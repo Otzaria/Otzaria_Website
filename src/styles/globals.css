@@ -2,12 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
-@font-face {
-  font-family: 'FrankRuehl';
-  src: url('/fonts/FrankRuehlCLM-Medium.ttf') format('truetype');
-  font-weight: 500;
-  font-style: normal;
-  font-display: swap;
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  /* הוספת הפונט שלנו כמשתנה ש-Tailwind מכיר */
+  --font-frank: var(--font-frank-ruehl); 
+}
+@layer utilities {
+  .font-frank {
+    font-family: var(--font-frank-ruehl), serif;
+  }
 }
 
 @layer base {

@@ -1,25 +1,26 @@
 FROM node:20-alpine
 
-# התקנת תלויות מערכת לעיבוד תמונות ו-PDF
+# התקנת כלי מערכת (זה יורד פעם אחת ונשמר במטמון)
 RUN apk add --no-cache \
     graphicsmagick \
     ghostscript \
-    libc6-compat
+    libc6-compat \
+    python3 \
+    make \
+    g++
 
 WORKDIR /app
 
-# התקנת תלויות פרויקט
-COPY package*.json ./
-RUN npm ci
+# שלב חכם: מעתיקים רק את הקובץ שמגדיר את החבילות
+COPY package.json package-lock.json* ./
 
-# העתקת קוד המקור
+# מתקינים חבילות. דוקר "זוכר" את השלב הזה.
+# אם לא שינית את package.json, הוא ידלג על ההורדה הזו בפעם הבאה!
+RUN npm install
+
+# רק עכשיו מעתיקים את שאר הקוד
 COPY . .
 
-# בניית הפרויקט
-RUN npm run build
-
-# חשיפת הפורט
 EXPOSE 3000
 
-# הרצת השרת
-CMD ["npm", "start"]
+CMD ["npm", "run", "dev"]
