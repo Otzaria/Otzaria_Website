@@ -9,13 +9,10 @@ import Page from '@/models/Page';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
-// הגדרת נתיב השמירה הפיזי
-// Nginx צריך להיות מוגדר להגיש את /var/www/otzaria/uploads בכתובת http://your-domain/uploads
 const UPLOAD_ROOT = process.env.UPLOAD_DIR || path.join(process.cwd(), 'public', 'uploads');
 
 export async function POST(request) {
   try {
-    // 1. אבטחה - רק אדמין
     const session = await getServerSession(authOptions);
     if (session?.user?.role !== 'admin') {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
@@ -32,21 +29,22 @@ export async function POST(request) {
       return NextResponse.json({ success: false, error: 'חסרים נתונים' }, { status: 400 });
     }
 
-    // 2. יצירת שם תיקייה ייחודי (Slug)
-    const slug = slugify(bookName, { lower: true, strict: true, remove: /[*+~.()'"!:@]/g }) + '-' + Date.now();
+    // תיקון: יצירת Slug ששומר על עברית
+    // במקום למחוק תווים לא לטיניים, נחליף רק רווחים וסימנים מיוחדים במקפים
+    const safeName = bookName.trim().replace(/[\s\t\n]+/g, '-'); 
+    // מוסיפים timestamp קצר למניעת כפילויות
+    const slug = `${safeName}-${Date.now().toString().slice(-6)}`;
+    
     const bookFolder = path.join(UPLOAD_ROOT, 'books', slug);
     
-    // יצירת התיקייה הפיזית
     await fs.ensureDir(bookFolder);
 
-    // 3. שמירת ה-PDF זמנית
     const pdfBuffer = Buffer.from(await file.arrayBuffer());
     const tempPdfPath = path.join(bookFolder, 'source.pdf');
     await fs.writeFile(tempPdfPath, pdfBuffer);
 
-    // 4. המרת PDF לתמונות
     const options = {
-      density: 150, // איכות
+      density: 150,
       saveFilename: "page",
       savePath: bookFolder,
       format: "jpg",
@@ -55,35 +53,29 @@ export async function POST(request) {
     };
 
     const convert = fromPath(tempPdfPath, options);
-    // המרה של כל העמודים (-1)
     const result = await convert.bulk(-1, { responseType: "image" });
     
     if (!result || result.length === 0) {
       throw new Error('Conversion failed');
     }
 
-    // 5. יצירת הספר ב-DB
     const newBook = await Book.create({
       name: bookName,
       slug: slug,
       category: category,
-      folderPath: `/uploads/books/${slug}`, // נתיב וירטואלי ל-WEB
+      folderPath: `/uploads/books/${slug}`,
       totalPages: result.length,
       completedPages: 0
     });
 
-    // 6. יצירת העמודים ב-DB
     const pagesData = result.map((page, index) => ({
       book: newBook._id,
       pageNumber: index + 1,
-      // הנתיב ש-Nginx יגיש
       imagePath: `/uploads/books/${slug}/page.${index + 1}.jpg`,
       status: 'available'
     }));
 
     await Page.insertMany(pagesData);
-
-    // ניקוי ה-PDF המקורי לחסכון במקום (אופציונלי)
     await fs.remove(tempPdfPath); 
 
     return NextResponse.json({ 

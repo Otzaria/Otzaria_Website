@@ -32,13 +32,9 @@ export default function BookPage() {
   const router = useRouter()
   const params = useParams()
   
-  // פענח את ה-path (Next.js לא תמיד מפענח אוטומטית)
+  // פענוח ה-URL
   const rawPath = Array.isArray(params.path) ? params.path.join('/') : params.path
   const bookPath = decodeURIComponent(rawPath)
-  
-  console.log('📖 BookPage loaded')
-  console.log('   Raw path:', rawPath)
-  console.log('   Decoded path:', bookPath)
   
   const [bookData, setBookData] = useState(null)
   const [pages, setPages] = useState([])
@@ -46,21 +42,16 @@ export default function BookPage() {
   const [error, setError] = useState(null)
   const [confirmDialog, setConfirmDialog] = useState(null)
   const [uploadDialog, setUploadDialog] = useState(null)
-  const [viewMode, setViewMode] = useState('single') // 'single' (עמוד אחד) או 'double' (שני עמודים)
+  const [viewMode, setViewMode] = useState('single') 
 
   useEffect(() => {
     loadBookData()
   }, [bookPath])
 
-const loadBookData = async () => {
+  const loadBookData = async () => {
     try {
       setLoading(true)
-      console.log('📤 Loading book:', bookPath)
-      
-      // --- שינוי כאן: שימוש ב-API המאוחד במקום book-by-name ---
       const response = await fetch(`/api/book/${encodeURIComponent(bookPath)}`)
-      // -----------------------------------------------------------
-      
       const result = await response.json()
       
       if (result.success) {
@@ -78,38 +69,26 @@ const loadBookData = async () => {
   }
 
   const handleReleasePage = async (pageNumber) => {
-    if (!session) {
-      return
-    }
-
-    if (!confirm('האם אתה בטוח שברצונך לשחרר את העמוד? תאבד 5 נקודות.')) {
-      return
-    }
+    if (!session) return;
+    if (!confirm('האם אתה בטוח שברצונך לשחרר את העמוד? תאבד 5 נקודות.')) return;
 
     try {
-      console.log('🔓 Releasing page:', { bookPath, pageNumber })
-      
       const pageId = pages.find(p => p.number === pageNumber)?.id;
       if (!pageId) return alert('שגיאה בזיהוי העמוד');
 
       const response = await fetch(`/api/book/release-page`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pageId: pageId // ה-API מצפה ל-pageId
-        })
+        body: JSON.stringify({ pageId: pageId })
       })
 
       const result = await response.json()
-
       if (result.success) {
-        alert('✅ העמוד שוחרר בהצלחה!')
-        loadBookData() // רענן את הנתונים
+        loadBookData() // רענון מלא כדי לוודא סנכרון
       } else {
         alert(`❌ ${result.error}`)
       }
     } catch (error) {
-      console.error('Error releasing page:', error)
       alert('❌ שגיאה בשחרור העמוד')
     }
   }
@@ -120,15 +99,18 @@ const loadBookData = async () => {
       return
     }
 
-    // הצג דיאלוג אישור
     setConfirmDialog({
       pageNumber,
       onConfirm: async () => {
         setConfirmDialog(null)
-        
+            if (!session.user || (!session.user.id && !session.user._id)) {
+        alert('שגיאת התחברות: חסר מזהה משתמש. נסה להתחבר מחדש.');
+        return;
+        }
         try {
-          // bookPath כבר מפוענח מ-params, אז נשתמש בו ישירות
-          console.log('📤 Claiming page:', { bookPath, pageNumber })
+          // תיקון: שליחת ID נכון מה-session
+          // ב-NextAuth שהגדרנו, ה-ID נמצא ב-session.user._id
+          const userId = session.user._id || session.user.id;
           
           const response = await fetch(`/api/book/claim-page`, {
             method: 'POST',
@@ -136,23 +118,20 @@ const loadBookData = async () => {
             body: JSON.stringify({
               bookPath: bookPath,
               pageNumber,
-              userId: session.user._idd,
+              userId: userId, 
               userName: session.user.name
             })
           })
           
-          console.log('📥 Response status:', response.status)
-          
           const result = await response.json()
           
           if (result.success) {
-            // עדכן את הדף המקומי
+            // עדכון מקומי מהיר
             setPages(prevPages => 
               prevPages.map(page => 
-                page.number === pageNumber ? result.page : page
+                page.number === pageNumber ? { ...page, status: 'in-progress', claimedBy: session.user.name, claimedById: userId } : page
               )
             )
-            console.log(`✅ עמוד ${pageNumber} נתפס על ידי ${session.user.name}`)
           } else {
             alert(`❌ ${result.error}`)
           }
@@ -347,7 +326,7 @@ const loadBookData = async () => {
 
           {session && (
             <Link 
-              href="/dashboard" 
+              href="/library/dashboard" 
               className="flex items-center justify-center hover:opacity-80 transition-opacity"
               title={session.user.name}
             >
@@ -422,15 +401,17 @@ const loadBookData = async () => {
                 : 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-4'
             }>
               {pages.map((page) => (
-                <PageCard
-                  key={page.number}
-                  page={page}
-                  onClaim={handleClaimPage}
-                  onComplete={handleMarkComplete}
-                  onRelease={handleReleasePage}
-                  currentUser={session?.user}
-                  bookPath={bookPath}
-                />
+                // תיקון: הוספת key ייחודי ברמה העליונה של האלמנט ברשימה
+                <div key={page.id || page.number} className="relative">
+                   <PageCard
+                      page={page}
+                      onClaim={handleClaimPage}
+                      onComplete={handleMarkComplete}
+                      onRelease={handleReleasePage}
+                      currentUser={session?.user}
+                      bookPath={bookPath}
+                    />
+                </div>
               ))}
             </div>
           </div>

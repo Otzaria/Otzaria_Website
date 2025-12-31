@@ -15,7 +15,6 @@ export const authOptions = {
       async authorize(credentials) {
         await connectDB();
         
-        // תמיכה בהתחברות עם מייל או שם משתמש
         const user = await User.findOne({
             $or: [
                 { email: credentials.identifier },
@@ -32,6 +31,7 @@ export const authOptions = {
           throw new Error('סיסמה שגויה');
         }
 
+        // כאן אנחנו מחזירים אובייקט עם 'id' (בלי קו תחתון)
         return {
           id: user._id.toString(),
           email: user.email,
@@ -43,14 +43,19 @@ export const authOptions = {
   ],
   callbacks: {
     async jwt({ token, user }) {
+      // user קיים רק בהתחברות הראשונית (Login)
       if (user) {
-        token.id = user._id;
+        // תיקון: משתמשים ב-user.id כי זה מה שהחזרנו ב-authorize
+        token.id = user.id; 
         token.role = user.role;
       }
       return token;
     },
     async session({ session, token }) {
       if (token) {
+        // מעבירים את ה-ID מהטוקן לסשן
+        session.user.id = token.id;
+        // ליתר ביטחון, נגדיר גם _id לתאימות לאחור
         session.user._id = token.id;
         session.user.role = token.role;
       }
@@ -58,7 +63,7 @@ export const authOptions = {
     },
   },
   pages: {
-    signIn: '/library/auth/login', // נשתמש בנתיב של ה-UI הקיים
+    signIn: '/library/auth/login',
     error: '/library/auth/error',
   },
   session: { strategy: 'jwt' },

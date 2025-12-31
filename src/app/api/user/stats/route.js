@@ -11,7 +11,7 @@ export async function GET() {
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     await connectDB();
-    const userId = session.user._idd;
+    const userId = session.user._id;
 
     // 1. שליפת ניקוד עדכני
     const user = await User.findById(userId).select('points');

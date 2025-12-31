@@ -7,8 +7,8 @@ export async function GET(request, { params }) {
   try {
     await connectDB();
     
-    // הפענוח קריטי כי ה-Client שולח URL Encoded (למשל רווחים או עברית)
-    const identifier = decodeURIComponent(params.id);
+    const { id } = await params;
+    const identifier = decodeURIComponent(id);
 
     // 1. מציאת הספר - חיפוש גמיש (גם Slug וגם שם)
     const book = await Book.findOne({ 
