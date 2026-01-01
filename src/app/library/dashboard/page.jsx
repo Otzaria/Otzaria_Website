@@ -46,7 +46,8 @@ export default function DashboardPage() {
           completedPages: result.stats?.completedPages || 0,
           inProgressPages: result.stats?.inProgressPages || 0,
           points: result.stats?.points || 0,
-          recentActivity: result.recentActivity || []
+          // התיקון כאן: הנתונים נמצאים בתוך result.stats.recentActivity ולא ב-result.recentActivity
+          recentActivity: result.stats?.recentActivity || []
         })
       }
     } catch (error) {
@@ -58,8 +59,8 @@ export default function DashboardPage() {
 
   const loadMyMessages = async () => {
     try {
-    const response = await fetch('/api/messages') 
-    const result = await response.json()
+      const response = await fetch('/api/messages')
+      const result = await response.json()
       
       if (result.success) {
         setMyMessages(result.messages)
@@ -82,7 +83,7 @@ export default function DashboardPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           subject: messageSubject,
-          content: messageText, // שינוי מ-message ל-content
+          content: messageText,
           recipientId: null // null מסמן הודעה למנהלים
         })
       })
@@ -249,6 +250,7 @@ export default function DashboardPage() {
                         {activity.status === 'completed' ? 'הושלם' : 'בטיפול'} • {activity.date}
                       </p>
                     </div>
+                    {/* כאן התיקון לנתיב הלינק */}
                     <Link 
                       href={`/library/book/${activity.bookPath}`}
                       className="text-primary hover:text-accent"
@@ -330,7 +332,7 @@ export default function DashboardPage() {
                       </span>
                     </div>
                     
-                    <p className="text-on-surface whitespace-pre-wrap mb-4">{message.message}</p>
+                    <p className="text-on-surface whitespace-pre-wrap mb-4">{message.content}</p>
 
                     {message.replies && message.replies.length > 0 && (
                       <div className="mt-4 pt-4 border-t border-surface-variant">
@@ -342,7 +344,7 @@ export default function DashboardPage() {
                           {message.replies.map((reply, idx) => (
                             <div key={idx} className="bg-green-50 p-4 rounded-lg">
                               <p className="text-sm text-on-surface/60 mb-2">
-                                <span className="font-medium">{reply.senderName}</span>
+                                <span className="font-medium">{reply.senderName || 'מנהל'}</span>
                                 <span className="mx-2">•</span>
                                 {new Date(reply.createdAt).toLocaleDateString('he-IL', {
                                   day: 'numeric',
@@ -351,7 +353,7 @@ export default function DashboardPage() {
                                   minute: '2-digit'
                                 })}
                               </p>
-                              <p className="text-on-surface whitespace-pre-wrap">{reply.message}</p>
+                              <p className="text-on-surface whitespace-pre-wrap">{reply.content}</p>
                             </div>
                           ))}
                         </div>
