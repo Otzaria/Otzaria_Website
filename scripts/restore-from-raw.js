@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import fs from 'fs';
-import readline from 'readline'; // ספרייה לקריאת שורות
+import readline from 'readline';
 import path from 'path';
 import dotenv from 'dotenv';
 import slugify from 'slugify';
@@ -79,17 +79,15 @@ async function loadDataFromFile(filePath) {
     console.log(`📖 Streaming ${filePath}...`);
 
     for await (const line of rl) {
-        if (!line.trim()) continue; // דילוג על שורות ריקות
+        if (!line.trim()) continue;
         try {
             const doc = JSON.parse(line);
             results.push(doc);
         } catch (err) {
-            // אם זה לא עבד, אולי הקובץ הוא מערך JSON רגיל ולא NDJSON?
-            // במקרה כזה, נצבור הכל וננסה בסוף (אבל רוב הסיכויים שזה NDJSON)
+             // התעלמות משגיאות פרסור של שורות בודדות
         }
     }
 
-    // אם הסטרים סיים ולא הצלחנו לקרוא שורות (אולי זה קובץ JSON רגיל עם [ ])
     if (results.length === 0) {
         try {
             const content = fs.readFileSync(filePath, 'utf8');
@@ -97,7 +95,7 @@ async function loadDataFromFile(filePath) {
             if (Array.isArray(data)) return data;
             return [data];
         } catch (e) {
-            // אם הגענו לפה, הקובץ כנראה ריק או שבור, או בפורמט NDJSON שקראנו אותו כבר
+             // קובץ ריק או לא תקין
         }
     }
     
@@ -122,7 +120,7 @@ async function restore() {
         await mongoose.connect(process.env.MONGODB_URI);
         console.log('✅ Connected.');
 
-        // קריאת הנתונים בצורה אסינכרונית וחכמה
+        // קריאת הנתונים
         const rawFiles = await loadDataFromFile(FILES_JSON_PATH);
         const rawBackups = await loadDataFromFile(BACKUPS_JSON_PATH);
         const rawMessages = await loadDataFromFile(MESSAGES_JSON_PATH);
@@ -137,21 +135,29 @@ async function restore() {
             console.log(`Processing users...`);
             for (const u of usersEntry.data) {
                 const newId = new mongoose.Types.ObjectId();
-                userMap.set(u.id, newId);
+                
+                // בדיקה אם המשתמש כבר קיים כדי לקבל את ה-ID האמיתי שלו
+                const existingUser = await User.findOne({ email: u.email });
+                const finalId = existingUser ? existingUser._id : newId;
+                
+                // שמירת המיפוי (בין ID ישן ל-ID שיהיה במונגו)
+                userMap.set(u.id, finalId);
 
                 const points = u.points?.$numberInt ? parseInt(u.points.$numberInt) : (u.points || 0);
 
                 await User.updateOne(
                     { email: u.email },
                     {
+                        // עדכון שדות רגילים
                         $set: {
-                            _id: newId,
                             name: u.name,
                             password: u.password,
                             role: u.role,
                             points: points,
                             createdAt: u.createdAt ? new Date(u.createdAt) : new Date(),
-                        }
+                        },
+                        // קביעת ID רק אם נוצר מסמך חדש
+                        $setOnInsert: { _id: finalId }
                     },
                     { upsert: true }
                 );
@@ -169,7 +175,11 @@ async function restore() {
                 const newId = new mongoose.Types.ObjectId();
                 const slug = slugify(b.name, { lower: true, strict: true, remove: /[*+~.()'"!:@]/g });
                 
-                bookMap.set(b.name, { _id: newId, slug });
+                // בדיקה אם ספר קיים
+                const existingBook = await Book.findOne({ name: b.name });
+                const finalId = existingBook ? existingBook._id : newId;
+
+                bookMap.set(b.name, { _id: finalId, slug });
 
                 const totalPages = b.totalPages?.$numberInt ? parseInt(b.totalPages.$numberInt) : (b.totalPages || 0);
 
@@ -177,13 +187,13 @@ async function restore() {
                     { name: b.name },
                     {
                         $set: {
-                            _id: newId,
                             slug: slug,
                             totalPages: totalPages,
-                            completedPages: 0,
+                            // completedPages: 0, // לא נאפס כדי לא לדרוס חישובים אם יש
                             folderPath: `/uploads/books/${slug}`,
                             createdAt: b.createdAt ? new Date(b.createdAt) : new Date()
-                        }
+                        },
+                        $setOnInsert: { _id: finalId, completedPages: 0 }
                     },
                     { upsert: true }
                 );
@@ -209,7 +219,6 @@ async function restore() {
             fileRecord.data.forEach(p => {
                 const num = p.number?.$numberInt ? parseInt(p.number.$numberInt) : p.number;
                 
-                // שימוש בקישור מהגיבוי אם קיים, אחרת יצירת נתיב ברירת מחדל
                 const defaultThumb = `/uploads/books/${slugify(bookName, {lower:true, strict:true})}/page.${num}.jpg`;
                 
                 mergedPages[bookName][num] = {
@@ -292,6 +301,8 @@ async function restore() {
 
         if (pageOperations.length > 0) {
             console.log(`Inserting ${totalPagesCount} pages...`);
+            
+            // מחיקה מלאה של עמודים קיימים לפני הכנסה חדשה (הכי בטוח למניעת כפילויות)
             await Page.deleteMany({});
             
             const chunkSize = 500;
