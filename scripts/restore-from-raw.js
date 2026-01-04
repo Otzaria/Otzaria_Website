@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import fs from 'fs';
+import readline from 'readline'; // ספרייה לקריאת שורות
 import path from 'path';
 import dotenv from 'dotenv';
 import slugify from 'slugify';
@@ -9,13 +10,9 @@ import { fileURLToPath } from 'url';
 dotenv.config({ path: '.env.local' });
 dotenv.config({ path: '.env' });
 
-// הגדרת נתיבים
-const __filename = fileURLToPath(import.meta.url);
-
-// קבצי המקור
 const FILES_JSON_PATH = 'files.json';
 const MESSAGES_JSON_PATH = 'messages.json';
-const BACKUPS_JSON_PATH = 'backups.json'; // הוספנו את זה
+const BACKUPS_JSON_PATH = 'backups.json';
 
 // --- הגדרת סכמות ---
 const UserSchema = new mongoose.Schema({
@@ -64,25 +61,47 @@ const Book = mongoose.models.Book || mongoose.model('Book', BookSchema);
 const Page = mongoose.models.Page || mongoose.model('Page', PageSchema);
 const Message = mongoose.models.Message || mongoose.model('Message', MessageSchema);
 
-// --- כלי עזר ---
-
-function readJsonFile(filePath) {
+// --- פונקציה חכמה לקריאת קבצים גדולים ---
+async function loadDataFromFile(filePath) {
     if (!fs.existsSync(filePath)) {
         console.warn(`⚠️ File not found: ${filePath}`);
         return [];
     }
-    const content = fs.readFileSync(filePath, 'utf8');
-    try {
-        return JSON.parse(content);
-    } catch (e) {
+
+    const results = [];
+    const fileStream = fs.createReadStream(filePath);
+
+    const rl = readline.createInterface({
+        input: fileStream,
+        crlfDelay: Infinity
+    });
+
+    console.log(`📖 Streaming ${filePath}...`);
+
+    for await (const line of rl) {
+        if (!line.trim()) continue; // דילוג על שורות ריקות
         try {
-            // תמיכה ב-NDJSON (Mongo Export)
-            return content.trim().split('\n').map(line => JSON.parse(line));
-        } catch (e2) {
-            console.error(`❌ Failed to parse ${filePath}`);
-            return [];
+            const doc = JSON.parse(line);
+            results.push(doc);
+        } catch (err) {
+            // אם זה לא עבד, אולי הקובץ הוא מערך JSON רגיל ולא NDJSON?
+            // במקרה כזה, נצבור הכל וננסה בסוף (אבל רוב הסיכויים שזה NDJSON)
         }
     }
+
+    // אם הסטרים סיים ולא הצלחנו לקרוא שורות (אולי זה קובץ JSON רגיל עם [ ])
+    if (results.length === 0) {
+        try {
+            const content = fs.readFileSync(filePath, 'utf8');
+            const data = JSON.parse(content);
+            if (Array.isArray(data)) return data;
+            return [data];
+        } catch (e) {
+            // אם הגענו לפה, הקובץ כנראה ריק או שבור, או בפורמט NDJSON שקראנו אותו כבר
+        }
+    }
+    
+    return results;
 }
 
 function decodeFileName(encodedName) {
@@ -94,7 +113,6 @@ function decodeFileName(encodedName) {
     }
 }
 
-// --- משתני מיפוי גלובליים ---
 const userMap = new Map(); 
 const bookMap = new Map(); 
 
@@ -104,23 +122,19 @@ async function restore() {
         await mongoose.connect(process.env.MONGODB_URI);
         console.log('✅ Connected.');
 
-        // ניקוי מסד (אופציונלי)
-        // await User.deleteMany({}); await Book.deleteMany({}); await Page.deleteMany({}); await Message.deleteMany({});
+        // קריאת הנתונים בצורה אסינכרונית וחכמה
+        const rawFiles = await loadDataFromFile(FILES_JSON_PATH);
+        const rawBackups = await loadDataFromFile(BACKUPS_JSON_PATH);
+        const rawMessages = await loadDataFromFile(MESSAGES_JSON_PATH);
 
-        console.log('📖 Reading raw files...');
-        const rawFiles = readJsonFile(FILES_JSON_PATH);
-        const rawBackups = readJsonFile(BACKUPS_JSON_PATH); // קריאת הגיבויים
-        const rawMessages = readJsonFile(MESSAGES_JSON_PATH);
-
-        // איחוד רשומות רלוונטיות (קבצים וגיבויים) לצורך חיפוש דפים
         const allMetadataSources = [...rawFiles, ...rawBackups];
 
         // ---------------------------------------------------------
-        // שלב 1: משתמשים (נמצאים רק ב-files.json בד"כ)
+        // שלב 1: משתמשים
         // ---------------------------------------------------------
         const usersEntry = rawFiles.find(f => f.path === 'data/users.json');
         if (usersEntry && usersEntry.data) {
-            console.log(`Processing ${usersEntry.data.length} users...`);
+            console.log(`Processing users...`);
             for (const u of usersEntry.data) {
                 const newId = new mongoose.Types.ObjectId();
                 userMap.set(u.id, newId);
@@ -150,7 +164,7 @@ async function restore() {
         // ---------------------------------------------------------
         const booksEntry = rawFiles.find(f => f.path === 'data/books.json');
         if (booksEntry && booksEntry.data) {
-            console.log(`Processing ${booksEntry.data.length} books...`);
+            console.log(`Processing books...`);
             for (const b of booksEntry.data) {
                 const newId = new mongoose.Types.ObjectId();
                 const slug = slugify(b.name, { lower: true, strict: true, remove: /[*+~.()'"!:@]/g });
@@ -178,20 +192,16 @@ async function restore() {
         }
 
         // ---------------------------------------------------------
-        // שלב 3: איחוי דפים (מ-Files ומ-Backups יחד)
+        // שלב 3: איחוי דפים
         // ---------------------------------------------------------
-        console.log('🧩 Merging page metadata (from files & backups) and content...');
+        console.log('🧩 Merging page metadata and content...');
         const pageOperations = [];
         const mergedPages = {};
 
-        // א. מעבר על מטא-דאטה מכל המקורות (קבצים + גיבויים)
-        // המיון חשוב: אם יש כפילות, האחרון קובע (אלא אם נרצה לוגיקה אחרת)
-        // נרוץ קודם על files ואז על backups, בהנחה ש-backups אולי עדכני יותר או מלא יותר
-        
-        allMetadataSources.filter(f => f.path.startsWith('data/pages/')).forEach(fileRecord => {
+        // א. מטא-דאטה
+        allMetadataSources.filter(f => f.path && f.path.startsWith('data/pages/')).forEach(fileRecord => {
             const bookName = path.basename(fileRecord.path, '.json');
             
-            // דילוג אם המידע ריק (data: null)
             if (!fileRecord.data || !Array.isArray(fileRecord.data)) return;
 
             if (!mergedPages[bookName]) mergedPages[bookName] = {};
@@ -199,21 +209,22 @@ async function restore() {
             fileRecord.data.forEach(p => {
                 const num = p.number?.$numberInt ? parseInt(p.number.$numberInt) : p.number;
                 
-                // יוצרים אובייקט, דורסים אם כבר קיים (כך נתוני הגיבוי ישלימו נתונים חסרים)
+                // שימוש בקישור מהגיבוי אם קיים, אחרת יצירת נתיב ברירת מחדל
+                const defaultThumb = `/uploads/books/${slugify(bookName, {lower:true, strict:true})}/page.${num}.jpg`;
+                
                 mergedPages[bookName][num] = {
-                    ...mergedPages[bookName][num], // שמירה על מידע קיים אם יש
+                    ...mergedPages[bookName][num],
                     status: p.status,
                     claimedById: p.claimedById,
                     claimedAt: p.claimedAt,
                     completedAt: p.completedAt,
-                    // השתמש בקישור מהגיבוי אם קיים, אחרת צור נתיב ברירת מחדל
-                    thumbnail: p.thumbnail || `/uploads/books/${slugify(bookName, {lower:true, strict:true})}/page.${num}.jpg`
+                    thumbnail: p.thumbnail || defaultThumb
                 };
             });
         });
 
-        // ב. הוספת תוכן טקסטואלי מ-files.json (נמצא רק שם)
-        rawFiles.filter(f => f.path.startsWith('data/content/')).forEach(fileRecord => {
+        // ב. תוכן טקסט
+        rawFiles.filter(f => f.path && f.path.startsWith('data/content/')).forEach(fileRecord => {
             const fileName = path.basename(fileRecord.path, '.txt');
             const decodedName = decodeFileName(fileName);
             
@@ -222,7 +233,6 @@ async function restore() {
                 const bookNameRaw = decodedName.substring(0, splitIndex).trim();
                 let validBookName = bookNameRaw;
 
-                // נרמול שם הספר
                 if (!bookMap.has(validBookName)) {
                     const spaceName = bookNameRaw.replace(/_/g, ' ');
                     if (bookMap.has(spaceName)) validBookName = spaceName;
@@ -234,11 +244,9 @@ async function restore() {
                 if (bookMap.has(validBookName)) {
                     if (!mergedPages[validBookName]) mergedPages[validBookName] = {};
                     if (!mergedPages[validBookName][pageNum]) {
-                        // אם לא היה מטא-דאטה, ניצור רשומה חדשה
                         mergedPages[validBookName][pageNum] = { 
                             status: 'available',
-                            // השתמש בקישור מהגיבוי אם קיים, אחרת צור נתיב ברירת מחדל
-                            thumbnail: p.thumbnail || `/uploads/books/${slugify(bookName, {lower:true, strict:true})}/page.${num}.jpg`
+                            thumbnail: `/uploads/books/${slugify(validBookName, {lower:true, strict:true})}/page.${pageNum}.jpg`
                         };
                     }
                     mergedPages[validBookName][pageNum].content = fileRecord.data?.content || '';
@@ -246,7 +254,7 @@ async function restore() {
             }
         });
 
-        // ג. הכנה להכנסה ל-DB
+        // ג. יצירת אובייקטים
         let totalPagesCount = 0;
         const bookCompletedCounts = {};
 
@@ -257,12 +265,10 @@ async function restore() {
             bookCompletedCounts[bookInfo._id] = 0;
 
             for (const [pageNumStr, pageData] of Object.entries(pagesObj)) {
-                // המרת ID של משתמש
                 let claimedByNewId = null;
                 if (pageData.claimedById && userMap.has(pageData.claimedById)) {
                     claimedByNewId = userMap.get(pageData.claimedById);
                 } else if (pageData.claimedById) {
-                     // Fallback לאדמין אם המשתמש המקורי לא נמצא
                      claimedByNewId = userMap.values().next().value; 
                 }
 
