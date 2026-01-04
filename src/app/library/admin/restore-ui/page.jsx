@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { uploadFileAction } from './action'
 
 export default function RestoreUIPage() {
   const [file, setFile] = useState(null)
@@ -13,22 +12,27 @@ export default function RestoreUIPage() {
     if (!file) return
 
     setLoading(true)
-    setStatus('מעלה... (זה עשוי לקחת זמן לקבצים גדולים)')
-
-    const formData = new FormData()
-    formData.append('file', file)
+    setStatus('מתחיל העלאה ישירה...')
 
     try {
-      // קריאה לפונקציית השרת
-      const result = await uploadFileAction(formData)
+      // שליחה ישירה של הקובץ בגוף הבקשה (בלי FormData)
+      // זה חוסך זיכרון ועיבוד בצד השרת
+      const res = await fetch(`/api/admin/upload-backup?filename=${encodeURIComponent(file.name)}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/octet-stream',
+        },
+        body: file // שולחים את אובייקט הקובץ ישירות
+      })
       
-      if (result.success) {
+      const data = await res.json()
+      
+      if (res.ok && data.success) {
         setStatus(`✅ הקובץ ${file.name} הועלה בהצלחה!`)
         setFile(null)
-        // איפוס האינפוט
         document.getElementById('fileInput').value = ''
       } else {
-        setStatus('❌ שגיאה: ' + result.error)
+        setStatus('❌ שגיאה: ' + (data.error || 'שגיאה לא ידועה'))
       }
     } catch (err) {
       setStatus('❌ שגיאה בתקשורת: ' + err.message)

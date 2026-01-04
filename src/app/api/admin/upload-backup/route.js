@@ -1,26 +1,47 @@
 import { NextResponse } from 'next/server';
-import { writeFile } from 'fs/promises';
+import fs from 'fs';
 import path from 'path';
+import { pipeline } from 'stream/promises';
+import { Readable } from 'stream';
+
+// מבטל את מגבלת הגודל המובנית של Next.js לנתיב הזה ספציפית
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
 
 export async function POST(request) {
   try {
-    const data = await request.formData();
-    const file = data.get('file');
+    // 1. קבלת שם הקובץ מה-Query String
+    const { searchParams } = new URL(request.url);
+    const fileName = searchParams.get('filename');
 
-    if (!file) {
-      return NextResponse.json({ success: false, error: "No file found" });
+    if (!fileName) {
+      return NextResponse.json({ error: 'Filename is required' }, { status: 400 });
     }
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    // 2. הגדרת נתיב יעד
+    const filePath = path.join(process.cwd(), fileName);
+    
+    // 3. יצירת Write Stream לקובץ
+    const fileStream = fs.createWriteStream(filePath);
 
-    // שמירת הקובץ בתיקיית השורש של הפרויקט
-    const filePath = path.join(process.cwd(), file.name);
-    await writeFile(filePath, buffer);
+    // 4. המרת ה-Web Stream (של הדפדפן) ל-Node Stream והזרמה לדיסק
+    // request.body הוא ReadableStream ב-App Router
+    if (!request.body) {
+        return NextResponse.json({ error: 'No body' }, { status: 400 });
+    }
 
+    // @ts-ignore
+    const nodeStream = Readable.fromWeb(request.body);
+    await pipeline(nodeStream, fileStream);
+
+    console.log(`✅ File saved: ${filePath}`);
     return NextResponse.json({ success: true, path: filePath });
+
   } catch (error) {
-    console.error(error);
-    return NextResponse.json({ success: false, error: error.message });
+    console.error('Upload error:', error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
