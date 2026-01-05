@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 /**
- * סקריפט מיגרציה סופי להעברת נתונים מהמסד הישן לחדש
- * גרסה מעודכנת עם טיפול בכפילויות ואימות נתונים
+ * סקריפט מיגרציה משופר - גרסה סלחנית
+ * מטפל בנתונים חסרים ושומר כל נתון אפשרי
  */
 
 const fs = require('fs');
@@ -36,6 +36,49 @@ function createSlug(name) {
         .replace(/\s+/g, '-')
         .replace(/[^\w\u0590-\u05FF\-]/g, '')
         .toLowerCase();
+}
+
+// פונקציה עזר לפענוח תאריכים בטוח
+function safeParseDate(dateValue) {
+    if (!dateValue) return new Date();
+    
+    try {
+        const parsed = new Date(dateValue);
+        if (isNaN(parsed.getTime())) {
+            return new Date(); // תאריך נוכחי אם הפענוח נכשל
+        }
+        return parsed;
+    } catch (e) {
+        return new Date();
+    }
+}
+
+// פונקציה עזר למציאת זמן העדכון האחרון
+function getLatestUpdateTime(pages) {
+    let latestTime = new Date(0); // תאריך ברירת מחדל ישן
+    
+    pages.forEach(page => {
+        if (page.updatedAt) {
+            const updateTime = safeParseDate(page.updatedAt);
+            if (updateTime > latestTime) {
+                latestTime = updateTime;
+            }
+        }
+        if (page.completedAt) {
+            const completedTime = safeParseDate(page.completedAt);
+            if (completedTime > latestTime) {
+                latestTime = completedTime;
+            }
+        }
+        if (page.claimedAt) {
+            const claimedTime = safeParseDate(page.claimedAt);
+            if (claimedTime > latestTime) {
+                latestTime = claimedTime;
+            }
+        }
+    });
+    
+    return latestTime;
 }
 
 // מיפוי משתמשים ישנים לחדשים
@@ -241,49 +284,6 @@ async function migrateMessages() {
     }
 }
 
-// פונקציה עזר לפענוח תאריכים בטוח
-function safeParseDate(dateValue) {
-    if (!dateValue) return new Date();
-    
-    try {
-        const parsed = new Date(dateValue);
-        if (isNaN(parsed.getTime())) {
-            return new Date(); // תאריך נוכחי אם הפענוח נכשל
-        }
-        return parsed;
-    } catch (e) {
-        return new Date();
-    }
-}
-
-// פונקציה עזר למציאת זמן העדכון האחרון
-function getLatestUpdateTime(pages) {
-    let latestTime = new Date(0); // תאריך ברירת מחדל ישן
-    
-    pages.forEach(page => {
-        if (page.updatedAt) {
-            const updateTime = safeParseDate(page.updatedAt);
-            if (updateTime > latestTime) {
-                latestTime = updateTime;
-            }
-        }
-        if (page.completedAt) {
-            const completedTime = safeParseDate(page.completedAt);
-            if (completedTime > latestTime) {
-                latestTime = completedTime;
-            }
-        }
-        if (page.claimedAt) {
-            const claimedTime = safeParseDate(page.claimedAt);
-            if (claimedTime > latestTime) {
-                latestTime = claimedTime;
-            }
-        }
-    });
-    
-    return latestTime;
-}
-
 async function migrateBooksAndPages() {
     console.log('\n📚 מתחיל מיגרציה של ספרים ועמודים...');
     
@@ -343,21 +343,31 @@ async function migrateBooksAndPages() {
     
     console.log(`📚 נמצאו ${bookVersions.size} ספרים ייחודיים`);
     
-    // בחירת הגרסה הטובה ביותר לכל ספר
+    // בחירת הגרסה הטובה ביותר לכל ספר - לוגיקה משופרת
     const bestVersions = [];
     bookVersions.forEach((versions, bookName) => {
-        // מציאת הגרסה עם הכי הרבה עמודים גמורים
+        // מציאת הגרסה הטובה ביותר עם לוגיקה משופרת
         const bestVersion = versions.reduce((best, current) => {
-            // קודם לפי עמודים גמורים
+            // 1. קודם לפי עמודים גמורים (הכי חשוב)
             if (current.completedPages > best.completedPages) return current;
             if (current.completedPages < best.completedPages) return best;
             
-            // אם שווים, לפי עמודים בעבודה
+            // 2. אם שווים בגמורים, לפי עמודים בעבודה
             if (current.inProgressPages > best.inProgressPages) return current;
             if (current.inProgressPages < best.inProgressPages) return best;
             
-            // אם שווים, לפי סה"כ עמודים
+            // 3. אם שווים גם בעבודה, לפי סה"כ עמודים
             if (current.totalPages > best.totalPages) return current;
+            if (current.totalPages < best.totalPages) return best;
+            
+            // 4. אם הכל שווה, נבחר לפי תאריך עדכון אחרון (אם קיים)
+            const bestLatestUpdate = getLatestUpdateTime(best.data.data);
+            const currentLatestUpdate = getLatestUpdateTime(current.data.data);
+            
+            if (currentLatestUpdate > bestLatestUpdate) return current;
+            if (currentLatestUpdate < bestLatestUpdate) return best;
+            
+            // 5. אם הכל זהה, נשאיר את הנוכחי (הראשון שנמצא)
             return best;
         });
         
@@ -410,7 +420,7 @@ async function migrateBooksAndPages() {
             // יצירת העמודים עם טיפול משופר בנתונים חסרים
             const pages = [];
             let pagesWithInvalidOwners = 0;
-            let pagesWithInvalidDates = 0;
+            let pagesWithInvalidNumbers = 0;
             
             for (const pageData of bookData) {
                 let claimedBy = null;
@@ -442,10 +452,11 @@ async function migrateBooksAndPages() {
                 }
                 
                 // וידוא שמספר העמוד תקין
-                const pageNumber = extractValue(pageData.number);
+                let pageNumber = extractValue(pageData.number);
                 if (!pageNumber || pageNumber < 1) {
                     console.log(`⚠️ מספר עמוד לא תקין בספר "${bookName}": ${pageData.number}, משתמש ב-1`);
                     pageNumber = 1;
+                    pagesWithInvalidNumbers++;
                 }
                 
                 const newPage = {
@@ -467,8 +478,8 @@ async function migrateBooksAndPages() {
             if (pagesWithInvalidOwners > 0) {
                 console.log(`⚠️ ${pagesWithInvalidOwners} עמודים אופסו עקב בעלים לא קיימים בספר "${bookName}"`);
             }
-            if (pagesWithInvalidDates > 0) {
-                console.log(`⚠️ ${pagesWithInvalidDates} עמודים עם תאריכים לא תקינים תוקנו בספר "${bookName}"`);
+            if (pagesWithInvalidNumbers > 0) {
+                console.log(`⚠️ ${pagesWithInvalidNumbers} עמודים עם מספרים לא תקינים תוקנו בספר "${bookName}"`);
             }
             
             // הכנסה בקבוצות לביצועים טובים יותר
@@ -526,6 +537,8 @@ async function validateMigration() {
     const inProgressPages = await Page.countDocuments({ status: 'in-progress' });
     const availablePages = await Page.countDocuments({ status: 'available' });
     const messagesWithReplies = await Message.countDocuments({ 'replies.0': { $exists: true } });
+    const messagesWithoutSender = await Message.countDocuments({ sender: null });
+    const pagesWithoutOwner = await Page.countDocuments({ claimedBy: null, status: { $ne: 'available' } });
     
     console.log(`\n📈 סטטיסטיקות נוספות:`);
     console.log(`   👑 מנהלים: ${adminUsers}`);
@@ -533,6 +546,8 @@ async function validateMigration() {
     console.log(`   🔄 עמודים בעבודה: ${inProgressPages}`);
     console.log(`   ⏳ עמודים זמינים: ${availablePages}`);
     console.log(`   💬 הודעות עם תגובות: ${messagesWithReplies}`);
+    console.log(`   ⚠️ הודעות ללא שולח: ${messagesWithoutSender}`);
+    console.log(`   ⚠️ עמודים לא זמינים ללא בעלים: ${pagesWithoutOwner}`);
     
     // בדיקת עקביות ספירות בספרים
     console.log(`\n🔍 בדיקת עקביות ספירות:`);
@@ -564,7 +579,7 @@ async function validateMigration() {
 }
 
 async function main() {
-    console.log('🚀 מתחיל מיגרציה של נתונים ישנים...\n');
+    console.log('🚀 מתחיל מיגרציה משופרת של נתונים ישנים...\n');
     
     try {
         await connectDB();
@@ -581,7 +596,8 @@ async function main() {
         await migrateBooksAndPages();
         await validateMigration();
         
-        console.log('\n🎉 מיגרציה הושלמה בהצלחה!');
+        console.log('\n🎉 מיגרציה משופרת הושלמה בהצלחה!');
+        console.log('💡 הסקריפט שמר כל נתון אפשרי, כולל נתונים עם מידע חסר');
         
     } catch (error) {
         console.error('❌ שגיאה במיגרציה:', error);
