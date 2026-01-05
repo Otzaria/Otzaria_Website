@@ -565,9 +565,14 @@ async function migrateUploads() {
             if (uploadData.uploadedById) {
                 uploaderId = userIdMapping.get(uploadData.uploadedById);
                 if (!uploaderId) {
-                    console.log(`⚠️ upload "${uploadData.fileName || 'ללא שם'}" - מעלה לא קיים: ${uploadData.uploadedById} (${uploadData.uploadedBy || 'לא ידוע'})`);
+                    console.log(`⚠️ דילוג על upload "${uploadData.fileName || 'ללא שם'}" - מעלה לא קיים: ${uploadData.uploadedById} (${uploadData.uploadedBy || 'לא ידוע'})`);
                     uploadsWithoutUploader++;
+                    continue; // דילוג על upload זה
                 }
+            } else {
+                console.log(`⚠️ דילוג על upload "${uploadData.fileName || 'ללא שם'}" - ללא מזהה מעלה`);
+                uploadsWithoutUploader++;
+                continue; // דילוג על upload זה
             }
             
             // חיפוש תוכן הקובץ
@@ -585,8 +590,9 @@ async function migrateUploads() {
                 }
             }
             
-            // יצירת ה-upload
+            // יצירת ה-upload - עכשיו תמיד יש uploader תקין
             const uploadDoc = {
+                uploader: uploaderId, // תמיד קיים
                 bookName: uploadData.bookName,
                 originalFileName: uploadData.originalFileName || uploadData.fileName || 'ללא שם',
                 content: fileContent,
@@ -594,11 +600,6 @@ async function migrateUploads() {
                 createdAt: safeParseDate(uploadData.uploadedAt),
                 updatedAt: safeParseDate(uploadData.uploadedAt)
             };
-            
-            // הוספת uploader רק אם קיים
-            if (uploaderId) {
-                uploadDoc.uploader = uploaderId;
-            }
             
             const newUpload = new Upload(uploadDoc);
             await newUpload.save();
@@ -614,7 +615,7 @@ async function migrateUploads() {
     
     console.log(`✅ הושלמה מיגרציה של ${migratedCount} קבצי uploads`);
     if (uploadsWithoutUploader > 0) {
-        console.log(`⚠️ ${uploadsWithoutUploader} uploads נשמרו ללא מעלה תקין`);
+        console.log(`⚠️ ${uploadsWithoutUploader} uploads נדלגו בגלל מעלה לא קיים במסד`);
     }
     console.log(`📄 שוחזר תוכן עבור ${uploadsWithContent} קבצי uploads`);
 }

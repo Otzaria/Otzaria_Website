@@ -62,3 +62,4 @@ scripts/check-content-files.js
 scripts/check-files-structure.js
 scripts/check-uploads-meta.js
 scripts/debug-upload-content.js
+scripts/check-saved-uploads.js
