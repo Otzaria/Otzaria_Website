@@ -5,6 +5,7 @@ import Book from '@/models/Book';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
+// שמירת תוכן (Auto-save)
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
@@ -12,32 +13,39 @@ export async function POST(request) {
 
     const body = await request.json();
     const { 
-        bookId, // שים לב: ב-Client נצטרך לשלוח ID או למצוא אותו לפי Slug
         pageNumber, 
         content, 
         leftColumn, 
         rightColumn, 
         twoColumns,
-        isContentSplit, 
         rightColumnName, 
         leftColumnName 
     } = body;
 
     await connectDB();
 
-    // עדכון העמוד
-    // אנו מניחים שיש לך את ה-ID של העמוד או הספר. 
-    // אם ה-Client שולח bookPath (slug), נמצא את הספר קודם.
-    
     let query = {};
+    
+    // ניסיון למצוא את העמוד לפי ID ישיר אם סופק
     if (body.pageId) {
         query = { _id: body.pageId };
-    } else if (body.bookPath) {
-        const book = await Book.findOne({ slug: decodeURIComponent(body.bookPath) });
-        if (!book) throw new Error('Book not found');
+    } 
+    // אחרת, חיפוש לפי נתיב הספר ומספר העמוד
+    else if (body.bookPath) {
+        const decodedPath = decodeURIComponent(body.bookPath);
+        
+        // חיפוש גמיש: או לפי ה-slug או לפי השם המדויק
+        const book = await Book.findOne({ 
+            $or: [{ slug: decodedPath }, { name: decodedPath }] 
+        });
+        
+        if (!book) throw new Error(`Book not found: ${decodedPath}`);
         query = { book: book._id, pageNumber: pageNumber };
+    } else {
+        throw new Error('Missing book identifier');
     }
 
+    // עדכון העמוד (upsert=false כי העמוד חייב להיות קיים כבר מהעלאת ה-PDF)
     const updatedPage = await Page.findOneAndUpdate(
       query,
       {
@@ -47,7 +55,7 @@ export async function POST(request) {
         leftColumn,
         rightColumnName,
         leftColumnName,
-        // אופציונלי: שמירת היסטוריה או לוג עריכה
+        // מעדכן את תאריך העדכון האחרון אוטומטית בגלל timestamps: true במודל
       },
       { new: true }
     );
@@ -63,8 +71,57 @@ export async function POST(request) {
   }
 }
 
+// שליפת תוכן (טעינה בעת פתיחת העורך)
 export async function GET(request) {
-    // לוגיקה לקריאת תוכן (דומה ל-GET הקיים שלך ב-book/[id] אבל ספציפי לתוכן טקסט אם צריך בנפרד)
-    // כרגע ה-route של book/[id] כבר מחזיר את המידע, אז אולי זה מיותר אלא אם כן תרצה טעינה בנפרד (Lazy loading של טקסט).
-    return NextResponse.json({ success: true }); 
+    try {
+        const { searchParams } = new URL(request.url);
+        const bookPath = searchParams.get('bookPath');
+        const pageNumber = searchParams.get('pageNumber');
+
+        if (!bookPath || !pageNumber) {
+            return NextResponse.json({ success: false, error: 'Missing parameters' }, { status: 400 });
+        }
+
+        await connectDB();
+
+        // פענוח ה-URL (למשל %D7%97%D7%95%D7%95%D7%AA -> חוות)
+        const decodedPath = decodeURIComponent(bookPath);
+
+        // 1. מציאת הספר
+        const book = await Book.findOne({ 
+            $or: [{ slug: decodedPath }, { name: decodedPath }] 
+        });
+
+        if (!book) {
+            return NextResponse.json({ success: false, error: 'Book not found' }, { status: 404 });
+        }
+
+        // 2. מציאת העמוד
+        const page = await Page.findOne({ 
+            book: book._id, 
+            pageNumber: parseInt(pageNumber) 
+        });
+
+        if (!page) {
+            return NextResponse.json({ success: false, error: 'Page not found' }, { status: 404 });
+        }
+
+        // 3. החזרת הנתונים ללקוח
+        return NextResponse.json({ 
+            success: true, 
+            data: {
+                content: page.content || '',
+                isTwoColumns: page.isTwoColumns || false,
+                twoColumns: page.isTwoColumns || false, // תאימות לשמות משתנים בקלאיינט
+                rightColumn: page.rightColumn || '',
+                leftColumn: page.leftColumn || '',
+                rightColumnName: page.rightColumnName || 'חלק 1',
+                leftColumnName: page.leftColumnName || 'חלק 2'
+            }
+        });
+
+    } catch (error) {
+        console.error('Get Content Error:', error);
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    }
 }
