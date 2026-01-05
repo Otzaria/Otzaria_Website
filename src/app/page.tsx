@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import OtzariaSoftwareHeader from '@/components/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/OtzariaSoftwareFooter'
+import SystemNotice from '@/components/SystemNotice'
 
 export default function Home() {
   const [windowsModalOpen, setWindowsModalOpen] = useState(false)
@@ -70,6 +71,7 @@ export default function Home() {
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <OtzariaSoftwareHeader />
+      <SystemNotice />
       
       <main className="flex-1">
         {/* Hero Section */}
