@@ -1,0 +1,27 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches:
+      - master  # או master, תלוי איך קוראים לבראנץ' הראשי שלך
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy using SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            # כנס לתיקיית הפרוייקט (שנה את הנתיב לנתיב האמיתי בשרת שלך)
+            cd /var/www/otzaria-web
+
+            # משוך את השינויים האחרונים
+            git pull
+
+            npm run build
+
+            pm2 restart otzaria-web
