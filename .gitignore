@@ -61,3 +61,4 @@ scripts/check-backups-structure.js
 scripts/check-content-files.js
 scripts/check-files-structure.js
 scripts/check-uploads-meta.js
+scripts/debug-upload-content.js

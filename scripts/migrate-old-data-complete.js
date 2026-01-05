@@ -577,6 +577,11 @@ async function migrateUploads() {
                 if (uploadContentMap.has(contentKey)) {
                     fileContent = uploadContentMap.get(contentKey);
                     uploadsWithContent++;
+                    
+                    // debug - הדפסה לכמה קבצים ראשונים
+                    if (uploadsWithContent <= 3) {
+                        console.log(`🔍 Debug: קובץ "${uploadData.fileName}" - תוכן: ${fileContent.length} תווים`);
+                    }
                 }
             }
             
