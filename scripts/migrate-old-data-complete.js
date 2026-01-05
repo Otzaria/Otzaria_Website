@@ -548,7 +548,7 @@ async function migrateUploads() {
     filesData.forEach(item => {
         if (item.path && item.path.includes('data/uploads/') && item.data && item.data.content) {
             const fileName = item.path.replace('data/uploads/', '').replace('.txt', '');
-            uploadContentMap.set(fileName, item.data.content);
+            uploadContentMap.set(fileName, item.data.content); // שמירת התוכן עצמו, לא האורך!
         }
     });
     
@@ -600,6 +600,12 @@ async function migrateUploads() {
                 createdAt: safeParseDate(uploadData.uploadedAt),
                 updatedAt: safeParseDate(uploadData.uploadedAt)
             };
+            
+            // debug נוסף - בדיקה לפני השמירה
+            if (uploadsWithContent <= 3) {
+                console.log(`🔍 Debug לפני שמירה: תוכן באורך ${fileContent.length} תווים`);
+                console.log(`🔍 Debug תחילת תוכן: "${fileContent.substring(0, 50)}..."`);
+            }
             
             const newUpload = new Upload(uploadDoc);
             await newUpload.save();
