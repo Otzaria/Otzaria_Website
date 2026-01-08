@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import "./globals.css"; // <--- שורה זו קריטית! וודא שהיא קיימת
 import SessionProvider from "@/components/SessionProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import VersionNotice from "@/components/VersionNotice";
 
 const frankRuehl = localFont({
   src: "./fonts/FrankRuehlCLM-Medium.ttf",
@@ -39,6 +40,7 @@ export default function RootLayout({
         <ErrorBoundary>
           <SessionProvider>
             {children}
+            <VersionNotice />
           </SessionProvider>
         </ErrorBoundary>
       </body>

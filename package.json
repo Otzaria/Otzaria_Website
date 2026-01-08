@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "generate-version": "node -e \"const fs = require('fs'); fs.writeFileSync('./public/version.json', JSON.stringify({ version: Date.now() }));\"",
+    "build": "npm run generate-version && next build",
     "start": "next start",
     "lint": "eslint"
   },
