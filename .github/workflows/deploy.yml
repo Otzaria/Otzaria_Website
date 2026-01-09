@@ -1,12 +1,33 @@
-name: Deploy to VPS
+name: Deploy to VPS with Caching
 
 on:
   push:
     branches:
-      - master  # או master, תלוי איך קוראים לבראנץ' הראשי שלך
+      - master
 
 jobs:
+  # שלב 1: בדיקה ב-GitHub (מהיר יותר בזכות Cache)
+  build-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20 with Cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # עודכן ל-20
+          cache: 'npm'       # זו השורה שמוסיפה את הקסם - שומרת את ההתקנות בזיכרון
+
+      - name: Install Dependencies
+        run: npm ci # ירוץ הרבה יותר מהר בזכות ה-cache
+
+      - name: Try to Build
+        run: npm run build
+
+  # שלב 2: פריסה לשרת (אופטימיזציה בהעתקת קבצים)
   deploy:
+    needs: build-check
     runs-on: ubuntu-latest
     steps:
       - name: Deploy using SSH
@@ -17,13 +38,52 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.PORT }}
           script: |
-            # כנס לתיקיית הפרוייקט (שנה את הנתיב לנתיב האמיתי בשרת שלך)
-            cd /var/www/otzaria-web
+            set -e
 
-            # משוך את השינויים האחרונים
-            git pull
+            APP_DIR="/var/www/otzaria-web"
+            TEMP_DIR="/var/www/otzaria-web-temp"
 
+            echo "🚀 Starting Optimized Deployment..."
+
+            # ניקוי תיקייה זמנית ישנה
+            rm -rf $TEMP_DIR
+            mkdir -p $TEMP_DIR
+
+            # אופטימיזציה: העתקת הפרויקט ללא node_modules
+            # זה חוסך המון זמן כי אנחנו לא מעתיקים סתם אלפי קבצים שנמחוק עוד רגע
+            echo "📋 Copying files (skipping heavy node_modules)..."
+            rsync -a --exclude 'node_modules' --exclude '.git' $APP_DIR/ $TEMP_DIR/
+            
+            cd $TEMP_DIR
+
+            # משיכת הקוד החדש
+            echo "📥 Pulling latest code..."
+            # אנחנו צריכים לאתחל גיט כי לא העתקנו את התיקייה .git הכבדה
+            git init
+            git remote add origin https://github.com/${{ github.repository }}.git
+            git fetch --depth 1 origin master
+            git reset --hard origin/master
+
+            # התקנה ובניה
+            # בשרת, npm שומר cache פנימי ולכן זה יהיה מהיר גם בלי להעתיק את התיקייה
+            echo "📦 Installing dependencies..."
+            npm ci --production
+
+            echo "🛠 Building project..."
             npm run build
 
-            pm2 restart otzaria-web
+            echo "✅ Build successful. Swapping folders..."
             
+            # העתקת התוצאה הסופית לאתר החי
+            # --delete מבטיח שקבצים שנמחקו מהקוד ימחקו גם מהשרת
+            rsync -a --delete $TEMP_DIR/ $APP_DIR/
+
+            # ניקוי
+            rm -rf $TEMP_DIR
+
+            # הפעלה מחדש
+            echo "🔄 Reloading PM2..."
+            cd $APP_DIR
+            pm2 reload otzaria-web || pm2 restart otzaria-web
+
+            echo "🎉 Deployment Finished Successfully!"
