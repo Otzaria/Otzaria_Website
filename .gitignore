@@ -47,27 +47,8 @@ backups.json
 files.json
 
 # Migration scripts (temporary - exclude from git except main migration script)
-scripts/analyze-data-structure.js
-scripts/deep-data-analysis.js
-scripts/fix-duplicate-books.js
-scripts/migration-summary.js
-scripts/migrate-old-data.js
-scripts/migrate-old-data-simple.js
-scripts/pre-migration-check.js
-scripts/preview-migration.js
-scripts/validate-migration-readiness.js
-scripts/MIGRATION_README.md
-scripts/check-backups-structure.js
-scripts/check-content-files.js
-scripts/check-files-structure.js
-scripts/check-uploads-meta.js
-scripts/debug-upload-content.js
-scripts/check-saved-uploads.js
-scripts/debug-upload-mapping.js
+scripts/*
 empty-uploads-report-1767610989868.json
-scripts/debug-content-mapping.js
-scripts/list-empty-uploads.js
-scripts/test-migration-logic.js
 .vscode/settings.json
 111.json
 222.json
