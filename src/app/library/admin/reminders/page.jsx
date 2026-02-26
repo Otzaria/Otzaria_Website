@@ -9,11 +9,15 @@ export default function BookReminderPage() {
     const { showConfirm } = useDialog();
     
     const [books, setBooks] = useState([]);
+    const [dictaBooks, setDictaBooks] = useState([]);
     const [allUsers, setAllUsers] = useState([]); 
     const [history, setHistory] = useState([]);
     
+    const [bookType, setBookType] = useState('regular'); // 'regular' or 'dicta'
     const [selectedBookPath, setSelectedBookPath] = useState('');
+    const [daysThreshold, setDaysThreshold] = useState(7);
     const [customMessage, setCustomMessage] = useState('שמנו לב כי ישנם עמודים שתפסת לעריכה וטרם הושלמו.\nנודה לך מאוד אם תוכל להיכנס למערכת ולהשלים את העבודה עליהם בהקדם, כדי שנוכל לקדם את הספר לפרסום לטובת הכלל.\nלחילופין, אם לא תוכלו לסיים כרגע, נא לשחרר את העמודים ע"מ שאחרים יוכלו לסיים אותם.');
+    const [dictaMessage, setDictaMessage] = useState('שמנו לב כי תפסת ספר דיקטה לעריכה וטרם הושלם.\nנודה לך מאוד אם תוכל להיכנס למערכת ולהשלים את העבודה עליו בהקדם, כדי שנוכל לקדם את הספר לפרסום לטובת הכלל.\nלחילופין, אם לא תוכלו לסיים כרגע, נא לשחרר את הספר ע"מ שאחרים יוכלו לסיים אותו.');
     
     const [recipients, setRecipients] = useState([]);
     const [foundUsersDetails, setFoundUsersDetails] = useState([]);
@@ -87,6 +91,15 @@ export default function BookReminderPage() {
                     setBooks(booksWithWork);
                 }
 
+                const dictaBooksRes = await fetch('/api/dicta/books');
+                const dictaBooksData = await dictaBooksRes.json();
+                if (Array.isArray(dictaBooksData)) {
+                    const dictaBooksInProgress = dictaBooksData.filter(book => 
+                        book.status === 'in-progress' && book.claimedBy
+                    );
+                    setDictaBooks(dictaBooksInProgress);
+                }
+
                 const usersRes = await fetch('/api/admin/users');
                 const usersData = await usersRes.json();
                 if (usersData.success && Array.isArray(usersData.users)) {
@@ -116,9 +129,15 @@ export default function BookReminderPage() {
     }, []);
 
     useEffect(() => {
-        if (!selectedBookPath) {
+        // עבור ספרים רגילים - צריך לבחור ספר
+        if (bookType === 'regular' && !selectedBookPath) {
             setRecipients([]);
             setFoundUsersDetails([]);
+            return;
+        }
+
+        // עבור ספרי דיקטה - לא צריך לבחור ספר, מאתרים אוטומטית
+        if (bookType === 'dicta' && dictaBooks.length === 0) {
             return;
         }
 
@@ -128,40 +147,86 @@ export default function BookReminderPage() {
             setFoundUsersDetails([]);
 
             try {
-                const response = await fetch(`/api/book/${encodeURIComponent(selectedBookPath)}`);
-                const data = await response.json();
+                if (bookType === 'regular') {
+                    const response = await fetch(`/api/book/${encodeURIComponent(selectedBookPath)}`);
+                    const data = await response.json();
 
-                if (data.success && data.pages) {
-                    const userMap = new Map();
-                    allUsers.forEach(u => {
-                        if (u._id) userMap.set(normalizeId(u._id), u);
-                        if (u.id) userMap.set(normalizeId(u.id), u);
-                    });
+                    if (data.success && data.pages) {
+                        const userMap = new Map();
+                        allUsers.forEach(u => {
+                            if (u._id) userMap.set(normalizeId(u._id), u);
+                            if (u.id) userMap.set(normalizeId(u.id), u);
+                        });
 
-                    const uniqueUsers = new Map();
-                    
-                    data.pages.forEach(page => {
-                        if (page.status === 'in-progress') {
-                            let rawUserId = page.claimedById || page.holder;
-                            if (rawUserId && typeof rawUserId === 'object' && rawUserId._id) {
-                                rawUserId = rawUserId._id;
+                        const uniqueUsers = new Map();
+                        
+                        data.pages.forEach(page => {
+                            if (page.status === 'in-progress') {
+                                let rawUserId = page.claimedById || page.holder;
+                                if (rawUserId && typeof rawUserId === 'object' && rawUserId._id) {
+                                    rawUserId = rawUserId._id;
+                                }
+                                const userId = normalizeId(rawUserId);
+
+                                if (userId) {
+                                    const userDetails = userMap.get(userId);
+                                    if (userDetails && userDetails.email && userDetails.acceptReminders && userDetails.isVerified) {
+                                        uniqueUsers.set(userDetails.email, {
+                                            email: userDetails.email,
+                                            name: userDetails.name || 'משתמש ללא שם',
+                                            id: userId
+                                        });
+                                    }
+                                }
                             }
-                            const userId = normalizeId(rawUserId);
+                        });
 
-                            if (userId) {
-                                const userDetails = userMap.get(userId);
+                        const usersList = Array.from(uniqueUsers.values());
+                        setFoundUsersDetails(usersList);
+                        setRecipients(usersList.map(u => u.email));
+                    }
+                } else if (bookType === 'dicta') {
+                    // טיפול בספרי דיקטה - מאתרים את כל המשתמשים עם ספרים בטיפול
+                    const now = new Date();
+                    const usersWithBooks = new Map();
+
+                    dictaBooks.forEach(book => {
+                        if (book.status === 'in-progress' && book.claimedBy && book.claimedAt) {
+                            const claimedAt = new Date(book.claimedAt);
+                            const daysSinceClaim = Math.floor((now - claimedAt) / (1000 * 60 * 60 * 24));
+
+                            if (daysSinceClaim >= daysThreshold) {
+                                const claimedById = book.claimedBy._id || book.claimedBy;
+                                const userDetails = allUsers.find(u => 
+                                    normalizeId(u._id) === normalizeId(claimedById) || 
+                                    normalizeId(u.id) === normalizeId(claimedById)
+                                );
+
                                 if (userDetails && userDetails.email && userDetails.acceptReminders && userDetails.isVerified) {
-                                    uniqueUsers.set(userDetails.email, {
-                                        email: userDetails.email,
-                                        name: userDetails.name || 'משתמש ללא שם',
-                                        id: userId
+                                    const userId = normalizeId(claimedById);
+                                    
+                                    if (!usersWithBooks.has(userId)) {
+                                        usersWithBooks.set(userId, {
+                                            email: userDetails.email,
+                                            name: userDetails.name || 'משתמש ללא שם',
+                                            id: userId,
+                                            books: [],
+                                            maxDays: daysSinceClaim
+                                        });
+                                    }
+                                    
+                                    const userInfo = usersWithBooks.get(userId);
+                                    userInfo.books.push({
+                                        title: book.title,
+                                        daysSinceClaim
                                     });
+                                    userInfo.maxDays = Math.max(userInfo.maxDays, daysSinceClaim);
                                 }
                             }
                         }
                     });
 
-                    const usersList = Array.from(uniqueUsers.values());
+                    const usersList = Array.from(usersWithBooks.values());
                     setFoundUsersDetails(usersList);
                     setRecipients(usersList.map(u => u.email));
                 }
@@ -175,7 +240,7 @@ export default function BookReminderPage() {
         if (allUsers.length > 0) {
             fetchRecipients();
         }
-    }, [selectedBookPath, allUsers]);
+    }, [selectedBookPath, allUsers, bookType, daysThreshold, dictaBooks]);
 
     const toggleRecipient = (email) => {
         setRecipients(prev => {
@@ -187,9 +252,12 @@ export default function BookReminderPage() {
         });
     };
 
-    const generateEmailHtml = (bookName, messageBody) => {
+    const generateEmailHtml = (bookName, messageBody, isDicta = false) => {
         const siteUrl = typeof window !== 'undefined' ? window.location.origin : '';
         const formattedBody = messageBody.replace(/\n/g, '<br/>');
+        const bookLink = isDicta 
+            ? `${siteUrl}/library/dicta-books` 
+            : `${siteUrl}/library/book/${bookName}`;
 
         return `
         <div dir="rtl" style="font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 40px; text-align: center;">
@@ -199,12 +267,12 @@ export default function BookReminderPage() {
                     <h2 style="color: #d4a373; margin: 5px 0 0 0; font-size: 20px; font-weight: bold;">ספריית אוצריא</h2>
                 </div>
                 <div style="padding: 30px; color: #333333;">
-                    <h1 style="color: #2c3e50; font-size: 24px; margin-bottom: 10px;">הודעה בנוגע לספר: ${bookName}</h1>
+                    <h1 style="color: #2c3e50; font-size: 24px; margin-bottom: 10px;">הודעה בנוגע לספר${isDicta ? ' דיקטה' : ''}: ${bookName}</h1>
                     <div style="font-size: 18px; line-height: 1.6; text-align: right; margin-bottom: 30px;">
                         ${formattedBody}
                     </div>
                     <div style="margin: 30px 0; text-align: center;">
-                        <a href="${siteUrl}/library/book/${bookName}" style="background-color: #d4a373; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+                        <a href="${bookLink}" style="background-color: #d4a373; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
                             כנס לספרייה
                         </a>
                     </div>
@@ -216,17 +284,31 @@ export default function BookReminderPage() {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        if (!selectedBookPath || recipients.length === 0) return;
+        if (recipients.length === 0) return;
+        
+        // עבור ספרים רגילים - צריך לבחור ספר
+        if (bookType === 'regular' && !selectedBookPath) return;
 
-        const selectedBook = books.find(b => b.path === selectedBookPath);
-        if (!selectedBook) return;
+        let bookName, bookPath;
+        
+        if (bookType === 'regular') {
+            const selectedBook = books.find(b => b.path === selectedBookPath);
+            if (!selectedBook) return;
+            bookName = selectedBook.name;
+            bookPath = selectedBook.path;
+        } else {
+            // עבור דיקטה - שם כללי
+            bookName = 'ספרי דיקטה';
+            bookPath = 'dicta-books';
+        }
 
         const executeSend = async () => {
             setStatus({ loading: true, error: '', success: '' });
 
             try {
-                const emailHtml = generateEmailHtml(selectedBook.name, customMessage);
-                const emailSubject = `הודעה מערכת בנוגע לספר "${selectedBook.name}"`;
+                const messageToSend = bookType === 'dicta' ? dictaMessage : customMessage;
+                const emailHtml = generateEmailHtml(bookName, messageToSend, bookType === 'dicta');
+                const emailSubject = `הודעה מערכת בנוגע לספר${bookType === 'dicta' ? ' דיקטה' : ''} "${bookName}"`;
                 const isPartial = recipients.length < foundUsersDetails.length;
 
                 const response = await fetch('/api/admin/send-email', { 
@@ -236,10 +318,11 @@ export default function BookReminderPage() {
                         bcc: recipients,
                         subject: emailSubject,
                         html: emailHtml,
-                        text: customMessage,
-                        bookName: selectedBook.name,
-                        bookPath: selectedBook.path,
-                        isPartial: isPartial
+                        text: messageToSend,
+                        bookName: bookName,
+                        bookPath: bookPath,
+                        isPartial: isPartial,
+                        bookType: bookType
                     }),
                 });
 
@@ -258,7 +341,13 @@ export default function BookReminderPage() {
                 const newHistoryItem = {
                     id: Date.now().toString(),
                     adminName: session?.user?.name || 'אדמין',
-                    bookName: selectedBook.name,
+                    bookName: bookType === 'dicta' 
+                        ? (daysThreshold === 0 
+                            ? 'עורכי דיקטה (כל הספרים בטיפול)'
+                            : `עורכי דיקטה מעל ${daysThreshold} ימים`)
+                        : bookName,
+                    bookType: bookType,
+                    daysThreshold: bookType === 'dicta' ? daysThreshold : undefined,
                     timestamp: new Date().toISOString(),
                     isPartial: isPartial
                 };
@@ -276,13 +365,12 @@ export default function BookReminderPage() {
             }
         };
 
-        if (history.length > 0 && history[0].bookName === selectedBook.name) {
+        if (history.length > 0 && history[0].bookName === bookName && history[0].bookType === bookType) {
             const timeAgo = formatTimeAgo(history[0].timestamp);
             
-            // שימוש ב-showConfirm החדש
             showConfirm(
                 'כפילות שליחה',
-                `שים לב! התזכורת האחרונה שיצאה מהמערכת (${timeAgo}) הייתה גם היא עבור הספר "${selectedBook.name}".\nהאם אתה בטוח שברצונך לשלוח תזכורת נוספת לאותו ספר?`,
+                `שים לב! התזכורת האחרונה שיצאה מהמערכת (${timeAgo}) הייתה גם היא עבור ${bookType === 'dicta' ? 'ספרי דיקטה' : `הספר "${bookName}"`}.\nהאם אתה בטוח שברצונך לשלוח תזכורת נוספת?`,
                 executeSend
             );
         } else {
@@ -304,63 +392,159 @@ export default function BookReminderPage() {
                 
                 <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
                     <label className="block text-sm font-bold text-gray-700 mb-2">
-                        1. בחר ספר (מוצגים רק ספרים בטיפול)
+                        1. בחר סוג ספר
                     </label>
-                    <select
-                        value={selectedBookPath}
-                        onChange={(e) => setSelectedBookPath(e.target.value)}
-                        required
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none bg-white transition-all"
-                    >
-                        <option value="">-- בחר ספר מהרשימה --</option>
-                        {books.map(book => (
-                            <option key={book.id} value={book.path}>
-                                {book.name} ({book.category})
-                            </option>
-                        ))}
-                    </select>
+                    <div className="flex gap-4 mb-4">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                                type="radio"
+                                value="regular"
+                                checked={bookType === 'regular'}
+                                onChange={(e) => {
+                                    setBookType(e.target.value);
+                                    setSelectedBookPath('');
+                                }}
+                                className="w-4 h-4 text-primary focus:ring-primary"
+                            />
+                            <span className="text-sm font-medium">ספרים רגילים (עמודים)</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                                type="radio"
+                                value="dicta"
+                                checked={bookType === 'dicta'}
+                                onChange={(e) => {
+                                    setBookType(e.target.value);
+                                    setSelectedBookPath('');
+                                }}
+                                className="w-4 h-4 text-primary focus:ring-primary"
+                            />
+                            <span className="text-sm font-medium">ספרי דיקטה</span>
+                        </label>
+                    </div>
 
-                    {selectedBookPath && (
-                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm animate-in fade-in">
-                            <div>
-                                {isCheckingRecipients ? (
+                    {bookType === 'dicta' ? (
+                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                            <label className="block text-sm font-bold text-gray-700 mb-2">
+                                סינון לפי ימים מאז תפיסה
+                            </label>
+                            <div className="flex items-center gap-3 mb-3">
+                                <input
+                                    type="number"
+                                    min="0"
+                                    value={daysThreshold}
+                                    onChange={(e) => setDaysThreshold(parseInt(e.target.value) || 0)}
+                                    className="w-20 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none"
+                                />
+                                <span className="text-sm text-gray-600">
+                                    {daysThreshold === 0 ? 'כל הספרים בטיפול (ללא סינון)' : `ימים או יותר מאז שהספר נתפס`}
+                                </span>
+                            </div>
+                            <p className="text-xs text-gray-500">
+                                {daysThreshold === 0 
+                                    ? 'המערכת תאתר את כל המשתמשים שיש להם ספרי דיקטה בטיפול, ללא קשר למועד התפיסה'
+                                    : `המערכת תאתר אוטומטית את כל המשתמשים שיש להם ספרי דיקטה בטיפול שעברו ${daysThreshold} ימים או יותר מאז התפיסה`
+                                }
+                            </p>
+                            
+                            {isCheckingRecipients ? (
+                                <div className="mt-3">
                                     <span className="text-blue-600 flex items-center gap-2">
                                         <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
                                         מאתר נמענים...
                                     </span>
-                                ) : foundUsersDetails.length > 0 ? (
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-green-600 font-bold flex items-center gap-2 bg-green-50 px-3 py-1 rounded-full border border-green-200">
-                                            <span className="material-symbols-outlined text-sm">group</span>
-                                            נמצאו {foundUsersDetails.length} משתמשים ({recipients.length} נבחרו)
-                                        </span>
-                                        
-                                        <button 
-                                            type="button"
-                                            onClick={() => setShowUserSelection(true)}
-                                            className="text-primary hover:text-blue-800 underline font-medium text-sm transition-colors"
-                                        >
-                                            בחירת משתמשים מסויימים
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <span className="text-red-500 flex items-center gap-2 bg-red-50 px-3 py-1 rounded-full border border-red-200">
-                                        <span className="material-symbols-outlined text-sm">warning</span>
-                                        לא נמצאו נמענים פעילים בספר זה
+                                </div>
+                            ) : foundUsersDetails.length > 0 ? (
+                                <div className="mt-3 flex items-center gap-3">
+                                    <span className="text-green-600 font-bold flex items-center gap-2 bg-green-50 px-3 py-1 rounded-full border border-green-200">
+                                        <span className="material-symbols-outlined text-sm">group</span>
+                                        נמצאו {foundUsersDetails.length} משתמשים ({recipients.length} נבחרו)
                                     </span>
-                                )}
-                            </div>
+                                    
+                                    <button 
+                                        type="button"
+                                        onClick={() => setShowUserSelection(true)}
+                                        className="text-primary hover:text-blue-800 underline font-medium text-sm transition-colors"
+                                    >
+                                        בחירת משתמשים מסויימים
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="mt-3">
+                                    <span className="text-orange-500 flex items-center gap-2 bg-orange-50 px-3 py-1 rounded-full border border-orange-200 text-sm">
+                                        <span className="material-symbols-outlined text-sm">info</span>
+                                        {daysThreshold === 0 
+                                            ? 'לא נמצאו משתמשים עם ספרי דיקטה בטיפול'
+                                            : `לא נמצאו משתמשים עם ספרי דיקטה שעברו ${daysThreshold} ימים`
+                                        }
+                                    </span>
+                                </div>
+                            )}
                         </div>
+                    ) : (
+                        <>
+                            <label className="block text-sm font-bold text-gray-700 mb-2">
+                                2. בחר ספר (מוצגים רק ספרים בטיפול)
+                            </label>
+                            <select
+                                value={selectedBookPath}
+                                onChange={(e) => setSelectedBookPath(e.target.value)}
+                                required
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none bg-white transition-all"
+                            >
+                                <option value="">-- בחר ספר מהרשימה --</option>
+                                {books.map(book => (
+                                    <option key={book.id} value={book.path}>
+                                        {book.name} ({book.category})
+                                    </option>
+                                ))}
+                            </select>
+
+                            {selectedBookPath && (
+                                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm animate-in fade-in">
+                                    <div>
+                                        {isCheckingRecipients ? (
+                                            <span className="text-blue-600 flex items-center gap-2">
+                                                <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+                                                מאתר נמענים...
+                                            </span>
+                                        ) : foundUsersDetails.length > 0 ? (
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-green-600 font-bold flex items-center gap-2 bg-green-50 px-3 py-1 rounded-full border border-green-200">
+                                                    <span className="material-symbols-outlined text-sm">group</span>
+                                                    נמצאו {foundUsersDetails.length} משתמשים ({recipients.length} נבחרו)
+                                                </span>
+                                                
+                                                {foundUsersDetails.length > 1 && (
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => setShowUserSelection(true)}
+                                                        className="text-primary hover:text-blue-800 underline font-medium text-sm transition-colors"
+                                                    >
+                                                        בחירת משתמשים מסויימים
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <span className="text-red-500 flex items-center gap-2 bg-red-50 px-3 py-1 rounded-full border border-red-200">
+                                                <span className="material-symbols-outlined text-sm">warning</span>
+                                                לא נמצאו נמענים פעילים בספר זה
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
 
                 <div>
                     <label className="block text-sm font-bold text-gray-700 mb-2">
-                        2. תוכן ההודעה (משתלב בתוך התבנית הקבועה)
+                        {bookType === 'regular' ? '3' : '2'}. תוכן ההודעה (משתלב בתוך התבנית הקבועה)
                     </label>
                     <textarea
-                        value={customMessage}
-                        onChange={(e) => setCustomMessage(e.target.value)}
+                        value={bookType === 'dicta' ? dictaMessage : customMessage}
+                        onChange={(e) => bookType === 'dicta' ? setDictaMessage(e.target.value) : setCustomMessage(e.target.value)}
                         required
                         rows="5"
                         placeholder="כתוב כאן את המסר שלך למתנדבים..."
@@ -420,12 +604,24 @@ export default function BookReminderPage() {
                         {history.map((item) => (
                             <div key={item.id} className="p-4 border-b border-gray-100 last:border-0 hover:bg-white transition-colors flex items-center justify-between group">
                                 <div>
-                                    <div className="font-bold text-gray-800">{item.bookName}</div>
-                                    <div className="text-sm text-gray-500 flex items-center gap-2">
+                                    <div className="font-bold text-gray-800 flex items-center gap-2">
+                                        {item.bookName}
+                                        {item.bookType === 'dicta' && (
+                                            <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                                                דיקטה
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="text-sm text-gray-500 flex items-center gap-2 flex-wrap">
                                         <span>נשלח על ידי: {item.adminName}</span>
                                         {item.isPartial && (
                                             <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
                                                 נשלח לחלק מהמשתמשים
+                                            </span>
+                                        )}
+                                        {item.bookType === 'dicta' && item.daysThreshold !== undefined && (
+                                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                                                {item.daysThreshold === 0 ? 'כל הספרים' : `${item.daysThreshold}+ ימים`}
                                             </span>
                                         )}
                                     </div>
@@ -490,18 +686,27 @@ export default function BookReminderPage() {
                                 {foundUsersDetails.map((user) => (
                                     <label 
                                         key={user.email} 
-                                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all
+                                        className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all
                                             ${recipients.includes(user.email) ? 'bg-blue-50 border-blue-200' : 'hover:bg-gray-50 border-gray-100'}`}
                                     >
                                         <input
                                             type="checkbox"
                                             checked={recipients.includes(user.email)}
                                             onChange={() => toggleRecipient(user.email)}
-                                            className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500"
+                                            className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500 mt-0.5"
                                         />
-                                        <div>
+                                        <div className="flex-1">
                                             <div className="font-bold text-gray-800">{user.name}</div>
                                             <div className="text-xs text-gray-500">{user.email}</div>
+                                            {bookType === 'dicta' && user.books && user.books.length > 0 && (
+                                                <div className="mt-2 space-y-1">
+                                                    {user.books.map((book, idx) => (
+                                                        <div key={idx} className="text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded">
+                                                            {book.title} ({book.daysSinceClaim} ימים)
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
                                     </label>
                                 ))}

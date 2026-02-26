@@ -14,8 +14,8 @@ export async function GET() {
 
     await connectDB();
     // שליפת רשימת הספרים כולל סטטוס ומי תפס
-    const books = await DictaBook.find({}, 'title status claimedBy updatedAt')
-      .populate('claimedBy', 'name')
+    const books = await DictaBook.find({}, 'title status claimedBy claimedAt updatedAt')
+      .populate('claimedBy', 'name email')
       .sort({ updatedAt: -1 });
     return NextResponse.json(books);
   } catch (error) {
