@@ -261,6 +261,9 @@ export default function DictaEditorPage() {
     const end = textarea.selectionEnd
     const selectedText = content.substring(start, end)
     
+    // שמירת מיקום הגלילה לפני השינוי
+    const scrollTop = textarea.scrollTop
+    
     const insertion = selectedText ? `<${tag}>${selectedText}</${tag}>` : `<${tag}></${tag}>`;
     const newText = content.substring(0, start) + insertion + content.substring(end);
     
@@ -270,6 +273,8 @@ export default function DictaEditorPage() {
       const newPos = selectedText ? (start + insertion.length) : (start + tag.length + 2);
       textarea.focus();
       textarea.setSelectionRange(newPos, newPos);
+      // החזרת מיקום הגלילה
+      textarea.scrollTop = scrollTop;
     }, 0);
   }, [content])
 
