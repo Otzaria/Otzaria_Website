@@ -256,7 +256,7 @@ export default function BookReminderPage() {
         const siteUrl = typeof window !== 'undefined' ? window.location.origin : '';
         const formattedBody = messageBody.replace(/\n/g, '<br/>');
         const bookLink = isDicta 
-            ? `${siteUrl}/library/dicta-books` 
+            ? `${siteUrl}/library/dicta-books?status=my-books` 
             : `${siteUrl}/library/book/${bookName}`;
 
         return `
@@ -273,7 +273,7 @@ export default function BookReminderPage() {
                     </div>
                     <div style="margin: 30px 0; text-align: center;">
                         <a href="${bookLink}" style="background-color: #d4a373; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
-                            כנס לספרייה
+                            ${isDicta ? 'כנס לספרי הדיקטה שלי' : 'כנס לספרייה'}
                         </a>
                     </div>
                 </div>
