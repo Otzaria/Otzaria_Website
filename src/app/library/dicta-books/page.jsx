@@ -93,11 +93,25 @@ export default function DictaBooksPublicPage() {
           const res = await fetch(`/api/dicta/books/${bookId}/claim`, {
             method: 'POST',
           })
+          
           if (res.ok) {
             fetchBooks()
             showAlert('הצלחה', 'הספר נתפס בהצלחה וכעת תוכל להתחיל לערוך אותו!')
           } else {
-            showAlert('שגיאה', 'אירעה בעיה בתפיסת הספר. ייתכן שהוא נתפס על ידי משתמש אחר.')
+            const data = await res.json()
+            
+            // בדיקה אם המשתמש לא אישר תזכורות
+            if (data.error === 'TERMS_REQUIRED' && data.redirectUrl) {
+              showConfirm(
+                'נדרש אישור תזכורות',
+                'כדי לתפוס ספר לעריכה, עליך לאשר קבלת תזכורות במייל. האם ברצונך לעבור לדף האישור?',
+                () => {
+                  router.push(data.redirectUrl)
+                }
+              )
+            } else {
+              showAlert('שגיאה', data.error || 'אירעה בעיה בתפיסת הספר. ייתכן שהוא נתפס על ידי משתמש אחר.')
+            }
           }
         } catch (error) {
           console.error('Error claiming book:', error)

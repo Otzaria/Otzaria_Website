@@ -61,7 +61,7 @@ export default function ApproveTermsPage() {
           
           <p className="text-center text-on-surface/70 mb-8 text-sm leading-relaxed">
             כדי להשלים את הכניסה למערכת ולשמור על חוויית שימוש רציפה, 
-            אנו זקוקים לאישור שלך לקבלת תזכורות על עמודים שלא סיימת לערוך.
+            אנו זקוקים לאישור שלך לקבלת תזכורות על עמודים וספרים שלא סיימת לערוך.
           </p>
 
           {error && (
@@ -85,7 +85,7 @@ export default function ApproveTermsPage() {
                   />
                 </div>
                 <label htmlFor="terms-check" className="text-sm text-on-surface cursor-pointer select-none leading-relaxed">
-                  אני מאשר קבלת תזכורות במייל על עמודים שלא סיימתי לערוך.
+                  אני מאשר קבלת תזכורות במייל על עמודים וספרים שלא סיימתי לערוך.
                 </label>
               </div>
             </div>

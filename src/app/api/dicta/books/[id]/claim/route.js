@@ -26,7 +26,17 @@ export async function POST(request, context) {
     // 2. חיבור למסד הנתונים
     await dbConnect();
 
-    // 3. שליפת הספר
+    // 3. בדיקת סטטוס המשתמש (acceptReminders)
+    const user = await User.findById(userId);
+    if (!user || !user.acceptReminders) {
+      return NextResponse.json({ 
+        success: false, 
+        error: 'TERMS_REQUIRED',
+        redirectUrl: '/library/auth/approve-terms-on-edit'
+      }, { status: 403 });
+    }
+
+    // 4. שליפת הספר
     const book = await DictaBook.findById(bookId);
     
     if (!book) {
@@ -35,6 +45,7 @@ export async function POST(request, context) {
     }
 
 
+    
     // 4. בדיקה אם הספר כבר תפוס
     if (book.claimedBy || book.status !== 'available') {
       console.log('❌ Book is already claimed or not available.');

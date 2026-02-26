@@ -630,6 +630,20 @@ export default function DictaEditorPage() {
     return () => window.removeEventListener('keydown', handleGlobalKeyDown, { capture: true })
   }, [userShortcuts, actionsMap, showShortcutsDialog])
 
+  const refreshContent = async () => {
+    try {
+      const res = await fetch(`/api/dicta/books/${bookId}`)
+      if (!res.ok) throw new Error('שגיאה בטעינת הספר')
+      const data = await res.json()
+      setBook(data)
+      setContent(data.content || '')
+      setSavedContent(data.content || '')
+    } catch (error) {
+      console.error('Error refreshing book:', error)
+      showAlert('שגיאה', 'שגיאה בטעינת הספר')
+    }
+  }
+
   const handleClaim = () => {
     showConfirm(
       'תפיסת ספר',
@@ -640,11 +654,25 @@ export default function DictaEditorPage() {
           const res = await fetch(`/api/dicta/books/${bookId}/claim`, {
             method: 'POST',
           })
+          
           if (res.ok) {
             await refreshContent()
             showAlert('הצלחה', 'הספר נתפס בהצלחה וכעת תוכל להתחיל לערוך אותו!')
           } else {
-            showAlert('שגיאה', 'אירעה בעיה בתפיסת הספר. ייתכן שהוא נתפס על ידי משתמש אחר.')
+            const data = await res.json()
+            
+            // בדיקה אם המשתמש לא אישר תזכורות
+            if (data.error === 'TERMS_REQUIRED' && data.redirectUrl) {
+              showConfirm(
+                'נדרש אישור תזכורות',
+                'כדי לתפוס ספר לעריכה, עליך לאשר קבלת תזכורות במייל. האם ברצונך לעבור לדף האישור?',
+                () => {
+                  router.push(data.redirectUrl)
+                }
+              )
+            } else {
+              showAlert('שגיאה', data.error || 'אירעה בעיה בתפיסת הספר. ייתכן שהוא נתפס על ידי משתמש אחר.')
+            }
           }
         } catch (error) {
           console.error('Error claiming book:', error)
