@@ -30,6 +30,7 @@ export default function AdminDictaBooksPage() {
   const [splitting, setSplitting] = useState(false)
   const [searchText, setSearchText] = useState('')
   const [viewMode, setViewMode] = useState('preview') // 'preview' or 'full'
+  const [openMenuId, setOpenMenuId] = useState(null) // לניהול תפריט פתוח
   
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
   const [statusFilter, setStatusFilter] = useState('all') // ברירת מחדל: הכל
@@ -319,6 +320,19 @@ export default function AdminDictaBooksPage() {
     setSplitPosition(position)
   }
 
+  const toggleMenu = (bookId) => {
+    setOpenMenuId(openMenuId === bookId ? null : bookId)
+  }
+
+  // סגירת תפריט בלחיצה מחוץ לו
+  useEffect(() => {
+    const handleClickOutside = () => setOpenMenuId(null)
+    if (openMenuId) {
+      document.addEventListener('click', handleClickOutside)
+      return () => document.removeEventListener('click', handleClickOutside)
+    }
+  }, [openMenuId])
+
   const handleConfirmSplit = async () => {
     if (!splittingBook) return
     
@@ -576,46 +590,87 @@ export default function AdminDictaBooksPage() {
                     })}
                   </td>
                   <td className="p-4">
-                    <div className="flex gap-2 justify-center">
+                    <div className="flex justify-center relative">
                       <button
-                        onClick={() => router.push(`/library/dicta-books/edit/${book._id}`)}
-                        className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                        title="פתח בעורך"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          toggleMenu(book._id)
+                        }}
+                        className={`p-2 hover:bg-gray-200 rounded-lg transition-colors ${
+                          openMenuId === book._id ? 'bg-gray-200' : ''
+                        }`}
+                        title="פעולות"
                       >
-                        <span className="material-symbols-outlined">edit_note</span>
+                        <span className="material-symbols-outlined text-gray-600">more_vert</span>
                       </button>
-                      {book.status !== 'completed' && (
-                        <button
-                          onClick={() => handleSplitBook(book)}
-                          className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                          title="פצל ספר ל-2"
+
+                      {openMenuId === book._id && (
+                        <div 
+                          className="absolute left-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 min-w-[180px] animate-in fade-in slide-in-from-top-2 duration-200"
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          <span className="material-symbols-outlined">call_split</span>
-                        </button>
+                          <button
+                            onClick={() => {
+                              setOpenMenuId(null)
+                              router.push(`/library/dicta-books/edit/${book._id}`)
+                            }}
+                            className="w-full px-4 py-2 text-right hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm"
+                          >
+                            <span className="material-symbols-outlined text-green-600 text-base">edit_note</span>
+                            <span>פתח בעורך</span>
+                          </button>
+
+                          {book.status !== 'completed' && (
+                            <button
+                              onClick={() => {
+                                setOpenMenuId(null)
+                                handleSplitBook(book)
+                              }}
+                              className="w-full px-4 py-2 text-right hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm"
+                            >
+                              <span className="material-symbols-outlined text-purple-600 text-base">call_split</span>
+                              <span>פצל ספר ל-2</span>
+                            </button>
+                          )}
+
+                          {book.status === 'in-progress' && (
+                            <button
+                              onClick={() => {
+                                setOpenMenuId(null)
+                                handleReleaseBook(book._id, book.title)
+                              }}
+                              className="w-full px-4 py-2 text-right hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm"
+                            >
+                              <span className="material-symbols-outlined text-orange-600 text-base">lock_open</span>
+                              <span>שחרר ספר</span>
+                            </button>
+                          )}
+
+                          <button
+                            onClick={() => {
+                              setOpenMenuId(null)
+                              handleEditStatus(book)
+                            }}
+                            className="w-full px-4 py-2 text-right hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm"
+                          >
+                            <span className="material-symbols-outlined text-blue-600 text-base">edit</span>
+                            <span>ערוך סטטוס</span>
+                          </button>
+
+                          <div className="border-t border-gray-200 my-1"></div>
+
+                          <button
+                            onClick={() => {
+                              setOpenMenuId(null)
+                              handleDeleteBook(book._id, book.title)
+                            }}
+                            className="w-full px-4 py-2 text-right hover:bg-red-50 transition-colors flex items-center gap-2 text-sm text-red-600"
+                          >
+                            <span className="material-symbols-outlined text-base">delete</span>
+                            <span>מחק ספר</span>
+                          </button>
+                        </div>
                       )}
-                      {book.status === 'in-progress' && (
-                        <button
-                          onClick={() => handleReleaseBook(book._id, book.title)}
-                          className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
-                          title="שחרר ספר (בטל נעילה)"
-                        >
-                          <span className="material-symbols-outlined">lock_open</span>
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleEditStatus(book)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="ערוך סטטוס"
-                      >
-                        <span className="material-symbols-outlined">edit</span>
-                      </button>
-                      <button
-                        onClick={() => handleDeleteBook(book._id, book.title)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="מחק ספר"
-                      >
-                        <span className="material-symbols-outlined">delete</span>
-                      </button>
                     </div>
                   </td>
                 </tr>
