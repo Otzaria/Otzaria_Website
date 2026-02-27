@@ -190,6 +190,13 @@ export default function BookReminderPage() {
                     const now = new Date();
                     const usersWithBooks = new Map();
 
+                    // יצירת Map של משתמשים לפי ID לשיפור ביצועים (O(1) במקום O(N))
+                    const userMap = new Map();
+                    allUsers.forEach(u => {
+                        if (u._id) userMap.set(normalizeId(u._id), u);
+                        if (u.id) userMap.set(normalizeId(u.id), u);
+                    });
+
                     dictaBooks.forEach(book => {
                         if (book.status === 'in-progress' && book.claimedBy && book.claimedAt) {
                             const claimedAt = new Date(book.claimedAt);
@@ -197,14 +204,10 @@ export default function BookReminderPage() {
 
                             if (daysSinceClaim >= daysThreshold) {
                                 const claimedById = book.claimedBy._id || book.claimedBy;
-                                const userDetails = allUsers.find(u => 
-                                    normalizeId(u._id) === normalizeId(claimedById) || 
-                                    normalizeId(u.id) === normalizeId(claimedById)
-                                );
+                                const userId = normalizeId(claimedById);
+                                const userDetails = userMap.get(userId);
 
                                 if (userDetails && userDetails.email && userDetails.acceptReminders && userDetails.isVerified) {
-                                    const userId = normalizeId(claimedById);
-                                    
                                     if (!usersWithBooks.has(userId)) {
                                         usersWithBooks.set(userId, {
                                             email: userDetails.email,
