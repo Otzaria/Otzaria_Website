@@ -5,8 +5,9 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 export async function POST(request) {
+  const session = await getServerSession(authOptions);
+  
   try {
-    const session = await getServerSession(authOptions);
     if (session?.user?.role !== 'admin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -63,43 +64,82 @@ export async function POST(request) {
       }, { status: 400 });
     }
 
-    // יצירת הספר הראשון - שומר את הסטטוס והבעלות של הספר המקורי
-    const firstBook = await DictaBook.create({
-      title: firstBookTitle,
-      content: firstContent,
-      status: originalBook.status, // שומר את הסטטוס המקורי
-      claimedBy: originalBook.claimedBy, // שומר את הבעלות המקורית
-      claimedAt: originalBook.claimedAt, // שומר את תאריך התפיסה
-      history: [{
-        timestamp: new Date(),
-        description: `נוצר מפיצול של "${originalBook.title}" (חלק ראשון)`,
-        editorId: session.user._id || session.user.id,
-        editorName: session.user.name
-      }]
-    });
+    // גישה חלופית ללא טרנזקציות - עם rollback ידני במקרה של כשל
+    let firstBook = null;
+    let secondBook = null;
+    let originalDeleted = false;
 
-    // יצירת הספר השני - תמיד פנוי
-    const secondBook = await DictaBook.create({
-      title: secondBookTitle,
-      content: secondContent,
-      status: 'available', // תמיד פנוי
-      history: [{
-        timestamp: new Date(),
-        description: `נוצר מפיצול של "${originalBook.title}" (חלק שני)`,
-        editorId: session.user._id || session.user.id,
-        editorName: session.user.name
-      }]
-    });
+    try {
+      // שלב 1: יצירת הספר הראשון
+      firstBook = await DictaBook.create({
+        title: firstBookTitle,
+        content: firstContent,
+        status: originalBook.status,
+        claimedBy: originalBook.claimedBy,
+        claimedAt: originalBook.claimedAt,
+        history: [{
+          timestamp: new Date(),
+          description: `נוצר מפיצול של "${originalBook.title}" (חלק ראשון)`,
+          editorId: session.user._id || session.user.id,
+          editorName: session.user.name
+        }]
+      });
 
-    // מחיקת הספר המקורי
-    await DictaBook.findByIdAndDelete(bookId);
+      console.log('First book created:', firstBook._id);
 
-    return NextResponse.json({ 
-      success: true, 
-      firstBookId: firstBook._id,
-      secondBookId: secondBook._id,
-      message: `הספר פוצל בהצלחה ל-2 ספרים חדשים`
-    });
+      // שלב 2: יצירת הספר השני
+      secondBook = await DictaBook.create({
+        title: secondBookTitle,
+        content: secondContent,
+        status: 'available',
+        history: [{
+          timestamp: new Date(),
+          description: `נוצר מפיצול של "${originalBook.title}" (חלק שני)`,
+          editorId: session.user._id || session.user.id,
+          editorName: session.user.name
+        }]
+      });
+
+      console.log('Second book created:', secondBook._id);
+
+      // שלב 3: מחיקת הספר המקורי
+      await DictaBook.findByIdAndDelete(bookId);
+      originalDeleted = true;
+
+      console.log('Original book deleted:', bookId);
+      console.log('Book split completed successfully');
+
+      return NextResponse.json({ 
+        success: true, 
+        firstBookId: firstBook._id,
+        secondBookId: secondBook._id,
+        message: `הספר פוצל בהצלחה ל-2 ספרים חדשים`
+      });
+
+    } catch (operationError) {
+      // Rollback ידני - מחיקת הספרים שנוצרו
+      console.error('Operation failed, performing manual rollback:', operationError);
+
+      try {
+        if (firstBook) {
+          await DictaBook.findByIdAndDelete(firstBook._id);
+          console.log('Rolled back: deleted first book');
+        }
+        if (secondBook) {
+          await DictaBook.findByIdAndDelete(secondBook._id);
+          console.log('Rolled back: deleted second book');
+        }
+        // אם הספר המקורי נמחק, לא ניתן לשחזר אותו - זה לא אמור לקרות
+        // כי המחיקה היא הפעולה האחרונה
+        if (originalDeleted) {
+          console.error('CRITICAL: Original book was deleted but operation failed');
+        }
+      } catch (rollbackError) {
+        console.error('Rollback failed:', rollbackError);
+      }
+
+      throw operationError;
+    }
 
   } catch (error) {
     console.error('Error splitting book:', error);
