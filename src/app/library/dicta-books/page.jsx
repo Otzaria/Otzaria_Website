@@ -1,13 +1,14 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Header from '@/components/Header'
 import Link from 'next/link'
 import { useDialog } from '@/components/DialogContext'
 
-export default function DictaBooksPublicPage() {
+// קומפוננטת התוכן שמכילה את כל הלוגיקה והממשק
+function DictaBooksContent() {
   const { data: session } = useSession()
   const { showAlert, showConfirm } = useDialog()
   const router = useRouter()
@@ -52,7 +53,6 @@ export default function DictaBooksPublicPage() {
         const now = Date.now()
         const timestamp = parseInt(savedTimestamp, 10)
         
-        // אם עברו פחות מ-5 שניות, זה כנראה ניווט חזרה ולא רענון
         if (!isNaN(timestamp) && now - timestamp < 5000) {
           try {
             const { search, status, category } = JSON.parse(savedFilters)
@@ -66,7 +66,6 @@ export default function DictaBooksPublicPage() {
       }
     }
     
-    // ניקוי אחרי טעינה
     sessionStorage.removeItem('dictaBooksFilters')
     sessionStorage.removeItem('dictaBooksTimestamp')
   }, [searchParams])
@@ -82,11 +81,9 @@ export default function DictaBooksPublicPage() {
     const queryString = params.toString()
     const newUrl = queryString ? `/library/dicta-books?${queryString}` : '/library/dicta-books'
     
-    // עדכון ה-URL בלי לגרום לרענון הדף
     window.history.replaceState({}, '', newUrl)
   }, [searchTerm, filterStatus, filterCategory])
 
-  // פונקציה לשמירת הסינונים לפני ניווט
   const saveFiltersBeforeNavigation = () => {
     const filters = {
       search: searchTerm,
@@ -127,8 +124,6 @@ export default function DictaBooksPublicPage() {
             showAlert('הצלחה', 'הספר נתפס בהצלחה וכעת תוכל להתחיל לערוך אותו!')
           } else {
             const data = await res.json()
-            
-            // בדיקה אם המשתמש לא אישר תזכורות
             if (data.error === 'TERMS_REQUIRED' && data.redirectUrl) {
               showConfirm(
                 'נדרש אישור תזכורות',
@@ -138,7 +133,7 @@ export default function DictaBooksPublicPage() {
                 }
               )
             } else {
-              showAlert('שגיאה', data.error || 'אירעה בעיה בתפיסת הספר. ייתכן שהוא נתפס על ידי משתמש אחר.')
+              showAlert('שגיאה', data.error || 'אירעה בעיה בתפיסת הספר.')
             }
           }
         } catch (error) {
@@ -224,7 +219,6 @@ export default function DictaBooksPublicPage() {
     )
   }
 
-  // עיבוד מקדים של הספרים - הוספת bookCategory ו-bookName
   const processedBooks = useMemo(() => {
     return books.map(book => {
       const bookCategory = book.title?.split('/')[0]?.trim()
@@ -237,7 +231,6 @@ export default function DictaBooksPublicPage() {
     })
   }, [books])
 
-  // חילוץ רשימת קטגוריות ייחודיות מהספרים
   const categories = useMemo(() => {
     return [...new Set(
       processedBooks
@@ -282,7 +275,6 @@ export default function DictaBooksPublicPage() {
               <h1 className="text-4xl font-bold font-frank text-slate-900 mb-2">עריכת ספרי דיקטה</h1>
               <p className="text-slate-600 text-lg">
                 {loading ? 'טוען...' : `${filteredBooks.length} ספרים מוצגים`}
-                {!loading && filteredBooks.length !== books.length && ` (מתוך ${books.length} סה"כ)`}
               </p>
             </div>
             
@@ -329,9 +321,7 @@ export default function DictaBooksPublicPage() {
               >
                 <option value="all">כל הקטגוריות</option>
                 {categories.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
+                  <option key={cat} value={cat}>{cat}</option>
                 ))}
               </select>
             </div>
@@ -382,10 +372,7 @@ export default function DictaBooksPublicPage() {
                         <div className="flex items-center gap-2">
                           {isOwner && !isCompleted && (
                             <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                handleRelease(book._id);
-                              }}
+                              onClick={(e) => { e.preventDefault(); handleRelease(book._id); }}
                               className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1 rounded-md transition-colors flex items-center justify-center cursor-pointer"
                               title="שחרר ספר"
                             >
@@ -471,7 +458,7 @@ export default function DictaBooksPublicPage() {
                               onClick={saveFiltersBeforeNavigation}
                               className="flex-[2] text-center bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-md"
                             >
-                              פתח עורך טקסט
+                              פתח עורך
                             </Link>
                             <button 
                               onClick={() => handleComplete(book._id)}
@@ -502,5 +489,18 @@ export default function DictaBooksPublicPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+// הייצוא הראשי שעוטף ב-Suspense כדי לפתור את שגיאת ה-Build
+export default function DictaBooksPublicPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    }>
+      <DictaBooksContent />
+    </Suspense>
   )
 }

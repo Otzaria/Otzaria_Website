@@ -60,3 +60,4 @@ sample.json
 Otzaria_Website.xml
 .env.local
 public/tessdata/*
+public/version.json
