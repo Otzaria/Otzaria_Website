@@ -77,6 +77,35 @@ export default function AdminDictaBooksPage() {
                 
             showAlert('הסנכרון הושלם', `${summary}`)
             loadBooks() // טעינה ברקע ללא מסך טעינה
+
+            // אם נוספו מעל 10 ספרים, שאל אם לשלוח הודעה
+            const addedCount = data.addedCount || 0
+            if (addedCount > 10) {
+              showConfirm(
+                'שליחת הודעה למנויים',
+                `נוספו ${addedCount} ספרים חדשים. האם לשלוח הודעה למנויים על הספרים החדשים?`,
+                async () => {
+                  try {
+                    const emailResponse = await fetch('/api/admin/send-dicta-sync-notification', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ addedCount })
+                    })
+
+                    const emailData = await emailResponse.json()
+                    
+                    if (emailData.success) {
+                      showAlert('הצלחה', `ההודעה נשלחה בהצלחה ל-${emailData.details?.successful || 0} מנויים`)
+                    } else {
+                      showAlert('שגיאה', `שגיאה בשליחת ההודעה: ${emailData.error || 'שגיאה לא ידועה'}`)
+                    }
+                  } catch (emailError) {
+                    console.error(emailError)
+                    showAlert('שגיאה', 'שגיאה בשליחת ההודעה למנויים')
+                  }
+                }
+              )
+            }
           } else {
             showAlert('שגיאה', `שגיאה בסנכרון: ${data.detail || data.error || 'שגיאה לא ידועה'}`)
           }

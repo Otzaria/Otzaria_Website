@@ -95,7 +95,7 @@ export async function dictaSync(customFolderPath) {
     log.push('--------------------------------');
     log.push(`סיכום: נוספו ${addedCount}, דולגו ${fileList.length - addedCount - errorCount}, שגיאות ${errorCount}`);
 
-    return { success: true, log };
+    return { success: true, log, addedCount };
 
   } catch (error) {
     console.error("Critical Sync Error:", error);
