@@ -211,114 +211,121 @@ export default function AdminPagesPage() {
           </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-gray-200">
-          <table className="w-full bg-white">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                      <th className="text-right p-4 font-bold text-gray-700">ספר</th>
-                      <th className="text-right p-4 font-bold text-gray-700">עמוד</th>
-                      <th className="text-right p-4 font-bold text-gray-700">סטטוס</th>
-                      <th className="text-right p-4 font-bold text-gray-700">משתמש</th>
-                      <th className="text-right p-4 font-bold text-gray-700">עודכן לאחרונה</th>
-                      <th className="text-right p-4 font-bold text-gray-700">פעולות</th>
-                  </tr>
-              </thead>
-              <tbody>
-                  {pages.map((page, idx) => {
-                      const isEditing = editingPage === `${page.bookName}-${page.number}`
-                      const pageId = page._id || page.id; 
-                      // TIQUN: Prefer pageId over idx for stable rendering
-                      const rowKey = pageId || idx;
-
-                      return (
-                      <tr key={rowKey} className="border-b hover:bg-gray-50 transition-colors">
-                          <td className="p-4 font-medium">{page.bookName}</td>
-                          <td className="p-4">{page.number}</td>
-                          <td className="p-4">
-                              {isEditing ? (
-                                  <select 
-                                    className="border rounded px-2 py-1 bg-white"
-                                    value={editForm.status}
-                                    onChange={e => setEditForm({...editForm, status: e.target.value})}
-                                  >
-                                      <option value="available">זמין</option>
-                                      <option value="in-progress">בטיפול</option>
-                                      <option value="completed">הושלם</option>
-                                  </select>
-                              ) : (
-                                  <span className={`px-3 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1 ${
-                                      page.status === 'completed' ? 'bg-green-100 text-green-800' :
-                                      page.status === 'in-progress' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
-                                  }`}>
-                                      <span className="material-symbols-outlined text-xs">
-                                        {page.status === 'completed' ? 'check_circle' : page.status === 'in-progress' ? 'edit' : 'lock_open'}
-                                      </span>
-                                      {page.status === 'completed' ? 'הושלם' : page.status === 'in-progress' ? 'בטיפול' : 'זמין'}
-                                  </span>
-                              )}
-                          </td>
-                          <td className="p-4 text-sm">{page.claimedBy || '-'}</td>
-                          <td className="p-4 text-sm text-gray-500">
-                              {new Date(page.updatedAt || page.createdAt || Date.now()).toLocaleDateString('he-IL')}
-                          </td>
-                          <td className="p-4 flex gap-2">
-                              {isEditing ? (
-                                  <>
-                                      <button 
-                                        onClick={() => saveEdit(page.bookName, page.number)}
-                                        className="text-green-600 hover:bg-green-50 p-1.5 rounded-lg transition-colors"
-                                        title="שמור"
-                                      >
-                                          <span className="material-symbols-outlined">check</span>
-                                      </button>
-                                      <button 
-                                        onClick={cancelEdit}
-                                        className="text-gray-500 hover:bg-gray-100 p-1.5 rounded-lg transition-colors"
-                                        title="ביטול"
-                                      >
-                                          <span className="material-symbols-outlined">close</span>
-                                      </button>
-                                  </>
-                              ) : (
-                                  <>
-                                      <button 
-                                        onClick={() => startEdit(page)}
-                                        className="text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg transition-colors"
-                                        title="ערוך סטטוס"
-                                      >
-                                          <span className="material-symbols-outlined">edit</span>
-                                      </button>
-                                      {page.status !== 'available' && (
-                                          <button 
-                                            onClick={() => handleReleasePage(page.bookName, page.number)}
-                                            className="text-orange-600 hover:bg-orange-50 p-1.5 rounded-lg transition-colors"
-                                            title="שחרר עמוד"
-                                          >
-                                              <span className="material-symbols-outlined">lock_open</span>
-                                          </button>
-                                      )}
-                                  </>
-                              )}
-
-                              <button 
-                                onClick={() => handleDownload(pageId, `${page.bookName}-${page.number}.txt`)}
-                                className="text-teal-600 hover:bg-teal-50 p-1.5 rounded-lg transition-colors"
-                                title="הורד טקסט"
-                              >
-                                  <span className="material-symbols-outlined">download</span>
-                              </button>
-                              
-                          </td>
+      {loading ? (
+          <div className="text-center py-20">
+              <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+              <p className="mt-4 text-gray-600">טוען עמודים...</p>
+          </div>
+      ) : (
+          <div className="overflow-x-auto rounded-xl border border-gray-200">
+              <table className="w-full bg-white">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                          <th className="text-right p-4 font-bold text-gray-700">ספר</th>
+                          <th className="text-right p-4 font-bold text-gray-700">עמוד</th>
+                          <th className="text-right p-4 font-bold text-gray-700">סטטוס</th>
+                          <th className="text-right p-4 font-bold text-gray-700">משתמש</th>
+                          <th className="text-right p-4 font-bold text-gray-700">עודכן לאחרונה</th>
+                          <th className="text-right p-4 font-bold text-gray-700">פעולות</th>
                       </tr>
-                  )})}
-              </tbody>
-          </table>
-          {pages.length === 0 && (
-              <div className="text-center py-10 text-gray-500">
-                  <p>לא נמצאו עמודים התואמים את הסינון</p>
-              </div>
-          )}
-      </div>
+                  </thead>
+                  <tbody>
+                      {pages.map((page, idx) => {
+                          const isEditing = editingPage === `${page.bookName}-${page.number}`
+                          const pageId = page._id || page.id; 
+                          // TIQUN: Prefer pageId over idx for stable rendering
+                          const rowKey = pageId || idx;
+
+                          return (
+                          <tr key={rowKey} className="border-b hover:bg-gray-50 transition-colors">
+                              <td className="p-4 font-medium">{page.bookName}</td>
+                              <td className="p-4">{page.number}</td>
+                              <td className="p-4">
+                                  {isEditing ? (
+                                      <select 
+                                        className="border rounded px-2 py-1 bg-white"
+                                        value={editForm.status}
+                                        onChange={e => setEditForm({...editForm, status: e.target.value})}
+                                      >
+                                          <option value="available">זמין</option>
+                                          <option value="in-progress">בטיפול</option>
+                                          <option value="completed">הושלם</option>
+                                      </select>
+                                  ) : (
+                                      <span className={`px-3 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1 ${
+                                          page.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                          page.status === 'in-progress' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+                                      }`}>
+                                          <span className="material-symbols-outlined text-xs">
+                                            {page.status === 'completed' ? 'check_circle' : page.status === 'in-progress' ? 'edit' : 'lock_open'}
+                                          </span>
+                                          {page.status === 'completed' ? 'הושלם' : page.status === 'in-progress' ? 'בטיפול' : 'זמין'}
+                                      </span>
+                                  )}
+                              </td>
+                              <td className="p-4 text-sm">{page.claimedBy || '-'}</td>
+                              <td className="p-4 text-sm text-gray-500">
+                                  {new Date(page.updatedAt || page.createdAt || Date.now()).toLocaleDateString('he-IL')}
+                              </td>
+                              <td className="p-4 flex gap-2">
+                                  {isEditing ? (
+                                      <>
+                                          <button 
+                                            onClick={() => saveEdit(page.bookName, page.number)}
+                                            className="text-green-600 hover:bg-green-50 p-1.5 rounded-lg transition-colors"
+                                            title="שמור"
+                                          >
+                                              <span className="material-symbols-outlined">check</span>
+                                          </button>
+                                          <button 
+                                            onClick={cancelEdit}
+                                            className="text-gray-500 hover:bg-gray-100 p-1.5 rounded-lg transition-colors"
+                                            title="ביטול"
+                                          >
+                                              <span className="material-symbols-outlined">close</span>
+                                          </button>
+                                      </>
+                                  ) : (
+                                      <>
+                                          <button 
+                                            onClick={() => startEdit(page)}
+                                            className="text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg transition-colors"
+                                            title="ערוך סטטוס"
+                                          >
+                                              <span className="material-symbols-outlined">edit</span>
+                                          </button>
+                                          {page.status !== 'available' && (
+                                              <button 
+                                                onClick={() => handleReleasePage(page.bookName, page.number)}
+                                                className="text-orange-600 hover:bg-orange-50 p-1.5 rounded-lg transition-colors"
+                                                title="שחרר עמוד"
+                                              >
+                                                  <span className="material-symbols-outlined">lock_open</span>
+                                              </button>
+                                          )}
+                                      </>
+                                  )}
+
+                                  <button 
+                                    onClick={() => handleDownload(pageId, `${page.bookName}-${page.number}.txt`)}
+                                    className="text-teal-600 hover:bg-teal-50 p-1.5 rounded-lg transition-colors"
+                                    title="הורד טקסט"
+                                  >
+                                      <span className="material-symbols-outlined">download</span>
+                                  </button>
+                                  
+                              </td>
+                          </tr>
+                      )})}
+                  </tbody>
+              </table>
+              {pages.length === 0 && (
+                  <div className="text-center py-10 text-gray-500">
+                      <p>לא נמצאו עמודים התואמים את הסינון</p>
+                  </div>
+              )}
+          </div>
+      )}
       
       <div className="mt-4 text-sm text-gray-500 text-left">
           סה"כ רשומות: {pages.length}

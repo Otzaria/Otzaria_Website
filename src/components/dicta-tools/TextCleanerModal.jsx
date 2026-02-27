@@ -82,14 +82,21 @@ export default function TextCleanerModal({ isOpen, onClose, content, onContentCh
         let previousText
         do {
           previousText = newContent
-          // תגית סוגרת ותגית פותחת אותו דבר עם רווח באמצע: </b> <b> -> רווח בלבד
-          newContent = newContent.replace(/<\/(b|i|u|big|small|h[1-6])>\s+<\1>/g, ' ')
+          // תגית סוגרת ותגית פותחת אותו דבר עם רווח או ללא רווח באמצע: </b> <b> או </b><b> -> רווח בלבד או ריק
+          newContent = newContent.replace(/<\/(b|i|u|big|small|h[1-6])>\s*<\1>/g, (match) => {
+            // אם היה רווח במקור, נשאיר רווח. אם לא היה רווח, נמחק לגמרי
+            return match.includes(' ') || match.includes('\n') || match.includes('\t') ? ' ' : ''
+          })
         
-          // שני סוגרים ואז שני פותחים באותו סדר הפוך: </b></i> <i><b> -> רווח בלבד
-          newContent = newContent.replace(/<\/(b|i|u|big|small|h[1-6])><\/(b|i|u|big|small|h[1-6])>\s*<\2><\1>/g, ' ')
+          // שני סוגרים ואז שני פותחים באותו סדר הפוך: </b></i> <i><b> או </b></i><i><b> -> רווח או ריק
+          newContent = newContent.replace(/<\/(b|i|u|big|small|h[1-6])><\/(b|i|u|big|small|h[1-6])>\s*<\2><\1>/g, (match) => {
+            return match.includes(' ') || match.includes('\n') || match.includes('\t') ? ' ' : ''
+          })
         
-          // שני סוגרים ואז שני פותחים באותו סדר: </b></i> <b><i> -> רווח בלבד
-          newContent = newContent.replace(/<\/(b|i|u|big|small|h[1-6])><\/(b|i|u|big|small|h[1-6])>\s*<\1><\2>/g, ' ')
+          // שני סוגרים ואז שני פותחים באותו סדר: </b></i> <b><i> או </b></i><b><i> -> רווח או ריק
+          newContent = newContent.replace(/<\/(b|i|u|big|small|h[1-6])><\/(b|i|u|big|small|h[1-6])>\s*<\1><\2>/g, (match) => {
+            return match.includes(' ') || match.includes('\n') || match.includes('\t') ? ' ' : ''
+          })
         } while (newContent !== previousText)
         
         if (before !== newContent) changed = true

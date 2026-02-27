@@ -242,7 +242,7 @@ export default function RegisterPage() {
                 />
               </div>
               <label htmlFor="reminders" className="text-sm text-on-surface/80 cursor-pointer select-none leading-5">
-                אני מאשר קבלת תזכורות במייל על עמודים שלא סיימתי
+                אני מאשר קבלת תזכורות במייל על עמודים וספרים שלא סיימתי
               </label>
             </div>
 

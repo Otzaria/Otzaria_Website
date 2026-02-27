@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Header from '@/components/Header'
 import Link from 'next/link'
 import { useDialog } from '@/components/DialogContext'
@@ -11,6 +11,7 @@ export default function DictaBooksPublicPage() {
   const { data: session } = useSession()
   const { showAlert, showConfirm } = useDialog()
   const router = useRouter()
+  const searchParams = useSearchParams()
   
   const [books, setBooks] = useState([])
   const [loading, setLoading] = useState(true)
@@ -32,23 +33,35 @@ export default function DictaBooksPublicPage() {
   useEffect(() => {
     fetchBooks()
     
-    // טעינת סינונים מ-sessionStorage
-    const savedFilters = sessionStorage.getItem('dictaBooksFilters')
-    const savedTimestamp = sessionStorage.getItem('dictaBooksTimestamp')
+    // קריאת פרמטרים מה-URL
+    const urlSearch = searchParams.get('search')
+    const urlStatus = searchParams.get('status')
+    const urlCategory = searchParams.get('category')
     
-    if (savedFilters && savedTimestamp) {
-      const now = Date.now()
-      const timestamp = parseInt(savedTimestamp, 10)
+    // אם יש פרמטרים ב-URL, השתמש בהם
+    if (urlSearch || urlStatus || urlCategory) {
+      if (urlSearch) setSearchTerm(urlSearch)
+      if (urlStatus) setFilterStatus(urlStatus)
+      if (urlCategory) setFilterCategory(urlCategory)
+    } else {
+      // אחרת, נסה לטעון מ-sessionStorage (לתמיכה לאחור)
+      const savedFilters = sessionStorage.getItem('dictaBooksFilters')
+      const savedTimestamp = sessionStorage.getItem('dictaBooksTimestamp')
       
-      // אם עברו פחות מ-5 שניות, זה כנראה ניווט חזרה ולא רענון
-      if (!isNaN(timestamp) && now - timestamp < 5000) {
-        try {
-          const { search, status, category } = JSON.parse(savedFilters)
-          if (search) setSearchTerm(search)
-          if (status) setFilterStatus(status)
-          if (category) setFilterCategory(category)
-        } catch (e) {
-          console.error('Error loading filters:', e)
+      if (savedFilters && savedTimestamp) {
+        const now = Date.now()
+        const timestamp = parseInt(savedTimestamp, 10)
+        
+        // אם עברו פחות מ-5 שניות, זה כנראה ניווט חזרה ולא רענון
+        if (!isNaN(timestamp) && now - timestamp < 5000) {
+          try {
+            const { search, status, category } = JSON.parse(savedFilters)
+            if (search) setSearchTerm(search)
+            if (status) setFilterStatus(status)
+            if (category) setFilterCategory(category)
+          } catch (e) {
+            console.error('Error loading filters:', e)
+          }
         }
       }
     }
@@ -56,7 +69,22 @@ export default function DictaBooksPublicPage() {
     // ניקוי אחרי טעינה
     sessionStorage.removeItem('dictaBooksFilters')
     sessionStorage.removeItem('dictaBooksTimestamp')
-  }, [])
+  }, [searchParams])
+
+  // עדכון ה-URL כאשר הסינונים משתנים
+  useEffect(() => {
+    const params = new URLSearchParams()
+    
+    if (searchTerm) params.set('search', searchTerm)
+    if (filterStatus && filterStatus !== 'available') params.set('status', filterStatus)
+    if (filterCategory && filterCategory !== 'all') params.set('category', filterCategory)
+    
+    const queryString = params.toString()
+    const newUrl = queryString ? `/library/dicta-books?${queryString}` : '/library/dicta-books'
+    
+    // עדכון ה-URL בלי לגרום לרענון הדף
+    window.history.replaceState({}, '', newUrl)
+  }, [searchTerm, filterStatus, filterCategory])
 
   // פונקציה לשמירת הסינונים לפני ניווט
   const saveFiltersBeforeNavigation = () => {
@@ -93,11 +121,25 @@ export default function DictaBooksPublicPage() {
           const res = await fetch(`/api/dicta/books/${bookId}/claim`, {
             method: 'POST',
           })
+          
           if (res.ok) {
             fetchBooks()
             showAlert('הצלחה', 'הספר נתפס בהצלחה וכעת תוכל להתחיל לערוך אותו!')
           } else {
-            showAlert('שגיאה', 'אירעה בעיה בתפיסת הספר. ייתכן שהוא נתפס על ידי משתמש אחר.')
+            const data = await res.json()
+            
+            // בדיקה אם המשתמש לא אישר תזכורות
+            if (data.error === 'TERMS_REQUIRED' && data.redirectUrl) {
+              showConfirm(
+                'נדרש אישור תזכורות',
+                'כדי לתפוס ספר לעריכה, עליך לאשר קבלת תזכורות במייל. האם ברצונך לעבור לדף האישור?',
+                () => {
+                  router.push(data.redirectUrl)
+                }
+              )
+            } else {
+              showAlert('שגיאה', data.error || 'אירעה בעיה בתפיסת הספר. ייתכן שהוא נתפס על ידי משתמש אחר.')
+            }
           }
         } catch (error) {
           console.error('Error claiming book:', error)

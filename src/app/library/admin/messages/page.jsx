@@ -2,15 +2,15 @@
 
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
-import { createPortal } from 'react-dom'
+import { useDialog } from '@/components/DialogContext'
 
 export default function AdminMessagesPage() {
   const { data: session } = useSession()
+  const { showAlert, showConfirm } = useDialog()
   
   const [messages, setMessages] = useState([])
   const [users, setUsers] = useState([]) 
   const [loading, setLoading] = useState(true)
-  const [mounted, setMounted] = useState(false)
   
   const [replyText, setReplyText] = useState('')
   const [selectedMessage, setSelectedMessage] = useState(null)
@@ -22,7 +22,6 @@ export default function AdminMessagesPage() {
   const [sendingNewMessage, setSendingNewMessage] = useState(false)
 
   useEffect(() => {
-    setMounted(true)
     loadData()
   }, [])
 
@@ -76,12 +75,12 @@ export default function AdminMessagesPage() {
               setReplyText('')
               setSelectedMessage(null)
               loadData()
-              alert('התגובה נשלחה בהצלחה')
+              showAlert('הצלחה', 'התגובה נשלחה בהצלחה')
           } else {
-              alert('שגיאה בשליחת התגובה')
+              showAlert('שגיאה', 'שגיאה בשליחת התגובה')
           }
       } catch (e) {
-          alert('שגיאה בתקשורת')
+          showAlert('שגיאה', 'שגיאה בתקשורת')
       }
   }
 
@@ -95,18 +94,25 @@ export default function AdminMessagesPage() {
   }
 
   const handleDelete = async (messageId) => {
-      if (!confirm('למחוק לצמיתות?')) return
-      await fetch('/api/messages/delete', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messageId })
-      })
-      setMessages(prev => prev.filter(m => m.id !== messageId))
+      showConfirm(
+          'מחיקת הודעה',
+          'האם אתה בטוח שברצונך למחוק הודעה זו לצמיתות?',
+          async () => {
+              await fetch('/api/messages/delete', {
+                  method: 'DELETE',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ messageId })
+              })
+              setMessages(prev => prev.filter(m => m.id !== messageId))
+          },
+          'מחק',
+          'ביטול'
+      )
   }
 
   const handleSendNewMessage = async () => {
     if (!newMessageSubject.trim() || !newMessageText.trim()) {
-        alert('נא למלא את כל השדות')
+        showAlert('שגיאה', 'נא למלא את כל השדות')
         return
     }
 
@@ -125,18 +131,18 @@ export default function AdminMessagesPage() {
 
         const result = await response.json()
         if (result.success) {
-            alert(result.message)
+            showAlert('הצלחה', result.message)
             setNewMessageSubject('')
             setNewMessageText('')
             setNewMessageRecipient('all')
             setShowSendMessageDialog(false)
             loadData()
         } else {
-            alert(result.error || 'שגיאה בשליחת הודעה')
+            showAlert('שגיאה', result.error || 'שגיאה בשליחת הודעה')
         }
     } catch (error) {
         console.error('Error sending message:', error)
-        alert('שגיאה בשליחת הודעה')
+        showAlert('שגיאה', 'שגיאה בשליחת הודעה')
     } finally {
         setSendingNewMessage(false)
     }
@@ -272,7 +278,7 @@ export default function AdminMessagesPage() {
           </div>
       )}
 
-      {showSendMessageDialog && mounted && createPortal(
+      {showSendMessageDialog && (
           <div 
             className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
             onClick={() => setShowSendMessageDialog(false)}
@@ -363,8 +369,7 @@ export default function AdminMessagesPage() {
                       </button>
                   </div>
               </div>
-          </div>,
-          document.body
+          </div>
       )}
     </div>
   )

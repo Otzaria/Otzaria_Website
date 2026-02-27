@@ -621,7 +621,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="glass-strong p-8 rounded-2xl mb-8">
-            <h2 className="text-2xl font-bold mb-6 text-on-surface">ספרי דיקטה שלי</h2>
+            <h2 className="text-2xl font-bold mb-6 text-on-surface">ספרי הדיקטה שלי</h2>
             {loading ? (
               <div className="text-center py-8">
                 <span className="material-symbols-outlined animate-spin text-4xl text-primary">
