@@ -16,6 +16,7 @@ import ReplacePageBModal from '@/components/dicta-tools/ReplacePageBModal'
 import HeaderErrorCheckerModal from '@/components/dicta-tools/HeaderErrorCheckerModal'
 import TextCleanerModal from '@/components/dicta-tools/TextCleanerModal'
 import AddPageNumberModal from '@/components/dicta-tools/AddPageNumberModal'
+import ImageToTextModal from '@/components/dicta-tools/ImageToTextModal'
 import ShortcutsDialog from '@/components/editor/modals/ShortcutsDialog'
 import FindReplaceDialog from '@/components/editor/modals/FindReplaceDialog'
 
@@ -35,6 +36,7 @@ const DEFAULT_SHORTCUTS = {
   'alignLeft': 'Ctrl+KeyL',
   'findReplace': 'Ctrl+KeyF',
   'shortcuts': 'Alt+KeyK',
+  'imageToText': 'Ctrl+Shift+KeyI',
 }
 
 export default function DictaEditorPage() {
@@ -588,6 +590,7 @@ export default function DictaEditorPage() {
     'addPageNumber': { label: 'מיזוג דף ועמוד', action: () => setActiveTool('addPageNumber') },
     'headerCheck': { label: 'בדיקת שגיאות בכותרות', action: () => setActiveTool('headerCheck') },
     'cleanText': { label: 'ניקוי טקסט', action: () => setActiveTool('cleanText') },
+    'imageToText': { label: 'המרת תמונה לטקסט', action: () => setActiveTool('imageToText') },
     'shortcuts': { label: 'ערוך קיצורי מקלדת', action: () => setShowShortcutsDialog(true) },
   }), [handleSave, insertTag])
 
@@ -1143,6 +1146,15 @@ export default function DictaEditorPage() {
               {toolbarExpanded && <span className="text-sm text-gray-700">ניקוי טקסט</span>}
             </button>
             
+            <button
+              onClick={() => setActiveTool('imageToText')}
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
+              title="המרת תמונה לטקסט"
+            >
+              <span className="material-symbols-outlined text-gray-700">image_search</span>
+              {toolbarExpanded && <span className="text-sm text-gray-700">המרת תמונה</span>}
+            </button>
+            
             {/* Spacer to push button to bottom */}
             <div className="flex-1"></div>
             
@@ -1394,6 +1406,13 @@ export default function DictaEditorPage() {
 
       <AddPageNumberModal
         isOpen={activeTool === 'addPageNumber'}
+        onClose={() => setActiveTool(null)}
+        content={content}
+        onContentChange={handleContentChange}
+      />
+
+      <ImageToTextModal
+        isOpen={activeTool === 'imageToText'}
         onClose={() => setActiveTool(null)}
         content={content}
         onContentChange={handleContentChange}

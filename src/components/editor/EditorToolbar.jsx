@@ -34,7 +34,8 @@ export default function EditorToolbar({
   isCollapsed,
   setIsCollapsed,
   isFullScreen,
-  onToggleFullScreen
+  onToggleFullScreen,
+  onOpenImageToText
   // הוסרו props של alignment ו-textZoom מכאן כי הם לא בשימוש בסרגל זה יותר
 }) {
   const preventFocusLoss = (e) => {
@@ -158,6 +159,11 @@ export default function EditorToolbar({
       <button onClick={() => setShowFindReplace(true)} className="flex items-center gap-1 px-2 py-1 h-7 bg-white hover:bg-gray-50 rounded-md border border-gray-200">
         <span className="material-symbols-outlined text-sm">find_replace</span>
         <span className="text-[10px] font-medium">חיפוש</span>
+      </button>
+
+      <button onClick={onOpenImageToText} className="flex items-center gap-1 px-2 py-1 h-7 bg-white hover:bg-gray-50 rounded-md border border-gray-200" title="המרת תמונה לטקסט">
+        <span className="material-symbols-outlined text-sm">image_search</span>
+        <span className="text-[10px] font-medium">תמונה</span>
       </button>
 
       <div className="w-px h-5 bg-gray-200"></div>

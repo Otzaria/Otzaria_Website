@@ -9,6 +9,7 @@ import ImagePanel from '@/components/editor/ImagePanel'
 import TextEditor from '@/components/editor/TextEditor'
 import SettingsSidebar from '@/components/editor/SettingsSidebar'
 import FindReplaceDialog from '@/components/editor/modals/FindReplaceDialog'
+import ImageToTextModal from '@/components/dicta-tools/ImageToTextModal'
 import SplitDialog from '@/components/editor/modals/SplitDialog'
 import InfoDialog from '@/components/editor/modals/InfoDialog'
 import ShortcutsDialog from '@/components/editor/modals/ShortcutsDialog'
@@ -32,7 +33,8 @@ const DEFAULT_SHORTCUTS = {
   'fullScreen': 'F11',
   'shortcuts': 'Alt+KeyK',
   'selectionMode': 'Alt+KeyV',
-  'finish': 'Ctrl+Enter'
+  'finish': 'Ctrl+Enter',
+  'imageToText': 'Ctrl+Shift+KeyI',
 };
 
 export default function EditPage() {
@@ -133,6 +135,7 @@ export default function EditPage() {
   // Shortcuts State
   const [showShortcutsDialog, setShowShortcutsDialog] = useState(false);
   const [userShortcuts, setUserShortcuts] = useState(DEFAULT_SHORTCUTS);
+  const [showImageToText, setShowImageToText] = useState(false);
 
   const { save: debouncedSave, status: saveStatus } = useAutoSave()
 
@@ -1072,6 +1075,7 @@ export default function EditPage() {
     'togglePanel': { label: 'החלף צדדים (תמונה/טקסט)', action: togglePanelOrder },
     'fullScreen': { label: 'מסך מלא', action: toggleFullScreen },
     'findReplace': { label: 'פתח חיפוש והחלפה', action: () => setShowFindReplace(true) },
+    'imageToText': { label: 'המרת תמונה לטקסט', action: () => setShowImageToText(true) },
     'settings': { label: 'פתח הגדרות', action: () => setShowSettings(true) },
     'shortcuts': { label: 'ערוך קיצורי מקלדת', action: () => setShowShortcutsDialog(true) },
     
@@ -1215,6 +1219,7 @@ export default function EditPage() {
         isFullScreen={isFullScreen}
         onToggleFullScreen={toggleFullScreen}
         openShortcuts={() => setShowShortcutsDialog(true)}
+        onOpenImageToText={() => setShowImageToText(true)}
       />
 
       <div className={`flex-1 flex flex-col overflow-hidden ${isFullScreen ? 'p-0' : 'p-6'}`}>
@@ -1296,6 +1301,21 @@ export default function EditPage() {
         onAddRemoveDigitsToSaved={addRemoveDigitsToSaved}
         useRegex={useRegex}
         setUseRegex={setUseRegex}
+      />
+
+      <ImageToTextModal
+        isOpen={showImageToText}
+        onClose={() => setShowImageToText(false)}
+        content={twoColumns ? rightColumn : content}
+        onContentChange={(newContent) => {
+          if (twoColumns) {
+            setRightColumn(newContent)
+            handleAutoSaveWrapper(content, leftColumn, newContent, true)
+          } else {
+            setContent(newContent)
+            handleAutoSaveWrapper(newContent)
+          }
+        }}
       />
 
       <SplitDialog 
