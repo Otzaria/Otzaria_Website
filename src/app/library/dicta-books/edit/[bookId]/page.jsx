@@ -16,7 +16,7 @@ import ReplacePageBModal from '@/components/dicta-tools/ReplacePageBModal'
 import HeaderErrorCheckerModal from '@/components/dicta-tools/HeaderErrorCheckerModal'
 import TextCleanerModal from '@/components/dicta-tools/TextCleanerModal'
 import AddPageNumberModal from '@/components/dicta-tools/AddPageNumberModal'
-import ImageToTextModal from '@/components/dicta-tools/ImageToTextModal'
+import EmbedImageModal from '@/components/dicta-tools/EmbedImageModal'
 import ShortcutsDialog from '@/components/editor/modals/ShortcutsDialog'
 import FindReplaceDialog from '@/components/editor/modals/FindReplaceDialog'
 
@@ -1415,7 +1415,7 @@ export default function DictaEditorPage() {
         onContentChange={handleContentChange}
       />
 
-      <ImageToTextModal
+      <EmbedImageModal
         isOpen={activeTool === 'imageToText'}
         onClose={() => setActiveTool(null)}
         content={content}

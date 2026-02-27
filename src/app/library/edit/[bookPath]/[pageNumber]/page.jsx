@@ -9,7 +9,7 @@ import ImagePanel from '@/components/editor/ImagePanel'
 import TextEditor from '@/components/editor/TextEditor'
 import SettingsSidebar from '@/components/editor/SettingsSidebar'
 import FindReplaceDialog from '@/components/editor/modals/FindReplaceDialog'
-import ImageToTextModal from '@/components/dicta-tools/ImageToTextModal'
+import EmbedImageModal from '@/components/dicta-tools/EmbedImageModal'
 import SplitDialog from '@/components/editor/modals/SplitDialog'
 import InfoDialog from '@/components/editor/modals/InfoDialog'
 import ShortcutsDialog from '@/components/editor/modals/ShortcutsDialog'
@@ -1303,7 +1303,7 @@ export default function EditPage() {
         setUseRegex={setUseRegex}
       />
 
-      <ImageToTextModal
+      <EmbedImageModal
         isOpen={showImageToText}
         onClose={() => setShowImageToText(false)}
         content={twoColumns ? rightColumn : content}
