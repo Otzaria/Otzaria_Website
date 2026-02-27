@@ -29,14 +29,12 @@ export async function GET() {
 
   try {
     let bundledComponents = '';
-    console.log("--- Starting Offline Bundle Generation ---");
     
     for (const filePath of componentPaths) {
       const fullPath = path.join(rootDir, filePath);
       
       if (fs.existsSync(fullPath)) {
         let content = fs.readFileSync(fullPath, 'utf8');
-        console.log(`✅ Bundling: ${filePath}`);
         
         // ניקוי מתקדם:
         const cleanedContent = content
@@ -51,8 +49,6 @@ export async function GET() {
           .replace(/export\s+(const|function|class|let|var)\s+/g, '$1 ');
 
         bundledComponents += `\n/* --- Source: ${filePath} --- */\n${cleanedContent}\n`;
-      } else {
-        console.error(`❌ Missing file: ${filePath}`);
       }
     }
 
@@ -228,6 +224,7 @@ export async function GET() {
     <div id="root"></div>
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef, useContext, createContext, useCallback, forwardRef, useTransition } = React;
+        const { createPortal } = ReactDOM;
 
         ${bundledComponents}
 
@@ -324,7 +321,6 @@ export async function GET() {
       },
     });
   } catch (error) {
-    console.error("Critical Bundle Error:", error);
-    return NextResponse.json({ error: 'Failed' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to generate offline editor' }, { status: 500 });
   }
 }
