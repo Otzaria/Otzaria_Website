@@ -2,6 +2,30 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
+// פונקציה להורדת פונט והמרה ל-base64
+async function fetchFontAsBase64(url: string): Promise<string> {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const base64 = buffer.toString('base64');
+    console.log(`Font downloaded successfully, size: ${base64.length} chars`);
+    return base64;
+  } catch (error) {
+    console.error('Failed to fetch font:', error);
+    return '';
+  }
+}
+
 export async function GET() {
   const rootDir = process.cwd();
 
@@ -28,6 +52,29 @@ export async function GET() {
   ];
 
   try {
+    // הורדת פונט Material Symbols - נסה מספר URLs
+    const materialIconsUrls = [
+      // URL עדכני יותר
+      'https://fonts.gstatic.com/s/materialsymbolsoutlined/v180/kJF1BvYX7BgnkSrUwT8OhrdQw4oELdPIeeII9v6oDMzByHX9rA6RzaxHMPdY43zj-jCxv3fzvRNU22ZXGJpEpjC_1v-p_4MrImHCIJIZrDCvHOej.woff2',
+      // Fallback URL
+      'https://fonts.gstatic.com/s/materialsymbolsoutlined/v169/kJF1BvYX7BgnkSrUwT8OhrdQw4oELdPIeeII9v6oDMzByHX9rA6RzaxHMPdY43zj-jCxv3fzvRNU22ZXGJpEpjC_1v-p_4MrImHCIJIZrDCvHOej.woff2'
+    ];
+    
+    let materialIconsBase64 = '';
+    for (const url of materialIconsUrls) {
+      materialIconsBase64 = await fetchFontAsBase64(url);
+      if (materialIconsBase64) {
+        console.log('Material Icons font embedded successfully');
+        break;
+      }
+    }
+    
+    // אם ההורדה נכשלה, השתמש ב-CDN
+    const useCDN = !materialIconsBase64;
+    if (useCDN) {
+      console.log('Using CDN fallback for Material Icons');
+    }
+
     let bundledComponents = '';
     
     for (const filePath of componentPaths) {
@@ -60,12 +107,36 @@ export async function GET() {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>עורך אופליין - אוצריא</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E📚%3C/text%3E%3C/svg%3E" />
+    
+    <!-- React & Babel -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet" />
+    
+    ${useCDN ? `
+    <!-- Material Symbols Icons - CDN Fallback -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet" />
+    ` : ''}
+    
+    <!-- Hebrew Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
+    
     <style>
+      ${!useCDN ? `
+      /* Material Symbols Icons - Embedded for offline use */
+      @font-face {
+        font-family: 'Material Symbols Outlined';
+        font-style: normal;
+        font-weight: 100 700;
+        src: url(data:font/woff2;base64,${materialIconsBase64}) format('woff2');
+        font-display: block;
+      }
+      ` : ''}
       @font-face {
         font-family: 'FrankRuehl';
         src: url('https://fonts.cdnfonts.com/css/frank-ruhl-libre') format('woff2');
