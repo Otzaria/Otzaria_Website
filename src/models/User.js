@@ -24,7 +24,15 @@ const UserSchema = new mongoose.Schema({
     label: { type: String },
     isRemoveDigits: { type: Boolean, default: false }
   }],
-  hiddenInstructionsBooks: { type: [String], default: [] }
+  hiddenInstructionsBooks: { type: [String], default: [] },
+  
+  // הגדרות התראות על העלאות
+  uploadNotifications: {
+    enabled: { type: Boolean, default: false },
+    dicta: { type: Boolean, default: false },
+    fullBook: { type: Boolean, default: false },
+    singlePage: { type: Boolean, default: false }
+  }
 }, { timestamps: true });
 
 const User = mongoose.models.User || mongoose.model('User', UserSchema);

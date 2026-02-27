@@ -7,6 +7,7 @@ import { useDialog } from '@/components/DialogContext'
 import StatusConfigModal from '@/components/StatusConfigModal'
 import StatusBadge from '@/components/StatusBadge'
 import StatusEditor from '@/components/StatusEditor'
+import UploadNotificationSettings from '@/components/UploadNotificationSettings'
 
 export default function AdminUploadsPage() {
   const [uploads, setUploads] = useState([])
@@ -19,6 +20,7 @@ export default function AdminUploadsPage() {
   const [bookStatuses, setBookStatuses] = useState({}) // הגדרות סטטוסים
   const [editingStatus, setEditingStatus] = useState(null) // שם הספר שעורכים את הסטטוס שלו
   const [showStatusConfig, setShowStatusConfig] = useState(false) // הצגת חלון הגדרות סטטוסים
+  const [showNotificationSettings, setShowNotificationSettings] = useState(false) // הצגת חלון הגדרות התראות
   const router = useRouter()
   const { showConfirm, showAlert } = useDialog()
 
@@ -361,6 +363,14 @@ export default function AdminUploadsPage() {
         </div>
         
         <div className="flex gap-2">
+          <button
+            onClick={() => setShowNotificationSettings(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+          >
+            <span className="material-symbols-outlined text-sm">notifications</span>
+            התראות
+          </button>
+          
           <button
             onClick={() => setShowStatusConfig(true)}
             className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
@@ -791,6 +801,12 @@ export default function AdminUploadsPage() {
         />
       )}
       
+      {/* חלון הגדרות התראות */}
+      {showNotificationSettings && (
+        <UploadNotificationSettings
+          onClose={() => setShowNotificationSettings(false)}
+        />
+      )}
 
     </div>
   )

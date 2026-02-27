@@ -172,23 +172,59 @@ function DictaBooksContent() {
   const handleComplete = (bookId) => {
     showConfirm(
       'סיום עריכה',
-      'האם אתה בטוח שסיימת לערוך את הספר? לאחר האישור הספר יסומן כ"הושלם".',
+      'האם אתה בטוח שסיימת לערוך את הספר? הטקסט יועלה למערכת והספר יסומן כ"הושלם".',
       async () => {
         try {
-          const res = await fetch(`/api/dicta/books/${bookId}`, {
+          // שלב 1: שליפת תוכן הספר
+          const bookRes = await fetch(`/api/dicta/books/${bookId}`)
+          if (!bookRes.ok) throw new Error('שגיאה בטעינת הספר')
+          
+          const book = await bookRes.json()
+          
+          if (!book?.content?.trim()) {
+            showAlert('שגיאה', 'הספר ריק מתוכן')
+            return
+          }
+
+          // שלב 2: יצירת קובץ והעלאה
+          const cleanBookName = book.title.replace(/[^a-zA-Z0-9א-ת]/g, '_')
+          const fileName = `${cleanBookName}_dicta.txt`
+          const blob = new Blob([book.content], { type: 'text/plain' })
+          const file = new File([blob], fileName, { type: 'text/plain' })
+
+          const formData = new FormData()
+          formData.append('file', file)
+          formData.append('bookName', book.title)
+          formData.append('userId', session.user._id || session.user.id)
+          formData.append('userName', session.user.name)
+          formData.append('uploadType', 'dicta')
+
+          const uploadResponse = await fetch('/api/upload-book', { 
+            method: 'POST', 
+            body: formData 
+          })
+          const uploadResult = await uploadResponse.json()
+
+          if (!uploadResult.success) {
+            throw new Error(uploadResult.error || 'שגיאה בהעלאה')
+          }
+
+          // שלב 3: עדכון סטטוס הספר ל-completed
+          const completeResponse = await fetch(`/api/dicta/books/${bookId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'complete' })
           })
-          if (res.ok) {
+
+          if (completeResponse.ok) {
             fetchBooks()
-            showAlert('הצלחה', 'הספר סומן כהושלם בהצלחה!')
+            showAlert('הצלחה', 'הטקסט הועלה בהצלחה והספר סומן כהושלם!')
           } else {
-            showAlert('שגיאה', 'אירעה בעיה בסיום עריכת הספר.')
+            showAlert('שגיאה', 'הטקסט הועלה אך אירעה בעיה בסימון הספר כהושלם.')
           }
         } catch (error) {
           console.error('Error completing book:', error)
-          showAlert('שגיאה', 'אירעה שגיאה בתקשורת מול השרת.')
+          showAlert('שגיאה', error.message || 'אירעה שגיאה בתהליך ההעלאה')
         }
       }
     )
