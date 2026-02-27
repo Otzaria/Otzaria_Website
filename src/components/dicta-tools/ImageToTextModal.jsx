@@ -23,7 +23,65 @@ export default function ImageToTextModal({ isOpen, onClose, content, onContentCh
     onClose()
   }, [onClose, resetState])
 
-  const handleFileSelect = useCallback((files) => {
+  const compressImage = useCallback((file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      
+      reader.onload = (e) => {
+        const img = new Image()
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          const ctx = canvas.getContext('2d')
+          
+          // הגדרות קבועות לדחיסה בסיסית
+          const maxSize = 600 // גודל מקסימלי קטן למשרטוטים
+          const quality = 0.7 // איכות בסיסית 70%
+          
+          let width = img.width
+          let height = img.height
+          
+          // שמירה על יחס התמונה
+          if (width > height) {
+            if (width > maxSize) {
+              height = (height * maxSize) / width
+              width = maxSize
+            }
+          } else {
+            if (height > maxSize) {
+              width = (width * maxSize) / height
+              height = maxSize
+            }
+          }
+          
+          canvas.width = width
+          canvas.height = height
+          ctx.drawImage(img, 0, 0, width, height)
+          
+          // המרה ל-JPEG עם דחיסה בסיסית
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', quality)
+          
+          // חישוב גודל
+          const originalSize = (e.target.result.length * 0.75) / 1024
+          const compressedSize = (compressedDataUrl.length * 0.75) / 1024
+          
+          resolve({
+            data: compressedDataUrl,
+            extension: 'jpg',
+            originalSize: originalSize.toFixed(0),
+            compressedSize: compressedSize.toFixed(0)
+          })
+        }
+        
+        img.onerror = () => reject(new Error('שגיאה בטעינת התמונה'))
+        img.src = e.target.result
+      }
+      
+      reader.onerror = () => reject(new Error('שגיאה בקריאת הקובץ'))
+      reader.readAsDataURL(file)
+    })
+  }, [])
+
+  const handleFileSelect = useCallback(async (files) => {
     if (!files || files.length === 0) return
 
     const supportedExtensions = ['.png', '.jpg', '.jpeg', '.svg', '.tif', '.tiff', '.heic', '.heif', '.ico', '.webp', '.gif', '.bmp']
@@ -37,16 +95,15 @@ export default function ImageToTextModal({ isOpen, onClose, content, onContentCh
       return
     }
 
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      setImageData({
-        data: e.target.result,
-        extension: fileName.split('.').pop()
-      })
-      showAlert('הצלחה', 'התמונה נטענה בהצלחה!')
+    try {
+      // דחיסת התמונה
+      const compressed = await compressImage(file)
+      setImageData(compressed)
+      showAlert('הצלחה', 'התמונה נטענה ודוחסה!')
+    } catch (error) {
+      showAlert('שגיאה', `שגיאה בעיבוד התמונה: ${error.message}`)
     }
-    reader.readAsDataURL(file)
-  }, [showAlert])
+  }, [showAlert, compressImage])
 
   const handleDragEnter = useCallback((e) => {
     e.preventDefault()
@@ -99,7 +156,7 @@ export default function ImageToTextModal({ isOpen, onClose, content, onContentCh
     }
 
     // יצירת קוד HTML
-    const html = `<img src="${imageData.data}" >`
+    const html = `<img src="${imageData.data}" alt="תמונה">`
     setHtmlCode(html)
     setIsConverted(true)
     showAlert('הצלחה', 'ההמרה בוצעה בהצלחה!')
@@ -210,7 +267,14 @@ export default function ImageToTextModal({ isOpen, onClose, content, onContentCh
               {/* תצוגה מקדימה של התמונה */}
               {imageData && (
                 <div className="border rounded-lg p-4 bg-gray-50">
-                  <p className="text-sm text-gray-600 mb-2">תצוגה מקדימה:</p>
+                  <div className="flex justify-between items-center mb-2">
+                    <p className="text-sm text-gray-600">תצוגה מקדימה:</p>
+                    {imageData.compressedSize && (
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                        {imageData.compressedSize} KB
+                      </span>
+                    )}
+                  </div>
                   <div className="flex justify-center">
                     <img 
                       src={imageData.data} 
