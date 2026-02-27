@@ -871,7 +871,19 @@ export default function DictaEditorPage() {
                 <div className="w-px h-8 bg-surface-variant"></div>
 
                 <div>
-                  <h1 className="text-lg font-bold text-on-surface">{book.title}</h1>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-lg font-bold text-on-surface">{book.title}</h1>
+                    {canEdit && (
+                      <Button
+                        icon="restart_alt"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleReset}
+                        loading={resetting}
+                        label="אפס"
+                      />
+                    )}
+                  </div>
                   <div className="flex items-center gap-2">
                     <p className="text-xs text-on-surface/60">עריכת דיקטה</p>
                     {book.status === 'in-progress' && (
@@ -906,14 +918,6 @@ export default function DictaEditorPage() {
               <div className="flex items-center gap-3">
           {canEdit && (
             <>
-              <Button
-                icon="restart_alt"
-                variant="ghost"
-                size="sm"
-                onClick={handleReset}
-                loading={resetting}
-                label="אפס עריכת ספר"
-              />
               <Button
                 icon="find_replace"
                 variant="ghost"
