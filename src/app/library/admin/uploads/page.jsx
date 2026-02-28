@@ -610,8 +610,49 @@ export default function AdminUploadsPage() {
                                   
                                   {/* כפתורי פעולה */}
                                   <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-gray-100">
+                                      {/* כפתור פתח בעורך */}
+                                      <button 
+                                        onClick={async (e) => {
+                                            e.stopPropagation();
+                                            try {
+                                                setLoading(true);
+                                                // שליפת כל התוכן של ההעלאות
+                                                const uploadIds = bookUploads.map(u => u.id);
+                                                const response = await fetch('/api/admin/uploads/get-book-content', {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({ uploadIds })
+                                                });
+                                                
+                                                const data = await response.json();
+                                                
+                                                if (data.success) {
+                                                    // שמירת התוכן ב-localStorage
+                                                    localStorage.setItem('tempEditorContent', data.content);
+                                                    localStorage.setItem('tempEditorFileName', `${bookName}.txt`);
+                                                    
+                                                    // פתיחת העורך במצב offline
+                                                    router.push('/library/dicta-books/edit/offline');
+                                                } else {
+                                                    showAlert('שגיאה', 'שגיאה בטעינת התוכן');
+                                                }
+                                            } catch (error) {
+                                                console.error('Error loading book content:', error);
+                                                showAlert('שגיאה', 'שגיאה בטעינת התוכן');
+                                            } finally {
+                                                setLoading(false);
+                                            }
+                                        }}
+                                        className="flex items-center gap-1 px-3 py-1.5 text-purple-600 hover:bg-purple-50 rounded-lg text-sm transition-colors"
+                                      >
+                                          <span className="material-symbols-outlined text-lg">edit_note</span>
+                                          פתח בעורך
+                                      </button>
+                                      
                                       {hasMultipleUploads && (
                                           <>
+                                              <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                                              
                                               <button 
                                                 onClick={(e) => {
                                                     e.stopPropagation();
@@ -696,6 +737,8 @@ export default function AdminUploadsPage() {
                                       
                                       {!hasMultipleUploads && (
                                           <>
+                                              <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                                              
                                               <button 
                                                 onClick={(e) => {
                                                     e.stopPropagation()

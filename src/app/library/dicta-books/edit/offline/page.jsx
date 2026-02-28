@@ -11,6 +11,25 @@ export default function OfflineEditorRoute() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const fileInputRef = useRef(null)
 
+  // טעינת תוכן מ-localStorage אם קיים (מהעלאות)
+  useEffect(() => {
+    const tempContent = localStorage.getItem('tempEditorContent');
+    const tempFileName = localStorage.getItem('tempEditorFileName');
+    
+    if (tempContent) {
+      setLocalContent(tempContent);
+      setHasUnsavedChanges(false);
+      
+      // ניקוי localStorage
+      localStorage.removeItem('tempEditorContent');
+    }
+    
+    if (tempFileName) {
+      setFileName(tempFileName);
+      localStorage.removeItem('tempEditorFileName');
+    }
+  }, []);
+
   // התראה בעת ניסיון לעזוב את הדף עם שינויים שלא נשמרו
   useEffect(() => {
     const handleBeforeUnload = (e) => {
