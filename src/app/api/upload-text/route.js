@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Upload from '@/models/Upload';
-import Book from '@/models/Book';
-import Page from '@/models/Page';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { sendUploadNotification } from '@/lib/emailService';
+import { isLastPageUpload } from '@/lib/uploadHelpers';
 
 export async function POST(request) {
     try {
@@ -39,38 +38,7 @@ export async function POST(request) {
         );
 
         // בדיקה אם זה העמוד האחרון בספר
-        let isLastPage = false;
-        try {
-            // ניסיון לחלץ את שם הספר ומספר העמוד מה-bookName
-            // פורמט אפשרי: "שם_ספר - עמוד X" או "שם_ספר/עמוד X"
-            const pageMatch = bookName.match(/(.+?)[\s\-\/]+(?:עמוד|page)\s*(\d+)/i);
-            
-            if (pageMatch) {
-                const extractedBookName = pageMatch[1].trim();
-                const pageNumber = parseInt(pageMatch[2]);
-                
-                // חיפוש הספר לפי שם (slug או name)
-                const book = await Book.findOne({
-                    $or: [
-                        { slug: extractedBookName },
-                        { name: { $regex: new RegExp(extractedBookName, 'i') } }
-                    ]
-                });
-                
-                if (book && book.totalPages > 0) {
-                    // ספירת עמודים שהושלמו (כולל זה שהועלה עכשיו)
-                    const completedCount = await Page.countDocuments({
-                        book: book._id,
-                        status: 'completed'
-                    });
-                    
-                    // בדיקה אם זה העמוד האחרון
-                    isLastPage = (completedCount + 1) >= book.totalPages;
-                }
-            }
-        } catch (error) {
-            console.error('Error checking if last page:', error);
-        }
+        const isLastPage = await isLastPageUpload(bookName);
 
         // שליחת התראה למנהלים רק אם זה העמוד האחרון
         if (isLastPage) {

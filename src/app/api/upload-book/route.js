@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Upload from '@/models/Upload';
-import Book from '@/models/Book';
-import Page from '@/models/Page';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { sendUploadNotification } from '@/lib/emailService';
+import { isLastPageUpload } from '@/lib/uploadHelpers';
 
 // טיפול בהעלאת קובץ טקסט ע"י משתמש
 export async function POST(request) {
@@ -52,31 +51,7 @@ export async function POST(request) {
             shouldSendEmail = true;
         } else if (uploadType === 'single_page') {
             // עמוד בודד - רק אם זה העמוד האחרון
-            try {
-                const pageMatch = bookName.match(/(.+?)[\s\-\/]+(?:עמוד|page)\s*(\d+)/i);
-                
-                if (pageMatch) {
-                    const extractedBookName = pageMatch[1].trim();
-                    
-                    const book = await Book.findOne({
-                        $or: [
-                            { slug: extractedBookName },
-                            { name: { $regex: new RegExp(extractedBookName, 'i') } }
-                        ]
-                    });
-                    
-                    if (book && book.totalPages > 0) {
-                        const completedCount = await Page.countDocuments({
-                            book: book._id,
-                            status: 'completed'
-                        });
-                        
-                        shouldSendEmail = (completedCount + 1) >= book.totalPages;
-                    }
-                }
-            } catch (error) {
-                console.error('Error checking if last page:', error);
-            }
+            shouldSendEmail = await isLastPageUpload(bookName);
         }
 
         // שליחת התראה למנהלים רק אם צריך
