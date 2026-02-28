@@ -56,7 +56,6 @@ export async function POST(request) {
             existingUpload.deletedAt = new Date();
             await existingUpload.save();
         }
-        }
 
         // יצירת העלאה חדשה
         const upload = await Upload.create({
