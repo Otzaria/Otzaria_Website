@@ -43,10 +43,12 @@ export async function POST(request) {
 
         // אם קיים קובץ ואושר לדרוס - העבר את הישן לאשפה
         if (existingUpload && confirmOverwrite) {
-            existingUpload.bookName = `${existingUpload.bookName} (הועלתה גירסה חדשה)`;
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            existingUpload.bookName = `${existingUpload.bookName} (גרסה ישנה מ-${timestamp}`;
             existingUpload.isDeleted = true;
             existingUpload.deletedAt = new Date();
             await existingUpload.save();
+        }
         }
 
         // יצירת העלאה חדשה
