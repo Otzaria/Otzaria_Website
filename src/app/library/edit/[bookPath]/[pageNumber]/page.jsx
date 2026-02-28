@@ -591,35 +591,56 @@ export default function EditPage() {
     let textContent = twoColumns ? `${rightColumnName}:\n${rightColumn}\n\n${leftColumnName}:\n${leftColumn}` : content;
     if (!textContent.trim()) return showAlert('שגיאה', 'העמוד ריק');
 
-    startLoading('מעלה קובץ למערכת...');
-    try {
-      const cleanBookName = bookPath.replace(/[^a-zA-Z0-9א-ת]/g, '_'); 
-      const fileName = `${cleanBookName}_page_${pageNumber}.txt`;
-      const blob = new Blob([textContent], { type: 'text/plain' });
-      const file = new File([blob], fileName, { type: 'text/plain' });
+    const uploadFile = async (confirmOverwrite = false) => {
+      startLoading('מעלה קובץ למערכת...');
+      try {
+        const cleanBookName = bookPath.replace(/[^a-zA-Z0-9א-ת]/g, '_'); 
+        const fileName = `${cleanBookName}_page_${pageNumber}.txt`;
+        const blob = new Blob([textContent], { type: 'text/plain' });
+        const file = new File([blob], fileName, { type: 'text/plain' });
 
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('bookName', `${bookPath} - עמוד ${pageNumber}`);
-      formData.append('userId', session.user._id || session.user.id);
-      formData.append('userName', session.user.name);
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('bookName', `${bookPath} - עמוד ${pageNumber}`);
+        formData.append('userId', session.user._id || session.user.id);
+        formData.append('userName', session.user.name);
+        if (confirmOverwrite) {
+          formData.append('confirmOverwrite', 'true');
+        }
 
-      const response = await fetch('/api/upload-book', { method: 'POST', body: formData });
-      const result = await response.json();
+        const response = await fetch('/api/upload-book', { method: 'POST', body: formData });
+        const result = await response.json();
 
-      stopLoading(); 
+        stopLoading(); 
 
-      if (result.success) {
-        showAlert('הצלחה', 'הטקסט הועלה בהצלחה והעמוד סומן כהושלם!');
-        await completePageLogic(); 
-      } else {
-        showAlert('שגיאה', `שגיאה בהעלאה: ${result.error || 'שגיאה לא ידועה'}`);
+        // אם נדרש אישור
+        if (result.requiresConfirmation) {
+          const confirmed = await showConfirm(
+            'קובץ קיים',
+            result.message
+          );
+          
+          if (confirmed) {
+            // נסה שוב עם אישור
+            await uploadFile(true);
+          }
+          return;
+        }
+
+        if (result.success) {
+          showAlert('הצלחה', 'הטקסט הועלה בהצלחה והעמוד סומן כהושלם!');
+          await completePageLogic(); 
+        } else {
+          showAlert('שגיאה', `שגיאה בהעלאה: ${result.error || 'שגיאה לא ידועה'}`);
+        }
+      } catch (error) {
+        stopLoading();
+        console.error('Error uploading text:', error);
+        showAlert('שגיאה', 'שגיאה בתהליך ההעלאה');
       }
-    } catch (error) {
-      stopLoading();
-      console.error('Error uploading text:', error);
-      showAlert('שגיאה', 'שגיאה בתהליך ההעלאה');
-    }
+    };
+
+    await uploadFile();
   };
 
   const handleResizeStart = (e) => {

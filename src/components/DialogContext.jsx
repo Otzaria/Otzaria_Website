@@ -52,6 +52,26 @@ export function DialogProvider({ children }) {
   const showConfirm = useCallback((title, message, onConfirmAction, confirmText = 'אישור', cancelText = 'ביטול') => {
     clearAutoCloseTimer()
     clearCloseTimer()
+    
+    // תמיכה ב-Promise - אם לא נשלח callback, מחזירים Promise
+    if (typeof onConfirmAction !== 'function') {
+      return new Promise((resolve) => {
+        setIsVisible(true)
+        setDialogConfig({
+          isOpen: true,
+          type: 'confirm',
+          title,
+          message,
+          onConfirm: () => resolve(true),
+          onCancel: () => resolve(false),
+          confirmText: onConfirmAction || 'אישור', // אם onConfirmAction הוא string, זה confirmText
+          cancelText: typeof message === 'string' && typeof onConfirmAction === 'string' ? onConfirmAction : 'ביטול',
+          timestamp: Date.now()
+        })
+      })
+    }
+    
+    // תמיכה ב-callback המקורי
     setIsVisible(true)
     setDialogConfig({
       isOpen: true,
@@ -59,6 +79,7 @@ export function DialogProvider({ children }) {
       title,
       message,
       onConfirm: onConfirmAction,
+      onCancel: null,
       confirmText,
       cancelText,
       timestamp: Date.now()
@@ -68,12 +89,18 @@ export function DialogProvider({ children }) {
   const closeDialog = useCallback(() => {
     clearAutoCloseTimer()
     clearCloseTimer()
+    
+    // אם יש onCancel (במקרה של Promise), קורא לו
+    if (dialogConfig.onCancel) {
+      dialogConfig.onCancel()
+    }
+    
     setIsVisible(false)
     
     closeTimerRef.current = setTimeout(() => {
       setDialogConfig(prev => ({ ...prev, isOpen: false }))
     }, 300)
-  }, [clearAutoCloseTimer, clearCloseTimer])
+  }, [clearAutoCloseTimer, clearCloseTimer, dialogConfig.onCancel])
 
   const handleConfirm = useCallback(() => {
     if (dialogConfig.onConfirm) {

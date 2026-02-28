@@ -14,28 +14,50 @@ export async function POST(request) {
         const formData = await request.formData();
         const file = formData.get('file');
         const bookName = formData.get('bookName');
+        const confirmOverwrite = formData.get('confirmOverwrite') === 'true';
 
         if (!file || !bookName) return NextResponse.json({ error: 'Missing data' }, { status: 400 });
 
         const content = await file.text();
         await connectDB();
 
-        const upload = await Upload.findOneAndUpdate(
-            { bookName: bookName }, 
-            { 
-                uploader: session.user._id, 
-                originalFileName: file.name,
-                content: content,
-                uploadType: 'single_page',
-                status: 'pending',
-                createdAt: new Date() 
-            },
-            { 
-                upsert: true, 
-                new: true, 
-                setDefaultsOnInsert: true 
-            }
-        );
+        // בדיקה אם קיים קובץ עם אותו שם
+        const existingUpload = await Upload.findOne({ 
+            uploader: session.user._id,
+            bookName: bookName, 
+            isDeleted: false 
+        });
+
+        // אם קיים קובץ ולא אושר לדרוס
+        if (existingUpload && !confirmOverwrite) {
+            return NextResponse.json({ 
+                requiresConfirmation: true,
+                message: 'קובץ עם שם זה כבר קיים במערכת. האם להעלות גירסה חדשה?',
+                existingUpload: {
+                    id: existingUpload._id,
+                    uploadedAt: existingUpload.createdAt,
+                    status: existingUpload.status
+                }
+            }, { status: 409 });
+        }
+
+        // אם קיים קובץ ואושר לדרוס - העבר את הישן לאשפה
+        if (existingUpload && confirmOverwrite) {
+            existingUpload.bookName = `${existingUpload.bookName} (הועלתה גירסה חדשה)`;
+            existingUpload.isDeleted = true;
+            existingUpload.deletedAt = new Date();
+            await existingUpload.save();
+        }
+
+        // יצירת העלאה חדשה
+        const upload = await Upload.create({
+            uploader: session.user._id, 
+            originalFileName: file.name,
+            content: content,
+            uploadType: 'single_page',
+            status: 'pending',
+            bookName: bookName
+        });
 
         // בדיקה אם זה העמוד האחרון בספר
         const isLastPage = await isLastPageUpload(bookName);

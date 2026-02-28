@@ -15,6 +15,7 @@ export async function POST(request) {
         const formData = await request.formData();
         const file = formData.get('file');
         const bookName = formData.get('bookName');
+        const confirmOverwrite = formData.get('confirmOverwrite') === 'true';
 
         const MAX_SIZE = 10 * 1024 * 1024;
         if (file.size > MAX_SIZE) {
@@ -27,21 +28,45 @@ export async function POST(request) {
 
         const uploadType = formData.get('uploadType') || 'single_page';
 
-        const upload = await Upload.findOneAndUpdate(
-            { uploader: session.user._id, bookName: bookName },
-            { 
-                originalFileName: file.name,
-                content: content,
-                fileSize: file.size,
-                lineCount: 0,
-                uploadType: uploadType,
-                status: 'pending',
-                isDeleted: false,
-                deletedAt: null,
-                updatedAt: new Date()
-            },
-            { upsert: true, new: true }
-        );
+        // בדיקה אם קיים קובץ עם אותו שם
+        const existingUpload = await Upload.findOne({ 
+            uploader: session.user._id, 
+            bookName: bookName, 
+            isDeleted: false 
+        });
+
+        // אם קיים קובץ ולא אושר לדרוס
+        if (existingUpload && !confirmOverwrite) {
+            return NextResponse.json({ 
+                requiresConfirmation: true,
+                message: 'כבר העלת קובץ עם שם זה. האם להעלות גירסה חדשה? הגירסה הישנה תועבר לאשפה.',
+                existingUpload: {
+                    id: existingUpload._id,
+                    uploadedAt: existingUpload.createdAt,
+                    status: existingUpload.status
+                }
+            }, { status: 409 });
+        }
+
+        // אם קיים קובץ ואושר לדרוס - העבר את הישן לאשפה
+        if (existingUpload && confirmOverwrite) {
+            existingUpload.bookName = `${existingUpload.bookName} (הועלתה גירסה חדשה)`;
+            existingUpload.isDeleted = true;
+            existingUpload.deletedAt = new Date();
+            await existingUpload.save();
+        }
+
+        // יצירת העלאה חדשה
+        const upload = await Upload.create({
+            uploader: session.user._id,
+            originalFileName: file.name,
+            content: content,
+            fileSize: file.size,
+            lineCount: 0,
+            uploadType: uploadType,
+            status: 'pending',
+            bookName: bookName
+        });
 
         // בדיקה אם צריך לשלוח מייל
         let shouldSendEmail = false;
