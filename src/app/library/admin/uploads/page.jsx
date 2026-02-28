@@ -8,6 +8,7 @@ import StatusConfigModal from '@/components/StatusConfigModal'
 import StatusBadge from '@/components/StatusBadge'
 import StatusEditor from '@/components/StatusEditor'
 import UploadNotificationSettings from '@/components/UploadNotificationSettings'
+import LoadingSpinner from '@/components/LoadingSpinner'
 
 export default function AdminUploadsPage() {
   const [uploads, setUploads] = useState([])
@@ -324,12 +325,6 @@ export default function AdminUploadsPage() {
     }
   }
 
-  if (loading) return (
-    <div className="flex justify-center items-center h-64">
-        <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
-    </div>
-  )
-
   return (
     <div className="glass-strong p-6 rounded-xl animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex justify-between items-center gap-4 mb-6">
@@ -519,7 +514,9 @@ export default function AdminUploadsPage() {
         )}
       </div>
       
-      {uploads.length === 0 ? (
+      {loading ? (
+          <LoadingSpinner message="טוען העלאות..." />
+      ) : uploads.length === 0 ? (
           <div className="text-center py-16 text-gray-500">
             <span className="material-symbols-outlined text-6xl mb-2">folder_off</span>
             <p>אין העלאות במערכת</p>

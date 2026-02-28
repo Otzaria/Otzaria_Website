@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, useTransition } from 'react'
 import Button from '@/components/Button'
 import { useDialog } from '@/components/DialogContext'
+import LoadingSpinner from '@/components/LoadingSpinner'
 import CreateHeadersModal from '@/components/dicta-tools/CreateHeadersModal'
 import SingleLetterHeadersModal from '@/components/dicta-tools/SingleLetterHeadersModal'
 import ChangeHeadingModal from '@/components/dicta-tools/ChangeHeadingModal'
@@ -824,10 +825,7 @@ export default function DictaEditorCore({
         <main className="flex-1 overflow-auto bg-white flex">
           {isPending ? (
             <div className="flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-                <div className="text-lg text-gray-600">טוען...</div>
-              </div>
+              <LoadingSpinner message="טוען..." />
             </div>
           ) : editMode && canEdit ? (
             <>

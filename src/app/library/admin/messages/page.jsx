@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useDialog } from '@/components/DialogContext'
+import LoadingSpinner from '@/components/LoadingSpinner'
 
 export default function AdminMessagesPage() {
   const { data: session } = useSession()
@@ -165,9 +166,7 @@ export default function AdminMessagesPage() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-20">
-            <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
-        </div>
+        <LoadingSpinner message="טוען הודעות..." />
       ) : messages.length === 0 ? (
           <div className="text-center py-20 text-gray-500">
               <span className="material-symbols-outlined text-6xl mb-2 text-gray-300">inbox</span>

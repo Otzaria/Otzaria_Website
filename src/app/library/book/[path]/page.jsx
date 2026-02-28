@@ -10,6 +10,7 @@ import { useDialog } from '@/components/DialogContext'
 import { LoadingProvider } from '@/components/LoadingContext'
 import { useLoading } from '@/components/LoadingContext'
 import Header from '@/components/Header'
+import LoadingSpinner from '@/components/LoadingSpinner'
 
 const pageStatusConfig = {
   available: {
@@ -343,12 +344,7 @@ export default function BookPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <span className="material-symbols-outlined animate-spin text-6xl text-primary mb-4 block">
-            progress_activity
-          </span>
-          <p className="text-on-surface/70">טוען את הספר...</p>
-        </div>
+        <LoadingSpinner message="טוען את הספר..." size="lg" />
       </div>
     )
   }

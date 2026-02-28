@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useDialog } from '@/components/DialogContext';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 export default function BookReminderPage() {
     const { data: session } = useSession();
@@ -12,6 +13,7 @@ export default function BookReminderPage() {
     const [dictaBooks, setDictaBooks] = useState([]);
     const [allUsers, setAllUsers] = useState([]); 
     const [history, setHistory] = useState([]);
+    const [loadingHistory, setLoadingHistory] = useState(true);
     
     const [bookType, setBookType] = useState('regular'); // 'regular' or 'dicta'
     const [selectedBookPath, setSelectedBookPath] = useState('');
@@ -119,6 +121,8 @@ export default function BookReminderPage() {
                     }
                 } catch (e) {
                     console.error('History fetch failed:', e);
+                } finally {
+                    setLoadingHistory(false);
                 }
 
             } catch (error) {
@@ -597,7 +601,15 @@ export default function BookReminderPage() {
                 )}
             </form>
 
-            {history.length > 0 && (
+            {loadingHistory ? (
+                <div className="mt-12 border-t pt-8">
+                    <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-gray-500">history</span>
+                        היסטוריית שליחות אחרונות
+                    </h2>
+                    <LoadingSpinner message="טוען היסטוריה..." />
+                </div>
+            ) : !loadingHistory && history.length > 0 && (
                 <div className="mt-12 border-t pt-8">
                     <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
                         <span className="material-symbols-outlined text-gray-500">history</span>

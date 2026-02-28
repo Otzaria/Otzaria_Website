@@ -8,6 +8,7 @@ import Button from '@/components/Button'
 import { useDialog } from '@/components/DialogContext'
 import { getAvatarColor, getInitial } from '@/lib/avatar-colors'
 import DictaEditorCore from '@/components/editor/DictaEditorCore'
+import LoadingSpinner from '@/components/LoadingSpinner'
 
 export default function DictaEditorPage() {
   const params = useParams()
@@ -261,8 +262,7 @@ export default function DictaEditorPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary ml-3"></div>
-        <div className="text-xl">טוען נתונים...</div>
+        <LoadingSpinner message="טוען נתונים..." />
       </div>
     )
   }
