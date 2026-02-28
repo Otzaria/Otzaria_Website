@@ -345,7 +345,7 @@ function DictaBooksContent() {
               </Link>
 
               <Link 
-                href="/library/editingtools" 
+                href="/library/dicta-books/editingtools" 
                 className="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-5 py-2.5 rounded-xl hover:bg-slate-50 transition-all font-semibold shadow-sm"
               >
                 <span className="material-symbols-outlined text-primary">construction</span>
