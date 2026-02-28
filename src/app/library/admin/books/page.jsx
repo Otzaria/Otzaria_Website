@@ -634,7 +634,7 @@ export default function AdminBooksPage() {
                             {isPersonal ? (
                                 <div className="grid grid-cols-2 gap-2">
                                     <Link
-                                        href={`/library/book/${encodeURIComponent(book.path)}`}
+                                        href={`/library/books/${encodeURIComponent(book.path)}`}
                                         className="flex items-center justify-center gap-1 px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-sm font-medium transition-colors"
                                     >
                                         <span className="material-symbols-outlined text-sm">visibility</span>
@@ -652,7 +652,7 @@ export default function AdminBooksPage() {
                                 <>
                                     <div className="grid grid-cols-2 gap-2">
                                         <Link
-                                            href={`/library/book/${encodeURIComponent(book.path)}`}
+                                            href={`/library/books/${encodeURIComponent(book.path)}`}
                                             className="flex items-center justify-center gap-1 px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-sm font-medium transition-colors"
                                         >
                                             <span className="material-symbols-outlined text-sm">visibility</span>

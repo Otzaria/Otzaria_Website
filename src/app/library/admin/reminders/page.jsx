@@ -264,7 +264,7 @@ export default function BookReminderPage() {
         const formattedBody = messageBody.replace(/\n/g, '<br/>');
         const bookLink = isDicta 
             ? `${siteUrl}/library/dicta-books?status=my-books` 
-            : `${siteUrl}/library/book/${bookName}`;
+            : `${siteUrl}/library/books/${bookName}`;
 
         return `
         <div dir="rtl" style="font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 40px; text-align: center;">

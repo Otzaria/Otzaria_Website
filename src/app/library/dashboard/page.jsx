@@ -667,7 +667,7 @@ export default function DashboardPage() {
                       </div>
                       {activity.bookPath && activity.bookPath !== '#' && activity.pageNumber !== null && activity.pageNumber !== undefined ? (
                         <Link 
-                          href={`/library/edit/${encodeURIComponent(activity.bookPath)}/${activity.pageNumber}`}
+                          href={`/library/books/${encodeURIComponent(activity.bookPath)}/${activity.pageNumber}`}
                           className="text-primary hover:text-accent"
                         >
                           <span className="material-symbols-outlined">arrow_back</span>

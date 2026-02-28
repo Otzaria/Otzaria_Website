@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Header from '@/components/Header'
 import WeeklyProgressChart from '@/components/WeeklyProgressChart'
 import { statusConfig } from '@/lib/library-data'
+import LoadingSpinner from '@/components/LoadingSpinner'
 
 export default function LibraryBooksPage() {
   const [treeData, setTreeData] = useState([])
@@ -157,10 +158,7 @@ export default function LibraryBooksPage() {
             </div>
 
             {loading ? (
-                <div className="flex flex-col justify-center items-center h-64 opacity-60">
-                    <span className="material-symbols-outlined animate-spin text-5xl text-primary mb-4">progress_activity</span>
-                    <p>טוען את הספרייה...</p>
-                </div>
+                <LoadingSpinner message="טוען את הספרייה..." />
             ) : (
                 <>
                     <div className="flex items-center justify-between border-b border-surface-variant pb-3">
@@ -216,7 +214,7 @@ function BookCard({ book, categories }) {
     
     return (
       <Link 
-          href={`/library/book/${encodeURIComponent(book.path)}`}
+          href={`/library/books/${encodeURIComponent(book.path)}`}
           className="group bg-white p-5 rounded-2xl border border-surface-variant hover:border-primary/50 hover:shadow-lg transition-all duration-300 flex flex-col h-full transform hover:-translate-y-1"
       >
           {/* Top Section */}

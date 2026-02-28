@@ -654,7 +654,7 @@ function formatTimeAgo(dateString) {
 function PageCard({ page, onClaim, onComplete, onRelease, onUncomplete, onPreview, currentUser, bookPath, isAdmin, isBookOwner }) {
   const status = pageStatusConfig[page.status]
 
-  const editUrl = `/library/edit/${encodeURIComponent(bookPath)}/${page.number}`;
+  const editUrl = `/library/books/${encodeURIComponent(bookPath)}/${page.number}`;
   
   const isClaimedByMe = currentUser && (
     page.claimedBy === currentUser.name || 

@@ -173,7 +173,7 @@ export async function sendBookNotification(bookName, bookSlug) {
             
             const safeSlug = bookSlug ? encodeURIComponent(bookSlug) : ''; 
             const bookLink = safeSlug 
-                ? `${process.env.NEXTAUTH_URL}/library/book/${safeSlug}`
+                ? `${process.env.NEXTAUTH_URL}/library/books/${safeSlug}`
                 : `${process.env.NEXTAUTH_URL}/library`;
 
             const emailHtml = `

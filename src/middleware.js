@@ -42,7 +42,7 @@ export const config = {
     '/library/dashboard/:path*',
     '/library/admin/:path*',
     '/library/upload/:path*',
-    '/library/edit/:path*',
+    '/library/books/:path*',
     '/library/users/:path*',
     '/library/auth/login', // הוספנו את דף ההתחברות ל-matcher
     '/api/admin/((?!books/upload).*)', 
