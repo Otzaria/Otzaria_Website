@@ -197,8 +197,6 @@ function DictaBooksContent() {
             const formData = new FormData()
             formData.append('file', file)
             formData.append('bookName', book.title)
-            formData.append('userId', session.user._id || session.user.id)
-            formData.append('userName', session.user.name)
             formData.append('uploadType', 'dicta')
             if (confirmOverwrite) {
               formData.append('confirmOverwrite', 'true')

@@ -50,10 +50,12 @@ export async function PUT(request) {
       { email: session.user.email },
       {
         $set: {
-          'uploadNotifications.enabled': enabled,
-          'uploadNotifications.dicta': dicta,
-          'uploadNotifications.fullBook': fullBook,
-          'uploadNotifications.singlePage': singlePage
+          uploadNotifications: {
+            enabled,
+            dicta,
+            fullBook,
+            singlePage
+          }
         }
       },
       { new: true }
