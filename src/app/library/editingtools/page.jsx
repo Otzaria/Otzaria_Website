@@ -1,0 +1,235 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import Header from '@/components/Header'
+import { useDialog } from '@/components/DialogContext'
+
+export default function EditingToolsPage() {
+  const { showAlert } = useDialog()
+  const [releases, setReleases] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchReleases()
+  }, [])
+
+  const fetchReleases = async () => {
+    try {
+      const response = await fetch('https://api.github.com/repos/YOSEFTT/EditingDictaBooks/releases/latest', {
+        headers: {
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'Otzaria-Website'
+        }
+      })
+
+      if (!response.ok) throw new Error('Failed to fetch releases')
+
+      const data = await response.json()
+      const assets = data.assets || []
+
+      setReleases({
+        version: data.tag_name,
+        installer: assets.find(a => a.name.includes('Installation'))?.browser_download_url,
+        portable: assets.find(a => !a.name.includes('Installation') && a.name.endsWith('.exe'))?.browser_download_url,
+        releaseUrl: data.html_url
+      })
+    } catch (error) {
+      console.error('Error fetching releases:', error)
+      showAlert('שגיאה', 'לא ניתן לטעון את גרסאות התוכנה')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDownloadOfflineEditor = async () => {
+    try {
+      const response = await fetch('/api/export-editor')
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'dicta-editor-offline.html'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Error downloading offline editor:', error)
+      showAlert('שגיאה', 'לא ניתן להוריד את העורך האופליין')
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Header />
+      
+      <main className="container mx-auto px-4 py-12">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-12">
+            <h1 className="text-4xl font-bold mb-3 font-frank">
+              כלי עריכה
+            </h1>
+            <p className="text-on-surface/70 text-lg">
+              הורד כלים לעריכת ספרי דיקטה ללא חיבור לאינטרנט
+            </p>
+          </div>
+
+          <div className="space-y-8">
+            {/* תוכנת עריכת ספרי דיקטה */}
+            <div className="glass p-8 rounded-2xl">
+              <div className="flex items-start gap-6">
+                <div className="flex-shrink-0">
+                  <div className="w-16 h-16 bg-primary/10 rounded-xl flex items-center justify-center">
+                    <span className="material-symbols-outlined text-4xl text-primary">
+                      desktop_windows
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="flex-1">
+                  <h2 className="text-2xl font-bold mb-2 font-frank">
+                    תוכנת עריכת ספרי דיקטה
+                  </h2>
+                  <p className="text-on-surface/70 mb-6">
+                    תוכנה ייעודית לעריכת ספרי דיקטה עם כלים מתקדמים לניקוי טקסט, הוספת כותרות, ניקוד ועוד
+                  </p>
+
+                  {loading ? (
+                    <div className="flex items-center gap-2 text-on-surface/60">
+                      <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                      <span>טוען מידע על גרסאות...</span>
+                    </div>
+                  ) : releases ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2 text-sm text-on-surface/60">
+                        <span className="material-symbols-outlined text-base">info</span>
+                        <span>גרסה נוכחית: {releases.version}</span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-3">
+                        {releases.installer && (
+                          <a
+                            href={releases.installer}
+                            className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-on-primary rounded-lg font-bold hover:bg-accent transition-colors"
+                          >
+                            <span className="material-symbols-outlined">download</span>
+                            הורד תוכנת התקנה
+                          </a>
+                        )}
+
+                        {releases.portable && (
+                          <a
+                            href={releases.portable}
+                            className="inline-flex items-center gap-2 px-6 py-3 bg-secondary text-on-primary rounded-lg font-bold hover:bg-accent transition-colors"
+                          >
+                            <span className="material-symbols-outlined">download</span>
+                            הורד גרסה ניידת
+                          </a>
+                        )}
+
+                        <a
+                          href={releases.releaseUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-6 py-3 border-2 border-primary text-primary rounded-lg font-bold hover:bg-primary/10 transition-colors"
+                        >
+                          <span className="material-symbols-outlined">open_in_new</span>
+                          פרטים נוספים
+                        </a>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-on-surface/60">
+                      לא ניתן לטעון מידע על גרסאות
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* עורך אופליין */}
+            <div className="glass p-8 rounded-2xl">
+              <div className="flex items-start gap-6">
+                <div className="flex-shrink-0">
+                  <div className="w-16 h-16 bg-accent/10 rounded-xl flex items-center justify-center">
+                    <span className="material-symbols-outlined text-4xl text-accent">
+                      edit_document
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="flex-1">
+                  <h2 className="text-2xl font-bold mb-2 font-frank">
+                    עורך אופליין
+                  </h2>
+                  <p className="text-on-surface/70 mb-6">
+                    ממשק עריכה מלא כמו באתר, בקובץ HTML יחיד שניתן להוריד ולהשתמש בו ללא חיבור לאינטרנט
+                  </p>
+
+                  <div className="space-y-4">
+                    <div className="bg-primary-container/50 border border-primary/20 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <span className="material-symbols-outlined text-primary mt-0.5">
+                          lightbulb
+                        </span>
+                        <div className="text-sm text-on-surface/80">
+                          <p className="font-bold mb-1">איך זה עובד?</p>
+                          <ul className="list-disc list-inside space-y-1 mr-4">
+                            <li>הורד קובץ HTML יחיד</li>
+                            <li>פתח אותו בדפדפן (Chrome, Firefox, Edge)</li>
+                            <li>ערוך טקסטים עם כל הכלים המתקדמים</li>
+                            <li>שמור את העבודה למחשב שלך</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleDownloadOfflineEditor}
+                      className="inline-flex items-center gap-2 px-6 py-3 bg-accent text-on-primary rounded-lg font-bold hover:bg-primary transition-colors"
+                    >
+                      <span className="material-symbols-outlined">download</span>
+                      הורד עורך אופליין
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* מידע נוסף */}
+            <div className="glass-strong p-6 rounded-xl">
+              <div className="flex items-start gap-4">
+                <span className="material-symbols-outlined text-2xl text-primary">
+                  help
+                </span>
+                <div>
+                  <h3 className="font-bold mb-2">זקוק לעזרה?</h3>
+                  <p className="text-sm text-on-surface/70 mb-3">
+                    למדריכים מפורטים על שימוש בכלי העריכה, בקר בעמוד המדריכים או בפורום הקהילה
+                  </p>
+                  <div className="flex gap-3">
+                    <a
+                      href="/docs"
+                      className="text-sm text-primary hover:underline font-medium"
+                    >
+                      מדריכים
+                    </a>
+                    <span className="text-on-surface/30">•</span>
+                    <a
+                      href="https://otzaria.org/forum"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-primary hover:underline font-medium"
+                    >
+                      פורום
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  )
+}
