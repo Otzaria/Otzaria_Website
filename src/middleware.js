@@ -19,11 +19,6 @@ export default withAuth(
       return NextResponse.redirect(new URL(newPath, req.url));
     }
 
-    // אם המשתמש מחובר ומנסה לגשת לדף ההתחברות - נעביר אותו לדשבורד
-    if (path === '/library/auth/login' && !!token) {
-      return NextResponse.redirect(new URL('/library/dashboard', req.url));
-    }
-
     // הגנה על דפי אדמין - רק לבעלי תפקיד 'admin'
     if (path.startsWith('/library/admin')) {
       if (!token) {
@@ -40,12 +35,8 @@ export default withAuth(
   },
   {
     callbacks: {
-      authorized: ({ token, req }) => {
-        const path = req.nextUrl.pathname;
-        // מאפשרים גישה לדף ההתחברות גם ללא טוקן (כדי שהמחשב לא ייתקע בלופ של הפניות)
-        if (path === '/library/auth/login') {
-          return true;
-        }
+      authorized: ({ token }) => {
+        // כל הדפים שב-matcher דורשים אימות
         return !!token;
       }
     },
@@ -65,7 +56,6 @@ export const config = {
     '/library/edit/:path*',       // נתיב ישן - יופנה ל-books
     '/library/users/:path*',
     '/library/dicta-books/:path*',
-    '/library/auth/login', // הוספנו את דף ההתחברות ל-matcher
     '/api/admin/((?!books/upload).*)', 
     '/api/upload-text/:path*'
   ]

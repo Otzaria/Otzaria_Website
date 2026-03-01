@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, Suspense } from 'react'
-import { signIn, useSession, getSession } from 'next-auth/react' // הוספנו את getSession
+import { signIn, useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -20,30 +20,16 @@ function LoginContent() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  const [isRedirecting, setIsRedirecting] = useState(false)
+
+  // בדיקה אם המשתמש התחבר (בלשונית זו או אחרת)
   useEffect(() => {
-    const checkSession = async () => {
-      const session = await getSession()
-      if (session) {
-        const callbackUrl = searchParams.get('callbackUrl') || '/library/dashboard'
-        router.refresh() 
-        router.replace(callbackUrl)
-      }
-    }
-
-    checkSession()
-
-    const intervalId = setInterval(checkSession, 5000)
-
-    return () => clearInterval(intervalId)
-  }, [router, searchParams])
-
-  // בדיקה רגילה של ה-Hook (גיבוי נוסף)
-  useEffect(() => {
-    if (status === 'authenticated') {
+    if (status === 'authenticated' && !isRedirecting) {
+      setIsRedirecting(true)
       const callbackUrl = searchParams.get('callbackUrl') || '/library/dashboard'
       router.replace(callbackUrl)
     }
-  }, [status, router, searchParams])
+  }, [status, router, searchParams, isRedirecting])
 
   useEffect(() => {
     const errorType = searchParams.get('error')
