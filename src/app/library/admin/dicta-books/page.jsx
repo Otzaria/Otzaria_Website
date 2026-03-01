@@ -36,7 +36,7 @@ export default function AdminDictaBooksPage() {
     if (status === 'loading') return
     
     if (status === 'unauthenticated') {
-      router.push('/library/auth/login')
+      router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
     } else if (session?.user?.role !== 'admin') {
       router.push('/library/dashboard')
     } else {

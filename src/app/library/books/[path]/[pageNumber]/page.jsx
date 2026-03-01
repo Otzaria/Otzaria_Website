@@ -250,7 +250,7 @@ export default function EditPage() {
   }, [])
 
   useEffect(() => {
-    if (status === 'unauthenticated') router.push('/library/auth/login')
+    if (status === 'unauthenticated') router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
     else if (status === 'authenticated') loadPageData()
   }, [status, bookPath, pageNumber])
 

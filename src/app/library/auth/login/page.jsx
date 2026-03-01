@@ -24,8 +24,9 @@ function LoginContent() {
     const checkSession = async () => {
       const session = await getSession()
       if (session) {
+        const callbackUrl = searchParams.get('callbackUrl') || '/library/dashboard'
         router.refresh() 
-        router.replace('/library/dashboard')
+        router.replace(callbackUrl)
       }
     }
 
@@ -34,14 +35,15 @@ function LoginContent() {
     const intervalId = setInterval(checkSession, 5000)
 
     return () => clearInterval(intervalId)
-  }, [router])
+  }, [router, searchParams])
 
   // בדיקה רגילה של ה-Hook (גיבוי נוסף)
   useEffect(() => {
     if (status === 'authenticated') {
-      router.replace('/library/dashboard')
+      const callbackUrl = searchParams.get('callbackUrl') || '/library/dashboard'
+      router.replace(callbackUrl)
     }
-  }, [status, router])
+  }, [status, router, searchParams])
 
   useEffect(() => {
     const errorType = searchParams.get('error')
@@ -78,8 +80,9 @@ function LoginContent() {
         setError('שם משתמש או סיסמה שגויים')
         setLoading(false)
       } else {
+        const callbackUrl = searchParams.get('callbackUrl') || '/library/dashboard'
         router.refresh()
-        router.replace('/library/dashboard')
+        router.replace(callbackUrl)
       }
     } catch {
       setError('שגיאה בהתחברות')

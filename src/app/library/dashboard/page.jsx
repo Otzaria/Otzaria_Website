@@ -73,7 +73,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (status === 'unauthenticated') {
-      router.push('/library/auth/login');
+      router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`);
     } else if (status === 'authenticated') {
       const isFirstTime = stats.myPages === 0 && stats.recentActivity.length === 0;
       loadUserStats(isFirstTime); 

@@ -18,7 +18,7 @@ export default function UploadPage() {
   const fileInputRef = useRef(null)
 
   if (status === 'unauthenticated') {
-    router.push('/library/auth/login')
+    router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
     return null
   }
 

@@ -26,8 +26,13 @@ export default withAuth(
 
     // הגנה על דפי אדמין - רק לבעלי תפקיד 'admin'
     if (path.startsWith('/library/admin')) {
-      if (!token || token.role !== 'admin') {
-        return NextResponse.redirect(new URL('/library/dashboard', req.url));
+      if (!token) {
+        // אם אין טוקן בכלל - NextAuth יטפל בהפניה להתחברות עם callbackUrl
+        return NextResponse.next();
+      }
+      if (token.role !== 'admin') {
+        // אם יש טוקן אבל המשתמש לא אדמין - נעביר לדף שגיאה
+        return NextResponse.redirect(new URL('/library/unauthorized', req.url));
       }
     }
 
@@ -59,6 +64,7 @@ export const config = {
     '/library/book/:path*',      // נתיב ישן - יופנה ל-books
     '/library/edit/:path*',       // נתיב ישן - יופנה ל-books
     '/library/users/:path*',
+    '/library/dicta-books/:path*',
     '/library/auth/login', // הוספנו את דף ההתחברות ל-matcher
     '/api/admin/((?!books/upload).*)', 
     '/api/upload-text/:path*'
