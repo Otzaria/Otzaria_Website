@@ -15,8 +15,8 @@ export default function AdminUploadsPage() {
   const [loading, setLoading] = useState(true)
   const [expandedBooks, setExpandedBooks] = useState({}) // מעקב אחרי ספרים מורחבים
   const [searchTerm, setSearchTerm] = useState('')
-  const [filterType, setFilterType] = useState('all') // 'all', 'dicta', 'full_book', 'single_page'
-  const [filterStatus, setFilterStatus] = useState('all') // 'all' או מפתח סטטוס
+  const [filterTypes, setFilterTypes] = useState([]) // מערך של סוגים שנבחרו
+  const [filterStatuses, setFilterStatuses] = useState([]) // מערך של סטטוסים שנבחרו
   const [showFilterMenu, setShowFilterMenu] = useState(false) // הצגת תפריט סינון
   const [bookStatuses, setBookStatuses] = useState({}) // הגדרות סטטוסים
   const [editingStatus, setEditingStatus] = useState(null) // שם הספר שעורכים את הסטטוס שלו
@@ -96,16 +96,16 @@ export default function AdminUploadsPage() {
     
     // סינון העלאות לפי חיפוש, סוג וסטטוס
     const filteredUploads = uploads.filter(upload => {
-      // סינון לפי סוג
-      if (filterType !== 'all') {
+      // סינון לפי סוג - אם יש סוגים שנבחרו, בדוק אם העלאה זו בתוכם
+      if (filterTypes.length > 0) {
         const uploadType = upload.uploadType || 'single_page'
-        if (filterType !== uploadType) return false
+        if (!filterTypes.includes(uploadType)) return false
       }
       
-      // סינון לפי סטטוס
-      if (filterStatus !== 'all') {
+      // סינון לפי סטטוס - אם יש סטטוסים שנבחרו, בדוק אם העלאה זו בתוכם
+      if (filterStatuses.length > 0) {
         const bookStatus = upload.bookStatus || 'not_checked'
-        if (filterStatus !== bookStatus) return false
+        if (!filterStatuses.includes(bookStatus)) return false
       }
       
       // סינון לפי חיפוש
@@ -152,7 +152,7 @@ export default function AdminUploadsPage() {
         )
       }))
       .sort((a, b) => new Date(b.latestUpload.uploadedAt) - new Date(a.latestUpload.uploadedAt))
-  }, [uploads, searchTerm, filterType, filterStatus])
+  }, [uploads, searchTerm, filterTypes, filterStatuses])
 
   const toggleBookExpansion = (bookName) => {
     setExpandedBooks(prev => ({
@@ -402,7 +402,7 @@ export default function AdminUploadsPage() {
         >
           <span className="material-symbols-outlined text-sm">filter_list</span>
           סינון
-          {(filterType !== 'all' || filterStatus !== 'all') && (
+          {(filterTypes.length > 0 || filterStatuses.length > 0) && (
             <span className="w-2 h-2 bg-blue-600 rounded-full"></span>
           )}
           <span className="material-symbols-outlined text-sm">
@@ -418,46 +418,51 @@ export default function AdminUploadsPage() {
               <div>
                 <h3 className="text-sm font-bold text-gray-700 mb-3 pb-2 border-b">סוג</h3>
                 <div className="space-y-2">
-                  <button
-                    onClick={() => setFilterType('all')}
-                    className={`w-full text-right px-3 py-2 rounded-lg text-sm transition-colors ${
-                      filterType === 'all'
-                        ? 'bg-blue-100 text-blue-700 font-semibold'
-                        : 'hover:bg-gray-100 text-gray-700'
-                    }`}
-                  >
-                    הכל
-                  </button>
-                  <button
-                    onClick={() => setFilterType('dicta')}
-                    className={`w-full text-right px-3 py-2 rounded-lg text-sm transition-colors ${
-                      filterType === 'dicta'
-                        ? 'bg-purple-100 text-purple-700 font-semibold'
-                        : 'hover:bg-gray-100 text-gray-700'
-                    }`}
-                  >
-                    דיקטה
-                  </button>
-                  <button
-                    onClick={() => setFilterType('full_book')}
-                    className={`w-full text-right px-3 py-2 rounded-lg text-sm transition-colors ${
-                      filterType === 'full_book'
-                        ? 'bg-green-100 text-green-700 font-semibold'
-                        : 'hover:bg-gray-100 text-gray-700'
-                    }`}
-                  >
-                    ספרים שהועלו
-                  </button>
-                  <button
-                    onClick={() => setFilterType('single_page')}
-                    className={`w-full text-right px-3 py-2 rounded-lg text-sm transition-colors ${
-                      filterType === 'single_page'
-                        ? 'bg-amber-100 text-amber-700 font-semibold'
-                        : 'hover:bg-gray-100 text-gray-700'
-                    }`}
-                  >
-                    עמודים שנערכו
-                  </button>
+                  <label className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={filterTypes.includes('dicta')}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setFilterTypes([...filterTypes, 'dicta'])
+                        } else {
+                          setFilterTypes(filterTypes.filter(t => t !== 'dicta'))
+                        }
+                      }}
+                      className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                    />
+                    <span className="text-sm text-gray-700">דיקטה</span>
+                  </label>
+                  <label className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={filterTypes.includes('full_book')}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setFilterTypes([...filterTypes, 'full_book'])
+                        } else {
+                          setFilterTypes(filterTypes.filter(t => t !== 'full_book'))
+                        }
+                      }}
+                      className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
+                    />
+                    <span className="text-sm text-gray-700">ספרים שהועלו</span>
+                  </label>
+                  <label className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={filterTypes.includes('single_page')}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setFilterTypes([...filterTypes, 'single_page'])
+                        } else {
+                          setFilterTypes(filterTypes.filter(t => t !== 'single_page'))
+                        }
+                      }}
+                      className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
+                    />
+                    <span className="text-sm text-gray-700">עמודים שנערכו</span>
+                  </label>
                 </div>
               </div>
               
@@ -465,44 +470,41 @@ export default function AdminUploadsPage() {
               <div>
                 <h3 className="text-sm font-bold text-gray-700 mb-3 pb-2 border-b">סטטוס</h3>
                 <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                  <button
-                    onClick={() => setFilterStatus('all')}
-                    className={`w-full text-right px-3 py-2 rounded-lg text-sm transition-colors ${
-                      filterStatus === 'all'
-                        ? 'bg-blue-100 text-blue-700 font-semibold'
-                        : 'hover:bg-gray-100 text-gray-700'
-                    }`}
-                  >
-                    הכל
-                  </button>
                   {Object.entries(bookStatuses).map(([key, config]) => (
-                    <button
+                    <label 
                       key={key}
-                      onClick={() => setFilterStatus(key)}
-                      className={`w-full text-right px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2 ${
-                        filterStatus === key
-                          ? 'bg-blue-100 text-blue-700 font-semibold'
-                          : 'hover:bg-gray-100 text-gray-700'
-                      }`}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
                     >
+                      <input
+                        type="checkbox"
+                        checked={filterStatuses.includes(key)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setFilterStatuses([...filterStatuses, key])
+                          } else {
+                            setFilterStatuses(filterStatuses.filter(s => s !== key))
+                          }
+                        }}
+                        className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                      />
                       <span 
                         className="w-3 h-3 rounded-full flex-shrink-0" 
                         style={{ backgroundColor: config.color }}
                       ></span>
-                      {config.label}
-                    </button>
+                      <span className="text-sm text-gray-700">{config.label}</span>
+                    </label>
                   ))}
                 </div>
               </div>
             </div>
             
             {/* כפתור איפוס */}
-            {(filterType !== 'all' || filterStatus !== 'all') && (
+            {(filterTypes.length > 0 || filterStatuses.length > 0) && (
               <div className="mt-4 pt-4 border-t">
                 <button
                   onClick={() => {
-                    setFilterType('all')
-                    setFilterStatus('all')
+                    setFilterTypes([])
+                    setFilterStatuses([])
                   }}
                   className="w-full px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
                 >
