@@ -19,11 +19,7 @@ const DictaBookSchema = new mongoose.Schema({
     description: String,
     editorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     editorName: String,
-  }],
-  // שדות לעותקי עריכה מהעלאות
-  isEditCopy: { type: Boolean, default: false }, // האם זה עותק עריכה מהעלאה
-  sourceUploadIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Upload' }], // מזהי ההעלאות המקוריות
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' } // מי יצר את עותק העריכה
+  }]
 }, { timestamps: true });
 
 export default mongoose.models.DictaBook || mongoose.model('DictaBook', DictaBookSchema);
