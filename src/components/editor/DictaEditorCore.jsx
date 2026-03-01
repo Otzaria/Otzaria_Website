@@ -34,6 +34,7 @@ const DEFAULT_SHORTCUTS = {
   'findReplace': 'Ctrl+KeyF',
   'shortcuts': 'Alt+KeyK',
   'embedImage': 'Ctrl+Shift+KeyI',
+  'removeTags': 'Ctrl+Shift+KeyX',
 }
 
 export default function DictaEditorCore({ 
@@ -216,6 +217,36 @@ export default function DictaEditorCore({
       textarea.scrollTop = scrollTop;
     }, 0);
   }, [content])
+
+  const removeTags = useCallback(() => {
+    if (!textareaRef.current) return
+    
+    const textarea = textareaRef.current
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    const selectedText = content.substring(start, end)
+    
+    if (!selectedText) {
+      showAlert('שגיאה', 'יש לבחור טקסט להסרת תגים')
+      return
+    }
+    
+    const scrollTop = textarea.scrollTop
+    
+    // הסרת כל תגי ה-HTML מהטקסט הנבחר
+    const cleanedText = selectedText.replace(/<[^>]*>/g, '')
+    const newText = content.substring(0, start) + cleanedText + content.substring(end)
+    
+    setContent(newText)
+    
+    setTimeout(() => {
+      textarea.focus()
+      textarea.setSelectionRange(start, start + cleanedText.length)
+      textarea.scrollTop = scrollTop
+    }, 0)
+    
+    showAlert('הצלחה', 'התגים הוסרו בהצלחה!')
+  }, [content, showAlert])
 
   const handleFindNext = useCallback((textToFind, isRegexMode) => {
     if (!textToFind) return showAlert('שגיאה', 'הזן טקסט לחיפוש')
@@ -495,6 +526,7 @@ export default function DictaEditorCore({
     'h6': { label: 'כותרת H6', action: () => insertTag('h6') },
     'bigger': { label: 'הגדל גופן טקסט', action: () => insertTag('big') },
     'smaller': { label: 'הקטן גופן טקסט', action: () => insertTag('small') },
+    'removeTags': { label: 'הסרת תגים', action: removeTags },
     'findReplace': { label: 'חיפוש והחלפה', action: () => setShowFindReplace(true) },
     'createHeaders': { label: 'יצירת כותרות', action: () => setActiveTool('createHeaders') },
     'singleLetterHeaders': { label: 'כותרות אותיות', action: () => setActiveTool('singleLetterHeaders') },
@@ -507,7 +539,7 @@ export default function DictaEditorCore({
     'cleanText': { label: 'ניקוי טקסט', action: () => setActiveTool('cleanText') },
     'embedImage': { label: 'הטמעת תמונה', action: () => setActiveTool('embedImage') },
     'shortcuts': { label: 'ערוך קיצורי מקלדת', action: () => setShowShortcutsDialog(true) },
-  }), [onSave, content, insertTag])
+  }), [onSave, content, insertTag, removeTags])
 
   const availableActions = useMemo(() => {
     return Object.entries(actionsMap).map(([id, def]) => ({
@@ -1161,6 +1193,17 @@ export default function DictaEditorCore({
                     size="sm"
                     onClick={() => insertTag('small')}
                     label="קטן"
+                  />
+                  
+                  <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                  
+                  <Button
+                    icon="format_clear"
+                    variant="ghost"
+                    size="sm"
+                    onClick={removeTags}
+                    label="הסר תגים"
+                    title="הסרת תגי HTML מהטקסט הנבחר"
                   />
                   </div>
                   
