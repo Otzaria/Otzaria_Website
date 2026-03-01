@@ -35,6 +35,8 @@ const DEFAULT_SHORTCUTS = {
   'shortcuts': 'Alt+KeyK',
   'embedImage': 'Ctrl+Shift+KeyI',
   'removeTags': 'Ctrl+Shift+KeyX',
+  'undo': 'Ctrl+KeyZ',
+  'redo': 'Ctrl+KeyY',
 }
 
 export default function DictaEditorCore({ 
@@ -74,6 +76,10 @@ export default function DictaEditorCore({
   const [toolbarExpanded, setToolbarExpanded] = useState(false)
   const [headerCompact, setHeaderCompact] = useState(false)
   
+  // מנגנון undo/redo
+  const [history, setHistory] = useState([initialContent])
+  const [historyIndex, setHistoryIndex] = useState(0)
+  
   // טעינת מצב toolbar מ-localStorage רק בצד הלקוח
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -96,6 +102,8 @@ export default function DictaEditorCore({
 
   useEffect(() => {
     setContent(initialContent)
+    setHistory([initialContent])
+    setHistoryIndex(0)
   }, [initialContent])
 
   useEffect(() => {
@@ -155,9 +163,54 @@ export default function DictaEditorCore({
     }
   }, [])
 
+  const updateTextWithHistory = useCallback((newText) => {
+    setContent(newText)
+    setHistory(prev => {
+      const newHistory = prev.slice(0, historyIndex + 1)
+      newHistory.push(newText)
+      return newHistory
+    })
+    setHistoryIndex(prev => prev + 1)
+  }, [historyIndex])
+  
+  const undo = useCallback(() => {
+    if (historyIndex > 0) {
+      const newIndex = historyIndex - 1
+      setHistoryIndex(newIndex)
+      setContent(history[newIndex])
+    }
+  }, [historyIndex, history])
+  
+  const redo = useCallback(() => {
+    if (historyIndex < history.length - 1) {
+      const newIndex = historyIndex + 1
+      setHistoryIndex(newIndex)
+      setContent(history[newIndex])
+    }
+  }, [historyIndex, history])
+
   const handleContentChange = useCallback((newContent) => {
+    updateTextWithHistory(newContent)
+  }, [updateTextWithHistory])
+  
+  const handleTextareaChange = useCallback((e) => {
+    const newContent = e.target.value
     setContent(newContent)
-  }, [])
+    // הוספה להיסטוריה עם debounce קל
+    if (handleTextareaChange.timeout) {
+      clearTimeout(handleTextareaChange.timeout)
+    }
+    handleTextareaChange.timeout = setTimeout(() => {
+      setHistory(prev => {
+        const newHistory = prev.slice(0, historyIndex + 1)
+        if (newHistory[newHistory.length - 1] !== newContent) {
+          newHistory.push(newContent)
+          setHistoryIndex(newHistory.length - 1)
+        }
+        return newHistory
+      })
+    }, 500)
+  }, [historyIndex])
 
   const handleTextareaScroll = useCallback(() => {
     if (!textareaRef.current || !previewRef.current) return
@@ -205,18 +258,18 @@ export default function DictaEditorCore({
     
     const scrollTop = textarea.scrollTop
     
-    const insertion = selectedText ? `<${tag}>${selectedText}</${tag}>` : `<${tag}></${tag}>`;
-    const newText = content.substring(0, start) + insertion + content.substring(end);
+    const insertion = selectedText ? `<${tag}>${selectedText}</${tag}>` : `<${tag}></${tag}>`
+    const newText = content.substring(0, start) + insertion + content.substring(end)
     
-    setContent(newText);
+    updateTextWithHistory(newText)
     
     setTimeout(() => {
-      const newPos = selectedText ? (start + insertion.length) : (start + tag.length + 2);
-      textarea.focus();
-      textarea.setSelectionRange(newPos, newPos);
-      textarea.scrollTop = scrollTop;
-    }, 0);
-  }, [content])
+      const newPos = selectedText ? (start + insertion.length) : (start + tag.length + 2)
+      textarea.focus()
+      textarea.setSelectionRange(newPos, newPos)
+      textarea.scrollTop = scrollTop
+    }, 0)
+  }, [content, updateTextWithHistory])
 
   const removeTags = useCallback(() => {
     if (!textareaRef.current) return
@@ -237,16 +290,14 @@ export default function DictaEditorCore({
     const cleanedText = selectedText.replace(/<[^>]*>/g, '')
     const newText = content.substring(0, start) + cleanedText + content.substring(end)
     
-    setContent(newText)
+    updateTextWithHistory(newText)
     
     setTimeout(() => {
       textarea.focus()
       textarea.setSelectionRange(start, start + cleanedText.length)
       textarea.scrollTop = scrollTop
     }, 0)
-    
-    showAlert('הצלחה', 'התגים הוסרו בהצלחה!')
-  }, [content, showAlert])
+  }, [content, showAlert, updateTextWithHistory])
 
   const handleFindNext = useCallback((textToFind, isRegexMode) => {
     if (!textToFind) return showAlert('שגיאה', 'הזן טקסט לחיפוש')
@@ -338,7 +389,7 @@ export default function DictaEditorCore({
     const end = textarea.selectionEnd
     const newText = content.substring(0, start) + finalReplacement + content.substring(end)
     
-    setContent(newText)
+    updateTextWithHistory(newText)
     
     setTimeout(() => {
       textarea.focus()
@@ -346,7 +397,7 @@ export default function DictaEditorCore({
     }, 0)
 
     handleFindNext(textToFind, isRegexMode)
-  }, [content, handleFindNext, showAlert])
+  }, [content, handleFindNext, showAlert, updateTextWithHistory])
 
   const handleReplaceAll = useCallback((overrideFind = null, overrideReplace = null, useRegexOverride = null) => {
     const textToFind = overrideFind !== null ? overrideFind : findText
@@ -383,16 +434,16 @@ export default function DictaEditorCore({
     }
 
     const newContent = content.replace(regex, replacement)
-    setContent(newContent)
+    updateTextWithHistory(newContent)
     
     showAlert('הצלחה', `ההחלפה בוצעה בהצלחה! הוחלפו ${count} מופעים.`)
-  }, [content, findText, replaceText, useRegex, showAlert])
+  }, [content, findText, replaceText, useRegex, showAlert, updateTextWithHistory])
 
   const handleRemoveDigits = useCallback(() => {
     const newContent = content.replace(/\d+/g, '')
-    setContent(newContent)
+    updateTextWithHistory(newContent)
     showAlert('הצלחה', 'הספרות הוסרו בהצלחה!')
-  }, [content, showAlert])
+  }, [content, showAlert, updateTextWithHistory])
 
   const addSavedSearch = useCallback((label, newFindText, newReplaceText, isRegex = false) => {
     const newSearch = {
@@ -461,9 +512,9 @@ export default function DictaEditorCore({
       }
     })
 
-    setContent(currentContent)
+    updateTextWithHistory(currentContent)
     showAlert('הצלחה', `בוצעו ${totalReplacements} החלפות מתוך ${savedSearches.length} חיפושים שמורים.`)
-  }, [content, savedSearches, showAlert])
+  }, [content, savedSearches, showAlert, updateTextWithHistory])
 
   const onAddRemoveDigitsToSaved = useCallback(() => {
     const newSearch = {
@@ -527,6 +578,8 @@ export default function DictaEditorCore({
     'bigger': { label: 'הגדל גופן טקסט', action: () => insertTag('big') },
     'smaller': { label: 'הקטן גופן טקסט', action: () => insertTag('small') },
     'removeTags': { label: 'הסרת תגים', action: removeTags },
+    'undo': { label: 'ביטול (Undo)', action: undo },
+    'redo': { label: 'ביצוע מחדש (Redo)', action: redo },
     'findReplace': { label: 'חיפוש והחלפה', action: () => setShowFindReplace(true) },
     'createHeaders': { label: 'יצירת כותרות', action: () => setActiveTool('createHeaders') },
     'singleLetterHeaders': { label: 'כותרות אותיות', action: () => setActiveTool('singleLetterHeaders') },
@@ -539,7 +592,7 @@ export default function DictaEditorCore({
     'cleanText': { label: 'ניקוי טקסט', action: () => setActiveTool('cleanText') },
     'embedImage': { label: 'הטמעת תמונה', action: () => setActiveTool('embedImage') },
     'shortcuts': { label: 'ערוך קיצורי מקלדת', action: () => setShowShortcutsDialog(true) },
-  }), [onSave, content, insertTag, removeTags])
+  }), [onSave, content, insertTag, removeTags, undo, redo])
 
   const availableActions = useMemo(() => {
     return Object.entries(actionsMap).map(([id, def]) => ({
@@ -1222,7 +1275,7 @@ export default function DictaEditorCore({
                 <textarea
                   ref={textareaRef}
                   value={content}
-                  onChange={(e) => setContent(e.target.value)}
+                  onChange={handleTextareaChange}
                   onScroll={handleTextareaScroll}
                   className="flex-1 p-6 border-0 resize-none focus:ring-0 outline-none"
                   style={{ fontSize: `${fontSize}px`, fontFamily: selectedFont, direction: 'rtl', textAlign: textAlign }}
