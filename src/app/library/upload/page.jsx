@@ -1,7 +1,7 @@
 // src/app/library/upload/page.jsx
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
@@ -15,6 +15,7 @@ export default function UploadPage() {
   const [file, setFile] = useState(null)
   const [bookName, setBookName] = useState('')
   const [loading, setLoading] = useState(false)
+  const fileInputRef = useRef(null)
 
   if (status === 'unauthenticated') {
     router.push('/library/auth/login')
@@ -74,6 +75,10 @@ export default function UploadPage() {
         showAlert('הצלחה', 'הספר הועלה בהצלחה!')
         setFile(null)
         setBookName('')
+        // איפוס ה-input כדי לאפשר העלאה נוספת
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''
+        }
       } else {
         showAlert('שגיאה', data.error || 'שגיאה בהעלאה')
       }
@@ -117,6 +122,7 @@ export default function UploadPage() {
                 <label className="block text-sm font-bold mb-2">קובץ טקסט או וורד</label>
                 <div className="border-2 border-dashed border-surface-variant rounded-lg p-8 text-center hover:bg-surface/50 transition-colors cursor-pointer relative">
                   <input
+                    ref={fileInputRef}
                     type="file"
                     accept=".txt,.doc,.docx,.rtf,.odt,text/*"
                     onChange={handleFileChange}
