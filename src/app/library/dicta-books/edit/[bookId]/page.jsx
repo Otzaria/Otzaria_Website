@@ -25,6 +25,9 @@ export default function DictaEditorPage() {
   const [resetting, setResetting] = useState(false)
   const [showUploadDialog, setShowUploadDialog] = useState(false)
   const [showResetDialog, setShowResetDialog] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [isEditCopy, setIsEditCopy] = useState(false) // האם זה עותק עריכה מהעלאה
   
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
 
@@ -71,6 +74,7 @@ export default function DictaEditorPage() {
       if (!res.ok) throw new Error('שגיאה בטעינת הספר')
       const data = await res.json()
       setBook(data)
+      setIsEditCopy(data.isEditCopy || false) // שמירת מידע אם זה עותק עריכה
     } catch (error) {
       console.error('Error loading book:', error)
       showAlert('שגיאה', 'שגיאה בטעינת הספר')
@@ -234,6 +238,33 @@ export default function DictaEditorPage() {
     setShowResetDialog(true)
   }
 
+  const handleDelete = () => {
+    setShowDeleteDialog(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    try {
+      setDeleting(true)
+      const res = await fetch(`/api/dicta/books/${bookId}`, {
+        method: 'DELETE',
+      })
+      
+      if (res.ok) {
+        showAlert('הצלחה', 'עותק העריכה נמחק בהצלחה')
+        router.push('/library/admin/uploads')
+      } else {
+        const data = await res.json()
+        showAlert('שגיאה', data.error || 'שגיאה במחיקת עותק העריכה')
+      }
+    } catch (error) {
+      console.error('Error deleting edit copy:', error)
+      showAlert('שגיאה', 'שגיאה במחיקת עותק העריכה')
+    } finally {
+      setDeleting(false)
+      setShowDeleteDialog(false)
+    }
+  }
+
   const handleResetConfirm = async () => {
     try {
       setResetting(true)
@@ -278,8 +309,8 @@ export default function DictaEditorPage() {
   const claimedById = book?.claimedBy?._id || book?.claimedBy
   const isOwner = currentUserId && claimedById === currentUserId
   const isCompleted = book?.status === 'completed'
-  const canEdit = (!isCompleted && isOwner) || isAdmin
-  const isAvailable = !claimedById && !isCompleted
+  const canEdit = isEditCopy ? isAdmin : ((!isCompleted && isOwner) || isAdmin) // עותקי עריכה - רק אדמין
+  const isAvailable = !isEditCopy && !claimedById && !isCompleted // עותקי עריכה לא ניתנים לתפיסה
 
   const headerStart = (
     <>
@@ -291,10 +322,19 @@ export default function DictaEditorPage() {
       <Button
         icon="arrow_forward"
         variant="ghost"
-        onClick={() => router.push('/library/dicta-books')}
-        label="חזרה לדיקטה"
+        onClick={() => router.push(isEditCopy ? '/library/admin/uploads' : '/library/dicta-books')}
+        label={isEditCopy ? 'חזרה להעלאות' : 'חזרה לדיקטה'}
       />
       <div className="w-px h-8 bg-surface-variant"></div>
+      {isEditCopy && (
+        <>
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-100 text-purple-700 rounded-lg text-sm">
+            <span className="material-symbols-outlined text-sm">content_copy</span>
+            <span>עותק עריכה</span>
+          </div>
+          <div className="w-px h-8 bg-surface-variant"></div>
+        </>
+      )}
     </>
   )
 
@@ -311,6 +351,17 @@ export default function DictaEditorPage() {
         />
       )}
       
+      {isEditCopy && isAdmin && (
+        <Button
+          icon="delete"
+          variant="ghost"
+          size="sm"
+          onClick={handleDelete}
+          loading={deleting}
+          label="מחק עותק"
+        />
+      )}
+      
       {isAvailable ? (
         <Button
           icon="back_hand"
@@ -319,7 +370,7 @@ export default function DictaEditorPage() {
           loading={claiming}
           label="תפוס לעריכה"
         />
-      ) : canEdit && !isCompleted ? (
+      ) : canEdit && !isCompleted && !isEditCopy ? (
         <Button
           icon="task_alt"
           variant="ghost"
@@ -327,7 +378,7 @@ export default function DictaEditorPage() {
           loading={completing}
           label="סיום"
         />
-      ) : canEdit && isCompleted ? (
+      ) : canEdit && isCompleted && !isEditCopy ? (
         <Button
           icon="upload"
           variant="ghost"
@@ -383,6 +434,16 @@ export default function DictaEditorPage() {
           onConfirm={handleResetConfirm}
           onCancel={() => setShowResetDialog(false)}
           loading={resetting}
+          isEditCopy={isEditCopy}
+        />
+      )}
+
+      {showDeleteDialog && (
+        <DeleteDialog
+          bookTitle={book?.title}
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setShowDeleteDialog(false)}
+          loading={deleting}
         />
       )}
     </>
@@ -445,7 +506,7 @@ function UploadDialog({ bookTitle, onConfirm, onCancel }) {
   )
 }
 
-function ResetDialog({ bookTitle, onConfirm, onCancel, loading }) {
+function ResetDialog({ bookTitle, onConfirm, onCancel, loading, isEditCopy }) {
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
@@ -474,7 +535,11 @@ function ResetDialog({ bookTitle, onConfirm, onCancel, loading }) {
               <p className="font-bold mb-2">אזהרה: פעולה בלתי הפיכה!</p>
               <ul className="space-y-1">
                 <li>• כל העריכות שביצעת יימחקו לצמיתות</li>
-                <li>• הספר יחזור למצבו המקורי מגיטהאב</li>
+                {isEditCopy ? (
+                  <li>• הספר יחזור למצבו המקורי מההעלאות</li>
+                ) : (
+                  <li>• הספר יחזור למצבו המקורי מגיטהאב</li>
+                )}
                 <li>• לא ניתן לשחזר את השינויים לאחר האיפוס</li>
               </ul>
               <p className="mt-3 font-bold">האם אתה בטוח שברצונך להמשיך?</p>
@@ -496,6 +561,74 @@ function ResetDialog({ bookTitle, onConfirm, onCancel, loading }) {
               <>
                 <span className="material-symbols-outlined">restart_alt</span>
                 <span>כן, אפס את הספר</span>
+              </>
+            )}
+          </button>
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            className="px-6 py-3 border-2 border-surface-variant text-on-surface rounded-lg hover:bg-surface transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            ביטול
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DeleteDialog({ bookTitle, onConfirm, onCancel, loading }) {
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onCancel()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onCancel])
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onCancel}>
+      <div className="glass-strong rounded-2xl p-8 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+        <div className="text-center mb-6">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="material-symbols-outlined text-4xl text-red-600">delete_forever</span>
+          </div>
+          <h2 className="text-2xl font-bold text-on-surface mb-2">מחיקת עותק עריכה</h2>
+          <p className="text-on-surface/70 font-bold">{bookTitle}</p>
+        </div>
+        <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 mb-6">
+          <div className="flex items-start gap-3">
+            <span className="material-symbols-outlined text-red-600 mt-0.5">error</span>
+            <div className="text-sm text-red-800">
+              <p className="font-bold mb-2">אזהרה: פעולה בלתי הפיכה!</p>
+              <ul className="space-y-1">
+                <li>• עותק העריכה יימחק לצמיתות</li>
+                <li>• כל העריכות שביצעת יאבדו</li>
+                <li>• ההעלאות המקוריות יישארו ללא שינוי</li>
+                <li>• לא ניתן לשחזר את העותק לאחר המחיקה</li>
+              </ul>
+              <p className="mt-3 font-bold">האם אתה בטוח שברצונך למחוק?</p>
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-col gap-3">
+          <button 
+            onClick={onConfirm} 
+            disabled={loading}
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? (
+              <>
+                <span className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-white"></span>
+                <span>מוחק...</span>
+              </>
+            ) : (
+              <>
+                <span className="material-symbols-outlined">delete_forever</span>
+                <span>כן, מחק את העותק</span>
               </>
             )}
           </button>

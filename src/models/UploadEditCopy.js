@@ -1,9 +1,9 @@
 import mongoose from 'mongoose';
 
-const DictaBookSchema = new mongoose.Schema({
+const UploadEditCopySchema = new mongoose.Schema({
   title: { type: String, required: true },
   content: { type: String, default: "" },
-  // סטטוס הספר - דומה למודל Page
+  // סטטוס העריכה
   status: { 
     type: String, 
     enum: ['available', 'in-progress', 'completed'], 
@@ -13,17 +13,17 @@ const DictaBookSchema = new mongoose.Schema({
   claimedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   claimedAt: { type: Date, default: null },
   completedAt: { type: Date, default: null },
+  // מזהי ההעלאות המקוריות
+  sourceUploadIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Upload' }],
+  // מי יצר את עותק העריכה
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   // היסטוריית גירסאות
   history: [{
     timestamp: { type: Date, default: Date.now },
     description: String,
     editorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     editorName: String,
-  }],
-  // שדות לעותקי עריכה מהעלאות
-  isEditCopy: { type: Boolean, default: false }, // האם זה עותק עריכה מהעלאה
-  sourceUploadIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Upload' }], // מזהי ההעלאות המקוריות
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' } // מי יצר את עותק העריכה
+  }]
 }, { timestamps: true });
 
-export default mongoose.models.DictaBook || mongoose.model('DictaBook', DictaBookSchema);
+export default mongoose.models.UploadEditCopy || mongoose.model('UploadEditCopy', UploadEditCopySchema);

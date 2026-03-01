@@ -610,44 +610,68 @@ export default function AdminUploadsPage() {
                                   
                                   {/* כפתורי פעולה */}
                                   <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-gray-100">
-                                      {/* כפתור פתח בעורך */}
-                                      <button 
-                                        onClick={async (e) => {
-                                            e.stopPropagation();
-                                            try {
-                                                setLoading(true);
-                                                // שליפת כל התוכן של ההעלאות
-                                                const uploadIds = bookUploads.map(u => u.id);
-                                                const response = await fetch('/api/admin/uploads/get-book-content', {
-                                                    method: 'POST',
-                                                    headers: { 'Content-Type': 'application/json' },
-                                                    body: JSON.stringify({ uploadIds })
-                                                });
-                                                
-                                                const data = await response.json();
-                                                
-                                                if (data.success) {
-                                                    // שמירת התוכן ב-localStorage
-                                                    localStorage.setItem('tempEditorContent', data.content);
-                                                    localStorage.setItem('tempEditorFileName', `${bookName}.txt`);
-                                                    
-                                                    // פתיחת העורך במצב offline
-                                                    router.push('/library/dicta-books/edit/offline');
-                                                } else {
-                                                    showAlert('שגיאה', 'שגיאה בטעינת התוכן');
-                                                }
-                                            } catch (error) {
-                                                console.error('Error loading book content:', error);
-                                                showAlert('שגיאה', 'שגיאה בטעינת התוכן');
-                                            } finally {
-                                                setLoading(false);
-                                            }
-                                        }}
-                                        className="flex items-center gap-1 px-3 py-1.5 text-purple-600 hover:bg-purple-50 rounded-lg text-sm transition-colors"
-                                      >
-                                          <span className="material-symbols-outlined text-lg">edit_note</span>
-                                          פתח בעורך
-                                      </button>
+                                      {/* כפתור ערוך - מוצג רק אם כבר נוצר עותק עריכה */}
+                                      {firstUpload.editCopy && (
+                                          <button 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                router.push(`/library/dicta-books/edit/${firstUpload.editCopy}`);
+                                            }}
+                                            className="flex items-center gap-1 px-3 py-1.5 text-green-600 hover:bg-green-50 rounded-lg text-sm transition-colors"
+                                          >
+                                              <span className="material-symbols-outlined text-lg">edit</span>
+                                              ערוך עותק
+                                          </button>
+                                      )}
+                                      
+                                      {/* כפתור צור עותק עריכה - מוצג רק אם עדיין לא נוצר עותק */}
+                                      {!firstUpload.editCopy && (
+                                          <button 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                showConfirm(
+                                                    'יצירת עותק עריכה',
+                                                    `האם ליצור עותק עריכה של "${bookName}"?\n\nשים לב: העותק לא יתעדכן אוטומטית אם יתווספו העלאות נוספות לספר זה. העותק יישמר במערכת ויהיה ניתן לעריכה כמו ספרי דיקטה.`,
+                                                    async () => {
+                                                        try {
+                                                            setLoading(true);
+                                                            const uploadIds = bookUploads.map(u => u.id);
+                                                            const response = await fetch('/api/admin/uploads/create-edit-copy', {
+                                                                method: 'POST',
+                                                                headers: { 'Content-Type': 'application/json' },
+                                                                body: JSON.stringify({ uploadIds, bookName })
+                                                            });
+                                                            
+                                                            const data = await response.json();
+                                                            
+                                                            if (data.success) {
+                                                                // עדכון מקומי של ה-state
+                                                                setUploads(prev => prev.map(u => 
+                                                                    uploadIds.includes(u.id) 
+                                                                        ? { ...u, editCopy: data.editCopyId, editCopyCreatedAt: new Date().toISOString() } 
+                                                                        : u
+                                                                ));
+                                                                showAlert('הצלחה', 'עותק העריכה נוצר בהצלחה');
+                                                            } else {
+                                                                showAlert('שגיאה', data.error || 'שגיאה ביצירת עותק העריכה');
+                                                            }
+                                                        } catch (error) {
+                                                            console.error('Error creating edit copy:', error);
+                                                            showAlert('שגיאה', 'שגיאה ביצירת עותק העריכה');
+                                                        } finally {
+                                                            setLoading(false);
+                                                        }
+                                                    },
+                                                    'צור עותק',
+                                                    'ביטול'
+                                                );
+                                            }}
+                                            className="flex items-center gap-1 px-3 py-1.5 text-purple-600 hover:bg-purple-50 rounded-lg text-sm transition-colors"
+                                          >
+                                              <span className="material-symbols-outlined text-lg">content_copy</span>
+                                              צור עותק עריכה
+                                          </button>
+                                      )}
                                       
                                       {hasMultipleUploads && (
                                           <>
