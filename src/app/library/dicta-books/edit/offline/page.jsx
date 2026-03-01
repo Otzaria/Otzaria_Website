@@ -11,6 +11,8 @@ export default function OfflineEditorRoute() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const fileInputRef = useRef(null)
 
+  console.log('OfflineEditorRoute - rendering with singleLineHeader=true')
+
   // טעינת תוכן מ-localStorage אם קיים (מהעלאות)
   useEffect(() => {
     const tempContent = localStorage.getItem('tempEditorContent');
@@ -73,7 +75,7 @@ export default function OfflineEditorRoute() {
     setHasUnsavedChanges(false)
   }
 
-  // אלמנטים ייעודיים לצד ימין של ההדר (כולל כפתור פתיחת קובץ)
+  // אלמנטים ייעודיים לצד ימין של ההדר
   const headerStart = (
     <>
       <Link href="/library" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
@@ -89,13 +91,19 @@ export default function OfflineEditorRoute() {
         ref={fileInputRef}
         onChange={handleFileUpload} 
       />
+      
       <Button 
         icon="folder_open" 
         variant="ghost" 
         onClick={() => fileInputRef.current?.click()} 
-        label="פתח קובץ מקומי" 
+        label="פתח קובץ" 
       />
-      <div className="w-px h-8 bg-surface-variant mx-2"></div>
+      <Button
+        icon="download"
+        variant="primary"
+        onClick={() => handleSaveToLocalFile(localContent)}
+        label="שמור קובץ"
+      />
     </>
   )
 
@@ -119,6 +127,7 @@ export default function OfflineEditorRoute() {
       setHasUnsavedChanges={setHasUnsavedChanges}
       headerStartElement={headerStart}
       headerEndElement={headerEnd}
+      singleLineHeader={true}
     />
   )
 }

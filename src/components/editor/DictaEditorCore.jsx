@@ -46,9 +46,12 @@ export default function DictaEditorCore({
   hasUnsavedChangesOuter = false,
   setHasUnsavedChanges = () => {},
   headerStartElement = null,
-  headerEndElement = null
+  headerEndElement = null,
+  singleLineHeader = false
 }) {
   const { showAlert } = useDialog()
+  
+  console.log('DictaEditorCore v2 - singleLineHeader:', singleLineHeader)
   
   const [content, setContent] = useState(initialContent)
   const [fontSize, setFontSize] = useState(18)
@@ -67,13 +70,22 @@ export default function DictaEditorCore({
   const [showPreview, setShowPreview] = useState(true)
   const [isPending, startTransition] = useTransition()
   
-  const [toolbarExpanded, setToolbarExpanded] = useState(() => {
+  const [toolbarExpanded, setToolbarExpanded] = useState(false)
+  const [headerCompact, setHeaderCompact] = useState(false)
+  
+  // טעינת מצב toolbar מ-localStorage רק בצד הלקוח
+  useEffect(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('dicta_editor_toolbar_expanded')
-      return saved === 'true'
+      if (saved === 'true') {
+        setToolbarExpanded(true)
+      }
+      const savedCompact = localStorage.getItem('dicta_editor_header_compact')
+      if (savedCompact === 'true') {
+        setHeaderCompact(true)
+      }
     }
-    return false
-  })
+  }, [])
   
   const hasLoadedPreviewState = useRef(false)
   const contentRef = useRef(null)
@@ -104,6 +116,10 @@ export default function DictaEditorCore({
   useEffect(() => {
     localStorage.setItem('dicta_editor_toolbar_expanded', toolbarExpanded.toString())
   }, [toolbarExpanded])
+
+  useEffect(() => {
+    localStorage.setItem('dicta_editor_header_compact', headerCompact.toString())
+  }, [headerCompact])
 
   useEffect(() => {
     const saved = localStorage.getItem('dicta_editor_shortcuts')
@@ -574,135 +590,402 @@ export default function DictaEditorCore({
   return (
     <div className="flex flex-col h-screen bg-gray-50" dir="rtl">
       <header className="glass-strong border-b border-surface-variant sticky top-0 z-40">
-        <div className="container mx-auto px-4 py-3">
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              
-              <div className="flex items-center gap-4">
-                {headerStartElement}
-                <div>
-                  <div className="flex items-center gap-2">
+        <div className={singleLineHeader && headerCompact ? 'px-2 py-2' : 'container mx-auto px-4 py-3'}>
+          {singleLineHeader ? (
+            headerCompact ? (
+              // שורה אחת קומפקטית - כל המסכים
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {headerStartElement}
+                  <h1 className="text-base font-bold text-on-surface">{title}</h1>
+                  
+                  <Button
+                    icon="unfold_more"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setHeaderCompact(false)}
+                    title="הרחב כותרת"
+                  />
+                  
+                  {canEdit && (
+                    <>
+                      <div className="w-px h-5 bg-surface-variant"></div>
+                      <Button
+                        icon="find_replace"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowFindReplace(true)}
+                        title="חיפוש והחלפה"
+                      />
+                      <Button
+                        icon="keyboard"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowShortcutsDialog(true)}
+                        title="קיצורי מקשים"
+                      />
+                      <Button
+                        icon={editMode ? 'visibility' : 'edit'}
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          startTransition(() => {
+                            setEditMode(!editMode)
+                          })
+                        }}
+                        title={editMode ? 'תצוגה' : 'עריכה ידנית'}
+                      />
+                    </>
+                  )}
+
+                  <div className="flex items-center bg-gray-100 rounded-lg p-0.5 gap-0.5 border border-gray-200">
+                    <Button
+                      icon="format_align_right"
+                      variant={textAlign === 'right' ? 'primary' : 'ghost'}
+                      size="sm"
+                      onClick={() => setTextAlign('right')}
+                      title="יישור לימין"
+                    />
+                    <Button
+                      icon="format_align_center"
+                      variant={textAlign === 'center' ? 'primary' : 'ghost'}
+                      size="sm"
+                      onClick={() => setTextAlign('center')}
+                      title="יישור למרכז"
+                    />
+                    <Button
+                      icon="format_align_left"
+                      variant={textAlign === 'left' ? 'primary' : 'ghost'}
+                      size="sm"
+                      onClick={() => setTextAlign('left')}
+                      title="יישור לשמאל"
+                    />
+                    <Button
+                      icon="format_align_justify"
+                      variant={textAlign === 'justify' ? 'primary' : 'ghost'}
+                      size="sm"
+                      onClick={() => setTextAlign('justify')}
+                      title="יישור מלא"
+                    />
+                  </div>
+
+                  <Button
+                    icon="remove"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setFontSize(prev => Math.max(12, prev - 2))}
+                    title="הקטן גופן"
+                  />
+                  <span className="text-xs font-medium w-5 text-center">{fontSize}</span>
+                  <Button
+                    icon="add"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setFontSize(prev => Math.min(32, prev + 2))}
+                    title="הגדל גופן"
+                  />
+
+                  <div className="relative">
+                    <select 
+                      value={selectedFont} 
+                      onChange={(e) => setSelectedFont(e.target.value)} 
+                      className="appearance-none pl-1 pr-5 h-7 bg-white border border-gray-200 rounded-md text-xs font-medium focus:outline-none hover:bg-gray-50 cursor-pointer"
+                    >
+                      <option value="'Times New Roman'">Times</option>
+                      <option value="monospace">Mono</option>
+                      <option value="Arial">Arial</option>
+                      <option value="'Courier New'">Courier</option>
+                      <option value="Georgia">Georgia</option>
+                      <option value="Verdana">Verdana</option>
+                    </select>
+                    <span className="material-symbols-outlined text-sm absolute left-0.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">expand_more</span>
+                  </div>
+                  
+                  {canEdit && !isCompleted && (
+                    <>
+                      <Button
+                        icon="save"
+                        variant={hasUnsavedChangesOuter ? "primary" : "ghost"}
+                        size="sm"
+                        onClick={() => onSave && onSave(content)}
+                        loading={saving}
+                        title={hasUnsavedChangesOuter ? "שמור שינויים" : "שמירה"}
+                      />
+                    </>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {headerEndElement}
+                </div>
+              </div>
+            ) : (
+              // שתי שורות מורחבות - כל המסכים
+              <>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  {headerStartElement}
+                  <div>
                     <h1 className="text-lg font-bold text-on-surface">{title}</h1>
+                    <p className="text-xs text-on-surface/60">עריכה אופליין</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <p className="text-xs text-on-surface/60">עריכת דיקטה</p>
-                  </div>
+                </div>
+                <div>
+                  {headerEndElement}
                 </div>
               </div>
 
-              <div>
-                {headerEndElement}
+              <div className="flex items-center justify-between border-t border-surface-variant/50 pt-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <Button
+                    icon="unfold_less"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setHeaderCompact(true)}
+                    title="כווץ כותרת"
+                  />
+                  <div className="w-px h-6 bg-surface-variant"></div>
+                  
+                  {canEdit && (
+                    <>
+                      <Button
+                        icon="find_replace"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowFindReplace(true)}
+                        label="חיפוש"
+                      />
+                      <Button
+                        icon="keyboard"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowShortcutsDialog(true)}
+                        label="קיצורי מקשים"
+                      />
+                      <Button
+                        icon={editMode ? 'visibility' : 'edit'}
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          startTransition(() => {
+                            setEditMode(!editMode)
+                          })
+                        }}
+                        label={editMode ? 'תצוגה' : 'עריכה ידנית'}
+                      />
+                    </>
+                  )}
+
+                  <div className="flex items-center bg-gray-100 rounded-lg p-1 gap-1 border border-gray-200 mx-2">
+                    <Button
+                      icon="format_align_right"
+                      variant={textAlign === 'right' ? 'primary' : 'ghost'}
+                      size="sm"
+                      onClick={() => setTextAlign('right')}
+                    />
+                    <Button
+                      icon="format_align_center"
+                      variant={textAlign === 'center' ? 'primary' : 'ghost'}
+                      size="sm"
+                      onClick={() => setTextAlign('center')}
+                    />
+                    <Button
+                      icon="format_align_left"
+                      variant={textAlign === 'left' ? 'primary' : 'ghost'}
+                      size="sm"
+                      onClick={() => setTextAlign('left')}
+                    />
+                    <Button
+                      icon="format_align_justify"
+                      variant={textAlign === 'justify' ? 'primary' : 'ghost'}
+                      size="sm"
+                      onClick={() => setTextAlign('justify')}
+                    />
+                  </div>
+
+                  <Button
+                    icon="remove"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setFontSize(prev => Math.max(12, prev - 2))}
+                  />
+                  <span className="text-sm font-medium w-6 text-center">{fontSize}</span>
+                  <Button
+                    icon="add"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setFontSize(prev => Math.min(32, prev + 2))}
+                  />
+
+                  <div className="w-px h-6 bg-gray-300 mx-2"></div>
+
+                  <div className="relative">
+                    <select 
+                      value={selectedFont} 
+                      onChange={(e) => setSelectedFont(e.target.value)} 
+                      className="appearance-none pl-2 pr-6 h-8 bg-white border border-gray-200 rounded-md text-xs font-medium focus:outline-none hover:bg-gray-50 cursor-pointer"
+                    >
+                      <option value="'Times New Roman'">Times New Roman</option>
+                      <option value="monospace">Monospace</option>
+                      <option value="Arial">Arial</option>
+                      <option value="'Courier New'">Courier New</option>
+                      <option value="Georgia">Georgia</option>
+                      <option value="Verdana">Verdana</option>
+                    </select>
+                    <span className="material-symbols-outlined text-sm absolute left-1 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">expand_more</span>
+                  </div>
+                  
+                  {canEdit && !isCompleted && (
+                    <div className="flex gap-2 items-center mr-auto">
+                      <Button
+                        icon="save"
+                        variant={hasUnsavedChangesOuter ? "primary" : "ghost"}
+                        onClick={() => onSave && onSave(content)}
+                        loading={saving}
+                        label={hasUnsavedChangesOuter ? "שמירה *" : "שמירה"}
+                      />
+                      {hasUnsavedChangesOuter && (
+                        <span className="text-red-600 text-sm font-medium mr-2">ישנם שינויים לא שמורים</span>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-
-            <div className="flex items-center justify-between border-t border-surface-variant/50 pt-3">
-              <div className="flex items-center gap-3 flex-wrap">
-                {canEdit && (
-                  <>
-                    <Button
-                      icon="find_replace"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowFindReplace(true)}
-                      label="חיפוש"
-                    />
-                    <Button
-                      icon="keyboard"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowShortcutsDialog(true)}
-                      label="קיצורי מקשים"
-                    />
-                    <Button
-                      icon={editMode ? 'visibility' : 'edit'}
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        startTransition(() => {
-                          setEditMode(!editMode)
-                        })
-                      }}
-                      label={editMode ? 'תצוגה' : 'עריכה ידנית'}
-                    />
-                  </>
-                )}
-
-                <div className="flex items-center bg-gray-100 rounded-lg p-1 gap-1 border border-gray-200 mx-2">
-                  <Button
-                    icon="format_align_right"
-                    variant={textAlign === 'right' ? 'primary' : 'ghost'}
-                    size="sm"
-                    onClick={() => setTextAlign('right')}
-                  />
-                  <Button
-                    icon="format_align_center"
-                    variant={textAlign === 'center' ? 'primary' : 'ghost'}
-                    size="sm"
-                    onClick={() => setTextAlign('center')}
-                  />
-                  <Button
-                    icon="format_align_left"
-                    variant={textAlign === 'left' ? 'primary' : 'ghost'}
-                    size="sm"
-                    onClick={() => setTextAlign('left')}
-                  />
-                  <Button
-                    icon="format_align_justify"
-                    variant={textAlign === 'justify' ? 'primary' : 'ghost'}
-                    size="sm"
-                    onClick={() => setTextAlign('justify')}
-                  />
-                </div>
-
-                <Button
-                  icon="remove"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setFontSize(prev => Math.max(12, prev - 2))}
-                />
-                <span className="text-sm font-medium w-6 text-center">{fontSize}</span>
-                <Button
-                  icon="add"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setFontSize(prev => Math.min(32, prev + 2))}
-                />
-
-                <div className="w-px h-6 bg-gray-300 mx-2"></div>
-
-                <div className="relative">
-                  <select 
-                    value={selectedFont} 
-                    onChange={(e) => setSelectedFont(e.target.value)} 
-                    className="appearance-none pl-2 pr-6 h-8 bg-white border border-gray-200 rounded-md text-xs font-medium focus:outline-none hover:bg-gray-50 cursor-pointer"
-                  >
-                    <option value="'Times New Roman'">Times New Roman</option>
-                    <option value="monospace">Monospace</option>
-                    <option value="Arial">Arial</option>
-                    <option value="'Courier New'">Courier New</option>
-                    <option value="Georgia">Georgia</option>
-                    <option value="Verdana">Verdana</option>
-                  </select>
-                  <span className="material-symbols-outlined text-sm absolute left-1 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">expand_more</span>
-                </div>
+            </>
+            )
+          ) : (
+            // שתי שורות - לאונליין
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
                 
-                {canEdit && !isCompleted && (
-                  <div className="flex gap-2 items-center mr-auto">
-                    <Button
-                      icon="save"
-                      variant={hasUnsavedChangesOuter ? "primary" : "ghost"}
-                      onClick={() => onSave && onSave(content)}
-                      loading={saving}
-                      label={hasUnsavedChangesOuter ? "שמירה *" : "שמירה"}
-                    />
-                    {hasUnsavedChangesOuter && (
-                      <span className="text-red-600 text-sm font-medium mr-2">ישנם שינויים לא שמורים</span>
-                    )}
+                <div className="flex items-center gap-4">
+                  {headerStartElement}
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h1 className="text-lg font-bold text-on-surface">{title}</h1>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs text-on-surface/60">עריכת דיקטה</p>
+                    </div>
                   </div>
-                )}
+                </div>
+
+                <div>
+                  {headerEndElement}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between border-t border-surface-variant/50 pt-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                  {canEdit && (
+                    <>
+                      <Button
+                        icon="find_replace"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowFindReplace(true)}
+                        label="חיפוש"
+                      />
+                      <Button
+                        icon="keyboard"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowShortcutsDialog(true)}
+                        label="קיצורי מקשים"
+                      />
+                      <Button
+                        icon={editMode ? 'visibility' : 'edit'}
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          startTransition(() => {
+                            setEditMode(!editMode)
+                          })
+                        }}
+                        label={editMode ? 'תצוגה' : 'עריכה ידנית'}
+                      />
+                    </>
+                  )}
+
+                  <div className="flex items-center bg-gray-100 rounded-lg p-1 gap-1 border border-gray-200 mx-2">
+                    <Button
+                      icon="format_align_right"
+                      variant={textAlign === 'right' ? 'primary' : 'ghost'}
+                      size="sm"
+                      onClick={() => setTextAlign('right')}
+                    />
+                    <Button
+                      icon="format_align_center"
+                      variant={textAlign === 'center' ? 'primary' : 'ghost'}
+                      size="sm"
+                      onClick={() => setTextAlign('center')}
+                    />
+                    <Button
+                      icon="format_align_left"
+                      variant={textAlign === 'left' ? 'primary' : 'ghost'}
+                      size="sm"
+                      onClick={() => setTextAlign('left')}
+                    />
+                    <Button
+                      icon="format_align_justify"
+                      variant={textAlign === 'justify' ? 'primary' : 'ghost'}
+                      size="sm"
+                      onClick={() => setTextAlign('justify')}
+                    />
+                  </div>
+
+                  <Button
+                    icon="remove"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setFontSize(prev => Math.max(12, prev - 2))}
+                  />
+                  <span className="text-sm font-medium w-6 text-center">{fontSize}</span>
+                  <Button
+                    icon="add"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setFontSize(prev => Math.min(32, prev + 2))}
+                  />
+
+                  <div className="w-px h-6 bg-gray-300 mx-2"></div>
+
+                  <div className="relative">
+                    <select 
+                      value={selectedFont} 
+                      onChange={(e) => setSelectedFont(e.target.value)} 
+                      className="appearance-none pl-2 pr-6 h-8 bg-white border border-gray-200 rounded-md text-xs font-medium focus:outline-none hover:bg-gray-50 cursor-pointer"
+                    >
+                      <option value="'Times New Roman'">Times New Roman</option>
+                      <option value="monospace">Monospace</option>
+                      <option value="Arial">Arial</option>
+                      <option value="'Courier New'">Courier New</option>
+                      <option value="Georgia">Georgia</option>
+                      <option value="Verdana">Verdana</option>
+                    </select>
+                    <span className="material-symbols-outlined text-sm absolute left-1 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">expand_more</span>
+                  </div>
+                  
+                  {canEdit && !isCompleted && (
+                    <div className="flex gap-2 items-center mr-auto">
+                      <Button
+                        icon="save"
+                        variant={hasUnsavedChangesOuter ? "primary" : "ghost"}
+                        onClick={() => onSave && onSave(content)}
+                        loading={saving}
+                        label={hasUnsavedChangesOuter ? "שמירה *" : "שמירה"}
+                      />
+                      {hasUnsavedChangesOuter && (
+                        <span className="text-red-600 text-sm font-medium mr-2">ישנם שינויים לא שמורים</span>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </header>
 
