@@ -71,9 +71,6 @@ export async function POST(request) {
     }
   );
 
-  console.log('Update result:', updateResult);
-  console.log('Updated uploads with editCopy:', newEditCopy._id);
-
   return NextResponse.json({ 
     success: true, 
     editCopyId: newEditCopy._id.toString(),
