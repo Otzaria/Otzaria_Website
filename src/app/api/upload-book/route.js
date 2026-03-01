@@ -3,6 +3,8 @@ import connectDB from '@/lib/db';
 import Upload from '@/models/Upload';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { sendUploadNotification } from '@/lib/emailService';
+import { isLastPageUpload } from '@/lib/uploadHelpers';
 
 // טיפול בהעלאת קובץ טקסט ע"י משתמש
 export async function POST(request) {
@@ -12,39 +14,89 @@ export async function POST(request) {
 
         const formData = await request.formData();
         const file = formData.get('file');
-        const bookName = formData.get('bookName'); // מכיל את שם הספר + מספר העמוד
+        const bookName = formData.get('bookName');
+        const confirmOverwrite = formData.get('confirmOverwrite') === 'true';
 
         const MAX_SIZE = 10 * 1024 * 1024;
         if (file.size > MAX_SIZE) {
             return NextResponse.json({ error: 'הקובץ גדול מדי (מקסימום 10MB)' }, { status: 400 });
         }
 
-        // קריאת הקובץ כ-ArrayBuffer ללא המרה
         const arrayBuffer = await file.arrayBuffer();
         const content = Buffer.from(arrayBuffer);
         await connectDB();
 
-        // קבלת סוג ההעלאה מה-FormData, ברירת מחדל: single_page
         const uploadType = formData.get('uploadType') || 'single_page';
 
-        // לוגיקת ה"דחיסה": עדכון אם קיים, אחרת יצירה (Upsert)
-        const upload = await Upload.findOneAndUpdate(
-            { uploader: session.user._id, bookName: bookName }, // חיפוש לפי משתמש ושם ספר/עמוד
-            { 
-                originalFileName: file.name,
-                content: content, // שמירת הקובץ כ-Buffer ללא המרה
-                fileSize: file.size,
-                lineCount: 0, // לא סופרים שורות כי זה לא בהכרח טקסט
-                uploadType: uploadType, // שימוש בערך שהתקבל או ברירת מחדל
-                status: 'pending',
-                isDeleted: false, // הוצאה מהאשפה אם היה שם
-                deletedAt: null, // איפוס תאריך המחיקה
-                updatedAt: new Date()
-            },
-            { upsert: true, new: true } // upsert יוצר חדש אם לא נמצא דף תואם
-        );
+        // בדיקה אם קיים קובץ עם אותו שם
+        const existingUpload = await Upload.findOne({ 
+            uploader: session.user._id, 
+            bookName: bookName, 
+            isDeleted: false 
+        });
 
-        return NextResponse.json({ success: true, id: upload._id });
+        // אם קיים קובץ ולא אושר לדרוס
+        if (existingUpload && !confirmOverwrite) {
+            return NextResponse.json({ 
+                requiresConfirmation: true,
+                message: 'כבר העלת קובץ עם שם זה. האם להעלות גירסה חדשה? הגירסה הישנה תועבר לאשפה.',
+                existingUpload: {
+                    id: existingUpload._id,
+                    uploadedAt: existingUpload.createdAt,
+                    status: existingUpload.status
+                }
+            }, { status: 409 });
+        }
+
+        // אם קיים קובץ ואושר לדרוס - העבר את הישן לאשפה
+        if (existingUpload && confirmOverwrite) {
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            existingUpload.bookName = `${existingUpload.bookName} (גרסה ישנה מ-${timestamp}`;
+            existingUpload.isDeleted = true;
+            existingUpload.deletedAt = new Date();
+            await existingUpload.save();
+        }
+
+        // יצירת העלאה חדשה
+        const upload = await Upload.create({
+            uploader: session.user._id,
+            originalFileName: file.name,
+            content: content,
+            fileSize: file.size,
+            lineCount: 0,
+            uploadType: uploadType,
+            status: 'pending',
+            bookName: bookName
+        });
+
+        // בדיקה אם צריך לשלוח מייל
+        let shouldSendEmail = false;
+        
+        if (uploadType === 'dicta' || uploadType === 'full_book') {
+            // דיקטה וספר שלם - תמיד שולחים מייל
+            shouldSendEmail = true;
+        } else if (uploadType === 'single_page') {
+            // עמוד בודד - רק אם זה העמוד האחרון
+            shouldSendEmail = await isLastPageUpload(bookName);
+        }
+
+        // שליחת התראה למנהלים רק אם צריך
+        let notificationResult = null;
+        if (shouldSendEmail) {
+            notificationResult = await sendUploadNotification({
+                bookName: bookName,
+                uploadedBy: session.user.name || session.user.email,
+                uploaderEmail: session.user.email,
+                uploadType: uploadType,
+                originalFileName: file.name
+            });
+        }
+
+        return NextResponse.json({ 
+            success: true, 
+            id: upload._id,
+            emailNotification: notificationResult 
+        });
 
     } catch (error) {
         return NextResponse.json({ success: false, error: 'שגיאה בעיבוד' }, { status: 500 });

@@ -50,8 +50,11 @@ export async function GET(request) {
         const MailingList = mongoose.models.MailingList || mongoose.model('MailingList', new mongoose.Schema({ listName: String, emails: [String] }));
         await MailingList.updateOne({ listName: 'new_books_subscribers' }, { $pull: { emails: email } });
     } else if (action === 'reminder') {
-    // עדכון המשתמש
-    await User.updateOne({ email }, { $set: { acceptReminders: false } });
+        // עדכון המשתמש
+        await User.updateOne({ email }, { $set: { acceptReminders: false } });
+    } else if (action === 'upload_notifications') {
+        // כיבוי התראות על העלאות
+        await User.updateOne({ email }, { $set: { 'uploadNotifications.enabled': false } });
     }
     return new NextResponse(`
         <div dir="rtl" style="font-family: system-ui; text-align: center; padding: 100px 20px;">
@@ -75,10 +78,12 @@ export async function POST(request) {
     if (email) {
         await connectDB();
         if (action === 'new_books') {
-        const MailingList = mongoose.models.MailingList || mongoose.model('MailingList', new mongoose.Schema({ listName: String, emails: [String] }));
-        await MailingList.updateOne({ listName: 'new_books_subscribers' }, { $pull: { emails: email } });
+            const MailingList = mongoose.models.MailingList || mongoose.model('MailingList', new mongoose.Schema({ listName: String, emails: [String] }));
+            await MailingList.updateOne({ listName: 'new_books_subscribers' }, { $pull: { emails: email } });
         } else if (action === 'reminder') {
-        await User.updateOne({ email }, { $set: { acceptReminders: false } });
+            await User.updateOne({ email }, { $set: { acceptReminders: false } });
+        } else if (action === 'upload_notifications') {
+            await User.updateOne({ email }, { $set: { 'uploadNotifications.enabled': false } });
         }
         return NextResponse.json({ success: true });
     }

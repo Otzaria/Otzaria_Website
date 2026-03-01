@@ -256,7 +256,7 @@ function PersonalBookCard({ book }) {
   
   return (
     <Link 
-        href={`/library/book/${encodeURIComponent(book.path)}`}
+        href={`/library/books/${encodeURIComponent(book.path)}`}
         className="group bg-white p-5 rounded-2xl border border-surface-variant hover:border-blue-300 hover:shadow-xl hover:shadow-blue-50 transition-all duration-300 flex flex-col h-full transform hover:-translate-y-1 relative"
     >
         <span className="absolute top-4 left-4 bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-1 rounded-full z-10">

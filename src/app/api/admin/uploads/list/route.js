@@ -17,7 +17,7 @@ export async function GET() {
 
   // התאמה ל-UI
   const formattedUploads = uploads.map(u => ({
-      id: u._id,
+      id: u._id.toString(),
       bookName: u.bookName,
       originalFileName: u.originalFileName,
       uploadedBy: u.uploader?.name,
@@ -25,6 +25,8 @@ export async function GET() {
       uploadType: u.uploadType || 'single_page', // ברירת מחדל לרשומות ישנות
       status: u.status,
       bookStatus: u.bookStatus || 'not_checked', // סטטוס הספר
+      editCopy: u.editCopy ? u.editCopy.toString() : null, // מזהה עותק העריכה
+      editCopyCreatedAt: u.editCopyCreatedAt, // תאריך יצירת עותק העריכה
   }));
 
   return NextResponse.json({ success: true, uploads: formattedUploads });

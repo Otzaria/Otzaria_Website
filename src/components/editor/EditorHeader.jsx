@@ -15,7 +15,7 @@ export default function EditorHeader({ bookName, pageNumber, bookPath, session, 
             <div className="w-px h-8 bg-surface-variant"></div>
 
             <Link
-              href={`/library/book/${encodeURIComponent(bookPath)}`}
+              href={`/library/books/${encodeURIComponent(bookPath)}`}
               className="flex items-center gap-2 text-on-surface hover:text-primary transition-colors"
             >
               <span className="material-symbols-outlined">arrow_forward</span>

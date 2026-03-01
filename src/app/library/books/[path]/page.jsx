@@ -10,6 +10,7 @@ import { useDialog } from '@/components/DialogContext'
 import { LoadingProvider } from '@/components/LoadingContext'
 import { useLoading } from '@/components/LoadingContext'
 import Header from '@/components/Header'
+import LoadingSpinner from '@/components/LoadingSpinner'
 
 const pageStatusConfig = {
   available: {
@@ -160,7 +161,7 @@ export default function BookPage() {
 
   const handleClaimPage = async (pageNumber) => {
     if (!session) {
-      router.push('/library/auth/login')
+      router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
       return
     }
 
@@ -264,71 +265,86 @@ export default function BookPage() {
   }
 
   const uploadPageText = async (pageNumber) => {
-    try {
-      const bookName = bookPath.replace(/[^a-zA-Z0-9א-ת]/g, '_')
-      const fileName = `${bookName}_page_${pageNumber}.txt`
-      
-      const contentResponse = await fetch(`/api/page-content?bookPath=${encodeURIComponent(bookPath)}&pageNumber=${pageNumber}`)
-      const contentResult = await contentResponse.json()
-      
-      if (!contentResult.success || !contentResult.data) {
-        showAlert('שגיאה', 'לא נמצא תוכן לעמוד זה');
-        return
+    const performUpload = async (confirmOverwrite = false) => {
+      try {
+        const bookName = bookPath.replace(/[^a-zA-Z0-9א-ת]/g, '_')
+        const fileName = `${bookName}_page_${pageNumber}.txt`
+        
+        const contentResponse = await fetch(`/api/page-content?bookPath=${encodeURIComponent(bookPath)}&pageNumber=${pageNumber}`)
+        const contentResult = await contentResponse.json()
+        
+        if (!contentResult.success || !contentResult.data) {
+          showAlert('שגיאה', 'לא נמצא תוכן לעמוד זה');
+          return
+        }
+
+        const data = contentResult.data
+        let textContent = ''
+        
+        if (data.twoColumns) {
+          const rightName = data.rightColumnName || 'חלק 1'
+          const leftName = data.leftColumnName || 'חלק 2'
+          textContent = `${rightName}:\n${data.rightColumn}\n\n${leftName}:\n${data.leftColumn}`
+        } else {
+          textContent = data.content
+        }
+
+        if (!textContent.trim()) {
+          showAlert('שגיאה', 'העמוד ריק, אין מה להעלות');
+          return
+        }
+
+        const blob = new Blob([textContent], { type: 'text/plain' })
+        const file = new File([blob], fileName, { type: 'text/plain' })
+
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('bookName', `${bookPath} - עמוד ${pageNumber}`)
+        formData.append('userId', session.user._id)
+        formData.append('userName', session.user.name)
+        if (confirmOverwrite) {
+          formData.append('confirmOverwrite', 'true')
+        }
+
+        const uploadResponse = await fetch('/api/upload-book', {
+          method: 'POST',
+          body: formData
+        })
+
+        const uploadResult = await uploadResponse.json()
+
+        // אם נדרש אישור
+        if (uploadResult.requiresConfirmation) {
+          const confirmed = await showConfirm(
+            'קובץ קיים',
+            uploadResult.message
+          )
+          
+          if (confirmed) {
+            await performUpload(true)
+          }
+          return
+        }
+
+        if (uploadResult.success) {
+          await completePageWithoutUpload(pageNumber)
+          showAlert('הצלחה', 'הטקסט הועלה בהצלחה והעמוד סומן כהושלם!');
+        } else {
+          showAlert('שגיאה', uploadResult.error || 'שגיאה בהעלאת הטקסט');
+        }
+      } catch (error) {
+        console.error('Error uploading text:', error)
+        showAlert('שגיאה', 'שגיאה בהעלאת הטקסט');
       }
-
-      const data = contentResult.data
-      let textContent = ''
-      
-      if (data.twoColumns) {
-        const rightName = data.rightColumnName || 'חלק 1'
-        const leftName = data.leftColumnName || 'חלק 2'
-        textContent = `${rightName}:\n${data.rightColumn}\n\n${leftName}:\n${data.leftColumn}`
-      } else {
-        textContent = data.content
-      }
-
-      if (!textContent.trim()) {
-        showAlert('שגיאה', 'העמוד ריק, אין מה להעלות');
-        return
-      }
-
-      const blob = new Blob([textContent], { type: 'text/plain' })
-      const file = new File([blob], fileName, { type: 'text/plain' })
-
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('bookName', `${bookPath} - עמוד ${pageNumber}`)
-      formData.append('userId', session.user._id)
-      formData.append('userName', session.user.name)
-
-      const uploadResponse = await fetch('/api/upload-book', {
-        method: 'POST',
-        body: formData
-      })
-
-      const uploadResult = await uploadResponse.json()
-
-      if (uploadResult.success) {
-        await completePageWithoutUpload(pageNumber)
-        showAlert('הצלחה', 'הטקסט הועלה בהצלחה והעמוד סומן כהושלם!');
-      } else {
-        showAlert('שגיאה', uploadResult.error || 'שגיאה בהעלאת הטקסט');
-      }
-    } catch (error) {
-      console.error('Error uploading text:', error)
-      showAlert('שגיאה', 'שגיאה בהעלאת הטקסט');
     }
+
+    await performUpload()
   }
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <span className="material-symbols-outlined animate-spin text-6xl text-primary mb-4 block">
-            progress_activity
-          </span>
-          <p className="text-on-surface/70">טוען את הספר...</p>
-        </div>
+        <LoadingSpinner message="טוען את הספר..." size="lg" />
       </div>
     )
   }
@@ -638,7 +654,7 @@ function formatTimeAgo(dateString) {
 function PageCard({ page, onClaim, onComplete, onRelease, onUncomplete, onPreview, currentUser, bookPath, isAdmin, isBookOwner }) {
   const status = pageStatusConfig[page.status]
 
-  const editUrl = `/library/edit/${encodeURIComponent(bookPath)}/${page.number}`;
+  const editUrl = `/library/books/${encodeURIComponent(bookPath)}/${page.number}`;
   
   const isClaimedByMe = currentUser && (
     page.claimedBy === currentUser.name || 

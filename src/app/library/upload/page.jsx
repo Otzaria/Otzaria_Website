@@ -1,22 +1,24 @@
 // src/app/library/upload/page.jsx
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
+import { useDialog } from '@/components/DialogContext'
 
 export default function UploadPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const { showConfirm, showAlert } = useDialog()
   
   const [file, setFile] = useState(null)
   const [bookName, setBookName] = useState('')
   const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState(null)
+  const fileInputRef = useRef(null)
 
   if (status === 'unauthenticated') {
-    router.push('/library/auth/login')
+    router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
     return null
   }
 
@@ -32,17 +34,19 @@ export default function UploadPage() {
     }
   }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
+  const handleSubmit = async (e, confirmOverwrite = false) => {
+    e?.preventDefault()
     if (!file || !bookName) return
 
     setLoading(true)
-    setMessage(null)
 
     const formData = new FormData()
     formData.append('file', file)
     formData.append('bookName', bookName)
     formData.append('uploadType', 'full_book') // זיהוי כספר שלם
+    if (confirmOverwrite) {
+      formData.append('confirmOverwrite', 'true')
+    }
 
     try {
       // שימוש ב-API החדש של ה-Rewrite
@@ -53,15 +57,33 @@ export default function UploadPage() {
 
       const data = await res.json()
 
+      // אם נדרש אישור
+      if (data.requiresConfirmation) {
+        setLoading(false)
+        const confirmed = await showConfirm(
+          'קובץ קיים',
+          data.message
+        )
+        
+        if (confirmed) {
+          await handleSubmit(null, true)
+        }
+        return
+      }
+
       if (data.success) {
-        setMessage({ type: 'success', text: 'הספר הועלה בהצלחה!' })
+        showAlert('הצלחה', 'הספר הועלה בהצלחה!')
         setFile(null)
         setBookName('')
+        // איפוס ה-input כדי לאפשר העלאה נוספת
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''
+        }
       } else {
-        setMessage({ type: 'error', text: data.error || 'שגיאה בהעלאה' })
+        showAlert('שגיאה', data.error || 'שגיאה בהעלאה')
       }
     } catch (err) {
-      setMessage({ type: 'error', text: 'שגיאת תקשורת' })
+      showAlert('שגיאה', 'שגיאת תקשורת')
     } finally {
       setLoading(false)
     }
@@ -100,6 +122,7 @@ export default function UploadPage() {
                 <label className="block text-sm font-bold mb-2">קובץ טקסט או וורד</label>
                 <div className="border-2 border-dashed border-surface-variant rounded-lg p-8 text-center hover:bg-surface/50 transition-colors cursor-pointer relative">
                   <input
+                    ref={fileInputRef}
                     type="file"
                     accept=".txt,.doc,.docx,.rtf,.odt,text/*"
                     onChange={handleFileChange}
@@ -119,12 +142,6 @@ export default function UploadPage() {
                   )}
                 </div>
               </div>
-
-              {message && (
-                <div className={`p-4 rounded-lg ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                  {message.text}
-                </div>
-              )}
 
               <button
                 type="submit"

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useDialog } from '@/components/DialogContext'
 import { useLoading } from '@/components/LoadingContext'
 import SplitBookDialog from '@/components/admin/SplitBookDialog'
+import LoadingSpinner from '@/components/LoadingSpinner'
 
 export default function AdminDictaBooksPage() {
   const { data: session, status } = useSession()
@@ -35,7 +36,7 @@ export default function AdminDictaBooksPage() {
     if (status === 'loading') return
     
     if (status === 'unauthenticated') {
-      router.push('/library/auth/login')
+      router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
     } else if (session?.user?.role !== 'admin') {
       router.push('/library/dashboard')
     } else {
@@ -333,14 +334,13 @@ export default function AdminDictaBooksPage() {
     }
   }
 
-  // מסך טעינה מלא במידה ועדיין בודקים הרשאות או טוענים נתונים ראשוניים
-  if (status === 'loading' || loading) return (
+  // אם עדיין בודקים הרשאות או המשתמש לא אדמין
+  if (status === 'loading') return (
     <div className="flex justify-center items-center h-64">
       <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
     </div>
   )
 
-  // אם המשתמש לא אדמין (למרות שה-useEffect אמור להעיף אותו, זה מונע ריצוד)
   if (session?.user?.role !== 'admin') return null;
 
   return (
@@ -424,7 +424,9 @@ export default function AdminDictaBooksPage() {
       </div>
 
       {/* רשימת ספרים */}
-      {filteredBooks.length === 0 ? (
+      {loading ? (
+        <LoadingSpinner message="טוען ספרים..." />
+      ) : filteredBooks.length === 0 ? (
         <div className="text-center py-12 text-on-surface/60 border-2 border-dashed border-gray-300 rounded-xl">
           <span className="material-symbols-outlined text-6xl mb-4 block opacity-50">library_books</span>
           {books.length === 0 ? (

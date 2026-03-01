@@ -13,6 +13,8 @@ const UploadSchema = new mongoose.Schema({
   reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   isDeleted: { type: Boolean, default: false }, // האם הועבר לאשפה
   deletedAt: { type: Date }, // תאריך העברה לאשפה
+  editCopy: { type: mongoose.Schema.Types.ObjectId, ref: 'UploadEditCopy' }, // עותק עריכה מהעלאות
+  editCopyCreatedAt: { type: Date }, // תאריך יצירת עותק העריכה
 }, { timestamps: true });
 
 export default mongoose.models.Upload || mongoose.model('Upload', UploadSchema);

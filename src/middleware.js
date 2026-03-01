@@ -6,15 +6,28 @@ export default withAuth(
     const token = req.nextauth.token;
     const path = req.nextUrl.pathname;
 
-    // אם המשתמש מחובר ומנסה לגשת לדף ההתחברות - נעביר אותו לדשבורד
-    if (path === '/library/auth/login' && !!token) {
-      return NextResponse.redirect(new URL('/library/dashboard', req.url));
+    // Redirects מהנתיבים הישנים לחדשים
+    // /library/book/* -> /library/books/*
+    if (path.startsWith('/library/book/')) {
+      const newPath = path.replace('/library/book/', '/library/books/');
+      return NextResponse.redirect(new URL(newPath, req.url));
+    }
+    
+    // /library/edit/* -> /library/books/*
+    if (path.startsWith('/library/edit/')) {
+      const newPath = path.replace('/library/edit/', '/library/books/');
+      return NextResponse.redirect(new URL(newPath, req.url));
     }
 
     // הגנה על דפי אדמין - רק לבעלי תפקיד 'admin'
     if (path.startsWith('/library/admin')) {
-      if (!token || token.role !== 'admin') {
-        return NextResponse.redirect(new URL('/library/dashboard', req.url));
+      if (!token) {
+        // אם אין טוקן בכלל - NextAuth יטפל בהפניה להתחברות עם callbackUrl
+        return NextResponse.next();
+      }
+      if (token.role !== 'admin') {
+        // אם יש טוקן אבל המשתמש לא אדמין - נעביר לדף שגיאה
+        return NextResponse.redirect(new URL('/library/unauthorized', req.url));
       }
     }
 
@@ -22,12 +35,8 @@ export default withAuth(
   },
   {
     callbacks: {
-      authorized: ({ token, req }) => {
-        const path = req.nextUrl.pathname;
-        // מאפשרים גישה לדף ההתחברות גם ללא טוקן (כדי שהמחשב לא ייתקע בלופ של הפניות)
-        if (path === '/library/auth/login') {
-          return true;
-        }
+      authorized: ({ token }) => {
+        // כל הדפים שב-matcher דורשים אימות
         return !!token;
       }
     },
@@ -42,9 +51,11 @@ export const config = {
     '/library/dashboard/:path*',
     '/library/admin/:path*',
     '/library/upload/:path*',
-    '/library/edit/:path*',
+    '/library/books/:path*',
+    '/library/book/:path*',      // נתיב ישן - יופנה ל-books
+    '/library/edit/:path*',       // נתיב ישן - יופנה ל-books
     '/library/users/:path*',
-    '/library/auth/login', // הוספנו את דף ההתחברות ל-matcher
+    '/library/dicta-books/:path*',
     '/api/admin/((?!books/upload).*)', 
     '/api/upload-text/:path*'
   ]

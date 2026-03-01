@@ -76,7 +76,7 @@ export default function InfoDialog({ isOpen, onClose, bookInstructions, globalIn
             {examplePage && bookPath && (
                 <div className="py-4 flex justify-center border-t border-b border-surface-variant/60 my-2">
                     <a
-                        href={`/library/book/${encodeURIComponent(bookPath)}/example`}
+                        href={`/library/books/${encodeURIComponent(bookPath)}/example`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="w-full bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300 p-4 rounded-xl flex items-center justify-center gap-3 font-bold transition-all shadow-sm group"

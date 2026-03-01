@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useDialog } from '@/components/DialogContext';
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 export default function BookReminderPage() {
     const { data: session } = useSession();
@@ -12,12 +13,13 @@ export default function BookReminderPage() {
     const [dictaBooks, setDictaBooks] = useState([]);
     const [allUsers, setAllUsers] = useState([]); 
     const [history, setHistory] = useState([]);
+    const [loadingHistory, setLoadingHistory] = useState(true);
     
     const [bookType, setBookType] = useState('regular'); // 'regular' or 'dicta'
     const [selectedBookPath, setSelectedBookPath] = useState('');
     const [daysThreshold, setDaysThreshold] = useState(7);
-    const [customMessage, setCustomMessage] = useState('שמנו לב כי ישנם עמודים שתפסת לעריכה וטרם הושלמו.\nנודה לך מאוד אם תוכל להיכנס למערכת ולהשלים את העבודה עליהם בהקדם, כדי שנוכל לקדם את הספר לפרסום לטובת הכלל.\nלחילופין, אם לא תוכלו לסיים כרגע, נא לשחרר את העמודים ע"מ שאחרים יוכלו לסיים אותם.');
-    const [dictaMessage, setDictaMessage] = useState('שמנו לב כי תפסת ספר דיקטה לעריכה וטרם הושלם.\nנודה לך מאוד אם תוכל להיכנס למערכת ולהשלים את העבודה עליו בהקדם, כדי שנוכל לקדם את הספר לפרסום לטובת הכלל.\nלחילופין, אם לא תוכלו לסיים כרגע, נא לשחרר את הספר ע"מ שאחרים יוכלו לסיים אותו.');
+    const [customMessage, setCustomMessage] = useState('שמנו לב כי ישנם עמודים שתפסת לעריכה וטרם הושלמו.\nנודה לך מאוד אם תוכל להיכנס למערכת ולהשלים את העבודה עליהם בהקדם, כדי שנוכל לקדם את הספר לפרסום לטובת הכלל.\nלחילופין, אם לא תוכל לסיים כרגע, נא לשחרר את העמודים ע"מ שאחרים יוכלו לסיים אותם.');
+    const [dictaMessage, setDictaMessage] = useState('שמנו לב כי תפסת ספר דיקטה לעריכה וטרם הושלם.\nנודה לך מאוד אם תוכל להיכנס למערכת ולהשלים את העבודה עליו בהקדם, כדי שנוכל לקדם את הספר לפרסום לטובת הכלל.\nלחילופין, אם לא תוכל לסיים כרגע, נא לשחרר את הספר ע"מ שאחרים יוכלו לסיים אותו.');
     
     const [recipients, setRecipients] = useState([]);
     const [foundUsersDetails, setFoundUsersDetails] = useState([]);
@@ -119,6 +121,8 @@ export default function BookReminderPage() {
                     }
                 } catch (e) {
                     console.error('History fetch failed:', e);
+                } finally {
+                    setLoadingHistory(false);
                 }
 
             } catch (error) {
@@ -260,7 +264,7 @@ export default function BookReminderPage() {
         const formattedBody = messageBody.replace(/\n/g, '<br/>');
         const bookLink = isDicta 
             ? `${siteUrl}/library/dicta-books?status=my-books` 
-            : `${siteUrl}/library/book/${bookName}`;
+            : `${siteUrl}/library/books/${bookName}`;
 
         return `
         <div dir="rtl" style="font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 40px; text-align: center;">
@@ -597,7 +601,15 @@ export default function BookReminderPage() {
                 )}
             </form>
 
-            {history.length > 0 && (
+            {loadingHistory ? (
+                <div className="mt-12 border-t pt-8">
+                    <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-gray-500">history</span>
+                        היסטוריית שליחות אחרונות
+                    </h2>
+                    <LoadingSpinner message="טוען היסטוריה..." />
+                </div>
+            ) : !loadingHistory && history.length > 0 && (
                 <div className="mt-12 border-t pt-8">
                     <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
                         <span className="material-symbols-outlined text-gray-500">history</span>

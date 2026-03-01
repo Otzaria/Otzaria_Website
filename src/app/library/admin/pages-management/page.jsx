@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useDialog } from '@/components/DialogContext'
+import LoadingSpinner from '@/components/LoadingSpinner'
 
 export default function AdminPagesPage() {
   const [pages, setPages] = useState([])
@@ -212,10 +213,7 @@ export default function AdminPagesPage() {
       </div>
 
       {loading ? (
-          <div className="text-center py-20">
-              <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-              <p className="mt-4 text-gray-600">טוען עמודים...</p>
-          </div>
+          <LoadingSpinner message="טוען עמודים..." />
       ) : (
           <div className="overflow-x-auto rounded-xl border border-gray-200">
               <table className="w-full bg-white">

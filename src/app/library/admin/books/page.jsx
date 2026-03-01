@@ -8,6 +8,7 @@ import EditBookInfoDialog from '@/components/EditBookInfoDialog'
 import EditGlobalInstructionsDialog from '@/components/EditGlobalInstructionsDialog'
 import EditCategoriesDialog from '@/components/EditCategoriesDialog'
 import { useDialog } from '@/components/DialogContext'
+import LoadingSpinner from '@/components/LoadingSpinner'
 
 export default function AdminBooksPage() {
   const { showAlert, showConfirm } = useDialog()
@@ -410,12 +411,6 @@ export default function AdminBooksPage() {
     }  
   });  
 
-  if (loading) return (
-    <div className="flex justify-center items-center h-64">
-        <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
-    </div>
-  )
-
   return (
     <>
         <div className="glass-strong p-6 rounded-xl animate-in fade-in slide-in-from-bottom-4 duration-500 relative">
@@ -527,7 +522,9 @@ export default function AdminBooksPage() {
         </label>
       </div>
 
-        {books.length === 0 ? (
+        {loading ? (
+            <LoadingSpinner message="טוען ספרים..." />
+        ) : books.length === 0 ? (
             <div className="text-center py-20 text-gray-500">
             <span className="material-symbols-outlined text-6xl mb-2">library_books</span>
             <p>אין ספרים במערכת עדיין</p>
@@ -637,7 +634,7 @@ export default function AdminBooksPage() {
                             {isPersonal ? (
                                 <div className="grid grid-cols-2 gap-2">
                                     <Link
-                                        href={`/library/book/${encodeURIComponent(book.path)}`}
+                                        href={`/library/books/${encodeURIComponent(book.path)}`}
                                         className="flex items-center justify-center gap-1 px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-sm font-medium transition-colors"
                                     >
                                         <span className="material-symbols-outlined text-sm">visibility</span>
@@ -655,7 +652,7 @@ export default function AdminBooksPage() {
                                 <>
                                     <div className="grid grid-cols-2 gap-2">
                                         <Link
-                                            href={`/library/book/${encodeURIComponent(book.path)}`}
+                                            href={`/library/books/${encodeURIComponent(book.path)}`}
                                             className="flex items-center justify-center gap-1 px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-sm font-medium transition-colors"
                                         >
                                             <span className="material-symbols-outlined text-sm">visibility</span>

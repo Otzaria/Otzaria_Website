@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useDialog } from '@/components/DialogContext'
+import LoadingSpinner from '@/components/LoadingSpinner'
 
 export default function AdminUsersPage() {
   const { data: session } = useSession()
@@ -126,11 +127,13 @@ export default function AdminUsersPage() {
     return sortConfig.direction === 'asc' ? '↑' : '↓'
   }
 
-  if (loading) return <div className="text-center p-10">טוען משתמשים...</div>
-
   return (
     <div className="glass-strong p-6 rounded-xl animate-in fade-in slide-in-from-bottom-4 duration-500">
       <h2 className="text-2xl font-bold mb-6 text-on-surface">ניהול משתמשים</h2>
+      
+      {loading ? (
+        <LoadingSpinner message="טוען משתמשים..." />
+      ) : (
       <div className="overflow-x-auto rounded-xl border border-gray-200">
         <table className="w-full bg-white">
           <thead className="bg-gray-50 border-b">
@@ -270,6 +273,7 @@ export default function AdminUsersPage() {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   )
 }
