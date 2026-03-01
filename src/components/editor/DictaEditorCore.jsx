@@ -117,6 +117,14 @@ export default function DictaEditorCore({
   }, [selectedFont])
 
   useEffect(() => {
+    localStorage.setItem('dicta_editor_font_size', fontSize.toString())
+  }, [fontSize])
+
+  useEffect(() => {
+    localStorage.setItem('dicta_editor_text_align', textAlign)
+  }, [textAlign])
+
+  useEffect(() => {
     if (hasLoadedPreviewState.current) {
       localStorage.setItem('dicta_editor_show_preview', showPreview.toString())
     }
@@ -152,6 +160,16 @@ export default function DictaEditorCore({
     const savedFont = localStorage.getItem('dicta_editor_font')
     if (savedFont) {
       setSelectedFont(savedFont)
+    }
+
+    const savedFontSize = localStorage.getItem('dicta_editor_font_size')
+    if (savedFontSize) {
+      setFontSize(parseInt(savedFontSize))
+    }
+
+    const savedTextAlign = localStorage.getItem('dicta_editor_text_align')
+    if (savedTextAlign) {
+      setTextAlign(savedTextAlign)
     }
 
     if (!hasLoadedPreviewState.current) {
