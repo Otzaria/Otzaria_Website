@@ -18,8 +18,8 @@ export default function BookReminderPage() {
     const [bookType, setBookType] = useState('regular'); // 'regular' or 'dicta'
     const [selectedBookPath, setSelectedBookPath] = useState('');
     const [daysThreshold, setDaysThreshold] = useState(7);
-    const [customMessage, setCustomMessage] = useState('שמנו לב כי ישנם עמודים שתפסת לעריכה וטרם הושלמו.\nנודה לך מאוד אם תוכל להיכנס למערכת ולהשלים את העבודה עליהם בהקדם, כדי שנוכל לקדם את הספר לפרסום לטובת הכלל.\nלחילופין, אם לא תוכלו לסיים כרגע, נא לשחרר את העמודים ע"מ שאחרים יוכלו לסיים אותם.');
-    const [dictaMessage, setDictaMessage] = useState('שמנו לב כי תפסת ספר דיקטה לעריכה וטרם הושלם.\nנודה לך מאוד אם תוכל להיכנס למערכת ולהשלים את העבודה עליו בהקדם, כדי שנוכל לקדם את הספר לפרסום לטובת הכלל.\nלחילופין, אם לא תוכלו לסיים כרגע, נא לשחרר את הספר ע"מ שאחרים יוכלו לסיים אותו.');
+    const [customMessage, setCustomMessage] = useState('שמנו לב כי ישנם עמודים שתפסת לעריכה וטרם הושלמו.\nנודה לך מאוד אם תוכל להיכנס למערכת ולהשלים את העבודה עליהם בהקדם, כדי שנוכל לקדם את הספר לפרסום לטובת הכלל.\nלחילופין, אם לא תוכל לסיים כרגע, נא לשחרר את העמודים ע"מ שאחרים יוכלו לסיים אותם.');
+    const [dictaMessage, setDictaMessage] = useState('שמנו לב כי תפסת ספר דיקטה לעריכה וטרם הושלם.\nנודה לך מאוד אם תוכל להיכנס למערכת ולהשלים את העבודה עליו בהקדם, כדי שנוכל לקדם את הספר לפרסום לטובת הכלל.\nלחילופין, אם לא תוכל לסיים כרגע, נא לשחרר את הספר ע"מ שאחרים יוכלו לסיים אותו.');
     
     const [recipients, setRecipients] = useState([]);
     const [foundUsersDetails, setFoundUsersDetails] = useState([]);
