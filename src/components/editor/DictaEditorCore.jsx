@@ -182,29 +182,56 @@ export default function DictaEditorCore({
     }
   }, [])
 
-  const updateTextWithHistory = useCallback((newText) => {
+  const updateTextWithHistory = useCallback((newText, selectionStart = null, selectionEnd = null) => {
+    // מניעת הוספה להיסטוריה אם התוכן לא השתנה
+    if (newText === content) {
+      return
+    }
+    
+    const textarea = textareaRef.current
+    const start = selectionStart !== null ? selectionStart : (textarea?.selectionStart || 0)
+    const end = selectionEnd !== null ? selectionEnd : (textarea?.selectionEnd || 0)
+    
     setContent(newText)
-    setHistory(prev => {
-      const newHistory = prev.slice(0, historyIndex + 1)
-      newHistory.push(newText)
-      return newHistory
-    })
-    setHistoryIndex(prev => prev + 1)
-  }, [historyIndex])
+    const newHistory = history.slice(0, historyIndex + 1)
+    newHistory.push({ content: newText, selection: { start, end } })
+    setHistory(newHistory)
+    setHistoryIndex(newHistory.length - 1)
+  }, [content, history, historyIndex])
   
   const undo = useCallback(() => {
     if (historyIndex > 0) {
       const newIndex = historyIndex - 1
+      const historyItem = history[newIndex]
       setHistoryIndex(newIndex)
-      setContent(history[newIndex])
+      setContent(historyItem.content)
+      
+      // שחזור הבחירה
+      setTimeout(() => {
+        const textarea = textareaRef.current
+        if (textarea && historyItem.selection) {
+          textarea.focus()
+          textarea.setSelectionRange(historyItem.selection.start, historyItem.selection.end)
+        }
+      }, 0)
     }
   }, [historyIndex, history])
   
   const redo = useCallback(() => {
     if (historyIndex < history.length - 1) {
       const newIndex = historyIndex + 1
+      const historyItem = history[newIndex]
       setHistoryIndex(newIndex)
-      setContent(history[newIndex])
+      setContent(historyItem.content)
+      
+      // שחזור הבחירה
+      setTimeout(() => {
+        const textarea = textareaRef.current
+        if (textarea && historyItem.selection) {
+          textarea.focus()
+          textarea.setSelectionRange(historyItem.selection.start, historyItem.selection.end)
+        }
+      }, 0)
     }
   }, [historyIndex, history])
 
@@ -223,17 +250,16 @@ export default function DictaEditorCore({
       clearTimeout(timeoutRef.current)
     }
     timeoutRef.current = setTimeout(() => {
-      setHistory(prev => {
-        const newHistory = prev.slice(0, historyIndex + 1)
-        const lastItem = newHistory[newHistory.length - 1]
-        if (lastItem !== newContent) {
-          newHistory.push(newContent)
-          setHistoryIndex(newHistory.length - 1)
-        }
-        return newHistory
-      })
+      // השוואה למצב האחרון בהיסטוריה לפני הוספה
+      const lastItem = history[historyIndex]
+      if (!lastItem || lastItem.content !== newContent) {
+        const newHistory = history.slice(0, historyIndex + 1)
+        newHistory.push({ content: newContent, selection: { start: selectionStart, end: selectionEnd } })
+        setHistory(newHistory)
+        setHistoryIndex(newHistory.length - 1)
+      }
     }, 500)
-  }, [historyIndex])
+  }, [history, historyIndex])
 
   const handleTextareaScroll = useCallback(() => {
     if (!textareaRef.current || !previewRef.current) return
