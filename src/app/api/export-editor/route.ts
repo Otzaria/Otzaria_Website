@@ -373,6 +373,7 @@ export async function GET() {
                 setHasUnsavedChanges={setHasUnsavedChanges}
                 headerStartElement={headerStart}
                 headerEndElement={headerEnd}
+                singleLineHeader={true}
               />
             </DialogProvider>
           );
