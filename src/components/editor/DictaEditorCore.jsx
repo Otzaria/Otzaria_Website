@@ -103,7 +103,7 @@ export default function DictaEditorCore({
 
   useEffect(() => {
     setContent(initialContent)
-    setHistory([initialContent])
+    setHistory([{ content: initialContent, selection: { start: 0, end: 0 } }])
     setHistoryIndex(0)
   }, [initialContent])
 
