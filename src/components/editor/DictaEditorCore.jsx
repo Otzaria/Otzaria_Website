@@ -77,7 +77,7 @@ export default function DictaEditorCore({
   const [headerCompact, setHeaderCompact] = useState(false)
   
   // מנגנון undo/redo
-  const [history, setHistory] = useState([initialContent])
+  const [history, setHistory] = useState([{ content: initialContent, selection: { start: 0, end: 0 } }])
   const [historyIndex, setHistoryIndex] = useState(0)
   
   // טעינת מצב toolbar מ-localStorage רק בצד הלקוח
