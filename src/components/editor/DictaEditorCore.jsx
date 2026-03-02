@@ -226,8 +226,8 @@ export default function DictaEditorCore({
       setHistory(prev => {
         const newHistory = prev.slice(0, historyIndex + 1)
         const lastItem = newHistory[newHistory.length - 1]
-        if (!lastItem || lastItem.content !== newContent) {
-          newHistory.push({ content: newContent, selection: { start: selectionStart, end: selectionEnd } })
+        if (lastItem !== newContent) {
+          newHistory.push(newContent)
           setHistoryIndex(newHistory.length - 1)
         }
         return newHistory
