@@ -183,6 +183,11 @@ export default function DictaEditorCore({
   }, [])
 
   const updateTextWithHistory = useCallback((newText, selectionStart = null, selectionEnd = null) => {
+    // ניקוי timeout מושהה כדי למנוע race condition
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+    }
+    
     // מניעת הוספה להיסטוריה אם התוכן לא השתנה
     if (newText === content) {
       return
@@ -200,6 +205,11 @@ export default function DictaEditorCore({
   }, [content, history, historyIndex])
   
   const undo = useCallback(() => {
+    // ניקוי timeout מושהה כדי למנוע race condition
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+    }
+    
     if (historyIndex > 0) {
       const newIndex = historyIndex - 1
       const historyItem = history[newIndex]
@@ -218,6 +228,11 @@ export default function DictaEditorCore({
   }, [historyIndex, history])
   
   const redo = useCallback(() => {
+    // ניקוי timeout מושהה כדי למנוע race condition
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+    }
+    
     if (historyIndex < history.length - 1) {
       const newIndex = historyIndex + 1
       const historyItem = history[newIndex]
