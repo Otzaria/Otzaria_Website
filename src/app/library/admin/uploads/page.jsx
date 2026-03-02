@@ -423,11 +423,15 @@ export default function AdminUploadsPage() {
                       type="checkbox"
                       checked={filterTypes.includes('dicta')}
                       onChange={(e) => {
-                        if (e.target.checked) {
-                          setFilterTypes([...filterTypes, 'dicta'])
-                        } else {
-                          setFilterTypes(filterTypes.filter(t => t !== 'dicta'))
-                        }
+                        setFilterTypes(prev => {
+                          const newTypes = new Set(prev)
+                          if (e.target.checked) {
+                            newTypes.add('dicta')
+                          } else {
+                            newTypes.delete('dicta')
+                          }
+                          return Array.from(newTypes)
+                        })
                       }}
                       className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
                     />
@@ -438,11 +442,15 @@ export default function AdminUploadsPage() {
                       type="checkbox"
                       checked={filterTypes.includes('full_book')}
                       onChange={(e) => {
-                        if (e.target.checked) {
-                          setFilterTypes([...filterTypes, 'full_book'])
-                        } else {
-                          setFilterTypes(filterTypes.filter(t => t !== 'full_book'))
-                        }
+                        setFilterTypes(prev => {
+                          const newTypes = new Set(prev)
+                          if (e.target.checked) {
+                            newTypes.add('full_book')
+                          } else {
+                            newTypes.delete('full_book')
+                          }
+                          return Array.from(newTypes)
+                        })
                       }}
                       className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
                     />
@@ -453,11 +461,15 @@ export default function AdminUploadsPage() {
                       type="checkbox"
                       checked={filterTypes.includes('single_page')}
                       onChange={(e) => {
-                        if (e.target.checked) {
-                          setFilterTypes([...filterTypes, 'single_page'])
-                        } else {
-                          setFilterTypes(filterTypes.filter(t => t !== 'single_page'))
-                        }
+                        setFilterTypes(prev => {
+                          const newTypes = new Set(prev)
+                          if (e.target.checked) {
+                            newTypes.add('single_page')
+                          } else {
+                            newTypes.delete('single_page')
+                          }
+                          return Array.from(newTypes)
+                        })
                       }}
                       className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
                     />
@@ -479,11 +491,15 @@ export default function AdminUploadsPage() {
                         type="checkbox"
                         checked={filterStatuses.includes(key)}
                         onChange={(e) => {
-                          if (e.target.checked) {
-                            setFilterStatuses([...filterStatuses, key])
-                          } else {
-                            setFilterStatuses(filterStatuses.filter(s => s !== key))
-                          }
+                          setFilterStatuses(prev => {
+                            const newStatuses = new Set(prev)
+                            if (e.target.checked) {
+                              newStatuses.add(key)
+                            } else {
+                              newStatuses.delete(key)
+                            }
+                            return Array.from(newStatuses)
+                          })
                         }}
                         className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                       />

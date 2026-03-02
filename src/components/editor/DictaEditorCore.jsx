@@ -99,6 +99,7 @@ export default function DictaEditorCore({
   const textareaRef = useRef(null)
   const previewRef = useRef(null)
   const scrollingSource = useRef(null)
+  const timeoutRef = useRef(null)
 
   useEffect(() => {
     setContent(initialContent)
@@ -213,16 +214,20 @@ export default function DictaEditorCore({
   
   const handleTextareaChange = useCallback((e) => {
     const newContent = e.target.value
+    const selectionStart = e.target.selectionStart
+    const selectionEnd = e.target.selectionEnd
+    
     setContent(newContent)
     // הוספה להיסטוריה עם debounce קל
-    if (handleTextareaChange.timeout) {
-      clearTimeout(handleTextareaChange.timeout)
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
     }
-    handleTextareaChange.timeout = setTimeout(() => {
+    timeoutRef.current = setTimeout(() => {
       setHistory(prev => {
         const newHistory = prev.slice(0, historyIndex + 1)
-        if (newHistory[newHistory.length - 1] !== newContent) {
-          newHistory.push(newContent)
+        const lastItem = newHistory[newHistory.length - 1]
+        if (!lastItem || lastItem.content !== newContent) {
+          newHistory.push({ content: newContent, selection: { start: selectionStart, end: selectionEnd } })
           setHistoryIndex(newHistory.length - 1)
         }
         return newHistory
