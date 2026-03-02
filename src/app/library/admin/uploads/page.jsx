@@ -154,6 +154,22 @@ export default function AdminUploadsPage() {
       .sort((a, b) => new Date(b.latestUpload.uploadedAt) - new Date(a.latestUpload.uploadedAt))
   }, [uploads, searchTerm, filterTypes, filterStatuses])
 
+  // פונקציית עזר גנרית לעדכון מסננים
+  const createFilterChangeHandler = (setter) => (value, isChecked) => {
+    setter(prev => {
+      const newSet = new Set(prev)
+      if (isChecked) {
+        newSet.add(value)
+      } else {
+        newSet.delete(value)
+      }
+      return Array.from(newSet)
+    })
+  }
+
+  const handleTypeChange = createFilterChangeHandler(setFilterTypes)
+  const handleStatusChange = createFilterChangeHandler(setFilterStatuses)
+
   const toggleBookExpansion = (bookName) => {
     setExpandedBooks(prev => ({
       ...prev,
@@ -422,17 +438,7 @@ export default function AdminUploadsPage() {
                     <input
                       type="checkbox"
                       checked={filterTypes.includes('dicta')}
-                      onChange={(e) => {
-                        setFilterTypes(prev => {
-                          const newTypes = new Set(prev)
-                          if (e.target.checked) {
-                            newTypes.add('dicta')
-                          } else {
-                            newTypes.delete('dicta')
-                          }
-                          return Array.from(newTypes)
-                        })
-                      }}
+                      onChange={(e) => handleTypeChange('dicta', e.target.checked)}
                       className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
                     />
                     <span className="text-sm text-gray-700">דיקטה</span>
@@ -441,17 +447,7 @@ export default function AdminUploadsPage() {
                     <input
                       type="checkbox"
                       checked={filterTypes.includes('full_book')}
-                      onChange={(e) => {
-                        setFilterTypes(prev => {
-                          const newTypes = new Set(prev)
-                          if (e.target.checked) {
-                            newTypes.add('full_book')
-                          } else {
-                            newTypes.delete('full_book')
-                          }
-                          return Array.from(newTypes)
-                        })
-                      }}
+                      onChange={(e) => handleTypeChange('full_book', e.target.checked)}
                       className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
                     />
                     <span className="text-sm text-gray-700">ספרים שהועלו</span>
@@ -460,17 +456,7 @@ export default function AdminUploadsPage() {
                     <input
                       type="checkbox"
                       checked={filterTypes.includes('single_page')}
-                      onChange={(e) => {
-                        setFilterTypes(prev => {
-                          const newTypes = new Set(prev)
-                          if (e.target.checked) {
-                            newTypes.add('single_page')
-                          } else {
-                            newTypes.delete('single_page')
-                          }
-                          return Array.from(newTypes)
-                        })
-                      }}
+                      onChange={(e) => handleTypeChange('single_page', e.target.checked)}
                       className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
                     />
                     <span className="text-sm text-gray-700">עמודים שנערכו</span>
@@ -490,17 +476,7 @@ export default function AdminUploadsPage() {
                       <input
                         type="checkbox"
                         checked={filterStatuses.includes(key)}
-                        onChange={(e) => {
-                          setFilterStatuses(prev => {
-                            const newStatuses = new Set(prev)
-                            if (e.target.checked) {
-                              newStatuses.add(key)
-                            } else {
-                              newStatuses.delete(key)
-                            }
-                            return Array.from(newStatuses)
-                          })
-                        }}
+                        onChange={(e) => handleStatusChange(key, e.target.checked)}
                         className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                       />
                       <span 
