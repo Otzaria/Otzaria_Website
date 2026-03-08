@@ -94,7 +94,6 @@ export default function SingleLetterHeadersModal({ isOpen, onClose, content, onC
               
               // בדיקת גימטריה על הטקסט הנקי
               if (isGematria(textForGematria, maxNum + 1)) {
-                const cleanWord = stripHtml(firstWord, removeArray)
                 const cleanWord = stripHtml(firstWord, removeArray).replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 allLines.push(headingLine)
                 
