@@ -78,17 +78,32 @@ export default function SingleLetterHeadersModal({ isOpen, onClose, content, onC
             
             // בדיקה אם המילה הראשונה מסתיימת בסיומת הנדרשת
             if (stripped.endsWith(localEndSuffix) && 
-                isGematria(firstWord, maxNum + 1) && 
                 stripped.startsWith(localStart)) {
               
-              const cleanWord = stripHtml(firstWord, removeArray)
-              const headingLine = `<h${level}>${cleanWord}</h${level}>`
-              allLines.push(headingLine)
-              
-              if (words.length > 1) {
-                allLines.push(words.slice(1).join(' '))
+              // הסרת תו התחלה והסוף לבדיקת גימטריה
+              let textForGematria = stripped
+              if (localStart && textForGematria.startsWith(localStart)) {
+                textForGematria = textForGematria.slice(localStart.length)
               }
-              count++
+              if (localEndSuffix && textForGematria.endsWith(localEndSuffix)) {
+                textForGematria = textForGematria.slice(0, -localEndSuffix.length)
+              }
+              
+              // הסרת תגי <b> ו-</b> אם נשארו (במקרה של boldOnly)
+              textForGematria = textForGematria.replace(/<\/?b>/g, '')
+              
+              // בדיקת גימטריה על הטקסט הנקי
+              if (isGematria(textForGematria, maxNum + 1)) {
+                const cleanWord = stripHtml(firstWord, removeArray).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                allLines.push(headingLine)
+                
+                if (words.length > 1) {
+                  allLines.push(words.slice(1).join(' '))
+                }
+                count++
+              } else {
+                allLines.push(line)
+              }
             } else {
               allLines.push(line)
             }

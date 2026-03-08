@@ -27,6 +27,7 @@ export default function DictaEditorPage() {
   const [showResetDialog, setShowResetDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [downloading, setDownloading] = useState(false)
   const [isEditCopy, setIsEditCopy] = useState(false) // האם זה עותק עריכה מהעלאה
   
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
@@ -265,6 +266,44 @@ export default function DictaEditorPage() {
     }
   }
 
+  const getDownloadBaseName = (title = 'dicta-book') => {
+    const normalizedTitle = typeof title === 'string' ? title : 'dicta-book'
+    const lastSegment = normalizedTitle.split('/').filter(Boolean).pop() || normalizedTitle
+    return lastSegment.trim() || 'dicta-book'
+  }
+
+  const handleDownloadSavedBook = async () => {
+    try {
+      setDownloading(true)
+      const response = await fetch(`/api/dicta/books/${bookId}/download`)
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error || 'שגיאה בהורדת הספר')
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const contentDisposition = response.headers.get('content-disposition') || ''
+      const filenameMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i)
+      const fallbackFilename = `${getDownloadBaseName(book?.title)}_dicta.txt`
+      const filename = decodeURIComponent(filenameMatch?.[1] || filenameMatch?.[2] || fallbackFilename)
+
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Error downloading saved book:', error)
+      showAlert('שגיאה', error.message || 'שגיאה בהורדת הספר')
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   const handleResetConfirm = async () => {
     try {
       setResetting(true)
@@ -340,6 +379,16 @@ export default function DictaEditorPage() {
 
   const headerEnd = (
     <div className="flex items-center gap-4">
+      <Button
+        icon="download"
+        variant="ghost"
+        size="sm"
+        onClick={handleDownloadSavedBook}
+        loading={downloading}
+        label="הורד ספר"
+        title="מוריד את הגרסה השמורה בלבד, ללא שינויים לא שמורים"
+      />
+
       {canEdit && (
         <Button
           icon="restart_alt"
