@@ -39,7 +39,7 @@ export async function GET(request, { params }) {
     const isAdmin = session.user.role === 'admin';
 
     await connectDB();
-    const { id } = params;
+    const { id } = await params;
 
     let book = await DictaBook.findById(id).populate('claimedBy', 'name');
     let isEditCopy = false;
