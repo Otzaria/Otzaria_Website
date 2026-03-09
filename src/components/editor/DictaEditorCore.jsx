@@ -179,11 +179,13 @@ export default function DictaEditorCore({
   }, [])
   
   const hasLoadedPreviewState = useRef(false)
+  const mainRef = useRef(null)
   const contentRef = useRef(null)
   const textareaRef = useRef(null)
   const previewRef = useRef(null)
   const scrollingSource = useRef(null)
   const timeoutRef = useRef(null)
+  const pendingScrollRestoreRef = useRef(null)
 
   useEffect(() => {
     setContent(initialContent)
@@ -359,6 +361,69 @@ export default function DictaEditorCore({
       }
     }, 500)
   }, [history, historyIndex])
+
+  const getScrollPercentage = useCallback((element) => {
+    if (!element) return 0
+
+    const maxScroll = element.scrollHeight - element.clientHeight
+    if (maxScroll <= 0) return 0
+
+    return element.scrollTop / maxScroll
+  }, [])
+
+  const setScrollPercentage = useCallback((element, percentage) => {
+    if (!element) return
+
+    const maxScroll = element.scrollHeight - element.clientHeight
+    if (maxScroll <= 0) {
+      element.scrollTop = 0
+      return
+    }
+
+    element.scrollTop = Math.max(0, Math.min(maxScroll, percentage * maxScroll))
+  }, [])
+
+  const captureCurrentScrollState = useCallback(() => {
+    if (editMode) {
+      return { percentage: getScrollPercentage(textareaRef.current) }
+    }
+
+    return { percentage: getScrollPercentage(mainRef.current) }
+  }, [editMode, getScrollPercentage])
+
+  const handleToggleEditMode = useCallback(() => {
+    pendingScrollRestoreRef.current = captureCurrentScrollState()
+    startTransition(() => {
+      setEditMode(prev => !prev)
+    })
+  }, [captureCurrentScrollState, startTransition])
+
+  const handleTogglePreview = useCallback((nextShowPreview) => {
+    pendingScrollRestoreRef.current = captureCurrentScrollState()
+    setShowPreview(nextShowPreview)
+  }, [captureCurrentScrollState])
+
+  useEffect(() => {
+    const pending = pendingScrollRestoreRef.current
+    if (!pending) return
+
+    const restore = () => {
+      if (editMode) {
+        setScrollPercentage(textareaRef.current, pending.percentage)
+
+        if (showPreview) {
+          setScrollPercentage(previewRef.current, pending.percentage)
+        }
+      } else {
+        setScrollPercentage(mainRef.current, pending.percentage)
+      }
+
+      pendingScrollRestoreRef.current = null
+    }
+
+    const frame = window.requestAnimationFrame(restore)
+    return () => window.cancelAnimationFrame(frame)
+  }, [editMode, showPreview, setScrollPercentage])
 
   const handleTextareaScroll = useCallback(() => {
     if (!textareaRef.current || !previewRef.current) return
@@ -694,7 +759,7 @@ export default function DictaEditorCore({
 
   const actionsMap = useMemo(() => ({
     'save': { label: 'שמירה', action: () => onSave && onSave(content) },
-    'toggleEdit': { label: 'מעבר בין עריכה לתצוגה', action: () => setEditMode(prev => !prev) },
+    'toggleEdit': { label: 'מעבר בין עריכה לתצוגה', action: handleToggleEditMode },
     'fontIncrease': { label: 'הגדל גופן', action: () => setFontSize(prev => Math.min(32, prev + 2)) },
     'fontDecrease': { label: 'הקטן גופן', action: () => setFontSize(prev => Math.max(12, prev - 2)) },
     'alignRight': { label: 'יישור לימין', action: () => setTextAlign('right') },
@@ -727,7 +792,7 @@ export default function DictaEditorCore({
     'cleanText': { label: 'ניקוי טקסט', action: () => setActiveTool('cleanText') },
     'embedImage': { label: 'הטמעת תמונה', action: () => setActiveTool('embedImage') },
     'shortcuts': { label: 'ערוך קיצורי מקלדת', action: () => setShowShortcutsDialog(true) },
-  }), [onSave, insertTag, removeTags, undo, redo])
+  }), [onSave, content, handleToggleEditMode, insertTag, removeTags, undo, redo])
 
   const availableActions = useMemo(() => {
     return Object.entries(actionsMap).map(([id, def]) => ({
@@ -848,11 +913,7 @@ export default function DictaEditorCore({
                         icon={editMode ? 'visibility' : 'edit'}
                         variant="ghost"
                         size="sm"
-                        onClick={() => {
-                          startTransition(() => {
-                            setEditMode(!editMode)
-                          })
-                        }}
+                        onClick={handleToggleEditMode}
                         title={editMode ? 'תצוגה' : 'עריכה ידנית'}
                       />
                     </>
@@ -987,11 +1048,7 @@ export default function DictaEditorCore({
                         icon={editMode ? 'visibility' : 'edit'}
                         variant="ghost"
                         size="sm"
-                        onClick={() => {
-                          startTransition(() => {
-                            setEditMode(!editMode)
-                          })
-                        }}
+                        onClick={handleToggleEditMode}
                         label={editMode ? 'תצוגה' : 'עריכה ידנית'}
                       />
                     </>
@@ -1119,11 +1176,7 @@ export default function DictaEditorCore({
                         icon={editMode ? 'visibility' : 'edit'}
                         variant="ghost"
                         size="sm"
-                        onClick={() => {
-                          startTransition(() => {
-                            setEditMode(!editMode)
-                          })
-                        }}
+                        onClick={handleToggleEditMode}
                         label={editMode ? 'תצוגה' : 'עריכה ידנית'}
                       />
                     </>
@@ -1325,7 +1378,7 @@ export default function DictaEditorCore({
           </aside>
         )}
 
-        <main className="flex-1 overflow-auto bg-white flex">
+        <main ref={mainRef} className="flex-1 overflow-auto bg-white flex">
           {isPending ? (
             <div className="flex-1 flex items-center justify-center">
               <LoadingSpinner message="טוען..." />
@@ -1397,7 +1450,7 @@ export default function DictaEditorCore({
                   
                   {!showPreview && (
                     <button
-                      onClick={() => setShowPreview(true)}
+                      onClick={() => handleTogglePreview(true)}
                       className="flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-2 py-1 rounded transition-colors"
                       title="הצג תצוגה מקדימה"
                     >
@@ -1422,7 +1475,7 @@ export default function DictaEditorCore({
                 <div className="px-6 pt-6 pb-2 bg-gray-50 sticky top-0 z-10 border-b border-gray-200 flex items-center justify-between">
                   <span className="text-xs text-gray-500 font-medium">תצוגה מקדימה</span>
                   <button
-                    onClick={() => setShowPreview(false)}
+                    onClick={() => handleTogglePreview(false)}
                     className="flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-2 py-1 rounded transition-colors"
                     title="הסתר תצוגה מקדימה"
                   >
