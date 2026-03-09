@@ -49,13 +49,21 @@ function buildTocFromContent(content) {
 
   while ((match = headingRegex.exec(content)) !== null) {
     const [, rawLevel, innerHtml] = match
-    const temp = document.createElement('div')
-    temp.innerHTML = innerHtml
+    const headingText = innerHtml
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'")
+      .replace(/\s+/g, ' ')
+      .trim()
 
     tocItems.push({
       id: `heading-${index}`,
       level: Math.min(Math.max(parseInt(rawLevel, 10), 1), 6),
-      text: temp.textContent || '',
+      text: headingText,
       html: match[0],
       position: match.index
     })
