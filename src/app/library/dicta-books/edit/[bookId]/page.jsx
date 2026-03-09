@@ -459,7 +459,6 @@ export default function DictaEditorPage() {
       <DictaEditorCore 
         initialContent={book.content || ''}
         title={book.title}
-        debugContext={{ bookId, status: book.status, isEditCopy }}
         canEdit={canEdit}
         isCompleted={isCompleted}
         onSave={handleSaveToServer}

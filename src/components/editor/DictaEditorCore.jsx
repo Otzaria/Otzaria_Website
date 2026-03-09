@@ -126,7 +126,6 @@ function getTextareaCaretTop(textarea, position) {
 export default function DictaEditorCore({ 
   initialContent = '', 
   title = 'ללא שם', 
-  debugContext = null,
   canEdit = true, 
   isCompleted = false,
   onSave, 
@@ -165,22 +164,6 @@ export default function DictaEditorCore({
   const [history, setHistory] = useState([{ content: initialContent, selection: { start: 0, end: 0 } }])
   const [historyIndex, setHistoryIndex] = useState(0)
 
-  const logScrollDebug = useCallback(async (payload) => {
-    try {
-      await fetch('/api/dicta/debug-scroll', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title,
-          debugContext,
-          payload
-        })
-      })
-    } catch (error) {
-      console.error('Failed to send dicta scroll debug:', error)
-    }
-  }, [debugContext, title])
-  
   // טעינת מצב toolbar מ-localStorage רק בצד הלקוח
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -801,55 +784,8 @@ export default function DictaEditorCore({
         const lineHeight = Number.isFinite(computedLineHeight) ? computedLineHeight : fontSize * 1.5;
         const caretTop = getTextareaCaretTop(textarea, matchIndex);
         const scrollPos = Math.max(0, caretTop - (textarea.clientHeight / 2) + lineHeight);
-        const snippetStart = Math.max(0, matchIndex - 120);
-        const snippetEnd = Math.min(content.length, matchIndex + heading.html.length + 120);
-
-        logScrollDebug({
-          phase: 'before-scroll-edit-mode',
-          index,
-          headingText: heading.text,
-          headingLevel: heading.level,
-          headingHtml: heading.html,
-          matchIndex,
-          selectionEnd: matchIndex + heading.html.length,
-          caretTop,
-          lineHeight,
-          targetScrollTop: scrollPos,
-          currentScrollTop: textarea.scrollTop,
-          currentSelectionStart: textarea.selectionStart,
-          currentSelectionEnd: textarea.selectionEnd,
-          textareaClientHeight: textarea.clientHeight,
-          textareaScrollHeight: textarea.scrollHeight,
-          contentLength: content.length,
-          snippet: content.substring(snippetStart, snippetEnd)
-        })
         
         textarea.scrollTop = scrollPos;
-
-        window.setTimeout(() => {
-          logScrollDebug({
-            phase: 'after-scroll-edit-mode',
-            index,
-            headingText: heading.text,
-            headingLevel: heading.level,
-            matchIndex,
-            appliedScrollTop: textarea.scrollTop,
-            targetScrollTop: scrollPos,
-            currentSelectionStart: textarea.selectionStart,
-            currentSelectionEnd: textarea.selectionEnd,
-            textareaClientHeight: textarea.clientHeight,
-            textareaScrollHeight: textarea.scrollHeight
-          })
-        }, 50)
-      } else {
-        logScrollDebug({
-          phase: 'heading-not-found-edit-mode',
-          index,
-          headingText: heading.text,
-          headingLevel: heading.level,
-          headingHtml: heading.html,
-          contentLength: content.length
-        })
       }
       return;
     }
