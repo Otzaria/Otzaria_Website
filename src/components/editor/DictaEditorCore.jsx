@@ -39,9 +39,94 @@ const DEFAULT_SHORTCUTS = {
   'redo': 'Ctrl+KeyY',
 }
 
+function buildTocFromContent(content) {
+  if (!content) return []
+
+  const headingRegex = /<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi
+  const tocItems = []
+  let match
+  let index = 0
+
+  while ((match = headingRegex.exec(content)) !== null) {
+    const [, rawLevel, innerHtml] = match
+    const temp = document.createElement('div')
+    temp.innerHTML = innerHtml
+
+    tocItems.push({
+      id: `heading-${index}`,
+      level: Math.min(Math.max(parseInt(rawLevel, 10), 1), 6),
+      text: temp.textContent || '',
+      html: match[0],
+      position: match.index
+    })
+
+    index += 1
+  }
+
+  return tocItems
+}
+
+function getTextareaCaretTop(textarea, position) {
+  const computedStyle = window.getComputedStyle(textarea)
+  const mirror = document.createElement('div')
+  const span = document.createElement('span')
+  const propertiesToCopy = [
+    'boxSizing',
+    'width',
+    'height',
+    'overflowX',
+    'overflowY',
+    'borderTopWidth',
+    'borderRightWidth',
+    'borderBottomWidth',
+    'borderLeftWidth',
+    'paddingTop',
+    'paddingRight',
+    'paddingBottom',
+    'paddingLeft',
+    'fontStyle',
+    'fontVariant',
+    'fontWeight',
+    'fontStretch',
+    'fontSize',
+    'fontSizeAdjust',
+    'lineHeight',
+    'fontFamily',
+    'textAlign',
+    'textTransform',
+    'textIndent',
+    'textDecoration',
+    'letterSpacing',
+    'wordSpacing',
+    'tabSize',
+    'MozTabSize'
+  ]
+
+  mirror.dir = textarea.dir || 'rtl'
+  mirror.style.position = 'absolute'
+  mirror.style.visibility = 'hidden'
+  mirror.style.whiteSpace = 'pre-wrap'
+  mirror.style.overflowWrap = 'break-word'
+  mirror.style.wordBreak = 'break-word'
+
+  propertiesToCopy.forEach((property) => {
+    mirror.style[property] = computedStyle[property]
+  })
+
+  mirror.textContent = textarea.value.slice(0, position)
+  span.textContent = textarea.value.slice(position, position + 1) || '.'
+  mirror.appendChild(span)
+  document.body.appendChild(mirror)
+
+  const caretTop = span.offsetTop
+  document.body.removeChild(mirror)
+  return caretTop
+}
+
 export default function DictaEditorCore({ 
   initialContent = '', 
   title = 'ללא שם', 
+  debugContext = null,
   canEdit = true, 
   isCompleted = false,
   onSave, 
@@ -79,6 +164,22 @@ export default function DictaEditorCore({
   // מנגנון undo/redo
   const [history, setHistory] = useState([{ content: initialContent, selection: { start: 0, end: 0 } }])
   const [historyIndex, setHistoryIndex] = useState(0)
+
+  const logScrollDebug = useCallback(async (payload) => {
+    try {
+      await fetch('/api/dicta/debug-scroll', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          debugContext,
+          payload
+        })
+      })
+    } catch (error) {
+      console.error('Failed to send dicta scroll debug:', error)
+    }
+  }, [debugContext, title])
   
   // טעינת מצב toolbar מ-localStorage רק בצד הלקוח
   useEffect(() => {
@@ -593,20 +694,7 @@ export default function DictaEditorCore({
   }, [savedSearches, showAlert])
 
   useEffect(() => {
-    if (!content) return
-    
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(content, 'text/html')
-    const headings = doc.querySelectorAll('h1, h2, h3, h4, h5, h6')
-    
-    const tocItems = Array.from(headings).map((heading, index) => ({
-      id: `heading-${index}`,
-      level: Math.min(Math.max(parseInt(heading.tagName[1]), 1), 6),
-      text: heading.textContent,
-      html: heading.outerHTML
-    }))
-    
-    setToc(tocItems)
+    setToc(buildTocFromContent(content))
   }, [content])
 
   const saveUserShortcuts = useCallback((newShortcuts) => {
@@ -702,19 +790,66 @@ export default function DictaEditorCore({
       if (!textareaRef.current || !toc[index]) return;
       
       const textarea = textareaRef.current;
-      const textToFind = toc[index].html; 
-      const matchIndex = content.indexOf(textToFind);
+      const heading = toc[index];
+      const matchIndex = heading.position;
       
       if (matchIndex !== -1) {
         textarea.focus();
-        textarea.setSelectionRange(matchIndex, matchIndex + textToFind.length);
+        textarea.setSelectionRange(matchIndex, matchIndex + heading.html.length);
         
-        const textBeforeMatch = content.substring(0, matchIndex);
-        const lines = textBeforeMatch.split('\n').length;
-        const lineHeight = fontSize * 1.5; 
-        const scrollPos = (lines - 4) * lineHeight;
+        const computedLineHeight = Number.parseFloat(window.getComputedStyle(textarea).lineHeight);
+        const lineHeight = Number.isFinite(computedLineHeight) ? computedLineHeight : fontSize * 1.5;
+        const caretTop = getTextareaCaretTop(textarea, matchIndex);
+        const scrollPos = Math.max(0, caretTop - (textarea.clientHeight / 2) + lineHeight);
+        const snippetStart = Math.max(0, matchIndex - 120);
+        const snippetEnd = Math.min(content.length, matchIndex + heading.html.length + 120);
+
+        logScrollDebug({
+          phase: 'before-scroll-hidden-preview',
+          index,
+          headingText: heading.text,
+          headingLevel: heading.level,
+          headingHtml: heading.html,
+          matchIndex,
+          selectionEnd: matchIndex + heading.html.length,
+          caretTop,
+          lineHeight,
+          targetScrollTop: scrollPos,
+          currentScrollTop: textarea.scrollTop,
+          currentSelectionStart: textarea.selectionStart,
+          currentSelectionEnd: textarea.selectionEnd,
+          textareaClientHeight: textarea.clientHeight,
+          textareaScrollHeight: textarea.scrollHeight,
+          contentLength: content.length,
+          snippet: content.substring(snippetStart, snippetEnd)
+        })
         
-        textarea.scrollTop = scrollPos > 0 ? scrollPos : 0;
+        textarea.scrollTop = scrollPos;
+
+        window.setTimeout(() => {
+          logScrollDebug({
+            phase: 'after-scroll-hidden-preview',
+            index,
+            headingText: heading.text,
+            headingLevel: heading.level,
+            matchIndex,
+            appliedScrollTop: textarea.scrollTop,
+            targetScrollTop: scrollPos,
+            currentSelectionStart: textarea.selectionStart,
+            currentSelectionEnd: textarea.selectionEnd,
+            textareaClientHeight: textarea.clientHeight,
+            textareaScrollHeight: textarea.scrollHeight
+          })
+        }, 50)
+      } else {
+        logScrollDebug({
+          phase: 'heading-not-found-hidden-preview',
+          index,
+          headingText: heading.text,
+          headingLevel: heading.level,
+          headingHtml: heading.html,
+          contentLength: content.length
+        })
       }
       return;
     }
@@ -1342,7 +1477,7 @@ export default function DictaEditorCore({
                   onChange={handleTextareaChange}
                   onScroll={handleTextareaScroll}
                   className="flex-1 p-6 border-0 resize-none focus:ring-0 outline-none"
-                  style={{ fontSize: `${fontSize}px`, fontFamily: selectedFont, direction: 'rtl', textAlign: textAlign }}
+                  style={{ fontSize: `${fontSize}px`, fontFamily: selectedFont, direction: 'rtl', textAlign: textAlign, lineHeight: 1.5 }}
                 />
               </div>
               
