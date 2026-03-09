@@ -59,6 +59,24 @@ export default function EditingToolsPage() {
     }
   }
 
+  const handleDownloadHeaderProcessor = async () => {
+    try {
+      const response = await fetch('/api/header-processor')
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'מעבד כותרות ומחלק קבצים.html'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Error downloading header processor:', error)
+      showAlert('שגיאה', 'לא ניתן להוריד את כלי עיבוד הכותרות')
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -70,7 +88,7 @@ export default function EditingToolsPage() {
               כלי עריכה
             </h1>
             <p className="text-on-surface/70 text-lg">
-              הורד כלים לעריכת ספרי דיקטה ללא חיבור לאינטרנט
+              הורד כלים לעריכת ספרים ללא חיבור לאינטרנט
             </p>
           </div>
 
@@ -191,6 +209,70 @@ export default function EditingToolsPage() {
                       <span className="material-symbols-outlined">download</span>
                       הורד עורך אופליין
                     </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* כלי לחלוקת ספרים וטיפול בכותרות */}
+            <div className="glass p-8 rounded-2xl">
+              <div className="flex items-start gap-6">
+                <div className="flex-shrink-0">
+                  <div className="w-16 h-16 bg-secondary/10 rounded-xl flex items-center justify-center">
+                    <span className="material-symbols-outlined text-4xl text-secondary">
+                      splitscreen
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="flex-1">
+                  <h2 className="text-2xl font-bold mb-2 font-frank">
+                    מעבד כותרות ומחלק קבצים
+                  </h2>
+                  <p className="text-on-surface/70 mb-6">
+                    כלי מתקדם לחלוקת ספרים, נירמול כותרות, חיבור כותרות דינמי וסינכרון שמות קבצים
+                  </p>
+
+                  <div className="space-y-4">
+                    <div className="bg-secondary-container/50 border border-secondary/20 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <span className="material-symbols-outlined text-secondary mt-0.5">
+                          checklist
+                        </span>
+                        <div className="text-sm text-on-surface/80">
+                          <p className="font-bold mb-1">יכולות הכלי:</p>
+                          <ul className="list-disc list-inside space-y-1 mr-4">
+                            <li>חיתוך מסמכים חכם לפי רמת כותרת</li>
+                            <li>נירמול היררכיה של כותרות</li>
+                            <li>חיבור כותרות דינמי (למשל דף לעמוד)</li>
+                            <li>חיפוש והחלפה ממוקד בכותרות</li>
+                            <li>סינכרון כותרת H1 ושם הקובץ</li>
+                            <li>עורך ידני מובנה</li>
+                            <li>הוספת שם מחבר ושם ספר לקבצים</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        onClick={handleDownloadHeaderProcessor}
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-secondary text-on-primary rounded-lg font-bold hover:bg-accent transition-colors"
+                      >
+                        <span className="material-symbols-outlined">download</span>
+                        הורד כלי עיבוד כותרות
+                      </button>
+
+                      <a
+                        href="https://otzaria.org/forum/topic/838"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-6 py-3 border-2 border-secondary text-secondary rounded-lg font-bold hover:bg-secondary/10 transition-colors"
+                      >
+                        <span className="material-symbols-outlined">forum</span>
+                        מדריך ודיון בפורום
+                      </a>
+                    </div>
                   </div>
                 </div>
               </div>
