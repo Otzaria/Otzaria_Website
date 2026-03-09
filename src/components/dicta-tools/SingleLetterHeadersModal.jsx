@@ -156,7 +156,7 @@ export default function SingleLetterHeadersModal({ isOpen, onClose, content, onC
             label="תו התחלה"
             value={startChar}
             onChange={(e) => setStartChar(e.target.value)}
-            placeholder='למשל: "א"'
+            placeholder='למשל: "["'
           />
           
           <FormInput

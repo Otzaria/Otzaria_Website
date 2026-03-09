@@ -1,398 +1,352 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
+import { createRequire } from 'module';
+import { promises as fs } from 'fs';
 import path from 'path';
 
-// פונקציה להורדת פונט והמרה ל-base64
-async function fetchFontAsBase64(url: string): Promise<string> {
+const require = createRequire(import.meta.url);
+const BabelBundle = require('next/dist/compiled/babel/bundle.js');
+const Babel = BabelBundle.core();
+const presetReact = BabelBundle.presetReact().default;
+
+const ROOT_DIR = process.cwd();
+const COMPONENT_PATHS = [
+  'src/lib/avatar-colors.js',
+  'src/components/DialogContext.jsx',
+  'src/components/Modal.jsx',
+  'src/components/FormInput.jsx',
+  'src/components/Button.jsx',
+  'src/components/LoadingSpinner.jsx',
+  'src/components/dicta-tools/CreateHeadersModal.jsx',
+  'src/components/dicta-tools/SingleLetterHeadersModal.jsx',
+  'src/components/dicta-tools/ChangeHeadingModal.jsx',
+  'src/components/dicta-tools/PunctuateModal.jsx',
+  'src/components/dicta-tools/PageBHeaderModal.jsx',
+  'src/components/dicta-tools/ReplacePageBModal.jsx',
+  'src/components/dicta-tools/HeaderErrorCheckerModal.jsx',
+  'src/components/dicta-tools/TextCleanerModal.jsx',
+  'src/components/dicta-tools/AddPageNumberModal.jsx',
+  'src/components/dicta-tools/EmbedImageModal.jsx',
+  'src/components/editor/modals/ShortcutsDialog.jsx',
+  'src/components/editor/modals/FindReplaceDialog.jsx',
+  'src/components/editor/DictaEditorCore.jsx',
+];
+
+const REACT_RUNTIME_PATHS = [
+  ['next/dist/compiled/scheduler', 'node_modules/next/dist/compiled/scheduler/cjs/scheduler.production.js'],
+  ['next/dist/compiled/react', 'node_modules/next/dist/compiled/react/cjs/react.production.js'],
+  ['next/dist/compiled/react-dom', 'node_modules/next/dist/compiled/react-dom/cjs/react-dom.production.js'],
+  ['next/dist/compiled/react-dom/client', 'node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.production.js'],
+];
+
+const MATERIAL_SYMBOLS_ASSET_CANDIDATES = [
+  {
+    fontPath: 'public/export-editor/material-symbols/material-symbols-outlined.woff2',
+    cssPath: 'public/export-editor/material-symbols/outlined.css',
+  },
+  {
+    fontPath: 'node_modules/material-symbols/material-symbols-outlined.woff2',
+    cssPath: 'node_modules/material-symbols/outlined.css',
+  },
+];
+
+function escapeScriptTag(value: string) {
+  return value.replace(/<\/script/gi, '<\\/script');
+}
+
+function stripImportsAndExports(source: string) {
+  return source
+    .replace(/^\s*['\"]use client['\"];?\s*/gm, '')
+    .replace(/^\s*import[\s\S]*?from\s+['\"].*?['\"];?\s*$/gm, '')
+    .replace(/^\s*import\s+['\"].*?['\"];?\s*$/gm, '')
+    .replace(/export default function\s+/g, 'function ')
+    .replace(/export default\s+([A-Za-z0-9_$]+);?/g, '')
+    .replace(/export\s+(const|function|class|let|var)\s+/g, '$1 ')
+    .replace(/export\s*\{[^}]*\};?/g, '');
+}
+
+function transpileComponent(source: string, filename: string) {
+  const cleaned = stripImportsAndExports(source);
+  const result = Babel.transformSync(cleaned, {
+    filename,
+    babelrc: false,
+    configFile: false,
+    comments: false,
+    compact: false,
+    sourceType: 'script',
+    presets: [[presetReact, { runtime: 'classic' }]],
+  });
+
+  return result?.code ?? cleaned;
+}
+
+async function readTextFile(filePath: string) {
+  return fs.readFile(filePath, 'utf8');
+}
+
+async function readRuntimeModules() {
+  const modules = await Promise.all(
+    REACT_RUNTIME_PATHS.map(async ([moduleId, relativePath]) => {
+      const fullPath = path.join(ROOT_DIR, relativePath);
+      const code = await readTextFile(fullPath);
+      return { moduleId, code };
+    })
+  );
+
+  return modules;
+}
+
+async function collectCssFiles(dirPath: string): Promise<string[]> {
   try {
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const base64 = buffer.toString('base64');
-    console.log(`Font downloaded successfully, size: ${base64.length} chars`);
-    return base64;
-  } catch (error) {
-    console.error('Failed to fetch font:', error);
-    return '';
+    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    const files = await Promise.all(
+      entries.map(async (entry) => {
+        const fullPath = path.join(dirPath, entry.name);
+        if (entry.isDirectory()) {
+          return collectCssFiles(fullPath);
+        }
+        return entry.name.endsWith('.css') ? [fullPath] : [];
+      })
+    );
+
+    return files.flat();
+  } catch {
+    return [];
   }
+}
+
+async function readCurrentCssBundle() {
+  const cssRoots = [
+    path.join(ROOT_DIR, '.next', 'static', 'css'),
+    path.join(ROOT_DIR, '.next', 'dev', 'static', 'chunks'),
+  ];
+
+  const cssFiles = (await Promise.all(cssRoots.map(collectCssFiles)))
+    .flat()
+    .filter((filePath, index, all) => all.indexOf(filePath) === index)
+    .sort();
+
+  const cssContents = await Promise.all(
+    cssFiles.map(async (filePath) => {
+      const css = await readTextFile(filePath);
+      return `/* ${path.basename(filePath)} */\n${css}`;
+    })
+  );
+
+  return cssContents.join('\n\n');
+}
+
+async function buildMaterialSymbolsCss() {
+  for (const candidate of MATERIAL_SYMBOLS_ASSET_CANDIDATES) {
+    try {
+      const [fontBuffer, cssTemplate] = await Promise.all([
+        fs.readFile(path.join(ROOT_DIR, candidate.fontPath)),
+        readTextFile(path.join(ROOT_DIR, candidate.cssPath)),
+      ]);
+
+      const fontBase64 = fontBuffer.toString('base64');
+      return cssTemplate.replace('./material-symbols-outlined.woff2', `data:font/woff2;base64,${fontBase64}`);
+    } catch {
+      continue;
+    }
+  }
+
+  return `
+.material-symbols-outlined {
+  font-family: inherit;
+  font-weight: 400;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  direction: ltr;
+}
+`;
+}
+
+async function buildBundledComponents() {
+  const sources = await Promise.all(
+    COMPONENT_PATHS.map(async (relativePath) => {
+      const fullPath = path.join(ROOT_DIR, relativePath);
+      const source = await readTextFile(fullPath);
+      const code = transpileComponent(source, relativePath);
+      return `/* --- ${relativePath} --- */\n${code}`;
+    })
+  );
+
+  return sources.join('\n\n');
+}
+
+function buildAppSource() {
+  const appSource = `
+function OfflineEditorApp() {
+  const [localContent, setLocalContent] = useState('');
+  const [fileName, setFileName] = useState('קובץ_אופליין_חדש.txt');
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const handleFileUpload = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (loadEvent) => {
+      setLocalContent(loadEvent.target.result);
+      setHasUnsavedChanges(false);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleSaveToLocalFile = (currentContent) => {
+    const blob = new Blob([currentContent], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+    setLocalContent(currentContent);
+    setHasUnsavedChanges(false);
+  };
+
+  const headerStart = (
+    <>
+      <input
+        type="file"
+        accept=".txt,.html"
+        style={{ display: 'none' }}
+        ref={fileInputRef}
+        onChange={handleFileUpload}
+      />
+      <Button
+        icon="folder_open"
+        variant="ghost"
+        onClick={() => fileInputRef.current?.click()}
+        label="פתח קובץ"
+      />
+      <Button
+        icon="download"
+        variant="primary"
+        onClick={() => handleSaveToLocalFile(localContent)}
+        label="שמור קובץ"
+      />
+      <div className="w-px h-8 bg-surface-variant mx-2"></div>
+    </>
+  );
+
+  const headerEnd = (
+    <div className="text-sm text-gray-500 font-medium">מצב עבודה אופליין</div>
+  );
+
+  return (
+    <DialogProvider>
+      <DictaEditorCore
+        initialContent={localContent}
+        title={fileName}
+        canEdit={true}
+        isCompleted={false}
+        onSave={handleSaveToLocalFile}
+        hasUnsavedChangesOuter={hasUnsavedChanges}
+        setHasUnsavedChanges={setHasUnsavedChanges}
+        headerStartElement={headerStart}
+        headerEndElement={headerEnd}
+        singleLineHeader={true}
+      />
+    </DialogProvider>
+  );
+}
+
+const offlineRoot = ReactDOMClient.createRoot(document.getElementById('root'));
+offlineRoot.render(<OfflineEditorApp />);
+`;
+
+  return transpileComponent(appSource, 'offline-editor-app.jsx');
+}
+
+function buildModuleLoader(runtimeModules: { moduleId: string; code: string }[]) {
+  const moduleEntries = runtimeModules
+    .map(({ moduleId, code }) => {
+      const safeCode = escapeScriptTag(code);
+      return `"${moduleId}": function(module, exports, require) {\n${safeCode}\n}`;
+    })
+    .join(',\n');
+
+  return `
+const __offlineModules = {
+${moduleEntries}
+};
+const __offlineCache = {};
+function __offlineRequire(moduleId) {
+  if (__offlineCache[moduleId]) {
+    return __offlineCache[moduleId].exports;
+  }
+  const factory = __offlineModules[moduleId];
+  if (!factory) {
+    throw new Error('Missing module: ' + moduleId);
+  }
+  const module = { exports: {} };
+  __offlineCache[moduleId] = module;
+  factory(module, module.exports, __offlineRequire);
+  return module.exports;
+}
+const React = __offlineRequire('next/dist/compiled/react');
+const ReactDOM = __offlineRequire('next/dist/compiled/react-dom');
+const ReactDOMClient = __offlineRequire('next/dist/compiled/react-dom/client');
+const { useState, useEffect, useRef, useMemo, useCallback, useContext, useTransition, createContext } = React;
+const { createPortal } = ReactDOM;
+`;
 }
 
 export async function GET() {
-  const rootDir = process.cwd();
+  const [runtimeModules, bundledComponents, appCode, materialSymbolsCss, cssBundle] = await Promise.all([
+    readRuntimeModules(),
+    buildBundledComponents(),
+    Promise.resolve(buildAppSource()),
+    buildMaterialSymbolsCss(),
+    readCurrentCssBundle(),
+  ]);
 
-  // רשימת כל הקבצים הנדרשים כפי שהופיעו בדרישה המקורית
-  const componentPaths = [
-    'src/lib/avatar-colors.js',
-    'src/components/DialogContext.jsx',
-    'src/components/Modal.jsx',
-    'src/components/FormInput.jsx',
-    'src/components/Button.jsx',
-    'src/components/dicta-tools/CreateHeadersModal.jsx',
-    'src/components/dicta-tools/SingleLetterHeadersModal.jsx',
-    'src/components/dicta-tools/ChangeHeadingModal.jsx',
-    'src/components/dicta-tools/PunctuateModal.jsx',
-    'src/components/dicta-tools/PageBHeaderModal.jsx',
-    'src/components/dicta-tools/ReplacePageBModal.jsx',
-    'src/components/dicta-tools/HeaderErrorCheckerModal.jsx',
-    'src/components/dicta-tools/TextCleanerModal.jsx',
-    'src/components/dicta-tools/AddPageNumberModal.jsx',
-    'src/components/dicta-tools/EmbedImageModal.jsx',
-    'src/components/editor/modals/ShortcutsDialog.jsx',
-    'src/components/editor/modals/FindReplaceDialog.jsx',
-    'src/components/editor/DictaEditorCore.jsx'
-  ];
+  const moduleLoader = buildModuleLoader(runtimeModules);
+  const inlineScript = [moduleLoader, bundledComponents, appCode].map(escapeScriptTag).join('\n\n');
+  const inlineCss = [
+    materialSymbolsCss,
+    cssBundle,
+    `html, body, #root { min-height: 100%; } body { margin: 0; } body::before { background-image: none !important; content: none !important; }`,
+  ].join('\n\n');
 
-  try {
-    // הורדת פונט Material Symbols - נסה מספר URLs
-    const materialIconsUrls = [
-      // URL עדכני יותר
-      'https://fonts.gstatic.com/s/materialsymbolsoutlined/v180/kJF1BvYX7BgnkSrUwT8OhrdQw4oELdPIeeII9v6oDMzByHX9rA6RzaxHMPdY43zj-jCxv3fzvRNU22ZXGJpEpjC_1v-p_4MrImHCIJIZrDCvHOej.woff2',
-      // Fallback URL
-      'https://fonts.gstatic.com/s/materialsymbolsoutlined/v169/kJF1BvYX7BgnkSrUwT8OhrdQw4oELdPIeeII9v6oDMzByHX9rA6RzaxHMPdY43zj-jCxv3fzvRNU22ZXGJpEpjC_1v-p_4MrImHCIJIZrDCvHOej.woff2'
-    ];
-    
-    let materialIconsBase64 = '';
-    for (const url of materialIconsUrls) {
-      materialIconsBase64 = await fetchFontAsBase64(url);
-      if (materialIconsBase64) {
-        console.log('Material Icons font embedded successfully');
-        break;
-      }
-    }
-    
-    // אם ההורדה נכשלה, השתמש ב-CDN
-    const useCDN = !materialIconsBase64;
-    if (useCDN) {
-      console.log('Using CDN fallback for Material Icons');
-    }
-
-    let bundledComponents = '';
-    
-    for (const filePath of componentPaths) {
-      const fullPath = path.join(rootDir, filePath);
-      
-      if (fs.existsSync(fullPath)) {
-        let content = fs.readFileSync(fullPath, 'utf8');
-        
-        // ניקוי מתקדם:
-        const cleanedContent = content
-          .replace(/'use client'/g, '')
-          // 1. הסרת ייבואים (כולל כאלו שמתפרסים על מספר שורות)
-          .replace(/import[\s\S]*?from\s+['"].*?['"];?/g, '')
-          // 2. טיפול ב-export default function
-          .replace(/export default function\s+/g, 'function ')
-          // 3. טיפול ב-export default Name (בסוף קובץ)
-          .replace(/export default\s+([a-zA-Z0-9_$]+);?/g, '')
-          // 4. טיפול ב-export const / function
-          .replace(/export\s+(const|function|class|let|var)\s+/g, '$1 ');
-
-        bundledComponents += `\n/* --- Source: ${filePath} --- */\n${cleanedContent}\n`;
-      }
-    }
-
-    const htmlTemplate = `
-<!DOCTYPE html>
+  const html = `<!doctype html>
 <html lang="he" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>עורך אופליין - אוצריא</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E📚%3C/text%3E%3C/svg%3E" />
-    
-    <!-- React & Babel -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
-    
-    ${useCDN ? `
-    <!-- Material Symbols Icons - CDN Fallback -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet" />
-    ` : ''}
-    
-    <!-- Hebrew Font -->
-    <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
-    
-    <style>
-      ${!useCDN ? `
-      /* Material Symbols Icons - Embedded for offline use */
-      @font-face {
-        font-family: 'Material Symbols Outlined';
-        font-style: normal;
-        font-weight: 100 700;
-        src: url(data:font/woff2;base64,${materialIconsBase64}) format('woff2');
-        font-display: block;
-      }
-      ` : ''}
-      @font-face {
-        font-family: 'FrankRuehl';
-        src: url('https://fonts.cdnfonts.com/css/frank-ruhl-libre') format('woff2');
-        font-weight: normal;
-        font-style: normal;
-        font-display: swap;
-      }
-      
-      :root {
-        --color-background: #fefbf6;
-        --color-surface: #f8f4ef;
-        --color-surface-variant: #e7e0d8;
-        --color-primary: #6b5d4f;
-        --color-primary-container: #f4ede3;
-        --color-secondary: #8b7355;
-        --color-secondary-container: #f5ead8;
-        --color-accent: #9c7c4f;
-        --color-on-background: #1c1b1a;
-        --color-on-surface: #1c1b1a;
-        --color-on-primary: #ffffff;
-      }
-      
-      html {
-        direction: rtl;
-        background-color: var(--color-background);
-      }
-      
-      body { 
-        background-color: transparent;
-        color: var(--color-on-background);
-        margin: 0;
-        padding: 0;
-        font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
-        min-height: 100vh;
-        position: relative;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-      }
-      
-      .font-frank {
-        font-family: 'FrankRuehl', serif;
-      }
-      
-      .glass {
-        background-color: color-mix(in srgb, var(--color-background) 60%, transparent);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid color-mix(in srgb, var(--color-surface-variant) 50%, transparent);
-      }
-      
-      .glass-strong { 
-        background-color: color-mix(in srgb, var(--color-background) 95%, transparent);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        border: 1px solid var(--color-surface-variant);
-      }
-      
-      .material-symbols-outlined {
-        font-family: 'Material Symbols Outlined';
-        font-weight: normal;
-        font-style: normal;
-        font-size: 24px;
-        line-height: 1;
-        letter-spacing: normal;
-        text-transform: none;
-        display: inline-block;
-        white-space: nowrap;
-        word-wrap: normal;
-        direction: ltr;
-        -webkit-font-smoothing: antialiased;
-        -webkit-font-feature-settings: 'liga';
-      }
-      
-      /* Scrollbar styling */
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-      }
-      
-      ::-webkit-scrollbar-track {
-        background: var(--color-surface);
-      }
-      
-      ::-webkit-scrollbar-thumb {
-        background: var(--color-surface-variant);
-        border-radius: 4px;
-      }
-      
-      ::-webkit-scrollbar-thumb:hover {
-        background: var(--color-primary);
-      }
-      
-      /* Animations */
-      @keyframes float {
-        0%, 100% { transform: translateY(0px); }
-        50% { transform: translateY(-20px); }
-      }
-
-      @keyframes pulse-glow {
-        0%, 100% { box-shadow: 0 0 20px rgba(107, 93, 79, 0.3); }
-        50% { box-shadow: 0 0 40px rgba(107, 93, 79, 0.6); }
-      }
-
-      @keyframes shimmer {
-        0% { background-position: -1000px 0; }
-        100% { background-position: 1000px 0; }
-      }
-
-      @keyframes shake {
-        0%, 100% { transform: translateX(0); }
-        10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-        20%, 40%, 60%, 80% { transform: translateX(5px); }
-      }
-
-      .animate-float { animation: float 6s ease-in-out infinite; }
-      .animate-pulse-glow { animation: pulse-glow 3s ease-in-out infinite; }
-      .animate-shake { animation: shake 0.5s ease-in-out; }
-      
-      .hover-lift {
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      }
-
-      .hover-lift:hover {
-        transform: translateY(-8px);
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-      }
-    </style>
-    <script>
-      tailwind.config = {
-        theme: { 
-          extend: { 
-            colors: { 
-              background: '#fefbf6',
-              surface: '#f8f4ef',
-              'surface-variant': '#e7e0d8',
-              primary: '#6b5d4f',
-              'primary-container': '#f4ede3',
-              secondary: '#8b7355',
-              'secondary-container': '#f5ead8',
-              accent: '#9c7c4f',
-              'on-background': '#1c1b1a',
-              'on-surface': '#1c1b1a',
-              'on-primary': '#ffffff'
-            },
-            fontFamily: {
-              'frank': ['FrankRuehl', 'serif'],
-              'sans': ['Segoe UI', 'Tahoma', 'Arial', 'sans-serif'],
-              'hebrew': ['Segoe UI', 'Tahoma', 'Arial', 'sans-serif']
-            }
-          } 
-        }
-      }
-    </script>
-</head>
-<body>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%9A%3C/text%3E%3C/svg%3E" />
+    <style>${inlineCss}</style>
+  </head>
+  <body>
     <div id="root"></div>
-    <script type="text/babel">
-        const { useState, useEffect, useMemo, useRef, useContext, createContext, useCallback, forwardRef, useTransition } = React;
-        const { createPortal } = ReactDOM;
-
-        ${bundledComponents}
-
-        function App() {
-          const [localContent, setLocalContent] = useState('');
-          const [fileName, setFileName] = useState('קובץ_אופליין_חדש.txt');
-          const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-          const fileInputRef = useRef(null);
-
-          // פתיחת קובץ מקומי
-          const handleFileUpload = (event) => {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            setFileName(file.name);
-            const reader = new FileReader();
-            reader.onload = (e) => {
-              setLocalContent(e.target.result);
-              setHasUnsavedChanges(false);
-            };
-            reader.readAsText(file);
-          };
-
-          // שמירה מקומית על ידי הורדה
-          const handleSaveToLocalFile = (currentContent) => {
-            const blob = new Blob([currentContent], { type: 'text/html;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = fileName;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            
-            setLocalContent(currentContent);
-            setHasUnsavedChanges(false);
-          };
-
-          const headerStart = (
-            <>
-              <input 
-                type="file" 
-                accept=".txt,.html" 
-                style={{ display: 'none' }} 
-                ref={fileInputRef}
-                onChange={handleFileUpload} 
-              />
-              <Button 
-                icon="folder_open" 
-                variant="ghost" 
-                onClick={() => fileInputRef.current.click()} 
-                label="פתח קובץ מקומי" 
-              />
-              <div className="w-px h-8 bg-surface-variant mx-2"></div>
-            </>
-          );
-
-          const headerEnd = (
-            <div className="text-sm text-gray-500 font-medium">
-              מצב עבודה אופליין
-            </div>
-          );
-
-          return (
-            <DialogProvider>
-              <DictaEditorCore 
-                initialContent={localContent}
-                title={fileName}
-                canEdit={true}
-                isCompleted={false}
-                onSave={handleSaveToLocalFile}
-                hasUnsavedChangesOuter={hasUnsavedChanges}
-                setHasUnsavedChanges={setHasUnsavedChanges}
-                headerStartElement={headerStart}
-                headerEndElement={headerEnd}
-                singleLineHeader={true}
-              />
-            </DialogProvider>
-          );
-        }
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
+    <script>${inlineScript}</script>
+  </body>
 </html>`;
 
-    return new NextResponse(htmlTemplate, {
-      status: 200,
-      headers: {
-        'Content-Type': 'text/html; charset=utf-8',
-        'Content-Disposition': 'attachment; filename=dicta-editor-offline.html',
-      },
-    });
-  } catch (error) {
-    return NextResponse.json({ error: 'Failed to generate offline editor' }, { status: 500 });
-  }
+  return new NextResponse(html, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Disposition': 'attachment; filename=dicta-editor-offline.html',
+      'Cache-Control': 'no-store',
+    },
+  });
 }
+
+
+
+
+
+
+

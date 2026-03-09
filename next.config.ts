@@ -27,6 +27,16 @@ const nextConfig = {
     }
     return [];
   },
+
+  async redirects() {
+    return [
+      {
+        source: '/library/dicta-books/editingtools',
+        destination: '/library/editingtools',
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
