@@ -786,7 +786,7 @@ export default function DictaEditorCore({
   }, [userShortcuts, actionsMap, showShortcutsDialog])
 
   const scrollToHeading = (index) => {
-    if (editMode && !showPreview) {
+    if (editMode) {
       if (!textareaRef.current || !toc[index]) return;
       
       const textarea = textareaRef.current;
@@ -805,7 +805,7 @@ export default function DictaEditorCore({
         const snippetEnd = Math.min(content.length, matchIndex + heading.html.length + 120);
 
         logScrollDebug({
-          phase: 'before-scroll-hidden-preview',
+          phase: 'before-scroll-edit-mode',
           index,
           headingText: heading.text,
           headingLevel: heading.level,
@@ -828,7 +828,7 @@ export default function DictaEditorCore({
 
         window.setTimeout(() => {
           logScrollDebug({
-            phase: 'after-scroll-hidden-preview',
+            phase: 'after-scroll-edit-mode',
             index,
             headingText: heading.text,
             headingLevel: heading.level,
@@ -843,7 +843,7 @@ export default function DictaEditorCore({
         }, 50)
       } else {
         logScrollDebug({
-          phase: 'heading-not-found-hidden-preview',
+          phase: 'heading-not-found-edit-mode',
           index,
           headingText: heading.text,
           headingLevel: heading.level,
