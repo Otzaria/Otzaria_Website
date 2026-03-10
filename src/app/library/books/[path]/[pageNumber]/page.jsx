@@ -17,6 +17,7 @@ import { useDialog } from '@/components/DialogContext'
 import { useLoading } from '@/components/LoadingContext'
 import { useAutoSave } from '@/hooks/useAutoSave'
 import { useOCR } from '@/hooks/useOCR'
+import { getTextareaCaretTop } from '@/lib/editorUtils'
 
 // הגדרת ברירת מחדל המבוססת על מקשים פיזיים (Codes)
 const DEFAULT_SHORTCUTS = {
@@ -747,64 +748,6 @@ export default function EditPage() {
     }
     return activeEl;
   }
-
-// פונקציה לחישוב מיקום מדויק של הקורסור
-function getTextareaCaretTop(textarea, position) {
-  const computedStyle = window.getComputedStyle(textarea);
-  const mirror = document.createElement('div');
-  const span = document.createElement('span');
-  const propertiesToCopy = [
-    'boxSizing',
-    'width',
-    'height',
-    'overflowX',
-    'overflowY',
-    'borderTopWidth',
-    'borderRightWidth',
-    'borderBottomWidth',
-    'borderLeftWidth',
-    'paddingTop',
-    'paddingRight',
-    'paddingBottom',
-    'paddingLeft',
-    'fontStyle',
-    'fontVariant',
-    'fontWeight',
-    'fontStretch',
-    'fontSize',
-    'fontSizeAdjust',
-    'lineHeight',
-    'fontFamily',
-    'textAlign',
-    'textTransform',
-    'textIndent',
-    'textDecoration',
-    'letterSpacing',
-    'wordSpacing',
-    'tabSize',
-    'MozTabSize'
-  ];
-
-  mirror.dir = textarea.dir || 'rtl';
-  mirror.style.position = 'absolute';
-  mirror.style.visibility = 'hidden';
-  mirror.style.whiteSpace = 'pre-wrap';
-  mirror.style.overflowWrap = 'break-word';
-  mirror.style.wordBreak = 'break-word';
-
-  propertiesToCopy.forEach((property) => {
-    mirror.style[property] = computedStyle[property];
-  });
-
-  mirror.textContent = textarea.value.slice(0, position);
-  span.textContent = textarea.value.slice(position, position + 1) || '.';
-  mirror.appendChild(span);
-  document.body.appendChild(mirror);
-
-  const caretTop = span.offsetTop;
-  document.body.removeChild(mirror);
-  return caretTop;
-}
 
   const handleFindNext = (textToFind, isRegexMode) => {
     if (!textToFind) return showAlert('שגיאה', 'הזן טקסט לחיפוש');
