@@ -39,6 +39,98 @@ const DEFAULT_SHORTCUTS = {
   'redo': 'Ctrl+KeyY',
 }
 
+function buildTocFromContent(content) {
+  if (!content) return []
+
+  const headingRegex = /<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi
+  const tocItems = []
+  let match
+  let index = 0
+
+  while ((match = headingRegex.exec(content)) !== null) {
+    const [, rawLevel, innerHtml] = match
+    const headingText = innerHtml
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'")
+      .replace(/\s+/g, ' ')
+      .trim()
+
+    tocItems.push({
+      id: `heading-${index}`,
+      level: Math.min(Math.max(parseInt(rawLevel, 10), 1), 6),
+      text: headingText,
+      html: match[0],
+      position: match.index
+    })
+
+    index += 1
+  }
+
+  return tocItems
+}
+
+function getTextareaCaretTop(textarea, position) {
+  const computedStyle = window.getComputedStyle(textarea)
+  const mirror = document.createElement('div')
+  const span = document.createElement('span')
+  const propertiesToCopy = [
+    'boxSizing',
+    'width',
+    'height',
+    'overflowX',
+    'overflowY',
+    'borderTopWidth',
+    'borderRightWidth',
+    'borderBottomWidth',
+    'borderLeftWidth',
+    'paddingTop',
+    'paddingRight',
+    'paddingBottom',
+    'paddingLeft',
+    'fontStyle',
+    'fontVariant',
+    'fontWeight',
+    'fontStretch',
+    'fontSize',
+    'fontSizeAdjust',
+    'lineHeight',
+    'fontFamily',
+    'textAlign',
+    'textTransform',
+    'textIndent',
+    'textDecoration',
+    'letterSpacing',
+    'wordSpacing',
+    'tabSize',
+    'MozTabSize'
+  ]
+
+  mirror.dir = textarea.dir || 'rtl'
+  mirror.style.position = 'absolute'
+  mirror.style.visibility = 'hidden'
+  mirror.style.whiteSpace = 'pre-wrap'
+  mirror.style.overflowWrap = 'break-word'
+  mirror.style.wordBreak = 'break-word'
+
+  propertiesToCopy.forEach((property) => {
+    mirror.style[property] = computedStyle[property]
+  })
+
+  mirror.textContent = textarea.value.slice(0, position)
+  span.textContent = textarea.value.slice(position, position + 1) || '.'
+  mirror.appendChild(span)
+  document.body.appendChild(mirror)
+
+  const caretTop = span.offsetTop
+  document.body.removeChild(mirror)
+  return caretTop
+}
+
 export default function DictaEditorCore({ 
   initialContent = '', 
   title = 'ללא שם', 
@@ -79,7 +171,7 @@ export default function DictaEditorCore({
   // מנגנון undo/redo
   const [history, setHistory] = useState([{ content: initialContent, selection: { start: 0, end: 0 } }])
   const [historyIndex, setHistoryIndex] = useState(0)
-  
+
   // טעינת מצב toolbar מ-localStorage רק בצד הלקוח
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -95,11 +187,13 @@ export default function DictaEditorCore({
   }, [])
   
   const hasLoadedPreviewState = useRef(false)
+  const mainRef = useRef(null)
   const contentRef = useRef(null)
   const textareaRef = useRef(null)
   const previewRef = useRef(null)
   const scrollingSource = useRef(null)
   const timeoutRef = useRef(null)
+  const pendingScrollRestoreRef = useRef(null)
 
   useEffect(() => {
     setContent(initialContent)
@@ -275,6 +369,69 @@ export default function DictaEditorCore({
       }
     }, 500)
   }, [history, historyIndex])
+
+  const getScrollPercentage = useCallback((element) => {
+    if (!element) return 0
+
+    const maxScroll = element.scrollHeight - element.clientHeight
+    if (maxScroll <= 0) return 0
+
+    return element.scrollTop / maxScroll
+  }, [])
+
+  const setScrollPercentage = useCallback((element, percentage) => {
+    if (!element) return
+
+    const maxScroll = element.scrollHeight - element.clientHeight
+    if (maxScroll <= 0) {
+      element.scrollTop = 0
+      return
+    }
+
+    element.scrollTop = Math.max(0, Math.min(maxScroll, percentage * maxScroll))
+  }, [])
+
+  const captureCurrentScrollState = useCallback(() => {
+    if (editMode) {
+      return { percentage: getScrollPercentage(textareaRef.current) }
+    }
+
+    return { percentage: getScrollPercentage(mainRef.current) }
+  }, [editMode, getScrollPercentage])
+
+  const handleToggleEditMode = useCallback(() => {
+    pendingScrollRestoreRef.current = captureCurrentScrollState()
+    startTransition(() => {
+      setEditMode(prev => !prev)
+    })
+  }, [captureCurrentScrollState, startTransition])
+
+  const handleTogglePreview = useCallback((nextShowPreview) => {
+    pendingScrollRestoreRef.current = captureCurrentScrollState()
+    setShowPreview(nextShowPreview)
+  }, [captureCurrentScrollState])
+
+  useEffect(() => {
+    const pending = pendingScrollRestoreRef.current
+    if (!pending) return
+
+    const restore = () => {
+      if (editMode) {
+        setScrollPercentage(textareaRef.current, pending.percentage)
+
+        if (showPreview) {
+          setScrollPercentage(previewRef.current, pending.percentage)
+        }
+      } else {
+        setScrollPercentage(mainRef.current, pending.percentage)
+      }
+
+      pendingScrollRestoreRef.current = null
+    }
+
+    const frame = window.requestAnimationFrame(restore)
+    return () => window.cancelAnimationFrame(frame)
+  }, [editMode, showPreview, setScrollPercentage])
 
   const handleTextareaScroll = useCallback(() => {
     if (!textareaRef.current || !previewRef.current) return
@@ -593,20 +750,7 @@ export default function DictaEditorCore({
   }, [savedSearches, showAlert])
 
   useEffect(() => {
-    if (!content) return
-    
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(content, 'text/html')
-    const headings = doc.querySelectorAll('h1, h2, h3, h4, h5, h6')
-    
-    const tocItems = Array.from(headings).map((heading, index) => ({
-      id: `heading-${index}`,
-      level: Math.min(Math.max(parseInt(heading.tagName[1]), 1), 6),
-      text: heading.textContent,
-      html: heading.outerHTML
-    }))
-    
-    setToc(tocItems)
+    setToc(buildTocFromContent(content))
   }, [content])
 
   const saveUserShortcuts = useCallback((newShortcuts) => {
@@ -623,7 +767,7 @@ export default function DictaEditorCore({
 
   const actionsMap = useMemo(() => ({
     'save': { label: 'שמירה', action: () => onSave && onSave(content) },
-    'toggleEdit': { label: 'מעבר בין עריכה לתצוגה', action: () => setEditMode(prev => !prev) },
+    'toggleEdit': { label: 'מעבר בין עריכה לתצוגה', action: handleToggleEditMode },
     'fontIncrease': { label: 'הגדל גופן', action: () => setFontSize(prev => Math.min(32, prev + 2)) },
     'fontDecrease': { label: 'הקטן גופן', action: () => setFontSize(prev => Math.max(12, prev - 2)) },
     'alignRight': { label: 'יישור לימין', action: () => setTextAlign('right') },
@@ -656,7 +800,7 @@ export default function DictaEditorCore({
     'cleanText': { label: 'ניקוי טקסט', action: () => setActiveTool('cleanText') },
     'embedImage': { label: 'הטמעת תמונה', action: () => setActiveTool('embedImage') },
     'shortcuts': { label: 'ערוך קיצורי מקלדת', action: () => setShowShortcutsDialog(true) },
-  }), [onSave, insertTag, removeTags, undo, redo])
+  }), [onSave, content, handleToggleEditMode, insertTag, removeTags, undo, redo])
 
   const availableActions = useMemo(() => {
     return Object.entries(actionsMap).map(([id, def]) => ({
@@ -698,23 +842,23 @@ export default function DictaEditorCore({
   }, [userShortcuts, actionsMap, showShortcutsDialog])
 
   const scrollToHeading = (index) => {
-    if (editMode && !showPreview) {
+    if (editMode) {
       if (!textareaRef.current || !toc[index]) return;
       
       const textarea = textareaRef.current;
-      const textToFind = toc[index].html; 
-      const matchIndex = content.indexOf(textToFind);
+      const heading = toc[index];
+      const matchIndex = heading.position;
       
       if (matchIndex !== -1) {
         textarea.focus();
-        textarea.setSelectionRange(matchIndex, matchIndex + textToFind.length);
+        textarea.setSelectionRange(matchIndex, matchIndex + heading.html.length);
         
-        const textBeforeMatch = content.substring(0, matchIndex);
-        const lines = textBeforeMatch.split('\n').length;
-        const lineHeight = fontSize * 1.5; 
-        const scrollPos = (lines - 4) * lineHeight;
+        const computedLineHeight = Number.parseFloat(window.getComputedStyle(textarea).lineHeight);
+        const lineHeight = Number.isFinite(computedLineHeight) ? computedLineHeight : fontSize * 1.5;
+        const caretTop = getTextareaCaretTop(textarea, matchIndex);
+        const scrollPos = Math.max(0, caretTop - (textarea.clientHeight / 2) + lineHeight);
         
-        textarea.scrollTop = scrollPos > 0 ? scrollPos : 0;
+        textarea.scrollTop = scrollPos;
       }
       return;
     }
@@ -777,11 +921,7 @@ export default function DictaEditorCore({
                         icon={editMode ? 'visibility' : 'edit'}
                         variant="ghost"
                         size="sm"
-                        onClick={() => {
-                          startTransition(() => {
-                            setEditMode(!editMode)
-                          })
-                        }}
+                        onClick={handleToggleEditMode}
                         title={editMode ? 'תצוגה' : 'עריכה ידנית'}
                       />
                     </>
@@ -916,11 +1056,7 @@ export default function DictaEditorCore({
                         icon={editMode ? 'visibility' : 'edit'}
                         variant="ghost"
                         size="sm"
-                        onClick={() => {
-                          startTransition(() => {
-                            setEditMode(!editMode)
-                          })
-                        }}
+                        onClick={handleToggleEditMode}
                         label={editMode ? 'תצוגה' : 'עריכה ידנית'}
                       />
                     </>
@@ -1048,11 +1184,7 @@ export default function DictaEditorCore({
                         icon={editMode ? 'visibility' : 'edit'}
                         variant="ghost"
                         size="sm"
-                        onClick={() => {
-                          startTransition(() => {
-                            setEditMode(!editMode)
-                          })
-                        }}
+                        onClick={handleToggleEditMode}
                         label={editMode ? 'תצוגה' : 'עריכה ידנית'}
                       />
                     </>
@@ -1254,7 +1386,7 @@ export default function DictaEditorCore({
           </aside>
         )}
 
-        <main className="flex-1 overflow-auto bg-white flex">
+        <main ref={mainRef} className="flex-1 overflow-auto bg-white flex">
           {isPending ? (
             <div className="flex-1 flex items-center justify-center">
               <LoadingSpinner message="טוען..." />
@@ -1326,7 +1458,7 @@ export default function DictaEditorCore({
                   
                   {!showPreview && (
                     <button
-                      onClick={() => setShowPreview(true)}
+                      onClick={() => handleTogglePreview(true)}
                       className="flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-2 py-1 rounded transition-colors"
                       title="הצג תצוגה מקדימה"
                     >
@@ -1342,7 +1474,7 @@ export default function DictaEditorCore({
                   onChange={handleTextareaChange}
                   onScroll={handleTextareaScroll}
                   className="flex-1 p-6 border-0 resize-none focus:ring-0 outline-none"
-                  style={{ fontSize: `${fontSize}px`, fontFamily: selectedFont, direction: 'rtl', textAlign: textAlign }}
+                  style={{ fontSize: `${fontSize}px`, fontFamily: selectedFont, direction: 'rtl', textAlign: textAlign, lineHeight: 1.5 }}
                 />
               </div>
               
@@ -1351,7 +1483,7 @@ export default function DictaEditorCore({
                 <div className="px-6 pt-6 pb-2 bg-gray-50 sticky top-0 z-10 border-b border-gray-200 flex items-center justify-between">
                   <span className="text-xs text-gray-500 font-medium">תצוגה מקדימה</span>
                   <button
-                    onClick={() => setShowPreview(false)}
+                    onClick={() => handleTogglePreview(false)}
                     className="flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-2 py-1 rounded transition-colors"
                     title="הסתר תצוגה מקדימה"
                   >

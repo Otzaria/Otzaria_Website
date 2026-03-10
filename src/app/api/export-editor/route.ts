@@ -1,12 +1,8 @@
-import { NextResponse } from 'next/server';
-import { createRequire } from 'module';
+import * as Babel from '@babel/core';
+import presetReact from '@babel/preset-react';
 import { promises as fs } from 'fs';
+import { NextResponse } from 'next/server';
 import path from 'path';
-
-const require = createRequire(import.meta.url);
-const BabelBundle = require('next/dist/compiled/babel/bundle.js');
-const Babel = BabelBundle.core();
-const presetReact = BabelBundle.presetReact().default;
 
 const ROOT_DIR = process.cwd();
 const COMPONENT_PATHS = [
@@ -29,13 +25,14 @@ const COMPONENT_PATHS = [
   'src/components/editor/modals/ShortcutsDialog.jsx',
   'src/components/editor/modals/FindReplaceDialog.jsx',
   'src/components/editor/DictaEditorCore.jsx',
+  'src/components/editor/OfflineEditorApp.jsx',
 ];
 
 const REACT_RUNTIME_PATHS = [
-  ['next/dist/compiled/scheduler', 'node_modules/next/dist/compiled/scheduler/cjs/scheduler.production.js'],
-  ['next/dist/compiled/react', 'node_modules/next/dist/compiled/react/cjs/react.production.js'],
-  ['next/dist/compiled/react-dom', 'node_modules/next/dist/compiled/react-dom/cjs/react-dom.production.js'],
-  ['next/dist/compiled/react-dom/client', 'node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.production.js'],
+  ['scheduler', 'node_modules/scheduler/cjs/scheduler.production.js'],
+  ['react', 'node_modules/react/cjs/react.production.js'],
+  ['react-dom', 'node_modules/react-dom/cjs/react-dom.production.js'],
+  ['react-dom/client', 'node_modules/react-dom/cjs/react-dom-client.production.js'],
 ];
 
 const MATERIAL_SYMBOLS_ASSET_CANDIDATES = [
@@ -180,92 +177,10 @@ async function buildBundledComponents() {
 }
 
 function buildAppSource() {
-  const appSource = `
-function OfflineEditorApp() {
-  const [localContent, setLocalContent] = useState('');
-  const [fileName, setFileName] = useState('קובץ_אופליין_חדש.txt');
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const fileInputRef = useRef(null);
-
-  const handleFileUpload = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    setFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = (loadEvent) => {
-      setLocalContent(loadEvent.target.result);
-      setHasUnsavedChanges(false);
-    };
-    reader.readAsText(file);
-  };
-
-  const handleSaveToLocalFile = (currentContent) => {
-    const blob = new Blob([currentContent], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = fileName;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    URL.revokeObjectURL(url);
-    setLocalContent(currentContent);
-    setHasUnsavedChanges(false);
-  };
-
-  const headerStart = (
-    <>
-      <input
-        type="file"
-        accept=".txt,.html"
-        style={{ display: 'none' }}
-        ref={fileInputRef}
-        onChange={handleFileUpload}
-      />
-      <Button
-        icon="folder_open"
-        variant="ghost"
-        onClick={() => fileInputRef.current?.click()}
-        label="פתח קובץ"
-      />
-      <Button
-        icon="download"
-        variant="primary"
-        onClick={() => handleSaveToLocalFile(localContent)}
-        label="שמור קובץ"
-      />
-      <div className="w-px h-8 bg-surface-variant mx-2"></div>
-    </>
-  );
-
-  const headerEnd = (
-    <div className="text-sm text-gray-500 font-medium">מצב עבודה אופליין</div>
-  );
-
-  return (
-    <DialogProvider>
-      <DictaEditorCore
-        initialContent={localContent}
-        title={fileName}
-        canEdit={true}
-        isCompleted={false}
-        onSave={handleSaveToLocalFile}
-        hasUnsavedChangesOuter={hasUnsavedChanges}
-        setHasUnsavedChanges={setHasUnsavedChanges}
-        headerStartElement={headerStart}
-        headerEndElement={headerEnd}
-        singleLineHeader={true}
-      />
-    </DialogProvider>
-  );
-}
-
-const offlineRoot = ReactDOMClient.createRoot(document.getElementById('root'));
-offlineRoot.render(<OfflineEditorApp />);
-`;
-
-  return transpileComponent(appSource, 'offline-editor-app.jsx');
+  return [
+    "const offlineRoot = ReactDOMClient.createRoot(document.getElementById('root'));",
+    'offlineRoot.render(React.createElement(OfflineEditorApp));',
+  ].join('\n');
 }
 
 function buildModuleLoader(runtimeModules: { moduleId: string; code: string }[]) {
@@ -294,9 +209,9 @@ function __offlineRequire(moduleId) {
   factory(module, module.exports, __offlineRequire);
   return module.exports;
 }
-const React = __offlineRequire('next/dist/compiled/react');
-const ReactDOM = __offlineRequire('next/dist/compiled/react-dom');
-const ReactDOMClient = __offlineRequire('next/dist/compiled/react-dom/client');
+const React = __offlineRequire('react');
+const ReactDOM = __offlineRequire('react-dom');
+const ReactDOMClient = __offlineRequire('react-dom/client');
 const { useState, useEffect, useRef, useMemo, useCallback, useContext, useTransition, createContext } = React;
 const { createPortal } = ReactDOM;
 `;
