@@ -1,10 +1,11 @@
-import * as Babel from '@babel/core';
-import presetReact from '@babel/preset-react';
-import { promises as fs } from 'fs';
-import { NextResponse } from 'next/server';
-import path from 'path';
+const fs = require('fs/promises');
+const path = require('path');
+const Babel = require('@babel/core');
+const presetReact = require('@babel/preset-react');
 
 const ROOT_DIR = process.cwd();
+const OUTPUT_PATH = path.join(ROOT_DIR, 'public', 'export-editor', 'dicta-editor-offline.html');
+
 const COMPONENT_PATHS = [
   'src/lib/avatar-colors.js',
   'src/components/DialogContext.jsx',
@@ -46,42 +47,11 @@ const MATERIAL_SYMBOLS_ASSET_CANDIDATES = [
   },
 ];
 
-function getRequestId() {
-  try {
-    return crypto.randomUUID();
-  } catch {
-    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  }
-}
-
-function normalizeError(error: unknown) {
-  if (error instanceof Error) {
-    return {
-      errorMessage: error.message,
-      errorStack: error.stack,
-    };
-  }
-
-  return {
-    errorMessage: typeof error === 'string' ? error : 'Unknown error',
-    errorStack: undefined,
-  };
-}
-
-function logExportError(requestId: string, message: string, error: unknown) {
-  const payload = {
-    requestId,
-    message,
-    ...normalizeError(error),
-  };
-  console.error('[export-editor]', payload);
-}
-
-function escapeScriptTag(value: string) {
+function escapeScriptTag(value) {
   return value.replace(/<\/script/gi, '<\\/script');
 }
 
-function stripImportsAndExports(source: string) {
+function stripImportsAndExports(source) {
   return source
     .replace(/^\s*['\"]use client['\"];?\s*/gm, '')
     .replace(/^\s*import[\s\S]*?from\s+['\"].*?['\"];?\s*$/gm, '')
@@ -92,7 +62,7 @@ function stripImportsAndExports(source: string) {
     .replace(/export\s*\{[^}]*\};?/g, '');
 }
 
-function transpileComponent(source: string, filename: string) {
+function transpileComponent(source, filename) {
   const cleaned = stripImportsAndExports(source);
   const result = Babel.transformSync(cleaned, {
     filename,
@@ -104,10 +74,10 @@ function transpileComponent(source: string, filename: string) {
     presets: [[presetReact, { runtime: 'classic' }]],
   });
 
-  return result?.code ?? cleaned;
+  return result && result.code ? result.code : cleaned;
 }
 
-async function readTextFile(filePath: string) {
+async function readTextFile(filePath) {
   return fs.readFile(filePath, 'utf8');
 }
 
@@ -123,7 +93,15 @@ async function readRuntimeModules() {
   return modules;
 }
 
-async function collectCssFiles(dirPath: string): Promise<string[]> {
+async function hasNextBuild() {
+  try {
+    await fs.access(path.join(ROOT_DIR, '.next'));
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function collectCssFiles(dirPath) {
   try {
     const entries = await fs.readdir(dirPath, { withFileTypes: true });
     const files = await Promise.all(
@@ -153,6 +131,10 @@ async function readCurrentCssBundle() {
     .flat()
     .filter((filePath, index, all) => all.indexOf(filePath) === index)
     .sort();
+
+  if (cssFiles.length === 0) {
+    return '';
+  }
 
   const cssContents = await Promise.all(
     cssFiles.map(async (filePath) => {
@@ -215,7 +197,7 @@ function buildAppSource() {
   ].join('\n');
 }
 
-function buildModuleLoader(runtimeModules: { moduleId: string; code: string }[]) {
+function buildModuleLoader(runtimeModules) {
   const moduleEntries = runtimeModules
     .map(({ moduleId, code }) => {
       const safeCode = escapeScriptTag(code);
@@ -249,25 +231,35 @@ const { createPortal } = ReactDOM;
 `;
 }
 
-export async function GET() {
-  const requestId = getRequestId();
-  try {
-    const [runtimeModules, bundledComponents, appCode, materialSymbolsCss, cssBundle] = await Promise.all([
-      readRuntimeModules(),
-      buildBundledComponents(),
-      Promise.resolve(buildAppSource()),
-      buildMaterialSymbolsCss(),
-      readCurrentCssBundle(),
-    ]);
+async function buildOfflineEditor() {
+  const hasBuild = await hasNextBuild();
+  if (!hasBuild) {
+    console.log('Offline editor build skipped: .next directory not found.');
+    return;
+  }
 
-    const moduleLoader = buildModuleLoader(runtimeModules);
-    const inlineScript = [moduleLoader, bundledComponents, appCode].map(escapeScriptTag).join('\n\n');
-    const inlineCss = [
-      materialSymbolsCss,
-      cssBundle,
-      `html, body, #root { min-height: 100%; } body { margin: 0; } body::before { background-image: none !important; content: none !important; }`,
-    ].join('\n\n');
-    const html = `<!doctype html>
+  const [runtimeModules, bundledComponents, appCode, materialSymbolsCss, cssBundle] = await Promise.all([
+    readRuntimeModules(),
+    buildBundledComponents(),
+    Promise.resolve(buildAppSource()),
+    buildMaterialSymbolsCss(),
+    readCurrentCssBundle(),
+  ]);
+
+  if (!cssBundle.trim()) {
+    console.log('Offline editor build skipped: CSS bundle not ready yet.');
+    return;
+  }
+
+  const moduleLoader = buildModuleLoader(runtimeModules);
+  const inlineScript = [moduleLoader, bundledComponents, appCode].map(escapeScriptTag).join('\n\n');
+  const inlineCss = [
+    materialSymbolsCss,
+    cssBundle,
+    `html, body, #root { min-height: 100%; } body { margin: 0; } body::before { background-image: none !important; content: none !important; }`,
+  ].join('\n\n');
+
+  const html = `<!doctype html>
 <html lang="he" dir="rtl">
   <head>
     <meta charset="UTF-8" />
@@ -282,26 +274,15 @@ export async function GET() {
   </body>
 </html>`;
 
-    const response = new NextResponse(html, {
-      status: 200,
-      headers: {
-        'Content-Type': 'text/html; charset=utf-8',
-        'Content-Disposition': 'attachment; filename=dicta-editor-offline.html',
-        'Cache-Control': 'no-store',
-        'X-Export-Editor-Request-Id': requestId,
-      },
-    });
-    return response;
-  } catch (error) {
-    logExportError(requestId, 'Export editor request failed', error);
-
-    return new NextResponse(`Export editor failed. requestId=${requestId}`, {
-      status: 500,
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Cache-Control': 'no-store',
-        'X-Export-Editor-Request-Id': requestId,
-      },
-    });
-  }
+  await fs.mkdir(path.dirname(OUTPUT_PATH), { recursive: true });
+  await fs.writeFile(OUTPUT_PATH, html, 'utf8');
 }
+
+buildOfflineEditor()
+  .then(() => {
+    console.log(`Offline editor generated at ${OUTPUT_PATH}`);
+  })
+  .catch((error) => {
+    console.error('Failed to generate offline editor', error);
+    process.exitCode = 1;
+  });
