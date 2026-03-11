@@ -292,7 +292,7 @@ export async function GET() {
       },
     });
     return response;
-  } catch {
+  } catch (error) {
     logExportError(requestId, 'Export editor request failed', error);
 
     return new NextResponse(`Export editor failed. requestId=${requestId}`, {
