@@ -17,6 +17,7 @@ import { useDialog } from '@/components/DialogContext'
 import { useLoading } from '@/components/LoadingContext'
 import { useAutoSave } from '@/hooks/useAutoSave'
 import { useOCR } from '@/hooks/useOCR'
+import { getTextareaCaretTop } from '@/lib/editorUtils'
 
 // הגדרת ברירת מחדל המבוססת על מקשים פיזיים (Codes)
 const DEFAULT_SHORTCUTS = {
@@ -797,10 +798,15 @@ export default function EditPage() {
         activeEl.focus();
         activeEl.setSelectionRange(matchIndex, matchIndex + matchLength);
         
-        const lineHeight = 24; 
-        const lines = text.substr(0, matchIndex).split('\n').length;
-        const scrollPos = (lines - 5) * lineHeight; 
-        activeEl.scrollTop = scrollPos > 0 ? scrollPos : 0;
+        // שימוש בפונקציה המדויקת לחישוב מיקום הקורסור
+        setTimeout(() => {
+            const computedLineHeight = Number.parseFloat(window.getComputedStyle(activeEl).lineHeight);
+            const lineHeight = Number.isFinite(computedLineHeight) ? computedLineHeight : 24;
+            const caretTop = getTextareaCaretTop(activeEl, matchIndex);
+            const scrollPos = Math.max(0, caretTop - (activeEl.clientHeight / 2) + lineHeight);
+            
+            activeEl.scrollTop = scrollPos;
+        }, 10);
     } else {
         showAlert('חיפוש', 'לא נמצאו מופעים.');
     }

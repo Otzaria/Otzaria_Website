@@ -3,36 +3,29 @@
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import Button from '@/components/Button'
-import DictaEditorCore from '@/components/editor/DictaEditorCore'
+import dynamic from 'next/dynamic'
+
+const DictaEditorCore = dynamic(() => import('@/components/editor/DictaEditorCore'), { ssr: false })
 
 export default function OfflineEditorRoute() {
-  const [localContent, setLocalContent] = useState('')
-  const [fileName, setFileName] = useState('קובץ_מקומי_חדש.txt')
+  const [localContent, setLocalContent] = useState(() => {
+    if (typeof window === 'undefined') return ''
+    return localStorage.getItem('tempEditorContent') ?? ''
+  })
+  const [fileName, setFileName] = useState(() => {
+    if (typeof window === 'undefined') return 'קובץ_מקומי_חדש.txt'
+    return localStorage.getItem('tempEditorFileName') ?? 'קובץ_מקומי_חדש.txt'
+  })
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const fileInputRef = useRef(null)
 
   console.log('OfflineEditorRoute - rendering with singleLineHeader=true')
 
-  // טעינת תוכן מ-localStorage אם קיים (מהעלאות)
   useEffect(() => {
-    const tempContent = localStorage.getItem('tempEditorContent');
-    const tempFileName = localStorage.getItem('tempEditorFileName');
-    
-    if (tempContent) {
-      setLocalContent(tempContent);
-      setHasUnsavedChanges(false);
-      
-      // ניקוי localStorage
-      localStorage.removeItem('tempEditorContent');
-    }
-    
-    if (tempFileName) {
-      setFileName(tempFileName);
-      localStorage.removeItem('tempEditorFileName');
-    }
-  }, []);
-
-  // התראה בעת ניסיון לעזוב את הדף עם שינויים שלא נשמרו
+    localStorage.removeItem('tempEditorContent')
+    localStorage.removeItem('tempEditorFileName')
+  }, [])
+// התראה בעת ניסיון לעזוב את הדף עם שינויים שלא נשמרו
   useEffect(() => {
     const handleBeforeUnload = (e) => {
       if (hasUnsavedChanges) {

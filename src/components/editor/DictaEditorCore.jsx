@@ -16,6 +16,7 @@ import AddPageNumberModal from '@/components/dicta-tools/AddPageNumberModal'
 import EmbedImageModal from '@/components/dicta-tools/EmbedImageModal'
 import ShortcutsDialog from '@/components/editor/modals/ShortcutsDialog'
 import FindReplaceDialog from '@/components/editor/modals/FindReplaceDialog'
+import { getTextareaCaretTop } from '@/lib/editorUtils'
 
 const DEFAULT_SHORTCUTS = {
   'save': 'Ctrl+KeyS',
@@ -72,63 +73,6 @@ function buildTocFromContent(content) {
   }
 
   return tocItems
-}
-
-function getTextareaCaretTop(textarea, position) {
-  const computedStyle = window.getComputedStyle(textarea)
-  const mirror = document.createElement('div')
-  const span = document.createElement('span')
-  const propertiesToCopy = [
-    'boxSizing',
-    'width',
-    'height',
-    'overflowX',
-    'overflowY',
-    'borderTopWidth',
-    'borderRightWidth',
-    'borderBottomWidth',
-    'borderLeftWidth',
-    'paddingTop',
-    'paddingRight',
-    'paddingBottom',
-    'paddingLeft',
-    'fontStyle',
-    'fontVariant',
-    'fontWeight',
-    'fontStretch',
-    'fontSize',
-    'fontSizeAdjust',
-    'lineHeight',
-    'fontFamily',
-    'textAlign',
-    'textTransform',
-    'textIndent',
-    'textDecoration',
-    'letterSpacing',
-    'wordSpacing',
-    'tabSize',
-    'MozTabSize'
-  ]
-
-  mirror.dir = textarea.dir || 'rtl'
-  mirror.style.position = 'absolute'
-  mirror.style.visibility = 'hidden'
-  mirror.style.whiteSpace = 'pre-wrap'
-  mirror.style.overflowWrap = 'break-word'
-  mirror.style.wordBreak = 'break-word'
-
-  propertiesToCopy.forEach((property) => {
-    mirror.style[property] = computedStyle[property]
-  })
-
-  mirror.textContent = textarea.value.slice(0, position)
-  span.textContent = textarea.value.slice(position, position + 1) || '.'
-  mirror.appendChild(span)
-  document.body.appendChild(mirror)
-
-  const caretTop = span.offsetTop
-  document.body.removeChild(mirror)
-  return caretTop
 }
 
 export default function DictaEditorCore({ 
@@ -569,10 +513,15 @@ export default function DictaEditorCore({
       textarea.focus()
       textarea.setSelectionRange(matchIndex, matchIndex + matchLength)
       
-      const lineHeight = 24
-      const lines = text.substr(0, matchIndex).split('\n').length
-      const scrollPos = (lines - 5) * lineHeight
-      textarea.scrollTop = scrollPos > 0 ? scrollPos : 0
+      // שימוש בפונקציה המדויקת לחישוב מיקום הקורסור
+      setTimeout(() => {
+        const computedLineHeight = Number.parseFloat(window.getComputedStyle(textarea).lineHeight)
+        const lineHeight = Number.isFinite(computedLineHeight) ? computedLineHeight : 24
+        const caretTop = getTextareaCaretTop(textarea, matchIndex)
+        const scrollPos = Math.max(0, caretTop - (textarea.clientHeight / 2) + lineHeight)
+        
+        textarea.scrollTop = scrollPos
+      }, 10)
     } else {
       showAlert('חיפוש', 'לא נמצאו מופעים.')
     }
@@ -1636,6 +1585,7 @@ export default function DictaEditorCore({
         onAddRemoveDigitsToSaved={onAddRemoveDigitsToSaved}
         useRegex={useRegex}
         setUseRegex={setUseRegex}
+        editMode={editMode}
       />
     </div>
   )

@@ -19,7 +19,8 @@ export default function FindReplaceDialog({
   handleRemoveDigits,
   onAddRemoveDigitsToSaved,
   useRegex = false, 
-  setUseRegex = () => {} 
+  setUseRegex = () => {},
+  editMode = true
 }) {
   const [view, setView] = useState('main') 
 
@@ -183,15 +184,36 @@ export default function FindReplaceDialog({
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 pt-1">
-                    <button onClick={() => handleFindNext(findText, useRegex)} className="col-span-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-bold transition-all shadow-sm text-sm">
+                    <button 
+                        onClick={() => editMode && handleFindNext(findText, useRegex)} 
+                        disabled={!editMode}
+                        className={`col-span-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md font-bold transition-all shadow-sm text-sm ${
+                            editMode 
+                                ? 'bg-blue-600 text-white hover:bg-blue-700 cursor-pointer' 
+                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        }`}
+                        title={editMode ? "חפש הבא" : "לחצנים אלו זמינים במצב עריכה ידנית בלבד"}
+                    >
                         <span className="material-symbols-outlined text-sm">search</span>
                         <span>חפש הבא</span>
                     </button>
-                    <button onClick={() => handleReplaceCurrent(replaceText, findText, useRegex)} className="col-span-1 flex items-center justify-center gap-2 px-3 py-2 bg-primary text-on-primary rounded-md hover:bg-accent font-bold transition-all shadow-sm text-sm">
+                    <button 
+                        onClick={() => editMode && handleReplaceCurrent(replaceText, findText, useRegex)} 
+                        disabled={!editMode}
+                        className={`col-span-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md font-bold transition-all shadow-sm text-sm ${
+                            editMode 
+                                ? 'bg-primary text-on-primary hover:bg-accent cursor-pointer' 
+                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        }`}
+                        title={editMode ? "החלף" : "לחצנים אלו זמינים במצב עריכה ידנית בלבד"}
+                    >
                         <span className="material-symbols-outlined text-sm">find_replace</span>
                         <span>החלף</span>
                     </button>
-                    <button onClick={() => handleReplaceAll(undefined, undefined, useRegex)} className="col-span-2 flex items-center justify-center gap-2 px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-bold transition-all shadow-sm mt-1 text-sm">
+                    <button 
+                        onClick={() => handleReplaceAll(undefined, undefined, useRegex)} 
+                        className="col-span-2 flex items-center justify-center gap-2 px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-bold transition-all shadow-sm mt-1 text-sm"
+                    >
                         <span className="material-symbols-outlined text-sm">published_with_changes</span>
                         <span>החלף הכל</span>
                     </button>
