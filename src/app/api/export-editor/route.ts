@@ -57,42 +57,24 @@ function getRequestId() {
 function normalizeError(error: unknown) {
   if (error instanceof Error) {
     return {
-      errorName: error.name,
       errorMessage: error.message,
       errorStack: error.stack,
     };
   }
 
   return {
-    errorName: 'UnknownError',
     errorMessage: typeof error === 'string' ? error : 'Unknown error',
     errorStack: undefined,
   };
 }
 
-function logExport(
-  requestId: string,
-  level: 'log' | 'warn' | 'error',
-  message: string,
-  data: Record<string, unknown> = {}
-) {
+function logExportError(requestId: string, message: string, error: unknown) {
   const payload = {
     requestId,
-    ...data,
     message,
+    ...normalizeError(error),
   };
-
-  if (level === 'error') {
-    console.error('[export-editor]', payload);
-    return;
-  }
-
-  if (level === 'warn') {
-    console.warn('[export-editor]', payload);
-    return;
-  }
-
-  console.log('[export-editor]', payload);
+  console.error('[export-editor]', payload);
 }
 
 function escapeScriptTag(value: string) {
@@ -125,134 +107,77 @@ function transpileComponent(source: string, filename: string) {
   return result?.code ?? cleaned;
 }
 
-async function readTextFile(filePath: string, requestId?: string, context?: string) {
-  try {
-    return await fs.readFile(filePath, 'utf8');
-  } catch (error) {
-    if (requestId) {
-      logExport(requestId, 'error', 'Failed to read text file', {
-        context,
-        filePath,
-        ...normalizeError(error),
-      });
-    }
-
-    throw error;
-  }
+async function readTextFile(filePath: string) {
+  return fs.readFile(filePath, 'utf8');
 }
 
-async function readRuntimeModules(requestId: string) {
+async function readRuntimeModules() {
   const modules = await Promise.all(
     REACT_RUNTIME_PATHS.map(async ([moduleId, relativePath]) => {
       const fullPath = path.join(ROOT_DIR, relativePath);
-      try {
-        const code = await readTextFile(fullPath, requestId, 'react-runtime');
-        return { moduleId, code };
-      } catch (error) {
-        logExport(requestId, 'error', 'Failed to load runtime module', {
-          moduleId,
-          relativePath,
-          fullPath,
-          ...normalizeError(error),
-        });
-        throw error;
-      }
+      const code = await readTextFile(fullPath);
+      return { moduleId, code };
     })
   );
 
   return modules;
 }
 
-async function collectCssFiles(dirPath: string, requestId?: string): Promise<string[]> {
+async function collectCssFiles(dirPath: string): Promise<string[]> {
   try {
     const entries = await fs.readdir(dirPath, { withFileTypes: true });
     const files = await Promise.all(
       entries.map(async (entry) => {
         const fullPath = path.join(dirPath, entry.name);
         if (entry.isDirectory()) {
-          return collectCssFiles(fullPath, requestId);
+          return collectCssFiles(fullPath);
         }
         return entry.name.endsWith('.css') ? [fullPath] : [];
       })
     );
 
     return files.flat();
-  } catch (error) {
-    if (requestId) {
-      logExport(requestId, 'warn', 'Failed to scan CSS directory', {
-        dirPath,
-        ...normalizeError(error),
-      });
-    }
-
+  } catch {
     return [];
   }
 }
 
-async function readCurrentCssBundle(requestId: string) {
+async function readCurrentCssBundle() {
   const cssRoots = [
     path.join(ROOT_DIR, '.next', 'static', 'css'),
     path.join(ROOT_DIR, '.next', 'static', 'chunks'),
     path.join(ROOT_DIR, '.next', 'dev', 'static', 'chunks'),
   ];
 
-  logExport(requestId, 'log', 'Collecting CSS bundle', { cssRoots });
-
-  const cssFiles = (await Promise.all(cssRoots.map((root) => collectCssFiles(root, requestId))))
+  const cssFiles = (await Promise.all(cssRoots.map((root) => collectCssFiles(root))))
     .flat()
     .filter((filePath, index, all) => all.indexOf(filePath) === index)
     .sort();
 
-  if (cssFiles.length === 0) {
-    logExport(requestId, 'warn', 'No CSS files found for offline bundle', { cssRoots });
-  } else {
-    logExport(requestId, 'log', 'CSS files collected', { cssFileCount: cssFiles.length });
-  }
-
   const cssContents = await Promise.all(
     cssFiles.map(async (filePath) => {
-      try {
-        const css = await readTextFile(filePath, requestId, 'css-bundle');
-        return `/* ${path.basename(filePath)} */\n${css}`;
-      } catch (error) {
-        logExport(requestId, 'warn', 'Failed to read CSS file; skipping', {
-          filePath,
-          ...normalizeError(error),
-        });
-        return '';
-      }
+      const css = await readTextFile(filePath);
+      return `/* ${path.basename(filePath)} */\n${css}`;
     })
   );
 
   return cssContents.filter(Boolean).join('\n\n');
 }
 
-async function buildMaterialSymbolsCss(requestId: string) {
+async function buildMaterialSymbolsCss() {
   for (const candidate of MATERIAL_SYMBOLS_ASSET_CANDIDATES) {
     try {
       const [fontBuffer, cssTemplate] = await Promise.all([
         fs.readFile(path.join(ROOT_DIR, candidate.fontPath)),
-        readTextFile(path.join(ROOT_DIR, candidate.cssPath), requestId, 'material-symbols-css'),
+        readTextFile(path.join(ROOT_DIR, candidate.cssPath)),
       ]);
 
       const fontBase64 = fontBuffer.toString('base64');
-      logExport(requestId, 'log', 'Material Symbols CSS embedded', {
-        fontPath: candidate.fontPath,
-        cssPath: candidate.cssPath,
-      });
-
       return cssTemplate.replace('./material-symbols-outlined.woff2', `data:font/woff2;base64,${fontBase64}`);
-    } catch (error) {
-      logExport(requestId, 'warn', 'Material Symbols candidate failed', {
-        fontPath: candidate.fontPath,
-        cssPath: candidate.cssPath,
-        ...normalizeError(error),
-      });
+    } catch {
       continue;
     }
   }
-
-  logExport(requestId, 'warn', 'Material Symbols assets not found; using fallback CSS');
 
   return `
 .material-symbols-outlined {
@@ -270,22 +195,13 @@ async function buildMaterialSymbolsCss(requestId: string) {
 `;
 }
 
-async function buildBundledComponents(requestId: string) {
+async function buildBundledComponents() {
   const sources = await Promise.all(
     COMPONENT_PATHS.map(async (relativePath) => {
       const fullPath = path.join(ROOT_DIR, relativePath);
-      try {
-        const source = await readTextFile(fullPath, requestId, 'component-source');
-        const code = transpileComponent(source, relativePath);
-        return `/* --- ${relativePath} --- */\n${code}`;
-      } catch (error) {
-        logExport(requestId, 'error', 'Failed to bundle component', {
-          relativePath,
-          fullPath,
-          ...normalizeError(error),
-        });
-        throw error;
-      }
+      const source = await readTextFile(fullPath);
+      const code = transpileComponent(source, relativePath);
+      return `/* --- ${relativePath} --- */\n${code}`;
     })
   );
 
@@ -333,23 +249,15 @@ const { createPortal } = ReactDOM;
 `;
 }
 
-export async function GET(request: Request) {
+export async function GET() {
   const requestId = getRequestId();
-  const startedAt = Date.now();
-
-  logExport(requestId, 'log', 'Export editor request started', {
-    url: request.url,
-    userAgent: request.headers.get('user-agent'),
-    referer: request.headers.get('referer'),
-  });
-
   try {
     const [runtimeModules, bundledComponents, appCode, materialSymbolsCss, cssBundle] = await Promise.all([
-      readRuntimeModules(requestId),
-      buildBundledComponents(requestId),
+      readRuntimeModules(),
+      buildBundledComponents(),
       Promise.resolve(buildAppSource()),
-      buildMaterialSymbolsCss(requestId),
-      readCurrentCssBundle(requestId),
+      buildMaterialSymbolsCss(),
+      readCurrentCssBundle(),
     ]);
 
     const moduleLoader = buildModuleLoader(runtimeModules);
@@ -359,15 +267,6 @@ export async function GET(request: Request) {
       cssBundle,
       `html, body, #root { min-height: 100%; } body { margin: 0; } body::before { background-image: none !important; content: none !important; }`,
     ].join('\n\n');
-
-    logExport(requestId, 'log', 'Export editor bundle built', {
-      runtimeModuleCount: runtimeModules.length,
-      componentCount: COMPONENT_PATHS.length,
-      inlineCssBytes: inlineCss.length,
-      inlineScriptBytes: inlineScript.length,
-      cssBundleBytes: cssBundle.length,
-    });
-
     const html = `<!doctype html>
 <html lang="he" dir="rtl">
   <head>
@@ -392,17 +291,9 @@ export async function GET(request: Request) {
         'X-Export-Editor-Request-Id': requestId,
       },
     });
-
-    logExport(requestId, 'log', 'Export editor request completed', {
-      durationMs: Date.now() - startedAt,
-    });
-
     return response;
-  } catch (error) {
-    logExport(requestId, 'error', 'Export editor request failed', {
-      durationMs: Date.now() - startedAt,
-      ...normalizeError(error),
-    });
+  } catch {
+    logExportError(requestId, 'Export editor request failed', error);
 
     return new NextResponse(`Export editor failed. requestId=${requestId}`, {
       status: 500,
