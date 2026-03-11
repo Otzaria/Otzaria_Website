@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "npm run build:offline-editor && next dev",
+    "dev": "next dev",
     "generate-version": "node -e \"const fs = require('fs'); fs.writeFileSync('./public/version.json', JSON.stringify({ version: Date.now() }));\"",
     "build:offline-editor": "node scripts/build-offline-editor.js",
     "build": "npm run generate-version && next build && npm run build:offline-editor",
