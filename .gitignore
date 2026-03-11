@@ -49,6 +49,7 @@ files.json
 
 # Migration scripts (temporary - exclude from git except main migration script)
 scripts/*
+!scripts/build-offline-editor.js
 empty-uploads-report-1767610989868.json
 .vscode/settings.json
 111.json
@@ -61,3 +62,4 @@ Otzaria_Website.xml
 .env.local
 public/tessdata/*
 public/version.json
+public/export-editor/dicta-editor-offline.html
