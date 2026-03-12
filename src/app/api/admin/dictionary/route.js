@@ -19,18 +19,16 @@ export async function GET() {
       .select('name email spellWords')
       .lean();
 
-    const entries = [];
-    users.forEach(user => {
-      (user.spellWords || []).forEach(word => {
-        if (!word) return;
-        entries.push({
+    const entries = users.flatMap(user =>
+      (user.spellWords || [])
+        .filter(Boolean)
+        .map(word => ({
           userId: user._id.toString(),
           name: user.name || '',
           email: user.email || '',
           word
-        });
-      });
-    });
+        }))
+    );
 
     const skips = await SpellWordSkip.find({}).select('userId word -_id').lean();
     const skipped = skips.map(item => ({ userId: item.userId?.toString(), word: item.word }));
@@ -65,6 +63,7 @@ export async function POST(req) {
         { upsert: true, new: true }
       );
       if (userId) {
+        await User.updateOne({ _id: userId }, { $pull: { spellWords: clean } });
         await SpellWordSkip.deleteOne({ userId, word: clean });
       }
       return NextResponse.json({ success: true });

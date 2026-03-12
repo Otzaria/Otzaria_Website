@@ -62,13 +62,6 @@ export default function AdminDictionaryPage() {
       })
       if (!res.ok) throw new Error('Failed')
 
-      const removeRes = await fetch('/api/admin/dictionary', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'remove-personal', userId, word })
-      })
-      if (!removeRes.ok) throw new Error('Failed')
-
       setEntries(prev => prev.filter(e => !(e.userId === userId && e.word === word)))
       setSkipped(prev => {
         const next = new Set(prev)

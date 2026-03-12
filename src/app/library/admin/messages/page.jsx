@@ -150,7 +150,8 @@ export default function AdminMessagesPage() {
   }
 
   return (
-    <div className="glass-strong p-6 rounded-xl min-h-[600px] relative">
+    <>
+    <div className="glass-strong p-6 rounded-xl min-h-[600px]">
       <div className="flex justify-between items-center mb-8 border-b border-gray-200 pb-4">
           <h2 className="text-2xl font-bold text-on-surface flex items-center gap-2">
             <span className="material-symbols-outlined text-primary">mail</span>
@@ -276,7 +277,9 @@ export default function AdminMessagesPage() {
               ))}
           </div>
       )}
+    </div>
 
+      {/* Modal moved outside the main container */}
       {showSendMessageDialog && (
           <div 
             className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
@@ -370,7 +373,7 @@ export default function AdminMessagesPage() {
               </div>
           </div>
       )}
-    </div>
+    </>
   )
 
 }

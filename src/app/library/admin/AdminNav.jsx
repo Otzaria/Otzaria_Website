@@ -30,14 +30,14 @@ export default function AdminNav({ unreadMessagesCount = 0, pendingUploadsCount 
   ]
 
   return (
-    <div className="flex gap-2 mb-6 overflow-x-auto p-3 custom-scrollbar">
+    <div className="flex w-full max-w-full flex-nowrap gap-2 mb-6 overflow-x-auto p-3 custom-scrollbar">
       {tabs.map((tab) => {
         const isActive = pathname === tab.href
         return (
           <Link
             key={tab.id}
             href={tab.href}
-            className={`px-6 py-3 rounded-lg font-medium transition-all whitespace-nowrap relative group ${
+            className={`px-4 py-2 rounded-lg font-medium transition-all whitespace-nowrap relative group ${
               isActive
                 ? 'bg-primary text-on-primary'
                 : 'glass text-on-surface hover:bg-surface-variant'
@@ -59,3 +59,6 @@ export default function AdminNav({ unreadMessagesCount = 0, pendingUploadsCount 
     </div>
   )
 }
+
+
+

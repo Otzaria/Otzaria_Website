@@ -42,8 +42,8 @@ export default function AdminLayout({ children }) {
       <Header />
 
       <main className="flex-1">
-        <div className="container mx-auto px-4 py-12">
-          <div className="max-w-7xl mx-auto">
+        <div className="w-full px-6 py-12">
+          <div className="w-full max-w-7xl mx-auto">
             <div className="flex items-center justify-between mb-8">
               <div>
                 <h1 className="text-4xl font-bold text-on-surface flex items-center gap-3">
@@ -75,9 +75,9 @@ export default function AdminLayout({ children }) {
               </div>
             </div>
 
-            <AdminNav 
-                unreadMessagesCount={counts.unreadMessages} 
-                pendingUploadsCount={counts.pendingUploads} 
+            <AdminNav
+              unreadMessagesCount={counts.unreadMessages}
+              pendingUploadsCount={counts.pendingUploads}
             />
 
             <div className="min-h-[500px]">
@@ -89,3 +89,8 @@ export default function AdminLayout({ children }) {
     </div>
   )
 }
+
+
+
+
+
