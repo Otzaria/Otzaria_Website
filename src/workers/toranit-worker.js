@@ -209,7 +209,7 @@ function fuzzySuggest(word, limit) {
   const bucketA = prefixIndex.get(key2) || []
   const bucketB = key1 ? (prefixIndex.get(key1) || []) : []
 
-  const combined = bucketA.length >= bucketB.length ? bucketA.concat(bucketB) : bucketB.concat(bucketA)
+  const combined = [...new Set([...bucketA, ...bucketB])]
   if (combined.length === 0) return []
 
   const maxDist = normalized.length <= 4 ? 1 : (normalized.length <= 7 ? 2 : 3)
