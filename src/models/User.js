@@ -25,6 +25,7 @@ const UserSchema = new mongoose.Schema({
     isRemoveDigits: { type: Boolean, default: false }
   }],
   hiddenInstructionsBooks: { type: [String], default: [] },
+  spellWords: { type: [String], default: [] },
   
   // הגדרות התראות על העלאות
   uploadNotifications: {
@@ -39,3 +40,4 @@ const User = mongoose.models.User || mongoose.model('User', UserSchema);
 
 
 export default User;
+

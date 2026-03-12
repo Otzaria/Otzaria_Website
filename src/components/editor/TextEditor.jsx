@@ -94,6 +94,7 @@ const TextEditor = forwardRef(({
               }}
               className="flex-1 p-4 bg-white border-2 border-surface-variant rounded-lg resize-none focus:outline-none focus:border-primary transition-colors leading-relaxed"
               dir="rtl"
+              spellCheck={false}
             />
           </div>
 
@@ -120,6 +121,7 @@ const TextEditor = forwardRef(({
               }}
               className="flex-1 p-4 bg-white border-2 border-surface-variant rounded-lg resize-none focus:outline-none focus:border-primary transition-colors leading-relaxed"
               dir="rtl"
+              spellCheck={false}
             />
           </div>
         </div>
@@ -136,6 +138,7 @@ const TextEditor = forwardRef(({
           }}
           className="w-full h-full p-4 bg-white border-2 border-surface-variant rounded-lg resize-none focus:outline-none focus:border-primary transition-colors leading-relaxed"
           dir="rtl"
+              spellCheck={false}
         />
       )}
     </div>
@@ -144,3 +147,4 @@ const TextEditor = forwardRef(({
 
 TextEditor.displayName = 'TextEditor'
 export default TextEditor
+

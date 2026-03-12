@@ -15,6 +15,7 @@ export default function EditorToolbar({
   setIsSelectionMode,
   insertTag,
   setShowFindReplace,
+  onOpenSpellcheck = () => {},
   selectedFont,
   setSelectedFont,
   twoColumns,
@@ -161,6 +162,11 @@ export default function EditorToolbar({
         <span className="text-[10px] font-medium">חיפוש</span>
       </button>
 
+      <button onClick={onOpenSpellcheck} className="flex items-center gap-1 px-2 py-1 h-7 bg-white hover:bg-gray-50 rounded-md border border-gray-200" title="בדיקת איות">
+        <span className="material-symbols-outlined text-sm">spellcheck</span>
+        <span className="text-[10px] font-medium">איות</span>
+      </button>
+
       <button onClick={onOpenImageToText} className="flex items-center gap-1 px-2 py-1 h-7 bg-white hover:bg-gray-50 rounded-md border border-gray-200" title="המרת תמונה לטקסט">
         <span className="material-symbols-outlined text-sm">image_search</span>
         <span className="text-[10px] font-medium">תמונה</span>
@@ -288,3 +294,4 @@ export default function EditorToolbar({
   </div>
 )
 }
+

@@ -63,7 +63,7 @@ export function LoadingProvider({ children }) {
                   className="mt-6 px-6 py-2 rounded-full border border-red-500/50 text-red-500 hover:bg-red-500/10 transition-colors duration-200 text-sm font-medium"
                   onClick={handleCancel}
                 >
-                  בטל פעולה
+                 ביטול
                 </motion.button>
               )}
             </motion.div>

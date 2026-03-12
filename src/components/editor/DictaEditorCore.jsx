@@ -16,6 +16,7 @@ import AddPageNumberModal from '@/components/dicta-tools/AddPageNumberModal'
 import EmbedImageModal from '@/components/dicta-tools/EmbedImageModal'
 import ShortcutsDialog from '@/components/editor/modals/ShortcutsDialog'
 import FindReplaceDialog from '@/components/editor/modals/FindReplaceDialog'
+import SpellcheckDialog from '@/components/editor/modals/SpellcheckDialog'
 import { getTextareaCaretTop } from '@/lib/editorUtils'
 
 const DEFAULT_SHORTCUTS = {
@@ -86,7 +87,8 @@ export default function DictaEditorCore({
   setHasUnsavedChanges = () => {},
   headerStartElement = null,
   headerEndElement = null,
-  singleLineHeader = false
+  singleLineHeader = false,
+  enableSpellcheck = true
 }) {
   const { showAlert } = useDialog()
   
@@ -102,6 +104,7 @@ export default function DictaEditorCore({
   const [showShortcutsDialog, setShowShortcutsDialog] = useState(false)
   const [userShortcuts, setUserShortcuts] = useState(DEFAULT_SHORTCUTS)
   const [showFindReplace, setShowFindReplace] = useState(false)
+  const [showSpellcheck, setShowSpellcheck] = useState(false)
   const [findText, setFindText] = useState('')
   const [replaceText, setReplaceText] = useState('')
   const [useRegex, setUseRegex] = useState(false)
@@ -291,6 +294,10 @@ export default function DictaEditorCore({
   const handleContentChange = useCallback((newContent) => {
     updateTextWithHistory(newContent)
   }, [updateTextWithHistory])
+
+  const handleSpellcheckApply = useCallback((newText) => {
+    updateTextWithHistory(newText)
+  }, [updateTextWithHistory])
   
   const handleTextareaChange = useCallback((e) => {
     const newContent = e.target.value
@@ -464,9 +471,17 @@ export default function DictaEditorCore({
     }, 0)
   }, [content, showAlert, updateTextWithHistory])
 
-  const handleFindNext = useCallback((textToFind, isRegexMode) => {
-    if (!textToFind) return showAlert('שגיאה', 'הזן טקסט לחיפוש')
-    if (!textareaRef.current) return
+  const normalizeHebrewQuotes = useCallback((value) => {
+    if (!value) return ''
+    return value.replace(/["']/g, m => (m === '"' ? '״' : '׳'))
+  }, [])
+
+  const handleFindNextInternal = useCallback((textToFind, isRegexMode, suppressAlerts = false) => {
+    if (!textToFind) {
+      if (!suppressAlerts) showAlert('שגיאה', 'הזן טקסט לחיפוש')
+      return false
+    }
+    if (!textareaRef.current) return false
 
     const textarea = textareaRef.current
     const text = content
@@ -492,17 +507,20 @@ export default function DictaEditorCore({
           if (matchFromStart) {
             matchIndex = matchFromStart.index
             matchLength = matchFromStart[0].length
-            showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.')
+            if (!suppressAlerts) {
+              showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.')
+            }
           }
         }
       } catch (e) {
-        return showAlert('שגיאה', 'ביטוי רגולרי לא תקין')
+        if (!suppressAlerts) showAlert('שגיאה', 'ביטוי רגולרי לא תקין')
+        return false
       }
     } else {
       matchIndex = text.indexOf(patternStr, startPos)
       if (matchIndex === -1) {
         matchIndex = text.indexOf(patternStr, 0)
-        if (matchIndex !== -1) {
+        if (matchIndex !== -1 && !suppressAlerts) {
           showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.')
         }
       }
@@ -522,11 +540,113 @@ export default function DictaEditorCore({
         
         textarea.scrollTop = scrollPos
       }, 10)
-    } else {
+      return true
+    }
+
+    if (!suppressAlerts) {
       showAlert('חיפוש', 'לא נמצאו מופעים.')
     }
+    return false
   }, [content, showAlert])
 
+  const handleFindNext = useCallback((textToFind, isRegexMode) => {
+    return handleFindNextInternal(textToFind, isRegexMode, false)
+  }, [handleFindNextInternal])
+
+
+  const clearSpellcheckHighlights = useCallback(() => {
+    if (typeof document === 'undefined') return
+    const containers = []
+    if (previewRef.current) containers.push(previewRef.current)
+    if (contentRef.current) containers.push(contentRef.current)
+    containers.forEach(container => {
+      container.querySelectorAll('span.spellcheck-highlight').forEach(mark => {
+        const textNode = document.createTextNode(mark.textContent || '')
+        mark.replaceWith(textNode)
+      })
+    })
+  }, [])
+
+  const highlightFirstOccurrence = useCallback((container, word) => {
+    if (!container || !word || typeof document === 'undefined') return false
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+      acceptNode: (node) => {
+        if (!node.nodeValue) return NodeFilter.FILTER_REJECT
+        return node.nodeValue.includes(word) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP
+      }
+    })
+
+    let node = walker.nextNode()
+    while (node) {
+      const text = node.nodeValue || ''
+      const index = text.indexOf(word)
+      if (index !== -1) {
+        const before = text.slice(0, index)
+        const match = text.slice(index, index + word.length)
+        const after = text.slice(index + word.length)
+
+        const highlight = document.createElement('span')
+        highlight.className = 'spellcheck-highlight'
+        highlight.textContent = match
+        highlight.style.backgroundColor = '#fde68a'
+        highlight.style.borderRadius = '3px'
+        highlight.style.boxShadow = '0 0 0 2px rgba(251, 191, 36, 0.35)'
+        highlight.style.padding = '0 1px'
+
+        const frag = document.createDocumentFragment()
+        if (before) frag.appendChild(document.createTextNode(before))
+        frag.appendChild(highlight)
+        if (after) frag.appendChild(document.createTextNode(after))
+
+        node.parentNode.replaceChild(frag, node)
+        highlight.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        return true
+      }
+      node = walker.nextNode()
+    }
+
+    return false
+  }, [])
+
+  const highlightFirstOccurrenceAny = useCallback((container, variants) => {
+    if (!container || !variants || variants.length === 0) return false
+    for (let i = 0; i < variants.length; i += 1) {
+      if (highlightFirstOccurrence(container, variants[i])) return true
+    }
+    return false
+  }, [highlightFirstOccurrence])
+
+  const buildWordVariants = useCallback((word) => {
+    if (!word) return []
+    const normalized = normalizeHebrewQuotes(word)
+    const alt = normalized.replace(/[״׳]/g, m => (m === '״' ? '"' : "'"))
+    const variants = [word, normalized, alt].filter(Boolean)
+    return Array.from(new Set(variants))
+  }, [normalizeHebrewQuotes])
+
+  const handleSpellcheckSelect = useCallback((word) => {
+    if (!word) return
+    const variants = buildWordVariants(word)
+
+    if (editMode && textareaRef.current) {
+      const textarea = textareaRef.current
+      textarea.focus()
+      textarea.setSelectionRange(0, 0)
+      let found = false
+      variants.forEach((variant) => {
+        if (!found) found = handleFindNextInternal(variant, false, true)
+      })
+      if (!found) {
+        showAlert('חיפוש', 'לא נמצאו מופעים.')
+      }
+      return
+    }
+
+    clearSpellcheckHighlights()
+    if (!editMode && contentRef.current) {
+      highlightFirstOccurrenceAny(contentRef.current, variants)
+    }
+  }, [buildWordVariants, clearSpellcheckHighlights, editMode, handleFindNextInternal, highlightFirstOccurrenceAny, showAlert])
   const handleReplaceCurrent = useCallback((textToReplace, textToFind, isRegexMode) => {
     if (!textToFind) return showAlert('שגיאה', 'הזן טקסט לחיפוש')
     if (!textareaRef.current) return
@@ -859,6 +979,15 @@ export default function DictaEditorCore({
                         onClick={() => setShowFindReplace(true)}
                         title="חיפוש והחלפה"
                       />
+                      {enableSpellcheck && (
+                      <Button
+                        icon="spellcheck"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowSpellcheck(true)}
+                        title="בדיקת איות"
+                      />
+                      )}
                       <Button
                         icon="keyboard"
                         variant="ghost"
@@ -994,6 +1123,15 @@ export default function DictaEditorCore({
                         onClick={() => setShowFindReplace(true)}
                         label="חיפוש"
                       />
+                      {enableSpellcheck && (
+                      <Button
+                        icon="spellcheck"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowSpellcheck(true)}
+                        label="איות"
+                      />
+                      )}
                       <Button
                         icon="keyboard"
                         variant="ghost"
@@ -1122,6 +1260,15 @@ export default function DictaEditorCore({
                         onClick={() => setShowFindReplace(true)}
                         label="חיפוש"
                       />
+                      {enableSpellcheck && (
+                      <Button
+                        icon="spellcheck"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowSpellcheck(true)}
+                        label="איות"
+                      />
+                      )}
                       <Button
                         icon="keyboard"
                         variant="ghost"
@@ -1422,6 +1569,7 @@ export default function DictaEditorCore({
                   value={content}
                   onChange={handleTextareaChange}
                   onScroll={handleTextareaScroll}
+                  spellCheck={false}
                   className="flex-1 p-6 border-0 resize-none focus:ring-0 outline-none"
                   style={{ fontSize: `${fontSize}px`, fontFamily: selectedFont, direction: 'rtl', textAlign: textAlign, lineHeight: 1.5 }}
                 />
@@ -1587,6 +1735,29 @@ export default function DictaEditorCore({
         setUseRegex={setUseRegex}
         editMode={editMode}
       />
+
+      {enableSpellcheck && (
+      <SpellcheckDialog
+        isOpen={showSpellcheck}
+        onClose={() => setShowSpellcheck(false)}
+        text={content}
+        onApplyText={handleSpellcheckApply}
+        onSelectWord={handleSpellcheckSelect}
+        title="בדיקת איות"
+      />
+      )}
     </div>
   )
 }
+
+
+
+
+
+
+
+
+
+
+
+
