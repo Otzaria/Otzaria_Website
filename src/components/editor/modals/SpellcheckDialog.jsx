@@ -426,9 +426,10 @@ export default function SpellcheckDialog({
                 variant="ghost"
                 size="sm"
                 icon="bookmark_add"
-                label="הוסף למילון אישי"
+                label="הוסף למילון"
                 onClick={() => handleAddPersonal(selectedWord)}
                 disabled={!selectedWord}
+                title="המילה תתווסף למילון האישי שלכם ותישלח לאישור מנהל להוספה למילון הכללי"
               />
             </div>
           </div>

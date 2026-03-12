@@ -11,6 +11,7 @@ export default function AdminNav({ unreadMessagesCount = 0, pendingUploadsCount 
     { id: 'users', label: 'משתמשים', icon: 'group', href: '/library/admin/users' },
     { id: 'books', label: 'ספרים', icon: 'menu_book', href: '/library/admin/books' },
     { id: 'dicta-books', label: 'ספרי דיקטה', icon: 'edit_document', href: '/library/admin/dicta-books' },
+    { id: 'dictionary', label: 'מילון', icon: 'spellcheck', href: '/library/admin/dictionary' },
     { 
       id: 'uploads', 
       label: `העלאות ${pendingUploadsCount > 0 ? `(${pendingUploadsCount})` : ''}`, 
