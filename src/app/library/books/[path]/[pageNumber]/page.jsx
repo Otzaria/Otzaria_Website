@@ -19,6 +19,7 @@ import { useLoading } from '@/components/LoadingContext'
 import { useAutoSave } from '@/hooks/useAutoSave'
 import { useOCR } from '@/hooks/useOCR'
 import { getTextareaCaretTop } from '@/lib/editorUtils'
+import { findNextWholeWordInTextarea as findNextWholeWordInTextareaUtil } from '@/lib/hebrewWordUtils'
 
 // הגדרת ברירת מחדל המבוססת על מקשים פיזיים (Codes)
 const DEFAULT_SHORTCUTS = {
@@ -857,66 +858,24 @@ export default function EditPage() {
     findNextInTextarea(activeEl, textToFind, isRegexMode, false);
   };
 
-  const HEBREW_BOUNDARY = '\u0590-\u05FF';
-  const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const buildWholeWordRegex = (word, global = true) => {
-    if (!word) return null;
-    const escaped = escapeRegExp(word);
-    const pattern = `(^|[^${HEBREW_BOUNDARY}])(${escaped})(?=([^${HEBREW_BOUNDARY}]|$))`;
-    return new RegExp(pattern, global ? 'g' : '');
-  };
-
   const findNextWholeWordInTextarea = (activeEl, word, suppressAlerts = false) => {
     if (!word) {
-      if (!suppressAlerts) showAlert('שגיאה', 'הזן טקסט לחיפוש');
-      return false;
+      if (!suppressAlerts) showAlert('שגיאה', 'הזן טקסט לחיפוש')
+      return false
     }
 
-    if (!activeEl) return false;
+    if (!activeEl) return false
 
-    const text = activeEl.value;
-    const regex = buildWholeWordRegex(word, true);
-    if (!regex) return false;
-
-    const startPos = activeEl.selectionEnd;
-    regex.lastIndex = startPos;
-    let match = regex.exec(text);
-    let wrapped = false;
-
-    if (!match) {
-      regex.lastIndex = 0;
-      match = regex.exec(text);
-      wrapped = !!match;
-    }
-
-    if (!match) {
-      if (!suppressAlerts) showAlert('חיפוש', 'לא נמצאו מופעים.');
-      return false;
-    }
-
-    const prefixLen = match[1] ? match[1].length : 0;
-    const matchText = match[2] || word;
-    const matchIndex = match.index + prefixLen;
-    const matchLength = matchText.length;
-
-    activeEl.focus();
-    activeEl.setSelectionRange(matchIndex, matchIndex + matchLength);
-
-    setTimeout(() => {
-      const computedLineHeight = Number.parseFloat(window.getComputedStyle(activeEl).lineHeight);
-      const lineHeight = Number.isFinite(computedLineHeight) ? computedLineHeight : 24;
-      const caretTop = getTextareaCaretTop(activeEl, matchIndex);
-      const scrollPos = Math.max(0, caretTop - (activeEl.clientHeight / 2) + lineHeight);
-
-      activeEl.scrollTop = scrollPos;
-    }, 10);
-
-    if (wrapped && !suppressAlerts) {
-      showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.');
-    }
-
-    return true;
+    return findNextWholeWordInTextareaUtil(activeEl, word, {
+      text: activeEl.value || '',
+      suppressAlerts,
+      onWrap: () => showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.'),
+      onNotFound: () => showAlert('חיפוש', 'לא נמצאו מופעים.'),
+      getCaretTop: getTextareaCaretTop,
+      scrollDelay: 10
+    })
   };
+
   const handleSpellcheckSelect = (word) => {
     if (!word) return;
 
@@ -1575,6 +1534,9 @@ function UploadDialog({ pageNumber, onConfirm, onCancel }) {
     </div>
   )
 }
+
+
+
 
 
 

@@ -18,6 +18,7 @@ import ShortcutsDialog from '@/components/editor/modals/ShortcutsDialog'
 import FindReplaceDialog from '@/components/editor/modals/FindReplaceDialog'
 import SpellcheckDialog from '@/components/editor/modals/SpellcheckDialog'
 import { getTextareaCaretTop } from '@/lib/editorUtils'
+import { buildWholeWordRegex, findNextWholeWordInTextarea as findNextWholeWordInTextareaUtil } from '@/lib/hebrewWordUtils'
 
 const DEFAULT_SHORTCUTS = {
   'save': 'Ctrl+KeyS',
@@ -566,55 +567,15 @@ export default function DictaEditorCore({
       })
     })
   }, [])
-  const HEBREW_BOUNDARY = "\\u0590-\\u05FF"
-  const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const buildWholeWordRegex = (word, global = true) => {
-    if (!word) return null
-    const escaped = escapeRegExp(word)
-    const pattern = `(^|[^${HEBREW_BOUNDARY}])(${escaped})(?=([^${HEBREW_BOUNDARY}]|$))`
-    return new RegExp(pattern, global ? 'g' : '')
-  }
 
   const findNextWholeWordInTextarea = useCallback((textarea, word, suppressAlerts = false) => {
-    if (!textarea || !word) return false
-    const text = content
-    const regex = buildWholeWordRegex(word, true)
-    if (!regex) return false
-
-    const startPos = textarea.selectionEnd || 0
-    regex.lastIndex = startPos
-    let match = regex.exec(text)
-    let wrapped = false
-
-    if (!match) {
-      regex.lastIndex = 0
-      match = regex.exec(text)
-      wrapped = !!match
-    }
-
-    if (!match) return false
-
-    const prefixLen = match[1] ? match[1].length : 0
-    const wordText = match[2] || word
-    const matchIndex = match.index + prefixLen
-    const matchLength = wordText.length
-
-    textarea.focus()
-    textarea.setSelectionRange(matchIndex, matchIndex + matchLength)
-
-    setTimeout(() => {
-      const computedLineHeight = Number.parseFloat(window.getComputedStyle(textarea).lineHeight)
-      const lineHeight = Number.isFinite(computedLineHeight) ? computedLineHeight : 24
-      const caretTop = getTextareaCaretTop(textarea, matchIndex)
-      const scrollPos = Math.max(0, caretTop - (textarea.clientHeight / 2) + lineHeight)
-      textarea.scrollTop = scrollPos
-    }, 0)
-
-    if (wrapped && !suppressAlerts) {
-      showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.')
-    }
-
-    return true
+    return findNextWholeWordInTextareaUtil(textarea, word, {
+      text: content,
+      suppressAlerts,
+      onWrap: () => showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.'),
+      getCaretTop: getTextareaCaretTop,
+      scrollDelay: 0
+    })
   }, [content, showAlert])
 
   const highlightFirstOccurrence = useCallback((container, word) => {

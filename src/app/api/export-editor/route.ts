@@ -83,7 +83,7 @@ function escapeScriptTag(value: string) {
   return value.replace(/<\/script/gi, '<\\/script');
 }
 
-function stripImportsAndExports(source) {
+function stripImportsAndExports(source: string) {
   return source
     .replace(/import\.meta\.url/g, 'location.href')
     .replace(/^\s*[\'\"]use client[\'\"];?\s*/gm, '')
