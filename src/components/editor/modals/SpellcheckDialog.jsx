@@ -42,13 +42,6 @@ function replaceAllOccurrences(text, word, replacement) {
   return text.replace(re, (match, prefix) => `${prefix}${replacement}`)
 }
 
-function replaceAllSimple(text, word, replacement) {
-  if (!word) return text
-  const escaped = escapeRegExp(word)
-  const re = new RegExp(escaped, 'g')
-  return text.replace(re, replacement)
-}
-
 export default function SpellcheckDialog({
   isOpen,
   onClose,
@@ -306,10 +299,7 @@ export default function SpellcheckDialog({
     const baseText = normalizeHebrew(text)
     const normalizedWord = normalizeHebrew(word)
     const normalizedReplacement = normalizeHebrew(replacement)
-    let nextText = replaceAllOccurrences(baseText, normalizedWord, normalizedReplacement)
-    if (nextText === baseText) {
-      nextText = replaceAllSimple(baseText, normalizedWord, normalizedReplacement)
-    }
+    const nextText = replaceAllOccurrences(baseText, normalizedWord, normalizedReplacement)
     if (nextText !== baseText) {
       onApplyText(nextText)
       runSpellcheck()
@@ -501,6 +491,10 @@ export default function SpellcheckDialog({
     document.body
   )
 }
+
+
+
+
 
 
 

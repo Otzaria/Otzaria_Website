@@ -56,43 +56,45 @@ export async function POST(req) {
 
     await connectDB();
 
-    if (action === 'add-global') {
-      await SpellWord.findOneAndUpdate(
-        { word: clean },
-        { $setOnInsert: { word: clean, addedBy: session.user?.email || '' } },
-        { upsert: true, new: true }
-      );
-      if (userId) {
-        await User.updateOne({ _id: userId }, { $pull: { spellWords: clean } });
-        await SpellWordSkip.deleteOne({ userId, word: clean });
+    const needsUserId = new Set(["remove-personal", "skip", "unskip"])
+    if (needsUserId.has(action) && !userId) {
+      return NextResponse.json({ error: "Missing userId" }, { status: 400 })
+    }
+
+    switch (action) {
+      case "add-global": {
+        await SpellWord.findOneAndUpdate(
+          { word: clean },
+          { $setOnInsert: { word: clean, addedBy: session.user?.email || "" } },
+          { upsert: true, new: true }
+        )
+        if (userId) {
+          await User.updateOne({ _id: userId }, { $pull: { spellWords: clean } })
+          await SpellWordSkip.deleteOne({ userId, word: clean })
+        }
+        return NextResponse.json({ success: true })
       }
-      return NextResponse.json({ success: true });
+      case "remove-personal": {
+        await User.updateOne({ _id: userId }, { $pull: { spellWords: clean } })
+        await SpellWordSkip.deleteOne({ userId, word: clean })
+        return NextResponse.json({ success: true })
+      }
+      case "skip": {
+        await SpellWordSkip.findOneAndUpdate(
+          { userId, word: clean },
+          { $setOnInsert: { userId, word: clean, skippedBy: session.user?.email || "" } },
+          { upsert: true, new: true }
+        )
+        return NextResponse.json({ success: true })
+      }
+      case "unskip": {
+        await SpellWordSkip.deleteOne({ userId, word: clean })
+        return NextResponse.json({ success: true })
+      }
+      default:
+        return NextResponse.json({ error: "Unknown action" }, { status: 400 })
     }
 
-    if (action === 'remove-personal') {
-      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
-      await User.updateOne({ _id: userId }, { $pull: { spellWords: clean } });
-      await SpellWordSkip.deleteOne({ userId, word: clean });
-      return NextResponse.json({ success: true });
-    }
-
-    if (action === 'skip') {
-      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
-      await SpellWordSkip.findOneAndUpdate(
-        { userId, word: clean },
-        { $setOnInsert: { userId, word: clean, skippedBy: session.user?.email || '' } },
-        { upsert: true, new: true }
-      );
-      return NextResponse.json({ success: true });
-    }
-
-    if (action === 'unskip') {
-      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
-      await SpellWordSkip.deleteOne({ userId, word: clean });
-      return NextResponse.json({ success: true });
-    }
-
-    return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
   } catch (error) {
     console.error('Admin dictionary POST error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

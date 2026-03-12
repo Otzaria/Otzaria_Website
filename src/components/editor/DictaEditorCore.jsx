@@ -588,10 +588,6 @@ export default function DictaEditorCore({
         const highlight = document.createElement('span')
         highlight.className = 'spellcheck-highlight'
         highlight.textContent = match
-        highlight.style.backgroundColor = '#fde68a'
-        highlight.style.borderRadius = '3px'
-        highlight.style.boxShadow = '0 0 0 2px rgba(251, 191, 36, 0.35)'
-        highlight.style.padding = '0 1px'
 
         const frag = document.createDocumentFragment()
         if (before) frag.appendChild(document.createTextNode(before))
@@ -1749,6 +1745,11 @@ export default function DictaEditorCore({
     </div>
   )
 }
+
+
+
+
+
 
 
 
