@@ -10,7 +10,7 @@ const TORANIT_DICT_PATHS = {
   aff: `${DICT_BASE_PATH}/he_TORANIT.aff`,
   dic: `${DICT_BASE_PATH}/he_TORANIT.dic`
 }
-const HEBREW_BOUNDARY = "[\u0590-\u05FF\"'״׳]"
+const HEBREW_CHARS = "\\u0590-\\u05FF"
 const MISSPELLINGS_LIMIT = 1500
 const DEFAULT_SUGGESTION_LIMIT = 8
 const MAX_WORDS_TO_CHECK = Number.POSITIVE_INFINITY
@@ -36,8 +36,11 @@ function escapeRegExp(value) {
 function replaceAllOccurrences(text, word, replacement) {
   if (!word) return text
   const escaped = escapeRegExp(word)
-  const boundary = HEBREW_BOUNDARY
-  const pattern = `(^|[^${boundary}])${escaped}(?=([^${boundary}]|$))`
+    .replace(/\\"/g, '["״]')
+    .replace(/\\'/g, "['׳]")
+    .replace(/״/g, '["״]')
+    .replace(/׳/g, "['׳]")
+  const pattern = `(^|[^${HEBREW_CHARS}])(${escaped})(?=([^${HEBREW_CHARS}]|$))`
   const re = new RegExp(pattern, 'g')
   return text.replace(re, (match, prefix) => `${prefix}${replacement}`)
 }
@@ -296,13 +299,18 @@ export default function SpellcheckDialog({
 
   const handleReplaceAll = (word, replacement) => {
     if (!word || !replacement) return
-    const baseText = normalizeHebrew(text)
-    const normalizedWord = normalizeHebrew(word)
-    const normalizedReplacement = normalizeHebrew(replacement)
-    const nextText = replaceAllOccurrences(baseText, normalizedWord, normalizedReplacement)
-    if (nextText !== baseText) {
+    const nextText = replaceAllOccurrences(text, word, replacement)
+    if (nextText !== text) {
       onApplyText(nextText)
-      runSpellcheck()
+      setMisspellings(prev => {
+        const next = prev.filter(item => item.word !== word)
+        if (selectedWord === word) {
+          setSelectedWord(next[0]?.word || '')
+        }
+        return next
+      })
+      setSuggestions([])
+      setCustomReplacement('')
     }
   }
 
