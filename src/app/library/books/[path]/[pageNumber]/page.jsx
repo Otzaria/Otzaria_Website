@@ -857,6 +857,66 @@ export default function EditPage() {
     findNextInTextarea(activeEl, textToFind, isRegexMode, false);
   };
 
+  const HEBREW_BOUNDARY = '\u0590-\u05FF';
+  const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const buildWholeWordRegex = (word, global = true) => {
+    if (!word) return null;
+    const escaped = escapeRegExp(word);
+    const pattern = `(^|[^${HEBREW_BOUNDARY}])(${escaped})(?=([^${HEBREW_BOUNDARY}]|$))`;
+    return new RegExp(pattern, global ? 'g' : '');
+  };
+
+  const findNextWholeWordInTextarea = (activeEl, word, suppressAlerts = false) => {
+    if (!word) {
+      if (!suppressAlerts) showAlert('שגיאה', 'הזן טקסט לחיפוש');
+      return false;
+    }
+
+    if (!activeEl) return false;
+
+    const text = activeEl.value;
+    const regex = buildWholeWordRegex(word, true);
+    if (!regex) return false;
+
+    const startPos = activeEl.selectionEnd;
+    regex.lastIndex = startPos;
+    let match = regex.exec(text);
+    let wrapped = false;
+
+    if (!match) {
+      regex.lastIndex = 0;
+      match = regex.exec(text);
+      wrapped = !!match;
+    }
+
+    if (!match) {
+      if (!suppressAlerts) showAlert('חיפוש', 'לא נמצאו מופעים.');
+      return false;
+    }
+
+    const prefixLen = match[1] ? match[1].length : 0;
+    const matchText = match[2] || word;
+    const matchIndex = match.index + prefixLen;
+    const matchLength = matchText.length;
+
+    activeEl.focus();
+    activeEl.setSelectionRange(matchIndex, matchIndex + matchLength);
+
+    setTimeout(() => {
+      const computedLineHeight = Number.parseFloat(window.getComputedStyle(activeEl).lineHeight);
+      const lineHeight = Number.isFinite(computedLineHeight) ? computedLineHeight : 24;
+      const caretTop = getTextareaCaretTop(activeEl, matchIndex);
+      const scrollPos = Math.max(0, caretTop - (activeEl.clientHeight / 2) + lineHeight);
+
+      activeEl.scrollTop = scrollPos;
+    }, 10);
+
+    if (wrapped && !suppressAlerts) {
+      showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.');
+    }
+
+    return true;
+  };
   const handleSpellcheckSelect = (word) => {
     if (!word) return;
 
@@ -872,7 +932,7 @@ export default function EditPage() {
 
     let found = false;
     for (let i = 0; i < variants.length; i += 1) {
-      if (!found) found = findNextInTextarea(activeEl, variants[i], false, true);
+      if (!found) found = findNextWholeWordInTextarea(activeEl, variants[i], true);
     }
 
     if (!found) {
