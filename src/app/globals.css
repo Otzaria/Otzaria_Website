@@ -97,6 +97,13 @@
     display: none;
   }
 
+  .spellcheck-highlight {
+    background-color: #fde68a;
+    border-radius: 3px;
+    box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.35);
+    padding: 0 1px;
+  }
+
   /* אנימציות */
   @keyframes float {
     0%, 100% { transform: translateY(0px); }

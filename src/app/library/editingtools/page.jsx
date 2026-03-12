@@ -41,22 +41,13 @@ export default function EditingToolsPage() {
     }
   }
 
-  const handleDownloadOfflineEditor = async () => {
-    try {
-      const response = await fetch('/api/export-editor')
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'dicta-editor-offline.html'
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      window.URL.revokeObjectURL(url)
-    } catch (error) {
-      console.error('Error downloading offline editor:', error)
-      showAlert('שגיאה', 'לא ניתן להוריד את העורך האופליין')
-    }
+  const handleDownloadOfflineEditor = () => {
+    const link = document.createElement('a')
+    link.href = '/export-editor/dicta-editor-offline.html'
+    link.download = 'dicta-editor-offline.html'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 
   const handleDownloadHeaderProcessor = async () => {

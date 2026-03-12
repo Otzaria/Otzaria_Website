@@ -121,6 +121,9 @@ export default function OfflineEditorRoute() {
       headerStartElement={headerStart}
       headerEndElement={headerEnd}
       singleLineHeader={true}
+      enableSpellcheck={false}
     />
   )
 }
+
+

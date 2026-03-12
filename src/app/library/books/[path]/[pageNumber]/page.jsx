@@ -13,6 +13,7 @@ import EmbedImageModal from '@/components/dicta-tools/EmbedImageModal'
 import SplitDialog from '@/components/editor/modals/SplitDialog'
 import InfoDialog from '@/components/editor/modals/InfoDialog'
 import ShortcutsDialog from '@/components/editor/modals/ShortcutsDialog'
+import SpellcheckDialog from '@/components/editor/modals/SpellcheckDialog'
 import { useDialog } from '@/components/DialogContext'
 import { useLoading } from '@/components/LoadingContext'
 import { useAutoSave } from '@/hooks/useAutoSave'
@@ -114,6 +115,8 @@ export default function EditPage() {
   const [isContentSplit, setIsContentSplit] = useState(false)
 
   const [showFindReplace, setShowFindReplace] = useState(false)
+  const [showSpellcheck, setShowSpellcheck] = useState(false)
+  const [spellcheckTarget, setSpellcheckTarget] = useState('content')
   const [findText, setFindText] = useState('')
   const [replaceText, setReplaceText] = useState('')
   const [useRegex, setUseRegex] = useState(false)
@@ -413,6 +416,25 @@ export default function EditPage() {
         else { setContent(newText); handleAutoSaveWrapper(newText); }
     }
   }, [handleColumnChange, handleAutoSaveWrapper]);
+
+  const openSpellcheck = useCallback(() => {
+    const target = twoColumns ? (activeTextarea || 'right') : 'content'
+    setSpellcheckTarget(target)
+    setShowSpellcheck(true)
+  }, [twoColumns, activeTextarea])
+
+  const spellcheckText = useMemo(() => {
+    if (!twoColumns) return content
+    return spellcheckTarget === 'left' ? leftColumn : rightColumn
+  }, [twoColumns, spellcheckTarget, content, leftColumn, rightColumn])
+
+  const handleSpellcheckApply = useCallback((newText) => {
+    if (!twoColumns || spellcheckTarget === 'content') {
+      updateTextWithHistory(newText, null)
+      return
+    }
+    updateTextWithHistory(newText, spellcheckTarget)
+  }, [twoColumns, spellcheckTarget, updateTextWithHistory])
 
   const runAllSavedReplacements = useCallback(() => {
     if (savedSearches.length === 0) return;
@@ -749,11 +771,18 @@ export default function EditPage() {
     return activeEl;
   }
 
-  const handleFindNext = (textToFind, isRegexMode) => {
-    if (!textToFind) return showAlert('שגיאה', 'הזן טקסט לחיפוש');
+  const normalizeHebrewQuotes = (value) => {
+    if (!value) return '';
+    return value.replace(/["']/g, m => (m === '"' ? '״' : '׳'));
+  };
 
-    const activeEl = getActiveTextarea();
-    if (!activeEl) return;
+  const findNextInTextarea = (activeEl, textToFind, isRegexMode, suppressAlerts = false) => {
+    if (!textToFind) {
+      if (!suppressAlerts) showAlert('שגיאה', 'הזן טקסט לחיפוש');
+      return false;
+    }
+
+    if (!activeEl) return false;
 
     const processPattern = (str) => str.replaceAll('^13', '\n');
     const patternStr = processPattern(textToFind);
@@ -764,54 +793,92 @@ export default function EditPage() {
     let matchLength = 0;
 
     if (isRegexMode) {
-        try {
-            const regex = new RegExp(patternStr, 'g');
-            regex.lastIndex = startPos;
-            const match = regex.exec(text);
-            if (match) {
-                matchIndex = match.index;
-                matchLength = match[0].length;
-            } else {
-                regex.lastIndex = 0;
-                const matchFromStart = regex.exec(text);
-                if (matchFromStart) {
-                    matchIndex = matchFromStart.index;
-                    matchLength = matchFromStart[0].length;
-                    showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.');
-                }
+      try {
+        const regex = new RegExp(patternStr, 'g');
+        regex.lastIndex = startPos;
+        const match = regex.exec(text);
+        if (match) {
+          matchIndex = match.index;
+          matchLength = match[0].length;
+        } else {
+          regex.lastIndex = 0;
+          const matchFromStart = regex.exec(text);
+          if (matchFromStart) {
+            matchIndex = matchFromStart.index;
+            matchLength = matchFromStart[0].length;
+            if (!suppressAlerts) {
+              showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.');
             }
-        } catch (e) {
-            return showAlert('שגיאה', 'ביטוי רגולרי לא תקין');
+          }
         }
+      } catch (e) {
+        if (!suppressAlerts) showAlert('שגיאה', 'ביטוי רגולרי לא תקין');
+        return false;
+      }
     } else {
-        matchIndex = text.indexOf(patternStr, startPos);
-        if (matchIndex === -1) {
-            matchIndex = text.indexOf(patternStr, 0);
-            if (matchIndex !== -1) {
-                 showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.');
-            }
+      matchIndex = text.indexOf(patternStr, startPos);
+      if (matchIndex === -1) {
+        matchIndex = text.indexOf(patternStr, 0);
+        if (matchIndex !== -1 && !suppressAlerts) {
+          showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.');
         }
-        matchLength = patternStr.length;
+      }
+      matchLength = patternStr.length;
     }
 
     if (matchIndex !== -1) {
-        activeEl.focus();
-        activeEl.setSelectionRange(matchIndex, matchIndex + matchLength);
-        
-        // שימוש בפונקציה המדויקת לחישוב מיקום הקורסור
-        setTimeout(() => {
-            const computedLineHeight = Number.parseFloat(window.getComputedStyle(activeEl).lineHeight);
-            const lineHeight = Number.isFinite(computedLineHeight) ? computedLineHeight : 24;
-            const caretTop = getTextareaCaretTop(activeEl, matchIndex);
-            const scrollPos = Math.max(0, caretTop - (activeEl.clientHeight / 2) + lineHeight);
-            
-            activeEl.scrollTop = scrollPos;
-        }, 10);
-    } else {
-        showAlert('חיפוש', 'לא נמצאו מופעים.');
+      activeEl.focus();
+      activeEl.setSelectionRange(matchIndex, matchIndex + matchLength);
+
+      // שימוש בפונקציה המדויקת לחישוב מיקום הקורסור
+      setTimeout(() => {
+        const computedLineHeight = Number.parseFloat(window.getComputedStyle(activeEl).lineHeight);
+        const lineHeight = Number.isFinite(computedLineHeight) ? computedLineHeight : 24;
+        const caretTop = getTextareaCaretTop(activeEl, matchIndex);
+        const scrollPos = Math.max(0, caretTop - (activeEl.clientHeight / 2) + lineHeight);
+
+        activeEl.scrollTop = scrollPos;
+      }, 10);
+      return true;
     }
+
+    if (!suppressAlerts) {
+      showAlert('חיפוש', 'לא נמצאו מופעים.');
+    }
+    return false;
   };
 
+  const handleFindNext = (textToFind, isRegexMode) => {
+    if (!textToFind) return showAlert('שגיאה', 'הזן טקסט לחיפוש');
+
+    const activeEl = getActiveTextarea();
+    if (!activeEl) return;
+
+    findNextInTextarea(activeEl, textToFind, isRegexMode, false);
+  };
+
+  const handleSpellcheckSelect = (word) => {
+    if (!word) return;
+
+    const activeEl = getActiveTextarea();
+    if (!activeEl) return;
+
+    const normalized = normalizeHebrewQuotes(word);
+    const alt = normalized.replace(/[״׳]/g, m => (m === '״' ? '"' : "'"));
+    const variants = Array.from(new Set([word, normalized, alt]));
+
+    activeEl.focus();
+    activeEl.setSelectionRange(0, 0);
+
+    let found = false;
+    for (let i = 0; i < variants.length; i += 1) {
+      if (!found) found = findNextInTextarea(activeEl, variants[i], false, true);
+    }
+
+    if (!found) {
+      showAlert('חיפוש', 'לא נמצאו מופעים.');
+    }
+  };
   const handleReplaceCurrent = (textToReplace, textToFind, isRegexMode) => {
     if (!textToFind) return showAlert('שגיאה', 'הזן טקסט לחיפוש');
 
@@ -1227,6 +1294,7 @@ export default function EditPage() {
         handleOCRSelection={handleOCR} setSelectionRect={setSelectionRect}
         setIsSelectionMode={setIsSelectionMode} insertTag={insertTag}
         setShowFindReplace={setShowFindReplace}
+        onOpenSpellcheck={openSpellcheck}
         selectedFont={selectedFont} setSelectedFont={setSelectedFont}
         twoColumns={twoColumns} toggleColumns={toggleColumns}
         layoutOrientation={layoutOrientation} setLayoutOrientation={setLayoutOrientation}
@@ -1328,7 +1396,16 @@ export default function EditPage() {
         onAddRemoveDigitsToSaved={addRemoveDigitsToSaved}
         useRegex={useRegex}
         setUseRegex={setUseRegex}
-      />
+        />
+
+        <SpellcheckDialog
+          isOpen={showSpellcheck}
+          onClose={() => setShowSpellcheck(false)}
+          text={spellcheckText}
+          onApplyText={handleSpellcheckApply}
+          onSelectWord={handleSpellcheckSelect}
+          title="בדיקת איות"
+        />
 
       <EmbedImageModal
         isOpen={showImageToText}
@@ -1438,3 +1515,12 @@ function UploadDialog({ pageNumber, onConfirm, onCancel }) {
     </div>
   )
 }
+
+
+
+
+
+
+
+
+
