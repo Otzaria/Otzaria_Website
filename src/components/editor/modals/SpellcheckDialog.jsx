@@ -13,7 +13,7 @@ const TORANIT_DICT_PATHS = {
 const HEBREW_BOUNDARY = "[\u0590-\u05FF\"'״׳]"
 const MISSPELLINGS_LIMIT = 1500
 const DEFAULT_SUGGESTION_LIMIT = 8
-const MAX_WORDS_TO_CHECK = 60000
+const MAX_WORDS_TO_CHECK = Number.POSITIVE_INFINITY
 
 function resolveAssetUrl(path) {
   if (typeof window === 'undefined') return path
@@ -377,9 +377,6 @@ export default function SpellcheckDialog({
           {misspellingsLimited && (
             <div className="text-xs text-amber-600 mt-2">מוצגים עד {MISSPELLINGS_LIMIT} שגיאות ראשונות.</div>
           )}
-          {wordsLimited && (
-            <div className="text-xs text-amber-600 mt-1">בוצעה בדיקה מהירה (מקסימום {MAX_WORDS_TO_CHECK} מילים).</div>
-          )}
 
           <div className="max-h-[360px] overflow-y-auto mt-2 space-y-2">
             {misspellings.map(item => (
@@ -491,6 +488,7 @@ export default function SpellcheckDialog({
     document.body
   )
 }
+
 
 
 

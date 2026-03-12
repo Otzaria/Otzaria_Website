@@ -7,7 +7,7 @@ let prefixIndex = null
 let useNspell = true
 let suggestMode = 'fuzzy'
 
-const MAX_WORDS_TO_CHECK = 60000
+const MAX_WORDS_TO_CHECK = Number.POSITIVE_INFINITY
 const YIELD_EVERY = 2000
 const MAX_SUGGEST_CANDIDATES = 12000
 const USE_PREFIXES = ['ו', 'ב', 'כ', 'ל', 'מ', 'ש', 'ה']
@@ -321,5 +321,6 @@ self.onmessage = async (event) => {
     self.postMessage({ type: 'error', message: err?.message || 'Worker error' })
   }
 }
+
 
 
