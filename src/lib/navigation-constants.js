@@ -4,7 +4,7 @@
 
 export const LIBRARY_NAV_LINKS = [
   { href: '/', label: 'בית', icon: 'home' },
-  { href: '/library/books', label: 'ספרייה', icon: 'library_books' },
+  { href: '/library/books', label: 'ספרים', icon: 'library_books' },
   { href: '/library/dicta-books', label: 'ספרי דיקטה', icon: 'edit_document' },
   { href: '/library/users', label: 'משתמשים', icon: 'people' },
   { href: '/library/upload', label: 'הוספת ספר', icon: 'upload' },
