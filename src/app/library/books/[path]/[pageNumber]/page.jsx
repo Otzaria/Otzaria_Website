@@ -19,6 +19,7 @@ import { useLoading } from '@/components/LoadingContext'
 import { useAutoSave } from '@/hooks/useAutoSave'
 import { useOCR } from '@/hooks/useOCR'
 import { getTextareaCaretTop } from '@/lib/editorUtils'
+import { findNextWholeWordInTextarea as findNextWholeWordInTextareaUtil } from '@/lib/hebrewWordUtils'
 
 // הגדרת ברירת מחדל המבוססת על מקשים פיזיים (Codes)
 const DEFAULT_SHORTCUTS = {
@@ -857,6 +858,24 @@ export default function EditPage() {
     findNextInTextarea(activeEl, textToFind, isRegexMode, false);
   };
 
+  const findNextWholeWordInTextarea = (activeEl, word, suppressAlerts = false) => {
+    if (!word) {
+      if (!suppressAlerts) showAlert('שגיאה', 'הזן טקסט לחיפוש')
+      return false
+    }
+
+    if (!activeEl) return false
+
+    return findNextWholeWordInTextareaUtil(activeEl, word, {
+      text: activeEl.value || '',
+      suppressAlerts,
+      onWrap: () => showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.'),
+      onNotFound: () => showAlert('חיפוש', 'לא נמצאו מופעים.'),
+      getCaretTop: getTextareaCaretTop,
+      scrollDelay: 10
+    })
+  };
+
   const handleSpellcheckSelect = (word) => {
     if (!word) return;
 
@@ -872,7 +891,7 @@ export default function EditPage() {
 
     let found = false;
     for (let i = 0; i < variants.length; i += 1) {
-      if (!found) found = findNextInTextarea(activeEl, variants[i], false, true);
+      if (!found) found = findNextWholeWordInTextarea(activeEl, variants[i], true);
     }
 
     if (!found) {
@@ -1515,6 +1534,9 @@ function UploadDialog({ pageNumber, onConfirm, onCancel }) {
     </div>
   )
 }
+
+
+
 
 
 

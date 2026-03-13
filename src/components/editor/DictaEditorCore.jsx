@@ -18,6 +18,7 @@ import ShortcutsDialog from '@/components/editor/modals/ShortcutsDialog'
 import FindReplaceDialog from '@/components/editor/modals/FindReplaceDialog'
 import SpellcheckDialog from '@/components/editor/modals/SpellcheckDialog'
 import { getTextareaCaretTop } from '@/lib/editorUtils'
+import { buildWholeWordRegex, findNextWholeWordInTextarea as findNextWholeWordInTextareaUtil } from '@/lib/hebrewWordUtils'
 
 const DEFAULT_SHORTCUTS = {
   'save': 'Ctrl+KeyS',
@@ -567,27 +568,44 @@ export default function DictaEditorCore({
     })
   }, [])
 
+  const findNextWholeWordInTextarea = useCallback((textarea, word, suppressAlerts = false) => {
+    return findNextWholeWordInTextareaUtil(textarea, word, {
+      text: content,
+      suppressAlerts,
+      onWrap: () => showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.'),
+      getCaretTop: getTextareaCaretTop,
+      scrollDelay: 0
+    })
+  }, [content, showAlert])
+
   const highlightFirstOccurrence = useCallback((container, word) => {
     if (!container || !word || typeof document === 'undefined') return false
+    const testRe = buildWholeWordRegex(word, false)
+    const execRe = buildWholeWordRegex(word, true)
+    if (!testRe || !execRe) return false
+
     const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
       acceptNode: (node) => {
         if (!node.nodeValue) return NodeFilter.FILTER_REJECT
-        return node.nodeValue.includes(word) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP
+        return testRe.test(node.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP
       }
     })
 
     let node = walker.nextNode()
     while (node) {
       const text = node.nodeValue || ''
-      const index = text.indexOf(word)
-      if (index !== -1) {
+      execRe.lastIndex = 0
+      const match = execRe.exec(text)
+      if (match) {
+        const prefixLen = match[1] ? match[1].length : 0
+        const matchText = match[2] || word
+        const index = match.index + prefixLen
         const before = text.slice(0, index)
-        const match = text.slice(index, index + word.length)
-        const after = text.slice(index + word.length)
+        const after = text.slice(index + matchText.length)
 
         const highlight = document.createElement('span')
         highlight.className = 'spellcheck-highlight'
-        highlight.textContent = match
+        highlight.textContent = matchText
 
         const frag = document.createDocumentFragment()
         if (before) frag.appendChild(document.createTextNode(before))
@@ -630,7 +648,7 @@ export default function DictaEditorCore({
       textarea.setSelectionRange(0, 0)
       let found = false
       variants.forEach((variant) => {
-        if (!found) found = handleFindNextInternal(variant, false, true)
+        if (!found) found = findNextWholeWordInTextarea(textarea, variant, true)
       })
       if (!found) {
         showAlert('חיפוש', 'לא נמצאו מופעים.')
@@ -642,7 +660,7 @@ export default function DictaEditorCore({
     if (!editMode && contentRef.current) {
       highlightFirstOccurrenceAny(contentRef.current, variants)
     }
-  }, [buildWordVariants, clearSpellcheckHighlights, editMode, handleFindNextInternal, highlightFirstOccurrenceAny, showAlert])
+  }, [buildWordVariants, clearSpellcheckHighlights, editMode, findNextWholeWordInTextarea, highlightFirstOccurrenceAny, showAlert])
   const handleReplaceCurrent = useCallback((textToReplace, textToFind, isRegexMode) => {
     if (!textToFind) return showAlert('שגיאה', 'הזן טקסט לחיפוש')
     if (!textareaRef.current) return
@@ -1745,6 +1763,7 @@ export default function DictaEditorCore({
     </div>
   )
 }
+
 
 
 

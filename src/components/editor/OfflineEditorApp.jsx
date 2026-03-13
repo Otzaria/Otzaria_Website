@@ -61,7 +61,7 @@ export default function OfflineEditorApp() {
   const headerEnd = <div className="text-sm text-gray-500 font-medium">מצב עבודה אופליין</div>;
 
   return (
-    <DialogProvider>
+    <LoadingProvider><DialogProvider>
       <DictaEditorCore
         initialContent={localContent}
         title={fileName}
@@ -74,6 +74,6 @@ export default function OfflineEditorApp() {
         headerEndElement={headerEnd}
         singleLineHeader={true}
       />
-    </DialogProvider>
+    </DialogProvider></LoadingProvider>
   );
 }

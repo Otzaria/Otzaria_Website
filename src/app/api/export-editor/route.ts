@@ -12,6 +12,7 @@ const COMPONENT_PATHS = [
   'src/components/FormInput.jsx',
   'src/components/Button.jsx',
   'src/components/LoadingSpinner.jsx',
+  'src/components/LoadingContext.jsx',
   'src/components/dicta-tools/CreateHeadersModal.jsx',
   'src/components/dicta-tools/SingleLetterHeadersModal.jsx',
   'src/components/dicta-tools/ChangeHeadingModal.jsx',
@@ -24,6 +25,7 @@ const COMPONENT_PATHS = [
   'src/components/dicta-tools/EmbedImageModal.jsx',
   'src/components/editor/modals/ShortcutsDialog.jsx',
   'src/components/editor/modals/FindReplaceDialog.jsx',
+  'src/components/editor/modals/SpellcheckDialog.jsx',
   'src/components/editor/DictaEditorCore.jsx',
   'src/components/editor/OfflineEditorApp.jsx',
 ];
@@ -83,9 +85,10 @@ function escapeScriptTag(value: string) {
 
 function stripImportsAndExports(source: string) {
   return source
-    .replace(/^\s*['\"]use client['\"];?\s*/gm, '')
-    .replace(/^\s*import[\s\S]*?from\s+['\"].*?['\"];?\s*$/gm, '')
-    .replace(/^\s*import\s+['\"].*?['\"];?\s*$/gm, '')
+    .replace(/import\.meta\.url/g, 'location.href')
+    .replace(/^\s*[\'\"]use client[\'\"];?\s*/gm, '')
+    .replace(/^\s*import[\s\S]*?from\s+[\'\"].*?[\'\"];?\s*$/gm, '')
+    .replace(/^\s*import\s+[\'\"].*?[\'\"];?\s*$/gm, '')
     .replace(/export default function\s+/g, 'function ')
     .replace(/export default\s+([A-Za-z0-9_$]+);?/g, '')
     .replace(/export\s+(const|function|class|let|var)\s+/g, '$1 ')
@@ -100,7 +103,7 @@ function transpileComponent(source: string, filename: string) {
     configFile: false,
     comments: false,
     compact: false,
-    sourceType: 'script',
+    sourceType: 'unambiguous',
     presets: [[presetReact, { runtime: 'classic' }]],
   });
 
@@ -245,7 +248,7 @@ const React = __offlineRequire('react');
 const ReactDOM = __offlineRequire('react-dom');
 const ReactDOMClient = __offlineRequire('react-dom/client');
 const { useState, useEffect, useRef, useMemo, useCallback, useContext, useTransition, createContext } = React;
-const { createPortal } = ReactDOM;
+const { createPortal } = ReactDOM;\nconst AnimatePresence = ({ children }) => React.createElement(React.Fragment, null, children);\nconst motion = new Proxy({}, { get: (_, tag) => (props) => React.createElement(tag, props, props && props.children) });
 `;
 }
 

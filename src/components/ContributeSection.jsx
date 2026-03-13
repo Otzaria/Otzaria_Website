@@ -119,7 +119,7 @@ export default function ContributeSection() {
             <p className="text-lg text-on-surface/70 mb-8 max-w-2xl mx-auto">
               ספרים רבים עדיין אינם זמינים בפורמט דיגיטלי נגיש. כל תרומה עוזרת לשמר ולהנגיש את האוצר התורני לדורות הבאים.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center flex-wrap">
               <motion.div
                 whileHover={{ scale: 1.05, y: -2 }}
                 whileTap={{ scale: 0.95 }}
@@ -152,8 +152,8 @@ export default function ContributeSection() {
                   href="/library/dicta-books" 
                   className="flex items-center justify-center gap-2 px-8 py-4 bg-surface text-on-surface rounded-lg text-lg font-medium hover:bg-surface-variant transition-colors border border-outline w-full sm:w-auto"
                 >
-                  <span className="material-symbols-outlined">sync_alt</span>
-                  <span>המר ספרי דיקטה</span>
+                  <span className="material-symbols-outlined">edit_note</span>
+                  <span>ערוך ספרי דיקטה</span>
                 </Link>
               </motion.div>
             </div>

@@ -7,7 +7,7 @@ let prefixIndex = null
 let useNspell = true
 let suggestMode = 'fuzzy'
 
-const MAX_WORDS_TO_CHECK = 60000
+const MAX_WORDS_TO_CHECK = Number.POSITIVE_INFINITY
 const YIELD_EVERY = 2000
 const MAX_SUGGEST_CANDIDATES = 12000
 const USE_PREFIXES = ['ו', 'ב', 'כ', 'ל', 'מ', 'ש', 'ה']
@@ -268,22 +268,27 @@ self.onmessage = async (event) => {
 
       for (let i = 0; i < length; i += 1) {
         const word = words[i]
-        counts.set(word, (counts.get(word) || 0) + 1)
+        const existing = counts.get(word)
+        if (existing) {
+          existing.count += 1
+        } else {
+          counts.set(word, { count: 1, firstIndex: i })
+        }
         await maybeYield(i)
       }
 
       const misspellings = []
       const entries = Array.from(counts.entries())
       for (let i = 0; i < entries.length; i += 1) {
-        const [word, count] = entries[i]
+        const [word, data] = entries[i]
         if (!isCorrect(word)) {
-          misspellings.push({ word, count })
+          misspellings.push({ word, count: data.count, firstIndex: data.firstIndex })
           if (misspellings.length >= limit) break
         }
         await maybeYield(i)
       }
 
-      misspellings.sort((a, b) => b.count - a.count || a.word.localeCompare(b.word))
+      misspellings.sort((a, b) => a.firstIndex - b.firstIndex)
       const limited = misspellings.length >= limit
       const wordsLimited = words.length > maxWords
       self.postMessage({ type: 'checkResult', misspellings, limited, wordsLimited })
@@ -316,3 +321,6 @@ self.onmessage = async (event) => {
     self.postMessage({ type: 'error', message: err?.message || 'Worker error' })
   }
 }
+
+
+

@@ -97,7 +97,7 @@ export default function Hero() {
           
           {/* כפתורים */}
           <motion.div 
-            className="flex flex-col sm:flex-row gap-4 justify-center"
+            className="flex flex-col sm:flex-row gap-4 justify-center flex-wrap"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.8, duration: 0.8 }}
@@ -118,6 +118,15 @@ export default function Hero() {
               <Link href="/library/books" className="flex items-center justify-center gap-2 px-8 py-4 glass border-2 border-primary text-primary rounded-lg text-lg font-medium hover:bg-primary-container transition-colors">
                 <span className="material-symbols-outlined">library_books</span>
                 <span>התחל לערוך</span>
+              </Link>
+            </motion.div>
+            <motion.div
+              whileHover={{ scale: 1.05, y: -2 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <Link href="/library/dicta-books" className="flex items-center justify-center gap-2 px-8 py-4 glass border-2 border-primary text-primary rounded-lg text-lg font-medium hover:bg-primary-container transition-colors">
+                <span className="material-symbols-outlined">edit_note</span>
+                <span>ערוך ספרי דיקטה</span>
               </Link>
             </motion.div>
           </motion.div>
