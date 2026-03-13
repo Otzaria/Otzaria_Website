@@ -62,7 +62,7 @@ export async function POST(request) {
         const sendResults = await Promise.allSettled(validEmails.map(async (email) => {
             const secureToken = encryptToken(email);
             const unsubUrl = `${process.env.NEXTAUTH_URL}/api/user/unsubscribe?t=${secureToken}&action=new_books`;
-            const dictaBooksUrl = `${process.env.NEXTAUTH_URL}/library/admin/dicta-books`;
+            const dictaBooksUrl = `${process.env.NEXTAUTH_URL}/library/dicta-books`;
 
             const emailHtml = `
             <div dir="rtl" style="font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 40px; text-align: center;">
