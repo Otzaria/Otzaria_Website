@@ -9,6 +9,7 @@ import StatusBadge from '@/components/StatusBadge'
 import StatusEditor from '@/components/StatusEditor'
 import UploadNotificationSettings from '@/components/UploadNotificationSettings'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import MetadataDisplay from '@/components/MetadataDisplay'
 
 export default function AdminUploadsPage() {
   const [uploads, setUploads] = useState([])
@@ -590,34 +591,7 @@ export default function AdminUploadsPage() {
                                           </div>
                                           
                                           {/* מטא-דטה של הספר */}
-                                          {(firstUpload.authorName || firstUpload.bookCategory || firstUpload.authorCategory) && (
-                                            <div className="mt-3 pt-3 border-t border-gray-200 space-y-1 text-sm text-gray-600">
-                                              {firstUpload.authorName && (
-                                                <div><span className="font-semibold">מחבר:</span> {firstUpload.authorName}</div>
-                                              )}
-                                              {firstUpload.bookCategory && (
-                                                <div><span className="font-semibold">קטגוריית ספר:</span> {firstUpload.bookCategory}</div>
-                                              )}
-                                              {firstUpload.authorCategory && (
-                                                <div><span className="font-semibold">קטגוריית מחבר:</span> {firstUpload.authorCategory}</div>
-                                              )}
-                                              {firstUpload.authorYear && (
-                                                <div><span className="font-semibold">שנת מחבר:</span> {firstUpload.authorYear}</div>
-                                              )}
-                                              {firstUpload.publicationYear && (
-                                                <div><span className="font-semibold">שנת הדפסה:</span> {firstUpload.publicationYear}</div>
-                                              )}
-                                              {firstUpload.copyrightHolder && (
-                                                <div><span className="font-semibold">בעל זכויות:</span> {firstUpload.copyrightHolder}</div>
-                                              )}
-                                              {firstUpload.sourceUrl && (
-                                                <div><span className="font-semibold">מקור:</span> <a href={firstUpload.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{firstUpload.sourceUrl}</a></div>
-                                              )}
-                                              {firstUpload.isOcr && (
-                                                <div><span className="font-semibold">OCR:</span> {firstUpload.ocrDescription}</div>
-                                              )}
-                                            </div>
-                                          )}
+                                          <MetadataDisplay upload={firstUpload} />
                                       </div>
                                       
                                       <div className="flex items-center gap-2">
@@ -840,34 +814,7 @@ export default function AdminUploadsPage() {
                                                   </div>
                                                   
                                                   {/* מטא-דטה של הספר */}
-                                                  {(upload.authorName || upload.bookCategory || upload.authorCategory) && (
-                                                    <div className="mt-3 pt-3 border-t border-gray-200 space-y-1 text-xs text-gray-600">
-                                                      {upload.authorName && (
-                                                        <div><span className="font-semibold">מחבר:</span> {upload.authorName}</div>
-                                                      )}
-                                                      {upload.bookCategory && (
-                                                        <div><span className="font-semibold">קטגוריית ספר:</span> {upload.bookCategory}</div>
-                                                      )}
-                                                      {upload.authorCategory && (
-                                                        <div><span className="font-semibold">קטגוריית מחבר:</span> {upload.authorCategory}</div>
-                                                      )}
-                                                      {upload.authorYear && (
-                                                        <div><span className="font-semibold">שנת מחבר:</span> {upload.authorYear}</div>
-                                                      )}
-                                                      {upload.publicationYear && (
-                                                        <div><span className="font-semibold">שנת הדפסה:</span> {upload.publicationYear}</div>
-                                                      )}
-                                                      {upload.copyrightHolder && (
-                                                        <div><span className="font-semibold">בעל זכויות:</span> {upload.copyrightHolder}</div>
-                                                      )}
-                                                      {upload.sourceUrl && (
-                                                        <div><span className="font-semibold">מקור:</span> <a href={upload.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{upload.sourceUrl}</a></div>
-                                                      )}
-                                                      {upload.isOcr && (
-                                                        <div><span className="font-semibold">OCR:</span> {upload.ocrDescription}</div>
-                                                      )}
-                                                    </div>
-                                                  )}
+                                                  <MetadataDisplay upload={upload} textSize="text-xs" />
                                               </div>
                                           </div>
                                           

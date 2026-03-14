@@ -28,18 +28,24 @@ function createMetadataHeader(metadata) {
     return lines.join('\n');
 }
 
+// פונקציית עזר לחילוץ סיומת קובץ
+function getFileExtension(fileName) {
+    if (!fileName) return '';
+    const lastDotIndex = fileName.lastIndexOf('.');
+    if (lastDotIndex === -1) return '';
+    return fileName.substring(lastDotIndex).toLowerCase();
+}
+
 // בדיקה אם הקובץ הוא טקסט או בינארי
 function isTextFile(fileName) {
     const textExtensions = ['.txt', '.text', '.rtf'];
-    const ext = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
-    return textExtensions.includes(ext);
+    return textExtensions.includes(getFileExtension(fileName));
 }
 
 // בדיקה אם הקובץ הוא וורד
 function isWordFile(fileName) {
     const wordExtensions = ['.doc', '.docx'];
-    const ext = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
-    return wordExtensions.includes(ext);
+    return wordExtensions.includes(getFileExtension(fileName));
 }
 
 // טיפול בהעלאת קובץ טקסט ע"י משתמש
