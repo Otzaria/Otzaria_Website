@@ -15,6 +15,16 @@ const UploadSchema = new mongoose.Schema({
   deletedAt: { type: Date }, // תאריך העברה לאשפה
   editCopy: { type: mongoose.Schema.Types.ObjectId, ref: 'UploadEditCopy' }, // עותק עריכה מהעלאות
   editCopyCreatedAt: { type: Date }, // תאריך יצירת עותק העריכה
+  // שדות מטא-דטה חדשים
+  authorName: { type: String }, // שם המחבר
+  bookCategory: { type: String }, // קטגוריית הספר
+  authorCategory: { type: String }, // קטגוריית המחבר
+  authorYear: { type: String }, // שנת המחבר
+  publicationYear: { type: String }, // שנת הדפסת הספר
+  copyrightHolder: { type: String }, // בעל הזכויות יוצרים
+  sourceUrl: { type: String }, // מקור הספר (קישור לPDF ציבורי)
+  isOcr: { type: Boolean, default: false }, // האם הטקסט הוא ע"י OCR
+  ocrDescription: { type: String }, // תיאור שיטת ה-OCR
 }, { timestamps: true });
 
 export default mongoose.models.Upload || mongoose.model('Upload', UploadSchema);

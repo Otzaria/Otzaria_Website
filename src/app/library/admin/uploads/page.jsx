@@ -410,15 +410,54 @@ export default function AdminUploadsPage() {
         </div>
       </div>
       
-      {/* לחצן סינון */}
+      {/* כפתורי סינון לפי סוג */}
+      <div className="flex gap-2 mb-6">
+        <button
+          onClick={() => setFilterTypes(filterTypes.includes('dicta') ? filterTypes.filter(t => t !== 'dicta') : [...filterTypes, 'dicta'])}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors shadow-sm ${
+            filterTypes.includes('dicta')
+              ? 'bg-purple-600 text-white'
+              : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          <span className="material-symbols-outlined text-sm">mic</span>
+          דיקטה
+        </button>
+        
+        <button
+          onClick={() => setFilterTypes(filterTypes.includes('full_book') ? filterTypes.filter(t => t !== 'full_book') : [...filterTypes, 'full_book'])}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors shadow-sm ${
+            filterTypes.includes('full_book')
+              ? 'bg-green-600 text-white'
+              : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          <span className="material-symbols-outlined text-sm">book</span>
+          ספרים שהועלו
+        </button>
+        
+        <button
+          onClick={() => setFilterTypes(filterTypes.includes('single_page') ? filterTypes.filter(t => t !== 'single_page') : [...filterTypes, 'single_page'])}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors shadow-sm ${
+            filterTypes.includes('single_page')
+              ? 'bg-amber-600 text-white'
+              : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          <span className="material-symbols-outlined text-sm">description</span>
+          עמודים שנערכו
+        </button>
+      </div>
+      
+      {/* לחצן סינון לסטטוס בלבד */}
       <div className="relative mb-6 filter-menu-container">
         <button
           onClick={() => setShowFilterMenu(!showFilterMenu)}
           className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
         >
           <span className="material-symbols-outlined text-sm">filter_list</span>
-          סינון
-          {(filterTypes.length > 0 || filterStatuses.length > 0) && (
+          סינון לפי סטטוס
+          {filterStatuses.length > 0 && (
             <span className="w-2 h-2 bg-blue-600 rounded-full"></span>
           )}
           <span className="material-symbols-outlined text-sm">
@@ -426,78 +465,36 @@ export default function AdminUploadsPage() {
           </span>
         </button>
         
-        {/* תפריט סינון */}
+        {/* תפריט סינון - רק סטטוס */}
         {showFilterMenu && (
-          <div className="absolute top-full mt-2 right-0 bg-white border border-gray-200 rounded-lg shadow-xl z-10 p-4 min-w-[400px]">
-            <div className="grid grid-cols-2 gap-6">
-              {/* עמודה ראשונה - סוג */}
-              <div>
-                <h3 className="text-sm font-bold text-gray-700 mb-3 pb-2 border-b">סוג</h3>
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={filterTypes.includes('dicta')}
-                      onChange={(e) => handleTypeChange('dicta', e.target.checked)}
-                      className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
-                    />
-                    <span className="text-sm text-gray-700">דיקטה</span>
-                  </label>
-                  <label className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={filterTypes.includes('full_book')}
-                      onChange={(e) => handleTypeChange('full_book', e.target.checked)}
-                      className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
-                    />
-                    <span className="text-sm text-gray-700">ספרים שהועלו</span>
-                  </label>
-                  <label className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={filterTypes.includes('single_page')}
-                      onChange={(e) => handleTypeChange('single_page', e.target.checked)}
-                      className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
-                    />
-                    <span className="text-sm text-gray-700">עמודים שנערכו</span>
-                  </label>
-                </div>
-              </div>
-              
-              {/* עמודה שניה - סטטוס */}
-              <div>
-                <h3 className="text-sm font-bold text-gray-700 mb-3 pb-2 border-b">סטטוס</h3>
-                <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                  {Object.entries(bookStatuses).map(([key, config]) => (
-                    <label 
-                      key={key}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={filterStatuses.includes(key)}
-                        onChange={(e) => handleStatusChange(key, e.target.checked)}
-                        className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                      />
-                      <span 
-                        className="w-3 h-3 rounded-full flex-shrink-0" 
-                        style={{ backgroundColor: config.color }}
-                      ></span>
-                      <span className="text-sm text-gray-700">{config.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
+          <div className="absolute top-full mt-2 right-0 bg-white border border-gray-200 rounded-lg shadow-xl z-10 p-4 min-w-[300px]">
+            <h3 className="text-sm font-bold text-gray-700 mb-3 pb-2 border-b">סטטוס</h3>
+            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+              {Object.entries(bookStatuses).map(([key, config]) => (
+                <label 
+                  key={key}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                >
+                  <input
+                    type="checkbox"
+                    checked={filterStatuses.includes(key)}
+                    onChange={(e) => handleStatusChange(key, e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                  />
+                  <span 
+                    className="w-3 h-3 rounded-full flex-shrink-0" 
+                    style={{ backgroundColor: config.color }}
+                  ></span>
+                  <span className="text-sm text-gray-700">{config.label}</span>
+                </label>
+              ))}
             </div>
             
             {/* כפתור איפוס */}
-            {(filterTypes.length > 0 || filterStatuses.length > 0) && (
+            {filterStatuses.length > 0 && (
               <div className="mt-4 pt-4 border-t">
                 <button
-                  onClick={() => {
-                    setFilterTypes([])
-                    setFilterStatuses([])
-                  }}
+                  onClick={() => setFilterStatuses([])}
                   className="w-full px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
                 >
                   איפוס סינון
@@ -591,6 +588,36 @@ export default function AdminUploadsPage() {
                                                   </span>
                                               )}
                                           </div>
+                                          
+                                          {/* מטא-דטה של הספר */}
+                                          {(firstUpload.authorName || firstUpload.bookCategory || firstUpload.authorCategory) && (
+                                            <div className="mt-3 pt-3 border-t border-gray-200 space-y-1 text-sm text-gray-600">
+                                              {firstUpload.authorName && (
+                                                <div><span className="font-semibold">מחבר:</span> {firstUpload.authorName}</div>
+                                              )}
+                                              {firstUpload.bookCategory && (
+                                                <div><span className="font-semibold">קטגוריית ספר:</span> {firstUpload.bookCategory}</div>
+                                              )}
+                                              {firstUpload.authorCategory && (
+                                                <div><span className="font-semibold">קטגוריית מחבר:</span> {firstUpload.authorCategory}</div>
+                                              )}
+                                              {firstUpload.authorYear && (
+                                                <div><span className="font-semibold">שנת מחבר:</span> {firstUpload.authorYear}</div>
+                                              )}
+                                              {firstUpload.publicationYear && (
+                                                <div><span className="font-semibold">שנת הדפסה:</span> {firstUpload.publicationYear}</div>
+                                              )}
+                                              {firstUpload.copyrightHolder && (
+                                                <div><span className="font-semibold">בעל זכויות:</span> {firstUpload.copyrightHolder}</div>
+                                              )}
+                                              {firstUpload.sourceUrl && (
+                                                <div><span className="font-semibold">מקור:</span> <a href={firstUpload.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{firstUpload.sourceUrl}</a></div>
+                                              )}
+                                              {firstUpload.isOcr && (
+                                                <div><span className="font-semibold">OCR:</span> {firstUpload.ocrDescription}</div>
+                                              )}
+                                            </div>
+                                          )}
                                       </div>
                                       
                                       <div className="flex items-center gap-2">
@@ -811,6 +838,36 @@ export default function AdminUploadsPage() {
                                                         <span className="truncate max-w-[150px]">{upload.originalFileName}</span>
                                                       </span>
                                                   </div>
+                                                  
+                                                  {/* מטא-דטה של הספר */}
+                                                  {(upload.authorName || upload.bookCategory || upload.authorCategory) && (
+                                                    <div className="mt-3 pt-3 border-t border-gray-200 space-y-1 text-xs text-gray-600">
+                                                      {upload.authorName && (
+                                                        <div><span className="font-semibold">מחבר:</span> {upload.authorName}</div>
+                                                      )}
+                                                      {upload.bookCategory && (
+                                                        <div><span className="font-semibold">קטגוריית ספר:</span> {upload.bookCategory}</div>
+                                                      )}
+                                                      {upload.authorCategory && (
+                                                        <div><span className="font-semibold">קטגוריית מחבר:</span> {upload.authorCategory}</div>
+                                                      )}
+                                                      {upload.authorYear && (
+                                                        <div><span className="font-semibold">שנת מחבר:</span> {upload.authorYear}</div>
+                                                      )}
+                                                      {upload.publicationYear && (
+                                                        <div><span className="font-semibold">שנת הדפסה:</span> {upload.publicationYear}</div>
+                                                      )}
+                                                      {upload.copyrightHolder && (
+                                                        <div><span className="font-semibold">בעל זכויות:</span> {upload.copyrightHolder}</div>
+                                                      )}
+                                                      {upload.sourceUrl && (
+                                                        <div><span className="font-semibold">מקור:</span> <a href={upload.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{upload.sourceUrl}</a></div>
+                                                      )}
+                                                      {upload.isOcr && (
+                                                        <div><span className="font-semibold">OCR:</span> {upload.ocrDescription}</div>
+                                                      )}
+                                                    </div>
+                                                  )}
                                               </div>
                                           </div>
                                           
