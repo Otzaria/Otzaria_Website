@@ -72,9 +72,9 @@ export default function TextCleanerModal({ isOpen, onClose, content, onContentCh
       if (options.fix_spaces_near_tags) {
         const before = newContent
         // הוסף רווח לפני תגים פותחים אם אין רווח
-        newContent = newContent.replace(/([א-ת])<([a-z]+\d?)>/gi, '$1 <$2>')
+        newContent = newContent.replace(/(\S)<([a-z]+\d?)>/gi, '$1 <$2>')
         // הוסף רווח אחרי תגים סוגרים אם אין רווח
-        newContent = newContent.replace(/<\/([a-z]+\d?)>([א-ת])/gi, '</$1> $2')
+        newContent = newContent.replace(/<\/([a-z]+\d?)>(\S)/gi, '</$1> $2')
         // הסר רווחים מיותרים אחרי תגים פותחים
         newContent = newContent.replace(/<([a-z]+\d?)>\s+/gi, '<$1>')
         // הסר רווחים מיותרים לפני תגים סוגרים
