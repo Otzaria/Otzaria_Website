@@ -302,7 +302,7 @@ export default function UploadPage() {
                   value={formData.copyrightHolder}
                   onChange={handleInputChange}
                   className="w-full px-4 py-3 rounded-lg border border-surface-variant bg-surface focus:ring-2 focus:ring-primary outline-none"
-                  placeholder="לדוגמה: הזכויות שייכים לי, או להוצאת כתר"
+                  placeholder="לדוגמה: הזכויות שייכות לי, הוצאת כתר, או תחום ציבורי"
                   required
                 />
               </div>
