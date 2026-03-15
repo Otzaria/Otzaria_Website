@@ -46,7 +46,13 @@ function LoginContent() {
   const handleUsernameKeyDown = (e) => {
     if (e.key === 'Enter') {
       e.preventDefault()
-      passwordRef.current?.focus()
+      // אם יש טקסט בשדה הסיסמה, בצע התחברות
+      if (formData.password.trim()) {
+        handleSubmit(e)
+      } else {
+        // אחרת, עבור לשדה הסיסמה
+        passwordRef.current?.focus()
+      }
     }
   }
 
