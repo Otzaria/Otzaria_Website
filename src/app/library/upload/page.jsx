@@ -184,7 +184,7 @@ export default function UploadPage() {
               העלאת ספר חדש
             </h1>
             <p className="text-on-surface/70">
-              תרום לקהילה על ידי העלאת טקסטים של ספרי קודש (כל פורמטי טקסט ווורד)
+              תרום לקהילה על ידי העלאת טקסטים של ספרי קודש (כל פורמטי טקסט, או וורד)
             </p>
           </div>
 
@@ -302,7 +302,7 @@ export default function UploadPage() {
                   value={formData.copyrightHolder}
                   onChange={handleInputChange}
                   className="w-full px-4 py-3 rounded-lg border border-surface-variant bg-surface focus:ring-2 focus:ring-primary outline-none"
-                  placeholder="לדוגמה: הוצאת כתר או תחום ציבורי"
+                  placeholder="לדוגמה: הזכויות שייכות לי, הוצאת כתר, או תחום ציבורי"
                   required
                 />
               </div>
@@ -362,14 +362,14 @@ export default function UploadPage() {
                     value={formData.ocrDescription}
                     onChange={handleInputChange}
                     className="w-full px-4 py-3 rounded-lg border border-surface-variant bg-surface focus:ring-2 focus:ring-primary outline-none"
-                    placeholder="לדוגמה: Google Docs OCR, Adobe Acrobat, Tesseract, או תיאור אחר של השיטה"
+                    placeholder="לדוגמה: Abbyy, Google Docs OCR, PDF XChange, Adobe Acrobat, Tesseract, או תיאור אחר של השיטה"
                     rows="3"
                     required
                   />
                 </div>
               )}
 
-              {/* קובץ טקסט או וורד */}
+              {/* העלאת קובץ (טקסט או וורד) */}
               <div>
                 <label className="block text-sm font-bold mb-2">
                   קובץ טקסט או וורד <span className="text-red-500">*</span>
