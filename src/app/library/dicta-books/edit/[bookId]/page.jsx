@@ -535,7 +535,7 @@ function UploadDialog({ bookTitle, onConfirm, onCancel }) {
                 <p className="font-bold mb-1">לפני הסיום יש לבצע:</p>
                 <ul className="space-y-0.5">
                   <li>✓ בדיקת איות</li>
-                  <li>✓ בדיקת שגיאות</li>
+                  <li>✓ ניקוי שגיאות</li>
                 </ul>
               </div>
             </div>

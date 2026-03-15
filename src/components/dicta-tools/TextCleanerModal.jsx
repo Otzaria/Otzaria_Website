@@ -10,6 +10,8 @@ export default function TextCleanerModal({ isOpen, onClose, content, onContentCh
     remove_spaces_before: true,
     remove_spaces_after: true,
     remove_spaces_around_newlines: true,
+    remove_leading_spaces: true,
+    fix_spaces_near_tags: true,
     replace_double_quotes: true,
     normalize_quotes: true,
     clean_duplicate_tags: false
@@ -58,6 +60,25 @@ export default function TextCleanerModal({ isOpen, onClose, content, onContentCh
         const before = newContent
         newContent = newContent.replace(/\s+\n/g, '\n')
         newContent = newContent.replace(/\n\s+/g, '\n')
+        if (before !== newContent) changed = true
+      }
+      
+      if (options.remove_leading_spaces) {
+        const before = newContent
+        newContent = newContent.replace(/^[ \t]+/gm, '')
+        if (before !== newContent) changed = true
+      }
+      
+      if (options.fix_spaces_near_tags) {
+        const before = newContent
+        // הוסף רווח לפני תגים פותחים אם אין רווח
+        newContent = newContent.replace(/([א-ת])<([a-z]+\d?)>/gi, '$1 <$2>')
+        // הוסף רווח אחרי תגים סוגרים אם אין רווח
+        newContent = newContent.replace(/<\/([a-z]+\d?)>([א-ת])/gi, '</$1> $2')
+        // הסר רווחים מיותרים אחרי תגים פותחים
+        newContent = newContent.replace(/<([a-z]+\d?)>\s+/gi, '<$1>')
+        // הסר רווחים מיותרים לפני תגים סוגרים
+        newContent = newContent.replace(/\s+<\/([a-z]+\d?)>/gi, '</$1>')
         if (before !== newContent) changed = true
       }
       
@@ -186,6 +207,26 @@ export default function TextCleanerModal({ isOpen, onClose, content, onContentCh
               className="w-4 h-4"
             />
             <span>הסרת רווחים סביב מעברי שורה</span>
+          </label>
+
+          <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-2 rounded">
+            <input
+              type="checkbox"
+              checked={options.remove_leading_spaces}
+              onChange={() => handleToggle('remove_leading_spaces')}
+              className="w-4 h-4"
+            />
+            <span>הסרת רווחים בתחילת שורה</span>
+          </label>
+
+          <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-2 rounded">
+            <input
+              type="checkbox"
+              checked={options.fix_spaces_near_tags}
+              onChange={() => handleToggle('fix_spaces_near_tags')}
+              className="w-4 h-4"
+            />
+            <span>רווחים חסרים/מיותרים ליד תגים</span>
           </label>
 
           <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-2 rounded">
