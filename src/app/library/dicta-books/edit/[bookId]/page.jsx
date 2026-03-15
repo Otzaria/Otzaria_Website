@@ -9,6 +9,7 @@ import { useDialog } from '@/components/DialogContext'
 import { getAvatarColor, getInitial } from '@/lib/avatar-colors'
 import DictaEditorCore from '@/components/editor/DictaEditorCore'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import DictaUploadDialog from '@/components/dicta-tools/DictaUploadDialog'
 
 export default function DictaEditorPage() {
   const params = useParams()
@@ -470,10 +471,11 @@ export default function DictaEditorPage() {
       />
 
       {showUploadDialog && (
-        <UploadDialog
+        <DictaUploadDialog
           bookTitle={book?.title}
           onConfirm={handleUploadConfirm}
           onCancel={() => setShowUploadDialog(false)}
+          loading={completing}
         />
       )}
 
@@ -523,8 +525,23 @@ function UploadDialog({ bookTitle, onConfirm, onCancel }) {
             <span className="material-symbols-outlined text-4xl text-green-600">upload_file</span>
           </div>
           <h2 className="text-2xl font-bold text-on-surface mb-2">סיום עבודה על {bookTitle}</h2>
-          <p className="text-on-surface/70">האם ברצונך להעלות את הטקסט שערכת למערכת?</p>
         </div>
+        <div className="flex justify-center mb-6">
+          <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-3 max-w-xs">
+            <div className="flex items-start gap-2">
+              <span className="material-symbols-outlined text-amber-600 text-lg flex-shrink-0">warning</span>
+              <div className="text-xs text-amber-800">
+                <p className="font-bold mb-1">תזכורת חשובה!</p>
+                <p className="font-bold mb-1">לפני הסיום יש לבצע:</p>
+                <ul className="space-y-0.5">
+                  <li>✓ בדיקת איות</li>
+                  <li>✓ בדיקת שגיאות</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p className="text-on-surface/70 text-center mb-6">האם ברצונך להעלות את הטקסט שערכת למערכת?</p>
         <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-6">
           <div className="flex items-start gap-3">
             <span className="material-symbols-outlined text-blue-600 mt-0.5">info</span>
