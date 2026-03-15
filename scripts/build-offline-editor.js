@@ -76,18 +76,266 @@ async function readTextFile(filePath) {
   return fs.readFile(filePath, 'utf8');
 }
 
+function isIconName(value) {
+  return typeof value === 'string' && /^[a-z][a-z_]*$/.test(value);
+}
+
+function unionSets(...sets) {
+  const merged = new Set();
+  for (const set of sets) {
+    if (!set) continue;
+    for (const value of set) merged.add(value);
+  }
+  return merged;
+}
+
+function createScope(parent = null) {
+  return {
+    parent,
+    bindings: new Map(),
+  };
+}
+
+function getBinding(scope, name) {
+  let current = scope;
+  while (current) {
+    if (current.bindings.has(name)) {
+      return current.bindings.get(name);
+    }
+    current = current.parent;
+  }
+  return null;
+}
+
+function setBinding(scope, name, value) {
+  if (!name || !value || value.size === 0) return;
+  scope.bindings.set(name, value);
+}
+
+function getJsxName(node) {
+  if (!node) return '';
+  if (node.type === 'JSXIdentifier') return node.name;
+  if (node.type === 'JSXMemberExpression') {
+    const objectName = getJsxName(node.object);
+    const propertyName = getJsxName(node.property);
+    return objectName && propertyName ? `${objectName}.${propertyName}` : '';
+  }
+  return '';
+}
+
+function getAttributeValue(node) {
+  if (!node) return null;
+
+  switch (node.type) {
+    case 'StringLiteral':
+      return node.value;
+    case 'Literal':
+      return typeof node.value === 'string' ? node.value : null;
+    case 'JSXExpressionContainer':
+      if (!node.expression) return null;
+      if (node.expression.type === 'StringLiteral') return node.expression.value;
+      if (node.expression.type === 'Literal') {
+        return typeof node.expression.value === 'string' ? node.expression.value : null;
+      }
+      return null;
+    default:
+      return null;
+  }
+}
+
+function containsMaterialClass(valueNode) {
+  if (!valueNode) return false;
+
+  const direct = getAttributeValue(valueNode);
+  if (typeof direct === 'string' && direct.includes('material-symbols-outlined')) {
+    return true;
+  }
+
+  if (valueNode.type === 'JSXExpressionContainer' && valueNode.expression) {
+    const expr = valueNode.expression;
+
+    if (expr.type === 'TemplateLiteral') {
+      const cooked = expr.quasis.map((q) => q.value.cooked || '').join(' ');
+      if (cooked.includes('material-symbols-outlined')) {
+        return true;
+      }
+    }
+
+    if (expr.type === 'BinaryExpression' && expr.operator === '+') {
+      const walk = (node) => {
+        if (!node) return '';
+        if (node.type === 'StringLiteral') return node.value || '';
+        if (node.type === 'Literal' && typeof node.value === 'string') return node.value;
+        if (node.type === 'BinaryExpression' && node.operator === '+') {
+          return `${walk(node.left)} ${walk(node.right)}`;
+        }
+        return '';
+      };
+      const flat = walk(expr);
+      if (flat.includes('material-symbols-outlined')) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function expressionToIconSet(expression, scope, depth = 0) {
+  if (!expression || depth > 8) return new Set();
+
+  switch (expression.type) {
+    case 'StringLiteral':
+      return isIconName(expression.value) ? new Set([expression.value]) : new Set();
+    case 'Literal':
+      return typeof expression.value === 'string' && isIconName(expression.value)
+        ? new Set([expression.value])
+        : new Set();
+    case 'TemplateLiteral': {
+      if (expression.expressions.length > 0) return new Set();
+      const value = expression.quasis.map((q) => q.value.cooked || '').join('');
+      return isIconName(value) ? new Set([value]) : new Set();
+    }
+    case 'ConditionalExpression':
+      return unionSets(
+        expressionToIconSet(expression.consequent, scope, depth + 1),
+        expressionToIconSet(expression.alternate, scope, depth + 1)
+      );
+    case 'LogicalExpression':
+      return unionSets(
+        expressionToIconSet(expression.left, scope, depth + 1),
+        expressionToIconSet(expression.right, scope, depth + 1)
+      );
+    case 'SequenceExpression': {
+      const last = expression.expressions[expression.expressions.length - 1];
+      return expressionToIconSet(last, scope, depth + 1);
+    }
+    case 'ParenthesizedExpression':
+      return expressionToIconSet(expression.expression, scope, depth + 1);
+    case 'Identifier': {
+      const binding = getBinding(scope, expression.name);
+      return binding ? new Set(binding) : new Set();
+    }
+    default:
+      return new Set();
+  }
+}
+
+function collectIconsFromJsxElement(node, scope, usedIcons) {
+  if (!node || node.type !== 'JSXElement') return;
+
+  const attrs = node.openingElement?.attributes || [];
+  let hasMaterialClass = false;
+
+  for (const attr of attrs) {
+    if (!attr || attr.type !== 'JSXAttribute') continue;
+    const attrName = getJsxName(attr.name);
+    if (attrName !== 'className' && attrName !== 'class') continue;
+    if (containsMaterialClass(attr.value)) {
+      hasMaterialClass = true;
+      break;
+    }
+  }
+
+  for (const attr of attrs) {
+    if (!attr || attr.type !== 'JSXAttribute') continue;
+    if (getJsxName(attr.name) !== 'icon') continue;
+
+    if (attr.value?.type === 'StringLiteral') {
+      if (isIconName(attr.value.value)) usedIcons.add(attr.value.value);
+      continue;
+    }
+
+    if (attr.value?.type === 'JSXExpressionContainer') {
+      const names = expressionToIconSet(attr.value.expression, scope);
+      for (const name of names) usedIcons.add(name);
+    }
+  }
+
+  if (hasMaterialClass) {
+    for (const child of node.children || []) {
+      if (!child) continue;
+
+      if (child.type === 'JSXText') {
+        const value = child.value.trim();
+        if (isIconName(value)) usedIcons.add(value);
+        continue;
+      }
+
+      if (child.type === 'JSXExpressionContainer') {
+        const names = expressionToIconSet(child.expression, scope);
+        for (const name of names) usedIcons.add(name);
+      }
+    }
+  }
+}
+
+function traverseForIcons(node, scope, usedIcons) {
+  if (!node || typeof node !== 'object') return;
+
+  switch (node.type) {
+    case 'File':
+      traverseForIcons(node.program, scope, usedIcons);
+      return;
+    case 'Program':
+      for (const statement of node.body || []) traverseForIcons(statement, scope, usedIcons);
+      return;
+    case 'BlockStatement': {
+      const blockScope = createScope(scope);
+      for (const statement of node.body || []) traverseForIcons(statement, blockScope, usedIcons);
+      return;
+    }
+    case 'FunctionDeclaration': {
+      if (node.id?.name) setBinding(scope, node.id.name, new Set());
+      const fnScope = createScope(scope);
+      for (const param of node.params || []) traverseForIcons(param, fnScope, usedIcons);
+      traverseForIcons(node.body, fnScope, usedIcons);
+      return;
+    }
+    case 'FunctionExpression':
+    case 'ArrowFunctionExpression': {
+      const fnScope = createScope(scope);
+      for (const param of node.params || []) traverseForIcons(param, fnScope, usedIcons);
+      traverseForIcons(node.body, fnScope, usedIcons);
+      return;
+    }
+    case 'VariableDeclaration':
+      for (const declaration of node.declarations || []) {
+        if (declaration.id?.type === 'Identifier' && declaration.init) {
+          const names = expressionToIconSet(declaration.init, scope);
+          setBinding(scope, declaration.id.name, names);
+        }
+        traverseForIcons(declaration, scope, usedIcons);
+      }
+      return;
+    case 'JSXElement':
+      collectIconsFromJsxElement(node, scope, usedIcons);
+      break;
+    case 'ReturnStatement': {
+      const names = expressionToIconSet(node.argument, scope);
+      for (const name of names) usedIcons.add(name);
+      break;
+    }
+    default:
+      break;
+  }
+
+  for (const value of Object.values(node)) {
+    if (!value) continue;
+    if (Array.isArray(value)) {
+      for (const item of value) traverseForIcons(item, scope, usedIcons);
+    } else if (typeof value === 'object' && value.type) {
+      traverseForIcons(value, scope, usedIcons);
+    }
+  }
+}
+
 /**
- * Scans each bundled component file and extracts the names of every
- * Material Symbols icon that is actually used, so the font can be subsetted.
- *
- * Handles three patterns:
- *   1. Static text children of .material-symbols-outlined spans
- *   2. String literals inside icon= props (including ternary expressions)
- *   3. return 'icon_name' statements in files that use material-symbols
+ * Extracts Material Symbols icon names from source files using AST parsing.
+ * This supports literals and common variable-based expressions (e.g. const x = 'settings').
  */
 async function collectUsedIcons() {
   const usedIcons = new Set();
-  const iconNameRe = /^[a-z][a-z_]*$/;
 
   for (const relativePath of COMPONENT_PATHS) {
     const fullPath = path.join(ROOT_DIR, relativePath);
@@ -98,70 +346,28 @@ async function collectUsedIcons() {
       continue;
     }
 
-    // 1. Content of every material-symbols-outlined span element.
-    //    Split on each occurrence of the class name, grab everything between
-    //    the first '>' and the first '<' that follows it.
-    const parts = source.split('material-symbols-outlined');
-    for (let i = 1; i < parts.length; i++) {
-      const afterClass = parts[i];
-      const gtIdx = afterClass.indexOf('>');
-      if (gtIdx === -1) continue;
-      const afterGt = afterClass.slice(gtIdx + 1);
-      const ltIdx = afterGt.indexOf('<');
-      if (ltIdx === -1) continue;
-      const content = afterGt.slice(0, ltIdx).trim();
+    try {
+      const ast = Babel.parseSync(source, {
+        filename: relativePath,
+        sourceType: 'unambiguous',
+        babelrc: false,
+        configFile: false,
+        parserOpts: {
+          plugins: ['jsx'],
+          errorRecovery: true,
+        },
+      });
 
-      if (iconNameRe.test(content)) {
-        // Plain static icon name
-        usedIcons.add(content);
-      } else {
-        // For expressions, only keep quoted values that are rendered as icon outputs.
-        // This avoids collecting condition strings such as "confirm".
-        const ternaryOutputs = content.matchAll(/\?\s*["']([a-z][a-z_]*)["']\s*:\s*["']([a-z][a-z_]*)["']/g);
-        let foundTernary = false;
-        for (const match of ternaryOutputs) {
-          foundTernary = true;
-          usedIcons.add(match[1]);
-          usedIcons.add(match[2]);
-        }
-
-        if (!foundTernary) {
-          const directValue = content.match(/^\{?\s*["']([a-z][a-z_]*)["']\s*\}?$/);
-          if (directValue) {
-            usedIcons.add(directValue[1]);
-          }
-        }
-      }
+      if (!ast) continue;
+      traverseForIcons(ast, createScope(), usedIcons);
+    } catch (error) {
+      console.warn(`[offline-editor] Icon scan parse failed for ${relativePath}: ${error.message}`);
+      continue;
     }
 
-    // 2. icon= prop: static ("name"), dynamic ({expr}) and ternary forms
-    const iconPropRe = /\bicon=(?:"([a-z][a-z_]*)"|'([a-z][a-z_]*)'|\{([^}]+)\})/g;
-    for (const match of source.matchAll(iconPropRe)) {
-      if (match[1]) {
-        usedIcons.add(match[1]);
-      } else if (match[2]) {
-        usedIcons.add(match[2]);
-      } else if (match[3]) {
-        const expression = match[3].trim();
-        const directValue = expression.match(/^["']([a-z][a-z_]*)["']$/);
-        if (directValue) {
-          usedIcons.add(directValue[1]);
-          continue;
-        }
-
-        const ternaryOutputs = expression.matchAll(/\?\s*["']([a-z][a-z_]*)["']\s*:\s*["']([a-z][a-z_]*)["']/g);
-        for (const ternary of ternaryOutputs) {
-          usedIcons.add(ternary[1]);
-          usedIcons.add(ternary[2]);
-        }
-      }
-    }
-
-    // 3. return 'icon_name' in files that render material-symbols icons.
-    //    Catches helper functions like getIcon() { switch(...) { return 'list_alt' } }
     if (source.includes('material-symbols-outlined')) {
       for (const [, name] of source.matchAll(/\breturn\s+["']([a-z][a-z_]*)["']/g)) {
-        usedIcons.add(name);
+        if (isIconName(name)) usedIcons.add(name);
       }
     }
   }
@@ -188,7 +394,7 @@ async function buildGoogleMaterialSymbolsCss(usedIcons) {
     }
 
     const googleCss = await cssResponse.text();
-    const fontUrlMatch = googleCss.match(/src:\s*url\((https:[^)]+)\)\s*format\('([^']+)'\)/);
+    const fontUrlMatch = googleCss.match(/src:\s*url\((https:[^)]+)\)\s*format\(['"]([^'"]+)['"]\)/);
     if (!fontUrlMatch) {
       throw new Error('subset font URL not found in Google CSS response');
     }
