@@ -173,27 +173,22 @@ function DictaBooksContent() {
     )
   }
 
-  const handleComplete = (bookId) => {
+  const handleComplete = async (bookId) => {
     try {
       // שלב 1: שליפת תוכן הספר מהשרת
-      const fetchAndOpen = async () => {
-        const bookRes = await fetch(`/api/dicta/books/${bookId}`)
-        if (!bookRes.ok) throw new Error('שגיאה בטעינת הספר')
-        
-        const book = await bookRes.json()
-        
-        if (!book?.content?.trim()) {
-          showAlert('שגיאה', 'הספר ריק מתוכן')
-          return
-        }
-
-        // פתח את החלונית עם פרטי הספר
-        setSelectedBookForCompletion(book)
-        setShowUploadDialog(true)
+      const bookRes = await fetch(`/api/dicta/books/${bookId}`)
+      if (!bookRes.ok) throw new Error('שגיאה בטעינת הספר')
+      
+      const book = await bookRes.json()
+      
+      if (!book?.content?.trim()) {
+        showAlert('שגיאה', 'הספר ריק מתוכן')
+        return
       }
 
-      fetchAndOpen()
-
+      // פתח את החלונית עם פרטי הספר
+      setSelectedBookForCompletion(book)
+      setShowUploadDialog(true)
     } catch (error) {
       console.error('Error completing book:', error)
       showAlert('שגיאה', error.message || 'אירעה שגיאה בטעינת הספר')
