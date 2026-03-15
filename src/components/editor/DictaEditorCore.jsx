@@ -431,13 +431,18 @@ export default function DictaEditorCore({
     
     const scrollTop = textarea.scrollTop
     
-    const insertion = selectedText ? `<${tag}>${selectedText}</${tag}>` : `<${tag}></${tag}>`
-    const newText = content.substring(0, start) + insertion + content.substring(end)
+    // הסרת רווחים מלפני ואחרי הטקסט הנבחר
+    const trimmedText = selectedText.trim()
+    const leadingSpaces = selectedText.match(/^\s*/)[0]
+    const trailingSpaces = selectedText.match(/\s*$/)[0]
+    
+    const insertion = trimmedText ? `<${tag}>${trimmedText}</${tag}>` : `<${tag}></${tag}>`
+    const newText = content.substring(0, start) + leadingSpaces + insertion + trailingSpaces + content.substring(end)
     
     updateTextWithHistory(newText)
     
     setTimeout(() => {
-      const newPos = selectedText ? (start + insertion.length) : (start + tag.length + 2)
+      const newPos = trimmedText ? (start + leadingSpaces.length + insertion.length) : (start + tag.length + 2)
       textarea.focus()
       textarea.setSelectionRange(newPos, newPos)
       textarea.scrollTop = scrollTop

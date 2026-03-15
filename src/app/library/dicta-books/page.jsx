@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Header from '@/components/Header'
 import Link from 'next/link'
 import { useDialog } from '@/components/DialogContext'
+import DictaUploadDialog from '@/components/dicta-tools/DictaUploadDialog'
 
 // קומפוננטת התוכן שמכילה את כל הלוגיקה והממשק
 function DictaBooksContent() {
@@ -19,6 +20,9 @@ function DictaBooksContent() {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('available')
   const [filterCategory, setFilterCategory] = useState('all')
+  const [showUploadDialog, setShowUploadDialog] = useState(false)
+  const [selectedBookForCompletion, setSelectedBookForCompletion] = useState(null)
+  const [completing, setCompleting] = useState(false)
   
   const isAdmin = session?.user?.role === 'admin'
   const currentUserId = session?.user?.id
@@ -169,86 +173,26 @@ function DictaBooksContent() {
     )
   }
 
-  const handleComplete = (bookId) => {
-    showConfirm(
-      'סיום עריכה',
-      'האם אתה בטוח שסיימת לערוך את הספר? הטקסט יועלה למערכת והספר יסומן כ"הושלם".',
-      async () => {
-        try {
-          // שלב 1: שליפת תוכן הספר
-          const bookRes = await fetch(`/api/dicta/books/${bookId}`)
-          if (!bookRes.ok) throw new Error('שגיאה בטעינת הספר')
-          
-          const book = await bookRes.json()
-          
-          if (!book?.content?.trim()) {
-            showAlert('שגיאה', 'הספר ריק מתוכן')
-            return
-          }
-
-          // פונקציה פנימית להעלאה
-          const uploadBook = async (confirmOverwrite = false) => {
-            // שלב 2: יצירת קובץ והעלאה
-            const cleanBookName = book.title.replace(/[^a-zA-Z0-9א-ת]/g, '_')
-            const fileName = `${cleanBookName}_dicta.txt`
-            const blob = new Blob([book.content], { type: 'text/plain' })
-            const file = new File([blob], fileName, { type: 'text/plain' })
-
-            const formData = new FormData()
-            formData.append('file', file)
-            formData.append('bookName', book.title)
-            formData.append('uploadType', 'dicta')
-            if (confirmOverwrite) {
-              formData.append('confirmOverwrite', 'true')
-            }
-
-            const uploadResponse = await fetch('/api/upload-book', { 
-              method: 'POST', 
-              body: formData 
-            })
-            const uploadResult = await uploadResponse.json()
-
-            // אם נדרש אישור
-            if (uploadResult.requiresConfirmation) {
-              const confirmed = await showConfirm(
-                'קובץ קיים',
-                uploadResult.message
-              )
-              
-              if (confirmed) {
-                await uploadBook(true)
-              }
-              return
-            }
-
-            if (!uploadResult.success) {
-              throw new Error(uploadResult.error || 'שגיאה בהעלאה')
-            }
-
-            // שלב 3: עדכון סטטוס הספר ל-completed
-            const completeResponse = await fetch(`/api/dicta/books/${bookId}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'complete' })
-            })
-
-            if (completeResponse.ok) {
-              fetchBooks()
-              showAlert('הצלחה', 'הטקסט הועלה בהצלחה והספר סומן כהושלם!')
-            } else {
-              showAlert('שגיאה', 'הטקסט הועלה אך אירעה בעיה בסימון הספר כהושלם.')
-            }
-          }
-
-          // התחל את תהליך ההעלאה
-          await uploadBook()
-
-        } catch (error) {
-          console.error('Error completing book:', error)
-          showAlert('שגיאה', error.message || 'אירעה שגיאה בתהליך ההעלאה')
-        }
+  const handleComplete = async (bookId) => {
+    try {
+      // שלב 1: שליפת תוכן הספר מהשרת
+      const bookRes = await fetch(`/api/dicta/books/${bookId}`)
+      if (!bookRes.ok) throw new Error('שגיאה בטעינת הספר')
+      
+      const book = await bookRes.json()
+      
+      if (!book?.content?.trim()) {
+        showAlert('שגיאה', 'הספר ריק מתוכן')
+        return
       }
-    )
+
+      // פתח את החלונית עם פרטי הספר
+      setSelectedBookForCompletion(book)
+      setShowUploadDialog(true)
+    } catch (error) {
+      console.error('Error completing book:', error)
+      showAlert('שגיאה', error.message || 'אירעה שגיאה בטעינת הספר')
+    }
   }
 
   const handleCancelCompletion = (bookId) => {
@@ -274,6 +218,72 @@ function DictaBooksContent() {
         }
       }
     )
+  }
+
+  const handleUploadConfirm = async () => {
+    if (!selectedBookForCompletion?.content?.trim()) return showAlert('שגיאה', 'הספר ריק מתוכן')
+
+    const uploadBook = async (confirmOverwrite = false) => {
+      try {
+        setCompleting(true)
+        
+        const cleanBookName = selectedBookForCompletion.title.replace(/[^a-zA-Z0-9א-ת]/g, '_')
+        const fileName = `${cleanBookName}_dicta.txt`
+        const blob = new Blob([selectedBookForCompletion.content], { type: 'text/plain' })
+        const file = new File([blob], fileName, { type: 'text/plain' })
+
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('bookName', selectedBookForCompletion.title)
+        formData.append('uploadType', 'dicta')
+        if (confirmOverwrite) {
+          formData.append('confirmOverwrite', 'true')
+        }
+
+        const uploadResponse = await fetch('/api/upload-book', { method: 'POST', body: formData })
+        const uploadResult = await uploadResponse.json()
+
+        // אם נדרש אישור
+        if (uploadResult.requiresConfirmation) {
+          setCompleting(false)
+          const confirmed = await showConfirm(
+            'קובץ קיים',
+            uploadResult.message
+          )
+          
+          if (confirmed) {
+            await uploadBook(true)
+          }
+          return
+        }
+
+        if (!uploadResult.success) {
+          throw new Error(uploadResult.error || 'שגיאה בהעלאה')
+        }
+
+        const completeResponse = await fetch(`/api/dicta/books/${selectedBookForCompletion._id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'complete' })
+        })
+
+        if (completeResponse.ok) {
+          setShowUploadDialog(false)
+          setSelectedBookForCompletion(null)
+          fetchBooks()
+          showAlert('הצלחה', 'הטקסט הועלה בהצלחה והספר סומן כהושלם!')
+        } else {
+          showAlert('שגיאה', 'הטקסט הועלה אך אירעה בעיה בסימון הספר כהושלם.')
+        }
+      } catch (error) {
+        console.error('Error completing book:', error)
+        showAlert('שגיאה', error.message || 'אירעה שגיאה בתהליך ההעלאה')
+      } finally {
+        setCompleting(false)
+      }
+    }
+
+    await uploadBook()
   }
 
   const processedBooks = useMemo(() => {
@@ -553,6 +563,18 @@ function DictaBooksContent() {
           )}
         </div>
       </main>
+
+      {showUploadDialog && selectedBookForCompletion && (
+        <DictaUploadDialog
+          bookTitle={selectedBookForCompletion?.title}
+          onConfirm={handleUploadConfirm}
+          onCancel={() => {
+            setShowUploadDialog(false)
+            setSelectedBookForCompletion(null)
+          }}
+          loading={completing}
+        />
+      )}
     </div>
   )
 }

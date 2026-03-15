@@ -65,6 +65,19 @@ export default function UploadPage() {
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0]
     if (selectedFile) {
+      // בדוק את סוג הקובץ
+      const allowedExtensions = ['.txt', '.doc', '.docx', '.rtf', '.odt']
+      const fileName = selectedFile.name.toLowerCase()
+      const hasValidExtension = allowedExtensions.some(ext => fileName.endsWith(ext))
+      
+      if (!hasValidExtension) {
+        showAlert('סוג קובץ לא תקין', 'אנא בחר קובץ טקסט או וורד בלבד (.txt, .doc, .docx, .rtf, .odt)')
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''
+        }
+        return
+      }
+      
       setFile(selectedFile)
       // מציע שם ספר לפי שם הקובץ
       if (!formData.bookName) {
@@ -378,7 +391,7 @@ export default function UploadPage() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".txt,.doc,.docx,.rtf,.odt,text/*"
+                    accept=".txt,.doc,.docx,.rtf,.odt"
                     onChange={handleFileChange}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     required

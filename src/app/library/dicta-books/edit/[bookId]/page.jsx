@@ -9,6 +9,7 @@ import { useDialog } from '@/components/DialogContext'
 import { getAvatarColor, getInitial } from '@/lib/avatar-colors'
 import DictaEditorCore from '@/components/editor/DictaEditorCore'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import DictaUploadDialog from '@/components/dicta-tools/DictaUploadDialog'
 
 export default function DictaEditorPage() {
   const params = useParams()
@@ -470,10 +471,11 @@ export default function DictaEditorPage() {
       />
 
       {showUploadDialog && (
-        <UploadDialog
+        <DictaUploadDialog
           bookTitle={book?.title}
           onConfirm={handleUploadConfirm}
           onCancel={() => setShowUploadDialog(false)}
+          loading={completing}
         />
       )}
 
@@ -496,62 +498,6 @@ export default function DictaEditorPage() {
         />
       )}
     </>
-  )
-}
-
-function UploadDialog({ bookTitle, onConfirm, onCancel }) {
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault()
-        onConfirm()
-      }
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        onCancel()
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [onConfirm, onCancel])
-
-  return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onCancel}>
-      <div className="glass-strong rounded-2xl p-8 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-        <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="material-symbols-outlined text-4xl text-green-600">upload_file</span>
-          </div>
-          <h2 className="text-2xl font-bold text-on-surface mb-2">סיום עבודה על {bookTitle}</h2>
-          <p className="text-on-surface/70">האם ברצונך להעלות את הטקסט שערכת למערכת?</p>
-        </div>
-        <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-6">
-          <div className="flex items-start gap-3">
-            <span className="material-symbols-outlined text-blue-600 mt-0.5">info</span>
-            <div className="text-sm text-blue-800">
-              <p className="font-bold mb-1">מה יקרה?</p>
-              <ul className="space-y-1">
-                <li>• הטקסט שערכת יועלה כקובץ חדש</li>
-                <li>• הקובץ יסומן כ"דיקטה" ויישלח לאישור מנהל</li>
-                <li>• הספר יסומן כהושלם</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-col gap-3">
-          <button onClick={onConfirm} className="flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-bold">
-            <span className="material-symbols-outlined">upload</span>
-            <span>כן, העלה את הטקסט</span>
-          </button>
-          <button
-            onClick={onCancel}
-            className="px-6 py-3 border-2 border-surface-variant text-on-surface rounded-lg hover:bg-surface transition-colors"
-          >
-            ביטול
-          </button>
-        </div>
-      </div>
-    </div>
   )
 }
 

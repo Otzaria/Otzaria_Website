@@ -1503,8 +1503,21 @@ function UploadDialog({ pageNumber, onConfirm, onCancel }) {
             <span className="material-symbols-outlined text-4xl text-green-600">upload_file</span>
           </div>
           <h2 className="text-2xl font-bold text-on-surface mb-2">סיום עבודה על עמוד {pageNumber}</h2>
-          <p className="text-on-surface/70">האם ברצונך להעלות את הטקסט שערכת למערכת?</p>
         </div>
+        <div className="flex justify-center mb-6">
+          <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-3 max-w-xs">
+            <div className="flex items-start gap-2">
+              <span className="material-symbols-outlined text-amber-600 text-lg flex-shrink-0">warning</span>
+              <div className="text-xs text-amber-800">
+                <p className="font-bold mb-1">תזכורת חשובה!</p>
+                <ul className="space-y-0.5">
+                  <li>לפני הסיום יש לבצע בדיקת איות</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p className="text-on-surface/70 text-center mb-6">האם ברצונך להעלות את הטקסט שערכת למערכת?</p>
         <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-6">
           <div className="flex items-start gap-3">
             <span className="material-symbols-outlined text-blue-600 mt-0.5">info</span>
