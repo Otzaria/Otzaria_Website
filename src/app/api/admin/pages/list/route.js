@@ -34,6 +34,18 @@ export async function GET(request) {
         const bookDoc = await Book.findOne({ name: bookName });
         if (bookDoc) {
             query.book = bookDoc._id;
+        } else {
+            // אם הספר לא נמצא, החזר רשימה ריקה
+            return NextResponse.json({ 
+                success: true, 
+                pages: [],
+                pagination: {
+                    total: 0,
+                    page,
+                    limit,
+                    totalPages: 0
+                }
+            });
         }
     }
     
@@ -49,8 +61,10 @@ export async function GET(request) {
     // ספירת סה"כ רשומות (עבור פגינציה עתידית)
     const total = await Page.countDocuments(query);
 
-    // התאמה לפורמט ה-UI
-    const formattedPages = pages.map(p => ({
+    // התאמה לפורמט ה-UI - סינון עמודים ללא ספר
+    const formattedPages = pages
+      .filter(p => p.book) // התעלם מעמודים ללא ספר
+      .map(p => ({
         id: p._id,
         bookName: p.book?.name || 'ספר לא ידוע',
         number: p.pageNumber,
@@ -60,7 +74,7 @@ export async function GET(request) {
         updatedAt: p.updatedAt,
         completedAt: p.completedAt,
         createdAt: p.createdAt
-    }));
+      }));
 
     return NextResponse.json({ 
         success: true, 

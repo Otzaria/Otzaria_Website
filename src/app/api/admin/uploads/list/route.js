@@ -27,6 +27,16 @@ export async function GET() {
       bookStatus: u.bookStatus || 'not_checked', // סטטוס הספר
       editCopy: u.editCopy ? u.editCopy.toString() : null, // מזהה עותק העריכה
       editCopyCreatedAt: u.editCopyCreatedAt, // תאריך יצירת עותק העריכה
+      // מטא-דטה של הספר
+      authorName: u.authorName,
+      bookCategory: u.bookCategory,
+      authorCategory: u.authorCategory,
+      authorYear: u.authorYear,
+      publicationYear: u.publicationYear,
+      copyrightHolder: u.copyrightHolder,
+      sourceUrl: u.sourceUrl,
+      isOcr: u.isOcr,
+      ocrDescription: u.ocrDescription,
   }));
 
   return NextResponse.json({ success: true, uploads: formattedUploads });

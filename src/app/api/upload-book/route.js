@@ -6,6 +6,48 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { sendUploadNotification } from '@/lib/emailService';
 import { isLastPageUpload } from '@/lib/uploadHelpers';
 
+// פונקציה ליצירת כותרת מטא-דטה
+function createMetadataHeader(metadata) {
+    const lines = [
+        '═══════════════════════════════════════════════════════════',
+        'מידע על הספר',
+        '═══════════════════════════════════════════════════════════',
+        `שם הספר: ${metadata.bookName}`,
+        `שם המחבר: ${metadata.authorName}`,
+        `קטגוריית הספר: ${metadata.bookCategory}`,
+        `קטגוריית המחבר: ${metadata.authorCategory}`,
+        `שנת המחבר: ${metadata.authorYear}`,
+        ...(metadata.publicationYear ? [`שנת הדפסה: ${metadata.publicationYear}`] : []),
+        `בעל הזכויות: ${metadata.copyrightHolder}`,
+        ...(metadata.sourceUrl ? [`מקור: ${metadata.sourceUrl}`] : []),
+        `OCR: ${metadata.isOcr ? `כן - ${metadata.ocrDescription}` : 'לא'}`,
+        '═══════════════════════════════════════════════════════════',
+        '',
+        '',
+    ];
+    return lines.join('\n');
+}
+
+// פונקציית עזר לחילוץ סיומת קובץ
+function getFileExtension(fileName) {
+    if (!fileName) return '';
+    const lastDotIndex = fileName.lastIndexOf('.');
+    if (lastDotIndex === -1) return '';
+    return fileName.substring(lastDotIndex).toLowerCase();
+}
+
+// בדיקה אם הקובץ הוא טקסט או בינארי
+function isTextFile(fileName) {
+    const textExtensions = ['.txt', '.text', '.rtf'];
+    return textExtensions.includes(getFileExtension(fileName));
+}
+
+// בדיקה אם הקובץ הוא וורד
+function isWordFile(fileName) {
+    const wordExtensions = ['.doc', '.docx'];
+    return wordExtensions.includes(getFileExtension(fileName));
+}
+
 // טיפול בהעלאת קובץ טקסט ע"י משתמש
 export async function POST(request) {
     try {
@@ -16,14 +58,49 @@ export async function POST(request) {
         const file = formData.get('file');
         const bookName = formData.get('bookName');
         const confirmOverwrite = formData.get('confirmOverwrite') === 'true';
+        
+        // Extract metadata fields
+        const authorName = formData.get('authorName');
+        const bookCategory = formData.get('bookCategory');
+        const authorCategory = formData.get('authorCategory');
+        const authorYear = formData.get('authorYear');
+        const publicationYear = formData.get('publicationYear');
+        const copyrightHolder = formData.get('copyrightHolder');
+        const sourceUrl = formData.get('sourceUrl');
+        const isOcr = formData.get('isOcr') === 'true';
+        const ocrDescription = formData.get('ocrDescription');
 
         const MAX_SIZE = 10 * 1024 * 1024;
         if (file.size > MAX_SIZE) {
             return NextResponse.json({ error: 'הקובץ גדול מדי (מקסימום 10MB)' }, { status: 400 });
         }
 
-        const arrayBuffer = await file.arrayBuffer();
-        const content = Buffer.from(arrayBuffer);
+        let arrayBuffer = await file.arrayBuffer();
+        let content = Buffer.from(arrayBuffer);
+        
+        // הוסף מטא-דטה לתחילת הקובץ
+        const metadata = {
+            bookName,
+            authorName,
+            bookCategory,
+            authorCategory,
+            authorYear,
+            publicationYear,
+            copyrightHolder,
+            sourceUrl,
+            isOcr,
+            ocrDescription
+        };
+        
+        if (isTextFile(file.name)) {
+            const metadataHeader = createMetadataHeader(metadata);
+            const headerBuffer = Buffer.from(metadataHeader, 'utf8');
+            content = Buffer.concat([headerBuffer, content]);
+        } else if (isWordFile(file.name)) {
+            // לקבצי וורד, נשמור את המטא-דטה בשדה נפרד בדטה בייס
+            // ונוסיף אותה כשמוציאים את הקובץ
+        }
+        
         await connectDB();
 
         const uploadType = formData.get('uploadType') || 'single_page';
@@ -62,11 +139,21 @@ export async function POST(request) {
             uploader: session.user._id,
             originalFileName: file.name,
             content: content,
-            fileSize: file.size,
+            fileSize: content.length,
             lineCount: 0,
             uploadType: uploadType,
             status: 'pending',
-            bookName: bookName
+            bookName: bookName,
+            // Add metadata fields
+            authorName: authorName,
+            bookCategory: bookCategory,
+            authorCategory: authorCategory,
+            authorYear: authorYear,
+            publicationYear: publicationYear,
+            copyrightHolder: copyrightHolder,
+            sourceUrl: sourceUrl,
+            isOcr: isOcr,
+            ocrDescription: ocrDescription
         });
 
         // בדיקה אם צריך לשלוח מייל

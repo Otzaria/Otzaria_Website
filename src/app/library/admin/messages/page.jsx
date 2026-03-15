@@ -21,10 +21,24 @@ export default function AdminMessagesPage() {
   const [newMessageSubject, setNewMessageSubject] = useState('')
   const [newMessageText, setNewMessageText] = useState('')
   const [sendingNewMessage, setSendingNewMessage] = useState(false)
+  const [userSearchTerm, setUserSearchTerm] = useState('')
+  const [showUserMenu, setShowUserMenu] = useState(false)
 
   useEffect(() => {
     loadData()
   }, [])
+
+  // סגירת תפריט בלחיצה מחוץ
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showUserMenu && !event.target.closest('.user-menu-container')) {
+        setShowUserMenu(false)
+      }
+    }
+    
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showUserMenu])
 
   const loadData = async () => {
     try {
@@ -299,19 +313,64 @@ export default function AdminMessagesPage() {
                   
                   {/* Content */}
                   <div className="p-6 space-y-5 overflow-y-auto custom-scrollbar flex-1">
-                      <div>
+                      <div className="relative user-menu-container">
                           <label className="block text-sm font-bold text-on-surface mb-2">נמען</label>
-                          <select 
-                              value={newMessageRecipient}
-                              onChange={(e) => setNewMessageRecipient(e.target.value)}
-                              className="w-full px-4 py-3 border border-surface-variant rounded-lg focus:outline-none focus:border-primary bg-white text-on-surface shadow-sm"
-                              disabled={sendingNewMessage}
+                          <button
+                            onClick={() => setShowUserMenu(!showUserMenu)}
+                            className="w-full px-4 py-3 border border-surface-variant rounded-lg focus:outline-none focus:border-primary bg-white text-on-surface shadow-sm text-right flex items-center justify-between"
+                            disabled={sendingNewMessage}
                           >
-                              <option value="all">כל המשתמשים (הודעת מערכת)</option>
-                              {users.map(user => (
-                                  <option key={user._id} value={user._id}>{user.name} ({user.email})</option>
-                              ))}
-                          </select>
+                            <span className="material-symbols-outlined text-sm">expand_more</span>
+                            <span className="flex-1">
+                              {newMessageRecipient === 'all' 
+                                ? 'כל המשתמשים (הודעת מערכת)'
+                                : users.find(u => u._id === newMessageRecipient)?.name || 'בחר משתמש'}
+                            </span>
+                          </button>
+                          
+                          {showUserMenu && (
+                            <div className="absolute top-full mt-1 left-0 right-0 bg-white border border-surface-variant rounded-lg shadow-lg z-10 max-h-64 overflow-hidden flex flex-col">
+                              <input
+                                type="text"
+                                placeholder="חיפוש..."
+                                value={userSearchTerm}
+                                onChange={e => setUserSearchTerm(e.target.value)}
+                                className="p-2 border-b border-surface-variant focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                autoFocus
+                              />
+                              <div className="overflow-y-auto">
+                                <div
+                                  onClick={() => {
+                                    setNewMessageRecipient('all')
+                                    setShowUserMenu(false)
+                                    setUserSearchTerm('')
+                                  }}
+                                  className="p-3 hover:bg-surface/50 cursor-pointer text-sm border-b border-surface-variant"
+                                >
+                                  כל המשתמשים (הודעת מערכת)
+                                </div>
+                                {users
+                                  .filter(user => 
+                                    user.name.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
+                                    user.email.toLowerCase().includes(userSearchTerm.toLowerCase())
+                                  )
+                                  .map(user => (
+                                    <div
+                                      key={user._id}
+                                      onClick={() => {
+                                        setNewMessageRecipient(user._id)
+                                        setShowUserMenu(false)
+                                        setUserSearchTerm('')
+                                      }}
+                                      className="p-3 hover:bg-surface/50 cursor-pointer text-sm border-b border-surface-variant last:border-b-0"
+                                    >
+                                      <div className="font-medium">{user.name}</div>
+                                      <div className="text-xs text-gray-500">{user.email}</div>
+                                    </div>
+                                  ))}
+                              </div>
+                            </div>
+                          )}
                       </div>
 
                       <div>
