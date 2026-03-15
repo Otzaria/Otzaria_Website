@@ -38,16 +38,8 @@ const REACT_RUNTIME_PATHS = [
   ['react-dom/client', 'node_modules/react-dom/cjs/react-dom-client.production.js'],
 ];
 
-const MATERIAL_SYMBOLS_ASSET_CANDIDATES = [
-  {
-    fontPath: 'public/export-editor/material-symbols/material-symbols-outlined.woff2',
-    cssPath: 'public/export-editor/material-symbols/outlined.css',
-  },
-  {
-    fontPath: 'node_modules/material-symbols/material-symbols-outlined.woff2',
-    cssPath: 'node_modules/material-symbols/outlined.css',
-  },
-];
+const MATERIAL_SYMBOLS_GOOGLE_CSS_URL =
+  'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0';
 
 function escapeScriptTag(value) {
   return value.replace(/<\/script/gi, '<\\/script');
@@ -82,6 +74,174 @@ function transpileComponent(source, filename) {
 
 async function readTextFile(filePath) {
   return fs.readFile(filePath, 'utf8');
+}
+
+/**
+ * Scans each bundled component file and extracts the names of every
+ * Material Symbols icon that is actually used, so the font can be subsetted.
+ *
+ * Handles three patterns:
+ *   1. Static text children of .material-symbols-outlined spans
+ *   2. String literals inside icon= props (including ternary expressions)
+ *   3. return 'icon_name' statements in files that use material-symbols
+ */
+async function collectUsedIcons() {
+  const usedIcons = new Set();
+  const iconNameRe = /^[a-z][a-z_]*$/;
+
+  for (const relativePath of COMPONENT_PATHS) {
+    const fullPath = path.join(ROOT_DIR, relativePath);
+    let source;
+    try {
+      source = await readTextFile(fullPath);
+    } catch {
+      continue;
+    }
+
+    // 1. Content of every material-symbols-outlined span element.
+    //    Split on each occurrence of the class name, grab everything between
+    //    the first '>' and the first '<' that follows it.
+    const parts = source.split('material-symbols-outlined');
+    for (let i = 1; i < parts.length; i++) {
+      const afterClass = parts[i];
+      const gtIdx = afterClass.indexOf('>');
+      if (gtIdx === -1) continue;
+      const afterGt = afterClass.slice(gtIdx + 1);
+      const ltIdx = afterGt.indexOf('<');
+      if (ltIdx === -1) continue;
+      const content = afterGt.slice(0, ltIdx).trim();
+
+      if (iconNameRe.test(content)) {
+        // Plain static icon name
+        usedIcons.add(content);
+      } else {
+        // For expressions, only keep quoted values that are rendered as icon outputs.
+        // This avoids collecting condition strings such as "confirm".
+        const ternaryOutputs = content.matchAll(/\?\s*["']([a-z][a-z_]*)["']\s*:\s*["']([a-z][a-z_]*)["']/g);
+        let foundTernary = false;
+        for (const match of ternaryOutputs) {
+          foundTernary = true;
+          usedIcons.add(match[1]);
+          usedIcons.add(match[2]);
+        }
+
+        if (!foundTernary) {
+          const directValue = content.match(/^\{?\s*["']([a-z][a-z_]*)["']\s*\}?$/);
+          if (directValue) {
+            usedIcons.add(directValue[1]);
+          }
+        }
+      }
+    }
+
+    // 2. icon= prop: static ("name"), dynamic ({expr}) and ternary forms
+    const iconPropRe = /\bicon=(?:"([a-z][a-z_]*)"|'([a-z][a-z_]*)'|\{([^}]+)\})/g;
+    for (const match of source.matchAll(iconPropRe)) {
+      if (match[1]) {
+        usedIcons.add(match[1]);
+      } else if (match[2]) {
+        usedIcons.add(match[2]);
+      } else if (match[3]) {
+        const expression = match[3].trim();
+        const directValue = expression.match(/^["']([a-z][a-z_]*)["']$/);
+        if (directValue) {
+          usedIcons.add(directValue[1]);
+          continue;
+        }
+
+        const ternaryOutputs = expression.matchAll(/\?\s*["']([a-z][a-z_]*)["']\s*:\s*["']([a-z][a-z_]*)["']/g);
+        for (const ternary of ternaryOutputs) {
+          usedIcons.add(ternary[1]);
+          usedIcons.add(ternary[2]);
+        }
+      }
+    }
+
+    // 3. return 'icon_name' in files that render material-symbols icons.
+    //    Catches helper functions like getIcon() { switch(...) { return 'list_alt' } }
+    if (source.includes('material-symbols-outlined')) {
+      for (const [, name] of source.matchAll(/\breturn\s+["']([a-z][a-z_]*)["']/g)) {
+        usedIcons.add(name);
+      }
+    }
+  }
+
+  return usedIcons;
+}
+
+async function buildGoogleMaterialSymbolsCss(usedIcons) {
+  const iconNames = [...usedIcons].sort().join(',');
+  if (!iconNames) {
+    return null;
+  }
+
+  try {
+    const cssUrl = `${MATERIAL_SYMBOLS_GOOGLE_CSS_URL}&icon_names=${encodeURIComponent(iconNames)}`;
+    const cssResponse = await fetch(cssUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0',
+      },
+    });
+
+    if (!cssResponse.ok) {
+      throw new Error(`CSS request failed with ${cssResponse.status}`);
+    }
+
+    const googleCss = await cssResponse.text();
+    const fontUrlMatch = googleCss.match(/src:\s*url\((https:[^)]+)\)\s*format\('([^']+)'\)/);
+    if (!fontUrlMatch) {
+      throw new Error('subset font URL not found in Google CSS response');
+    }
+
+    const [, fontUrl, format] = fontUrlMatch;
+    const fontResponse = await fetch(fontUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0',
+      },
+    });
+
+    if (!fontResponse.ok) {
+      throw new Error(`font request failed with ${fontResponse.status}`);
+    }
+
+    const fontBuffer = Buffer.from(await fontResponse.arrayBuffer());
+    const mimeType = format === 'truetype' ? 'font/ttf' : `font/${format}`;
+    const fontBase64 = fontBuffer.toString('base64');
+
+    console.log(
+      `[offline-editor] Downloaded Google icon subset: ${fontBuffer.length} bytes ` +
+      `(${usedIcons.size} icons)`
+    );
+
+    return `
+@font-face {
+  font-family: "Material Symbols Outlined";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("data:${mimeType};base64,${fontBase64}") format("${format}");
+}
+.material-symbols-outlined {
+  font-family: "Material Symbols Outlined";
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "liga";
+}
+`;
+  } catch (err) {
+    throw new Error(`Google icon subset unavailable: ${err.message}`);
+  }
 }
 
 async function readRuntimeModules() {
@@ -149,35 +309,8 @@ async function readCurrentCssBundle() {
   return cssContents.filter(Boolean).join('\n\n');
 }
 
-async function buildMaterialSymbolsCss() {
-  for (const candidate of MATERIAL_SYMBOLS_ASSET_CANDIDATES) {
-    try {
-      const [fontBuffer, cssTemplate] = await Promise.all([
-        fs.readFile(path.join(ROOT_DIR, candidate.fontPath)),
-        readTextFile(path.join(ROOT_DIR, candidate.cssPath)),
-      ]);
-
-      const fontBase64 = fontBuffer.toString('base64');
-      return cssTemplate.replace('./material-symbols-outlined.woff2', `data:font/woff2;base64,${fontBase64}`);
-    } catch {
-      continue;
-    }
-  }
-
-  return `
-.material-symbols-outlined {
-  font-family: inherit;
-  font-weight: 400;
-  font-style: normal;
-  font-size: 24px;
-  line-height: 1;
-  letter-spacing: normal;
-  text-transform: none;
-  display: inline-block;
-  white-space: nowrap;
-  direction: ltr;
-}
-`;
+async function buildMaterialSymbolsCss(usedIcons) {
+  return buildGoogleMaterialSymbolsCss(usedIcons);
 }
 
 async function buildBundledComponents() {
@@ -241,11 +374,14 @@ async function buildOfflineEditor() {
     return;
   }
 
+  const usedIcons = await collectUsedIcons();
+  console.log(`[offline-editor] Found ${usedIcons.size} used icons:`, [...usedIcons].sort().join(', '));
+
   const [runtimeModules, bundledComponents, appCode, materialSymbolsCss, cssBundle] = await Promise.all([
     readRuntimeModules(),
     buildBundledComponents(),
     Promise.resolve(buildAppSource()),
-    buildMaterialSymbolsCss(),
+    buildMaterialSymbolsCss(usedIcons),
     readCurrentCssBundle(),
   ]);
 
