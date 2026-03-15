@@ -428,35 +428,63 @@ export async function headerErrorCheckerDB(bookId: string, reStart: string, reEn
   const unmatchedRegex: string[] = [];
   const unmatchedTags: string[] = [];
   const missingLevels: number[] = [];
+  const headersByLevel: Record<number, Array<{ level: number; content: string; full: string }>> = {};
+  const orderedHeaders: Array<{ level: number; content: string; full: string }> = [];
 
   for (let i = 2; i <= 6; i += 1) {
+    headersByLevel[i] = [];
     const tags = $(`h${i}`).toArray();
     if (!tags.length) {
       missingLevels.push(i);
-      continue;
     }
-    const step = isShas ? 2 : 1;
-    for (let index = 0; index < tags.length - step; index += step) {
-      const currentTag = $(tags[index]).text() || "";
-      const nextTag = $(tags[index + step]).text() || "";
-      if (!currentTag || !nextTag) continue;
-      const currentParts = currentTag.split(" ");
-      const nextParts = nextTag.split(" ");
-      const currentHeading = currentParts.length > 1 ? currentParts[1] : currentTag;
-      const nextHeading = nextParts.length > 1 ? nextParts[1] : nextTag;
 
-      if (!pattern.test(currentTag)) {
-        if (!(gershayim && (currentTag.includes("'") || currentTag.includes('"')))) {
-          unmatchedRegex.push(currentTag);
-        }
-      }
-      if (currentHeading.includes("'") || currentHeading.includes('"')) {
-        unmatchedTags.push(currentHeading);
-      }
-      if (toNumber(currentHeading) + step !== toNumber(nextHeading)) {
-        unmatchedTags.push(`כותרת נוכחית - ${currentTag} || כותרת הבאה - ${nextTag}`);
+    for (const tag of tags) {
+      const text = $(tag).text().trim();
+      const full = $.html(tag);
+      const entry = { level: i, content: text, full };
+
+      headersByLevel[i].push(entry);
+      orderedHeaders.push(entry);
+    }
+  }
+
+  const step = isShas ? 2 : 1;
+  const previousHeadersByLevel: Record<number, { level: number; content: string; full: string } | null> = {};
+
+  for (const header of orderedHeaders) {
+    const { level, content: headerText } = header;
+
+    for (let deeperLevel = level + 1; deeperLevel <= 6; deeperLevel += 1) {
+      previousHeadersByLevel[deeperLevel] = null;
+    }
+
+    if (!pattern.test(headerText)) {
+      if (!(gershayim && (headerText.includes("'") || headerText.includes('"')))) {
+        unmatchedRegex.push(header.full);
       }
     }
+
+    const headerParts = headerText.split(" ");
+    const currentHeading = headerParts.length > 1 ? headerParts[1] : headerText;
+
+    if ((currentHeading.includes("'") || currentHeading.includes('"')) && !gershayim) {
+      unmatchedTags.push(currentHeading);
+    }
+
+    const previousHeader = previousHeadersByLevel[level];
+    if (previousHeader) {
+      const previousText = previousHeader.content;
+      const previousParts = previousText.split(" ");
+      const previousHeading = previousParts.length > 1 ? previousParts[1] : previousText;
+      const previousNum = toNumber(previousHeading);
+      const currentNum = toNumber(currentHeading);
+
+      if (previousNum > 0 && currentNum > 0 && previousNum + step !== currentNum) {
+        unmatchedTags.push(`כותרת נוכחית - ${previousText} || כותרת הבאה - ${headerText}`);
+      }
+    }
+
+    previousHeadersByLevel[level] = header;
   }
 
   return {
