@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import { validateEmail, validateRequired } from '@/lib/validation-utils';
 
-const REPORTING_ERRORS_RECIPIENT = 'otzaria.200@gmail.com';
+const REPORTING_ERRORS_RECIPIENT = 'c8401948@gmail.com';
 
 const REQUIRED_FIELDS = [
   ['report_id', 'מזהה דיווח'],
