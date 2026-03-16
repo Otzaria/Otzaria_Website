@@ -162,7 +162,7 @@ export async function createSingleLetterHeadersDB(
   let localEndSuffix = endSuffix;
   let localStart = start;
   let localIgnore = [...ignore];
-  const fixedRemoveTags = ["<b>", "</b>", "<big>", "</big>", "<i>", "</i>", "</small>", "</small>", "<span>", "</span>", "<br>", "</br>", "<p>", "</p>"];
+  const fixedRemoveTags = ["<b>", "</b>", "<big>", "</big>", "<i>", "</i>", "</small>", "<span>", "</span>", "<br>", "</br>", "<p>", "</p>"];
   const fullRemove = fixedRemoveTags.concat(remove);
 
   if (boldOnly) {
