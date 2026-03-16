@@ -4,7 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import connectDB from "@/lib/db";
 import DictaBook from "@/models/DictaBook";
 
-// ייבוא הלוגיקה העסקית מהקבצים החדשים בספרייה
+// ייבוא הלוגיקה העסקית ממקור אמת אחד
 import { 
   addPageNumberToHeadingDB,
   changeHeadingLevelDB,
@@ -15,7 +15,7 @@ import {
   emphasizeAndPunctuateDB,
   textCleanerDB,
   headerErrorCheckerDB
-} from "@/lib/dicta/text-processors";
+} from "../_lib";
 
 import { dictaSync } from "@/lib/dicta/github-sync";
 

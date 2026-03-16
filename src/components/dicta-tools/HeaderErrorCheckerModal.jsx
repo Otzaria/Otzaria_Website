@@ -119,8 +119,9 @@ export default function HeaderErrorCheckerModal({ isOpen, onClose, content, onCo
         pattern = new RegExp('^[א-ת]([א-ת \\-]*[א-ת])?$')
       }
       
-      // בדיקת כותרות
+      // בדיקת כותרות לפי סדר המסמך, כדי לא להשוות בין ענפים שונים בעץ הכותרות
       const headersByLevel = {}
+      const orderedHeaders = []
       for (let level = 2; level <= 6; level++) {
         headersByLevel[level] = []
       }
@@ -132,8 +133,10 @@ export default function HeaderErrorCheckerModal({ isOpen, onClose, content, onCo
         const level = parseInt(headerMatch[1])
         const headerContent = headerMatch[2].trim()
         const fullHeader = headerMatch[0]
+        const headerEntry = { level, content: headerContent, full: fullHeader }
         
-        headersByLevel[level].push({ content: headerContent, full: fullHeader })
+        headersByLevel[level].push(headerEntry)
+        orderedHeaders.push(headerEntry)
       }
       
       // בדיקת רמות חסרות
@@ -147,50 +150,49 @@ export default function HeaderErrorCheckerModal({ isOpen, onClose, content, onCo
         }
       }
       
-      // בדיקת כל רמה
-      for (let level = 2; level <= 6; level++) {
-        const headers = headersByLevel[level]
-        if (headers.length === 0) continue
-        
-        const step = isShas ? 2 : 1
-        
-        for (let i = 0; i < headers.length - step; i += step) {
-          const current = headers[i]
-          const next = headers[i + step]
-          
-          if (!current || !next) continue
-          
-          const currentText = current.content
-          const nextText = next.content
-          
-          // בדיקת regex
-          if (pattern && !pattern.test(currentText)) {
-            if (!(gershayim && (currentText.includes("'") || currentText.includes('"')))) {
-              result.unmatched_regex.push(current.full)
-            }
-          }
-          
-          // חילוץ החלק המספרי
-          const currentParts = currentText.split(' ')
-          const nextParts = nextText.split(' ')
-          const currentHeading = currentParts.length > 1 ? currentParts[1] : currentText
-          const nextHeading = nextParts.length > 1 ? nextParts[1] : nextText
-          
-          // בדיקת גרשיים
-          if (currentHeading.includes("'") || currentHeading.includes('"')) {
-            if (!gershayim) {
-              result.unmatched_tags.push(currentHeading)
-            }
-          }
-          
-          // בדיקת רצף
-          const currentNum = toNumber(currentHeading)
-          const nextNum = toNumber(nextHeading)
-          
-          if (currentNum > 0 && nextNum > 0 && currentNum + step !== nextNum) {
-            result.unmatched_tags.push(`כותרת נוכחית - ${currentText} || כותרת הבאה - ${nextText}`)
+      const step = isShas ? 2 : 1
+      const previousHeadersByLevel = {}
+
+      for (const header of orderedHeaders) {
+        const { level, content: headerText } = header
+
+        // מעבר לרמה גבוהה יותר פותח ענף חדש ולכן מאפס את כל הרמות שמתחתיה
+        for (let deeperLevel = level + 1; deeperLevel <= 6; deeperLevel++) {
+          previousHeadersByLevel[deeperLevel] = null
+        }
+
+        // בדיקת regex
+        if (pattern && !pattern.test(headerText)) {
+          if (!(gershayim && (headerText.includes("'") || headerText.includes('"')))) {
+            result.unmatched_regex.push(header.full)
           }
         }
+
+        // חילוץ החלק המספרי
+        const headerParts = headerText.split(' ')
+        const currentHeading = headerParts.length > 1 ? headerParts[1] : headerText
+
+        // בדיקת גרשיים
+        if ((currentHeading.includes("'") || currentHeading.includes('"')) && !gershayim) {
+          result.unmatched_tags.push(currentHeading)
+        }
+
+        // בדיקת רצף רק מול כותרת קודמת מאותה רמה ובאותו ענף
+        const previousHeader = previousHeadersByLevel[level]
+        if (previousHeader) {
+          const previousText = previousHeader.content
+          const previousParts = previousText.split(' ')
+          const previousHeading = previousParts.length > 1 ? previousParts[1] : previousText
+
+          const previousNum = toNumber(previousHeading)
+          const currentNum = toNumber(currentHeading)
+
+          if (previousNum > 0 && currentNum > 0 && previousNum + step !== currentNum) {
+            result.unmatched_tags.push(`כותרת נוכחית - ${previousText} || כותרת הבאה - ${headerText}`)
+          }
+        }
+
+        previousHeadersByLevel[level] = header
       }
       
       setErrors(result)
