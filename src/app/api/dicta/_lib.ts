@@ -150,11 +150,11 @@ export async function createHeadersDB(bookId: string, findWord: string, end: num
 
 export async function createSingleLetterHeadersDB(
   bookId: string,
+  start: string,
   endSuffix: string,
   end: number,
   levelNum: number,
   ignore: string[],
-  start: string,
   remove: string[],
   boldOnly: boolean
 ) {
@@ -162,6 +162,8 @@ export async function createSingleLetterHeadersDB(
   let localEndSuffix = endSuffix;
   let localStart = start;
   let localIgnore = [...ignore];
+  const fixedRemoveTags = ["<b>", "</b>", "<big>", "</big>", "<i>", "</i>", "</small>", "</small>", "<span>", "</span>", "<br>", "</br>", "<p>", "</p>"];
+  const fullRemove = fixedRemoveTags.concat(remove);
 
   if (boldOnly) {
     localEndSuffix += "</b>";
@@ -183,12 +185,28 @@ export async function createSingleLetterHeadersDB(
   for (const line of content.slice(1)) {
     const words = line.split(/\s+/).filter(Boolean);
     try {
+      const strippedFirstWord = stripHtml(words[0], localIgnore);
+
       if (
-        stripHtml(words[0], localIgnore).endsWith(localEndSuffix) &&
-        isGematria(words[0], end + 1) &&
-        stripHtml(words[0], localIgnore).startsWith(localStart)
+        strippedFirstWord.endsWith(localEndSuffix) &&
+        strippedFirstWord.startsWith(localStart)
       ) {
-        const headingLine = `<h${levelNum}>${stripHtml(words[0], remove)}<\/h${levelNum}>`;
+        let textForGematria = strippedFirstWord;
+        if (localStart && textForGematria.startsWith(localStart)) {
+          textForGematria = textForGematria.slice(localStart.length);
+        }
+        if (localEndSuffix && textForGematria.endsWith(localEndSuffix)) {
+          textForGematria = textForGematria.slice(0, -localEndSuffix.length);
+        }
+        textForGematria = textForGematria.replace(/<\/?b>/g, "");
+
+        if (!isGematria(textForGematria, end + 1)) {
+          allLines.push(line);
+          continue;
+        }
+
+        const cleanWord = stripHtml(words[0], fullRemove);
+        const headingLine = `<h${levelNum}>${cleanWord}<\/h${levelNum}>`;
         allLines.push(headingLine);
         if (words.slice(1).length) allLines.push(words.slice(1).join(" "));
         count += 1;

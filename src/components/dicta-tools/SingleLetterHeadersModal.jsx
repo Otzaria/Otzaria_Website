@@ -22,6 +22,10 @@ export default function SingleLetterHeadersModal({ isOpen, onClose, content, onC
     try {
       const ignoreArray = ignoreTags.split(' ').filter(Boolean)
       const removeArray = removeTags.split(' ').filter(Boolean)
+      const fixedRemoveTags = [
+        '<b>', '</b>', '<big>', '</big>', '<i>', '</i>', '</small>', '</small>', '<span>', '</span>', '<br>', '</br>', '<p>', '</p>'
+      ]
+      const fullRemoveArray = fixedRemoveTags.concat(removeArray)
       
       // פונקציה להסרת תגים
       const stripHtml = (text, tagsToRemove) => {
@@ -31,25 +35,55 @@ export default function SingleLetterHeadersModal({ isOpen, onClose, content, onC
         })
         return result
       }
-      
+
       // פונקציה לבדיקת גימטריה
       const isGematria = (text, maxValue) => {
-        const hebrewNumerals = {
-          'א': 1, 'ב': 2, 'ג': 3, 'ד': 4, 'ה': 5, 'ו': 6, 'ז': 7, 'ח': 8, 'ט': 9,
-          'י': 10, 'כ': 20, 'ך': 20, 'ל': 30, 'מ': 40, 'ם': 40, 'נ': 50, 'ן': 50,
-          'ס': 60, 'ע': 70, 'פ': 80, 'ף': 80, 'צ': 90, 'ץ': 90,
-          'ק': 100, 'ר': 200, 'ש': 300, 'ת': 400
-        }
-        
-        let value = 0
-        for (let char of text) {
-          if (hebrewNumerals[char]) {
-            value += hebrewNumerals[char]
-          } else if (!/['"״׳]/.test(char)) {
-            return false
+        const remove = ["<b>", "</b>", "<big>", "</big>", "<i>", "</i>", "</small>", "</small>", "<span>", "</span>", "<br>", "</br>", "<p>", "</p>", ":", '"', ",", ";", "[", "]", "(", ")", "{", "}", ".", "'", "״", "”", "’", "׳", "‘", "„", "`", "´", "“", "❝", "❞", "ˮ", "″", "ʺ", "ˈ", "´", "ʹ", "′", "ʾ", "ʽ"]
+        const aa = ["ק", "ר", "ש", "ת", "תק", "תר", "תש", "תת", "תתק", "יה", "יו", "קיה", "קיו", "ריה", "ריו", "שיה", "שיו", "תיה", "תיו", "תקיה", "תקיו", "תריה", "תריו", "תשיה", "תשיו", "תתיה", "תתיו", "תתקיה", "תתקיו"]
+        const bb = ["ם", "ן", "ץ", "ף", "ך"]
+        const cc = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "ששי", "שביעי", "שמיני", "תשיעי", "עשירי", "חי", "יוד", "למד", "נון", "טל", "דש", "שדמ", "ער", "שדם", "תשדם", "תשדמ", "ערה", "ערב", "עדר", "רחצ"]
+        const appendList = []
+
+        aa.forEach(item => {
+          bb.forEach(suffix => {
+            appendList.push(item + suffix)
+          })
+        })
+
+        let cleaned = text
+        remove.forEach(tag => {
+          cleaned = cleaned.replaceAll(tag, '')
+        })
+
+        const toHebrew = (num) => {
+          if (num <= 0) return ''
+          let remaining = num
+          let result = ''
+          const values = [400, 300, 200, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
+          const letters = ["ת", "ש", "ר", "ק", "צ", "פ", "ע", "ס", "נ", "מ", "ל", "כ", "י", "ט", "ח", "ז", "ו", "ה", "ד", "ג", "ב", "א"]
+
+          for (let i = 0; i < values.length; i++) {
+            while (remaining >= values[i]) {
+              if (remaining === 15) {
+                result += 'טו'
+                remaining = 0
+                break
+              }
+              if (remaining === 16) {
+                result += 'טז'
+                remaining = 0
+                break
+              }
+              result += letters[i]
+              remaining -= values[i]
+            }
           }
+
+          return result
         }
-        return value > 0 && value < maxValue
+
+        const withoutGershayim = Array.from({ length: maxValue - 1 }, (_, i) => toHebrew(i + 1)).concat(bb, cc, appendList, aa)
+        return withoutGershayim.includes(cleaned)
       }
       
       // הגדרת סיומת וסימן התחלה
@@ -94,7 +128,7 @@ export default function SingleLetterHeadersModal({ isOpen, onClose, content, onC
               
               // בדיקת גימטריה על הטקסט הנקי
               if (isGematria(textForGematria, maxNum + 1)) {
-                const cleanWord = stripHtml(firstWord, removeArray).replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                const cleanWord = stripHtml(firstWord, fullRemoveArray)
                 const headingLine = `<h${level}>${cleanWord}</h${level}>`
                 allLines.push(headingLine)
                 
