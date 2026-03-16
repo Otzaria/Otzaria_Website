@@ -2,20 +2,18 @@ import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import { validateEmail, validateRequired } from '@/lib/validation-utils';
 
-const REPORTING_ERRORS_RECIPIENT = 'c8401948@gmail.com';
+const REPORTING_ERRORS_RECIPIENT = 'otzaria.200@gmail.com';
 
 const REQUIRED_FIELDS = [
   ['report_id', 'מזהה דיווח'],
   ['sender_email', 'כתובת שולח'],
   ['subject', 'נושא'],
-  ['body', 'תוכן מלא'],
   ['book_title', 'שם הספר'],
   ['current_ref', 'מיקום'],
   ['line_number', 'מספר שורה'],
   ['selected_text', 'טקסט מסומן'],
   ['error_details', 'פירוט הטעות'],
   ['context_text', 'טקסט הקשר'],
-  ['file_name', 'שם קובץ'],
   ['file_path', 'נתיב קובץ'],
   ['source_folder', 'תיקיית מקור'],
   ['created_at', 'זמן יצירה'],
@@ -94,7 +92,6 @@ function buildHtml(payload) {
           <p><strong>ספר:</strong> ${escaped.book_title}</p>
           <p><strong>מיקום:</strong> ${escaped.current_ref}</p>
           <p><strong>שורה:</strong> ${escaped.line_number}</p>
-          <p><strong>קובץ:</strong> ${escaped.file_name}</p>
           <p><strong>נתיב:</strong> ${escaped.file_path}</p>
           <p><strong>תיקיית מקור:</strong> ${escaped.source_folder}</p>
           <p><strong>נוצר בתאריך:</strong> ${escaped.created_at}</p>
@@ -105,8 +102,6 @@ function buildHtml(payload) {
           <div style="background: #faf7f2; border: 1px solid #eee2d2; border-radius: 10px; padding: 14px; white-space: pre-wrap;">${escaped.error_details}</div>
           <h2 style="font-size: 18px; margin: 20px 0 8px;">הקשר</h2>
           <div style="background: #faf7f2; border: 1px solid #eee2d2; border-radius: 10px; padding: 14px; white-space: pre-wrap;">${escaped.context_text}</div>
-          <h2 style="font-size: 18px; margin: 20px 0 8px;">Body גולמי</h2>
-          <div style="background: #f3f3f3; border-radius: 10px; padding: 14px; white-space: pre-wrap;">${escaped.body}</div>
         </div>
       </div>
     </div>
@@ -120,7 +115,6 @@ function buildText(payload) {
     `ספר: ${payload.book_title}`,
     `מיקום: ${payload.current_ref}`,
     `שורה: ${payload.line_number}`,
-    `קובץ: ${payload.file_name}`,
     `נתיב: ${payload.file_path}`,
     `תיקיית מקור: ${payload.source_folder}`,
     `נוצר בתאריך: ${payload.created_at}`,
@@ -133,9 +127,6 @@ function buildText(payload) {
     '',
     'הקשר:',
     payload.context_text,
-    '',
-    'Body גולמי:',
-    payload.body,
   ].join('\n');
 }
 

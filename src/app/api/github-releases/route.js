@@ -46,12 +46,29 @@ export async function GET(request) {
         })?.browser_download_url;
     }
 
+    // Helper to find Windows ZIP - prioritize files with 'windows' in name, then exclude other platforms
+    const findWindowsZip = () => {
+      // First try to find a ZIP with 'windows' in the name
+      let zip = assets.find(a => a.name.toLowerCase().includes('windows') && a.name.endsWith('.zip'))?.browser_download_url;
+      if (zip) return zip;
+      
+      // Otherwise find a ZIP that's not for other platforms
+      zip = assets.find(a => 
+        a.name.endsWith('.zip') && 
+        !a.name.toLowerCase().includes('mac') && 
+        !a.name.toLowerCase().includes('darwin') &&
+        !a.name.toLowerCase().includes('linux') && 
+        !a.name.toLowerCase().includes('android')
+      )?.browser_download_url;
+      return zip;
+    }
+
     const downloads = {
       version: release.tag_name,
       windows: {
         exe: findAsset('.exe'),
         msix: findAsset('.msix'),
-        zip: assets.find(a => a.name.endsWith('.zip') && !a.name.toLowerCase().includes('mac') && !a.name.toLowerCase().includes('linux'))?.browser_download_url
+        zip: findWindowsZip()
       },
       linux: {
         deb: findAsset('.deb'),
