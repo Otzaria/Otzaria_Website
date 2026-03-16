@@ -4,6 +4,55 @@ import { useState } from 'react'
 import Modal from '@/components/Modal'
 import FormInput from '@/components/FormInput'
 
+const GEMATRIA_REMOVE_TOKENS = ["<b>", "</b>", "<big>", "</big>", "<i>", "</i>", "</small>", "</small>", "<span>", "</span>", "<br>", "</br>", "<p>", "</p>", ":", '"', ",", ";", "[", "]", "(", ")", "{", "}", ".", "'", "״", "”", "’", "׳", "‘", "„", "`", "´", "“", "❝", "❞", "ˮ", "″", "ʺ", "ˈ", "´", "ʹ", "′", "ʾ", "ʽ"]
+const GEMATRIA_AA = ["ק", "ר", "ש", "ת", "תק", "תר", "תש", "תת", "תתק", "יה", "יו", "קיה", "קיו", "ריה", "ריו", "שיה", "שיו", "תיה", "תיו", "תקיה", "תקיו", "תריה", "תריו", "תשיה", "תשיו", "תתיה", "תתיו", "תתקיה", "תתקיו"]
+const GEMATRIA_BB = ["ם", "ן", "ץ", "ף", "ך"]
+const GEMATRIA_CC = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "ששי", "שביעי", "שמיני", "תשיעי", "עשירי", "חי", "יוד", "למד", "נון", "טל", "דש", "שדמ", "ער", "שדם", "תשדם", "תשדמ", "ערה", "ערב", "עדר", "רחצ"]
+const GEMATRIA_APPEND_LIST = GEMATRIA_AA.flatMap(item => GEMATRIA_BB.map(suffix => item + suffix))
+const GEMATRIA_CACHE = new Map()
+
+function toHebrewGematria(num) {
+  if (num <= 0) return ''
+
+  let remaining = num
+  let result = ''
+  const values = [400, 300, 200, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
+  const letters = ["ת", "ש", "ר", "ק", "צ", "פ", "ע", "ס", "נ", "מ", "ל", "כ", "י", "ט", "ח", "ז", "ו", "ה", "ד", "ג", "ב", "א"]
+
+  for (let i = 0; i < values.length; i++) {
+    while (remaining >= values[i]) {
+      if (remaining === 15) {
+        result += 'טו'
+        remaining = 0
+        break
+      }
+      if (remaining === 16) {
+        result += 'טז'
+        remaining = 0
+        break
+      }
+      result += letters[i]
+      remaining -= values[i]
+    }
+  }
+
+  return result
+}
+
+function getGematriaSet(maxValue) {
+  if (!GEMATRIA_CACHE.has(maxValue)) {
+    const withoutGershayim = Array.from({ length: maxValue - 1 }, (_, i) => toHebrewGematria(i + 1))
+      .concat(GEMATRIA_BB, GEMATRIA_CC, GEMATRIA_APPEND_LIST, GEMATRIA_AA)
+    GEMATRIA_CACHE.set(maxValue, new Set(withoutGershayim))
+  }
+
+  return GEMATRIA_CACHE.get(maxValue)
+}
+
+function escapeHtml(text) {
+  return text.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
 export default function SingleLetterHeadersModal({ isOpen, onClose, content, onContentChange }) {
   const [startChar, setStartChar] = useState('')
   const [endChar, setEndChar] = useState('')
@@ -23,7 +72,7 @@ export default function SingleLetterHeadersModal({ isOpen, onClose, content, onC
       const ignoreArray = ignoreTags.split(' ').filter(Boolean)
       const removeArray = removeTags.split(' ').filter(Boolean)
       const fixedRemoveTags = [
-        '<b>', '</b>', '<big>', '</big>', '<i>', '</i>', '</small>', '</small>', '<span>', '</span>', '<br>', '</br>', '<p>', '</p>'
+        '<b>', '</b>', '<big>', '</big>', '<i>', '</i>', '</small>', '<span>', '</span>', '<br>', '</br>', '<p>', '</p>'
       ]
       const fullRemoveArray = fixedRemoveTags.concat(removeArray)
       
@@ -38,52 +87,11 @@ export default function SingleLetterHeadersModal({ isOpen, onClose, content, onC
 
       // פונקציה לבדיקת גימטריה
       const isGematria = (text, maxValue) => {
-        const remove = ["<b>", "</b>", "<big>", "</big>", "<i>", "</i>", "</small>", "</small>", "<span>", "</span>", "<br>", "</br>", "<p>", "</p>", ":", '"', ",", ";", "[", "]", "(", ")", "{", "}", ".", "'", "״", "”", "’", "׳", "‘", "„", "`", "´", "“", "❝", "❞", "ˮ", "″", "ʺ", "ˈ", "´", "ʹ", "′", "ʾ", "ʽ"]
-        const aa = ["ק", "ר", "ש", "ת", "תק", "תר", "תש", "תת", "תתק", "יה", "יו", "קיה", "קיו", "ריה", "ריו", "שיה", "שיו", "תיה", "תיו", "תקיה", "תקיו", "תריה", "תריו", "תשיה", "תשיו", "תתיה", "תתיו", "תתקיה", "תתקיו"]
-        const bb = ["ם", "ן", "ץ", "ף", "ך"]
-        const cc = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "ששי", "שביעי", "שמיני", "תשיעי", "עשירי", "חי", "יוד", "למד", "נון", "טל", "דש", "שדמ", "ער", "שדם", "תשדם", "תשדמ", "ערה", "ערב", "עדר", "רחצ"]
-        const appendList = []
-
-        aa.forEach(item => {
-          bb.forEach(suffix => {
-            appendList.push(item + suffix)
-          })
-        })
-
         let cleaned = text
-        remove.forEach(tag => {
+        GEMATRIA_REMOVE_TOKENS.forEach(tag => {
           cleaned = cleaned.replaceAll(tag, '')
         })
-
-        const toHebrew = (num) => {
-          if (num <= 0) return ''
-          let remaining = num
-          let result = ''
-          const values = [400, 300, 200, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
-          const letters = ["ת", "ש", "ר", "ק", "צ", "פ", "ע", "ס", "נ", "מ", "ל", "כ", "י", "ט", "ח", "ז", "ו", "ה", "ד", "ג", "ב", "א"]
-
-          for (let i = 0; i < values.length; i++) {
-            while (remaining >= values[i]) {
-              if (remaining === 15) {
-                result += 'טו'
-                remaining = 0
-                break
-              }
-              if (remaining === 16) {
-                result += 'טז'
-                remaining = 0
-                break
-              }
-              result += letters[i]
-              remaining -= values[i]
-            }
-          }
-
-          return result
-        }
-
-        const withoutGershayim = Array.from({ length: maxValue - 1 }, (_, i) => toHebrew(i + 1)).concat(bb, cc, appendList, aa)
-        return withoutGershayim.includes(cleaned)
+        return getGematriaSet(maxValue).has(cleaned)
       }
       
       // הגדרת סיומת וסימן התחלה
@@ -128,7 +136,7 @@ export default function SingleLetterHeadersModal({ isOpen, onClose, content, onC
               
               // בדיקת גימטריה על הטקסט הנקי
               if (isGematria(textForGematria, maxNum + 1)) {
-                const cleanWord = stripHtml(firstWord, fullRemoveArray)
+                const cleanWord = escapeHtml(stripHtml(firstWord, fullRemoveArray))
                 const headingLine = `<h${level}>${cleanWord}</h${level}>`
                 allLines.push(headingLine)
                 
