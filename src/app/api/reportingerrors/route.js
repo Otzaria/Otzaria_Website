@@ -68,7 +68,20 @@ function ensureSmtpConfig() {
   return missing;
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 function buildHtml(payload) {
+  const escaped = Object.fromEntries(
+    Object.entries(payload).map(([key, value]) => [key, escapeHtml(value)])
+  );
+
   return `
     <div dir="rtl" style="font-family: Arial, sans-serif; background: #f7f4ef; padding: 24px; color: #222;">
       <div style="max-width: 760px; margin: 0 auto; background: #fff; border-radius: 14px; overflow: hidden; border: 1px solid #eadfce;">
@@ -76,24 +89,24 @@ function buildHtml(payload) {
           <h1 style="margin: 0; font-size: 24px;">דיווח טעות חדש מאוצריא</h1>
         </div>
         <div style="padding: 24px; line-height: 1.7;">
-          <p><strong>מזהה דיווח:</strong> ${payload.report_id}</p>
-          <p><strong>שולח:</strong> ${payload.sender_email}</p>
-          <p><strong>ספר:</strong> ${payload.book_title}</p>
-          <p><strong>מיקום:</strong> ${payload.current_ref}</p>
-          <p><strong>שורה:</strong> ${payload.line_number}</p>
-          <p><strong>קובץ:</strong> ${payload.file_name}</p>
-          <p><strong>נתיב:</strong> ${payload.file_path}</p>
-          <p><strong>תיקיית מקור:</strong> ${payload.source_folder}</p>
-          <p><strong>נוצר בתאריך:</strong> ${payload.created_at}</p>
+          <p><strong>מזהה דיווח:</strong> ${escaped.report_id}</p>
+          <p><strong>שולח:</strong> ${escaped.sender_email}</p>
+          <p><strong>ספר:</strong> ${escaped.book_title}</p>
+          <p><strong>מיקום:</strong> ${escaped.current_ref}</p>
+          <p><strong>שורה:</strong> ${escaped.line_number}</p>
+          <p><strong>קובץ:</strong> ${escaped.file_name}</p>
+          <p><strong>נתיב:</strong> ${escaped.file_path}</p>
+          <p><strong>תיקיית מקור:</strong> ${escaped.source_folder}</p>
+          <p><strong>נוצר בתאריך:</strong> ${escaped.created_at}</p>
           <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
           <h2 style="font-size: 18px; margin-bottom: 8px;">הטקסט המסומן</h2>
-          <div style="background: #faf7f2; border: 1px solid #eee2d2; border-radius: 10px; padding: 14px; white-space: pre-wrap;">${payload.selected_text}</div>
+          <div style="background: #faf7f2; border: 1px solid #eee2d2; border-radius: 10px; padding: 14px; white-space: pre-wrap;">${escaped.selected_text}</div>
           <h2 style="font-size: 18px; margin: 20px 0 8px;">פירוט הטעות</h2>
-          <div style="background: #faf7f2; border: 1px solid #eee2d2; border-radius: 10px; padding: 14px; white-space: pre-wrap;">${payload.error_details}</div>
+          <div style="background: #faf7f2; border: 1px solid #eee2d2; border-radius: 10px; padding: 14px; white-space: pre-wrap;">${escaped.error_details}</div>
           <h2 style="font-size: 18px; margin: 20px 0 8px;">הקשר</h2>
-          <div style="background: #faf7f2; border: 1px solid #eee2d2; border-radius: 10px; padding: 14px; white-space: pre-wrap;">${payload.context_text}</div>
+          <div style="background: #faf7f2; border: 1px solid #eee2d2; border-radius: 10px; padding: 14px; white-space: pre-wrap;">${escaped.context_text}</div>
           <h2 style="font-size: 18px; margin: 20px 0 8px;">Body גולמי</h2>
-          <div style="background: #f3f3f3; border-radius: 10px; padding: 14px; white-space: pre-wrap;">${payload.body}</div>
+          <div style="background: #f3f3f3; border-radius: 10px; padding: 14px; white-space: pre-wrap;">${escaped.body}</div>
         </div>
       </div>
     </div>
