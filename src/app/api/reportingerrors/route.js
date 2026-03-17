@@ -87,14 +87,11 @@ function buildHtml(payload) {
           <h1 style="margin: 0; font-size: 24px;">דיווח טעות חדש מאוצריא</h1>
         </div>
         <div style="padding: 24px; line-height: 1.7;">
-          <p><strong>מזהה דיווח:</strong> ${escaped.report_id}</p>
-          <p><strong>שולח:</strong> ${escaped.sender_email}</p>
           <p><strong>ספר:</strong> ${escaped.book_title}</p>
           <p><strong>מיקום:</strong> ${escaped.current_ref}</p>
           <p><strong>שורה:</strong> ${escaped.line_number}</p>
           <p><strong>נתיב:</strong> ${escaped.file_path}</p>
           <p><strong>תיקיית מקור:</strong> ${escaped.source_folder}</p>
-          <p><strong>נוצר בתאריך:</strong> ${escaped.created_at}</p>
           <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
           <h2 style="font-size: 18px; margin-bottom: 8px;">הטקסט המסומן</h2>
           <div style="background: #faf7f2; border: 1px solid #eee2d2; border-radius: 10px; padding: 14px; white-space: pre-wrap;">${escaped.selected_text}</div>
@@ -102,6 +99,10 @@ function buildHtml(payload) {
           <div style="background: #faf7f2; border: 1px solid #eee2d2; border-radius: 10px; padding: 14px; white-space: pre-wrap;">${escaped.error_details}</div>
           <h2 style="font-size: 18px; margin: 20px 0 8px;">הקשר</h2>
           <div style="background: #faf7f2; border: 1px solid #eee2d2; border-radius: 10px; padding: 14px; white-space: pre-wrap;">${escaped.context_text}</div>
+          <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
+          <p><strong>שולח:</strong> ${escaped.sender_email}</p>
+          <p><strong>נוצר בתאריך:</strong> ${escaped.created_at}</p>
+          <p><strong>מזהה דיווח:</strong> ${escaped.report_id}</p>
         </div>
       </div>
     </div>
@@ -110,14 +111,11 @@ function buildHtml(payload) {
 
 function buildText(payload) {
   return [
-    `מזהה דיווח: ${payload.report_id}`,
-    `שולח: ${payload.sender_email}`,
     `ספר: ${payload.book_title}`,
     `מיקום: ${payload.current_ref}`,
     `שורה: ${payload.line_number}`,
     `נתיב: ${payload.file_path}`,
     `תיקיית מקור: ${payload.source_folder}`,
-    `נוצר בתאריך: ${payload.created_at}`,
     '',
     'הטקסט המסומן:',
     payload.selected_text,
@@ -127,6 +125,10 @@ function buildText(payload) {
     '',
     'הקשר:',
     payload.context_text,
+    '',
+    `שולח: ${payload.sender_email}`,
+    `נוצר בתאריך: ${payload.created_at}`,
+    `מזהה דיווח: ${payload.report_id}`,
   ].join('\n');
 }
 

@@ -36,7 +36,8 @@ export default function DictaUploadDialog({ bookTitle, onConfirm, onCancel, load
                 <p className="font-bold mb-1">לפני הסיום יש לבצע:</p>
                 <ul className="space-y-0.5">
                   <li>✓ בדיקת איות</li>
-                  <li>✓ ניקוי שגיאות</li>
+                  <li>✓ בדיקת שגיאות בכותרות</li>
+                  <li>✓ ניקוי טקסט</li>
                 </ul>
               </div>
             </div>

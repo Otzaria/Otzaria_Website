@@ -68,6 +68,24 @@ export default function EditingToolsPage() {
     }
   }
 
+  const handleDownloadLinkNotes = async () => {
+    try {
+      const response = await fetch('https://raw.githubusercontent.com/Otzaria/Link-Notes/main/index.html')
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'מקשר-הערות-אוטומטי.html'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Error downloading link notes:', error)
+      showAlert('שגיאה', 'לא ניתן להוריד את כלי מקשר ההערות')
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -259,6 +277,77 @@ export default function EditingToolsPage() {
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-2 px-6 py-3 border-2 border-secondary text-secondary rounded-lg font-bold hover:bg-secondary/10 transition-colors"
+                      >
+                        <span className="material-symbols-outlined">forum</span>
+                        מדריך ודיון בפורום
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* מקשר הערות אוטומטי */}
+            <div className="glass p-8 rounded-2xl">
+              <div className="flex items-start gap-6">
+                <div className="flex-shrink-0">
+                  <div className="w-16 h-16 bg-primary/10 rounded-xl flex items-center justify-center">
+                    <span className="material-symbols-outlined text-4xl text-primary">
+                      link
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="flex-1">
+                  <h2 className="text-2xl font-bold mb-2 font-frank">
+                    מקשר הערות אוטומטי
+                  </h2>
+                  <p className="text-on-surface/70 mb-6">
+                    כלי לקישור אוטומטי בין הערות בקובץ הספר לקובץ ההערות הנפרד, יוצר קובץ JSON המקשר בין ההערות
+                  </p>
+
+                  <div className="space-y-4">
+                    <div className="bg-primary-container/50 border border-primary/20 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <span className="material-symbols-outlined text-primary mt-0.5">
+                          auto_fix_high
+                        </span>
+                        <div className="text-sm text-on-surface/80">
+                          <p className="font-bold mb-1">איך זה עובד?</p>
+                          <ul className="list-disc list-inside space-y-1 mr-4">
+                            <li>טען קובץ ספר וקובץ הערות נפרד</li>
+                            <li>בחר את התו שעוטף את מספרי ההערות (ברירת מחדל: sup)</li>
+                            <li>התוכנה מזהה ומקשרת אוטומטית בין ההערות</li>
+                            <li>יוצר קובץ JSON לתיקיית links באוצריא</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-3">
+                      <a
+                        href="https://otzaria.github.io/Link-Notes/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-on-primary rounded-lg font-bold hover:bg-accent transition-colors"
+                      >
+                        <span className="material-symbols-outlined">open_in_new</span>
+                        פתח כלי מקשר הערות
+                      </a>
+
+                      <button
+                        onClick={handleDownloadLinkNotes}
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-secondary text-on-primary rounded-lg font-bold hover:bg-accent transition-colors"
+                      >
+                        <span className="material-symbols-outlined">download</span>
+                        הורד לעבודה אופליין
+                      </button>
+
+                      <a
+                        href="https://otzaria.org/forum/topic/934"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-6 py-3 border-2 border-primary text-primary rounded-lg font-bold hover:bg-primary/10 transition-colors"
                       >
                         <span className="material-symbols-outlined">forum</span>
                         מדריך ודיון בפורום
