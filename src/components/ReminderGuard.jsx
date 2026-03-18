@@ -8,18 +8,20 @@ export default function ReminderGuard({ children }) {
     const router = useRouter();
     const pathname = usePathname();
 
+    const exemptPaths = [
+        '/library/auth/login',
+        '/library/auth/register',
+        '/library/auth/approve-terms',
+        '/library/auth/verify-request',
+        '/library/auth/verify-success'
+    ];
+
+    const isExemptPath = exemptPaths.includes(pathname) || pathname?.startsWith('/api');
+
     useEffect(() => {
         if (status === 'loading') return;
 
-        const exemptPaths = [
-            '/library/auth/login', 
-            '/library/auth/register', 
-            '/library/auth/approve-terms',
-            '/library/auth/verify-request',
-            '/library/auth/verify-success'
-        ];
-
-        if (exemptPaths.includes(pathname) || pathname?.startsWith('/api') || status !== 'authenticated') {
+        if (isExemptPath || status !== 'authenticated') {
             return;
         }
 
@@ -32,17 +34,21 @@ export default function ReminderGuard({ children }) {
             router.replace('/library/auth/approve-terms');
         }
 
-    }, [status, session, router, pathname]);
+    }, [status, session, router, pathname, isExemptPath]);
 
     if (status === 'authenticated') {
+        if (isExemptPath) {
+            return children;
+        }
+
         const isVerified = session?.user?.isVerified;
         const acceptReminders = session?.user?.acceptReminders;
-        
-        if (!isVerified && pathname !== '/library/auth/verify-request' && pathname !== '/library/auth/verify-success') {
+
+        if (!isVerified) {
             return <LoadingScreen />;
         }
 
-        if (isVerified && !acceptReminders && pathname !== '/library/auth/approve-terms') {
+        if (!acceptReminders) {
             return <LoadingScreen />;
         }
     }
