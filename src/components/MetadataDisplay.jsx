@@ -1,4 +1,9 @@
 export default function MetadataDisplay({ upload, className = '', textSize = 'text-sm' }) {
+  // הצג מטא-דטה רק להעלאות מסוג full_book
+  if (upload.uploadType !== 'full_book') {
+    return null
+  }
+
   if (!upload.authorName && !upload.bookCategory && !upload.authorCategory && !upload.authorYear && !upload.publicationYear && !upload.copyrightHolder && !upload.sourceUrl && !upload.isOcr) {
     return null
   }

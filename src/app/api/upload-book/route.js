@@ -78,32 +78,34 @@ export async function POST(request) {
         let arrayBuffer = await file.arrayBuffer();
         let content = Buffer.from(arrayBuffer);
         
-        // הוסף מטא-דטה לתחילת הקובץ
-        const metadata = {
-            bookName,
-            authorName,
-            bookCategory,
-            authorCategory,
-            authorYear,
-            publicationYear,
-            copyrightHolder,
-            sourceUrl,
-            isOcr,
-            ocrDescription
-        };
+        // הוסף מטא-דטה לתחילת הקובץ רק להעלאות מסוג full_book
+        const uploadType = formData.get('uploadType') || 'single_page';
         
-        if (isTextFile(file.name)) {
-            const metadataHeader = createMetadataHeader(metadata);
-            const headerBuffer = Buffer.from(metadataHeader, 'utf8');
-            content = Buffer.concat([headerBuffer, content]);
-        } else if (isWordFile(file.name)) {
-            // לקבצי וורד, נשמור את המטא-דטה בשדה נפרד בדטה בייס
-            // ונוסיף אותה כשמוציאים את הקובץ
+        if (uploadType === 'full_book') {
+            const metadata = {
+                bookName,
+                authorName,
+                bookCategory,
+                authorCategory,
+                authorYear,
+                publicationYear,
+                copyrightHolder,
+                sourceUrl,
+                isOcr,
+                ocrDescription
+            };
+            
+            if (isTextFile(file.name)) {
+                const metadataHeader = createMetadataHeader(metadata);
+                const headerBuffer = Buffer.from(metadataHeader, 'utf8');
+                content = Buffer.concat([headerBuffer, content]);
+            } else if (isWordFile(file.name)) {
+                // לקבצי וורד, נשמור את המטא-דטה בשדה נפרד בדטה בייס
+                // ונוסיף אותה כשמוציאים את הקובץ
+            }
         }
         
         await connectDB();
-
-        const uploadType = formData.get('uploadType') || 'single_page';
 
         // בדיקה אם קיים קובץ עם אותו שם
         const existingUpload = await Upload.findOne({ 
@@ -135,7 +137,7 @@ export async function POST(request) {
         }
 
         // יצירת העלאה חדשה
-        const upload = await Upload.create({
+        const uploadData = {
             uploader: session.user._id,
             originalFileName: file.name,
             content: content,
@@ -143,18 +145,23 @@ export async function POST(request) {
             lineCount: 0,
             uploadType: uploadType,
             status: 'pending',
-            bookName: bookName,
-            // Add metadata fields
-            authorName: authorName,
-            bookCategory: bookCategory,
-            authorCategory: authorCategory,
-            authorYear: authorYear,
-            publicationYear: publicationYear,
-            copyrightHolder: copyrightHolder,
-            sourceUrl: sourceUrl,
-            isOcr: isOcr,
-            ocrDescription: ocrDescription
-        });
+            bookName: bookName
+        };
+
+        // הוסף מטא-דטה רק להעלאות מסוג full_book
+        if (uploadType === 'full_book') {
+            uploadData.authorName = authorName;
+            uploadData.bookCategory = bookCategory;
+            uploadData.authorCategory = authorCategory;
+            uploadData.authorYear = authorYear;
+            uploadData.publicationYear = publicationYear;
+            uploadData.copyrightHolder = copyrightHolder;
+            uploadData.sourceUrl = sourceUrl;
+            uploadData.isOcr = isOcr;
+            uploadData.ocrDescription = ocrDescription;
+        }
+
+        const upload = await Upload.create(uploadData);
 
         // בדיקה אם צריך לשלוח מייל
         let shouldSendEmail = false;
