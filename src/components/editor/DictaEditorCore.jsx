@@ -436,7 +436,28 @@ export default function DictaEditorCore({
     const leadingSpaces = selectedText.match(/^\s*/)[0]
     const trailingSpaces = selectedText.match(/\s*$/)[0]
     
-    const insertion = trimmedText ? `<${tag}>${trimmedText}</${tag}>` : `<${tag}></${tag}>`
+    // בדיקה אם זה תג כותרת
+    const isHeadingTag = /^h[1-6]$/.test(tag)
+    
+    let cleanText = trimmedText
+    let insertion
+    
+    if (isHeadingTag && trimmedText) {
+      // עבור כותרות: הסרת כל התגים הקיימים מהטקסט
+      cleanText = trimmedText.replace(/<[^>]*>/g, '')
+      insertion = `<${tag}>${cleanText}</${tag}>`
+      
+      // הוספת ירידת שורה אחרי הכותרת אם אין כבר
+      const textAfterSelection = content.substring(end)
+      const needsNewline = !textAfterSelection.startsWith('\n') && textAfterSelection.length > 0
+      if (needsNewline) {
+        insertion += '\n'
+      }
+    } else {
+      // עבור תגים רגילים: התנהגות קיימת
+      insertion = trimmedText ? `<${tag}>${trimmedText}</${tag}>` : `<${tag}></${tag}>`
+    }
+    
     const newText = content.substring(0, start) + leadingSpaces + insertion + trailingSpaces + content.substring(end)
     
     updateTextWithHistory(newText)
