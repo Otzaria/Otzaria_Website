@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import { validateEmail, validateRequired } from '@/lib/validation-utils';
+import connectDB from '@/lib/db';
+import ErrorReport from '@/models/ErrorReport';
 
 const REPORTING_ERRORS_RECIPIENT = 'otzaria.200@gmail.com';
 
@@ -141,12 +143,37 @@ export async function POST(request) {
       return NextResponse.json({ success: false, error: validationError }, { status: 400 });
     }
 
+    // התחברות למסד הנתונים
+    await connectDB();
+
+    // שמירת הדיווח במסד הנתונים
+    const errorReport = new ErrorReport({
+      reportId: payload.report_id,
+      senderEmail: payload.sender_email,
+      subject: payload.subject,
+      bookTitle: payload.book_title,
+      currentRef: payload.current_ref,
+      lineNumber: payload.line_number,
+      selectedText: payload.selected_text,
+      errorDetails: payload.error_details,
+      contextText: payload.context_text,
+      filePath: payload.file_path,
+      sourceFolder: payload.source_folder,
+      status: 'pending',
+      emailSent: false
+    });
+
+    await errorReport.save();
+
     const missingSmtp = ensureSmtpConfig();
     if (missingSmtp.length > 0) {
+      // גם אם שליחת המייל נכשלה, הדיווח נשמר במסד הנתונים
       return NextResponse.json(
         {
           success: false,
           error: `השרת אינו מוגדר לשליחת מייל. חסרים משתני סביבה: ${missingSmtp.join(', ')}`,
+          reportId: payload.report_id,
+          savedToDatabase: true
         },
         { status: 500 }
       );
@@ -176,17 +203,45 @@ export async function POST(request) {
       },
     });
 
+    // עדכון שהמייל נשלח בהצלחה
+    await ErrorReport.findOneAndUpdate(
+      { reportId: payload.report_id },
+      { 
+        emailSent: true, 
+        emailSentAt: new Date() 
+      }
+    );
+
     return NextResponse.json({
       success: true,
       message: 'הדיווח התקבל ונשלח בהצלחה',
       reportId: payload.report_id,
+      savedToDatabase: true
     });
   } catch (error) {
     console.error('Reporting errors API error:', error);
+    
+    // אם יש שגיאה, ננסה לעדכן את הדיווח במסד הנתונים
+    try {
+      if (payload?.report_id) {
+        await ErrorReport.findOneAndUpdate(
+          { reportId: payload.report_id },
+          { 
+            adminNotes: `שגיאה בשליחת מייל: ${error?.message}`,
+            emailSent: false
+          }
+        );
+      }
+    } catch (dbError) {
+      console.error('Error updating database after email failure:', dbError);
+    }
+
     return NextResponse.json(
       {
         success: false,
         error: error?.message || 'שגיאת שרת פנימית',
+        reportId: payload?.report_id,
+        savedToDatabase: true
       },
       { status: 500 }
     );
