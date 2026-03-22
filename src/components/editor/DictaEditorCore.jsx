@@ -449,7 +449,9 @@ export default function DictaEditorCore({
       
       // הוספת ירידת שורה אחרי הכותרת אם אין כבר
       const textAfterSelection = content.substring(end)
-      const needsNewline = !textAfterSelection.startsWith('\n') && textAfterSelection.length > 0
+      const hasNewlineAfter = textAfterSelection.startsWith('\n')
+      const hasNewlineInTrailing = trailingSpaces.includes('\n')
+      const needsNewline = !hasNewlineAfter && !hasNewlineInTrailing && textAfterSelection.length > 0
       if (needsNewline) {
         insertion += '\n'
       }
