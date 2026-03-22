@@ -56,6 +56,8 @@ export default function UploadPage() {
     isOcr: false,
     ocrDescription: ''
   })
+  
+  const [contemporaryAuthorConfirmed, setContemporaryAuthorConfirmed] = useState(false)
 
   if (status === 'unauthenticated') {
     router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
@@ -90,6 +92,28 @@ export default function UploadPage() {
   const handleInputChange = (e) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
+    
+    // אם שינו את קטגוריית המחבר, איפוס האישור
+    if (name === 'authorCategory') {
+      setContemporaryAuthorConfirmed(false)
+    }
+  }
+
+  const handleContemporaryAuthorWarning = async () => {
+    if (formData.authorCategory === 'מחברי זמנינו' && !contemporaryAuthorConfirmed) {
+      const confirmed = await showConfirm(
+        'שים לב!',
+        'אנו לא מכניסים ספרים ממחברים שאחר זמן השואה, חוץ מספרי רבותינו המפורסמים וגדולי הדור, או ספרי מ"מ ידועים. האם אתה מאשר שהספר עומד בקריטריונים אלה?'
+      )
+      
+      if (confirmed) {
+        setContemporaryAuthorConfirmed(true)
+        return true
+      } else {
+        return false
+      }
+    }
+    return true
   }
 
   const validateForm = () => {
@@ -117,6 +141,10 @@ export default function UploadPage() {
     }
 
     if (!validateForm()) return
+
+    // בדיקת אישור עבור מחברי זמנינו
+    const canProceed = await handleContemporaryAuthorWarning()
+    if (!canProceed) return
 
     setLoading(true)
 
@@ -173,6 +201,7 @@ export default function UploadPage() {
           isOcr: false,
           ocrDescription: ''
         })
+        setContemporaryAuthorConfirmed(false)
         if (fileInputRef.current) {
           fileInputRef.current.value = ''
         }
@@ -271,6 +300,20 @@ export default function UploadPage() {
                     <option key={cat} value={cat}>{cat}</option>
                   ))}
                 </select>
+                
+                {/* הודעת אזהרה עבור מחברי זמנינו */}
+                {formData.authorCategory === 'מחברי זמנינו' && (
+                  <div className="mt-3 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <div className="flex items-start gap-2">
+                      <span className="material-symbols-outlined text-yellow-600 text-xl">warning</span>
+                      <div className="text-sm text-yellow-800">
+                        <p className="font-bold mb-1">שים לב!</p>
+                        <p>אנו לא מכניסים ספרים ממחברים שאחר זמן השואה, חוץ מספרי רבותינו המפורסמים וגדולי הדור, או ספרי מ"מ ידועים.</p>
+                        <p className="mt-1">תתבקש לאשר זאת בעת השליחה.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* שנת המחבר */}
@@ -338,7 +381,7 @@ export default function UploadPage() {
               {/* האם OCR */}
               <div>
                 <label className="block text-sm font-bold mb-2">
-                  האם הטקסט הוא ע"י OCR? <span className="text-red-500">*</span>
+                  האם הטקסט הוא ע"י OCR (חילוץ טקסט מתמונה או ספר סרוק)? <span className="text-red-500">*</span>
                 </label>
                 <div className="flex gap-6">
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -359,7 +402,7 @@ export default function UploadPage() {
                       onChange={() => setFormData(prev => ({ ...prev, isOcr: true }))}
                       className="w-4 h-4"
                     />
-                    <span>כן - טקסט מ-OCR</span>
+                    <span>כן - טקסט מ-OCR (חילוץ טקסט מתמונה או ספר סרוק)</span>
                   </label>
                 </div>
               </div>

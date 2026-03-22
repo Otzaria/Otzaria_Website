@@ -12,7 +12,7 @@ export async function GET() {
   
   // מציג רק העלאות שלא באשפה
   const uploads = await Upload.find({ isDeleted: false })
-    .populate('uploader', 'name')
+    .populate('uploader', 'name email')
     .sort({ createdAt: -1 });
 
   // התאמה ל-UI
@@ -21,6 +21,7 @@ export async function GET() {
       bookName: u.bookName,
       originalFileName: u.originalFileName,
       uploadedBy: u.uploader?.name,
+      uploadedByEmail: u.uploader?.email,
       uploadedAt: u.createdAt,
       uploadType: u.uploadType || 'single_page', // ברירת מחדל לרשומות ישנות
       status: u.status,
