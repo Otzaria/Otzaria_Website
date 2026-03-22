@@ -8,6 +8,7 @@ const OUTPUT_PATH = path.join(ROOT_DIR, 'public', 'export-editor', 'dicta-editor
 
 const COMPONENT_PATHS = [
   'src/lib/avatar-colors.js',
+  'src/lib/editorUtils.js',
   'src/components/DialogContext.jsx',
   'src/components/Modal.jsx',
   'src/components/FormInput.jsx',
