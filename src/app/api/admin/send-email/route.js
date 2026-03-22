@@ -93,7 +93,7 @@ export async function POST(request) {
 
         console.log(`Email process finished. Success: ${successful}, Failed: ${failed}`);
 
-        if (successful > 0 && bookName) {
+        if (bookName) {
             try {
                 await ReminderHistory.create({
                     adminName: session.user.name || 'Admin',
