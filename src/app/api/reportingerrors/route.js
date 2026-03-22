@@ -135,8 +135,10 @@ function buildText(payload) {
 }
 
 export async function POST(request) {
+  let payload;
+  let savedToDatabase = false;
   try {
-    const payload = await request.json();
+    payload = await request.json();
 
     const validationError = validatePayload(payload);
     if (validationError) {
@@ -164,6 +166,7 @@ export async function POST(request) {
     });
 
     await errorReport.save();
+    savedToDatabase = true;
 
     const missingSmtp = ensureSmtpConfig();
     if (missingSmtp.length > 0) {
@@ -173,7 +176,7 @@ export async function POST(request) {
           success: false,
           error: `השרת אינו מוגדר לשליחת מייל. חסרים משתני סביבה: ${missingSmtp.join(', ')}`,
           reportId: payload.report_id,
-          savedToDatabase: true
+          savedToDatabase
         },
         { status: 500 }
       );
@@ -216,14 +219,14 @@ export async function POST(request) {
       success: true,
       message: 'הדיווח התקבל ונשלח בהצלחה',
       reportId: payload.report_id,
-      savedToDatabase: true
+      savedToDatabase
     });
   } catch (error) {
     console.error('Reporting errors API error:', error);
     
     // אם יש שגיאה, ננסה לעדכן את הדיווח במסד הנתונים
     try {
-      if (payload?.report_id) {
+      if (savedToDatabase && payload?.report_id) {
         await ErrorReport.findOneAndUpdate(
           { reportId: payload.report_id },
           { 
@@ -241,7 +244,7 @@ export async function POST(request) {
         success: false,
         error: error?.message || 'שגיאת שרת פנימית',
         reportId: payload?.report_id,
-        savedToDatabase: true
+        savedToDatabase
       },
       { status: 500 }
     );
