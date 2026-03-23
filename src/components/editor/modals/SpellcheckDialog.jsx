@@ -5,24 +5,9 @@ import { createPortal } from 'react-dom'
 import Button from '@/components/Button'
 import { useLoading } from '@/components/LoadingContext'
 
-const DICT_BASE_PATH = '/spellcheck'
-const TORANIT_DICT_PATHS = {
-  aff: `${DICT_BASE_PATH}/he_TORANIT.aff`,
-  dic: `${DICT_BASE_PATH}/he_TORANIT.dic`
-}
 const HEBREW_CHARS = "\\u0590-\\u05FF"
 const MISSPELLINGS_LIMIT = 1500
 const DEFAULT_SUGGESTION_LIMIT = 8
-const MAX_WORDS_TO_CHECK = Number.POSITIVE_INFINITY
-
-function resolveAssetUrl(path) {
-  if (typeof window === 'undefined') return path
-  try {
-    return new URL(path, window.location.origin).href
-  } catch (err) {
-    return path
-  }
-}
 
 function normalizeHebrew(text) {
   if (!text) return ''
@@ -60,10 +45,7 @@ export default function SpellcheckDialog({
   const [suggestions, setSuggestions] = useState([])
   const [customReplacement, setCustomReplacement] = useState('')
   const [misspellingsLimited, setMisspellingsLimited] = useState(false)
-  const [wordsLimited, setWordsLimited] = useState(false)
   const [suggestionLimit, setSuggestionLimit] = useState(DEFAULT_SUGGESTION_LIMIT)
-  const [canSuggest, setCanSuggest] = useState(true)
-  const [suggestMode, setSuggestMode] = useState('fuzzy')
   const [personalWords, setPersonalWords] = useState([])
   const [globalWords, setGlobalWords] = useState([])
   const [isReady, setIsReady] = useState(false)
@@ -71,23 +53,20 @@ export default function SpellcheckDialog({
   const [isDragging, setIsDragging] = useState(false)
   const dragStartOffset = useRef({ x: 0, y: 0 })
 
-  const workerRef = useRef(null)
   const isMountedRef = useRef(true)
   const hasLoadedWordsRef = useRef(false)
   const personalWordsRef = useRef([])
   const globalWordsRef = useRef([])
-  const cancelRequestedRef = useRef(false)
+  const checkAbortRef = useRef(null)
   const { startLoading, stopLoading } = useLoading()
 
   useEffect(() => {
     isMountedRef.current = true
-    return () => {
-      isMountedRef.current = false
-    }
+    return () => { isMountedRef.current = false }
   }, [])
 
   useEffect(() => {
-    if (isOpen && typeof window !== "undefined") {
+    if (isOpen && typeof window !== 'undefined') {
       if (position.x === 0 && position.y === 0) {
         const width = 520
         const x = Math.max(16, window.innerWidth - width - 24)
@@ -99,41 +78,30 @@ export default function SpellcheckDialog({
   useEffect(() => {
     const handleMouseMove = (e) => {
       if (!isDragging) return
-      const newX = e.clientX - dragStartOffset.current.x
-      const newY = e.clientY - dragStartOffset.current.y
-      setPosition({ x: newX, y: newY })
+      setPosition({
+        x: e.clientX - dragStartOffset.current.x,
+        y: e.clientY - dragStartOffset.current.y,
+      })
     }
-
-    const handleMouseUp = () => {
-      setIsDragging(false)
-    }
+    const handleMouseUp = () => setIsDragging(false)
 
     if (isDragging) {
-      window.addEventListener("mousemove", handleMouseMove)
-      window.addEventListener("mouseup", handleMouseUp)
+      window.addEventListener('mousemove', handleMouseMove)
+      window.addEventListener('mouseup', handleMouseUp)
     }
-
     return () => {
-      window.removeEventListener("mousemove", handleMouseMove)
-      window.removeEventListener("mouseup", handleMouseUp)
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
     }
   }, [isDragging])
 
   const handleMouseDown = (e) => {
     setIsDragging(true)
-    dragStartOffset.current = {
-      x: e.clientX - position.x,
-      y: e.clientY - position.y
-    }
+    dragStartOffset.current = { x: e.clientX - position.x, y: e.clientY - position.y }
   }
 
-  useEffect(() => {
-    personalWordsRef.current = personalWords
-  }, [personalWords])
-
-  useEffect(() => {
-    globalWordsRef.current = globalWords
-  }, [globalWords])
+  useEffect(() => { personalWordsRef.current = personalWords }, [personalWords])
+  useEffect(() => { globalWordsRef.current = globalWords }, [globalWords])
 
   async function fetchPersonalWords() {
     try {
@@ -141,9 +109,7 @@ export default function SpellcheckDialog({
       if (!res.ok) return []
       const data = await res.json()
       return Array.isArray(data.spellWords) ? data.spellWords : []
-    } catch (err) {
-      return []
-    }
+    } catch { return [] }
   }
 
   async function fetchGlobalWords() {
@@ -152,63 +118,10 @@ export default function SpellcheckDialog({
       if (!res.ok) return []
       const data = await res.json()
       return Array.isArray(data.words) ? data.words : []
-    } catch (err) {
-      return []
-    }
+    } catch { return [] }
   }
 
-  const setupWorker = useCallback(() => {
-    if (workerRef.current) return workerRef.current
-
-    const worker = new Worker(new URL('../../../workers/toranit-worker.js', import.meta.url), { type: 'module' })
-    workerRef.current = worker
-
-    worker.onmessage = (event) => {
-      const payload = event.data || {}
-      if (!isMountedRef.current) return
-
-      if (payload.type === 'ready') {
-        if (typeof payload.canSuggest === 'boolean') {
-          setCanSuggest(payload.canSuggest)
-        }
-        if (payload.suggestMode) {
-          setSuggestMode(payload.suggestMode)
-        }
-      }
-
-      if (payload.type === 'checkResult') {
-        setMisspellings(payload.misspellings || [])
-        setMisspellingsLimited(!!payload.limited)
-        setWordsLimited(!!payload.wordsLimited)
-        setSelectedWord(payload.misspellings?.[0]?.word || '')
-        setCustomReplacement('')
-        setLoading(false)
-        setIsReady(true)
-        stopLoading()
-      }
-
-      if (payload.type === 'suggestResult') {
-        setSuggestions(payload.suggestions || [])
-        if (typeof payload.canSuggest === 'boolean') {
-          setCanSuggest(payload.canSuggest)
-        }
-        if (payload.suggestMode) {
-          setSuggestMode(payload.suggestMode)
-        }
-      }
-
-      if (payload.type === 'error') {
-        setError(payload.message || 'שגיאה בבדיקת האיות')
-        setLoading(false)
-        setIsReady(true)
-        stopLoading()
-      }
-    }
-
-    return worker
-  }, [])
-
-  const runSpellcheck = useCallback((wordsOverride = null, options = null) => {
+  const runSpellcheck = useCallback(async (wordsOverride = null, options = null) => {
     if (!isOpen) return
     const silent = !!options?.silent
     if (!silent) {
@@ -218,45 +131,60 @@ export default function SpellcheckDialog({
       setSuggestions([])
     }
 
-    const worker = setupWorker()
+    if (checkAbortRef.current) checkAbortRef.current.abort()
+    const controller = new AbortController()
+    checkAbortRef.current = controller
+
     const wordsForSpell = Array.isArray(wordsOverride)
       ? wordsOverride
       : Array.from(new Set([...(personalWordsRef.current || []), ...(globalWordsRef.current || [])]))
 
-    worker.postMessage({
-      type: 'init',
-      aff: resolveAssetUrl(TORANIT_DICT_PATHS.aff),
-      dic: resolveAssetUrl(TORANIT_DICT_PATHS.dic),
-      personalWords: wordsForSpell
-    })
+    try {
+      const res = await fetch('/api/spellcheck', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'check',
+          text: normalizeHebrew(text),
+          personalWords: wordsForSpell,
+        }),
+        signal: controller.signal,
+      })
 
-    worker.postMessage({
-      type: 'check',
-      text: normalizeHebrew(text),
-      limit: MISSPELLINGS_LIMIT,
-      maxWords: MAX_WORDS_TO_CHECK
-    })
-  }, [isOpen, setupWorker, text])
+      if (!isMountedRef.current) return
+      if (!res.ok) throw new Error('שגיאת שרת')
+      const data = await res.json()
+
+      setMisspellings(data.misspellings || [])
+      setMisspellingsLimited(!!data.limited)
+      setSelectedWord(data.misspellings?.[0]?.word || '')
+      setCustomReplacement('')
+      setLoading(false)
+      setIsReady(true)
+      stopLoading()
+    } catch (err) {
+      if (err.name === 'AbortError') return
+      if (!isMountedRef.current) return
+      setError(err.message || 'שגיאה בבדיקת האיות')
+      setLoading(false)
+      setIsReady(true)
+      stopLoading()
+    }
+  }, [isOpen, text, stopLoading])
 
   useEffect(() => {
     if (!isOpen) {
       hasLoadedWordsRef.current = false
-      cancelRequestedRef.current = false
+      if (checkAbortRef.current) checkAbortRef.current.abort()
       setIsReady(false)
       stopLoading()
       return
     }
     if (hasLoadedWordsRef.current) return
     hasLoadedWordsRef.current = true
-    cancelRequestedRef.current = false
-    setIsReady(false)
 
-    startLoading('טוען מילון ובודק איות...', () => {
-      cancelRequestedRef.current = true
-      if (workerRef.current) {
-        workerRef.current.terminate()
-        workerRef.current = null
-      }
+    startLoading('בודק איות...', () => {
+      if (checkAbortRef.current) checkAbortRef.current.abort()
       setLoading(false)
       setMisspellings([])
       setSuggestions([])
@@ -269,7 +197,6 @@ export default function SpellcheckDialog({
 
     Promise.all([fetchPersonalWords(), fetchGlobalWords()]).then(([personal, global]) => {
       if (!isMountedRef.current) return
-      if (cancelRequestedRef.current) return
       setPersonalWords(personal)
       setGlobalWords(global)
       const combined = Array.from(new Set([...(personal || []), ...(global || [])]))
@@ -277,25 +204,37 @@ export default function SpellcheckDialog({
     })
   }, [isOpen, runSpellcheck])
 
+  // Fetch suggestions from server whenever selected word changes
   useEffect(() => {
-    if (!workerRef.current || !selectedWord) {
+    if (!selectedWord) {
       setSuggestions([])
       return
     }
 
-    workerRef.current.postMessage({
-      type: 'suggest',
-      word: normalizeHebrew(selectedWord),
-      limit: suggestionLimit
-    })
-  }, [selectedWord, suggestionLimit])
+    const controller = new AbortController()
 
-  useEffect(() => {
-    if (!isOpen && workerRef.current) {
-      workerRef.current.terminate()
-      workerRef.current = null
-    }
-  }, [isOpen])
+    ;(async () => {
+      try {
+        const res = await fetch('/api/spellcheck', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'suggest',
+            word: normalizeHebrew(selectedWord),
+            limit: suggestionLimit,
+          }),
+          signal: controller.signal,
+        })
+        if (!res.ok) return
+        const data = await res.json()
+        if (isMountedRef.current) setSuggestions(data.suggestions || [])
+      } catch (err) {
+        if (err.name === 'AbortError') return
+      }
+    })()
+
+    return () => controller.abort()
+  }, [selectedWord, suggestionLimit])
 
   const handleReplaceAll = (word, replacement) => {
     if (!word || !replacement) return
@@ -304,9 +243,7 @@ export default function SpellcheckDialog({
       onApplyText(nextText)
       setMisspellings(prev => {
         const next = prev.filter(item => item.word !== word)
-        if (selectedWord === word) {
-          setSelectedWord(next[0]?.word || '')
-        }
+        if (selectedWord === word) setSelectedWord(next[0]?.word || '')
         return next
       })
       setSuggestions([])
@@ -331,16 +268,11 @@ export default function SpellcheckDialog({
       setPersonalWords(nextPersonal)
       setMisspellings(prev => {
         const next = prev.filter(item => item.word !== normalized)
-        if (selectedWord === normalized) {
-          setSelectedWord(next[0]?.word || '')
-        }
+        if (selectedWord === normalized) setSelectedWord(next[0]?.word || '')
         return next
       })
-      if (workerRef.current) {
-        workerRef.current.postMessage({ type: 'addPersonal', word: normalized })
-      }
       runSpellcheck(nextPersonal || [], { silent: true })
-    } catch (err) {
+    } catch {
       // ignore
     }
   }
@@ -374,7 +306,7 @@ export default function SpellcheckDialog({
           </div>
 
           {loading && (
-            <div className="text-sm text-gray-500">טוען מילון ובודק...</div>
+            <div className="text-sm text-gray-500">בודק...</div>
           )}
           {error && (
             <div className="text-sm text-red-600">{error}</div>
@@ -464,9 +396,6 @@ export default function SpellcheckDialog({
                 </select>
               </div>
             </div>
-            {!canSuggest && suggestMode === 'nspell' && (
-              <div className="text-xs text-amber-600 mb-2">הצעות מושבתות כרגע (nspell לא נטען). עדיין אפשר להחליף ידנית.</div>
-            )}
 
             {selectedWord && suggestions.length === 0 && (
               <div className="text-sm text-gray-500">אין הצעות זמינות</div>
@@ -496,12 +425,3 @@ export default function SpellcheckDialog({
     document.body
   )
 }
-
-
-
-
-
-
-
-
-

@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /c/Otzaria_Website/public -name *spell* -o -name *dict*)"
+    ]
+  }
+}

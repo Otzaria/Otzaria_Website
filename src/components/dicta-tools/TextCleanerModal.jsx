@@ -99,24 +99,65 @@ export default function TextCleanerModal({ isOpen, onClose, content, onContentCh
         const before = newContent
         // ניקוי תגיות כפולות - מאומץ מהמימוש בצד השרת
         // מטפל בכל סוגי התגיות כולל h1-h6
-        
+
+        const getLastTagInfo = (text, tag, closeTagIndex) => {
+          const openTag = `<${tag}>`
+          const openIndex = text.lastIndexOf(openTag, closeTagIndex)
+          if (openIndex === -1) return null
+          const inner = text.slice(openIndex + openTag.length, closeTagIndex)
+          const cleaned = inner.replace(/<[^>]*>/g, '').trim()
+          const wordCount = cleaned ? cleaned.split(/\s+/).filter(Boolean).length : 0
+          return { openTag, openIndex, inner, wordCount }
+        }
+
+        const isOnlyTagOnLine = (text, tagInfo, closeTagIndex) => {
+          if (!tagInfo) return false
+          const closeTag = `</${tagInfo.openTag.slice(1)}`
+          const closeTagIndexEnd = closeTagIndex + closeTag.length
+          const lineStart = text.lastIndexOf('\n', tagInfo.openIndex - 1) + 1
+          const line = text.slice(lineStart, closeTagIndexEnd)
+          const trimmed = line.trim()
+          const expected = `${tagInfo.openTag}${tagInfo.inner}</${tagInfo.openTag.slice(1)}`
+          return trimmed === expected
+        }
+
         let previousText
         do {
           previousText = newContent
           // תגית סוגרת ותגית פותחת אותו דבר עם רווח או ללא רווח באמצע: </b> <b> או </b><b> -> רווח בלבד או ריק
-          newContent = newContent.replace(/<\/(b|i|u|big|small|h[1-6])>\s*<\1>/g, (match) => {
-            // אם היה רווח במקור, נשאיר רווח. אם לא היה רווח, נמחק לגמרי
-            return match.includes(' ') || match.includes('\n') || match.includes('\t') ? ' ' : ''
+          newContent = newContent.replace(/<\/(b|i|u|big|small|h[1-6])>(\s*)<\1>/g, (match, tag, whitespace, offset, fullText) => {
+            const hasLineBreak = /\r?\n/.test(whitespace)
+            if (!hasLineBreak) {
+              return whitespace.length > 0 ? ' ' : ''
+            }
+            const info = getLastTagInfo(fullText, tag, offset)
+            if (!info || info.wordCount !== 1) return match
+            if (!isOnlyTagOnLine(fullText, info, offset)) return match
+            return ' '
           })
         
           // שני סוגרים ואז שני פותחים באותו סדר הפוך: </b></i> <i><b> או </b></i><i><b> -> רווח או ריק
-          newContent = newContent.replace(/<\/(b|i|u|big|small|h[1-6])><\/(b|i|u|big|small|h[1-6])>\s*<\2><\1>/g, (match) => {
-            return match.includes(' ') || match.includes('\n') || match.includes('\t') ? ' ' : ''
+          newContent = newContent.replace(/<\/(b|i|u|big|small|h[1-6])><\/(b|i|u|big|small|h[1-6])>(\s*)<\2><\1>/g, (match, tag1, tag2, whitespace, offset, fullText) => {
+            const hasLineBreak = /\r?\n/.test(whitespace)
+            if (!hasLineBreak) {
+              return whitespace.length > 0 ? ' ' : ''
+            }
+            const info = getLastTagInfo(fullText, tag1, offset)
+            if (!info || info.wordCount !== 1) return match
+            if (!isOnlyTagOnLine(fullText, info, offset)) return match
+            return ' '
           })
         
           // שני סוגרים ואז שני פותחים באותו סדר: </b></i> <b><i> או </b></i><b><i> -> רווח או ריק
-          newContent = newContent.replace(/<\/(b|i|u|big|small|h[1-6])><\/(b|i|u|big|small|h[1-6])>\s*<\1><\2>/g, (match) => {
-            return match.includes(' ') || match.includes('\n') || match.includes('\t') ? ' ' : ''
+          newContent = newContent.replace(/<\/(b|i|u|big|small|h[1-6])><\/(b|i|u|big|small|h[1-6])>(\s*)<\1><\2>/g, (match, tag1, tag2, whitespace, offset, fullText) => {
+            const hasLineBreak = /\r?\n/.test(whitespace)
+            if (!hasLineBreak) {
+              return whitespace.length > 0 ? ' ' : ''
+            }
+            const info = getLastTagInfo(fullText, tag1, offset)
+            if (!info || info.wordCount !== 1) return match
+            if (!isOnlyTagOnLine(fullText, info, offset)) return match
+            return ' '
           })
         } while (newContent !== previousText)
         
