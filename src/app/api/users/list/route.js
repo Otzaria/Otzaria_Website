@@ -80,7 +80,6 @@ export async function GET() {
         const stats = statsMap[user._id.toString()] || { completed: 0, inProgress: 0 };
         const dictaBooksCount = dictaBooksMap[user._id.toString()] || 0;
         return {
-            id: user._id.toString(),
             name: user.name,
             role: user.role,
             createdAt: user.createdAt,
