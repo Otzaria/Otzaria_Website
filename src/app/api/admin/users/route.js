@@ -16,7 +16,10 @@ export async function GET() {
         await connectDB();
 
         // 1. שליפת כל המשתמשים
-        const users = await User.find({}).select('-password').sort({ createdAt: -1 }).lean();
+        const users = await User.find({})
+            .select('-password -resetPasswordToken -resetPasswordExpires -verificationToken -verificationTokenExpires -verificationRequestHistory -lastResetRequest -dailyResetRequestsCount')
+            .sort({ createdAt: -1 })
+            .lean();
 
         // 2. חישוב סטטיסטיקות מתקדם (Aggregation)
         // סופר גם Completed וגם In-Progress
@@ -137,7 +140,7 @@ export async function PUT(request) {
             userId, 
             updateData,
             { new: true }
-        ).select('-password');
+        ).select('-password -resetPasswordToken -resetPasswordExpires -verificationToken -verificationTokenExpires -verificationRequestHistory -lastResetRequest -dailyResetRequestsCount');
 
         if (!updatedUser) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 });
