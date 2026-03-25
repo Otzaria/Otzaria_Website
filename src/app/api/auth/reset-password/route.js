@@ -38,6 +38,9 @@ export async function POST(request) {
   try {
     const { token, password } = await request.json();
 
+    if (typeof token !== 'string') {
+        return NextResponse.json({ error: 'טוקן לא חוקי' }, { status: 400 });
+    }
     if (!password || password.length < 6) {
       return NextResponse.json({ error: 'הסיסמה חייבת להכיל לפחות 6 תווים.' }, { status: 400 });
     }
@@ -45,7 +48,7 @@ export async function POST(request) {
     await connectDB();
 
     const user = await User.findOne({
-        resetPasswordToken: token,
+        resetPasswordToken: String(token),
         resetPasswordExpires: { $gt: Date.now() }
     });
 
