@@ -1,6 +1,6 @@
 'use client'
 
-import Header from '@/components/Header'
+import Header from '@/components/OtzariaSoftwareHeader'
 import { motion } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -55,7 +55,7 @@ export default function AboutPage() {
                 </h2>
                 <div className="space-y-4 text-lg text-on-surface/80 leading-relaxed">
                   <p>
-                    <strong className="text-primary">נכון לתאריך ר"ח טבת תשפ"ו</strong> הספרייה כוללת כ-<strong className="text-accent">7,200 ספרים</strong> הכוללים את רוב ספרי היסוד:
+                    <strong className="text-primary">נכון לתאריך ר"ח ניסן תשפ"ו</strong> הספרייה כוללת כ-<strong className="text-accent">7,000 ספרים</strong> הכוללים את רוב ספרי היסוד:
                   </p>
                   <ul className="space-y-3 mr-6">
                     <li className="flex items-start gap-3">
@@ -222,7 +222,7 @@ export default function AboutPage() {
                 <h3 className="text-2xl font-bold mb-4 text-on-surface">
                   מוכנים להצטרף אלינו?
                 </h3>
-                <Link href="/library/books" className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-on-primary rounded-lg text-lg font-medium hover:bg-accent transition-colors shadow-lg hover:shadow-xl">
+                <Link href="/library" className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-on-primary rounded-lg text-lg font-medium hover:bg-accent transition-colors shadow-lg hover:shadow-xl">
                   <span className="material-symbols-outlined">library_books</span>
                   <span>התחל לערוך</span>
                 </Link>
