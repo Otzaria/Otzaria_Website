@@ -3,16 +3,24 @@ import connectDB from '@/lib/db';
 import User from '@/models/User';
 import Page from '@/models/Page';
 import DictaBook from '@/models/DictaBook';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
+    // בדיקת התחברות
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     await connectDB();
 
     // 1. שליפת כל המשתמשים (רק שדות נחוצים לציבור)
     const users = await User.find({})
-      .select('name email role points createdAt')
+      .select('name role points createdAt')
       .sort({ points: -1 })
       .lean();
 
