@@ -7,6 +7,22 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 export const dynamic = 'force-dynamic'; // מונע קאש סטטי
 
+function sanitizeUser(userDoc) {
+    const user = userDoc.toObject ? userDoc.toObject() : userDoc;
+    const {
+        password,
+        resetPasswordToken,
+        resetPasswordExpires,
+        verificationToken,
+        verificationTokenExpires,
+        verificationRequestHistory,
+        lastResetRequest,
+        dailyResetRequestsCount,
+        ...safeUser
+    } = user;
+    return safeUser;
+}
+
 export async function GET() {
     try {
         const session = await getServerSession(authOptions);
@@ -31,7 +47,7 @@ export async function GET() {
                 // שימוש ב-Cursor של Mongoose כדי לרוץ על המסמכים אחד אחד
                 for await (const user of User.find({}).cursor()) {
                     if (!isFirstUser) controller.enqueue(encoder.encode(','));
-                    controller.enqueue(encoder.encode(JSON.stringify(user)));
+                    controller.enqueue(encoder.encode(JSON.stringify(sanitizeUser(user))));
                     isFirstUser = false;
                 }
                 controller.enqueue(encoder.encode('],\n'));
