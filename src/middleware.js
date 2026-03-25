@@ -20,7 +20,7 @@ export default withAuth(
     }
 
     // הגנה על דפי אדמין - רק לבעלי תפקיד 'admin'
-    if (path.startsWith('/library/admin')) {
+    if (path.startsWith('/library/admin') || path.startsWith('/api/admin')) {
       if (!token) {
         // אם אין טוקן בכלל - NextAuth יטפל בהפניה להתחברות עם callbackUrl
         return NextResponse.next();

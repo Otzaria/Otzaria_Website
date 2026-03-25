@@ -2,14 +2,20 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Page from '@/models/Page';
 import Book from '@/models/Book';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 export async function GET(request, { params }) {
+    const session = await getServerSession(authOptions);
+    if (session?.user?.role !== 'admin') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     try {
         const { id } = await params;
         await connectDB();
 
         const page = await Page.findById(id).populate('book');
-        
+
         if (!page) {
             return NextResponse.json({ error: 'Page not found' }, { status: 404 });
         }
@@ -22,7 +28,7 @@ export async function GET(request, { params }) {
         }
 
         const bookName = page.book ? (page.book.name || page.book.title || 'book') : 'unknown';
-        
+
         const filename = `${bookName}-page-${page.pageNumber}.txt`;
 
         return new NextResponse(textContent, {

@@ -10,8 +10,11 @@ export async function PUT(request) {
 
     const { messageId } = await request.json();
     await connectDB();
-    
+    const message = await Message.findOne({ _id: messageId, recipient: session.user._id });
+    if (!message && session.user.role !== 'admin') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     await Message.findByIdAndUpdate(messageId, { isRead: true });
-    
+
     return NextResponse.json({ success: true });
 }

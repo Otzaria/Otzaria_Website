@@ -2,27 +2,33 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Page from '@/models/Page';
 import Book from '@/models/Book';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 export async function GET(request) {
+    const session = await getServerSession(authOptions);
+    if (session?.user?.role !== 'admin') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     try {
         await connectDB();
-        
+
         const { searchParams } = new URL(request.url);
         const status = searchParams.get('status');
         const bookName = searchParams.get('book');
         const userId = searchParams.get('userId');
 
         let query = {};
-        
+
         if (status) query.status = status;
         if (userId) query.claimedBy = userId;
-        
+
         if (bookName) {
             const bookDoc = await Book.findOne({ name: bookName });
             if (bookDoc) {
                 query.book = bookDoc._id;
             } else {
-                return new NextResponse('', { status: 200 }); 
+                return new NextResponse('', { status: 200 });
             }
         }
 
@@ -45,11 +51,11 @@ export async function GET(request) {
                 fullContent += (page.content || '') + "\n";
             }
 
-            fullContent += "\n\n"; 
+            fullContent += "\n\n";
         }
 
         const filename = `all-pages-export-${Date.now()}.txt`;
-        
+
         return new NextResponse(fullContent, {
             headers: {
                 'Content-Type': 'text/plain; charset=utf-8',

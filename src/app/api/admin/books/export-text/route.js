@@ -1,8 +1,14 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Page from '@/models/Page';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 export async function GET(request) {
+  const session = await getServerSession(authOptions);
+  if (session?.user?.role !== 'admin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
   try {
     await connectDB();
 
@@ -17,7 +23,7 @@ export async function GET(request) {
     }
 
     const pages = await Page.find({ book: bookId })
-      .sort({ pageNumber: 1 }) 
+      .sort({ pageNumber: 1 })
       .select('content pageNumber')
       .lean();
 
@@ -30,7 +36,7 @@ export async function GET(request) {
 
     const combinedText = pages
       .map((page) => page.content || '')
-      .join('\n\n'); 
+      .join('\n\n');
 
     return NextResponse.json({
       success: true,
