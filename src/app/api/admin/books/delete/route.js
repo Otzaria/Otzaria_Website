@@ -11,14 +11,11 @@ export async function DELETE(request) {
     try {
         // 1. אבטחה: בדיקת הרשאות אדמין
         const session = await getServerSession(authOptions);
-        
-        // בדיקה כפולה: גם שיש סשן וגם שהתפקיד הוא אדמין
         if (!session || session.user?.role !== 'admin') {
             return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
         }
 
         const { bookId } = await request.json();
-        
         if (!bookId) {
             return NextResponse.json({ error: 'Book ID is required' }, { status: 400 });
         }
@@ -28,24 +25,31 @@ export async function DELETE(request) {
         const book = await Book.findById(bookId);
         if (!book) return NextResponse.json({ error: 'Book not found' }, { status: 404 });
 
-        if (book.folderPath) { // בדיקה שהשדה קיים
+        // 2. מחיקת קבצים פיזיים (רק אם קיים נתיב)
+        if (book.folderPath) {
             const relativePath = book.folderPath.startsWith('/') ? book.folderPath.slice(1) : book.folderPath;
-            const fullPath = path.join(process.cwd(), 'public', relativePath);
+            const baseUploadDir = path.resolve(process.cwd(), 'public', 'uploads');
+            const fullPath = path.resolve(process.cwd(), 'public', relativePath);
 
-            if (fullPath.includes('uploads') && await fs.pathExists(fullPath)) {
-                await fs.remove(fullPath);
+            // אימות בטיחות נתיב (Path Traversal Protection)
+            if (fullPath.startsWith(baseUploadDir + path.sep)) {
+                if (await fs.pathExists(fullPath)) {
+                    await fs.remove(fullPath);
+                }
+            } else {
+                console.error("Security alert: Attempt to delete unauthorized path:", fullPath);
+                // כאן אפשר להחליט אם לעצור או רק להתריע
             }
-        } else {
-            console.warn(`Book ${bookId} has no folderPath, skipping physical file deletion.`);
         }
 
-        // 3. מחיקת כל העמודים המשויכים לספר מה-DB
+        // 3. מחיקת כל העמודים המשויכים לספר מה-DB (קורה תמיד!)
         await Page.deleteMany({ book: bookId });
 
-        // 4. מחיקת רשומת הספר עצמה מה-DB
+        // 4. מחיקת רשומת הספר עצמה מה-DB (קורה תמיד!)
         await Book.findByIdAndDelete(bookId);
 
         return NextResponse.json({ success: true, message: 'הספר נמחק בהצלחה' });
+
     } catch (error) {
         console.error('Delete book error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });

@@ -14,12 +14,14 @@ export const authOptions = {
       },
       async authorize(credentials) {
         await connectDB();
-        
+        if (typeof credentials.identifier !== 'string' || typeof credentials.password !== 'string') {
+          throw new Error('קלט לא חוקי');
+        }
         const user = await User.findOne({
-            $or: [
-                { email: credentials.identifier },
-                { name: credentials.identifier }
-            ]
+          $or: [
+            { email: credentials.identifier },
+            { name: credentials.identifier }
+          ]
         });
 
         if (!user) {
@@ -45,25 +47,25 @@ export const authOptions = {
   callbacks: {
     async jwt({ token, user, trigger, session }) {
       if (user) {
-        token.id = user.id; 
+        token.id = user.id;
         token.role = user.role;
         token.acceptReminders = user.acceptReminders;
         token.isVerified = user.isVerified;
       }
-      
+
       if (trigger === "update") {
         try {
-            await connectDB();
-            const freshUser = await User.findById(token.id);
-            if (freshUser) {
-                token.email = freshUser.email;
-                token.isVerified = freshUser.isVerified;
-                token.acceptReminders = freshUser.acceptReminders;
-                token.role = freshUser.role;
-                token.name = freshUser.name;
-            }
+          await connectDB();
+          const freshUser = await User.findById(token.id);
+          if (freshUser) {
+            token.email = freshUser.email;
+            token.isVerified = freshUser.isVerified;
+            token.acceptReminders = freshUser.acceptReminders;
+            token.role = freshUser.role;
+            token.name = freshUser.name;
+          }
         } catch (error) {
-            console.error("Error refreshing user token:", error);
+          console.error("Error refreshing user token:", error);
         }
       }
       return token;
