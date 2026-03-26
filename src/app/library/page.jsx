@@ -1,7 +1,6 @@
 import Header from '@/components/Header'
 import Hero from '@/components/Hero'
 import StatsSection from '@/components/StatsSection'
-import Features from '@/components/Features'
 import ContributeSection from '@/components/ContributeSection'
 
 export default function LibraryHome() {
@@ -14,7 +13,6 @@ export default function LibraryHome() {
         
         <StatsSection /> 
         
-        <Features />
         <ContributeSection />
       </main>
     </div>

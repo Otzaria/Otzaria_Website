@@ -12,6 +12,7 @@ const ErrorReportSchema = new mongoose.Schema({
   contextText: { type: String, required: true }, // טקסט הקשר
   filePath: { type: String, required: true }, // נתיב הקובץ
   sourceFolder: { type: String, required: true }, // תיקיית המקור
+  libraryVersion: { type: String, default: 'unknown' }, // גרסת ספרייה של המשתמש
   status: { 
     type: String, 
     enum: ['pending', 'in_progress', 'resolved', 'rejected'], 
