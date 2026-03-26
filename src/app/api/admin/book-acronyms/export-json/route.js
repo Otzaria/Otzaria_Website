@@ -29,15 +29,12 @@ export async function GET() {
       .select('externalId aliases')
       .lean()
 
-    const output = []
-    for (const book of books) {
-      for (const term of book.aliases || []) {
-        output.push({
-          bookId: normalizeBookId(book.externalId),
-          term
-        })
-      }
-    }
+    const output = books.flatMap((book) =>
+      (book.aliases || []).map((term) => ({
+        bookId: normalizeBookId(book.externalId),
+        term
+      }))
+    )
 
     output.sort((a, b) => {
       if (a.bookId === b.bookId) {

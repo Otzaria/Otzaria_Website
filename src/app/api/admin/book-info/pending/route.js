@@ -76,14 +76,42 @@ export async function POST(request) {
 
     await connectDB()
 
+    const requestedChangeIds = selections
+      .map((selection) => selection?.changeId)
+      .filter(Boolean)
+
+    const pendingChanges = await BookInfoPendingChange.find({
+      _id: { $in: requestedChangeIds }
+    })
+      .select('_id bookInfo changes')
+      .lean()
+
+    const changeById = new Map(
+      pendingChanges.map((changeDoc) => [String(changeDoc._id), changeDoc])
+    )
+
+    const bookIds = Array.from(
+      new Set(pendingChanges.map((changeDoc) => String(changeDoc.bookInfo)))
+    )
+
+    const existingBooks = await BookInfo.find({ _id: { $in: bookIds } })
+      .select('_id')
+      .lean()
+
+    const existingBookIdSet = new Set(existingBooks.map((book) => String(book._id)))
+
+    const bookUpdateById = new Map()
+    const pendingUpdateById = new Map()
+    const pendingDeleteIds = new Set()
     const changedRows = []
+
     for (const selection of selections) {
       const { changeId } = selection || {}
       if (!changeId) {
         continue
       }
 
-      const changeDoc = await BookInfoPendingChange.findById(changeId)
+      const changeDoc = changeById.get(String(changeId))
       if (!changeDoc) {
         continue
       }
@@ -93,35 +121,88 @@ export async function POST(request) {
         continue
       }
 
-      const book = await BookInfo.findById(changeDoc.bookInfo)
-      if (!book) {
-        await BookInfoPendingChange.findByIdAndDelete(changeDoc._id)
+      const bookId = String(changeDoc.bookInfo)
+      if (!existingBookIdSet.has(bookId)) {
+        pendingDeleteIds.add(String(changeDoc._id))
+        pendingUpdateById.delete(String(changeDoc._id))
+        changeById.delete(String(changeDoc._id))
         continue
       }
 
       if (action === 'approve') {
-        for (const field of selectedFields) {
-          book[field] = changeDoc.get(`changes.${field}`)
-          changeDoc.set(`changes.${field}`, undefined)
+        if (!bookUpdateById.has(bookId)) {
+          bookUpdateById.set(bookId, {})
         }
-        await book.save()
+        const bookUpdate = bookUpdateById.get(bookId)
+
+        for (const field of selectedFields) {
+          bookUpdate[field] = changeDoc.changes?.[field]
+          if (changeDoc.changes) {
+            delete changeDoc.changes[field]
+          }
+        }
       }
 
       if (action === 'delete') {
         for (const field of selectedFields) {
-          changeDoc.set(`changes.${field}`, undefined)
+          if (changeDoc.changes) {
+            delete changeDoc.changes[field]
+          }
         }
       }
 
       const remainingFields = getChangedFields(changeDoc.changes)
       if (remainingFields.length === 0) {
-        await BookInfoPendingChange.findByIdAndDelete(changeDoc._id)
+        pendingDeleteIds.add(String(changeDoc._id))
+        pendingUpdateById.delete(String(changeDoc._id))
+        changeById.delete(String(changeDoc._id))
       } else {
-        changeDoc.markModified('changes')
-        await changeDoc.save()
+        const nextChanges = {}
+        for (const field of remainingFields) {
+          nextChanges[field] = changeDoc.changes[field]
+        }
+        pendingUpdateById.set(String(changeDoc._id), nextChanges)
       }
 
       changedRows.push(String(changeDoc._id))
+    }
+
+    if (bookUpdateById.size > 0) {
+      const bookBulkOps = Array.from(bookUpdateById.entries()).map(([bookId, updateFields]) => ({
+        updateOne: {
+          filter: { _id: bookId },
+          update: { $set: updateFields }
+        }
+      }))
+      await BookInfo.bulkWrite(bookBulkOps)
+    }
+
+    if (pendingDeleteIds.size > 0 || pendingUpdateById.size > 0) {
+      const pendingBulkOps = []
+
+      for (const changeDocId of pendingDeleteIds) {
+        pendingBulkOps.push({
+          deleteOne: {
+            filter: { _id: changeDocId }
+          }
+        })
+      }
+
+      for (const [changeDocId, nextChanges] of pendingUpdateById.entries()) {
+        if (pendingDeleteIds.has(changeDocId)) {
+          continue
+        }
+        pendingBulkOps.push({
+          updateOne: {
+            filter: { _id: changeDocId },
+            update: { $set: { changes: nextChanges } }
+          }
+        })
+      }
+
+      if (pendingBulkOps.length > 0) {
+        await BookInfoPendingChange.bulkWrite(pendingBulkOps)
+      }
     }
 
     return NextResponse.json({ success: true, processed: changedRows.length })
@@ -130,5 +211,3 @@ export async function POST(request) {
     return NextResponse.json({ success: false, error: 'שגיאה בעדכון השינויים הממתינים' }, { status: 500 })
   }
 }
-
-

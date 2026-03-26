@@ -63,21 +63,42 @@ export async function POST(request) {
 
     await connectDB()
 
-    let processed = 0
-    for (const suggestionId of suggestionIds) {
-      const suggestion = await BookAcronymPendingSuggestion.findById(suggestionId)
-      if (!suggestion) continue
+    const suggestions = await BookAcronymPendingSuggestion.find({
+      _id: { $in: suggestionIds }
+    })
+      .select('_id bookAcronym alias')
+      .lean()
 
-      if (action === 'approve') {
-        await BookAcronym.findByIdAndUpdate(suggestion.bookAcronym, {
-          $addToSet: { aliases: suggestion.alias }
-        })
+    if (action === 'approve' && suggestions.length > 0) {
+      const aliasesByBookId = new Map()
+      for (const suggestion of suggestions) {
+        const bookId = String(suggestion.bookAcronym)
+        if (!aliasesByBookId.has(bookId)) {
+          aliasesByBookId.set(bookId, new Set())
+        }
+        aliasesByBookId.get(bookId).add(suggestion.alias)
       }
 
-      await BookAcronymPendingSuggestion.findByIdAndDelete(suggestion._id)
-      processed += 1
+      const bookOps = Array.from(aliasesByBookId.entries()).map(([bookId, aliases]) => ({
+        updateOne: {
+          filter: { _id: bookId },
+          update: { $addToSet: { aliases: { $each: Array.from(aliases) } } }
+        }
+      }))
+
+      if (bookOps.length > 0) {
+        await BookAcronym.bulkWrite(bookOps)
+      }
     }
 
+    const processedSuggestionIds = suggestions.map((suggestion) => suggestion._id)
+    if (processedSuggestionIds.length > 0) {
+      await BookAcronymPendingSuggestion.deleteMany({
+        _id: { $in: processedSuggestionIds }
+      })
+    }
+
+    const processed = processedSuggestionIds.length
     return NextResponse.json({ success: true, processed })
   } catch (error) {
     console.error('POST /api/admin/book-acronyms/pending failed:', error)
