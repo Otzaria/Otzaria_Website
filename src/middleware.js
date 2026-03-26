@@ -55,8 +55,10 @@ export const config = {
     '/library/book/:path*',      // נתיב ישן - יופנה ל-books
     '/library/edit/:path*',       // נתיב ישן - יופנה ל-books
     '/library/users/:path*',
+    '/library/info/:path*',
     '/library/dicta-books/:path*',
     '/api/admin/((?!books/upload).*)', 
+    '/api/library/book-info/:path*',
     '/api/upload-text/:path*'
   ]
 };
