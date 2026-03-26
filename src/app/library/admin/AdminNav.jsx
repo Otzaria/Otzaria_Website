@@ -11,9 +11,6 @@ export default function AdminNav({ unreadMessagesCount = 0, pendingUploadsCount 
     { id: 'users', label: 'משתמשים', icon: 'group', href: '/library/admin/users' },
     { id: 'books', label: 'ספרים', icon: 'menu_book', href: '/library/admin/books' },
     { id: 'dicta-books', label: 'ספרי דיקטה', icon: 'edit_document', href: '/library/admin/dicta-books' },
-    { id: 'dictionary', label: 'מילון', icon: 'spellcheck', href: '/library/admin/dictionary' },
-    { id: 'book-info', label: 'מידע על ספרים', icon: 'list_alt', href: '/library/admin/book-info' },
-    { id: 'book-acronyms', label: 'כינויים ור"ת', icon: 'dictionary', href: '/library/admin/book-acronyms' },
     { 
       id: 'uploads', 
       label: `העלאות ${pendingUploadsCount > 0 ? `(${pendingUploadsCount})` : ''}`, 
@@ -29,17 +26,20 @@ export default function AdminNav({ unreadMessagesCount = 0, pendingUploadsCount 
       count: unreadMessagesCount 
     },
     { id: 'reminders', label: 'תזכורות', icon: 'notifications', href: '/library/admin/reminders' },
+    { id: 'dictionary', label: 'מילון', icon: 'spellcheck', href: '/library/admin/dictionary' },
+    { id: 'book-info', label: 'מידע על ספרים', icon: 'list_alt', href: '/library/admin/book-info' },
+    { id: 'book-acronyms', label: 'כינויים ור"ת', icon: 'dictionary', href: '/library/admin/book-acronyms' },
   ]
 
   return (
-    <div className="flex w-full max-w-full flex-nowrap gap-2 mb-6 overflow-x-auto p-3 custom-scrollbar">
+    <div className="flex w-full max-w-full flex-wrap justify-center gap-2 mb-6 overflow-visible p-3">
       {tabs.map((tab) => {
         const isActive = pathname === tab.href
         return (
           <Link
             key={tab.id}
             href={tab.href}
-            className={`px-4 py-2 rounded-lg font-medium transition-all whitespace-nowrap relative group ${
+            className={`px-4 py-2 rounded-lg font-medium transition-all whitespace-nowrap relative group shrink-0 text-center ${
               isActive
                 ? 'bg-primary text-on-primary'
                 : 'glass text-on-surface hover:bg-surface-variant'
