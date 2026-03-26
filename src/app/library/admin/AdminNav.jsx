@@ -13,6 +13,7 @@ export default function AdminNav({ unreadMessagesCount = 0, pendingUploadsCount 
     { id: 'dicta-books', label: 'ספרי דיקטה', icon: 'edit_document', href: '/library/admin/dicta-books' },
     { id: 'dictionary', label: 'מילון', icon: 'spellcheck', href: '/library/admin/dictionary' },
     { id: 'book-info', label: 'מידע על ספרים', icon: 'list_alt', href: '/library/admin/book-info' },
+    { id: 'book-acronyms', label: 'כינויים ור"ת', icon: 'dictionary', href: '/library/admin/book-acronyms' },
     { 
       id: 'uploads', 
       label: `העלאות ${pendingUploadsCount > 0 ? `(${pendingUploadsCount})` : ''}`, 
