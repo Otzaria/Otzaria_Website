@@ -21,6 +21,24 @@ const REQUIRED_FIELDS = [
   ['created_at', 'זמן יצירה'],
 ];
 
+function extractLibraryVersion(payload) {
+  const explicitVersion = String(payload?.library_version ?? '').trim();
+  if (explicitVersion) {
+    return explicitVersion;
+  }
+
+  const errorDetails = String(payload?.error_details ?? '');
+  const match = errorDetails.match(/גרסת\s*ספרי(?:י|')ה\s*:\s*(.+)$/m);
+  if (match?.[1]) {
+    const version = match[1].trim();
+    if (version) {
+      return version;
+    }
+  }
+
+  return 'unknown';
+}
+
 function validatePayload(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     return 'Body חייב להיות אובייקט JSON תקין';
@@ -81,6 +99,7 @@ function buildHtml(payload) {
   const escaped = Object.fromEntries(
     Object.entries(payload).map(([key, value]) => [key, escapeHtml(value)])
   );
+  const libraryVersion = escapeHtml(extractLibraryVersion(payload));
 
   return `
     <div dir="rtl" style="font-family: Arial, sans-serif; background: #f7f4ef; padding: 24px; color: #222;">
@@ -92,6 +111,7 @@ function buildHtml(payload) {
           <p><strong>ספר:</strong> ${escaped.book_title}</p>
           <p><strong>מיקום:</strong> ${escaped.current_ref}</p>
           <p><strong>שורה:</strong> ${escaped.line_number}</p>
+          <p><strong>גרסת ספרייה:</strong> ${libraryVersion}</p>
           <p><strong>נתיב:</strong> ${escaped.file_path}</p>
           <p><strong>תיקיית מקור:</strong> ${escaped.source_folder}</p>
           <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
@@ -116,6 +136,7 @@ function buildText(payload) {
     `ספר: ${payload.book_title}`,
     `מיקום: ${payload.current_ref}`,
     `שורה: ${payload.line_number}`,
+    `גרסת ספרייה: ${extractLibraryVersion(payload)}`,
     `נתיב: ${payload.file_path}`,
     `תיקיית מקור: ${payload.source_folder}`,
     '',
@@ -148,6 +169,8 @@ export async function POST(request) {
     // התחברות למסד הנתונים
     await connectDB();
 
+    const libraryVersion = extractLibraryVersion(payload);
+
     // שמירת הדיווח במסד הנתונים
     const errorReport = new ErrorReport({
       reportId: payload.report_id,
@@ -161,8 +184,9 @@ export async function POST(request) {
       contextText: payload.context_text,
       filePath: payload.file_path,
       sourceFolder: payload.source_folder,
+      libraryVersion,
       status: 'pending',
-      emailSent: false
+      emailSent: false,
     });
 
     await errorReport.save();
@@ -176,7 +200,7 @@ export async function POST(request) {
           success: false,
           error: `השרת אינו מוגדר לשליחת מייל. חסרים משתני סביבה: ${missingSmtp.join(', ')}`,
           reportId: payload.report_id,
-          savedToDatabase
+          savedToDatabase,
         },
         { status: 500 }
       );
@@ -209,9 +233,9 @@ export async function POST(request) {
     // עדכון שהמייל נשלח בהצלחה
     await ErrorReport.findOneAndUpdate(
       { reportId: payload.report_id },
-      { 
-        emailSent: true, 
-        emailSentAt: new Date() 
+      {
+        emailSent: true,
+        emailSentAt: new Date(),
       }
     );
 
@@ -219,19 +243,19 @@ export async function POST(request) {
       success: true,
       message: 'הדיווח התקבל ונשלח בהצלחה',
       reportId: payload.report_id,
-      savedToDatabase
+      savedToDatabase,
     });
   } catch (error) {
     console.error('Reporting errors API error:', error);
-    
+
     // אם יש שגיאה, ננסה לעדכן את הדיווח במסד הנתונים
     try {
       if (savedToDatabase && payload?.report_id) {
         await ErrorReport.findOneAndUpdate(
           { reportId: payload.report_id },
-          { 
+          {
             adminNotes: `שגיאה בשליחת מייל: ${error?.message}`,
-            emailSent: false
+            emailSent: false,
           }
         );
       }
@@ -244,7 +268,7 @@ export async function POST(request) {
         success: false,
         error: error?.message || 'שגיאת שרת פנימית',
         reportId: payload?.report_id,
-        savedToDatabase
+        savedToDatabase,
       },
       { status: 500 }
     );
