@@ -1,25 +1,11 @@
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
-import { validateEmail, validateRequired } from '@/lib/validation-utils';
+import { validateEmail } from '@/lib/validation-utils';
 import connectDB from '@/lib/db';
 import ErrorReport from '@/models/ErrorReport';
 
 const REPORTING_ERRORS_RECIPIENT = 'otzaria.200@gmail.com';
-
-const REQUIRED_FIELDS = [
-  ['report_id', 'מזהה דיווח'],
-  ['sender_email', 'כתובת שולח'],
-  ['subject', 'נושא'],
-  ['book_title', 'שם הספר'],
-  ['current_ref', 'מיקום'],
-  ['line_number', 'מספר שורה'],
-  ['selected_text', 'טקסט מסומן'],
-  ['error_details', 'פירוט הטעות'],
-  ['context_text', 'טקסט הקשר'],
-  ['file_path', 'נתיב קובץ'],
-  ['source_folder', 'תיקיית מקור'],
-  ['created_at', 'זמן יצירה'],
-];
+const DEFAULT_SENDER_EMAIL = 'unknown@otzaria.invalid';
 
 function extractLibraryVersion(payload) {
   const explicitVersion = String(payload?.library_version ?? '').trim();
@@ -39,38 +25,75 @@ function extractLibraryVersion(payload) {
   return 'unknown';
 }
 
-function validatePayload(payload) {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-    return 'Body חייב להיות אובייקט JSON תקין';
+function toSafeString(value, fallback = '') {
+  const result = String(value ?? '').trim();
+  return result || fallback;
+}
+
+function toSafeLineNumber(value) {
+  if (Number.isInteger(value) && value > 0) {
+    return value;
   }
 
-  for (const [fieldName, label] of REQUIRED_FIELDS) {
-    const value = payload[fieldName];
-
-    if (fieldName === 'line_number') {
-      if (!Number.isInteger(value) || value <= 0) {
-        return `${label} חייב להיות מספר שלם גדול מאפס`;
-      }
-      continue;
-    }
-
-    const result = validateRequired(String(value ?? ''), label);
-    if (!result.isValid) {
-      return result.error;
-    }
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  if (Number.isInteger(parsed) && parsed > 0) {
+    return parsed;
   }
 
-  const senderValidation = validateEmail(String(payload.sender_email));
-  if (!senderValidation.isValid) {
-    return 'כתובת השולח אינה תקינה';
-  }
+  return 1;
+}
 
-  const createdAt = new Date(payload.created_at);
-  if (Number.isNaN(createdAt.getTime())) {
-    return 'זמן היצירה אינו בפורמט תקין';
+function toSafeIsoDate(value) {
+  const date = new Date(value ?? Date.now());
+  if (!Number.isNaN(date.getTime())) {
+    return date.toISOString();
   }
+  return new Date().toISOString();
+}
 
-  return null;
+function normalizePayload(payload) {
+  const raw = payload && typeof payload === 'object' && !Array.isArray(payload)
+    ? payload
+    : {};
+
+  const senderCandidate = toSafeString(raw.sender_email);
+  const senderValidation = validateEmail(senderCandidate);
+  const senderEmail = senderValidation.isValid
+    ? senderCandidate
+    : DEFAULT_SENDER_EMAIL;
+
+  const reportId = toSafeString(
+    raw.report_id,
+    `missing-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  );
+
+  const subject = toSafeString(raw.subject, 'דיווח טעות ללא נושא');
+  const bookTitle = toSafeString(raw.book_title, 'לא צוין ספר');
+  const currentRef = toSafeString(raw.current_ref, 'לא צוין מיקום');
+  const lineNumber = toSafeLineNumber(raw.line_number);
+  const selectedText = toSafeString(raw.selected_text, '(לא נשלח טקסט מסומן)');
+  const errorDetails = toSafeString(raw.error_details, '(לא נשלח פירוט טעות)');
+  const contextText = toSafeString(raw.context_text, '(לא נשלח טקסט הקשר)');
+  const filePath = toSafeString(raw.file_path, '(לא נשלח נתיב קובץ)');
+  const sourceFolder = toSafeString(raw.source_folder, '(לא נשלחה תיקיית מקור)');
+  const createdAt = toSafeIsoDate(raw.created_at);
+  const libraryVersion = extractLibraryVersion(raw);
+
+  return {
+    report_id: reportId,
+    sender_email: senderEmail,
+    subject: subject,
+    book_title: bookTitle,
+    current_ref: currentRef,
+    line_number: lineNumber,
+    selected_text: selectedText,
+    error_details: errorDetails,
+    context_text: contextText,
+    file_path: filePath,
+    source_folder: sourceFolder,
+    created_at: createdAt,
+    library_version: libraryVersion,
+  };
 }
 
 function ensureSmtpConfig() {
@@ -159,19 +182,11 @@ export async function POST(request) {
   let payload;
   let savedToDatabase = false;
   try {
-    payload = await request.json();
+    const rawBody = await request.json();
+    payload = normalizePayload(rawBody);
 
-    const validationError = validatePayload(payload);
-    if (validationError) {
-      return NextResponse.json({ success: false, error: validationError }, { status: 400 });
-    }
-
-    // התחברות למסד הנתונים
     await connectDB();
 
-    const libraryVersion = extractLibraryVersion(payload);
-
-    // שמירת הדיווח במסד הנתונים
     const errorReport = new ErrorReport({
       reportId: payload.report_id,
       senderEmail: payload.sender_email,
@@ -184,7 +199,7 @@ export async function POST(request) {
       contextText: payload.context_text,
       filePath: payload.file_path,
       sourceFolder: payload.source_folder,
-      libraryVersion,
+      libraryVersion: payload.library_version,
       status: 'pending',
       emailSent: false,
     });
@@ -194,7 +209,6 @@ export async function POST(request) {
 
     const missingSmtp = ensureSmtpConfig();
     if (missingSmtp.length > 0) {
-      // גם אם שליחת המייל נכשלה, הדיווח נשמר במסד הנתונים
       return NextResponse.json(
         {
           success: false,
@@ -217,10 +231,13 @@ export async function POST(request) {
       tls: { rejectUnauthorized: false },
     });
 
+    const senderValidation = validateEmail(payload.sender_email);
+    const replyTo = senderValidation.isValid ? payload.sender_email : undefined;
+
     await transporter.sendMail({
       from: process.env.SMTP_FROM,
       to: REPORTING_ERRORS_RECIPIENT,
-      replyTo: payload.sender_email,
+      replyTo,
       subject: payload.subject,
       html: buildHtml(payload),
       text: buildText(payload),
@@ -230,7 +247,6 @@ export async function POST(request) {
       },
     });
 
-    // עדכון שהמייל נשלח בהצלחה
     await ErrorReport.findOneAndUpdate(
       { reportId: payload.report_id },
       {
@@ -248,7 +264,6 @@ export async function POST(request) {
   } catch (error) {
     console.error('Reporting errors API error:', error);
 
-    // אם יש שגיאה, ננסה לעדכן את הדיווח במסד הנתונים
     try {
       if (savedToDatabase && payload?.report_id) {
         await ErrorReport.findOneAndUpdate(
