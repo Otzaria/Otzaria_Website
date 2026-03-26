@@ -525,10 +525,8 @@ export function validateSafePath(filePath: string) {
   if (!filePath) throw new Error("נא לבחור קובץ תחילה");
   const resolvedPath = path.resolve(filePath);
   const resolvedUploadDir = path.resolve(UPLOAD_DIR);
-  
-  // הוספת path.sep מבטיחה שלא ניתן לגשת לתיקיות שמתחילות באותו שם (כמו dicta-uploads-backup)
-  if (!resolvedPath.startsWith(resolvedUploadDir + path.sep) && resolvedPath !== resolvedUploadDir) {
-    throw new Error("גישה נדחתה: ניסיון גישה מחוץ לתיקייה המורשית");
+  if (!resolvedPath.startsWith(resolvedUploadDir)) {
+    throw new Error("גישה נדחתה: נתיב לא חוקי");
   }
 }
 
