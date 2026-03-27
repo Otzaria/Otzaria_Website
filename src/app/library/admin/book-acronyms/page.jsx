@@ -115,7 +115,8 @@ export default function AdminBookAcronymsPage() {
                 <th className="text-right px-3 py-2">ID ספר</th>
                 <th className="text-right px-3 py-2">שם ספר</th>
                 <th className="text-right px-3 py-2">כינויים קיימים</th>
-                <th className="text-right px-3 py-2">כינוי מוצע</th>
+                <th className="text-right px-3 py-2">סוג פעולה</th>
+                <th className="text-right px-3 py-2">פרטי שינוי</th>
                 <th className="text-right px-3 py-2">משתמש</th>
                 <th className="text-right px-3 py-2">תאריך</th>
               </tr>
@@ -133,7 +134,8 @@ export default function AdminBookAcronymsPage() {
                   <td className="px-3 py-2">{row.externalId}</td>
                   <td className="px-3 py-2">{row.displayName || 'ללא שם תצוגה'}</td>
                   <td className="px-3 py-2">{(row.approvedAliases || []).join(' | ') || '-'}</td>
-                  <td className="px-3 py-2 font-medium text-primary">{row.alias}</td>
+                  <td className="px-3 py-2">{formatActionType(row.actionType)}</td>
+                  <td className="px-3 py-2 font-medium text-primary">{formatActionDetails(row)}</td>
                   <td className="px-3 py-2">{row.submittedBy}</td>
                   <td className="px-3 py-2">{new Date(row.updatedAt).toLocaleString('he-IL')}</td>
                 </tr>
@@ -144,4 +146,20 @@ export default function AdminBookAcronymsPage() {
       )}
     </div>
   )
+}
+
+function formatActionType(actionType) {
+  if (actionType === 'delete') return 'מחיקה'
+  if (actionType === 'update') return 'עריכה'
+  return 'הוספה'
+}
+
+function formatActionDetails(row) {
+  if (row.actionType === 'delete') {
+    return row.currentAlias || '-'
+  }
+  if (row.actionType === 'update') {
+    return `${row.currentAlias || '-'} -> ${row.nextAlias || '-'}`
+  }
+  return row.nextAlias || '-'
 }

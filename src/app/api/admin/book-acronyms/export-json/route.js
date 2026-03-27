@@ -15,6 +15,11 @@ function normalizeBookId(externalId) {
   return externalId
 }
 
+function normalizeAlias(term) {
+  if (typeof term !== 'string') return ''
+  return term.trim()
+}
+
 export async function GET() {
   try {
     const session = await getServerSession(authOptions)
@@ -30,10 +35,13 @@ export async function GET() {
       .lean()
 
     const output = books.flatMap((book) =>
-      (book.aliases || []).map((term) => ({
-        bookId: normalizeBookId(book.externalId),
-        term
-      }))
+      (book.aliases || [])
+        .map((term) => normalizeAlias(term))
+        .filter(Boolean)
+        .map((term) => ({
+          bookId: normalizeBookId(book.externalId),
+          term
+        }))
     )
 
     output.sort((a, b) => {

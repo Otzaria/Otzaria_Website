@@ -24,15 +24,15 @@ export async function GET() {
       .sort({ updatedAt: -1 })
       .lean()
 
-    const rows = suggestions
-      .filter((item) => !!item.bookAcronym)
-      .map((item) => ({
+    const rows = suggestions.map((item) => ({
         id: String(item._id),
-        bookAcronymId: String(item.bookAcronym._id),
-        externalId: item.bookAcronym.externalId,
-        displayName: item.bookAcronym.displayName || '',
-        approvedAliases: item.bookAcronym.aliases || [],
-        alias: item.alias,
+        bookAcronymId: item.bookAcronym?._id ? String(item.bookAcronym._id) : '',
+        externalId: item.bookAcronym?.externalId || item.bookExternalId || '',
+        displayName: item.bookAcronym?.displayName || item.bookDisplayName || '',
+        approvedAliases: item.bookAcronym?.aliases || item.approvedAliasesSnapshot || [],
+        actionType: item.actionType || 'add',
+        currentAlias: item.currentAlias || null,
+        nextAlias: item.nextAlias || item.alias || null,
         submittedBy: item.submittedBy?.name || 'משתמש',
         updatedAt: item.updatedAt
       }))
@@ -66,25 +66,50 @@ export async function POST(request) {
     const suggestions = await BookAcronymPendingSuggestion.find({
       _id: { $in: suggestionIds }
     })
-      .select('_id bookAcronym alias')
+      .select('_id bookAcronym actionType currentAlias nextAlias alias')
       .lean()
 
     if (action === 'approve' && suggestions.length > 0) {
-      const aliasesByBookId = new Map()
+      const bookOps = []
       for (const suggestion of suggestions) {
         const bookId = String(suggestion.bookAcronym)
-        if (!aliasesByBookId.has(bookId)) {
-          aliasesByBookId.set(bookId, new Set())
-        }
-        aliasesByBookId.get(bookId).add(suggestion.alias)
-      }
+        const actionType = suggestion.actionType || 'add'
+        const currentAlias = suggestion.currentAlias || null
+        const nextAlias = suggestion.nextAlias || suggestion.alias || null
 
-      const bookOps = Array.from(aliasesByBookId.entries()).map(([bookId, aliases]) => ({
-        updateOne: {
-          filter: { _id: bookId },
-          update: { $addToSet: { aliases: { $each: Array.from(aliases) } } }
+        if (actionType === 'add' && nextAlias) {
+          bookOps.push({
+            updateOne: {
+              filter: { _id: bookId },
+              update: { $addToSet: { aliases: nextAlias } }
+            }
+          })
+        } else if (actionType === 'delete' && currentAlias) {
+          bookOps.push({
+            updateOne: {
+              filter: { _id: bookId },
+              update: { $pull: { aliases: currentAlias } }
+            }
+          })
+        } else if (actionType === 'update' && currentAlias && nextAlias) {
+          bookOps.push({
+            updateOne: {
+              filter: { _id: bookId },
+              update: {
+                $pull: { aliases: currentAlias }
+              }
+            }
+          })
+          bookOps.push({
+            updateOne: {
+              filter: { _id: bookId },
+              update: {
+                $addToSet: { aliases: nextAlias }
+              }
+            }
+          })
         }
-      }))
+      }
 
       if (bookOps.length > 0) {
         await BookAcronym.bulkWrite(bookOps)

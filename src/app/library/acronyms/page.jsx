@@ -11,6 +11,11 @@ export default function LibraryAcronymsPage() {
   const [search, setSearch] = useState('')
   const [newAliasById, setNewAliasById] = useState({})
   const [submittingId, setSubmittingId] = useState('')
+  const [editingAliasKey, setEditingAliasKey] = useState('')
+  const [editingAliasValue, setEditingAliasValue] = useState('')
+  const [editingPendingId, setEditingPendingId] = useState('')
+  const [editingPendingCurrentValue, setEditingPendingCurrentValue] = useState('')
+  const [editingPendingNextValue, setEditingPendingNextValue] = useState('')
 
   const loadData = async () => {
     try {
@@ -42,35 +47,100 @@ export default function LibraryAcronymsPage() {
         row.externalId,
         row.displayName,
         ...(row.aliases || []),
-        ...((row.pendingAliases || []).map((p) => p.alias))
+        ...((row.pendingAliases || []).map((p) => p.currentAlias || p.nextAlias || ''))
       ]
       return values.some((value) => String(value || '').includes(term))
     })
   }, [rows, search])
 
-  const submitAlias = async (rowId) => {
-    const alias = (newAliasById[rowId] || '').trim()
-    if (!alias) return
-
+  const requestChange = async (rowId, body) => {
     try {
       setSubmittingId(rowId)
       const response = await fetch('/api/library/book-acronyms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookAcronymId: rowId, alias })
+        body: JSON.stringify({ bookAcronymId: rowId, ...body })
       })
       const data = await response.json()
       if (!response.ok || !data.success) {
-        throw new Error(data.error || 'שגיאה בשליחת הכינוי')
+        throw new Error(data.error || 'שגיאה בשליחת הבקשה')
       }
 
-      setNewAliasById((prev) => ({ ...prev, [rowId]: '' }))
+      setNewAliasById((prev) => ({ ...prev, [rowId]: body.actionType === 'add' ? '' : prev[rowId] || '' }))
       await loadData()
     } catch (submitError) {
       setError(submitError.message)
     } finally {
       setSubmittingId('')
     }
+  }
+
+  const submitAlias = async (rowId) => {
+    const alias = (newAliasById[rowId] || '').trim()
+    if (!alias) return
+    await requestChange(rowId, { actionType: 'add', alias })
+  }
+
+  const requestDeleteAlias = async (rowId, alias) => {
+    await requestChange(rowId, { actionType: 'delete', alias })
+  }
+
+  const startEditAlias = (rowId, alias) => {
+    setEditingAliasKey(`${rowId}::${alias}`)
+    setEditingAliasValue(alias)
+  }
+
+  const cancelEditAlias = () => {
+    setEditingAliasKey('')
+    setEditingAliasValue('')
+  }
+
+  const startEditPending = (pending) => {
+    setEditingPendingId(pending.id)
+    setEditingPendingCurrentValue(pending.currentAlias || '')
+    setEditingPendingNextValue(pending.nextAlias || '')
+  }
+
+  const cancelEditPending = () => {
+    setEditingPendingId('')
+    setEditingPendingCurrentValue('')
+    setEditingPendingNextValue('')
+  }
+
+  const saveEditAlias = async (rowId, originalAlias) => {
+    const nextAlias = editingAliasValue.trim()
+    if (!nextAlias) return
+    await requestChange(rowId, { actionType: 'update', alias: originalAlias, nextAlias })
+    cancelEditAlias()
+  }
+
+  const saveEditPending = async (rowId, pending) => {
+    const body = {
+      pendingId: pending.id,
+      actionType: pending.actionType
+    }
+
+    if (pending.actionType === 'delete') {
+      body.alias = editingPendingCurrentValue.trim()
+    } else if (pending.actionType === 'update') {
+      body.alias = editingPendingCurrentValue.trim()
+      body.nextAlias = editingPendingNextValue.trim()
+    } else {
+      body.alias = editingPendingNextValue.trim()
+    }
+
+    await requestChange(rowId, body)
+    cancelEditPending()
+  }
+
+  const formatPendingLabel = (pending) => {
+    if (pending.actionType === 'delete') {
+      return `מחיקה: ${pending.currentAlias}`
+    }
+    if (pending.actionType === 'update') {
+      return `עריכה: ${pending.currentAlias} -> ${pending.nextAlias}`
+    }
+    return `הוספה: ${pending.nextAlias}`
   }
 
   return (
@@ -137,9 +207,52 @@ export default function LibraryAcronymsPage() {
                       <span className="text-sm text-on-surface/50">אין כינויים מאושרים</span>
                     ) : (
                       row.aliases.map((alias) => (
-                        <span key={alias} className="px-2 py-1 text-sm rounded-md bg-green-50 text-green-800 border border-green-200">
-                          {alias}
-                        </span>
+                        <div key={alias} className="px-2 py-1 text-sm rounded-md bg-green-50 text-green-800 border border-green-200 flex items-center gap-1">
+                          {editingAliasKey === `${row.id}::${alias}` ? (
+                            <>
+                              <input
+                                type="text"
+                                value={editingAliasValue}
+                                onChange={(e) => setEditingAliasValue(e.target.value)}
+                                className="border rounded px-2 py-0.5 text-sm bg-white text-black"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => saveEditAlias(row.id, alias)}
+                                disabled={submittingId === row.id}
+                                className="text-xs px-2 py-0.5 rounded bg-blue-600 text-white disabled:opacity-50"
+                              >
+                                שמור
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelEditAlias}
+                                className="text-xs px-2 py-0.5 rounded border border-gray-300 bg-white text-gray-700"
+                              >
+                                בטל
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <span>{alias}</span>
+                              <button
+                                type="button"
+                                onClick={() => startEditAlias(row.id, alias)}
+                                className="text-xs px-1 rounded bg-white border border-green-300"
+                              >
+                                ערוך
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => requestDeleteAlias(row.id, alias)}
+                                disabled={submittingId === row.id}
+                                className="text-xs px-1 rounded bg-white border border-red-300 text-red-700 disabled:opacity-50"
+                              >
+                                מחק
+                              </button>
+                            </>
+                          )}
+                        </div>
                       ))
                     )}
                   </div>
@@ -149,12 +262,59 @@ export default function LibraryAcronymsPage() {
                       <div className="mb-2 text-sm font-medium text-on-surface/80">ממתין לאישור:</div>
                       <div className="flex flex-wrap gap-2">
                         {row.pendingAliases.map((pending) => (
-                          <span
+                          <div
                             key={pending.id}
-                            className="px-2 py-1 text-sm rounded-md bg-orange-50 text-orange-800 border border-orange-200"
+                            className="px-2 py-1 text-sm rounded-md bg-orange-50 text-orange-800 border border-orange-200 flex items-center gap-1"
                           >
-                            {pending.alias}
-                          </span>
+                            {editingPendingId === pending.id ? (
+                              <>
+                                {(pending.actionType === 'delete' || pending.actionType === 'update') && (
+                                  <input
+                                    type="text"
+                                    value={editingPendingCurrentValue}
+                                    onChange={(e) => setEditingPendingCurrentValue(e.target.value)}
+                                    className="border rounded px-2 py-0.5 text-sm bg-white text-black"
+                                    placeholder={pending.actionType === 'delete' ? 'כינוי למחיקה' : 'כינוי ישן'}
+                                  />
+                                )}
+                                {(pending.actionType === 'add' || pending.actionType === 'update') && (
+                                  <input
+                                    type="text"
+                                    value={editingPendingNextValue}
+                                    onChange={(e) => setEditingPendingNextValue(e.target.value)}
+                                    className="border rounded px-2 py-0.5 text-sm bg-white text-black"
+                                    placeholder={pending.actionType === 'add' ? 'כינוי חדש' : 'כינוי חדש'}
+                                  />
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => saveEditPending(row.id, pending)}
+                                  disabled={submittingId === row.id}
+                                  className="text-xs px-2 py-0.5 rounded bg-blue-600 text-white disabled:opacity-50"
+                                >
+                                  שמור
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={cancelEditPending}
+                                  className="text-xs px-2 py-0.5 rounded border border-gray-300 bg-white text-gray-700"
+                                >
+                                  בטל
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <span>{formatPendingLabel(pending)}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => startEditPending(pending)}
+                                  className="text-xs px-1 rounded bg-white border border-orange-300"
+                                >
+                                  ערוך
+                                </button>
+                              </>
+                            )}
+                          </div>
                         ))}
                       </div>
                     </>
