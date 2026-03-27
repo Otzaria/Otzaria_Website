@@ -117,7 +117,37 @@ export default function LibraryInfoPage() {
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'שגיאה בשמירה')
       }
-      await loadData()
+      setRows((prev) =>
+        prev.map((row) => {
+          if (row.id !== editRow.id) return row
+
+          const normalizedEffective = {
+            ...row.effective,
+            ...formData,
+            startYear: formData.startYear === '' ? null : Number(formData.startYear),
+            endYear: formData.endYear === '' ? null : Number(formData.endYear)
+          }
+
+          if (data.pendingCleared) {
+            return {
+              ...row,
+              effective: row.approved,
+              pending: null
+            }
+          }
+
+          return {
+            ...row,
+            effective: normalizedEffective,
+            pending: {
+              id: data.pendingId || row.pending?.id || '',
+              changedFields: data.changedFields || row.pending?.changedFields || [],
+              submittedBy: row.pending?.submittedBy || 'משתמש',
+              updatedAt: new Date().toISOString()
+            }
+          }
+        })
+      )
       closeEdit()
     } catch (submitError) {
       setError(submitError.message)

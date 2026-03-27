@@ -103,6 +103,14 @@ function LoginContent() {
           <h1 className="text-3xl font-bold text-center mb-2 text-on-surface">
             התחברות
           </h1>
+          
+          {searchParams.get('callbackUrl') && (
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2 text-amber-800">
+              <span className="material-symbols-outlined text-amber-600">info</span>
+              <span className="text-sm font-medium">פעולה זו דורשת התחברות</span>
+            </div>
+          )}
+          
           <p className="text-center text-on-surface/70 mb-8">
             ברוכים השבים לספריית אוצריא
           </p>

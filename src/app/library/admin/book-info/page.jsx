@@ -64,6 +64,26 @@ export default function AdminBookInfoPage() {
     [selected]
   )
 
+  const allSelected =
+    rows.length > 0 &&
+    rows.every((row) => {
+      const selectedFields = selected[row.id] || []
+      return row.changedFields.length > 0 && selectedFields.length === row.changedFields.length
+    })
+
+  const toggleSelectAllRows = () => {
+    if (allSelected) {
+      setSelected({})
+      return
+    }
+
+    setSelected(
+      Object.fromEntries(
+        rows.map((row) => [row.id, [...row.changedFields]])
+      )
+    )
+  }
+
   const runAction = async (action) => {
     if (selections.length === 0) {
       setError('לא נבחרו שדות')
@@ -81,7 +101,41 @@ export default function AdminBookInfoPage() {
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'שגיאה בפעולה')
       }
-      await loadRows()
+      const selectionsById = new Map(selections.map((item) => [item.changeId, item.fields]))
+
+      setRows((prev) =>
+        prev
+          .map((row) => {
+            const selectedFields = selectionsById.get(row.id)
+            if (!selectedFields || selectedFields.length === 0) {
+              return row
+            }
+
+            const nextApproved = { ...(row.approved || {}) }
+            const nextChanges = { ...(row.changes || {}) }
+
+            for (const field of selectedFields) {
+              if (action === 'approve' && Object.prototype.hasOwnProperty.call(nextChanges, field)) {
+                nextApproved[field] = nextChanges[field]
+              }
+              delete nextChanges[field]
+            }
+
+            const nextChangedFields = row.changedFields.filter((field) => !selectedFields.includes(field))
+            if (nextChangedFields.length === 0) {
+              return null
+            }
+
+            return {
+              ...row,
+              approved: nextApproved,
+              changes: nextChanges,
+              changedFields: nextChangedFields
+            }
+          })
+          .filter(Boolean)
+      )
+      setSelected({})
     } catch (actionError) {
       setError(actionError.message)
     } finally {
@@ -107,6 +161,13 @@ export default function AdminBookInfoPage() {
       </div>
 
       <div className="flex gap-2 mb-4">
+        <button
+          onClick={toggleSelectAllRows}
+          disabled={loading || rows.length === 0}
+          className="px-4 py-2 rounded-lg bg-slate-600 text-white disabled:opacity-50"
+        >
+          {allSelected ? 'בטל סימון מהכל' : 'סמן הכל'}
+        </button>
         <button
           onClick={() => runAction('approve')}
           disabled={runningAction || selections.length === 0}

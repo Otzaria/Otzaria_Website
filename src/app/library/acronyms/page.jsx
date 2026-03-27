@@ -67,7 +67,46 @@ export default function LibraryAcronymsPage() {
       }
 
       setNewAliasById((prev) => ({ ...prev, [rowId]: body.actionType === 'add' ? '' : prev[rowId] || '' }))
-      await loadData()
+      setRows((prev) => {
+        const row = prev.find((item) => item.id === rowId)
+        if (!row) return prev
+
+        const nextPendingAliases = [...(row.pendingAliases || [])]
+        const actionType = body.actionType
+        const pendingId = data.pendingId || body.pendingId || ''
+        const pendingIndex = body.pendingId
+          ? nextPendingAliases.findIndex((item) => item.id === body.pendingId)
+          : -1
+
+        const nextPending = {
+          id: pendingId,
+          actionType,
+          currentAlias:
+            actionType === 'delete' || actionType === 'update'
+              ? (body.alias || '').trim()
+              : null,
+          nextAlias:
+            actionType === 'add'
+              ? (body.alias || '').trim()
+              : actionType === 'update'
+                ? (body.nextAlias || '').trim()
+                : null,
+          updatedAt: new Date().toISOString()
+        }
+
+        if (pendingIndex >= 0) {
+          nextPendingAliases[pendingIndex] = nextPending
+        } else if (!data.alreadyPending) {
+          nextPendingAliases.unshift(nextPending)
+        }
+
+        const nextRows = prev.filter((item) => item.id !== rowId)
+        nextRows.push({
+          ...row,
+          pendingAliases: nextPendingAliases
+        })
+        return nextRows
+      })
     } catch (submitError) {
       setError(submitError.message)
     } finally {
