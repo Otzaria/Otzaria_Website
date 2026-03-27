@@ -1,11 +1,5 @@
-import { getServerSession } from 'next-auth'
 import connectDB from '@/lib/db'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import BookAcronym from '@/models/BookAcronym'
-
-function isAdmin(session) {
-  return session?.user?.role === 'admin'
-}
 
 function normalizeBookId(externalId) {
   const asNumber = Number(externalId)
@@ -22,11 +16,6 @@ function normalizeAlias(term) {
 
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions)
-    if (!isAdmin(session)) {
-      return new Response('Forbidden', { status: 403 })
-    }
-
     await connectDB()
 
     const books = await BookAcronym.find({})
@@ -59,7 +48,7 @@ export async function GET() {
       }
     })
   } catch (error) {
-    console.error('GET /api/admin/book-acronyms/export-json failed:', error)
+    console.error('GET /api/book-acronyms/export-json failed:', error)
     return new Response('Internal Server Error', { status: 500 })
   }
 }

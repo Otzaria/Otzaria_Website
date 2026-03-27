@@ -74,7 +74,7 @@ export default function AdminBookAcronymsPage() {
           <p className="text-on-surface/60">כאן מאשרים או מוחקים הצעות חדשות ממשתמשים.</p>
         </div>
         <a
-          href="/api/admin/book-acronyms/export-json"
+          href="/api/book-acronyms/export-json"
           className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
           download
         >
