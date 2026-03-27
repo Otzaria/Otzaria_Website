@@ -190,7 +190,8 @@ export default function LibraryAcronymsPage() {
           <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold text-on-surface">כינויים וראשי תיבות לספרים</h1>
-              <p className="text-on-surface/70 mt-1">אפשר לעיין בכינויים קיימים ולהציע כינוי חדש לאישור מנהל.</p>
+              <p className="text-on-surface/70 mt-1">הכינויים בדף זה משמשים לשיפור האיתור בתוכנת אוצריא.</p>
+              <p className="text-on-surface/70 mt-1">תרמו לפרויקט בעדכון כינויים אפשריים לספרים. כל עריכה תישלח לאישור מנהל.</p>
             </div>
             <input
               type="text"

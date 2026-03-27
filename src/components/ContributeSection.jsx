@@ -119,43 +119,74 @@ export default function ContributeSection() {
             <p className="text-lg text-on-surface/70 mb-8 max-w-2xl mx-auto">
               ספרים רבים עדיין אינם זמינים בפורמט דיגיטלי נגיש. כל תרומה עוזרת לשמר ולהנגיש את האוצר התורני לדורות הבאים.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center flex-wrap">
-              <motion.div
-                whileHover={{ scale: 1.05, y: -2 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Link 
-                  href="/library/upload" 
-                  className="flex items-center justify-center gap-2 px-8 py-4 bg-primary text-on-primary rounded-lg text-lg font-medium hover:bg-accent transition-colors shadow-lg hover:shadow-xl w-full sm:w-auto"
+            <div className="flex flex-col gap-6 justify-center items-center">
+              {/* שורה ראשונה - לחצנים קיימים */}
+              <div className="flex flex-col sm:flex-row gap-4 justify-center items-center flex-wrap">
+                <motion.div
+                  whileHover={{ scale: 1.05, y: -2 }}
+                  whileTap={{ scale: 0.95 }}
                 >
-                  <span className="material-symbols-outlined">add</span>
-                  <span>הוסף ספר חדש</span>
-                </Link>
-              </motion.div>
-              <motion.div
-                whileHover={{ scale: 1.05, y: -2 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Link 
-                  href="/library/books" 
-                  className="flex items-center justify-center gap-2 px-8 py-4 bg-surface text-on-surface rounded-lg text-lg font-medium hover:bg-surface-variant transition-colors border border-outline w-full sm:w-auto"
+                  <Link 
+                    href="/library/upload" 
+                    className="flex items-center justify-center gap-2 px-8 py-4 bg-primary text-on-primary rounded-lg text-lg font-medium hover:bg-accent transition-colors shadow-lg hover:shadow-xl w-full sm:w-auto"
+                  >
+                    <span className="material-symbols-outlined">add</span>
+                    <span>הוסף ספר חדש</span>
+                  </Link>
+                </motion.div>
+                <motion.div
+                  whileHover={{ scale: 1.05, y: -2 }}
+                  whileTap={{ scale: 0.95 }}
                 >
-                  <span className="material-symbols-outlined">library_books</span>
-                  <span>ערוך בספרייה</span>
-                </Link>
-              </motion.div>
-              <motion.div
-                whileHover={{ scale: 1.05, y: -2 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Link 
-                  href="/library/dicta-books" 
-                  className="flex items-center justify-center gap-2 px-8 py-4 bg-surface text-on-surface rounded-lg text-lg font-medium hover:bg-surface-variant transition-colors border border-outline w-full sm:w-auto"
+                  <Link 
+                    href="/library/books" 
+                    className="flex items-center justify-center gap-2 px-8 py-4 bg-surface text-on-surface rounded-lg text-lg font-medium hover:bg-surface-variant transition-colors border border-outline w-full sm:w-auto"
+                  >
+                    <span className="material-symbols-outlined">library_books</span>
+                    <span>ערוך בספרייה</span>
+                  </Link>
+                </motion.div>
+                <motion.div
+                  whileHover={{ scale: 1.05, y: -2 }}
+                  whileTap={{ scale: 0.95 }}
                 >
-                  <span className="material-symbols-outlined">edit_note</span>
-                  <span>ערוך ספרי דיקטה</span>
-                </Link>
-              </motion.div>
+                  <Link 
+                    href="/library/dicta-books" 
+                    className="flex items-center justify-center gap-2 px-8 py-4 bg-surface text-on-surface rounded-lg text-lg font-medium hover:bg-surface-variant transition-colors border border-outline w-full sm:w-auto"
+                  >
+                    <span className="material-symbols-outlined">edit_note</span>
+                    <span>ערוך ספרי דיקטה</span>
+                  </Link>
+                </motion.div>
+              </div>
+              
+              {/* שורה שנייה - לחצנים חדשים */}
+              <div className="flex flex-col sm:flex-row gap-4 justify-center items-center flex-wrap">
+                <motion.div
+                  whileHover={{ scale: 1.05, y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Link 
+                    href="/library/info" 
+                    className="flex items-center justify-center gap-2 px-8 py-4 bg-surface text-on-surface rounded-lg text-lg font-medium hover:bg-surface-variant transition-colors border border-outline w-full sm:w-auto"
+                  >
+                    <span className="material-symbols-outlined">info</span>
+                    <span>הוסף מידע על ספרים</span>
+                  </Link>
+                </motion.div>
+                <motion.div
+                  whileHover={{ scale: 1.05, y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Link 
+                    href="/library/acronyms" 
+                    className="flex items-center justify-center gap-2 px-8 py-4 bg-surface text-on-surface rounded-lg text-lg font-medium hover:bg-surface-variant transition-colors border border-outline w-full sm:w-auto"
+                  >
+                    <span className="material-symbols-outlined">short_text</span>
+                    <span>הוסף כינויי ספרים</span>
+                  </Link>
+                </motion.div>
+              </div>
             </div>
           </div>
         </motion.div>
