@@ -525,8 +525,8 @@ export function validateSafePath(filePath: string) {
   if (!filePath) throw new Error("נא לבחור קובץ תחילה");
   const resolvedPath = path.resolve(filePath);
   const resolvedUploadDir = path.resolve(UPLOAD_DIR);
-  if (!resolvedPath.startsWith(resolvedUploadDir)) {
-    throw new Error("גישה נדחתה: נתיב לא חוקי");
+  if (!resolvedPath.startsWith(resolvedUploadDir + path.sep) && resolvedPath !== resolvedUploadDir) {
+    throw new Error("גישה נדחתה: ניסיון גישה מחוץ לתיקייה המורשית");
   }
 }
 

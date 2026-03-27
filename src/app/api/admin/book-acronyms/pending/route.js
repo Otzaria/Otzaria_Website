@@ -9,6 +9,40 @@ function isAdmin(session) {
   return session?.user?.role === 'admin'
 }
 
+function buildAtomicAliasReplaceUpdate(currentAlias, nextAlias) {
+  return [
+    {
+      $set: {
+        aliases: {
+          $reduce: {
+            input: {
+              $map: {
+                input: { $ifNull: ['$aliases', []] },
+                as: 'alias',
+                in: {
+                  $cond: [
+                    { $eq: ['$$alias', currentAlias] },
+                    nextAlias,
+                    '$$alias'
+                  ]
+                }
+              }
+            },
+            initialValue: [],
+            in: {
+              $cond: [
+                { $in: ['$$this', '$$value'] },
+                '$$value',
+                { $concatArrays: ['$$value', ['$$this']] }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}
+
 export async function GET() {
   try {
     const session = await getServerSession(authOptions)
@@ -95,17 +129,7 @@ export async function POST(request) {
           bookOps.push({
             updateOne: {
               filter: { _id: bookId },
-              update: {
-                $pull: { aliases: currentAlias }
-              }
-            }
-          })
-          bookOps.push({
-            updateOne: {
-              filter: { _id: bookId },
-              update: {
-                $addToSet: { aliases: nextAlias }
-              }
+              update: buildAtomicAliasReplaceUpdate(currentAlias, nextAlias)
             }
           })
         }

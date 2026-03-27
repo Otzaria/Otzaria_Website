@@ -164,7 +164,7 @@ export default function LibraryInfoPage() {
           <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold text-on-surface">מידע על ספרים</h1>
-              <p className="text-on-surface/70 mt-1">המידע בדף זה משמש את אוצריא לסידור הספרים בתוכנה לפי סדר הדורות..</p>
+              <p className="text-on-surface/70 mt-1">המידע בדף זה משמש את אוצריא לסידור הספרים בתוכנה לפי סדר הדורות.</p>
               <p className="text-on-surface/70 mt-1">תרמו לפרוייקט בהוספת מידע חסר על ספרים ומחברים. כל שינוי נשמר כהצעה ומחכה לאישור מנהל.</p>
             </div>
             <input
