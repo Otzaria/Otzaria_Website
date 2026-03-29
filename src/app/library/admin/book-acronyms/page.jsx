@@ -40,6 +40,17 @@ export default function AdminBookAcronymsPage() {
     })
   }
 
+  const allSelected = rows.length > 0 && selectedIds.length === rows.length
+
+  const toggleSelectAllRows = () => {
+    if (allSelected) {
+      setSelectedIds([])
+      return
+    }
+
+    setSelectedIds(rows.map((row) => row.id))
+  }
+
   const runAction = async (action) => {
     if (selectedIds.length === 0) {
       setError('לא נבחרו פריטים')
@@ -58,7 +69,8 @@ export default function AdminBookAcronymsPage() {
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'שגיאה בביצוע הפעולה')
       }
-      await loadRows()
+      setRows((prev) => prev.filter((row) => !selectedIds.includes(row.id)))
+      setSelectedIds([])
     } catch (actionError) {
       setError(actionError.message)
     } finally {
@@ -74,7 +86,7 @@ export default function AdminBookAcronymsPage() {
           <p className="text-on-surface/60">כאן מאשרים או מוחקים הצעות חדשות ממשתמשים.</p>
         </div>
         <a
-          href="/api/admin/book-acronyms/export-json"
+          href="/api/book-acronyms/export-json"
           className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
           download
         >
@@ -84,6 +96,13 @@ export default function AdminBookAcronymsPage() {
       </div>
 
       <div className="flex gap-2 mb-4">
+        <button
+          onClick={toggleSelectAllRows}
+          disabled={loading || rows.length === 0}
+          className="px-4 py-2 rounded-lg bg-slate-600 text-white disabled:opacity-50"
+        >
+          {allSelected ? 'בטל סימון מהכל' : 'סמן הכל'}
+        </button>
         <button
           onClick={() => runAction('approve')}
           disabled={runningAction || selectedIds.length === 0}
@@ -115,7 +134,8 @@ export default function AdminBookAcronymsPage() {
                 <th className="text-right px-3 py-2">ID ספר</th>
                 <th className="text-right px-3 py-2">שם ספר</th>
                 <th className="text-right px-3 py-2">כינויים קיימים</th>
-                <th className="text-right px-3 py-2">כינוי מוצע</th>
+                <th className="text-right px-3 py-2">סוג פעולה</th>
+                <th className="text-right px-3 py-2">פרטי שינוי</th>
                 <th className="text-right px-3 py-2">משתמש</th>
                 <th className="text-right px-3 py-2">תאריך</th>
               </tr>
@@ -133,7 +153,8 @@ export default function AdminBookAcronymsPage() {
                   <td className="px-3 py-2">{row.externalId}</td>
                   <td className="px-3 py-2">{row.displayName || 'ללא שם תצוגה'}</td>
                   <td className="px-3 py-2">{(row.approvedAliases || []).join(' | ') || '-'}</td>
-                  <td className="px-3 py-2 font-medium text-primary">{row.alias}</td>
+                  <td className="px-3 py-2">{formatActionType(row.actionType)}</td>
+                  <td className="px-3 py-2 font-medium text-primary">{formatActionDetails(row)}</td>
                   <td className="px-3 py-2">{row.submittedBy}</td>
                   <td className="px-3 py-2">{new Date(row.updatedAt).toLocaleString('he-IL')}</td>
                 </tr>
@@ -144,4 +165,20 @@ export default function AdminBookAcronymsPage() {
       )}
     </div>
   )
+}
+
+function formatActionType(actionType) {
+  if (actionType === 'delete') return 'מחיקה'
+  if (actionType === 'update') return 'עריכה'
+  return 'הוספה'
+}
+
+function formatActionDetails(row) {
+  if (row.actionType === 'delete') {
+    return row.currentAlias || '-'
+  }
+  if (row.actionType === 'update') {
+    return `${row.currentAlias || '-'} -> ${row.nextAlias || '-'}`
+  }
+  return row.nextAlias || '-'
 }

@@ -117,7 +117,37 @@ export default function LibraryInfoPage() {
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'שגיאה בשמירה')
       }
-      await loadData()
+      setRows((prev) =>
+        prev.map((row) => {
+          if (row.id !== editRow.id) return row
+
+          const normalizedEffective = {
+            ...row.effective,
+            ...formData,
+            startYear: formData.startYear === '' ? null : Number(formData.startYear),
+            endYear: formData.endYear === '' ? null : Number(formData.endYear)
+          }
+
+          if (data.pendingCleared) {
+            return {
+              ...row,
+              effective: row.approved,
+              pending: null
+            }
+          }
+
+          return {
+            ...row,
+            effective: normalizedEffective,
+            pending: {
+              id: data.pendingId || row.pending?.id || '',
+              changedFields: data.changedFields || row.pending?.changedFields || [],
+              submittedBy: row.pending?.submittedBy || 'משתמש',
+              updatedAt: new Date().toISOString()
+            }
+          }
+        })
+      )
       closeEdit()
     } catch (submitError) {
       setError(submitError.message)
@@ -134,7 +164,8 @@ export default function LibraryInfoPage() {
           <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold text-on-surface">מידע על ספרים</h1>
-              <p className="text-on-surface/70 mt-1">כל שינוי נשמר כהצעה ומחכה לאישור מנהל.</p>
+              <p className="text-on-surface/70 mt-1">המידע בדף זה משמש את אוצריא לסידור הספרים בתוכנה לפי סדר הדורות.</p>
+              <p className="text-on-surface/70 mt-1">תרמו לפרוייקט בהוספת מידע חסר על ספרים ומחברים. כל שינוי נשמר כהצעה ומחכה לאישור מנהל.</p>
             </div>
             <input
               type="text"
