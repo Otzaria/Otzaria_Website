@@ -185,16 +185,16 @@ export default function LibraryInfoPage() {
           {loading ? (
             <LoadingSpinner message="טוען נתוני ספרים..." />
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-surface-variant bg-white">
+            <div className="overflow-x-auto lg:overflow-visible rounded-xl border border-surface-variant bg-white">
               <table className="w-full min-w-[1080px]">
                 <thead className="bg-surface">
                   <tr className="text-right text-sm text-on-surface/70">
-                    <th className="px-3 py-3">שם הספר</th>
-                    <th className="px-3 py-3">מחבר</th>
-                    <th className="px-3 py-3">דור</th>
-                    <th className="px-3 py-3">דור משנה</th>
-                    <th className="px-3 py-3">שנים</th>
-                    <th className="px-3 py-3">פעולה</th>
+                    <th className="sticky top-16 z-20 bg-surface px-3 py-3 shadow-sm">שם הספר</th>
+                    <th className="sticky top-16 z-20 bg-surface px-3 py-3 shadow-sm">מחבר</th>
+                    <th className="sticky top-16 z-20 bg-surface px-3 py-3 shadow-sm">דור</th>
+                    <th className="sticky top-16 z-20 bg-surface px-3 py-3 shadow-sm">דור משנה</th>
+                    <th className="sticky top-16 z-20 bg-surface px-3 py-3 shadow-sm">שנים</th>
+                    <th className="sticky top-16 z-20 bg-surface px-3 py-3 shadow-sm">פעולה</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -285,7 +285,7 @@ export default function LibraryInfoPage() {
                 </select>
               </Field>
 
-              <Field label="תחילת התקופה">
+              <Field label="תחילת תקופת המחבר">
                 <input
                   type="number"
                   value={formData.startYear}
@@ -294,7 +294,7 @@ export default function LibraryInfoPage() {
                 />
               </Field>
 
-              <Field label="סיום התקופה">
+              <Field label="סיום תקופת המחבר">
                 <input
                   type="number"
                   value={formData.endYear}
@@ -351,3 +351,5 @@ function countMissingFields(effective) {
     return sum
   }, 0)
 }
+
+
