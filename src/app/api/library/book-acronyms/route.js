@@ -29,6 +29,12 @@ function extractPendingTargetAlias(suggestion) {
   return ''
 }
 
+function buildWholeWordSearchPattern(searchText) {
+  const normalizedSearchText = normalizeAlias(searchText)
+  if (!normalizedSearchText) return null
+
+  return `(^|[^\\p{L}\\p{N}])${escapeRegex(normalizedSearchText)}(?=$|[^\\p{L}\\p{N}])`
+}
 function replaceWholeWordOccurrences(text, searchText, replacementText) {
   const normalizedText = normalizeAlias(text)
   const normalizedSearchText = normalizeAlias(searchText)
@@ -61,8 +67,10 @@ async function createBulkAliasSuggestions({ userId, matchText, replacementText }
     }
   }
 
+  const wholeWordSearchPattern = buildWholeWordSearchPattern(normalizedMatchText)
+
   const matchingBooks = await BookAcronym.find({
-    displayName: { $regex: escapeRegex(normalizedMatchText) }
+    displayName: { $regex: wholeWordSearchPattern, $options: 'u' }
   })
     .sort({ updatedAt: 1, externalId: 1 })
     .lean()
@@ -339,5 +347,7 @@ export async function POST(request) {
     return NextResponse.json({ success: false, error: 'שגיאה בשליחת הכינוי לאישור' }, { status: 500 })
   }
 }
+
+
 
 
