@@ -34,13 +34,13 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-50 w-full glass-strong border-b border-gray-200 bg-white/80 backdrop-blur-md">
-      <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-8">
-        <Link href="/library" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+      <div className="mx-auto flex h-16 w-full max-w-[1800px] items-center justify-between px-2 sm:px-3 md:px-4 xl:px-8">
+        <Link href="/library" className="flex items-center gap-2 lg:gap-3 hover:opacity-80 transition-opacity">
           <Image src="/logo.svg" alt="לוגו אוצריא" width={32} height={32} />
-          <span className="text-xl font-bold text-foreground font-frank">ספריית אוצריא</span>
+          <span className="text-lg xl:text-xl font-bold text-foreground font-frank">ספריית אוצריא</span>
         </Link>
         
-        <nav className="hidden md:flex items-center gap-6">
+        <nav className="hidden md:flex items-center gap-3 lg:gap-4 xl:gap-6">
           {LIBRARY_NAV_LINKS.map(link => (
             <Link 
               key={link.href}
@@ -52,7 +52,7 @@ export default function Header() {
           ))}
           
           {session ? (
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 lg:gap-3 xl:gap-4">
               {session.user.role === 'admin' && (
                 <Link href="/library/admin" className="flex items-center gap-2 text-accent hover:text-accent/80 transition-colors relative font-medium">
                   <span className="material-symbols-outlined">admin_panel_settings</span>
