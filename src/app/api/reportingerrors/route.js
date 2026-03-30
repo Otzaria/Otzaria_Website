@@ -132,7 +132,7 @@ function buildHtml(payload) {
         </div>
         <div style="padding: 24px; line-height: 1.7;">
           <p><strong>ספר:</strong> ${escaped.book_title}</p>
-          <p><strong>מיקום:</strong> ${escaped.current_ref}</p>
+          <p><strong>מיקום:</strong> ${escaped.book_title}, ${escaped.current_ref}</p>
           <p><strong>שורה:</strong> ${escaped.line_number}</p>
           <p><strong>גרסת ספרייה:</strong> ${libraryVersion}</p>
           <p><strong>נתיב:</strong> ${escaped.file_path}</p>
