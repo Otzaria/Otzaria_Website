@@ -242,7 +242,7 @@ export default function AdminMessagesPage() {
                                             })}
                                           </span>
                                       </div>
-                                      <p className="text-gray-800">{reply.content}</p>
+                                      <p className="text-gray-800 whitespace-pre-wrap">{reply.content}</p>
                                   </div>
                               ))}
                           </div>
