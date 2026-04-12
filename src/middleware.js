@@ -58,7 +58,7 @@ export const config = {
     '/library/info/:path*',
     '/library/acronyms/:path*',
     '/library/dicta-books/:path*',
-    '/api/admin/((?!books/upload).*)', 
+    '/api/admin/:path*', 
     '/api/library/book-info/:path*',
     '/api/library/book-acronyms/:path*',
     '/api/upload-text/:path*'

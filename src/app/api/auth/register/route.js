@@ -3,6 +3,15 @@ import { hash } from 'bcryptjs';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { z } from 'zod';
+
+// סכמת אימות עם Zod
+const registerSchema = z.object({
+  name: z.string().min(1, 'שם חובה').max(50, 'שם ארוך מדי').trim(),
+  email: z.string().email('כתובת אימייל לא תקינה').toLowerCase().trim(),
+  password: z.string().min(6, 'סיסמה חייבת להכיל לפחות 6 תווים').max(128, 'סיסמה ארוכה מדי'),
+  acceptReminders: z.boolean()
+});
 
 export async function POST(request) {
   try {
@@ -17,7 +26,16 @@ export async function POST(request) {
         );
     }
 
-    const { name, email, password, acceptReminders } = await request.json();
+    const body = await request.json();
+    
+    // אימות קלט עם Zod למניעת NoSQL Injection
+    const validationResult = registerSchema.safeParse(body);
+    if (!validationResult.success) {
+      const errors = validationResult.error.issues.map(err => err.message).join(', ');
+      return NextResponse.json({ error: errors }, { status: 400 });
+    }
+    
+    const { name, email, password, acceptReminders } = validationResult.data;
     
     if (!acceptReminders) {
       return NextResponse.json(
@@ -47,6 +65,7 @@ export async function POST(request) {
 
     return NextResponse.json({ message: 'המשתמש נוצר בהצלחה', user: { id: user._id, name: user.name, email: user.email } }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('Registration Error:', error);
+    return NextResponse.json({ error: 'שגיאה בשרת. נסה שוב מאוחר יותר.' }, { status: 500 });
   }
 }

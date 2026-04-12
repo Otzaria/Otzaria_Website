@@ -9,6 +9,22 @@ import Page from '@/models/Page';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { sendBookNotification } from '@/lib/emailService';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { z } from 'zod';
+
+// סכמת אימות להעלאת ספרים
+const uploadBookSchema = z.object({
+  bookName: z.string().min(1, 'שם הספר נדרש').max(200, 'שם הספר ארוך מדי'),
+  category: z.string().max(100, 'קטגוריה ארוכה מדי').optional(),
+  isHidden: z.boolean().optional(),
+  sendNotification: z.boolean().optional()
+});
+
+function normalizeOptionalText(value) {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed === '' ? undefined : trimmed;
+}
 
 const UPLOAD_ROOT = process.env.UPLOAD_DIR || path.join(process.cwd(), 'public', 'uploads');
 
@@ -17,23 +33,55 @@ export async function POST(request) {
   let createdFolderPath = null;
 
   try {
+    // 1. בדיקת סשן ותפקיד
     const session = await getServerSession(authOptions);
     if (!session || session.user?.role !== 'admin') {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
+    // 2. Rate Limiting - מגבלה של 10 העלאות לשעה לאדמין
+    const ip = request.headers.get("x-forwarded-for") || "unknown";
+    const isAllowed = checkRateLimit(ip, 'admin_upload', 10, 'hour');
+    
+    if (!isAllowed) {
+        return NextResponse.json(
+            { error: 'יותר מדי העלאות. נסה שוב מאוחר יותר.' }, 
+            { status: 429 }
+        );
+    }
+
     await connectDB();
     
-    // קבלת הנתונים מהבקשה
+    // 3. קבלת הנתונים מהבקשה
     const formData = await request.formData();
     const file = formData.get('pdf');
-    const bookName = formData.get('bookName');
-    const category = formData.get('category') || 'כללי';
+    const bookName = normalizeOptionalText(formData.get('bookName'));
+    const category = normalizeOptionalText(formData.get('category')) || 'כללי';
     const isHidden = formData.get('isHidden') === 'true';
     const sendNotification = formData.get('sendNotification') === 'true';
 
-    if (!file || !bookName) {
-      return NextResponse.json({ success: false, error: 'חסרים נתונים' }, { status: 400 });
+    // 4. אימות קלט עם Zod
+    const validationResult = uploadBookSchema.safeParse({
+      bookName,
+      category,
+      isHidden,
+      sendNotification
+    });
+
+    if (!validationResult.success) {
+      const errors = validationResult.error.issues.map(err => err.message).join(', ');
+      return NextResponse.json({ error: errors }, { status: 400 });
+    }
+
+    // 5. בדיקת קובץ
+    if (!file || file.type !== 'application/pdf') {
+      return NextResponse.json({ success: false, error: 'חובה להעלות קובץ PDF תקין' }, { status: 400 });
+    }
+
+    // 6. בדיקת גודל קובץ (מקסימום 50MB)
+    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json({ success: false, error: 'קובץ גדול מדי (מקסימום 50MB)' }, { status: 400 });
     }
 
     // יצירת שם תיקייה (Slug)
@@ -143,7 +191,7 @@ export async function POST(request) {
 
     return NextResponse.json({ 
         success: false, 
-        error: `התהליך נכשל ובוצע ביטול שינויים: ${error.message}` 
+        error: 'שגיאה בשרת. נסה שוב מאוחר יותר.' 
     }, { status: 500 });
   }
 }

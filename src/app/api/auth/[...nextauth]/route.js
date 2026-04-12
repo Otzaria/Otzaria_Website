@@ -3,6 +3,14 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { compare } from 'bcryptjs';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { z } from 'zod';
+
+// סכמת אימות לקלט התחברות
+const loginSchema = z.object({
+  identifier: z.string().min(1, 'שם משתמש או אימייל נדרש').max(100, 'קלט ארוך מדי'),
+  password: z.string().min(1, 'סיסמה נדרשת').max(128, 'סיסמה ארוכה מדי')
+});
 
 export const authOptions = {
   providers: [
@@ -12,15 +20,29 @@ export const authOptions = {
         identifier: { label: 'Email or Username', type: 'text' },
         password: { label: 'Password', type: 'password' },
       },
-      async authorize(credentials) {
-        await connectDB();
-        if (typeof credentials.identifier !== 'string' || typeof credentials.password !== 'string') {
-          throw new Error('קלט לא חוקי');
+      async authorize(credentials, req) {
+        // Rate limiting לפי IP
+        const ip = req?.headers?.['x-forwarded-for'] || req?.ip || 'unknown';
+        const isAllowed = checkRateLimit(ip, 'login', 5, 'minute');
+        
+        if (!isAllowed) {
+          throw new Error('יותר מדי ניסיונות התחברות. נסה שוב מאוחר יותר.');
         }
+
+        // אימות קלט עם Zod
+        const validationResult = loginSchema.safeParse(credentials);
+        if (!validationResult.success) {
+          throw new Error('נתונים לא תקינים');
+        }
+
+        const { identifier, password } = validationResult.data;
+
+        await connectDB();
+        
         const user = await User.findOne({
           $or: [
-            { email: credentials.identifier },
-            { name: credentials.identifier }
+            { email: identifier },
+            { name: identifier }
           ]
         });
 
@@ -28,7 +50,7 @@ export const authOptions = {
           throw new Error('משתמש לא נמצא');
         }
 
-        const isValid = await compare(credentials.password, user.password);
+        const isValid = await compare(password, user.password);
         if (!isValid) {
           throw new Error('סיסמה שגויה');
         }
