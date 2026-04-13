@@ -75,7 +75,7 @@ export async function POST(request) {
     const updatedPage = await Page.findOneAndUpdate(
       query,
       updateFields,
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     return NextResponse.json({ success: true, message: 'נשמר בהצלחה', pageStatus: updatedPage.status });

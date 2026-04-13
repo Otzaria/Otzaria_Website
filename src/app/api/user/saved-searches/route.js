@@ -38,7 +38,7 @@ export async function PUT(req) {
     const updatedUser = await User.findOneAndUpdate(
       { email: session.user.email },
       { $set: { savedSearches: savedSearches } },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!updatedUser) {
