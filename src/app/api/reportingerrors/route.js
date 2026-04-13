@@ -118,11 +118,24 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
+function buildSefariaLink(bookTitle, currentRef) {
+  if (!bookTitle || !currentRef) return '';
+  
+  // Create the Sefaria URL with encoded Hebrew text
+  const encodedBook = encodeURIComponent(bookTitle);
+  const encodedRef = encodeURIComponent(currentRef);
+  return `https://www.sefaria.org/${encodedBook}.${encodedRef}`;
+}
+
 function buildHtml(payload) {
   const escaped = Object.fromEntries(
     Object.entries(payload).map(([key, value]) => [key, escapeHtml(value)])
   );
   const libraryVersion = escapeHtml(extractLibraryVersion(payload));
+  
+  // Check if source is Sefaria
+  const isSefariaSource = payload.source_folder && payload.source_folder.toLowerCase().includes('sefaria');
+  const sefariaLink = isSefariaSource ? buildSefariaLink(payload.book_title, payload.current_ref) : '';
 
   return `
     <div dir="rtl" style="font-family: Arial, sans-serif; background: #f7f4ef; padding: 24px; color: #222;">
@@ -132,11 +145,12 @@ function buildHtml(payload) {
         </div>
         <div style="padding: 24px; line-height: 1.7;">
           <p><strong>ספר:</strong> ${escaped.book_title}</p>
-          <p><strong>מיקום:</strong> ${escaped.book_title}, ${escaped.current_ref}</p>
+          <p><strong>מיקום:</strong> ${escaped.current_ref}</p>
           <p><strong>שורה:</strong> ${escaped.line_number}</p>
           <p><strong>גרסת ספרייה:</strong> ${libraryVersion}</p>
           <p><strong>נתיב:</strong> ${escaped.file_path}</p>
           <p><strong>תיקיית מקור:</strong> ${escaped.source_folder}</p>
+          ${isSefariaSource ? `<p><strong>קישור ישיר:</strong> <a href="${sefariaLink}" target="_blank" style="color: #d4a373;">${sefariaLink}</a></p>` : ''}
           <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
           <h2 style="font-size: 18px; margin-bottom: 8px;">הטקסט המסומן</h2>
           <div style="background: #faf7f2; border: 1px solid #eee2d2; border-radius: 10px; padding: 14px; white-space: pre-wrap;">${escaped.selected_text}</div>
@@ -155,9 +169,20 @@ function buildHtml(payload) {
 }
 
 function buildText(payload) {
-  return [
+  // Check if source is Sefaria
+  const isSefariaSource = payload.source_folder && payload.source_folder.toLowerCase().includes('sefaria');
+  const sefariaLink = isSefariaSource ? buildSefariaLink(payload.book_title, payload.current_ref) : '';
+  
+  const lines = [
     `ספר: ${payload.book_title}`,
     `מיקום: ${payload.current_ref}`,
+  ];
+  
+  if (isSefariaSource && sefariaLink) {
+    lines.push(`קישור ישיר: ${sefariaLink}`);
+  }
+  
+  lines.push(
     `שורה: ${payload.line_number}`,
     `גרסת ספרייה: ${extractLibraryVersion(payload)}`,
     `נתיב: ${payload.file_path}`,
@@ -175,7 +200,9 @@ function buildText(payload) {
     `שולח: ${payload.sender_email}`,
     `נוצר בתאריך: ${payload.created_at}`,
     `מזהה דיווח: ${payload.report_id}`,
-  ].join('\n');
+  );
+  
+  return lines.join('\n');
 }
 
 export async function POST(request) {
