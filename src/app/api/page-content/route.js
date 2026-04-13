@@ -78,6 +78,10 @@ export async function POST(request) {
       { returnDocument: 'after' }
     );
 
+    if (!updatedPage) {
+      return NextResponse.json({ success: false, message: 'העמוד לא נמצא' }, { status: 404 });
+    }
+
     return NextResponse.json({ success: true, message: 'נשמר בהצלחה', pageStatus: updatedPage.status });
   } catch (error) {
     console.error('Save Content Error:', error);
