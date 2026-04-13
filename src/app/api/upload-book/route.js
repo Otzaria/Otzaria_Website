@@ -5,6 +5,30 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { sendUploadNotification } from '@/lib/emailService';
 import { isLastPageUpload } from '@/lib/uploadHelpers';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { saveFileToGridFS } from '@/lib/gridfs-service';
+import { z } from 'zod';
+
+// סכמת אימות להעלאת קבצים
+const uploadFileSchema = z.object({
+  bookName: z.string().min(1, 'שם הספר נדרש').max(200, 'שם הספר ארוך מדי'),
+  uploadType: z.enum(['full_book', 'single_page', 'dicta']).optional(),
+  authorName: z.string().max(100, 'שם המחבר ארוך מדי').optional(),
+  bookCategory: z.string().max(100, 'קטגוריית הספר ארוכה מדי').optional(),
+  authorCategory: z.string().max(100, 'קטגוריית המחבר ארוכה מדי').optional(),
+  authorYear: z.string().max(20, 'שנת המחבר ארוכה מדי').optional(),
+  publicationYear: z.string().max(20, 'שנת הדפסה ארוכה מדי').optional(),
+  copyrightHolder: z.string().max(200, 'בעל הזכויות ארוך מדי').optional(),
+  sourceUrl: z.string().url('כתובת לא תקינה').optional().or(z.literal('')),
+  isOcr: z.boolean().optional(),
+  ocrDescription: z.string().max(500, 'תיאור OCR ארוך מדי').optional()
+});
+
+function normalizeOptionalText(value) {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed === '' ? undefined : trimmed;
+}
 
 // פונקציה ליצירת כותרת מטא-דטה
 function createMetadataHeader(metadata) {
@@ -51,24 +75,62 @@ function isWordFile(fileName) {
 // טיפול בהעלאת קובץ טקסט ע"י משתמש
 export async function POST(request) {
     try {
+        // 1. בדיקת סשן
         const session = await getServerSession(authOptions);
         if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+        // 2. Rate Limiting - מגבלה של 20 העלאות לשעה למשתמש רגיל
+        const ip = request.headers.get("x-forwarded-for") || "unknown";
+        const isAllowed = checkRateLimit(ip, 'user_upload', 20, 'hour');
+        
+        if (!isAllowed) {
+            return NextResponse.json(
+                { error: 'יותר מדי העלאות. נסה שוב מאוחר יותר.' }, 
+                { status: 429 }
+            );
+        }
+
         const formData = await request.formData();
         const file = formData.get('file');
-        const bookName = formData.get('bookName');
+        const bookName = normalizeOptionalText(formData.get('bookName'));
         const confirmOverwrite = formData.get('confirmOverwrite') === 'true';
         
         // Extract metadata fields
-        const authorName = formData.get('authorName');
-        const bookCategory = formData.get('bookCategory');
-        const authorCategory = formData.get('authorCategory');
-        const authorYear = formData.get('authorYear');
-        const publicationYear = formData.get('publicationYear');
-        const copyrightHolder = formData.get('copyrightHolder');
-        const sourceUrl = formData.get('sourceUrl');
+        const authorName = normalizeOptionalText(formData.get('authorName'));
+        const bookCategory = normalizeOptionalText(formData.get('bookCategory'));
+        const authorCategory = normalizeOptionalText(formData.get('authorCategory'));
+        const authorYear = normalizeOptionalText(formData.get('authorYear'));
+        const publicationYear = normalizeOptionalText(formData.get('publicationYear'));
+        const copyrightHolder = normalizeOptionalText(formData.get('copyrightHolder'));
+        const sourceUrl = normalizeOptionalText(formData.get('sourceUrl'));
         const isOcr = formData.get('isOcr') === 'true';
-        const ocrDescription = formData.get('ocrDescription');
+        const ocrDescription = normalizeOptionalText(formData.get('ocrDescription'));
+        const uploadType = normalizeOptionalText(formData.get('uploadType')) || 'single_page';
+
+        // 3. אימות קלט עם Zod
+        const validationResult = uploadFileSchema.safeParse({
+          bookName,
+          uploadType,
+          authorName,
+          bookCategory,
+          authorCategory,
+          authorYear,
+          publicationYear,
+          copyrightHolder,
+          sourceUrl,
+          isOcr,
+          ocrDescription
+        });
+
+        if (!validationResult.success) {
+          const errors = validationResult.error.issues.map(err => err.message).join(', ');
+          return NextResponse.json({ error: errors }, { status: 400 });
+        }
+
+        // 4. בדיקת קובץ
+        if (!file) {
+          return NextResponse.json({ error: 'חובה להעלות קובץ' }, { status: 400 });
+        }
 
         const MAX_SIZE = 10 * 1024 * 1024;
         if (file.size > MAX_SIZE) {
@@ -77,10 +139,6 @@ export async function POST(request) {
 
         let arrayBuffer = await file.arrayBuffer();
         let content = Buffer.from(arrayBuffer);
-        
-        // הוסף מטא-דטה לתחילת הקובץ רק להעלאות מסוג full_book
-        const uploadType = formData.get('uploadType') || 'single_page';
-        
         if (uploadType === 'full_book') {
             const metadata = {
                 bookName,
@@ -136,11 +194,23 @@ export async function POST(request) {
             await existingUpload.save();
         }
 
+        const storedFile = await saveFileToGridFS(
+            content,
+            file.name,
+            file.type || 'application/octet-stream',
+            {
+                uploadedBy: session.user._id,
+                bookName,
+                uploadType
+            }
+        );
+
         // יצירת העלאה חדשה
         const uploadData = {
             uploader: session.user._id,
             originalFileName: file.name,
             content: content,
+            fileStorageId: storedFile.fileStorageId,
             fileSize: content.length,
             lineCount: 0,
             uploadType: uploadType,
@@ -193,7 +263,8 @@ export async function POST(request) {
         });
 
     } catch (error) {
-        return NextResponse.json({ success: false, error: 'שגיאה בעיבוד' }, { status: 500 });
+        console.error('Upload Error:', error);
+        return NextResponse.json({ success: false, error: 'שגיאה בשרת. נסה שוב מאוחר יותר.' }, { status: 500 });
     }
 }
 
@@ -230,6 +301,7 @@ export async function GET(request) {
         });
 
     } catch (error) {
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+        console.error('Get Uploads Error:', error);
+        return NextResponse.json({ success: false, error: 'שגיאה בשרת. נסה שוב מאוחר יותר.' }, { status: 500 });
     }
 }

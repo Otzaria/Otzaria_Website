@@ -87,6 +87,6 @@ export async function POST(request) {
 
   } catch (error) {
     console.error('Forgot Password Error:', error);
-    return NextResponse.json({ error: 'שגיאה בשרת' }, { status: 500 });
+    return NextResponse.json({ error: 'שגיאה בשרת. נסה שוב מאוחר יותר.' }, { status: 500 });
   }
 }

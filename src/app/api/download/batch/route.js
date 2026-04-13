@@ -3,6 +3,7 @@ import connectDB from '@/lib/db';
 import Upload from '@/models/Upload';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { getUploadText } from '@/lib/gridfs-service';
 
 export async function POST(request) {
   const session = await getServerSession(authOptions);
@@ -26,9 +27,8 @@ export async function POST(request) {
     }
 
     // איחוד התוכן של כל הקבצים עם 2 מעברי שורות ביניהם
-    const combinedContent = uploads
-      .map(upload => upload.content)
-      .join('\n\n');
+    const parts = await Promise.all(uploads.map(upload => getUploadText(upload)));
+    const combinedContent = parts.join('\n\n');
 
     // החזרת הקובץ המאוחד
     return new NextResponse(combinedContent, {
