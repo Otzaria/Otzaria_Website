@@ -37,7 +37,7 @@ export async function POST(req) {
     const updatedUser = await User.findOneAndUpdate(
       { email: session.user.email },
       { $addToSet: { spellWords: clean } },
-      { new: true }
+      { returnDocument: 'after' }
     ).select('spellWords');
 
     if (!updatedUser) {

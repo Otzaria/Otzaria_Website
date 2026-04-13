@@ -75,8 +75,12 @@ export async function POST(request) {
     const updatedPage = await Page.findOneAndUpdate(
       query,
       updateFields,
-      { new: true }
+      { returnDocument: 'after' }
     );
+
+    if (!updatedPage) {
+      return NextResponse.json({ success: false, message: 'העמוד לא נמצא' }, { status: 404 });
+    }
 
     return NextResponse.json({ success: true, message: 'נשמר בהצלחה', pageStatus: updatedPage.status });
   } catch (error) {

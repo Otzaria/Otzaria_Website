@@ -37,23 +37,23 @@ export async function saveFileToGridFS(fileBuffer, filename, contentType, metada
     });
 
     uploadStream.on('error', reject);
-    uploadStream.on('finish', async (file) => {
+    uploadStream.on('finish', async () => {
       try {
         // שמירת מטא-דטה במודל נפרד
         const fileStorage = await FileStorage.create({
-          filename: file.filename,
+          filename: filename, // השתמש בשם הקובץ שהועבר לפונקציה
           originalName: filename,
           contentType,
-          size: file.length,
-          gridfsId: file._id,
+          size: fileBuffer.length, // השתמש בגודל הבאפר המקורי
+          gridfsId: uploadStream.id, // השתמש ב-ID של ה-uploadStream
           uploadedBy: metadata.uploadedBy || null
         });
 
         resolve({
           fileStorageId: fileStorage._id,
-          gridfsId: file._id,
-          filename: file.filename,
-          size: file.length
+          gridfsId: uploadStream.id, // השתמש ב-ID של ה-uploadStream
+          filename: filename, // השתמש בשם הקובץ שהועבר לפונקציה
+          size: fileBuffer.length // השתמש בגודל הבאפר המקורי
         });
       } catch (error) {
         reject(error);
@@ -107,7 +107,7 @@ export async function deleteFileFromGridFS(gridfsId) {
   await FileStorage.findOneAndUpdate(
     { gridfsId },
     { isDeleted: true },
-    { new: true }
+    { returnDocument: 'after' }
   );
 }
 
