@@ -5,8 +5,19 @@ import connectDB from '@/lib/db';
 import ErrorReport from '@/models/ErrorReport';
 
 const REPORTING_ERRORS_RECIPIENT = 'otzaria.200@gmail.com';
-const SEFARIA_CORRECTIONS_EMAIL = 'corrections@sefaria.org';
+const SEFARIA_ERRORS_RECIPIENT = 'corrections@sefaria.org';
 const DEFAULT_SENDER_EMAIL = 'unknown@otzaria.invalid';
+
+// מיפוי מקורות לכתובות מייל - בהתבסס על error_report_dialog.dart
+const SOURCE_EMAIL_MAPPING = {
+  'sefariaToOtzaria': 'corrections@sefaria.org',
+  'sefaria': 'corrections@sefaria.org',
+  'wiki_jewish_books': 'WikiJewishBooks@gmail.com',
+  'wikiSource': 'novartza@gmail.com',
+  'Pninim': 'contact@pninim.org',
+  'Tashma': 'jewishoffice@gmail.com',
+  'Ben-Yehuda': 'editor@benyehuda.org',
+};
 
 function extractLibraryVersion(payload) {
   const explicitVersion = String(payload?.library_version ?? '').trim();
@@ -119,6 +130,46 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
+function getEmailRecipients(sourceFolder) {
+  if (!sourceFolder) {
+    return {
+      primary: REPORTING_ERRORS_RECIPIENT,
+      cc: null,
+      isSefariaOnly: false
+    };
+  }
+
+  const normalizedSource = sourceFolder.toLowerCase();
+  
+  // בדיקה אם זה ספריא - שליחה רק לספריא
+  if (normalizedSource.includes('sefaria')) {
+    return {
+      primary: SEFARIA_ERRORS_RECIPIENT,
+      cc: null,
+      isSefariaOnly: true
+    };
+  }
+
+  // בדיקה של מקורות אחרים - שליחה גם לאוצריא וגם למקור
+  for (const [sourceKey, sourceEmail] of Object.entries(SOURCE_EMAIL_MAPPING)) {
+    if (sourceKey !== 'sefaria' && sourceKey !== 'sefariaToOtzaria' && 
+        normalizedSource.includes(sourceKey.toLowerCase())) {
+      return {
+        primary: REPORTING_ERRORS_RECIPIENT,
+        cc: sourceEmail,
+        isSefariaOnly: false
+      };
+    }
+  }
+
+  // ברירת מחדל - רק לאוצריא
+  return {
+    primary: REPORTING_ERRORS_RECIPIENT,
+    cc: null,
+    isSefariaOnly: false
+  };
+}
+
 function buildSefariaLink(bookTitle, currentRef) {
   if (!bookTitle || !currentRef) return '';
   
@@ -137,6 +188,13 @@ function buildHtml(payload) {
   // Check if source is Sefaria
   const isSefariaSource = payload.source_folder && payload.source_folder.toLowerCase().includes('sefaria');
   const sefariaLink = isSefariaSource ? buildSefariaLink(payload.book_title, payload.current_ref) : '';
+  
+  // Get email recipients info
+  const emailInfo = getEmailRecipients(payload.source_folder);
+  const ccNotification = emailInfo.cc ? 
+    `<div style="background: #e8f4fd; border: 2px solid #2196f3; margin: 16px; padding: 16px; border-radius: 8px; text-align: center;">
+      <strong style="color: #1976d2; font-size: 16px;">📧 עותק מדיווח זה נשלח גם ל: ${emailInfo.cc}</strong>
+    </div>` : '';
 
   return `
     <div dir="rtl" style="font-family: Arial, sans-serif; background: #f7f4ef; padding: 24px; color: #222;">
@@ -144,11 +202,7 @@ function buildHtml(payload) {
         <div style="background: #d4a373; color: #fff; padding: 18px 24px;">
           <h1 style="margin: 0; font-size: 24px;">דיווח טעות חדש מאוצריא</h1>
         </div>
-        ${isSefariaSource ? `
-        <div style="background: #e8f4fd; border: 2px solid #2196f3; margin: 16px; padding: 16px; border-radius: 8px; text-align: center;">
-          <strong style="color: #1976d2; font-size: 16px;">📧 עותק מדיווח זה נשלח לספריא (corrections@sefaria.org)</strong>
-        </div>
-        ` : ''}
+        ${ccNotification}
         <div style="padding: 24px; line-height: 1.7;">
           <p><strong>ספר:</strong> ${escaped.book_title}</p>
           <p><strong>מיקום:</strong> ${escaped.current_ref}</p>
@@ -176,8 +230,9 @@ function buildHtml(payload) {
 }
 
 function buildText(payload) {
-  // Check if source is Sefaria
-  const isSefariaSource = payload.source_folder && payload.source_folder.toLowerCase().includes('sefaria');
+  // Get email recipients info
+  const emailInfo = getEmailRecipients(payload.source_folder);
+  const isSefariaSource = emailInfo.isSefariaOnly;
   const sefariaLink = isSefariaSource ? buildSefariaLink(payload.book_title, payload.current_ref) : '';
   
   const lines = [
@@ -187,7 +242,10 @@ function buildText(payload) {
   
   if (isSefariaSource && sefariaLink) {
     lines.push(`קישור ישיר: ${sefariaLink}`);
-    lines.push('** עותק מדיווח זה נשלח לספריא (corrections@sefaria.org) **');
+  }
+  
+  if (emailInfo.cc) {
+    lines.push(`** עותק מדיווח זה נשלח גם ל: ${emailInfo.cc} **`);
   }
   
   lines.push(
@@ -273,9 +331,12 @@ export async function POST(request) {
     const isSefariaSource = payload.source_folder && payload.source_folder.toLowerCase().includes('sefaria');
 
     // Send email to main recipient
-    await transporter.sendMail({
+    // Determine recipient based on source
+    const emailInfo = getEmailRecipients(payload.source_folder);
+
+    const mailOptions = {
       from: process.env.SMTP_FROM,
-      to: REPORTING_ERRORS_RECIPIENT,
+      to: emailInfo.primary,
       replyTo,
       subject: payload.subject,
       html: buildHtml(payload),
@@ -284,7 +345,14 @@ export async function POST(request) {
         'X-Otzaria-Report-Id': payload.report_id,
         'X-Otzaria-Book-Title': payload.book_title,
       },
-    });
+    };
+
+    // Add CC if needed (for non-Sefaria sources that have additional recipients)
+    if (emailInfo.cc) {
+      mailOptions.cc = emailInfo.cc;
+    }
+
+    await transporter.sendMail(mailOptions);
 
     // If it's a Sefaria source, also send to Sefaria corrections
     if (isSefariaSource) {
