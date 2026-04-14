@@ -150,6 +150,16 @@ export default function FindReplaceDialog({
                             />
                             <span className="text-[10px] text-gray-500">Regex</span>
                         </label>
+                        {useRegex && (
+                            <a 
+                                href="https://tchumim.com/topic/1463/regex-%D7%91%D7%99%D7%98%D7%95%D7%99%D7%99%D7%9D-%D7%A8%D7%92%D7%95%D7%9C%D7%A8%D7%99%D7%99%D7%9D" 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-[10px] text-blue-600 hover:text-blue-800 underline"
+                            >
+                                למדריך רג'קס מפורט
+                            </a>
+                        )}
                     </div>
                     <button onClick={() => setFindText(prev => prev + '^13')} className="text-[10px] bg-gray-50 hover:bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200 flex items-center gap-1 transition-colors">
                       <span className="material-symbols-outlined text-[10px]">keyboard_return</span>
@@ -369,6 +379,16 @@ export default function FindReplaceDialog({
                                 />
                                 <span className="text-[10px] text-gray-500">Regex</span>
                             </label>
+                            {newIsRegex && (
+                                <a 
+                                    href="https://tchumim.com/topic/1463/regex-%D7%91%D7%99%D7%98%D7%95%D7%99%D7%99%D7%9D-%D7%A8%D7%92%D7%95%D7%9C%D7%A8%D7%99%D7%99%D7%9D" 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="text-[10px] text-blue-600 hover:text-blue-800 underline"
+                                >
+                                    למדריך רג'קס מפורט
+                                </a>
+                            )}
                         </div>
                         <button onClick={() => setNewFind(prev => prev + '^13')} className="text-[10px] bg-gray-50 hover:bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200 flex items-center gap-1">
                             <span className="material-symbols-outlined text-[10px]">keyboard_return</span>
