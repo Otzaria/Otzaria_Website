@@ -5,6 +5,7 @@ import connectDB from '@/lib/db';
 import ErrorReport from '@/models/ErrorReport';
 
 const REPORTING_ERRORS_RECIPIENT = 'otzaria.200@gmail.com';
+const SEFARIA_CORRECTIONS_EMAIL = 'corrections@sefaria.org';
 const DEFAULT_SENDER_EMAIL = 'unknown@otzaria.invalid';
 
 function extractLibraryVersion(payload) {
@@ -143,9 +144,15 @@ function buildHtml(payload) {
         <div style="background: #d4a373; color: #fff; padding: 18px 24px;">
           <h1 style="margin: 0; font-size: 24px;">דיווח טעות חדש מאוצריא</h1>
         </div>
+        ${isSefariaSource ? `
+        <div style="background: #e8f4fd; border: 2px solid #2196f3; margin: 16px; padding: 16px; border-radius: 8px; text-align: center;">
+          <strong style="color: #1976d2; font-size: 16px;">📧 עותק מדיווח זה נשלח לספריא (corrections@sefaria.org)</strong>
+        </div>
+        ` : ''}
         <div style="padding: 24px; line-height: 1.7;">
           <p><strong>ספר:</strong> ${escaped.book_title}</p>
           <p><strong>מיקום:</strong> ${escaped.current_ref}</p>
+          ${isSefariaSource ? `<p><strong>קישור ישיר:</strong> <a href="${sefariaLink}" target="_blank" style="color: #d4a373;">${sefariaLink}</a></p>` : ''}
           <p><strong>שורה:</strong> ${escaped.line_number}</p>
           <p><strong>גרסת ספרייה:</strong> ${libraryVersion}</p>
           <p><strong>נתיב:</strong> ${escaped.file_path}</p>
@@ -180,6 +187,7 @@ function buildText(payload) {
   
   if (isSefariaSource && sefariaLink) {
     lines.push(`קישור ישיר: ${sefariaLink}`);
+    lines.push('** עותק מדיווח זה נשלח לספריא (corrections@sefaria.org) **');
   }
   
   lines.push(
@@ -261,6 +269,10 @@ export async function POST(request) {
     const senderValidation = validateEmail(payload.sender_email);
     const replyTo = senderValidation.isValid ? payload.sender_email : undefined;
 
+    // Check if this is a Sefaria source book
+    const isSefariaSource = payload.source_folder && payload.source_folder.toLowerCase().includes('sefaria');
+
+    // Send email to main recipient
     await transporter.sendMail({
       from: process.env.SMTP_FROM,
       to: REPORTING_ERRORS_RECIPIENT,
@@ -273,6 +285,23 @@ export async function POST(request) {
         'X-Otzaria-Book-Title': payload.book_title,
       },
     });
+
+    // If it's a Sefaria source, also send to Sefaria corrections
+    if (isSefariaSource) {
+      await transporter.sendMail({
+        from: process.env.SMTP_FROM,
+        to: SEFARIA_CORRECTIONS_EMAIL,
+        replyTo,
+        subject: `[Otzaria] ${payload.subject}`,
+        html: buildHtml(payload),
+        text: buildText(payload),
+        headers: {
+          'X-Otzaria-Report-Id': payload.report_id,
+          'X-Otzaria-Book-Title': payload.book_title,
+          'X-Otzaria-Source': 'Sefaria',
+        },
+      });
+    }
 
     await ErrorReport.findOneAndUpdate(
       { reportId: payload.report_id },
