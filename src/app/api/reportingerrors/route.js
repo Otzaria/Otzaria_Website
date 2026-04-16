@@ -191,12 +191,10 @@ function buildHtml(payload) {
   );
   const libraryVersion = escapeHtml(extractLibraryVersion(payload));
   
-  // Check if source is Sefaria
-  const isSefariaSource = payload.source_folder && payload.source_folder.toLowerCase().includes('sefaria');
-  const sefariaLink = isSefariaSource ? buildSefariaLink(payload.book_title, payload.current_ref) : '';
-  
   // Get email recipients info
   const emailInfo = getEmailRecipients(payload.source_folder);
+  const isSefariaSource = emailInfo.isSefariaOnly;
+  const sefariaLink = isSefariaSource ? buildSefariaLink(payload.book_title, payload.current_ref) : '';
   const ccNotification = emailInfo.cc ? 
     `<div style="background: #e8f4fd; border: 2px solid #2196f3; margin: 16px; padding: 16px; border-radius: 8px; text-align: center;">
       <strong style="color: #1976d2; font-size: 16px;">📧 עותק מדיווח זה נשלח גם ל: ${emailInfo.cc}</strong>
@@ -217,7 +215,6 @@ function buildHtml(payload) {
           <p><strong>גרסת ספרייה:</strong> ${libraryVersion}</p>
           <p><strong>נתיב:</strong> ${escaped.file_path}</p>
           <p><strong>תיקיית מקור:</strong> ${escaped.source_folder}</p>
-          ${isSefariaSource ? `<p><strong>קישור ישיר:</strong> <a href="${sefariaLink}" target="_blank" style="color: #d4a373;">${sefariaLink}</a></p>` : ''}
           <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
           <h2 style="font-size: 18px; margin-bottom: 8px;">הטקסט המסומן</h2>
           <div style="background: #faf7f2; border: 1px solid #eee2d2; border-radius: 10px; padding: 14px; white-space: pre-wrap;">${escaped.selected_text}</div>
@@ -333,10 +330,6 @@ export async function POST(request) {
     const senderValidation = validateEmail(payload.sender_email);
     const replyTo = senderValidation.isValid ? payload.sender_email : undefined;
 
-    // Check if this is a Sefaria source book
-    const isSefariaSource = payload.source_folder && payload.source_folder.toLowerCase().includes('sefaria');
-
-    // Send email to main recipient
     // Determine recipient based on source
     const emailInfo = getEmailRecipients(payload.source_folder);
 
@@ -359,23 +352,6 @@ export async function POST(request) {
     }
 
     await transporter.sendMail(mailOptions);
-
-    // If it's a Sefaria source, also send to Sefaria corrections
-    if (isSefariaSource) {
-      await transporter.sendMail({
-        from: process.env.SMTP_FROM,
-        to: SEFARIA_CORRECTIONS_EMAIL,
-        replyTo,
-        subject: `[Otzaria] ${payload.subject}`,
-        html: buildHtml(payload),
-        text: buildText(payload),
-        headers: {
-          'X-Otzaria-Report-Id': payload.report_id,
-          'X-Otzaria-Book-Title': payload.book_title,
-          'X-Otzaria-Source': 'Sefaria',
-        },
-      });
-    }
 
     await ErrorReport.findOneAndUpdate(
       { reportId: payload.report_id },

@@ -653,54 +653,63 @@ export default function DictaEditorCore({
   const highlightOccurrenceByIndex = useCallback((container, variants, targetIndex) => {
     if (!container || !variants || variants.length === 0) return false
     
-    for (let variantIdx = 0; variantIdx < variants.length; variantIdx++) {
-      const word = variants[variantIdx]
-      if (!word || typeof document === 'undefined') continue
-      
-      const testRe = buildWholeWordRegex(word, false)
-      const execRe = buildWholeWordRegex(word, true)
-      if (!testRe || !execRe) continue
+    // Create a combined regex for all variants
+    const validVariants = variants.filter(word => word && typeof word === 'string')
+    if (validVariants.length === 0) return false
+    
+    // Escape special regex characters and create combined pattern
+    const escapedVariants = validVariants.map(word => 
+      word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    )
+    const combinedPattern = `(^|\\s|[^\\u05D0-\\u05EA])(${escapedVariants.join('|')})(?=\\s|[^\\u05D0-\\u05EA]|$)`
+    
+    let combinedRegex
+    try {
+      combinedRegex = new RegExp(combinedPattern, 'g')
+    } catch (e) {
+      console.warn('Failed to create combined regex:', e)
+      return false
+    }
 
-      const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
-        acceptNode: (node) => {
-          if (!node.nodeValue) return NodeFilter.FILTER_REJECT
-          return testRe.test(node.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP
-        }
-      })
-
-      let currentIndex = 0
-      let node = walker.nextNode()
-      
-      while (node) {
-        const text = node.nodeValue || ''
-        execRe.lastIndex = 0
-        let match
-        
-        while ((match = execRe.exec(text)) !== null) {
-          if (currentIndex === targetIndex) {
-            const prefixLen = match[1] ? match[1].length : 0
-            const matchText = match[2] || word
-            const index = match.index + prefixLen
-            const before = text.slice(0, index)
-            const after = text.slice(index + matchText.length)
-
-            const highlight = document.createElement('span')
-            highlight.className = 'spellcheck-highlight'
-            highlight.textContent = matchText
-
-            const frag = document.createDocumentFragment()
-            if (before) frag.appendChild(document.createTextNode(before))
-            frag.appendChild(highlight)
-            if (after) frag.appendChild(document.createTextNode(after))
-
-            node.parentNode.replaceChild(frag, node)
-            highlight.scrollIntoView({ block: 'center', behavior: 'smooth' })
-            return true
-          }
-          currentIndex++
-        }
-        node = walker.nextNode()
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+      acceptNode: (node) => {
+        if (!node.nodeValue) return NodeFilter.FILTER_REJECT
+        return combinedRegex.test(node.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP
       }
+    })
+
+    let currentIndex = 0
+    let node = walker.nextNode()
+    
+    while (node) {
+      const text = node.nodeValue || ''
+      combinedRegex.lastIndex = 0
+      let match
+      
+      while ((match = combinedRegex.exec(text)) !== null) {
+        if (currentIndex === targetIndex) {
+          const prefixLen = match[1] ? match[1].length : 0
+          const matchText = match[2]
+          const index = match.index + prefixLen
+          const before = text.slice(0, index)
+          const after = text.slice(index + matchText.length)
+
+          const highlight = document.createElement('span')
+          highlight.className = 'spellcheck-highlight'
+          highlight.textContent = matchText
+
+          const frag = document.createDocumentFragment()
+          if (before) frag.appendChild(document.createTextNode(before))
+          frag.appendChild(highlight)
+          if (after) frag.appendChild(document.createTextNode(after))
+
+          node.parentNode.replaceChild(frag, node)
+          highlight.scrollIntoView({ block: 'center', behavior: 'smooth' })
+          return true
+        }
+        currentIndex++
+      }
+      node = walker.nextNode()
     }
     
     return false
