@@ -173,10 +173,16 @@ function getEmailRecipients(sourceFolder) {
 function buildSefariaLink(bookTitle, currentRef) {
   if (!bookTitle || !currentRef) return '';
   
-  // Create the Sefaria URL with encoded Hebrew text
+  // Clean the reference - remove book title if it's duplicated at the start
+  let cleanRef = currentRef;
+  if (cleanRef.startsWith(bookTitle)) {
+    cleanRef = cleanRef.substring(bookTitle.length).replace(/^[,\s]+/, '');
+  }
+  
+  // Create the Sefaria URL with comma separator (not dot)
   const encodedBook = encodeURIComponent(bookTitle);
-  const encodedRef = encodeURIComponent(currentRef);
-  return `https://www.sefaria.org/${encodedBook}.${encodedRef}`;
+  const encodedRef = encodeURIComponent(cleanRef);
+  return `https://www.sefaria.org/${encodedBook}, ${encodedRef}`;
 }
 
 function buildHtml(payload) {
