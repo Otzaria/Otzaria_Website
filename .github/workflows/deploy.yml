@@ -16,11 +16,11 @@ jobs:
       - name: Setup Node.js 20 with Cache
         uses: actions/setup-node@v4
         with:
-          node-version: '20' # עודכן ל-20
-          cache: 'npm'       # זו השורה שמוסיפה את הקסם - שומרת את ההתקנות בזיכרון
+          node-version: '20'
+          cache: 'npm'
 
       - name: Install Dependencies
-        run: npm ci # ירוץ הרבה יותר מהר בזכות ה-cache
+        run: npm ci --legacy-peer-deps
 
       - name: Try to Build
         run: npm run build
@@ -71,7 +71,7 @@ jobs:
             git reset --hard origin/master
 
             echo "📦 Installing dependencies..."
-            npm ci
+            npm ci --legacy-peer-deps
 
             echo "🛠 Building project..."
             npm run build
