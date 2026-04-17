@@ -650,6 +650,71 @@ export default function DictaEditorCore({
     return false
   }, [])
 
+  const highlightOccurrenceByIndex = useCallback((container, variants, targetIndex) => {
+    if (!container || !variants || variants.length === 0) return false
+    
+    // Create a combined regex for all variants
+    const validVariants = variants.filter(word => word && typeof word === 'string')
+    if (validVariants.length === 0) return false
+    
+    // Escape special regex characters and create combined pattern
+    const escapedVariants = validVariants.map(word => 
+      word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    )
+    const combinedPattern = `(^|\\s|[^\\u05D0-\\u05EA])(${escapedVariants.join('|')})(?=\\s|[^\\u05D0-\\u05EA]|$)`
+    
+    let combinedRegex
+    try {
+      combinedRegex = new RegExp(combinedPattern, 'g')
+    } catch (e) {
+      console.warn('Failed to create combined regex:', e)
+      return false
+    }
+
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+      acceptNode: (node) => {
+        if (!node.nodeValue) return NodeFilter.FILTER_REJECT
+        return combinedRegex.test(node.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP
+      }
+    })
+
+    let currentIndex = 0
+    let node = walker.nextNode()
+    
+    while (node) {
+      const text = node.nodeValue || ''
+      combinedRegex.lastIndex = 0
+      let match
+      
+      while ((match = combinedRegex.exec(text)) !== null) {
+        if (currentIndex === targetIndex) {
+          const prefixLen = match[1] ? match[1].length : 0
+          const matchText = match[2]
+          const index = match.index + prefixLen
+          const before = text.slice(0, index)
+          const after = text.slice(index + matchText.length)
+
+          const highlight = document.createElement('span')
+          highlight.className = 'spellcheck-highlight'
+          highlight.textContent = matchText
+
+          const frag = document.createDocumentFragment()
+          if (before) frag.appendChild(document.createTextNode(before))
+          frag.appendChild(highlight)
+          if (after) frag.appendChild(document.createTextNode(after))
+
+          node.parentNode.replaceChild(frag, node)
+          highlight.scrollIntoView({ block: 'center', behavior: 'smooth' })
+          return true
+        }
+        currentIndex++
+      }
+      node = walker.nextNode()
+    }
+    
+    return false
+  }, [])
+
   const highlightFirstOccurrenceAny = useCallback((container, variants) => {
     if (!container || !variants || variants.length === 0) return false
     for (let i = 0; i < variants.length; i += 1) {
@@ -666,29 +731,59 @@ export default function DictaEditorCore({
     return Array.from(new Set(variants))
   }, [normalizeHebrewQuotes])
 
-  const handleSpellcheckSelect = useCallback((word) => {
+  const handleSpellcheckSelect = useCallback((word, ignoreCount = 0) => {
     if (!word) return
     const variants = buildWordVariants(word)
 
     if (editMode && textareaRef.current) {
       const textarea = textareaRef.current
       textarea.focus()
-      textarea.setSelectionRange(0, 0)
       let found = false
-      variants.forEach((variant) => {
-        if (!found) found = findNextWholeWordInTextarea(textarea, variant, true)
-      })
+      
+      // Try each variant until we find one
+      for (const variant of variants) {
+        if (found) break
+        
+        // Start from the beginning of the text
+        textarea.setSelectionRange(0, 0)
+        
+        // Skip the ignored occurrences by calling findNext multiple times
+        let currentSkipped = 0
+        let foundCurrent = true
+        
+        while (currentSkipped <= ignoreCount && foundCurrent) {
+          foundCurrent = findNextWholeWordInTextarea(textarea, variant, {
+            suppressAlerts: true
+          })
+          
+          if (!foundCurrent) break
+          
+          if (currentSkipped === ignoreCount) {
+            found = true
+            break
+          }
+          
+          // Move cursor to after the current match to find the next one
+          const currentEnd = textarea.selectionEnd
+          textarea.setSelectionRange(currentEnd, currentEnd)
+          currentSkipped++
+        }
+        
+        if (found) break
+      }
+      
       if (!found) {
-        showAlert('חיפוש', 'לא נמצאו מופעים.')
+        showAlert('חיפוש', 'לא נמצאו מופעים נוספים.')
       }
       return
     }
 
     clearSpellcheckHighlights()
     if (!editMode && contentRef.current) {
-      highlightFirstOccurrenceAny(contentRef.current, variants)
+      // For non-edit mode, highlight the occurrence based on ignore count
+      highlightOccurrenceByIndex(contentRef.current, variants, ignoreCount)
     }
-  }, [buildWordVariants, clearSpellcheckHighlights, editMode, findNextWholeWordInTextarea, highlightFirstOccurrenceAny, showAlert])
+  }, [buildWordVariants, clearSpellcheckHighlights, editMode, findNextWholeWordInTextarea, showAlert, highlightOccurrenceByIndex])
   const handleReplaceCurrent = useCallback((textToReplace, textToFind, isRegexMode) => {
     if (!textToFind) return showAlert('שגיאה', 'הזן טקסט לחיפוש')
     if (!textareaRef.current) return
