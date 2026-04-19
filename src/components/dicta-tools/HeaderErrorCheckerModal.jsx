@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import Modal from '@/components/Modal'
-import FormInput from '@/components/FormInput'
+import Modal from '@/components/ui/Modal'
+import FormInput from '@/components/ui/FormInput'
 
 export default function HeaderErrorCheckerModal({ isOpen, onClose, content, onContentChange }) {
   const [reStart, setReStart] = useState('')
@@ -361,3 +361,4 @@ export default function HeaderErrorCheckerModal({ isOpen, onClose, content, onCo
     </Modal>
   )
 }
+

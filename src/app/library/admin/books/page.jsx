@@ -3,12 +3,12 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import AddBookDialog from '@/components/AddBookDialog'
-import EditBookInfoDialog from '@/components/EditBookInfoDialog'
-import EditGlobalInstructionsDialog from '@/components/EditGlobalInstructionsDialog'
-import EditCategoriesDialog from '@/components/EditCategoriesDialog'
-import { useDialog } from '@/components/DialogContext'
-import LoadingSpinner from '@/components/LoadingSpinner'
+import AddBookDialog from '@/components/admin/AddBookDialog'
+import EditBookInfoDialog from '@/components/admin/EditBookInfoDialog'
+import EditGlobalInstructionsDialog from '@/components/admin/EditGlobalInstructionsDialog'
+import EditCategoriesDialog from '@/components/admin/EditCategoriesDialog'
+import { useDialog } from '@/components/providers/DialogContext'
+import LoadingSpinner from '@/components/ui/LoadingSpinner'
 
 export default function AdminBooksPage() {
   const { showAlert, showConfirm } = useDialog()

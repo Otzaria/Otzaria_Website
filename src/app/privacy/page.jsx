@@ -1,8 +1,8 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import OtzariaSoftwareHeader from '@/components/OtzariaSoftwareHeader'
-import OtzariaSoftwareFooter from '@/components/OtzariaSoftwareFooter'
+import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
+import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 
 export default function PrivacyPolicyPage() {
   return (

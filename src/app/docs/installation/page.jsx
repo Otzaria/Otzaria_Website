@@ -2,8 +2,8 @@
 
 import { motion } from 'framer-motion'
 import Link from 'next/link'
-import OtzariaSoftwareHeader from '@/components/OtzariaSoftwareHeader'
-import OtzariaSoftwareFooter from '@/components/OtzariaSoftwareFooter'
+import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
+import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 
 export default function InstallationTutorialPage() {
   return (
@@ -591,3 +591,4 @@ export default function InstallationTutorialPage() {
     </div>
   )
 }
+

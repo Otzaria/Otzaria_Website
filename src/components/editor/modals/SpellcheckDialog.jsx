@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import Button from '@/components/Button'
-import { useLoading } from '@/components/LoadingContext'
+import Button from '@/components/ui/Button'
+import { useLoading } from '@/components/providers/LoadingContext'
 
 const HEBREW_CHARS = "\\u0590-\\u05FF"
 const MISSPELLINGS_LIMIT = 1500
@@ -425,3 +425,4 @@ export default function SpellcheckDialog({
     document.body
   )
 }
+

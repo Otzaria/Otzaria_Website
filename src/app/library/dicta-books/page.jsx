@@ -3,9 +3,9 @@
 import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import Header from '@/components/Header'
+import Header from '@/components/layout/Header'
 import Link from 'next/link'
-import { useDialog } from '@/components/DialogContext'
+import { useDialog } from '@/components/providers/DialogContext'
 import DictaUploadDialog from '@/components/dicta-tools/DictaUploadDialog'
 
 // קומפוננטת התוכן שמכילה את כל הלוגיקה והממשק

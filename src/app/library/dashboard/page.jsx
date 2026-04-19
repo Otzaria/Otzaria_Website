@@ -4,9 +4,9 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import Header from '@/components/Header'
-import { useDialog } from '@/components/DialogContext'
-import Pagination from '@/components/Pagination'
+import Header from '@/components/layout/Header'
+import { useDialog } from '@/components/providers/DialogContext'
+import Pagination from '@/components/ui/Pagination'
 import { validatePassword, validateMatch, validateDifferent } from '@/lib/validation-utils'
 
 export default function DashboardPage() {

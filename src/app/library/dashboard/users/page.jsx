@@ -3,7 +3,7 @@
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import Header from '@/components/Header'
+import Header from '@/components/layout/Header'
 import { getAvatarColor, getInitial } from '@/lib/avatar-colors'
 
 export default function UsersManagementPage() {
@@ -178,3 +178,4 @@ export default function UsersManagementPage() {
     </div>
   )
 }
+

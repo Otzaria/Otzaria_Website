@@ -1,6 +1,6 @@
 'use client'
 
-import Header from '@/components/OtzariaSoftwareHeader'
+import Header from '@/components/layout/OtzariaSoftwareHeader'
 import { motion } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -234,3 +234,4 @@ export default function AboutPage() {
     </div>
   )
 }
+

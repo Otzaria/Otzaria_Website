@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
-import { useDialog } from '@/components/DialogContext'
-import LoadingSpinner from '@/components/LoadingSpinner'
+import { useDialog } from '@/components/providers/DialogContext'
+import LoadingSpinner from '@/components/ui/LoadingSpinner'
 
 export default function AdminUsersPage() {
   const { data: session } = useSession()
@@ -277,3 +277,4 @@ export default function AdminUsersPage() {
     </div>
   )
 }
+

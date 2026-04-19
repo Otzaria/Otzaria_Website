@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import Modal from '@/components/Modal'
-import FormInput from '@/components/FormInput'
+import Modal from '@/components/ui/Modal'
+import FormInput from '@/components/ui/FormInput'
 
 export default function CreateHeadersModal({ isOpen, onClose, content, onContentChange }) {
   const [findWord, setFindWord] = useState('דף')
@@ -184,3 +184,4 @@ export default function CreateHeadersModal({ isOpen, onClose, content, onContent
     </Modal>
   )
 }
+

@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import Modal from '@/components/Modal'
-import FormInput from '@/components/FormInput'
+import Modal from '@/components/ui/Modal'
+import FormInput from '@/components/ui/FormInput'
 
 const GEMATRIA_REMOVE_TOKENS = ["<b>", "</b>", "<big>", "</big>", "<i>", "</i>", "</small>", "</small>", "<span>", "</span>", "<br>", "</br>", "<p>", "</p>", ":", '"', ",", ";", "[", "]", "(", ")", "{", "}", ".", "'", "״", "”", "’", "׳", "‘", "„", "`", "´", "“", "❝", "❞", "ˮ", "″", "ʺ", "ˈ", "´", "ʹ", "′", "ʾ", "ʽ"]
 const GEMATRIA_AA = ["ק", "ר", "ש", "ת", "תק", "תר", "תש", "תת", "תתק", "יה", "יו", "קיה", "קיו", "ריה", "ריו", "שיה", "שיו", "תיה", "תיו", "תקיה", "תקיו", "תריה", "תריו", "תשיה", "תשיו", "תתיה", "תתיו", "תתקיה", "תתקיו"]
@@ -273,3 +273,4 @@ export default function SingleLetterHeadersModal({ isOpen, onClose, content, onC
     </Modal>
   )
 }
+

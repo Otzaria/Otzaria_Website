@@ -1,7 +1,7 @@
 'use client'
 
-import OtzariaSoftwareHeader from '@/components/OtzariaSoftwareHeader'
-import OtzariaSoftwareFooter from '@/components/OtzariaSoftwareFooter'
+import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
+import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 
 export default function DonatePage() {
   return (

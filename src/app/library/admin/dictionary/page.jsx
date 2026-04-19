@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { useDialog } from '@/components/DialogContext'
-import LoadingSpinner from '@/components/LoadingSpinner'
+import { useDialog } from '@/components/providers/DialogContext'
+import LoadingSpinner from '@/components/ui/LoadingSpinner'
 
 export default function AdminDictionaryPage() {
   const { data: session, status } = useSession()
@@ -271,3 +271,4 @@ export default function AdminDictionaryPage() {
     </div>
   )
 }
+

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
-import Header from '@/components/Header'
+import Header from '@/components/layout/Header'
 
 export default function PersonalLibraryPage() {
   const [flatBooks, setFlatBooks] = useState([])

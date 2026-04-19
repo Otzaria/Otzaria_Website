@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css"; 
-import SessionProvider from "@/components/SessionProvider";
-import ErrorBoundary from "@/components/ErrorBoundary";
-import VersionNotice from "@/components/VersionNotice";
-import ReminderGuard from "@/components/ReminderGuard"; 
-import { DialogProvider } from '@/components/DialogContext'
-import { LoadingProvider } from '@/components/LoadingContext'
+import SessionProvider from "@/components/providers/SessionProvider";
+import ErrorBoundary from "@/components/providers/ErrorBoundary";
+import VersionNotice from "@/components/notifications/VersionNotice";
+import ReminderGuard from "@/components/notifications/ReminderGuard"; 
+import { DialogProvider } from '@/components/providers/DialogContext'
+import { LoadingProvider } from '@/components/providers/LoadingContext'
 
 
 const frankRuehl = localFont({

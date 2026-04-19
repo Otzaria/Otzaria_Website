@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import Modal from '@/components/Modal'
+import Modal from '@/components/ui/Modal'
 
 export default function PunctuateModal({ isOpen, onClose, content, onContentChange }) {
   const [addEnding, setAddEnding] = useState('הוסף נקודה')
@@ -136,3 +136,4 @@ export default function PunctuateModal({ isOpen, onClose, content, onContentChan
     </Modal>
   )
 }
+

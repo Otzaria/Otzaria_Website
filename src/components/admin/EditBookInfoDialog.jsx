@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { useDialog } from '@/components/DialogContext'
+import { useDialog } from '@/components/providers/DialogContext'
 
 export default function EditBookInfoDialog({ book, onClose, onSave }) {
   const { showAlert } = useDialog()

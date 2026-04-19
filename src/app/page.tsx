@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
-import OtzariaSoftwareHeader from '@/components/OtzariaSoftwareHeader'
-import OtzariaSoftwareFooter from '@/components/OtzariaSoftwareFooter'
+import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
+import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 
 export default function Home() {
   const [windowsModalOpen, setWindowsModalOpen] = useState(false)
@@ -548,3 +548,4 @@ function renderDownloadOptions(platform: string, links: any) {
     </a>
   ))
 }
+

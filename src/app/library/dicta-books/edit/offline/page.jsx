@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
-import Button from '@/components/Button'
+import Button from '@/components/ui/Button'
 import dynamic from 'next/dynamic'
 
 const DictaEditorCore = dynamic(() => import('@/components/editor/DictaEditorCore'), { ssr: false })
@@ -125,5 +125,6 @@ export default function OfflineEditorRoute() {
     />
   )
 }
+
 
 

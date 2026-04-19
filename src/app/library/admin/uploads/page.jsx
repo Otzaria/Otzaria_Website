@@ -3,13 +3,13 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useDialog } from '@/components/DialogContext'
-import StatusConfigModal from '@/components/StatusConfigModal'
-import StatusBadge from '@/components/StatusBadge'
-import StatusEditor from '@/components/StatusEditor'
-import UploadNotificationSettings from '@/components/UploadNotificationSettings'
-import LoadingSpinner from '@/components/LoadingSpinner'
-import MetadataDisplay from '@/components/MetadataDisplay'
+import { useDialog } from '@/components/providers/DialogContext'
+import StatusConfigModal from '@/components/status/StatusConfigModal'
+import StatusBadge from '@/components/status/StatusBadge'
+import StatusEditor from '@/components/status/StatusEditor'
+import UploadNotificationSettings from '@/components/notifications/UploadNotificationSettings'
+import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import MetadataDisplay from '@/components/data-display/MetadataDisplay'
 
 export default function AdminUploadsPage() {
   const [uploads, setUploads] = useState([])
@@ -1183,3 +1183,4 @@ export default function AdminUploadsPage() {
     </>
   )
 }
+

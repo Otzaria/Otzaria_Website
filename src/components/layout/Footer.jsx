@@ -1,6 +1,6 @@
 import Image from 'next/image'
 import Link from 'next/link'
-import LinkList from './LinkList'
+import LinkList from '@/components/data-display/LinkList'
 import { FOOTER_QUICK_LINKS, FOOTER_EXTERNAL_LINKS } from '@/lib/navigation-constants'
 
 export default function Footer() {

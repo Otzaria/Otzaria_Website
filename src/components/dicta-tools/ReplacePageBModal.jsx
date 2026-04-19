@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import Modal from '@/components/Modal'
+import Modal from '@/components/ui/Modal'
 
 export default function ReplacePageBModal({ isOpen, onClose, content, onContentChange }) {
   const [replaceType, setReplaceType] = useState('נקודותיים')
@@ -117,3 +117,4 @@ export default function ReplacePageBModal({ isOpen, onClose, content, onContentC
     </Modal>
   )
 }
+

@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Header from '@/components/Header'
-import { useDialog } from '@/components/DialogContext'
+import Header from '@/components/layout/Header'
+import { useDialog } from '@/components/providers/DialogContext'
 
 export default function EditingToolsPage() {
   const { showAlert } = useDialog()
@@ -395,3 +395,4 @@ export default function EditingToolsPage() {
     </div>
   )
 }
+

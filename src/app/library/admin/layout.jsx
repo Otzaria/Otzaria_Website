@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Header from '@/components/Header'
+import Header from '@/components/layout/Header'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import AdminNav from './AdminNav'
@@ -89,6 +89,7 @@ export default function AdminLayout({ children }) {
     </div>
   )
 }
+
 
 
 

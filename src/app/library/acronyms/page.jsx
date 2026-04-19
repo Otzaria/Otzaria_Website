@@ -1,9 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import Header from '@/components/Header'
-import LoadingSpinner from '@/components/LoadingSpinner'
-import { useDialog } from '@/components/DialogContext'
+import Header from '@/components/layout/Header'
+import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import { useDialog } from '@/components/providers/DialogContext'
 
 export default function LibraryAcronymsPage() {
   const [rows, setRows] = useState([])
@@ -494,6 +494,7 @@ export default function LibraryAcronymsPage() {
     </div>
   )
 }
+
 
 
 

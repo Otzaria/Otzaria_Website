@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import Header from '@/components/Header'
+import Header from '@/components/layout/Header'
 import Link from 'next/link'
 
 export default function LicensePage() {
@@ -82,3 +82,4 @@ export default function LicensePage() {
     </div>
   )
 }
+

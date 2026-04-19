@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import Modal from '@/components/Modal'
-import FormInput from '@/components/FormInput'
+import Modal from '@/components/ui/Modal'
+import FormInput from '@/components/ui/FormInput'
 
 export default function PageBHeaderModal({ isOpen, onClose, content, onContentChange }) {
   const [headerLevel, setHeaderLevel] = useState(2)
@@ -145,3 +145,4 @@ export default function PageBHeaderModal({ isOpen, onClose, content, onContentCh
     </Modal>
   )
 }
+

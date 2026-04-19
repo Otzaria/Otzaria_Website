@@ -3,8 +3,8 @@
 import { motion } from 'framer-motion'
 import { useState } from 'react'
 import Link from 'next/link'
-import OtzariaSoftwareHeader from '@/components/OtzariaSoftwareHeader'
-import OtzariaSoftwareFooter from '@/components/OtzariaSoftwareFooter'
+import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
+import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 
 export default function DocsPage() {
   const [openSections, setOpenSections] = useState(['installation', 'usage'])

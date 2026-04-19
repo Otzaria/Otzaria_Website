@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useDialog } from '@/components/DialogContext'
+import { useDialog } from '@/components/providers/DialogContext'
 
 export default function SplitBookDialog({ book, onClose, onSuccess }) {
   const { showAlert, showConfirm } = useDialog()
@@ -455,3 +455,4 @@ function BookPreview({ title, content, status, claimedBy, color }) {
     </div>
   )
 }
+

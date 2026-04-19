@@ -5,12 +5,12 @@ import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { getAvatarColor, getInitial } from '@/lib/avatar-colors'
-import ImagePreviewModal from '@/components/ImagePreviewModal'
-import { useDialog } from '@/components/DialogContext'
-import { LoadingProvider } from '@/components/LoadingContext'
-import { useLoading } from '@/components/LoadingContext'
-import Header from '@/components/Header'
-import LoadingSpinner from '@/components/LoadingSpinner'
+import ImagePreviewModal from '@/components/ui/ImagePreviewModal'
+import { useDialog } from '@/components/providers/DialogContext'
+import { LoadingProvider } from '@/components/providers/LoadingContext'
+import { useLoading } from '@/components/providers/LoadingContext'
+import Header from '@/components/layout/Header'
+import LoadingSpinner from '@/components/ui/LoadingSpinner'
 
 const pageStatusConfig = {
   available: {

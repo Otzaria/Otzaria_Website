@@ -2,8 +2,8 @@
 
 import { motion } from 'framer-motion'
 import { useState } from 'react'
-import OtzariaSoftwareHeader from '@/components/OtzariaSoftwareHeader'
-import OtzariaSoftwareFooter from '@/components/OtzariaSoftwareFooter'
+import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
+import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 
 export default function FAQPage() {
   const [activeCategory, setActiveCategory] = useState('all')

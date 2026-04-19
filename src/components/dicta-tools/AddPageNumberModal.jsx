@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import Modal from '@/components/Modal'
+import Modal from '@/components/ui/Modal'
 
 export default function AddPageNumberModal({ isOpen, onClose, content, onContentChange }) {
   const [replaceWith, setReplaceWith] = useState('נקודה ונקודותיים')

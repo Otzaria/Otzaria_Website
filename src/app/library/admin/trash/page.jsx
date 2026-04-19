@@ -3,8 +3,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useDialog } from '@/components/DialogContext'
-import LoadingSpinner from '@/components/LoadingSpinner'
+import { useDialog } from '@/components/providers/DialogContext'
+import LoadingSpinner from '@/components/ui/LoadingSpinner'
 
 export default function AdminTrashPage() {
   const [uploads, setUploads] = useState([])
@@ -413,3 +413,4 @@ export default function AdminTrashPage() {
     </div>
   )
 }
+

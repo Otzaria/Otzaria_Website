@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
-import Header from '@/components/Header'
-import WeeklyProgressChart from '@/components/WeeklyProgressChart'
+import Header from '@/components/layout/Header'
+import WeeklyProgressChart from '@/components/data-display/WeeklyProgressChart'
 import { statusConfig } from '@/lib/library-data'
-import LoadingSpinner from '@/components/LoadingSpinner'
+import LoadingSpinner from '@/components/ui/LoadingSpinner'
 
 export default function LibraryBooksPage() {
   const [treeData, setTreeData] = useState([])

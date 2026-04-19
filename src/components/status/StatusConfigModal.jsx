@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { useDialog } from '@/components/DialogContext'
+import { useDialog } from '@/components/providers/DialogContext'
 
 export default function StatusConfigModal({ statuses, uploads = [], onSave, onClose }) {
   const [mounted, setMounted] = useState(false)
@@ -250,3 +250,4 @@ export default function StatusConfigModal({ statuses, uploads = [], onSave, onCl
   
   return createPortal(modalContent, document.body)
 }
+

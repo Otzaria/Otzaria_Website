@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback } from 'react'
-import { useDialog } from '@/components/DialogContext'
+import { useDialog } from '@/components/providers/DialogContext'
 
 export default function EmbedImageModal({ isOpen, onClose, content, onContentChange }) {
   const { showAlert } = useDialog()
@@ -318,3 +318,4 @@ export default function EmbedImageModal({ isOpen, onClose, content, onContentCha
     </div>
   )
 }
+

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Modal from './Modal'
+import Modal from '@/components/ui/Modal'
 
 export default function EditCategoriesDialog({ isOpen, onClose, existingCategories, onSave }) {
     const [categories, setCategories] = useState(existingCategories || []);

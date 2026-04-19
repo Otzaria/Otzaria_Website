@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { validateRequired, validateFile } from '@/lib/validation-utils'
-import Modal from './Modal'
+import Modal from '@/components/ui/Modal'
 
 export default function AddBookDialog({ isOpen, onClose, onBookAdded, categories }) {
     const [bookName, setBookName] = useState('')

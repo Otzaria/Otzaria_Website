@@ -1,7 +1,7 @@
-import Header from '@/components/Header'
-import Hero from '@/components/Hero'
-import StatsSection from '@/components/StatsSection'
-import ContributeSection from '@/components/ContributeSection'
+import Header from '@/components/layout/Header'
+import Hero from '@/components/layout/Hero'
+import StatsSection from '@/components/layout/StatsSection'
+import ContributeSection from '@/components/layout/ContributeSection'
 
 export default function LibraryHome() {
   return (

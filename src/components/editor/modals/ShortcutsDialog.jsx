@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useDialog } from '@/components/DialogContext';
+import { useDialog } from '@/components/providers/DialogContext';
 
 // פונקציית עזר להצגת מקשים בצורה יפה
 const formatKey = (code) => {

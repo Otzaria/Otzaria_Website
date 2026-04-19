@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import Modal from '@/components/Modal'
-import FormInput from '@/components/FormInput'
+import Modal from '@/components/ui/Modal'
+import FormInput from '@/components/ui/FormInput'
 
 export default function ChangeHeadingModal({ isOpen, onClose, content, onContentChange }) {
   const [currentLevel, setCurrentLevel] = useState('2')
@@ -117,3 +117,4 @@ export default function ChangeHeadingModal({ isOpen, onClose, content, onContent
     </Modal>
   )
 }
+

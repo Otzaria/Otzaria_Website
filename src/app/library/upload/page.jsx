@@ -4,8 +4,8 @@
 import { useState, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import Header from '@/components/Header'
-import { useDialog } from '@/components/DialogContext'
+import Header from '@/components/layout/Header'
+import { useDialog } from '@/components/providers/DialogContext'
 
 const BOOK_CATEGORIES = [
   'תנ"ך',
@@ -468,3 +468,4 @@ export default function UploadPage() {
     </div>
   )
 }
+

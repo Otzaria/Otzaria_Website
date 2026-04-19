@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useDialog } from '@/components/DialogContext'
-import LoadingSpinner from '@/components/LoadingSpinner'
+import { useDialog } from '@/components/providers/DialogContext'
+import LoadingSpinner from '@/components/ui/LoadingSpinner'
 
 export default function AdminPagesPage() {
   const [pages, setPages] = useState([])

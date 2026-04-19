@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import Header from '@/components/Header'
-import LoadingSpinner from '@/components/LoadingSpinner'
+import Header from '@/components/layout/Header'
+import LoadingSpinner from '@/components/ui/LoadingSpinner'
 
 export default function LibraryInfoPage() {
   const [rows, setRows] = useState([])
@@ -351,5 +351,6 @@ function countMissingFields(effective) {
     return sum
   }, 0)
 }
+
 
 

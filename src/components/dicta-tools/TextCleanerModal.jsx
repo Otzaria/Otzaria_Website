@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import Modal from '@/components/Modal'
+import Modal from '@/components/ui/Modal'
 
 export default function TextCleanerModal({ isOpen, onClose, content, onContentChange }) {
   const [options, setOptions] = useState({
@@ -329,3 +329,4 @@ export default function TextCleanerModal({ isOpen, onClose, content, onContentCh
     </Modal>
   )
 }
+

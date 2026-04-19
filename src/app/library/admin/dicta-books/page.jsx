@@ -3,10 +3,10 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { useDialog } from '@/components/DialogContext'
-import { useLoading } from '@/components/LoadingContext'
+import { useDialog } from '@/components/providers/DialogContext'
+import { useLoading } from '@/components/providers/LoadingContext'
 import SplitBookDialog from '@/components/admin/SplitBookDialog'
-import LoadingSpinner from '@/components/LoadingSpinner'
+import LoadingSpinner from '@/components/ui/LoadingSpinner'
 
 export default function AdminDictaBooksPage() {
   const { data: session, status } = useSession()
@@ -692,3 +692,4 @@ export default function AdminDictaBooksPage() {
     </>
   )
 }
+

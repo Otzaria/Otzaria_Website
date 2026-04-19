@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import Header from '@/components/Header'
+import Header from '@/components/layout/Header'
 
 export default function LibraryNotFound() {
   return (
@@ -168,3 +168,4 @@ export default function LibraryNotFound() {
     </div>
   )
 }
+

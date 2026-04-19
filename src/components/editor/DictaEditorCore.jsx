@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo, useCallback, useTransition } from 'react'
-import Button from '@/components/Button'
-import { useDialog } from '@/components/DialogContext'
-import LoadingSpinner from '@/components/LoadingSpinner'
+import Button from '@/components/ui/Button'
+import { useDialog } from '@/components/providers/DialogContext'
+import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import CreateHeadersModal from '@/components/dicta-tools/CreateHeadersModal'
 import SingleLetterHeadersModal from '@/components/dicta-tools/SingleLetterHeadersModal'
 import ChangeHeadingModal from '@/components/dicta-tools/ChangeHeadingModal'
@@ -1886,6 +1886,7 @@ export default function DictaEditorCore({
     </div>
   )
 }
+
 
 
 
