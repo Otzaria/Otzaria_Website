@@ -19,6 +19,9 @@ export default function AdminUploadsPage() {
   const [filterTypes, setFilterTypes] = useState([]) // מערך של סוגים שנבחרו
   const [filterStatuses, setFilterStatuses] = useState([]) // מערך של סטטוסים שנבחרו
   const [showFilterMenu, setShowFilterMenu] = useState(false) // הצגת תפריט סינון
+  const [filterUsers, setFilterUsers] = useState([]) // סינון לפי משתמשים
+  const [showUserDropdown, setShowUserDropdown] = useState(false) // הצגת dropdown משתמשים
+  const [userSearch, setUserSearch] = useState('') // חיפוש בתוך dropdown
   const [bookStatuses, setBookStatuses] = useState({}) // הגדרות סטטוסים
   const [editingStatus, setEditingStatus] = useState(null) // שם הספר שעורכים את הסטטוס שלו
   const [showStatusConfig, setShowStatusConfig] = useState(false) // הצגת חלון הגדרות סטטוסים
@@ -75,6 +78,31 @@ export default function AdminUploadsPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showFilterMenu])
 
+  // סגירת dropdown משתמשים בלחיצה מחוץ
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showUserDropdown && !event.target.closest('.user-filter-container')) {
+        setShowUserDropdown(false)
+        setUserSearch('')
+      }
+
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showUserDropdown])
+
+  // רשימת משתמשים ייחודיים מה-uploads
+  const uniqueUsers = useMemo(() => {
+    const map = new Map()
+    uploads.forEach(u => {
+      const email = u.uploadedByEmail || ''
+      const name = u.uploadedBy || 'אורח'
+      const key = email || name
+      if (!map.has(key)) map.set(key, { name, email, key })
+    })
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'he'))
+  }, [uploads])
+
   // חישוב ספירות מאופטם עם useMemo
   const { fullBookCount, singlePageCount } = useMemo(() => {
     return uploads.reduce((counts, upload) => {
@@ -113,7 +141,13 @@ export default function AdminUploadsPage() {
         const bookStatus = upload.bookStatus || 'not_checked'
         if (!filterStatuses.includes(bookStatus)) return false
       }
-      
+
+      // סינון לפי משתמשים
+      if (filterUsers.length > 0) {
+        const key = upload.uploadedByEmail || upload.uploadedBy || 'אורח'
+        if (!filterUsers.includes(key)) return false
+      }
+
       // סינון לפי חיפוש
       if (!searchTerm) return true
       
@@ -158,7 +192,7 @@ export default function AdminUploadsPage() {
         )
       }))
       .sort((a, b) => new Date(b.latestUpload.uploadedAt) - new Date(a.latestUpload.uploadedAt))
-  }, [uploads, searchTerm, filterTypes, filterStatuses])
+  }, [uploads, searchTerm, filterTypes, filterStatuses, filterUsers])
 
   // פונקציית עזר גנרית לעדכון מסננים
   const createFilterChangeHandler = (setter) => (value, isChecked) => {
@@ -520,8 +554,92 @@ export default function AdminUploadsPage() {
         </button>
       </div>
       
+      {/* שורת סינון: משתמש + סטטוס */}
+      <div className="flex gap-2 mb-6">
+
+      {/* סינון לפי משתמש */}
+      <div className="relative user-filter-container">
+        <button
+          onClick={() => setShowUserDropdown(!showUserDropdown)}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors shadow-sm ${
+            filterUsers.length > 0
+              ? 'bg-indigo-600 text-white'
+              : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          <span className="material-symbols-outlined text-sm">person_search</span>
+          {filterUsers.length === 0 && 'סינון לפי משתמש'}
+          {filterUsers.length === 1 && (uniqueUsers.find(u => u.key === filterUsers[0])?.name || filterUsers[0])}
+          {filterUsers.length > 1 && `${filterUsers.length} משתמשים`}
+          {filterUsers.length > 0 && (
+            <span
+              className="material-symbols-outlined text-sm hover:opacity-70"
+              onClick={(e) => { e.stopPropagation(); setFilterUsers([]) }}
+            >close</span>
+          )}
+          {filterUsers.length === 0 && (
+            <span className="material-symbols-outlined text-sm">
+              {showUserDropdown ? 'expand_less' : 'expand_more'}
+            </span>
+          )}
+        </button>
+
+        {showUserDropdown && (
+          <div className="absolute top-full mt-2 right-0 bg-white border border-gray-200 rounded-lg shadow-xl z-10 p-3 min-w-[230px]">
+            <input
+              type="text"
+              placeholder="חיפוש משתמש..."
+              value={userSearch}
+              onChange={(e) => setUserSearch(e.target.value)}
+              autoFocus
+              className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg mb-2 focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+            <div className="space-y-1 max-h-[240px] overflow-y-auto">
+              {uniqueUsers
+                .filter(u => !userSearch || u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase()))
+                .map(u => {
+                  const selected = filterUsers.includes(u.key)
+                  const emailPrefix = u.email ? u.email.split('@')[0] : ''
+                  return (
+                    <label
+                      key={u.key}
+                      className={`w-full text-right px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2 cursor-pointer ${
+                        selected ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50 text-gray-700'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() => setFilterUsers(prev =>
+                          selected ? prev.filter(k => k !== u.key) : [...prev, u.key]
+                        )}
+                        className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 flex-shrink-0"
+                      />
+                      <span className="flex-1">{u.name}</span>
+                      {emailPrefix && <span className="text-xs text-gray-400 truncate max-w-[70px]" title={u.email}>{emailPrefix}</span>}
+                    </label>
+                  )
+                })}
+              {uniqueUsers.filter(u => !userSearch || u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase())).length === 0 && (
+                <p className="text-sm text-gray-400 text-center py-2">לא נמצאו משתמשים</p>
+              )}
+            </div>
+            {filterUsers.length > 0 && (
+              <div className="mt-2 pt-2 border-t">
+                <button
+                  onClick={() => setFilterUsers([])}
+                  className="w-full px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
+                >
+                  איפוס בחירה
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* לחצן סינון לסטטוס בלבד */}
-      <div className="relative mb-6 filter-menu-container">
+      <div className="relative filter-menu-container">
         <button
           onClick={() => setShowFilterMenu(!showFilterMenu)}
           className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
@@ -575,7 +693,9 @@ export default function AdminUploadsPage() {
           </div>
         )}
       </div>
-      
+
+      </div>{/* סוף שורת סינון */}
+
       {loading ? (
           <LoadingSpinner message="טוען העלאות..." />
       ) : uploads.length === 0 ? (
