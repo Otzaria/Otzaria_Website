@@ -376,12 +376,27 @@ async function collectUsedIcons() {
   return usedIcons;
 }
 
-async function buildGoogleMaterialSymbolsCss(usedIcons) {
+async function buildGoogleMaterialSymbolsCss(usedIcons, retries = 3, delayMs = 2000) {
   const iconNames = [...usedIcons].sort().join(',');
   if (!iconNames) {
     return null;
   }
 
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await _fetchGoogleMaterialSymbolsCss(iconNames, usedIcons);
+    } catch (err) {
+      if (attempt < retries) {
+        console.warn(`[offline-editor] Google fonts attempt ${attempt} failed: ${err.message}. Retrying in ${delayMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      } else {
+        throw new Error(`Google icon subset unavailable after ${retries} attempts: ${err.message}`);
+      }
+    }
+  }
+}
+
+async function _fetchGoogleMaterialSymbolsCss(iconNames, usedIcons) {
   try {
     const cssUrl = `${MATERIAL_SYMBOLS_GOOGLE_CSS_URL}&icon_names=${encodeURIComponent(iconNames)}`;
     const cssResponse = await fetch(cssUrl, {
@@ -447,7 +462,7 @@ async function buildGoogleMaterialSymbolsCss(usedIcons) {
 }
 `;
   } catch (err) {
-    throw new Error(`Google icon subset unavailable: ${err.message}`);
+    throw err;
   }
 }
 
