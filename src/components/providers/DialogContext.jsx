@@ -240,10 +240,13 @@ export function DialogProvider({ children }) {
   )
 }
 
+const noopDialog = {
+  showAlert: () => {},
+  showConfirm: () => Promise.resolve(false),
+  showPrompt: () => Promise.resolve(null),
+}
+
 export function useDialog() {
   const context = useContext(DialogContext)
-  if (!context) {
-    throw new Error('useDialog must be used within a DialogProvider')
-  }
-  return context
+  return context ?? noopDialog
 }
