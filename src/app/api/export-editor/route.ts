@@ -7,12 +7,12 @@ import path from 'path';
 const ROOT_DIR = process.cwd();
 const COMPONENT_PATHS = [
   'src/lib/avatar-colors.js',
-  'src/components/DialogContext.jsx',
-  'src/components/Modal.jsx',
-  'src/components/FormInput.jsx',
-  'src/components/Button.jsx',
-  'src/components/LoadingSpinner.jsx',
-  'src/components/LoadingContext.jsx',
+  'src/components/providers/DialogContext.jsx',
+  'src/components/ui/Modal.jsx',
+  'src/components/ui/FormInput.jsx',
+  'src/components/ui/Button.jsx',
+  'src/components/ui/LoadingSpinner.jsx',
+  'src/components/providers/LoadingContext.jsx',
   'src/components/dicta-tools/CreateHeadersModal.jsx',
   'src/components/dicta-tools/SingleLetterHeadersModal.jsx',
   'src/components/dicta-tools/ChangeHeadingModal.jsx',
