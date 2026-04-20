@@ -397,11 +397,11 @@ export default function Home() {
         onClose={() => setAndroidModalOpen(false)}
         platform="Android"
         stableLinks={{
-          playStore: 'https://play.google.com/store/apps/details?id=com.mendelg.otzaria',
+          playStore: 'https://play.google.com/store/apps/details?id=org.otzaria.otzaria',
           apk: stableDownloads?.android?.apk
         }}
         devLinks={{
-          playStore: 'https://play.google.com/store/apps/details?id=com.mendelg.otzaria',
+          playStore: 'https://play.google.com/store/apps/details?id=org.otzaria.otzaria',
           apk: devDownloads?.android?.apk
         }}
         stableVersion={stableDownloads?.version}
@@ -499,24 +499,28 @@ function renderDownloadOptions(platform: string, links: any) {
   const options: any = {
     Windows: [
       { key: 'exe', icon: 'install_desktop', title: 'EXE Installer', desc: 'קובץ התקנה (מומלץ)' },
+      { key: 'exeFull', icon: 'install_desktop', title: 'EXE Installer (Full)', desc: 'קובץ התקנה עם ספרייה מלאה' },
       { key: 'msix', icon: 'package_2', title: 'MSIX Package', desc: 'התקנה דרך החנות' },
       { key: 'zip', icon: 'folder_zip', title: 'Portable ZIP', desc: 'גרסה ניידת ללא התקנה' }
     ],
     Linux: [
       { key: 'deb', icon: 'package_2', title: 'DEB Package', desc: 'עבור Ubuntu/Debian' },
       { key: 'rpm', icon: 'package_2', title: 'RPM Package', desc: 'עבור Fedora/RedHat' },
-      { key: 'appimage', icon: 'apps', title: 'AppImage', desc: 'קובץ הרצה אוניברסלי' }
+      { key: 'appimage', icon: 'apps', title: 'AppImage', desc: 'קובץ הרצה אוניברסלי' },
+      { key: 'tarFull', icon: 'folder_zip', title: 'Full Package', desc: 'חבילה מלאה עם ספרייה' }
     ],
     Android: [
       { key: 'playStore', icon: 'shop', title: 'Google Play', desc: 'התקנה מהחנות', isLink: true },
-      { key: 'apk', icon: 'android', title: 'APK File', desc: 'התקנה ידנית' }
+      { key: 'apk', icon: 'android', title: 'APK File', desc: 'התקנה ידנית' },
+      { key: 'zipFull', icon: 'folder_zip', title: 'Full Package', desc: 'APK + ספרייה מלאה' }
     ],
     iOS: [
       { key: 'appStore', icon: 'shop', title: 'App Store', desc: 'הורדה מחנות האפליקציות', isLink: true }
     ],
     macOS: [
       { key: 'dmg', icon: 'album', title: 'DMG Image', desc: 'קובץ התקנה למק (מומלץ)' },
-      { key: 'zip', icon: 'folder_zip', title: 'macOS Package', desc: 'גרסה דחוסה' }
+      { key: 'zip', icon: 'folder_zip', title: 'macOS Package', desc: 'גרסה דחוסה' },
+      { key: 'zipFull', icon: 'folder_zip', title: 'Full Package', desc: 'חבילה מלאה עם ספרייה' }
     ]
   }
 
