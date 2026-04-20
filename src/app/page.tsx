@@ -398,11 +398,13 @@ export default function Home() {
         platform="Android"
         stableLinks={{
           playStore: 'https://play.google.com/store/apps/details?id=org.otzaria.otzaria',
-          apk: stableDownloads?.android?.apk
+          apk: stableDownloads?.android?.apk,
+          zipFull: stableDownloads?.android?.zipFull
         }}
         devLinks={{
           playStore: 'https://play.google.com/store/apps/details?id=org.otzaria.otzaria',
-          apk: devDownloads?.android?.apk
+          apk: devDownloads?.android?.apk,
+          zipFull: devDownloads?.android?.zipFull
         }}
         stableVersion={stableDownloads?.version}
         devVersion={devDownloads?.version}

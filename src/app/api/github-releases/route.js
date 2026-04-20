@@ -46,6 +46,14 @@ export async function GET(request) {
         })?.browser_download_url;
     }
 
+    const findAssetWithKeywords = (extension, keywords = []) => {
+        return assets.find(a => {
+            const name = a.name.toLowerCase();
+            return name.endsWith(extension.toLowerCase()) &&
+                   keywords.every(keyword => name.includes(keyword.toLowerCase()));
+        })?.browser_download_url;
+    }
+
     // Helper to find Windows ZIP - prioritize files with 'windows' in name, then exclude other platforms
     const findWindowsZip = () => {
       // First try to find a ZIP with 'windows' in the name
@@ -84,7 +92,7 @@ export async function GET(request) {
       },
       android: {
         apk: findAsset('.apk'),
-        zipFull: findAsset('.zip', 'full')
+        zipFull: findAssetWithKeywords('.zip', ['android', 'full'])
       },
       releaseUrl: release.html_url
     }
