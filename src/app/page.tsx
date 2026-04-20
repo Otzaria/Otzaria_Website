@@ -397,11 +397,11 @@ export default function Home() {
         onClose={() => setAndroidModalOpen(false)}
         platform="Android"
         stableLinks={{
-          playStore: 'https://play.google.com/store/apps/details?id=com.mendelg.otzaria',
+          playStore: 'https://play.google.com/store/apps/details?id=org.otzaria.otzaria',
           apk: stableDownloads?.android?.apk
         }}
         devLinks={{
-          playStore: 'https://play.google.com/store/apps/details?id=com.mendelg.otzaria',
+          playStore: 'https://play.google.com/store/apps/details?id=org.otzaria.otzaria',
           apk: devDownloads?.android?.apk
         }}
         stableVersion={stableDownloads?.version}
