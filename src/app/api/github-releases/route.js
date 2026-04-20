@@ -47,10 +47,13 @@ export async function GET(request) {
     }
 
     const findAssetWithKeywords = (extension, keywords = []) => {
+        const lowerExtension = extension.toLowerCase();
+        const lowerKeywords = keywords.map(keyword => keyword.toLowerCase());
+
         return assets.find(a => {
             const name = a.name.toLowerCase();
-            return name.endsWith(extension.toLowerCase()) &&
-                   keywords.every(keyword => name.includes(keyword.toLowerCase()));
+            return name.endsWith(lowerExtension) &&
+                   lowerKeywords.every(keyword => name.includes(keyword));
         })?.browser_download_url;
     }
 
