@@ -68,19 +68,23 @@ export async function GET(request) {
       windows: {
         exe: findAsset('.exe'),
         msix: findAsset('.msix'),
-        zip: findWindowsZip()
+        zip: findWindowsZip(),
+        exeFull: findAsset('.exe', 'full')
       },
       linux: {
         deb: findAsset('.deb'),
         rpm: findAsset('.rpm'),
-        appimage: findAsset('.AppImage') || findAsset('.appimage')
+        appimage: findAsset('.AppImage') || findAsset('.appimage'),
+        tarFull: findAsset('.tar.gz', 'full')
       },
       macos: {
         dmg: findAsset('.dmg'),
-        zip: assets.find(a => a.name.endsWith('.zip') && (a.name.toLowerCase().includes('mac') || a.name.toLowerCase().includes('darwin')))?.browser_download_url
+        zip: assets.find(a => a.name.endsWith('.zip') && (a.name.toLowerCase().includes('mac') || a.name.toLowerCase().includes('darwin')))?.browser_download_url,
+        zipFull: assets.find(a => a.name.endsWith('.zip') && a.name.toLowerCase().includes('full') && (a.name.toLowerCase().includes('mac') || a.name.toLowerCase().includes('darwin')))?.browser_download_url
       },
       android: {
-        apk: findAsset('.apk')
+        apk: findAsset('.apk'),
+        zipFull: findAsset('.zip', 'full')
       },
       releaseUrl: release.html_url
     }
