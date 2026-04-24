@@ -38,17 +38,6 @@ export async function GET(request) {
 
     const assets = release.assets || []
     
-    const findAsset = (extension, keyword = '') => {
-      const lowerExtension = extension.toLowerCase()
-      const lowerKeyword = keyword.toLowerCase()
-
-      return assets.find(a => {
-        const name = a.name.toLowerCase()
-        return name.endsWith(lowerExtension) &&
-               (!lowerKeyword || name.includes(lowerKeyword))
-      })?.browser_download_url
-    }
-
     const findAssetWithKeywords = (extension, includeKeywords = [], excludeKeywords = []) => {
       const lowerExtension = extension.toLowerCase()
       const lowerIncludeKeywords = includeKeywords.map(keyword => keyword.toLowerCase())
@@ -104,7 +93,7 @@ export async function GET(request) {
       linux: {
         deb: findPlatformAsset('linux', '.deb'),
         rpm: findPlatformAsset('linux', '.rpm'),
-        appimage: findPlatformAsset('linux', '.AppImage', { preferPlatformKeyword: false }) || findPlatformAsset('linux', '.appimage', { preferPlatformKeyword: false }),
+        appimage: findPlatformAsset('linux', '.AppImage', { preferPlatformKeyword: false }),
         tarFull: findPlatformAsset('linux', '.tar.gz', { full: true, preferPlatformKeyword: false })
       },
       macos: {
@@ -114,7 +103,7 @@ export async function GET(request) {
       },
       android: {
         apk: findPlatformAsset('android', '.apk', { preferPlatformKeyword: false }),
-        zipFull: findAssetWithKeywords('.zip', ['android', 'full'])
+        zipFull: findPlatformAsset('android', '.zip', { full: true })
       },
       releaseUrl: release.html_url
     }
