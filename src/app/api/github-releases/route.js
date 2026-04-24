@@ -39,62 +39,81 @@ export async function GET(request) {
     const assets = release.assets || []
     
     const findAsset = (extension, keyword = '') => {
-        return assets.find(a => {
-            const name = a.name.toLowerCase();
-            return name.endsWith(extension.toLowerCase()) && 
-                   (!keyword || name.includes(keyword.toLowerCase()));
-        })?.browser_download_url;
+      const lowerExtension = extension.toLowerCase()
+      const lowerKeyword = keyword.toLowerCase()
+
+      return assets.find(a => {
+        const name = a.name.toLowerCase()
+        return name.endsWith(lowerExtension) &&
+               (!lowerKeyword || name.includes(lowerKeyword))
+      })?.browser_download_url
     }
 
-    const findAssetWithKeywords = (extension, keywords = []) => {
-        const lowerExtension = extension.toLowerCase();
-        const lowerKeywords = keywords.map(keyword => keyword.toLowerCase());
+    const findAssetWithKeywords = (extension, includeKeywords = [], excludeKeywords = []) => {
+      const lowerExtension = extension.toLowerCase()
+      const lowerIncludeKeywords = includeKeywords.map(keyword => keyword.toLowerCase())
+      const lowerExcludeKeywords = excludeKeywords.map(keyword => keyword.toLowerCase())
 
-        return assets.find(a => {
-            const name = a.name.toLowerCase();
-            return name.endsWith(lowerExtension) &&
-                   lowerKeywords.every(keyword => name.includes(keyword));
-        })?.browser_download_url;
+      return assets.find(a => {
+        const name = a.name.toLowerCase()
+        return name.endsWith(lowerExtension) &&
+               lowerIncludeKeywords.every(keyword => name.includes(keyword)) &&
+               lowerExcludeKeywords.every(keyword => !name.includes(keyword))
+      })?.browser_download_url
     }
 
-    // Helper to find Windows ZIP - prioritize files with 'windows' in name, then exclude other platforms
-    const findWindowsZip = () => {
-      // First try to find a ZIP with 'windows' in the name
-      let zip = assets.find(a => a.name.toLowerCase().includes('windows') && a.name.endsWith('.zip'))?.browser_download_url;
-      if (zip) return zip;
-      
-      // Otherwise find a ZIP that's not for other platforms
-      zip = assets.find(a => 
-        a.name.endsWith('.zip') && 
-        !a.name.toLowerCase().includes('mac') && 
-        !a.name.toLowerCase().includes('darwin') &&
-        !a.name.toLowerCase().includes('linux') && 
-        !a.name.toLowerCase().includes('android')
-      )?.browser_download_url;
-      return zip;
+    const platformAliases = {
+      windows: ['windows', 'win'],
+      linux: ['linux'],
+      macos: ['macos', 'mac', 'darwin', 'osx'],
+      android: ['android']
+    }
+
+    const otherPlatformKeywords = {
+      windows: [...platformAliases.linux, ...platformAliases.macos, ...platformAliases.android],
+      linux: [...platformAliases.windows, ...platformAliases.macos, ...platformAliases.android],
+      macos: [...platformAliases.windows, ...platformAliases.linux, ...platformAliases.android],
+      android: [...platformAliases.windows, ...platformAliases.linux, ...platformAliases.macos]
+    }
+
+    const findPlatformAsset = (platform, extension, { full = false, preferPlatformKeyword = true } = {}) => {
+      const includeKeywords = full ? ['full'] : []
+      const excludeKeywords = full ? [] : ['full']
+
+      const aliases = platformAliases[platform] || []
+      const excludedPlatforms = otherPlatformKeywords[platform] || []
+
+      if (preferPlatformKeyword) {
+        for (const alias of aliases) {
+          const asset = findAssetWithKeywords(extension, [...includeKeywords, alias], excludeKeywords)
+          if (asset) return asset
+        }
+      }
+
+      return findAssetWithKeywords(extension, includeKeywords, [...excludeKeywords, ...excludedPlatforms])
     }
 
     const downloads = {
       version: release.tag_name,
       windows: {
-        exe: findAsset('.exe'),
-        msix: findAsset('.msix'),
-        zip: findWindowsZip(),
-        exeFull: findAsset('.exe', 'full')
+        exe: findPlatformAsset('windows', '.exe'),
+        msix: findPlatformAsset('windows', '.msix'),
+        zip: findPlatformAsset('windows', '.zip'),
+        exeFull: findPlatformAsset('windows', '.exe', { full: true })
       },
       linux: {
-        deb: findAsset('.deb'),
-        rpm: findAsset('.rpm'),
-        appimage: findAsset('.AppImage') || findAsset('.appimage'),
-        tarFull: findAsset('.tar.gz', 'full')
+        deb: findPlatformAsset('linux', '.deb'),
+        rpm: findPlatformAsset('linux', '.rpm'),
+        appimage: findPlatformAsset('linux', '.AppImage', { preferPlatformKeyword: false }) || findPlatformAsset('linux', '.appimage', { preferPlatformKeyword: false }),
+        tarFull: findPlatformAsset('linux', '.tar.gz', { full: true, preferPlatformKeyword: false })
       },
       macos: {
-        dmg: findAsset('.dmg'),
-        zip: assets.find(a => a.name.endsWith('.zip') && (a.name.toLowerCase().includes('mac') || a.name.toLowerCase().includes('darwin')))?.browser_download_url,
-        zipFull: assets.find(a => a.name.endsWith('.zip') && a.name.toLowerCase().includes('full') && (a.name.toLowerCase().includes('mac') || a.name.toLowerCase().includes('darwin')))?.browser_download_url
+        dmg: findPlatformAsset('macos', '.dmg'),
+        zip: findPlatformAsset('macos', '.zip'),
+        zipFull: findPlatformAsset('macos', '.zip', { full: true })
       },
       android: {
-        apk: findAsset('.apk'),
+        apk: findPlatformAsset('android', '.apk', { preferPlatformKeyword: false }),
         zipFull: findAssetWithKeywords('.zip', ['android', 'full'])
       },
       releaseUrl: release.html_url
