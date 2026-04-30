@@ -29,7 +29,7 @@ export async function GET(request, { params }) {
     }
     
     // עדכון מונה ההורדות (async, לא חוסם)
-    plugin.incrementDownload().catch(err => console.error('Failed to increment download count:', err))
+    await plugin.incrementDownload().catch(err => console.error('Failed to increment download count:', err))
     
     // החזרת הקובץ
     return new NextResponse(plugin.pluginData, {

@@ -144,7 +144,7 @@ export async function POST(request) {
   } catch (error) {
     console.error('Error uploading plugin:', error)
     return NextResponse.json(
-      { error: 'Failed to upload plugin', details: error.message },
+      { error: 'Failed to upload plugin' },
       { status: 500 }
     )
   }
