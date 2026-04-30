@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
-export default function AdminNav({ unreadMessagesCount = 0, pendingUploadsCount = 0 }) {
+export default function AdminNav({ unreadMessagesCount = 0, pendingUploadsCount = 0, pendingPluginsCount = 0 }) {
   const pathname = usePathname()
 
   const tabs = [
@@ -16,6 +16,13 @@ export default function AdminNav({ unreadMessagesCount = 0, pendingUploadsCount 
       label: `העלאות ${pendingUploadsCount > 0 ? `(${pendingUploadsCount})` : ''}`, 
       icon: 'upload_file', 
       href: '/library/admin/uploads' 
+    },
+    { 
+      id: 'plugins', 
+      label: 'תוספים', 
+      icon: 'extension', 
+      href: '/library/admin/plugins',
+      count: pendingPluginsCount 
     },
     { id: 'pages', label: 'עמודים', icon: 'description', href: '/library/admin/pages-management' },
     { 
