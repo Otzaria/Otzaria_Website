@@ -8,22 +8,25 @@ import AdminNav from './AdminNav'
 
 export default function AdminLayout({ children }) {
   const { data: session } = useSession()
-  const [counts, setCounts] = useState({ unreadMessages: 0, pendingUploads: 0 })
+  const [counts, setCounts] = useState({ unreadMessages: 0, pendingUploads: 0, pendingPlugins: 0 })
 
   useEffect(() => {
     const fetchCounts = async () => {
       try {
-        const [msgRes, uploadRes] = await Promise.all([
+        const [msgRes, uploadRes, pluginsRes] = await Promise.all([
             fetch('/api/messages?allMessages=true'), 
-            fetch('/api/admin/uploads/list')
+            fetch('/api/admin/uploads/list'),
+            fetch('/api/admin/plugins/pending')
         ])
         
         const msgData = await msgRes.json()
         const uploadData = await uploadRes.json()
+        const pluginsData = await pluginsRes.json()
 
         setCounts({
             unreadMessages: msgData.success ? msgData.messages.filter(m => m.status === 'unread').length : 0,
-            pendingUploads: uploadData.success ? uploadData.uploads.filter(u => u.status === 'pending').length : 0
+            pendingUploads: uploadData.success ? uploadData.uploads.filter(u => u.status === 'pending').length : 0,
+            pendingPlugins: Array.isArray(pluginsData) ? pluginsData.length : 0
         })
       } catch (e) {
         console.error('Error loading admin counts', e)
@@ -78,6 +81,7 @@ export default function AdminLayout({ children }) {
             <AdminNav
               unreadMessagesCount={counts.unreadMessages}
               pendingUploadsCount={counts.pendingUploads}
+              pendingPluginsCount={counts.pendingPlugins}
             />
 
             <div className="min-h-[500px]">
