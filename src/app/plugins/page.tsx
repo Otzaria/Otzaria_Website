@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
@@ -25,7 +25,7 @@ interface Plugin {
   installInstructions: string[]
 }
 
-export default function PluginsPage() {
+function PluginsPageContent() {
   const searchParams = useSearchParams()
   const [plugins, setPlugins] = useState<Plugin[]>([])
   const [filteredPlugins, setFilteredPlugins] = useState<Plugin[]>([])
@@ -504,5 +504,24 @@ export default function PluginsPage() {
 
       <OtzariaSoftwareFooter />
     </div>
+  )
+}
+
+export default function PluginsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen flex-col bg-background">
+        <OtzariaSoftwareHeader />
+        <main className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-on-surface/50 font-medium">טוען את חנות התוספים...</p>
+          </div>
+        </main>
+        <OtzariaSoftwareFooter />
+      </div>
+    }>
+      <PluginsPageContent />
+    </Suspense>
   )
 }
