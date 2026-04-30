@@ -16,7 +16,7 @@ export default function AdminLayout({ children }) {
         const [msgRes, uploadRes, pluginsRes] = await Promise.all([
             fetch('/api/messages?allMessages=true'), 
             fetch('/api/admin/uploads/list'),
-            fetch('/api/admin/plugins/pending')
+            fetch('/api/admin/plugins?status=pending')
         ])
         
         const msgData = await msgRes.json()

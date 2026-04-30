@@ -43,6 +43,7 @@ next-env.d.ts
 .gitconfig_local
 otzaria-rewrite.xml
 public/uploads/*
+storage/
 messages.json
 backups.json
 files.json
@@ -63,3 +64,4 @@ Otzaria_Website.xml
 public/tessdata/*
 public/version.json
 public/export-editor/dicta-editor-offline.html
+.vscode/settings.json

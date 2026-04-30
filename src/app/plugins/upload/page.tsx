@@ -73,12 +73,23 @@ export default function UploadPluginPage() {
     handleChange('installInstructions', formData.installInstructions.filter((_, i) => i !== index))
   }
 
+  // מגבלות חייבות להיות עקביות עם השרת ([src/app/api/plugins/upload/route.js]).
+  const MAX_PLUGIN_BYTES = 50 * 1024 * 1024
+  const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+  const MAX_SCREENSHOTS = 10
+  const ALLOWED_IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
+  const VERSION_RE = /^\d+(?:\.\d+){0,3}(?:[-+][A-Za-z0-9.]+)?$/
+
   // טיפול בקובץ תוסף
   const handlePluginFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      if (!file.name.endsWith('.otzplugin')) {
+      if (!file.name.toLowerCase().endsWith('.otzplugin')) {
         setError('קובץ התוסף חייב להיות בפורמט .otzplugin')
+        return
+      }
+      if (file.size > MAX_PLUGIN_BYTES) {
+        setError(`קובץ התוסף חורג מהמגבלה של ${MAX_PLUGIN_BYTES / 1024 / 1024}MB`)
         return
       }
       setPluginFile(file)
@@ -90,7 +101,16 @@ export default function UploadPluginPage() {
   const handleImageFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
+      if (!ALLOWED_IMAGE_MIMES.includes(file.type)) {
+        setError('תמונה חייבת להיות בפורמט PNG, JPEG, WEBP או GIF')
+        return
+      }
+      if (file.size > MAX_IMAGE_BYTES) {
+        setError(`התמונה חורגת מהמגבלה של ${MAX_IMAGE_BYTES / 1024 / 1024}MB`)
+        return
+      }
       setImageFile(file)
+      setError('')
       const reader = new FileReader()
       reader.onloadend = () => {
         setImagePreview(reader.result as string)
@@ -102,6 +122,21 @@ export default function UploadPluginPage() {
   // טיפול בצילומי מסך
   const handleScreenshotFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
+    if (files.length > MAX_SCREENSHOTS) {
+      setError(`מותר עד ${MAX_SCREENSHOTS} צילומי מסך`)
+      return
+    }
+    for (const f of files) {
+      if (!ALLOWED_IMAGE_MIMES.includes(f.type)) {
+        setError('צילומי מסך חייבים להיות בפורמט PNG, JPEG, WEBP או GIF')
+        return
+      }
+      if (f.size > MAX_IMAGE_BYTES) {
+        setError(`כל צילום מסך מוגבל ל-${MAX_IMAGE_BYTES / 1024 / 1024}MB`)
+        return
+      }
+    }
+    setError('')
     setScreenshotFiles(files)
     
     // יצירת תצוגות מקדימות
@@ -130,9 +165,28 @@ export default function UploadPluginPage() {
         throw new Error('חובה לצרף קובץ תוסף')
       }
 
-      if (!formData.name || !formData.shortDescription || !formData.description || 
+      if (!formData.name || !formData.shortDescription || !formData.description ||
           !formData.version || !formData.author || !formData.compatibleWith) {
         throw new Error('נא למלא את כל השדות החובה')
+      }
+
+      if (!VERSION_RE.test(formData.version.trim())) {
+        throw new Error('פורמט גרסה לא תקין (לדוגמה 1.0.0 או 1.2.3-beta)')
+      }
+
+      if (formData.homepage) {
+        try {
+          const u = new URL(formData.homepage)
+          if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+            throw new Error('protocol')
+          }
+        } catch {
+          throw new Error('כתובת אתר הבית חייבת להתחיל ב-http:// או https://')
+        }
+      }
+
+      if (!['stable', 'beta', 'experimental'].includes(formData.status)) {
+        throw new Error('סטטוס לא תקין')
       }
 
       // יצירת FormData
@@ -304,6 +358,7 @@ export default function UploadPluginPage() {
                     onChange={(e) => handleChange('name', e.target.value)}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
                     placeholder="לדוגמה: תוסף מילון"
+                    maxLength={100}
                     required
                   />
                 </div>
@@ -332,6 +387,7 @@ export default function UploadPluginPage() {
                     onChange={(e) => handleChange('description', e.target.value)}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 min-h-[150px]"
                     placeholder="תיאור מפורט של התוסף, מה הוא עושה ואיך להשתמש בו"
+                    maxLength={10000}
                     required
                   />
                 </div>
@@ -347,6 +403,9 @@ export default function UploadPluginPage() {
                       onChange={(e) => handleChange('version', e.target.value)}
                       className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
                       placeholder="לדוגמה: 1.0.0"
+                      pattern="^\d+(?:\.\d+){0,3}(?:[-+][A-Za-z0-9.]+)?$"
+                      title="פורמט: X או X.Y או X.Y.Z, אופציונלי -beta וכד'"
+                      maxLength={30}
                       required
                     />
                   </div>
@@ -379,6 +438,7 @@ export default function UploadPluginPage() {
                       onChange={(e) => handleChange('author', e.target.value)}
                       className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
                       placeholder="שמך או שם הארגון"
+                      maxLength={100}
                       required
                     />
                   </div>
@@ -393,6 +453,7 @@ export default function UploadPluginPage() {
                       onChange={(e) => handleChange('compatibleWith', e.target.value)}
                       className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
                       placeholder="לדוגמה: אוצריא 5.0+"
+                      maxLength={100}
                       required
                     />
                   </div>
@@ -408,6 +469,8 @@ export default function UploadPluginPage() {
                     onChange={(e) => handleChange('homepage', e.target.value)}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
                     placeholder="https://example.com"
+                    maxLength={500}
+                    pattern="https?://.+"
                   />
                 </div>
               </div>
@@ -426,6 +489,7 @@ export default function UploadPluginPage() {
                     onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
                     className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
                     placeholder="הוסף תגית (לדוגמה: מילון, חיפוש, כלי עזר)"
+                    maxLength={40}
                   />
                   <button
                     type="button"
@@ -476,6 +540,7 @@ export default function UploadPluginPage() {
                       onChange={(e) => updateInstruction(index, e.target.value)}
                       className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
                       placeholder={`שלב ${index + 1}`}
+                      maxLength={500}
                     />
                     {formData.installInstructions.length > 1 && (
                       <button

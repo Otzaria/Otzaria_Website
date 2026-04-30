@@ -17,12 +17,12 @@ export default function AdminPluginsPage() {
   const loadPendingPlugins = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/admin/plugins/pending')
-      
+      const response = await fetch('/api/admin/plugins?status=pending')
+
       if (!response.ok) {
         throw new Error('Failed to load plugins')
       }
-      
+
       const data = await response.json()
       setPendingPlugins(data)
     } catch (error) {
@@ -36,12 +36,12 @@ export default function AdminPluginsPage() {
   const loadApprovedPlugins = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/admin/plugins/approved')
-      
+      const response = await fetch('/api/admin/plugins?status=approved')
+
       if (!response.ok) {
         throw new Error('Failed to load plugins')
       }
-      
+
       const data = await response.json()
       setApprovedPlugins(data)
     } catch (error) {
@@ -74,8 +74,10 @@ export default function AdminPluginsPage() {
 
     try {
       setProcessingId(plugin._id)
-      const response = await fetch(`/api/admin/plugins/${plugin._id}/approve`, {
-        method: 'POST'
+      const response = await fetch(`/api/admin/plugins/${plugin._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'approve' })
       })
 
       if (!response.ok) {
@@ -102,7 +104,7 @@ export default function AdminPluginsPage() {
 
     try {
       setProcessingId(plugin._id)
-      const response = await fetch(`/api/admin/plugins/${plugin._id}/reject`, {
+      const response = await fetch(`/api/admin/plugins/${plugin._id}`, {
         method: 'DELETE'
       })
 
@@ -130,8 +132,10 @@ export default function AdminPluginsPage() {
 
     try {
       setProcessingId(plugin._id)
-      const response = await fetch(`/api/admin/plugins/${plugin._id}/unapprove`, {
-        method: 'POST'
+      const response = await fetch(`/api/admin/plugins/${plugin._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'unapprove' })
       })
 
       if (!response.ok) {
@@ -158,7 +162,7 @@ export default function AdminPluginsPage() {
 
     try {
       setProcessingId(plugin._id)
-      const response = await fetch(`/api/admin/plugins/${plugin._id}/reject`, {
+      const response = await fetch(`/api/admin/plugins/${plugin._id}`, {
         method: 'DELETE'
       })
 
@@ -316,9 +320,9 @@ export default function AdminPluginsPage() {
               <div className="grid md:grid-cols-[200px_1fr_auto] gap-6">
                 {/* Plugin Image */}
                 <div className="rounded-xl overflow-hidden bg-gradient-to-br from-primary/5 to-secondary/5 aspect-[4/3]">
-                  {plugin.imageData ? (
+                  {plugin.image?.ext ? (
                     <img
-                      src={`/api/plugins/images/${plugin._id}`}
+                      src={`/api/plugins/${plugin._id}/image`}
                       alt={plugin.name}
                       className="w-full h-full object-cover"
                     />

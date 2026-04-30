@@ -3,60 +3,73 @@ import mongoose from 'mongoose'
 const PluginSchema = new mongoose.Schema(
   {
     // מידע בסיסי
-    name: { type: String, required: true, trim: true },
-    slug: { type: String, required: true, unique: true, index: true, trim: true },
-    shortDescription: { type: String, required: true, trim: true },
-    description: { type: String, required: true },
-    
-    // גרסה וסטטוס
-    version: { type: String, required: true },
-    status: { 
-      type: String, 
-      enum: ['stable', 'beta', 'experimental'], 
-      default: 'stable' 
+    name: { type: String, required: true, trim: true, maxlength: 100 },
+    slug: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true,
+      trim: true,
+      maxlength: 120,
+      match: /^[a-z0-9]+(?:-[a-z0-9]+)*$/
     },
-    
+    shortDescription: { type: String, required: true, trim: true, maxlength: 150 },
+    description: { type: String, required: true, maxlength: 10000 },
+
+    // גרסה וסטטוס
+    version: { type: String, required: true, maxlength: 30 },
+    status: {
+      type: String,
+      enum: ['stable', 'beta', 'experimental'],
+      default: 'stable',
+      required: true
+    },
+
     // מפתח ותאימות
-    author: { type: String, required: true, trim: true },
+    author: { type: String, required: true, trim: true, maxlength: 100 },
     authorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    compatibleWith: { type: String, required: true },
-    
+    compatibleWith: { type: String, required: true, maxlength: 100 },
+
     // תגיות
     tags: [{ type: String, trim: true }],
-    
-    // קבצים - מאוחסנים כ-Buffer במסד הנתונים
-    imageData: { type: Buffer }, // נתוני התמונה
-    imageContentType: { type: String }, // image/png, image/jpeg, etc.
-    
-    pluginData: { type: Buffer, required: true }, // נתוני קובץ התוסף
-    pluginFileName: { type: String, required: true }, // שם הקובץ המקורי
-    
+
+    // קבצים - מאוחסנים במערכת הקבצים תחת storage/plugins/<id>/
+    // כאן נשמרת רק מטא-דאטה.
+    pluginFileName: { type: String, required: true }, // שם קובץ מקורי שהועלה (לשימוש ב-Content-Disposition)
+    pluginFileExt: { type: String, required: true },  // הסיומת בפועל בדיסק (כולל נקודה), למשל ".otzplugin"
+    pluginFileSize: { type: Number, default: 0 },
+
+    image: {
+      ext: { type: String, default: null },          // סיומת כולל נקודה, למשל ".png"
+      contentType: { type: String, default: null }
+    },
+
     screenshots: [{
-      data: { type: Buffer },
-      contentType: { type: String }
+      ext: { type: String, required: true },
+      contentType: { type: String, required: true }
     }],
-    
+
     // קישורים חיצוניים
     homepage: { type: String, trim: true },
-    
+
     // הוראות התקנה
     installInstructions: [{ type: String }],
-    
+
     // תאריך מקורי (מה-JSON)
     originalDate: { type: String }, // YYYY-MM-DD format
-    
+
     // אישור מנהל
     isApproved: { type: Boolean, default: false, index: true },
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     approvedAt: { type: Date },
-    
+
     // סטטיסטיקות
     downloadCount: { type: Number, default: 0 },
-    
+
     // הסתרה (במקום מחיקה)
     isHidden: { type: Boolean, default: false, index: true },
   },
-  { 
+  {
     timestamps: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true }
@@ -69,46 +82,46 @@ PluginSchema.index({ tags: 1 })
 PluginSchema.index({ isApproved: 1, isHidden: 1 })
 PluginSchema.index({ createdAt: -1 })
 
-// Virtual fields
-PluginSchema.virtual('imageUrl').get(function() {
-  return this.imageData ? `/api/plugins/${this._id}/image` : null
+// Virtual fields - URLs מצביעים לראוטים שמגישים מהדיסק
+PluginSchema.virtual('imageUrl').get(function () {
+  return this.image && this.image.ext ? `/api/plugins/${this._id}/image` : null
 })
 
-PluginSchema.virtual('pluginUrl').get(function() {
+PluginSchema.virtual('pluginUrl').get(function () {
   return `/api/plugins/${this._id}/download`
 })
 
-PluginSchema.virtual('screenshotUrls').get(function() {
-  return this.screenshots?.map((_, index) => `/api/plugins/${this._id}/screenshot/${index}`) || []
+PluginSchema.virtual('screenshotUrls').get(function () {
+  return this.screenshots?.map((_, index) => `/api/plugins/${this._id}/screenshots/${index}`) || []
 })
 
 // Methods
-PluginSchema.methods.approve = function(adminId) {
+PluginSchema.methods.approve = function (adminId) {
   this.isApproved = true
   this.approvedBy = adminId
   this.approvedAt = new Date()
   return this.save()
 }
 
-PluginSchema.methods.incrementDownload = function() {
+PluginSchema.methods.incrementDownload = function () {
   this.downloadCount += 1
   return this.save()
 }
 
 // Static methods
-PluginSchema.statics.getApprovedPlugins = function() {
+PluginSchema.statics.getApprovedPlugins = function () {
   return this.find({ isApproved: true, isHidden: false })
     .sort({ createdAt: -1 })
     .populate('authorId', 'name email')
     .populate('approvedBy', 'name email')
-    .select('-pluginData -imageData -screenshots.data -__v') // לא מחזירים את הנתונים הבינאריים
+    .select('-__v')
 }
 
-PluginSchema.statics.getPendingPlugins = function() {
+PluginSchema.statics.getPendingPlugins = function () {
   return this.find({ isApproved: false, isHidden: false })
     .sort({ createdAt: -1 })
     .populate('authorId', 'name email')
-    .select('-pluginData -imageData -screenshots.data -__v') // לא מחזירים את הנתונים הבינאריים
+    .select('-__v')
 }
 
 export default mongoose.models.Plugin || mongoose.model('Plugin', PluginSchema)
