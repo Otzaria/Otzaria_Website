@@ -33,6 +33,11 @@ const UserSchema = new mongoose.Schema({
     dicta: { type: Boolean, default: false },
     fullBook: { type: Boolean, default: false },
     singlePage: { type: Boolean, default: false }
+  },
+  
+  // הגדרות התראות על תוספים (נפרד)
+  pluginNotifications: {
+    enabled: { type: Boolean, default: false }
   }
 }, { timestamps: true });
 

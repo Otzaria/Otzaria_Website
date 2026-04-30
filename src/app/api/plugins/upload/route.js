@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
+import { sendPluginUploadNotification } from '@/lib/emailService'
 
 // יצירת slug מהשם
 function createSlug(name) {
@@ -115,6 +116,21 @@ export async function POST(request) {
       installInstructions,
       isApproved: false // ממתין לאישור מנהל
     })
+    
+    // שליחת התראה למנהלים
+    try {
+      await sendPluginUploadNotification({
+        pluginName: name,
+        version: version,
+        author: author,
+        uploadedBy: session.user.name || session.user.email,
+        uploaderEmail: session.user.email,
+        shortDescription: shortDescription
+      })
+    } catch (emailError) {
+      console.error('Failed to send plugin upload notification:', emailError)
+      // ממשיכים גם אם שליחת המייל נכשלה
+    }
     
     return NextResponse.json({
       success: true,

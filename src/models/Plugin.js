@@ -99,6 +99,8 @@ PluginSchema.methods.incrementDownload = function() {
 PluginSchema.statics.getApprovedPlugins = function() {
   return this.find({ isApproved: true, isHidden: false })
     .sort({ createdAt: -1 })
+    .populate('authorId', 'name email')
+    .populate('approvedBy', 'name email')
     .select('-pluginData -imageData -screenshots.data -__v') // לא מחזירים את הנתונים הבינאריים
 }
 

@@ -136,6 +136,107 @@ export async function sendUploadNotification(uploadData) {
     }
 }
 
+// שליחת התראה למנהלים על העלאת תוסף חדש
+export async function sendPluginUploadNotification(pluginData) {
+    try {
+        await dbConnect();
+        
+        // מציאת כל המנהלים שרשומים להתראות על תוספים (לא כולל את המעלה עצמו)
+        const admins = await User.find({
+            role: 'admin',
+            'pluginNotifications.enabled': true,
+            isVerified: true,
+            email: { $ne: pluginData.uploaderEmail }
+        });
+        
+        if (admins.length === 0) {
+            return { sent: false, reason: 'no_subscribers' };
+        }
+
+        const transporter = nodemailer.createTransport({
+            host: process.env.SMTP_HOST,
+            port: Number(process.env.SMTP_PORT),
+            secure: process.env.SMTP_SECURE === 'true',
+            auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+        });
+
+        const adminUrl = `${process.env.NEXTAUTH_URL}/library/admin/plugins`;
+        const logoUrl = `${process.env.NEXTAUTH_URL}/logo.png`;
+
+        const sendPromises = admins.map(async (admin) => {
+            // יצירת טוקן מאובטח להסרה מהתראות
+            const secureToken = encryptToken(admin.email);
+            const unsubUrl = `${process.env.NEXTAUTH_URL}/api/user/unsubscribe?t=${secureToken}&action=upload_notifications`;
+            
+            const emailHtml = `
+            <div dir="rtl" style="font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 40px; text-align: center;">
+                <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden;">
+                    <div style="background-color: #ffffff; padding: 20px; border-bottom: 3px solid #d4a373;">
+                        <img src="${logoUrl}" alt="Otzaria Logo" style="width: 120px; height: auto;">
+                        <h2 style="color: #d4a373; font-size: 20px; margin: 5px 0 0 0; font-weight: bold;">ספריית אוצריא</h2>
+                    </div>
+                    <div style="padding: 30px; color: #333333;">
+                        <h1 style="color: #2c3e50; font-size: 24px; margin-bottom: 10px;">🔌 תוסף חדש הועלה!</h1>
+                        <div style="background-color: #f0f0f0; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: right;">
+                            <p style="margin: 8px 0;"><strong>שם התוסף:</strong> ${pluginData.pluginName || 'לא צוין'}</p>
+                            <p style="margin: 8px 0;"><strong>גרסה:</strong> ${pluginData.version || 'לא צוין'}</p>
+                            <p style="margin: 8px 0;"><strong>מפתח:</strong> ${pluginData.author || 'לא ידוע'}</p>
+                            <p style="margin: 8px 0;"><strong>הועלה על ידי:</strong> ${pluginData.uploadedBy || 'אורח'}</p>
+                            ${pluginData.shortDescription ? `<p style="margin: 8px 0;"><strong>תיאור:</strong> ${pluginData.shortDescription}</p>` : ''}
+                        </div>
+                        <div style="margin: 30px 0;">
+                            <a href="${adminUrl}" style="background-color: #d4a373; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+                                עבור לניהול תוספים
+                            </a>
+                        </div>
+                        <p style="color: #666; font-size: 14px; margin-top: 20px;">
+                            התוסף ממתין לאישור שלך לפני שיופיע בחנות התוספים.
+                        </p>
+                    </div>
+                    <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; font-size: 11px; color: #999; text-align: center;">
+                        קיבלת הודעה זו כי נרשמת לעדכונים על העלאות תוספים.
+                        <br>
+                        <a href="${unsubUrl}" style="color: #999; text-decoration: underline;">הסרה מרשימת התפוצה<br>שים לב שלא תקבל עוד עדכונים על העלאות!</a>
+                    </div>
+                </div>
+            </div>
+            `;
+            
+            try {
+                await transporter.sendMail({
+                    from: {
+                        name: "ספריית אוצריא - ניהול",
+                        address: process.env.SMTP_FROM
+                    },
+                    to: admin.email,
+                    replyTo: process.env.SMTP_REPLY_TO || process.env.SMTP_FROM,
+                    subject: `🔌 תוסף חדש הועלה: ${pluginData.pluginName}`,
+                    headers: {
+                        'List-Unsubscribe': `<${unsubUrl}>`,
+                        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
+                    },
+                    html: emailHtml
+                });
+                return { success: true, email: admin.email };
+            } catch (error) {
+                console.error(`Failed to send email to ${admin.email}:`, error);
+                return { success: false, email: admin.email, error: error.message };
+            }
+        });
+
+        const results = await Promise.allSettled(sendPromises);
+        
+        const successful = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
+        const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success)).length;
+        
+        return { sent: true, count: admins.length, successful, failed };
+
+    } catch (error) {
+        console.error('Plugin Upload Notification Error:', error);
+        return { sent: false, error: error.message };
+    }
+}
+
 export async function sendBookNotification(bookName, bookSlug) {
     try {
         await dbConnect();

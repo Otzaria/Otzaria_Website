@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import PluginNotificationSettings from '@/components/notifications/PluginNotificationSettings'
 
 export default function AdminPluginsPage() {
   const [activeTab, setActiveTab] = useState('pending') // 'pending' or 'approved'
@@ -10,6 +11,7 @@ export default function AdminPluginsPage() {
   const [approvedPlugins, setApprovedPlugins] = useState([])
   const [loading, setLoading] = useState(true)
   const [processingId, setProcessingId] = useState(null)
+  const [showNotificationSettings, setShowNotificationSettings] = useState(false)
   const { showConfirm, showAlert } = useDialog()
 
   const loadPendingPlugins = async () => {
@@ -93,8 +95,7 @@ export default function AdminPluginsPage() {
   const handleReject = async (plugin) => {
     const confirmed = await showConfirm(
       'דחיית תוסף',
-      `האם אתה בטוח שברצונך לדחות ולמחוק את התוסף "${plugin.name}"? פעולה זו תמחק את התוסף וכל הקבצים הקשורים אליו ולא ניתן לבטלה.`,
-      'destructive'
+      `האם אתה בטוח שברצונך לדחות ולמחוק את התוסף "${plugin.name}"? פעולה זו תמחק את התוסף וכל הקבצים הקשורים אליו ולא ניתן לבטלה.`
     )
 
     if (!confirmed) return
@@ -150,8 +151,7 @@ export default function AdminPluginsPage() {
   const handleDelete = async (plugin) => {
     const confirmed = await showConfirm(
       'מחיקת תוסף',
-      `האם אתה בטוח שברצונך למחוק את התוסף "${plugin.name}"? פעולה זו תמחק את התוסף לצמיתות ולא ניתן לבטלה.`,
-      'destructive'
+      `האם אתה בטוח שברצונך למחוק את התוסף "${plugin.name}"? פעולה זו תמחק את התוסף לצמיתות ולא ניתן לבטלה.`
     )
 
     if (!confirmed) return
@@ -228,13 +228,24 @@ export default function AdminPluginsPage() {
           </p>
         </div>
         
-        <button
-          onClick={loadPlugins}
-          className="flex items-center gap-2 px-4 py-2 bg-surface hover:bg-surface-variant rounded-lg transition-colors"
-        >
-          <span className="material-symbols-outlined">refresh</span>
-          <span>רענן</span>
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowNotificationSettings(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-medium"
+            title="הגדרות התראות על העלאת תוספים"
+          >
+            <span className="material-symbols-outlined">notifications</span>
+            <span>התראות</span>
+          </button>
+          
+          <button
+            onClick={loadPlugins}
+            className="flex items-center gap-2 px-4 py-2 bg-surface hover:bg-surface-variant rounded-lg transition-colors"
+          >
+            <span className="material-symbols-outlined">refresh</span>
+            <span>רענן</span>
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -343,9 +354,15 @@ export default function AdminPluginsPage() {
                       <span className="font-medium text-on-surface mr-2">
                         {plugin.author}
                       </span>
-                      {plugin.authorId?.name && (
-                        <span className="text-on-surface/50 text-xs">
-                          ({plugin.authorId.name})
+                    </div>
+                    <div>
+                      <span className="text-on-surface/60">הועלה על ידי:</span>
+                      <span className="font-medium text-on-surface mr-2">
+                        {plugin.authorId?.name || 'לא ידוע'}
+                      </span>
+                      {plugin.authorId?.email && (
+                        <span className="text-on-surface/50 text-xs block">
+                          {plugin.authorId.email}
                         </span>
                       )}
                     </div>
@@ -526,6 +543,13 @@ export default function AdminPluginsPage() {
             </div>
           ))}
         </div>
+      )}
+
+      {/* חלון הגדרות התראות */}
+      {showNotificationSettings && (
+        <PluginNotificationSettings
+          onClose={() => setShowNotificationSettings(false)}
+        />
       )}
     </div>
   )

@@ -300,7 +300,7 @@ export default function PluginsPage() {
         {/* Filters Section */}
         <section className="py-6 px-4 bg-white border-b border-gray-100">
           <div className="container mx-auto max-w-6xl">
-            <div className="grid md:grid-cols-[1fr_220px] gap-4 mb-4">
+            <div className="grid md:grid-cols-[1fr_220px_auto] gap-4 mb-4">
               <div>
                 <label className="block text-sm font-bold text-on-surface/60 mb-2">חיפוש</label>
                 <input
@@ -324,6 +324,18 @@ export default function PluginsPage() {
                   <option value="beta">בטא</option>
                   <option value="experimental">ניסיוני</option>
                 </select>
+              </div>
+
+              <div className="flex items-end">
+                <Link
+                  href="/plugins/upload"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-xl font-bold hover:bg-primary/90 transition-colors shadow-md hover:shadow-lg whitespace-nowrap"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span>העלה תוסף חדש</span>
+                </Link>
               </div>
             </div>
 
