@@ -8,7 +8,7 @@ export default function OtzariaSoftwareFooter() {
           תוכנה זו נוצרה והוקדשה על ידי המפתחים והתורמים של פרויקט אוצריא
         </p>
         <div className="flex justify-center gap-6 text-sm text-foreground/60">
-          <span>קוד פתוח תחת רישיון Unlicense</span>
+          <span>קוד פתוח תחת רישיון GPL-3.0</span>
           <a 
             href="https://github.com/sivan22/otzaria" 
             target="_blank" 
