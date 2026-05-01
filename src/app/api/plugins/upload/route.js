@@ -7,6 +7,15 @@ import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import { sendPluginUploadNotification } from '@/lib/emailService'
 import {
+  ALLOWED_PLUGIN_STATUSES,
+  PLUGIN_VERSION_RE,
+  assertPluginTextLimits,
+  isHttpUrl,
+  normalizeInstructions,
+  normalizeTags,
+  parseJsonArrayField
+} from '@/lib/pluginSubmission'
+import {
   MAX_PLUGIN_BYTES,
   MAX_IMAGE_BYTES,
   MAX_SCREENSHOT_BYTES,
@@ -21,22 +30,6 @@ import {
 } from '@/lib/pluginStorage'
 
 const PLUGIN_FILE_EXT = '.otzplugin'
-
-// מגבלות אורך לשדות טקסט - אכיפה בשרת (אפילו אם הלקוח עוקף).
-const LIMITS = {
-  name: 100,
-  shortDescription: 150,
-  description: 10_000,
-  version: 30,
-  author: 100,
-  compatibleWith: 100,
-  homepage: 500,
-  tag: 40,
-  instruction: 500
-}
-
-const ALLOWED_STATUSES = ['stable', 'beta', 'experimental']
-const VERSION_RE = /^\d+(?:\.\d+){0,3}(?:[-+][A-Za-z0-9.]+)?$/
 // slug באנגלית בלבד - אותיות קטנות, ספרות ומקפים. לא מתחיל/מסתיים במקף.
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
@@ -51,15 +44,6 @@ function createSlug(name) {
     .trim()
   // אם הסינון פירק את השם (למשל שם בעברית בלבד) - מחרוזת רנדומלית באנגלית.
   return base || `plugin-${crypto.randomBytes(4).toString('hex')}`
-}
-
-function isHttpUrl(value) {
-  try {
-    const u = new URL(value)
-    return u.protocol === 'http:' || u.protocol === 'https:'
-  } catch {
-    return false
-  }
 }
 
 function bad(message, status = 400) {
@@ -87,36 +71,22 @@ export async function POST(request) {
 
     let tags = []
     try {
-      const raw = formData.get('tags')
-      if (raw) tags = JSON.parse(raw)
-      if (!Array.isArray(tags)) tags = []
-      tags = tags.map(t => String(t).trim()).filter(Boolean)
-      if (tags.some(t => t.length > LIMITS.tag)) {
-        return bad(`Each tag must be at most ${LIMITS.tag} characters`)
-      }
-      tags = tags.slice(0, 30)
+      tags = normalizeTags(parseJsonArrayField(formData.get('tags'), 'tags'))
     } catch {
       return bad('Invalid tags format')
     }
 
     let installInstructions = []
     try {
-      const raw = formData.get('installInstructions')
-      if (raw) installInstructions = JSON.parse(raw)
-      if (!Array.isArray(installInstructions)) installInstructions = []
-      installInstructions = installInstructions
-        .map(i => String(i))
-        .filter(i => i.trim().length > 0)
-      if (installInstructions.some(i => i.length > LIMITS.instruction)) {
-        return bad(`Each instruction must be at most ${LIMITS.instruction} characters`)
-      }
-      installInstructions = installInstructions.slice(0, 50)
+      installInstructions = normalizeInstructions(
+        parseJsonArrayField(formData.get('installInstructions'), 'installInstructions')
+      )
     } catch {
       return bad('Invalid installInstructions format')
     }
 
-    if (!ALLOWED_STATUSES.includes(statusVal)) {
-      return bad(`Status must be one of: ${ALLOWED_STATUSES.join(', ')}`)
+    if (!ALLOWED_PLUGIN_STATUSES.includes(statusVal)) {
+      return bad(`Status must be one of: ${ALLOWED_PLUGIN_STATUSES.join(', ')}`)
     }
 
     const pluginFile = formData.get('pluginFile')
@@ -127,16 +97,23 @@ export async function POST(request) {
       return bad('Missing required fields')
     }
 
-    // אורכים מקסימליים - אכיפה בשרת גם אם הלקוח עוקף.
-    if (name.length > LIMITS.name) return bad(`Name must be at most ${LIMITS.name} characters`)
-    if (shortDescription.length > LIMITS.shortDescription) return bad(`Short description must be at most ${LIMITS.shortDescription} characters`)
-    if (description.length > LIMITS.description) return bad(`Description must be at most ${LIMITS.description} characters`)
-    if (version.length > LIMITS.version) return bad(`Version must be at most ${LIMITS.version} characters`)
-    if (author.length > LIMITS.author) return bad(`Author must be at most ${LIMITS.author} characters`)
-    if (compatibleWith.length > LIMITS.compatibleWith) return bad(`Compatibility must be at most ${LIMITS.compatibleWith} characters`)
-    if (homepage.length > LIMITS.homepage) return bad(`Homepage URL must be at most ${LIMITS.homepage} characters`)
+    try {
+      assertPluginTextLimits({
+        name,
+        shortDescription,
+        description,
+        version,
+        author,
+        compatibleWith,
+        homepage,
+        tags,
+        installInstructions
+      })
+    } catch (error) {
+      return bad(error.message)
+    }
 
-    if (!VERSION_RE.test(version)) {
+    if (!PLUGIN_VERSION_RE.test(version)) {
       return bad('Version must be in the form X, X.Y, X.Y.Z (optionally with -beta etc.)')
     }
 
@@ -211,7 +188,10 @@ export async function POST(request) {
           screenshots: screenshotMeta,
           homepage,
           installInstructions,
-          isApproved: false
+          isApproved: false,
+          submissionType: 'new',
+          lastSubmittedBy: session.user.id,
+          lastSubmittedAt: new Date()
         })
       } catch (err) {
         if (err && err.code === 11000) continue
@@ -248,6 +228,7 @@ export async function POST(request) {
     // שליחת התראה למנהלים
     try {
       await sendPluginUploadNotification({
+        submissionType: 'new',
         pluginName: name,
         version,
         author,

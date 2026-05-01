@@ -59,6 +59,17 @@ export async function ensurePluginDir(pluginId) {
   return dir
 }
 
+export function getPendingPluginDir(pluginId) {
+  return path.join(getPluginDir(pluginId), PENDING_DIRNAME)
+}
+
+export async function ensurePendingPluginDir(pluginId) {
+  const dir = getPendingPluginDir(pluginId)
+  await fs.mkdir(dir, { recursive: true })
+  await fs.mkdir(path.join(dir, 'screenshots'), { recursive: true })
+  return dir
+}
+
 // שמירת stream/buffer מקובץ FormData תוך אכיפת גודל מקסימלי
 export async function saveFileFromFormData(file, destPath, maxBytes) {
   if (file.size > maxBytes) {
@@ -76,13 +87,22 @@ export async function saveFileFromFormData(file, destPath, maxBytes) {
 }
 
 // קריאת קובץ תוסף מהדיסק
-export async function readPluginAsset(pluginId, relativePath) {
-  const dir = getPluginDir(pluginId)
+export async function readPluginAsset(pluginId, relativePath, options = {}) {
+  const dir = options.pending ? getPendingPluginDir(pluginId) : getPluginDir(pluginId)
   const target = path.resolve(dir, relativePath)
   if (!target.startsWith(dir + path.sep) && target !== dir) {
     throw new Error('Asset path escapes plugin dir')
   }
   return fs.readFile(target)
+}
+
+export async function removePluginAsset(pluginId, relativePath, options = {}) {
+  const dir = options.pending ? getPendingPluginDir(pluginId) : getPluginDir(pluginId)
+  const target = path.resolve(dir, relativePath)
+  if (!target.startsWith(dir + path.sep) && target !== dir) {
+    throw new Error('Asset path escapes plugin dir')
+  }
+  await fs.rm(target, { force: true, recursive: false })
 }
 
 // מחיקת כל הקבצים של תוסף
@@ -91,5 +111,11 @@ export async function deletePluginDir(pluginId) {
   await fs.rm(dir, { recursive: true, force: true })
 }
 
+export async function deletePendingPluginDir(pluginId) {
+  const dir = getPendingPluginDir(pluginId)
+  await fs.rm(dir, { recursive: true, force: true })
+}
+
 export const PLUGIN_FILE_BASENAME = 'plugin'
 export const IMAGE_BASENAME = 'image'
+export const PENDING_DIRNAME = 'pending'

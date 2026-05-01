@@ -21,6 +21,7 @@ interface Plugin {
   image: string
   screenshots: string[]
   downloadUrl: string
+  supportsDirectInstall: boolean
   homepage: string
   installInstructions: string[]
 }
@@ -214,7 +215,7 @@ function PluginsPageContent() {
   }
 
   const canDirectInstall = (plugin: Plugin) => {
-    return /\.otzplugin(?:[?#].*)?$/i.test(plugin.downloadUrl || '')
+    return Boolean(plugin.supportsDirectInstall && plugin.downloadUrl)
   }
 
   const handleDirectInstall = (plugin: Plugin) => {
@@ -258,17 +259,6 @@ function PluginsPageContent() {
                 <p className="text-on-surface/70 text-lg leading-relaxed">
                   כאן תמצאו תוספים שנבנו במיוחד לחוויית הלימוד באוצריא, עם עמודי הסבר ברורים, קישורי הורדה, ובמקרים מתאימים גם התקנה ישירה מתוך התוכנה.
                 </p>
-                <div className="flex flex-wrap gap-3 mt-6">
-                  <div className="px-4 py-2 bg-white rounded-full border border-primary/10 shadow-sm">
-                    <span className="text-sm font-bold text-primary">עמוד מסודר לכל תוסף</span>
-                  </div>
-                  <div className="px-4 py-2 bg-white rounded-full border border-primary/10 shadow-sm">
-                    <span className="text-sm font-bold text-primary">חיפוש וסינון מהירים</span>
-                  </div>
-                  <div className="px-4 py-2 bg-white rounded-full border border-primary/10 shadow-sm">
-                    <span className="text-sm font-bold text-primary">התקנה ישירה כאשר נתמכת</span>
-                  </div>
-                </div>
               </div>
               
               <div className="space-y-4">

@@ -10,6 +10,8 @@ import { readPluginAsset, PLUGIN_FILE_BASENAME } from '@/lib/pluginStorage'
 export async function GET(request, { params }) {
   try {
     const { id } = await params
+    const { searchParams } = new URL(request.url)
+    const includePending = searchParams.get('pending') === '1'
     await dbConnect()
 
     const plugin = await Plugin.findById(id)
@@ -17,31 +19,41 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
     }
 
-    if (!plugin.isApproved) {
-      const session = await getServerSession(authOptions)
-      if (!session || session.user?.role !== 'admin') {
+    const session = await getServerSession(authOptions)
+    const isAdmin = session?.user?.role === 'admin'
+    const isOwner = plugin.authorId?.toString() === session?.user?.id
+
+    if (includePending) {
+      if (!plugin.pendingUpdate || (!isAdmin && !isOwner)) {
         return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
       }
+    } else if (!plugin.isApproved && !isAdmin && !isOwner) {
+      return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
     }
 
-    const filename = `${PLUGIN_FILE_BASENAME}${plugin.pluginFileExt}`
+    const source = includePending ? plugin.pendingUpdate : null
+    const usePendingAsset = includePending && source?.assetSources?.pluginFile === 'pending'
+    const fileExt = includePending ? (source?.pluginFileExt || plugin.pluginFileExt) : plugin.pluginFileExt
+    const fileName = includePending ? (source?.pluginFileName || plugin.pluginFileName) : plugin.pluginFileName
+    const filename = `${PLUGIN_FILE_BASENAME}${fileExt}`
+
     let buf
     try {
-      buf = await readPluginAsset(id, filename)
+      buf = await readPluginAsset(id, filename, { pending: usePendingAsset })
     } catch (err) {
       if (err && err.code === 'ENOENT') {
-        return NextResponse.json({ error: 'Plugin file not found' }, { status: 404 })
+        return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
       }
       throw err
     }
 
-    if (plugin.isApproved) {
+    if (!includePending && plugin.isApproved) {
       // עדכון מונה הורדות רק לתוספים פומביים, לא בעת בדיקת מנהל
       plugin.incrementDownload().catch(e => console.error('Failed to increment download count:', e))
     }
 
     // הסרת תווים מסוכנים משם הקובץ ב-Content-Disposition
-    const safeName = (plugin.pluginFileName || `plugin${plugin.pluginFileExt}`).replace(/["\\\r\n]/g, '_')
+    const safeName = (fileName || `plugin${fileExt}`).replace(/["\\\r\n]/g, '_')
 
     return new NextResponse(buf, {
       headers: {

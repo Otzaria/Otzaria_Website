@@ -14,6 +14,34 @@ function cleanBookName(bookName) {
         .trim();
 }
 
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function renderPluginChanges(changes = []) {
+    if (!changes.length) return '';
+
+    const items = changes.map(change => `
+        <div style="background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin: 10px 0;">
+            <p style="margin: 0 0 6px 0;"><strong>${escapeHtml(change.label)}</strong></p>
+            <p style="margin: 0; color: #666;"><strong>לפני:</strong> ${escapeHtml(change.before || 'ללא')}</p>
+            <p style="margin: 6px 0 0 0; color: #111;"><strong>אחרי:</strong> ${escapeHtml(change.after || 'ללא')}</p>
+        </div>
+    `).join('');
+
+    return `
+        <div style="margin-top: 24px; text-align: right;">
+            <h3 style="color: #2c3e50; margin-bottom: 12px;">מה השתנה?</h3>
+            ${items}
+        </div>
+    `;
+}
+
 // שליחת התראה למנהלים על העלאה חדשה של משתמש
 export async function sendUploadNotification(uploadData) {
     try {
@@ -136,7 +164,7 @@ export async function sendUploadNotification(uploadData) {
     }
 }
 
-// שליחת התראה למנהלים על העלאת תוסף חדש
+// שליחת התראה למנהלים על העלאת תוסף חדש או עדכון
 export async function sendPluginUploadNotification(pluginData) {
     try {
         await dbConnect();
@@ -163,10 +191,25 @@ export async function sendPluginUploadNotification(pluginData) {
         const adminUrl = `${process.env.NEXTAUTH_URL}/library/admin/plugins`;
         const logoUrl = `${process.env.NEXTAUTH_URL}/logo.png`;
 
+        const isUpdate = pluginData.submissionType === 'update';
+        const title = isUpdate ? '✏️ עדכון לתוסף קיים ממתין לאישור' : '🔌 תוסף חדש הועלה!';
+        const subject = isUpdate
+            ? `✏️ עדכון תוסף ממתין לאישור: ${pluginData.pluginName}`
+            : `🔌 תוסף חדש הועלה: ${pluginData.pluginName}`;
+        const introText = isUpdate
+            ? 'נשלחה עריכה לתוסף קיים, והיא ממתינה לאישור שלך לפני שתתעדכן בחנות.'
+            : 'התוסף ממתין לאישור שלך לפני שיופיע בחנות התוספים.';
+        const changesHtml = renderPluginChanges(pluginData.changes);
+        const safePluginName = escapeHtml(pluginData.pluginName || 'לא צוין');
+        const safeVersion = escapeHtml(pluginData.version || 'לא צוין');
+        const safeAuthor = escapeHtml(pluginData.author || 'לא ידוע');
+        const safeUploadedBy = escapeHtml(pluginData.uploadedBy || 'אורח');
+        const safeShortDescription = pluginData.shortDescription ? escapeHtml(pluginData.shortDescription) : '';
+
         const sendPromises = admins.map(async (admin) => {
             // יצירת טוקן מאובטח להסרה מהתראות
             const secureToken = encryptToken(admin.email);
-            const unsubUrl = `${process.env.NEXTAUTH_URL}/api/user/unsubscribe?t=${secureToken}&action=upload_notifications`;
+            const unsubUrl = `${process.env.NEXTAUTH_URL}/api/user/unsubscribe?t=${secureToken}&action=plugin_notifications`;
             
             const emailHtml = `
             <div dir="rtl" style="font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 40px; text-align: center;">
@@ -176,21 +219,22 @@ export async function sendPluginUploadNotification(pluginData) {
                         <h2 style="color: #d4a373; font-size: 20px; margin: 5px 0 0 0; font-weight: bold;">ספריית אוצריא</h2>
                     </div>
                     <div style="padding: 30px; color: #333333;">
-                        <h1 style="color: #2c3e50; font-size: 24px; margin-bottom: 10px;">🔌 תוסף חדש הועלה!</h1>
+                        <h1 style="color: #2c3e50; font-size: 24px; margin-bottom: 10px;">${title}</h1>
                         <div style="background-color: #f0f0f0; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: right;">
-                            <p style="margin: 8px 0;"><strong>שם התוסף:</strong> ${pluginData.pluginName || 'לא צוין'}</p>
-                            <p style="margin: 8px 0;"><strong>גרסה:</strong> ${pluginData.version || 'לא צוין'}</p>
-                            <p style="margin: 8px 0;"><strong>מפתח:</strong> ${pluginData.author || 'לא ידוע'}</p>
-                            <p style="margin: 8px 0;"><strong>הועלה על ידי:</strong> ${pluginData.uploadedBy || 'אורח'}</p>
-                            ${pluginData.shortDescription ? `<p style="margin: 8px 0;"><strong>תיאור:</strong> ${pluginData.shortDescription}</p>` : ''}
+                            <p style="margin: 8px 0;"><strong>שם התוסף:</strong> ${safePluginName}</p>
+                            <p style="margin: 8px 0;"><strong>גרסה:</strong> ${safeVersion}</p>
+                            <p style="margin: 8px 0;"><strong>מפתח:</strong> ${safeAuthor}</p>
+                            <p style="margin: 8px 0;"><strong>הועלה על ידי:</strong> ${safeUploadedBy}</p>
+                            ${safeShortDescription ? `<p style="margin: 8px 0;"><strong>תיאור:</strong> ${safeShortDescription}</p>` : ''}
                         </div>
+                        ${changesHtml}
                         <div style="margin: 30px 0;">
                             <a href="${adminUrl}" style="background-color: #d4a373; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
                                 עבור לניהול תוספים
                             </a>
                         </div>
                         <p style="color: #666; font-size: 14px; margin-top: 20px;">
-                            התוסף ממתין לאישור שלך לפני שיופיע בחנות התוספים.
+                            ${introText}
                         </p>
                     </div>
                     <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; font-size: 11px; color: #999; text-align: center;">
@@ -210,7 +254,7 @@ export async function sendPluginUploadNotification(pluginData) {
                     },
                     to: admin.email,
                     replyTo: process.env.SMTP_REPLY_TO || process.env.SMTP_FROM,
-                    subject: `🔌 תוסף חדש הועלה: ${pluginData.pluginName}`,
+                    subject,
                     headers: {
                         'List-Unsubscribe': `<${unsubUrl}>`,
                         'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'

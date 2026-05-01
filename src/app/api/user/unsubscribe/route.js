@@ -55,6 +55,8 @@ export async function GET(request) {
     } else if (action === 'upload_notifications') {
         // כיבוי התראות על העלאות
         await User.updateOne({ email }, { $set: { 'uploadNotifications.enabled': false } });
+    } else if (action === 'plugin_notifications') {
+        await User.updateOne({ email }, { $set: { 'pluginNotifications.enabled': false } });
     }
     return new NextResponse(`
         <div dir="rtl" style="font-family: system-ui; text-align: center; padding: 100px 20px;">
@@ -84,6 +86,8 @@ export async function POST(request) {
             await User.updateOne({ email }, { $set: { acceptReminders: false } });
         } else if (action === 'upload_notifications') {
             await User.updateOne({ email }, { $set: { 'uploadNotifications.enabled': false } });
+        } else if (action === 'plugin_notifications') {
+            await User.updateOne({ email }, { $set: { 'pluginNotifications.enabled': false } });
         }
         return NextResponse.json({ success: true });
     }

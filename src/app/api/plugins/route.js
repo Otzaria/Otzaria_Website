@@ -1,30 +1,7 @@
 import { NextResponse } from 'next/server'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
-
-function format(plugin) {
-  const id = plugin._id.toString()
-  return {
-    id,
-    name: plugin.name,
-    slug: plugin.slug,
-    shortDescription: plugin.shortDescription,
-    description: plugin.description,
-    version: plugin.version,
-    status: plugin.status,
-    author: plugin.author,
-    updatedAt: plugin.updatedAt.toISOString().split('T')[0],
-    originalDate: plugin.originalDate || plugin.updatedAt.toISOString().split('T')[0],
-    compatibleWith: plugin.compatibleWith,
-    tags: plugin.tags || [],
-    image: plugin.image && plugin.image.ext ? `/api/plugins/${id}/image` : null,
-    screenshots: (plugin.screenshots || []).map((_, index) => `/api/plugins/${id}/screenshots/${index}`),
-    downloadUrl: `/api/plugins/${id}/download`,
-    homepage: plugin.homepage || '',
-    installInstructions: plugin.installInstructions || [],
-    downloadCount: plugin.downloadCount || 0
-  }
-}
+import { formatPluginForPublic } from '@/lib/pluginSubmission'
 
 // GET - קבלת כל התוספים המאושרים, עם סינון אופציונלי
 export async function GET(request) {
@@ -43,10 +20,10 @@ export async function GET(request) {
 
     const plugins = await Plugin.find(query)
       .sort({ createdAt: -1 })
-      .select('-__v')
+      .select('-__v -pendingUpdate -pendingChangeSummary')
       .lean()
 
-    return NextResponse.json(plugins.map(format))
+    return NextResponse.json(plugins.map((plugin) => formatPluginForPublic(plugin)))
   } catch (error) {
     console.error('Error fetching plugins:', error)
     return NextResponse.json({ error: 'Failed to fetch plugins' }, { status: 500 })

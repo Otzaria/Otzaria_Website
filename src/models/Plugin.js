@@ -63,6 +63,22 @@ const PluginSchema = new mongoose.Schema(
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     approvedAt: { type: Date },
 
+    // מידע על ההגשה האחרונה ועדכונים ממתינים
+    submissionType: {
+      type: String,
+      enum: ['new', 'update'],
+      default: 'new'
+    },
+    lastSubmittedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    lastSubmittedAt: { type: Date },
+    pendingChangeSummary: [{
+      field: { type: String },
+      label: { type: String },
+      before: { type: String },
+      after: { type: String }
+    }],
+    pendingUpdate: { type: mongoose.Schema.Types.Mixed, default: null },
+
     // סטטיסטיקות
     downloadCount: { type: Number, default: 0 },
 
@@ -101,6 +117,13 @@ PluginSchema.methods.approve = function (adminId) {
   this.approvedBy = adminId
   this.approvedAt = new Date()
   return this.save()
+}
+
+PluginSchema.methods.clearPendingUpdate = function () {
+  this.pendingUpdate = null
+  this.pendingChangeSummary = []
+  this.submissionType = 'new'
+  return this
 }
 
 PluginSchema.methods.incrementDownload = function () {
