@@ -2,9 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
+import PluginEditModal from '@/components/plugins/PluginEditModal'
+import { useDialog } from '@/components/providers/DialogContext'
 
 interface Plugin {
   id: string
@@ -21,15 +24,43 @@ interface Plugin {
   image: string
   screenshots: string[]
   downloadUrl: string
+  supportsDirectInstall: boolean
   homepage: string
   installInstructions: string[]
+  authorId?: string | null
+}
+
+interface PluginEditPayload extends Plugin {
+  _id: string
+  hasPendingUpdate?: boolean
+  isApproved?: boolean
+  submissionType?: 'new' | 'update'
+  imageData?: boolean
+  pendingChangeSummary?: Array<{
+    field: string
+    label: string
+    before: string
+    after: string
+  }>
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+  return fallback
 }
 
 export default function PluginDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const { data: session } = useSession()
+  const { showAlert } = useDialog() as { showAlert: (title: string, message: string) => void }
   const [plugin, setPlugin] = useState<Plugin | null>(null)
   const [loading, setLoading] = useState(true)
+  const [editingPlugin, setEditingPlugin] = useState<PluginEditPayload | null>(null)
+  const [loadingEdit, setLoadingEdit] = useState(false)
+  const currentUser = session?.user as { id?: string; role?: string } | undefined
 
   useEffect(() => {
     const loadPlugin = async () => {
@@ -172,7 +203,7 @@ export default function PluginDetailPage() {
   }
 
   const canDirectInstall = (plugin: Plugin) => {
-    return /\.otzplugin(?:[?#].*)?$/i.test(plugin.downloadUrl || '')
+    return Boolean(plugin.supportsDirectInstall && plugin.downloadUrl)
   }
 
   const handleDirectInstall = () => {
@@ -198,6 +229,29 @@ export default function PluginDetailPage() {
 
   if (!plugin) {
     return null
+  }
+
+  const canEdit = Boolean(currentUser && (currentUser.role === 'admin' || currentUser.id === plugin.authorId))
+
+  const handleEdit = async () => {
+    try {
+      setLoadingEdit(true)
+      const response = await fetch(`/api/plugins/${plugin.id}/edit`)
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'לא ניתן לטעון את חלון העריכה')
+      }
+
+      setEditingPlugin({
+        ...result,
+        _id: result.id
+      })
+    } catch (error: unknown) {
+      showAlert('שגיאה', getErrorMessage(error, 'לא ניתן לטעון את חלון העריכה'))
+    } finally {
+      setLoadingEdit(false)
+    }
   }
 
   return (
@@ -283,6 +337,16 @@ export default function PluginDetailPage() {
                       <span>דיון בפורום</span>
                     </a>
                   )}
+                  {canEdit && (
+                    <button
+                      onClick={handleEdit}
+                      disabled={loadingEdit}
+                      className="inline-flex items-center gap-2 rounded-xl bg-stone-700 px-6 py-3 font-medium text-white transition-colors hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <span className="material-symbols-outlined">edit</span>
+                      <span>{loadingEdit ? 'טוען...' : 'ערוך'}</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -360,6 +424,23 @@ export default function PluginDetailPage() {
       </main>
 
       <OtzariaSoftwareFooter />
+
+      {editingPlugin && (
+        <PluginEditModal
+          plugin={editingPlugin}
+          endpoint={`/api/plugins/${editingPlugin._id}/edit`}
+          onClose={() => setEditingPlugin(null)}
+          onSuccess={async (result: { message?: string }) => {
+            setEditingPlugin(null)
+            await showAlert('הצלחה', result?.message || 'השינויים נשמרו בהצלחה.')
+            const refreshed = await fetch(`/api/plugins/${params.id}`)
+            if (refreshed.ok) {
+              const data = await refreshed.json()
+              setPlugin(data)
+            }
+          }}
+        />
+      )}
     </div>
   )
 }

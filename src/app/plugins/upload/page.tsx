@@ -6,13 +6,13 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
+import { useDialog } from '@/components/providers/DialogContext'
 
 export default function UploadPluginPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const { showAlert } = useDialog() as { showAlert: (title: string, message: string) => void }
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState(false)
 
   // שדות הטופס
   const [formData, setFormData] = useState({
@@ -85,15 +85,14 @@ export default function UploadPluginPage() {
     const file = e.target.files?.[0]
     if (file) {
       if (!file.name.toLowerCase().endsWith('.otzplugin')) {
-        setError('קובץ התוסף חייב להיות בפורמט .otzplugin')
+        showAlert('שגיאה', 'קובץ התוסף חייב להיות בפורמט .otzplugin')
         return
       }
       if (file.size > MAX_PLUGIN_BYTES) {
-        setError(`קובץ התוסף חורג מהמגבלה של ${MAX_PLUGIN_BYTES / 1024 / 1024}MB`)
+        showAlert('שגיאה', `קובץ התוסף חורג מהמגבלה של ${MAX_PLUGIN_BYTES / 1024 / 1024}MB`)
         return
       }
       setPluginFile(file)
-      setError('')
     }
   }
 
@@ -102,15 +101,14 @@ export default function UploadPluginPage() {
     const file = e.target.files?.[0]
     if (file) {
       if (!ALLOWED_IMAGE_MIMES.includes(file.type)) {
-        setError('תמונה חייבת להיות בפורמט PNG, JPEG, WEBP או GIF')
+        showAlert('שגיאה', 'תמונה חייבת להיות בפורמט PNG, JPEG, WEBP או GIF')
         return
       }
       if (file.size > MAX_IMAGE_BYTES) {
-        setError(`התמונה חורגת מהמגבלה של ${MAX_IMAGE_BYTES / 1024 / 1024}MB`)
+        showAlert('שגיאה', `התמונה חורגת מהמגבלה של ${MAX_IMAGE_BYTES / 1024 / 1024}MB`)
         return
       }
       setImageFile(file)
-      setError('')
       const reader = new FileReader()
       reader.onloadend = () => {
         setImagePreview(reader.result as string)
@@ -123,20 +121,19 @@ export default function UploadPluginPage() {
   const handleScreenshotFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     if (files.length > MAX_SCREENSHOTS) {
-      setError(`מותר עד ${MAX_SCREENSHOTS} צילומי מסך`)
+      showAlert('שגיאה', `מותר עד ${MAX_SCREENSHOTS} צילומי מסך`)
       return
     }
     for (const f of files) {
       if (!ALLOWED_IMAGE_MIMES.includes(f.type)) {
-        setError('צילומי מסך חייבים להיות בפורמט PNG, JPEG, WEBP או GIF')
+        showAlert('שגיאה', 'צילומי מסך חייבים להיות בפורמט PNG, JPEG, WEBP או GIF')
         return
       }
       if (f.size > MAX_IMAGE_BYTES) {
-        setError(`כל צילום מסך מוגבל ל-${MAX_IMAGE_BYTES / 1024 / 1024}MB`)
+        showAlert('שגיאה', `כל צילום מסך מוגבל ל-${MAX_IMAGE_BYTES / 1024 / 1024}MB`)
         return
       }
     }
-    setError('')
     setScreenshotFiles(files)
     
     // יצירת תצוגות מקדימות
@@ -157,7 +154,6 @@ export default function UploadPluginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    setError('')
 
     try {
       // בדיקות
@@ -225,14 +221,10 @@ export default function UploadPluginPage() {
         throw new Error(result.error || 'שגיאה בהעלאת התוסף')
       }
 
-      setSuccess(true)
-      
-      // המתנה קצרה ומעבר לעמוד התוסף
-      setTimeout(() => {
-        router.push('/plugins')
-      }, 2000)
+      await showAlert('הצלחה', 'התוסף הועלה בהצלחה ונשלח לאישור מנהל. לאחר האישור הוא יופיע בחנות התוספים.')
+      router.push('/plugins')
     } catch (err: any) {
-      setError(err.message || 'שגיאה בהעלאת התוסף')
+      showAlert('שגיאה', err.message || 'שגיאה בהעלאת התוסף')
     } finally {
       setLoading(false)
     }
@@ -279,36 +271,6 @@ export default function UploadPluginPage() {
     )
   }
 
-  if (success) {
-    return (
-      <div className="flex min-h-screen flex-col bg-background">
-        <OtzariaSoftwareHeader />
-        <main className="flex-1 flex items-center justify-center px-4">
-          <div className="max-w-md w-full text-center">
-            <div className="bg-white rounded-2xl border border-gray-100 p-8">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <h2 className="text-2xl font-bold text-on-surface mb-4">התוסף הועלה בהצלחה!</h2>
-              <p className="text-on-surface/70 mb-6">
-                התוסף שלך נשלח לאישור מנהל. לאחר האישור הוא יופיע בחנות התוספים.
-              </p>
-              <Link
-                href="/plugins"
-                className="inline-block px-6 py-3 bg-primary text-white rounded-full font-bold hover:bg-primary/90 transition-colors"
-              >
-                חזרה לחנות התוספים
-              </Link>
-            </div>
-          </div>
-        </main>
-        <OtzariaSoftwareFooter />
-      </div>
-    )
-  }
-
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <OtzariaSoftwareHeader />
@@ -333,13 +295,6 @@ export default function UploadPluginPage() {
               מלאו את הפרטים הבאים כדי להעלות תוסף לחנות. התוסף יעבור אישור מנהל לפני שיופיע בחנות.
             </p>
           </div>
-
-          {/* Error Message */}
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
-              {error}
-            </div>
-          )}
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-8">

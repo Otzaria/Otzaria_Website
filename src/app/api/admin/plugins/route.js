@@ -22,10 +22,20 @@ export async function GET(request) {
 
     await dbConnect()
 
-    const query = { isHidden: false, isApproved: status === 'approved' }
+    const query = status === 'pending'
+      ? {
+          isHidden: false,
+          $or: [
+            { isApproved: false },
+            { pendingUpdate: { $ne: null } }
+          ]
+        }
+      : { isHidden: false, isApproved: true }
+
     const cursor = Plugin.find(query)
       .sort({ createdAt: -1 })
       .populate('authorId', 'name email')
+      .populate('lastSubmittedBy', 'name email')
       .select('-__v')
 
     if (status === 'approved') cursor.populate('approvedBy', 'name email')

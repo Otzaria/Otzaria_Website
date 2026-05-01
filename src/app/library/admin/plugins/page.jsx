@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import PluginNotificationSettings from '@/components/notifications/PluginNotificationSettings'
+import PluginEditModal from '@/components/plugins/PluginEditModal'
 
 export default function AdminPluginsPage() {
   const [activeTab, setActiveTab] = useState('pending') // 'pending' or 'approved'
@@ -11,6 +12,8 @@ export default function AdminPluginsPage() {
   const [approvedPlugins, setApprovedPlugins] = useState([])
   const [loading, setLoading] = useState(true)
   const [processingId, setProcessingId] = useState(null)
+  const [editingId, setEditingId] = useState(null)
+  const [editingPlugin, setEditingPlugin] = useState(null)
   const [showNotificationSettings, setShowNotificationSettings] = useState(false)
   const { showConfirm, showAlert } = useDialog()
 
@@ -112,7 +115,8 @@ export default function AdminPluginsPage() {
         throw new Error('Failed to reject plugin')
       }
 
-      await showAlert('תוסף נדחה', `התוסף "${plugin.name}" נדחה ונמחק בהצלחה`)
+      const result = await response.json()
+      await showAlert('תוסף נדחה', result.message || `התוסף "${plugin.name}" נדחה בהצלחה`)
       loadPlugins()
     } catch (error) {
       console.error('Error rejecting plugin:', error)
@@ -180,6 +184,28 @@ export default function AdminPluginsPage() {
     }
   }
 
+  const handleEdit = async (plugin) => {
+    try {
+      setEditingId(plugin._id)
+      const response = await fetch(`/api/admin/plugins/${plugin._id}/edit`)
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'לא ניתן לטעון את מסך העריכה')
+      }
+
+      setEditingPlugin({
+        ...result,
+        _id: result.id
+      })
+    } catch (error) {
+      console.error('Error loading plugin edit modal:', error)
+      showAlert('שגיאה', error.message || 'לא ניתן לטעון את מסך העריכה')
+    } finally {
+      setEditingId(null)
+    }
+  }
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('he-IL', {
       year: 'numeric',
@@ -213,6 +239,8 @@ export default function AdminPluginsPage() {
   }
 
   const plugins = activeTab === 'pending' ? pendingPlugins : approvedPlugins
+  const getReviewSource = (plugin) => plugin.pendingUpdate || plugin
+  const hasPendingUpdate = (plugin) => Boolean(plugin.pendingUpdate)
 
   return (
     <div className="space-y-6">
@@ -318,12 +346,16 @@ export default function AdminPluginsPage() {
               className="glass rounded-2xl p-6 hover:shadow-lg transition-shadow"
             >
               <div className="grid md:grid-cols-[200px_1fr_auto] gap-6">
+                {(() => {
+                  const source = getReviewSource(plugin)
+                  return (
+                    <>
                 {/* Plugin Image */}
                 <div className="rounded-xl overflow-hidden bg-gradient-to-br from-primary/5 to-secondary/5 aspect-[4/3]">
-                  {plugin.image?.ext ? (
+                  {source.image?.ext ? (
                     <img
-                      src={`/api/plugins/${plugin._id}/image`}
-                      alt={plugin.name}
+                      src={`/api/plugins/${plugin._id}/image${activeTab === 'pending' && hasPendingUpdate(plugin) ? '?pending=1' : ''}`}
+                      alt={source.name}
                       className="w-full h-full object-cover"
                     />
                   ) : (
@@ -340,15 +372,21 @@ export default function AdminPluginsPage() {
                   <div>
                     <div className="flex items-center gap-3 mb-2">
                       <h3 className="text-2xl font-bold text-on-surface">
-                        {plugin.name}
+                        {source.name}
                       </h3>
-                      {getStatusBadge(plugin.status)}
+                      {activeTab === 'pending' && hasPendingUpdate(plugin) && (
+                        <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-800">עריכה ממתינה</span>
+                      )}
+                      {activeTab === 'pending' && !hasPendingUpdate(plugin) && (
+                        <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-bold text-purple-800">תוסף חדש</span>
+                      )}
+                      {getStatusBadge(source.status)}
                       <span className="px-3 py-1 bg-surface rounded-full text-xs font-bold text-on-surface/60">
-                        גרסה {plugin.version}
+                        גרסה {source.version}
                       </span>
                     </div>
                     <p className="text-on-surface/70 leading-relaxed">
-                      {plugin.shortDescription}
+                      {source.shortDescription}
                     </p>
                   </div>
 
@@ -356,7 +394,7 @@ export default function AdminPluginsPage() {
                     <div>
                       <span className="text-on-surface/60">מפתח:</span>
                       <span className="font-medium text-on-surface mr-2">
-                        {plugin.author}
+                        {source.author}
                       </span>
                     </div>
                     <div>
@@ -373,15 +411,23 @@ export default function AdminPluginsPage() {
                     <div>
                       <span className="text-on-surface/60">תאימות:</span>
                       <span className="font-medium text-on-surface mr-2">
-                        {plugin.compatibleWith}
+                        {source.compatibleWith}
                       </span>
                     </div>
                     <div>
-                      <span className="text-on-surface/60">הועלה:</span>
+                      <span className="text-on-surface/60">{hasPendingUpdate(plugin) ? 'נשלח לעדכון:' : 'הועלה:'}</span>
                       <span className="font-medium text-on-surface mr-2">
-                        {formatDate(plugin.createdAt)}
+                        {formatDate(plugin.lastSubmittedAt || plugin.createdAt)}
                       </span>
                     </div>
+                    {plugin.lastSubmittedBy?.name && (
+                      <div>
+                        <span className="text-on-surface/60">נשלח ע"י:</span>
+                        <span className="font-medium text-on-surface mr-2">
+                          {plugin.lastSubmittedBy.name}
+                        </span>
+                      </div>
+                    )}
                     {activeTab === 'approved' && plugin.approvedAt && (
                       <div>
                         <span className="text-on-surface/60">אושר:</span>
@@ -401,7 +447,7 @@ export default function AdminPluginsPage() {
                     <div>
                       <span className="text-on-surface/60">קובץ:</span>
                       <span className="font-medium text-on-surface mr-2">
-                        {plugin.pluginFileName}
+                        {source.pluginFileName || plugin.pluginFileName}
                       </span>
                     </div>
                     {activeTab === 'approved' && (
@@ -415,9 +461,9 @@ export default function AdminPluginsPage() {
                   </div>
 
                   {/* Tags */}
-                  {plugin.tags && plugin.tags.length > 0 && (
+                  {source.tags && source.tags.length > 0 && (
                     <div className="flex flex-wrap gap-2">
-                      {plugin.tags.map((tag, index) => (
+                      {source.tags.map((tag, index) => (
                         <span
                           key={index}
                           className="px-3 py-1 bg-surface rounded-full text-xs text-on-surface/70"
@@ -429,21 +475,38 @@ export default function AdminPluginsPage() {
                   )}
 
                   {/* Description */}
-                  {plugin.description && plugin.description !== plugin.shortDescription && (
+                  {source.description && source.description !== source.shortDescription && (
                     <details className="text-sm">
                       <summary className="cursor-pointer text-primary font-medium hover:underline">
                         תיאור מלא
                       </summary>
                       <p className="mt-2 text-on-surface/70 leading-relaxed whitespace-pre-wrap">
-                        {plugin.description}
+                        {source.description}
                       </p>
                     </details>
                   )}
 
+                  {activeTab === 'pending' && plugin.pendingChangeSummary?.length > 0 && (
+                    <details className="text-sm">
+                      <summary className="cursor-pointer text-primary font-medium hover:underline">
+                        הצג שינויים שהוגשו
+                      </summary>
+                      <div className="mt-3 space-y-3">
+                        {plugin.pendingChangeSummary.map((change, index) => (
+                          <div key={`${change.field}-${index}`} className="rounded-xl border border-gray-200 bg-surface p-3">
+                            <div className="font-bold text-on-surface mb-1">{change.label}</div>
+                            <div className="text-on-surface/60">לפני: {change.before || 'ללא'}</div>
+                            <div className="text-on-surface">אחרי: {change.after || 'ללא'}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+
                   {/* Homepage Link */}
-                  {plugin.homepage && (
+                  {source.homepage && (
                     <a
-                      href={plugin.homepage}
+                      href={source.homepage}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
@@ -453,6 +516,9 @@ export default function AdminPluginsPage() {
                     </a>
                   )}
                 </div>
+                    </>
+                  )
+                })()}
 
                 {/* Actions */}
                 <div className="flex flex-col gap-3">
@@ -536,12 +602,21 @@ export default function AdminPluginsPage() {
 
                   {/* Download Plugin File for Review */}
                   <a
-                    href={`/api/plugins/${plugin._id}/download`}
+                    href={`/api/plugins/${plugin._id}/download${activeTab === 'pending' && hasPendingUpdate(plugin) ? '?pending=1' : ''}`}
                     className="flex items-center justify-center gap-2 px-6 py-3 bg-surface hover:bg-surface-variant rounded-xl font-medium transition-colors text-center"
                   >
                     <span className="material-symbols-outlined">download</span>
                     <span>הורד לבדיקה</span>
                   </a>
+
+                  <button
+                    onClick={() => handleEdit(plugin)}
+                    disabled={editingId === plugin._id}
+                    className="flex items-center justify-center gap-2 rounded-xl bg-stone-700 px-6 py-3 font-medium text-white transition-colors hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined">edit</span>
+                    <span>{editingId === plugin._id ? 'טוען...' : 'ערוך'}</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -553,6 +628,19 @@ export default function AdminPluginsPage() {
       {showNotificationSettings && (
         <PluginNotificationSettings
           onClose={() => setShowNotificationSettings(false)}
+        />
+      )}
+
+      {editingPlugin && (
+        <PluginEditModal
+          plugin={editingPlugin}
+          endpoint={`/api/admin/plugins/${editingPlugin._id}/edit`}
+          onClose={() => setEditingPlugin(null)}
+          onSuccess={async (result) => {
+            setEditingPlugin(null)
+            await showAlert('הצלחה', result?.message || 'השינויים נשמרו בהצלחה.')
+            loadPlugins()
+          }}
         />
       )}
     </div>
