@@ -206,9 +206,17 @@ export default function PluginDetailPage() {
     return Boolean(plugin.supportsDirectInstall && plugin.downloadUrl)
   }
 
+  const getDirectInstallUrl = (downloadUrl: string) => {
+    const absoluteDownloadUrl = /^https?:\/\//i.test(downloadUrl)
+      ? downloadUrl
+      : new URL(downloadUrl, window.location.origin).toString()
+
+    return `otzaria://plugin/install?url=${encodeURIComponent(absoluteDownloadUrl)}`
+  }
+
   const handleDirectInstall = () => {
     if (plugin && canDirectInstall(plugin)) {
-      window.location.href = `otzaria://plugin/install?url=${encodeURIComponent(plugin.downloadUrl)}`
+      window.location.href = getDirectInstallUrl(plugin.downloadUrl)
     }
   }
 
