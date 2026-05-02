@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
+import { buildDirectPluginInstallUrl } from '@/lib/pluginInstall'
 
 interface Plugin {
   id: string
@@ -218,17 +219,9 @@ function PluginsPageContent() {
     return Boolean(plugin.supportsDirectInstall && plugin.downloadUrl)
   }
 
-  const getDirectInstallUrl = (downloadUrl: string) => {
-    const absoluteDownloadUrl = /^https?:\/\//i.test(downloadUrl)
-      ? downloadUrl
-      : new URL(downloadUrl, window.location.origin).toString()
-
-    return `otzaria://plugin/install?url=${encodeURIComponent(absoluteDownloadUrl)}`
-  }
-
   const handleDirectInstall = (plugin: Plugin) => {
     if (canDirectInstall(plugin)) {
-      window.location.href = getDirectInstallUrl(plugin.downloadUrl)
+      window.location.href = buildDirectPluginInstallUrl(plugin.downloadUrl, window.location.origin)
     }
   }
 

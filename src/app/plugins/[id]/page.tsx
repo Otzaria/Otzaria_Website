@@ -8,6 +8,7 @@ import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 import PluginEditModal from '@/components/plugins/PluginEditModal'
 import { useDialog } from '@/components/providers/DialogContext'
+import { buildDirectPluginInstallUrl } from '@/lib/pluginInstall'
 
 interface Plugin {
   id: string
@@ -206,17 +207,9 @@ export default function PluginDetailPage() {
     return Boolean(plugin.supportsDirectInstall && plugin.downloadUrl)
   }
 
-  const getDirectInstallUrl = (downloadUrl: string) => {
-    const absoluteDownloadUrl = /^https?:\/\//i.test(downloadUrl)
-      ? downloadUrl
-      : new URL(downloadUrl, window.location.origin).toString()
-
-    return `otzaria://plugin/install?url=${encodeURIComponent(absoluteDownloadUrl)}`
-  }
-
   const handleDirectInstall = () => {
     if (plugin && canDirectInstall(plugin)) {
-      window.location.href = getDirectInstallUrl(plugin.downloadUrl)
+      window.location.href = buildDirectPluginInstallUrl(plugin.downloadUrl, window.location.origin)
     }
   }
 

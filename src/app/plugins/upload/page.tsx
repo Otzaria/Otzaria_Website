@@ -1,24 +1,23 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useSession } from 'next-auth/react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 import { useDialog } from '@/components/providers/DialogContext'
 
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+  return fallback
+}
+
 export default function UploadPluginPage() {
-  const { data: session, status } = useSession()
   const router = useRouter()
   const { showAlert } = useDialog() as { showAlert: (title: string, message: string) => void }
   const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.replace(`/library/auth/login?callbackUrl=${encodeURIComponent('/plugins/upload')}`)
-    }
-  }, [router, status])
 
   // שדות הטופס
   const [formData, setFormData] = useState({
@@ -45,7 +44,7 @@ export default function UploadPluginPage() {
   const [newTag, setNewTag] = useState('')
 
   // טיפול בשינוי שדות
-  const handleChange = (field: string, value: any) => {
+  const handleChange = <K extends keyof typeof formData>(field: K, value: (typeof formData)[K]) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
@@ -229,42 +228,11 @@ export default function UploadPluginPage() {
 
       await showAlert('הצלחה', 'התוסף הועלה בהצלחה ונשלח לאישור מנהל. לאחר האישור הוא יופיע בחנות התוספים.')
       router.push('/plugins')
-    } catch (err: any) {
-      showAlert('שגיאה', err.message || 'שגיאה בהעלאת התוסף')
+    } catch (error: unknown) {
+      showAlert('שגיאה', getErrorMessage(error, 'שגיאה בהעלאת התוסף'))
     } finally {
       setLoading(false)
     }
-  }
-
-  // בדיקת התחברות
-  if (status === 'loading') {
-    return (
-      <div className="flex min-h-screen flex-col bg-background">
-        <OtzariaSoftwareHeader />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-on-surface/50 font-medium">טוען...</p>
-          </div>
-        </main>
-        <OtzariaSoftwareFooter />
-      </div>
-    )
-  }
-
-  if (!session) {
-    return (
-      <div className="flex min-h-screen flex-col bg-background">
-        <OtzariaSoftwareHeader />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-on-surface/50 font-medium">מעביר לדף ההתחברות...</p>
-          </div>
-        </main>
-        <OtzariaSoftwareFooter />
-      </div>
-    )
   }
 
   return (
