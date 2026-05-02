@@ -218,9 +218,17 @@ function PluginsPageContent() {
     return Boolean(plugin.supportsDirectInstall && plugin.downloadUrl)
   }
 
+  const getDirectInstallUrl = (downloadUrl: string) => {
+    const absoluteDownloadUrl = /^https?:\/\//i.test(downloadUrl)
+      ? downloadUrl
+      : new URL(downloadUrl, window.location.origin).toString()
+
+    return `otzaria://plugin/install?url=${encodeURIComponent(absoluteDownloadUrl)}`
+  }
+
   const handleDirectInstall = (plugin: Plugin) => {
     if (canDirectInstall(plugin)) {
-      window.location.href = `otzaria://plugin/install?url=${encodeURIComponent(plugin.downloadUrl)}`
+      window.location.href = getDirectInstallUrl(plugin.downloadUrl)
     }
   }
 
@@ -464,7 +472,7 @@ function PluginsPageContent() {
                         {canDirectInstall(plugin) && (
                           <button
                             onClick={() => handleDirectInstall(plugin)}
-                            className="flex-1 px-4 py-2.5 bg-white border border-primary/20 text-primary rounded-full text-sm font-bold hover:bg-primary/5 transition-colors"
+                            className="flex-1 px-4 py-2.5 bg-white border border-primary/20 text-primary rounded-full text-sm font-bold hover:bg-primary/5 transition-colors text-center"
                           >
                             התקנה ישירה
                           </button>

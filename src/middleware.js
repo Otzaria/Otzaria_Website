@@ -48,6 +48,7 @@ export default withAuth(
 
 export const config = {
   matcher: [
+    '/plugins/upload/:path*',
     '/library/dashboard/:path*',
     '/library/admin/:path*',
     '/library/upload/:path*',

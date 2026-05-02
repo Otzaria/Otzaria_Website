@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -13,6 +13,12 @@ export default function UploadPluginPage() {
   const router = useRouter()
   const { showAlert } = useDialog() as { showAlert: (title: string, message: string) => void }
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.replace(`/library/auth/login?callbackUrl=${encodeURIComponent('/plugins/upload')}`)
+    }
+  }, [router, status])
 
   // שדות הטופס
   const [formData, setFormData] = useState({
@@ -250,20 +256,10 @@ export default function UploadPluginPage() {
     return (
       <div className="flex min-h-screen flex-col bg-background">
         <OtzariaSoftwareHeader />
-        <main className="flex-1 flex items-center justify-center px-4">
-          <div className="max-w-md w-full text-center">
-            <div className="bg-white rounded-2xl border border-gray-100 p-8">
-              <h2 className="text-2xl font-bold text-on-surface mb-4">נדרשת התחברות</h2>
-              <p className="text-on-surface/70 mb-6">
-                כדי להעלות תוסף לחנות, עליך להתחבר תחילה
-              </p>
-              <Link
-                href="/api/auth/signin"
-                className="inline-block px-6 py-3 bg-primary text-white rounded-full font-bold hover:bg-primary/90 transition-colors"
-              >
-                התחבר
-              </Link>
-            </div>
+        <main className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-on-surface/50 font-medium">מעביר לדף ההתחברות...</p>
           </div>
         </main>
         <OtzariaSoftwareFooter />
