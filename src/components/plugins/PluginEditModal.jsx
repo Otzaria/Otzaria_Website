@@ -4,9 +4,33 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useSession } from 'next-auth/react'
 import { useDialog } from '@/components/providers/DialogContext'
+import { MIN_SUPPORTED_APP_VERSION } from '@/lib/pluginSubmission'
 
-const VERSION_RE = /^\d+(?:\.\d+){0,3}(?:[-+][A-Za-z0-9.]+)?$/
 const ALLOWED_IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
+const STATUS_OPTIONS = [
+  { value: 'stable', label: 'יציב' },
+  { value: 'beta', label: 'בטא' },
+  { value: 'experimental', label: 'ניסיוני' }
+]
+
+async function readPluginManifest(file) {
+  const { unzipSync } = await import('fflate')
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  const unzipped = unzipSync(bytes, { filter: (info) => info.name === 'manifest.json' })
+  const manifestBytes = unzipped['manifest.json']
+  if (!manifestBytes) throw new Error('manifest.json not found in plugin file')
+  return JSON.parse(new TextDecoder().decode(manifestBytes))
+}
+
+function versionAtLeast(v, min) {
+  const parse = (s) => s.split('.').map(Number)
+  const va = parse(v), vm = parse(min)
+  for (let i = 0; i < Math.max(va.length, vm.length); i++) {
+    const a = va[i] ?? 0, b = vm[i] ?? 0
+    if (a !== b) return a > b
+  }
+  return true
+}
 
 export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }) {
   const { data: session } = useSession()
@@ -25,8 +49,7 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
     author: plugin.author || '',
     compatibleWith: plugin.compatibleWith || '',
     tags: plugin.tags || [],
-    homepage: plugin.homepage || '',
-    installInstructions: plugin.installInstructions?.length ? plugin.installInstructions : ['']
+    homepage: plugin.homepage || ''
   })
 
   const [pluginFile, setPluginFile] = useState(null)
@@ -58,26 +81,58 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
     handleChange('tags', formData.tags.filter((item) => item !== tag))
   }
 
-  const addInstruction = () => {
-    handleChange('installInstructions', [...formData.installInstructions, ''])
-  }
-
-  const updateInstruction = (index, value) => {
-    const next = [...formData.installInstructions]
-    next[index] = value
-    handleChange('installInstructions', next)
-  }
-
-  const removeInstruction = (index) => {
-    handleChange('installInstructions', formData.installInstructions.filter((_, currentIndex) => currentIndex !== index))
-  }
-
-  const handlePluginFile = (event) => {
-    const file = event.target.files?.[0]
+  const handlePluginFile = async (event) => {
+    const input = event.target
+    const file = input.files?.[0]
     if (!file) return
     if (!file.name.toLowerCase().endsWith('.otzplugin')) {
       showAlert('שגיאה', 'קובץ התוסף חייב להיות בפורמט .otzplugin')
+      input.value = ''
       return
+    }
+    let manifest
+    try {
+      manifest = await readPluginManifest(file)
+    } catch (err) {
+      showAlert('שגיאה', `לא ניתן לקרוא את manifest.json מקובץ התוסף: ${err?.message || err}`)
+      input.value = ''
+      return
+    }
+    const manifestVersion = (typeof manifest.version === 'string' ? manifest.version : '').trim()
+    const manifestName = (typeof manifest.name === 'string' ? manifest.name : '').trim()
+    const manifestAuthor = (typeof manifest.author === 'string' ? manifest.author : '').trim()
+    const manifestDesc = (typeof manifest.description === 'string' ? manifest.description : '').trim()
+    const stability = (typeof manifest.stability === 'string' ? manifest.stability : '').trim()
+    const minAppVersion = (typeof manifest.minAppVersion === 'string' ? manifest.minAppVersion : '').trim()
+    const manifestHomepage = (typeof manifest.homepage === 'string' ? manifest.homepage : '').trim()
+    if (!manifestVersion) {
+      showAlert('שגיאה', 'חסר שדה גרסה ב-manifest.json של קובץ התוסף')
+      input.value = ''
+      return
+    }
+    if (!isAdmin && (!stability || !['stable', 'beta', 'experimental'].includes(stability))) {
+      showAlert('שגיאה', 'חסר שדה stability תקין ב-manifest.json (ערכים מותרים: stable, beta, experimental)')
+      input.value = ''
+      return
+    }
+    if (!isAdmin && !minAppVersion) {
+      showAlert('שגיאה', 'חסר שדה minAppVersion ב-manifest.json של קובץ התוסף')
+      input.value = ''
+      return
+    }
+    if (!isAdmin && !versionAtLeast(minAppVersion, MIN_SUPPORTED_APP_VERSION)) {
+      showAlert('שגיאה', `גרסת המינימום (${minAppVersion}) לא יכולה להיות פחות מ-${MIN_SUPPORTED_APP_VERSION}`)
+      input.value = ''
+      return
+    }
+    if (!isAdmin) {
+      handleChange('version', manifestVersion)
+      if (manifestName) handleChange('name', manifestName)
+      if (manifestAuthor) handleChange('author', manifestAuthor)
+      if (manifestDesc) handleChange('shortDescription', manifestDesc)
+      handleChange('status', stability)
+      handleChange('compatibleWith', minAppVersion)
+      handleChange('homepage', manifestHomepage)
     }
     setPluginFile(file)
   }
@@ -130,10 +185,6 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
         throw new Error('נא למלא את כל שדות החובה לפני השמירה.')
       }
 
-      if (!VERSION_RE.test(formData.version.trim())) {
-        throw new Error('פורמט גרסה לא תקין (לדוגמה 1.0.0 או 1.2.3-beta)')
-      }
-
       const data = new FormData()
       data.append('name', formData.name)
       data.append('shortDescription', formData.shortDescription)
@@ -144,10 +195,6 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
       data.append('compatibleWith', formData.compatibleWith)
       data.append('tags', JSON.stringify(formData.tags))
       data.append('homepage', formData.homepage)
-      data.append(
-        'installInstructions',
-        JSON.stringify(formData.installInstructions.filter((instruction) => instruction.trim()))
-      )
 
       if (pluginFile) {
         data.append('pluginFile', pluginFile)
@@ -203,31 +250,32 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
         <form onSubmit={handleSubmit} className="space-y-6 p-6">
           {!isAdmin && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
-              כל שינוי יישלח לאישור מנהל לפני שיתעדכן בחנות. מספר גרסה חדש נדרש רק אם מחליפים את קובץ התוסף.
+              כל שינוי יישלח לאישור מנהל לפני שיתעדכן בחנות. בעת החלפת קובץ התוסף, שם התוסף, המפתח והגרסה יזוהו אוטומטית מ-manifest.json — הגרסה חייבת להיות גבוהה מהנוכחית.
             </div>
           )}
 
           <section className="space-y-4">
             <h3 className="text-xl font-bold text-on-surface">מידע בסיסי</h3>
-            <input type="text" value={formData.name} onChange={(e) => handleChange('name', e.target.value)} className="w-full rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="שם התוסף" required />
-            <input type="text" value={formData.shortDescription} onChange={(e) => handleChange('shortDescription', e.target.value)} className="w-full rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="תיאור קצר" maxLength={150} required />
+            {isAdmin ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                <input value={formData.name} onChange={(e) => handleChange('name', e.target.value)} className="rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="שם התוסף" required />
+                <input value={formData.author} onChange={(e) => handleChange('author', e.target.value)} className="rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="מפתח" required />
+                <input value={formData.version} onChange={(e) => handleChange('version', e.target.value)} className="rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="גרסה" required />
+                <input value={formData.compatibleWith} onChange={(e) => handleChange('compatibleWith', e.target.value)} className="rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="גרסת מינימום" required />
+                <input value={formData.shortDescription} onChange={(e) => handleChange('shortDescription', e.target.value)} className="md:col-span-2 rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="תיאור קצר" required />
+                <input value={formData.homepage} onChange={(e) => handleChange('homepage', e.target.value)} className="md:col-span-2 rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="אתר בית (אופציונלי)" />
+                <select value={formData.status} onChange={(e) => handleChange('status', e.target.value)} className="rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10">
+                  {STATUS_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-primary/10 bg-primary/5 px-4 py-3 text-sm text-on-surface/70">
+                שאר המידע יילקח מקובץ התוסף.
+              </div>
+            )}
             <textarea value={formData.description} onChange={(e) => handleChange('description', e.target.value)} className="min-h-[150px] w-full rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="תיאור מלא" required />
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <input type="text" value={formData.version} onChange={(e) => handleChange('version', e.target.value)} className="w-full rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="גרסה" required />
-              <select value={formData.status} onChange={(e) => handleChange('status', e.target.value)} className="w-full rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" required>
-                <option value="stable">יציב</option>
-                <option value="beta">בטא</option>
-                <option value="experimental">ניסיוני</option>
-              </select>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <input type="text" value={formData.author} onChange={(e) => handleChange('author', e.target.value)} className="w-full rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="שם המפתח" required />
-              <input type="text" value={formData.compatibleWith} onChange={(e) => handleChange('compatibleWith', e.target.value)} className="w-full rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="תאימות" required />
-            </div>
-
-            <input type="url" value={formData.homepage} onChange={(e) => handleChange('homepage', e.target.value)} className="w-full rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="אתר בית (אופציונלי)" />
           </section>
 
           <section className="space-y-4">
@@ -250,26 +298,6 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
             )}
           </section>
 
-          <section className="space-y-4">
-            <h3 className="text-xl font-bold text-on-surface">הוראות התקנה</h3>
-            {formData.installInstructions.map((instruction, index) => (
-              <div key={index} className="flex gap-2">
-                <div className="mt-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                  {index + 1}
-                </div>
-                <input type="text" value={instruction} onChange={(e) => updateInstruction(index, e.target.value)} className="flex-1 rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder={`שלב ${index + 1}`} />
-                {formData.installInstructions.length > 1 && (
-                  <button type="button" onClick={() => removeInstruction(index)} className="mt-2 rounded-xl px-3 text-red-500 transition-colors hover:bg-red-50">
-                    <span className="material-symbols-outlined">delete</span>
-                  </button>
-                )}
-              </div>
-            ))}
-            <button type="button" onClick={addInstruction} className="w-full rounded-xl border-2 border-dashed border-gray-300 px-4 py-3 font-medium text-on-surface/60 transition-colors hover:border-primary hover:text-primary">
-              + הוסף שלב
-            </button>
-          </section>
-
           <section className="space-y-6">
             <h3 className="text-xl font-bold text-on-surface">קבצים</h3>
 
@@ -278,7 +306,8 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
               <input type="file" accept=".otzplugin" onChange={handlePluginFile} className="w-full rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" />
               {pluginFile && <p className="mt-2 text-sm text-green-600">✓ נבחר: {pluginFile.name}</p>}
               {plugin.pluginFileName && <p className="mt-2 text-sm text-on-surface/50">קובץ נוכחי: {plugin.pluginFileName}</p>}
-              {!isAdmin && <p className="mt-2 text-sm text-on-surface/50">אם מעלים קובץ חדש, צריך לעדכן גם את מספר הגרסה הנוכחי ({originalVersion}).</p>}
+              {isAdmin && <p className="mt-2 text-sm text-on-surface/50">למנהל, החלפת הקובץ אינה משנה אוטומטית את השדות הידניים ואינה מחייבת העלאת גרסה.</p>}
+              {!isAdmin && <p className="mt-2 text-sm text-on-surface/50">אם מעלים קובץ חדש, הגרסה תזוהה אוטומטית מ-manifest.json ויש להיות גבוהה מהגרסה הנוכחית ({originalVersion}).</p>}
             </div>
 
             <div>
@@ -310,7 +339,7 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
                       <img key={index} src={screenshot} alt={`צילום מסך ${index + 1}`} className="h-32 w-full rounded-xl border border-gray-200 object-cover" />
                     ))}
                   </div>
-                  <button type="button" onClick={() => setRemoveScreenshots(true)} className="mt-2 text-sm text-red-600 hover:underline">הסר כל צילומי המסך</button>
+                  <button type="button" onClick={() => setRemoveScreenshots(true)} className="mt-2 text-sm text-red-600 hover:underline">הסר את כל צילומי המסך</button>
                 </div>
               ) : null}
             </div>

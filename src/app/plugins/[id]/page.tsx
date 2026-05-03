@@ -8,6 +8,8 @@ import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 import PluginEditModal from '@/components/plugins/PluginEditModal'
 import { useDialog } from '@/components/providers/DialogContext'
+import { buildDirectPluginInstallUrl } from '@/lib/pluginInstall'
+import { formatPluginStatus } from '@/lib/pluginSubmission'
 
 interface Plugin {
   id: string
@@ -26,7 +28,6 @@ interface Plugin {
   downloadUrl: string
   supportsDirectInstall: boolean
   homepage: string
-  installInstructions: string[]
   authorId?: string | null
 }
 
@@ -82,15 +83,6 @@ export default function PluginDetailPage() {
     }
     loadPlugin()
   }, [params.id, router])
-
-  const formatStatus = (status: string) => {
-    const labels: Record<string, string> = {
-      stable: 'יציב',
-      beta: 'בטא',
-      experimental: 'ניסיוני'
-    }
-    return labels[status] || 'לא ידוע'
-  }
 
   // המרת מספר לגימטריה עברית
   const toHebrewNumeral = (num: number): string => {
@@ -206,17 +198,9 @@ export default function PluginDetailPage() {
     return Boolean(plugin.supportsDirectInstall && plugin.downloadUrl)
   }
 
-  const getDirectInstallUrl = (downloadUrl: string) => {
-    const absoluteDownloadUrl = /^https?:\/\//i.test(downloadUrl)
-      ? downloadUrl
-      : new URL(downloadUrl, window.location.origin).toString()
-
-    return `otzaria://plugin/install?url=${encodeURIComponent(absoluteDownloadUrl)}`
-  }
-
   const handleDirectInstall = () => {
     if (plugin && canDirectInstall(plugin)) {
-      window.location.href = getDirectInstallUrl(plugin.downloadUrl)
+      window.location.href = buildDirectPluginInstallUrl(plugin.downloadUrl, window.location.origin)
     }
   }
 
@@ -239,7 +223,7 @@ export default function PluginDetailPage() {
     return null
   }
 
-  const canEdit = Boolean(currentUser && (currentUser.role === 'admin' || currentUser.id === plugin.authorId))
+  const canEdit = Boolean(currentUser && currentUser.id === plugin.authorId)
 
   const handleEdit = async () => {
     try {
@@ -307,7 +291,7 @@ export default function PluginDetailPage() {
                     plugin.status === 'beta' ? 'bg-primary/15 text-primary' :
                     'bg-primary/20 text-primary'
                   }`}>
-                    {formatStatus(plugin.status)}
+                    {formatPluginStatus(plugin.status)}
                   </span>
                   <span className="px-4 py-2 rounded-full text-sm font-bold bg-surface text-on-surface/60">
                     גרסה {plugin.version}
@@ -342,7 +326,7 @@ export default function PluginDetailPage() {
                       className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-gray-200 text-on-surface rounded-xl font-medium hover:border-primary/30 transition-colors"
                     >
                       <span className="material-symbols-outlined">open_in_new</span>
-                      <span>דיון בפורום</span>
+                      <span>מקור</span>
                     </a>
                   )}
                   {canEdit && (
@@ -375,7 +359,7 @@ export default function PluginDetailPage() {
                 </div>
                 <div className="p-4 bg-surface rounded-xl">
                   <div className="text-sm text-on-surface/60 mb-1">סטטוס</div>
-                  <div className="font-bold text-on-surface">{formatStatus(plugin.status)}</div>
+                  <div className="font-bold text-on-surface">{formatPluginStatus(plugin.status)}</div>
                 </div>
                 <div className="p-4 bg-surface rounded-xl">
                   <div className="text-sm text-on-surface/60 mb-1">מפתח</div>
@@ -412,22 +396,6 @@ export default function PluginDetailPage() {
             </div>
           </div>
 
-          {/* Installation Instructions */}
-          {plugin.installInstructions && plugin.installInstructions.length > 0 && (
-            <div className="bg-white rounded-2xl border border-gray-100 p-6">
-              <h2 className="text-xl font-bold text-on-surface mb-4 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary">checklist</span>
-                <span>הוראות התקנה</span>
-              </h2>
-              <ol className="space-y-3 pr-6">
-                {plugin.installInstructions.map((instruction, index) => (
-                  <li key={index} className="text-on-surface/80 leading-relaxed list-decimal">
-                    {instruction}
-                  </li>
-                ))}
-              </ol>
-            </div>
-          )}
         </div>
       </main>
 

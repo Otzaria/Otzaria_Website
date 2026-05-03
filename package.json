@@ -16,6 +16,7 @@
     "cheerio": "^1.2.0",
     "dompurify": "^3.4.0",
     "dotenv": "^17.2.3",
+    "fflate": "^0.8.2",
     "framer-motion": "^12.23.26",
     "fs-extra": "^11.2.0",
     "limiter": "^3.0.0",

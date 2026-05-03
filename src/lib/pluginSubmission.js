@@ -8,12 +8,21 @@ export const PLUGIN_LIMITS = {
   author: 100,
   compatibleWith: 100,
   homepage: 500,
-  tag: 40,
-  instruction: 500
+  tag: 40
 }
 
 export const ALLOWED_PLUGIN_STATUSES = ['stable', 'beta', 'experimental']
+export const PLUGIN_STATUS_LABELS = {
+  stable: 'יציב',
+  beta: 'בטא',
+  experimental: 'ניסיוני'
+}
 export const PLUGIN_VERSION_RE = /^\d+(?:\.\d+){0,3}(?:[-+][A-Za-z0-9.]+)?$/
+export const MIN_SUPPORTED_APP_VERSION = '0.9.89'
+
+export function formatPluginStatus(status) {
+  return PLUGIN_STATUS_LABELS[status] || 'לא ידוע'
+}
 
 export function isHttpUrl(value) {
   try {
@@ -45,13 +54,6 @@ export function normalizeTags(rawTags) {
     .slice(0, 30)
 }
 
-export function normalizeInstructions(rawInstructions) {
-  return rawInstructions
-    .map(instruction => String(instruction))
-    .filter(instruction => instruction.trim().length > 0)
-    .slice(0, 50)
-}
-
 export function assertPluginTextLimits(data) {
   if (data.name.length > PLUGIN_LIMITS.name) {
     throw new Error(`Name must be at most ${PLUGIN_LIMITS.name} characters`)
@@ -77,9 +79,6 @@ export function assertPluginTextLimits(data) {
   if ((data.tags || []).some(tag => tag.length > PLUGIN_LIMITS.tag)) {
     throw new Error(`Each tag must be at most ${PLUGIN_LIMITS.tag} characters`)
   }
-  if ((data.installInstructions || []).some(instruction => instruction.length > PLUGIN_LIMITS.instruction)) {
-    throw new Error(`Each instruction must be at most ${PLUGIN_LIMITS.instruction} characters`)
-  }
 }
 
 export function getLivePluginData(plugin) {
@@ -93,7 +92,6 @@ export function getLivePluginData(plugin) {
     compatibleWith: plugin.compatibleWith,
     tags: plugin.tags || [],
     homepage: plugin.homepage || '',
-    installInstructions: plugin.installInstructions || [],
     pluginFileName: plugin.pluginFileName || '',
     pluginFileExt: plugin.pluginFileExt || '.otzplugin',
     pluginFileSize: plugin.pluginFileSize || 0,
@@ -130,13 +128,12 @@ export function formatPluginForPublic(plugin, options = {}) {
     screenshots: (source.screenshots || []).map((_, index) => `/api/plugins/${pluginId}/screenshots/${index}${options.usePending ? '?pending=1' : ''}`),
     downloadUrl: `/api/plugins/${pluginId}/download`,
     homepage: source.homepage || '',
-    installInstructions: source.installInstructions || [],
     downloadCount: plugin.downloadCount || 0,
     supportsDirectInstall: (source.pluginFileExt || '').toLowerCase() === '.otzplugin'
   }
 }
 
-export function formatValue(value) {
+export function formatValue(value, field) {
   if (Array.isArray(value)) {
     return value.length ? value.join(', ') : 'ללא'
   }
@@ -145,6 +142,9 @@ export function formatValue(value) {
   }
   if (typeof value === 'boolean') {
     return value ? 'כן' : 'לא'
+  }
+  if (field === 'status') {
+    return formatPluginStatus(value)
   }
   return String(value)
 }
@@ -159,8 +159,7 @@ export function buildChangeSummary(current, next, filesChanged) {
     ['author', 'שם המפתח'],
     ['compatibleWith', 'תאימות'],
     ['tags', 'תגיות'],
-    ['homepage', 'אתר בית'],
-    ['installInstructions', 'הוראות התקנה']
+    ['homepage', 'אתר בית']
   ]
 
   const changes = []
@@ -175,8 +174,8 @@ export function buildChangeSummary(current, next, filesChanged) {
       changes.push({
         field,
         label,
-        before: formatValue(before),
-        after: formatValue(after)
+        before: formatValue(before, field),
+        after: formatValue(after, field)
       })
     }
   }

@@ -1,24 +1,24 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useSession } from 'next-auth/react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 import { useDialog } from '@/components/providers/DialogContext'
+import { MIN_SUPPORTED_APP_VERSION } from '@/lib/pluginSubmission'
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+  return fallback
+}
 
 export default function UploadPluginPage() {
-  const { data: session, status } = useSession()
   const router = useRouter()
   const { showAlert } = useDialog() as { showAlert: (title: string, message: string) => void }
   const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.replace(`/library/auth/login?callbackUrl=${encodeURIComponent('/plugins/upload')}`)
-    }
-  }, [router, status])
 
   // שדות הטופס
   const [formData, setFormData] = useState({
@@ -30,8 +30,7 @@ export default function UploadPluginPage() {
     author: '',
     compatibleWith: '',
     tags: [] as string[],
-    homepage: '',
-    installInstructions: [''] as string[]
+    homepage: ''
   })
 
   // קבצים
@@ -45,7 +44,7 @@ export default function UploadPluginPage() {
   const [newTag, setNewTag] = useState('')
 
   // טיפול בשינוי שדות
-  const handleChange = (field: string, value: any) => {
+  const handleChange = <K extends keyof typeof formData>(field: K, value: (typeof formData)[K]) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
@@ -62,44 +61,91 @@ export default function UploadPluginPage() {
     handleChange('tags', formData.tags.filter(t => t !== tag))
   }
 
-  // הוספת הוראת התקנה
-  const addInstruction = () => {
-    handleChange('installInstructions', [...formData.installInstructions, ''])
-  }
-
-  // עדכון הוראת התקנה
-  const updateInstruction = (index: number, value: string) => {
-    const updated = [...formData.installInstructions]
-    updated[index] = value
-    handleChange('installInstructions', updated)
-  }
-
-  // הסרת הוראת התקנה
-  const removeInstruction = (index: number) => {
-    handleChange('installInstructions', formData.installInstructions.filter((_, i) => i !== index))
-  }
-
   // מגבלות חייבות להיות עקביות עם השרת ([src/app/api/plugins/upload/route.js]).
   const MAX_PLUGIN_BYTES = 50 * 1024 * 1024
   const MAX_IMAGE_BYTES = 5 * 1024 * 1024
   const MAX_SCREENSHOTS = 10
   const ALLOWED_IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
-  const VERSION_RE = /^\d+(?:\.\d+){0,3}(?:[-+][A-Za-z0-9.]+)?$/
+
+  // Reads manifest.json from an .otzplugin (ZIP) file using fflate
+  async function readPluginManifest(file: File): Promise<Record<string, unknown>> {
+    const { unzipSync } = await import('fflate')
+    const bytes = new Uint8Array(await file.arrayBuffer())
+    const unzipped = unzipSync(bytes, { filter: (info) => info.name === 'manifest.json' })
+    const manifestBytes = unzipped['manifest.json']
+    if (!manifestBytes) throw new Error('manifest.json not found in plugin file')
+    return JSON.parse(new TextDecoder().decode(manifestBytes))
+  }
+
+  function versionAtLeast(v: string, min: string): boolean {
+    const parse = (s: string) => s.split('.').map(Number)
+    const va = parse(v), vm = parse(min)
+    for (let i = 0; i < Math.max(va.length, vm.length); i++) {
+      const a = va[i] ?? 0, b = vm[i] ?? 0
+      if (a !== b) return a > b
+    }
+    return true
+  }
 
   // טיפול בקובץ תוסף
-  const handlePluginFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      if (!file.name.toLowerCase().endsWith('.otzplugin')) {
-        showAlert('שגיאה', 'קובץ התוסף חייב להיות בפורמט .otzplugin')
-        return
-      }
-      if (file.size > MAX_PLUGIN_BYTES) {
-        showAlert('שגיאה', `קובץ התוסף חורג מהמגבלה של ${MAX_PLUGIN_BYTES / 1024 / 1024}MB`)
-        return
-      }
-      setPluginFile(file)
+  const handlePluginFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target
+    const file = input.files?.[0]
+    if (!file) return
+
+    const resetInput = () => { input.value = '' }
+
+    if (!file.name.toLowerCase().endsWith('.otzplugin')) {
+      showAlert('שגיאה', 'קובץ התוסף חייב להיות בפורמט .otzplugin')
+      resetInput()
+      return
     }
+    if (file.size > MAX_PLUGIN_BYTES) {
+      showAlert('שגיאה', `קובץ התוסף חורג מהמגבלה של ${MAX_PLUGIN_BYTES / 1024 / 1024}MB`)
+      resetInput()
+      return
+    }
+
+    let manifest: Record<string, unknown>
+    try {
+      manifest = await readPluginManifest(file)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      showAlert('שגיאה', `לא ניתן לקרוא את manifest.json מקובץ התוסף: ${msg}`)
+      resetInput()
+      return
+    }
+
+    const version = (typeof manifest.version === 'string' ? manifest.version : '').trim()
+    const name = (typeof manifest.name === 'string' ? manifest.name : '').trim()
+    const author = (typeof manifest.author === 'string' ? manifest.author : '').trim()
+    const shortDescription = (typeof manifest.description === 'string' ? manifest.description : '').trim()
+    const stability = (typeof manifest.stability === 'string' ? manifest.stability : '').trim()
+    const minAppVersion = (typeof manifest.minAppVersion === 'string' ? manifest.minAppVersion : '').trim()
+    const homepage = (typeof manifest.homepage === 'string' ? manifest.homepage : '').trim()
+
+    if (!version) { showAlert('שגיאה', 'חסר שדה גרסה ב-manifest.json'); resetInput(); return }
+    if (!name) { showAlert('שגיאה', 'חסר שדה name ב-manifest.json'); resetInput(); return }
+    if (!author) { showAlert('שגיאה', 'חסר שדה author ב-manifest.json'); resetInput(); return }
+    if (!shortDescription) { showAlert('שגיאה', 'חסר שדה description ב-manifest.json'); resetInput(); return }
+    if (!stability || !['stable', 'beta', 'experimental'].includes(stability)) {
+      showAlert('שגיאה', 'חסר שדה stability תקין ב-manifest.json (ערכים מותרים: stable, beta, experimental)')
+      resetInput(); return
+    }
+    if (!minAppVersion) { showAlert('שגיאה', 'חסר שדה minAppVersion ב-manifest.json'); resetInput(); return }
+    if (!versionAtLeast(minAppVersion, MIN_SUPPORTED_APP_VERSION)) {
+      showAlert('שגיאה', `גרסת המינימום (${minAppVersion}) לא יכולה להיות פחות מ-${MIN_SUPPORTED_APP_VERSION}`)
+      resetInput(); return
+    }
+
+    handleChange('version', version)
+    handleChange('name', name)
+    handleChange('author', author)
+    handleChange('shortDescription', shortDescription)
+    handleChange('status', stability as 'stable' | 'beta' | 'experimental')
+    handleChange('compatibleWith', minAppVersion)
+    handleChange('homepage', homepage)
+    setPluginFile(file)
   }
 
   // טיפול בתמונה
@@ -167,24 +213,12 @@ export default function UploadPluginPage() {
         throw new Error('חובה לצרף קובץ תוסף')
       }
 
-      if (!formData.name || !formData.shortDescription || !formData.description ||
-          !formData.version || !formData.author || !formData.compatibleWith) {
+      if (!formData.description || !formData.compatibleWith) {
         throw new Error('נא למלא את כל השדות החובה')
       }
 
-      if (!VERSION_RE.test(formData.version.trim())) {
-        throw new Error('פורמט גרסה לא תקין (לדוגמה 1.0.0 או 1.2.3-beta)')
-      }
-
-      if (formData.homepage) {
-        try {
-          const u = new URL(formData.homepage)
-          if (u.protocol !== 'http:' && u.protocol !== 'https:') {
-            throw new Error('protocol')
-          }
-        } catch {
-          throw new Error('כתובת אתר הבית חייבת להתחיל ב-http:// או https://')
-        }
+      if (!formData.version || !formData.name || !formData.author || !formData.shortDescription) {
+        throw new Error('נא לבחור קובץ תוסף תחילה - שם, מפתח, תיאור קצר וגרסה יזוהו אוטומטית')
       }
 
       if (!['stable', 'beta', 'experimental'].includes(formData.status)) {
@@ -202,10 +236,6 @@ export default function UploadPluginPage() {
       data.append('compatibleWith', formData.compatibleWith)
       data.append('tags', JSON.stringify(formData.tags))
       data.append('homepage', formData.homepage)
-      
-      // סינון הוראות התקנה ריקות
-      const instructions = formData.installInstructions.filter(i => i.trim())
-      data.append('installInstructions', JSON.stringify(instructions))
       
       data.append('pluginFile', pluginFile)
       if (imageFile) {
@@ -229,42 +259,11 @@ export default function UploadPluginPage() {
 
       await showAlert('הצלחה', 'התוסף הועלה בהצלחה ונשלח לאישור מנהל. לאחר האישור הוא יופיע בחנות התוספים.')
       router.push('/plugins')
-    } catch (err: any) {
-      showAlert('שגיאה', err.message || 'שגיאה בהעלאת התוסף')
+    } catch (error: unknown) {
+      showAlert('שגיאה', getErrorMessage(error, 'שגיאה בהעלאת התוסף'))
     } finally {
       setLoading(false)
     }
-  }
-
-  // בדיקת התחברות
-  if (status === 'loading') {
-    return (
-      <div className="flex min-h-screen flex-col bg-background">
-        <OtzariaSoftwareHeader />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-on-surface/50 font-medium">טוען...</p>
-          </div>
-        </main>
-        <OtzariaSoftwareFooter />
-      </div>
-    )
-  }
-
-  if (!session) {
-    return (
-      <div className="flex min-h-screen flex-col bg-background">
-        <OtzariaSoftwareHeader />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-on-surface/50 font-medium">מעביר לדף ההתחברות...</p>
-          </div>
-        </main>
-        <OtzariaSoftwareFooter />
-      </div>
-    )
   }
 
   return (
@@ -299,34 +298,8 @@ export default function UploadPluginPage() {
               <h2 className="text-2xl font-bold text-on-surface mb-6">מידע בסיסי</h2>
               
               <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-bold text-on-surface/60 mb-2">
-                    שם התוסף <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => handleChange('name', e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
-                    placeholder="לדוגמה: תוסף מילון"
-                    maxLength={100}
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-bold text-on-surface/60 mb-2">
-                    תיאור קצר <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.shortDescription}
-                    onChange={(e) => handleChange('shortDescription', e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
-                    placeholder="תיאור קצר של התוסף (עד 150 תווים)"
-                    maxLength={150}
-                    required
-                  />
+                <div className="rounded-xl border border-primary/10 bg-primary/5 px-4 py-3 text-sm text-on-surface/70">
+                  שאר המידע יילקח מקובץ התוסף.
                 </div>
 
                 <div>
@@ -343,87 +316,6 @@ export default function UploadPluginPage() {
                   />
                 </div>
 
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-bold text-on-surface/60 mb-2">
-                      גרסה <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.version}
-                      onChange={(e) => handleChange('version', e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
-                      placeholder="לדוגמה: 1.0.0"
-                      pattern="^\d+(?:\.\d+){0,3}(?:[-+][A-Za-z0-9.]+)?$"
-                      title="פורמט: X או X.Y או X.Y.Z, אופציונלי -beta וכד'"
-                      maxLength={30}
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-bold text-on-surface/60 mb-2">
-                      סטטוס <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={formData.status}
-                      onChange={(e) => handleChange('status', e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
-                      required
-                    >
-                      <option value="stable">יציב</option>
-                      <option value="beta">בטא</option>
-                      <option value="experimental">ניסיוני</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-bold text-on-surface/60 mb-2">
-                      שם המפתח <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.author}
-                      onChange={(e) => handleChange('author', e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
-                      placeholder="שמך או שם הארגון"
-                      maxLength={100}
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-bold text-on-surface/60 mb-2">
-                      תאימות <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.compatibleWith}
-                      onChange={(e) => handleChange('compatibleWith', e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
-                      placeholder="לדוגמה: אוצריא 5.0+"
-                      maxLength={100}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-bold text-on-surface/60 mb-2">
-                    אתר בית (אופציונלי)
-                  </label>
-                  <input
-                    type="url"
-                    value={formData.homepage}
-                    onChange={(e) => handleChange('homepage', e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
-                    placeholder="https://example.com"
-                    maxLength={500}
-                    pattern="https?://.+"
-                  />
-                </div>
               </div>
             </section>
 
@@ -472,48 +364,6 @@ export default function UploadPluginPage() {
                     ))}
                   </div>
                 )}
-              </div>
-            </section>
-
-            {/* הוראות התקנה */}
-            <section className="bg-white rounded-2xl border border-gray-100 p-6">
-              <h2 className="text-2xl font-bold text-on-surface mb-6">הוראות התקנה</h2>
-              
-              <div className="space-y-4">
-                {formData.installInstructions.map((instruction, index) => (
-                  <div key={index} className="flex gap-2">
-                    <div className="flex-shrink-0 w-8 h-8 bg-primary/10 text-primary rounded-full flex items-center justify-center font-bold text-sm mt-2">
-                      {index + 1}
-                    </div>
-                    <input
-                      type="text"
-                      value={instruction}
-                      onChange={(e) => updateInstruction(index, e.target.value)}
-                      className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
-                      placeholder={`שלב ${index + 1}`}
-                      maxLength={500}
-                    />
-                    {formData.installInstructions.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeInstruction(index)}
-                        className="flex-shrink-0 w-10 h-10 text-red-500 hover:bg-red-50 rounded-xl transition-colors mt-2"
-                      >
-                        <svg className="w-5 h-5 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    )}
-                  </div>
-                ))}
-                
-                <button
-                  type="button"
-                  onClick={addInstruction}
-                  className="w-full px-4 py-3 border-2 border-dashed border-gray-300 text-on-surface/60 rounded-xl hover:border-primary hover:text-primary transition-colors font-medium"
-                >
-                  + הוסף שלב
-                </button>
               </div>
             </section>
 

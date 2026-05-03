@@ -52,9 +52,6 @@ const PluginSchema = new mongoose.Schema(
     // קישורים חיצוניים
     homepage: { type: String, trim: true },
 
-    // הוראות התקנה
-    installInstructions: [{ type: String }],
-
     // תאריך מקורי (מה-JSON)
     originalDate: { type: String }, // YYYY-MM-DD format
 
