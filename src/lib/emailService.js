@@ -3,6 +3,7 @@ import { encryptToken } from '@/app/api/user/unsubscribe/route';
 import User from '@/models/User'; 
 import MailingList from '@/models/MailingList';
 import dbConnect from '@/lib/db';
+import { formatPluginStatus } from '@/lib/pluginSubmission';
 
 // פונקציה להסרת מספר עמוד משם הספר
 function cleanBookName(bookName) {
@@ -40,6 +41,15 @@ function renderPluginChanges(changes = []) {
             ${items}
         </div>
     `;
+}
+
+function createTransporter() {
+    return nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT),
+        secure: process.env.SMTP_SECURE === 'true',
+        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    });
 }
 
 // שליחת התראה למנהלים על העלאה חדשה של משתמש
@@ -181,12 +191,7 @@ export async function sendPluginUploadNotification(pluginData) {
             return { sent: false, reason: 'no_subscribers' };
         }
 
-        const transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST,
-            port: Number(process.env.SMTP_PORT),
-            secure: process.env.SMTP_SECURE === 'true',
-            auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-        });
+        const transporter = createTransporter();
 
         const adminUrl = `${process.env.NEXTAUTH_URL}/library/admin/plugins`;
         const logoUrl = `${process.env.NEXTAUTH_URL}/logo.png`;
@@ -371,6 +376,79 @@ export async function sendBookNotification(bookName, bookSlug) {
 
     } catch (error) {
         console.error('Email Service Error:', error);
+        return { sent: false, error: error.message };
+    }
+}
+
+export async function sendPluginApprovalNotification(pluginData) {
+    try {
+        const recipientEmail = (pluginData.recipientEmail || '').trim();
+        if (!recipientEmail) {
+            return { sent: false, reason: 'missing_recipient_email' };
+        }
+
+        const transporter = createTransporter();
+        const logoUrl = `${process.env.NEXTAUTH_URL}/logo.png`;
+        const pluginUrl = `${process.env.NEXTAUTH_URL}/plugins/${encodeURIComponent(pluginData.pluginId)}`;
+        const safePluginName = escapeHtml(pluginData.pluginName || 'התוסף שלך');
+        const safeVersion = escapeHtml(pluginData.version || 'לא צוין');
+        const safeStatus = escapeHtml(formatPluginStatus(pluginData.status));
+        const safeRecipientName = escapeHtml(pluginData.recipientName || pluginData.recipientEmail);
+        const isUpdate = pluginData.submissionType === 'update';
+        const title = isUpdate ? 'עדכון התוסף שלך אושר' : 'התוסף שלך אושר';
+        const intro = isUpdate
+            ? 'העדכון ששלחת אושר על ידי מנהל, והוא זמין כעת בדף התוסף ובחנות התוספים.'
+            : 'התוסף ששלחת אושר על ידי מנהל, והוא זמין כעת בדף התוסף ובחנות התוספים.';
+
+        const emailHtml = `
+        <div dir="rtl" style="font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 40px; text-align: center;">
+            <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden;">
+                <div style="background-color: #ffffff; padding: 20px; border-bottom: 3px solid #d4a373;">
+                    <img src="${logoUrl}" alt="Otzaria Logo" style="width: 120px; height: auto;">
+                    <h2 style="color: #d4a373; font-size: 20px; margin: 5px 0 0 0; font-weight: bold;">ספריית אוצריא</h2>
+                </div>
+                <div style="padding: 30px; color: #333333; text-align: right;">
+                    <h1 style="color: #2c3e50; font-size: 24px; margin-bottom: 10px; text-align: center;">🎉 ${title}</h1>
+                    <p style="font-size: 16px; line-height: 1.8; margin: 0 0 20px 0;">
+                        שלום ${safeRecipientName},
+                    </p>
+                    <p style="font-size: 16px; line-height: 1.8; margin: 0 0 20px 0;">
+                        ${intro}
+                    </p>
+                    <div style="background-color: #f0f0f0; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                        <p style="margin: 8px 0;"><strong>שם התוסף:</strong> ${safePluginName}</p>
+                        <p style="margin: 8px 0;"><strong>גרסה:</strong> ${safeVersion}</p>
+                        <p style="margin: 8px 0;"><strong>סטטוס:</strong> ${safeStatus}</p>
+                    </div>
+                    <div style="margin: 30px 0; text-align: center;">
+                        <a href="${pluginUrl}" style="background-color: #d4a373; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+                            מעבר לדף התוסף
+                        </a>
+                    </div>
+                    <p style="color: #666; font-size: 14px; line-height: 1.8; margin-top: 20px;">
+                        אפשר לפתוח את התוסף ישירות, לבדוק איך הוא מוצג בחנות, ולשתף את הקישור עם אחרים.
+                    </p>
+                </div>
+            </div>
+        </div>
+        `;
+
+        await transporter.sendMail({
+            from: {
+                name: "ספריית אוצריא",
+                address: process.env.SMTP_FROM
+            },
+            to: recipientEmail,
+            replyTo: process.env.SMTP_REPLY_TO || process.env.SMTP_FROM,
+            subject: isUpdate
+                ? `✅ עדכון התוסף אושר: ${pluginData.pluginName}`
+                : `✅ התוסף אושר: ${pluginData.pluginName}`,
+            html: emailHtml
+        });
+
+        return { sent: true, email: recipientEmail };
+    } catch (error) {
+        console.error('Plugin Approval Notification Error:', error);
         return { sent: false, error: error.message };
     }
 }

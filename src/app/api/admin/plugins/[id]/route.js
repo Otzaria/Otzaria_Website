@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
+import { sendPluginApprovalNotification } from '@/lib/emailService'
 import {
   deletePendingPluginDir,
   deletePluginDir,
@@ -42,12 +43,22 @@ export async function PATCH(request, { params }) {
     }
 
     await dbConnect()
-    const plugin = await Plugin.findById(id)
+    const plugin = await Plugin.findById(id).populate('authorId', 'name email')
     if (!plugin) {
       return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
     }
 
     if (action === 'approve') {
+      const approvalEmailData = {
+        recipientEmail: plugin.authorId?.email || '',
+        recipientName: plugin.authorId?.name || plugin.author || '',
+        pluginId: plugin._id.toString(),
+        pluginName: plugin.name,
+        version: plugin.version,
+        status: plugin.status,
+        submissionType: plugin.pendingUpdate ? 'update' : (plugin.submissionType || 'new')
+      }
+
       if (plugin.pendingUpdate) {
         const pending = plugin.pendingUpdate
         const pluginId = plugin._id.toString()
@@ -122,8 +133,18 @@ export async function PATCH(request, { params }) {
         plugin.approvedAt = new Date()
         await plugin.save()
         await deletePendingPluginDir(pluginId).catch(() => {})
+
+        approvalEmailData.pluginName = plugin.name
+        approvalEmailData.version = plugin.version
+        approvalEmailData.status = plugin.status
       } else {
         await plugin.approve(auth.session.user.id)
+      }
+
+      try {
+        await sendPluginApprovalNotification(approvalEmailData)
+      } catch (emailError) {
+        console.error('Failed to send plugin approval notification:', emailError)
       }
     } else {
       plugin.isApproved = false
