@@ -221,6 +221,10 @@ export default function UploadPluginPage() {
         throw new Error('נא לבחור קובץ תוסף תחילה - שם, מפתח, תיאור קצר וגרסה יזוהו אוטומטית')
       }
 
+      if (screenshotFiles.length < 1) {
+        throw new Error('חובה לצרף לפחות צילום מסך אחד. ללא צילום מסך התוסף יידחה')
+      }
+
       if (!['stable', 'beta', 'experimental'].includes(formData.status)) {
         throw new Error('סטטוס לא תקין')
       }
@@ -299,7 +303,12 @@ export default function UploadPluginPage() {
               
               <div className="space-y-4">
                 <div className="rounded-xl border border-primary/10 bg-primary/5 px-4 py-3 text-sm text-on-surface/70">
-                  שאר המידע יילקח מקובץ התוסף.
+                  שאר המידע יילקח אוטומטית מקובץ התוסף, מתוך <code>manifest.json</code>. יש לוודא שהשדות הבאים מוגדרים בקובץ:
+                  <br />
+                  <strong>name</strong>, <strong>author</strong>, <strong>description</strong>, <strong>version</strong>, <strong>stability</strong>, <strong>minAppVersion</strong>
+                  <span> (ואם יש, גם </span>
+                  <strong>homepage</strong>
+                  <span>).</span>
                 </div>
 
                 <div>
@@ -384,6 +393,9 @@ export default function UploadPluginPage() {
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
                     required
                   />
+                  <p className="mt-2 text-sm text-on-surface/60">
+                    המערכת תחיל על הטופס את השדות מתוך <code>manifest.json</code>: שם התוסף, מחבר, תיאור קצר, גרסה, סטטוס וגרסת מינימום נתמכת.
+                  </p>
                   {pluginFile && (
                     <p className="mt-2 text-sm text-green-600">
                       ✓ נבחר: {pluginFile.name}
@@ -402,6 +414,9 @@ export default function UploadPluginPage() {
                     onChange={handleImageFile}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
                   />
+                  <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    כדי להגביר את סיכויי הקבלה מומלץ לצרף תמונת תוסף איכותית, ברורה ומתאימה לתוכן התוסף. העלאה ללא תמונה או עם תמונה לא מתאימה עלולה להוביל לדחיית התוסף.
+                  </div>
                   {imagePreview && (
                     <div className="mt-4">
                       <img
@@ -416,7 +431,7 @@ export default function UploadPluginPage() {
                 {/* צילומי מסך */}
                 <div>
                   <label className="block text-sm font-bold text-on-surface/60 mb-2">
-                    צילומי מסך (אופציונלי)
+                    צילומי מסך <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="file"
@@ -424,7 +439,11 @@ export default function UploadPluginPage() {
                     multiple
                     onChange={handleScreenshotFiles}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+                    required={screenshotFiles.length === 0}
                   />
+                  <p className="mt-2 text-sm text-on-surface/60">
+                    חובה לצרף לפחות צילום מסך אחד של התוסף.
+                  </p>
                   {screenshotPreviews.length > 0 && (
                     <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4">
                       {screenshotPreviews.map((preview, index) => (
