@@ -8,6 +8,7 @@ import Plugin from '@/models/Plugin'
 import { sendPluginUploadNotification } from '@/lib/emailService'
 import {
   ALLOWED_PLUGIN_STATUSES,
+  MIN_SUPPORTED_APP_VERSION,
   PLUGIN_VERSION_RE,
   assertPluginTextLimits,
   isHttpUrl,
@@ -89,7 +90,7 @@ export async function POST(request) {
 
     // Read name, author, version, shortDescription, status, compatibleWith from manifest
     const pluginBuffer = Buffer.from(await pluginFile.arrayBuffer())
-    let name, author, version, shortDescription, statusFromManifest, compatibleWithFromManifest, homepageFromManifest = ''
+    let name, author, version, shortDescription, statusFromManifest, compatibleWithFromManifest, homepageFromManifest
     try {
       const manifest = readManifestFromPlugin(pluginBuffer)
       version = (manifest.version || '').toString().trim()
@@ -104,8 +105,8 @@ export async function POST(request) {
       statusFromManifest = stability
       if (!minAppVersion)
         return bad('חסר שדה minAppVersion ב-manifest.json של קובץ התוסף')
-      if (compareVersions(minAppVersion, '0.9.89') < 0)
-        return bad(`גרסת המינימום (${minAppVersion}) לא יכולה להיות פחות מ-0.9.89`)
+      if (compareVersions(minAppVersion, MIN_SUPPORTED_APP_VERSION) < 0)
+        return bad(`גרסת המינימום (${minAppVersion}) לא יכולה להיות פחות מ-${MIN_SUPPORTED_APP_VERSION}`)
       compatibleWithFromManifest = minAppVersion
     } catch {
       return bad('לא ניתן לקרוא את manifest.json מקובץ התוסף')

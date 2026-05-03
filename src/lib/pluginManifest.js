@@ -35,7 +35,7 @@ export function readManifestFromPlugin(buffer) {
     const localFnLen = buffer.readUInt16LE(localHeaderOffset + 26)
     const localExtraLen = buffer.readUInt16LE(localHeaderOffset + 28)
     const dataStart = localHeaderOffset + 30 + localFnLen + localExtraLen
-    const compressedData = buffer.slice(dataStart, dataStart + compressedSize)
+    const compressedData = buffer.subarray(dataStart, dataStart + compressedSize)
 
     let data
     if (compressionMethod === 0) {

@@ -8,6 +8,7 @@ import Plugin from '@/models/Plugin'
 import { sendPluginUploadNotification } from '@/lib/emailService'
 import {
   ALLOWED_PLUGIN_STATUSES,
+  MIN_SUPPORTED_APP_VERSION,
   PLUGIN_VERSION_RE,
   assertPluginTextLimits,
   buildChangeSummary,
@@ -370,12 +371,12 @@ export async function PUT(request, { params }) {
       if (!manifestStability || !ALLOWED_PLUGIN_STATUSES.includes(manifestStability)) {
         return bad('חסר שדה stability תקין ב-manifest.json (ערכים מותרים: stable, beta, experimental)')
       }
-      const manifestminAppVersion = newManifest.minAppVersion ? newManifest.minAppVersion.toString().trim() : ''
-      if (!manifestminAppVersion) {
+      const manifestMinAppVersion = newManifest.minAppVersion ? newManifest.minAppVersion.toString().trim() : ''
+      if (!manifestMinAppVersion) {
         return bad('חסר שדה minAppVersion ב-manifest.json של קובץ התוסף')
       }
-      if (compareVersions(manifestminAppVersion, '0.9.89') < 0) {
-        return bad(`גרסת המינימום (${manifestminAppVersion}) לא יכולה להיות פחות מ-0.9.89`)
+      if (compareVersions(manifestMinAppVersion, MIN_SUPPORTED_APP_VERSION) < 0) {
+        return bad(`גרסת המינימום (${manifestMinAppVersion}) לא יכולה להיות פחות מ-${MIN_SUPPORTED_APP_VERSION}`)
       }
       version = manifestVersion
       const manifestName = (newManifest.name || '').toString().trim()
@@ -385,7 +386,7 @@ export async function PUT(request, { params }) {
       if (manifestAuthor) author = manifestAuthor
       if (manifestDesc) shortDescription = manifestDesc
       status = manifestStability
-      compatibleWith = manifestminAppVersion
+      compatibleWith = manifestMinAppVersion
       homepage = newManifest.homepage ? newManifest.homepage.toString().trim() : ''
     }
 

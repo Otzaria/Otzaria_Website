@@ -6,6 +6,7 @@ import Link from 'next/link'
 import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 import { useDialog } from '@/components/providers/DialogContext'
+import { MIN_SUPPORTED_APP_VERSION } from '@/lib/pluginSubmission'
 
 function getErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message) {
@@ -132,8 +133,8 @@ export default function UploadPluginPage() {
       resetInput(); return
     }
     if (!minAppVersion) { showAlert('שגיאה', 'חסר שדה minAppVersion ב-manifest.json'); resetInput(); return }
-    if (!versionAtLeast(minAppVersion, '0.9.89')) {
-      showAlert('שגיאה', `גרסת המינימום (${minAppVersion}) לא יכולה להיות פחות מ-0.9.89`)
+    if (!versionAtLeast(minAppVersion, MIN_SUPPORTED_APP_VERSION)) {
+      showAlert('שגיאה', `גרסת המינימום (${minAppVersion}) לא יכולה להיות פחות מ-${MIN_SUPPORTED_APP_VERSION}`)
       resetInput(); return
     }
 

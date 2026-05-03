@@ -18,6 +18,7 @@ export const PLUGIN_STATUS_LABELS = {
   experimental: 'ניסיוני'
 }
 export const PLUGIN_VERSION_RE = /^\d+(?:\.\d+){0,3}(?:[-+][A-Za-z0-9.]+)?$/
+export const MIN_SUPPORTED_APP_VERSION = '0.9.89'
 
 export function formatPluginStatus(status) {
   return PLUGIN_STATUS_LABELS[status] || 'לא ידוע'

@@ -4,12 +4,13 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useSession } from 'next-auth/react'
 import { useDialog } from '@/components/providers/DialogContext'
+import { MIN_SUPPORTED_APP_VERSION } from '@/lib/pluginSubmission'
 
 const ALLOWED_IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
 const STATUS_OPTIONS = [
   { value: 'stable', label: 'יציב' },
   { value: 'beta', label: 'בטא' },
-  { value: 'experimental', label: 'נסיוני' }
+  { value: 'experimental', label: 'ניסיוני' }
 ]
 
 async function readPluginManifest(file) {
@@ -119,8 +120,8 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
       input.value = ''
       return
     }
-    if (!isAdmin && !versionAtLeast(minAppVersion, '0.9.89')) {
-      showAlert('שגיאה', `גרסת המינימום (${minAppVersion}) לא יכולה להיות פחות מ-0.9.89`)
+    if (!isAdmin && !versionAtLeast(minAppVersion, MIN_SUPPORTED_APP_VERSION)) {
+      showAlert('שגיאה', `גרסת המינימום (${minAppVersion}) לא יכולה להיות פחות מ-${MIN_SUPPORTED_APP_VERSION}`)
       input.value = ''
       return
     }
