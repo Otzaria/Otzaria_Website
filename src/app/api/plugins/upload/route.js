@@ -11,10 +11,10 @@ import {
   PLUGIN_VERSION_RE,
   assertPluginTextLimits,
   isHttpUrl,
-  normalizeInstructions,
   normalizeTags,
   parseJsonArrayField
 } from '@/lib/pluginSubmission'
+import { readManifestFromPlugin, compareVersions } from '@/lib/pluginManifest'
 import {
   MAX_PLUGIN_BYTES,
   MAX_IMAGE_BYTES,
@@ -60,14 +60,7 @@ export async function POST(request) {
 
     const formData = await request.formData()
 
-    const name = (formData.get('name') || '').toString().trim()
-    const shortDescription = (formData.get('shortDescription') || '').toString().trim()
     const description = (formData.get('description') || '').toString()
-    const version = (formData.get('version') || '').toString().trim()
-    const statusVal = (formData.get('status') || 'stable').toString()
-    const author = (formData.get('author') || '').toString().trim()
-    const compatibleWith = (formData.get('compatibleWith') || '').toString().trim()
-    const homepage = (formData.get('homepage') || '').toString().trim()
 
     let tags = []
     try {
@@ -76,49 +69,12 @@ export async function POST(request) {
       return bad('Invalid tags format')
     }
 
-    let installInstructions = []
-    try {
-      installInstructions = normalizeInstructions(
-        parseJsonArrayField(formData.get('installInstructions'), 'installInstructions')
-      )
-    } catch {
-      return bad('Invalid installInstructions format')
-    }
-
-    if (!ALLOWED_PLUGIN_STATUSES.includes(statusVal)) {
-      return bad(`Status must be one of: ${ALLOWED_PLUGIN_STATUSES.join(', ')}`)
-    }
-
     const pluginFile = formData.get('pluginFile')
     const imageFile = formData.get('imageFile')
     const screenshotFiles = formData.getAll('screenshots').filter(f => f && f.size > 0)
 
-    if (!name || !shortDescription || !description || !version || !author || !compatibleWith || !pluginFile) {
+    if (!description || !pluginFile) {
       return bad('Missing required fields')
-    }
-
-    try {
-      assertPluginTextLimits({
-        name,
-        shortDescription,
-        description,
-        version,
-        author,
-        compatibleWith,
-        homepage,
-        tags,
-        installInstructions
-      })
-    } catch (error) {
-      return bad(error.message)
-    }
-
-    if (!PLUGIN_VERSION_RE.test(version)) {
-      return bad('Version must be in the form X, X.Y, X.Y.Z (optionally with -beta etc.)')
-    }
-
-    if (homepage && !isHttpUrl(homepage)) {
-      return bad('Homepage must be a valid http(s) URL')
     }
 
     if (typeof pluginFile.name !== 'string' || !pluginFile.name.toLowerCase().endsWith(PLUGIN_FILE_EXT)) {
@@ -129,6 +85,54 @@ export async function POST(request) {
     }
     if (pluginFile.size > MAX_PLUGIN_BYTES) {
       return bad(`Plugin file exceeds ${Math.floor(MAX_PLUGIN_BYTES / 1024 / 1024)}MB limit`)
+    }
+
+    // Read name, author, version, shortDescription, status, compatibleWith from manifest
+    const pluginBuffer = Buffer.from(await pluginFile.arrayBuffer())
+    let name, author, version, shortDescription, statusFromManifest, compatibleWithFromManifest, homepageFromManifest = ''
+    try {
+      const manifest = readManifestFromPlugin(pluginBuffer)
+      version = (manifest.version || '').toString().trim()
+      name = (manifest.name || '').toString().trim()
+      author = (manifest.author || '').toString().trim()
+      shortDescription = (manifest.description || '').toString().trim()
+      homepageFromManifest = (manifest.homepage || '').toString().trim()
+      const stability = manifest.stability ? manifest.stability.toString().trim() : ''
+      const minAppVersion = manifest.minAppVersion ? manifest.minAppVersion.toString().trim() : ''
+      if (!stability || !ALLOWED_PLUGIN_STATUSES.includes(stability))
+        return bad('חסר שדה stability תקין ב-manifest.json (ערכים מותרים: stable, beta, experimental)')
+      statusFromManifest = stability
+      if (!minAppVersion)
+        return bad('חסר שדה minAppVersion ב-manifest.json של קובץ התוסף')
+      if (compareVersions(minAppVersion, '0.9.89') < 0)
+        return bad(`גרסת המינימום (${minAppVersion}) לא יכולה להיות פחות מ-0.9.89`)
+      compatibleWithFromManifest = minAppVersion
+    } catch {
+      return bad('לא ניתן לקרוא את manifest.json מקובץ התוסף')
+    }
+    if (!version) return bad('חסר שדה גרסה ב-manifest.json של קובץ התוסף')
+    if (!PLUGIN_VERSION_RE.test(version)) return bad('גרסה לא תקינה ב-manifest.json של קובץ התוסף (נדרש פורמט X, X.Y, X.Y.Z)')
+    if (!name) return bad('חסר שדה name ב-manifest.json של קובץ התוסף')
+    if (!author) return bad('חסר שדה author ב-manifest.json של קובץ התוסף')
+    if (!shortDescription) return bad('חסר שדה description ב-manifest.json של קובץ התוסף')
+
+    try {
+      assertPluginTextLimits({
+        name,
+        shortDescription,
+        description,
+        version,
+        author,
+        compatibleWith: compatibleWithFromManifest,
+        homepage: homepageFromManifest,
+        tags
+      })
+    } catch (error) {
+      return bad(error.message)
+    }
+
+    if (homepageFromManifest && !isHttpUrl(homepageFromManifest)) {
+      return bad('Homepage must be a valid http(s) URL')
     }
 
     // ולידציית תמונה ראשית
@@ -176,18 +180,17 @@ export async function POST(request) {
           shortDescription,
           description,
           version,
-          status: statusVal,
+          status: statusFromManifest,
           author,
           authorId: session.user.id,
-          compatibleWith,
+          compatibleWith: compatibleWithFromManifest,
           tags,
           pluginFileName: path.basename(pluginFile.name),
           pluginFileExt: PLUGIN_FILE_EXT,
           pluginFileSize: pluginFile.size,
           image: imageMeta || { ext: null, contentType: null },
           screenshots: screenshotMeta,
-          homepage,
-          installInstructions,
+          homepage: homepageFromManifest,
           isApproved: false,
           submissionType: 'new',
           lastSubmittedBy: session.user.id,

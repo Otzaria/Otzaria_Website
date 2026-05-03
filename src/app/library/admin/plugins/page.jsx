@@ -5,6 +5,7 @@ import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import PluginNotificationSettings from '@/components/notifications/PluginNotificationSettings'
 import PluginEditModal from '@/components/plugins/PluginEditModal'
+import { formatPluginStatus } from '@/lib/pluginSubmission'
 
 export default function AdminPluginsPage() {
   const [activeTab, setActiveTab] = useState('pending') // 'pending' or 'approved'
@@ -218,9 +219,9 @@ export default function AdminPluginsPage() {
 
   const getStatusBadge = (status) => {
     const badges = {
-      stable: { label: 'יציב', class: 'bg-green-100 text-green-800' },
-      beta: { label: 'בטא', class: 'bg-yellow-100 text-yellow-800' },
-      experimental: { label: 'ניסיוני', class: 'bg-orange-100 text-orange-800' }
+      stable: { label: formatPluginStatus('stable'), class: 'bg-green-100 text-green-800' },
+      beta: { label: formatPluginStatus('beta'), class: 'bg-yellow-100 text-yellow-800' },
+      experimental: { label: formatPluginStatus('experimental'), class: 'bg-orange-100 text-orange-800' }
     }
     const badge = badges[status] || badges.stable
     return (

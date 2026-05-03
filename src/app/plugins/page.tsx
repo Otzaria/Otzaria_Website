@@ -6,6 +6,7 @@ import Link from 'next/link'
 import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 import { buildDirectPluginInstallUrl } from '@/lib/pluginInstall'
+import { formatPluginStatus } from '@/lib/pluginSubmission'
 
 interface Plugin {
   id: string
@@ -24,7 +25,6 @@ interface Plugin {
   downloadUrl: string
   supportsDirectInstall: boolean
   homepage: string
-  installInstructions: string[]
 }
 
 function PluginsPageContent() {
@@ -95,15 +95,6 @@ function PluginsPageContent() {
 
     setFilteredPlugins(filtered)
   }, [searchQuery, statusFilter, activeTag, plugins])
-
-  const formatStatus = (status: string) => {
-    const labels: Record<string, string> = {
-      stable: 'יציב',
-      beta: 'בטא',
-      experimental: 'ניסיוני'
-    }
-    return labels[status] || 'לא ידוע'
-  }
 
   // המרת מספר לגימטריה עברית
   const toHebrewNumeral = (num: number): string => {
@@ -266,7 +257,6 @@ function PluginsPageContent() {
                 <div className="p-6 bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl border border-primary/10">
                   <span className="text-sm text-on-surface/60 block mb-2">זמין עכשיו</span>
                   <div className="text-4xl font-bold text-primary mb-2">{plugins.length} תוספים</div>
-                  <p className="text-sm text-on-surface/60">כל תוסף כולל תאימות, הוראות, ותצוגה נקייה שמתאימה לחנות.</p>
                 </div>
                 
                 <div className="p-6 bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl border border-primary/10 space-y-3">
@@ -420,7 +410,7 @@ function PluginsPageContent() {
                           plugin.status === 'beta' ? 'bg-primary/15 text-primary' :
                           'bg-primary/20 text-primary'
                         }`}>
-                          {formatStatus(plugin.status)}
+                          {formatPluginStatus(plugin.status)}
                         </span>
                         <span className="px-3 py-1 rounded-full text-xs font-bold bg-surface text-on-surface/60">
                           גרסה {plugin.version}

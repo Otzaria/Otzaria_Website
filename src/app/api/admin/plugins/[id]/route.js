@@ -62,7 +62,6 @@ export async function PATCH(request, { params }) {
         plugin.compatibleWith = pending.compatibleWith
         plugin.tags = pending.tags || []
         plugin.homepage = pending.homepage || ''
-        plugin.installInstructions = pending.installInstructions || []
         plugin.pluginFileName = pending.pluginFileName
         plugin.pluginFileExt = pending.pluginFileExt
         plugin.pluginFileSize = pending.pluginFileSize || 0

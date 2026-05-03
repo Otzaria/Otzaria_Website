@@ -15,10 +15,10 @@ import {
   getEditableSource,
   getLivePluginData,
   isHttpUrl,
-  normalizeInstructions,
   normalizeTags,
   parseJsonArrayField
 } from '@/lib/pluginSubmission'
+import { readManifestFromPlugin, compareVersions } from '@/lib/pluginManifest'
 import {
   MAX_IMAGE_BYTES,
   MAX_PLUGIN_BYTES,
@@ -262,22 +262,24 @@ export async function PUT(request, { params }) {
     const editableSource = getEditableSource(plugin)
     const formData = await request.formData()
 
-    const name = (formData.get('name') || '').toString().trim()
-    const shortDescription = (formData.get('shortDescription') || '').toString().trim()
+    let name = (formData.get('name') || '').toString().trim()
+    let shortDescription = (formData.get('shortDescription') || '').toString().trim()
     const description = (formData.get('description') || '').toString()
-    const version = (formData.get('version') || '').toString().trim()
-    const status = (formData.get('status') || 'stable').toString()
-    const author = (formData.get('author') || '').toString().trim()
-    const compatibleWith = (formData.get('compatibleWith') || '').toString().trim()
-    const homepage = (formData.get('homepage') || '').toString().trim()
+    let version = (formData.get('version') || '').toString().trim()
+    let status = isAdmin
+      ? (formData.get('status') || '').toString().trim()
+      : (editableSource.status || livePlugin.status || 'stable')
+    let author = (formData.get('author') || '').toString().trim()
+    let compatibleWith = isAdmin
+      ? (formData.get('compatibleWith') || '').toString().trim()
+      : (editableSource.compatibleWith || livePlugin.compatibleWith || '')
+    let homepage = isAdmin
+      ? (formData.get('homepage') || '').toString().trim()
+      : (editableSource.homepage || livePlugin.homepage || '')
 
     let tags
-    let installInstructions
     try {
       tags = normalizeTags(parseJsonArrayField(formData.get('tags'), 'tags'))
-      installInstructions = normalizeInstructions(
-        parseJsonArrayField(formData.get('installInstructions'), 'installInstructions')
-      )
     } catch (error) {
       return bad(error.message)
     }
@@ -291,9 +293,6 @@ export async function PUT(request, { params }) {
     if (!PLUGIN_VERSION_RE.test(version)) {
       return bad('Version must be in the form X, X.Y, X.Y.Z (optionally with -beta etc.)')
     }
-    if (homepage && !isHttpUrl(homepage)) {
-      return bad('Homepage must be a valid http(s) URL')
-    }
 
     try {
       assertPluginTextLimits({
@@ -304,8 +303,7 @@ export async function PUT(request, { params }) {
         author,
         compatibleWith,
         homepage,
-        tags,
-        installInstructions
+        tags
       })
     } catch (error) {
       return bad(error.message)
@@ -348,8 +346,66 @@ export async function PUT(request, { params }) {
     }
 
     const isOwnerResubmission = isOwner && !isAdmin
-    if (isOwnerResubmission && pluginFile?.size && version === livePlugin.version) {
-      return bad('העלית קובץ תוסף חדש. כדי לשמור את השינוי צריך לעדכן גם את מספר הגרסה.')
+
+    // Non-admin edits derive protected metadata from manifest when replacing the plugin file.
+    if (pluginFile?.size && !isAdmin) {
+      const pluginBuffer = Buffer.from(await pluginFile.arrayBuffer())
+      let newManifest
+      try {
+        newManifest = readManifestFromPlugin(pluginBuffer)
+      } catch {
+        return bad('לא ניתן לקרוא את manifest.json מקובץ התוסף')
+      }
+      const manifestVersion = (newManifest.version || '').toString().trim()
+      if (!manifestVersion) {
+        return bad('חסר שדה גרסה ב-manifest.json של קובץ התוסף')
+      }
+      if (!PLUGIN_VERSION_RE.test(manifestVersion)) {
+        return bad('גרסה לא תקינה ב-manifest.json של קובץ התוסף (נדרש פורמט X, X.Y, X.Y.Z)')
+      }
+      if (compareVersions(manifestVersion, livePlugin.version) <= 0) {
+        return bad(`הגרסה בקובץ (${manifestVersion}) חייבת להיות גבוהה מהגרסה הנוכחית (${livePlugin.version})`)
+      }
+      const manifestStability = newManifest.stability ? newManifest.stability.toString().trim() : ''
+      if (!manifestStability || !ALLOWED_PLUGIN_STATUSES.includes(manifestStability)) {
+        return bad('חסר שדה stability תקין ב-manifest.json (ערכים מותרים: stable, beta, experimental)')
+      }
+      const manifestminAppVersion = newManifest.minAppVersion ? newManifest.minAppVersion.toString().trim() : ''
+      if (!manifestminAppVersion) {
+        return bad('חסר שדה minAppVersion ב-manifest.json של קובץ התוסף')
+      }
+      if (compareVersions(manifestminAppVersion, '0.9.89') < 0) {
+        return bad(`גרסת המינימום (${manifestminAppVersion}) לא יכולה להיות פחות מ-0.9.89`)
+      }
+      version = manifestVersion
+      const manifestName = (newManifest.name || '').toString().trim()
+      const manifestAuthor = (newManifest.author || '').toString().trim()
+      const manifestDesc = (newManifest.description || '').toString().trim()
+      if (manifestName) name = manifestName
+      if (manifestAuthor) author = manifestAuthor
+      if (manifestDesc) shortDescription = manifestDesc
+      status = manifestStability
+      compatibleWith = manifestminAppVersion
+      homepage = newManifest.homepage ? newManifest.homepage.toString().trim() : ''
+    }
+
+    if (homepage && !isHttpUrl(homepage)) {
+      return bad('Homepage must be a valid http(s) URL')
+    }
+
+    try {
+      assertPluginTextLimits({
+        name,
+        shortDescription,
+        description,
+        version,
+        author,
+        compatibleWith,
+        homepage,
+        tags
+      })
+    } catch (error) {
+      return bad(error.message)
     }
 
     const nextPluginData = {
@@ -362,7 +418,6 @@ export async function PUT(request, { params }) {
       compatibleWith,
       tags,
       homepage,
-      installInstructions,
       pluginFileName: editableSource.pluginFileName || livePlugin.pluginFileName,
       pluginFileExt: PLUGIN_FILE_EXT,
       pluginFileSize: editableSource.pluginFileSize || livePlugin.pluginFileSize || 0,
@@ -451,7 +506,6 @@ export async function PUT(request, { params }) {
       plugin.compatibleWith = nextPluginData.compatibleWith
       plugin.tags = nextPluginData.tags
       plugin.homepage = nextPluginData.homepage
-      plugin.installInstructions = nextPluginData.installInstructions
       plugin.pluginFileName = nextPluginData.pluginFileName
       plugin.pluginFileExt = nextPluginData.pluginFileExt
       plugin.pluginFileSize = nextPluginData.pluginFileSize
