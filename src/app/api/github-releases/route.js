@@ -10,8 +10,8 @@ export async function GET(request) {
     
     // Fetch releases from GitHub
     const url = type === 'dev' 
-      ? 'https://api.github.com/repos/Y-PLONI/otzaria/releases'
-      : 'https://api.github.com/repos/Y-PLONI/otzaria/releases/latest'
+      ? 'https://api.github.com/repos/otzaria/otzaria/releases'
+      : 'https://api.github.com/repos/otzaria/otzaria/releases/latest'
     
     const response = await fetch(url, {
       headers: {

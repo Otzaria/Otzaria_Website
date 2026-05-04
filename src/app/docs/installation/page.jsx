@@ -124,7 +124,7 @@ export default function InstallationTutorialPage() {
                       
                       <div className="space-y-3">
                         <a
-                          href="https://github.com/Y-PLONI/otzaria/releases/latest/download/otzaria-windows.exe"
+                          href="https://github.com/otzaria/otzaria/releases/latest/download/otzaria-windows.exe"
                           className="flex items-center justify-between p-4 bg-white rounded-lg hover:shadow-lg transition-shadow group"
                           download
                         >
@@ -139,7 +139,7 @@ export default function InstallationTutorialPage() {
                         </a>
 
                         <a
-                          href="https://github.com/Y-PLONI/otzaria/releases/latest/download/otzaria-macos.zip"
+                          href="https://github.com/otzaria/otzaria/releases/latest/download/otzaria-macos.zip"
                           className="flex items-center justify-between p-4 bg-white rounded-lg hover:shadow-lg transition-shadow group"
                           download
                         >
@@ -154,7 +154,7 @@ export default function InstallationTutorialPage() {
                         </a>
 
                         <a
-                          href="https://github.com/Y-PLONI/otzaria/releases/latest"
+                          href="https://github.com/otzaria/otzaria/releases/latest"
                           className="flex items-center justify-between p-4 bg-white rounded-lg hover:shadow-lg transition-shadow group"
                           target="_blank"
                           rel="noopener noreferrer"
@@ -162,42 +162,43 @@ export default function InstallationTutorialPage() {
                           <div className="flex items-center gap-3">
                             <span className="material-symbols-outlined text-3xl text-orange-600">computer</span>
                             <div>
-                              <div className="font-bold text-lg">Linux (DEB)</div>
-                              <div className="text-sm text-gray-600">Ubuntu, Debian ומשפחתם</div>
+                              <div className="font-bold text-lg">Linux (tar.gz)</div>
+                              <div className="text-sm text-gray-600">כל ההפצות</div>
                             </div>
                           </div>
                           <span className="material-symbols-outlined text-primary group-hover:translate-x-[-4px] transition-transform">open_in_new</span>
                         </a>
 
                         <a
-                          href="https://github.com/Y-PLONI/otzaria/releases/latest"
+                          href="https://play.google.com/store/apps/details?id=com.mendelg.otzaria"
                           className="flex items-center justify-between p-4 bg-white rounded-lg hover:shadow-lg transition-shadow group"
                           target="_blank"
                           rel="noopener noreferrer"
                         >
                           <div className="flex items-center gap-3">
-                            <span className="material-symbols-outlined text-3xl text-red-600">computer</span>
+                            <span className="material-symbols-outlined text-3xl text-green-600">android</span>
                             <div>
-                              <div className="font-bold text-lg">Linux (RPM)</div>
-                              <div className="text-sm text-gray-600">Fedora, RedHat ומשפחתם</div>
+                              <div className="font-bold text-lg">Android</div>
+                              <div className="text-sm text-gray-600">Google Play / APK</div>
                             </div>
                           </div>
                           <span className="material-symbols-outlined text-primary group-hover:translate-x-[-4px] transition-transform">open_in_new</span>
                         </a>
 
                         <a
-                          href="https://github.com/Y-PLONI/otzaria/releases/latest/download/app-release.apk"
+                          href="https://apps.apple.com/us/app/otzaria/id6738098031"
                           className="flex items-center justify-between p-4 bg-white rounded-lg hover:shadow-lg transition-shadow group"
-                          download
+                          target="_blank"
+                          rel="noopener noreferrer"
                         >
                           <div className="flex items-center gap-3">
-                            <span className="material-symbols-outlined text-3xl text-green-600">android</span>
+                            <span className="material-symbols-outlined text-3xl text-blue-500">phone_iphone</span>
                             <div>
-                              <div className="font-bold text-lg">Android (APK)</div>
-                              <div className="text-sm text-gray-600">למכשירי אנדרואיד</div>
+                              <div className="font-bold text-lg">iOS / iPadOS</div>
+                              <div className="text-sm text-gray-600">App Store</div>
                             </div>
                           </div>
-                          <span className="material-symbols-outlined text-primary group-hover:translate-x-[-4px] transition-transform">download</span>
+                          <span className="material-symbols-outlined text-primary group-hover:translate-x-[-4px] transition-transform">open_in_new</span>
                         </a>
                       </div>
                     </div>
@@ -211,7 +212,7 @@ export default function InstallationTutorialPage() {
                       <p className="text-purple-900 mb-4">גירסאות עם תכונות חדשות שעדיין בבדיקה</p>
                       
                       <a
-                        href="https://github.com/Y-PLONI/otzaria/releases?q=prerelease%3Atrue"
+                        href="https://github.com/otzaria/otzaria/releases?q=prerelease%3Atrue"
                         className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-bold"
                         target="_blank"
                         rel="noopener noreferrer"
@@ -224,7 +225,7 @@ export default function InstallationTutorialPage() {
                     {/* כל הגירסאות */}
                     <div className="p-4 bg-gray-50 border border-gray-300 rounded-xl">
                       <a
-                        href="https://github.com/Y-PLONI/otzaria/releases"
+                        href="https://github.com/otzaria/otzaria/releases"
                         className="flex items-center justify-between hover:text-primary transition-colors"
                         target="_blank"
                         rel="noopener noreferrer"
@@ -260,12 +261,12 @@ export default function InstallationTutorialPage() {
                 </h2>
                 <div className="space-y-6">
                   <div>
-                    <h3 className="text-2xl font-bold text-primary mb-4">שיטת התקנה א': קובץ EXE</h3>
+                    <h3 className="text-2xl font-bold text-primary mb-4">Windows</h3>
                     <div className="space-y-4">
                       {[
-                        { num: 1, title: 'הפעלת ההתקנה', desc: 'הפעילו את קובץ ההתקנה שהורדתם (otzaria.exe).' },
-                        { num: 2, title: 'בחירת מיקום', desc: 'בחרו את המיקום להתקנת התוכנה. מומלץ: התקינו בכונן C:\\ או בכונן אחר עם מספיק מקום פנוי.' },
-                        { num: 3, title: 'השלמת ההתקנה', desc: 'המתינו עד לסיום ההתקנה. התהליך עשוי לקחת מספר דקות.' }
+                        { num: 1, title: 'בחירת קובץ', desc: 'מומלץ להוריד "Full Installer" הכולל את כל הדרישות (Visual C++ Redistributable). אם כבר מותקן, ניתן להוריד את הגרסה הרגילה.' },
+                        { num: 2, title: 'הפעלת ההתקנה', desc: 'הריצו את קובץ ה-EXE שהורדתם ועקבו אחרי ההוראות.' },
+                        { num: 3, title: 'הורדת הספרייה', desc: 'בהפעלה הראשונה תוצע הורדת הספרייה. לחצו "הורד" – התוכנה תוריד ותחלץ הכל אוטומטית.' }
                       ].map((step) => (
                         <div key={step.num} className="flex gap-4 p-6 bg-surface-variant rounded-xl">
                           <div className="w-12 h-12 bg-primary text-on-primary rounded-full flex items-center justify-center font-bold text-xl flex-shrink-0">
@@ -281,8 +282,45 @@ export default function InstallationTutorialPage() {
                   </div>
 
                   <div>
-                    <h3 className="text-2xl font-bold text-primary mb-4">שיטת התקנה ב': קובץ MSIX</h3>
-                    <p>אם בחרתם בגרסת MSIX, פשוט לחצו פעמיים על הקובץ והתקנה תתבצע אוטומטית.</p>
+                    <h3 className="text-2xl font-bold text-primary mb-4">macOS</h3>
+                    <div className="space-y-4">
+                      {[
+                        { num: 1, title: 'הורדה וחילוץ', desc: 'הורידו את קובץ ה-ZIP וחלצו אותו.' },
+                        { num: 2, title: 'פתיחה ראשונה', desc: 'הריצו את האפליקציה תוך לחיצה על מקש ctrl (לעקיפת Gatekeeper בפעם הראשונה).' },
+                        { num: 3, title: 'הורדת הספרייה', desc: 'בהפעלה הראשונה תוצע הורדת הספרייה.' }
+                      ].map((step) => (
+                        <div key={step.num} className="flex gap-4 p-6 bg-surface-variant rounded-xl">
+                          <div className="w-12 h-12 bg-primary text-on-primary rounded-full flex items-center justify-center font-bold text-xl flex-shrink-0">
+                            {step.num}
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="text-xl font-bold text-primary-dark mb-2">{step.title}</h4>
+                            <p>{step.desc}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-2xl font-bold text-primary mb-4">Linux</h3>
+                    <div className="space-y-4">
+                      {[
+                        { num: 1, title: 'דרישות מוקדמות', desc: 'sudo apt-get install libgtk-3-0 libblkid1 liblzma5' },
+                        { num: 2, title: 'הורדה וחילוץ', desc: 'הורידו את קובץ ה-tar.gz מ-GitHub Releases וחלצו אותו.' },
+                        { num: 3, title: 'הפעלה', desc: 'הריצו את קובץ Otzaria. קיים גם FULL Bundle הכולל את הספרייה – חלצו והריצו run-otzaria.sh.' }
+                      ].map((step) => (
+                        <div key={step.num} className="flex gap-4 p-6 bg-surface-variant rounded-xl">
+                          <div className="w-12 h-12 bg-primary text-on-primary rounded-full flex items-center justify-center font-bold text-xl flex-shrink-0">
+                            {step.num}
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="text-xl font-bold text-primary-dark mb-2">{step.title}</h4>
+                            <p>{step.desc}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="p-4 bg-orange-50 border-r-4 border-orange-400 rounded">
@@ -365,11 +403,16 @@ export default function InstallationTutorialPage() {
                 </h2>
                 <div className="space-y-6">
                   <div>
-                    <h3 className="text-2xl font-bold text-primary mb-4">גרסה 0.2.3 - עדכונים חדשים</h3>
+                    <h3 className="text-2xl font-bold text-primary mb-4">תכונות עיקריות</h3>
                     <ul className="list-disc mr-6 space-y-2">
-                      <li><strong>פרוטוקולים מותאמים אישית</strong> - תמיכה בפרוטוקולים מותאמים אישית</li>
-                      <li><strong>הוספת PDF</strong> - אפשרות להוסיף קבצי PDF לספרייה</li>
-                      <li><strong>שיפורים רבים</strong> - תיקוני באגים ושיפורי ביצועים</li>
+                      <li><strong>כ-7,000 ספרים</strong> – תנ"ך, תלמוד, הלכה, מחשבה, קבלה ועוד</li>
+                      <li><strong>צורת הדף</strong> – תצוגה מסורתית עם מפרשים בצדדים</li>
+                      <li><strong>חיפוש מהיר ומורפולוגי</strong> – חיפוש בכל הספרייה כולל צורות דקדוקיות</li>
+                      <li><strong>פורמטים מגוונים</strong> – תמיכה ב-TXT, DOCX ו-PDF</li>
+                      <li><strong>הערות אישיות וסימניות</strong> – שמירת הערות המחוברות לטקסט</li>
+                      <li><strong>תוספים</strong> – הרחבות מחנות otzaria.org/plugins</li>
+                      <li><strong>לוח שנה עברי</strong> – עם זמני היום לפי מיקום</li>
+                      <li><strong>מצב כהה, גופנים וניקוד</strong> – התאמה אישית מלאה</li>
                     </ul>
                   </div>
                   <div>

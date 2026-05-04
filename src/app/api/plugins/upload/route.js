@@ -149,6 +149,9 @@ export async function POST(request) {
     }
 
     // ולידציית צילומי מסך
+    if (screenshotFiles.length < 1) {
+      return bad('חובה לצרף לפחות צילום מסך אחד. ללא צילום מסך התוסף יידחה')
+    }
     if (screenshotFiles.length > MAX_SCREENSHOTS) {
       return bad(`Too many screenshots (max ${MAX_SCREENSHOTS})`)
     }
