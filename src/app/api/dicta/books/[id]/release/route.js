@@ -4,6 +4,7 @@ import dbConnect from '@/lib/db'
 import DictaBook from '@/models/DictaBook'
 import User from '@/models/User'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route' 
+import { hasBooksAccess } from '@/lib/roles'
 
 export async function POST(request, context) {
 
@@ -21,7 +22,7 @@ export async function POST(request, context) {
 
     const userId = String(session.user.id); // ממירים למחרוזת ליתר ביטחון
     const userName = session.user.name || 'משתמש לא ידוע';
-    const isAdmin = session.user.role === 'admin';
+    const isAdmin = hasBooksAccess(session.user.role);
     
 
     // 2. חיבור למסד הנתונים

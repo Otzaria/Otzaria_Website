@@ -3,12 +3,13 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
+import { hasBooksAccess } from '@/lib/roles';
 
 // GET - קבלת הגדרות התראות של המשתמש
 export async function GET(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || session.user?.role !== 'admin') {
+    if (!session || !hasBooksAccess(session.user?.role)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -38,7 +39,7 @@ export async function GET(request) {
 export async function PUT(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || session.user?.role !== 'admin') {
+    if (!session || !hasBooksAccess(session.user?.role)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 

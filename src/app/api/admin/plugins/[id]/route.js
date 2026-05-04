@@ -13,11 +13,12 @@ import {
 } from '@/lib/pluginStorage'
 import path from 'path'
 import { promises as fs } from 'fs'
+import { hasPluginsAccess } from '@/lib/roles'
 
-// וידוא הרשאת מנהל
+// וידוא הרשאת מנהל תוספים
 async function requireAdmin() {
   const session = await getServerSession(authOptions)
-  if (!session || session.user?.role !== 'admin') {
+  if (!session || !hasPluginsAccess(session.user?.role)) {
     return { ok: false, response: NextResponse.json({ error: 'Unauthorized' }, { status: 403 }) }
   }
   return { ok: true, session }

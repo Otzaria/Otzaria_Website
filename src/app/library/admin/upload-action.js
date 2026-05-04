@@ -2,6 +2,7 @@
 
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { hasBooksAccess } from '@/lib/roles';
 import { fromPath } from 'pdf2pic';
 import path from 'path';
 import fs from 'fs-extra';
@@ -16,7 +17,7 @@ export async function uploadBookAction(formData) {
   try {
     // 1. אבטחה - בדיקת סשן
     const session = await getServerSession(authOptions);
-    if (session?.user?.role !== 'admin') {
+    if (!hasBooksAccess(session?.user?.role)) {
         return { success: false, error: 'אין הרשאות ניהול' };
     }
 

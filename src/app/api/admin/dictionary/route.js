@@ -5,11 +5,12 @@ import connectDB from '@/lib/db';
 import User from '@/models/User';
 import SpellWord from '@/models/SpellWord';
 import SpellWordSkip from '@/models/SpellWordSkip';
+import { hasBooksAccess } from '@/lib/roles';
 
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    if (session?.user?.role !== 'admin') {
+    if (!hasBooksAccess(session?.user?.role)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -43,7 +44,7 @@ export async function GET() {
 export async function POST(req) {
   try {
     const session = await getServerSession(authOptions);
-    if (session?.user?.role !== 'admin') {
+    if (!hasBooksAccess(session?.user?.role)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 

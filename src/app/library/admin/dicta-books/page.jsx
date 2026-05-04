@@ -7,6 +7,7 @@ import { useDialog } from '@/components/providers/DialogContext'
 import { useLoading } from '@/components/providers/LoadingContext'
 import SplitBookDialog from '@/components/admin/SplitBookDialog'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import { hasBooksAccess } from '@/lib/roles'
 
 export default function AdminDictaBooksPage() {
   const { data: session, status } = useSession()
@@ -37,7 +38,7 @@ export default function AdminDictaBooksPage() {
     
     if (status === 'unauthenticated') {
       router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
-    } else if (session?.user?.role !== 'admin') {
+    } else if (!hasBooksAccess(session?.user?.role)) {
       router.push('/library/dashboard')
     } else {
       loadBooks()
@@ -341,7 +342,7 @@ export default function AdminDictaBooksPage() {
     </div>
   )
 
-  if (session?.user?.role !== 'admin') return null;
+  if (!hasBooksAccess(session?.user?.role)) return null;
 
   return (
     <>

@@ -213,11 +213,20 @@ export default function AdminUsersPage() {
                         onChange={e => setFormData({ ...formData, role: e.target.value })}
                       >
                         <option value="user">משתמש</option>
-                        <option value="admin">מנהל</option>
+                        <option value="admin">מנהל כללי</option>
+                        <option value="admin_plugins">מנהל תוספים</option>
+                        <option value="admin_books">מנהל ספרים</option>
                       </select>
                     ) : (
-                      <span className={`px-2 py-1 rounded text-xs font-bold ${user.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'}`}>
-                        {user.role === 'admin' ? 'מנהל' : 'משתמש'}
+                      <span className={`px-2 py-1 rounded text-xs font-bold ${
+                        user.role === 'admin' ? 'bg-purple-100 text-purple-800' :
+                        user.role === 'admin_plugins' ? 'bg-blue-100 text-blue-800' :
+                        user.role === 'admin_books' ? 'bg-green-100 text-green-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {user.role === 'admin' ? 'מנהל כללי' :
+                         user.role === 'admin_plugins' ? 'מנהל תוספים' :
+                         user.role === 'admin_books' ? 'מנהל ספרים' : 'משתמש'}
                       </span>
                     )}
                   </td>

@@ -3,10 +3,11 @@ import connectDB from '@/lib/db';
 import Upload from '@/models/Upload';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { hasBooksAccess } from '@/lib/roles';
 
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (session?.user?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!hasBooksAccess(session?.user?.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   await connectDB();
   

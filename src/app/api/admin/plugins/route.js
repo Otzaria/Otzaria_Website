@@ -3,13 +3,14 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
+import { hasPluginsAccess } from '@/lib/roles'
 
 // GET /api/admin/plugins?status=pending|approved
 // מאחד את שתי רשימות הניהול תחת ראוט אחד.
 export async function GET(request) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session || session.user?.role !== 'admin') {
+    if (!session || !hasPluginsAccess(session.user?.role)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     }
 

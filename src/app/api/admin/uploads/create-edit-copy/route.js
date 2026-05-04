@@ -5,10 +5,11 @@ import UploadEditCopy from '@/models/UploadEditCopy';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { getUploadText } from '@/lib/gridfs-service';
+import { hasBooksAccess } from '@/lib/roles';
 
 export async function POST(request) {
   const session = await getServerSession(authOptions);
-  if (session?.user?.role !== 'admin') {
+  if (!hasBooksAccess(session?.user?.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
