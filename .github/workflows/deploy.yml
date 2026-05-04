@@ -13,10 +13,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 20 with Cache
+      - name: Setup Node.js 24 with Cache
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install Dependencies
@@ -51,39 +51,22 @@ jobs:
             set -e
 
             APP_DIR="/var/www/otzaria-web"
-            TEMP_DIR="/var/www/otzaria-web-temp"
 
-            echo "🚀 Starting Optimized Deployment..."
+            echo "🚀 Starting In-Place Deployment (with build cache)..."
 
+            cd $APP_DIR
 
-            rm -rf $TEMP_DIR
-            mkdir -p $TEMP_DIR
-
-            echo "📋 Copying files (skipping heavy node_modules)..."
-            rsync -a --exclude 'node_modules' --exclude '.git' $APP_DIR/ $TEMP_DIR/
-            
-            cd $TEMP_DIR
-
-            echo "📥 Pulling latest code..."
-            git init
-            git remote add origin https://github.com/${{ github.repository }}.git
+            echo "📥 Pulling latest code (preserving node_modules & build cache)..."
             git fetch --depth 1 origin master
             git reset --hard origin/master
 
             echo "📦 Installing dependencies..."
             npm ci --legacy-peer-deps
 
-            echo "🛠 Building project..."
+            echo "🛠 Building project (incremental cache enabled)..."
             npm run build
 
-            echo "✅ Build successful. Swapping folders..."
-            
-            rsync -a --delete $TEMP_DIR/ $APP_DIR/
-
-            rm -rf $TEMP_DIR
-
             echo "🔄 Reloading PM2..."
-            cd $APP_DIR
             pm2 reload otzaria-web || pm2 restart otzaria-web
 
             echo "🎉 Deployment Finished Successfully!"
