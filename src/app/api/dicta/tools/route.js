@@ -18,6 +18,7 @@ import {
 } from "../_lib";
 
 import { dictaSync } from "@/lib/dicta/github-sync";
+import { hasBooksAccess } from '@/lib/roles';
 
 const toolHandlers = {
   "add-page-number": async (params) => {
@@ -143,7 +144,7 @@ export async function POST(request) {
     
     const user = session.user;
     const userId = user._id || user.id;
-    const isAdmin = user.role === "admin";
+    const isAdmin = hasBooksAccess(user.role);
 
     // 2. קריאת הבקשה
     const body = await request.json();
@@ -167,7 +168,7 @@ export async function POST(request) {
         return NextResponse.json({ detail: access.error }, { status: 403 });
       }
     } else if (tool === 'dicta-sync' && !isAdmin) {
-        // רק אדמין יכול לבצע סנכרון מערכת
+      // רק בעלי הרשאות ספרים יכולים לבצע סנכרון מערכת
         return NextResponse.json({ detail: "פעולה זו מותרת למנהלים בלבד" }, { status: 403 });
     }
 

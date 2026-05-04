@@ -3,9 +3,10 @@ import connectDB from '@/lib/db'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import BookInfo from '@/models/BookInfo'
 import { escapeCsvValue } from '@/lib/book-info-utils'
+import { hasBooksAccess } from '@/lib/roles';
 
 function isAdmin(session) {
-  return session?.user?.role === 'admin'
+  return hasBooksAccess(session?.user?.role)
 }
 
 export async function GET() {

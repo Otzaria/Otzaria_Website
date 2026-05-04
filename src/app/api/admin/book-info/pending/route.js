@@ -6,9 +6,10 @@ import BookInfo from '@/models/BookInfo'
 import BookInfoPendingChange from '@/models/BookInfoPendingChange'
 import { BOOK_INFO_EDITABLE_FIELDS } from '@/lib/book-info-constants'
 import { getChangedFields } from '@/lib/book-info-utils'
+import { hasBooksAccess } from '@/lib/roles';
 
 function isAdmin(session) {
-  return session?.user?.role === 'admin'
+  return hasBooksAccess(session?.user?.role)
 }
 
 function normalizeFieldSelection(changeDoc, fields) {

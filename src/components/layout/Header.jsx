@@ -12,7 +12,8 @@ export default function Header() {
   const [unreadMessages, setUnreadMessages] = useState(0)
 
   useEffect(() => {
-    if (session?.user?.role === 'admin') {
+    const role = session?.user?.role
+    if (role === 'admin' || role === 'admin_plugins' || role === 'admin_books') {
       const loadUnreadCount = async () => {
         try {
           // תיקון נתיב: messages/list -> messages
@@ -53,7 +54,7 @@ export default function Header() {
           
           {session ? (
             <div className="flex items-center gap-2 lg:gap-3 xl:gap-4">
-              {session.user.role === 'admin' && (
+              {(session.user.role === 'admin' || session.user.role === 'admin_plugins' || session.user.role === 'admin_books') && (
                 <Link href="/library/admin" className="flex items-center gap-2 text-accent hover:text-accent/80 transition-colors relative font-medium">
                   <span className="material-symbols-outlined">admin_panel_settings</span>
                   <span>ניהול</span>

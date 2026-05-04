@@ -2,41 +2,37 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useSession } from 'next-auth/react'
+
+const ALL_TABS = [
+  { id: 'dashboard', label: 'דשבורד', icon: 'analytics', href: '/library/admin', roles: ['admin', 'admin_books', 'admin_plugins'] },
+  { id: 'users', label: 'משתמשים', icon: 'group', href: '/library/admin/users', roles: ['admin'] },
+  { id: 'books', label: 'ספרים', icon: 'menu_book', href: '/library/admin/books', roles: ['admin', 'admin_books'] },
+  { id: 'dicta-books', label: 'ספרי דיקטה', icon: 'edit_document', href: '/library/admin/dicta-books', roles: ['admin', 'admin_books'] },
+  { id: 'uploads', label: 'העלאות', icon: 'upload_file', href: '/library/admin/uploads', roles: ['admin', 'admin_books'] },
+  { id: 'plugins', label: 'תוספים', icon: 'extension', href: '/library/admin/plugins', roles: ['admin', 'admin_plugins'] },
+  { id: 'pages', label: 'עמודים', icon: 'description', href: '/library/admin/pages-management', roles: ['admin', 'admin_books'] },
+  { id: 'messages', label: 'הודעות', icon: 'mail', href: '/library/admin/messages', roles: ['admin', 'admin_plugins', 'admin_books'] },
+  { id: 'reminders', label: 'תזכורות', icon: 'notifications', href: '/library/admin/reminders', roles: ['admin', 'admin_books'] },
+  { id: 'dictionary', label: 'מילון', icon: 'spellcheck', href: '/library/admin/dictionary', roles: ['admin', 'admin_books'] },
+  { id: 'book-info', label: 'מידע על ספרים', icon: 'list_alt', href: '/library/admin/book-info', roles: ['admin', 'admin_books'] },
+  { id: 'book-acronyms', label: 'כינויים ור"ת', icon: 'dictionary', href: '/library/admin/book-acronyms', roles: ['admin', 'admin_books'] },
+]
 
 export default function AdminNav({ unreadMessagesCount = 0, pendingUploadsCount = 0, pendingPluginsCount = 0 }) {
   const pathname = usePathname()
+  const { data: session } = useSession()
+  const role = session?.user?.role
 
-  const tabs = [
-    { id: 'dashboard', label: 'דשבורד', icon: 'analytics', href: '/library/admin' },
-    { id: 'users', label: 'משתמשים', icon: 'group', href: '/library/admin/users' },
-    { id: 'books', label: 'ספרים', icon: 'menu_book', href: '/library/admin/books' },
-    { id: 'dicta-books', label: 'ספרי דיקטה', icon: 'edit_document', href: '/library/admin/dicta-books' },
-    { 
-      id: 'uploads', 
-      label: `העלאות ${pendingUploadsCount > 0 ? `(${pendingUploadsCount})` : ''}`, 
-      icon: 'upload_file', 
-      href: '/library/admin/uploads' 
-    },
-    { 
-      id: 'plugins', 
-      label: 'תוספים', 
-      icon: 'extension', 
-      href: '/library/admin/plugins',
-      count: pendingPluginsCount 
-    },
-    { id: 'pages', label: 'עמודים', icon: 'description', href: '/library/admin/pages-management' },
-    { 
-      id: 'messages', 
-      label: 'הודעות', 
-      icon: 'mail', 
-      href: '/library/admin/messages',
-      count: unreadMessagesCount 
-    },
-    { id: 'reminders', label: 'תזכורות', icon: 'notifications', href: '/library/admin/reminders' },
-    { id: 'dictionary', label: 'מילון', icon: 'spellcheck', href: '/library/admin/dictionary' },
-    { id: 'book-info', label: 'מידע על ספרים', icon: 'list_alt', href: '/library/admin/book-info' },
-    { id: 'book-acronyms', label: 'כינויים ור"ת', icon: 'dictionary', href: '/library/admin/book-acronyms' },
-  ]
+  const tabs = ALL_TABS
+    .filter(tab => tab.roles.includes(role))
+    .map(tab => {
+      if (tab.id === 'uploads' && pendingUploadsCount > 0)
+        return { ...tab, label: `העלאות (${pendingUploadsCount})` }
+      if (tab.id === 'plugins') return { ...tab, count: pendingPluginsCount }
+      if (tab.id === 'messages') return { ...tab, count: unreadMessagesCount }
+      return tab
+    })
 
   return (
     <div className="flex w-full max-w-full flex-wrap justify-center gap-2 mb-6 overflow-visible p-3">
@@ -68,6 +64,3 @@ export default function AdminNav({ unreadMessagesCount = 0, pendingUploadsCount 
     </div>
   )
 }
-
-
-

@@ -5,11 +5,12 @@ import Page from '@/models/Page';
 import User from '@/models/User';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { hasAnyAdminAccess } from '@/lib/roles';
 
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    if (session?.user?.role !== 'admin') {
+    if (!hasAnyAdminAccess(session?.user?.role)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 

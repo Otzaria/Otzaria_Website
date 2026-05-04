@@ -25,8 +25,8 @@ export default function AdminMessagesPage() {
   const [showUserMenu, setShowUserMenu] = useState(false)
 
   useEffect(() => {
-    loadData()
-  }, [])
+    if (session) loadData()
+  }, [session])
 
   // סגירת תפריט בלחיצה מחוץ
   useEffect(() => {
@@ -45,19 +45,19 @@ export default function AdminMessagesPage() {
       setLoading(true)
       const [msgsRes, usersRes] = await Promise.all([
         fetch('/api/messages?allMessages=true'),
-        fetch('/api/admin/users')
+        fetch('/api/admin/users-basic')
       ])
 
       const msgsData = await msgsRes.json()
       const usersData = await usersRes.json()
-      
+
       if (msgsData.success) {
         const sortedMessages = [...msgsData.messages].sort((a, b) => {
-          const lastTimeA = a.replies && a.replies.length > 0 
+          const lastTimeA = a.replies && a.replies.length > 0
             ? new Date(a.replies[a.replies.length - 1].createdAt).getTime()
             : new Date(a.createdAt).getTime();
 
-          const lastTimeB = b.replies && b.replies.length > 0 
+          const lastTimeB = b.replies && b.replies.length > 0
             ? new Date(b.replies[b.replies.length - 1].createdAt).getTime()
             : new Date(b.createdAt).getTime();
 
@@ -66,9 +66,9 @@ export default function AdminMessagesPage() {
 
         setMessages(sortedMessages)
       }
-      
+
       if (usersData.success) {
-        setUsers(usersData.users.filter(u => u.role !== 'admin'))
+        setUsers(usersData.users)
       }
 
     } catch (e) {

@@ -6,6 +6,7 @@ import Upload from '@/models/Upload';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { getUploadText } from '@/lib/gridfs-service';
+import { hasBooksAccess } from '@/lib/roles';
 
 const DEFAULT_REPO_URL = "https://raw.githubusercontent.com/Otzaria/otzaria-library/refs/heads/main";
 const DEFAULT_FOLDER = "DictaToOtzaria/לא ערוך";
@@ -154,7 +155,7 @@ export async function POST(request, context) {
 
     const bookId = params.id;
     const userId = session.user.id;
-    const isAdmin = session.user.role === 'admin';
+    const isAdmin = hasBooksAccess(session.user.role);
 
     await connectDB();
     

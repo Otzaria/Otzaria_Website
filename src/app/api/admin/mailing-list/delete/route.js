@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
 import MailingList from '@/models/MailingList';
+import { hasBooksAccess } from '@/lib/roles';
 
 const LIST_NAME = 'new_books_subscribers';
 
@@ -13,7 +14,7 @@ export async function DELETE(request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (session.user.role !== 'admin') {
+    if (!hasBooksAccess(session.user.role)) {
       return NextResponse.json({ error: 'Forbidden: Access denied' }, { status: 403 });
     }
 

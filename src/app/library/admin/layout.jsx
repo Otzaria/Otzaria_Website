@@ -5,6 +5,7 @@ import Header from '@/components/layout/Header'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import AdminNav from './AdminNav'
+import { ROLE_LABELS } from '@/lib/roles'
 
 export default function AdminLayout({ children }) {
   const { data: session } = useSession()
@@ -13,27 +14,28 @@ export default function AdminLayout({ children }) {
   useEffect(() => {
     const fetchCounts = async () => {
       try {
-        const [msgRes, uploadRes, pluginsRes] = await Promise.all([
-            fetch('/api/messages?allMessages=true'), 
-            fetch('/api/admin/uploads/list'),
-            fetch('/api/admin/plugins?status=pending')
+        const role = session?.user?.role
+        const canSeeUploads = role === 'admin' || role === 'admin_books'
+        const canSeePlugins = role === 'admin' || role === 'admin_plugins'
+
+        const [msgData, uploadData, pluginsData] = await Promise.all([
+          fetch('/api/messages?allMessages=true').then(r => r.json()).catch(() => null),
+          canSeeUploads ? fetch('/api/admin/uploads/list').then(r => r.json()).catch(() => null) : null,
+          canSeePlugins ? fetch('/api/admin/plugins?status=pending').then(r => r.json()).catch(() => null) : null,
         ])
-        
-        const msgData = await msgRes.json()
-        const uploadData = await uploadRes.json()
-        const pluginsData = await pluginsRes.json()
 
         setCounts({
-            unreadMessages: msgData.success ? msgData.messages.filter(m => m.status === 'unread').length : 0,
-            pendingUploads: uploadData.success ? uploadData.uploads.filter(u => u.status === 'pending').length : 0,
-            pendingPlugins: Array.isArray(pluginsData) ? pluginsData.length : 0
+          unreadMessages: msgData?.success ? msgData.messages.filter(m => m.status === 'unread').length : 0,
+          pendingUploads: uploadData?.success ? uploadData.uploads.filter(u => u.status === 'pending').length : 0,
+          pendingPlugins: Array.isArray(pluginsData) ? pluginsData.length : 0,
         })
       } catch (e) {
         console.error('Error loading admin counts', e)
       }
     }
 
-    if (session?.user?.role === 'admin') {
+    const role = session?.user?.role
+    if (role === 'admin' || role === 'admin_plugins' || role === 'admin_books') {
         fetchCounts()
         const interval = setInterval(fetchCounts, 60000)
         return () => clearInterval(interval)
@@ -55,7 +57,7 @@ export default function AdminLayout({ children }) {
                   </span>
                   פאנל ניהול
                 </h1>
-                <p className="text-on-surface/60 mt-2">ניהול מלא של המערכת</p>
+                <p className="text-on-surface/60 mt-2">{ROLE_LABELS[session?.user?.role] || 'ניהול מלא של המערכת'}</p>
               </div>
               <div className="flex gap-3">
                 {session?.user?.name === 'admin' && (

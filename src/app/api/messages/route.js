@@ -4,6 +4,7 @@ import Message from '@/models/Message';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import mongoose from 'mongoose';
+import { hasAnyAdminAccess } from '@/lib/roles';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +20,7 @@ export async function GET(request) {
 
         let query = {};
         
-        if (session.user.role === 'admin' && showAll === 'true') {
+        if (hasAnyAdminAccess(session.user.role) && showAll === 'true') {
              query = {}; 
         } else {
             query = { 

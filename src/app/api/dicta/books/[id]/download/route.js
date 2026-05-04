@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
 import DictaBook from '@/models/DictaBook';
 import UploadEditCopy from '@/models/UploadEditCopy';
+import { hasBooksAccess } from '@/lib/roles';
 
 function getDownloadBaseName(title = 'dicta-book') {
   const normalizedTitle = typeof title === 'string' ? title : 'dicta-book';
@@ -36,7 +37,7 @@ export async function GET(request, { params }) {
     }
 
     const userId = session.user._id || session.user.id;
-    const isAdmin = session.user.role === 'admin';
+    const isAdmin = hasBooksAccess(session.user.role);
 
     await connectDB();
     const { id } = await params;
