@@ -42,7 +42,8 @@ export default function AdminBooksPage() {
   const [isLoadingInstructions, setIsLoadingInstructions] = useState(false)
   const [isSavingInstructions, setIsSavingInstructions] = useState(false)
 
-  const [hidePersonalBooks, setHidePersonalBooks] = useState(false)
+  const [personalFilter, setPersonalFilter] = useState('all') // 'all' | 'public' | 'personal'
+  const [ownerSearchTerm, setOwnerSearchTerm] = useState('')
 
   const [showCategoriesDialog, setShowCategoriesDialog] = useState(false)
   const [categoriesList, setCategoriesList] = useState([
@@ -51,11 +52,17 @@ export default function AdminBooksPage() {
 
     useEffect(() => {
     try {
-      const saved = localStorage.getItem('admin_hide_personal_books');
+      const saved = localStorage.getItem('admin_personal_filter');
       if (saved !== null) {
-          setHidePersonalBooks(JSON.parse(saved));
+          const parsed = JSON.parse(saved);
+          if (typeof parsed === 'string' && ['all', 'public', 'personal'].includes(parsed)) {
+              setPersonalFilter(parsed);
+          } else if (parsed === true) {
+              setPersonalFilter('public');
+          }
       }
     } catch (error) {
+      localStorage.removeItem('admin_personal_filter');
       localStorage.removeItem('admin_hide_personal_books');
     }
   }, [])
@@ -384,32 +391,43 @@ export default function AdminBooksPage() {
     }
 };
 
-  const toggleHidePersonal = (checked) => {
-    setHidePersonalBooks(checked);
-    localStorage.setItem('admin_hide_personal_books', JSON.stringify(checked));
+  const changePersonalFilter = (value) => {
+    setPersonalFilter(value);
+    localStorage.setItem('admin_personal_filter', JSON.stringify(value));
+    if (value !== 'personal') {
+        setOwnerSearchTerm('');
+    }
   };
 
-  const filteredBooks = books.filter(book => {  
-    const isPersonal = book.isPrivate || !!book.ownerId;
-    if (hidePersonalBooks && isPersonal) return false;
+  const filteredBooks = books.filter(book => {
+    const isCurrentlyPersonal = book.isPrivate || !!book.ownerId;
+    const hasPersonalHistory = isCurrentlyPersonal || !!book.originalOwnerId;
 
-    const matchesSearch = book.name.toLowerCase().includes(searchTerm.toLowerCase());  
-    if (!matchesSearch) return false;  
+    if (personalFilter === 'public' && isCurrentlyPersonal) return false;
+    if (personalFilter === 'personal' && !hasPersonalHistory) return false;
 
-    const total = book.totalPages || 0;  
-    const completed = book.completedPages || 0;  
+    if (personalFilter === 'personal' && ownerSearchTerm.trim()) {
+        const ownerName = (book.ownerName || book.originalOwnerName || '').toLowerCase();
+        if (!ownerName.includes(ownerSearchTerm.trim().toLowerCase())) return false;
+    }
 
-    switch (activeTab) {  
-      case 'in_progress':  
-        return completed > 0 && completed < total;  
-      case 'hidden':  
-        return book.isHidden;  
-      case 'completed':  
-        return total > 0 && completed >= total;  
-      default:  
-        return true;  
-    }  
-  });  
+    const matchesSearch = book.name.toLowerCase().includes(searchTerm.toLowerCase());
+    if (!matchesSearch) return false;
+
+    const total = book.totalPages || 0;
+    const completed = book.completedPages || 0;
+
+    switch (activeTab) {
+      case 'in_progress':
+        return completed > 0 && completed < total;
+      case 'hidden':
+        return book.isHidden;
+      case 'completed':
+        return total > 0 && completed >= total;
+      default:
+        return true;
+    }
+  });
 
   return (
     <>
@@ -511,15 +529,41 @@ export default function AdminBooksPage() {
             ))}
         </div>
 
-        <label className="flex items-center gap-2 cursor-pointer select-none whitespace-nowrap bg-white/40 px-3 py-2 rounded-lg border border-transparent hover:border-gray-200 transition-all">
-            <input 
-                type="checkbox" 
-                checked={hidePersonalBooks}
-                onChange={(e) => toggleHidePersonal(e.target.checked)}
-                className="w-4 h-4 text-primary rounded focus:ring-primary border-gray-300"
-            />
-            <span className="text-sm font-medium text-gray-700">אל תציג ספרים אישיים</span>
-        </label>
+        <div className="flex flex-col md:flex-row items-start md:items-center gap-2">
+            <div className="flex gap-1 bg-white/40 p-1 rounded-lg border border-transparent">
+                {[
+                    { id: 'all', label: 'כל הספרים', icon: 'menu_book' },
+                    { id: 'public', label: 'ציבוריים בלבד', icon: 'public' },
+                    { id: 'personal', label: 'אישיים בלבד', icon: 'person' },
+                ].map(opt => (
+                    <button
+                        key={opt.id}
+                        onClick={() => changePersonalFilter(opt.id)}
+                        className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${
+                            personalFilter === opt.id
+                            ? 'bg-primary text-on-primary shadow-sm'
+                            : 'text-gray-600 hover:bg-white/80'
+                        }`}
+                    >
+                        <span className="material-symbols-outlined text-sm">{opt.icon}</span>
+                        {opt.label}
+                    </button>
+                ))}
+            </div>
+
+            {personalFilter === 'personal' && (
+                <div className="relative w-full md:w-56 animate-in fade-in slide-in-from-right-2 duration-200">
+                    <input
+                        type="text"
+                        placeholder="סינון לפי שם בעלים..."
+                        className="w-full border rounded-lg pr-8 pl-3 py-1.5 text-sm focus:ring-2 focus:ring-primary outline-none bg-white/70"
+                        value={ownerSearchTerm}
+                        onChange={e => setOwnerSearchTerm(e.target.value)}
+                    />
+                    <span className="material-symbols-outlined absolute right-2 top-1.5 text-gray-400 text-base">person_search</span>
+                </div>
+            )}
+        </div>
       </div>
 
         {loading ? (
@@ -540,7 +584,8 @@ export default function AdminBooksPage() {
                 const progress = book.totalPages > 0 ? Math.round((book.completedPages / book.totalPages) * 100) : 0;
                 
                 const isPersonal = book.isPrivate || !!book.ownerId;
-                const ownerName = book.ownerName || 'משתמש פרטי';
+                const wasPersonal = !isPersonal && !!book.originalOwnerId;
+                const ownerName = book.ownerName || book.originalOwnerName || 'משתמש פרטי';
 
                 return (
                     <div key={book.id || book.path} className={`group glass p-0 rounded-xl border transition-all hover:shadow-lg overflow-hidden flex flex-col ${isHidden ? 'border-amber-200 bg-amber-50/30' : 'border-white/50'}`}>
@@ -572,6 +617,11 @@ export default function AdminBooksPage() {
                                     {isPersonal ? (
                                          <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
                                             <span className="material-symbols-outlined text-[12px]">person</span>
+                                            {ownerName}
+                                        </span>
+                                    ) : wasPersonal ? (
+                                        <span className="bg-blue-400 text-white text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1" title="ספר שהיה אישי והושלם">
+                                            <span className="material-symbols-outlined text-[12px]">history</span>
                                             {ownerName}
                                         </span>
                                     ) : isHidden && (

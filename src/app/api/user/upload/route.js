@@ -91,7 +91,8 @@ export async function POST(request) {
       completedPages: 0,
       isHidden: true,
       isPrivate: true,
-      ownerId: userId
+      ownerId: userId,
+      originalOwnerId: userId
     });
     
     createdBookId = newBook._id;

@@ -14,6 +14,7 @@ const BookSchema = new mongoose.Schema({
   isHidden: { type: Boolean, default: false },
   
   ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  originalOwnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   isPrivate: { type: Boolean, default: false }
 }, { timestamps: true });
 

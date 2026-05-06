@@ -18,8 +18,9 @@ export async function GET() {
     const query = isAdmin ? {} : { isHidden: { $ne: true } };
 
     const books = await Book.find(query)
-      .select('name slug totalPages category updatedAt isHidden editingInfo ownerId isPrivate') 
-      .populate('ownerId', 'name') // שליפת השם של הבעלים
+      .select('name slug totalPages category updatedAt isHidden editingInfo ownerId originalOwnerId isPrivate')
+      .populate('ownerId', 'name')
+      .populate('originalOwnerId', 'name')
       .sort({ updatedAt: -1 })
       .lean();
 
@@ -62,6 +63,8 @@ export async function GET() {
         
         ownerId: book.ownerId,
         ownerName: book.ownerId?.name || null,
+        originalOwnerId: book.originalOwnerId?._id || book.originalOwnerId || null,
+        originalOwnerName: book.originalOwnerId?.name || null,
         isPrivate: book.isPrivate || false
       };
     });

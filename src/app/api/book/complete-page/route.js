@@ -58,11 +58,15 @@ export async function POST(request) {
         if (book && (book.ownerId || book.isPrivate)) {
 
             if (book.totalPages > 0 && book.totalPages === book.completedPages) {
-                await Book.findByIdAndUpdate(book._id, {
+                const update = {
                     $unset: { ownerId: 1 },
                     isPrivate: false,
                     isHidden: false
-                });
+                };
+                if (!book.originalOwnerId && book.ownerId) {
+                    update.originalOwnerId = book.ownerId;
+                }
+                await Book.findByIdAndUpdate(book._id, update);
             }
         }
     }
