@@ -6,11 +6,12 @@ import { encryptToken } from '@/app/api/user/unsubscribe/route';
 import dbConnect from '@/lib/db';
 import ReminderHistory from '@/models/reminderHistory';
 import User from '@/models/User';
+import { hasBooksAccess } from '@/lib/roles';
 
 export async function POST(request) {
     try {
         const session = await getServerSession(authOptions);
-        if (!session || session.user?.role !== 'admin') {
+        if (!session || !hasBooksAccess(session.user?.role)) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
 

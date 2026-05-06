@@ -6,6 +6,7 @@ import { promises as fs } from 'fs'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import { sendPluginUploadNotification } from '@/lib/emailService'
+import { hasPluginsAccess } from '@/lib/roles'
 import {
   ALLOWED_PLUGIN_STATUSES,
   MIN_SUPPORTED_APP_VERSION,
@@ -69,7 +70,7 @@ async function getAuthorizedPlugin(id, session) {
     return { error: bad('Plugin not found', 404) }
   }
 
-  const isAdmin = session.user?.role === 'admin'
+  const isAdmin = hasPluginsAccess(session.user?.role)
   const isOwner = plugin.authorId?.toString() === session.user?.id
   if (!isAdmin && !isOwner) {
     return { error: bad('Forbidden - You do not have permission to edit this plugin', 403) }

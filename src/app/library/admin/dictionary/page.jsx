@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import { hasBooksAccess } from '@/lib/roles'
 
 export default function AdminDictionaryPage() {
   const { data: session, status } = useSession()
@@ -24,7 +25,7 @@ export default function AdminDictionaryPage() {
       return
     }
 
-    if (session?.user?.role !== 'admin') {
+    if (!hasBooksAccess(session?.user?.role)) {
       router.push('/library/dashboard')
       return
     }
@@ -150,7 +151,7 @@ export default function AdminDictionaryPage() {
     </div>
   )
 
-  if (session?.user?.role !== 'admin') return null
+  if (!hasBooksAccess(session?.user?.role)) return null
 
   return (
     <div className="glass-strong p-6 rounded-xl animate-in fade-in slide-in-from-bottom-4 duration-500">

@@ -4,9 +4,10 @@ import connectDB from '@/lib/db'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import BookAcronym from '@/models/BookAcronym'
 import BookAcronymPendingSuggestion from '@/models/BookAcronymPendingSuggestion'
+import { hasBooksAccess } from '@/lib/roles';
 
 function isAdmin(session) {
-  return session?.user?.role === 'admin'
+  return hasBooksAccess(session?.user?.role)
 }
 
 function buildAtomicAliasReplaceUpdate(currentAlias, nextAlias) {

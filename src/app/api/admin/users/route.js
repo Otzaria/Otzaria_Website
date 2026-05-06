@@ -107,16 +107,23 @@ export async function PUT(request) {
         }
 
         const { userId, role, points, name, email } = await request.json();
-        
+
         await connectDB();
-        
-        if (email) {
+
+        const currentUser = await User.findById(userId).select('email');
+        if (!currentUser) {
+            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        }
+
+        const emailChanged = email && email !== currentUser.email;
+
+        if (emailChanged) {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!emailRegex.test(email)) {
                 return NextResponse.json({ error: 'Invalid email address' }, { status: 400 });
             }
 
-            const existingUser = await User.findOne({ email: email, _id: { $ne: userId } });
+            const existingUser = await User.findOne({ email, _id: { $ne: userId } });
             if (existingUser) {
                 return NextResponse.json({ error: 'Email already in use' }, { status: 409 });
             }
@@ -128,7 +135,7 @@ export async function PUT(request) {
             name,
         };
 
-        if (email) {
+        if (emailChanged) {
             updateData.email = email;
             updateData.isVerified = false;
             updateData.verificationToken = null;

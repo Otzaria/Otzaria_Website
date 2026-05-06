@@ -4,6 +4,7 @@ import Message from '@/models/Message';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import mongoose from 'mongoose';
+import { hasAnyAdminAccess } from '@/lib/roles';
 
 export async function POST(request) {
     try {
@@ -19,7 +20,7 @@ export async function POST(request) {
         const userId = session?.user?._id || session?.user?.id;
         await connectDB();
 
-        const isSentFromAdminInterface = fromAdminPanel === true && session?.user?.role === 'admin';
+        const isSentFromAdminInterface = fromAdminPanel === true && hasAnyAdminAccess(session?.user?.role);
 
         const message = await Message.findById(messageId).select('sender recipient');
         if (!message) return NextResponse.json({ error: 'ההודעה לא נמצאה' }, { status: 404 });

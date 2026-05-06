@@ -5,11 +5,12 @@ import User from '@/models/User';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import mongoose from 'mongoose';
+import { hasAnyAdminAccess, ALL_ADMIN_ROLES } from '@/lib/roles';
 
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (session?.user?.role !== 'admin') {
+    if (!hasAnyAdminAccess(session?.user?.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -21,7 +22,7 @@ export async function POST(request) {
 
     if (sendToAll) {
       // שליפה של כל המשתמשים (למעט האדמין עצמו)
-      const users = await User.find({ role: { $ne: 'admin' } }).select('_id');
+      const users = await User.find({ role: { $nin: ALL_ADMIN_ROLES } }).select('_id');
       
       const messages = users.map(user => ({
         sender: adminId,

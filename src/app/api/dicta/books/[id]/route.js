@@ -6,6 +6,7 @@ import Upload from '@/models/Upload';
 import User from '@/models/User';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { hasBooksAccess } from '@/lib/roles';
 
 export async function GET(req, { params }) {
   try {
@@ -15,7 +16,7 @@ export async function GET(req, { params }) {
     }
 
     const userId = session.user._id || session.user.id;
-    const isAdmin = session.user.role === 'admin';
+    const isAdmin = hasBooksAccess(session.user.role);
 
     await connectDB();
     const { id } = await params;
@@ -68,7 +69,7 @@ export async function PUT(req, { params }) {
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized: User ID missing' }, { status: 401 });
     }
-    const isAdmin = session.user.role === 'admin';
+    const isAdmin = hasBooksAccess(session.user.role);
 
     await connectDB();
     const { id } = await params;
@@ -187,7 +188,7 @@ export async function PUT(req, { params }) {
 export async function DELETE(req, { params }) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || session.user?.role !== 'admin') {
+    if (!session || !hasBooksAccess(session.user?.role)) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 

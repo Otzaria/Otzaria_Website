@@ -4,10 +4,11 @@ import Page from '@/models/Page';
 import Book from '@/models/Book'; // ייבוא המודל
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { hasBooksAccess } from '@/lib/roles';
 
 export async function PUT(request) {
   const session = await getServerSession(authOptions);
-  if (session?.user?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!hasBooksAccess(session?.user?.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const { bookName, pageNumber, updates } = await request.json();
   
