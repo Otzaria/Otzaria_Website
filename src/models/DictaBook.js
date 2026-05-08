@@ -13,6 +13,7 @@ const DictaBookSchema = new mongoose.Schema({
   claimedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   claimedAt: { type: Date, default: null },
   completedAt: { type: Date, default: null },
+  lastAutoReminderAt: { type: Date, default: null },
   // היסטוריית גירסאות
   history: [{
     timestamp: { type: Date, default: Date.now },
@@ -21,5 +22,8 @@ const DictaBookSchema = new mongoose.Schema({
     editorName: String,
   }]
 }, { timestamps: true });
+
+// אינדקס לסריקות ה-cron של תזכורות/שחרור אוטומטי
+DictaBookSchema.index({ status: 1, claimedBy: 1, updatedAt: 1 });
 
 export default mongoose.models.DictaBook || mongoose.model('DictaBook', DictaBookSchema);

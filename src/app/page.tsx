@@ -6,6 +6,29 @@ import Link from 'next/link'
 import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 
+function normalizeVersionPart(part: string) {
+  const numericPart = part.match(/^\d+/)?.[0]
+  return numericPart ? Number(numericPart) : 0
+}
+
+function compareVersions(firstVersion?: string | null, secondVersion?: string | null) {
+  if (!firstVersion || !secondVersion) return 0
+
+  const firstParts = firstVersion.replace(/^[^\d]*/, '').split(/[.-]/)
+  const secondParts = secondVersion.replace(/^[^\d]*/, '').split(/[.-]/)
+  const maxLength = Math.max(firstParts.length, secondParts.length)
+
+  for (let index = 0; index < maxLength; index += 1) {
+    const firstPart = normalizeVersionPart(firstParts[index] || '0')
+    const secondPart = normalizeVersionPart(secondParts[index] || '0')
+
+    if (firstPart > secondPart) return 1
+    if (firstPart < secondPart) return -1
+  }
+
+  return 0
+}
+
 export default function Home() {
   const [windowsModalOpen, setWindowsModalOpen] = useState(false)
   const [linuxModalOpen, setLinuxModalOpen] = useState(false)
@@ -439,6 +462,8 @@ export default function Home() {
 function DownloadModal({ isOpen, onClose, platform, stableLinks, devLinks, stableVersion, devVersion }: any) {
   if (!isOpen) return null
 
+  const shouldShowDevVersion = Boolean(devVersion) && (!stableVersion || compareVersions(stableVersion, devVersion) < 0)
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
       <motion.div
@@ -475,21 +500,21 @@ function DownloadModal({ isOpen, onClose, platform, stableLinks, devLinks, stabl
                 {renderDownloadOptions(platform, stableLinks)}
               </div>
             </div>
-
-            {/* Dev Version */}
-            <div>
-              <div className="flex items-center gap-3 mb-4 sticky top-0 bg-white z-10 py-2">
-                <span className="material-symbols-outlined text-orange-600">code</span>
-                <h3 className="text-xl font-bold text-gray-800">
-                  גירסת פיתוח
-                  {devVersion && <span className="text-sm font-normal text-gray-500 mr-2"> ({devVersion})</span>}
-                </h3>
-                <span className="px-3 py-1 bg-orange-100 text-orange-800 text-xs font-bold rounded-full">ניסיוני</span>
+            {shouldShowDevVersion && (
+              <div>
+                <div className="flex items-center gap-3 mb-4 sticky top-0 bg-white z-10 py-2">
+                  <span className="material-symbols-outlined text-orange-600">code</span>
+                  <h3 className="text-xl font-bold text-gray-800">
+                    גירסת פיתוח
+                    {devVersion && <span className="text-sm font-normal text-gray-500 mr-2"> ({devVersion})</span>}
+                  </h3>
+                  <span className="px-3 py-1 bg-orange-100 text-orange-800 text-xs font-bold rounded-full">ניסיוני</span>
+                </div>
+                <div className="grid gap-3">
+                  {renderDownloadOptions(platform, devLinks)}
+                </div>
               </div>
-              <div className="grid gap-3">
-                {renderDownloadOptions(platform, devLinks)}
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </motion.div>
