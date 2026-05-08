@@ -380,6 +380,155 @@ export async function sendBookNotification(bookName, bookSlug) {
     }
 }
 
+// תבנית בסיסית למייל תזכורת אוטומטית (עמודי ספר רגיל / ספר דיקטה).
+// bodyHtml חייב להיות HTML שכבר עבר escape במקום הקריאה.
+function buildStaleReminderHtml({ headingTitle, bodyHtml, ctaUrl, ctaLabel, unsubUrl }) {
+    const logoUrl = `${process.env.NEXTAUTH_URL}/logo.png`;
+    return `
+    <div dir="rtl" style="font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 40px; text-align: center;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden;">
+            <div style="background-color: #ffffff; padding: 20px; border-bottom: 3px solid #d4a373;">
+                <img src="${logoUrl}" alt="Otzaria Logo" style="width: 120px; height: auto;">
+                <h2 style="color: #d4a373; margin: 5px 0 0 0; font-size: 20px; font-weight: bold;">ספריית אוצריא</h2>
+            </div>
+            <div style="padding: 30px; color: #333333;">
+                <h1 style="color: #2c3e50; font-size: 24px; margin-bottom: 10px;">${escapeHtml(headingTitle)}</h1>
+                <div style="font-size: 18px; line-height: 1.6; text-align: right; margin-bottom: 30px;">
+                    ${bodyHtml}
+                </div>
+                <div style="margin: 30px 0; text-align: center;">
+                    <a href="${ctaUrl}" style="background-color: #d4a373; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+                        ${escapeHtml(ctaLabel)}
+                    </a>
+                </div>
+            </div>
+            <div style="margin-top: 0; padding: 20px; border-top: 1px solid #eee; font-size: 11px; color: #999; text-align: center;">
+                קיבלת הודעה זו ממערכת אוצריא.
+                <br>
+                <a href="${unsubUrl}" style="color: #999; text-decoration: underline;">להסרה מקבלת תזכורות במייל<br>שים לב שלא תוכל לערוך עוד באתר כל עוד לא תאשר קבלת מיילים!<br>התזכורות נצרכות לצורך תפעול תקין של המערכת.</a>
+            </div>
+        </div>
+    </div>
+    `;
+}
+
+// תזכורת אוטומטית על עמודים תקועים בספר רגיל. pages הוא מערך עם { pageNumber, daysSinceEdit }
+export async function sendStalePageReminder({ user, book, pages }) {
+    if (!user?.email || !book?.slug) return { sent: false, reason: 'missing_data' };
+    if (!pages?.length) return { sent: false, reason: 'no_pages' };
+
+    const transporter = createTransporter();
+    const siteUrl = process.env.NEXTAUTH_URL || '';
+    const bookUrl = `${siteUrl}/library/books/${encodeURIComponent(book.slug)}`;
+    const secureToken = encryptToken(user.email);
+    const unsubUrl = `${siteUrl}/api/user/unsubscribe?t=${secureToken}&action=reminder`;
+    const safeBookName = escapeHtml(book.name || '');
+
+    const pageListText = pages
+        .map(p => `• עמוד ${p.pageNumber} (לא נערך כבר ${p.daysSinceEdit} ימים)`)
+        .join('\n');
+    const pageListHtml = pages
+        .map(p => `• עמוד ${p.pageNumber} (לא נערך כבר ${p.daysSinceEdit} ימים)`)
+        .join('<br/>');
+
+    const introHtml = `שמנו לב שיש עמודים שתפסת לעריכה בספר "${safeBookName}" שלא נערכו כשבוע ויותר:`;
+    const closingHtml =
+        'אנא היכנס למערכת והשלם את העריכה, או שחרר את העמודים כדי שאחרים יוכלו להמשיך.<br/>' +
+        'שים לב — עמודים שלא ייערכו במהלך השבוע הקרוב ישוחררו אוטומטית.';
+
+    const bodyHtml = `${introHtml}<br/><br/>${pageListHtml}<br/><br/>${closingHtml}`;
+
+    const bodyText =
+        `שמנו לב שיש עמודים שתפסת לעריכה בספר "${book.name}" שלא נערכו כשבוע ויותר:\n\n` +
+        `${pageListText}\n\n` +
+        `אנא היכנס למערכת והשלם את העריכה, או שחרר את העמודים כדי שאחרים יוכלו להמשיך.\n` +
+        `שים לב — עמודים שלא ייערכו במהלך השבוע הקרוב ישוחררו אוטומטית.`;
+
+    const html = buildStaleReminderHtml({
+        headingTitle: `תזכורת: עמודים תקועים בספר "${book.name}"`,
+        bodyHtml,
+        ctaUrl: bookUrl,
+        ctaLabel: 'מעבר לספר',
+        unsubUrl,
+    });
+
+    try {
+        await transporter.sendMail({
+            from: process.env.SMTP_FROM || process.env.SMTP_USER,
+            to: user.email,
+            subject: `תזכורת אוטומטית: עמודים שלא נערכו בספר "${book.name}"`,
+            headers: {
+                'List-Unsubscribe': `<${unsubUrl}>`,
+                'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
+            },
+            html,
+            text: `${bodyText}\n\nלהסרה: ${unsubUrl}`,
+        });
+        return { sent: true };
+    } catch (error) {
+        console.error(`Stale page reminder failed for ${user.email}:`, error.message);
+        return { sent: false, error: error.message };
+    }
+}
+
+// תזכורת אוטומטית על ספרי דיקטה תקועים. books הוא מערך עם { title, daysSinceEdit }
+export async function sendStaleDictaReminder({ user, books }) {
+    if (!user?.email) return { sent: false, reason: 'missing_data' };
+    if (!books?.length) return { sent: false, reason: 'no_books' };
+
+    const transporter = createTransporter();
+    const siteUrl = process.env.NEXTAUTH_URL || '';
+    const ctaUrl = `${siteUrl}/library/dicta-books?status=my-books`;
+    const secureToken = encryptToken(user.email);
+    const unsubUrl = `${siteUrl}/api/user/unsubscribe?t=${secureToken}&action=reminder`;
+
+    const bookListText = books
+        .map(b => `• ${b.title} (לא נערך כבר ${b.daysSinceEdit} ימים)`)
+        .join('\n');
+    const bookListHtml = books
+        .map(b => `• ${escapeHtml(b.title || '')} (לא נערך כבר ${b.daysSinceEdit} ימים)`)
+        .join('<br/>');
+
+    const introHtml = 'שמנו לב שיש ספרי דיקטה שתפסת לעריכה ולא נגעת בהם כשבוע ויותר:';
+    const closingHtml =
+        'אנא היכנס למערכת והשלם את העריכה, או שחרר את הספר כדי שאחרים יוכלו להמשיך.<br/>' +
+        'שים לב — ספר שלא ייערך במהלך השבוע הקרוב ישוחרר אוטומטית.';
+
+    const bodyHtml = `${introHtml}<br/><br/>${bookListHtml}<br/><br/>${closingHtml}`;
+
+    const bodyText =
+        `שמנו לב שיש ספרי דיקטה שתפסת לעריכה ולא נגעת בהם כשבוע ויותר:\n\n` +
+        `${bookListText}\n\n` +
+        `אנא היכנס למערכת והשלם את העריכה, או שחרר את הספר כדי שאחרים יוכלו להמשיך.\n` +
+        `שים לב — ספר שלא ייערך במהלך השבוע הקרוב ישוחרר אוטומטית.`;
+
+    const html = buildStaleReminderHtml({
+        headingTitle: 'תזכורת: ספרי דיקטה תקועים בעריכה',
+        bodyHtml,
+        ctaUrl,
+        ctaLabel: 'כנס לספרי הדיקטה שלי',
+        unsubUrl,
+    });
+
+    try {
+        await transporter.sendMail({
+            from: process.env.SMTP_FROM || process.env.SMTP_USER,
+            to: user.email,
+            subject: 'תזכורת אוטומטית: ספרי דיקטה שלא נערכו',
+            headers: {
+                'List-Unsubscribe': `<${unsubUrl}>`,
+                'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
+            },
+            html,
+            text: `${bodyText}\n\nלהסרה: ${unsubUrl}`,
+        });
+        return { sent: true };
+    } catch (error) {
+        console.error(`Stale dicta reminder failed for ${user.email}:`, error.message);
+        return { sent: false, error: error.message };
+    }
+}
+
 export async function sendPluginApprovalNotification(pluginData) {
     try {
         const recipientEmail = (pluginData.recipientEmail || '').trim();

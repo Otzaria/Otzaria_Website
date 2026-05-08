@@ -24,6 +24,7 @@ const PageSchema = new mongoose.Schema({
   claimedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   claimedAt: { type: Date },
   completedAt: { type: Date },
+  lastAutoReminderAt: { type: Date },
   
   // נתיב התמונה (יחסי, למשל: /uploads/books/mybook/page.1.jpg)
   imagePath: { type: String, required: true } 
@@ -31,5 +32,8 @@ const PageSchema = new mongoose.Schema({
 
 // אינדקס משולב לשליפה מהירה של עמודים לפי ספר ומספר
 PageSchema.index({ book: 1, pageNumber: 1 }, { unique: true });
+
+// אינדקס לסריקות ה-cron של תזכורות/שחרור אוטומטי על עמודים תקועים
+PageSchema.index({ status: 1, claimedBy: 1, updatedAt: 1 });
 
 export default mongoose.models.Page || mongoose.model('Page', PageSchema);
