@@ -25,6 +25,30 @@ export async function clearImageOptCache(pluginId) {
   } catch { /* ignore */ }
 }
 
+// שומר תמונה לדיסק תוך דחיסה ל-WebP (חוץ מ-GIF). מחזיר את ה-meta שנשמר.
+// destDir: תיקיית היעד, basename: שם הקובץ ללא סיומת, file: File מ-FormData
+export async function saveOptimizedImage(file, destDir, basename, { maxWidth = 1200, quality = 82 } = {}) {
+  const rawBuf = Buffer.from(await file.arrayBuffer())
+  const mime = (file.type || '').toLowerCase()
+  let saveBuf = rawBuf
+  let ext = imageExtFromMime(mime) || '.bin'
+  let contentType = mime
+
+  if (mime !== 'image/gif') {
+    try {
+      saveBuf = await optimizeImageBuffer(rawBuf, { maxWidth, quality })
+      ext = '.webp'
+      contentType = 'image/webp'
+    } catch { /* fallback to original */ }
+  }
+
+  const dest = path.join(destDir, `${basename}${ext}`)
+  const tmp = `${dest}.${crypto.randomBytes(6).toString('hex')}.tmp`
+  await fs.writeFile(tmp, saveBuf, { mode: 0o640 })
+  await fs.rename(tmp, dest)
+  return { ext, contentType }
+}
+
 // מגבלות גודל
 export const MAX_PLUGIN_BYTES = 50 * 1024 * 1024 // 50MB
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024   // 5MB

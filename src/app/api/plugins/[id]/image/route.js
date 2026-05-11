@@ -68,7 +68,7 @@ export async function GET(request, { params }) {
         'Content-Length': serveBuf.length.toString(),
         'Cache-Control': includePending
           ? 'private, no-store'
-          : 'public, max-age=604800, stale-while-revalidate=2592000',
+          : 'public, max-age=3600, stale-while-revalidate=2592000',
         'X-Content-Type-Options': 'nosniff'
       }
     })

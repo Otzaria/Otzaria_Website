@@ -35,7 +35,9 @@ import {
   imageExtFromMime,
   isAllowedImage,
   removePluginAsset,
-  saveFileFromFormData
+  saveFileFromFormData,
+  saveOptimizedImage,
+  clearImageOptCache
 } from '@/lib/pluginStorage'
 
 const PLUGIN_FILE_EXT = '.otzplugin'
@@ -130,13 +132,7 @@ async function savePendingSnapshot(pluginId, editableSource, nextPluginData, fil
     if (editableSource.assetSources?.image === 'pending' && editableSource.image?.ext) {
       await removePluginAsset(pluginId, `${IMAGE_BASENAME}${editableSource.image.ext}`, { pending: true }).catch(() => {})
     }
-    const ext = imageExtFromMime(files.imageFile.type)
-    await saveFileFromFormData(
-      files.imageFile,
-      path.join(pendingDir, `${IMAGE_BASENAME}${ext}`),
-      MAX_IMAGE_BYTES
-    )
-    nextPluginData.image = { ext, contentType: files.imageFile.type.toLowerCase() }
+    nextPluginData.image = await saveOptimizedImage(files.imageFile, pendingDir, IMAGE_BASENAME, { maxWidth: 1200 })
     nextPluginData.assetSources.image = 'pending'
   }
 
@@ -155,14 +151,7 @@ async function savePendingSnapshot(pluginId, editableSource, nextPluginData, fil
 
     const screenshots = []
     for (let index = 0; index < files.screenshotFiles.length; index += 1) {
-      const file = files.screenshotFiles[index]
-      const ext = imageExtFromMime(file.type)
-      await saveFileFromFormData(
-        file,
-        path.join(pendingDir, 'screenshots', `${index}${ext}`),
-        MAX_SCREENSHOT_BYTES
-      )
-      screenshots.push({ ext, contentType: file.type.toLowerCase() })
+      screenshots.push(await saveOptimizedImage(files.screenshotFiles[index], path.join(pendingDir, 'screenshots'), String(index), { maxWidth: 1920 }))
     }
     nextPluginData.screenshots = screenshots
     nextPluginData.assetSources.screenshots = 'pending'
@@ -187,16 +176,15 @@ async function saveLiveAssets(pluginId, plugin, editableSource, nextPluginData, 
 
   if (files.removeImage) {
     await removeLiveImage(pluginId, plugin)
+    await clearImageOptCache(pluginId)
     nextPluginData.image = null
   } else if (files.imageFile) {
     await removeLiveImage(pluginId, plugin)
-    await saveFileFromFormData(
-      files.imageFile,
-      path.join(dir, `${IMAGE_BASENAME}${nextPluginData.image.ext}`),
-      MAX_IMAGE_BYTES
-    )
+    await clearImageOptCache(pluginId)
+    nextPluginData.image = await saveOptimizedImage(files.imageFile, dir, IMAGE_BASENAME, { maxWidth: 1200 })
   } else if (editableSource.assetSources?.image === 'pending' && editableSource.image?.ext) {
     await removeLiveImage(pluginId, plugin)
+    await clearImageOptCache(pluginId)
     const target = path.join(dir, `${IMAGE_BASENAME}${editableSource.image.ext}`)
     await fs.rm(target, { force: true })
     await fs.rename(path.join(pendingDir, `${IMAGE_BASENAME}${editableSource.image.ext}`), target)
@@ -208,11 +196,7 @@ async function saveLiveAssets(pluginId, plugin, editableSource, nextPluginData, 
 
   if (files.screenshotFiles.length > 0) {
     for (let index = 0; index < files.screenshotFiles.length; index += 1) {
-      await saveFileFromFormData(
-        files.screenshotFiles[index],
-        path.join(dir, 'screenshots', `${index}${nextPluginData.screenshots[index].ext}`),
-        MAX_SCREENSHOT_BYTES
-      )
+      nextPluginData.screenshots[index] = await saveOptimizedImage(files.screenshotFiles[index], path.join(dir, 'screenshots'), String(index), { maxWidth: 1920 })
     }
   } else if (editableSource.assetSources?.screenshots === 'pending') {
     await removeLiveScreenshots(pluginId, plugin)
