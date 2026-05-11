@@ -515,8 +515,11 @@ export async function PUT(request, { params }) {
       plugin.screenshots = nextPluginData.screenshots
       plugin.pendingUpdate = null
       plugin.pendingChangeSummary = []
-      plugin.lastSubmittedBy = session.user.id
-      plugin.lastSubmittedAt = new Date()
+      // מנהל שעורך ישירות לא מחליף את המעלה המקורי
+      if (!isAdmin || isOwner) {
+        plugin.lastSubmittedBy = session.user.id
+        plugin.lastSubmittedAt = new Date()
+      }
       await deletePendingPluginDir(plugin._id.toString()).catch(() => {})
 
       if (isOwnerResubmission) {
