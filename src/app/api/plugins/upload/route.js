@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import path from 'path'
 import crypto from 'crypto'
+import { promises as fsp } from 'fs'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import { sendPluginUploadNotification } from '@/lib/emailService'
@@ -26,6 +27,7 @@ import {
   ensurePluginDir,
   saveFileFromFormData,
   deletePluginDir,
+  optimizeImageBuffer,
   PLUGIN_FILE_BASENAME,
   IMAGE_BASENAME
 } from '@/lib/pluginStorage'
@@ -218,19 +220,43 @@ export async function POST(request) {
       MAX_PLUGIN_BYTES
     )
     if (imageFile && imageMeta) {
-      await saveFileFromFormData(
-        imageFile,
-        path.join(dir, `${IMAGE_BASENAME}${imageMeta.ext}`),
-        MAX_IMAGE_BYTES
-      )
+      const rawBuf = Buffer.from(await imageFile.arrayBuffer())
+      let saveBuf = rawBuf
+      let saveExt = imageMeta.ext
+      let saveContentType = imageMeta.contentType
+      if (imageMeta.contentType !== 'image/gif') {
+        try {
+          saveBuf = await optimizeImageBuffer(rawBuf, { maxWidth: 1200, quality: 82 })
+          saveExt = '.webp'
+          saveContentType = 'image/webp'
+        } catch { /* fallback to original */ }
+      }
+      imageMeta = { ext: saveExt, contentType: saveContentType }
+      const tmp = path.join(dir, `${IMAGE_BASENAME}${saveExt}.${crypto.randomBytes(6).toString('hex')}.tmp`)
+      await fsp.writeFile(tmp, saveBuf, { mode: 0o640 })
+      await fsp.rename(tmp, path.join(dir, `${IMAGE_BASENAME}${saveExt}`))
+      plugin.image = imageMeta
     }
     for (let i = 0; i < screenshotFiles.length; i++) {
-      await saveFileFromFormData(
-        screenshotFiles[i],
-        path.join(dir, 'screenshots', `${i}${screenshotMeta[i].ext}`),
-        MAX_SCREENSHOT_BYTES
-      )
+      const rawBuf = Buffer.from(await screenshotFiles[i].arrayBuffer())
+      const meta = screenshotMeta[i]
+      let saveBuf = rawBuf
+      let saveExt = meta.ext
+      let saveContentType = meta.contentType
+      if (meta.contentType !== 'image/gif') {
+        try {
+          saveBuf = await optimizeImageBuffer(rawBuf, { maxWidth: 1920, quality: 82 })
+          saveExt = '.webp'
+          saveContentType = 'image/webp'
+        } catch { /* fallback */ }
+      }
+      screenshotMeta[i] = { ext: saveExt, contentType: saveContentType }
+      const tmp = path.join(dir, 'screenshots', `${i}${saveExt}.${crypto.randomBytes(6).toString('hex')}.tmp`)
+      await fsp.writeFile(tmp, saveBuf, { mode: 0o640 })
+      await fsp.rename(tmp, path.join(dir, 'screenshots', `${i}${saveExt}`))
     }
+    plugin.screenshots = screenshotMeta
+    await plugin.save()
 
     // שליחת התראה למנהלים
     try {
