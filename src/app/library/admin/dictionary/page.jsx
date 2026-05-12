@@ -16,6 +16,7 @@ export default function AdminDictionaryPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [skipped, setSkipped] = useState(() => new Set())
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
 
   useEffect(() => {
     if (status === 'loading') return
@@ -132,6 +133,29 @@ export default function AdminDictionaryPage() {
     })
   }, [entries, search, skipped])
 
+  const handleSort = (key) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }))
+  }
+
+  const getSortIcon = (col) => {
+    if (sortConfig.key !== col) return '↕'
+    return sortConfig.direction === 'asc' ? '↑' : '↓'
+  }
+
+  const applySortToList = (list) => {
+    if (!sortConfig.key) return list
+    return [...list].sort((a, b) => {
+      const aVal = String(a[sortConfig.key] ?? '').toLowerCase()
+      const bVal = String(b[sortConfig.key] ?? '').toLowerCase()
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1
+      return 0
+    })
+  }
+
   const skippedEntries = useMemo(() => {
     const term = search.trim().toLowerCase()
     return entries.filter(item => {
@@ -186,14 +210,14 @@ export default function AdminDictionaryPage() {
           <table className="w-full bg-white">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-gray-700 text-sm">
-                <th className="text-right p-4 font-bold">מילה</th>
-                <th className="text-right p-4 font-bold">משתמש</th>
-                <th className="text-right p-4 font-bold">אימייל</th>
+                <th onClick={() => handleSort('word')} className="text-right p-4 font-bold cursor-pointer hover:bg-gray-100 select-none">מילה {getSortIcon('word')}</th>
+                <th onClick={() => handleSort('name')} className="text-right p-4 font-bold cursor-pointer hover:bg-gray-100 select-none">משתמש {getSortIcon('name')}</th>
+                <th onClick={() => handleSort('email')} className="text-right p-4 font-bold cursor-pointer hover:bg-gray-100 select-none">אימייל {getSortIcon('email')}</th>
                 <th className="text-center p-4 font-bold">פעולות</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filteredEntries.map(entry => (
+              {applySortToList(filteredEntries).map(entry => (
                 <tr key={`${entry.userId}-${entry.word}`} className="hover:bg-gray-50 transition-colors">
                   <td className="p-4 font-medium text-gray-900">{entry.word}</td>
                   <td className="p-4 text-sm">{entry.name || '-'}</td>
@@ -234,14 +258,14 @@ export default function AdminDictionaryPage() {
             <table className="w-full bg-white">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-gray-700 text-sm">
-                  <th className="text-right p-4 font-bold">מילה</th>
-                  <th className="text-right p-4 font-bold">משתמש</th>
-                  <th className="text-right p-4 font-bold">אימייל</th>
+                  <th onClick={() => handleSort('word')} className="text-right p-4 font-bold cursor-pointer hover:bg-gray-100 select-none">מילה {getSortIcon('word')}</th>
+                  <th onClick={() => handleSort('name')} className="text-right p-4 font-bold cursor-pointer hover:bg-gray-100 select-none">משתמש {getSortIcon('name')}</th>
+                  <th onClick={() => handleSort('email')} className="text-right p-4 font-bold cursor-pointer hover:bg-gray-100 select-none">אימייל {getSortIcon('email')}</th>
                   <th className="text-center p-4 font-bold">פעולות</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {skippedEntries.map(entry => (
+                {applySortToList(skippedEntries).map(entry => (
                   <tr key={`skipped-${entry.userId}-${entry.word}`} className="hover:bg-gray-50 transition-colors">
                     <td className="p-4 font-medium text-gray-900">{entry.word}</td>
                     <td className="p-4 text-sm">{entry.name || '-'}</td>

@@ -17,6 +17,7 @@ export default function AdminPagesPage() {
   
   const [booksList, setBooksList] = useState([])
   const [usersList, setUsersList] = useState([])
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
 
   const { showAlert, showConfirm } = useDialog()
 
@@ -161,6 +162,37 @@ export default function AdminPagesPage() {
       link.click()
       document.body.removeChild(link)
   }
+
+  const handleSort = (key) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }))
+  }
+
+  const getSortIcon = (col) => {
+    if (sortConfig.key !== col) return '↕'
+    return sortConfig.direction === 'asc' ? '↑' : '↓'
+  }
+
+  const sortedPages = [...pages].sort((a, b) => {
+    if (!sortConfig.key) return 0
+    let aVal = a[sortConfig.key] ?? ''
+    let bVal = b[sortConfig.key] ?? ''
+    if (sortConfig.key === 'updatedAt') {
+      aVal = new Date(aVal).getTime() || 0
+      bVal = new Date(bVal).getTime() || 0
+    } else if (sortConfig.key === 'number') {
+      aVal = Number(aVal) || 0
+      bVal = Number(bVal) || 0
+    } else {
+      aVal = String(aVal).toLowerCase()
+      bVal = String(bVal).toLowerCase()
+    }
+    if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1
+    if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1
+    return 0
+  })
 
   const handleDownloadAll = () => {
       const params = new URLSearchParams()
@@ -338,16 +370,16 @@ export default function AdminPagesPage() {
               <table className="w-full bg-white">
                   <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
-                          <th className="text-right p-4 font-bold text-gray-700">ספר</th>
-                          <th className="text-right p-4 font-bold text-gray-700">עמוד</th>
-                          <th className="text-right p-4 font-bold text-gray-700">סטטוס</th>
-                          <th className="text-right p-4 font-bold text-gray-700">משתמש</th>
-                          <th className="text-right p-4 font-bold text-gray-700">עודכן לאחרונה</th>
+                          <th onClick={() => handleSort('bookName')} className="text-right p-4 font-bold text-gray-700 cursor-pointer hover:bg-gray-100 select-none">ספר {getSortIcon('bookName')}</th>
+                          <th onClick={() => handleSort('number')} className="text-right p-4 font-bold text-gray-700 cursor-pointer hover:bg-gray-100 select-none">עמוד {getSortIcon('number')}</th>
+                          <th onClick={() => handleSort('status')} className="text-right p-4 font-bold text-gray-700 cursor-pointer hover:bg-gray-100 select-none">סטטוס {getSortIcon('status')}</th>
+                          <th onClick={() => handleSort('claimedBy')} className="text-right p-4 font-bold text-gray-700 cursor-pointer hover:bg-gray-100 select-none">משתמש {getSortIcon('claimedBy')}</th>
+                          <th onClick={() => handleSort('updatedAt')} className="text-right p-4 font-bold text-gray-700 cursor-pointer hover:bg-gray-100 select-none">עודכן לאחרונה {getSortIcon('updatedAt')}</th>
                           <th className="text-right p-4 font-bold text-gray-700">פעולות</th>
                       </tr>
                   </thead>
                   <tbody>
-                      {pages.map((page, idx) => {
+                      {sortedPages.map((page, idx) => {
                           const isEditing = editingPage === `${page.bookName}-${page.number}`
                           const pageId = page._id || page.id; 
                           // TIQUN: Prefer pageId over idx for stable rendering

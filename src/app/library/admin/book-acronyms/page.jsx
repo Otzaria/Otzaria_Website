@@ -8,6 +8,7 @@ export default function AdminBookAcronymsPage() {
   const [runningAction, setRunningAction] = useState(false)
   const [error, setError] = useState('')
   const [selectedIds, setSelectedIds] = useState([])
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
 
   const loadRows = async () => {
     try {
@@ -39,6 +40,34 @@ export default function AdminBookAcronymsPage() {
       return prev.filter((item) => item !== id)
     })
   }
+
+  const handleSort = (key) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }))
+  }
+
+  const getSortIcon = (col) => {
+    if (sortConfig.key !== col) return '↕'
+    return sortConfig.direction === 'asc' ? '↑' : '↓'
+  }
+
+  const sortedRows = [...rows].sort((a, b) => {
+    if (!sortConfig.key) return 0
+    let aVal = a[sortConfig.key] ?? ''
+    let bVal = b[sortConfig.key] ?? ''
+    if (sortConfig.key === 'updatedAt') {
+      aVal = new Date(aVal).getTime() || 0
+      bVal = new Date(bVal).getTime() || 0
+    } else {
+      aVal = String(aVal).toLowerCase()
+      bVal = String(bVal).toLowerCase()
+    }
+    if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1
+    if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1
+    return 0
+  })
 
   const allSelected = rows.length > 0 && selectedIds.length === rows.length
 
@@ -131,17 +160,17 @@ export default function AdminBookAcronymsPage() {
             <thead className="bg-surface/70">
               <tr>
                 <th className="text-right px-3 py-2">סימון</th>
-                <th className="text-right px-3 py-2">ID ספר</th>
-                <th className="text-right px-3 py-2">שם ספר</th>
+                <th onClick={() => handleSort('externalId')} className="text-right px-3 py-2 cursor-pointer hover:bg-surface select-none">ID ספר {getSortIcon('externalId')}</th>
+                <th onClick={() => handleSort('displayName')} className="text-right px-3 py-2 cursor-pointer hover:bg-surface select-none">שם ספר {getSortIcon('displayName')}</th>
                 <th className="text-right px-3 py-2">כינויים קיימים</th>
-                <th className="text-right px-3 py-2">סוג פעולה</th>
+                <th onClick={() => handleSort('actionType')} className="text-right px-3 py-2 cursor-pointer hover:bg-surface select-none">סוג פעולה {getSortIcon('actionType')}</th>
                 <th className="text-right px-3 py-2">פרטי שינוי</th>
-                <th className="text-right px-3 py-2">משתמש</th>
-                <th className="text-right px-3 py-2">תאריך</th>
+                <th onClick={() => handleSort('submittedBy')} className="text-right px-3 py-2 cursor-pointer hover:bg-surface select-none">משתמש {getSortIcon('submittedBy')}</th>
+                <th onClick={() => handleSort('updatedAt')} className="text-right px-3 py-2 cursor-pointer hover:bg-surface select-none">תאריך {getSortIcon('updatedAt')}</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {sortedRows.map((row) => (
                 <tr key={row.id} className="border-t border-surface-variant/60">
                   <td className="px-3 py-2">
                     <input
