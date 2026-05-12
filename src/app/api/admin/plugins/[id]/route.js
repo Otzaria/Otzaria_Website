@@ -9,7 +9,8 @@ import {
   deletePluginDir,
   ensurePluginDir,
   getPendingPluginDir,
-  removePluginAsset
+  removePluginAsset,
+  clearImageOptCache
 } from '@/lib/pluginStorage'
 import path from 'path'
 import { promises as fs } from 'fs'
@@ -89,11 +90,13 @@ export async function PATCH(request, { params }) {
           if (plugin.image?.ext) {
             await removePluginAsset(pluginId, `image${plugin.image.ext}`).catch(() => {})
           }
+          await clearImageOptCache(pluginId)
           plugin.image = { ext: null, contentType: null }
         } else if (pending.assetSources?.image === 'pending') {
           if (plugin.image?.ext) {
             await removePluginAsset(pluginId, `image${plugin.image.ext}`).catch(() => {})
           }
+          await clearImageOptCache(pluginId)
           const source = path.join(getPendingPluginDir(pluginId), `image${pending.image.ext}`)
           const target = path.join(pluginDir, `image${pending.image.ext}`)
           await fs.rm(target, { force: true })

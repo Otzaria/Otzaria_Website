@@ -2,6 +2,53 @@ import path from 'path'
 import { promises as fs } from 'fs'
 import crypto from 'crypto'
 
+const OPT_CACHE_BASENAME = 'image_opt.webp'
+
+// דחיסת תמונה ל-WebP עם resize. מדלגת על GIF מונפש.
+export async function optimizeImageBuffer(buffer, { maxWidth = 1200, quality = 82 } = {}) {
+  const sharp = (await import('sharp')).default
+  return sharp(buffer, { animated: false })
+    .resize({ width: maxWidth, withoutEnlargement: true })
+    .webp({ quality })
+    .toBuffer()
+}
+
+// מחזיר את הנתיב לקובץ ה-cache
+export function getOptCachePath(pluginId) {
+  return path.join(getPluginDir(pluginId), OPT_CACHE_BASENAME)
+}
+
+// מוחק את ה-cache של תמונה מותאמת (לקריאה אחרי עדכון תמונה)
+export async function clearImageOptCache(pluginId) {
+  try {
+    await fs.rm(getOptCachePath(pluginId), { force: true })
+  } catch { /* ignore */ }
+}
+
+// שומר תמונה לדיסק תוך דחיסה ל-WebP (חוץ מ-GIF). מחזיר את ה-meta שנשמר.
+// destDir: תיקיית היעד, basename: שם הקובץ ללא סיומת, file: File מ-FormData
+export async function saveOptimizedImage(file, destDir, basename, { maxWidth = 1200, quality = 82 } = {}) {
+  const rawBuf = Buffer.from(await file.arrayBuffer())
+  const mime = (file.type || '').toLowerCase()
+  let saveBuf = rawBuf
+  let ext = imageExtFromMime(mime) || '.bin'
+  let contentType = mime
+
+  if (mime !== 'image/gif') {
+    try {
+      saveBuf = await optimizeImageBuffer(rawBuf, { maxWidth, quality })
+      ext = '.webp'
+      contentType = 'image/webp'
+    } catch { /* fallback to original */ }
+  }
+
+  const dest = path.join(destDir, `${basename}${ext}`)
+  const tmp = `${dest}.${crypto.randomBytes(6).toString('hex')}.tmp`
+  await fs.writeFile(tmp, saveBuf, { mode: 0o640 })
+  await fs.rename(tmp, dest)
+  return { ext, contentType }
+}
+
 // מגבלות גודל
 export const MAX_PLUGIN_BYTES = 50 * 1024 * 1024 // 50MB
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024   // 5MB

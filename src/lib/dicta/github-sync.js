@@ -17,6 +17,7 @@ export async function dictaSync(customFolderPath) {
   let addedCount = 0;
   let skippedCount = 0;
   let errorCount = 0;
+  const createdBookIds = [];
 
   await connectDB();
 
@@ -74,13 +75,15 @@ export async function dictaSync(customFolderPath) {
         const content = await contentResp.text();
 
         // 4. יצירת הספר ב-DB
-        await DictaBook.create({
+        const createdBook = await DictaBook.create({
           title: bookTitle,
           content: content,
           status: 'available', // ברירת מחדל
           createdAt: new Date(),
           updatedAt: new Date()
         });
+
+        createdBookIds.push(createdBook._id);
 
         log.push(`✅ נוסף: ${bookTitle}`);
         addedCount++;
@@ -95,10 +98,64 @@ export async function dictaSync(customFolderPath) {
     log.push('--------------------------------');
     log.push(`סיכום: נוספו ${addedCount}, דולגו ${fileList.length - addedCount - errorCount}, שגיאות ${errorCount}`);
 
+    // ניקוי כפולות שנוצרו בסנכרון
+    const dedupResult = await removeDuplicateBooks(createdBookIds);
+    if (dedupResult.deletedCount > 0) {
+      log.push(`🧹 הוסרו ${dedupResult.deletedCount} ספרים כפולים`);
+    }
+
     return { success: true, log, addedCount };
 
   } catch (error) {
     console.error("Critical Sync Error:", error);
     return { success: false, error: error.message, log };
   }
+}
+
+/**
+ * מוחק רק ספרים כפולים שנוצרו בהרצת הסנכרון הנוכחית.
+ * ספרים קיימים לעולם לא יימחקו כאן, גם אם יש להם אותו שם.
+ * מחזיר { deletedCount }.
+ */
+export async function removeDuplicateBooks(createdBookIds = []) {
+  await connectDB();
+
+  if (createdBookIds.length === 0) return { deletedCount: 0 };
+
+  const createdBooks = await DictaBook.find({ _id: { $in: createdBookIds } })
+    .select('_id title')
+    .lean();
+
+  if (createdBooks.length === 0) return { deletedCount: 0 };
+
+  const createdBookIdsSet = new Set(createdBooks.map((book) => String(book._id)));
+  const createdTitles = [...new Set(createdBooks.map((book) => book.title).filter(Boolean))];
+
+  if (createdTitles.length === 0) return { deletedCount: 0 };
+
+  const duplicates = await DictaBook.aggregate([
+    { $match: { title: { $in: createdTitles } } },
+    { $group: { _id: '$title', count: { $sum: 1 }, ids: { $push: '$_id' } } },
+    { $match: { count: { $gt: 1 } } },
+  ]);
+
+  if (duplicates.length === 0) return { deletedCount: 0 };
+
+  let deletedCount = 0;
+
+  for (const dup of duplicates) {
+    const existingIds = dup.ids.filter((id) => !createdBookIdsSet.has(String(id)));
+    let toDelete = dup.ids.filter((id) => createdBookIdsSet.has(String(id)));
+
+    if (existingIds.length === 0 && toDelete.length > 0) {
+      toDelete = toDelete.slice(1);
+    }
+
+    if (toDelete.length === 0) continue;
+
+    await DictaBook.deleteMany({ _id: { $in: toDelete } });
+    deletedCount += toDelete.length;
+  }
+
+  return { deletedCount };
 }

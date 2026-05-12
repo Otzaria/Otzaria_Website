@@ -223,6 +223,67 @@ export default function EditingToolsPage() {
               </div>
             </div>
 
+            {/* עורך מנחם */}
+            <div className="glass p-8 rounded-2xl">
+              <div className="flex items-start gap-6">
+                <div className="flex-shrink-0">
+                  <div className="w-16 h-16 bg-secondary/10 rounded-xl flex items-center justify-center">
+                    <span className="material-symbols-outlined text-4xl text-secondary">
+                      description
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex-1">
+                  <h2 className="text-2xl font-bold mb-2 font-frank">
+                    עורך מנחם
+                  </h2>
+                  <p className="text-on-surface/70 mb-6">
+                    תבנית וורד (dotm) לעריכת קבצי טקסט של אוצריא בתוכנת Word, עם כרטיסייה ייעודית לפתיחה, עריכה ושמירה נוחה
+                  </p>
+
+                  <div className="space-y-4">
+                    <div className="bg-secondary-container/50 border border-secondary/20 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <span className="material-symbols-outlined text-secondary mt-0.5">
+                          lightbulb
+                        </span>
+                        <div className="text-sm text-on-surface/80">
+                          <p className="font-bold mb-1">איך זה עובד?</p>
+                          <ul className="list-disc list-inside space-y-1 mr-4">
+                            <li>הורד את קובץ התבנית והסר את חסימת האינטרנט (לחצן ימני ← מאפיינים)</li>
+                            <li>פתח את הקובץ — תיפתח כרטיסיית "עורך לאוצריא" בסרגל הכלים</li>
+                            <li>לחץ על "פתיחה" כדי לטעון קובץ טקסט — ייפתח ללא תגי עיצוב</li>
+                            <li>לאחר עריכה — "הגדרות שמירה" ← "הוספת תגים" ← "שמירה"</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-3">
+                      <a
+                        href="https://otzaria.org/forum/assets/uploads/files/1775952267943-עורך-מנחם-14.dotm"
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-secondary text-on-primary rounded-lg font-bold hover:bg-accent transition-colors"
+                      >
+                        <span className="material-symbols-outlined">download</span>
+                        הורד עורך מנחם
+                      </a>
+
+                      <a
+                        href="https://otzaria.org/forum/topic/740"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-6 py-3 border-2 border-secondary text-secondary rounded-lg font-bold hover:bg-secondary/10 transition-colors"
+                      >
+                        <span className="material-symbols-outlined">forum</span>
+                        מדריך ודיון בפורום
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* כלי לחלוקת ספרים וטיפול בכותרות */}
             <div className="glass p-8 rounded-2xl">
               <div className="flex items-start gap-6">

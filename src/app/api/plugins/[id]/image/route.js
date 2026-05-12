@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { promises as fsp } from 'fs'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
-import { readPluginAsset, IMAGE_BASENAME } from '@/lib/pluginStorage'
+import { readPluginAsset, IMAGE_BASENAME, optimizeImageBuffer, getOptCachePath } from '@/lib/pluginStorage'
 
 // GET /api/plugins/[id]/image - הגשת תמונת התוסף מהדיסק
 export async function GET(request, { params }) {
@@ -36,11 +37,38 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: 'Image not found' }, { status: 404 })
     }
     const buf = await readPluginAsset(id, `${IMAGE_BASENAME}${image.ext}`, { pending: assetSource === 'pending' })
-    return new NextResponse(buf, {
+
+    let serveBuf = buf
+    let serveContentType = image.contentType || 'application/octet-stream'
+
+    // אופטימיזציה + cache לדיסק רק לתמונות חיות (לא pending), לא GIF
+    if (!includePending && image.contentType !== 'image/gif') {
+      const cachePath = getOptCachePath(id)
+      let fromCache = false
+      try {
+        serveBuf = await fsp.readFile(cachePath)
+        serveContentType = 'image/webp'
+        fromCache = true
+      } catch { /* cache miss */ }
+
+      if (!fromCache) {
+        try {
+          const optimized = await optimizeImageBuffer(buf, { maxWidth: 1200, quality: 82 })
+          serveBuf = optimized
+          serveContentType = 'image/webp'
+          // כתיבה async לדיסק — לא חוסמת את התגובה
+          fsp.writeFile(cachePath, optimized).catch(() => {})
+        } catch { /* fallback to original */ }
+      }
+    }
+
+    return new NextResponse(serveBuf, {
       headers: {
-        'Content-Type': image.contentType || 'application/octet-stream',
-        'Content-Length': buf.length.toString(),
-        'Cache-Control': includePending ? 'private, no-store' : 'public, max-age=0, must-revalidate',
+        'Content-Type': serveContentType,
+        'Content-Length': serveBuf.length.toString(),
+        'Cache-Control': includePending
+          ? 'private, no-store'
+          : 'public, max-age=3600, stale-while-revalidate=2592000',
         'X-Content-Type-Options': 'nosniff'
       }
     })

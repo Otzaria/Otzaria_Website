@@ -25,6 +25,7 @@ import {
   imageExtFromMime,
   ensurePluginDir,
   saveFileFromFormData,
+  saveOptimizedImage,
   deletePluginDir,
   PLUGIN_FILE_BASENAME,
   IMAGE_BASENAME
@@ -218,19 +219,14 @@ export async function POST(request) {
       MAX_PLUGIN_BYTES
     )
     if (imageFile && imageMeta) {
-      await saveFileFromFormData(
-        imageFile,
-        path.join(dir, `${IMAGE_BASENAME}${imageMeta.ext}`),
-        MAX_IMAGE_BYTES
-      )
+      imageMeta = await saveOptimizedImage(imageFile, dir, IMAGE_BASENAME, { maxWidth: 1200 })
+      plugin.image = imageMeta
     }
     for (let i = 0; i < screenshotFiles.length; i++) {
-      await saveFileFromFormData(
-        screenshotFiles[i],
-        path.join(dir, 'screenshots', `${i}${screenshotMeta[i].ext}`),
-        MAX_SCREENSHOT_BYTES
-      )
+      screenshotMeta[i] = await saveOptimizedImage(screenshotFiles[i], path.join(dir, 'screenshots'), String(i), { maxWidth: 1920 })
     }
+    plugin.screenshots = screenshotMeta
+    await plugin.save()
 
     // שליחת התראה למנהלים
     try {
