@@ -39,7 +39,7 @@ const EXAMPLE_PAGES = {
     // { bookSlug: 'שם-הספר-בסלאג', pageNumber: 1 },
   ],
   B: [
-    // { bookSlug: 'שם-הספר-בסלאג', pageNumber: 1 },
+    { bookSlug: 'עמוד-דוגמא-כתב-רשי-2-טורים', pageNumber: 1 },
     // { bookSlug: 'שם-הספר-בסלאג', pageNumber: 2 },
   ],
   C: [],
