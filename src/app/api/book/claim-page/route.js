@@ -6,6 +6,7 @@ import User from '@/models/User';
 import mongoose from 'mongoose';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { hasBooksAccess } from '@/lib/roles';
 
 export async function POST(request) {
     try {
@@ -43,10 +44,11 @@ export async function POST(request) {
         const page = await Page.findOne({ book: book._id, pageNumber });
         if (!page) return NextResponse.json({ error: 'Page not found' }, { status: 404 });
 
-        // 6. בדיקות בעלות (האם תפוס/הושלם ע"י אחר)
+        // 6. בדיקות בעלות (האם תפוס/הושלם ע"י אחר) — אדמין/admin_books עוקף
+        const isAdmin = hasBooksAccess(session.user.role);
         const isClaimedByOther = page.claimedBy && page.claimedBy.toString() !== userId.toString();
         
-        if ((page.status === 'in-progress' || page.status === 'completed') && isClaimedByOther) {
+        if ((page.status === 'in-progress' || page.status === 'completed') && isClaimedByOther && !isAdmin) {
              return NextResponse.json({ 
                 success: false, 
                 error: `העמוד כבר ${page.status === 'completed' ? 'הושלם' : 'בטיפול'} ע"י משתמש אחר` 

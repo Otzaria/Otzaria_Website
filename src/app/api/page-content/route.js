@@ -4,6 +4,7 @@ import Page from '@/models/Page';
 import Book from '@/models/Book';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { hasBooksAccess } from '@/lib/roles';
 
 // שמירת תוכן (Auto-save)
 export async function POST(request) {
@@ -23,7 +24,7 @@ export async function POST(request) {
     } = body;
 
     const userId = session.user._id || session.user.id;
-    const isAdmin = session.user.role === 'admin';
+    const isAdmin = hasBooksAccess(session.user.role);
 
     await connectDB();
 
@@ -97,7 +98,7 @@ export async function GET(request) {
         if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const userId = session.user._id || session.user.id;
-        const isAdmin = session.user.role === 'admin';
+        const isAdmin = hasBooksAccess(session.user.role);
 
         const { searchParams } = new URL(request.url);
         const bookPath = searchParams.get('bookPath');
