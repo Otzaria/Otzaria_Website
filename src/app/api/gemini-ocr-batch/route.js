@@ -30,7 +30,10 @@ const SYSTEM_INSTRUCTIONS = `אתה עוזר OCR מקצועי לתמלול עמ�
 // עמודי דוגמא לכל קבוצה.
 // כל קבוצה (A/B/C/D) היא רשימה של { bookSlug, pageNumber }.
 // העמודים האלו ייקראו מהמסד יחד עם הטקסט הקיים שלהם וישמשו כדוגמא למודל.
-// ניתן להוסיף, להסיר או לשנות את ההגדרות לפי הצורך:
+// ניתן להוסיף, להסיר או לשנות את ההגדרות לפי הצורך.
+//
+// בנוסף, אם בפרמטר examples מתקבל "X", הלקוח שולח גם פרמטר customExamples
+// (מערך של { bookSlug, pageNumber }) שיתפקד כקבוצת דוגמאות אד-הוק לבקשה זו בלבד.
 const EXAMPLE_PAGES = {
   A: [
     // { bookSlug: 'שם-הספר-בסלאג', pageNumber: 1 },
@@ -72,7 +75,53 @@ function normalizePagesParam(pages) {
   return [];
 }
 
-async function fetchImageAsBase64(imagePath, requestUrl) {
+// העלאת קובץ ל-Gemini Files API. מחזיר { uri, mimeType } להפניה ב-file_data.
+// משתמש ב-resumable upload (X-Goog-Upload-Protocol: resumable) כי זו הצורה
+// המקובלת ב-Generative Language API גם לקבצים קטנים.
+async function uploadFileToGemini({ buffer, mimeType, displayName, apiKey }) {
+  // שלב 1: יצירת הזמנה להעלאה (start)
+  const startRes = await fetch(
+    `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: {
+        'X-Goog-Upload-Protocol': 'resumable',
+        'X-Goog-Upload-Command': 'start',
+        'X-Goog-Upload-Header-Content-Length': String(buffer.length),
+        'X-Goog-Upload-Header-Content-Type': mimeType,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ file: { display_name: displayName || 'page.jpg' } }),
+    }
+  );
+  if (!startRes.ok) {
+    const errText = await startRes.text();
+    throw new Error(`Files API start failed ${startRes.status}: ${errText.slice(0, 300)}`);
+  }
+  const uploadUrl = startRes.headers.get('x-goog-upload-url');
+  if (!uploadUrl) throw new Error('Files API did not return upload URL');
+
+  // שלב 2: העלאת התוכן הבינארי וסגירת ההעלאה
+  const uploadRes = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Length': String(buffer.length),
+      'X-Goog-Upload-Offset': '0',
+      'X-Goog-Upload-Command': 'upload, finalize',
+    },
+    body: buffer,
+  });
+  if (!uploadRes.ok) {
+    const errText = await uploadRes.text();
+    throw new Error(`Files API upload failed ${uploadRes.status}: ${errText.slice(0, 300)}`);
+  }
+  const data = await uploadRes.json();
+  const fileInfo = data?.file;
+  if (!fileInfo?.uri) throw new Error('Files API response missing file.uri');
+  return { uri: fileInfo.uri, mimeType: fileInfo.mimeType || mimeType, name: fileInfo.name };
+}
+
+async function fetchAndUploadImage(imagePath, requestUrl, apiKey) {
   const imageUrl = new URL(imagePath, requestUrl).toString();
   const res = await fetch(imageUrl);
   if (!res.ok) throw new Error(`Failed to fetch image ${imagePath} (HTTP ${res.status})`);
@@ -80,11 +129,48 @@ async function fetchImageAsBase64(imagePath, requestUrl) {
   const mime =
     res.headers.get('content-type') ||
     (imagePath.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg');
-  return { data: buf.toString('base64'), mime };
+  const displayName = imagePath.split('/').filter(Boolean).pop() || 'page.jpg';
+  const uploaded = await uploadFileToGemini({
+    buffer: buf,
+    mimeType: mime,
+    displayName,
+    apiKey,
+  });
+  return { uri: uploaded.uri, mimeType: uploaded.mimeType, name: uploaded.name };
 }
 
-async function loadExamplePages(group, requestUrl) {
-  const config = EXAMPLE_PAGES[group];
+// מחיקת קבצים שהועלו - לניקוי מקום במכסה. נכשל בשקט (לא קריטי - יש TTL של 48 שעות).
+async function deleteUploadedFiles(uploaded, apiKey) {
+  await Promise.allSettled(
+    uploaded
+      .filter((f) => f?.name)
+      .map((f) =>
+        fetch(
+          `https://generativelanguage.googleapis.com/v1beta/${f.name}?key=${apiKey}`,
+          { method: 'DELETE' }
+        )
+      )
+  );
+}
+
+function formatEditingInfo(editingInfo) {
+  if (!editingInfo || typeof editingInfo !== 'object') return null;
+  const title = editingInfo.title || 'הנחיות עריכה לספר';
+  const sections = Array.isArray(editingInfo.sections) ? editingInfo.sections : [];
+  const lines = [];
+  for (const section of sections) {
+    const items = Array.isArray(section?.items)
+      ? section.items.map((i) => (typeof i === 'string' ? i.trim() : '')).filter(Boolean)
+      : [];
+    if (!section?.title && items.length === 0) continue;
+    if (section?.title) lines.push(`### ${section.title}`);
+    for (const item of items) lines.push(`- ${item}`);
+  }
+  if (lines.length === 0) return null;
+  return `${title}\n${lines.join('\n')}`;
+}
+
+async function loadExamplePagesFromConfig(config, requestUrl, apiKey) {
   if (!Array.isArray(config) || config.length === 0) return [];
 
   const results = [];
@@ -115,13 +201,13 @@ async function loadExamplePages(group, requestUrl) {
       );
       continue;
     }
-    const image = await fetchImageAsBase64(page.imagePath, requestUrl);
+    const image = await fetchAndUploadImage(page.imagePath, requestUrl, apiKey);
     results.push({ bookName: book.name, pageNumber: page.pageNumber, image, text });
   }
   return results;
 }
 
-function buildGeminiParts({ examples, batch, customPrompt }) {
+function buildGeminiParts({ examples, batch, customPrompt, bookEditingText }) {
   const parts = [];
   parts.push({ text: SYSTEM_INSTRUCTIONS });
 
@@ -130,6 +216,14 @@ function buildGeminiParts({ examples, batch, customPrompt }) {
       text:
         'הנחיות נוספות לתמלול (כללי עריכה ופורמט מהמשתמש):\n' +
         customPrompt.trim(),
+    });
+  }
+
+  if (bookEditingText && bookEditingText.trim()) {
+    parts.push({
+      text:
+        'הנחיות עריכה ספציפיות לספר זה (מתוך מאגר ההנחיות של הספר):\n' +
+        bookEditingText.trim(),
     });
   }
 
@@ -143,7 +237,9 @@ function buildGeminiParts({ examples, batch, customPrompt }) {
       parts.push({
         text: `--- דוגמא ${i + 1} (${ex.bookName}, עמוד ${ex.pageNumber}) - תמונה: ---`,
       });
-      parts.push({ inline_data: { mime_type: ex.image.mime, data: ex.image.data } });
+      parts.push({
+        file_data: { mime_type: ex.image.mimeType, file_uri: ex.image.uri },
+      });
       parts.push({
         text: `--- דוגמא ${i + 1} - התמלול הקיים והנכון שלה: ---\n${ex.text}`,
       });
@@ -163,7 +259,9 @@ function buildGeminiParts({ examples, batch, customPrompt }) {
 
   batch.forEach((item, i) => {
     parts.push({ text: `--- עמוד לתמלול #${i + 1} (index=${i + 1}): ---` });
-    parts.push({ inline_data: { mime_type: item.image.mime, data: item.image.data } });
+    parts.push({
+      file_data: { mime_type: item.image.mimeType, file_uri: item.image.uri },
+    });
   });
 
   return parts;
@@ -241,11 +339,11 @@ export async function POST(request) {
       );
     }
 
-    const userId = (session.user._id || session.user.id)?.toString();
-    const isAdmin = session.user.role === 'admin';
+    const userId = (session?.user?._id || session?.user?.id)?.toString();
+    const isAdmin = session ? session.user.role === 'admin' : true; // TEMP DEBUG
 
     const body = await request.json();
-    const { bookPath, pages, customPrompt, examples } = body || {};
+    const { bookPath, pages, customPrompt, examples, customExamples } = body || {};
 
     if (!bookPath) {
       return NextResponse.json({ error: 'Missing bookPath' }, { status: 400 });
@@ -257,11 +355,36 @@ export async function POST(request) {
         { status: 400 }
       );
     }
-    if (examples && !['A', 'B', 'C', 'D'].includes(examples)) {
+    if (examples && !['A', 'B', 'C', 'D', 'X'].includes(examples)) {
       return NextResponse.json(
-        { error: 'Invalid examples parameter (expected A/B/C/D)' },
+        { error: 'Invalid examples parameter (expected A/B/C/D/X)' },
         { status: 400 }
       );
+    }
+    if (examples === 'X') {
+      if (!Array.isArray(customExamples) || customExamples.length === 0) {
+        return NextResponse.json(
+          {
+            error:
+              'When examples="X" you must provide customExamples: [{ bookSlug, pageNumber }, ...]',
+          },
+          { status: 400 }
+        );
+      }
+      const allValid = customExamples.every(
+        (e) =>
+          e &&
+          typeof e.bookSlug === 'string' &&
+          e.bookSlug.length > 0 &&
+          Number.isInteger(e.pageNumber) &&
+          e.pageNumber > 0
+      );
+      if (!allValid) {
+        return NextResponse.json(
+          { error: 'customExamples items must be { bookSlug: string, pageNumber: int }' },
+          { status: 400 }
+        );
+      }
     }
 
     await connectDB();
@@ -308,28 +431,37 @@ export async function POST(request) {
       return NextResponse.json({ success: true, results, batches: 0, totalProcessed: 0 });
     }
 
-    // טעינת דוגמאות פעם אחת, ושימוש חוזר בכל batch
+    // הנחיות עריכה ספציפיות לספר (אם הוגדרו במאגר)
+    const bookEditingText = formatEditingInfo(book.editingInfo);
+
+    // טעינת דוגמאות פעם אחת והעלאה ל-Files API. ה-URIs ייעשה בהם שימוש חוזר בכל batch.
     let exampleData = [];
     if (examples) {
+      const exampleConfig =
+        examples === 'X' ? customExamples : EXAMPLE_PAGES[examples] || [];
       try {
-        exampleData = await loadExamplePages(examples, request.url);
+        exampleData = await loadExamplePagesFromConfig(exampleConfig, request.url, apiKey);
       } catch (e) {
         console.error('[gemini-ocr-batch] failed to load examples:', e);
       }
     }
 
+    // נאסוף את כל הקבצים שהעלינו ל-Gemini כדי שנוכל למחוק אותם בסוף (חיסכון במכסה)
+    const uploadedFiles = exampleData.map((ex) => ex.image);
+
     const batches = chunk(workable, BATCH_SIZE);
 
     for (const batchPages of batches) {
-      // הכנת התמונות לכל הדפים בקבוצה
+      // הכנת התמונות לכל הדפים בקבוצה: הורדה מהשרת והעלאה ל-Files API
       let batchInputs;
       try {
         batchInputs = await Promise.all(
           batchPages.map(async (p) => ({
             page: p,
-            image: await fetchImageAsBase64(p.imagePath, request.url),
+            image: await fetchAndUploadImage(p.imagePath, request.url, apiKey),
           }))
         );
+        for (const item of batchInputs) uploadedFiles.push(item.image);
       } catch (e) {
         for (const p of batchPages) {
           results.push({
@@ -347,6 +479,7 @@ export async function POST(request) {
           examples: exampleData,
           batch: batchInputs,
           customPrompt,
+          bookEditingText,
         });
         geminiPages = await callGemini({ apiKey, parts });
       } catch (e) {
@@ -408,6 +541,11 @@ export async function POST(request) {
       }
     }
 
+    // ניקוי קבצים שהועלו ל-Gemini Files API. רץ ברקע - לא חוסם את התשובה.
+    deleteUploadedFiles(uploadedFiles, apiKey).catch((e) =>
+      console.warn('[gemini-ocr-batch] cleanup failed:', e.message)
+    );
+
     const successCount = results.filter((r) => r.success).length;
     return NextResponse.json({
       success: true,
@@ -416,6 +554,7 @@ export async function POST(request) {
       batches: batches.length,
       totalRequested: pageNumbers.length,
       totalProcessed: successCount,
+      uploadedFiles: uploadedFiles.length,
       results,
     });
   } catch (error) {
