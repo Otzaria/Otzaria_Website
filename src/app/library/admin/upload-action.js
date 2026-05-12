@@ -3,13 +3,13 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBooksAccess } from '@/lib/roles';
-import { fromPath } from 'pdf2pic';
 import path from 'path';
 import fs from 'fs-extra';
 import slugify from 'slugify';
 import connectDB from '@/lib/db';
 import Book from '@/models/Book';
 import Page from '@/models/Page';
+import { convertPdfToImages } from '@/lib/pdfConverter';
 
 const UPLOAD_ROOT = process.env.UPLOAD_DIR || path.join(process.cwd(), 'public', 'uploads');
 
@@ -77,19 +77,8 @@ export async function uploadBookAction(formData) {
     await fs.writeFile(tempPdfPath, pdfBuffer);
 
     // 4. המרת PDF לתמונות
-    const options = {
-      density: 150,
-      saveFilename: "page",
-      savePath: bookFolder,
-      format: "jpg",
-      width: 1200,
-      height: 1600 
-    };
+    const result = await convertPdfToImages(tempPdfPath, bookFolder);
 
-    // המרה של כל העמודים (-1)
-    const convert = fromPath(tempPdfPath, options);
-    const result = await convert.bulk(-1, { responseType: "image" });
-    
     if (!result || result.length === 0) {
       throw new Error('Conversion failed');
     }
