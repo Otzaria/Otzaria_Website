@@ -73,6 +73,7 @@ export async function PATCH(request, { params }) {
         plugin.status = pending.status
         plugin.author = pending.author
         plugin.compatibleWith = pending.compatibleWith
+        plugin.requiresNetwork = pending.requiresNetwork === true
         plugin.tags = pending.tags || []
         plugin.homepage = pending.homepage || ''
         plugin.pluginFileName = pending.pluginFileName
