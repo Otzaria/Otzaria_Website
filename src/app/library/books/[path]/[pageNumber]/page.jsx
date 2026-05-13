@@ -20,6 +20,7 @@ import { useAutoSave } from '@/hooks/useAutoSave'
 import { useOCR } from '@/hooks/useOCR'
 import { getTextareaCaretTop } from '@/lib/editorUtils'
 import { findNextWholeWordInTextarea as findNextWholeWordInTextareaUtil } from '@/lib/hebrewWordUtils'
+import { hasBooksAccess } from '@/lib/roles'
 
 // הגדרת ברירת מחדל המבוססת על מקשים פיזיים (Codes)
 const DEFAULT_SHORTCUTS = {
@@ -280,7 +281,7 @@ export default function EditPage() {
            if (foundPage) {
              
                const currentUserId = session?.user?._id || session?.user?.id;
-               const isAdmin = session?.user?.role === 'admin';
+               const isAdmin = hasBooksAccess(session?.user?.role);
 
                const isClaimedByMe = foundPage.claimedById === currentUserId;
              
@@ -1158,6 +1159,67 @@ export default function EditPage() {
     }
   }, [selectionRect, pageData, rotation, ocrMethod, userApiKey, selectedModel, customPrompt, performGeminiOCR, performOCRWin, performTesseractOCR, rightColumn, content, leftColumn, twoColumns, handleAutoSaveWrapper, startLoading, stopLoading, showAlert]);
 
+  // OCR לעמוד שלם בעזרת ה-Gemini batch API.
+  // שולח את העמוד הנוכחי, וגם דוגמא (examples='X' + customExamples) אם הוגדר examplePage לספר.
+  const handleGeminiFullPage = useCallback(async () => {
+    if (!bookPath || !Number.isInteger(pageNumber)) return;
+
+    let isCancelled = false;
+    startLoading("שולח לג'מיני (עמוד שלם)...", () => { isCancelled = true; });
+
+    try {
+      const requestBody = { bookPath, pages: [pageNumber] };
+
+      if (bookData?.examplePage && Number.isInteger(bookData.examplePage)) {
+        requestBody.examples = 'X';
+        requestBody.customExamples = [
+          {
+            bookSlug: bookData.slug || bookData.path || bookPath,
+            pageNumber: bookData.examplePage,
+          },
+        ];
+      }
+
+      const res = await fetch('/api/gemini-ocr-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      });
+      const result = await res.json();
+      if (isCancelled) return;
+
+      const pageResult = result?.results?.[0];
+      if (!result?.success || !pageResult?.success) {
+        const err = pageResult?.error || result?.error || 'OCR נכשל';
+        throw new Error(err);
+      }
+
+      // ה-API כבר שמר ל-DB (עם הוספה ב-\n\n במידת הצורך). נטען מחדש כדי לסנכרן UI.
+      const contentRes = await fetch(
+        `/api/page-content?bookPath=${encodeURIComponent(bookPath)}&pageNumber=${pageNumber}`
+      );
+      const contentResult = await contentRes.json();
+      if (isCancelled) return;
+
+      if (contentResult?.success && contentResult.data) {
+        const d = contentResult.data;
+        setContent(d.content || '');
+        setRightColumn(d.rightColumn || '');
+        setLeftColumn(d.leftColumn || '');
+        setRightColumnName(d.rightColumnName || 'חלק 1');
+        setLeftColumnName(d.leftColumnName || 'חלק 2');
+        setTwoColumns(d.twoColumns || false);
+      }
+      stopLoading();
+    } catch (e) {
+      if (!isCancelled) {
+        console.error(e);
+        stopLoading();
+        showAlert('שגיאה', "שגיאה ב-OCR (Gemini): " + e.message);
+      }
+    }
+  }, [bookPath, pageNumber, bookData, startLoading, stopLoading, showAlert]);
+
   const saveUserShortcuts = (newShortcuts) => {
     setUserShortcuts(newShortcuts);
     localStorage.setItem('user_shortcuts', JSON.stringify(newShortcuts));
@@ -1304,13 +1366,14 @@ export default function EditPage() {
           onToggleFullScreen={toggleFullScreen}
         />
       )}
-      <EditorToolbar 
+      <EditorToolbar
         pageNumber={pageNumber} totalPages={bookData?.totalPages}
         imageZoom={imageZoom} setImageZoom={setImageZoom}
         ocrMethod={ocrMethod} setOcrMethod={setOcrMethod}
         isSelectionMode={isSelectionMode} toggleSelectionMode={() => setIsSelectionMode(!isSelectionMode)}
         isOcrProcessing={isOcrProcessing} selectionRect={selectionRect}
         handleOCRSelection={handleOCR} setSelectionRect={setSelectionRect}
+        handleGeminiFullPage={handleGeminiFullPage}
         setIsSelectionMode={setIsSelectionMode} insertTag={insertTag}
         setShowFindReplace={setShowFindReplace}
         onOpenSpellcheck={openSpellcheck}

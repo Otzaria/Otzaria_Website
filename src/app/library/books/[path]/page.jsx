@@ -11,6 +11,7 @@ import { LoadingProvider } from '@/components/providers/LoadingContext'
 import { useLoading } from '@/components/providers/LoadingContext'
 import Header from '@/components/layout/Header'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import { hasBooksAccess } from '@/lib/roles'
 
 const pageStatusConfig = {
   available: {
@@ -551,7 +552,7 @@ export default function BookPage() {
                     currentUser={session?.user}
                     isBookOwner={bookData.isOwner}
                     bookPath={bookPath}
-                    isAdmin={session?.user?.role === 'admin'}
+                    isAdmin={hasBooksAccess(session?.user?.role)}
                   />
               </div>
             ))}

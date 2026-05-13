@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { fromPath } from 'pdf2pic';
 import path from 'path';
 import fs from 'fs-extra';
 import slugify from 'slugify';
@@ -12,6 +11,7 @@ import { sendBookNotification } from '@/lib/emailService';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { z } from 'zod';
 import { hasBooksAccess } from '@/lib/roles';
+import { convertPdfToImages } from '@/lib/pdfConverter';
 
 // סכמת אימות להעלאת ספרים
 const uploadBookSchema = z.object({
@@ -114,18 +114,8 @@ export async function POST(request) {
     const tempPdfPath = path.join(bookFolder, 'source.pdf');
     await fs.writeFile(tempPdfPath, pdfBuffer);
 
-    const options = {
-      density: 150,
-      saveFilename: "page",
-      savePath: bookFolder,
-      format: "jpg",
-      width: 1200,
-      height: 1600 
-    };
+    const result = await convertPdfToImages(tempPdfPath, bookFolder);
 
-    const convert = fromPath(tempPdfPath, options);
-    const result = await convert.bulk(-1, { responseType: "image" });
-    
     if (!result || result.length === 0) {
       throw new Error('Conversion failed');
     }

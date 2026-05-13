@@ -11,6 +11,7 @@ export default function EditorToolbar({
   isOcrProcessing,
   selectionRect,
   handleOCRSelection,
+  handleGeminiFullPage,
   setSelectionRect,
   setIsSelectionMode,
   insertTag,
@@ -100,13 +101,13 @@ export default function EditorToolbar({
       </div>
 
       <button
-        onClick={toggleSelectionMode}
+        onClick={ocrMethod === 'gemini' ? handleGeminiFullPage : toggleSelectionMode}
         disabled={isOcrProcessing || !thumbnailUrl}
-        className={`w-7 h-7 rounded-md border flex items-center justify-center ${isSelectionMode ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200'} disabled:opacity-40`}
-        title="זיהוי טקסט מאזור נבחר"
+        className={`w-7 h-7 rounded-md border flex items-center justify-center ${isSelectionMode && ocrMethod !== 'gemini' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200'} disabled:opacity-40`}
+        title={ocrMethod === 'gemini' ? "Gemini OCR לעמוד שלם" : "זיהוי טקסט מאזור נבחר"}
       >
         <span className={`material-symbols-outlined text-sm ${isOcrProcessing ? 'animate-spin' : ''}`}>
-          {isOcrProcessing ? 'progress_activity' : 'document_scanner'}
+          {isOcrProcessing ? 'progress_activity' : (ocrMethod === 'gemini' ? 'auto_fix_high' : 'document_scanner')}
         </span>
       </button>
 

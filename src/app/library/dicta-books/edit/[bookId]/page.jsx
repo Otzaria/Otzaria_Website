@@ -10,6 +10,7 @@ import { getAvatarColor, getInitial } from '@/lib/avatar-colors'
 import DictaEditorCore from '@/components/editor/DictaEditorCore'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import DictaUploadDialog from '@/components/dicta-tools/DictaUploadDialog'
+import { hasBooksAccess } from '@/lib/roles'
 
 export default function DictaEditorPage() {
   const params = useParams()
@@ -34,7 +35,7 @@ export default function DictaEditorPage() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
 
   const currentUserId = session?.user?.id
-  const isAdmin = session?.user?.role === 'admin'
+  const isAdmin = hasBooksAccess(session?.user?.role)
 
   useEffect(() => {
     const handleBeforeUnload = (e) => {

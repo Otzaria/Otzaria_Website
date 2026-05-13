@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  serverExternalPackages: ['pdf-to-img', 'pdfjs-dist'],
   experimental: {
     serverActions: {
       bodySizeLimit: '500mb',

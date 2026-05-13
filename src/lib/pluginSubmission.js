@@ -90,6 +90,7 @@ export function getLivePluginData(plugin) {
     status: plugin.status,
     author: plugin.author,
     compatibleWith: plugin.compatibleWith,
+    requiresNetwork: plugin.requiresNetwork === true,
     tags: plugin.tags || [],
     homepage: plugin.homepage || '',
     pluginFileName: plugin.pluginFileName || '',
@@ -104,7 +105,12 @@ export function getLivePluginData(plugin) {
 }
 
 export function getEditableSource(plugin) {
-  return plugin.pendingUpdate || getLivePluginData(plugin)
+  const source = plugin.pendingUpdate || getLivePluginData(plugin)
+  // נירמול שדות שעשויים להיות חסרים ב-pendingUpdate שנשמרו לפני הוספת השדה ל-schema
+  return {
+    ...source,
+    requiresNetwork: source.requiresNetwork === true
+  }
 }
 
 export function formatPluginForPublic(plugin, options = {}) {
@@ -123,6 +129,7 @@ export function formatPluginForPublic(plugin, options = {}) {
     updatedAt: plugin.updatedAt.toISOString().split('T')[0],
     originalDate: plugin.originalDate || plugin.updatedAt.toISOString().split('T')[0],
     compatibleWith: source.compatibleWith,
+    requiresNetwork: source.requiresNetwork === true,
     tags: source.tags || [],
     image: source.image?.ext ? `/api/plugins/${pluginId}/image${options.usePending ? '?pending=1' : ''}` : null,
     screenshots: (source.screenshots || []).map((_, index) => `/api/plugins/${pluginId}/screenshots/${index}${options.usePending ? '?pending=1' : ''}`),
@@ -134,6 +141,9 @@ export function formatPluginForPublic(plugin, options = {}) {
 }
 
 export function formatValue(value, field) {
+  if (field === 'requiresNetwork') {
+    return value === true ? 'נדרש' : 'לא נדרש'
+  }
   if (Array.isArray(value)) {
     return value.length ? value.join(', ') : 'ללא'
   }
@@ -158,6 +168,7 @@ export function buildChangeSummary(current, next, filesChanged) {
     ['status', 'סטטוס'],
     ['author', 'שם המפתח'],
     ['compatibleWith', 'תאימות'],
+    ['requiresNetwork', 'דורש חיבור אינטרנט'],
     ['tags', 'תגיות'],
     ['homepage', 'אתר בית']
   ]

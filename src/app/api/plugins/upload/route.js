@@ -91,7 +91,7 @@ export async function POST(request) {
 
     // Read name, author, version, shortDescription, status, compatibleWith from manifest
     const pluginBuffer = Buffer.from(await pluginFile.arrayBuffer())
-    let name, author, version, shortDescription, statusFromManifest, compatibleWithFromManifest, homepageFromManifest
+    let name, author, version, shortDescription, statusFromManifest, compatibleWithFromManifest, homepageFromManifest, requiresNetworkFromManifest
     try {
       const manifest = readManifestFromPlugin(pluginBuffer)
       version = (manifest.version || '').toString().trim()
@@ -109,6 +109,7 @@ export async function POST(request) {
       if (compareVersions(minAppVersion, MIN_SUPPORTED_APP_VERSION) < 0)
         return bad(`גרסת המינימום (${minAppVersion}) לא יכולה להיות פחות מ-${MIN_SUPPORTED_APP_VERSION}`)
       compatibleWithFromManifest = minAppVersion
+      requiresNetworkFromManifest = manifest.network?.enabled === true
     } catch {
       return bad('לא ניתן לקרוא את manifest.json מקובץ התוסף')
     }
@@ -189,6 +190,7 @@ export async function POST(request) {
           author,
           authorId: session.user.id,
           compatibleWith: compatibleWithFromManifest,
+          requiresNetwork: requiresNetworkFromManifest,
           tags,
           pluginFileName: path.basename(pluginFile.name),
           pluginFileExt: PLUGIN_FILE_EXT,

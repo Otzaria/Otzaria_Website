@@ -5,6 +5,7 @@ import Book from '@/models/Book';
 import User from '@/models/User';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { hasBooksAccess } from '@/lib/roles';
 
 export async function POST(request) {
   try {
@@ -14,7 +15,7 @@ export async function POST(request) {
     const { pageId, bookId } = await request.json();
     await connectDB();
 
-    const isAdmin = session.user.role === 'admin';
+    const isAdmin = hasBooksAccess(session.user.role);
 
     const query = { _id: pageId };
     if (!isAdmin) {

@@ -4,6 +4,7 @@ import dbConnect from '@/lib/db'
 import DictaBook from '@/models/DictaBook'
 import User from '@/models/User'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route' 
+import { hasBooksAccess } from '@/lib/roles'
 
 // שינינו את קבלת הפרמטרים
 export async function POST(request, context) {
@@ -46,8 +47,12 @@ export async function POST(request, context) {
 
 
     
-    // 4. בדיקה אם הספר כבר תפוס
-    if (book.claimedBy || book.status !== 'available') {
+    // 4. בדיקה אם הספר כבר תפוס — אדמין/admin_books עוקף ויכול לתפוס בכל זאת
+    const isAdmin = hasBooksAccess(session.user.role);
+    const claimedByOther = book.claimedBy && book.claimedBy.toString() !== String(userId);
+    const wasTakenOver = claimedByOther;
+
+    if ((book.claimedBy || book.status !== 'available') && !isAdmin) {
       console.log('❌ Book is already claimed or not available.');
       return NextResponse.json({ error: 'הספר כבר תפוס על ידי משתמש אחר או שאינו זמין' }, { status: 400 });
     }
@@ -60,7 +65,7 @@ export async function POST(request, context) {
 
     // 6. הוספת הפעולה להיסטוריה
     book.history.push({
-      description: 'הספר נתפס לעריכה',
+      description: wasTakenOver ? 'הספר נתפס לעריכה (השתלטות מנהל)' : 'הספר נתפס לעריכה',
       editorId: userId,
       editorName: userName,
       timestamp: new Date()

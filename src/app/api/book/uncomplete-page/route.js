@@ -6,6 +6,7 @@ import Book from '@/models/Book';
 import User from '@/models/User';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { hasBooksAccess } from '@/lib/roles';
 
 export async function POST(request) {
   await connectDB();
@@ -17,12 +18,17 @@ export async function POST(request) {
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { pageId } = await request.json();
+    const isAdmin = hasBooksAccess(session.user.role);
 
     dbSession.startTransaction();
 
-    // שלב א: עדכון העמוד
+    // שלב א: עדכון העמוד — אדמין/admin_books יכול גם על עמוד של אחר
+    const pageQuery = isAdmin
+      ? { _id: pageId, status: 'completed' }
+      : { _id: pageId, claimedBy: session.user._id, status: 'completed' };
+
     const page = await Page.findOneAndUpdate(
-      { _id: pageId, claimedBy: session.user._id, status: 'completed' },
+      pageQuery,
       { 
         $set: { status: 'in-progress' }, 
         $unset: { completedAt: 1 }  
@@ -43,9 +49,10 @@ export async function POST(request) {
         { session: dbSession }
     );
 
-    // שלב ג: עדכון המשתמש (הפחתת ניקוד)
+    // שלב ג: הפחתת ניקוד מהתופס המקורי (לא מהאדמין אם הוא לא התופס)
+    const pointsTargetUserId = page.claimedBy?._id || page.claimedBy || session.user._id;
     await User.findByIdAndUpdate(
-        session.user._id, 
+        pointsTargetUserId, 
         { $inc: { points: -10 } }, 
         { session: dbSession }
     );

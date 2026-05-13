@@ -48,6 +48,7 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
     status: plugin.status || 'stable',
     author: plugin.author || '',
     compatibleWith: plugin.compatibleWith || '',
+    requiresNetwork: plugin.requiresNetwork === true,
     tags: plugin.tags || [],
     homepage: plugin.homepage || ''
   })
@@ -133,6 +134,7 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
       handleChange('status', stability)
       handleChange('compatibleWith', minAppVersion)
       handleChange('homepage', manifestHomepage)
+      handleChange('requiresNetwork', manifest.network?.enabled === true)
     }
     setPluginFile(file)
   }
@@ -193,6 +195,7 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
       data.append('status', formData.status)
       data.append('author', formData.author)
       data.append('compatibleWith', formData.compatibleWith)
+      data.append('requiresNetwork', formData.requiresNetwork ? 'true' : 'false')
       data.append('tags', JSON.stringify(formData.tags))
       data.append('homepage', formData.homepage)
 
@@ -257,23 +260,48 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
           <section className="space-y-4">
             <h3 className="text-xl font-bold text-on-surface">מידע בסיסי</h3>
             {isAdmin ? (
-              <div className="grid gap-4 md:grid-cols-2">
-                <input value={formData.name} onChange={(e) => handleChange('name', e.target.value)} className="rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="שם התוסף" required />
-                <input value={formData.author} onChange={(e) => handleChange('author', e.target.value)} className="rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="מפתח" required />
-                <input value={formData.version} onChange={(e) => handleChange('version', e.target.value)} className="rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="גרסה" required />
-                <input value={formData.compatibleWith} onChange={(e) => handleChange('compatibleWith', e.target.value)} className="rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="גרסת מינימום" required />
-                <input value={formData.shortDescription} onChange={(e) => handleChange('shortDescription', e.target.value)} className="md:col-span-2 rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="תיאור קצר" required />
-                <input value={formData.homepage} onChange={(e) => handleChange('homepage', e.target.value)} className="md:col-span-2 rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="אתר בית (אופציונלי)" />
-                <select value={formData.status} onChange={(e) => handleChange('status', e.target.value)} className="rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10">
-                  {STATUS_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </div>
+              <>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <input value={formData.name} onChange={(e) => handleChange('name', e.target.value)} className="rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="שם התוסף" required />
+                  <input value={formData.author} onChange={(e) => handleChange('author', e.target.value)} className="rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="מפתח" required />
+                  <input value={formData.version} onChange={(e) => handleChange('version', e.target.value)} className="rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="גרסה" required />
+                  <input value={formData.compatibleWith} onChange={(e) => handleChange('compatibleWith', e.target.value)} className="rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="גרסת מינימום" required />
+                  <input value={formData.shortDescription} onChange={(e) => handleChange('shortDescription', e.target.value)} className="md:col-span-2 rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="תיאור קצר" required />
+                  <input value={formData.homepage} onChange={(e) => handleChange('homepage', e.target.value)} className="md:col-span-2 rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="אתר בית (אופציונלי)" />
+                  <select value={formData.status} onChange={(e) => handleChange('status', e.target.value)} className="rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10">
+                    {STATUS_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <label className="flex items-center gap-3 rounded-xl border border-gray-200 px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={formData.requiresNetwork}
+                    onChange={(e) => handleChange('requiresNetwork', e.target.checked)}
+                    className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-2 focus:ring-primary/20"
+                  />
+                  <span className="material-symbols-outlined text-primary">
+                    {formData.requiresNetwork ? 'wifi' : 'wifi_off'}
+                  </span>
+                  <span className="font-medium text-on-surface">התוסף דורש חיבור אינטרנט</span>
+                </label>
+              </>
             ) : (
-              <div className="rounded-xl border border-primary/10 bg-primary/5 px-4 py-3 text-sm text-on-surface/70">
-                שאר המידע יילקח מקובץ התוסף.
-              </div>
+              <>
+                <div className="rounded-xl border border-primary/10 bg-primary/5 px-4 py-3 text-sm text-on-surface/70">
+                  שאר המידע יילקח מקובץ התוסף.
+                </div>
+                <div className="flex items-center gap-3 rounded-xl border border-gray-200 px-4 py-3 text-sm text-on-surface/70">
+                  <span className="material-symbols-outlined text-primary">
+                    {formData.requiresNetwork ? 'wifi' : 'wifi_off'}
+                  </span>
+                  <span>
+                    חיבור אינטרנט: <strong>{formData.requiresNetwork ? 'נדרש' : 'לא נדרש'}</strong>
+                    {' '}(נקבע אוטומטית מ-<code>network.enabled</code> ב-manifest.json)
+                  </span>
+                </div>
+              </>
             )}
             <textarea value={formData.description} onChange={(e) => handleChange('description', e.target.value)} className="min-h-[150px] w-full rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="תיאור מלא" required />
           </section>

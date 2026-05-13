@@ -22,6 +22,7 @@ interface Plugin {
   updatedAt: string
   originalDate?: string
   compatibleWith: string
+  requiresNetwork?: boolean
   tags: string[]
   image: string
   screenshots: string[]
@@ -386,6 +387,15 @@ export default function PluginDetailPage() {
                 <div className="p-4 bg-surface rounded-xl col-span-2">
                   <div className="text-sm text-on-surface/60 mb-1">תאימות</div>
                   <div className="font-bold text-on-surface">{plugin.compatibleWith}</div>
+                </div>
+                <div className="p-4 bg-surface rounded-xl col-span-2">
+                  <div className="text-sm text-on-surface/60 mb-1">חיבור אינטרנט</div>
+                  <div className="font-bold text-on-surface flex items-center gap-2">
+                    <span className="material-symbols-outlined text-base">
+                      {plugin.requiresNetwork ? 'wifi' : 'wifi_off'}
+                    </span>
+                    <span>{plugin.requiresNetwork ? 'נדרש' : 'לא נדרש'}</span>
+                  </div>
                 </div>
               </div>
             </div>

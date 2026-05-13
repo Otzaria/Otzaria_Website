@@ -262,6 +262,11 @@ export async function PUT(request, { params }) {
     let homepage = isAdmin
       ? (formData.get('homepage') || '').toString().trim()
       : (editableSource.homepage || livePlugin.homepage || '')
+    // requiresNetwork: מנהל יכול לערוך ידנית. לבעלים — נגזר מהמניפסט בהחלפת קובץ
+    // (בהמשך הקוד), אחרת שומרים את הערך הקיים מהמקור הניתן לעריכה.
+    let requiresNetwork = isAdmin
+      ? formData.get('requiresNetwork') === 'true'
+      : (editableSource.requiresNetwork ?? livePlugin.requiresNetwork) === true
 
     let tags
     try {
@@ -373,6 +378,7 @@ export async function PUT(request, { params }) {
       status = manifestStability
       compatibleWith = manifestMinAppVersion
       homepage = newManifest.homepage ? newManifest.homepage.toString().trim() : ''
+      requiresNetwork = newManifest.network?.enabled === true
     }
 
     if (homepage && !isHttpUrl(homepage)) {
@@ -402,6 +408,7 @@ export async function PUT(request, { params }) {
       status,
       author,
       compatibleWith,
+      requiresNetwork,
       tags,
       homepage,
       pluginFileName: editableSource.pluginFileName || livePlugin.pluginFileName,
@@ -490,6 +497,7 @@ export async function PUT(request, { params }) {
       plugin.status = nextPluginData.status
       plugin.author = nextPluginData.author
       plugin.compatibleWith = nextPluginData.compatibleWith
+      plugin.requiresNetwork = nextPluginData.requiresNetwork === true
       plugin.tags = nextPluginData.tags
       plugin.homepage = nextPluginData.homepage
       plugin.pluginFileName = nextPluginData.pluginFileName
