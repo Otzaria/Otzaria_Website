@@ -283,24 +283,28 @@ export async function POST(request) {
 
     await connectDB();
 
-    const errorReport = new ErrorReport({
-      reportId: payload.report_id,
-      senderEmail: payload.sender_email,
-      subject: payload.subject,
-      bookTitle: payload.book_title,
-      currentRef: payload.current_ref,
-      lineNumber: payload.line_number,
-      selectedText: payload.selected_text,
-      errorDetails: payload.error_details,
-      contextText: payload.context_text,
-      filePath: payload.file_path,
-      sourceFolder: payload.source_folder,
-      libraryVersion: payload.library_version,
-      status: 'pending',
-      emailSent: false,
-    });
-
-    await errorReport.save();
+    await ErrorReport.findOneAndUpdate(
+      { reportId: payload.report_id },
+      {
+        $setOnInsert: {
+          reportId: payload.report_id,
+          senderEmail: payload.sender_email,
+          subject: payload.subject,
+          bookTitle: payload.book_title,
+          currentRef: payload.current_ref,
+          lineNumber: payload.line_number,
+          selectedText: payload.selected_text,
+          errorDetails: payload.error_details,
+          contextText: payload.context_text,
+          filePath: payload.file_path,
+          sourceFolder: payload.source_folder,
+          libraryVersion: payload.library_version,
+          status: 'pending',
+          emailSent: false,
+        },
+      },
+      { upsert: true }
+    );
     savedToDatabase = true;
 
     const missingSmtp = ensureSmtpConfig();

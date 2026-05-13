@@ -25,8 +25,7 @@ const ErrorReportSchema = new mongoose.Schema({
   emailSentAt: { type: Date }, // תאריך שליחת המייל
 }, { timestamps: true });
 
-// אינדקס לחיפוש מהיר
-ErrorReportSchema.index({ reportId: 1 });
+// אינדקס לחיפוש מהיר (reportId מקבל אינדקס אוטומטית דרך unique: true בהגדרת השדה)
 ErrorReportSchema.index({ senderEmail: 1 });
 ErrorReportSchema.index({ bookTitle: 1 });
 ErrorReportSchema.index({ status: 1 });
