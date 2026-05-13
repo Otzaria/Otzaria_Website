@@ -406,9 +406,7 @@ function PluginsPageContent() {
                       />
                       {plugin.isPinned && (
                         <span className="absolute top-3 right-3 inline-flex items-center gap-1 rounded-full bg-amber-500 px-3 py-1 text-xs font-bold text-white shadow-md">
-                          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
-                          </svg>
+                          <span className="material-symbols-outlined text-base">push_pin</span>
                           <span>מומלץ</span>
                         </span>
                       )}

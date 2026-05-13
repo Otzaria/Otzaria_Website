@@ -198,13 +198,10 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
         const message = `בקובץ התוסף החדש נמצאו ערכים שונים מהשדות בטופס:\n\n${lines.join('\n\n')}\n\nלהחליף את הערכים בטופס לפי הקובץ?`
         const apply = await showConfirm('עדכון שדות לפי הקובץ', message)
         if (apply) {
-          setFormData((prev) => {
-            const next = { ...prev }
-            for (const change of diff) {
-              next[change.field] = change.value
-            }
-            return next
-          })
+          setFormData((prev) => ({
+            ...prev,
+            ...Object.fromEntries(diff.map((change) => [change.field, change.value]))
+          }))
         }
       }
     }
