@@ -3,12 +3,13 @@ import connectDB from '@/lib/db';
 import Book from '@/models/Book';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { hasBooksAccess } from '@/lib/roles';
 
 export async function POST(request) {
 
   try {
     const session = await getServerSession(authOptions);
-    if (session?.user?.role !== 'admin') {
+    if (!session || !hasBooksAccess(session.user?.role)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
