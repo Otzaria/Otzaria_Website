@@ -1,9 +1,8 @@
 import { pdf } from 'pdf-to-img';
 import sharp from 'sharp';
 import path from 'path';
-import { createRequire } from 'node:module';
 
-const pdfjsPath = path.dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'));
+const pdfjsWasmUrl = path.join(process.cwd(), 'node_modules/pdfjs-dist/wasm/');
 
 const DEFAULT_OPTIONS = {
   width: 1200,
@@ -19,7 +18,7 @@ export async function convertPdfToImages(pdfSource, outputFolder, options = {}) 
   const document = await pdf(pdfSource, {
     scale,
     docInitParams: {
-      wasmUrl: path.join(pdfjsPath, 'wasm/'),
+      wasmUrl: pdfjsWasmUrl,
     },
   });
   const pages = [];
