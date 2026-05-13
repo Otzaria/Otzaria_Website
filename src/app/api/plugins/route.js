@@ -19,7 +19,7 @@ export async function GET(request) {
     if (search) query.$text = { $search: search }
 
     const plugins = await Plugin.find(query)
-      .sort({ createdAt: -1 })
+      .sort({ isPinned: -1, pinnedAt: -1, createdAt: -1 })
       .select('-__v -pendingUpdate -pendingChangeSummary')
       .lean()
 

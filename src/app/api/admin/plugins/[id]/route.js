@@ -40,7 +40,7 @@ export async function PATCH(request, { params }) {
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
     const action = body?.action
-    if (!['approve', 'unapprove'].includes(action)) {
+    if (!['approve', 'unapprove', 'pin', 'unpin'].includes(action)) {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
     }
 
@@ -48,6 +48,20 @@ export async function PATCH(request, { params }) {
     const plugin = await Plugin.findById(id).populate('authorId', 'name email')
     if (!plugin) {
       return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
+    }
+
+    if (action === 'pin' || action === 'unpin') {
+      if (!plugin.isApproved) {
+        return NextResponse.json({ error: 'Only approved plugins can be pinned' }, { status: 400 })
+      }
+      plugin.isPinned = action === 'pin'
+      plugin.pinnedAt = action === 'pin' ? new Date() : null
+      await plugin.save()
+      return NextResponse.json({
+        success: true,
+        message: action === 'pin' ? 'Plugin pinned successfully' : 'Plugin unpinned successfully',
+        plugin
+      })
     }
 
     if (action === 'approve') {
@@ -155,6 +169,8 @@ export async function PATCH(request, { params }) {
       plugin.isApproved = false
       plugin.approvedBy = null
       plugin.approvedAt = null
+      plugin.isPinned = false
+      plugin.pinnedAt = null
       await plugin.save()
     }
 

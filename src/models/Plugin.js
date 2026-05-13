@@ -84,6 +84,10 @@ const PluginSchema = new mongoose.Schema(
 
     // הסתרה (במקום מחיקה)
     isHidden: { type: Boolean, default: false, index: true },
+
+    // הצמדה (תוספים מוצמדים יוצגו ראשונים)
+    isPinned: { type: Boolean, default: false, index: true },
+    pinnedAt: { type: Date, default: null },
   },
   {
     timestamps: true,

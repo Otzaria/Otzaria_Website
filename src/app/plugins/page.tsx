@@ -25,6 +25,7 @@ interface Plugin {
   downloadUrl: string
   supportsDirectInstall: boolean
   homepage: string
+  isPinned?: boolean
 }
 
 function PluginsPageContent() {
@@ -387,7 +388,9 @@ function PluginsPageContent() {
                 {filteredPlugins.map(plugin => (
                   <article
                     key={plugin.id}
-                    className="flex flex-col bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group"
+                    className={`flex flex-col bg-white rounded-2xl border overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group ${
+                      plugin.isPinned ? 'border-amber-300 ring-1 ring-amber-200' : 'border-gray-100'
+                    }`}
                   >
                     {/* Plugin Image */}
                     <Link
@@ -401,6 +404,14 @@ function PluginsPageContent() {
                         decoding="async"
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
+                      {plugin.isPinned && (
+                        <span className="absolute top-3 right-3 inline-flex items-center gap-1 rounded-full bg-amber-500 px-3 py-1 text-xs font-bold text-white shadow-md">
+                          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/>
+                          </svg>
+                          <span>מומלץ</span>
+                        </span>
+                      )}
                     </Link>
 
                     {/* Plugin Body */}

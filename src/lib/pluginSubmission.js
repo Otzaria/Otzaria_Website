@@ -136,7 +136,8 @@ export function formatPluginForPublic(plugin, options = {}) {
     downloadUrl: `/api/plugins/${pluginId}/download`,
     homepage: source.homepage || '',
     downloadCount: plugin.downloadCount || 0,
-    supportsDirectInstall: (source.pluginFileExt || '').toLowerCase() === '.otzplugin'
+    supportsDirectInstall: (source.pluginFileExt || '').toLowerCase() === '.otzplugin',
+    isPinned: plugin.isPinned === true
   }
 }
 
