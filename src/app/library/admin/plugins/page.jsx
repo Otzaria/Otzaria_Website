@@ -127,6 +127,38 @@ export default function AdminPluginsPage() {
     }
   }
 
+  const handleTogglePin = async (plugin) => {
+    const willPin = !plugin.isPinned
+    const confirmed = await showConfirm(
+      willPin ? 'הצמדת תוסף' : 'ביטול הצמדה',
+      willPin
+        ? `האם להצמיד את התוסף "${plugin.name}"? תוספים מוצמדים יוצגו תמיד בראש החנות.`
+        : `האם לבטל את ההצמדה של התוסף "${plugin.name}"?`
+    )
+
+    if (!confirmed) return
+
+    try {
+      setProcessingId(plugin._id)
+      const response = await fetch(`/api/admin/plugins/${plugin._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: willPin ? 'pin' : 'unpin' })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to toggle pin')
+      }
+
+      loadPlugins()
+    } catch (error) {
+      console.error('Error toggling pin:', error)
+      showAlert('שגיאה', 'לא הצלחנו לעדכן את ההצמדה')
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
   const handleUnapprove = async (plugin) => {
     const confirmed = await showConfirm(
       'ביטול אישור תוסף',
@@ -381,6 +413,12 @@ export default function AdminPluginsPage() {
                       {activeTab === 'pending' && !hasPendingUpdate(plugin) && (
                         <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-bold text-purple-800">תוסף חדש</span>
                       )}
+                      {activeTab === 'approved' && plugin.isPinned && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">
+                          <span className="material-symbols-outlined text-sm">push_pin</span>
+                          <span>מוצמד</span>
+                        </span>
+                      )}
                       {getStatusBadge(source.status)}
                       <span className="px-3 py-1 bg-surface rounded-full text-xs font-bold text-on-surface/60">
                         גרסה {source.version}
@@ -563,6 +601,29 @@ export default function AdminPluginsPage() {
                     </>
                   ) : (
                     <>
+                      <button
+                        onClick={() => handleTogglePin(plugin)}
+                        disabled={processingId === plugin._id}
+                        className={`flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                          plugin.isPinned
+                            ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                            : 'bg-amber-600 hover:bg-amber-700 text-white'
+                        }`}
+                        title={plugin.isPinned ? 'בטל הצמדה' : 'הצמד תוסף — יופיע ראשון בחנות'}
+                      >
+                        {processingId === plugin._id ? (
+                          <>
+                            <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                            <span>מעבד...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="material-symbols-outlined">{plugin.isPinned ? 'keep_off' : 'push_pin'}</span>
+                            <span>{plugin.isPinned ? 'בטל הצמדה' : 'הצמד'}</span>
+                          </>
+                        )}
+                      </button>
+
                       <button
                         onClick={() => handleUnapprove(plugin)}
                         disabled={processingId === plugin._id}

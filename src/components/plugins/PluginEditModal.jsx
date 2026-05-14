@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useSession } from 'next-auth/react'
 import { useDialog } from '@/components/providers/DialogContext'
-import { MIN_SUPPORTED_APP_VERSION } from '@/lib/pluginSubmission'
+import { MIN_SUPPORTED_APP_VERSION, formatPluginStatus } from '@/lib/pluginSubmission'
 
 const ALLOWED_IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
 const STATUS_OPTIONS = [
@@ -32,9 +32,65 @@ function versionAtLeast(v, min) {
   return true
 }
 
+function buildManifestDiff(manifest, current) {
+  const manifestValues = {
+    name: (typeof manifest.name === 'string' ? manifest.name : '').trim(),
+    author: (typeof manifest.author === 'string' ? manifest.author : '').trim(),
+    version: (typeof manifest.version === 'string' ? manifest.version : '').trim(),
+    shortDescription: (typeof manifest.description === 'string' ? manifest.description : '').trim(),
+    status: (typeof manifest.stability === 'string' ? manifest.stability : '').trim(),
+    compatibleWith: (typeof manifest.minAppVersion === 'string' ? manifest.minAppVersion : '').trim(),
+    homepage: (typeof manifest.homepage === 'string' ? manifest.homepage : '').trim(),
+    requiresNetwork: manifest.network?.enabled === true
+  }
+
+  const labels = {
+    name: 'שם התוסף',
+    author: 'מפתח',
+    version: 'גרסה',
+    shortDescription: 'תיאור קצר',
+    status: 'סטטוס',
+    compatibleWith: 'גרסת מינימום',
+    homepage: 'אתר בית',
+    requiresNetwork: 'חיבור אינטרנט'
+  }
+
+  const formatValue = (field, value) => {
+    if (field === 'requiresNetwork') return value ? 'נדרש' : 'לא נדרש'
+    if (field === 'status') return formatPluginStatus(value) || value || 'ללא'
+    return value || 'ללא'
+  }
+
+  const changes = []
+  for (const field of Object.keys(labels)) {
+    const newValue = manifestValues[field]
+    const oldValue = current[field]
+
+    if (field === 'requiresNetwork') {
+      if (newValue !== (oldValue === true)) {
+        changes.push({ field, label: labels[field], before: formatValue(field, oldValue === true), after: formatValue(field, newValue), value: newValue })
+      }
+      continue
+    }
+
+    if (field === 'status') {
+      if (newValue && ['stable', 'beta', 'experimental'].includes(newValue) && newValue !== oldValue) {
+        changes.push({ field, label: labels[field], before: formatValue(field, oldValue), after: formatValue(field, newValue), value: newValue })
+      }
+      continue
+    }
+
+    if (newValue && newValue !== (oldValue || '').trim()) {
+      changes.push({ field, label: labels[field], before: formatValue(field, oldValue), after: formatValue(field, newValue), value: newValue })
+    }
+  }
+
+  return changes
+}
+
 export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }) {
   const { data: session } = useSession()
-  const { showAlert } = useDialog()
+  const { showAlert, showConfirm } = useDialog()
   const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(false)
   const isAdmin = session?.user?.role === 'admin'
@@ -135,6 +191,19 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
       handleChange('compatibleWith', minAppVersion)
       handleChange('homepage', manifestHomepage)
       handleChange('requiresNetwork', manifest.network?.enabled === true)
+    } else {
+      const diff = buildManifestDiff(manifest, formData)
+      if (diff.length > 0) {
+        const lines = diff.map((change) => `• ${change.label}\n   לפני: ${change.before}\n   אחרי: ${change.after}`)
+        const message = `בקובץ התוסף החדש נמצאו ערכים שונים מהשדות בטופס:\n\n${lines.join('\n\n')}\n\nלהחליף את הערכים בטופס לפי הקובץ?`
+        const apply = await showConfirm('עדכון שדות לפי הקובץ', message)
+        if (apply) {
+          setFormData((prev) => ({
+            ...prev,
+            ...Object.fromEntries(diff.map((change) => [change.field, change.value]))
+          }))
+        }
+      }
     }
     setPluginFile(file)
   }

@@ -43,6 +43,36 @@ export default function UploadPluginPage() {
   // תגית חדשה
   const [newTag, setNewTag] = useState('')
 
+  // מצב גרירה לכל אזור העלאה בנפרד
+  const [isDraggingPlugin, setIsDraggingPlugin] = useState(false)
+  const [isDraggingImage, setIsDraggingImage] = useState(false)
+  const [isDraggingScreenshots, setIsDraggingScreenshots] = useState(false)
+
+  const makeDropHandlers = (
+    setIsDragging: (v: boolean) => void,
+    onFiles: (files: FileList) => void
+  ) => ({
+    onDragEnter: (e: React.DragEvent) => {
+      e.preventDefault(); e.stopPropagation()
+      if (e.dataTransfer?.types?.includes('Files')) setIsDragging(true)
+    },
+    onDragOver: (e: React.DragEvent) => {
+      e.preventDefault(); e.stopPropagation()
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
+    },
+    onDragLeave: (e: React.DragEvent) => {
+      e.preventDefault(); e.stopPropagation()
+      const related = e.relatedTarget as Node | null
+      if (related && e.currentTarget.contains(related)) return
+      setIsDragging(false)
+    },
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault(); e.stopPropagation()
+      setIsDragging(false)
+      if (e.dataTransfer?.files?.length) onFiles(e.dataTransfer.files)
+    },
+  })
+
   // טיפול בשינוי שדות
   const handleChange = <K extends keyof typeof formData>(field: K, value: (typeof formData)[K]) => {
     setFormData(prev => ({ ...prev, [field]: value }))
@@ -87,14 +117,8 @@ export default function UploadPluginPage() {
     return true
   }
 
-  // טיפול בקובץ תוסף
-  const handlePluginFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const input = e.target
-    const file = input.files?.[0]
-    if (!file) return
-
-    const resetInput = () => { input.value = '' }
-
+  // עיבוד קובץ תוסף (משותף ל-input ול-drop)
+  const processPluginFile = async (file: File, resetInput: () => void) => {
     if (!file.name.toLowerCase().endsWith('.otzplugin')) {
       showAlert('שגיאה', 'קובץ התוסף חייב להיות בפורמט .otzplugin')
       resetInput()
@@ -148,30 +172,56 @@ export default function UploadPluginPage() {
     setPluginFile(file)
   }
 
-  // טיפול בתמונה
-  const handleImageFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      if (!ALLOWED_IMAGE_MIMES.includes(file.type)) {
-        showAlert('שגיאה', 'תמונה חייבת להיות בפורמט PNG, JPEG, WEBP או GIF')
-        return
-      }
-      if (file.size > MAX_IMAGE_BYTES) {
-        showAlert('שגיאה', `התמונה חורגת מהמגבלה של ${MAX_IMAGE_BYTES / 1024 / 1024}MB`)
-        return
-      }
-      setImageFile(file)
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string)
-      }
-      reader.readAsDataURL(file)
-    }
+  const handlePluginFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target
+    const file = input.files?.[0]
+    if (!file) return
+    await processPluginFile(file, () => { input.value = '' })
   }
 
-  // טיפול בצילומי מסך
-  const handleScreenshotFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || [])
+  const dropPluginFile = (files: FileList) => {
+    if (files.length > 1) {
+      showAlert('שגיאה', 'ניתן לגרור רק קובץ תוסף אחד')
+      return
+    }
+    const file = files[0]
+    if (file) void processPluginFile(file, () => {})
+  }
+
+  // עיבוד תמונה (משותף ל-input ול-drop)
+  const processImageFile = (file: File) => {
+    if (!ALLOWED_IMAGE_MIMES.includes(file.type)) {
+      showAlert('שגיאה', 'תמונה חייבת להיות בפורמט PNG, JPEG, WEBP או GIF')
+      return
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      showAlert('שגיאה', `התמונה חורגת מהמגבלה של ${MAX_IMAGE_BYTES / 1024 / 1024}MB`)
+      return
+    }
+    setImageFile(file)
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setImagePreview(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleImageFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) processImageFile(file)
+  }
+
+  const dropImageFile = (files: FileList) => {
+    if (files.length > 1) {
+      showAlert('שגיאה', 'ניתן לגרור תמונה אחת בלבד')
+      return
+    }
+    const file = files[0]
+    if (file) processImageFile(file)
+  }
+
+  // עיבוד צילומי מסך (משותף ל-input ול-drop)
+  const processScreenshotFiles = (files: File[]) => {
     if (files.length > MAX_SCREENSHOTS) {
       showAlert('שגיאה', `מותר עד ${MAX_SCREENSHOTS} צילומי מסך`)
       return
@@ -187,8 +237,7 @@ export default function UploadPluginPage() {
       }
     }
     setScreenshotFiles(files)
-    
-    // יצירת תצוגות מקדימות
+
     const previews: string[] = []
     files.forEach(file => {
       const reader = new FileReader()
@@ -200,6 +249,14 @@ export default function UploadPluginPage() {
       }
       reader.readAsDataURL(file)
     })
+  }
+
+  const handleScreenshotFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    processScreenshotFiles(Array.from(e.target.files || []))
+  }
+
+  const dropScreenshotFiles = (files: FileList) => {
+    processScreenshotFiles(Array.from(files))
   }
 
   // שליחת הטופס
@@ -382,7 +439,12 @@ export default function UploadPluginPage() {
               
               <div className="space-y-6">
                 {/* קובץ תוסף */}
-                <div>
+                <div
+                  {...makeDropHandlers(setIsDraggingPlugin, dropPluginFile)}
+                  className={`rounded-xl border-2 border-dashed p-4 transition-colors ${
+                    isDraggingPlugin ? 'border-primary bg-primary/5' : 'border-transparent'
+                  }`}
+                >
                   <label className="block text-sm font-bold text-on-surface/60 mb-2">
                     קובץ תוסף (.otzplugin) <span className="text-red-500">*</span>
                   </label>
@@ -396,6 +458,9 @@ export default function UploadPluginPage() {
                   <p className="mt-2 text-sm text-on-surface/60">
                     המערכת תחיל על הטופס את השדות מתוך <code>manifest.json</code>: שם התוסף, מחבר, תיאור קצר, גרסה, סטטוס וגרסת מינימום נתמכת.
                   </p>
+                  <p className="mt-1 text-sm text-on-surface/50">
+                    טיפ: ניתן גם לגרור את קובץ ה-.otzplugin לכאן.
+                  </p>
                   {pluginFile && (
                     <p className="mt-2 text-sm text-green-600">
                       ✓ נבחר: {pluginFile.name}
@@ -404,7 +469,12 @@ export default function UploadPluginPage() {
                 </div>
 
                 {/* תמונה */}
-                <div>
+                <div
+                  {...makeDropHandlers(setIsDraggingImage, dropImageFile)}
+                  className={`rounded-xl border-2 border-dashed p-4 transition-colors ${
+                    isDraggingImage ? 'border-primary bg-primary/5' : 'border-transparent'
+                  }`}
+                >
                   <label className="block text-sm font-bold text-on-surface/60 mb-2">
                     תמונת תוסף (אופציונלי)
                   </label>
@@ -414,6 +484,9 @@ export default function UploadPluginPage() {
                     onChange={handleImageFile}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
                   />
+                  <p className="mt-1 text-sm text-on-surface/50">
+                    טיפ: ניתן גם לגרור תמונה לכאן.
+                  </p>
                   <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                     כדי להגביר את סיכויי הקבלה מומלץ לצרף תמונת תוסף איכותית, ברורה ומתאימה לתוכן התוסף. העלאה ללא תמונה או עם תמונה לא מתאימה עלולה להוביל לדחיית התוסף.
                   </div>
@@ -429,7 +502,12 @@ export default function UploadPluginPage() {
                 </div>
 
                 {/* צילומי מסך */}
-                <div>
+                <div
+                  {...makeDropHandlers(setIsDraggingScreenshots, dropScreenshotFiles)}
+                  className={`rounded-xl border-2 border-dashed p-4 transition-colors ${
+                    isDraggingScreenshots ? 'border-primary bg-primary/5' : 'border-transparent'
+                  }`}
+                >
                   <label className="block text-sm font-bold text-on-surface/60 mb-2">
                     צילומי מסך <span className="text-red-500">*</span>
                   </label>
@@ -442,7 +520,7 @@ export default function UploadPluginPage() {
                     required={screenshotFiles.length === 0}
                   />
                   <p className="mt-2 text-sm text-on-surface/60">
-                    חובה לצרף לפחות צילום מסך אחד של התוסף.
+                    חובה לצרף לפחות צילום מסך אחד של התוסף. ניתן גם לגרור מספר תמונות לכאן יחד.
                   </p>
                   {screenshotPreviews.length > 0 && (
                     <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4">
