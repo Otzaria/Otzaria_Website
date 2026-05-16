@@ -118,19 +118,58 @@ export default function AboutPage() {
                     <ul className="space-y-2 text-on-surface/80">
                       <li className="flex items-center gap-2">
                         <span className="material-symbols-outlined text-sm text-primary">check_circle</span>
-                        אורייתא
+                        <a
+                          href="https://oraita.net/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          אורייתא
+                        </a>
                       </li>
                       <li className="flex items-center gap-2">
                         <span className="material-symbols-outlined text-sm text-primary">check_circle</span>
-                        ובלכתך בדרך
+                        <a
+                          href="http://mobile.tora.ws/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          ובלכתך בדרך
+                        </a>
                       </li>
                       <li className="flex items-center gap-2">
                         <span className="material-symbols-outlined text-sm text-primary">check_circle</span>
-                        תורת אמת
+                        <a
+                          href="https://www.toratemetfreeware.com/online/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          תורת אמת
+                        </a>
                       </li>
                       <li className="flex items-center gap-2">
                         <span className="material-symbols-outlined text-sm text-primary">check_circle</span>
-                        אוצר הספרים היהודי השיתופי
+                        <a
+                          href="https://wiki.jewishbooks.org.il/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          אוצר הספרים היהודי השיתופי
+                        </a>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-sm text-primary">check_circle</span>
+                        <a
+                          href="https://pninim.org/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          פנינים
+                        </a>
                       </li>
                     </ul>
                   </div>
