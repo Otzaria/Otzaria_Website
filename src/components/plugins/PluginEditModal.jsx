@@ -90,7 +90,7 @@ function buildManifestDiff(manifest, current) {
 
 export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }) {
   const { data: session } = useSession()
-  const { showAlert, showConfirm } = useDialog()
+  const { showAlert, showConfirm, showMessage } = useDialog()
   const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(false)
   const isAdmin = session?.user?.role === 'admin'
@@ -294,7 +294,9 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
 
       onSuccess?.(result)
     } catch (error) {
-      showAlert('שגיאה', error.message || 'שגיאה בעדכון התוסף')
+      // דיאלוג מודאלי חוסם — לא נעלם עד שלוחצים אישור, כדי שניתן יהיה לקרוא הודעות שגיאה ארוכות
+      // (למשל פירוט ולידציה מול ה-SDK שמחזיר השרת בעת החלפת קובץ תוסף).
+      await showMessage('שגיאה בעדכון התוסף', error.message || 'שגיאה בעדכון התוסף')
     } finally {
       setLoading(false)
     }

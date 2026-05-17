@@ -45,7 +45,9 @@ export function readManifestFromPlugin(buffer) {
     } else {
       throw new Error(`Unsupported ZIP compression method: ${compressionMethod}`)
     }
-    return JSON.parse(data.toString('utf8'))
+    // הסרת UTF-8 BOM אם קיים — עורכים בווינדוז (Notepad, VS Code עם הגדרה ברירת מחדל)
+    // שומרים לעיתים JSON עם BOM ש-JSON.parse נופל עליו.
+    return JSON.parse(data.toString('utf8').replace(/^﻿/, ''))
   }
 
   throw new Error('manifest.json not found in plugin file')

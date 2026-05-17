@@ -21,6 +21,7 @@ import {
   parseJsonArrayField
 } from '@/lib/pluginSubmission'
 import { readManifestFromPlugin, compareVersions } from '@/lib/pluginManifest'
+import { validatePluginArchive, OTZARIA_DESIGN_TAG } from '@/lib/pluginValidation'
 import {
   MAX_IMAGE_BYTES,
   MAX_PLUGIN_BYTES,
@@ -306,6 +307,11 @@ export async function PUT(request, { params }) {
     const removeImage = formData.get('removeImage') === 'true'
     const removeScreenshots = formData.get('removeScreenshots') === 'true'
 
+    let pluginBuffer = null
+    // designCompliantFromFile: true → הקובץ עבר את בדיקת תאימות העיצוב; null → לא הועלה קובץ חדש
+    // ועל כן יש להישען על מצב התגית הקיים. false → קובץ הועלה ולא עבר.
+    let designCompliantFromFile = null
+    let designViolations = []
     if (pluginFile?.size) {
       if (!pluginFile.name.toLowerCase().endsWith(PLUGIN_FILE_EXT)) {
         return bad('Plugin file must be .otzplugin format')
@@ -313,6 +319,42 @@ export async function PUT(request, { params }) {
       if (pluginFile.size > MAX_PLUGIN_BYTES) {
         return bad(`Plugin file exceeds ${Math.floor(MAX_PLUGIN_BYTES / 1024 / 1024)}MB limit`)
       }
+      pluginBuffer = Buffer.from(await pluginFile.arrayBuffer())
+      try {
+        const validation = await validatePluginArchive(pluginBuffer)
+        const issues = [...validation.errors, ...validation.warnings]
+        if (issues.length > 0) {
+          return bad(`קובץ התוסף לא עבר ולידציה מול ה-SDK הרשמי:\n- ${issues.join('\n- ')}`)
+        }
+        designCompliantFromFile = validation.design?.compliant === true
+        designViolations = validation.design?.violations || []
+      } catch (validationError) {
+        console.error('Plugin validation crashed during edit:', validationError)
+      }
+    }
+
+    // אכיפת תגית "מראה תואם לאוצריא": אם הוחלף קובץ — נסמך על הבדיקה החדשה.
+    // אם לא הוחלף — נסמך על המצב הקיים של התוסף (הוא כבר נבדק כשהקובץ הועלה).
+    const userRequestedDesignTag = tags.includes(OTZARIA_DESIGN_TAG)
+    const pluginAlreadyHadTag = Array.isArray(livePlugin.tags) && livePlugin.tags.includes(OTZARIA_DESIGN_TAG)
+    const designCompliant = designCompliantFromFile === null
+      ? pluginAlreadyHadTag
+      : designCompliantFromFile
+
+    if (userRequestedDesignTag && !designCompliant) {
+      const detail = designViolations.length > 0
+        ? `\n- ${designViolations.join('\n- ')}`
+        : ''
+      return bad(
+        `לא ניתן להוסיף את התגית "${OTZARIA_DESIGN_TAG}" — העיצוב אינו תואם ל-DESIGN_GUIDE.md:${detail}`
+      )
+    }
+    if (designCompliant && !userRequestedDesignTag) {
+      tags = [...tags, OTZARIA_DESIGN_TAG]
+    }
+    if (!designCompliant && userRequestedDesignTag) {
+      // הגנת בטחון - לא אמור להגיע לכאן כי נחסם למעלה.
+      tags = tags.filter(tag => tag !== OTZARIA_DESIGN_TAG)
     }
 
     if (imageFile?.size) {
@@ -340,7 +382,6 @@ export async function PUT(request, { params }) {
 
     // Non-admin edits derive protected metadata from manifest when replacing the plugin file.
     if (pluginFile?.size && !isAdmin) {
-      const pluginBuffer = Buffer.from(await pluginFile.arrayBuffer())
       let newManifest
       try {
         newManifest = readManifestFromPlugin(pluginBuffer)
@@ -527,6 +568,11 @@ export async function PUT(request, { params }) {
     }
 
     await plugin.save()
+
+    // אם הוחלף קובץ חדש שלא תאם לעיצוב — מציינים בהודעת ההצלחה שהתגית לא נוספה.
+    if (designCompliantFromFile === false) {
+      message += `\n(התגית "${OTZARIA_DESIGN_TAG}" לא נוספה — העיצוב אינו תואם להנחיות.)`
+    }
 
     if (pendingApproval) {
       try {
