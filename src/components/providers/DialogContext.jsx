@@ -49,6 +49,27 @@ export function DialogProvider({ children }) {
     })
   }, [clearAutoCloseTimer, clearCloseTimer])
 
+  // showMessage: דיאלוג מודאלי חוסם בלי auto-close, עם כפתור אישור יחיד.
+  // מיועד להודעות שגיאה ארוכות שצריך לקרוא במלואן (לעומת showAlert שהוא toast קצר).
+  const showMessage = useCallback((title, message, confirmText = 'אישור') => {
+    clearAutoCloseTimer()
+    clearCloseTimer()
+    return new Promise((resolve) => {
+      setIsVisible(true)
+      setDialogConfig({
+        isOpen: true,
+        type: 'message',
+        title,
+        message,
+        onConfirm: () => resolve(),
+        onCancel: () => resolve(),
+        confirmText,
+        cancelText: '',
+        timestamp: Date.now()
+      })
+    })
+  }, [clearAutoCloseTimer, clearCloseTimer])
+
   const showConfirm = useCallback((title, message, onConfirmAction, confirmText = 'אישור', cancelText = 'ביטול') => {
     clearAutoCloseTimer()
     clearCloseTimer()
@@ -114,7 +135,7 @@ export function DialogProvider({ children }) {
       if (!dialogConfig.isOpen) return
       if (event.key === 'Enter') {
         event.preventDefault()
-        if (dialogConfig.type === 'confirm') {
+        if (dialogConfig.type === 'confirm' || dialogConfig.type === 'message') {
           handleConfirm()
         } else {
           closeDialog()
@@ -157,7 +178,7 @@ export function DialogProvider({ children }) {
       : `max-w-sm w-full p-8 ${isVisible ? 'scale-100 translate-y-0' : 'scale-95 translate-y-4'}`
     }`;
   return (
-    <DialogContext.Provider value={{ showAlert, showConfirm, closeDialog }}>
+    <DialogContext.Provider value={{ showAlert, showConfirm, showMessage, closeDialog }}>
       <style>{`
         @keyframes shrinkWidth {
           from { width: 100%; }
@@ -185,15 +206,15 @@ export function DialogProvider({ children }) {
             {/* מבנה פנימי - Flex Row עבור Alert */}
             <div className={`flex ${isAlert ? 'flex-row text-right items-start gap-4' : 'flex-col items-center text-center'} mb-${isAlert ? '2' : '6'}`}>
               
-              <div className={`shrink-0 rounded-full flex items-center justify-center shadow-inner transition-transform duration-500 
-                ${isAlert ? 'w-10 h-10' : 'w-14 h-14 mb-4'} 
-                ${isVisible ? 'scale-100 rotate-0' : 'scale-0 -rotate-180'} 
-                ${dialogConfig.type === 'confirm' 
-                  ? 'bg-primary/10 text-primary' 
+              <div className={`shrink-0 rounded-full flex items-center justify-center shadow-inner transition-transform duration-500
+                ${isAlert ? 'w-10 h-10' : 'w-14 h-14 mb-4'}
+                ${isVisible ? 'scale-100 rotate-0' : 'scale-0 -rotate-180'}
+                ${dialogConfig.type === 'confirm'
+                  ? 'bg-primary/10 text-primary'
                   : 'bg-secondary/10 text-secondary'
               }`}>
                 <span className={`material-symbols-outlined ${isAlert ? 'text-[24px]' : 'text-[32px]'}`}>
-                  {dialogConfig.type === 'confirm' ? 'help' : 'info'}
+                  {dialogConfig.type === 'confirm' ? 'help' : dialogConfig.type === 'message' ? 'error' : 'info'}
                 </span>
               </div>
               
@@ -210,13 +231,15 @@ export function DialogProvider({ children }) {
 
             {!isAlert && (
               <div className="flex gap-3 justify-center mt-2 z-10 relative">
-                  <button 
-                    onClick={closeDialog}
-                    className="px-5 py-2.5 rounded-xl border border-surface-variant text-on-surface/70 hover:bg-surface-variant/30 hover:text-on-surface font-medium transition-all duration-200"
-                  >
-                    {dialogConfig.cancelText}
-                  </button>
-                  <button 
+                  {dialogConfig.type === 'confirm' && (
+                    <button
+                      onClick={closeDialog}
+                      className="px-5 py-2.5 rounded-xl border border-surface-variant text-on-surface/70 hover:bg-surface-variant/30 hover:text-on-surface font-medium transition-all duration-200"
+                    >
+                      {dialogConfig.cancelText}
+                    </button>
+                  )}
+                  <button
                     onClick={handleConfirm}
                     className="px-6 py-2.5 rounded-xl text-on-primary font-medium shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 bg-primary hover:bg-primary/90"
                   >
@@ -243,6 +266,7 @@ export function DialogProvider({ children }) {
 const noopDialog = {
   showAlert: () => {},
   showConfirm: () => Promise.resolve(false),
+  showMessage: () => Promise.resolve(),
   showPrompt: () => Promise.resolve(null),
 }
 

@@ -36,11 +36,12 @@ const SYSTEM_INSTRUCTIONS = `אתה עוזר OCR מקצועי לתמלול עמ�
 // (מערך של { bookSlug, pageNumber }) שיתפקד כקבוצת דוגמאות אד-הוק לבקשה זו בלבד.
 const EXAMPLE_PAGES = {
   A: [
-    // { bookSlug: 'שם-הספר-בסלאג', pageNumber: 1 },
+    { bookSlug: 'עמוד-דוגמא-כתב-רשי-טור-אחד', pageNumber: 1 },
+    { bookSlug: 'עמוד-דוגמא-כתב-רשי-טור-אחד-2', pageNumber: 1 },
   ],
   B: [
     { bookSlug: 'עמוד-דוגמא-כתב-רשי-2-טורים', pageNumber: 1 },
-    // { bookSlug: 'שם-הספר-בסלאג', pageNumber: 2 },
+    { bookSlug: 'עמוד-דוגמא-כתב-רשי-2-טורים-2', pageNumber: 1 },
   ],
   C: [],
   D: [],

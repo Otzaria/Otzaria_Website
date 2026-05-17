@@ -16,6 +16,7 @@ import {
   parseJsonArrayField
 } from '@/lib/pluginSubmission'
 import { readManifestFromPlugin, compareVersions } from '@/lib/pluginManifest'
+import { validatePluginArchive, OTZARIA_DESIGN_TAG } from '@/lib/pluginValidation'
 import {
   MAX_PLUGIN_BYTES,
   MAX_IMAGE_BYTES,
@@ -118,6 +119,38 @@ export async function POST(request) {
     if (!name) return bad('חסר שדה name ב-manifest.json של קובץ התוסף')
     if (!author) return bad('חסר שדה author ב-manifest.json של קובץ התוסף')
     if (!shortDescription) return bad('חסר שדה description ב-manifest.json של קובץ התוסף')
+
+    // בדיקות תקינות מול ה-API הרשמי: הרשאות לא קיימות, קריאות API לא קיימות וכדומה.
+    // כל ממצא (גם errors וגם warnings) חוסם את ההעלאה - לא מאחסנים תוספים שאינם תואמים ל-SDK.
+    let designCompliant = false
+    let designViolations = []
+    try {
+      const validation = await validatePluginArchive(pluginBuffer)
+      const issues = [...validation.errors, ...validation.warnings]
+      if (issues.length > 0) {
+        return bad(`קובץ התוסף לא עבר ולידציה מול ה-SDK הרשמי:\n- ${issues.join('\n- ')}`)
+      }
+      designCompliant = validation.design?.compliant === true
+      designViolations = validation.design?.violations || []
+    } catch (validationError) {
+      console.error('Plugin validation crashed:', validationError)
+      // אם הולידציה עצמה נפלה, לא מבטלים את ההעלאה אלא מתעדים בלוג בלבד.
+    }
+
+    // אכיפת תגית "מראה תואם לאוצריא": אסור להוסיף ידנית בלי שהעיצוב באמת תואם;
+    // נוסף אוטומטית כשהעיצוב כן תואם.
+    const userRequestedDesignTag = tags.includes(OTZARIA_DESIGN_TAG)
+    if (userRequestedDesignTag && !designCompliant) {
+      const detail = designViolations.length > 0
+        ? `\n- ${designViolations.join('\n- ')}`
+        : ''
+      return bad(
+        `לא ניתן להוסיף את התגית "${OTZARIA_DESIGN_TAG}" — העיצוב אינו תואם ל-DESIGN_GUIDE.md:${detail}`
+      )
+    }
+    if (designCompliant && !userRequestedDesignTag) {
+      tags = [...tags, OTZARIA_DESIGN_TAG]
+    }
 
     try {
       assertPluginTextLimits({
@@ -248,6 +281,7 @@ export async function POST(request) {
     return NextResponse.json({
       success: true,
       message: 'Plugin uploaded successfully and waiting for approval',
+      designCompliant,
       plugin: {
         id: plugin._id,
         name: plugin.name,

@@ -17,7 +17,10 @@ function getErrorMessage(error: unknown, fallback: string) {
 
 export default function UploadPluginPage() {
   const router = useRouter()
-  const { showAlert } = useDialog() as { showAlert: (title: string, message: string) => void }
+  const { showAlert, showMessage } = useDialog() as {
+    showAlert: (title: string, message: string) => void
+    showMessage: (title: string, message: string) => Promise<void>
+  }
   const [loading, setLoading] = useState(false)
 
   // שדות הטופס
@@ -318,10 +321,18 @@ export default function UploadPluginPage() {
         throw new Error(result.error || 'שגיאה בהעלאת התוסף')
       }
 
-      await showAlert('הצלחה', 'התוסף הועלה בהצלחה ונשלח לאישור מנהל. לאחר האישור הוא יופיע בחנות התוספים.')
+      const designNote = result?.designCompliant === false
+        ? '\n(התגית "מראה תואם לאוצריא" לא נוספה — העיצוב אינו תואם להנחיות.)'
+        : ''
+      await showAlert(
+        'הצלחה',
+        `התוסף הועלה בהצלחה ונשלח לאישור מנהל. לאחר האישור הוא יופיע בחנות התוספים.${designNote}`
+      )
       router.push('/plugins')
     } catch (error: unknown) {
-      showAlert('שגיאה', getErrorMessage(error, 'שגיאה בהעלאת התוסף'))
+      // showMessage: דיאלוג מודאלי חוסם, נשאר על המסך עד שהמשתמש לוחץ אישור,
+      // כך שהודעות שגיאה רב-שורתיות (למשל פירוט ולידציה מול ה-SDK) ייקראו במלואן.
+      await showMessage('שגיאה בהעלאת התוסף', getErrorMessage(error, 'שגיאה בהעלאת התוסף'))
     } finally {
       setLoading(false)
     }

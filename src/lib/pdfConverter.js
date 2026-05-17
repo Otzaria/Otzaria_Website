@@ -1,8 +1,9 @@
 import { pdf } from 'pdf-to-img';
 import sharp from 'sharp';
 import path from 'path';
+import { pathToFileURL } from 'node:url';
 
-const pdfjsWasmUrl = path.join(process.cwd(), 'node_modules/pdfjs-dist/wasm/');
+const pdfjsWasmUrl = pathToFileURL(path.join(process.cwd(), 'node_modules', 'pdfjs-dist', 'wasm') + path.sep).href;
 
 const DEFAULT_OPTIONS = {
   width: 1200,
