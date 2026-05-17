@@ -1,4 +1,4 @@
-import { inflateRawSync } from 'zlib'
+import { unzipSync } from 'fflate'
 
 // --- Fallback snapshot of the official Otzaria plugin SDK API_REFERENCE.md ----
 // כשה-fetch מ-GitHub נכשל מסתמכים על הרשימות הללו. יש לעדכן בעת שינוי בתיעוד הרשמי.
@@ -222,51 +222,30 @@ export function _resetApiSpecCacheForTests() {
   inFlight = null
 }
 
-// --- ZIP extraction (central-directory based, supports stored + deflate) -----
+// --- ZIP extraction ----------------------------------------------------------
 
 /**
- * Extract files from an .otzplugin ZIP buffer.
- * Returns Map<filename, Buffer>. Optional predicate filters which entries to inflate.
+ * Extract files from an .otzplugin ZIP buffer using fflate (the same library
+ * the upload UI uses on the client). Optional predicate filters which entries
+ * to inflate, saving CPU on large archives.
+ * Returns Map<filename, Buffer>.
  */
 export function extractZipFiles(buffer, predicate) {
-  const files = new Map()
-  let eocdOffset = -1
-  for (let i = buffer.length - 22; i >= Math.max(0, buffer.length - 65558); i--) {
-    if (buffer.readUInt32LE(i) === 0x06054b50) { eocdOffset = i; break }
+  const bytes = buffer instanceof Uint8Array
+    ? buffer
+    : new Uint8Array(buffer)
+  let unzipped
+  try {
+    unzipped = unzipSync(bytes, predicate
+      ? { filter: (file) => !file.name.endsWith('/') && predicate(file.name) }
+      : undefined)
+  } catch (err) {
+    throw new Error(`Not a valid ZIP file: ${err.message}`)
   }
-  if (eocdOffset === -1) throw new Error('Not a valid ZIP file')
-  const cdOffset = buffer.readUInt32LE(eocdOffset + 16)
-  const cdEntries = buffer.readUInt16LE(eocdOffset + 10)
-  let cdPos = cdOffset
-  for (let i = 0; i < cdEntries; i++) {
-    if (buffer.readUInt32LE(cdPos) !== 0x02014b50) break
-    const compressionMethod = buffer.readUInt16LE(cdPos + 10)
-    const compressedSize = buffer.readUInt32LE(cdPos + 20)
-    const fileNameLength = buffer.readUInt16LE(cdPos + 28)
-    const extraFieldLength = buffer.readUInt16LE(cdPos + 30)
-    const commentLength = buffer.readUInt16LE(cdPos + 32)
-    const localHeaderOffset = buffer.readUInt32LE(cdPos + 42)
-    const fileName = buffer.toString('utf8', cdPos + 46, cdPos + 46 + fileNameLength)
-    cdPos += 46 + fileNameLength + extraFieldLength + commentLength
-    if (fileName.endsWith('/')) continue
-    if (predicate && !predicate(fileName)) continue
-    const localFnLen = buffer.readUInt16LE(localHeaderOffset + 26)
-    const localExtraLen = buffer.readUInt16LE(localHeaderOffset + 28)
-    const dataStart = localHeaderOffset + 30 + localFnLen + localExtraLen
-    const compressedData = buffer.subarray(dataStart, dataStart + compressedSize)
-    let data
-    if (compressionMethod === 0) {
-      data = compressedData
-    } else if (compressionMethod === 8) {
-      try {
-        data = inflateRawSync(compressedData)
-      } catch {
-        continue
-      }
-    } else {
-      continue // skip unsupported compression
-    }
-    files.set(fileName, data)
+  const files = new Map()
+  for (const [name, data] of Object.entries(unzipped)) {
+    if (name.endsWith('/')) continue
+    files.set(name, Buffer.from(data.buffer, data.byteOffset, data.byteLength))
   }
   return files
 }
@@ -456,13 +435,15 @@ const SHORTHAND_RE = /Otzaria\s*\.\s*([a-z][a-zA-Z0-9_]*)\s*\.\s*([a-zA-Z][a-zA-
 // Otzaria.on/off/call/emit/once/use/setup/init - לא לטעות בהן כקריאות ל-API
 const RESERVED_HOLDER_FIELDS = new Set(['call', 'on', 'off', 'emit', 'once', 'use', 'init', 'setup', 'ready'])
 
-// מסיר הערות (JSDoc/block/line/HTML) לפני סריקת קריאות API, כדי שדוגמאות `@example`
-// בתוך SDK shim שמוטמע בתוסף לא יסומנו כאילו התוסף משתמש ב-API.
+// מסיר הערות (JSDoc/block/HTML + line בתחילת שורה) לפני סריקת קריאות API,
+// כדי שדוגמאות `@example` בתוך SDK shim שמוטמע בתוסף לא יסומנו כקריאות אמת.
+// מכוון: לא מסיר // אמצע-שורה כדי לא לפגוע במחרוזות שמכילות '//' (URLs, regex וכד').
+// מקרי קצה של Otzaria.call(...) בתוך // הערה ייפסו לאזהרת שווא נדירה, וזה מחיר סביר.
 function stripCommentsForScan(text) {
   return text
-    .replace(/<!--[\s\S]*?-->/g, '')   // HTML comments
-    .replace(/\/\*[\s\S]*?\*\//g, '')  // JS block/JSDoc comments
-    .replace(/(^|[^:\\])\/\/.*$/gm, '$1') // JS line comments (לא לפגוע ב-https://)
+    .replace(/<!--[\s\S]*?-->/g, '')        // HTML comments
+    .replace(/\/\*[\s\S]*?\*\//g, '')       // JS block / JSDoc comments
+    .replace(/^[ \t]*\/\/.*$/gm, '')        // JS line comments בתחילת שורה (אחרי whitespace)
 }
 
 function scanCodeForApiUsage(text) {
@@ -532,7 +513,7 @@ export async function validatePluginArchive(buffer) {
   let manifest
   try {
     // עורכים בווינדוז שומרים לעיתים JSON עם BOM (U+FEFF) בתחילת הקובץ. JSON.parse לא יודע להתמודד.
-    manifest = JSON.parse(manifestBuf.toString('utf8').replace(/^﻿/, ''))
+    manifest = JSON.parse(manifestBuf.toString('utf8').replace(/^\uFEFF/, ''))
   } catch (err) {
     errors.push(`manifest.json אינו JSON תקין: ${err.message}`)
     return {

@@ -47,7 +47,7 @@ export function readManifestFromPlugin(buffer) {
     }
     // הסרת UTF-8 BOM אם קיים — עורכים בווינדוז (Notepad, VS Code עם הגדרה ברירת מחדל)
     // שומרים לעיתים JSON עם BOM ש-JSON.parse נופל עליו.
-    return JSON.parse(data.toString('utf8').replace(/^﻿/, ''))
+    return JSON.parse(data.toString('utf8').replace(/^\uFEFF/, ''))
   }
 
   throw new Error('manifest.json not found in plugin file')

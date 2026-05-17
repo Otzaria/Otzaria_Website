@@ -52,10 +52,12 @@ export async function GET(request, { params }) {
       plugin.incrementDownload().catch(e => console.error('Failed to increment download count:', e))
     }
 
-    // בניית Content-Disposition התומך בשמות קובץ בעברית/Unicode (RFC 5987)
+    // בניית Content-Disposition התומך בשמות קובץ בעברית/Unicode (RFC 5987).
+    // encodeURIComponent לא מקודד את ! ' ( ) * - מקודדים ידנית כדי לעמוד ב-RFC 3986.
     const rawName = fileName || `plugin${fileExt}`
     const asciiFallback = rawName.replace(/[^\x20-\x7E]/g, '_').replace(/["\\\r\n]/g, '_')
-    const encodedName = encodeURIComponent(rawName).replace(/['()]/g, escape).replace(/\*/g, '%2A')
+    const encodedName = encodeURIComponent(rawName)
+      .replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
 
     return new NextResponse(buf, {
       headers: {
