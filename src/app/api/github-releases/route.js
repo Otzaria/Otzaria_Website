@@ -85,9 +85,10 @@ export async function GET(request) {
     const downloads = {
       version: release.tag_name,
       windows: {
-        exe: findPlatformAsset('windows', '.exe'),
+        exe: findAssetWithKeywords('.exe', ['windows'], ['silent', 'full']) || findAssetWithKeywords('.exe', ['win'], ['silent', 'full']),
         msix: findPlatformAsset('windows', '.msix'),
         zip: findPlatformAsset('windows', '.zip'),
+        exeSilent: findAssetWithKeywords('.exe', ['windows', 'silent'], ['full']) || findAssetWithKeywords('.exe', ['win', 'silent'], ['full']),
         exeFull: findPlatformAsset('windows', '.exe', { full: true })
       },
       linux: {
