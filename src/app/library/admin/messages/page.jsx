@@ -212,11 +212,18 @@ export default function AdminMessagesPage() {
                                       {message.status === 'unread' ? 'חדש' : message.status === 'replied' ? 'נענה' : 'נקרא'}
                                   </span>
                               </div>
-                              <p className="text-sm text-on-surface/60 mb-3 flex items-center gap-2">
+                              <p className="text-sm text-on-surface/60 mb-3 flex items-center flex-wrap gap-2">
                                   <span className="material-symbols-outlined text-sm">person</span>
-                                  <span className="font-medium">{message.senderName}</span> 
+                                  <span className="font-medium">{message.senderName}</span>
                                   <span>({message.senderEmail})</span>
-                                  <span className="mx-2">•</span> 
+                                  {message.recipientName && (
+                                    <>
+                                      <span className="material-symbols-outlined text-sm">arrow_back</span>
+                                      <span className="font-medium">{message.recipientName}</span>
+                                      <span>({message.recipientEmail})</span>
+                                    </>
+                                  )}
+                                  <span className="mx-2">•</span>
                                   <span>{new Date(message.createdAt).toLocaleDateString('he-IL', { day: 'numeric', month: 'long', hour: '2-digit', minute:'2-digit' })}</span>
                               </p>
                               <div className="bg-white/50 p-3 rounded-lg border border-gray-100 text-on-surface whitespace-pre-wrap">
