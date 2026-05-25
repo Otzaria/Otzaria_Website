@@ -33,19 +33,23 @@ export async function GET(request) {
 
         const messages = await Message.find(query)
             .populate('sender', 'name email role')
+            .populate('recipient', 'name email')
             .populate('replies.sender', 'name email role')
             .sort({ createdAt: -1 })
             .lean();
 
         const formattedMessages = messages.map(msg => ({
-            id: msg._id.toString(), 
+            id: msg._id.toString(),
             subject: msg.subject,
             content: msg.content,
             sender: msg.sender,
+            recipient: msg.recipient,
             isRead: msg.isRead,
             readBy: (msg.readBy || []).map(id => id.toString()),
             senderName: msg.sender?.name || 'משתמש לא ידוע',
             senderEmail: msg.sender?.email,
+            recipientName: msg.recipient?.name || null,
+            recipientEmail: msg.recipient?.email || null,
             status: !msg.isRead ? 'unread' : (msg.replies?.length > 0 ? 'replied' : 'read'),
             createdAt: msg.createdAt,
             replies: (msg.replies || []).map(r => ({

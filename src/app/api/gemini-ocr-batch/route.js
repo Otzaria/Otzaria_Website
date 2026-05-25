@@ -10,7 +10,7 @@ import Page from '@/models/Page';
 // ============================================================
 
 // המודל שאליו נשלחות הבקשות
-const GEMINI_MODEL = 'gemini-3-pro-preview';
+const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
 // כמה עמודים מקסימום נשלחים למודל בכל קריאה אחת
 const BATCH_SIZE = 5;
