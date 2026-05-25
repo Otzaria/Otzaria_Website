@@ -4,9 +4,10 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import { readPluginAsset, PLUGIN_FILE_BASENAME } from '@/lib/pluginStorage'
+import { hasPluginsAccess } from '@/lib/roles'
 
 // GET /api/plugins/[id]/download - הורדת קובץ התוסף.
-// רק תוספים מאושרים פתוחים לציבור; מנהלים יכולים להוריד גם תוספים ממתינים לבדיקה.
+// רק תוספים מאושרים פתוחים לציבור; מנהלי תוספים יכולים להוריד גם תוספים לא מאושרים.
 export async function GET(request, { params }) {
   try {
     const { id } = await params
@@ -20,7 +21,7 @@ export async function GET(request, { params }) {
     }
 
     const session = await getServerSession(authOptions)
-    const isAdmin = session?.user?.role === 'admin'
+    const isAdmin = hasPluginsAccess(session?.user?.role)
     const isOwner = plugin.authorId?.toString() === session?.user?.id
 
     if (includePending) {

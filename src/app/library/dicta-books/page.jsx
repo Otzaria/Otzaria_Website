@@ -7,6 +7,7 @@ import Header from '@/components/layout/Header'
 import Link from 'next/link'
 import { useDialog } from '@/components/providers/DialogContext'
 import DictaUploadDialog from '@/components/dicta-tools/DictaUploadDialog'
+import { hasBooksAccess } from '@/lib/roles'
 
 // קומפוננטת התוכן שמכילה את כל הלוגיקה והממשק
 function DictaBooksContent() {
@@ -24,7 +25,7 @@ function DictaBooksContent() {
   const [selectedBookForCompletion, setSelectedBookForCompletion] = useState(null)
   const [completing, setCompleting] = useState(false)
   
-  const isAdmin = session?.user?.role === 'admin'
+  const isAdmin = hasBooksAccess(session?.user?.role)
   const currentUserId = session?.user?.id
 
   const filters = [
