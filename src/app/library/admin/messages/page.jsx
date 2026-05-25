@@ -220,7 +220,7 @@ export default function AdminMessagesPage() {
                                     <>
                                       <span className="material-symbols-outlined text-sm">arrow_back</span>
                                       <span className="font-medium">{message.recipientName}</span>
-                                      <span>({message.recipientEmail})</span>
+                                      {message.recipientEmail && <span>({message.recipientEmail})</span>}
                                     </>
                                   )}
                                   <span className="mx-2">•</span>
