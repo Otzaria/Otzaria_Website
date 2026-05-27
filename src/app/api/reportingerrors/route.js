@@ -141,11 +141,11 @@ function getEmailRecipients(sourceFolder) {
 
   const normalizedSource = sourceFolder.toLowerCase();
   
-  // בדיקה אם זה ספריא - שליחה רק לספריא
+  // בדיקה אם זה ספריא - שליחה לספריא עם עותק לתא שמע
   if (normalizedSource.includes('sefaria')) {
     return {
       primary: SEFARIA_ERRORS_RECIPIENT,
-      cc: null,
+      cc: SOURCE_EMAIL_MAPPING['Tashma'],
       isSefariaOnly: true
     };
   }
