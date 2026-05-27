@@ -145,7 +145,7 @@ function getEmailRecipients(sourceFolder) {
   if (normalizedSource.includes('sefaria')) {
     return {
       primary: SEFARIA_ERRORS_RECIPIENT,
-      cc: SOURCE_EMAIL_MAPPING['Tashma'],
+      cc: SOURCE_EMAIL_MAPPING.Tashma || null,
       isSefariaOnly: true
     };
   }
