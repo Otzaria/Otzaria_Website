@@ -287,7 +287,7 @@ export default function DevelopmentTutorialPage() {
                     </div>
                     <div className="flex-1">
                       <h4 className="text-xl font-bold text-primary-dark mb-2">גשו למאגר</h4>
-                      <p>היכנסו ל-<a href="https://github.com/Sivan22/otzaria" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">מאגר אוצריא ב-GitHub</a></p>
+                      <p>היכנסו ל-<a href="https://github.com/otzaria/otzaria" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">מאגר אוצריא ב-GitHub</a></p>
                     </div>
                   </div>
 
@@ -461,7 +461,7 @@ export default function DevelopmentTutorialPage() {
                     <h4 className="text-2xl font-bold text-primary-dark mb-3">זקוק לעזרה?</h4>
                     <p className="mb-4">הצטרפו לקהילה ב-GitHub או שאלו שאלות בפורומים.</p>
                     <a
-                      href="https://github.com/Sivan22/otzaria"
+                      href="https://github.com/otzaria/otzaria"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-on-primary rounded-lg hover:bg-accent transition-colors font-bold"

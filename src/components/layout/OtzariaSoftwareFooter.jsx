@@ -10,7 +10,7 @@ export default function OtzariaSoftwareFooter() {
         <div className="flex justify-center gap-6 text-sm text-foreground/60">
           <span>קוד פתוח תחת רישיון GPL-3.0</span>
           <a 
-            href="https://github.com/sivan22/otzaria" 
+            href="https://github.com/otzaria/otzaria" 
             target="_blank" 
             rel="noopener noreferrer"
             className="text-primary hover:text-accent transition-colors underline decoration-dotted"
