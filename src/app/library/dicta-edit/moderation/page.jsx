@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Header from '@/components/layout/Header'
 import { useDialog } from '@/components/providers/DialogContext'
@@ -10,6 +11,7 @@ import { EDIT_TYPE_LABELS, EDIT_KIND } from '@/lib/dicta/edit-constants'
 
 export default function ModerationPage() {
   const { data: session, status } = useSession()
+  const router = useRouter()
   const { showAlert, showConfirm } = useDialog()
 
   const [edits, setEdits] = useState([])
@@ -38,7 +40,13 @@ export default function ModerationPage() {
   }
 
   useEffect(() => {
-    if (status === 'authenticated') fetchEdits()
+    if (status === 'loading') return
+    if (status === 'unauthenticated') {
+      router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
+      return
+    }
+    fetchEdits()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status])
 
   const bookName = (path) => (path?.split('/').slice(1).join('/').replace(/\.txt$/, '') || path)

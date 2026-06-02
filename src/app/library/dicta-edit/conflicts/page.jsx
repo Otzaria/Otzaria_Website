@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Header from '@/components/layout/Header'
 import { useDialog } from '@/components/providers/DialogContext'
@@ -9,6 +10,7 @@ import { canManageLibrarySync } from '@/lib/roles'
 
 export default function ConflictsPage() {
   const { data: session, status } = useSession()
+  const router = useRouter()
   const { showAlert, showConfirm } = useDialog()
   const [conflicts, setConflicts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -29,7 +31,13 @@ export default function ConflictsPage() {
   }
 
   useEffect(() => {
-    if (status === 'authenticated') fetchConflicts()
+    if (status === 'loading') return
+    if (status === 'unauthenticated') {
+      router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
+      return
+    }
+    fetchConflicts()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status])
 
   const resolve = (book, strategy) => {
