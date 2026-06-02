@@ -89,7 +89,8 @@ export default function DictaEditorCore({
   headerStartElement = null,
   headerEndElement = null,
   singleLineHeader = false,
-  enableSpellcheck = true
+  enableSpellcheck = true,
+  saveLabel = 'שמירה'
 }) {
   const { showAlert } = useDialog()
   
@@ -972,7 +973,7 @@ export default function DictaEditorCore({
   }, [showAlert])
 
   const actionsMap = useMemo(() => ({
-    'save': { label: 'שמירה', action: () => onSave && onSave(content) },
+    'save': { label: saveLabel, action: () => onSave && onSave(content) },
     'toggleEdit': { label: 'מעבר בין עריכה לתצוגה', action: handleToggleEditMode },
     'fontIncrease': { label: 'הגדל גופן', action: () => setFontSize(prev => Math.min(32, prev + 2)) },
     'fontDecrease': { label: 'הקטן גופן', action: () => setFontSize(prev => Math.max(12, prev - 2)) },
@@ -1006,7 +1007,7 @@ export default function DictaEditorCore({
     'cleanText': { label: 'ניקוי טקסט', action: () => setActiveTool('cleanText') },
     'embedImage': { label: 'הטמעת תמונה', action: () => setActiveTool('embedImage') },
     'shortcuts': { label: 'ערוך קיצורי מקלדת', action: () => setShowShortcutsDialog(true) },
-  }), [onSave, content, handleToggleEditMode, insertTag, removeTags, undo, redo])
+  }), [onSave, content, saveLabel, handleToggleEditMode, insertTag, removeTags, undo, redo])
 
   const availableActions = useMemo(() => {
     return Object.entries(actionsMap).map(([id, def]) => ({
@@ -1352,7 +1353,7 @@ export default function DictaEditorCore({
                         variant={hasUnsavedChangesOuter ? "primary" : "ghost"}
                         onClick={() => onSave && onSave(content)}
                         loading={saving}
-                        label={hasUnsavedChangesOuter ? "שמירה *" : "שמירה"}
+                        label={hasUnsavedChangesOuter ? `${saveLabel} *` : saveLabel}
                       />
                       {hasUnsavedChangesOuter && (
                         <span className="text-red-600 text-sm font-medium mr-2">ישנם שינויים לא שמורים</span>
@@ -1489,7 +1490,7 @@ export default function DictaEditorCore({
                         variant={hasUnsavedChangesOuter ? "primary" : "ghost"}
                         onClick={() => onSave && onSave(content)}
                         loading={saving}
-                        label={hasUnsavedChangesOuter ? "שמירה *" : "שמירה"}
+                        label={hasUnsavedChangesOuter ? `${saveLabel} *` : saveLabel}
                       />
                       {hasUnsavedChangesOuter && (
                         <span className="text-red-600 text-sm font-medium mr-2">ישנם שינויים לא שמורים</span>

@@ -62,6 +62,7 @@ export const authOptions = {
           role: user.role,
           acceptReminders: user.acceptReminders,
           isVerified: user.isVerified,
+          isSupervisor: user.isSupervisor === true,
         };
       },
     }),
@@ -73,6 +74,7 @@ export const authOptions = {
         token.role = user.role;
         token.acceptReminders = user.acceptReminders;
         token.isVerified = user.isVerified;
+        token.isSupervisor = user.isSupervisor === true;
       }
 
       if (trigger === "update") {
@@ -85,6 +87,7 @@ export const authOptions = {
             token.acceptReminders = freshUser.acceptReminders;
             token.role = freshUser.role;
             token.name = freshUser.name;
+            token.isSupervisor = freshUser.isSupervisor === true;
           }
         } catch (error) {
           console.error("Error refreshing user token:", error);
@@ -101,6 +104,7 @@ export const authOptions = {
         session.user.name = token.name;
         session.user.acceptReminders = token.acceptReminders;
         session.user.isVerified = token.isVerified;
+        session.user.isSupervisor = token.isSupervisor === true;
       }
       return session;
     },

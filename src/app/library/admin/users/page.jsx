@@ -41,7 +41,9 @@ export default function AdminUsersPage() {
           name: user.name,
           email: user.email,
           role: user.role,
-          points: user.points
+          points: user.points,
+          isSupervisor: !!user.isSupervisor,
+          dictaEditBlocked: !!user.dictaEditBlocked
       })
   }
 
@@ -207,27 +209,43 @@ export default function AdminUsersPage() {
 
                   <td className="p-4">
                     {isEditing ? (
-                      <select
-                        className="border rounded px-2 py-1 bg-white"
-                        value={formData.role}
-                        onChange={e => setFormData({ ...formData, role: e.target.value })}
-                      >
-                        <option value="user">משתמש</option>
-                        <option value="admin">מנהל כללי</option>
-                        <option value="admin_plugins">מנהל תוספים</option>
-                        <option value="admin_books">מנהל ספרים</option>
-                      </select>
+                      <div className="flex flex-col gap-2">
+                        <select
+                          className="border rounded px-2 py-1 bg-white"
+                          value={formData.role}
+                          onChange={e => setFormData({ ...formData, role: e.target.value })}
+                        >
+                          <option value="user">משתמש</option>
+                          <option value="admin">מנהל כללי</option>
+                          <option value="admin_plugins">מנהל תוספים</option>
+                          <option value="admin_books">מנהל ספרים</option>
+                        </select>
+                        <label className="flex items-center gap-1.5 text-xs cursor-pointer whitespace-nowrap">
+                          <input type="checkbox" checked={!!formData.isSupervisor}
+                            onChange={e => setFormData({ ...formData, isSupervisor: e.target.checked })} />
+                          מפקח (עריכה ישירה)
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs cursor-pointer whitespace-nowrap text-red-700">
+                          <input type="checkbox" checked={!!formData.dictaEditBlocked}
+                            onChange={e => setFormData({ ...formData, dictaEditBlocked: e.target.checked })} />
+                          חסום מעריכה
+                        </label>
+                      </div>
                     ) : (
-                      <span className={`px-2 py-1 rounded text-xs font-bold ${
-                        user.role === 'admin' ? 'bg-purple-100 text-purple-800' :
-                        user.role === 'admin_plugins' ? 'bg-blue-100 text-blue-800' :
-                        user.role === 'admin_books' ? 'bg-green-100 text-green-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {user.role === 'admin' ? 'מנהל כללי' :
-                         user.role === 'admin_plugins' ? 'מנהל תוספים' :
-                         user.role === 'admin_books' ? 'מנהל ספרים' : 'משתמש'}
-                      </span>
+                      <div className="flex flex-col items-start gap-1">
+                        <span className={`px-2 py-1 rounded text-xs font-bold ${
+                          user.role === 'admin' ? 'bg-purple-100 text-purple-800' :
+                          user.role === 'admin_plugins' ? 'bg-blue-100 text-blue-800' :
+                          user.role === 'admin_books' ? 'bg-green-100 text-green-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {user.role === 'admin' ? 'מנהל כללי' :
+                           user.role === 'admin_plugins' ? 'מנהל תוספים' :
+                           user.role === 'admin_books' ? 'מנהל ספרים' : 'משתמש'}
+                        </span>
+                        {user.isSupervisor && <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">מפקח</span>}
+                        {user.dictaEditBlocked && <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700">חסום מעריכה</span>}
+                      </div>
                     )}
                   </td>
                   <td className="p-4">

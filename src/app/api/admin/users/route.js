@@ -106,7 +106,7 @@ export async function PUT(request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
 
-        const { userId, role, points, name, email } = await request.json();
+        const { userId, role, points, name, email, isSupervisor, dictaEditBlocked } = await request.json();
 
         await connectDB();
 
@@ -134,6 +134,21 @@ export async function PUT(request) {
             points,
             name,
         };
+
+        // מרחב עריכת הספרים הערוכים — הסמכת מפקח / ביטול חסימה
+        if (typeof isSupervisor === 'boolean') updateData.isSupervisor = isSupervisor;
+        if (typeof dictaEditBlocked === 'boolean') {
+            updateData.dictaEditBlocked = dictaEditBlocked;
+            if (dictaEditBlocked) {
+                updateData.dictaEditBlockedBy = session.user.id;
+                updateData.dictaEditBlockedAt = new Date();
+                updateData.dictaEditBlockedReason = 'נחסם דרך ממשק ניהול המשתמשים';
+            } else {
+                updateData.dictaEditBlockedReason = '';
+                updateData.dictaEditBlockedBy = null;
+                updateData.dictaEditBlockedAt = null;
+            }
+        }
 
         if (emailChanged) {
             updateData.email = email;
