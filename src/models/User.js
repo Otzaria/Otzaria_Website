@@ -38,7 +38,16 @@ const UserSchema = new mongoose.Schema({
   // הגדרות התראות על תוספים (נפרד)
   pluginNotifications: {
     enabled: { type: Boolean, default: false }
-  }
+  },
+
+  // --- מרחב עריכת הספרים הערוכים ---
+  // מפקח: משתמש מהימן שעריכותיו מוחלות מיד והוא יכול לאשר הצעות של אחרים
+  isSupervisor: { type: Boolean, default: false },
+  // חסימה מעריכה במרחב
+  dictaEditBlocked: { type: Boolean, default: false },
+  dictaEditBlockedReason: { type: String, default: '' },
+  dictaEditBlockedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  dictaEditBlockedAt: { type: Date, default: null },
 }, { timestamps: true });
 
 const User = mongoose.models.User || mongoose.model('User', UserSchema);
