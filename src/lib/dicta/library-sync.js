@@ -194,7 +194,30 @@ export async function pushLibraryToGitHub({ force = false } = {}) {
     }
   }
 
-  // שלב 2: commit אחד (או כמה, אם מעבר ל-MAX_FILES_PER_COMMIT) לכל הקבצים ששונו
+  // עדכון ה-DB לספר אחרי שתוכנו נמצא בריפו (נדחף בהצלחה, או כבר היה שם).
+  const persist = async (x) => {
+    x.book.content = x.merged;
+    if (samePull) {
+      // הריפו עכשיו מכיל את merged → הבסיס מתעדכן ל-merged (אין מחזור-סרק)
+      x.book.baseContent = x.merged;
+      x.book.baseSha = x.blobSha;
+    } else {
+      // דחיפה לפורק — ה-upstream (משיכה) לא הושפע מהדחיפה שלנו
+      x.book.baseContent = x.theirs;
+      x.book.baseSha = x.theirsSha;
+    }
+    x.book.pushSha = x.blobSha;
+    x.book.syncStatus = 'clean';
+    x.book.conflict = CLEAR_CONFLICT;
+    x.book.lastPushedAt = now;
+    x.book.lastSyncedAt = now;
+    await x.book.save();
+    x.processed = true;
+  };
+
+  // שלב 2: commit לכל הקבצים ששונו (אצווה אחת, או כמה אם מעבר ל-MAX_FILES_PER_COMMIT).
+  // מעדכנים DB מיד אחרי כל אצווה שנדחפה, כך שכשל באצווה מאוחרת לא ישאיר אצווה
+  // קודמת שנדחפה לגיטהאב אך מסומנת dirty (ותידחף שוב בריצה הבאה).
   const changedItems = toApply.filter((x) => x.changed);
   if (changedItems.length > 0) {
     try {
@@ -207,38 +230,33 @@ export async function pushLibraryToGitHub({ force = false } = {}) {
         const { commitSha } = await commitBatch({ files: filesToCommit, message }, config);
         results.commitSha = commitSha;
         results.commits++;
-        results.pushed += slice.length;
+
+        for (const x of slice) {
+          try {
+            await persist(x);
+            results.pushed++;
+            results.details.push({ path: x.book.path, status: 'pushed' });
+          } catch (dbErr) {
+            console.error('push db update error on', x.book.path, dbErr.message);
+            results.errors++;
+          }
+        }
       }
     } catch (e) {
       console.error('commitBatch failed', e.message);
-      // הקומיט נכשל — לא מעדכנים DB; הספרים יישארו dirty וייבחרו שוב בריצה הבאה
-      results.errors += changedItems.length - results.pushed;
+      // הקומיט נכשל — רק הקבצים שטרם עובדו יישארו dirty וייבחרו שוב בריצה הבאה
+      results.errors += changedItems.filter((x) => !x.processed).length;
       results.details.push({ status: 'commit-error', error: e.message });
       return results;
     }
   }
 
-  // שלב 3: עדכון ה-DB לספרים שעובדו (ששונו ושכבר היו עדכניים)
+  // שלב 3: עדכון ה-DB לספרים שכבר היו עדכניים בריפו (לא שונו)
   for (const x of toApply) {
+    if (x.processed) continue;
     try {
-      x.book.content = x.merged;
-      if (samePull) {
-        // הריפו עכשיו מכיל את merged → הבסיס מתעדכן ל-merged (אין מחזור-סרק)
-        x.book.baseContent = x.merged;
-        x.book.baseSha = x.blobSha;
-      } else {
-        // דחיפה לפורק — ה-upstream (משיכה) לא הושפע מהדחיפה שלנו
-        x.book.baseContent = x.theirs;
-        x.book.baseSha = x.theirsSha;
-      }
-      x.book.pushSha = x.blobSha;
-      x.book.syncStatus = 'clean';
-      x.book.conflict = CLEAR_CONFLICT;
-      x.book.lastPushedAt = now;
-      x.book.lastSyncedAt = now;
-      await x.book.save();
-      if (x.changed) results.details.push({ path: x.book.path, status: 'pushed' });
-      else results.upToDate++;
+      await persist(x);
+      results.upToDate++;
     } catch (e) {
       console.error('push db update error on', x.book.path, e.message);
       results.errors++;

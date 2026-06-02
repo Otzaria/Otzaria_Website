@@ -10,6 +10,47 @@ function normalizeEditType(t) {
   return t && EDIT_TYPE_IDS.includes(t) ? t : null;
 }
 
+/**
+ * מריץ regex.replace בתוך worker thread עם timeout קשיח (ברירת מחדל 2 שניות).
+ * Node חד-תהליכי — regex עם catastrophic backtracking יחסום את כל האתר. הרצה
+ * ב-worker מאפשרת terminate() שעוצר גם ריצה סינכרונית תקועה. מגן מפני ReDoS.
+ */
+async function safeRegexReplace(content, source, flags, replacement, timeoutMs = 2000) {
+  const { Worker } = await import('node:worker_threads');
+  const code = `
+    const { parentPort, workerData } = require('worker_threads');
+    try {
+      const re = new RegExp(workerData.source, workerData.flags);
+      parentPort.postMessage({ ok: true, result: workerData.content.replace(re, workerData.replacement) });
+    } catch (e) {
+      parentPort.postMessage({ ok: false, error: String((e && e.message) || e) });
+    }
+  `;
+  return new Promise((resolve, reject) => {
+    let worker;
+    try {
+      worker = new Worker(code, { eval: true, workerData: { content, source, flags, replacement } });
+    } catch (e) {
+      reject(e);
+      return;
+    }
+    const timer = setTimeout(() => {
+      worker.terminate();
+      reject(Object.assign(new Error('פעולת החיפוש-והחלפה ארכה מדי — ייתכן שהתבנית כבדה מדי'), { code: 'BAD_INPUT' }));
+    }, timeoutMs);
+    worker.once('message', (m) => {
+      clearTimeout(timer);
+      worker.terminate();
+      if (m.ok) resolve(m.result);
+      else reject(Object.assign(new Error('תבנית החיפוש אינה תקינה: ' + m.error), { code: 'BAD_INPUT' }));
+    });
+    worker.once('error', (e) => {
+      clearTimeout(timer);
+      reject(e);
+    });
+  });
+}
+
 /** מעדכן את מונה ההצעות הממתינות על הספר */
 async function refreshPendingCount(bookId) {
   const count = await BookEdit.countDocuments({ book: bookId, status: 'pending' });
@@ -183,7 +224,10 @@ export async function submitFindReplaceEdit({ bookId, userDoc, find, replace, is
   }
 
   const current = (book.content || '').replace(/\r\n/g, '\n');
-  const replaced = current.replace(regex, replace ?? '');
+  // regex רץ ב-worker עם timeout (הגנת ReDoS); חיפוש מילולי בטוח להרצה inline
+  const replaced = isRegex
+    ? await safeRegexReplace(current, regex.source, regex.flags, replace ?? '')
+    : current.replace(regex, replace ?? '');
   if (replaced === current) {
     return { status: 'nochange' };
   }

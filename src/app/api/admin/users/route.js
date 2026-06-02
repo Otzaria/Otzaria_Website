@@ -139,7 +139,11 @@ export async function PUT(request) {
         if (typeof isSupervisor === 'boolean') updateData.isSupervisor = isSupervisor;
         if (typeof dictaEditBlocked === 'boolean') {
             updateData.dictaEditBlocked = dictaEditBlocked;
-            if (!dictaEditBlocked) {
+            if (dictaEditBlocked) {
+                updateData.dictaEditBlockedBy = session.user.id;
+                updateData.dictaEditBlockedAt = new Date();
+                updateData.dictaEditBlockedReason = 'נחסם דרך ממשק ניהול המשתמשים';
+            } else {
                 updateData.dictaEditBlockedReason = '';
                 updateData.dictaEditBlockedBy = null;
                 updateData.dictaEditBlockedAt = null;

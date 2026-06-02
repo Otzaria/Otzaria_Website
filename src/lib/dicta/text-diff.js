@@ -40,6 +40,7 @@ function lcsTable(a, b) {
 export function diffToHunks(oldText, newText) {
   const a = splitLines(oldText);
   const b = splitLines(newText);
+  const sourceText = a.join('\n'); // לבדיקת ייחודיות העוגן
 
   // 1. קיצוץ קידומת משותפת
   let start = 0;
@@ -61,7 +62,7 @@ export function diffToHunks(oldText, newText) {
 
   // 3. אם האזור השונה גדול מדי ל-LCS — hunk גס אחד
   if (midA.length * midB.length > MAX_DP_CELLS) {
-    return [anchorHunk(a, start, midA, midB)];
+    return [anchorHunk(a, start, midA, midB, sourceText)];
   }
 
   // 4. LCS עדין על האזור השונה → hunks
@@ -72,7 +73,7 @@ export function diffToHunks(oldText, newText) {
 
   const flush = () => {
     if (curOld.length === 0 && curNew.length === 0) return;
-    hunks.push(anchorHunk(a, hunkStart, curOld, curNew));
+    hunks.push(anchorHunk(a, hunkStart, curOld, curNew, sourceText));
     curOld = [];
     curNew = [];
   };
@@ -97,33 +98,53 @@ export function diffToHunks(oldText, newText) {
   return hunks;
 }
 
-/**
- * בונה hunk מעוגן לשורת הקשר סמוכה (קודמת אם קיימת, אחרת הבאה), כך שגבולות
- * ה-newline נשמרים גם במחיקה/הוספה, ו-before לעולם אינו ריק (פרט לקובץ ריק לגמרי).
- */
-function anchorHunk(a, oldStart, oldLines, newLines) {
-  const blockEnd = oldStart + oldLines.length; // אינדקס השורה שאחרי הבלוק
+const MAX_CONTEXT_LINES = 6;
 
-  // שורת הקשר קודמת
-  if (oldStart > 0) {
-    const prev = a[oldStart - 1];
-    return {
-      line: oldStart - 1,
-      before: joinLines([prev, ...oldLines]),
-      after: joinLines([prev, ...newLines]),
-    };
+/**
+ * בונה hunk מעוגן לשורות הקשר סמוכות, כך שגבולות ה-newline נשמרים גם במחיקה/הוספה.
+ * מרחיב את ההקשר (שורות נוספות מסביב) עד ש-before ייחודי במסמך המקור — כך שורות
+ * קצרות/ריקות/חוזרות (כותרות, מעברי פסקה) לא יגרמו לאי-ודאות (ambiguous) ביישום.
+ * ההרחבה בטוחה: לעולם לא "מנחשת" מיקום, רק מוסיפה הקשר ודאי.
+ */
+function anchorHunk(a, oldStart, oldLines, newLines, sourceText) {
+  const blockEnd = oldStart + oldLines.length; // אינדקס השורה שאחרי הבלוק
+  const hasPrev = oldStart > 0;
+  const hasNext = blockEnd < a.length;
+
+  // הבלוק מכסה את כל הקובץ (או קובץ ריק) — אין הקשר לעגן אליו
+  if (!hasPrev && !hasNext) {
+    return { line: oldStart, before: joinLines(oldLines), after: joinLines(newLines) };
   }
-  // אין קודמת — נסה שורת הקשר הבאה
-  if (blockEnd < a.length) {
-    const next = a[blockEnd];
+
+  let lead = hasPrev ? 1 : 0;
+  let trail = !hasPrev && hasNext ? 1 : 0; // אם אין שורה קודמת — מתחילים מהשורה הבאה
+
+  const build = () => {
+    const preStart = oldStart - lead;
+    const pre = a.slice(preStart, oldStart);
+    const post = a.slice(blockEnd, blockEnd + trail);
     return {
-      line: oldStart,
-      before: joinLines([...oldLines, next]),
-      after: joinLines([...newLines, next]),
+      line: preStart,
+      before: joinLines([...pre, ...oldLines, ...post]),
+      after: joinLines([...pre, ...newLines, ...post]),
     };
+  };
+
+  const appearsTwice = (s) => {
+    const first = sourceText.indexOf(s);
+    return first !== -1 && sourceText.indexOf(s, first + 1) !== -1;
+  };
+
+  let h = build();
+  let guard = 0;
+  while (appearsTwice(h.before) && guard++ < MAX_CONTEXT_LINES) {
+    if (oldStart - lead > 0) lead++;          // עדיפות להרחבה כלפי מעלה
+    else if (blockEnd + trail < a.length) trail++;
+    else break;                                // אי אפשר להרחיב יותר
+    h = build();
   }
-  // הבלוק מכסה את כל הקובץ (או קובץ ריק) — אין עוגן
-  return { line: oldStart, before: joinLines(oldLines), after: joinLines(newLines) };
+
+  return { line: h.line, before: h.before, after: h.after };
 }
 
 /**
