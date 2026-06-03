@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import Header from '@/components/layout/Header'
 import { useDialog } from '@/components/providers/DialogContext'
@@ -11,6 +11,7 @@ import { canModerateLibrary, canManageLibrarySync } from '@/lib/roles'
 export default function LibraryEditSpacePage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const pathname = usePathname()
   const { showAlert } = useDialog()
 
   const [books, setBooks] = useState([])
@@ -39,7 +40,7 @@ export default function LibraryEditSpacePage() {
   useEffect(() => {
     if (status === 'loading') return
     if (status === 'unauthenticated') {
-      router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
+      router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(pathname)}`)
       return
     }
     fetchBooks()

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import Header from '@/components/layout/Header'
 import { useDialog } from '@/components/providers/DialogContext'
@@ -12,6 +12,7 @@ import { EDIT_TYPE_LABELS, EDIT_KIND } from '@/lib/dicta/edit-constants'
 export default function ModerationPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const pathname = usePathname()
   const { showAlert, showConfirm } = useDialog()
 
   const [edits, setEdits] = useState([])
@@ -42,7 +43,7 @@ export default function ModerationPage() {
   useEffect(() => {
     if (status === 'loading') return
     if (status === 'unauthenticated') {
-      router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
+      router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(pathname)}`)
       return
     }
     fetchEdits()
