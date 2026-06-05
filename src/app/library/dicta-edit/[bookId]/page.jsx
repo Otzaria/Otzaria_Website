@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import Button from '@/components/ui/Button'
@@ -15,6 +15,7 @@ import { EDIT_TYPES } from '@/lib/dicta/edit-constants'
 export default function LibraryEditorPage() {
   const params = useParams()
   const router = useRouter()
+  const pathname = usePathname()
   const { data: session, status } = useSession()
   const { showAlert } = useDialog()
   const bookId = params?.bookId
@@ -58,7 +59,7 @@ export default function LibraryEditorPage() {
   useEffect(() => {
     if (status === 'loading') return
     if (status === 'unauthenticated') {
-      router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
+      router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(pathname)}`)
       return
     }
     if (bookId) loadBook()

@@ -1,12 +1,101 @@
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
+import crypto from 'crypto';
 import { validateEmail } from '@/lib/validation-utils';
 import connectDB from '@/lib/db';
 import ErrorReport from '@/models/ErrorReport';
+import SentEmailLog from '@/models/SentEmailLog';
 
 const REPORTING_ERRORS_RECIPIENT = 'otzaria.200@gmail.com';
 const SEFARIA_ERRORS_RECIPIENT = 'corrections@sefaria.org';
 const DEFAULT_SENDER_EMAIL = 'unknown@otzaria.invalid';
+
+// חלון מניעת כפילות: לא נשלח תוכן זהה לאותו נמען בתוך פרק זמן זה.
+// ברירת מחדל 6 חודשים, ניתן להגדיל דרך משתנה סביבה REPORT_DEDUP_MONTHS.
+const DEDUP_WINDOW_MONTHS = Math.max(6, Number(process.env.REPORT_DEDUP_MONTHS) || 6);
+
+// נרמול כתובת מייל להשוואה עקבית (אותיות קטנות, ללא רווחים)
+function normalizeRecipient(email) {
+  return String(email ?? '').trim().toLowerCase();
+}
+
+// טביעת אצבע (SHA-256) של כל תוכן הדיווח. שינוי בכל אחד מהשדות -> טביעה שונה.
+// מטא-דאטה משתנה (מזהה דיווח, שולח, חותמת זמן) אינו נכלל בכוונה.
+function computeContentHash(payload) {
+  const parts = [
+    payload.book_title,
+    payload.current_ref,
+    payload.line_number,
+    payload.selected_text,
+    payload.error_details,
+    payload.context_text,
+    payload.source_folder,
+  ].map((value) => String(value ?? '').trim());
+
+  return crypto.createHash('sha256').update(parts.join('\\u0000')).digest('hex');
+}
+
+// מועד הסף - תוכן שנשלח לפניו נחשב "ישן" וניתן לשלוח שוב
+function getDedupCutoff() {
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - DEDUP_WINDOW_MONTHS);
+  return cutoff;
+}
+
+// תפיסה אטומית של צירוף נמען+תוכן *לפני* השליחה בפועל.
+// בזכות האינדקס הייחודי {recipient, contentHash}, רק בקשה אחת מצליחה לתפוס
+// צירוף נתון - כך שתי בקשות מקבילות זהות לא ישלחו מייל כפול (תופעת הלוואי
+// נאכפת לפני sendMail, לא אחריו). findOneAndUpdate מבצע התאמה+עדכון אטומית,
+// כך שגם תחרות על אותה רשומה ישנה מסתיימת בתפיסה יחידה בלבד.
+// מחזיר { recipient, claimed, inserted, previousLastSentAt } לצורך שחזור.
+async function claimRecipient(recipient, contentHash, cutoff, sentAt, payload) {
+  try {
+    // ברירת המחדל מחזירה את המסמך כפי שהיה *לפני* העדכון (או null אם נוצר חדש)
+    const previousDoc = await SentEmailLog.findOneAndUpdate(
+      { recipient, contentHash, lastSentAt: { $lt: cutoff } },
+      {
+        $set: {
+          lastSentAt: sentAt,
+          reportId: payload.report_id,
+          bookTitle: payload.book_title,
+        },
+      },
+      { upsert: true }
+    );
+
+    return {
+      recipient,
+      claimed: true,
+      inserted: previousDoc === null, // null => נוצרה רשומה חדשה
+      previousLastSentAt: previousDoc?.lastSentAt ?? null,
+    };
+  } catch (error) {
+    // E11000 = הצירוף כבר תפוס (נשלח לאחרונה, או בקשה מקבילה תפסה אותו זה עתה)
+    if (error?.code === 11000) {
+      return { recipient, claimed: false };
+    }
+    throw error;
+  }
+}
+
+// שחזור תפיסות שבוצעו, אם השליחה נכשלה - כדי לא לחסום שליחה עתידית לשווא
+async function releaseClaims(claims, contentHash) {
+  await Promise.all(
+    claims
+      .filter((claim) => claim.claimed)
+      .map((claim) => {
+        if (claim.inserted) {
+          // רשומה חדשה שנוצרה כעת - מחיקה מלאה
+          return SentEmailLog.deleteOne({ recipient: claim.recipient, contentHash });
+        }
+        // רשומה ישנה שעודכנה - החזרת חותמת הזמן הקודמת
+        return SentEmailLog.updateOne(
+          { recipient: claim.recipient, contentHash },
+          { $set: { lastSentAt: claim.previousLastSentAt } }
+        );
+      })
+  );
+}
 
 // מיפוי מקורות לכתובות מייל - בהתבסס על error_report_dialog.dart
 const SOURCE_EMAIL_MAPPING = {
@@ -185,19 +274,21 @@ function buildSefariaLink(bookTitle, currentRef) {
   return `https://www.sefaria.org/${encodedBook}, ${encodedRef}`;
 }
 
-function buildHtml(payload) {
+function buildHtml(payload, ccRecipients = []) {
   const escaped = Object.fromEntries(
     Object.entries(payload).map(([key, value]) => [key, escapeHtml(value)])
   );
   const libraryVersion = escapeHtml(extractLibraryVersion(payload));
-  
-  // Get email recipients info
+
+  // Get email recipients info (source-based: קובע אם להציג קישור ספריא)
   const emailInfo = getEmailRecipients(payload.source_folder);
   const isSefariaSource = emailInfo.isSefariaOnly;
   const sefariaLink = isSefariaSource ? buildSefariaLink(payload.book_title, payload.current_ref) : '';
-  const ccNotification = emailInfo.cc ? 
+  // הודעת העותק משקפת את נמעני ה-cc שבאמת קיבלו (לאחר סינון כפילויות), לא את המיפוי
+  const ccList = (Array.isArray(ccRecipients) ? ccRecipients : [ccRecipients]).filter(Boolean);
+  const ccNotification = ccList.length > 0 ?
     `<div style="background: #e8f4fd; border: 2px solid #2196f3; margin: 16px; padding: 16px; border-radius: 8px; text-align: center;">
-      <strong style="color: #1976d2; font-size: 16px;">📧 עותק מדיווח זה נשלח גם ל: ${emailInfo.cc}</strong>
+      <strong style="color: #1976d2; font-size: 16px;">📧 עותק מדיווח זה נשלח גם ל: ${escapeHtml(ccList.join(', '))}</strong>
     </div>` : '';
 
   return `
@@ -232,23 +323,25 @@ function buildHtml(payload) {
   `;
 }
 
-function buildText(payload) {
-  // Get email recipients info
+function buildText(payload, ccRecipients = []) {
+  // Get email recipients info (source-based: קובע אם להציג קישור ספריא)
   const emailInfo = getEmailRecipients(payload.source_folder);
   const isSefariaSource = emailInfo.isSefariaOnly;
   const sefariaLink = isSefariaSource ? buildSefariaLink(payload.book_title, payload.current_ref) : '';
-  
+
   const lines = [
     `ספר: ${payload.book_title}`,
     `מיקום: ${payload.current_ref}`,
   ];
-  
+
   if (isSefariaSource && sefariaLink) {
     lines.push(`קישור ישיר: ${sefariaLink}`);
   }
-  
-  if (emailInfo.cc) {
-    lines.push(`** עותק מדיווח זה נשלח גם ל: ${emailInfo.cc} **`);
+
+  // הודעת העותק משקפת את נמעני ה-cc שבאמת קיבלו (לאחר סינון כפילויות)
+  const ccList = (Array.isArray(ccRecipients) ? ccRecipients : [ccRecipients]).filter(Boolean);
+  if (ccList.length > 0) {
+    lines.push(`** עותק מדיווח זה נשלח גם ל: ${ccList.join(', ')} **`);
   }
   
   lines.push(
@@ -277,6 +370,10 @@ function buildText(payload) {
 export async function POST(request) {
   let payload;
   let savedToDatabase = false;
+  // נשמרים בטווח הפונקציה כדי שניתן יהיה לשחרר תפיסות חלקיות בכל מסלול כשל
+  let claims = [];
+  let contentHash;
+  let emailDelivered = false;
   try {
     const rawBody = await request.json();
     payload = normalizePayload(rawBody);
@@ -337,31 +434,83 @@ export async function POST(request) {
     // Determine recipient based on source
     const emailInfo = getEmailRecipients(payload.source_folder);
 
+    // רשימת הנמענים המיועדים (ראשי + עותק), מנורמלת וללא כפילויות
+    const candidateRecipients = [
+      ...new Set(
+        [emailInfo.primary, emailInfo.cc]
+          .map(normalizeRecipient)
+          .filter(Boolean)
+      ),
+    ];
+
+    // מניעת כפילות אטומית: תפיסת כל נמען לפני השליחה. נמען שכבר קיבל תוכן
+    // זהה בתוך חלון הזמן (או שנתפס ע"י בקשה מקבילה) לא ייתפס - ולכן לא יקבל מייל.
+    contentHash = computeContentHash(payload);
+    const cutoff = getDedupCutoff();
+    const sentAt = new Date();
+    for (const recipient of candidateRecipients) {
+      // סדרתי בכוונה - שומר על סדר התפיסות עבור שחזור מסודר בכישלון
+      claims.push(await claimRecipient(recipient, contentHash, cutoff, sentAt, payload));
+    }
+    const allowedRecipients = claims
+      .filter((claim) => claim.claimed)
+      .map((claim) => claim.recipient);
+
+    // אם אף נמען לא נתפס - כולם כבר קיבלו תוכן זהה, לא שולחים שוב בשום אופן
+    if (allowedRecipients.length === 0) {
+      await ErrorReport.findOneAndUpdate(
+        { reportId: payload.report_id },
+        {
+          emailSent: false,
+          adminNotes: `נחסם: תוכן זהה כבר נשלח לכל הנמענים ב-${DEDUP_WINDOW_MONTHS} החודשים האחרונים (טביעת אצבע: ${contentHash}).`,
+        }
+      );
+
+      return NextResponse.json({
+        success: true,
+        duplicate: true,
+        message: `דיווח עם תוכן זהה כבר נשלח לנמענים אלו ב-${DEDUP_WINDOW_MONTHS} החודשים האחרונים. כדי למנוע כפילות, המייל לא נשלח שוב.`,
+        reportId: payload.report_id,
+        savedToDatabase,
+      });
+    }
+
+    // שמירה על תפקיד הנמענים: הראשי נשאר "to" אם הותר, אחרת הראשון שהותר
+    const toRecipient = allowedRecipients.includes(normalizeRecipient(emailInfo.primary))
+      ? normalizeRecipient(emailInfo.primary)
+      : allowedRecipients[0];
+    const ccRecipients = allowedRecipients.filter((recipient) => recipient !== toRecipient);
+
     const mailOptions = {
       from: process.env.SMTP_FROM,
-      to: emailInfo.primary,
+      to: toRecipient,
       replyTo,
       subject: payload.subject,
-      html: buildHtml(payload),
-      text: buildText(payload),
+      // גוף המייל משקף את נמעני העותק שבאמת קיבלו (לאחר סינון כפילויות)
+      html: buildHtml(payload, ccRecipients),
+      text: buildText(payload, ccRecipients),
       headers: {
         'X-Otzaria-Report-Id': payload.report_id,
         'X-Otzaria-Book-Title': payload.book_title,
       },
     };
 
-    // Add CC if needed (for non-Sefaria sources that have additional recipients)
-    if (emailInfo.cc) {
-      mailOptions.cc = emailInfo.cc;
+    // הוספת עותק רק לנמענים שהותרו (שלא קיבלו תוכן זהה לאחרונה)
+    if (ccRecipients.length > 0) {
+      mailOptions.cc = ccRecipients;
     }
 
+    // התפיסות כבר רשמו lastSentAt=sentAt באופן אטומי לפני השליחה.
+    // השחרור בכשל מרוכז ב-catch הכללי (לפי הדגל emailDelivered), כך שגם
+    // תפיסה חלקית או שגיאה לפני sendMail לא משאירה lock תקוע ל-6 חודשים.
     await transporter.sendMail(mailOptions);
+    emailDelivered = true;
 
     await ErrorReport.findOneAndUpdate(
       { reportId: payload.report_id },
       {
         emailSent: true,
-        emailSentAt: new Date(),
+        emailSentAt: sentAt,
       }
     );
 
@@ -373,6 +522,17 @@ export async function POST(request) {
     });
   } catch (error) {
     console.error('Reporting errors API error:', error);
+
+    // שחרור תפיסות שנעשו אם המייל לא נשלח בפועל - בכל מסלול כשל (תפיסה חלקית,
+    // שגיאה לפני sendMail, או כשל ב-sendMail עצמו). אם המייל כבר נשלח, התפיסות
+    // לגיטימיות ונשמרות.
+    if (!emailDelivered && claims.length > 0) {
+      try {
+        await releaseClaims(claims, contentHash);
+      } catch (releaseError) {
+        console.error('Error releasing claims after failure:', releaseError);
+      }
+    }
 
     try {
       if (savedToDatabase && payload?.report_id) {
