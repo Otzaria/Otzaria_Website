@@ -194,7 +194,6 @@ export default function AdminUploadsPage() {
     })
   }
 
-  const _handleTypeChange = createFilterChangeHandler(setFilterTypes)
   const handleStatusChange = createFilterChangeHandler(setFilterStatuses)
 
   const toggleBookExpansion = (bookName) => {

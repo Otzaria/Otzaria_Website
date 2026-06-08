@@ -9,6 +9,50 @@ import { useDialog } from '@/components/providers/DialogContext'
 import { canManageLibrarySync } from '@/lib/roles'
 import DiffPreview from '@/components/library/DiffPreview'
 
+// טוען את ה-diff של ספר בודד רק כשפותחים אותו (לחיצה), כדי שעמוד הרשימה לא יריץ
+// diff על כל הספרים — לא בבקשה אחת ולא ב-N בקשות מקבילות עם הרינדור.
+function ConflictDiff({ bookId, conflictCount }) {
+  const [open, setOpen] = useState(false)
+  const [state, setState] = useState({ loading: false, changes: null, changeCount: 0, error: false, loaded: false })
+
+  const toggle = () => {
+    const next = !open
+    setOpen(next)
+    if (next && !state.loaded && !state.loading) {
+      setState((s) => ({ ...s, loading: true, error: false }))
+      fetch(`/api/library/books/${bookId}/conflict-diff`)
+        .then((res) => (res.ok ? res.json() : Promise.reject(new Error('failed'))))
+        .then((data) => setState({ loading: false, changes: data.changes, changeCount: data.changeCount, error: false, loaded: true }))
+        .catch(() => setState({ loading: false, changes: null, changeCount: 0, error: true, loaded: false }))
+    }
+  }
+
+  return (
+    <div>
+      <button onClick={toggle} className="text-sm font-semibold text-slate-600 hover:text-primary flex items-center gap-1">
+        <span className={`transition-transform ${open ? 'rotate-90' : ''}`}>‹</span>
+        {open ? 'הסתר הבדלים' : 'הצג את כל ההבדלים בין הגרסאות'}
+      </button>
+      {open && (
+        <div className="mt-2">
+          <div className="flex items-center gap-3 text-xs text-slate-500 mb-2 flex-wrap">
+            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-red-200 border border-red-300" /> גיטהאב</span>
+            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-emerald-200 border border-emerald-300" /> האתר</span>
+            <span className="text-slate-400">(מתוכם {conflictCount} מתנגשים)</span>
+          </div>
+          {state.loading ? (
+            <div className="h-12 bg-slate-50 animate-pulse rounded-lg" />
+          ) : state.error ? (
+            <div className="text-sm text-slate-400">שגיאה בטעינת ההבדלים</div>
+          ) : (
+            <DiffPreview changes={state.changes} total={state.changeCount} />
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ConflictsPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -105,14 +149,8 @@ export default function ConflictsPage() {
                     </div>
                     <Link href={`/library/dicta-edit/${c._id}`} className="text-sm text-primary font-semibold hover:underline">פתח בעורך »</Link>
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-slate-500 mb-2 flex-wrap">
-                    <span className="font-semibold text-slate-600">כל ההבדלים בין הגרסאות:</span>
-                    <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-red-200 border border-red-300" /> גיטהאב</span>
-                    <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-emerald-200 border border-emerald-300" /> האתר</span>
-                    <span className="text-slate-400">(מתוכם {c.conflictCount} מתנגשים)</span>
-                  </div>
                   <div className="mb-4">
-                    <DiffPreview changes={c.changes} total={c.changeCount} />
+                    <ConflictDiff bookId={c._id} conflictCount={c.conflictCount} />
                   </div>
                   <div className="flex gap-2 flex-wrap">
                     <button onClick={() => resolve(c, 'ours')} disabled={busy} className="bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-emerald-400 disabled:opacity-50">
