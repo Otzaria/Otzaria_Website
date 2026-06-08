@@ -9,6 +9,8 @@ export default function EditCategoriesDialog({ isOpen, onClose, existingCategori
 
     useEffect(() => {
         if (existingCategories) {
+            // סנכרון עותק מקומי לעריכה מה-prop בעת פתיחת הדיאלוג
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setCategories(JSON.parse(JSON.stringify(existingCategories)));
         }
     }, [existingCategories, isOpen]);

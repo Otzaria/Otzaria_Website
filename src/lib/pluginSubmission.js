@@ -17,6 +17,8 @@ export const PLUGIN_STATUS_LABELS = {
   beta: 'בטא',
   experimental: 'ניסיוני'
 }
+// נבדק: לינארי — {0,3} חסום וקידומת '-'/'+' חובה לסיומת, אין נסיגה קטסטרופלית
+// eslint-disable-next-line security/detect-unsafe-regex
 export const PLUGIN_VERSION_RE = /^\d+(?:\.\d+){0,3}(?:[-+][A-Za-z0-9.]+)?$/
 export const MIN_SUPPORTED_APP_VERSION = '0.9.89'
 

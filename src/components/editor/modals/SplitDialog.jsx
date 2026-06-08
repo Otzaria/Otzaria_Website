@@ -15,6 +15,8 @@ export default function SplitDialog({
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
+    // mount guard לרינדור פורטל בצד הלקוח בלבד (מניעת hydration mismatch)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true)
   }, [])
 

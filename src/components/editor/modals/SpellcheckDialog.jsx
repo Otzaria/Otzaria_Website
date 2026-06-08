@@ -202,6 +202,8 @@ export default function SpellcheckDialog({
       const combined = Array.from(new Set([...(personal || []), ...(global || [])]))
       runSpellcheck(combined)
     })
+  // callbacks מוחרגים; האפקט מתבסס על מצב הפתיחה
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, runSpellcheck])
 
   // Fetch suggestions from server whenever selected word changes

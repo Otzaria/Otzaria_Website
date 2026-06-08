@@ -5,7 +5,7 @@ import dbConnect from '@/lib/db';
 import ReminderHistory from '@/models/reminderHistory';
 import { hasBooksAccess } from '@/lib/roles';
 
-export async function GET(req) {
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !hasBooksAccess(session.user?.role)) {

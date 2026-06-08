@@ -1,5 +1,13 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 
+const ResizeHandle = ({ cursor, position, handle, onResize, zoom }) => (
+  <div
+    onMouseDown={(e) => onResize(e, handle)}
+    className={`absolute w-3 h-3 bg-white border border-blue-600 rounded-full z-20 hover:bg-blue-100 ${position}`}
+    style={{ cursor: cursor, transform: `scale(${100 / zoom})` }}
+  />
+)
+
 export default function ImagePanel({
   thumbnailUrl,
   pageNumber,
@@ -118,7 +126,7 @@ export default function ImagePanel({
 
         setSelectionRect({ x: newX, y: newY, width: newW, height: newH })
     }
-  }, [interactionMode, imageZoom, activeHandle])
+  }, [interactionMode, imageZoom, activeHandle, selectionRect, setSelectionEnd, setSelectionRect])
 
 
   const handleMouseMove = (e) => {
@@ -197,7 +205,7 @@ export default function ImagePanel({
       }
   }
 
-  const handleMouseUp = (e) => {
+  const handleMouseUp = () => {
     if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current)
         animationFrameRef.current = null
@@ -389,14 +397,6 @@ export default function ImagePanel({
     lastMousePosRef.current = { x: e.clientX, y: e.clientY }
   }
 
-  const ResizeHandle = ({ cursor, position, handle }) => (
-    <div
-      onMouseDown={(e) => handleMouseDownResize(e, handle)}
-      className={`absolute w-3 h-3 bg-white border border-blue-600 rounded-full z-20 hover:bg-blue-100 ${position}`}
-      style={{ cursor: cursor, transform: `scale(${100 / imageZoom})` }}
-    />
-  )
-
   useEffect(() => {
     const container = imageContainerRef.current
     if (!container) return
@@ -440,6 +440,8 @@ export default function ImagePanel({
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
     }
+  // מטפלי אירוע נוצרים מחדש בכל רינדור; מוחרגים למניעת קשירה חוזרת
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interactionMode, selectionRect, selectionStart, activeHandle, rotation]) 
 
   return (
@@ -531,14 +533,14 @@ export default function ImagePanel({
                   }}
                   onMouseDown={handleMouseDownMove}
                 >
-                  <ResizeHandle cursor="nw-resize" position="-top-1.5 -left-1.5" handle="nw" />
-                  <ResizeHandle cursor="n-resize" position="-top-1.5 left-1/2 -translate-x-1/2" handle="n" />
-                  <ResizeHandle cursor="ne-resize" position="-top-1.5 -right-1.5" handle="ne" />
-                  <ResizeHandle cursor="e-resize" position="top-1/2 -translate-y-1/2 -right-1.5" handle="e" />
-                  <ResizeHandle cursor="se-resize" position="-bottom-1.5 -right-1.5" handle="se" />
-                  <ResizeHandle cursor="s-resize" position="-bottom-1.5 left-1/2 -translate-x-1/2" handle="s" />
-                  <ResizeHandle cursor="sw-resize" position="-bottom-1.5 -left-1.5" handle="sw" />
-                  <ResizeHandle cursor="w-resize" position="top-1/2 -translate-y-1/2 -left-1.5" handle="w" />
+                  <ResizeHandle cursor="nw-resize" position="-top-1.5 -left-1.5" handle="nw" onResize={handleMouseDownResize} zoom={imageZoom} />
+                  <ResizeHandle cursor="n-resize" position="-top-1.5 left-1/2 -translate-x-1/2" handle="n" onResize={handleMouseDownResize} zoom={imageZoom} />
+                  <ResizeHandle cursor="ne-resize" position="-top-1.5 -right-1.5" handle="ne" onResize={handleMouseDownResize} zoom={imageZoom} />
+                  <ResizeHandle cursor="e-resize" position="top-1/2 -translate-y-1/2 -right-1.5" handle="e" onResize={handleMouseDownResize} zoom={imageZoom} />
+                  <ResizeHandle cursor="se-resize" position="-bottom-1.5 -right-1.5" handle="se" onResize={handleMouseDownResize} zoom={imageZoom} />
+                  <ResizeHandle cursor="s-resize" position="-bottom-1.5 left-1/2 -translate-x-1/2" handle="s" onResize={handleMouseDownResize} zoom={imageZoom} />
+                  <ResizeHandle cursor="sw-resize" position="-bottom-1.5 -left-1.5" handle="sw" onResize={handleMouseDownResize} zoom={imageZoom} />
+                  <ResizeHandle cursor="w-resize" position="top-1/2 -translate-y-1/2 -left-1.5" handle="w" onResize={handleMouseDownResize} zoom={imageZoom} />
 
                   <button
                     onMouseDown={(e) => e.stopPropagation()}

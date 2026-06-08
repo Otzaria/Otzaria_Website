@@ -28,6 +28,8 @@ export default function ShortcutsDialog({ isOpen, onClose, availableActions, sho
 
   useEffect(() => {
     if (isOpen) {
+      // איפוס מצב הדיאלוג ועותק העריכה המקומי בעת פתיחה
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLocalShortcuts(shortcuts);
       setRecordedKeys(null);
       setIsRecording(false);

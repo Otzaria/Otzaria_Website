@@ -103,19 +103,6 @@ export default function AdminUploadsPage() {
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'he'))
   }, [uploads])
 
-  // חישוב ספירות מאופטם עם useMemo
-  const { fullBookCount, singlePageCount } = useMemo(() => {
-    return uploads.reduce((counts, upload) => {
-      const type = upload.uploadType || 'single_page'
-      if (type === 'full_book') {
-        counts.fullBookCount++
-      } else {
-        counts.singlePageCount++
-      }
-      return counts
-    }, { fullBookCount: 0, singlePageCount: 0 })
-  }, [uploads])
-
   // פונקציה לחילוץ שם הספר הבסיסי (ללא מספר עמוד)
   const extractBaseBookName = (bookName) => {
     if (!bookName) return ''
@@ -207,7 +194,7 @@ export default function AdminUploadsPage() {
     })
   }
 
-  const handleTypeChange = createFilterChangeHandler(setFilterTypes)
+  const _handleTypeChange = createFilterChangeHandler(setFilterTypes)
   const handleStatusChange = createFilterChangeHandler(setFilterStatuses)
 
   const toggleBookExpansion = (bookName) => {
@@ -336,7 +323,7 @@ export default function AdminUploadsPage() {
     }
   }
 
-  const handleBatchUpdateStatus = async (uploadIds, newStatus) => {
+  const _handleBatchUpdateStatus = async (uploadIds, newStatus) => {
     try {
       const response = await fetch('/api/admin/uploads/batch-update-book-status', {
         method: 'PUT',

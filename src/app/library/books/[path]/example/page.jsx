@@ -64,6 +64,8 @@ export default function ExamplePageViewer() {
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
+  // handleMouseMove נוצר מחדש בכל רינדור; מוחרג למניעת קשירה חוזרת של מאזינים
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isResizing])
 
 

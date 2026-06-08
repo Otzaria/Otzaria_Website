@@ -26,7 +26,7 @@ export async function DELETE(request) {
 
     await connectDB();
 
-    const result = await MailingList.updateOne(
+    await MailingList.updateOne(
       { listName: LIST_NAME },
       { $pull: { emails: email } }
     );

@@ -43,6 +43,8 @@ export default function AdminDictaBooksPage() {
     } else {
       loadBooks()
     }
+  // טעינת נתונים מותנית-הרשאה; loadBooks מוחרג למניעת לולאת רענון
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, session, router])
 
   const loadBooks = async () => {

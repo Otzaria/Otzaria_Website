@@ -35,7 +35,7 @@ const AUTHOR_CATEGORIES = [
 ]
 
 export default function UploadPage() {
-  const { data: session, status } = useSession()
+  const { status } = useSession()
   const router = useRouter()
   const { showConfirm, showAlert } = useDialog()
   

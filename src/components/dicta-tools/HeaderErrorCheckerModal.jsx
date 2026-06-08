@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Modal from '@/components/ui/Modal'
 import FormInput from '@/components/ui/FormInput'
 
-export default function HeaderErrorCheckerModal({ isOpen, onClose, content, onContentChange }) {
+export default function HeaderErrorCheckerModal({ isOpen, onClose, content }) {
   const [reStart, setReStart] = useState('')
   const [reEnd, setReEnd] = useState('')
   const [gershayim, setGershayim] = useState(false)
@@ -52,7 +52,6 @@ export default function HeaderErrorCheckerModal({ isOpen, onClose, content, onCo
         let match
         
         while ((match = tagRegex.exec(line)) !== null) {
-          const fullTag = match[0]
           const tagName = match[1]
           const position = match.index
           
@@ -116,6 +115,8 @@ export default function HeaderErrorCheckerModal({ isOpen, onClose, content, onCo
       } else if (reEnd) {
         pattern = new RegExp(`^[א-ת]([א-ת \\-]*[א-ת])?[${escapeRegex(reEnd)}]*$`)
       } else {
+        // נבדק: לינארי — קבוצה אופציונלית בודדת (?), עוגן '$' חוסם נסיגה
+        // eslint-disable-next-line security/detect-unsafe-regex
         pattern = new RegExp('^[א-ת]([א-ת \\-]*[א-ת])?$')
       }
       

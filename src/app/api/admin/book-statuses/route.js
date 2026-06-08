@@ -26,7 +26,7 @@ const DEFAULT_STATUSES = {
 };
 
 // GET - קבלת הגדרות סטטוסים
-export async function GET(request) {
+export async function GET() {
   const session = await getServerSession(authOptions);
   if (!hasBooksAccess(session?.user?.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

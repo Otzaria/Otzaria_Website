@@ -1,5 +1,20 @@
 import { forwardRef } from 'react'
 
+// רכיב כפתור קטן לשימוש חוזר
+const MiniBtn = ({ onClick, active, icon, title, rotate }) => (
+  <button
+    onClick={onClick}
+    className={`w-6 h-6 rounded flex items-center justify-center transition-colors ${
+      active ? 'bg-blue-50 text-blue-600' : 'text-gray-500 hover:bg-white hover:text-gray-900'
+    }`}
+    title={title}
+  >
+    <span className="material-symbols-outlined text-[16px]" style={{ transform: rotate ? 'rotate(90deg)' : 'none' }}>
+      {icon}
+    </span>
+  </button>
+);
+
 const TextEditor = forwardRef(({
   content,
   leftColumn,
@@ -27,21 +42,6 @@ const TextEditor = forwardRef(({
     }
     e.stopPropagation();
   };
-
-  // רכיב כפתור קטן לשימוש חוזר
-  const MiniBtn = ({ onClick, active, icon, title, rotate }) => (
-    <button
-      onClick={onClick}
-      className={`w-6 h-6 rounded flex items-center justify-center transition-colors ${
-        active ? 'bg-blue-50 text-blue-600' : 'text-gray-500 hover:bg-white hover:text-gray-900'
-      }`}
-      title={title}
-    >
-      <span className="material-symbols-outlined text-[16px]" style={{ transform: rotate ? 'rotate(90deg)' : 'none' }}>
-        {icon}
-      </span>
-    </button>
-  );
 
   return (
     <div

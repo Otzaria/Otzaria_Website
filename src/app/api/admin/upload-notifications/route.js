@@ -6,7 +6,7 @@ import User from '@/models/User';
 import { hasBooksAccess } from '@/lib/roles';
 
 // GET - קבלת הגדרות התראות של המשתמש
-export async function GET(request) {
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !hasBooksAccess(session.user?.role)) {

@@ -11,6 +11,8 @@ const PluginSchema = new mongoose.Schema(
       index: true,
       trim: true,
       maxlength: 120,
+      // נבדק: לינארי — מפריד '-' חובה בכל איטרציה מונע נסיגה קטסטרופלית
+      // eslint-disable-next-line security/detect-unsafe-regex
       match: /^[a-z0-9]+(?:-[a-z0-9]+)*$/
     },
     shortDescription: { type: String, required: true, trim: true, maxlength: 150 },

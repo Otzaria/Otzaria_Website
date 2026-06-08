@@ -20,8 +20,6 @@ export async function GET(request) {
 
         await connectDB();
 
-        const userExists = await User.findOne({ resetPasswordToken: token });
-
         const user = await User.findOne({
             resetPasswordToken: token,
             resetPasswordExpires: { $gt: Date.now() }
