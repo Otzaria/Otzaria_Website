@@ -98,6 +98,88 @@ export function diffToHunks(oldText, newText) {
   return hunks;
 }
 
+const MAX_WORD_DIFF_TOKENS = 1500; // מעל זה — לא מפרקים למילים (יקר מדי), מחזירים בלוק אחד
+
+/**
+ * diff ברמת המילה בין שני בלוקי טקסט, לצורך הדגשה ויזואלית של מה שהשתנה בתוך השורה.
+ * מחזיר רצף מקטעים: { type: 'equal' | 'del' | 'add', text }
+ *   equal = ללא שינוי, del = הוסר מ-before, add = נוסף ב-after.
+ * הטוקניזציה שומרת על רווחים/ירידות שורה כטוקנים נפרדים, כך שהשחזור מדויק.
+ */
+export function diffWords(before, after) {
+  const tokenize = (s) => String(s == null ? '' : s).match(/\s+|\S+/g) || [];
+  const a = tokenize(before);
+  const b = tokenize(after);
+
+  // הגנת ביצועים: בלוקים ענקיים — לא מפרקים, מסמנים הכל כשינוי גס
+  if (a.length * b.length > MAX_WORD_DIFF_TOKENS * MAX_WORD_DIFF_TOKENS) {
+    const segs = [];
+    if (a.length) segs.push({ type: 'del', text: a.join('') });
+    if (b.length) segs.push({ type: 'add', text: b.join('') });
+    return segs;
+  }
+
+  const n = a.length, m = b.length;
+  const dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+
+  const segments = [];
+  const push = (type, text) => {
+    const last = segments[segments.length - 1];
+    if (last && last.type === type) last.text += text;
+    else segments.push({ type, text });
+  };
+
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) { push('equal', a[i]); i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) { push('del', a[i++]); }
+    else { push('add', b[j++]); }
+  }
+  while (i < n) push('del', a[i++]);
+  while (j < m) push('add', b[j++]);
+
+  return segments;
+}
+
+/**
+ * מצמצם בלוק before/after לחלון סביב אזור השינוי בלבד (לתצוגה מקדימה), כדי שלא
+ * יוצג רק *תחילת* הקטע כשהשינוי עמוק בתוכו. שומר ~context תווים מכל צד של אזור
+ * השינוי ומסמן קיצוץ ב-'…'. ההקשר השמור (קידומת/סיומת משותפת) זהה בשני הצדדים,
+ * כך שהדגשת המילים בלקוח עדיין מסמנת אך ורק את מה שבאמת השתנה.
+ * @returns {{before:string, after:string}}
+ */
+export function focusChange(before, after, { context = 140, maxChanged = 1200 } = {}) {
+  const a = String(before == null ? '' : before);
+  const b = String(after == null ? '' : after);
+  const minLen = Math.min(a.length, b.length);
+
+  let p = 0;
+  while (p < minLen && a[p] === b[p]) p++;
+  let s = 0;
+  while (s < minLen - p && a[a.length - 1 - s] === b[b.length - 1 - s]) s++;
+
+  if (p === a.length && p === b.length) return { before: a, after: b }; // זהים
+
+  const window = (str) => {
+    const cs = p;                       // תחילת השינוי
+    const ce = str.length - s;          // סוף השינוי (לא כולל)
+    const leadStart = Math.max(0, cs - context);
+    const trailEnd = Math.min(str.length, ce + context);
+    const head = str.slice(leadStart, cs);
+    let mid = str.slice(cs, ce);
+    if (mid.length > maxChanged) mid = mid.slice(0, maxChanged) + ' … '; // שינוי ענק — קיצוץ באמצע
+    const tail = str.slice(ce, trailEnd);
+    return (leadStart > 0 ? '…' : '') + head + mid + tail + (trailEnd < str.length ? '…' : '');
+  };
+
+  return { before: window(a), after: window(b) };
+}
+
 const MAX_CONTEXT_LINES = 6;
 
 /**

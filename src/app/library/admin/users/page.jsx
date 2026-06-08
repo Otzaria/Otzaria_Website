@@ -180,7 +180,7 @@ export default function AdminUsersPage() {
                 מרחב תיקון ספרים
                 <div className="text-[10px] font-normal text-gray-400">הרשאות לעריכת ספרי דיקטה הערוכים</div>
               </th>
-              <th className="text-right p-4 font-bold text-gray-700">פעולות</th>
+              <th className="text-right p-4 font-bold text-gray-700 sticky left-0 bg-gray-50 z-10 shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.1)]">פעולות</th>
             </tr>
           </thead>
           <tbody>
@@ -259,13 +259,13 @@ export default function AdminUsersPage() {
                   <td className="p-4">
                     {isEditing ? (
                       <div className="flex flex-col gap-2">
-                        <label className="flex items-center gap-1.5 text-xs cursor-pointer whitespace-nowrap" title="עורך ישירות ומאשר הצעות של אחרים במרחב תיקון הספרים">
-                          <input type="checkbox" checked={!!formData.isSupervisor}
+                        <label className="flex items-center gap-1.5 text-xs cursor-pointer" title="עורך ישירות ומאשר הצעות של אחרים במרחב תיקון הספרים">
+                          <input type="checkbox" className="shrink-0" checked={!!formData.isSupervisor}
                             onChange={e => setFormData({ ...formData, isSupervisor: e.target.checked })} />
                           מפקח — עריכה ישירה ואישור
                         </label>
-                        <label className="flex items-center gap-1.5 text-xs cursor-pointer whitespace-nowrap text-red-700" title="חוסם את המשתמש מלהגיש תיקונים במרחב">
-                          <input type="checkbox" checked={!!formData.dictaEditBlocked}
+                        <label className="flex items-center gap-1.5 text-xs cursor-pointer text-red-700" title="חוסם את המשתמש מלהגיש תיקונים במרחב">
+                          <input type="checkbox" className="shrink-0" checked={!!formData.dictaEditBlocked}
                             onChange={e => setFormData({ ...formData, dictaEditBlocked: e.target.checked })} />
                           חסום מעריכה
                         </label>
@@ -278,7 +278,8 @@ export default function AdminUsersPage() {
                       </div>
                     )}
                   </td>
-                  <td className="p-4 flex gap-2">
+                  <td className="p-4 sticky left-0 bg-white z-10 shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.1)]">
+                    <div className="flex gap-2">
                     {isEditing ? (
                       <>
                         <button onClick={handleUpdateUser} className="text-green-600 hover:bg-green-50 p-1.5 rounded-lg transition-colors">
@@ -303,6 +304,7 @@ export default function AdminUsersPage() {
                         </button>
                       </>
                     )}
+                    </div>
                   </td>
                 </tr>
               )

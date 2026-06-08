@@ -8,6 +8,7 @@ import Header from '@/components/layout/Header'
 import { useDialog } from '@/components/providers/DialogContext'
 import { canModerateLibrary } from '@/lib/roles'
 import { EDIT_TYPE_LABELS, EDIT_KIND } from '@/lib/dicta/edit-constants'
+import DiffPreview from '@/components/library/DiffPreview'
 
 export default function ModerationPage() {
   const { data: session, status } = useSession()
@@ -256,25 +257,6 @@ function EditCard({ edit, bookName, selected, onToggle, busy, onApprove, onRejec
           <span className="material-symbols-outlined text-base">close</span> דחה
         </button>
       </div>
-    </div>
-  )
-}
-
-function DiffPreview({ changes, total }) {
-  if (!changes?.length) return <div className="text-sm text-slate-400">אין תצוגה מקדימה</div>
-  return (
-    <div className="space-y-2 font-mono text-sm" dir="rtl">
-      {changes.map((c, i) => (
-        <div key={i} className="rounded-lg overflow-hidden border border-slate-200">
-          {c.before !== '' && (
-            <div className="bg-red-50 text-red-800 px-3 py-1 whitespace-pre-wrap break-words border-r-4 border-red-300">{c.before}</div>
-          )}
-          {c.after !== '' && (
-            <div className="bg-emerald-50 text-emerald-800 px-3 py-1 whitespace-pre-wrap break-words border-r-4 border-emerald-300">{c.after}</div>
-          )}
-        </div>
-      ))}
-      {total > changes.length && <div className="text-xs text-slate-400">…ועוד {total - changes.length} מקטעים</div>}
     </div>
   )
 }

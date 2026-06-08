@@ -7,6 +7,7 @@ import Link from 'next/link'
 import Header from '@/components/layout/Header'
 import { useDialog } from '@/components/providers/DialogContext'
 import { canManageLibrarySync } from '@/lib/roles'
+import DiffPreview from '@/components/library/DiffPreview'
 
 export default function ConflictsPage() {
   const { data: session, status } = useSession()
@@ -103,6 +104,15 @@ export default function ConflictsPage() {
                       <span className="text-xs text-red-500 mr-2">{c.conflictCount} מקטעים מתנגשים</span>
                     </div>
                     <Link href={`/library/dicta-edit/${c._id}`} className="text-sm text-primary font-semibold hover:underline">פתח בעורך »</Link>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-slate-500 mb-2 flex-wrap">
+                    <span className="font-semibold text-slate-600">כל ההבדלים בין הגרסאות:</span>
+                    <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-red-200 border border-red-300" /> גיטהאב</span>
+                    <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-emerald-200 border border-emerald-300" /> האתר</span>
+                    <span className="text-slate-400">(מתוכם {c.conflictCount} מתנגשים)</span>
+                  </div>
+                  <div className="mb-4">
+                    <DiffPreview changes={c.changes} total={c.changeCount} />
                   </div>
                   <div className="flex gap-2 flex-wrap">
                     <button onClick={() => resolve(c, 'ours')} disabled={busy} className="bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-emerald-400 disabled:opacity-50">
