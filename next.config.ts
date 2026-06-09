@@ -19,13 +19,12 @@ const nextConfig = {
     unoptimized: true,
   },
   
-  // הגדרה שמאפשרת להפנות נתיבים לשרת אחר במצב פיתוח
   async rewrites() {
     if (process.env.NODE_ENV === 'development') {
       return [
         {
           source: '/uploads/:path*',
-          destination: 'https://otzaria.org/uploads/:path*', // החלף בכתובת השרת שלך
+          destination: 'https://otzaria.org/uploads/:path*',
         },
       ];
     }
