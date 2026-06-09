@@ -66,6 +66,8 @@ export default function AdminPluginsPage() {
 
   useEffect(() => {
     loadPlugins()
+  // רענון לפי לשונית; loadPlugins מוחרג
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])
 
   const handleApprove = async (plugin) => {

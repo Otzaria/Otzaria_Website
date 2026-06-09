@@ -94,6 +94,8 @@ export default function DictaEditorPage() {
     }
     
     if (bookId) loadBook()
+  // טעינה מותנית-נתיב/הרשאה; loadBook מוחרג למניעת לולאה
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookId, status, router, showAlert])
 
   const handleSaveToServer = async (currentContent, silent = false) => {

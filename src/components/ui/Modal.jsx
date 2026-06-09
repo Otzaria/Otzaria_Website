@@ -27,6 +27,8 @@ export default function Modal({
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
+    // mount guard לרינדור פורטל בצד הלקוח בלבד (מניעת hydration mismatch)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true)
     // מניעת גלילה של הרקע כשהמודל פתוח
     if (isOpen) {

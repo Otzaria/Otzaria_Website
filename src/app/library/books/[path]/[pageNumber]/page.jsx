@@ -233,11 +233,11 @@ export default function EditPage() {
     if (settingsLoaded) localStorage.setItem('imageZoom', imageZoom.toString())
   }, [imageZoom, settingsLoaded])
 
-  const toggleFullScreen = async () => {
+  const toggleFullScreen = useCallback(async () => {
     try {
       if (!document.fullscreenElement) {
         await document.documentElement.requestFullscreen()
-        setIsToolbarCollapsed(true) 
+        setIsToolbarCollapsed(true)
       } else {
         if (document.exitFullscreen) await document.exitFullscreen()
         setIsToolbarCollapsed(false)
@@ -245,7 +245,7 @@ export default function EditPage() {
     } catch (err) {
       console.error(err)
     }
-  }
+  }, [])
 
   useEffect(() => {
     const handleFullScreenChange = () => {
@@ -258,6 +258,8 @@ export default function EditPage() {
   useEffect(() => {
     if (status === 'unauthenticated') router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
     else if (status === 'authenticated') loadPageData()
+  // טעינה מותנית-נתיב; loadPageData/router מוחרגים למניעת לולאה
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, bookPath, pageNumber])
 
   useEffect(() => {
@@ -382,6 +384,8 @@ export default function EditPage() {
       setRightColumn(newText)
       handleAutoSaveWrapper(content, leftColumn, newText, twoColumns)
     }
+  // handleAutoSaveWrapper מוגדר בהמשך; מכוון
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content, leftColumn, rightColumn, twoColumns]); // handleAutoSaveWrapper added below
 
   const handleAutoSaveWrapper = useCallback((newContent, left = leftColumn, right = rightColumn, two = twoColumns) => {
@@ -1116,9 +1120,6 @@ export default function EditPage() {
         
         const selCenterX = selectionRect.x + selectionRect.width / 2
         const selCenterY = selectionRect.y + selectionRect.height / 2
-        
-        const imgCenterX = img.width / 2
-        const imgCenterY = img.height / 2
         
         ctx.drawImage(img, -selCenterX, -selCenterY)
 

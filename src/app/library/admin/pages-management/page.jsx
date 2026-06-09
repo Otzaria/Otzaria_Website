@@ -73,10 +73,14 @@ export default function AdminPagesPage() {
   useEffect(() => {
     loadAllBooksAndUsers()
     loadPages()
+  // טעינה חד-פעמית בעליה; loadPages מוחרג
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
     loadPages()
+  // רענון לפי filters; loadPages מוחרג למניעת לולאה
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters])
 
   // סגירת תפריטים בלחיצה מחוץ

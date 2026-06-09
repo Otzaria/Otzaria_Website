@@ -11,6 +11,8 @@ export default function EditingToolsPage() {
 
   useEffect(() => {
     fetchReleases()
+  // fetch חד-פעמי בעליה; fetchReleases מוחרג
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const fetchReleases = async () => {

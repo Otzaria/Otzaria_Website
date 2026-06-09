@@ -69,6 +69,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
       update();
+    // הרצה חד-פעמית בעליה; update מוחרג
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
   useEffect(() => {
@@ -81,6 +83,8 @@ export default function DashboardPage() {
       setNewEmail(session?.user?.email || '');
       checkSubscriptionReminder();
     }
+  // טעינה מותנית-הרשאה; קריאת stats היא snapshot מכוון
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, router, session]);
 
   const loadUserStats = async (isInitialLoad = false) => {
@@ -409,6 +413,8 @@ export default function DashboardPage() {
       if (showMyMessages && myMessages.length > 0) {
           markMessagesAsRead(myMessages);
       }
+  // markMessagesAsRead מוחרג; רץ רק לפי נראות הודעות
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showMyMessages, myMessages]);
 
   const unreadCount = myMessages.filter(m => {

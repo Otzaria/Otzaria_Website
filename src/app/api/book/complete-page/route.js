@@ -12,7 +12,7 @@ export async function POST(request) {
     const session = await getServerSession(authOptions);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { pageId, bookId } = await request.json();
+    const { pageId } = await request.json();
     await connectDB();
 
     const isAdmin = hasBooksAccess(session.user.role);

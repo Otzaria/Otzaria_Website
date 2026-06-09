@@ -23,7 +23,7 @@
     "mongoose": "^9.1.0",
     "next": "16.2.6",
     "next-auth": "^4.24.13",
-    "nodemailer": "^8.0.5",
+     "nodemailer": "^8.0.5",
     "nspell": "^2.1.5",
     "pdf-lib": "^1.17.1",
     "pdf-to-img": "^6.0.0",
@@ -47,6 +47,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
+    "eslint-plugin-security": "^4.0.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

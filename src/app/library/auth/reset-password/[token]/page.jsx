@@ -54,6 +54,8 @@ export default function ResetPasswordPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // השוואת שני שדות סיסמה של המשתמש עצמו (ולידציית UI) — אין כאן סוד, לא רלוונטי timing attack
+    // eslint-disable-next-line security/detect-possible-timing-attacks
     if (password !== confirmPassword) {
         setStatus({ loading: false, error: 'הסיסמאות אינן תואמות', success: '' });
         return;

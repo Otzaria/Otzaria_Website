@@ -6,7 +6,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBooksAccess } from '@/lib/roles';
 
-export async function POST(request) {
+export async function POST() {
     try {
         const session = await getServerSession(authOptions);
         if (!hasBooksAccess(session?.user?.role)) {

@@ -25,6 +25,8 @@ function LoginContent() {
   // בדיקה אם המשתמש התחבר (בלשונית זו או אחרת)
   useEffect(() => {
     if (status === 'authenticated' && !isRedirecting) {
+      // דגל חד-פעמי למניעת ניתוב כפול בתגובה לשינוי סטטוס האימות
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsRedirecting(true)
       const callbackUrl = searchParams.get('callbackUrl') || '/library/dashboard'
       router.replace(callbackUrl)
@@ -35,6 +37,8 @@ function LoginContent() {
     const errorType = searchParams.get('error')
     
     if (errorType === 'InvalidToken') {
+      // הצגת הודעת שגיאה בתגובה לפרמטר error שב-URL
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setError('קישור האימות אינו תקין או שכבר נעשה בו שימוש.')
     } else if (errorType === 'TokenExpired') {
       setError('קישור האימות פג תוקף. אנא בקש קישור אימות חדש.')

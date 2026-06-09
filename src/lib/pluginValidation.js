@@ -102,8 +102,12 @@ function looksLikePermission(token) {
   // הרשאות ב-snake_case מנוקדות, ללא camelCase. למשל: library.books.read, plugin.storage.write.
   if (token.startsWith('events.subscribe:')) {
     const tail = token.slice('events.subscribe:'.length)
+    // נבדק: לינארי — מפריד '.' חובה בכל איטרציה מונע backtracking קטסטרופלי
+    // eslint-disable-next-line security/detect-unsafe-regex
     return /^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+$/.test(tail)
   }
+  // נבדק: לינארי — מפריד '.' חובה בכל איטרציה מונע backtracking קטסטרופלי
+  // eslint-disable-next-line security/detect-unsafe-regex
   if (!/^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+$/.test(token)) return false
   if (/[A-Z]/.test(token)) return false
   // לסנן ערכי דמה כמו "event.name", "namespace.method"
@@ -391,6 +395,8 @@ export function checkDesignCompliance(files) {
       const value = fsMatch[1].trim()
       // מותר: var(...), אחוזים, em/rem
       if (/var\s*\(/.test(value)) continue
+      // נבדק: לינארי — כמתים חד-רמתיים, אין נסיגה קטסטרופלית
+      // eslint-disable-next-line security/detect-unsafe-regex
       if (/^\d+(?:\.\d+)?\s*(?:em|rem|%)$/i.test(value)) continue
       if (/^0(?:px)?$/.test(value)) continue
       if (/\d+\s*px/i.test(value)) {
@@ -405,7 +411,11 @@ export function checkDesignCompliance(files) {
     while ((brMatch = radiusRe.exec(stripped)) !== null) {
       const value = brMatch[1].trim()
       if (/var\s*\(/.test(value)) continue
+      // נבדק: לינארי — מפריד '\s+' חובה בכל איטרציה
+      // eslint-disable-next-line security/detect-unsafe-regex
       if (/^0(?:px)?(?:\s+0(?:px)?)*$/.test(value)) continue
+      // נבדק: לינארי — כמתים חד-רמתיים
+      // eslint-disable-next-line security/detect-unsafe-regex
       if (/^\d+(?:\.\d+)?\s*%$/.test(value)) continue
       if (/\d+\s*px/i.test(value)) {
         addOnce('radius-px', `${name}: border-radius ב-px קבוע ("${value.slice(0, 30)}"). חובה var(--radius-sm/md/lg/pill)`)

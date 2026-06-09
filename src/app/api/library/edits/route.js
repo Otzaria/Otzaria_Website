@@ -5,9 +5,7 @@ import User from '@/models/User';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { canModerateLibrary } from '@/lib/roles';
-
-const PREVIEW_LIMIT = 600;
-const clip = (s) => (typeof s === 'string' && s.length > PREVIEW_LIMIT ? s.slice(0, PREVIEW_LIMIT) + '…' : s);
+import { focusChange } from '@/lib/dicta/text-diff';
 
 // רשימת הצעות לתור האישורים. תומך בסינון לפי סטטוס/ספר/מחבר/סוג/תבנית.
 export async function GET(req) {
@@ -49,7 +47,10 @@ export async function GET(req) {
       note: e.note,
       findReplace: e.findReplace,
       changeCount: e.changes?.length || 0,
-      changes: (e.changes || []).slice(0, 30).map((c) => ({ line: c.line, before: clip(c.before), after: clip(c.after) })),
+      changes: (e.changes || []).slice(0, 30).map((c) => {
+        const f = focusChange(c.before, c.after);
+        return { line: c.line, before: f.before, after: f.after };
+      }),
       baseVersion: e.baseVersion,
       appliedDirectly: e.appliedDirectly,
       reviewerName: e.reviewerName,

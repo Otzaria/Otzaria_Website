@@ -121,14 +121,14 @@ export function DialogProvider({ children }) {
     closeTimerRef.current = setTimeout(() => {
       setDialogConfig(prev => ({ ...prev, isOpen: false }))
     }, 300)
-  }, [clearAutoCloseTimer, clearCloseTimer, dialogConfig.onCancel])
+  }, [clearAutoCloseTimer, clearCloseTimer, dialogConfig])
 
   const handleConfirm = useCallback(() => {
     if (dialogConfig.onConfirm) {
       dialogConfig.onConfirm()
     }
     closeDialog()
-  }, [dialogConfig.onConfirm, closeDialog])
+  }, [dialogConfig, closeDialog])
 
   useEffect(() => {
     const handleKeyDown = (event) => {

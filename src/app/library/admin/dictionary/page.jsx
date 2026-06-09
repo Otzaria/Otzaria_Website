@@ -32,6 +32,8 @@ export default function AdminDictionaryPage() {
     }
 
     loadEntries()
+  // טעינת נתונים מותנית-הרשאה; loadEntries מוחרג למניעת לולאת רענון
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, session, router])
 
   const loadEntries = async () => {

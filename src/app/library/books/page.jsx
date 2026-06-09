@@ -8,7 +8,7 @@ import { statusConfig } from '@/lib/library-data'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 
 export default function LibraryBooksPage() {
-  const [treeData, setTreeData] = useState([])
+  const [, setTreeData] = useState([])
   const [flatBooks, setFlatBooks] = useState([])
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)

@@ -716,7 +716,7 @@ export default function DictaEditorCore({
     return false
   }, [])
 
-  const highlightFirstOccurrenceAny = useCallback((container, variants) => {
+  const _highlightFirstOccurrenceAny = useCallback((container, variants) => {
     if (!container || !variants || variants.length === 0) return false
     for (let i = 0; i < variants.length; i += 1) {
       if (highlightFirstOccurrence(container, variants[i])) return true
@@ -1010,6 +1010,8 @@ export default function DictaEditorCore({
   }), [onSave, content, saveLabel, handleToggleEditMode, insertTag, removeTags, undo, redo])
 
   const availableActions = useMemo(() => {
+    // actionsMap הוא אובייקט ממומואיז (useMemo) רגיל ולא ref; קריאת def.label בטוחה ברינדור.
+    // eslint-disable-next-line react-hooks/refs
     return Object.entries(actionsMap).map(([id, def]) => ({
       id,
       label: def.label

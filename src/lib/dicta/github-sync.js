@@ -15,7 +15,6 @@ export async function dictaSync(customFolderPath) {
   
   const log = [];
   let addedCount = 0;
-  let skippedCount = 0;
   let errorCount = 0;
   const createdBookIds = [];
 

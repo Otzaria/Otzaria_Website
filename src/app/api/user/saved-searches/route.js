@@ -5,7 +5,7 @@ import connectDB from '@/lib/db';
 import User from '@/models/User';         
 
 // שליפת נתונים
-export async function GET(req) {
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     

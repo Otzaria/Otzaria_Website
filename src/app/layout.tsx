@@ -35,11 +35,13 @@ export default function RootLayout({
   return (
     <html lang="he" dir="rtl">
       <head>
-        <link 
-          rel="stylesheet" 
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" 
+        {/* גופן אייקונים (Material Symbols) — next/font אינו מתאים לגופן אייקונים דינמי */}
+        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
         />
-        <script src="https://palmoni5.github.io/Shabbat-blocker/Shabbat-blocker.js"></script>
+        {/* חסימת שבת/יום טוב מתבצעת כעת בצד שרת ב-src/proxy.js (כולל מעבר חופשי לבוטים) */}
       </head>
       <body className={`antialiased bg-background text-foreground font-sans ${frankRuehl.variable}`}>
         <ErrorBoundary>

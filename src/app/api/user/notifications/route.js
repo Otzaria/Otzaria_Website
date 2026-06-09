@@ -7,7 +7,7 @@ import User from '@/models/User';
 
 const LIST_NAME = 'new_books_subscribers';
 
-export async function GET(request) {
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     if (!session) {

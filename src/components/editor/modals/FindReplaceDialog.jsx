@@ -40,6 +40,8 @@ export default function FindReplaceDialog({
              setPosition({ x: startX, y: 100 })
         }
     }
+  // position נקבע בתוך האפקט; מוחרג למניעת לולאה
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
 
   // לוגיקת גרירה

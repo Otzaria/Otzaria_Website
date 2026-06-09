@@ -30,6 +30,8 @@ export default function AddPageNumberModal({ isOpen, onClose, content, onContent
           if (nextLineIndex < lines.length) {
             const nextLine = lines[nextLineIndex].trim()
             // דפוס מורכב יותר שתופס גם תגים
+            // נבדק: לינארי — כמתים חד-רמתיים, אין נסיגה קטסטרופלית
+            // eslint-disable-next-line security/detect-unsafe-regex
             const pattern = /(<[a-z]+>)?(ע["']+?[אב]|עמוד [אב])[.,:()\[\]'"״׳]?(<\/[a-z]+>)?\s?/
             const matchNextLine = nextLine.match(pattern)
             
@@ -72,7 +74,6 @@ export default function AddPageNumberModal({ isOpen, onClose, content, onContent
       
       if (changesMade) {
         const newContent = updated.join('\n')
-        const count = updated.length - lines.length + (lines.length - updated.length)
         setResult('ההחלפה הושלמה בהצלחה!')
         onContentChange(newContent)
         setTimeout(() => {

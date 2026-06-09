@@ -39,7 +39,7 @@ export default function AdminBooksPage() {
 
   const [showGlobalInstructionsDialog, setShowGlobalInstructionsDialog] = useState(false)
   const [globalInstructionsData, setGlobalInstructionsData] = useState({ sections: [] })
-  const [isLoadingInstructions, setIsLoadingInstructions] = useState(false)
+  const [, setIsLoadingInstructions] = useState(false)
   const [isSavingInstructions, setIsSavingInstructions] = useState(false)
 
   const [personalFilter, setPersonalFilter] = useState('all') // 'all' | 'public' | 'personal'

@@ -9,6 +9,8 @@ export default function EditGlobalInstructionsDialog({ isOpen, onClose, initialD
     useEffect(() => {
         if (isOpen) {
             if (initialData) {
+                // סנכרון עותק מקומי לעריכה מה-prop בעת פתיחת הדיאלוג
+                // eslint-disable-next-line react-hooks/set-state-in-effect
                 setInstructions(JSON.parse(JSON.stringify(initialData)))
             } else {
                 setInstructions({ sections: [] })

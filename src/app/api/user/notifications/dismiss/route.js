@@ -4,7 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import dbConnect from '@/lib/db';
 import User from '@/models/User';
 
-export async function POST(req) {
+export async function POST() {
   try {
     await dbConnect();
     const session = await getServerSession(authOptions);

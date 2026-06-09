@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
@@ -10,7 +9,6 @@ export default function AdminTrashPage() {
   const [uploads, setUploads] = useState([])
   const [loading, setLoading] = useState(true)
   const [expandedBooks, setExpandedBooks] = useState({})
-  const router = useRouter()
   const { showConfirm, showAlert } = useDialog()
 
   const loadTrash = async () => {

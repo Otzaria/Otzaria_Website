@@ -12,6 +12,8 @@ export default function ImagePreviewModal({ isOpen, onClose, imageSrc, altText }
   // איפוס בעת פתיחה מחדש
   useEffect(() => {
     if (isOpen) {
+      // איפוס זום/מיקום התצוגה בעת פתיחה מחדש
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setScale(1)
       setPosition({ x: 0, y: 0 })
       document.body.style.overflow = 'hidden' // מניעת גלילה של האתר ברקע

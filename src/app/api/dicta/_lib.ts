@@ -52,6 +52,8 @@ export async function addPageNumberToHeadingDB(bookId: string, replaceWith: stri
       const nextLineIndex = i + 1;
       if (nextLineIndex < content.length) {
         const nextLine = content[nextLineIndex].trim();
+        // נבדק: לינארי — כמתים חד-רמתיים, אין נסיגה קטסטרופלית
+        // eslint-disable-next-line security/detect-unsafe-regex
         const pattern = /(<[a-z]+>)?(ע["']+?[אב]|עמוד [אב])[.,:()\[\]'"״׳]?(<\/[a-z]+>)?\s?/;
         const matchNextLine = nextLine.match(pattern);
         if (matchNextLine) {
@@ -440,6 +442,8 @@ export async function headerErrorCheckerDB(bookId: string, reStart: string, reEn
   } else if (reEnd) {
     pattern = new RegExp(`^[א-ת]([א-ת \\-]*[א-ת])?[${escapeRegExpHelper(reEnd)}]*$`);
   } else {
+    // נבדק: לינארי — קבוצה אופציונלית בודדת (?), עוגן '$' חוסם נסיגה
+    // eslint-disable-next-line security/detect-unsafe-regex
     pattern = new RegExp("^[א-ת]([א-ת \\-]*[א-ת])?$");
   }
 
@@ -852,8 +856,8 @@ export async function ocrProcess(
           totalOutputTokens += usage.candidatesTokenCount ?? 0;
         }
         success = true;
-      } catch (err: any) {
-        const errorStr = err?.message || String(err);
+      } catch (err: unknown) {
+        const errorStr = err instanceof Error ? err.message : String(err);
         if (errorStr.includes("429") || /quota|rate/i.test(errorStr)) {
           retryCount += 1;
           if (retryCount < 3) {

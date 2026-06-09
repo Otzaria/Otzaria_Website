@@ -6,7 +6,7 @@ import User from '@/models/User';
 import { hasPluginsAccess } from '@/lib/roles';
 
 // GET - קבלת הגדרות התראות על תוספים של המשתמש
-export async function GET(request) {
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !hasPluginsAccess(session.user?.role)) {

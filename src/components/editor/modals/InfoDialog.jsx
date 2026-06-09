@@ -6,6 +6,8 @@ export default function InfoDialog({ isOpen, onClose, bookInstructions, globalIn
   const [dontShowAgain, setDontShowAgain] = useState(false)
 
   useEffect(() => {
+    // mount guard לרינדור פורטל בצד הלקוח בלבד (מניעת hydration mismatch)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true)
     if (isOpen) {
       document.body.style.overflow = 'hidden'

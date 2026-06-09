@@ -34,6 +34,8 @@ import {
 
 const PLUGIN_FILE_EXT = '.otzplugin'
 // slug באנגלית בלבד - אותיות קטנות, ספרות ומקפים. לא מתחיל/מסתיים במקף.
+// נבדק: לינארי — מפריד '-' חובה בכל איטרציה מונע נסיגה קטסטרופלית
+// eslint-disable-next-line security/detect-unsafe-regex
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
 function createSlug(name) {

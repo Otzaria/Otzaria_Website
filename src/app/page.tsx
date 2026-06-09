@@ -1,10 +1,36 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import Link from 'next/link'
 import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
+
+// מבנה נתוני ההורדות המוחזר מ-/api/github-releases
+type PlatformLinks = Record<string, string | undefined>
+type Downloads = {
+  version?: string
+  windows?: PlatformLinks
+  linux?: PlatformLinks
+  android?: PlatformLinks
+  ios?: PlatformLinks
+  macos?: PlatformLinks
+}
+
+type PlatformButtonConfig = {
+  icon: string
+  title: string
+  subtitle: string
+  onClick: () => void
+}
+
+type DownloadOption = {
+  key: string
+  icon: string
+  title: string
+  desc: string
+  isLink?: boolean
+}
 
 function normalizeVersionPart(part: string) {
   const numericPart = part.match(/^\d+/)?.[0]
@@ -36,8 +62,8 @@ export default function Home() {
   const [macModalOpen, setMacModalOpen] = useState(false)
   const [iosModalOpen, setIosModalOpen] = useState(false)
   
-  const [stableDownloads, setStableDownloads] = useState<any>(null)
-  const [devDownloads, setDevDownloads] = useState<any>(null)
+  const [stableDownloads, setStableDownloads] = useState<Downloads | null>(null)
+  const [devDownloads, setDevDownloads] = useState<Downloads | null>(null)
   const [detectedPlatform, setDetectedPlatform] = useState<string | null>(null)
   const [showAllPlatforms, setShowAllPlatforms] = useState(false)
 
@@ -61,6 +87,8 @@ export default function Home() {
       return null
     }
     
+    // זיהוי פלטפורמה רץ רק בצד הלקוח (navigator לא קיים בשרת)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDetectedPlatform(detectPlatform())
   }, [])
 
@@ -139,7 +167,7 @@ export default function Home() {
 
   // פונקציה להצגת כפתור פלטפורמה
   const renderPlatformButton = (platform: string, large: boolean = false) => {
-    const platformConfig: Record<string, any> = {
+    const platformConfig: Record<string, PlatformButtonConfig> = {
       windows: {
         icon: 'desktop_windows',
         title: 'Windows',
@@ -459,7 +487,15 @@ export default function Home() {
 }
 
 // Download Modal Component
-function DownloadModal({ isOpen, onClose, platform, stableLinks, devLinks, stableVersion, devVersion }: any) {
+function DownloadModal({ isOpen, onClose, platform, stableLinks, devLinks, stableVersion, devVersion }: {
+  isOpen: boolean
+  onClose: () => void
+  platform: string
+  stableLinks: PlatformLinks
+  devLinks: PlatformLinks
+  stableVersion?: string
+  devVersion?: string
+}) {
   if (!isOpen) return null
 
   const shouldShowDevVersion = Boolean(devVersion) && (!stableVersion || compareVersions(stableVersion, devVersion) < 0)
@@ -522,8 +558,8 @@ function DownloadModal({ isOpen, onClose, platform, stableLinks, devLinks, stabl
   )
 }
 
-function renderDownloadOptions(platform: string, links: any) {
-  const options: any = {
+function renderDownloadOptions(platform: string, links: PlatformLinks) {
+  const options: Record<string, DownloadOption[]> = {
     Windows: [
       { key: 'exe', icon: 'install_desktop', title: 'EXE Installer', desc: 'קובץ התקנה (מומלץ)' },
       { key: 'exeFull', icon: 'install_desktop', title: 'EXE Installer (Full)', desc: 'קובץ התקנה עם ספרייה מלאה' },
@@ -552,13 +588,13 @@ function renderDownloadOptions(platform: string, links: any) {
   }
 
   const platformOptions = options[platform] || []
-  const validOptions = platformOptions.filter((opt: any) => links && links[opt.key])
+  const validOptions = platformOptions.filter((opt) => links && links[opt.key])
 
   if (validOptions.length === 0) {
     return <p className="text-gray-500 italic p-4 bg-gray-50 rounded-lg text-center border border-dashed border-gray-300">אין הורדות זמינות כרגע לגרסה זו.</p>
   }
 
-  return validOptions.map((option: any) => (
+  return validOptions.map((option) => (
     <a
       key={option.key}
       href={links[option.key]}
