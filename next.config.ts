@@ -61,7 +61,7 @@ const nextConfig = {
           // תת-דומיין שאינו HTTPS). הוסף אותם ידנית רק כשכל תתי-הדומיינים מוכנים ל-HTTPS קבוע.
           { key: 'Strict-Transport-Security', value: 'max-age=31536000' },
           // Content-Security-Policy — מותאם למקורות שהאתר משתמש בהם בפועל:
-          //  • script: עצמי + inline/eval (Next.js, PDF.js wasm) + חוסם-השבת החיצוני
+          //  • script: עצמי + inline/eval (Next.js, PDF.js wasm)
           //  • style/font: עצמי + inline (Tailwind/framer-motion) + Google Fonts
           //  • img/media: כל HTTPS + data/blob (תמונות ספרים, OCR, canvas)
           //  • connect: כולל ws:/wss: עבור HMR/WebSocket של Next dev (ה-headers חלים גם בפיתוח)
@@ -70,7 +70,7 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://palmoni5.github.io",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com data:",
               "img-src 'self' data: blob: https:",
