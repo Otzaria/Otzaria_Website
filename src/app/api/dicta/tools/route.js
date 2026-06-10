@@ -178,6 +178,6 @@ export async function POST(request) {
 
   } catch (err) {
     console.error(`Error in tool execution:`, err);
-    return NextResponse.json({ detail: 'Internal Server Error' || "שגיאת שרת פנימית" }, { status: 500 });
+    return NextResponse.json({ detail: "שגיאת שרת פנימית" }, { status: 500 });
   }
 }

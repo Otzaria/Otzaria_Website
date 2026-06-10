@@ -12,11 +12,9 @@ export async function POST(request) {
     }
     await connectDB();
 
-    // נטרול תווי regex כדי למנוע הזרקת NoSQL / ReDoS דרך שדה המייל
-    const escapedEmail = email.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const user = await User.findOne({
-        email: { $regex: new RegExp(`^${escapedEmail}$`, 'i') }
-    });
+    // חיפוש ישיר על מייל מנורמל (ההרשמה שומרת toLowerCase) — משתמש באינדקס
+    // ומבטל לחלוטין סיכוני NoSQL injection / ReDoS, ללא צורך ב-$regex.
+    const user = await User.findOne({ email: email.trim().toLowerCase() });
     
     if (!user) {
       return NextResponse.json({ success: true, message: 'אם המייל קיים במערכת, נשלחה הודעה.' });

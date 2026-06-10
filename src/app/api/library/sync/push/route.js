@@ -18,6 +18,6 @@ export async function POST(req) {
   } catch (error) {
     if (error.code === 'NO_TOKEN') return NextResponse.json({ error: error.message, code: 'NO_TOKEN' }, { status: 400 });
     console.error('Manual push sync failed:', error);
-    return NextResponse.json({ error: 'Internal Server Error' || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

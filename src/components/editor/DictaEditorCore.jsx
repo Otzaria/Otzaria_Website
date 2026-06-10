@@ -98,8 +98,12 @@ export default function DictaEditorCore({
   console.log('DictaEditorCore v2 - singleLineHeader:', singleLineHeader)
   
   const [content, setContent] = useState(initialContent)
-  // ניקוי HTML לפני רינדור כדי למנוע XSS (התוכן נערך ידנית ועלול להכיל סקריפטים)
-  const sanitizedContent = useMemo(() => DOMPurify.sanitize(content || ''), [content])
+  // ניקוי HTML לפני רינדור כדי למנוע XSS. DOMPurify תלוי ב-window ולכן רץ רק
+  // בצד הלקוח; ב-SSR מוחזר תוכן ריק וההידרציה בצד הלקוח מבצעת את הניקוי.
+  const sanitizedContent = useMemo(
+    () => (typeof window !== 'undefined' ? DOMPurify.sanitize(content || '') : ''),
+    [content]
+  )
   const [fontSize, setFontSize] = useState(18)
   const [selectedFont, setSelectedFont] = useState("'Times New Roman'")
   const [textAlign, setTextAlign] = useState('right')

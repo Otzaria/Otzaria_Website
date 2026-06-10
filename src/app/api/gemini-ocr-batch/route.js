@@ -390,7 +390,7 @@ export async function POST(request) {
     }
 
     const userId = (session?.user?._id || session?.user?.id)?.toString();
-    const isAdmin = session.user.role === 'admin';
+    const isAdmin = session.user?.role === 'admin';
 
     const body = await request.json();
     const { bookPath, pages, customPrompt, examples, customExamples } = body || {};
