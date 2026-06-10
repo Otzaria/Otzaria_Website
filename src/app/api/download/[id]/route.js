@@ -2,9 +2,17 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Upload from '@/models/Upload';
 import { getUploadBuffer } from '@/lib/gridfs-service';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { hasBooksAccess } from '@/lib/roles';
 
 export async function GET(request, { params }) {
     try {
+        const session = await getServerSession(authOptions);
+        if (!hasBooksAccess(session?.user?.role)) {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+
         const { id } = await params;
         await connectDB();
 
@@ -22,6 +30,7 @@ export async function GET(request, { params }) {
         });
 
     } catch (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        console.error('download/[id] error:', error);
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }

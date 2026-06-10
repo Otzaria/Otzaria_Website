@@ -29,7 +29,7 @@ export default function ChangePasswordForm() {
     }
 
     // Validate new password strength
-    const passwordCheck = validatePassword(formData.newPassword, 6)
+    const passwordCheck = validatePassword(formData.newPassword, 8)
     if (!passwordCheck.isValid) {
       setMessage({ type: 'error', text: passwordCheck.error })
       return
@@ -114,7 +114,7 @@ export default function ChangePasswordForm() {
               value={formData.newPassword}
               onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
               className="w-full px-4 py-3 bg-surface border border-outline rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-on-surface"
-              placeholder="הזן סיסמה חדשה (לפחות 6 תווים)"
+              placeholder="הזן סיסמה חדשה (לפחות 8 תווים)"
               disabled={loading}
             />
             <button

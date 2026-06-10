@@ -213,7 +213,7 @@ async function runCheck(request) {
         });
     } catch (error) {
         console.error('Stale-pages cron error:', error);
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+        return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
     }
 }
 

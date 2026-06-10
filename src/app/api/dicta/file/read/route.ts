@@ -2,8 +2,13 @@ import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import fsSync from "fs";
 import { validateSafePath } from "../../_lib";
+import { requireBooksAccess } from "../../_auth";
 
 export async function POST(request: Request) {
+  const auth = await requireBooksAccess();
+  if (!auth.ok) {
+    return NextResponse.json({ detail: auth.error }, { status: auth.status });
+  }
   try {
     const { file_path } = await request.json();
     validateSafePath(file_path);
@@ -13,7 +18,7 @@ export async function POST(request: Request) {
     const content = await fs.readFile(file_path, "utf-8");
     return NextResponse.json({ content });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ detail: `שגיאה בקריאת הקובץ: ${message}` }, { status: 500 });
+    console.error("dicta/file/read error:", err);
+    return NextResponse.json({ detail: "שגיאה בקריאת הקובץ" }, { status: 500 });
   }
 }

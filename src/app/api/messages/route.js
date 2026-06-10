@@ -66,7 +66,7 @@ export async function GET(request) {
         return NextResponse.json({ success: true, messages: formattedMessages });
     } catch (error) {
         console.error('Error fetching messages:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }
 
@@ -90,7 +90,7 @@ export async function POST(request) {
         return NextResponse.json({ success: true });
     } catch (error) {
         console.error('Error sending message:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }
 
@@ -151,6 +151,6 @@ export async function PUT(request) {
 
     } catch (error) {
         console.error('❌ FATAL ERROR in PUT:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }

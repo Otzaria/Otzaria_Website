@@ -7,10 +7,15 @@ import nodemailer from 'nodemailer';
 export async function POST(request) {
   try {
     const { email } = await request.json();
+    if (typeof email !== 'string' || !email.trim()) {
+        return NextResponse.json({ success: true, message: 'אם המייל קיים במערכת, נשלחה הודעה.' });
+    }
     await connectDB();
 
-    const user = await User.findOne({ 
-        email: { $regex: new RegExp(`^${email.trim()}$`, 'i') } 
+    // נטרול תווי regex כדי למנוע הזרקת NoSQL / ReDoS דרך שדה המייל
+    const escapedEmail = email.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const user = await User.findOne({
+        email: { $regex: new RegExp(`^${escapedEmail}$`, 'i') }
     });
     
     if (!user) {

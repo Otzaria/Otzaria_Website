@@ -25,6 +25,6 @@ export async function POST(req) {
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
     console.error('Library pull sync failed:', error);
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error' || 'Internal Server Error' }, { status: 500 });
   }
 }

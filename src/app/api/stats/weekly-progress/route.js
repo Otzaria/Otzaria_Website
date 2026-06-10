@@ -58,6 +58,6 @@ export async function GET() {
         return NextResponse.json({ success: true, data: filledData, total });
     } catch (error) {
         console.error('Weekly stats error:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }

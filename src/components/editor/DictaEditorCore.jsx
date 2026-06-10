@@ -18,6 +18,7 @@ import ShortcutsDialog from '@/components/editor/modals/ShortcutsDialog'
 import FindReplaceDialog from '@/components/editor/modals/FindReplaceDialog'
 import SpellcheckDialog from '@/components/editor/modals/SpellcheckDialog'
 import { getTextareaCaretTop } from '@/lib/editorUtils'
+import DOMPurify from 'dompurify'
 import { buildWholeWordRegex, findNextWholeWordInTextarea as findNextWholeWordInTextareaUtil } from '@/lib/hebrewWordUtils'
 
 const DEFAULT_SHORTCUTS = {
@@ -97,6 +98,8 @@ export default function DictaEditorCore({
   console.log('DictaEditorCore v2 - singleLineHeader:', singleLineHeader)
   
   const [content, setContent] = useState(initialContent)
+  // ניקוי HTML לפני רינדור כדי למנוע XSS (התוכן נערך ידנית ועלול להכיל סקריפטים)
+  const sanitizedContent = useMemo(() => DOMPurify.sanitize(content || ''), [content])
   const [fontSize, setFontSize] = useState(18)
   const [selectedFont, setSelectedFont] = useState("'Times New Roman'")
   const [textAlign, setTextAlign] = useState('right')
@@ -1736,7 +1739,7 @@ export default function DictaEditorCore({
                   <div
                     className="max-w-4xl mx-auto prose prose-lg [&_h1]:font-bold [&_h2]:font-bold [&_h3]:font-bold [&_h4]:font-bold [&_h5]:font-bold [&_h6]:font-bold bg-white p-6 rounded-lg shadow-sm"
                     style={{ fontSize: `${fontSize}px`, fontFamily: selectedFont, textAlign: textAlign, whiteSpace: 'pre-wrap' }}
-                    dangerouslySetInnerHTML={{ __html: content }}
+                    dangerouslySetInnerHTML={{ __html: sanitizedContent }}
                   />
                 </div>
               </div>
@@ -1748,7 +1751,7 @@ export default function DictaEditorCore({
                 ref={contentRef}
                 className="max-w-4xl mx-auto prose prose-lg [&_h1]:font-bold [&_h2]:font-bold [&_h3]:font-bold [&_h4]:font-bold [&_h5]:font-bold [&_h6]:font-bold"
                 style={{ fontSize: `${fontSize}px`, fontFamily: selectedFont, textAlign: textAlign, whiteSpace: 'pre-wrap' }}
-                dangerouslySetInnerHTML={{ __html: content }}
+                dangerouslySetInnerHTML={{ __html: sanitizedContent }}
               />
             </div>
           )}

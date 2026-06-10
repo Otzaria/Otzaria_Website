@@ -63,6 +63,6 @@ export async function POST() {
 
     } catch (error) {
         console.error('Recalc Error:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }

@@ -5,10 +5,10 @@
 /**
  * Validates password strength
  * @param {string} password - Password to validate
- * @param {number} minLength - Minimum length (default: 6)
+ * @param {number} minLength - Minimum length (default: 8)
  * @returns {Object} {isValid, error}
  */
-export function validatePassword(password, minLength = 6) {
+export function validatePassword(password, minLength = 8) {
   if (!password) {
     return { isValid: false, error: 'סיסמה נדרשת' }
   }
