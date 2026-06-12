@@ -40,6 +40,6 @@ export async function POST(request) {
     return NextResponse.json({ success: true, message: 'המידע עודכן' });
   } catch (error) {
     console.error('🔥 API ERROR:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

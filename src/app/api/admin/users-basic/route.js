@@ -22,6 +22,6 @@ export async function GET() {
 
     return NextResponse.json({ success: true, users });
   } catch (e) {
-    return NextResponse.json({ success: false, error: e.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
   }
 }

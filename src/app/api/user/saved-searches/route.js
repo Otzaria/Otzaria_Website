@@ -19,7 +19,7 @@ export async function GET() {
     return NextResponse.json({ success: true, savedSearches: user?.savedSearches || [] });
   } catch (error) {
     console.error('Error fetching searches:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
@@ -48,6 +48,6 @@ export async function PUT(req) {
     return NextResponse.json({ success: true, savedSearches: updatedUser.savedSearches });
   } catch (error) {
     console.error('Error saving searches:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

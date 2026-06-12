@@ -7,11 +7,14 @@ import nodemailer from 'nodemailer';
 export async function POST(request) {
   try {
     const { email } = await request.json();
+    if (typeof email !== 'string' || !email.trim()) {
+        return NextResponse.json({ success: true, message: 'אם המייל קיים במערכת, נשלחה הודעה.' });
+    }
     await connectDB();
 
-    const user = await User.findOne({ 
-        email: { $regex: new RegExp(`^${email.trim()}$`, 'i') } 
-    });
+    // חיפוש ישיר על מייל מנורמל (ההרשמה שומרת toLowerCase) — משתמש באינדקס
+    // ומבטל לחלוטין סיכוני NoSQL injection / ReDoS, ללא צורך ב-$regex.
+    const user = await User.findOne({ email: email.trim().toLowerCase() });
     
     if (!user) {
       return NextResponse.json({ success: true, message: 'אם המייל קיים במערכת, נשלחה הודעה.' });

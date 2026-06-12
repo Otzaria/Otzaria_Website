@@ -12,8 +12,8 @@ export async function POST(request) {
 
     const { currentPassword, newPassword } = await request.json();
     
-    if (newPassword.length < 6) {
-        return NextResponse.json({ error: 'הסיסמה החדשה קצרה מדי' }, { status: 400 });
+    if (!newPassword || newPassword.length < 8) {
+        return NextResponse.json({ error: 'הסיסמה החדשה חייבת להכיל לפחות 8 תווים' }, { status: 400 });
     }
 
     await connectDB();
@@ -34,6 +34,6 @@ export async function POST(request) {
 
     return NextResponse.json({ success: true, message: 'הסיסמה שונתה בהצלחה' });
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

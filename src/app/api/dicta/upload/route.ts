@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 import path from "path";
 import { ensureUploadDir, UPLOAD_DIR } from "../_lib";
+import { requireBooksAccess } from "../_auth";
 import fs from "fs/promises";
 
 export async function POST(request: Request) {
+  const auth = await requireBooksAccess();
+  if (!auth.ok) {
+    return NextResponse.json({ detail: auth.error }, { status: auth.status });
+  }
   try {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
@@ -12,8 +17,10 @@ export async function POST(request: Request) {
     }
 
     await ensureUploadDir();
-    const safeName = file.name.replace(/\.\./g, "").replace(/[\\/]/g, "_");
-    const destName = `${Date.now()}_${safeName}`;
+    // נטרול שם הקובץ: שמירה רק על שם הבסיס וצמצום לתווים בטוחים בלבד.
+    const baseName = path.basename(file.name);
+    const safeName = baseName.replace(/[^a-zA-Z0-9._֐-׿-]/g, "_").replace(/\.{2,}/g, ".");
+    const destName = `${Date.now()}_${safeName || "file"}`;
     const destPath = path.join(UPLOAD_DIR, destName);
 
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -21,7 +28,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ path: destPath, name: file.name });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ detail: `שגיאה בשמירת הקובץ: ${message}` }, { status: 500 });
+    console.error("dicta/upload error:", err);
+    return NextResponse.json({ detail: "שגיאה בשמירת הקובץ" }, { status: 500 });
   }
 }

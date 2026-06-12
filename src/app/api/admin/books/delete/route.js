@@ -53,6 +53,6 @@ export async function DELETE(request) {
 
     } catch (error) {
         console.error('Delete book error:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }

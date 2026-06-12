@@ -79,7 +79,7 @@ export async function POST(request) {
       await dbSession.abortTransaction();
     }
     console.error('Error uncompleting page:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   } finally {
     await dbSession.endSession();
   }
