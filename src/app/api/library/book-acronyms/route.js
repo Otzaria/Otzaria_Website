@@ -18,150 +18,26 @@ function isSameAlias(a, b) {
   return normalizeAlias(a) === normalizeAlias(b)
 }
 
-function escapeRegex(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+// גרשיים/גרש (ASCII ועברי) — סימנים המסמנים ראשי תיבות
+const GERSHAYIM_CHARS = /["'׳״]/g
+
+function stripGershayim(value) {
+  return normalizeAlias(value).replace(GERSHAYIM_CHARS, '')
 }
 
-function extractPendingTargetAlias(suggestion) {
-  if (!suggestion) return ''
-  if (suggestion.actionType === 'update') return normalizeAlias(suggestion.nextAlias)
-  if (suggestion.actionType === 'add') return normalizeAlias(suggestion.nextAlias || suggestion.alias)
-  return ''
+// האם ההבדל היחיד בין שני הערכים הוא הוספה/הסרה של גרשיים?
+function differsOnlyByGershayim(a, b) {
+  const stripped = stripGershayim(a)
+  if (!stripped) return false
+  return !isSameAlias(a, b) && stripped === stripGershayim(b)
 }
 
-function buildWholeWordSearchPattern(searchText) {
-  const normalizedSearchText = normalizeAlias(searchText)
-  if (!normalizedSearchText) return null
+const GERSHAYIM_ONLY_ERROR =
+  'אין להוסיף כינוי שכל ההבדל בו הוא הוספת או הסרת גרשיים (") — זה כבר מטופל בצד התוכנה. יש להוסיף רק כינויים או ראשי תיבות בעלי ערך, כגון: רבי עקיבא אייגר ← רעק"א'
 
-  return `(^|[^\\p{L}\\p{N}])${escapeRegex(normalizedSearchText)}(?=$|[^\\p{L}\\p{N}])`
-}
-function replaceWholeWordOccurrences(text, searchText, replacementText) {
-  const normalizedText = normalizeAlias(text)
-  const normalizedSearchText = normalizeAlias(searchText)
-  const normalizedReplacementText = normalizeAlias(replacementText)
-
-  if (!normalizedText || !normalizedSearchText || !normalizedReplacementText) {
-    return null
-  }
-
-  const pattern = new RegExp(`(^|[^\\p{L}\\p{N}])(${escapeRegex(normalizedSearchText)})(?=$|[^\\p{L}\\p{N}])`, 'gu')
-  if (!pattern.test(normalizedText)) {
-    return null
-  }
-
-  return normalizeAlias(normalizedText.replace(pattern, `$1${normalizedReplacementText}`))
-}
-async function createBulkAliasSuggestions({ userId, matchText, replacementText }) {
-  const normalizedMatchText = normalizeAlias(matchText)
-  const normalizedReplacementText = normalizeAlias(replacementText)
-
-  if (!normalizedMatchText || !normalizedReplacementText) {
-    return {
-      error: 'יש למלא גם טקסט לחיפוש בשם הספר וגם את הכינוי החלופי'
-    }
-  }
-
-  if (isSameAlias(normalizedMatchText, normalizedReplacementText)) {
-    return {
-      error: 'הכינוי החלופי חייב להיות שונה מהטקסט שמחפשים בשם הספר'
-    }
-  }
-
-  const wholeWordSearchPattern = buildWholeWordSearchPattern(normalizedMatchText)
-
-  const matchingBooks = await BookAcronym.find({
-    displayName: { $regex: wholeWordSearchPattern, $options: 'u' }
-  })
-    .sort({ updatedAt: 1, externalId: 1 })
-    .lean()
-
-  if (matchingBooks.length === 0) {
-    return {
-      createdCount: 0,
-      matchedCount: 0,
-      skippedCount: 0,
-      updatedBookCount: 0
-    }
-  }
-
-  const bookIds = matchingBooks.map((book) => book._id)
-  const existingPendingSuggestions = await BookAcronymPendingSuggestion.find({
-    bookAcronym: { $in: bookIds }
-  })
-    .select('bookAcronym actionType alias nextAlias')
-    .lean()
-
-  const pendingByBookId = new Map()
-  for (const suggestion of existingPendingSuggestions) {
-    const key = String(suggestion.bookAcronym)
-    const list = pendingByBookId.get(key) || []
-    list.push(suggestion)
-    pendingByBookId.set(key, list)
-  }
-
-  const suggestionsToCreate = []
-  const touchedBookIds = []
-  let skippedCount = 0
-
-  for (const book of matchingBooks) {
-    const displayName = normalizeAlias(book.displayName)
-    if (!displayName.includes(normalizedMatchText)) {
-      skippedCount += 1
-      continue
-    }
-
-    const nextAlias = replaceWholeWordOccurrences(displayName, normalizedMatchText, normalizedReplacementText)
-    if (!nextAlias) {
-      skippedCount += 1
-      continue
-    }
-
-    const approvedAliases = Array.isArray(book.aliases) ? book.aliases : []
-    if (approvedAliases.some((item) => isSameAlias(item, nextAlias))) {
-      skippedCount += 1
-      continue
-    }
-
-    const pendingSuggestions = pendingByBookId.get(String(book._id)) || []
-    const alreadyPending = pendingSuggestions.some((item) => isSameAlias(extractPendingTargetAlias(item), nextAlias))
-    if (alreadyPending) {
-      skippedCount += 1
-      continue
-    }
-
-    suggestionsToCreate.push({
-      bookAcronym: book._id,
-      alias: nextAlias,
-      actionType: 'add',
-      currentAlias: null,
-      nextAlias,
-      bookExternalId: String(book.externalId || ''),
-      bookDisplayName: displayName,
-      approvedAliasesSnapshot: approvedAliases,
-      submittedBy: userId
-    })
-    touchedBookIds.push(book._id)
-  }
-
-  if (suggestionsToCreate.length > 0) {
-    await BookAcronymPendingSuggestion.insertMany(suggestionsToCreate, { ordered: false })
-
-    await BookAcronym.bulkWrite(
-      touchedBookIds.map((bookId) => ({
-        updateOne: {
-          filter: { _id: bookId },
-          update: { $set: { updatedAt: new Date() } }
-        }
-      }))
-    )
-  }
-
-  return {
-    createdCount: suggestionsToCreate.length,
-    matchedCount: matchingBooks.length,
-    skippedCount,
-    updatedBookCount: touchedBookIds.length
-  }
+// בדיקה מול שם הספר וכל הכינויים המאושרים
+function isGershayimOnlyChange(candidate, references) {
+  return references.some((reference) => differsOnlyByGershayim(candidate, reference))
 }
 
 export async function GET() {
@@ -219,25 +95,11 @@ export async function POST(request) {
     }
 
     const body = await request.json()
-    const { bookAcronymId, pendingId, actionType = 'add', alias, nextAlias, matchText, replacementText } = body || {}
+    const { bookAcronymId, pendingId, actionType = 'add', alias, nextAlias } = body || {}
     const normalizedAlias = normalizeAlias(alias)
     const normalizedNextAlias = normalizeAlias(nextAlias)
 
     await connectDB()
-
-    if (actionType === 'bulk-add-by-name-pattern') {
-      const result = await createBulkAliasSuggestions({
-        userId,
-        matchText,
-        replacementText
-      })
-
-      if (result.error) {
-        return NextResponse.json({ success: false, error: result.error }, { status: 400 })
-      }
-
-      return NextResponse.json({ success: true, ...result })
-    }
 
     if (!bookAcronymId) {
       return NextResponse.json({ success: false, error: 'bookAcronymId is required' }, { status: 400 })
@@ -274,6 +136,9 @@ export async function POST(request) {
       if (approvedAliases.some((item) => isSameAlias(item, normalizedAlias))) {
         return NextResponse.json({ success: false, error: 'הכינוי כבר קיים ומאושר' }, { status: 400 })
       }
+      if (isGershayimOnlyChange(normalizedAlias, [book.displayName, ...approvedAliases])) {
+        return NextResponse.json({ success: false, error: GERSHAYIM_ONLY_ERROR }, { status: 400 })
+      }
       targetAlias = normalizedAlias
     } else if (effectiveActionType === 'delete') {
       if (!normalizedAlias) {
@@ -297,6 +162,9 @@ export async function POST(request) {
       }
       if (approvedAliases.some((item) => isSameAlias(item, normalizedNextAlias))) {
         return NextResponse.json({ success: false, error: 'הכינוי החדש כבר קיים ברשימה המאושרת' }, { status: 400 })
+      }
+      if (isGershayimOnlyChange(normalizedNextAlias, [book.displayName, ...approvedAliases.filter((item) => !isSameAlias(item, normalizedAlias))])) {
+        return NextResponse.json({ success: false, error: GERSHAYIM_ONLY_ERROR }, { status: 400 })
       }
       currentAlias = existing
       targetAlias = normalizedNextAlias
