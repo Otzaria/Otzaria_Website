@@ -202,19 +202,25 @@ export async function moderateChanges({ editId, approve = [], reject = [], moder
   const pendingMatch = { $in: ['pending', null] };
   let rejectedNow = 0;
   let approvedNow = 0;
-  for (const i of rejectSet) {
-    const r = await BookEdit.updateOne(
-      { _id: editId, status: 'pending', [`changes.${i}.status`]: pendingMatch },
-      { $set: { [`changes.${i}.status`]: 'rejected' } }
-    );
-    if (r.modifiedCount) rejectedNow++;
+  if (rejectSet.size > 0) {
+    const rejectOps = [...rejectSet].map((i) => ({
+      updateOne: {
+        filter: { _id: editId, status: 'pending', [`changes.${i}.status`]: pendingMatch },
+        update: { $set: { [`changes.${i}.status`]: 'rejected' } },
+      },
+    }));
+    const res = await BookEdit.bulkWrite(rejectOps, { ordered: false });
+    rejectedNow = res.modifiedCount || 0;
   }
-  for (const i of approveSet) {
-    const r = await BookEdit.updateOne(
-      { _id: editId, status: 'pending', [`changes.${i}.status`]: pendingMatch },
-      { $set: { [`changes.${i}.status`]: 'approved', [`changes.${i}.applied`]: false } }
-    );
-    if (r.modifiedCount) approvedNow++;
+  if (approveSet.size > 0) {
+    const approveOps = [...approveSet].map((i) => ({
+      updateOne: {
+        filter: { _id: editId, status: 'pending', [`changes.${i}.status`]: pendingMatch },
+        update: { $set: { [`changes.${i}.status`]: 'approved', [`changes.${i}.applied`]: false } },
+      },
+    }));
+    const res = await BookEdit.bulkWrite(approveOps, { ordered: false });
+    approvedNow = res.modifiedCount || 0;
   }
   if (!rejectedNow && !approvedNow) {
     return { status: 'noop', approved: 0, rejected: 0, conflicts: 0, remainingPending: await countPendingChanges(editId) };
@@ -228,17 +234,30 @@ export async function moderateChanges({ editId, approve = [], reject = [], moder
 
   // 3) עדכון אטומי פר-מקטע: applied למוצלחים; קונפליקט → חזרה ל-pending (אם עדיין
   //    approved&!applied, כדי לא לדרוס הכרעה מקבילה).
+  const settleOps = [];
   for (const c of okChanges) {
     const i = fresh.changes.indexOf(c);
-    if (i >= 0) await BookEdit.updateOne({ _id: editId }, { $set: { [`changes.${i}.applied`]: true } });
+    if (i >= 0) {
+      settleOps.push({
+        updateOne: {
+          filter: { _id: editId },
+          update: { $set: { [`changes.${i}.applied`]: true } },
+        },
+      });
+    }
   }
   for (const c of conflictChanges) {
     const i = fresh.changes.indexOf(c);
-    if (i >= 0) await BookEdit.updateOne(
-      { _id: editId, [`changes.${i}.status`]: 'approved', [`changes.${i}.applied`]: false },
-      { $set: { [`changes.${i}.status`]: 'pending' } }
-    );
+    if (i >= 0) {
+      settleOps.push({
+        updateOne: {
+          filter: { _id: editId, [`changes.${i}.status`]: 'approved', [`changes.${i}.applied`]: false },
+          update: { $set: { [`changes.${i}.status`]: 'pending' } },
+        },
+      });
+    }
   }
+  if (settleOps.length > 0) await BookEdit.bulkWrite(settleOps, { ordered: false });
 
   // 4) סגירה אטומית: רק אם לא נותר אף מקטע ממתין. הסטטוס נגזר מהאם יש מקטע מאושר.
   const settled = await BookEdit.findById(editId);

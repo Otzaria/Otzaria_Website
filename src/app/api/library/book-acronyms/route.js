@@ -35,11 +35,6 @@ function differsOnlyByGershayim(a, b) {
 const GERSHAYIM_ONLY_ERROR =
   'אין להוסיף כינוי שכל ההבדל בו הוא הוספת או הסרת גרשיים (") — זה כבר מטופל בצד התוכנה. יש להוסיף רק כינויים או ראשי תיבות בעלי ערך, כגון: רבי עקיבא אייגר ← רעק"א'
 
-// בדיקה מול שם הספר וכל הכינויים המאושרים
-function isGershayimOnlyChange(candidate, references) {
-  return references.some((reference) => differsOnlyByGershayim(candidate, reference))
-}
-
 export async function GET() {
   try {
     const session = await getServerSession(authOptions)
@@ -136,7 +131,7 @@ export async function POST(request) {
       if (approvedAliases.some((item) => isSameAlias(item, normalizedAlias))) {
         return NextResponse.json({ success: false, error: 'הכינוי כבר קיים ומאושר' }, { status: 400 })
       }
-      if (isGershayimOnlyChange(normalizedAlias, [book.displayName, ...approvedAliases])) {
+      if (differsOnlyByGershayim(normalizedAlias, book.displayName)) {
         return NextResponse.json({ success: false, error: GERSHAYIM_ONLY_ERROR }, { status: 400 })
       }
       targetAlias = normalizedAlias
@@ -163,7 +158,7 @@ export async function POST(request) {
       if (approvedAliases.some((item) => isSameAlias(item, normalizedNextAlias))) {
         return NextResponse.json({ success: false, error: 'הכינוי החדש כבר קיים ברשימה המאושרת' }, { status: 400 })
       }
-      if (isGershayimOnlyChange(normalizedNextAlias, [book.displayName, ...approvedAliases.filter((item) => !isSameAlias(item, normalizedAlias))])) {
+      if (differsOnlyByGershayim(normalizedNextAlias, book.displayName)) {
         return NextResponse.json({ success: false, error: GERSHAYIM_ONLY_ERROR }, { status: 400 })
       }
       currentAlias = existing

@@ -20,14 +20,11 @@ export default function LibraryAcronymsPage() {
 
   const stripGershayim = (value) => String(value || '').trim().replace(/["'׳״]/g, '')
 
-  // האם ההבדל היחיד בין הכינוי לבין שם הספר/כינוי קיים הוא הוספה/הסרה של גרשיים?
-  const isGershayimOnlyChange = (candidate, references) => {
+  // האם ההבדל היחיד בין הכינוי לבין שם הספר הוא הוספה/הסרה של גרשיים?
+  const differsOnlyByGershayim = (candidate, reference) => {
     const stripped = stripGershayim(candidate)
     if (!stripped) return false
-    return references.some((reference) => {
-      const trimmedRef = String(reference || '').trim()
-      return String(candidate || '').trim() !== trimmedRef && stripped === stripGershayim(trimmedRef)
-    })
+    return String(candidate || '').trim() !== String(reference || '').trim() && stripped === stripGershayim(reference)
   }
 
   const GERSHAYIM_ONLY_ERROR =
@@ -133,7 +130,7 @@ export default function LibraryAcronymsPage() {
     const alias = (newAliasById[rowId] || '').trim()
     if (!alias) return
     const row = rows.find((item) => item.id === rowId)
-    if (row && isGershayimOnlyChange(alias, [row.displayName, ...(row.aliases || [])])) {
+    if (row && differsOnlyByGershayim(alias, row.displayName)) {
       showAlert('לא ניתן להוסיף', GERSHAYIM_ONLY_ERROR)
       return
     }
@@ -170,12 +167,9 @@ export default function LibraryAcronymsPage() {
     const nextAlias = editingAliasValue.trim()
     if (!nextAlias) return
     const row = rows.find((item) => item.id === rowId)
-    if (row) {
-      const references = [row.displayName, ...(row.aliases || []).filter((item) => item !== originalAlias)]
-      if (isGershayimOnlyChange(nextAlias, references)) {
-        showAlert('לא ניתן לעדכן', GERSHAYIM_ONLY_ERROR)
-        return
-      }
+    if (row && differsOnlyByGershayim(nextAlias, row.displayName)) {
+      showAlert('לא ניתן לעדכן', GERSHAYIM_ONLY_ERROR)
+      return
     }
     await requestChange(rowId, { actionType: 'update', alias: originalAlias, nextAlias })
     cancelEditAlias()
@@ -196,16 +190,13 @@ export default function LibraryAcronymsPage() {
       body.alias = editingPendingNextValue.trim()
     }
 
-    // הצעות add/update מוסיפות כינוי חדש — נחסום שינוי גרשיים בלבד גם כאן
+    // הצעות add/update מוסיפות כינוי חדש — נחסום שינוי גרשיים בלבד מול שם הספר גם כאן
     if (pending.actionType !== 'delete') {
       const candidate = editingPendingNextValue.trim()
       const row = rows.find((item) => item.id === rowId)
-      if (row) {
-        const references = [row.displayName, ...(row.aliases || []).filter((item) => item !== editingPendingCurrentValue.trim())]
-        if (isGershayimOnlyChange(candidate, references)) {
-          showAlert(pending.actionType === 'add' ? 'לא ניתן להוסיף' : 'לא ניתן לעדכן', GERSHAYIM_ONLY_ERROR)
-          return
-        }
+      if (row && differsOnlyByGershayim(candidate, row.displayName)) {
+        showAlert(pending.actionType === 'add' ? 'לא ניתן להוסיף' : 'לא ניתן לעדכן', GERSHAYIM_ONLY_ERROR)
+        return
       }
     }
 
