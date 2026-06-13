@@ -91,6 +91,30 @@ export default function ModerationPage() {
     }
   }
 
+  // אישור חלקי — אישור/דחיית מקטעים נבחרים בתוך הצעה אחת
+  const moderateSegments = async (id, payload) => {
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/library/edits/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'moderate-changes', ...payload }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'שגיאה')
+      if (data.conflicts > 0) {
+        showAlert('חלק מהמקטעים בקונפליקט', `אושרו ${data.approved || 0} · נדחו ${data.rejected || 0} · ${data.conflicts} מקטעים לא ניתנים להחלה אוטומטית (הטקסט המקורי השתנה) והוחזרו לתור.`)
+      }
+      await fetchEdits()
+      return true
+    } catch (e) {
+      showAlert('שגיאה', e.message)
+      return false
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const bulk = async (action) => {
     if (selected.size === 0) return
     setBusy(true)
@@ -197,6 +221,7 @@ export default function ModerationPage() {
                   onReject={() => act(e._id, 'reject')}
                   onApprovePattern={() => approveAllMatchingPattern(e.findReplace)}
                   onBlock={() => setBlockTarget({ id: e.author, name: e.authorName })}
+                  onModerateSegments={moderateSegments}
                 />
               ))}
             </div>
@@ -215,12 +240,39 @@ export default function ModerationPage() {
   )
 }
 
-function EditCard({ edit, bookName, selected, onToggle, busy, onApprove, onReject, onApprovePattern, onBlock }) {
+function EditCard({ edit, bookName, selected, onToggle, busy, onApprove, onReject, onApprovePattern, onBlock, onModerateSegments }) {
   const isFR = edit.kind === EDIT_KIND.FIND_REPLACE
+  const [segs, setSegs] = useState(() => new Set())
+
+  const changes = edit.changes || []
+  const pendingCount = changes.filter((c) => (c.status || 'pending') === 'pending').length
+  // הצעה שכבר עברה אישור חלקי — חלק מהמקטעים אושרו/נדחו וחלק עדיין ממתין
+  const partiallyHandled = pendingCount > 0 && pendingCount < changes.length
+
+  const toggleSeg = (idx) => setSegs((prev) => {
+    const n = new Set(prev)
+    if (n.has(idx)) n.delete(idx); else n.add(idx)
+    return n
+  })
+
+  const runSeg = async (kind) => {
+    const ids = [...segs]
+    if (!ids.length) return
+    const ok = await onModerateSegments(edit._id, kind === 'approve' ? { approve: ids } : { reject: ids })
+    if (ok) setSegs(new Set())
+  }
+
+  // "אשר/דחה הכל" עובר תמיד דרך המסלול הקלאסי (approveEdit/rejectEdit) שפועל על
+  // *כל* מקטעי ההצעה בצד השרת — ולכן אינו תלוי ב-50 המקטעים שהוחזרו ללקוח (אחרת
+  // "הכל" היה מטעה בהצעות גדולות). approveEdit מחיל כל מקטע שאינו דחוי וטרם הוחל;
+  // rejectEdit דוחה רק מקטעים שעדיין ממתינים ושומר מקטעים שכבר אושרו והוחלו.
+  const approveAll = onApprove
+  const rejectAll = onReject
+
   return (
     <div className={`bg-white rounded-2xl border p-5 shadow-sm transition-all ${selected ? 'border-primary ring-2 ring-primary/20' : 'border-slate-200'}`}>
       <div className="flex items-start gap-3 mb-3">
-        <input type="checkbox" checked={selected} onChange={onToggle} className="mt-1.5 w-4 h-4" />
+        <input type="checkbox" checked={selected} onChange={onToggle} className="mt-1.5 w-4 h-4" title="בחירת ההצעה כולה לפעולה מרובה" />
         <div className="flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-bold text-slate-800 font-frank text-lg">{bookName}</span>
@@ -228,7 +280,9 @@ function EditCard({ edit, bookName, selected, onToggle, busy, onApprove, onRejec
               {isFR ? 'חיפוש והחלפה' : 'עריכה ידנית'}
             </span>
             {edit.editType && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{EDIT_TYPE_LABELS[edit.editType] || edit.editType}</span>}
-            <span className="text-xs text-slate-400">{edit.changeCount} מקטעים</span>
+            <span className="text-xs text-slate-400">
+              {partiallyHandled ? `${pendingCount} מתוך ${edit.changeCount} מקטעים ממתינים` : `${edit.changeCount} מקטעים`}
+            </span>
           </div>
           <div className="text-sm text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
             <span>מאת <button onClick={onBlock} className="font-semibold text-slate-700 hover:text-red-600 underline decoration-dotted" title="ניהול / חסימת משתמש">{edit.authorName}</button></span>
@@ -247,14 +301,30 @@ function EditCard({ edit, bookName, selected, onToggle, busy, onApprove, onRejec
         </div>
       )}
 
-      <DiffPreview changes={edit.changes} total={edit.changeCount} />
+      {changes.length > 1 && (
+        <p className="text-xs text-slate-400 mb-2">סמן מקטעים בודדים כדי לאשר/לדחות רק חלק מההצעה</p>
+      )}
+      <DiffPreview changes={changes} total={edit.changeCount} selectable selected={segs} onToggle={toggleSeg} />
+
+      {segs.size > 0 && (
+        <div className="flex items-center gap-2 mt-3 bg-primary/5 border border-primary/20 rounded-xl px-3 py-2 flex-wrap">
+          <span className="font-semibold text-slate-700 text-sm">{segs.size} מקטעים נבחרו</span>
+          <button onClick={() => runSeg('approve')} disabled={busy} className="flex items-center gap-1 bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-emerald-400 disabled:opacity-50">
+            <span className="material-symbols-outlined text-sm">check</span> אשר נבחרים
+          </button>
+          <button onClick={() => runSeg('reject')} disabled={busy} className="flex items-center gap-1 bg-white border border-red-200 text-red-600 px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-red-50 disabled:opacity-50">
+            <span className="material-symbols-outlined text-sm">close</span> דחה נבחרים
+          </button>
+          <button onClick={() => setSegs(new Set())} className="mr-auto text-slate-400 hover:text-slate-700 text-sm">נקה בחירה</button>
+        </div>
+      )}
 
       <div className="flex gap-2 mt-4">
-        <button onClick={onApprove} disabled={busy} className="flex items-center gap-1.5 bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-emerald-400 disabled:opacity-50">
-          <span className="material-symbols-outlined text-base">check</span> אשר
+        <button onClick={approveAll} disabled={busy} className="flex items-center gap-1.5 bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-emerald-400 disabled:opacity-50">
+          <span className="material-symbols-outlined text-base">check</span> {pendingCount > 1 || partiallyHandled ? 'אשר הכל' : 'אשר'}
         </button>
-        <button onClick={onReject} disabled={busy} className="flex items-center gap-1.5 bg-white border border-red-200 text-red-600 px-4 py-2 rounded-lg font-bold hover:bg-red-50 disabled:opacity-50">
-          <span className="material-symbols-outlined text-base">close</span> דחה
+        <button onClick={rejectAll} disabled={busy} className="flex items-center gap-1.5 bg-white border border-red-200 text-red-600 px-4 py-2 rounded-lg font-bold hover:bg-red-50 disabled:opacity-50">
+          <span className="material-symbols-outlined text-base">close</span> {pendingCount > 1 || partiallyHandled ? 'דחה הכל' : 'דחה'}
         </button>
       </div>
     </div>

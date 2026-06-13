@@ -13,6 +13,12 @@ const ChangeSchema = new mongoose.Schema({
   line: { type: Number, required: true },  // אינדקס שורה (0-based) בגרסת הבסיס של ההצעה
   before: { type: String, default: '' },
   after: { type: String, default: '' },
+
+  // אישור/דחייה ברמת המקטע הבודד — מאפשר אישור חלקי של הצעה.
+  // מסמכים ישנים שנוצרו לפני השדה: היעדר הערך = 'pending' (כך מטופל בקוד).
+  status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+  // האם המקטע הוחל בפועל על תוכן הספר. נשמר לשחזור-לאחר-קריסה (reconcile).
+  applied: { type: Boolean, default: false },
 }, { _id: false });
 
 const BookEditSchema = new mongoose.Schema({
