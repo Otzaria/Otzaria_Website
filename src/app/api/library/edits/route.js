@@ -47,9 +47,13 @@ export async function GET(req) {
       note: e.note,
       findReplace: e.findReplace,
       changeCount: e.changes?.length || 0,
-      changes: (e.changes || []).slice(0, 30).map((c) => {
+      // idx = האינדקס האמיתי בתוך e.changes (יציב גם אם חלק כבר הוכרעו) — נחוץ
+      // לאישור חלקי. status מאפשר לתצוגה לסמן מקטעים שכבר אושרו/נדחו.
+      // התקרה (50) מאזנת בין אישור-חלקי שמיש לבין עומס רינדור (diffWords לכל מקטע,
+      // עד 500 הצעות בבת אחת); מעבר לכך עדיין ניתן לאשר/לדחות את ההצעה כולה.
+      changes: (e.changes || []).slice(0, 50).map((c, idx) => {
         const f = focusChange(c.before, c.after);
-        return { line: c.line, before: f.before, after: f.after };
+        return { idx, line: c.line, before: f.before, after: f.after, status: c.status || 'pending' };
       }),
       baseVersion: e.baseVersion,
       appliedDirectly: e.appliedDirectly,
