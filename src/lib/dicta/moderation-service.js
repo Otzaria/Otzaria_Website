@@ -454,13 +454,8 @@ export async function resolveConflict({ bookId, strategy }) {
  */
 export async function resolveConflictHunk({ bookId, before, after, strategy }) {
   await connectDB();
-  const book = await LibraryBook.findById(bookId);
-  if (!book) throw Object.assign(new Error('הספר לא נמצא'), { code: 'NOT_FOUND' });
-  if (book.syncStatus !== 'conflict' || book.conflict?.theirsContent == null) {
-    return { status: 'not-conflict', resolved: false, conflictCount: 0 };
-  }
 
-  // before = הבלוק בגיטהאב, after = הבלוק באתר (התוכן המלא של ה-hunk, לא ממוקד לתצוגה)
+  // ולידציות קלט (אינן תלויות בספר) — לפני לולאת ה-CAS
   if (typeof before !== 'string' || typeof after !== 'string' || before === after) {
     throw Object.assign(new Error('מקטע לא תקין'), { code: 'BAD_INPUT' });
   }
@@ -468,55 +463,73 @@ export async function resolveConflictHunk({ bookId, before, after, strategy }) {
   if (strategy !== 'theirs' && strategy !== 'ours') {
     throw Object.assign(new Error('אסטרטגיה לא חוקית'), { code: 'BAD_INPUT' });
   }
-  const want = strategy;
 
-  let theirs = book.conflict.theirsContent ?? ''; // baseline תצוגה (גיטהאב, אולי מוזג חלקית)
-  let ours = book.content || '';
+  // CAS עם version + ניסיון חוזר: שני מנהלים שמכריעים מקטעים במקביל (או עקיפת התור
+  // בלקוח) לא ידרסו זה את זה. כל כתיבה מקדמת version; אם הוא השתנה בינתיים — קוראים
+  // מחדש ומחשבים שוב על התוכן העדכני. applyHunks אידמפוטנטי, לכן הרצה חוזרת בטוחה.
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const book = await LibraryBook.findById(bookId)
+      .select('content version baseContent baseSha syncStatus conflict')
+      .lean();
+    if (!book) throw Object.assign(new Error('הספר לא נמצא'), { code: 'NOT_FOUND' });
+    if (book.syncStatus !== 'conflict' || book.conflict?.theirsContent == null) {
+      return { status: 'not-conflict', resolved: false, conflictCount: 0 };
+    }
 
-  // עיגון תוכן גיטהאב האמיתי כבסיס הסופי, פעם אחת, לפני מיזוג baseline התצוגה
-  const realTheirsSha = book.conflict.theirsSha;
-  if (book.baseSha !== realTheirsSha) {
-    book.baseContent = theirs;
-    book.baseSha = realTheirsSha;
+    let theirs = book.conflict.theirsContent ?? ''; // baseline תצוגה (גיטהאב, אולי מוזג חלקית)
+    let ours = book.content || '';
+
+    const set = {};
+
+    // עיגון תוכן גיטהאב האמיתי כבסיס הסופי, פעם אחת (מזוהה לפי baseSha != theirsSha)
+    const realTheirsSha = book.conflict.theirsSha;
+    const promote = book.baseSha !== realTheirsSha;
+    if (promote) { set.baseContent = theirs; set.baseSha = realTheirsSha; }
+    const finalBaseContent = promote ? theirs : (book.baseContent || '');
+
+    let newTheirsContent = null;
+    if (strategy === 'theirs') {
+      // קבל גיטהאב: content מאמץ את גרסת גיטהאב במקטע זה (החלפת בלוק-האתר בבלוק-גיטהאב)
+      const { content, conflicts } = applyHunks(ours, [{ before: after, after: before }]);
+      if (conflicts.length) {
+        throw Object.assign(new Error('לא ניתן להחיל מקטע זה אוטומטית; השתמשו בפתרון כלל-הספר'), { code: 'APPLY_FAILED' });
+      }
+      if (content !== ours) { set.content = content; ours = content; }
+    } else {
+      // קבל אתר: baseline התצוגה מאמץ את גרסת האתר במקטע זה (המקטע נעלם מהדיף)
+      const { content, conflicts } = applyHunks(theirs, [{ before, after }]);
+      if (conflicts.length) {
+        throw Object.assign(new Error('לא ניתן להחיל מקטע זה אוטומטית; השתמשו בפתרון כלל-הספר'), { code: 'APPLY_FAILED' });
+      }
+      if (content !== theirs) { theirs = content; newTheirsContent = content; }
+    }
+
+    const remaining = diffToHunks(theirs, ours).length;
+
+    let result;
+    if (remaining === 0) {
+      // כל המקטעים הוכרעו — הספר נפתר. baseContent/baseSha כבר = גיטהאב האמיתי.
+      // לא מעדכנים conflict.theirsContent בנפרד (גם אם השתנה) — כל ה-conflict נמחק.
+      const isClean = norm(ours) === norm(finalBaseContent);
+      set.syncStatus = isClean ? 'clean' : 'dirty';
+      set.conflict = { theirsContent: null, theirsSha: null, detectedAt: null, conflictCount: 0 };
+      result = { status: 'resolved', resolved: true, conflictCount: 0, syncStatus: set.syncStatus };
+    } else {
+      if (newTheirsContent !== null) set['conflict.theirsContent'] = newTheirsContent;
+      set['conflict.conflictCount'] = remaining;
+      result = { status: 'partial', resolved: false, conflictCount: remaining };
+    }
+
+    const updated = await LibraryBook.findOneAndUpdate(
+      { _id: bookId, version: book.version },
+      { $set: set, $inc: { version: 1 } },
+      { new: true, projection: '_id' }
+    );
+    if (updated) return result;
+    // version השתנה במקביל — ננסה שוב על התוכן העדכני
   }
 
-  if (want === 'theirs') {
-    // קבל גיטהאב: content מאמץ את גרסת גיטהאב במקטע זה (החלפת בלוק-האתר בבלוק-גיטהאב)
-    const { content, conflicts } = applyHunks(ours, [{ before: after, after: before }]);
-    if (conflicts.length) {
-      throw Object.assign(new Error('לא ניתן להחיל מקטע זה אוטומטית; השתמשו בפתרון כלל-הספר'), { code: 'APPLY_FAILED' });
-    }
-    if (content !== ours) {
-      book.content = content;
-      book.version = (book.version || 1) + 1;
-      ours = content;
-    }
-  } else {
-    // קבל אתר: baseline התצוגה מאמץ את גרסת האתר במקטע זה (המקטע נעלם מהדיף)
-    const { content, conflicts } = applyHunks(theirs, [{ before, after }]);
-    if (conflicts.length) {
-      throw Object.assign(new Error('לא ניתן להחיל מקטע זה אוטומטית; השתמשו בפתרון כלל-הספר'), { code: 'APPLY_FAILED' });
-    }
-    if (content !== theirs) {
-      book.conflict.theirsContent = content;
-      theirs = content;
-    }
-  }
-
-  const remaining = diffToHunks(theirs, ours).length;
-  book.conflict.conflictCount = remaining;
-
-  if (remaining === 0) {
-    // כל המקטעים הוכרעו — הספר נפתר. baseContent/baseSha כבר = גיטהאב האמיתי.
-    const isClean = norm(book.content) === norm(book.baseContent || '');
-    book.syncStatus = isClean ? 'clean' : 'dirty';
-    book.conflict = { theirsContent: null, theirsSha: null, detectedAt: null, conflictCount: 0 };
-    await book.save();
-    return { status: 'resolved', resolved: true, conflictCount: 0, syncStatus: book.syncStatus };
-  }
-
-  await book.save();
-  return { status: 'partial', resolved: false, conflictCount: remaining };
+  throw Object.assign(new Error('עומס עדכונים מקבילים על הספר, נסו שוב'), { code: 'CONFLICT_RETRY' });
 }
 
 /**
