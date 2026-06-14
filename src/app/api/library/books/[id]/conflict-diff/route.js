@@ -26,9 +26,11 @@ export async function GET(req, { params }) {
     const theirs = book.conflict?.theirsContent ?? '';
     const ours = book.content || '';
     const hunks = diffToHunks(theirs, ours);
+    // before/after = גרסה ממוקדת לתצוגה; fullBefore/fullAfter = התוכן המלא של ה-hunk,
+    // שנשלח חזרה בהכרעה מקטע-מקטע כדי לזהות את המקטע לפי תוכן (ללא תלות באינדקס).
     const changes = hunks.slice(0, 30).map((h) => {
       const f = focusChange(h.before, h.after);
-      return { before: f.before, after: f.after };
+      return { before: f.before, after: f.after, fullBefore: h.before, fullAfter: h.after };
     });
 
     return NextResponse.json({ changeCount: hunks.length, changes });

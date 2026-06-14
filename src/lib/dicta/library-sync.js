@@ -132,8 +132,11 @@ export async function pushLibraryToGitHub({ force = false } = {}) {
 
   // בחירת ספרים: ב-force כולם; אחרת dirty או כאלה ש-upstream שלהם השתנה מאז הבסיס
   // (גם 'clean'), כדי שספר שכבר נדחף לא יישאר תקוע כשמופיע שינוי חדש ב-upstream.
+  // ספרי 'conflict' מוחרגים תמיד (גם ב-force) — הם דורשים הכרעה ידנית; דחיפה אוטומטית
+  // עלולה לדרוס בגיטהאב קונפליקט פתוח (כולל קונפליקט פתור-חלקית שבו baseSha כבר עודכן
+  // ל-upstream דרך resolveConflictHunk). לאחר הכרעה הספר הופך dirty/clean וייבחר ממילא.
   const candidates = await LibraryBook.find(
-    { removedUpstream: { $ne: true } },
+    { removedUpstream: { $ne: true }, syncStatus: { $ne: 'conflict' } },
     '_id path baseSha syncStatus'
   ).lean();
   const selectedIds = candidates
