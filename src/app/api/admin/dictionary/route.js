@@ -37,7 +37,7 @@ export async function GET() {
     return NextResponse.json({ success: true, entries, skipped });
   } catch (error) {
     console.error('Admin dictionary GET error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
@@ -98,6 +98,6 @@ export async function POST(req) {
 
   } catch (error) {
     console.error('Admin dictionary POST error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

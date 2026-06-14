@@ -262,7 +262,7 @@ export default function DashboardPage() {
       return
     }
 
-    const passwordCheck = validatePassword(passwordFormData.newPassword, 6)
+    const passwordCheck = validatePassword(passwordFormData.newPassword, 8)
     if (!passwordCheck.isValid) {
       setPasswordMessage({ type: 'error', text: passwordCheck.error })
       return
@@ -914,7 +914,7 @@ export default function DashboardPage() {
                     value={passwordFormData.newPassword}
                     onChange={(e) => setPasswordFormData({ ...passwordFormData, newPassword: e.target.value })}
                     className="w-full px-4 py-3 border border-surface-variant rounded-lg focus:outline-none focus:border-primary bg-white text-on-surface shadow-sm"
-                    placeholder="הזן סיסמה חדשה (לפחות 6 תווים)"
+                    placeholder="הזן סיסמה חדשה (לפחות 8 תווים)"
                     disabled={loadingPassword}
                   />
                   <button

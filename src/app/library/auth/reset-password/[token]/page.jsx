@@ -132,9 +132,9 @@ export default function ResetPasswordPage() {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required
-                        minLength={6}
+                        minLength={8}
                         className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none"
-                        placeholder="לפחות 6 תווים"
+                        placeholder="לפחות 8 תווים"
                     />
                 </div>
                 <div>

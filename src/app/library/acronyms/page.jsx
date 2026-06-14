@@ -22,10 +22,6 @@ export default function LibraryAcronymsPage() {
   const [editingPendingId, setEditingPendingId] = useState('')
   const [editingPendingCurrentValue, setEditingPendingCurrentValue] = useState('')
   const [editingPendingNextValue, setEditingPendingNextValue] = useState('')
-  const [isBulkDialogOpen, setIsBulkDialogOpen] = useState(false)
-  const [bulkMatchText, setBulkMatchText] = useState('')
-  const [bulkReplacementText, setBulkReplacementText] = useState('')
-  const [bulkSubmitting, setBulkSubmitting] = useState(false)
   const { showAlert } = useDialog()
 
   useEffect(() => {
@@ -38,6 +34,18 @@ export default function LibraryAcronymsPage() {
       router.push('/library/unauthorized')
     }
   }, [status, session, router, pathname])
+
+  const stripGershayim = (value) => String(value || '').trim().replace(/["'׳״]/g, '')
+
+  // האם ההבדל היחיד בין הכינוי לבין שם הספר הוא הוספה/הסרה של גרשיים?
+  const differsOnlyByGershayim = (candidate, reference) => {
+    const stripped = stripGershayim(candidate)
+    if (!stripped) return false
+    return String(candidate || '').trim() !== String(reference || '').trim() && stripped === stripGershayim(reference)
+  }
+
+  const GERSHAYIM_ONLY_ERROR =
+    'אין להוסיף כינוי שכל ההבדל בו הוא הוספת או הסרת גרשיים (") — זה כבר מטופל בצד התוכנה. יש להוסיף רק כינויים או ראשי תיבות בעלי ערך, כגון: רבי עקיבא אייגר ← רעק"א'
 
   const loadData = useCallback(async () => {
     try {
@@ -73,13 +81,6 @@ export default function LibraryAcronymsPage() {
       return values.some((value) => String(value || '').includes(term))
     })
   }, [rows, search])
-
-  const bulkPreview = useMemo(() => {
-    const matchText = bulkMatchText.trim()
-    const replacementText = bulkReplacementText.trim()
-    if (!matchText || !replacementText) return ''
-    return `לדוגמה: "${matchText} חלק א" יהפוך ל־"${replacementText} חלק א"`
-  }, [bulkMatchText, bulkReplacementText])
 
   const requestChange = async (rowId, body) => {
     try {
@@ -145,47 +146,12 @@ export default function LibraryAcronymsPage() {
   const submitAlias = async (rowId) => {
     const alias = (newAliasById[rowId] || '').trim()
     if (!alias) return
-    await requestChange(rowId, { actionType: 'add', alias })
-  }
-
-  const submitBulkAlias = async (event) => {
-    event.preventDefault()
-
-    try {
-      setBulkSubmitting(true)
-      const response = await fetch('/api/library/book-acronyms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          actionType: 'bulk-add-by-name-pattern',
-          matchText: bulkMatchText,
-          replacementText: bulkReplacementText
-        })
-      })
-      const data = await response.json()
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'שגיאה בשליחת ההצעות')
-      }
-
-      const createdCount = Number(data.createdCount || 0)
-      const matchedCount = Number(data.matchedCount || 0)
-      const skippedCount = Number(data.skippedCount || 0)
-      showAlert(
-        createdCount > 0 ? 'הצלחה' : 'לידיעתך',
-        createdCount > 0
-          ? `נשלחו ${createdCount} הצעות לאישור מתוך ${matchedCount} ספרים תואמים. ${skippedCount > 0 ? `${skippedCount} ספרים דולגו כי הכינוי כבר קיים או כבר ממתין לאישור.` : ''}`.trim()
-          : `לא נוצרו הצעות חדשות. נמצאו ${matchedCount} ספרים תואמים, אבל כולם כבר מכילים את הכינוי או שממתינה עבורם הצעה זהה.`
-      )
-
-      setIsBulkDialogOpen(false)
-      setBulkMatchText('')
-      setBulkReplacementText('')
-      await loadData()
-    } catch (submitError) {
-      showAlert('שגיאה', submitError.message)
-    } finally {
-      setBulkSubmitting(false)
+    const row = rows.find((item) => item.id === rowId)
+    if (row && differsOnlyByGershayim(alias, row.displayName)) {
+      showAlert('לא ניתן להוסיף', GERSHAYIM_ONLY_ERROR)
+      return
     }
+    await requestChange(rowId, { actionType: 'add', alias })
   }
 
   const requestDeleteAlias = async (rowId, alias) => {
@@ -217,6 +183,11 @@ export default function LibraryAcronymsPage() {
   const saveEditAlias = async (rowId, originalAlias) => {
     const nextAlias = editingAliasValue.trim()
     if (!nextAlias) return
+    const row = rows.find((item) => item.id === rowId)
+    if (row && differsOnlyByGershayim(nextAlias, row.displayName)) {
+      showAlert('לא ניתן לעדכן', GERSHAYIM_ONLY_ERROR)
+      return
+    }
     await requestChange(rowId, { actionType: 'update', alias: originalAlias, nextAlias })
     cancelEditAlias()
   }
@@ -234,6 +205,16 @@ export default function LibraryAcronymsPage() {
       body.nextAlias = editingPendingNextValue.trim()
     } else {
       body.alias = editingPendingNextValue.trim()
+    }
+
+    // הצעות add/update מוסיפות כינוי חדש — נחסום שינוי גרשיים בלבד מול שם הספר גם כאן
+    if (pending.actionType !== 'delete') {
+      const candidate = editingPendingNextValue.trim()
+      const row = rows.find((item) => item.id === rowId)
+      if (row && differsOnlyByGershayim(candidate, row.displayName)) {
+        showAlert(pending.actionType === 'add' ? 'לא ניתן להוסיף' : 'לא ניתן לעדכן', GERSHAYIM_ONLY_ERROR)
+        return
+      }
     }
 
     await requestChange(rowId, body)
@@ -262,15 +243,6 @@ export default function LibraryAcronymsPage() {
               <p className="text-on-surface/70 mt-1">תרמו לפרויקט בעדכון כינויים אפשריים לספרים. כל עריכה תישלח לאישור מנהל.</p>
             </div>
             <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsBulkDialogOpen(true)
-                }}
-                className="rounded-lg bg-primary px-4 py-2 text-on-primary hover:bg-primary/90"
-              >
-                הוספה מרוכזת לפי שם הספר
-              </button>
               <input
                 type="text"
                 value={search}
@@ -439,75 +411,6 @@ export default function LibraryAcronymsPage() {
           )}
         </div>
       </main>
-
-      {isBulkDialogOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => !bulkSubmitting && setIsBulkDialogOpen(false)}
-        >
-          <div
-            className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <form onSubmit={submitBulkAlias} className="space-y-4">
-              <div>
-                <h2 className="text-2xl font-bold text-on-surface">הוספת כינויים במרוכז</h2>
-                <p className="mt-2 text-sm leading-6 text-on-surface/70">
-                  מזינים טקסט שמופיע בשם הספר, וטקסט חלופי לכינוי. לכל ספר תואם תיווצר הצעת כינוי חדשה שבה
-                  הטקסט המופיע בשם הספר יוחלף בטקסט שהזנתם, בתוספת שאר שם הספר. הצעות כפולות לא ייווצרו,
-                  והכול יישלח לאישור מנהל רגיל.
-                </p>
-              </div>
-
-              <label className="block space-y-2">
-                <span className="text-sm font-medium text-on-surface">טקסט שמחפשים בשם הספר</span>
-                <input
-                  type="text"
-                  value={bulkMatchText}
-                  onChange={(e) => setBulkMatchText(e.target.value)}
-                  placeholder="למשל: מרכבת המשנה"
-                  className="w-full rounded-lg border px-3 py-2"
-                />
-              </label>
-
-              <label className="block space-y-2">
-                <span className="text-sm font-medium text-on-surface">הטקסט שיופיע בכינוי במקום זה</span>
-                <input
-                  type="text"
-                  value={bulkReplacementText}
-                  onChange={(e) => setBulkReplacementText(e.target.value)}
-                  placeholder="למשל: מרכבת-המשנה"
-                  className="w-full rounded-lg border px-3 py-2"
-                />
-              </label>
-
-              {bulkPreview && (
-                <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-                  {bulkPreview}
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsBulkDialogOpen(false)}
-                  disabled={bulkSubmitting}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 disabled:opacity-50"
-                >
-                  בטל
-                </button>
-                <button
-                  type="submit"
-                  disabled={bulkSubmitting}
-                  className="rounded-lg bg-primary px-4 py-2 text-on-primary disabled:opacity-50"
-                >
-                  {bulkSubmitting ? 'שולח...' : 'שלח לאישור'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

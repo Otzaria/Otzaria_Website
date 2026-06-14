@@ -1,14 +1,24 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Page from '@/models/Page';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function GET(request) {
     try {
         const { searchParams } = new URL(request.url);
         const query = searchParams.get('q');
-        
+
+        // בקשות ריקות/קצרות אינן צורכות מכסה ואינן ניגשות ל-DB
         if (!query || query.trim().length < 2) {
             return NextResponse.json({ results: [] });
+        }
+
+        // הגבלת קצב רק על חיפושים אמיתיים. נלקח ה-IP הראשון בשרשרת x-forwarded-for.
+        const ip = (request.headers.get('x-forwarded-for') || '').split(',')[0].trim()
+            || request.headers.get('x-real-ip')
+            || 'unknown';
+        if (!checkRateLimit(ip, 'search', 30, 'minute')) {
+            return NextResponse.json({ error: 'יותר מדי בקשות חיפוש. נסה שוב בעוד רגע.' }, { status: 429 });
         }
 
         await connectDB();
@@ -38,7 +48,7 @@ export async function GET(request) {
 
         return NextResponse.json({ success: true, results });
     } catch (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }
 

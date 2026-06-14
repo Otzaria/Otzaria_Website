@@ -16,7 +16,7 @@ export async function GET() {
     return NextResponse.json({ success: true, spellWords: user?.spellWords || [] });
   } catch (error) {
     console.error('Error fetching spell words:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
@@ -47,6 +47,6 @@ export async function POST(req) {
     return NextResponse.json({ success: true, spellWords: updatedUser.spellWords });
   } catch (error) {
     console.error('Error saving spell word:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

@@ -95,7 +95,7 @@ export async function GET() {
         return NextResponse.json({ success: true, users: usersWithStats });
     } catch (e) {
         console.error('Admin users error:', e);
-        return NextResponse.json({ success: false, error: e.message }, { status: 500 });
+        return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
     }
 }
 
@@ -170,7 +170,7 @@ export async function PUT(request) {
 
         return NextResponse.json({ success: true, user: updatedUser });
     } catch (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }
 
@@ -198,6 +198,6 @@ export async function DELETE(request) {
 
         return NextResponse.json({ success: true });
     } catch (e) {
-        return NextResponse.json({ error: e.message }, { status: 500 });
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }

@@ -9,7 +9,7 @@ import { z } from 'zod';
 const registerSchema = z.object({
   name: z.string().min(1, 'שם חובה').max(50, 'שם ארוך מדי').trim(),
   email: z.string().email('כתובת אימייל לא תקינה').toLowerCase().trim(),
-  password: z.string().min(6, 'סיסמה חייבת להכיל לפחות 6 תווים').max(128, 'סיסמה ארוכה מדי'),
+  password: z.string().min(8, 'סיסמה חייבת להכיל לפחות 8 תווים').max(128, 'סיסמה ארוכה מדי'),
   acceptReminders: z.boolean()
 });
 

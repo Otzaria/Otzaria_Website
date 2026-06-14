@@ -56,8 +56,8 @@ export default function RegisterPage() {
       return
     }
 
-    if (formData.password.length < 6) {
-      setError('הסיסמה חייבת להכיל לפחות 6 תווים')
+    if (formData.password.length < 8) {
+      setError('הסיסמה חייבת להכיל לפחות 8 תווים')
       setLoading(false)
       return
     }
@@ -207,7 +207,7 @@ export default function RegisterPage() {
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   className="w-full pr-12 pl-4 py-3 border border-surface-variant rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-background text-on-surface"
-                  placeholder="לפחות 6 תווים"
+                  placeholder="לפחות 8 תווים"
                 />
               </div>
             </div>

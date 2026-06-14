@@ -43,8 +43,8 @@ export async function POST(request) {
         if (!token || typeof token !== 'string') {
             return NextResponse.json({ error: 'טוקן לא חוקי' }, { status: 400 });
         }
-        if (!password || password.length < 6) {
-            return NextResponse.json({ error: 'הסיסמה חייבת להכיל לפחות 6 תווים.' }, { status: 400 });
+        if (!password || password.length < 8) {
+            return NextResponse.json({ error: 'הסיסמה חייבת להכיל לפחות 8 תווים.' }, { status: 400 });
         }
 
         await connectDB();
@@ -58,7 +58,7 @@ export async function POST(request) {
             return NextResponse.json({ error: 'קישור לא תקין או שפג תוקפו' }, { status: 400 });
         }
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const hashedPassword = await bcrypt.hash(password, 12);
 
         user.password = hashedPassword;
         user.resetPasswordToken = undefined;

@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
 import Book from '@/models/Book';
 import Page from '@/models/Page';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 // ============================================================
 // הגדרות קבועות לעריכה ידנית
@@ -374,6 +375,12 @@ export async function POST(request) {
     const session = await getServerSession(authOptions);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    // הגבלת קצב לכל משתמש — קריאות ה-LLM יקרות
+    const rlKey = (session.user?._id || session.user?.id || 'unknown').toString();
+    if (!checkRateLimit(rlKey, 'gemini-ocr-batch', 10, 'minute')) {
+      return NextResponse.json({ error: 'יותר מדי בקשות OCR. נסה שוב בעוד דקה.' }, { status: 429 });
+    }
+
     const apiKey = process.env.GEMINI_BATCH_OCR_API_KEY || process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
@@ -383,7 +390,7 @@ export async function POST(request) {
     }
 
     const userId = (session?.user?._id || session?.user?.id)?.toString();
-    const isAdmin = session ? session.user.role === 'admin' : true; // TEMP DEBUG
+    const isAdmin = session.user?.role === 'admin';
 
     const body = await request.json();
     const { bookPath, pages, customPrompt, examples, customExamples } = body || {};
@@ -602,6 +609,6 @@ export async function POST(request) {
     });
   } catch (error) {
     console.error('Gemini OCR Batch Error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

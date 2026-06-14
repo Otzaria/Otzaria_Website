@@ -21,6 +21,11 @@ RUN npm install
 # רק עכשיו מעתיקים את שאר הקוד
 COPY . .
 
+# הערת אבטחה: ה-image הזה רץ כ-root ב-dev (CMD = npm run dev) כי docker-compose
+# ממפה bind-mount של ./:/app ו-anon volume ל-/app/.next; הרצה כ-USER node כאן
+# שוברת את הכתיבה ל-.next (EACCES). הקשחת least-privilege שייכת ל-build פרודקשן
+# נפרד (multi-stage: next build → next start, ללא bind mounts) שירוץ כ-USER node.
+
 EXPOSE 3000
 
 CMD ["npm", "run", "dev"]

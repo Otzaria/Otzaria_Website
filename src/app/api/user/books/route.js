@@ -35,6 +35,6 @@ export async function GET() {
 
   } catch (error) {
     console.error('Error fetching user books:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
   }
 }

@@ -280,6 +280,14 @@ export function applyHunks(currentText, hunks) {
       continue;
     }
 
+    // כבר הוחל? בהוספה (after מכיל את before כתחילית) ה-before ימשיך להימצא גם אחרי
+    // ההחלה, ויישום חוזר היה משכפל את התוספת. אם הטקסט במיקום זה כבר תואם ל-after —
+    // דילוג אידמפוטני. התנאי on-length מונע טריגר-שווא במחיקות (after קצר מ-before).
+    if (hunk.after.length >= hunk.before.length && text.startsWith(hunk.after, first)) {
+      applied++;
+      continue;
+    }
+
     const second = text.indexOf(hunk.before, first + 1);
     if (second !== -1) {
       // מעורפל — יותר מהתאמה אחת; לא נחליף באופן עיוור
