@@ -1,11 +1,17 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSession } from 'next-auth/react'
+import { useRouter, usePathname } from 'next/navigation'
 import Header from '@/components/layout/Header'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { useDialog } from '@/components/providers/DialogContext'
+import { hasBooksAccess } from '@/lib/roles'
 
 export default function LibraryAcronymsPage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
+  const pathname = usePathname()
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -21,6 +27,17 @@ export default function LibraryAcronymsPage() {
   const [bulkReplacementText, setBulkReplacementText] = useState('')
   const [bulkSubmitting, setBulkSubmitting] = useState(false)
   const { showAlert } = useDialog()
+
+  useEffect(() => {
+    if (status === 'loading') return
+    if (status === 'unauthenticated') {
+      router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(pathname)}`)
+      return
+    }
+    if (!hasBooksAccess(session?.user?.role)) {
+      router.push('/library/unauthorized')
+    }
+  }, [status, session, router, pathname])
 
   const loadData = useCallback(async () => {
     try {

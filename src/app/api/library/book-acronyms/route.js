@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import connectDB from '@/lib/db'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { hasBooksAccess } from '@/lib/roles'
 import BookAcronym from '@/models/BookAcronym'
 import BookAcronymPendingSuggestion from '@/models/BookAcronymPendingSuggestion'
 
-function requireAuthenticatedSession(session) {
-  return session?.user?.id || session?.user?._id
+function requireAdminAccess(session) {
+  return hasBooksAccess(session?.user?.role)
 }
 
 function normalizeAlias(value) {
@@ -167,9 +168,8 @@ async function createBulkAliasSuggestions({ userId, matchText, replacementText }
 export async function GET() {
   try {
     const session = await getServerSession(authOptions)
-    const userId = requireAuthenticatedSession(session)
-    if (!userId) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    if (!requireAdminAccess(session)) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 })
     }
 
     await connectDB()
@@ -213,9 +213,8 @@ export async function GET() {
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions)
-    const userId = requireAuthenticatedSession(session)
-    if (!userId) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    if (!requireAdminAccess(session)) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 })
     }
 
     const body = await request.json()
