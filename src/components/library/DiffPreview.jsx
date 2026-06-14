@@ -14,15 +14,20 @@ import { diffWords } from '@/lib/dicta/text-diff'
  * אישור חלקי: כשמועבר selectable=true, כל מקטע ממתין מקבל תיבת-סימון לבחירה
  * (לפי c.idx), ומקטעים שכבר אושרו/נדחו מסומנים בתג ולא ניתנים לבחירה.
  *
+ * פתרון קונפליקט מקטע-מקטע: כשמועבר onResolve, כל גרסה (גיטהאב/האתר) מקבלת כפתור
+ * "קבל גרסה זו". מקבל את אובייקט המקטע (c) — ההורה מסיר אותו אופטימית מיד, כך שאפשר
+ * ללחוץ על מקטעים נוספים בלי להמתין לשרת.
+ *
  * @param {{
  *   changes: Array<{idx?:number, before:string, after:string, status?:string}>,
  *   total?: number,
  *   selectable?: boolean,
  *   selected?: Set<number>,
  *   onToggle?: (idx:number) => void,
+ *   onResolve?: (change:object, strategy:'ours'|'theirs') => void,
  * }} props
  */
-function DiffPreview({ changes, total, selectable = false, selected, onToggle }) {
+function DiffPreview({ changes, total, selectable = false, selected, onToggle, onResolve }) {
   const rows = useMemo(
     () => (changes || []).map((c) => ({ c, segs: diffWords(c.before, c.after) })),
     [changes]
@@ -74,6 +79,18 @@ function DiffPreview({ changes, total, selectable = false, selected, onToggle })
             )}
             {c.before !== '' && (
               <div className="bg-red-50 text-red-800 px-3 py-1 whitespace-pre-wrap break-words border-r-4 border-red-300">
+                {onResolve && (
+                  <div className="flex items-center justify-between gap-2 mb-1 font-sans" dir="rtl">
+                    <span className="text-xs font-bold text-red-400">גיטהאב</span>
+                    <button
+                      type="button"
+                      onClick={() => onResolve(c, 'theirs')}
+                      className="text-xs font-bold bg-red-100 text-red-700 border border-red-300 rounded-md px-2 py-0.5 hover:bg-red-200"
+                    >
+                      קבל גרסה זו
+                    </button>
+                  </div>
+                )}
                 {segs.filter((s) => s.type !== 'add').map((s, k) =>
                   s.type === 'del'
                     ? <span key={k} className="bg-red-300/60 rounded-sm">{s.text}</span>
@@ -83,6 +100,18 @@ function DiffPreview({ changes, total, selectable = false, selected, onToggle })
             )}
             {c.after !== '' && (
               <div className="bg-emerald-50 text-emerald-800 px-3 py-1 whitespace-pre-wrap break-words border-r-4 border-emerald-300">
+                {onResolve && (
+                  <div className="flex items-center justify-between gap-2 mb-1 font-sans" dir="rtl">
+                    <span className="text-xs font-bold text-emerald-500">האתר</span>
+                    <button
+                      type="button"
+                      onClick={() => onResolve(c, 'ours')}
+                      className="text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-md px-2 py-0.5 hover:bg-emerald-200"
+                    >
+                      קבל גרסה זו
+                    </button>
+                  </div>
+                )}
                 {segs.filter((s) => s.type !== 'del').map((s, k) =>
                   s.type === 'add'
                     ? <span key={k} className="bg-emerald-300/60 rounded-sm">{s.text}</span>

@@ -2,7 +2,9 @@ import connectDB from '@/lib/db';
 import LibraryBook from '@/models/LibraryBook';
 import BookEdit from '@/models/BookEdit';
 import User from '@/models/User';
-import { applyHunks } from '@/lib/dicta/text-diff';
+import { applyHunks, diffToHunks } from '@/lib/dicta/text-diff';
+
+const norm = (s) => String(s == null ? '' : s).replace(/\r\n/g, '\n');
 
 async function refreshPendingCount(bookId) {
   const count = await BookEdit.countDocuments({ book: bookId, status: 'pending' });
@@ -431,6 +433,90 @@ export async function resolveConflict({ bookId, strategy }) {
   book.conflict = clear;
   await book.save();
   return { status: 'resolved', strategy: strategy === 'theirs' ? 'theirs' : 'ours' };
+}
+
+/**
+ * פתרון קונפליקט סנכרון **מקטע-מקטע** (לעומת resolveConflict שמכריע את כל הספר).
+ * ה-diff שמוצג למנהל הוא diffToHunks(theirsContent, content) — אדום=גיטהאב, ירוק=האתר.
+ *  strategy='theirs' → קבל את גרסת גיטהאב למקטע זה: content מאמץ אותה (נדרס באתר).
+ *  strategy='ours'   → קבל את גרסת האתר למקטע זה: baseline התצוגה (theirsContent)
+ *                      מאמץ את גרסת האתר, כך שהמקטע נעלם מהקונפליקט וגרסת האתר נשמרת.
+ *
+ * המקטע מזוהה לפי **תוכן** (before=גיטהאב, after=האתר) ולא לפי אינדקס, כדי שהכרעות
+ * מרובות (תור אופטימי בלקוח) לא יושפעו מסדר/הסטת אינדקסים. ההחלה אידמפוטנטית, לכן
+ * הכרעה כפולה או מקטע שכבר נפתר (ע"י מנהל אחר) פשוט לא משנים דבר.
+ *
+ * עיגון הבסיס הסופי: בפעולה הידנית הראשונה מעבירים את תוכן גיטהאב האמיתי ל-baseContent/
+ * baseSha (מזוהה לפי baseSha != theirsSha), כך ש-theirsContent הופך ל-baseline תצוגה
+ * שניתן למזג בו את בחירות "קבל אתר" מבלי לאבד את הבסיס לסנכרון.
+ *
+ * @returns {Promise<{status:string, resolved:boolean, conflictCount:number, syncStatus?:string}>}
+ */
+export async function resolveConflictHunk({ bookId, before, after, strategy }) {
+  await connectDB();
+  const book = await LibraryBook.findById(bookId);
+  if (!book) throw Object.assign(new Error('הספר לא נמצא'), { code: 'NOT_FOUND' });
+  if (book.syncStatus !== 'conflict' || book.conflict?.theirsContent == null) {
+    return { status: 'not-conflict', resolved: false, conflictCount: 0 };
+  }
+
+  // before = הבלוק בגיטהאב, after = הבלוק באתר (התוכן המלא של ה-hunk, לא ממוקד לתצוגה)
+  if (typeof before !== 'string' || typeof after !== 'string' || before === after) {
+    throw Object.assign(new Error('מקטע לא תקין'), { code: 'BAD_INPUT' });
+  }
+  // ולידציה מפורשת — לא להכריע בשקט לכיוון הלא נכון על ערך לא חוקי
+  if (strategy !== 'theirs' && strategy !== 'ours') {
+    throw Object.assign(new Error('אסטרטגיה לא חוקית'), { code: 'BAD_INPUT' });
+  }
+  const want = strategy;
+
+  let theirs = book.conflict.theirsContent ?? ''; // baseline תצוגה (גיטהאב, אולי מוזג חלקית)
+  let ours = book.content || '';
+
+  // עיגון תוכן גיטהאב האמיתי כבסיס הסופי, פעם אחת, לפני מיזוג baseline התצוגה
+  const realTheirsSha = book.conflict.theirsSha;
+  if (book.baseSha !== realTheirsSha) {
+    book.baseContent = theirs;
+    book.baseSha = realTheirsSha;
+  }
+
+  if (want === 'theirs') {
+    // קבל גיטהאב: content מאמץ את גרסת גיטהאב במקטע זה (החלפת בלוק-האתר בבלוק-גיטהאב)
+    const { content, conflicts } = applyHunks(ours, [{ before: after, after: before }]);
+    if (conflicts.length) {
+      throw Object.assign(new Error('לא ניתן להחיל מקטע זה אוטומטית; השתמשו בפתרון כלל-הספר'), { code: 'APPLY_FAILED' });
+    }
+    if (content !== ours) {
+      book.content = content;
+      book.version = (book.version || 1) + 1;
+      ours = content;
+    }
+  } else {
+    // קבל אתר: baseline התצוגה מאמץ את גרסת האתר במקטע זה (המקטע נעלם מהדיף)
+    const { content, conflicts } = applyHunks(theirs, [{ before, after }]);
+    if (conflicts.length) {
+      throw Object.assign(new Error('לא ניתן להחיל מקטע זה אוטומטית; השתמשו בפתרון כלל-הספר'), { code: 'APPLY_FAILED' });
+    }
+    if (content !== theirs) {
+      book.conflict.theirsContent = content;
+      theirs = content;
+    }
+  }
+
+  const remaining = diffToHunks(theirs, ours).length;
+  book.conflict.conflictCount = remaining;
+
+  if (remaining === 0) {
+    // כל המקטעים הוכרעו — הספר נפתר. baseContent/baseSha כבר = גיטהאב האמיתי.
+    const isClean = norm(book.content) === norm(book.baseContent || '');
+    book.syncStatus = isClean ? 'clean' : 'dirty';
+    book.conflict = { theirsContent: null, theirsSha: null, detectedAt: null, conflictCount: 0 };
+    await book.save();
+    return { status: 'resolved', resolved: true, conflictCount: 0, syncStatus: book.syncStatus };
+  }
+
+  await book.save();
+  return { status: 'partial', resolved: false, conflictCount: remaining };
 }
 
 /**
