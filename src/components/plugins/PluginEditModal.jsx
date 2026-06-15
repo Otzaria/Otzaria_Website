@@ -32,6 +32,17 @@ function versionAtLeast(v, min) {
   return true
 }
 
+// השוואה מספרית של גרסאות (בדיקת UX בלבד — השרת הוא מקור האמת). 1: a>b, -1: a<b, 0: שווה.
+function compareVersionsNumeric(a, b) {
+  const pa = (a || '').split('.').map(Number)
+  const pb = (b || '').split('.').map(Number)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i] ?? 0, y = pb[i] ?? 0
+    if (x !== y) return x > y ? 1 : -1
+  }
+  return 0
+}
+
 function buildManifestDiff(manifest, current) {
   const manifestValues = {
     name: (typeof manifest.name === 'string' ? manifest.name : '').trim(),
@@ -155,6 +166,7 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
       input.value = ''
       return
     }
+    const manifestId = (typeof manifest.id === 'string' ? manifest.id : '').trim()
     const manifestVersion = (typeof manifest.version === 'string' ? manifest.version : '').trim()
     const manifestName = (typeof manifest.name === 'string' ? manifest.name : '').trim()
     const manifestAuthor = (typeof manifest.author === 'string' ? manifest.author : '').trim()
@@ -164,6 +176,30 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
     const manifestHomepage = (typeof manifest.homepage === 'string' ? manifest.homepage : '').trim()
     if (!manifestVersion) {
       showAlert('שגיאה', 'חסר שדה גרסה ב-manifest.json של קובץ התוסף')
+      input.value = ''
+      return
+    }
+    // המזהה (id) חייב להופיע ולהישאר זהה למזהה הקיים של התוסף.
+    if (!manifestId) {
+      showAlert('שגיאה', 'חסר שדה id ב-manifest.json של קובץ התוסף')
+      input.value = ''
+      return
+    }
+    const existingUid = (plugin.pluginUid || '').trim()
+    if (existingUid && manifestId !== existingUid) {
+      showAlert('שגיאה', `המזהה (id) בקובץ (${manifestId}) חייב להיות זהה למזהה הקיים של התוסף (${existingUid})`)
+      input.value = ''
+      return
+    }
+    // אי-ירידת גרסה: היוצר חייב גרסה גבוהה מהנוכחית; מנהל רשאי גם אותה גרסה אך לא לשנמך.
+    const versionCmp = compareVersionsNumeric(manifestVersion, originalVersion)
+    if (!isAdmin && versionCmp <= 0) {
+      showAlert('שגיאה', `הגרסה בקובץ (${manifestVersion}) חייבת להיות גבוהה מהגרסה הנוכחית (${originalVersion})`)
+      input.value = ''
+      return
+    }
+    if (isAdmin && versionCmp < 0) {
+      showAlert('שגיאה', `לא ניתן להוריד את הגרסה. הגרסה בקובץ (${manifestVersion}) חייבת להיות זהה או גבוהה מהגרסה הנוכחית (${originalVersion})`)
       input.value = ''
       return
     }
@@ -405,8 +441,8 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
               <input type="file" accept=".otzplugin" onChange={handlePluginFile} className="w-full rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" />
               {pluginFile && <p className="mt-2 text-sm text-green-600">✓ נבחר: {pluginFile.name}</p>}
               {plugin.pluginFileName && <p className="mt-2 text-sm text-on-surface/50">קובץ נוכחי: {plugin.pluginFileName}</p>}
-              {isAdmin && <p className="mt-2 text-sm text-on-surface/50">למנהל, החלפת הקובץ אינה משנה אוטומטית את השדות הידניים ואינה מחייבת העלאת גרסה.</p>}
-              {!isAdmin && <p className="mt-2 text-sm text-on-surface/50">אם מעלים קובץ חדש, הגרסה תזוהה אוטומטית מ-manifest.json ויש להיות גבוהה מהגרסה הנוכחית ({originalVersion}).</p>}
+              {isAdmin && <p className="mt-2 text-sm text-on-surface/50">למנהל, החלפת הקובץ אינה משנה אוטומטית את השדות הידניים. ניתן לשמור על אותה גרסה אך לא לשנמך, והמזהה (id) ב-manifest.json חייב להישאר זהה.</p>}
+              {!isAdmin && <p className="mt-2 text-sm text-on-surface/50">אם מעלים קובץ חדש, הגרסה תזוהה אוטומטית מ-manifest.json ועליה להיות גבוהה מהגרסה הנוכחית ({originalVersion}). המזהה (id) חייב להישאר זהה.</p>}
             </div>
 
             <div>

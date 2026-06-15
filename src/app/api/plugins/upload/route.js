@@ -94,9 +94,10 @@ export async function POST(request) {
 
     // Read name, author, version, shortDescription, status, compatibleWith from manifest
     const pluginBuffer = Buffer.from(await pluginFile.arrayBuffer())
-    let name, author, version, shortDescription, statusFromManifest, compatibleWithFromManifest, homepageFromManifest, requiresNetworkFromManifest
+    let name, author, version, shortDescription, statusFromManifest, compatibleWithFromManifest, homepageFromManifest, requiresNetworkFromManifest, pluginUid
     try {
       const manifest = readManifestFromPlugin(pluginBuffer)
+      pluginUid = (manifest.id || '').toString().trim()
       version = (manifest.version || '').toString().trim()
       name = (manifest.name || '').toString().trim()
       author = (manifest.author || '').toString().trim()
@@ -116,6 +117,7 @@ export async function POST(request) {
     } catch {
       return bad('לא ניתן לקרוא את manifest.json מקובץ התוסף')
     }
+    if (!pluginUid) return bad('חסר שדה id ב-manifest.json של קובץ התוסף')
     if (!version) return bad('חסר שדה גרסה ב-manifest.json של קובץ התוסף')
     if (!PLUGIN_VERSION_RE.test(version)) return bad('גרסה לא תקינה ב-manifest.json של קובץ התוסף (נדרש פורמט X, X.Y, X.Y.Z)')
     if (!name) return bad('חסר שדה name ב-manifest.json של קובץ התוסף')
@@ -205,6 +207,12 @@ export async function POST(request) {
 
     await dbConnect()
 
+    // אכיפת ייחודיות המזהה (id) — אסור ששני תוספים שונים יחלקו את אותו manifest.id.
+    const existingByUid = await Plugin.findOne({ pluginUid }).select('_id').lean()
+    if (existingByUid) {
+      return bad('כבר קיים תוסף עם מזהה (id) זה ב-manifest.json. יש להשתמש במזהה ייחודי.')
+    }
+
     // יצירת המסמך תחילה (עם retry על duplicate-key לטיפול ב-race ב-slug)
     const baseSlug = createSlug(name)
     if (!SLUG_RE.test(baseSlug)) {
@@ -218,6 +226,7 @@ export async function POST(request) {
         plugin = await Plugin.create({
           name,
           slug,
+          pluginUid,
           shortDescription,
           description,
           version,
@@ -239,7 +248,13 @@ export async function POST(request) {
           lastSubmittedAt: new Date()
         })
       } catch (err) {
-        if (err && err.code === 11000) continue
+        if (err && err.code === 11000) {
+          // התנגשות במזהה התוסף לא נפתרת ע"י slug אחר (race מול בדיקת הייחודיות שמעל).
+          if (err.keyPattern && err.keyPattern.pluginUid) {
+            return bad('כבר קיים תוסף עם מזהה (id) זה ב-manifest.json. יש להשתמש במזהה ייחודי.')
+          }
+          continue
+        }
         throw err
       }
     }

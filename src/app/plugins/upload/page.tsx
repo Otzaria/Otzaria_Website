@@ -143,6 +143,7 @@ export default function UploadPluginPage() {
       return
     }
 
+    const manifestId = (typeof manifest.id === 'string' ? manifest.id : '').trim()
     const version = (typeof manifest.version === 'string' ? manifest.version : '').trim()
     const name = (typeof manifest.name === 'string' ? manifest.name : '').trim()
     const author = (typeof manifest.author === 'string' ? manifest.author : '').trim()
@@ -151,6 +152,7 @@ export default function UploadPluginPage() {
     const minAppVersion = (typeof manifest.minAppVersion === 'string' ? manifest.minAppVersion : '').trim()
     const homepage = (typeof manifest.homepage === 'string' ? manifest.homepage : '').trim()
 
+    if (!manifestId) { showAlert('שגיאה', 'חסר שדה id ב-manifest.json (מזהה ייחודי בסגנון com.company.plugin-name)'); resetInput(); return }
     if (!version) { showAlert('שגיאה', 'חסר שדה גרסה ב-manifest.json'); resetInput(); return }
     if (!name) { showAlert('שגיאה', 'חסר שדה name ב-manifest.json'); resetInput(); return }
     if (!author) { showAlert('שגיאה', 'חסר שדה author ב-manifest.json'); resetInput(); return }

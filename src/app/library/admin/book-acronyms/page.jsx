@@ -162,9 +162,9 @@ export default function AdminBookAcronymsPage() {
                 <th className="text-right px-3 py-2">סימון</th>
                 <th onClick={() => handleSort('externalId')} className="text-right px-3 py-2 cursor-pointer hover:bg-surface select-none">ID ספר {getSortIcon('externalId')}</th>
                 <th onClick={() => handleSort('displayName')} className="text-right px-3 py-2 cursor-pointer hover:bg-surface select-none">שם ספר {getSortIcon('displayName')}</th>
+                <th className="text-right px-3 py-2">פרטי שינוי</th>
                 <th className="text-right px-3 py-2">כינויים קיימים</th>
                 <th onClick={() => handleSort('actionType')} className="text-right px-3 py-2 cursor-pointer hover:bg-surface select-none">סוג פעולה {getSortIcon('actionType')}</th>
-                <th className="text-right px-3 py-2">פרטי שינוי</th>
                 <th onClick={() => handleSort('submittedBy')} className="text-right px-3 py-2 cursor-pointer hover:bg-surface select-none">משתמש {getSortIcon('submittedBy')}</th>
                 <th onClick={() => handleSort('updatedAt')} className="text-right px-3 py-2 cursor-pointer hover:bg-surface select-none">תאריך {getSortIcon('updatedAt')}</th>
               </tr>
@@ -181,9 +181,9 @@ export default function AdminBookAcronymsPage() {
                   </td>
                   <td className="px-3 py-2">{row.externalId}</td>
                   <td className="px-3 py-2">{row.displayName || 'ללא שם תצוגה'}</td>
+                  <td className="px-3 py-2 font-medium text-primary">{formatActionDetails(row)}</td>
                   <td className="px-3 py-2">{(row.approvedAliases || []).join(' | ') || '-'}</td>
                   <td className="px-3 py-2">{formatActionType(row.actionType)}</td>
-                  <td className="px-3 py-2 font-medium text-primary">{formatActionDetails(row)}</td>
                   <td className="px-3 py-2">{row.submittedBy}</td>
                   <td className="px-3 py-2">{new Date(row.updatedAt).toLocaleString('he-IL')}</td>
                 </tr>
@@ -204,10 +204,21 @@ function formatActionType(actionType) {
 
 function formatActionDetails(row) {
   if (row.actionType === 'delete') {
-    return row.currentAlias || '-'
+    return <span className="line-through text-red-600">{row.currentAlias || '-'}</span>
   }
   if (row.actionType === 'update') {
-    return `${row.currentAlias || '-'} -> ${row.nextAlias || '-'}`
+    return (
+      <span>
+        <span className="text-on-surface/60">{row.currentAlias || '-'}</span>
+        <span className="mx-1 text-on-surface/40">{'>>'}</span>
+        <span>{row.nextAlias || '-'}</span>
+      </span>
+    )
   }
-  return row.nextAlias || '-'
+  return (
+    <span>
+      <span className="text-on-surface/70">{row.displayName || 'ללא שם תצוגה'}</span>
+      <span className="font-semibold mr-1">{row.nextAlias || '-'}</span>
+    </span>
+  )
 }

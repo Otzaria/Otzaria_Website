@@ -35,6 +35,7 @@ import {
   getPendingPluginDir,
   imageExtFromMime,
   isAllowedImage,
+  readPluginAsset,
   removePluginAsset,
   saveFileFromFormData,
   saveOptimizedImage,
@@ -82,12 +83,31 @@ async function getAuthorizedPlugin(id, session) {
   return { plugin, isAdmin, isOwner }
 }
 
+// מחזיר את מזהה התוסף (id מתוך manifest.json). אם טרם נשמר pluginUid (תוספים ישנים
+// שקדמו לשמירת המזהה) — קורא את הקובץ החי מהדיסק ומחלץ ממנו את ה-id, כדי שאפשר יהיה
+// לאכוף זהות קבועה גם עליהם. מחזיר מחרוזת ריקה אם לא נמצא מזהה.
+async function resolveExistingManifestId(plugin) {
+  const stored = (plugin.pluginUid || '').toString().trim()
+  if (stored) return stored
+  try {
+    const buffer = await readPluginAsset(
+      plugin._id.toString(),
+      `${PLUGIN_FILE_BASENAME}${plugin.pluginFileExt || PLUGIN_FILE_EXT}`
+    )
+    const manifest = readManifestFromPlugin(buffer)
+    return (manifest.id || '').toString().trim()
+  } catch {
+    return ''
+  }
+}
+
 function buildEditResponse(plugin, source) {
   const pluginId = plugin._id.toString()
   const pending = Boolean(plugin.pendingUpdate)
   return {
     ...formatPluginForPublic(plugin, { usePending: pending }),
     _id: pluginId,
+    pluginUid: plugin.pluginUid || null,
     authorId: plugin.authorId?.toString() || null,
     pluginFileName: source.pluginFileName || '',
     isApproved: plugin.isApproved,
@@ -380,14 +400,29 @@ export async function PUT(request, { params }) {
 
     const isOwnerResubmission = isOwner && !isAdmin
 
-    // Non-admin edits derive protected metadata from manifest when replacing the plugin file.
-    if (pluginFile?.size && !isAdmin) {
+    // pluginUidToPersist: המזהה (id) לשמירה אם הוחלף קובץ. נשמר בעת ה-save בהמשך.
+    let pluginUidToPersist = null
+
+    // החלפת קובץ תוסף — אוכפים את זהות התוסף ואת אי-ירידת הגרסה עבור מנהל ויוצר כאחד.
+    if (pluginFile?.size) {
       let newManifest
       try {
         newManifest = readManifestFromPlugin(pluginBuffer)
       } catch {
         return bad('לא ניתן לקרוא את manifest.json מקובץ התוסף')
       }
+
+      // המזהה (id) חייב להישאר זהה לאורך חיי התוסף — אסור לשנותו בעדכון.
+      const manifestId = (newManifest.id || '').toString().trim()
+      if (!manifestId) {
+        return bad('חסר שדה id ב-manifest.json של קובץ התוסף')
+      }
+      const existingId = await resolveExistingManifestId(plugin)
+      if (existingId && manifestId !== existingId) {
+        return bad(`המזהה (id) בקובץ (${manifestId}) חייב להיות זהה למזהה הקיים של התוסף (${existingId})`)
+      }
+      pluginUidToPersist = manifestId
+
       const manifestVersion = (newManifest.version || '').toString().trim()
       if (!manifestVersion) {
         return bad('חסר שדה גרסה ב-manifest.json של קובץ התוסף')
@@ -395,31 +430,42 @@ export async function PUT(request, { params }) {
       if (!PLUGIN_VERSION_RE.test(manifestVersion)) {
         return bad('גרסה לא תקינה ב-manifest.json של קובץ התוסף (נדרש פורמט X, X.Y, X.Y.Z)')
       }
-      if (compareVersions(manifestVersion, livePlugin.version) <= 0) {
+      // היוצר חייב להעלות גרסה גבוהה מהקיימת. מנהל רשאי לשמור גם על אותה גרסה
+      // (למשל החלפת קובץ לתיקון), אך לעולם לא לשנמך — ירידה נחסמת בהמשך לכולם.
+      if (!isAdmin && compareVersions(manifestVersion, livePlugin.version) <= 0) {
         return bad(`הגרסה בקובץ (${manifestVersion}) חייבת להיות גבוהה מהגרסה הנוכחית (${livePlugin.version})`)
       }
-      const manifestStability = newManifest.stability ? newManifest.stability.toString().trim() : ''
-      if (!manifestStability || !ALLOWED_PLUGIN_STATUSES.includes(manifestStability)) {
-        return bad('חסר שדה stability תקין ב-manifest.json (ערכים מותרים: stable, beta, experimental)')
-      }
-      const manifestMinAppVersion = newManifest.minAppVersion ? newManifest.minAppVersion.toString().trim() : ''
-      if (!manifestMinAppVersion) {
-        return bad('חסר שדה minAppVersion ב-manifest.json של קובץ התוסף')
-      }
-      if (compareVersions(manifestMinAppVersion, MIN_SUPPORTED_APP_VERSION) < 0) {
-        return bad(`גרסת המינימום (${manifestMinAppVersion}) לא יכולה להיות פחות מ-${MIN_SUPPORTED_APP_VERSION}`)
-      }
       version = manifestVersion
-      const manifestName = (newManifest.name || '').toString().trim()
-      const manifestAuthor = (newManifest.author || '').toString().trim()
-      const manifestDesc = (newManifest.description || '').toString().trim()
-      if (manifestName) name = manifestName
-      if (manifestAuthor) author = manifestAuthor
-      if (manifestDesc) shortDescription = manifestDesc
-      status = manifestStability
-      compatibleWith = manifestMinAppVersion
-      homepage = newManifest.homepage ? newManifest.homepage.toString().trim() : ''
-      requiresNetwork = newManifest.network?.enabled === true
+
+      // היוצר — שאר המטא-דאטה המוגנת נגזרת מהמניפסט (מנהל עורך אותה ידנית בטופס).
+      if (!isAdmin) {
+        const manifestStability = newManifest.stability ? newManifest.stability.toString().trim() : ''
+        if (!manifestStability || !ALLOWED_PLUGIN_STATUSES.includes(manifestStability)) {
+          return bad('חסר שדה stability תקין ב-manifest.json (ערכים מותרים: stable, beta, experimental)')
+        }
+        const manifestMinAppVersion = newManifest.minAppVersion ? newManifest.minAppVersion.toString().trim() : ''
+        if (!manifestMinAppVersion) {
+          return bad('חסר שדה minAppVersion ב-manifest.json של קובץ התוסף')
+        }
+        if (compareVersions(manifestMinAppVersion, MIN_SUPPORTED_APP_VERSION) < 0) {
+          return bad(`גרסת המינימום (${manifestMinAppVersion}) לא יכולה להיות פחות מ-${MIN_SUPPORTED_APP_VERSION}`)
+        }
+        const manifestName = (newManifest.name || '').toString().trim()
+        const manifestAuthor = (newManifest.author || '').toString().trim()
+        const manifestDesc = (newManifest.description || '').toString().trim()
+        if (manifestName) name = manifestName
+        if (manifestAuthor) author = manifestAuthor
+        if (manifestDesc) shortDescription = manifestDesc
+        status = manifestStability
+        compatibleWith = manifestMinAppVersion
+        homepage = newManifest.homepage ? newManifest.homepage.toString().trim() : ''
+        requiresNetwork = newManifest.network?.enabled === true
+      }
+    }
+
+    // אכיפת אי-ירידת גרסה גם בעריכה ללא החלפת קובץ (למשל מנהל שעורך ידנית את שדה הגרסה).
+    if (compareVersions(version, livePlugin.version) < 0) {
+      return bad(`לא ניתן להוריד את גרסת התוסף. הגרסה (${version}) חייבת להיות זהה או גבוהה מהגרסה הנוכחית (${livePlugin.version}).`)
     }
 
     if (homepage && !isHttpUrl(homepage)) {
@@ -567,6 +613,11 @@ export async function PUT(request, { params }) {
       }
     }
 
+    // שמירת זהות התוסף (id). קבוע לאורך חיי התוסף; כאן גם משלים backfill לתוספים ישנים.
+    if (pluginUidToPersist) {
+      plugin.pluginUid = pluginUidToPersist
+    }
+
     await plugin.save()
 
     // אם הוחלף קובץ חדש שלא תאם לעיצוב — מציינים בהודעת ההצלחה שהתגית לא נוספה.
@@ -603,6 +654,9 @@ export async function PUT(request, { params }) {
       }
     })
   } catch (error) {
+    if (error && error.code === 11000 && error.keyPattern && error.keyPattern.pluginUid) {
+      return bad('כבר קיים תוסף אחר עם מזהה (id) זה ב-manifest.json. המזהה חייב להיות ייחודי.')
+    }
     console.error('Error updating plugin:', error)
     return bad('Failed to update plugin', 500)
   }
