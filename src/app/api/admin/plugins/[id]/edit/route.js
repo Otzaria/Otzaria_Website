@@ -381,6 +381,7 @@ export async function PUT(request, { params }) {
         designCompliant = liveValidation.design?.compliant === true
       } catch (err) {
         console.error('Re-validating stored plugin for design tag failed:', err)
+        designViolations = ['שגיאה בקריאת או בבדיקת קובץ התוסף המאוחסן: ' + err.message]
       }
     }
 
