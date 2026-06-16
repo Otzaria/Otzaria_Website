@@ -357,9 +357,33 @@ export async function PUT(request, { params }) {
     // אם לא הוחלף — נסמך על המצב הקיים של התוסף (הוא כבר נבדק כשהקובץ הועלה).
     const userRequestedDesignTag = tags.includes(OTZARIA_DESIGN_TAG)
     const pluginAlreadyHadTag = Array.isArray(livePlugin.tags) && livePlugin.tags.includes(OTZARIA_DESIGN_TAG)
-    const designCompliant = designCompliantFromFile === null
+    let designCompliant = designCompliantFromFile === null
       ? pluginAlreadyHadTag
       : designCompliantFromFile
+
+    // לא הועלה קובץ חדש אך המשתמש מבקש את התג והתוסף עדיין אינו נושא אותו —
+    // נבדוק את הקובץ המאוחסן עצמו (נחוץ לתוספים שהועלו לפני עדכון כללי בדיקת
+    // העיצוב). חשוב לקרוא את אותו קובץ שייכנס לאישור: אם המקור הנערך הוא
+    // pendingUpdate — את קובץ ה-pending, בדיוק כפי ש-download route עושה.
+    if (userRequestedDesignTag && !designCompliant && designCompliantFromFile === null) {
+      try {
+        const usePendingAsset = getAssetSources(editableSource).pluginFile === 'pending'
+        const fileExt = (usePendingAsset
+          ? (editableSource.pluginFileExt || plugin.pluginFileExt)
+          : plugin.pluginFileExt) || PLUGIN_FILE_EXT
+        const liveBuffer = await readPluginAsset(
+          plugin._id.toString(),
+          `${PLUGIN_FILE_BASENAME}${fileExt}`,
+          { pending: usePendingAsset }
+        )
+        const liveValidation = await validatePluginArchive(liveBuffer)
+        designViolations = liveValidation.design?.violations || []
+        designCompliant = liveValidation.design?.compliant === true
+      } catch (err) {
+        console.error('Re-validating stored plugin for design tag failed:', err)
+        designViolations = ['שגיאה בקריאת או בבדיקת קובץ התוסף המאוחסן: ' + err.message]
+      }
+    }
 
     if (userRequestedDesignTag && !designCompliant) {
       const detail = designViolations.length > 0

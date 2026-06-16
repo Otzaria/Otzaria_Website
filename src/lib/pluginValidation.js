@@ -19,6 +19,7 @@ const FALLBACK_PERMISSIONS = [
   'calendar.read',
   'settings.read',
   'ui.feedback',
+  'ui.create_shortcut',
   'plugin.storage.read',
   'plugin.storage.write',
   'published_data.write',
@@ -334,7 +335,11 @@ export function checkDesignCompliance(files) {
   }
 
   for (const { name, css } of cssChunks) {
+    // הגדרות CSS custom properties (`--color-foo: #xxx;`, `--radius-md: 12px;`)
+    // מותרות במפורש לפי DESIGN_GUIDE — הן ברירות מחדל לפני applyTheme. מסירים
+    // אותן לפני סריקת צבעים/גדלים גולמיים, כפי שעושה ה-packager של אוצריא.
     const stripped = stripCssComments(css)
+      .replace(/--[a-zA-Z_][\w-]*\s*:\s*[^;}]+;?/g, '')
     const seenViolationTypes = new Set()
     const addOnce = (type, message) => {
       if (seenViolationTypes.has(type)) return
