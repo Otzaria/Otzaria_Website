@@ -18,6 +18,10 @@ const PluginSchema = new mongoose.Schema(
     shortDescription: { type: String, required: true, trim: true, maxlength: 150 },
     description: { type: String, required: true, maxlength: 10000 },
 
+    // מזהה ייחודי קבוע מתוך manifest.json (reverse-domain, למשל com.company.plugin-name).
+    // קבוע לאורך חיי התוסף — לא ניתן לשנותו בעדכון, לא ע"י היוצר ולא ע"י מנהל.
+    pluginUid: { type: String, trim: true, maxlength: 200, default: null },
+
     // גרסה וסטטוס
     version: { type: String, required: true, maxlength: 30 },
     status: {
@@ -103,6 +107,12 @@ PluginSchema.index({ name: 'text', shortDescription: 'text', description: 'text'
 PluginSchema.index({ tags: 1 })
 PluginSchema.index({ isApproved: 1, isHidden: 1 })
 PluginSchema.index({ createdAt: -1 })
+// מזהה התוסף (pluginUid מתוך manifest.json) ייחודי בין תוספים שונים.
+// אינדקס חלקי (string בלבד) כדי לאפשר תוספים ישנים שטרם נשמר עבורם המזהה (null).
+PluginSchema.index(
+  { pluginUid: 1 },
+  { unique: true, partialFilterExpression: { pluginUid: { $type: 'string' } } }
+)
 
 // Virtual fields - URLs מצביעים לראוטים שמגישים מהדיסק
 PluginSchema.virtual('imageUrl').get(function () {
