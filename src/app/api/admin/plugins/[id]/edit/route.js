@@ -463,6 +463,16 @@ export async function PUT(request, { params }) {
       }
     }
 
+    // משתמש רגיל (לא מנהל) שעורך ללא העלאת קובץ — השדות הנגזרים מ-manifest.json מוסתרים
+    // בטופס ואינם ניתנים לעריכה ידנית. אוכפים בשרת שיישארו זהים למקור הקיים, כדי שלא
+    // ייווצר חוסר התאמה בין מסד הנתונים לבין הקובץ המאוחסן (עקיפה ישירה דרך PUT).
+    if (!isAdmin && !pluginFile?.size) {
+      name = editableSource.name || livePlugin.name
+      author = editableSource.author || livePlugin.author
+      version = editableSource.version || livePlugin.version
+      shortDescription = editableSource.shortDescription || livePlugin.shortDescription
+    }
+
     // אכיפת אי-ירידת גרסה גם בעריכה ללא החלפת קובץ (למשל מנהל שעורך ידנית את שדה הגרסה).
     if (compareVersions(version, livePlugin.version) < 0) {
       return bad(`לא ניתן להוריד את גרסת התוסף. הגרסה (${version}) חייבת להיות זהה או גבוהה מהגרסה הנוכחית (${livePlugin.version}).`)

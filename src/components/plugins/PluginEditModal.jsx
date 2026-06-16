@@ -33,12 +33,24 @@ function versionAtLeast(v, min) {
 }
 
 // השוואה מספרית של גרסאות (בדיקת UX בלבד — השרת הוא מקור האמת). 1: a>b, -1: a<b, 0: שווה.
+// מפריד תחילה את חלק ה-prerelease (אחרי '-') כדי שלא ננסה להמיר תווים לא-מספריים ל-Number
+// (מה שמחזיר NaN). לפי SemVer גרסה עם prerelease קטנה מהגרסה היציבה התואמת.
 function compareVersionsNumeric(a, b) {
-  const pa = (a || '').split('.').map(Number)
-  const pb = (b || '').split('.').map(Number)
+  const [coreA] = (a || '').split('+')[0].split('-')
+  const [coreB] = (b || '').split('+')[0].split('-')
+  const preA = (a || '').split('+')[0].slice(coreA.length + 1)
+  const preB = (b || '').split('+')[0].slice(coreB.length + 1)
+  const pa = coreA.split('.').map(Number)
+  const pb = coreB.split('.').map(Number)
   for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
     const x = pa[i] ?? 0, y = pb[i] ?? 0
     if (x !== y) return x > y ? 1 : -1
+  }
+  if (preA && !preB) return -1
+  if (!preA && preB) return 1
+  if (preA && preB) {
+    const cmp = preA.localeCompare(preB)
+    return cmp === 0 ? 0 : (cmp > 0 ? 1 : -1)
   }
   return 0
 }
