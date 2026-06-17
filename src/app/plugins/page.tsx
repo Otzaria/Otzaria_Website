@@ -26,6 +26,7 @@ interface Plugin {
   supportsDirectInstall: boolean
   homepage: string
   isPinned?: boolean
+  downloadCount?: number
 }
 
 function PluginsPageContent() {
@@ -425,6 +426,13 @@ function PluginsPageContent() {
                         </span>
                         <span className="px-3 py-1 rounded-full text-xs font-bold bg-surface text-on-surface/60">
                           גרסה {plugin.version}
+                        </span>
+                        <span
+                          className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-surface text-on-surface/60"
+                          title="מספר הורדות"
+                        >
+                          <span className="material-symbols-outlined text-sm leading-none">download</span>
+                          {(plugin.downloadCount || 0).toLocaleString('he-IL')}
                         </span>
                       </div>
 
