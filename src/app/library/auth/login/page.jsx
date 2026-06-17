@@ -2,12 +2,38 @@
 
 import { useState, useRef, useEffect, Suspense } from 'react'
 import { signIn, useSession } from 'next-auth/react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 
+const DEFAULT_REDIRECT = '/library/dashboard'
+
+// מאשר רק יעד פנימי בטוח לפני ניווט מלא, ומונע שתי בעיות:
+// 1. open-redirect — ?callbackUrl=https://evil.com או //evil.com (protocol-relative).
+//    מקבלים אך ורק נתיב יחסי שמתחיל ב-"/" יחיד (לא "//" ולא "/\").
+// 2. לופ רענון — ניתוב חזרה לדף ההתחברות עצמו. נופלים חזרה ליעד ברירת המחדל.
+function getSafeCallbackUrl(raw) {
+  if (!raw || raw[0] !== '/') return DEFAULT_REDIRECT
+  // "//" או "/\" מתפרשים בדפדפן כ-origin חיצוני
+  if (raw[1] === '/' || raw[1] === '\\') return DEFAULT_REDIRECT
+  const pathOnly = raw.split(/[?#]/)[0]
+  if (pathOnly === '/library/auth/login' || pathOnly.startsWith('/library/auth/login/')) {
+    return DEFAULT_REDIRECT
+  }
+  return raw
+}
+
+// ניווט מלא (ולא router.replace צד-לקוח) בכוונה:
+// לאחר signIn ה-cookie נכתב, אך ה-SessionProvider וה-Router Cache של Next
+// עדיין לא תמיד מעודכנים. ניווט צד-לקוח לדף מוגן עלול להישלף מ-cache ישן
+// (הניתוב חזרה ל-login מהביקור הלא-מאומת), והשומר בדשבורד מחזיר ל-login —
+// ונוצר לופ שנפתר רק ברענון ידני. ניווט מלא מכריח את ה-middleware לקרוא
+// את ה-cookie החדש בצד שרת ומונע את הלופ.
+function redirectAfterLogin(searchParams) {
+  window.location.assign(getSafeCallbackUrl(searchParams.get('callbackUrl')))
+}
+
 function LoginContent() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const passwordRef = useRef(null)
   
@@ -28,10 +54,9 @@ function LoginContent() {
       // דגל חד-פעמי למניעת ניתוב כפול בתגובה לשינוי סטטוס האימות
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsRedirecting(true)
-      const callbackUrl = searchParams.get('callbackUrl') || '/library/dashboard'
-      router.replace(callbackUrl)
+      redirectAfterLogin(searchParams)
     }
-  }, [status, router, searchParams, isRedirecting])
+  }, [status, searchParams, isRedirecting])
 
   useEffect(() => {
     const errorType = searchParams.get('error')
@@ -76,9 +101,8 @@ function LoginContent() {
         setError('שם משתמש או סיסמה שגויים')
         setLoading(false)
       } else {
-        const callbackUrl = searchParams.get('callbackUrl') || '/library/dashboard'
-        router.refresh()
-        router.replace(callbackUrl)
+        // משאירים loading=true כדי שהכפתור יישאר במצב טעינה עד שהדף נטען מחדש.
+        redirectAfterLogin(searchParams)
       }
     } catch {
       setError('שגיאה בהתחברות')
