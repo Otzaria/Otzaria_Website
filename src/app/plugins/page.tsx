@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
@@ -38,6 +38,10 @@ function PluginsPageContent() {
   const [activeTag, setActiveTag] = useState('all')
   const [allTags, setAllTags] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
+  const tagsContainerRef = useRef<HTMLDivElement>(null)
+  const [showAllTags, setShowAllTags] = useState(false)
+  const [tagsCollapsedHeight, setTagsCollapsedHeight] = useState(0)
+  const [tagsOverflow, setTagsOverflow] = useState(false)
 
   // טעינת נתוני התוספים
   useEffect(() => {
@@ -69,6 +73,22 @@ function PluginsPageContent() {
     }
     loadPlugins()
   }, [searchParams])
+
+  // מדידת גובה אזור התגיות - הגבלה ל-3 שורות עם כפתור "הצג עוד"
+  useEffect(() => {
+    const el = tagsContainerRef.current
+    if (!el || !el.firstElementChild) return
+    const measure = () => {
+      const rowHeight = (el.firstElementChild as HTMLElement).offsetHeight
+      const gap = 8 // gap-2
+      const threeLines = rowHeight * 3 + gap * 2
+      setTagsCollapsedHeight(threeLines)
+      setTagsOverflow(el.scrollHeight > threeLines + 4)
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [allTags])
 
   // סינון התוספים
   useEffect(() => {
@@ -324,30 +344,44 @@ function PluginsPageContent() {
 
             {/* Tags Filter */}
             {allTags.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => setActiveTag('all')}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                    activeTag === 'all'
-                      ? 'bg-primary text-white'
-                      : 'bg-white border border-gray-200 text-on-surface/70 hover:border-primary/30 hover:text-primary'
-                  }`}
+              <div>
+                <div
+                  ref={tagsContainerRef}
+                  className="flex flex-wrap gap-2 overflow-hidden transition-all duration-300"
+                  style={!showAllTags && tagsCollapsedHeight ? { maxHeight: tagsCollapsedHeight } : undefined}
                 >
-                  כל התגיות
-                </button>
-                {allTags.map(tag => (
                   <button
-                    key={tag}
-                    onClick={() => setActiveTag(tag)}
+                    onClick={() => setActiveTag('all')}
                     className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                      activeTag === tag
+                      activeTag === 'all'
                         ? 'bg-primary text-white'
                         : 'bg-white border border-gray-200 text-on-surface/70 hover:border-primary/30 hover:text-primary'
                     }`}
                   >
-                    {tag}
+                    כל התגיות
                   </button>
-                ))}
+                  {allTags.map(tag => (
+                    <button
+                      key={tag}
+                      onClick={() => setActiveTag(tag)}
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                        activeTag === tag
+                          ? 'bg-primary text-white'
+                          : 'bg-white border border-gray-200 text-on-surface/70 hover:border-primary/30 hover:text-primary'
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+                {tagsOverflow && (
+                  <button
+                    onClick={() => setShowAllTags(v => !v)}
+                    className="mt-3 text-sm font-medium text-primary hover:underline"
+                  >
+                    {showAllTags ? 'הצג פחות' : 'הצג עוד'}
+                  </button>
+                )}
               </div>
             )}
           </div>
