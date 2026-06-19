@@ -40,7 +40,8 @@ function PluginsPageContent() {
   const [loading, setLoading] = useState(true)
   const tagsContainerRef = useRef<HTMLDivElement>(null)
   const [showAllTags, setShowAllTags] = useState(false)
-  const [tagsCollapsedHeight, setTagsCollapsedHeight] = useState(0)
+  const [tagsCollapsedHeight, setTagsCollapsedHeight] = useState(130)
+  const [tagsFullHeight, setTagsFullHeight] = useState(0)
   const [tagsOverflow, setTagsOverflow] = useState(false)
 
   // טעינת נתוני התוספים
@@ -83,6 +84,7 @@ function PluginsPageContent() {
       const gap = 8 // gap-2
       const threeLines = rowHeight * 3 + gap * 2
       setTagsCollapsedHeight(threeLines)
+      setTagsFullHeight(el.scrollHeight)
       setTagsOverflow(el.scrollHeight > threeLines + 4)
     }
     measure()
@@ -348,7 +350,7 @@ function PluginsPageContent() {
                 <div
                   ref={tagsContainerRef}
                   className="flex flex-wrap gap-2 overflow-hidden transition-all duration-300"
-                  style={!showAllTags && tagsCollapsedHeight ? { maxHeight: tagsCollapsedHeight } : undefined}
+                  style={{ maxHeight: !showAllTags ? tagsCollapsedHeight : (tagsFullHeight || undefined) }}
                 >
                   <button
                     onClick={() => setActiveTag('all')}
