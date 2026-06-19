@@ -260,48 +260,6 @@ function PluginsPageContent() {
       <OtzariaSoftwareHeader />
       
       <main className="flex-1">
-        {/* Hero Section */}
-        <section className="bg-surface py-16 px-4 border-b border-surface-variant">
-          <div className="container mx-auto max-w-6xl">
-            <div className="grid md:grid-cols-2 gap-8 items-center">
-              <div>
-                <div className="inline-flex items-center gap-2 text-primary/70 text-sm font-bold mb-4">
-                  <div className="w-7 h-px bg-primary/30"></div>
-                  <span>תוספים לאוצריא</span>
-                </div>
-                <h1 className="text-5xl font-bold text-primary font-frank mb-4 leading-tight">
-                  להוסיף יכולות חדשות לאוצריא בלחיצה אחת
-                </h1>
-                <p className="text-on-surface/70 text-lg leading-relaxed">
-                  כאן תמצאו תוספים שנבנו במיוחד לחוויית הלימוד באוצריא, עם עמודי הסבר ברורים, קישורי הורדה, ובמקרים מתאימים גם התקנה ישירה מתוך התוכנה.
-                </p>
-              </div>
-              
-              <div className="space-y-4">
-                <div className="p-6 bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl border border-primary/10">
-                  <span className="text-sm text-on-surface/60 block mb-2">זמין עכשיו</span>
-                  <div className="text-4xl font-bold text-primary mb-2">{plugins.length} תוספים</div>
-                </div>
-                
-                <div className="p-6 bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl border border-primary/10 space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_0_6px_rgba(44,27,2,0.08)]"></div>
-                    <span className="text-sm text-on-surface/70">הורדה רגילה לצד התקנה ישירה</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_0_6px_rgba(44,27,2,0.08)]"></div>
-                    <span className="text-sm text-on-surface/70">תגיות שעוזרות למצוא את התוסף המתאים</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_0_6px_rgba(44,27,2,0.08)]"></div>
-                    <span className="text-sm text-on-surface/70">פרטי גרסה ותאימות במקום אחד</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
         {/* Filters Section */}
         <section className="py-6 px-4 bg-white border-b border-gray-100">
           <div className="container mx-auto max-w-6xl">
@@ -534,6 +492,48 @@ function PluginsPageContent() {
                 ))}
               </div>
             )}
+          </div>
+        </section>
+
+        {/* Hero / Info Section */}
+        <section className="bg-surface py-16 px-4 border-t border-surface-variant">
+          <div className="container mx-auto max-w-6xl">
+            <div className="grid md:grid-cols-2 gap-8 items-center">
+              <div>
+                <div className="inline-flex items-center gap-2 text-primary/70 text-sm font-bold mb-4">
+                  <div className="w-7 h-px bg-primary/30"></div>
+                  <span>תוספים לאוצריא</span>
+                </div>
+                <h2 className="text-5xl font-bold text-primary font-frank mb-4 leading-tight">
+                  להוסיף יכולות חדשות לאוצריא בלחיצה אחת
+                </h2>
+                <p className="text-on-surface/70 text-lg leading-relaxed">
+                  כאן תמצאו תוספים שנבנו במיוחד לחוויית הלימוד באוצריא, עם עמודי הסבר ברורים, קישורי הורדה, ובמקרים מתאימים גם התקנה ישירה מתוך התוכנה.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="p-6 bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl border border-primary/10">
+                  <span className="text-sm text-on-surface/60 block mb-2">זמין עכשיו</span>
+                  <div className="text-4xl font-bold text-primary mb-2">{plugins.length} תוספים</div>
+                </div>
+
+                <div className="p-6 bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl border border-primary/10 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_0_6px_rgba(44,27,2,0.08)]"></div>
+                    <span className="text-sm text-on-surface/70">הורדה רגילה לצד התקנה ישירה</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_0_6px_rgba(44,27,2,0.08)]"></div>
+                    <span className="text-sm text-on-surface/70">תגיות שעוזרות למצוא את התוסף המתאים</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_0_6px_rgba(44,27,2,0.08)]"></div>
+                    <span className="text-sm text-on-surface/70">פרטי גרסה ותאימות במקום אחד</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
       </main>
