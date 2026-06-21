@@ -17,7 +17,8 @@ function LibraryEditSpaceContent() {
 
   const [books, setBooks] = useState([])
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
+  // אתחול שדה החיפוש משם הספר שנשלח ב-URL (פרמטר q), למשל מאוצריא
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('q') || '')
   const [filterCategory, setFilterCategory] = useState('all')
   const [syncing, setSyncing] = useState(false)
   const [pushing, setPushing] = useState(false)
@@ -50,12 +51,6 @@ function LibraryEditSpaceContent() {
     fetchBooks()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status])
-
-  // אתחול שדה החיפוש משם הספר שנשלח ב-URL (פרמטר q), למשל מאוצריא
-  useEffect(() => {
-    const q = searchParams.get('q')
-    if (q) setSearchTerm(q)
-  }, [searchParams])
 
   const handleSync = async () => {
     try {

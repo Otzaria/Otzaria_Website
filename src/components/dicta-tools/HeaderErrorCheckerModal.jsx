@@ -52,7 +52,7 @@ export default function HeaderErrorCheckerModal({ isOpen, onClose, content }) {
 
       // בניית מספר עברי קנוני, כדי לאמת שטוקן הוא באמת מספר ולא מילה רגילה
       const numberToHebrew = (n) => {
-        if (n <= 0 || n > 1100) return null
+        if (n <= 0 || n > 1099) return null
         const hundreds = ['', 'ק', 'ר', 'ש', 'ת', 'תק', 'תר', 'תש', 'תת', 'תתק', 'תתר']
         const tens = ['', 'י', 'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ']
         const ones = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט']
@@ -85,13 +85,24 @@ export default function HeaderErrorCheckerModal({ isOpen, onClose, content }) {
         else if (text.endsWith(':')) amud = 1
         else if (text.endsWith('.')) amud = 0
 
-        // זיהוי מספר הדף: הטוקן הראשון שהוא מספר עברי תקין (תוך דילוג על מילות תווית
-        // ועל מילים רגילות שאינן מספר), כדי לא לפרש "תורה"/"משנה" וכו' כמספר
+        // זיהוי מספר הדף. מסירים תחילה את חלק "עמוד א/ב" (שכבר זוהה לעיל)
+        // כדי שאות העמוד לא תיחשב בטעות כמספר הדף בכותרת ללא הקידומת "דף"
         let dafNum = 0
-        const tokens = text.replace(/[.:]/g, ' ').trim().split(/\s+/)
-        for (const t of tokens) {
-          if (!t || labelWords.has(t)) continue
-          if (isValidNumeral(t)) { dafNum = toNumber(normalizeNumeral(t)); break }
+        const tokens = text.replace(/עמוד\s*[אב]/g, ' ').replace(/[.:]/g, ' ').trim().split(/\s+/).filter(Boolean)
+        const isSingleToken = tokens.length === 1
+        for (let i = 0; i < tokens.length; i++) {
+          const t = tokens[i]
+          if (labelWords.has(t)) continue
+          if (!isValidNumeral(t)) continue
+          // מספר רב-אותיות (כמו "רב"=202) מתקבל רק אם הוא הטוקן היחיד או מופיע מיד
+          // אחרי מילת תווית, כדי לא לפרש שמות/ביטויים ("רב פפא", "רב אשי") כמספרים.
+          // מספר בן אות אחת ("א", "ב") מתקבל תמיד.
+          const isMultiLetter = normalizeNumeral(t).length > 1
+          const prevIsLabel = i > 0 && labelWords.has(tokens[i - 1])
+          if (!isMultiLetter || isSingleToken || prevIsLabel) {
+            dafNum = toNumber(normalizeNumeral(t))
+            break
+          }
         }
         // ערך ממוין: כל דף = שני עמודים, כך ש"ב עמוד ב" < "ג עמוד א"
         return { dafNum, value: dafNum * 2 + amud }
@@ -263,7 +274,7 @@ export default function HeaderErrorCheckerModal({ isOpen, onClose, content }) {
 
           // בדיקת סדר עולה: כותרת כפולה או כותרת שאינה גדולה מקודמתה (כותרת זרה באמצע).
           // מדלג על פערים תקינים (ב -> ג -> ד) ועל שינויי פורמט, ובודק רק שהערך עולה.
-          if (previousValue.dafNum > 0 && currentValue.dafNum > 0 && currentValue.value <= previousValue.value) {
+          if (previousNum > 0 && currentNum > 0 && currentValue.value <= previousValue.value) {
             result.heading_order.push(`כותרת קודמת - ${previousText} || כותרת נוכחית - ${headerText}${parentSuffix}`)
           }
         }
