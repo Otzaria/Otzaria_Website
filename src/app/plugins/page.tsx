@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
@@ -26,6 +26,7 @@ interface Plugin {
   supportsDirectInstall: boolean
   homepage: string
   isPinned?: boolean
+  downloadCount?: number
 }
 
 function PluginsPageContent() {
@@ -37,6 +38,11 @@ function PluginsPageContent() {
   const [activeTag, setActiveTag] = useState('all')
   const [allTags, setAllTags] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
+  const tagsContainerRef = useRef<HTMLDivElement>(null)
+  const [showAllTags, setShowAllTags] = useState(false)
+  const [tagsCollapsedHeight, setTagsCollapsedHeight] = useState(130)
+  const [tagsFullHeight, setTagsFullHeight] = useState(0)
+  const [tagsOverflow, setTagsOverflow] = useState(false)
 
   // טעינת נתוני התוספים
   useEffect(() => {
@@ -68,6 +74,23 @@ function PluginsPageContent() {
     }
     loadPlugins()
   }, [searchParams])
+
+  // מדידת גובה אזור התגיות - הגבלה ל-3 שורות עם כפתור "הצג עוד"
+  useEffect(() => {
+    const el = tagsContainerRef.current
+    if (!el || !el.firstElementChild) return
+    const measure = () => {
+      const rowHeight = (el.firstElementChild as HTMLElement).offsetHeight
+      const gap = 8 // gap-2
+      const threeLines = rowHeight * 3 + gap * 2
+      setTagsCollapsedHeight(threeLines)
+      setTagsFullHeight(el.scrollHeight)
+      setTagsOverflow(el.scrollHeight > threeLines + 4)
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [allTags])
 
   // סינון התוספים
   useEffect(() => {
@@ -237,48 +260,6 @@ function PluginsPageContent() {
       <OtzariaSoftwareHeader />
       
       <main className="flex-1">
-        {/* Hero Section */}
-        <section className="bg-surface py-16 px-4 border-b border-surface-variant">
-          <div className="container mx-auto max-w-6xl">
-            <div className="grid md:grid-cols-2 gap-8 items-center">
-              <div>
-                <div className="inline-flex items-center gap-2 text-primary/70 text-sm font-bold mb-4">
-                  <div className="w-7 h-px bg-primary/30"></div>
-                  <span>תוספים לאוצריא</span>
-                </div>
-                <h1 className="text-5xl font-bold text-primary font-frank mb-4 leading-tight">
-                  להוסיף יכולות חדשות לאוצריא בלחיצה אחת
-                </h1>
-                <p className="text-on-surface/70 text-lg leading-relaxed">
-                  כאן תמצאו תוספים שנבנו במיוחד לחוויית הלימוד באוצריא, עם עמודי הסבר ברורים, קישורי הורדה, ובמקרים מתאימים גם התקנה ישירה מתוך התוכנה.
-                </p>
-              </div>
-              
-              <div className="space-y-4">
-                <div className="p-6 bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl border border-primary/10">
-                  <span className="text-sm text-on-surface/60 block mb-2">זמין עכשיו</span>
-                  <div className="text-4xl font-bold text-primary mb-2">{plugins.length} תוספים</div>
-                </div>
-                
-                <div className="p-6 bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl border border-primary/10 space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_0_6px_rgba(44,27,2,0.08)]"></div>
-                    <span className="text-sm text-on-surface/70">הורדה רגילה לצד התקנה ישירה</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_0_6px_rgba(44,27,2,0.08)]"></div>
-                    <span className="text-sm text-on-surface/70">תגיות שעוזרות למצוא את התוסף המתאים</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_0_6px_rgba(44,27,2,0.08)]"></div>
-                    <span className="text-sm text-on-surface/70">פרטי גרסה ותאימות במקום אחד</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
         {/* Filters Section */}
         <section className="py-6 px-4 bg-white border-b border-gray-100">
           <div className="container mx-auto max-w-6xl">
@@ -323,30 +304,44 @@ function PluginsPageContent() {
 
             {/* Tags Filter */}
             {allTags.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => setActiveTag('all')}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                    activeTag === 'all'
-                      ? 'bg-primary text-white'
-                      : 'bg-white border border-gray-200 text-on-surface/70 hover:border-primary/30 hover:text-primary'
-                  }`}
+              <div>
+                <div
+                  ref={tagsContainerRef}
+                  className="flex flex-wrap gap-2 overflow-hidden transition-all duration-300"
+                  style={{ maxHeight: !showAllTags ? tagsCollapsedHeight : (tagsFullHeight || undefined) }}
                 >
-                  כל התגיות
-                </button>
-                {allTags.map(tag => (
                   <button
-                    key={tag}
-                    onClick={() => setActiveTag(tag)}
+                    onClick={() => setActiveTag('all')}
                     className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                      activeTag === tag
+                      activeTag === 'all'
                         ? 'bg-primary text-white'
                         : 'bg-white border border-gray-200 text-on-surface/70 hover:border-primary/30 hover:text-primary'
                     }`}
                   >
-                    {tag}
+                    כל התגיות
                   </button>
-                ))}
+                  {allTags.map(tag => (
+                    <button
+                      key={tag}
+                      onClick={() => setActiveTag(tag)}
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                        activeTag === tag
+                          ? 'bg-primary text-white'
+                          : 'bg-white border border-gray-200 text-on-surface/70 hover:border-primary/30 hover:text-primary'
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+                {tagsOverflow && (
+                  <button
+                    onClick={() => setShowAllTags(v => !v)}
+                    className="mt-3 text-sm font-medium text-primary hover:underline"
+                  >
+                    {showAllTags ? 'הצג פחות' : 'הצג עוד'}
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -426,6 +421,13 @@ function PluginsPageContent() {
                         <span className="px-3 py-1 rounded-full text-xs font-bold bg-surface text-on-surface/60">
                           גרסה {plugin.version}
                         </span>
+                        <span
+                          className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-surface text-on-surface/60"
+                          title="מספר הורדות"
+                        >
+                          <span className="material-symbols-outlined text-sm leading-none">download</span>
+                          {(plugin.downloadCount || 0).toLocaleString('he-IL')}
+                        </span>
                       </div>
 
                       {/* Title & Description */}
@@ -490,6 +492,48 @@ function PluginsPageContent() {
                 ))}
               </div>
             )}
+          </div>
+        </section>
+
+        {/* Hero / Info Section */}
+        <section className="bg-surface py-16 px-4 border-t border-surface-variant">
+          <div className="container mx-auto max-w-6xl">
+            <div className="grid md:grid-cols-2 gap-8 items-center">
+              <div>
+                <div className="inline-flex items-center gap-2 text-primary/70 text-sm font-bold mb-4">
+                  <div className="w-7 h-px bg-primary/30"></div>
+                  <span>תוספים לאוצריא</span>
+                </div>
+                <h2 className="text-5xl font-bold text-primary font-frank mb-4 leading-tight">
+                  להוסיף יכולות חדשות לאוצריא בלחיצה אחת
+                </h2>
+                <p className="text-on-surface/70 text-lg leading-relaxed">
+                  כאן תמצאו תוספים שנבנו במיוחד לחוויית הלימוד באוצריא, עם עמודי הסבר ברורים, קישורי הורדה, ובמקרים מתאימים גם התקנה ישירה מתוך התוכנה.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="p-6 bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl border border-primary/10">
+                  <span className="text-sm text-on-surface/60 block mb-2">זמין עכשיו</span>
+                  <div className="text-4xl font-bold text-primary mb-2">{plugins.length} תוספים</div>
+                </div>
+
+                <div className="p-6 bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl border border-primary/10 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_0_6px_rgba(44,27,2,0.08)]"></div>
+                    <span className="text-sm text-on-surface/70">הורדה רגילה לצד התקנה ישירה</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_0_6px_rgba(44,27,2,0.08)]"></div>
+                    <span className="text-sm text-on-surface/70">תגיות שעוזרות למצוא את התוסף המתאים</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_0_6px_rgba(44,27,2,0.08)]"></div>
+                    <span className="text-sm text-on-surface/70">פרטי גרסה ותאימות במקום אחד</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
       </main>

@@ -30,6 +30,7 @@ interface Plugin {
   supportsDirectInstall: boolean
   homepage: string
   authorId?: string | null
+  downloadCount?: number
 }
 
 interface PluginEditPayload extends Plugin {
@@ -311,6 +312,13 @@ export default function PluginDetailPage() {
                   <span className="px-4 py-2 rounded-full text-sm font-bold bg-surface text-on-surface/60">
                     גרסה {plugin.version}
                   </span>
+                  <span
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold bg-surface text-on-surface/60"
+                    title="מספר הורדות"
+                  >
+                    <span className="material-symbols-outlined text-base leading-none">download</span>
+                    {(plugin.downloadCount || 0).toLocaleString('he-IL')} הורדות
+                  </span>
                 </div>
 
                 {/* Action Buttons */}
@@ -383,6 +391,13 @@ export default function PluginDetailPage() {
                 <div className="p-4 bg-surface rounded-xl">
                   <div className="text-sm text-on-surface/60 mb-1">עודכן</div>
                   <div className="font-bold text-on-surface text-sm">{formatHebrewDate(plugin.originalDate || plugin.updatedAt)}</div>
+                </div>
+                <div className="p-4 bg-surface rounded-xl col-span-2">
+                  <div className="text-sm text-on-surface/60 mb-1">הורדות</div>
+                  <div className="font-bold text-on-surface flex items-center gap-2">
+                    <span className="material-symbols-outlined text-base">download</span>
+                    <span>{(plugin.downloadCount || 0).toLocaleString('he-IL')}</span>
+                  </div>
                 </div>
                 <div className="p-4 bg-surface rounded-xl col-span-2">
                   <div className="text-sm text-on-surface/60 mb-1">תאימות</div>
