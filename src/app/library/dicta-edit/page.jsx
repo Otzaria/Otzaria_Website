@@ -1,22 +1,24 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useSession } from 'next-auth/react'
-import { useRouter, usePathname } from 'next/navigation'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Header from '@/components/layout/Header'
 import { useDialog } from '@/components/providers/DialogContext'
 import { canModerateLibrary, canManageLibrarySync } from '@/lib/roles'
 
-export default function LibraryEditSpacePage() {
+function LibraryEditSpaceContent() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const { showAlert } = useDialog()
 
   const [books, setBooks] = useState([])
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
+  // אתחול שדה החיפוש משם הספר שנשלח ב-URL (פרמטר q), למשל מאוצריא
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('q') || '')
   const [filterCategory, setFilterCategory] = useState('all')
   const [syncing, setSyncing] = useState(false)
   const [pushing, setPushing] = useState(false)
@@ -40,7 +42,10 @@ export default function LibraryEditSpacePage() {
   useEffect(() => {
     if (status === 'loading') return
     if (status === 'unauthenticated') {
-      router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(pathname)}`)
+      // שימור ה-query (למשל ?q=שם הספר) כדי שלא יאבד לאחר ההתחברות
+      const query = searchParams.toString()
+      const callbackUrl = query ? `${pathname}?${query}` : pathname
+      router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(callbackUrl)}`)
       return
     }
     fetchBooks()
@@ -208,5 +213,14 @@ export default function LibraryEditSpacePage() {
         </div>
       </main>
     </div>
+  )
+}
+
+// עטיפת Suspense — נדרשת ל-useSearchParams ב-Next.js כדי למנוע שגיאת build
+export default function LibraryEditSpacePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#f8f9fa]" />}>
+      <LibraryEditSpaceContent />
+    </Suspense>
   )
 }
