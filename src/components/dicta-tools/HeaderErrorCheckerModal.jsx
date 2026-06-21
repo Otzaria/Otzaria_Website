@@ -23,6 +23,7 @@ export default function HeaderErrorCheckerModal({ isOpen, onClose, content }) {
         opening_without_closing: [],
         closing_without_opening: [],
         heading_errors: [],
+        heading_order: [],
         missing_levels: []
       }
       
@@ -43,7 +44,59 @@ export default function HeaderErrorCheckerModal({ isOpen, onClose, content }) {
         }
         return value
       }
-      
+
+      // המרת אותיות סופיות לרגילות, להשוואת גימטריה
+      const finalForms = { 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ' }
+      const normalizeNumeral = (token) =>
+        token.replace(/['"`׳״]/g, '').split('').map(c => finalForms[c] || c).join('')
+
+      // בניית מספר עברי קנוני, כדי לאמת שטוקן הוא באמת מספר ולא מילה רגילה
+      const numberToHebrew = (n) => {
+        if (n <= 0 || n > 1100) return null
+        const hundreds = ['', 'ק', 'ר', 'ש', 'ת', 'תק', 'תר', 'תש', 'תת', 'תתק', 'תתר']
+        const tens = ['', 'י', 'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ']
+        const ones = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט']
+        let out = hundreds[Math.floor(n / 100)] || ''
+        const rem = n % 100
+        if (rem === 15) out += 'טו'
+        else if (rem === 16) out += 'טז'
+        else out += tens[Math.floor(rem / 10)] + ones[rem % 10]
+        return out
+      }
+
+      // האם הטוקן הוא מספר עברי תקני (ולא מילה רגילה כמו "תורה" / "משנה")
+      const isValidNumeral = (token) => {
+        const clean = normalizeNumeral(token)
+        if (!clean) return false
+        const n = toNumber(clean)
+        return n > 0 && numberToHebrew(n) === clean
+      }
+
+      // חילוץ ערך הדף (מספר + עמוד) מתוך כותרת, לתמיכה בפורמטים שונים:
+      // "דף ב עמוד א" / "דף ב:" / "ג:" / "ד." / "ד עמוד א" וכיו"ב
+      const labelWords = new Set(['דף', 'פרק', 'עמוד', 'סימן', 'הלכה', 'משנה', 'פסקה', 'שער', 'מאמר', 'חלק', 'אות'])
+      const parseDafValue = (rawText) => {
+        const text = rawText.trim()
+
+        // זיהוי העמוד: "עמוד ב" או סיומת ":" => עמוד ב; "עמוד א" / "." / ברירת מחדל => עמוד א
+        let amud = 0
+        if (/עמוד\s*ב/.test(text)) amud = 1
+        else if (/עמוד\s*א/.test(text)) amud = 0
+        else if (text.endsWith(':')) amud = 1
+        else if (text.endsWith('.')) amud = 0
+
+        // זיהוי מספר הדף: הטוקן הראשון שהוא מספר עברי תקין (תוך דילוג על מילות תווית
+        // ועל מילים רגילות שאינן מספר), כדי לא לפרש "תורה"/"משנה" וכו' כמספר
+        let dafNum = 0
+        const tokens = text.replace(/[.:]/g, ' ').trim().split(/\s+/)
+        for (const t of tokens) {
+          if (!t || labelWords.has(t)) continue
+          if (isValidNumeral(t)) { dafNum = toNumber(normalizeNumeral(t)); break }
+        }
+        // ערך ממוין: כל דף = שני עמודים, כך ש"ב עמוד ב" < "ג עמוד א"
+        return { dafNum, value: dafNum * 2 + amud }
+      }
+
       // בדיקת תגים פתוחים וסוגרים - לפי שורות כמו בקוד המקורי
       const lines = content.split('\n')
       lines.forEach((line, lineIndex) => {
@@ -154,6 +207,14 @@ export default function HeaderErrorCheckerModal({ isOpen, onClose, content }) {
       const step = isShas ? 2 : 1
       const previousHeadersByLevel = {}
 
+      // הכותרת הקרובה ביותר ברמה גבוהה יותר (ההורה בעץ), כדי לציין היכן בדיוק הבעיה
+      const getParentContext = (level) => {
+        for (let k = level - 1; k >= 2; k--) {
+          if (previousHeadersByLevel[k]) return previousHeadersByLevel[k].content
+        }
+        return null
+      }
+
       for (const header of orderedHeaders) {
         const { level, content: headerText } = header
 
@@ -182,14 +243,28 @@ export default function HeaderErrorCheckerModal({ isOpen, onClose, content }) {
         const previousHeader = previousHeadersByLevel[level]
         if (previousHeader) {
           const previousText = previousHeader.content
-          const previousParts = previousText.split(' ')
-          const previousHeading = previousParts.length > 1 ? previousParts[1] : previousText
 
-          const previousNum = toNumber(previousHeading)
-          const currentNum = toNumber(currentHeading)
+          // פענוח אחיד לשתי הבדיקות: מאתר את המספר העברי התקין בכותרת
+          // ומדלג על מילות תווית ומילים רגילות (כך "פרק שני"/"פרק שלישי" לא יסומנו כדילוג)
+          const previousValue = parseDafValue(previousText)
+          const currentValue = parseDafValue(headerText)
+          const previousNum = previousValue.dafNum
+          const currentNum = currentValue.dafNum
 
-          if (previousNum > 0 && currentNum > 0 && previousNum + step !== currentNum) {
-            result.unmatched_tags.push(`כותרת נוכחית - ${previousText} || כותרת הבאה - ${headerText}`)
+          // ציון הכותרת שברמה מעל, כדי לדעת היכן בדיוק חסר (למשל באיזה חלק בשו"ת)
+          const parentContext = getParentContext(level)
+          const parentSuffix = parentContext ? ` (תחת: ${parentContext})` : ''
+
+          // פער קדימה בלבד (דילוג על כותרת): המספר עלה אך לא בדיוק לפי הצעד.
+          // ירידה/כפילות אינן נכנסות לכאן אלא לבדיקת הסדר העולה, כדי לא לדווח פעמיים.
+          if (previousNum > 0 && currentNum > previousNum && previousNum + step !== currentNum) {
+            result.unmatched_tags.push(`כותרת נוכחית - ${previousText} || כותרת הבאה - ${headerText}${parentSuffix}`)
+          }
+
+          // בדיקת סדר עולה: כותרת כפולה או כותרת שאינה גדולה מקודמתה (כותרת זרה באמצע).
+          // מדלג על פערים תקינים (ב -> ג -> ד) ועל שינויי פורמט, ובודק רק שהערך עולה.
+          if (previousValue.dafNum > 0 && currentValue.dafNum > 0 && currentValue.value <= previousValue.value) {
+            result.heading_order.push(`כותרת קודמת - ${previousText} || כותרת נוכחית - ${headerText}${parentSuffix}`)
           }
         }
 
@@ -217,6 +292,7 @@ export default function HeaderErrorCheckerModal({ isOpen, onClose, content }) {
   const hasErrors = errors && (
     (errors.unmatched_regex?.length > 0) ||
     (errors.unmatched_tags?.length > 0) ||
+    (errors.heading_order?.length > 0) ||
     (errors.opening_without_closing?.length > 0) ||
     (errors.closing_without_opening?.length > 0) ||
     (errors.heading_errors?.length > 0) ||
@@ -301,6 +377,15 @@ export default function HeaderErrorCheckerModal({ isOpen, onClose, content }) {
                     <h4 className="font-bold text-orange-700 mb-2">כותרות לא עוקבות ({errors.unmatched_tags.length}):</h4>
                     <ul className="text-sm space-y-1 bg-orange-50 p-3 rounded max-h-40 overflow-y-auto">
                       {errors.unmatched_tags.map((item, i) => <li key={i}>• {item}</li>)}
+                    </ul>
+                  </div>
+                )}
+
+                {errors.heading_order?.length > 0 && (
+                  <div>
+                    <h4 className="font-bold text-amber-700 mb-2">כותרות לא בסדר עולה ({errors.heading_order.length}):</h4>
+                    <ul className="text-sm space-y-1 bg-amber-50 p-3 rounded max-h-40 overflow-y-auto">
+                      {errors.heading_order.map((item, i) => <li key={i}>• {item}</li>)}
                     </ul>
                   </div>
                 )}
