@@ -9,6 +9,23 @@ import SplitBookDialog from '@/components/admin/SplitBookDialog'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { hasBooksAccess } from '@/lib/roles'
 
+function getDateTimestamp(value) {
+  if (!value) return null
+  const timestamp = new Date(value).getTime()
+  return Number.isNaN(timestamp) ? null : timestamp
+}
+
+function formatHebrewDate(value) {
+  const timestamp = getDateTimestamp(value)
+  if (timestamp === null) return '-'
+
+  return new Date(timestamp).toLocaleDateString('he-IL', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  })
+}
+
 export default function AdminDictaBooksPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -315,8 +332,8 @@ export default function AdminDictaBooksPage() {
     
     // טיפול מיוחד בתאריך עדכון
     if (sortConfig.key === 'updatedAt') {
-      aValue = new Date(a.updatedAt).getTime()
-      bValue = new Date(b.updatedAt).getTime()
+      aValue = getDateTimestamp(a.updatedAt)
+      bValue = getDateTimestamp(b.updatedAt)
     }
 
     if (aValue < bValue) {
@@ -480,9 +497,7 @@ export default function AdminDictaBooksPage() {
                   <td className="p-4">{getStatusBadge(book.status)}</td>
                   <td className="p-4 text-sm">{book.claimedBy?.name || '-'}</td>
                   <td className="p-4 text-sm text-neutral-500">
-                    {new Date(book.updatedAt).toLocaleDateString('he-IL', {
-                        day: 'numeric', month: 'long', year: 'numeric'
-                    })}
+                    {formatHebrewDate(book.updatedAt)}
                   </td>
                   <td className="p-4">
                     <div className="flex justify-center relative">

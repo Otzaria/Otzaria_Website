@@ -98,6 +98,7 @@ export async function GET(request) {
 
     if (!response.ok) throw new Error('Failed to fetch releases')
     const allReleases = await response.json()
+    if (!Array.isArray(allReleases)) throw new Error('Invalid response from GitHub')
 
     let candidateReleases
     if (type === 'dev') {
