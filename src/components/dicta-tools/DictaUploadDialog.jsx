@@ -22,16 +22,16 @@ export default function DictaUploadDialog({ bookTitle, onConfirm, onCancel, load
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onCancel}>
       <div className="glass-strong rounded-2xl p-8 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
         <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="material-symbols-outlined text-4xl text-green-600">upload_file</span>
+          <div className="w-16 h-16 bg-success-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="material-symbols-outlined text-4xl text-success-600">upload_file</span>
           </div>
           <h2 className="text-2xl font-bold text-on-surface mb-2">סיום עבודה על {bookTitle}</h2>
         </div>
         <div className="flex justify-center mb-6">
-          <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-3 max-w-xs">
+          <div className="bg-warning-50 border-2 border-warning-200 rounded-xl p-3 max-w-xs">
             <div className="flex items-start gap-2">
-              <span className="material-symbols-outlined text-amber-600 text-lg flex-shrink-0">warning</span>
-              <div className="text-xs text-amber-800">
+              <span className="material-symbols-outlined text-warning-600 text-lg flex-shrink-0">warning</span>
+              <div className="text-xs text-warning-800">
                 <p className="font-bold mb-1">תזכורת חשובה!</p>
                 <p className="font-bold mb-1">לפני הסיום יש לבצע:</p>
                 <ul className="space-y-0.5">
@@ -44,10 +44,10 @@ export default function DictaUploadDialog({ bookTitle, onConfirm, onCancel, load
           </div>
         </div>
         <p className="text-on-surface/70 text-center mb-6">האם ברצונך להעלות את הטקסט שערכת למערכת?</p>
-        <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-6">
+        <div className="bg-info-50 border-2 border-info-200 rounded-xl p-4 mb-6">
           <div className="flex items-start gap-3">
-            <span className="material-symbols-outlined text-blue-600 mt-0.5">info</span>
-            <div className="text-sm text-blue-800">
+            <span className="material-symbols-outlined text-info-600 mt-0.5">info</span>
+            <div className="text-sm text-info-800">
               <p className="font-bold mb-1">מה יקרה?</p>
               <ul className="space-y-1">
                 <li>• הטקסט שערכת יועלה כקובץ חדש</li>
@@ -61,7 +61,7 @@ export default function DictaUploadDialog({ bookTitle, onConfirm, onCancel, load
           <button 
             onClick={onConfirm} 
             disabled={loading}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-success-600 text-white rounded-lg hover:bg-success-700 transition-colors font-bold disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
               <>

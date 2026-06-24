@@ -258,7 +258,7 @@ export default function FAQPage() {
                 className={`px-6 py-2 rounded-full font-medium transition-all ${
                   activeCategory === category.id
                     ? 'bg-primary text-white shadow-lg'
-                    : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+                    : 'bg-white text-neutral-700 hover:bg-neutral-100 border border-neutral-200'
                 }`}
               >
                 {category.label}
@@ -271,19 +271,19 @@ export default function FAQPage() {
               <motion.div
                 key={faq.id}
                 layout
-                className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm"
+                className="bg-white rounded-xl overflow-hidden border border-neutral-200 shadow-sm"
               >
                 <button
                   onClick={() => setOpenQuestion(openQuestion === faq.id ? null : faq.id)}
-                  className="w-full flex items-center justify-between p-6 text-right hover:bg-gray-50 transition-colors"
+                  className="w-full flex items-center justify-between p-6 text-right hover:bg-neutral-50 transition-colors"
                 >
-                  <span className="text-lg font-bold text-gray-800">{faq.question}</span>
-                  <span className="material-symbols-outlined text-gray-400 flex-shrink-0 mr-4">
+                  <span className="text-lg font-bold text-neutral-800">{faq.question}</span>
+                  <span className="material-symbols-outlined text-neutral-400 flex-shrink-0 mr-4">
                     {openQuestion === faq.id ? 'expand_less' : 'expand_more'}
                   </span>
                 </button>
                 {openQuestion === faq.id && (
-                  <div className="px-6 pb-6 text-gray-600 leading-relaxed border-t border-gray-100 pt-4 whitespace-pre-line">
+                  <div className="px-6 pb-6 text-neutral-600 leading-relaxed border-t border-neutral-100 pt-4 whitespace-pre-line">
                     {faq.answer}
                   </div>
                 )}

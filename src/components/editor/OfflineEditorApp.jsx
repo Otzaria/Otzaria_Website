@@ -58,7 +58,7 @@ export default function OfflineEditorApp() {
     </>
   );
 
-  const headerEnd = <div className="text-sm text-gray-500 font-medium">מצב עבודה אופליין</div>;
+  const headerEnd = <div className="text-sm text-neutral-500 font-medium">מצב עבודה אופליין</div>;
 
   return (
     <LoadingProvider><DialogProvider>

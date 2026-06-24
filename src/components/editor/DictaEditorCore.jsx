@@ -1097,7 +1097,7 @@ export default function DictaEditorCore({
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50" dir="rtl">
+    <div className="flex flex-col h-screen bg-neutral-50" dir="rtl">
       <header className="glass-strong border-b border-surface-variant sticky top-0 z-40">
         <div className={singleLineHeader && headerCompact ? 'px-2 py-2' : 'container mx-auto px-4 py-3'}>
           {singleLineHeader ? (
@@ -1152,7 +1152,7 @@ export default function DictaEditorCore({
                     </>
                   )}
 
-                  <div className="flex items-center bg-gray-100 rounded-lg p-0.5 gap-0.5 border border-gray-200">
+                  <div className="flex items-center bg-neutral-100 rounded-lg p-0.5 gap-0.5 border border-neutral-200">
                     <Button
                       icon="format_align_right"
                       variant={textAlign === 'right' ? 'primary' : 'ghost'}
@@ -1203,7 +1203,7 @@ export default function DictaEditorCore({
                     <select 
                       value={selectedFont} 
                       onChange={(e) => setSelectedFont(e.target.value)} 
-                      className="appearance-none pl-1 pr-5 h-7 bg-white border border-gray-200 rounded-md text-xs font-medium focus:outline-none hover:bg-gray-50 cursor-pointer"
+                      className="appearance-none pl-1 pr-5 h-7 bg-white border border-neutral-200 rounded-md text-xs font-medium focus:outline-none hover:bg-neutral-50 cursor-pointer"
                     >
                       <option value="'Times New Roman'">Times</option>
                       <option value="monospace">Mono</option>
@@ -1212,7 +1212,7 @@ export default function DictaEditorCore({
                       <option value="Georgia">Georgia</option>
                       <option value="Verdana">Verdana</option>
                     </select>
-                    <span className="material-symbols-outlined text-sm absolute left-0.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">expand_more</span>
+                    <span className="material-symbols-outlined text-sm absolute left-0.5 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-500">expand_more</span>
                   </div>
                   
                   {canEdit && !isCompleted && (
@@ -1296,7 +1296,7 @@ export default function DictaEditorCore({
                     </>
                   )}
 
-                  <div className="flex items-center bg-gray-100 rounded-lg p-1 gap-1 border border-gray-200 mx-2">
+                  <div className="flex items-center bg-neutral-100 rounded-lg p-1 gap-1 border border-neutral-200 mx-2">
                     <Button
                       icon="format_align_right"
                       variant={textAlign === 'right' ? 'primary' : 'ghost'}
@@ -1337,13 +1337,13 @@ export default function DictaEditorCore({
                     onClick={() => setFontSize(prev => Math.min(32, prev + 2))}
                   />
 
-                  <div className="w-px h-6 bg-gray-300 mx-2"></div>
+                  <div className="w-px h-6 bg-neutral-300 mx-2"></div>
 
                   <div className="relative">
                     <select 
                       value={selectedFont} 
                       onChange={(e) => setSelectedFont(e.target.value)} 
-                      className="appearance-none pl-2 pr-6 h-8 bg-white border border-gray-200 rounded-md text-xs font-medium focus:outline-none hover:bg-gray-50 cursor-pointer"
+                      className="appearance-none pl-2 pr-6 h-8 bg-white border border-neutral-200 rounded-md text-xs font-medium focus:outline-none hover:bg-neutral-50 cursor-pointer"
                     >
                       <option value="'Times New Roman'">Times New Roman</option>
                       <option value="monospace">Monospace</option>
@@ -1352,7 +1352,7 @@ export default function DictaEditorCore({
                       <option value="Georgia">Georgia</option>
                       <option value="Verdana">Verdana</option>
                     </select>
-                    <span className="material-symbols-outlined text-sm absolute left-1 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">expand_more</span>
+                    <span className="material-symbols-outlined text-sm absolute left-1 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-500">expand_more</span>
                   </div>
                   
                   {canEdit && !isCompleted && (
@@ -1365,7 +1365,7 @@ export default function DictaEditorCore({
                         label={hasUnsavedChangesOuter ? `${saveLabel} *` : saveLabel}
                       />
                       {hasUnsavedChangesOuter && (
-                        <span className="text-red-600 text-sm font-medium mr-2">ישנם שינויים לא שמורים</span>
+                        <span className="text-danger-600 text-sm font-medium mr-2">ישנם שינויים לא שמורים</span>
                       )}
                     </div>
                   )}
@@ -1433,7 +1433,7 @@ export default function DictaEditorCore({
                     </>
                   )}
 
-                  <div className="flex items-center bg-gray-100 rounded-lg p-1 gap-1 border border-gray-200 mx-2">
+                  <div className="flex items-center bg-neutral-100 rounded-lg p-1 gap-1 border border-neutral-200 mx-2">
                     <Button
                       icon="format_align_right"
                       variant={textAlign === 'right' ? 'primary' : 'ghost'}
@@ -1474,13 +1474,13 @@ export default function DictaEditorCore({
                     onClick={() => setFontSize(prev => Math.min(32, prev + 2))}
                   />
 
-                  <div className="w-px h-6 bg-gray-300 mx-2"></div>
+                  <div className="w-px h-6 bg-neutral-300 mx-2"></div>
 
                   <div className="relative">
                     <select 
                       value={selectedFont} 
                       onChange={(e) => setSelectedFont(e.target.value)} 
-                      className="appearance-none pl-2 pr-6 h-8 bg-white border border-gray-200 rounded-md text-xs font-medium focus:outline-none hover:bg-gray-50 cursor-pointer"
+                      className="appearance-none pl-2 pr-6 h-8 bg-white border border-neutral-200 rounded-md text-xs font-medium focus:outline-none hover:bg-neutral-50 cursor-pointer"
                     >
                       <option value="'Times New Roman'">Times New Roman</option>
                       <option value="monospace">Monospace</option>
@@ -1489,7 +1489,7 @@ export default function DictaEditorCore({
                       <option value="Georgia">Georgia</option>
                       <option value="Verdana">Verdana</option>
                     </select>
-                    <span className="material-symbols-outlined text-sm absolute left-1 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">expand_more</span>
+                    <span className="material-symbols-outlined text-sm absolute left-1 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-500">expand_more</span>
                   </div>
                   
                   {canEdit && !isCompleted && (
@@ -1502,7 +1502,7 @@ export default function DictaEditorCore({
                         label={hasUnsavedChangesOuter ? `${saveLabel} *` : saveLabel}
                       />
                       {hasUnsavedChangesOuter && (
-                        <span className="text-red-600 text-sm font-medium mr-2">ישנם שינויים לא שמורים</span>
+                        <span className="text-danger-600 text-sm font-medium mr-2">ישנם שינויים לא שמורים</span>
                       )}
                     </div>
                   )}
@@ -1518,98 +1518,98 @@ export default function DictaEditorCore({
           <aside className={`${toolbarExpanded ? 'w-56' : 'w-20'} bg-white border-l flex flex-col py-4 gap-2 overflow-y-auto shadow-sm transition-all duration-300`}>
             {toolbarExpanded && (
               <div className="px-4 mb-2">
-                <span className="text-sm font-medium text-gray-700">כלי עריכה</span>
+                <span className="text-sm font-medium text-neutral-700">כלי עריכה</span>
               </div>
             )}
             
             <button
               onClick={() => setActiveTool('createHeaders')}
-              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2`}
               title="יצירת כותרות"
             >
-              <span className="material-symbols-outlined text-gray-700">title</span>
-              {toolbarExpanded && <span className="text-sm text-gray-700">יצירת כותרות</span>}
+              <span className="material-symbols-outlined text-neutral-700">title</span>
+              {toolbarExpanded && <span className="text-sm text-neutral-700">יצירת כותרות</span>}
             </button>
             
             <button
               onClick={() => setActiveTool('singleLetterHeaders')}
-              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2`}
               title="כותרות אותיות"
             >
-              <span className="material-symbols-outlined text-gray-700">format_size</span>
-              {toolbarExpanded && <span className="text-sm text-gray-700">כותרות אותיות</span>}
+              <span className="material-symbols-outlined text-neutral-700">format_size</span>
+              {toolbarExpanded && <span className="text-sm text-neutral-700">כותרות אותיות</span>}
             </button>
             
             <button
               onClick={() => setActiveTool('changeHeading')}
-              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2`}
               title="שינוי רמת כותרת"
             >
-              <span className="material-symbols-outlined text-gray-700">format_indent_increase</span>
-              {toolbarExpanded && <span className="text-sm text-gray-700">שינוי רמת כותרת</span>}
+              <span className="material-symbols-outlined text-neutral-700">format_indent_increase</span>
+              {toolbarExpanded && <span className="text-sm text-neutral-700">שינוי רמת כותרת</span>}
             </button>
             
             <button
               onClick={() => setActiveTool('punctuate')}
-              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2`}
               title="הדגשה וניקוד"
             >
-              <span className="material-symbols-outlined text-gray-700">format_bold</span>
-              {toolbarExpanded && <span className="text-sm text-gray-700">הדגשה וניקוד</span>}
+              <span className="material-symbols-outlined text-neutral-700">format_bold</span>
+              {toolbarExpanded && <span className="text-sm text-neutral-700">הדגשה וניקוד</span>}
             </button>
             
             <button
               onClick={() => setActiveTool('pageBHeader')}
-              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2`}
               title="כותרות עמוד ב"
             >
-              <span className="material-symbols-outlined text-gray-700">find_in_page</span>
-              {toolbarExpanded && <span className="text-sm text-gray-700">כותרות עמוד ב</span>}
+              <span className="material-symbols-outlined text-neutral-700">find_in_page</span>
+              {toolbarExpanded && <span className="text-sm text-neutral-700">כותרות עמוד ב</span>}
             </button>
             
             <button
               onClick={() => setActiveTool('replacePageB')}
-              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2`}
               title="החלפת עמוד ב"
             >
-              <span className="material-symbols-outlined text-gray-700">swap_horiz</span>
-              {toolbarExpanded && <span className="text-sm text-gray-700">החלפת עמוד ב</span>}
+              <span className="material-symbols-outlined text-neutral-700">swap_horiz</span>
+              {toolbarExpanded && <span className="text-sm text-neutral-700">החלפת עמוד ב</span>}
             </button>
 
             <button
               onClick={() => setActiveTool('addPageNumber')}
-              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2`}
               title="מיזוג דף ועמוד"
             >
-              <span className="material-symbols-outlined text-gray-700">auto_stories</span>
-              {toolbarExpanded && <span className="text-sm text-gray-700">מיזוג דף ועמוד</span>}
+              <span className="material-symbols-outlined text-neutral-700">auto_stories</span>
+              {toolbarExpanded && <span className="text-sm text-neutral-700">מיזוג דף ועמוד</span>}
             </button>
             
             <button
               onClick={() => setActiveTool('headerCheck')}
-              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2`}
               title="בדיקת שגיאות בכותרות"
             >
-              <span className="material-symbols-outlined text-gray-700">bug_report</span>
-              {toolbarExpanded && <span className="text-sm text-gray-700">בדיקת שגיאות</span>}
+              <span className="material-symbols-outlined text-neutral-700">bug_report</span>
+              {toolbarExpanded && <span className="text-sm text-neutral-700">בדיקת שגיאות</span>}
             </button>
             
             <button
               onClick={() => setActiveTool('cleanText')}
-              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2`}
               title="ניקוי טקסט"
             >
-              <span className="material-symbols-outlined text-gray-700">cleaning_services</span>
-              {toolbarExpanded && <span className="text-sm text-gray-700">ניקוי טקסט</span>}
+              <span className="material-symbols-outlined text-neutral-700">cleaning_services</span>
+              {toolbarExpanded && <span className="text-sm text-neutral-700">ניקוי טקסט</span>}
             </button>
             
             <button
               onClick={() => setActiveTool('embedImage')}
-              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2`}
+              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2`}
               title="הטמעת תמונה"
             >
-              <span className="material-symbols-outlined text-gray-700">image</span>
-              {toolbarExpanded && <span className="text-sm text-gray-700">הטמעת תמונה</span>}
+              <span className="material-symbols-outlined text-neutral-700">image</span>
+              {toolbarExpanded && <span className="text-sm text-neutral-700">הטמעת תמונה</span>}
             </button>
             
             <div className="flex-1"></div>
@@ -1617,13 +1617,13 @@ export default function DictaEditorCore({
             <div className="border-t pt-2 mt-2">
               <button
                 onClick={() => setToolbarExpanded(!toolbarExpanded)}
-                className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-gray-100 rounded-lg transition-colors mx-2 w-full`}
+                className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2 w-full`}
                 title={toolbarExpanded ? "כווץ סרגל" : "הרחב סרגל"}
               >
-                <span className="material-symbols-outlined text-gray-600">
+                <span className="material-symbols-outlined text-neutral-600">
                   {toolbarExpanded ? 'chevron_right' : 'chevron_left'}
                 </span>
-                {toolbarExpanded && <span className="text-sm text-gray-600">{toolbarExpanded ? 'כווץ' : 'הרחב'}</span>}
+                {toolbarExpanded && <span className="text-sm text-neutral-600">{toolbarExpanded ? 'כווץ' : 'הרחב'}</span>}
               </button>
             </div>
           </aside>
@@ -1637,7 +1637,7 @@ export default function DictaEditorCore({
           ) : editMode && canEdit ? (
             <>
               <div className={`${showPreview ? 'flex-1' : 'w-full'} flex flex-col h-full border-l`}>
-                <div className="bg-gray-50 border-b px-4 py-2 flex items-center justify-between gap-2 flex-wrap">
+                <div className="bg-neutral-50 border-b px-4 py-2 flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2 flex-wrap">
                   <Button
                     icon="format_bold"
@@ -1661,7 +1661,7 @@ export default function DictaEditorCore({
                     label="קו תחתון"
                   />
                   
-                  <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                  <div className="w-px h-6 bg-neutral-300 mx-1"></div>
                   
                   <Button variant="ghost" size="sm" onClick={() => insertTag('h1')} label="H1" />
                   <Button variant="ghost" size="sm" onClick={() => insertTag('h2')} label="H2" />
@@ -1670,7 +1670,7 @@ export default function DictaEditorCore({
                   <Button variant="ghost" size="sm" onClick={() => insertTag('h5')} label="H5" />
                   <Button variant="ghost" size="sm" onClick={() => insertTag('h6')} label="H6" />
                   
-                  <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                  <div className="w-px h-6 bg-neutral-300 mx-1"></div>
                   
                   <Button
                     icon="text_increase"
@@ -1687,7 +1687,7 @@ export default function DictaEditorCore({
                     label="קטן"
                   />
                   
-                  <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                  <div className="w-px h-6 bg-neutral-300 mx-1"></div>
                   
                   <Button
                     icon="format_clear"
@@ -1702,7 +1702,7 @@ export default function DictaEditorCore({
                   {!showPreview && (
                     <button
                       onClick={() => handleTogglePreview(true)}
-                      className="flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-2 py-1 rounded transition-colors"
+                      className="flex items-center gap-1 text-xs text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 px-2 py-1 rounded transition-colors"
                       title="הצג תצוגה מקדימה"
                     >
                       <span className="material-symbols-outlined text-sm">visibility</span>
@@ -1723,12 +1723,12 @@ export default function DictaEditorCore({
               </div>
               
               {showPreview && (
-              <div className="w-1/2 flex flex-col bg-gray-50">
-                <div className="px-6 pt-6 pb-2 bg-gray-50 sticky top-0 z-10 border-b border-gray-200 flex items-center justify-between">
-                  <span className="text-xs text-gray-500 font-medium">תצוגה מקדימה</span>
+              <div className="w-1/2 flex flex-col bg-neutral-50">
+                <div className="px-6 pt-6 pb-2 bg-neutral-50 sticky top-0 z-10 border-b border-neutral-200 flex items-center justify-between">
+                  <span className="text-xs text-neutral-500 font-medium">תצוגה מקדימה</span>
                   <button
                     onClick={() => handleTogglePreview(false)}
-                    className="flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-2 py-1 rounded transition-colors"
+                    className="flex items-center gap-1 text-xs text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 px-2 py-1 rounded transition-colors"
                     title="הסתר תצוגה מקדימה"
                   >
                     <span className="material-symbols-outlined text-sm">visibility_off</span>
@@ -1762,19 +1762,19 @@ export default function DictaEditorCore({
         </main>
 
         <aside className="w-64 bg-white border-r p-4 overflow-y-auto shadow-sm">
-          <h3 className="font-bold text-lg mb-4 text-gray-800">תוכן עניינים</h3>
+          <h3 className="font-bold text-lg mb-4 text-neutral-800">תוכן עניינים</h3>
           {toc.length === 0 ? (
-            <p className="text-sm text-gray-500">אין כותרות בספר</p>
+            <p className="text-sm text-neutral-500">אין כותרות בספר</p>
           ) : (
             <ul className="space-y-2">
               {toc.map((item, index) => (
                 <li
                   key={item.id}
-                  className="cursor-pointer hover:bg-gray-100 p-2 rounded transition-colors"
+                  className="cursor-pointer hover:bg-neutral-100 p-2 rounded transition-colors"
                   style={{ paddingRight: `${(item.level - 1) * 12}px` }}
                   onClick={() => scrollToHeading(index)}
                 >
-                  <span className="text-sm text-gray-700">{item.text}</span>
+                  <span className="text-sm text-neutral-700">{item.text}</span>
                 </li>
               ))}
             </ul>

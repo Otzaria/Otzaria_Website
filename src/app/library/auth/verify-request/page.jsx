@@ -105,12 +105,12 @@ export default function VerifyRequestPage() {
                     <span className={`material-symbols-outlined text-4xl ${theme.iconColor}`}>mark_email_unread</span>
                 </div>
 
-                <h1 className="text-2xl font-bold text-gray-800 mb-2">נדרש אימות כתובת מייל</h1>
+                <h1 className="text-2xl font-bold text-neutral-800 mb-2">נדרש אימות כתובת מייל</h1>
 
                 <div className="mb-6">
                     {!isEditingEmail ? (
                         <>
-                            <p className="text-gray-600">
+                            <p className="text-neutral-600">
                                 החשבון שלך (<strong dir="ltr" className="font-semibold">{session?.user?.email}</strong>) טרם אומת.
                                 <br />
                                 כדי להגן על המערכת, עליך לבצע אימות.
@@ -128,7 +128,7 @@ export default function VerifyRequestPage() {
                         </>
                     ) : (
                         <div className={`mt-4 p-4 ${theme.infoBoxBg} rounded-xl border ${theme.infoBoxBorder} animate-in slide-in-from-top-2`}>
-                            <label className="block text-right text-sm font-bold text-gray-600 mb-2">מייל מעודכן:</label>
+                            <label className="block text-right text-sm font-bold text-neutral-600 mb-2">מייל מעודכן:</label>
                             <input
                                 type="email"
                                 value={newEmail}
@@ -149,14 +149,14 @@ export default function VerifyRequestPage() {
                                 <button
                                     onClick={() => setIsEditingEmail(false)}
                                     disabled={updateStatus.loading}
-                                    className="flex-1 bg-white border border-[#d1c4b8] text-gray-600 hover:bg-gray-50 text-sm py-2 rounded-lg transition-colors"
+                                    className="flex-1 bg-white border border-[#d1c4b8] text-neutral-600 hover:bg-neutral-50 text-sm py-2 rounded-lg transition-colors"
                                 >
                                     ביטול
                                 </button>
                             </div>
 
-                            {updateStatus.error && <p className="text-red-600 text-xs mt-2 font-bold">{updateStatus.error}</p>}
-                            {updateStatus.message && <p className="text-green-600 text-xs mt-2 font-bold">{updateStatus.message}</p>}
+                            {updateStatus.error && <p className="text-danger-600 text-xs mt-2 font-bold">{updateStatus.error}</p>}
+                            {updateStatus.message && <p className="text-success-600 text-xs mt-2 font-bold">{updateStatus.message}</p>}
                         </div>
                     )}
                 </div>
@@ -175,9 +175,9 @@ export default function VerifyRequestPage() {
                     disabled={verificationStatus.loading || verificationStatus.sent || isEditingEmail}
                     className={`w-full py-4 px-6 rounded-xl font-bold text-lg transition-all shadow-sm flex items-center justify-center gap-2 text-white
                         ${verificationStatus.sent
-                            ? 'bg-green-600 cursor-default'
+                            ? 'bg-success-600 cursor-default'
                             : isEditingEmail
-                                ? 'bg-gray-300 cursor-not-allowed shadow-none'
+                                ? 'bg-neutral-300 cursor-not-allowed shadow-none'
                                 : `${theme.primaryBtn} ${theme.primaryBtnHover} hover:shadow-md`}`}
                 >
                     {verificationStatus.loading ? (
@@ -199,21 +199,21 @@ export default function VerifyRequestPage() {
                 </button>
 
                 {verificationStatus.message && (
-                    <div className="mt-4 p-4 bg-green-50 text-green-800 rounded-xl text-base border border-green-200 animate-in slide-in-from-top-2">
+                    <div className="mt-4 p-4 bg-success-50 text-success-800 rounded-xl text-base border border-success-200 animate-in slide-in-from-top-2">
                         {verificationStatus.message}
                     </div>
                 )}
 
                 {verificationStatus.error && (
-                    <div className="mt-4 p-4 bg-red-50 text-red-800 rounded-xl text-sm border border-red-200">
+                    <div className="mt-4 p-4 bg-danger-50 text-danger-800 rounded-xl text-sm border border-danger-200">
                         {verificationStatus.error}
                     </div>
                 )}
 
-                <div className="mt-8 border-t border-gray-100 pt-4">
+                <div className="mt-8 border-t border-neutral-100 pt-4">
                     <button
                         onClick={() => signOut({ callbackUrl: '/library/auth/login' })}
-                        className="text-gray-400 hover:text-gray-600 text-sm flex items-center justify-center gap-1 mx-auto transition-colors font-medium"
+                        className="text-neutral-400 hover:text-neutral-600 text-sm flex items-center justify-center gap-1 mx-auto transition-colors font-medium"
                     >
                         <span className="material-symbols-outlined text-sm">logout</span>
                         התנתק בינתיים

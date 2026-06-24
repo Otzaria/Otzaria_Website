@@ -36,7 +36,7 @@ export default function WeeklyProgressChart() {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 h-40 flex items-center justify-center shadow-sm">
+      <div className="bg-white rounded-xl border border-neutral-200 h-40 flex items-center justify-center shadow-sm">
         <span className="material-symbols-outlined animate-spin text-3xl text-primary/50">
           progress_activity
         </span>
@@ -45,15 +45,15 @@ export default function WeeklyProgressChart() {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm h-full flex flex-col justify-between">
+    <div className="bg-white rounded-xl border border-neutral-200 p-4 shadow-sm h-full flex flex-col justify-between">
       {/* כותרת ונתון מספרי */}
       <div className="flex justify-between items-start mb-2">
         <div>
-            <h2 className="text-base font-bold text-gray-800 flex items-center gap-1.5">
+            <h2 className="text-base font-bold text-neutral-800 flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-primary text-lg">bar_chart</span>
                 הספק שבועי
             </h2>
-            <p className="text-[11px] text-gray-500">דפים שהושלמו ב-7 ימים</p>
+            <p className="text-[11px] text-neutral-500">דפים שהושלמו ב-7 ימים</p>
         </div>
         <div className="text-left">
             <span className="text-2xl font-bold text-primary block leading-none">{total}</span>

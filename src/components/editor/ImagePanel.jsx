@@ -3,7 +3,7 @@ import { useRef, useEffect, useState, useCallback } from 'react'
 const ResizeHandle = ({ cursor, position, handle, onResize, zoom }) => (
   <div
     onMouseDown={(e) => onResize(e, handle)}
-    className={`absolute w-3 h-3 bg-white border border-blue-600 rounded-full z-20 hover:bg-blue-100 ${position}`}
+    className={`absolute w-3 h-3 bg-white border border-info-600 rounded-full z-20 hover:bg-info-100 ${position}`}
     style={{ cursor: cursor, transform: `scale(${100 / zoom})` }}
   />
 )
@@ -449,7 +449,7 @@ export default function ImagePanel({
       <div
         ref={imageContainerRef}
         onScroll={handleScroll} 
-        className="overflow-auto p-4 bg-gray-50/50 relative block select-none"
+        className="overflow-auto p-4 bg-neutral-50/50 relative block select-none"
         style={{
           width: layoutOrientation === 'horizontal' ? '100%' : `${imagePanelWidth}%`,
           height: layoutOrientation === 'horizontal' ? `${imagePanelWidth}%` : 'auto',
@@ -486,16 +486,16 @@ export default function ImagePanel({
               >
                   <div className="rotation-controls absolute top-2 left-1/2 flex items-center gap-2 z-[100] opacity-0 group-hover:opacity-100 transition-opacity"
                        style={{ transform: `translateX(-50%) scale(${100 / imageZoom})` }}>
-                     <button className="w-4 h-4 bg-gray-600/90 border border-gray-100 text-white rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm" onMouseDown={rotateRight}>&lt;</button>
-                     <div className="rotation-handle relative w-8 h-8 bg-gray-800/90 border border-gray-600 rounded-full flex items-center justify-center cursor-grab backdrop-blur-sm" onMouseDown={handleRotationStart}>
+                     <button className="w-4 h-4 bg-neutral-600/90 border border-neutral-100 text-white rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm" onMouseDown={rotateRight}>&lt;</button>
+                     <div className="rotation-handle relative w-8 h-8 bg-neutral-800/90 border border-neutral-600 rounded-full flex items-center justify-center cursor-grab backdrop-blur-sm" onMouseDown={handleRotationStart}>
                         <span className="material-symbols-outlined text-white text-sm">sync</span>
                         {(isRotating || rotation !== 0) && (
-                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black/90 text-white text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap dir-ltr shadow-md border border-gray-700">
+                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black/90 text-white text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap dir-ltr shadow-md border border-neutral-700">
                             {Number(rotation).toFixed(1)}°
                           </div>
                         )}
                      </div>
-                     <button className="w-4 h-4 bg-gray-600/90 border border-gray-100 text-white rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm" onMouseDown={rotateLeft}>&gt;</button>
+                     <button className="w-4 h-4 bg-neutral-600/90 border border-neutral-100 text-white rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm" onMouseDown={rotateLeft}>&gt;</button>
                   </div>
 
                   <img
@@ -511,7 +511,7 @@ export default function ImagePanel({
               
               {interactionMode === 'create' && selectionStart && selectionEnd && (
                 <div
-                  className="absolute border-2 border-blue-500 bg-blue-500/20 pointer-events-none"
+                  className="absolute border-2 border-info-500 bg-info-500/20 pointer-events-none"
                   style={{
                     left: `${Math.min(selectionStart.x, selectionEnd.x)}px`,
                     top: `${Math.min(selectionStart.y, selectionEnd.y)}px`,
@@ -523,7 +523,7 @@ export default function ImagePanel({
 
               {selectionRect && (
                 <div
-                  className="selection-box absolute border-2 border-green-500 bg-green-500/10 group/box"
+                  className="selection-box absolute border-2 border-success-500 bg-success-500/10 group/box"
                   style={{
                     left: `${selectionRect.x}px`,
                     top: `${selectionRect.y}px`,
@@ -545,7 +545,7 @@ export default function ImagePanel({
                   <button
                     onMouseDown={(e) => e.stopPropagation()}
                     onClick={(e) => { e.stopPropagation(); downloadSelectedArea(); }}
-                    className="absolute bottom-0 right-[72px] translate-y-full mt-1 bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center p-1 rounded shadow-md pointer-events-auto transition-colors z-30"
+                    className="absolute bottom-0 right-[72px] translate-y-full mt-1 bg-info-600 hover:bg-info-700 text-white flex items-center justify-center p-1 rounded shadow-md pointer-events-auto transition-colors z-30"
                     title="הורד בחירה"
                     style={{ transform: `scale(${100 / imageZoom})`, transformOrigin: 'top right', cursor: 'pointer' }}
                   >
@@ -555,7 +555,7 @@ export default function ImagePanel({
                   <button
                     onMouseDown={(e) => e.stopPropagation()}
                     onClick={(e) => { e.stopPropagation(); copySelectedArea(); }}
-                    className="absolute bottom-0 right-9 translate-y-full mt-1 bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center p-1 rounded shadow-md pointer-events-auto transition-colors z-30"
+                    className="absolute bottom-0 right-9 translate-y-full mt-1 bg-info-600 hover:bg-info-700 text-white flex items-center justify-center p-1 rounded shadow-md pointer-events-auto transition-colors z-30"
                     title="העתק תמונה (Ctrl+C)"
                     style={{ transform: `scale(${100 / imageZoom})`, transformOrigin: 'top right', cursor: 'pointer' }}
                   >
@@ -568,7 +568,7 @@ export default function ImagePanel({
                     onMouseDown={(e) => e.stopPropagation()}
                     onClick={(e) => { e.stopPropagation(); handleOCRSelection(); }}
                     disabled={isOcrProcessing}
-                    className="absolute bottom-0 right-0 translate-y-full mt-1 bg-green-600 hover:bg-green-700 text-white flex items-center justify-center p-1 rounded shadow-md pointer-events-auto transition-colors disabled:opacity-50 z-30"
+                    className="absolute bottom-0 right-0 translate-y-full mt-1 bg-success-600 hover:bg-success-700 text-white flex items-center justify-center p-1 rounded shadow-md pointer-events-auto transition-colors disabled:opacity-50 z-30"
                     title="זהה טקסט"
                     style={{ transform: `scale(${100 / imageZoom})`, transformOrigin: 'top right', cursor: 'pointer' }}
                   >

@@ -97,13 +97,13 @@ export default function StatusConfigModal({ statuses, uploads = [], onSave, onCl
       <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* כותרת */}
         <div className="flex justify-between items-center p-6 border-b">
-          <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-            <span className="material-symbols-outlined text-purple-600">settings</span>
+          <h2 className="text-2xl font-bold text-neutral-800 flex items-center gap-2">
+            <span className="material-symbols-outlined text-feature-600">settings</span>
             הגדרות סטטוסים
           </h2>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-neutral-100 rounded-lg transition-colors"
           >
             <span className="material-symbols-outlined">close</span>
           </button>
@@ -113,7 +113,7 @@ export default function StatusConfigModal({ statuses, uploads = [], onSave, onCl
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* רשימת סטטוסים קיימים */}
           <div>
-            <h3 className="text-lg font-bold mb-4 text-gray-700">סטטוסים קיימים</h3>
+            <h3 className="text-lg font-bold mb-4 text-neutral-700">סטטוסים קיימים</h3>
             <div className="space-y-3">
               {Object.entries(editedStatuses).map(([key, config]) => {
                 const booksWithStatus = uploads.filter(upload => 
@@ -121,13 +121,13 @@ export default function StatusConfigModal({ statuses, uploads = [], onSave, onCl
                 ).length
                 
                 return (
-                <div key={key} className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div key={key} className="flex items-center gap-3 p-4 bg-neutral-50 rounded-lg border border-neutral-200">
                   <div className="flex-1 grid grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1 flex items-center gap-2">
+                      <label className="block text-xs text-neutral-600 mb-1 flex items-center gap-2">
                         מפתח
                         {booksWithStatus > 0 && (
-                          <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
+                          <span className="px-2 py-0.5 bg-info-100 text-info-700 text-xs rounded-full">
                             {booksWithStatus} העלאות
                           </span>
                         )}
@@ -136,34 +136,34 @@ export default function StatusConfigModal({ statuses, uploads = [], onSave, onCl
                         type="text"
                         value={key}
                         disabled
-                        className="w-full px-3 py-2 bg-gray-200 border border-gray-300 rounded text-sm"
+                        className="w-full px-3 py-2 bg-neutral-200 border border-neutral-300 rounded text-sm"
                       />
                     </div>
                     
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">תווית</label>
+                      <label className="block text-xs text-neutral-600 mb-1">תווית</label>
                       <input
                         type="text"
                         value={config.label}
                         onChange={(e) => handleUpdateStatus(key, 'label', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-feature-500"
                       />
                     </div>
                     
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">צבע רקע</label>
+                      <label className="block text-xs text-neutral-600 mb-1">צבע רקע</label>
                       <div className="flex gap-2">
                         <input
                           type="color"
                           value={config.color}
                           onChange={(e) => handleUpdateStatus(key, 'color', e.target.value)}
-                          className="w-12 h-10 border border-gray-300 rounded cursor-pointer"
+                          className="w-12 h-10 border border-neutral-300 rounded cursor-pointer"
                         />
                         <input
                           type="text"
                           value={config.color}
                           onChange={(e) => handleUpdateStatus(key, 'color', e.target.value)}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          className="flex-1 px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-feature-500"
                         />
                       </div>
                     </div>
@@ -171,7 +171,7 @@ export default function StatusConfigModal({ statuses, uploads = [], onSave, onCl
                   
                   <button
                     onClick={() => handleDeleteStatus(key)}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+                    className="p-2 text-danger-600 hover:bg-danger-50 rounded transition-colors"
                     title="מחיקת סטטוס"
                   >
                     <span className="material-symbols-outlined">delete</span>
@@ -183,43 +183,43 @@ export default function StatusConfigModal({ statuses, uploads = [], onSave, onCl
           
           {/* הוספת סטטוס חדש */}
           <div className="border-t pt-6">
-            <h3 className="text-lg font-bold mb-4 text-gray-700">הוספת סטטוס חדש</h3>
+            <h3 className="text-lg font-bold mb-4 text-neutral-700">הוספת סטטוס חדש</h3>
             <div className="flex items-end gap-3">
               <div className="flex-1">
-                <label className="block text-xs text-gray-600 mb-1">מפתח (באנגלית, ללא רווחים)</label>
+                <label className="block text-xs text-neutral-600 mb-1">מפתח (באנגלית, ללא רווחים)</label>
                 <input
                   type="text"
                   value={newStatusKey}
                   onChange={(e) => setNewStatusKey(e.target.value.replace(/\s/g, '_'))}
                   placeholder="new_status"
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-feature-500"
                 />
               </div>
               
               <div className="flex-1">
-                <label className="block text-xs text-gray-600 mb-1">תווית</label>
+                <label className="block text-xs text-neutral-600 mb-1">תווית</label>
                 <input
                   type="text"
                   value={newStatusLabel}
                   onChange={(e) => setNewStatusLabel(e.target.value)}
                   placeholder="סטטוס חדש"
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-feature-500"
                 />
               </div>
               
               <div className="w-32">
-                <label className="block text-xs text-gray-600 mb-1">צבע</label>
+                <label className="block text-xs text-neutral-600 mb-1">צבע</label>
                 <input
                   type="color"
                   value={newStatusColor}
                   onChange={(e) => setNewStatusColor(e.target.value)}
-                  className="w-full h-10 border border-gray-300 rounded cursor-pointer"
+                  className="w-full h-10 border border-neutral-300 rounded cursor-pointer"
                 />
               </div>
               
               <button
                 onClick={handleAddStatus}
-                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-1"
+                className="px-4 py-2 bg-success-600 text-white rounded hover:bg-success-700 transition-colors flex items-center gap-1"
               >
                 <span className="material-symbols-outlined text-sm">add</span>
                 הוסף
@@ -229,16 +229,16 @@ export default function StatusConfigModal({ statuses, uploads = [], onSave, onCl
         </div>
         
         {/* כפתורי פעולה */}
-        <div className="flex justify-end gap-3 p-6 border-t bg-gray-50">
+        <div className="flex justify-end gap-3 p-6 border-t bg-neutral-50">
           <button
             onClick={onClose}
-            className="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+            className="px-6 py-2 bg-neutral-300 text-neutral-700 rounded-lg hover:bg-neutral-400 transition-colors"
           >
             ביטול
           </button>
           <button
             onClick={() => onSave(editedStatuses)}
-            className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
+            className="px-6 py-2 bg-feature-600 text-white rounded-lg hover:bg-feature-700 transition-colors flex items-center gap-2"
           >
             <span className="material-symbols-outlined text-sm">save</span>
             שמור שינויים

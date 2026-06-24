@@ -69,7 +69,7 @@ export default function PersonalLibraryPage() {
                 {/* כפתור שפותח את המודל */}
                 <button 
                     onClick={() => setIsUploadModalOpen(true)}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-blue-200 transition-all transform hover:-translate-y-1 active:scale-95"
+                    className="flex items-center gap-2 bg-info-600 hover:bg-info-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-info-200 transition-all transform hover:-translate-y-1 active:scale-95"
                 >
                     <span className="material-symbols-outlined">upload_file</span>
                     העלאת ספר חדש
@@ -84,9 +84,9 @@ export default function PersonalLibraryPage() {
                         placeholder="חפש בספרים שלך..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full px-4 py-2.5 pr-10 rounded-lg border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:border-blue-500 transition-all"
+                        className="w-full px-4 py-2.5 pr-10 rounded-lg border border-neutral-200 bg-neutral-50 focus:bg-white focus:outline-none focus:border-info-500 transition-all"
                     />
-                    <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">search</span>
+                    <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400">search</span>
                 </div>
                 {/* כפתורי סינון */}
                 <div className="flex gap-2">
@@ -96,8 +96,8 @@ export default function PersonalLibraryPage() {
                             onClick={() => setFilterStatus(status)}
                             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                                 filterStatus === status 
-                                ? 'bg-gray-800 text-white' 
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                ? 'bg-neutral-800 text-white' 
+                                : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
                             }`}
                         >
                             {status === 'all' ? 'הכל' : status === 'available' ? 'בתהליך' : 'הושלם'}
@@ -113,12 +113,12 @@ export default function PersonalLibraryPage() {
                     <p>טוען...</p>
                 </div>
             ) : filteredBooks.length === 0 ? (
-                <div className="text-center py-20 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200">
-                    <span className="material-symbols-outlined text-6xl text-gray-300 mb-4">library_books</span>
-                    <h3 className="text-xl font-medium text-gray-600">אין כאן ספרים עדיין</h3>
+                <div className="text-center py-20 bg-neutral-50 rounded-3xl border-2 border-dashed border-neutral-200">
+                    <span className="material-symbols-outlined text-6xl text-neutral-300 mb-4">library_books</span>
+                    <h3 className="text-xl font-medium text-neutral-600">אין כאן ספרים עדיין</h3>
                     <button 
                         onClick={() => setIsUploadModalOpen(true)}
-                        className="mt-4 text-blue-600 font-bold hover:underline"
+                        className="mt-4 text-info-600 font-bold hover:underline"
                     >
                         לחץ כאן להעלאת הספר הראשון
                     </button>
@@ -192,40 +192,40 @@ function UploadModal({ onClose, onSuccess }) {
             <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 relative">
                 
                 {/* כפתור סגירה */}
-                <button onClick={onClose} className="absolute top-4 left-4 text-gray-400 hover:text-gray-600">
+                <button onClick={onClose} className="absolute top-4 left-4 text-neutral-400 hover:text-neutral-600">
                     <span className="material-symbols-outlined">close</span>
                 </button>
 
-                <div className="p-6 border-b border-gray-100 bg-gray-50">
-                    <h2 className="text-xl font-bold text-gray-800 text-center">העלאת ספר חדש</h2>
+                <div className="p-6 border-b border-neutral-100 bg-neutral-50">
+                    <h2 className="text-xl font-bold text-neutral-800 text-center">העלאת ספר חדש</h2>
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-5">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">שם הספר</label>
+                        <label className="block text-sm font-medium text-neutral-700 mb-1">שם הספר</label>
                         <input
                             type="text"
                             value={bookName}
                             onChange={(e) => setBookName(e.target.value)}
-                            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-info-500 outline-none"
                             placeholder="שם הספר..."
                             required
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">קובץ PDF</label>
+                        <label className="block text-sm font-medium text-neutral-700 mb-1">קובץ PDF</label>
                         <input
                             type="file"
                             accept="application/pdf"
                             onChange={(e) => setFile(e.target.files[0])}
-                            className="block w-full text-sm text-gray-500 file:ml-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                            className="block w-full text-sm text-neutral-500 file:ml-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-info-50 file:text-info-700 hover:file:bg-info-100"
                             required
                         />
                     </div>
 
                     {status && (
-                        <div className={`text-sm text-center p-2 rounded ${status.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        <div className={`text-sm text-center p-2 rounded ${status.type === 'success' ? 'bg-success-100 text-success-700' : 'bg-danger-100 text-danger-700'}`}>
                             {status.msg}
                         </div>
                     )}
@@ -233,7 +233,7 @@ function UploadModal({ onClose, onSuccess }) {
                     <button
                         type="submit"
                         disabled={isUploading}
-                        className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700 transition disabled:opacity-50 flex justify-center gap-2"
+                        className="w-full bg-info-600 text-white py-2.5 rounded-xl font-bold hover:bg-info-700 transition disabled:opacity-50 flex justify-center gap-2"
                     >
                         {isUploading ? (
                             <>
@@ -257,38 +257,38 @@ function PersonalBookCard({ book }) {
   return (
     <Link 
         href={`/library/books/${encodeURIComponent(book.path)}`}
-        className="group bg-white p-5 rounded-2xl border border-surface-variant hover:border-blue-300 hover:shadow-xl hover:shadow-blue-50 transition-all duration-300 flex flex-col h-full transform hover:-translate-y-1 relative"
+        className="group bg-white p-5 rounded-2xl border border-surface-variant hover:border-info-300 hover:shadow-xl hover:shadow-info-50 transition-all duration-300 flex flex-col h-full transform hover:-translate-y-1 relative"
     >
-        <span className="absolute top-4 left-4 bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-1 rounded-full z-10">
+        <span className="absolute top-4 left-4 bg-info-100 text-info-700 text-[10px] font-bold px-2 py-1 rounded-full z-10">
             אישי
         </span>
 
         <div className="flex gap-4 mb-5">
-            <div className="w-16 h-20 bg-gray-100 rounded-lg shadow-inner flex-shrink-0 flex items-center justify-center overflow-hidden">
+            <div className="w-16 h-20 bg-neutral-100 rounded-lg shadow-inner flex-shrink-0 flex items-center justify-center overflow-hidden">
                 {book.thumbnail ? (
                     <img src={book.thumbnail} alt="" className="w-full h-full object-cover" />
                 ) : (
-                    <span className="material-symbols-outlined text-3xl text-gray-300">folder_open</span>
+                    <span className="material-symbols-outlined text-3xl text-neutral-300">folder_open</span>
                 )}
             </div>
             <div className="flex-1 min-w-0 py-1">
-                <h3 className="font-bold text-lg text-gray-800 line-clamp-2 leading-tight mb-1 group-hover:text-blue-600 transition-colors">
+                <h3 className="font-bold text-lg text-neutral-800 line-clamp-2 leading-tight mb-1 group-hover:text-info-600 transition-colors">
                     {book.name}
                 </h3>
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-neutral-500">
                    {total} עמודים
                 </span>
             </div>
         </div>
 
         <div className="mt-auto">
-            <div className="flex justify-between text-[11px] text-gray-400 mb-1.5">
+            <div className="flex justify-between text-[11px] text-neutral-400 mb-1.5">
                 <span>התקדמות</span>
                 <span>{Math.round(percent)}%</span>
             </div>
-            <div className="flex h-2.5 w-full rounded-full overflow-hidden bg-gray-100 mb-3">
+            <div className="flex h-2.5 w-full rounded-full overflow-hidden bg-neutral-100 mb-3">
                 <div 
-                    className={`h-full transition-all duration-500 ${percent === 100 ? 'bg-green-500' : 'bg-blue-500'}`} 
+                    className={`h-full transition-all duration-500 ${percent === 100 ? 'bg-success-500' : 'bg-info-500'}`} 
                     style={{ width: `${percent}%` }} 
                 />
             </div>

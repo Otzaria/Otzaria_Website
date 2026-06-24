@@ -128,7 +128,7 @@ export default function FindReplaceDialog({
           </h2>
           <button 
             onClick={handleCloseInternal} 
-            className="text-on-surface/50 hover:text-red-500 hover:bg-red-50 p-1 rounded-full transition-colors cursor-pointer"
+            className="text-on-surface/50 hover:text-danger-500 hover:bg-danger-50 p-1 rounded-full transition-colors cursor-pointer"
             onMouseDown={(e) => e.stopPropagation()} 
           >
             <span className="material-symbols-outlined text-xl block">close</span>
@@ -148,22 +148,22 @@ export default function FindReplaceDialog({
                                 type="checkbox" 
                                 checked={useRegex} 
                                 onChange={(e) => setUseRegex(e.target.checked)}
-                                className="w-3 h-3 rounded border-gray-300 text-primary focus:ring-primary"
+                                className="w-3 h-3 rounded border-neutral-300 text-primary focus:ring-primary"
                             />
-                            <span className="text-[10px] text-gray-500">Regex</span>
+                            <span className="text-[10px] text-neutral-500">Regex</span>
                         </label>
                         {useRegex && (
                             <a 
                                 href="https://tchumim.com/topic/1463/regex-%D7%91%D7%99%D7%98%D7%95%D7%99%D7%99%D7%9D-%D7%A8%D7%92%D7%95%D7%9C%D7%A8%D7%99%D7%99%D7%9D" 
                                 target="_blank" 
                                 rel="noopener noreferrer"
-                                className="text-[10px] text-blue-600 hover:text-blue-800 underline"
+                                className="text-[10px] text-info-600 hover:text-info-800 underline"
                             >
                                 למדריך רג'קס מפורט
                             </a>
                         )}
                     </div>
-                    <button onClick={() => setFindText(prev => prev + '^13')} className="text-[10px] bg-gray-50 hover:bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200 flex items-center gap-1 transition-colors">
+                    <button onClick={() => setFindText(prev => prev + '^13')} className="text-[10px] bg-neutral-50 hover:bg-neutral-200 text-neutral-600 px-1.5 py-0.5 rounded border border-neutral-200 flex items-center gap-1 transition-colors">
                       <span className="material-symbols-outlined text-[10px]">keyboard_return</span>
                     </button>
                   </div>
@@ -181,7 +181,7 @@ export default function FindReplaceDialog({
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <label className="block text-xs font-bold text-on-surface">החלף ב:</label>
-                    <button onClick={() => setReplaceText(prev => prev + '^13')} className="text-[10px] bg-gray-50 hover:bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200 flex items-center gap-1 transition-colors">
+                    <button onClick={() => setReplaceText(prev => prev + '^13')} className="text-[10px] bg-neutral-50 hover:bg-neutral-200 text-neutral-600 px-1.5 py-0.5 rounded border border-neutral-200 flex items-center gap-1 transition-colors">
                       <span className="material-symbols-outlined text-[10px]">keyboard_return</span>
                     </button>
                   </div>
@@ -201,8 +201,8 @@ export default function FindReplaceDialog({
                         disabled={!editMode}
                         className={`col-span-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md font-bold transition-all shadow-sm text-sm ${
                             editMode 
-                                ? 'bg-blue-600 text-white hover:bg-blue-700 cursor-pointer' 
-                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                ? 'bg-info-600 text-white hover:bg-info-700 cursor-pointer' 
+                                : 'bg-neutral-300 text-neutral-500 cursor-not-allowed'
                         }`}
                         title={editMode ? "חפש הבא" : "לחצנים אלו זמינים במצב עריכה ידנית בלבד"}
                     >
@@ -215,7 +215,7 @@ export default function FindReplaceDialog({
                         className={`col-span-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md font-bold transition-all shadow-sm text-sm ${
                             editMode 
                                 ? 'bg-primary text-on-primary hover:bg-accent cursor-pointer' 
-                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                : 'bg-neutral-300 text-neutral-500 cursor-not-allowed'
                         }`}
                         title={editMode ? "החלף" : "לחצנים אלו זמינים במצב עריכה ידנית בלבד"}
                     >
@@ -224,7 +224,7 @@ export default function FindReplaceDialog({
                     </button>
                     <button 
                         onClick={() => handleReplaceAll(undefined, undefined, useRegex)} 
-                        className="col-span-2 flex items-center justify-center gap-2 px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 font-bold transition-all shadow-sm mt-1 text-sm"
+                        className="col-span-2 flex items-center justify-center gap-2 px-3 py-2 bg-success-600 text-white rounded-md hover:bg-success-700 font-bold transition-all shadow-sm mt-1 text-sm"
                     >
                         <span className="material-symbols-outlined text-sm">published_with_changes</span>
                         <span>החלף הכל</span>
@@ -234,7 +234,7 @@ export default function FindReplaceDialog({
                 <div className="pt-3 border-t border-surface-variant space-y-2">
                     <button 
                         onClick={handleRemoveDigits} 
-                        className="w-full flex items-center justify-center gap-2 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-md border border-red-200 transition-colors text-xs font-medium"
+                        className="w-full flex items-center justify-center gap-2 px-3 py-1.5 bg-danger-50 hover:bg-danger-100 text-danger-700 rounded-md border border-danger-200 transition-colors text-xs font-medium"
                     >
                         <span className="text-[10px] font-bold line-through">123</span>
                         <span>נקה ספרות (מיידי)</span>
@@ -242,7 +242,7 @@ export default function FindReplaceDialog({
 
                     <button 
                         onClick={() => setView('list')}
-                        className="w-full flex items-center justify-center gap-2 px-3 py-1.5 bg-gray-50 text-gray-700 rounded-md hover:bg-gray-100 transition-colors text-xs font-medium border border-gray-200"
+                        className="w-full flex items-center justify-center gap-2 px-3 py-1.5 bg-neutral-50 text-neutral-700 rounded-md hover:bg-neutral-100 transition-colors text-xs font-medium border border-neutral-200"
                     >
                         <span className="material-symbols-outlined text-sm">list</span>
                         חיפושים קבועים
@@ -255,7 +255,7 @@ export default function FindReplaceDialog({
             <div className="space-y-3">
                  <button 
                     onClick={runAllSavedReplacements}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 font-bold transition-all shadow-sm mb-2 text-sm"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-feature-600 text-white rounded-md hover:bg-feature-700 font-bold transition-all shadow-sm mb-2 text-sm"
                 >
                     <span className="material-symbols-outlined text-sm">playlist_play</span>
                     חפש והחלף הכל (לפי סדר)
@@ -270,7 +270,7 @@ export default function FindReplaceDialog({
                             setNewIsRegex(false);
                             setView('add');
                         }}
-                        className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-xs font-medium"
+                        className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-info-600 text-white rounded-md hover:bg-info-700 transition-colors text-xs font-medium"
                     >
                         <span className="material-symbols-outlined text-xs">add</span>
                         חדש
@@ -284,9 +284,9 @@ export default function FindReplaceDialog({
                                 alert("חסרה הפונקציה בקובץ האב");
                             }
                         }}
-                        className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-red-50 text-red-700 rounded-md hover:bg-red-100 border border-red-100 transition-colors text-xs font-medium"
+                        className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-danger-50 text-danger-700 rounded-md hover:bg-danger-100 border border-danger-100 transition-colors text-xs font-medium"
                     >
-                        <span className="text-[10px] font-bold line-through bg-red-100 border-red-200 border px-1 rounded">123</span>
+                        <span className="text-[10px] font-bold line-through bg-danger-100 border-danger-200 border px-1 rounded">123</span>
                         הוסף ניקוי ספרות
                     </button>
                 </div>
@@ -298,20 +298,20 @@ export default function FindReplaceDialog({
                             const isRegexItem = search.isRegex;
 
                             return (
-                            <div key={search.id} className={`p-2 rounded-md border flex items-center justify-between gap-2 group transition-colors ${isRemoveDigitsItem ? 'bg-red-50 border-red-100 hover:border-red-300' : 'bg-gray-50 border-gray-200 hover:border-primary/50'}`}>
+                            <div key={search.id} className={`p-2 rounded-md border flex items-center justify-between gap-2 group transition-colors ${isRemoveDigitsItem ? 'bg-danger-50 border-danger-100 hover:border-danger-300' : 'bg-neutral-50 border-neutral-200 hover:border-primary/50'}`}>
                                 <div className="flex-1 min-w-0">
                                     {isRemoveDigitsItem ? (
-                                        <div className="flex items-center gap-2 text-red-700 font-medium">
-                                             <span className="text-[10px] font-bold line-through bg-red-100 border-red-200 border px-1 rounded">123</span>
+                                        <div className="flex items-center gap-2 text-danger-700 font-medium">
+                                             <span className="text-[10px] font-bold line-through bg-danger-100 border-danger-200 border px-1 rounded">123</span>
                                              <span className="truncate text-xs">{search.label || 'ניקוי ספרות'}</span>
                                         </div>
                                     ) : (
                                         <>
                                             <div className="flex items-center gap-2">
-                                                <div className="font-bold text-xs text-gray-800 truncate">{search.label || search.findText}</div>
-                                                {isRegexItem && <span className="text-[9px] text-gray-500 bg-gray-200 px-1 rounded">Regex</span>}
+                                                <div className="font-bold text-xs text-neutral-800 truncate">{search.label || search.findText}</div>
+                                                {isRegexItem && <span className="text-[9px] text-neutral-500 bg-neutral-200 px-1 rounded">Regex</span>}
                                             </div>
-                                            <div className="text-[10px] text-gray-500 truncate flex items-center gap-1 mt-0.5">
+                                            <div className="text-[10px] text-neutral-500 truncate flex items-center gap-1 mt-0.5">
                                                 <span className={`bg-white px-1 border rounded max-w-[60px] truncate ${isRegexItem ? 'font-mono' : ''}`} dir={isRegexItem ? 'ltr' : 'rtl'}>{search.findText}</span>
                                                 <span className="material-symbols-outlined text-[10px]">arrow_back</span>
                                                 <span className="bg-white px-1 border rounded max-w-[60px] truncate">{search.replaceText || 'ריק'}</span>
@@ -322,33 +322,33 @@ export default function FindReplaceDialog({
                                 <div className="flex items-center gap-1 flex-shrink-0">
                                      <button 
                                         onClick={() => isRemoveDigitsItem ? handleRemoveDigits() : handleReplaceAll(search.findText, search.replaceText, isRegexItem)}
-                                        className={`p-1 rounded border transition-colors ${isRemoveDigitsItem ? 'text-red-600 hover:bg-red-100 bg-red-50/50 border-red-200' : 'text-blue-600 hover:bg-blue-50 bg-blue-50/50 border-blue-100'}`}
+                                        className={`p-1 rounded border transition-colors ${isRemoveDigitsItem ? 'text-danger-600 hover:bg-danger-100 bg-danger-50/50 border-danger-200' : 'text-info-600 hover:bg-info-50 bg-info-50/50 border-info-100'}`}
                                         title="הרץ פעולה זו כעת (החלף הכל)"
                                     >
                                         <span className="material-symbols-outlined text-sm">play_arrow</span>
                                     </button>
                                     <div className="flex flex-col">
-                                        <button onClick={() => moveSearch(index, 'up')} disabled={index === 0} className="p-0.5 text-gray-400 hover:text-gray-700 hover:bg-gray-200 rounded disabled:opacity-30">
+                                        <button onClick={() => moveSearch(index, 'up')} disabled={index === 0} className="p-0.5 text-neutral-400 hover:text-neutral-700 hover:bg-neutral-200 rounded disabled:opacity-30">
                                             <span className="material-symbols-outlined text-[10px]">keyboard_arrow_up</span>
                                         </button>
-                                        <button onClick={() => moveSearch(index, 'down')} disabled={index === savedSearches.length - 1} className="p-0.5 text-gray-400 hover:text-gray-700 hover:bg-gray-200 rounded disabled:opacity-30">
+                                        <button onClick={() => moveSearch(index, 'down')} disabled={index === savedSearches.length - 1} className="p-0.5 text-neutral-400 hover:text-neutral-700 hover:bg-neutral-200 rounded disabled:opacity-30">
                                             <span className="material-symbols-outlined text-[10px]">keyboard_arrow_down</span>
                                         </button>
                                     </div>
-                                    <button onClick={() => removeSavedSearch(search.id)} className="p-1 text-red-500 hover:bg-red-50 rounded" title="מחק">
+                                    <button onClick={() => removeSavedSearch(search.id)} className="p-1 text-danger-500 hover:bg-danger-50 rounded" title="מחק">
                                         <span className="material-symbols-outlined text-sm">delete</span>
                                     </button>
                                 </div>
                             </div>
                         )})
                     ) : (
-                        <div className="text-center text-gray-500 py-2 text-xs">אין חיפושים שמורים</div>
+                        <div className="text-center text-neutral-500 py-2 text-xs">אין חיפושים שמורים</div>
                     )}
                 </div>
 
                 <button 
                     onClick={() => setView('main')}
-                    className="w-full mt-2 flex items-center justify-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors text-xs font-medium"
+                    className="w-full mt-2 flex items-center justify-center gap-2 px-3 py-1.5 bg-neutral-100 text-neutral-700 rounded-md hover:bg-neutral-200 transition-colors text-xs font-medium"
                 >
                     <span className="material-symbols-outlined text-xs">arrow_forward</span>
                     חזרה לחיפוש רגיל
@@ -377,22 +377,22 @@ export default function FindReplaceDialog({
                                     type="checkbox" 
                                     checked={newIsRegex} 
                                     onChange={(e) => setNewIsRegex(e.target.checked)}
-                                    className="w-3 h-3 rounded border-gray-300 text-primary focus:ring-primary"
+                                    className="w-3 h-3 rounded border-neutral-300 text-primary focus:ring-primary"
                                 />
-                                <span className="text-[10px] text-gray-500">Regex</span>
+                                <span className="text-[10px] text-neutral-500">Regex</span>
                             </label>
                             {newIsRegex && (
                                 <a 
                                     href="https://tchumim.com/topic/1463/regex-%D7%91%D7%99%D7%98%D7%95%D7%99%D7%99%D7%9D-%D7%A8%D7%92%D7%95%D7%9C%D7%A8%D7%99%D7%99%D7%9D" 
                                     target="_blank" 
                                     rel="noopener noreferrer"
-                                    className="text-[10px] text-blue-600 hover:text-blue-800 underline"
+                                    className="text-[10px] text-info-600 hover:text-info-800 underline"
                                 >
                                     למדריך רג'קס מפורט
                                 </a>
                             )}
                         </div>
-                        <button onClick={() => setNewFind(prev => prev + '^13')} className="text-[10px] bg-gray-50 hover:bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200 flex items-center gap-1">
+                        <button onClick={() => setNewFind(prev => prev + '^13')} className="text-[10px] bg-neutral-50 hover:bg-neutral-200 text-neutral-600 px-1.5 py-0.5 rounded border border-neutral-200 flex items-center gap-1">
                             <span className="material-symbols-outlined text-[10px]">keyboard_return</span>
                             (^13)
                         </button>
@@ -408,7 +408,7 @@ export default function FindReplaceDialog({
                 <div>
                     <div className="flex justify-between items-center mb-1">
                         <label className="block text-xs font-bold text-on-surface">טקסט להחלפה:</label>
-                        <button onClick={() => setNewReplace(prev => prev + '^13')} className="text-[10px] bg-gray-50 hover:bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200 flex items-center gap-1">
+                        <button onClick={() => setNewReplace(prev => prev + '^13')} className="text-[10px] bg-neutral-50 hover:bg-neutral-200 text-neutral-600 px-1.5 py-0.5 rounded border border-neutral-200 flex items-center gap-1">
                             <span className="material-symbols-outlined text-[10px]">keyboard_return</span>
                         </button>
                     </div>
@@ -424,7 +424,7 @@ export default function FindReplaceDialog({
                 <div className="flex gap-2 pt-2">
                      <button 
                         onClick={() => setView('list')}
-                        className="flex-1 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 font-bold text-xs"
+                        className="flex-1 px-3 py-1.5 bg-neutral-100 text-neutral-700 rounded-md hover:bg-neutral-200 font-bold text-xs"
                     >
                         ביטול
                     </button>
@@ -434,14 +434,14 @@ export default function FindReplaceDialog({
                             addSavedSearch(newLabel, newFind, newReplace, newIsRegex);
                             setView('list');
                         }}
-                        className="flex-1 px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-bold text-xs"
+                        className="flex-1 px-3 py-1.5 bg-info-600 text-white rounded-md hover:bg-info-700 font-bold text-xs"
                     >
                         שמור
                     </button>
                 </div>
 
-                <div className="my-3 border-t border-gray-100 relative">
-                    <span className="absolute top-[-8px] left-1/2 -translate-x-1/2 bg-white px-2 text-[10px] text-gray-400">או</span>
+                <div className="my-3 border-t border-neutral-100 relative">
+                    <span className="absolute top-[-8px] left-1/2 -translate-x-1/2 bg-white px-2 text-[10px] text-neutral-400">או</span>
                 </div>
 
                 <button 
@@ -453,9 +453,9 @@ export default function FindReplaceDialog({
                             alert("פונקציה זו טרם הוטמעה בקומפוננטת האב");
                         }
                     }}
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-red-50 text-red-700 rounded-md hover:bg-red-100 font-bold border border-red-100 transition-colors text-xs"
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-danger-50 text-danger-700 rounded-md hover:bg-danger-100 font-bold border border-danger-100 transition-colors text-xs"
                 >
-                     <span className="text-[10px] font-bold line-through bg-red-100 border-red-200 border px-1 rounded">123</span>
+                     <span className="text-[10px] font-bold line-through bg-danger-100 border-danger-200 border px-1 rounded">123</span>
                      הוסף פעולת "ניקוי ספרות" לרשימה
                 </button>
 

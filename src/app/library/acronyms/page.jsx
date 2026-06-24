@@ -293,7 +293,7 @@ export default function LibraryAcronymsPage() {
                       <span className="text-sm text-on-surface/50">אין כינויים מאושרים</span>
                     ) : (
                       row.aliases.map((alias) => (
-                        <div key={alias} className="px-2 py-1 text-sm rounded-md bg-green-50 text-green-800 border border-green-200 flex items-center gap-1">
+                        <div key={alias} className="px-2 py-1 text-sm rounded-md bg-success-50 text-success-800 border border-success-200 flex items-center gap-1">
                           {editingAliasKey === `${row.id}::${alias}` ? (
                             <>
                               <input
@@ -306,14 +306,14 @@ export default function LibraryAcronymsPage() {
                                 type="button"
                                 onClick={() => saveEditAlias(row.id, alias)}
                                 disabled={submittingId === row.id}
-                                className="text-xs px-2 py-0.5 rounded bg-blue-600 text-white disabled:opacity-50"
+                                className="text-xs px-2 py-0.5 rounded bg-info-600 text-white disabled:opacity-50"
                               >
                                 שמור
                               </button>
                               <button
                                 type="button"
                                 onClick={cancelEditAlias}
-                                className="text-xs px-2 py-0.5 rounded border border-gray-300 bg-white text-gray-700"
+                                className="text-xs px-2 py-0.5 rounded border border-neutral-300 bg-white text-neutral-700"
                               >
                                 בטל
                               </button>
@@ -324,7 +324,7 @@ export default function LibraryAcronymsPage() {
                               <button
                                 type="button"
                                 onClick={() => startEditAlias(row.id, alias)}
-                                className="text-xs px-1 rounded bg-white border border-green-300"
+                                className="text-xs px-1 rounded bg-white border border-success-300"
                               >
                                 ערוך
                               </button>
@@ -332,7 +332,7 @@ export default function LibraryAcronymsPage() {
                                 type="button"
                                 onClick={() => requestDeleteAlias(row.id, alias)}
                                 disabled={submittingId === row.id}
-                                className="text-xs px-1 rounded bg-white border border-red-300 text-red-700 disabled:opacity-50"
+                                className="text-xs px-1 rounded bg-white border border-danger-300 text-danger-700 disabled:opacity-50"
                               >
                                 מחק
                               </button>
@@ -350,7 +350,7 @@ export default function LibraryAcronymsPage() {
                         {row.pendingAliases.map((pending) => (
                           <div
                             key={pending.id}
-                            className="px-2 py-1 text-sm rounded-md bg-orange-50 text-orange-800 border border-orange-200 flex items-center gap-1"
+                            className="px-2 py-1 text-sm rounded-md bg-warning-strong-50 text-warning-strong-800 border border-warning-strong-200 flex items-center gap-1"
                           >
                             {editingPendingId === pending.id ? (
                               <>
@@ -376,14 +376,14 @@ export default function LibraryAcronymsPage() {
                                   type="button"
                                   onClick={() => saveEditPending(row.id, pending)}
                                   disabled={submittingId === row.id}
-                                  className="text-xs px-2 py-0.5 rounded bg-blue-600 text-white disabled:opacity-50"
+                                  className="text-xs px-2 py-0.5 rounded bg-info-600 text-white disabled:opacity-50"
                                 >
                                   שמור
                                 </button>
                                 <button
                                   type="button"
                                   onClick={cancelEditPending}
-                                  className="text-xs px-2 py-0.5 rounded border border-gray-300 bg-white text-gray-700"
+                                  className="text-xs px-2 py-0.5 rounded border border-neutral-300 bg-white text-neutral-700"
                                 >
                                   בטל
                                 </button>
@@ -394,7 +394,7 @@ export default function LibraryAcronymsPage() {
                                 <button
                                   type="button"
                                   onClick={() => startEditPending(pending)}
-                                  className="text-xs px-1 rounded bg-white border border-orange-300"
+                                  className="text-xs px-1 rounded bg-white border border-warning-strong-300"
                                 >
                                   ערוך
                                 </button>

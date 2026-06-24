@@ -1348,7 +1348,7 @@ export default function EditPage() {
   };
 
   if (loading) return <div className="text-center p-20">טוען...</div>
-  if (error) return <div className="text-center p-20 text-red-500">{error}</div>
+  if (error) return <div className="text-center p-20 text-danger-500">{error}</div>
 
   return (
     <div 
@@ -1446,9 +1446,9 @@ export default function EditPage() {
                 {twoColumns ? <span>ימין: {rightColumn.length}, שמאל: {leftColumn.length}</span> : <span>תווים: {content.length}</span>}
              </div>
              <div>
-                {saveStatus === 'saved' && <span className="text-green-600 font-medium">נשמר אוטומטית</span>}
-                {saveStatus === 'saving' && <span className="text-blue-600 font-medium">שומר...</span>}
-                {saveStatus === 'error' && <span className="text-red-600 font-medium">שגיאה בשמירה</span>}
+                {saveStatus === 'saved' && <span className="text-success-600 font-medium">נשמר אוטומטית</span>}
+                {saveStatus === 'saving' && <span className="text-info-600 font-medium">שומר...</span>}
+                {saveStatus === 'error' && <span className="text-danger-600 font-medium">שגיאה בשמירה</span>}
              </div>
           </div>
         </div>
@@ -1563,16 +1563,16 @@ function UploadDialog({ pageNumber, onConfirm, onCancel }) {
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onCancel}>
       <div className="glass-strong rounded-2xl p-8 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
         <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="material-symbols-outlined text-4xl text-green-600">upload_file</span>
+          <div className="w-16 h-16 bg-success-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="material-symbols-outlined text-4xl text-success-600">upload_file</span>
           </div>
           <h2 className="text-2xl font-bold text-on-surface mb-2">סיום עבודה על עמוד {pageNumber}</h2>
         </div>
         <div className="flex justify-center mb-6">
-          <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-3 max-w-xs">
+          <div className="bg-warning-50 border-2 border-warning-200 rounded-xl p-3 max-w-xs">
             <div className="flex items-start gap-2">
-              <span className="material-symbols-outlined text-amber-600 text-lg flex-shrink-0">warning</span>
-              <div className="text-xs text-amber-800">
+              <span className="material-symbols-outlined text-warning-600 text-lg flex-shrink-0">warning</span>
+              <div className="text-xs text-warning-800">
                 <p className="font-bold mb-1">תזכורת חשובה!</p>
                 <ul className="space-y-0.5">
                   <li>לפני הסיום יש לבצע בדיקת איות</li>
@@ -1582,10 +1582,10 @@ function UploadDialog({ pageNumber, onConfirm, onCancel }) {
           </div>
         </div>
         <p className="text-on-surface/70 text-center mb-6">האם ברצונך להעלות את הטקסט שערכת למערכת?</p>
-        <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-6">
+        <div className="bg-info-50 border-2 border-info-200 rounded-xl p-4 mb-6">
           <div className="flex items-start gap-3">
-            <span className="material-symbols-outlined text-blue-600 mt-0.5">info</span>
-            <div className="text-sm text-blue-800">
+            <span className="material-symbols-outlined text-info-600 mt-0.5">info</span>
+            <div className="text-sm text-info-800">
               <p className="font-bold mb-1">מה יקרה?</p>
               <ul className="space-y-1">
                 <li>• הטקסט שערכת יועלה כקובץ חדש</li>
@@ -1596,7 +1596,7 @@ function UploadDialog({ pageNumber, onConfirm, onCancel }) {
           </div>
         </div>
         <div className="flex flex-col gap-3">
-          <button onClick={onConfirm} className="flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-bold">
+          <button onClick={onConfirm} className="flex items-center justify-center gap-2 px-6 py-3 bg-success-600 text-white rounded-lg hover:bg-success-700 transition-colors font-bold">
             <span className="material-symbols-outlined">upload</span>
             <span>כן, העלה את הטקסט</span>
           </button>

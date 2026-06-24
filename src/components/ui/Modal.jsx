@@ -63,12 +63,12 @@ export default function Modal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header - Fixed */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-100 flex-shrink-0">
-          <h2 className="text-2xl font-bold text-gray-900 line-clamp-1">{title}</h2>
+        <div className="flex items-center justify-between p-6 border-b border-neutral-100 flex-shrink-0">
+          <h2 className="text-2xl font-bold text-neutral-900 line-clamp-1">{title}</h2>
           {closeable && (
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 p-2 rounded-full transition-colors"
+              className="text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 p-2 rounded-full transition-colors"
               aria-label="Close modal"
             >
               <span className="material-symbols-outlined text-2xl block">close</span>
@@ -83,7 +83,7 @@ export default function Modal({
 
         {/* Footer - Fixed */}
         {buttons.length > 0 && (
-          <div className="flex gap-3 justify-end p-6 border-t border-gray-100 flex-shrink-0 bg-gray-50/50 rounded-b-2xl">
+          <div className="flex gap-3 justify-end p-6 border-t border-neutral-100 flex-shrink-0 bg-neutral-50/50 rounded-b-2xl">
             {buttons.map((button, index) => (
               <button
                 key={index}
@@ -91,9 +91,9 @@ export default function Modal({
                 disabled={button.disabled}
                 className={`px-6 py-2.5 rounded-lg font-bold transition-colors shadow-sm ${
                   button.variant === 'secondary'
-                    ? 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                    ? 'bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-50'
                     : button.variant === 'danger'
-                    ? 'bg-red-600 text-white hover:bg-red-700'
+                    ? 'bg-danger-600 text-white hover:bg-danger-700'
                     : 'bg-primary text-on-primary hover:bg-accent'
                 } ${button.disabled ? 'opacity-50 cursor-not-allowed' : 'hover:-translate-y-0.5'}`}
               >

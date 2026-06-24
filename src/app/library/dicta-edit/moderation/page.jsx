@@ -166,7 +166,7 @@ export default function ModerationPage() {
   if (!isModerator) {
     return (
       <div className="min-h-screen bg-[#f8f9fa]"><Header />
-        <div className="container mx-auto px-4 py-20 text-center text-slate-500">אין לך הרשאת גישה לתור האישורים.</div>
+        <div className="container mx-auto px-4 py-20 text-center text-neutral-cool-500">אין לך הרשאת גישה לתור האישורים.</div>
       </div>
     )
   }
@@ -178,16 +178,16 @@ export default function ModerationPage() {
         <div className="max-w-5xl mx-auto">
           <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
             <div>
-              <h1 className="text-3xl font-bold font-frank text-slate-900">תור אישורים</h1>
-              <p className="text-slate-600">{loading ? 'טוען...' : `${filtered.length} הצעות ממתינות`}</p>
+              <h1 className="text-3xl font-bold font-frank text-neutral-cool-900">תור אישורים</h1>
+              <p className="text-neutral-cool-600">{loading ? 'טוען...' : `${filtered.length} הצעות ממתינות`}</p>
             </div>
             <Link href="/library/dicta-edit" className="text-primary font-semibold hover:underline">→ חזרה למרחב</Link>
           </div>
 
           <div className="flex flex-wrap gap-3 mb-6">
             <input value={filterBook} onChange={(e) => setFilterBook(e.target.value)} placeholder="סינון לפי ספר..."
-              className="flex-1 min-w-[200px] bg-white border border-slate-200 rounded-xl px-4 py-2.5 shadow-sm" />
-            <select value={filterKind} onChange={(e) => setFilterKind(e.target.value)} className="bg-white border border-slate-200 rounded-xl px-4 py-2.5 shadow-sm">
+              className="flex-1 min-w-[200px] bg-white border border-neutral-cool-200 rounded-xl px-4 py-2.5 shadow-sm" />
+            <select value={filterKind} onChange={(e) => setFilterKind(e.target.value)} className="bg-white border border-neutral-cool-200 rounded-xl px-4 py-2.5 shadow-sm">
               <option value="all">כל הסוגים</option>
               <option value={EDIT_KIND.MANUAL}>עריכה ידנית</option>
               <option value={EDIT_KIND.FIND_REPLACE}>חיפוש והחלפה</option>
@@ -195,18 +195,18 @@ export default function ModerationPage() {
           </div>
 
           {selected.size > 0 && (
-            <div className="sticky top-2 z-10 flex items-center gap-3 bg-slate-900 text-white rounded-xl px-4 py-3 mb-4 shadow-lg">
+            <div className="sticky top-2 z-10 flex items-center gap-3 bg-neutral-cool-900 text-white rounded-xl px-4 py-3 mb-4 shadow-lg">
               <span className="font-semibold">{selected.size} נבחרו</span>
-              <button disabled={busy} onClick={() => bulk('approve')} className="bg-emerald-500 px-4 py-1.5 rounded-lg font-bold hover:bg-emerald-400 disabled:opacity-50">אשר נבחרים</button>
-              <button disabled={busy} onClick={() => bulk('reject')} className="bg-red-500 px-4 py-1.5 rounded-lg font-bold hover:bg-red-400 disabled:opacity-50">דחה נבחרים</button>
-              <button onClick={() => setSelected(new Set())} className="mr-auto text-slate-300 hover:text-white">בטל בחירה</button>
+              <button disabled={busy} onClick={() => bulk('approve')} className="bg-success-alt-500 px-4 py-1.5 rounded-lg font-bold hover:bg-success-alt-400 disabled:opacity-50">אשר נבחרים</button>
+              <button disabled={busy} onClick={() => bulk('reject')} className="bg-danger-500 px-4 py-1.5 rounded-lg font-bold hover:bg-danger-400 disabled:opacity-50">דחה נבחרים</button>
+              <button onClick={() => setSelected(new Set())} className="mr-auto text-neutral-cool-300 hover:text-white">בטל בחירה</button>
             </div>
           )}
 
           {loading ? (
-            <div className="space-y-4">{[...Array(4)].map((_, i) => <div key={i} className="h-40 bg-white animate-pulse rounded-2xl border border-slate-100" />)}</div>
+            <div className="space-y-4">{[...Array(4)].map((_, i) => <div key={i} className="h-40 bg-white animate-pulse rounded-2xl border border-neutral-cool-100" />)}</div>
           ) : filtered.length === 0 ? (
-            <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-slate-300 text-slate-400">אין הצעות ממתינות 🎉</div>
+            <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-neutral-cool-300 text-neutral-cool-400">אין הצעות ממתינות 🎉</div>
           ) : (
             <div className="space-y-4">
               {filtered.map((e) => (
@@ -270,60 +270,60 @@ function EditCard({ edit, bookName, selected, onToggle, busy, onApprove, onRejec
   const rejectAll = onReject
 
   return (
-    <div className={`bg-white rounded-2xl border p-5 shadow-sm transition-all ${selected ? 'border-primary ring-2 ring-primary/20' : 'border-slate-200'}`}>
+    <div className={`bg-white rounded-2xl border p-5 shadow-sm transition-all ${selected ? 'border-primary ring-2 ring-primary/20' : 'border-neutral-cool-200'}`}>
       <div className="flex items-start gap-3 mb-3">
         <input type="checkbox" checked={selected} onChange={onToggle} className="mt-1.5 w-4 h-4" title="בחירת ההצעה כולה לפעולה מרובה" />
         <div className="flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-bold text-slate-800 font-frank text-lg">{bookName}</span>
-            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isFR ? 'bg-purple-50 text-purple-600 border border-purple-100' : 'bg-blue-50 text-blue-600 border border-blue-100'}`}>
+            <span className="font-bold text-neutral-cool-800 font-frank text-lg">{bookName}</span>
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isFR ? 'bg-feature-50 text-feature-600 border border-feature-100' : 'bg-info-50 text-info-600 border border-info-100'}`}>
               {isFR ? 'חיפוש והחלפה' : 'עריכה ידנית'}
             </span>
-            {edit.editType && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{EDIT_TYPE_LABELS[edit.editType] || edit.editType}</span>}
-            <span className="text-xs text-slate-400">
+            {edit.editType && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-neutral-cool-100 text-neutral-cool-600">{EDIT_TYPE_LABELS[edit.editType] || edit.editType}</span>}
+            <span className="text-xs text-neutral-cool-400">
               {partiallyHandled ? `${pendingCount} מתוך ${edit.changeCount} מקטעים ממתינים` : `${edit.changeCount} מקטעים`}
             </span>
           </div>
-          <div className="text-sm text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
-            <span>מאת <button onClick={onBlock} className="font-semibold text-slate-700 hover:text-red-600 underline decoration-dotted" title="ניהול / חסימת משתמש">{edit.authorName}</button></span>
-            {edit.note && <span className="text-slate-600">· {edit.note}</span>}
+          <div className="text-sm text-neutral-cool-500 mt-1 flex items-center gap-2 flex-wrap">
+            <span>מאת <button onClick={onBlock} className="font-semibold text-neutral-cool-700 hover:text-danger-600 underline decoration-dotted" title="ניהול / חסימת משתמש">{edit.authorName}</button></span>
+            {edit.note && <span className="text-neutral-cool-600">· {edit.note}</span>}
           </div>
         </div>
       </div>
 
       {isFR && edit.findReplace && (
-        <div className="mb-3 text-sm bg-purple-50 border border-purple-100 rounded-lg px-3 py-2 flex items-center gap-2 flex-wrap">
+        <div className="mb-3 text-sm bg-feature-50 border border-feature-100 rounded-lg px-3 py-2 flex items-center gap-2 flex-wrap">
           <code className="font-mono bg-white px-2 py-0.5 rounded border">{edit.findReplace.find}</code>
           <span>←</span>
           <code className="font-mono bg-white px-2 py-0.5 rounded border">{edit.findReplace.replace || '(ריק)'}</code>
-          {edit.findReplace.isRegex && <span className="text-xs text-purple-500">regex</span>}
-          <button onClick={onApprovePattern} disabled={busy} className="mr-auto text-xs font-bold text-purple-700 hover:underline disabled:opacity-50">אשר את כל ההחלפות הזהות »</button>
+          {edit.findReplace.isRegex && <span className="text-xs text-feature-500">regex</span>}
+          <button onClick={onApprovePattern} disabled={busy} className="mr-auto text-xs font-bold text-feature-700 hover:underline disabled:opacity-50">אשר את כל ההחלפות הזהות »</button>
         </div>
       )}
 
       {changes.length > 1 && (
-        <p className="text-xs text-slate-400 mb-2">סמן מקטעים בודדים כדי לאשר/לדחות רק חלק מההצעה</p>
+        <p className="text-xs text-neutral-cool-400 mb-2">סמן מקטעים בודדים כדי לאשר/לדחות רק חלק מההצעה</p>
       )}
       <DiffPreview changes={changes} total={edit.changeCount} selectable selected={segs} onToggle={toggleSeg} />
 
       {segs.size > 0 && (
         <div className="flex items-center gap-2 mt-3 bg-primary/5 border border-primary/20 rounded-xl px-3 py-2 flex-wrap">
-          <span className="font-semibold text-slate-700 text-sm">{segs.size} מקטעים נבחרו</span>
-          <button onClick={() => runSeg('approve')} disabled={busy} className="flex items-center gap-1 bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-emerald-400 disabled:opacity-50">
+          <span className="font-semibold text-neutral-cool-700 text-sm">{segs.size} מקטעים נבחרו</span>
+          <button onClick={() => runSeg('approve')} disabled={busy} className="flex items-center gap-1 bg-success-alt-500 text-white px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-success-alt-400 disabled:opacity-50">
             <span className="material-symbols-outlined text-sm">check</span> אשר נבחרים
           </button>
-          <button onClick={() => runSeg('reject')} disabled={busy} className="flex items-center gap-1 bg-white border border-red-200 text-red-600 px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-red-50 disabled:opacity-50">
+          <button onClick={() => runSeg('reject')} disabled={busy} className="flex items-center gap-1 bg-white border border-danger-200 text-danger-600 px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-danger-50 disabled:opacity-50">
             <span className="material-symbols-outlined text-sm">close</span> דחה נבחרים
           </button>
-          <button onClick={() => setSegs(new Set())} className="mr-auto text-slate-400 hover:text-slate-700 text-sm">נקה בחירה</button>
+          <button onClick={() => setSegs(new Set())} className="mr-auto text-neutral-cool-400 hover:text-neutral-cool-700 text-sm">נקה בחירה</button>
         </div>
       )}
 
       <div className="flex gap-2 mt-4">
-        <button onClick={approveAll} disabled={busy} className="flex items-center gap-1.5 bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-emerald-400 disabled:opacity-50">
+        <button onClick={approveAll} disabled={busy} className="flex items-center gap-1.5 bg-success-alt-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-success-alt-400 disabled:opacity-50">
           <span className="material-symbols-outlined text-base">check</span> {pendingCount > 1 || partiallyHandled ? 'אשר הכל' : 'אשר'}
         </button>
-        <button onClick={rejectAll} disabled={busy} className="flex items-center gap-1.5 bg-white border border-red-200 text-red-600 px-4 py-2 rounded-lg font-bold hover:bg-red-50 disabled:opacity-50">
+        <button onClick={rejectAll} disabled={busy} className="flex items-center gap-1.5 bg-white border border-danger-200 text-danger-600 px-4 py-2 rounded-lg font-bold hover:bg-danger-50 disabled:opacity-50">
           <span className="material-symbols-outlined text-base">close</span> {pendingCount > 1 || partiallyHandled ? 'דחה הכל' : 'דחה'}
         </button>
       </div>
@@ -360,18 +360,18 @@ function BlockUserModal({ target, onClose, onDone }) {
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4" onClick={onClose} dir="rtl">
       <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl" onClick={(ev) => ev.stopPropagation()}>
         <h2 className="text-xl font-bold mb-2 flex items-center gap-2">
-          <span className="material-symbols-outlined text-red-600">block</span>
+          <span className="material-symbols-outlined text-danger-600">block</span>
           חסימת משתמש
         </h2>
-        <p className="text-slate-600 mb-4">לחסום את <strong>{target.name}</strong> מעריכה במרחב?</p>
-        <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="סיבה (אופציונלי)" className="w-full border border-slate-200 rounded-lg px-3 py-2 mb-3" />
+        <p className="text-neutral-cool-600 mb-4">לחסום את <strong>{target.name}</strong> מעריכה במרחב?</p>
+        <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="סיבה (אופציונלי)" className="w-full border border-neutral-cool-200 rounded-lg px-3 py-2 mb-3" />
         <label className="flex items-center gap-2 text-sm mb-5 cursor-pointer">
           <input type="checkbox" checked={rejectPending} onChange={(e) => setRejectPending(e.target.checked)} />
           דחה גם את כל ההצעות הממתינות שלו
         </label>
         <div className="flex gap-3">
-          <button onClick={submit} disabled={busy} className="flex-[2] bg-red-600 text-white py-2.5 rounded-xl font-bold hover:bg-red-700 disabled:opacity-50">{busy ? 'חוסם...' : 'חסום'}</button>
-          <button onClick={onClose} disabled={busy} className="flex-1 border border-slate-200 py-2.5 rounded-xl font-bold hover:bg-slate-50">ביטול</button>
+          <button onClick={submit} disabled={busy} className="flex-[2] bg-danger-600 text-white py-2.5 rounded-xl font-bold hover:bg-danger-700 disabled:opacity-50">{busy ? 'חוסם...' : 'חסום'}</button>
+          <button onClick={onClose} disabled={busy} className="flex-1 border border-neutral-cool-200 py-2.5 rounded-xl font-bold hover:bg-neutral-cool-50">ביטול</button>
         </div>
       </div>
     </div>

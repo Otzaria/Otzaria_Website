@@ -284,20 +284,20 @@ export default function SpellcheckDialog({
   if (typeof document === 'undefined') return null
 
   return createPortal(
-    <div className="fixed z-[9999] w-[520px] max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col" dir="rtl" style={{ left: `${position.x}px`, top: `${position.y}px` }}>
-      <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 cursor-move select-none" onMouseDown={handleMouseDown}>
+    <div className="fixed z-[9999] w-[520px] max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-neutral-200 overflow-hidden flex flex-col" dir="rtl" style={{ left: `${position.x}px`, top: `${position.y}px` }}>
+      <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-200 cursor-move select-none" onMouseDown={handleMouseDown}>
         <div>
-          <h2 className="text-base font-bold text-gray-900">{title}</h2>
+          <h2 className="text-base font-bold text-neutral-900">{title}</h2>
         </div>
-        <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg" onMouseDown={(e) => e.stopPropagation()}>
+        <button onClick={onClose} className="p-2 hover:bg-neutral-100 rounded-lg" onMouseDown={(e) => e.stopPropagation()}>
           <span className="material-symbols-outlined">close</span>
         </button>
       </div>
 
       <div className="flex flex-col md:flex-row overflow-auto">
-        <div className="md:w-1/3 border-b md:border-b-0 md:border-r border-gray-200 p-4">
+        <div className="md:w-1/3 border-b md:border-b-0 md:border-r border-neutral-200 p-4">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-bold text-gray-800">מילים חשודות</span>
+            <span className="text-sm font-bold text-neutral-800">מילים חשודות</span>
             <Button
               variant="ghost"
               size="sm"
@@ -308,16 +308,16 @@ export default function SpellcheckDialog({
           </div>
 
           {loading && (
-            <div className="text-sm text-gray-500">בודק...</div>
+            <div className="text-sm text-neutral-500">בודק...</div>
           )}
           {error && (
-            <div className="text-sm text-red-600">{error}</div>
+            <div className="text-sm text-danger-600">{error}</div>
           )}
           {!loading && !error && misspellings.length === 0 && (
-            <div className="text-sm text-green-700">לא נמצאו שגיאות</div>
+            <div className="text-sm text-success-700">לא נמצאו שגיאות</div>
           )}
           {misspellingsLimited && (
-            <div className="text-xs text-amber-600 mt-2">מוצגים עד {MISSPELLINGS_LIMIT} שגיאות ראשונות.</div>
+            <div className="text-xs text-warning-600 mt-2">מוצגים עד {MISSPELLINGS_LIMIT} שגיאות ראשונות.</div>
           )}
 
           <div className="max-h-[360px] overflow-y-auto mt-2 space-y-2">
@@ -331,13 +331,13 @@ export default function SpellcheckDialog({
                 }}
                 className={`w-full text-right px-3 py-2 rounded-lg border transition-colors ${
                   selectedWord === item.word
-                    ? 'border-blue-200 bg-blue-50 text-blue-900'
-                    : 'border-gray-200 hover:bg-gray-50 text-gray-800'
+                    ? 'border-info-200 bg-info-50 text-info-900'
+                    : 'border-neutral-200 hover:bg-neutral-50 text-neutral-800'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <span className="font-medium">{item.word}</span>
-                  <span className="text-xs text-gray-500">{item.count}x</span>
+                  <span className="text-xs text-neutral-500">{item.count}x</span>
                 </div>
               </button>
             ))}
@@ -347,8 +347,8 @@ export default function SpellcheckDialog({
         <div className="flex-1 p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <div className="text-sm text-gray-500">מילה נבחרת</div>
-              <div className="text-xl font-bold text-gray-900">{selectedWord || '—'}</div>
+              <div className="text-sm text-neutral-500">מילה נבחרת</div>
+              <div className="text-xl font-bold text-neutral-900">{selectedWord || '—'}</div>
             </div>
             <div className="flex items-center gap-2">
               <Button
@@ -363,14 +363,14 @@ export default function SpellcheckDialog({
             </div>
           </div>
 
-          <div className="text-sm font-bold text-gray-800 mb-2">החלף ב:</div>
+          <div className="text-sm font-bold text-neutral-800 mb-2">החלף ב:</div>
           <div className="flex flex-col sm:flex-row gap-2 mb-3">
             <input
               type="text"
               value={customReplacement}
               onChange={(e) => setCustomReplacement(e.target.value)}
               placeholder="החלפה ידנית..."
-              className="flex-1 px-3 py-2 border border-gray-200 rounded-md text-sm"
+              className="flex-1 px-3 py-2 border border-neutral-200 rounded-md text-sm"
             />
             <Button
               variant="ghost"
@@ -383,13 +383,13 @@ export default function SpellcheckDialog({
           </div>
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
-              <div className="text-sm font-bold text-gray-800">הצעות</div>
+              <div className="text-sm font-bold text-neutral-800">הצעות</div>
               <div className="flex items-center gap-2">
-                <label className="text-xs text-gray-500">מספר הצעות</label>
+                <label className="text-xs text-neutral-500">מספר הצעות</label>
                 <select
                   value={suggestionLimit}
                   onChange={(e) => setSuggestionLimit(parseInt(e.target.value, 10))}
-                  className="border border-gray-200 rounded-md text-xs px-2 py-1"
+                  className="border border-neutral-200 rounded-md text-xs px-2 py-1"
                 >
                   <option value={0}>0</option>
                   <option value={4}>4</option>
@@ -400,12 +400,12 @@ export default function SpellcheckDialog({
             </div>
 
             {selectedWord && suggestions.length === 0 && (
-              <div className="text-sm text-gray-500">אין הצעות זמינות</div>
+              <div className="text-sm text-neutral-500">אין הצעות זמינות</div>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {suggestions.map(suggestion => (
-                <div key={suggestion} className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2">
-                  <span className="flex-1 text-sm text-gray-800">{suggestion}</span>
+                <div key={suggestion} className="flex items-center gap-2 border border-neutral-200 rounded-lg px-3 py-2">
+                  <span className="flex-1 text-sm text-neutral-800">{suggestion}</span>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -418,7 +418,7 @@ export default function SpellcheckDialog({
             </div>
           </div>
 
-          <div className="text-xs text-gray-500">
+          <div className="text-xs text-neutral-500">
             מומלץ להריץ בדיקה מחדש אחרי החלפות גדולות.
           </div>
         </div>

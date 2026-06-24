@@ -65,7 +65,7 @@ export default function ApproveTermsPage() {
           </p>
 
           {error && (
-            <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700 text-sm">
+            <div className="mb-6 p-3 bg-danger-50 border border-danger-200 rounded-lg flex items-center gap-2 text-danger-700 text-sm">
               <span className="material-symbols-outlined text-base">error</span>
               <span>{error}</span>
             </div>

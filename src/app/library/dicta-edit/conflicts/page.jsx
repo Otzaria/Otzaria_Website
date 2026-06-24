@@ -93,21 +93,21 @@ function ConflictDiff({ bookId, onResolved }) {
 
   return (
     <div>
-      <button onClick={toggle} className="text-sm font-semibold text-slate-600 hover:text-primary flex items-center gap-1">
+      <button onClick={toggle} className="text-sm font-semibold text-neutral-cool-600 hover:text-primary flex items-center gap-1">
         <span className={`transition-transform ${open ? 'rotate-90' : ''}`}>‹</span>
         {open ? 'הסתר הבדלים' : 'הצג והכרע את ההבדלים בין הגרסאות'}
       </button>
       {open && (
         <div className="mt-2">
-          <div className="flex items-center gap-3 text-xs text-slate-500 mb-2 flex-wrap">
-            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-red-200 border border-red-300" /> גיטהאב</span>
-            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-emerald-200 border border-emerald-300" /> האתר</span>
-            <span className="text-slate-400">לחצו "קבל גרסה זו" ליד כל גרסה כדי להכריע מקטע בודד</span>
+          <div className="flex items-center gap-3 text-xs text-neutral-cool-500 mb-2 flex-wrap">
+            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-danger-200 border border-danger-300" /> גיטהאב</span>
+            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-success-alt-200 border border-success-alt-300" /> האתר</span>
+            <span className="text-neutral-cool-400">לחצו "קבל גרסה זו" ליד כל גרסה כדי להכריע מקטע בודד</span>
           </div>
           {state.loading ? (
-            <div className="h-12 bg-slate-50 animate-pulse rounded-lg" />
+            <div className="h-12 bg-neutral-cool-50 animate-pulse rounded-lg" />
           ) : state.error ? (
-            <div className="text-sm text-slate-400">שגיאה בטעינת ההבדלים</div>
+            <div className="text-sm text-neutral-cool-400">שגיאה בטעינת ההבדלים</div>
           ) : (
             <DiffPreview changes={state.changes} total={state.changeCount} onResolve={resolveHunk} />
           )}
@@ -188,7 +188,7 @@ export default function ConflictsPage() {
     return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" /></div>
   }
   if (!canSync) {
-    return <div className="min-h-screen bg-[#f8f9fa]"><Header /><div className="container mx-auto px-4 py-20 text-center text-slate-500">אין לך הרשאת גישה.</div></div>
+    return <div className="min-h-screen bg-[#f8f9fa]"><Header /><div className="container mx-auto px-4 py-20 text-center text-neutral-cool-500">אין לך הרשאת גישה.</div></div>
   }
 
   return (
@@ -198,29 +198,29 @@ export default function ConflictsPage() {
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
             <div>
-              <h1 className="text-3xl font-bold font-frank text-slate-900">קונפליקטים בסנכרון</h1>
-              <p className="text-slate-600">{loading ? 'טוען...' : `${conflicts.length} ספרים דורשים הכרעה`}</p>
+              <h1 className="text-3xl font-bold font-frank text-neutral-cool-900">קונפליקטים בסנכרון</h1>
+              <p className="text-neutral-cool-600">{loading ? 'טוען...' : `${conflicts.length} ספרים דורשים הכרעה`}</p>
             </div>
             <Link href="/library/dicta-edit" className="text-primary font-semibold hover:underline">→ חזרה למרחב</Link>
           </div>
 
-          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-6 text-sm text-amber-800">
+          <div className="bg-warning-50 border border-warning-200 rounded-xl px-4 py-3 mb-6 text-sm text-warning-800">
             קונפליקט קורה כשגם באתר וגם בגיטהאב שונה אותו קטע מאז הסנכרון האחרון. אפשר להכריע מקטע-מקטע ("הצג והכרע את ההבדלים" ולחיצה על "קבל גרסה זו" ליד הגרסה הרצויה), להכריע את כל הספר בכפתורים למטה, או לפתוח בעורך למיזוג ידני. כשכל המקטעים יוכרעו — הקונפליקט ייסגר אוטומטית.
           </div>
 
           {loading ? (
-            <div className="space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="h-24 bg-white animate-pulse rounded-2xl border border-slate-100" />)}</div>
+            <div className="space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="h-24 bg-white animate-pulse rounded-2xl border border-neutral-cool-100" />)}</div>
           ) : conflicts.length === 0 ? (
-            <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-slate-300 text-slate-400">אין קונפליקטים פתוחים 🎉</div>
+            <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-neutral-cool-300 text-neutral-cool-400">אין קונפליקטים פתוחים 🎉</div>
           ) : (
             <div className="space-y-3">
               {conflicts.map((c) => (
-                <div key={c._id} className="bg-white rounded-2xl border border-red-200 p-5 shadow-sm">
+                <div key={c._id} className="bg-white rounded-2xl border border-danger-200 p-5 shadow-sm">
                   <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
                     <div>
-                      <span className="font-bold text-slate-800 font-frank text-lg">{bookName(c.path)}</span>
-                      {c.category && <span className="text-xs text-slate-400 mr-2">{c.category}</span>}
-                      <span className="text-xs text-red-500 mr-2">{c.conflictCount} מקטעים מתנגשים</span>
+                      <span className="font-bold text-neutral-cool-800 font-frank text-lg">{bookName(c.path)}</span>
+                      {c.category && <span className="text-xs text-neutral-cool-400 mr-2">{c.category}</span>}
+                      <span className="text-xs text-danger-500 mr-2">{c.conflictCount} מקטעים מתנגשים</span>
                     </div>
                     <Link href={`/library/dicta-edit/${c._id}`} className="text-sm text-primary font-semibold hover:underline">פתח בעורך »</Link>
                   </div>
@@ -228,10 +228,10 @@ export default function ConflictsPage() {
                     <ConflictDiff bookId={c._id} onResolved={handleHunkResolved} />
                   </div>
                   <div className="flex gap-2 flex-wrap">
-                    <button onClick={() => resolve(c, 'ours')} disabled={busy} className="bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-emerald-400 disabled:opacity-50">
+                    <button onClick={() => resolve(c, 'ours')} disabled={busy} className="bg-success-alt-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-success-alt-400 disabled:opacity-50">
                       השתמש בגרסת האתר
                     </button>
-                    <button onClick={() => resolve(c, 'theirs')} disabled={busy} className="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg font-bold hover:bg-slate-50 disabled:opacity-50">
+                    <button onClick={() => resolve(c, 'theirs')} disabled={busy} className="bg-white border border-neutral-cool-300 text-neutral-cool-700 px-4 py-2 rounded-lg font-bold hover:bg-neutral-cool-50 disabled:opacity-50">
                       השתמש בגרסת גיטהאב
                     </button>
                   </div>

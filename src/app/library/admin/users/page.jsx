@@ -136,58 +136,58 @@ export default function AdminUsersPage() {
       {loading ? (
         <LoadingSpinner message="טוען משתמשים..." />
       ) : (
-      <div className="overflow-x-auto rounded-xl border border-gray-200">
+      <div className="overflow-x-auto rounded-xl border border-neutral-200">
         <table className="w-full bg-white">
-          <thead className="bg-gray-50 border-b">
+          <thead className="bg-neutral-50 border-b">
             <tr>
               <th 
                 onClick={() => handleSort('name')}
-                className="text-right p-4 font-bold text-gray-700 cursor-pointer hover:bg-gray-200 select-none"
+                className="text-right p-4 font-bold text-neutral-700 cursor-pointer hover:bg-neutral-200 select-none"
               >
                 שם {getSortIcon('name')}
               </th>
               <th 
                 onClick={() => handleSort('email')}
-                className="text-right p-4 font-bold text-gray-700 cursor-pointer hover:bg-gray-200 select-none"
+                className="text-right p-4 font-bold text-neutral-700 cursor-pointer hover:bg-neutral-200 select-none"
               >
                 אימייל {getSortIcon('email')}
               </th>
               <th 
                 onClick={() => handleSort('role')}
-                className="text-right p-4 font-bold text-gray-700 cursor-pointer hover:bg-gray-200 select-none"
+                className="text-right p-4 font-bold text-neutral-700 cursor-pointer hover:bg-neutral-200 select-none"
               >
                 תפקיד {getSortIcon('role')}
               </th>
               <th 
                 onClick={() => handleSort('points')}
-                className="text-right p-4 font-bold text-gray-700 cursor-pointer hover:bg-gray-200 select-none"
+                className="text-right p-4 font-bold text-neutral-700 cursor-pointer hover:bg-neutral-200 select-none"
               >
                 נקודות {getSortIcon('points')}
               </th>
               <th 
                 onClick={() => handleSort('completedPages')}
-                className="text-right p-4 font-bold text-gray-700 cursor-pointer hover:bg-gray-200 select-none"
+                className="text-right p-4 font-bold text-neutral-700 cursor-pointer hover:bg-neutral-200 select-none"
               >
                 עמודים שהושלמו {getSortIcon('completedPages')}
               </th>
               <th 
                 onClick={() => handleSort('dictaBooks')}
-                className="text-right p-4 font-bold text-gray-700 cursor-pointer hover:bg-gray-200 select-none"
+                className="text-right p-4 font-bold text-neutral-700 cursor-pointer hover:bg-neutral-200 select-none"
               >
                 ספרי דיקטה {getSortIcon('dictaBooks')}
               </th>
-              <th className="text-right p-4 font-bold text-gray-700">
+              <th className="text-right p-4 font-bold text-neutral-700">
                 מרחב תיקון ספרים
-                <div className="text-[10px] font-normal text-gray-400">הרשאות לעריכת ספרי דיקטה הערוכים</div>
+                <div className="text-[10px] font-normal text-neutral-400">הרשאות לעריכת ספרי דיקטה הערוכים</div>
               </th>
-              <th className="text-right p-4 font-bold text-gray-700 sticky left-0 bg-gray-50 z-10 shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.1)]">פעולות</th>
+              <th className="text-right p-4 font-bold text-neutral-700 sticky left-0 bg-neutral-50 z-10 shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.1)]">פעולות</th>
             </tr>
           </thead>
           <tbody>
             {sortedUsers.map(user => {
               const isEditing = editingUser === user._id
               return (
-                <tr key={user._id} className="border-b hover:bg-gray-50 transition-colors">
+                <tr key={user._id} className="border-b hover:bg-neutral-50 transition-colors">
                   <td className="p-4 font-medium">
                     {isEditing ? (
                       <input
@@ -199,7 +199,7 @@ export default function AdminUsersPage() {
                   </td>
                   
                   {/* --- שינוי: הפיכת עמודת האימייל לניתנת לעריכה --- */}
-                  <td className="p-4 text-sm text-gray-600 font-mono">
+                  <td className="p-4 text-sm text-neutral-600 font-mono">
                     {isEditing ? (
                         <input
                             type="email"
@@ -225,10 +225,10 @@ export default function AdminUsersPage() {
                       </select>
                     ) : (
                       <span className={`px-2 py-1 rounded text-xs font-bold ${
-                        user.role === 'admin' ? 'bg-purple-100 text-purple-800' :
-                        user.role === 'admin_plugins' ? 'bg-blue-100 text-blue-800' :
-                        user.role === 'admin_books' ? 'bg-green-100 text-green-800' :
-                        'bg-gray-100 text-gray-800'
+                        user.role === 'admin' ? 'bg-feature-100 text-feature-800' :
+                        user.role === 'admin_plugins' ? 'bg-info-100 text-info-800' :
+                        user.role === 'admin_books' ? 'bg-success-100 text-success-800' :
+                        'bg-neutral-100 text-neutral-800'
                       }`}>
                         {user.role === 'admin' ? 'מנהל כללי' :
                          user.role === 'admin_plugins' ? 'מנהל תוספים' :
@@ -247,12 +247,12 @@ export default function AdminUsersPage() {
                     ) : <span className="font-bold text-primary">{user.points || 0}</span>}
                   </td>
                   <td className="p-4 text-center">
-                    <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm font-bold">
+                    <span className="bg-info-50 text-info-700 px-3 py-1 rounded-full text-sm font-bold">
                         {user.completedPages || 0}
                     </span>
                   </td>
                   <td className="p-4 text-center">
-                    <span className="bg-green-50 text-green-700 px-3 py-1 rounded-full text-sm font-bold">
+                    <span className="bg-success-50 text-success-700 px-3 py-1 rounded-full text-sm font-bold">
                         {user.dictaBooks || 0}
                     </span>
                   </td>
@@ -264,7 +264,7 @@ export default function AdminUsersPage() {
                             onChange={e => setFormData({ ...formData, isSupervisor: e.target.checked })} />
                           מפקח — עריכה ישירה ואישור
                         </label>
-                        <label className="flex items-center gap-1.5 text-xs cursor-pointer text-red-700" title="חוסם את המשתמש מלהגיש תיקונים במרחב">
+                        <label className="flex items-center gap-1.5 text-xs cursor-pointer text-danger-700" title="חוסם את המשתמש מלהגיש תיקונים במרחב">
                           <input type="checkbox" className="shrink-0" checked={!!formData.dictaEditBlocked}
                             onChange={e => setFormData({ ...formData, dictaEditBlocked: e.target.checked })} />
                           חסום מעריכה
@@ -272,9 +272,9 @@ export default function AdminUsersPage() {
                       </div>
                     ) : (
                       <div className="flex flex-col items-start gap-1">
-                        {user.isSupervisor && <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-100 text-emerald-700">מפקח</span>}
-                        {user.dictaEditBlocked && <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-red-100 text-red-700">חסום מעריכה</span>}
-                        {!user.isSupervisor && !user.dictaEditBlocked && <span className="text-gray-300 text-xs">—</span>}
+                        {user.isSupervisor && <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-success-alt-100 text-success-alt-700">מפקח</span>}
+                        {user.dictaEditBlocked && <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-danger-100 text-danger-700">חסום מעריכה</span>}
+                        {!user.isSupervisor && !user.dictaEditBlocked && <span className="text-neutral-300 text-xs">—</span>}
                       </div>
                     )}
                   </td>
@@ -282,21 +282,21 @@ export default function AdminUsersPage() {
                     <div className="flex gap-2">
                     {isEditing ? (
                       <>
-                        <button onClick={handleUpdateUser} className="text-green-600 hover:bg-green-50 p-1.5 rounded-lg transition-colors">
+                        <button onClick={handleUpdateUser} className="text-success-600 hover:bg-success-50 p-1.5 rounded-lg transition-colors">
                             <span className="material-symbols-outlined">check</span>
                         </button>
-                        <button onClick={() => setEditingUser(null)} className="text-gray-600 hover:bg-gray-100 p-1.5 rounded-lg transition-colors">
+                        <button onClick={() => setEditingUser(null)} className="text-neutral-600 hover:bg-neutral-100 p-1.5 rounded-lg transition-colors">
                             <span className="material-symbols-outlined">close</span>
                         </button>
                       </>
                     ) : (
                       <>
-                        <button onClick={() => startEdit(user)} className="text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg transition-colors">
+                        <button onClick={() => startEdit(user)} className="text-info-600 hover:bg-info-50 p-1.5 rounded-lg transition-colors">
                             <span className="material-symbols-outlined">edit</span>
                         </button>
                         <button 
                             onClick={() => handleDeleteUser(user._id)} 
-                            className="text-red-600 hover:bg-red-50 p-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="text-danger-600 hover:bg-danger-50 p-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             disabled={session?.user?.id === user._id}
                             title={session?.user?.id === user._id ? "לא ניתן למחוק את עצמך" : "מחק משתמש"}
                         >

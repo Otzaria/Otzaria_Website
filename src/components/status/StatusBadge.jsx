@@ -14,10 +14,10 @@ export default function StatusBadge({ status, statuses, onEdit, editable = false
       {editable && (
         <button
           onClick={onEdit}
-          className="p-1 hover:bg-gray-100 rounded transition-colors"
+          className="p-1 hover:bg-neutral-100 rounded transition-colors"
           title="עריכת סטטוס"
         >
-          <span className="material-symbols-outlined text-sm text-gray-600">edit</span>
+          <span className="material-symbols-outlined text-sm text-neutral-600">edit</span>
         </button>
       )}
     </div>

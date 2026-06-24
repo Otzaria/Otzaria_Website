@@ -195,12 +195,12 @@ export default function TextCleanerModal({ isOpen, onClose, content, onContentCh
       size="md"
     >
       <div className="space-y-4">
-        <div className="bg-blue-50 p-4 rounded-lg text-sm text-gray-700">
+        <div className="bg-info-50 p-4 rounded-lg text-sm text-neutral-700">
           <p>כלי זה מנקה שגיאות נפוצות בטקסט כמו רווחים מיותרים, שורות ריקות וכו'.</p>
         </div>
 
         <div className="space-y-2">
-          <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-2 rounded">
+          <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-neutral-50 p-2 rounded">
             <input
               type="checkbox"
               checked={options.remove_empty_lines}
@@ -210,7 +210,7 @@ export default function TextCleanerModal({ isOpen, onClose, content, onContentCh
             <span>הסרת שורות ריקות</span>
           </label>
 
-          <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-2 rounded">
+          <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-neutral-50 p-2 rounded">
             <input
               type="checkbox"
               checked={options.remove_double_spaces}
@@ -220,7 +220,7 @@ export default function TextCleanerModal({ isOpen, onClose, content, onContentCh
             <span>הסרת רווחים כפולים</span>
           </label>
 
-          <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-2 rounded">
+          <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-neutral-50 p-2 rounded">
             <input
               type="checkbox"
               checked={options.remove_spaces_before}
@@ -230,7 +230,7 @@ export default function TextCleanerModal({ isOpen, onClose, content, onContentCh
             <span>הסרת רווחים לפני פיסוק</span>
           </label>
 
-          <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-2 rounded">
+          <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-neutral-50 p-2 rounded">
             <input
               type="checkbox"
               checked={options.remove_spaces_after}
@@ -240,7 +240,7 @@ export default function TextCleanerModal({ isOpen, onClose, content, onContentCh
             <span>הסרת רווחים אחרי סוגריים פותחים</span>
           </label>
 
-          <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-2 rounded">
+          <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-neutral-50 p-2 rounded">
             <input
               type="checkbox"
               checked={options.remove_spaces_around_newlines}
@@ -250,7 +250,7 @@ export default function TextCleanerModal({ isOpen, onClose, content, onContentCh
             <span>הסרת רווחים סביב מעברי שורה</span>
           </label>
 
-          <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-2 rounded">
+          <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-neutral-50 p-2 rounded">
             <input
               type="checkbox"
               checked={options.remove_leading_spaces}
@@ -260,7 +260,7 @@ export default function TextCleanerModal({ isOpen, onClose, content, onContentCh
             <span>הסרת רווחים בתחילת שורה</span>
           </label>
 
-          <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-2 rounded">
+          <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-neutral-50 p-2 rounded">
             <input
               type="checkbox"
               checked={options.fix_spaces_near_tags}
@@ -270,7 +270,7 @@ export default function TextCleanerModal({ isOpen, onClose, content, onContentCh
             <span>רווחים חסרים/מיותרים ליד תגים</span>
           </label>
 
-          <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-2 rounded">
+          <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-neutral-50 p-2 rounded">
             <input
               type="checkbox"
               checked={options.replace_double_quotes}
@@ -280,7 +280,7 @@ export default function TextCleanerModal({ isOpen, onClose, content, onContentCh
             <span>החלפת גרשיים כפולים למרכאות</span>
           </label>
 
-          <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-2 rounded">
+          <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-neutral-50 p-2 rounded">
             <input
               type="checkbox"
               checked={options.normalize_quotes}
@@ -290,7 +290,7 @@ export default function TextCleanerModal({ isOpen, onClose, content, onContentCh
             <span>אחדות מרכאות וגרשיים</span>
           </label>
 
-          <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-2 rounded">
+          <label className="flex items-center gap-2 text-sm cursor-pointer hover:bg-neutral-50 p-2 rounded">
             <input
               type="checkbox"
               checked={options.clean_duplicate_tags}
@@ -299,13 +299,13 @@ export default function TextCleanerModal({ isOpen, onClose, content, onContentCh
             />
             <div className="flex flex-col">
               <span>נקה תגיות כפולות</span>
-              <span className="text-xs text-gray-500 mr-6">(למשל &lt;b&gt;חידושים&lt;/b&gt; &lt;b&gt;על&lt;/b&gt;, לא מומלץ להפעיל לפני גמר העריכה)</span>
+              <span className="text-xs text-neutral-500 mr-6">(למשל &lt;b&gt;חידושים&lt;/b&gt; &lt;b&gt;על&lt;/b&gt;, לא מומלץ להפעיל לפני גמר העריכה)</span>
             </div>
           </label>
         </div>
 
         {result && (
-          <div className={`p-3 rounded ${result.includes('שגיאה') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+          <div className={`p-3 rounded ${result.includes('שגיאה') ? 'bg-danger-100 text-danger-700' : 'bg-success-100 text-success-700'}`}>
             {result}
           </div>
         )}
@@ -320,7 +320,7 @@ export default function TextCleanerModal({ isOpen, onClose, content, onContentCh
           </button>
           <button
             onClick={handleClose}
-            className="px-6 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="px-6 py-2.5 border border-neutral-300 rounded-lg hover:bg-neutral-50 transition-colors"
           >
             סגור
           </button>

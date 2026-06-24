@@ -177,7 +177,7 @@ export default function LibraryInfoPage() {
           </div>
 
           {error && (
-            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700">
+            <div className="mb-4 rounded-lg border border-danger-200 bg-danger-50 px-4 py-3 text-danger-700">
               {error}
             </div>
           )}

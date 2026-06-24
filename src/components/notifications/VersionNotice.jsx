@@ -53,7 +53,7 @@ export default function VersionNotice() {
           exit={{ y: 100, opacity: 0 }}
           className="fixed bottom-6 right-6 z-[100] max-w-md w-full"
         >
-          <div className="bg-slate-900/95 text-white p-4 rounded-xl shadow-2xl backdrop-blur-md border border-slate-700 flex items-center justify-between gap-4">
+          <div className="bg-neutral-cool-900/95 text-white p-4 rounded-xl shadow-2xl backdrop-blur-md border border-neutral-cool-700 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="bg-primary/20 p-2 rounded-lg">
                 <span className="material-symbols-outlined text-primary animate-pulse">
@@ -62,7 +62,7 @@ export default function VersionNotice() {
               </div>
               <div>
                 <h4 className="font-bold text-sm">האתר עודכן!</h4>
-                <p className="text-xs text-slate-400">יש לרענן כדי לטעון את התוכן המעודכן</p>
+                <p className="text-xs text-neutral-cool-400">יש לרענן כדי לטעון את התוכן המעודכן</p>
               </div>
             </div>
             

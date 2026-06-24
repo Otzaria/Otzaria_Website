@@ -1,23 +1,23 @@
 export const statusConfig = {
   completed: {
     label: 'הושלם',
-    color: 'text-green-700',
-    bgColor: 'bg-green-100',
-    borderColor: 'border-green-300',
+    color: 'text-success-700',
+    bgColor: 'bg-success-100',
+    borderColor: 'border-success-300',
     icon: 'check_circle'
   },
   'in-progress': {
     label: 'בטיפול',
-    color: 'text-blue-700',
-    bgColor: 'bg-blue-100',
-    borderColor: 'border-blue-300',
+    color: 'text-info-700',
+    bgColor: 'bg-info-100',
+    borderColor: 'border-info-300',
     icon: 'edit'
   },
   available: {
     label: 'זמין לעריכה',
-    color: 'text-gray-700',
-    bgColor: 'bg-gray-100',
-    borderColor: 'border-gray-300',
+    color: 'text-neutral-700',
+    bgColor: 'bg-neutral-100',
+    borderColor: 'border-neutral-300',
     icon: 'description'
   }
 }

@@ -330,9 +330,9 @@ export default function AdminDictaBooksPage() {
 
   const getStatusBadge = (status) => {
     switch(status) {
-      case 'available': return <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">פנוי</span>
-      case 'in-progress': return <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs">בעריכה</span>
-      case 'completed': return <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">הושלם</span>
+      case 'available': return <span className="bg-success-100 text-success-800 px-2 py-1 rounded-full text-xs">פנוי</span>
+      case 'in-progress': return <span className="bg-warning-strong-100 text-warning-strong-800 px-2 py-1 rounded-full text-xs">בעריכה</span>
+      case 'completed': return <span className="bg-info-100 text-info-800 px-2 py-1 rounded-full text-xs">הושלם</span>
       default: return status
     }
   }
@@ -360,7 +360,7 @@ export default function AdminDictaBooksPage() {
             <button 
                 onClick={handleSync}
                 disabled={syncing}
-                className="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 transition flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed shadow-sm"
+                className="bg-aqua-600 text-white px-4 py-2 rounded-lg hover:bg-aqua-700 transition flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed shadow-sm"
             >
                 {syncing ? (
                     <span className="material-symbols-outlined animate-spin text-sm">sync</span>
@@ -389,7 +389,7 @@ export default function AdminDictaBooksPage() {
           className={`px-4 py-2 rounded-lg font-medium transition-colors ${
             statusFilter === 'all'
               ? 'bg-primary text-white shadow-sm'
-              : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+              : 'bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-50'
           }`}
         >
           הכל ({statusCounts.total})
@@ -398,8 +398,8 @@ export default function AdminDictaBooksPage() {
           onClick={() => setStatusFilter('available')}
           className={`px-4 py-2 rounded-lg font-medium transition-colors ${
             statusFilter === 'available'
-              ? 'bg-green-600 text-white shadow-sm'
-              : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+              ? 'bg-success-600 text-white shadow-sm'
+              : 'bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-50'
           }`}
         >
           פנוי ({statusCounts.available})
@@ -408,8 +408,8 @@ export default function AdminDictaBooksPage() {
           onClick={() => setStatusFilter('in-progress')}
           className={`px-4 py-2 rounded-lg font-medium transition-colors ${
             statusFilter === 'in-progress'
-              ? 'bg-orange-600 text-white shadow-sm'
-              : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+              ? 'bg-warning-strong-600 text-white shadow-sm'
+              : 'bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-50'
           }`}
         >
           בטיפול ({statusCounts.inProgress})
@@ -418,8 +418,8 @@ export default function AdminDictaBooksPage() {
           onClick={() => setStatusFilter('completed')}
           className={`px-4 py-2 rounded-lg font-medium transition-colors ${
             statusFilter === 'completed'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+              ? 'bg-info-600 text-white shadow-sm'
+              : 'bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-50'
           }`}
         >
           הושלם ({statusCounts.completed})
@@ -430,7 +430,7 @@ export default function AdminDictaBooksPage() {
       {loading ? (
         <LoadingSpinner message="טוען ספרים..." />
       ) : filteredBooks.length === 0 ? (
-        <div className="text-center py-12 text-on-surface/60 border-2 border-dashed border-gray-300 rounded-xl">
+        <div className="text-center py-12 text-on-surface/60 border-2 border-dashed border-neutral-300 rounded-xl">
           <span className="material-symbols-outlined text-6xl mb-4 block opacity-50">library_books</span>
           {books.length === 0 ? (
             <>
@@ -442,44 +442,44 @@ export default function AdminDictaBooksPage() {
           )}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-gray-200">
+        <div className="overflow-x-auto rounded-xl border border-neutral-200">
           <table className="w-full bg-white">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200 text-gray-700 text-sm">
+              <tr className="bg-neutral-50 border-b border-neutral-200 text-neutral-700 text-sm">
                 <th 
                   onClick={() => handleSort('title')}
-                  className="text-right p-4 font-bold cursor-pointer hover:bg-gray-200 select-none"
+                  className="text-right p-4 font-bold cursor-pointer hover:bg-neutral-200 select-none"
                 >
                   שם הספר {getSortIcon('title')}
                 </th>
                 <th 
                   onClick={() => handleSort('status')}
-                  className="text-right p-4 font-bold cursor-pointer hover:bg-gray-200 select-none"
+                  className="text-right p-4 font-bold cursor-pointer hover:bg-neutral-200 select-none"
                 >
                   סטטוס {getSortIcon('status')}
                 </th>
                 <th 
                   onClick={() => handleSort('claimedBy')}
-                  className="text-right p-4 font-bold cursor-pointer hover:bg-gray-200 select-none"
+                  className="text-right p-4 font-bold cursor-pointer hover:bg-neutral-200 select-none"
                 >
                   נערך ע"י {getSortIcon('claimedBy')}
                 </th>
                 <th 
                   onClick={() => handleSort('updatedAt')}
-                  className="text-right p-4 font-bold cursor-pointer hover:bg-gray-200 select-none"
+                  className="text-right p-4 font-bold cursor-pointer hover:bg-neutral-200 select-none"
                 >
                   עדכון אחרון {getSortIcon('updatedAt')}
                 </th>
                 <th className="text-center p-4 font-bold">פעולות</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-neutral-100">
               {sortedBooks.map(book => (
-                <tr key={book._id} className="hover:bg-gray-50 transition-colors">
-                  <td className="p-4 font-medium text-gray-900">{book.title}</td>
+                <tr key={book._id} className="hover:bg-neutral-50 transition-colors">
+                  <td className="p-4 font-medium text-neutral-900">{book.title}</td>
                   <td className="p-4">{getStatusBadge(book.status)}</td>
                   <td className="p-4 text-sm">{book.claimedBy?.name || '-'}</td>
-                  <td className="p-4 text-sm text-gray-500">
+                  <td className="p-4 text-sm text-neutral-500">
                     {new Date(book.updatedAt).toLocaleDateString('he-IL', {
                         day: 'numeric', month: 'long', year: 'numeric'
                     })}
@@ -491,17 +491,17 @@ export default function AdminDictaBooksPage() {
                           e.stopPropagation()
                           toggleMenu(book._id)
                         }}
-                        className={`p-2 hover:bg-gray-200 rounded-lg transition-colors ${
-                          openMenuId === book._id ? 'bg-gray-200' : ''
+                        className={`p-2 hover:bg-neutral-200 rounded-lg transition-colors ${
+                          openMenuId === book._id ? 'bg-neutral-200' : ''
                         }`}
                         title="פעולות"
                       >
-                        <span className="material-symbols-outlined text-gray-600">more_vert</span>
+                        <span className="material-symbols-outlined text-neutral-600">more_vert</span>
                       </button>
 
                       {openMenuId === book._id && (
                         <div 
-                          className="absolute left-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 min-w-[180px] animate-in fade-in slide-in-from-top-2 duration-200"
+                          className="absolute left-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-neutral-200 py-1 z-50 min-w-[180px] animate-in fade-in slide-in-from-top-2 duration-200"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <button
@@ -509,9 +509,9 @@ export default function AdminDictaBooksPage() {
                               setOpenMenuId(null)
                               router.push(`/library/dicta-books/edit/${book._id}`)
                             }}
-                            className="w-full px-4 py-2 text-right hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm"
+                            className="w-full px-4 py-2 text-right hover:bg-neutral-50 transition-colors flex items-center gap-2 text-sm"
                           >
-                            <span className="material-symbols-outlined text-green-600 text-base">edit_note</span>
+                            <span className="material-symbols-outlined text-success-600 text-base">edit_note</span>
                             <span>פתח בעורך</span>
                           </button>
 
@@ -521,9 +521,9 @@ export default function AdminDictaBooksPage() {
                                 setOpenMenuId(null)
                                 handleSplitBook(book)
                               }}
-                              className="w-full px-4 py-2 text-right hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm"
+                              className="w-full px-4 py-2 text-right hover:bg-neutral-50 transition-colors flex items-center gap-2 text-sm"
                             >
-                              <span className="material-symbols-outlined text-purple-600 text-base">call_split</span>
+                              <span className="material-symbols-outlined text-feature-600 text-base">call_split</span>
                               <span>פצל ספר ל-2</span>
                             </button>
                           )}
@@ -534,9 +534,9 @@ export default function AdminDictaBooksPage() {
                                 setOpenMenuId(null)
                                 handleReleaseBook(book._id, book.title)
                               }}
-                              className="w-full px-4 py-2 text-right hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm"
+                              className="w-full px-4 py-2 text-right hover:bg-neutral-50 transition-colors flex items-center gap-2 text-sm"
                             >
-                              <span className="material-symbols-outlined text-orange-600 text-base">lock_open</span>
+                              <span className="material-symbols-outlined text-warning-strong-600 text-base">lock_open</span>
                               <span>שחרר ספר</span>
                             </button>
                           )}
@@ -546,20 +546,20 @@ export default function AdminDictaBooksPage() {
                               setOpenMenuId(null)
                               handleEditStatus(book)
                             }}
-                            className="w-full px-4 py-2 text-right hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm"
+                            className="w-full px-4 py-2 text-right hover:bg-neutral-50 transition-colors flex items-center gap-2 text-sm"
                           >
-                            <span className="material-symbols-outlined text-blue-600 text-base">edit</span>
+                            <span className="material-symbols-outlined text-info-600 text-base">edit</span>
                             <span>ערוך סטטוס</span>
                           </button>
 
-                          <div className="border-t border-gray-200 my-1"></div>
+                          <div className="border-t border-neutral-200 my-1"></div>
 
                           <button
                             onClick={() => {
                               setOpenMenuId(null)
                               handleDeleteBook(book._id, book.title)
                             }}
-                            className="w-full px-4 py-2 text-right hover:bg-red-50 transition-colors flex items-center gap-2 text-sm text-red-600"
+                            className="w-full px-4 py-2 text-right hover:bg-danger-50 transition-colors flex items-center gap-2 text-sm text-danger-600"
                           >
                             <span className="material-symbols-outlined text-base">delete</span>
                             <span>מחק ספר</span>
@@ -583,9 +583,9 @@ export default function AdminDictaBooksPage() {
           className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden relative" 
           onClick={e => e.stopPropagation()}
         >
-          <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
-            <h3 className="font-bold text-lg text-gray-800">יצירת ספר חדש ידנית</h3>
-            <button onClick={() => setShowCreateForm(false)} className="text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-200 p-1">
+          <div className="p-4 border-b bg-neutral-50 flex justify-between items-center">
+            <h3 className="font-bold text-lg text-neutral-800">יצירת ספר חדש ידנית</h3>
+            <button onClick={() => setShowCreateForm(false)} className="text-neutral-400 hover:text-neutral-600 rounded-full hover:bg-neutral-200 p-1">
               <span className="material-symbols-outlined text-xl">close</span>
             </button>
           </div>
@@ -593,21 +593,21 @@ export default function AdminDictaBooksPage() {
           <div className="p-6">
             <div className="space-y-4">
               <div>
-                <label className="block text-sm mb-2 font-medium text-gray-700">שם הספר</label>
+                <label className="block text-sm mb-2 font-medium text-neutral-700">שם הספר</label>
                 <input
                   type="text"
                   value={newBookTitle}
                   onChange={(e) => setNewBookTitle(e.target.value)}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none"
+                  className="w-full p-3 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary outline-none"
                   placeholder="הזן שם לספר"
                 />
               </div>
               <div>
-                <label className="block text-sm mb-2 font-medium text-gray-700">תוכן התחלתי (אופציונלי)</label>
+                <label className="block text-sm mb-2 font-medium text-neutral-700">תוכן התחלתי (אופציונלי)</label>
                 <textarea
                   value={newBookContent}
                   onChange={(e) => setNewBookContent(e.target.value)}
-                  className="w-full p-3 border border-gray-300 rounded-lg h-48 focus:ring-2 focus:ring-primary outline-none"
+                  className="w-full p-3 border border-neutral-300 rounded-lg h-48 focus:ring-2 focus:ring-primary outline-none"
                   placeholder="הדבק כאן טקסט התחלתי..."
                 />
               </div>
@@ -616,7 +616,7 @@ export default function AdminDictaBooksPage() {
             <div className="flex justify-end gap-3 mt-8">
               <button 
                 onClick={() => setShowCreateForm(false)}
-                className="px-5 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition-colors"
+                className="px-5 py-2 text-neutral-600 hover:bg-neutral-100 rounded-lg font-medium transition-colors"
               >
                 ביטול
               </button>
@@ -638,27 +638,27 @@ export default function AdminDictaBooksPage() {
           className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden relative" 
           onClick={e => e.stopPropagation()}
         >
-          <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
-            <h3 className="font-bold text-lg text-gray-800">עריכת סטטוס ספר</h3>
-            <button onClick={() => setEditingBook(null)} className="text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-200 p-1">
+          <div className="p-4 border-b bg-neutral-50 flex justify-between items-center">
+            <h3 className="font-bold text-lg text-neutral-800">עריכת סטטוס ספר</h3>
+            <button onClick={() => setEditingBook(null)} className="text-neutral-400 hover:text-neutral-600 rounded-full hover:bg-neutral-200 p-1">
               <span className="material-symbols-outlined text-xl">close</span>
             </button>
           </div>
           
           <div className="p-6">
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">שם הספר</label>
-              <div className="w-full p-3 bg-gray-50 rounded-lg text-gray-600 border border-gray-200">
+              <label className="block text-sm font-medium text-neutral-700 mb-2">שם הספר</label>
+              <div className="w-full p-3 bg-neutral-50 rounded-lg text-neutral-600 border border-neutral-200">
                 {editingBook.title}
               </div>
             </div>
 
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">סטטוס</label>
+              <label className="block text-sm font-medium text-neutral-700 mb-2">סטטוס</label>
               <select
                 value={editStatus}
                 onChange={(e) => setEditStatus(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-primary outline-none bg-white"
+                className="w-full border border-neutral-300 rounded-lg p-3 focus:ring-2 focus:ring-primary outline-none bg-white"
               >
                 <option value="available">פנוי</option>
                 <option value="in-progress">בעריכה</option>
@@ -669,7 +669,7 @@ export default function AdminDictaBooksPage() {
             <div className="flex justify-end gap-3 mt-8">
               <button 
                 onClick={() => setEditingBook(null)}
-                className="px-5 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition-colors"
+                className="px-5 py-2 text-neutral-600 hover:bg-neutral-100 rounded-lg font-medium transition-colors"
               >
                 ביטול
               </button>

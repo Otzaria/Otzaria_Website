@@ -221,7 +221,7 @@ export default function AdminPagesPage() {
       
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 bg-surface/50 p-4 rounded-xl border border-surface-variant">
           <div className="flex flex-col">
-              <label className="text-sm font-bold text-gray-700 mb-1">סטטוס</label>
+              <label className="text-sm font-bold text-neutral-700 mb-1">סטטוס</label>
               <select 
                 className="border p-2 rounded-lg bg-white focus:ring-2 focus:ring-primary outline-none h-[42px]"
                 value={filters.status}
@@ -236,7 +236,7 @@ export default function AdminPagesPage() {
           
           {/* תפריט ספר עם חיפוש */}
           <div className="flex flex-col relative book-menu-container">
-              <label className="text-sm font-bold text-gray-700 mb-1">ספר</label>
+              <label className="text-sm font-bold text-neutral-700 mb-1">ספר</label>
               <button
                 onClick={() => setShowBookMenu(!showBookMenu)}
                 className="border p-2 rounded-lg bg-white focus:ring-2 focus:ring-primary outline-none h-[42px] text-right flex items-center justify-between"
@@ -246,13 +246,13 @@ export default function AdminPagesPage() {
               </button>
               
               {showBookMenu && (
-                <div className="absolute top-full mt-1 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-64 overflow-hidden flex flex-col">
+                <div className="absolute top-full mt-1 left-0 right-0 bg-white border border-neutral-200 rounded-lg shadow-lg z-10 max-h-64 overflow-hidden flex flex-col">
                   <input
                     type="text"
                     placeholder="חיפוש..."
                     value={bookSearchTerm}
                     onChange={e => setBookSearchTerm(e.target.value)}
-                    className="p-2 border-b border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    className="p-2 border-b border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary/20"
                     autoFocus
                   />
                   <div className="overflow-y-auto">
@@ -262,7 +262,7 @@ export default function AdminPagesPage() {
                         setShowBookMenu(false)
                         setBookSearchTerm('')
                       }}
-                      className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
+                      className="p-2 hover:bg-neutral-100 cursor-pointer text-sm"
                     >
                       כל הספרים
                     </div>
@@ -276,7 +276,7 @@ export default function AdminPagesPage() {
                             setShowBookMenu(false)
                             setBookSearchTerm('')
                           }}
-                          className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
+                          className="p-2 hover:bg-neutral-100 cursor-pointer text-sm"
                         >
                           {book}
                         </div>
@@ -288,7 +288,7 @@ export default function AdminPagesPage() {
 
           {/* תפריט משתמש עם חיפוש */}
           <div className="flex flex-col relative user-menu-container">
-              <label className="text-sm font-bold text-gray-700 mb-1">משתמש</label>
+              <label className="text-sm font-bold text-neutral-700 mb-1">משתמש</label>
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className="border p-2 rounded-lg bg-white focus:ring-2 focus:ring-primary outline-none h-[42px] text-right flex items-center justify-between"
@@ -302,13 +302,13 @@ export default function AdminPagesPage() {
               </button>
               
               {showUserMenu && (
-                <div className="absolute top-full mt-1 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-64 overflow-hidden flex flex-col">
+                <div className="absolute top-full mt-1 left-0 right-0 bg-white border border-neutral-200 rounded-lg shadow-lg z-10 max-h-64 overflow-hidden flex flex-col">
                   <input
                     type="text"
                     placeholder="חיפוש..."
                     value={userSearchTerm}
                     onChange={e => setUserSearchTerm(e.target.value)}
-                    className="p-2 border-b border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    className="p-2 border-b border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary/20"
                     autoFocus
                   />
                   <div className="overflow-y-auto">
@@ -318,7 +318,7 @@ export default function AdminPagesPage() {
                         setShowUserMenu(false)
                         setUserSearchTerm('')
                       }}
-                      className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
+                      className="p-2 hover:bg-neutral-100 cursor-pointer text-sm"
                     >
                       כל המשתמשים
                     </div>
@@ -332,7 +332,7 @@ export default function AdminPagesPage() {
                             setShowUserMenu(false)
                             setUserSearchTerm('')
                           }}
-                          className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
+                          className="p-2 hover:bg-neutral-100 cursor-pointer text-sm"
                         >
                           {user.name}
                         </div>
@@ -349,7 +349,7 @@ export default function AdminPagesPage() {
                   setBookSearchTerm('')
                   setUserSearchTerm('')
                 }}
-                className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium px-4 rounded-lg transition-colors flex items-center justify-center gap-2 h-[42px] border border-gray-300"
+                className="flex-1 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 font-medium px-4 rounded-lg transition-colors flex items-center justify-center gap-2 h-[42px] border border-neutral-300"
                 title="נקה סינון והצג את כל העמודים"
               >
                   <span className="material-symbols-outlined text-sm">filter_alt_off</span>
@@ -358,7 +358,7 @@ export default function AdminPagesPage() {
               
               <button 
                 onClick={handleDownloadAll}
-                className="flex-1 bg-teal-600 hover:bg-teal-700 text-white font-medium px-4 rounded-lg transition-colors flex items-center justify-center gap-2 h-[42px] shadow-sm"
+                className="flex-1 bg-aqua-600 hover:bg-aqua-700 text-white font-medium px-4 rounded-lg transition-colors flex items-center justify-center gap-2 h-[42px] shadow-sm"
                 title="הורד את כל העמודים המוצגים כעת כקובץ טקסט"
               >
                   <span className="material-symbols-outlined text-sm">download</span>
@@ -370,16 +370,16 @@ export default function AdminPagesPage() {
       {loading ? (
           <LoadingSpinner message="טוען עמודים..." />
       ) : (
-          <div className="overflow-x-auto rounded-xl border border-gray-200">
+          <div className="overflow-x-auto rounded-xl border border-neutral-200">
               <table className="w-full bg-white">
-                  <thead className="bg-gray-50 border-b border-gray-200">
+                  <thead className="bg-neutral-50 border-b border-neutral-200">
                       <tr>
-                          <th onClick={() => handleSort('bookName')} className="text-right p-4 font-bold text-gray-700 cursor-pointer hover:bg-gray-100 select-none">ספר {getSortIcon('bookName')}</th>
-                          <th onClick={() => handleSort('number')} className="text-right p-4 font-bold text-gray-700 cursor-pointer hover:bg-gray-100 select-none">עמוד {getSortIcon('number')}</th>
-                          <th onClick={() => handleSort('status')} className="text-right p-4 font-bold text-gray-700 cursor-pointer hover:bg-gray-100 select-none">סטטוס {getSortIcon('status')}</th>
-                          <th onClick={() => handleSort('claimedBy')} className="text-right p-4 font-bold text-gray-700 cursor-pointer hover:bg-gray-100 select-none">משתמש {getSortIcon('claimedBy')}</th>
-                          <th onClick={() => handleSort('updatedAt')} className="text-right p-4 font-bold text-gray-700 cursor-pointer hover:bg-gray-100 select-none">עודכן לאחרונה {getSortIcon('updatedAt')}</th>
-                          <th className="text-right p-4 font-bold text-gray-700">פעולות</th>
+                          <th onClick={() => handleSort('bookName')} className="text-right p-4 font-bold text-neutral-700 cursor-pointer hover:bg-neutral-100 select-none">ספר {getSortIcon('bookName')}</th>
+                          <th onClick={() => handleSort('number')} className="text-right p-4 font-bold text-neutral-700 cursor-pointer hover:bg-neutral-100 select-none">עמוד {getSortIcon('number')}</th>
+                          <th onClick={() => handleSort('status')} className="text-right p-4 font-bold text-neutral-700 cursor-pointer hover:bg-neutral-100 select-none">סטטוס {getSortIcon('status')}</th>
+                          <th onClick={() => handleSort('claimedBy')} className="text-right p-4 font-bold text-neutral-700 cursor-pointer hover:bg-neutral-100 select-none">משתמש {getSortIcon('claimedBy')}</th>
+                          <th onClick={() => handleSort('updatedAt')} className="text-right p-4 font-bold text-neutral-700 cursor-pointer hover:bg-neutral-100 select-none">עודכן לאחרונה {getSortIcon('updatedAt')}</th>
+                          <th className="text-right p-4 font-bold text-neutral-700">פעולות</th>
                       </tr>
                   </thead>
                   <tbody>
@@ -390,7 +390,7 @@ export default function AdminPagesPage() {
                           const rowKey = pageId || idx;
 
                           return (
-                          <tr key={rowKey} className="border-b hover:bg-gray-50 transition-colors">
+                          <tr key={rowKey} className="border-b hover:bg-neutral-50 transition-colors">
                               <td className="p-4 font-medium">{page.bookName}</td>
                               <td className="p-4">{page.number}</td>
                               <td className="p-4">
@@ -406,8 +406,8 @@ export default function AdminPagesPage() {
                                       </select>
                                   ) : (
                                       <span className={`px-3 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1 ${
-                                          page.status === 'completed' ? 'bg-green-100 text-green-800' :
-                                          page.status === 'in-progress' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+                                          page.status === 'completed' ? 'bg-success-100 text-success-800' :
+                                          page.status === 'in-progress' ? 'bg-info-100 text-info-800' : 'bg-neutral-100 text-neutral-600'
                                       }`}>
                                           <span className="material-symbols-outlined text-xs">
                                             {page.status === 'completed' ? 'check_circle' : page.status === 'in-progress' ? 'edit' : 'lock_open'}
@@ -417,7 +417,7 @@ export default function AdminPagesPage() {
                                   )}
                               </td>
                               <td className="p-4 text-sm">{page.claimedBy || '-'}</td>
-                              <td className="p-4 text-sm text-gray-500">
+                              <td className="p-4 text-sm text-neutral-500">
                                   {new Date(page.updatedAt || page.createdAt || Date.now()).toLocaleDateString('he-IL')}
                               </td>
                               <td className="p-4 flex gap-2">
@@ -425,14 +425,14 @@ export default function AdminPagesPage() {
                                       <>
                                           <button 
                                             onClick={() => saveEdit(page.bookName, page.number)}
-                                            className="text-green-600 hover:bg-green-50 p-1.5 rounded-lg transition-colors"
+                                            className="text-success-600 hover:bg-success-50 p-1.5 rounded-lg transition-colors"
                                             title="שמור"
                                           >
                                               <span className="material-symbols-outlined">check</span>
                                           </button>
                                           <button 
                                             onClick={cancelEdit}
-                                            className="text-gray-500 hover:bg-gray-100 p-1.5 rounded-lg transition-colors"
+                                            className="text-neutral-500 hover:bg-neutral-100 p-1.5 rounded-lg transition-colors"
                                             title="ביטול"
                                           >
                                               <span className="material-symbols-outlined">close</span>
@@ -442,7 +442,7 @@ export default function AdminPagesPage() {
                                       <>
                                           <button 
                                             onClick={() => startEdit(page)}
-                                            className="text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg transition-colors"
+                                            className="text-info-600 hover:bg-info-50 p-1.5 rounded-lg transition-colors"
                                             title="ערוך סטטוס"
                                           >
                                               <span className="material-symbols-outlined">edit</span>
@@ -450,7 +450,7 @@ export default function AdminPagesPage() {
                                           {page.status !== 'available' && (
                                               <button 
                                                 onClick={() => handleReleasePage(page.bookName, page.number)}
-                                                className="text-orange-600 hover:bg-orange-50 p-1.5 rounded-lg transition-colors"
+                                                className="text-warning-strong-600 hover:bg-warning-strong-50 p-1.5 rounded-lg transition-colors"
                                                 title="שחרר עמוד"
                                               >
                                                   <span className="material-symbols-outlined">lock_open</span>
@@ -461,7 +461,7 @@ export default function AdminPagesPage() {
 
                                   <button 
                                     onClick={() => handleDownload(pageId, `${page.bookName}-${page.number}.txt`)}
-                                    className="text-teal-600 hover:bg-teal-50 p-1.5 rounded-lg transition-colors"
+                                    className="text-aqua-600 hover:bg-aqua-50 p-1.5 rounded-lg transition-colors"
                                     title="הורד טקסט"
                                   >
                                       <span className="material-symbols-outlined">download</span>
@@ -473,14 +473,14 @@ export default function AdminPagesPage() {
                   </tbody>
               </table>
               {pages.length === 0 && (
-                  <div className="text-center py-10 text-gray-500">
+                  <div className="text-center py-10 text-neutral-500">
                       <p>לא נמצאו עמודים התואמים את הסינון</p>
                   </div>
               )}
           </div>
       )}
       
-      <div className="mt-4 text-sm text-gray-500 text-left">
+      <div className="mt-4 text-sm text-neutral-500 text-left">
           סה"כ רשומות: {pages.length}
       </div>
     </div>

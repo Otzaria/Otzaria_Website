@@ -344,7 +344,7 @@ export default function DictaEditorPage() {
   if (!book) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-xl text-red-600">הספר לא נמצא</div>
+        <div className="text-xl text-danger-600">הספר לא נמצא</div>
       </div>
     )
   }
@@ -371,7 +371,7 @@ export default function DictaEditorPage() {
       <div className="w-px h-8 bg-surface-variant"></div>
       {isEditCopy && (
         <>
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-100 text-purple-700 rounded-lg text-sm">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-feature-100 text-feature-700 rounded-lg text-sm">
             <span className="material-symbols-outlined text-sm">content_copy</span>
             <span>עותק עריכה</span>
           </div>
@@ -520,16 +520,16 @@ function ResetDialog({ bookTitle, onConfirm, onCancel, loading, isEditCopy }) {
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onCancel}>
       <div className="glass-strong rounded-2xl p-8 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
         <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="material-symbols-outlined text-4xl text-red-600">warning</span>
+          <div className="w-16 h-16 bg-danger-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="material-symbols-outlined text-4xl text-danger-600">warning</span>
           </div>
           <h2 className="text-2xl font-bold text-on-surface mb-2">אפס עריכת ספר</h2>
           <p className="text-on-surface/70 font-bold">{bookTitle}</p>
         </div>
-        <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 mb-6">
+        <div className="bg-danger-50 border-2 border-danger-200 rounded-xl p-4 mb-6">
           <div className="flex items-start gap-3">
-            <span className="material-symbols-outlined text-red-600 mt-0.5">error</span>
-            <div className="text-sm text-red-800">
+            <span className="material-symbols-outlined text-danger-600 mt-0.5">error</span>
+            <div className="text-sm text-danger-800">
               <p className="font-bold mb-2">אזהרה: פעולה בלתי הפיכה!</p>
               <ul className="space-y-1">
                 <li>• כל העריכות שביצעת יימחקו לצמיתות</li>
@@ -548,7 +548,7 @@ function ResetDialog({ bookTitle, onConfirm, onCancel, loading, isEditCopy }) {
           <button 
             onClick={onConfirm} 
             disabled={loading}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-danger-600 text-white rounded-lg hover:bg-danger-700 transition-colors font-bold disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
               <>
@@ -591,16 +591,16 @@ function DeleteDialog({ bookTitle, onConfirm, onCancel, loading }) {
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onCancel}>
       <div className="glass-strong rounded-2xl p-8 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
         <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="material-symbols-outlined text-4xl text-red-600">delete_forever</span>
+          <div className="w-16 h-16 bg-danger-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="material-symbols-outlined text-4xl text-danger-600">delete_forever</span>
           </div>
           <h2 className="text-2xl font-bold text-on-surface mb-2">מחיקת עותק עריכה</h2>
           <p className="text-on-surface/70 font-bold">{bookTitle}</p>
         </div>
-        <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 mb-6">
+        <div className="bg-danger-50 border-2 border-danger-200 rounded-xl p-4 mb-6">
           <div className="flex items-start gap-3">
-            <span className="material-symbols-outlined text-red-600 mt-0.5">error</span>
-            <div className="text-sm text-red-800">
+            <span className="material-symbols-outlined text-danger-600 mt-0.5">error</span>
+            <div className="text-sm text-danger-800">
               <p className="font-bold mb-2">אזהרה: פעולה בלתי הפיכה!</p>
               <ul className="space-y-1">
                 <li>• עותק העריכה יימחק לצמיתות</li>
@@ -616,7 +616,7 @@ function DeleteDialog({ bookTitle, onConfirm, onCancel, loading }) {
           <button 
             onClick={onConfirm} 
             disabled={loading}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-danger-600 text-white rounded-lg hover:bg-danger-700 transition-colors font-bold disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
               <>

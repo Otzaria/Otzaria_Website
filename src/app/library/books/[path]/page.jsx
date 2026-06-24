@@ -14,21 +14,21 @@ import { hasBooksAccess } from '@/lib/roles'
 const pageStatusConfig = {
   available: {
     label: 'זמין',
-    color: 'text-gray-700',
-    bgColor: 'bg-gray-100',
-    borderColor: 'border-gray-300',
+    color: 'text-neutral-700',
+    bgColor: 'bg-neutral-100',
+    borderColor: 'border-neutral-300',
   },
   'in-progress': {
     label: 'בטיפול',
-    color: 'text-blue-700',
-    bgColor: 'bg-blue-100',
-    borderColor: 'border-blue-300',
+    color: 'text-info-700',
+    bgColor: 'bg-info-100',
+    borderColor: 'border-info-300',
   },
   completed: {
     label: 'הושלם',
-    color: 'text-green-700',
-    bgColor: 'bg-green-100',
-    borderColor: 'border-green-300',
+    color: 'text-success-700',
+    bgColor: 'bg-success-100',
+    borderColor: 'border-success-300',
   },
 }
 
@@ -352,7 +352,7 @@ export default function BookPage() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center glass-strong p-8 rounded-2xl max-w-md">
-          <span className="material-symbols-outlined text-6xl text-red-500 mb-4 block">
+          <span className="material-symbols-outlined text-6xl text-danger-500 mb-4 block">
             error
           </span>
           <h2 className="text-2xl font-bold text-on-surface mb-2">שגיאה</h2>
@@ -394,8 +394,8 @@ export default function BookPage() {
           </Link>
           <div className="w-px h-8 bg-surface-variant"></div>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
-              <span className="material-symbols-outlined text-xl text-red-600">
+            <div className="w-10 h-10 rounded-lg bg-danger-100 flex items-center justify-center">
+              <span className="material-symbols-outlined text-xl text-danger-600">
                 picture_as_pdf
               </span>
             </div>
@@ -438,12 +438,12 @@ export default function BookPage() {
                 onClick={() => setActiveFilter('available')}
                 className={`glass p-4 rounded-xl text-center border-2 transition-all ${
                 activeFilter === 'available'
-                    ? 'border-gray-500 bg-gray-50 ring-2 ring-gray-200'
-                    : 'border-gray-300 hover:border-gray-400'
+                    ? 'border-neutral-500 bg-neutral-50 ring-2 ring-neutral-200'
+                    : 'border-neutral-300 hover:border-neutral-400'
                 }`}
             >
-                <p className="text-3xl font-bold text-gray-700">{stats.available}</p>
-                <p className="text-sm text-gray-700">זמינים</p>
+                <p className="text-3xl font-bold text-neutral-700">{stats.available}</p>
+                <p className="text-sm text-neutral-700">זמינים</p>
             </button>
           )}
           
@@ -451,24 +451,24 @@ export default function BookPage() {
             onClick={() => setActiveFilter('in-progress')}
             className={`glass p-4 rounded-xl text-center border-2 transition-all ${
               activeFilter === 'in-progress'
-                ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
-                : 'border-blue-300 hover:border-blue-400'
+                ? 'border-info-500 bg-info-50 ring-2 ring-info-200'
+                : 'border-info-300 hover:border-info-400'
             }`}
           >
-            <p className="text-3xl font-bold text-blue-700">{stats.inProgress}</p>
-            <p className="text-sm text-blue-700">בטיפול</p>
+            <p className="text-3xl font-bold text-info-700">{stats.inProgress}</p>
+            <p className="text-sm text-info-700">בטיפול</p>
           </button>
           
           <button 
             onClick={() => setActiveFilter('completed')}
             className={`glass p-4 rounded-xl text-center border-2 transition-all ${
               activeFilter === 'completed'
-                ? 'border-green-500 bg-green-50 ring-2 ring-green-200'
-                : 'border-green-300 hover:border-green-400'
+                ? 'border-success-500 bg-success-50 ring-2 ring-success-200'
+                : 'border-success-300 hover:border-success-400'
             }`}
           >
-            <p className="text-3xl font-bold text-green-700">{stats.completed}</p>
-            <p className="text-sm text-green-700">הושלמו</p>
+            <p className="text-3xl font-bold text-success-700">{stats.completed}</p>
+            <p className="text-sm text-success-700">הושלמו</p>
           </button>
         </div>
 
@@ -694,7 +694,7 @@ function PageCard({ page, onClaim, onComplete, onRelease, onUncomplete, onPrevie
               e.preventDefault()
               onRelease(page.number)
             }}
-            className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white p-2 rounded-lg transition-all shadow-lg z-20 cursor-pointer hover:scale-110"
+            className="absolute top-2 right-2 bg-danger-600 hover:bg-danger-700 active:bg-danger-800 text-white p-2 rounded-lg transition-all shadow-lg z-20 cursor-pointer hover:scale-110"
             title="שחרר עמוד"
             type="button"
           >
@@ -753,7 +753,7 @@ function PageCard({ page, onClaim, onComplete, onRelease, onUncomplete, onPrevie
           )}
 
           {page.status === 'in-progress' && isClaimedByMe && (
-            <button onClick={() => onComplete(page.number)} className="w-full py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-colors flex items-center justify-center gap-2">
+            <button onClick={() => onComplete(page.number)} className="w-full py-2 bg-success-600 text-white rounded-lg text-sm font-bold hover:bg-success-700 transition-colors flex items-center justify-center gap-2">
               <span className="material-symbols-outlined text-lg">check</span>
               <span>סיים עריכה</span>
             </button>
@@ -762,7 +762,7 @@ function PageCard({ page, onClaim, onComplete, onRelease, onUncomplete, onPrevie
           {page.status === 'completed' && (isClaimedByMe || isAdmin) && (
             <button 
               onClick={() => onUncomplete(page.number)}
-              className="w-full py-2 bg-gray-600 text-white rounded-lg text-sm font-bold hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
+              className="w-full py-2 bg-neutral-600 text-white rounded-lg text-sm font-bold hover:bg-neutral-700 transition-colors flex items-center justify-center gap-2"
               title="החזר לסטטוס בטיפול"
             >
               <span className="material-symbols-outlined text-lg">undo</span>

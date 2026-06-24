@@ -34,7 +34,7 @@ export default function Header() {
   }, [session])
 
   return (
-    <header className="sticky top-0 z-50 w-full glass-strong border-b border-gray-200 bg-white/80 backdrop-blur-md">
+    <header className="sticky top-0 z-50 w-full glass-strong border-b border-neutral-200 bg-white/80 backdrop-blur-md">
       <div className="mx-auto flex h-16 w-full max-w-[1800px] items-center justify-between px-2 sm:px-3 md:px-4 xl:px-8">
         <Link href="/library" className="flex items-center gap-2 lg:gap-3 hover:opacity-80 transition-opacity">
           <Image src="/logo.svg" alt="לוגו אוצריא" width={32} height={32} />
@@ -59,7 +59,7 @@ export default function Header() {
                   <span className="material-symbols-outlined">admin_panel_settings</span>
                   <span>ניהול</span>
                   {unreadMessages > 0 && (
-                    <span className="absolute -top-2 -left-2 bg-red-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                    <span className="absolute -top-2 -left-2 bg-danger-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
                       {unreadMessages}
                     </span>
                   )}

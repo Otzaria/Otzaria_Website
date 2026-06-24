@@ -2,7 +2,7 @@ import Link from 'next/link'
 
 export default function OtzariaSoftwareFooter() {
   return (
-    <footer className="bg-gray-50 border-t border-gray-200 py-12 px-4 mt-20">
+    <footer className="bg-neutral-50 border-t border-neutral-200 py-12 px-4 mt-20">
       <div className="container mx-auto max-w-6xl text-center">
         <p className="text-foreground/80 mb-4 font-medium">
           תוכנה זו נוצרה והוקדשה על ידי המפתחים והתורמים של פרויקט אוצריא

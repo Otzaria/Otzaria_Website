@@ -49,7 +49,7 @@ export default function AdminNav({ unreadMessagesCount = 0, pendingUploadsCount 
             }`}
           >
             {tab.count > 0 && (
-              <span className="absolute -top-2 -left-2 bg-red-600 text-white text-[10px] font-bold min-w-[20px] h-[20px] flex items-center justify-center rounded-full border-2 border-white shadow-sm z-10">
+              <span className="absolute -top-2 -left-2 bg-danger-600 text-white text-[10px] font-bold min-w-[20px] h-[20px] flex items-center justify-center rounded-full border-2 border-white shadow-sm z-10">
                 {tab.count}
               </span>
             )}

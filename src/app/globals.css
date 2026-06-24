@@ -1,161 +1,25 @@
 @import "tailwindcss";
 
-@theme {
-  /* הגדרת צבעים מהפרוייקט הישן */
-  --color-background: #fefbf6;
-  --color-surface: #f8f4ef;
-  --color-surface-variant: #e7e0d8;
-  --color-primary: #6b5d4f;
-  --color-primary-container: #f4ede3;
-  --color-secondary: #8b7355;
-  --color-secondary-container: #f5ead8;
-  --color-accent: #9c7c4f;
-  --color-on-background: #1c1b1a;
-  --color-on-surface: #1c1b1a;
-  --color-on-primary: #ffffff;
+/* ============================================================
+ * מערכת העיצוב של אוצריא — מאוגדת בקבצי styles/ ייעודיים.
+ * כל שינוי עיצוב גלובלי מתבצע באחד הקבצים הבאים:
+ *   styles/colors.css      — צבעי מותג + רמפות סמנטיות (מקור האמת לצבעים)
+ *   styles/typography.css  — משפחות גופנים
+ *   styles/layout.css      — מרווחים, מידות בסיס ושבירות מסך
+ *   styles/shape.css       — רדיוסים ופינות
+ *   styles/elevation.css   — צללים ועומק
+ *   styles/motion.css      — easing, blur וברירות מחדל של transition
+ *   styles/base.css        — html / body / רקע / אייקונים
+ *   styles/effects.css     — זכוכית, פס גלילה, ריחוף, הדגשת איות
+ *   styles/animations.css  — keyframes + מחלקות animate-*
+ * ============================================================ */
 
-  /* הגדרת פונטים */
-  --font-frank: var(--font-frank-ruehl), serif;
-  --font-sans: system-ui, -apple-system, sans-serif;
-  --font-hebrew: 'Segoe UI', Tahoma, Arial, sans-serif;
-}
-
-@layer base {
-  html {
-    direction: rtl;
-    /* 1. העבר את צבע הרקע לכאן */
-    background-color: var(--color-background);
-  }
-  
-  body {
-    /* 2. שנה את צבע הרקע של הגוף לשקוף */
-    background-color: transparent;
-    color: var(--color-on-background);
-    font-family: var(--font-hebrew);
-    position: relative;
-    /* 3. וודא שהגוף תופס את כל הגובה */
-    min-height: 100vh;
-  }
-  
-  /* תמונת הרקע (הקרע) - נשאר כפי שהוא */
-  body::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-image: url('/image.png');
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    opacity: 0.15;
-    z-index: -1;
-    pointer-events: none;
-  }
-  
-  .material-symbols-outlined {
-    font-family: 'Material Symbols Outlined';
-    font-weight: normal;
-    font-style: normal;
-    font-size: 24px;
-    line-height: 1;
-    letter-spacing: normal;
-    text-transform: none;
-    display: inline-block;
-    white-space: nowrap;
-    word-wrap: normal;
-    direction: ltr;
-    -webkit-font-smoothing: antialiased;
-  }
-}
-
-@layer utilities {
-  .font-frank {
-    font-family: var(--font-frank);
-  }
-
-  .glass {
-    background-color: color-mix(in srgb, var(--color-background) 60%, transparent);
-    backdrop-filter: blur(12px);
-    border: 1px solid color-mix(in srgb, var(--color-surface-variant) 50%, transparent);
-  }
-  
-  .glass-strong {
-    background-color: color-mix(in srgb, var(--color-background) 95%, transparent);
-    backdrop-filter: blur(16px);
-    border: 1px solid var(--color-surface-variant);
-  }
-  
-  /* הסתרת פס גלילה */
-  .custom-scrollbar {
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-  }
-  
-  .custom-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
-
-  .spellcheck-highlight {
-    background-color: #fde68a;
-    border-radius: 3px;
-    box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.35);
-    padding: 0 1px;
-  }
-
-  /* אנימציות */
-  @keyframes float {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-20px); }
-  }
-
-  @keyframes pulse-glow {
-    0%, 100% { box-shadow: 0 0 20px rgba(107, 93, 79, 0.3); }
-    50% { box-shadow: 0 0 40px rgba(107, 93, 79, 0.6); }
-  }
-
-  @keyframes shimmer {
-    0% { background-position: -1000px 0; }
-    100% { background-position: 1000px 0; }
-  }
-
-  @keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-    20%, 40%, 60%, 80% { transform: translateX(5px); }
-  }
-
-  .animate-float {
-    animation: float 6s ease-in-out infinite;
-  }
-
-  .animate-pulse-glow {
-    animation: pulse-glow 3s ease-in-out infinite;
-  }
-
-  .animate-shimmer {
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      rgba(255, 255, 255, 0.1) 50%,
-      transparent 100%
-    );
-    background-size: 1000px 100%;
-    animation: shimmer 3s infinite;
-  }
-
-  .animate-shake {
-    animation: shake 0.5s ease-in-out;
-  }
-  
-  /* אפקטים נוספים */
-  .hover-lift {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  .hover-lift:hover {
-    transform: translateY(-8px);
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-  }
-}
+@import "./styles/colors.css";
+@import "./styles/typography.css";
+@import "./styles/layout.css";
+@import "./styles/shape.css";
+@import "./styles/elevation.css";
+@import "./styles/motion.css";
+@import "./styles/base.css";
+@import "./styles/effects.css";
+@import "./styles/animations.css";

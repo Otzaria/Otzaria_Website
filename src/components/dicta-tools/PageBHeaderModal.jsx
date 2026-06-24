@@ -107,7 +107,7 @@ export default function PageBHeaderModal({ isOpen, onClose, content, onContentCh
       size="md"
     >
       <div className="space-y-4">
-        <div className="bg-blue-50 p-4 rounded-lg text-sm text-gray-700">
+        <div className="bg-info-50 p-4 rounded-lg text-sm text-neutral-700">
           <p>כלי זה מזהה אזכורים של "עמוד ב" / "ע"ב" בטקסט ויוצר מהם כותרות.</p>
           <p className="mt-2">שימושי במיוחד בספרי תלמוד ופרשנות.</p>
         </div>
@@ -121,7 +121,7 @@ export default function PageBHeaderModal({ isOpen, onClose, content, onContentCh
         />
 
         {result && (
-          <div className={`p-3 rounded ${result.includes('שגיאה') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+          <div className={`p-3 rounded ${result.includes('שגיאה') ? 'bg-danger-100 text-danger-700' : 'bg-success-100 text-success-700'}`}>
             {result}
           </div>
         )}
@@ -136,7 +136,7 @@ export default function PageBHeaderModal({ isOpen, onClose, content, onContentCh
           </button>
           <button
             onClick={handleClose}
-            className="px-6 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="px-6 py-2.5 border border-neutral-300 rounded-lg hover:bg-neutral-50 transition-colors"
           >
             סגור
           </button>

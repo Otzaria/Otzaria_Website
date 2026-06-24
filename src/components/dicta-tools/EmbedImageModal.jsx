@@ -195,10 +195,10 @@ export default function EmbedImageModal({ isOpen, onClose, content, onContentCha
         tabIndex={0}
       >
         <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between z-10">
-          <h2 className="text-xl font-bold text-gray-800">המרת תמונה לטקסט HTML</h2>
+          <h2 className="text-xl font-bold text-neutral-800">המרת תמונה לטקסט HTML</h2>
           <button
             onClick={handleClose}
-            className="text-gray-500 hover:text-gray-700 transition-colors"
+            className="text-neutral-500 hover:text-neutral-700 transition-colors"
           >
             <span className="material-symbols-outlined">close</span>
           </button>
@@ -208,8 +208,8 @@ export default function EmbedImageModal({ isOpen, onClose, content, onContentCha
           {!isConverted ? (
             <>
               <div className="text-center mb-4">
-                <p className="text-gray-600 text-lg">בחר תמונה להמרה</p>
-                <p className="text-gray-500 text-sm mt-1">גרור קובץ, לחץ לבחירה, או הדבק תמונה (Ctrl+V)</p>
+                <p className="text-neutral-600 text-lg">בחר תמונה להמרה</p>
+                <p className="text-neutral-500 text-sm mt-1">גרור קובץ, לחץ לבחירה, או הדבק תמונה (Ctrl+V)</p>
               </div>
 
               {/* אזור גרירה וקליק */}
@@ -221,19 +221,19 @@ export default function EmbedImageModal({ isOpen, onClose, content, onContentCha
                 onDrop={handleDrop}
                 className={`border-2 border-dashed rounded-lg p-16 text-center transition-all cursor-pointer ${
                   isDragging 
-                    ? 'border-blue-500 bg-blue-50 scale-105' 
+                    ? 'border-info-500 bg-info-50 scale-105' 
                     : imageData 
-                    ? 'border-green-500 bg-green-50' 
-                    : 'border-gray-300 bg-gray-50 hover:border-blue-400 hover:bg-blue-50/50'
+                    ? 'border-success-500 bg-success-50' 
+                    : 'border-neutral-300 bg-neutral-50 hover:border-info-400 hover:bg-info-50/50'
                 }`}
               >
-                <span className="material-symbols-outlined text-6xl text-gray-400 mb-3 block">
+                <span className="material-symbols-outlined text-6xl text-neutral-400 mb-3 block">
                   {imageData ? 'check_circle' : 'cloud_upload'}
                 </span>
-                <p className="text-xl text-gray-700 font-medium mb-1">
+                <p className="text-xl text-neutral-700 font-medium mb-1">
                   {imageData ? 'התמונה נטענה בהצלחה!' : 'לחץ לבחירת קובץ'}
                 </p>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-neutral-500">
                   {!imageData && 'או גרור ושחרר קובץ תמונה כאן'}
                 </p>
               </div>
@@ -250,7 +250,7 @@ export default function EmbedImageModal({ isOpen, onClose, content, onContentCha
               <button
                 onClick={handleConvert}
                 disabled={!imageData}
-                className="w-full px-6 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg transition-colors text-xl font-bold"
+                className="w-full px-6 py-4 bg-info-600 hover:bg-info-700 disabled:bg-neutral-300 disabled:cursor-not-allowed text-white rounded-lg transition-colors text-xl font-bold"
               >
                 המר
               </button>
@@ -258,19 +258,19 @@ export default function EmbedImageModal({ isOpen, onClose, content, onContentCha
           ) : (
             <>
               <div className="text-center mb-4">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-3">
-                  <span className="material-symbols-outlined text-4xl text-green-600">check_circle</span>
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-success-100 rounded-full mb-3">
+                  <span className="material-symbols-outlined text-4xl text-success-600">check_circle</span>
                 </div>
-                <p className="text-xl font-bold text-gray-800">ההמרה בוצעה בהצלחה!</p>
+                <p className="text-xl font-bold text-neutral-800">ההמרה בוצעה בהצלחה!</p>
               </div>
 
               {/* תצוגה מקדימה של התמונה */}
               {imageData && (
-                <div className="border rounded-lg p-4 bg-gray-50">
+                <div className="border rounded-lg p-4 bg-neutral-50">
                   <div className="flex justify-between items-center mb-2">
-                    <p className="text-sm text-gray-600">תצוגה מקדימה:</p>
+                    <p className="text-sm text-neutral-600">תצוגה מקדימה:</p>
                     {imageData.compressedSize && (
-                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                      <span className="text-xs bg-success-100 text-success-700 px-2 py-1 rounded">
                         {imageData.compressedSize} KB
                       </span>
                     )}
@@ -289,7 +289,7 @@ export default function EmbedImageModal({ isOpen, onClose, content, onContentCha
               <div className="space-y-3">
                 <button
                   onClick={handleInsertToEditor}
-                  className="w-full px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+                  className="w-full px-6 py-3 bg-success-600 hover:bg-success-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
                   <span className="material-symbols-outlined">add_circle</span>
                   <span>הוסף לעורך</span>
@@ -297,7 +297,7 @@ export default function EmbedImageModal({ isOpen, onClose, content, onContentCha
 
                 <button
                   onClick={handleCopyToClipboard}
-                  className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+                  className="w-full px-6 py-3 bg-info-600 hover:bg-info-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
                   <span className="material-symbols-outlined">content_copy</span>
                   <span>העתק קוד HTML</span>
@@ -305,7 +305,7 @@ export default function EmbedImageModal({ isOpen, onClose, content, onContentCha
 
                 <button
                   onClick={resetState}
-                  className="w-full px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg transition-colors flex items-center justify-center gap-2"
+                  className="w-full px-6 py-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
                   <span className="material-symbols-outlined">refresh</span>
                   <span>המרת תמונה נוספת</span>

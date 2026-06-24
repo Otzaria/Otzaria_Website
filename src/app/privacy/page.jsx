@@ -59,7 +59,7 @@ export default function PrivacyPolicyPage() {
                     <span className="material-symbols-outlined">calendar_month</span>
                     Google Calendar Integration
                   </h3>
-                  <div className="dir-ltr text-left font-sans text-sm space-y-2 text-gray-700">
+                  <div className="dir-ltr text-left font-sans text-sm space-y-2 text-neutral-700">
                     <p>This application uses Google Calendar only to create and manage events explicitly requested by the user.</p>
                     <p>No data is stored on external servers. All access is performed locally on the user's device.</p>
                     <p>User data is not shared with third parties.</p>

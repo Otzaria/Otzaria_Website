@@ -104,7 +104,7 @@ export default function AddPageNumberModal({ isOpen, onClose, content, onContent
       size="md"
     >
       <div className="space-y-4">
-        <div className="bg-blue-50 p-4 rounded-lg text-sm text-gray-700">
+        <div className="bg-info-50 p-4 rounded-lg text-sm text-neutral-700">
           <p>כלי זה מחפש כותרות "דף X" ואחריהן שורה עם "עמוד א/ב", וממזג אותם לכותרת אחת.</p>
           <p className="mt-2 font-bold">דוגמה:</p>
           <p className="opacity-70">&lt;h2&gt;דף כ&lt;/h2&gt;</p>
@@ -118,7 +118,7 @@ export default function AddPageNumberModal({ isOpen, onClose, content, onContent
           <select
             value={replaceWith}
             onChange={(e) => setReplaceWith(e.target.value)}
-            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-info-500 outline-none"
           >
             <option value="נקודה ונקודותיים">נקודה (.) לעמוד א' / נקודותיים (:) לעמוד ב'</option>
             <option value='ע"א וע"ב'>הוספת הסיומת ע"א / ע"ב</option>
@@ -126,7 +126,7 @@ export default function AddPageNumberModal({ isOpen, onClose, content, onContent
         </div>
 
         {result && (
-          <div className={`p-3 rounded ${result.includes('שגיאה') || result.includes('אין') ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-700'}`}>
+          <div className={`p-3 rounded ${result.includes('שגיאה') || result.includes('אין') ? 'bg-warning-alt-100 text-warning-alt-800' : 'bg-success-100 text-success-700'}`}>
             {result}
           </div>
         )}
@@ -141,7 +141,7 @@ export default function AddPageNumberModal({ isOpen, onClose, content, onContent
           </button>
           <button
             onClick={handleClose}
-            className="px-6 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="px-6 py-2.5 border border-neutral-300 rounded-lg hover:bg-neutral-50 transition-colors"
           >
             סגור
           </button>

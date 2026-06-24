@@ -358,12 +358,12 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
         className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white p-6">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-neutral-200 bg-white p-6">
           <h2 className="text-2xl font-bold text-on-surface">עריכת תוסף</h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-2 transition-colors hover:bg-gray-100"
+            className="rounded-lg p-2 transition-colors hover:bg-neutral-100"
           >
             <span className="material-symbols-outlined">close</span>
           </button>
@@ -371,7 +371,7 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
 
         <form onSubmit={handleSubmit} className="space-y-6 p-6">
           {!isAdmin && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+            <div className="rounded-xl border border-warning-200 bg-warning-50 p-4 text-warning-900">
               כל שינוי יישלח לאישור מנהל לפני שיתעדכן בחנות. בעת החלפת קובץ התוסף, שם התוסף, המפתח והגרסה יזוהו אוטומטית מ-manifest.json — הגרסה חייבת להיות גבוהה מהנוכחית.
             </div>
           )}
@@ -381,24 +381,24 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
             {isAdmin ? (
               <>
                 <div className="grid gap-4 md:grid-cols-2">
-                  <input value={formData.name} onChange={(e) => handleChange('name', e.target.value)} className="rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="שם התוסף" required />
-                  <input value={formData.author} onChange={(e) => handleChange('author', e.target.value)} className="rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="מפתח" required />
-                  <input value={formData.version} onChange={(e) => handleChange('version', e.target.value)} className="rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="גרסה" required />
-                  <input value={formData.compatibleWith} onChange={(e) => handleChange('compatibleWith', e.target.value)} className="rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="גרסת מינימום" required />
-                  <input value={formData.shortDescription} onChange={(e) => handleChange('shortDescription', e.target.value)} className="md:col-span-2 rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="תיאור קצר" required />
-                  <input value={formData.homepage} onChange={(e) => handleChange('homepage', e.target.value)} className="md:col-span-2 rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="אתר בית (אופציונלי)" />
-                  <select value={formData.status} onChange={(e) => handleChange('status', e.target.value)} className="rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10">
+                  <input value={formData.name} onChange={(e) => handleChange('name', e.target.value)} className="rounded-xl border border-neutral-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="שם התוסף" required />
+                  <input value={formData.author} onChange={(e) => handleChange('author', e.target.value)} className="rounded-xl border border-neutral-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="מפתח" required />
+                  <input value={formData.version} onChange={(e) => handleChange('version', e.target.value)} className="rounded-xl border border-neutral-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="גרסה" required />
+                  <input value={formData.compatibleWith} onChange={(e) => handleChange('compatibleWith', e.target.value)} className="rounded-xl border border-neutral-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="גרסת מינימום" required />
+                  <input value={formData.shortDescription} onChange={(e) => handleChange('shortDescription', e.target.value)} className="md:col-span-2 rounded-xl border border-neutral-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="תיאור קצר" required />
+                  <input value={formData.homepage} onChange={(e) => handleChange('homepage', e.target.value)} className="md:col-span-2 rounded-xl border border-neutral-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="אתר בית (אופציונלי)" />
+                  <select value={formData.status} onChange={(e) => handleChange('status', e.target.value)} className="rounded-xl border border-neutral-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10">
                     {STATUS_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </select>
                 </div>
-                <label className="flex items-center gap-3 rounded-xl border border-gray-200 px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors">
+                <label className="flex items-center gap-3 rounded-xl border border-neutral-200 px-4 py-3 cursor-pointer hover:bg-neutral-50 transition-colors">
                   <input
                     type="checkbox"
                     checked={formData.requiresNetwork}
                     onChange={(e) => handleChange('requiresNetwork', e.target.checked)}
-                    className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-2 focus:ring-primary/20"
+                    className="h-5 w-5 rounded border-neutral-300 text-primary focus:ring-2 focus:ring-primary/20"
                   />
                   <span className="material-symbols-outlined text-primary">
                     {formData.requiresNetwork ? 'wifi' : 'wifi_off'}
@@ -411,7 +411,7 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
                 <div className="rounded-xl border border-primary/10 bg-primary/5 px-4 py-3 text-sm text-on-surface/70">
                   שאר המידע יילקח מקובץ התוסף.
                 </div>
-                <div className="flex items-center gap-3 rounded-xl border border-gray-200 px-4 py-3 text-sm text-on-surface/70">
+                <div className="flex items-center gap-3 rounded-xl border border-neutral-200 px-4 py-3 text-sm text-on-surface/70">
                   <span className="material-symbols-outlined text-primary">
                     {formData.requiresNetwork ? 'wifi' : 'wifi_off'}
                   </span>
@@ -422,13 +422,13 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
                 </div>
               </>
             )}
-            <textarea value={formData.description} onChange={(e) => handleChange('description', e.target.value)} className="min-h-[150px] w-full rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="תיאור מלא" required />
+            <textarea value={formData.description} onChange={(e) => handleChange('description', e.target.value)} className="min-h-[150px] w-full rounded-xl border border-neutral-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="תיאור מלא" required />
           </section>
 
           <section className="space-y-4">
             <h3 className="text-xl font-bold text-on-surface">תגיות</h3>
             <div className="flex gap-2">
-              <input type="text" value={newTag} onChange={(e) => setNewTag(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())} className="flex-1 rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="הוסף תגית" />
+              <input type="text" value={newTag} onChange={(e) => setNewTag(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())} className="flex-1 rounded-xl border border-neutral-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" placeholder="הוסף תגית" />
               <button type="button" onClick={addTag} className="rounded-xl bg-primary px-6 py-3 font-bold text-white transition-colors hover:bg-primary/90">הוסף</button>
             </div>
             {formData.tags.length > 0 && (
@@ -450,8 +450,8 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
 
             <div>
               <label className="mb-2 block text-sm font-bold text-on-surface/60">קובץ תוסף (.otzplugin)</label>
-              <input type="file" accept=".otzplugin" onChange={handlePluginFile} className="w-full rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" />
-              {pluginFile && <p className="mt-2 text-sm text-green-600">✓ נבחר: {pluginFile.name}</p>}
+              <input type="file" accept=".otzplugin" onChange={handlePluginFile} className="w-full rounded-xl border border-neutral-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" />
+              {pluginFile && <p className="mt-2 text-sm text-success-600">✓ נבחר: {pluginFile.name}</p>}
               {plugin.pluginFileName && <p className="mt-2 text-sm text-on-surface/50">קובץ נוכחי: {plugin.pluginFileName}</p>}
               {isAdmin && <p className="mt-2 text-sm text-on-surface/50">למנהל, החלפת הקובץ אינה משנה אוטומטית את השדות הידניים. ניתן לשמור על אותה גרסה אך לא לשנמך, והמזהה (id) ב-manifest.json חייב להישאר זהה.</p>}
               {!isAdmin && <p className="mt-2 text-sm text-on-surface/50">אם מעלים קובץ חדש, הגרסה תזוהה אוטומטית מ-manifest.json ועליה להיות גבוהה מהגרסה הנוכחית ({originalVersion}). המזהה (id) חייב להישאר זהה.</p>}
@@ -459,44 +459,44 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
 
             <div>
               <label className="mb-2 block text-sm font-bold text-on-surface/60">תמונת תוסף</label>
-              <input type="file" accept="image/*" onChange={handleImageFile} className="w-full rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" />
+              <input type="file" accept="image/*" onChange={handleImageFile} className="w-full rounded-xl border border-neutral-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" />
               {imagePreview ? (
-                <img src={imagePreview} alt="תצוגה מקדימה" className="mt-4 h-48 w-full max-w-md rounded-xl border border-gray-200 object-cover" />
+                <img src={imagePreview} alt="תצוגה מקדימה" className="mt-4 h-48 w-full max-w-md rounded-xl border border-neutral-200 object-cover" />
               ) : plugin.imageData && !removeImage ? (
                 <div className="mt-4">
-                  <img src={plugin.image} alt="תמונה נוכחית" className="h-48 w-full max-w-md rounded-xl border border-gray-200 object-cover" />
-                  <button type="button" onClick={() => setRemoveImage(true)} className="mt-2 text-sm text-red-600 hover:underline">הסר תמונה</button>
+                  <img src={plugin.image} alt="תמונה נוכחית" className="h-48 w-full max-w-md rounded-xl border border-neutral-200 object-cover" />
+                  <button type="button" onClick={() => setRemoveImage(true)} className="mt-2 text-sm text-danger-600 hover:underline">הסר תמונה</button>
                 </div>
               ) : null}
             </div>
 
             <div>
               <label className="mb-2 block text-sm font-bold text-on-surface/60">צילומי מסך</label>
-              <input type="file" accept="image/*" multiple onChange={handleScreenshotFiles} className="w-full rounded-xl border border-gray-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" />
+              <input type="file" accept="image/*" multiple onChange={handleScreenshotFiles} className="w-full rounded-xl border border-neutral-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10" />
               {screenshotPreviews.length > 0 ? (
                 <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-3">
                   {screenshotPreviews.map((preview, index) => (
-                    <img key={index} src={preview} alt={`צילום מסך ${index + 1}`} className="h-32 w-full rounded-xl border border-gray-200 object-cover" />
+                    <img key={index} src={preview} alt={`צילום מסך ${index + 1}`} className="h-32 w-full rounded-xl border border-neutral-200 object-cover" />
                   ))}
                 </div>
               ) : plugin.screenshots?.length > 0 && !removeScreenshots ? (
                 <div className="mt-4">
                   <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
                     {plugin.screenshots.map((screenshot, index) => (
-                      <img key={index} src={screenshot} alt={`צילום מסך ${index + 1}`} className="h-32 w-full rounded-xl border border-gray-200 object-cover" />
+                      <img key={index} src={screenshot} alt={`צילום מסך ${index + 1}`} className="h-32 w-full rounded-xl border border-neutral-200 object-cover" />
                     ))}
                   </div>
-                  <button type="button" onClick={() => setRemoveScreenshots(true)} className="mt-2 text-sm text-red-600 hover:underline">הסר את כל צילומי המסך</button>
+                  <button type="button" onClick={() => setRemoveScreenshots(true)} className="mt-2 text-sm text-danger-600 hover:underline">הסר את כל צילומי המסך</button>
                 </div>
               ) : null}
             </div>
           </section>
 
-          <div className="flex gap-4 border-t border-gray-200 pt-4">
+          <div className="flex gap-4 border-t border-neutral-200 pt-4">
             <button type="submit" disabled={loading} className="flex-1 rounded-xl bg-primary px-6 py-4 font-bold text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50">
               {loading ? 'שומר...' : isAdmin ? 'שמור שינויים' : 'שמור ושלח לאישור'}
             </button>
-            <button type="button" onClick={onClose} className="rounded-xl border border-gray-200 px-6 py-4 font-bold text-on-surface transition-colors hover:bg-gray-50">
+            <button type="button" onClick={onClose} className="rounded-xl border border-neutral-200 px-6 py-4 font-bold text-on-surface transition-colors hover:bg-neutral-50">
               ביטול
             </button>
           </div>

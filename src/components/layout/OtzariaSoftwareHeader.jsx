@@ -11,7 +11,7 @@ export default function OtzariaSoftwareHeader() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
 
   return (
-    <header className="sticky top-0 z-50 w-full glass-strong border-b border-gray-200 bg-white/80 backdrop-blur-md">
+    <header className="sticky top-0 z-50 w-full glass-strong border-b border-neutral-200 bg-white/80 backdrop-blur-md">
       <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-8">
         <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
           <Image src="/logo.svg" alt="לוגו אוצריא" width={32} height={32} />
@@ -45,13 +45,13 @@ export default function OtzariaSoftwareHeader() {
 
       {/* Mobile Menu */}
       {isMenuOpen && (
-        <div className="md:hidden absolute top-16 left-0 w-full bg-white border-b border-gray-200 shadow-lg p-4 flex flex-col gap-4">
+        <div className="md:hidden absolute top-16 left-0 w-full bg-white border-b border-neutral-200 shadow-lg p-4 flex flex-col gap-4">
           {MAIN_NAV_LINKS.map(link => (
             <Link
               key={link.label}
               href={link.href}
               onClick={() => setIsMenuOpen(false)}
-              className="text-lg font-medium p-2 hover:bg-gray-50 rounded-lg text-foreground"
+              className="text-lg font-medium p-2 hover:bg-neutral-50 rounded-lg text-foreground"
             >
               {link.label}
             </Link>
