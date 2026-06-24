@@ -35,6 +35,8 @@ const PluginSchema = new mongoose.Schema(
     author: { type: String, required: true, trim: true, maxlength: 100 },
     authorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     compatibleWith: { type: String, required: true, maxlength: 100 },
+    // גרסת אוצריא המקסימלית הנתמכת (מ-maxAppVersion ב-manifest). null = ללא תקרה.
+    maxAppVersion: { type: String, default: null, maxlength: 30 },
 
     // האם התוסף דורש חיבור אינטרנט (נקרא מ-network.enabled ב-manifest.json)
     requiresNetwork: { type: Boolean, default: false },

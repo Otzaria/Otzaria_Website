@@ -280,6 +280,13 @@ export async function PUT(request, { params }) {
     let compatibleWith = isAdmin
       ? (formData.get('compatibleWith') || '').toString().trim()
       : (editableSource.compatibleWith || livePlugin.compatibleWith || '')
+    // maxAppVersion: מנהל יכול לערוך ידנית (שדה ריק מפורש = הסרת התקרה). בהיעדר
+    // השדה בטופס שומרים את הקיים. לבעלים נגזר מהמניפסט בהחלפת קובץ (בהמשך).
+    const existingMaxAppVersion =
+      editableSource.maxAppVersion || livePlugin.maxAppVersion || null
+    let maxAppVersion = isAdmin && formData.has('maxAppVersion')
+      ? ((formData.get('maxAppVersion') || '').toString().trim() || null)
+      : existingMaxAppVersion
     let homepage = isAdmin
       ? (formData.get('homepage') || '').toString().trim()
       : (editableSource.homepage || livePlugin.homepage || '')
@@ -304,6 +311,14 @@ export async function PUT(request, { params }) {
     }
     if (!PLUGIN_VERSION_RE.test(version)) {
       return bad('Version must be in the form X, X.Y, X.Y.Z (optionally with -beta etc.)')
+    }
+    if (maxAppVersion) {
+      if (!PLUGIN_VERSION_RE.test(maxAppVersion)) {
+        return bad('שדה maxAppVersion אינו בפורמט גרסה תקין')
+      }
+      if (compareVersions(maxAppVersion, compatibleWith) < 0) {
+        return bad(`גרסת המקסימום (${maxAppVersion}) לא יכולה להיות נמוכה מגרסת המינימום (${compatibleWith})`)
+      }
     }
 
     try {
@@ -482,6 +497,16 @@ export async function PUT(request, { params }) {
         if (manifestDesc) shortDescription = manifestDesc
         status = manifestStability
         compatibleWith = manifestMinAppVersion
+        const manifestMaxAppVersion = newManifest.maxAppVersion ? newManifest.maxAppVersion.toString().trim() : ''
+        if (manifestMaxAppVersion) {
+          if (!PLUGIN_VERSION_RE.test(manifestMaxAppVersion)) {
+            return bad('שדה maxAppVersion ב-manifest.json אינו בפורמט גרסה תקין')
+          }
+          if (compareVersions(manifestMaxAppVersion, manifestMinAppVersion) < 0) {
+            return bad(`גרסת המקסימום (${manifestMaxAppVersion}) לא יכולה להיות נמוכה מגרסת המינימום (${manifestMinAppVersion})`)
+          }
+        }
+        maxAppVersion = manifestMaxAppVersion || null
         homepage = newManifest.homepage ? newManifest.homepage.toString().trim() : ''
         requiresNetwork = newManifest.network?.enabled === true
       }
@@ -529,6 +554,7 @@ export async function PUT(request, { params }) {
       status,
       author,
       compatibleWith,
+      maxAppVersion,
       requiresNetwork,
       tags,
       homepage,
@@ -618,6 +644,7 @@ export async function PUT(request, { params }) {
       plugin.status = nextPluginData.status
       plugin.author = nextPluginData.author
       plugin.compatibleWith = nextPluginData.compatibleWith
+      plugin.maxAppVersion = nextPluginData.maxAppVersion || null
       plugin.requiresNetwork = nextPluginData.requiresNetwork === true
       plugin.tags = nextPluginData.tags
       plugin.homepage = nextPluginData.homepage

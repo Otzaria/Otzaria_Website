@@ -92,6 +92,7 @@ export function getLivePluginData(plugin) {
     status: plugin.status,
     author: plugin.author,
     compatibleWith: plugin.compatibleWith,
+    maxAppVersion: plugin.maxAppVersion || null,
     requiresNetwork: plugin.requiresNetwork === true,
     tags: plugin.tags || [],
     homepage: plugin.homepage || '',
@@ -131,6 +132,7 @@ export function formatPluginForPublic(plugin, options = {}) {
     updatedAt: plugin.updatedAt.toISOString().split('T')[0],
     originalDate: plugin.originalDate || plugin.updatedAt.toISOString().split('T')[0],
     compatibleWith: source.compatibleWith,
+    maxAppVersion: source.maxAppVersion || null,
     requiresNetwork: source.requiresNetwork === true,
     tags: source.tags || [],
     image: source.image?.ext ? `/api/plugins/${pluginId}/image${options.usePending ? '?pending=1' : ''}` : null,
@@ -171,6 +173,7 @@ export function buildChangeSummary(current, next, filesChanged) {
     ['status', 'סטטוס'],
     ['author', 'שם המפתח'],
     ['compatibleWith', 'תאימות'],
+    ['maxAppVersion', 'תאימות עד גרסה'],
     ['requiresNetwork', 'דורש חיבור אינטרנט'],
     ['tags', 'תגיות'],
     ['homepage', 'אתר בית']
