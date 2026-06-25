@@ -58,28 +58,28 @@ export function normalizeTags(rawTags) {
 
 export function assertPluginTextLimits(data) {
   if (data.name.length > PLUGIN_LIMITS.name) {
-    throw new Error(`Name must be at most ${PLUGIN_LIMITS.name} characters`)
+    throw new Error(`שם התוסף חייב להכיל לכל היותר ${PLUGIN_LIMITS.name} תווים`)
   }
   if (data.shortDescription.length > PLUGIN_LIMITS.shortDescription) {
-    throw new Error(`Short description must be at most ${PLUGIN_LIMITS.shortDescription} characters`)
+    throw new Error(`תיאור קצר חייב להכיל לכל היותר ${PLUGIN_LIMITS.shortDescription} תווים`)
   }
   if (data.description.length > PLUGIN_LIMITS.description) {
-    throw new Error(`Description must be at most ${PLUGIN_LIMITS.description} characters`)
+    throw new Error(`תיאור מלא חייב להכיל לכל היותר ${PLUGIN_LIMITS.description} תווים`)
   }
   if (data.version.length > PLUGIN_LIMITS.version) {
-    throw new Error(`Version must be at most ${PLUGIN_LIMITS.version} characters`)
+    throw new Error(`גרסה חייבת להכיל לכל היותר ${PLUGIN_LIMITS.version} תווים`)
   }
   if (data.author.length > PLUGIN_LIMITS.author) {
-    throw new Error(`Author must be at most ${PLUGIN_LIMITS.author} characters`)
+    throw new Error(`שם המחבר חייב להכיל לכל היותר ${PLUGIN_LIMITS.author} תווים`)
   }
   if (data.compatibleWith.length > PLUGIN_LIMITS.compatibleWith) {
-    throw new Error(`Compatibility must be at most ${PLUGIN_LIMITS.compatibleWith} characters`)
+    throw new Error(`תאימות חייבת להכיל לכל היותר ${PLUGIN_LIMITS.compatibleWith} תווים`)
   }
   if ((data.homepage || '').length > PLUGIN_LIMITS.homepage) {
-    throw new Error(`Homepage URL must be at most ${PLUGIN_LIMITS.homepage} characters`)
+    throw new Error(`כתובת האתר חייבת להכיל לכל היותר ${PLUGIN_LIMITS.homepage} תווים`)
   }
   if ((data.tags || []).some(tag => tag.length > PLUGIN_LIMITS.tag)) {
-    throw new Error(`Each tag must be at most ${PLUGIN_LIMITS.tag} characters`)
+    throw new Error(`כל תג חייב להכיל לכל היותר ${PLUGIN_LIMITS.tag} תווים`)
   }
 }
 
