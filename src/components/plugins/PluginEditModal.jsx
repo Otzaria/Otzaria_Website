@@ -371,8 +371,8 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
 
         <form onSubmit={handleSubmit} className="space-y-6 p-6">
           {!isAdmin && (
-            <div className="rounded-xl border border-warning-200 bg-warning-50 p-4 text-warning-900">
-              כל שינוי יישלח לאישור מנהל לפני שיתעדכן בחנות. בעת החלפת קובץ התוסף, שם התוסף, המפתח והגרסה יזוהו אוטומטית מ-manifest.json — הגרסה חייבת להיות גבוהה מהנוכחית.
+            <div className="rounded-xl border border-primary/10 bg-primary/5 p-4 text-on-surface/70 text-sm">
+              בעת החלפת קובץ התוסף, שם התוסף, המפתח והגרסה יזוהו אוטומטית מ-manifest.json — הגרסה חייבת להיות גבוהה מהנוכחית.
             </div>
           )}
 
@@ -494,7 +494,7 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
 
           <div className="flex gap-4 border-t border-neutral-200 pt-4">
             <button type="submit" disabled={loading} className="flex-1 rounded-xl bg-primary px-6 py-4 font-bold text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50">
-              {loading ? 'שומר...' : isAdmin ? 'שמור שינויים' : 'שמור ושלח לאישור'}
+              {loading ? 'שומר...' : 'שמור שינויים'}
             </button>
             <button type="button" onClick={onClose} className="rounded-xl border border-neutral-200 px-6 py-4 font-bold text-on-surface transition-colors hover:bg-neutral-50">
               ביטול

@@ -12,7 +12,6 @@ import {
   MIN_SUPPORTED_APP_VERSION,
   PLUGIN_VERSION_RE,
   assertPluginTextLimits,
-  buildChangeSummary,
   formatPluginForPublic,
   getEditableSource,
   getLivePluginData,
@@ -31,7 +30,6 @@ import {
   PLUGIN_FILE_BASENAME,
   IMAGE_BASENAME,
   deletePendingPluginDir,
-  ensurePendingPluginDir,
   ensurePluginDir,
   getPendingPluginDir,
   imageExtFromMime,
@@ -55,16 +53,6 @@ function getAssetSources(source) {
     image: source.assetSources?.image || (source.image ? 'live' : 'none'),
     screenshots: source.assetSources?.screenshots || ((source.screenshots || []).length ? 'live' : 'none')
   }
-}
-
-function hasExplicitFileChanges(files) {
-  return Boolean(
-    files.pluginFile ||
-    files.imageFile ||
-    files.removeImage ||
-    files.removeScreenshots ||
-    files.screenshotFiles.length > 0
-  )
 }
 
 async function getAuthorizedPlugin(id, session) {
@@ -132,51 +120,6 @@ async function removeLiveScreenshots(pluginId, plugin) {
     if (screenshot?.ext) {
       await removePluginAsset(pluginId, path.join('screenshots', `${index}${screenshot.ext}`)).catch(() => {})
     }
-  }
-}
-
-async function savePendingSnapshot(pluginId, editableSource, nextPluginData, files) {
-  const pendingDir = await ensurePendingPluginDir(pluginId)
-
-  if (files.pluginFile) {
-    await saveFileFromFormData(
-      files.pluginFile,
-      path.join(pendingDir, `${PLUGIN_FILE_BASENAME}${PLUGIN_FILE_EXT}`),
-      MAX_PLUGIN_BYTES
-    )
-    nextPluginData.assetSources.pluginFile = 'pending'
-  }
-
-  if (files.removeImage) {
-    nextPluginData.image = null
-    nextPluginData.assetSources.image = 'none'
-  } else if (files.imageFile) {
-    if (editableSource.assetSources?.image === 'pending' && editableSource.image?.ext) {
-      await removePluginAsset(pluginId, `${IMAGE_BASENAME}${editableSource.image.ext}`, { pending: true }).catch(() => {})
-    }
-    nextPluginData.image = await saveOptimizedImage(files.imageFile, pendingDir, IMAGE_BASENAME, { maxWidth: 1200 })
-    nextPluginData.assetSources.image = 'pending'
-  }
-
-  if (files.removeScreenshots) {
-    nextPluginData.screenshots = []
-    nextPluginData.assetSources.screenshots = 'none'
-  } else if (files.screenshotFiles.length > 0) {
-    if (editableSource.assetSources?.screenshots === 'pending') {
-      for (let index = 0; index < (editableSource.screenshots || []).length; index += 1) {
-        const screenshot = editableSource.screenshots[index]
-        if (screenshot?.ext) {
-          await removePluginAsset(pluginId, path.join('screenshots', `${index}${screenshot.ext}`), { pending: true }).catch(() => {})
-        }
-      }
-    }
-
-    const screenshots = []
-    for (let index = 0; index < files.screenshotFiles.length; index += 1) {
-      screenshots.push(await saveOptimizedImage(files.screenshotFiles[index], path.join(pendingDir, 'screenshots'), String(index), { maxWidth: 1920 }))
-    }
-    nextPluginData.screenshots = screenshots
-    nextPluginData.assetSources.screenshots = 'pending'
   }
 }
 
@@ -595,41 +538,7 @@ export async function PUT(request, { params }) {
     let pendingApproval = false
     let message = 'השינויים נשמרו בהצלחה.'
 
-    if (isOwnerResubmission && plugin.isApproved) {
-      const editableChanges = buildChangeSummary(editableSource, nextPluginData, filesChanged)
-      if (editableChanges.length === 0 && !hasExplicitFileChanges({
-        pluginFile: pluginFile?.size ? pluginFile : null,
-        imageFile: imageFile?.size ? imageFile : null,
-        screenshotFiles,
-        removeImage,
-        removeScreenshots
-      })) {
-        return bad('לא זוהו שינויים לשמירה.')
-      }
-
-      const changes = buildChangeSummary(livePlugin, nextPluginData, filesChanged)
-      if (changes.length === 0) {
-        return bad('לא זוהו שינויים לשמירה.')
-      }
-
-      await savePendingSnapshot(plugin._id.toString(), editableSource, nextPluginData, {
-        pluginFile: pluginFile?.size ? pluginFile : null,
-        imageFile: imageFile?.size ? imageFile : null,
-        screenshotFiles,
-        removeImage,
-        removeScreenshots
-      })
-
-      plugin.pendingUpdate = nextPluginData
-      plugin.pendingChangeSummary = changes
-      plugin.submissionType = 'update'
-      plugin.lastSubmittedBy = session.user.id
-      plugin.lastSubmittedAt = new Date()
-      pendingApproval = true
-      message = filesChanged.pluginFile
-        ? 'הגרסה החדשה נשמרה ונשלחה לאישור מנהל. בינתיים הגרסה הקיימת ממשיכה להופיע בחנות.'
-        : 'השינויים נשמרו ונשלחו לאישור מנהל. בינתיים הגרסה הקיימת ממשיכה להופיע בחנות.'
-    } else {
+    {
       // עדכון חי של תוסף שכבר פומבי + עליית גרסה ממש → מארכבים את הגרסה היוצאת
       // להיסטוריה לפני שהקובץ החי נדרס. עריכה ללא שינוי מספר הגרסה דורסת ואינה נשמרת.
       // יש לארכב לפני saveLiveAssets (שמחליף את הקובץ) ולפני עדכון שדות התוסף.
@@ -677,7 +586,7 @@ export async function PUT(request, { params }) {
       }
       await deletePendingPluginDir(plugin._id.toString()).catch(() => {})
 
-      if (isOwnerResubmission) {
+      if (isOwnerResubmission && !plugin.isApproved) {
         plugin.submissionType = 'new'
         plugin.isApproved = false
         plugin.approvedBy = null
