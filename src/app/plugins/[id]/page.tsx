@@ -31,6 +31,8 @@ interface Plugin {
   homepage: string
   authorId?: string | null
   downloadCount?: number
+  isHistoricalVersion?: boolean
+  latestVersion?: string
 }
 
 interface PluginEditPayload extends Plugin {
@@ -239,7 +241,7 @@ export default function PluginDetailPage() {
     return null
   }
 
-  const canEdit = Boolean(currentUser && currentUser.id === plugin.authorId)
+  const canEdit = Boolean(currentUser && currentUser.id === plugin.authorId && !plugin.isHistoricalVersion)
 
   const handleEdit = async () => {
     try {
@@ -276,6 +278,33 @@ export default function PluginDetailPage() {
             <span className="material-symbols-outlined">arrow_forward</span>
             <span>חזרה לחנות</span>
           </Link>
+
+          {/* Historical Version Banner */}
+          {plugin.isHistoricalVersion && (
+            <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-warning-200 bg-warning-50 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <span className="material-symbols-outlined text-warning-700">history</span>
+                <div>
+                  <div className="font-bold text-warning-900">
+                    גרסה ישנה ({plugin.version})
+                  </div>
+                  <div className="text-sm text-warning-800/80">
+                    אתה צופה בגרסה קודמת של התוסף.
+                    {plugin.latestVersion && plugin.latestVersion !== plugin.version
+                      ? ` הגרסה העדכנית היא ${plugin.latestVersion}.`
+                      : ''}
+                  </div>
+                </div>
+              </div>
+              <Link
+                href={`/plugins/${plugin.id}`}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-warning-600 px-5 py-2.5 font-bold text-white transition-colors hover:bg-warning-700"
+              >
+                <span className="material-symbols-outlined">upgrade</span>
+                <span>עבור לגרסה העדכנית</span>
+              </Link>
+            </div>
+          )}
 
           {/* Plugin Header */}
           <div className="bg-white rounded-2xl border border-neutral-100 p-8 mb-6">

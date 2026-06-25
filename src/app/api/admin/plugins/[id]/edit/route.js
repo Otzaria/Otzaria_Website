@@ -21,6 +21,7 @@ import {
   parseJsonArrayField
 } from '@/lib/pluginSubmission'
 import { readManifestFromPlugin, compareVersions } from '@/lib/pluginManifest'
+import { archiveCurrentVersion } from '@/lib/pluginVersions'
 import { validatePluginArchive, OTZARIA_DESIGN_TAG } from '@/lib/pluginValidation'
 import {
   MAX_IMAGE_BYTES,
@@ -629,6 +630,20 @@ export async function PUT(request, { params }) {
         ? 'הגרסה החדשה נשמרה ונשלחה לאישור מנהל. בינתיים הגרסה הקיימת ממשיכה להופיע בחנות.'
         : 'השינויים נשמרו ונשלחו לאישור מנהל. בינתיים הגרסה הקיימת ממשיכה להופיע בחנות.'
     } else {
+      // עדכון חי של תוסף שכבר פומבי + עליית גרסה ממש → מארכבים את הגרסה היוצאת
+      // להיסטוריה לפני שהקובץ החי נדרס. עריכה ללא שינוי מספר הגרסה דורסת ואינה נשמרת.
+      // יש לארכב לפני saveLiveAssets (שמחליף את הקובץ) ולפני עדכון שדות התוסף.
+      if (plugin.isApproved && compareVersions(nextPluginData.version, livePlugin.version) > 0) {
+        try {
+          await archiveCurrentVersion(plugin)
+        } catch (archiveErr) {
+          console.error('Failed to archive outgoing plugin version:', archiveErr)
+          // הארכוב הכרחי — בלעדיו תאבד הגרסה הקיימת ומשתמשים בגרסת אוצריא ישנה
+          // לא יוכלו לקבל את הגרסה התואמת הקודמת. נחסם לפני דריסת הקובץ החי.
+          return bad('שמירת הגרסה הקודמת בהיסטוריה נכשלה. השינויים לא נשמרו כדי לא לאבד את הגרסה הקיימת.', 500)
+        }
+      }
+
       await saveLiveAssets(plugin._id.toString(), plugin, editableSource, nextPluginData, {
         pluginFile: pluginFile?.size ? pluginFile : null,
         imageFile: imageFile?.size ? imageFile : null,

@@ -1,4 +1,5 @@
 import path from 'path'
+import { compareVersions } from './pluginManifest'
 
 export const PLUGIN_LIMITS = {
   name: 100,
@@ -116,9 +117,41 @@ export function getEditableSource(plugin) {
   }
 }
 
+// בונה את רשימת כל הגרסאות הזמינות (החיה + ההיסטוריות), כל אחת עם פרטי התאימות
+// וקישור ההורדה שלה, ממוינת מהגבוהה לנמוכה. מאפשר לצרכן (תוסף החנות) לבחור את
+// הגרסה הגבוהה ביותר התואמת לגרסת אוצריא של המשתמש.
+function buildVersionsList(pluginId, liveData, plugin) {
+  const live = {
+    version: liveData.version,
+    status: liveData.status,
+    compatibleWith: liveData.compatibleWith,
+    maxAppVersion: liveData.maxAppVersion || null,
+    requiresNetwork: liveData.requiresNetwork === true,
+    pluginFileSize: liveData.pluginFileSize || 0,
+    downloadUrl: `/api/plugins/${pluginId}/download`,
+    releasedAt: plugin.updatedAt ? new Date(plugin.updatedAt).toISOString().split('T')[0] : null,
+    isLatest: true
+  }
+
+  const archived = (plugin.versions || []).map((v) => ({
+    version: v.version,
+    status: v.status,
+    compatibleWith: v.compatibleWith || '',
+    maxAppVersion: v.maxAppVersion || null,
+    requiresNetwork: v.requiresNetwork === true,
+    pluginFileSize: v.pluginFileSize || 0,
+    downloadUrl: `/api/plugins/${pluginId}@${v.version}/download`,
+    releasedAt: v.archivedAt ? new Date(v.archivedAt).toISOString().split('T')[0] : null,
+    isLatest: false
+  }))
+
+  return [live, ...archived].sort((a, b) => compareVersions(b.version, a.version))
+}
+
 export function formatPluginForPublic(plugin, options = {}) {
   const pluginId = plugin._id.toString()
   const source = options.usePending ? getEditableSource(plugin) : getLivePluginData(plugin)
+  const liveData = options.usePending ? getLivePluginData(plugin) : source
   return {
     id: pluginId,
     authorId: plugin.authorId?.toString?.() || plugin.authorId || null,
@@ -141,7 +174,9 @@ export function formatPluginForPublic(plugin, options = {}) {
     homepage: source.homepage || '',
     downloadCount: plugin.downloadCount || 0,
     supportsDirectInstall: (source.pluginFileExt || '').toLowerCase() === '.otzplugin',
-    isPinned: plugin.isPinned === true
+    isPinned: plugin.isPinned === true,
+    // כל הגרסאות הזמינות (חיה + היסטוריה) עם פרטי תאימות וקישורי הורדה.
+    versions: buildVersionsList(pluginId, liveData, plugin)
   }
 }
 

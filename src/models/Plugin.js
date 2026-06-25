@@ -96,6 +96,25 @@ const PluginSchema = new mongoose.Schema(
     // הצמדה (תוספים מוצמדים יוצגו ראשונים)
     isPinned: { type: Boolean, default: false, index: true },
     pinnedAt: { type: Date, default: null },
+
+    // היסטוריית גרסאות קודמות. נדחפת אליה הגרסה היוצאת כשמעלים גרסה חדשה
+    // (עליית גרסה ממש). עריכה ללא העלאת גרסה דורסת את הגרסה הנוכחית ולא נשמרת כאן.
+    // הקובץ עצמו של כל גרסה ישנה נשמר תחת storage/plugins/<id>/versions/<version>/.
+    // כאן נשמרת רק מטא-דאטה (לפי החלטת אפיון — לא משכפלים תמונות/צילומי מסך).
+    versions: [{
+      _id: false,
+      version: { type: String, required: true, maxlength: 40 },
+      pluginFileName: { type: String, default: '' },
+      pluginFileExt: { type: String, default: '.otzplugin' },
+      pluginFileSize: { type: Number, default: 0 },
+      status: { type: String, enum: ['stable', 'beta', 'experimental'], default: 'stable' },
+      compatibleWith: { type: String, default: '' },
+      maxAppVersion: { type: String, default: null },
+      requiresNetwork: { type: Boolean, default: false },
+      shortDescription: { type: String, default: '' },
+      description: { type: String, default: '' },
+      archivedAt: { type: Date, default: Date.now }
+    }],
   },
   {
     timestamps: true,

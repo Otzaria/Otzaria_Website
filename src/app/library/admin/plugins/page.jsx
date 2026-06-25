@@ -13,6 +13,7 @@ export default function AdminPluginsPage() {
   const [approvedPlugins, setApprovedPlugins] = useState([])
   const [loading, setLoading] = useState(true)
   const [processingId, setProcessingId] = useState(null)
+  const [deletingVersion, setDeletingVersion] = useState(null)
   const [editingId, setEditingId] = useState(null)
   const [editingPlugin, setEditingPlugin] = useState(null)
   const [showNotificationSettings, setShowNotificationSettings] = useState(false)
@@ -216,6 +217,36 @@ export default function AdminPluginsPage() {
       showAlert('שגיאה', 'לא הצלחנו למחוק את התוסף')
     } finally {
       setProcessingId(null)
+    }
+  }
+
+  const handleDeleteVersion = async (plugin, version) => {
+    const confirmed = await showConfirm(
+      'מחיקת גרסה',
+      `האם למחוק לצמיתות את גרסה ${version} של "${plugin.name}"? פעולה זו תמחק את קובץ הגרסה הישנה ולא ניתן לבטלה.`
+    )
+
+    if (!confirmed) return
+
+    try {
+      setDeletingVersion(`${plugin._id}:${version}`)
+      const response = await fetch(
+        `/api/admin/plugins/${plugin._id}/versions/${encodeURIComponent(version)}`,
+        { method: 'DELETE' }
+      )
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete version')
+      }
+
+      await showAlert('גרסה נמחקה', result.message || `גרסה ${version} נמחקה בהצלחה`)
+      loadPlugins()
+    } catch (error) {
+      console.error('Error deleting plugin version:', error)
+      showAlert('שגיאה', error.message || 'לא הצלחנו למחוק את הגרסה')
+    } finally {
+      setDeletingVersion(null)
     }
   }
 
@@ -555,6 +586,51 @@ export default function AdminPluginsPage() {
                       <span className="material-symbols-outlined text-base">open_in_new</span>
                       <span>דף הבית</span>
                     </a>
+                  )}
+
+                  {/* Previous Versions */}
+                  {plugin.versions?.length > 0 && (
+                    <details className="text-sm">
+                      <summary className="cursor-pointer font-medium text-primary hover:underline">
+                        גרסאות קודמות ({plugin.versions.length})
+                      </summary>
+                      <div className="mt-3 space-y-2">
+                        {[...plugin.versions]
+                          .sort((a, b) => new Date(b.archivedAt) - new Date(a.archivedAt))
+                          .map((v) => (
+                            <div
+                              key={v.version}
+                              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-200 bg-surface p-3"
+                            >
+                              <div className="min-w-0">
+                                <span className="font-bold text-on-surface">גרסה {v.version}</span>
+                                <span className="mr-2 text-xs text-on-surface/50">
+                                  {formatDate(v.archivedAt)}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <a
+                                  href={`/api/plugins/${plugin._id}@${encodeURIComponent(v.version)}/download`}
+                                  className="inline-flex items-center gap-1 rounded-lg bg-surface-variant px-3 py-1.5 text-xs font-medium transition-colors hover:bg-neutral-200"
+                                >
+                                  <span className="material-symbols-outlined text-base">download</span>
+                                  <span>הורד</span>
+                                </a>
+                                <button
+                                  onClick={() => handleDeleteVersion(plugin, v.version)}
+                                  disabled={deletingVersion === `${plugin._id}:${v.version}`}
+                                  className="inline-flex items-center gap-1 rounded-lg bg-danger-100 px-3 py-1.5 text-xs font-medium text-danger-700 transition-colors hover:bg-danger-200 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  <span className="material-symbols-outlined text-base">
+                                    {deletingVersion === `${plugin._id}:${v.version}` ? 'progress_activity' : 'delete'}
+                                  </span>
+                                  <span>מחק</span>
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </details>
                   )}
                 </div>
                     </>

@@ -12,6 +12,8 @@ import {
   removePluginAsset,
   clearImageOptCache
 } from '@/lib/pluginStorage'
+import { archiveCurrentVersion } from '@/lib/pluginVersions'
+import { compareVersions } from '@/lib/pluginManifest'
 import path from 'path'
 import { promises as fs } from 'fs'
 import { hasPluginsAccess } from '@/lib/roles'
@@ -80,6 +82,23 @@ export async function PATCH(request, { params }) {
         const pluginId = plugin._id.toString()
         const pluginDir = await ensurePluginDir(pluginId)
 
+        // עליית גרסה ממש → מארכבים את הגרסה החיה היוצאת להיסטוריה לפני הדריסה.
+        // עדכון באותה גרסה (תיקון ללא שינוי מספר) דורס ואינו נשמר בהיסטוריה.
+        if (compareVersions(pending.version, plugin.version) > 0) {
+          try {
+            await archiveCurrentVersion(plugin)
+          } catch (archiveErr) {
+            console.error('Failed to archive outgoing plugin version:', archiveErr)
+            // הארכוב הוא תנאי הכרחי לפיצ'ר הגרסאות — בלעדיו תאבד הגרסה הקיימת
+            // ומשתמשים בגרסת אוצריא ישנה לא יוכלו לקבל את הגרסה התואמת הקודמת.
+            // לכן לא מאשרים ולא דורסים אם הארכוב נכשל.
+            return NextResponse.json(
+              { error: 'שמירת הגרסה הקודמת בהיסטוריה נכשלה. העדכון לא אושר כדי לא לאבד את הגרסה הקיימת.' },
+              { status: 500 }
+            )
+          }
+        }
+
         plugin.name = pending.name
         plugin.shortDescription = pending.shortDescription
         plugin.description = pending.description
@@ -87,6 +106,7 @@ export async function PATCH(request, { params }) {
         plugin.status = pending.status
         plugin.author = pending.author
         plugin.compatibleWith = pending.compatibleWith
+        plugin.maxAppVersion = pending.maxAppVersion || null
         plugin.requiresNetwork = pending.requiresNetwork === true
         plugin.tags = pending.tags || []
         plugin.homepage = pending.homepage || ''

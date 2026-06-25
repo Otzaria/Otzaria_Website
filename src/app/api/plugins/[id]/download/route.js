@@ -3,14 +3,20 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
-import { readPluginAsset, PLUGIN_FILE_BASENAME } from '@/lib/pluginStorage'
+import { readPluginAsset, readVersionAsset, PLUGIN_FILE_BASENAME } from '@/lib/pluginStorage'
+import { parsePluginRef } from '@/lib/pluginRef'
 import { hasPluginsAccess } from '@/lib/roles'
 
 // GET /api/plugins/[id]/download - הורדת קובץ התוסף.
+// תומך גם בהורדת גרסה ארכיונית ספציפית דרך /api/plugins/<id>@<version>/download.
 // רק תוספים מאושרים פתוחים לציבור; מנהלי תוספים יכולים להוריד גם תוספים לא מאושרים.
 export async function GET(request, { params }) {
   try {
-    const { id } = await params
+    const { id: rawId } = await params
+    const { id, version } = parsePluginRef(rawId)
+    if (!id || version === false) {
+      return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
+    }
     const { searchParams } = new URL(request.url)
     const includePending = searchParams.get('pending') === '1'
     await dbConnect()
@@ -23,6 +29,30 @@ export async function GET(request, { params }) {
     const session = await getServerSession(authOptions)
     const isAdmin = hasPluginsAccess(session?.user?.role)
     const isOwner = plugin.authorId?.toString() === session?.user?.id
+
+    // בקשה לגרסה ארכיונית ספציפית (שאינה הגרסה החיה הנוכחית).
+    if (version && version !== plugin.version) {
+      if (!plugin.isApproved && !isAdmin && !isOwner) {
+        return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
+      }
+      const entry = (plugin.versions || []).find((v) => v.version === version)
+      if (!entry) {
+        return NextResponse.json({ error: 'Plugin version not found' }, { status: 404 })
+      }
+      let archiveBuf
+      try {
+        archiveBuf = await readVersionAsset(id, version, `${PLUGIN_FILE_BASENAME}${entry.pluginFileExt || '.otzplugin'}`)
+      } catch (err) {
+        if (err && err.code === 'ENOENT') {
+          return NextResponse.json({ error: 'Plugin version not found' }, { status: 404 })
+        }
+        throw err
+      }
+      if (plugin.isApproved) {
+        plugin.incrementDownload().catch(e => console.error('Failed to increment download count:', e))
+      }
+      return pluginFileResponse(archiveBuf, entry.pluginFileName || plugin.pluginFileName, entry.pluginFileExt || plugin.pluginFileExt)
+    }
 
     if (includePending) {
       if (!plugin.pendingUpdate || (!isAdmin && !isOwner)) {
@@ -53,23 +83,27 @@ export async function GET(request, { params }) {
       plugin.incrementDownload().catch(e => console.error('Failed to increment download count:', e))
     }
 
-    // בניית Content-Disposition התומך בשמות קובץ בעברית/Unicode (RFC 5987).
-    // encodeURIComponent לא מקודד את ! ' ( ) * - מקודדים ידנית כדי לעמוד ב-RFC 3986.
-    const rawName = fileName || `plugin${fileExt}`
-    const asciiFallback = rawName.replace(/[^\x20-\x7E]/g, '_').replace(/["\\\r\n]/g, '_')
-    const encodedName = encodeURIComponent(rawName)
-      .replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
-
-    return new NextResponse(buf, {
-      headers: {
-        'Content-Type': 'application/octet-stream',
-        'Content-Disposition': `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodedName}`,
-        'Content-Length': buf.length.toString(),
-        'X-Content-Type-Options': 'nosniff'
-      }
-    })
+    return pluginFileResponse(buf, fileName, fileExt)
   } catch (error) {
     console.error('Error downloading plugin:', error)
     return NextResponse.json({ error: 'Failed to download plugin' }, { status: 500 })
   }
+}
+
+// בניית תגובת הורדה עם Content-Disposition התומך בשמות קובץ בעברית/Unicode (RFC 5987).
+// encodeURIComponent לא מקודד את ! ' ( ) * - מקודדים ידנית כדי לעמוד ב-RFC 3986.
+function pluginFileResponse(buf, fileName, fileExt) {
+  const rawName = fileName || `plugin${fileExt}`
+  const asciiFallback = rawName.replace(/[^\x20-\x7E]/g, '_').replace(/["\\\r\n]/g, '_')
+  const encodedName = encodeURIComponent(rawName)
+    .replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
+
+  return new NextResponse(buf, {
+    headers: {
+      'Content-Type': 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodedName}`,
+      'Content-Length': buf.length.toString(),
+      'X-Content-Type-Options': 'nosniff'
+    }
+  })
 }
