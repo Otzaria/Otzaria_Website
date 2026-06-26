@@ -12,7 +12,6 @@ import {
   MIN_SUPPORTED_APP_VERSION,
   PLUGIN_VERSION_RE,
   assertPluginTextLimits,
-  buildChangeSummary,
   formatPluginForPublic,
   getEditableSource,
   getLivePluginData,
@@ -21,6 +20,7 @@ import {
   parseJsonArrayField
 } from '@/lib/pluginSubmission'
 import { readManifestFromPlugin, compareVersions } from '@/lib/pluginManifest'
+import { archiveCurrentVersion } from '@/lib/pluginVersions'
 import { validatePluginArchive, OTZARIA_DESIGN_TAG } from '@/lib/pluginValidation'
 import {
   MAX_IMAGE_BYTES,
@@ -30,7 +30,6 @@ import {
   PLUGIN_FILE_BASENAME,
   IMAGE_BASENAME,
   deletePendingPluginDir,
-  ensurePendingPluginDir,
   ensurePluginDir,
   getPendingPluginDir,
   imageExtFromMime,
@@ -54,16 +53,6 @@ function getAssetSources(source) {
     image: source.assetSources?.image || (source.image ? 'live' : 'none'),
     screenshots: source.assetSources?.screenshots || ((source.screenshots || []).length ? 'live' : 'none')
   }
-}
-
-function hasExplicitFileChanges(files) {
-  return Boolean(
-    files.pluginFile ||
-    files.imageFile ||
-    files.removeImage ||
-    files.removeScreenshots ||
-    files.screenshotFiles.length > 0
-  )
 }
 
 async function getAuthorizedPlugin(id, session) {
@@ -131,51 +120,6 @@ async function removeLiveScreenshots(pluginId, plugin) {
     if (screenshot?.ext) {
       await removePluginAsset(pluginId, path.join('screenshots', `${index}${screenshot.ext}`)).catch(() => {})
     }
-  }
-}
-
-async function savePendingSnapshot(pluginId, editableSource, nextPluginData, files) {
-  const pendingDir = await ensurePendingPluginDir(pluginId)
-
-  if (files.pluginFile) {
-    await saveFileFromFormData(
-      files.pluginFile,
-      path.join(pendingDir, `${PLUGIN_FILE_BASENAME}${PLUGIN_FILE_EXT}`),
-      MAX_PLUGIN_BYTES
-    )
-    nextPluginData.assetSources.pluginFile = 'pending'
-  }
-
-  if (files.removeImage) {
-    nextPluginData.image = null
-    nextPluginData.assetSources.image = 'none'
-  } else if (files.imageFile) {
-    if (editableSource.assetSources?.image === 'pending' && editableSource.image?.ext) {
-      await removePluginAsset(pluginId, `${IMAGE_BASENAME}${editableSource.image.ext}`, { pending: true }).catch(() => {})
-    }
-    nextPluginData.image = await saveOptimizedImage(files.imageFile, pendingDir, IMAGE_BASENAME, { maxWidth: 1200 })
-    nextPluginData.assetSources.image = 'pending'
-  }
-
-  if (files.removeScreenshots) {
-    nextPluginData.screenshots = []
-    nextPluginData.assetSources.screenshots = 'none'
-  } else if (files.screenshotFiles.length > 0) {
-    if (editableSource.assetSources?.screenshots === 'pending') {
-      for (let index = 0; index < (editableSource.screenshots || []).length; index += 1) {
-        const screenshot = editableSource.screenshots[index]
-        if (screenshot?.ext) {
-          await removePluginAsset(pluginId, path.join('screenshots', `${index}${screenshot.ext}`), { pending: true }).catch(() => {})
-        }
-      }
-    }
-
-    const screenshots = []
-    for (let index = 0; index < files.screenshotFiles.length; index += 1) {
-      screenshots.push(await saveOptimizedImage(files.screenshotFiles[index], path.join(pendingDir, 'screenshots'), String(index), { maxWidth: 1920 }))
-    }
-    nextPluginData.screenshots = screenshots
-    nextPluginData.assetSources.screenshots = 'pending'
   }
 }
 
@@ -280,6 +224,13 @@ export async function PUT(request, { params }) {
     let compatibleWith = isAdmin
       ? (formData.get('compatibleWith') || '').toString().trim()
       : (editableSource.compatibleWith || livePlugin.compatibleWith || '')
+    // maxAppVersion: מנהל יכול לערוך ידנית (שדה ריק מפורש = הסרת התקרה). בהיעדר
+    // השדה בטופס שומרים את הקיים. לבעלים נגזר מהמניפסט בהחלפת קובץ (בהמשך).
+    const existingMaxAppVersion =
+      editableSource.maxAppVersion || livePlugin.maxAppVersion || null
+    let maxAppVersion = isAdmin && formData.has('maxAppVersion')
+      ? ((formData.get('maxAppVersion') || '').toString().trim() || null)
+      : existingMaxAppVersion
     let homepage = isAdmin
       ? (formData.get('homepage') || '').toString().trim()
       : (editableSource.homepage || livePlugin.homepage || '')
@@ -304,6 +255,14 @@ export async function PUT(request, { params }) {
     }
     if (!PLUGIN_VERSION_RE.test(version)) {
       return bad('Version must be in the form X, X.Y, X.Y.Z (optionally with -beta etc.)')
+    }
+    if (maxAppVersion) {
+      if (!PLUGIN_VERSION_RE.test(maxAppVersion)) {
+        return bad('שדה maxAppVersion אינו בפורמט גרסה תקין')
+      }
+      if (compareVersions(maxAppVersion, compatibleWith) < 0) {
+        return bad(`גרסת המקסימום (${maxAppVersion}) לא יכולה להיות נמוכה מגרסת המינימום (${compatibleWith})`)
+      }
     }
 
     try {
@@ -482,6 +441,16 @@ export async function PUT(request, { params }) {
         if (manifestDesc) shortDescription = manifestDesc
         status = manifestStability
         compatibleWith = manifestMinAppVersion
+        const manifestMaxAppVersion = newManifest.maxAppVersion ? newManifest.maxAppVersion.toString().trim() : ''
+        if (manifestMaxAppVersion) {
+          if (!PLUGIN_VERSION_RE.test(manifestMaxAppVersion)) {
+            return bad('שדה maxAppVersion ב-manifest.json אינו בפורמט גרסה תקין')
+          }
+          if (compareVersions(manifestMaxAppVersion, manifestMinAppVersion) < 0) {
+            return bad(`גרסת המקסימום (${manifestMaxAppVersion}) לא יכולה להיות נמוכה מגרסת המינימום (${manifestMinAppVersion})`)
+          }
+        }
+        maxAppVersion = manifestMaxAppVersion || null
         homepage = newManifest.homepage ? newManifest.homepage.toString().trim() : ''
         requiresNetwork = newManifest.network?.enabled === true
       }
@@ -529,6 +498,7 @@ export async function PUT(request, { params }) {
       status,
       author,
       compatibleWith,
+      maxAppVersion,
       requiresNetwork,
       tags,
       homepage,
@@ -568,41 +538,21 @@ export async function PUT(request, { params }) {
     let pendingApproval = false
     let message = 'השינויים נשמרו בהצלחה.'
 
-    if (isOwnerResubmission && plugin.isApproved) {
-      const editableChanges = buildChangeSummary(editableSource, nextPluginData, filesChanged)
-      if (editableChanges.length === 0 && !hasExplicitFileChanges({
-        pluginFile: pluginFile?.size ? pluginFile : null,
-        imageFile: imageFile?.size ? imageFile : null,
-        screenshotFiles,
-        removeImage,
-        removeScreenshots
-      })) {
-        return bad('לא זוהו שינויים לשמירה.')
+    {
+      // עדכון חי של תוסף שכבר פומבי + עליית גרסה ממש → מארכבים את הגרסה היוצאת
+      // להיסטוריה לפני שהקובץ החי נדרס. עריכה ללא שינוי מספר הגרסה דורסת ואינה נשמרת.
+      // יש לארכב לפני saveLiveAssets (שמחליף את הקובץ) ולפני עדכון שדות התוסף.
+      if (plugin.isApproved && compareVersions(nextPluginData.version, livePlugin.version) > 0) {
+        try {
+          await archiveCurrentVersion(plugin)
+        } catch (archiveErr) {
+          console.error('Failed to archive outgoing plugin version:', archiveErr)
+          // הארכוב הכרחי — בלעדיו תאבד הגרסה הקיימת ומשתמשים בגרסת אוצריא ישנה
+          // לא יוכלו לקבל את הגרסה התואמת הקודמת. נחסם לפני דריסת הקובץ החי.
+          return bad('שמירת הגרסה הקודמת בהיסטוריה נכשלה. השינויים לא נשמרו כדי לא לאבד את הגרסה הקיימת.', 500)
+        }
       }
 
-      const changes = buildChangeSummary(livePlugin, nextPluginData, filesChanged)
-      if (changes.length === 0) {
-        return bad('לא זוהו שינויים לשמירה.')
-      }
-
-      await savePendingSnapshot(plugin._id.toString(), editableSource, nextPluginData, {
-        pluginFile: pluginFile?.size ? pluginFile : null,
-        imageFile: imageFile?.size ? imageFile : null,
-        screenshotFiles,
-        removeImage,
-        removeScreenshots
-      })
-
-      plugin.pendingUpdate = nextPluginData
-      plugin.pendingChangeSummary = changes
-      plugin.submissionType = 'update'
-      plugin.lastSubmittedBy = session.user.id
-      plugin.lastSubmittedAt = new Date()
-      pendingApproval = true
-      message = filesChanged.pluginFile
-        ? 'הגרסה החדשה נשמרה ונשלחה לאישור מנהל. בינתיים הגרסה הקיימת ממשיכה להופיע בחנות.'
-        : 'השינויים נשמרו ונשלחו לאישור מנהל. בינתיים הגרסה הקיימת ממשיכה להופיע בחנות.'
-    } else {
       await saveLiveAssets(plugin._id.toString(), plugin, editableSource, nextPluginData, {
         pluginFile: pluginFile?.size ? pluginFile : null,
         imageFile: imageFile?.size ? imageFile : null,
@@ -618,6 +568,7 @@ export async function PUT(request, { params }) {
       plugin.status = nextPluginData.status
       plugin.author = nextPluginData.author
       plugin.compatibleWith = nextPluginData.compatibleWith
+      plugin.maxAppVersion = nextPluginData.maxAppVersion || null
       plugin.requiresNetwork = nextPluginData.requiresNetwork === true
       plugin.tags = nextPluginData.tags
       plugin.homepage = nextPluginData.homepage
@@ -635,7 +586,7 @@ export async function PUT(request, { params }) {
       }
       await deletePendingPluginDir(plugin._id.toString()).catch(() => {})
 
-      if (isOwnerResubmission) {
+      if (isOwnerResubmission && !plugin.isApproved) {
         plugin.submissionType = 'new'
         plugin.isApproved = false
         plugin.approvedBy = null

@@ -1,4 +1,5 @@
 import path from 'path'
+import { compareVersions } from './pluginManifest'
 
 export const PLUGIN_LIMITS = {
   name: 100,
@@ -58,28 +59,28 @@ export function normalizeTags(rawTags) {
 
 export function assertPluginTextLimits(data) {
   if (data.name.length > PLUGIN_LIMITS.name) {
-    throw new Error(`Name must be at most ${PLUGIN_LIMITS.name} characters`)
+    throw new Error(`שם התוסף חייב להכיל לכל היותר ${PLUGIN_LIMITS.name} תווים`)
   }
   if (data.shortDescription.length > PLUGIN_LIMITS.shortDescription) {
-    throw new Error(`Short description must be at most ${PLUGIN_LIMITS.shortDescription} characters`)
+    throw new Error(`תיאור קצר חייב להכיל לכל היותר ${PLUGIN_LIMITS.shortDescription} תווים`)
   }
   if (data.description.length > PLUGIN_LIMITS.description) {
-    throw new Error(`Description must be at most ${PLUGIN_LIMITS.description} characters`)
+    throw new Error(`תיאור מלא חייב להכיל לכל היותר ${PLUGIN_LIMITS.description} תווים`)
   }
   if (data.version.length > PLUGIN_LIMITS.version) {
-    throw new Error(`Version must be at most ${PLUGIN_LIMITS.version} characters`)
+    throw new Error(`גרסה חייבת להכיל לכל היותר ${PLUGIN_LIMITS.version} תווים`)
   }
   if (data.author.length > PLUGIN_LIMITS.author) {
-    throw new Error(`Author must be at most ${PLUGIN_LIMITS.author} characters`)
+    throw new Error(`שם המחבר חייב להכיל לכל היותר ${PLUGIN_LIMITS.author} תווים`)
   }
   if (data.compatibleWith.length > PLUGIN_LIMITS.compatibleWith) {
-    throw new Error(`Compatibility must be at most ${PLUGIN_LIMITS.compatibleWith} characters`)
+    throw new Error(`תאימות חייבת להכיל לכל היותר ${PLUGIN_LIMITS.compatibleWith} תווים`)
   }
   if ((data.homepage || '').length > PLUGIN_LIMITS.homepage) {
-    throw new Error(`Homepage URL must be at most ${PLUGIN_LIMITS.homepage} characters`)
+    throw new Error(`כתובת האתר חייבת להכיל לכל היותר ${PLUGIN_LIMITS.homepage} תווים`)
   }
   if ((data.tags || []).some(tag => tag.length > PLUGIN_LIMITS.tag)) {
-    throw new Error(`Each tag must be at most ${PLUGIN_LIMITS.tag} characters`)
+    throw new Error(`כל תג חייב להכיל לכל היותר ${PLUGIN_LIMITS.tag} תווים`)
   }
 }
 
@@ -92,6 +93,7 @@ export function getLivePluginData(plugin) {
     status: plugin.status,
     author: plugin.author,
     compatibleWith: plugin.compatibleWith,
+    maxAppVersion: plugin.maxAppVersion || null,
     requiresNetwork: plugin.requiresNetwork === true,
     tags: plugin.tags || [],
     homepage: plugin.homepage || '',
@@ -115,9 +117,41 @@ export function getEditableSource(plugin) {
   }
 }
 
+// בונה את רשימת כל הגרסאות הזמינות (החיה + ההיסטוריות), כל אחת עם פרטי התאימות
+// וקישור ההורדה שלה, ממוינת מהגבוהה לנמוכה. מאפשר לצרכן (תוסף החנות) לבחור את
+// הגרסה הגבוהה ביותר התואמת לגרסת אוצריא של המשתמש.
+function buildVersionsList(pluginId, liveData, plugin) {
+  const live = {
+    version: liveData.version,
+    status: liveData.status,
+    compatibleWith: liveData.compatibleWith,
+    maxAppVersion: liveData.maxAppVersion || null,
+    requiresNetwork: liveData.requiresNetwork === true,
+    pluginFileSize: liveData.pluginFileSize || 0,
+    downloadUrl: `/api/plugins/${pluginId}/download`,
+    releasedAt: plugin.updatedAt ? new Date(plugin.updatedAt).toISOString().split('T')[0] : null,
+    isLatest: true
+  }
+
+  const archived = (plugin.versions || []).map((v) => ({
+    version: v.version,
+    status: v.status,
+    compatibleWith: v.compatibleWith || '',
+    maxAppVersion: v.maxAppVersion || null,
+    requiresNetwork: v.requiresNetwork === true,
+    pluginFileSize: v.pluginFileSize || 0,
+    downloadUrl: `/api/plugins/${pluginId}@${v.version}/download`,
+    releasedAt: v.archivedAt ? new Date(v.archivedAt).toISOString().split('T')[0] : null,
+    isLatest: false
+  }))
+
+  return [live, ...archived].sort((a, b) => compareVersions(b.version, a.version))
+}
+
 export function formatPluginForPublic(plugin, options = {}) {
   const pluginId = plugin._id.toString()
   const source = options.usePending ? getEditableSource(plugin) : getLivePluginData(plugin)
+  const liveData = options.usePending ? getLivePluginData(plugin) : source
   return {
     id: pluginId,
     authorId: plugin.authorId?.toString?.() || plugin.authorId || null,
@@ -131,6 +165,7 @@ export function formatPluginForPublic(plugin, options = {}) {
     updatedAt: plugin.updatedAt.toISOString().split('T')[0],
     originalDate: plugin.originalDate || plugin.updatedAt.toISOString().split('T')[0],
     compatibleWith: source.compatibleWith,
+    maxAppVersion: source.maxAppVersion || null,
     requiresNetwork: source.requiresNetwork === true,
     tags: source.tags || [],
     image: source.image?.ext ? `/api/plugins/${pluginId}/image${options.usePending ? '?pending=1' : ''}` : null,
@@ -139,7 +174,9 @@ export function formatPluginForPublic(plugin, options = {}) {
     homepage: source.homepage || '',
     downloadCount: plugin.downloadCount || 0,
     supportsDirectInstall: (source.pluginFileExt || '').toLowerCase() === '.otzplugin',
-    isPinned: plugin.isPinned === true
+    isPinned: plugin.isPinned === true,
+    // כל הגרסאות הזמינות (חיה + היסטוריה) עם פרטי תאימות וקישורי הורדה.
+    versions: buildVersionsList(pluginId, liveData, plugin)
   }
 }
 
@@ -171,6 +208,7 @@ export function buildChangeSummary(current, next, filesChanged) {
     ['status', 'סטטוס'],
     ['author', 'שם המפתח'],
     ['compatibleWith', 'תאימות'],
+    ['maxAppVersion', 'תאימות עד גרסה'],
     ['requiresNetwork', 'דורש חיבור אינטרנט'],
     ['tags', 'תגיות'],
     ['homepage', 'אתר בית']

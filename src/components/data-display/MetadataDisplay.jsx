@@ -9,7 +9,7 @@ export default function MetadataDisplay({ upload, className = '', textSize = 'te
   }
 
   return (
-    <div className={`mt-3 pt-3 border-t border-gray-200 space-y-1 ${textSize} text-gray-600 ${className}`}>
+    <div className={`mt-3 pt-3 border-t border-neutral-200 space-y-1 ${textSize} text-neutral-600 ${className}`}>
       {upload.authorName && (
         <div><span className="font-semibold">מחבר:</span> {upload.authorName}</div>
       )}
@@ -29,7 +29,7 @@ export default function MetadataDisplay({ upload, className = '', textSize = 'te
         <div><span className="font-semibold">בעל זכויות:</span> {upload.copyrightHolder}</div>
       )}
       {upload.sourceUrl && (
-        <div><span className="font-semibold">מקור:</span> <a href={upload.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{upload.sourceUrl}</a></div>
+        <div><span className="font-semibold">מקור:</span> <a href={upload.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-info-600 hover:underline">{upload.sourceUrl}</a></div>
       )}
       {upload.isOcr && (
         <div><span className="font-semibold">OCR:</span> {upload.ocrDescription}</div>

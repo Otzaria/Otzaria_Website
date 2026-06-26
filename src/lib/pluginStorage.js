@@ -106,6 +106,48 @@ export async function ensurePluginDir(pluginId) {
   return dir
 }
 
+// ולידציה שמחרוזת הגרסה בטוחה לשימוש כשם תיקייה (ללא traversal/תווים מסוכנים).
+// תואם ל-PLUGIN_VERSION_RE (ספרות, נקודות, מקף, פלוס, אותיות) — תווים בטוחים בכל מערכת קבצים.
+export function assertSafeVersion(version) {
+  if (typeof version !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9.+-]{0,39}$/.test(version) || version.includes('..')) {
+    throw new Error('Invalid plugin version segment')
+  }
+}
+
+// תיקיית האחסון של גרסה ארכיונית ספציפית, תחת תיקיית התוסף (מוגן מ-path traversal).
+export function getVersionDir(pluginId, version) {
+  assertSafeVersion(version)
+  const base = getPluginDir(pluginId)
+  const dir = path.join(base, VERSIONS_DIRNAME, version)
+  const resolved = path.resolve(dir)
+  if (!resolved.startsWith(base + path.sep)) {
+    throw new Error('Resolved version dir escapes plugin dir')
+  }
+  return resolved
+}
+
+export async function ensureVersionDir(pluginId, version) {
+  const dir = getVersionDir(pluginId, version)
+  await fs.mkdir(dir, { recursive: true })
+  return dir
+}
+
+// קריאת קובץ של גרסה ארכיונית
+export async function readVersionAsset(pluginId, version, fileName) {
+  const dir = getVersionDir(pluginId, version)
+  const target = path.resolve(dir, fileName)
+  if (!target.startsWith(dir + path.sep) && target !== dir) {
+    throw new Error('Asset path escapes version dir')
+  }
+  return fs.readFile(target)
+}
+
+// מחיקת תיקיית גרסה ארכיונית שלמה
+export async function deleteVersionDir(pluginId, version) {
+  const dir = getVersionDir(pluginId, version)
+  await fs.rm(dir, { recursive: true, force: true })
+}
+
 export function getPendingPluginDir(pluginId) {
   return path.join(getPluginDir(pluginId), PENDING_DIRNAME)
 }
@@ -166,3 +208,4 @@ export async function deletePendingPluginDir(pluginId) {
 export const PLUGIN_FILE_BASENAME = 'plugin'
 export const IMAGE_BASENAME = 'image'
 export const PENDING_DIRNAME = 'pending'
+export const VERSIONS_DIRNAME = 'versions'

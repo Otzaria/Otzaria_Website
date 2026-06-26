@@ -446,14 +446,14 @@ export default function AdminBooksPage() {
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
                     />
-                    <span className="material-symbols-outlined absolute right-2 top-2 text-gray-400 text-lg">search</span>
+                    <span className="material-symbols-outlined absolute right-2 top-2 text-neutral-400 text-lg">search</span>
                 </div>
             </div>
             
             <div className="flex gap-3 w-full md:w-auto">
                 <button
                     onClick={handleShowSubscribers}
-                    className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition-all shadow-md w-full md:w-auto justify-center text-sm"
+                    className="flex items-center gap-2 px-4 py-2 bg-aqua-600 text-white rounded-xl hover:bg-aqua-700 transition-all shadow-md w-full md:w-auto justify-center text-sm"
                 >
                     <span className="material-symbols-outlined">notifications_active</span>
                     <div className="flex flex-col items-start leading-tight">
@@ -464,7 +464,7 @@ export default function AdminBooksPage() {
 
                 <button
                     onClick={handleOpenGlobalInstructions}
-                    className="flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-xl hover:bg-slate-700 transition-all shadow-md w-full md:w-auto justify-center"
+                    className="flex items-center gap-2 px-4 py-2 bg-neutral-cool-600 text-white rounded-xl hover:bg-neutral-cool-700 transition-all shadow-md w-full md:w-auto justify-center"
                 >
                     <span className="material-symbols-outlined shrink-0">gavel</span>
                     <div className="flex flex-col items-start leading-tight">
@@ -475,7 +475,7 @@ export default function AdminBooksPage() {
 
                 <button
                     onClick={() => setShowCategoriesDialog(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-indigo-700 text-white rounded-xl hover:bg-indigo-800 transition-all shadow-md w-full md:w-auto justify-center"
+                    className="flex items-center gap-2 px-4 py-2 bg-info-alt-700 text-white rounded-xl hover:bg-info-alt-800 transition-all shadow-md w-full md:w-auto justify-center"
                 >
                     <span className="material-symbols-outlined shrink-0">palette</span>
                     <div className="flex flex-col items-start leading-tight">
@@ -486,7 +486,7 @@ export default function AdminBooksPage() {
 
                 <button
                     onClick={() => setShowMergeDialog(true)}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-all shadow-md w-full md:w-auto justify-center"
+                    className="flex items-center gap-2 px-5 py-2.5 bg-feature-600 text-white rounded-xl hover:bg-feature-700 transition-all shadow-md w-full md:w-auto justify-center"
                 >
                     <span className="material-symbols-outlined shrink-0">call_merge</span>
                     <div className="flex flex-col items-start leading-tight">
@@ -521,7 +521,7 @@ export default function AdminBooksPage() {
                     className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
                         activeTab === tab.id 
                         ? 'bg-primary text-on-primary' 
-                        : 'bg-white/50 text-gray-600 hover:bg-white/80'
+                        : 'bg-white/50 text-neutral-600 hover:bg-white/80'
                     }`}
                 >
                     {tab.label}
@@ -542,7 +542,7 @@ export default function AdminBooksPage() {
                         className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${
                             personalFilter === opt.id
                             ? 'bg-primary text-on-primary shadow-sm'
-                            : 'text-gray-600 hover:bg-white/80'
+                            : 'text-neutral-600 hover:bg-white/80'
                         }`}
                     >
                         <span className="material-symbols-outlined text-sm">{opt.icon}</span>
@@ -560,7 +560,7 @@ export default function AdminBooksPage() {
                         value={ownerSearchTerm}
                         onChange={e => setOwnerSearchTerm(e.target.value)}
                     />
-                    <span className="material-symbols-outlined absolute right-2 top-1.5 text-gray-400 text-base">person_search</span>
+                    <span className="material-symbols-outlined absolute right-2 top-1.5 text-neutral-400 text-base">person_search</span>
                 </div>
             )}
         </div>
@@ -569,12 +569,12 @@ export default function AdminBooksPage() {
         {loading ? (
             <LoadingSpinner message="טוען ספרים..." />
         ) : books.length === 0 ? (
-            <div className="text-center py-20 text-gray-500">
+            <div className="text-center py-20 text-neutral-500">
             <span className="material-symbols-outlined text-6xl mb-2">library_books</span>
             <p>אין ספרים במערכת עדיין</p>
             </div>
         ) : filteredBooks.length === 0 ? (
-            <div className="text-center py-20 text-gray-500">
+            <div className="text-center py-20 text-neutral-500">
                 <p>לא נמצאו ספרים התואמים לחיפוש</p>
             </div>
         ) : (
@@ -588,7 +588,7 @@ export default function AdminBooksPage() {
                 const ownerName = book.ownerName || book.originalOwnerName || 'משתמש פרטי';
 
                 return (
-                    <div key={book.id || book.path} className={`group glass p-0 rounded-xl border transition-all hover:shadow-lg overflow-hidden flex flex-col ${isHidden ? 'border-amber-200 bg-amber-50/30' : 'border-white/50'}`}>
+                    <div key={book.id || book.path} className={`group glass p-0 rounded-xl border transition-all hover:shadow-lg overflow-hidden flex flex-col ${isHidden ? 'border-warning-200 bg-warning-50/30' : 'border-white/50'}`}>
                     <div className="bg-gradient-to-b from-primary/5 to-transparent p-4 flex items-start justify-between relative">
                         <div className="flex gap-3">
                             {book.thumbnail ? (
@@ -600,7 +600,7 @@ export default function AdminBooksPage() {
                                 className="rounded shadow-sm object-cover"
                             />
                             ) : (
-                                <div className="w-[50px] h-[70px] bg-gray-200 rounded flex items-center justify-center text-gray-400">
+                                <div className="w-[50px] h-[70px] bg-neutral-200 rounded flex items-center justify-center text-neutral-400">
                                     <span className="material-symbols-outlined text-2xl">book</span>
                                 </div>
                             )}
@@ -615,17 +615,17 @@ export default function AdminBooksPage() {
                                     </span>
                                     
                                     {isPersonal ? (
-                                         <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                                         <span className="bg-info-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
                                             <span className="material-symbols-outlined text-[12px]">person</span>
                                             {ownerName}
                                         </span>
                                     ) : wasPersonal ? (
-                                        <span className="bg-blue-400 text-white text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1" title="ספר שהיה אישי והושלם">
+                                        <span className="bg-info-400 text-white text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1" title="ספר שהיה אישי והושלם">
                                             <span className="material-symbols-outlined text-[12px]">history</span>
                                             {ownerName}
                                         </span>
                                     ) : isHidden && (
-                                        <span className="bg-amber-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                                        <span className="bg-warning-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
                                             <span className="material-symbols-outlined text-[12px]">visibility_off</span>
                                             מוסתר
                                         </span>
@@ -636,7 +636,7 @@ export default function AdminBooksPage() {
 
                         <button 
                             onClick={() => openRenameDialog(book)}
-                            className="text-gray-400 hover:text-primary hover:bg-white/80 p-1.5 rounded-full transition-all"
+                            className="text-neutral-400 hover:text-primary hover:bg-white/80 p-1.5 rounded-full transition-all"
                             title="שנה שם ספר"
                         >
                             <span className="material-symbols-outlined text-lg">edit</span>
@@ -645,17 +645,17 @@ export default function AdminBooksPage() {
 
                     <div className="p-4 pt-2 flex-1 flex flex-col">
                         <div className="mt-2 mb-4">
-                            <div className="flex justify-between text-xs text-gray-600 mb-1">
+                            <div className="flex justify-between text-xs text-neutral-600 mb-1">
                                 <span>התקדמות</span>
                                 <span className="font-bold">{progress}%</span>
                             </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div className="w-full bg-neutral-200 rounded-full h-2">
                                 <div 
-                                    className="bg-green-500 h-2 rounded-full transition-all duration-500" 
+                                    className="bg-success-500 h-2 rounded-full transition-all duration-500" 
                                     style={{ width: `${progress}%` }}
                                 ></div>
                             </div>
-                            <p className="text-xs text-center mt-1 text-gray-500">
+                            <p className="text-xs text-center mt-1 text-neutral-500">
                                 {book.completedPages || 0} מתוך {book.totalPages || 0} עמודים הושלמו
                             </p>
                         </div>
@@ -664,7 +664,7 @@ export default function AdminBooksPage() {
                             {progress === 100 ? (
                                 <button
                                     onClick={() => handleDownloadFullText(book)}
-                                    className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-green-600 text-white hover:bg-green-700 rounded-lg text-sm font-bold transition-all mb-1 shadow-sm"
+                                    className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-success-600 text-white hover:bg-success-700 rounded-lg text-sm font-bold transition-all mb-1 shadow-sm"
                                     title="הורד את כל דפי הספר כקובץ טקסט אחד"
                                 >
                                     <span className="material-symbols-outlined text-sm">download</span>
@@ -673,7 +673,7 @@ export default function AdminBooksPage() {
                             ) : (
                                 <button
                                     onClick={() => handleDownloadFullText(book)}
-                                    className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100/50 rounded text-xs transition-all mb-1"
+                                    className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100/50 rounded text-xs transition-all mb-1"
                                     title="הורד את הטקסט הקיים (חלקי)"
                                 >
                                     <span className="material-symbols-outlined text-[16px]">download</span>
@@ -685,14 +685,14 @@ export default function AdminBooksPage() {
                                 <div className="grid grid-cols-2 gap-2">
                                     <Link
                                         href={`/library/books/${encodeURIComponent(book.path)}`}
-                                        className="flex items-center justify-center gap-1 px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-sm font-medium transition-colors"
+                                        className="flex items-center justify-center gap-1 px-3 py-2 bg-info-50 text-info-700 hover:bg-info-100 rounded-lg text-sm font-medium transition-colors"
                                     >
                                         <span className="material-symbols-outlined text-sm">visibility</span>
                                         צפה
                                     </Link>
                                     <button
                                         onClick={() => handleDeleteBook(book.id)}
-                                        className="flex items-center justify-center gap-1 px-3 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg text-sm transition-colors font-medium"
+                                        className="flex items-center justify-center gap-1 px-3 py-2 text-danger-600 bg-danger-50 hover:bg-danger-100 rounded-lg text-sm transition-colors font-medium"
                                     >
                                         <span className="material-symbols-outlined text-sm">delete</span>
                                         <span>מחק</span>
@@ -703,14 +703,14 @@ export default function AdminBooksPage() {
                                     <div className="grid grid-cols-2 gap-2">
                                         <Link
                                             href={`/library/books/${encodeURIComponent(book.path)}`}
-                                            className="flex items-center justify-center gap-1 px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-sm font-medium transition-colors"
+                                            className="flex items-center justify-center gap-1 px-3 py-2 bg-info-50 text-info-700 hover:bg-info-100 rounded-lg text-sm font-medium transition-colors"
                                         >
                                             <span className="material-symbols-outlined text-sm">visibility</span>
                                             צפה
                                         </Link>
                                         <button
                                             onClick={() => setEditingBookInfo(book)}
-                                            className="flex items-center justify-center gap-1 px-3 py-2 bg-gray-50 text-gray-700 hover:bg-gray-100 rounded-lg text-sm font-medium transition-colors"
+                                            className="flex items-center justify-center gap-1 px-3 py-2 bg-neutral-50 text-neutral-700 hover:bg-neutral-100 rounded-lg text-sm font-medium transition-colors"
                                         >
                                             <span className="material-symbols-outlined text-sm">edit_note</span>
                                             פרטים
@@ -722,8 +722,8 @@ export default function AdminBooksPage() {
                                             onClick={() => handleVisibilityClick(book)}
                                             className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                                                 isHidden 
-                                                ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' 
-                                                : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700'
+                                                ? 'bg-warning-100 text-warning-800 hover:bg-warning-200' 
+                                                : 'bg-neutral-100 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-700'
                                             }`}
                                             title={isHidden ? "הפוך לספר גלוי לכולם" : "הסתר ספר מהציבור"}
                                         >
@@ -735,7 +735,7 @@ export default function AdminBooksPage() {
 
                                         <button
                                             onClick={() => handleDeleteBook(book.id)}
-                                            className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg text-sm transition-colors font-medium"
+                                            className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-danger-600 bg-danger-50 hover:bg-danger-100 rounded-lg text-sm transition-colors font-medium"
                                         >
                                             <span className="material-symbols-outlined text-sm">delete</span>
                                             <span>מחק</span>
@@ -773,30 +773,30 @@ export default function AdminBooksPage() {
                     className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden relative" 
                     onClick={e => e.stopPropagation()}
                 >
-                    <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
-                        <h3 className="font-bold text-lg text-gray-800">שינוי שם ספר</h3>
-                        <button onClick={() => setRenamingBook(null)} className="text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-200 p-1">
+                    <div className="p-4 border-b bg-neutral-50 flex justify-between items-center">
+                        <h3 className="font-bold text-lg text-neutral-800">שינוי שם ספר</h3>
+                        <button onClick={() => setRenamingBook(null)} className="text-neutral-400 hover:text-neutral-600 rounded-full hover:bg-neutral-200 p-1">
                             <span className="material-symbols-outlined text-xl">close</span>
                         </button>
                     </div>
                     
                     <div className="p-6">
                         <div className="mb-4">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">שם הספר החדש</label>
+                            <label className="block text-sm font-medium text-neutral-700 mb-2">שם הספר החדש</label>
                             <input 
                                 type="text" 
                                 value={newName}
                                 onChange={(e) => setNewName(e.target.value)}
-                                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all text-base"
+                                className="w-full border border-neutral-300 rounded-lg p-3 focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all text-base"
                                 autoFocus
                             />
                         </div>
 
                         <div className="mb-6">
                             <div className="flex justify-between mb-2">
-                                <label className="block text-sm font-medium text-gray-700">קטגוריה</label>
+                                <label className="block text-sm font-medium text-neutral-700">קטגוריה</label>
                                 {(renamingBook.isPrivate || renamingBook.ownerId) && (
-                                    <span className="text-xs text-red-500 bg-red-50 px-2 py-0.5 rounded-full border border-red-100 flex items-center gap-1">
+                                    <span className="text-xs text-danger-500 bg-danger-50 px-2 py-0.5 rounded-full border border-danger-100 flex items-center gap-1">
                                         <span className="material-symbols-outlined text-[10px]">lock</span>
                                         ספר אישי - לא ניתן לשינוי
                                     </span>
@@ -807,7 +807,7 @@ export default function AdminBooksPage() {
                                 value={newCategory}
                                 onChange={(e) => setNewCategory(e.target.value)}
                                 disabled={renamingBook.isPrivate || renamingBook.ownerId}
-                                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-primary outline-none bg-white disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+                                className="w-full border border-neutral-300 rounded-lg p-3 focus:ring-2 focus:ring-primary outline-none bg-white disabled:bg-neutral-100 disabled:text-neutral-500 disabled:cursor-not-allowed"
                             >
                                 {categoriesList && categoriesList.length > 0 ? (
                                     categoriesList.map((cat, idx) => (
@@ -822,7 +822,7 @@ export default function AdminBooksPage() {
                         <div className="flex justify-end gap-3 mt-8">
                             <button 
                                 onClick={() => setRenamingBook(null)}
-                                className="px-5 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition-colors"
+                                className="px-5 py-2 text-neutral-600 hover:bg-neutral-100 rounded-lg font-medium transition-colors"
                             >
                                 ביטול
                             </button>
@@ -848,21 +848,21 @@ export default function AdminBooksPage() {
                     className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden relative" 
                     onClick={e => e.stopPropagation()}
                 >
-                    <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
-                        <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
+                    <div className="p-4 border-b bg-neutral-50 flex justify-between items-center">
+                        <h3 className="font-bold text-lg text-neutral-800 flex items-center gap-2">
                              <span className="material-symbols-outlined text-primary">campaign</span>
                              חשיפת ספר לקהל
                         </h3>
-                        <button onClick={() => setShowNotifyDialog(false)} className="text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-200 p-1">
+                        <button onClick={() => setShowNotifyDialog(false)} className="text-neutral-400 hover:text-neutral-600 rounded-full hover:bg-neutral-200 p-1">
                             <span className="material-symbols-outlined text-xl">close</span>
                         </button>
                     </div>
                     
                     <div className="p-6 space-y-4">
-                        <p className="text-gray-700 text-base">
+                        <p className="text-neutral-700 text-base">
                             הספר <strong>"{bookToToggle.name}"</strong> יהפוך כעת לגלוי לכל המשתמשים.
                         </p>
-                        <p className="font-bold text-gray-900 text-base">
+                        <p className="font-bold text-neutral-900 text-base">
                             האם ברצונך לשלוח עדכון במייל למנויים על ספר זה?
                         </p>
 
@@ -870,7 +870,7 @@ export default function AdminBooksPage() {
                             <button
                                 onClick={() => updateBookStatus(bookToToggle.id, false, true)}
                                 disabled={isUpdatingStatus}
-                                className="w-full bg-green-600 text-white py-3 rounded-xl hover:bg-green-700 flex items-center justify-center gap-2 font-bold shadow-md transition-all hover:scale-[1.02]"
+                                className="w-full bg-success-600 text-white py-3 rounded-xl hover:bg-success-700 flex items-center justify-center gap-2 font-bold shadow-md transition-all hover:scale-[1.02]"
                             >
                                 {isUpdatingStatus ? 'מעדכן ושולח...' : (
                                     <>
@@ -883,7 +883,7 @@ export default function AdminBooksPage() {
                             <button
                                 onClick={() => updateBookStatus(bookToToggle.id, false, false)}
                                 disabled={isUpdatingStatus}
-                                className="w-full bg-gray-100 text-gray-700 py-3 rounded-xl hover:bg-gray-200 border border-gray-300 font-medium transition-all"
+                                className="w-full bg-neutral-100 text-neutral-700 py-3 rounded-xl hover:bg-neutral-200 border border-neutral-300 font-medium transition-all"
                             >
                                 לא, רק חשוף (ללא מייל)
                             </button>
@@ -899,24 +899,24 @@ export default function AdminBooksPage() {
                     className="bg-white rounded-xl shadow-2xl w-full max-w-5xl overflow-hidden relative flex flex-col h-[85vh]" 
                     onClick={e => e.stopPropagation()}
                 >
-                    <div className="p-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
+                    <div className="p-4 border-b bg-neutral-50 flex justify-between items-center shrink-0">
                         <div className="flex items-center gap-3">
-                            <div className="bg-purple-100 p-2 rounded-full">
-                                <span className="material-symbols-outlined text-purple-600">call_merge</span>
+                            <div className="bg-feature-100 p-2 rounded-full">
+                                <span className="material-symbols-outlined text-feature-600">call_merge</span>
                             </div>
                             <div>
-                                <h3 className="font-bold text-xl text-gray-800">מיזוג ספרים</h3>
-                                <p className="text-xs text-gray-500">בחר ספרים וסדר אותם לפי הסדר הרצוי</p>
+                                <h3 className="font-bold text-xl text-neutral-800">מיזוג ספרים</h3>
+                                <p className="text-xs text-neutral-500">בחר ספרים וסדר אותם לפי הסדר הרצוי</p>
                             </div>
                         </div>
-                        <button onClick={() => setShowMergeDialog(false)} className="text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-200 p-1">
+                        <button onClick={() => setShowMergeDialog(false)} className="text-neutral-400 hover:text-neutral-600 rounded-full hover:bg-neutral-200 p-1">
                             <span className="material-symbols-outlined text-xl">close</span>
                         </button>
                     </div>
                     
                     <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-                        <div className="w-full md:w-1/2 border-l p-4 flex flex-col bg-gray-50/50">
-                            <h4 className="font-bold text-gray-700 mb-3 flex items-center gap-2">
+                        <div className="w-full md:w-1/2 border-l p-4 flex flex-col bg-neutral-50/50">
+                            <h4 className="font-bold text-neutral-700 mb-3 flex items-center gap-2">
                                 <span className="material-symbols-outlined text-sm">library_books</span>
                                 בחר ספרים להוספה
                             </h4>
@@ -929,20 +929,20 @@ export default function AdminBooksPage() {
                                         <div 
                                             key={book.id}
                                             onClick={() => addBookToMergeList(book)}
-                                            className="bg-white p-3 rounded-lg border hover:border-purple-300 hover:shadow-sm cursor-pointer transition-all flex items-center gap-3 group"
+                                            className="bg-white p-3 rounded-lg border hover:border-feature-300 hover:shadow-sm cursor-pointer transition-all flex items-center gap-3 group"
                                         >
                                             {book.thumbnail ? (
                                                 <Image src={book.thumbnail} alt="" width={30} height={40} className="rounded object-cover shadow-sm" />
                                             ) : (
-                                                <div className="w-[30px] h-[40px] bg-gray-100 rounded flex items-center justify-center">
-                                                    <span className="material-symbols-outlined text-gray-300 text-sm">book</span>
+                                                <div className="w-[30px] h-[40px] bg-neutral-100 rounded flex items-center justify-center">
+                                                    <span className="material-symbols-outlined text-neutral-300 text-sm">book</span>
                                                 </div>
                                             )}
                                             <div className="flex-1 min-w-0">
-                                                <div className="font-medium text-sm text-gray-800 truncate">{book.name}</div>
-                                                <div className="text-xs text-gray-500">{book.category}</div>
+                                                <div className="font-medium text-sm text-neutral-800 truncate">{book.name}</div>
+                                                <div className="text-xs text-neutral-500">{book.category}</div>
                                             </div>
-                                            <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center group-hover:bg-purple-100 group-hover:text-purple-600 transition-colors">
+                                            <div className="w-6 h-6 rounded-full bg-neutral-100 flex items-center justify-center group-hover:bg-feature-100 group-hover:text-feature-600 transition-colors">
                                                 <span className="material-symbols-outlined text-sm">add</span>
                                             </div>
                                         </div>
@@ -952,52 +952,52 @@ export default function AdminBooksPage() {
                         </div>
 
                         <div className="w-full md:w-1/2 p-4 flex flex-col bg-white">
-                            <h4 className="font-bold text-gray-700 mb-4 flex items-center gap-2">
+                            <h4 className="font-bold text-neutral-700 mb-4 flex items-center gap-2">
                                 <span className="material-symbols-outlined text-sm">format_list_numbered</span>
                                 סדר הספרים במיזוג ({selectedBooksToMerge.length})
                             </h4>
 
                             <div className="mb-4 space-y-3">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">שם הספר המאוחד החדש</label>
+                                    <label className="block text-sm font-medium text-neutral-700 mb-1">שם הספר המאוחד החדש</label>
                                     <input 
                                         type="text" 
                                         value={mergedBookName}
                                         onChange={(e) => setMergedBookName(e.target.value)}
-                                        className="w-full border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-purple-500 outline-none text-base bg-purple-50/30"
+                                        className="w-full border border-neutral-300 rounded-lg p-2.5 focus:ring-2 focus:ring-feature-500 outline-none text-base bg-feature-50/30"
                                         placeholder="לדוגמה: אוסף כתבים מלא"
                                     />
                                 </div>
-                                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                                <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer select-none">
                                     <input 
                                         type="checkbox" 
                                         checked={isMergedHidden}
                                         onChange={(e) => setIsMergedHidden(e.target.checked)}
-                                        className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500 border-gray-300"
+                                        className="w-4 h-4 text-feature-600 rounded focus:ring-feature-500 border-neutral-300"
                                     />
                                     <span>הגדר את הספר המאוחד כ"מוסתר" (לא יוצג לציבור)</span>
                                 </label>
                             </div>
 
                             {selectedBooksToMerge.length === 0 ? (
-                                <div className="flex-1 flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50/50 m-2">
+                                <div className="flex-1 flex flex-col items-center justify-center text-neutral-400 border-2 border-dashed border-neutral-200 rounded-xl bg-neutral-50/50 m-2">
                                     <span className="material-symbols-outlined text-4xl mb-2 opacity-50">playlist_add</span>
                                     <p className="text-sm">בחר ספרים מהרשימה מימין</p>
                                 </div>
                             ) : (
                                 <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar pb-4">
                                     {selectedBooksToMerge.map((book, index) => (
-                                        <div key={book.id} className="bg-purple-50 border border-purple-100 p-3 rounded-lg flex items-center gap-3 animate-in slide-in-from-right-4 duration-300">
-                                            <div className="font-bold text-purple-300 text-lg w-6 text-center">{index + 1}</div>
-                                            <div className="flex-1 min-w-0 font-medium text-sm text-gray-900 truncate">{book.name}</div>
+                                        <div key={book.id} className="bg-feature-50 border border-feature-100 p-3 rounded-lg flex items-center gap-3 animate-in slide-in-from-right-4 duration-300">
+                                            <div className="font-bold text-feature-300 text-lg w-6 text-center">{index + 1}</div>
+                                            <div className="flex-1 min-w-0 font-medium text-sm text-neutral-900 truncate">{book.name}</div>
                                             <div className="flex items-center gap-1 bg-white rounded-lg border shadow-sm p-1">
-                                                <button onClick={() => moveBookOrder(index, 'up')} disabled={index === 0} className="p-1 hover:bg-gray-100 rounded disabled:opacity-30">
+                                                <button onClick={() => moveBookOrder(index, 'up')} disabled={index === 0} className="p-1 hover:bg-neutral-100 rounded disabled:opacity-30">
                                                     <span className="material-symbols-outlined text-sm">arrow_upward</span>
                                                 </button>
-                                                <button onClick={() => moveBookOrder(index, 'down')} disabled={index === selectedBooksToMerge.length - 1} className="p-1 hover:bg-gray-100 rounded disabled:opacity-30">
+                                                <button onClick={() => moveBookOrder(index, 'down')} disabled={index === selectedBooksToMerge.length - 1} className="p-1 hover:bg-neutral-100 rounded disabled:opacity-30">
                                                     <span className="material-symbols-outlined text-sm">arrow_downward</span>
                                                 </button>
-                                                <button onClick={() => removeBookFromMergeList(book.id)} className="p-1 text-red-500 hover:bg-red-50 rounded">
+                                                <button onClick={() => removeBookFromMergeList(book.id)} className="p-1 text-danger-500 hover:bg-danger-50 rounded">
                                                     <span className="material-symbols-outlined text-sm">close</span>
                                                 </button>
                                             </div>
@@ -1008,12 +1008,12 @@ export default function AdminBooksPage() {
                         </div>
                     </div>
 
-                    <div className="p-4 border-t bg-gray-50 flex justify-end gap-3 shrink-0">
-                        <button onClick={() => setShowMergeDialog(false)} className="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition-colors">ביטול</button>
+                    <div className="p-4 border-t bg-neutral-50 flex justify-end gap-3 shrink-0">
+                        <button onClick={() => setShowMergeDialog(false)} className="px-5 py-2.5 text-neutral-600 hover:bg-neutral-100 rounded-lg font-medium transition-colors">ביטול</button>
                         <button 
                             onClick={handleMergeSubmit} 
                             disabled={selectedBooksToMerge.length < 2 || !mergedBookName.trim() || isMerging}
-                            className="px-6 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-bold shadow-md disabled:opacity-50 flex items-center gap-2"
+                            className="px-6 py-2.5 bg-feature-600 text-white rounded-lg hover:bg-feature-700 font-bold shadow-md disabled:opacity-50 flex items-center gap-2"
                         >
                             {isMerging ? 'מבצע מיזוג...' : 'בצע מיזוג עכשיו'}
                         </button>
@@ -1028,53 +1028,53 @@ export default function AdminBooksPage() {
                     className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden relative flex flex-col max-h-[80vh]" 
                     onClick={e => e.stopPropagation()}
                 >
-                    <div className="p-4 border-b bg-teal-50 flex justify-between items-center shrink-0">
+                    <div className="p-4 border-b bg-aqua-50 flex justify-between items-center shrink-0">
                         <div className="flex items-center gap-2">
-                             <div className="bg-teal-100 p-2 rounded-full text-teal-700">
+                             <div className="bg-aqua-100 p-2 rounded-full text-aqua-700">
                                 <span className="material-symbols-outlined">group</span>
                              </div>
                              <div>
-                                <h3 className="font-bold text-lg text-gray-800">רשומים להתראות</h3>
-                                <p className="text-xs text-teal-700 font-medium">עדכונים על ספרים חדשים</p>
+                                <h3 className="font-bold text-lg text-neutral-800">רשומים להתראות</h3>
+                                <p className="text-xs text-aqua-700 font-medium">עדכונים על ספרים חדשים</p>
                              </div>
                         </div>
-                        <button onClick={() => setShowSubscribersModal(false)} className="text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-200 p-1">
+                        <button onClick={() => setShowSubscribersModal(false)} className="text-neutral-400 hover:text-neutral-600 rounded-full hover:bg-neutral-200 p-1">
                             <span className="material-symbols-outlined text-xl">close</span>
                         </button>
                     </div>
                     
-                    <div className="p-4 bg-gray-50 border-b flex justify-between items-center">
-                        <span className="text-gray-600 text-sm">סך הכל רשומים:</span>
-                        <span className="bg-teal-600 text-white px-3 py-1 rounded-full font-bold text-sm">
+                    <div className="p-4 bg-neutral-50 border-b flex justify-between items-center">
+                        <span className="text-neutral-600 text-sm">סך הכל רשומים:</span>
+                        <span className="bg-aqua-600 text-white px-3 py-1 rounded-full font-bold text-sm">
                             {isLoadingSubscribers ? '...' : subscribersList.length}
                         </span>
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                         {isLoadingSubscribers ? (
-                            <div className="flex justify-center py-8 text-teal-600">
+                            <div className="flex justify-center py-8 text-aqua-600">
                                 <span className="material-symbols-outlined animate-spin text-3xl">progress_activity</span>
                             </div>
                         ) : subscribersList.length === 0 ? (
-                            <div className="text-center py-8 text-gray-400">
+                            <div className="text-center py-8 text-neutral-400">
                                 <span className="material-symbols-outlined text-4xl mb-2 opacity-30">unsubscribe</span>
                                 <p>אין רשומים ברשימה זו עדיין.</p>
                             </div>
                         ) : (
                             <ul className="space-y-2">
                                 {subscribersList.map((subscriber, index) => (
-                                    <li key={subscriber.email} className="flex items-center justify-between gap-3 p-3 bg-white border border-gray-100 rounded-lg hover:border-teal-200 hover:shadow-sm transition-all group">
+                                    <li key={subscriber.email} className="flex items-center justify-between gap-3 p-3 bg-white border border-neutral-100 rounded-lg hover:border-aqua-200 hover:shadow-sm transition-all group">
                                         <div className="flex items-center gap-3 overflow-hidden flex-1">
-                                            <span className="text-gray-400 text-xs w-6">{index + 1}.</span>
-                                            <span className="material-symbols-outlined text-gray-400 text-sm">mail</span>
-                                            <span className="text-gray-700 font-mono text-sm truncate select-all" title={subscriber.email}>{subscriber.email}</span>
+                                            <span className="text-neutral-400 text-xs w-6">{index + 1}.</span>
+                                            <span className="material-symbols-outlined text-neutral-400 text-sm">mail</span>
+                                            <span className="text-neutral-700 font-mono text-sm truncate select-all" title={subscriber.email}>{subscriber.email}</span>
                                         </div>
             
                                         <div className="flex items-center gap-3">
-                                            <span className="text-gray-600 text-sm truncate">{subscriber.name}</span>
+                                            <span className="text-neutral-600 text-sm truncate">{subscriber.name}</span>
                                             <button 
                                                 onClick={() => handleDeleteSubscriber(subscriber.email)}
-                                                className="text-gray-300 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-full transition-all opacity-0 group-hover:opacity-100"
+                                                className="text-neutral-300 hover:text-danger-500 hover:bg-danger-50 p-1.5 rounded-full transition-all opacity-0 group-hover:opacity-100"
                                                 title="מחק מנוי"
                 >
                                                 <span className="material-symbols-outlined text-lg">delete</span>
@@ -1086,10 +1086,10 @@ export default function AdminBooksPage() {
                         )}
                     </div>
                     
-                    <div className="p-4 border-t bg-gray-50 text-center">
+                    <div className="p-4 border-t bg-neutral-50 text-center">
                         <button 
                             onClick={() => setShowSubscribersModal(false)}
-                            className="w-full py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 font-medium text-sm"
+                            className="w-full py-2 bg-white border border-neutral-300 text-neutral-700 rounded-lg hover:bg-neutral-100 font-medium text-sm"
                         >
                             סגור
                         </button>

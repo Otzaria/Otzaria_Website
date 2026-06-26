@@ -34,7 +34,7 @@ export default function Button({
     secondary: 'bg-secondary text-on-secondary hover:bg-secondary/90',
     outline: 'border-2 border-primary text-primary hover:bg-primary-container',
     ghost: 'text-primary hover:bg-primary/10',
-    danger: 'bg-red-600 text-white hover:bg-red-700'
+    danger: 'bg-danger-600 text-white hover:bg-danger-700'
   }
 
   const sizeClasses = {

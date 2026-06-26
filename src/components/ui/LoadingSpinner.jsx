@@ -26,7 +26,7 @@ export default function LoadingSpinner({
     <div className={`text-center py-20 ${className}`}>
       <div className={`inline-block animate-spin rounded-full border-primary ${sizeClasses[size]}`}></div>
       {message && (
-        <p className={`mt-4 text-gray-600 ${textSizeClasses[size]}`}>{message}</p>
+        <p className={`mt-4 text-neutral-600 ${textSizeClasses[size]}`}>{message}</p>
       )}
     </div>
   );

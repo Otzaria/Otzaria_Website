@@ -261,7 +261,7 @@ function PluginsPageContent() {
       
       <main className="flex-1">
         {/* Filters Section */}
-        <section className="py-6 px-4 bg-white border-b border-gray-100">
+        <section className="py-6 px-4 bg-white border-b border-neutral-100">
           <div className="container mx-auto max-w-6xl">
             <div className="grid md:grid-cols-[1fr_220px_auto] gap-4 mb-4">
               <div>
@@ -271,7 +271,7 @@ function PluginsPageContent() {
                   placeholder="שם, תיאור או תגית..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all"
+                  className="w-full px-4 py-3 border border-neutral-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all"
                 />
               </div>
               
@@ -280,7 +280,7 @@ function PluginsPageContent() {
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all"
+                  className="w-full px-4 py-3 border border-neutral-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all"
                 >
                   <option value="all">הכול</option>
                   <option value="stable">יציב</option>
@@ -315,7 +315,7 @@ function PluginsPageContent() {
                     className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
                       activeTag === 'all'
                         ? 'bg-primary text-white'
-                        : 'bg-white border border-gray-200 text-on-surface/70 hover:border-primary/30 hover:text-primary'
+                        : 'bg-white border border-neutral-200 text-on-surface/70 hover:border-primary/30 hover:text-primary'
                     }`}
                   >
                     כל התגיות
@@ -327,7 +327,7 @@ function PluginsPageContent() {
                       className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
                         activeTag === tag
                           ? 'bg-primary text-white'
-                          : 'bg-white border border-gray-200 text-on-surface/70 hover:border-primary/30 hover:text-primary'
+                          : 'bg-white border border-neutral-200 text-on-surface/70 hover:border-primary/30 hover:text-primary'
                       }`}
                     >
                       {tag}
@@ -368,7 +368,7 @@ function PluginsPageContent() {
             </div>
 
             {filteredPlugins.length === 0 ? (
-              <div className="text-center py-16 px-4 bg-white rounded-2xl border border-gray-100">
+              <div className="text-center py-16 px-4 bg-white rounded-2xl border border-neutral-100">
                 <h3 className="text-2xl font-bold text-on-surface mb-3">
                   {plugins.length === 0 ? 'בקרוב יופיעו כאן תוספים נוספים' : 'לא נמצאו תוספים לפי הסינון שבחרתם'}
                 </h3>
@@ -384,7 +384,7 @@ function PluginsPageContent() {
                   <article
                     key={plugin.id}
                     className={`flex flex-col bg-white rounded-2xl border overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group ${
-                      plugin.isPinned ? 'border-amber-300 ring-1 ring-amber-200' : 'border-gray-100'
+                      plugin.isPinned ? 'border-warning-300 ring-1 ring-warning-200' : 'border-neutral-100'
                     }`}
                   >
                     {/* Plugin Image */}
@@ -400,7 +400,7 @@ function PluginsPageContent() {
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                       {plugin.isPinned && (
-                        <span className="absolute top-3 right-3 inline-flex items-center gap-1 rounded-full bg-amber-500 px-3 py-1 text-xs font-bold text-white shadow-md">
+                        <span className="absolute top-3 right-3 inline-flex items-center gap-1 rounded-full bg-warning-500 px-3 py-1 text-xs font-bold text-white shadow-md">
                           <span className="material-symbols-outlined text-base">push_pin</span>
                           <span>מומלץ</span>
                         </span>
@@ -476,7 +476,7 @@ function PluginsPageContent() {
                       </div>
 
                       {/* Footer */}
-                      <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                      <div className="flex items-center justify-between pt-3 border-t border-neutral-100">
                         <Link
                           href={`/plugins/${plugin.id}`}
                           className="text-sm font-bold text-primary hover:underline"

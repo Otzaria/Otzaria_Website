@@ -30,13 +30,13 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center px-4 bg-neutral-50">
       <div className="max-w-md w-full glass-strong p-8 rounded-2xl shadow-xl text-center">
         <div className="flex justify-center mb-6">
             <Image src="/logo.png" alt="Logo" width={60} height={60} />
         </div>
         <h2 className="text-2xl font-bold mb-4">שחזור סיסמה</h2>
-        <p className="text-gray-600 mb-6">הכנס את המייל שלך ונשלח לך קישור לאיפוס הסיסמה.</p>
+        <p className="text-neutral-600 mb-6">הכנס את המייל שלך ונשלח לך קישור לאיפוס הסיסמה.</p>
         
         <form onSubmit={handleSubmit} className="space-y-4">
             <input
@@ -56,11 +56,11 @@ export default function ForgotPasswordPage() {
             </button>
         </form>
 
-        {status.message && <div className="mt-4 p-3 bg-green-100 text-green-700 rounded">{status.message}</div>}
-        {status.error && <div className="mt-4 p-3 bg-red-100 text-red-700 rounded">{status.error}</div>}
+        {status.message && <div className="mt-4 p-3 bg-success-100 text-success-700 rounded">{status.message}</div>}
+        {status.error && <div className="mt-4 p-3 bg-danger-100 text-danger-700 rounded">{status.error}</div>}
 
         <div className="mt-6">
-            <Link href="/library/auth/login" className="text-sm text-gray-500 hover:text-primary">חזרה להתחברות</Link>
+            <Link href="/library/auth/login" className="text-sm text-neutral-500 hover:text-primary">חזרה להתחברות</Link>
         </div>
       </div>
     </div>

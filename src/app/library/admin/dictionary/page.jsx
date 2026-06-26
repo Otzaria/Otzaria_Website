@@ -192,11 +192,11 @@ export default function AdminDictionaryPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="חפש מילה/משתמש"
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm w-64"
+            className="px-3 py-2 border border-neutral-300 rounded-lg text-sm w-64"
           />
           <button
             onClick={loadEntries}
-            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm"
+            className="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 rounded-lg text-sm"
           >
             רענן
           </button>
@@ -206,41 +206,41 @@ export default function AdminDictionaryPage() {
       {loading ? (
         <LoadingSpinner message="טוען מילים..." />
       ) : filteredEntries.length === 0 ? (
-        <div className="text-center py-12 text-gray-500">אין מילים להצגה</div>
+        <div className="text-center py-12 text-neutral-500">אין מילים להצגה</div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-gray-200">
+        <div className="overflow-x-auto rounded-xl border border-neutral-200">
           <table className="w-full bg-white">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200 text-gray-700 text-sm">
-                <th onClick={() => handleSort('word')} className="text-right p-4 font-bold cursor-pointer hover:bg-gray-100 select-none">מילה {getSortIcon('word')}</th>
-                <th onClick={() => handleSort('name')} className="text-right p-4 font-bold cursor-pointer hover:bg-gray-100 select-none">משתמש {getSortIcon('name')}</th>
-                <th onClick={() => handleSort('email')} className="text-right p-4 font-bold cursor-pointer hover:bg-gray-100 select-none">אימייל {getSortIcon('email')}</th>
+              <tr className="bg-neutral-50 border-b border-neutral-200 text-neutral-700 text-sm">
+                <th onClick={() => handleSort('word')} className="text-right p-4 font-bold cursor-pointer hover:bg-neutral-100 select-none">מילה {getSortIcon('word')}</th>
+                <th onClick={() => handleSort('name')} className="text-right p-4 font-bold cursor-pointer hover:bg-neutral-100 select-none">משתמש {getSortIcon('name')}</th>
+                <th onClick={() => handleSort('email')} className="text-right p-4 font-bold cursor-pointer hover:bg-neutral-100 select-none">אימייל {getSortIcon('email')}</th>
                 <th className="text-center p-4 font-bold">פעולות</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-neutral-100">
               {applySortToList(filteredEntries).map(entry => (
-                <tr key={`${entry.userId}-${entry.word}`} className="hover:bg-gray-50 transition-colors">
-                  <td className="p-4 font-medium text-gray-900">{entry.word}</td>
+                <tr key={`${entry.userId}-${entry.word}`} className="hover:bg-neutral-50 transition-colors">
+                  <td className="p-4 font-medium text-neutral-900">{entry.word}</td>
                   <td className="p-4 text-sm">{entry.name || '-'}</td>
-                  <td className="p-4 text-sm text-gray-500">{entry.email || '-'}</td>
+                  <td className="p-4 text-sm text-neutral-500">{entry.email || '-'}</td>
                   <td className="p-4">
                     <div className="flex items-center justify-center gap-2">
                       <button
                         onClick={() => handleAddGlobal(entry.userId, entry.word)}
-                        className="px-3 py-1.5 bg-green-600 text-white rounded-md text-xs hover:bg-green-700"
+                        className="px-3 py-1.5 bg-success-600 text-white rounded-md text-xs hover:bg-success-700"
                       >
                         הוסף למילון
                       </button>
                       <button
                         onClick={() => handleSkip(entry.userId, entry.word)}
-                        className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-xs hover:bg-gray-200"
+                        className="px-3 py-1.5 bg-neutral-100 text-neutral-700 rounded-md text-xs hover:bg-neutral-200"
                       >
                         דלג
                       </button>
                       <button
                         onClick={() => handleRemovePersonal(entry.userId, entry.word)}
-                        className="px-3 py-1.5 bg-red-50 text-red-700 rounded-md text-xs hover:bg-red-100"
+                        className="px-3 py-1.5 bg-danger-50 text-danger-700 rounded-md text-xs hover:bg-danger-100"
                       >
                         הסר מהמילון האישי
                       </button>
@@ -255,34 +255,34 @@ export default function AdminDictionaryPage() {
 
       {!loading && skippedEntries.length > 0 && (
         <div className="mt-8">
-          <h3 className="text-lg font-bold text-gray-800 mb-3">מילים מדולגות</h3>
-          <div className="overflow-x-auto rounded-xl border border-gray-200">
+          <h3 className="text-lg font-bold text-neutral-800 mb-3">מילים מדולגות</h3>
+          <div className="overflow-x-auto rounded-xl border border-neutral-200">
             <table className="w-full bg-white">
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-200 text-gray-700 text-sm">
-                  <th onClick={() => handleSort('word')} className="text-right p-4 font-bold cursor-pointer hover:bg-gray-100 select-none">מילה {getSortIcon('word')}</th>
-                  <th onClick={() => handleSort('name')} className="text-right p-4 font-bold cursor-pointer hover:bg-gray-100 select-none">משתמש {getSortIcon('name')}</th>
-                  <th onClick={() => handleSort('email')} className="text-right p-4 font-bold cursor-pointer hover:bg-gray-100 select-none">אימייל {getSortIcon('email')}</th>
+                <tr className="bg-neutral-50 border-b border-neutral-200 text-neutral-700 text-sm">
+                  <th onClick={() => handleSort('word')} className="text-right p-4 font-bold cursor-pointer hover:bg-neutral-100 select-none">מילה {getSortIcon('word')}</th>
+                  <th onClick={() => handleSort('name')} className="text-right p-4 font-bold cursor-pointer hover:bg-neutral-100 select-none">משתמש {getSortIcon('name')}</th>
+                  <th onClick={() => handleSort('email')} className="text-right p-4 font-bold cursor-pointer hover:bg-neutral-100 select-none">אימייל {getSortIcon('email')}</th>
                   <th className="text-center p-4 font-bold">פעולות</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-neutral-100">
                 {applySortToList(skippedEntries).map(entry => (
-                  <tr key={`skipped-${entry.userId}-${entry.word}`} className="hover:bg-gray-50 transition-colors">
-                    <td className="p-4 font-medium text-gray-900">{entry.word}</td>
+                  <tr key={`skipped-${entry.userId}-${entry.word}`} className="hover:bg-neutral-50 transition-colors">
+                    <td className="p-4 font-medium text-neutral-900">{entry.word}</td>
                     <td className="p-4 text-sm">{entry.name || '-'}</td>
-                    <td className="p-4 text-sm text-gray-500">{entry.email || '-'}</td>
+                    <td className="p-4 text-sm text-neutral-500">{entry.email || '-'}</td>
                     <td className="p-4">
                       <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() => handleAddGlobal(entry.userId, entry.word)}
-                          className="px-3 py-1.5 bg-green-600 text-white rounded-md text-xs hover:bg-green-700"
+                          className="px-3 py-1.5 bg-success-600 text-white rounded-md text-xs hover:bg-success-700"
                         >
                           הוסף למילון
                         </button>
                         <button
                           onClick={() => handleRemovePersonal(entry.userId, entry.word)}
-                          className="px-3 py-1.5 bg-red-50 text-red-700 rounded-md text-xs hover:bg-red-100"
+                          className="px-3 py-1.5 bg-danger-50 text-danger-700 rounded-md text-xs hover:bg-danger-100"
                         >
                           הסר מהמילון האישי
                         </button>

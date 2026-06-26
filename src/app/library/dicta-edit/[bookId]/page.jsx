@@ -111,7 +111,7 @@ export default function LibraryEditorPage() {
       <div className="w-px h-8 bg-surface-variant"></div>
       <Button icon="arrow_forward" variant="ghost" onClick={() => router.push('/library/dicta-edit')} label="חזרה למרחב" />
       <div className="w-px h-8 bg-surface-variant"></div>
-      <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm ${canEditDirect ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+      <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm ${canEditDirect ? 'bg-success-alt-100 text-success-alt-700' : 'bg-warning-100 text-warning-700'}`}>
         <span className="material-symbols-outlined text-sm">{canEditDirect ? 'verified_user' : 'rate_review'}</span>
         <span>{canEditDirect ? 'עריכה ישירה' : 'מצב הצעות'}</span>
       </div>
@@ -124,7 +124,7 @@ export default function LibraryEditorPage() {
         value={editType}
         onChange={(e) => setEditType(e.target.value)}
         title="סוג התיקון (אופציונלי)"
-        className="text-sm border border-slate-200 rounded-lg px-2 py-1.5 bg-white"
+        className="text-sm border border-neutral-cool-200 rounded-lg px-2 py-1.5 bg-white"
       >
         <option value="">סוג תיקון (אופציונלי)</option>
         {EDIT_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
@@ -148,18 +148,18 @@ export default function LibraryEditorPage() {
     return <div className="flex items-center justify-center min-h-screen"><LoadingSpinner message="טוען ספר..." /></div>
   }
   if (!book) {
-    return <div className="flex items-center justify-center min-h-screen"><div className="text-xl text-red-600">הספר לא נמצא</div></div>
+    return <div className="flex items-center justify-center min-h-screen"><div className="text-xl text-danger-600">הספר לא נמצא</div></div>
   }
 
   return (
     <>
       {blocked && (
-        <div className="bg-red-600 text-white text-center py-2 text-sm font-medium">
+        <div className="bg-danger-600 text-white text-center py-2 text-sm font-medium">
           חשבונך חסום מעריכה במרחב זה. ניתן לצפות בלבד.
         </div>
       )}
       {!canEditDirect && !blocked && (
-        <div className="bg-amber-50 border-b border-amber-200 text-amber-800 text-center py-2 text-sm">
+        <div className="bg-warning-50 border-b border-warning-200 text-warning-800 text-center py-2 text-sm">
           עריכותיך יישמרו כ<strong>הצעת תיקון</strong> וייכנסו לספר רק לאחר אישור מפקח. ניתן לערוך בחופשיות — לא ניתן לקלקל את הספר.
         </div>
       )}
@@ -245,15 +245,15 @@ function FindReplaceCorrectionModal({ bookId, canEditDirect, onClose, onApplied,
           <span className="material-symbols-outlined text-primary">find_replace</span>
           חיפוש והחלפה בכל הספר
         </h2>
-        <p className="text-sm text-slate-500 mb-4">
+        <p className="text-sm text-neutral-cool-500 mb-4">
           {canEditDirect ? 'ההחלפה תוחל מיד על הספר.' : 'ההחלפה תישלח כהצעה לאישור מפקח.'}
         </p>
 
         <label className="block text-sm font-medium mb-1">חיפוש</label>
-        <input value={find} onChange={(e) => setFind(e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 mb-3 font-mono" />
+        <input value={find} onChange={(e) => setFind(e.target.value)} className="w-full border border-neutral-cool-200 rounded-lg px-3 py-2 mb-3 font-mono" />
 
         <label className="block text-sm font-medium mb-1">החלפה</label>
-        <input value={replace} onChange={(e) => setReplace(e.target.value)} className="w-full border border-slate-200 rounded-lg px-3 py-2 mb-3 font-mono" />
+        <input value={replace} onChange={(e) => setReplace(e.target.value)} className="w-full border border-neutral-cool-200 rounded-lg px-3 py-2 mb-3 font-mono" />
 
         <div className="flex flex-wrap items-center gap-4 mb-3 text-sm">
           <label className={`flex items-center gap-2 ${canEditDirect ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
@@ -267,23 +267,23 @@ function FindReplaceCorrectionModal({ bookId, canEditDirect, onClose, onApplied,
             תלוי רישיות
           </label>
           {isRegex && (
-            <input value={flags} onChange={(e) => setFlags(e.target.value)} placeholder="flags (gimsuy)" className="border border-slate-200 rounded-lg px-2 py-1 w-28 font-mono" />
+            <input value={flags} onChange={(e) => setFlags(e.target.value)} placeholder="flags (gimsuy)" className="border border-neutral-cool-200 rounded-lg px-2 py-1 w-28 font-mono" />
           )}
         </div>
 
         <div className="flex gap-3 mb-4">
-          <select value={editType} onChange={(e) => setEditType(e.target.value)} className="flex-1 border border-slate-200 rounded-lg px-2 py-2 text-sm bg-white">
+          <select value={editType} onChange={(e) => setEditType(e.target.value)} className="flex-1 border border-neutral-cool-200 rounded-lg px-2 py-2 text-sm bg-white">
             <option value="">סוג תיקון (אופציונלי)</option>
             {EDIT_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
           </select>
-          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="הערה (אופציונלי)" className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="הערה (אופציונלי)" className="flex-1 border border-neutral-cool-200 rounded-lg px-3 py-2 text-sm" />
         </div>
 
         <div className="flex gap-3">
           <button onClick={submit} disabled={busy} className="flex-[2] bg-primary text-white py-2.5 rounded-xl font-bold hover:bg-primary/90 disabled:opacity-50">
             {busy ? 'מעבד...' : canEditDirect ? 'החל החלפה' : 'שלח כהצעה'}
           </button>
-          <button onClick={onClose} disabled={busy} className="flex-1 border border-slate-200 py-2.5 rounded-xl font-bold hover:bg-slate-50">ביטול</button>
+          <button onClick={onClose} disabled={busy} className="flex-1 border border-neutral-cool-200 py-2.5 rounded-xl font-bold hover:bg-neutral-cool-50">ביטול</button>
         </div>
       </div>
     </div>

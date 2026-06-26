@@ -387,18 +387,18 @@ export default function BookReminderPage() {
 
     return (
         <div className="max-w-3xl mx-auto p-8 bg-white shadow-xl rounded-2xl mt-10">
-            <h1 className="text-3xl font-bold mb-2 text-gray-800 flex items-center gap-3">
+            <h1 className="text-3xl font-bold mb-2 text-neutral-800 flex items-center gap-3">
                 <span className="material-symbols-outlined text-primary text-4xl">forward_to_inbox</span>
                 שליחת תזכורות לעורכים
             </h1>
-            <p className="text-gray-500 mb-8">
+            <p className="text-neutral-500 mb-8">
                 המערכת תאתר אוטומטית את המשתמשים שעובדים כרגע על הספר הנבחר ותשלח להם את ההודעה.
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-8">
                 
-                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                <div className="bg-neutral-50 p-4 rounded-xl border border-neutral-100">
+                    <label className="block text-sm font-bold text-neutral-700 mb-2">
                         1. בחר סוג ספר
                     </label>
                     <div className="flex gap-4 mb-4">
@@ -431,8 +431,8 @@ export default function BookReminderPage() {
                     </div>
 
                     {bookType === 'dicta' ? (
-                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                            <label className="block text-sm font-bold text-gray-700 mb-2">
+                        <div className="bg-info-50 p-4 rounded-lg border border-info-200">
+                            <label className="block text-sm font-bold text-neutral-700 mb-2">
                                 סינון לפי ימים מאז תפיסה
                             </label>
                             <div className="flex items-center gap-3 mb-3">
@@ -441,13 +441,13 @@ export default function BookReminderPage() {
                                     min="0"
                                     value={daysThreshold}
                                     onChange={(e) => setDaysThreshold(parseInt(e.target.value) || 0)}
-                                    className="w-20 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none"
+                                    className="w-20 p-2 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary outline-none"
                                 />
-                                <span className="text-sm text-gray-600">
+                                <span className="text-sm text-neutral-600">
                                     {daysThreshold === 0 ? 'כל הספרים בטיפול (ללא סינון)' : `ימים או יותר מאז שהספר נתפס`}
                                 </span>
                             </div>
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-neutral-500">
                                 {daysThreshold === 0 
                                     ? 'המערכת תאתר את כל המשתמשים שיש להם ספרי דיקטה בטיפול, ללא קשר למועד התפיסה'
                                     : `המערכת תאתר אוטומטית את כל המשתמשים שיש להם ספרי דיקטה בטיפול שעברו ${daysThreshold} ימים או יותר מאז התפיסה`
@@ -456,14 +456,14 @@ export default function BookReminderPage() {
                             
                             {isCheckingRecipients ? (
                                 <div className="mt-3">
-                                    <span className="text-blue-600 flex items-center gap-2">
+                                    <span className="text-info-600 flex items-center gap-2">
                                         <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
                                         מאתר נמענים...
                                     </span>
                                 </div>
                             ) : foundUsersDetails.length > 0 ? (
                                 <div className="mt-3 flex items-center gap-3">
-                                    <span className="text-green-600 font-bold flex items-center gap-2 bg-green-50 px-3 py-1 rounded-full border border-green-200">
+                                    <span className="text-success-600 font-bold flex items-center gap-2 bg-success-50 px-3 py-1 rounded-full border border-success-200">
                                         <span className="material-symbols-outlined text-sm">group</span>
                                         נמצאו {foundUsersDetails.length} משתמשים ({recipients.length} נבחרו)
                                     </span>
@@ -471,14 +471,14 @@ export default function BookReminderPage() {
                                     <button 
                                         type="button"
                                         onClick={() => setShowUserSelection(true)}
-                                        className="text-primary hover:text-blue-800 underline font-medium text-sm transition-colors"
+                                        className="text-primary hover:text-info-800 underline font-medium text-sm transition-colors"
                                     >
                                         בחירת משתמשים מסויימים
                                     </button>
                                 </div>
                             ) : (
                                 <div className="mt-3">
-                                    <span className="text-orange-500 flex items-center gap-2 bg-orange-50 px-3 py-1 rounded-full border border-orange-200 text-sm">
+                                    <span className="text-warning-strong-500 flex items-center gap-2 bg-warning-strong-50 px-3 py-1 rounded-full border border-warning-strong-200 text-sm">
                                         <span className="material-symbols-outlined text-sm">info</span>
                                         {daysThreshold === 0 
                                             ? 'לא נמצאו משתמשים עם ספרי דיקטה בטיפול'
@@ -490,14 +490,14 @@ export default function BookReminderPage() {
                         </div>
                     ) : (
                         <>
-                            <label className="block text-sm font-bold text-gray-700 mb-2">
+                            <label className="block text-sm font-bold text-neutral-700 mb-2">
                                 2. בחר ספר (מוצגים רק ספרים בטיפול)
                             </label>
                             <select
                                 value={selectedBookPath}
                                 onChange={(e) => setSelectedBookPath(e.target.value)}
                                 required
-                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none bg-white transition-all"
+                                className="w-full p-3 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary outline-none bg-white transition-all"
                             >
                                 <option value="">-- בחר ספר מהרשימה --</option>
                                 {books.map(book => (
@@ -511,13 +511,13 @@ export default function BookReminderPage() {
                                 <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm animate-in fade-in">
                                     <div>
                                         {isCheckingRecipients ? (
-                                            <span className="text-blue-600 flex items-center gap-2">
+                                            <span className="text-info-600 flex items-center gap-2">
                                                 <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
                                                 מאתר נמענים...
                                             </span>
                                         ) : foundUsersDetails.length > 0 ? (
                                             <div className="flex items-center gap-3">
-                                                <span className="text-green-600 font-bold flex items-center gap-2 bg-green-50 px-3 py-1 rounded-full border border-green-200">
+                                                <span className="text-success-600 font-bold flex items-center gap-2 bg-success-50 px-3 py-1 rounded-full border border-success-200">
                                                     <span className="material-symbols-outlined text-sm">group</span>
                                                     נמצאו {foundUsersDetails.length} משתמשים ({recipients.length} נבחרו)
                                                 </span>
@@ -526,14 +526,14 @@ export default function BookReminderPage() {
                                                     <button 
                                                         type="button"
                                                         onClick={() => setShowUserSelection(true)}
-                                                        className="text-primary hover:text-blue-800 underline font-medium text-sm transition-colors"
+                                                        className="text-primary hover:text-info-800 underline font-medium text-sm transition-colors"
                                                     >
                                                         בחירת משתמשים מסויימים
                                                     </button>
                                                 )}
                                             </div>
                                         ) : (
-                                            <span className="text-red-500 flex items-center gap-2 bg-red-50 px-3 py-1 rounded-full border border-red-200">
+                                            <span className="text-danger-500 flex items-center gap-2 bg-danger-50 px-3 py-1 rounded-full border border-danger-200">
                                                 <span className="material-symbols-outlined text-sm">warning</span>
                                                 לא נמצאו נמענים פעילים בספר זה
                                             </span>
@@ -546,7 +546,7 @@ export default function BookReminderPage() {
                 </div>
 
                 <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                    <label className="block text-sm font-bold text-neutral-700 mb-2">
                         {bookType === 'regular' ? '3' : '2'}. תוכן ההודעה (משתלב בתוך התבנית הקבועה)
                     </label>
                     <textarea
@@ -555,7 +555,7 @@ export default function BookReminderPage() {
                         required
                         rows="5"
                         placeholder="כתוב כאן את המסר שלך למתנדבים..."
-                        className="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary outline-none resize-y text-base leading-relaxed"
+                        className="w-full p-4 border border-neutral-300 rounded-xl focus:ring-2 focus:ring-primary outline-none resize-y text-base leading-relaxed"
                     ></textarea>
                 </div>
 
@@ -564,8 +564,8 @@ export default function BookReminderPage() {
                     disabled={status.loading || recipients.length === 0}
                     className={`w-full py-4 px-6 rounded-xl text-white font-bold text-lg transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 transform active:scale-[0.98]
                         ${status.loading || recipients.length === 0 
-                            ? 'bg-gray-400 cursor-not-allowed opacity-70' 
-                            : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800'}`}
+                            ? 'bg-neutral-400 cursor-not-allowed opacity-70' 
+                            : 'bg-gradient-to-r from-info-600 to-info-700 hover:from-info-700 hover:to-info-800'}`}
                 >
                     {status.loading ? (
                         <>
@@ -581,8 +581,8 @@ export default function BookReminderPage() {
                 </button>
 
                 {status.success && (
-                    <div className="p-4 bg-green-50 text-green-800 rounded-xl border border-green-200 flex items-center gap-3 animate-in slide-in-from-bottom-2">
-                        <span className="material-symbols-outlined text-2xl text-green-600">check_circle</span>
+                    <div className="p-4 bg-success-50 text-success-800 rounded-xl border border-success-200 flex items-center gap-3 animate-in slide-in-from-bottom-2">
+                        <span className="material-symbols-outlined text-2xl text-success-600">check_circle</span>
                         <div>
                             <p className="font-bold">השליחה בוצעה!</p>
                             <p className="text-sm">{status.success}</p>
@@ -591,8 +591,8 @@ export default function BookReminderPage() {
                 )}
                 
                 {status.error && (
-                    <div className="p-4 bg-red-50 text-red-800 rounded-xl border border-red-200 flex items-center gap-3 animate-in slide-in-from-bottom-2">
-                        <span className="material-symbols-outlined text-2xl text-red-600">error</span>
+                    <div className="p-4 bg-danger-50 text-danger-800 rounded-xl border border-danger-200 flex items-center gap-3 animate-in slide-in-from-bottom-2">
+                        <span className="material-symbols-outlined text-2xl text-danger-600">error</span>
                         <div>
                             <p className="font-bold">שגיאה בשליחה</p>
                             <p className="text-sm">{status.error}</p>
@@ -603,39 +603,39 @@ export default function BookReminderPage() {
 
             {loadingHistory ? (
                 <div className="mt-12 border-t pt-8">
-                    <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-gray-500">history</span>
+                    <h2 className="text-xl font-bold text-neutral-800 mb-4 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-neutral-500">history</span>
                         היסטוריית שליחות אחרונות
                     </h2>
                     <LoadingSpinner message="טוען היסטוריה..." />
                 </div>
             ) : !loadingHistory && history.length > 0 && (
                 <div className="mt-12 border-t pt-8">
-                    <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-gray-500">history</span>
+                    <h2 className="text-xl font-bold text-neutral-800 mb-4 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-neutral-500">history</span>
                         היסטוריית שליחות אחרונות
                     </h2>
-                    <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
+                    <div className="bg-neutral-50 rounded-xl border border-neutral-200 overflow-hidden">
                         {history.map((item) => (
-                            <div key={item.id} className="p-4 border-b border-gray-100 last:border-0 hover:bg-white transition-colors flex items-center justify-between group">
+                            <div key={item.id} className="p-4 border-b border-neutral-100 last:border-0 hover:bg-white transition-colors flex items-center justify-between group">
                                 <div>
-                                    <div className="font-bold text-gray-800 flex items-center gap-2">
+                                    <div className="font-bold text-neutral-800 flex items-center gap-2">
                                         {item.bookName}
                                         {item.bookType === 'dicta' && (
-                                            <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                                            <span className="text-xs bg-feature-100 text-feature-700 px-2 py-0.5 rounded-full">
                                                 דיקטה
                                             </span>
                                         )}
                                     </div>
-                                    <div className="text-sm text-gray-500 flex items-center gap-2 flex-wrap">
+                                    <div className="text-sm text-neutral-500 flex items-center gap-2 flex-wrap">
                                         <span>נשלח על ידי: {item.adminName}</span>
                                         {item.isPartial && (
-                                            <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
+                                            <span className="text-xs bg-warning-strong-100 text-warning-strong-700 px-2 py-0.5 rounded-full">
                                                 נשלח לחלק מהמשתמשים
                                             </span>
                                         )}
                                         {item.bookType === 'dicta' && item.daysThreshold !== undefined && (
-                                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                                            <span className="text-xs bg-info-100 text-info-700 px-2 py-0.5 rounded-full">
                                                 {item.daysThreshold === 0 ? 'כל הספרים' : `${item.daysThreshold}+ ימים`}
                                             </span>
                                         )}
@@ -643,17 +643,17 @@ export default function BookReminderPage() {
                                 </div>
                                 <div className="flex items-center gap-4">
                                     <div className="text-left">
-                                        <div className="text-sm font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md inline-block">
+                                        <div className="text-sm font-bold text-info-600 bg-info-50 px-2 py-1 rounded-md inline-block">
                                             {formatTimeAgo(item.timestamp)}
                                         </div>
-                                        <div className="text-xs text-gray-400 mt-1" dir="ltr">
+                                        <div className="text-xs text-neutral-400 mt-1" dir="ltr">
                                             {new Date(item.timestamp).toLocaleTimeString('he-IL', {hour: '2-digit', minute:'2-digit'})}
                                         </div>
                                     </div>
                                     
                                     <button 
                                         onClick={() => handleDeleteHistory(item.id)}
-                                        className="text-gray-300 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-50 opacity-0 group-hover:opacity-100"
+                                        className="text-neutral-300 hover:text-danger-500 transition-colors p-2 rounded-full hover:bg-danger-50 opacity-0 group-hover:opacity-100"
                                         title="מחק מההיסטוריה"
                                     >
                                         <span className="material-symbols-outlined">delete</span>
@@ -668,12 +668,12 @@ export default function BookReminderPage() {
             {showUserSelection && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col">
-                        <div className="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-2xl">
-                            <h3 className="font-bold text-lg text-gray-800">בחירת נמענים</h3>
+                        <div className="p-4 border-b flex justify-between items-center bg-neutral-50 rounded-t-2xl">
+                            <h3 className="font-bold text-lg text-neutral-800">בחירת נמענים</h3>
                             <button 
                                 type="button"
                                 onClick={() => setShowUserSelection(false)} 
-                                className="text-gray-500 hover:text-gray-700"
+                                className="text-neutral-500 hover:text-neutral-700"
                             >
                                 <span className="material-symbols-outlined">close</span>
                             </button>
@@ -684,14 +684,14 @@ export default function BookReminderPage() {
                                 <button 
                                     type="button"
                                     onClick={() => setRecipients(foundUsersDetails.map(u => u.email))}
-                                    className="text-blue-600 hover:underline"
+                                    className="text-info-600 hover:underline"
                                 >
                                     בחר הכל
                                 </button>
                                 <button 
                                     type="button"
                                     onClick={() => setRecipients([])}
-                                    className="text-red-600 hover:underline"
+                                    className="text-danger-600 hover:underline"
                                 >
                                     נקה הכל
                                 </button>
@@ -702,21 +702,21 @@ export default function BookReminderPage() {
                                     <label 
                                         key={user.email} 
                                         className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all
-                                            ${recipients.includes(user.email) ? 'bg-blue-50 border-blue-200' : 'hover:bg-gray-50 border-gray-100'}`}
+                                            ${recipients.includes(user.email) ? 'bg-info-50 border-info-200' : 'hover:bg-neutral-50 border-neutral-100'}`}
                                     >
                                         <input
                                             type="checkbox"
                                             checked={recipients.includes(user.email)}
                                             onChange={() => toggleRecipient(user.email)}
-                                            className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500 mt-0.5"
+                                            className="w-5 h-5 rounded text-info-600 focus:ring-info-500 mt-0.5"
                                         />
                                         <div className="flex-1">
-                                            <div className="font-bold text-gray-800">{user.name}</div>
-                                            <div className="text-xs text-gray-500">{user.email}</div>
+                                            <div className="font-bold text-neutral-800">{user.name}</div>
+                                            <div className="text-xs text-neutral-500">{user.email}</div>
                                             {bookType === 'dicta' && user.books && user.books.length > 0 && (
                                                 <div className="mt-2 space-y-1">
                                                     {user.books.map((book, idx) => (
-                                                        <div key={idx} className="text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded">
+                                                        <div key={idx} className="text-xs bg-feature-50 text-feature-700 px-2 py-1 rounded">
                                                             {book.title} ({book.daysSinceClaim} ימים)
                                                         </div>
                                                     ))}
@@ -728,11 +728,11 @@ export default function BookReminderPage() {
                             </div>
                         </div>
 
-                        <div className="p-4 border-t bg-gray-50 rounded-b-2xl flex justify-end">
+                        <div className="p-4 border-t bg-neutral-50 rounded-b-2xl flex justify-end">
                             <button
                                 type="button"
                                 onClick={() => setShowUserSelection(false)}
-                                className="bg-primary text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700 transition-colors"
+                                className="bg-primary text-white px-6 py-2 rounded-lg font-bold hover:bg-info-700 transition-colors"
                             >
                                 אישור ({recipients.length})
                             </button>

@@ -84,7 +84,7 @@ export default function PunctuateModal({ isOpen, onClose, content, onContentChan
       size="md"
     >
       <div className="space-y-4">
-        <div className="bg-blue-50 p-4 rounded-lg text-sm text-gray-700">
+        <div className="bg-info-50 p-4 rounded-lg text-sm text-neutral-700">
           <p>כלי זה מוסיף נקודה או נקודותיים בסוף שורות ארוכות ומדגיש את המילה הראשונה.</p>
         </div>
 
@@ -93,7 +93,7 @@ export default function PunctuateModal({ isOpen, onClose, content, onContentChan
           <select
             value={addEnding}
             onChange={(e) => setAddEnding(e.target.value)}
-            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-info-500 outline-none"
           >
             <option value="הוסף נקודה">הוסף נקודה</option>
             <option value="הוסף נקודותיים">הוסף נקודותיים</option>
@@ -112,7 +112,7 @@ export default function PunctuateModal({ isOpen, onClose, content, onContentChan
         </label>
 
         {result && (
-          <div className={`p-3 rounded ${result.includes('שגיאה') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+          <div className={`p-3 rounded ${result.includes('שגיאה') ? 'bg-danger-100 text-danger-700' : 'bg-success-100 text-success-700'}`}>
             {result}
           </div>
         )}
@@ -127,7 +127,7 @@ export default function PunctuateModal({ isOpen, onClose, content, onContentChan
           </button>
           <button
             onClick={handleClose}
-            className="px-6 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="px-6 py-2.5 border border-neutral-300 rounded-lg hover:bg-neutral-50 transition-colors"
           >
             סגור
           </button>

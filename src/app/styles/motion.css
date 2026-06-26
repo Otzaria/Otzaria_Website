@@ -1,0 +1,22 @@
+/* ============================================================
+ * motion.css — טוקני תנועה וטשטוש גלובליים
+ * ------------------------------------------------------------
+ * הערכים מכוונים לתנועה מעט רגועה וטשטוש רך יותר.
+ * ============================================================ */
+
+@theme {
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --blur-xs: 4px;
+  --blur-sm: 8px;
+  --blur-md: 14px;
+  --blur-lg: 18px;
+  --blur-xl: 28px;
+  --blur-2xl: 44px;
+  --blur-3xl: 68px;
+
+  --default-transition-duration: 180ms;
+  --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}

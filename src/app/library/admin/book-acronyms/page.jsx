@@ -116,7 +116,7 @@ export default function AdminBookAcronymsPage() {
         </div>
         <a
           href="/api/book-acronyms/export-json"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-success-alt-600 text-white rounded-lg hover:bg-success-alt-700"
           download
         >
           <span className="material-symbols-outlined">download</span>
@@ -128,27 +128,27 @@ export default function AdminBookAcronymsPage() {
         <button
           onClick={toggleSelectAllRows}
           disabled={loading || rows.length === 0}
-          className="px-4 py-2 rounded-lg bg-slate-600 text-white disabled:opacity-50"
+          className="px-4 py-2 rounded-lg bg-neutral-cool-600 text-white disabled:opacity-50"
         >
           {allSelected ? 'בטל סימון מהכל' : 'סמן הכל'}
         </button>
         <button
           onClick={() => runAction('approve')}
           disabled={runningAction || selectedIds.length === 0}
-          className="px-4 py-2 rounded-lg bg-green-600 text-white disabled:opacity-50"
+          className="px-4 py-2 rounded-lg bg-success-600 text-white disabled:opacity-50"
         >
           אשר מסומן
         </button>
         <button
           onClick={() => runAction('delete')}
           disabled={runningAction || selectedIds.length === 0}
-          className="px-4 py-2 rounded-lg bg-red-600 text-white disabled:opacity-50"
+          className="px-4 py-2 rounded-lg bg-danger-600 text-white disabled:opacity-50"
         >
           מחק מסומן
         </button>
       </div>
 
-      {error && <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 px-3 py-2 rounded">{error}</div>}
+      {error && <div className="mb-4 text-sm text-danger-700 bg-danger-50 border border-danger-200 px-3 py-2 rounded">{error}</div>}
 
       {loading ? (
         <div className="text-center py-10">טוען...</div>
@@ -204,7 +204,7 @@ function formatActionType(actionType) {
 
 function formatActionDetails(row) {
   if (row.actionType === 'delete') {
-    return <span className="line-through text-red-600">{row.currentAlias || '-'}</span>
+    return <span className="line-through text-danger-600">{row.currentAlias || '-'}</span>
   }
   if (row.actionType === 'update') {
     return (

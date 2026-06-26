@@ -55,7 +55,7 @@ export default function EditCategoriesDialog({ isOpen, onClose, existingCategori
             ]}
         >
             <div className="space-y-4 max-h-[60vh] overflow-y-auto p-1">
-                <div className="grid grid-cols-12 gap-2 text-sm font-bold text-gray-500 mb-2">
+                <div className="grid grid-cols-12 gap-2 text-sm font-bold text-neutral-500 mb-2">
                     <div className="col-span-2">צבע</div>
                     <div className="col-span-8">שם הקטגוריה</div>
                     <div className="col-span-2"></div>
@@ -82,7 +82,7 @@ export default function EditCategoriesDialog({ isOpen, onClose, existingCategori
                         <div className="col-span-2 text-left">
                             <button
                                 onClick={() => handleDelete(index)}
-                                className="text-gray-400 hover:text-red-500 p-1 rounded-full hover:bg-red-50 transition-colors"
+                                className="text-neutral-400 hover:text-danger-500 p-1 rounded-full hover:bg-danger-50 transition-colors"
                             >
                                 <span className="material-symbols-outlined">delete</span>
                             </button>
@@ -92,7 +92,7 @@ export default function EditCategoriesDialog({ isOpen, onClose, existingCategori
 
                 <button
                     onClick={handleAdd}
-                    className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-primary hover:text-primary hover:bg-blue-50 transition-all flex items-center justify-center gap-2 font-medium mt-4"
+                    className="w-full py-2 border-2 border-dashed border-neutral-300 rounded-lg text-neutral-500 hover:border-primary hover:text-primary hover:bg-info-50 transition-all flex items-center justify-center gap-2 font-medium mt-4"
                 >
                     <span className="material-symbols-outlined">add</span>
                     הוסף קטגוריה חדשה

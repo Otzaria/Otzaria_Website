@@ -85,12 +85,12 @@ export default function SearchTutorialPage() {
                 <p className="text-lg mb-6">
                   מדריך זה מחולק לכותרות לפי הנושא, ויעזור לך להפיק את המרב מיכולות החיפוש המתקדמות של אוצריא.
                 </p>
-                <div className="p-4 bg-blue-50 border-r-4 border-blue-400 rounded">
+                <div className="p-4 bg-info-50 border-r-4 border-info-400 rounded">
                   <div className="flex items-start gap-3">
-                    <span className="material-symbols-outlined text-blue-600">lightbulb</span>
+                    <span className="material-symbols-outlined text-info-600">lightbulb</span>
                     <div>
-                      <p className="text-blue-900 mb-2"><strong>לתשומת לב:</strong> אם החיפוש מגיב "אין תוצאות" בכל חיפוש שעשיתם, כנראה לא יצרתם אינדקס עדיין.</p>
-                      <p className="text-blue-900">כדי ליצור אינדקס יש ללחוץ על מקש עדכון אינדקס (המסומן בעיגול) ולאשר את הפעולה בחלון שיפתח לכם. כמו כן, יש לעדכן את האינדקס גם לאחר הוספת ספרים חדשים לתוכנה.</p>
+                      <p className="text-info-900 mb-2"><strong>לתשומת לב:</strong> אם החיפוש מגיב "אין תוצאות" בכל חיפוש שעשיתם, כנראה לא יצרתם אינדקס עדיין.</p>
+                      <p className="text-info-900">כדי ליצור אינדקס יש ללחוץ על מקש עדכון אינדקס (המסומן בעיגול) ולאשר את הפעולה בחלון שיפתח לכם. כמו כן, יש לעדכן את האינדקס גם לאחר הוספת ספרים חדשים לתוכנה.</p>
                     </div>
                   </div>
                 </div>
@@ -130,24 +130,24 @@ export default function SearchTutorialPage() {
                     </div>
                   </div>
 
-                  <div className="p-4 bg-red-50 border-r-4 border-red-400 rounded">
+                  <div className="p-4 bg-danger-50 border-r-4 border-danger-400 rounded">
                     <div className="flex items-start gap-3">
-                      <span className="material-symbols-outlined text-red-600">warning</span>
+                      <span className="material-symbols-outlined text-danger-600">warning</span>
                       <div>
-                        <p className="text-red-900 font-bold mb-2">שימו לב:</p>
-                        <ul className="list-disc mr-6 space-y-1 text-red-900">
-                          <li>אין להשתמש בראשי תיבות בתוך חיפוש מקורב, כגון "רש"י" אלא יש לכתוב <code className="bg-red-100 px-2 py-1 rounded">רש?י</code></li>
-                          <li>אין להשתמש בתווים הבאים בתוך חיפוש מקורב: <code className="bg-red-100 px-2 py-1 rounded">+ - & | ! ( ) &#123; &#125; [ ] ^ " ~ * ?</code></li>
+                        <p className="text-danger-900 font-bold mb-2">שימו לב:</p>
+                        <ul className="list-disc mr-6 space-y-1 text-danger-900">
+                          <li>אין להשתמש בראשי תיבות בתוך חיפוש מקורב, כגון "רש"י" אלא יש לכתוב <code className="bg-danger-100 px-2 py-1 rounded">רש?י</code></li>
+                          <li>אין להשתמש בתווים הבאים בתוך חיפוש מקורב: <code className="bg-danger-100 px-2 py-1 rounded">+ - & | ! ( ) &#123; &#125; [ ] ^ " ~ * ?</code></li>
                         </ul>
                       </div>
                     </div>
                   </div>
 
-                  <div className="p-4 bg-orange-50 border-r-4 border-orange-400 rounded">
+                  <div className="p-4 bg-warning-strong-50 border-r-4 border-warning-strong-400 rounded">
                     <div className="flex items-start gap-3">
-                      <span className="material-symbols-outlined text-orange-600">tips_and_updates</span>
+                      <span className="material-symbols-outlined text-warning-strong-600">tips_and_updates</span>
                       <div>
-                        <p className="text-orange-900"><strong>טיפ:</strong> החיפוש המקורב פועל בצורה משוכללת ומבצע חיפוש מקיף בכל האופציות הקרובות, והוא מציג בתוצאות החיפוש את כל הקטעים בהם מופיעים המילים שחיפשתם גם אם אינם רצופות וגם אם אינם מדויקות לגמרי.</p>
+                        <p className="text-warning-strong-900"><strong>טיפ:</strong> החיפוש המקורב פועל בצורה משוכללת ומבצע חיפוש מקיף בכל האופציות הקרובות, והוא מציג בתוצאות החיפוש את כל הקטעים בהם מופיעים המילים שחיפשתם גם אם אינם רצופות וגם אם אינם מדויקות לגמרי.</p>
                       </div>
                     </div>
                   </div>

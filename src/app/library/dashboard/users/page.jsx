@@ -110,7 +110,7 @@ export default function UsersManagementPage() {
           </div>
 
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
+            <div className="mb-6 p-4 bg-danger-50 border border-danger-200 rounded-lg flex items-center gap-2 text-danger-700">
               <span className="material-symbols-outlined">error</span>
               <span>{error}</span>
             </div>
@@ -162,7 +162,7 @@ export default function UsersManagementPage() {
                         <button
                           onClick={() => handleDeleteUser(user._id)}
                           disabled={user._id === session?.user?.id}
-                          className="text-red-600 hover:text-red-800 disabled:opacity-30 disabled:cursor-not-allowed"
+                          className="text-danger-600 hover:text-danger-800 disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                           <span className="material-symbols-outlined">delete</span>
                         </button>

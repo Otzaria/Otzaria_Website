@@ -101,7 +101,7 @@ export default function LibraryBooksPage() {
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="w-full px-4 py-3 pr-10 rounded-xl border-2 border-surface-variant bg-white focus:outline-none focus:border-primary shadow-sm transition-all"
                             />
-                            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">
                                 search
                             </span>
                         </div>
@@ -221,7 +221,7 @@ function BookCard({ book, categories }) {
           <div className="flex gap-4 mb-5">
               <div className="w-16 h-20 bg-surface-variant rounded-lg shadow-sm overflow-hidden flex-shrink-0 relative group-hover:shadow-md transition-shadow">
                   {book.isHidden && (
-                    <span className="absolute top-0 right-0 bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-bl-md z-10 font-bold shadow-sm">
+                    <span className="absolute top-0 right-0 bg-danger-500 text-white text-[10px] px-1.5 py-0.5 rounded-bl-md z-10 font-bold shadow-sm">
                         מוסתר
                     </span>
                   )}
@@ -255,27 +255,27 @@ function BookCard({ book, categories }) {
               </div>
   
               {/* The Visual Bar */}
-              <div className="flex h-3 w-full rounded-full overflow-hidden bg-gray-100 mb-3 shadow-inner">
+              <div className="flex h-3 w-full rounded-full overflow-hidden bg-neutral-100 mb-3 shadow-inner">
                   {completed > 0 && (
-                      <div className="bg-green-500 h-full transition-all duration-500" style={{ width: `${completedPercent}%` }} />
+                      <div className="bg-success-500 h-full transition-all duration-500" style={{ width: `${completedPercent}%` }} />
                   )}
                   {inProgress > 0 && (
-                      <div className="bg-blue-500 h-full transition-all duration-500" style={{ width: `${inProgressPercent}%` }} />
+                      <div className="bg-info-500 h-full transition-all duration-500" style={{ width: `${inProgressPercent}%` }} />
                   )}
               </div>
   
               {/* Legend / Numbers */}
               <div className="flex justify-between items-center text-xs font-medium border-t border-surface-variant/50 pt-3">
-                  <div className="flex items-center gap-1.5 text-green-700" title="הושלמו">
-                      <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                  <div className="flex items-center gap-1.5 text-success-700" title="הושלמו">
+                      <div className="w-2 h-2 rounded-full bg-success-500"></div>
                       <span>{completed}</span>
                   </div>
-                  <div className="flex items-center gap-1.5 text-blue-700" title="בטיפול">
-                      <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                  <div className="flex items-center gap-1.5 text-info-700" title="בטיפול">
+                      <div className="w-2 h-2 rounded-full bg-info-500"></div>
                       <span>{inProgress}</span>
                   </div>
-                  <div className="flex items-center gap-1.5 text-gray-500" title="פנויים">
-                      <div className="w-2 h-2 rounded-full bg-gray-300"></div>
+                  <div className="flex items-center gap-1.5 text-neutral-500" title="פנויים">
+                      <div className="w-2 h-2 rounded-full bg-neutral-300"></div>
                       <span>{available}</span>
                   </div>
               </div>

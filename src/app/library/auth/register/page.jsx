@@ -131,18 +131,18 @@ export default function RegisterPage() {
           </p>
 
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border-2 border-red-300 rounded-lg animate-shake">
+            <div className="mb-6 p-4 bg-danger-50 border-2 border-danger-300 rounded-lg animate-shake">
               <div className="flex items-start gap-3">
-                <span className="material-symbols-outlined text-red-600 text-2xl flex-shrink-0">
+                <span className="material-symbols-outlined text-danger-600 text-2xl flex-shrink-0">
                   error
                 </span>
                 <div className="flex-1">
-                  <h3 className="font-bold text-red-800 mb-1">שגיאה בהרשמה</h3>
-                  <p className="text-red-700 text-sm">{error}</p>
+                  <h3 className="font-bold text-danger-800 mb-1">שגיאה בהרשמה</h3>
+                  <p className="text-danger-700 text-sm">{error}</p>
                 </div>
                 <button
                   onClick={() => setError('')}
-                  className="text-red-400 hover:text-red-600 transition-colors"
+                  className="text-danger-400 hover:text-danger-600 transition-colors"
                   type="button"
                 >
                   <span className="material-symbols-outlined">close</span>

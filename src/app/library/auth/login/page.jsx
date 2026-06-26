@@ -133,8 +133,8 @@ function LoginContent() {
           </h1>
           
           {searchParams.get('callbackUrl') && (
-            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2 text-amber-800">
-              <span className="material-symbols-outlined text-amber-600">info</span>
+            <div className="mb-4 p-3 bg-warning-50 border border-warning-200 rounded-lg flex items-center gap-2 text-warning-800">
+              <span className="material-symbols-outlined text-warning-600">info</span>
               <span className="text-sm font-medium">פעולה זו דורשת התחברות</span>
             </div>
           )}
@@ -144,7 +144,7 @@ function LoginContent() {
           </p>
 
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
+            <div className="mb-6 p-4 bg-danger-50 border border-danger-200 rounded-lg flex items-center gap-2 text-danger-700">
               <span className="material-symbols-outlined">error</span>
               <span className="text-sm font-medium">{error}</span>
             </div>

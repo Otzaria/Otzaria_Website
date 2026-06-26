@@ -135,9 +135,9 @@ export default function EditBookInfoDialog({ book, onClose, onSave }) {
         className="flex flex-col bg-white rounded-2xl w-full max-w-4xl shadow-2xl max-h-[90vh]" 
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between p-6 border-b border-gray-100 flex-shrink-0">
-          <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <span className="material-symbols-outlined text-blue-600 text-3xl">edit_note</span>
+        <div className="flex items-center justify-between p-6 border-b border-neutral-100 flex-shrink-0">
+          <h2 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
+            <span className="material-symbols-outlined text-info-600 text-3xl">edit_note</span>
             <span>עריכת מידע - {book.name}</span>
           </h2>
           
@@ -148,8 +148,8 @@ export default function EditBookInfoDialog({ book, onClose, onSave }) {
                     onClick={() => setShowPageMenu(!showPageMenu)}
                     className={`flex items-center gap-2 px-3 py-1.5 border rounded-lg transition-colors text-sm font-bold ${
                         examplePage 
-                        ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' 
-                        : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                        ? 'bg-info-alt-50 text-info-alt-700 border-info-alt-200 hover:bg-info-alt-100' 
+                        : 'bg-neutral-50 text-neutral-600 border-neutral-200 hover:bg-neutral-100'
                     }`}
                     title="הגדר עמוד דוגמא שיוצג למשתמשים"
                 >
@@ -163,9 +163,9 @@ export default function EditBookInfoDialog({ book, onClose, onSave }) {
                 </button>
 
                 {showPageMenu && (
-                    <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-[60] animate-in fade-in slide-in-from-top-2 duration-200">
-                        <div className="p-2 border-b border-gray-50 bg-gray-50/50">
-                            <span className="text-xs font-bold text-gray-500">בחר עמוד (סה"כ {totalPages})</span>
+                    <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-neutral-100 overflow-hidden z-[60] animate-in fade-in slide-in-from-top-2 duration-200">
+                        <div className="p-2 border-b border-neutral-50 bg-neutral-50/50">
+                            <span className="text-xs font-bold text-neutral-500">בחר עמוד (סה"כ {totalPages})</span>
                         </div>
                         <div className="max-h-60 overflow-y-auto custom-scrollbar p-1">
                             <button
@@ -174,7 +174,7 @@ export default function EditBookInfoDialog({ book, onClose, onSave }) {
                                     setShowPageMenu(false)
                                 }}
                                 className={`w-full text-right px-3 py-2 rounded-lg text-sm transition-colors mb-1 ${
-                                    examplePage === null ? 'bg-indigo-50 text-indigo-700 font-bold' : 'hover:bg-gray-50 text-gray-700'
+                                    examplePage === null ? 'bg-info-alt-50 text-info-alt-700 font-bold' : 'hover:bg-neutral-50 text-neutral-700'
                                 }`}
                             >
                                 ללא עמוד דוגמא
@@ -187,14 +187,14 @@ export default function EditBookInfoDialog({ book, onClose, onSave }) {
                                         setShowPageMenu(false)
                                     }}
                                     className={`w-full text-right px-3 py-2 rounded-lg text-sm transition-colors ${
-                                        examplePage === num ? 'bg-indigo-50 text-indigo-700 font-bold' : 'hover:bg-gray-50 text-gray-700'
+                                        examplePage === num ? 'bg-info-alt-50 text-info-alt-700 font-bold' : 'hover:bg-neutral-50 text-neutral-700'
                                     }`}
                                 >
                                     עמוד {num}
                                 </button>
                             ))}
                             {totalPages === 0 && (
-                                <div className="p-3 text-center text-xs text-gray-400">
+                                <div className="p-3 text-center text-xs text-neutral-400">
                                     אין עמודים בספר זה
                                 </div>
                             )}
@@ -205,7 +205,7 @@ export default function EditBookInfoDialog({ book, onClose, onSave }) {
 
             <button
                 onClick={onClose}
-                className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 p-2 rounded-full transition-colors"
+                className="text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 p-2 rounded-full transition-colors"
             >
                 <span className="material-symbols-outlined text-2xl block">close</span>
             </button>
@@ -215,26 +215,26 @@ export default function EditBookInfoDialog({ book, onClose, onSave }) {
         <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-bold text-gray-900 mb-2">
+              <label className="block text-sm font-bold text-neutral-900 mb-2">
                 כותרת ראשית
               </label>
               <input
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-info-500 focus:border-transparent"
                 placeholder="לדוגמה: הנחיות עריכה - תלמוד"
               />
             </div>
 
             <div>
               <div className="flex items-center justify-between mb-4">
-                <label className="block text-sm font-bold text-gray-900">
+                <label className="block text-sm font-bold text-neutral-900">
                   סעיפים
                 </label>
                 <button
                   onClick={addSection}
-                  className="flex items-center gap-1 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm font-bold"
+                  className="flex items-center gap-1 px-4 py-2 bg-info-50 text-info-700 rounded-lg hover:bg-info-100 transition-colors text-sm font-bold"
                 >
                   <span className="material-symbols-outlined text-sm">add</span>
                   <span>הוסף סעיף</span>
@@ -243,38 +243,38 @@ export default function EditBookInfoDialog({ book, onClose, onSave }) {
 
               <div className="space-y-4">
                 {sections.map((section, sectionIndex) => (
-                  <div key={sectionIndex} className="bg-gray-50 border border-gray-200 rounded-xl p-4 transition-all hover:border-blue-200 hover:shadow-sm">
+                  <div key={sectionIndex} className="bg-neutral-50 border border-neutral-200 rounded-xl p-4 transition-all hover:border-info-200 hover:shadow-sm">
                     <div className="flex items-center gap-3 mb-3">
                       <input
                         type="text"
                         value={section.title}
                         onChange={(e) => updateSectionTitle(sectionIndex, e.target.value)}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium"
+                        className="flex-1 px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-info-500 bg-white font-medium"
                         placeholder="כותרת הסעיף (לדוגמה: כללי, תיוג, שמירה)"
                       />
                       <button
                         onClick={() => removeSection(sectionIndex)}
-                        className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                        className="p-2 text-danger-600 hover:bg-danger-100 rounded-lg transition-colors"
                         title="מחק סעיף"
                       >
                         <span className="material-symbols-outlined">delete</span>
                       </button>
                     </div>
 
-                    <div className="space-y-2 pr-4 border-r-2 border-gray-200">
+                    <div className="space-y-2 pr-4 border-r-2 border-neutral-200">
                       {section.items.map((item, itemIndex) => (
                         <div key={itemIndex} className="flex items-center gap-2">
-                          <span className="material-symbols-outlined text-sm text-gray-400">arrow_left</span>
+                          <span className="material-symbols-outlined text-sm text-neutral-400">arrow_left</span>
                           <input
                             type="text"
                             value={item}
                             onChange={(e) => updateItem(sectionIndex, itemIndex, e.target.value)}
-                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
+                            className="flex-1 px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-info-500 bg-white text-sm"
                             placeholder="הנחיה..."
                           />
                           <button
                             onClick={() => removeItem(sectionIndex, itemIndex)}
-                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                            className="p-1.5 text-neutral-400 hover:text-danger-600 hover:bg-danger-50 rounded transition-colors"
                             title="מחק הנחיה"
                           >
                             <span className="material-symbols-outlined text-sm">close</span>
@@ -283,7 +283,7 @@ export default function EditBookInfoDialog({ book, onClose, onSave }) {
                       ))}
                       <button
                         onClick={() => addItem(sectionIndex)}
-                        className="flex items-center gap-1 px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors mt-2"
+                        className="flex items-center gap-1 px-3 py-1.5 text-sm text-info-600 hover:bg-info-50 rounded-lg transition-colors mt-2"
                       >
                         <span className="material-symbols-outlined text-sm">add</span>
                         <span>הוסף הנחיה</span>
@@ -296,11 +296,11 @@ export default function EditBookInfoDialog({ book, onClose, onSave }) {
           </div>
         </div>
 
-        <div className="flex gap-3 p-6 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex-shrink-0">
+        <div className="flex gap-3 p-6 border-t border-neutral-100 bg-neutral-50 rounded-b-2xl flex-shrink-0">
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-bold disabled:opacity-70 shadow-md hover:-translate-y-0.5 transform"
+            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-info-600 text-white rounded-lg hover:bg-info-700 transition-colors font-bold disabled:opacity-70 shadow-md hover:-translate-y-0.5 transform"
           >
             {saving ? (
               <>
@@ -316,7 +316,7 @@ export default function EditBookInfoDialog({ book, onClose, onSave }) {
           </button>
           <button
             onClick={onClose}
-            className="px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+            className="px-6 py-3 bg-white border border-neutral-300 text-neutral-700 rounded-lg hover:bg-neutral-50 transition-colors font-medium"
           >
             ביטול
           </button>

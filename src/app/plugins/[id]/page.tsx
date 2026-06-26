@@ -31,6 +31,8 @@ interface Plugin {
   homepage: string
   authorId?: string | null
   downloadCount?: number
+  isHistoricalVersion?: boolean
+  latestVersion?: string
 }
 
 interface PluginEditPayload extends Plugin {
@@ -239,7 +241,7 @@ export default function PluginDetailPage() {
     return null
   }
 
-  const canEdit = Boolean(currentUser && currentUser.id === plugin.authorId)
+  const canEdit = Boolean(currentUser && currentUser.id === plugin.authorId && !plugin.isHistoricalVersion)
 
   const handleEdit = async () => {
     try {
@@ -277,8 +279,35 @@ export default function PluginDetailPage() {
             <span>חזרה לחנות</span>
           </Link>
 
+          {/* Historical Version Banner */}
+          {plugin.isHistoricalVersion && (
+            <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-warning-200 bg-warning-50 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <span className="material-symbols-outlined text-warning-700">history</span>
+                <div>
+                  <div className="font-bold text-warning-900">
+                    גרסה ישנה ({plugin.version})
+                  </div>
+                  <div className="text-sm text-warning-800/80">
+                    אתה צופה בגרסה קודמת של התוסף.
+                    {plugin.latestVersion && plugin.latestVersion !== plugin.version
+                      ? ` הגרסה העדכנית היא ${plugin.latestVersion}.`
+                      : ''}
+                  </div>
+                </div>
+              </div>
+              <Link
+                href={`/plugins/${plugin.id}`}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-warning-600 px-5 py-2.5 font-bold text-white transition-colors hover:bg-warning-700"
+              >
+                <span className="material-symbols-outlined">upgrade</span>
+                <span>עבור לגרסה העדכנית</span>
+              </Link>
+            </div>
+          )}
+
           {/* Plugin Header */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-8 mb-6">
+          <div className="bg-white rounded-2xl border border-neutral-100 p-8 mb-6">
             <div className="grid md:grid-cols-[380px_1fr] gap-8">
               {/* Plugin Image */}
               <div className="rounded-2xl overflow-hidden bg-gradient-to-br from-primary/5 to-secondary/5 aspect-[4/3]">
@@ -346,7 +375,7 @@ export default function PluginDetailPage() {
                       href={plugin.homepage}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-gray-200 text-on-surface rounded-xl font-medium hover:border-primary/30 transition-colors"
+                      className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-neutral-200 text-on-surface rounded-xl font-medium hover:border-primary/30 transition-colors"
                     >
                       <span className="material-symbols-outlined">open_in_new</span>
                       <span>מקור</span>
@@ -356,7 +385,7 @@ export default function PluginDetailPage() {
                     <button
                       onClick={handleEdit}
                       disabled={loadingEdit}
-                      className="inline-flex items-center gap-2 rounded-xl bg-stone-700 px-6 py-3 font-medium text-white transition-colors hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex items-center gap-2 rounded-xl bg-neutral-warm-700 px-6 py-3 font-medium text-white transition-colors hover:bg-neutral-warm-800 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <span className="material-symbols-outlined">edit</span>
                       <span>{loadingEdit ? 'טוען...' : 'ערוך'}</span>
@@ -370,7 +399,7 @@ export default function PluginDetailPage() {
           {/* Plugin Details Grid */}
           <div className="grid md:grid-cols-2 gap-6 mb-6">
             {/* Info Section */}
-            <div className="bg-white rounded-2xl border border-gray-100 p-6">
+            <div className="bg-white rounded-2xl border border-neutral-100 p-6">
               <h2 className="text-xl font-bold text-on-surface mb-4 flex items-center gap-2">
                 <span className="material-symbols-outlined text-primary">info</span>
                 <span>מידע כללי</span>
@@ -416,7 +445,7 @@ export default function PluginDetailPage() {
             </div>
 
             {/* Tags Section */}
-            <div className="bg-white rounded-2xl border border-gray-100 p-6">
+            <div className="bg-white rounded-2xl border border-neutral-100 p-6">
               <h2 className="text-xl font-bold text-on-surface mb-4 flex items-center gap-2">
                 <span className="material-symbols-outlined text-primary">label</span>
                 <span>תגיות</span>
@@ -437,7 +466,7 @@ export default function PluginDetailPage() {
 
           {/* Screenshots Gallery */}
           {plugin.screenshots?.length > 0 && (
-            <div className="bg-white rounded-2xl border border-gray-100 p-6 mt-6">
+            <div className="bg-white rounded-2xl border border-neutral-100 p-6 mt-6">
               <h2 className="text-xl font-bold text-on-surface mb-4 flex items-center gap-2">
                 <span className="material-symbols-outlined text-primary">photo_library</span>
                 <span>צילומי מסך</span>

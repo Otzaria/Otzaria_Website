@@ -340,8 +340,8 @@ function DictaBooksContent() {
           
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-4">
             <div>
-              <h1 className="text-4xl font-bold font-frank text-slate-900 mb-2">עריכת ספרי דיקטה</h1>
-              <p className="text-slate-600 text-lg">
+              <h1 className="text-4xl font-bold font-frank text-neutral-cool-900 mb-2">עריכת ספרי דיקטה</h1>
+              <p className="text-neutral-cool-600 text-lg">
                 {loading ? 'טוען...' : `${filteredBooks.length} ספרים מוצגים`}
               </p>
             </div>
@@ -349,7 +349,7 @@ function DictaBooksContent() {
             <div className="flex flex-wrap items-center gap-3 md:justify-end">
               <Link 
                 href="/docs/dicta" 
-                className="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-5 py-2.5 rounded-xl hover:bg-slate-50 transition-all font-semibold shadow-sm"
+                className="inline-flex items-center gap-2 bg-white border border-neutral-cool-200 text-neutral-cool-700 px-5 py-2.5 rounded-xl hover:bg-neutral-cool-50 transition-all font-semibold shadow-sm"
               >
                 <span className="material-symbols-outlined text-primary">help_outline</span>
                 מדריך לטיפול בספרי דיקטה
@@ -357,7 +357,7 @@ function DictaBooksContent() {
 
               <Link 
                 href="/library/editingtools" 
-                className="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-5 py-2.5 rounded-xl hover:bg-slate-50 transition-all font-semibold shadow-sm"
+                className="inline-flex items-center gap-2 bg-white border border-neutral-cool-200 text-neutral-cool-700 px-5 py-2.5 rounded-xl hover:bg-neutral-cool-50 transition-all font-semibold shadow-sm"
               >
                 <span className="material-symbols-outlined text-primary">construction</span>
                 כלי עריכה אופליין
@@ -366,7 +366,7 @@ function DictaBooksContent() {
               {isAdmin && (
                 <Link 
                   href="/library/admin/dicta-books" 
-                  className="inline-flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-5 py-2.5 rounded-xl hover:bg-slate-50 transition-all font-semibold shadow-sm"
+                  className="inline-flex items-center gap-2 bg-white border border-neutral-cool-200 text-neutral-cool-700 px-5 py-2.5 rounded-xl hover:bg-neutral-cool-50 transition-all font-semibold shadow-sm"
                 >
                   <span className="material-symbols-outlined text-primary">security</span>
                   ממשק ניהול וסנכרון
@@ -377,7 +377,7 @@ function DictaBooksContent() {
 
           <div className="flex flex-col md:flex-row gap-4 mb-8">
             <div className="relative flex-1">
-              <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5">
+              <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-neutral-cool-400 w-5 h-5">
                 search
               </span>
               <input 
@@ -385,7 +385,7 @@ function DictaBooksContent() {
                 placeholder="חיפוש ספר לפי שם..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-2xl py-3 pr-12 pl-4 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm text-lg"
+                className="w-full bg-white border border-neutral-cool-200 rounded-2xl py-3 pr-12 pl-4 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm text-lg"
               />
             </div>
 
@@ -393,7 +393,7 @@ function DictaBooksContent() {
               <select
                 value={filterCategory}
                 onChange={(e) => setFilterCategory(e.target.value)}
-                className="w-full h-full px-4 py-3 rounded-2xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm text-lg cursor-pointer"
+                className="w-full h-full px-4 py-3 rounded-2xl border border-neutral-cool-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm text-lg cursor-pointer"
               >
                 <option value="all">כל הקטגוריות</option>
                 {categories.map((cat) => (
@@ -402,15 +402,15 @@ function DictaBooksContent() {
               </select>
             </div>
 
-            <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 self-start md:self-stretch items-center shadow-inner overflow-x-auto">
+            <div className="flex bg-neutral-cool-100 p-1.5 rounded-2xl border border-neutral-cool-200 self-start md:self-stretch items-center shadow-inner overflow-x-auto">
               {filters.map(f => (
                 <button
                   key={f.id}
                   onClick={() => setFilterStatus(f.id)}
                   className={`px-6 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
                     filterStatus === f.id 
-                      ? 'bg-white text-slate-800 shadow-sm' 
-                      : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                      ? 'bg-white text-neutral-cool-800 shadow-sm' 
+                      : 'text-neutral-cool-500 hover:text-neutral-cool-700 hover:bg-neutral-cool-200/50'
                   }`}
                 >
                   {f.label}
@@ -422,7 +422,7 @@ function DictaBooksContent() {
           {loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[1, 2, 3, 4, 5, 6].map(i => (
-                <div key={i} className="h-48 bg-white animate-pulse rounded-2xl border border-slate-100"></div>
+                <div key={i} className="h-48 bg-white animate-pulse rounded-2xl border border-neutral-cool-100"></div>
               ))}
             </div>
           ) : (
@@ -434,13 +434,13 @@ function DictaBooksContent() {
                   const isCompleted = book.status === 'completed'
 
                   return (
-                    <div key={book._id} className={`group bg-white rounded-2xl border border-slate-200 p-6 transition-all flex flex-col h-full ${isCompleted ? 'opacity-80' : 'hover:border-primary/50 hover:shadow-xl hover:shadow-primary/5'}`}>
+                    <div key={book._id} className={`group bg-white rounded-2xl border border-neutral-cool-200 p-6 transition-all flex flex-col h-full ${isCompleted ? 'opacity-80' : 'hover:border-primary/50 hover:shadow-xl hover:shadow-primary/5'}`}>
                       <div className="flex justify-between items-start mb-4">
                         <div className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider ${
-                          book.status === 'completed' ? 'bg-blue-50 text-blue-600 border border-blue-100' :
+                          book.status === 'completed' ? 'bg-info-50 text-info-600 border border-info-100' :
                           book.status === 'available' 
-                            ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
-                            : 'bg-amber-50 text-amber-600 border border-amber-100'
+                            ? 'bg-success-alt-50 text-success-alt-600 border border-success-alt-100' 
+                            : 'bg-warning-50 text-warning-600 border border-warning-100'
                         }`}>
                           {book.status === 'completed' ? 'הושלם' : book.status === 'available' ? 'זמין לעריכה' : 'בטיפול'}
                         </div>
@@ -449,13 +449,13 @@ function DictaBooksContent() {
                           {isOwner && !isCompleted && (
                             <button
                               onClick={(e) => { e.preventDefault(); handleRelease(book._id); }}
-                              className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1 rounded-md transition-colors flex items-center justify-center cursor-pointer"
+                              className="text-danger-400 hover:text-danger-600 hover:bg-danger-50 p-1 rounded-md transition-colors flex items-center justify-center cursor-pointer"
                               title="שחרר ספר"
                             >
                               <span className="material-symbols-outlined text-xl">close</span>
                             </button>
                           )}
-                          <span className={`material-symbols-outlined transition-colors ${isCompleted ? 'text-blue-300' : 'text-slate-300 group-hover:text-primary'}`}>
+                          <span className={`material-symbols-outlined transition-colors ${isCompleted ? 'text-info-300' : 'text-neutral-cool-300 group-hover:text-primary'}`}>
                             {isCompleted ? 'task_alt' : 'menu_book'}
                           </span>
                         </div>
@@ -463,30 +463,30 @@ function DictaBooksContent() {
 
                       {book.bookCategory && (
                         <div className="mb-2">
-                          <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 border border-slate-200">
+                          <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-lg bg-neutral-cool-100 text-neutral-cool-600 border border-neutral-cool-200">
                             {book.bookCategory}
                           </span>
                         </div>
                       )}
 
-                      <h3 className="text-xl font-bold text-slate-800 mb-2 font-frank leading-tight line-clamp-2" title={book.title}>
+                      <h3 className="text-xl font-bold text-neutral-cool-800 mb-2 font-frank leading-tight line-clamp-2" title={book.title}>
                         {book.bookName}
                       </h3>
 
                       <div className="mt-auto pt-6">
                         <div className="flex flex-col gap-2 mb-6">
                           {book.status === 'completed' ? (
-                            <div className="flex items-center gap-2 text-sm text-blue-600 font-medium">
+                            <div className="flex items-center gap-2 text-sm text-info-600 font-medium">
                               <span className="material-symbols-outlined text-base">verified</span>
                               <span>הושלם על ידי {book.claimedBy?.name || 'לא ידוע'}</span>
                             </div>
                           ) : book.status === 'in-progress' ? (
-                            <div className="flex items-center gap-2 text-sm text-slate-500">
+                            <div className="flex items-center gap-2 text-sm text-neutral-cool-500">
                               <span className="material-symbols-outlined text-base">person</span>
                               <span>נערך על ידי {book.claimedBy?.name || 'לא ידוע'}</span>
                             </div>
                           ) : (
-                            <div className="flex items-center gap-2 text-sm text-emerald-600 font-medium">
+                            <div className="flex items-center gap-2 text-sm text-success-alt-600 font-medium">
                               <span className="material-symbols-outlined text-base">check_circle</span>
                               <span>פנוי לתפיסה</span>
                             </div>
@@ -498,14 +498,14 @@ function DictaBooksContent() {
                             <Link 
                               href={`/library/dicta-books/edit/${book._id}`}
                               onClick={saveFiltersBeforeNavigation}
-                              className="flex-[2] text-center bg-blue-50 text-blue-700 border border-blue-200 py-3 rounded-xl font-bold hover:bg-blue-100 transition-all shadow-sm"
+                              className="flex-[2] text-center bg-info-50 text-info-700 border border-info-200 py-3 rounded-xl font-bold hover:bg-info-100 transition-all shadow-sm"
                             >
                               צפה בספר
                             </Link>
                             {canEdit && (
                               <button 
                                 onClick={() => handleCancelCompletion(book._id)}
-                                className="flex-1 text-center bg-white border border-slate-200 text-slate-700 py-3 rounded-xl font-bold hover:bg-slate-50 transition-all shadow-sm"
+                                className="flex-1 text-center bg-white border border-neutral-cool-200 text-neutral-cool-700 py-3 rounded-xl font-bold hover:bg-neutral-cool-50 transition-all shadow-sm"
                               >
                                 בטל סיום
                               </button>
@@ -516,7 +516,7 @@ function DictaBooksContent() {
                             <Link 
                               href={`/library/dicta-books/edit/${book._id}`}
                               onClick={saveFiltersBeforeNavigation}
-                              className="flex-1 text-center bg-white border border-slate-200 text-slate-700 py-3 rounded-xl font-bold hover:bg-slate-50 transition-all shadow-sm"
+                              className="flex-1 text-center bg-white border border-neutral-cool-200 text-neutral-cool-700 py-3 rounded-xl font-bold hover:bg-neutral-cool-50 transition-all shadow-sm"
                             >
                               הצצה
                             </Link>
@@ -532,13 +532,13 @@ function DictaBooksContent() {
                             <Link 
                               href={`/library/dicta-books/edit/${book._id}`}
                               onClick={saveFiltersBeforeNavigation}
-                              className="flex-[2] text-center bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-md"
+                              className="flex-[2] text-center bg-neutral-cool-900 text-white py-3 rounded-xl font-bold hover:bg-neutral-cool-800 transition-all shadow-md"
                             >
                               פתח עורך
                             </Link>
                             <button 
                               onClick={() => handleComplete(book._id)}
-                              className="flex-1 text-center bg-emerald-50 text-emerald-700 border border-emerald-200 py-3 rounded-xl font-bold hover:bg-emerald-100 transition-all shadow-sm"
+                              className="flex-1 text-center bg-success-alt-50 text-success-alt-700 border border-success-alt-200 py-3 rounded-xl font-bold hover:bg-success-alt-100 transition-all shadow-sm"
                             >
                               סיום
                             </button>
@@ -546,7 +546,7 @@ function DictaBooksContent() {
                         ) : (
                           <button 
                             disabled
-                            className="block w-full text-center bg-slate-100 text-slate-400 py-3 rounded-xl font-bold cursor-not-allowed border border-slate-200"
+                            className="block w-full text-center bg-neutral-cool-100 text-neutral-cool-400 py-3 rounded-xl font-bold cursor-not-allowed border border-neutral-cool-200"
                           >
                             נעול לעריכה
                           </button>
@@ -556,8 +556,8 @@ function DictaBooksContent() {
                   )
                 })
               ) : (
-                <div className="col-span-full text-center py-20 bg-white rounded-3xl border border-dashed border-slate-300">
-                  <p className="text-slate-400 text-lg">לא נמצאו ספרים התואמים לסינון הנוכחי.</p>
+                <div className="col-span-full text-center py-20 bg-white rounded-3xl border border-dashed border-neutral-cool-300">
+                  <p className="text-neutral-cool-400 text-lg">לא נמצאו ספרים התואמים לסינון הנוכחי.</p>
                 </div>
               )}
             </div>

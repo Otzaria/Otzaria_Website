@@ -166,7 +166,7 @@ export default function AdminMessagesPage() {
   return (
     <>
     <div className="glass-strong p-6 rounded-xl min-h-[600px]">
-      <div className="flex justify-between items-center mb-8 border-b border-gray-200 pb-4">
+      <div className="flex justify-between items-center mb-8 border-b border-neutral-200 pb-4">
           <h2 className="text-2xl font-bold text-on-surface flex items-center gap-2">
             <span className="material-symbols-outlined text-primary">mail</span>
             הודעות מערכת
@@ -183,8 +183,8 @@ export default function AdminMessagesPage() {
       {loading ? (
         <LoadingSpinner message="טוען הודעות..." />
       ) : messages.length === 0 ? (
-          <div className="text-center py-20 text-gray-500">
-              <span className="material-symbols-outlined text-6xl mb-2 text-gray-300">inbox</span>
+          <div className="text-center py-20 text-neutral-500">
+              <span className="material-symbols-outlined text-6xl mb-2 text-neutral-300">inbox</span>
               <p>אין הודעות להצגה</p>
           </div>
       ) : (
@@ -194,7 +194,7 @@ export default function AdminMessagesPage() {
                     key={message.id} 
                     className={`p-6 rounded-lg transition-all ${
                         message.status === 'unread' 
-                        ? 'bg-red-50 border-2 border-red-200 shadow-md'
+                        ? 'bg-danger-50 border-2 border-danger-200 shadow-md'
                         : 'glass hover:shadow-md'
                     }`}
                   >
@@ -204,10 +204,10 @@ export default function AdminMessagesPage() {
                                   <h3 className="text-xl font-bold text-on-surface">{message.subject}</h3>
                                   <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                                       message.status === 'unread' 
-                                      ? 'bg-blue-100 text-blue-800' 
+                                      ? 'bg-info-100 text-info-800' 
                                       : message.status === 'replied' 
-                                          ? 'bg-green-100 text-green-800' 
-                                          : 'bg-gray-100 text-gray-800'
+                                          ? 'bg-success-100 text-success-800' 
+                                          : 'bg-neutral-100 text-neutral-800'
                                   }`}>
                                       {message.status === 'unread' ? 'חדש' : message.status === 'replied' ? 'נענה' : 'נקרא'}
                                   </span>
@@ -226,18 +226,18 @@ export default function AdminMessagesPage() {
                                   <span className="mx-2">•</span>
                                   <span>{new Date(message.createdAt).toLocaleDateString('he-IL', { day: 'numeric', month: 'long', hour: '2-digit', minute:'2-digit' })}</span>
                               </p>
-                              <div className="bg-white/50 p-3 rounded-lg border border-gray-100 text-on-surface whitespace-pre-wrap">
+                              <div className="bg-white/50 p-3 rounded-lg border border-neutral-100 text-on-surface whitespace-pre-wrap">
                                   {message.content}
                               </div>
                           </div>
                       </div>
 
                       {message.replies && message.replies.length > 0 && (
-                          <div className="mt-4 mr-8 space-y-3 border-r-2 border-gray-200 pr-4">
+                          <div className="mt-4 mr-8 space-y-3 border-r-2 border-neutral-200 pr-4">
                               <h4 className="font-bold text-sm text-on-surface mb-2">היסטוריית תגובות:</h4>
                               {message.replies.map((reply, idx) => (
                                   <div key={idx} className="bg-surface p-3 rounded-lg text-sm shadow-sm">
-                                      <div className="flex justify-between text-xs text-gray-500 mb-1">
+                                      <div className="flex justify-between text-xs text-neutral-500 mb-1">
                                           <span className="font-bold text-primary">{reply.senderName || 'מנהל'}</span>
                                           <span>
                                             {new Date(reply.createdAt).toLocaleString('he-IL', {
@@ -249,7 +249,7 @@ export default function AdminMessagesPage() {
                                             })}
                                           </span>
                                       </div>
-                                      <p className="text-gray-800 whitespace-pre-wrap">{reply.content}</p>
+                                      <p className="text-neutral-800 whitespace-pre-wrap">{reply.content}</p>
                                   </div>
                               ))}
                           </div>
@@ -276,19 +276,19 @@ export default function AdminMessagesPage() {
                               </div>
                           </div>
                       ) : (
-                          <div className="flex gap-3 mt-4 border-t border-gray-100 pt-3">
-                              <button onClick={() => setSelectedMessage(message.id)} className="flex items-center gap-1 text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-colors text-sm font-medium">
+                          <div className="flex gap-3 mt-4 border-t border-neutral-100 pt-3">
+                              <button onClick={() => setSelectedMessage(message.id)} className="flex items-center gap-1 text-info-600 hover:bg-info-50 px-3 py-1.5 rounded-lg transition-colors text-sm font-medium">
                                   <span className="material-symbols-outlined text-lg">reply</span>
                                   השב
                               </button>
                               {message.status === 'unread' && (
-                                  <button onClick={() => handleMarkRead(message.id)} className="flex items-center gap-1 text-gray-600 hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors text-sm">
+                                  <button onClick={() => handleMarkRead(message.id)} className="flex items-center gap-1 text-neutral-600 hover:bg-neutral-100 px-3 py-1.5 rounded-lg transition-colors text-sm">
                                       <span className="material-symbols-outlined text-lg">mark_email_read</span>
                                       סמן כנקרא
                                   </button>
                               )}
                               <div className="flex-1"></div>
-                              <button onClick={() => handleDelete(message.id)} className="flex items-center gap-1 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors text-sm">
+                              <button onClick={() => handleDelete(message.id)} className="flex items-center gap-1 text-danger-600 hover:bg-danger-50 px-3 py-1.5 rounded-lg transition-colors text-sm">
                                   <span className="material-symbols-outlined text-lg">delete</span>
                                   מחק
                               </button>
@@ -311,7 +311,7 @@ export default function AdminMessagesPage() {
                 onClick={e => e.stopPropagation()}
               >
                   {/* Header */}
-                  <div className="p-6 border-b border-gray-200 flex-shrink-0 bg-white rounded-t-2xl">
+                  <div className="p-6 border-b border-neutral-200 flex-shrink-0 bg-white rounded-t-2xl">
                       <h3 className="text-2xl font-bold text-on-surface flex items-center gap-3">
                           <span className="material-symbols-outlined text-3xl text-primary">send</span>
                           שלח הודעה למשתמשים
@@ -372,7 +372,7 @@ export default function AdminMessagesPage() {
                                       className="p-3 hover:bg-surface/50 cursor-pointer text-sm border-b border-surface-variant last:border-b-0"
                                     >
                                       <div className="font-medium">{user.name}</div>
-                                      <div className="text-xs text-gray-500">{user.email}</div>
+                                      <div className="text-xs text-neutral-500">{user.email}</div>
                                     </div>
                                   ))}
                               </div>
@@ -405,7 +405,7 @@ export default function AdminMessagesPage() {
                   </div>
 
                   {/* Footer */}
-                  <div className="flex gap-3 p-6 border-t border-gray-200 bg-gray-50 rounded-b-2xl flex-shrink-0">
+                  <div className="flex gap-3 p-6 border-t border-neutral-200 bg-neutral-50 rounded-b-2xl flex-shrink-0">
                       <button 
                           onClick={handleSendNewMessage}
                           disabled={sendingNewMessage}
@@ -431,7 +431,7 @@ export default function AdminMessagesPage() {
                               setNewMessageRecipient('all')
                           }}
                           disabled={sendingNewMessage}
-                          className="px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                          className="px-6 py-3 bg-white border border-neutral-300 text-neutral-700 rounded-lg hover:bg-neutral-50 transition-colors font-medium"
                       >
                           ביטול
                       </button>

@@ -160,12 +160,12 @@ export default function AdminTrashPage() {
         <div className="flex items-center gap-4">
           <Link
             href="/library/admin/uploads"
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-neutral-100 rounded-lg transition-colors"
           >
             <span className="material-symbols-outlined">arrow_forward</span>
           </Link>
           <h2 className="text-2xl font-bold text-on-surface flex items-center gap-2">
-            <span className="material-symbols-outlined text-orange-600">delete</span>
+            <span className="material-symbols-outlined text-warning-strong-600">delete</span>
             אשפה
           </h2>
         </div>
@@ -173,7 +173,7 @@ export default function AdminTrashPage() {
         {uploads.length > 0 && (
           <button 
             onClick={handleEmptyTrash}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors shadow-sm"
+            className="flex items-center gap-2 px-4 py-2 bg-danger-600 text-white rounded-lg hover:bg-danger-700 transition-colors shadow-sm"
           >
             <span className="material-symbols-outlined text-sm">delete_forever</span>
             רוקן אשפה ({uploads.length})
@@ -184,7 +184,7 @@ export default function AdminTrashPage() {
       {loading ? (
         <LoadingSpinner message="טוען אשפה..." />
       ) : uploads.length === 0 ? (
-          <div className="text-center py-16 text-gray-500">
+          <div className="text-center py-16 text-neutral-500">
             <span className="material-symbols-outlined text-6xl mb-2">delete_outline</span>
             <p>האשפה ריקה</p>
           </div>
@@ -196,12 +196,12 @@ export default function AdminTrashPage() {
                   const firstUpload = bookUploads[0]
                   
                   return (
-                      <div key={bookName} className="glass p-5 rounded-xl border border-orange-200 hover:border-orange-300 transition-all">
+                      <div key={bookName} className="glass p-5 rounded-xl border border-warning-strong-200 hover:border-warning-strong-300 transition-all">
                           <div 
                               className={`flex items-start gap-4 ${hasMultipleUploads ? 'cursor-pointer' : ''}`}
                               onClick={() => hasMultipleUploads && toggleBookExpansion(bookName)}
                           >
-                              <div className="p-3 rounded-lg bg-orange-100 text-orange-700">
+                              <div className="p-3 rounded-lg bg-warning-strong-100 text-warning-strong-700">
                                   <span className="material-symbols-outlined text-3xl">
                                       {hasMultipleUploads ? 'folder_delete' : 'description'}
                                   </span>
@@ -210,15 +210,15 @@ export default function AdminTrashPage() {
                               <div className="flex-1">
                                   <div className="flex justify-between items-start mb-2">
                                       <div>
-                                          <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                          <h3 className="text-lg font-bold text-neutral-800 flex items-center gap-2">
                                               {bookName || 'ללא שם'}
                                               {hasMultipleUploads && (
-                                                  <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs rounded-full border border-orange-200 font-bold">
+                                                  <span className="px-2 py-0.5 bg-warning-strong-100 text-warning-strong-700 text-xs rounded-full border border-warning-strong-200 font-bold">
                                                       {bookUploads.length} העלאות
                                                   </span>
                                               )}
                                           </h3>
-                                          <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
+                                          <div className="flex items-center gap-4 text-sm text-neutral-500 mt-1">
                                               <span className="flex items-center gap-1">
                                                 <span className="material-symbols-outlined text-sm">delete</span>
                                                 נמחק ב-{new Date(firstUpload.deletedAt).toLocaleDateString('he-IL')}
@@ -228,7 +228,7 @@ export default function AdminTrashPage() {
                                       
                                       <div className="flex items-center gap-2">
                                           {hasMultipleUploads && (
-                                              <span className="material-symbols-outlined text-gray-400">
+                                              <span className="material-symbols-outlined text-neutral-400">
                                                   {isExpanded ? 'expand_less' : 'expand_more'}
                                               </span>
                                           )}
@@ -236,7 +236,7 @@ export default function AdminTrashPage() {
                                   </div>
                                   
                                   {/* כפתורי פעולה */}
-                                  <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-gray-100">
+                                  <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-neutral-100">
                                       {hasMultipleUploads && (
                                           <>
                                               <button 
@@ -272,13 +272,13 @@ export default function AdminTrashPage() {
                                                         'ביטול'
                                                     )
                                                 }}
-                                                className="flex items-center gap-1 px-3 py-1.5 text-green-600 hover:bg-green-50 rounded-lg text-sm transition-colors"
+                                                className="flex items-center gap-1 px-3 py-1.5 text-success-600 hover:bg-success-50 rounded-lg text-sm transition-colors"
                                               >
                                                   <span className="material-symbols-outlined text-lg">restore</span>
                                                   שחזר הכל ({bookUploads.length})
                                               </button>
                                               
-                                              <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                                              <div className="w-px h-6 bg-neutral-300 mx-1"></div>
                                               
                                               <button 
                                                 onClick={(e) => {
@@ -313,7 +313,7 @@ export default function AdminTrashPage() {
                                                         'ביטול'
                                                     )
                                                 }}
-                                                className="flex items-center gap-1 px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg text-sm transition-colors"
+                                                className="flex items-center gap-1 px-3 py-1.5 text-danger-600 hover:bg-danger-50 rounded-lg text-sm transition-colors"
                                               >
                                                   <span className="material-symbols-outlined text-lg">delete_forever</span>
                                                   מחק הכל לצמיתות
@@ -328,20 +328,20 @@ export default function AdminTrashPage() {
                                                     e.stopPropagation()
                                                     handleRestore(firstUpload.id, firstUpload.bookName)
                                                 }}
-                                                className="flex items-center gap-1 px-3 py-1.5 text-green-600 hover:bg-green-50 rounded-lg text-sm transition-colors"
+                                                className="flex items-center gap-1 px-3 py-1.5 text-success-600 hover:bg-success-50 rounded-lg text-sm transition-colors"
                                               >
                                                   <span className="material-symbols-outlined text-lg">restore</span>
                                                   שחזר
                                               </button>
                                               
-                                              <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                                              <div className="w-px h-6 bg-neutral-300 mx-1"></div>
                                               
                                               <button 
                                                 onClick={(e) => {
                                                     e.stopPropagation()
                                                     handlePermanentDelete(firstUpload.id, firstUpload.bookName)
                                                 }}
-                                                className="flex items-center gap-1 px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg text-sm transition-colors"
+                                                className="flex items-center gap-1 px-3 py-1.5 text-danger-600 hover:bg-danger-50 rounded-lg text-sm transition-colors"
                                               >
                                                   <span className="material-symbols-outlined text-lg">delete_forever</span>
                                                   מחק לצמיתות
@@ -353,15 +353,15 @@ export default function AdminTrashPage() {
                           </div>
                           
                           {hasMultipleUploads && isExpanded && (
-                              <div className="mt-4 mr-16 space-y-3 border-r-2 border-orange-300 pr-4">
+                              <div className="mt-4 mr-16 space-y-3 border-r-2 border-warning-strong-300 pr-4">
                                   {bookUploads.map(upload => (
-                                      <div key={upload.id} className="bg-white/50 p-4 rounded-lg border border-gray-200">
+                                      <div key={upload.id} className="bg-white/50 p-4 rounded-lg border border-neutral-200">
                                           <div className="flex justify-between items-start mb-2">
                                               <div className="flex-1">
-                                                  <h4 className="font-semibold text-gray-800">
+                                                  <h4 className="font-semibold text-neutral-800">
                                                       {upload.bookName}
                                                   </h4>
-                                                  <div className="flex items-center gap-4 text-xs text-gray-500 mt-1">
+                                                  <div className="flex items-center gap-4 text-xs text-neutral-500 mt-1">
                                                       <span className="flex items-center gap-1">
                                                         <span className="material-symbols-outlined text-xs">person</span>
                                                         {upload.uploadedBy || 'אורח'}
@@ -374,26 +374,26 @@ export default function AdminTrashPage() {
                                               </div>
                                           </div>
                                           
-                                          <div className="flex items-center justify-end gap-2 mt-3 pt-2 border-t border-gray-100">
+                                          <div className="flex items-center justify-end gap-2 mt-3 pt-2 border-t border-neutral-100">
                                               <button 
                                                 onClick={(e) => {
                                                     e.stopPropagation()
                                                     handleRestore(upload.id, upload.bookName)
                                                 }}
-                                                className="flex items-center gap-1 px-3 py-1.5 text-green-600 hover:bg-green-50 rounded-lg text-xs transition-colors"
+                                                className="flex items-center gap-1 px-3 py-1.5 text-success-600 hover:bg-success-50 rounded-lg text-xs transition-colors"
                                               >
                                                   <span className="material-symbols-outlined text-sm">restore</span>
                                                   שחזר
                                               </button>
                                               
-                                              <div className="w-px h-5 bg-gray-300 mx-1"></div>
+                                              <div className="w-px h-5 bg-neutral-300 mx-1"></div>
                                               
                                               <button 
                                                 onClick={(e) => {
                                                     e.stopPropagation()
                                                     handlePermanentDelete(upload.id, upload.bookName)
                                                 }}
-                                                className="flex items-center gap-1 px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg text-xs transition-colors"
+                                                className="flex items-center gap-1 px-3 py-1.5 text-danger-600 hover:bg-danger-50 rounded-lg text-xs transition-colors"
                                               >
                                                   <span className="material-symbols-outlined text-sm">delete_forever</span>
                                                   מחק לצמיתות

@@ -89,7 +89,7 @@ export default function ResetPasswordPage() {
 
   if (isCheckingToken) {
       return (
-          <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="min-h-screen flex items-center justify-center bg-neutral-50">
               <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
           </div>
       );
@@ -97,13 +97,13 @@ export default function ResetPasswordPage() {
 
   if (!isValidToken) {
       return (
-          <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+          <div className="min-h-screen flex items-center justify-center bg-neutral-50 px-4">
               <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-lg text-center">
-                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <span className="material-symbols-outlined text-3xl text-red-600">link_off</span>
+                  <div className="w-16 h-16 bg-danger-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <span className="material-symbols-outlined text-3xl text-danger-600">link_off</span>
                   </div>
-                  <h2 className="text-xl font-bold text-gray-900 mb-2">קישור לא תקין</h2>
-                  <p className="text-gray-600 mb-6">
+                  <h2 className="text-xl font-bold text-neutral-900 mb-2">קישור לא תקין</h2>
+                  <p className="text-neutral-600 mb-6">
                       {tokenError || 'הקישור לאיפוס הסיסמה פג תוקף או שאינו תקין.'}
                       <br/>
                       אנא נסה לבקש איפוס סיסמה מחדש.
@@ -120,43 +120,43 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-neutral-50 px-4">
         <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-lg">
-            <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">איפוס סיסמה</h2>
+            <h2 className="text-2xl font-bold mb-6 text-center text-neutral-800">איפוס סיסמה</h2>
             
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">סיסמה חדשה</label>
+                    <label className="block text-sm font-medium text-neutral-700 mb-1">סיסמה חדשה</label>
                     <input
                         type="password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required
                         minLength={8}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none"
+                        className="w-full p-3 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary outline-none"
                         placeholder="לפחות 8 תווים"
                     />
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">אימות סיסמה חדשה</label>
+                    <label className="block text-sm font-medium text-neutral-700 mb-1">אימות סיסמה חדשה</label>
                     <input
                         type="password"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         required
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary outline-none"
+                        className="w-full p-3 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-primary outline-none"
                         placeholder="הקלד שוב את הסיסמה"
                     />
                 </div>
 
                 {status.error && (
-                    <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">
+                    <div className="p-3 bg-danger-50 text-danger-700 rounded-lg text-sm">
                         {status.error}
                     </div>
                 )}
                 
                 {status.success && (
-                    <div className="p-3 bg-green-50 text-green-700 rounded-lg text-sm">
+                    <div className="p-3 bg-success-50 text-success-700 rounded-lg text-sm">
                         {status.success}
                     </div>
                 )}
@@ -165,7 +165,7 @@ export default function ResetPasswordPage() {
                     type="submit"
                     disabled={status.loading}
                     className={`w-full py-3 rounded-xl text-white font-bold transition-all
-                        ${status.loading ? 'bg-gray-400' : 'bg-primary hover:bg-blue-700'}`}
+                        ${status.loading ? 'bg-neutral-400' : 'bg-primary hover:bg-info-700'}`}
                 >
                     {status.loading ? 'מעדכן...' : 'שמור סיסמה חדשה'}
                 </button>

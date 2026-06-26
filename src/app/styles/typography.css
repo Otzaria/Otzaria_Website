@@ -1,0 +1,61 @@
+/* ============================================================
+ * typography.css — טוקני טיפוגרפיה (גופנים, גדלים, משקלים וריווח)
+ * שינוי טיפוגרפיה גלובלי מתבצע כאן.
+ * הערה: --font-frank-ruehl מוגדר ע"י next/font ב-layout.tsx.
+ * ============================================================ */
+
+@theme {
+  --font-frank: var(--font-frank-ruehl), serif;
+  --font-sans: system-ui, -apple-system, sans-serif;
+  --font-hebrew: 'Segoe UI', Tahoma, Arial, sans-serif;
+
+  --text-xs: 0.72rem;
+  --text-xs--line-height: calc(1 / 0.72);
+  --text-sm: 0.84rem;
+  --text-sm--line-height: calc(1.2 / 0.84);
+  --text-base: 0.96rem;
+  --text-base--line-height: calc(1.45 / 0.96);
+  --text-lg: 1.08rem;
+  --text-lg--line-height: calc(1.68 / 1.08);
+  --text-xl: 1.2rem;
+  --text-xl--line-height: calc(1.68 / 1.2);
+  --text-2xl: 1.44rem;
+  --text-2xl--line-height: calc(1.92 / 1.44);
+  --text-3xl: 1.8rem;
+  --text-3xl--line-height: calc(2.16 / 1.8);
+  --text-4xl: 2.16rem;
+  --text-4xl--line-height: calc(2.4 / 2.16);
+  --text-5xl: 2.875rem;
+  --text-5xl--line-height: 1;
+  --text-6xl: 3.6rem;
+  --text-6xl--line-height: 1;
+  --text-7xl: 4.3rem;
+  --text-7xl--line-height: 1;
+  --text-8xl: 5.75rem;
+  --text-8xl--line-height: 1;
+  --text-9xl: 7.65rem;
+  --text-9xl--line-height: 1;
+
+  --font-weight-thin: 100;
+  --font-weight-extralight: 200;
+  --font-weight-light: 300;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
+  --font-weight-black: 900;
+
+  --tracking-tighter: -0.05em;
+  --tracking-tight: -0.025em;
+  --tracking-normal: 0em;
+  --tracking-wide: 0.025em;
+  --tracking-wider: 0.05em;
+  --tracking-widest: 0.1em;
+
+  --leading-tight: 1.25;
+  --leading-snug: 1.375;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.625;
+  --leading-loose: 2;
+}

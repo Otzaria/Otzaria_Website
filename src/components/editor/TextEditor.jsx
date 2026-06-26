@@ -5,7 +5,7 @@ const MiniBtn = ({ onClick, active, icon, title, rotate }) => (
   <button
     onClick={onClick}
     className={`w-6 h-6 rounded flex items-center justify-center transition-colors ${
-      active ? 'bg-blue-50 text-blue-600' : 'text-gray-500 hover:bg-white hover:text-gray-900'
+      active ? 'bg-info-50 text-info-600' : 'text-neutral-500 hover:bg-white hover:text-neutral-900'
     }`}
     title={title}
   >
@@ -51,16 +51,16 @@ const TextEditor = forwardRef(({
       onWheel={handleWheel}
     >
       {/* סרגל כלים צף וממורכז - גודל ויישור */}
-      <div className="flex items-center gap-2 mb-3 bg-gray-50/80 backdrop-blur-sm border border-gray-200 rounded-md p-1 px-2 w-fit mx-auto shadow-sm sticky top-0 z-10">
+      <div className="flex items-center gap-2 mb-3 bg-neutral-50/80 backdrop-blur-sm border border-neutral-200 rounded-md p-1 px-2 w-fit mx-auto shadow-sm sticky top-0 z-10">
         
         {/* שליטה בגודל */}
         <div className="flex items-center gap-0.5">
            <MiniBtn onClick={() => setTextZoom(Math.max(10, textZoom - 1))} icon="remove" title="הקטן גופן" />
-           <span className="text-[10px] font-medium w-6 text-center select-none text-gray-600">{textZoom}</span>
+           <span className="text-[10px] font-medium w-6 text-center select-none text-neutral-600">{textZoom}</span>
            <MiniBtn onClick={() => setTextZoom(Math.min(60, textZoom + 1))} icon="add" title="הגדל גופן" />
         </div>
 
-        <div className="w-px h-3 bg-gray-300 mx-1"></div>
+        <div className="w-px h-3 bg-neutral-300 mx-1"></div>
 
         {/* שליטה ביישור */}
         <div className="flex items-center gap-0.5">

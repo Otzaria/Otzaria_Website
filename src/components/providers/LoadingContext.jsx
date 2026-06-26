@@ -60,7 +60,7 @@ export function LoadingProvider({ children }) {
                 <motion.button
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="mt-6 px-6 py-2 rounded-full border border-red-500/50 text-red-500 hover:bg-red-500/10 transition-colors duration-200 text-sm font-medium"
+                  className="mt-6 px-6 py-2 rounded-full border border-danger-500/50 text-danger-500 hover:bg-danger-500/10 transition-colors duration-200 text-sm font-medium"
                   onClick={handleCancel}
                 >
                  ביטול

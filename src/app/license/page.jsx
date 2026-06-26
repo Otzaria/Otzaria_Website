@@ -63,7 +63,7 @@ export default function LicensePage() {
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                     </div>
                   ) : error ? (
-                    <div className="text-red-500 text-center py-4">
+                    <div className="text-danger-500 text-center py-4">
                       <p>לא ניתן היה לטעון את הרישיון.</p>
                       <a 
                         href="https://github.com/Otzaria/otzaria-library/blob/main/LICENSE"

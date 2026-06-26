@@ -53,13 +53,13 @@ export default function DocsPage() {
           <div className="grid lg:grid-cols-4 gap-8">
             {/* Sidebar */}
             <aside className="lg:col-span-1">
-              <div className="glass-strong rounded-xl p-6 sticky top-24 bg-white border border-gray-200">
+              <div className="glass-strong rounded-xl p-6 sticky top-24 bg-white border border-neutral-200">
                 <h3 className="text-xl font-bold text-primary mb-4">תוכן עניינים</h3>
                 <nav className="space-y-2">
                   <div>
                     <button
                       onClick={() => toggleSection('installation')}
-                      className="flex items-center justify-between w-full text-right p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                      className="flex items-center justify-between w-full text-right p-2 hover:bg-neutral-100 rounded-lg transition-colors"
                     >
                       <span className="font-medium">התקנה</span>
                       <motion.span
@@ -70,12 +70,12 @@ export default function DocsPage() {
                       </motion.span>
                     </button>
                     {openSections.includes('installation') && (
-                      <div className="mr-4 mt-2 space-y-1 border-r-2 border-gray-100 pr-2">
-                        <a href="#windows" className="block p-2 text-sm text-gray-600 hover:text-primary transition-colors">Windows</a>
-                        <a href="#linux" className="block p-2 text-sm text-gray-600 hover:text-primary transition-colors">Linux</a>
-                        <a href="#android" className="block p-2 text-sm text-gray-600 hover:text-primary transition-colors">Android</a>
-                        <a href="#ios" className="block p-2 text-sm text-gray-600 hover:text-primary transition-colors">iOS</a>
-                        <a href="#macos" className="block p-2 text-sm text-gray-600 hover:text-primary transition-colors">macOS</a>
+                      <div className="mr-4 mt-2 space-y-1 border-r-2 border-neutral-100 pr-2">
+                        <a href="#windows" className="block p-2 text-sm text-neutral-600 hover:text-primary transition-colors">Windows</a>
+                        <a href="#linux" className="block p-2 text-sm text-neutral-600 hover:text-primary transition-colors">Linux</a>
+                        <a href="#android" className="block p-2 text-sm text-neutral-600 hover:text-primary transition-colors">Android</a>
+                        <a href="#ios" className="block p-2 text-sm text-neutral-600 hover:text-primary transition-colors">iOS</a>
+                        <a href="#macos" className="block p-2 text-sm text-neutral-600 hover:text-primary transition-colors">macOS</a>
                       </div>
                     )}
                   </div>
@@ -83,7 +83,7 @@ export default function DocsPage() {
                   <div>
                     <button
                       onClick={() => toggleSection('usage')}
-                      className="flex items-center justify-between w-full text-right p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                      className="flex items-center justify-between w-full text-right p-2 hover:bg-neutral-100 rounded-lg transition-colors"
                     >
                       <span className="font-medium">שימוש בסיסי</span>
                       <motion.span
@@ -94,16 +94,16 @@ export default function DocsPage() {
                       </motion.span>
                     </button>
                     {openSections.includes('usage') && (
-                      <div className="mr-4 mt-2 space-y-1 border-r-2 border-gray-100 pr-2">
-                        <a href="#library" className="block p-2 text-sm text-gray-600 hover:text-primary transition-colors">דפדוף בספרייה</a>
-                        <a href="#search" className="block p-2 text-sm text-gray-600 hover:text-primary transition-colors">חיפוש</a>
-                        <a href="#reading" className="block p-2 text-sm text-gray-600 hover:text-primary transition-colors">קריאה</a>
-                        <a href="#bookmarks" className="block p-2 text-sm text-gray-600 hover:text-primary transition-colors">סימניות</a>
+                      <div className="mr-4 mt-2 space-y-1 border-r-2 border-neutral-100 pr-2">
+                        <a href="#library" className="block p-2 text-sm text-neutral-600 hover:text-primary transition-colors">דפדוף בספרייה</a>
+                        <a href="#search" className="block p-2 text-sm text-neutral-600 hover:text-primary transition-colors">חיפוש</a>
+                        <a href="#reading" className="block p-2 text-sm text-neutral-600 hover:text-primary transition-colors">קריאה</a>
+                        <a href="#bookmarks" className="block p-2 text-sm text-neutral-600 hover:text-primary transition-colors">סימניות</a>
                       </div>
                     )}
                   </div>
 
-                  <Link href="#tutorials" className="block p-2 hover:bg-gray-100 rounded-lg transition-colors font-medium">מדריכים נוספים</Link>
+                  <Link href="#tutorials" className="block p-2 hover:bg-neutral-100 rounded-lg transition-colors font-medium">מדריכים נוספים</Link>
                 </nav>
               </div>
             </aside>
@@ -113,7 +113,7 @@ export default function DocsPage() {
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-white rounded-xl p-8 mb-8 border border-gray-200 shadow-sm"
+                className="bg-white rounded-xl p-8 mb-8 border border-neutral-200 shadow-sm"
               >
                 <h1 className="text-4xl font-bold text-primary mb-6 font-frank">
                   מדריך למשתמש
@@ -121,13 +121,13 @@ export default function DocsPage() {
 
                 {/* Installation Section */}
                 <section id="installation" className="mb-12">
-                  <h2 className="text-3xl font-bold text-gray-800 mb-4">התקנה</h2>
-                  <p className="text-lg text-gray-600 mb-6">
+                  <h2 className="text-3xl font-bold text-neutral-800 mb-4">התקנה</h2>
+                  <p className="text-lg text-neutral-600 mb-6">
                     אוצריא זמינה למגוון פלטפורמות. בחר את ההוראות המתאימות למערכת שלך:
                   </p>
 
                   {/* Windows */}
-                  <div id="windows" className="mb-8 p-6 bg-gray-50 rounded-xl border border-gray-200">
+                  <div id="windows" className="mb-8 p-6 bg-neutral-50 rounded-xl border border-neutral-200">
                     <h3 className="text-2xl font-bold text-primary mb-4 flex items-center gap-3">
                       <span className="material-symbols-outlined text-3xl">desktop_windows</span>
                       Windows
@@ -145,7 +145,7 @@ export default function DocsPage() {
                   </div>
 
                   {/* Android */}
-                  <div id="android" className="mb-8 p-6 bg-gray-50 rounded-xl border border-gray-200">
+                  <div id="android" className="mb-8 p-6 bg-neutral-50 rounded-xl border border-neutral-200">
                     <h3 className="text-2xl font-bold text-primary mb-4 flex items-center gap-3">
                       <span className="material-symbols-outlined text-3xl">phone_android</span>
                       Android
@@ -163,20 +163,20 @@ export default function DocsPage() {
 
                 {/* Tutorials Links */}
                 <section id="tutorials" className="mb-12">
-                  <h2 className="text-3xl font-bold text-gray-800 mb-6">מדריכים נוספים</h2>
+                  <h2 className="text-3xl font-bold text-neutral-800 mb-6">מדריכים נוספים</h2>
                   <div className="grid md:grid-cols-2 gap-4">
                     {tutorials.map((tutorial, i) => (
                       <Link
                         key={i}
                         href={tutorial.href}
-                        className="flex flex-col gap-4 p-6 bg-gray-50 hover:bg-primary/5 rounded-xl transition-all hover:shadow-md border border-gray-200 group"
+                        className="flex flex-col gap-4 p-6 bg-neutral-50 hover:bg-primary/5 rounded-xl transition-all hover:shadow-md border border-neutral-200 group"
                       >
                         <span className="material-symbols-outlined text-4xl text-primary group-hover:scale-110 transition-transform w-fit">
                           {tutorial.icon}
                         </span>
                         <div>
-                          <h4 className="text-xl font-bold text-gray-800 mb-2">{tutorial.title}</h4>
-                          <p className="text-gray-600">{tutorial.description}</p>
+                          <h4 className="text-xl font-bold text-neutral-800 mb-2">{tutorial.title}</h4>
+                          <p className="text-neutral-600">{tutorial.description}</p>
                         </div>
                       </Link>
                     ))}

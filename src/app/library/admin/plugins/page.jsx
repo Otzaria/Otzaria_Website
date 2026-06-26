@@ -13,6 +13,7 @@ export default function AdminPluginsPage() {
   const [approvedPlugins, setApprovedPlugins] = useState([])
   const [loading, setLoading] = useState(true)
   const [processingId, setProcessingId] = useState(null)
+  const [deletingVersion, setDeletingVersion] = useState(null)
   const [editingId, setEditingId] = useState(null)
   const [editingPlugin, setEditingPlugin] = useState(null)
   const [showNotificationSettings, setShowNotificationSettings] = useState(false)
@@ -219,6 +220,36 @@ export default function AdminPluginsPage() {
     }
   }
 
+  const handleDeleteVersion = async (plugin, version) => {
+    const confirmed = await showConfirm(
+      'מחיקת גרסה',
+      `האם למחוק לצמיתות את גרסה ${version} של "${plugin.name}"? פעולה זו תמחק את קובץ הגרסה הישנה ולא ניתן לבטלה.`
+    )
+
+    if (!confirmed) return
+
+    try {
+      setDeletingVersion(`${plugin._id}:${version}`)
+      const response = await fetch(
+        `/api/admin/plugins/${plugin._id}/versions/${encodeURIComponent(version)}`,
+        { method: 'DELETE' }
+      )
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete version')
+      }
+
+      await showAlert('גרסה נמחקה', result.message || `גרסה ${version} נמחקה בהצלחה`)
+      loadPlugins()
+    } catch (error) {
+      console.error('Error deleting plugin version:', error)
+      showAlert('שגיאה', error.message || 'לא הצלחנו למחוק את הגרסה')
+    } finally {
+      setDeletingVersion(null)
+    }
+  }
+
   const handleEdit = async (plugin) => {
     try {
       setEditingId(plugin._id)
@@ -253,9 +284,9 @@ export default function AdminPluginsPage() {
 
   const getStatusBadge = (status) => {
     const badges = {
-      stable: { label: formatPluginStatus('stable'), class: 'bg-green-100 text-green-800' },
-      beta: { label: formatPluginStatus('beta'), class: 'bg-yellow-100 text-yellow-800' },
-      experimental: { label: formatPluginStatus('experimental'), class: 'bg-orange-100 text-orange-800' }
+      stable: { label: formatPluginStatus('stable'), class: 'bg-success-100 text-success-800' },
+      beta: { label: formatPluginStatus('beta'), class: 'bg-warning-alt-100 text-warning-alt-800' },
+      experimental: { label: formatPluginStatus('experimental'), class: 'bg-warning-strong-100 text-warning-strong-800' }
     }
     const badge = badges[status] || badges.stable
     return (
@@ -298,7 +329,7 @@ export default function AdminPluginsPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setShowNotificationSettings(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-medium"
+            className="flex items-center gap-2 px-4 py-2 bg-info-alt-600 hover:bg-info-alt-700 text-white rounded-lg transition-colors font-medium"
             title="הגדרות התראות על העלאת תוספים"
           >
             <span className="material-symbols-outlined">notifications</span>
@@ -346,7 +377,7 @@ export default function AdminPluginsPage() {
         >
           <span>מאושרים</span>
           {approvedPlugins.length > 0 && (
-            <span className="absolute -top-1 -left-1 w-6 h-6 bg-green-600 text-white rounded-full text-xs flex items-center justify-center font-bold">
+            <span className="absolute -top-1 -left-1 w-6 h-6 bg-success-600 text-white rounded-full text-xs flex items-center justify-center font-bold">
               {approvedPlugins.length}
             </span>
           )}
@@ -410,13 +441,13 @@ export default function AdminPluginsPage() {
                         {source.name}
                       </h3>
                       {activeTab === 'pending' && hasPendingUpdate(plugin) && (
-                        <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-800">עריכה ממתינה</span>
+                        <span className="rounded-full bg-info-100 px-3 py-1 text-xs font-bold text-info-800">עריכה ממתינה</span>
                       )}
                       {activeTab === 'pending' && !hasPendingUpdate(plugin) && (
-                        <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-bold text-purple-800">תוסף חדש</span>
+                        <span className="rounded-full bg-feature-100 px-3 py-1 text-xs font-bold text-feature-800">תוסף חדש</span>
                       )}
                       {activeTab === 'approved' && plugin.isPinned && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-warning-100 px-3 py-1 text-xs font-bold text-warning-800">
                           <span className="material-symbols-outlined text-sm">push_pin</span>
                           <span>מוצמד</span>
                         </span>
@@ -534,7 +565,7 @@ export default function AdminPluginsPage() {
                       </summary>
                       <div className="mt-3 space-y-3">
                         {plugin.pendingChangeSummary.map((change, index) => (
-                          <div key={`${change.field}-${index}`} className="rounded-xl border border-gray-200 bg-surface p-3">
+                          <div key={`${change.field}-${index}`} className="rounded-xl border border-neutral-200 bg-surface p-3">
                             <div className="font-bold text-on-surface mb-1">{change.label}</div>
                             <div className="text-on-surface/60">לפני: {change.before || 'ללא'}</div>
                             <div className="text-on-surface">אחרי: {change.after || 'ללא'}</div>
@@ -556,6 +587,51 @@ export default function AdminPluginsPage() {
                       <span>דף הבית</span>
                     </a>
                   )}
+
+                  {/* Previous Versions */}
+                  {plugin.versions?.length > 0 && (
+                    <details className="text-sm">
+                      <summary className="cursor-pointer font-medium text-primary hover:underline">
+                        גרסאות קודמות ({plugin.versions.length})
+                      </summary>
+                      <div className="mt-3 space-y-2">
+                        {[...plugin.versions]
+                          .sort((a, b) => new Date(b.archivedAt) - new Date(a.archivedAt))
+                          .map((v) => (
+                            <div
+                              key={v.version}
+                              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-200 bg-surface p-3"
+                            >
+                              <div className="min-w-0">
+                                <span className="font-bold text-on-surface">גרסה {v.version}</span>
+                                <span className="mr-2 text-xs text-on-surface/50">
+                                  {formatDate(v.archivedAt)}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <a
+                                  href={`/api/plugins/${plugin._id}@${encodeURIComponent(v.version)}/download`}
+                                  className="inline-flex items-center gap-1 rounded-lg bg-surface-variant px-3 py-1.5 text-xs font-medium transition-colors hover:bg-neutral-200"
+                                >
+                                  <span className="material-symbols-outlined text-base">download</span>
+                                  <span>הורד</span>
+                                </a>
+                                <button
+                                  onClick={() => handleDeleteVersion(plugin, v.version)}
+                                  disabled={deletingVersion === `${plugin._id}:${v.version}`}
+                                  className="inline-flex items-center gap-1 rounded-lg bg-danger-100 px-3 py-1.5 text-xs font-medium text-danger-700 transition-colors hover:bg-danger-200 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  <span className="material-symbols-outlined text-base">
+                                    {deletingVersion === `${plugin._id}:${v.version}` ? 'progress_activity' : 'delete'}
+                                  </span>
+                                  <span>מחק</span>
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </details>
+                  )}
                 </div>
                     </>
                   )
@@ -568,7 +644,7 @@ export default function AdminPluginsPage() {
                       <button
                         onClick={() => handleApprove(plugin)}
                         disabled={processingId === plugin._id}
-                        className="flex items-center justify-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center justify-center gap-2 px-6 py-3 bg-success-600 hover:bg-success-700 text-white rounded-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {processingId === plugin._id ? (
                           <>
@@ -586,7 +662,7 @@ export default function AdminPluginsPage() {
                       <button
                         onClick={() => handleReject(plugin)}
                         disabled={processingId === plugin._id}
-                        className="flex items-center justify-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center justify-center gap-2 px-6 py-3 bg-danger-600 hover:bg-danger-700 text-white rounded-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {processingId === plugin._id ? (
                           <>
@@ -608,8 +684,8 @@ export default function AdminPluginsPage() {
                         disabled={processingId === plugin._id}
                         className={`flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                           plugin.isPinned
-                            ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
-                            : 'bg-amber-600 hover:bg-amber-700 text-white'
+                            ? 'bg-warning-100 text-warning-800 hover:bg-warning-200'
+                            : 'bg-warning-600 hover:bg-warning-700 text-white'
                         }`}
                         title={plugin.isPinned ? 'בטל הצמדה' : 'הצמד תוסף — יופיע ראשון בחנות'}
                       >
@@ -629,7 +705,7 @@ export default function AdminPluginsPage() {
                       <button
                         onClick={() => handleUnapprove(plugin)}
                         disabled={processingId === plugin._id}
-                        className="flex items-center justify-center gap-2 px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center justify-center gap-2 px-6 py-3 bg-warning-strong-600 hover:bg-warning-strong-700 text-white rounded-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {processingId === plugin._id ? (
                           <>
@@ -647,7 +723,7 @@ export default function AdminPluginsPage() {
                       <button
                         onClick={() => handleDelete(plugin)}
                         disabled={processingId === plugin._id}
-                        className="flex items-center justify-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center justify-center gap-2 px-6 py-3 bg-danger-600 hover:bg-danger-700 text-white rounded-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {processingId === plugin._id ? (
                           <>
@@ -676,7 +752,7 @@ export default function AdminPluginsPage() {
                   <button
                     onClick={() => handleEdit(plugin)}
                     disabled={editingId === plugin._id}
-                    className="flex items-center justify-center gap-2 rounded-xl bg-stone-700 px-6 py-3 font-medium text-white transition-colors hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex items-center justify-center gap-2 rounded-xl bg-neutral-warm-700 px-6 py-3 font-medium text-white transition-colors hover:bg-neutral-warm-800 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <span className="material-symbols-outlined">edit</span>
                     <span>{editingId === plugin._id ? 'טוען...' : 'ערוך'}</span>

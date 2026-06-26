@@ -159,8 +159,8 @@ export default function ChangePasswordForm() {
         {message.text && (
           <div className={`p-4 rounded-lg flex items-center gap-3 ${
             message.type === 'success' 
-              ? 'bg-green-100 text-green-800 border border-green-300' 
-              : 'bg-red-100 text-red-800 border border-red-300'
+              ? 'bg-success-100 text-success-800 border border-success-300' 
+              : 'bg-danger-100 text-danger-800 border border-danger-300'
           }`}>
             <span className="material-symbols-outlined">
               {message.type === 'success' ? 'check_circle' : 'error'}

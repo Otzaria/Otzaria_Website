@@ -1,0 +1,49 @@
+/* ============================================================
+ * effects.css — מחלקות עזר ויזואליות (זכוכית, פס גלילה, ריחוף)
+ * כל אפקט מוגדר פעם אחת כאן ונשלט ממקום מרכזי.
+ * ============================================================ */
+
+@layer utilities {
+  .font-frank {
+    font-family: var(--font-frank);
+  }
+
+  .glass {
+    background-color: color-mix(in srgb, var(--color-background) 60%, transparent);
+    backdrop-filter: blur(12px);
+    border: 1px solid color-mix(in srgb, var(--color-surface-variant) 50%, transparent);
+  }
+
+  .glass-strong {
+    background-color: color-mix(in srgb, var(--color-background) 95%, transparent);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-surface-variant);
+  }
+
+  /* הסתרת פס גלילה */
+  .custom-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .spellcheck-highlight {
+    background-color: #fde68a;
+    border-radius: 3px;
+    box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.35);
+    padding: 0 1px;
+  }
+
+  /* אפקטים נוספים */
+  .hover-lift {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  }
+}

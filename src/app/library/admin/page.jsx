@@ -29,10 +29,10 @@ export default function AdminDashboardPage() {
     <div className="space-y-6">
       {/* כרטיסי מידע עליונים */}
       <div className="grid md:grid-cols-4 gap-4 mb-8">
-        <StatCard icon="group" color="text-blue-600" value={stats?.users?.total} label="משתמשים" />
-        <StatCard icon="menu_book" color="text-green-600" value={stats?.books?.total} label="ספרים" />
-        <StatCard icon="description" color="text-purple-600" value={stats?.totalPages} label="סה״כ עמודים" />
-        <StatCard icon="check_circle" color="text-yellow-600" value={`${stats?.completionRate}%`} label="אחוז השלמה" />
+        <StatCard icon="group" color="text-info-600" value={stats?.users?.total} label="משתמשים" />
+        <StatCard icon="menu_book" color="text-success-600" value={stats?.books?.total} label="ספרים" />
+        <StatCard icon="description" color="text-feature-600" value={stats?.totalPages} label="סה״כ עמודים" />
+        <StatCard icon="check_circle" color="text-warning-alt-600" value={`${stats?.completionRate}%`} label="אחוז השלמה" />
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
@@ -41,11 +41,11 @@ export default function AdminDashboardPage() {
             <div className="space-y-4">
                 <div className="flex justify-between items-center p-4 bg-surface rounded-lg">
                     <span className="text-on-surface">דפים שהושלמו</span>
-                    <span className="text-2xl font-bold text-green-600">{stats?.completedPages}</span>
+                    <span className="text-2xl font-bold text-success-600">{stats?.completedPages}</span>
                 </div>
                 <div className="flex justify-between items-center p-4 bg-surface rounded-lg">
                     <span className="text-on-surface">דפים בטיפול</span>
-                    <span className="text-2xl font-bold text-blue-600">{stats?.inProgressPages}</span>
+                    <span className="text-2xl font-bold text-info-600">{stats?.inProgressPages}</span>
                 </div>
             </div>
         </div>

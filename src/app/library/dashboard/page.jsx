@@ -478,7 +478,7 @@ export default function DashboardPage() {
           <div className="grid md:grid-cols-3 gap-6 mb-12">
             <div className="glass p-6 rounded-xl">
               <div className="flex items-center gap-4">
-                <span className="material-symbols-outlined text-5xl text-blue-600">
+                <span className="material-symbols-outlined text-5xl text-info-600">
                   edit_note
                 </span>
                 <div>
@@ -492,7 +492,7 @@ export default function DashboardPage() {
 
             <div className="glass p-6 rounded-xl">
               <div className="flex items-center gap-4">
-                <span className="material-symbols-outlined text-5xl text-green-600">
+                <span className="material-symbols-outlined text-5xl text-success-600">
                   check_circle
                 </span>
                 <div>
@@ -522,7 +522,7 @@ export default function DashboardPage() {
           <div className="grid md:grid-cols-3 gap-6 mb-12">
             <div className="glass p-6 rounded-xl">
               <div className="flex items-center gap-4">
-                <span className="material-symbols-outlined text-5xl text-blue-600">
+                <span className="material-symbols-outlined text-5xl text-info-600">
                   menu_book
                 </span>
                 <div>
@@ -536,7 +536,7 @@ export default function DashboardPage() {
 
             <div className="glass p-6 rounded-xl">
               <div className="flex items-center gap-4">
-                <span className="material-symbols-outlined text-5xl text-green-600">
+                <span className="material-symbols-outlined text-5xl text-success-600">
                   task_alt
                 </span>
                 <div>
@@ -598,7 +598,7 @@ export default function DashboardPage() {
                 <span className="font-medium text-on-surface">ההודעות שלי</span>
   
                 {unreadCount > 0 && (
-                  <span className="absolute top-2 left-2 bg-red-600 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center animate-pulse">
+                  <span className="absolute top-2 left-2 bg-danger-600 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center animate-pulse">
                     {unreadCount}
                   </span>
                 )}
@@ -659,7 +659,7 @@ export default function DashboardPage() {
                   {currentItems.map((activity) => (
                     <div key={`${activity.bookName}-${activity.pageNumber}`} className="flex items-center gap-4 p-4 bg-surface rounded-lg">
                       <span className={`material-symbols-outlined ${
-                        activity.status === 'completed' ? 'text-green-600' : 'text-blue-600'
+                        activity.status === 'completed' ? 'text-success-600' : 'text-info-600'
                       }`}>
                         {activity.status === 'completed' ? 'check_circle' : 'edit_note'}
                       </span>
@@ -735,7 +735,7 @@ export default function DashboardPage() {
                         {currentDictaItems.map((book) => (
                           <div key={book.id} className="flex items-center gap-4 p-4 bg-surface rounded-lg">
                             <span className={`material-symbols-outlined ${
-                              book.status === 'completed' ? 'text-green-600' : 'text-blue-600'
+                              book.status === 'completed' ? 'text-success-600' : 'text-info-600'
                             }`}>
                               {book.status === 'completed' ? 'task_alt' : 'menu_book'}
                             </span>
@@ -795,7 +795,7 @@ export default function DashboardPage() {
               </h3>
               <button 
                 onClick={() => setShowEmailModal(false)} 
-                className="text-gray-500 hover:text-gray-800"
+                className="text-neutral-500 hover:text-neutral-800"
                 disabled={updatingEmail}
               >
                 <span className="material-symbols-outlined">close</span>
@@ -805,7 +805,7 @@ export default function DashboardPage() {
             <div className="p-6 space-y-6">
                <div>
                   <label className="block text-sm font-medium text-on-surface mb-2">כתובת מייל נוכחית</label>
-                  <div className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-gray-600">
+                  <div className="w-full px-4 py-3 bg-neutral-100 border border-neutral-200 rounded-lg text-neutral-600">
                     {session?.user?.email}
                   </div>
                </div>
@@ -875,7 +875,7 @@ export default function DashboardPage() {
               </h3>
               <button 
                 onClick={() => setShowPasswordModal(false)} 
-                className="text-gray-500 hover:text-gray-800"
+                className="text-neutral-500 hover:text-neutral-800"
                 disabled={loadingPassword}
               >
                 <span className="material-symbols-outlined">close</span>
@@ -955,8 +955,8 @@ export default function DashboardPage() {
               {passwordMessage.text && (
                 <div className={`p-4 rounded-lg flex items-center gap-3 ${
                   passwordMessage.type === 'success' 
-                    ? 'bg-green-100 text-green-800 border border-green-300' 
-                    : 'bg-red-100 text-red-800 border border-red-300'
+                    ? 'bg-success-100 text-success-800 border border-success-300' 
+                    : 'bg-danger-100 text-danger-800 border border-danger-300'
                 }`}>
                   <span className="material-symbols-outlined">
                     {passwordMessage.type === 'success' ? 'check_circle' : 'error'}
@@ -1045,7 +1045,7 @@ export default function DashboardPage() {
                         key={message.id} 
                         className={`glass p-6 rounded-lg border transition-colors duration-300 ${
                           isUnread 
-                            ? 'bg-red-50 border-red-200 shadow-sm' 
+                            ? 'bg-danger-50 border-danger-200 shadow-sm' 
                             : 'border-surface-variant'
                         }`}
                       >
@@ -1054,7 +1054,7 @@ export default function DashboardPage() {
                             <h4 className="text-xl font-bold text-on-surface mb-1 flex items-center gap-2">
                                 {message.subject}
                                 {isUnread && (
-                                    <span className="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                                    <span className="inline-block w-2 h-2 rounded-full bg-danger-500 animate-pulse"></span>
                                 )}
                             </h4>
                             <p className="text-sm text-on-surface/60">
@@ -1069,8 +1069,8 @@ export default function DashboardPage() {
                           </div>
                           <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                             message.status === 'replied' 
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-gray-100 text-gray-800'
+                              ? 'bg-success-100 text-success-800'
+                              : 'bg-neutral-100 text-neutral-800'
                           }`}>
                             {message.status === 'replied' ? 'נענה' : 'נשלח'}
                           </span>
@@ -1081,14 +1081,14 @@ export default function DashboardPage() {
                         {message.replies && message.replies.length > 0 && (
                           <div className="mt-4 pt-4 border-t border-surface-variant">
                             <h5 className="font-bold text-on-surface mb-3 flex items-center gap-2">
-                              <span className="material-symbols-outlined text-green-600">reply</span>
+                              <span className="material-symbols-outlined text-success-600">reply</span>
                               תגובות בשרשור:
                             </h5>
                             <div className="space-y-3">
                               {message.replies.map((reply, idx) => (
                                 <div
                                   key={reply?.id || idx}
-                                  className={`${reply?.senderRole === 'admin' ? 'bg-green-50 border border-green-100' : 'bg-surface border border-surface-variant'} p-4 rounded-lg`}
+                                  className={`${reply?.senderRole === 'admin' ? 'bg-success-50 border border-success-100' : 'bg-surface border border-surface-variant'} p-4 rounded-lg`}
                                 >
                                   <p className="text-sm text-on-surface/60 mb-2">
                                     <span className="font-medium text-primary">{getReplySenderDisplayName(reply)}</span>
@@ -1171,14 +1171,14 @@ export default function DashboardPage() {
                 <span className="material-symbols-outlined text-2xl text-primary">notifications_active</span>
                 התראות על ספרים חדשים
               </h3>
-              <button onClick={() => setShowNotifModal(false)} className="text-gray-500 hover:text-gray-800">
+              <button onClick={() => setShowNotifModal(false)} className="text-neutral-500 hover:text-neutral-800">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
             
             <div className="p-8 text-center space-y-6">
-              <div className={`inline-flex items-center justify-center p-4 rounded-full ${isSubscribed ? 'bg-green-100' : 'bg-gray-100'}`}>
-                <span className={`material-symbols-outlined text-5xl ${isSubscribed ? 'text-green-600' : 'text-gray-400'}`}>
+              <div className={`inline-flex items-center justify-center p-4 rounded-full ${isSubscribed ? 'bg-success-100' : 'bg-neutral-100'}`}>
+                <span className={`material-symbols-outlined text-5xl ${isSubscribed ? 'text-success-600' : 'text-neutral-400'}`}>
                   {isSubscribed ? 'mark_email_read' : 'mail_off'}
                 </span>
               </div>
@@ -1186,7 +1186,7 @@ export default function DashboardPage() {
               <div>
                 <p className="text-lg font-bold text-on-surface mb-2">
                   סטטוס נוכחי: 
-                  <span className={isSubscribed ? 'text-green-600 mr-2' : 'text-gray-500 mr-2'}>
+                  <span className={isSubscribed ? 'text-success-600 mr-2' : 'text-neutral-500 mr-2'}>
                     {isSubscribed ? 'רשום לקבלת עדכונים' : 'לא רשום'}
                   </span>
                 </p>
@@ -1202,8 +1202,8 @@ export default function DashboardPage() {
                 disabled={loadingSub}
                 className={`w-full py-3 px-6 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
                   isSubscribed 
-                    ? 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100' 
-                    : 'bg-primary text-on-primary hover:bg-blue-700 shadow-lg hover:shadow-xl'
+                    ? 'bg-danger-50 text-danger-600 border border-danger-200 hover:bg-danger-100' 
+                    : 'bg-primary text-on-primary hover:bg-info-700 shadow-lg hover:shadow-xl'
                 }`}
               >
                 {loadingSub ? (
@@ -1267,7 +1267,7 @@ export default function DashboardPage() {
                 <button
                   onClick={handleDismissReminderServerSide}
                   disabled={dismissingReminder}
-                  className="w-full py-2 px-6 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl text-sm font-medium transition-colors"
+                  className="w-full py-2 px-6 text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100 rounded-xl text-sm font-medium transition-colors"
                 >
                   {dismissingReminder ? 'מעדכן...' : 'לא מעוניין (הזכר לי שוב בעוד שבוע)'}
                 </button>
@@ -1313,7 +1313,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="flex gap-3 p-6 border-t border-surface-variant bg-gray-50/50 rounded-b-2xl">
+            <div className="flex gap-3 p-6 border-t border-surface-variant bg-neutral-50/50 rounded-b-2xl">
               <button
                 onClick={handleSendMessage}
                 disabled={sendingMessage}
@@ -1338,7 +1338,7 @@ export default function DashboardPage() {
                   setMessageText('')
                 }}
                 disabled={sendingMessage}
-                className="px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 font-medium"
+                className="px-6 py-3 bg-white border border-neutral-300 text-neutral-700 rounded-lg hover:bg-neutral-50 transition-colors disabled:opacity-50 font-medium"
               >
                 ביטול
               </button>

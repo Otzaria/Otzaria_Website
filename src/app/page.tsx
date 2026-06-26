@@ -10,6 +10,7 @@ import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 type PlatformLinks = Record<string, string | undefined>
 type Downloads = {
   version?: string
+  versions?: Record<string, string>
   windows?: PlatformLinks
   linux?: PlatformLinks
   android?: PlatformLinks
@@ -32,28 +33,6 @@ type DownloadOption = {
   isLink?: boolean
 }
 
-function normalizeVersionPart(part: string) {
-  const numericPart = part.match(/^\d+/)?.[0]
-  return numericPart ? Number(numericPart) : 0
-}
-
-function compareVersions(firstVersion?: string | null, secondVersion?: string | null) {
-  if (!firstVersion || !secondVersion) return 0
-
-  const firstParts = firstVersion.replace(/^[^\d]*/, '').split(/[.-]/)
-  const secondParts = secondVersion.replace(/^[^\d]*/, '').split(/[.-]/)
-  const maxLength = Math.max(firstParts.length, secondParts.length)
-
-  for (let index = 0; index < maxLength; index += 1) {
-    const firstPart = normalizeVersionPart(firstParts[index] || '0')
-    const secondPart = normalizeVersionPart(secondParts[index] || '0')
-
-    if (firstPart > secondPart) return 1
-    if (firstPart < secondPart) return -1
-  }
-
-  return 0
-}
 
 export default function Home() {
   const [windowsModalOpen, setWindowsModalOpen] = useState(false)
@@ -63,7 +42,6 @@ export default function Home() {
   const [iosModalOpen, setIosModalOpen] = useState(false)
   
   const [stableDownloads, setStableDownloads] = useState<Downloads | null>(null)
-  const [devDownloads, setDevDownloads] = useState<Downloads | null>(null)
   const [detectedPlatform, setDetectedPlatform] = useState<string | null>(null)
   const [showAllPlatforms, setShowAllPlatforms] = useState(false)
 
@@ -96,13 +74,8 @@ export default function Home() {
   useEffect(() => {
     const fetchReleases = async () => {
         try {
-            const [stableRes, devRes] = await Promise.all([
-                fetch('/api/github-releases?type=stable'),
-                fetch('/api/github-releases?type=dev')
-            ]);
-            
+            const stableRes = await fetch('/api/github-releases?type=stable');
             if (stableRes.ok) setStableDownloads(await stableRes.json());
-            if (devRes.ok) setDevDownloads(await devRes.json());
         } catch (error) {
             console.error('Failed to load releases:', error);
         }
@@ -216,7 +189,7 @@ export default function Home() {
           </div>
           <div className="flex-1 text-right">
             <h3 className="text-2xl font-bold mb-1">{config.title}</h3>
-            <p className="text-gray-500">{config.subtitle}</p>
+            <p className="text-neutral-500">{config.subtitle}</p>
           </div>
           <span className="material-symbols-outlined text-3xl text-primary">download</span>
         </button>
@@ -226,13 +199,13 @@ export default function Home() {
     return (
       <button 
         onClick={config.onClick}
-        className="flex flex-col items-center p-6 bg-white border border-gray-200 rounded-xl hover:border-primary hover:shadow-lg transition-all group h-full"
+        className="flex flex-col items-center p-6 bg-white border border-neutral-200 rounded-xl hover:border-primary hover:shadow-lg transition-all group h-full"
       >
         <span className="material-symbols-outlined text-6xl text-primary mb-4 group-hover:scale-110 transition-transform">
           {config.icon}
         </span>
         <h3 className="text-xl font-bold mb-1">{config.title}</h3>
-        <p className="text-sm text-gray-500">{config.subtitle}</p>
+        <p className="text-sm text-neutral-500">{config.subtitle}</p>
       </button>
     )
   }
@@ -343,7 +316,7 @@ export default function Home() {
                 {/* הצגת כפתור הורדה לפלטפורמה שזוהתה */}
                 {detectedPlatform && !showAllPlatforms ? (
                   <div className="max-w-2xl mx-auto">
-                    <p className="text-center text-xl text-gray-600 mb-8">זיהינו שאתה משתמש ב-{getPlatformName(detectedPlatform)}</p>
+                    <p className="text-center text-xl text-neutral-600 mb-8">זיהינו שאתה משתמש ב-{getPlatformName(detectedPlatform)}</p>
                     
                     <div className="flex flex-col items-center gap-4 mb-8">
                       {renderPlatformButton(detectedPlatform, true)}
@@ -359,7 +332,7 @@ export default function Home() {
                   </div>
                 ) : (
                   <>
-                    <p className="text-center text-xl text-gray-600 mb-12">
+                    <p className="text-center text-xl text-neutral-600 mb-12">
                       {detectedPlatform ? 'בחר פלטפורמה' : 'לא הצלחנו לזהות את המערכת שלך - בחר פלטפורמה'}
                     </p>
                     
@@ -387,29 +360,6 @@ export default function Home() {
             </div>
         </section>
 
-        {/* Library Content Download Section - NEW ADDITION */}
-        <section className="py-16 px-4 bg-gray-50 border-t border-gray-100">
-             <div className="container mx-auto max-w-6xl text-center">
-                <h2 className="text-3xl font-bold mb-8 font-frank">הורדת הספרייה (תוכן)</h2>
-                <div className="flex justify-center">
-                    <a 
-                        href="https://github.com/Otzaria/SeforimLibrary/releases/latest/download/seforim.db.zst"
-                        className="flex flex-col items-center p-8 bg-white border border-gray-200 rounded-xl hover:border-primary hover:shadow-lg transition-all group max-w-md w-full"
-                    >
-                        <span className="material-symbols-outlined text-6xl text-primary mb-4 group-hover:scale-110 transition-transform">
-                            library_add
-                        </span>
-                        <h3 className="text-2xl font-bold mb-2 text-gray-800">הורדת המאגר המלא</h3>
-                        <p className="text-gray-500 mb-6">קובץ דחוס המכיל את ספריית הספרים המעודכנת</p>
-                        <span className="inline-flex items-center gap-2 px-6 py-2 bg-primary/10 text-primary rounded-full font-medium group-hover:bg-primary group-hover:text-white transition-colors">
-                            <span className="material-symbols-outlined text-sm">download</span>
-                            לחץ להורדה ישירה
-                        </span>
-                    </a>
-                </div>
-            </div>
-        </section>
-
         {/* Contribute Link */}
         <section className="py-20 px-4 bg-primary/5 text-center">
             <div className="container mx-auto">
@@ -429,76 +379,56 @@ export default function Home() {
         isOpen={windowsModalOpen}
         onClose={() => setWindowsModalOpen(false)}
         platform="Windows"
-        stableLinks={stableDownloads?.windows || {}}
-        devLinks={devDownloads?.windows || {}}
-        stableVersion={stableDownloads?.version}
-        devVersion={devDownloads?.version}
+        links={stableDownloads?.windows || {}}
+        version={stableDownloads?.versions?.windows ?? stableDownloads?.version}
       />
       <DownloadModal
         isOpen={linuxModalOpen}
         onClose={() => setLinuxModalOpen(false)}
         platform="Linux"
-        stableLinks={stableDownloads?.linux || {}}
-        devLinks={devDownloads?.linux || {}}
-        stableVersion={stableDownloads?.version}
-        devVersion={devDownloads?.version}
+        links={stableDownloads?.linux || {}}
+        version={stableDownloads?.versions?.linux ?? stableDownloads?.version}
       />
       <DownloadModal
         isOpen={androidModalOpen}
         onClose={() => setAndroidModalOpen(false)}
         platform="Android"
-        stableLinks={{
+        links={{
           playStore: 'https://play.google.com/store/apps/details?id=org.otzaria.otzaria',
           apk: stableDownloads?.android?.apk,
           zipFull: stableDownloads?.android?.zipFull
         }}
-        devLinks={{
-          playStore: 'https://play.google.com/store/apps/details?id=org.otzaria.otzaria',
-          apk: devDownloads?.android?.apk,
-          zipFull: devDownloads?.android?.zipFull
-        }}
-        stableVersion={stableDownloads?.version}
-        devVersion={devDownloads?.version}
+        version={stableDownloads?.versions?.android ?? stableDownloads?.version}
       />
       <DownloadModal
         isOpen={iosModalOpen}
         onClose={() => setIosModalOpen(false)}
         platform="iOS"
-        stableLinks={{
+        links={{
           appStore: 'https://apps.apple.com/us/app/otzaria/id6738098031'
         }}
-        devLinks={{
-          appStore: 'https://apps.apple.com/us/app/otzaria/id6738098031'
-        }}
-        stableVersion={stableDownloads?.version}
-        devVersion={devDownloads?.version}
+        version={stableDownloads?.version}
       />
       <DownloadModal
         isOpen={macModalOpen}
         onClose={() => setMacModalOpen(false)}
         platform="macOS"
-        stableLinks={stableDownloads?.macos || {}}
-        devLinks={devDownloads?.macos || {}}
-        stableVersion={stableDownloads?.version}
-        devVersion={devDownloads?.version}
+        links={stableDownloads?.macos || {}}
+        version={stableDownloads?.versions?.macos ?? stableDownloads?.version}
       />
     </div>
   );
 }
 
 // Download Modal Component
-function DownloadModal({ isOpen, onClose, platform, stableLinks, devLinks, stableVersion, devVersion }: {
+function DownloadModal({ isOpen, onClose, platform, links, version }: {
   isOpen: boolean
   onClose: () => void
   platform: string
-  stableLinks: PlatformLinks
-  devLinks: PlatformLinks
-  stableVersion?: string
-  devVersion?: string
+  links: PlatformLinks
+  version?: string
 }) {
   if (!isOpen) return null
-
-  const shouldShowDevVersion = Boolean(devVersion) && (!stableVersion || compareVersions(stableVersion, devVersion) < 0)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
@@ -510,47 +440,20 @@ function DownloadModal({ isOpen, onClose, platform, stableLinks, devLinks, stabl
         className="flex flex-col bg-white rounded-2xl w-full max-w-2xl shadow-2xl max-h-[90vh]"
       >
         {/* Fixed Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
-          <h2 className="text-2xl font-bold text-gray-800">
+        <div className="flex items-center justify-between p-6 border-b border-neutral-200 flex-shrink-0">
+          <h2 className="text-2xl font-bold text-neutral-800">
             הורדת אוצריא ל-{platform}
+            {version && <span className="text-sm font-normal text-neutral-500 mr-2"> ({version})</span>}
           </h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500">
+          <button onClick={onClose} className="p-2 hover:bg-neutral-100 rounded-full transition-colors text-neutral-500">
             <span className="material-symbols-outlined text-2xl block">close</span>
           </button>
         </div>
 
         {/* Scrollable Content */}
         <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
-          <div className="space-y-8">
-            {/* Stable Version */}
-            <div>
-              <div className="flex items-center gap-3 mb-4 sticky top-0 bg-white z-10 py-2">
-                <span className="material-symbols-outlined text-green-600">verified</span>
-                <h3 className="text-xl font-bold text-gray-800">
-                  גירסה יציבה
-                  {stableVersion && <span className="text-sm font-normal text-gray-500 mr-2"> ({stableVersion})</span>}
-                </h3>
-                <span className="px-3 py-1 bg-green-100 text-green-800 text-xs font-bold rounded-full">מומלץ</span>
-              </div>
-              <div className="grid gap-3">
-                {renderDownloadOptions(platform, stableLinks)}
-              </div>
-            </div>
-            {shouldShowDevVersion && (
-              <div>
-                <div className="flex items-center gap-3 mb-4 sticky top-0 bg-white z-10 py-2">
-                  <span className="material-symbols-outlined text-orange-600">code</span>
-                  <h3 className="text-xl font-bold text-gray-800">
-                    גירסת פיתוח
-                    {devVersion && <span className="text-sm font-normal text-gray-500 mr-2"> ({devVersion})</span>}
-                  </h3>
-                  <span className="px-3 py-1 bg-orange-100 text-orange-800 text-xs font-bold rounded-full">ניסיוני</span>
-                </div>
-                <div className="grid gap-3">
-                  {renderDownloadOptions(platform, devLinks)}
-                </div>
-              </div>
-            )}
+          <div className="grid gap-3">
+            {renderDownloadOptions(platform, links)}
           </div>
         </div>
       </motion.div>
@@ -561,8 +464,8 @@ function DownloadModal({ isOpen, onClose, platform, stableLinks, devLinks, stabl
 function renderDownloadOptions(platform: string, links: PlatformLinks) {
   const options: Record<string, DownloadOption[]> = {
     Windows: [
-      { key: 'exe', icon: 'install_desktop', title: 'EXE Installer', desc: 'קובץ התקנה (מומלץ)' },
-      { key: 'exeFull', icon: 'install_desktop', title: 'EXE Installer (Full)', desc: 'קובץ התקנה עם ספרייה מלאה' },
+      { key: 'exe', icon: 'install_desktop', title: 'EXE Installer', desc: 'קובץ התקנה רגיל — הורדת הספרייה תתבצע דרך התוכנה' },
+      { key: 'exeFull', icon: 'install_desktop', title: 'EXE Installer (Full)', desc: 'מתקין מלא להתקנה במחשב ללא אינטרנט' },
       { key: 'msix', icon: 'package_2', title: 'MSIX Package', desc: 'התקנה דרך החנות' },
       { key: 'zip', icon: 'folder_zip', title: 'Portable ZIP', desc: 'גרסה ניידת ללא התקנה' }
     ],
@@ -570,20 +473,20 @@ function renderDownloadOptions(platform: string, links: PlatformLinks) {
       { key: 'deb', icon: 'package_2', title: 'DEB Package', desc: 'עבור Ubuntu/Debian' },
       { key: 'rpm', icon: 'package_2', title: 'RPM Package', desc: 'עבור Fedora/RedHat' },
       { key: 'appimage', icon: 'apps', title: 'AppImage', desc: 'קובץ הרצה אוניברסלי' },
-      { key: 'tarFull', icon: 'folder_zip', title: 'Full Package', desc: 'חבילה מלאה עם ספרייה' }
+      { key: 'tarFull', icon: 'folder_zip', title: 'Full Package', desc: 'מתקין מלא להתקנה במחשב ללא אינטרנט' }
     ],
     Android: [
       { key: 'playStore', icon: 'shop', title: 'Google Play', desc: 'התקנה מהחנות', isLink: true },
-      { key: 'apk', icon: 'android', title: 'APK File', desc: 'התקנה ידנית' },
-      { key: 'zipFull', icon: 'folder_zip', title: 'Full Package', desc: 'APK + ספרייה מלאה' }
+      { key: 'apk', icon: 'android', title: 'APK File', desc: 'התקנה ידנית — הורדת הספרייה תתבצע דרך התוכנה' },
+      { key: 'zipFull', icon: 'folder_zip', title: 'Full Package', desc: 'מתקין מלא להתקנה ללא אינטרנט' }
     ],
     iOS: [
       { key: 'appStore', icon: 'shop', title: 'App Store', desc: 'הורדה מחנות האפליקציות', isLink: true }
     ],
     macOS: [
-      { key: 'dmg', icon: 'album', title: 'DMG Image', desc: 'קובץ התקנה למק (מומלץ)' },
+      { key: 'dmg', icon: 'album', title: 'DMG Image', desc: 'קובץ התקנה רגיל — הורדת הספרייה תתבצע דרך התוכנה' },
       { key: 'zip', icon: 'folder_zip', title: 'macOS Package', desc: 'גרסה דחוסה' },
-      { key: 'zipFull', icon: 'folder_zip', title: 'Full Package', desc: 'חבילה מלאה עם ספרייה' }
+      { key: 'zipFull', icon: 'folder_zip', title: 'Full Package', desc: 'מתקין מלא להתקנה במחשב ללא אינטרנט' }
     ]
   }
 
@@ -591,7 +494,7 @@ function renderDownloadOptions(platform: string, links: PlatformLinks) {
   const validOptions = platformOptions.filter((opt) => links && links[opt.key])
 
   if (validOptions.length === 0) {
-    return <p className="text-gray-500 italic p-4 bg-gray-50 rounded-lg text-center border border-dashed border-gray-300">אין הורדות זמינות כרגע לגרסה זו.</p>
+    return <p className="text-neutral-500 italic p-4 bg-neutral-50 rounded-lg text-center border border-dashed border-neutral-300">אין הורדות זמינות כרגע לגרסה זו.</p>
   }
 
   return validOptions.map((option) => (
@@ -600,16 +503,16 @@ function renderDownloadOptions(platform: string, links: PlatformLinks) {
       href={links[option.key]}
       target={option.isLink ? "_blank" : undefined}
       rel={option.isLink ? "noopener noreferrer" : undefined}
-      className="flex items-center gap-4 p-4 rounded-xl border border-gray-200 hover:border-primary hover:shadow-md transition-all group bg-gray-50 hover:bg-white"
+      className="flex items-center gap-4 p-4 rounded-xl border border-neutral-200 hover:border-primary hover:shadow-md transition-all group bg-neutral-50 hover:bg-white"
     >
       <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center shadow-sm text-primary group-hover:scale-110 transition-transform">
         <span className="material-symbols-outlined text-2xl">{option.icon}</span>
       </div>
       <div className="flex-1">
-        <h4 className="font-bold text-gray-800">{option.title}</h4>
-        <p className="text-sm text-gray-500">{option.desc}</p>
+        <h4 className="font-bold text-neutral-800">{option.title}</h4>
+        <p className="text-sm text-neutral-500">{option.desc}</p>
       </div>
-      <span className="material-symbols-outlined text-gray-400 group-hover:text-primary">
+      <span className="material-symbols-outlined text-neutral-400 group-hover:text-primary">
         {option.isLink ? 'open_in_new' : 'download'}
       </span>
     </a>

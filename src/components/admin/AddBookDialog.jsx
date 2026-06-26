@@ -104,7 +104,7 @@ export default function AddBookDialog({ isOpen, onClose, onBookAdded, categories
                         value={bookName}
                         onChange={(e) => setBookName(e.target.value)}
                         disabled={isUploading}
-                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-100"
+                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-info-500 outline-none disabled:bg-neutral-100"
                         placeholder="הכנס שם ספר..."
                     />
                 </div>
@@ -115,7 +115,7 @@ export default function AddBookDialog({ isOpen, onClose, onBookAdded, categories
                         value={category}
                         onChange={(e) => setCategory(e.target.value)}
                         disabled={isUploading}
-                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-100 bg-white"
+                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-info-500 outline-none disabled:bg-neutral-100 bg-white"
                     >
                         {categories && categories.length > 0 ? (
                             categories.map((cat, idx) => (
@@ -134,18 +134,18 @@ export default function AddBookDialog({ isOpen, onClose, onBookAdded, categories
                         accept=".pdf"
                         onChange={handleFileSelect}
                         disabled={isUploading}
-                        className="w-full block text-sm text-slate-500
+                        className="w-full block text-sm text-neutral-cool-500
                           file:mr-4 file:py-2 file:px-4
                           file:rounded-full file:border-0
                           file:text-sm file:font-semibold
-                          file:bg-blue-50 file:text-blue-700
-                          hover:file:bg-blue-100
+                          file:bg-info-50 file:text-info-700
+                          hover:file:bg-info-100
                           disabled:opacity-50"
                     />
                 </div>
 
                 {/* אפשרויות נוספות */}
-                <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 space-y-3">
+                <div className="bg-neutral-50 p-3 rounded-lg border border-neutral-200 space-y-3">
                     <div className="flex items-center gap-2">
                         <input
                             type="checkbox"
@@ -153,9 +153,9 @@ export default function AddBookDialog({ isOpen, onClose, onBookAdded, categories
                             checked={isHidden}
                             onChange={(e) => setIsHidden(e.target.checked)}
                             disabled={isUploading}
-                            className="w-4 h-4 text-primary focus:ring-primary border-gray-300 rounded cursor-pointer"
+                            className="w-4 h-4 text-primary focus:ring-primary border-neutral-300 rounded cursor-pointer"
                         />
-                        <label htmlFor="isHidden" className="text-sm font-bold text-gray-700 flex items-center gap-1 cursor-pointer select-none">
+                        <label htmlFor="isHidden" className="text-sm font-bold text-neutral-700 flex items-center gap-1 cursor-pointer select-none">
                             <span className="material-symbols-outlined text-sm">visibility_off</span>
                             ספר מוסתר (יוצג למנהלים בלבד)
                         </label>
@@ -168,9 +168,9 @@ export default function AddBookDialog({ isOpen, onClose, onBookAdded, categories
                             checked={sendNotification}
                             onChange={(e) => setSendNotification(e.target.checked)}
                             disabled={isUploading || isHidden} 
-                            className="w-4 h-4 text-primary focus:ring-primary border-gray-300 rounded cursor-pointer"
+                            className="w-4 h-4 text-primary focus:ring-primary border-neutral-300 rounded cursor-pointer"
                         />
-                        <label htmlFor="sendNotification" className={`text-sm font-bold flex items-center gap-1 cursor-pointer select-none ${isHidden ? 'text-gray-400' : 'text-gray-700'}`}>
+                        <label htmlFor="sendNotification" className={`text-sm font-bold flex items-center gap-1 cursor-pointer select-none ${isHidden ? 'text-neutral-400' : 'text-neutral-700'}`}>
                             <span className="material-symbols-outlined text-sm">campaign</span>
                             שלח עדכון במייל למנויים
                         </label>
@@ -178,7 +178,7 @@ export default function AddBookDialog({ isOpen, onClose, onBookAdded, categories
                 </div>
 
                 {error && (
-                    <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg border border-red-200 flex items-start gap-2">
+                    <div className="text-danger-600 text-sm bg-danger-50 p-3 rounded-lg border border-danger-200 flex items-start gap-2">
                         <span className="material-symbols-outlined text-lg flex-shrink-0 mt-0.5">error</span>
                         <span>{error}</span>
                     </div>

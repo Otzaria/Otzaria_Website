@@ -50,7 +50,7 @@ export default function InfoDialog({ isOpen, onClose, bookInstructions, globalIn
       >
         <div className="flex items-center justify-between p-6 border-b border-surface-variant flex-shrink-0 bg-white/50 rounded-t-2xl">
           <h2 className="text-2xl font-bold text-on-surface flex items-center gap-2">
-            <span className="material-symbols-outlined text-blue-600 text-3xl">info</span>
+            <span className="material-symbols-outlined text-info-600 text-3xl">info</span>
             <span>הנחיות עריכה</span>
           </h2>
           <button 
@@ -81,14 +81,14 @@ export default function InfoDialog({ isOpen, onClose, bookInstructions, globalIn
                         href={`/library/books/${encodeURIComponent(bookPath)}/example`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="w-full bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300 p-4 rounded-xl flex items-center justify-center gap-3 font-bold transition-all shadow-sm group"
+                        className="w-full bg-info-alt-50 border border-info-alt-200 text-info-alt-700 hover:bg-info-alt-100 hover:border-info-alt-300 p-4 rounded-xl flex items-center justify-center gap-3 font-bold transition-all shadow-sm group"
                     >
                         <div className="bg-white p-2 rounded-full shadow-sm group-hover:scale-110 transition-transform">
-                             <span className="material-symbols-outlined text-indigo-600">bookmark</span>
+                             <span className="material-symbols-outlined text-info-alt-600">bookmark</span>
                         </div>
                         <div className="flex flex-col items-start">
                              <span className="text-lg">צפה בעמוד דוגמא</span>
-                             <span className="text-xs font-normal text-indigo-600/80">לחץ לפתיחה בכרטיסייה חדשה</span>
+                             <span className="text-xs font-normal text-info-alt-600/80">לחץ לפתיחה בכרטיסייה חדשה</span>
                         </div>
                         <span className="material-symbols-outlined mr-auto">open_in_new</span>
                     </a>

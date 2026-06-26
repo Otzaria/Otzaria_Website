@@ -318,7 +318,7 @@ export default function HeaderErrorCheckerModal({ isOpen, onClose, content }) {
       size="xl"
     >
       <div className="space-y-4">
-        <div className="bg-blue-50 p-4 rounded-lg text-sm text-gray-700">
+        <div className="bg-info-50 p-4 rounded-lg text-sm text-neutral-700">
           <p>כלי זה בודק שגיאות נפוצות בכותרות ובתגי HTML.</p>
         </div>
 
@@ -361,7 +361,7 @@ export default function HeaderErrorCheckerModal({ isOpen, onClose, content }) {
         </div>
 
         {errors?.error && (
-          <div className="p-3 rounded bg-red-100 text-red-700">
+          <div className="p-3 rounded bg-danger-100 text-danger-700">
             {errors.error}
           </div>
         )}
@@ -369,15 +369,15 @@ export default function HeaderErrorCheckerModal({ isOpen, onClose, content }) {
         {errors && !errors.error && (
           <div className="space-y-3 max-h-96 overflow-y-auto">
             {!hasErrors ? (
-              <div className="p-3 rounded bg-green-100 text-green-700">
+              <div className="p-3 rounded bg-success-100 text-success-700">
                 ✓ לא נמצאו שגיאות!
               </div>
             ) : (
               <>
                 {errors.unmatched_regex?.length > 0 && (
                   <div>
-                    <h4 className="font-bold text-red-700 mb-2">כותרות לא תואמות regex ({errors.unmatched_regex.length}):</h4>
-                    <ul className="text-sm space-y-1 bg-red-50 p-3 rounded max-h-40 overflow-y-auto">
+                    <h4 className="font-bold text-danger-700 mb-2">כותרות לא תואמות regex ({errors.unmatched_regex.length}):</h4>
+                    <ul className="text-sm space-y-1 bg-danger-50 p-3 rounded max-h-40 overflow-y-auto">
                       {errors.unmatched_regex.map((item, i) => <li key={i}>• {item}</li>)}
                     </ul>
                   </div>
@@ -385,8 +385,8 @@ export default function HeaderErrorCheckerModal({ isOpen, onClose, content }) {
 
                 {errors.unmatched_tags?.length > 0 && (
                   <div>
-                    <h4 className="font-bold text-orange-700 mb-2">כותרות לא עוקבות ({errors.unmatched_tags.length}):</h4>
-                    <ul className="text-sm space-y-1 bg-orange-50 p-3 rounded max-h-40 overflow-y-auto">
+                    <h4 className="font-bold text-warning-strong-700 mb-2">כותרות לא עוקבות ({errors.unmatched_tags.length}):</h4>
+                    <ul className="text-sm space-y-1 bg-warning-strong-50 p-3 rounded max-h-40 overflow-y-auto">
                       {errors.unmatched_tags.map((item, i) => <li key={i}>• {item}</li>)}
                     </ul>
                   </div>
@@ -394,8 +394,8 @@ export default function HeaderErrorCheckerModal({ isOpen, onClose, content }) {
 
                 {errors.heading_order?.length > 0 && (
                   <div>
-                    <h4 className="font-bold text-amber-700 mb-2">כותרות לא בסדר עולה ({errors.heading_order.length}):</h4>
-                    <ul className="text-sm space-y-1 bg-amber-50 p-3 rounded max-h-40 overflow-y-auto">
+                    <h4 className="font-bold text-warning-700 mb-2">כותרות לא בסדר עולה ({errors.heading_order.length}):</h4>
+                    <ul className="text-sm space-y-1 bg-warning-50 p-3 rounded max-h-40 overflow-y-auto">
                       {errors.heading_order.map((item, i) => <li key={i}>• {item}</li>)}
                     </ul>
                   </div>
@@ -403,8 +403,8 @@ export default function HeaderErrorCheckerModal({ isOpen, onClose, content }) {
 
                 {errors.opening_without_closing?.length > 0 && (
                   <div>
-                    <h4 className="font-bold text-purple-700 mb-2">תגים פתוחים ללא סגירה ({errors.opening_without_closing.length}):</h4>
-                    <ul className="text-sm space-y-1 bg-purple-50 p-3 rounded max-h-40 overflow-y-auto">
+                    <h4 className="font-bold text-feature-700 mb-2">תגים פתוחים ללא סגירה ({errors.opening_without_closing.length}):</h4>
+                    <ul className="text-sm space-y-1 bg-feature-50 p-3 rounded max-h-40 overflow-y-auto">
                       {errors.opening_without_closing.map((item, i) => <li key={i}>• {item}</li>)}
                     </ul>
                   </div>
@@ -412,8 +412,8 @@ export default function HeaderErrorCheckerModal({ isOpen, onClose, content }) {
 
                 {errors.closing_without_opening?.length > 0 && (
                   <div>
-                    <h4 className="font-bold text-blue-700 mb-2">תגים סוגרים ללא פתיחה ({errors.closing_without_opening.length}):</h4>
-                    <ul className="text-sm space-y-1 bg-blue-50 p-3 rounded max-h-40 overflow-y-auto">
+                    <h4 className="font-bold text-info-700 mb-2">תגים סוגרים ללא פתיחה ({errors.closing_without_opening.length}):</h4>
+                    <ul className="text-sm space-y-1 bg-info-50 p-3 rounded max-h-40 overflow-y-auto">
                       {errors.closing_without_opening.map((item, i) => <li key={i}>• {item}</li>)}
                     </ul>
                   </div>
@@ -430,8 +430,8 @@ export default function HeaderErrorCheckerModal({ isOpen, onClose, content }) {
 
                 {errors.missing_levels?.length > 0 && (
                   <div>
-                    <h4 className="font-bold text-gray-700 mb-2">רמות כותרת חסרות:</h4>
-                    <p className="text-sm bg-gray-50 p-3 rounded">H{errors.missing_levels.join(', H')}</p>
+                    <h4 className="font-bold text-neutral-700 mb-2">רמות כותרת חסרות:</h4>
+                    <p className="text-sm bg-neutral-50 p-3 rounded">H{errors.missing_levels.join(', H')}</p>
                   </div>
                 )}
               </>
@@ -449,7 +449,7 @@ export default function HeaderErrorCheckerModal({ isOpen, onClose, content }) {
           </button>
           <button
             onClick={handleClose}
-            className="px-6 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="px-6 py-2.5 border border-neutral-300 rounded-lg hover:bg-neutral-50 transition-colors"
           >
             סגור
           </button>

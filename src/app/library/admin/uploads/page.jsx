@@ -443,7 +443,7 @@ export default function AdminUploadsPage() {
           
           {/* שדה חיפוש */}
           <div className="relative flex-1 max-w-md">
-            <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
+            <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-neutral-cool-400 text-sm">
               search
             </span>
             <input 
@@ -451,12 +451,12 @@ export default function AdminUploadsPage() {
               placeholder="חיפוש..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-lg py-2 pr-10 pl-4 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm text-sm"
+              className="w-full bg-white border border-neutral-cool-200 rounded-lg py-2 pr-10 pl-4 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-sm text-sm"
             />
             {searchTerm && (
               <button
                 onClick={() => setSearchTerm('')}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-cool-400 hover:text-neutral-cool-600"
               >
                 <span className="material-symbols-outlined text-sm">close</span>
               </button>
@@ -467,7 +467,7 @@ export default function AdminUploadsPage() {
         <div className="flex gap-2">
           <button
             onClick={() => setShowNotificationSettings(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+            className="flex items-center gap-2 px-4 py-2 bg-info-600 text-white rounded-lg hover:bg-info-700 transition-colors shadow-sm"
           >
             <span className="material-symbols-outlined text-sm">notifications</span>
             התראות
@@ -475,7 +475,7 @@ export default function AdminUploadsPage() {
           
           <button
             onClick={() => setShowStatusConfig(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
+            className="flex items-center gap-2 px-4 py-2 bg-feature-600 text-white rounded-lg hover:bg-feature-700 transition-colors shadow-sm"
           >
             <span className="material-symbols-outlined text-sm">settings</span>
             הגדרות סטטוסים
@@ -483,7 +483,7 @@ export default function AdminUploadsPage() {
           
           <Link 
             href="/library/admin/trash"
-            className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors shadow-sm"
+            className="flex items-center gap-2 px-4 py-2 bg-warning-strong-600 text-white rounded-lg hover:bg-warning-strong-700 transition-colors shadow-sm"
           >
             <span className="material-symbols-outlined text-sm">delete</span>
             אשפה
@@ -492,7 +492,7 @@ export default function AdminUploadsPage() {
           {pendingCount > 0 && (
             <button 
               onClick={handleDownloadAllPending}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+              className="flex items-center gap-2 px-4 py-2 bg-info-600 text-white rounded-lg hover:bg-info-700 transition-colors shadow-sm"
             >
               <span className="material-symbols-outlined text-sm">download</span>
               הורד הכל ({pendingCount})
@@ -507,8 +507,8 @@ export default function AdminUploadsPage() {
           onClick={() => setFilterTypes(filterTypes.includes('dicta') ? filterTypes.filter(t => t !== 'dicta') : [...filterTypes, 'dicta'])}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors shadow-sm ${
             filterTypes.includes('dicta')
-              ? 'bg-purple-600 text-white'
-              : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+              ? 'bg-feature-600 text-white'
+              : 'bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-50'
           }`}
         >
           <span className="material-symbols-outlined text-sm">mic</span>
@@ -519,8 +519,8 @@ export default function AdminUploadsPage() {
           onClick={() => setFilterTypes(filterTypes.includes('full_book') ? filterTypes.filter(t => t !== 'full_book') : [...filterTypes, 'full_book'])}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors shadow-sm ${
             filterTypes.includes('full_book')
-              ? 'bg-green-600 text-white'
-              : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+              ? 'bg-success-600 text-white'
+              : 'bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-50'
           }`}
         >
           <span className="material-symbols-outlined text-sm">book</span>
@@ -531,8 +531,8 @@ export default function AdminUploadsPage() {
           onClick={() => setFilterTypes(filterTypes.includes('single_page') ? filterTypes.filter(t => t !== 'single_page') : [...filterTypes, 'single_page'])}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors shadow-sm ${
             filterTypes.includes('single_page')
-              ? 'bg-amber-600 text-white'
-              : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+              ? 'bg-warning-600 text-white'
+              : 'bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-50'
           }`}
         >
           <span className="material-symbols-outlined text-sm">description</span>
@@ -549,8 +549,8 @@ export default function AdminUploadsPage() {
           onClick={() => setShowUserDropdown(!showUserDropdown)}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors shadow-sm ${
             filterUsers.length > 0
-              ? 'bg-indigo-600 text-white'
-              : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+              ? 'bg-info-alt-600 text-white'
+              : 'bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-50'
           }`}
         >
           <span className="material-symbols-outlined text-sm">person_search</span>
@@ -571,14 +571,14 @@ export default function AdminUploadsPage() {
         </button>
 
         {showUserDropdown && (
-          <div className="absolute top-full mt-2 right-0 bg-white border border-gray-200 rounded-lg shadow-xl z-10 p-3 min-w-[230px]">
+          <div className="absolute top-full mt-2 right-0 bg-white border border-neutral-200 rounded-lg shadow-xl z-10 p-3 min-w-[230px]">
             <input
               type="text"
               placeholder="חיפוש משתמש..."
               value={userSearch}
               onChange={(e) => setUserSearch(e.target.value)}
               autoFocus
-              className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg mb-2 focus:outline-none focus:ring-2 focus:ring-primary/20"
+              className="w-full px-3 py-1.5 text-sm border border-neutral-200 rounded-lg mb-2 focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
             <div className="space-y-1 max-h-[240px] overflow-y-auto">
               {uniqueUsers
@@ -590,7 +590,7 @@ export default function AdminUploadsPage() {
                     <label
                       key={u.key}
                       className={`w-full text-right px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2 cursor-pointer ${
-                        selected ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50 text-gray-700'
+                        selected ? 'bg-info-alt-50 text-info-alt-700' : 'hover:bg-neutral-50 text-neutral-700'
                       }`}
                     >
                       <input
@@ -599,22 +599,22 @@ export default function AdminUploadsPage() {
                         onChange={() => setFilterUsers(prev =>
                           selected ? prev.filter(k => k !== u.key) : [...prev, u.key]
                         )}
-                        className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 flex-shrink-0"
+                        className="w-4 h-4 text-info-alt-600 rounded focus:ring-info-alt-500 flex-shrink-0"
                       />
                       <span className="flex-1">{u.name}</span>
-                      {emailPrefix && <span className="text-xs text-gray-400 truncate max-w-[70px]" title={u.email}>{emailPrefix}</span>}
+                      {emailPrefix && <span className="text-xs text-neutral-400 truncate max-w-[70px]" title={u.email}>{emailPrefix}</span>}
                     </label>
                   )
                 })}
               {uniqueUsers.filter(u => !userSearch || u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase())).length === 0 && (
-                <p className="text-sm text-gray-400 text-center py-2">לא נמצאו משתמשים</p>
+                <p className="text-sm text-neutral-400 text-center py-2">לא נמצאו משתמשים</p>
               )}
             </div>
             {filterUsers.length > 0 && (
               <div className="mt-2 pt-2 border-t">
                 <button
                   onClick={() => setFilterUsers([])}
-                  className="w-full px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
+                  className="w-full px-3 py-1.5 bg-neutral-100 text-neutral-700 rounded-lg hover:bg-neutral-200 transition-colors text-sm font-medium"
                 >
                   איפוס בחירה
                 </button>
@@ -628,12 +628,12 @@ export default function AdminUploadsPage() {
       <div className="relative filter-menu-container">
         <button
           onClick={() => setShowFilterMenu(!showFilterMenu)}
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-neutral-300 rounded-lg hover:bg-neutral-50 transition-colors shadow-sm"
         >
           <span className="material-symbols-outlined text-sm">filter_list</span>
           סינון לפי סטטוס
           {filterStatuses.length > 0 && (
-            <span className="w-2 h-2 bg-blue-600 rounded-full"></span>
+            <span className="w-2 h-2 bg-info-600 rounded-full"></span>
           )}
           <span className="material-symbols-outlined text-sm">
             {showFilterMenu ? 'expand_less' : 'expand_more'}
@@ -642,25 +642,25 @@ export default function AdminUploadsPage() {
         
         {/* תפריט סינון - רק סטטוס */}
         {showFilterMenu && (
-          <div className="absolute top-full mt-2 right-0 bg-white border border-gray-200 rounded-lg shadow-xl z-10 p-4 min-w-[300px]">
-            <h3 className="text-sm font-bold text-gray-700 mb-3 pb-2 border-b">סטטוס</h3>
+          <div className="absolute top-full mt-2 right-0 bg-white border border-neutral-200 rounded-lg shadow-xl z-10 p-4 min-w-[300px]">
+            <h3 className="text-sm font-bold text-neutral-700 mb-3 pb-2 border-b">סטטוס</h3>
             <div className="space-y-2 max-h-[300px] overflow-y-auto">
               {Object.entries(bookStatuses).map(([key, config]) => (
                 <label 
                   key={key}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-neutral-50 cursor-pointer transition-colors"
                 >
                   <input
                     type="checkbox"
                     checked={filterStatuses.includes(key)}
                     onChange={(e) => handleStatusChange(key, e.target.checked)}
-                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                    className="w-4 h-4 text-info-600 rounded focus:ring-info-500"
                   />
                   <span 
                     className="w-3 h-3 rounded-full flex-shrink-0" 
                     style={{ backgroundColor: config.color }}
                   ></span>
-                  <span className="text-sm text-gray-700">{config.label}</span>
+                  <span className="text-sm text-neutral-700">{config.label}</span>
                 </label>
               ))}
             </div>
@@ -670,7 +670,7 @@ export default function AdminUploadsPage() {
               <div className="mt-4 pt-4 border-t">
                 <button
                   onClick={() => setFilterStatuses([])}
-                  className="w-full px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
+                  className="w-full px-3 py-2 bg-neutral-100 text-neutral-700 rounded-lg hover:bg-neutral-200 transition-colors text-sm font-medium"
                 >
                   איפוס סינון
                 </button>
@@ -685,7 +685,7 @@ export default function AdminUploadsPage() {
       {loading ? (
           <LoadingSpinner message="טוען העלאות..." />
       ) : uploads.length === 0 ? (
-          <div className="text-center py-16 text-gray-500">
+          <div className="text-center py-16 text-neutral-500">
             <span className="material-symbols-outlined text-6xl mb-2">folder_off</span>
             <p>אין העלאות במערכת</p>
           </div>
@@ -697,13 +697,13 @@ export default function AdminUploadsPage() {
                   const firstUpload = bookUploads[0]
                   
                   return (
-                      <div key={bookName} className="glass p-5 rounded-xl border border-blue-200 hover:border-blue-300 transition-all">
+                      <div key={bookName} className="glass p-5 rounded-xl border border-info-200 hover:border-info-300 transition-all">
                           {/* כותרת הספר */}
                           <div 
                               className={`flex items-start gap-4 ${hasMultipleUploads ? 'cursor-pointer' : ''}`}
                               onClick={() => hasMultipleUploads && toggleBookExpansion(bookName)}
                           >
-                              <div className="p-3 rounded-lg bg-blue-100 text-blue-700">
+                              <div className="p-3 rounded-lg bg-info-100 text-info-700">
                                   <span className="material-symbols-outlined text-3xl">
                                       {hasMultipleUploads ? 'folder' : 'description'}
                                   </span>
@@ -712,20 +712,20 @@ export default function AdminUploadsPage() {
                               <div className="flex-1">
                                   <div className="flex justify-between items-start mb-2">
                                       <div>
-                                          <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                          <h3 className="text-lg font-bold text-neutral-800 flex items-center gap-2">
                                               {bookName || 'ללא שם'}
                                               {hasMultipleUploads && (
-                                                  <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full border border-blue-200 font-bold">
+                                                  <span className="px-2 py-0.5 bg-info-100 text-info-700 text-xs rounded-full border border-info-200 font-bold">
                                                       {bookUploads.length} העלאות
                                                   </span>
                                               )}
                                               {firstUpload.uploadType === 'full_book' && (
-                                                  <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full border border-green-200 font-bold">
+                                                  <span className="px-2 py-0.5 bg-success-100 text-success-700 text-xs rounded-full border border-success-200 font-bold">
                                                       ספר שלם
                                                   </span>
                                               )}
                                               {firstUpload.uploadType === 'dicta' && (
-                                                  <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full border border-purple-200 font-bold">
+                                                  <span className="px-2 py-0.5 bg-feature-100 text-feature-700 text-xs rounded-full border border-feature-200 font-bold">
                                                       דיקטה
                                                   </span>
                                               )}
@@ -749,7 +749,7 @@ export default function AdminUploadsPage() {
                                                   />
                                               )}
                                           </div>
-                                          <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
+                                          <div className="flex items-center gap-4 text-sm text-neutral-500 mt-1">
                                               <span className="flex items-center gap-1">
                                                 <span className="material-symbols-outlined text-sm">person</span>
                                                 {firstUpload.uploadedBy || 'אורח'}
@@ -772,7 +772,7 @@ export default function AdminUploadsPage() {
                                       
                                       <div className="flex items-center gap-2">
                                           {hasMultipleUploads && (
-                                              <span className="material-symbols-outlined text-gray-400">
+                                              <span className="material-symbols-outlined text-neutral-400">
                                                   {isExpanded ? 'expand_less' : 'expand_more'}
                                               </span>
                                           )}
@@ -780,7 +780,7 @@ export default function AdminUploadsPage() {
                                   </div>
                                   
                                   {/* כפתורי פעולה */}
-                                  <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-gray-100">
+                                  <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-neutral-100">
                                       {/* כפתור ערוך - מוצג רק אם כבר נוצר עותק עריכה */}
                                       {firstUpload.editCopy && (
                                           <button 
@@ -788,7 +788,7 @@ export default function AdminUploadsPage() {
                                                 e.stopPropagation();
                                                 router.push(`/library/dicta-books/edit/${firstUpload.editCopy}`);
                                             }}
-                                            className="flex items-center gap-1 px-3 py-1.5 text-green-600 hover:bg-green-50 rounded-lg text-sm transition-colors"
+                                            className="flex items-center gap-1 px-3 py-1.5 text-success-600 hover:bg-success-50 rounded-lg text-sm transition-colors"
                                           >
                                               <span className="material-symbols-outlined text-lg">edit</span>
                                               ערוך עותק
@@ -837,7 +837,7 @@ export default function AdminUploadsPage() {
                                                     'ביטול'
                                                 );
                                             }}
-                                            className="flex items-center gap-1 px-3 py-1.5 text-purple-600 hover:bg-purple-50 rounded-lg text-sm transition-colors"
+                                            className="flex items-center gap-1 px-3 py-1.5 text-feature-600 hover:bg-feature-50 rounded-lg text-sm transition-colors"
                                           >
                                               <span className="material-symbols-outlined text-lg">content_copy</span>
                                               צור עותק עריכה
@@ -846,7 +846,7 @@ export default function AdminUploadsPage() {
                                       
                                       {hasMultipleUploads && (
                                           <>
-                                              <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                                              <div className="w-px h-6 bg-neutral-300 mx-1"></div>
                                               
                                               <button 
                                                 onClick={(e) => {
@@ -884,13 +884,13 @@ export default function AdminUploadsPage() {
                                                         }
                                                     );
                                                 }}
-                                                className="flex items-center gap-1 px-3 py-1.5 text-blue-600 hover:bg-blue-50 rounded-lg text-sm transition-colors"
+                                                className="flex items-center gap-1 px-3 py-1.5 text-info-600 hover:bg-info-50 rounded-lg text-sm transition-colors"
                                               >
                                                   <span className="material-symbols-outlined text-lg">download</span>
                                                   הורד הכל ({bookUploads.length})
                                               </button>
                                               
-                                              <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                                              <div className="w-px h-6 bg-neutral-300 mx-1"></div>
                                               
                                               <button 
                                                 onClick={(e) => {
@@ -922,7 +922,7 @@ export default function AdminUploadsPage() {
                                                         'ביטול'
                                                     )
                                                 }}
-                                                className="flex items-center gap-1 px-3 py-1.5 text-red-700 hover:bg-red-50 rounded-lg text-sm transition-colors"
+                                                className="flex items-center gap-1 px-3 py-1.5 text-danger-700 hover:bg-danger-50 rounded-lg text-sm transition-colors"
                                               >
                                                   <span className="material-symbols-outlined text-lg">delete</span>
                                                   העבר הכל לאשפה
@@ -940,14 +940,14 @@ export default function AdminUploadsPage() {
                                                         e.stopPropagation()
                                                         handleSendMessage(firstUpload.uploadedByEmail, firstUpload.uploadedBy, firstUpload.bookName)
                                                     }}
-                                                    className="flex items-center gap-1 px-3 py-1.5 text-purple-600 hover:bg-purple-50 rounded-lg text-sm transition-colors"
+                                                    className="flex items-center gap-1 px-3 py-1.5 text-feature-600 hover:bg-feature-50 rounded-lg text-sm transition-colors"
                                                     title="שלח הודעה למעלה"
                                                   >
                                                       <span className="material-symbols-outlined text-lg">send</span>
                                                       שלח הודעה
                                                   </button>
                                                   
-                                                  <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                                                  <div className="w-px h-6 bg-neutral-300 mx-1"></div>
                                                 </>
                                               )}
                                               
@@ -956,20 +956,20 @@ export default function AdminUploadsPage() {
                                                     e.stopPropagation()
                                                     handleDownload(firstUpload.id, firstUpload.originalFileName)
                                                 }}
-                                                className="flex items-center gap-1 px-3 py-1.5 text-blue-600 hover:bg-blue-50 rounded-lg text-sm transition-colors"
+                                                className="flex items-center gap-1 px-3 py-1.5 text-info-600 hover:bg-info-50 rounded-lg text-sm transition-colors"
                                               >
                                                   <span className="material-symbols-outlined text-lg">download</span>
                                                   הורד קובץ
                                               </button>
                                               
-                                              <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                                              <div className="w-px h-6 bg-neutral-300 mx-1"></div>
                                               
                                               <button 
                                                 onClick={(e) => {
                                                     e.stopPropagation()
                                                     handleMoveToTrash(firstUpload.id, firstUpload.bookName)
                                                 }}
-                                                className="flex items-center gap-1 px-3 py-1.5 text-red-700 hover:bg-red-50 rounded-lg text-sm transition-colors"
+                                                className="flex items-center gap-1 px-3 py-1.5 text-danger-700 hover:bg-danger-50 rounded-lg text-sm transition-colors"
                                               >
                                                   <span className="material-symbols-outlined text-lg">delete</span>
                                                   העבר לאשפה
@@ -982,16 +982,16 @@ export default function AdminUploadsPage() {
                           
                           {/* רשימת העלאות מורחבת */}
                           {hasMultipleUploads && isExpanded && (
-                              <div className="mt-4 mr-16 space-y-3 border-r-2 border-blue-300 pr-4">
+                              <div className="mt-4 mr-16 space-y-3 border-r-2 border-info-300 pr-4">
                                   {bookUploads.map(upload => (
-                                      <div key={upload.id} className="bg-white/50 p-4 rounded-lg border border-gray-200">
+                                      <div key={upload.id} className="bg-white/50 p-4 rounded-lg border border-neutral-200">
                                           <div className="flex justify-between items-start mb-2">
                                               <div className="flex-1">
-                                                  <h4 className="font-semibold text-gray-800">
+                                                  <h4 className="font-semibold text-neutral-800">
                                                       {upload.bookName}
                                                   </h4>
                                                   
-                                                  <div className="flex items-center gap-4 text-xs text-gray-500 mt-2">
+                                                  <div className="flex items-center gap-4 text-xs text-neutral-500 mt-2">
                                                       <span className="flex items-center gap-1">
                                                         <span className="material-symbols-outlined text-xs">person</span>
                                                         {upload.uploadedBy || 'אורח'}
@@ -1011,7 +1011,7 @@ export default function AdminUploadsPage() {
                                               </div>
                                           </div>
                                           
-                                          <div className="flex items-center justify-end gap-2 mt-3 pt-2 border-t border-gray-100">
+                                          <div className="flex items-center justify-end gap-2 mt-3 pt-2 border-t border-neutral-100">
                                               {/* כפתור שלח הודעה - רק אם יש אימייל */}
                                               {upload.uploadedByEmail && (
                                                 <>
@@ -1020,14 +1020,14 @@ export default function AdminUploadsPage() {
                                                         e.stopPropagation()
                                                         handleSendMessage(upload.uploadedByEmail, upload.uploadedBy, upload.bookName)
                                                     }}
-                                                    className="flex items-center gap-1 px-3 py-1.5 text-purple-600 hover:bg-purple-50 rounded-lg text-xs transition-colors"
+                                                    className="flex items-center gap-1 px-3 py-1.5 text-feature-600 hover:bg-feature-50 rounded-lg text-xs transition-colors"
                                                     title="שלח הודעה למעלה"
                                                   >
                                                       <span className="material-symbols-outlined text-sm">send</span>
                                                       הודעה
                                                   </button>
                                                   
-                                                  <div className="w-px h-5 bg-gray-300 mx-1"></div>
+                                                  <div className="w-px h-5 bg-neutral-300 mx-1"></div>
                                                 </>
                                               )}
                                               
@@ -1036,20 +1036,20 @@ export default function AdminUploadsPage() {
                                                     e.stopPropagation()
                                                     handleDownload(upload.id, upload.originalFileName)
                                                 }}
-                                                className="flex items-center gap-1 px-3 py-1.5 text-blue-600 hover:bg-blue-50 rounded-lg text-xs transition-colors"
+                                                className="flex items-center gap-1 px-3 py-1.5 text-info-600 hover:bg-info-50 rounded-lg text-xs transition-colors"
                                               >
                                                   <span className="material-symbols-outlined text-sm">download</span>
                                                   הורד
                                               </button>
                                               
-                                              <div className="w-px h-5 bg-gray-300 mx-1"></div>
+                                              <div className="w-px h-5 bg-neutral-300 mx-1"></div>
                                               
                                               <button 
                                                 onClick={(e) => {
                                                     e.stopPropagation()
                                                     handleMoveToTrash(upload.id, upload.bookName)
                                                 }}
-                                                className="flex items-center gap-1 px-3 py-1.5 text-red-700 hover:bg-red-50 rounded-lg text-xs transition-colors"
+                                                className="flex items-center gap-1 px-3 py-1.5 text-danger-700 hover:bg-danger-50 rounded-lg text-xs transition-colors"
                                               >
                                                   <span className="material-symbols-outlined text-sm">delete</span>
                                                   העבר לאשפה
@@ -1095,12 +1095,12 @@ export default function AdminUploadsPage() {
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="p-6 border-b border-gray-200 flex-shrink-0 bg-white rounded-t-2xl">
+            <div className="p-6 border-b border-neutral-200 flex-shrink-0 bg-white rounded-t-2xl">
               <h3 className="text-2xl font-bold text-on-surface flex items-center gap-3">
                 <span className="material-symbols-outlined text-3xl text-primary">send</span>
                 שלח הודעה למשתמש
               </h3>
-              <p className="text-sm text-gray-600 mt-2">
+              <p className="text-sm text-neutral-600 mt-2">
                 נמען: <span className="font-medium">{messageRecipient.name}</span> ({messageRecipient.email})
               </p>
             </div>
@@ -1132,7 +1132,7 @@ export default function AdminUploadsPage() {
             </div>
 
             {/* Footer */}
-            <div className="flex gap-3 p-6 border-t border-gray-200 bg-gray-50 rounded-b-2xl flex-shrink-0">
+            <div className="flex gap-3 p-6 border-t border-neutral-200 bg-neutral-50 rounded-b-2xl flex-shrink-0">
               <button 
                 onClick={handleSendMessageSubmit}
                 disabled={sendingMessage}
@@ -1158,7 +1158,7 @@ export default function AdminUploadsPage() {
                   setMessageRecipient(null)
                 }}
                 disabled={sendingMessage}
-                className="px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                className="px-6 py-3 bg-white border border-neutral-300 text-neutral-700 rounded-lg hover:bg-neutral-50 transition-colors font-medium"
               >
                 ביטול
               </button>

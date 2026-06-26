@@ -89,11 +89,11 @@ export default function DevelopmentTutorialPage() {
                   <p>נשמע לך לא אפשרי? אתה טועה! תיכף תראה כמה זה אפשרי!</p>
                   <p>תוכל לעשות הכל באמצעות בקשה פשוטה בשפה שלך לסוכן AI שיעשה כל מה שרק תבקש ממנו!!</p>
                 </div>
-                <div className="mt-6 p-4 bg-orange-50 border-r-4 border-orange-400 rounded">
+                <div className="mt-6 p-4 bg-warning-strong-50 border-r-4 border-warning-strong-400 rounded">
                   <div className="flex items-start gap-3">
-                    <span className="material-symbols-outlined text-orange-600">tips_and_updates</span>
+                    <span className="material-symbols-outlined text-warning-strong-600">tips_and_updates</span>
                     <div>
-                      <p className="text-orange-900"><strong>טיפ חשוב:</strong> תתחילו מדברים קטנים ממש ממש, לאט לאט מתקדמים בחיים, לא קופצים מידי גבוה על ההתחלה.</p>
+                      <p className="text-warning-strong-900"><strong>טיפ חשוב:</strong> תתחילו מדברים קטנים ממש ממש, לאט לאט מתקדמים בחיים, לא קופצים מידי גבוה על ההתחלה.</p>
                     </div>
                   </div>
                 </div>
@@ -120,11 +120,11 @@ export default function DevelopmentTutorialPage() {
                     <li><strong>בין 15 ל-20 ג"ב פנויים</strong> במחשב</li>
                     <li><strong>רשת יציבה</strong> - בדר"כ גלישה באמצעות סטיק לא תספיק</li>
                   </ul>
-                  <div className="mt-6 p-4 bg-blue-50 border-r-4 border-blue-400 rounded">
+                  <div className="mt-6 p-4 bg-info-50 border-r-4 border-info-400 rounded">
                     <div className="flex items-start gap-3">
-                      <span className="material-symbols-outlined text-blue-600">info</span>
+                      <span className="material-symbols-outlined text-info-600">info</span>
                       <div>
-                        <p className="text-blue-900">ההדרכה מתאימה למי שעובד דרך Windows.</p>
+                        <p className="text-info-900">ההדרכה מתאימה למי שעובד דרך Windows.</p>
                       </div>
                     </div>
                   </div>
@@ -162,7 +162,7 @@ export default function DevelopmentTutorialPage() {
                     <div className="flex-1">
                       <h4 className="text-xl font-bold text-primary-dark mb-2">בדיקת ההתקנה</h4>
                       <p className="mb-3">פתחו את ה-CMD והריצו את הפקודה:</p>
-                      <pre className="bg-gray-800 text-white p-4 rounded overflow-x-auto text-sm">
+                      <pre className="bg-neutral-800 text-white p-4 rounded overflow-x-auto text-sm">
                         <code>git --version</code>
                       </pre>
                       <p className="mt-3">אם לא מופיע מספר גירסה, זה אומר שצריך להכניס את נתיב ההתקנה למשתני הסביבה של PATH.</p>
@@ -222,7 +222,7 @@ export default function DevelopmentTutorialPage() {
                     <div className="flex-1">
                       <h4 className="text-xl font-bold text-primary-dark mb-2">בדיקת ההתקנה</h4>
                       <p className="mb-3">הריצו בטרמינל:</p>
-                      <pre className="bg-gray-800 text-white p-4 rounded overflow-x-auto text-sm">
+                      <pre className="bg-neutral-800 text-white p-4 rounded overflow-x-auto text-sm">
                         <code>flutter doctor</code>
                       </pre>
                       <p className="mt-3">הפקודה תבדוק מה חסר ותציג הוראות להשלמת ההתקנה.</p>
@@ -334,7 +334,7 @@ export default function DevelopmentTutorialPage() {
                     <div className="flex-1">
                       <h4 className="text-xl font-bold text-primary-dark mb-2">Clone המאגר</h4>
                       <p className="mb-3">פתחו טרמינל והריצו:</p>
-                      <pre className="bg-gray-800 text-white p-4 rounded overflow-x-auto text-sm">
+                      <pre className="bg-neutral-800 text-white p-4 rounded overflow-x-auto text-sm">
                         <code>git clone [URL שהעתקתם]</code>
                       </pre>
                     </div>
@@ -372,11 +372,11 @@ export default function DevelopmentTutorialPage() {
                     <li>קראו את הקוד הקיים כדי להבין איך הוא עובד</li>
                     <li>אל תפחדו לנסות - תמיד אפשר לחזור אחורה!</li>
                   </ul>
-                  <div className="p-4 bg-orange-50 border-r-4 border-orange-400 rounded">
+                  <div className="p-4 bg-warning-strong-50 border-r-4 border-warning-strong-400 rounded">
                     <div className="flex items-start gap-3">
-                      <span className="material-symbols-outlined text-orange-600">tips_and_updates</span>
+                      <span className="material-symbols-outlined text-warning-strong-600">tips_and_updates</span>
                       <div>
-                        <p className="text-orange-900"><strong>טיפ:</strong> השתמשו ב-Ctrl+F כדי לחפש טקסט בקוד. זה יעזור לכם למצוא איפה לעשות שינויים.</p>
+                        <p className="text-warning-strong-900"><strong>טיפ:</strong> השתמשו ב-Ctrl+F כדי לחפש טקסט בקוד. זה יעזור לכם למצוא איפה לעשות שינויים.</p>
                       </div>
                     </div>
                   </div>
@@ -403,7 +403,7 @@ export default function DevelopmentTutorialPage() {
                     <div className="flex-1">
                       <h4 className="text-xl font-bold text-primary-dark mb-2">הרצת הפרויקט</h4>
                       <p className="mb-3">בטרמינל, הריצו:</p>
-                      <pre className="bg-gray-800 text-white p-4 rounded overflow-x-auto text-sm">
+                      <pre className="bg-neutral-800 text-white p-4 rounded overflow-x-auto text-sm">
                         <code>flutter run</code>
                       </pre>
                       <p className="mt-3">זה יריץ את התוכנה במצב פיתוח ותוכלו לראות את השינויים שלכם.</p>
@@ -417,7 +417,7 @@ export default function DevelopmentTutorialPage() {
                     <div className="flex-1">
                       <h4 className="text-xl font-bold text-primary-dark mb-2">בניית הפרויקט</h4>
                       <p className="mb-3">כשאתם מרוצים מהשינויים, בנו את הפרויקט:</p>
-                      <pre className="bg-gray-800 text-white p-4 rounded overflow-x-auto text-sm">
+                      <pre className="bg-neutral-800 text-white p-4 rounded overflow-x-auto text-sm">
                         <code>flutter build windows</code>
                       </pre>
                     </div>
@@ -440,11 +440,11 @@ export default function DevelopmentTutorialPage() {
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                className="p-6 bg-green-50 border-r-4 border-green-400 rounded-xl flex items-start gap-4"
+                className="p-6 bg-success-50 border-r-4 border-success-400 rounded-xl flex items-start gap-4"
               >
-                <span className="material-symbols-outlined text-4xl text-green-600">celebration</span>
+                <span className="material-symbols-outlined text-4xl text-success-600">celebration</span>
                 <div>
-                  <p className="text-green-900 text-lg"><strong>כל הכבוד!</strong> עכשיו אתם מפתחים של אוצריא! המשיכו ללמוד ולשפר את התוכנה.</p>
+                  <p className="text-success-900 text-lg"><strong>כל הכבוד!</strong> עכשיו אתם מפתחים של אוצריא! המשיכו ללמוד ולשפר את התוכנה.</p>
                 </div>
               </motion.div>
 

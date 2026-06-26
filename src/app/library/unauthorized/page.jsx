@@ -18,7 +18,7 @@ export default function UnauthorizedPage() {
           </div>
 
           <div className="mb-6">
-            <span className="material-symbols-outlined text-6xl text-red-500">block</span>
+            <span className="material-symbols-outlined text-6xl text-danger-500">block</span>
           </div>
 
           <h1 className="text-3xl font-bold text-center mb-2 text-on-surface">

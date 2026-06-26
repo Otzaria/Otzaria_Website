@@ -85,11 +85,11 @@ export default function InstallationTutorialPage() {
                   <p>ברוכים הבאים למדריך ההפעלה של תוכנת אוצריא!</p>
                   <p>מדריך זה יעזור לכם להתקין ולהפעיל את התוכנה בצורה נכונה, ולהכיר את התכונות העיקריות שלה.</p>
                 </div>
-                <div className="mt-6 p-4 bg-blue-50 border-r-4 border-blue-400 rounded">
+                <div className="mt-6 p-4 bg-info-50 border-r-4 border-info-400 rounded">
                   <div className="flex items-start gap-3">
-                    <span className="material-symbols-outlined text-blue-600">lightbulb</span>
+                    <span className="material-symbols-outlined text-info-600">lightbulb</span>
                     <div>
-                      <p className="text-blue-900"><strong>לתשומת לב:</strong> המדריך מיועד למשתמשי Windows. אם אתם משתמשים במערכת הפעלה אחרת, ייתכנו הבדלים בתהליך ההתקנה.</p>
+                      <p className="text-info-900"><strong>לתשומת לב:</strong> המדריך מיועד למשתמשי Windows. אם אתם משתמשים במערכת הפעלה אחרת, ייתכנו הבדלים בתהליך ההתקנה.</p>
                     </div>
                   </div>
                 </div>
@@ -115,12 +115,12 @@ export default function InstallationTutorialPage() {
 
                   <div className="space-y-4">
                     {/* גירסאות יציבות */}
-                    <div className="p-6 bg-green-50 border-2 border-green-400 rounded-xl">
-                      <h4 className="text-2xl font-bold text-green-800 mb-4 flex items-center gap-2">
+                    <div className="p-6 bg-success-50 border-2 border-success-400 rounded-xl">
+                      <h4 className="text-2xl font-bold text-success-800 mb-4 flex items-center gap-2">
                         <span className="material-symbols-outlined">verified</span>
                         גירסאות יציבות (מומלץ)
                       </h4>
-                      <p className="text-green-900 mb-4">גירסאות שנבדקו ויציבות למשתמשים רגילים</p>
+                      <p className="text-success-900 mb-4">גירסאות שנבדקו ויציבות למשתמשים רגילים</p>
                       
                       <div className="space-y-3">
                         <a
@@ -129,10 +129,10 @@ export default function InstallationTutorialPage() {
                           download
                         >
                           <div className="flex items-center gap-3">
-                            <span className="material-symbols-outlined text-3xl text-blue-600">desktop_windows</span>
+                            <span className="material-symbols-outlined text-3xl text-info-600">desktop_windows</span>
                             <div>
                               <div className="font-bold text-lg">Windows (EXE)</div>
-                              <div className="text-sm text-gray-600">מומלץ למשתמשי Windows</div>
+                              <div className="text-sm text-neutral-600">מומלץ למשתמשי Windows</div>
                             </div>
                           </div>
                           <span className="material-symbols-outlined text-primary group-hover:translate-x-[-4px] transition-transform">download</span>
@@ -144,10 +144,10 @@ export default function InstallationTutorialPage() {
                           download
                         >
                           <div className="flex items-center gap-3">
-                            <span className="material-symbols-outlined text-3xl text-gray-700">laptop_mac</span>
+                            <span className="material-symbols-outlined text-3xl text-neutral-700">laptop_mac</span>
                             <div>
                               <div className="font-bold text-lg">macOS (ZIP)</div>
-                              <div className="text-sm text-gray-600">למחשבי Mac</div>
+                              <div className="text-sm text-neutral-600">למחשבי Mac</div>
                             </div>
                           </div>
                           <span className="material-symbols-outlined text-primary group-hover:translate-x-[-4px] transition-transform">download</span>
@@ -160,10 +160,10 @@ export default function InstallationTutorialPage() {
                           rel="noopener noreferrer"
                         >
                           <div className="flex items-center gap-3">
-                            <span className="material-symbols-outlined text-3xl text-orange-600">computer</span>
+                            <span className="material-symbols-outlined text-3xl text-warning-strong-600">computer</span>
                             <div>
                               <div className="font-bold text-lg">Linux (tar.gz)</div>
-                              <div className="text-sm text-gray-600">כל ההפצות</div>
+                              <div className="text-sm text-neutral-600">כל ההפצות</div>
                             </div>
                           </div>
                           <span className="material-symbols-outlined text-primary group-hover:translate-x-[-4px] transition-transform">open_in_new</span>
@@ -176,10 +176,10 @@ export default function InstallationTutorialPage() {
                           rel="noopener noreferrer"
                         >
                           <div className="flex items-center gap-3">
-                            <span className="material-symbols-outlined text-3xl text-green-600">android</span>
+                            <span className="material-symbols-outlined text-3xl text-success-600">android</span>
                             <div>
                               <div className="font-bold text-lg">Android</div>
-                              <div className="text-sm text-gray-600">Google Play / APK</div>
+                              <div className="text-sm text-neutral-600">Google Play / APK</div>
                             </div>
                           </div>
                           <span className="material-symbols-outlined text-primary group-hover:translate-x-[-4px] transition-transform">open_in_new</span>
@@ -192,10 +192,10 @@ export default function InstallationTutorialPage() {
                           rel="noopener noreferrer"
                         >
                           <div className="flex items-center gap-3">
-                            <span className="material-symbols-outlined text-3xl text-blue-500">phone_iphone</span>
+                            <span className="material-symbols-outlined text-3xl text-info-500">phone_iphone</span>
                             <div>
                               <div className="font-bold text-lg">iOS / iPadOS</div>
-                              <div className="text-sm text-gray-600">App Store</div>
+                              <div className="text-sm text-neutral-600">App Store</div>
                             </div>
                           </div>
                           <span className="material-symbols-outlined text-primary group-hover:translate-x-[-4px] transition-transform">open_in_new</span>
@@ -204,16 +204,16 @@ export default function InstallationTutorialPage() {
                     </div>
 
                     {/* גירסאות מפתחים */}
-                    <div className="p-6 bg-purple-50 border-2 border-purple-400 rounded-xl">
-                      <h4 className="text-2xl font-bold text-purple-800 mb-4 flex items-center gap-2">
+                    <div className="p-6 bg-feature-50 border-2 border-feature-400 rounded-xl">
+                      <h4 className="text-2xl font-bold text-feature-800 mb-4 flex items-center gap-2">
                         <span className="material-symbols-outlined">code</span>
                         גירסאות מפתחים (Dev)
                       </h4>
-                      <p className="text-purple-900 mb-4">גירסאות עם תכונות חדשות שעדיין בבדיקה</p>
+                      <p className="text-feature-900 mb-4">גירסאות עם תכונות חדשות שעדיין בבדיקה</p>
                       
                       <a
                         href="https://github.com/otzaria/otzaria/releases?q=prerelease%3Atrue"
-                        className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-bold"
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-feature-600 text-white rounded-lg hover:bg-feature-700 transition-colors font-bold"
                         target="_blank"
                         rel="noopener noreferrer"
                       >
@@ -223,7 +223,7 @@ export default function InstallationTutorialPage() {
                     </div>
 
                     {/* כל הגירסאות */}
-                    <div className="p-4 bg-gray-50 border border-gray-300 rounded-xl">
+                    <div className="p-4 bg-neutral-50 border border-neutral-300 rounded-xl">
                       <a
                         href="https://github.com/otzaria/otzaria/releases"
                         className="flex items-center justify-between hover:text-primary transition-colors"
@@ -236,11 +236,11 @@ export default function InstallationTutorialPage() {
                     </div>
                   </div>
 
-                  <div className="p-4 bg-red-50 border-r-4 border-red-400 rounded">
+                  <div className="p-4 bg-danger-50 border-r-4 border-danger-400 rounded">
                     <div className="flex items-start gap-3">
-                      <span className="material-symbols-outlined text-red-600">warning</span>
+                      <span className="material-symbols-outlined text-danger-600">warning</span>
                       <div>
-                        <p className="text-red-900"><strong>שימו לב:</strong> הורדת הספרייה עשויה לקחת זמן רב בגלל גודלה. וודאו שיש לכם חיבור אינטרנט יציב.</p>
+                        <p className="text-danger-900"><strong>שימו לב:</strong> הורדת הספרייה עשויה לקחת זמן רב בגלל גודלה. וודאו שיש לכם חיבור אינטרנט יציב.</p>
                       </div>
                     </div>
                   </div>
@@ -323,11 +323,11 @@ export default function InstallationTutorialPage() {
                     </div>
                   </div>
 
-                  <div className="p-4 bg-orange-50 border-r-4 border-orange-400 rounded">
+                  <div className="p-4 bg-warning-strong-50 border-r-4 border-warning-strong-400 rounded">
                     <div className="flex items-start gap-3">
-                      <span className="material-symbols-outlined text-orange-600">tips_and_updates</span>
+                      <span className="material-symbols-outlined text-warning-strong-600">tips_and_updates</span>
                       <div>
-                        <p className="text-orange-900"><strong>טיפ:</strong> אם אתם מתקינים את התוכנה בפעם הראשונה, מומלץ להוריד את הגרסה המלאה עם הספרייה.</p>
+                        <p className="text-warning-strong-900"><strong>טיפ:</strong> אם אתם מתקינים את התוכנה בפעם הראשונה, מומלץ להוריד את הגרסה המלאה עם הספרייה.</p>
                       </div>
                     </div>
                   </div>
@@ -372,17 +372,17 @@ export default function InstallationTutorialPage() {
                   <div>
                     <h3 className="text-2xl font-bold text-primary mb-4">שיטה ב': שימוש ב-Symbolic Link</h3>
                     <p className="mb-4">למשתמשים מתקדמים - ניתן ליצור קישור סימבולי:</p>
-                    <pre className="bg-gray-800 text-white p-4 rounded overflow-x-auto text-sm">
+                    <pre className="bg-neutral-800 text-white p-4 rounded overflow-x-auto text-sm">
                       <code>MKLINK /J "C:\otzaria\books" "D:\my-books"</code>
                     </pre>
                     <p className="mt-4">פקודה זו תיצור קישור מהתיקייה C:\otzaria\books לתיקייה D:\my-books.</p>
                   </div>
 
-                  <div className="p-4 bg-red-50 border-r-4 border-red-400 rounded">
+                  <div className="p-4 bg-danger-50 border-r-4 border-danger-400 rounded">
                     <div className="flex items-start gap-3">
-                      <span className="material-symbols-outlined text-red-600">warning</span>
+                      <span className="material-symbols-outlined text-danger-600">warning</span>
                       <div>
-                        <p className="text-red-900"><strong>חשוב:</strong> וודאו שיש לכם מספיק מקום פנוי בדיסק לפני הורדת הספרייה. הספרייה המלאה עשויה לתפוס כ-5 ג'יגה-בייט, ולאחר האינדוקס האוטומטי - עוד כ-5.</p>
+                        <p className="text-danger-900"><strong>חשוב:</strong> וודאו שיש לכם מספיק מקום פנוי בדיסק לפני הורדת הספרייה. הספרייה המלאה עשויה לתפוס כ-5 ג'יגה-בייט, ולאחר האינדוקס האוטומטי - עוד כ-5.</p>
                       </div>
                     </div>
                   </div>
@@ -457,8 +457,8 @@ export default function InstallationTutorialPage() {
                         </div>
                       ))}
                     </div>
-                    <div className="mt-4 p-4 bg-blue-50 border-r-4 border-blue-400 rounded">
-                      <p className="text-blue-900"><strong>שימו לב:</strong> יש לעדכן את האינדקס גם לאחר הוספת ספרים חדשים לתוכנה.</p>
+                    <div className="mt-4 p-4 bg-info-50 border-r-4 border-info-400 rounded">
+                      <p className="text-info-900"><strong>שימו לב:</strong> יש לעדכן את האינדקס גם לאחר הוספת ספרים חדשים לתוכנה.</p>
                     </div>
                   </div>
                   <div>
@@ -579,11 +579,11 @@ export default function InstallationTutorialPage() {
                     </div>
                   </div>
 
-                  <div className="p-4 bg-red-50 border-r-4 border-red-400 rounded">
+                  <div className="p-4 bg-danger-50 border-r-4 border-danger-400 rounded">
                     <div className="flex items-start gap-3">
-                      <span className="material-symbols-outlined text-red-600">warning</span>
+                      <span className="material-symbols-outlined text-danger-600">warning</span>
                       <div>
-                        <p className="text-red-900"><strong>אזהרה:</strong> עריכת קבצי הספרים עלולה לגרום לבעיות בקישורים שבין הספרים. מומלץ לגבות את הקבצים לפני עריכה.</p>
+                        <p className="text-danger-900"><strong>אזהרה:</strong> עריכת קבצי הספרים עלולה לגרום לבעיות בקישורים שבין הספרים. מומלץ לגבות את הקבצים לפני עריכה.</p>
                       </div>
                     </div>
                   </div>
@@ -595,11 +595,11 @@ export default function InstallationTutorialPage() {
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                className="p-6 bg-green-50 border-r-4 border-green-400 rounded-xl flex items-start gap-4"
+                className="p-6 bg-success-50 border-r-4 border-success-400 rounded-xl flex items-start gap-4"
               >
-                <span className="material-symbols-outlined text-4xl text-green-600">celebration</span>
+                <span className="material-symbols-outlined text-4xl text-success-600">celebration</span>
                 <div>
-                  <p className="text-green-900 text-lg"><strong>מזל טוב!</strong> סיימתם את המדריך להפעלת תוכנת אוצריא. כעת אתם מוכנים להתחיל להשתמש בתוכנה!</p>
+                  <p className="text-success-900 text-lg"><strong>מזל טוב!</strong> סיימתם את המדריך להפעלת תוכנת אוצריא. כעת אתם מוכנים להתחיל להשתמש בתוכנה!</p>
                 </div>
               </motion.div>
 

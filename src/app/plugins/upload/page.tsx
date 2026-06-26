@@ -368,7 +368,7 @@ export default function UploadPluginPage() {
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-8">
             {/* מידע בסיסי */}
-            <section className="bg-white rounded-2xl border border-gray-100 p-6">
+            <section className="bg-white rounded-2xl border border-neutral-100 p-6">
               <h2 className="text-2xl font-bold text-on-surface mb-6">מידע בסיסי</h2>
               
               <div className="space-y-4">
@@ -383,12 +383,12 @@ export default function UploadPluginPage() {
 
                 <div>
                   <label className="block text-sm font-bold text-on-surface/60 mb-2">
-                    תיאור מלא <span className="text-red-500">*</span>
+                    תיאור מלא <span className="text-danger-500">*</span>
                   </label>
                   <textarea
                     value={formData.description}
                     onChange={(e) => handleChange('description', e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 min-h-[150px]"
+                    className="w-full px-4 py-3 border border-neutral-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 min-h-[150px]"
                     placeholder="תיאור מפורט של התוסף, מה הוא עושה ואיך להשתמש בו"
                     maxLength={10000}
                     required
@@ -399,7 +399,7 @@ export default function UploadPluginPage() {
             </section>
 
             {/* תגיות */}
-            <section className="bg-white rounded-2xl border border-gray-100 p-6">
+            <section className="bg-white rounded-2xl border border-neutral-100 p-6">
               <h2 className="text-2xl font-bold text-on-surface mb-6">תגיות</h2>
               
               <div className="space-y-4">
@@ -409,7 +409,7 @@ export default function UploadPluginPage() {
                     value={newTag}
                     onChange={(e) => setNewTag(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
-                    className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+                    className="flex-1 px-4 py-3 border border-neutral-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
                     placeholder="הוסף תגית (לדוגמה: מילון, חיפוש, כלי עזר)"
                     maxLength={40}
                   />
@@ -447,7 +447,7 @@ export default function UploadPluginPage() {
             </section>
 
             {/* קבצים */}
-            <section className="bg-white rounded-2xl border border-gray-100 p-6">
+            <section className="bg-white rounded-2xl border border-neutral-100 p-6">
               <h2 className="text-2xl font-bold text-on-surface mb-6">קבצים</h2>
               
               <div className="space-y-6">
@@ -459,13 +459,13 @@ export default function UploadPluginPage() {
                   }`}
                 >
                   <label className="block text-sm font-bold text-on-surface/60 mb-2">
-                    קובץ תוסף (.otzplugin) <span className="text-red-500">*</span>
+                    קובץ תוסף (.otzplugin) <span className="text-danger-500">*</span>
                   </label>
                   <input
                     type="file"
                     accept=".otzplugin"
                     onChange={handlePluginFile}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+                    className="w-full px-4 py-3 border border-neutral-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
                     required
                   />
                   <p className="mt-2 text-sm text-on-surface/60">
@@ -475,7 +475,7 @@ export default function UploadPluginPage() {
                     טיפ: ניתן גם לגרור את קובץ ה-.otzplugin לכאן.
                   </p>
                   {pluginFile && (
-                    <p className="mt-2 text-sm text-green-600">
+                    <p className="mt-2 text-sm text-success-600">
                       ✓ נבחר: {pluginFile.name}
                     </p>
                   )}
@@ -495,12 +495,12 @@ export default function UploadPluginPage() {
                     type="file"
                     accept="image/*"
                     onChange={handleImageFile}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+                    className="w-full px-4 py-3 border border-neutral-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
                   />
                   <p className="mt-1 text-sm text-on-surface/50">
                     טיפ: ניתן גם לגרור תמונה לכאן.
                   </p>
-                  <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  <div className="mt-2 rounded-xl border border-warning-200 bg-warning-50 px-4 py-3 text-sm text-warning-900">
                     כדי להגביר את סיכויי הקבלה מומלץ לצרף תמונת תוסף איכותית, ברורה ומתאימה לתוכן התוסף. העלאה ללא תמונה או עם תמונה לא מתאימה עלולה להוביל לדחיית התוסף.
                   </div>
                   {imagePreview && (
@@ -508,7 +508,7 @@ export default function UploadPluginPage() {
                       <img
                         src={imagePreview}
                         alt="תצוגה מקדימה"
-                        className="w-full max-w-md h-48 object-cover rounded-xl border border-gray-200"
+                        className="w-full max-w-md h-48 object-cover rounded-xl border border-neutral-200"
                       />
                     </div>
                   )}
@@ -522,14 +522,14 @@ export default function UploadPluginPage() {
                   }`}
                 >
                   <label className="block text-sm font-bold text-on-surface/60 mb-2">
-                    צילומי מסך <span className="text-red-500">*</span>
+                    צילומי מסך <span className="text-danger-500">*</span>
                   </label>
                   <input
                     type="file"
                     accept="image/*"
                     multiple
                     onChange={handleScreenshotFiles}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+                    className="w-full px-4 py-3 border border-neutral-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
                     required={screenshotFiles.length === 0}
                   />
                   <p className="mt-2 text-sm text-on-surface/60">
@@ -542,7 +542,7 @@ export default function UploadPluginPage() {
                           key={index}
                           src={preview}
                           alt={`צילום מסך ${index + 1}`}
-                          className="w-full h-32 object-cover rounded-xl border border-gray-200"
+                          className="w-full h-32 object-cover rounded-xl border border-neutral-200"
                         />
                       ))}
                     </div>
@@ -562,7 +562,7 @@ export default function UploadPluginPage() {
               </button>
               <Link
                 href="/plugins"
-                className="px-6 py-4 border border-gray-200 text-on-surface rounded-xl font-bold hover:bg-gray-50 transition-colors text-center"
+                className="px-6 py-4 border border-neutral-200 text-on-surface rounded-xl font-bold hover:bg-neutral-50 transition-colors text-center"
               >
                 ביטול
               </Link>

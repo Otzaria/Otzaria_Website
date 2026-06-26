@@ -31,7 +31,7 @@ export default class ErrorBoundary extends Component {
               אירעה שגיאה בלתי צפויה. אנחנו עובדים על זה.
             </p>
             {process.env.NODE_ENV === 'development' && this.state.error && (
-              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded text-right text-sm text-red-800 overflow-auto max-h-40">
+              <div className="mb-6 p-4 bg-danger-50 border border-danger-200 rounded text-right text-sm text-danger-800 overflow-auto max-h-40">
                 <strong>שגיאה:</strong> {this.state.error.toString()}
               </div>
             )}

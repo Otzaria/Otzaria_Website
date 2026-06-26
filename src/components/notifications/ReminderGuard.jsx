@@ -58,7 +58,7 @@ export default function ReminderGuard({ children }) {
 
 function LoadingScreen() {
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="min-h-screen flex items-center justify-center bg-neutral-50">
             <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
         </div>
     );

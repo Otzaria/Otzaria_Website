@@ -14,14 +14,14 @@ export default function DonatePage() {
             תרומה לאוצריא
           </h1>
           
-          <div className="glass-strong p-8 rounded-2xl border border-gray-200 bg-white">
+          <div className="glass-strong p-8 rounded-2xl border border-neutral-200 bg-white">
             <span className="material-symbols-outlined text-7xl text-primary mb-4 block">
               volunteer_activism
             </span>
-            <p className="text-xl text-gray-700 mb-4">
+            <p className="text-xl text-neutral-700 mb-4">
               הפרויקט מתוחזק בהתנדבות. תרומתכם עוזרת לנו לשלם על שרתים ולהמשיך לפתח את התוכנה.
             </p>
-            <p className="text-lg text-gray-600 mb-8">
+            <p className="text-lg text-neutral-600 mb-8">
               התרומה באמצעות נדרים פלוס
             </p>
             

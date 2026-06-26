@@ -85,11 +85,11 @@ export default function DictaTutorialPage() {
                   <p><strong>המטרה:</strong> לקחת את קובץ הטקסט שקיבלנו, ולחלק אותו לכותרות.</p>
                   <p>העבודה בבסיסה ידנית, ולבקשת העורכים נוצרו תוכנות שמייעלות את העבודה, ועושות חלק ממנה בצורה אוטומטית.</p>
                 </div>
-                <div className="mt-6 p-4 bg-orange-50 border-r-4 border-orange-400 rounded">
+                <div className="mt-6 p-4 bg-warning-strong-50 border-r-4 border-warning-strong-400 rounded">
                   <div className="flex items-start gap-3">
-                    <span className="material-symbols-outlined text-orange-600">lightbulb</span>
+                    <span className="material-symbols-outlined text-warning-strong-600">lightbulb</span>
                     <div>
-                      <p className="text-orange-900"><strong>טיפ חשוב:</strong> צרו גיבוי לעבודה מדי פעם, כך שגם אם הרצתם איזו תוכנה שעשתה פעולה לא נכונה, תוכלו לחזור אחורה.</p>
+                      <p className="text-warning-strong-900"><strong>טיפ חשוב:</strong> צרו גיבוי לעבודה מדי פעם, כך שגם אם הרצתם איזו תוכנה שעשתה פעולה לא נכונה, תוכלו לחזור אחורה.</p>
                     </div>
                   </div>
                 </div>
@@ -114,16 +114,16 @@ export default function DictaTutorialPage() {
                     <div className="p-6 bg-surface-variant rounded-xl">
                       <h4 className="text-xl font-bold text-primary mb-4">דוגמה 1: מסכת</h4>
                       <div className="space-y-2">
-                        <div className="flex items-center gap-3 p-3 bg-red-100 rounded-lg">
-                          <span className="w-8 h-8 bg-red-600 text-white rounded-full flex items-center justify-center font-bold text-sm">1</span>
+                        <div className="flex items-center gap-3 p-3 bg-danger-100 rounded-lg">
+                          <span className="w-8 h-8 bg-danger-600 text-white rounded-full flex items-center justify-center font-bold text-sm">1</span>
                           <span className="font-bold">מסכת ברכות</span>
                         </div>
-                        <div className="flex items-center gap-3 p-3 bg-blue-100 rounded-lg mr-6">
-                          <span className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm">2</span>
+                        <div className="flex items-center gap-3 p-3 bg-info-100 rounded-lg mr-6">
+                          <span className="w-8 h-8 bg-info-600 text-white rounded-full flex items-center justify-center font-bold text-sm">2</span>
                           <span>פרק ראשון</span>
                         </div>
-                        <div className="flex items-center gap-3 p-3 bg-gray-100 rounded-lg mr-12">
-                          <span className="w-8 h-8 bg-gray-600 text-white rounded-full flex items-center justify-center font-bold text-sm">3</span>
+                        <div className="flex items-center gap-3 p-3 bg-neutral-100 rounded-lg mr-12">
+                          <span className="w-8 h-8 bg-neutral-600 text-white rounded-full flex items-center justify-center font-bold text-sm">3</span>
                           <span>דף ב עמוד א</span>
                         </div>
                       </div>
@@ -132,16 +132,16 @@ export default function DictaTutorialPage() {
                     <div className="p-6 bg-surface-variant rounded-xl">
                       <h4 className="text-xl font-bold text-primary mb-4">דוגמה 2: ספר שו"ת</h4>
                       <div className="space-y-2">
-                        <div className="flex items-center gap-3 p-3 bg-red-100 rounded-lg">
-                          <span className="w-8 h-8 bg-red-600 text-white rounded-full flex items-center justify-center font-bold text-sm">1</span>
+                        <div className="flex items-center gap-3 p-3 bg-danger-100 rounded-lg">
+                          <span className="w-8 h-8 bg-danger-600 text-white rounded-full flex items-center justify-center font-bold text-sm">1</span>
                           <span className="font-bold">שו"ת הרשב"א</span>
                         </div>
-                        <div className="flex items-center gap-3 p-3 bg-blue-100 rounded-lg mr-6">
-                          <span className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm">2</span>
+                        <div className="flex items-center gap-3 p-3 bg-info-100 rounded-lg mr-6">
+                          <span className="w-8 h-8 bg-info-600 text-white rounded-full flex items-center justify-center font-bold text-sm">2</span>
                           <span>חלק א</span>
                         </div>
-                        <div className="flex items-center gap-3 p-3 bg-gray-100 rounded-lg mr-12">
-                          <span className="w-8 h-8 bg-gray-600 text-white rounded-full flex items-center justify-center font-bold text-sm">3</span>
+                        <div className="flex items-center gap-3 p-3 bg-neutral-100 rounded-lg mr-12">
+                          <span className="w-8 h-8 bg-neutral-600 text-white rounded-full flex items-center justify-center font-bold text-sm">3</span>
                           <span>סימן א</span>
                         </div>
                       </div>
@@ -168,31 +168,31 @@ export default function DictaTutorialPage() {
                   <div className="space-y-4">
                     <div className="p-6 bg-surface-variant rounded-xl">
                       <h4 className="text-xl font-bold text-primary-dark mb-3">כותרת רמה 1</h4>
-                      <pre className="bg-gray-800 text-white p-4 rounded overflow-x-auto text-sm">
+                      <pre className="bg-neutral-800 text-white p-4 rounded overflow-x-auto text-sm">
                         <code>&lt;h1&gt;שם הספר&lt;/h1&gt;</code>
                       </pre>
                     </div>
 
                     <div className="p-6 bg-surface-variant rounded-xl">
                       <h4 className="text-xl font-bold text-primary-dark mb-3">כותרת רמה 2</h4>
-                      <pre className="bg-gray-800 text-white p-4 rounded overflow-x-auto text-sm">
+                      <pre className="bg-neutral-800 text-white p-4 rounded overflow-x-auto text-sm">
                         <code>&lt;h2&gt;פרק ראשון&lt;/h2&gt;</code>
                       </pre>
                     </div>
 
                     <div className="p-6 bg-surface-variant rounded-xl">
                       <h4 className="text-xl font-bold text-primary-dark mb-3">כותרת רמה 3</h4>
-                      <pre className="bg-gray-800 text-white p-4 rounded overflow-x-auto text-sm">
+                      <pre className="bg-neutral-800 text-white p-4 rounded overflow-x-auto text-sm">
                         <code>&lt;h3&gt;סימן א&lt;/h3&gt;</code>
                       </pre>
                     </div>
                   </div>
 
-                  <div className="p-4 bg-blue-50 border-r-4 border-blue-400 rounded">
+                  <div className="p-4 bg-info-50 border-r-4 border-info-400 rounded">
                     <div className="flex items-start gap-3">
-                      <span className="material-symbols-outlined text-blue-600">info</span>
+                      <span className="material-symbols-outlined text-info-600">info</span>
                       <div>
-                        <p className="text-blue-900"><strong>הערה:</strong> ניתן להשתמש עד רמה 6 (h1 עד h6), אך ברוב המקרים מספיקות 3-4 רמות.</p>
+                        <p className="text-info-900"><strong>הערה:</strong> ניתן להשתמש עד רמה 6 (h1 עד h6), אך ברוב המקרים מספיקות 3-4 רמות.</p>
                       </div>
                     </div>
                   </div>
@@ -266,8 +266,8 @@ export default function DictaTutorialPage() {
                   
                   <div className="grid md:grid-cols-2 gap-6">
                     <div>
-                      <h4 className="text-xl font-bold text-red-600 mb-3">לפני העריכה:</h4>
-                      <div className="p-4 bg-red-50 border-2 border-red-200 rounded-lg">
+                      <h4 className="text-xl font-bold text-danger-600 mb-3">לפני העריכה:</h4>
+                      <div className="p-4 bg-danger-50 border-2 border-danger-200 rounded-lg">
                         <pre className="text-sm whitespace-pre-wrap">
                             <div>שו"ת הרשב"א</div>
                             <div>חלק ראשון</div>
@@ -282,8 +282,8 @@ export default function DictaTutorialPage() {
                     </div>
 
                     <div>
-                      <h4 className="text-xl font-bold text-green-600 mb-3">אחרי העריכה:</h4>
-                      <div className="p-4 bg-green-50 border-2 border-green-200 rounded-lg">
+                      <h4 className="text-xl font-bold text-success-600 mb-3">אחרי העריכה:</h4>
+                      <div className="p-4 bg-success-50 border-2 border-success-200 rounded-lg">
                         <pre className="text-sm whitespace-pre-wrap">
                             <div>&lt;h1&gt;שו"ת הרשב"א&lt;/h1&gt;</div>
                             <div>&lt;h2&gt;חלק ראשון&lt;/h2&gt;</div>
@@ -298,11 +298,11 @@ export default function DictaTutorialPage() {
                     </div>
                   </div>
 
-                  <div className="p-4 bg-orange-50 border-r-4 border-orange-400 rounded">
+                  <div className="p-4 bg-warning-strong-50 border-r-4 border-warning-strong-400 rounded">
                     <div className="flex items-start gap-3">
-                      <span className="material-symbols-outlined text-orange-600">tips_and_updates</span>
+                      <span className="material-symbols-outlined text-warning-strong-600">tips_and_updates</span>
                       <div>
-                        <p className="text-orange-900"><strong>טיפ:</strong> התחילו עם קטע קטן כדי לבדוק שהתוצאה נכונה, ורק אז המשיכו לכל הספר.</p>
+                        <p className="text-warning-strong-900"><strong>טיפ:</strong> התחילו עם קטע קטן כדי לבדוק שהתוצאה נכונה, ורק אז המשיכו לכל הספר.</p>
                       </div>
                     </div>
                   </div>
@@ -323,12 +323,12 @@ export default function DictaTutorialPage() {
                 </h2>
                 <div className="space-y-6">
                   <div className="space-y-4">
-                    <div className="p-4 bg-red-50 border-r-4 border-red-400 rounded">
+                    <div className="p-4 bg-danger-50 border-r-4 border-danger-400 rounded">
                       <div className="flex items-start gap-3">
-                        <span className="material-symbols-outlined text-red-600">warning</span>
+                        <span className="material-symbols-outlined text-danger-600">warning</span>
                         <div>
-                          <p className="text-red-900 font-bold mb-2">זהירות:</p>
-                          <ul className="list-disc mr-6 space-y-1 text-red-900">
+                          <p className="text-danger-900 font-bold mb-2">זהירות:</p>
+                          <ul className="list-disc mr-6 space-y-1 text-danger-900">
                             <li>וודאו שהתגיות נסגרות נכון ({'<'}h1{'>'}...{'<'}/h1{'>'})</li>
                             <li>אל תשכחו את הסלש בתגית הסגירה</li>
                             <li>השתמשו ברמות נכונות (h1 לכותרת הראשית, h2 לחלוקה הבאה וכו')</li>
@@ -337,12 +337,12 @@ export default function DictaTutorialPage() {
                       </div>
                     </div>
 
-                    <div className="p-4 bg-blue-50 border-r-4 border-blue-400 rounded">
+                    <div className="p-4 bg-info-50 border-r-4 border-info-400 rounded">
                       <div className="flex items-start gap-3">
-                        <span className="material-symbols-outlined text-blue-600">info</span>
+                        <span className="material-symbols-outlined text-info-600">info</span>
                         <div>
-                          <p className="text-blue-900 font-bold mb-2">טיפים נוספים:</p>
-                          <ul className="list-disc mr-6 space-y-1 text-blue-900">
+                          <p className="text-info-900 font-bold mb-2">טיפים נוספים:</p>
+                          <ul className="list-disc mr-6 space-y-1 text-info-900">
                             <li>שמרו גיבוי לפני שמתחילים</li>
                             <li>עבדו בחלקים קטנים ובדקו התוצאה</li>
                             <li>השתמשו בעורך טקסט עם הדגשת תחביר (Syntax Highlighting)</li>
@@ -352,12 +352,12 @@ export default function DictaTutorialPage() {
                       </div>
                     </div>
 
-                    <div className="p-4 bg-green-50 border-r-4 border-green-400 rounded">
+                    <div className="p-4 bg-success-50 border-r-4 border-success-400 rounded">
                       <div className="flex items-start gap-3">
-                        <span className="material-symbols-outlined text-green-600">check_circle</span>
+                        <span className="material-symbols-outlined text-success-600">check_circle</span>
                         <div>
-                          <p className="text-green-900 font-bold mb-2">בדיקת איכות:</p>
-                          <ul className="list-disc mr-6 space-y-1 text-green-900">
+                          <p className="text-success-900 font-bold mb-2">בדיקת איכות:</p>
+                          <ul className="list-disc mr-6 space-y-1 text-success-900">
                             <li>פתחו את הספר באוצריא ובדקו שהניווט עובד</li>
                             <li>וודאו שכל הכותרות מופיעות בעץ הניווט</li>
                             <li>בדקו שאין כותרות ריקות או שגויות</li>
@@ -375,11 +375,11 @@ export default function DictaTutorialPage() {
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                className="p-6 bg-green-50 border-r-4 border-green-400 rounded-xl flex items-start gap-4"
+                className="p-6 bg-success-50 border-r-4 border-success-400 rounded-xl flex items-start gap-4"
               >
-                <span className="material-symbols-outlined text-4xl text-green-600">celebration</span>
+                <span className="material-symbols-outlined text-4xl text-success-600">celebration</span>
                 <div>
-                  <p className="text-green-900 text-lg"><strong>כל הכבוד!</strong> עכשיו אתם יודעים כיצד לעבד ספרי דיקטה ולהפוך אותם לספרים עם ניווט מלא באוצריא!</p>
+                  <p className="text-success-900 text-lg"><strong>כל הכבוד!</strong> עכשיו אתם יודעים כיצד לעבד ספרי דיקטה ולהפוך אותם לספרים עם ניווט מלא באוצריא!</p>
                 </div>
               </motion.div>
 

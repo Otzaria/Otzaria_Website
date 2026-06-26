@@ -75,7 +75,7 @@ export default function ImagePreviewModal({ isOpen, onClose, imageSrc, altText }
       <div className="absolute top-4 right-4 z-[101] flex gap-2">
                 <button 
           onClick={onClose}
-          className="bg-white/10 hover:bg-red-500/80 text-white p-2 rounded-full transition-colors"
+          className="bg-white/10 hover:bg-danger-500/80 text-white p-2 rounded-full transition-colors"
           title="סגור"
         >
                   <span className="material-symbols-outlined">close</span>

@@ -34,19 +34,19 @@ export default function EditorHeader({ bookName, pageNumber, bookPath, session, 
             {/* אינדיקטור שמירה דינמי */}
             <div className="min-w-[120px] flex justify-end">
               {saveStatus === 'saved' && (
-                <div className="flex items-center gap-2 text-sm text-green-600 animate-in fade-in duration-300">
+                <div className="flex items-center gap-2 text-sm text-success-600 animate-in fade-in duration-300">
                   <span className="material-symbols-outlined text-base">check_circle</span>
                   <span>נשמר אוטומטית</span>
                 </div>
               )}
               {saveStatus === 'saving' && (
-                <div className="flex items-center gap-2 text-sm text-blue-600 animate-in fade-in duration-300">
+                <div className="flex items-center gap-2 text-sm text-info-600 animate-in fade-in duration-300">
                   <span className="material-symbols-outlined text-base animate-spin">sync</span>
                   <span>שומר...</span>
                 </div>
               )}
               {saveStatus === 'error' && (
-                <div className="flex items-center gap-2 text-sm text-red-600 animate-in fade-in duration-300">
+                <div className="flex items-center gap-2 text-sm text-danger-600 animate-in fade-in duration-300">
                   <span className="material-symbols-outlined text-base">error</span>
                   <span>שגיאה בשמירה</span>
                 </div>

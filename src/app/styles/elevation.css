@@ -1,0 +1,38 @@
+/* ============================================================
+ * elevation.css — טוקני עומק גלובליים (צללים)
+ * ------------------------------------------------------------
+ * הערכים מכוונים לצללים רכים ועדינים יותר מברירת המחדל של Tailwind.
+ *
+ * שינוי ערך כאן ישפיע על מחלקות כמו shadow-lg / drop-shadow-xl
+ * בכל הפרויקט.
+ * ============================================================ */
+
+@theme {
+  --shadow-2xs: 0 1px rgb(0 0 0 / 0.035);
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  --shadow-sm: 0 2px 5px -1px rgb(0 0 0 / 0.055), 0 1px 3px -2px rgb(0 0 0 / 0.055);
+  --shadow-md: 0 6px 12px -4px rgb(0 0 0 / 0.08), 0 3px 6px -5px rgb(0 0 0 / 0.07);
+  --shadow-lg: 0 12px 24px -8px rgb(0 0 0 / 0.09), 0 6px 12px -10px rgb(0 0 0 / 0.08);
+  --shadow-xl: 0 22px 36px -14px rgb(0 0 0 / 0.11), 0 10px 18px -16px rgb(0 0 0 / 0.09);
+  --shadow-2xl: 0 28px 60px -22px rgb(0 0 0 / 0.18);
+
+  --inset-shadow-2xs: inset 0 1px rgb(0 0 0 / 0.035);
+  --inset-shadow-xs: inset 0 1px 1px rgb(0 0 0 / 0.04);
+  --inset-shadow-sm: inset 0 2px 4px rgb(0 0 0 / 0.04);
+
+  --drop-shadow-xs: 0 1px 1px rgb(0 0 0 / 0.04);
+  --drop-shadow-sm: 0 2px 3px rgb(0 0 0 / 0.09);
+  --drop-shadow-md: 0 4px 6px rgb(0 0 0 / 0.08);
+  --drop-shadow-lg: 0 8px 10px rgb(0 0 0 / 0.08);
+  --drop-shadow-xl: 0 12px 16px rgb(0 0 0 / 0.075);
+  --drop-shadow-2xl: 0 26px 32px rgb(0 0 0 / 0.11);
+
+  --text-shadow-2xs: 0px 1px 0px rgb(0 0 0 / 0.15);
+  --text-shadow-xs: 0px 1px 1px rgb(0 0 0 / 0.2);
+  --text-shadow-sm:
+    0px 1px 0px rgb(0 0 0 / 0.075), 0px 1px 1px rgb(0 0 0 / 0.075), 0px 2px 2px rgb(0 0 0 / 0.075);
+  --text-shadow-md:
+    0px 1px 1px rgb(0 0 0 / 0.1), 0px 1px 2px rgb(0 0 0 / 0.1), 0px 2px 4px rgb(0 0 0 / 0.1);
+  --text-shadow-lg:
+    0px 1px 2px rgb(0 0 0 / 0.1), 0px 3px 2px rgb(0 0 0 / 0.1), 0px 4px 8px rgb(0 0 0 / 0.1);
+}

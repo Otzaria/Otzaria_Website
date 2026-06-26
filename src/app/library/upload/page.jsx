@@ -235,7 +235,7 @@ export default function UploadPage() {
               {/* שם הספר */}
               <div>
                 <label className="block text-sm font-bold mb-2">
-                  שם הספר <span className="text-red-500">*</span>
+                  שם הספר <span className="text-danger-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -251,7 +251,7 @@ export default function UploadPage() {
               {/* שם המחבר */}
               <div>
                 <label className="block text-sm font-bold mb-2">
-                  שם המחבר <span className="text-red-500">*</span>
+                  שם המחבר <span className="text-danger-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -267,7 +267,7 @@ export default function UploadPage() {
               {/* קטגוריית הספר */}
               <div>
                 <label className="block text-sm font-bold mb-2">
-                  קטגוריית הספר <span className="text-red-500">*</span>
+                  קטגוריית הספר <span className="text-danger-500">*</span>
                 </label>
                 <select
                   name="bookCategory"
@@ -286,7 +286,7 @@ export default function UploadPage() {
               {/* קטגוריית המחבר */}
               <div>
                 <label className="block text-sm font-bold mb-2">
-                  קטגוריית המחבר <span className="text-red-500">*</span>
+                  קטגוריית המחבר <span className="text-danger-500">*</span>
                 </label>
                 <select
                   name="authorCategory"
@@ -303,10 +303,10 @@ export default function UploadPage() {
                 
                 {/* הודעת אזהרה עבור מחברי זמנינו */}
                 {formData.authorCategory === 'מחברי זמנינו' && (
-                  <div className="mt-3 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <div className="mt-3 p-4 bg-warning-alt-50 border border-warning-alt-200 rounded-lg">
                     <div className="flex items-start gap-2">
-                      <span className="material-symbols-outlined text-yellow-600 text-xl">warning</span>
-                      <div className="text-sm text-yellow-800">
+                      <span className="material-symbols-outlined text-warning-alt-600 text-xl">warning</span>
+                      <div className="text-sm text-warning-alt-800">
                         <p className="font-bold mb-1">שים לב!</p>
                         <p>אנו לא מכניסים ספרים ממחברים שאחר זמן השואה, חוץ מספרי רבותינו המפורסמים וגדולי הדור, או ספרי מ"מ ידועים.</p>
                         <p className="mt-1">תתבקש לאשר זאת בעת השליחה.</p>
@@ -319,7 +319,7 @@ export default function UploadPage() {
               {/* שנת המחבר */}
               <div>
                 <label className="block text-sm font-bold mb-2">
-                  שנת המחבר (לדוגמה: שנה עברית) <span className="text-red-500">*</span>
+                  שנת המחבר (לדוגמה: שנה עברית) <span className="text-danger-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -350,7 +350,7 @@ export default function UploadPage() {
               {/* בעל הזכויות */}
               <div>
                 <label className="block text-sm font-bold mb-2">
-                  בעל הזכויות יוצרים <span className="text-red-500">*</span>
+                  בעל הזכויות יוצרים <span className="text-danger-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -381,7 +381,7 @@ export default function UploadPage() {
               {/* האם OCR */}
               <div>
                 <label className="block text-sm font-bold mb-2">
-                  האם הטקסט הוא ע"י OCR (חילוץ טקסט מתמונה או ספר סרוק)? <span className="text-red-500">*</span>
+                  האם הטקסט הוא ע"י OCR (חילוץ טקסט מתמונה או ספר סרוק)? <span className="text-danger-500">*</span>
                 </label>
                 <div className="flex gap-6">
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -411,7 +411,7 @@ export default function UploadPage() {
               {formData.isOcr && (
                 <div>
                   <label className="block text-sm font-bold mb-2">
-                    תאר את שיטת ה-OCR (איזה תוכנה או שיטה?) <span className="text-red-500">*</span>
+                    תאר את שיטת ה-OCR (איזה תוכנה או שיטה?) <span className="text-danger-500">*</span>
                   </label>
                   <textarea
                     name="ocrDescription"
@@ -428,7 +428,7 @@ export default function UploadPage() {
               {/* העלאת קובץ (טקסט או וורד) */}
               <div>
                 <label className="block text-sm font-bold mb-2">
-                  קובץ טקסט או וורד <span className="text-red-500">*</span>
+                  קובץ טקסט או וורד <span className="text-danger-500">*</span>
                 </label>
                 <div className="border-2 border-dashed border-surface-variant rounded-lg p-8 text-center hover:bg-surface/50 transition-colors cursor-pointer relative">
                   <input

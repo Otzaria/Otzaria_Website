@@ -62,8 +62,98 @@ const FALLBACK_API_METHODS = [
   'calendar.getSelectedDate', 'calendar.getDailyTimes', 'calendar.getHalachicTimes',
   'calendar.getJewishDate', 'calendar.getEvents',
   'publishedData.upsert', 'publishedData.remove', 'publishedData.listOwn',
-  'database.listSources', 'database.describeSource', 'database.query', 'database.batchQuery'
+  'database.listSources', 'database.describeSource', 'database.query', 'database.batchQuery',
+  'library.getTree',
+  'network.fetch', 'network.download',
+  'ui.pickFolder',
+  'fs.extractZip', 'fs.deleteFile',
+  'fs.pickUserFile', 'fs.resolveFileUrl', 'fs.readTextFile', 'fs.revokeFile',
+  'shortcut.create'
 ]
+
+// גרסת אוצריא המינימלית שבה כל API התווסף. תואם FALLBACK_METHOD_MIN_VERSION
+// ב-otzaria-plugin-validator, _methodMinVersion ב-plugin_extended_validator.dart
+// וטבלת "גרסאות API" ב-API_REFERENCE.md. תוסף שקורא ל-API חדש מ-minAppVersion
+// שהצהיר → שגיאה חוסמת. יש לעדכן יחד עם שינוי ב-SDK.
+const FALLBACK_METHOD_MIN_VERSION = {
+  // 0.9.89 — מערכת התוספים הראשונה (כל ה-APIs הבסיסיים)
+  'app.getInfo': '0.9.89',
+  'app.getTheme': '0.9.89',
+  'app.getLocale': '0.9.89',
+  'app.getUserEmail': '0.9.89',
+  'app.getGrantedPermissions': '0.9.89',
+  'library.findBooks': '0.9.89',
+  'library.getBookMetadata': '0.9.89',
+  'library.listRecentBooks': '0.9.89',
+  'library.getBookContent': '0.9.89',
+  'library.getBookToc': '0.9.89',
+  'search.fullText': '0.9.89',
+  'reader.openBook': '0.9.89',
+  'reader.openBookAtRef': '0.9.89',
+  'reader.getCurrentState': '0.9.89',
+  'reader.getCurrentRef': '0.9.89',
+  'reader.getSelection': '0.9.89',
+  'reader.addContextMenuItem': '0.9.89',
+  'reader.removeContextMenuItem': '0.9.89',
+  'reader.setHighlight': '0.9.89',
+  'reader.getHighlights': '0.9.89',
+  'reader.clearHighlight': '0.9.89',
+  'reader.clearAllHighlights': '0.9.89',
+  'navigation.goTo': '0.9.89',
+  'notes.list': '0.9.89',
+  'notes.getBookNotesSummary': '0.9.89',
+  'notes.add': '0.9.89',
+  'notes.update': '0.9.89',
+  'notes.delete': '0.9.89',
+  'ui.showMessage': '0.9.89',
+  'ui.showSuccess': '0.9.89',
+  'ui.showError': '0.9.89',
+  'ui.showConfirm': '0.9.89',
+  'ui.showWarning': '0.9.89',
+  'feedback.sendEmail': '0.9.89',
+  'history.list': '0.9.89',
+  'history.listSearches': '0.9.89',
+  'history.clear': '0.9.89',
+  'history.remove': '0.9.89',
+  'notifications.showInApp': '0.9.89',
+  'notifications.sendSystem': '0.9.89',
+  'notifications.scheduleSystem': '0.9.89',
+  'notifications.cancel': '0.9.89',
+  'notifications.cancelAll': '0.9.89',
+  'notifications.checkPermissions': '0.9.89',
+  'notifications.requestPermissions': '0.9.89',
+  'storage.get': '0.9.89',
+  'storage.set': '0.9.89',
+  'storage.remove': '0.9.89',
+  'storage.list': '0.9.89',
+  'settings.get': '0.9.89',
+  'settings.getMany': '0.9.89',
+  'calendar.getSelectedDate': '0.9.89',
+  'calendar.getDailyTimes': '0.9.89',
+  'calendar.getHalachicTimes': '0.9.89',
+  'calendar.getJewishDate': '0.9.89',
+  'calendar.getEvents': '0.9.89',
+  'publishedData.upsert': '0.9.89',
+  'publishedData.remove': '0.9.89',
+  'publishedData.listOwn': '0.9.89',
+  'database.listSources': '0.9.89',
+  'database.describeSource': '0.9.89',
+  'database.query': '0.9.89',
+  'database.batchQuery': '0.9.89',
+  // 0.9.93
+  'library.getTree': '0.9.93',
+  'network.fetch': '0.9.93',
+  'network.download': '0.9.93',
+  'fs.deleteFile': '0.9.93',
+  'fs.extractZip': '0.9.93',
+  'ui.pickFolder': '0.9.93',
+  // 0.9.94
+  'shortcut.create': '0.9.94',
+  'fs.pickUserFile': '0.9.94',
+  'fs.readTextFile': '0.9.94',
+  'fs.resolveFileUrl': '0.9.94',
+  'fs.revokeFile': '0.9.94'
+}
 
 const FALLBACK_EVENTS = [
   'plugin.boot', 'plugin.ready',
@@ -93,10 +183,35 @@ function buildFallbackSpec() {
   return {
     permissions: new Set(FALLBACK_PERMISSIONS),
     apiMethods: new Set(FALLBACK_API_METHODS),
+    methodMinVersions: new Map(Object.entries(FALLBACK_METHOD_MIN_VERSION)),
     events: new Set(FALLBACK_EVENTS),
     source: 'fallback',
     fetchedAt: new Date().toISOString()
   }
+}
+
+// משווה שתי גרסאות לפי שלושת רכיבי הליבה major.minor.patch (מתעלם מ-build/prerelease).
+// תואם PluginVersionUtils.compareCoreVersions ב-Otzaria.
+function compareCoreVersions(first, second) {
+  const core = (v) => String(v).split('+')[0].split('-')[0].trim()
+  const parse = (v) => {
+    const s = core(v)
+    if (s === '') throw new Error(`פורמט גרסה לא חוקי: ${v}`)
+    return s.split('.').map((seg) => {
+      const n = Number(seg)
+      if (!Number.isInteger(n)) throw new Error(`פורמט גרסה לא חוקי: ${v}`)
+      return n
+    })
+  }
+  const a = parse(first)
+  const b = parse(second)
+  for (let i = 0; i < 3; i++) {
+    const x = i < a.length ? a[i] : 0
+    const y = i < b.length ? b[i] : 0
+    if (x > y) return 1
+    if (x < y) return -1
+  }
+  return 0
 }
 
 function looksLikePermission(token) {
@@ -145,6 +260,13 @@ function parseApiReferenceMarkdown(md) {
     apiMethods.add(match[1])
   }
 
+  // 3b. "טבלת גרסאות API" — שורות בפורמט ``| `namespace.method` | 0.9.89 |``.
+  const methodMinVersions = new Map()
+  const versionRowRe = /^\|\s*`([a-z][a-zA-Z0-9_]*\.[a-zA-Z0-9_]+)`\s*\|\s*(\d+\.\d+\.\d+)\s*\|/gm
+  while ((match = versionRowRe.exec(md)) !== null) {
+    methodMinVersions.set(match[1], match[2])
+  }
+
   // 4. אירועים: מצטטים ב-Otzaria.on('…'), ואז סוננים placeholders.
   const onRe = /Otzaria\.on\(['"]([a-z][a-zA-Z0-9_]*\.[a-zA-Z0-9_]+)['"]/g
   while ((match = onRe.exec(md)) !== null) {
@@ -169,6 +291,10 @@ function parseApiReferenceMarkdown(md) {
   return {
     permissions,
     apiMethods,
+    // doc ישן ללא טבלת גרסאות — נופלים ל-floor המקובע כדי שהאכיפה לא תיעלם.
+    methodMinVersions: methodMinVersions.size > 0
+      ? methodMinVersions
+      : new Map(Object.entries(FALLBACK_METHOD_MIN_VERSION)),
     events: events.size > 0 ? events : new Set(FALLBACK_EVENTS),
     source: 'remote',
     fetchedAt: new Date().toISOString()
@@ -600,6 +726,18 @@ export async function validatePluginArchive(buffer) {
     }
   }
 
+  // contributes.background.entrypoint - קובץ הרקע הקליל (אם הוכרז) חייב גם הוא
+  // להיכלל ב-ZIP, אחרת תוסף הרקע יישבר בשקט בעליית אוצריא.
+  const backgroundEntrypoint = (manifest.contributes?.background?.entrypoint || '').toString()
+  if (backgroundEntrypoint) {
+    if (!files.has(backgroundEntrypoint)) {
+      const allFiles = extractZipFiles(buffer)
+      if (!allFiles.has(backgroundEntrypoint)) {
+        errors.push(`קובץ הרקע שצוין ב-manifest ("${backgroundEntrypoint}") לא נמצא בקובץ התוסף`)
+      }
+    }
+  }
+
   // ---- Code scan ----
   const apiUsage = new Map()    // method -> Set<filename>
   const eventUsage = new Map()  // event -> Set<filename>
@@ -646,6 +784,24 @@ export async function validatePluginArchive(buffer) {
     if (!required) continue
     if (!declaredSet.has(required)) {
       warnings.push(`התוסף משתמש ב-${method} אך לא ביקש את ההרשאה "${required}" ב-manifest`)
+    }
+  }
+
+  // Cross-check חוסם: method חדש מ-minAppVersion שהוצהר. תוסף שקורא ל-API
+  // שלא היה קיים בגרסת המינימום שלו יקרוס אצל משתמש בגרסה כזו.
+  const minAppVersion = typeof manifest.minAppVersion === 'string' ? manifest.minAppVersion : '0.0.0'
+  for (const [method, sources] of apiUsage) {
+    const since = spec.methodMinVersions?.get(method)
+    if (!since) continue
+    try {
+      if (compareCoreVersions(since, minAppVersion) > 0) {
+        errors.push(
+          `התוסף משתמש ב-${method} הקיים החל מגרסה ${since}, אך minAppVersion שהוצהר הוא ` +
+          `${minAppVersion}. עדכן את minAppVersion ל-${since} לפחות (קבצים: ${[...sources].join(', ')})`
+        )
+      }
+    } catch {
+      // minAppVersion לא חוקי — לא חוסמים כאן (ולידציית המניפסט תטפל בכך)
     }
   }
 

@@ -120,7 +120,7 @@ export default function UsersPage() {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full px-4 py-3 pr-10 rounded-xl border border-surface-variant bg-white focus:outline-none focus:ring-2 focus:ring-primary shadow-sm transition-all"
                 />
-                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">
                     search
                 </span>
                </div>
@@ -192,9 +192,9 @@ export default function UsersPage() {
                          {/* Rank Badge for Top 3 */}
                          {isTop3 && (
                             <div className={`absolute top-0 left-0 w-16 h-16 flex items-start justify-end p-2 bg-gradient-to-br ${
-                                globalIndex === 1 ? 'from-yellow-400/20 to-transparent text-yellow-600' :
-                                globalIndex === 2 ? 'from-gray-300/20 to-transparent text-gray-500' :
-                                'from-orange-400/20 to-transparent text-orange-600'
+                                globalIndex === 1 ? 'from-warning-alt-400/20 to-transparent text-warning-alt-600' :
+                                globalIndex === 2 ? 'from-neutral-300/20 to-transparent text-neutral-500' :
+                                'from-warning-strong-400/20 to-transparent text-warning-strong-600'
                             }`}>
                                 <span className="material-symbols-outlined text-2xl">workspace_premium</span>
                             </div>
@@ -235,7 +235,7 @@ export default function UsersPage() {
                                 </div>
                                 <div className="w-px h-6 bg-surface-variant"></div>
                                 <div className="text-center">
-                                    <span className="block text-lg font-bold text-blue-600 leading-none">
+                                    <span className="block text-lg font-bold text-info-600 leading-none">
                                         {user.completedPages?.toLocaleString() || 0}
                                     </span>
                                     <span className="text-[10px] text-on-surface/60">דפים</span>
@@ -244,7 +244,7 @@ export default function UsersPage() {
                                   <>
                                     <div className="w-px h-6 bg-surface-variant"></div>
                                     <div className="text-center">
-                                        <span className="block text-lg font-bold text-green-600 leading-none">
+                                        <span className="block text-lg font-bold text-success-600 leading-none">
                                             {user.dictaBooks?.toLocaleString() || 0}
                                         </span>
                                         <span className="text-[10px] text-on-surface/60">ספרי דיקטה</span>

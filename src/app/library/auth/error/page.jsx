@@ -28,7 +28,7 @@ function ErrorContent() {
             </Link>
           </div>
 
-          <span className="material-symbols-outlined text-6xl text-red-500 mb-4 block">
+          <span className="material-symbols-outlined text-6xl text-danger-500 mb-4 block">
             error
           </span>
 
