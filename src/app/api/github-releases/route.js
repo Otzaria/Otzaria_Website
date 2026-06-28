@@ -54,25 +54,25 @@ function extractPlatformDownloads(platform, assets) {
         msix: findPlatformAsset(assets, 'windows', '.msix'),
         zip: findPlatformAsset(assets, 'windows', '.zip'),
         exeSilent: findAssetWithKeywords(assets, '.exe', ['windows', 'silent'], ['full']) || findAssetWithKeywords(assets, '.exe', ['win', 'silent'], ['full']),
-        exeFull: findPlatformAsset(assets, 'windows', '.exe', { full: true })
+        exeFull: findAssetWithKeywords(assets, '.exe', ['windows', 'full'], ['silent']) || findAssetWithKeywords(assets, '.exe', ['win', 'full'], ['silent'])
       }
     case 'linux':
       return {
         deb: findPlatformAsset(assets, 'linux', '.deb'),
         rpm: findPlatformAsset(assets, 'linux', '.rpm'),
         appimage: findPlatformAsset(assets, 'linux', '.AppImage', { preferPlatformKeyword: false }),
-        tarFull: findPlatformAsset(assets, 'linux', '.tar.gz', { full: true, preferPlatformKeyword: false })
+        tarFull: findAssetWithKeywords(assets, '.tar.gz', ['full'], ['silent'])
       }
     case 'macos':
       return {
         dmg: findPlatformAsset(assets, 'macos', '.dmg'),
         zip: findPlatformAsset(assets, 'macos', '.zip'),
-        zipFull: findPlatformAsset(assets, 'macos', '.zip', { full: true })
+        zipFull: findAssetWithKeywords(assets, '.zip', ['macos', 'full'], ['silent']) || findAssetWithKeywords(assets, '.zip', ['mac', 'full'], ['silent'])
       }
     case 'android':
       return {
         apk: findPlatformAsset(assets, 'android', '.apk', { preferPlatformKeyword: false }),
-        zipFull: findPlatformAsset(assets, 'android', '.zip', { full: true })
+        zipFull: findAssetWithKeywords(assets, '.zip', ['android', 'full'], ['silent'])
       }
     default:
       return {}
