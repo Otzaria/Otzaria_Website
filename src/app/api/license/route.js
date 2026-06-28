@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    const res = await fetch('https://raw.githubusercontent.com/Otzaria/otzaria-library/main/LICENSE', {
+    const res = await fetch('https://raw.githubusercontent.com/Otzaria/otzaria/main/LICENSE', {
       next: { revalidate: 3600 } // רענון פעם בשעה
     });
 
