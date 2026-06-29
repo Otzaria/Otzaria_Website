@@ -58,7 +58,8 @@ export async function GET(request) {
       return NextResponse.json({ success: false, error: 'הספר לא נמצא' }, { status: 404 });
     }
 
-    const pages = await Page.find({ book: bookId })
+    // חלק מהעמודים (למשל לאחר מיזוג ספרים) נשמרים תחת השדה bookId ולא book — נשלוף לפי שניהם
+    const pages = await Page.find({ $or: [{ book: bookId }, { bookId: bookId }] })
       .sort({ pageNumber: 1 })
       .select('imagePath pageNumber')
       .lean();
@@ -103,22 +104,21 @@ export async function GET(request) {
     let embeddedCount = 0;
 
     for (const { filePath, pageNumber } of validFiles) {
-      const imageBytes = await fs.readFile(filePath);
-      const ext = path.extname(filePath).toLowerCase();
-
-      let image;
+      // עיבוד כל עמוד בנפרד כדי שכשל בקובץ בודד (חסר/לא קריא/פגום) לא יפיל את ייצוא כל הספר
       try {
-        image = (ext === '.png')
+        const imageBytes = await fs.readFile(filePath);
+        const ext = path.extname(filePath).toLowerCase();
+
+        const image = (ext === '.png')
           ? await pdfDoc.embedPng(imageBytes)
           : await pdfDoc.embedJpg(imageBytes);
-      } catch (embedErr) {
-        console.warn(`Failed to embed page ${pageNumber}: ${embedErr.message}`);
-        continue;
-      }
 
-      const pdfPage = pdfDoc.addPage([image.width, image.height]);
-      pdfPage.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height });
-      embeddedCount++;
+        const pdfPage = pdfDoc.addPage([image.width, image.height]);
+        pdfPage.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height });
+        embeddedCount++;
+      } catch (err) {
+        console.warn(`Failed to process page ${pageNumber}: ${err?.message || String(err)}`);
+      }
     }
 
     if (embeddedCount === 0) {
@@ -142,7 +142,7 @@ export async function GET(request) {
   } catch (error) {
     console.error('Error exporting book PDF:', error);
     return NextResponse.json(
-      { success: false, error: 'שגיאת שרת פנימית: ' + error.message },
+      { success: false, error: 'שגיאת שרת פנימית: ' + (error?.message || String(error)) },
       { status: 500 }
     );
   }
