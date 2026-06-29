@@ -140,6 +140,22 @@ const PLUGINS_ADMIN_ALLOWED_API = [
   '/api/admin/stats',
 ];
 
+// ===== מנהל ספרים-בלבד =====
+// גישה אך ורק לעמוד ניהול הספרים (/library/admin/books) ולדשבורד, ולנתיבי ה-API
+// המשרתים אותם. כל שאר נתיבי /library/admin ו-/api/admin חסומים (דיקטה, העלאות,
+// עמודים, מילון, מידע/כינויים, משתמשים, תוספים וכו').
+const BOOKS_ONLY_ADMIN_ALLOWED_PAGES = [
+  '/library/admin/books',
+];
+const BOOKS_ONLY_ADMIN_ALLOWED_PAGE_EXACT = ['/library/admin'];
+const BOOKS_ONLY_ADMIN_ALLOWED_API = [
+  '/api/admin/books',
+  '/api/admin/categories',
+  '/api/admin/mailing-list',
+  '/api/admin/book-statuses',
+  '/api/admin/stats',
+];
+
 // נתיבי דפים/API החסומים למנהל ספרים
 const BOOKS_ADMIN_BLOCKED_PAGES = [
   '/library/admin/users',
@@ -213,6 +229,14 @@ const authProxy = withAuth(
         const allowed = isApiRoute
           ? PLUGINS_ADMIN_ALLOWED_API.some(p => path.startsWith(p))
           : PLUGINS_ADMIN_ALLOWED_PAGE_EXACT.includes(path) || PLUGINS_ADMIN_ALLOWED_PAGES.some(p => path.startsWith(p));
+        if (!allowed) return unauthorized();
+      }
+
+      // מנהל ספרים-בלבד - דשבורד + ניהול ספרים בלבד (allowlist)
+      if (role === 'admin_books_only') {
+        const allowed = isApiRoute
+          ? BOOKS_ONLY_ADMIN_ALLOWED_API.some(p => path === p || path.startsWith(p + '/'))
+          : BOOKS_ONLY_ADMIN_ALLOWED_PAGE_EXACT.includes(path) || BOOKS_ONLY_ADMIN_ALLOWED_PAGES.some(p => path === p || path.startsWith(p + '/'));
         if (!allowed) return unauthorized();
       }
 

@@ -6,7 +6,7 @@ import User from '@/models/User';
 import mongoose from 'mongoose';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { hasBooksAccess } from '@/lib/roles';
+import { hasBookLibraryAccess } from '@/lib/roles';
 
 export async function POST(request) {
     try {
@@ -45,7 +45,7 @@ export async function POST(request) {
         if (!page) return NextResponse.json({ error: 'Page not found' }, { status: 404 });
 
         // 6. בדיקות בעלות (האם תפוס/הושלם ע"י אחר) — אדמין/admin_books עוקף
-        const isAdmin = hasBooksAccess(session.user.role);
+        const isAdmin = hasBookLibraryAccess(session.user.role);
         const isClaimedByOther = page.claimedBy && page.claimedBy.toString() !== userId.toString();
         
         if ((page.status === 'in-progress' || page.status === 'completed') && isClaimedByOther && !isAdmin) {

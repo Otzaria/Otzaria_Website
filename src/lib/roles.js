@@ -2,6 +2,9 @@ export const ROLES = {
   ADMIN: 'admin',
   ADMIN_PLUGINS: 'admin_plugins',
   ADMIN_BOOKS: 'admin_books',
+  // מנהל ספרים-בלבד: גישה מלאה לספריית הספרים (/library/books) ולניהול המקביל
+  // (/library/admin/books) בלבד — ללא דיקטה, העלאות, עמודים או כל מודול אחר.
+  ADMIN_BOOKS_ONLY: 'admin_books_only',
 }
 
 export const ROLE_LABELS = {
@@ -9,9 +12,10 @@ export const ROLE_LABELS = {
   admin: 'מנהל כללי',
   admin_plugins: 'מנהל תוספים',
   admin_books: 'מנהל ספרים',
+  admin_books_only: 'מנהל ספרים בלבד',
 }
 
-export const ALL_ADMIN_ROLES = [ROLES.ADMIN, ROLES.ADMIN_PLUGINS, ROLES.ADMIN_BOOKS]
+export const ALL_ADMIN_ROLES = [ROLES.ADMIN, ROLES.ADMIN_PLUGINS, ROLES.ADMIN_BOOKS, ROLES.ADMIN_BOOKS_ONLY]
 
 /** גישה לכל מה שבניהול */
 export function isAdmin(role) {
@@ -23,9 +27,16 @@ export function hasPluginsAccess(role) {
   return role === ROLES.ADMIN || role === ROLES.ADMIN_PLUGINS
 }
 
-/** גישה לניהול ספרים (הכל חוץ ממשתמשים ותוספים) */
+/** גישה לניהול ספרים הרחב (הכל חוץ ממשתמשים ותוספים) — כולל דיקטה, העלאות, עמודים וכו'.
+ *  שים לב: מנהל-ספרים-בלבד אינו נכלל כאן בכוונה, כדי שלא יקבל גישה לדיקטה/העלאות/עמודים. */
 export function hasBooksAccess(role) {
   return role === ROLES.ADMIN || role === ROLES.ADMIN_BOOKS
+}
+
+/** גישה לספריית הספרים עצמה: ניהול ספרים (/library/admin/books), קטגוריות, תמלול
+ *  עמודים ב-/library/books. נכלל גם מנהל-ספרים-בלבד, בנוסף למנהלי הספרים הרחבים. */
+export function hasBookLibraryAccess(role) {
+  return role === ROLES.ADMIN || role === ROLES.ADMIN_BOOKS || role === ROLES.ADMIN_BOOKS_ONLY
 }
 
 /** כל סוג מנהל */

@@ -6,7 +6,7 @@ import Book from '@/models/Book';
 import User from '@/models/User';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { hasBooksAccess } from '@/lib/roles';
+import { hasBookLibraryAccess } from '@/lib/roles';
 
 export async function POST(request) {
   await connectDB();
@@ -18,7 +18,7 @@ export async function POST(request) {
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { pageId } = await request.json();
-    const isAdmin = hasBooksAccess(session.user.role);
+    const isAdmin = hasBookLibraryAccess(session.user.role);
 
     dbSession.startTransaction();
 

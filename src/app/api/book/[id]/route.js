@@ -4,7 +4,7 @@ import Book from '@/models/Book';
 import Page from '@/models/Page';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { hasBooksAccess } from '@/lib/roles';
+import { hasBookLibraryAccess } from '@/lib/roles';
 
 export async function GET(request, { params }) {
   try {
@@ -14,7 +14,7 @@ export async function GET(request, { params }) {
     }
     
     const userId = session.user.id || session.user._id;
-    const isAdmin = hasBooksAccess(session?.user?.role);
+    const isAdmin = hasBookLibraryAccess(session?.user?.role);
     
     await connectDB();
     

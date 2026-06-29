@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
 import SystemConfig from '@/models/SystemConfig';
-import { hasBooksAccess } from '@/lib/roles';
+import { hasBookLibraryAccess } from '@/lib/roles';
 
 // ברירות מחדל לסטטוסים
 const DEFAULT_STATUSES = {
@@ -28,7 +28,7 @@ const DEFAULT_STATUSES = {
 // GET - קבלת הגדרות סטטוסים
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (!hasBooksAccess(session?.user?.role)) {
+  if (!hasBookLibraryAccess(session?.user?.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -50,7 +50,7 @@ export async function GET() {
 // POST - עדכון הגדרות סטטוסים
 export async function POST(request) {
   const session = await getServerSession(authOptions);
-  if (!hasBooksAccess(session?.user?.role)) {
+  if (!hasBookLibraryAccess(session?.user?.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

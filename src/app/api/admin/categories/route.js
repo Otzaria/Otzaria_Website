@@ -4,7 +4,7 @@ import Book from '@/models/Book';
 import Category from '@/models/Category';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { hasBooksAccess } from '@/lib/roles';
+import { hasBookLibraryAccess } from '@/lib/roles';
 export async function GET() {
   try {
     await connectDB();
@@ -18,7 +18,7 @@ export async function GET() {
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !hasBooksAccess(session.user?.role)) {
+    if (!session || !hasBookLibraryAccess(session.user?.role)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -40,7 +40,7 @@ export async function POST(request) {
 export async function PUT(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !hasBooksAccess(session.user?.role)) {
+    if (!session || !hasBookLibraryAccess(session.user?.role)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 

@@ -9,7 +9,7 @@ import { useDialog } from '@/components/providers/DialogContext'
 import { useLoading } from '@/components/providers/LoadingContext'
 import Header from '@/components/layout/Header'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
-import { hasBooksAccess } from '@/lib/roles'
+import { hasBookLibraryAccess } from '@/lib/roles'
 
 const pageStatusConfig = {
   available: {
@@ -550,7 +550,7 @@ export default function BookPage() {
                     currentUser={session?.user}
                     isBookOwner={bookData.isOwner}
                     bookPath={bookPath}
-                    isAdmin={hasBooksAccess(session?.user?.role)}
+                    isAdmin={hasBookLibraryAccess(session?.user?.role)}
                   />
               </div>
             ))}

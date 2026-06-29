@@ -4,14 +4,14 @@ import Book from '@/models/Book';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { sendBookNotification } from '@/lib/emailService';
-import { hasBooksAccess } from '@/lib/roles';
+import { hasBookLibraryAccess } from '@/lib/roles';
 
 export async function PUT(request) {
   try {
     const session = await getServerSession(authOptions);
     
     // בדיקת הרשאות מנהל
-    if (!hasBooksAccess(session?.user?.role)) {
+    if (!hasBookLibraryAccess(session?.user?.role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

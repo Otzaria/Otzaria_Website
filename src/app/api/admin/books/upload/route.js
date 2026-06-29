@@ -10,7 +10,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { sendBookNotification } from '@/lib/emailService';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { z } from 'zod';
-import { hasBooksAccess } from '@/lib/roles';
+import { hasBookLibraryAccess } from '@/lib/roles';
 import { convertPdfToImages } from '@/lib/pdfConverter';
 
 // סכמת אימות להעלאת ספרים
@@ -36,7 +36,7 @@ export async function POST(request) {
   try {
     // 1. בדיקת סשן ותפקיד
     const session = await getServerSession(authOptions);
-    if (!session || !hasBooksAccess(session.user?.role)) {
+    if (!session || !hasBookLibraryAccess(session.user?.role)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
