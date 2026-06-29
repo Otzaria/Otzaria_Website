@@ -2,7 +2,8 @@ import path from 'path'
 import { compareVersions } from './pluginManifest'
 
 export const PLUGIN_LIMITS = {
-  name: 100,
+  // שם התוסף מוצג בראש לשונית התוסף ב"כלים" — מעבר ל-14 תווים גולש מהכרטיסייה.
+  name: 14,
   shortDescription: 150,
   description: 10_000,
   version: 30,
