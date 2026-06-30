@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo, useCallback, useTransition } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback, useTransition, useDeferredValue } from 'react'
 import Button from '@/components/ui/Button'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
@@ -42,6 +42,9 @@ const DEFAULT_SHORTCUTS = {
   'undo': 'Ctrl+KeyZ',
   'redo': 'Ctrl+KeyY',
 }
+
+// תקרת צעדי undo/redo - כל צעד שומר עותק מלא של המסמך, ללא תקרה הזיכרון תופח במסמך גדול
+const MAX_HISTORY = 100
 
 function buildTocFromContent(content) {
   if (!content) return []
@@ -94,20 +97,20 @@ export default function DictaEditorCore({
   saveLabel = 'שמירה'
 }) {
   const { showAlert } = useDialog()
-  
-  console.log('DictaEditorCore v2 - singleLineHeader:', singleLineHeader)
-  
+
   const [content, setContent] = useState(initialContent)
+  // התצוגה המקדימה ותוכן העניינים נגזרים מערך מושהה כדי שההקלדה תישאר חלקה
+  // גם במסמכים גדולים - ה-sanitize וה-regex הכבדים רצים רק כשהמשתמש עוצר.
+  const deferredContent = useDeferredValue(content)
   // ניקוי HTML לפני רינדור כדי למנוע XSS. DOMPurify תלוי ב-window ולכן רץ רק
   // בצד הלקוח; ב-SSR מוחזר תוכן ריק וההידרציה בצד הלקוח מבצעת את הניקוי.
   const sanitizedContent = useMemo(
-    () => (typeof window !== 'undefined' ? DOMPurify.sanitize(content || '') : ''),
-    [content]
+    () => (typeof window !== 'undefined' ? DOMPurify.sanitize(deferredContent || '') : ''),
+    [deferredContent]
   )
   const [fontSize, setFontSize] = useState(18)
   const [selectedFont, setSelectedFont] = useState("'Times New Roman'")
   const [textAlign, setTextAlign] = useState('right')
-  const [toc, setToc] = useState([])
   const [activeTool, setActiveTool] = useState(null)
   const [editMode, setEditMode] = useState(false)
   const [showShortcutsDialog, setShowShortcutsDialog] = useState(false)
@@ -250,6 +253,9 @@ export default function DictaEditorCore({
     setContent(newText)
     const newHistory = history.slice(0, historyIndex + 1)
     newHistory.push({ content: newText, selection: { start, end } })
+    if (newHistory.length > MAX_HISTORY) {
+      newHistory.splice(0, newHistory.length - MAX_HISTORY)
+    }
     setHistory(newHistory)
     setHistoryIndex(newHistory.length - 1)
   }, [content, history, historyIndex])
@@ -324,6 +330,9 @@ export default function DictaEditorCore({
       if (!lastItem || lastItem.content !== newContent) {
         const newHistory = history.slice(0, historyIndex + 1)
         newHistory.push({ content: newContent, selection: { start: selectionStart, end: selectionEnd } })
+        if (newHistory.length > MAX_HISTORY) {
+          newHistory.splice(0, newHistory.length - MAX_HISTORY)
+        }
         setHistory(newHistory)
         setHistoryIndex(newHistory.length - 1)
       }
@@ -963,9 +972,7 @@ export default function DictaEditorCore({
     showAlert('הצלחה', 'פעולת ניקוי ספרות נוספה לרשימה!')
   }, [savedSearches, showAlert])
 
-  useEffect(() => {
-    setToc(buildTocFromContent(content))
-  }, [content])
+  const toc = useMemo(() => buildTocFromContent(deferredContent), [deferredContent])
 
   const saveUserShortcuts = useCallback((newShortcuts) => {
     setUserShortcuts(newShortcuts)
@@ -1025,9 +1032,17 @@ export default function DictaEditorCore({
     }))
   }, [actionsMap])
 
+  // refs לערכים העדכניים כדי לרשום את מאזין המקלדת פעם אחת בלבד ולא בכל הקלדה
+  const actionsMapRef = useRef(actionsMap)
+  const userShortcutsRef = useRef(userShortcuts)
+  const showShortcutsDialogRef = useRef(showShortcutsDialog)
+  actionsMapRef.current = actionsMap
+  userShortcutsRef.current = userShortcuts
+  showShortcutsDialogRef.current = showShortcutsDialog
+
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
-      if (showShortcutsDialog) return
+      if (showShortcutsDialogRef.current) return
 
       if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return
 
@@ -1036,28 +1051,28 @@ export default function DictaEditorCore({
       if (e.altKey) modifiers.push('Alt')
       if (e.shiftKey) modifiers.push('Shift')
       if (e.metaKey) modifiers.push('Meta')
-      
+
       const code = e.code
 
       const combination = [...modifiers, code].join('+')
-      
-      const foundActionId = Object.keys(userShortcuts).find(actionId => {
-        const savedCombo = userShortcuts[actionId]
-        return savedCombo === combination
+
+      const shortcuts = userShortcutsRef.current
+      const foundActionId = Object.keys(shortcuts).find(actionId => {
+        return shortcuts[actionId] === combination
       })
 
-      if (foundActionId && actionsMap[foundActionId]) {
+      if (foundActionId && actionsMapRef.current[foundActionId]) {
         e.preventDefault()
         e.stopPropagation()
-        actionsMap[foundActionId].action()
+        actionsMapRef.current[foundActionId].action()
       }
     }
 
     window.addEventListener('keydown', handleGlobalKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', handleGlobalKeyDown, { capture: true })
-  }, [userShortcuts, actionsMap, showShortcutsDialog])
+  }, [])
 
-  const scrollToHeading = (index) => {
+  const scrollToHeading = useCallback((index) => {
     if (editMode) {
       if (!textareaRef.current || !toc[index]) return;
       
@@ -1094,10 +1109,87 @@ export default function DictaEditorCore({
         headings[index].style.backgroundColor = '';
       }, 2000);
     }
-  }
+  }, [editMode, showPreview, fontSize, toc])
 
-  return (
-    <div className="flex flex-col h-screen bg-neutral-50" dir="rtl">
+  // כפתור השמירה לא קושר את content (שמשתנה בכל הקלדה) כדי שה-header הממומואיז יישאר יציב
+  const latestContentRef = useRef(content)
+  latestContentRef.current = content
+  const handleSaveClick = useCallback(() => {
+    if (onSave) onSave(latestContentRef.current)
+  }, [onSave])
+
+  // memoization של אזורים שאינם תלויים בתוכן - מונע reconciliation שלהם בכל הקלדה
+  const tocSidebar = useMemo(() => (
+    <aside className="w-64 bg-white border-r p-4 overflow-y-auto shadow-sm">
+      <h3 className="font-bold text-lg mb-4 text-neutral-800">תוכן עניינים</h3>
+      {toc.length === 0 ? (
+        <p className="text-sm text-neutral-500">אין כותרות בספר</p>
+      ) : (
+        <ul className="space-y-2">
+          {toc.map((item, index) => (
+            <li
+              key={item.id}
+              className="cursor-pointer hover:bg-neutral-100 p-2 rounded transition-colors"
+              style={{ paddingRight: `${(item.level - 1) * 12}px` }}
+              onClick={() => scrollToHeading(index)}
+            >
+              <span className="text-sm text-neutral-700">{item.text}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </aside>
+  ), [toc, scrollToHeading])
+
+  const toolsSidebar = useMemo(() => {
+    if (!canEdit) return null
+    const toolButton = (tool, icon, label, title = label) => (
+      <button
+        onClick={() => setActiveTool(tool)}
+        className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2`}
+        title={title}
+      >
+        <span className="material-symbols-outlined text-neutral-700">{icon}</span>
+        {toolbarExpanded && <span className="text-sm text-neutral-700">{label}</span>}
+      </button>
+    )
+
+    return (
+      <aside className={`${toolbarExpanded ? 'w-56' : 'w-20'} bg-white border-l flex flex-col py-4 gap-2 overflow-y-auto shadow-sm transition-all duration-300`}>
+        {toolbarExpanded && (
+          <div className="px-4 mb-2">
+            <span className="text-sm font-medium text-neutral-700">כלי עריכה</span>
+          </div>
+        )}
+        {toolButton('createHeaders', 'title', 'יצירת כותרות')}
+        {toolButton('singleLetterHeaders', 'format_size', 'כותרות אותיות')}
+        {toolButton('changeHeading', 'format_indent_increase', 'שינוי רמת כותרת')}
+        {toolButton('punctuate', 'format_bold', 'הדגשה וניקוד')}
+        {toolButton('pageBHeader', 'find_in_page', 'כותרות עמוד ב')}
+        {toolButton('replacePageB', 'swap_horiz', 'החלפת עמוד ב')}
+        {toolButton('addPageNumber', 'auto_stories', 'מיזוג דף ועמוד')}
+        {toolButton('headerCheck', 'bug_report', 'בדיקת שגיאות', 'בדיקת שגיאות בכותרות')}
+        {toolButton('cleanText', 'cleaning_services', 'ניקוי טקסט')}
+        {toolButton('embedImage', 'image', 'הטמעת תמונה')}
+        <div className="flex-1"></div>
+        <div className="border-t pt-2 mt-2">
+          <button
+            onClick={() => setToolbarExpanded(!toolbarExpanded)}
+            className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2 w-full`}
+            title={toolbarExpanded ? 'כווץ סרגל' : 'הרחב סרגל'}
+          >
+            <span className="material-symbols-outlined text-neutral-600">
+              {toolbarExpanded ? 'chevron_right' : 'chevron_left'}
+            </span>
+            {toolbarExpanded && <span className="text-sm text-neutral-600">{toolbarExpanded ? 'כווץ' : 'הרחב'}</span>}
+          </button>
+        </div>
+      </aside>
+    )
+  }, [canEdit, toolbarExpanded])
+
+  // ה-header אינו תלוי בתוכן (השמירה דרך handleSaveClick) - ממומואיז כדי לא לרנדר ~100 כפתורים בכל הקלדה
+  const headerNode = useMemo(() => (
       <header className="glass-strong border-b border-surface-variant sticky top-0 z-40">
         <div className={singleLineHeader && headerCompact ? 'px-2 py-2' : 'container mx-auto px-4 py-3'}>
           {singleLineHeader ? (
@@ -1221,7 +1313,7 @@ export default function DictaEditorCore({
                         icon="save"
                         variant={hasUnsavedChangesOuter ? "primary" : "ghost"}
                         size="sm"
-                        onClick={() => onSave && onSave(content)}
+                        onClick={handleSaveClick}
                         loading={saving}
                         title={hasUnsavedChangesOuter ? "שמור שינויים" : "שמירה"}
                       />
@@ -1360,7 +1452,7 @@ export default function DictaEditorCore({
                       <Button
                         icon="save"
                         variant={hasUnsavedChangesOuter ? "primary" : "ghost"}
-                        onClick={() => onSave && onSave(content)}
+                        onClick={handleSaveClick}
                         loading={saving}
                         label={hasUnsavedChangesOuter ? `${saveLabel} *` : saveLabel}
                       />
@@ -1497,7 +1589,7 @@ export default function DictaEditorCore({
                       <Button
                         icon="save"
                         variant={hasUnsavedChangesOuter ? "primary" : "ghost"}
-                        onClick={() => onSave && onSave(content)}
+                        onClick={handleSaveClick}
                         loading={saving}
                         label={hasUnsavedChangesOuter ? `${saveLabel} *` : saveLabel}
                       />
@@ -1512,122 +1604,14 @@ export default function DictaEditorCore({
           )}
         </div>
       </header>
+  ), [singleLineHeader, headerCompact, headerStartElement, headerEndElement, title, canEdit, enableSpellcheck, isCompleted, editMode, textAlign, fontSize, selectedFont, hasUnsavedChangesOuter, saving, saveLabel, handleToggleEditMode, handleSaveClick])
+
+  return (
+    <div className="flex flex-col h-screen bg-neutral-50" dir="rtl">
+      {headerNode}
 
       <div className="flex flex-1 overflow-hidden">
-        {canEdit && (
-          <aside className={`${toolbarExpanded ? 'w-56' : 'w-20'} bg-white border-l flex flex-col py-4 gap-2 overflow-y-auto shadow-sm transition-all duration-300`}>
-            {toolbarExpanded && (
-              <div className="px-4 mb-2">
-                <span className="text-sm font-medium text-neutral-700">כלי עריכה</span>
-              </div>
-            )}
-            
-            <button
-              onClick={() => setActiveTool('createHeaders')}
-              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2`}
-              title="יצירת כותרות"
-            >
-              <span className="material-symbols-outlined text-neutral-700">title</span>
-              {toolbarExpanded && <span className="text-sm text-neutral-700">יצירת כותרות</span>}
-            </button>
-            
-            <button
-              onClick={() => setActiveTool('singleLetterHeaders')}
-              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2`}
-              title="כותרות אותיות"
-            >
-              <span className="material-symbols-outlined text-neutral-700">format_size</span>
-              {toolbarExpanded && <span className="text-sm text-neutral-700">כותרות אותיות</span>}
-            </button>
-            
-            <button
-              onClick={() => setActiveTool('changeHeading')}
-              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2`}
-              title="שינוי רמת כותרת"
-            >
-              <span className="material-symbols-outlined text-neutral-700">format_indent_increase</span>
-              {toolbarExpanded && <span className="text-sm text-neutral-700">שינוי רמת כותרת</span>}
-            </button>
-            
-            <button
-              onClick={() => setActiveTool('punctuate')}
-              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2`}
-              title="הדגשה וניקוד"
-            >
-              <span className="material-symbols-outlined text-neutral-700">format_bold</span>
-              {toolbarExpanded && <span className="text-sm text-neutral-700">הדגשה וניקוד</span>}
-            </button>
-            
-            <button
-              onClick={() => setActiveTool('pageBHeader')}
-              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2`}
-              title="כותרות עמוד ב"
-            >
-              <span className="material-symbols-outlined text-neutral-700">find_in_page</span>
-              {toolbarExpanded && <span className="text-sm text-neutral-700">כותרות עמוד ב</span>}
-            </button>
-            
-            <button
-              onClick={() => setActiveTool('replacePageB')}
-              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2`}
-              title="החלפת עמוד ב"
-            >
-              <span className="material-symbols-outlined text-neutral-700">swap_horiz</span>
-              {toolbarExpanded && <span className="text-sm text-neutral-700">החלפת עמוד ב</span>}
-            </button>
-
-            <button
-              onClick={() => setActiveTool('addPageNumber')}
-              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2`}
-              title="מיזוג דף ועמוד"
-            >
-              <span className="material-symbols-outlined text-neutral-700">auto_stories</span>
-              {toolbarExpanded && <span className="text-sm text-neutral-700">מיזוג דף ועמוד</span>}
-            </button>
-            
-            <button
-              onClick={() => setActiveTool('headerCheck')}
-              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2`}
-              title="בדיקת שגיאות בכותרות"
-            >
-              <span className="material-symbols-outlined text-neutral-700">bug_report</span>
-              {toolbarExpanded && <span className="text-sm text-neutral-700">בדיקת שגיאות</span>}
-            </button>
-            
-            <button
-              onClick={() => setActiveTool('cleanText')}
-              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2`}
-              title="ניקוי טקסט"
-            >
-              <span className="material-symbols-outlined text-neutral-700">cleaning_services</span>
-              {toolbarExpanded && <span className="text-sm text-neutral-700">ניקוי טקסט</span>}
-            </button>
-            
-            <button
-              onClick={() => setActiveTool('embedImage')}
-              className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2`}
-              title="הטמעת תמונה"
-            >
-              <span className="material-symbols-outlined text-neutral-700">image</span>
-              {toolbarExpanded && <span className="text-sm text-neutral-700">הטמעת תמונה</span>}
-            </button>
-            
-            <div className="flex-1"></div>
-            
-            <div className="border-t pt-2 mt-2">
-              <button
-                onClick={() => setToolbarExpanded(!toolbarExpanded)}
-                className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2 w-full`}
-                title={toolbarExpanded ? "כווץ סרגל" : "הרחב סרגל"}
-              >
-                <span className="material-symbols-outlined text-neutral-600">
-                  {toolbarExpanded ? 'chevron_right' : 'chevron_left'}
-                </span>
-                {toolbarExpanded && <span className="text-sm text-neutral-600">{toolbarExpanded ? 'כווץ' : 'הרחב'}</span>}
-              </button>
-            </div>
-          </aside>
-        )}
+        {toolsSidebar}
 
         <main ref={mainRef} className="flex-1 overflow-auto bg-white flex">
           {isPending ? (
@@ -1761,25 +1745,7 @@ export default function DictaEditorCore({
           )}
         </main>
 
-        <aside className="w-64 bg-white border-r p-4 overflow-y-auto shadow-sm">
-          <h3 className="font-bold text-lg mb-4 text-neutral-800">תוכן עניינים</h3>
-          {toc.length === 0 ? (
-            <p className="text-sm text-neutral-500">אין כותרות בספר</p>
-          ) : (
-            <ul className="space-y-2">
-              {toc.map((item, index) => (
-                <li
-                  key={item.id}
-                  className="cursor-pointer hover:bg-neutral-100 p-2 rounded transition-colors"
-                  style={{ paddingRight: `${(item.level - 1) * 12}px` }}
-                  onClick={() => scrollToHeading(index)}
-                >
-                  <span className="text-sm text-neutral-700">{item.text}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </aside>
+        {tocSidebar}
       </div>
 
       <CreateHeadersModal
