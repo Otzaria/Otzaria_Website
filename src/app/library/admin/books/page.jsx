@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import AddBookDialog from '@/components/admin/AddBookDialog'
+import BookOcrDialog from '@/components/admin/BookOcrDialog'
 import EditBookInfoDialog from '@/components/admin/EditBookInfoDialog'
 import EditGlobalInstructionsDialog from '@/components/admin/EditGlobalInstructionsDialog'
 import EditCategoriesDialog from '@/components/admin/EditCategoriesDialog'
@@ -30,6 +31,7 @@ export default function AdminBooksPage() {
   const [isMerging, setIsMerging] = useState(false)
 
   const [downloadingPdfId, setDownloadingPdfId] = useState(null)
+  const [ocrBook, setOcrBook] = useState(null)
 
   const [showNotifyDialog, setShowNotifyDialog] = useState(false)
   const [bookToToggle, setBookToToggle] = useState(null)
@@ -729,6 +731,15 @@ export default function AdminBooksPage() {
                                 {downloadingPdfId === book.id ? 'מכין PDF…' : 'הורד PDF מלא'}
                             </button>
 
+                            <button
+                                onClick={() => setOcrBook(book)}
+                                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-feature-50 text-feature-700 hover:bg-feature-100 rounded-lg text-sm font-medium transition-colors mb-1"
+                                title="הרץ OCR על כל עמודי הספר (Gemini או OCRWin) ברקע"
+                            >
+                                <span className="material-symbols-outlined text-sm">document_scanner</span>
+                                OCR לספר שלם
+                            </button>
+
                             {isPersonal ? (
                                 <div className="grid grid-cols-2 gap-2">
                                     <Link
@@ -814,6 +825,13 @@ export default function AdminBooksPage() {
             />
         )}
         </div>
+
+        {ocrBook && (
+            <BookOcrDialog
+            book={ocrBook}
+            onClose={() => setOcrBook(null)}
+            />
+        )}
 
         {renamingBook && (
             <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200 h-screen w-screen">
