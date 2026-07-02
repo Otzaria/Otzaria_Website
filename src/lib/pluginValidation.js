@@ -704,8 +704,19 @@ export async function validatePluginArchive(buffer) {
   // שם התוסף וכותרת ה-toolTab חייבים להיות זהים — אחרת התוסף יוצג בחנות בשם אחד
   // אבל בלשונית בתוך התוכנה בשם אחר, וזה מבלבל למשתמש.
   const manifestName = typeof manifest.name === 'string' ? manifest.name.trim() : ''
+  // שם התוסף מוצג בראש לשונית התוסף ב"כלים" — מעבר ל-14 תווים גולש מהכרטיסייה.
+  if (manifestName.length > 14) {
+    errors.push('שם התוסף חייב להכיל לכל היותר 14 תווים')
+  }
+  // description הוא התיאור הקצר שמוצג בכרטיס התוסף בחנות — מוגבל ל-150 תווים.
+  const manifestDescription = typeof manifest.description === 'string' ? manifest.description.trim() : ''
+  if (manifestDescription.length > 150) {
+    errors.push('תיאור קצר חייב להכיל לכל היותר 150 תווים')
+  }
+  // title שהוגדר במפורש (כולל מחרוזת ריקה — שתציג טאב בלי טקסט) חייב להיות
+  // זהה ל-name. title חסר (undefined) נופל לברירת המחדל (name) ולכן מדולג.
   const toolTabTitle = manifest.contributes?.toolTab?.title
-  if (manifestName && typeof toolTabTitle === 'string' && toolTabTitle.trim() !== '') {
+  if (manifestName && typeof toolTabTitle === 'string') {
     const titleNorm = toolTabTitle.trim()
     if (titleNorm !== manifestName) {
       errors.push(

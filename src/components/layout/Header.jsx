@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useSession, signOut } from 'next-auth/react'
 import { getAvatarColor, getInitial } from '@/lib/avatar-colors'
 import { LIBRARY_NAV_LINKS } from '@/lib/navigation-constants'
+import { hasAnyAdminAccess } from '@/lib/roles'
 import { useState, useEffect } from 'react'
 
 export default function Header() {
@@ -54,7 +55,7 @@ export default function Header() {
           
           {session ? (
             <div className="flex items-center gap-2 lg:gap-3 xl:gap-4">
-              {(session.user.role === 'admin' || session.user.role === 'admin_plugins' || session.user.role === 'admin_books') && (
+              {hasAnyAdminAccess(session.user.role) && (
                 <Link href="/library/admin" className="flex items-center gap-2 text-accent hover:text-accent/80 transition-colors relative font-medium">
                   <span className="material-symbols-outlined">admin_panel_settings</span>
                   <span>ניהול</span>

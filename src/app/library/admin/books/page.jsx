@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import AddBookDialog from '@/components/admin/AddBookDialog'
+import BookOcrDialog from '@/components/admin/BookOcrDialog'
 import EditBookInfoDialog from '@/components/admin/EditBookInfoDialog'
 import EditGlobalInstructionsDialog from '@/components/admin/EditGlobalInstructionsDialog'
 import EditCategoriesDialog from '@/components/admin/EditCategoriesDialog'
@@ -28,6 +29,9 @@ export default function AdminBooksPage() {
   const [mergedBookName, setMergedBookName] = useState('')
   const [isMergedHidden, setIsMergedHidden] = useState(false)
   const [isMerging, setIsMerging] = useState(false)
+
+  const [downloadingPdfId, setDownloadingPdfId] = useState(null)
+  const [ocrBook, setOcrBook] = useState(null)
 
   const [showNotifyDialog, setShowNotifyDialog] = useState(false)
   const [bookToToggle, setBookToToggle] = useState(null)
@@ -283,6 +287,40 @@ export default function AdminBooksPage() {
         }
     } catch (e) {
         showAlert('שגיאה', 'תקלה בתקשורת עם השרת');
+    }
+  };
+
+  const handleDownloadPdf = async (book) => {
+    if (downloadingPdfId) return;
+    setDownloadingPdfId(book.id);
+    try {
+        const response = await fetch(`/api/admin/books/export-pdf?bookId=${book.id}`);
+
+        if (!response.ok) {
+            let message = 'נסה שוב מאוחר יותר';
+            try {
+                const result = await response.json();
+                message = result.error || message;
+            } catch (_) {}
+            showAlert('שגיאה', 'שגיאה בהפקת ה-PDF: ' + message);
+            return;
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+
+        link.href = url;
+        link.download = `${book.name}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+    } catch (e) {
+        showAlert('שגיאה', 'תקלה בתקשורת עם השרת');
+    } finally {
+        setDownloadingPdfId(null);
     }
   };
 
@@ -681,6 +719,27 @@ export default function AdminBooksPage() {
                                 </button>
                             )}
 
+                            <button
+                                onClick={() => handleDownloadPdf(book)}
+                                disabled={downloadingPdfId === book.id}
+                                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-danger-50 text-danger-700 hover:bg-danger-100 rounded-lg text-sm font-medium transition-colors mb-1 disabled:opacity-60 disabled:cursor-not-allowed"
+                                title="הורד את הספר המלא כקובץ PDF (מתמונות העמודים)"
+                            >
+                                <span className={`material-symbols-outlined text-sm ${downloadingPdfId === book.id ? 'animate-spin' : ''}`}>
+                                    {downloadingPdfId === book.id ? 'progress_activity' : 'picture_as_pdf'}
+                                </span>
+                                {downloadingPdfId === book.id ? 'מכין PDF…' : 'הורד PDF מלא'}
+                            </button>
+
+                            <button
+                                onClick={() => setOcrBook(book)}
+                                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-feature-50 text-feature-700 hover:bg-feature-100 rounded-lg text-sm font-medium transition-colors mb-1"
+                                title="הרץ OCR על כל עמודי הספר (Gemini או OCRWin) ברקע"
+                            >
+                                <span className="material-symbols-outlined text-sm">document_scanner</span>
+                                OCR לספר שלם
+                            </button>
+
                             {isPersonal ? (
                                 <div className="grid grid-cols-2 gap-2">
                                     <Link
@@ -766,6 +825,13 @@ export default function AdminBooksPage() {
             />
         )}
         </div>
+
+        {ocrBook && (
+            <BookOcrDialog
+            book={ocrBook}
+            onClose={() => setOcrBook(null)}
+            />
+        )}
 
         {renamingBook && (
             <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200 h-screen w-screen">

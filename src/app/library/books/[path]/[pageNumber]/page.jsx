@@ -20,7 +20,7 @@ import { useAutoSave } from '@/hooks/useAutoSave'
 import { useOCR } from '@/hooks/useOCR'
 import { getTextareaCaretTop } from '@/lib/editorUtils'
 import { findNextWholeWordInTextarea as findNextWholeWordInTextareaUtil } from '@/lib/hebrewWordUtils'
-import { hasBooksAccess } from '@/lib/roles'
+import { hasBookLibraryAccess } from '@/lib/roles'
 
 // הגדרת ברירת מחדל המבוססת על מקשים פיזיים (Codes)
 const DEFAULT_SHORTCUTS = {
@@ -283,7 +283,7 @@ export default function EditPage() {
            if (foundPage) {
              
                const currentUserId = session?.user?._id || session?.user?.id;
-               const isAdmin = hasBooksAccess(session?.user?.role);
+               const isAdmin = hasBookLibraryAccess(session?.user?.role);
 
                const isClaimedByMe = foundPage.claimedById === currentUserId;
              

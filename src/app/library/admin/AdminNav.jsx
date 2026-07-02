@@ -5,9 +5,9 @@ import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 
 const ALL_TABS = [
-  { id: 'dashboard', label: 'דשבורד', icon: 'analytics', href: '/library/admin', roles: ['admin', 'admin_books', 'admin_plugins'] },
+  { id: 'dashboard', label: 'דשבורד', icon: 'analytics', href: '/library/admin', roles: ['admin', 'admin_books', 'admin_plugins', 'admin_books_only'] },
   { id: 'users', label: 'משתמשים', icon: 'group', href: '/library/admin/users', roles: ['admin'] },
-  { id: 'books', label: 'ספרים', icon: 'menu_book', href: '/library/admin/books', roles: ['admin', 'admin_books'] },
+  { id: 'books', label: 'ספרים', icon: 'menu_book', href: '/library/admin/books', roles: ['admin', 'admin_books', 'admin_books_only'] },
   { id: 'dicta-books', label: 'ספרי דיקטה', icon: 'edit_document', href: '/library/admin/dicta-books', roles: ['admin', 'admin_books'] },
   { id: 'uploads', label: 'העלאות', icon: 'upload_file', href: '/library/admin/uploads', roles: ['admin', 'admin_books'] },
   { id: 'plugins', label: 'תוספים', icon: 'extension', href: '/library/admin/plugins', roles: ['admin', 'admin_plugins'] },

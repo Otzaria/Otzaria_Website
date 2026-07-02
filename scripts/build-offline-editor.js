@@ -37,6 +37,7 @@ const REACT_RUNTIME_PATHS = [
   ['react', 'node_modules/react/cjs/react.production.js'],
   ['react-dom', 'node_modules/react-dom/cjs/react-dom.production.js'],
   ['react-dom/client', 'node_modules/react-dom/cjs/react-dom-client.production.js'],
+  ['dompurify', 'node_modules/dompurify/dist/purify.cjs.js'],
 ];
 
 const MATERIAL_SYMBOLS_GOOGLE_CSS_URL =
@@ -584,6 +585,7 @@ function __offlineRequire(moduleId) {
 const React = __offlineRequire('react');
 const ReactDOM = __offlineRequire('react-dom');
 const ReactDOMClient = __offlineRequire('react-dom/client');
+const DOMPurify = __offlineRequire('dompurify');
 const { useState, useEffect, useRef, useMemo, useCallback, useContext, useTransition, createContext } = React;
 const { createPortal } = ReactDOM;\nconst AnimatePresence = ({ children }) => React.createElement(React.Fragment, null, children);\nconst motion = new Proxy({}, { get: (_, tag) => (props) => React.createElement(tag, props, props && props.children) });
 `;

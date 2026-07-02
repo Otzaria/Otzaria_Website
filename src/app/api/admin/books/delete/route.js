@@ -6,13 +6,13 @@ import fs from 'fs-extra';
 import path from 'path';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { hasBooksAccess } from '@/lib/roles';
+import { hasBookLibraryAccess } from '@/lib/roles';
 
 export async function DELETE(request) {
     try {
         // 1. אבטחה: בדיקת הרשאות אדמין
         const session = await getServerSession(authOptions);
-        if (!session || !hasBooksAccess(session.user?.role)) {
+        if (!session || !hasBookLibraryAccess(session.user?.role)) {
             return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
         }
 

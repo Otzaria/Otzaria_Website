@@ -222,17 +222,20 @@ export default function AdminUsersPage() {
                         <option value="admin">מנהל כללי</option>
                         <option value="admin_plugins">מנהל תוספים</option>
                         <option value="admin_books">מנהל ספרים</option>
+                        <option value="admin_books_only">מנהל ספרים בלבד</option>
                       </select>
                     ) : (
                       <span className={`px-2 py-1 rounded text-xs font-bold ${
                         user.role === 'admin' ? 'bg-feature-100 text-feature-800' :
                         user.role === 'admin_plugins' ? 'bg-info-100 text-info-800' :
                         user.role === 'admin_books' ? 'bg-success-100 text-success-800' :
+                        user.role === 'admin_books_only' ? 'bg-aqua-100 text-aqua-800' :
                         'bg-neutral-100 text-neutral-800'
                       }`}>
                         {user.role === 'admin' ? 'מנהל כללי' :
                          user.role === 'admin_plugins' ? 'מנהל תוספים' :
-                         user.role === 'admin_books' ? 'מנהל ספרים' : 'משתמש'}
+                         user.role === 'admin_books' ? 'מנהל ספרים' :
+                         user.role === 'admin_books_only' ? 'מנהל ספרים בלבד' : 'משתמש'}
                       </span>
                     )}
                   </td>

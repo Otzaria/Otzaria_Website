@@ -3,7 +3,7 @@ import mongoose from 'mongoose'
 const PluginSchema = new mongoose.Schema(
   {
     // מידע בסיסי
-    name: { type: String, required: true, trim: true, maxlength: 100 },
+    name: { type: String, required: true, trim: true, maxlength: 14 },
     slug: {
       type: String,
       required: true,

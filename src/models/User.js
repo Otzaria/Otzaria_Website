@@ -4,7 +4,7 @@ const UserSchema = new mongoose.Schema({
   name: { type: String, required: true, unique: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  role: { type: String, enum: ['user', 'admin', 'admin_plugins', 'admin_books'], default: 'user' },
+  role: { type: String, enum: ['user', 'admin', 'admin_plugins', 'admin_books', 'admin_books_only'], default: 'user' },
   points: { type: Number, default: 0 },
   acceptReminders: { type: Boolean, default: false },
   resetPasswordToken: { type: String },

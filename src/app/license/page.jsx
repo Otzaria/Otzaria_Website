@@ -46,7 +46,8 @@ export default function LicensePage() {
                 <h2 className="text-2xl font-bold text-on-surface mb-4">מבוא</h2>
                 <p>
                   פרויקט "אוצריא" הוא מיזם שמטרתו הנגשת ספרי קודש לציבור.
-                  הספרייה והתוכנה מופצים תחת רישיון פתוח כדי לאפשר שימוש רחב ככל הניתן.
+                  התוכנה מופצת תחת <strong>Personal Use License 1.0</strong> — רישיון שימוש אישי בלבד.
+                  הספרייה (הספרים והתכנים) מופצת תחת רישיון נפרד — <a href="/library/license" className="text-primary hover:underline">לפרטים לחצו כאן</a>.
                 </p>
               </div>
 
@@ -66,7 +67,7 @@ export default function LicensePage() {
                     <div className="text-danger-500 text-center py-4">
                       <p>לא ניתן היה לטעון את הרישיון.</p>
                       <a 
-                        href="https://github.com/Otzaria/otzaria-library/blob/main/LICENSE"
+                        href="https://github.com/Otzaria/otzaria/blob/main/LICENSE"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="underline"
@@ -86,7 +87,7 @@ export default function LicensePage() {
                    <p>
                     לצפייה בקובץ הרישיון המקורי והעדכני ב-GitHub:{' '}
                     <a 
-                      href="https://github.com/Otzaria/otzaria-library/blob/main/LICENSE"
+                      href="https://github.com/Otzaria/otzaria/blob/main/LICENSE"
                       target="_blank" 
                       rel="noopener noreferrer"
                       className="text-primary font-bold hover:underline"
