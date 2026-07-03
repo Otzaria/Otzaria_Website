@@ -264,7 +264,7 @@ export default function EditingToolsPage() {
 
                     <div className="flex flex-wrap gap-3">
                       <a
-                        href="https://otzariausercontent.serveftp.com/forum/assets/uploads/files/1780575153786-%D7%A2%D7%95%D7%A8%D7%9A-%D7%9E%D7%A0%D7%97%D7%9D-15.dotm"
+                        href="https://github.com/Otzaria/Orech-Menachem/releases/latest/download/Orech-Menachem.dotm"
                         className="inline-flex items-center gap-2 px-6 py-3 bg-secondary text-on-primary rounded-lg font-bold hover:bg-accent transition-colors"
                       >
                         <span className="material-symbols-outlined">download</span>
