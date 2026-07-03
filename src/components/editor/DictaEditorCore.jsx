@@ -93,8 +93,10 @@ function locateTextFlexible(content, phrase) {
   const exactIndex = content.indexOf(cleaned)
   if (exactIndex !== -1) return { start: exactIndex, end: exactIndex + cleaned.length }
 
-  // סדר ההחלפות חשוב: & לפני החלפות שמוסיפות &quot;/&#39; לתבנית
-  const tokens = cleaned.split(' ').map(token =>
+  // סדר ההחלפות חשוב: & לפני החלפות שמוסיפות &quot;/&#39; לתבנית.
+  // תקרת 15 מילים — מגנה מפני backtracking קטלוני בקטע ארוך, ו-15 המילים
+  // הראשונות כמעט תמיד ייחודיות מספיק לאיתור.
+  const tokens = cleaned.split(' ').slice(0, 15).map(token =>
     token
       .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       .replace(/&/g, '&(?:amp;)?')

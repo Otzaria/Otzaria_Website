@@ -13,8 +13,9 @@ import LibraryBook from '@/models/LibraryBook';
  */
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
-  const title = (searchParams.get('title') || searchParams.get('q') || '').trim();
-  const text = (searchParams.get('text') || searchParams.get('find') || '').trim();
+  // תקרות אורך על קלט משתמש — מגנות מפני regex ארוך מדי במסד ומ-URL מנופח
+  const title = (searchParams.get('title') || searchParams.get('q') || '').trim().slice(0, 150);
+  const text = (searchParams.get('text') || searchParams.get('find') || '').trim().slice(0, 1000);
 
   const listUrl = new URL('/library/dicta-edit', req.url);
   if (title) listUrl.searchParams.set('q', title);
