@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
-import { useParams, useRouter, usePathname } from 'next/navigation'
+import { useState, useEffect, useMemo, Suspense } from 'react'
+import { useParams, useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import Button from '@/components/ui/Button'
@@ -12,13 +12,16 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { applyHunks } from '@/lib/dicta/text-diff'
 import { EDIT_TYPES } from '@/lib/dicta/edit-constants'
 
-export default function LibraryEditorPage() {
+function LibraryEditorContent() {
   const params = useParams()
   const router = useRouter()
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const { data: session, status } = useSession()
   const { showAlert } = useDialog()
   const bookId = params?.bookId
+  // קטע למיקוד אוטומטי — מגיע מקישור עמוק (למשל מדיווח שגיאה באוצריא)
+  const initialFind = searchParams.get('find') || ''
 
   const [book, setBook] = useState(null)
   const [seedContent, setSeedContent] = useState('')
@@ -59,7 +62,10 @@ export default function LibraryEditorPage() {
   useEffect(() => {
     if (status === 'loading') return
     if (status === 'unauthenticated') {
-      router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(pathname)}`)
+      // שימור ה-query (למשל ?find=קטע מדיווח) כדי שהמיקוד לא יאבד אחרי ההתחברות
+      const query = searchParams.toString()
+      const callbackUrl = query ? `${pathname}?${query}` : pathname
+      router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(callbackUrl)}`)
       return
     }
     if (bookId) loadBook()
@@ -166,6 +172,7 @@ export default function LibraryEditorPage() {
 
       <DictaEditorCore
         initialContent={seedContent}
+        initialFind={initialFind}
         title={book.title}
         canEdit={canEdit}
         isCompleted={false}
@@ -188,6 +195,15 @@ export default function LibraryEditorPage() {
         />
       )}
     </>
+  )
+}
+
+// עטיפת Suspense — נדרשת ל-useSearchParams ב-Next.js כדי למנוע שגיאת build
+export default function LibraryEditorPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><LoadingSpinner message="טוען ספר..." /></div>}>
+      <LibraryEditorContent />
+    </Suspense>
   )
 }
 
