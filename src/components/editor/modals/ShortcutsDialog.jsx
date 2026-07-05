@@ -1,22 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useDialog } from '@/components/providers/DialogContext';
-
-// פונקציית עזר להצגת מקשים בצורה יפה
-const formatKey = (code) => {
-  if (!code) return '';
-  return code
-    .replace('Key', '')
-    .replace('Digit', '')
-    .replace('Control', 'Ctrl')
-    .replace('Shift', 'Shift')
-    .replace('Alt', 'Alt')
-    .replace('ArrowUp', '↑')
-    .replace('ArrowDown', '↓')
-    .replace('ArrowLeft', '←')
-    .replace('ArrowRight', '→')
-    .replace('Enter', 'Enter')
-    .replace('Space', 'Space');
-};
+import { formatShortcut as formatKey } from '@/lib/shortcuts';
 
 export default function ShortcutsDialog({ isOpen, onClose, availableActions, shortcuts, saveShortcuts, resetToDefaults }) {
   const { showConfirm } = useDialog();

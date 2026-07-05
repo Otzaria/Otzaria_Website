@@ -1398,6 +1398,7 @@ export default function EditPage() {
         onToggleFullScreen={toggleFullScreen}
         openShortcuts={() => setShowShortcutsDialog(true)}
         onOpenImageToText={() => setShowImageToText(true)}
+        userShortcuts={userShortcuts}
       />
 
       <div className={`flex-1 flex flex-col overflow-hidden ${isFullScreen ? 'p-0' : 'p-6'}`}>
