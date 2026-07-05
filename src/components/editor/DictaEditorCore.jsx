@@ -81,9 +81,42 @@ function buildTocFromContent(content) {
   return tocItems
 }
 
-export default function DictaEditorCore({ 
-  initialContent = '', 
-  title = 'ללא שם', 
+/**
+ * מאתר קטע מקישור עמוק (?find=) בתוכן הספר. הקטע המדווח מנוקה מתגי HTML
+ * בעוד התוכן מכיל אותם, לכן אחרי התאמה מדויקת מנסים regex סובלני: תגים,
+ * &nbsp; וישויות HTML בין/בתוך מילים, וגרשיים עבריים מול ASCII.
+ */
+function locateTextFlexible(content, phrase) {
+  const cleaned = String(phrase || '').replace(/\s+/g, ' ').trim()
+  if (!cleaned || !content) return null
+
+  const exactIndex = content.indexOf(cleaned)
+  if (exactIndex !== -1) return { start: exactIndex, end: exactIndex + cleaned.length }
+
+  // סדר ההחלפות חשוב: & לפני החלפות שמוסיפות &quot;/&#39; לתבנית.
+  // תקרת 15 מילים — מגנה מפני backtracking קטלוני בקטע ארוך, ו-15 המילים
+  // הראשונות כמעט תמיד ייחודיות מספיק לאיתור.
+  const tokens = cleaned.split(' ').slice(0, 15).map(token =>
+    token
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      .replace(/&/g, '&(?:amp;)?')
+      .replace(/["״]/g, '(?:["״]|&quot;)')
+      .replace(/['׳]/g, "(?:['׳]|&#39;)")
+  )
+  try {
+    const tolerant = new RegExp(tokens.join('(?:\\s|&nbsp;|<[^>]*>)+'))
+    const match = tolerant.exec(content)
+    if (match) return { start: match.index, end: match.index + match[0].length }
+  } catch (e) {
+    console.warn('locateTextFlexible: invalid pattern', e)
+  }
+  return null
+}
+
+export default function DictaEditorCore({
+  initialContent = '',
+  initialFind = '',
+  title = 'ללא שם',
   canEdit = true, 
   isCompleted = false,
   onSave, 
@@ -159,6 +192,40 @@ export default function DictaEditorCore({
     setHistory([{ content: initialContent, selection: { start: 0, end: 0 } }])
     setHistoryIndex(0)
   }, [initialContent])
+
+  // מיקוד אוטומטי בקטע שהגיע בקישור עמוק (?find=) — פעם אחת בטעינה:
+  // מאתרים את הקטע, עוברים למצב עריכה, והאפקט השני (תלוי editMode) מסמן וגולל.
+  const initialFindHandledRef = useRef(false)
+  const pendingInitialSelectionRef = useRef(null)
+  useEffect(() => {
+    if (initialFindHandledRef.current || !initialFind || !initialContent) return
+    initialFindHandledRef.current = true
+    if (!canEdit) return
+    const match = locateTextFlexible(initialContent, initialFind)
+    if (!match) {
+      showAlert('הקטע לא אותר', 'הקטע מהדיווח לא נמצא בגרסה הנוכחית של הספר — ייתכן שכבר תוקן. ניתן לחפש ידנית דרך "חיפוש והחלפה".')
+      return
+    }
+    pendingInitialSelectionRef.current = match
+    setEditMode(true)
+  }, [initialFind, initialContent, canEdit, showAlert])
+
+  useEffect(() => {
+    if (!editMode || !pendingInitialSelectionRef.current) return
+    const frame = window.requestAnimationFrame(() => {
+      const textarea = textareaRef.current
+      const sel = pendingInitialSelectionRef.current
+      if (!textarea || !sel) return
+      pendingInitialSelectionRef.current = null
+      textarea.focus()
+      textarea.setSelectionRange(sel.start, sel.end)
+      const computedLineHeight = Number.parseFloat(window.getComputedStyle(textarea).lineHeight)
+      const lineHeight = Number.isFinite(computedLineHeight) ? computedLineHeight : 24
+      const caretTop = getTextareaCaretTop(textarea, sel.start)
+      textarea.scrollTop = Math.max(0, caretTop - (textarea.clientHeight / 2) + lineHeight)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [editMode])
 
   useEffect(() => {
     setHasUnsavedChanges(content !== initialContent)

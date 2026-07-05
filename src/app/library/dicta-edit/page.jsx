@@ -19,6 +19,8 @@ function LibraryEditSpaceContent() {
   const [loading, setLoading] = useState(true)
   // אתחול שדה החיפוש משם הספר שנשלח ב-URL (פרמטר q), למשל מאוצריא
   const [searchTerm, setSearchTerm] = useState(searchParams.get('q') || '')
+  // קטע למיקוד שהגיע מקישור עמוק שנפל לרשימה (עמימות בשם) — מועבר הלאה לעורך
+  const findParam = searchParams.get('find') || ''
   const [filterCategory, setFilterCategory] = useState('all')
   const [syncing, setSyncing] = useState(false)
   const [pushing, setPushing] = useState(false)
@@ -183,7 +185,7 @@ function LibraryEditSpaceContent() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filtered.map((book) => (
-                <Link key={book._id} href={`/library/dicta-edit/${book._id}`}
+                <Link key={book._id} href={`/library/dicta-edit/${book._id}${findParam ? `?find=${encodeURIComponent(findParam)}` : ''}`}
                   className="group bg-white rounded-2xl border border-neutral-cool-200 p-6 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/5 transition-all flex flex-col">
                   <div className="flex justify-between items-start mb-3">
                     {book.category && (
