@@ -86,19 +86,21 @@ export async function GET(request) {
       const rotation = Number(doc.rotation) || 0;
       let cropW = 0;
       let cropH = 0;
-      let cropSource = fsPath; // string או Buffer
+      // אובייקט sharp אחד לעמוד; כל חיתוך משתמש ב-clone() כדי לא לפענח את התמונה מחדש לכל שורה
+      let pageSharp;
       try {
         if (rotation) {
           const rotatedBuf = await sharp(fsPath)
             .rotate(rotation, { background: '#ffffff' })
             .png()
             .toBuffer();
-          const rmeta = await sharp(rotatedBuf).metadata();
-          cropSource = rotatedBuf;
+          pageSharp = sharp(rotatedBuf);
+          const rmeta = await pageSharp.metadata();
           cropW = rmeta.width || 0;
           cropH = rmeta.height || 0;
         } else {
-          const meta = await sharp(fsPath).metadata();
+          pageSharp = sharp(fsPath);
+          const meta = await pageSharp.metadata();
           cropW = meta.width || 0;
           cropH = meta.height || 0;
         }
@@ -139,7 +141,7 @@ export async function GET(request) {
 
         let cropBuf;
         try {
-          cropBuf = await sharp(cropSource).extract({ left, top, width, height }).png().toBuffer();
+          cropBuf = await pageSharp.clone().extract({ left, top, width, height }).png().toBuffer();
         } catch (e) {
           acc.rejected.push(`${manifestPath}\t\tcrop_failed:${e.message}`);
           acc.rejectedCount += 1;
