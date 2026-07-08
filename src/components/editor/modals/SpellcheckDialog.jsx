@@ -8,6 +8,42 @@ import { useLoading } from '@/components/providers/LoadingContext'
 const HEBREW_CHARS = "\\u0590-\\u05FF"
 const MISSPELLINGS_LIMIT = 1500
 const DEFAULT_SUGGESTION_LIMIT = 8
+const DIALOG_WIDTH = 520
+const POSITION_STORAGE_KEY = 'spellcheckDialogPosition'
+
+function getDefaultPosition() {
+  const x = Math.max(16, window.innerWidth - DIALOG_WIDTH - 24)
+  return { x, y: 96 }
+}
+
+// שמירת המיקום ב-localStorage כדי שיישמר בין דפים, ספרים וטעינות מחדש.
+// המיקום נצמד לגבולות החלון הנוכחי כדי שלא ייפתח מחוץ למסך.
+function loadSavedPosition() {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(POSITION_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (typeof parsed?.x !== 'number' || typeof parsed?.y !== 'number') return null
+    const maxX = Math.max(16, window.innerWidth - DIALOG_WIDTH - 24)
+    const maxY = Math.max(16, window.innerHeight - 80)
+    return {
+      x: Math.min(Math.max(16, parsed.x), maxX),
+      y: Math.min(Math.max(16, parsed.y), maxY),
+    }
+  } catch {
+    return null
+  }
+}
+
+function savePosition(position) {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify(position))
+  } catch {
+    // ignore (מצב פרטי / מכסת אחסון)
+  }
+}
 
 function normalizeHebrew(text) {
   if (!text) return ''
@@ -68,9 +104,7 @@ export default function SpellcheckDialog({
   useEffect(() => {
     if (isOpen && typeof window !== 'undefined') {
       if (position.x === 0 && position.y === 0) {
-        const width = 520
-        const x = Math.max(16, window.innerWidth - width - 24)
-        setPosition({ x, y: 96 })
+        setPosition(loadSavedPosition() || getDefaultPosition())
       }
     }
   }, [isOpen, position.x, position.y])
@@ -83,7 +117,13 @@ export default function SpellcheckDialog({
         y: e.clientY - dragStartOffset.current.y,
       })
     }
-    const handleMouseUp = () => setIsDragging(false)
+    const handleMouseUp = () => {
+      setIsDragging(false)
+      setPosition(current => {
+        savePosition(current)
+        return current
+      })
+    }
 
     if (isDragging) {
       window.addEventListener('mousemove', handleMouseMove)

@@ -1,6 +1,43 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 
+const DIALOG_WIDTH = 400
+const POSITION_STORAGE_KEY = 'findReplaceDialogPosition'
+
+function getDefaultPosition() {
+  const startX = window.innerWidth > 800 ? (window.innerWidth / 2) : 20
+  return { x: startX, y: 100 }
+}
+
+// שמירת המיקום ב-localStorage כדי שיישמר בין דפים, ספרים וטעינות מחדש.
+// המיקום נצמד לגבולות החלון הנוכחי כדי שלא ייפתח מחוץ למסך.
+function loadSavedPosition() {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(POSITION_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (typeof parsed?.x !== 'number' || typeof parsed?.y !== 'number') return null
+    const maxX = Math.max(16, window.innerWidth - DIALOG_WIDTH - 24)
+    const maxY = Math.max(16, window.innerHeight - 80)
+    return {
+      x: Math.min(Math.max(16, parsed.x), maxX),
+      y: Math.min(Math.max(16, parsed.y), maxY),
+    }
+  } catch {
+    return null
+  }
+}
+
+function savePosition(position) {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify(position))
+  } catch {
+    // ignore (מצב פרטי / מכסת אחסון)
+  }
+}
+
 export default function FindReplaceDialog({
   isOpen,
   onClose,
@@ -36,8 +73,7 @@ export default function FindReplaceDialog({
   useEffect(() => {
     if (isOpen && typeof window !== 'undefined') {
         if (position.x === 100 && position.y === 100) {
-             const startX = window.innerWidth > 800 ? (window.innerWidth / 2) : 20;
-             setPosition({ x: startX, y: 100 })
+             setPosition(loadSavedPosition() || getDefaultPosition())
         }
     }
   // position נקבע בתוך האפקט; מוחרג למניעת לולאה
@@ -57,6 +93,10 @@ export default function FindReplaceDialog({
 
     const handleMouseUp = () => {
       setIsDragging(false)
+      setPosition(current => {
+        savePosition(current)
+        return current
+      })
     }
 
     if (isDragging) {
