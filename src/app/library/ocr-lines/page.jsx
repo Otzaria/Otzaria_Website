@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Header from '@/components/layout/Header'
@@ -27,8 +27,8 @@ const RULES = [
 const SCRIPT_LABELS = { square: 'מרובע', rashi: 'רש״י' }
 
 // שורת תמלול בודדת: תמונה מימין, הזנת טקסט משמאל. מנהלת את הטקסט שלה מקומית,
-// כך שהחלפת שורה אחרת בדף אינה מרנדרת אותה מחדש.
-function LineRow({ line, onSave, onOpenContext }) {
+// ועטופה ב-memo (עם props יציבים מהאב) — שינוי בדף או בשורה אחרת לא מרנדר אותה.
+const LineRow = memo(function LineRow({ line, onSave, onOpenContext }) {
   const [text, setText] = useState('')
   const [script, setScript] = useState(line.scriptType || 'square')
   const [saving, setSaving] = useState(false)
@@ -132,7 +132,7 @@ function LineRow({ line, onSave, onOpenContext }) {
       </div>
     </div>
   )
-}
+})
 
 export default function OcrLinesPage() {
   const { data: session, status } = useSession()
@@ -173,14 +173,21 @@ export default function OcrLinesPage() {
     }
   }, [status, session, router, load])
 
+  // הרשימה הנוכחית ב-ref — כך handleSave נשאר רפרנס יציב (useCallback ללא תלות
+  // ב-lines), וה-memo של LineRow באמת מונע רינדור של שורות שלא השתנו.
+  const linesRef = useRef(lines)
+  useEffect(() => {
+    linesRef.current = lines
+  }, [lines])
+
   // שמירה: השורה ששמורה יוצאת מהדף ובמקומה נכנסת חלופית מהשרת — שאר השורות
-  // אינן מתרנדרות מחדש (key לפי id שומר עליהן mounted).
-  const handleSave = async (line, text, scriptType) => {
+  // אינן מתרנדרות מחדש (key לפי id + memo שומרים עליהן).
+  const handleSave = useCallback(async (line, text, scriptType) => {
     try {
       const res = await fetch(`/api/ocr-lines/${line.id}/save`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, scriptType, excludeIds: lines.map((l) => l.id) }),
+        body: JSON.stringify({ text, scriptType, excludeIds: linesRef.current.map((l) => l.id) }),
       })
       const data = await res.json()
 
@@ -206,7 +213,9 @@ export default function OcrLinesPage() {
     } catch {
       showAlert('שגיאה', 'תקלה בתקשורת')
     }
-  }
+  // showAlert יציב מספיק; לא תלות אמיתית
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div className="flex min-h-screen flex-col bg-background">

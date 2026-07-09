@@ -32,8 +32,10 @@ export async function GET(request, { params }) {
       });
     }
 
+    // מופע sharp יחיד — הקובץ נקרא ומפוענח פעם אחת ל-metadata ולחיתוך
     const fsPath = resolveImageFsPath(doc.imagePath);
-    const meta = await sharp(fsPath).metadata();
+    const image = sharp(fsPath);
+    const meta = await image.metadata();
     const imgW = meta.width || 0;
     const imgH = meta.height || 0;
 
@@ -48,7 +50,7 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: 'Invalid crop box' }, { status: 422 });
     }
 
-    const buf = await sharp(fsPath).extract({ left, top, width, height }).png().toBuffer();
+    const buf = await image.extract({ left, top, width, height }).png().toBuffer();
     return new NextResponse(buf, {
       headers: { 'Content-Type': 'image/png', ...cacheHeaders },
     });

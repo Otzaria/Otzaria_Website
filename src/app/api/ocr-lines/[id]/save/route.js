@@ -24,6 +24,8 @@ export async function POST(request, { params }) {
     const { id } = await params;
     const { text, scriptType, excludeIds } = await request.json();
     const userId = session.user.id || session.user._id;
+    // קלט לקוח — פריסה של לא-מערך זורקת TypeError
+    const exclude = Array.isArray(excludeIds) ? excludeIds : [];
 
     // אימות הטקסט מול תקן האלפבית — אותם כללים כמו בייצוא לאימון
     const norm = normalizeLineText(text);
@@ -75,14 +77,14 @@ export async function POST(request, { params }) {
         return NextResponse.json({ success: false, error: 'השורה לא נמצאה' }, { status: 404 });
       }
       // מישהו הקדים — מחזירים תחליף כדי שהדף יתמלא בכל זאת
-      const next = await sampleReplacement([...(excludeIds || []), id]);
+      const next = await sampleReplacement([...exclude, id]);
       return NextResponse.json(
         { success: false, error: 'השורה כבר תומללה על ידי משתמש אחר', next },
         { status: 409 }
       );
     }
 
-    const next = await sampleReplacement([...(excludeIds || []), id]);
+    const next = await sampleReplacement([...exclude, id]);
     return NextResponse.json({ success: true, next });
   } catch (err) {
     console.error('OCR line save error:', err);

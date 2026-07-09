@@ -94,6 +94,10 @@ export async function PATCH(request, { params }) {
         { new: true }
       );
       if (!doc) {
+        const existing = await OcrLine.findById(id).select('_id').lean();
+        if (!existing) {
+          return NextResponse.json({ success: false, error: 'השורה לא נמצאה' }, { status: 404 });
+        }
         return NextResponse.json(
           { success: false, error: 'אין הצעת שינוי כתב פתוחה לשורה זו' },
           { status: 409 }
