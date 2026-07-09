@@ -1,3 +1,5 @@
+import { withShortcut } from '@/lib/shortcuts';
+
 export default function EditorToolbar({
   pageNumber,
   totalPages,
@@ -36,19 +38,23 @@ export default function EditorToolbar({
   setIsCollapsed,
   isFullScreen,
   onToggleFullScreen,
-  onOpenImageToText
+  onOpenImageToText,
+  userShortcuts = {}
   // הוסרו props של alignment ו-textZoom מכאן כי הם לא בשימוש בסרגל זה יותר
 }) {
   const preventFocusLoss = (e) => {
     e.preventDefault();
   };
 
+  // בונה טולטיפ הכולל את קיצור המקלדת המוגדר לפעולה (גלובלי או של המשתמש)
+  const tip = (base, actionId) => withShortcut(base, userShortcuts, actionId);
+
   const ImageTools = (
     <div className="flex items-center gap-1.5 justify-center">
       <button
         onClick={() => setShowSettings(prev => !prev)}
         className="p-1 h-7 w-7 rounded-md transition-colors flex items-center justify-center hover:bg-neutral-100 text-neutral-700"
-        title="הגדרות OCR"
+        title={tip("הגדרות OCR", 'settings')}
       >
         <span className="material-symbols-outlined text-sm">settings</span>
       </button>
@@ -58,11 +64,11 @@ export default function EditorToolbar({
       <div className="w-px h-5 bg-neutral-200"></div>
 
       <div className="flex items-center gap-0 bg-neutral-100 rounded-md p-0.5">
-        <button onClick={() => setImageZoom(Math.max(25, imageZoom - 10))} className="w-7 h-7 hover:bg-white rounded flex items-center justify-center">
+        <button onClick={() => setImageZoom(Math.max(25, imageZoom - 10))} className="w-7 h-7 hover:bg-white rounded flex items-center justify-center" title={tip("הקטן תמונה", 'zoomOut')}>
           <span className="material-symbols-outlined text-sm">zoom_out</span>
         </button>
         <span className="text-[10px] font-medium min-w-[2rem] text-center text-neutral-700">{imageZoom}%</span>
-        <button onClick={() => setImageZoom(Math.min(300, imageZoom + 10))} className="w-7 h-7 hover:bg-white rounded flex items-center justify-center">
+        <button onClick={() => setImageZoom(Math.min(300, imageZoom + 10))} className="w-7 h-7 hover:bg-white rounded flex items-center justify-center" title={tip("הגדל תמונה", 'zoomIn')}>
           <span className="material-symbols-outlined text-sm">zoom_in</span>
         </button>
         <button onClick={() => setImageZoom(100)} className="w-9 h-7 hover:bg-white rounded text-[10px] font-medium flex items-center justify-center">
@@ -103,7 +109,7 @@ export default function EditorToolbar({
         onClick={ocrMethod === 'gemini' ? handleGeminiFullPage : toggleSelectionMode}
         disabled={isOcrProcessing || !thumbnailUrl}
         className={`w-7 h-7 rounded-md border flex items-center justify-center ${isSelectionMode && ocrMethod !== 'gemini' ? 'bg-info-50 text-info-700 border-info-200' : 'bg-white hover:bg-neutral-50 text-neutral-700 border-neutral-200'} disabled:opacity-40`}
-        title={ocrMethod === 'gemini' ? "Gemini OCR לעמוד שלם" : "זיהוי טקסט מאזור נבחר"}
+        title={ocrMethod === 'gemini' ? "Gemini OCR לעמוד שלם" : tip("זיהוי טקסט מאזור נבחר", 'selectionMode')}
       >
         <span className={`material-symbols-outlined text-sm ${isOcrProcessing ? 'animate-spin' : ''}`}>
           {isOcrProcessing ? 'progress_activity' : (ocrMethod === 'gemini' ? 'auto_fix_high' : 'document_scanner')}
@@ -112,7 +118,7 @@ export default function EditorToolbar({
 
       {selectionRect && (
         <>
-          <button onClick={handleOCRSelection} disabled={isOcrProcessing} className="flex items-center gap-1.5 px-2 py-1 h-7 bg-info-600 text-white rounded-md hover:bg-info-700 disabled:opacity-40">
+          <button onClick={handleOCRSelection} disabled={isOcrProcessing} className="flex items-center gap-1.5 px-2 py-1 h-7 bg-info-600 text-white rounded-md hover:bg-info-700 disabled:opacity-40" title={tip("זהה טקסט", 'ocr')}>
             <span className="material-symbols-outlined text-sm">check_circle</span>
             <span className="text-[10px] font-medium">זהה</span>
           </button>
@@ -127,13 +133,13 @@ export default function EditorToolbar({
   const TextTools = (
     <div className="flex items-center gap-1.5 flex-wrap justify-center">
       <div className="flex items-center gap-0 bg-neutral-100 rounded-md p-0.5">
-        <button onMouseDown={preventFocusLoss} onClick={() => insertTag('b')} className="w-7 h-7 hover:bg-white rounded flex items-center justify-center" title="מודגש">
+        <button onMouseDown={preventFocusLoss} onClick={() => insertTag('b')} className="w-7 h-7 hover:bg-white rounded flex items-center justify-center" title={tip("מודגש", 'bold')}>
           <span className="font-bold text-xs">B</span>
         </button>
-        <button onMouseDown={preventFocusLoss} onClick={() => insertTag('i')} className="w-7 h-7 hover:bg-white rounded flex items-center justify-center" title="נטוי">
+        <button onMouseDown={preventFocusLoss} onClick={() => insertTag('i')} className="w-7 h-7 hover:bg-white rounded flex items-center justify-center" title={tip("נטוי", 'italic')}>
           <span className="italic text-xs">I</span>
         </button>
-        <button onMouseDown={preventFocusLoss} onClick={() => insertTag('u')} className="w-7 h-7 hover:bg-white rounded flex items-center justify-center" title="קו תחתון">
+        <button onMouseDown={preventFocusLoss} onClick={() => insertTag('u')} className="w-7 h-7 hover:bg-white rounded flex items-center justify-center" title={tip("קו תחתון", 'underline')}>
           <span className="underline text-xs">U</span>
         </button>
       </div>
@@ -141,23 +147,23 @@ export default function EditorToolbar({
       <div className="w-px h-5 bg-neutral-200"></div>
 
       <div className="flex items-center gap-0 bg-neutral-100 rounded-md p-0.5">
-        <button onMouseDown={preventFocusLoss} onClick={() => insertTag('big')} className="w-7 h-7 hover:bg-white rounded flex items-center justify-center text-xs font-medium">A+</button>
-        <button onMouseDown={preventFocusLoss} onClick={() => insertTag('small')} className="w-7 h-7 hover:bg-white rounded flex items-center justify-center text-[10px] font-medium">A-</button>
+        <button onMouseDown={preventFocusLoss} onClick={() => insertTag('big')} className="w-7 h-7 hover:bg-white rounded flex items-center justify-center text-xs font-medium" title={tip("הגדל גופן טקסט", 'bigger')}>A+</button>
+        <button onMouseDown={preventFocusLoss} onClick={() => insertTag('small')} className="w-7 h-7 hover:bg-white rounded flex items-center justify-center text-[10px] font-medium" title={tip("הקטן גופן טקסט", 'smaller')}>A-</button>
       </div>
 
       <div className="w-px h-5 bg-neutral-200"></div>
 
       <div className="flex items-center gap-0 bg-neutral-100 rounded-md p-0.5">
-        <button onMouseDown={preventFocusLoss} onClick={() => insertTag('h1')} className="px-2 h-7 hover:bg-white rounded text-[10px] font-bold flex items-center justify-center">H1</button>
-        <button onMouseDown={preventFocusLoss} onClick={() => insertTag('h2')} className="px-2 h-7 hover:bg-white rounded text-[10px] font-bold flex items-center justify-center">H2</button>
-        <button onMouseDown={preventFocusLoss} onClick={() => insertTag('h3')} className="px-2 h-7 hover:bg-white rounded text-[10px] font-bold flex items-center justify-center">H3</button>
+        <button onMouseDown={preventFocusLoss} onClick={() => insertTag('h1')} className="px-2 h-7 hover:bg-white rounded text-[10px] font-bold flex items-center justify-center" title={tip("כותרת H1", 'h1')}>H1</button>
+        <button onMouseDown={preventFocusLoss} onClick={() => insertTag('h2')} className="px-2 h-7 hover:bg-white rounded text-[10px] font-bold flex items-center justify-center" title={tip("כותרת H2", 'h2')}>H2</button>
+        <button onMouseDown={preventFocusLoss} onClick={() => insertTag('h3')} className="px-2 h-7 hover:bg-white rounded text-[10px] font-bold flex items-center justify-center" title={tip("כותרת H3", 'h3')}>H3</button>
       </div>
 
       <div className="w-px h-5 bg-neutral-200"></div>
 
       {/* כפתורי היישור (Align) הוסרו מכאן */}
 
-      <button onClick={() => setShowFindReplace(true)} className="flex items-center gap-1 px-2 py-1 h-7 bg-white hover:bg-neutral-50 rounded-md border border-neutral-200">
+      <button onClick={() => setShowFindReplace(true)} className="flex items-center gap-1 px-2 py-1 h-7 bg-white hover:bg-neutral-50 rounded-md border border-neutral-200" title={tip("חיפוש והחלפה", 'findReplace')}>
         <span className="material-symbols-outlined text-sm">find_replace</span>
         <span className="text-[10px] font-medium">חיפוש</span>
       </button>
@@ -167,7 +173,7 @@ export default function EditorToolbar({
         <span className="text-[10px] font-medium">איות</span>
       </button>
 
-      <button onClick={onOpenImageToText} className="flex items-center gap-1 px-2 py-1 h-7 bg-white hover:bg-neutral-50 rounded-md border border-neutral-200" title="המרת תמונה לטקסט">
+      <button onClick={onOpenImageToText} className="flex items-center gap-1 px-2 py-1 h-7 bg-white hover:bg-neutral-50 rounded-md border border-neutral-200" title={tip("המרת תמונה לטקסט", 'imageToText')}>
         <span className="material-symbols-outlined text-sm">image_search</span>
         <span className="text-[10px] font-medium">תמונה</span>
       </button>
@@ -194,7 +200,7 @@ export default function EditorToolbar({
           <span className="text-[11px] font-bold">תפוס</span>
         </button>
       ) : (
-        <button onClick={handleFinish} className="flex items-center gap-1.5 px-3 py-1 h-7 bg-success-600 hover:bg-success-700 text-white rounded-md shadow-sm transition-colors ml-2" title="סיים הקלדת קובץ וסמן כהושלם">
+        <button onClick={handleFinish} className="flex items-center gap-1.5 px-3 py-1 h-7 bg-success-600 hover:bg-success-700 text-white rounded-md shadow-sm transition-colors ml-2" title={tip("סיים הקלדת קובץ וסמן כהושלם", 'finish')}>
           <span className="material-symbols-outlined text-sm">upload_file</span>
           <span className="text-[11px] font-bold">סיים</span>
         </button>
@@ -202,7 +208,7 @@ export default function EditorToolbar({
 
       <div className="w-px h-5 bg-neutral-200"></div>
 
-      <button onClick={toggleColumns} className="w-7 h-7 hover:bg-neutral-100 rounded-md flex items-center justify-center" title={twoColumns ? 'איחוד לטור אחד' : 'פיצול לשני טורים'}>
+      <button onClick={toggleColumns} className="w-7 h-7 hover:bg-neutral-100 rounded-md flex items-center justify-center" title={tip(twoColumns ? 'איחוד לטור אחד' : 'פיצול לשני טורים', 'split')}>
         <span className="material-symbols-outlined text-sm" style={{ transform: 'rotate(90deg)' }}>{twoColumns ? 'unfold_less' : 'unfold_more'}</span>
       </button>
 
@@ -210,7 +216,7 @@ export default function EditorToolbar({
         const newOrientation = layoutOrientation === 'vertical' ? 'horizontal' : 'vertical'
         setLayoutOrientation(newOrientation)
         localStorage.setItem('layoutOrientation', newOrientation)
-      }} className="w-7 h-7 hover:bg-neutral-100 rounded-md flex items-center justify-center" title={layoutOrientation === 'vertical' ? 'פריסה אנכית' : 'פריסה אופקית'}>
+      }} className="w-7 h-7 hover:bg-neutral-100 rounded-md flex items-center justify-center" title={tip(layoutOrientation === 'vertical' ? 'פריסה אנכית' : 'פריסה אופקית', 'layout')}>
         <span className="material-symbols-outlined text-sm" style={{ transform: layoutOrientation === 'horizontal' ? 'rotate(90deg)' : 'none' }}>splitscreen</span>
       </button>
 
@@ -222,7 +228,7 @@ export default function EditorToolbar({
 
       <div className="w-px h-5 bg-neutral-200"></div>
 
-      <button onClick={onToggleFullScreen} className="w-7 h-7 hover:bg-neutral-100 text-neutral-600 rounded-md flex items-center justify-center" title={isFullScreen ? "צא ממסך מלא" : "מסך מלא"}>
+      <button onClick={onToggleFullScreen} className="w-7 h-7 hover:bg-neutral-100 text-neutral-600 rounded-md flex items-center justify-center" title={tip(isFullScreen ? "צא ממסך מלא" : "מסך מלא", 'fullScreen')}>
         <span className="material-symbols-outlined text-sm">{isFullScreen ? 'close_fullscreen' : 'fullscreen'}</span>
       </button>
 
@@ -264,7 +270,7 @@ export default function EditorToolbar({
                 ? 'bg-info-50 text-info-600 border-info-200'
                 : 'bg-white text-neutral-500 hover:bg-neutral-50 border-neutral-200'
             }`}
-            title="החלף צדדים"
+            title={tip("החלף צדדים", 'togglePanel')}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M20 17h-5" />
@@ -277,9 +283,9 @@ export default function EditorToolbar({
           </button>
 
           <button 
-            onClick={openShortcuts} 
-            className="w-9 h-9 flex items-center justify-center rounded-full bg-white text-neutral-500 hover:bg-neutral-50 border border-neutral-200 shadow-sm transition-all" 
-            title="קיצורי מקלדת"
+            onClick={openShortcuts}
+            className="w-9 h-9 flex items-center justify-center rounded-full bg-white text-neutral-500 hover:bg-neutral-50 border border-neutral-200 shadow-sm transition-all"
+            title={tip("קיצורי מקלדת", 'shortcuts')}
           >
             <span className="material-symbols-outlined !text-[25px]">keyboard</span>
           </button>

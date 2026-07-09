@@ -18,6 +18,7 @@ import ShortcutsDialog from '@/components/editor/modals/ShortcutsDialog'
 import FindReplaceDialog from '@/components/editor/modals/FindReplaceDialog'
 import SpellcheckDialog from '@/components/editor/modals/SpellcheckDialog'
 import { getTextareaCaretTop } from '@/lib/editorUtils'
+import { withShortcut } from '@/lib/shortcuts'
 import DOMPurify from 'dompurify'
 import { buildWholeWordRegex, findNextWholeWordInTextarea as findNextWholeWordInTextareaUtil } from '@/lib/hebrewWordUtils'
 
@@ -1053,6 +1054,9 @@ export default function DictaEditorCore({
     showAlert('הצלחה', 'קיצורי המקלדת אופסו')
   }, [showAlert])
 
+  // בונה טולטיפ הכולל את קיצור המקלדת המוגדר לפעולה (גלובלי או של המשתמש)
+  const tip = useCallback((base, actionId) => withShortcut(base, userShortcuts, actionId), [userShortcuts])
+
   const actionsMap = useMemo(() => ({
     'save': { label: saveLabel, action: () => onSave && onSave(content) },
     'toggleEdit': { label: 'מעבר בין עריכה לתצוגה', action: handleToggleEditMode },
@@ -1214,7 +1218,7 @@ export default function DictaEditorCore({
       <button
         onClick={() => setActiveTool(tool)}
         className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2`}
-        title={title}
+        title={tip(title, tool)}
       >
         <span className="material-symbols-outlined text-neutral-700">{icon}</span>
         {toolbarExpanded && <span className="text-sm text-neutral-700">{label}</span>}
@@ -1253,7 +1257,7 @@ export default function DictaEditorCore({
         </div>
       </aside>
     )
-  }, [canEdit, toolbarExpanded])
+  }, [canEdit, toolbarExpanded, tip])
 
   // ה-header אינו תלוי בתוכן (השמירה דרך handleSaveClick) - ממומואיז כדי לא לרנדר ~100 כפתורים בכל הקלדה
   const headerNode = useMemo(() => (
@@ -1283,7 +1287,7 @@ export default function DictaEditorCore({
                         variant="ghost"
                         size="sm"
                         onClick={() => setShowFindReplace(true)}
-                        title="חיפוש והחלפה"
+                        title={tip("חיפוש והחלפה", 'findReplace')}
                       />
                       {enableSpellcheck && (
                       <Button
@@ -1299,14 +1303,14 @@ export default function DictaEditorCore({
                         variant="ghost"
                         size="sm"
                         onClick={() => setShowShortcutsDialog(true)}
-                        title="קיצורי מקשים"
+                        title={tip("קיצורי מקשים", 'shortcuts')}
                       />
                       <Button
                         icon={editMode ? 'visibility' : 'edit'}
                         variant="ghost"
                         size="sm"
                         onClick={handleToggleEditMode}
-                        title={editMode ? 'תצוגה' : 'עריכה ידנית'}
+                        title={tip(editMode ? 'תצוגה' : 'עריכה ידנית', 'toggleEdit')}
                       />
                     </>
                   )}
@@ -1317,28 +1321,28 @@ export default function DictaEditorCore({
                       variant={textAlign === 'right' ? 'primary' : 'ghost'}
                       size="sm"
                       onClick={() => setTextAlign('right')}
-                      title="יישור לימין"
+                      title={tip("יישור לימין", 'alignRight')}
                     />
                     <Button
                       icon="format_align_center"
                       variant={textAlign === 'center' ? 'primary' : 'ghost'}
                       size="sm"
                       onClick={() => setTextAlign('center')}
-                      title="יישור למרכז"
+                      title={tip("יישור למרכז", 'alignCenter')}
                     />
                     <Button
                       icon="format_align_left"
                       variant={textAlign === 'left' ? 'primary' : 'ghost'}
                       size="sm"
                       onClick={() => setTextAlign('left')}
-                      title="יישור לשמאל"
+                      title={tip("יישור לשמאל", 'alignLeft')}
                     />
                     <Button
                       icon="format_align_justify"
                       variant={textAlign === 'justify' ? 'primary' : 'ghost'}
                       size="sm"
                       onClick={() => setTextAlign('justify')}
-                      title="יישור מלא"
+                      title={tip("יישור מלא", 'alignJustify')}
                     />
                   </div>
 
@@ -1347,7 +1351,7 @@ export default function DictaEditorCore({
                     variant="ghost"
                     size="sm"
                     onClick={() => setFontSize(prev => Math.max(12, prev - 2))}
-                    title="הקטן גופן"
+                    title={tip("הקטן גופן", 'fontDecrease')}
                   />
                   <span className="text-xs font-medium w-5 text-center">{fontSize}</span>
                   <Button
@@ -1355,7 +1359,7 @@ export default function DictaEditorCore({
                     variant="ghost"
                     size="sm"
                     onClick={() => setFontSize(prev => Math.min(32, prev + 2))}
-                    title="הגדל גופן"
+                    title={tip("הגדל גופן", 'fontIncrease')}
                   />
 
                   <div className="relative">
@@ -1382,7 +1386,7 @@ export default function DictaEditorCore({
                         size="sm"
                         onClick={handleSaveClick}
                         loading={saving}
-                        title={hasUnsavedChangesOuter ? "שמור שינויים" : "שמירה"}
+                        title={tip(hasUnsavedChangesOuter ? "שמור שינויים" : "שמירה", 'save')}
                       />
                     </>
                   )}
@@ -1428,6 +1432,7 @@ export default function DictaEditorCore({
                         size="sm"
                         onClick={() => setShowFindReplace(true)}
                         label="חיפוש"
+                        title={tip("חיפוש והחלפה", 'findReplace')}
                       />
                       {enableSpellcheck && (
                       <Button
@@ -1444,6 +1449,7 @@ export default function DictaEditorCore({
                         size="sm"
                         onClick={() => setShowShortcutsDialog(true)}
                         label="קיצורי מקשים"
+                        title={tip("קיצורי מקשים", 'shortcuts')}
                       />
                       <Button
                         icon={editMode ? 'visibility' : 'edit'}
@@ -1451,6 +1457,7 @@ export default function DictaEditorCore({
                         size="sm"
                         onClick={handleToggleEditMode}
                         label={editMode ? 'תצוגה' : 'עריכה ידנית'}
+                        title={tip(editMode ? 'תצוגה' : 'עריכה ידנית', 'toggleEdit')}
                       />
                     </>
                   )}
@@ -1461,24 +1468,28 @@ export default function DictaEditorCore({
                       variant={textAlign === 'right' ? 'primary' : 'ghost'}
                       size="sm"
                       onClick={() => setTextAlign('right')}
+                      title={tip("יישור לימין", 'alignRight')}
                     />
                     <Button
                       icon="format_align_center"
                       variant={textAlign === 'center' ? 'primary' : 'ghost'}
                       size="sm"
                       onClick={() => setTextAlign('center')}
+                      title={tip("יישור למרכז", 'alignCenter')}
                     />
                     <Button
                       icon="format_align_left"
                       variant={textAlign === 'left' ? 'primary' : 'ghost'}
                       size="sm"
                       onClick={() => setTextAlign('left')}
+                      title={tip("יישור לשמאל", 'alignLeft')}
                     />
                     <Button
                       icon="format_align_justify"
                       variant={textAlign === 'justify' ? 'primary' : 'ghost'}
                       size="sm"
                       onClick={() => setTextAlign('justify')}
+                      title={tip("יישור מלא", 'alignJustify')}
                     />
                   </div>
 
@@ -1487,6 +1498,7 @@ export default function DictaEditorCore({
                     variant="ghost"
                     size="sm"
                     onClick={() => setFontSize(prev => Math.max(12, prev - 2))}
+                    title={tip("הקטן גופן", 'fontDecrease')}
                   />
                   <span className="text-sm font-medium w-6 text-center">{fontSize}</span>
                   <Button
@@ -1494,6 +1506,7 @@ export default function DictaEditorCore({
                     variant="ghost"
                     size="sm"
                     onClick={() => setFontSize(prev => Math.min(32, prev + 2))}
+                    title={tip("הגדל גופן", 'fontIncrease')}
                   />
 
                   <div className="w-px h-6 bg-neutral-300 mx-2"></div>
@@ -1522,6 +1535,7 @@ export default function DictaEditorCore({
                         onClick={handleSaveClick}
                         loading={saving}
                         label={hasUnsavedChangesOuter ? `${saveLabel} *` : saveLabel}
+                        title={tip(saveLabel, 'save')}
                       />
                       {hasUnsavedChangesOuter && (
                         <span className="text-danger-600 text-sm font-medium mr-2">ישנם שינויים לא שמורים</span>
@@ -1565,6 +1579,7 @@ export default function DictaEditorCore({
                         size="sm"
                         onClick={() => setShowFindReplace(true)}
                         label="חיפוש"
+                        title={tip("חיפוש והחלפה", 'findReplace')}
                       />
                       {enableSpellcheck && (
                       <Button
@@ -1581,6 +1596,7 @@ export default function DictaEditorCore({
                         size="sm"
                         onClick={() => setShowShortcutsDialog(true)}
                         label="קיצורי מקשים"
+                        title={tip("קיצורי מקשים", 'shortcuts')}
                       />
                       <Button
                         icon={editMode ? 'visibility' : 'edit'}
@@ -1588,6 +1604,7 @@ export default function DictaEditorCore({
                         size="sm"
                         onClick={handleToggleEditMode}
                         label={editMode ? 'תצוגה' : 'עריכה ידנית'}
+                        title={tip(editMode ? 'תצוגה' : 'עריכה ידנית', 'toggleEdit')}
                       />
                     </>
                   )}
@@ -1598,24 +1615,28 @@ export default function DictaEditorCore({
                       variant={textAlign === 'right' ? 'primary' : 'ghost'}
                       size="sm"
                       onClick={() => setTextAlign('right')}
+                      title={tip("יישור לימין", 'alignRight')}
                     />
                     <Button
                       icon="format_align_center"
                       variant={textAlign === 'center' ? 'primary' : 'ghost'}
                       size="sm"
                       onClick={() => setTextAlign('center')}
+                      title={tip("יישור למרכז", 'alignCenter')}
                     />
                     <Button
                       icon="format_align_left"
                       variant={textAlign === 'left' ? 'primary' : 'ghost'}
                       size="sm"
                       onClick={() => setTextAlign('left')}
+                      title={tip("יישור לשמאל", 'alignLeft')}
                     />
                     <Button
                       icon="format_align_justify"
                       variant={textAlign === 'justify' ? 'primary' : 'ghost'}
                       size="sm"
                       onClick={() => setTextAlign('justify')}
+                      title={tip("יישור מלא", 'alignJustify')}
                     />
                   </div>
 
@@ -1624,6 +1645,7 @@ export default function DictaEditorCore({
                     variant="ghost"
                     size="sm"
                     onClick={() => setFontSize(prev => Math.max(12, prev - 2))}
+                    title={tip("הקטן גופן", 'fontDecrease')}
                   />
                   <span className="text-sm font-medium w-6 text-center">{fontSize}</span>
                   <Button
@@ -1631,6 +1653,7 @@ export default function DictaEditorCore({
                     variant="ghost"
                     size="sm"
                     onClick={() => setFontSize(prev => Math.min(32, prev + 2))}
+                    title={tip("הגדל גופן", 'fontIncrease')}
                   />
 
                   <div className="w-px h-6 bg-neutral-300 mx-2"></div>
@@ -1659,6 +1682,7 @@ export default function DictaEditorCore({
                         onClick={handleSaveClick}
                         loading={saving}
                         label={hasUnsavedChangesOuter ? `${saveLabel} *` : saveLabel}
+                        title={tip(saveLabel, 'save')}
                       />
                       {hasUnsavedChangesOuter && (
                         <span className="text-danger-600 text-sm font-medium mr-2">ישנם שינויים לא שמורים</span>
@@ -1671,7 +1695,7 @@ export default function DictaEditorCore({
           )}
         </div>
       </header>
-  ), [singleLineHeader, headerCompact, headerStartElement, headerEndElement, title, canEdit, enableSpellcheck, isCompleted, editMode, textAlign, fontSize, selectedFont, hasUnsavedChangesOuter, saving, saveLabel, handleToggleEditMode, handleSaveClick])
+  ), [singleLineHeader, headerCompact, headerStartElement, headerEndElement, title, canEdit, enableSpellcheck, isCompleted, editMode, textAlign, fontSize, selectedFont, hasUnsavedChangesOuter, saving, saveLabel, handleToggleEditMode, handleSaveClick, tip])
 
   return (
     <div className="flex flex-col h-screen bg-neutral-50" dir="rtl">
@@ -1696,6 +1720,7 @@ export default function DictaEditorCore({
                     size="sm"
                     onClick={() => insertTag('b')}
                     label="מודגש"
+                    title={tip("מודגש", 'bold')}
                   />
                   <Button
                     icon="format_italic"
@@ -1703,6 +1728,7 @@ export default function DictaEditorCore({
                     size="sm"
                     onClick={() => insertTag('i')}
                     label="נטוי"
+                    title={tip("נטוי", 'italic')}
                   />
                   <Button
                     icon="format_underlined"
@@ -1710,16 +1736,17 @@ export default function DictaEditorCore({
                     size="sm"
                     onClick={() => insertTag('u')}
                     label="קו תחתון"
+                    title={tip("קו תחתון", 'underline')}
                   />
                   
                   <div className="w-px h-6 bg-neutral-300 mx-1"></div>
                   
-                  <Button variant="ghost" size="sm" onClick={() => insertTag('h1')} label="H1" />
-                  <Button variant="ghost" size="sm" onClick={() => insertTag('h2')} label="H2" />
-                  <Button variant="ghost" size="sm" onClick={() => insertTag('h3')} label="H3" />
-                  <Button variant="ghost" size="sm" onClick={() => insertTag('h4')} label="H4" />
-                  <Button variant="ghost" size="sm" onClick={() => insertTag('h5')} label="H5" />
-                  <Button variant="ghost" size="sm" onClick={() => insertTag('h6')} label="H6" />
+                  <Button variant="ghost" size="sm" onClick={() => insertTag('h1')} label="H1" title={tip("כותרת H1", 'h1')} />
+                  <Button variant="ghost" size="sm" onClick={() => insertTag('h2')} label="H2" title={tip("כותרת H2", 'h2')} />
+                  <Button variant="ghost" size="sm" onClick={() => insertTag('h3')} label="H3" title={tip("כותרת H3", 'h3')} />
+                  <Button variant="ghost" size="sm" onClick={() => insertTag('h4')} label="H4" title={tip("כותרת H4", 'h4')} />
+                  <Button variant="ghost" size="sm" onClick={() => insertTag('h5')} label="H5" title={tip("כותרת H5", 'h5')} />
+                  <Button variant="ghost" size="sm" onClick={() => insertTag('h6')} label="H6" title={tip("כותרת H6", 'h6')} />
                   
                   <div className="w-px h-6 bg-neutral-300 mx-1"></div>
                   
@@ -1729,6 +1756,7 @@ export default function DictaEditorCore({
                     size="sm"
                     onClick={() => insertTag('big')}
                     label="גדול"
+                    title={tip("הגדל גופן טקסט", 'bigger')}
                   />
                   <Button
                     icon="text_decrease"
@@ -1736,6 +1764,7 @@ export default function DictaEditorCore({
                     size="sm"
                     onClick={() => insertTag('small')}
                     label="קטן"
+                    title={tip("הקטן גופן טקסט", 'smaller')}
                   />
                   
                   <div className="w-px h-6 bg-neutral-300 mx-1"></div>
@@ -1746,7 +1775,7 @@ export default function DictaEditorCore({
                     size="sm"
                     onClick={removeTags}
                     label="הסר תגים"
-                    title="הסרת תגי HTML מהטקסט הנבחר"
+                    title={tip("הסרת תגי HTML מהטקסט הנבחר", 'removeTags')}
                   />
                   </div>
                   
