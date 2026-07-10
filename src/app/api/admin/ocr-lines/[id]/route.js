@@ -74,6 +74,9 @@ export async function PATCH(request, { params }) {
     }
 
     if (action === 'set-text') {
+      if (typeof text !== 'string') {
+        return NextResponse.json({ success: false, error: 'טקסט לא תקין' }, { status: 400 });
+      }
       const norm = normalizeLineText(text);
       if (!norm) {
         return NextResponse.json({ success: false, error: 'הטקסט ריק' }, { status: 400 });

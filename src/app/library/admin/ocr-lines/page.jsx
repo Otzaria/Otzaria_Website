@@ -20,16 +20,16 @@ const SCRIPT_LABELS = { square: 'מרובע', rashi: 'רש״י' }
 // טקסט השורה כתיבת עריכה רגילה (כמו אצל המתמלל) — למנהל, בהגשה ובמאושרות.
 // כפתור השמירה מופיע רק כשהטקסט שונה מהשמור; אותם כללי תקן נאכפים חיים.
 function AdminLineText({ line, onSave }) {
-  const [text, setText] = useState(line.text)
+  const [text, setText] = useState(line.text || '')
   const [saving, setSaving] = useState(false)
 
   // סנכרון כשהשורה מתעדכנת מבחוץ (למשל אחרי שמירה מוצלחת)
   useEffect(() => {
-    setText(line.text)
+    setText(line.text || '')
   }, [line.text])
 
   const forbidden = useMemo(() => findForbidden(text), [text])
-  const dirty = text !== line.text
+  const dirty = text !== (line.text || '')
   const canSave = dirty && !saving && forbidden.length === 0 && !!normalizeLineText(text)
 
   const save = async () => {
