@@ -91,7 +91,8 @@ export async function PATCH(request, { params }) {
       const doc = await OcrLine.findOneAndUpdate(
         { _id: id, suggestedScriptType: { $in: ['square', 'rashi'] } },
         [{ $set: { scriptType: '$suggestedScriptType' } }, { $unset: 'suggestedScriptType' }],
-        { new: true }
+        // mongoose 9 דורש הצהרה מפורשת שהעדכון הוא aggregation pipeline
+        { new: true, updatePipeline: true }
       );
       if (!doc) {
         const existing = await OcrLine.findById(id).select('_id').lean();
