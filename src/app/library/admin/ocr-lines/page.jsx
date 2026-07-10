@@ -100,7 +100,13 @@ export default function AdminOcrLinesPage() {
       const res = await fetch(`/api/admin/ocr-lines?status=${statusFilter}&skip=${skip}`)
       const data = await res.json()
       if (data.success) {
-        setLines((prev) => (skip === 0 ? data.lines : [...prev, ...data.lines]))
+        // ב"טען עוד" מסננים כפולים — עימוד skip עלול להחזיר שורה שכבר מוצגת
+        // כשהנתונים משתנים בין הקריאות
+        setLines((prev) =>
+          skip === 0
+            ? data.lines
+            : [...prev, ...data.lines.filter((l) => !prev.some((p) => p.id === l.id))]
+        )
         setCounts(data.counts)
         setTotal(data.total)
       }

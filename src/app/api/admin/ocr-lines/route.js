@@ -24,7 +24,7 @@ export async function GET(request) {
     const skip = Math.max(0, parseInt(searchParams.get('skip')) || 0);
 
     const [docs, total, countRows] = await Promise.all([
-      OcrLine.find({ status }).sort({ updatedAt: -1 }).skip(skip).limit(PAGE_LIMIT).lean(),
+      OcrLine.find({ status }).sort({ updatedAt: -1, _id: -1 }).skip(skip).limit(PAGE_LIMIT).lean(),
       OcrLine.countDocuments({ status }),
       OcrLine.aggregate([{ $group: { _id: '$status', n: { $sum: 1 } } }]),
     ]);
