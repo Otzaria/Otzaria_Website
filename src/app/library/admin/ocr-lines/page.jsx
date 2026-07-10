@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import OcrLineContextModal from '@/components/ocr/OcrLineContextModal'
-import { hasBooksAccess } from '@/lib/roles'
+import { isAdmin } from '@/lib/roles'
+import { normalizeLineText, findForbidden } from '@/lib/ocr/textStandard'
 
 const TABS = [
   { id: 'submitted', label: 'ממתינות לאישור', icon: 'pending_actions' },
@@ -15,6 +16,69 @@ const TABS = [
 ]
 
 const SCRIPT_LABELS = { square: 'מרובע', rashi: 'רש״י' }
+
+// טקסט השורה כתיבת עריכה רגילה (כמו אצל המתמלל) — למנהל, בהגשה ובמאושרות.
+// כפתור השמירה מופיע רק כשהטקסט שונה מהשמור; אותם כללי תקן נאכפים חיים.
+function AdminLineText({ line, onSave }) {
+  const [text, setText] = useState(line.text || '')
+  const [saving, setSaving] = useState(false)
+
+  // סנכרון כשהשורה מתעדכנת מבחוץ (למשל אחרי שמירה מוצלחת)
+  useEffect(() => {
+    setText(line.text || '')
+  }, [line.text])
+
+  const forbidden = useMemo(() => findForbidden(text), [text])
+  const dirty = text !== (line.text || '')
+  const canSave = dirty && !saving && forbidden.length === 0 && !!normalizeLineText(text)
+
+  const save = async () => {
+    if (!canSave) return
+    setSaving(true)
+    try {
+      await onSave(line, text)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="flex-1 flex flex-col gap-1">
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          dir="rtl"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && save()}
+          className="border border-neutral-200 bg-neutral-50 focus:bg-white rounded-lg p-3 text-lg text-neutral-800 w-full focus:outline-none focus:ring-2 focus:ring-primary/40"
+        />
+        {dirty && (
+          <button
+            onClick={save}
+            disabled={!canSave}
+            className="bg-primary hover:opacity-90 text-on-primary font-bold px-3 py-2 rounded-lg transition-all disabled:opacity-40 flex items-center gap-1 shrink-0"
+            title="שמור את תיקון הטקסט"
+          >
+            <span className="material-symbols-outlined text-sm">{saving ? 'hourglass_top' : 'save'}</span>
+            שמור
+          </button>
+        )}
+      </div>
+      {forbidden.length > 0 && (
+        <div className="text-sm text-danger-600 flex items-center gap-1 flex-wrap">
+          <span className="material-symbols-outlined text-sm">error</span>
+          תווים לא מותרים:
+          {forbidden.map((c) => (
+            <span key={c} className="px-1.5 py-0.5 bg-danger-50 border border-danger-200 rounded font-mono font-bold">
+              {c}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function AdminOcrLinesPage() {
   const { data: session, status } = useSession()
@@ -36,7 +100,13 @@ export default function AdminOcrLinesPage() {
       const res = await fetch(`/api/admin/ocr-lines?status=${statusFilter}&skip=${skip}`)
       const data = await res.json()
       if (data.success) {
-        setLines((prev) => (skip === 0 ? data.lines : [...prev, ...data.lines]))
+        // ב"טען עוד" מסננים כפולים — עימוד skip עלול להחזיר שורה שכבר מוצגת
+        // כשהנתונים משתנים בין הקריאות
+        setLines((prev) =>
+          skip === 0
+            ? data.lines
+            : [...prev, ...data.lines.filter((l) => !prev.some((p) => p.id === l.id))]
+        )
         setCounts(data.counts)
         setTotal(data.total)
       }
@@ -54,7 +124,7 @@ export default function AdminOcrLinesPage() {
       router.push('/library/auth/login?callbackUrl=/library/admin/ocr-lines')
       return
     }
-    if (!hasBooksAccess(session?.user?.role)) {
+    if (!isAdmin(session?.user?.role)) {
       router.push('/library/dashboard')
       return
     }
@@ -74,6 +144,22 @@ export default function AdminOcrLinesPage() {
 
   const updateLocal = (id, patch) =>
     setLines((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)))
+
+  // תיקון טקסט בידי המנהל — נשמר מנורמל לפי אותם כללי תקן
+  const handleSetText = async (line, text) => {
+    try {
+      const res = await fetch(`/api/admin/ocr-lines/${line.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set-text', text }),
+      })
+      const data = await res.json()
+      if (data.success) updateLocal(line.id, { text: data.text })
+      else showAlert('שגיאה', data.error || 'שגיאה בשמירת הטקסט')
+    } catch {
+      showAlert('שגיאה', 'תקלה בתקשורת')
+    }
+  }
 
   // פעולות סוג כתב: קביעה ישירה, או קבלה/דחייה של הצעת המתמלל
   const handleScript = async (line, action, scriptType) => {
@@ -270,9 +356,7 @@ export default function AdminOcrLinesPage() {
                     טרם תומללה
                   </div>
                 ) : (
-                  <div dir="rtl" className="border border-neutral-200 bg-neutral-50 rounded-lg p-3 text-lg text-neutral-800 flex-1">
-                    {line.text}
-                  </div>
+                  <AdminLineText line={line} onSave={handleSetText} />
                 )}
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div className="text-sm text-neutral-500 flex items-center gap-2">

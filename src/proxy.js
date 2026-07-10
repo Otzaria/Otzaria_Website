@@ -156,16 +156,20 @@ const BOOKS_ONLY_ADMIN_ALLOWED_API = [
   '/api/admin/stats',
 ];
 
-// נתיבי דפים/API החסומים למנהל ספרים
+// נתיבי דפים/API החסומים למנהל ספרים (אזורי ה-OCR — למנהל גלובלי בלבד)
 const BOOKS_ADMIN_BLOCKED_PAGES = [
   '/library/admin/users',
   '/library/admin/plugins',
+  '/library/admin/ocr-training',
+  '/library/admin/ocr-lines',
 ];
 const BOOKS_ADMIN_BLOCKED_API = [
   '/api/admin/users',
   '/api/admin/plugins',
   '/api/admin/plugin-notifications',
   '/api/admin/export-backup',
+  '/api/admin/ocr-training',
+  '/api/admin/ocr-lines',
 ];
 
 // נתיבים הדורשים אימות (קבוצת ה-matcher המקורית של ההרשאות).

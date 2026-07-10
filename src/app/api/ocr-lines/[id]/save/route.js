@@ -68,7 +68,8 @@ export async function POST(request, { params }) {
         },
         { $unset: 'leasedUntil' },
       ],
-      { new: true }
+      // mongoose 9 דורש הצהרה מפורשת שהעדכון הוא aggregation pipeline
+      { new: true, updatePipeline: true }
     );
 
     if (!doc) {

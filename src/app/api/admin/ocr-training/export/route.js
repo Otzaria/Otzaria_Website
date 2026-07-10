@@ -5,7 +5,7 @@ import sharp from 'sharp';
 import { zipSync } from 'fflate';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { hasBooksAccess } from '@/lib/roles';
+import { isAdmin } from '@/lib/roles';
 import { resolveImageFsPath } from '@/lib/ocr/images';
 import { normalizeLineText } from '@/lib/ocr/textStandard';
 import { validateLine } from '@/lib/ocr/trainingValidation';
@@ -47,7 +47,7 @@ function readmeText(perScript) {
 // פרמטרים: ?status=completed  (ברירת מחדל: כל עמוד עם שורות תקינות)
 export async function GET(request) {
   const session = await getServerSession(authOptions);
-  if (!hasBooksAccess(session?.user?.role)) {
+  if (!isAdmin(session?.user?.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

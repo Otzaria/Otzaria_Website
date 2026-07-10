@@ -6,14 +6,14 @@ import Page from '@/models/Page';
 import sharp from 'sharp';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { hasBooksAccess } from '@/lib/roles';
+import { isAdmin } from '@/lib/roles';
 import { resolveImageFsPath } from '@/lib/ocr/images';
 import { LINES_PER_PAGE } from '@/lib/ocr/trainingValidation';
 
 // GET: רשימת כל עמודי האימון עם התקדמות סימון השורות.
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (!hasBooksAccess(session?.user?.role)) {
+  if (!isAdmin(session?.user?.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -53,7 +53,7 @@ export async function GET() {
 // גוף: { bookId, pageNumber, scriptType? }  — יעד השורות קבוע (10) לכל העמודים.
 export async function POST(request) {
   const session = await getServerSession(authOptions);
-  if (!hasBooksAccess(session?.user?.role)) {
+  if (!isAdmin(session?.user?.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
