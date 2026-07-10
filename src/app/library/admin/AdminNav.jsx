@@ -13,6 +13,7 @@ const ALL_TABS = [
   { id: 'plugins', label: 'תוספים', icon: 'extension', href: '/library/admin/plugins', roles: ['admin', 'admin_plugins'] },
   { id: 'pages', label: 'עמודים', icon: 'description', href: '/library/admin/pages-management', roles: ['admin', 'admin_books'] },
   { id: 'ocr-training', label: 'מאגר אימון OCR', icon: 'model_training', href: '/library/admin/ocr-training', roles: ['admin', 'admin_books'] },
+  { id: 'ocr-lines', label: 'תמלול שורות OCR', icon: 'edit_note', href: '/library/admin/ocr-lines', roles: ['admin', 'admin_books'] },
   { id: 'messages', label: 'הודעות', icon: 'mail', href: '/library/admin/messages', roles: ['admin', 'admin_plugins', 'admin_books'] },
   { id: 'reminders', label: 'תזכורות', icon: 'notifications', href: '/library/admin/reminders', roles: ['admin', 'admin_books'] },
   { id: 'dictionary', label: 'מילון', icon: 'spellcheck', href: '/library/admin/dictionary', roles: ['admin', 'admin_books'] },
