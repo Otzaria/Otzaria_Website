@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import OcrLineContextModal from '@/components/ocr/OcrLineContextModal'
-import { hasBooksAccess } from '@/lib/roles'
+import { isAdmin } from '@/lib/roles'
 
 const TABS = [
   { id: 'submitted', label: 'ממתינות לאישור', icon: 'pending_actions' },
@@ -54,7 +54,7 @@ export default function AdminOcrLinesPage() {
       router.push('/library/auth/login?callbackUrl=/library/admin/ocr-lines')
       return
     }
-    if (!hasBooksAccess(session?.user?.role)) {
+    if (!isAdmin(session?.user?.role)) {
       router.push('/library/dashboard')
       return
     }

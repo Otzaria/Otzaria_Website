@@ -3,7 +3,7 @@ import connectDB from '@/lib/db';
 import OcrLine from '@/models/OcrLine';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { hasBooksAccess } from '@/lib/roles';
+import { isAdmin } from '@/lib/roles';
 
 const PAGE_LIMIT = 50;
 
@@ -11,7 +11,7 @@ const PAGE_LIMIT = 50;
 // פרמטרים: ?status=submitted|approved|available (ברירת מחדל submitted), ?skip=N
 export async function GET(request) {
   const session = await getServerSession(authOptions);
-  if (!hasBooksAccess(session?.user?.role)) {
+  if (!isAdmin(session?.user?.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

@@ -3,12 +3,12 @@ import connectDB from '@/lib/db';
 import OcrTrainingPage from '@/models/OcrTrainingPage';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { hasBooksAccess } from '@/lib/roles';
+import { isAdmin } from '@/lib/roles';
 
 // DELETE: מחיקת עמוד אימון מהמאגר.
 export async function DELETE(request, { params }) {
   const session = await getServerSession(authOptions);
-  if (!hasBooksAccess(session?.user?.role)) {
+  if (!isAdmin(session?.user?.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
   try {
@@ -26,7 +26,7 @@ export async function DELETE(request, { params }) {
 // PATCH: פעולות ניהול. גוף: { action: 'release' } — משחרר שיוך משתמש ומחזיר ל-available.
 export async function PATCH(request, { params }) {
   const session = await getServerSession(authOptions);
-  if (!hasBooksAccess(session?.user?.role)) {
+  if (!isAdmin(session?.user?.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
   try {

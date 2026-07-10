@@ -3,7 +3,7 @@ import connectDB from '@/lib/db';
 import OcrLine from '@/models/OcrLine';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { hasBooksAccess } from '@/lib/roles';
+import { isAdmin } from '@/lib/roles';
 
 // PATCH: פעולות ניהול על שורה.
 // גוף: { action: 'approve' | 'return' | 'set-script' | 'accept-script' | 'reject-script', scriptType? }
@@ -13,7 +13,7 @@ import { hasBooksAccess } from '@/lib/roles';
 // accept-script / reject-script — הכרעה בהצעת שינוי הכתב של המתמלל.
 export async function PATCH(request, { params }) {
   const session = await getServerSession(authOptions);
-  if (!hasBooksAccess(session?.user?.role)) {
+  if (!isAdmin(session?.user?.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -128,7 +128,7 @@ export async function PATCH(request, { params }) {
 // DELETE: מחיקת השורה מהמאגר לגמרי (למשל חיתוך פגום).
 export async function DELETE(request, { params }) {
   const session = await getServerSession(authOptions);
-  if (!hasBooksAccess(session?.user?.role)) {
+  if (!isAdmin(session?.user?.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
