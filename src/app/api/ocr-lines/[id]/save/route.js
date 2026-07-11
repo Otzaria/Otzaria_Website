@@ -15,8 +15,17 @@ export async function POST(request, { params }) {
 
   try {
     const { id } = await params;
-    const { text, scriptType } = await request.json();
     const userId = session.user.id || session.user._id;
+
+    // אימות מזהים מוקדם — מזהה פסול היה זורק CastError ומחזיר 500
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json({ success: false, error: 'מזהה שורה לא תקין' }, { status: 400 });
+    }
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return NextResponse.json({ success: false, error: 'מזהה משתמש לא תקין' }, { status: 401 });
+    }
+
+    const { text, scriptType } = await request.json();
 
     // אימות הטקסט מול תקן האלפבית — אותם כללים כמו בייצוא לאימון
     const norm = normalizeLineText(text);
