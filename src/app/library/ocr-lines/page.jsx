@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react'
+import { useState, useEffect, useMemo, useCallback, memo } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Header from '@/components/layout/Header'
@@ -141,7 +141,8 @@ export default function OcrLinesPage() {
 
   const [lines, setLines] = useState([])
   const [loading, setLoading] = useState(true)
-  const [savedCount, setSavedCount] = useState(0)
+  // התקדמות המאגר: total = כל השורות, done = הוגשו או אושרו, mine = שלי
+  const [stats, setStats] = useState(null)
   const [contextLine, setContextLine] = useState(null)
   const [rulesOpen, setRulesOpen] = useState(true)
 
@@ -153,8 +154,10 @@ export default function OcrLinesPage() {
       setLoading(true)
       const res = await fetch('/api/ocr-lines')
       const data = await res.json()
-      if (data.success) setLines(data.lines)
-      else if (data.error) showAlert('שגיאה', data.error)
+      if (data.success) {
+        setLines(data.lines)
+        if (data.stats) setStats(data.stats)
+      } else if (data.error) showAlert('שגיאה', data.error)
     } catch {
       showAlert('שגיאה', 'תקלה בתקשורת')
     } finally {
@@ -173,40 +176,24 @@ export default function OcrLinesPage() {
     }
   }, [status, session, router, load])
 
-  // הרשימה הנוכחית ב-ref — כך handleSave נשאר רפרנס יציב (useCallback ללא תלות
-  // ב-lines), וה-memo של LineRow באמת מונע רינדור של שורות שלא השתנו.
-  const linesRef = useRef(lines)
-  useEffect(() => {
-    linesRef.current = lines
-  }, [lines])
-
-  // שמירה: השורה ששמורה יוצאת מהדף ובמקומה נכנסת חלופית מהשרת — שאר השורות
-  // אינן מתרנדרות מחדש (key לפי id + memo שומרים עליהן).
+  // שמירה: השורה יורדת מהדף בלי תחליף — הרשימה מתקצרת, וכשמתרוקנת מופיע
+  // "טען עוד". שאר השורות אינן מתרנדרות מחדש (key לפי id + memo).
   const handleSave = useCallback(async (line, text, scriptType) => {
     try {
       const res = await fetch(`/api/ocr-lines/${line.id}/save`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, scriptType, excludeIds: linesRef.current.map((l) => l.id) }),
+        body: JSON.stringify({ text, scriptType }),
       })
       const data = await res.json()
 
-      const replaceWith = data.next || null
       if (data.success) {
-        setSavedCount((n) => n + 1)
-        setLines((prev) =>
-          replaceWith
-            ? prev.map((l) => (l.id === line.id ? replaceWith : l))
-            : prev.filter((l) => l.id !== line.id)
-        )
+        setLines((prev) => prev.filter((l) => l.id !== line.id))
+        setStats((s) => (s ? { ...s, done: s.done + 1, mine: s.mine + 1 } : s))
       } else if (res.status === 409) {
-        // מישהו הקדים אותנו — מחליפים את השורה בכל מקרה
+        // מישהו הקדים אותנו — השורה יורדת בכל מקרה
         showAlert('השורה נתפסה', data.error || 'השורה כבר תומללה על ידי משתמש אחר')
-        setLines((prev) =>
-          replaceWith
-            ? prev.map((l) => (l.id === line.id ? replaceWith : l))
-            : prev.filter((l) => l.id !== line.id)
-        )
+        setLines((prev) => prev.filter((l) => l.id !== line.id))
       } else {
         showAlert('שגיאה', data.error || 'שגיאה בשמירת השורה')
       }
@@ -229,14 +216,22 @@ export default function OcrLinesPage() {
                 תמלול שורות לאימון OCR
               </h1>
               <p className="text-on-surface/60 mt-2">
-                מוצגות {lines.length > 0 ? lines.length : 10} שורות אקראיות. הקלידו את הטקסט המדויק של כל שורה ולחצו שמור —
-                שורה שנשמרה מוחלפת מיד בשורה חדשה.
+                מוצגות עד 10 שורות אקראיות. הקלידו את הטקסט המדויק של כל שורה ולחצו שמור —
+                שורה שנשמרה יורדת מהרשימה, וכשתסיימו תוכלו לטעון עוד.
               </p>
             </div>
-            <div className="flex items-center gap-3">
-              {savedCount > 0 && (
+            <div className="flex items-center gap-3 flex-wrap">
+              {stats && (
+                <span
+                  className="px-3 py-1.5 rounded-full bg-info-100 text-info-800 text-sm font-bold"
+                  title="שורות שתומללו (כולל ממתינות לאישור) מתוך כלל המאגר"
+                >
+                  נעשו {stats.done.toLocaleString('he-IL')} מתוך {stats.total.toLocaleString('he-IL')} שורות
+                </span>
+              )}
+              {stats && stats.mine > 0 && (
                 <span className="px-3 py-1.5 rounded-full bg-success-100 text-success-800 text-sm font-bold">
-                  נשמרו {savedCount} שורות
+                  שלכם: {stats.mine.toLocaleString('he-IL')}
                 </span>
               )}
               <button
@@ -283,8 +278,17 @@ export default function OcrLinesPage() {
             <LoadingSpinner message="טוען שורות..." />
           ) : lines.length === 0 ? (
             canWork && (
-              <div className="glass-strong rounded-xl p-10 text-center text-on-surface/60">
-                אין כרגע שורות זמינות לתמלול. נסו שוב מאוחר יותר — תודה על העזרה!
+              <div className="glass-strong rounded-xl p-10 text-center flex flex-col items-center gap-4">
+                <p className="text-on-surface/70 font-medium">
+                  סיימתם את השורות שהוצגו — תודה רבה על העזרה!
+                </p>
+                <button
+                  onClick={load}
+                  className="bg-primary hover:opacity-90 text-on-primary font-bold px-6 py-3 rounded-lg transition-all flex items-center gap-2"
+                >
+                  <span className="material-symbols-outlined">autorenew</span>
+                  טען עוד שורות
+                </button>
               </div>
             )
           ) : (

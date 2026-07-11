@@ -3,29 +3,20 @@ import mongoose from 'mongoose';
 import connectDB from '@/lib/db';
 import OcrLine from '@/models/OcrLine';
 import { normalizeLineText, findForbidden } from '@/lib/ocr/textStandard';
-import { sampleAvailableLines, requireVerifiedSession } from '@/lib/ocr/linePool';
+import { requireVerifiedSession } from '@/lib/ocr/linePool';
 
-// שולף שורה זמינה אקראית אחת כתחליף לשורה שנשמרה, למעט השורות שכבר מוצגות
-// אצל המשתמש.
-async function sampleReplacement(excludeIds) {
-  const lines = await sampleAvailableLines(1, excludeIds);
-  return lines[0] || null;
-}
-
-// POST: שמירת תמלול של שורה. גוף: { text, scriptType?, excludeIds? }.
+// POST: שמירת תמלול של שורה. גוף: { text, scriptType? }.
 // השמירה אטומית — מצליחה רק אם השורה עדיין זמינה (הראשון ששומר זוכה).
 // scriptType שונה מהשמור נרשם כהצעת שינוי הממתינה להכרעת מנהל.
-// בהצלחה (וגם בהתנגשות) מוחזרת שורה חלופית אקראית כדי שבדף יישארו תמיד 10.
+// שורה שנשמרה פשוט יורדת מהדף — טעינת שורות חדשות נעשית ביוזמת המשתמש.
 export async function POST(request, { params }) {
   const { session, error } = await requireVerifiedSession();
   if (error) return error;
 
   try {
     const { id } = await params;
-    const { text, scriptType, excludeIds } = await request.json();
+    const { text, scriptType } = await request.json();
     const userId = session.user.id || session.user._id;
-    // קלט לקוח — פריסה של לא-מערך זורקת TypeError
-    const exclude = Array.isArray(excludeIds) ? excludeIds : [];
 
     // אימות הטקסט מול תקן האלפבית — אותם כללים כמו בייצוא לאימון
     const norm = normalizeLineText(text);
@@ -77,16 +68,13 @@ export async function POST(request, { params }) {
       if (!exists) {
         return NextResponse.json({ success: false, error: 'השורה לא נמצאה' }, { status: 404 });
       }
-      // מישהו הקדים — מחזירים תחליף כדי שהדף יתמלא בכל זאת
-      const next = await sampleReplacement([...exclude, id]);
       return NextResponse.json(
-        { success: false, error: 'השורה כבר תומללה על ידי משתמש אחר', next },
+        { success: false, error: 'השורה כבר תומללה על ידי משתמש אחר' },
         { status: 409 }
       );
     }
 
-    const next = await sampleReplacement([...exclude, id]);
-    return NextResponse.json({ success: true, next });
+    return NextResponse.json({ success: true });
   } catch (err) {
     console.error('OCR line save error:', err);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
