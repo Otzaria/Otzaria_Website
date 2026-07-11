@@ -15,9 +15,11 @@ export async function GET() {
     await connectDB();
     const lines = await sampleAvailableLines(LINES_BATCH_SIZE);
 
+    // ספירות יעילות: total מהמטא-דאטה של האוסף (O(1), מקורב), done על אינדקס status
     const userId = session.user.id || session.user._id;
-    const [statusRows, mine] = await Promise.all([
-      OcrLine.aggregate([{ $group: { _id: '$status', n: { $sum: 1 } } }]),
+    const [total, done, mine] = await Promise.all([
+      OcrLine.estimatedDocumentCount(),
+      OcrLine.countDocuments({ status: { $in: ['submitted', 'approved'] } }),
       mongoose.Types.ObjectId.isValid(userId)
         ? OcrLine.countDocuments({
             transcribedBy: new mongoose.Types.ObjectId(userId),
@@ -25,13 +27,6 @@ export async function GET() {
           })
         : 0,
     ]);
-
-    let total = 0;
-    let done = 0;
-    for (const row of statusRows) {
-      total += row.n;
-      if (row._id === 'submitted' || row._id === 'approved') done += row.n;
-    }
 
     return NextResponse.json({ success: true, lines, stats: { total, done, mine } });
   } catch (err) {
