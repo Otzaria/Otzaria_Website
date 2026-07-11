@@ -66,7 +66,7 @@ export async function POST(request, { params }) {
               : null,
           },
         },
-        { $unset: 'leasedUntil' },
+        { $unset: ['leasedUntil', 'prefillText'] },
       ],
       // mongoose 9 דורש הצהרה מפורשת שהעדכון הוא aggregation pipeline
       { new: true, updatePipeline: true }
