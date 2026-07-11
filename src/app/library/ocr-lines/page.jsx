@@ -35,6 +35,13 @@ const LineRow = memo(function LineRow({ line, onSave, onOpenContext }) {
   const [script, setScript] = useState(line.scriptType || 'square')
   const [saving, setSaving] = useState(false)
 
+  // איפוס בעת החלפת השורה: אחרי רענון עלולה לחזור שורה עם אותו id (אותו key),
+  // ו-React משמר את המופע — בלי זה יוצגו עריכות ישנות שלא נשמרו
+  useEffect(() => {
+    setText(line.prefillText || '')
+    setScript(line.scriptType || 'square')
+  }, [line])
+
   const forbidden = useMemo(() => findForbidden(text), [text])
   const canSave = !saving && forbidden.length === 0 && !!normalizeLineText(text)
   const scriptChanged = script !== (line.scriptType || 'square')
