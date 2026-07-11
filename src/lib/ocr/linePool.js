@@ -23,6 +23,7 @@ export function publicLineShape(d) {
     imageWidth: d.imageWidth || 0,
     imageHeight: d.imageHeight || 0,
     scriptType: d.scriptType === 'rashi' ? 'rashi' : 'square',
+    prefillText: d.prefillText || '',
   };
 }
 

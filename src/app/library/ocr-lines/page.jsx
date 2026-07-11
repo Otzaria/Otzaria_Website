@@ -21,6 +21,7 @@ const RULES = [
   'גרש וגרשיים אפשר להקליד במקלדת רגילה (\' ") — הם מומרים אוטומטית לצורה העברית (׳ ״).',
   'רווח יחיד בין מילים; רווחים בתחילת השורה ובסופה מוסרים אוטומטית.',
   'ליד כל שורה מוצג סוג הכתב (מרובע / רש״י). אם הסיווג שגוי — החליפו אותו; השינוי יועבר לאישור מנהל.',
+  'בחלק מהשורות תופיע טיוטת מחשב מוכנה — אל תסמכו עליה: השוו אות-אות מול התמונה ותקנו כל שגיאה לפני השמירה.',
   'שורה לא קריאה, חתוכה או פגומה? דלגו עליה — רענון הדף יביא שורות אחרות.',
 ]
 
@@ -29,7 +30,8 @@ const SCRIPT_LABELS = { square: 'מרובע', rashi: 'רש״י' }
 // שורת תמלול בודדת: תמונה מימין, הזנת טקסט משמאל. מנהלת את הטקסט שלה מקומית,
 // ועטופה ב-memo (עם props יציבים מהאב) — שינוי בדף או בשורה אחרת לא מרנדר אותה.
 const LineRow = memo(function LineRow({ line, onSave, onOpenContext }) {
-  const [text, setText] = useState('')
+  // טיוטת OCR (אם קיימת) כנקודת פתיחה — המתמלל מגיה אותה מול התמונה
+  const [text, setText] = useState(line.prefillText || '')
   const [script, setScript] = useState(line.scriptType || 'square')
   const [saving, setSaving] = useState(false)
 
@@ -108,6 +110,12 @@ const LineRow = memo(function LineRow({ line, onSave, onOpenContext }) {
           placeholder="הקלידו כאן את טקסט השורה במדויק..."
           className="border border-neutral-300 rounded-lg p-3 text-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/40 w-full"
         />
+        {!!line.prefillText && (
+          <div className="text-xs text-info-800 bg-info-50 border border-info-200 rounded-lg px-2 py-1 flex items-center gap-1 self-start">
+            <span className="material-symbols-outlined text-xs">smart_toy</span>
+            טיוטת מחשב — הגיהו בקפידה מול התמונה לפני השמירה
+          </div>
+        )}
         {forbidden.length > 0 && (
           <div className="text-sm text-danger-600 flex items-center gap-1 flex-wrap">
             <span className="material-symbols-outlined text-sm">error</span>

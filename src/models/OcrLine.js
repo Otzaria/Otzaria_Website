@@ -42,6 +42,9 @@ const OcrLineSchema = new mongoose.Schema(
     leasedUntil: { type: Date },
 
     text: { type: String, default: '' },
+    // טיוטת מכונה (OCR) לשורה זמינה: מוצגת למתמלל כנקודת פתיחה להגהה.
+    // אינה משנה סטטוס — השורה נחשבת "תומללה" רק כשמשתמש שומר אותה בעצמו.
+    prefillText: { type: String, default: '' },
     transcribedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     transcribedByName: { type: String },
     transcribedAt: { type: Date },
