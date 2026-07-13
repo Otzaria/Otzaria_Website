@@ -39,11 +39,23 @@ const OcrLayoutPageSchema = new mongoose.Schema(
     // שם העמוד בפרויקט ה-OCR (p0012)
     pageStem: { type: String, required: true },
 
-    // תמונת העמוד המיושרת (deskew) שצורפה לאצווה — התיבות ב-prefill הן
-    // בפיקסלים של התמונה הזו. מוגשת רק דרך /api/ocr-layout/[id]/image.
+    // נתיב התמונה שמעליה מצוירות שכבות ה-prefill. שני מצבים:
+    //  • אצווה עם תמונות: תמונת העמוד המיושרת (deskew) שצורפה ל-ZIP,
+    //    ‏/uploads/ocr-layout/<batch>/… (חסומה כנכס סטטי).
+    //  • מצב-קישור (book מוגדר): מצביע לתמונת-הספר הקיימת באתר
+    //    ‏(/uploads/books/<slug>/page.N.jpg) — ה-prefill במרחב הסריקה
+    //    המקורית, ולכן מתלבש עליה בלי צורך בהעלאה כפולה.
+    // בשני המקרים התיבות ב-prefill הן בפיקסלים של התמונה הזו. מוגשת רק
+    // דרך /api/ocr-layout/[id]/image.
     imagePath: { type: String, required: true },
     imageWidth: { type: Number, default: 0 },
     imageHeight: { type: Number, default: 0 },
+
+    // מצב-קישור: הפניה לעמוד-הספר הקיים במקום העלאת תמונה נפרדת. ריק
+    // באצוות עם תמונות מצורפות.
+    book: { type: mongoose.Schema.Types.ObjectId, ref: 'Book' },
+    bookSlug: { type: String },
+    pageNumber: { type: Number },
 
     // המיקרו-שאלות של העמוד — עמוד אחד = מסך אחד, כל השאלות יחד
     tasks: { type: [OcrLayoutTaskSchema], default: [] },

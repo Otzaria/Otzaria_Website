@@ -21,6 +21,10 @@ export async function PATCH(request, { params }) {
 
   try {
     const { id } = await params;
+    // מזהה לא-תקין → CastError שנתפס ב-catch ומחזיר 500; מסננים מראש ל-400
+    if (!/^[0-9a-fA-F]{24}$/.test(String(id))) {
+      return NextResponse.json({ success: false, error: 'מזהה עמוד לא תקין' }, { status: 400 });
+    }
     const { action, answers } = await request.json();
     await connectDB();
 
@@ -133,6 +137,9 @@ export async function DELETE(request, { params }) {
 
   try {
     const { id } = await params;
+    if (!/^[0-9a-fA-F]{24}$/.test(String(id))) {
+      return NextResponse.json({ success: false, error: 'מזהה עמוד לא תקין' }, { status: 400 });
+    }
     await connectDB();
     const res = await OcrLayoutPage.deleteOne({ _id: id });
     if (!res.deletedCount) {

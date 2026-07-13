@@ -43,6 +43,10 @@ export async function GET(request, { params }) {
 
   try {
     const { id } = await params;
+    // מזהה לא-תקין → CastError/500; מסננים מראש ל-400
+    if (!/^[0-9a-fA-F]{24}$/.test(String(id))) {
+      return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
+    }
     const { searchParams } = new URL(request.url);
     const taskIdx = searchParams.get('task');
     const part = searchParams.get('part');

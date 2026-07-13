@@ -310,8 +310,16 @@ export function ZonesFullCard({ prefill, imageUrl, pagenumImgSrc, imageWidth, im
       })
     } else if (!value) {
       setParts({ pagenum: null, header: null, streams: null })
+    } else if (value.answer) {
+      // עמוד שכבר תויג (סקירת/עריכת מנהל): טוענים את התשובות הקיימות
+      // לתתי-הכרטיסים, אחרת הם מוצגים ריקים
+      setParts({
+        pagenum: prefill.pagenum && value.answer.pagenum ? { confirmed: false, answer: value.answer.pagenum } : null,
+        header: prefill.header && value.answer.header ? { confirmed: false, answer: value.answer.header } : null,
+        streams: prefill.streams && value.answer.streams ? { confirmed: false, answer: value.answer.streams } : null,
+      })
     }
-    // רק שינוי חיצוני (איפוס/אישור-הכול) מעניין אותנו — לא כל עדכון פנימי
+    // רק שינוי חיצוני (איפוס/אישור-הכול/טעינת-תשובות) מעניין אותנו — לא כל עדכון פנימי
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value?.confirmed, value === null])
 

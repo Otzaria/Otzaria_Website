@@ -2,8 +2,10 @@ import { NextResponse } from 'next/server';
 import path from 'path';
 import fs from 'fs-extra';
 import { unzipSync } from 'fflate';
+import mongoose from 'mongoose';
 import connectDB from '@/lib/db';
 import OcrLayoutPage from '@/models/OcrLayoutPage';
+import Page from '@/models/Page';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { isAdmin } from '@/lib/roles';
@@ -13,7 +15,10 @@ import { validatePrefill, TASK_KINDS } from '@/lib/ocr/layoutValidation';
 // פריקת אצווה יכולה לקחת זמן (מאות תמונות לדיסק)
 export const maxDuration = 300;
 
-const MAX_ZIP_BYTES = 500 * 1024 * 1024; // תואם את proxyClientMaxBodySize
+// תקרת זיכרון: unzipSync פורק את כל ה-ZIP לזיכרון בבת אחת. מצב-הקישור
+// (ref לתמונת-ספר קיימת) הפך אצוות-תמונות כבדות למיותרות — אצווה טיפוסית
+// היא מטא-דאטה בלבד — ולכן רף בטוח מפני OOM, ולא 500mb של הפרוקסי הכללי.
+const MAX_ZIP_BYTES = 100 * 1024 * 1024;
 const MAX_RECORDS = 20000;
 
 // מזהי אצווה/מהדורה/עמוד: ASCII בטוח לנתיב, בלי אפשרות traversal
@@ -85,8 +90,11 @@ export async function POST(request) {
         continue;
       }
 
-      const { batch, edition, page, width, height, tasks } = rec || {};
-      if (!SAFE_ID.test(String(batch)) || !SAFE_ID.test(String(edition)) || !SAFE_ID.test(String(page))) {
+      const { batch, edition, page, width, height, tasks, ref } = rec || {};
+      // בלי הבדיקה המפורשת לקיום: String(undefined)==="undefined" עובר את
+      // SAFE_ID ומזהם את המסד/הדיסק בערכי "undefined"
+      if (!batch || !edition || !page ||
+          !SAFE_ID.test(String(batch)) || !SAFE_ID.test(String(edition)) || !SAFE_ID.test(String(page))) {
         fail('מזהה אצווה/מהדורה/עמוד לא תקין');
         continue;
       }
@@ -117,12 +125,42 @@ export async function POST(request) {
         continue;
       }
 
-      // התמונה חייבת להיות באצווה — מהדורות הקורפוס אינן "ספרים" באתר
-      const zipImagePath = `images/${edition}/${page}.jpg`;
-      const imageData = entries[zipImagePath];
-      if (!imageData || !imageData.length) {
-        fail(`${edition}/${page}: התמונה ${zipImagePath} חסרה ב-ZIP`);
-        continue;
+      // שני מצבים: (א) מצב-קישור — לרשומה יש ref לעמוד-ספר קיים, מצביעים
+      // לתמונת-הספר בלי להעלות תמונה כפולה; (ב) תמונה מצורפת ב-ZIP.
+      // ‏prefill במצב-קישור כבר במרחב הסריקה המקורית (הופכי ה-deskew נעשה
+      // בייצוא), ולכן מתלבש על תמונת-הספר הלא-מיושרת.
+      // בדיקת ref/זמינות התמונה לפני בדיקת "כבר נענה", כדי להיכשל מוקדם;
+      // כתיבת קובץ (מצב ב') נעשית רק אחרי שווידאנו שהעמוד אינו נענה.
+      const linkFields = {};
+      let zipImageData = null;
+      let imagePath;
+      if (ref) {
+        if (!/^[a-fA-F0-9]{24}$/.test(String(ref.bookId)) ||
+            !Number.isInteger(ref.pageNumber) || ref.pageNumber <= 0) {
+          fail(`${edition}/${page}: ref לא תקין (bookId/pageNumber)`);
+          continue;
+        }
+        const src = await Page.findOne({
+          book: new mongoose.Types.ObjectId(String(ref.bookId)),
+          pageNumber: ref.pageNumber,
+        }).select('imagePath').lean();
+        if (!src?.imagePath) {
+          fail(`${edition}/${page}: עמוד-ספר לקישור לא נמצא (book ${ref.bookId} עמ' ${ref.pageNumber})`);
+          continue;
+        }
+        imagePath = src.imagePath;
+        linkFields.book = new mongoose.Types.ObjectId(String(ref.bookId));
+        linkFields.bookSlug = ref.slug ? String(ref.slug) : undefined;
+        linkFields.pageNumber = ref.pageNumber;
+      } else {
+        // מהדורות הקורפוס אינן "ספרים" באתר — התמונה חייבת להיות ב-ZIP
+        const zipImagePath = `images/${edition}/${page}.jpg`;
+        zipImageData = entries[zipImagePath];
+        if (!zipImageData || !zipImageData.length) {
+          fail(`${edition}/${page}: התמונה ${zipImagePath} חסרה ב-ZIP`);
+          continue;
+        }
+        imagePath = `/uploads/ocr-layout/${batch}/${edition}/${page}.jpg`;
       }
 
       const key = { batch, edition, pageStem: page };
@@ -133,10 +171,12 @@ export async function POST(request) {
         continue;
       }
 
-      const imagePath = `/uploads/ocr-layout/${batch}/${edition}/${page}.jpg`;
-      const fsPath = resolveImageFsPath(imagePath); // כולל אימות traversal
-      await fs.ensureDir(path.dirname(fsPath));
-      await fs.writeFile(fsPath, Buffer.from(imageData));
+      // מצב תמונה-ב-ZIP: כותבים לדיסק רק עכשיו (אחרי שהעמוד אינו נענה)
+      if (zipImageData) {
+        const fsPath = resolveImageFsPath(imagePath); // כולל אימות traversal
+        await fs.ensureDir(path.dirname(fsPath));
+        await fs.writeFile(fsPath, Buffer.from(zipImageData));
+      }
 
       // התנאי על הסטטוס גם בעדכון עצמו: מתנדב שהגיש בין הבדיקה לכתיבה לא
       // יידרס — ההתאמה תיכשל, ה-upsert יתנגש במפתח הייחודי ויידלג.
@@ -150,6 +190,7 @@ export async function POST(request) {
               imageHeight: height,
               tasks: cleanTasks,
               status: 'available',
+              ...linkFields,
             },
             $unset: { leasedUntil: '' },
           },
