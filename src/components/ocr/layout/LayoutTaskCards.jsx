@@ -221,6 +221,7 @@ export function StreamsTaskCard({ prefill, imageUrl, imageWidth, imageHeight, va
   // "הוסף רצועה" גלוי — חיוני כשזוהה זרם אחד בלבד ובעמוד יש שניים:
   // מפצל את הרצועה הגבוהה ביותר, ואת הגבול גוררים למקום הנכון
   const addBand = () => {
+    if (!bands || !bands.length) return
     let tallest = 0
     for (let j = 1; j < bands.length; j++) {
       if (bands[j].y1 - bands[j].y0 > bands[tallest].y1 - bands[tallest].y0) tallest = j

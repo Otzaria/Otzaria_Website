@@ -53,7 +53,8 @@ export async function GET(request) {
           $group: {
             _id: {
               status: '$status',
-              flagged: { $cond: [{ $ifNull: ['$flagged', false] }, true, false] },
+              // $ne מבטיח ביטוי בוליאני — flagged מכיל מחרוזת, לא boolean
+              flagged: { $ne: [{ $ifNull: ['$flagged', null] }, null] },
             },
             n: { $sum: 1 },
           },
