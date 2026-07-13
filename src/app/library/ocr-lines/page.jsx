@@ -30,11 +30,12 @@ const SCRIPT_LABELS = { square: 'מרובע', rashi: 'רש״י' }
 
 // שורת תמלול בודדת: תמונה מימין, הזנת טקסט משמאל. מנהלת את הטקסט שלה מקומית,
 // ועטופה ב-memo (עם props יציבים מהאב) — שינוי בדף או בשורה אחרת לא מרנדר אותה.
-const LineRow = memo(function LineRow({ line, onSave, onOpenContext }) {
+const LineRow = memo(function LineRow({ line, onSave, onFlag, onOpenContext }) {
   // טיוטת OCR (אם קיימת) כנקודת פתיחה — המתמלל מגיה אותה מול התמונה
   const [text, setText] = useState(line.prefillText || '')
   const [script, setScript] = useState(line.scriptType || 'square')
   const [saving, setSaving] = useState(false)
+  const [flagging, setFlagging] = useState(false)
 
   // איפוס בעת החלפת השורה: אחרי רענון עלולה לחזור שורה עם אותו id (אותו key),
   // ו-React משמר את המופע — בלי זה יוצגו עריכות ישנות שלא נשמרו
@@ -54,6 +55,16 @@ const LineRow = memo(function LineRow({ line, onSave, onOpenContext }) {
       await onSave(line, text, script)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleFlag = async (reason) => {
+    if (flagging || saving) return
+    setFlagging(true)
+    try {
+      await onFlag(line, reason)
+    } finally {
+      setFlagging(false)
     }
   }
 
@@ -139,7 +150,7 @@ const LineRow = memo(function LineRow({ line, onSave, onOpenContext }) {
             ))}
           </div>
         )}
-        <div className="mt-auto flex justify-start">
+        <div className="mt-auto flex justify-between items-center gap-2 flex-wrap">
           <button
             onClick={handleSave}
             disabled={!canSave}
@@ -148,6 +159,27 @@ const LineRow = memo(function LineRow({ line, onSave, onOpenContext }) {
             <span className="material-symbols-outlined text-sm">{saving ? 'hourglass_top' : 'save'}</span>
             {saving ? 'שומר...' : 'שמור'}
           </button>
+          {/* דיווח על שורה פגומה — יוצאת מהתור וחוזרת כמשוב פילוח לפרויקט ה-OCR */}
+          <div className="flex items-center gap-1 text-xs text-on-surface/50">
+            <button
+              onClick={() => handleFlag('unreadable')}
+              disabled={flagging || saving}
+              className="px-2 py-1 rounded-lg hover:bg-danger-50 hover:text-danger-700 transition-colors disabled:opacity-40 flex items-center gap-1"
+              title="התמונה אינה ניתנת לקריאה (מטושטשת, ריקה, כתמים)"
+            >
+              <span className="material-symbols-outlined text-sm">visibility_off</span>
+              לא קריא
+            </button>
+            <button
+              onClick={() => handleFlag('bad_crop')}
+              disabled={flagging || saving}
+              className="px-2 py-1 rounded-lg hover:bg-danger-50 hover:text-danger-700 transition-colors disabled:opacity-40 flex items-center gap-1"
+              title="החיתוך שגוי: חצי שורה, שתי שורות, או לא שורת טקסט כלל"
+            >
+              <span className="material-symbols-outlined text-sm">content_cut</span>
+              חיתוך שגוי
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -216,6 +248,27 @@ export default function OcrLinesPage() {
         setLines((prev) => prev.filter((l) => l.id !== line.id))
       } else {
         showAlert('שגיאה', data.error || 'שגיאה בשמירת השורה')
+      }
+    } catch {
+      showAlert('שגיאה', 'תקלה בתקשורת')
+    }
+  // showAlert יציב מספיק; לא תלות אמיתית
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // דיגול שורה פגומה: יורדת מהדף ולא תוצע שוב לאף מתנדב
+  const handleFlag = useCallback(async (line, reason) => {
+    try {
+      const res = await fetch(`/api/ocr-lines/${line.id}/flag`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      })
+      const data = await res.json()
+      if (data.success || res.status === 409) {
+        setLines((prev) => prev.filter((l) => l.id !== line.id))
+      } else {
+        showAlert('שגיאה', data.error || 'שגיאה בדיווח על השורה')
       }
     } catch {
       showAlert('שגיאה', 'תקלה בתקשורת')
@@ -314,7 +367,7 @@ export default function OcrLinesPage() {
           ) : (
             <div className="flex flex-col gap-4">
               {lines.map((line) => (
-                <LineRow key={line.id} line={line} onSave={handleSave} onOpenContext={setContextLine} />
+                <LineRow key={line.id} line={line} onSave={handleSave} onFlag={handleFlag} onOpenContext={setContextLine} />
               ))}
             </div>
           )}

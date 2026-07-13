@@ -45,6 +45,18 @@ const OcrLineSchema = new mongoose.Schema(
     // טיוטת מכונה (OCR) לשורה זמינה: מוצגת למתמלל כנקודת פתיחה להגהה.
     // אינה משנה סטטוס — השורה נחשבת "תומללה" רק כשמשתמש שומר אותה בעצמו.
     prefillText: { type: String, default: '' },
+
+    // זרימת ההגהות (proofread): שורות אי-הסכמה מפרויקט ה-OCR עם טיוטת מודל.
+    // batch = מזהה האצווה; sourceKey = מפתח-המקור הייחודי (edition/page/line)
+    // ל-upsert אידמפוטנטי ולחיבור ההכרעה חזרה לחיתוך המקורי באימון.
+    batch: { type: String, index: true },
+    sourceKey: { type: String, unique: true, sparse: true },
+    // מטא מהצינור (conf, rank, reject_reason) — לא מוצג למתנדב
+    meta: { type: mongoose.Schema.Types.Mixed },
+    // דגל מתנדב: שורה לא-קריאה או חיתוך שגוי — יוצאת מהתור בלי אישור מנהל,
+    // וחוזרת בייצוא כמשוב על הפילוח
+    flagged: { type: String, enum: ['unreadable', 'bad_crop'] },
+    flaggedByName: { type: String },
     transcribedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     transcribedByName: { type: String },
     transcribedAt: { type: Date },

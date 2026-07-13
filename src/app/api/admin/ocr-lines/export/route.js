@@ -96,8 +96,8 @@ export async function GET() {
     // ה-producer רץ ברקע בזמן שהתגובה כבר זורמת ללקוח
     (async () => {
       const perScript = {
-        square: { manifest: [], contributors: [], rejected: [], lines: 0, rejectedCount: 0 },
-        rashi: { manifest: [], contributors: [], rejected: [], lines: 0, rejectedCount: 0 },
+        square: { manifest: [], contributors: [], rejected: [], proofread: [], lines: 0, rejectedCount: 0 },
+        rashi: { manifest: [], contributors: [], rejected: [], proofread: [], lines: 0, rejectedCount: 0 },
       };
 
       // מיון לפי תמונת העמוד — כל שורות אותו עמוד רצופות, ומפענחים כל תמונה פעם אחת
@@ -178,10 +178,30 @@ export async function GET() {
         addFile(relPath, new Uint8Array(cropBuf), false);
         acc.manifest.push(`${manifestPath}\t${normalizeLineText(doc.text)}`);
         acc.contributors.push(`${manifestPath}\t${doc.transcribedByName || ''}`);
+        // שורת זרימת-ההגהות: מפתח-המקור והטיוטה שהוצגה — לחיבור ההכרעה חזרה
+        // לחיתוך המקורי ולמדידת CER-של-prefill בקליטה (ingest_proofread.py)
+        if (doc.sourceKey) {
+          acc.proofread.push(
+            `${manifestPath}\t${doc.sourceKey}\t${doc.batch || ''}\t${(doc.meta?.prefill ?? doc.prefillText ?? '').replace(/\s+/g, ' ')}`
+          );
+        }
         acc.lines += 1;
       }
 
       if (cancelled) return;
+
+      // משוב הפילוח: שורות שמתנדבים דיגלו כלא-קריאות/חיתוך-שגוי
+      const flaggedRows = [];
+      const flaggedCursor = OcrLine.find({ flagged: { $exists: true } })
+        .select('sourceKey batch flagged flaggedByName scriptType')
+        .lean()
+        .cursor();
+      for await (const doc of flaggedCursor) {
+        if (cancelled) return;
+        flaggedRows.push(
+          `${doc.sourceKey || String(doc._id)}\t${doc.batch || ''}\t${doc.scriptType}\t${doc.flagged}\t${doc.flaggedByName || ''}`
+        );
+      }
 
       const enc = new TextEncoder();
       for (const [script, acc] of Object.entries(perScript)) {
@@ -209,6 +229,27 @@ export async function GET() {
             true
           );
         }
+        if (acc.proofread.length) {
+          addFile(
+            `${script}/proofread.tsv`,
+            enc.encode(
+              '# image_path\tsourceKey\tbatch\tprefill — שורות זרימת-ההגהות: חיבור לחיתוך המקורי + הטיוטה שהוצגה\n' +
+                acc.proofread.join('\n') + '\n'
+            ),
+            true
+          );
+        }
+      }
+
+      if (flaggedRows.length) {
+        addFile(
+          'flagged.tsv',
+          enc.encode(
+            '# sourceKey\tbatch\tscript\treason\tby — שורות שדוגלו ע"י מתנדבים (משוב פילוח, לא לאימון)\n' +
+              flaggedRows.join('\n') + '\n'
+          ),
+          true
+        );
       }
 
       addFile('README.txt', enc.encode(readmeText(perScript)), true);

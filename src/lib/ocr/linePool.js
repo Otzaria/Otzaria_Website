@@ -33,6 +33,8 @@ export function publicLineShape(d) {
 // אם המאגר הפנוי קטן מהמבוקש — משלים משורות מוחכרות (עדיף התנגשות אפשרית
 // מדף ריק). רשימת ההחרגה מוגבלת בגודל המנה, כך שאי אפשר "לרוקן" את המאגר
 // דרך excludeIds מנופח.
+// עדיפות תור: שורות אצוות-הגהה (batch) לפני שורות המאגר הכללי — שם יושבות
+// שורות אי-ההסכמה שהמודל צריך הכי הרבה. שורות שדוגלו (flagged) לא מוצעות.
 export async function sampleAvailableLines(count, excludeIds = []) {
   const exclude = (Array.isArray(excludeIds) ? excludeIds : [])
     .slice(0, LINES_BATCH_SIZE + 2)
@@ -40,46 +42,54 @@ export async function sampleAvailableLines(count, excludeIds = []) {
     .map((v) => new mongoose.Types.ObjectId(v));
 
   const leaseFree = () => ({ $or: [{ leasedUntil: null }, { leasedUntil: { $lt: new Date() } }] });
+  const notFlagged = { flagged: { $exists: false } };
   const claimed = [];
   const seen = new Set(exclude.map(String));
 
-  // מספר סבבים חסום — הפסדים במרוץ מפוצים בדגימת-יתר בסבב הבא
-  for (let round = 0; round < 4 && claimed.length < count; round++) {
-    const need = count - claimed.length;
-    const candidates = await OcrLine.aggregate([
-      {
-        $match: {
-          status: 'available',
-          _id: { $nin: [...exclude, ...claimed.map((d) => d._id)] },
-          ...leaseFree(),
+  // מספר סבבים חסום — הפסדים במרוץ מפוצים בדגימת-יתר בסבב הבא.
+  // שני מעברים: קודם רק שורות אצווה, ואז המאגר כולו.
+  const passes = [{ batch: { $exists: true, $ne: null } }, {}];
+  for (const passFilter of passes) {
+    for (let round = 0; round < 4 && claimed.length < count; round++) {
+      const need = count - claimed.length;
+      const candidates = await OcrLine.aggregate([
+        {
+          $match: {
+            status: 'available',
+            _id: { $nin: [...exclude, ...claimed.map((d) => d._id)] },
+            ...notFlagged,
+            ...passFilter,
+            ...leaseFree(),
+          },
         },
-      },
-      { $sample: { size: need * 2 } },
-      { $project: { _id: 1 } },
-    ]);
-    if (!candidates.length) break;
+        { $sample: { size: need * 2 } },
+        { $project: { _id: 1 } },
+      ]);
+      if (!candidates.length) break;
 
-    for (const c of candidates) {
-      if (claimed.length >= count) break;
-      const k = String(c._id);
-      if (seen.has(k)) continue;
-      seen.add(k);
+      for (const c of candidates) {
+        if (claimed.length >= count) break;
+        const k = String(c._id);
+        if (seen.has(k)) continue;
+        seen.add(k);
 
-      // תפיסת ההחכרה — עדכון מותנה יחיד; רק בקשה אחת יכולה לזכות בשורה
-      const doc = await OcrLine.findOneAndUpdate(
-        { _id: c._id, status: 'available', ...leaseFree() },
-        { leasedUntil: new Date(Date.now() + LINE_LEASE_MS) },
-        { new: true, lean: true }
-      );
-      if (doc) claimed.push(doc);
+        // תפיסת ההחכרה — עדכון מותנה יחיד; רק בקשה אחת יכולה לזכות בשורה
+        const doc = await OcrLine.findOneAndUpdate(
+          { _id: c._id, status: 'available', ...notFlagged, ...leaseFree() },
+          { leasedUntil: new Date(Date.now() + LINE_LEASE_MS) },
+          { new: true, lean: true }
+        );
+        if (doc) claimed.push(doc);
+      }
     }
+    if (claimed.length >= count) break;
   }
 
   // המאגר הפנוי קטן מהמבוקש — משלימים משורות שמוחכרות לאחרים, בלי לגעת בהחכרתם
   if (claimed.length < count) {
     const taken = [...exclude, ...claimed.map((d) => d._id)];
     const extra = await OcrLine.aggregate([
-      { $match: { status: 'available', _id: { $nin: taken } } },
+      { $match: { status: 'available', _id: { $nin: taken }, ...notFlagged } },
       { $sample: { size: count - claimed.length } },
     ]);
     for (const d of extra) {
