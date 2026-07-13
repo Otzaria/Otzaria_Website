@@ -12,7 +12,11 @@ function foldTasksToRecord(tasks) {
   const rec = {};
   const apply = (kind, answer) => {
     if (!answer) return;
-    if (kind === 'pagenum') rec.pagenum = { value: answer.value ?? null };
+    if (kind === 'pagenum') {
+      rec.pagenum = { value: answer.value ?? null };
+      // שומר-דף (D019): apply_template הופך את ההחרגה ל-kind catchword
+      if (answer.catchword === true) rec.pagenum.catchword = true;
+    }
     else if (kind === 'header') rec.header = { box: answer.box ?? null };
     else if (kind === 'streams') {
       rec.streams = (answer.bands || []).map((b) => ({
@@ -139,9 +143,12 @@ export async function GET() {
         'הכרעות-אדם לתיוג מבנה-עמוד (מאושרות בלבד) — יוצא מ-Otzaria_Website\n' +
           '=================================================================\n\n' +
           'קובץ לכל מהדורה: <edition>.human.jsonl — שורה לעמוד:\n' +
-          '{page, pagenum:{value|null}, header:{box|null}, streams:[{y0,y1,book_stream}], by, at}\n' +
-          'שדה חסר = לא הייתה משימה כזו בעמוד. תיבות בפיקסלים של התמונה המיושרת\n' +
-          'שיוצאה באצווה; רצועות זרמים מנורמלות (0..1) לגובה העמוד.\n\n' +
+          '{page, pagenum:{value|null, catchword?}, header:{box|null}, streams:[{y0,y1,book_stream}], by, at}\n' +
+          'שדה חסר = לא הייתה משימה כזו בעמוד. pagenum.catchword=true = החיתוך\n' +
+          'מציג שומר-דף (מילה מהעמוד הבא), לא מספר (D019).\n' +
+          'תיבות בפיקסלים של תמונת העמוד שהאצווה הצביעה עליה (אצוות ZIP —\n' +
+          'התמונה המיושרת; אצוות-קישור — סריקת הספר המקורית); רצועות זרמים\n' +
+          'מנורמלות (0..1) לגובה העמוד.\n\n' +
           'צריכה בפרויקט ה-OCR:\n' +
           'python scripts/apply_template.py --editions <ed> --human <תיקיית הקבצים>\n'
       );

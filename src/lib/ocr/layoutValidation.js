@@ -153,6 +153,10 @@ function legendIdsOf(prefill) {
 
 function checkPagenumAnswer(a) {
   if (!a || typeof a !== 'object') return 'תשובה חסרה';
+  // שומר-דף (D019): החיתוך מציג מילה מהעמוד הבא, לא מספר — ללא ערך
+  if (a.catchword === true) {
+    return a.value === null ? null : 'שומר-דף מסומן יחד עם ערך';
+  }
   if (a.value === null) return null; // "אין מספר עמוד"
   if (typeof a.value !== 'string' || !a.value.trim()) return 'יש להקליד ערך או לסמן שאין מספר';
   if (a.value.length > 12) return 'ערך ארוך מדי';
@@ -199,6 +203,8 @@ export function validateAnswer(kind, answer, prefill, imageWidth, imageHeight) {
  */
 export function cleanAnswer(kind, answer) {
   if (kind === 'pagenum') {
+    // catchword נשמר — apply_template צורך אותו כהחרגת שומר-דף (D019)
+    if (answer.catchword === true) return { value: null, catchword: true };
     return { value: answer.value === null ? null : answer.value.trim() };
   }
   if (kind === 'header') {
