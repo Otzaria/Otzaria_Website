@@ -7,6 +7,7 @@ import Header from '@/components/layout/Header'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import OcrLineContextModal from '@/components/ocr/OcrLineContextModal'
+import AutoGrowTextarea from '@/components/ocr/AutoGrowTextarea'
 import { normalizeLineText, findForbidden } from '@/lib/ocr/textStandard'
 import { hasBookLibraryAccess } from '@/lib/roles'
 
@@ -108,12 +109,16 @@ const LineRow = memo(function LineRow({ line, onSave, onOpenContext }) {
 
       {/* הזנת הטקסט (משמאל) */}
       <div className="md:w-1/2 flex flex-col gap-2">
-        <input
-          type="text"
+        <AutoGrowTextarea
           dir="rtl"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              handleSave()
+            }
+          }}
           placeholder="הקלידו כאן את טקסט השורה במדויק..."
           className="border border-neutral-300 rounded-lg p-3 text-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/40 w-full"
         />

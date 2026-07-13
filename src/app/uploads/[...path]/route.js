@@ -17,9 +17,21 @@ const MIME_MAP = {
   '.json': 'application/json',
 };
 
+// תיקיות שאינן מוגשות כנכס סטטי: תמונות תיוג מבנה-עמוד שייכות לקורפוס
+// ה-OCR (לא "ספרים" באתר) ומוגשות רק דרך /api/ocr-layout/[id]/image
+// למשתמשים מאומתים.
+const BLOCKED_PREFIXES = ['ocr-layout/'];
+
 export async function GET(request, { params }) {
   const segments = (await params).path;
   const relative = segments.join('/');
+
+  // נרמול לפני הבדיקה: לוכסן-הפוך ורישיות אינם עוקפים את החסימה
+  // (מערכת קבצים לא רגישת-רישיות תגיש OCR-Layout/... כאילו הייתה ocr-layout/)
+  const normalized = relative.replace(/\\/g, '/').toLowerCase();
+  if (BLOCKED_PREFIXES.some((p) => normalized === p.slice(0, -1) || normalized.startsWith(p))) {
+    return new Response(null, { status: 403 });
+  }
 
   const resolved = path.resolve(UPLOAD_ROOT, relative);
   if (!resolved.startsWith(UPLOAD_ROOT + path.sep) && resolved !== UPLOAD_ROOT) {
