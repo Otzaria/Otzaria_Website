@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import OcrLineContextModal from '@/components/ocr/OcrLineContextModal'
+import AutoGrowTextarea from '@/components/ocr/AutoGrowTextarea'
 import { isAdmin } from '@/lib/roles'
 import { normalizeLineText, findForbidden } from '@/lib/ocr/textStandard'
 
@@ -45,12 +46,16 @@ function AdminLineText({ line, onSave }) {
   return (
     <div className="flex-1 flex flex-col gap-1">
       <div className="flex items-center gap-2">
-        <input
-          type="text"
+        <AutoGrowTextarea
           dir="rtl"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && save()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              save()
+            }
+          }}
           className="border border-neutral-200 bg-neutral-50 focus:bg-white rounded-lg p-3 text-lg text-neutral-800 w-full focus:outline-none focus:ring-2 focus:ring-primary/40"
         />
         {dirty && (
