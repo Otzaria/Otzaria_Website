@@ -7,9 +7,10 @@ import { isAdmin } from '@/lib/roles';
 import { normalizeLineText, findForbidden } from '@/lib/ocr/textStandard';
 
 // PATCH: פעולות ניהול על שורה.
-// גוף: { action: 'approve' | 'return' | 'set-text' | 'set-script' | 'accept-script' | 'reject-script', text?, scriptType? }
+// גוף: { action: 'approve' | 'return' | 'set-text' | 'set-script' | 'accept-script' | 'reject-script' | 'unflag', text?, scriptType? }
 // approve — אישור תמלול שהוגש (חסום כל עוד יש הצעת שינוי כתב פתוחה);
 // return — מחיקת הטקסט והחזרת השורה למאגר הזמינות;
+// unflag — ביטול דיגול מתנדב (לא-קריא/חיתוך שגוי) והחזרת השורה לתור;
 // set-text — תיקון הטקסט בידי המנהל (בהגשה ובמאושרות), באותם כללי תקן כמו המתמלל;
 // set-script — קביעת סוג הכתב ישירות (מבטלת הצעה פתוחה);
 // accept-script / reject-script — הכרעה בהצעת שינוי הכתב של המתמלל.
@@ -51,24 +52,48 @@ export async function PATCH(request, { params }) {
     }
 
     if (action === 'return') {
+      // שורת-הגהה חוזרת לתור עם הטיוטה המקורית (meta.prefill — השמירה מוחקת
+      // את prefillText); שורה ותיקה חוזרת כרגיל
       const doc = await OcrLine.findByIdAndUpdate(
         id,
-        {
-          status: 'available',
-          text: '',
-          $unset: {
-            transcribedBy: '',
-            transcribedByName: '',
-            transcribedAt: '',
-            approvedAt: '',
-            suggestedScriptType: '',
-            leasedUntil: '',
+        [
+          {
+            $set: {
+              status: 'available',
+              text: '',
+              prefillText: { $ifNull: ['$meta.prefill', '$prefillText', ''] },
+            },
           },
-        },
-        { new: true }
+          {
+            $unset: [
+              'transcribedBy',
+              'transcribedByName',
+              'transcribedAt',
+              'approvedAt',
+              'suggestedScriptType',
+              'leasedUntil',
+            ],
+          },
+        ],
+        { new: true, updatePipeline: true }
       );
       if (!doc) {
         return NextResponse.json({ success: false, error: 'השורה לא נמצאה' }, { status: 404 });
+      }
+      return NextResponse.json({ success: true });
+    }
+
+    if (action === 'unflag') {
+      const doc = await OcrLine.findOneAndUpdate(
+        { _id: id, status: 'available', flagged: { $exists: true } },
+        { $unset: { flagged: '', flaggedByName: '' } },
+        { new: true }
+      );
+      if (!doc) {
+        return NextResponse.json(
+          { success: false, error: 'השורה לא נמצאה או שאינה מדוגלת' },
+          { status: 404 }
+        );
       }
       return NextResponse.json({ success: true });
     }

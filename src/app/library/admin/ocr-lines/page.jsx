@@ -14,9 +14,19 @@ const TABS = [
   { id: 'submitted', label: 'ממתינות לאישור', icon: 'pending_actions' },
   { id: 'approved', label: 'מאושרות', icon: 'check_circle' },
   { id: 'available', label: 'זמינות לתמלול', icon: 'lock_open' },
+  { id: 'flagged', label: 'מדוגלות', icon: 'flag' },
+]
+
+// הפרדת המאגרים: אצוות-ההגהה (שורות אי-הסכמה מפרויקט ה-OCR, עם batch)
+// לעומת המאגר הוותיק — כל המונים והרשימות בחתך הבורר הזה
+const POOLS = [
+  { id: 'all', label: 'הכול' },
+  { id: 'proofread', label: 'הגהות (אצוות)' },
+  { id: 'legacy', label: 'מאגר ותיק' },
 ]
 
 const SCRIPT_LABELS = { square: 'מרובע', rashi: 'רש״י' }
+const FLAG_LABELS = { unreadable: 'לא קריא', bad_crop: 'חיתוך שגוי' }
 
 // טקסט השורה כתיבת עריכה רגילה (כמו אצל המתמלל) — למנהל, בהגשה ובמאושרות.
 // כפתור השמירה מופיע רק כשהטקסט שונה מהשמור; אותם כללי תקן נאכפים חיים.
@@ -91,18 +101,19 @@ export default function AdminOcrLinesPage() {
   const { showAlert, showConfirm } = useDialog()
 
   const [tab, setTab] = useState('submitted')
+  const [pool, setPool] = useState('all')
   const [lines, setLines] = useState([])
-  const [counts, setCounts] = useState({ available: 0, submitted: 0, approved: 0 })
+  const [counts, setCounts] = useState({ available: 0, submitted: 0, approved: 0, flagged: 0 })
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [contextLine, setContextLine] = useState(null)
 
-  const load = useCallback(async (statusFilter, skip = 0) => {
+  const load = useCallback(async (statusFilter, skip = 0, poolFilter = 'all') => {
     try {
       if (skip === 0) setLoading(true)
       else setLoadingMore(true)
-      const res = await fetch(`/api/admin/ocr-lines?status=${statusFilter}&skip=${skip}`)
+      const res = await fetch(`/api/admin/ocr-lines?status=${statusFilter}&skip=${skip}&pool=${poolFilter}`)
       const data = await res.json()
       if (data.success) {
         // ב"טען עוד" מסננים כפולים — עימוד skip עלול להחזיר שורה שכבר מוצגת
@@ -133,8 +144,34 @@ export default function AdminOcrLinesPage() {
       router.push('/library/dashboard')
       return
     }
-    load(tab)
-  }, [status, session, router, tab, load])
+    load(tab, 0, pool)
+  }, [status, session, router, tab, pool, load])
+
+  // ביטול דיגול: השורה חוזרת לתור המתנדבים ויורדת מלשונית המדוגלות
+  const handleUnflag = async (line) => {
+    try {
+      const res = await fetch(`/api/admin/ocr-lines/${line.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'unflag' }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setLines((prev) => prev.filter((l) => l.id !== line.id))
+        setTotal((t) => Math.max(0, t - 1))
+        setCounts((c) => ({
+          ...c,
+          flagged: Math.max(0, (c.flagged || 0) - 1),
+          available: (c.available || 0) + 1,
+        }))
+      } else {
+        showAlert('שגיאה', data.error || 'שגיאה בביטול הדיגול')
+      }
+    } catch (e) {
+      console.error(e)
+      showAlert('שגיאה', 'תקלה בתקשורת')
+    }
+  }
 
   // פעולה על שורה: מסירים אותה מהרשימה המקומית ומעדכנים מונים — בלי טעינה מחדש
   const removeLocal = (id, fromStatus, toStatus) => {
@@ -253,6 +290,27 @@ export default function AdminOcrLinesPage() {
         </button>
       </div>
 
+      {/* בורר מאגר: אצוות-הגהה / ותיק / הכול — המונים והרשימה בחתך הנבחר */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap text-sm">
+        <span className="text-on-surface/60 flex items-center gap-1">
+          <span className="material-symbols-outlined text-sm">filter_alt</span>
+          מאגר:
+        </span>
+        {POOLS.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => setPool(p.id)}
+            className={`px-3 py-1 rounded-full font-bold text-xs transition-all border ${
+              pool === p.id
+                ? 'bg-info-100 text-info-800 border-info-300'
+                : 'bg-white text-neutral-500 border-neutral-200 hover:border-neutral-400'
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
       {/* טאבים לפי סטטוס */}
       <div className="flex gap-2 mb-6 flex-wrap">
         {TABS.map((t) => (
@@ -264,7 +322,7 @@ export default function AdminOcrLinesPage() {
             }`}
           >
             <span className="material-symbols-outlined text-sm">{t.icon}</span>
-            {t.label} ({counts[t.id]})
+            {t.label} ({counts[t.id] ?? 0})
           </button>
         ))}
       </div>
@@ -328,6 +386,16 @@ export default function AdminOcrLinesPage() {
                       {line.bookName} · עמ׳ {line.pageNumber}
                     </span>
                   )}
+
+                  {/* שיוך לאצוות-ההגהה — מבדיל שורות אי-הסכמה מהמאגר הוותיק */}
+                  {line.batch && (
+                    <span
+                      className="px-2 py-0.5 rounded-full text-xs font-bold bg-info-50 text-info-700 border border-info-200"
+                      title="שורת זרימת-ההגהות (אי-הסכמת מודלים) מפרויקט ה-OCR"
+                    >
+                      {line.batch}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -356,12 +424,42 @@ export default function AdminOcrLinesPage() {
                     </span>
                   </div>
                 )}
+                {/* דיווח מתנדב על שורה פגומה — הכרעת מנהל: ביטול הדיגול או השארה */}
+                {line.flagged && (
+                  <div className="bg-danger-50 border-2 border-danger-200 text-danger-800 rounded-lg p-2 text-sm flex items-center justify-between gap-2 flex-wrap">
+                    <span className="flex items-center gap-1 font-bold">
+                      <span className="material-symbols-outlined text-sm">flag</span>
+                      דווח: {FLAG_LABELS[line.flagged] || line.flagged}
+                      {line.flaggedByName && <span className="font-normal">· {line.flaggedByName}</span>}
+                    </span>
+                    <button
+                      onClick={() => handleUnflag(line)}
+                      className="bg-neutral-200 hover:bg-neutral-300 text-neutral-700 text-xs font-bold px-3 py-1 rounded-lg transition-colors"
+                      title="הדיווח שגוי — השורה תחזור לתור המתנדבים"
+                    >
+                      החזר לתור
+                    </button>
+                  </div>
+                )}
                 {line.status === 'available' ? (
                   <div className="border border-dashed border-neutral-300 rounded-lg p-3 text-neutral-400 text-sm flex-1">
-                    טרם תומללה
+                    {line.flagged ? 'הוצאה מהתור בעקבות הדיווח' : 'טרם תומללה'}
+                    {!!line.prefill && (
+                      <div className="mt-1 text-neutral-500" dir="rtl">
+                        טיוטת מודל: {line.prefill}
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  <AdminLineText line={line} onSave={handleSetText} />
+                  <>
+                    {/* הטיוטה שהוצגה למתנדב — להשוואה מהירה מול ההגהה שהוגשה */}
+                    {!!line.prefill && line.prefill !== line.text && (
+                      <div className="text-xs text-neutral-500 bg-neutral-50 border border-neutral-200 rounded-lg px-2 py-1" dir="rtl">
+                        <span className="font-bold">טיוטת המודל:</span> {line.prefill}
+                      </div>
+                    )}
+                    <AdminLineText line={line} onSave={handleSetText} />
+                  </>
                 )}
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div className="text-sm text-neutral-500 flex items-center gap-2">
@@ -416,7 +514,7 @@ export default function AdminOcrLinesPage() {
 
           {lines.length < total && (
             <button
-              onClick={() => load(tab, lines.length)}
+              onClick={() => load(tab, lines.length, pool)}
               disabled={loadingMore}
               className="self-center glass text-on-surface hover:bg-surface-variant px-6 py-2 rounded-lg font-medium transition-all disabled:opacity-40"
             >

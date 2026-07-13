@@ -34,7 +34,8 @@ function ChoiceButton({ active, onClick, icon, children, tone = 'success' }) {
 export function PagenumTaskCard({ prefill, imgSrc, value, onChange }) {
   const typed = !value?.confirmed && typeof value?.answer?.value === 'string' ? value.answer.value : ''
   const parsed = useMemo(() => (typed ? parsePageNumber(typed) : null), [typed])
-  const noneChosen = !value?.confirmed && value?.answer && value.answer.value === null
+  const cwChosen = !value?.confirmed && value?.answer?.catchword === true
+  const noneChosen = !value?.confirmed && value?.answer && value.answer.value === null && !cwChosen
 
   return (
     <div className="flex flex-col gap-3">
@@ -90,6 +91,20 @@ export function PagenumTaskCard({ prefill, imgSrc, value, onChange }) {
         >
           אין מספר עמוד
         </ChoiceButton>
+
+        <ChoiceButton
+          active={cwChosen}
+          onClick={() => onChange({ confirmed: false, answer: { value: null, catchword: true } })}
+          icon="skip_next"
+          tone="neutral"
+        >
+          זו מילה — שומר-דף
+        </ChoiceButton>
+      </div>
+
+      <div className="text-xs text-on-surface/50">
+        אם בתמונה מופיעה <b>מילה</b> ולא מספר — זהו &quot;שומר-דף&quot;: המילה הראשונה של
+        העמוד הבא, שהודפסה בתחתית העמוד. סמנו &quot;זו מילה — שומר-דף&quot;.
       </div>
     </div>
   )
@@ -203,6 +218,17 @@ export function StreamsTaskCard({ prefill, imageUrl, imageWidth, imageHeight, va
     setBands(bands.filter((_, j) => j !== i))
   }
 
+  // "הוסף רצועה" גלוי — חיוני כשזוהה זרם אחד בלבד ובעמוד יש שניים:
+  // מפצל את הרצועה הגבוהה ביותר, ואת הגבול גוררים למקום הנכון
+  const addBand = () => {
+    if (!bands || !bands.length) return
+    let tallest = 0
+    for (let j = 1; j < bands.length; j++) {
+      if (bands[j].y1 - bands[j].y0 > bands[tallest].y1 - bands[tallest].y0) tallest = j
+    }
+    splitBand(tallest)
+  }
+
   const setIdentity = (i, id) => {
     setBands(bands.map((b, j) => (j === i ? { ...b, book_stream: id } : b)))
   }
@@ -270,6 +296,15 @@ export function StreamsTaskCard({ prefill, imageUrl, imageWidth, imageHeight, va
               </span>
             </div>
           ))}
+
+          <button
+            onClick={addBand}
+            className="border border-dashed border-info-400 text-info-700 hover:bg-info-50 rounded-lg px-2 py-1.5 text-sm font-bold flex items-center justify-center gap-1 transition-colors"
+            title="מוסיף גבול חדש (מפצל את הרצועה הגדולה) — גררו אותו למקום הנכון"
+          >
+            <span className="material-symbols-outlined text-sm">add</span>
+            הוסף רצועה — יש עוד זרם בעמוד
+          </button>
 
           <div className="flex items-center gap-2 flex-wrap mt-1">
             <ChoiceButton
@@ -488,6 +523,31 @@ export function ZonesFullCard({ prefill, imageUrl, pagenumImgSrc, imageWidth, im
                   </button>
                 </div>
               ))}
+              <button
+                onClick={() => {
+                  const bands = shownBands || []
+                  if (!bands.length) return
+                  let t = 0
+                  for (let j = 1; j < bands.length; j++) {
+                    if (bands[j].y1 - bands[j].y0 > bands[t].y1 - bands[t].y0) t = j
+                  }
+                  const b = bands[t]
+                  if (b.y1 - b.y0 < 0.02) return
+                  const mid = (b.y0 + b.y1) / 2
+                  const next = [
+                    ...bands.slice(0, t),
+                    { ...b, y1: mid },
+                    { y0: mid, y1: b.y1, book_stream: null },
+                    ...bands.slice(t + 1),
+                  ]
+                  setPart('streams', { confirmed: false, answer: { bands: next } })
+                }}
+                className="border border-dashed border-info-400 text-info-700 hover:bg-info-50 rounded-lg px-2 py-1 text-xs font-bold flex items-center justify-center gap-1 transition-colors"
+                title="מוסיף גבול חדש (מפצל את הרצועה הגדולה) — גררו אותו למקום הנכון"
+              >
+                <span className="material-symbols-outlined text-sm">add</span>
+                הוסף רצועה — יש עוד זרם בעמוד
+              </button>
               <ChoiceButton
                 active={!!parts.streams?.confirmed}
                 onClick={() => setPart('streams', { confirmed: true, answer: null })}
