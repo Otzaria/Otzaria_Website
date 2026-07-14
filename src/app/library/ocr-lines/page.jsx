@@ -297,9 +297,10 @@ export default function OcrLinesPage() {
               {stats && (
                 <span
                   className="px-3 py-1.5 rounded-full bg-info-100 text-info-800 text-sm font-bold"
-                  title="שורות שתומללו עד כה (כולל ממתינות לאישור)"
+                  title="שורות שתומללו (כולל ממתינות לאישור) מתוך כלל המאגר"
                 >
-                  נעשו {stats.done.toLocaleString('he-IL')} שורות
+                  נעשו {stats.done.toLocaleString('he-IL')}
+                  {stats.total != null && ` מתוך ${stats.total.toLocaleString('he-IL')}`} שורות
                 </span>
               )}
               {stats && stats.mine > 0 && (

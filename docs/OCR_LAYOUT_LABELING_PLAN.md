@@ -139,3 +139,32 @@
 - תפיסה/החכרה אטומית; שמירה first-wins; ולידציה כפולה (לקוח+שרת).
 - תמונות רק דרך API מאומת; ניהול למנהל גלובלי בלבד.
 - ייצוא זורם בפורמט שפרויקט ה-OCR צורך ישירות, כולל `contributors.tsv`.
+
+## מצב תפעולי (עודכן 14/07/2026)
+
+### מצב-קישור (linked) — ברירת המחדל בפועל
+האצוות אינן מעלות תמונות: כל רשומה נושאת `ref` (bookId+pageNumber) ומצביעה
+לתמונת-הספר הקיימת (`/uploads/books/<slug>/page.N.jpg`). ה-prefill מיוצא
+במרחב הסריקה המקורית (הופכי-deskew בצד OCR-AI), ולכן מתלבש עליה ישירות.
+מסמכי `OcrLayoutPage` מקושרים נושאים `book/bookSlug/pageNumber`.
+הערה: התמונות קיימות רק בשרת הייצור — ב-localhost ה-viewer יציג רקע ריק.
+
+### סקריפטי תפעול (ב-`scripts/`, מחוץ לגיט בכוונה — כמו יתר סקריפטי seed)
+- `seed-ocr-layout.js --file <batch.jsonl> [--dry-run] [--purge-batches a,b
+  --purge-editions e1,e2]` — ייבוא-בכמות ישירות ל-Mongo (עוקף אימות-HTTP).
+  הטיהור מוחק רק עמודים available לא-מוחכרים; עמודים שנענו לעולם לא.
+- `seed-ocr-layout-imagemap.js <needed.json> <book_map.json> <out.tsv>` —
+  מפת imagePath להורדת תמונות-הקורפוס בצד OCR-AI.
+- אם הסקריפטים חסרים (checkout חדש): המבנה שלהם מתועד בפרויקט OCR-AI —
+  `scripts/run_layout_round.sh` (ה-driver שקורא להם) + `docs/LAYOUT_LAYER.md`.
+
+### אצוות חיות
+- `r2-2026-07` (עמודים מדוגלים) + `hard7-r2-2026-07` (zones-full למהדורות
+  הקשות) — סבב D019 (שומר-דף), יובאו 14/07/2026.
+- האצוות הראשונות (`all-flagged-2026-07`, `hard7-2026-07`) נמחקו כליל;
+  97 העמודים שנענו גובו ב-OCR-AI: `data/labeling/r1_answered_backup.jsonl`.
+
+### תשובת שומר-דף (D019)
+במשימת `pagenum` המתנדב יכול לסמן "זו מילה — שומר-דף" →
+`answer: {value: null, catchword: true}`; זורם דרך הייצוא ל-`human.jsonl`
+ונצרך ב-`apply_template --human` כהחרגת `catchword` (המילה לא חוזרת לתוכן).
