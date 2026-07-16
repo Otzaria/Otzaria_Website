@@ -3,12 +3,12 @@ import connectDB from '@/lib/db';
 import Book from '@/models/Book';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { isAdmin } from '@/lib/roles';
+import { hasOcrAccess } from '@/lib/roles';
 
 // GET: כל הספרים לבורר ההוספה — כולל מוסתרים. מחזיר totalPages כדי להגביל את מספר העמוד.
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (!isAdmin(session?.user?.role)) {
+  if (!hasOcrAccess(session?.user?.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

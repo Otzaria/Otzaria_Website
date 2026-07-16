@@ -11,7 +11,7 @@ import {
   StreamsTaskCard,
   ZonesFullCard,
 } from '@/components/ocr/layout/LayoutTaskCards'
-import { isAdmin } from '@/lib/roles'
+import { hasOcrAccess } from '@/lib/roles'
 import {
   validateAnswer,
   confirmedAnswerFromPrefill,
@@ -269,7 +269,7 @@ export default function AdminOcrLayoutPage() {
       router.push('/library/auth/login?callbackUrl=/library/admin/ocr-layout')
       return
     }
-    if (!isAdmin(session?.user?.role)) {
+    if (!hasOcrAccess(session?.user?.role)) {
       router.push('/library/dashboard')
       return
     }

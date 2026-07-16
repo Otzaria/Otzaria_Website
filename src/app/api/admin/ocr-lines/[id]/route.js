@@ -3,7 +3,7 @@ import connectDB from '@/lib/db';
 import OcrLine from '@/models/OcrLine';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { isAdmin } from '@/lib/roles';
+import { hasOcrAccess } from '@/lib/roles';
 import { normalizeLineText, findForbidden } from '@/lib/ocr/textStandard';
 
 // PATCH: פעולות ניהול על שורה.
@@ -16,7 +16,7 @@ import { normalizeLineText, findForbidden } from '@/lib/ocr/textStandard';
 // accept-script / reject-script — הכרעה בהצעת שינוי הכתב של המתמלל.
 export async function PATCH(request, { params }) {
   const session = await getServerSession(authOptions);
-  if (!isAdmin(session?.user?.role)) {
+  if (!hasOcrAccess(session?.user?.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -194,7 +194,7 @@ export async function PATCH(request, { params }) {
 // DELETE: מחיקת השורה מהמאגר לגמרי (למשל חיתוך פגום).
 export async function DELETE(request, { params }) {
   const session = await getServerSession(authOptions);
-  if (!isAdmin(session?.user?.role)) {
+  if (!hasOcrAccess(session?.user?.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

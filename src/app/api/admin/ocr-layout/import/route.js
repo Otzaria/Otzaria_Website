@@ -8,7 +8,7 @@ import OcrLayoutPage from '@/models/OcrLayoutPage';
 import Page from '@/models/Page';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { isAdmin } from '@/lib/roles';
+import { hasOcrAccess } from '@/lib/roles';
 import { resolveImageFsPath } from '@/lib/ocr/images';
 import { validatePrefill, TASK_KINDS } from '@/lib/ocr/layoutValidation';
 
@@ -31,7 +31,7 @@ const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,59}$/;
 // עמוד שכבר נענה (submitted/approved) לא נדרס — נספר כ"דולג".
 export async function POST(request) {
   const session = await getServerSession(authOptions);
-  if (!isAdmin(session?.user?.role)) {
+  if (!hasOcrAccess(session?.user?.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

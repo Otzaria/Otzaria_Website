@@ -7,7 +7,7 @@ import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import OcrLineContextModal from '@/components/ocr/OcrLineContextModal'
 import AutoGrowTextarea from '@/components/ocr/AutoGrowTextarea'
-import { isAdmin } from '@/lib/roles'
+import { hasOcrAccess } from '@/lib/roles'
 import { normalizeLineText, findForbidden } from '@/lib/ocr/textStandard'
 
 const TABS = [
@@ -140,7 +140,7 @@ export default function AdminOcrLinesPage() {
       router.push('/library/auth/login?callbackUrl=/library/admin/ocr-lines')
       return
     }
-    if (!isAdmin(session?.user?.role)) {
+    if (!hasOcrAccess(session?.user?.role)) {
       router.push('/library/dashboard')
       return
     }
