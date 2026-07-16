@@ -4,7 +4,7 @@ import OcrLayoutPage from '@/models/OcrLayoutPage';
 import { Zip, ZipDeflate } from 'fflate';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { isAdmin } from '@/lib/roles';
+import { hasOcrAccess } from '@/lib/roles';
 
 // ממיר תשובות משימה לשדות שורת-הייצוא. zones-full מקופל לאותם שדות —
 // פרויקט ה-OCR רואה פורמט אחיד בלי קשר לצורת המסך שבה נענתה השאלה.
@@ -43,7 +43,7 @@ function foldTasksToRecord(tasks) {
 // לכל עמוד. הייצוא זורם עם cursor + backpressure כמו בייצוא ocr-lines.
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (!isAdmin(session?.user?.role)) {
+  if (!hasOcrAccess(session?.user?.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

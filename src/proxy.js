@@ -156,12 +156,30 @@ const BOOKS_ONLY_ADMIN_ALLOWED_API = [
   '/api/admin/stats',
 ];
 
-// נתיבי דפים/API החסומים למנהל ספרים (אזורי ה-OCR — למנהל גלובלי בלבד)
+// ===== מנהל OCR =====
+// גישה אך ורק לשלושת אזורי הניהול של ה-OCR (מאגר אימון, תמלול שורות, תיוג
+// מבנה עמוד) ולדשבורד, ולנתיבי ה-API המשרתים אותם. כל שאר /library/admin
+// ו-/api/admin חסומים.
+const OCR_ADMIN_ALLOWED_PAGES = [
+  '/library/admin/ocr-training',
+  '/library/admin/ocr-lines',
+  '/library/admin/ocr-layout',
+];
+const OCR_ADMIN_ALLOWED_PAGE_EXACT = ['/library/admin'];
+const OCR_ADMIN_ALLOWED_API = [
+  '/api/admin/ocr-training',
+  '/api/admin/ocr-lines',
+  '/api/admin/ocr-layout',
+  '/api/admin/stats',
+];
+
+// נתיבי דפים/API החסומים למנהל ספרים (אזורי ה-OCR — למנהל גלובלי ולמנהל OCR בלבד)
 const BOOKS_ADMIN_BLOCKED_PAGES = [
   '/library/admin/users',
   '/library/admin/plugins',
   '/library/admin/ocr-training',
   '/library/admin/ocr-lines',
+  '/library/admin/ocr-layout',
 ];
 const BOOKS_ADMIN_BLOCKED_API = [
   '/api/admin/users',
@@ -170,6 +188,7 @@ const BOOKS_ADMIN_BLOCKED_API = [
   '/api/admin/export-backup',
   '/api/admin/ocr-training',
   '/api/admin/ocr-lines',
+  '/api/admin/ocr-layout',
 ];
 
 // נתיבים הדורשים אימות (קבוצת ה-matcher המקורית של ההרשאות).
@@ -245,6 +264,14 @@ const authProxy = withAuth(
         const allowed = isApiRoute
           ? BOOKS_ONLY_ADMIN_ALLOWED_API.some(p => path === p || path.startsWith(p + '/'))
           : BOOKS_ONLY_ADMIN_ALLOWED_PAGE_EXACT.includes(path) || BOOKS_ONLY_ADMIN_ALLOWED_PAGES.some(p => path === p || path.startsWith(p + '/'));
+        if (!allowed) return unauthorized();
+      }
+
+      // מנהל OCR - דשבורד + שלושת אזורי ה-OCR בלבד (allowlist)
+      if (role === 'admin_ocr') {
+        const allowed = isApiRoute
+          ? OCR_ADMIN_ALLOWED_API.some(p => path === p || path.startsWith(p + '/'))
+          : OCR_ADMIN_ALLOWED_PAGE_EXACT.includes(path) || OCR_ADMIN_ALLOWED_PAGES.some(p => path === p || path.startsWith(p + '/'));
         if (!allowed) return unauthorized();
       }
 

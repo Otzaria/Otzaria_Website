@@ -223,6 +223,7 @@ export default function AdminUsersPage() {
                         <option value="admin_plugins">מנהל תוספים</option>
                         <option value="admin_books">מנהל ספרים</option>
                         <option value="admin_books_only">מנהל ספרים בלבד</option>
+                        <option value="admin_ocr">מנהל OCR</option>
                       </select>
                     ) : (
                       <span className={`px-2 py-1 rounded text-xs font-bold ${
@@ -230,12 +231,14 @@ export default function AdminUsersPage() {
                         user.role === 'admin_plugins' ? 'bg-info-100 text-info-800' :
                         user.role === 'admin_books' ? 'bg-success-100 text-success-800' :
                         user.role === 'admin_books_only' ? 'bg-aqua-100 text-aqua-800' :
+                        user.role === 'admin_ocr' ? 'bg-warning-100 text-warning-800' :
                         'bg-neutral-100 text-neutral-800'
                       }`}>
                         {user.role === 'admin' ? 'מנהל כללי' :
                          user.role === 'admin_plugins' ? 'מנהל תוספים' :
                          user.role === 'admin_books' ? 'מנהל ספרים' :
-                         user.role === 'admin_books_only' ? 'מנהל ספרים בלבד' : 'משתמש'}
+                         user.role === 'admin_books_only' ? 'מנהל ספרים בלבד' :
+                         user.role === 'admin_ocr' ? 'מנהל OCR' : 'משתמש'}
                       </span>
                     )}
                   </td>

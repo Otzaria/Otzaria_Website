@@ -5,6 +5,9 @@ export const ROLES = {
   // מנהל ספרים-בלבד: גישה מלאה לספריית הספרים (/library/books) ולניהול המקביל
   // (/library/admin/books) בלבד — ללא דיקטה, העלאות, עמודים או כל מודול אחר.
   ADMIN_BOOKS_ONLY: 'admin_books_only',
+  // מנהל OCR: גישה לניהול שלושת אזורי ה-OCR בלבד — מאגר אימון, תמלול שורות
+  // ותיוג מבנה עמוד (/library/admin/ocr-*) — ללא שאר מודולי הניהול.
+  ADMIN_OCR: 'admin_ocr',
 }
 
 export const ROLE_LABELS = {
@@ -13,9 +16,10 @@ export const ROLE_LABELS = {
   admin_plugins: 'מנהל תוספים',
   admin_books: 'מנהל ספרים',
   admin_books_only: 'מנהל ספרים בלבד',
+  admin_ocr: 'מנהל OCR',
 }
 
-export const ALL_ADMIN_ROLES = [ROLES.ADMIN, ROLES.ADMIN_PLUGINS, ROLES.ADMIN_BOOKS, ROLES.ADMIN_BOOKS_ONLY]
+export const ALL_ADMIN_ROLES = [ROLES.ADMIN, ROLES.ADMIN_PLUGINS, ROLES.ADMIN_BOOKS, ROLES.ADMIN_BOOKS_ONLY, ROLES.ADMIN_OCR]
 
 /** גישה לכל מה שבניהול */
 export function isAdmin(role) {
@@ -37,6 +41,11 @@ export function hasBooksAccess(role) {
  *  עמודים ב-/library/books. נכלל גם מנהל-ספרים-בלבד, בנוסף למנהלי הספרים הרחבים. */
 export function hasBookLibraryAccess(role) {
   return role === ROLES.ADMIN || role === ROLES.ADMIN_BOOKS || role === ROLES.ADMIN_BOOKS_ONLY
+}
+
+/** גישה לניהול שלושת אזורי ה-OCR (מאגר אימון, תמלול שורות, תיוג מבנה עמוד) */
+export function hasOcrAccess(role) {
+  return role === ROLES.ADMIN || role === ROLES.ADMIN_OCR
 }
 
 /** כל סוג מנהל */

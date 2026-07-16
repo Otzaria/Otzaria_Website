@@ -3,7 +3,7 @@ import connectDB from '@/lib/db';
 import OcrLayoutPage from '@/models/OcrLayoutPage';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { isAdmin } from '@/lib/roles';
+import { hasOcrAccess } from '@/lib/roles';
 import { validateAnswer, cleanAnswer, TASK_LABELS } from '@/lib/ocr/layoutValidation';
 
 // PATCH: פעולות ניהול על עמוד תיוג-מבנה.
@@ -15,7 +15,7 @@ import { validateAnswer, cleanAnswer, TASK_LABELS } from '@/lib/ocr/layoutValida
 //   { answer } (או { confirmed:true } נשמר כמו שהוא — אין צורך לשלוח).
 export async function PATCH(request, { params }) {
   const session = await getServerSession(authOptions);
-  if (!isAdmin(session?.user?.role)) {
+  if (!hasOcrAccess(session?.user?.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -131,7 +131,7 @@ export async function PATCH(request, { params }) {
 // התמונה בדיסק נשארת בתיקיית האצווה — ניקוי אצוות נעשה ידנית.
 export async function DELETE(request, { params }) {
   const session = await getServerSession(authOptions);
-  if (!isAdmin(session?.user?.role)) {
+  if (!hasOcrAccess(session?.user?.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
