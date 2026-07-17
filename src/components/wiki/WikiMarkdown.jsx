@@ -75,7 +75,7 @@ const components = {
 };
 
 function childrenToText(children) {
-  if (typeof children === 'string') return children;
+  if (typeof children === 'string' || typeof children === 'number') return String(children);
   if (Array.isArray(children)) return children.map(childrenToText).join('');
   if (children && typeof children === 'object' && 'props' in children) {
     return childrenToText(children.props.children);

@@ -16,9 +16,11 @@ export async function POST(request) {
   const body = await request.text();
   const signature = request.headers.get('x-hub-signature-256') || '';
   const expected = `sha256=${crypto.createHmac('sha256', secret).update(body).digest('hex')}`;
-  const signatureBuf = Buffer.from(signature);
-  const expectedBuf = Buffer.from(expected);
-  if (signatureBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(signatureBuf, expectedBuf)) {
+  // בדיקת אורך על המחרוזת לפני הקצאת Buffer — כותרת ענקית לא תוקצה בזיכרון
+  if (signature.length !== expected.length) {
+    return NextResponse.json({ ok: false }, { status: 401 });
+  }
+  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
 

@@ -43,12 +43,12 @@ export async function getUserGuideNav() {
   const md = await res.text();
 
   const nav = [];
-  const linkRe = /\[\[([^\]|]+)\|([^\]]+)\]\]/g;
+  const linkRe = /\[\[([^\]]+)\]\]/g;
   let m;
   while ((m = linkRe.exec(md)) !== null) {
-    const [, title, page] = m;
+    const [title, page] = splitWikiLink(m[1]);
     if (page.startsWith('User-')) {
-      nav.push({ page, slug: pageToSlug(page), title: title.trim() });
+      nav.push({ page, slug: pageToSlug(page), title });
     }
   }
   return nav;
@@ -89,21 +89,35 @@ function transformWikiMarkdown(md) {
   out = out.replace(/<div dir="rtl">\s*/g, '').replace(/\s*<\/div>\s*$/g, '');
 
   // קישורי [[...|...]] ו-[[...]]
-  out = out.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, text, page) => {
-    const target = (page || text).trim();
+  out = out.replace(/\[\[([^\]]+)\]\]/g, (_, inner) => {
+    const [text, target] = splitWikiLink(inner);
     if (target.startsWith('User-')) {
-      return `[${text.trim()}](/docs/${pageToSlug(target)})`;
+      return `[${text}](/docs/${pageToSlug(target)})`;
     }
-    return `[${text.trim()}](${WIKI_WEB}/${encodeURIComponent(target)})`;
+    return `[${text}](${WIKI_WEB}/${encodeURIComponent(target)})`;
   });
 
   // קישורים מוחלטים לאתר עצמו → נתיב פנימי (Link של Next, בלי טעינת דף)
+  // eslint-disable-next-line security/detect-unsafe-regex -- ללא קבוצות מקוננות, אין backtracking אקספוננציאלי
   out = out.replace(/\]\(https?:\/\/(?:www\.)?otzaria\.org(\/[^)]*)?\)/g, (_, path) => `](${path || '/'})`);
 
-  // תמונות בנתיב יחסי → raw של הוויקי
-  out = out.replace(/!\[([^\]]*)\]\((?!https?:\/\/|\/)([^)]+)\)/g, (_, alt, src) => `![${alt}](${WIKI_RAW}/${src})`);
+  // תמונות בנתיב יחסי → raw של הוויקי (מוחלט/data: נשארים כמו שהם)
+  out = out.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (full, alt, src) => {
+    if (/^(?:https?:\/\/|\/|data:)/.test(src)) return full;
+    return `![${alt}](${WIKI_RAW}/${src})`;
+  });
 
   return out.trim();
+}
+
+/** מפצל תוכן קישור וויקי "טקסט|יעד" (או "יעד" בלבד) לזוג [טקסט, יעד]. */
+function splitWikiLink(inner) {
+  const idx = inner.indexOf('|');
+  if (idx === -1) {
+    const both = inner.trim();
+    return [both, both];
+  }
+  return [inner.slice(0, idx).trim(), inner.slice(idx + 1).trim()];
 }
 
 /**
