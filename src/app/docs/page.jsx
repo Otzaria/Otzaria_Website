@@ -1,194 +1,110 @@
-'use client'
+import Link from 'next/link';
+import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader';
+import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter';
+import { getUserGuideNav, iconForSlug } from '@/lib/wiki';
 
-import { motion } from 'framer-motion'
-import { useState } from 'react'
-import Link from 'next/link'
-import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
-import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
+export const revalidate = 1800;
 
-export default function DocsPage() {
-  const [openSections, setOpenSections] = useState(['installation', 'usage'])
+export const metadata = {
+  title: 'מדריך למשתמש - אוצריא',
+  description: 'המדריך המלא לשימוש בתוכנת אוצריא: התקנה, ספרייה, קריאה, חיפוש, הגדרות ועוד',
+};
 
-  const toggleSection = (section) => {
-    setOpenSections(prev => 
-      prev.includes(section) 
-        ? prev.filter(s => s !== section)
-        : [...prev, section]
-    )
+export default async function DocsIndexPage() {
+  let nav = [];
+  try {
+    nav = await getUserGuideNav();
+  } catch {
+    /* בתקלה זמנית מציגים את הדף עם המדריכים הקבועים בלבד */
   }
-
-  const tutorials = [
-    {
-      href: '/docs/installation',
-      icon: 'install_desktop',
-      title: 'מדריך הפעלת תוכנת אוצריא',
-      description: 'הוראות מפורטות להתקנה, הפעלה והוספת ספרייה - כולל טיפים ואפשרויות מתקדמות'
-    },
-    {
-      href: '/docs/search',
-      icon: 'search',
-      title: 'מדריך חיפוש באוצריא',
-      description: 'למד כיצד לחפש ביעילות - חיפוש מדויק, מקורב, סינון ספרים, והשלמת אותיות'
-    },
-    {
-      href: '/docs/development',
-      icon: 'code',
-      title: 'מדריך פיתוח - עריכת אוצריא',
-      description: 'למד כיצד לערוך ולשפר את תוכנת אוצריא בעצמך - גם ללא ידע מעמיק בתכנות'
-    },
-    {
-      href: '/docs/dicta',
-      icon: 'edit',
-      title: 'מדריך לטיפול בספרי דיקטה',
-      description: 'הדרכה מפורטת ליצירת כותרות וניווט בספרים - כולל כלים אוטומטיים והדגמות מעשיות'
-    }
-  ]
 
   return (
     <div className="min-h-screen bg-background text-foreground">
       <OtzariaSoftwareHeader />
 
       <main className="py-12 px-4">
-        <div className="container mx-auto max-w-7xl">
-          <div className="grid lg:grid-cols-4 gap-8">
-            {/* Sidebar */}
-            <aside className="lg:col-span-1">
-              <div className="glass-strong rounded-xl p-6 sticky top-24 bg-white border border-neutral-200">
-                <h3 className="text-xl font-bold text-primary mb-4">תוכן עניינים</h3>
-                <nav className="space-y-2">
-                  <div>
-                    <button
-                      onClick={() => toggleSection('installation')}
-                      className="flex items-center justify-between w-full text-right p-2 hover:bg-neutral-100 rounded-lg transition-colors"
-                    >
-                      <span className="font-medium">התקנה</span>
-                      <motion.span
-                        animate={{ rotate: openSections.includes('installation') ? 180 : 0 }}
-                        className="material-symbols-outlined text-sm"
-                      >
-                        expand_more
-                      </motion.span>
-                    </button>
-                    {openSections.includes('installation') && (
-                      <div className="mr-4 mt-2 space-y-1 border-r-2 border-neutral-100 pr-2">
-                        <a href="#windows" className="block p-2 text-sm text-neutral-600 hover:text-primary transition-colors">Windows</a>
-                        <a href="#linux" className="block p-2 text-sm text-neutral-600 hover:text-primary transition-colors">Linux</a>
-                        <a href="#android" className="block p-2 text-sm text-neutral-600 hover:text-primary transition-colors">Android</a>
-                        <a href="#ios" className="block p-2 text-sm text-neutral-600 hover:text-primary transition-colors">iOS</a>
-                        <a href="#macos" className="block p-2 text-sm text-neutral-600 hover:text-primary transition-colors">macOS</a>
-                      </div>
-                    )}
-                  </div>
+        <div className="container mx-auto max-w-6xl">
+          {/* Hero */}
+          <div className="text-center mb-12 glass-strong rounded-2xl p-12">
+            <span className="material-symbols-outlined text-7xl text-primary mb-4 block">menu_book</span>
+            <h1 className="text-4xl font-bold text-primary-dark mb-4 font-frank">מדריך למשתמש</h1>
+            <p className="text-xl text-on-surface/70 max-w-2xl mx-auto">
+              כל מה שצריך לדעת על אוצריא — מההתקנה הראשונה ועד הכלים המתקדמים.
+              המדריך מתעדכן אוטומטית מוויקי הפרויקט.
+            </p>
+          </div>
 
-                  <div>
-                    <button
-                      onClick={() => toggleSection('usage')}
-                      className="flex items-center justify-between w-full text-right p-2 hover:bg-neutral-100 rounded-lg transition-colors"
-                    >
-                      <span className="font-medium">שימוש בסיסי</span>
-                      <motion.span
-                        animate={{ rotate: openSections.includes('usage') ? 180 : 0 }}
-                        className="material-symbols-outlined text-sm"
-                      >
-                        expand_more
-                      </motion.span>
-                    </button>
-                    {openSections.includes('usage') && (
-                      <div className="mr-4 mt-2 space-y-1 border-r-2 border-neutral-100 pr-2">
-                        <a href="#library" className="block p-2 text-sm text-neutral-600 hover:text-primary transition-colors">דפדוף בספרייה</a>
-                        <a href="#search" className="block p-2 text-sm text-neutral-600 hover:text-primary transition-colors">חיפוש</a>
-                        <a href="#reading" className="block p-2 text-sm text-neutral-600 hover:text-primary transition-colors">קריאה</a>
-                        <a href="#bookmarks" className="block p-2 text-sm text-neutral-600 hover:text-primary transition-colors">סימניות</a>
-                      </div>
-                    )}
-                  </div>
+          {/* דפי המדריך — נטענים דינמית מהוויקי */}
+          {nav.length > 0 ? (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-12">
+              {nav.map((item) => (
+                <Link
+                  key={item.slug}
+                  href={`/docs/${item.slug}`}
+                  className="glass-strong rounded-xl p-6 hover:shadow-xl hover:-translate-y-1 transition-all group"
+                >
+                  <span className="material-symbols-outlined text-4xl text-primary mb-3 block group-hover:scale-110 transition-transform">
+                    {iconForSlug(item.slug)}
+                  </span>
+                  <h2 className="text-xl font-bold text-primary-dark">{item.title}</h2>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="glass-strong rounded-xl p-8 text-center mb-12">
+              <p className="text-lg text-on-surface/70">
+                המדריך אינו זמין כרגע — נסו לרענן בעוד רגע, או עיינו בו ישירות{' '}
+                <a
+                  href="https://github.com/Otzaria/otzaria/wiki"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary underline underline-offset-2"
+                >
+                  בוויקי הפרויקט
+                </a>
+                .
+              </p>
+            </div>
+          )}
 
-                  <Link href="#tutorials" className="block p-2 hover:bg-neutral-100 rounded-lg transition-colors font-medium">מדריכים נוספים</Link>
-                </nav>
+          {/* מדריכים נוספים (תוכן ייחודי שאינו בוויקי) */}
+          <h2 className="text-2xl font-bold text-primary-dark mb-5 font-frank">מדריכים נוספים</h2>
+          <div className="grid sm:grid-cols-2 gap-5 mb-12">
+            <Link href="/docs/dicta" className="glass-strong rounded-xl p-6 hover:shadow-lg transition-shadow">
+              <span className="material-symbols-outlined text-3xl text-primary mb-2 block">edit</span>
+              <h3 className="text-lg font-bold text-primary-dark mb-1">מדריך לטיפול בספרי דיקטה</h3>
+              <p className="text-sm text-on-surface/60">יצירת כותרות וניווט בספרים — כולל כלים אוטומטיים</p>
+            </Link>
+            <Link href="/docs/development" className="glass-strong rounded-xl p-6 hover:shadow-lg transition-shadow">
+              <span className="material-symbols-outlined text-3xl text-primary mb-2 block">code</span>
+              <h3 className="text-lg font-bold text-primary-dark mb-1">מדריך פיתוח — עריכת אוצריא</h3>
+              <p className="text-sm text-on-surface/60">איך לערוך ולשפר את התוכנה בעצמכם</p>
+            </Link>
+          </div>
+
+          {/* קישור לתיעוד מפתחים */}
+          <div className="glass-strong rounded-xl p-6 flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-3">
+              <span className="material-symbols-outlined text-3xl text-primary">terminal</span>
+              <div>
+                <div className="font-bold text-primary-dark">מפתחים?</div>
+                <div className="text-sm text-on-surface/60">תיעוד הארכיטקטורה המלא נמצא בוויקי הפרויקט ב-GitHub</div>
               </div>
-            </aside>
-
-            {/* Main Content */}
-            <article className="lg:col-span-3">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white rounded-xl p-8 mb-8 border border-neutral-200 shadow-sm"
-              >
-                <h1 className="text-4xl font-bold text-primary mb-6 font-frank">
-                  מדריך למשתמש
-                </h1>
-
-                {/* Installation Section */}
-                <section id="installation" className="mb-12">
-                  <h2 className="text-3xl font-bold text-neutral-800 mb-4">התקנה</h2>
-                  <p className="text-lg text-neutral-600 mb-6">
-                    אוצריא זמינה למגוון פלטפורמות. בחר את ההוראות המתאימות למערכת שלך:
-                  </p>
-
-                  {/* Windows */}
-                  <div id="windows" className="mb-8 p-6 bg-neutral-50 rounded-xl border border-neutral-200">
-                    <h3 className="text-2xl font-bold text-primary mb-4 flex items-center gap-3">
-                      <span className="material-symbols-outlined text-3xl">desktop_windows</span>
-                      Windows
-                    </h3>
-                    <div className="space-y-4">
-                      <div className="p-4 bg-white rounded-lg shadow-sm">
-                        <h4 className="font-bold text-lg mb-2">שלבי ההתקנה</h4>
-                        <ol className="list-decimal mr-6 space-y-2">
-                          <li>הורד את קובץ ה-.exe מדף הבית</li>
-                          <li>הפעל את הקובץ והמתן להתקנה</li>
-                          <li>פתח את התוכנה והתחל ללמוד!</li>
-                        </ol>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Android */}
-                  <div id="android" className="mb-8 p-6 bg-neutral-50 rounded-xl border border-neutral-200">
-                    <h3 className="text-2xl font-bold text-primary mb-4 flex items-center gap-3">
-                      <span className="material-symbols-outlined text-3xl">phone_android</span>
-                      Android
-                    </h3>
-                    <div className="p-4 bg-white rounded-lg shadow-sm">
-                      <h4 className="font-bold text-lg mb-2">התקנה מ-Google Play</h4>
-                      <ol className="list-decimal mr-6 space-y-2">
-                        <li>היכנס ל-Google Play</li>
-                        <li>חפש "אוצריא" והתקן</li>
-                        <li>בהפעלה הראשונה תתבקש להוריד את הספרייה</li>
-                      </ol>
-                    </div>
-                  </div>
-                </section>
-
-                {/* Tutorials Links */}
-                <section id="tutorials" className="mb-12">
-                  <h2 className="text-3xl font-bold text-neutral-800 mb-6">מדריכים נוספים</h2>
-                  <div className="grid md:grid-cols-2 gap-4">
-                    {tutorials.map((tutorial, i) => (
-                      <Link
-                        key={i}
-                        href={tutorial.href}
-                        className="flex flex-col gap-4 p-6 bg-neutral-50 hover:bg-primary/5 rounded-xl transition-all hover:shadow-md border border-neutral-200 group"
-                      >
-                        <span className="material-symbols-outlined text-4xl text-primary group-hover:scale-110 transition-transform w-fit">
-                          {tutorial.icon}
-                        </span>
-                        <div>
-                          <h4 className="text-xl font-bold text-neutral-800 mb-2">{tutorial.title}</h4>
-                          <p className="text-neutral-600">{tutorial.description}</p>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                </section>
-              </motion.div>
-            </article>
+            </div>
+            <a
+              href="https://github.com/Otzaria/otzaria/wiki"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-5 py-2 bg-surface-variant rounded-lg hover:bg-neutral-200 transition-colors font-bold text-primary-dark"
+            >
+              <span className="material-symbols-outlined text-base">open_in_new</span>
+              <span>לתיעוד המפתחים</span>
+            </a>
           </div>
         </div>
       </main>
 
       <OtzariaSoftwareFooter />
     </div>
-  )
+  );
 }

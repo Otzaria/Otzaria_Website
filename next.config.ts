@@ -38,6 +38,12 @@ const nextConfig = {
         destination: '/library/editingtools',
         permanent: true,
       },
+      // המדריך הישן הוחלף במדריך הדינמי מהוויקי
+      {
+        source: '/docs/installation',
+        destination: '/docs/getting-started',
+        permanent: true,
+      },
     ];
   },
 
