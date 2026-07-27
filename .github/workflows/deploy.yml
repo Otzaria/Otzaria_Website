@@ -61,7 +61,7 @@ jobs:
             git reset --hard origin/master
 
             echo "📦 Installing dependencies..."
-            npm ci --legacy-peer-deps
+            npm install --legacy-peer-deps
 
             echo "🛠 Building project (incremental cache enabled)..."
             npm run build
