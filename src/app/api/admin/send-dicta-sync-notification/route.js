@@ -8,6 +8,15 @@ import User from '@/models/User';
 import MailingList from '@/models/MailingList';
 import { hasBooksAccess } from '@/lib/roles';
 
+function escapeHtml(unsafe) {
+    return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
 export async function POST(request) {
     try {
         const session = await getServerSession(authOptions);
@@ -75,8 +84,8 @@ export async function POST(request) {
                     <div style="padding: 30px; color: #333333;">
                         <h1 style="color: #2c3e50; font-size: 24px; margin-bottom: 10px;">ספרי דיקטה חדשים נוספו לספרייה!</h1>
                         <p style="font-size: 18px; line-height: 1.6;">
-                            אנו שמחים לעדכן כי 
-                            <strong style="color: #d4a373;">${addedCount} ספרים חדשים</strong>
+                            אנו שמחים לעדכן כי
+                            <strong style="color: #d4a373;">${escapeHtml(String(addedCount))} ספרים חדשים</strong>
                             מדיקטה נוספו כעת לספרייה וזמינים לעריכה.
                         </p>
                         <p style="font-size: 16px; line-height: 1.6; color: #666;">

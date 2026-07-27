@@ -96,7 +96,9 @@ export async function changeHeadingLevelDB(bookId: string, currentLevel: string,
   const content = await getBookContent(bookId);
   const currentTag = `h${currentLevel}`;
   const newTag = `h${newLevel}`;
-  const updated = content.replace(new RegExp(`<${currentTag}>(.*?)<\/${currentTag}>`, "gs"), `<${newTag}>$1<\/${newTag}>`);
+  const currentPattern = currentTag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const newPattern = newTag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const updated = content.replace(new RegExp(`<${currentPattern}>(.*?)<\\/${currentPattern}>`, "gs"), `<${newPattern}>$1</${newPattern}>`);
   if (content === updated) return { changed: false, message: "אין מה להחליף בקובץ זה" };
   await saveBookContent(bookId, updated);
   return { changed: true, message: "רמות הכותרות עודכנו בהצלחה!" };

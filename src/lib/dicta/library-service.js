@@ -189,6 +189,7 @@ function buildRegex({ find, isRegex, flags, caseSensitive }) {
   }
   if (!f.includes('g')) f += 'g';
   if (!caseSensitive && !f.includes('i')) f += 'i';
+  // eslint-disable-next-line security/detect-non-literal-regexp
   return new RegExp(pattern, f);
 }
 

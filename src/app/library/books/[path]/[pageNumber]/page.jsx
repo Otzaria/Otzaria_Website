@@ -158,7 +158,7 @@ export default function EditPage() {
     const savedTextZoom = localStorage.getItem('textZoom')
     const savedImageZoom = localStorage.getItem('imageZoom')
     const savedShortcuts = localStorage.getItem('user_shortcuts')
-    
+
     if (savedAlign) setTextAlign(savedAlign);
     if (savedFont) setSelectedFont(savedFont)
     if (savedApiKey) setUserApiKey(savedApiKey)
@@ -1455,12 +1455,12 @@ export default function EditPage() {
         </div>
       </div>
 
-      <SettingsSidebar 
+      <SettingsSidebar
         show={showSettings} onClose={() => setShowSettings(false)}
         userApiKey={userApiKey} setUserApiKey={setUserApiKey}
         selectedModel={selectedModel} setSelectedModel={setSelectedModel}
         customPrompt={customPrompt} setCustomPrompt={setCustomPrompt}
-        saveSettings={() => { localStorage.setItem('gemini_api_key', userApiKey); showAlert('הצלחה', 'נשמר'); }}
+        saveSettings={() => { localStorage.setItem('gemini_api_key', userApiKey); localStorage.setItem('gemini_prompt', customPrompt); localStorage.setItem('gemini_model', selectedModel); showAlert('הצלחה', 'נשמר'); }}
         resetPrompt={() => setCustomPrompt('The text is in Hebrew, written in Rashi script...')}
       />
       
