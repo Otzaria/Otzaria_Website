@@ -119,7 +119,8 @@ export async function PUT(request) {
 
         if (emailChanged) {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(email)) {
+            // codeql[js/polynomial-redos]: bound input length before testing.
+            if (email.length > 254 || !emailRegex.test(email)) {
                 return NextResponse.json({ error: 'Invalid email address' }, { status: 400 });
             }
 

@@ -22,9 +22,13 @@ export async function dictaSync(customFolderPath) {
 
   try {
     // 1. הורדת קובץ הרשימה (list.txt)
+    // codeql[js/request-forgery] false positive: baseUrl is a fixed origin (env var set by
+    // the deployer or the hardcoded DEFAULT_REPO_URL, never user input) and folderPath is just
+    // appended as a path segment via string concatenation — it cannot change the request host.
+    // This endpoint is also admin-gated (see tools/route.js: dicta-sync requires hasBooksAccess).
     const listUrl = `${baseUrl}/${folderPath}/list.txt`;
     log.push(`טוען רשימת קבצים מ: ${listUrl}`);
-    
+
     const listResp = await fetch(listUrl);
     if (!listResp.ok) {
       throw new Error(`שגיאה בטעינת list.txt (סטטוס: ${listResp.status})`);
@@ -61,8 +65,11 @@ export async function dictaSync(customFolderPath) {
 
         // 3. הורדת תוכן הספר
         // הנתיב הוא: base + folder + ספרים/אוצריא + filename
+        // codeql[js/request-forgery] false positive: same fixed-origin reasoning as the
+        // list.txt fetch above — baseUrl can't be overridden, and fileName comes from that
+        // same trusted list.txt, not from an external caller.
         const contentUrl = `${baseUrl}/${folderPath}/ספרים/אוצריא/${encodeURIComponent(fileName)}`;
-        
+
         const contentResp = await fetch(contentUrl);
         
         if (!contentResp.ok) {

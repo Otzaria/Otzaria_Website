@@ -15,11 +15,18 @@ export async function POST(request) {
         return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
     }
     const { imageBase64, model = 'gemini-1.5-flash' } = await request.json();
-    
+
     if (!imageBase64) return NextResponse.json({ error: 'No image' }, { status: 400 });
 
+    // codeql[js/request-forgery]: the host is fixed, so `model` can't redirect the request
+    // to another origin — but validating it against Google's model-name charset closes the
+    // request-smuggling/malformed-URL angle with no effect on any real model name.
+    if (!/^[a-zA-Z0-9._-]+$/.test(model)) {
+      return NextResponse.json({ error: 'Invalid model' }, { status: 400 });
+    }
+
     const apiKey = process.env.GEMINI_API_KEY;
-    
+
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {

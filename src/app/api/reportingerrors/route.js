@@ -114,7 +114,10 @@ function extractLibraryVersion(payload) {
     return explicitVersion;
   }
 
-  const errorDetails = String(payload?.error_details ?? '');
+  // codeql[js/polynomial-redos]: errorDetails is public untrusted input; cap its length
+  // before regex matching to bound the engine's worst-case work (no legitimate diagnostic
+  // text is anywhere near this size).
+  const errorDetails = String(payload?.error_details ?? '').slice(0, 5000);
   const match = errorDetails.match(/גרסת\s*ספרי(?:י|')ה\s*:\s*(.+)$/m);
   if (match?.[1]) {
     const version = match[1].trim();

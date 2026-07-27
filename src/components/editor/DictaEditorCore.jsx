@@ -57,14 +57,16 @@ function buildTocFromContent(content) {
 
   while ((match = headingRegex.exec(content)) !== null) {
     const [, rawLevel, innerHtml] = match
+    // הפענוח של &amp; מתבצע אחרון: אחרת "&amp;lt;" (שאמור להישאר "&lt;" מילולי)
+    // היה מפוענח פעמיים ל-"<" בטעות (codeql: js/double-escaping).
     const headingText = innerHtml
       .replace(/<[^>]+>/g, ' ')
       .replace(/&nbsp;/gi, ' ')
-      .replace(/&amp;/gi, '&')
       .replace(/&lt;/gi, '<')
       .replace(/&gt;/gi, '>')
       .replace(/&quot;/gi, '"')
       .replace(/&#39;/gi, "'")
+      .replace(/&amp;/gi, '&')
       .replace(/\s+/g, ' ')
       .trim()
 
@@ -529,6 +531,10 @@ export default function DictaEditorCore({
     
     if (isHeadingTag && trimmedText) {
       // עבור כותרות: הסרת כל התגים הקיימים מהטקסט
+      // codeql[js/incomplete-multi-character-sanitization] false positive: this is an editor
+      // convenience action (strip tags before wrapping in a heading), not the security
+      // boundary — final content is always run through DOMPurify.sanitize() before render
+      // (see sanitizedContent above / dangerouslySetInnerHTML usage below).
       cleanText = trimmedText.replace(/<[^>]*>/g, '')
       insertion = `<${tag}>${cleanText}</${tag}>`
       
@@ -573,6 +579,9 @@ export default function DictaEditorCore({
     const scrollTop = textarea.scrollTop
     
     // הסרת כל תגי ה-HTML מהטקסט הנבחר
+    // codeql[js/incomplete-multi-character-sanitization] false positive: editor convenience
+    // action, not the security boundary — see note on the identical pattern above; rendering
+    // always goes through DOMPurify.sanitize() first.
     const cleanedText = selectedText.replace(/<[^>]*>/g, '')
     const newText = content.substring(0, start) + cleanedText + content.substring(end)
     
@@ -1107,9 +1116,12 @@ export default function DictaEditorCore({
   const actionsMapRef = useRef(actionsMap)
   const userShortcutsRef = useRef(userShortcuts)
   const showShortcutsDialogRef = useRef(showShortcutsDialog)
-  actionsMapRef.current = actionsMap
-  userShortcutsRef.current = userShortcuts
-  showShortcutsDialogRef.current = showShortcutsDialog
+  // סנכרון ה-refs מתבצע ב-effect (לא ישירות ברינדור) כדי לא לגעת ב-ref.current תוך כדי רינדור
+  useEffect(() => {
+    actionsMapRef.current = actionsMap
+    userShortcutsRef.current = userShortcuts
+    showShortcutsDialogRef.current = showShortcutsDialog
+  })
 
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
@@ -1184,7 +1196,10 @@ export default function DictaEditorCore({
 
   // כפתור השמירה לא קושר את content (שמשתנה בכל הקלדה) כדי שה-header הממומואיז יישאר יציב
   const latestContentRef = useRef(content)
-  latestContentRef.current = content
+  // סנכרון ה-ref מתבצע ב-effect (לא ישירות ברינדור) כדי לא לגעת ב-ref.current תוך כדי רינדור
+  useEffect(() => {
+    latestContentRef.current = content
+  })
   const handleSaveClick = useCallback(() => {
     if (onSave) onSave(latestContentRef.current)
   }, [onSave])

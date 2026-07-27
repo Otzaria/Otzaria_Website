@@ -70,6 +70,10 @@ export async function addPageNumberToHeadingDB(bookId: string, replaceWith: stri
             newTitle = `<h${level}>${title.replace(/\.+$/, "")} ${suffix}<\/h${level}>`;
           }
           updated.push(newTitle);
+          // codeql[js/incomplete-multi-character-sanitization] false positive: `pattern`
+          // strips a specific Hebrew page-reference marker (e.g. ע"א/ע"ב), not arbitrary
+          // HTML — the optional tag-wrapper groups are incidental. Book content is sanitized
+          // with DOMPurify wherever it's rendered as HTML (see DictaEditorCore.jsx).
           const modifiedNext = nextLine.replace(pattern, "").trim();
           if (modifiedNext !== "") updated.push(modifiedNext);
           i += 1;

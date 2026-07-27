@@ -580,6 +580,9 @@ const RESERVED_HOLDER_FIELDS = new Set(['call', 'on', 'off', 'emit', 'once', 'us
 // כדי שדוגמאות `@example` בתוך SDK shim שמוטמע בתוסף לא יסומנו כקריאות אמת.
 // מכוון: לא מסיר // אמצע-שורה כדי לא לפגוע במחרוזות שמכילות '//' (URLs, regex וכד').
 // מקרי קצה של Otzaria.call(...) בתוך // הערה ייפסו לאזהרת שווא נדירה, וזה מחיר סביר.
+// codeql[js/incomplete-multi-character-sanitization] false positive: this strips comments
+// before scanning plugin code text for API-call names (a static lint check for docs), not
+// sanitizing HTML for output — nothing here reaches dangerouslySetInnerHTML or similar.
 function stripCommentsForScan(text) {
   return text
     .replace(/<!--[\s\S]*?-->/g, '')        // HTML comments

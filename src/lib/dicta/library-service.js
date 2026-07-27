@@ -189,6 +189,10 @@ function buildRegex({ find, isRegex, flags, caseSensitive }) {
   }
   if (!f.includes('g')) f += 'g';
   if (!caseSensitive && !f.includes('i')) f += 'i';
+  // codeql[js/regex-injection] accepted by design: only supervisors/admins may reach this
+  // path with isRegex=true (enforced by the caller in submitFindReplaceEdit), and the
+  // resulting RegExp always executes inside safeRegexReplace()'s worker thread with a
+  // hard timeout — a runaway pattern is terminated rather than blocking the server.
   // eslint-disable-next-line security/detect-non-literal-regexp
   return new RegExp(pattern, f);
 }

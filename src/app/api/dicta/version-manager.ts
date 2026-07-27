@@ -34,6 +34,8 @@ export class VersionManager {
   }
 
   async init() {
+    // codeql[js/path-injection] false positive: this.versionsDir is derived from filePath,
+    // which validateSafePath() already confined to UPLOAD_DIR in the constructor (line 26).
     await fs.mkdir(this.versionsDir, { recursive: true });
     await this.loadMetadata();
     if (!this.metadata.versions?.length) {
@@ -42,8 +44,11 @@ export class VersionManager {
   }
 
   async loadMetadata() {
+    // codeql[js/path-injection] false positive: metadataFile is derived from the
+    // constructor-validated filePath (see validateSafePath in the constructor).
     if (fsSync.existsSync(this.metadataFile)) {
       try {
+        // codeql[js/path-injection] false positive: see note above.
         const raw = await fs.readFile(this.metadataFile, "utf-8");
         this.metadata = JSON.parse(raw);
       } catch {
@@ -55,21 +60,31 @@ export class VersionManager {
   }
 
   async saveMetadata() {
+    // codeql[js/path-injection] false positive: metadataFile derives from the
+    // constructor-validated filePath (see validateSafePath in the constructor).
     await fs.writeFile(this.metadataFile, JSON.stringify(this.metadata, null, 2), "utf-8");
   }
 
   async saveVersion(description = "") {
+    // codeql[js/path-injection] false positive: filePath was validated by
+    // validateSafePath() in the constructor and never reassigned afterward.
     if (!this.filePath || !fsSync.existsSync(this.filePath)) return null;
 
     const versionNum = (this.metadata.versions?.length || 0) + 1;
     const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19);
     const versionFilename = `v${versionNum}_${path.basename(this.filePath)}`;
+    // codeql[js/path-injection] false positive: versionsDir derives from the
+    // constructor-validated filePath; versionFilename is generated here, not user input.
     // eslint-disable-next-line security/detect-non-literal-fs-filename
     const versionPath = path.join(this.versionsDir, versionFilename);
 
+    // codeql[js/path-injection] false positive: filePath is validated in the constructor;
+    // versionPath is built from versionsDir (also derived from the validated filePath) joined
+    // with a filename this code generates itself (versionNum + basename), never user input.
     // eslint-disable-next-line security/detect-non-literal-fs-filename
     await fs.copyFile(this.filePath, versionPath);
 
+    // codeql[js/path-injection] false positive: versionPath is not user-controlled (see above).
     const stat = await fs.stat(versionPath);
     const versionInfo: VersionInfo = {
       version: versionNum,
@@ -98,12 +113,18 @@ export class VersionManager {
   async restoreVersionByFilename(filename: string) {
     const versionInfo = this.metadata.versions.find((v) => v.filename === filename);
     if (!versionInfo) return false;
+    // codeql[js/path-injection] false positive: versionInfo.filename comes from this.metadata
+    // (written only by saveVersion(), never from external input), and versionsDir derives from
+    // the constructor-validated filePath.
     // eslint-disable-next-line security/detect-non-literal-fs-filename
     const versionPath = path.join(this.versionsDir, versionInfo.filename);
+    // codeql[js/path-injection] false positive: see note above.
     // eslint-disable-next-line security/detect-non-literal-fs-filename
     if (!fsSync.existsSync(versionPath)) return false;
 
     await this.saveVersion(`לפני שחזור לגירסה ${versionInfo.version}`);
+    // codeql[js/path-injection] false positive: neither versionPath nor filePath is user input
+    // here (see notes above and in the constructor).
     // eslint-disable-next-line security/detect-non-literal-fs-filename
     await fs.copyFile(versionPath, this.filePath);
     this.metadata.current_version = versionInfo.version;

@@ -14,8 +14,9 @@ export async function POST(request) {
 
     const { email: newEmail } = await request.json();
 
-    const emailRegex = /^[^\"s@]+@[^\"s@]+\.[^\"s@]+$/;
-    if (!newEmail || !emailRegex.test(newEmail)) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    // codeql[js/polynomial-redos]: bound input length before testing.
+    if (!newEmail || newEmail.length > 254 || !emailRegex.test(newEmail)) {
       return NextResponse.json({ error: 'כתובת אימייל לא תקינה' }, { status: 400 });
     }
 

@@ -27,11 +27,17 @@ export function validatePassword(password, minLength = 8) {
  */
 export function validateEmail(email) {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  
+
   if (!email) {
     return { isValid: false, error: 'דוא"ל נדרש' }
   }
-  
+
+  // codeql[js/polynomial-redos]: bound input length before testing — no real email
+  // exceeds this, but it caps the regex engine's worst-case work on adversarial input.
+  if (email.length > 254) {
+    return { isValid: false, error: 'דוא"ל אינו תקין' }
+  }
+
   if (!emailRegex.test(email)) {
     return { isValid: false, error: 'דוא"ל אינו תקין' }
   }

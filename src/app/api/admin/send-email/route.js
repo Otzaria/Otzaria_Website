@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
+import sanitizeHtml from 'sanitize-html';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { encryptToken } from '@/app/api/user/unsubscribe/route';
@@ -7,6 +8,19 @@ import dbConnect from '@/lib/db';
 import ReminderHistory from '@/models/reminderHistory';
 import User from '@/models/User';
 import { hasBooksAccess } from '@/lib/roles';
+
+// מאפשר עיצוב חופשי (תגיות/סגנון בסיסיים) אך חוסם script/iframe/event handlers וכד'.
+const EMAIL_HTML_OPTIONS = {
+  allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'span', 'div', 'style', 'u', 'font']),
+  allowedAttributes: {
+    ...sanitizeHtml.defaults.allowedAttributes,
+    '*': ['style', 'class', 'dir', 'align'],
+    img: ['src', 'alt', 'width', 'height'],
+    font: ['color', 'face', 'size'],
+    a: ['href', 'name', 'target'],
+  },
+  allowedSchemes: ['http', 'https', 'mailto', 'cid'],
+};
 
 export async function POST(request) {
     try {
@@ -64,11 +78,14 @@ export async function POST(request) {
             tls: { rejectUnauthorized: false }
         });
 
+        // מסננים סקריפטים/event handlers מהתוכן שהאדמין שלח, תוך שמירה על עיצוב חופשי (codeql: js/xss)
+        const safeBodyHtml = sanitizeHtml(html || text, EMAIL_HTML_OPTIONS);
+
         const sendResults = await Promise.allSettled(filteredRecipients.map(async (email) => {
             const secureToken = encryptToken(email);
             const unsubUrl = `${process.env.NEXTAUTH_URL}/api/user/unsubscribe?t=${secureToken}&action=reminder`;
 
-            const individualHtml = (html || text) + `
+            const individualHtml = safeBodyHtml + `
                 <div dir="rtl" style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; font-size: 11px; color: #999; text-align: center; font-family: sans-serif;">
                     קיבלת הודעה זו ממערכת אוצריא.
                     <br>
