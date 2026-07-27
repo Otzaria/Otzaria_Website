@@ -531,7 +531,7 @@ export default function DictaEditorCore({
     
     if (isHeadingTag && trimmedText) {
       // עבור כותרות: הסרת כל התגים הקיימים מהטקסט
-      // codeql[js/incomplete-multi-character-sanitization] false positive: this is an editor
+      // הערת אבטחה: false positive מאומת עבור התראת CodeQL js/incomplete-multi-character-sanitization (נסגרה ידנית ב-GitHub, ראו הסבר): this is an editor
       // convenience action (strip tags before wrapping in a heading), not the security
       // boundary — final content is always run through DOMPurify.sanitize() before render
       // (see sanitizedContent above / dangerouslySetInnerHTML usage below).
@@ -579,7 +579,7 @@ export default function DictaEditorCore({
     const scrollTop = textarea.scrollTop
     
     // הסרת כל תגי ה-HTML מהטקסט הנבחר
-    // codeql[js/incomplete-multi-character-sanitization] false positive: editor convenience
+    // הערת אבטחה: false positive מאומת עבור התראת CodeQL js/incomplete-multi-character-sanitization (נסגרה ידנית ב-GitHub, ראו הסבר): editor convenience
     // action, not the security boundary — see note on the identical pattern above; rendering
     // always goes through DOMPurify.sanitize() first.
     const cleanedText = selectedText.replace(/<[^>]*>/g, '')

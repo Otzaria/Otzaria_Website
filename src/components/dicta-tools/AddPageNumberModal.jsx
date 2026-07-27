@@ -53,7 +53,7 @@ export default function AddPageNumberModal({ isOpen, onClose, content, onContent
               updated.push(newTitle)
               
               // הסרת הדפוס מהשורה הבאה
-              // codeql[js/incomplete-multi-character-sanitization] false positive: `pattern`
+              // הערת אבטחה: false positive מאומת עבור התראת CodeQL js/incomplete-multi-character-sanitization (נסגרה ידנית ב-GitHub, ראו הסבר): `pattern`
               // strips a specific Hebrew page-reference marker (e.g. ע"א/ע"ב), not arbitrary
               // HTML — the optional tag-wrapper groups are incidental. Output is sanitized
               // with DOMPurify at render time regardless.

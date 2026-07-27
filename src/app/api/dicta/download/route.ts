@@ -13,13 +13,13 @@ export async function POST(request: Request) {
   try {
     const { file_path } = await request.json();
     validateSafePath(file_path);
-    // codeql[js/path-injection] false positive: validateSafePath() above throws unless
+    // הערת אבטחה: false positive מאומת עבור התראת CodeQL js/path-injection (נסגרה ידנית ב-GitHub, ראו הסבר): validateSafePath() above throws unless
     // file_path resolves inside UPLOAD_DIR, so execution only reaches here for safe paths.
     if (!file_path || !fsSync.existsSync(file_path)) {
       return NextResponse.json({ detail: "הקובץ לא נמצא" }, { status: 404 });
     }
 
-    // codeql[js/path-injection] false positive: see validateSafePath() call above.
+    // הערת אבטחה: false positive מאומת עבור התראת CodeQL js/path-injection (נסגרה ידנית ב-GitHub, ראו הסבר): see validateSafePath() call above.
     const buffer = await fs.readFile(file_path);
     const filename = path.basename(file_path);
     return new NextResponse(buffer, {

@@ -105,7 +105,7 @@ export default function TextCleanerModal({ isOpen, onClose, content, onContentCh
           const openIndex = text.lastIndexOf(openTag, closeTagIndex)
           if (openIndex === -1) return null
           const inner = text.slice(openIndex + openTag.length, closeTagIndex)
-          // codeql[js/incomplete-multi-character-sanitization] false positive: used only to
+          // הערת אבטחה: false positive מאומת עבור התראת CodeQL js/incomplete-multi-character-sanitization (נסגרה ידנית ב-GitHub, ראו הסבר): used only to
           // count words for a duplicate-heading heuristic, not as an output sanitizer — the
           // book content itself is sanitized with DOMPurify at render time.
           const cleaned = inner.replace(/<[^>]*>/g, '').trim()
