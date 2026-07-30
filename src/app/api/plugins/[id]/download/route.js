@@ -49,7 +49,7 @@ export async function GET(request, { params }) {
         throw err
       }
       if (plugin.isApproved) {
-        plugin.incrementDownload().catch(e => console.error('Failed to increment download count:', e))
+        plugin.incrementDownload(version).catch(e => console.error('Failed to increment download count:', e))
       }
       return pluginFileResponse(archiveBuf, entry.pluginFileName || plugin.pluginFileName, entry.pluginFileExt || plugin.pluginFileExt)
     }

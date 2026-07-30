@@ -41,7 +41,7 @@ export async function GET(request) {
       .sort(sortOrder)
       .populate('authorId', 'name email')
       .populate('lastSubmittedBy', 'name email')
-      .select('-__v')
+      .select('-__v -downloadsByVersion')
 
     if (status === 'approved') cursor.populate('approvedBy', 'name email')
 
