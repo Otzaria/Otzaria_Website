@@ -12,9 +12,10 @@ function getClientIp(request) {
     || 'unknown'
 }
 
-// POST /api/plugins/install-result - דיווח תוצאת התקנה מהאפליקציה.
-// גוף הבקשה: { token, status: 'success' | 'failure', error?, appVersion? }
-// חד-פעמי: רק טוקן במצב pending שטרם פג ניתן לעדכון.
+// POST /api/plugins/install-result - דיווח מהאפליקציה.
+// גוף הבקשה: { token, status: 'received' | 'success' | 'failure', error?, appVersion? }
+// 'received' — אישור קבלה מיידי (הטוקן נשאר pending); ניתן פעם אחת.
+// 'success'/'failure' — תוצאה סופית, חד-פעמית: רק טוקן pending שטרם פג ניתן לעדכון.
 export async function POST(request) {
   try {
     if (!checkRateLimit(getClientIp(request), 'plugin-install-report', 30, 'minute')) {
@@ -32,7 +33,7 @@ export async function POST(request) {
     if (typeof token !== 'string' || !TOKEN_PATTERN.test(token)) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 400 })
     }
-    if (status !== 'success' && status !== 'failure') {
+    if (status !== 'success' && status !== 'failure' && status !== 'received') {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
     }
 
@@ -42,6 +43,25 @@ export async function POST(request) {
     const appVersion = typeof body.appVersion === 'string' ? body.appVersion.slice(0, 30) : null
 
     await dbConnect()
+
+    // אישור קבלה — מסמן receivedAt בלבד, הטוקן נשאר pending לקראת התוצאה
+    // הסופית. אידמפוטנטי: האפליקציה שולחת ack גם מוקדם ב-main וגם בזרימת
+    // ההתקנה — ack חוזר על טוקן קיים מחזיר ok (ומשלים appVersion אם חסר).
+    if (status === 'received') {
+      const now = new Date()
+      const doc = await PluginInstallToken.findOne({ token, expiresAt: { $gt: now } })
+        .select('receivedAt appVersion').lean()
+      if (!doc) {
+        return NextResponse.json({ error: 'Token not found or expired' }, { status: 404 })
+      }
+      const update = {}
+      if (!doc.receivedAt) update.receivedAt = now
+      if (appVersion && !doc.appVersion) update.appVersion = appVersion
+      if (Object.keys(update).length > 0) {
+        await PluginInstallToken.updateOne({ _id: doc._id }, update)
+      }
+      return NextResponse.json({ ok: true })
+    }
     const updated = await PluginInstallToken.findOneAndUpdate(
       { token, status: 'pending', expiresAt: { $gt: new Date() } },
       { status, errorMessage, appVersion, reportedAt: new Date() }
@@ -72,14 +92,19 @@ export async function GET(request) {
     }
 
     await dbConnect()
-    const doc = await PluginInstallToken.findOne({ token }).select('status errorMessage expiresAt downloadedAt').lean()
+    const doc = await PluginInstallToken.findOne({ token }).select('status errorMessage expiresAt downloadedAt receivedAt').lean()
     if (!doc || (doc.status === 'pending' && doc.expiresAt <= new Date())) {
       return NextResponse.json({ error: 'Token not found or expired' }, { status: 404 })
     }
 
-    // downloaded — האם בקשת הורדת הקובץ כבר הגיעה מהאפליקציה. מאפשר לדף
-    // לזהות מוקדם "אוצריא כנראה לא מותקנת" כשאין הורדה תוך פרק זמן סביר.
-    const payload = { status: doc.status, downloaded: Boolean(doc.downloadedAt) }
+    // received — האפליקציה אישרה קבלה; downloaded — בקשת ההורדה הגיעה.
+    // כל אחד מהם מעיד שאוצריא חיה; היעדר שניהם תוך פרק זמן סביר מעיד
+    // ש"אוצריא כנראה לא מותקנת".
+    const payload = {
+      status: doc.status,
+      received: Boolean(doc.receivedAt),
+      downloaded: Boolean(doc.downloadedAt)
+    }
     if (doc.status === 'failure' && doc.errorMessage) {
       payload.error = doc.errorMessage
     }

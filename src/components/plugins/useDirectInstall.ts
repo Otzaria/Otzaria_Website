@@ -8,9 +8,12 @@ import { buildDirectPluginInstallUrl } from '@/lib/pluginInstall'
 const POLL_INTERVAL_MS = 2000
 const POLL_TIMEOUT_MS = 2 * 60 * 1000
 
-// אם בקשת הורדת הקובץ לא הגיעה לשרת תוך פרק זמן זה — אוצריא כנראה לא
-// נפתחה כלל (לא מותקנת). נדיב מספיק כדי לכסות גם עליית אפליקציה "קרה".
-const NO_DOWNLOAD_TIMEOUT_MS = 30 * 1000
+// אם לא הגיע לשרת שום אות חיים מהאפליקציה תוך פרק זמן זה — אוצריא כנראה
+// לא נפתחה כלל (לא מותקנת). אותות חיים: אישור קבלה (received — נשלח מ-main()
+// של אוצריא מיד עם קבלת הקישור, לפני עליית החלון, גם בעלייה קרה) או בקשת
+// הורדת הקובץ. הבדיקה נעשית על טיקי ה-polling (כל 2 שניות), כך שבפועל
+// ההכרזה נופלת על הטיק הראשון שאחרי הסף (~4 שניות מהלחיצה).
+const NO_SIGNAL_TIMEOUT_MS = 3 * 1000
 
 export type InstallPhase = 'idle' | 'waiting' | 'success' | 'failure' | 'no_report' | 'no_app'
 
@@ -89,10 +92,11 @@ export function useDirectInstall() {
           stopPolling()
           setState({ phase: 'failure', pluginId: plugin.id, error: data.error || null })
         } else if (
+          !data.received &&
           !data.downloaded &&
-          Date.now() - startedAt > NO_DOWNLOAD_TIMEOUT_MS
+          Date.now() - startedAt > NO_SIGNAL_TIMEOUT_MS
         ) {
-          // בקשת ההורדה לא הגיעה לשרת — אוצריא כנראה לא נפתחה (לא מותקנת)
+          // שום אות חיים לא הגיע לשרת — אוצריא כנראה לא נפתחה (לא מותקנת)
           stopPolling()
           setState({ phase: 'no_app', pluginId: plugin.id, error: null })
         }
