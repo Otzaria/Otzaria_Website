@@ -8,7 +8,11 @@ import { buildDirectPluginInstallUrl } from '@/lib/pluginInstall'
 const POLL_INTERVAL_MS = 2000
 const POLL_TIMEOUT_MS = 2 * 60 * 1000
 
-export type InstallPhase = 'idle' | 'waiting' | 'success' | 'failure' | 'no_report'
+// אם בקשת הורדת הקובץ לא הגיעה לשרת תוך פרק זמן זה — אוצריא כנראה לא
+// נפתחה כלל (לא מותקנת). נדיב מספיק כדי לכסות גם עליית אפליקציה "קרה".
+const NO_DOWNLOAD_TIMEOUT_MS = 30 * 1000
+
+export type InstallPhase = 'idle' | 'waiting' | 'success' | 'failure' | 'no_report' | 'no_app'
 
 export interface DirectInstallState {
   phase: InstallPhase
@@ -84,6 +88,13 @@ export function useDirectInstall() {
         } else if (data.status === 'failure') {
           stopPolling()
           setState({ phase: 'failure', pluginId: plugin.id, error: data.error || null })
+        } else if (
+          !data.downloaded &&
+          Date.now() - startedAt > NO_DOWNLOAD_TIMEOUT_MS
+        ) {
+          // בקשת ההורדה לא הגיעה לשרת — אוצריא כנראה לא נפתחה (לא מותקנת)
+          stopPolling()
+          setState({ phase: 'no_app', pluginId: plugin.id, error: null })
         }
       } catch {
         // שגיאת רשת זמנית — ננסה שוב בסבב הבא

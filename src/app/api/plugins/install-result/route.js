@@ -72,12 +72,14 @@ export async function GET(request) {
     }
 
     await dbConnect()
-    const doc = await PluginInstallToken.findOne({ token }).select('status errorMessage expiresAt').lean()
+    const doc = await PluginInstallToken.findOne({ token }).select('status errorMessage expiresAt downloadedAt').lean()
     if (!doc || (doc.status === 'pending' && doc.expiresAt <= new Date())) {
       return NextResponse.json({ error: 'Token not found or expired' }, { status: 404 })
     }
 
-    const payload = { status: doc.status }
+    // downloaded — האם בקשת הורדת הקובץ כבר הגיעה מהאפליקציה. מאפשר לדף
+    // לזהות מוקדם "אוצריא כנראה לא מותקנת" כשאין הורדה תוך פרק זמן סביר.
+    const payload = { status: doc.status, downloaded: Boolean(doc.downloadedAt) }
     if (doc.status === 'failure' && doc.errorMessage) {
       payload.error = doc.errorMessage
     }

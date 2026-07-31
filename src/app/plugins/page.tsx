@@ -58,6 +58,11 @@ function PluginsPageContent() {
           ? `ההתקנה נכשלה: ${installState.error}`
           : 'ההתקנה נכשלה. אפשר לנסות שוב או להוריד את הקובץ ולהתקין ידנית.'
       )
+    } else if (installState.phase === 'no_app') {
+      showAlert(
+        'אוצריא לא נמצאה',
+        'נראה שאוצריא אינה מותקנת במחשב זה — בקשת ההתקנה לא הגיעה לתוכנה. ניתן להוריד את אוצריא מהאתר, או להוריד את קובץ התוסף ולהתקינו ידנית.'
+      )
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [installState])

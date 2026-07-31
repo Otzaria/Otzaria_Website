@@ -22,6 +22,11 @@ const PluginInstallTokenSchema = new mongoose.Schema(
     appVersion: { type: String, default: null, maxlength: 30 },
     reportedAt: { type: Date, default: null },
 
+    // מתי הגיעה בקשת הורדת הקובץ מהאפליקציה (הטוקן מצורף ל-URL ההורדה).
+    // משמש את הדף לזיהוי מוקדם של "אוצריא כנראה לא מותקנת" — אם תוך פרק
+    // זמן סביר לא הגיעה בקשת הורדה, האפליקציה כנראה לא נפתחה כלל.
+    downloadedAt: { type: Date, default: null },
+
     // תפוגה — מסמך נמחק אוטומטית ע"י TTL של מונגו אחרי המועד הזה.
     // (הניקוי של מונגו רץ כדקה אחת אחורה, לכן הראוטים בודקים גם את הערך עצמו.)
     expiresAt: { type: Date, required: true }
