@@ -5,7 +5,8 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
-import { buildDirectPluginInstallUrl } from '@/lib/pluginInstall'
+import { useDirectInstall } from '@/components/plugins/useDirectInstall'
+import { useDialog } from '@/components/providers/DialogContext'
 import { formatPluginStatus } from '@/lib/pluginSubmission'
 
 interface Plugin {
@@ -43,6 +44,23 @@ function PluginsPageContent() {
   const [tagsCollapsedHeight, setTagsCollapsedHeight] = useState(130)
   const [tagsFullHeight, setTagsFullHeight] = useState(0)
   const [tagsOverflow, setTagsOverflow] = useState(false)
+  const { installState, install } = useDirectInstall()
+  const { showAlert } = useDialog() as { showAlert: (title: string, message: string) => void }
+
+  // הודעת דיאלוג רגילה של האתר כשמגיע דיווח תוצאה מאוצריא
+  useEffect(() => {
+    if (installState.phase === 'success') {
+      showAlert('הצלחה', 'התוסף הותקן בהצלחה באוצריא!')
+    } else if (installState.phase === 'failure') {
+      showAlert(
+        'שגיאה',
+        installState.error
+          ? `ההתקנה נכשלה: ${installState.error}`
+          : 'ההתקנה נכשלה. אפשר לנסות שוב או להוריד את הקובץ ולהתקין ידנית.'
+      )
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [installState])
 
   // טעינת נתוני התוספים
   useEffect(() => {
@@ -236,7 +254,7 @@ function PluginsPageContent() {
 
   const handleDirectInstall = (plugin: Plugin) => {
     if (canDirectInstall(plugin)) {
-      window.location.href = buildDirectPluginInstallUrl(plugin.downloadUrl, window.location.origin)
+      install(plugin)
     }
   }
 
@@ -468,9 +486,21 @@ function PluginsPageContent() {
                         {canDirectInstall(plugin) && (
                           <button
                             onClick={() => handleDirectInstall(plugin)}
-                            className="flex-1 px-4 py-2.5 bg-white border border-primary/20 text-primary rounded-full text-sm font-bold hover:bg-primary/5 transition-colors text-center"
+                            disabled={installState.pluginId === plugin.id && installState.phase === 'waiting'}
+                            className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-primary/20 text-primary rounded-full text-sm font-bold hover:bg-primary/5 transition-colors text-center disabled:cursor-default disabled:opacity-80"
                           >
-                            התקנה ישירה
+                            {installState.pluginId === plugin.id && installState.phase === 'waiting' ? (
+                              <>
+                                <span className="w-3.5 h-3.5 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></span>
+                                <span>מתקין...</span>
+                              </>
+                            ) : installState.pluginId === plugin.id && installState.phase === 'success' ? (
+                              <span>הותקן בהצלחה!</span>
+                            ) : installState.pluginId === plugin.id && installState.phase === 'failure' ? (
+                              <span>ההתקנה נכשלה - לחץ שוב לנסיון נוסף</span>
+                            ) : (
+                              <span>התקנה ישירה</span>
+                            )}
                           </button>
                         )}
                       </div>

@@ -8,7 +8,7 @@ import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 import PluginEditModal from '@/components/plugins/PluginEditModal'
 import { useDialog } from '@/components/providers/DialogContext'
-import { buildDirectPluginInstallUrl } from '@/lib/pluginInstall'
+import { useDirectInstall } from '@/components/plugins/useDirectInstall'
 import { formatPluginStatus } from '@/lib/pluginSubmission'
 
 interface Plugin {
@@ -66,6 +66,22 @@ export default function PluginDetailPage() {
   const [editingPlugin, setEditingPlugin] = useState<PluginEditPayload | null>(null)
   const [loadingEdit, setLoadingEdit] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+  const { installState, install } = useDirectInstall()
+
+  // הודעת דיאלוג רגילה של האתר כשמגיע דיווח תוצאה מאוצריא
+  useEffect(() => {
+    if (installState.phase === 'success') {
+      showAlert('הצלחה', 'התוסף הותקן בהצלחה באוצריא!')
+    } else if (installState.phase === 'failure') {
+      showAlert(
+        'שגיאה',
+        installState.error
+          ? `ההתקנה נכשלה: ${installState.error}`
+          : 'ההתקנה נכשלה. אפשר לנסות שוב או להוריד את הקובץ ולהתקין ידנית.'
+      )
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [installState])
   const currentUser = session?.user as { id?: string; role?: string } | undefined
 
   useEffect(() => {
@@ -218,7 +234,7 @@ export default function PluginDetailPage() {
 
   const handleDirectInstall = () => {
     if (plugin && canDirectInstall(plugin)) {
-      window.location.href = buildDirectPluginInstallUrl(plugin.downloadUrl, window.location.origin)
+      install(plugin)
     }
   }
 
@@ -364,10 +380,30 @@ export default function PluginDetailPage() {
                   {canDirectInstall(plugin) && (
                     <button
                       onClick={handleDirectInstall}
-                      className="inline-flex items-center gap-2 px-6 py-3 bg-white border-2 border-primary text-primary rounded-xl font-bold hover:bg-primary/5 transition-colors"
+                      disabled={installState.phase === 'waiting'}
+                      className="inline-flex items-center gap-2 px-6 py-3 bg-white border-2 border-primary text-primary rounded-xl font-bold hover:bg-primary/5 transition-colors disabled:cursor-default disabled:opacity-80"
                     >
-                      <span className="material-symbols-outlined">install_desktop</span>
-                      <span>התקנה ישירה לאוצריא</span>
+                      {installState.phase === 'waiting' ? (
+                        <>
+                          <span className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></span>
+                          <span>מתקין...</span>
+                        </>
+                      ) : installState.phase === 'success' ? (
+                        <>
+                          <span className="material-symbols-outlined">check_circle</span>
+                          <span>הותקן בהצלחה!</span>
+                        </>
+                      ) : installState.phase === 'failure' ? (
+                        <>
+                          <span className="material-symbols-outlined">error</span>
+                          <span>ההתקנה נכשלה - לחץ שוב לנסיון נוסף</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="material-symbols-outlined">install_desktop</span>
+                          <span>התקנה ישירה לאוצריא</span>
+                        </>
+                      )}
                     </button>
                   )}
                   {plugin.homepage && (
