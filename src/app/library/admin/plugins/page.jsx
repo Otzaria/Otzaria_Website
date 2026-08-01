@@ -1,22 +1,29 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import PluginNotificationSettings from '@/components/notifications/PluginNotificationSettings'
 import PluginEditModal from '@/components/plugins/PluginEditModal'
+import PluginApproveModal from '@/components/plugins/PluginApproveModal'
+import StoreLayoutTab from './StoreLayoutTab'
 import { formatPluginStatus } from '@/lib/pluginSubmission'
 
 export default function AdminPluginsPage() {
-  const [activeTab, setActiveTab] = useState('pending') // 'pending' or 'approved'
+  const [activeTab, setActiveTab] = useState('pending') // 'pending' | 'approved' | 'store'
   const [pendingPlugins, setPendingPlugins] = useState([])
   const [approvedPlugins, setApprovedPlugins] = useState([])
+  const [categories, setCategories] = useState([]) // קטגוריות החנות — להצגת שיבוצים בכרטיסי המאושרים
   const [loading, setLoading] = useState(true)
   const [processingId, setProcessingId] = useState(null)
   const [deletingVersion, setDeletingVersion] = useState(null)
   const [editingId, setEditingId] = useState(null)
   const [editingPlugin, setEditingPlugin] = useState(null)
   const [showNotificationSettings, setShowNotificationSettings] = useState(false)
+  const [approvingPlugin, setApprovingPlugin] = useState(null) // תוסף חדש בזרימת אישור (מודאל קטגוריות)
+  const [assigningPlugin, setAssigningPlugin] = useState(null) // תוסף מאושר שנפתח לו מודאל "ערוך שיבוץ"
+  const [assignProcessingId, setAssignProcessingId] = useState(null)
   const { showConfirm, showAlert } = useDialog()
 
   const loadPendingPlugins = async () => {
@@ -41,7 +48,10 @@ export default function AdminPluginsPage() {
   const loadApprovedPlugins = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/admin/plugins?status=approved')
+      const [response, categoriesResponse] = await Promise.all([
+        fetch('/api/admin/plugins?status=approved'),
+        fetch('/api/admin/plugin-categories')
+      ])
 
       if (!response.ok) {
         throw new Error('Failed to load plugins')
@@ -49,6 +59,11 @@ export default function AdminPluginsPage() {
 
       const data = await response.json()
       setApprovedPlugins(data)
+
+      // כשל בטעינת הקטגוריות לא חוסם את רשימת התוספים — רק שורת השיבוצים לא תוצג
+      if (categoriesResponse.ok) {
+        setCategories(await categoriesResponse.json())
+      }
     } catch (error) {
       console.error('Error loading approved plugins:', error)
       showAlert('שגיאה בטעינת תוספים', 'לא הצלחנו לטעון את רשימת התוספים המאושרים')
@@ -57,11 +72,25 @@ export default function AdminPluginsPage() {
     }
   }
 
+  const refreshCategories = async () => {
+    try {
+      const response = await fetch('/api/admin/plugin-categories')
+      if (response.ok) {
+        setCategories(await response.json())
+      }
+    } catch (error) {
+      console.error('Error refreshing categories:', error)
+    }
+  }
+
   const loadPlugins = () => {
     if (activeTab === 'pending') {
       loadPendingPlugins()
-    } else {
+    } else if (activeTab === 'approved') {
       loadApprovedPlugins()
+    } else {
+      // לשונית "סידור החנות" טוענת את נתוניה בעצמה (StoreLayoutTab)
+      setLoading(false)
     }
   }
 
@@ -72,25 +101,41 @@ export default function AdminPluginsPage() {
   }, [activeTab])
 
   const handleApprove = async (plugin) => {
+    // תוסף חדש — מודאל אישור עם שיבוץ לקטגוריות; אישור עדכון — confirm רגיל (בלי UI קטגוריות)
+    if (!plugin.pendingUpdate) {
+      setApprovingPlugin(plugin)
+      return
+    }
+
     const confirmed = await showConfirm(
       'אישור תוסף',
       `האם אתה בטוח שברצונך לאשר את התוסף "${plugin.name}"? לאחר האישור, התוסף יהיה זמין לכל המשתמשים.`
     )
 
     if (!confirmed) return
+    await performApprove(plugin)
+  }
 
+  // ביצוע האישור בפועל; לתוסף חדש נתמכים גם שיבוץ לקטגוריות והוספה לנבחרים בדף הבית.
+  // ההוספה לנבחרים מתבצעת בצד השרת ($addToSet) יחד עם האישור — אטומית מול עריכות מקבילות.
+  const performApprove = async (plugin, { categoryIds = [], addToFeatured = false } = {}) => {
     try {
       setProcessingId(plugin._id)
       const response = await fetch(`/api/admin/plugins/${plugin._id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'approve' })
+        body: JSON.stringify({
+          action: 'approve',
+          ...(categoryIds.length > 0 ? { categoryIds } : {}),
+          ...(addToFeatured ? { addToFeatured: true } : {})
+        })
       })
 
       if (!response.ok) {
         throw new Error('Failed to approve plugin')
       }
 
+      setApprovingPlugin(null)
       await showAlert('תוסף אושר', `התוסף "${plugin.name}" אושר בהצלחה!`)
       loadPlugins()
     } catch (error) {
@@ -125,38 +170,6 @@ export default function AdminPluginsPage() {
     } catch (error) {
       console.error('Error rejecting plugin:', error)
       showAlert('שגיאה', 'לא הצלחנו לדחות את התוסף')
-    } finally {
-      setProcessingId(null)
-    }
-  }
-
-  const handleTogglePin = async (plugin) => {
-    const willPin = !plugin.isPinned
-    const confirmed = await showConfirm(
-      willPin ? 'הצמדת תוסף' : 'ביטול הצמדה',
-      willPin
-        ? `האם להצמיד את התוסף "${plugin.name}"? תוספים מוצמדים יוצגו תמיד בראש החנות.`
-        : `האם לבטל את ההצמדה של התוסף "${plugin.name}"?`
-    )
-
-    if (!confirmed) return
-
-    try {
-      setProcessingId(plugin._id)
-      const response = await fetch(`/api/admin/plugins/${plugin._id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: willPin ? 'pin' : 'unpin' })
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to toggle pin')
-      }
-
-      loadPlugins()
-    } catch (error) {
-      console.error('Error toggling pin:', error)
-      showAlert('שגיאה', 'לא הצלחנו לעדכן את ההצמדה')
     } finally {
       setProcessingId(null)
     }
@@ -272,6 +285,38 @@ export default function AdminPluginsPage() {
     }
   }
 
+  // שינוי שיבוץ ממודאל "ערוך שיבוץ" — כל סימון/ביטול נשמר מיידית
+  const handleToggleAssignment = async (plugin, category, checked) => {
+    try {
+      setAssignProcessingId(category.id)
+      const response = await fetch(`/api/admin/plugin-categories/${category.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: checked ? 'addPlugin' : 'removePlugin',
+          pluginId: plugin._id
+        })
+      })
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update assignment')
+      }
+
+      // עדכון מקומי מהתשובה — הקטגוריה חוזרת מפורמטת וטרייה
+      setCategories((prev) => prev.map((item) => (item.id === category.id ? result.category : item)))
+    } catch (error) {
+      console.error('Error toggling category assignment:', error)
+      showAlert('שגיאה', error.message || 'לא הצלחנו לעדכן את השיבוץ')
+    } finally {
+      setAssignProcessingId(null)
+    }
+  }
+
+  // הקטגוריות שבהן תוסף משובץ — לשורת המידע בכרטיס ולמודאל השיבוץ
+  const getPluginCategories = (pluginId) =>
+    categories.filter((category) => category.plugins.some((item) => item.id === pluginId))
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('he-IL', {
       year: 'numeric',
@@ -315,8 +360,10 @@ export default function AdminPluginsPage() {
         <div>
           <h1 className="text-3xl font-bold text-on-surface">ניהול תוספים</h1>
           <p className="text-on-surface/60 mt-1">
-            {activeTab === 'pending' 
-              ? plugins.length === 0 
+            {activeTab === 'store'
+              ? 'סידור דף הבית של החנות: נבחרים, קטגוריות ושיבוצים'
+              : activeTab === 'pending'
+              ? plugins.length === 0
                 ? 'אין תוספים ממתינים לאישור'
                 : `${plugins.length} תוספים ממתינים לאישור`
               : plugins.length === 0
@@ -385,10 +432,26 @@ export default function AdminPluginsPage() {
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"></div>
           )}
         </button>
+
+        <button
+          onClick={() => setActiveTab('store')}
+          className={`px-6 py-3 font-bold transition-colors relative ${
+            activeTab === 'store'
+              ? 'text-primary'
+              : 'text-on-surface/60 hover:text-on-surface'
+          }`}
+        >
+          <span>סידור החנות</span>
+          {activeTab === 'store' && (
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"></div>
+          )}
+        </button>
       </div>
 
-      {/* Empty State */}
-      {plugins.length === 0 ? (
+      {/* לשונית סידור החנות — טוענת את נתוניה בעצמה */}
+      {activeTab === 'store' ? (
+        <StoreLayoutTab />
+      ) : plugins.length === 0 ? (
         <div className="glass rounded-2xl p-12 text-center">
           <span className="material-symbols-outlined text-6xl text-on-surface/30 mb-4 block">
             {activeTab === 'pending' ? 'check_circle' : 'extension'}
@@ -445,12 +508,6 @@ export default function AdminPluginsPage() {
                       )}
                       {activeTab === 'pending' && !hasPendingUpdate(plugin) && (
                         <span className="rounded-full bg-feature-100 px-3 py-1 text-xs font-bold text-feature-800">תוסף חדש</span>
-                      )}
-                      {activeTab === 'approved' && plugin.isPinned && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-warning-100 px-3 py-1 text-xs font-bold text-warning-800">
-                          <span className="material-symbols-outlined text-sm">push_pin</span>
-                          <span>מוצמד</span>
-                        </span>
                       )}
                       {getStatusBadge(source.status)}
                       <span className="px-3 py-1 bg-surface rounded-full text-xs font-bold text-on-surface/60">
@@ -527,6 +584,14 @@ export default function AdminPluginsPage() {
                         <span className="text-on-surface/60">הורדות:</span>
                         <span className="font-medium text-on-surface mr-2">
                           {plugin.downloadCount || 0}
+                        </span>
+                      </div>
+                    )}
+                    {activeTab === 'approved' && categories.length > 0 && (
+                      <div className="col-span-2">
+                        <span className="text-on-surface/60">קטגוריות:</span>
+                        <span className="font-medium text-on-surface mr-2">
+                          {getPluginCategories(plugin._id).map((category) => category.name).join(', ') || 'ללא'}
                         </span>
                       </div>
                     )}
@@ -680,26 +745,12 @@ export default function AdminPluginsPage() {
                   ) : (
                     <>
                       <button
-                        onClick={() => handleTogglePin(plugin)}
-                        disabled={processingId === plugin._id}
-                        className={`flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                          plugin.isPinned
-                            ? 'bg-warning-100 text-warning-800 hover:bg-warning-200'
-                            : 'bg-warning-600 hover:bg-warning-700 text-white'
-                        }`}
-                        title={plugin.isPinned ? 'בטל הצמדה' : 'הצמד תוסף — יופיע ראשון בחנות'}
+                        onClick={() => setAssigningPlugin(plugin)}
+                        className="flex items-center justify-center gap-2 px-6 py-3 bg-info-alt-600 hover:bg-info-alt-700 text-white rounded-xl font-bold transition-colors"
+                        title="שיבוץ התוסף בקטגוריות החנות"
                       >
-                        {processingId === plugin._id ? (
-                          <>
-                            <span className="material-symbols-outlined animate-spin">progress_activity</span>
-                            <span>מעבד...</span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="material-symbols-outlined">{plugin.isPinned ? 'keep_off' : 'push_pin'}</span>
-                            <span>{plugin.isPinned ? 'בטל הצמדה' : 'הצמד'}</span>
-                          </>
-                        )}
+                        <span className="material-symbols-outlined">category</span>
+                        <span>ערוך שיבוץ</span>
                       </button>
 
                       <button
@@ -783,6 +834,106 @@ export default function AdminPluginsPage() {
           }}
         />
       )}
+
+      {/* מודאל אישור תוסף חדש — עם שיבוץ אופציונלי לקטגוריות */}
+      {approvingPlugin && (
+        <PluginApproveModal
+          plugin={approvingPlugin}
+          onClose={() => setApprovingPlugin(null)}
+          onConfirm={(selection) => performApprove(approvingPlugin, selection)}
+        />
+      )}
+
+      {/* מודאל "ערוך שיבוץ" לתוסף מאושר */}
+      {assigningPlugin && (
+        <AssignCategoriesModal
+          plugin={assigningPlugin}
+          categories={categories}
+          assignedCategoryIds={getPluginCategories(assigningPlugin._id).map((category) => category.id)}
+          processingCategoryId={assignProcessingId}
+          onToggle={handleToggleAssignment}
+          onClose={() => {
+            setAssigningPlugin(null)
+            // רענון הקטגוריות בסגירה — שורת "קטגוריות:" בכרטיסים תתעדכן
+            refreshCategories()
+          }}
+        />
+      )}
     </div>
+  )
+}
+
+// מודאל שיבוץ מקומי לתוסף מאושר — כל סימון/ביטול נשמר מיידית (addPlugin/removePlugin)
+function AssignCategoriesModal({ plugin, categories, assignedCategoryIds, processingCategoryId, onToggle, onClose }) {
+  return createPortal(
+    <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div
+        className="max-h-[80vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-neutral-200 bg-white p-6">
+          <h2 className="text-xl font-bold text-on-surface">שיבוץ בקטגוריות: {plugin.name}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-2 transition-colors hover:bg-neutral-100"
+          >
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div className="space-y-4 p-6">
+          <p className="text-sm text-on-surface/60">כל שינוי נשמר מיידית.</p>
+
+          {categories.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-neutral-300 p-4 text-center text-sm text-on-surface/50">
+              עדיין לא נוצרו קטגוריות — ניתן ליצור בלשונית &quot;סידור החנות&quot;
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {categories.map((category) => {
+                const checked = assignedCategoryIds.includes(category.id)
+                const processing = processingCategoryId === category.id
+                return (
+                  <label
+                    key={category.id}
+                    className={`flex cursor-pointer items-center gap-3 rounded-xl border border-neutral-200 px-4 py-3 transition-colors hover:bg-neutral-50 ${
+                      category.isVisible ? '' : 'opacity-60'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={processingCategoryId !== null}
+                      onChange={(e) => onToggle(plugin, category, e.target.checked)}
+                      className="h-5 w-5 rounded border-neutral-300 text-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
+                    />
+                    {category.icon && (
+                      <span className="material-symbols-outlined text-base text-on-surface/50">{category.icon}</span>
+                    )}
+                    <span className="flex-1 font-medium text-on-surface">{category.name}</span>
+                    {!category.isVisible && (
+                      <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-xs font-bold text-on-surface/60">מוסתרת</span>
+                    )}
+                    {processing && (
+                      <span className="material-symbols-outlined animate-spin text-base text-primary">progress_activity</span>
+                    )}
+                  </label>
+                )
+              })}
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full rounded-xl border border-neutral-200 px-6 py-3 font-bold text-on-surface transition-colors hover:bg-neutral-50"
+          >
+            סגור
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   )
 }
