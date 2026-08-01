@@ -10,6 +10,8 @@ import PluginEditModal from '@/components/plugins/PluginEditModal'
 import { useDialog } from '@/components/providers/DialogContext'
 import { useDirectInstall } from '@/components/plugins/useDirectInstall'
 import { formatPluginStatus } from '@/lib/pluginSubmission'
+import { formatHebrewDate } from '@/lib/hebrewDate'
+import type { CategoryRef } from '@/components/plugins/types'
 
 interface Plugin {
   id: string
@@ -33,6 +35,8 @@ interface Plugin {
   downloadCount?: number
   isHistoricalVersion?: boolean
   latestVersion?: string
+  // הקטגוריות שהתוסף משובץ בהן (מוחזר מ-GET /api/plugins/[id])
+  categories?: CategoryRef[]
 }
 
 interface PluginEditPayload extends Plugin {
@@ -110,116 +114,6 @@ export default function PluginDetailPage() {
     loadPlugin()
   }, [params.id, router])
 
-  // המרת מספר לגימטריה עברית
-  const toHebrewNumeral = (num: number): string => {
-    const ones = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט']
-    const tens = ['', 'י', 'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ']
-    const hundreds = ['', 'ק', 'ר', 'ש', 'ת']
-    const thousands = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט']
-    
-    if (num === 0) return ''
-    if (num > 9999) return num.toString()
-    
-    let result = ''
-    
-    // אלפים
-    const thousandsDigit = Math.floor(num / 1000)
-    if (thousandsDigit > 0) {
-      result += thousands[thousandsDigit] + "'"
-      num %= 1000
-    }
-    
-    // מאות - טיפול במאות מעל 400
-    const hundredsDigit = Math.floor(num / 100)
-    if (hundredsDigit > 0) {
-      if (hundredsDigit <= 4) {
-        result += hundreds[hundredsDigit]
-      } else if (hundredsDigit === 5) {
-        result += 'תק' // 500
-      } else if (hundredsDigit === 6) {
-        result += 'תר' // 600
-      } else if (hundredsDigit === 7) {
-        result += 'תש' // 700
-      } else if (hundredsDigit === 8) {
-        result += 'תת' // 800
-      } else if (hundredsDigit === 9) {
-        result += 'תתק' // 900
-      }
-      num %= 100
-    }
-    
-    // טיפול מיוחד ב-15 ו-16 (ט"ו, ט"ז במקום י"ה, י"ו)
-    if (num === 15) {
-      result += 'טו'
-    } else if (num === 16) {
-      result += 'טז'
-    } else {
-      // עשרות
-      const tensDigit = Math.floor(num / 10)
-      if (tensDigit > 0) {
-        result += tens[tensDigit]
-        num %= 10
-      }
-      
-      // יחידות
-      if (num > 0) {
-        result += ones[num]
-      }
-    }
-    
-    // הוספת גרש או גרשיים
-    if (result.length === 1) {
-      result += "'"
-    } else if (result.length > 1) {
-      result = result.slice(0, -1) + '"' + result.slice(-1)
-    }
-    
-    return result
-  }
-
-  const formatHebrewDate = (dateStr: string) => {
-    try {
-      let date: Date
-      
-      // אם זה ISO timestamp (כולל שעה)
-      if (dateStr.includes('T')) {
-        date = new Date(dateStr)
-      } else {
-        // אם זה תאריך פשוט (YYYY-MM-DD)
-        const [year, month, dayNum] = dateStr.split('-').map(Number)
-        date = new Date(Date.UTC(year, month - 1, dayNum, 12))
-      }
-      
-      const formatter = new Intl.DateTimeFormat('he-u-ca-hebrew', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-        timeZone: 'UTC'
-      })
-      
-      const formatted = formatter.format(date)
-      
-      // פירוק התאריך לחלקים
-      const parts = formatter.formatToParts(date)
-      const dayPart = parts.find(p => p.type === 'day')
-      const monthPart = parts.find(p => p.type === 'month')
-      const yearPart = parts.find(p => p.type === 'year')
-      
-      if (!dayPart || !monthPart || !yearPart) {
-        return formatted // fallback למקרה של בעיה
-      }
-      
-      const day = parseInt(dayPart.value)
-      const monthName = monthPart.value
-      const year = parseInt(yearPart.value)
-      
-      return `${toHebrewNumeral(day)} ${monthName} ${toHebrewNumeral(year)}`
-    } catch (error) {
-      console.error('Error formatting date:', error, dateStr)
-      return dateStr
-    }
-  }
-
   const screenshotCount = plugin?.screenshots?.length ?? 0
   const handleLightboxKey = useCallback((e: KeyboardEvent) => {
     if (lightboxIndex === null) return
@@ -291,6 +185,26 @@ export default function PluginDetailPage() {
       
       <main className="flex-1 py-8 px-4">
         <div className="container mx-auto max-w-5xl">
+          {/* פירורי לחם: חנות התוספים ‹ קטגוריה ראשונה (אם משובץ) ‹ שם התוסף */}
+          <nav className="flex flex-wrap items-center gap-2 text-sm text-on-surface/60 mb-3" aria-label="פירורי לחם">
+            <Link href="/plugins" className="text-primary hover:underline font-medium">
+              חנות התוספים
+            </Link>
+            {plugin.categories && plugin.categories.length > 0 && (
+              <>
+                <span aria-hidden="true">‹</span>
+                <Link
+                  href={`/plugins/category/${plugin.categories[0].slug}`}
+                  className="text-primary hover:underline font-medium"
+                >
+                  {plugin.categories[0].name}
+                </Link>
+              </>
+            )}
+            <span aria-hidden="true">‹</span>
+            <span className="font-bold text-on-surface">{plugin.name}</span>
+          </nav>
+
           {/* Back Button */}
           <Link
             href="/plugins"
@@ -433,6 +347,22 @@ export default function PluginDetailPage() {
                     </button>
                   )}
                 </div>
+
+                {/* קטגוריות שהתוסף משובץ בהן — צ'יפים מקושרים */}
+                {plugin.categories && plugin.categories.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <span className="text-sm font-bold text-on-surface/50">מופיע בקטגוריות:</span>
+                    {plugin.categories.map(category => (
+                      <Link
+                        key={category.slug}
+                        href={`/plugins/category/${category.slug}`}
+                        className="px-3 py-1.5 bg-primary/5 border border-primary/15 rounded-full text-sm font-medium text-primary hover:bg-primary/10 transition-colors"
+                      >
+                        {category.name}
+                      </Link>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
