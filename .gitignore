@@ -65,3 +65,4 @@ public/tessdata/*
 public/version.json
 public/export-editor/dicta-editor-offline.html
 .vscode/settings.json
+.gstack/

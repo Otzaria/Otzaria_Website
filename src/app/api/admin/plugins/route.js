@@ -33,12 +33,8 @@ export async function GET(request) {
         }
       : { isHidden: false, isApproved: true }
 
-    const sortOrder = status === 'approved'
-      ? { isPinned: -1, pinnedAt: -1, createdAt: -1 }
-      : { createdAt: -1 }
-
     const cursor = Plugin.find(query)
-      .sort(sortOrder)
+      .sort({ createdAt: -1 })
       .populate('authorId', 'name email')
       .populate('lastSubmittedBy', 'name email')
       .select('-__v -downloadsByVersion')

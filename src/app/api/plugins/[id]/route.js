@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
+import PluginCategory from '@/models/PluginCategory'
 import { formatPluginForPublic } from '@/lib/pluginSubmission'
 import { formatVersionForPublic } from '@/lib/pluginVersions'
 import { parsePluginRef } from '@/lib/pluginRef'
@@ -20,7 +21,15 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
     }
 
-    const livePublic = formatPluginForPublic(plugin)
+    // קטגוריות החנות הגלויות שהתוסף משובץ בהן (אדיטיבי — לפירורי לחם וצ'יפים בדף התוסף)
+    const categories = await PluginCategory.find({ isVisible: true, pluginIds: id })
+      .sort({ order: 1 })
+      .select('slug name')
+      .lean()
+
+    const livePublic = formatPluginForPublic(plugin, {
+      categories: categories.map((category) => ({ slug: category.slug, name: category.name }))
+    })
 
     // גרסה ארכיונית ספציפית (שאינה הגרסה החיה).
     if (version && version !== plugin.version) {

@@ -136,6 +136,10 @@ const PLUGINS_ADMIN_ALLOWED_PAGE_EXACT = ['/library/admin'];
 const PLUGINS_ADMIN_ALLOWED_API = [
   '/api/admin/plugins',
   '/api/admin/plugin-notifications',
+  // סידור חנות התוספים: קטגוריות, הגדרות דף הבית (נבחרים) ורשימת הלא-משוכנים
+  '/api/admin/plugin-categories',
+  '/api/admin/store-settings',
+  '/api/admin/plugin-store',
   '/api/admin/users-basic',
   '/api/admin/stats',
 ];
@@ -185,6 +189,9 @@ const BOOKS_ADMIN_BLOCKED_API = [
   '/api/admin/users',
   '/api/admin/plugins',
   '/api/admin/plugin-notifications',
+  '/api/admin/plugin-categories',
+  '/api/admin/store-settings',
+  '/api/admin/plugin-store',
   '/api/admin/export-backup',
   '/api/admin/ocr-training',
   '/api/admin/ocr-lines',

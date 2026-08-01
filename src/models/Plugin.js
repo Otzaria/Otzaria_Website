@@ -101,9 +101,9 @@ const PluginSchema = new mongoose.Schema(
     // הסתרה (במקום מחיקה)
     isHidden: { type: Boolean, default: false, index: true },
 
-    // הצמדה (תוספים מוצמדים יוצגו ראשונים)
-    isPinned: { type: Boolean, default: false, index: true },
-    pinnedAt: { type: Date, default: null },
+    // הערה: מנגנון ההצמדה (isPinned/pinnedAt) בוטל ב-31/07/2026 והוחלף
+    // ב"תוספים נבחרים" (StoreSettings.featuredPluginIds) — הנבחרים ממוינים
+    // ראשונים ב-GET /api/plugins ומסומנים בו isPinned:true לתאימות לאחור.
 
     // היסטוריית גרסאות קודמות. נדחפת אליה הגרסה היוצאת כשמעלים גרסה חדשה
     // (עליית גרסה ממש). עריכה ללא העלאת גרסה דורסת את הגרסה הנוכחית ולא נשמרת כאן.

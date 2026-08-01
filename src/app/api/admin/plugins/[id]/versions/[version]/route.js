@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import { deleteVersionDir } from '@/lib/pluginStorage'
+import { invalidatePluginSearchIndex } from '@/lib/pluginSearchIndex'
 import { parsePluginRef } from '@/lib/pluginRef'
 import { hasPluginsAccess } from '@/lib/roles'
 
@@ -51,6 +52,8 @@ export async function DELETE(request, { params }) {
 
     plugin.versions = (plugin.versions || []).filter((v) => v.version !== version)
     await plugin.save()
+    // רשימת הגרסאות נחשפת בפורמט הציבורי → רענון אינדקס החיפוש (המסמכים בקאש)
+    invalidatePluginSearchIndex()
 
     try {
       await deleteVersionDir(id, version)
