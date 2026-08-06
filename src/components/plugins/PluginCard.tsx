@@ -29,7 +29,7 @@ export default function PluginCard({ plugin, installState, onInstall }: PluginCa
         className="relative aspect-[16/11] bg-gradient-to-br from-primary/5 to-secondary/5 overflow-hidden"
       >
         <img
-          src={plugin.image || '/logo.svg'}
+          src={plugin.image || '/logo.webp'}
           alt={plugin.name}
           loading="lazy"
           decoding="async"

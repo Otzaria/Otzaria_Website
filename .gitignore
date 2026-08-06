@@ -54,6 +54,7 @@ scripts/*
 # סקריפטי build אמיתיים — נדרשים ל-npm run build ולכן נשמרים
 !scripts/build-icon-font.mjs
 !scripts/icon-font.manifest.json
+!scripts/optimize-assets.mjs
 empty-uploads-report-1767610989868.json
 .vscode/settings.json
 111.json

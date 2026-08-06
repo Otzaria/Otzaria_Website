@@ -247,7 +247,7 @@ export default function PluginDetailPage() {
               {/* Plugin Image */}
               <div className="rounded-2xl overflow-hidden bg-gradient-to-br from-primary/5 to-secondary/5 aspect-[4/3]">
                 <img
-                  src={plugin.image || '/logo.svg'}
+                  src={plugin.image || '/logo.webp'}
                   alt={plugin.name}
                   className="w-full h-full object-cover"
                 />

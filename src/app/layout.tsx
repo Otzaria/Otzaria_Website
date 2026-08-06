@@ -19,13 +19,8 @@ const frankRuehl = localFont({
 export const metadata: Metadata = {
   title: "אוצריא",
   description: "פלטפורמה משותפת לעריכה ושיתוף",
-  icons: {
-    icon: [
-      { url: "/logo.svg", type: "image/svg+xml" },
-    ],
-    shortcut: ["/logo.svg"],
-    apple: ["/logo.svg"],
-  },
+  // האייקונים נקבעים על ידי app/icon.png ו-app/apple-icon.png (מוסיף Next hash
+  // ו-cache ארוך). קודם הוגש כאן logo.svg — 1.68MB דחוסים כ-favicon.
 };
 
 export default function RootLayout({

@@ -27,7 +27,13 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background-image: url('/image.png');
+    /* השורה הראשונה היא נפילה לדפדפנים בלי image-set/AVIF.
+       המקור: assets/background-master.png (ראה scripts/optimize-assets.mjs). */
+    background-image: url('/bg.webp');
+    background-image: image-set(
+      url('/bg.avif') type('image/avif'),
+      url('/bg.webp') type('image/webp')
+    );
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;

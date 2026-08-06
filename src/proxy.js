@@ -91,7 +91,7 @@ function blockResponse() {
 </head>
 <body>
   <div class="shabbat-content">
-    <img src="/logo.svg" alt="לוגו אוצריא" class="shabbat-logo" />
+    <img src="/logo.webp" alt="לוגו אוצריא" class="shabbat-logo" />
     <h1 class="shabbat-title">שבת היום לה'</h1>
     <img src="/shabbat/sabbath.png" alt="שבת שלום" class="shabbat-image" />
   </div>

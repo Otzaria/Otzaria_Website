@@ -7,6 +7,7 @@
     "generate-version": "node -e \"const fs = require('fs'); fs.writeFileSync('./public/version.json', JSON.stringify({ version: Date.now() }));\"",
     "build:offline-editor": "node scripts/build-offline-editor.js",
     "build:icons": "node scripts/build-icon-font.mjs",
+    "build:assets": "node scripts/optimize-assets.mjs",
     "check:icons": "node scripts/build-icon-font.mjs --check",
     "build": "npm run generate-version && npm run check:icons && next build && npm run build:offline-editor",
     "start": "next start",

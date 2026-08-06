@@ -275,7 +275,7 @@ function PluginSearchPageContent() {
                       {/* תמונת מיני */}
                       <Link href={`/plugins/${plugin.id}`} className="shrink-0">
                         <img
-                          src={plugin.image || '/logo.svg'}
+                          src={plugin.image || '/logo.webp'}
                           alt={plugin.name}
                           loading="lazy"
                           decoding="async"

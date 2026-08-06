@@ -226,7 +226,7 @@ export default function Home() {
                     transition={{ type: "spring", stiffness: 260, damping: 20 }}
                     className="mb-8 flex justify-center"
                 >
-                    <img src="/logo.svg" alt="לוגו אוצריא" className="w-32 h-32 drop-shadow-2xl" />
+                    <img src="/logo.webp" alt="לוגו אוצריא" className="w-32 h-32 drop-shadow-2xl" />
                 </motion.div>
                 
                 <h1 className="text-5xl md:text-6xl font-bold mb-6 font-frank">
