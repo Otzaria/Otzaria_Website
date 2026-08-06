@@ -155,12 +155,18 @@ const FALLBACK_METHOD_MIN_VERSION = {
   'fs.revokeFile': '0.9.94'
 }
 
+// תואם _knownEvents ב-lib/plugins/services/plugin_extended_validator.dart
+// בריפו של אוצריא. קוד האפליקציה הוא מקור האמת; API_REFERENCE עשוי להתעדכן באיחור.
 const FALLBACK_EVENTS = [
   'plugin.boot', 'plugin.ready',
+  'plugin.suspended', 'plugin.resumed',
   'theme.changed',
   'navigation.changed',
   'reader.current_book_changed', 'reader.current_ref_changed',
-  'reader.selection_changed', 'reader.context_menu_item_clicked',
+  'reader.selection_changed', 'reader.sectionContentChanged',
+  'reader.context_menu_item_clicked',
+  'plugin.page_opened',
+  'contextMenu.itemClicked', 'contextMenu.colorClicked',
   'calendar.date_changed', 'workspace.changed',
   'settings.changed', 'plugin.permissions_changed'
 ]
@@ -279,10 +285,9 @@ function parseApiReferenceMarkdown(md) {
       events.add(perm.slice('events.subscribe:'.length))
     }
   }
-  // ארועי lifecycle אינם תמיד מצוטטים. נשמור על הוספתם אם הופיעו במסמך.
-  for (const lifecycle of ['plugin.boot', 'plugin.ready']) {
-    if (md.includes(lifecycle)) events.add(lifecycle)
-  }
+  // הוולידטור באתר חייב לקבל כל event שהוולידטור של אפליקציית אוצריא מקבל,
+  // גם אם API_REFERENCE המרוחק עדיין אינו מציין אותו.
+  for (const supportedEvent of FALLBACK_EVENTS) events.add(supportedEvent)
 
   if (permissions.size < 5 || apiMethods.size < 10) {
     throw new Error('Parsed API reference looked malformed')
