@@ -10,13 +10,18 @@ const nextConfig = {
     proxyClientMaxBodySize: '500mb',
   },
   images: {
+    // unoptimized: true היה מוגדר כאן גלובלית, ולכן גם <Image width={32}> שלח את
+    // קובץ המקור בגודלו המלא. עכשיו Next מקטין וממיר ל-WebP כל תמונה מקומית —
+    // כולל תמונות ממוזערות של ספרים מ-/uploads, שהן סריקות עמוד שלמות.
+    //
+    // remotePatterns הכיל hostname: '**'. בשילוב עם אופטימיזציה פעילה זה הופך את
+    // /_next/image ל-proxy תמונות פתוח לכל דומיין, ולכן צומצם לדומיין של האתר.
+    // תמונות חיצוניות (למשל צילומי מסך של תוספים) מוצגות ב-<img> רגיל ואינן
+    // עוברות דרך המאופטמייזר.
     remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: '**', // מאפשר לטעון תמונות מכל דומיין
-      },
+      { protocol: 'https', hostname: 'otzaria.org' },
+      { protocol: 'https', hostname: 'www.otzaria.org' },
     ],
-    unoptimized: true,
   },
   
   async rewrites() {
