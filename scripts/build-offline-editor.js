@@ -381,6 +381,13 @@ async function collectUsedIcons() {
 // אינטרנט: בלי רשת הפונקציה מטה נכשלת אחרי שלושה ניסיונות וה-build כולו נופל.
 const ICON_CACHE_PATH = path.join(ROOT_DIR, 'scripts', 'offline-editor-icons.json');
 
+// רענון הגופן מ-Google הוא פעולה מפורשת, לא תופעת לוואי של build.
+const SHOULD_REFRESH_ICONS =
+  process.argv.includes('--refresh-icons') || process.env.REFRESH_EDITOR_ICONS === '1';
+
+// timeout לכל בקשה ל-Google — חיבור תקוע לא יעכב את ה-build ללא הגבלה.
+const ICON_FETCH_TIMEOUT_MS = 8_000;
+
 async function readIconCache() {
   try {
     const cache = JSON.parse(await fs.readFile(ICON_CACHE_PATH, 'utf8'));
@@ -414,9 +421,15 @@ async function buildGoogleMaterialSymbolsCss(usedIcons, retries = 3, delayMs = 2
   const cached = await readIconCache();
   const cacheCoversAll = cached !== null && iconNames.every(name => cached.icons.includes(name));
 
-  // כשהמטמון מכסה את כל האייקונים, נפילה אליו מפיקה בדיוק את אותו פלט — ואין
-  // מה להרוויח מהמתנה לניסיונות חוזרים. חוסך כ-4 שניות ב-build ללא רשת.
-  const attempts = cacheCoversAll ? 1 : retries;
+  // מטמון מלא = אותו פלט בדיוק. אין שום סיבה שה-build יחכה לרשת בשביל תוצאה
+  // זהה: גם כשל מיידי הוא סיכון (חיבור תקוע יכול לעכב שניות רבות). לכן ברירת
+  // המחדל היא מטמון, ורענון מהרשת הוא פקודה מפורשת:  npm run refresh:editor-icons
+  if (cacheCoversAll && !SHOULD_REFRESH_ICONS) {
+    console.log(`[offline-editor] Using committed icon cache (${cached.icons.length} icons, no network)`);
+    return renderMaterialSymbolsCss(cached);
+  }
+
+  const attempts = retries;
 
   let lastError;
   for (let attempt = 1; attempt <= attempts; attempt++) {
@@ -467,6 +480,7 @@ async function _fetchGoogleMaterialSymbolsAsset(iconNames, usedIcons) {
       headers: {
         'User-Agent': 'Mozilla/5.0',
       },
+      signal: AbortSignal.timeout(ICON_FETCH_TIMEOUT_MS),
     });
 
     if (!cssResponse.ok) {
@@ -484,6 +498,7 @@ async function _fetchGoogleMaterialSymbolsAsset(iconNames, usedIcons) {
       headers: {
         'User-Agent': 'Mozilla/5.0',
       },
+      signal: AbortSignal.timeout(ICON_FETCH_TIMEOUT_MS),
     });
 
     if (!fontResponse.ok) {
