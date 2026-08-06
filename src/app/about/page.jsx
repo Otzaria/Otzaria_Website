@@ -12,10 +12,10 @@ export default function AboutPage() {
           <div className="container mx-auto max-w-4xl relative z-10">
             <div className="text-center animate-enter-up">
               <div className="mb-6 flex justify-center">
-                <Image 
-                  src="/logo.png" 
-                  alt="לוגו אוצריא" 
-                  width={100} 
+                <Image
+                  src="/logo.png"
+                  alt="לוגו אוצריא"
+                  width={100}
                   height={100}
                   className="drop-shadow-2xl"
                 />
@@ -179,7 +179,7 @@ export default function AboutPage() {
                   <span className="material-symbols-outlined text-4xl">gavel</span>
                   תנאי השימוש במאגר
                 </h2>
-  
+
                 <div className="space-y-6 text-lg text-on-surface/80 leading-relaxed">
                   <p>
                     הטקסטים ניתנים לשימוש חופשי, עם זאת <strong className="text-accent">חלק מהטקסטים ניתנים ברישיון שאינו מאפשר שימוש מסחרי</strong>.
@@ -226,7 +226,7 @@ export default function AboutPage() {
               </div>
 
               {/* Quote */}
-              <div 
+              <div
                 className="glass-strong p-8 rounded-xl text-center border-r-4 border-primary animate-enter-scale"
                style={{ animationDelay: '0.4s' }}>
                 <p className="text-2xl font-bold text-primary mb-4 font-frank">

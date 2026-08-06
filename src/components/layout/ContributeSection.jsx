@@ -81,40 +81,40 @@ export default function ContributeSection() {
             <div className="flex flex-col gap-6 justify-center items-center">
               {/* שורה ראשונה - לחצנים קיימים */}
               <div className="flex flex-col sm:flex-row gap-4 justify-center items-center flex-wrap">
-                                  <Link 
-                    href="/library/upload" 
+                                  <Link
+                    href="/library/upload"
                     className="flex items-center justify-center gap-2 px-8 py-4 bg-primary text-on-primary rounded-lg text-lg font-medium hover:bg-accent transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105 hover:-translate-y-0.5 active:scale-95 w-full sm:w-auto"
                   >
                     <span className="material-symbols-outlined">add</span>
                     <span>הוסף ספר חדש</span>
                   </Link>
-                                  <Link 
-                    href="/library/books" 
+                                  <Link
+                    href="/library/books"
                     className="flex items-center justify-center gap-2 px-8 py-4 bg-surface text-on-surface rounded-lg text-lg font-medium hover:bg-surface-variant transition-all duration-200 border border-outline hover:scale-105 hover:-translate-y-0.5 active:scale-95 w-full sm:w-auto"
                   >
                     <span className="material-symbols-outlined">library_books</span>
                     <span>ערוך בספרייה</span>
                   </Link>
-                                  <Link 
-                    href="/library/dicta-books" 
+                                  <Link
+                    href="/library/dicta-books"
                     className="flex items-center justify-center gap-2 px-8 py-4 bg-surface text-on-surface rounded-lg text-lg font-medium hover:bg-surface-variant transition-all duration-200 border border-outline hover:scale-105 hover:-translate-y-0.5 active:scale-95 w-full sm:w-auto"
                   >
                     <span className="material-symbols-outlined">edit_note</span>
                     <span>ערוך ספרי דיקטה</span>
                   </Link>
               </div>
-              
+
               {/* שורה שנייה - לחצנים חדשים */}
               <div className="flex flex-col sm:flex-row gap-4 justify-center items-center flex-wrap">
-                                  <Link 
-                    href="/library/info" 
+                                  <Link
+                    href="/library/info"
                     className="flex items-center justify-center gap-2 px-8 py-4 bg-surface text-on-surface rounded-lg text-lg font-medium hover:bg-surface-variant transition-all duration-200 border border-outline hover:scale-105 hover:-translate-y-0.5 active:scale-95 w-full sm:w-auto"
                   >
                     <span className="material-symbols-outlined">info</span>
                     <span>הוסף מידע על ספרים</span>
                   </Link>
-                                  <Link 
-                    href="/library/acronyms" 
+                                  <Link
+                    href="/library/acronyms"
                     className="flex items-center justify-center gap-2 px-8 py-4 bg-surface text-on-surface rounded-lg text-lg font-medium hover:bg-surface-variant transition-all duration-200 border border-outline hover:scale-105 hover:-translate-y-0.5 active:scale-95 w-full sm:w-auto"
                   >
                     <span className="material-symbols-outlined">short_text</span>

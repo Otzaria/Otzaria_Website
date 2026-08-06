@@ -5,7 +5,7 @@ export default function LibraryNotFound() {
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-surface via-background to-surface-variant">
       <Header />
-      
+
       <main className="flex-1 flex items-center justify-center px-4 py-20">
         <div className="max-w-3xl mx-auto text-center">
           <div className="animate-enter-scale">
@@ -21,7 +21,7 @@ export default function LibraryNotFound() {
 
             {/* Animated Icon */}
             <div className="mb-8 animate-enter-pop" style={{ animationDelay: '0.3s' }}>
-              <span 
+              <span
                 className="material-symbols-outlined text-8xl text-primary/70 animate-float"
               >
                 search_off
@@ -67,8 +67,8 @@ export default function LibraryNotFound() {
                 אולי תרצה לבקר ב:
               </h3>
               <div className="grid sm:grid-cols-2 gap-4 text-right">
-                <Link 
-                  href="/library/books" 
+                <Link
+                  href="/library/books"
                   className="group p-4 bg-surface-variant hover:bg-primary hover:text-on-primary rounded-xl transition-all hover:scale-105 hover:shadow-lg flex items-center gap-3"
                 >
                   <span className="material-symbols-outlined text-2xl group-hover:scale-110 transition-transform">
@@ -79,8 +79,8 @@ export default function LibraryNotFound() {
                     <div className="text-sm opacity-70">עיין בכל הספרים</div>
                   </div>
                 </Link>
-                <Link 
-                  href="/library/users" 
+                <Link
+                  href="/library/users"
                   className="group p-4 bg-surface-variant hover:bg-primary hover:text-on-primary rounded-xl transition-all hover:scale-105 hover:shadow-lg flex items-center gap-3"
                 >
                   <span className="material-symbols-outlined text-2xl group-hover:scale-110 transition-transform">
@@ -91,8 +91,8 @@ export default function LibraryNotFound() {
                     <div className="text-sm opacity-70">קהילת התורמים</div>
                   </div>
                 </Link>
-                <Link 
-                  href="/library/upload" 
+                <Link
+                  href="/library/upload"
                   className="group p-4 bg-surface-variant hover:bg-primary hover:text-on-primary rounded-xl transition-all hover:scale-105 hover:shadow-lg flex items-center gap-3"
                 >
                   <span className="material-symbols-outlined text-2xl group-hover:scale-110 transition-transform">
@@ -103,8 +103,8 @@ export default function LibraryNotFound() {
                     <div className="text-sm opacity-70">תרום לספרייה</div>
                   </div>
                 </Link>
-                <Link 
-                  href="/" 
+                <Link
+                  href="/"
                   className="group p-4 bg-surface-variant hover:bg-primary hover:text-on-primary rounded-xl transition-all hover:scale-105 hover:shadow-lg flex items-center gap-3"
                 >
                   <span className="material-symbols-outlined text-2xl group-hover:scale-110 transition-transform">

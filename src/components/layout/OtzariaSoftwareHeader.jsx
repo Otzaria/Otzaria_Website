@@ -40,7 +40,8 @@ export default function OtzariaSoftwareHeader() {
   return (
     <header className="sticky top-0 z-50 w-full glass-strong border-b border-neutral-200 bg-white/80 backdrop-blur-md">
       <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-8">
-        <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+        {/* קישור הלוגו מופיע בכל דף ואינו מצדיק prefetch */}
+        <Link href="/" prefetch={false} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
           <Image src="/logo.webp" alt="לוגו אוצריא" width={32} height={32} />
           <span className="text-xl font-bold text-foreground font-frank">אוצריא</span>
         </Link>

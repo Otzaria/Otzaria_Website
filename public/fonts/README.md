@@ -18,7 +18,18 @@ npm run build:icons
 הסקריפט (`scripts/build-icon-font.mjs`) סורק את `src/`, מוריד subset מ-Google
 ומעדכן את הגופן, את `src/app/styles/icon-font.css`, את `src/lib/icon-font.js`
 ואת `scripts/icon-font.manifest.json`. הפלטים נשמרים ב-Git כדי שה-build לא יהיה
-תלוי ברשת. `npm run build` מריץ `check:icons` שמתריע אם אייקון בקוד חסר בגופן.
+תלוי ברשת.
+
+`npm run build` מריץ `check:icons`. הבדיקה עצמה offline, ומשווה את האייקונים
+שבקוד למניפסט:
+
+- מקומית — אזהרה בלבד, כדי לא לחסום עבודה (התיקון דורש רשת).
+- ב-CI (או עם `--strict`) — מכשילה את ה-build. אייקון חסר מוצג למשתמש כטקסט.
+
+מה שהבדיקה **לא** מכסה: אייקון שנקבע דינמית לגמרי, למשל מתוך תשובת API. היא
+מזהה שימושים שניתן לקרוא מהקוד סטטית — טקסט בתוך `span.material-symbols-outlined`,
+שדה `icon:` ו-prop בצורת `icon="..."`. ה-subset עצמו נבנה מסריקה רחבה יותר
+(כל token בקוד שתואם שם אייקון), ולכן בפועל הוא מכיל יותר ממה שנבדק.
 
 ## גופן הכותרות (Frank Ruehl CLM)
 

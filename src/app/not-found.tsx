@@ -18,7 +18,7 @@ export default function NotFound() {
 
             {/* Animated Icon */}
             <div className="mb-8 animate-enter-pop" style={{ animationDelay: '0.3s' }}>
-              <span 
+              <span
                 className="material-symbols-outlined text-8xl text-primary/70 animate-float"
               >
                 search_off
@@ -64,8 +64,8 @@ export default function NotFound() {
                 אולי תרצה לבקר ב:
               </h3>
               <div className="grid sm:grid-cols-2 gap-4 text-right">
-                <Link 
-                  href="/" 
+                <Link
+                  href="/"
                   className="group p-4 bg-surface-variant hover:bg-primary hover:text-on-primary rounded-xl transition-all hover:scale-105 hover:shadow-lg flex items-center gap-3"
                 >
                   <span className="material-symbols-outlined text-2xl group-hover:scale-110 transition-transform">
@@ -76,8 +76,8 @@ export default function NotFound() {
                     <div className="text-sm opacity-70">אוצריא - תוכנה</div>
                   </div>
                 </Link>
-                <Link 
-                  href="/library" 
+                <Link
+                  href="/library"
                   className="group p-4 bg-surface-variant hover:bg-primary hover:text-on-primary rounded-xl transition-all hover:scale-105 hover:shadow-lg flex items-center gap-3"
                 >
                   <span className="material-symbols-outlined text-2xl group-hover:scale-110 transition-transform">
@@ -88,8 +88,8 @@ export default function NotFound() {
                     <div className="text-sm opacity-70">ספריית אוצריא</div>
                   </div>
                 </Link>
-                <Link 
-                  href="/library/books" 
+                <Link
+                  href="/library/books"
                   className="group p-4 bg-surface-variant hover:bg-primary hover:text-on-primary rounded-xl transition-all hover:scale-105 hover:shadow-lg flex items-center gap-3"
                 >
                   <span className="material-symbols-outlined text-2xl group-hover:scale-110 transition-transform">
@@ -100,8 +100,8 @@ export default function NotFound() {
                     <div className="text-sm opacity-70">עיין בכל הספרים</div>
                   </div>
                 </Link>
-                <Link 
-                  href="/docs" 
+                <Link
+                  href="/docs"
                   className="group p-4 bg-surface-variant hover:bg-primary hover:text-on-primary rounded-xl transition-all hover:scale-105 hover:shadow-lg flex items-center gap-3"
                 >
                   <span className="material-symbols-outlined text-2xl group-hover:scale-110 transition-transform">

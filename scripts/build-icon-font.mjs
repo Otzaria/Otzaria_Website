@@ -215,12 +215,31 @@ export const ICON_FONT_URL = '${publicUrl}'
   console.log(`✓ ${fileName} — ${names.length} אייקונים, ${(woff2.length / 1024).toFixed(1)}KB`)
 }
 
+/**
+ * ב-CI הבדיקה מכשילה את ה-build, ולא רק מתריעה: אייקון חסר מוצג למשתמש כטקסט
+ * ("drag_indicator" באמצע הממשק), וזה לא משהו שכדאי לדפלוי לעבור עליו בשקט.
+ * מקומית זו אזהרה בלבד, כדי לא לחסום עבודה שוטפת — התיקון (build:icons) דורש
+ * רשת. אכיפה מפורשת: --strict.
+ */
+function shouldEnforce() {
+  return process.argv.includes('--strict') || process.env.CI === 'true' || process.env.CI === '1'
+}
+
+function reportFailure(message, details = []) {
+  const enforce = shouldEnforce()
+  const log = enforce ? console.error : console.warn
+  log(`${enforce ? '✗' : '⚠️ '} ${message}`)
+  for (const line of details) log(`   ${line}`)
+  log('   הרץ: npm run build:icons')
+  if (enforce) process.exitCode = 1
+}
+
 async function check() {
   let manifest
   try {
     manifest = JSON.parse(await readFile(MANIFEST_OUT, 'utf8'))
   } catch {
-    console.warn('⚠️  אין icon-font.manifest.json — הרץ: npm run build:icons')
+    reportFailure('אין icon-font.manifest.json')
     return
   }
 
@@ -233,9 +252,14 @@ async function check() {
     return
   }
 
-  console.warn(`⚠️  ${missing.length} אייקונים אינם ב-subset ולא יוצגו:`)
-  for (const [name, file] of missing) console.warn(`   ${name}  (${file})`)
-  console.warn('   הרץ: npm run build:icons')
+  // הערה על גבולות הבדיקה: היא מזהה רק שימושים שניתן לקרוא מהקוד סטטית
+  // (טקסט בתוך span עם המחלקה, שדה icon:, prop בצורת icon="..."). אייקון
+  // שנקבע דינמית לגמרי — למשל מתוך תשובת API — אינו נתפס כאן. ה-subset עצמו
+  // נבנה מסריקה רחבה בהרבה, ולכן בפועל הוא מכיל יותר ממה שהבדיקה מוודאת.
+  reportFailure(
+    `${missing.length} אייקונים אינם ב-subset ולא יוצגו:`,
+    missing.map(([name, file]) => `${name}  (${file})`)
+  )
 }
 
 const mode = process.argv.includes('--check') ? check : build
