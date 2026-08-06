@@ -16,15 +16,14 @@
  *   node scripts/check-perf-budget.mjs --strict # מכשיל (וכך גם ב-CI)
  */
 
-import { readFile, readdir, stat } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { gzipSync } from 'node:zlib'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { isProtectedPath } from '../src/lib/protected-routes.js'
+import { checkPrefetch } from './check-prefetch.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const NEXT_DIR = path.join(ROOT, '.next')
-const APP_DIR = path.join(ROOT, 'src', 'app')
 
 // התקציבים נקבעו כ-15% מעל המצב הנמדד בזמן הכתיבה, כדי לתפוס רגרסיה אמיתית
 // ולא גדילה טבעית. כשעוברים אותם — או שמייעלים, או שמעדכנים במודע עם הסבר.
@@ -124,65 +123,19 @@ async function checkPages() {
   }
 }
 
-/** src/app/about/page.jsx -> /about */
-function routeForPageFile(file) {
-  const rel = path.relative(APP_DIR, file)
-  const segments = rel.split(path.sep).slice(0, -1)
-    // (group) אינו חלק מה-URL; [slug] מיוצג כפרמטר
-    .filter((s) => !(s.startsWith('(') && s.endsWith(')')))
-  return '/' + segments.join('/')
-}
-
-async function collectPageFiles(dir) {
-  const out = []
-  for (const entry of await readdir(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name)
-    if (entry.isDirectory()) out.push(...(await collectPageFiles(full)))
-    else if (/^(page|not-found)\.(jsx?|tsx?)$/.test(entry.name)) out.push(full)
-  }
-  return out
-}
-
-/**
- * דף ציבורי שמקשר לנתיב מוגן בלי prefetch={false}.
- *
- * זו הרגרסיה שנמדדה בפועל: אורח שגולל לאזור עם קישור כזה מפעיל בקשת RSC
- * למסלול המוגן, מקבל redirect לדף ההתחברות, ואז נמשכות גם חבילות ה-JavaScript
- * של דף ההתחברות — הכול לפני שלחץ על משהו.
- *
- * הבדיקה מכסה קובצי page/not-found שהמסלול שלהם *אינו* מוגן. קומפוננטות
- * ב-src/components אינן נבדקות: לא ניתן לדעת סטטית מאיזה דף הן מוצגות, ורובן
- * מוצגות רק מתוך אזורים שדורשים התחברות (עורך, דשבורד, ניהול) שבהם prefetch
- * דווקא מועיל.
- */
 async function checkProtectedPrefetch() {
-  const linkPattern = /<Link\b((?:[^<>]|\{[^{}]*\})*?)>/gs
-  const violations = []
-
-  for (const file of await collectPageFiles(APP_DIR)) {
-    const route = routeForPageFile(file)
-    if (isProtectedPath(route)) continue // דף שממילא דורש התחברות
-
-    const source = await readFile(file, 'utf8')
-    for (const match of source.matchAll(linkPattern)) {
-      const attrs = match[1]
-      if (attrs.includes('prefetch')) continue
-
-      const href = attrs.match(/href="([^"]*)"/)?.[1]
-      if (!href || !href.startsWith('/') || !isProtectedPath(href)) continue
-
-      const line = source.slice(0, match.index).split('\n').length
-      violations.push(`${path.relative(ROOT, file)}:${line} → ${href}`)
-    }
-  }
+  // הבדיקה עצמה ב-scripts/check-prefetch.mjs — ניתוח AST של JSX, כולל
+  // הקומפוננטות שדפים ציבוריים מייבאים.
+  const { violations, scanned, publicPages } = await checkPrefetch()
 
   if (violations.length > 0) {
     failures.push(
       `${violations.length} קישורים בדפים ציבוריים מבצעים prefetch לנתיב מוגן ` +
-      `(הוסף prefetch={false}):\n     ${violations.join('\n     ')}`
+      `(הוסף prefetch={false}):\n     ` +
+      violations.map((v) => `${v.file}:${v.line} → ${v.href}`).join('\n     ')
     )
   } else {
-    notes.push('prefetch — אין קישור בדף ציבורי שמקדים בקשה לנתיב מוגן')
+    notes.push(`prefetch — ${scanned} קבצים מ-${publicPages} דפים ציבוריים, אין קישור לנתיב מוגן`)
   }
 }
 
