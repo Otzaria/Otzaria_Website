@@ -411,15 +411,22 @@ async function buildGoogleMaterialSymbolsCss(usedIcons, retries = 3, delayMs = 2
     return null;
   }
 
+  const cached = await readIconCache();
+  const cacheCoversAll = cached !== null && iconNames.every(name => cached.icons.includes(name));
+
+  // כשהמטמון מכסה את כל האייקונים, נפילה אליו מפיקה בדיוק את אותו פלט — ואין
+  // מה להרוויח מהמתנה לניסיונות חוזרים. חוסך כ-4 שניות ב-build ללא רשת.
+  const attempts = cacheCoversAll ? 1 : retries;
+
   let lastError;
-  for (let attempt = 1; attempt <= retries; attempt++) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
       const asset = await _fetchGoogleMaterialSymbolsAsset(iconNames.join(','), usedIcons);
       await writeIconCache(iconNames, asset);
       return renderMaterialSymbolsCss(asset);
     } catch (err) {
       lastError = err;
-      if (attempt < retries) {
+      if (attempt < attempts) {
         console.warn(`[offline-editor] Google fonts attempt ${attempt} failed: ${err.message}. Retrying in ${delayMs}ms...`);
         await new Promise(resolve => setTimeout(resolve, delayMs));
       }
@@ -427,22 +434,29 @@ async function buildGoogleMaterialSymbolsCss(usedIcons, retries = 3, delayMs = 2
   }
 
   // נפילה למטמון שנשמר ב-Git, כדי ש-build לא יהיה תלוי בזמינות Google.
-  const cached = await readIconCache();
   if (!cached) {
     throw new Error(
-      `Google icon subset unavailable after ${retries} attempts (${lastError.message}) ` +
+      `Google icon subset unavailable after ${attempts} attempt(s) (${lastError.message}) ` +
       'and no committed cache at scripts/offline-editor-icons.json'
     );
   }
 
-  const missing = iconNames.filter(name => !cached.icons.includes(name));
   console.warn(`[offline-editor] Google unavailable (${lastError.message}) — using committed icon cache`);
-  if (missing.length > 0) {
-    console.warn(
-      `[offline-editor] ⚠️  ${missing.length} icons are not in the cache and will render as text: ${missing.join(', ')}. ` +
-      'Re-run this build with network access to refresh scripts/offline-editor-icons.json'
-    );
+
+  if (!cacheCoversAll) {
+    const missing = iconNames.filter(name => !cached.icons.includes(name));
+    const detail =
+      `${missing.length} icons are missing from the cache and would render as text: ${missing.join(', ')}. ` +
+      'Re-run with network access to refresh scripts/offline-editor-icons.json';
+
+    // ב-CI זה כשל: ייצוא עורך שמציג "format_bold" כטקסט אינו משהו שכדאי לדפלוי
+    // לעבור עליו בשקט. מקומית זו אזהרה, כדי לא לחסום עבודה ללא רשת.
+    if (process.env.CI === 'true' || process.env.CI === '1') {
+      throw new Error(detail);
+    }
+    console.warn(`[offline-editor] ⚠️  ${detail}`);
   }
+
   return renderMaterialSymbolsCss(cached);
 }
 
