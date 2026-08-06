@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
+import { publicCacheHeaders } from '@/lib/api-cache'
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 600
+// המסלול דינמי (הוא קורא את searchParams), ולכן revalidate ברמת המסלול היה
+// חסר משמעות וסתר את force-dynamic. המטמון האמיתי הוא על ה-fetch ל-GitHub למטה.
+export const dynamic = 'force-dynamic'
 
 const platformAliases = {
   windows: ['windows', 'win'],
@@ -129,12 +131,16 @@ export async function GET(request) {
       }
     }
 
-    return NextResponse.json({
-      version: latestRelease.tag_name,
-      versions: platformVersions,
-      ...platformData,
-      releaseUrl: latestRelease.html_url
-    })
+    return NextResponse.json(
+      {
+        version: latestRelease.tag_name,
+        versions: platformVersions,
+        ...platformData,
+        releaseUrl: latestRelease.html_url
+      },
+      // קישורי ההורדה משתנים רק כשיוצאת גרסה — מותר לדפדפן להחזיק אותם.
+      { headers: publicCacheHeaders(600) }
+    )
   } catch (error) {
     console.error('Error fetching GitHub releases:', error)
     return NextResponse.json(

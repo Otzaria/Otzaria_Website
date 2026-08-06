@@ -36,4 +36,8 @@ PageSchema.index({ book: 1, pageNumber: 1 }, { unique: true });
 // אינדקס לסריקות ה-cron של תזכורות/שחרור אוטומטי על עמודים תקועים
 PageSchema.index({ status: 1, claimedBy: 1, updatedAt: 1 });
 
+// אינדקס לסטטיסטיקת ההספק — /api/stats/weekly-progress מסנן status+completedAt.
+// בלעדיו completedAt לא היה ממופתח בכלל והשאילתה סרקה עמודים לפי סטטוס בלבד.
+PageSchema.index({ status: 1, completedAt: 1 });
+
 export default mongoose.models.Page || mongoose.model('Page', PageSchema);
