@@ -55,6 +55,7 @@ scripts/*
 !scripts/build-icon-font.mjs
 !scripts/icon-font.manifest.json
 !scripts/optimize-assets.mjs
+!scripts/offline-editor-icons.json
 empty-uploads-report-1767610989868.json
 .vscode/settings.json
 111.json

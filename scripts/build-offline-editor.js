@@ -377,27 +377,76 @@ async function collectUsedIcons() {
   return usedIcons;
 }
 
-async function buildGoogleMaterialSymbolsCss(usedIcons, retries = 3, delayMs = 2000) {
-  const iconNames = [...usedIcons].sort().join(',');
-  if (!iconNames) {
-    return null;
-  }
+// מטמון של ה-subset שהורד מ-Google, נשמר ב-Git. בלעדיו כל build היה דורש
+// אינטרנט: בלי רשת הפונקציה מטה נכשלת אחרי שלושה ניסיונות וה-build כולו נופל.
+const ICON_CACHE_PATH = path.join(ROOT_DIR, 'scripts', 'offline-editor-icons.json');
 
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      return await _fetchGoogleMaterialSymbolsCss(iconNames, usedIcons);
-    } catch (err) {
-      if (attempt < retries) {
-        console.warn(`[offline-editor] Google fonts attempt ${attempt} failed: ${err.message}. Retrying in ${delayMs}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delayMs));
-      } else {
-        throw new Error(`Google icon subset unavailable after ${retries} attempts: ${err.message}`);
-      }
-    }
+async function readIconCache() {
+  try {
+    const cache = JSON.parse(await fs.readFile(ICON_CACHE_PATH, 'utf8'));
+    return cache?.base64 ? cache : null;
+  } catch {
+    return null;
   }
 }
 
-async function _fetchGoogleMaterialSymbolsCss(iconNames, usedIcons) {
+// נכתב רק כשרשימת האייקונים השתנתה, כדי שלא כל build ילכלך את עץ העבודה.
+async function writeIconCache(iconNames, asset) {
+  const existing = await readIconCache();
+  const sameIcons =
+    existing && existing.icons.length === iconNames.length &&
+    existing.icons.every((name, i) => name === iconNames[i]);
+  if (sameIcons) return;
+
+  await fs.writeFile(
+    ICON_CACHE_PATH,
+    `${JSON.stringify({ icons: iconNames, format: asset.format, bytes: asset.bytes, base64: asset.base64 }, null, 2)}\n`
+  );
+  console.log(`[offline-editor] Updated committed icon cache (${iconNames.length} icons)`);
+}
+
+async function buildGoogleMaterialSymbolsCss(usedIcons, retries = 3, delayMs = 2000) {
+  const iconNames = [...usedIcons].sort();
+  if (iconNames.length === 0) {
+    return null;
+  }
+
+  let lastError;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const asset = await _fetchGoogleMaterialSymbolsAsset(iconNames.join(','), usedIcons);
+      await writeIconCache(iconNames, asset);
+      return renderMaterialSymbolsCss(asset);
+    } catch (err) {
+      lastError = err;
+      if (attempt < retries) {
+        console.warn(`[offline-editor] Google fonts attempt ${attempt} failed: ${err.message}. Retrying in ${delayMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+
+  // נפילה למטמון שנשמר ב-Git, כדי ש-build לא יהיה תלוי בזמינות Google.
+  const cached = await readIconCache();
+  if (!cached) {
+    throw new Error(
+      `Google icon subset unavailable after ${retries} attempts (${lastError.message}) ` +
+      'and no committed cache at scripts/offline-editor-icons.json'
+    );
+  }
+
+  const missing = iconNames.filter(name => !cached.icons.includes(name));
+  console.warn(`[offline-editor] Google unavailable (${lastError.message}) — using committed icon cache`);
+  if (missing.length > 0) {
+    console.warn(
+      `[offline-editor] ⚠️  ${missing.length} icons are not in the cache and will render as text: ${missing.join(', ')}. ` +
+      'Re-run this build with network access to refresh scripts/offline-editor-icons.json'
+    );
+  }
+  return renderMaterialSymbolsCss(cached);
+}
+
+async function _fetchGoogleMaterialSymbolsAsset(iconNames, usedIcons) {
   try {
     const cssUrl = `${MATERIAL_SYMBOLS_GOOGLE_CSS_URL}&icon_names=${encodeURIComponent(iconNames)}`;
     const cssResponse = await fetch(cssUrl, {
@@ -428,21 +477,27 @@ async function _fetchGoogleMaterialSymbolsCss(iconNames, usedIcons) {
     }
 
     const fontBuffer = Buffer.from(await fontResponse.arrayBuffer());
-    const mimeType = format === 'truetype' ? 'font/ttf' : `font/${format}`;
-    const fontBase64 = fontBuffer.toString('base64');
 
     console.log(
       `[offline-editor] Downloaded Google icon subset: ${fontBuffer.length} bytes ` +
       `(${usedIcons.size} icons)`
     );
 
-    return `
+    return { base64: fontBuffer.toString('base64'), format, bytes: fontBuffer.length };
+  } catch (err) {
+    throw err;
+  }
+}
+
+function renderMaterialSymbolsCss({ base64, format }) {
+  const mimeType = format === 'truetype' ? 'font/ttf' : `font/${format}`;
+  return `
 @font-face {
   font-family: "Material Symbols Outlined";
   font-style: normal;
   font-weight: 400;
   font-display: block;
-  src: url("data:${mimeType};base64,${fontBase64}") format("${format}");
+  src: url("data:${mimeType};base64,${base64}") format("${format}");
 }
 .material-symbols-outlined {
   font-family: "Material Symbols Outlined";
@@ -462,9 +517,6 @@ async function _fetchGoogleMaterialSymbolsCss(iconNames, usedIcons) {
   font-feature-settings: "liga";
 }
 `;
-  } catch (err) {
-    throw err;
-  }
 }
 
 async function readRuntimeModules() {
