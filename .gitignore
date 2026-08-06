@@ -56,6 +56,7 @@ scripts/*
 !scripts/icon-font.manifest.json
 !scripts/optimize-assets.mjs
 !scripts/offline-editor-icons.json
+!scripts/check-perf-budget.mjs
 empty-uploads-report-1767610989868.json
 .vscode/settings.json
 111.json
