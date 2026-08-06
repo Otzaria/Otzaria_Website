@@ -141,7 +141,7 @@ function LibraryEditorContent() {
       )}
 
       <div className="w-px h-8 bg-surface-variant"></div>
-      <Link href="/library/dashboard" className="flex items-center justify-center hover:opacity-80 transition-opacity" title={session?.user?.name}>
+      <Link href="/library/dashboard" prefetch={false} className="flex items-center justify-center hover:opacity-80 transition-opacity" title={session?.user?.name}>
         <div className="w-10 h-10 rounded-full text-white flex items-center justify-center font-bold text-base shadow-md"
           style={{ backgroundColor: getAvatarColor(session?.user?.name || '') }}>
           {getInitial(session?.user?.name || '')}

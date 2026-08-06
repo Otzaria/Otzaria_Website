@@ -191,12 +191,12 @@ export default function AboutPage() {
                       <span>ניתן לראות את פרטי הרישיון לכל טקסט באתר ספריא</span>
                     </div>
 
-                    <Link href="/license" className="flex items-center gap-2 text-primary hover:underline font-medium w-fit">
+                    <Link href="/license" prefetch={false} className="flex items-center gap-2 text-primary hover:underline font-medium w-fit">
                       <span className="material-symbols-outlined">description</span>
                       לרישיון הכללי של מאגר אוצריא
                     </Link>
 
-                    <Link href="/library/license" className="flex items-center gap-2 text-primary hover:underline font-medium w-fit">
+                    <Link href="/library/license" prefetch={false} className="flex items-center gap-2 text-primary hover:underline font-medium w-fit">
                       <span className="material-symbols-outlined">auto_stories</span>
                       לרישיון הספרים הערוכים בספריית אוצריא
                     </Link>
@@ -214,11 +214,11 @@ export default function AboutPage() {
                   לצורך עדכון והרחבת מאגר ספריית אוצריא עובדים מתנדבים רבים מכל העולם. הצטרפו אליהם והיו שותפים בשימור והנגשת המורשת התורנית!
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4">
-                  <Link href="/library/users" className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-on-primary rounded-lg hover:bg-accent transition-colors">
+                  <Link href="/library/users" prefetch={false} className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-on-primary rounded-lg hover:bg-accent transition-colors">
                     <span className="material-symbols-outlined">people</span>
                     <span>צפה במשתמשים</span>
                   </Link>
-                  <Link href="/library/auth/login" className="flex items-center justify-center gap-2 px-6 py-3 bg-surface text-on-surface rounded-lg hover:bg-surface-variant transition-colors border border-outline">
+                  <Link href="/library/auth/login" prefetch={false} className="flex items-center justify-center gap-2 px-6 py-3 bg-surface text-on-surface rounded-lg hover:bg-surface-variant transition-colors border border-outline">
                     <span className="material-symbols-outlined">add</span>
                     <span>התחבר לקהילה</span>
                   </Link>
@@ -245,7 +245,7 @@ export default function AboutPage() {
                 <h3 className="text-2xl font-bold mb-4 text-on-surface">
                   מוכנים להצטרף אלינו?
                 </h3>
-                <Link href="/library" className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-on-primary rounded-lg text-lg font-medium hover:bg-accent transition-colors shadow-lg hover:shadow-xl">
+                <Link href="/library" prefetch={false} className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-on-primary rounded-lg text-lg font-medium hover:bg-accent transition-colors shadow-lg hover:shadow-xl">
                   <span className="material-symbols-outlined">library_books</span>
                   <span>התחל לערוך</span>
                 </Link>

@@ -236,9 +236,11 @@ export default function Home() {
                 
                 <div className="flex flex-col gap-4 justify-center items-center mt-8">
                     <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-                        <Link href="#download" className="px-8 py-4 bg-primary text-white rounded-lg text-lg font-medium hover:bg-primary/90 transition-all shadow-lg hover:shadow-xl">
+                        {/* עוגן באותו דף — <a> רגיל. כ-Link, Next התייחס אליו כמסלול
+                            ופתח בקשות RSC ספקולטיביות לדף הנוכחי. */}
+                        <a href="#download" className="px-8 py-4 bg-primary text-white rounded-lg text-lg font-medium hover:bg-primary/90 transition-all shadow-lg hover:shadow-xl">
                             הורד עכשיו
-                        </Link>
+                        </a>
                         <Link href="/about" prefetch={false} className="flex items-center gap-2 px-8 py-4 bg-white border-2 border-primary text-primary rounded-lg text-lg font-medium hover:bg-primary/5 transition-all shadow-lg hover:shadow-xl">
                             <span className="material-symbols-outlined">info</span>
                             <span>אודות הספרייה</span>

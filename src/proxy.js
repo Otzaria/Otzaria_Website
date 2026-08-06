@@ -2,6 +2,8 @@ import { withAuth } from 'next-auth/middleware';
 import { NextResponse } from 'next/server';
 import { hasAnyAdminAccess } from '@/lib/roles';
 import { shabbatGate } from '@/lib/shabbat-cache';
+// רשימת הנתיבים המוגנים במקום אחד: src/lib/protected-routes.js
+import { isProtectedPath } from '@/lib/protected-routes';
 
 // ===== חסימת שבת/יום טוב בצד שרת =====
 // הלוגיקה הועברה מסקריפט צד-לקוח (Shabbat-blocker.js):
@@ -164,33 +166,6 @@ const BOOKS_ADMIN_BLOCKED_API = [
   '/api/admin/ocr-lines',
   '/api/admin/ocr-layout',
 ];
-
-// נתיבים הדורשים אימות (קבוצת ה-matcher המקורית של ההרשאות).
-// רק עליהם נכפה התחברות; שאר הדפים ציבוריים (ועוברים רק בדיקת שבת).
-const PROTECTED_PREFIXES = [
-  '/plugins/upload',
-  '/library/dashboard',
-  '/library/admin',
-  '/library/upload',
-  '/library/books',
-  '/library/book',
-  '/library/edit',
-  '/library/users',
-  '/library/info',
-  '/library/acronyms',
-  '/library/dicta-books',
-  '/library/ocr-training',
-  '/library/ocr-lines',
-  '/api/admin',
-  '/api/ocr-training',
-  '/api/ocr-lines',
-  '/api/library/book-info',
-  '/api/library/book-acronyms',
-  '/api/upload-text',
-];
-
-const isProtectedPath = (path) =>
-  PROTECTED_PREFIXES.some((p) => path === p || path.startsWith(p + '/'));
 
 const authProxy = withAuth(
   function middleware(req) {

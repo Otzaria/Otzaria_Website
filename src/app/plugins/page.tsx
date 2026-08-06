@@ -147,7 +147,7 @@ function PluginsStoreHomeContent() {
               <PluginSearchBox size="lg" placeholder="חפשו תוסף לפי שם, תיאור או נושא..." />
               <div className="mt-5 flex items-center justify-center gap-4">
                 <Link
-                  href="/plugins/upload"
+                  href="/plugins/upload" prefetch={false}
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-primary/20 text-primary rounded-xl font-bold hover:bg-primary/5 transition-colors"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

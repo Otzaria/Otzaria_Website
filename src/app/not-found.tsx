@@ -38,7 +38,7 @@ export default function NotFound() {
             {/* Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12 animate-enter-up" style={{ animationDelay: '0.6s' }}>
               <Link
-                href="/"
+                href="/" prefetch={false}
                 className="group px-8 py-4 bg-primary text-on-primary rounded-xl text-lg font-medium hover:bg-accent transition-all shadow-lg hover:shadow-2xl hover:scale-105 flex items-center justify-center gap-2"
               >
                 <span className="material-symbols-outlined group-hover:rotate-[-10deg] transition-transform">
@@ -47,7 +47,7 @@ export default function NotFound() {
                 חזרה לדף הבית
               </Link>
               <Link
-                href="/library"
+                href="/library" prefetch={false}
                 className="group px-8 py-4 glass border-2 border-primary text-primary rounded-xl text-lg font-medium hover:bg-primary hover:text-on-primary transition-all hover:scale-105 flex items-center justify-center gap-2"
               >
                 <span className="material-symbols-outlined group-hover:scale-110 transition-transform">
@@ -65,7 +65,7 @@ export default function NotFound() {
               </h3>
               <div className="grid sm:grid-cols-2 gap-4 text-right">
                 <Link
-                  href="/"
+                  href="/" prefetch={false}
                   className="group p-4 bg-surface-variant hover:bg-primary hover:text-on-primary rounded-xl transition-all hover:scale-105 hover:shadow-lg flex items-center gap-3"
                 >
                   <span className="material-symbols-outlined text-2xl group-hover:scale-110 transition-transform">
@@ -77,7 +77,7 @@ export default function NotFound() {
                   </div>
                 </Link>
                 <Link
-                  href="/library"
+                  href="/library" prefetch={false}
                   className="group p-4 bg-surface-variant hover:bg-primary hover:text-on-primary rounded-xl transition-all hover:scale-105 hover:shadow-lg flex items-center gap-3"
                 >
                   <span className="material-symbols-outlined text-2xl group-hover:scale-110 transition-transform">
@@ -89,7 +89,7 @@ export default function NotFound() {
                   </div>
                 </Link>
                 <Link
-                  href="/library/books"
+                  href="/library/books" prefetch={false}
                   className="group p-4 bg-surface-variant hover:bg-primary hover:text-on-primary rounded-xl transition-all hover:scale-105 hover:shadow-lg flex items-center gap-3"
                 >
                   <span className="material-symbols-outlined text-2xl group-hover:scale-110 transition-transform">
@@ -101,7 +101,7 @@ export default function NotFound() {
                   </div>
                 </Link>
                 <Link
-                  href="/docs"
+                  href="/docs" prefetch={false}
                   className="group p-4 bg-surface-variant hover:bg-primary hover:text-on-primary rounded-xl transition-all hover:scale-105 hover:shadow-lg flex items-center gap-3"
                 >
                   <span className="material-symbols-outlined text-2xl group-hover:scale-110 transition-transform">
