@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Page from '@/models/Page';
-import { cached, publicCacheHeaders } from '@/lib/api-cache';
+import { cached, shabbatGatedCacheHeaders } from '@/lib/api-cache';
 
 // הנתון הוא ספירת דפים לפי יום — אין טעם לחשב אותו מחדש לכל מבקר.
 const CACHE_TTL_MS = 5 * 60_000;
@@ -68,7 +68,7 @@ export async function GET() {
         const dayKey = new Date().toISOString().slice(0, 10);
         const payload = await cached(`weekly-progress:${dayKey}`, CACHE_TTL_MS, computeWeeklyProgress);
 
-        return NextResponse.json(payload, { headers: publicCacheHeaders(300) });
+        return NextResponse.json(payload, { headers: shabbatGatedCacheHeaders() });
     } catch (error) {
         console.error('Weekly stats error:', error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

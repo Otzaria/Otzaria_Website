@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { publicCacheHeaders } from '@/lib/api-cache'
+import { shabbatGatedCacheHeaders } from '@/lib/api-cache'
 
 // המסלול דינמי (הוא קורא את searchParams), ולכן revalidate ברמת המסלול היה
 // חסר משמעות וסתר את force-dynamic. המטמון האמיתי הוא על ה-fetch ל-GitHub למטה.
@@ -138,8 +138,9 @@ export async function GET(request) {
         ...platformData,
         releaseUrl: latestRelease.html_url
       },
-      // קישורי ההורדה משתנים רק כשיוצאת גרסה — מותר לדפדפן להחזיק אותם.
-      { headers: publicCacheHeaders(600) }
+      // התשובה עצמה אינה נשמרת בדפדפן (חסימת השבת צריכה לחול על כל בקשה);
+      // מה שנשמר הוא ה-fetch ל-GitHub, ב-Data Cache של Next למעלה.
+      { headers: shabbatGatedCacheHeaders() }
     )
   } catch (error) {
     console.error('Error fetching GitHub releases:', error)

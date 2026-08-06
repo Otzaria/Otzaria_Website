@@ -4,7 +4,7 @@ import Book from '@/models/Book';
 import Page from '@/models/Page';
 import User from '@/models/User';
 import DictaBook from '@/models/DictaBook';
-import { cached, publicCacheHeaders } from '@/lib/api-cache';
+import { cached, shabbatGatedCacheHeaders } from '@/lib/api-cache';
 
 // מספרי הכותרת בדף הבית. אין סיבה להריץ את הספירות בכל ביקור.
 const CACHE_TTL_MS = 5 * 60_000;
@@ -79,7 +79,7 @@ async function computeStats() {
 export async function GET() {
   try {
     const payload = await cached('site-stats', CACHE_TTL_MS, computeStats);
-    return NextResponse.json(payload, { headers: publicCacheHeaders(300) });
+    return NextResponse.json(payload, { headers: shabbatGatedCacheHeaders() });
   } catch (error) {
     console.error('Stats API Error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
