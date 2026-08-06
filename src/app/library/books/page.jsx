@@ -1,37 +1,41 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import Header from '@/components/layout/Header'
 import WeeklyProgressChart from '@/components/data-display/WeeklyProgressChart'
 import { statusConfig } from '@/lib/library-data'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 
+// מספר הכרטיסים שנוספים בכל פעם. הקטלוג צייר בעבר את כל הספרים בבת אחת, מה
+// שיצר DOM עצום ומאות בקשות תמונה בו-זמנית.
+const PAGE_SIZE = 36
+
 export default function LibraryBooksPage() {
-  const [, setTreeData] = useState([])
   const [flatBooks, setFlatBooks] = useState([])
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [filterCategory, setFilterCategory] = useState('all')
-  
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('available')
-  
+
   useEffect(() => {
     const fetchData = async () => {
         try {
-            const [treeRes, listRes, catsRes] = await Promise.all([
-                fetch('/api/library'),
+            // /api/library נשלף כאן בעבר ונשמר ב-state שאף אחד לא קרא — בקשת DB
+            // ותגובה מיותרות לחלוטין. הוסרה.
+            const [listRes, catsRes] = await Promise.all([
                 fetch('/api/library/list'),
-                fetch('/api/admin/categories') 
+                fetch('/api/admin/categories')
             ]);
-            
-            const treeJson = await treeRes.json();
+
             const listJson = await listRes.json();
             let catsJson = { success: false, categories: [] };
             try { catsJson = await catsRes.json(); } catch(e) {}
 
-            if (treeJson.success) setTreeData(treeJson.data);
             if (listJson.success) setFlatBooks(listJson.books);
             if (catsJson.success) setCategories(catsJson.categories);
 
@@ -71,6 +75,35 @@ export default function LibraryBooksPage() {
 
     return data
   }, [flatBooks, searchTerm, filterStatus, filterCategory]) // הוספנו את filterCategory לתלויות
+
+  // כל שינוי סינון מתחיל מחדש מהעמוד הראשון
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE)
+  }, [searchTerm, filterStatus, filterCategory])
+
+  const visibleBooks = useMemo(
+    () => filteredBooks.slice(0, visibleCount),
+    [filteredBooks, visibleCount]
+  )
+  const hasMore = visibleCount < filteredBooks.length
+
+  // "עוד" נטען כשהמשתמש מתקרב לסוף הרשימה, בלי לחיצה
+  const sentinelRef = useRef(null)
+  const loadMore = useCallback(() => {
+    setVisibleCount(count => Math.min(count + PAGE_SIZE, filteredBooks.length))
+  }, [filteredBooks.length])
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current
+    if (!sentinel || !hasMore) return
+
+    const observer = new IntersectionObserver(
+      entries => { if (entries[0].isIntersecting) loadMore() },
+      { rootMargin: '400px' }
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [hasMore, loadMore])
 
   return (
     <div className="min-h-screen flex flex-col bg-background pb-12">
@@ -165,6 +198,11 @@ export default function LibraryBooksPage() {
                         <span className="text-on-surface/70 font-medium">
                             נמצאו {filteredBooks.length} ספרים
                         </span>
+                        {hasMore && (
+                            <span className="text-on-surface/50 text-sm">
+                                מוצגים {visibleBooks.length}
+                            </span>
+                        )}
                     </div>
 
                     {filteredBooks.length === 0 ? (
@@ -179,11 +217,24 @@ export default function LibraryBooksPage() {
                             </button>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                            {filteredBooks.map(book => (
-                                <BookCard key={book.id || book.path} book={book} categories={categories} />
-                            ))}
-                        </div>
+                        <>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                {visibleBooks.map(book => (
+                                    <BookCard key={book.id || book.path} book={book} categories={categories} />
+                                ))}
+                            </div>
+
+                            {hasMore && (
+                                <div ref={sentinelRef} className="flex justify-center py-6">
+                                    <button
+                                        onClick={loadMore}
+                                        className="px-6 py-2 bg-white border border-surface-variant text-primary rounded-lg hover:bg-surface-variant transition-colors font-medium"
+                                    >
+                                        טען עוד ספרים
+                                    </button>
+                                </div>
+                            )}
+                        </>
                     )}
                 </>
             )}
@@ -191,6 +242,35 @@ export default function LibraryBooksPage() {
       </main>
     </div>
   )
+}
+
+/**
+ * תמונה ממוזערת של ספר. בעבר זה היה <img> ישיר לסריקת העמוד המלאה, בלי
+ * loading="lazy" — כלומר בקשה אחת לכל ספר בקטלוג, מיד, בגודל המקורי. עכשיו
+ * next/image מקטין לרוחב שבו התמונה מוצגת בפועל, וטוען אותה בעצלתיים.
+ */
+function BookThumbnail({ book }) {
+    const [failed, setFailed] = useState(false)
+
+    if (!book.thumbnail || failed) {
+        return (
+            <div className="w-full h-full flex items-center justify-center bg-surface text-on-surface/20">
+                <span className="material-symbols-outlined text-3xl">auto_stories</span>
+            </div>
+        )
+    }
+
+    return (
+        <Image
+            src={book.thumbnail}
+            alt={book.name}
+            width={64}
+            height={80}
+            loading="lazy"
+            onError={() => setFailed(true)}
+            className="w-full h-full object-cover"
+        />
+    )
 }
 
 function BookCard({ book, categories }) {
@@ -225,13 +305,7 @@ function BookCard({ book, categories }) {
                         מוסתר
                     </span>
                   )}
-                  {book.thumbnail ? (
-                      <img src={book.thumbnail} alt={book.name} className="w-full h-full object-cover" />
-                  ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-surface text-on-surface/20">
-                          <span className="material-symbols-outlined text-3xl">auto_stories</span>
-                      </div>
-                  )}
+                  <BookThumbnail book={book} />
               </div>
               <div className="flex-1 min-w-0 py-0.5">
                   <h3 className="font-bold text-lg text-on-surface line-clamp-2 leading-tight mb-2 font-frank group-hover:text-primary transition-colors" title={book.name}>
