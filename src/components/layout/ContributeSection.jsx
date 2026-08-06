@@ -83,6 +83,7 @@ export default function ContributeSection() {
               <div className="flex flex-col sm:flex-row gap-4 justify-center items-center flex-wrap">
                                   <Link
                     href="/library/upload"
+                    prefetch={false}
                     className="flex items-center justify-center gap-2 px-8 py-4 bg-primary text-on-primary rounded-lg text-lg font-medium hover:bg-accent transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105 hover:-translate-y-0.5 active:scale-95 w-full sm:w-auto"
                   >
                     <span className="material-symbols-outlined">add</span>
@@ -90,6 +91,7 @@ export default function ContributeSection() {
                   </Link>
                                   <Link
                     href="/library/books"
+                    prefetch={false}
                     className="flex items-center justify-center gap-2 px-8 py-4 bg-surface text-on-surface rounded-lg text-lg font-medium hover:bg-surface-variant transition-all duration-200 border border-outline hover:scale-105 hover:-translate-y-0.5 active:scale-95 w-full sm:w-auto"
                   >
                     <span className="material-symbols-outlined">library_books</span>
@@ -97,6 +99,7 @@ export default function ContributeSection() {
                   </Link>
                                   <Link
                     href="/library/dicta-books"
+                    prefetch={false}
                     className="flex items-center justify-center gap-2 px-8 py-4 bg-surface text-on-surface rounded-lg text-lg font-medium hover:bg-surface-variant transition-all duration-200 border border-outline hover:scale-105 hover:-translate-y-0.5 active:scale-95 w-full sm:w-auto"
                   >
                     <span className="material-symbols-outlined">edit_note</span>
@@ -108,6 +111,7 @@ export default function ContributeSection() {
               <div className="flex flex-col sm:flex-row gap-4 justify-center items-center flex-wrap">
                                   <Link
                     href="/library/info"
+                    prefetch={false}
                     className="flex items-center justify-center gap-2 px-8 py-4 bg-surface text-on-surface rounded-lg text-lg font-medium hover:bg-surface-variant transition-all duration-200 border border-outline hover:scale-105 hover:-translate-y-0.5 active:scale-95 w-full sm:w-auto"
                   >
                     <span className="material-symbols-outlined">info</span>
@@ -115,6 +119,7 @@ export default function ContributeSection() {
                   </Link>
                                   <Link
                     href="/library/acronyms"
+                    prefetch={false}
                     className="flex items-center justify-center gap-2 px-8 py-4 bg-surface text-on-surface rounded-lg text-lg font-medium hover:bg-surface-variant transition-all duration-200 border border-outline hover:scale-105 hover:-translate-y-0.5 active:scale-95 w-full sm:w-auto"
                   >
                     <span className="material-symbols-outlined">short_text</span>

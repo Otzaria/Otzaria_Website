@@ -64,13 +64,17 @@ export default function Hero() {
             למאגר החינמי הגדול ביותר של טקסטים תורניים מדויקים ונגישים לכולם.
           </p>
 
-          {/* כפתורים */}
+          {/* כפתורים.
+              prefetch={false} כי שני היעדים מוגנים ב-proxy: לאורח, prefetch
+              מייצר בקשת RSC שמסתיימת ב-redirect לדף ההתחברות, ומשם גם את
+              חבילות ה-JavaScript שלו — עבודה שלמה על תוכן שלא יוצג. */}
           <div
             className="flex flex-col sm:flex-row gap-4 justify-center flex-wrap animate-enter-up"
             style={{ animationDelay: '0.8s' }}
           >
             <Link
               href="/library/books"
+              prefetch={false}
               className="flex items-center justify-center gap-2 px-8 py-4 glass border-2 border-primary text-primary rounded-lg text-lg font-medium hover:bg-primary-container transition-all duration-200 hover:scale-105 hover:-translate-y-0.5 active:scale-95"
             >
               <span className="material-symbols-outlined">library_books</span>
@@ -78,6 +82,7 @@ export default function Hero() {
             </Link>
             <Link
               href="/library/dicta-books"
+              prefetch={false}
               className="flex items-center justify-center gap-2 px-8 py-4 glass border-2 border-primary text-primary rounded-lg text-lg font-medium hover:bg-primary-container transition-all duration-200 hover:scale-105 hover:-translate-y-0.5 active:scale-95"
             >
               <span className="material-symbols-outlined">edit_note</span>

@@ -60,7 +60,7 @@ export default function Header() {
           {session ? (
             <div className="flex items-center gap-2 lg:gap-3 xl:gap-4">
               {hasAnyAdminAccess(session.user.role) && (
-                <Link href="/library/admin" className="flex items-center gap-2 text-accent hover:text-accent/80 transition-colors relative font-medium">
+                <Link href="/library/admin" prefetch={false} className="flex items-center gap-2 text-accent hover:text-accent/80 transition-colors relative font-medium">
                   <span className="material-symbols-outlined">admin_panel_settings</span>
                   <span>ניהול</span>
                   {unreadMessages > 0 && (
@@ -71,7 +71,8 @@ export default function Header() {
                 </Link>
               )}
               <Link 
-                href="/library/dashboard" 
+                href="/library/dashboard"
+                prefetch={false} 
                 className="flex items-center justify-center hover:opacity-80 transition-opacity"
                 title={session.user.name}
               >
@@ -91,7 +92,7 @@ export default function Header() {
               </button>
             </div>
           ) : (
-            <Link href="/library/auth/login" className="flex items-center gap-2 px-5 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm font-medium">
+            <Link href="/library/auth/login" prefetch={false} className="flex items-center gap-2 px-5 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm font-medium">
               <span className="material-symbols-outlined text-lg">login</span>
               <span>התחבר</span>
             </Link>
