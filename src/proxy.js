@@ -14,6 +14,12 @@ const HEBCAL_URL = 'https://www.hebcal.com/zmanim?cfg=json&im=1&geonameid=281184
 // משך תוקף המטמון בזיכרון (מילישניות). שומר על תגובתיות סביב כניסת/צאת שבת.
 const CACHE_TTL_MS = 60_000;
 
+// חלון "מיושן אך שמיש": אחרי פקיעת התוקף ועד לגבול הזה מוחזרת התשובה השמורה
+// מיד, וברקע נשלחת בקשת רענון. כך אף בקשת משתמש אינה משלמת את זמן ההמתנה
+// ל-Hebcal (נמדדו 0.68–0.75 שניות TTFB בכל פקיעה), והדיוק נשאר כשהיה: הערך
+// המוחזר לעולם אינו מיושן ביותר מ-CACHE_TTL_MS ועוד משך רענון אחד.
+const CACHE_STALE_MS = 10 * 60_000;
+
 // מטמון שלילי קצר על כשל — מונע הצפת Hebcal בקריאות חוזרות בזמן תקלה.
 const ERROR_CACHE_TTL_MS = 30_000;
 
@@ -35,33 +41,63 @@ const FORCE_BLOCK_FOR_TESTING = false;
 
 // מטמון מודולרי — נשמר בין בקשות באותו תהליך/isolate.
 let shabbatCache = null;
+// בקשת רענון שנמצאת באוויר — מונעת קריאות מקבילות מיותרות ל-Hebcal.
+let shabbatRefresh = null;
+
+/** קורא ל-Hebcal ומעדכן את המטמון. אינו זורק — כשל נשמר כמטמון שלילי קצר. */
+function refreshShabbatCache() {
+  if (shabbatRefresh) return shabbatRefresh;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+  shabbatRefresh = (async () => {
+    try {
+      const res = await fetch(HEBCAL_URL, { cache: 'no-store', signal: controller.signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const value = data?.status?.isAssurBemlacha === true;
+      shabbatCache = { value, expires: Date.now() + CACHE_TTL_MS };
+      return value;
+    } catch {
+      // לא הצלחנו לברר (timeout/שגיאה) — לא חוסמים, ושומרים במטמון שלילי קצר
+      // כדי לא לקרוא ל-Hebcal בכל בקשה בזמן תקלה.
+      shabbatCache = { value: false, expires: Date.now() + ERROR_CACHE_TTL_MS };
+      return false;
+    } finally {
+      clearTimeout(timer);
+      shabbatRefresh = null;
+    }
+  })();
+
+  return shabbatRefresh;
+}
 
 /**
  * בודק מול Hebcal האם כעת אסור במלאכה (שבת או יום טוב).
  * נכשל "פתוח" (false) במקרה של שגיאה, בדיוק כמו הסקריפט המקורי.
+ *
+ * event מאפשר לרענון הרקע להמשיך לרוץ אחרי שהתשובה נשלחה (waitUntil).
  */
-async function isAssurBemlacha() {
+async function isAssurBemlacha(event) {
   if (FORCE_BLOCK_FOR_TESTING) return true; // ⚠️ זמני — הסר לפני העלאה
-  const now = Date.now();
-  if (shabbatCache && shabbatCache.expires > now) return shabbatCache.value;
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const res = await fetch(HEBCAL_URL, { cache: 'no-store', signal: controller.signal });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const value = data?.status?.isAssurBemlacha === true;
-    shabbatCache = { value, expires: now + CACHE_TTL_MS };
-    return value;
-  } catch {
-    // לא הצלחנו לברר (timeout/שגיאה) — לא חוסמים, ושומרים במטמון שלילי קצר
-    // כדי לא לקרוא ל-Hebcal בכל בקשה בזמן תקלה.
-    shabbatCache = { value: false, expires: now + ERROR_CACHE_TTL_MS };
-    return false;
-  } finally {
-    clearTimeout(timer);
+  const now = Date.now();
+
+  if (shabbatCache) {
+    // בתוקף — תשובה מיידית.
+    if (shabbatCache.expires > now) return shabbatCache.value;
+
+    // פג התוקף אך עדיין בחלון השמיש: מחזירים מיד ומרעננים ברקע.
+    if (shabbatCache.expires + CACHE_STALE_MS > now) {
+      const refresh = refreshShabbatCache();
+      if (event?.waitUntil) event.waitUntil(refresh);
+      return shabbatCache.value;
+    }
   }
+
+  // אין ערך כלל, או שהוא ישן מדי מכדי לסמוך עליו — ממתינים לתשובה.
+  return refreshShabbatCache();
 }
 
 function blockResponse() {
@@ -318,7 +354,7 @@ export default async function proxy(req, event) {
   // חסימת שבת/יום טוב — לכל הדפים וה-API, פרט לבוטים ולנתיבי תשתית מוחרגים.
   // דפים מקבלים HTML, ו-API מקבל JSON של דחייה.
   const ua = req.headers.get('user-agent') ?? '';
-  if (!apiExempt && !BOT_REGEX.test(ua) && await isAssurBemlacha()) {
+  if (!apiExempt && !BOT_REGEX.test(ua) && await isAssurBemlacha(event)) {
     return isApi ? blockResponseJson() : blockResponse();
   }
 
