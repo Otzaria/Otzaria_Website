@@ -1,6 +1,3 @@
-'use client'
-
-import { motion } from 'framer-motion'
 import Link from 'next/link'
 import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
@@ -34,11 +31,7 @@ export default function DevelopmentTutorialPage() {
           </div>
 
           {/* Hero */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center mb-12 glass-strong rounded-2xl p-12 border-4 border-primary"
-          >
+          <div className="text-center mb-12 glass-strong rounded-2xl p-12 border-4 border-primary animate-enter-up">
             <span className="material-symbols-outlined text-7xl text-primary mb-4 block">
               code
             </span>
@@ -48,7 +41,7 @@ export default function DevelopmentTutorialPage() {
             <p className="text-xl text-on-surface/70">
               עכשיו זה אפשרי! גם ללא ידע מעמיק בתכנות
             </p>
-          </motion.div>
+          </div>
 
           <div className="grid lg:grid-cols-4 gap-8">
             {/* Sidebar TOC */}
@@ -72,12 +65,9 @@ export default function DevelopmentTutorialPage() {
             {/* Main Content */}
             <article className="lg:col-span-3 space-y-8">
               {/* Intro Section */}
-              <motion.section
+              <section
                 id="intro"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                className="glass-strong rounded-xl p-8"
+                className="glass-strong rounded-xl p-8 animate-enter-up"
               >
                 <h2 className="text-3xl font-bold text-primary-dark mb-6 flex items-center gap-3">
                   <span className="material-symbols-outlined text-4xl">rocket_launch</span>
@@ -97,15 +87,12 @@ export default function DevelopmentTutorialPage() {
                     </div>
                   </div>
                 </div>
-              </motion.section>
+              </section>
 
               {/* Requirements Section */}
-              <motion.section
+              <section
                 id="requirements"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                className="glass-strong rounded-xl p-8"
+                className="glass-strong rounded-xl p-8 animate-enter-up"
               >
                 <h2 className="text-3xl font-bold text-primary-dark mb-6 flex items-center gap-3">
                   <span className="material-symbols-outlined text-4xl">checklist</span>
@@ -129,15 +116,12 @@ export default function DevelopmentTutorialPage() {
                     </div>
                   </div>
                 </div>
-              </motion.section>
+              </section>
 
               {/* Git Installation */}
-              <motion.section
+              <section
                 id="git-install"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                className="glass-strong rounded-xl p-8"
+                className="glass-strong rounded-xl p-8 animate-enter-up"
               >
                 <h2 className="text-3xl font-bold text-primary-dark mb-6 flex items-center gap-3">
                   <span className="material-symbols-outlined text-4xl">download</span>
@@ -169,15 +153,12 @@ export default function DevelopmentTutorialPage() {
                     </div>
                   </div>
                 </div>
-              </motion.section>
+              </section>
 
               {/* Flutter Installation */}
-              <motion.section
+              <section
                 id="flutter-install"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                className="glass-strong rounded-xl p-8"
+                className="glass-strong rounded-xl p-8 animate-enter-up"
               >
                 <h2 className="text-3xl font-bold text-primary-dark mb-6 flex items-center gap-3">
                   <span className="material-symbols-outlined text-4xl">flutter</span>
@@ -229,15 +210,12 @@ export default function DevelopmentTutorialPage() {
                     </div>
                   </div>
                 </div>
-              </motion.section>
+              </section>
 
               {/* Editor Installation */}
-              <motion.section
+              <section
                 id="editor-install"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                className="glass-strong rounded-xl p-8"
+                className="glass-strong rounded-xl p-8 animate-enter-up"
               >
                 <h2 className="text-3xl font-bold text-primary-dark mb-6 flex items-center gap-3">
                   <span className="material-symbols-outlined text-4xl">edit_note</span>
@@ -265,15 +243,12 @@ export default function DevelopmentTutorialPage() {
                     </div>
                   </div>
                 </div>
-              </motion.section>
+              </section>
 
               {/* Fork Section */}
-              <motion.section
+              <section
                 id="fork"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                className="glass-strong rounded-xl p-8"
+                className="glass-strong rounded-xl p-8 animate-enter-up"
               >
                 <h2 className="text-3xl font-bold text-primary-dark mb-6 flex items-center gap-3">
                   <span className="material-symbols-outlined text-4xl">fork_right</span>
@@ -301,15 +276,12 @@ export default function DevelopmentTutorialPage() {
                     </div>
                   </div>
                 </div>
-              </motion.section>
+              </section>
 
               {/* Clone Section */}
-              <motion.section
+              <section
                 id="clone"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                className="glass-strong rounded-xl p-8"
+                className="glass-strong rounded-xl p-8 animate-enter-up"
               >
                 <h2 className="text-3xl font-bold text-primary-dark mb-6 flex items-center gap-3">
                   <span className="material-symbols-outlined text-4xl">cloud_download</span>
@@ -350,15 +322,12 @@ export default function DevelopmentTutorialPage() {
                     </div>
                   </div>
                 </div>
-              </motion.section>
+              </section>
 
               {/* Editing Section */}
-              <motion.section
+              <section
                 id="editing"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                className="glass-strong rounded-xl p-8"
+                className="glass-strong rounded-xl p-8 animate-enter-up"
               >
                 <h2 className="text-3xl font-bold text-primary-dark mb-6 flex items-center gap-3">
                   <span className="material-symbols-outlined text-4xl">edit</span>
@@ -381,15 +350,12 @@ export default function DevelopmentTutorialPage() {
                     </div>
                   </div>
                 </div>
-              </motion.section>
+              </section>
 
               {/* Testing Section */}
-              <motion.section
+              <section
                 id="testing"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                className="glass-strong rounded-xl p-8"
+                className="glass-strong rounded-xl p-8 animate-enter-up"
               >
                 <h2 className="text-3xl font-bold text-primary-dark mb-6 flex items-center gap-3">
                   <span className="material-symbols-outlined text-4xl">bug_report</span>
@@ -433,28 +399,18 @@ export default function DevelopmentTutorialPage() {
                     </div>
                   </div>
                 </div>
-              </motion.section>
+              </section>
 
               {/* Success Box */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                className="p-6 bg-success-50 border-r-4 border-success-400 rounded-xl flex items-start gap-4"
-              >
+              <div className="p-6 bg-success-50 border-r-4 border-success-400 rounded-xl flex items-start gap-4 animate-enter-up">
                 <span className="material-symbols-outlined text-4xl text-success-600">celebration</span>
                 <div>
                   <p className="text-success-900 text-lg"><strong>כל הכבוד!</strong> עכשיו אתם מפתחים של אוצריא! המשיכו ללמוד ולשפר את התוכנה.</p>
                 </div>
-              </motion.div>
+              </div>
 
               {/* Help Card */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                className="glass-strong rounded-xl p-8"
-              >
+              <div className="glass-strong rounded-xl p-8 animate-enter-up">
                 <div className="flex items-start gap-4">
                   <span className="material-symbols-outlined text-5xl text-primary">help</span>
                   <div className="flex-1">
@@ -471,7 +427,7 @@ export default function DevelopmentTutorialPage() {
                     </a>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             </article>
           </div>
         </div>

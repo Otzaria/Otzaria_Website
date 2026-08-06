@@ -46,4 +46,86 @@
   .animate-shake {
     animation: shake 0.5s ease-in-out;
   }
+
+  /* ============================================================
+   * אנימציות כניסה — ב-CSS, לא ב-JavaScript.
+   *
+   * כשהכניסה נעשית ב-framer-motion, ה-HTML שהשרת שולח נשמר עם
+   * style="opacity:0" — התוכן קיים, אך המשתמש אינו רואה אותו עד ש-JavaScript
+   * יורד, מתפרסר ומבצע hydration. ברשת איטית זה הופך את ה-JS לתלות חזותית של
+   * התוכן. אנימציית CSS מתחילה בציור הראשון ואינה ממתינה לכלום.
+   *
+   * ב-keyframes מוגדר רק from: מצב הסיום הוא הערך הטבעי של האלמנט, ולכן אין
+   * צורך ב-fill-mode שדורך על ה-style שלו — אפקטי hover ממשיכים לעבוד.
+   * ההשהיה (staggering) נקבעת ב-animation-delay מקומי.
+   * ============================================================ */
+  @keyframes enter-up {
+    from { opacity: 0; transform: translateY(20px); }
+  }
+
+  @keyframes enter-down {
+    from { opacity: 0; transform: translateY(-20px); }
+  }
+
+  @keyframes enter-scale {
+    from { opacity: 0; transform: scale(0.95); }
+  }
+
+  @keyframes enter-pop {
+    from { opacity: 0; transform: scale(0) rotate(-180deg); }
+  }
+
+  /* הודעה שנכנסת מלמטה (toast) */
+  @keyframes enter-toast {
+    from { opacity: 0; transform: translateY(100px); }
+  }
+
+  /* חלונית מודאלית שנכנסת מהמרכז */
+  @keyframes enter-dialog {
+    from { opacity: 0; transform: scale(0.8) translateY(20px); }
+  }
+
+  @keyframes enter-fade {
+    from { opacity: 0; }
+  }
+
+  .animate-enter-up {
+    animation: enter-up 0.6s ease-out backwards;
+  }
+
+  .animate-enter-down {
+    animation: enter-down 0.6s ease-out backwards;
+  }
+
+  .animate-enter-scale {
+    animation: enter-scale 0.6s ease-out backwards;
+  }
+
+  .animate-enter-pop {
+    animation: enter-pop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+  }
+
+  .animate-enter-toast {
+    animation: enter-toast 0.35s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+
+  .animate-enter-dialog {
+    animation: enter-dialog 0.3s cubic-bezier(0.34, 1.4, 0.64, 1) backwards;
+  }
+
+  .animate-enter-fade {
+    animation: enter-fade 0.3s ease-out backwards;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-enter-up,
+    .animate-enter-down,
+    .animate-enter-scale,
+    .animate-enter-pop,
+    .animate-enter-toast,
+    .animate-enter-dialog,
+    .animate-enter-fade {
+      animation: none;
+    }
+  }
 }

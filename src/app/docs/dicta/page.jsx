@@ -1,6 +1,3 @@
-'use client'
-
-import { motion } from 'framer-motion'
 import Link from 'next/link'
 import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
@@ -31,11 +28,7 @@ export default function DictaTutorialPage() {
           </div>
 
           {/* Hero */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center mb-12 glass-strong rounded-2xl p-12 border-4 border-primary"
-          >
+          <div className="text-center mb-12 glass-strong rounded-2xl p-12 border-4 border-primary animate-enter-up">
             <span className="material-symbols-outlined text-7xl text-primary mb-4 block">
               school
             </span>
@@ -45,7 +38,7 @@ export default function DictaTutorialPage() {
             <p className="text-xl text-on-surface/70">
               הדרכה מפורטת ליצירת כותרות וניווט בספרים
             </p>
-          </motion.div>
+          </div>
 
           <div className="grid lg:grid-cols-4 gap-8">
             {/* Sidebar TOC */}
@@ -69,12 +62,9 @@ export default function DictaTutorialPage() {
             {/* Main Content */}
             <article className="lg:col-span-3 space-y-8">
               {/* Intro Section */}
-              <motion.section
+              <section
                 id="intro"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                className="glass-strong rounded-xl p-8"
+                className="glass-strong rounded-xl p-8 animate-enter-up"
               >
                 <h2 className="text-3xl font-bold text-primary-dark mb-6 flex items-center gap-3">
                   <span className="material-symbols-outlined text-4xl">info</span>
@@ -93,15 +83,12 @@ export default function DictaTutorialPage() {
                     </div>
                   </div>
                 </div>
-              </motion.section>
+              </section>
 
               {/* Structure Section */}
-              <motion.section
+              <section
                 id="structure"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                className="glass-strong rounded-xl p-8"
+                className="glass-strong rounded-xl p-8 animate-enter-up"
               >
                 <h2 className="text-3xl font-bold text-primary-dark mb-6 flex items-center gap-3">
                   <span className="material-symbols-outlined text-4xl">account_tree</span>
@@ -148,15 +135,12 @@ export default function DictaTutorialPage() {
                     </div>
                   </div>
                 </div>
-              </motion.section>
+              </section>
 
               {/* Markup Section */}
-              <motion.section
+              <section
                 id="markup"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                className="glass-strong rounded-xl p-8"
+                className="glass-strong rounded-xl p-8 animate-enter-up"
               >
                 <h2 className="text-3xl font-bold text-primary-dark mb-6 flex items-center gap-3">
                   <span className="material-symbols-outlined text-4xl">code</span>
@@ -197,15 +181,12 @@ export default function DictaTutorialPage() {
                     </div>
                   </div>
                 </div>
-              </motion.section>
+              </section>
 
               {/* Tools Section */}
-              <motion.section
+              <section
                 id="tools"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                className="glass-strong rounded-xl p-8"
+                className="glass-strong rounded-xl p-8 animate-enter-up"
               >
                 <h2 className="text-3xl font-bold text-primary-dark mb-6 flex items-center gap-3">
                   <span className="material-symbols-outlined text-4xl">build</span>
@@ -247,15 +228,12 @@ export default function DictaTutorialPage() {
                     </div>
                   </div>
                 </div>
-              </motion.section>
+              </section>
 
               {/* Demo Section */}
-              <motion.section
+              <section
                 id="demo"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                className="glass-strong rounded-xl p-8"
+                className="glass-strong rounded-xl p-8 animate-enter-up"
               >
                 <h2 className="text-3xl font-bold text-primary-dark mb-6 flex items-center gap-3">
                   <span className="material-symbols-outlined text-4xl">play_circle</span>
@@ -307,15 +285,12 @@ export default function DictaTutorialPage() {
                     </div>
                   </div>
                 </div>
-              </motion.section>
+              </section>
 
               {/* Notes Section */}
-              <motion.section
+              <section
                 id="notes"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                className="glass-strong rounded-xl p-8"
+                className="glass-strong rounded-xl p-8 animate-enter-up"
               >
                 <h2 className="text-3xl font-bold text-primary-dark mb-6 flex items-center gap-3">
                   <span className="material-symbols-outlined text-4xl">note</span>
@@ -368,28 +343,18 @@ export default function DictaTutorialPage() {
                     </div>
                   </div>
                 </div>
-              </motion.section>
+              </section>
 
               {/* Success Box */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                className="p-6 bg-success-50 border-r-4 border-success-400 rounded-xl flex items-start gap-4"
-              >
+              <div className="p-6 bg-success-50 border-r-4 border-success-400 rounded-xl flex items-start gap-4 animate-enter-up">
                 <span className="material-symbols-outlined text-4xl text-success-600">celebration</span>
                 <div>
                   <p className="text-success-900 text-lg"><strong>כל הכבוד!</strong> עכשיו אתם יודעים כיצד לעבד ספרי דיקטה ולהפוך אותם לספרים עם ניווט מלא באוצריא!</p>
                 </div>
-              </motion.div>
+              </div>
 
               {/* Help Card */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                className="glass-strong rounded-xl p-8"
-              >
+              <div className="glass-strong rounded-xl p-8 animate-enter-up">
                 <div className="flex items-start gap-4">
                   <span className="material-symbols-outlined text-5xl text-primary">help</span>
                   <div className="flex-1">
@@ -404,7 +369,7 @@ export default function DictaTutorialPage() {
                     </Link>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             </article>
           </div>
         </div>

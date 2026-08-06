@@ -1,7 +1,4 @@
-'use client'
-
 import Header from '@/components/layout/OtzariaSoftwareHeader'
-import { motion } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
 
@@ -13,12 +10,7 @@ export default function AboutPage() {
         {/* Hero Section */}
         <section className="relative py-16 px-4 overflow-hidden bg-gradient-to-bl from-primary-container via-background to-secondary-container">
           <div className="container mx-auto max-w-4xl relative z-10">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-              className="text-center"
-            >
+            <div className="text-center animate-enter-up">
               <div className="mb-6 flex justify-center">
                 <Image 
                   src="/logo.png" 
@@ -34,19 +26,14 @@ export default function AboutPage() {
               <p className="text-xl text-on-surface/80">
                 פלטפורמה משותפת לעריכה ושיתוף של ספרי קודש
               </p>
-            </motion.div>
+            </div>
           </div>
         </section>
 
         {/* Main Content */}
         <section className="py-16 px-4">
           <div className="container mx-auto max-w-4xl">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.2 }}
-              className="space-y-8"
-            >
+            <div className="space-y-8 animate-enter-up" style={{ animationDelay: '0.2s' }}>
               {/* Library Stats */}
               <div className="glass p-8 rounded-xl">
                 <h2 className="text-3xl font-bold mb-6 text-primary flex items-center gap-3">
@@ -239,12 +226,9 @@ export default function AboutPage() {
               </div>
 
               {/* Quote */}
-              <motion.div 
-                className="glass-strong p-8 rounded-xl text-center border-r-4 border-primary"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.6, delay: 0.4 }}
-              >
+              <div 
+                className="glass-strong p-8 rounded-xl text-center border-r-4 border-primary animate-enter-scale"
+               style={{ animationDelay: '0.4s' }}>
                 <p className="text-2xl font-bold text-primary mb-4 font-frank">
                   "צדקתו עומדת לעד"
                 </p>
@@ -254,7 +238,7 @@ export default function AboutPage() {
                 <p className="text-sm text-on-surface/60 mt-2">
                   (כתובות נ')
                 </p>
-              </motion.div>
+              </div>
 
               {/* CTA */}
               <div className="text-center pt-8">
@@ -266,7 +250,7 @@ export default function AboutPage() {
                   <span>התחל לערוך</span>
                 </Link>
               </div>
-            </motion.div>
+            </div>
           </div>
         </section>
       </main>

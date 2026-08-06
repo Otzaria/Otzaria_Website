@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 
 // כל 3 דקות במקום כל 40 שניות. הבדיקה נועדה לתפוס דפלוי חדש, ולא צריכה להיות
 // צמודה יותר מזה — היא רצה בכל טאב פתוח של כל משתמש.
@@ -53,15 +52,12 @@ export default function VersionNotice() {
     window.location.reload()
   }
 
+  // אנימציית CSS ולא framer-motion: הקומפוננטה יושבת במעטפת השורש, ולכן ייבוא
+  // של framer-motion כאן נכנס לחבילת ה-JavaScript של *כל* דף באתר.
   return (
-    <AnimatePresence>
+    <>
       {hasUpdate && (
-        <motion.div
-          initial={{ y: 100, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 100, opacity: 0 }}
-          className="fixed bottom-6 right-6 z-[100] max-w-md w-full"
-        >
+        <div className="fixed bottom-6 right-6 z-[100] max-w-md w-full animate-enter-toast">
           <div className="bg-neutral-cool-900/95 text-white p-4 rounded-xl shadow-2xl backdrop-blur-md border border-neutral-cool-700 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="bg-primary/20 p-2 rounded-lg">
@@ -82,8 +78,8 @@ export default function VersionNotice() {
               רענן עכשיו
             </button>
           </div>
-        </motion.div>
+        </div>
       )}
-    </AnimatePresence>
+    </>
   )
 }

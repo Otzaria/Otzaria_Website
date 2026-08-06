@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
 import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 
@@ -32,11 +31,7 @@ export default function LicensePage() {
 
       <main className="py-12 px-4">
         <div className="container mx-auto max-w-4xl">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="glass-strong rounded-3xl p-8 md:p-12 shadow-xl border border-surface-variant"
-          >
+          <div className="glass-strong rounded-3xl p-8 md:p-12 shadow-xl border border-surface-variant animate-enter-up">
             <h1 className="text-4xl font-bold text-primary mb-8 font-frank border-b pb-4">
               רישיון שימוש - אוצריא (Otzaria)
             </h1>
@@ -111,7 +106,7 @@ export default function LicensePage() {
                 </a>
               </div>
             </section>
-          </motion.div>
+          </div>
         </div>
       </main>
 
