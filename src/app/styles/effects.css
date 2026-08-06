@@ -20,6 +20,53 @@
     border: 1px solid var(--color-surface-variant);
   }
 
+  /* תרומה — הדגשה עדינה, בהשראת כפתור התרומה בפורום */
+  .donation-nav-link {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-inline-start: 0.25rem;
+    padding: 0.375rem 0.625rem;
+    color: var(--color-donation) !important;
+    border-inline-start: 1px solid color-mix(in srgb, var(--color-donation) 22%, transparent);
+    border-radius: 0.5rem;
+    animation: donation-nav-pulse 3s infinite;
+  }
+
+  .donation-nav-link:hover {
+    color: var(--color-donation-strong) !important;
+    background-color: color-mix(in srgb, var(--color-donation) 7%, transparent);
+  }
+
+  .donation-nav-icon {
+    animation: donation-heart-bounce 3s infinite ease-in-out;
+  }
+
+  @keyframes donation-nav-pulse {
+    0% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-donation) 20%, transparent);
+    }
+    70% {
+      box-shadow: 0 0 0 8px color-mix(in srgb, var(--color-donation) 0%, transparent);
+    }
+    100% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-donation) 0%, transparent);
+    }
+  }
+
+  @keyframes donation-heart-bounce {
+    0%, 20%, 50%, 80%, 100% {
+      transform: translateY(0);
+    }
+    40% {
+      transform: translateY(-2px);
+    }
+    60% {
+      transform: translateY(-1px);
+    }
+  }
+
   /* הסתרת פס גלילה */
   .custom-scrollbar {
     scrollbar-width: none;

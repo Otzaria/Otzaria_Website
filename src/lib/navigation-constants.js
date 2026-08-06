@@ -20,7 +20,7 @@ export const MAIN_NAV_LINKS = [
   { href: '/plugins', label: 'תוספים', highlight: false },
   { href: '/docs', label: 'מדריכים', highlight: false },
   { href: '/faq', label: 'שאלות נפוצות', highlight: false },
-  { href: '/donate', label: 'תרומות', highlight: false },
+  { href: '/donate', label: 'תרומות', icon: 'volunteer_activism', emphasis: 'donation' },
   { href: '/forum', label: 'פורום', external: true, highlight: false }
 ]
 

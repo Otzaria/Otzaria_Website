@@ -20,18 +20,29 @@ export default function OtzariaSoftwareHeader() {
         
         {/* Desktop Nav */}
         <nav className="hidden md:flex items-center gap-6">
-          {MAIN_NAV_LINKS.map(link => (
-            <Link
-              key={link.label}
-              href={link.href}
-              target={link.external ? "_blank" : undefined}
-              className={`text-sm font-medium transition-colors hover:text-primary ${
-                pathname === link.href ? 'text-primary font-bold' : 'text-foreground/80'
-              } ${link.highlight ? 'bg-primary/10 text-primary px-3 py-1.5 rounded-lg hover:bg-primary/20' : ''}`}
-            >
-              {link.label}
-            </Link>
-          ))}
+          {MAIN_NAV_LINKS.map(link => {
+            const isDonationLink = link.emphasis === 'donation'
+
+            return (
+              <Link
+                key={link.label}
+                href={link.href}
+                target={link.external ? "_blank" : undefined}
+                className={`text-sm font-medium transition-colors hover:text-primary ${
+                  pathname === link.href && !isDonationLink ? 'text-primary font-bold' : 'text-foreground/80'
+                } ${link.highlight ? 'bg-primary/10 text-primary px-3 py-1.5 rounded-lg hover:bg-primary/20' : ''} ${
+                  isDonationLink ? 'donation-nav-link' : ''
+                }`}
+              >
+                {isDonationLink && (
+                  <span className="material-symbols-outlined donation-nav-icon" aria-hidden="true">
+                    {link.icon}
+                  </span>
+                )}
+                {link.label}
+              </Link>
+            )
+          })}
         </nav>
         
         {/* Mobile Menu Button */}
@@ -46,16 +57,27 @@ export default function OtzariaSoftwareHeader() {
       {/* Mobile Menu */}
       {isMenuOpen && (
         <div className="md:hidden absolute top-16 left-0 w-full bg-white border-b border-neutral-200 shadow-lg p-4 flex flex-col gap-4">
-          {MAIN_NAV_LINKS.map(link => (
-            <Link
-              key={link.label}
-              href={link.href}
-              onClick={() => setIsMenuOpen(false)}
-              className="text-lg font-medium p-2 hover:bg-neutral-50 rounded-lg text-foreground"
-            >
-              {link.label}
-            </Link>
-          ))}
+          {MAIN_NAV_LINKS.map(link => {
+            const isDonationLink = link.emphasis === 'donation'
+
+            return (
+              <Link
+                key={link.label}
+                href={link.href}
+                onClick={() => setIsMenuOpen(false)}
+                className={`text-lg font-medium p-2 hover:bg-neutral-50 rounded-lg text-foreground ${
+                  isDonationLink ? 'donation-nav-link' : ''
+                }`}
+              >
+                {isDonationLink && (
+                  <span className="material-symbols-outlined donation-nav-icon" aria-hidden="true">
+                    {link.icon}
+                  </span>
+                )}
+                {link.label}
+              </Link>
+            )
+          })}
         </div>
       )}
     </header>
