@@ -175,93 +175,20 @@ export function formatPluginForPublic(plugin, options = {}) {
     homepage: source.homepage || '',
     downloadCount: plugin.downloadCount || 0,
     supportsDirectInstall: (source.pluginFileExt || '').toLowerCase() === '.otzplugin',
-    isPinned: plugin.isPinned === true,
+    // תאימות לאחור: השדה נשאר בשם isPinned אך משמעותו כיום "נבחר" (featured).
+    // רק נתיבים שיודעים את רשימת הנבחרים מעבירים options.isFeatured.
+    isPinned: options.isFeatured === true,
     // כל הגרסאות הזמינות (חיה + היסטוריה) עם פרטי תאימות וקישורי הורדה.
-    versions: buildVersionsList(pluginId, liveData, plugin)
+    versions: buildVersionsList(pluginId, liveData, plugin),
+    // קטגוריות החנות של התוסף — מצורף רק כשהקורא חישב והעביר אותן (אדיטיבי;
+    // נתיבים שאינם מעבירים פשוט לא כוללים את השדה, כמו GET /api/plugins הוותיק)
+    ...(options.categories ? { categories: options.categories } : {})
   }
 }
 
-export function formatValue(value, field) {
-  if (field === 'requiresNetwork') {
-    return value === true ? 'נדרש' : 'לא נדרש'
-  }
-  if (Array.isArray(value)) {
-    return value.length ? value.join(', ') : 'ללא'
-  }
-  if (value === null || value === undefined || value === '') {
-    return 'ללא'
-  }
-  if (typeof value === 'boolean') {
-    return value ? 'כן' : 'לא'
-  }
-  if (field === 'status') {
-    return formatPluginStatus(value)
-  }
-  return String(value)
-}
-
-export function buildChangeSummary(current, next, filesChanged) {
-  const fields = [
-    ['name', 'שם התוסף'],
-    ['shortDescription', 'תיאור קצר'],
-    ['description', 'תיאור מלא'],
-    ['version', 'גרסה'],
-    ['status', 'סטטוס'],
-    ['author', 'שם המפתח'],
-    ['compatibleWith', 'תאימות'],
-    ['maxAppVersion', 'תאימות עד גרסה'],
-    ['requiresNetwork', 'דורש חיבור אינטרנט'],
-    ['tags', 'תגיות'],
-    ['homepage', 'אתר בית']
-  ]
-
-  const changes = []
-  for (const [field, label] of fields) {
-    const before = current[field]
-    const after = next[field]
-    const changed = Array.isArray(before) || Array.isArray(after)
-      ? JSON.stringify(before || []) !== JSON.stringify(after || [])
-      : String(before ?? '') !== String(after ?? '')
-
-    if (changed) {
-      changes.push({
-        field,
-        label,
-        before: formatValue(before, field),
-        after: formatValue(after, field)
-      })
-    }
-  }
-
-  if (filesChanged.pluginFile) {
-    changes.push({
-      field: 'pluginFileName',
-      label: 'קובץ התוסף',
-      before: current.pluginFileName || 'ללא',
-      after: next.pluginFileName || 'ללא'
-    })
-  }
-
-  if (filesChanged.image) {
-    changes.push({
-      field: 'image',
-      label: 'תמונת תוסף',
-      before: current.image ? `קיימת תמונה (${current.image.ext})` : 'ללא תמונה',
-      after: next.image ? `קיימת תמונה (${next.image.ext})` : 'ללא תמונה'
-    })
-  }
-
-  if (filesChanged.screenshots) {
-    changes.push({
-      field: 'screenshots',
-      label: 'צילומי מסך',
-      before: `${current.screenshots?.length || 0} קבצים`,
-      after: `${next.screenshots?.length || 0} קבצים`
-    })
-  }
-
-  return changes
-}
+// הערה: buildChangeSummary ו-formatValue הוסרו (02/08/2026) — קוד מת מאז ביטול
+// זרימת ה-pendingUpdate ("עדכון תוספים ללא אישור מנהל"). שדות pendingUpdate/
+// pendingChangeSummary נשארו במודל רק לתמיכה במסמכים ישנים שטרם אושרו.
 
 export function pendingAssetPath(fileName) {
   return path.join('pending', fileName)

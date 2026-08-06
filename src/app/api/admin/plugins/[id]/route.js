@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import mongoose from 'mongoose'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
+import PluginCategory from '@/models/PluginCategory'
+import StoreSettings from '@/models/StoreSettings'
+import { invalidatePluginSearchIndex } from '@/lib/pluginSearchIndex'
 import { sendPluginApprovalNotification } from '@/lib/emailService'
 import {
   deletePendingPluginDir,
@@ -28,7 +32,8 @@ async function requireAdmin() {
 }
 
 // PATCH /api/admin/plugins/[id]  body: { action: 'approve' | 'unapprove' }
-// מאחד את פעולות approve / unapprove.
+// באישור נתמך גם categoryIds אופציונלי — שיבוץ התוסף לקטגוריות החנות מיד עם האישור.
+// (פעולות pin/unpin בוטלו ב-31/07/2026 — הוחלפו ב"תוספים נבחרים" ב-store-settings.)
 export async function PATCH(request, { params }) {
   try {
     const auth = await requireAdmin()
@@ -42,7 +47,7 @@ export async function PATCH(request, { params }) {
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
     const action = body?.action
-    if (!['approve', 'unapprove', 'pin', 'unpin'].includes(action)) {
+    if (!['approve', 'unapprove'].includes(action)) {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
     }
 
@@ -50,20 +55,6 @@ export async function PATCH(request, { params }) {
     const plugin = await Plugin.findById(id).populate('authorId', 'name email')
     if (!plugin) {
       return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
-    }
-
-    if (action === 'pin' || action === 'unpin') {
-      if (!plugin.isApproved) {
-        return NextResponse.json({ error: 'Only approved plugins can be pinned' }, { status: 400 })
-      }
-      plugin.isPinned = action === 'pin'
-      plugin.pinnedAt = action === 'pin' ? new Date() : null
-      await plugin.save()
-      return NextResponse.json({
-        success: true,
-        message: action === 'pin' ? 'Plugin pinned successfully' : 'Plugin unpinned successfully',
-        plugin
-      })
     }
 
     if (action === 'approve') {
@@ -180,6 +171,33 @@ export async function PATCH(request, { params }) {
         await plugin.approve(auth.session.user.id)
       }
 
+      // שיבוץ אופציונלי לקטגוריות החנות מיד עם האישור (המנהל המאשר בוחר היכן לשכן).
+      // היעדר השדה = התנהגות זהה לעבר; קליינטים ישנים אינם נשברים.
+      if (Array.isArray(body.categoryIds) && body.categoryIds.length > 0) {
+        const validIds = body.categoryIds.filter(
+          (catId) => typeof catId === 'string' && mongoose.Types.ObjectId.isValid(catId)
+        )
+        if (validIds.length > 0) {
+          await PluginCategory.updateMany(
+            { _id: { $in: validIds } },
+            { $addToSet: { pluginIds: plugin._id } }
+          )
+        }
+      }
+
+      // הוספה אופציונלית ל"נבחרים" בדף הבית — אטומית ($addToSet) בצד השרת,
+      // כדי לא לדרוס עריכות מקבילות של רשימת הנבחרים ע"י מנהל אחר.
+      if (body.addToFeatured === true) {
+        await StoreSettings.updateOne(
+          { key: 'store' },
+          {
+            $addToSet: { featuredPluginIds: plugin._id },
+            $setOnInsert: { homeTitle: '', homeSubtitle: '' }
+          },
+          { upsert: true }
+        )
+      }
+
       try {
         await sendPluginApprovalNotification(approvalEmailData)
       } catch (emailError) {
@@ -189,11 +207,12 @@ export async function PATCH(request, { params }) {
       plugin.isApproved = false
       plugin.approvedBy = null
       plugin.approvedAt = null
-      plugin.isPinned = false
-      plugin.pinnedAt = null
+      // מכוון: ביטול אישור אינו מסיר מקטגוריות ומהנבחרים — השיבוץ נשמר לקראת
+      // אישור מחדש (ציבורית התוסף ממילא מסונן כל עוד אינו מאושר).
       await plugin.save()
     }
 
+    invalidatePluginSearchIndex()
     return NextResponse.json({
       success: true,
       message: action === 'approve' ? 'Plugin approved successfully' : 'Plugin approval revoked successfully',
@@ -240,6 +259,15 @@ export async function DELETE(request, { params }) {
     }
 
     await Plugin.findByIdAndDelete(id)
+
+    // ניקוי עקבי: הסרת התוסף שנמחק מכל קטגוריה ומרשימת הנבחרים של דף הבית
+    await PluginCategory.updateMany({ pluginIds: id }, { $pull: { pluginIds: id } }).catch((err) => {
+      console.error('Failed to remove deleted plugin from categories:', err)
+    })
+    await StoreSettings.updateOne({ key: 'store' }, { $pull: { featuredPluginIds: id } }).catch((err) => {
+      console.error('Failed to remove deleted plugin from featured list:', err)
+    })
+    invalidatePluginSearchIndex()
 
     return NextResponse.json({
       success: true,
