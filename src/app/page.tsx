@@ -466,8 +466,7 @@ function renderDownloadOptions(platform: string, links: PlatformLinks) {
     Windows: [
       { key: 'exe', icon: 'install_desktop', title: 'EXE Installer', desc: 'קובץ התקנה רגיל — הורדת הספרייה תתבצע דרך התוכנה' },
       { key: 'exeFull', icon: 'install_desktop', title: 'EXE Installer (Full)', desc: 'מתקין מלא להתקנה במחשב ללא אינטרנט' },
-      { key: 'msix', icon: 'package_2', title: 'MSIX Package', desc: 'התקנה דרך החנות' },
-      { key: 'zip', icon: 'folder_zip', title: 'Portable ZIP', desc: 'גרסה ניידת ללא התקנה' }
+      { key: 'msix', icon: 'package_2', title: 'MSIX Package', desc: 'התקנה דרך החנות' }
     ],
     Linux: [
       { key: 'deb', icon: 'package_2', title: 'DEB Package', desc: 'עבור Ubuntu/Debian' },

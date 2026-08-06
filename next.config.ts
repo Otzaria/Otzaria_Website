@@ -76,6 +76,7 @@ const nextConfig = {
           //  • style/font: עצמי + inline (Tailwind/framer-motion) + Google Fonts
           //  • img/media: כל HTTPS + data/blob (תמונות ספרים, OCR, canvas)
           //  • connect: כולל ws:/wss: עבור HMR/WebSocket של Next dev (ה-headers חלים גם בפיתוח)
+          //  • frame-src: נדרים פלוס (iframe בדף התרומות)
           //  • frame-ancestors 'self': anti-clickjacking
           {
             key: 'Content-Security-Policy',
@@ -88,6 +89,8 @@ const nextConfig = {
               "media-src 'self' blob: https:",
               "connect-src 'self' https: ws: wss:",
               "worker-src 'self' blob:",
+              // דף התרומות מטמיע את הווידג'ט של נדרים פלוס ב-iframe
+              "frame-src 'self' https://nedar.im https://www.matara.pro",
               "frame-ancestors 'self'",
               "object-src 'none'",
               "base-uri 'self'",

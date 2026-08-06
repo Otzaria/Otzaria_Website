@@ -20,6 +20,7 @@ import {
   parseJsonArrayField
 } from '@/lib/pluginSubmission'
 import { readManifestFromPlugin, compareVersions } from '@/lib/pluginManifest'
+import { invalidatePluginSearchIndex } from '@/lib/pluginSearchIndex'
 import { archiveCurrentVersion } from '@/lib/pluginVersions'
 import { validatePluginArchive, OTZARIA_DESIGN_TAG } from '@/lib/pluginValidation'
 import {
@@ -529,12 +530,6 @@ export async function PUT(request, { params }) {
       }))
     }
 
-    const filesChanged = {
-      pluginFile: Boolean(pluginFile?.size),
-      image: removeImage || Boolean(imageFile?.size),
-      screenshots: removeScreenshots || screenshotFiles.length > 0
-    }
-
     let pendingApproval = false
     let message = 'השינויים נשמרו בהצלחה.'
 
@@ -604,6 +599,8 @@ export async function PUT(request, { params }) {
     }
 
     await plugin.save()
+    // עריכה ישירה (ללא pendingApproval) משנה את הנתונים החיים → רענון אינדקס החיפוש
+    invalidatePluginSearchIndex()
 
     // אם הוחלף קובץ חדש שלא תאם לעיצוב — מציינים בהודעת ההצלחה שהתגית לא נוספה.
     if (designCompliantFromFile === false) {

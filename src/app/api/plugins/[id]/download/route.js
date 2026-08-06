@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
+import PluginInstallToken from '@/models/PluginInstallToken'
 import { readPluginAsset, readVersionAsset, PLUGIN_FILE_BASENAME } from '@/lib/pluginStorage'
 import { parsePluginRef } from '@/lib/pluginRef'
 import { hasPluginsAccess } from '@/lib/roles'
@@ -24,6 +25,16 @@ export async function GET(request, { params }) {
     const plugin = await Plugin.findById(id)
     if (!plugin || plugin.isHidden) {
       return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
+    }
+
+    // it=<token> — סימון על טוקן התקנה ישירה שבקשת ההורדה הגיעה מהאפליקציה.
+    // fire-and-forget: לעולם לא מכשיל או מעכב את ההורדה עצמה.
+    const installToken = searchParams.get('it')
+    if (installToken && /^[A-Za-z0-9_-]{20,64}$/.test(installToken)) {
+      PluginInstallToken.updateOne(
+        { token: installToken, downloadedAt: null },
+        { downloadedAt: new Date() }
+      ).catch(e => console.error('Failed to mark install token download:', e))
     }
 
     const session = await getServerSession(authOptions)
@@ -49,7 +60,7 @@ export async function GET(request, { params }) {
         throw err
       }
       if (plugin.isApproved) {
-        plugin.incrementDownload().catch(e => console.error('Failed to increment download count:', e))
+        plugin.incrementDownload(version).catch(e => console.error('Failed to increment download count:', e))
       }
       return pluginFileResponse(archiveBuf, entry.pluginFileName || plugin.pluginFileName, entry.pluginFileExt || plugin.pluginFileExt)
     }

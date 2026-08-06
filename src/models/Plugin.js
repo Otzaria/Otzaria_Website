@@ -90,12 +90,20 @@ const PluginSchema = new mongoose.Schema(
     // סטטיסטיקות
     downloadCount: { type: Number, default: 0 },
 
+    // פילוח הורדות לפי גרסה — לשימוש פנימי בלבד, לא נחשף ב-API ולא בתצוגה.
+    // מפתח כמערך (ולא כאובייקט/Map) כי מספרי גרסה מכילים נקודות.
+    downloadsByVersion: [{
+      _id: false,
+      version: { type: String, required: true, maxlength: 40 },
+      count: { type: Number, default: 0 }
+    }],
+
     // הסתרה (במקום מחיקה)
     isHidden: { type: Boolean, default: false, index: true },
 
-    // הצמדה (תוספים מוצמדים יוצגו ראשונים)
-    isPinned: { type: Boolean, default: false, index: true },
-    pinnedAt: { type: Date, default: null },
+    // הערה: מנגנון ההצמדה (isPinned/pinnedAt) בוטל ב-31/07/2026 והוחלף
+    // ב"תוספים נבחרים" (StoreSettings.featuredPluginIds) — הנבחרים ממוינים
+    // ראשונים ב-GET /api/plugins ומסומנים בו isPinned:true לתאימות לאחור.
 
     // היסטוריית גרסאות קודמות. נדחפת אליה הגרסה היוצאת כשמעלים גרסה חדשה
     // (עליית גרסה ממש). עריכה ללא העלאת גרסה דורסת את הגרסה הנוכחית ולא נשמרת כאן.
@@ -118,10 +126,17 @@ const PluginSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-    toJSON: { virtuals: true },
-    toObject: { virtuals: true }
+    // downloadsByVersion פנימי בלבד — מוסר מכל סריאליזציה כדי שלא ידלוף בתשובות API.
+    // (שאילתות .lean() עוקפות את ה-transform ומטופלות ב-select בראוטים עצמם.)
+    toJSON: { virtuals: true, transform: stripInternalFields },
+    toObject: { virtuals: true, transform: stripInternalFields }
   }
 )
+
+function stripInternalFields(doc, ret) {
+  delete ret.downloadsByVersion
+  return ret
+}
 
 // אינדקסים
 PluginSchema.index({ name: 'text', shortDescription: 'text', description: 'text' })
@@ -163,9 +178,30 @@ PluginSchema.methods.clearPendingUpdate = function () {
   return this
 }
 
-PluginSchema.methods.incrementDownload = function () {
-  this.downloadCount += 1
-  return this.save()
+// העלאת מונה ההורדות הכללי + המונה של הגרסה שהורדה בפועל (ברירת מחדל: הגרסה החיה).
+// עדכונים אטומיים ($inc) כדי שלא לאבד ספירות בהורדות מקבילות.
+PluginSchema.methods.incrementDownload = async function (version) {
+  const ver = version || this.version
+  const Plugin = this.constructor
+
+  const res = await Plugin.updateOne(
+    { _id: this._id, 'downloadsByVersion.version': ver },
+    { $inc: { downloadCount: 1, 'downloadsByVersion.$.count': 1 } }
+  )
+  if (res.matchedCount > 0) return
+
+  // אין עדיין רשומה לגרסה — יצירתה, עם תנאי $ne שמונע כפילות במרוץ בין בקשות
+  const pushRes = await Plugin.updateOne(
+    { _id: this._id, 'downloadsByVersion.version': { $ne: ver } },
+    { $inc: { downloadCount: 1 }, $push: { downloadsByVersion: { version: ver, count: 1 } } }
+  )
+  if (pushRes.matchedCount === 0) {
+    // בקשה מקבילה הספיקה ליצור את הרשומה — מעדכנים אותה
+    await Plugin.updateOne(
+      { _id: this._id, 'downloadsByVersion.version': ver },
+      { $inc: { downloadCount: 1, 'downloadsByVersion.$.count': 1 } }
+    )
+  }
 }
 
 // Static methods
