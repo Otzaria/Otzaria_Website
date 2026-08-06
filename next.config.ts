@@ -113,6 +113,14 @@ const nextConfig = {
           { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
         ],
       },
+      {
+        // חותם הגרסה של הדפלוי — VersionNotice מסתמך עליו לזיהוי עדכון, ולכן
+        // אסור שייענה מתוך מטמון (של הדפדפן או של ה-CDN).
+        source: '/version.json',
+        headers: [
+          { key: 'Cache-Control', value: 'no-store, must-revalidate' },
+        ],
+      },
       // נכסי תמונה קבועים ב-public (נוצרים ב-scripts/optimize-assets.mjs). שמם אינו
       // ממוספר ב-hash — הם מוטמעים גם במיילים וב-HTML של דף השבת — ולכן חודש
       // במקום שנה, עם stale-while-revalidate כדי שהחלפה תתפוס בלי המתנה.

@@ -1,44 +1,53 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+
+// כל 3 דקות במקום כל 40 שניות. הבדיקה נועדה לתפוס דפלוי חדש, ולא צריכה להיות
+// צמודה יותר מזה — היא רצה בכל טאב פתוח של כל משתמש.
+const CHECK_INTERVAL_MS = 3 * 60_000
+
+async function fetchVersion() {
+  // no-store במקום ?t=Date.now(): אותה תוצאה בלי לייצר URL חדש בכל בקשה
+  // (URL ייחודי מנטרל גם את מטמון ה-CDN וגם מזהם לוגים).
+  const res = await fetch('/version.json', { cache: 'no-store' })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return (await res.json()).version
+}
 
 export default function VersionNotice() {
   const [hasUpdate, setHasUpdate] = useState(false)
-  const [currentVersion, setCurrentVersion] = useState(null)
+  // הגרסה שאיתה נטענה האפליקציה. ב-ref ולא ב-state: הקומפוננטה אינה מציגה
+  // אותה, וכ-state היא הייתה תלות של ה-useEffect וגורמת לבקשה כפולה בעלייה
+  // ולבנייה מחדש של ה-interval.
+  const initialVersion = useRef(null)
 
   useEffect(() => {
-    // 1. שמירת הגרסה ההתחלתית כשהאפליקציה עולה
-    const fetchInitialVersion = async () => {
+    let cancelled = false
+
+    const check = async () => {
+      // אין טעם לבדוק כשהטאב ברקע — נבדוק כשהמשתמש יחזור אליו.
+      if (document.visibilityState !== 'visible') return
       try {
-        const res = await fetch('/version.json?t=' + Date.now())
-        const data = await res.json()
-        setCurrentVersion(data.version)
-      } catch (e) {
-        console.error('Failed to fetch initial version', e)
+        const version = await fetchVersion()
+        if (cancelled) return
+        if (initialVersion.current === null) initialVersion.current = version
+        else if (version !== initialVersion.current) setHasUpdate(true)
+      } catch {
+        // התעלמות משגיאות רשת זמניות
       }
     }
 
-    fetchInitialVersion()
+    check()
+    const interval = setInterval(check, CHECK_INTERVAL_MS)
+    document.addEventListener('visibilitychange', check)
 
-    // 2. בדיקה תקופתית (למשל כל דקה)
-    const interval = setInterval(async () => {
-      try {
-        // הוספת timestamp ל-url כדי למנוע caching של הדפדפן לקובץ ה-json
-        const res = await fetch('/version.json?t=' + Date.now())
-        const data = await res.json()
-
-        // אם יש לנו גרסה התחלתית, והגרסה בשרת שונה ממנה - יש עדכון!
-        if (currentVersion && data.version !== currentVersion) {
-          setHasUpdate(true)
-        }
-      } catch (e) {
-        // התעלמות משגיאות רשת זמניות
-      }
-    }, 40 * 1000) // בדיקה כל 60 שניות
-
-    return () => clearInterval(interval)
-  }, [currentVersion])
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', check)
+    }
+  }, [])
 
   const handleRefresh = () => {
     window.location.reload()
@@ -65,7 +74,7 @@ export default function VersionNotice() {
                 <p className="text-xs text-neutral-cool-400">יש לרענן כדי לטעון את התוכן המעודכן</p>
               </div>
             </div>
-            
+
             <button
               onClick={handleRefresh}
               className="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors whitespace-nowrap shadow-lg"
