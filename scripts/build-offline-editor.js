@@ -446,6 +446,15 @@ async function buildGoogleMaterialSymbolsCss(usedIcons, retries = 3, delayMs = 2
     }
   }
 
+  // רענון מפורש שנכשל חייב להיכשל בקול. נפילה שקטה למטמון הייתה מסיימת ב-exit 0
+  // ומשאירה את המפעיל (או אוטומציה) בהנחה שהמטמון רוענן, כשבפועל לא קרה דבר.
+  if (SHOULD_REFRESH_ICONS) {
+    throw new Error(
+      `רענון האייקונים נכשל אחרי ${attempts} ניסיונות (${lastError.message}). ` +
+      'המטמון לא עודכן.'
+    );
+  }
+
   // נפילה למטמון שנשמר ב-Git, כדי ש-build לא יהיה תלוי בזמינות Google.
   if (!cached) {
     throw new Error(
