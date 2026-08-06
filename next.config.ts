@@ -121,6 +121,14 @@ const nextConfig = {
           { key: 'Cache-Control', value: 'no-store, must-revalidate' },
         ],
       },
+      // אייקוני האתר. Next מגיש אותם כברירת מחדל עם max-age=0, must-revalidate,
+      // כלומר סבב אימות בכל טעינת דף — למרות שה-URL כולל hash של התוכן.
+      ...['/icon.png', '/apple-icon.png'].map((source) => ({
+        source,
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=2592000, stale-while-revalidate=604800' },
+        ],
+      })),
       // נכסי תמונה קבועים ב-public (נוצרים ב-scripts/optimize-assets.mjs). שמם אינו
       // ממוספר ב-hash — הם מוטמעים גם במיילים וב-HTML של דף השבת — ולכן חודש
       // במקום שנה, עם stale-while-revalidate כדי שהחלפה תתפוס בלי המתנה.
