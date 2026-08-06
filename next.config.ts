@@ -93,10 +93,9 @@ const nextConfig = {
               "img-src 'self' data: blob: https:",
               "media-src 'self' blob: https:",
               "connect-src 'self' https: ws: wss:",
-              "frame-src 'self' https://nedar.im https://www.matara.pro",
-              "worker-src 'self' blob:",
               // דף התרומות מטמיע את הווידג'ט של נדרים פלוס ב-iframe
               "frame-src 'self' https://nedar.im https://www.matara.pro",
+              "worker-src 'self' blob:",
               "frame-ancestors 'self'",
               "object-src 'none'",
               "base-uri 'self'",
