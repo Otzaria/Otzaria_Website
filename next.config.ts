@@ -100,6 +100,14 @@ const nextConfig = {
           },
         ],
       },
+      {
+        // גופנים ב-public/fonts ממוספרים ב-hash תוכן (scripts/build-icon-font.mjs),
+        // ולכן אפשר לשמור אותם לשנה כ-immutable. שינוי גופן משנה את שם הקובץ.
+        source: '/fonts/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
     ];
   },
 };

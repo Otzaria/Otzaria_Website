@@ -7,10 +7,11 @@ import VersionNotice from "@/components/notifications/VersionNotice";
 import ReminderGuard from "@/components/notifications/ReminderGuard"; 
 import { DialogProvider } from '@/components/providers/DialogContext'
 import { LoadingProvider } from '@/components/providers/LoadingContext'
+import { ICON_FONT_URL } from '@/lib/icon-font'
 
 
 const frankRuehl = localFont({
-  src: "./fonts/FrankRuehlCLM-Medium.ttf",
+  src: "./fonts/FrankRuehlCLM-Medium.woff2",
   variable: "--font-frank-ruehl",
   display: "swap",
 });
@@ -35,12 +36,9 @@ export default function RootLayout({
   return (
     <html lang="he" dir="rtl">
       <head>
-        {/* גופן אייקונים (Material Symbols) — next/font אינו מתאים לגופן אייקונים דינמי */}
-        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
-        />
+        {/* גופן האייקונים מוגש מקומית כ-subset (scripts/build-icon-font.mjs) ומוצהר
+            ב-styles/icon-font.css. ה-preload מקדים את הבקשה לפרסור ה-CSS. */}
+        <link rel="preload" href={ICON_FONT_URL} as="font" type="font/woff2" crossOrigin="anonymous" />
         {/* חסימת שבת/יום טוב מתבצעת כעת בצד שרת ב-src/proxy.js (כולל מעבר חופשי לבוטים) */}
       </head>
       <body className={`antialiased bg-background text-foreground font-sans ${frankRuehl.variable}`}>

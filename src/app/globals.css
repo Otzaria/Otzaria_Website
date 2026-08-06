@@ -9,6 +9,7 @@
  *   styles/shape.css       — רדיוסים ופינות
  *   styles/elevation.css   — צללים ועומק
  *   styles/motion.css      — easing, blur וברירות מחדל של transition
+ *   styles/icon-font.css   — @font-face של גופן האייקונים (נוצר אוטומטית)
  *   styles/base.css        — html / body / רקע / אייקונים
  *   styles/effects.css     — זכוכית, פס גלילה, ריחוף, הדגשת איות
  *   styles/animations.css  — keyframes + מחלקות animate-*
@@ -20,6 +21,7 @@
 @import "./styles/shape.css";
 @import "./styles/elevation.css";
 @import "./styles/motion.css";
+@import "./styles/icon-font.css";
 @import "./styles/base.css";
 @import "./styles/effects.css";
 @import "./styles/animations.css";
