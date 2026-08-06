@@ -43,10 +43,13 @@ export default function Header() {
         </Link>
         
         <nav className="hidden md:flex items-center gap-3 lg:gap-4 xl:gap-6">
+          {/* prefetch={false}: תשעה קישורי ניווט שמופיעים בכל דף בספרייה. ברירת
+              המחדל של Next הורידה את ה-RSC ואת חבילות ה-JavaScript של כולם מיד. */}
           {LIBRARY_NAV_LINKS.map(link => (
-            <Link 
+            <Link
               key={link.href}
-              href={link.href} 
+              href={link.href}
+              prefetch={false}
               className="text-foreground hover:text-primary transition-colors font-medium"
             >
               {link.label}

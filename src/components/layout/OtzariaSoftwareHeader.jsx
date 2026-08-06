@@ -6,6 +6,33 @@ import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import { MAIN_NAV_LINKS } from '@/lib/navigation-constants'
 
+/**
+ * קישור ניווט בכותרת.
+ *
+ * prefetch={false} במכוון: התפריט מוצג בכל דף, פעמיים (דסקטופ + מובייל), ולכן
+ * ברירת המחדל של Next גררה בקשות RSC כפולות-משולשות לכל מסלול בתפריט מיד עם
+ * טעינת הדף — כולל חבילות ה-JavaScript שלהם. ברשת איטית הן מתחרות בנכסים
+ * שהמסך הנוכחי צריך.
+ *
+ * מסלולים חיצוניים (כמו /forum, שאינו מסלול Next ומחזיר redirect) מקבלים <a>
+ * רגיל, כדי שלא ינסו ניווט צד-לקוח או prefetch של RSC שאינו קיים.
+ */
+function NavLink({ link, className, onClick, children }) {
+  if (link.external) {
+    return (
+      <a href={link.href} target="_blank" rel="noopener noreferrer" className={className} onClick={onClick}>
+        {children}
+      </a>
+    )
+  }
+
+  return (
+    <Link href={link.href} prefetch={false} className={className} onClick={onClick}>
+      {children}
+    </Link>
+  )
+}
+
 export default function OtzariaSoftwareHeader() {
   const pathname = usePathname()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -24,10 +51,9 @@ export default function OtzariaSoftwareHeader() {
             const isDonationLink = link.emphasis === 'donation'
 
             return (
-              <Link
+              <NavLink
                 key={link.label}
-                href={link.href}
-                target={link.external ? "_blank" : undefined}
+                link={link}
                 className={`text-sm font-medium transition-colors hover:text-primary ${
                   pathname === link.href && !isDonationLink ? 'text-primary font-bold' : 'text-foreground/80'
                 } ${link.highlight ? 'bg-primary/10 text-primary px-3 py-1.5 rounded-lg hover:bg-primary/20' : ''} ${
@@ -40,7 +66,7 @@ export default function OtzariaSoftwareHeader() {
                   </span>
                 )}
                 {link.label}
-              </Link>
+              </NavLink>
             )
           })}
         </nav>
@@ -61,9 +87,9 @@ export default function OtzariaSoftwareHeader() {
             const isDonationLink = link.emphasis === 'donation'
 
             return (
-              <Link
+              <NavLink
                 key={link.label}
-                href={link.href}
+                link={link}
                 onClick={() => setIsMenuOpen(false)}
                 className={`text-lg font-medium p-2 hover:bg-neutral-50 rounded-lg text-foreground ${
                   isDonationLink ? 'donation-nav-link' : ''
@@ -75,7 +101,7 @@ export default function OtzariaSoftwareHeader() {
                   </span>
                 )}
                 {link.label}
-              </Link>
+              </NavLink>
             )
           })}
         </div>

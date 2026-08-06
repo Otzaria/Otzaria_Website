@@ -43,6 +43,8 @@ export default function LinkList({ title, links = [], variant = 'default' }) {
             ) : (
               <Link
                 href={link.href}
+                // קישורי כותרת/פוטר אינם מצדיקים prefetch — הם מופיעים בכל דף
+                prefetch={false}
                 className={`${linkClasses[variant]} transition-colors flex items-center gap-2 group`}
               >
                 {link.icon && (

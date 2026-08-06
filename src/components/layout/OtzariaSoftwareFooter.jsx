@@ -17,13 +17,13 @@ export default function OtzariaSoftwareFooter() {
           >
             GitHub
           </a>
-          <Link href="/license" className="hover:text-primary transition-colors">
+          <Link href="/license" prefetch={false} className="hover:text-primary transition-colors">
             רשיון
           </Link>
-          <Link href="/library" className="hover:text-primary transition-colors">
+          <Link href="/library" prefetch={false} className="hover:text-primary transition-colors">
             הספרייה המקוונת
           </Link>
-          <Link href="/privacy" className="hover:text-primary transition-colors">
+          <Link href="/privacy" prefetch={false} className="hover:text-primary transition-colors">
             מדיניות פרטיות
           </Link>
         </div>
