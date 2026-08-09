@@ -149,6 +149,21 @@ function buildVersionsList(pluginId, liveData, plugin) {
   return [live, ...archived].sort((a, b) => compareVersions(b.version, a.version))
 }
 
+// תאריך העדכון המוצג בחנות — מתי קובץ התוסף עצמו השתנה בפועל, לא אישורים/עריכות
+// מטא-דאטה. לתוספים ישנים ללא fileUpdatedAt: הארכוב האחרון בהיסטוריית הגרסאות
+// (רגע החלפת הקובץ בעליית גרסה), אחרת התאריך המקורי מהייבוא, אחרת מועד ההעלאה.
+function resolveFileUpdatedDate(plugin) {
+  const iso = (d) => new Date(d).toISOString().split('T')[0]
+  if (plugin.fileUpdatedAt) return iso(plugin.fileUpdatedAt)
+  const lastArchived = (plugin.versions || [])
+    .map((v) => v.archivedAt)
+    .filter(Boolean)
+    .sort((a, b) => new Date(b) - new Date(a))[0]
+  if (lastArchived) return iso(lastArchived)
+  if (plugin.originalDate) return plugin.originalDate
+  return iso(plugin.createdAt || plugin.updatedAt)
+}
+
 export function formatPluginForPublic(plugin, options = {}) {
   const pluginId = plugin._id.toString()
   const source = options.usePending ? getEditableSource(plugin) : getLivePluginData(plugin)
@@ -165,6 +180,8 @@ export function formatPluginForPublic(plugin, options = {}) {
     author: source.author,
     updatedAt: plugin.updatedAt.toISOString().split('T')[0],
     originalDate: plugin.originalDate || plugin.updatedAt.toISOString().split('T')[0],
+    // מועד השינוי האחרון של קובץ התוסף בפועל — זה התאריך שמוצג בחנות כ"עודכן"
+    fileUpdatedAt: resolveFileUpdatedDate(plugin),
     compatibleWith: source.compatibleWith,
     maxAppVersion: source.maxAppVersion || null,
     requiresNetwork: source.requiresNetwork === true,

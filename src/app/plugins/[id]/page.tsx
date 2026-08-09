@@ -23,6 +23,7 @@ interface Plugin {
   author: string
   updatedAt: string
   originalDate?: string
+  fileUpdatedAt?: string
   compatibleWith: string
   requiresNetwork?: boolean
   tags: string[]
@@ -390,7 +391,7 @@ export default function PluginDetailPage() {
                 </div>
                 <div className="p-4 bg-surface rounded-xl">
                   <div className="text-sm text-on-surface/60 mb-1">עודכן</div>
-                  <div className="font-bold text-on-surface text-sm">{formatHebrewDate(plugin.originalDate || plugin.updatedAt)}</div>
+                  <div className="font-bold text-on-surface text-sm">{formatHebrewDate(plugin.fileUpdatedAt || plugin.originalDate || plugin.updatedAt)}</div>
                 </div>
                 <div className="p-4 bg-surface rounded-xl col-span-2">
                   <div className="text-sm text-on-surface/60 mb-1">הורדות</div>

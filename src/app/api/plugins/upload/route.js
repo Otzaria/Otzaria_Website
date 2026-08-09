@@ -248,6 +248,7 @@ export async function POST(request) {
           pluginFileName: path.basename(pluginFile.name),
           pluginFileExt: PLUGIN_FILE_EXT,
           pluginFileSize: pluginFile.size,
+          fileUpdatedAt: new Date(),
           image: imageMeta || { ext: null, contentType: null },
           screenshots: screenshotMeta,
           homepage: homepageFromManifest,

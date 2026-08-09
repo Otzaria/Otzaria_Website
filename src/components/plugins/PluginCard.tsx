@@ -126,7 +126,7 @@ export default function PluginCard({ plugin, installState, onInstall }: PluginCa
             לפרטים מלאים
           </Link>
           <span className="text-xs text-on-surface/50">
-            עודכן ב־{formatHebrewDate(plugin.originalDate || plugin.updatedAt)}
+            עודכן ב־{formatHebrewDate(plugin.fileUpdatedAt || plugin.originalDate || plugin.updatedAt)}
           </span>
         </div>
       </div>

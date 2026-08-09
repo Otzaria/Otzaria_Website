@@ -17,6 +17,8 @@ export interface Plugin {
   author: string
   updatedAt: string
   originalDate?: string
+  // מועד השינוי האחרון של קובץ התוסף בפועל (לא אישורים/עריכות מטא-דאטה)
+  fileUpdatedAt?: string
   compatibleWith: string
   tags: string[]
   image: string
