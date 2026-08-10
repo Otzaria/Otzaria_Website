@@ -85,3 +85,63 @@ export function isCompatibleWithApp(entry, appVersion) {
 export function resolveCompatibleVersion(plugin, appVersion) {
   return buildVersionEntries(plugin).find((entry) => isCompatibleWithApp(entry, appVersion)) || null
 }
+
+// האם לתוסף (מסמך DB) יש גרסה כלשהי התומכת בגרסת אוצריא. לסינון *לפני* עימוד
+// בנתיבים מעומדים, כדי ש-total ומספר הפריטים בעמוד יהיו נכונים.
+export function hasCompatibleVersion(plugin, appVersion) {
+  if (!appVersion) return true
+  return resolveCompatibleVersion(plugin, appVersion) !== null
+}
+
+// ── שכבת ה-API הציבורי ─────────────────────────────────────────────────
+// קריאת פרמטר appVersion מ-query string של נתיב ציבורי.
+// invalid=true מסמן ערך שנשלח ואינו תקין — הקורא יחזיר 400 במקום להתעלם בשקט.
+export function readAppVersionParam(searchParams) {
+  const raw = (searchParams.get(APP_VERSION_PARAM) || '').trim()
+  if (!raw) return { appVersion: null, invalid: false }
+  if (!isValidAppVersion(raw)) return { appVersion: null, invalid: true }
+  return { appVersion: raw, invalid: false }
+}
+
+export function invalidAppVersionMessage() {
+  return `Invalid ${APP_VERSION_PARAM} - expected a version like 0.9.94`
+}
+
+// מחיל בחירת גרסה תואמת על ייצוג ציבורי של תוסף (פלט formatPluginForPublic):
+// שדות הגרסה מוחלפים בערכי הגרסה התואמת הגבוהה ביותר, כך שצרכן שמציג את התוסף
+// ומתקין מ-downloadUrl מקבל אוטומטית את הגרסה שתעבוד אצלו. מחזיר null אם אין
+// אף גרסה תואמת (הקורא מסנן), ואת האובייקט כמו-שהוא כשלא נשלח appVersion.
+// נשען על השדה versions שכבר ממוין מהגבוה לנמוך.
+export function resolveForAppVersion(publicPlugin, appVersion) {
+  if (!appVersion) return publicPlugin
+  const versions = publicPlugin.versions || []
+  const best = versions.find((v) => isCompatibleWithApp(v, appVersion))
+  if (!best) return null
+
+  const latest = versions[0] || best
+  return {
+    ...publicPlugin,
+    version: best.version,
+    status: best.status,
+    compatibleWith: best.compatibleWith,
+    maxAppVersion: best.maxAppVersion,
+    requiresNetwork: best.requiresNetwork,
+    pluginFileSize: best.pluginFileSize,
+    downloadUrl: best.downloadUrl,
+    supportsDirectInstall: best.supportsDirectInstall,
+    // מועד פרסום הגרסה המוצגת (updatedAt/fileUpdatedAt נשארים של התוסף עצמו)
+    releasedAt: best.releasedAt,
+    // מטא-דאטה של הרזולוציה — מאפשר לצרכן להסביר למשתמש מה הוא רואה
+    resolvedForAppVersion: appVersion,
+    isLatestVersion: best.isLatest === true,
+    latestVersion: latest.version,
+    newerIncompatibleVersion:
+      compareVersions(latest.version, best.version) > 0 ? latest.version : null
+  }
+}
+
+// resolveForAppVersion על רשימה, כולל סינון תוספים ללא גרסה תואמת.
+export function resolveListForAppVersion(list, appVersion) {
+  if (!appVersion) return list
+  return list.map((item) => resolveForAppVersion(item, appVersion)).filter(Boolean)
+}

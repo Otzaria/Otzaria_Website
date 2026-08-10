@@ -4,10 +4,16 @@ import { checkRateLimit } from '@/lib/rate-limit'
 import { searchPlugins } from '@/lib/pluginSearchIndex'
 import { getCategoriesForPlugins } from '@/lib/pluginStore'
 import { formatPluginForPublic, ALLOWED_PLUGIN_STATUSES } from '@/lib/pluginSubmission'
+import {
+  readAppVersionParam,
+  invalidAppVersionMessage,
+  hasCompatibleVersion,
+  resolveForAppVersion
+} from '@/lib/pluginCompatibility'
 
 const MAX_QUERY_LENGTH = 120
 
-// GET /api/plugins/search?q=&limit=&offset=&status=&tag= — החיפוש החכם.
+// GET /api/plugins/search?q=&limit=&offset=&status=&tag=&appVersion= — החיפוש החכם.
 // דירוג: רלוונטיות טקסטואלית (שם > תגיות > תיאור קצר > מפתח > תיאור) משוקללת
 // בפופולריות והצמדה. ראו docs/PLUGIN_STORE_REDESIGN_PLAN.md פרק 8.
 export async function GET(request) {
@@ -32,6 +38,10 @@ export async function GET(request) {
     const offset = Number.isInteger(offsetRaw) && offsetRaw > 0 ? offsetRaw : 0
     const status = searchParams.get('status')
     const tag = searchParams.get('tag')
+    const { appVersion, invalid } = readAppVersionParam(searchParams)
+    if (invalid) {
+      return NextResponse.json({ error: invalidAppVersionMessage() }, { status: 400 })
+    }
 
     await dbConnect()
     let { results, relaxed } = await searchPlugins(query)
@@ -42,6 +52,11 @@ export async function GET(request) {
     }
     if (tag) {
       results = results.filter(({ doc }) => (doc.tags || []).includes(tag))
+    }
+    // סינון תאימות לפני העימוד — אחרת total והעמוד היו נספרים על תוספים
+    // שממילא היו מושמטים מהתשובה
+    if (appVersion) {
+      results = results.filter(({ doc }) => hasCompatibleVersion(doc, appVersion))
     }
 
     const total = results.length
@@ -55,8 +70,12 @@ export async function GET(request) {
         query,
         total,
         relaxed,
+        // resolveForAppVersion לא יחזיר null כאן — הסינון למעלה כבר הבטיח תאימות
         results: page.map(({ doc, score, matchedFields }) => ({
-          ...formatPluginForPublic(doc, { isFeatured: doc.isFeatured === true }),
+          ...resolveForAppVersion(
+            formatPluginForPublic(doc, { isFeatured: doc.isFeatured === true }),
+            appVersion
+          ),
           score: Math.round(score * 100) / 100,
           matchedFields,
           categories: categoriesByPlugin.get(doc._id.toString()) || []
