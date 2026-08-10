@@ -1,0 +1,13 @@
+/* ============================================================
+ * icon-font.css — נוצר אוטומטית על ידי scripts/build-icon-font.mjs. אין לערוך.
+ * subset מקומי של Material Symbols Outlined (410 אייקונים, מופע סטטי opsz,wght,FILL,GRAD@24,400,0,0).
+ * ============================================================ */
+
+@font-face {
+  font-family: 'Material Symbols Outlined';
+  font-style: normal;
+  font-weight: 400;
+  /* block ולא swap — אחרת שם האייקון מוצג כטקסט עד שהגופן עולה */
+  font-display: block;
+  src: url('/fonts/material-symbols-outlined.94ceb989.woff2') format('woff2');
+}

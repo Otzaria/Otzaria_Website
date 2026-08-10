@@ -4,69 +4,82 @@ import Book from '@/models/Book';
 import Page from '@/models/Page';
 import User from '@/models/User';
 import DictaBook from '@/models/DictaBook';
+import { cached, shabbatGatedCacheHeaders } from '@/lib/api-cache';
 
-export async function GET() {
-  try {
+// מספרי הכותרת בדף הבית. אין סיבה להריץ את הספירות בכל ביקור.
+const CACHE_TTL_MS = 5 * 60_000;
+
+async function computeStats() {
     await connectDB();
 
     const [usersCount, booksCount, pagesStats, dictaBooksCount] = await Promise.all([
         User.countDocuments(),
-        
-        Book.countDocuments({ 
+
+        Book.countDocuments({
             isHidden: { $ne: true },
             $or: [
                 { ownerId: { $exists: false } },
                 { ownerId: null }
             ],
             isPrivate: { $ne: true }
-        }), 
-        
+        }),
+
+        // סדר השלבים חשוב: קודם מסננים לפי status (אינדקס) ורק אחר כך מצרפים את
+        // הספר. בגרסה הקודמת ה-$lookup רץ על *כל* מסמכי העמודים בקולקציה, לפני
+        // כל צמצום, וה-join כלל את מסמך הספר המלא.
         Page.aggregate([
+            { $match: { status: 'completed' } },
             {
                 $lookup: {
-                    from: 'books',       
-                    localField: 'book',  
-                    foreignField: '_id', 
-                    as: 'bookData'
+                    from: 'books',
+                    localField: 'book',
+                    foreignField: '_id',
+                    as: 'hiddenBook',
+                    // מצרפים רק ספרים *מוסתרים*, ורק את ה-_id. כך התנאי למטה
+                    // שקול בדיוק ל-'bookData.isHidden': {$ne: true} המקורי, כולל
+                    // ההתנהגות לעמוד שהספר שלו נמחק (נספר גם קודם).
+                    pipeline: [
+                        { $match: { isHidden: true } },
+                        { $project: { _id: 1 } }
+                    ]
                 }
             },
-            {
-                $match: {
-                    'bookData.isHidden': { $ne: true },
-                    'status': 'completed'
-                }
-            },
+            { $match: { 'hiddenBook.0': { $exists: false } } },
             {
                 $group: {
                     _id: null,
-                    totalPages: { $sum: 1 },
-                    completedPages: { 
-                        $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] } 
-                    },
-                    inProgressPages: { 
-                        $sum: { $cond: [{ $eq: ["$status", "in-progress"] }, 1, 0] } 
-                    }
+                    completedPages: { $sum: 1 }
                 }
             }
         ]),
-        
+
         DictaBook.countDocuments({ status: 'completed' })
     ]);
 
-    const stats = pagesStats[0] || { totalPages: 0, completedPages: 0, inProgressPages: 0 };
+    // המדידה נשארת כשהייתה: נספרים דפים שהושלמו בספרים שאינם מוסתרים. מכיוון
+    // שהשאילתה מסננת status: 'completed', גם קודם totalPages היה שווה
+    // ל-completedPages, inProgressPages היה 0 ו-completionRate היה 100.
+    // הצרכן היחיד (StatsSection) מציג את totalPages בתווית "עמודים הושלמו".
+    const completedPages = pagesStats[0]?.completedPages ?? 0;
 
-    return NextResponse.json({
+    return {
         success: true,
         stats: {
             users: { total: usersCount },
             books: { total: booksCount },
-            totalPages: stats.totalPages,
-            completedPages: stats.completedPages,
-            inProgressPages: stats.inProgressPages,
-            completionRate: stats.totalPages > 0 ? (stats.completedPages / stats.totalPages) * 100 : 0,
+            totalPages: completedPages,
+            completedPages,
+            inProgressPages: 0,
+            completionRate: completedPages > 0 ? 100 : 0,
             dictaBooks: { completed: dictaBooksCount }
         }
-    });
+    };
+}
+
+export async function GET() {
+  try {
+    const payload = await cached('site-stats', CACHE_TTL_MS, computeStats);
+    return NextResponse.json(payload, { headers: shabbatGatedCacheHeaders() });
   } catch (error) {
     console.error('Stats API Error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

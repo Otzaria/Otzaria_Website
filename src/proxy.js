@@ -1,24 +1,15 @@
 import { withAuth } from 'next-auth/middleware';
 import { NextResponse } from 'next/server';
 import { hasAnyAdminAccess } from '@/lib/roles';
+import { shabbatGate } from '@/lib/shabbat-cache';
+// רשימת הנתיבים המוגנים במקום אחד: src/lib/protected-routes.js
+import { isProtectedPath } from '@/lib/protected-routes';
 
 // ===== חסימת שבת/יום טוב בצד שרת =====
 // הלוגיקה הועברה מסקריפט צד-לקוח (Shabbat-blocker.js):
 // - הבדיקה רצה בשרת לפני הצביעה, כך שאי אפשר לעקוף אותה בכיבוי JS.
 // - בוטים (גוגל, בינג וכו') אינם נחסמים, כדי לא לפגוע בסריקה ובאינדוקס (SEO).
 // - תוצאת ה-API נשמרת במטמון בזיכרון לזמן קצר כדי לא להעמיס על Hebcal.
-
-// כתובת ה-API של Hebcal עבור ירושלים (geonameid=281184), עם שעון ישראל (im=1).
-const HEBCAL_URL = 'https://www.hebcal.com/zmanim?cfg=json&im=1&geonameid=281184';
-
-// משך תוקף המטמון בזיכרון (מילישניות). שומר על תגובתיות סביב כניסת/צאת שבת.
-const CACHE_TTL_MS = 60_000;
-
-// מטמון שלילי קצר על כשל — מונע הצפת Hebcal בקריאות חוזרות בזמן תקלה.
-const ERROR_CACHE_TTL_MS = 30_000;
-
-// timeout לקריאה ל-Hebcal — שלא בקשה תיתקע אם השירות איטי/נפל.
-const FETCH_TIMEOUT_MS = 2_500;
 
 // זיהוי בוטים נפוצים — מנועי חיפוש ורשתות חברתיות. אלו לא נחסמים.
 const BOT_REGEX =
@@ -33,35 +24,13 @@ const SHABBAT_API_EXEMPT = ['/api/cron', '/api/auth'];
 // ⚠️ זמני לבדיקה בלבד — מכריח חסימה גם כשזו לא שבת. החזר ל-false לפני העלאה!
 const FORCE_BLOCK_FOR_TESTING = false;
 
-// מטמון מודולרי — נשמר בין בקשות באותו תהליך/isolate.
-let shabbatCache = null;
-
 /**
  * בודק מול Hebcal האם כעת אסור במלאכה (שבת או יום טוב).
- * נכשל "פתוח" (false) במקרה של שגיאה, בדיוק כמו הסקריפט המקורי.
+ * מדיניות המטמון והבדיקות שלה: src/lib/shabbat-cache.js
  */
-async function isAssurBemlacha() {
+async function isAssurBemlacha(event) {
   if (FORCE_BLOCK_FOR_TESTING) return true; // ⚠️ זמני — הסר לפני העלאה
-  const now = Date.now();
-  if (shabbatCache && shabbatCache.expires > now) return shabbatCache.value;
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const res = await fetch(HEBCAL_URL, { cache: 'no-store', signal: controller.signal });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const value = data?.status?.isAssurBemlacha === true;
-    shabbatCache = { value, expires: now + CACHE_TTL_MS };
-    return value;
-  } catch {
-    // לא הצלחנו לברר (timeout/שגיאה) — לא חוסמים, ושומרים במטמון שלילי קצר
-    // כדי לא לקרוא ל-Hebcal בכל בקשה בזמן תקלה.
-    shabbatCache = { value: false, expires: now + ERROR_CACHE_TTL_MS };
-    return false;
-  } finally {
-    clearTimeout(timer);
-  }
+  return shabbatGate.isAssurBemlacha(event);
 }
 
 function blockResponse() {
@@ -91,7 +60,7 @@ function blockResponse() {
 </head>
 <body>
   <div class="shabbat-content">
-    <img src="/logo.svg" alt="לוגו אוצריא" class="shabbat-logo" />
+    <img src="/logo.webp" alt="לוגו אוצריא" class="shabbat-logo" />
     <h1 class="shabbat-title">שבת היום לה'</h1>
     <img src="/shabbat/sabbath.png" alt="שבת שלום" class="shabbat-image" />
   </div>
@@ -198,33 +167,6 @@ const BOOKS_ADMIN_BLOCKED_API = [
   '/api/admin/ocr-layout',
 ];
 
-// נתיבים הדורשים אימות (קבוצת ה-matcher המקורית של ההרשאות).
-// רק עליהם נכפה התחברות; שאר הדפים ציבוריים (ועוברים רק בדיקת שבת).
-const PROTECTED_PREFIXES = [
-  '/plugins/upload',
-  '/library/dashboard',
-  '/library/admin',
-  '/library/upload',
-  '/library/books',
-  '/library/book',
-  '/library/edit',
-  '/library/users',
-  '/library/info',
-  '/library/acronyms',
-  '/library/dicta-books',
-  '/library/ocr-training',
-  '/library/ocr-lines',
-  '/api/admin',
-  '/api/ocr-training',
-  '/api/ocr-lines',
-  '/api/library/book-info',
-  '/api/library/book-acronyms',
-  '/api/upload-text',
-];
-
-const isProtectedPath = (path) =>
-  PROTECTED_PREFIXES.some((p) => path === p || path.startsWith(p + '/'));
-
 const authProxy = withAuth(
   function middleware(req) {
     const token = req.nextauth.token;
@@ -318,7 +260,7 @@ export default async function proxy(req, event) {
   // חסימת שבת/יום טוב — לכל הדפים וה-API, פרט לבוטים ולנתיבי תשתית מוחרגים.
   // דפים מקבלים HTML, ו-API מקבל JSON של דחייה.
   const ua = req.headers.get('user-agent') ?? '';
-  if (!apiExempt && !BOT_REGEX.test(ua) && await isAssurBemlacha()) {
+  if (!apiExempt && !BOT_REGEX.test(ua) && await isAssurBemlacha(event)) {
     return isApi ? blockResponseJson() : blockResponse();
   }
 

@@ -37,26 +37,30 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-50 w-full glass-strong border-b border-neutral-200 bg-white/80 backdrop-blur-md">
       <div className="mx-auto flex h-16 w-full max-w-[1800px] items-center justify-between px-2 sm:px-3 md:px-4 xl:px-8">
-        <Link href="/library" className="flex items-center gap-2 lg:gap-3 hover:opacity-80 transition-opacity">
-          <Image src="/logo.svg" alt="לוגו אוצריא" width={32} height={32} />
+        {/* קישור הלוגו מופיע בכל דף ואינו מצדיק prefetch */}
+        <Link href="/library" prefetch={false} className="flex items-center gap-2 lg:gap-3 hover:opacity-80 transition-opacity">
+          <Image src="/logo.webp" alt="לוגו אוצריא" width={32} height={32} />
           <span className="text-lg xl:text-xl font-bold text-foreground font-frank">ספריית אוצריא</span>
         </Link>
-        
+
         <nav className="hidden md:flex items-center gap-3 lg:gap-4 xl:gap-6">
+          {/* prefetch={false}: תשעה קישורי ניווט שמופיעים בכל דף בספרייה. ברירת
+              המחדל של Next הורידה את ה-RSC ואת חבילות ה-JavaScript של כולם מיד. */}
           {LIBRARY_NAV_LINKS.map(link => (
-            <Link 
+            <Link
               key={link.href}
-              href={link.href} 
+              href={link.href}
+              prefetch={false}
               className="text-foreground hover:text-primary transition-colors font-medium"
             >
               {link.label}
             </Link>
           ))}
-          
+
           {session ? (
             <div className="flex items-center gap-2 lg:gap-3 xl:gap-4">
               {hasAnyAdminAccess(session.user.role) && (
-                <Link href="/library/admin" className="flex items-center gap-2 text-accent hover:text-accent/80 transition-colors relative font-medium">
+                <Link href="/library/admin" prefetch={false} className="flex items-center gap-2 text-accent hover:text-accent/80 transition-colors relative font-medium">
                   <span className="material-symbols-outlined">admin_panel_settings</span>
                   <span>ניהול</span>
                   {unreadMessages > 0 && (
@@ -66,19 +70,20 @@ export default function Header() {
                   )}
                 </Link>
               )}
-              <Link 
-                href="/library/dashboard" 
+              <Link
+                href="/library/dashboard"
+                prefetch={false}
                 className="flex items-center justify-center hover:opacity-80 transition-opacity"
                 title={session.user.name}
               >
-                <div 
+                <div
                   className="w-9 h-9 rounded-full text-white flex items-center justify-center font-bold text-sm shadow-md hover:shadow-lg transition-shadow"
                   style={{ backgroundColor: getAvatarColor(session.user.name) }}
                 >
                   {getInitial(session.user.name)}
                 </div>
               </Link>
-              <button 
+              <button
                 onClick={() => signOut({ callbackUrl: '/library/auth/login' })}
                 className="flex items-center gap-2 px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary/10 transition-colors text-sm font-medium"
               >
@@ -87,13 +92,13 @@ export default function Header() {
               </button>
             </div>
           ) : (
-            <Link href="/library/auth/login" className="flex items-center gap-2 px-5 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm font-medium">
+            <Link href="/library/auth/login" prefetch={false} className="flex items-center gap-2 px-5 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm font-medium">
               <span className="material-symbols-outlined text-lg">login</span>
               <span>התחבר</span>
             </Link>
           )}
         </nav>
-        
+
         {/* Mobile Menu Button - Placeholder */}
         <button className="md:hidden text-foreground p-2">
           <span className="material-symbols-outlined text-3xl">menu</span>

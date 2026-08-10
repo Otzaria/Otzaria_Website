@@ -1,7 +1,4 @@
-'use client'
-
 import Header from '@/components/layout/OtzariaSoftwareHeader'
-import { motion } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
 
@@ -13,17 +10,12 @@ export default function AboutPage() {
         {/* Hero Section */}
         <section className="relative py-16 px-4 overflow-hidden bg-gradient-to-bl from-primary-container via-background to-secondary-container">
           <div className="container mx-auto max-w-4xl relative z-10">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-              className="text-center"
-            >
+            <div className="text-center animate-enter-up">
               <div className="mb-6 flex justify-center">
-                <Image 
-                  src="/logo.png" 
-                  alt="לוגו אוצריא" 
-                  width={100} 
+                <Image
+                  src="/logo.png"
+                  alt="לוגו אוצריא"
+                  width={100}
                   height={100}
                   className="drop-shadow-2xl"
                 />
@@ -34,19 +26,14 @@ export default function AboutPage() {
               <p className="text-xl text-on-surface/80">
                 פלטפורמה משותפת לעריכה ושיתוף של ספרי קודש
               </p>
-            </motion.div>
+            </div>
           </div>
         </section>
 
         {/* Main Content */}
         <section className="py-16 px-4">
           <div className="container mx-auto max-w-4xl">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.2 }}
-              className="space-y-8"
-            >
+            <div className="space-y-8 animate-enter-up" style={{ animationDelay: '0.2s' }}>
               {/* Library Stats */}
               <div className="glass p-8 rounded-xl">
                 <h2 className="text-3xl font-bold mb-6 text-primary flex items-center gap-3">
@@ -192,7 +179,7 @@ export default function AboutPage() {
                   <span className="material-symbols-outlined text-4xl">gavel</span>
                   תנאי השימוש במאגר
                 </h2>
-  
+
                 <div className="space-y-6 text-lg text-on-surface/80 leading-relaxed">
                   <p>
                     הטקסטים ניתנים לשימוש חופשי, עם זאת <strong className="text-accent">חלק מהטקסטים ניתנים ברישיון שאינו מאפשר שימוש מסחרי</strong>.
@@ -204,12 +191,12 @@ export default function AboutPage() {
                       <span>ניתן לראות את פרטי הרישיון לכל טקסט באתר ספריא</span>
                     </div>
 
-                    <Link href="/license" className="flex items-center gap-2 text-primary hover:underline font-medium w-fit">
+                    <Link href="/license" prefetch={false} className="flex items-center gap-2 text-primary hover:underline font-medium w-fit">
                       <span className="material-symbols-outlined">description</span>
                       לרישיון הכללי של מאגר אוצריא
                     </Link>
 
-                    <Link href="/library/license" className="flex items-center gap-2 text-primary hover:underline font-medium w-fit">
+                    <Link href="/library/license" prefetch={false} className="flex items-center gap-2 text-primary hover:underline font-medium w-fit">
                       <span className="material-symbols-outlined">auto_stories</span>
                       לרישיון הספרים הערוכים בספריית אוצריא
                     </Link>
@@ -227,11 +214,11 @@ export default function AboutPage() {
                   לצורך עדכון והרחבת מאגר ספריית אוצריא עובדים מתנדבים רבים מכל העולם. הצטרפו אליהם והיו שותפים בשימור והנגשת המורשת התורנית!
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4">
-                  <Link href="/library/users" className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-on-primary rounded-lg hover:bg-accent transition-colors">
+                  <Link href="/library/users" prefetch={false} className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-on-primary rounded-lg hover:bg-accent transition-colors">
                     <span className="material-symbols-outlined">people</span>
                     <span>צפה במשתמשים</span>
                   </Link>
-                  <Link href="/library/auth/login" className="flex items-center justify-center gap-2 px-6 py-3 bg-surface text-on-surface rounded-lg hover:bg-surface-variant transition-colors border border-outline">
+                  <Link href="/library/auth/login" prefetch={false} className="flex items-center justify-center gap-2 px-6 py-3 bg-surface text-on-surface rounded-lg hover:bg-surface-variant transition-colors border border-outline">
                     <span className="material-symbols-outlined">add</span>
                     <span>התחבר לקהילה</span>
                   </Link>
@@ -239,12 +226,9 @@ export default function AboutPage() {
               </div>
 
               {/* Quote */}
-              <motion.div 
-                className="glass-strong p-8 rounded-xl text-center border-r-4 border-primary"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.6, delay: 0.4 }}
-              >
+              <div
+                className="glass-strong p-8 rounded-xl text-center border-r-4 border-primary animate-enter-scale"
+               style={{ animationDelay: '0.4s' }}>
                 <p className="text-2xl font-bold text-primary mb-4 font-frank">
                   "צדקתו עומדת לעד"
                 </p>
@@ -254,19 +238,19 @@ export default function AboutPage() {
                 <p className="text-sm text-on-surface/60 mt-2">
                   (כתובות נ')
                 </p>
-              </motion.div>
+              </div>
 
               {/* CTA */}
               <div className="text-center pt-8">
                 <h3 className="text-2xl font-bold mb-4 text-on-surface">
                   מוכנים להצטרף אלינו?
                 </h3>
-                <Link href="/library" className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-on-primary rounded-lg text-lg font-medium hover:bg-accent transition-colors shadow-lg hover:shadow-xl">
+                <Link href="/library" prefetch={false} className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-on-primary rounded-lg text-lg font-medium hover:bg-accent transition-colors shadow-lg hover:shadow-xl">
                   <span className="material-symbols-outlined">library_books</span>
                   <span>התחל לערוך</span>
                 </Link>
               </div>
-            </motion.div>
+            </div>
           </div>
         </section>
       </main>

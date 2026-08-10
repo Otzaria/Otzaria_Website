@@ -254,7 +254,7 @@ export default function PluginSearchBox({
               }`}
             >
               <img
-                src={plugin.image || '/logo.svg'}
+                src={plugin.image || '/logo.webp'}
                 alt=""
                 loading="lazy"
                 decoding="async"

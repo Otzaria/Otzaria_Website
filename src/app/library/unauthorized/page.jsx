@@ -12,7 +12,7 @@ export default function UnauthorizedPage() {
       <div className="w-full max-w-md">
         <div className="glass-strong rounded-2xl p-8 shadow-2xl text-center">
           <div className="flex justify-center mb-6">
-            <Link href="/library">
+            <Link href="/library" prefetch={false}>
               <Image src="/logo.png" alt="לוגו אוצריא" width={80} height={80} />
             </Link>
           </div>
@@ -38,7 +38,7 @@ export default function UnauthorizedPage() {
             </button>
 
             <Link
-              href="/library/dashboard"
+              href="/library/dashboard" prefetch={false}
               className="w-full flex items-center justify-center gap-2 py-3 bg-surface text-on-surface rounded-lg font-medium hover:bg-surface-variant transition-all border border-outline"
             >
               <span className="material-symbols-outlined">dashboard</span>
@@ -47,7 +47,7 @@ export default function UnauthorizedPage() {
           </div>
 
           <div className="mt-6 text-center">
-            <Link href="/library" className="text-sm text-on-surface/60 hover:text-primary flex items-center justify-center gap-1">
+            <Link href="/library" prefetch={false} className="text-sm text-on-surface/60 hover:text-primary flex items-center justify-center gap-1">
               <span className="material-symbols-outlined text-sm">home</span>
               <span>חזרה לדף הבית</span>
             </Link>

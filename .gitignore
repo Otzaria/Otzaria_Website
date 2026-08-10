@@ -51,6 +51,13 @@ files.json
 # Migration scripts (temporary - exclude from git except main migration script)
 scripts/*
 !scripts/build-offline-editor.js
+# סקריפטי build אמיתיים — נדרשים ל-npm run build ולכן נשמרים
+!scripts/build-icon-font.mjs
+!scripts/icon-font.manifest.json
+!scripts/optimize-assets.mjs
+!scripts/offline-editor-icons.json
+!scripts/check-perf-budget.mjs
+!scripts/check-prefetch.mjs
 empty-uploads-report-1767610989868.json
 .vscode/settings.json
 111.json

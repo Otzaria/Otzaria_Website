@@ -220,14 +220,11 @@ export default function Home() {
             <div className="absolute inset-0 bg-gradient-to-bl from-primary/10 via-background to-secondary/10 opacity-50"></div>
             
             <div className="container mx-auto relative z-10 text-center max-w-4xl">
-                <motion.div 
-                    initial={{ scale: 0, rotate: -180 }}
-                    animate={{ scale: 1, rotate: 0 }}
-                    transition={{ type: "spring", stiffness: 260, damping: 20 }}
-                    className="mb-8 flex justify-center"
-                >
-                    <img src="/logo.svg" alt="לוגו אוצריא" className="w-32 h-32 drop-shadow-2xl" />
-                </motion.div>
+                {/* אנימציית CSS ולא framer-motion: כך הלוגו אינו מגיע מהשרת עם
+                    transform:scale(0) ונשאר בלתי נראה עד שה-JavaScript עולה. */}
+                <div className="mb-8 flex justify-center animate-enter-pop">
+                    <img src="/logo.webp" alt="לוגו אוצריא" width={128} height={128} className="w-32 h-32 drop-shadow-2xl" />
+                </div>
                 
                 <h1 className="text-5xl md:text-6xl font-bold mb-6 font-frank">
                     אוצריא
@@ -239,10 +236,12 @@ export default function Home() {
                 
                 <div className="flex flex-col gap-4 justify-center items-center mt-8">
                     <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-                        <Link href="#download" className="px-8 py-4 bg-primary text-white rounded-lg text-lg font-medium hover:bg-primary/90 transition-all shadow-lg hover:shadow-xl">
+                        {/* עוגן באותו דף — <a> רגיל. כ-Link, Next התייחס אליו כמסלול
+                            ופתח בקשות RSC ספקולטיביות לדף הנוכחי. */}
+                        <a href="#download" className="px-8 py-4 bg-primary text-white rounded-lg text-lg font-medium hover:bg-primary/90 transition-all shadow-lg hover:shadow-xl">
                             הורד עכשיו
-                        </Link>
-                        <Link href="/about" className="flex items-center gap-2 px-8 py-4 bg-white border-2 border-primary text-primary rounded-lg text-lg font-medium hover:bg-primary/5 transition-all shadow-lg hover:shadow-xl">
+                        </a>
+                        <Link href="/about" prefetch={false} className="flex items-center gap-2 px-8 py-4 bg-white border-2 border-primary text-primary rounded-lg text-lg font-medium hover:bg-primary/5 transition-all shadow-lg hover:shadow-xl">
                             <span className="material-symbols-outlined">info</span>
                             <span>אודות הספרייה</span>
                         </Link>
@@ -257,37 +256,28 @@ export default function Home() {
         {/* Features Section */}
         <section id="features" className="py-20 px-4 bg-surface relative overflow-hidden">
           <div className="container mx-auto relative z-10">
-            <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-            >
+            <div className="animate-enter-down">
               <h2 className="text-4xl font-bold text-center mb-4 text-on-surface">
                 למה לבחור באוצריא?
               </h2>
               <p className="text-center text-on-surface/70 mb-12 max-w-2xl mx-auto">
                 פלטפורמה מתקדמת המשלבת טכנולוגיה חדישה עם כבוד למסורת
               </p>
-            </motion.div>
-            
-            <motion.div 
-              className="flex flex-wrap justify-center gap-6"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ staggerChildren: 0.1 }}
-            >
+            </div>
+
+            {/* כרטיסי היכולות היו כולם opacity:0 ב-HTML של השרת — כלומר כל תוכן
+                החלק הזה נראה רק אחרי hydration. ההשהיה המדורגת עברה ל-CSS. */}
+            <div className="flex flex-wrap justify-center gap-6">
               {features.map((feature, index) => (
                 <motion.div
                   key={index}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: index * 0.1 }}
-                  whileHover={{ 
-                    scale: 1.05, 
+                  style={{ animationDelay: `${index * 0.1}s` }}
+                  whileHover={{
+                    scale: 1.05,
                     y: -8,
                     transition: { type: "spring", stiffness: 300 }
                   }}
-                  className="glass p-6 rounded-xl shadow-lg hover:shadow-2xl transition-shadow cursor-pointer group w-full md:w-[calc(50%-12px)] lg:w-[calc(33.33%-16px)]"
+                  className="glass p-6 rounded-xl shadow-lg hover:shadow-2xl transition-shadow cursor-pointer group w-full md:w-[calc(50%-12px)] lg:w-[calc(33.33%-16px)] animate-enter-up"
                 >
                   <motion.span 
                     className="material-symbols-outlined text-6xl text-primary mb-4 block"
@@ -304,7 +294,7 @@ export default function Home() {
                   </p>
                 </motion.div>
               ))}
-            </motion.div>
+            </div>
           </div>
         </section>
 
@@ -364,7 +354,7 @@ export default function Home() {
         <section className="py-20 px-4 bg-primary/5 text-center">
             <div className="container mx-auto">
                  <h2 className="text-3xl font-bold mb-6">רוצים לתרום לפיתוח?</h2>
-                 <Link href="/library/books" className="inline-flex items-center gap-2 px-6 py-3 bg-white text-primary border border-primary rounded-lg font-medium hover:bg-primary hover:text-white transition-colors">
+                 <Link href="/library/books" prefetch={false} className="inline-flex items-center gap-2 px-6 py-3 bg-white text-primary border border-primary rounded-lg font-medium hover:bg-primary hover:text-white transition-colors">
                     <span className="material-symbols-outlined">upload_file</span>
                     הצטרפו לקהילת העורכים
                  </Link>

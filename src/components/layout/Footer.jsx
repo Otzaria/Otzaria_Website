@@ -21,13 +21,15 @@ export default function Footer() {
             </p>
             <div className="flex gap-3">
               <Link 
-                href="/library" 
+                href="/library"
+                prefetch={false}
                 className="px-6 py-2.5 bg-primary text-on-primary rounded-lg hover:bg-accent transition-all hover:scale-105 shadow-md font-medium"
               >
                 לספרייה
               </Link>
               <Link 
-                href="/library/upload" 
+                href="/library/upload"
+                prefetch={false}
                 className="px-6 py-2.5 border-2 border-primary text-primary rounded-lg hover:bg-primary-container transition-all hover:scale-105 font-medium"
               >
                 הוסף ספר
