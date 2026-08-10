@@ -7,9 +7,12 @@ import PluginInstallToken from '@/models/PluginInstallToken'
 import { readPluginAsset, readVersionAsset, PLUGIN_FILE_BASENAME } from '@/lib/pluginStorage'
 import { parsePluginRef } from '@/lib/pluginRef'
 import { hasPluginsAccess } from '@/lib/roles'
+import { APP_VERSION_PARAM, isValidAppVersion, resolveCompatibleVersion } from '@/lib/pluginCompatibility'
 
 // GET /api/plugins/[id]/download - הורדת קובץ התוסף.
-// תומך גם בהורדת גרסה ארכיונית ספציפית דרך /api/plugins/<id>@<version>/download.
+// תומך גם בהורדת גרסה ארכיונית ספציפית דרך /api/plugins/<id>@<version>/download,
+// וגם בבחירת גרסה אוטומטית לפי גרסת אוצריא דרך ?appVersion=0.9.94 — מוריד את
+// הגרסה הגבוהה ביותר של התוסף שתומכת בגרסת האפליקציה הזו (ראו pluginCompatibility).
 // רק תוספים מאושרים פתוחים לציבור; מנהלי תוספים יכולים להוריד גם תוספים לא מאושרים.
 export async function GET(request, { params }) {
   try {
@@ -20,6 +23,30 @@ export async function GET(request, { params }) {
     }
     const { searchParams } = new URL(request.url)
     const includePending = searchParams.get('pending') === '1'
+
+    // ?appVersion=<גרסת אוצריא> — השרת בוחר את גרסת התוסף המתאימה.
+    const appVersionRaw = (searchParams.get(APP_VERSION_PARAM) || '').trim()
+    if (appVersionRaw) {
+      if (version) {
+        return NextResponse.json(
+          { error: `Cannot combine an explicit @version with ${APP_VERSION_PARAM}` },
+          { status: 400 }
+        )
+      }
+      if (includePending) {
+        return NextResponse.json(
+          { error: `Cannot combine pending=1 with ${APP_VERSION_PARAM}` },
+          { status: 400 }
+        )
+      }
+      if (!isValidAppVersion(appVersionRaw)) {
+        return NextResponse.json(
+          { error: `Invalid ${APP_VERSION_PARAM} - expected a version like 0.9.94` },
+          { status: 400 }
+        )
+      }
+    }
+
     await dbConnect()
 
     const plugin = await Plugin.findById(id)
@@ -41,18 +68,41 @@ export async function GET(request, { params }) {
     const isAdmin = hasPluginsAccess(session?.user?.role)
     const isOwner = plugin.authorId?.toString() === session?.user?.id
 
-    // בקשה לגרסה ארכיונית ספציפית (שאינה הגרסה החיה הנוכחית).
-    if (version && version !== plugin.version) {
+    // רזולוציה לפי גרסת אוצריא: הופכת את appVersion לגרסת תוסף קונקרטית.
+    // resolvedVersion=null פירושו "הגרסה החיה" — ממשיך לזרימה הרגילה למטה.
+    let resolvedVersion = version
+    if (appVersionRaw) {
       if (!plugin.isApproved && !isAdmin && !isOwner) {
         return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
       }
-      const entry = (plugin.versions || []).find((v) => v.version === version)
+      const match = resolveCompatibleVersion(plugin, appVersionRaw)
+      if (!match) {
+        return NextResponse.json(
+          {
+            error: 'No plugin version supports the requested app version',
+            appVersion: appVersionRaw,
+            latestVersion: plugin.version,
+            compatibleWith: plugin.compatibleWith || '',
+            maxAppVersion: plugin.maxAppVersion || null
+          },
+          { status: 404 }
+        )
+      }
+      resolvedVersion = match.isLatest ? null : match.version
+    }
+
+    // בקשה לגרסה ארכיונית ספציפית (שאינה הגרסה החיה הנוכחית).
+    if (resolvedVersion && resolvedVersion !== plugin.version) {
+      if (!plugin.isApproved && !isAdmin && !isOwner) {
+        return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
+      }
+      const entry = (plugin.versions || []).find((v) => v.version === resolvedVersion)
       if (!entry) {
         return NextResponse.json({ error: 'Plugin version not found' }, { status: 404 })
       }
       let archiveBuf
       try {
-        archiveBuf = await readVersionAsset(id, version, `${PLUGIN_FILE_BASENAME}${entry.pluginFileExt || '.otzplugin'}`)
+        archiveBuf = await readVersionAsset(id, resolvedVersion, `${PLUGIN_FILE_BASENAME}${entry.pluginFileExt || '.otzplugin'}`)
       } catch (err) {
         if (err && err.code === 'ENOENT') {
           return NextResponse.json({ error: 'Plugin version not found' }, { status: 404 })
@@ -60,9 +110,14 @@ export async function GET(request, { params }) {
         throw err
       }
       if (plugin.isApproved) {
-        plugin.incrementDownload(version).catch(e => console.error('Failed to increment download count:', e))
+        plugin.incrementDownload(resolvedVersion).catch(e => console.error('Failed to increment download count:', e))
       }
-      return pluginFileResponse(archiveBuf, entry.pluginFileName || plugin.pluginFileName, entry.pluginFileExt || plugin.pluginFileExt)
+      return pluginFileResponse(
+        archiveBuf,
+        entry.pluginFileName || plugin.pluginFileName,
+        entry.pluginFileExt || plugin.pluginFileExt,
+        resolvedVersion
+      )
     }
 
     if (includePending) {
@@ -94,7 +149,8 @@ export async function GET(request, { params }) {
       plugin.incrementDownload().catch(e => console.error('Failed to increment download count:', e))
     }
 
-    return pluginFileResponse(buf, fileName, fileExt)
+    const servedVersion = includePending ? (source?.version || plugin.version) : plugin.version
+    return pluginFileResponse(buf, fileName, fileExt, servedVersion)
   } catch (error) {
     console.error('Error downloading plugin:', error)
     return NextResponse.json({ error: 'Failed to download plugin' }, { status: 500 })
@@ -103,7 +159,9 @@ export async function GET(request, { params }) {
 
 // בניית תגובת הורדה עם Content-Disposition התומך בשמות קובץ בעברית/Unicode (RFC 5987).
 // encodeURIComponent לא מקודד את ! ' ( ) * - מקודדים ידנית כדי לעמוד ב-RFC 3986.
-function pluginFileResponse(buf, fileName, fileExt) {
+// X-Plugin-Version מציין איזו גרסה הוגשה בפועל — נחוץ למי שהוריד דרך ?appVersion=
+// ולא ידע מראש איזו גרסה ייבחר עבורו.
+function pluginFileResponse(buf, fileName, fileExt, servedVersion) {
   const rawName = fileName || `plugin${fileExt}`
   const asciiFallback = rawName.replace(/[^\x20-\x7E]/g, '_').replace(/["\\\r\n]/g, '_')
   const encodedName = encodeURIComponent(rawName)
@@ -114,7 +172,8 @@ function pluginFileResponse(buf, fileName, fileExt) {
       'Content-Type': 'application/octet-stream',
       'Content-Disposition': `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodedName}`,
       'Content-Length': buf.length.toString(),
-      'X-Content-Type-Options': 'nosniff'
+      'X-Content-Type-Options': 'nosniff',
+      ...(servedVersion ? { 'X-Plugin-Version': servedVersion } : {})
     }
   })
 }
