@@ -66,6 +66,10 @@ const PluginSchema = new mongoose.Schema(
     // תאריך מקורי (מה-JSON)
     originalDate: { type: String }, // YYYY-MM-DD format
 
+    // מועד ההחלפה האחרונה של קובץ התוסף עצמו בדיסק (העלאה ראשונה / עדכון עם קובץ).
+    // בשונה מ-updatedAt של Mongoose, לא מושפע מאישורים, עריכות מטא-דאטה וכד'.
+    fileUpdatedAt: { type: Date, default: null },
+
     // אישור מנהל
     isApproved: { type: Boolean, default: false, index: true },
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

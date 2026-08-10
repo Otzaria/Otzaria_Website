@@ -570,6 +570,10 @@ export async function PUT(request, { params }) {
       plugin.pluginFileName = nextPluginData.pluginFileName
       plugin.pluginFileExt = nextPluginData.pluginFileExt
       plugin.pluginFileSize = nextPluginData.pluginFileSize
+      // תאריך "עודכן" בחנות משקף רק החלפה בפועל של קובץ התוסף — לא עריכת מטא-דאטה
+      if (pluginFile?.size) {
+        plugin.fileUpdatedAt = new Date()
+      }
       plugin.image = nextPluginData.image || { ext: null, contentType: null }
       plugin.screenshots = nextPluginData.screenshots
       plugin.pendingUpdate = null

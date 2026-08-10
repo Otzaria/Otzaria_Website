@@ -68,6 +68,7 @@ export function formatVersionForPublic(livePublic, plugin, versionEntry) {
     requiresNetwork: versionEntry.requiresNetwork === true,
     shortDescription: versionEntry.shortDescription || livePublic.shortDescription,
     description: versionEntry.description || livePublic.description,
+    pluginFileSize: versionEntry.pluginFileSize || 0,
     updatedAt: versionEntry.archivedAt
       ? new Date(versionEntry.archivedAt).toISOString().split('T')[0]
       : livePublic.updatedAt,

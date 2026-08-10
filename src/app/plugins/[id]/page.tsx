@@ -23,6 +23,7 @@ interface Plugin {
   author: string
   updatedAt: string
   originalDate?: string
+  fileUpdatedAt?: string
   compatibleWith: string
   requiresNetwork?: boolean
   tags: string[]
@@ -33,6 +34,7 @@ interface Plugin {
   homepage: string
   authorId?: string | null
   downloadCount?: number
+  pluginFileSize?: number
   isHistoricalVersion?: boolean
   latestVersion?: string
   // הקטגוריות שהתוסף משובץ בהן (מוחזר מ-GET /api/plugins/[id])
@@ -51,6 +53,13 @@ interface PluginEditPayload extends Plugin {
     before: string
     after: string
   }>
+}
+
+// גודל קובץ בתצוגה ידידותית (B/KB/MB)
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toLocaleString('he-IL', { maximumFractionDigits: 0 })} KB`
+  return `${(bytes / (1024 * 1024)).toLocaleString('he-IL', { maximumFractionDigits: 1 })} MB`
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -390,15 +399,24 @@ export default function PluginDetailPage() {
                 </div>
                 <div className="p-4 bg-surface rounded-xl">
                   <div className="text-sm text-on-surface/60 mb-1">עודכן</div>
-                  <div className="font-bold text-on-surface text-sm">{formatHebrewDate(plugin.originalDate || plugin.updatedAt)}</div>
+                  <div className="font-bold text-on-surface text-sm">{formatHebrewDate(plugin.fileUpdatedAt || plugin.originalDate || plugin.updatedAt)}</div>
                 </div>
-                <div className="p-4 bg-surface rounded-xl col-span-2">
+                <div className={`p-4 bg-surface rounded-xl ${(plugin.pluginFileSize ?? 0) > 0 ? '' : 'col-span-2'}`}>
                   <div className="text-sm text-on-surface/60 mb-1">הורדות</div>
                   <div className="font-bold text-on-surface flex items-center gap-2">
                     <span className="material-symbols-outlined text-base">download</span>
                     <span>{(plugin.downloadCount || 0).toLocaleString('he-IL')}</span>
                   </div>
                 </div>
+                {(plugin.pluginFileSize ?? 0) > 0 && (
+                  <div className="p-4 bg-surface rounded-xl">
+                    <div className="text-sm text-on-surface/60 mb-1">גודל</div>
+                    <div className="font-bold text-on-surface flex items-center gap-2">
+                      <span className="material-symbols-outlined text-base">hard_drive</span>
+                      <span>{formatFileSize(plugin.pluginFileSize as number)}</span>
+                    </div>
+                  </div>
+                )}
                 <div className="p-4 bg-surface rounded-xl col-span-2">
                   <div className="text-sm text-on-surface/60 mb-1">תאימות</div>
                   <div className="font-bold text-on-surface">{plugin.compatibleWith}</div>

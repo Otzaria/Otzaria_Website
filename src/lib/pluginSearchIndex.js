@@ -17,7 +17,7 @@ const SELECT_FIELDS = [
   'name', 'slug', 'shortDescription', 'description', 'version', 'status', 'author',
   'authorId', 'compatibleWith', 'maxAppVersion', 'requiresNetwork', 'tags', 'homepage',
   'pluginFileName', 'pluginFileExt', 'pluginFileSize', 'image', 'screenshots',
-  'originalDate', 'downloadCount', 'versions', 'updatedAt', 'createdAt'
+  'originalDate', 'fileUpdatedAt', 'downloadCount', 'versions', 'updatedAt', 'createdAt'
 ].join(' ')
 
 let cache = { index: null, docs: new Map(), builtAt: 0 }
