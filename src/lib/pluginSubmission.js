@@ -191,6 +191,8 @@ export function formatPluginForPublic(plugin, options = {}) {
     downloadUrl: `/api/plugins/${pluginId}/download`,
     homepage: source.homepage || '',
     downloadCount: plugin.downloadCount || 0,
+    // גודל קובץ התוסף בבייטים (0 = לא ידוע, לתוספים ותיקים שטרם עברו backfill)
+    pluginFileSize: source.pluginFileSize || 0,
     supportsDirectInstall: (source.pluginFileExt || '').toLowerCase() === '.otzplugin',
     // תאימות לאחור: השדה נשאר בשם isPinned אך משמעותו כיום "נבחר" (featured).
     // רק נתיבים שיודעים את רשימת הנבחרים מעבירים options.isFeatured.
