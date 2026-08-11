@@ -3,11 +3,20 @@ import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import { getStoreSettings } from '@/models/StoreSettings'
 import { formatPluginForPublic } from '@/lib/pluginSubmission'
+import {
+  readAppVersionParam,
+  invalidAppVersionMessage,
+  resolveListForAppVersion
+} from '@/lib/pluginCompatibility'
 
 // GET - קבלת כל התוספים המאושרים, עם סינון אופציונלי.
 // סדר: "התוספים הנבחרים" (StoreSettings.featuredPluginIds, בסדר האצירה) ראשונים,
 // אחריהם השאר מהחדש לישן. הנבחרים מסומנים isPinned:true — שם השדה נשמר
 // לתאימות לאחור עם תוסף החנות שבתוך אוצריא וצרכנים חיצוניים.
+//
+// ?appVersion=0.9.94 — כל תוסף מוחזר בגרסה הגבוהה ביותר התואמת לגרסת אוצריא הזו
+// (לא בהכרח האחרונה), ותוספים שאין להם אף גרסה תואמת מושמטים. כך צרכן שמציג
+// את הרשימה ומתקין מ-downloadUrl מקבל תמיד משהו שיעבוד אצלו.
 export async function GET(request) {
   try {
     await dbConnect()
@@ -16,6 +25,10 @@ export async function GET(request) {
     const tag = searchParams.get('tag')
     const status = searchParams.get('status')
     const search = searchParams.get('search')
+    const { appVersion, invalid } = readAppVersionParam(searchParams)
+    if (invalid) {
+      return NextResponse.json({ error: invalidAppVersionMessage() }, { status: 400 })
+    }
 
     const query = { isApproved: true, isHidden: false }
     if (tag && tag !== 'all') query.tags = tag
@@ -42,8 +55,11 @@ export async function GET(request) {
     })
 
     return NextResponse.json(
-      plugins.map((plugin) =>
-        formatPluginForPublic(plugin, { isFeatured: featuredRank.has(plugin._id.toString()) })
+      resolveListForAppVersion(
+        plugins.map((plugin) =>
+          formatPluginForPublic(plugin, { isFeatured: featuredRank.has(plugin._id.toString()) })
+        ),
+        appVersion
       )
     )
   } catch (error) {

@@ -10,17 +10,32 @@ import {
   orderByIds,
   formatCategorySummary
 } from '@/lib/pluginStore'
+import {
+  readAppVersionParam,
+  invalidAppVersionMessage,
+  hasCompatibleVersion,
+  resolveForAppVersion
+} from '@/lib/pluginCompatibility'
 
-// GET /api/plugins/store-home — כל דף הבית של החנות בקריאה אחת:
+// GET /api/plugins/store-home?appVersion= — כל דף הבית של החנות בקריאה אחת:
 // טקסטים + תוספים נבחרים + קטגוריות (עם שורת תוספים לקטגוריות דף-הבית).
-export async function GET() {
+//
+// עם appVersion: כל תוסף מוחזר בגרסה התואמת הגבוהה ביותר, ותוספים שאין להם אף
+// גרסה תואמת מושמטים — גם מהמונים (pluginCount, totalPublicPlugins), אחרת
+// המספרים בחנות היו מבטיחים תוספים שלא ניתן להתקין.
+export async function GET(request) {
   try {
     await dbConnect()
+
+    const { appVersion, invalid } = readAppVersionParam(new URL(request.url).searchParams)
+    if (invalid) {
+      return NextResponse.json({ error: invalidAppVersionMessage() }, { status: 400 })
+    }
 
     const [settings, categories, totalPublicPlugins] = await Promise.all([
       getStoreSettings(),
       PluginCategory.find({ isVisible: true }).sort({ order: 1 }).lean(),
-      Plugin.countDocuments(PUBLIC_PLUGIN_FILTER)
+      countPublicPlugins(appVersion)
     ])
 
     // שאילפת תוספים אחת מרוכזת: נבחרים + כל המשובצים בקטגוריות
@@ -31,16 +46,22 @@ export async function GET() {
     ]
     const pluginsById = await fetchPublicPluginsByIds(neededIds)
 
-    const featured = orderByIds(settings.featuredPluginIds, pluginsById)
-      .map((plugin) => formatPluginForPublic(plugin, { isFeatured: true }))
+    // סינון התאימות מתבצע על המסמכים, לפני חיתוך homeLimit וספירת pluginCount
+    const compatible = (plugins) =>
+      appVersion ? plugins.filter((plugin) => hasCompatibleVersion(plugin, appVersion)) : plugins
+
+    const featured = compatible(orderByIds(settings.featuredPluginIds, pluginsById))
+      .map((plugin) => resolveForAppVersion(formatPluginForPublic(plugin, { isFeatured: true }), appVersion))
 
     const categoriesPayload = categories.map((category) => {
-      const publicPlugins = orderByIds(category.pluginIds || [], pluginsById)
+      const publicPlugins = compatible(orderByIds(category.pluginIds || [], pluginsById))
       return {
         ...formatCategorySummary(category, publicPlugins.length),
         showOnHome: category.showOnHome === true,
         plugins: category.showOnHome
-          ? publicPlugins.slice(0, category.homeLimit || 6).map((plugin) => formatPluginForPublic(plugin))
+          ? publicPlugins
+            .slice(0, category.homeLimit || 6)
+            .map((plugin) => resolveForAppVersion(formatPluginForPublic(plugin), appVersion))
           : []
       }
     })
@@ -61,4 +82,16 @@ export async function GET() {
     console.error('Error fetching store home:', error)
     return NextResponse.json({ error: 'Failed to fetch store home' }, { status: 500 })
   }
+}
+
+// מספר התוספים הציבוריים. ללא appVersion — ספירה ישירה ב-DB. עם appVersion אין
+// דרך לנסח את התאימות כשאילתה (הטווח נבדק על כל רשומת גרסה בנפרד), ולכן נשלפים
+// שדות התאימות בלבד — בלי התיאורים שבתוך versions — והספירה מתבצעת בזיכרון.
+async function countPublicPlugins(appVersion) {
+  if (!appVersion) return Plugin.countDocuments(PUBLIC_PLUGIN_FILTER)
+
+  const docs = await Plugin.find(PUBLIC_PLUGIN_FILTER)
+    .select('version compatibleWith maxAppVersion versions.version versions.compatibleWith versions.maxAppVersion')
+    .lean()
+  return docs.filter((doc) => hasCompatibleVersion(doc, appVersion)).length
 }
