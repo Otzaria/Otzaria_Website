@@ -41,6 +41,7 @@ const FALLBACK_PERMISSIONS = [
   'events.subscribe:theme.changed',
   'events.subscribe:settings.changed',
   'events.subscribe:calendar.date_changed',
+  'events.subscribe:calendar.city_changed',
   'events.subscribe:workspace.changed',
   'events.subscribe:plugin.permissions_changed'
 ]
@@ -66,7 +67,7 @@ const FALLBACK_API_METHODS = [
   'storage.get', 'storage.set', 'storage.remove', 'storage.list',
   'settings.get', 'settings.getMany',
   'calendar.getSelectedDate', 'calendar.getDailyTimes', 'calendar.getHalachicTimes',
-  'calendar.getJewishDate', 'calendar.getEvents',
+  'calendar.getJewishDate', 'calendar.getEvents', 'calendar.getCities',
   'publishedData.upsert', 'publishedData.remove', 'publishedData.listOwn',
   'database.listSources', 'database.describeSource', 'database.query', 'database.batchQuery',
   'library.getTree',
@@ -139,6 +140,7 @@ const FALLBACK_METHOD_MIN_VERSION = {
   'calendar.getHalachicTimes': '0.9.89',
   'calendar.getJewishDate': '0.9.89',
   'calendar.getEvents': '0.9.89',
+  'calendar.getCities': '0.9.97',
   'publishedData.upsert': '0.9.89',
   'publishedData.remove': '0.9.89',
   'publishedData.listOwn': '0.9.89',
@@ -178,7 +180,7 @@ const FALLBACK_EVENTS = [
   'reader.context_menu_item_clicked',
   'plugin.page_opened',
   'contextMenu.itemClicked', 'contextMenu.colorClicked',
-  'calendar.date_changed', 'workspace.changed',
+  'calendar.date_changed', 'calendar.city_changed', 'workspace.changed',
   'settings.changed', 'plugin.permissions_changed'
 ]
 
@@ -927,6 +929,7 @@ const METHOD_REQUIRED_PERMISSION = {
   'calendar.getHalachicTimes': 'calendar.read',
   'calendar.getJewishDate': 'calendar.read',
   'calendar.getEvents': 'calendar.read',
+  'calendar.getCities': 'calendar.read',
   'publishedData.upsert': 'published_data.write',
   'publishedData.remove': 'published_data.write',
   'publishedData.listOwn': 'published_data.write',
