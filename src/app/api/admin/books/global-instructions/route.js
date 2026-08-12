@@ -55,7 +55,7 @@ export async function POST(request) {
           label: 'הנחיות עריכה גלובליות'
         } 
       },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
     );
 
     return NextResponse.json({

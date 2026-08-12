@@ -76,7 +76,7 @@ async function applyDirect({ book, userDoc, newContent, kind, editType, note, fi
       $set: { content: newContent, syncStatus: book.syncStatus === 'conflict' ? 'conflict' : 'dirty' },
       $inc: { version: 1 },
     },
-    { new: true }
+    { returnDocument: 'after' }
   );
   if (!updated) {
     throw Object.assign(new Error('הספר עודכן בינתיים'), { code: 'STALE' });

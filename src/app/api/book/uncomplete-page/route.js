@@ -33,7 +33,7 @@ export async function POST(request) {
         $set: { status: 'in-progress' }, 
         $unset: { completedAt: 1 }  
       },
-      { new: true, session: dbSession }
+      { returnDocument: 'after', session: dbSession }
     ).populate('claimedBy', 'name email');
 
     if (!page) {

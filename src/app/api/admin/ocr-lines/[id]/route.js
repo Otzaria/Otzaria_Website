@@ -30,7 +30,7 @@ export async function PATCH(request, { params }) {
       const doc = await OcrLine.findOneAndUpdate(
         { _id: id, status: 'submitted', suggestedScriptType: null },
         { status: 'approved', approvedAt: new Date() },
-        { new: true }
+        { returnDocument: 'after' }
       );
       if (!doc) {
         const existing = await OcrLine.findById(id).select('status suggestedScriptType').lean();
@@ -75,7 +75,7 @@ export async function PATCH(request, { params }) {
             ],
           },
         ],
-        { new: true, updatePipeline: true }
+        { returnDocument: 'after', updatePipeline: true }
       );
       if (!doc) {
         return NextResponse.json({ success: false, error: 'השורה לא נמצאה' }, { status: 404 });
@@ -87,7 +87,7 @@ export async function PATCH(request, { params }) {
       const doc = await OcrLine.findOneAndUpdate(
         { _id: id, status: 'available', flagged: { $exists: true } },
         { $unset: { flagged: '', flaggedByName: '' } },
-        { new: true }
+        { returnDocument: 'after' }
       );
       if (!doc) {
         return NextResponse.json(
@@ -121,7 +121,7 @@ export async function PATCH(request, { params }) {
       const doc = await OcrLine.findOneAndUpdate(
         { _id: id, status: { $in: ['submitted', 'approved'] } },
         { text: norm },
-        { new: true }
+        { returnDocument: 'after' }
       );
       if (!doc) {
         const existing = await OcrLine.findById(id).select('_id').lean();
@@ -143,7 +143,7 @@ export async function PATCH(request, { params }) {
       const doc = await OcrLine.findByIdAndUpdate(
         id,
         { scriptType, $unset: { suggestedScriptType: '' } },
-        { new: true }
+        { returnDocument: 'after' }
       );
       if (!doc) {
         return NextResponse.json({ success: false, error: 'השורה לא נמצאה' }, { status: 404 });
@@ -157,7 +157,7 @@ export async function PATCH(request, { params }) {
         { _id: id, suggestedScriptType: { $in: ['square', 'rashi'] } },
         [{ $set: { scriptType: '$suggestedScriptType' } }, { $unset: 'suggestedScriptType' }],
         // mongoose 9 דורש הצהרה מפורשת שהעדכון הוא aggregation pipeline
-        { new: true, updatePipeline: true }
+        { returnDocument: 'after', updatePipeline: true }
       );
       if (!doc) {
         const existing = await OcrLine.findById(id).select('_id').lean();
@@ -176,7 +176,7 @@ export async function PATCH(request, { params }) {
       const doc = await OcrLine.findByIdAndUpdate(
         id,
         { $unset: { suggestedScriptType: '' } },
-        { new: true }
+        { returnDocument: 'after' }
       );
       if (!doc) {
         return NextResponse.json({ success: false, error: 'השורה לא נמצאה' }, { status: 404 });

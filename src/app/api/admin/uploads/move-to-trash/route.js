@@ -26,7 +26,7 @@ export async function PUT(request) {
         isDeleted: true,
         deletedAt: new Date()
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
     
     if (!result) {

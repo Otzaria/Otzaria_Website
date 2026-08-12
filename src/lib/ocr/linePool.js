@@ -77,7 +77,7 @@ export async function sampleAvailableLines(count, excludeIds = []) {
         const doc = await OcrLine.findOneAndUpdate(
           { _id: c._id, status: 'available', ...notFlagged, ...leaseFree() },
           { leasedUntil: new Date(Date.now() + LINE_LEASE_MS) },
-          { new: true, lean: true }
+          { returnDocument: 'after', lean: true }
         );
         if (doc) claimed.push(doc);
       }

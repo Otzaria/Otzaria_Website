@@ -56,7 +56,7 @@ async function applyChangeSubset(edit, subset) {
     const updated = await LibraryBook.findOneAndUpdate(
       { _id: book._id, version: book.version },
       { $set: { content: cur, syncStatus: book.syncStatus === 'conflict' ? 'conflict' : 'dirty' }, $inc: { version: 1 } },
-      { new: true }
+      { returnDocument: 'after' }
     );
     if (updated) return { okChanges, conflictChanges, version: updated.version };
     // version השתנה במקביל — ננסה שוב על התוכן העדכני
@@ -115,7 +115,7 @@ async function applyClaimedEdit(edit) {
         $set: { content, syncStatus: book.syncStatus === 'conflict' ? 'conflict' : 'dirty' },
         $inc: { version: 1 },
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
     if (updated) {
       await markApplied({ baseVersion: updated.version - 1 });
@@ -143,7 +143,7 @@ export async function approveEdit({ editId, moderatorDoc }) {
   const edit = await BookEdit.findOneAndUpdate(
     { _id: editId, status: 'pending' },
     { $set: { status: 'approved', applied: false, reviewedBy: moderatorDoc._id, reviewerName: moderatorDoc.name, reviewedAt: new Date() } },
-    { new: true }
+    { returnDocument: 'after' }
   );
   if (!edit) {
     if (!(await BookEdit.exists({ _id: editId }))) {
@@ -523,7 +523,7 @@ export async function resolveConflictHunk({ bookId, before, after, strategy }) {
     const updated = await LibraryBook.findOneAndUpdate(
       { _id: bookId, version: book.version },
       { $set: set, $inc: { version: 1 } },
-      { new: true, projection: '_id' }
+      { returnDocument: 'after', projection: '_id' }
     );
     if (updated) return result;
     // version השתנה במקביל — ננסה שוב על התוכן העדכני

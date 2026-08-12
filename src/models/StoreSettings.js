@@ -25,7 +25,7 @@ export async function getStoreSettings() {
   return StoreSettings.findOneAndUpdate(
     { key: 'store' },
     { $setOnInsert: { featuredPluginIds: [], homeTitle: '', homeSubtitle: '' } },
-    { upsert: true, new: true }
+    { upsert: true, returnDocument: 'after' }
   )
 }
 

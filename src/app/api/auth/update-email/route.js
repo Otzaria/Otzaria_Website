@@ -41,7 +41,7 @@ export async function POST(request) {
             acceptReminders: false
         }
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!updatedUser) {

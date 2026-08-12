@@ -35,14 +35,14 @@ export async function POST(request, { params }) {
 
     // תפיסה אטומית: מצליחה רק אם העמוד זמין או כבר שלי — מונע מירוץ בין שני משתמשים.
     const claimFilter = { _id: id, $or: [{ status: 'available' }, { claimedBy: oid }] };
-    let doc = await OcrTrainingPage.findOneAndUpdate(claimFilter, updates, { new: true });
+    let doc = await OcrTrainingPage.findOneAndUpdate(claimFilter, updates, { returnDocument: 'after' });
 
     if (!doc) {
       const existing = await OcrTrainingPage.findById(id).select('_id claimedBy');
       if (!existing) return NextResponse.json({ success: false, error: 'העמוד לא נמצא' }, { status: 404 });
       if (isAdmin) {
         // אדמין רשאי לעקוף שיוך קיים
-        doc = await OcrTrainingPage.findByIdAndUpdate(id, updates, { new: true });
+        doc = await OcrTrainingPage.findByIdAndUpdate(id, updates, { returnDocument: 'after' });
       } else {
         return NextResponse.json(
           { success: false, error: 'העמוד כבר תפוס על ידי משתמש אחר' },

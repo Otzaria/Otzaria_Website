@@ -25,7 +25,7 @@ export async function PUT(request) {
       { 
         $unset: { isDeleted: '', deletedAt: '' }
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
     
     if (!result) {

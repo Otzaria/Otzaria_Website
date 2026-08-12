@@ -53,7 +53,7 @@ export async function sampleAvailablePage(excludeIds = []) {
       const doc = await OcrLayoutPage.findOneAndUpdate(
         { _id: c._id, status: 'available', ...leaseFree() },
         { leasedUntil: new Date(Date.now() + PAGE_LEASE_MS) },
-        { new: true, lean: true }
+        { returnDocument: 'after', lean: true }
       );
       if (doc) return publicPageShape(doc);
     }

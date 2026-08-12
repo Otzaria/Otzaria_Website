@@ -59,7 +59,7 @@ export async function PUT(request) {
           }
         }
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!user) {

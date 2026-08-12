@@ -25,7 +25,7 @@ export async function POST(request) {
       { 
         $set: { acceptReminders: true }
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!updatedUser) {

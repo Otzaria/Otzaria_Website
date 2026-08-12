@@ -120,7 +120,7 @@ export async function POST(request) {
           changes: diff
         }
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     )
 
     return NextResponse.json({

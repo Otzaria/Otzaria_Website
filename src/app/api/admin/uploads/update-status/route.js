@@ -19,7 +19,7 @@ export async function PUT(request) {
           status, 
           reviewedBy: session.user._id 
       },
-      { new: true }
+      { returnDocument: 'after' }
   );
 
   return NextResponse.json({ success: true, upload });

@@ -67,7 +67,7 @@ export async function POST(req) {
         await SpellWord.findOneAndUpdate(
           { word: clean },
           { $setOnInsert: { word: clean, addedBy: session.user?.email || "" } },
-          { upsert: true, new: true }
+          { upsert: true, returnDocument: 'after' }
         )
         if (userId) {
           await User.updateOne({ _id: userId }, { $pull: { spellWords: clean } })
@@ -84,7 +84,7 @@ export async function POST(req) {
         await SpellWordSkip.findOneAndUpdate(
           { userId, word: clean },
           { $setOnInsert: { userId, word: clean, skippedBy: session.user?.email || "" } },
-          { upsert: true, new: true }
+          { upsert: true, returnDocument: 'after' }
         )
         return NextResponse.json({ success: true })
       }

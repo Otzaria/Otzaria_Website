@@ -70,7 +70,7 @@ export async function POST(request) {
         lastUpdatedBy: session.user.id,
         description: 'הגדרות סטטוסים לספרים'
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
     
     return NextResponse.json({

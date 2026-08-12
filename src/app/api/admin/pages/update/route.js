@@ -21,7 +21,7 @@ export async function PUT(request) {
   const page = await Page.findOneAndUpdate(
       { book: book._id, pageNumber },
       updates, // { status: 'available', claimedBy: null... }
-      { new: true }
+      { returnDocument: 'after' }
   );
 
   return NextResponse.json({ success: true, page });

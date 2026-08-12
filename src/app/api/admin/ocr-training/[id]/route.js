@@ -41,7 +41,7 @@ export async function PATCH(request, { params }) {
           status: 'available',
           $unset: { claimedBy: '', claimedByName: '', claimedAt: '', completedAt: '' },
         },
-        { new: true }
+        { returnDocument: 'after' }
       );
       if (!doc) return NextResponse.json({ success: false, error: 'לא נמצא' }, { status: 404 });
       return NextResponse.json({ success: true });

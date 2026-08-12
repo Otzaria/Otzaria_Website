@@ -32,7 +32,7 @@ export async function PATCH(request, { params }) {
       const doc = await OcrLayoutPage.findOneAndUpdate(
         { _id: id, status: 'submitted' },
         { status: 'approved', approvedAt: new Date() },
-        { new: true }
+        { returnDocument: 'after' }
       );
       if (!doc) {
         const exists = await OcrLayoutPage.exists({ _id: id });

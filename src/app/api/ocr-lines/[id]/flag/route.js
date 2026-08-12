@@ -30,7 +30,7 @@ export async function POST(request, { params }) {
         $set: { flagged: reason, flaggedByName: session.user.name || '' },
         $unset: { leasedUntil: '' },
       },
-      { new: true, lean: true }
+      { returnDocument: 'after', lean: true }
     );
 
     if (!doc) {

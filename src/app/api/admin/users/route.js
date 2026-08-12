@@ -162,7 +162,7 @@ export async function PUT(request) {
         const updatedUser = await User.findByIdAndUpdate(
             userId, 
             updateData,
-            { new: true }
+            { returnDocument: 'after' }
         ).select('-password -resetPasswordToken -resetPasswordExpires -verificationToken -verificationTokenExpires -verificationRequestHistory -lastResetRequest -dailyResetRequestsCount');
 
         if (!updatedUser) {

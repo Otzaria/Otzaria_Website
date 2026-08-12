@@ -47,7 +47,7 @@ export async function PUT(request) {
     const updatedBook = await Book.findByIdAndUpdate(
         bookId,
         { name, category, author, description, isHidden },
-        { new: true }
+        { returnDocument: 'after' }
     );
 
     if (!updatedBook) {

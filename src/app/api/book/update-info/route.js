@@ -29,7 +29,7 @@ export async function POST(request) {
     const book = await Book.findByIdAndUpdate(
         bookId,
         updateData,
-        { new: true }
+        { returnDocument: 'after' }
     );
 
     if (!book) {

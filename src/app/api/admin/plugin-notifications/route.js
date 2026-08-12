@@ -49,7 +49,7 @@ export async function PUT(request) {
           'pluginNotifications.enabled': enabled
         }
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!user) {

@@ -89,7 +89,7 @@ export async function POST(request, { params }) {
         },
         $unset: { leasedUntil: '' },
       },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!updated) {
