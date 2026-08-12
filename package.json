@@ -29,7 +29,7 @@
     "limiter": "^3.0.0",
     "minisearch": "^7.2.0",
     "mongoose": "^9.1.0",
-    "next": "^16.3.0",
+    "next": "^16.2.12",
     "next-auth": "^4.24.15",
     "nodemailer": "^9.0.1",
     "nspell": "^2.1.5",
