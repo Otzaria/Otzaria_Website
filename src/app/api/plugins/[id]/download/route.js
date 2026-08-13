@@ -7,7 +7,7 @@ import PluginInstallToken from '@/models/PluginInstallToken'
 import { readPluginAsset, readVersionAsset, PLUGIN_FILE_BASENAME } from '@/lib/pluginStorage'
 import { parsePluginRef } from '@/lib/pluginRef'
 import { hasPluginsAccess } from '@/lib/roles'
-import { APP_VERSION_PARAM, isValidAppVersion, resolveCompatibleVersion } from '@/lib/pluginCompatibility'
+import { APP_VERSION_PARAM, isValidAppVersion, resolveCompatibleVersion, lowestSupportedAppVersion } from '@/lib/pluginCompatibility'
 
 // GET /api/plugins/[id]/download - הורדת קובץ התוסף.
 // תומך גם בהורדת גרסה ארכיונית ספציפית דרך /api/plugins/<id>@<version>/download,
@@ -83,7 +83,10 @@ export async function GET(request, { params }) {
             appVersion: appVersionRaw,
             latestVersion: plugin.version,
             compatibleWith: plugin.compatibleWith || '',
-            maxAppVersion: plugin.maxAppVersion || null
+            maxAppVersion: plugin.maxAppVersion || null,
+            // הרצפה הנמוכה מכל הגרסאות — מה שהמשתמש צריך כדי להריץ גרסה כלשהי,
+            // להבדיל מ-compatibleWith שהוא דרישת הגרסה האחרונה בלבד.
+            minSupportedAppVersion: lowestSupportedAppVersion(plugin)
           },
           { status: 404 }
         )
