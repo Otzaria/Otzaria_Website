@@ -1,6 +1,6 @@
 /* ============================================================
  * icon-font.css — נוצר אוטומטית על ידי scripts/build-icon-font.mjs. אין לערוך.
- * subset מקומי של Material Symbols Outlined (413 אייקונים, מופע סטטי opsz,wght,FILL,GRAD@24,400,0,0).
+ * subset מקומי של Material Symbols Outlined (415 אייקונים, מופע סטטי opsz,wght,FILL,GRAD@24,400,0,0).
  * ============================================================ */
 
 @font-face {
@@ -9,5 +9,5 @@
   font-weight: 400;
   /* block ולא swap — אחרת שם האייקון מוצג כטקסט עד שהגופן עולה */
   font-display: block;
-  src: url('/fonts/material-symbols-outlined.65d4bfa4.woff2') format('woff2');
+  src: url('/fonts/material-symbols-outlined.a7040669.woff2') format('woff2');
 }

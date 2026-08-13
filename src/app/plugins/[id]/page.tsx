@@ -37,6 +37,9 @@ interface Plugin {
   pluginFileSize?: number
   isHistoricalVersion?: boolean
   latestVersion?: string
+  // מצב השהיה — מוחזר רק למי שרשאי לראות תוסף מושהה (המעלה / מנהל תוספים)
+  isSuspended?: boolean
+  suspendedByRole?: 'owner' | 'admin' | null
   // הקטגוריות שהתוסף משובץ בהן (מוחזר מ-GET /api/plugins/[id])
   categories?: CategoryRef[]
 }
@@ -73,12 +76,16 @@ export default function PluginDetailPage() {
   const params = useParams()
   const router = useRouter()
   const { data: session } = useSession()
-  const { showAlert } = useDialog() as { showAlert: (title: string, message: string) => void }
+  const { showAlert, showConfirm } = useDialog() as {
+    showAlert: (title: string, message: string) => void
+    showConfirm: (title: string, message: string) => Promise<boolean>
+  }
   const [plugin, setPlugin] = useState<Plugin | null>(null)
   const [loading, setLoading] = useState(true)
   const [editingPlugin, setEditingPlugin] = useState<PluginEditPayload | null>(null)
   const [loadingEdit, setLoadingEdit] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+  const [suspending, setSuspending] = useState(false)
   const { installState, install } = useDirectInstall()
 
   // הודעת דיאלוג רגילה של האתר כשמגיע דיווח תוצאה מאוצריא
@@ -166,6 +173,49 @@ export default function PluginDetailPage() {
   }
 
   const canEdit = Boolean(currentUser && currentUser.id === plugin.authorId && !plugin.isHistoricalVersion)
+  // השהיה מדף התוסף זמינה למעלה התוסף בלבד, ורק על הגרסה החיה. מנהל משהה
+  // ומחזיר מממשק הניהול (/library/admin/plugins) ולא מכאן.
+  const canSuspend = canEdit
+  // תוסף שהושהה בניהול — רק מנהל יכול להחזירו לחנות
+  const suspendedByAdmin = plugin.isSuspended === true && plugin.suspendedByRole === 'admin'
+  const canResume = plugin.isSuspended === true && !suspendedByAdmin
+
+  const handleToggleSuspend = async () => {
+    const suspend = plugin.isSuspended !== true
+    const confirmed = await showConfirm(
+      suspend ? 'השהיית התוסף מהחנות' : 'החזרת התוסף לחנות',
+      suspend
+        ? `האם להשהות את התוסף "${plugin.name}" מהחנות?\n\n` +
+          'לאחר ההשהיה התוסף לא יופיע בחנות ולא בחיפוש, ולא ניתן יהיה להוריד או להתקין אותו. ' +
+          'גם בקישור ישיר לא תהיה אליו גישה — למעט עבורך (המעלה) ועבור מנהלי האתר. ' +
+          'ניתן להחזיר את התוסף לחנות בכל עת מדף זה.'
+        : `להחזיר את התוסף "${plugin.name}" לחנות? התוסף יופיע שוב בחנות ויהיה זמין להורדה ולהתקנה.`
+    )
+    if (!confirmed) return
+
+    try {
+      setSuspending(true)
+      const response = await fetch(`/api/plugins/${plugin.id}/suspend`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: suspend ? 'suspend' : 'resume' })
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.error || 'הפעולה נכשלה')
+      }
+
+      await showAlert(suspend ? 'התוסף הושהה' : 'התוסף חזר לחנות', result.message)
+      const refreshed = await fetch(`/api/plugins/${plugin.id}`)
+      if (refreshed.ok) {
+        setPlugin(await refreshed.json())
+      }
+    } catch (error: unknown) {
+      showAlert('שגיאה', getErrorMessage(error, 'לא הצלחנו לעדכן את מצב ההשהיה'))
+    } finally {
+      setSuspending(false)
+    }
+  }
 
   const handleEdit = async () => {
     try {
@@ -247,6 +297,24 @@ export default function PluginDetailPage() {
                 <span className="material-symbols-outlined">upgrade</span>
                 <span>עבור לגרסה העדכנית</span>
               </Link>
+            </div>
+          )}
+
+          {/* Suspended Banner — מוצג רק למי שרשאי לראות תוסף מושהה */}
+          {plugin.isSuspended && (
+            <div className="mb-6 flex items-start gap-3 rounded-2xl border border-warning-strong-200 bg-warning-strong-50 p-5">
+              <span className="material-symbols-outlined text-warning-strong-700">pause_circle</span>
+              <div>
+                <div className="font-bold text-warning-strong-900">
+                  התוסף מושהה {suspendedByAdmin ? 'על ידי הנהלת האתר' : canEdit ? 'על ידך' : 'על ידי מעלה התוסף'}
+                </div>
+                <div className="text-sm text-warning-strong-800/80">
+                  התוסף אינו מופיע בחנות ואינו זמין להורדה. הדף נגיש בקישור ישיר למעלה התוסף ולמנהלי האתר בלבד.
+                  {canEdit && (suspendedByAdmin
+                    ? ' להחזרת התוסף לחנות יש לפנות למנהל.'
+                    : ' ניתן להחזירו לחנות בכל עת בכפתור "החזר לחנות".')}
+                </div>
+              </div>
             </div>
           )}
 
@@ -353,6 +421,33 @@ export default function PluginDetailPage() {
                     >
                       <span className="material-symbols-outlined">edit</span>
                       <span>{loadingEdit ? 'טוען...' : 'ערוך'}</span>
+                    </button>
+                  )}
+                  {canSuspend && (!plugin.isSuspended || canResume) && (
+                    <button
+                      onClick={handleToggleSuspend}
+                      disabled={suspending}
+                      className={`inline-flex items-center gap-2 rounded-xl px-6 py-3 font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                        plugin.isSuspended
+                          ? 'bg-success-600 hover:bg-success-700'
+                          : 'bg-warning-strong-600 hover:bg-warning-strong-700'
+                      }`}
+                      title={
+                        plugin.isSuspended
+                          ? 'החזרת התוסף לחנות'
+                          : 'השהיית התוסף — לא יופיע בחנות ולא יהיה ניתן להורדה'
+                      }
+                    >
+                      <span className="material-symbols-outlined">
+                        {plugin.isSuspended ? 'play_circle' : 'pause_circle'}
+                      </span>
+                      <span>
+                        {suspending
+                          ? 'מעדכן...'
+                          : plugin.isSuspended
+                            ? 'החזר לחנות'
+                            : 'השהה מהחנות'}
+                      </span>
                     </button>
                   )}
                 </div>

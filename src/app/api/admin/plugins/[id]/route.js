@@ -21,6 +21,11 @@ import { compareVersions } from '@/lib/pluginManifest'
 import path from 'path'
 import { promises as fs } from 'fs'
 import { hasPluginsAccess } from '@/lib/roles'
+import {
+  SUSPEND_ACTIONS,
+  applySuspension,
+  suspensionError
+} from '@/lib/pluginVisibility'
 
 // וידוא הרשאת מנהל תוספים
 async function requireAdmin() {
@@ -31,8 +36,9 @@ async function requireAdmin() {
   return { ok: true, session }
 }
 
-// PATCH /api/admin/plugins/[id]  body: { action: 'approve' | 'unapprove' }
+// PATCH /api/admin/plugins/[id]  body: { action: 'approve' | 'unapprove' | 'suspend' | 'resume' }
 // באישור נתמך גם categoryIds אופציונלי — שיבוץ התוסף לקטגוריות החנות מיד עם האישור.
+// suspend/resume: השהיית התוסף מהחנות והחזרתו (ראו src/lib/pluginVisibility.js).
 // (פעולות pin/unpin בוטלו ב-31/07/2026 — הוחלפו ב"תוספים נבחרים" ב-store-settings.)
 export async function PATCH(request, { params }) {
   try {
@@ -47,7 +53,7 @@ export async function PATCH(request, { params }) {
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
     const action = body?.action
-    if (!['approve', 'unapprove'].includes(action)) {
+    if (!['approve', 'unapprove', ...SUSPEND_ACTIONS].includes(action)) {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
     }
 
@@ -55,6 +61,24 @@ export async function PATCH(request, { params }) {
     const plugin = await Plugin.findById(id).populate('authorId', 'name email')
     if (!plugin) {
       return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
+    }
+
+    // השהיה/החזרה — מסלול קצר ונפרד מזרימת האישור
+    if (SUSPEND_ACTIONS.includes(action)) {
+      const suspendError = suspensionError(plugin, action, { isAdmin: true })
+      if (suspendError) {
+        return NextResponse.json({ error: suspendError }, { status: 400 })
+      }
+      applySuspension(plugin, action, { userId: auth.session.user.id, isAdmin: true })
+      await plugin.save()
+      invalidatePluginSearchIndex()
+      return NextResponse.json({
+        success: true,
+        message: action === 'suspend'
+          ? 'התוסף הושהה והוסר מהחנות'
+          : 'התוסף הוחזר לחנות',
+        plugin
+      })
     }
 
     if (action === 'approve') {

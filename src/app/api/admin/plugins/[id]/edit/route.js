@@ -56,7 +56,10 @@ function getAssetSources(source) {
   }
 }
 
-async function getAuthorizedPlugin(id, session) {
+// asOwner: הבקשה הגיעה מהנתיב הציבורי (/api/plugins/[id]/edit) — שם כל אחד,
+// גם מנהל, עורך את התוסף שלו כמשתמש רגיל לכל דבר (השדות נגזרים מהמניפסט,
+// חובה להעלות גרסה וכו'). הרשאות המנהל זמינות רק דרך ממשק הניהול.
+async function getAuthorizedPlugin(id, session, { asOwner = false } = {}) {
   await dbConnect()
 
   const plugin = await Plugin.findById(id)
@@ -64,10 +67,17 @@ async function getAuthorizedPlugin(id, session) {
     return { error: bad('Plugin not found', 404) }
   }
 
-  const isAdmin = hasPluginsAccess(session.user?.role)
   const isOwner = plugin.authorId?.toString() === session.user?.id
+  const isAdmin = asOwner ? false : hasPluginsAccess(session.user?.role)
   if (!isAdmin && !isOwner) {
-    return { error: bad('Forbidden - You do not have permission to edit this plugin', 403) }
+    return {
+      error: bad(
+        asOwner && hasPluginsAccess(session.user?.role)
+          ? 'עריכת תוספים כמנהל זמינה רק בממשק הניהול.'
+          : 'Forbidden - You do not have permission to edit this plugin',
+        403
+      )
+    }
   }
 
   return { plugin, isAdmin, isOwner }
@@ -175,7 +185,7 @@ async function saveLiveAssets(pluginId, plugin, editableSource, nextPluginData, 
   }
 }
 
-export async function GET(request, { params }) {
+export async function GET(request, { params }, { asOwner = false } = {}) {
   try {
     const session = await getServerSession(authOptions)
     if (!session) {
@@ -183,7 +193,7 @@ export async function GET(request, { params }) {
     }
 
     const { id } = await params
-    const access = await getAuthorizedPlugin(id, session)
+    const access = await getAuthorizedPlugin(id, session, { asOwner })
     if (access.error) {
       return access.error
     }
@@ -196,7 +206,7 @@ export async function GET(request, { params }) {
   }
 }
 
-export async function PUT(request, { params }) {
+export async function PUT(request, { params }, { asOwner = false } = {}) {
   try {
     const session = await getServerSession(authOptions)
     if (!session) {
@@ -204,7 +214,7 @@ export async function PUT(request, { params }) {
     }
 
     const { id } = await params
-    const access = await getAuthorizedPlugin(id, session)
+    const access = await getAuthorizedPlugin(id, session, { asOwner })
     if (access.error) {
       return access.error
     }

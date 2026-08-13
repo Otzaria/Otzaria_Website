@@ -205,6 +205,42 @@ export default function AdminPluginsPage() {
     }
   }
 
+  // השהיית תוסף מהחנות / החזרתו. השהיית מנהל גוברת על השהיית המעלה —
+  // תוסף שהושהה בניהול יוכל לחזור לחנות רק מכאן.
+  const handleToggleSuspend = async (plugin) => {
+    const suspend = plugin.isSuspended !== true
+    const confirmed = await showConfirm(
+      suspend ? 'השהיית תוסף' : 'החזרת תוסף לחנות',
+      suspend
+        ? `להשהות את התוסף "${plugin.name}"? התוסף לא יופיע בחנות ולא יהיה ניתן להורדה — למעט למעלה ולמנהלי התוספים בקישור ישיר. האישור עצמו נשמר וניתן להחזירו לחנות בכל עת.`
+        : `להחזיר את התוסף "${plugin.name}" לחנות? הוא יופיע שוב בחנות ויהיה זמין להורדה.`
+    )
+
+    if (!confirmed) return
+
+    try {
+      setProcessingId(plugin._id)
+      const response = await fetch(`/api/admin/plugins/${plugin._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: suspend ? 'suspend' : 'resume' })
+      })
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update suspension')
+      }
+
+      await showAlert(suspend ? 'התוסף הושהה' : 'התוסף חזר לחנות', result.message)
+      loadPlugins()
+    } catch (error) {
+      console.error('Error updating plugin suspension:', error)
+      showAlert('שגיאה', error.message || 'לא הצלחנו לעדכן את מצב ההשהיה')
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
   const handleDelete = async (plugin) => {
     const confirmed = await showConfirm(
       'מחיקת תוסף',
@@ -513,6 +549,11 @@ export default function AdminPluginsPage() {
                       <span className="px-3 py-1 bg-surface rounded-full text-xs font-bold text-on-surface/60">
                         גרסה {source.version}
                       </span>
+                      {plugin.isSuspended && (
+                        <span className="rounded-full bg-warning-strong-100 px-3 py-1 text-xs font-bold text-warning-strong-800">
+                          מושהה {plugin.suspendedByRole === 'admin' ? '(ע"י הניהול)' : '(ע"י המעלה)'}
+                        </span>
+                      )}
                     </div>
                     <p className="text-on-surface/70 leading-relaxed">
                       {source.shortDescription}
@@ -751,6 +792,35 @@ export default function AdminPluginsPage() {
                       >
                         <span className="material-symbols-outlined">category</span>
                         <span>ערוך שיבוץ</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleToggleSuspend(plugin)}
+                        disabled={processingId === plugin._id}
+                        className={`flex items-center justify-center gap-2 px-6 py-3 text-white rounded-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                          plugin.isSuspended
+                            ? 'bg-success-600 hover:bg-success-700'
+                            : 'bg-warning-alt-600 hover:bg-warning-alt-700'
+                        }`}
+                        title={
+                          plugin.isSuspended
+                            ? 'החזרת התוסף לחנות'
+                            : 'השהיית התוסף — יוסר מהחנות בלי לבטל את האישור'
+                        }
+                      >
+                        {processingId === plugin._id ? (
+                          <>
+                            <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                            <span>מעבד...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="material-symbols-outlined">
+                              {plugin.isSuspended ? 'play_circle' : 'pause_circle'}
+                            </span>
+                            <span>{plugin.isSuspended ? 'החזר לחנות' : 'השהה'}</span>
+                          </>
+                        )}
                       </button>
 
                       <button

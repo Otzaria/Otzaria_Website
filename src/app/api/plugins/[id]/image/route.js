@@ -5,6 +5,7 @@ import { promises as fsp } from 'fs'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import { readPluginAsset, IMAGE_BASENAME, optimizeImageBuffer, getOptCachePath } from '@/lib/pluginStorage'
+import { canAccessSuspended, isPluginSuspended } from '@/lib/pluginVisibility'
 
 // GET /api/plugins/[id]/image - הגשת תמונת התוסף מהדיסק
 export async function GET(request, { params }) {
@@ -13,7 +14,7 @@ export async function GET(request, { params }) {
     const { searchParams } = new URL(request.url)
     const includePending = searchParams.get('pending') === '1'
     await dbConnect()
-    const plugin = await Plugin.findById(id).select('image isApproved isHidden authorId pendingUpdate').lean()
+    const plugin = await Plugin.findById(id).select('image isApproved isHidden isSuspended authorId pendingUpdate').lean()
     if (!plugin || plugin.isHidden) {
       return NextResponse.json({ error: 'Image not found' }, { status: 404 })
     }
@@ -27,6 +28,11 @@ export async function GET(request, { params }) {
         return NextResponse.json({ error: 'Image not found' }, { status: 404 })
       }
     } else if (!plugin.isApproved && !isAdmin && !isOwner) {
+      return NextResponse.json({ error: 'Image not found' }, { status: 404 })
+    }
+
+    // תוסף מושהה — נכסיו מוגשים רק למעלה ולמנהל, כמו הדף וההורדה עצמם
+    if (isPluginSuspended(plugin) && !canAccessSuspended({ isAdmin, isOwner })) {
       return NextResponse.json({ error: 'Image not found' }, { status: 404 })
     }
 

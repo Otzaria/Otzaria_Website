@@ -7,6 +7,7 @@ import PluginInstallToken from '@/models/PluginInstallToken'
 import { readPluginAsset, readVersionAsset, PLUGIN_FILE_BASENAME } from '@/lib/pluginStorage'
 import { parsePluginRef } from '@/lib/pluginRef'
 import { hasPluginsAccess } from '@/lib/roles'
+import { canAccessSuspended, isPluginSuspended } from '@/lib/pluginVisibility'
 import { APP_VERSION_PARAM, isValidAppVersion, resolveCompatibleVersion, lowestSupportedAppVersion } from '@/lib/pluginCompatibility'
 
 // GET /api/plugins/[id]/download - הורדת קובץ התוסף.
@@ -14,6 +15,7 @@ import { APP_VERSION_PARAM, isValidAppVersion, resolveCompatibleVersion, lowestS
 // וגם בבחירת גרסה אוטומטית לפי גרסת אוצריא דרך ?appVersion=0.9.94 — מוריד את
 // הגרסה הגבוהה ביותר של התוסף שתומכת בגרסת האפליקציה הזו (ראו pluginCompatibility).
 // רק תוספים מאושרים פתוחים לציבור; מנהלי תוספים יכולים להוריד גם תוספים לא מאושרים.
+// תוסף מושהה (isSuspended) אינו ניתן להורדה כלל — למעט למעלה ולמנהלי התוספים.
 export async function GET(request, { params }) {
   try {
     const { id: rawId } = await params
@@ -67,6 +69,11 @@ export async function GET(request, { params }) {
     const session = await getServerSession(authOptions)
     const isAdmin = hasPluginsAccess(session?.user?.role)
     const isOwner = plugin.authorId?.toString() === session?.user?.id
+
+    // תוסף מושהה — גם בקישור ישיר ההורדה פתוחה רק למעלה ולמנהלי התוספים
+    if (isPluginSuspended(plugin) && !canAccessSuspended({ isAdmin, isOwner })) {
+      return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
+    }
 
     // רזולוציה לפי גרסת אוצריא: הופכת את appVersion לגרסת תוסף קונקרטית.
     // resolvedVersion=null פירושו "הגרסה החיה" — ממשיך לזרימה הרגילה למטה.

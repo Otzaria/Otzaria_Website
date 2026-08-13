@@ -105,6 +105,15 @@ const PluginSchema = new mongoose.Schema(
     // הסתרה (במקום מחיקה)
     isHidden: { type: Boolean, default: false, index: true },
 
+    // השהיה מהחנות — נפרד מהאישור ומההסתרה. תוסף מושהה אינו מופיע בחנות
+    // ואינו ניתן להורדה, אך נגיש בקישור ישיר למעלה התוסף ולמנהלי התוספים.
+    // suspendedByRole קובע מי רשאי להחזיר: השהיית מנהל ('admin') גוברת על
+    // המעלה, ורק מנהל יכול לבטלה. ראו src/lib/pluginVisibility.js.
+    isSuspended: { type: Boolean, default: false, index: true },
+    suspendedAt: { type: Date, default: null },
+    suspendedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    suspendedByRole: { type: String, enum: ['owner', 'admin', null], default: null },
+
     // הערה: מנגנון ההצמדה (isPinned/pinnedAt) בוטל ב-31/07/2026 והוחלף
     // ב"תוספים נבחרים" (StoreSettings.featuredPluginIds) — הנבחרים ממוינים
     // ראשונים ב-GET /api/plugins ומסומנים בו isPinned:true לתאימות לאחור.
@@ -210,7 +219,7 @@ PluginSchema.methods.incrementDownload = async function (version) {
 
 // Static methods
 PluginSchema.statics.getApprovedPlugins = function () {
-  return this.find({ isApproved: true, isHidden: false })
+  return this.find({ isApproved: true, isHidden: false, isSuspended: { $ne: true } })
     .sort({ createdAt: -1 })
     .populate('authorId', 'name email')
     .populate('approvedBy', 'name email')

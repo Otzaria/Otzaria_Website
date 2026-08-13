@@ -19,7 +19,9 @@ export async function GET() {
     const [categories, settings, plugins] = await Promise.all([
       PluginCategory.find({}).select('pluginIds').lean(),
       getStoreSettings(),
-      Plugin.find({ isApproved: true, isHidden: false })
+      // תוסף מושהה אינו מוצג ב"מסך העבודה" — הוא ממילא אינו בחנות כרגע,
+      // ויחזור לרשימה מאליו כשההשהיה תוסר.
+      Plugin.find({ isApproved: true, isHidden: false, isSuspended: { $ne: true } })
         .sort({ createdAt: -1 })
         .select('_id name version status tags downloadCount image createdAt')
         .lean()

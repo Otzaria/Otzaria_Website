@@ -3,6 +3,7 @@ import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import { getStoreSettings } from '@/models/StoreSettings'
 import { formatPluginForPublic } from '@/lib/pluginSubmission'
+import { PUBLIC_PLUGIN_FILTER } from '@/lib/pluginStore'
 import {
   readAppVersionParam,
   invalidAppVersionMessage,
@@ -30,7 +31,7 @@ export async function GET(request) {
       return NextResponse.json({ error: invalidAppVersionMessage() }, { status: 400 })
     }
 
-    const query = { isApproved: true, isHidden: false }
+    const query = { ...PUBLIC_PLUGIN_FILTER }
     if (tag && tag !== 'all') query.tags = tag
     if (status && status !== 'all') query.status = status
     if (search) query.$text = { $search: search }

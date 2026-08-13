@@ -1,11 +1,12 @@
 import Plugin from '@/models/Plugin'
 import PluginCategory from '@/models/PluginCategory'
+import { NOT_SUSPENDED_FILTER } from '@/lib/pluginVisibility'
 
 // עזרי שליפה משותפים לנתיבי החנות הציבוריים (store-home, categories, search).
-// כלל הברזל: ציבורית מוצגים רק תוספים isApproved && !isHidden; מזהי "רפאים"
-// (תוסף שנמחק/הוסתר/אינו מאושר) מדולגים בשקט ואינם נספרים.
+// כלל הברזל: ציבורית מוצגים רק תוספים isApproved && !isHidden && !isSuspended;
+// מזהי "רפאים" (תוסף שנמחק/הוסתר/מושהה/אינו מאושר) מדולגים בשקט ואינם נספרים.
 
-export const PUBLIC_PLUGIN_FILTER = { isApproved: true, isHidden: false }
+export const PUBLIC_PLUGIN_FILTER = { isApproved: true, isHidden: false, ...NOT_SUSPENDED_FILTER }
 
 // שליפת תוספים ציבוריים לפי מזהים — מחזיר Map<idString, pluginDoc>
 export async function fetchPublicPluginsByIds(ids) {
