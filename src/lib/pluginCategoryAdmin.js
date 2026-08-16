@@ -8,7 +8,7 @@ export const CATEGORY_LIMITS = { name: 40, slug: 60, description: 300, icon: 60 
 export const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
 // populate מינימלי לתצוגת הניהול — כולל תוספים לא-מאושרים/מוסתרים (מסומנים בקליינט)
-export const PLUGIN_PREVIEW_FIELDS = '_id name version status isApproved isHidden downloadCount image'
+export const PLUGIN_PREVIEW_FIELDS = '_id name version status isApproved isHidden isSuspended downloadCount image'
 
 export function validateCategoryData(data, { partial = false } = {}) {
   const errors = []
@@ -59,6 +59,7 @@ export function formatAdminCategory(category) {
       status: plugin.status,
       isApproved: plugin.isApproved === true,
       isHidden: plugin.isHidden === true,
+      isSuspended: plugin.isSuspended === true,
       downloadCount: plugin.downloadCount || 0,
       image: plugin.image?.ext ? `/api/plugins/${plugin._id}/image` : null
     })),

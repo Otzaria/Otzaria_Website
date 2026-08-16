@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import { readPluginAsset } from '@/lib/pluginStorage'
+import { canAccessSuspended, isPluginSuspended } from '@/lib/pluginVisibility'
 
 // GET /api/plugins/[id]/screenshots/[index] - הגשת צילום מסך מהדיסק
 export async function GET(request, { params }) {
@@ -17,7 +18,7 @@ export async function GET(request, { params }) {
     }
 
     await dbConnect()
-    const plugin = await Plugin.findById(id).select('screenshots isApproved isHidden authorId pendingUpdate').lean()
+    const plugin = await Plugin.findById(id).select('screenshots isApproved isHidden isSuspended authorId pendingUpdate').lean()
     if (!plugin || plugin.isHidden) {
       return NextResponse.json({ error: 'Screenshot not found' }, { status: 404 })
     }
@@ -31,6 +32,11 @@ export async function GET(request, { params }) {
         return NextResponse.json({ error: 'Screenshot not found' }, { status: 404 })
       }
     } else if (!plugin.isApproved && !isAdmin && !isOwner) {
+      return NextResponse.json({ error: 'Screenshot not found' }, { status: 404 })
+    }
+
+    // תוסף מושהה — נכסיו מוגשים רק למעלה ולמנהל, כמו הדף וההורדה עצמם
+    if (isPluginSuspended(plugin) && !canAccessSuspended({ isAdmin, isOwner })) {
       return NextResponse.json({ error: 'Screenshot not found' }, { status: 404 })
     }
 

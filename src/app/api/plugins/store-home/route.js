@@ -76,7 +76,9 @@ export async function GET(request) {
         categories: categoriesPayload,
         totalPublicPlugins
       },
-      { headers: { 'Cache-Control': 'public, max-age=60, stale-while-revalidate=300' } }
+      // no-cache (ולא max-age): הדפדפן שומר אך מאמת מול השרת בכל טעינה, כדי
+      // שהשהיית תוסף/החזרתו תשתקף מיד בריענון רגיל ולא רק ברענון עמוק.
+      { headers: { 'Cache-Control': 'no-cache' } }
     )
   } catch (error) {
     console.error('Error fetching store home:', error)

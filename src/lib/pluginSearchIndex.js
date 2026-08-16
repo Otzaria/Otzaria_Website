@@ -3,7 +3,7 @@ import Plugin from '@/models/Plugin'
 import { getStoreSettings } from '@/models/StoreSettings'
 import { normalizeHebrew, tokenizeHebrew, expandTermVariants } from '@/lib/hebrewSearchNormalize'
 
-// אינדקס חיפוש in-memory על התוספים הציבוריים (מאושרים ולא-מוסתרים).
+// אינדקס חיפוש in-memory על התוספים הציבוריים (מאושרים, לא-מוסתרים ולא-מושהים).
 // נבנה עצלה, נשמר ברמת המודול (אינסטנס Next יחיד — ראו תכנון 8.5), עם TTL כרשת
 // ביטחון + הפגה ישירה (invalidatePluginSearchIndex) מכל מוטציה רלוונטית.
 // מגבלה מתועדת: בריבוי אינסטנסים ההפגה הישירה מקומית בלבד וה-TTL מגביל את הסטייה.
@@ -53,7 +53,9 @@ export async function getSearchIndex() {
   if (cache.index && Date.now() - cache.builtAt < TTL_MS) return cache
 
   const [plugins, settings] = await Promise.all([
-    Plugin.find({ isApproved: true, isHidden: false }).select(SELECT_FIELDS).lean(),
+    Plugin.find({ isApproved: true, isHidden: false, isSuspended: { $ne: true } })
+      .select(SELECT_FIELDS)
+      .lean(),
     getStoreSettings()
   ])
 

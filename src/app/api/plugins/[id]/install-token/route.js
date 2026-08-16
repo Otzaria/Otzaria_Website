@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import PluginInstallToken from '@/models/PluginInstallToken'
 import { parsePluginRef } from '@/lib/pluginRef'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { hasPluginsAccess } from '@/lib/roles'
+import { canAccessSuspended, isPluginSuspended } from '@/lib/pluginVisibility'
 
 // משך חיי טוקן התקנה — מספיק להורדה + התקנה, קצר מספיק שלא להצטבר.
 const INSTALL_TOKEN_TTL_MS = 15 * 60 * 1000
@@ -28,9 +32,19 @@ export async function POST(request, { params }) {
     }
     await dbConnect()
 
-    const plugin = await Plugin.findById(id).select('isApproved isHidden version')
+    const plugin = await Plugin.findById(id).select('isApproved isHidden isSuspended authorId version')
     if (!plugin || plugin.isHidden || !plugin.isApproved) {
       return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
+    }
+
+    // תוסף מושהה — התקנה ישירה זמינה רק למעלה ולמנהלי התוספים, כמו ההורדה עצמה
+    if (isPluginSuspended(plugin)) {
+      const session = await getServerSession(authOptions)
+      const isAdmin = hasPluginsAccess(session?.user?.role)
+      const isOwner = plugin.authorId?.toString() === session?.user?.id
+      if (!canAccessSuspended({ isAdmin, isOwner })) {
+        return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
+      }
     }
 
     const expiresAt = new Date(Date.now() + INSTALL_TOKEN_TTL_MS)

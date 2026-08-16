@@ -11,7 +11,8 @@ import {
   isValidAppVersion,
   isCompatibleWithApp,
   buildVersionEntries,
-  resolveCompatibleVersion
+  resolveCompatibleVersion,
+  lowestSupportedAppVersion
 } from './pluginCompatibility.js'
 
 /** תוסף מדומה: הגרסה החיה + היסטוריית גרסאות, כמו במסמך ה-DB */
@@ -88,6 +89,42 @@ test('טווח התאימות נבדק בשני הכיוונים כולל הקצ
   assert.equal(isCompatibleWithApp(entry, '0.9.94'), true)
   assert.equal(isCompatibleWithApp(entry, '0.9.95'), true)
   assert.equal(isCompatibleWithApp(entry, '0.9.96'), false)
+})
+
+test('הרצפה הנמוכה מכל הגרסאות, ולא זו של הגרסה החיה', () => {
+  // החיה דורשת 0.9.96, אבל 1.0.0 עוד רצה על 0.9.89
+  assert.equal(lowestSupportedAppVersion(SAMPLE), '0.9.89')
+})
+
+test('אין רצפה כשלגרסה כלשהי אין דרישת מינימום', () => {
+  const p = plugin({
+    version: '2.0.0',
+    compatibleWith: '0.9.96',
+    versions: [
+      { version: '1.0.0', compatibleWith: '', maxAppVersion: '0.9.93', archivedAt: new Date('2026-02-01T00:00:00Z') }
+    ]
+  })
+
+  assert.equal(lowestSupportedAppVersion(p), null)
+})
+
+test('רצפה של תוסף בעל גרסה חיה בלבד', () => {
+  assert.equal(
+    lowestSupportedAppVersion(plugin({ version: '1.0.0', compatibleWith: '0.9.94' })),
+    '0.9.94'
+  )
+})
+
+test('נתון גרסה פגום אינו מפיל את חישוב הרצפה', () => {
+  const p = plugin({
+    version: '2.0.0',
+    compatibleWith: 'not-a-version',
+    versions: [
+      { version: '1.0.0', compatibleWith: '0.9.89', archivedAt: new Date('2026-02-01T00:00:00Z') }
+    ]
+  })
+
+  assert.equal(lowestSupportedAppVersion(p), null)
 })
 
 test('ולידציה של גרסת אוצריא נשלחת', () => {

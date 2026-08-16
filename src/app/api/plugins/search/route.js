@@ -81,7 +81,8 @@ export async function GET(request) {
           categories: categoriesByPlugin.get(doc._id.toString()) || []
         }))
       },
-      { headers: { 'Cache-Control': 'public, max-age=30' } }
+      // no-cache: אימות מול השרת בכל בקשה — תוצאות החיפוש לא ימשיכו להציג תוסף שהושהה
+      { headers: { 'Cache-Control': 'no-cache' } }
     )
   } catch (error) {
     console.error('Error searching plugins:', error)

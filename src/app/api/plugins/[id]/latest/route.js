@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import { parsePluginRef } from '@/lib/pluginRef'
+import { PUBLIC_PLUGIN_FILTER } from '@/lib/pluginStore'
 import {
   APP_VERSION_PARAM,
   isValidAppVersion,
@@ -44,7 +45,8 @@ export async function GET(request, { params }) {
     }
 
     await dbConnect()
-    const plugin = await Plugin.findOne({ _id: id, isApproved: true, isHidden: false })
+    // תוסף מושהה אינו נחשף בנתיב הציבורי הזה (ראו pluginVisibility)
+    const plugin = await Plugin.findOne({ _id: id, ...PUBLIC_PLUGIN_FILTER })
       .select('name slug version status compatibleWith maxAppVersion requiresNetwork pluginFileExt pluginFileSize versions updatedAt')
       .lean()
     if (!plugin) {

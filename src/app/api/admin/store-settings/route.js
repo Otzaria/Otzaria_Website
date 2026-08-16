@@ -21,6 +21,7 @@ function formatSettings(settings, pluginsById) {
         status: plugin.status,
         isApproved: plugin.isApproved === true,
         isHidden: plugin.isHidden === true,
+        isSuspended: plugin.isSuspended === true,
         downloadCount: plugin.downloadCount || 0,
         image: plugin.image?.ext ? `/api/plugins/${plugin._id}/image` : null
       })),
@@ -34,7 +35,7 @@ async function loadFeaturedPlugins(settings) {
   const ids = settings.featuredPluginIds.map((id) => id.toString())
   if (ids.length === 0) return new Map()
   const plugins = await Plugin.find({ _id: { $in: ids } })
-    .select('_id name version status isApproved isHidden downloadCount image')
+    .select('_id name version status isApproved isHidden isSuspended downloadCount image')
     .lean()
   return new Map(plugins.map((plugin) => [plugin._id.toString(), plugin]))
 }

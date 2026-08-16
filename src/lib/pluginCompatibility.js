@@ -86,6 +86,28 @@ export function resolveCompatibleVersion(plugin, appVersion) {
   return buildVersionEntries(plugin).find((entry) => isCompatibleWithApp(entry, appVersion)) || null
 }
 
+// גרסת האוצריא הנמוכה ביותר שעדיין מריצה גרסה כלשהי של התוסף — הרצפה הנמוכה
+// מבין כל הגרסאות, ולא זו של הגרסה החיה. מאפשר להסביר למשתמש שאין לו גרסה
+// תואמת מה הוא צריך בפועל, במקום את דרישת הגרסה האחרונה שהיא לרוב גבוהה יותר.
+// null כשלגרסה כלשהי אין רצפה כלל (ואז "ישן מדי" אינו ההסבר) או בנתון פגום.
+export function lowestSupportedAppVersion(plugin) {
+  try {
+    const entries = buildVersionEntries(plugin)
+    if (entries.length === 0) return null
+    let lowest = null
+    for (const entry of entries) {
+      // רצפה חסרה = אין מינימום כלל; רצפה פגומה = לא ניתן להסתמך על הנתון.
+      if (!entry.compatibleWith || !isValidAppVersion(entry.compatibleWith)) return null
+      if (lowest === null || compareVersions(entry.compatibleWith, lowest) < 0) {
+        lowest = entry.compatibleWith
+      }
+    }
+    return lowest
+  } catch {
+    return null
+  }
+}
+
 // האם לתוסף (מסמך DB) יש גרסה כלשהי התומכת בגרסת אוצריא. לסינון *לפני* עימוד
 // בנתיבים מעומדים, כדי ש-total ומספר הפריטים בעמוד יהיו נכונים.
 export function hasCompatibleVersion(plugin, appVersion) {

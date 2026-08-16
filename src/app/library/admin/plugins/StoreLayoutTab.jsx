@@ -89,6 +89,7 @@ function normalizeAdminPlugin(plugin) {
     status: plugin.status,
     isApproved: plugin.isApproved !== false,
     isHidden: plugin.isHidden === true,
+    isSuspended: plugin.isSuspended === true,
     downloadCount: plugin.downloadCount || 0,
     image: plugin.image?.ext ? `/api/plugins/${plugin._id}/image` : null
   }
@@ -169,7 +170,8 @@ function PluginPicker({ options, excludeIds, onSelect, placeholder }) {
 
 // שורת תוסף ברשימה ממוינת (נבחרים / שיבוצי קטגוריה) עם חיצי סדר והסרה
 function OrderedPluginRow({ plugin, index, total, onMove, onRemove }) {
-  const ghost = !plugin.isApproved || plugin.isHidden
+  // "רפאים" — משובץ שלא ייראה בפועל בחנות (לא מאושר / מוסתר / מושהה)
+  const ghost = !plugin.isApproved || plugin.isHidden || plugin.isSuspended
   return (
     <div className={`flex items-center gap-3 rounded-xl border p-3 ${ghost ? 'border-danger-200 bg-danger-50' : 'border-neutral-200 bg-surface'}`}>
       <span className="material-symbols-outlined text-on-surface/25" title="גרור לשינוי סדר">drag_indicator</span>
@@ -199,7 +201,9 @@ function OrderedPluginRow({ plugin, index, total, onMove, onRemove }) {
           <span className="truncate font-bold text-on-surface">{plugin.name}</span>
           <StatusBadge status={plugin.status} />
           {ghost && (
-            <span className="text-xs font-bold text-danger-600">לא יוצג בפועל</span>
+            <span className="text-xs font-bold text-danger-600">
+              {plugin.isSuspended && plugin.isApproved && !plugin.isHidden ? 'מושהה — לא יוצג בפועל' : 'לא יוצג בפועל'}
+            </span>
           )}
         </div>
         <div className="text-xs text-on-surface/50">
@@ -994,7 +998,9 @@ export default function StoreLayoutTab() {
           ) : (
             <div className="space-y-2">
               {categories.map((category, index) => {
-                const visibleCount = category.plugins.filter((plugin) => plugin.isApproved && !plugin.isHidden).length
+                const visibleCount = category.plugins.filter(
+                  (plugin) => plugin.isApproved && !plugin.isHidden && !plugin.isSuspended
+                ).length
                 const dndProps = categoriesDnd(index)
                 return (
                   <div
