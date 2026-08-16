@@ -6,9 +6,14 @@ const presetReact = require('@babel/preset-react');
 const ROOT_DIR = process.cwd();
 const OUTPUT_PATH = path.join(ROOT_DIR, 'public', 'export-editor', 'dicta-editor-offline.html');
 
+// הסדר משמעותי: קובץ שמצהיר על שם חייב להופיע לפני מי שמשתמש בו (ראה
+// createRenameCollisionsPlugin — הראשון שומר על השם).
 const COMPONENT_PATHS = [
+  'src/lib/color-constants.js',
   'src/lib/avatar-colors.js',
   'src/lib/editorUtils.js',
+  'src/lib/hebrewWordUtils.js',
+  'src/lib/shortcuts.js',
   'src/components/providers/DialogContext.jsx',
   'src/components/ui/Modal.jsx',
   'src/components/ui/FormInput.jsx',
@@ -47,6 +52,23 @@ function escapeScriptTag(value) {
   return value.replace(/<\/script/gi, '<\\/script');
 }
 
+// `import { formatShortcut as formatKey }` מאבד את הקישור כששורת ה-import נמחקת:
+// השם המקומי פשוט נעלם. כאן נשמר גשר מפורש בין השם המיוצא לשם המקומי.
+function collectImportAliases(source) {
+  const aliases = [];
+
+  for (const [, specifiers] of source.matchAll(/^\s*import\s*\{([^}]*)\}\s*from\s*['"][^'"]+['"];?\s*$/gm)) {
+    for (const specifier of specifiers.split(',')) {
+      const match = specifier.trim().match(/^([A-Za-z0-9_$]+)\s+as\s+([A-Za-z0-9_$]+)$/);
+      if (match && match[1] !== match[2]) {
+        aliases.push(`const ${match[2]} = ${match[1]};`);
+      }
+    }
+  }
+
+  return aliases;
+}
+
 function stripImportsAndExports(source) {
   return source
     .replace(/import\.meta\.url/g, 'location.href')
@@ -59,8 +81,48 @@ function stripImportsAndExports(source) {
     .replace(/export\s*\{[^}]*\};?/g, '');
 }
 
-function transpileComponent(source, filename) {
-  const cleaned = stripImportsAndExports(source);
+// כל הקבצים משורשרים לסקופ אחד, ולכן שתי הצהרות עם אותו שם ברמת המודול נפגשות:
+// `const` כפול הוא SyntaxError שמפיל את כל הסקריפט, ו-`function` כפול גרוע יותר —
+// הוא לא זורק, פשוט דורס בשקט. לכן מי שהגיע ראשון שומר על השם (וכך הפניות
+// חוצות-קבצים כמו Button או Modal ממשיכות לעבוד), וכל התנגשות אחריו מקבלת שם
+// ייחודי לקובץ. זו בדיוק סמנטיקת המודול המקורית: השם ההוא היה מקומי מלכתחילה.
+function moduleSuffixFor(filename) {
+  return path.basename(filename).replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9_$]/g, '_');
+}
+
+function createRenameCollisionsPlugin(claimedNames, filename, renamed) {
+  const suffix = moduleSuffixFor(filename);
+
+  return function renameCollisionsPlugin() {
+    return {
+      visitor: {
+        Program(programPath) {
+          // snapshot: scope.rename משנה את bindings תוך כדי
+          for (const name of Object.keys(programPath.scope.bindings)) {
+            if (!claimedNames.has(name)) {
+              claimedNames.set(name, filename);
+              continue;
+            }
+
+            let candidate = `${name}$${suffix}`;
+            let counter = 2;
+            while (claimedNames.has(candidate) || programPath.scope.hasBinding(candidate)) {
+              candidate = `${name}$${suffix}${counter++}`;
+            }
+
+            programPath.scope.rename(name, candidate);
+            claimedNames.set(candidate, filename);
+            renamed.push({ from: name, to: candidate, owner: claimedNames.get(name) });
+          }
+        },
+      },
+    };
+  };
+}
+
+function transpileComponent(source, filename, claimedNames, renamed) {
+  const aliases = collectImportAliases(source);
+  const cleaned = [stripImportsAndExports(source), ...aliases].join('\n');
   const result = Babel.transformSync(cleaned, {
     filename,
     babelrc: false,
@@ -68,6 +130,7 @@ function transpileComponent(source, filename) {
     comments: false,
     compact: false,
     sourceType: 'unambiguous',
+    plugins: [createRenameCollisionsPlugin(claimedNames, filename, renamed)],
     presets: [[presetReact, { runtime: 'classic' }]],
   });
 
@@ -627,16 +690,94 @@ async function buildMaterialSymbolsCss(usedIcons) {
 }
 
 async function buildBundledComponents() {
+  // הקריאה מקבילה, אבל ה-transpile סדרתי לפי סדר COMPONENT_PATHS: "הראשון שומר
+  // על השם" חייב להיות דטרמיניסטי, אחרת ריצות שונות יניבו פלט שונה.
   const sources = await Promise.all(
-    COMPONENT_PATHS.map(async (relativePath) => {
-      const fullPath = path.join(ROOT_DIR, relativePath);
-      const source = await readTextFile(fullPath);
-      const code = transpileComponent(source, relativePath);
-      return `/* --- ${relativePath} --- */\n${code}`;
-    })
+    COMPONENT_PATHS.map((relativePath) => readTextFile(path.join(ROOT_DIR, relativePath)))
   );
 
-  return sources.join('\n\n');
+  const claimedNames = new Map(PRELUDE_BINDINGS.map((name) => [name, '<prelude>']));
+  const renamed = [];
+  const chunks = [];
+
+  for (let i = 0; i < COMPONENT_PATHS.length; i++) {
+    const relativePath = COMPONENT_PATHS[i];
+    const code = transpileComponent(sources[i], relativePath, claimedNames, renamed);
+    chunks.push(`/* --- ${relativePath} --- */\n${code}`);
+  }
+
+  if (renamed.length > 0) {
+    console.log(`[offline-editor] Renamed ${renamed.length} colliding module-level name(s):`);
+    for (const { from, to, owner } of renamed) {
+      console.log(`  ${from} -> ${to} (already declared by ${owner})`);
+    }
+  }
+
+  return chunks.join('\n\n');
+}
+
+// גלובלים לגיטימיים של הדפדפן/השפה. כל שם אחר שהקוד שלנו מפנה אליו בלי שהוגדר
+// בבנדל הוא ReferenceError בזמן ריצה — כלומר עורך שנפתח כדף לבן.
+const ALLOWED_BROWSER_GLOBALS = new Set([
+  // Babel רושם arguments כגלובל, אך הוא מופיע רק בתוך פונקציות עזר שהוא עצמו מייצר
+  'arguments',
+  'globalThis', 'window', 'document', 'navigator', 'location', 'history', 'screen', 'console',
+  'localStorage', 'sessionStorage', 'fetch', 'XMLHttpRequest', 'AbortController', 'AbortSignal',
+  'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'queueMicrotask',
+  'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback',
+  'alert', 'confirm', 'prompt', 'getComputedStyle', 'matchMedia', 'structuredClone',
+  'Blob', 'File', 'FileReader', 'FormData', 'URL', 'URLSearchParams', 'Image', 'Audio',
+  'Event', 'CustomEvent', 'KeyboardEvent', 'MouseEvent', 'DOMParser', 'XMLSerializer',
+  'MutationObserver', 'IntersectionObserver', 'ResizeObserver',
+  'Node', 'NodeFilter', 'Element', 'HTMLElement', 'Range', 'Selection', 'DocumentFragment',
+  'crypto', 'performance', 'atob', 'btoa', 'TextEncoder', 'TextDecoder', 'ClipboardItem',
+  'Object', 'Array', 'String', 'Number', 'Boolean', 'Function', 'Symbol', 'BigInt',
+  'Math', 'JSON', 'Date', 'RegExp', 'Promise', 'Set', 'Map', 'WeakMap', 'WeakSet', 'Proxy',
+  'Reflect', 'Intl', 'Error', 'TypeError', 'RangeError', 'SyntaxError',
+  'parseInt', 'parseFloat', 'isNaN', 'isFinite', 'NaN', 'Infinity', 'undefined',
+  'encodeURIComponent', 'decodeURIComponent', 'encodeURI', 'decodeURI',
+  'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array',
+  'Int32Array', 'Uint32Array', 'Float32Array', 'Float64Array', 'ArrayBuffer', 'DataView',
+]);
+
+/**
+ * מוודא שכל שם שהקוד שלנו מפנה אליו באמת קיים בבנדל. זו הרשת שתופסת ייבוא חדש
+ * שנמחק ולא סופק בפרולוג — הכשל שהפיל את העורך האופליין בעבר בלי שאף build התלונן.
+ */
+function validateBundleReferences(bundledComponents, appCode) {
+  const code = `${bundledComponents}\n\n${appCode}`;
+  let globals = [];
+
+  Babel.transformSync(code, {
+    filename: 'offline-bundle.js',
+    babelrc: false,
+    configFile: false,
+    sourceType: 'script',
+    plugins: [
+      function collectGlobals() {
+        return {
+          visitor: {
+            Program(programPath) {
+              globals = Object.keys(programPath.scope.globals);
+            },
+          },
+        };
+      },
+    ],
+  });
+
+  const preludeNames = new Set(PRELUDE_BINDINGS);
+  const missing = globals
+    .filter((name) => !preludeNames.has(name) && !ALLOWED_BROWSER_GLOBALS.has(name))
+    .sort();
+
+  if (missing.length > 0) {
+    throw new Error(
+      `העורך האופליין מפנה ל-${missing.length} שמות שאינם מוגדרים בבנדל: ${missing.join(', ')}.\n` +
+      'כל אחד מהם יזרוק ReferenceError וישאיר את העורך כדף לבן. הוסף אותם לפרולוג ' +
+      '(buildModuleLoader) אם הם מגיעים מייבוא, או ל-ALLOWED_BROWSER_GLOBALS אם הם גלובל תקני.'
+    );
+  }
 }
 
 function buildAppSource() {
@@ -645,6 +786,47 @@ function buildAppSource() {
     'offlineRoot.render(React.createElement(OfflineEditorApp));',
   ].join('\n');
 }
+
+// שורות ה-import נמחקות, ולכן כל מה שהקומפוננטות מייבאות מ-react חייב להיות
+// מסופק כאן. רשימה קשיחה נשברת בשקט בכל הוק חדש (useDeferredValue היה בדיוק זה:
+// הוא נוסף לעורך, לא היה בפרולוג, והתוצאה הייתה ReferenceError בזמן ריצה), ולכן
+// היא נגזרת מהייצוא האמיתי של React בזמן ה-build.
+function reactHookNames() {
+  const names = Object.keys(require('react'))
+    .filter((name) => /^use[A-Z]/.test(name))
+    .sort();
+
+  if (names.length === 0) {
+    throw new Error('לא נמצאו הוקים בייצוא של react — בדוק את התקנת node_modules');
+  }
+
+  return names;
+}
+
+const REACT_EXTRA_BINDINGS = ['createContext'];
+const REACT_DOM_BINDINGS = ['createPortal'];
+const RUNTIME_BINDINGS = [
+  '__offlineModules',
+  '__offlineCache',
+  '__offlineRequire',
+  'React',
+  'ReactDOM',
+  'ReactDOMClient',
+  'DOMPurify',
+  'AnimatePresence',
+  'motion',
+  'Link',
+  'offlineRoot',
+];
+
+// כל השמות שהפרולוג מגדיר. משמש גם לשינוי שם של הצהרה בקומפוננטה שמתנגשת בהם,
+// וגם כרשימת ההיתר של הוולידציה בהמשך.
+const PRELUDE_BINDINGS = [
+  ...RUNTIME_BINDINGS,
+  ...reactHookNames(),
+  ...REACT_EXTRA_BINDINGS,
+  ...REACT_DOM_BINDINGS,
+];
 
 function buildModuleLoader(runtimeModules) {
   const moduleEntries = runtimeModules
@@ -676,8 +858,12 @@ const React = __offlineRequire('react');
 const ReactDOM = __offlineRequire('react-dom');
 const ReactDOMClient = __offlineRequire('react-dom/client');
 const DOMPurify = __offlineRequire('dompurify');
-const { useState, useEffect, useRef, useMemo, useCallback, useContext, useTransition, createContext } = React;
-const { createPortal } = ReactDOM;\nconst AnimatePresence = ({ children }) => React.createElement(React.Fragment, null, children);\nconst motion = new Proxy({}, { get: (_, tag) => (props) => React.createElement(tag, props, props && props.children) });
+const { ${[...reactHookNames(), ...REACT_EXTRA_BINDINGS].join(', ')} } = React;
+const { ${REACT_DOM_BINDINGS.join(', ')} } = ReactDOM;
+const AnimatePresence = ({ children }) => React.createElement(React.Fragment, null, children);
+const motion = new Proxy({}, { get: (_, tag) => (props) => React.createElement(tag, props, props && props.children) });
+// אין ניווט אופליין — Link של next הופך לעוגן רגיל (Button מרנדר אותו כש-href מועבר)
+const Link = ({ href, children, ...rest }) => React.createElement('a', { href, ...rest }, children);
 `;
 }
 
@@ -703,6 +889,8 @@ async function buildOfflineEditor() {
     console.log('Offline editor build skipped: CSS bundle not ready yet.');
     return;
   }
+
+  validateBundleReferences(bundledComponents, appCode);
 
   const moduleLoader = buildModuleLoader(runtimeModules);
   const inlineScript = [moduleLoader, bundledComponents, appCode].map(escapeScriptTag).join('\n\n');
