@@ -23,6 +23,7 @@ const FALLBACK_PERMISSIONS = [
   'ui.feedback',
   'ui.create_shortcut',
   'fs.user_files.read',
+  'fs.folder_access',
   'plugin.storage.read',
   'plugin.storage.write',
   'published_data.write',
@@ -45,6 +46,30 @@ const FALLBACK_PERMISSIONS = [
   'events.subscribe:workspace.changed',
   'events.subscribe:plugin.permissions_changed'
 ]
+
+// הרשאות בסיס (אוצריא 0.9.97+): ניתנות אוטומטית לכל תוסף. שימוש ב-API שלהן
+// בלי הצהרה אינו אזהרה; הצהרה עליהן מקבלת אזהרת דעיכה בלבד.
+// שיקוף של pluginBaselinePermissions באפליקציה.
+const BASELINE_PERMISSIONS = new Set([
+  'plugin.storage.read',
+  'plugin.storage.write',
+  'app.info.read',
+  'ui.feedback',
+  'notifications.send',
+  'events.subscribe:theme.changed'
+])
+
+// הרשאה חדשה (key) שהצהרה ותיקה (value) מכסה אותה —
+// ui.pickFolder ישב היסטורית תחת ui.feedback.
+const LEGACY_PERMISSION_ALIASES = {
+  'fs.folder_access': 'ui.feedback'
+}
+
+// גרסת אוצריא המינימלית שבה הרשאה מוצהרת קיימת. minAppVersion ישן יותר הוא
+// שגיאה חוסמת — אוצריא ישנה דוחה הרשאה לא מוכרת בהתקנה.
+const PERMISSION_MIN_VERSION = {
+  'fs.folder_access': '0.9.97'
+}
 
 const FALLBACK_API_METHODS = [
   'app.getInfo', 'app.getTheme', 'app.getLocale', 'app.getUserEmail', 'app.getGrantedPermissions',
@@ -836,10 +861,38 @@ export async function validatePluginArchive(buffer) {
   for (const [method] of apiUsage) {
     const required = METHOD_REQUIRED_PERMISSION[method]
     if (!required) continue
+    // הרשאות בסיס ניתנות אוטומטית (אוצריא 0.9.97+) — אין צורך בהצהרה
+    if (BASELINE_PERMISSIONS.has(required)) continue
     if (declaredSet.has(required)) continue
+    // הצהרה ותיקה מכסה הרשאה שפוצלה ממנה (ui.feedback → fs.folder_access)
+    if (LEGACY_PERMISSION_ALIASES[required] && declaredSet.has(LEGACY_PERMISSION_ALIASES[required])) continue
     // קריאות רשת מסתפקות גם ב-network.localhost (שירות מקומי), לא רק ב-network.access
     if (required === 'network.access' && declaredSet.has('network.localhost')) continue
     warnings.push(`התוסף משתמש ב-${method} אך לא ביקש את ההרשאה "${required}" ב-manifest`)
+  }
+
+  // הרשאת בסיס שהוצהרה — מיותרת; מומלץ להסיר בהזדמנות.
+  for (const permission of declaredSet) {
+    if (BASELINE_PERMISSIONS.has(permission)) {
+      warnings.push(`ההרשאה "${permission}" ניתנת כיום אוטומטית לכל תוסף — אפשר להסירה מה-manifest`)
+    }
+  }
+
+  // Cross-check חוסם: הרשאה מוצהרת חדשה מ-minAppVersion — אוצריא ישנה דוחה
+  // הרשאה לא מוכרת בהתקנה.
+  for (const permission of declaredSet) {
+    const since = PERMISSION_MIN_VERSION[permission]
+    if (!since) continue
+    try {
+      if (compareCoreVersions(since, typeof manifest.minAppVersion === 'string' ? manifest.minAppVersion : '0.0.0') > 0) {
+        errors.push(
+          `ההרשאה "${permission}" קיימת החל מגרסה ${since}, אך minAppVersion שהוצהר הוא ` +
+          `${manifest.minAppVersion}. עדכן את minAppVersion ל-${since} לפחות`
+        )
+      }
+    } catch {
+      // minAppVersion לא חוקי — לא חוסמים כאן (ולידציית המניפסט תטפל בכך)
+    }
   }
 
   // Cross-check חוסם: method חדש מ-minAppVersion שהוצהר. תוסף שקורא ל-API
@@ -864,6 +917,7 @@ export async function validatePluginArchive(buffer) {
   for (const [ev] of eventUsage) {
     const eventPerm = `events.subscribe:${ev}`
     if (!spec.permissions.has(eventPerm)) continue // not a permission-gated event
+    if (BASELINE_PERMISSIONS.has(eventPerm)) continue // הרשאת בסיס — ניתנת אוטומטית
     if (!declaredSet.has(eventPerm)) {
       warnings.push(`רישום ל-event "${ev}" דורש את ההרשאה "${eventPerm}" שלא הוכרזה ב-manifest`)
     }
@@ -923,7 +977,7 @@ const METHOD_REQUIRED_PERMISSION = {
   'ui.showError': 'ui.feedback',
   'ui.showConfirm': 'ui.feedback',
   'ui.showWarning': 'ui.feedback',
-  'ui.pickFolder': 'ui.feedback',
+  'ui.pickFolder': 'fs.folder_access',
   'feedback.sendEmail': 'feedback.send_email',
   'history.list': 'history.read',
   'history.listSearches': 'history.read',
