@@ -91,7 +91,7 @@ export default function PluginDetailPage() {
   // הודעת דיאלוג רגילה של האתר כשמגיע דיווח תוצאה מאוצריא
   useEffect(() => {
     if (installState.phase === 'success') {
-      showAlert('הצלחה', 'התוסף הותקן בהצלחה באוצריא!')
+      showAlert('הצלחה', installState.updated ? 'התוסף עודכן בהצלחה באוצריא!' : 'התוסף הותקן בהצלחה באוצריא!')
     } else if (installState.phase === 'failure') {
       showAlert(
         'שגיאה',
@@ -387,7 +387,7 @@ export default function PluginDetailPage() {
                       ) : installState.phase === 'success' ? (
                         <>
                           <span className="material-symbols-outlined">check_circle</span>
-                          <span>הותקן בהצלחה!</span>
+                          <span>{installState.updated ? 'עודכן בהצלחה!' : 'הותקן בהצלחה!'}</span>
                         </>
                       ) : installState.phase === 'failure' ? (
                         <>

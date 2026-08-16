@@ -107,7 +107,7 @@ export default function PluginCard({ plugin, installState, onInstall }: PluginCa
                   <span>מתקין...</span>
                 </>
               ) : installState.pluginId === plugin.id && installState.phase === 'success' ? (
-                <span>הותקן בהצלחה!</span>
+                <span>{installState.updated ? 'עודכן בהצלחה!' : 'הותקן בהצלחה!'}</span>
               ) : installState.pluginId === plugin.id && installState.phase === 'failure' ? (
                 <span>ההתקנה נכשלה - לחץ שוב לנסיון נוסף</span>
               ) : (

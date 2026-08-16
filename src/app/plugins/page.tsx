@@ -72,7 +72,7 @@ function PluginsStoreHomeContent() {
   // הודעת דיאלוג רגילה של האתר כשמגיע דיווח תוצאה מאוצריא
   useEffect(() => {
     if (installState.phase === 'success') {
-      showAlert('הצלחה', 'התוסף הותקן בהצלחה באוצריא!')
+      showAlert('הצלחה', installState.updated ? 'התוסף עודכן בהצלחה באוצריא!' : 'התוסף הותקן בהצלחה באוצריא!')
     } else if (installState.phase === 'failure') {
       showAlert(
         'שגיאה',

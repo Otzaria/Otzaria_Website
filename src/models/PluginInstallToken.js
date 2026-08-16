@@ -20,6 +20,9 @@ const PluginInstallTokenSchema = new mongoose.Schema(
     errorMessage: { type: String, default: null, maxlength: 500 },
     // גרסת אוצריא שדיווחה (אופציונלי, לצורכי אבחון)
     appVersion: { type: String, default: null, maxlength: 30 },
+    // האם התוסף כבר היה מותקן ורק עודכן. גרסאות אוצריא שאינן שולחות את
+    // השדה משאירות false, והדף מציג את נוסח ההתקנה כמו עד היום.
+    wasUpdate: { type: Boolean, default: false },
     reportedAt: { type: Date, default: null },
 
     // מתי הגיעה בקשת הורדת הקובץ מהאפליקציה (הטוקן מצורף ל-URL ההורדה).
