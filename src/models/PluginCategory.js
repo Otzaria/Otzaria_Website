@@ -39,6 +39,16 @@ const PluginCategorySchema = new mongoose.Schema(
     // הסתרת הקטגוריה כולה (בזמן בנייה וכד') בלי למחוק
     isVisible: { type: Boolean, default: true },
 
+    // סדר התצוגה בקטגוריה:
+    //   'rating' (ברירת המחדל) — מיון היברידי: manualTopCount הראשונים מ-pluginIds
+    //            נשארים מקובעים בסדר הידני, וכל השאר ממוינים לפי ציון הדירוג.
+    //   'manual' — הסדר הידני של pluginIds בלבד, כפי שהיה לפני הדירוגים.
+    sortMode: { type: String, enum: ['manual', 'rating'], default: 'rating' },
+
+    // כמה תוספים מראש הסדר הידני "מקובעים" ואינם נכנסים למיון לפי דירוג.
+    // רלוונטי ל-sortMode='rating' בלבד. 0 = הכול לפי דירוג.
+    manualTopCount: { type: Number, default: 0, min: 0, max: 20 },
+
     // התוספים המשובצים, בסדר תצוגה ידני. מותר לשבץ גם תוסף שטרם אושר —
     // הוא פשוט מסונן מכל תצוגה ציבורית עד אישורו.
     pluginIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Plugin' }],

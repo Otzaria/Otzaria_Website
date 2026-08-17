@@ -4,6 +4,7 @@ import Plugin from '@/models/Plugin'
 import { getStoreSettings } from '@/models/StoreSettings'
 import { formatPluginForPublic } from '@/lib/pluginSubmission'
 import { PUBLIC_PLUGIN_FILTER } from '@/lib/pluginStore'
+import { compareByRating } from '@/lib/pluginRating'
 import {
   readAppVersionParam,
   invalidAppVersionMessage,
@@ -14,6 +15,10 @@ import {
 // סדר: "התוספים הנבחרים" (StoreSettings.featuredPluginIds, בסדר האצירה) ראשונים,
 // אחריהם השאר מהחדש לישן. הנבחרים מסומנים isPinned:true — שם השדה נשמר
 // לתאימות לאחור עם תוסף החנות שבתוך אוצריא וצרכנים חיצוניים.
+//
+// ?sort=rating — במקום "מהחדש לישן", השאר ממוינים לפי ציון הדירוג (הנבחרים
+// נשארים ראשונים בכל מקרה). ברירת המחדל לא שונתה בכוונה: הסדר הכרונולוגי הוא
+// חוזה קיים מול תוסף החנות שבתוך אוצריא וצרכנים חיצוניים.
 //
 // ?appVersion=0.9.94 — כל תוסף מוחזר בגרסה הגבוהה ביותר התואמת לגרסת אוצריא הזו
 // (לא בהכרח האחרונה), ותוספים שאין להם אף גרסה תואמת מושמטים. כך צרכן שמציג
@@ -48,10 +53,12 @@ export async function GET(request) {
     const featuredRank = new Map(
       settings.featuredPluginIds.map((id, index) => [id.toString(), index])
     )
+    const byRating = searchParams.get('sort') === 'rating'
     plugins.sort((a, b) => {
       const rankA = featuredRank.get(a._id.toString()) ?? Infinity
       const rankB = featuredRank.get(b._id.toString()) ?? Infinity
       if (rankA !== rankB) return rankA - rankB
+      if (byRating) return compareByRating(a, b)
       return new Date(b.createdAt) - new Date(a.createdAt)
     })
 

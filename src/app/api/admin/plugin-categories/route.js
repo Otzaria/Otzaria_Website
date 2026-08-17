@@ -31,7 +31,7 @@ export async function GET() {
 }
 
 // POST /api/admin/plugin-categories — יצירת קטגוריה
-// body: { name, slug?, description?, icon?, showOnHome?, homeLimit? }
+// body: { name, slug?, description?, icon?, showOnHome?, homeLimit?, sortMode?, manualTopCount? }
 export async function POST(request) {
   try {
     const auth = await requirePluginsAdmin()
@@ -63,7 +63,9 @@ export async function POST(request) {
       description: (body.description || '').trim(),
       icon: (body.icon || '').trim(),
       showOnHome: body.showOnHome === true,
-      homeLimit: body.homeLimit !== undefined ? Number(body.homeLimit) : 6
+      homeLimit: body.homeLimit !== undefined ? Number(body.homeLimit) : 6,
+      sortMode: body.sortMode !== undefined ? body.sortMode : 'rating',
+      manualTopCount: body.manualTopCount !== undefined ? Number(body.manualTopCount) : 0
     }
     const errors = validateCategoryData(data)
     if (errors.length) {

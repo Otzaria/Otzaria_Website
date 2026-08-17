@@ -1,5 +1,6 @@
 import path from 'path'
 import { buildVersionEntries } from './pluginCompatibility'
+import { ratingFieldsForPublic } from './pluginRating'
 
 export const PLUGIN_LIMITS = {
   // שם התוסף מוצג בראש לשונית התוסף ב"כלים" — מעבר ל-14 תווים גולש מהכרטיסייה.
@@ -179,6 +180,9 @@ export function formatPluginForPublic(plugin, options = {}) {
     downloadUrl: `/api/plugins/${pluginId}/download`,
     homepage: source.homepage || '',
     downloadCount: plugin.downloadCount || 0,
+    // דירוגים: הממוצע האמיתי, מספר המדרגים, כמה מהם מאומתים וההתפלגות.
+    // ratingScore (הציון המוחלק שלפיו ממוינת החנות) אינו נחשף — פנימי למיון.
+    ...ratingFieldsForPublic(plugin),
     // גודל קובץ התוסף בבייטים (0 = לא ידוע, לתוספים ותיקים שטרם עברו backfill)
     pluginFileSize: source.pluginFileSize || 0,
     supportsDirectInstall: (source.pluginFileExt || '').toLowerCase() === '.otzplugin',

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose'
+import { DEFAULT_PRIOR_AVG } from '@/lib/pluginRating'
 
 const PluginSchema = new mongoose.Schema(
   {
@@ -101,6 +102,24 @@ const PluginSchema = new mongoose.Schema(
       version: { type: String, required: true, maxlength: 40 },
       count: { type: Number, default: 0 }
     }],
+
+    // ===== דירוגים =====
+    // האגרגט מנורמל כאן כדי שהחנות תוכל למיין ולהציג בלי join. מקור האמת הוא
+    // אוסף PluginRating, וכל השדות האלה מחושבים ממנו מחדש בכל שינוי דירוג
+    // (src/lib/pluginRatingStore.js — recomputePluginRating).
+    ratingCount: { type: Number, default: 0 },          // מספר המדרגים (גלויים)
+    ratingSum: { type: Number, default: 0 },            // סכום הדירוגים, לממוצע המוצג
+    ratingAvg: { type: Number, default: 0 },            // הממוצע האמיתי — זה שמוצג
+    ratingVerifiedCount: { type: Number, default: 0 },  // מתוכם בעלי התקנה מאומתת
+    // התפלגות 1★..5★ (אינדקס 0 = כוכב אחד) — להיסטוגרמה בדף התוסף
+    ratingBreakdown: { type: [Number], default: () => [0, 0, 0, 0, 0] },
+    // הסכום והמשקל המשוקללים (דירוג מאומת שוקל יותר) — קלט לציון המיון
+    ratingWeightedSum: { type: Number, default: 0 },
+    ratingWeight: { type: Number, default: 0 },
+    // הציון שלפיו ממוינת החנות: ממוצע מוחלק (Bayesian) ולא הממוצע הגולמי, כדי
+    // שדירוג בודד לא יעקוף עשרות דירוגים. פנימי — אינו נחשף ב-API.
+    // ברירת המחדל היא העוגן הגלובלי, כך שתוסף ללא דירוגים יושב באמצע ולא בתחתית.
+    ratingScore: { type: Number, default: DEFAULT_PRIOR_AVG, index: true },
 
     // הסתרה (במקום מחיקה)
     isHidden: { type: Boolean, default: false, index: true },

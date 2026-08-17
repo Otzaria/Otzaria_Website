@@ -7,6 +7,8 @@ import Link from 'next/link'
 import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 import PluginEditModal from '@/components/plugins/PluginEditModal'
+import RatingStars from '@/components/plugins/RatingStars'
+import PluginRatingPanel from '@/components/plugins/PluginRatingPanel'
 import { useDialog } from '@/components/providers/DialogContext'
 import { useDirectInstall } from '@/components/plugins/useDirectInstall'
 import { formatPluginStatus } from '@/lib/pluginSubmission'
@@ -34,6 +36,10 @@ interface Plugin {
   homepage: string
   authorId?: string | null
   downloadCount?: number
+  ratingAvg?: number
+  ratingCount?: number
+  ratingVerifiedCount?: number
+  ratingBreakdown?: number[]
   pluginFileSize?: number
   isHistoricalVersion?: boolean
   latestVersion?: string
@@ -360,6 +366,18 @@ export default function PluginDetailPage() {
                     <span className="material-symbols-outlined text-base leading-none">download</span>
                     {(plugin.downloadCount || 0).toLocaleString('he-IL')} הורדות
                   </span>
+                  {(plugin.ratingCount || 0) > 0 && (
+                    <span
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold bg-surface text-on-surface/70"
+                      title={`דירוג ממוצע מתוך ${plugin.ratingCount} מדרגים`}
+                    >
+                      <RatingStars value={plugin.ratingAvg || 0} size="md" />
+                      <span>
+                        {(plugin.ratingAvg || 0).toLocaleString('he-IL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                        <span className="text-on-surface/50"> ({plugin.ratingCount})</span>
+                      </span>
+                    </span>
+                  )}
                 </div>
 
                 {/* Action Buttons */}
@@ -547,6 +565,19 @@ export default function PluginDetailPage() {
               </div>
             </div>
           </div>
+
+          {/* דירוגים — הדירוג הוא של התוסף כולו, ולכן אינו מוצג בתצוגת גרסה ישנה */}
+          {!plugin.isHistoricalVersion && (
+            <PluginRatingPanel
+              pluginId={plugin.id}
+              initial={{
+                ratingAvg: plugin.ratingAvg || 0,
+                ratingCount: plugin.ratingCount || 0,
+                ratingVerifiedCount: plugin.ratingVerifiedCount || 0,
+                ratingBreakdown: plugin.ratingBreakdown || [0, 0, 0, 0, 0]
+              }}
+            />
+          )}
 
           {/* Screenshots Gallery */}
           {plugin.screenshots?.length > 0 && (

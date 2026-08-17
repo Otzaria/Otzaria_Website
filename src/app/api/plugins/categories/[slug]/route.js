@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import dbConnect from '@/lib/db'
 import PluginCategory from '@/models/PluginCategory'
 import { formatPluginForPublic } from '@/lib/pluginSubmission'
-import { fetchPublicPluginsByIds, orderByIds } from '@/lib/pluginStore'
+import { fetchPublicPluginsByIds, orderCategoryPlugins, resolveSortMode } from '@/lib/pluginStore'
 import {
   readAppVersionParam,
   invalidAppVersionMessage,
@@ -42,7 +42,7 @@ export async function GET(request, { params }) {
     }
 
     const pluginsById = await fetchPublicPluginsByIds(category.pluginIds || [])
-    let ordered = orderByIds(category.pluginIds || [], pluginsById)
+    let ordered = orderCategoryPlugins(category, pluginsById)
     // סינון תאימות לפני העימוד, כדי ש-total והעמוד ישקפו את מה שיוחזר בפועל
     if (appVersion) {
       ordered = ordered.filter((plugin) => hasCompatibleVersion(plugin, appVersion))
@@ -56,6 +56,8 @@ export async function GET(request, { params }) {
         name: category.name,
         description: category.description || '',
         icon: category.icon || '',
+        // אופן המיון — כדי שדף הקטגוריה יוכל לציין "מסודר לפי דירוג"
+        sortMode: resolveSortMode(category),
         plugins: page.map((plugin) => resolveForAppVersion(formatPluginForPublic(plugin), appVersion)),
         total: ordered.length
       },

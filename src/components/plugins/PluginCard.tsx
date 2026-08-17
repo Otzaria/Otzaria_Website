@@ -7,6 +7,7 @@
 import Link from 'next/link'
 import { formatPluginStatus } from '@/lib/pluginSubmission'
 import { formatHebrewDate } from '@/lib/hebrewDate'
+import RatingStars from '@/components/plugins/RatingStars'
 import type { DirectInstallState } from '@/components/plugins/useDirectInstall'
 import type { Plugin } from '@/components/plugins/types'
 
@@ -58,6 +59,19 @@ export default function PluginCard({ plugin, installState, onInstall }: PluginCa
             <span className="material-symbols-outlined text-sm leading-none">download</span>
             {(plugin.downloadCount || 0).toLocaleString('he-IL')}
           </span>
+          {/* דירוג — מוצג רק כשיש דירוגים בפועל (ולא "0 כוכבים") */}
+          {(plugin.ratingCount || 0) > 0 && (
+            <span
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-surface text-on-surface/70"
+              title={`דירוג ממוצע מתוך ${plugin.ratingCount} מדרגים`}
+            >
+              <RatingStars value={plugin.ratingAvg || 0} size="sm" />
+              <span>
+                {(plugin.ratingAvg || 0).toLocaleString('he-IL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                <span className="text-on-surface/50"> ({plugin.ratingCount})</span>
+              </span>
+            </span>
+          )}
         </div>
 
         {/* Title & Description */}

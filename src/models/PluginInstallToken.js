@@ -10,6 +10,11 @@ const PluginInstallTokenSchema = new mongoose.Schema(
     pluginId: { type: mongoose.Schema.Types.ObjectId, ref: 'Plugin', required: true, index: true },
     version: { type: String, default: '', maxlength: 40 },
 
+    // המשתמש שיזם את ההתקנה מהאתר, אם היה מחובר. משמש לרישום התקנה מאומתת
+    // (PluginInstall) כשהאפליקציה מדווחת הצלחה — ומשם ל"דירוג מאומת".
+    // ההתקנה עצמה פתוחה לכל אחד, ולכן השדה אופציונלי.
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+
     status: {
       type: String,
       enum: ['pending', 'success', 'failure'],
