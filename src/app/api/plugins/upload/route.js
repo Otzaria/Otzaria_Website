@@ -133,7 +133,9 @@ export async function POST(request) {
     if (!shortDescription) return bad('חסר שדה description ב-manifest.json של קובץ התוסף')
 
     // בדיקות תקינות מול ה-API הרשמי: הרשאות לא קיימות, קריאות API לא קיימות וכדומה.
-    // כל ממצא (גם errors וגם warnings) חוסם את ההעלאה - לא מאחסנים תוספים שאינם תואמים ל-SDK.
+    // errors ו-warnings חוסמים את ההעלאה — לא מאחסנים תוספים שאינם תואמים ל-SDK.
+    // advisories (המלצות ניקיון, למשל הצהרה על הרשאת בסיס) אינם חוסמים: התוסף
+    // תקין ועובד, וחסימה עליהם הייתה מקפיאה תוספים שאין בהם שום אי-תאימות.
     let designCompliant = false
     let designViolations = []
     try {
