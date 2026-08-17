@@ -21,13 +21,16 @@ export interface DirectInstallState {
   phase: InstallPhase
   pluginId: string | null
   error: string | null
+  // התוסף כבר היה מותקן ורק עודכן. גרסת אוצריא שאינה מדווחת על כך משאירה
+  // false, ואז מוצג נוסח ההתקנה.
+  updated: boolean
 }
 
 // ניהול התקנה ישירה עם מעקב תוצאה: יוצר טוקן, מנווט ל-otzaria:// עם הטוקן,
 // ועושה polling על סטטוס הדיווח מהאפליקציה. אם יצירת הטוקן נכשלת —
 // מנווט בלי טוקן (בדיוק כמו ההתנהגות הישנה) ולא מציג מעקב.
 export function useDirectInstall() {
-  const [state, setState] = useState<DirectInstallState>({ phase: 'idle', pluginId: null, error: null })
+  const [state, setState] = useState<DirectInstallState>({ phase: 'idle', pluginId: null, error: null, updated: false })
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const stopPolling = useCallback(() => {
@@ -59,18 +62,18 @@ export function useDirectInstall() {
     )
 
     if (!token) {
-      setState({ phase: 'idle', pluginId: null, error: null })
+      setState({ phase: 'idle', pluginId: null, error: null, updated: false })
       return
     }
 
-    setState({ phase: 'waiting', pluginId: plugin.id, error: null })
+    setState({ phase: 'waiting', pluginId: plugin.id, error: null, updated: false })
     const startedAt = Date.now()
     const activeToken = token
 
     pollRef.current = setInterval(async () => {
       if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
         stopPolling()
-        setState({ phase: 'no_report', pluginId: plugin.id, error: null })
+        setState({ phase: 'no_report', pluginId: plugin.id, error: null, updated: false })
         return
       }
       // חיסכון בבקשות כשהמשתמש עבר לחלון האפליקציה
@@ -80,17 +83,17 @@ export function useDirectInstall() {
         const res = await fetch(`/api/plugins/install-result?token=${encodeURIComponent(activeToken)}`)
         if (res.status === 404) {
           stopPolling()
-          setState({ phase: 'no_report', pluginId: plugin.id, error: null })
+          setState({ phase: 'no_report', pluginId: plugin.id, error: null, updated: false })
           return
         }
         if (!res.ok) return
         const data = await res.json()
         if (data.status === 'success') {
           stopPolling()
-          setState({ phase: 'success', pluginId: plugin.id, error: null })
+          setState({ phase: 'success', pluginId: plugin.id, error: null, updated: data.updated === true })
         } else if (data.status === 'failure') {
           stopPolling()
-          setState({ phase: 'failure', pluginId: plugin.id, error: data.error || null })
+          setState({ phase: 'failure', pluginId: plugin.id, error: data.error || null, updated: false })
         } else if (
           !data.received &&
           !data.downloaded &&
@@ -98,7 +101,7 @@ export function useDirectInstall() {
         ) {
           // שום אות חיים לא הגיע לשרת — אוצריא כנראה לא נפתחה (לא מותקנת)
           stopPolling()
-          setState({ phase: 'no_app', pluginId: plugin.id, error: null })
+          setState({ phase: 'no_app', pluginId: plugin.id, error: null, updated: false })
         }
       } catch {
         // שגיאת רשת זמנית — ננסה שוב בסבב הבא
@@ -108,7 +111,7 @@ export function useDirectInstall() {
 
   const dismiss = useCallback(() => {
     stopPolling()
-    setState({ phase: 'idle', pluginId: null, error: null })
+    setState({ phase: 'idle', pluginId: null, error: null, updated: false })
   }, [stopPolling])
 
   return { installState: state, install, dismiss }

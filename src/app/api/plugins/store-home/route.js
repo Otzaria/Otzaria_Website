@@ -8,6 +8,7 @@ import {
   PUBLIC_PLUGIN_FILTER,
   fetchPublicPluginsByIds,
   orderByIds,
+  orderCategoryPlugins,
   formatCategorySummary
 } from '@/lib/pluginStore'
 import {
@@ -50,11 +51,14 @@ export async function GET(request) {
     const compatible = (plugins) =>
       appVersion ? plugins.filter((plugin) => hasCompatibleVersion(plugin, appVersion)) : plugins
 
+    // התוספים הנבחרים נשארים בסדר הידני של המנהל — זו בחירה עריכותית ולא
+    // פופולריות, ולכן הדירוגים אינם ממיינים אותה.
     const featured = compatible(orderByIds(settings.featuredPluginIds, pluginsById))
       .map((plugin) => resolveForAppVersion(formatPluginForPublic(plugin, { isFeatured: true }), appVersion))
 
     const categoriesPayload = categories.map((category) => {
-      const publicPlugins = compatible(orderByIds(category.pluginIds || [], pluginsById))
+      // שורת דף-הבית מציגה את ראש הקטגוריה — ולכן באותו מיון בדיוק כמו דף הקטגוריה
+      const publicPlugins = compatible(orderCategoryPlugins(category, pluginsById))
       return {
         ...formatCategorySummary(category, publicPlugins.length),
         showOnHome: category.showOnHome === true,

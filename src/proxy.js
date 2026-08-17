@@ -153,9 +153,11 @@ const BOOKS_ADMIN_BLOCKED_PAGES = [
   '/library/admin/ocr-training',
   '/library/admin/ocr-lines',
   '/library/admin/ocr-layout',
+  '/library/admin/private-sources',
 ];
 const BOOKS_ADMIN_BLOCKED_API = [
   '/api/admin/users',
+  '/api/admin/private-sources',
   '/api/admin/plugins',
   '/api/admin/plugin-notifications',
   '/api/admin/plugin-categories',

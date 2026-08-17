@@ -2,6 +2,7 @@ import MiniSearch from 'minisearch'
 import Plugin from '@/models/Plugin'
 import { getStoreSettings } from '@/models/StoreSettings'
 import { normalizeHebrew, tokenizeHebrew, expandTermVariants } from '@/lib/hebrewSearchNormalize'
+import { effectiveRatingScore, DEFAULT_PRIOR_AVG, RATING_MAX } from '@/lib/pluginRating'
 
 // אינדקס חיפוש in-memory על התוספים הציבוריים (מאושרים, לא-מוסתרים ולא-מושהים).
 // נבנה עצלה, נשמר ברמת המודול (אינסטנס Next יחיד — ראו תכנון 8.5), עם TTL כרשת
@@ -17,7 +18,8 @@ const SELECT_FIELDS = [
   'name', 'slug', 'shortDescription', 'description', 'version', 'status', 'author',
   'authorId', 'compatibleWith', 'maxAppVersion', 'requiresNetwork', 'tags', 'homepage',
   'pluginFileName', 'pluginFileExt', 'pluginFileSize', 'image', 'screenshots',
-  'originalDate', 'fileUpdatedAt', 'downloadCount', 'versions', 'updatedAt', 'createdAt'
+  'originalDate', 'fileUpdatedAt', 'downloadCount', 'versions', 'updatedAt', 'createdAt',
+  'ratingCount', 'ratingAvg', 'ratingVerifiedCount', 'ratingBreakdown', 'ratingScore'
 ].join(' ')
 
 let cache = { index: null, docs: new Map(), builtAt: 0 }
@@ -86,12 +88,17 @@ function searchOptions(combineWith) {
   }
 }
 
-// דירוג סופי: רלוונטיות טקסטואלית דומיננטית, פופולריות שוברת שוויון, דחיפה קלה לנבחר
+// דירוג סופי: רלוונטיות טקסטואלית דומיננטית, פופולריות שוברת שוויון, דחיפה קלה לנבחר.
+// הדירוג נכנס כשקלול עדין בלבד (עד ±10%) ובכוונה אינו גורם מיון ראשי — אחרת
+// חיפוש מדויק לפי שם היה מחזיר תוסף אחר, מדורג יותר, לפני התוסף המבוקש.
+// תוסף ללא דירוגים מקבל בדיוק 1 (ratingScore שלו הוא העוגן הגלובלי).
 function finalScore(miniScore, doc) {
+  const ratingFactor = 1 + 0.1 * ((effectiveRatingScore(doc) - DEFAULT_PRIOR_AVG) / (RATING_MAX - DEFAULT_PRIOR_AVG))
   return (
     miniScore *
     (1 + 0.15 * Math.log10(1 + (doc.downloadCount || 0))) *
-    (doc.isFeatured ? 1.25 : 1)
+    (doc.isFeatured ? 1.25 : 1) *
+    ratingFactor
   )
 }
 

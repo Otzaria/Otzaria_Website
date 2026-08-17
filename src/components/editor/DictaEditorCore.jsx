@@ -162,6 +162,7 @@ export default function DictaEditorCore({
   
   const [toolbarExpanded, setToolbarExpanded] = useState(false)
   const [headerCompact, setHeaderCompact] = useState(false)
+  const [tocExpanded, setTocExpanded] = useState(true)
   
   // מנגנון undo/redo
   const [history, setHistory] = useState([{ content: initialContent, selection: { start: 0, end: 0 } }])
@@ -177,6 +178,11 @@ export default function DictaEditorCore({
       const savedCompact = localStorage.getItem('dicta_editor_header_compact')
       if (savedCompact === 'true') {
         setHeaderCompact(true)
+      }
+      // ברירת המחדל פתוחה, ולכן רק 'false' מפורש מכווץ
+      const savedToc = localStorage.getItem('dicta_editor_toc_expanded')
+      if (savedToc === 'false') {
+        setTocExpanded(false)
       }
     }
   }, [])
@@ -261,6 +267,10 @@ export default function DictaEditorCore({
   useEffect(() => {
     localStorage.setItem('dicta_editor_header_compact', headerCompact.toString())
   }, [headerCompact])
+
+  useEffect(() => {
+    localStorage.setItem('dicta_editor_toc_expanded', tocExpanded.toString())
+  }, [tocExpanded])
 
   useEffect(() => {
     const saved = localStorage.getItem('dicta_editor_shortcuts')
@@ -1205,27 +1215,50 @@ export default function DictaEditorCore({
   }, [onSave])
 
   // memoization של אזורים שאינם תלויים בתוכן - מונע reconciliation שלהם בכל הקלדה
+  // סרגל תוכן העניינים ניתן לכיווץ בדיוק כמו סרגל הכלים מנגד, כדי לפנות רוחב לטקסט
   const tocSidebar = useMemo(() => (
-    <aside className="w-64 bg-white border-r p-4 overflow-y-auto shadow-sm">
-      <h3 className="font-bold text-lg mb-4 text-neutral-800">תוכן עניינים</h3>
-      {toc.length === 0 ? (
-        <p className="text-sm text-neutral-500">אין כותרות בספר</p>
-      ) : (
-        <ul className="space-y-2">
-          {toc.map((item, index) => (
-            <li
-              key={item.id}
-              className="cursor-pointer hover:bg-neutral-100 p-2 rounded transition-colors"
-              style={{ paddingRight: `${(item.level - 1) * 12}px` }}
-              onClick={() => scrollToHeading(index)}
+    <aside className={`${tocExpanded ? 'w-64 p-4' : 'w-12 py-4'} bg-white border-r overflow-y-auto shadow-sm transition-all duration-300 shrink-0`}>
+      {tocExpanded ? (
+        <>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-lg text-neutral-800">תוכן עניינים</h3>
+            <button
+              onClick={() => setTocExpanded(false)}
+              className="p-1 hover:bg-neutral-100 rounded transition-colors"
+              title="כווץ תוכן עניינים"
             >
-              <span className="text-sm text-neutral-700">{item.text}</span>
-            </li>
-          ))}
-        </ul>
+              <span className="material-symbols-outlined text-neutral-600">chevron_left</span>
+            </button>
+          </div>
+          {toc.length === 0 ? (
+            <p className="text-sm text-neutral-500">אין כותרות בספר</p>
+          ) : (
+            <ul className="space-y-2">
+              {toc.map((item, index) => (
+                <li
+                  key={item.id}
+                  className="cursor-pointer hover:bg-neutral-100 p-2 rounded transition-colors"
+                  style={{ paddingRight: `${(item.level - 1) * 12}px` }}
+                  onClick={() => scrollToHeading(index)}
+                >
+                  <span className="text-sm text-neutral-700">{item.text}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      ) : (
+        <button
+          onClick={() => setTocExpanded(true)}
+          className="w-full flex flex-col items-center gap-2 p-2 hover:bg-neutral-100 rounded transition-colors"
+          title="הרחב תוכן עניינים"
+        >
+          <span className="material-symbols-outlined text-neutral-600">chevron_right</span>
+          <span className="material-symbols-outlined text-neutral-600">list</span>
+        </button>
       )}
     </aside>
-  ), [toc, scrollToHeading])
+  ), [toc, scrollToHeading, tocExpanded])
 
   const toolsSidebar = useMemo(() => {
     if (!canEdit) return null
@@ -1282,10 +1315,11 @@ export default function DictaEditorCore({
             headerCompact ? (
               // שורה אחת קומפקטית - כל המסכים
               <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap min-w-0">
                   {headerStartElement}
-                  <h1 className="text-base font-bold text-on-surface">{title}</h1>
-                  
+                  {/* שם קובץ ארוך היה מחזיר את הכותרת המכווצת לשתי שורות ומבטל את הכיווץ */}
+                  <h1 className="text-base font-bold text-on-surface truncate max-w-[14rem] min-w-0" title={title}>{title}</h1>
+
                   <Button
                     icon="unfold_more"
                     variant="ghost"
@@ -1416,10 +1450,10 @@ export default function DictaEditorCore({
               <>
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 min-w-0">
                   {headerStartElement}
-                  <div>
-                    <h1 className="text-lg font-bold text-on-surface">{title}</h1>
+                  <div className="min-w-0">
+                    <h1 className="text-lg font-bold text-on-surface truncate" title={title}>{title}</h1>
                     <p className="text-xs text-on-surface/60">עריכה אופליין</p>
                   </div>
                 </div>
@@ -1567,11 +1601,11 @@ export default function DictaEditorCore({
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 min-w-0">
                   {headerStartElement}
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h1 className="text-lg font-bold text-on-surface">{title}</h1>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <h1 className="text-lg font-bold text-on-surface truncate" title={title}>{title}</h1>
                     </div>
                     <div className="flex items-center gap-2">
                       <p className="text-xs text-on-surface/60">עריכת דיקטה</p>

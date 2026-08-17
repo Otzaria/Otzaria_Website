@@ -43,7 +43,7 @@ function PluginSearchPageContent() {
   // הודעת דיאלוג רגילה של האתר כשמגיע דיווח תוצאה מאוצריא
   useEffect(() => {
     if (installState.phase === 'success') {
-      showAlert('הצלחה', 'התוסף הותקן בהצלחה באוצריא!')
+      showAlert('הצלחה', installState.updated ? 'התוסף עודכן בהצלחה באוצריא!' : 'התוסף הותקן בהצלחה באוצריא!')
     } else if (installState.phase === 'failure') {
       showAlert(
         'שגיאה',
@@ -341,7 +341,7 @@ function PluginSearchPageContent() {
                                 <span>מתקין...</span>
                               </>
                             ) : installState.pluginId === plugin.id && installState.phase === 'success' ? (
-                              <span>הותקן בהצלחה!</span>
+                              <span>{installState.updated ? 'עודכן בהצלחה!' : 'הותקן בהצלחה!'}</span>
                             ) : installState.pluginId === plugin.id && installState.phase === 'failure' ? (
                               <span>ההתקנה נכשלה - לחץ שוב לנסיון נוסף</span>
                             ) : (

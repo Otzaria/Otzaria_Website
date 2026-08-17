@@ -4,7 +4,31 @@ import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useDialog } from '@/components/providers/DialogContext'
 
-export default function StatusConfigModal({ statuses, uploads = [], onSave, onClose }) {
+/**
+ * מודאל ניהול רשימת ערכים מסוג { key: { label, color } }.
+ *
+ * ברירות המחדל של המילים מתאימות לסטטוסי ספרים (השימוש המקורי), וניתן
+ * להחליף אותן כדי לנהל רשימות דינמיות אחרות (למשל אופני קבלת אישור).
+ *
+ * @param {object[]} uploads פריטים לספירת שימוש — נספרים לפי השדה `bookStatus`
+ */
+export default function StatusConfigModal({
+  statuses,
+  uploads = [],
+  onSave,
+  onClose,
+  title = 'הגדרות סטטוסים',
+  itemNoun = 'סטטוס',
+  itemNounPlural = 'סטטוסים',
+  usageNoun = 'העלאות',
+  defaultKey = 'not_checked',
+  // ניסוחים מגדריים — ברירת המחדל היא לשון זכר (סטטוס), וניתן להעביר נקבה
+  existingTitle = `${itemNounPlural} קיימים`,
+  addTitle = `הוספת ${itemNoun} חדש`,
+  assignedText = 'משויך',
+  deleteConfirmBody = 'אם תמחק את הסטטוס, ההעלאות האלה יישארו עם סטטוס לא תקין.\n\nמומלץ לשנות את הסטטוס של ההעלאות האלה לפני המחיקה.',
+  deleteConfirmQuestion = 'האם אתה בטוח שברצונך למחוק את הסטטוס?',
+}) {
   const [mounted, setMounted] = useState(false)
   const { showConfirm, showAlert } = useDialog()
   
@@ -38,7 +62,7 @@ export default function StatusConfigModal({ statuses, uploads = [], onSave, onCl
     }
     
     if (editedStatuses[newStatusKey]) {
-      showAlert('שגיאה', 'סטטוס עם מפתח זה כבר קיים')
+      showAlert('שגיאה', `${itemNoun} עם מפתח זה כבר קיים`)
       return
     }
     
@@ -57,17 +81,17 @@ export default function StatusConfigModal({ statuses, uploads = [], onSave, onCl
   
   const handleDeleteStatus = (key) => {
     // בדיקה כמה ספרים משתמשים בסטטוס הזה
-    const booksWithStatus = uploads.filter(upload => 
-      (upload.bookStatus || 'not_checked') === key
+    const booksWithStatus = uploads.filter(upload =>
+      (upload.bookStatus || defaultKey) === key
     )
-    
+
     const statusLabel = editedStatuses[key].label
-    
+
     if (booksWithStatus.length > 0) {
-      const confirmMessage = `סטטוס "${statusLabel}" משויך ל-${booksWithStatus.length} העלאות.\n\nאם תמחק את הסטטוס, ההעלאות האלה יישארו עם סטטוס לא תקין.\n\nמומלץ לשנות את הסטטוס של ההעלאות האלה לפני המחיקה.\n\nהאם אתה בטוח שברצונך למחוק את הסטטוס?`
-      
+      const confirmMessage = `${itemNoun} "${statusLabel}" ${assignedText} ל-${booksWithStatus.length} ${usageNoun}.\n\n${deleteConfirmBody}\n\n${deleteConfirmQuestion}`
+
       showConfirm(
-        'מחיקת סטטוס',
+        `מחיקת ${itemNoun}`,
         confirmMessage,
         () => {
           const { [key]: _, ...rest } = editedStatuses
@@ -78,8 +102,8 @@ export default function StatusConfigModal({ statuses, uploads = [], onSave, onCl
       )
     } else {
       showConfirm(
-        'מחיקת סטטוס',
-        `האם למחוק את הסטטוס "${statusLabel}"?`,
+        `מחיקת ${itemNoun}`,
+        `האם למחוק את "${statusLabel}"?`,
         () => {
           const { [key]: _, ...rest } = editedStatuses
           setEditedStatuses(rest)
@@ -99,7 +123,7 @@ export default function StatusConfigModal({ statuses, uploads = [], onSave, onCl
         <div className="flex justify-between items-center p-6 border-b">
           <h2 className="text-2xl font-bold text-neutral-800 flex items-center gap-2">
             <span className="material-symbols-outlined text-feature-600">settings</span>
-            הגדרות סטטוסים
+            {title}
           </h2>
           <button
             onClick={onClose}
@@ -113,11 +137,11 @@ export default function StatusConfigModal({ statuses, uploads = [], onSave, onCl
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* רשימת סטטוסים קיימים */}
           <div>
-            <h3 className="text-lg font-bold mb-4 text-neutral-700">סטטוסים קיימים</h3>
+            <h3 className="text-lg font-bold mb-4 text-neutral-700">{existingTitle}</h3>
             <div className="space-y-3">
               {Object.entries(editedStatuses).map(([key, config]) => {
-                const booksWithStatus = uploads.filter(upload => 
-                  (upload.bookStatus || 'not_checked') === key
+                const booksWithStatus = uploads.filter(upload =>
+                  (upload.bookStatus || defaultKey) === key
                 ).length
                 
                 return (
@@ -128,7 +152,7 @@ export default function StatusConfigModal({ statuses, uploads = [], onSave, onCl
                         מפתח
                         {booksWithStatus > 0 && (
                           <span className="px-2 py-0.5 bg-info-100 text-info-700 text-xs rounded-full">
-                            {booksWithStatus} העלאות
+                            {booksWithStatus} {usageNoun}
                           </span>
                         )}
                       </label>
@@ -172,7 +196,7 @@ export default function StatusConfigModal({ statuses, uploads = [], onSave, onCl
                   <button
                     onClick={() => handleDeleteStatus(key)}
                     className="p-2 text-danger-600 hover:bg-danger-50 rounded transition-colors"
-                    title="מחיקת סטטוס"
+                    title={`מחיקת ${itemNoun}`}
                   >
                     <span className="material-symbols-outlined">delete</span>
                   </button>
@@ -183,7 +207,7 @@ export default function StatusConfigModal({ statuses, uploads = [], onSave, onCl
           
           {/* הוספת סטטוס חדש */}
           <div className="border-t pt-6">
-            <h3 className="text-lg font-bold mb-4 text-neutral-700">הוספת סטטוס חדש</h3>
+            <h3 className="text-lg font-bold mb-4 text-neutral-700">{addTitle}</h3>
             <div className="flex items-end gap-3">
               <div className="flex-1">
                 <label className="block text-xs text-neutral-600 mb-1">מפתח (באנגלית, ללא רווחים)</label>

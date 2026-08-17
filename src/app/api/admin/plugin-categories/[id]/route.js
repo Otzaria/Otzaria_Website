@@ -77,6 +77,8 @@ export async function PATCH(request, { params }) {
         if (data.icon !== undefined) category.icon = String(data.icon).trim()
         if (data.showOnHome !== undefined) category.showOnHome = data.showOnHome === true
         if (data.homeLimit !== undefined) category.homeLimit = Number(data.homeLimit)
+        if (data.sortMode !== undefined) category.sortMode = data.sortMode
+        if (data.manualTopCount !== undefined) category.manualTopCount = Number(data.manualTopCount)
         if (data.isVisible !== undefined) category.isVisible = data.isVisible === true
 
         try {

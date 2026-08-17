@@ -37,9 +37,12 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
     }
 
+    // הסשן נדרש לשני דברים: בדיקת הגישה לתוסף מושהה, וצירוף מזהה המשתמש
+    // לטוקן — שממנו נרשמת ההתקנה המאומתת כשהאפליקציה תדווח הצלחה.
+    const session = await getServerSession(authOptions)
+
     // תוסף מושהה — התקנה ישירה זמינה רק למעלה ולמנהלי התוספים, כמו ההורדה עצמה
     if (isPluginSuspended(plugin)) {
-      const session = await getServerSession(authOptions)
       const isAdmin = hasPluginsAccess(session?.user?.role)
       const isOwner = plugin.authorId?.toString() === session?.user?.id
       if (!canAccessSuspended({ isAdmin, isOwner })) {
@@ -52,6 +55,7 @@ export async function POST(request, { params }) {
       token: crypto.randomBytes(24).toString('base64url'),
       pluginId: plugin._id,
       version: version || plugin.version,
+      userId: session?.user?.id || null,
       expiresAt
     })
 

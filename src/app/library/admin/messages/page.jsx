@@ -215,7 +215,7 @@ export default function AdminMessagesPage() {
                               <p className="text-sm text-on-surface/60 mb-3 flex items-center flex-wrap gap-2">
                                   <span className="material-symbols-outlined text-sm">person</span>
                                   <span className="font-medium">{message.senderName}</span>
-                                  <span>({message.senderEmail})</span>
+                                  {message.senderEmail && <span>({message.senderEmail})</span>}
                                   {message.recipientName && (
                                     <>
                                       <span className="material-symbols-outlined text-sm">arrow_back</span>
@@ -277,10 +277,14 @@ export default function AdminMessagesPage() {
                           </div>
                       ) : (
                           <div className="flex gap-3 mt-4 border-t border-neutral-100 pt-3">
-                              <button onClick={() => setSelectedMessage(message.id)} className="flex items-center gap-1 text-info-600 hover:bg-info-50 px-3 py-1.5 rounded-lg transition-colors text-sm font-medium">
-                                  <span className="material-symbols-outlined text-lg">reply</span>
-                                  השב
-                              </button>
+                              {message.allowReplies !== false ? (
+                                  <button onClick={() => setSelectedMessage(message.id)} className="flex items-center gap-1 text-info-600 hover:bg-info-50 px-3 py-1.5 rounded-lg transition-colors text-sm font-medium">
+                                      <span className="material-symbols-outlined text-lg">reply</span>
+                                      השב
+                                  </button>
+                              ) : (
+                                  <span className="flex items-center px-3 py-1.5 text-sm text-neutral-500">הודעת מערכת — לא ניתן להשיב</span>
+                              )}
                               {message.status === 'unread' && (
                                   <button onClick={() => handleMarkRead(message.id)} className="flex items-center gap-1 text-neutral-600 hover:bg-neutral-100 px-3 py-1.5 rounded-lg transition-colors text-sm">
                                       <span className="material-symbols-outlined text-lg">mark_email_read</span>

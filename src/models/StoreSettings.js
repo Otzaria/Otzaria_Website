@@ -14,6 +14,12 @@ const StoreSettingsSchema = new mongoose.Schema(
     homeTitle: { type: String, trim: true, maxlength: 80, default: '' },
     homeSubtitle: { type: String, trim: true, maxlength: 200, default: '' },
 
+    // ===== עוגן ההחלקה של הדירוגים =====
+    // הממוצע הגלובלי של כל דירוגי החנות, במטמון. אליו "נגררים" תוספים עם מעט
+    // דירוגים בחישוב ratingScore. מחושב מחדש בעצלתיים (ראו pluginRatingStore).
+    ratingPriorAvg: { type: Number, default: null },
+    ratingPriorUpdatedAt: { type: Date, default: null },
+
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
   },
   { timestamps: true }

@@ -20,6 +20,7 @@ const ALL_TABS = [
   { id: 'dictionary', label: 'מילון', icon: 'spellcheck', href: '/library/admin/dictionary', roles: ['admin', 'admin_books'] },
   { id: 'book-info', label: 'מידע על ספרים', icon: 'list_alt', href: '/library/admin/book-info', roles: ['admin', 'admin_books'] },
   { id: 'book-acronyms', label: 'כינויים ור"ת', icon: 'dictionary', href: '/library/admin/book-acronyms', roles: ['admin', 'admin_books'] },
+  { id: 'private-sources', label: 'מקורות ספרים פרטיים', icon: 'copyright', href: '/library/admin/private-sources', roles: ['admin'] },
 ]
 
 export default function AdminNav({ unreadMessagesCount = 0, pendingUploadsCount = 0, pendingPluginsCount = 0 }) {

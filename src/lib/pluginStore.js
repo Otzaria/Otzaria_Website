@@ -1,6 +1,7 @@
 import Plugin from '@/models/Plugin'
 import PluginCategory from '@/models/PluginCategory'
 import { NOT_SUSPENDED_FILTER } from '@/lib/pluginVisibility'
+import { compareByRating } from '@/lib/pluginRating'
 
 // עזרי שליפה משותפים לנתיבי החנות הציבוריים (store-home, categories, search).
 // כלל הברזל: ציבורית מוצגים רק תוספים isApproved && !isHidden && !isSuspended;
@@ -30,6 +31,28 @@ export function orderByIds(ids, pluginsById) {
     if (plugin) ordered.push(plugin)
   }
   return ordered
+}
+
+// מצב המיון של קטגוריה, כולל מסמכים ותיקים שנוצרו לפני הוספת השדה
+// (נעדר = 'rating', כדי שהדירוגים ישפיעו גם על קטגוריות קיימות).
+export function resolveSortMode(category) {
+  return category?.sortMode === 'manual' ? 'manual' : 'rating'
+}
+
+// סדר התצוגה של קטגוריה — היברידי: ראש הרשימה נשאר האוצרות הידנית של המנהל
+// (manualTopCount הראשונים), וכל השאר ממוינים לפי ציון הדירוג. כך דירוגים
+// מקדמים תוספים טובים בלי לדרוס קיבוע מכוון.
+// "רפאים" (תוסף שנמחק/הוסתר/מושהה/אינו מאושר) מדולגים בשקט, כמו ב-orderByIds.
+export function orderCategoryPlugins(category, pluginsById) {
+  const ids = category?.pluginIds || []
+  const ordered = orderByIds(ids, pluginsById)
+  if (resolveSortMode(category) === 'manual') return ordered
+
+  // הקיבוע נמדד על התוספים שיוצגו בפועל, ולא על מזהי הרפאים שביניהם
+  const pinnedCount = Math.min(Math.max(Number(category?.manualTopCount) || 0, 0), ordered.length)
+  const pinned = ordered.slice(0, pinnedCount)
+  const rest = ordered.slice(pinnedCount).sort(compareByRating)
+  return [...pinned, ...rest]
 }
 
 export function formatCategorySummary(category, pluginCount) {

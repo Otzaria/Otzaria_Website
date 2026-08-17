@@ -40,6 +40,9 @@ const UserSchema = new mongoose.Schema({
     enabled: { type: Boolean, default: false }
   },
 
+  // כתובת לקבלת התראות (למשל דיווחים על תוספים). null = להשתמש בכתובת החשבון.
+  notificationEmail: { type: String, default: null },
+
   // --- מרחב עריכת הספרים הערוכים ---
   // מפקח: משתמש מהימן שעריכותיו מוחלות מיד והוא יכול לאשר הצעות של אחרים
   isSupervisor: { type: Boolean, default: false },

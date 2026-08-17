@@ -28,6 +28,13 @@ export interface Plugin {
   homepage: string
   isPinned?: boolean
   downloadCount?: number
+  // דירוגים: הממוצע האמיתי, מספר המדרגים, כמה מהם בעלי התקנה מאומתת,
+  // והתפלגות 1★..5★ (אינדקס 0 = כוכב אחד). הציון המוחלק שלפיו ממוינת החנות
+  // אינו נחשף ב-API.
+  ratingAvg?: number
+  ratingCount?: number
+  ratingVerifiedCount?: number
+  ratingBreakdown?: number[]
   // מצורף רק בנתיבים שמחשבים קטגוריות (דף תוסף, חיפוש)
   categories?: CategoryRef[]
 }

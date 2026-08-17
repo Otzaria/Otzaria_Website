@@ -110,17 +110,58 @@ async function resolveBaseTreeSha({ repo, branch, basePath, token }) {
 }
 
 /**
- * ליבה: כל קבצי ה-txt תחת תיקיית הבסיס בריפו/ענף נתון, בקריאה אחת (recursive tree).
+ * ליבה: כל הקבצים בעלי הסיומות המבוקשות תחת תיקיית הבסיס בריפו/ענף נתון,
+ * בקריאה אחת (recursive tree). ברירת המחדל היא txt בלבד (התנהגות היסטורית).
+ *
+ * ההשוואה לסיומת היא תלוית-רישיות כברירת מחדל (כמו בהתנהגות ההיסטורית);
+ * caseInsensitiveExtensions=true מאפשר התאמה ללא תלות ברישיות.
  */
-async function listFilesInRepo({ repo, branch, basePath, token }) {
+async function listFilesInRepo({
+  repo,
+  branch,
+  basePath,
+  token,
+  extensions = [".txt"],
+  caseInsensitiveExtensions = false,
+}) {
+  const exts = caseInsensitiveExtensions ? extensions.map((e) => e.toLowerCase()) : extensions;
   const baseTreeSha = await resolveBaseTreeSha({ repo, branch, basePath, token });
   const data = await ghFetch(`${GITHUB_API}/repos/${repo}/git/trees/${baseTreeSha}?recursive=1`, { token });
   if (data.truncated) {
     throw new Error("רשימת הקבצים מגיטהאב נחתכה (truncated) — יש לפצל את הסריקה");
   }
   return (data.tree || [])
-    .filter((t) => t.type === "blob" && t.path.endsWith(".txt"))
+    .filter((t) => {
+      if (t.type !== "blob") return false;
+      const candidate = caseInsensitiveExtensions ? t.path.toLowerCase() : t.path;
+      return exts.some((e) => candidate.endsWith(e));
+    })
     .map((t) => ({ path: t.path, sha: t.sha, size: t.size }));
+}
+
+/**
+ * רשימת קבצים גנרית תחת תיקיית בסיס כלשהי בריפו המשיכה.
+ * נועד לצרכנים שאינם "מרחב העריכה" (למשל תיקיית MoreBooks של הספרים הפרטיים).
+ *
+ * @param {object} opts
+ * @param {string} opts.basePath      נתיב הבסיס בתוך הריפו (למשל "MoreBooks")
+ * @param {string[]} [opts.extensions] סיומות לסינון (ברירת מחדל: [".txt"])
+ * @param {string} [opts.repo]        ברירת מחדל: ריפו המשיכה מה-config
+ * @param {string} [opts.branch]      ברירת מחדל: ענף המשיכה מה-config
+ * @returns {Promise<Array<{path:string, sha:string, size:number}>>} path יחסי ל-basePath
+ *
+ * כאן ההשוואה לסיומת אינה תלוית-רישיות (קבצי המשתמשים מגיעים גם כ-".PDF" וכד').
+ */
+export async function listRepoFiles({ basePath, extensions = [".txt"], repo, branch } = {}, config = getLibraryGitHubConfig()) {
+  if (!basePath) throw new Error("חסר basePath לרשימת קבצים מגיטהאב");
+  return listFilesInRepo({
+    repo: repo || config.pullRepo,
+    branch: branch || config.pullBranch,
+    basePath,
+    token: config.token,
+    extensions,
+    caseInsensitiveExtensions: true,
+  });
 }
 
 /**

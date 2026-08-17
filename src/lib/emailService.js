@@ -601,3 +601,105 @@ export async function sendPluginApprovalNotification(pluginData) {
         return { sent: false, error: error.message };
     }
 }
+
+// תוויות סוגי דיווח על תוסף (חייב להתאים ל-enum ב-PluginReport)
+const PLUGIN_REPORT_TYPE_LABELS = {
+    bug: 'תקלה',
+    crash: 'קריסה',
+    content: 'תוכן',
+    other: 'אחר'
+};
+
+export function formatPluginReportType(type) {
+    return PLUGIN_REPORT_TYPE_LABELS[type] || PLUGIN_REPORT_TYPE_LABELS.other;
+}
+
+// שליחת התראה למפתח התוסף על דיווח שהתקבל ממשתמש באוצריא
+export async function sendPluginReportNotification(reportData) {
+    try {
+        const recipientEmail = (reportData.recipientEmail || '').trim();
+        if (!recipientEmail) {
+            return { sent: false, reason: 'missing_recipient_email' };
+        }
+
+        const transporter = createTransporter();
+        const logoUrl = `${process.env.NEXTAUTH_URL}/logo.png`;
+        const pluginUrl = reportData.pluginSlugOrId
+            ? `${process.env.NEXTAUTH_URL}/plugins/${encodeURIComponent(reportData.pluginSlugOrId)}`
+            : null;
+        const reporterEmail = (reportData.reporterEmail || '').trim();
+
+        const safePluginName = escapeHtml(reportData.pluginName || 'לא צוין');
+        const safePluginVersion = escapeHtml(reportData.pluginVersion || 'לא צוין');
+        const safeReportType = escapeHtml(formatPluginReportType(reportData.reportType));
+        const safeDetails = escapeHtml(reportData.details || '');
+        const safeRecipientName = escapeHtml(reportData.recipientName || recipientEmail);
+        const safeAppVersion = escapeHtml(reportData.appVersion || 'לא צוין');
+        const safePlatform = escapeHtml(reportData.platform || 'לא צוין');
+        const safeReporterEmail = escapeHtml(reporterEmail);
+
+        const replyToBlock = reporterEmail
+            ? `<p style="margin: 8px 0;"><strong>כתובת למענה:</strong> <a href="mailto:${safeReporterEmail}" style="color: #d4a373;">${safeReporterEmail}</a></p>`
+            : `<p style="margin: 8px 0; color: #666;">המדווח לא השאיר כתובת למענה.</p>`;
+
+        const pluginLinkBlock = pluginUrl
+            ? `<div style="margin: 30px 0; text-align: center;">
+                        <a href="${pluginUrl}" style="background-color: #d4a373; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+                            מעבר לדף התוסף
+                        </a>
+                    </div>`
+            : '';
+
+        const emailHtml = `
+        <div dir="rtl" style="font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 40px; text-align: center;">
+            <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden;">
+                <div style="background-color: #ffffff; padding: 20px; border-bottom: 3px solid #d4a373;">
+                    <img src="${logoUrl}" alt="Otzaria Logo" style="width: 120px; height: auto;">
+                    <h2 style="color: #d4a373; font-size: 20px; margin: 5px 0 0 0; font-weight: bold;">ספריית אוצריא</h2>
+                </div>
+                <div style="padding: 30px; color: #333333; text-align: right;">
+                    <h1 style="color: #2c3e50; font-size: 24px; margin-bottom: 10px; text-align: center;">📩 התקבל דיווח על התוסף שלך</h1>
+                    <p style="font-size: 16px; line-height: 1.8; margin: 0 0 20px 0;">
+                        שלום ${safeRecipientName},
+                    </p>
+                    <p style="font-size: 16px; line-height: 1.8; margin: 0 0 20px 0;">
+                        משתמש בתוסף שלך שלח דיווח דרך תוכנת אוצריא.
+                    </p>
+                    <div style="background-color: #f0f0f0; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                        <p style="margin: 8px 0;"><strong>שם התוסף:</strong> ${safePluginName}</p>
+                        <p style="margin: 8px 0;"><strong>גרסת התוסף:</strong> ${safePluginVersion}</p>
+                        <p style="margin: 8px 0;"><strong>סוג הדיווח:</strong> ${safeReportType}</p>
+                        <p style="margin: 8px 0;"><strong>גרסת אוצריא:</strong> ${safeAppVersion}</p>
+                        <p style="margin: 8px 0;"><strong>מערכת הפעלה:</strong> ${safePlatform}</p>
+                        ${replyToBlock}
+                    </div>
+                    <div style="background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin: 20px 0;">
+                        <p style="margin: 0 0 8px 0;"><strong>תוכן הדיווח:</strong></p>
+                        <p style="margin: 0; white-space: pre-wrap; line-height: 1.7;">${safeDetails}</p>
+                    </div>
+                    ${pluginLinkBlock}
+                    <p style="color: #666; font-size: 14px; line-height: 1.8; margin-top: 20px;">
+                        הדיווח נשלח על ידי משתמש של התוסף דרך אוצריא. עותק ממנו ממתין לך גם בתיבת ההודעות באתר.
+                    </p>
+                </div>
+            </div>
+        </div>
+        `;
+
+        await transporter.sendMail({
+            from: {
+                name: "ספריית אוצריא",
+                address: process.env.SMTP_FROM
+            },
+            to: recipientEmail,
+            replyTo: reporterEmail || process.env.SMTP_REPLY_TO || process.env.SMTP_FROM,
+            subject: `📩 דיווח חדש על התוסף: ${reportData.pluginName || 'ללא שם'}`,
+            html: emailHtml
+        });
+
+        return { sent: true, email: recipientEmail };
+    } catch (error) {
+        console.error('Plugin Report Notification Error:', error);
+        return { sent: false, error: error.message };
+    }
+}

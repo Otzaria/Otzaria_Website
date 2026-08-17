@@ -9,12 +9,16 @@ const FALLBACK_PERMISSIONS = [
   'app.user_email.read',
   'app.open_url',
   'app.run_on_startup',
+  'app.background_keep_alive',
+  'app.startup_contributions',
   'library.books.read',
   'library.content.read',
   'search.fulltext.read',
   'reader.open',
   'reader.context_menu',
+  'reader.toolbar',
   'reader.highlight',
+  'search.dialog',
   'navigation.write',
   'notes.read',
   'notes.write',
@@ -23,8 +27,10 @@ const FALLBACK_PERMISSIONS = [
   'ui.feedback',
   'ui.create_shortcut',
   'fs.user_files.read',
+  'fs.folder_access',
   'plugin.storage.read',
   'plugin.storage.write',
+  'plugin.open_other',
   'published_data.write',
   'network.access',
   'network.localhost',
@@ -38,6 +44,7 @@ const FALLBACK_PERMISSIONS = [
   'events.subscribe:reader.current_book_changed',
   'events.subscribe:reader.current_ref_changed',
   'events.subscribe:reader.selection_changed',
+  'events.subscribe:reader.sectionContentChanged',
   'events.subscribe:theme.changed',
   'events.subscribe:settings.changed',
   'events.subscribe:calendar.date_changed',
@@ -45,6 +52,62 @@ const FALLBACK_PERMISSIONS = [
   'events.subscribe:workspace.changed',
   'events.subscribe:plugin.permissions_changed'
 ]
+
+// הרשאות בסיס (אוצריא 0.9.97+): ניתנות אוטומטית לכל תוסף. שימוש ב-API שלהן
+// בלי הצהרה אינו אזהרה; הצהרה עליהן מקבלת אזהרת דעיכה בלבד.
+// שיקוף של pluginBaselinePermissions באפליקציה.
+const BASELINE_PERMISSIONS = new Set([
+  'plugin.storage.read',
+  'plugin.storage.write',
+  'app.info.read',
+  'ui.feedback',
+  'notifications.send',
+  'events.subscribe:theme.changed'
+])
+
+// הרשאה חדשה (key) שהצהרה ותיקה (value) מכסה אותה —
+// ui.pickFolder ישב היסטורית תחת ui.feedback.
+const LEGACY_PERMISSION_ALIASES = {
+  'fs.folder_access': 'ui.feedback'
+}
+
+// גרסת אוצריא המינימלית שבה הרשאה מוצהרת קיימת. minAppVersion ישן יותר הוא
+// שגיאה חוסמת — אוצריא ישנה דוחה הרשאה לא מוכרת בהתקנה.
+const PERMISSION_MIN_VERSION = {
+  'fs.folder_access': '0.9.97',
+  'plugin.open_other': '0.9.97'
+}
+
+// תנאי `when` על תרומות contributes.startup נתמך מגרסה זו. תואם
+// _whenConditionMinVersion ב-plugin_extended_validator.dart.
+const WHEN_CONDITION_MIN_VERSION = '0.9.97'
+
+// הגדרות אוצריא שתוסף רשאי לקרוא בעלה `setting` של when. רשימה קשיחה —
+// שיקוף של PluginSettingsAccessPolicy (allowlist פחות blocklist) בקובץ
+// lib/plugins/services/plugin_settings_access_policy.dart בריפו של אוצריא.
+// מפתח שאינו כאן מוערך כ-false בזמן ריצה, ולכן נחסם כבר בהגשה.
+const WHEN_READABLE_SETTING_KEYS = new Set([
+  'key-dark-mode',
+  'key-follow-system-theme',
+  'key-swatch-color',
+  'key-dark-swatch-color',
+  'key-font-size',
+  'key-font-family',
+  'key-commentators-font-family',
+  'key-commentators-font-size',
+  'key-line-height',
+  'key-selected-city',
+  'key-calendar-type',
+  'key-settings-language',
+  'key-show-teamim',
+  'key-default-nikud',
+  'key-remove-nikud-tanach',
+  'key-replace-holy-names',
+  'key-library-view-mode',
+  'key-copy-with-headers',
+  'key-copy-header-format',
+  'key-hebrew-books-path'
+])
 
 const FALLBACK_API_METHODS = [
   'app.getInfo', 'app.getTheme', 'app.getLocale', 'app.getUserEmail', 'app.getGrantedPermissions',
@@ -57,9 +120,10 @@ const FALLBACK_API_METHODS = [
   'reader.setHighlight', 'reader.getHighlights', 'reader.clearHighlight', 'reader.clearAllHighlights',
   'navigation.goTo',
   'plugin.openSelf',
+  'plugin.openOther',
   'notes.list', 'notes.getBookNotesSummary', 'notes.add', 'notes.update', 'notes.delete',
   'ui.showMessage', 'ui.showSuccess', 'ui.showError', 'ui.showConfirm', 'ui.showWarning',
-  'feedback.sendEmail',
+  'feedback.sendEmail', 'feedback.report',
   'history.list', 'history.listSearches', 'history.clear', 'history.remove',
   'notifications.showInApp', 'notifications.sendSystem', 'notifications.scheduleSystem',
   'notifications.cancel', 'notifications.cancelAll', 'notifications.checkPermissions',
@@ -164,7 +228,10 @@ const FALLBACK_METHOD_MIN_VERSION = {
   // 0.9.95
   'app.openUrl': '0.9.95',
   // 0.9.96
-  'plugin.openSelf': '0.9.96'
+  'plugin.openSelf': '0.9.96',
+  // 0.9.97
+  'plugin.openOther': '0.9.97',
+  'feedback.report': '0.9.97'
 }
 
 // תואם _knownEvents ב-lib/plugins/services/plugin_extended_validator.dart
@@ -649,6 +716,178 @@ function scanCodeForApiUsage(text) {
   return { methods, events }
 }
 
+// --- contributes.startup: תנאי when -----------------------------------------
+
+// מגבלות הסכימה — שיקוף של PluginWhenCondition ב-
+// lib/plugins/models/plugin_when_condition.dart בריפו של אוצריא.
+const WHEN_MAX_DEPTH = 5
+const WHEN_MAX_LEAVES = 20
+const WHEN_MAX_KEY_LENGTH = 128
+const WHEN_LEAF_OPERATORS = ['equals', 'notEquals', 'exists']
+
+class WhenConditionError extends Error {}
+
+function isPlainObject(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function hasField(object, field) {
+  return Object.prototype.hasOwnProperty.call(object, field)
+}
+
+/** מפרסר עלה (`setting`/`storage`) ואוסף את מפתחו לפי סוגו. */
+function parseWhenLeaf(raw, kind, state) {
+  state.leaves += 1
+  if (state.leaves > WHEN_MAX_LEAVES) {
+    throw new WhenConditionError('when has too many conditions')
+  }
+  if (!isPlainObject(raw)) {
+    throw new WhenConditionError('when leaf must be an object with a key')
+  }
+  const key = raw.key
+  if (typeof key !== 'string' || key.length === 0 || key.length > WHEN_MAX_KEY_LENGTH) {
+    throw new WhenConditionError(
+      'when leaf key must be a non-empty string of up to 128 characters'
+    )
+  }
+  const unknown = Object.keys(raw).find(
+    (field) => field !== 'key' && !WHEN_LEAF_OPERATORS.includes(field)
+  )
+  if (unknown !== undefined) {
+    throw new WhenConditionError(`unsupported when field "${unknown}"`)
+  }
+  const declared = WHEN_LEAF_OPERATORS.filter((op) => hasField(raw, op))
+  if (declared.length !== 1) {
+    throw new WhenConditionError(
+      'when leaf requires exactly one of equals, notEquals, exists'
+    )
+  }
+  const operator = declared[0]
+  const value = raw[operator]
+  if (operator === 'exists') {
+    if (typeof value !== 'boolean') {
+      throw new WhenConditionError('when exists must be a bool')
+    }
+  } else if (
+    value !== null &&
+    typeof value !== 'string' &&
+    typeof value !== 'number' &&
+    typeof value !== 'boolean'
+  ) {
+    throw new WhenConditionError('when comparison value must be a string, number or bool')
+  }
+  if (kind === 'setting') state.settingKeys.add(key)
+}
+
+/** מפרסר צומת בעץ `when` — עלה או קומבינטור. זורק WhenConditionError. */
+function parseWhenNode(node, depth, state) {
+  if (depth > WHEN_MAX_DEPTH) {
+    throw new WhenConditionError('when is nested too deeply')
+  }
+  if (!isPlainObject(node)) {
+    throw new WhenConditionError('when must be an object')
+  }
+  const keys = Object.keys(node)
+  if (keys.length !== 1) {
+    throw new WhenConditionError(
+      'when must declare exactly one of setting, storage, all, any, not'
+    )
+  }
+  const [operator] = keys
+  const value = node[operator]
+  switch (operator) {
+    case 'setting':
+    case 'storage':
+      parseWhenLeaf(value, operator, state)
+      return
+    case 'all':
+    case 'any':
+      if (!Array.isArray(value) || value.length === 0 || value.length > WHEN_MAX_LEAVES) {
+        throw new WhenConditionError(`${operator} must be a non-empty array of conditions`)
+      }
+      for (const child of value) parseWhenNode(child, depth + 1, state)
+      return
+    case 'not':
+      parseWhenNode(value, depth + 1, state)
+      return
+    default:
+      throw new WhenConditionError(`unsupported when operator "${operator}"`)
+  }
+}
+
+/**
+ * ולידציית תנאי `when` על תרומות contributes.startup: סכימה, מפתח הגדרה
+ * שתוסף רשאי לקרוא, וגרסת מינימום. תואם _validateWhenConditions ב-
+ * plugin_extended_validator.dart. תוסף בלי when כלל אינו נבדק כאן.
+ *
+ * @param {object} manifest - manifest.json מפוענח
+ * @returns {string[]} שגיאות חוסמות
+ */
+export function validateStartupWhenConditions(manifest) {
+  const errors = []
+  const startup = manifest?.contributes?.startup
+  if (!isPlainObject(startup)) return errors
+
+  let hasWhen = false
+  const validateRaw = (field, raw) => {
+    if (raw === undefined || raw === null) return
+    hasWhen = true
+    const state = { leaves: 0, settingKeys: new Set() }
+    try {
+      parseWhenNode(raw, 1, state)
+    } catch (err) {
+      if (!(err instanceof WhenConditionError)) throw err
+      errors.push(`contributes.startup.${field}: when לא תקין: ${err.message}`)
+      return
+    }
+    for (const key of state.settingKeys) {
+      if (!WHEN_READABLE_SETTING_KEYS.has(key)) {
+        errors.push(
+          `contributes.startup.${field}: when קורא הגדרה שאינה זמינה לתוספים ("${key}")`
+        )
+      }
+    }
+  }
+
+  for (const field of ['toolbarItems', 'contextMenuItems', 'searchDialogItems']) {
+    const items = startup[field]
+    if (!Array.isArray(items)) continue
+    for (const item of items) {
+      if (isPlainObject(item)) validateRaw(field, item.when)
+    }
+  }
+
+  const events = startup.activationEvents
+  if (Array.isArray(events)) {
+    for (const entry of events) {
+      if (!isPlainObject(entry)) continue
+      const unknown = Object.keys(entry).find((key) => key !== 'topic' && key !== 'when')
+      if (unknown !== undefined) {
+        errors.push(
+          `contributes.startup.activationEvents: שדה לא מוכר "${unknown}" ` +
+          '(מותרים topic ו-when בלבד)'
+        )
+      }
+      validateRaw('activationEvents', entry.when)
+    }
+  }
+
+  if (!hasWhen) return errors
+  const minAppVersion =
+    typeof manifest.minAppVersion === 'string' ? manifest.minAppVersion : '0.0.0'
+  try {
+    if (compareCoreVersions(WHEN_CONDITION_MIN_VERSION, minAppVersion) > 0) {
+      errors.push(
+        `תנאי when נתמך החל מגרסה ${WHEN_CONDITION_MIN_VERSION}, אך minAppVersion ` +
+        `שהוצהר הוא ${minAppVersion}`
+      )
+    }
+  } catch {
+    // minAppVersion לא חוקי — ולידציית המניפסט מטפלת בכך
+  }
+  return errors
+}
+
 // --- Public entry point ------------------------------------------------------
 
 /**
@@ -792,6 +1031,9 @@ export async function validatePluginArchive(buffer) {
     }
   }
 
+  // ---- contributes.startup: תנאי when ----
+  errors.push(...validateStartupWhenConditions(manifest))
+
   // ---- Code scan ----
   const apiUsage = new Map()    // method -> Set<filename>
   const eventUsage = new Map()  // event -> Set<filename>
@@ -836,10 +1078,38 @@ export async function validatePluginArchive(buffer) {
   for (const [method] of apiUsage) {
     const required = METHOD_REQUIRED_PERMISSION[method]
     if (!required) continue
+    // הרשאות בסיס ניתנות אוטומטית (אוצריא 0.9.97+) — אין צורך בהצהרה
+    if (BASELINE_PERMISSIONS.has(required)) continue
     if (declaredSet.has(required)) continue
+    // הצהרה ותיקה מכסה הרשאה שפוצלה ממנה (ui.feedback → fs.folder_access)
+    if (LEGACY_PERMISSION_ALIASES[required] && declaredSet.has(LEGACY_PERMISSION_ALIASES[required])) continue
     // קריאות רשת מסתפקות גם ב-network.localhost (שירות מקומי), לא רק ב-network.access
     if (required === 'network.access' && declaredSet.has('network.localhost')) continue
     warnings.push(`התוסף משתמש ב-${method} אך לא ביקש את ההרשאה "${required}" ב-manifest`)
+  }
+
+  // הרשאת בסיס שהוצהרה — מיותרת; מומלץ להסיר בהזדמנות.
+  for (const permission of declaredSet) {
+    if (BASELINE_PERMISSIONS.has(permission)) {
+      warnings.push(`ההרשאה "${permission}" ניתנת כיום אוטומטית לכל תוסף — אפשר להסירה מה-manifest`)
+    }
+  }
+
+  // Cross-check חוסם: הרשאה מוצהרת חדשה מ-minAppVersion — אוצריא ישנה דוחה
+  // הרשאה לא מוכרת בהתקנה.
+  for (const permission of declaredSet) {
+    const since = PERMISSION_MIN_VERSION[permission]
+    if (!since) continue
+    try {
+      if (compareCoreVersions(since, typeof manifest.minAppVersion === 'string' ? manifest.minAppVersion : '0.0.0') > 0) {
+        errors.push(
+          `ההרשאה "${permission}" קיימת החל מגרסה ${since}, אך minAppVersion שהוצהר הוא ` +
+          `${manifest.minAppVersion}. עדכן את minAppVersion ל-${since} לפחות`
+        )
+      }
+    } catch {
+      // minAppVersion לא חוקי — לא חוסמים כאן (ולידציית המניפסט תטפל בכך)
+    }
   }
 
   // Cross-check חוסם: method חדש מ-minAppVersion שהוצהר. תוסף שקורא ל-API
@@ -864,6 +1134,7 @@ export async function validatePluginArchive(buffer) {
   for (const [ev] of eventUsage) {
     const eventPerm = `events.subscribe:${ev}`
     if (!spec.permissions.has(eventPerm)) continue // not a permission-gated event
+    if (BASELINE_PERMISSIONS.has(eventPerm)) continue // הרשאת בסיס — ניתנת אוטומטית
     if (!declaredSet.has(eventPerm)) {
       warnings.push(`רישום ל-event "${ev}" דורש את ההרשאה "${eventPerm}" שלא הוכרזה ב-manifest`)
     }
@@ -913,6 +1184,7 @@ const METHOD_REQUIRED_PERMISSION = {
   'reader.clearAllHighlights': 'reader.highlight',
   'navigation.goTo': 'navigation.write',
   'plugin.openSelf': 'navigation.write',
+  'plugin.openOther': 'plugin.open_other',
   'notes.list': 'notes.read',
   'notes.getBookNotesSummary': 'notes.read',
   'notes.add': 'notes.write',
@@ -923,7 +1195,7 @@ const METHOD_REQUIRED_PERMISSION = {
   'ui.showError': 'ui.feedback',
   'ui.showConfirm': 'ui.feedback',
   'ui.showWarning': 'ui.feedback',
-  'ui.pickFolder': 'ui.feedback',
+  'ui.pickFolder': 'fs.folder_access',
   'feedback.sendEmail': 'feedback.send_email',
   'history.list': 'history.read',
   'history.listSearches': 'history.read',

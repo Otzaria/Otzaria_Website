@@ -23,6 +23,8 @@ interface CategoryData {
   icon: string
   plugins: Plugin[]
   total: number
+  // 'rating' = מסודר לפי דירוג (עם ראש רשימה מקובע ידנית), 'manual' = סדר ידני
+  sortMode?: 'manual' | 'rating'
 }
 
 export default function PluginCategoryPage() {
@@ -37,7 +39,7 @@ export default function PluginCategoryPage() {
   // הודעת דיאלוג רגילה של האתר כשמגיע דיווח תוצאה מאוצריא
   useEffect(() => {
     if (installState.phase === 'success') {
-      showAlert('הצלחה', 'התוסף הותקן בהצלחה באוצריא!')
+      showAlert('הצלחה', installState.updated ? 'התוסף עודכן בהצלחה באוצריא!' : 'התוסף הותקן בהצלחה באוצריא!')
     } else if (installState.phase === 'failure') {
       showAlert(
         'שגיאה',
@@ -157,8 +159,15 @@ export default function PluginCategoryPage() {
                     {category.description}
                   </p>
                 )}
-                <p className="text-sm font-bold text-on-surface/50">
-                  {category.total} תוספים בקטגוריה
+                <p className="flex flex-wrap items-center gap-2 text-sm font-bold text-on-surface/50">
+                  <span>{category.total} תוספים בקטגוריה</span>
+                  {category.sortMode === 'rating' && (
+                    <span className="inline-flex items-center gap-1 font-medium">
+                      <span aria-hidden="true">·</span>
+                      <span className="material-symbols-outlined text-sm leading-none text-warning-500">star</span>
+                      <span>מסודרים לפי דירוג המשתמשים</span>
+                    </span>
+                  )}
                 </p>
               </div>
 

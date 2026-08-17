@@ -22,8 +22,12 @@ export async function POST(request) {
 
         const isSentFromAdminInterface = fromAdminPanel === true && hasAnyAdminAccess(session?.user?.role);
 
-        const message = await Message.findById(messageId).select('sender recipient');
+        const message = await Message.findById(messageId).select('sender recipient allowReplies');
         if (!message) return NextResponse.json({ error: 'ההודעה לא נמצאה' }, { status: 404 });
+
+        if (message.allowReplies === false) {
+            return NextResponse.json({ error: 'לא ניתן להשיב על הודעת מערכת' }, { status: 403 });
+        }
 
         if (!isSentFromAdminInterface) {
             const userIdStr = String(userId);

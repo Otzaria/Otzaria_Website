@@ -234,6 +234,8 @@ function CategoryModal({ category, pickerOptions, onClose, onChanged }) {
     icon: category?.icon || '',
     showOnHome: category?.showOnHome === true,
     homeLimit: category?.homeLimit || 6,
+    sortMode: category?.sortMode === 'manual' ? 'manual' : 'rating',
+    manualTopCount: category?.manualTopCount || 0,
     isVisible: category ? category.isVisible : true
   })
   const [slugTouched, setSlugTouched] = useState(isEdit)
@@ -282,7 +284,9 @@ function CategoryModal({ category, pickerOptions, onClose, onChanged }) {
         description: form.description.trim(),
         icon: form.icon.trim(),
         showOnHome: form.showOnHome,
-        homeLimit: Number(form.homeLimit)
+        homeLimit: Number(form.homeLimit),
+        sortMode: form.sortMode,
+        manualTopCount: Number(form.manualTopCount) || 0
       }
 
       const response = isEdit
@@ -500,6 +504,68 @@ function CategoryModal({ category, pickerOptions, onClose, onChanged }) {
               </div>
             )}
 
+            {/* סדר התצוגה בקטגוריה — ידני מלא או היברידי (מקובעים + דירוג) */}
+            <div className="rounded-xl border border-neutral-200 p-4">
+              <label className="mb-3 block text-sm font-bold text-on-surface/60">סדר התצוגה בקטגוריה</label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {[
+                  {
+                    value: 'rating',
+                    title: 'לפי דירוג המשתמשים',
+                    hint: 'תוספים מדורגים גבוה מוצגים ראשונים. אפשר לקבע תוספים בראש הרשימה.'
+                  },
+                  {
+                    value: 'manual',
+                    title: 'סדר ידני בלבד',
+                    hint: 'בדיוק הסדר שנקבע בשיבוץ למטה; הדירוגים אינם משפיעים.'
+                  }
+                ].map((option) => (
+                  <label
+                    key={option.value}
+                    className={`flex cursor-pointer gap-3 rounded-xl border p-3 transition-colors ${
+                      form.sortMode === option.value
+                        ? 'border-primary bg-primary/5'
+                        : 'border-neutral-200 hover:bg-neutral-50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="sortMode"
+                      value={option.value}
+                      checked={form.sortMode === option.value}
+                      onChange={() => handleChange('sortMode', option.value)}
+                      className="mt-1 h-4 w-4 text-primary focus:ring-2 focus:ring-primary/20"
+                    />
+                    <span>
+                      <span className="block font-bold text-on-surface">{option.title}</span>
+                      <span className="block text-xs text-on-surface/60">{option.hint}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+
+              {form.sortMode === 'rating' && (
+                <div className="mt-4">
+                  <label className="mb-2 block text-sm font-bold text-on-surface/60">
+                    כמה תוספים מקובעים בראש הרשימה (0-20)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={20}
+                    value={form.manualTopCount}
+                    onChange={(e) => handleChange('manualTopCount', e.target.value)}
+                    className="w-32 rounded-xl border border-neutral-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
+                  />
+                  <p className="mt-1 text-xs text-on-surface/60">
+                    {Number(form.manualTopCount) > 0
+                      ? `${Number(form.manualTopCount)} התוספים הראשונים בשיבוץ למטה יישארו בסדר הידני, וכל השאר יסודרו לפי דירוג.`
+                      : 'כל התוספים בקטגוריה יסודרו לפי דירוג.'}
+                  </p>
+                </div>
+              )}
+            </div>
+
             <button
               type="button"
               onClick={handleSaveDetails}
@@ -545,20 +611,34 @@ function CategoryModal({ category, pickerOptions, onClose, onChanged }) {
               ) : (
                 <div className="space-y-2">
                   {assigned.map((plugin, index) => (
-                    <div key={plugin.id} {...assignedDnd(index)}>
-                      <OrderedPluginRow
-                        plugin={plugin}
-                        index={index}
-                        total={assigned.length}
-                        onMove={(i, dir) => {
-                          setAssigned((prev) => moveItem(prev, i, dir))
-                          setAssignDirty(true)
-                        }}
-                        onRemove={(i) => {
-                          setAssigned((prev) => prev.filter((_, idx) => idx !== i))
-                          setAssignDirty(true)
-                        }}
-                      />
+                    <div key={plugin.id}>
+                      <div {...assignedDnd(index)}>
+                        <OrderedPluginRow
+                          plugin={plugin}
+                          index={index}
+                          total={assigned.length}
+                          onMove={(i, dir) => {
+                            setAssigned((prev) => moveItem(prev, i, dir))
+                            setAssignDirty(true)
+                          }}
+                          onRemove={(i) => {
+                            setAssigned((prev) => prev.filter((_, idx) => idx !== i))
+                            setAssignDirty(true)
+                          }}
+                        />
+                      </div>
+                      {/* קו הפרדה בין החלק המקובע ידנית לחלק שמסודר לפי דירוג */}
+                      {form.sortMode === 'rating'
+                        && Number(form.manualTopCount) > 0
+                        && index === Number(form.manualTopCount) - 1
+                        && index < assigned.length - 1 && (
+                        <div className="flex items-center gap-2 py-2 text-xs font-bold text-on-surface/50">
+                          <span className="h-px flex-1 bg-neutral-200" />
+                          <span className="material-symbols-outlined text-sm leading-none text-warning-500">star</span>
+                          <span>מכאן ומטה: הסדר נקבע לפי דירוג המשתמשים</span>
+                          <span className="h-px flex-1 bg-neutral-200" />
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1051,6 +1131,14 @@ export default function StoreLayoutTab() {
                           )}
                           {category.showOnHome && (
                             <span className="rounded-full bg-info-100 px-2 py-0.5 text-xs font-bold text-info-800">בדף הבית ({category.homeLimit})</span>
+                          )}
+                          {category.sortMode === 'rating' ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-warning-50 px-2 py-0.5 text-xs font-bold text-warning-strong-800">
+                              <span className="material-symbols-outlined text-sm leading-none">star</span>
+                              <span>לפי דירוג{category.manualTopCount > 0 ? ` (${category.manualTopCount} מקובעים)` : ''}</span>
+                            </span>
+                          ) : (
+                            <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-bold text-on-surface/60">סדר ידני</span>
                           )}
                         </div>
                         <div className="flex flex-wrap items-center gap-3 text-xs text-on-surface/60">

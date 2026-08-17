@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import dbConnect from '@/lib/db'
 import PluginInstallToken from '@/models/PluginInstallToken'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { recordVerifiedInstall, promoteRatingToVerified } from '@/lib/pluginRatingStore'
 
 // טוקנים נוצרים ב-base64url באורך קבוע — כל דבר אחר נדחה לפני גישה ל-DB.
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{20,64}$/
@@ -13,7 +14,7 @@ function getClientIp(request) {
 }
 
 // POST /api/plugins/install-result - דיווח מהאפליקציה.
-// גוף הבקשה: { token, status: 'received' | 'success' | 'failure', error?, appVersion? }
+// גוף הבקשה: { token, status: 'received' | 'success' | 'failure', error?, appVersion?, updated? }
 // 'received' — אישור קבלה מיידי (הטוקן נשאר pending); ניתן פעם אחת.
 // 'success'/'failure' — תוצאה סופית, חד-פעמית: רק טוקן pending שטרם פג ניתן לעדכון.
 export async function POST(request) {
@@ -41,6 +42,8 @@ export async function POST(request) {
       ? body.error.slice(0, 500)
       : null
     const appVersion = typeof body.appVersion === 'string' ? body.appVersion.slice(0, 30) : null
+    // גרסאות אוצריא שאינן מכירות את השדה אינן שולחות אותו — ואז זו התקנה.
+    const wasUpdate = status === 'success' && body.updated === true
 
     await dbConnect()
 
@@ -64,10 +67,31 @@ export async function POST(request) {
     }
     const updated = await PluginInstallToken.findOneAndUpdate(
       { token, status: 'pending', expiresAt: { $gt: new Date() } },
-      { status, errorMessage, appVersion, reportedAt: new Date() }
+      { status, errorMessage, appVersion, wasUpdate, reportedAt: new Date() }
     )
     if (!updated) {
       return NextResponse.json({ error: 'Token not found, expired or already reported' }, { status: 404 })
+    }
+
+    // התקנה שהצליחה למשתמש מזוהה — רישום קבוע (הטוקן עצמו נמחק ב-TTL) שממנו
+    // נגזר "דירוג מאומת". כישלון בשלב הזה לא יפיל את הדיווח עצמו.
+    if (status === 'success' && updated.userId) {
+      try {
+        await recordVerifiedInstall({
+          userId: updated.userId,
+          pluginId: updated.pluginId,
+          version: updated.version,
+          appVersion
+        })
+        // מי שדירג לפני שהתקין — הדירוג הקיים שלו הופך למאומת
+        await promoteRatingToVerified({
+          userId: updated.userId,
+          pluginId: updated.pluginId,
+          version: updated.version
+        })
+      } catch (installError) {
+        console.error('Error recording verified plugin install:', installError)
+      }
     }
 
     return NextResponse.json({ ok: true })
@@ -78,7 +102,7 @@ export async function POST(request) {
 }
 
 // GET /api/plugins/install-result?token=... - שאילתת סטטוס (polling מדף החנות).
-// מחזיר { status: 'pending' | 'success' | 'failure', error? }.
+// מחזיר { status: 'pending' | 'success' | 'failure', error?, updated }.
 export async function GET(request) {
   try {
     // מרווח polling של 2 שניות = 30 בקשות לדקה; משאירים מרווח לשני דפים במקביל.
@@ -92,7 +116,7 @@ export async function GET(request) {
     }
 
     await dbConnect()
-    const doc = await PluginInstallToken.findOne({ token }).select('status errorMessage expiresAt downloadedAt receivedAt').lean()
+    const doc = await PluginInstallToken.findOne({ token }).select('status errorMessage expiresAt downloadedAt receivedAt wasUpdate').lean()
     if (!doc || (doc.status === 'pending' && doc.expiresAt <= new Date())) {
       return NextResponse.json({ error: 'Token not found or expired' }, { status: 404 })
     }
@@ -103,7 +127,8 @@ export async function GET(request) {
     const payload = {
       status: doc.status,
       received: Boolean(doc.receivedAt),
-      downloaded: Boolean(doc.downloadedAt)
+      downloaded: Boolean(doc.downloadedAt),
+      updated: Boolean(doc.wasUpdate)
     }
     if (doc.status === 'failure' && doc.errorMessage) {
       payload.error = doc.errorMessage
