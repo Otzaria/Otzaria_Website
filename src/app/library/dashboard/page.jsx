@@ -7,6 +7,7 @@ import Link from 'next/link'
 import Header from '@/components/layout/Header'
 import { useDialog } from '@/components/providers/DialogContext'
 import Pagination from '@/components/ui/Pagination'
+import NotificationEmailSettings from '@/components/notifications/NotificationEmailSettings'
 import { validatePassword, validateMatch, validateDifferent } from '@/lib/validation-utils'
 
 export default function DashboardPage() {
@@ -49,6 +50,8 @@ export default function DashboardPage() {
   const [showEmailModal, setShowEmailModal] = useState(false)
   const [newEmail, setNewEmail] = useState('')
   const [updatingEmail, setUpdatingEmail] = useState(false)
+
+  const [showNotificationEmailModal, setShowNotificationEmailModal] = useState(false)
 
   const [showReminderModal, setShowReminderModal] = useState(false)
   const [dismissingReminder, setDismissingReminder] = useState(false)
@@ -418,7 +421,8 @@ export default function DashboardPage() {
   }, [showMyMessages, myMessages]);
 
   const unreadCount = myMessages.filter(m => {
-      const amISender = m.sender._id === session?.user?.id || m.sender === session?.user?.id;
+      // sender=null בהודעת מערכת
+      const amISender = m.sender?._id === session?.user?.id || m.sender === session?.user?.id;
       if (amISender) {
           return m.status === 'replied' && !isReadByUser(m);
       }
@@ -621,6 +625,14 @@ export default function DashboardPage() {
               >
                 <span className="material-symbols-outlined text-4xl text-primary">manage_accounts</span>
                 <span className="font-medium text-on-surface">עדכון כתובת מייל</span>
+              </button>
+
+              <button
+                onClick={() => setShowNotificationEmailModal(true)}
+                className="flex flex-col items-center gap-3 p-6 bg-primary-container rounded-xl hover:bg-primary/20 transition-all"
+              >
+                <span className="material-symbols-outlined text-4xl text-primary">forward_to_inbox</span>
+                <span className="font-medium text-on-surface">כתובת מייל להתראות</span>
               </button>
 
               <button 
@@ -865,6 +877,10 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {showNotificationEmailModal && (
+        <NotificationEmailSettings onClose={() => setShowNotificationEmailModal(false)} />
+      )}
+
       {showPasswordModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="flex flex-col bg-white glass-strong rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200">
@@ -1058,6 +1074,12 @@ export default function DashboardPage() {
                                 )}
                             </h4>
                             <p className="text-sm text-on-surface/60">
+                              {message.messageType === 'system' && (
+                                <>
+                                  <span className="font-medium text-primary">{message.senderName || 'מערכת אוצריא'}</span>
+                                  <span className="mx-2">•</span>
+                                </>
+                              )}
                               {new Date(message.createdAt).toLocaleDateString('he-IL', {
                                 day: 'numeric',
                                 month: 'short',
@@ -1108,7 +1130,12 @@ export default function DashboardPage() {
                         )}
 
                         <div className="mt-4">
-                          {replyingToMessageId === message.id ? (
+                          {message.allowReplies === false ? (
+                            <p className="flex items-center gap-2 text-sm text-on-surface/50">
+                              <span className="material-symbols-outlined text-lg">info</span>
+                              <span>הודעת מערכת — לא ניתן להשיב</span>
+                            </p>
+                          ) : replyingToMessageId === message.id ? (
                             <div className="animate-in fade-in slide-in-from-top-2">
                               <textarea
                                 className="w-full px-4 py-3 border border-surface-variant rounded-lg focus:outline-none focus:border-primary bg-white text-on-surface shadow-inner"

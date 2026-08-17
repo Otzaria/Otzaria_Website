@@ -46,7 +46,11 @@ export async function GET(request) {
             recipient: msg.recipient,
             isRead: msg.isRead,
             readBy: (msg.readBy || []).map(id => id.toString()),
-            senderName: msg.sender?.name || 'משתמש לא ידוע',
+            messageType: msg.messageType || 'user',
+            allowReplies: msg.allowReplies !== false,
+            // הודעת מערכת מזוהה לפי messageType — populate מחזיר null גם למשתמש שנמחק
+            senderName: msg.sender?.name
+                || (msg.messageType === 'system' ? (msg.senderLabel || 'מערכת אוצריא') : 'משתמש לא ידוע'),
             senderEmail: msg.sender?.email,
             recipientName: msg.recipient?.name || null,
             recipientEmail: msg.recipient?.email || null,
@@ -133,9 +137,13 @@ export async function PUT(request) {
         console.log(`   Query IDs:`, messageObjectIds);
         console.log(`   Adding User:`, userObjectId);
 
+        // רק הודעות שהמשתמש צד בהן — אחרת כל משתמש מסמן הודעות של אחרים
         const result = await Message.updateMany(
-            { _id: { $in: messageObjectIds } },
-            { 
+            {
+                _id: { $in: messageObjectIds },
+                $or: [{ sender: userObjectId }, { recipient: userObjectId }]
+            },
+            {
                 $addToSet: { readBy: userObjectId }
             }
         );

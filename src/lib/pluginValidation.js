@@ -26,6 +26,7 @@ const FALLBACK_PERMISSIONS = [
   'fs.folder_access',
   'plugin.storage.read',
   'plugin.storage.write',
+  'plugin.open_other',
   'published_data.write',
   'network.access',
   'network.localhost',
@@ -68,7 +69,8 @@ const LEGACY_PERMISSION_ALIASES = {
 // גרסת אוצריא המינימלית שבה הרשאה מוצהרת קיימת. minAppVersion ישן יותר הוא
 // שגיאה חוסמת — אוצריא ישנה דוחה הרשאה לא מוכרת בהתקנה.
 const PERMISSION_MIN_VERSION = {
-  'fs.folder_access': '0.9.97'
+  'fs.folder_access': '0.9.97',
+  'plugin.open_other': '0.9.97'
 }
 
 const FALLBACK_API_METHODS = [
@@ -82,9 +84,10 @@ const FALLBACK_API_METHODS = [
   'reader.setHighlight', 'reader.getHighlights', 'reader.clearHighlight', 'reader.clearAllHighlights',
   'navigation.goTo',
   'plugin.openSelf',
+  'plugin.openOther',
   'notes.list', 'notes.getBookNotesSummary', 'notes.add', 'notes.update', 'notes.delete',
   'ui.showMessage', 'ui.showSuccess', 'ui.showError', 'ui.showConfirm', 'ui.showWarning',
-  'feedback.sendEmail',
+  'feedback.sendEmail', 'feedback.report',
   'history.list', 'history.listSearches', 'history.clear', 'history.remove',
   'notifications.showInApp', 'notifications.sendSystem', 'notifications.scheduleSystem',
   'notifications.cancel', 'notifications.cancelAll', 'notifications.checkPermissions',
@@ -189,7 +192,10 @@ const FALLBACK_METHOD_MIN_VERSION = {
   // 0.9.95
   'app.openUrl': '0.9.95',
   // 0.9.96
-  'plugin.openSelf': '0.9.96'
+  'plugin.openSelf': '0.9.96',
+  // 0.9.97
+  'plugin.openOther': '0.9.97',
+  'feedback.report': '0.9.97'
 }
 
 // תואם _knownEvents ב-lib/plugins/services/plugin_extended_validator.dart
@@ -967,6 +973,7 @@ const METHOD_REQUIRED_PERMISSION = {
   'reader.clearAllHighlights': 'reader.highlight',
   'navigation.goTo': 'navigation.write',
   'plugin.openSelf': 'navigation.write',
+  'plugin.openOther': 'plugin.open_other',
   'notes.list': 'notes.read',
   'notes.getBookNotesSummary': 'notes.read',
   'notes.add': 'notes.write',
