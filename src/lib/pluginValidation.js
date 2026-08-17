@@ -9,12 +9,16 @@ const FALLBACK_PERMISSIONS = [
   'app.user_email.read',
   'app.open_url',
   'app.run_on_startup',
+  'app.background_keep_alive',
+  'app.startup_contributions',
   'library.books.read',
   'library.content.read',
   'search.fulltext.read',
   'reader.open',
   'reader.context_menu',
+  'reader.toolbar',
   'reader.highlight',
+  'search.dialog',
   'navigation.write',
   'notes.read',
   'notes.write',
@@ -40,6 +44,7 @@ const FALLBACK_PERMISSIONS = [
   'events.subscribe:reader.current_book_changed',
   'events.subscribe:reader.current_ref_changed',
   'events.subscribe:reader.selection_changed',
+  'events.subscribe:reader.sectionContentChanged',
   'events.subscribe:theme.changed',
   'events.subscribe:settings.changed',
   'events.subscribe:calendar.date_changed',
@@ -72,6 +77,37 @@ const PERMISSION_MIN_VERSION = {
   'fs.folder_access': '0.9.97',
   'plugin.open_other': '0.9.97'
 }
+
+// תנאי `when` על תרומות contributes.startup נתמך מגרסה זו. תואם
+// _whenConditionMinVersion ב-plugin_extended_validator.dart.
+const WHEN_CONDITION_MIN_VERSION = '0.9.97'
+
+// הגדרות אוצריא שתוסף רשאי לקרוא בעלה `setting` של when. רשימה קשיחה —
+// שיקוף של PluginSettingsAccessPolicy (allowlist פחות blocklist) בקובץ
+// lib/plugins/services/plugin_settings_access_policy.dart בריפו של אוצריא.
+// מפתח שאינו כאן מוערך כ-false בזמן ריצה, ולכן נחסם כבר בהגשה.
+const WHEN_READABLE_SETTING_KEYS = new Set([
+  'key-dark-mode',
+  'key-follow-system-theme',
+  'key-swatch-color',
+  'key-dark-swatch-color',
+  'key-font-size',
+  'key-font-family',
+  'key-commentators-font-family',
+  'key-commentators-font-size',
+  'key-line-height',
+  'key-selected-city',
+  'key-calendar-type',
+  'key-settings-language',
+  'key-show-teamim',
+  'key-default-nikud',
+  'key-remove-nikud-tanach',
+  'key-replace-holy-names',
+  'key-library-view-mode',
+  'key-copy-with-headers',
+  'key-copy-header-format',
+  'key-hebrew-books-path'
+])
 
 const FALLBACK_API_METHODS = [
   'app.getInfo', 'app.getTheme', 'app.getLocale', 'app.getUserEmail', 'app.getGrantedPermissions',
@@ -680,6 +716,178 @@ function scanCodeForApiUsage(text) {
   return { methods, events }
 }
 
+// --- contributes.startup: תנאי when -----------------------------------------
+
+// מגבלות הסכימה — שיקוף של PluginWhenCondition ב-
+// lib/plugins/models/plugin_when_condition.dart בריפו של אוצריא.
+const WHEN_MAX_DEPTH = 5
+const WHEN_MAX_LEAVES = 20
+const WHEN_MAX_KEY_LENGTH = 128
+const WHEN_LEAF_OPERATORS = ['equals', 'notEquals', 'exists']
+
+class WhenConditionError extends Error {}
+
+function isPlainObject(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function hasField(object, field) {
+  return Object.prototype.hasOwnProperty.call(object, field)
+}
+
+/** מפרסר עלה (`setting`/`storage`) ואוסף את מפתחו לפי סוגו. */
+function parseWhenLeaf(raw, kind, state) {
+  state.leaves += 1
+  if (state.leaves > WHEN_MAX_LEAVES) {
+    throw new WhenConditionError('when has too many conditions')
+  }
+  if (!isPlainObject(raw)) {
+    throw new WhenConditionError('when leaf must be an object with a key')
+  }
+  const key = raw.key
+  if (typeof key !== 'string' || key.length === 0 || key.length > WHEN_MAX_KEY_LENGTH) {
+    throw new WhenConditionError(
+      'when leaf key must be a non-empty string of up to 128 characters'
+    )
+  }
+  const unknown = Object.keys(raw).find(
+    (field) => field !== 'key' && !WHEN_LEAF_OPERATORS.includes(field)
+  )
+  if (unknown !== undefined) {
+    throw new WhenConditionError(`unsupported when field "${unknown}"`)
+  }
+  const declared = WHEN_LEAF_OPERATORS.filter((op) => hasField(raw, op))
+  if (declared.length !== 1) {
+    throw new WhenConditionError(
+      'when leaf requires exactly one of equals, notEquals, exists'
+    )
+  }
+  const operator = declared[0]
+  const value = raw[operator]
+  if (operator === 'exists') {
+    if (typeof value !== 'boolean') {
+      throw new WhenConditionError('when exists must be a bool')
+    }
+  } else if (
+    value !== null &&
+    typeof value !== 'string' &&
+    typeof value !== 'number' &&
+    typeof value !== 'boolean'
+  ) {
+    throw new WhenConditionError('when comparison value must be a string, number or bool')
+  }
+  if (kind === 'setting') state.settingKeys.add(key)
+}
+
+/** מפרסר צומת בעץ `when` — עלה או קומבינטור. זורק WhenConditionError. */
+function parseWhenNode(node, depth, state) {
+  if (depth > WHEN_MAX_DEPTH) {
+    throw new WhenConditionError('when is nested too deeply')
+  }
+  if (!isPlainObject(node)) {
+    throw new WhenConditionError('when must be an object')
+  }
+  const keys = Object.keys(node)
+  if (keys.length !== 1) {
+    throw new WhenConditionError(
+      'when must declare exactly one of setting, storage, all, any, not'
+    )
+  }
+  const [operator] = keys
+  const value = node[operator]
+  switch (operator) {
+    case 'setting':
+    case 'storage':
+      parseWhenLeaf(value, operator, state)
+      return
+    case 'all':
+    case 'any':
+      if (!Array.isArray(value) || value.length === 0 || value.length > WHEN_MAX_LEAVES) {
+        throw new WhenConditionError(`${operator} must be a non-empty array of conditions`)
+      }
+      for (const child of value) parseWhenNode(child, depth + 1, state)
+      return
+    case 'not':
+      parseWhenNode(value, depth + 1, state)
+      return
+    default:
+      throw new WhenConditionError(`unsupported when operator "${operator}"`)
+  }
+}
+
+/**
+ * ולידציית תנאי `when` על תרומות contributes.startup: סכימה, מפתח הגדרה
+ * שתוסף רשאי לקרוא, וגרסת מינימום. תואם _validateWhenConditions ב-
+ * plugin_extended_validator.dart. תוסף בלי when כלל אינו נבדק כאן.
+ *
+ * @param {object} manifest - manifest.json מפוענח
+ * @returns {string[]} שגיאות חוסמות
+ */
+export function validateStartupWhenConditions(manifest) {
+  const errors = []
+  const startup = manifest?.contributes?.startup
+  if (!isPlainObject(startup)) return errors
+
+  let hasWhen = false
+  const validateRaw = (field, raw) => {
+    if (raw === undefined || raw === null) return
+    hasWhen = true
+    const state = { leaves: 0, settingKeys: new Set() }
+    try {
+      parseWhenNode(raw, 1, state)
+    } catch (err) {
+      if (!(err instanceof WhenConditionError)) throw err
+      errors.push(`contributes.startup.${field}: when לא תקין: ${err.message}`)
+      return
+    }
+    for (const key of state.settingKeys) {
+      if (!WHEN_READABLE_SETTING_KEYS.has(key)) {
+        errors.push(
+          `contributes.startup.${field}: when קורא הגדרה שאינה זמינה לתוספים ("${key}")`
+        )
+      }
+    }
+  }
+
+  for (const field of ['toolbarItems', 'contextMenuItems', 'searchDialogItems']) {
+    const items = startup[field]
+    if (!Array.isArray(items)) continue
+    for (const item of items) {
+      if (isPlainObject(item)) validateRaw(field, item.when)
+    }
+  }
+
+  const events = startup.activationEvents
+  if (Array.isArray(events)) {
+    for (const entry of events) {
+      if (!isPlainObject(entry)) continue
+      const unknown = Object.keys(entry).find((key) => key !== 'topic' && key !== 'when')
+      if (unknown !== undefined) {
+        errors.push(
+          `contributes.startup.activationEvents: שדה לא מוכר "${unknown}" ` +
+          '(מותרים topic ו-when בלבד)'
+        )
+      }
+      validateRaw('activationEvents', entry.when)
+    }
+  }
+
+  if (!hasWhen) return errors
+  const minAppVersion =
+    typeof manifest.minAppVersion === 'string' ? manifest.minAppVersion : '0.0.0'
+  try {
+    if (compareCoreVersions(WHEN_CONDITION_MIN_VERSION, minAppVersion) > 0) {
+      errors.push(
+        `תנאי when נתמך החל מגרסה ${WHEN_CONDITION_MIN_VERSION}, אך minAppVersion ` +
+        `שהוצהר הוא ${minAppVersion}`
+      )
+    }
+  } catch {
+    // minAppVersion לא חוקי — ולידציית המניפסט מטפלת בכך
+  }
+  return errors
+}
+
 // --- Public entry point ------------------------------------------------------
 
 /**
@@ -822,6 +1030,9 @@ export async function validatePluginArchive(buffer) {
       }
     }
   }
+
+  // ---- contributes.startup: תנאי when ----
+  errors.push(...validateStartupWhenConditions(manifest))
 
   // ---- Code scan ----
   const apiUsage = new Map()    // method -> Set<filename>
