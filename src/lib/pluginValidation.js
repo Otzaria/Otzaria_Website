@@ -893,12 +893,19 @@ export function validateStartupWhenConditions(manifest) {
 /**
  * Validate a plugin archive (.otzplugin ZIP) against the official Otzaria SDK spec.
  *
+ * שלוש רמות ממצא:
+ *   errors    — פוסל.
+ *   warnings  — פוסל גם הוא (מדיניות החנות: לא מאחסנים תוסף שאינו תואם ל-SDK).
+ *   advisories — המלצת ניקיון בלבד. אינו פוסל, כי אין בו אי-תאימות: המצב
+ *               שהוא מתאר תקין ועובד, ורק אפשר לנסח אותו יפה יותר.
+ *
  * @param {Buffer} buffer - the plugin file as Buffer
- * @returns {Promise<{errors: string[], warnings: string[], spec: {source: string, fetchedAt: string}}>}
+ * @returns {Promise<{errors: string[], warnings: string[], advisories: string[], spec: {source: string, fetchedAt: string}}>}
  */
 export async function validatePluginArchive(buffer) {
   const errors = []
   const warnings = []
+  const advisories = []
 
   let spec
   try {
@@ -917,6 +924,7 @@ export async function validatePluginArchive(buffer) {
     return {
       errors,
       warnings,
+      advisories,
       design: { compliant: false, violations: [] },
       spec: { source: spec.source, fetchedAt: spec.fetchedAt }
     }
@@ -929,6 +937,7 @@ export async function validatePluginArchive(buffer) {
     return {
       errors,
       warnings,
+      advisories,
       design: { compliant: false, violations: [] },
       spec: { source: spec.source, fetchedAt: spec.fetchedAt }
     }
@@ -942,6 +951,7 @@ export async function validatePluginArchive(buffer) {
     return {
       errors,
       warnings,
+      advisories,
       design: { compliant: false, violations: [] },
       spec: { source: spec.source, fetchedAt: spec.fetchedAt }
     }
@@ -1088,10 +1098,13 @@ export async function validatePluginArchive(buffer) {
     warnings.push(`התוסף משתמש ב-${method} אך לא ביקש את ההרשאה "${required}" ב-manifest`)
   }
 
-  // הרשאת בסיס שהוצהרה — מיותרת; מומלץ להסיר בהזדמנות.
+  // הרשאת בסיס שהוצהרה — מיותרת; מומלץ להסיר בהזדמנות. advisory ולא warning:
+  // ההצהרה תקינה לחלוטין ועובדת, ואין שום אי-תאימות ל-SDK. כאזהרה היא חסמה
+  // כל עדכון של כל תוסף שמצהיר הרשאת בסיס (כולל תוסף החנות עצמו), שכן נתיבי
+  // ההעלאה והעריכה פוסלים על כל אזהרה.
   for (const permission of declaredSet) {
     if (BASELINE_PERMISSIONS.has(permission)) {
-      warnings.push(`ההרשאה "${permission}" ניתנת כיום אוטומטית לכל תוסף — אפשר להסירה מה-manifest`)
+      advisories.push(`ההרשאה "${permission}" ניתנת כיום אוטומטית לכל תוסף — אפשר להסירה מה-manifest`)
     }
   }
 
@@ -1151,6 +1164,7 @@ export async function validatePluginArchive(buffer) {
   return {
     errors,
     warnings,
+    advisories,
     design,
     spec: { source: spec.source, fetchedAt: spec.fetchedAt }
   }
