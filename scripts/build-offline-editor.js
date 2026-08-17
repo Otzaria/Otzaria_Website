@@ -395,12 +395,40 @@ function traverseForIcons(node, scope, usedIcons) {
   }
 }
 
+// המניפסט של גופן האתר (scripts/icon-font.manifest.json) הוא רשימת שמות
+// האייקונים שאושרו מול Google — שמור ב-Git, ולכן זמין ללא רשת.
+const ICON_MANIFEST_PATH = path.join(ROOT_DIR, 'scripts', 'icon-font.manifest.json');
+
+async function readIconUniverse() {
+  try {
+    const manifest = JSON.parse(await readTextFile(ICON_MANIFEST_PATH));
+    return new Set(Array.isArray(manifest.icons) ? manifest.icons : []);
+  } catch {
+    return new Set();
+  }
+}
+
+// כל token בקוד ששמו הוא שם אייקון מוכר. סריקה רחבה במכוון, בדיוק כמו
+// build-icon-font.mjs: היא תופסת שמות שהסריקה המדויקת מפספסת — בעיקר שם שמועבר
+// כארגומנט לפונקציית עזר, למשל toolButton('createHeaders', 'title', ...), שאינו
+// לא prop בשם icon ולא טקסט בתוך span של material-symbols-outlined. אייקון כזה
+// נעדר מה-subset ומוצג למשתמש כטקסט ("format_size" באמצע סרגל הכלים).
+const ICON_TOKEN_RE = /[a-z][a-z0-9_]{2,}/g;
+
+function collectIconTokens(source, universe, usedIcons) {
+  if (universe.size === 0) return;
+  for (const [token] of source.matchAll(ICON_TOKEN_RE)) {
+    if (universe.has(token)) usedIcons.add(token);
+  }
+}
+
 /**
  * Extracts Material Symbols icon names from source files using AST parsing.
  * This supports literals and common variable-based expressions (e.g. const x = 'settings').
  */
 async function collectUsedIcons() {
   const usedIcons = new Set();
+  const universe = await readIconUniverse();
 
   for (const relativePath of COMPONENT_PATHS) {
     const fullPath = path.join(ROOT_DIR, relativePath);
@@ -435,6 +463,8 @@ async function collectUsedIcons() {
         if (isIconName(name)) usedIcons.add(name);
       }
     }
+
+    collectIconTokens(source, universe, usedIcons);
   }
 
   return usedIcons;
@@ -659,6 +689,19 @@ async function collectCssFiles(dirPath) {
   }
 }
 
+// icon-font.css של האתר מצהיר על אותה משפחה עם src ל-/fonts/... — נתיב שאינו קיים
+// בקובץ HTML שהורד. ההצהרה הזאת מגיעה לכאן דרך שרשור ה-CSS מ-.next, דורסת את
+// המשפחה של הגופן המוטמע, ומסתיימת ב-status: error. כרום נופל בחזרה למוטמע ולכן
+// זה לא מפיל את האייקונים, אבל זו הסתמכות על התנהגות fallback — ובנוסף כל טעינה
+// כזו היא בקשת רשת כושלת בעורך שאמור לעבוד ללא רשת.
+function stripMaterialSymbolsFontFaces(css) {
+  return css.replace(/@font-face\s*\{[^}]*\}/g, (rule) =>
+    /font-family\s*:\s*['"]?Material Symbols Outlined['"]?/i.test(rule) && !rule.includes('data:')
+      ? ''
+      : rule
+  );
+}
+
 async function readCurrentCssBundle() {
   const cssRoots = [
     path.join(ROOT_DIR, '.next', 'static', 'css'),
@@ -678,7 +721,7 @@ async function readCurrentCssBundle() {
   const cssContents = await Promise.all(
     cssFiles.map(async (filePath) => {
       const css = await readTextFile(filePath);
-      return `/* ${path.basename(filePath)} */\n${css}`;
+      return `/* ${path.basename(filePath)} */\n${stripMaterialSymbolsFontFaces(css)}`;
     })
   );
 
