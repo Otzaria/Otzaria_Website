@@ -87,6 +87,12 @@ export default function SourceEditModal({ item, options, onSave, onDelete, onClo
 
   if (!mounted || !item) return null
 
+  // רשומת סט — המזהה סינתטי ("set:...") ולכן במקומו מוצג תיאור הסט
+  const isSet = item.kind === 'set'
+  const subtitle = isSet
+    ? `סט${item.isManual ? ' ידני' : ''} · ${(item.books || []).length} ספרים · רשומה משותפת`
+    : item.bookPath
+
   const setField = (name, value) => setForm((prev) => ({ ...prev, [name]: value }))
 
   const togglePlatform = (key) =>
@@ -134,10 +140,12 @@ export default function SourceEditModal({ item, options, onSave, onDelete, onClo
         <div className="flex justify-between items-start gap-4 p-5 border-b">
           <div className="min-w-0">
             <h2 className="text-xl font-bold text-neutral-800 flex items-center gap-2">
-              <span className="material-symbols-outlined text-feature-600">copyright</span>
+              <span className="material-symbols-outlined text-feature-600">
+                {isSet ? 'library_books' : 'copyright'}
+              </span>
               <span className="truncate">{item.bookTitle}</span>
             </h2>
-            <p className="text-xs text-neutral-500 mt-1 break-all">{item.bookPath}</p>
+            <p className="text-xs text-neutral-500 mt-1 break-all">{subtitle}</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-neutral-100 rounded-lg transition-colors">
             <span className="material-symbols-outlined">close</span>

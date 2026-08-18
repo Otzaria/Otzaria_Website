@@ -7,8 +7,7 @@ import User from '@/models/User'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { validateEmail } from '@/lib/validation-utils'
 import { parsePluginRef } from '@/lib/pluginRef'
-import { createSystemMessage } from '@/lib/systemMessages'
-import { sendPluginReportNotification, formatPluginReportType } from '@/lib/emailService'
+import { sendPluginReportNotification } from '@/lib/emailService'
 
 const REPORT_TYPES = ['bug', 'crash', 'content', 'other']
 const MAX_DETAILS_LENGTH = 5000

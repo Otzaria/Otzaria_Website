@@ -2,16 +2,18 @@
  * לוגיקה משותפת לעמוד "מקורות ספרים פרטיים".
  *
  * הספרים הפרטיים יושבים בתיקיית MoreBooks בריפו Otzaria/otzaria-library.
- * ספר = קובץ בודד (txt/pdf/docx) תחת "ספרים/". הרשימה נמשכת מגיטהאב ונשמרת
+ * ספר = קובץ בודד (txt/docx) תחת "ספרים/". הרשימה נמשכת מגיטהאב ונשמרת
  * במטמון בזיכרון התהליך, כי היא זהה לכל המנהלים ואינה משתנה תדיר.
  */
 
 import { listRepoFiles } from '@/lib/dicta/github-api';
 import { cached, invalidate } from '@/lib/api-cache';
 import SystemConfig from '@/models/SystemConfig';
+import { MANUAL_SETS_CONFIG_KEY, normalizeManualSets } from '@/lib/private-sources-sets';
 
 export const MORE_BOOKS_BASE_PATH = 'MoreBooks';
-export const BOOK_EXTENSIONS = ['.txt', '.pdf', '.docx'];
+// קבצי PDF אינם נספרים כספרים לצורך מקורות (אינם ניתנים להתאמה לאוצריא)
+export const BOOK_EXTENSIONS = ['.txt', '.docx'];
 
 /** תיקייה שאינה ספרים (תיעוד התוכנה) */
 const EXCLUDED_PREFIXES = ['ספרים/אוצריא/אודות התוכנה/'];
@@ -26,6 +28,9 @@ export const CONFIG_KEYS = {
   methods: 'private_source_permission_methods',
   platforms: 'private_source_platforms',
 };
+
+// הסטים הידניים נשמרים באותו אוסף אך במבנה שונה ({ label, bookPaths })
+export const MANUAL_SETS_KEY = MANUAL_SETS_CONFIG_KEY;
 
 export const DEFAULT_STATUSES = {
   missing_info: { label: 'חסר מידע', color: '#ef4444' },
@@ -75,6 +80,12 @@ export async function loadOptionConfigs() {
     methods: pick(CONFIG_KEYS.methods),
     platforms: pick(CONFIG_KEYS.platforms),
   };
+}
+
+/** שולף את הסטים הידניים מ-SystemConfig (מנורמלים). דורש connectDB לפני. */
+export async function loadManualSets() {
+  const doc = await SystemConfig.findOne({ key: MANUAL_SETS_KEY }).lean();
+  return normalizeManualSets(doc?.value);
 }
 
 // ===== רשימת הספרים מגיטהאב =====
