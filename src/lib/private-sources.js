@@ -104,23 +104,12 @@ export function pathToCategory(path) {
 
 const NOTES_PREFIX = 'הערות על ';
 
-/** האם הקובץ הוא קובץ הערות נלווה ("הערות על X.txt") */
+/**
+ * האם הקובץ הוא קובץ הערות נלווה ("הערות על X.txt").
+ * קבצים אלו הם כפילות של הספר הראשי ולכן אינם מוצגים ברשימה כלל.
+ */
 function isNotesFile(path) {
   return (path.split('/').pop() || '').startsWith(NOTES_PREFIX);
-}
-
-/** מוצא את נתיב הספר שקובץ ההערות שייך לו (באותה תיקייה), או null */
-function findParentPath(notesPath, allPaths) {
-  const dir = notesPath.split('/').slice(0, -1).join('/');
-  const baseName = (notesPath.split('/').pop() || '')
-    .replace(/\.[^./]+$/, '')
-    .slice(NOTES_PREFIX.length);
-  if (!baseName) return null;
-  for (const ext of BOOK_EXTENSIONS) {
-    const candidate = `${dir}/${baseName}${ext}`;
-    if (allPaths.has(candidate)) return candidate;
-  }
-  return null;
 }
 
 /** מושך מגיטהאב את רשימת הספרים הפרטיים (ללא מטמון). */
@@ -131,24 +120,20 @@ async function fetchMoreBooks() {
   });
 
   const books = files.filter(
-    (f) => f.path.startsWith('ספרים/') && !EXCLUDED_PREFIXES.some((p) => f.path.startsWith(p))
+    (f) =>
+      f.path.startsWith('ספרים/') &&
+      !EXCLUDED_PREFIXES.some((p) => f.path.startsWith(p)) &&
+      !isNotesFile(f.path)
   );
 
-  const allPaths = new Set(books.map((b) => b.path));
-
   return books
-    .map((b) => {
-      const notes = isNotesFile(b.path);
-      return {
-        bookPath: b.path,
-        bookTitle: pathToBookTitle(b.path),
-        category: pathToCategory(b.path),
-        fileType: fileTypeOf(b.path),
-        size: b.size || 0,
-        isNotesCompanion: notes,
-        parentPath: notes ? findParentPath(b.path, allPaths) : null,
-      };
-    })
+    .map((b) => ({
+      bookPath: b.path,
+      bookTitle: pathToBookTitle(b.path),
+      category: pathToCategory(b.path),
+      fileType: fileTypeOf(b.path),
+      size: b.size || 0,
+    }))
     .sort((a, b) => a.bookPath.localeCompare(b.bookPath, 'he'));
 }
 

@@ -62,6 +62,9 @@ const FILE_TYPE_COLORS = {
 
 const NO_RECORD = '__none__'
 
+// קטגוריה שמוצגת תמיד בתחתית העמוד
+const NOT_ADAPTED_CATEGORY = 'לא מותאם עדיין לאוצריא'
+
 export default function PrivateSourcesPage() {
   const { showAlert, showMessage, showConfirm } = useDialog()
 
@@ -141,38 +144,23 @@ export default function PrivateSourcesPage() {
     [onlyMissing, statusFilter, search]
   )
 
-  // קיבוץ לפי קטגוריה עליונה; קובצי "הערות על X" נתלים תחת הספר שלהם
+  // קיבוץ לפי קטגוריה עליונה; "לא מותאם עדיין לאוצריא" תמיד בתחתית
   const groups = useMemo(() => {
-    const visible = items.filter(matches)
-    const visiblePaths = new Set(visible.map((i) => i.bookPath))
-
-    const childrenByParent = new Map()
-    for (const item of visible) {
-      if (item.isNotesCompanion && item.parentPath && visiblePaths.has(item.parentPath)) {
-        const list = childrenByParent.get(item.parentPath) || []
-        list.push(item)
-        childrenByParent.set(item.parentPath, list)
-      }
-    }
-
     const byCategory = new Map()
-    for (const item of visible) {
-      const attached =
-        item.isNotesCompanion && item.parentPath && visiblePaths.has(item.parentPath)
-      if (attached) continue
-
+    for (const item of items.filter(matches)) {
       const list = byCategory.get(item.category) || []
-      list.push({ item, children: childrenByParent.get(item.bookPath) || [] })
+      list.push(item)
       byCategory.set(item.category, list)
     }
 
     return Array.from(byCategory.entries())
-      .map(([category, rows]) => ({
-        category,
-        rows,
-        count: rows.reduce((sum, row) => sum + 1 + row.children.length, 0),
-      }))
-      .sort((a, b) => a.category.localeCompare(b.category, 'he'))
+      .map(([category, rows]) => ({ category, rows, count: rows.length }))
+      .sort((a, b) => {
+        const aLast = a.category === NOT_ADAPTED_CATEGORY
+        const bLast = b.category === NOT_ADAPTED_CATEGORY
+        if (aLast !== bLast) return aLast ? 1 : -1
+        return a.category.localeCompare(b.category, 'he')
+      })
   }, [items, matches])
 
   const visibleCount = useMemo(
@@ -451,23 +439,13 @@ export default function PrivateSourcesPage() {
 
                 {!isCollapsed && (
                   <div className="border-t border-surface-variant/60 divide-y divide-surface-variant/50">
-                    {group.rows.map(({ item, children }) => (
-                      <div key={item.bookPath}>
-                        <BookRow
-                          item={item}
-                          options={options}
-                          onEdit={() => setEditingItem(item)}
-                        />
-                        {children.map((child) => (
-                          <BookRow
-                            key={child.bookPath}
-                            item={child}
-                            options={options}
-                            onEdit={() => setEditingItem(child)}
-                            nested
-                          />
-                        ))}
-                      </div>
+                    {group.rows.map((item) => (
+                      <BookRow
+                        key={item.bookPath}
+                        item={item}
+                        options={options}
+                        onEdit={() => setEditingItem(item)}
+                      />
                     ))}
                   </div>
                 )}
@@ -527,23 +505,16 @@ function Chip({ label, value, tone = 'bg-surface-variant text-on-surface' }) {
   )
 }
 
-function BookRow({ item, options, onEdit, nested = false }) {
+function BookRow({ item, options, onEdit }) {
   const record = item.record
   const methodLabel = record?.permissionMethod
     ? options.methods?.[record.permissionMethod]?.label || record.permissionMethod
     : ''
 
   return (
-    <div
-      className={`flex flex-col md:flex-row md:items-center gap-3 px-5 py-3 hover:bg-surface-variant/30 transition-colors ${
-        nested ? 'pr-12 bg-surface/40' : ''
-      }`}
-    >
+    <div className="flex flex-col md:flex-row md:items-center gap-3 px-5 py-3 hover:bg-surface-variant/30 transition-colors">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          {nested && (
-            <span className="material-symbols-outlined text-on-surface/40 text-sm">note</span>
-          )}
           <span className="font-medium text-on-surface truncate">{item.bookTitle}</span>
           <span
             className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase ${
