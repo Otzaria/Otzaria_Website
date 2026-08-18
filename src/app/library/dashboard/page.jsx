@@ -7,7 +7,6 @@ import Link from 'next/link'
 import Header from '@/components/layout/Header'
 import { useDialog } from '@/components/providers/DialogContext'
 import Pagination from '@/components/ui/Pagination'
-import NotificationEmailSettings from '@/components/notifications/NotificationEmailSettings'
 import { validatePassword, validateMatch, validateDifferent } from '@/lib/validation-utils'
 
 export default function DashboardPage() {
@@ -51,7 +50,6 @@ export default function DashboardPage() {
   const [newEmail, setNewEmail] = useState('')
   const [updatingEmail, setUpdatingEmail] = useState(false)
 
-  const [showNotificationEmailModal, setShowNotificationEmailModal] = useState(false)
 
   const [showReminderModal, setShowReminderModal] = useState(false)
   const [dismissingReminder, setDismissingReminder] = useState(false)
@@ -628,14 +626,6 @@ export default function DashboardPage() {
               </button>
 
               <button
-                onClick={() => setShowNotificationEmailModal(true)}
-                className="flex flex-col items-center gap-3 p-6 bg-primary-container rounded-xl hover:bg-primary/20 transition-all"
-              >
-                <span className="material-symbols-outlined text-4xl text-primary">forward_to_inbox</span>
-                <span className="font-medium text-on-surface">כתובת מייל להתראות</span>
-              </button>
-
-              <button 
                 onClick={() => {
                     setPasswordFormData({ currentPassword: '', newPassword: '', confirmPassword: '' });
                     setPasswordMessage({ type: '', text: '' });
@@ -875,10 +865,6 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
-      )}
-
-      {showNotificationEmailModal && (
-        <NotificationEmailSettings onClose={() => setShowNotificationEmailModal(false)} />
       )}
 
       {showPasswordModal && (

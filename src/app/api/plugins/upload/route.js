@@ -6,6 +6,7 @@ import crypto from 'crypto'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import { sendPluginUploadNotification } from '@/lib/emailService'
+import { sendPluginReportNoticeIfNeeded } from '@/lib/systemMessages'
 import {
   ALLOWED_PLUGIN_STATUSES,
   MIN_SUPPORTED_APP_VERSION,
@@ -138,6 +139,7 @@ export async function POST(request) {
     // תקין ועובד, וחסימה עליהם הייתה מקפיאה תוספים שאין בהם שום אי-תאימות.
     let designCompliant = false
     let designViolations = []
+    let usedApiMethods = []
     try {
       const validation = await validatePluginArchive(pluginBuffer)
       const issues = [...validation.errors, ...validation.warnings]
@@ -146,6 +148,7 @@ export async function POST(request) {
       }
       designCompliant = validation.design?.compliant === true
       designViolations = validation.design?.violations || []
+      usedApiMethods = validation.usedApiMethods || []
     } catch (validationError) {
       console.error('Plugin validation crashed:', validationError)
       // אם הולידציה עצמה נפלה, לא מבטלים את ההעלאה אלא מתעדים בלוג בלבד.
@@ -306,6 +309,8 @@ export async function POST(request) {
     } catch (emailError) {
       console.error('Failed to send plugin upload notification:', emailError)
     }
+
+    await sendPluginReportNoticeIfNeeded({ userId: session.user.id, usedApiMethods })
 
     return NextResponse.json({
       success: true,

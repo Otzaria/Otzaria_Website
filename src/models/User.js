@@ -40,8 +40,8 @@ const UserSchema = new mongoose.Schema({
     enabled: { type: Boolean, default: false }
   },
 
-  // כתובת לקבלת התראות (למשל דיווחים על תוספים). null = להשתמש בכתובת החשבון.
-  notificationEmail: { type: String, default: null },
+  // הודעת המערכת החד-פעמית על דיווחי תוספים כבר נשלחה למשתמש זה
+  pluginReportNoticeSent: { type: Boolean, default: false },
 
   // --- מרחב עריכת הספרים הערוכים ---
   // מפקח: משתמש מהימן שעריכותיו מוחלות מיד והוא יכול לאשר הצעות של אחרים

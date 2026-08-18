@@ -23,6 +23,7 @@ import { readManifestFromPlugin, compareVersions } from '@/lib/pluginManifest'
 import { invalidatePluginSearchIndex } from '@/lib/pluginSearchIndex'
 import { archiveCurrentVersion } from '@/lib/pluginVersions'
 import { validatePluginArchive, OTZARIA_DESIGN_TAG } from '@/lib/pluginValidation'
+import { sendPluginReportNoticeIfNeeded } from '@/lib/systemMessages'
 import {
   MAX_IMAGE_BYTES,
   MAX_PLUGIN_BYTES,
@@ -302,6 +303,7 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
     // ועל כן יש להישען על מצב התגית הקיים. false → קובץ הועלה ולא עבר.
     let designCompliantFromFile = null
     let designViolations = []
+    let usedApiMethods = []
     if (pluginFile?.size) {
       if (!pluginFile.name.toLowerCase().endsWith(PLUGIN_FILE_EXT)) {
         return bad('Plugin file must be .otzplugin format')
@@ -318,6 +320,7 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
         }
         designCompliantFromFile = validation.design?.compliant === true
         designViolations = validation.design?.violations || []
+        usedApiMethods = validation.usedApiMethods || []
       } catch (validationError) {
         console.error('Plugin validation crashed during edit:', validationError)
       }
@@ -636,6 +639,11 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
       } catch (emailError) {
         console.error('Failed to send plugin update notification:', emailError)
       }
+    }
+
+    // ההודעה החד-פעמית נשלחת לבעל התוסף — הדיווחים מגיעים אליו, גם אם אדמין ערך
+    if (plugin.authorId) {
+      await sendPluginReportNoticeIfNeeded({ userId: plugin.authorId, usedApiMethods })
     }
 
     return NextResponse.json({

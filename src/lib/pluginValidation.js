@@ -1166,6 +1166,7 @@ export async function validatePluginArchive(buffer) {
     warnings,
     advisories,
     design,
+    usedApiMethods: [...apiUsage.keys()],
     spec: { source: spec.source, fetchedAt: spec.fetchedAt }
   }
 }
