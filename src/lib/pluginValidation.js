@@ -123,7 +123,7 @@ const FALLBACK_API_METHODS = [
   'plugin.openOther',
   'notes.list', 'notes.getBookNotesSummary', 'notes.add', 'notes.update', 'notes.delete',
   'ui.showMessage', 'ui.showSuccess', 'ui.showError', 'ui.showConfirm', 'ui.showWarning',
-  'feedback.sendEmail', 'feedback.report',
+  'feedback.sendEmail', 'feedback.report', 'feedback.hasReporterEmail',
   'history.list', 'history.listSearches', 'history.clear', 'history.remove',
   'notifications.showInApp', 'notifications.sendSystem', 'notifications.scheduleSystem',
   'notifications.cancel', 'notifications.cancelAll', 'notifications.checkPermissions',
@@ -231,7 +231,8 @@ const FALLBACK_METHOD_MIN_VERSION = {
   'plugin.openSelf': '0.9.96',
   // 0.9.97
   'plugin.openOther': '0.9.97',
-  'feedback.report': '0.9.97'
+  'feedback.report': '0.9.97',
+  'feedback.hasReporterEmail': '0.9.97'
 }
 
 // תואם _knownEvents ב-lib/plugins/services/plugin_extended_validator.dart
