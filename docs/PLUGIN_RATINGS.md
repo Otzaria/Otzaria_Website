@@ -53,6 +53,22 @@ ratingScore = (ratingWeightedSum + PRIOR_AVG × M) / (ratingWeight + M)
 - אימות **אינו תנאי לדירוג**: התקנה ידנית של קובץ שהורד אינה מזוהה כלל, ולכן
   היעדר רישום אינו מעיד שהתוסף לא הותקן.
 
+### התקין לפני שנרשם (עוגיית `otz_install_id`)
+
+תרחיש מצוי: מתקינים תוסף בלי חשבון, ורק אחר-כך נרשמים כדי לדרג. בשביל שגם
+הדירוג הזה יהיה מאומת:
+
+1. יצירת טוקן התקנה קובעת/מרעננת עוגיית דפדפן אנונימית `otz_install_id`
+   (httpOnly, ‏400 יום — תקרת הדפדפנים), והמזהה נשמר על הטוקן (`anonId`).
+2. דיווח הצלחה בלי `userId` נרשם ב-`PluginAnonInstall` (ייחודי לפי
+   `{anonId, pluginId}`, TTL ‏400 יום מההתקנה האחרונה).
+3. כשמשתמש מחובר מדרג (POST) מאותו דפדפן — `claimAnonInstalls` מעביר את **כל**
+   ההתקנות האנונימיות של העוגיה ל-`PluginInstall` על שמו, מוחק את השורות
+   האנונימיות, ומקדם דירוגים קיימים למאומתים.
+
+מגבלה מתועדת: הקישור הוא לפי דפדפן — ניקוי עוגיות, דפדפן אחר או מכשיר אחר
+מנתקים אותו, ואז חלים המנגנונים הקיימים (התקנה/עדכון חוזרים כמחובר).
+
 ## מי מדרג
 
 - משתמש מחובר בלבד, באתר בלבד. דירוג אחד לכל תוסף (אינדקס ייחודי
@@ -97,6 +113,8 @@ ratingScore = (ratingWeightedSum + PRIOR_AVG × M) / (ratingWeight + M)
 | `src/lib/pluginRatingStore.js` | גישת DB: חישוב מחדש של האגרגט, העוגן, רישום התקנה |
 | `src/models/PluginRating.js` | דירוג בודד (מקור האמת) |
 | `src/models/PluginInstall.js` | רישום התקנה מאומתת |
+| `src/models/PluginAnonInstall.js` | התקנה אנונימית הממתינה לתביעה לחשבון |
+| `src/lib/installAnonId.js` | עוגיית `otz_install_id` — קריאה/יצירה/קביעה |
 | `src/models/Plugin.js` | שדות האגרגט המנורמלים |
 | `src/app/api/plugins/[id]/rating/route.js` | GET/POST/DELETE לדירוג |
 | `src/app/api/admin/plugins/[id]/ratings/route.js` | מודרציה |
