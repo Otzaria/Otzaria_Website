@@ -112,6 +112,13 @@ export async function PATCH(request, { params }) {
     return NextResponse.json({
       success: true,
       message: hide ? 'הדירוג הוסתר ואינו נספר בממוצע' : 'הדירוג הוחזר ונספר שוב בממוצע',
+      // השדות המעודכנים של השורה — כדי שהניהול יעדכן מקומית בלי טעינה מחדש
+      rating: {
+        id: updated._id.toString(),
+        isHidden: hide,
+        hiddenByName: hide ? (auth.session.user?.name || null) : null,
+        hiddenAt: hide ? new Date().toISOString() : null
+      },
       aggregate: {
         ratingCount: aggregate.ratingCount,
         ratingAvg: aggregate.ratingAvg,

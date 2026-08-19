@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
@@ -935,10 +935,15 @@ export default function AdminPluginsPage() {
       {ratingsPlugin && (
         <PluginRatingsModal
           plugin={ratingsPlugin}
-          onClose={() => {
+          onClose={(aggregate) => {
+            // עדכון מקומי של הכרטיס בלבד (הממוצע שבכפתור) — בלי טעינה מחדש של הרשימה
+            if (aggregate) {
+              const pluginId = ratingsPlugin._id
+              setApprovedPlugins((prev) => prev.map((item) => (
+                item._id === pluginId ? { ...item, ...aggregate } : item
+              )))
+            }
             setRatingsPlugin(null)
-            // רענון — הממוצע שבכפתור מתעדכן לאחר הסתרה/החזרה של דירוג
-            loadPlugins()
           }}
         />
       )}
@@ -980,6 +985,8 @@ function PluginRatingsModal({ plugin, onClose }) {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState(null)
   const [processingId, setProcessingId] = useState(null)
+  const aggregateRef = useRef(null) // האגרגט האחרון שחזר מהשרת — נמסר בסגירה לעדכון מקומי של הכרטיס
+  const close = () => onClose(aggregateRef.current)
 
   const load = async () => {
     try {
@@ -1020,7 +1027,13 @@ function PluginRatingsModal({ plugin, onClose }) {
       })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || 'הפעולה נכשלה')
-      await load()
+      // עדכון מקומי מתוך תשובת השרת — אין צורך לטעון מחדש את כל הדירוגים
+      aggregateRef.current = result.aggregate
+      setData((prev) => prev && {
+        ...prev,
+        plugin: { ...prev.plugin, ...result.aggregate },
+        ratings: prev.ratings.map((item) => (item.id === rating.id ? { ...item, ...result.rating } : item))
+      })
     } catch (error) {
       showAlert('שגיאה', error.message || 'לא הצלחנו לעדכן את הדירוג')
     } finally {
@@ -1029,7 +1042,7 @@ function PluginRatingsModal({ plugin, onClose }) {
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/50 p-4" onClick={close}>
       <div
         className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl"
         onClick={(event) => event.stopPropagation()}
@@ -1038,7 +1051,7 @@ function PluginRatingsModal({ plugin, onClose }) {
           <h2 className="text-xl font-bold text-on-surface">דירוגים: {plugin.name}</h2>
           <button
             type="button"
-            onClick={onClose}
+            onClick={close}
             className="rounded-lg p-2 transition-colors hover:bg-neutral-100"
           >
             <span className="material-symbols-outlined">close</span>
