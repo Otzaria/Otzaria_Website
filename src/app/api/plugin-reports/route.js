@@ -7,8 +7,7 @@ import User from '@/models/User'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { validateEmail } from '@/lib/validation-utils'
 import { parsePluginRef } from '@/lib/pluginRef'
-import { createSystemMessage } from '@/lib/systemMessages'
-import { sendPluginReportNotification, formatPluginReportType } from '@/lib/emailService'
+import { sendPluginReportNotification } from '@/lib/emailService'
 
 const REPORT_TYPES = ['bug', 'crash', 'content', 'other']
 const MAX_DETAILS_LENGTH = 5000
@@ -45,25 +44,8 @@ async function resolvePlugin(pluginUid) {
   return Plugin.findById(id).select('_id name slug version author authorId').lean()
 }
 
-function buildMessageContent({ pluginName, pluginVersion, reportType, details, reporterEmail, appVersion, platform }) {
-  const lines = [
-    `התקבל דיווח ממשתמש על התוסף שלך דרך תוכנת אוצריא.`,
-    ``,
-    `שם התוסף: ${pluginName || 'לא צוין'}`,
-    `גרסת התוסף: ${pluginVersion || 'לא צוין'}`,
-    `סוג הדיווח: ${formatPluginReportType(reportType)}`,
-    `גרסת אוצריא: ${appVersion || 'לא צוין'}`,
-    `מערכת הפעלה: ${platform || 'לא צוין'}`,
-    reporterEmail ? `כתובת למענה: ${reporterEmail}` : 'המדווח לא השאיר כתובת למענה.',
-    ``,
-    `תוכן הדיווח:`,
-    details
-  ]
-  return lines.join('\n')
-}
-
 // POST /api/plugin-reports - דיווח משתמש על תוסף מותקן, נשלח מתוכנת אוצריא.
-// ציבורי ולא מאומת; כשל בהתראה (הודעה/מייל) אינו מפיל את הבקשה — הדיווח נשמר.
+// ציבורי ולא מאומת; כשל בשליחת המייל אינו מפיל את הבקשה — הדיווח נשמר.
 export async function POST(request) {
   try {
     if (!checkRateLimit(getClientIp(request), 'plugin-report', 5, 'minute')) {
@@ -167,30 +149,18 @@ export async function POST(request) {
   }
 }
 
-// התראה למפתח: הודעת מערכת בתיבה שלו + מייל. כישלון כאן נרשם ללוג בלבד,
-// כדי שדיווח שכבר נשמר לא יוחזר למשתמש ככישלון.
+// התראה למפתח: מייל בלבד, לכתובת הרשומה שלו באתר. כישלון כאן נרשם ללוג
+// בלבד, כדי שדיווח שכבר נשמר לא יוחזר למשתמש ככישלון.
 async function notifyDeveloper(params) {
   const { reportId, developerId, plugin } = params
   try {
-    const developer = await User.findById(developerId).select('name email notificationEmail').lean()
+    const developer = await User.findById(developerId).select('name email').lean()
     if (!developer) return
 
     const update = {}
 
-    try {
-      await createSystemMessage({
-        recipientId: developerId,
-        subject: `דיווח חדש על התוסף: ${params.pluginName || 'ללא שם'}`,
-        content: buildMessageContent(params),
-        source: 'plugin-report'
-      })
-      update.messageSent = true
-    } catch (error) {
-      console.error('Plugin report system message failed:', error)
-    }
-
     const mailResult = await sendPluginReportNotification({
-      recipientEmail: developer.notificationEmail || developer.email,
+      recipientEmail: developer.email,
       recipientName: developer.name,
       pluginName: params.pluginName,
       pluginVersion: params.pluginVersion,

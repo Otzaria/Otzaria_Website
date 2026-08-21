@@ -2,16 +2,18 @@
  * לוגיקה משותפת לעמוד "מקורות ספרים פרטיים".
  *
  * הספרים הפרטיים יושבים בתיקיית MoreBooks בריפו Otzaria/otzaria-library.
- * ספר = קובץ בודד (txt/pdf/docx) תחת "ספרים/". הרשימה נמשכת מגיטהאב ונשמרת
+ * ספר = קובץ בודד (txt/docx) תחת "ספרים/". הרשימה נמשכת מגיטהאב ונשמרת
  * במטמון בזיכרון התהליך, כי היא זהה לכל המנהלים ואינה משתנה תדיר.
  */
 
 import { listRepoFiles } from '@/lib/dicta/github-api';
 import { cached, invalidate } from '@/lib/api-cache';
 import SystemConfig from '@/models/SystemConfig';
+import { MANUAL_SETS_CONFIG_KEY, normalizeManualSets } from '@/lib/private-sources-sets';
 
 export const MORE_BOOKS_BASE_PATH = 'MoreBooks';
-export const BOOK_EXTENSIONS = ['.txt', '.pdf', '.docx'];
+// קבצי PDF אינם נספרים כספרים לצורך מקורות (אינם ניתנים להתאמה לאוצריא)
+export const BOOK_EXTENSIONS = ['.txt', '.docx'];
 
 /** תיקייה שאינה ספרים (תיעוד התוכנה) */
 const EXCLUDED_PREFIXES = ['ספרים/אוצריא/אודות התוכנה/'];
@@ -26,6 +28,9 @@ export const CONFIG_KEYS = {
   methods: 'private_source_permission_methods',
   platforms: 'private_source_platforms',
 };
+
+// הסטים הידניים נשמרים באותו אוסף אך במבנה שונה ({ label, bookPaths })
+export const MANUAL_SETS_KEY = MANUAL_SETS_CONFIG_KEY;
 
 export const DEFAULT_STATUSES = {
   missing_info: { label: 'חסר מידע', color: '#ef4444' },
@@ -77,6 +82,12 @@ export async function loadOptionConfigs() {
   };
 }
 
+/** שולף את הסטים הידניים מ-SystemConfig (מנורמלים). דורש connectDB לפני. */
+export async function loadManualSets() {
+  const doc = await SystemConfig.findOne({ key: MANUAL_SETS_KEY }).lean();
+  return normalizeManualSets(doc?.value);
+}
+
 // ===== רשימת הספרים מגיטהאב =====
 
 function fileTypeOf(path) {
@@ -104,23 +115,12 @@ export function pathToCategory(path) {
 
 const NOTES_PREFIX = 'הערות על ';
 
-/** האם הקובץ הוא קובץ הערות נלווה ("הערות על X.txt") */
+/**
+ * האם הקובץ הוא קובץ הערות נלווה ("הערות על X.txt").
+ * קבצים אלו הם כפילות של הספר הראשי ולכן אינם מוצגים ברשימה כלל.
+ */
 function isNotesFile(path) {
   return (path.split('/').pop() || '').startsWith(NOTES_PREFIX);
-}
-
-/** מוצא את נתיב הספר שקובץ ההערות שייך לו (באותה תיקייה), או null */
-function findParentPath(notesPath, allPaths) {
-  const dir = notesPath.split('/').slice(0, -1).join('/');
-  const baseName = (notesPath.split('/').pop() || '')
-    .replace(/\.[^./]+$/, '')
-    .slice(NOTES_PREFIX.length);
-  if (!baseName) return null;
-  for (const ext of BOOK_EXTENSIONS) {
-    const candidate = `${dir}/${baseName}${ext}`;
-    if (allPaths.has(candidate)) return candidate;
-  }
-  return null;
 }
 
 /** מושך מגיטהאב את רשימת הספרים הפרטיים (ללא מטמון). */
@@ -131,24 +131,20 @@ async function fetchMoreBooks() {
   });
 
   const books = files.filter(
-    (f) => f.path.startsWith('ספרים/') && !EXCLUDED_PREFIXES.some((p) => f.path.startsWith(p))
+    (f) =>
+      f.path.startsWith('ספרים/') &&
+      !EXCLUDED_PREFIXES.some((p) => f.path.startsWith(p)) &&
+      !isNotesFile(f.path)
   );
 
-  const allPaths = new Set(books.map((b) => b.path));
-
   return books
-    .map((b) => {
-      const notes = isNotesFile(b.path);
-      return {
-        bookPath: b.path,
-        bookTitle: pathToBookTitle(b.path),
-        category: pathToCategory(b.path),
-        fileType: fileTypeOf(b.path),
-        size: b.size || 0,
-        isNotesCompanion: notes,
-        parentPath: notes ? findParentPath(b.path, allPaths) : null,
-      };
-    })
+    .map((b) => ({
+      bookPath: b.path,
+      bookTitle: pathToBookTitle(b.path),
+      category: pathToCategory(b.path),
+      fileType: fileTypeOf(b.path),
+      size: b.size || 0,
+    }))
     .sort((a, b) => a.bookPath.localeCompare(b.bookPath, 'he'));
 }
 

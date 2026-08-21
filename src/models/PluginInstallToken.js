@@ -15,6 +15,11 @@ const PluginInstallTokenSchema = new mongoose.Schema(
     // ההתקנה עצמה פתוחה לכל אחד, ולכן השדה אופציונלי.
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
 
+    // מזהה הדפדפן האנונימי (עוגיית otz_install_id) של מי שיזם את ההתקנה.
+    // כשאין userId — הצלחה נרשמת ב-PluginAnonInstall וממתינה לתביעה לחשבון
+    // בעת דירוג. ראו src/lib/installAnonId.js.
+    anonId: { type: String, default: null, maxlength: 64 },
+
     status: {
       type: String,
       enum: ['pending', 'success', 'failure'],

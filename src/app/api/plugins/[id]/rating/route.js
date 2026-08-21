@@ -8,7 +8,8 @@ import { parsePluginRef } from '@/lib/pluginRef'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { isPluginSuspended } from '@/lib/pluginVisibility'
 import { isValidRatingValue, ratingFieldsForPublic, RATING_MIN, RATING_MAX } from '@/lib/pluginRating'
-import { recomputePluginRating, findVerifiedInstall } from '@/lib/pluginRatingStore'
+import { recomputePluginRating, findVerifiedInstall, claimAnonInstalls } from '@/lib/pluginRatingStore'
+import { readInstallAnonId } from '@/lib/installAnonId'
 
 // דירוג תוסף בחנות — באתר בלבד, למשתמש מחובר, דירוג אחד לכל תוסף (עדכון דורס).
 //   GET    — סיכום הדירוגים + הדירוג של המשתמש הנוכחי (אם מחובר)
@@ -16,8 +17,9 @@ import { recomputePluginRating, findVerifiedInstall } from '@/lib/pluginRatingSt
 //   DELETE — הסרת הדירוג של המשתמש
 //
 // "דירוג מאומת": אם למשתמש יש רישום התקנה בפועל (PluginInstall — נרשם כשהתקנה
-// ישירה מהאתר הצליחה), הדירוג מסומן ושוקל יותר בציון המיון. היעדר רישום אינו
-// חוסם דירוג — התקנה ידנית של קובץ שהורד אינה מזוהה כלל.
+// ישירה מהאתר הצליחה), הדירוג מסומן ושוקל יותר בציון המיון. התקנה שנעשתה לפני
+// הרשמה נתבעת לחשבון בעת הדירוג לפי עוגיית הדפדפן (claimAnonInstalls). היעדר
+// רישום אינו חוסם דירוג — התקנה ידנית של קובץ שהורד אינה מזוהה כלל.
 
 const NOT_FOUND = () => NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
 
@@ -104,6 +106,17 @@ export async function POST(request, { params }) {
     // מפתח אינו מדרג את התוסף של עצמו
     if (plugin.authorId?.toString() === userId) {
       return NextResponse.json({ error: 'לא ניתן לדרג תוסף שהעלית בעצמך' }, { status: 403 })
+    }
+
+    // התקנות שנעשו מהדפדפן הזה לפני הרשמה/התחברות (עוגיית otz_install_id)
+    // נתבעות עכשיו לחשבון — כך שגם "התקין ורק אחר-כך נרשם" מקבל דירוג מאומת.
+    const anonId = readInstallAnonId(request)
+    if (anonId) {
+      try {
+        await claimAnonInstalls({ userId, anonId })
+      } catch (claimError) {
+        console.error('Error claiming anonymous plugin installs:', claimError)
+      }
     }
 
     const install = await findVerifiedInstall(userId, plugin._id)

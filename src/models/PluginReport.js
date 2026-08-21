@@ -23,7 +23,6 @@ const PluginReportSchema = new mongoose.Schema({
     default: 'pending'
   },
   notifiedAt: { type: Date },
-  messageSent: { type: Boolean, default: false },
   emailSent: { type: Boolean, default: false },
   adminNotes: { type: String },
 }, { timestamps: true });

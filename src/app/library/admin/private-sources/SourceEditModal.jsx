@@ -12,7 +12,11 @@ const EMPTY_FORM = {
   ownerEmail: '',
   ownerPhone: '',
   obtainedBy: '',
+  obtainedByEmail: '',
+  obtainedByPhone: '',
+  obtainerSameAsOwner: false,
   permissionMethod: '',
+  permissionMethodDetail: '',
   permissionDate: '',
   requireCredit: false,
   allowedPlatforms: [],
@@ -62,7 +66,11 @@ export default function SourceEditModal({ item, options, onSave, onDelete, onClo
       ownerEmail: record?.ownerEmail || '',
       ownerPhone: record?.ownerPhone || '',
       obtainedBy: record?.obtainedBy || '',
+      obtainedByEmail: record?.obtainedByEmail || '',
+      obtainedByPhone: record?.obtainedByPhone || '',
+      obtainerSameAsOwner: Boolean(record?.obtainerSameAsOwner),
       permissionMethod: record?.permissionMethod || '',
+      permissionMethodDetail: record?.permissionMethodDetail || '',
       permissionDate: toDateInput(record?.permissionDate),
       requireCredit: Boolean(record?.requireCredit),
       allowedPlatforms: Array.isArray(record?.allowedPlatforms) ? [...record.allowedPlatforms] : [],
@@ -78,6 +86,12 @@ export default function SourceEditModal({ item, options, onSave, onDelete, onClo
   }, [item])
 
   if (!mounted || !item) return null
+
+  // רשומת סט — המזהה סינתטי ("set:...") ולכן במקומו מוצג תיאור הסט
+  const isSet = item.kind === 'set'
+  const subtitle = isSet
+    ? `סט${item.isManual ? ' ידני' : ''} · ${(item.books || []).length} ספרים · רשומה משותפת`
+    : item.bookPath
 
   const setField = (name, value) => setForm((prev) => ({ ...prev, [name]: value }))
 
@@ -108,6 +122,11 @@ export default function SourceEditModal({ item, options, onSave, onDelete, onClo
         bookPath: item.bookPath,
         bookTitle: item.bookTitle,
         ...form,
+        // כשמשיג האישור הוא בעל הזכויות — פרטי הקשר שלו הם של הבעלים,
+        // ולא שומרים כפילות שעלולה להתיישן
+        ...(form.obtainerSameAsOwner
+          ? { obtainedBy: '', obtainedByEmail: '', obtainedByPhone: '' }
+          : {}),
         permissionDate: form.permissionDate || null,
       })
     } finally {
@@ -121,10 +140,12 @@ export default function SourceEditModal({ item, options, onSave, onDelete, onClo
         <div className="flex justify-between items-start gap-4 p-5 border-b">
           <div className="min-w-0">
             <h2 className="text-xl font-bold text-neutral-800 flex items-center gap-2">
-              <span className="material-symbols-outlined text-feature-600">copyright</span>
+              <span className="material-symbols-outlined text-feature-600">
+                {isSet ? 'library_books' : 'copyright'}
+              </span>
               <span className="truncate">{item.bookTitle}</span>
             </h2>
-            <p className="text-xs text-neutral-500 mt-1 break-all">{item.bookPath}</p>
+            <p className="text-xs text-neutral-500 mt-1 break-all">{subtitle}</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-neutral-100 rounded-lg transition-colors">
             <span className="material-symbols-outlined">close</span>
@@ -132,45 +153,94 @@ export default function SourceEditModal({ item, options, onSave, onDelete, onClo
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          {/* בעל הזכויות */}
+          <fieldset className="border border-neutral-200 rounded-lg p-4">
+            <legend className="px-2 text-sm font-bold text-neutral-700">
+              בעל הזכויות / מוסר הספר
+            </legend>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs text-neutral-600 mb-1">שם</label>
+                <input
+                  type="text"
+                  value={form.ownerName}
+                  onChange={(e) => setField('ownerName', e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-neutral-600 mb-1">מייל</label>
+                <input
+                  type="email"
+                  dir="ltr"
+                  value={form.ownerEmail}
+                  onChange={(e) => setField('ownerEmail', e.target.value)}
+                  className={`${inputClass} text-right`}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-neutral-600 mb-1">טלפון</label>
+                <input
+                  type="tel"
+                  dir="ltr"
+                  value={form.ownerPhone}
+                  onChange={(e) => setField('ownerPhone', e.target.value)}
+                  className={`${inputClass} text-right`}
+                />
+              </div>
+            </div>
+          </fieldset>
+
+          {/* משיג האישור */}
+          <fieldset className="border border-neutral-200 rounded-lg p-4">
+            <legend className="px-2 text-sm font-bold text-neutral-700">
+              מי השיג את האישור
+            </legend>
+            <label className="inline-flex items-center gap-2 text-sm text-neutral-700 mb-3">
+              <input
+                type="checkbox"
+                checked={form.obtainerSameAsOwner}
+                onChange={(e) => setField('obtainerSameAsOwner', e.target.checked)}
+                className="w-4 h-4"
+              />
+              זהו אותו אדם — בעל הזכויות עצמו
+            </label>
+            {!form.obtainerSameAsOwner && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs text-neutral-600 mb-1">שם</label>
+                  <input
+                    type="text"
+                    value={form.obtainedBy}
+                    onChange={(e) => setField('obtainedBy', e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-neutral-600 mb-1">מייל</label>
+                  <input
+                    type="email"
+                    dir="ltr"
+                    value={form.obtainedByEmail}
+                    onChange={(e) => setField('obtainedByEmail', e.target.value)}
+                    className={`${inputClass} text-right`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-neutral-600 mb-1">טלפון</label>
+                  <input
+                    type="tel"
+                    dir="ltr"
+                    value={form.obtainedByPhone}
+                    onChange={(e) => setField('obtainedByPhone', e.target.value)}
+                    className={`${inputClass} text-right`}
+                  />
+                </div>
+              </div>
+            )}
+          </fieldset>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs text-neutral-600 mb-1">שם המוסר / בעל הזכויות</label>
-              <input
-                type="text"
-                value={form.ownerName}
-                onChange={(e) => setField('ownerName', e.target.value)}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-neutral-600 mb-1">מי השיג את האישור</label>
-              <input
-                type="text"
-                value={form.obtainedBy}
-                onChange={(e) => setField('obtainedBy', e.target.value)}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-neutral-600 mb-1">מייל</label>
-              <input
-                type="email"
-                dir="ltr"
-                value={form.ownerEmail}
-                onChange={(e) => setField('ownerEmail', e.target.value)}
-                className={`${inputClass} text-right`}
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-neutral-600 mb-1">טלפון</label>
-              <input
-                type="tel"
-                dir="ltr"
-                value={form.ownerPhone}
-                onChange={(e) => setField('ownerPhone', e.target.value)}
-                className={`${inputClass} text-right`}
-              />
-            </div>
             <div>
               <label className="block text-xs text-neutral-600 mb-1">אופן קבלת האישור</label>
               <select
@@ -185,6 +255,18 @@ export default function SourceEditModal({ item, options, onSave, onDelete, onClo
                   </option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="block text-xs text-neutral-600 mb-1">
+                פירוט — איזה מייל / צ&apos;אט / מספר טלפון וכו&apos;
+              </label>
+              <input
+                type="text"
+                value={form.permissionMethodDetail}
+                onChange={(e) => setField('permissionMethodDetail', e.target.value)}
+                placeholder="למשל: כתובת המייל שבה ניתן האישור"
+                className={inputClass}
+              />
             </div>
             <div>
               <label className="block text-xs text-neutral-600 mb-1">תאריך האישור</label>

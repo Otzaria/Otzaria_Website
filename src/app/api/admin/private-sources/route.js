@@ -7,9 +7,11 @@ import { isAdmin } from '@/lib/roles';
 import {
   getMoreBooksList,
   loadOptionConfigs,
+  loadManualSets,
   pathToBookTitle,
   DEFAULT_STATUS_KEY,
 } from '@/lib/private-sources';
+import { buildSourceEntries } from '@/lib/private-sources-sets';
 
 /** בודק הרשאת מנהל כללי; מחזיר את הסשן או null */
 async function requireAdmin() {
@@ -40,7 +42,7 @@ export async function GET(request) {
     const forceRefresh = new URL(request.url).searchParams.get('refresh') === '1';
     // כשל בגיטהאב לא אמור להעלים את המטא-דאטה השמורה — לכן הוא נתפס בנפרד
     let githubError = false;
-    const [books, records, options] = await Promise.all([
+    const [books, records, options, manualSets] = await Promise.all([
       getMoreBooksList({ forceRefresh }).catch((listError) => {
         console.error('Error loading MoreBooks list from GitHub:', listError);
         githubError = true;
@@ -48,26 +50,36 @@ export async function GET(request) {
       }),
       PrivateBookSource.find({}).lean(),
       loadOptionConfigs(),
+      loadManualSets(),
     ]);
 
     const byPath = new Map(records.map((r) => [r.bookPath, r]));
 
-    const items = books.map((book) => {
-      const record = byPath.get(book.bookPath) || null;
-      return {
-        ...book,
-        record: record
-          ? {
-              ...record,
-              _id: String(record._id),
-              status: record.status || DEFAULT_STATUS_KEY,
-            }
-          : null,
-      };
-    });
+    const serializeRecord = (record) =>
+      record
+        ? { ...record, _id: String(record._id), status: record.status || DEFAULT_STATUS_KEY }
+        : null;
 
-    // רשומות שנשמרו לספרים שכבר אינם בגיטהאב — כדי שלא ייעלמו בשקט
-    const knownPaths = new Set(books.map((b) => b.bookPath));
+    // ספרים בודדים + סטים (ידניים ואוטומטיים) — לכל סט רשומה משותפת אחת
+    const { entries, setPaths } = buildSourceEntries({ books, manualSets });
+
+    const items = entries.map((entry) => ({
+      ...entry,
+      record: serializeRecord(byPath.get(entry.bookPath) || null),
+      // ספר שנכנס לסט אך יש לו רשומה פרטית משלו — הרשומה נשלחת כדי שניתן
+      // יהיה לצפות בה, לערוך אותה ולמחוק אותה גם מתוך הסט
+      ...(entry.kind === 'set'
+        ? {
+            books: entry.books.map((member) => {
+              const memberRecord = serializeRecord(byPath.get(member.bookPath) || null);
+              return { ...member, record: memberRecord, hasOwnRecord: memberRecord !== null };
+            }),
+          }
+        : {}),
+    }));
+
+    // רשומות שנשמרו לספרים/סטים שכבר אינם קיימים — כדי שלא ייעלמו בשקט
+    const knownPaths = new Set([...books.map((b) => b.bookPath), ...setPaths]);
     const orphans = records
       .filter((r) => !knownPaths.has(r.bookPath))
       .map((r) => ({ bookPath: r.bookPath, bookTitle: r.bookTitle || pathToBookTitle(r.bookPath) }));
@@ -77,6 +89,14 @@ export async function GET(request) {
       items,
       orphans,
       options,
+      manualSets,
+      // כל הספרים (כולל חברי סטים) — לצורך מודאל ניהול הסטים
+      books: books.map((b) => ({
+        bookPath: b.bookPath,
+        bookTitle: b.bookTitle,
+        category: b.category,
+        fileType: b.fileType,
+      })),
       total: items.length,
       githubError,
       ...(githubError
@@ -134,7 +154,11 @@ export async function POST(request) {
       ownerEmail: cleanString(body?.ownerEmail, 300),
       ownerPhone: cleanString(body?.ownerPhone, 100),
       obtainedBy: cleanString(body?.obtainedBy, 300),
+      obtainedByEmail: cleanString(body?.obtainedByEmail, 300),
+      obtainedByPhone: cleanString(body?.obtainedByPhone, 100),
+      obtainerSameAsOwner: Boolean(body?.obtainerSameAsOwner),
       permissionMethod: cleanString(body?.permissionMethod, 100),
+      permissionMethodDetail: cleanString(body?.permissionMethodDetail, 1000),
       permissionDate,
       requireCredit: Boolean(body?.requireCredit),
       allowedPlatforms,

@@ -8,6 +8,10 @@ import mongoose from 'mongoose';
  *
  * רשימת הספרים עצמה נמשכת מגיטהאב בזמן אמת — כאן נשמרים רק המטא־נתונים,
  * ולכן ייתכנו ספרים ללא רשומה כלל (ואלו בדיוק אלו שדורשים טיפול).
+ *
+ * חריג: רשומה של "סט" (כמה ספרים שחולקים רשומת מקור אחת) נשמרת עם bookPath
+ * סינתטי שאינו נתיב אמיתי בריפו — 'set:m:<מפתח הסט>' לסט ידני,
+ * 'set:a:<שם הסט>' לסט אוטומטי (ראה src/lib/private-sources-sets.js).
  */
 const CustomFieldSchema = new mongoose.Schema(
   {
@@ -32,9 +36,15 @@ const PrivateBookSourceSchema = new mongoose.Schema(
 
     // מי השיג את האישור מטעמנו
     obtainedBy: { type: String, default: '' },
+    obtainedByEmail: { type: String, default: '' },
+    obtainedByPhone: { type: String, default: '' },
+    // משיג האישור הוא גם בעל הזכויות (ואז פרטי הקשר שלו הם של הבעלים)
+    obtainerSameAsOwner: { type: Boolean, default: false },
 
     // אופן קבלת האישור — מפתח מתוך רשימה דינמית (SystemConfig)
     permissionMethod: { type: String, default: '' },
+    // פירוט: איזה מייל / איזה צ'אט / איזה מספר טלפון וכו'
+    permissionMethodDetail: { type: String, default: '' },
     permissionDate: { type: Date, default: null },
 
     // חובת מתן קרדיט בפרסום

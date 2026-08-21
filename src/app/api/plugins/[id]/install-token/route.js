@@ -9,6 +9,7 @@ import { parsePluginRef } from '@/lib/pluginRef'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { hasPluginsAccess } from '@/lib/roles'
 import { canAccessSuspended, isPluginSuspended } from '@/lib/pluginVisibility'
+import { readInstallAnonId, generateInstallAnonId, setInstallAnonCookie } from '@/lib/installAnonId'
 
 // משך חיי טוקן התקנה — מספיק להורדה + התקנה, קצר מספיק שלא להצטבר.
 const INSTALL_TOKEN_TTL_MS = 15 * 60 * 1000
@@ -50,16 +51,24 @@ export async function POST(request, { params }) {
       }
     }
 
+    // מזהה הדפדפן האנונימי — מאפשר לרשום התקנה גם בלי חשבון, ולתבוע אותה
+    // לחשבון בעת דירוג עתידי (מי שהתקין ורק אחר-כך נרשם). נקבע/מתרענן תמיד,
+    // גם למחוברים — כדי שיהיה קיים אם יתנתקו ויתקינו שוב.
+    const anonId = readInstallAnonId(request) || generateInstallAnonId()
+
     const expiresAt = new Date(Date.now() + INSTALL_TOKEN_TTL_MS)
     const doc = await PluginInstallToken.create({
       token: crypto.randomBytes(24).toString('base64url'),
       pluginId: plugin._id,
       version: version || plugin.version,
       userId: session?.user?.id || null,
+      anonId,
       expiresAt
     })
 
-    return NextResponse.json({ token: doc.token, expiresAt: expiresAt.toISOString() })
+    const response = NextResponse.json({ token: doc.token, expiresAt: expiresAt.toISOString() })
+    setInstallAnonCookie(response, anonId)
+    return response
   } catch (error) {
     console.error('Error creating plugin install token:', error)
     return NextResponse.json({ error: 'Failed to create install token' }, { status: 500 })

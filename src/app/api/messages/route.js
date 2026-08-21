@@ -21,7 +21,8 @@ export async function GET(request) {
         let query = {};
         
         if (hasAnyAdminAccess(session.user.role) && showAll === 'true') {
-             query = {}; 
+             // הודעות מערכת הן אישיות לנמען — אינן מוצגות בניהול ההודעות
+             query = { messageType: { $ne: 'system' } };
         } else {
             query = { 
                 $or: [

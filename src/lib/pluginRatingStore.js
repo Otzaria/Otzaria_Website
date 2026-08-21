@@ -1,6 +1,7 @@
 import Plugin from '@/models/Plugin'
 import PluginRating from '@/models/PluginRating'
 import PluginInstall from '@/models/PluginInstall'
+import PluginAnonInstall from '@/models/PluginAnonInstall'
 import StoreSettings, { getStoreSettings } from '@/models/StoreSettings'
 import { invalidatePluginSearchIndex } from '@/lib/pluginSearchIndex'
 import {
@@ -81,6 +82,51 @@ export async function recordVerifiedInstall({ userId, pluginId, version, appVers
     { upsert: true }
   )
   return result.upsertedCount > 0
+}
+
+// רישום התקנה מוצלחת של מי שלא היה מחובר, לפי מזהה הדפדפן האנונימי.
+// ממתין לתביעה לחשבון (claimAnonInstalls) בעת דירוג. אידמפוטנטי כמו המזוהה.
+export async function recordAnonInstall({ anonId, pluginId, version, appVersion }) {
+  const now = new Date()
+  await PluginAnonInstall.updateOne(
+    { anonId, pluginId },
+    {
+      $set: { lastInstalledAt: now, version: version || '', appVersion: appVersion || null },
+      $inc: { installCount: 1 },
+      $setOnInsert: { firstInstalledAt: now }
+    },
+    { upsert: true }
+  )
+}
+
+// תביעת ההתקנות האנונימיות של הדפדפן הזה לחשבון: מי שהתקין לפני שנרשם/התחבר
+// מקבל רישום PluginInstall על שמו — וממנו "דירוג מאומת". נקרא מראוט הדירוג
+// (הרגע שבו האימות מתחיל להיות רלוונטי); רץ פעם אחת בפועל, כי השורות נמחקות.
+// מחזיר את מספר ההתקנות שנתבעו.
+export async function claimAnonInstalls({ userId, anonId }) {
+  if (!userId || !anonId) return 0
+  const anonRows = await PluginAnonInstall.find({ anonId }).lean()
+  if (anonRows.length === 0) return 0
+
+  for (const row of anonRows) {
+    await PluginInstall.updateOne(
+      { userId, pluginId: row.pluginId },
+      {
+        // אם כבר יש רישום מזוהה — רק מאחדים מונים וגבולות זמן; פרטי הגרסה
+        // של הרישום המזוהה עדכניים לפחות כמו האנונימי ולכן נקבעים רק ביצירה
+        $inc: { installCount: row.installCount || 1 },
+        $min: { firstInstalledAt: row.firstInstalledAt || row.lastInstalledAt },
+        $max: { lastInstalledAt: row.lastInstalledAt || row.firstInstalledAt },
+        $setOnInsert: { version: row.version || '', appVersion: row.appVersion || null }
+      },
+      { upsert: true }
+    )
+    // דירוג שכבר קיים לתוסף הזה הופך למאומת מיד (מדרג ראשון ותובע אחר-כך)
+    await promoteRatingToVerified({ userId, pluginId: row.pluginId, version: row.version })
+  }
+
+  await PluginAnonInstall.deleteMany({ anonId })
+  return anonRows.length
 }
 
 // שדרוג דירוג קיים ל"מאומת" לאחר שנרשמה התקנה בפועל — למי שדירג לפני שהתקין

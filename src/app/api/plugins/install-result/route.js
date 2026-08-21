@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import dbConnect from '@/lib/db'
 import PluginInstallToken from '@/models/PluginInstallToken'
 import { checkRateLimit } from '@/lib/rate-limit'
-import { recordVerifiedInstall, promoteRatingToVerified } from '@/lib/pluginRatingStore'
+import { recordVerifiedInstall, recordAnonInstall, promoteRatingToVerified } from '@/lib/pluginRatingStore'
 
 // טוקנים נוצרים ב-base64url באורך קבוע — כל דבר אחר נדחה לפני גישה ל-DB.
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{20,64}$/
@@ -73,8 +73,9 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Token not found, expired or already reported' }, { status: 404 })
     }
 
-    // התקנה שהצליחה למשתמש מזוהה — רישום קבוע (הטוקן עצמו נמחק ב-TTL) שממנו
-    // נגזר "דירוג מאומת". כישלון בשלב הזה לא יפיל את הדיווח עצמו.
+    // התקנה שהצליחה — רישום קבוע (הטוקן עצמו נמחק ב-TTL) שממנו נגזר "דירוג
+    // מאומת". למשתמש מזוהה — ישירות על שמו; לאנונימי — לפי מזהה הדפדפן,
+    // בהמתנה לתביעה לחשבון בעת דירוג. כישלון כאן לא יפיל את הדיווח עצמו.
     if (status === 'success' && updated.userId) {
       try {
         await recordVerifiedInstall({
@@ -91,6 +92,17 @@ export async function POST(request) {
         })
       } catch (installError) {
         console.error('Error recording verified plugin install:', installError)
+      }
+    } else if (status === 'success' && updated.anonId) {
+      try {
+        await recordAnonInstall({
+          anonId: updated.anonId,
+          pluginId: updated.pluginId,
+          version: updated.version,
+          appVersion
+        })
+      } catch (installError) {
+        console.error('Error recording anonymous plugin install:', installError)
       }
     }
 
