@@ -7,7 +7,8 @@ import {
   APP_VERSION_PARAM,
   isValidAppVersion,
   buildLiveVersionEntry,
-  resolveCompatibleVersion
+  resolveCompatibleVersion,
+  lowestSupportedAppVersion
 } from '@/lib/pluginCompatibility'
 
 // GET /api/plugins/<id>/latest
@@ -74,7 +75,9 @@ export async function GET(request, { params }) {
           error: 'No plugin version supports the requested app version',
           // טווח התאימות של הגרסה החיה — עוזר להציג "דרושה אוצריא X ומעלה"
           compatibleWith: plugin.compatibleWith || '',
-          maxAppVersion: plugin.maxAppVersion || null
+          maxAppVersion: plugin.maxAppVersion || null,
+          // כמו ב-404 של download — הרצפה הנמוכה מכל הגרסאות, להסבר מלא למשתמש
+          minSupportedAppVersion: lowestSupportedAppVersion(plugin)
         },
         { status: 404 }
       )
