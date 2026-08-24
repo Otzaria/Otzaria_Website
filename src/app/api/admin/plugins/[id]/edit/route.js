@@ -265,8 +265,10 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
     if (!ALLOWED_PLUGIN_STATUSES.includes(status)) {
       return bad(`Status must be one of: ${ALLOWED_PLUGIN_STATUSES.join(', ')}`)
     }
-    if (!PLUGIN_VERSION_RE.test(version)) {
-      return bad('Version must be in the form X, X.Y, X.Y.Z (optionally with -beta etc.)')
+    // הטופס מגיש את הגרסה החיה מה-DB גם כשלא נגעו בה. תוסף שפורסם בגרסה ישנה
+    // ("1.0", "1.0.0.1") נחסם כאן מכל עריכת מטא-דאטה, ולכן אוכפים רק על גרסה חדשה.
+    if (version !== livePlugin.version && !PLUGIN_VERSION_RE.test(version)) {
+      return bad('Version must be in the form X.Y.Z')
     }
     if (maxAppVersion) {
       if (!PLUGIN_VERSION_RE.test(maxAppVersion)) {
@@ -425,7 +427,7 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
         return bad('חסר שדה גרסה ב-manifest.json של קובץ התוסף')
       }
       if (!PLUGIN_VERSION_RE.test(manifestVersion)) {
-        return bad('גרסה לא תקינה ב-manifest.json של קובץ התוסף (נדרש פורמט X, X.Y, X.Y.Z)')
+        return bad('גרסה לא תקינה ב-manifest.json של קובץ התוסף (נדרש פורמט X.Y.Z)')
       }
       // היוצר חייב להעלות גרסה גבוהה מהקיימת. מנהל רשאי לשמור גם על אותה גרסה
       // (למשל החלפת קובץ לתיקון), אך לעולם לא לשנמך — ירידה נחסמת בהמשך לכולם.
@@ -436,9 +438,10 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
 
       // היוצר — שאר המטא-דאטה המוגנת נגזרת מהמניפסט (מנהל עורך אותה ידנית בטופס).
       if (!isAdmin) {
-        const manifestStability = newManifest.stability ? newManifest.stability.toString().trim() : ''
-        if (!manifestStability || !ALLOWED_PLUGIN_STATUSES.includes(manifestStability)) {
-          return bad('חסר שדה stability תקין ב-manifest.json (ערכים מותרים: stable, beta, experimental)')
+        // ברירת מחדל זהה לאוצריא ולוולידטור ה-CI — ראו upload/route.js.
+        const manifestStability = (newManifest.stability || 'stable').toString().trim()
+        if (!ALLOWED_PLUGIN_STATUSES.includes(manifestStability)) {
+          return bad('ערך stability לא תקין ב-manifest.json (ערכים מותרים: stable, beta, experimental)')
         }
         const manifestMinAppVersion = newManifest.minAppVersion ? newManifest.minAppVersion.toString().trim() : ''
         if (!manifestMinAppVersion) {

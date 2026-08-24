@@ -13,6 +13,7 @@ const FALLBACK_PERMISSIONS = [
   'app.startup_contributions',
   'library.books.read',
   'library.content.read',
+  'library.links.read',
   'search.fulltext.read',
   'reader.open',
   'reader.context_menu',
@@ -111,16 +112,28 @@ const WHEN_READABLE_SETTING_KEYS = new Set([
 
 const FALLBACK_API_METHODS = [
   'app.getInfo', 'app.getTheme', 'app.getLocale', 'app.getUserEmail', 'app.getGrantedPermissions',
+  'app.getConnectivity',
   'app.openUrl',
-  'library.findBooks', 'library.getBookMetadata', 'library.listRecentBooks',
+  'library.findBooks', 'library.getBookMetadata',
+  'library.resolveBooks', 'library.resolveCategoryPaths', 'library.listRecentBooks',
   'library.getBookContent', 'library.getBookToc',
-  'search.fullText',
-  'reader.openBook', 'reader.openBookAtRef', 'reader.getCurrentState', 'reader.getCurrentRef',
-  'reader.getSelection', 'reader.addContextMenuItem', 'reader.removeContextMenuItem',
-  'reader.setHighlight', 'reader.getHighlights', 'reader.clearHighlight', 'reader.clearAllHighlights',
+  'library.listBookAltStructures', 'library.getBookAltToc',
+  'library.getCommentators', 'library.getLinks', 'library.getLinkTargetsSummary', 'library.getLinkContent',
+  'search.fullText', 'search.query', 'search.getOptions',
+  'reader.openBook', 'reader.openBookAtRef', 'reader.openSearchTab',
+  'reader.getCurrentState', 'reader.getCurrentRef',
+  'reader.getSelection', 'reader.getActiveCommentators',
+  'reader.addContextMenuItem', 'reader.removeContextMenuItem', 'reader.updateContextMenuItem',
+  'reader.addToolbarItem', 'reader.removeToolbarItem', 'reader.updateToolbarItem',
+  'reader.findTextOccurrences', 'reader.getSectionTextMap',
+  'reader.setHighlight', 'reader.updateHighlight', 'reader.getHighlights',
+  'reader.revealHighlight', 'reader.clearHighlight', 'reader.clearAllHighlights',
+  'reader.registerInBookSearchProvider', 'reader.respondInBookSearch',
+  'reader.registerExternalSearchProvider', 'reader.respondExternalSearch',
   'navigation.goTo',
   'plugin.openSelf',
   'plugin.openOther',
+  'plugin.backgroundDone',
   'notes.list', 'notes.getBookNotesSummary', 'notes.add', 'notes.update', 'notes.delete',
   'ui.showMessage', 'ui.showSuccess', 'ui.showError', 'ui.showConfirm', 'ui.showWarning',
   'feedback.sendEmail', 'feedback.report', 'feedback.hasReporterEmail',
@@ -135,7 +148,7 @@ const FALLBACK_API_METHODS = [
   'publishedData.upsert', 'publishedData.remove', 'publishedData.listOwn',
   'database.listSources', 'database.describeSource', 'database.query', 'database.batchQuery',
   'library.getTree',
-  'network.fetch', 'network.download',
+  'network.fetch', 'network.fetchStream', 'network.download',
   'ui.pickFolder',
   'fs.extractZip', 'fs.deleteFile',
   'fs.pickUserFile', 'fs.resolveFileUrl', 'fs.readTextFile', 'fs.revokeFile',
@@ -170,6 +183,7 @@ const FALLBACK_METHOD_MIN_VERSION = {
   'reader.getHighlights': '0.9.89',
   'reader.clearHighlight': '0.9.89',
   'reader.clearAllHighlights': '0.9.89',
+  'reader.openSearchTab': '0.9.89',
   'navigation.goTo': '0.9.89',
   'notes.list': '0.9.89',
   'notes.getBookNotesSummary': '0.9.89',
@@ -200,11 +214,13 @@ const FALLBACK_METHOD_MIN_VERSION = {
   'settings.get': '0.9.89',
   'settings.getMany': '0.9.89',
   'calendar.getSelectedDate': '0.9.89',
-  'calendar.getDailyTimes': '0.9.89',
-  'calendar.getHalachicTimes': '0.9.89',
+  // שוחררו ב-0.9.92: נעדרים מ-plugin_bridge_adapter.dart בתג 0.9.91+622 וקיימים
+  // בתג 0.9.92+631. ערך 0.9.97 כאן היה חוסם תוספים שכבר משתמשים בהן.
+  'calendar.getDailyTimes': '0.9.92',
+  'calendar.getHalachicTimes': '0.9.92',
   'calendar.getJewishDate': '0.9.89',
   'calendar.getEvents': '0.9.89',
-  'calendar.getCities': '0.9.97',
+  'calendar.getCities': '0.9.96',
   'publishedData.upsert': '0.9.89',
   'publishedData.remove': '0.9.89',
   'publishedData.listOwn': '0.9.89',
@@ -225,14 +241,40 @@ const FALLBACK_METHOD_MIN_VERSION = {
   'fs.readTextFile': '0.9.94',
   'fs.resolveFileUrl': '0.9.94',
   'fs.revokeFile': '0.9.94',
+  'reader.updateContextMenuItem': '0.9.95',
+  'reader.findTextOccurrences': '0.9.95',
+  'reader.getSectionTextMap': '0.9.95',
+  'reader.updateHighlight': '0.9.95',
   // 0.9.95
   'app.openUrl': '0.9.95',
   // 0.9.96
   'plugin.openSelf': '0.9.96',
+  'app.getConnectivity': '0.9.96',
+  'library.listBookAltStructures': '0.9.96',
+  'library.getBookAltToc': '0.9.96',
+  'reader.revealHighlight': '0.9.96',
   // 0.9.97
   'plugin.openOther': '0.9.97',
+  'plugin.backgroundDone': '0.9.97',
   'feedback.report': '0.9.97',
-  'feedback.hasReporterEmail': '0.9.97'
+  'feedback.hasReporterEmail': '0.9.97',
+  'library.resolveBooks': '0.9.97',
+  'library.resolveCategoryPaths': '0.9.97',
+  'library.getCommentators': '0.9.97',
+  'library.getLinks': '0.9.97',
+  'library.getLinkTargetsSummary': '0.9.97',
+  'library.getLinkContent': '0.9.97',
+  'search.query': '0.9.97',
+  'search.getOptions': '0.9.97',
+  'reader.getActiveCommentators': '0.9.97',
+  'reader.addToolbarItem': '0.9.97',
+  'reader.removeToolbarItem': '0.9.97',
+  'reader.updateToolbarItem': '0.9.97',
+  'reader.registerInBookSearchProvider': '0.9.97',
+  'reader.respondInBookSearch': '0.9.97',
+  'reader.registerExternalSearchProvider': '0.9.97',
+  'reader.respondExternalSearch': '0.9.97',
+  'network.fetchStream': '0.9.97'
 }
 
 // תואם _knownEvents ב-lib/plugins/services/plugin_extended_validator.dart
@@ -245,12 +287,17 @@ const FALLBACK_EVENTS = [
   'navigation.changed',
   'reader.current_book_changed', 'reader.current_ref_changed',
   'reader.selection_changed', 'reader.sectionContentChanged',
-  'reader.context_menu_item_clicked',
-  'plugin.page_opened',
+  'reader.context_menu_item_clicked', 'reader.toolbar_item_clicked',
   'contextMenu.itemClicked', 'contextMenu.colorClicked',
   'calendar.date_changed', 'calendar.city_changed', 'workspace.changed',
-  'settings.changed', 'plugin.permissions_changed'
+  'settings.changed', 'plugin.permissions_changed',
+  'search.requested', 'search.external.requested',
+  'reader.inBookSearch.requested', 'ui.messageClicked'
 ]
+
+// hosts חשופים (ללא סכימה) שמותרים ב-network.allowlist.
+// שיקוף של _loopbackHosts ב-lib/plugins/models/plugin_network_allowlist.dart.
+const LOOPBACK_ALLOWLIST_HOSTS = new Set(['localhost', '127.0.0.1', '::1'])
 
 // APIs שמופיעות בתוספים קיימים אך אינן מתועדות במסמך הציבורי. לא נצעק עליהן.
 const KNOWN_UNDOCUMENTED_METHODS = new Set([
@@ -958,6 +1005,13 @@ export async function validatePluginArchive(buffer) {
     }
   }
 
+  // schemaVersion — אוצריא תומכת רק בסכמה 1. חסר (undefined) נחשב 1. נבדק
+  // באוצריא (plugin_manifest_validator.dart) וב-CI; חייב להיבדק גם בחנות כדי
+  // שמניפסט עם סכמה עתידית לא יתקבל בחנות ואז ייכשל בהתקנה.
+  if (manifest.schemaVersion !== undefined && manifest.schemaVersion !== 1) {
+    errors.push(`גרסת סכמה ${manifest.schemaVersion} של התוסף אינה נתמכת`)
+  }
+
   // Permissions - חובה להיות מערך של מחרוזות מהרשימה הרשמית
   const declaredPermissions = Array.isArray(manifest.permissions) ? manifest.permissions : []
   if (manifest.permissions !== undefined && !Array.isArray(manifest.permissions)) {
@@ -985,8 +1039,11 @@ export async function validatePluginArchive(buffer) {
       errors.push('network.access דורש manifest.network.allowlist עם רשימת כתובות מפורשת (ללא wildcards)')
     } else {
       for (const url of allowlist) {
+        // host מקומי חשוף הוא ערך שאוצריא עצמה מקבלת (isLoopbackHost ב-
+        // plugin_network_allowlist.dart) — דחייה כאן הייתה פוסלת תוסף שמותקן בפועל.
+        if (typeof url === 'string' && LOOPBACK_ALLOWLIST_HOSTS.has(url.trim().toLowerCase())) continue
         if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
-          errors.push(`כתובת לא תקינה ב-network.allowlist: ${JSON.stringify(url)} (חובה http(s) URL מלא)`)
+          errors.push(`כתובת לא תקינה ב-network.allowlist: ${JSON.stringify(url)} (חובה http(s) URL מלא, או host מקומי כמו 127.0.0.1)`)
         } else if (url.includes('*')) {
           errors.push(`network.allowlist אינו תומך ב-wildcard: ${url}`)
         }
@@ -1178,24 +1235,49 @@ const METHOD_REQUIRED_PERMISSION = {
   'app.getTheme': 'app.info.read',
   'app.getLocale': 'app.info.read',
   'app.getGrantedPermissions': 'app.info.read',
+  'app.getConnectivity': 'app.info.read',
   'app.getUserEmail': 'app.user_email.read',
   'app.openUrl': 'app.open_url',
   'library.findBooks': 'library.books.read',
   'library.getBookMetadata': 'library.books.read',
+  'library.resolveBooks': 'library.books.read',
+  'library.resolveCategoryPaths': 'library.books.read',
   'library.listRecentBooks': 'library.books.read',
   'library.getTree': 'library.books.read',
   'library.getBookContent': 'library.content.read',
   'library.getBookToc': 'library.content.read',
+  'library.listBookAltStructures': 'library.content.read',
+  'library.getBookAltToc': 'library.content.read',
+  'library.getLinkContent': 'library.content.read',
+  'library.getCommentators': 'library.links.read',
+  'library.getLinks': 'library.links.read',
+  'library.getLinkTargetsSummary': 'library.links.read',
   'search.fullText': 'search.fulltext.read',
+  'search.query': 'search.fulltext.read',
+  'search.getOptions': 'search.fulltext.read',
   'reader.openBook': 'reader.open',
   'reader.openBookAtRef': 'reader.open',
+  'reader.openSearchTab': 'reader.open',
+  'reader.registerInBookSearchProvider': 'reader.open',
+  'reader.respondInBookSearch': 'reader.open',
+  'reader.registerExternalSearchProvider': 'reader.open',
+  'reader.respondExternalSearch': 'reader.open',
   'reader.getCurrentState': 'reader.open',
   'reader.getCurrentRef': 'reader.open',
   'reader.getSelection': 'reader.open',
+  'reader.getActiveCommentators': 'reader.open',
+  'reader.findTextOccurrences': 'reader.open',
+  'reader.getSectionTextMap': 'reader.open',
   'reader.addContextMenuItem': 'reader.context_menu',
   'reader.removeContextMenuItem': 'reader.context_menu',
+  'reader.updateContextMenuItem': 'reader.context_menu',
+  'reader.addToolbarItem': 'reader.toolbar',
+  'reader.removeToolbarItem': 'reader.toolbar',
+  'reader.updateToolbarItem': 'reader.toolbar',
   'reader.setHighlight': 'reader.highlight',
+  'reader.updateHighlight': 'reader.highlight',
   'reader.getHighlights': 'reader.highlight',
+  'reader.revealHighlight': 'reader.highlight',
   'reader.clearHighlight': 'reader.highlight',
   'reader.clearAllHighlights': 'reader.highlight',
   'navigation.goTo': 'navigation.write',
@@ -1244,6 +1326,7 @@ const METHOD_REQUIRED_PERMISSION = {
   'database.query': 'database.read',
   'database.batchQuery': 'database.read',
   'network.fetch': 'network.access',
+  'network.fetchStream': 'network.access',
   'network.download': 'network.access',
   'shortcut.create': 'ui.create_shortcut',
   'fs.pickUserFile': 'fs.user_files.read',

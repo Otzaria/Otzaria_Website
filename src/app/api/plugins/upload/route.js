@@ -104,10 +104,12 @@ export async function POST(request) {
       author = (manifest.author || '').toString().trim()
       shortDescription = (manifest.description || '').toString().trim()
       homepageFromManifest = (manifest.homepage || '').toString().trim()
-      const stability = manifest.stability ? manifest.stability.toString().trim() : ''
+      // ברירת המחדל זהה לאוצריא (plugin_manifest.dart) ולוולידטור ה-CI: תוסף
+      // שנכתב לפני שהשדה הוצג נחשב stable, אחרת הוא מותקן ועובר CI אך נדחה כאן.
+      const stability = (manifest.stability || 'stable').toString().trim()
       const minAppVersion = manifest.minAppVersion ? manifest.minAppVersion.toString().trim() : ''
-      if (!stability || !ALLOWED_PLUGIN_STATUSES.includes(stability))
-        return bad('חסר שדה stability תקין ב-manifest.json (ערכים מותרים: stable, beta, experimental)')
+      if (!ALLOWED_PLUGIN_STATUSES.includes(stability))
+        return bad('ערך stability לא תקין ב-manifest.json (ערכים מותרים: stable, beta, experimental)')
       statusFromManifest = stability
       if (!minAppVersion)
         return bad('חסר שדה minAppVersion ב-manifest.json של קובץ התוסף')
@@ -128,7 +130,7 @@ export async function POST(request) {
     }
     if (!pluginUid) return bad('חסר שדה id ב-manifest.json של קובץ התוסף')
     if (!version) return bad('חסר שדה גרסה ב-manifest.json של קובץ התוסף')
-    if (!PLUGIN_VERSION_RE.test(version)) return bad('גרסה לא תקינה ב-manifest.json של קובץ התוסף (נדרש פורמט X, X.Y, X.Y.Z)')
+    if (!PLUGIN_VERSION_RE.test(version)) return bad('גרסה לא תקינה ב-manifest.json של קובץ התוסף (נדרש פורמט X.Y.Z)')
     if (!name) return bad('חסר שדה name ב-manifest.json של קובץ התוסף')
     if (!author) return bad('חסר שדה author ב-manifest.json של קובץ התוסף')
     if (!shortDescription) return bad('חסר שדה description ב-manifest.json של קובץ התוסף')
