@@ -33,6 +33,7 @@
     "next-auth": "^4.24.15",
     "nodemailer": "^9.0.1",
     "nspell": "^2.1.5",
+    "otzaria-plugin-validator": "github:Otzaria/otzaria-plugin-validator#v1",
     "pdf-lib": "^1.17.1",
     "pdf-to-img": "^6.0.0",
     "react": "19.2.3",
