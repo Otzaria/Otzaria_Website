@@ -4,13 +4,80 @@ on:
   push:
     branches:
       - master
+  # הבנייה כאן מתקינה את ראש תגית v1 של הוולידטור, ולכן היא מה שמביא כלל
+  # ולידציה חדש לפרודקשן. בלי הסריקה המחזורית הוא היה ממתין לדחיפה
+  # הבאה ל-master, שעשויה לא להגיע ימים. ה-cron בודק ולא פורס: הפריסה
+  # רצה רק כשהתגית זזה בפועל.
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+# ה-cron וה-push יכולים להיפגש, ושתי פריסות במקביל רצות git reset --hard
+# ו-npm install על אותה תיקייה. cancel-in-progress: false — פריסה שנקטעה באמצע
+# משאירה את השרת במצב ביניים.
+concurrency:
+  group: deploy-otzaria-web
+  cancel-in-progress: false
+
 jobs:
+  # שלב 0: האם יש מה לפרוס. push והפעלה ידנית רצים תמיד; ב-cron משווים
+  # את ה-SHA של תגית v1 לזה שכבר נפרס, וזהות = אין מה לעשות.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      deploy: ${{ steps.decide.outputs.deploy }}
+      sha: ${{ steps.v1.outputs.sha }}
+    steps:
+      # ללא checkout וללא אימות — המאגר ציבורי. v1^{} מועדף כדי שגם תגית
+      # annotated תיפתר ל-commit ולא לאובייקט התגית.
+      - name: Resolve the validator's v1 tag
+        id: v1
+        run: |
+          set -euo pipefail
+          url=https://github.com/Otzaria/otzaria-plugin-validator
+          refs="$(git ls-remote "$url" refs/tags/v1 'refs/tags/v1^{}')"
+          sha="$(printf '%s\n' "$refs" | awk '$2 == "refs/tags/v1^{}" { print $1 }')"
+          if [ -z "$sha" ]; then
+            sha="$(printf '%s\n' "$refs" | awk '$2 == "refs/tags/v1" { print $1 }')"
+          fi
+          if [ -z "$sha" ]; then
+            echo "לא נמצאה תגית v1 במאגר הוולידטור" >&2
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      # ה-cache משמש כסמן בלבד: קיום המפתח פירושו שה-SHA הזה כבר נפרס,
+      # ולכן lookup-only. פינוי רשומה ישנה גורר פריסה מיותרת אחת, לא נזק.
+      - name: Was this validator already deployed?
+        id: seen
+        if: github.event_name == 'schedule'
+        uses: actions/cache/restore@v4
+        with:
+          path: .validator-deployed
+          key: validator-v1-${{ steps.v1.outputs.sha }}
+          lookup-only: true
+
+      - name: Decide
+        id: decide
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          elif [ "${{ steps.seen.outputs.cache-hit }}" = "true" ]; then
+            echo "::notice::הוולידטור (${{ steps.v1.outputs.sha }}) כבר פרוס."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::תגית v1 זזה ל-${{ steps.v1.outputs.sha }} — פורסים."
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          fi
+
   # שלב 1: בדיקה ב-GitHub (מהיר יותר בזכות Cache)
   build-check:
+    needs: gate
+    if: needs.gate.outputs.deploy == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -37,7 +104,8 @@ jobs:
 
   # שלב 2: פריסה לשרת (אופטימיזציה בהעתקת קבצים)
   deploy:
-    needs: build-check
+    needs: [gate, build-check]
+    if: needs.gate.outputs.deploy == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Deploy using SSH
@@ -84,3 +152,18 @@ jobs:
             pm2 reload otzaria-web || pm2 restart otzaria-web
 
             echo "🎉 Deployment Finished Successfully!"
+
+  # שלב 3: רישום מה נפרס, כדי שה-cron הבא לא יפרוס את אותו דבר שוב.
+  # רץ גם אחרי push, ולכן ה-cron שלאחריו יודע שהגרסה כבר נקלטה.
+  mark-deployed:
+    needs: [gate, deploy]
+    if: needs.gate.outputs.deploy == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record the deployed validator
+        run: echo "${{ needs.gate.outputs.sha }}" > .validator-deployed
+
+      - uses: actions/cache/save@v4
+        with:
+          path: .validator-deployed
+          key: validator-v1-${{ needs.gate.outputs.sha }}
