@@ -20,9 +20,14 @@ export const PLUGIN_STATUS_LABELS = {
   beta: 'בטא',
   experimental: 'ניסיוני'
 }
-// נבדק: לינארי — {0,3} חסום וקידומת '-'/'+' חובה לסיומת, אין נסיגה קטסטרופלית
-// eslint-disable-next-line security/detect-unsafe-regex
-export const PLUGIN_VERSION_RE = /^\d+(?:\.\d+){0,3}(?:[-+][A-Za-z0-9.]+)?$/
+// פורמט גרסה מחמיר: major.minor.patch בלבד (+build metadata אופציונלי). זהה
+// לרגקס באוצריא (plugin_manifest_validator.dart) ובוולידטור ה-CI. prerelease
+// (-rc1) ו-4 רמות אסורים: compareCoreVersions באוצריא מתעלם מהם, כך שהיו
+// נחשבים שווים לגרסה המלאה ושוברים זיהוי עדכונים.
+// שימו לב: compareVersions כאן (pluginManifest.js) הוא semver מלא — הוא כן מבחין
+// בין "1.0.0.1" ל-"1.0.0" ובין prerelease לשחרור, בשונה מאוצריא ומהוולידטור.
+// הרגקס הוא מה שמונע מהפער להתבטא, כי גרסאות כאלה נחסמות בכניסה.
+export const PLUGIN_VERSION_RE = /^\d+\.\d+\.\d+(?:\+.*)?$/
 export const MIN_SUPPORTED_APP_VERSION = '0.9.89'
 
 export function formatPluginStatus(status) {

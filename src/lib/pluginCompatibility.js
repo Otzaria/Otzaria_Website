@@ -12,9 +12,9 @@ import { compareVersions } from './pluginManifest.js'
 // שם פרמטר ה-query שדרכו נשלחת גרסת אוצריא (ב-/latest ובהורדה).
 export const APP_VERSION_PARAM = 'appVersion'
 
-// עותק מקומי של PLUGIN_VERSION_RE מ-pluginSubmission (X[.Y[.Z[.W]]] עם סיומת
-// prerelease/build אופציונלית). מוגדר כאן ולא מיובא כדי למנוע ייבוא מעגלי —
-// pluginSubmission נשען על המודול הזה.
+// ולידטור לגרסת אוצריא של המשתמש (פרמטר appVersion) — סובלני בכוונה
+// (X[.Y[.Z[.W]]] עם סיומת prerelease/build), שונה מ-PLUGIN_VERSION_RE המחמיר
+// של גרסת התוסף. מוגדר כאן ולא מיובא כדי למנוע ייבוא מעגלי.
 // נבדק: לינארי — {0,3} חסום וקידומת '-'/'+' חובה לסיומת, אין נסיגה קטסטרופלית
 // eslint-disable-next-line security/detect-unsafe-regex
 const APP_VERSION_RE = /^\d+(?:\.\d+){0,3}(?:[-+][A-Za-z0-9.]+)?$/

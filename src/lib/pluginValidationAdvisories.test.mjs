@@ -67,3 +67,26 @@ test('שדה advisories קיים תמיד, גם בכשל קריאה של האר�
   assert.ok(result.errors.length > 0)
   assert.ok(Array.isArray(result.advisories))
 })
+
+test('schemaVersion שאינו 1 הוא שגיאה חוסמת בחנות', async () => {
+  const manifest = {
+    schemaVersion: 2,
+    id: 'test.schema',
+    name: 'בדיקה',
+    version: '1.0.0',
+    description: 'בדיקת סכמה',
+    author: 'בודק',
+    entrypoint: 'index.html',
+    minAppVersion: '0.9.97',
+    permissions: []
+  }
+  const buffer = Buffer.from(zipSync({
+    'manifest.json': strToU8(JSON.stringify(manifest)),
+    'index.html': strToU8('<!doctype html><html dir="rtl" lang="he"><body></body></html>')
+  }))
+  const result = await validatePluginArchive(buffer)
+  assert.ok(
+    result.errors.some((e) => e.includes('סכמה')),
+    'expected blocking schemaVersion error: ' + result.errors.join(' | ')
+  )
+})
