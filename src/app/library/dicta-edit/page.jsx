@@ -47,7 +47,7 @@ function LibraryEditSpaceContent() {
       // שימור ה-query (למשל ?q=שם הספר) כדי שלא יאבד לאחר ההתחברות
       const query = searchParams.toString()
       const callbackUrl = query ? `${pathname}?${query}` : pathname
-      router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(callbackUrl)}`)
+      router.push(`/auth/login?callbackUrl=${encodeURIComponent(callbackUrl)}`)
       return
     }
     fetchBooks()

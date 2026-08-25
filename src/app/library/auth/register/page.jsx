@@ -101,7 +101,7 @@ export default function RegisterPage() {
       })
 
       if (result?.error) {
-        router.push('/library/auth/login?registered=true')
+        router.push('/auth/login?registered=true')
       } else {
         router.push('/library/dashboard')
       }
@@ -268,7 +268,7 @@ export default function RegisterPage() {
           <div className="mt-6 text-center">
             <p className="text-on-surface/70">
               כבר יש לך חשבון?{' '}
-              <Link href="/library/auth/login" className="text-primary font-medium hover:text-accent">
+              <Link href="/auth/login" className="text-primary font-medium hover:text-accent">
                 התחבר
               </Link>
             </p>

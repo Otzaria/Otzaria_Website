@@ -81,7 +81,7 @@ export default function PluginCategoryPage() {
   if (loading && !notFound) {
     return (
       <div className="flex min-h-screen flex-col bg-background">
-        <OtzariaSoftwareHeader />
+        <OtzariaSoftwareHeader showAuth />
         <main className="flex-1">
           {/* שלד טעינה */}
           <div className="container mx-auto max-w-6xl px-4 py-12 animate-pulse">
@@ -103,7 +103,7 @@ export default function PluginCategoryPage() {
   if (notFound || !category) {
     return (
       <div className="flex min-h-screen flex-col bg-background">
-        <OtzariaSoftwareHeader />
+        <OtzariaSoftwareHeader showAuth />
         <main className="flex-1 flex items-center justify-center px-4">
           <div className="text-center max-w-lg bg-white rounded-2xl border border-neutral-100 py-16 px-8">
             <span className="material-symbols-outlined text-5xl text-primary/40 mb-4 inline-block">search_off</span>
@@ -127,7 +127,7 @@ export default function PluginCategoryPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <OtzariaSoftwareHeader />
+      <OtzariaSoftwareHeader showAuth />
 
       <main className="flex-1">
         {/* Category Header */}

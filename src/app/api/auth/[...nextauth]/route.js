@@ -110,7 +110,7 @@ export const authOptions = {
     },
   },
   pages: {
-    signIn: '/library/auth/login',
+    signIn: '/auth/login',
     error: '/library/auth/error',
   },
   session: { strategy: 'jwt' },

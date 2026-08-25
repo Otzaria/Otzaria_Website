@@ -49,6 +49,12 @@ const nextConfig = {
         destination: '/docs/getting-started',
         permanent: true,
       },
+      // דף ההתחברות עבר מהספרייה לנתיב כללי (פרמטרי ה-query, כולל callbackUrl, נשמרים אוטומטית)
+      {
+        source: '/library/auth/login',
+        destination: '/auth/login',
+        permanent: true,
+      },
     ];
   },
 

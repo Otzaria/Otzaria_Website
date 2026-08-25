@@ -160,7 +160,7 @@ export default function BookPage() {
 
   const handleClaimPage = async (pageNumber) => {
     if (!session) {
-      router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
+      router.push(`/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
       return
     }
 

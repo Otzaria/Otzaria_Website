@@ -54,7 +54,7 @@ export default function AdminDictaBooksPage() {
     if (status === 'loading') return
     
     if (status === 'unauthenticated') {
-      router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
+      router.push(`/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
     } else if (!hasBooksAccess(session?.user?.role)) {
       router.push('/library/dashboard')
     } else {

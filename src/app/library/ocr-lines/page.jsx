@@ -221,7 +221,7 @@ export default function OcrLinesPage() {
 
   useEffect(() => {
     if (status === 'unauthenticated') {
-      router.push('/library/auth/login?callbackUrl=/library/ocr-lines')
+      router.push('/auth/login?callbackUrl=/library/ocr-lines')
     } else if (status === 'authenticated') {
       if (session?.user?.isVerified || hasBookLibraryAccess(session?.user?.role)) load()
       else setLoading(false)

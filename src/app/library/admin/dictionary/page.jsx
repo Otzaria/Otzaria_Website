@@ -22,7 +22,7 @@ export default function AdminDictionaryPage() {
     if (status === 'loading') return
 
     if (status === 'unauthenticated') {
-      router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
+      router.push(`/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
       return
     }
 

@@ -111,7 +111,7 @@ function PluginsStoreHomeContent() {
   if (legacyTag || loading) {
     return (
       <div className="flex min-h-screen flex-col bg-background">
-        <OtzariaSoftwareHeader />
+        <OtzariaSoftwareHeader showAuth />
         <main className="flex-1">
           <StoreHomeSkeleton />
         </main>
@@ -131,7 +131,7 @@ function PluginsStoreHomeContent() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <OtzariaSoftwareHeader />
+      <OtzariaSoftwareHeader showAuth />
 
       <main className="flex-1">
         {/* Hero קומפקטי: כותרת + חיפוש בולט + העלאת תוסף */}
@@ -367,7 +367,7 @@ export default function PluginsPage() {
   return (
     <Suspense fallback={
       <div className="flex min-h-screen flex-col bg-background">
-        <OtzariaSoftwareHeader />
+        <OtzariaSoftwareHeader showAuth />
         <main className="flex-1">
           <StoreHomeSkeleton />
         </main>

@@ -72,7 +72,7 @@ export default function OcrLayoutPage() {
 
   useEffect(() => {
     if (status === 'unauthenticated') {
-      router.push('/library/auth/login?callbackUrl=/library/ocr-layout')
+      router.push('/auth/login?callbackUrl=/library/ocr-layout')
     } else if (status === 'authenticated') {
       if (session?.user?.isVerified || hasBookLibraryAccess(session?.user?.role)) load()
       else setLoading(false)
