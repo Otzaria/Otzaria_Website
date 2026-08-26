@@ -4,6 +4,7 @@ import { compare } from 'bcryptjs';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/client-ip';
 import { z } from 'zod';
 
 // סכמת אימות לקלט התחברות
@@ -21,8 +22,10 @@ export const authOptions = {
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials, req) {
-        // Rate limiting לפי IP
-        const ip = req?.headers?.['x-forwarded-for'] || req?.ip || 'unknown';
+        // Rate limiting לפי IP אמין — מספר ה-proxy-ים נקבע ב-TRUSTED_PROXY_COUNT,
+        // עם דילוג על כתובות פרטיות (ראו src/lib/client-ip.js). לא ניתן לעקוף
+        // ע"י זיוף x-forwarded-for.
+        const ip = getClientIp(req);
         const isAllowed = checkRateLimit(ip, 'login', 5, 'minute');
         
         if (!isAllowed) {
@@ -46,13 +49,16 @@ export const authOptions = {
           ]
         });
 
+        // הודעת שגיאה אחידה גם למשתמש שלא קיים וגם לסיסמה שגויה — מניעת
+        // user-enumeration ישירות מול ה-endpoint (ה-UI כבר מאחד, אבל אפשר
+        // לקרוא ל-API ישירות ולהשוות את ההודעות).
         if (!user) {
-          throw new Error('משתמש לא נמצא');
+          throw new Error('פרטי התחברות שגויים');
         }
 
         const isValid = await compare(password, user.password);
         if (!isValid) {
-          throw new Error('סיסמה שגויה');
+          throw new Error('פרטי התחברות שגויים');
         }
 
         return {

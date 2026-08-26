@@ -7,6 +7,7 @@ import Plugin from '@/models/Plugin'
 import PluginInstallToken from '@/models/PluginInstallToken'
 import { parsePluginRef } from '@/lib/pluginRef'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { getClientIp } from '@/lib/client-ip'
 import { hasPluginsAccess } from '@/lib/roles'
 import { canAccessSuspended, isPluginSuspended } from '@/lib/pluginVisibility'
 import { readInstallAnonId, generateInstallAnonId, setInstallAnonCookie } from '@/lib/installAnonId'
@@ -18,9 +19,7 @@ const INSTALL_TOKEN_TTL_MS = 15 * 60 * 1000
 // פתוח לציבור (כמו ההורדה עצמה) עבור תוספים מאושרים בלבד.
 export async function POST(request, { params }) {
   try {
-    const ip = (request.headers.get('x-forwarded-for') || '').split(',')[0].trim()
-      || request.headers.get('x-real-ip')
-      || 'unknown'
+    const ip = getClientIp(request)
     if (!checkRateLimit(ip, 'plugin-install-token', 20, 'minute')) {
       return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
     }

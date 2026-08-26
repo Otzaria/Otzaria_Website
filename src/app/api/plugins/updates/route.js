@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { getClientIp } from '@/lib/client-ip'
 import { PUBLIC_PLUGIN_FILTER } from '@/lib/pluginStore'
 import { APP_VERSION_PARAM, isValidAppVersion } from '@/lib/pluginCompatibility'
 import { parseUpdateRequestList, resolvePluginUpdates, MAX_UPDATE_REQUESTS } from '@/lib/pluginUpdates'
@@ -14,9 +15,7 @@ import { parseUpdateRequestList, resolvePluginUpdates, MAX_UPDATE_REQUESTS } fro
 // נתיב ציבורי שאפליקציות קוראות לו מחזורית — מוגבל-קצב ועד 100 תוספים לבקשה.
 export async function GET(request) {
   try {
-    const ip = (request.headers.get('x-forwarded-for') || '').split(',')[0].trim()
-      || request.headers.get('x-real-ip')
-      || 'unknown'
+    const ip = getClientIp(request)
     if (!checkRateLimit(ip, 'plugin-updates', 30, 'minute')) {
       return NextResponse.json({ error: 'Too many update checks. Try again later.' }, { status: 429 })
     }

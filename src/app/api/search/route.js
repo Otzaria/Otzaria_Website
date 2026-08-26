@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Page from '@/models/Page';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/client-ip';
 
 export async function GET(request) {
     try {
@@ -13,10 +14,8 @@ export async function GET(request) {
             return NextResponse.json({ results: [] });
         }
 
-        // הגבלת קצב רק על חיפושים אמיתיים. נלקח ה-IP הראשון בשרשרת x-forwarded-for.
-        const ip = (request.headers.get('x-forwarded-for') || '').split(',')[0].trim()
-            || request.headers.get('x-real-ip')
-            || 'unknown';
+        // הגבלת קצב רק על חיפושים אמיתיים — IP אמין דרך src/lib/client-ip.js
+        const ip = getClientIp(request);
         if (!checkRateLimit(ip, 'search', 30, 'minute')) {
             return NextResponse.json({ error: 'יותר מדי בקשות חיפוש. נסה שוב בעוד רגע.' }, { status: 429 });
         }

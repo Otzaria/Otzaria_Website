@@ -2,16 +2,13 @@ import { NextResponse } from 'next/server'
 import dbConnect from '@/lib/db'
 import PluginInstallToken from '@/models/PluginInstallToken'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { getClientIp } from '@/lib/client-ip'
 import { recordVerifiedInstall, recordAnonInstall, promoteRatingToVerified } from '@/lib/pluginRatingStore'
 
 // טוקנים נוצרים ב-base64url באורך קבוע — כל דבר אחר נדחה לפני גישה ל-DB.
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{20,64}$/
 
-function getClientIp(request) {
-  return (request.headers.get('x-forwarded-for') || '').split(',')[0].trim()
-    || request.headers.get('x-real-ip')
-    || 'unknown'
-}
+// getClientIp משותף: src/lib/client-ip.js — לא ניתן לעקיפה דרך XFF מזויף
 
 // POST /api/plugins/install-result - דיווח מהאפליקציה.
 // גוף הבקשה: { token, status: 'received' | 'success' | 'failure', error?, appVersion?, updated? }

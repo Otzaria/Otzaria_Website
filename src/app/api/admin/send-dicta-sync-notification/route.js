@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import nodemailer from 'nodemailer';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { encryptToken } from '@/app/api/user/unsubscribe/route';
@@ -7,6 +6,7 @@ import dbConnect from '@/lib/db';
 import User from '@/models/User';
 import MailingList from '@/models/MailingList';
 import { hasBooksAccess } from '@/lib/roles';
+import { createSmtpTransport } from '@/lib/smtp-transport';
 
 function escapeHtml(unsafe) {
     return unsafe
@@ -58,16 +58,8 @@ export async function POST(request) {
 
         const validEmails = validUsers.map(u => u.email);
 
-        const transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST,
-            port: Number(process.env.SMTP_PORT),
-            secure: process.env.SMTP_SECURE === 'true',
-            auth: {
-                user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASS,
-            },
-            tls: { rejectUnauthorized: false }
-        });
+        // transporter משותף עם אימות TLS מלא (במקום rejectUnauthorized:false)
+        const transporter = createSmtpTransport();
 
         const sendResults = await Promise.allSettled(validEmails.map(async (email) => {
             const secureToken = encryptToken(email);

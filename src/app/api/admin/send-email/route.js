@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import nodemailer from 'nodemailer';
 import sanitizeHtml from 'sanitize-html';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
@@ -8,6 +7,7 @@ import dbConnect from '@/lib/db';
 import ReminderHistory from '@/models/reminderHistory';
 import User from '@/models/User';
 import { hasBooksAccess } from '@/lib/roles';
+import { createSmtpTransport } from '@/lib/smtp-transport';
 
 // מאפשר עיצוב חופשי (תגיות/סגנון בסיסיים) אך חוסם script/iframe/event handlers וכד'.
 const EMAIL_HTML_OPTIONS = {
@@ -67,16 +67,8 @@ export async function POST(request) {
             }, { status: 400 });
         }
 
-        const transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST,
-            port: Number(process.env.SMTP_PORT),
-            secure: process.env.SMTP_SECURE === 'true',
-            auth: {
-                user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASS,
-            },
-            tls: { rejectUnauthorized: false }
-        });
+        // transporter משותף עם אימות TLS מלא (rejectUnauthorized=true כברירת מחדל)
+        const transporter = createSmtpTransport();
 
         // מסננים סקריפטים/event handlers מהתוכן שהאדמין שלח, תוך שמירה על עיצוב חופשי (codeql: js/xss)
         const safeBodyHtml = sanitizeHtml(html || text, EMAIL_HTML_OPTIONS);

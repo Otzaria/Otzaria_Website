@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/client-ip';
+
+// base64 של תמונה בגודל ~9MB — החריגה מעידה על שימוש לא תקין/זדוני
+const MAX_IMAGE_BASE64_CHARS = 12_000_000;
 
 export async function POST(request) {
   try {
@@ -8,7 +13,7 @@ export async function POST(request) {
     if (!session) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const ip = request.headers.get("x-forwarded-for") || "unknown";
+    const ip = getClientIp(request);
     const isAllowed = checkRateLimit(ip, 'gemini-ocr', 5); // 5 בקשות לדקה
 
     if (!isAllowed) {
@@ -17,6 +22,12 @@ export async function POST(request) {
     const { imageBase64, model = 'gemini-1.5-flash' } = await request.json();
 
     if (!imageBase64) return NextResponse.json({ error: 'No image' }, { status: 400 });
+    if (typeof imageBase64 !== 'string') {
+        return NextResponse.json({ error: 'Invalid image payload' }, { status: 400 });
+    }
+    if (imageBase64.length > MAX_IMAGE_BASE64_CHARS) {
+        return NextResponse.json({ error: 'Image too large' }, { status: 413 });
+    }
 
     // codeql[js/request-forgery]: the host is fixed, so `model` can't redirect the request
     // to another origin — but validating it against Google's model-name charset closes the
@@ -28,10 +39,15 @@ export async function POST(request) {
     const apiKey = process.env.GEMINI_API_KEY;
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          // ה-API key נשלח ב-header ולא ב-querystring — URL-ים נוטים לדלוף
+          // ללוגים/CDN/כלי ניטור, headers לא.
+          'x-goog-api-key': apiKey,
+        },
         body: JSON.stringify({
           contents: [{
             parts: [

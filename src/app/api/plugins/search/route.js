@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import dbConnect from '@/lib/db'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { getClientIp } from '@/lib/client-ip'
 import { searchPlugins } from '@/lib/pluginSearchIndex'
 import { getCategoriesForPlugins } from '@/lib/pluginStore'
 import { formatPluginForPublic, ALLOWED_PLUGIN_STATUSES } from '@/lib/pluginSubmission'
@@ -25,9 +26,7 @@ export async function GET(request) {
     }
 
     // הגבלת קצב — נתיב ציבורי "זול להצפה" (אותו דפוס כמו חיפוש הספרייה)
-    const ip = (request.headers.get('x-forwarded-for') || '').split(',')[0].trim()
-      || request.headers.get('x-real-ip')
-      || 'unknown'
+    const ip = getClientIp(request)
     if (!checkRateLimit(ip, 'plugin-search', 60, 'minute')) {
       return NextResponse.json({ error: 'יותר מדי בקשות חיפוש. נסו שוב בעוד רגע.' }, { status: 429 })
     }

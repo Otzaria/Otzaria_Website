@@ -1,9 +1,9 @@
-import nodemailer from 'nodemailer';
 import { encryptToken } from '@/app/api/user/unsubscribe/route'; 
 import User from '@/models/User'; 
 import MailingList from '@/models/MailingList';
 import dbConnect from '@/lib/db';
 import { formatPluginStatus } from '@/lib/pluginSubmission';
+import { createSmtpTransport, createCustomSmtpTransport } from '@/lib/smtp-transport';
 
 // פונקציה להסרת מספר עמוד משם הספר
 function cleanBookName(bookName) {
@@ -43,13 +43,9 @@ function renderPluginChanges(changes = []) {
     `;
 }
 
+// Transporter מרכזי — הגדרות TLS/timeouts מאוחדות ב-src/lib/smtp-transport.js
 function createTransporter() {
-    return nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: Number(process.env.SMTP_PORT),
-        secure: process.env.SMTP_SECURE === 'true',
-        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    });
+    return createSmtpTransport();
 }
 
 // שליחת התראה למנהלים על העלאה חדשה של משתמש
@@ -84,12 +80,7 @@ export async function sendUploadNotification(uploadData) {
             return { sent: false, reason: 'no_matching_subscribers' };
         }
 
-        const transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST,
-            port: Number(process.env.SMTP_PORT),
-            secure: process.env.SMTP_SECURE === 'true',
-            auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-        });
+        const transporter = createTransporter();
 
         const uploadTypeLabels = {
             dicta: 'דיקטה',
@@ -307,12 +298,8 @@ export async function sendBookNotification(bookName, bookSlug) {
 
         const validEmails = validUsers.map(u => u.email);
 
-        const transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST,
-            port: Number(process.env.SMTP_PORT),
-            secure: process.env.SMTP_SECURE === 'true',
-            auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-        });
+        // transporter משותף — TLS מאומת + timeouts מה-lib המשותף
+        const transporter = createCustomSmtpTransport('mailing_list');
 
         const logoUrl = `${process.env.NEXTAUTH_URL}/logo.png`;
 
