@@ -60,7 +60,7 @@ export default function ForgotPasswordPage() {
         {status.error && <div className="mt-4 p-3 bg-danger-100 text-danger-700 rounded">{status.error}</div>}
 
         <div className="mt-6">
-            <Link href="/library/auth/login" className="text-sm text-neutral-500 hover:text-primary">חזרה להתחברות</Link>
+            <Link href="/auth/login" className="text-sm text-neutral-500 hover:text-primary">חזרה להתחברות</Link>
         </div>
       </div>
     </div>

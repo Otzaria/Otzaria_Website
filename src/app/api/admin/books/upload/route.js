@@ -9,6 +9,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { sendBookNotification } from '@/lib/emailService';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/client-ip';
 import { z } from 'zod';
 import { hasBookLibraryAccess } from '@/lib/roles';
 import { convertPdfToImages } from '@/lib/pdfConverter';
@@ -40,8 +41,8 @@ export async function POST(request) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    // 2. Rate Limiting - מגבלה של 10 העלאות לשעה לאדמין
-    const ip = request.headers.get("x-forwarded-for") || "unknown";
+    // 2. Rate Limiting - מגבלה של 10 העלאות לשעה לאדמין — IP אמין
+    const ip = getClientIp(request);
     const isAllowed = checkRateLimit(ip, 'admin_upload', 10, 'hour');
     
     if (!isAllowed) {

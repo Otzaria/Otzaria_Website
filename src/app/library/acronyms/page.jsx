@@ -27,7 +27,7 @@ export default function LibraryAcronymsPage() {
   useEffect(() => {
     if (status === 'loading') return
     if (status === 'unauthenticated') {
-      router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(pathname)}`)
+      router.push(`/auth/login?callbackUrl=${encodeURIComponent(pathname)}`)
       return
     }
     if (!hasBooksAccess(session?.user?.role)) {

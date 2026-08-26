@@ -15,7 +15,7 @@ export default function UsersManagementPage() {
 
   useEffect(() => {
     if (status === 'unauthenticated') {
-      router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
+      router.push(`/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
     } else if (session?.user?.role !== 'admin') {
       router.push('/library/dashboard') // 👈 תיקון: הוספת /library
     } else {

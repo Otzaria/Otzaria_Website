@@ -137,7 +137,7 @@ export default function AdminOcrLinesPage() {
   useEffect(() => {
     if (status === 'loading') return
     if (status === 'unauthenticated') {
-      router.push('/library/auth/login?callbackUrl=/library/admin/ocr-lines')
+      router.push('/auth/login?callbackUrl=/library/admin/ocr-lines')
       return
     }
     if (!hasOcrAccess(session?.user?.role)) {

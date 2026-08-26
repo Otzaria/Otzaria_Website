@@ -60,7 +60,7 @@ export default function UploadPage() {
   const [contemporaryAuthorConfirmed, setContemporaryAuthorConfirmed] = useState(false)
 
   if (status === 'unauthenticated') {
-    router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
+    router.push(`/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
     return null
   }
 

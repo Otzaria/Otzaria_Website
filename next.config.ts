@@ -49,6 +49,12 @@ const nextConfig = {
         destination: '/docs/getting-started',
         permanent: true,
       },
+      // דף ההתחברות עבר מהספרייה לנתיב כללי (פרמטרי ה-query, כולל callbackUrl, נשמרים אוטומטית)
+      {
+        source: '/library/auth/login',
+        destination: '/auth/login',
+        permanent: true,
+      },
     ];
   },
 
@@ -77,10 +83,13 @@ const nextConfig = {
           // תת-דומיין שאינו HTTPS). הוסף אותם ידנית רק כשכל תתי-הדומיינים מוכנים ל-HTTPS קבוע.
           { key: 'Strict-Transport-Security', value: 'max-age=31536000' },
           // Content-Security-Policy — מותאם למקורות שהאתר משתמש בהם בפועל:
-          //  • script: עצמי + inline/eval (Next.js, PDF.js wasm)
+          //  • script: עצמי + inline/wasm (Next.js, PDF.js). 'unsafe-inline' נשאר
+          //    זמנית — הסרתו דורש מעבר ל-nonce בכל העמודים (TODO ארכיטקטוני)
           //  • style/font: עצמי + inline (Tailwind/framer-motion) + Google Fonts
-          //  • img/media: כל HTTPS + data/blob (תמונות ספרים, OCR, canvas)
-          //  • connect: כולל ws:/wss: עבור HMR/WebSocket של Next dev (ה-headers חלים גם בפיתוח)
+          //  • img/media: עצמי + data/blob. התו הכללי https: הוסר מ-connect-src,
+          //    נותר זמנית ב-img/media (תמונות/שמע של ספרים מגיעות ממארחים
+          //    משתנים) — יש לצמצם כאשר רשימת המארחים תתייצב
+          //  • connect: מצומצם ל-self + GitHub API (releases/תוספים) + ws:/wss: ל-HMR
           //  • frame: ווידג'ט התרומות של נדרים פלוס (הקישור הקצר מפנה ל-matara.pro)
           //  • frame-ancestors 'self': anti-clickjacking
           {
@@ -92,7 +101,10 @@ const nextConfig = {
               "font-src 'self' https://fonts.gstatic.com data:",
               "img-src 'self' data: blob: https:",
               "media-src 'self' blob: https:",
-              "connect-src 'self' https: ws: wss:",
+              // connect-src מצומצם למקורות בשימוש מוכח בצד הלקוח: GitHub API
+              // (github-releases/editingtools/Link-Notes). הוסר התו הכללי https:
+              // שאפשר ל-XSS להדליף נתוני משתמשים לכל שרת שהוא.
+              "connect-src 'self' blob: https://api.github.com https://raw.githubusercontent.com ws: wss:",
               // דף התרומות מטמיע את הווידג'ט של נדרים פלוס ב-iframe
               "frame-src 'self' https://nedar.im https://www.matara.pro",
               "worker-src 'self' blob:",

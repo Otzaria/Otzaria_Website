@@ -84,7 +84,7 @@ export default function Header() {
                 </div>
               </Link>
               <button
-                onClick={() => signOut({ callbackUrl: '/library/auth/login' })}
+                onClick={() => signOut({ callbackUrl: '/auth/login' })}
                 className="flex items-center gap-2 px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary/10 transition-colors text-sm font-medium"
               >
                 <span className="material-symbols-outlined text-lg">logout</span>
@@ -92,7 +92,7 @@ export default function Header() {
               </button>
             </div>
           ) : (
-            <Link href="/library/auth/login" prefetch={false} className="flex items-center gap-2 px-5 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm font-medium">
+            <Link href="/auth/login" prefetch={false} className="flex items-center gap-2 px-5 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm font-medium">
               <span className="material-symbols-outlined text-lg">login</span>
               <span>התחבר</span>
             </Link>

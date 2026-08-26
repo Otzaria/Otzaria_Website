@@ -162,7 +162,7 @@ export default function PluginDetailPage() {
   if (loading) {
     return (
       <div className="flex min-h-screen flex-col bg-background">
-        <OtzariaSoftwareHeader />
+        <OtzariaSoftwareHeader showAuth />
         <main className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto mb-4"></div>
@@ -246,7 +246,7 @@ export default function PluginDetailPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <OtzariaSoftwareHeader />
+      <OtzariaSoftwareHeader showAuth />
       
       <main className="flex-1 py-8 px-4">
         <div className="container mx-auto max-w-5xl">

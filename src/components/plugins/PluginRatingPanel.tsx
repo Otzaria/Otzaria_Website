@@ -176,7 +176,7 @@ export default function PluginRatingPanel({ pluginId, initial }: PluginRatingPan
         ) : !isLoggedIn ? (
           <p className="text-sm text-on-surface/70">
             <Link
-              href={`/library/auth/login?callbackUrl=${encodeURIComponent(`/plugins/${pluginId}`)}`}
+              href={`/auth/login?callbackUrl=${encodeURIComponent(`/plugins/${pluginId}`)}`}
               className="font-bold text-primary hover:underline"
             >
               התחברו לאתר

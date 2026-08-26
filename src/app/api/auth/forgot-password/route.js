@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
-import nodemailer from 'nodemailer';
-
+import { createSmtpTransport } from '@/lib/smtp-transport';
 export async function POST(request) {
   try {
     const { email } = await request.json();
@@ -59,15 +58,8 @@ export async function POST(request) {
     await user.save();
     console.log(`Token saved for user with ID: ${user._id}`);
 
-    const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: Number(process.env.SMTP_PORT),
-        secure: process.env.SMTP_SECURE === 'true',
-        auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS,
-        },
-    });
+    // transporter משותף (TLS מאומת + timeouts) — כמו בכל שליחות המייל באתר
+    const transporter = createSmtpTransport();
 
     const resetUrl = `${process.env.NEXTAUTH_URL}/library/auth/reset-password/${resetToken}`;
 

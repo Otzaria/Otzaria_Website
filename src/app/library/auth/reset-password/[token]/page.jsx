@@ -79,7 +79,7 @@ export default function ResetPasswordPage() {
         setStatus({ loading: false, error: '', success: 'הסיסמה שונתה בהצלחה! מעביר להתחברות...' });
         
         setTimeout(() => {
-            router.push('/library/auth/login');
+            router.push('/auth/login');
         }, 2000);
 
     } catch (error) {
@@ -109,7 +109,7 @@ export default function ResetPasswordPage() {
                       אנא נסה לבקש איפוס סיסמה מחדש.
                   </p>
                   <button
-                      onClick={() => router.push('/library/auth/login')}
+                      onClick={() => router.push('/auth/login')}
                       className="text-primary font-bold hover:underline"
                   >
                       חזור לדף הכניסה

@@ -256,7 +256,7 @@ export default function EditPage() {
   }, [])
 
   useEffect(() => {
-    if (status === 'unauthenticated') router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
+    if (status === 'unauthenticated') router.push(`/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
     else if (status === 'authenticated') loadPageData()
   // טעינה מותנית-נתיב; loadPageData/router מוחרגים למניעת לולאה
   // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -65,7 +65,7 @@ function LibraryEditorContent() {
       // שימור ה-query (למשל ?find=קטע מדיווח) כדי שהמיקוד לא יאבד אחרי ההתחברות
       const query = searchParams.toString()
       const callbackUrl = query ? `${pathname}?${query}` : pathname
-      router.push(`/library/auth/login?callbackUrl=${encodeURIComponent(callbackUrl)}`)
+      router.push(`/auth/login?callbackUrl=${encodeURIComponent(callbackUrl)}`)
       return
     }
     if (bookId) loadBook()

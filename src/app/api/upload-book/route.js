@@ -6,6 +6,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { sendUploadNotification } from '@/lib/emailService';
 import { isLastPageUpload } from '@/lib/uploadHelpers';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/client-ip';
 import { saveFileToGridFS } from '@/lib/gridfs-service';
 import { z } from 'zod';
 
@@ -79,8 +80,8 @@ export async function POST(request) {
         const session = await getServerSession(authOptions);
         if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-        // 2. Rate Limiting - מגבלה של 20 העלאות לשעה למשתמש רגיל
-        const ip = request.headers.get("x-forwarded-for") || "unknown";
+        // 2. Rate Limiting - מגבלה של 20 העלאות לשעה למשתמש רגיל — IP אמין
+        const ip = getClientIp(request);
         const isAllowed = checkRateLimit(ip, 'user_upload', 20, 'hour');
         
         if (!isAllowed) {

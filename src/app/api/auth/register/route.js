@@ -3,6 +3,7 @@ import { hash } from 'bcryptjs';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/client-ip';
 import { z } from 'zod';
 
 // סכמת אימות עם Zod
@@ -15,8 +16,8 @@ const registerSchema = z.object({
 
 export async function POST(request) {
   try {
-    // 1. אבטחה: Rate Limiting
-    const ip = request.headers.get("x-forwarded-for") || "unknown";
+    // 1. אבטחה: Rate Limiting — IP אמין (req.ip / קצה XFF), לא הראשון הניתן לזיוף
+    const ip = getClientIp(request);
     const isAllowed = checkRateLimit(ip, 'register', 5, 'hour');
     
     if (!isAllowed) {

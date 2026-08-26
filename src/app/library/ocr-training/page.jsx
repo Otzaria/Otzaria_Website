@@ -31,7 +31,7 @@ export default function OcrTrainingListPage() {
 
   useEffect(() => {
     if (status === 'unauthenticated') {
-      router.push('/library/auth/login?callbackUrl=/library/ocr-training')
+      router.push('/auth/login?callbackUrl=/library/ocr-training')
     } else if (status === 'authenticated') {
       load()
     }

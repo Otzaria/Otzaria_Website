@@ -246,7 +246,7 @@ const authProxy = withAuth(
       }
     },
     pages: {
-      signIn: '/library/auth/login',
+      signIn: '/auth/login',
     }
   }
 );

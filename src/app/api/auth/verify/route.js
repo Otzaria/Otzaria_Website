@@ -10,7 +10,7 @@ export async function GET(request) {
         const token = searchParams.get('token');
 
         if (!token) {
-            return NextResponse.redirect(new URL('/library/auth/login?error=InvalidToken', baseUrl));
+            return NextResponse.redirect(new URL('/auth/login?error=InvalidToken', baseUrl));
         }
 
         await connectDB();
@@ -18,14 +18,14 @@ export async function GET(request) {
         const user = await User.findOne({ verificationToken: token });
 
         if (!user) {
-            return NextResponse.redirect(new URL('/library/auth/login?error=InvalidToken', baseUrl));
+            return NextResponse.redirect(new URL('/auth/login?error=InvalidToken', baseUrl));
         }
 
         if (user.verificationTokenExpires && user.verificationTokenExpires < Date.now()) {
             user.verificationToken = undefined;
             user.verificationTokenExpires = undefined;
             await user.save();
-            return NextResponse.redirect(new URL('/library/auth/login?error=TokenExpired', baseUrl));
+            return NextResponse.redirect(new URL('/auth/login?error=TokenExpired', baseUrl));
         }
 
         user.isVerified = true;
@@ -38,6 +38,6 @@ export async function GET(request) {
 
     } catch (error) {
         console.error('Verification Error:', error);
-        return NextResponse.redirect(new URL('/library/auth/login?error=ServerError', baseUrl));
+        return NextResponse.redirect(new URL('/auth/login?error=ServerError', baseUrl));
     }
 }

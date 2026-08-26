@@ -9,7 +9,7 @@ export default function ReminderGuard({ children }) {
     const pathname = usePathname();
 
     const exemptPaths = [
-        '/library/auth/login',
+        '/auth/login',
         '/library/auth/register',
         '/library/auth/approve-terms',
         '/library/auth/verify-request',

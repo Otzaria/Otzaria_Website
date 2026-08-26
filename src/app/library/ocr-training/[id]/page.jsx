@@ -69,7 +69,7 @@ export default function OcrTrainingEditor() {
 
   useEffect(() => {
     if (status === 'unauthenticated') {
-      router.push(`/library/auth/login?callbackUrl=/library/ocr-training/${id}`)
+      router.push(`/auth/login?callbackUrl=/library/ocr-training/${id}`)
     } else if (status === 'authenticated') {
       load()
     }

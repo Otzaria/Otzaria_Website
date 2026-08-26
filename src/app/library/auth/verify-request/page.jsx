@@ -212,7 +212,7 @@ export default function VerifyRequestPage() {
 
                 <div className="mt-8 border-t border-neutral-100 pt-4">
                     <button
-                        onClick={() => signOut({ callbackUrl: '/library/auth/login' })}
+                        onClick={() => signOut({ callbackUrl: '/auth/login' })}
                         className="text-neutral-400 hover:text-neutral-600 text-sm flex items-center justify-center gap-1 mx-auto transition-colors font-medium"
                     >
                         <span className="material-symbols-outlined text-sm">logout</span>

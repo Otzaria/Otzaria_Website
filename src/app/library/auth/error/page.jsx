@@ -42,7 +42,7 @@ function ErrorContent() {
 
           <div className="space-y-4">
             <Link 
-              href="/library/auth/login"
+              href="/auth/login"
               className="flex items-center justify-center gap-2 w-full py-3 bg-primary text-on-primary rounded-lg font-medium hover:bg-accent transition-all"
             >
               <span className="material-symbols-outlined">login</span>

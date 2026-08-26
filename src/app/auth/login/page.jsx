@@ -17,7 +17,7 @@ function getSafeCallbackUrl(raw) {
   // "//" או "/\" מתפרשים בדפדפן כ-origin חיצוני
   if (raw[1] === '/' || raw[1] === '\\') return DEFAULT_REDIRECT
   const pathOnly = raw.split(/[?#]/)[0]
-  if (pathOnly === '/library/auth/login' || pathOnly.startsWith('/library/auth/login/')) {
+  if (pathOnly === '/auth/login' || pathOnly.startsWith('/auth/login/')) {
     return DEFAULT_REDIRECT
   }
   return raw

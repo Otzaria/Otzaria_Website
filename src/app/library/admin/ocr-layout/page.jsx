@@ -266,7 +266,7 @@ export default function AdminOcrLayoutPage() {
   useEffect(() => {
     if (status === 'loading') return
     if (status === 'unauthenticated') {
-      router.push('/library/auth/login?callbackUrl=/library/admin/ocr-layout')
+      router.push('/auth/login?callbackUrl=/library/admin/ocr-layout')
       return
     }
     if (!hasOcrAccess(session?.user?.role)) {

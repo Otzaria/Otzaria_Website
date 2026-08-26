@@ -4,8 +4,7 @@ import connectDB from '@/lib/db';
 import User from '@/models/User';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import nodemailer from 'nodemailer';
-
+import { createSmtpTransport } from '@/lib/smtp-transport';
 export async function POST() {
     try {
         const session = await getServerSession(authOptions);
@@ -49,16 +48,8 @@ export async function POST() {
         
         await user.save();
 
-        // הגדרת שליחת המייל
-        const transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST,
-            port: Number(process.env.SMTP_PORT),
-            secure: process.env.SMTP_SECURE === 'true',
-            auth: {
-                user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASS,
-            },
-        });
+        // הגדרת שליחת המייל — transporter משותף עם אימות TLS מלא
+        const transporter = createSmtpTransport();
 
         const verifyUrl = `${process.env.NEXTAUTH_URL}/api/auth/verify?token=${token}`;
 

@@ -12,6 +12,11 @@ services:
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - UPLOAD_DIR=/app/public/uploads
+      # מודל אמון ה-IP ל-rate-limiting. הפורט כאן חשוף ישירות (ports: 3000:3000),
+      # ולכן ברירת המחדל 0 — משתמשים רק בכתובת ה-peer, headers נשלטי-לקוח
+      # מנוטרלים. אם מוסיפים nginx/LB לפני הקונטיינר — העלו ל-1/2 ב-.env
+      # (ראו הסבר מלא ב-.env.example ו-src/lib/client-ip.js).
+      - TRUSTED_PROXY_COUNT=${TRUSTED_PROXY_COUNT:-0}
     volumes:
       - ./:/app
       - /app/node_modules

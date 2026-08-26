@@ -5,6 +5,7 @@ import PluginReport from '@/models/PluginReport'
 import Plugin from '@/models/Plugin'
 import User from '@/models/User'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { getClientIp } from '@/lib/client-ip'
 import { validateEmail } from '@/lib/validation-utils'
 import { parsePluginRef } from '@/lib/pluginRef'
 import { sendPluginReportNotification } from '@/lib/emailService'
@@ -15,12 +16,8 @@ const MAX_DETAILS_LENGTH = 5000
 // חלון מניעת כפילות: דיווח זהה על אותו תוסף לא נרשם שוב בתוך פרק זמן זה
 const DEDUP_WINDOW_MONTHS = 6
 
-function getClientIp(request) {
-  return (request.headers.get('x-forwarded-for') || '').split(',')[0].trim()
-    || request.headers.get('x-real-ip')
-    || 'unknown'
-}
-
+// getClientIp משותף: src/lib/client-ip.js (הכתובת האחרונה ב-XFF, לא הראשונה —
+// הראשונה נשלטת ע"י הלקוח ומאפשרת עקיפת rate-limit)
 function computeContentHash(pluginUid, reportType, details) {
   return crypto.createHash('sha256')
     .update([pluginUid, reportType, details].join('\0'))

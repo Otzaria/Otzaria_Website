@@ -1,14 +1,85 @@
 import { NextResponse } from 'next/server';
-import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import { validateEmail } from '@/lib/validation-utils';
 import connectDB from '@/lib/db';
 import ErrorReport from '@/models/ErrorReport';
 import SentEmailLog from '@/models/SentEmailLog';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/client-ip';
+import { createSmtpTransport } from '@/lib/smtp-transport';
 
 const REPORTING_ERRORS_RECIPIENT = 'otzaria.200@gmail.com';
 const SEFARIA_ERRORS_RECIPIENT = 'corrections@sefaria.org';
 const DEFAULT_SENDER_EMAIL = 'unknown@otzaria.invalid';
+
+// תקרות אורך לשדות הדיווח. בלעדיהן גוף בקשה ענק נשמר ב-MongoDB ונשלח ב-SMTP
+// כמו שהוא (DoS של אחסון/זיכרון, או מיילים בגודל חריג). תוכנת אוצריא שולחת
+// שדות קצרים בהרבה מהתקרות האלה, ולכן דיווחים לגיטימיים אינם נפגעים.
+const FIELD_CAPS = {
+  subject: 500,
+  book_title: 300,
+  current_ref: 300,
+  selected_text: 10_000,
+  error_details: 10_000,
+  context_text: 20_000,
+  file_path: 1_000,
+  source_folder: 200,
+};
+
+function capField(value, maxLen, fallback) {
+  return toSafeString(value, fallback).slice(0, maxLen);
+}
+
+// P2 (ביקורת קוד): request.json() טוען ומפענח את כל ה-body לזיכרון לפני
+// שהתקרות מיושמות — כלומר בלי מגבלה כאן גוף ענק היה צורך RAM פר-בקשה.
+// פתרון דו-שכבתי:
+//   1. בדיקת Content-Length מוקדמת (זולה; לא אמינה נגד header שקרי)
+//   2. קריאת streaming עם abort ברגע חריגה מהתקרה — נאכפת בפועל גם כשה-header
+//      שקרי/חסר (chunked), בלי להחזיק יותר מ-maxBytes בזיכרון אי פעם.
+// שכבת proxy/ingress צריכה להוסיף limit משלה (למשל client_max_body_size),
+// אבל ה-API כבר אינו מקבל body ללא הגבלה גם בלעדיה.
+const MAX_REPORT_BODY_BYTES = 256 * 1024; // 256KB — הרבה מעל כל דיווח אמיתי
+
+async function readJsonBodyLimited(request, maxBytes) {
+  const tooLarge = () => Object.assign(new Error('body too large'), { code: 'BODY_TOO_LARGE' });
+  const invalidJson = () => Object.assign(new Error('invalid JSON'), { code: 'INVALID_JSON' });
+
+  const contentLength = Number(request.headers.get('content-length') || '');
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    throw tooLarge();
+  }
+
+  if (!request.body) {
+    throw invalidJson();
+  }
+
+  const reader = request.body.getReader();
+  const chunks = [];
+  let received = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    received += value.byteLength;
+    if (received > maxBytes) {
+      try { await reader.cancel(); } catch { /* כבר מתה */ }
+      throw tooLarge();
+    }
+    chunks.push(value);
+  }
+
+  const merged = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  try {
+    return JSON.parse(new TextDecoder('utf-8').decode(merged));
+  } catch {
+    throw invalidJson();
+  }
+}
 
 // חלון מניעת כפילות: לא נשלח תוכן זהה לאותו נמען בתוך פרק זמן זה.
 // ברירת מחדל 6 חודשים, ניתן להגדיל דרך משתנה סביבה REPORT_DEDUP_MONTHS.
@@ -166,20 +237,23 @@ function normalizePayload(payload) {
     ? senderCandidate
     : DEFAULT_SENDER_EMAIL;
 
+  // מזהה הדיווח משמש מפתח upsert ב-MongoDB — מוגבל באורכו כדי שבקשה זדונית
+  // לא תוכל לדחוף מפתחות ענקיים לאינדקס/לוגים
   const reportId = toSafeString(
     raw.report_id,
     `missing-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-  );
+  ).slice(0, 128);
 
-  const subject = toSafeString(raw.subject, 'דיווח טעות ללא נושא');
-  const bookTitle = toSafeString(raw.book_title, 'לא צוין ספר');
-  const currentRef = toSafeString(raw.current_ref, 'לא צוין מיקום');
+  // תקרות אורך (FIELD_CAPS) — מגבילות גם את מה שנשמר ב-DB וגם את מה שנשלח במייל
+  const subject = capField(raw.subject, FIELD_CAPS.subject, 'דיווח טעות ללא נושא');
+  const bookTitle = capField(raw.book_title, FIELD_CAPS.book_title, 'לא צוין ספר');
+  const currentRef = capField(raw.current_ref, FIELD_CAPS.current_ref, 'לא צוין מיקום');
   const lineNumber = toSafeLineNumber(raw.line_number);
-  const selectedText = toSafeString(raw.selected_text, '(לא נשלח טקסט מסומן)');
-  const errorDetails = toSafeString(raw.error_details, '(לא נשלח פירוט טעות)');
-  const contextText = toSafeString(raw.context_text, '(לא נשלח טקסט הקשר)');
-  const filePath = toSafeString(raw.file_path, '(לא נשלח נתיב קובץ)');
-  const sourceFolder = toSafeString(raw.source_folder, '(לא נשלחה תיקיית מקור)');
+  const selectedText = capField(raw.selected_text, FIELD_CAPS.selected_text, '(לא נשלח טקסט מסומן)');
+  const errorDetails = capField(raw.error_details, FIELD_CAPS.error_details, '(לא נשלח פירוט טעות)');
+  const contextText = capField(raw.context_text, FIELD_CAPS.context_text, '(לא נשלח טקסט הקשר)');
+  const filePath = capField(raw.file_path, FIELD_CAPS.file_path, '(לא נשלח נתיב קובץ)');
+  const sourceFolder = capField(raw.source_folder, FIELD_CAPS.source_folder, '(לא נשלחה תיקיית מקור)');
   const createdAt = toSafeIsoDate(raw.created_at);
   const libraryVersion = extractLibraryVersion(raw);
 
@@ -370,7 +444,22 @@ function buildText(payload, ccRecipients = []) {
   return lines.join('\n');
 }
 
+// הנתיב נשאר ציבורי מכוון: דיווחי הטעויות מגיעים מתוכנת אוצריא (ללא חשבון
+// אתר), וכל שינוי בחוזה ה-API ישבור אותם. במקום אימות — הגבלת קצב לפי IP אמין
+// (req.ip / קצה שרשרת XFF): דיווח אנושי אינו מתקרב לתקרה, ואילו ספאמר/סקריפט
+// נחסם. כישלון ב-rate-limit עצמו לא יפיל דיווח לגיטימי.
 export async function POST(request) {
+  try {
+    if (!checkRateLimit(getClientIp(request), 'error-report', 5, 'minute')) {
+      return NextResponse.json(
+        { success: false, error: 'Too many requests', reportId: null },
+        { status: 429 }
+      );
+    }
+  } catch {
+    // כל חריגה כאן לא אמורה לקרות; לא מונעת את הדיווח עצמו
+  }
+
   let payload;
   let savedToDatabase = false;
   // נשמרים בטווח הפונקציה כדי שניתן יהיה לשחרר תפיסות חלקיות בכל מסלול כשל
@@ -378,7 +467,22 @@ export async function POST(request) {
   let contentHash;
   let emailDelivered = false;
   try {
-    const rawBody = await request.json();
+    // קריאת body עם תקרה אמיתית (streaming) — ראו הסבר ליד MAX_REPORT_BODY_BYTES
+    let rawBody;
+    try {
+      rawBody = await readJsonBodyLimited(request, MAX_REPORT_BODY_BYTES);
+    } catch (err) {
+      if (err?.code === 'BODY_TOO_LARGE') {
+        return NextResponse.json(
+          { success: false, error: 'Report body too large', reportId: null },
+          { status: 413 }
+        );
+      }
+      return NextResponse.json(
+        { success: false, error: 'Invalid JSON body', reportId: null },
+        { status: 400 }
+      );
+    }
     payload = normalizePayload(rawBody);
 
     await connectDB();
@@ -420,16 +524,9 @@ export async function POST(request) {
       );
     }
 
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT),
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-      tls: { rejectUnauthorized: false },
-    });
+    // transporter משותף (src/lib/smtp-transport.js) — אימות TLS מלא
+    // (rejectUnauthorized=true כברירת מחדל) ו-timeouts מוגדרים
+    const transporter = createSmtpTransport();
 
     const senderValidation = validateEmail(payload.sender_email);
     const replyTo = senderValidation.isValid ? payload.sender_email : undefined;

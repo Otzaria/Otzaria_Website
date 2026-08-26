@@ -4,6 +4,8 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
+import { useSession, signOut } from 'next-auth/react'
+import { getAvatarColor, getInitial } from '@/lib/avatar-colors'
 import { MAIN_NAV_LINKS } from '@/lib/navigation-constants'
 
 /**
@@ -33,7 +35,58 @@ function NavLink({ link, className, onClick, children }) {
   )
 }
 
-export default function OtzariaSoftwareHeader() {
+/**
+ * אזור התחברות/חשבון בכותרת — מוצג רק כש-showAuth מופעל (חנות התוספים).
+ * ההתחברות חוזרת לדף הנוכחי דרך callbackUrl, וההתנתקות משאירה את המשתמש באותו דף.
+ */
+function AuthActions({ pathname, compact = false, onNavigate }) {
+  const { data: session } = useSession()
+  const loginHref = `/auth/login?callbackUrl=${encodeURIComponent(pathname)}`
+
+  if (session) {
+    return (
+      <div className={compact ? 'flex items-center gap-3 p-2' : 'flex items-center gap-3'}>
+        <Link
+          href="/library/dashboard"
+          prefetch={false}
+          onClick={onNavigate}
+          className="flex items-center justify-center hover:opacity-80 transition-opacity"
+          title={session.user.name}
+        >
+          <div
+            className="w-9 h-9 rounded-full text-white flex items-center justify-center font-bold text-sm shadow-md hover:shadow-lg transition-shadow"
+            style={{ backgroundColor: getAvatarColor(session.user.name) }}
+          >
+            {getInitial(session.user.name)}
+          </div>
+        </Link>
+        <button
+          onClick={() => signOut({ callbackUrl: pathname })}
+          className="flex items-center gap-2 px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary/10 transition-colors text-sm font-medium"
+        >
+          <span className="material-symbols-outlined text-lg">logout</span>
+          <span>התנתק</span>
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <Link
+      href={loginHref}
+      prefetch={false}
+      onClick={onNavigate}
+      className={`flex items-center gap-2 px-5 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm font-medium ${
+        compact ? 'justify-center text-lg' : 'text-sm'
+      }`}
+    >
+      <span className="material-symbols-outlined text-lg">login</span>
+      <span>התחבר</span>
+    </Link>
+  )
+}
+
+export default function OtzariaSoftwareHeader({ showAuth = false }) {
   const pathname = usePathname()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
 
@@ -70,8 +123,9 @@ export default function OtzariaSoftwareHeader() {
               </NavLink>
             )
           })}
+          {showAuth && <AuthActions pathname={pathname} />}
         </nav>
-        
+
         {/* Mobile Menu Button */}
         <button 
           className="md:hidden p-2 text-foreground"
@@ -105,6 +159,7 @@ export default function OtzariaSoftwareHeader() {
               </NavLink>
             )
           })}
+          {showAuth && <AuthActions pathname={pathname} compact onNavigate={() => setIsMenuOpen(false)} />}
         </div>
       )}
     </header>
