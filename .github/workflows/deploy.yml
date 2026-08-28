@@ -10,6 +10,11 @@ on:
   # רצה רק כשהתגית זזה בפועל.
   schedule:
     - cron: '*/5 * * * *'
+  # שחרור בוולידטור דוחף לכאן מיד אחרי הזזת v1, במקום להמתין ל-cron —
+  # GitHub מחניק את ה-*/5 בפועל לשעות. השער מפעיל פריסה לכל אירוע שאינו
+  # schedule, ולכן לא נדרשת כאן לוגיקה נוספת.
+  repository_dispatch:
+    types: [validator-release]
   workflow_dispatch:
 
 permissions:
