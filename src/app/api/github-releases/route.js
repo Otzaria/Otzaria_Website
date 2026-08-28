@@ -12,6 +12,11 @@ const platformAliases = {
   android: ['android']
 }
 
+// נכסי ARM64 חייבים הדרה מפורשת מהבחירה ל-x64. GitHub מחזיר את הנכסים בסדר
+// אלפביתי, ומקף קודם לנקודה, ולכן המתקין של ARM מקדים את זה של x64 ברשימה —
+// בלי ההדרה כל מבקר x64 היה מקבל את מתקין ה-ARM.
+const ARM64_KEYWORDS = ['arm64', 'aarch64']
+
 const otherPlatformKeywords = {
   windows: [...platformAliases.linux, ...platformAliases.macos, ...platformAliases.android],
   linux: [...platformAliases.windows, ...platformAliases.macos, ...platformAliases.android],
@@ -32,9 +37,9 @@ function findAssetWithKeywords(assets, extension, includeKeywords = [], excludeK
   })?.browser_download_url
 }
 
-function findPlatformAsset(assets, platform, extension, { full = false, preferPlatformKeyword = true } = {}) {
+function findPlatformAsset(assets, platform, extension, { full = false, preferPlatformKeyword = true, exclude = [] } = {}) {
   const includeKeywords = full ? ['full'] : []
-  const excludeKeywords = full ? [] : ['full']
+  const excludeKeywords = full ? [...exclude] : ['full', ...exclude]
   const aliases = platformAliases[platform] || []
   const excludedPlatforms = otherPlatformKeywords[platform] || []
 
@@ -52,11 +57,13 @@ function extractPlatformDownloads(platform, assets) {
   switch (platform) {
     case 'windows':
       return {
-        exe: findAssetWithKeywords(assets, '.exe', ['windows'], ['silent', 'full']) || findAssetWithKeywords(assets, '.exe', ['win'], ['silent', 'full']),
-        msix: findPlatformAsset(assets, 'windows', '.msix'),
-        zip: findPlatformAsset(assets, 'windows', '.zip'),
-        exeSilent: findAssetWithKeywords(assets, '.exe', ['windows', 'silent'], ['full']) || findAssetWithKeywords(assets, '.exe', ['win', 'silent'], ['full']),
-        exeFull: findAssetWithKeywords(assets, '.exe', ['windows', 'full'], ['silent']) || findAssetWithKeywords(assets, '.exe', ['win', 'full'], ['silent'])
+        exe: findAssetWithKeywords(assets, '.exe', ['windows'], ['silent', 'full', ...ARM64_KEYWORDS]) || findAssetWithKeywords(assets, '.exe', ['win'], ['silent', 'full', ...ARM64_KEYWORDS]),
+        exeArm64: findAssetWithKeywords(assets, '.exe', ['windows', 'arm64'], ['silent', 'full']) || findAssetWithKeywords(assets, '.exe', ['win', 'aarch64'], ['silent', 'full']),
+        msix: findPlatformAsset(assets, 'windows', '.msix', { exclude: ARM64_KEYWORDS }),
+        zip: findPlatformAsset(assets, 'windows', '.zip', { exclude: ARM64_KEYWORDS }),
+        zipArm64: findAssetWithKeywords(assets, '.zip', ['windows', 'arm64'], ['full']),
+        exeSilent: findAssetWithKeywords(assets, '.exe', ['windows', 'silent'], ['full', ...ARM64_KEYWORDS]) || findAssetWithKeywords(assets, '.exe', ['win', 'silent'], ['full', ...ARM64_KEYWORDS]),
+        exeFull: findAssetWithKeywords(assets, '.exe', ['windows', 'full'], ['silent', ...ARM64_KEYWORDS]) || findAssetWithKeywords(assets, '.exe', ['win', 'full'], ['silent', ...ARM64_KEYWORDS])
       }
     case 'linux':
       return {
