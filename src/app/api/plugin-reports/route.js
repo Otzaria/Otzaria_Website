@@ -45,7 +45,7 @@ async function resolvePlugin(pluginUid) {
 // ציבורי ולא מאומת; כשל בשליחת המייל אינו מפיל את הבקשה — הדיווח נשמר.
 export async function POST(request) {
   try {
-    if (!checkRateLimit(getClientIp(request), 'plugin-report', 5, 'minute')) {
+    if (!checkRateLimit(getClientIp(request), 'plugin-report', 8, 'minute')) {
       return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
     }
 
