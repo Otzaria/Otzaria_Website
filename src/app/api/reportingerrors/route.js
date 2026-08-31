@@ -450,7 +450,7 @@ function buildText(payload, ccRecipients = []) {
 // נחסם. כישלון ב-rate-limit עצמו לא יפיל דיווח לגיטימי.
 export async function POST(request) {
   try {
-    if (!checkRateLimit(getClientIp(request), 'error-report', 5, 'minute')) {
+    if (!checkRateLimit(getClientIp(request), 'error-report', 8, 'minute')) {
       return NextResponse.json(
         { success: false, error: 'Too many requests', reportId: null },
         { status: 429 }
