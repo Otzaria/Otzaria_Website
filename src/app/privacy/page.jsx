@@ -18,9 +18,29 @@ export default function PrivacyPolicyPage() {
               <div>
                 <h2 className="text-2xl font-bold text-on-surface mb-4">מבוא</h2>
                 <p>
-                  פרויקט "אוצריא" הוא מיזם ללא כוונת רווח שמטרתו הנגשת ספרי קודש לציבור. 
+                  פרויקט "אוצריא" הוא מיזם ללא כוונת רווח שמטרתו הנגשת ספרי קודש לציבור.
                   אנו מכבדים את פרטיות המשתמשים שלנו, בין אם הם גולשים באתר ובין אם הם משתמשים בתוכנה להורדה.
                 </p>
+                <p className="mt-3">
+                  אוצריא היא תוכנה חופשית ובקוד פתוח לקריאה וללימוד ספרי קודש, לשולחן העבודה
+                  ולנייד. התוכנה עובדת מקומית על המכשיר, ואין לפרויקט שרת שאוסף את תוכן הלמידה,
+                  ההערות או היומן של המשתמש.
+                </p>
+                <div dir="ltr" className="mt-5 p-5 rounded-2xl bg-surface border border-surface-variant text-left font-sans text-sm space-y-2 text-neutral-700">
+                  <p className="font-bold">Summary in English</p>
+                  <p>
+                    Otzaria is a free, open source desktop and mobile application for reading and
+                    studying Jewish religious texts, published by a non profit project. The
+                    application runs locally on the user&apos;s device. The project operates no
+                    server that collects the user&apos;s reading history, personal notes or calendar
+                    data, and we do not sell or share personal data with third parties.
+                  </p>
+                  <p>
+                    The section below titled &quot;Google Calendar integration&quot; describes in
+                    full which Google user data the application accesses, why it is needed, where it
+                    is stored, and how the user can revoke access and delete it.
+                  </p>
+                </div>
               </div>
 
               {/* מדיניות האתר */}
@@ -47,22 +67,110 @@ export default function PrivacyPolicyPage() {
                   תוכנת אוצריא תוכננה לעבוד באופן מקומי ככל הניתן כדי לשמור על פרטיות מירבית:
                 </p>
                 
-                <div className="bg-white p-6 rounded-xl border border-surface-variant space-y-4 mb-6">
+                <div className="bg-white p-6 rounded-xl border border-surface-variant space-y-6 mb-6">
                   <h3 className="font-bold text-primary flex items-center gap-2">
                     <span className="material-symbols-outlined">calendar_month</span>
-                    Google Calendar Integration
+                    חיבור ליומן Google / Google Calendar integration
                   </h3>
-                  <div className="dir-ltr text-left font-sans text-sm space-y-2 text-neutral-700">
-                    <p>This application uses Google Calendar only to create and manage events explicitly requested by the user.</p>
-                    <p>No data is stored on external servers. All access is performed locally on the user's device.</p>
-                    <p>User data is not shared with third parties.</p>
+
+                  <div className="space-y-3 text-sm">
+                    <p>
+                      החיבור ליומן Google הוא אופציונלי לחלוטין. הוא מופעל רק אם המשתמש בחר בעצמו
+                      להתחבר לחשבונו במסך ההגדרות של לוח השנה, וניתן לנתק אותו בכל עת.
+                    </p>
+                    <p className="font-bold">אילו נתונים אנו ניגשים אליהם, ולמה:</p>
+                    <ul className="list-disc mr-6 space-y-2">
+                      <li>
+                        <strong>רשימת היומנים שלך</strong> (ההרשאה{' '}
+                        <span dir="ltr">calendar.calendarlist.readonly</span>) — כדי להציג לך את
+                        היומנים שלך ולתת לך לבחור אילו מהם יוצגו, וכדי לקרוא את צבע כל יומן לצורך
+                        התאמת הצבעים בתצוגה.
+                      </li>
+                      <li>
+                        <strong>קריאת אירועים</strong> (ההרשאה <span dir="ltr">calendar.events</span>)
+                        — אנו קוראים אירועים מהיומנים שבחרת, אך ורק לטווח החודשים שמוצג על המסך,
+                        ומציגים אותם בתצוגת לוח השנה של התוכנה לצד התאריכים העבריים.
+                      </li>
+                      <li>
+                        <strong>כתיבת אירועים</strong> (אותה הרשאה) — כאשר אתה יוצר, עורך או מוחק
+                        אירוע בתוך אוצריא, אנו כותבים את אותו שינוי ליומן הראשי שלך ב-Google, כדי
+                        ששני הצדדים יישארו מסונכרנים. אנו לא יוצרים, משנים או מוחקים אירועים
+                        שלא ביקשת.
+                      </li>
+                    </ul>
+                    <p className="font-bold">שמירה, שיתוף ומחיקה:</p>
+                    <ul className="list-disc mr-6 space-y-2">
+                      <li>
+                        אין לפרויקט אוצריא שרת שמקבל את נתוני היומן שלך. כל הגישה נעשית ישירות
+                        מהמכשיר שלך אל Google.
+                      </li>
+                      <li>
+                        אסימון ההרשאה (Token) והאירועים שנטענו נשמרים מקומית על המכשיר שלך בלבד.
+                      </li>
+                      <li>
+                        איננו מוכרים, משתפים או מעבירים את נתוני היומן שלך לאף צד שלישי, ואיננו
+                        משתמשים בהם לפרסום, לפרופיילינג או לאימון מודלים.
+                      </li>
+                      <li>
+                        ניתוק החשבון בהגדרות לוח השנה מוחק את אסימון ההרשאה ואת האירועים השמורים
+                        מהמכשיר. אפשר גם לבטל את הגישה בכל עת מדף ההרשאות של חשבון Google שלך:{' '}
+                        <a
+                          dir="ltr"
+                          href="https://myaccount.google.com/connections"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary underline"
+                        >
+                          myaccount.google.com/connections
+                        </a>
+                        .
+                      </li>
+                    </ul>
                   </div>
-                  <div className="border-t pt-4 mt-4">
-                    <p className="font-bold text-sm mb-1">ובתרגום לעברית:</p>
-                    <p className="text-sm italic">
-                      "התוכנה משתמשת ביומן גוגל (Google Calendar) אך ורק לצורך יצירה וניהול של אירועים לבקשת המשתמש המפורשת. 
-                      שום מידע אינו נשמר בשרתים חיצוניים. כל הגישה מתבצעת באופן מקומי על מכשיר המשתמש. 
-                      מידע המשתמש אינו משותף עם צדדים שלישיים."
+
+                  <div className="border-t pt-5 dir-ltr text-left font-sans text-sm space-y-3 text-neutral-700">
+                    <p className="font-bold">In English:</p>
+                    <p>
+                      Connecting a Google Calendar account is entirely optional. It happens only
+                      when the user chooses to sign in from the calendar settings screen of the
+                      Otzaria app, and it can be disconnected at any time.
+                    </p>
+                    <p>
+                      <strong>What we access and why.</strong> With{' '}
+                      <span className="font-mono">calendar.calendarlist.readonly</span> we read the
+                      list of calendars the user is subscribed to, so that the user can choose which
+                      calendars to display, and so that we can read each calendar&apos;s colour for
+                      display purposes. With <span className="font-mono">calendar.events</span> we
+                      read events from the calendars the user selected, only for the range of months
+                      currently shown on the screen, and display them in the app&apos;s calendar view
+                      next to the Hebrew dates. With the same scope we write events: when the user
+                      creates, edits or deletes an event inside Otzaria, we apply the same change to
+                      the user&apos;s primary Google calendar so that both sides stay in sync. We do
+                      not create, modify or delete any event the user did not ask for.
+                    </p>
+                    <p>
+                      <strong>Storage, sharing and deletion.</strong> The Otzaria project operates no
+                      server that receives your calendar data. All API access is performed directly
+                      from your own device to Google. The OAuth token and the events that were loaded
+                      are stored locally on your device only. We do not sell, share or transfer your
+                      Google user data to any third party, and we do not use it for advertising,
+                      profiling or training models. Disconnecting the account in the app&apos;s
+                      calendar settings deletes the stored token and the cached events from the
+                      device, and you may revoke access at any time at{' '}
+                      <span className="font-mono">myaccount.google.com/connections</span>.
+                    </p>
+                    <p>
+                      <strong>Limited Use.</strong> Otzaria&apos;s use and transfer of information
+                      received from Google APIs adheres to the{' '}
+                      <a
+                        href="https://developers.google.com/terms/api-services-user-data-policy"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary underline"
+                      >
+                        Google API Services User Data Policy
+                      </a>
+                      , including its Limited Use requirements.
                     </p>
                   </div>
                 </div>
@@ -77,8 +185,13 @@ export default function PrivacyPolicyPage() {
               <div>
                 <h2 className="text-2xl font-bold text-on-surface mb-4">צדדים שלישיים</h2>
                 <p>
-                  אנו לא מוכרים, סוחרים או מעבירים לאף גורם חיצוני את המידע המזהה שלך. 
+                  אנו לא מוכרים, סוחרים או מעבירים לאף גורם חיצוני את המידע המזהה שלך.
                   אנו משתמשים בשירותי דואר אלקטרוני (SMTP) אמינים אך ורק לצורך שליחת הודעות מערכת ואימות חשבון.
+                </p>
+                <p dir="ltr" className="mt-3 text-left font-sans text-sm text-neutral-700">
+                  We do not sell, trade or transfer your personally identifying information to any
+                  outside party. Data received from Google APIs is never transferred to a third
+                  party, and is used solely to provide the calendar features described above.
                 </p>
               </div>
 
@@ -94,6 +207,15 @@ export default function PrivacyPolicyPage() {
                   <span className="material-symbols-outlined">forum</span>
                   פנה אלינו בפורום אוצריא
                 </a>
+                <p className="mt-6 text-sm text-on-surface/60">
+                  ניתן לפנות אלינו גם בדואר אלקטרוני:{' '}
+                  <a href="mailto:otzaria.1@gmail.com" dir="ltr" className="text-primary underline">
+                    otzaria.1@gmail.com
+                  </a>
+                </p>
+                <p className="mt-3 text-sm text-on-surface/60">
+                  עדכון אחרון: 1 בספטמבר 2026 · <span dir="ltr">Last updated: 1 September 2026</span>
+                </p>
               </div>
             </section>
           </div>

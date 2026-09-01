@@ -227,11 +227,28 @@ export default function Home() {
                 </div>
                 
                 <h1 className="text-5xl md:text-6xl font-bold mb-6 font-frank">
-                    אוצריא
+                    אוצריא <span className="text-primary">(Otzaria)</span>
                 </h1>
-                
-                <p className="text-xl md:text-2xl mb-8 text-foreground/80 leading-relaxed">
+
+                <p className="text-xl md:text-2xl mb-6 text-foreground/80 leading-relaxed">
                     מאגר תורני רחב עם ממשק מודרני ומהיר
+                </p>
+
+                <p className="text-base md:text-lg mb-5 text-foreground/70 leading-relaxed max-w-3xl mx-auto">
+                    אוצריא היא תוכנה חופשית ובקוד פתוח לקריאה וללימוד של ספרי קודש, לשולחן העבודה
+                    (Windows, macOS, Linux) ולנייד (Android, iOS). התוכנה כוללת ספרייה תורנית רחבה,
+                    חיפוש בכל הספרים, מפרשים והפניות, הערות אישיות וסימניות, ולוח שנה עברי עם זמני
+                    היום. במסך לוח השנה ניתן לחבר את יומן Google של המשתמש, כדי לראות את האירועים
+                    שלו לצד הלוח העברי ולהוסיף אירועים בלי לצאת מהתוכנה.
+                </p>
+
+                <p dir="ltr" className="text-sm md:text-base mb-8 text-foreground/60 leading-relaxed max-w-3xl mx-auto text-left font-sans">
+                    <strong>Otzaria</strong> is a free, open source desktop and mobile application for
+                    reading and studying Jewish religious texts. It provides a large library of Torah
+                    books, full text search, commentaries and cross references, personal notes and
+                    bookmarks, and a Hebrew calendar with the daily prayer times. In the calendar
+                    screen the user can connect their own Google Calendar, in order to see their
+                    events next to the Hebrew calendar and to add events without leaving the app.
                 </p>
                 
                 <div className="flex flex-col gap-4 justify-center items-center mt-8">
