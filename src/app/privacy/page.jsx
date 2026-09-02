@@ -234,7 +234,7 @@ export default function PrivacyPolicyPage() {
               {/* שמירת נתונים ומחיקתם */}
               <div>
                 <h2 className="text-2xl font-bold text-on-surface mb-4 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-primary">auto_delete</span>
+                  <span className="material-symbols-outlined text-primary">delete_forever</span>
                   שמירת נתונים ומחיקתם / Data retention and deletion
                 </h2>
                 <ul className="list-disc mr-6 space-y-3">
