@@ -666,7 +666,7 @@ export async function sendPluginReportNotification(reportData) {
                     </div>
                     ${pluginLinkBlock}
                     <p style="color: #666; font-size: 14px; line-height: 1.8; margin-top: 20px;">
-                        הדיווח נשלח על ידי משתמש של התוסף דרך אוצריא. עותק ממנו ממתין לך גם בתיבת ההודעות באתר.
+                        הדיווח נשלח על ידי משתמש של התוסף דרך אוצריא.
                     </p>
                 </div>
             </div>
