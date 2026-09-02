@@ -112,8 +112,9 @@ export default function PrivacyPolicyPage() {
                         משתמשים בהם לפרסום, לפרופיילינג או לאימון מודלים.
                       </li>
                       <li>
-                        ניתוק החשבון בהגדרות לוח השנה מוחק את אסימון ההרשאה ואת האירועים השמורים
-                        מהמכשיר. אפשר גם לבטל את הגישה בכל עת מדף ההרשאות של חשבון Google שלך:{' '}
+                        ניתוק החשבון בהגדרות לוח השנה מוחק מהמכשיר את אסימון ההרשאה, ומפסיק מיד כל
+                        גישה נוספת ליומן. אפשר גם לבטל את הגישה בכל עת מדף ההרשאות של חשבון Google
+                        שלך:{' '}
                         <a
                           dir="ltr"
                           href="https://myaccount.google.com/connections"
@@ -155,9 +156,10 @@ export default function PrivacyPolicyPage() {
                       are stored locally on your device only. We do not sell, share or transfer your
                       Google user data to any third party, and we do not use it for advertising,
                       profiling or training models. Disconnecting the account in the app&apos;s
-                      calendar settings deletes the stored token and the cached events from the
-                      device, and you may revoke access at any time at{' '}
-                      <span className="font-mono">myaccount.google.com/connections</span>.
+                      calendar settings deletes the stored token from the device and immediately
+                      stops any further access, and you may revoke access at any time at{' '}
+                      <span className="font-mono">myaccount.google.com/connections</span>. Retention
+                      and deletion are described in full in the two sections below.
                     </p>
                     <p>
                       <strong>Limited Use.</strong> Otzaria&apos;s use and transfer of information
@@ -179,6 +181,107 @@ export default function PrivacyPolicyPage() {
                   <li><strong>שמירת נתונים:</strong> כל ההגדרות, הסימניות והיסטוריית הלמידה בתוכנה נשמרים מקומית על המחשב או הטלפון שלך בלבד.</li>
                   <li><strong>גישה לקבצים:</strong> התוכנה מבקשת גישה לתיקיית הספרים כדי לאפשר קריאה וחיפוש. אין לתוכנה גישה לקבצים אישיים אחרים.</li>
                 </ul>
+              </div>
+
+              {/* הגנה על הנתונים */}
+              <div>
+                <h2 className="text-2xl font-bold text-on-surface mb-4 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary">shield</span>
+                  הגנה על הנתונים / Data protection
+                </h2>
+                <ul className="list-disc mr-6 space-y-3">
+                  <li>
+                    <strong>הצפנה בהעברה:</strong> כל הפניות לממשקי Google נעשות ב-HTTPS/TLS בלבד.
+                  </li>
+                  <li>
+                    <strong>אין שרת ביניים:</strong> לפרויקט אין שרת שמקבל את נתוני היומן. התוכנה
+                    פונה ישירות מהמכשיר אל Google, ונתוני היומן אינם עוברים דרך שרת שלנו ואינם
+                    נשמרים בו.
+                  </li>
+                  <li>
+                    <strong>שמירה מקומית מוגנת:</strong> אסימון ההרשאה והאירועים שיובאו נשמרים
+                    בתיקיית הנתונים הפרטית של התוכנה על המכשיר, שמוגנת בהרשאות חשבון המשתמש של
+                    מערכת ההפעלה.
+                  </li>
+                  <li>
+                    <strong>הרשאות מצומצמות:</strong> התוכנה מבקשת את ההרשאות המצומצמות ביותר
+                    שהיכולות שלה מחייבות — הרשאת קריאה בלבד לרשימת היומנים, והרשאת אירועים לקריאה
+                    ולכתיבה של אירועים. היא אינה מבקשת הרשאת יומן מלאה.
+                  </li>
+                  <li>
+                    <strong>ללא שימושים נוספים:</strong> נתוני היומן אינם מועברים לצד שלישי, אינם
+                    משמשים לפרסום או לפרופיילינג, ואינם משמשים לפיתוח, לשיפור או לאימון של מודלי
+                    בינה מלאכותית או למידת מכונה.
+                  </li>
+                </ul>
+                <div dir="ltr" className="mt-4 text-left font-sans text-sm space-y-2 text-neutral-700">
+                  <p>
+                    <strong>In English.</strong> All requests to Google APIs are made over
+                    HTTPS/TLS. The project operates no intermediate server: the application talks
+                    directly from the user&apos;s device to Google, so Google user data never passes
+                    through or is stored on any server of ours. The OAuth token and the imported
+                    events are stored in the application&apos;s private data directory on the
+                    device, which is protected by the operating system&apos;s user account
+                    permissions. The application requests the narrowest scopes its features require
+                    — a read only scope for the calendar list, and the events scope for reading and
+                    writing events — and does not request the full calendar scope. Google user data
+                    is not transferred to any third party, is not used for advertising or profiling,
+                    and is not used to develop, improve or train generalized AI or ML models.
+                  </p>
+                </div>
+              </div>
+
+              {/* שמירת נתונים ומחיקתם */}
+              <div>
+                <h2 className="text-2xl font-bold text-on-surface mb-4 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary">auto_delete</span>
+                  שמירת נתונים ומחיקתם / Data retention and deletion
+                </h2>
+                <ul className="list-disc mr-6 space-y-3">
+                  <li>
+                    <strong>אסימון ההרשאה</strong> נשמר על המכשיר עד שאתה מנתק את החשבון בהגדרות
+                    לוח השנה, או מבטל את הגישה בחשבון Google שלך. ניתוק מוחק אותו מהמכשיר מיד
+                    ומפסיק כל גישה נוספת.
+                  </li>
+                  <li>
+                    <strong>אירועים שיובאו מהיומן</strong> נשמרים בנתוני לוח השנה המקומיים של
+                    התוכנה על המכשיר, ומתרעננים בכל סנכרון. הם נשארים על המכשיר עד שתמחק אותם
+                    בתוכנה או עד להסרת התוכנה — הסרת התוכנה מוחקת את כל נתוניה המקומיים.
+                  </li>
+                  <li>
+                    <strong>בצד שלנו אין מה למחוק:</strong> מכיוון שאין לנו שרת שמקבל את הנתונים,
+                    לא נשמר אצלנו שום עותק של נתוני היומן שלך.
+                  </li>
+                  <li>
+                    <strong>ביטול גישה מלא</strong> אפשרי בכל עת בדף ההרשאות של חשבון Google:{' '}
+                    <a
+                      dir="ltr"
+                      href="https://myaccount.google.com/connections"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary underline"
+                    >
+                      myaccount.google.com/connections
+                    </a>
+                    . לאחר הביטול התוכנה אינה יכולה עוד לגשת ליומן.
+                  </li>
+                </ul>
+                <div dir="ltr" className="mt-4 text-left font-sans text-sm space-y-2 text-neutral-700">
+                  <p>
+                    <strong>In English.</strong> The OAuth token is retained on the device until the
+                    user disconnects the account in the application&apos;s calendar settings or
+                    revokes access from their Google account; disconnecting deletes it from the
+                    device immediately and stops any further access. Events imported from the
+                    user&apos;s calendar are stored in the application&apos;s local calendar data on
+                    the device and are refreshed on every sync; they remain on the device until the
+                    user deletes them in the application or uninstalls it, and uninstalling the
+                    application removes all of its local data. Because we operate no server that
+                    receives this data, we hold no copy of your Google user data and therefore have
+                    nothing to retain or delete on our side. Access can be revoked completely at any
+                    time at <span className="font-mono">myaccount.google.com/connections</span>,
+                    after which the application can no longer access the calendar.
+                  </p>
+                </div>
               </div>
 
               {/* אבטחה וצדדים שלישיים */}
@@ -214,7 +317,7 @@ export default function PrivacyPolicyPage() {
                   </a>
                 </p>
                 <p className="mt-3 text-sm text-on-surface/60">
-                  עדכון אחרון: 1 בספטמבר 2026 · <span dir="ltr">Last updated: 1 September 2026</span>
+                  עדכון אחרון: 2 בספטמבר 2026 · <span dir="ltr">Last updated: 2 September 2026</span>
                 </p>
               </div>
             </section>
