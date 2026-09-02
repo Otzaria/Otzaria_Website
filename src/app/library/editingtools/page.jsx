@@ -88,6 +88,25 @@ export default function EditingToolsPage() {
     }
   }
 
+  const handleDownloadOtzariaLinker = async () => {
+    try {
+      const response = await fetch('https://raw.githubusercontent.com/Otzaria/OtzariaLinker/refs/heads/main/index.html')
+      if (!response.ok) throw new Error('Failed to fetch OtzariaLinker')
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'מנהל-הקישורים-אוצריא.html'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Error downloading OtzariaLinker:', error)
+      showAlert('שגיאה', 'לא ניתן להוריד את מנהל הקישורים')
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -414,6 +433,77 @@ export default function EditingToolsPage() {
                       >
                         <span className="material-symbols-outlined">forum</span>
                         מדריך ודיון בפורום
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* מנהל הקישורים */}
+            <div className="glass p-8 rounded-2xl">
+              <div className="flex items-start gap-6">
+                <div className="flex-shrink-0">
+                  <div className="w-16 h-16 bg-accent/10 rounded-xl flex items-center justify-center">
+                    <span className="material-symbols-outlined text-4xl text-accent">
+                      hub
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex-1">
+                  <h2 className="text-2xl font-bold mb-2 font-frank">
+                    מנהל הקישורים
+                  </h2>
+                  <p className="text-on-surface/70 mb-6">
+                    כלי ליצירת קובצי הקישורים של אוצריא: בין ספר לפירושו, בין גמרא למפרשים ובין טקסט להערות. קובץ HTML יחיד, קורא בלבד, ועובד גם ללא אינטרנט
+                  </p>
+
+                  <div className="space-y-4">
+                    <div className="bg-primary-container/50 border border-primary/20 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <span className="material-symbols-outlined text-primary mt-0.5">
+                          lightbulb
+                        </span>
+                        <div className="text-sm text-on-surface/80">
+                          <p className="font-bold mb-1">איך זה עובד?</p>
+                          <ul className="list-disc list-inside space-y-1 mr-4">
+                            <li>חבר מקור: מסד הנתונים של אוצריא (seforim.db), קובצי טקסט או תיקיית ספרים</li>
+                            <li>פתח ספר כמקור וספר שני כיעד</li>
+                            <li>לחץ על שורה במקור ואז על שורה ביעד ליצירת קישור, או השתמש ביצירה אוטומטית</li>
+                            <li>ייצא קובצי _links.json להעתקה לתיקיית links באוצריא</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-3">
+                      <a
+                        href="https://otzaria.github.io/OtzariaLinker/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-accent text-on-primary rounded-lg font-bold hover:bg-primary transition-colors"
+                      >
+                        <span className="material-symbols-outlined">open_in_new</span>
+                        פתח מנהל קישורים
+                      </a>
+
+                      <button
+                        onClick={handleDownloadOtzariaLinker}
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-secondary text-on-primary rounded-lg font-bold hover:bg-accent transition-colors"
+                      >
+                        <span className="material-symbols-outlined">download</span>
+                        הורד לעבודה אופליין
+                      </button>
+
+                      <a
+                        href="https://github.com/Otzaria/OtzariaLinker"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-6 py-3 border-2 border-accent text-accent rounded-lg font-bold hover:bg-accent/10 transition-colors"
+                      >
+                        <span className="material-symbols-outlined">code</span>
+                        מדריך וקוד המקור
                       </a>
                     </div>
                   </div>
