@@ -9,7 +9,15 @@ import { useDialog } from '@/components/providers/DialogContext'
 import { MIN_SUPPORTED_APP_VERSION } from '@/lib/pluginSubmission'
 import { getErrorMessage } from '@/lib/errors'
 import { compareVersions } from '@/lib/semverCompare'
-import { MAX_PLUGIN_BYTES, MAX_IMAGE_BYTES, MAX_SCREENSHOTS, ALLOWED_IMAGE_MIMES } from '@/lib/pluginLimits'
+import { MAX_PLUGIN_BYTES, MAX_COMPANION_BYTES, MAX_IMAGE_BYTES, MAX_SCREENSHOTS, ALLOWED_IMAGE_MIMES } from '@/lib/pluginLimits'
+
+// שיקוף של COMPANION_PLATFORMS ב-src/lib/pluginCompanion.js. משוכפל ולא מיובא
+// כי הלוגיקה בשרת נשענת על path ועל גיבוב, ואין טעם לגרור אותם לדפדפן.
+const COMPANION_EXTENSIONS: Record<string, string[]> = {
+  windows: ['.exe', '.msi'],
+  linux: ['.appimage', '.deb', '.rpm', '.sh'],
+  macos: ['.dmg', '.pkg']
+}
 
 export default function UploadPluginPage() {
   const router = useRouter()
@@ -31,6 +39,17 @@ export default function UploadPluginPage() {
     compatibleWith: '',
     tags: [] as string[],
     homepage: ''
+  })
+
+  // תוכנה נלווית — תוסף שאינו עובד לבדו ומדבר עם תוכנה שרצה מחוץ לאוצריא.
+  // המתקין מועלה כקובץ נפרד: קובץ הרצה בתוך ה-.otzplugin נדחה בשרת, כי אוצריא
+  // מחלצת אותו לתיקיית התוסף ואיש אינו יכול להריץ אותו משם.
+  const [companionFile, setCompanionFile] = useState<File | null>(null)
+  const [companion, setCompanion] = useState({
+    name: '',
+    version: '',
+    platform: 'windows' as 'windows' | 'linux' | 'macos',
+    installsPlugin: false
   })
 
   // קבצים
@@ -174,6 +193,46 @@ export default function UploadPluginPage() {
     if (file) void processPluginFile(file, () => {})
   }
 
+  // ===== תוכנה נלווית =====
+  const COMPANION_LABELS: Record<string, string> = { windows: 'Windows', linux: 'Linux', macos: 'macOS' }
+
+  const companionExtOf = (fileName: string) => (fileName.match(/\.[^.]+$/)?.[0] || '').toLowerCase()
+
+  const handleCompanionFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target
+    const file = input.files?.[0]
+    if (!file) return
+    const allowed = COMPANION_EXTENSIONS[companion.platform]
+    const ext = companionExtOf(file.name)
+    if (!allowed.includes(ext)) {
+      showAlert(
+        'שגיאה',
+        `סיומת המתקין (${ext || 'ללא סיומת'}) אינה מתאימה ל-${COMPANION_LABELS[companion.platform]}. מותר: ${allowed.join(', ')}`
+      )
+      input.value = ''
+      return
+    }
+    if (file.size > MAX_COMPANION_BYTES) {
+      showAlert('שגיאה', `קובץ המתקין חורג מהמגבלה של ${MAX_COMPANION_BYTES / 1024 / 1024}MB`)
+      input.value = ''
+      return
+    }
+    setCompanionFile(file)
+  }
+
+  // החלפת מערכת ההפעלה אחרי בחירת הקובץ: מתקין ל-Windows אינו מתקין ל-macOS,
+  // ולכן קובץ שסיומתו אינה מתאימה עוד מוסר במקום להישלח ולהיפסל בשרת.
+  const handleCompanionPlatform = (platform: 'windows' | 'linux' | 'macos') => {
+    setCompanion(prev => ({ ...prev, platform }))
+    if (companionFile && !COMPANION_EXTENSIONS[platform].includes(companionExtOf(companionFile.name))) {
+      setCompanionFile(null)
+      showAlert(
+        'הקובץ הוסר',
+        `${companionFile.name} אינו מתקין של ${COMPANION_LABELS[platform]}. יש לבחור קובץ מתאים (${COMPANION_EXTENSIONS[platform].join(', ')}).`
+      )
+    }
+  }
+
   // עיבוד תמונה (משותף ל-input ול-drop)
   const processImageFile = (file: File) => {
     if (!ALLOWED_IMAGE_MIMES.includes(file.type)) {
@@ -276,6 +335,13 @@ export default function UploadPluginPage() {
         throw new Error('יש לאשר קבלת דיווחים ממשתמשים למייל שלך')
       }
 
+      if (companionFile && !companion.name.trim()) {
+        throw new Error('יש למלא את שם התוכנה הנלווית — הוא מוצג למשתמש בדף התוסף')
+      }
+      if (!companionFile && companion.name.trim()) {
+        throw new Error('צורף שם תוכנה נלווית בלי קובץ מתקין. יש לצרף את המתקין או לרוקן את השם')
+      }
+
       // יצירת FormData
       const data = new FormData()
       data.append('name', formData.name)
@@ -290,6 +356,13 @@ export default function UploadPluginPage() {
       data.append('reportsConsent', 'true')
 
       data.append('pluginFile', pluginFile)
+      if (companionFile) {
+        data.append('companionFile', companionFile)
+        data.append('companionName', companion.name.trim())
+        data.append('companionVersion', companion.version.trim())
+        data.append('companionPlatform', companion.platform)
+        data.append('companionInstallsPlugin', companion.installsPlugin ? 'true' : 'false')
+      }
       if (imageFile) {
         data.append('imageFile', imageFile)
       }
@@ -463,6 +536,98 @@ export default function UploadPluginPage() {
                   {pluginFile && (
                     <p className="mt-2 text-sm text-success-600">
                       ✓ נבחר: {pluginFile.name}
+                    </p>
+                  )}
+                </div>
+
+                {/* תוכנה נלווית */}
+                <div className="rounded-xl border border-neutral-200 p-4">
+                  <label className="block text-sm font-bold text-on-surface/60 mb-2">
+                    תוכנה נלווית (אופציונלי)
+                  </label>
+                  <p className="text-sm text-on-surface/60">
+                    למלא רק אם התוסף אינו יכול לעבוד לבדו ומדבר עם תוכנה שרצה על המחשב מחוץ לאוצריא.
+                    המתקין מועלה כאן ולא בתוך קובץ התוסף: אוצריא מחלצת את החבילה לתיקיית התוסף, ולתוסף
+                    אין הרשאת הרצה — קובץ הרצה שנארז בפנים נדחה בהעלאה.
+                  </p>
+                  <div className="mt-3 rounded-xl border border-warning-200 bg-warning-50 px-4 py-3 text-sm text-warning-900">
+                    האתר מגיש את המתקין להורדה בדף התוסף, ואינו מריץ אותו — דפדפן אינו מריץ קובץ שהורד.
+                    המשתמש מוריד ומריץ בעצמו, ולכן כדאי שהמתקין יתקין את התוכנה בלי שלבים ידניים נוספים.
+                  </div>
+
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="block text-sm font-bold text-on-surface/60 mb-2">
+                        שם התוכנה
+                      </label>
+                      <input
+                        type="text"
+                        value={companion.name}
+                        onChange={(e) => setCompanion(prev => ({ ...prev, name: e.target.value }))}
+                        className="w-full px-4 py-3 border border-neutral-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+                        placeholder="לדוגמה: מתאם חברותא"
+                        maxLength={60}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-on-surface/60 mb-2">
+                        גרסת התוכנה (אופציונלי)
+                      </label>
+                      <input
+                        type="text"
+                        value={companion.version}
+                        onChange={(e) => setCompanion(prev => ({ ...prev, version: e.target.value }))}
+                        className="w-full px-4 py-3 border border-neutral-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+                        placeholder="6.0.0"
+                        maxLength={40}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-on-surface/60 mb-2">
+                        מערכת הפעלה
+                      </label>
+                      <select
+                        value={companion.platform}
+                        onChange={(e) => handleCompanionPlatform(e.target.value as 'windows' | 'linux' | 'macos')}
+                        className="w-full px-4 py-3 border border-neutral-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+                      >
+                        <option value="windows">Windows</option>
+                        <option value="linux">Linux</option>
+                        <option value="macos">macOS</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-on-surface/60 mb-2">
+                        קובץ המתקין
+                      </label>
+                      <input
+                        type="file"
+                        accept={COMPANION_EXTENSIONS[companion.platform].join(',')}
+                        onChange={handleCompanionFile}
+                        className="w-full px-4 py-3 border border-neutral-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+                      />
+                      <p className="mt-1 text-sm text-on-surface/50">
+                        {COMPANION_EXTENSIONS[companion.platform].join(', ')} · עד {MAX_COMPANION_BYTES / 1024 / 1024}MB
+                      </p>
+                    </div>
+                  </div>
+
+                  <label className="mt-4 flex items-start gap-2 text-sm text-on-surface/70">
+                    <input
+                      type="checkbox"
+                      checked={companion.installsPlugin}
+                      onChange={(e) => setCompanion(prev => ({ ...prev, installsPlugin: e.target.checked }))}
+                      className="mt-1"
+                    />
+                    <span>
+                      המתקין מתקין בסופו גם את קובץ התוסף באוצריא. סמנו רק אם זה נכון —
+                      דף התוסף יציג אז צעד אחד במקום שניים, ומי שיסמן בטעות יישאר בלי תוסף מותקן.
+                    </span>
+                  </label>
+
+                  {companionFile && (
+                    <p className="mt-3 text-sm text-success-600">
+                      ✓ נבחר: {companionFile.name}
                     </p>
                   )}
                 </div>

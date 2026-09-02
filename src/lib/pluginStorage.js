@@ -1,9 +1,9 @@
 import path from 'path'
 import { promises as fs } from 'fs'
 import crypto from 'crypto'
-import { MAX_PLUGIN_BYTES, MAX_IMAGE_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, ALLOWED_IMAGE_MIMES } from './pluginLimits.js'
+import { MAX_PLUGIN_BYTES, MAX_COMPANION_BYTES, MAX_IMAGE_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, ALLOWED_IMAGE_MIMES } from './pluginLimits.js'
 
-export { MAX_PLUGIN_BYTES, MAX_IMAGE_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS }
+export { MAX_PLUGIN_BYTES, MAX_COMPANION_BYTES, MAX_IMAGE_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS }
 
 const OPT_CACHE_BASENAME = 'image_opt.webp'
 
@@ -164,11 +164,16 @@ export async function saveFileFromFormData(file, destPath, maxBytes) {
   if (file.size > maxBytes) {
     throw new Error(`File exceeds max size of ${maxBytes} bytes`)
   }
-  const buf = Buffer.from(await file.arrayBuffer())
-  if (buf.length > maxBytes) {
+  return saveBufferAtomic(Buffer.from(await file.arrayBuffer()), destPath, maxBytes)
+}
+
+// כתיבה אטומית של buffer שכבר נקרא: קובץ זמני ואז rename. נפרד מ-
+// saveFileFromFormData כדי שנתיב שכבר קרא את הקובץ (למשל לחישוב גיבוב) לא
+// יקרא אותו שוב — הקבצים כאן מגיעים לעשרות ומאות מגה-בייטים.
+export async function saveBufferAtomic(buf, destPath, maxBytes) {
+  if (maxBytes && buf.length > maxBytes) {
     throw new Error(`File exceeds max size of ${maxBytes} bytes`)
   }
-  // כתיבה אטומית: כתיבה לקובץ זמני ואז rename
   const tmp = `${destPath}.${crypto.randomBytes(6).toString('hex')}.tmp`
   await fs.writeFile(tmp, buf, { mode: 0o640 })
   await fs.rename(tmp, destPath)
@@ -206,6 +211,8 @@ export async function deletePendingPluginDir(pluginId) {
 }
 
 export const PLUGIN_FILE_BASENAME = 'plugin'
+// מתקין התוכנה הנלווית, אם יש. הסיומת בפועל נשמרת ב-companion.ext במסמך.
+export const COMPANION_BASENAME = 'companion'
 export const IMAGE_BASENAME = 'image'
 export const PENDING_DIRNAME = 'pending'
 export const VERSIONS_DIRNAME = 'versions'
