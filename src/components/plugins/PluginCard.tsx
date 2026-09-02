@@ -59,6 +59,16 @@ export default function PluginCard({ plugin, installState, onInstall }: PluginCa
             <span className="material-symbols-outlined text-sm leading-none">download</span>
             {(plugin.downloadCount || 0).toLocaleString('he-IL')}
           </span>
+          {/* התוסף אינו עובד לבדו — סימון בחנות עצמה, כדי שלא יתגלה רק אחרי ההתקנה */}
+          {plugin.companion && (
+            <span
+              className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-warning-50 text-warning-900"
+              title={`דורש את ${plugin.companion.name}${plugin.companion.platformLabel ? ` (${plugin.companion.platformLabel})` : ''} — תוכנה שרצה על המחשב מחוץ לאוצריא`}
+            >
+              <span className="material-symbols-outlined text-sm leading-none">desktop_windows</span>
+              דורש תוכנה נלווית
+            </span>
+          )}
           {/* דירוג — מוצג רק כשיש דירוגים בפועל (ולא "0 כוכבים") */}
           {(plugin.ratingCount || 0) > 0 && (
             <span
@@ -109,7 +119,18 @@ export default function PluginCard({ plugin, installState, onInstall }: PluginCa
           >
             הורדה
           </a>
-          {canDirectInstall && (
+          {/* התקנה ישירה מכאן הייתה מתקינה תוסף בלי התוכנה שהוא צריך, ולכן
+              תוסף כזה מוביל לדף שבו ההתקנה מסודרת לפי הצעדים. */}
+          {plugin.companion && (
+            <Link
+              href={`/plugins/${plugin.id}`}
+              className="flex-1 px-4 py-2.5 bg-white border border-primary/20 text-primary rounded-full text-sm font-bold text-center hover:bg-primary/5 transition-colors"
+              title="התוסף דורש תוכנה נלווית — ההתקנה מוסברת בדף התוסף"
+            >
+              אופן ההתקנה
+            </Link>
+          )}
+          {canDirectInstall && !plugin.companion && (
             <button
               onClick={() => onInstall(plugin)}
               disabled={installState.pluginId === plugin.id && installState.phase === 'waiting'}

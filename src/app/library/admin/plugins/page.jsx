@@ -10,6 +10,8 @@ import PluginApproveModal from '@/components/plugins/PluginApproveModal'
 import StoreLayoutTab from './StoreLayoutTab'
 import { formatPluginStatus } from '@/lib/pluginSubmission'
 
+const COMPANION_PLATFORM_LABELS = { windows: 'Windows', linux: 'Linux', macos: 'macOS' }
+
 export default function AdminPluginsPage() {
   const [activeTab, setActiveTab] = useState('pending') // 'pending' | 'approved' | 'store'
   const [pendingPlugins, setPendingPlugins] = useState([])
@@ -621,6 +623,29 @@ export default function AdminPluginsPage() {
                         {source.pluginFileName || plugin.pluginFileName}
                       </span>
                     </div>
+                    {/* תוסף שמפיץ גם קובץ הרצה — הקישור כאן הוא כדי שהמתקין ייבדק
+                        לפני האישור, ולא רק יאושר על סמך ההצהרה. */}
+                    {plugin.companion?.present && (
+                      <div className="col-span-2 rounded-lg bg-warning-50 px-3 py-2">
+                        <span className="text-warning-900/70">תוכנה נלווית:</span>
+                        <span className="font-medium text-warning-900 mr-2">
+                          {plugin.companion.name}
+                          {plugin.companion.version ? ` ${plugin.companion.version}` : ''}
+                          {' · '}
+                          {COMPANION_PLATFORM_LABELS[plugin.companion.platform] || plugin.companion.platform}
+                          {plugin.companion.size > 0
+                            ? ` · ${(plugin.companion.size / 1024 / 1024).toFixed(1)}MB`
+                            : ''}
+                          {plugin.companion.installsPlugin ? ' · מתקין גם את התוסף' : ''}
+                        </span>
+                        <a
+                          href={`/api/plugins/${plugin._id}/companion`}
+                          className="font-bold text-primary hover:underline mr-2"
+                        >
+                          הורדת המתקין לבדיקה
+                        </a>
+                      </div>
+                    )}
                     {activeTab === 'approved' && (
                       <div>
                         <span className="text-on-surface/60">הורדות:</span>

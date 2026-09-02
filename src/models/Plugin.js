@@ -1,6 +1,25 @@
 import mongoose from 'mongoose'
 import { DEFAULT_PRIOR_AVG } from '@/lib/pluginRating'
 
+// מטא-דאטה של מתקין התוכנה הנלווית — הגדרה אחת, המשמשת גם את הגרסה החיה וגם
+// את רשומות ההיסטוריה (versions[]). ראו הסבר מלא בשדה companion שלמטה.
+const CompanionSchema = new mongoose.Schema(
+  {
+    present: { type: Boolean, default: false },
+    name: { type: String, default: '', trim: true, maxlength: 60 },
+    version: { type: String, default: '', trim: true, maxlength: 40 },
+    platform: { type: String, enum: ['windows', 'linux', 'macos', null], default: null },
+    fileName: { type: String, default: '' },   // שם הקובץ שהועלה, ל-Content-Disposition
+    ext: { type: String, default: '' },        // הסיומת בפועל בדיסק, כולל נקודה
+    size: { type: Number, default: 0 },
+    sha256: { type: String, default: '' },     // מוצג בדף התוסף — הקובץ בר-אימות
+    // המתקין מתקין בעצמו גם את קובץ התוסף (מתקין שמריץ את ה-.otzplugin בסופו).
+    // אז דף התוסף מציג צעד אחד ולא שניים.
+    installsPlugin: { type: Boolean, default: false }
+  },
+  { _id: false }
+)
+
 const PluginSchema = new mongoose.Schema(
   {
     // מידע בסיסי
@@ -55,6 +74,14 @@ const PluginSchema = new mongoose.Schema(
       ext: { type: String, default: null },          // סיומת כולל נקודה, למשל ".png"
       contentType: { type: String, default: null }
     },
+
+    // ===== תוכנה נלווית =====
+    // תוסף שאינו יכול לעבוד לבדו: הוא מדבר עם תוכנה שרצה על המחשב מחוץ לאוצריא
+    // (למשל מתאם שפותח סוקט רשת בשביל תוסף שרץ ב-WebView). המתקין מועלה כקובץ
+    // נפרד מה-.otzplugin ונשמר תחת storage/plugins/<id>/companion<ext>; כאן
+    // מטא-דאטה בלבד. present=false (ברירת המחדל) פירושו תוסף רגיל.
+    // ראו src/lib/pluginCompanion.js.
+    companion: { type: CompanionSchema, default: () => ({}) },
 
     screenshots: [{
       ext: { type: String, required: true },
@@ -153,6 +180,9 @@ const PluginSchema = new mongoose.Schema(
       requiresNetwork: { type: Boolean, default: false },
       shortDescription: { type: String, default: '' },
       description: { type: String, default: '' },
+      // המתקין של אותה גרסה נשמר לצידה תחת versions/<version>/companion<ext>,
+      // כדי שגרסה ארכיונית תוגש עם התוכנה שהתאימה לה ולא עם החדשה.
+      companion: { type: CompanionSchema, default: () => ({}) },
       archivedAt: { type: Date, default: Date.now }
     }],
   },
@@ -189,6 +219,10 @@ PluginSchema.virtual('imageUrl').get(function () {
 
 PluginSchema.virtual('pluginUrl').get(function () {
   return `/api/plugins/${this._id}/download`
+})
+
+PluginSchema.virtual('companionUrl').get(function () {
+  return this.companion?.present ? `/api/plugins/${this._id}/companion` : null
 })
 
 PluginSchema.virtual('screenshotUrls').get(function () {

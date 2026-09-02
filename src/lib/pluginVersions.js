@@ -3,8 +3,10 @@ import { promises as fs } from 'fs'
 import {
   getPluginDir,
   ensureVersionDir,
+  COMPANION_BASENAME,
   PLUGIN_FILE_BASENAME
 } from './pluginStorage'
+import { companionFromDoc, serializeCompanionForPublic } from './pluginCompanion.js'
 
 // מעביר את הגרסה החיה הנוכחית להיסטוריה (versions[]) לפני שהיא נדרסת בגרסה חדשה.
 // יש לקרוא *לפני* שהקובץ החי מוחלף ו*לפני* ששדות התוסף עודכנו — נשען על הערכים
@@ -33,6 +35,22 @@ export async function archiveCurrentVersion(plugin) {
   const dest = path.join(versionDir, `${PLUGIN_FILE_BASENAME}${fileExt}`)
   await fs.copyFile(liveFile, dest)
 
+  // מתקין התוכנה הנלווית של הגרסה היוצאת נשמר לצידה, כדי שגרסה ארכיונית תוגש
+  // עם התוכנה שהתאימה לה. כשל בהעתקה אינו חוסם את הארכוב: קובץ התוסף — שהוא
+  // מה שהארכוב קיים בשבילו — כבר נשמר, ורשומת המתקין נזנחת כדי שלא תצביע לקובץ
+  // חסר (התוצאה: הגרסה הישנה תוצג בלי מתקין, ולא עם קישור שבור).
+  const companion = companionFromDoc(plugin.companion)
+  let archivedCompanion = null
+  if (companion) {
+    const companionFile = path.join(getPluginDir(pluginId), `${COMPANION_BASENAME}${companion.ext}`)
+    try {
+      await fs.copyFile(companionFile, path.join(versionDir, `${COMPANION_BASENAME}${companion.ext}`))
+      archivedCompanion = companion
+    } catch (err) {
+      console.error(`Failed to archive companion installer for version ${version}:`, err)
+    }
+  }
+
   const entry = {
     version,
     pluginFileName: plugin.pluginFileName || '',
@@ -44,6 +62,7 @@ export async function archiveCurrentVersion(plugin) {
     requiresNetwork: plugin.requiresNetwork === true,
     shortDescription: plugin.shortDescription || '',
     description: plugin.description || '',
+    companion: archivedCompanion || { present: false },
     archivedAt: new Date()
   }
 
@@ -74,6 +93,12 @@ export function formatVersionForPublic(livePublic, plugin, versionEntry) {
       : livePublic.updatedAt,
     downloadUrl: `/api/plugins/${ref}/download`,
     supportsDirectInstall: (versionEntry.pluginFileExt || '').toLowerCase() === '.otzplugin',
+    // התוכנה הנלווית של אותה גרסה — לא זו של הגרסה החיה. גרסה שאורכבה לפני
+    // שהפיצ'ר נוסף (או שהעתקת המתקין שלה נכשלה) נופלת למתקין החי, כי להציג
+    // תוסף שדורש תוכנה כאילו הוא עומד בפני עצמו הוא הטעות הגרועה מהשתיים.
+    companion: serializeCompanionForPublic(versionEntry.companion, {
+      downloadUrl: `/api/plugins/${ref}/companion`
+    }) || livePublic.companion || null,
     isHistoricalVersion: true,
     latestVersion: plugin.version
   }

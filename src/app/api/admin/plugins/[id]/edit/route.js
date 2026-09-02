@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 import path from 'path'
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
@@ -23,12 +24,15 @@ import { readManifestFromPlugin, compareVersions } from '@/lib/pluginManifest'
 import { invalidatePluginSearchIndex } from '@/lib/pluginSearchIndex'
 import { archiveCurrentVersion } from '@/lib/pluginVersions'
 import { validatePluginArchive, OTZARIA_DESIGN_TAG } from '@/lib/pluginValidation'
+import { buildCompanionMeta, companionFromDoc, emptyCompanion } from '@/lib/pluginCompanion'
 import { sendPluginReportNoticeIfNeeded } from '@/lib/systemMessages'
 import {
+  MAX_COMPANION_BYTES,
   MAX_IMAGE_BYTES,
   MAX_PLUGIN_BYTES,
   MAX_SCREENSHOTS,
   MAX_SCREENSHOT_BYTES,
+  COMPANION_BASENAME,
   PLUGIN_FILE_BASENAME,
   IMAGE_BASENAME,
   deletePendingPluginDir,
@@ -38,6 +42,7 @@ import {
   isAllowedImage,
   readPluginAsset,
   removePluginAsset,
+  saveBufferAtomic,
   saveFileFromFormData,
   saveOptimizedImage,
   clearImageOptCache
@@ -183,6 +188,23 @@ async function saveLiveAssets(pluginId, plugin, editableSource, nextPluginData, 
       await fs.rm(target, { force: true })
       await fs.rename(path.join(pendingDir, 'screenshots', `${index}${screenshot.ext}`), target)
     }
+  }
+
+  // מתקין התוכנה הנלווית. הקובץ הישן נמחק במפורש ולא נדרס, כי הסיומת עשויה
+  // להשתנות מ-exe ל-msi, והוא יושב תחת שם אחר. הארכוב להיסטוריה כבר קרה
+  // לפני הקריאה לכאן, ולכן המחיקה אינה מאבדת את הגרסה היוצאת.
+  if (files.removeCompanion || files.companionBuffer) {
+    const previousExt = plugin.companion?.ext
+    if (previousExt) {
+      await removePluginAsset(pluginId, `${COMPANION_BASENAME}${previousExt}`).catch(() => {})
+    }
+  }
+  if (files.companionBuffer && files.companionMeta) {
+    await saveBufferAtomic(
+      files.companionBuffer,
+      path.join(dir, `${COMPANION_BASENAME}${files.companionMeta.ext}`),
+      MAX_COMPANION_BYTES
+    )
   }
 }
 
@@ -397,6 +419,60 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
       }
     }
 
+    // ===== תוכנה נלווית =====
+    // אינה נגזרת מ-manifest.json (המתקין אינו חלק מחבילת התוסף), ולכן גם הבעלים
+    // עורך אותה ידנית. removeCompanion=true מסיר, קובץ חדש מחליף, ובלי קובץ חדש
+    // נערכת המטא-דאטה של המתקין הקיים. טופס שאינו שולח את השדות כלל משאיר את
+    // הקיים כמו שהוא — כדי שלקוח ותיק לא ימחק תוכנה נלווית בשקט.
+    const companionFile = formData.get('companionFile')
+    const removeCompanion = formData.get('removeCompanion') === 'true'
+    const existingCompanion =
+      companionFromDoc(editableSource.companion) || companionFromDoc(livePlugin.companion)
+    let companionBuffer = null
+    let nextCompanion = existingCompanion
+    if (removeCompanion) {
+      nextCompanion = null
+    } else if (companionFile?.size) {
+      if (companionFile.size > MAX_COMPANION_BYTES) {
+        return bad(`קובץ המתקין חורג מהמגבלה של ${Math.floor(MAX_COMPANION_BYTES / 1024 / 1024)}MB`)
+      }
+      companionBuffer = Buffer.from(await companionFile.arrayBuffer())
+      try {
+        nextCompanion = buildCompanionMeta({
+          fileName: companionFile.name,
+          size: companionFile.size,
+          sha256: crypto.createHash('sha256').update(companionBuffer).digest('hex'),
+          platform: formData.get('companionPlatform'),
+          name: formData.get('companionName'),
+          version: formData.get('companionVersion'),
+          installsPlugin: formData.get('companionInstallsPlugin') === 'true',
+          maxBytes: MAX_COMPANION_BYTES
+        })
+      } catch (error) {
+        return bad(error.message)
+      }
+    } else if (existingCompanion && formData.has('companionName')) {
+      // עריכת מטא-דאטה בלבד — אותו קובץ מתקין, ולכן אותו גיבוב ואותו גודל.
+      try {
+        nextCompanion = buildCompanionMeta({
+          fileName: existingCompanion.fileName,
+          size: existingCompanion.size,
+          sha256: existingCompanion.sha256,
+          platform: formData.get('companionPlatform') || existingCompanion.platform,
+          name: formData.get('companionName'),
+          version: formData.has('companionVersion')
+            ? formData.get('companionVersion')
+            : existingCompanion.version,
+          installsPlugin: formData.has('companionInstallsPlugin')
+            ? formData.get('companionInstallsPlugin') === 'true'
+            : existingCompanion.installsPlugin,
+          maxBytes: MAX_COMPANION_BYTES
+        })
+      } catch (error) {
+        return bad(error.message)
+      }
+    }
+
     const isOwnerResubmission = isOwner && !isAdmin
 
     // pluginUidToPersist: המזהה (id) לשמירה אם הוחלף קובץ. נשמר בעת ה-save בהמשך.
@@ -524,6 +600,7 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
       pluginFileSize: editableSource.pluginFileSize || livePlugin.pluginFileSize || 0,
       image: editableSource.image ? { ...editableSource.image } : null,
       screenshots: (editableSource.screenshots || []).map((screenshot) => ({ ...screenshot })),
+      companion: nextCompanion || emptyCompanion(),
       assetSources: getAssetSources(editableSource)
     }
 
@@ -569,7 +646,10 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
         imageFile: imageFile?.size ? imageFile : null,
         screenshotFiles,
         removeImage,
-        removeScreenshots
+        removeScreenshots,
+        companionBuffer,
+        companionMeta: nextCompanion,
+        removeCompanion
       })
 
       plugin.name = nextPluginData.name
@@ -592,6 +672,7 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
       }
       plugin.image = nextPluginData.image || { ext: null, contentType: null }
       plugin.screenshots = nextPluginData.screenshots
+      plugin.companion = nextPluginData.companion
       plugin.pendingUpdate = null
       plugin.pendingChangeSummary = []
       // מנהל שעורך ישירות לא מחליף את המעלה המקורי
