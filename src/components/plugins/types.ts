@@ -6,6 +6,21 @@ export interface CategoryRef {
   name: string
 }
 
+// תוכנה נלווית שהתוסף דורש — תוכנה שרצה על המחשב מחוץ לאוצריא (null לתוסף
+// רגיל). האתר מגיש את המתקין להורדה; הוא אינו מריץ אותו, ואינו יכול.
+export interface PluginCompanion {
+  name: string
+  version: string
+  platform: 'windows' | 'linux' | 'macos' | null
+  platformLabel: string
+  fileName: string
+  size: number
+  sha256: string
+  // המתקין מתקין בעצמו גם את קובץ התוסף — ואז די בהורדה אחת
+  installsPlugin: boolean
+  downloadUrl: string
+}
+
 // הפורמט הציבורי של תוסף (כפי שמוחזר מ-/api/plugins ודומיו)
 export interface Plugin {
   id: string
@@ -25,6 +40,7 @@ export interface Plugin {
   screenshots: string[]
   downloadUrl: string
   supportsDirectInstall: boolean
+  companion?: PluginCompanion | null
   homepage: string
   isPinned?: boolean
   downloadCount?: number

@@ -1,5 +1,6 @@
 // סיומת .js מפורשת — הקובץ נטען גם ע"י node --test (ESM ללא רזולוציית webpack)
 import { compareVersions } from './pluginManifest.js'
+import { serializeCompanionForPublic } from './pluginCompanion.js'
 
 // בחירת גרסת התוסף המתאימה לגרסת אוצריא נתונה.
 //
@@ -39,6 +40,9 @@ export function buildLiveVersionEntry(plugin) {
     releasedAt: plugin.updatedAt ? new Date(plugin.updatedAt).toISOString().split('T')[0] : null,
     downloadUrl: `/api/plugins/${pluginId}/download`,
     supportsDirectInstall: (plugin.pluginFileExt || '').toLowerCase() === '.otzplugin',
+    companion: serializeCompanionForPublic(plugin.companion, {
+      downloadUrl: `/api/plugins/${pluginId}/companion`
+    }),
     isLatest: true
   }
 }
@@ -60,6 +64,12 @@ export function buildVersionEntries(plugin) {
     releasedAt: v.archivedAt ? new Date(v.archivedAt).toISOString().split('T')[0] : null,
     downloadUrl: `/api/plugins/${pluginId}@${v.version}/download`,
     supportsDirectInstall: (v.pluginFileExt || '.otzplugin').toLowerCase() === '.otzplugin',
+    // התוכנה הנלווית שאורכבה עם הגרסה הזאת. null בגרסה שאורכבה לפני שהפיצ'ר
+    // נוסף — הקוראים נופלים אז לתוכנה של הגרסה החיה, כי להציג תוסף שדורש תוכנה
+    // כאילו הוא עומד בפני עצמו הוא הטעות הגרועה מהשתיים.
+    companion: serializeCompanionForPublic(v.companion, {
+      downloadUrl: `/api/plugins/${pluginId}@${v.version}/companion`
+    }),
     isLatest: false
   }))
 
@@ -151,6 +161,9 @@ export function resolveForAppVersion(publicPlugin, appVersion) {
     pluginFileSize: best.pluginFileSize,
     downloadUrl: best.downloadUrl,
     supportsDirectInstall: best.supportsDirectInstall,
+    // גרסה שאורכבה בלי מתקין (לפני הוספת הפיצ'ר) מוגשת עם המתקין החי, ולא
+    // בלי מתקין כלל — ראו ההערה ב-buildVersionEntries.
+    companion: best.companion || publicPlugin.companion || null,
     // מועד פרסום הגרסה המוצגת (updatedAt/fileUpdatedAt נשארים של התוסף עצמו)
     releasedAt: best.releasedAt,
     // מטא-דאטה של הרזולוציה — מאפשר לצרכן להסביר למשתמש מה הוא רואה

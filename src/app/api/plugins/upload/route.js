@@ -18,17 +18,21 @@ import {
 } from '@/lib/pluginSubmission'
 import { readManifestFromPlugin, compareVersions } from '@/lib/pluginManifest'
 import { validatePluginArchive, OTZARIA_DESIGN_TAG } from '@/lib/pluginValidation'
+import { buildCompanionMeta, emptyCompanion } from '@/lib/pluginCompanion'
 import {
   MAX_PLUGIN_BYTES,
+  MAX_COMPANION_BYTES,
   MAX_IMAGE_BYTES,
   MAX_SCREENSHOT_BYTES,
   MAX_SCREENSHOTS,
   isAllowedImage,
   imageExtFromMime,
   ensurePluginDir,
+  saveBufferAtomic,
   saveFileFromFormData,
   saveOptimizedImage,
   deletePluginDir,
+  COMPANION_BASENAME,
   PLUGIN_FILE_BASENAME,
   IMAGE_BASENAME
 } from '@/lib/pluginStorage'
@@ -220,6 +224,30 @@ export async function POST(request) {
       screenshotMeta.push({ ext: imageExtFromMime(s.type), contentType: s.type.toLowerCase() })
     }
 
+    // ולידציית התוכנה הנלווית (אופציונלית) — תוסף שאינו יכול לעבוד לבדו ומדבר
+    // עם תוכנה שרצה מחוץ לאוצריא. המתקין מועלה כקובץ נפרד; קובץ הרצה שנארז
+    // בתוך ה-.otzplugin נחסם ב-validatePluginArchive שלמעלה.
+    const companionFile = formData.get('companionFile')
+    let companionMeta = null
+    let companionBuffer = null
+    if (companionFile && companionFile.size > 0) {
+      companionBuffer = Buffer.from(await companionFile.arrayBuffer())
+      try {
+        companionMeta = buildCompanionMeta({
+          fileName: companionFile.name,
+          size: companionFile.size,
+          sha256: crypto.createHash('sha256').update(companionBuffer).digest('hex'),
+          platform: formData.get('companionPlatform'),
+          name: formData.get('companionName'),
+          version: formData.get('companionVersion'),
+          installsPlugin: formData.get('companionInstallsPlugin') === 'true',
+          maxBytes: MAX_COMPANION_BYTES
+        })
+      } catch (error) {
+        return bad(error.message)
+      }
+    }
+
     await dbConnect()
 
     // אכיפת ייחודיות המזהה (id) — אסור ששני תוספים שונים יחלקו את אותו manifest.id.
@@ -256,6 +284,7 @@ export async function POST(request) {
           pluginFileExt: PLUGIN_FILE_EXT,
           pluginFileSize: pluginFile.size,
           fileUpdatedAt: new Date(),
+          companion: companionMeta || emptyCompanion(),
           image: imageMeta || { ext: null, contentType: null },
           screenshots: screenshotMeta,
           homepage: homepageFromManifest,
@@ -287,6 +316,13 @@ export async function POST(request) {
       path.join(dir, `${PLUGIN_FILE_BASENAME}${PLUGIN_FILE_EXT}`),
       MAX_PLUGIN_BYTES
     )
+    if (companionMeta && companionBuffer) {
+      await saveBufferAtomic(
+        companionBuffer,
+        path.join(dir, `${COMPANION_BASENAME}${companionMeta.ext}`),
+        MAX_COMPANION_BYTES
+      )
+    }
     if (imageFile && imageMeta) {
       imageMeta = await saveOptimizedImage(imageFile, dir, IMAGE_BASENAME, { maxWidth: 1200 })
       plugin.image = imageMeta

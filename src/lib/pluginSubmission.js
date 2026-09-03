@@ -1,6 +1,7 @@
 import path from 'path'
 import { buildVersionEntries } from './pluginCompatibility'
 import { ratingFieldsForPublic } from './pluginRating'
+import { companionFromDoc, serializeCompanionForPublic } from './pluginCompanion.js'
 
 export const PLUGIN_LIMITS = {
   // שם התוסף מוצג בראש לשונית התוסף ב"כלים" — מעבר ל-14 תווים גולש מהכרטיסייה.
@@ -111,7 +112,8 @@ export function getLivePluginData(plugin) {
     screenshots: (plugin.screenshots || []).map((screenshot) => ({
       ext: screenshot.ext,
       contentType: screenshot.contentType || null
-    }))
+    })),
+    companion: companionFromDoc(plugin.companion)
   }
 }
 
@@ -140,6 +142,7 @@ function buildVersionsList(plugin) {
     downloadUrl: entry.downloadUrl,
     releasedAt: entry.releasedAt,
     supportsDirectInstall: entry.supportsDirectInstall,
+    companion: entry.companion,
     isLatest: entry.isLatest
   }))
 }
@@ -191,6 +194,10 @@ export function formatPluginForPublic(plugin, options = {}) {
     // גודל קובץ התוסף בבייטים (0 = לא ידוע, לתוספים ותיקים שטרם עברו backfill)
     pluginFileSize: source.pluginFileSize || 0,
     supportsDirectInstall: (source.pluginFileExt || '').toLowerCase() === '.otzplugin',
+    // התוכנה הנלווית, אם התוסף אינו יכול לעבוד לבדו. null = תוסף רגיל.
+    companion: serializeCompanionForPublic(source.companion, {
+      downloadUrl: `/api/plugins/${pluginId}/companion`
+    }),
     // תאימות לאחור: השדה נשאר בשם isPinned אך משמעותו כיום "נבחר" (featured).
     // רק נתיבים שיודעים את רשימת הנבחרים מעבירים options.isFeatured.
     isPinned: options.isFeatured === true,

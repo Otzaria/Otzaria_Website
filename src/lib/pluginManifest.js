@@ -1,11 +1,11 @@
 import { inflateRawSync } from 'zlib'
 
 /**
- * Reads and parses manifest.json from an .otzplugin (ZIP) Buffer.
- * Uses the central directory so it works even with data-descriptor ZIPs.
- * Throws if manifest.json is not found or cannot be parsed.
+ * Reads the ZIP central directory of an .otzplugin Buffer and returns one record
+ * per entry. Reading the central directory (rather than the local headers) means
+ * this works even with data-descriptor ZIPs, and it inflates nothing at all.
  */
-export function readManifestFromPlugin(buffer) {
+function readCentralDirectory(buffer) {
   // Find EOCD (End of Central Directory) by searching backwards
   let eocdOffset = -1
   for (let i = buffer.length - 22; i >= Math.max(0, buffer.length - 65558); i--) {
@@ -16,12 +16,13 @@ export function readManifestFromPlugin(buffer) {
   const cdOffset = buffer.readUInt32LE(eocdOffset + 16)
   const cdEntries = buffer.readUInt16LE(eocdOffset + 10)
 
-  // Scan central directory for manifest.json
+  const entries = []
   let cdPos = cdOffset
   for (let i = 0; i < cdEntries; i++) {
     if (buffer.readUInt32LE(cdPos) !== 0x02014b50) break
     const compressionMethod = buffer.readUInt16LE(cdPos + 10)
     const compressedSize = buffer.readUInt32LE(cdPos + 20)
+    const uncompressedSize = buffer.readUInt32LE(cdPos + 24)
     const fileNameLength = buffer.readUInt16LE(cdPos + 28)
     const extraFieldLength = buffer.readUInt16LE(cdPos + 30)
     const commentLength = buffer.readUInt16LE(cdPos + 32)
@@ -29,6 +30,29 @@ export function readManifestFromPlugin(buffer) {
     const fileName = buffer.toString('utf8', cdPos + 46, cdPos + 46 + fileNameLength)
     cdPos += 46 + fileNameLength + extraFieldLength + commentLength
 
+    entries.push({ fileName, compressionMethod, compressedSize, uncompressedSize, localHeaderOffset })
+  }
+  return entries
+}
+
+/**
+ * שמות הקבצים שבחבילת התוסף וגודלם, מתוך ה-central directory בלבד — בלי לפרוס
+ * אף רשומה. משמש למדיניות החנות: זיהוי קובץ הרצה שנארז בתוך ה-.otzplugin
+ * (ראו src/lib/pluginCompanion.js).
+ */
+export function listPluginEntries(buffer) {
+  return readCentralDirectory(buffer)
+    .filter((entry) => !entry.fileName.endsWith('/'))
+    .map((entry) => ({ name: entry.fileName, size: entry.uncompressedSize }))
+}
+
+/**
+ * Reads and parses manifest.json from an .otzplugin (ZIP) Buffer.
+ * Uses the central directory so it works even with data-descriptor ZIPs.
+ * Throws if manifest.json is not found or cannot be parsed.
+ */
+export function readManifestFromPlugin(buffer) {
+  for (const { fileName, compressionMethod, compressedSize, localHeaderOffset } of readCentralDirectory(buffer)) {
     if (fileName !== 'manifest.json') continue
 
     // Use local file header to find actual data offset

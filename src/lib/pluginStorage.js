@@ -51,6 +51,9 @@ export async function saveOptimizedImage(file, destDir, basename, { maxWidth = 1
 
 // מגבלות גודל
 export const MAX_PLUGIN_BYTES = 50 * 1024 * 1024 // 50MB
+// מתקין של תוכנה נלווית — מגבלה נפרדת וגבוהה יותר מהתוסף: מתקין שולחני נושא
+// בינארי מקומפל, ולפעמים גם runtime (ראו src/lib/pluginCompanion.js).
+export const MAX_COMPANION_BYTES = 150 * 1024 * 1024 // 150MB
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024   // 5MB
 export const MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024
 export const MAX_SCREENSHOTS = 10
@@ -164,11 +167,16 @@ export async function saveFileFromFormData(file, destPath, maxBytes) {
   if (file.size > maxBytes) {
     throw new Error(`File exceeds max size of ${maxBytes} bytes`)
   }
-  const buf = Buffer.from(await file.arrayBuffer())
-  if (buf.length > maxBytes) {
+  return saveBufferAtomic(Buffer.from(await file.arrayBuffer()), destPath, maxBytes)
+}
+
+// כתיבה אטומית של buffer שכבר נקרא: קובץ זמני ואז rename. נפרד מ-
+// saveFileFromFormData כדי שנתיב שכבר קרא את הקובץ (למשל לחישוב גיבוב) לא
+// יקרא אותו שוב — הקבצים כאן מגיעים לעשרות ומאות מגה-בייטים.
+export async function saveBufferAtomic(buf, destPath, maxBytes) {
+  if (maxBytes && buf.length > maxBytes) {
     throw new Error(`File exceeds max size of ${maxBytes} bytes`)
   }
-  // כתיבה אטומית: כתיבה לקובץ זמני ואז rename
   const tmp = `${destPath}.${crypto.randomBytes(6).toString('hex')}.tmp`
   await fs.writeFile(tmp, buf, { mode: 0o640 })
   await fs.rename(tmp, destPath)
@@ -206,6 +214,8 @@ export async function deletePendingPluginDir(pluginId) {
 }
 
 export const PLUGIN_FILE_BASENAME = 'plugin'
+// מתקין התוכנה הנלווית, אם יש. הסיומת בפועל נשמרת ב-companion.ext במסמך.
+export const COMPANION_BASENAME = 'companion'
 export const IMAGE_BASENAME = 'image'
 export const PENDING_DIRNAME = 'pending'
 export const VERSIONS_DIRNAME = 'versions'

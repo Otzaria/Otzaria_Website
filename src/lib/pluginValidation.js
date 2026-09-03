@@ -1,5 +1,7 @@
 import { unzipSync } from 'fflate'
 import otzariaValidator from 'otzaria-plugin-validator'
+import { listPluginEntries } from './pluginManifest.js'
+import { findExecutableEntries } from './pluginCompanion.js'
 
 // --- מקורות הסמכות -----------------------------------------------------------
 // נתונים  — spec.json, מחולל בריפו של אוצריא מקבועי הקוד
@@ -268,6 +270,26 @@ export async function validatePluginArchive(buffer) {
         errors.push(`קובץ הרקע שצוין ב-manifest ("${backgroundEntrypoint}") לא נמצא בקובץ התוסף`)
       }
     }
+  }
+
+  // ---- קובץ הרצה בתוך החבילה ----
+  // אוצריא מחלצת כל רשומה שבחבילה לתיקיית התוסף, ולתוסף אין (במכוון) שום הרשאת
+  // הרצה — כלומר בינארי שנארז בפנים רק תופח בכל התקנה ואיש לא יריץ אותו. תוסף
+  // שצריך תוכנה שרצה מחוץ לאוצריא מצהיר עליה, ומעלה את המתקין בשדה נפרד
+  // (ראו src/lib/pluginCompanion.js). כאן החנות חוסמת את הדרך השקטה.
+  try {
+    const executables = findExecutableEntries(listPluginEntries(buffer))
+    if (executables.length > 0) {
+      errors.push(
+        `קובץ התוסף מכיל קבצי הרצה: ${executables.join(', ')}. ` +
+        'תוסף שדורש תוכנה שרצה מחוץ לאוצריא מצהיר עליה בטופס ההעלאה ומעלה את ' +
+        'המתקין בשדה "תוכנה נלווית" — לא בתוך חבילת התוסף.'
+      )
+    }
+  } catch (scanErr) {
+    // כשל בקריאת ה-central directory אינו ממצא מדיניות: הוא נתפס כבר בחילוץ
+    // עצמו למעלה, שם הוא error חוסם.
+    console.warn('[pluginValidation] executable scan failed:', scanErr?.message)
   }
 
   // ---- contributes.startup: תנאי when ----
