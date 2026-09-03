@@ -13,11 +13,15 @@ import LibraryBook from '@/models/LibraryBook';
  */
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
+  // מאחורי ה-proxy בפרודקשן req.url הוא הכתובת הפנימית (http://localhost:3000),
+  // ו-redirect מוחלט שנבנה ממנה שולח את המשתמש ל-localhost. בונים את היעד
+  // מה-origin הציבורי — כמו ב-/api/auth/verify.
+  const baseUrl = process.env.NEXTAUTH_URL || req.url;
   // תקרות אורך על קלט משתמש — מגנות מפני regex ארוך מדי במסד ומ-URL מנופח
   const title = (searchParams.get('title') || searchParams.get('q') || '').trim().slice(0, 150);
   const text = (searchParams.get('text') || searchParams.get('find') || '').trim().slice(0, 1000);
 
-  const listUrl = new URL('/library/dicta-edit', req.url);
+  const listUrl = new URL('/library/dicta-edit', baseUrl);
   if (title) listUrl.searchParams.set('q', title);
   // גם במסלול ה-fallback משמרים את הקטע — הרשימה תעביר אותו לעורך שייבחר
   if (text) listUrl.searchParams.set('find', text);
@@ -36,7 +40,7 @@ export async function GET(req) {
     ).limit(2).lean();
 
     if (matches.length === 1) {
-      const editUrl = new URL(`/library/dicta-edit/${matches[0]._id}`, req.url);
+      const editUrl = new URL(`/library/dicta-edit/${matches[0]._id}`, baseUrl);
       if (text) editUrl.searchParams.set('find', text);
       return NextResponse.redirect(editUrl);
     }
