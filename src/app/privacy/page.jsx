@@ -26,21 +26,6 @@ export default function PrivacyPolicyPage() {
                   ולנייד. התוכנה עובדת מקומית על המכשיר, ואין לפרויקט שרת שאוסף את תוכן הלמידה,
                   ההערות או היומן של המשתמש.
                 </p>
-                <div dir="ltr" className="mt-5 p-5 rounded-2xl bg-surface border border-surface-variant text-left font-sans text-sm space-y-2 text-neutral-700">
-                  <p className="font-bold">Summary in English</p>
-                  <p>
-                    Otzaria is a free, open source desktop and mobile application for reading and
-                    studying Jewish religious texts, published by a non profit project. The
-                    application runs locally on the user&apos;s device. The project operates no
-                    server that collects the user&apos;s reading history, personal notes or calendar
-                    data, and we do not sell or share personal data with third parties.
-                  </p>
-                  <p>
-                    The section below titled &quot;Google Calendar integration&quot; describes in
-                    full which Google user data the application accesses, why it is needed, where it
-                    is stored, and how the user can revoke access and delete it.
-                  </p>
-                </div>
               </div>
 
               {/* מדיניות האתר */}
@@ -214,21 +199,6 @@ export default function PrivacyPolicyPage() {
                     בינה מלאכותית או למידת מכונה.
                   </li>
                 </ul>
-                <div dir="ltr" className="mt-4 text-left font-sans text-sm space-y-2 text-neutral-700">
-                  <p>
-                    <strong>In English.</strong> All requests to Google APIs are made over
-                    HTTPS/TLS. The project operates no intermediate server: the application talks
-                    directly from the user&apos;s device to Google, so Google user data never passes
-                    through or is stored on any server of ours. The OAuth token and the imported
-                    events are stored in the application&apos;s private data directory on the
-                    device, which is protected by the operating system&apos;s user account
-                    permissions. The application requests the narrowest scopes its features require
-                    — a read only scope for the calendar list, and the events scope for reading and
-                    writing events — and does not request the full calendar scope. Google user data
-                    is not transferred to any third party, is not used for advertising or profiling,
-                    and is not used to develop, improve or train generalized AI or ML models.
-                  </p>
-                </div>
               </div>
 
               {/* שמירת נתונים ומחיקתם */}
@@ -266,22 +236,6 @@ export default function PrivacyPolicyPage() {
                     . לאחר הביטול התוכנה אינה יכולה עוד לגשת ליומן.
                   </li>
                 </ul>
-                <div dir="ltr" className="mt-4 text-left font-sans text-sm space-y-2 text-neutral-700">
-                  <p>
-                    <strong>In English.</strong> The OAuth token is retained on the device until the
-                    user disconnects the account in the application&apos;s calendar settings or
-                    revokes access from their Google account; disconnecting deletes it from the
-                    device immediately and stops any further access. Events imported from the
-                    user&apos;s calendar are stored in the application&apos;s local calendar data on
-                    the device and are refreshed on every sync; they remain on the device until the
-                    user deletes them in the application or uninstalls it, and uninstalling the
-                    application removes all of its local data. Because we operate no server that
-                    receives this data, we hold no copy of your Google user data and therefore have
-                    nothing to retain or delete on our side. Access can be revoked completely at any
-                    time at <span className="font-mono">myaccount.google.com/connections</span>,
-                    after which the application can no longer access the calendar.
-                  </p>
-                </div>
               </div>
 
               {/* אבטחה וצדדים שלישיים */}
@@ -290,11 +244,6 @@ export default function PrivacyPolicyPage() {
                 <p>
                   אנו לא מוכרים, סוחרים או מעבירים לאף גורם חיצוני את המידע המזהה שלך.
                   אנו משתמשים בשירותי דואר אלקטרוני (SMTP) אמינים אך ורק לצורך שליחת הודעות מערכת ואימות חשבון.
-                </p>
-                <p dir="ltr" className="mt-3 text-left font-sans text-sm text-neutral-700">
-                  We do not sell, trade or transfer your personally identifying information to any
-                  outside party. Data received from Google APIs is never transferred to a third
-                  party, and is used solely to provide the calendar features described above.
                 </p>
               </div>
 
@@ -317,7 +266,7 @@ export default function PrivacyPolicyPage() {
                   </a>
                 </p>
                 <p className="mt-3 text-sm text-on-surface/60">
-                  עדכון אחרון: 2 בספטמבר 2026 · <span dir="ltr">Last updated: 2 September 2026</span>
+                  עדכון אחרון: 4 בספטמבר 2026
                 </p>
               </div>
             </section>
