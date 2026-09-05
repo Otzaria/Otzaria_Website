@@ -83,6 +83,12 @@ export async function POST(request) {
       return bad('Missing required fields')
     }
 
+    // אכיפה בצד שרת: העלאת תוסף חדש מחייבת אישור מפורש לקבלת דיווחי משתמשים למייל המפתח.
+    const reportsConsent = (formData.get('reportsConsent') || '').toString().trim().toLowerCase()
+    if (reportsConsent !== 'true' && reportsConsent !== '1' && reportsConsent !== 'on') {
+      return bad('יש לאשר קבלת דיווחים ממשתמשים למייל שלך כדי להעלות תוסף חדש')
+    }
+
     if (typeof pluginFile.name !== 'string' || !pluginFile.name.toLowerCase().endsWith(PLUGIN_FILE_EXT)) {
       return bad(`Plugin file must be ${PLUGIN_FILE_EXT} format`)
     }
@@ -248,6 +254,7 @@ export async function POST(request) {
           status: statusFromManifest,
           author,
           authorId: session.user.id,
+          reportsConsentAt: new Date(),
           compatibleWith: compatibleWithFromManifest,
           maxAppVersion: maxAppVersionFromManifest,
           requiresNetwork: requiresNetworkFromManifest,

@@ -35,6 +35,8 @@ const PluginSchema = new mongoose.Schema(
     // מפתח ותאימות
     author: { type: String, required: true, trim: true, maxlength: 100 },
     authorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    // מועד אישור המפתח לקבלת דיווחי משתמשים למייל שלו (נדרש בהעלאת תוסף חדש)
+    reportsConsentAt: { type: Date, default: null },
     compatibleWith: { type: String, required: true, maxlength: 100 },
     // גרסת אוצריא המקסימלית הנתמכת (מ-maxAppVersion ב-manifest). null = ללא תקרה.
     maxAppVersion: { type: String, default: null, maxlength: 30 },

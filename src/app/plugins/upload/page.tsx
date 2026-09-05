@@ -22,6 +22,7 @@ export default function UploadPluginPage() {
     showMessage: (title: string, message: string) => Promise<void>
   }
   const [loading, setLoading] = useState(false)
+  const [reportsConsent, setReportsConsent] = useState(false)
 
   // שדות הטופס
   const [formData, setFormData] = useState({
@@ -291,6 +292,10 @@ export default function UploadPluginPage() {
         throw new Error('סטטוס לא תקין')
       }
 
+      if (!reportsConsent) {
+        throw new Error('יש לאשר קבלת דיווחים ממשתמשים למייל שלך')
+      }
+
       // יצירת FormData
       const data = new FormData()
       data.append('name', formData.name)
@@ -302,7 +307,8 @@ export default function UploadPluginPage() {
       data.append('compatibleWith', formData.compatibleWith)
       data.append('tags', JSON.stringify(formData.tags))
       data.append('homepage', formData.homepage)
-      
+      data.append('reportsConsent', 'true')
+
       data.append('pluginFile', pluginFile)
       if (imageFile) {
         data.append('imageFile', imageFile)
@@ -550,6 +556,24 @@ export default function UploadPluginPage() {
                 </div>
               </div>
             </section>
+
+            {/* אישור קבלת דיווחים */}
+            <label className="flex items-start gap-3 rounded-xl border border-neutral-200 bg-surface p-4 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={reportsConsent}
+                onChange={(e) => setReportsConsent(e.target.checked)}
+                required
+                className="mt-1 h-5 w-5 shrink-0 rounded border-neutral-300 text-primary focus:ring-4 focus:ring-primary/10"
+              />
+              <span className="text-sm text-on-surface/80">
+                אני מאשר קבלת דיווחים ממשתמשים למייל שלי
+                <span className="text-danger-500"> *</span>
+                <span className="block mt-1 text-on-surface/60">
+                  (המייל איתו הינך רשום באתר, ניתן לשנותו בכל עת והוא לא מוצג למשתמשים)
+                </span>
+              </span>
+            </label>
 
             {/* כפתורי שליחה */}
             <div className="flex gap-4">
