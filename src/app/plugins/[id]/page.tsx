@@ -7,6 +7,7 @@ import Link from 'next/link'
 import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 import PluginEditModal from '@/components/plugins/PluginEditModal'
+import PluginReportModal from '@/components/plugins/PluginReportModal'
 import RatingStars from '@/components/plugins/RatingStars'
 import PluginRatingPanel from '@/components/plugins/PluginRatingPanel'
 import { useDialog } from '@/components/providers/DialogContext'
@@ -17,6 +18,7 @@ import type { CategoryRef } from '@/components/plugins/types'
 
 interface Plugin {
   id: string
+  pluginUid?: string | null
   name: string
   shortDescription: string
   description: string
@@ -92,6 +94,7 @@ export default function PluginDetailPage() {
   const [loadingEdit, setLoadingEdit] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [suspending, setSuspending] = useState(false)
+  const [reporting, setReporting] = useState(false)
   const { installState, install } = useDirectInstall()
 
   // הודעת דיאלוג רגילה של האתר כשמגיע דיווח תוצאה מאוצריא
@@ -113,7 +116,7 @@ export default function PluginDetailPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [installState])
-  const currentUser = session?.user as { id?: string; role?: string } | undefined
+  const currentUser = session?.user as { id?: string; role?: string; email?: string | null } | undefined
 
   useEffect(() => {
     const loadPlugin = async () => {
@@ -431,6 +434,15 @@ export default function PluginDetailPage() {
                       <span>מקור</span>
                     </a>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => setReporting(true)}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-neutral-200 text-on-surface rounded-xl font-medium hover:border-primary/30 transition-colors"
+                    title="דיווח על תקלה או בעיה למפתח התוסף"
+                  >
+                    <span className="material-symbols-outlined">flag</span>
+                    <span>דיווח למפתח</span>
+                  </button>
                   {canEdit && (
                     <button
                       onClick={handleEdit}
@@ -649,6 +661,23 @@ export default function PluginDetailPage() {
       )}
 
       <OtzariaSoftwareFooter />
+
+      {reporting && (
+        <PluginReportModal
+          plugin={plugin}
+          defaultEmail={currentUser?.email || null}
+          onClose={() => setReporting(false)}
+          onSuccess={(duplicate) => {
+            setReporting(false)
+            showAlert(
+              'הדיווח נשלח',
+              duplicate
+                ? 'דיווח זהה כבר התקבל בעבר על תוסף זה, ולכן לא נשלח שוב למפתח.'
+                : 'תודה! הדיווח הועבר למפתח התוסף.'
+            )
+          }}
+        />
+      )}
 
       {editingPlugin && (
         <PluginEditModal

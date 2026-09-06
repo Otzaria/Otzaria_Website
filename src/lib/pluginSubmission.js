@@ -164,6 +164,8 @@ export function formatPluginForPublic(plugin, options = {}) {
   const source = options.usePending ? getEditableSource(plugin) : getLivePluginData(plugin)
   return {
     id: pluginId,
+    // מזהה ה-manifest — משמש את טופס הדיווח באתר (אותו מזהה שהאפליקציה שולחת)
+    pluginUid: plugin.pluginUid || null,
     authorId: plugin.authorId?.toString?.() || plugin.authorId || null,
     name: source.name,
     slug: plugin.slug,

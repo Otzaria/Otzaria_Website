@@ -41,7 +41,8 @@ async function resolvePlugin(pluginUid) {
   return Plugin.findById(id).select('_id name slug version author authorId').lean()
 }
 
-// POST /api/plugin-reports - דיווח משתמש על תוסף מותקן, נשלח מתוכנת אוצריא.
+// POST /api/plugin-reports - דיווח משתמש על תוסף, נשלח מתוכנת אוצריא או מטופס
+// הדיווח בדף התוסף באתר (platform: 'web').
 // ציבורי ולא מאומת; כשל בשליחת המייל אינו מפיל את הבקשה — הדיווח נשמר.
 export async function POST(request) {
   try {
