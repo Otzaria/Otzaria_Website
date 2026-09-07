@@ -76,3 +76,6 @@ public/export-editor/dicta-editor-offline.html
 
 # Claude Code local dev config
 .claude/launch.json
+
+# Refactor working notes (local only, not part of the shipped project)
+/refactor-notes/
