@@ -14,6 +14,8 @@ import { useDialog } from '@/components/providers/DialogContext'
 import { useDirectInstall } from '@/components/plugins/useDirectInstall'
 import { formatPluginStatus } from '@/lib/pluginSubmission'
 import { formatHebrewDate } from '@/lib/hebrewDate'
+import { formatFileSize } from '@/lib/formatFileSize'
+import { getErrorMessage } from '@/lib/errors'
 import { statusBadgeClass } from '@/components/plugins/StatusBadge'
 import DirectInstallButton from '@/components/plugins/DirectInstallButton'
 import Breadcrumbs, { type BreadcrumbItem } from '@/components/plugins/Breadcrumbs'
@@ -67,20 +69,6 @@ interface PluginEditPayload extends Plugin {
     before: string
     after: string
   }>
-}
-
-// גודל קובץ בתצוגה ידידותית (B/KB/MB)
-function formatFileSize(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toLocaleString('he-IL', { maximumFractionDigits: 0 })} KB`
-  return `${(bytes / (1024 * 1024)).toLocaleString('he-IL', { maximumFractionDigits: 1 })} MB`
-}
-
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) {
-    return error.message
-  }
-  return fallback
 }
 
 export default function PluginDetailPage() {

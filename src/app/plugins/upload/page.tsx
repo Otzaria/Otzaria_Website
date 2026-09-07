@@ -7,13 +7,7 @@ import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 import { useDialog } from '@/components/providers/DialogContext'
 import { MIN_SUPPORTED_APP_VERSION } from '@/lib/pluginSubmission'
-
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) {
-    return error.message
-  }
-  return fallback
-}
+import { getErrorMessage } from '@/lib/errors'
 
 export default function UploadPluginPage() {
   const router = useRouter()
