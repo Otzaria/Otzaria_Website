@@ -35,30 +35,10 @@ function PluginSearchPageContent() {
   const firstRunRef = useRef(true)
   // השאילתה העדכנית — תשובה של בקשה ישנה שאינה תואמת אותה נזרקת (מניעת race)
   const currentQueryRef = useRef(initialQuery.trim())
-  const { installState, install } = useDirectInstall()
   const { showAlert } = useDialog() as { showAlert: (title: string, message: string) => void }
+  const { installState, install } = useDirectInstall(showAlert)
 
   const trimmedInput = inputValue.trim()
-
-  // הודעת דיאלוג רגילה של האתר כשמגיע דיווח תוצאה מאוצריא
-  useEffect(() => {
-    if (installState.phase === 'success') {
-      showAlert('הצלחה', installState.updated ? 'התוסף עודכן בהצלחה באוצריא!' : 'התוסף הותקן בהצלחה באוצריא!')
-    } else if (installState.phase === 'failure') {
-      showAlert(
-        'שגיאה',
-        installState.error
-          ? `ההתקנה נכשלה: ${installState.error}`
-          : 'ההתקנה נכשלה. אפשר לנסות שוב או להוריד את הקובץ ולהתקין ידנית.'
-      )
-    } else if (installState.phase === 'no_app') {
-      showAlert(
-        'אוצריא לא נמצאה',
-        'נראה שאוצריא אינה מותקנת במחשב זה — בקשת ההתקנה לא הגיעה לתוכנה. ניתן להוריד את אוצריא מהאתר, או להוריד את קובץ התוסף ולהתקינו ידנית.'
-      )
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [installState])
 
   // קטגוריות להצעה במצב אפס-תוצאות (עד 3)
   useEffect(() => {
