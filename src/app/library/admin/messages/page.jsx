@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import { formatDateWithTime } from '@/lib/formatDate'
 
 export default function AdminMessagesPage() {
   const { data: session } = useSession()
@@ -224,7 +225,7 @@ export default function AdminMessagesPage() {
                                     </>
                                   )}
                                   <span className="mx-2">•</span>
-                                  <span>{new Date(message.createdAt).toLocaleDateString('he-IL', { day: 'numeric', month: 'long', hour: '2-digit', minute:'2-digit' })}</span>
+                                  <span>{formatDateWithTime(message.createdAt)}</span>
                               </p>
                               <div className="bg-white/50 p-3 rounded-lg border border-neutral-100 text-on-surface whitespace-pre-wrap">
                                   {message.content}
