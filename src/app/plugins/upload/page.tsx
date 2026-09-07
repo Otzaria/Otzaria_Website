@@ -8,6 +8,7 @@ import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 import { useDialog } from '@/components/providers/DialogContext'
 import { MIN_SUPPORTED_APP_VERSION } from '@/lib/pluginSubmission'
 import { getErrorMessage } from '@/lib/errors'
+import { compareVersions } from '@/lib/semverCompare'
 
 export default function UploadPluginPage() {
   const router = useRouter()
@@ -105,16 +106,6 @@ export default function UploadPluginPage() {
     return JSON.parse(new TextDecoder().decode(manifestBytes))
   }
 
-  function versionAtLeast(v: string, min: string): boolean {
-    const parse = (s: string) => s.split('.').map(Number)
-    const va = parse(v), vm = parse(min)
-    for (let i = 0; i < Math.max(va.length, vm.length); i++) {
-      const a = va[i] ?? 0, b = vm[i] ?? 0
-      if (a !== b) return a > b
-    }
-    return true
-  }
-
   // עיבוד קובץ תוסף (משותף ל-input ול-drop)
   const processPluginFile = async (file: File, resetInput: () => void) => {
     if (!file.name.toLowerCase().endsWith('.otzplugin')) {
@@ -157,7 +148,7 @@ export default function UploadPluginPage() {
       resetInput(); return
     }
     if (!minAppVersion) { showAlert('שגיאה', 'חסר שדה minAppVersion ב-manifest.json'); resetInput(); return }
-    if (!versionAtLeast(minAppVersion, MIN_SUPPORTED_APP_VERSION)) {
+    if (compareVersions(minAppVersion, MIN_SUPPORTED_APP_VERSION) < 0) {
       showAlert('שגיאה', `גרסת המינימום (${minAppVersion}) לא יכולה להיות פחות מ-${MIN_SUPPORTED_APP_VERSION}`)
       resetInput(); return
     }
