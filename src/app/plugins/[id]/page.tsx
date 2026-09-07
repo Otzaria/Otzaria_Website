@@ -14,6 +14,7 @@ import { useDialog } from '@/components/providers/DialogContext'
 import { useDirectInstall } from '@/components/plugins/useDirectInstall'
 import { formatPluginStatus } from '@/lib/pluginSubmission'
 import { formatHebrewDate } from '@/lib/hebrewDate'
+import { statusBadgeClass } from '@/components/plugins/StatusBadge'
 import type { CategoryRef } from '@/components/plugins/types'
 
 interface Plugin {
@@ -332,11 +333,7 @@ export default function PluginDetailPage() {
 
                 {/* Status & Version */}
                 <div className="flex items-center gap-3 flex-wrap">
-                  <span className={`px-4 py-2 rounded-full text-sm font-bold ${
-                    plugin.status === 'stable' ? 'bg-primary/10 text-primary' :
-                    plugin.status === 'beta' ? 'bg-primary/15 text-primary' :
-                    'bg-primary/20 text-primary'
-                  }`}>
+                  <span className={`px-4 py-2 rounded-full text-sm font-bold ${statusBadgeClass(plugin.status)}`}>
                     {formatPluginStatus(plugin.status)}
                   </span>
                   <span className="px-4 py-2 rounded-full text-sm font-bold bg-surface text-on-surface/60">

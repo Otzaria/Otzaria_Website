@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { formatPluginStatus } from '@/lib/pluginSubmission'
 import { formatHebrewDate } from '@/lib/hebrewDate'
 import RatingStars from '@/components/plugins/RatingStars'
+import { statusBadgeClass } from '@/components/plugins/StatusBadge'
 import type { DirectInstallState } from '@/components/plugins/useDirectInstall'
 import type { Plugin } from '@/components/plugins/types'
 
@@ -42,11 +43,7 @@ export default function PluginCard({ plugin, installState, onInstall }: PluginCa
       <div className="flex-1 p-5 flex flex-col gap-4">
         {/* Status & Version */}
         <div className="flex items-center gap-2 flex-wrap">
-          <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-            plugin.status === 'stable' ? 'bg-primary/10 text-primary' :
-            plugin.status === 'beta' ? 'bg-primary/15 text-primary' :
-            'bg-primary/20 text-primary'
-          }`}>
+          <span className={`px-3 py-1 rounded-full text-xs font-bold ${statusBadgeClass(plugin.status)}`}>
             {formatPluginStatus(plugin.status)}
           </span>
           <span className="px-3 py-1 rounded-full text-xs font-bold bg-surface text-on-surface/60">
