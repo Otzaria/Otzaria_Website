@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import AdminTableShell from '@/components/admin/AdminTableShell'
+import { formatDateShort } from '@/lib/formatDate'
 
 export default function AdminPagesPage() {
   const [pages, setPages] = useState([])
@@ -419,7 +420,7 @@ export default function AdminPagesPage() {
                               </td>
                               <td className="p-4 text-sm">{page.claimedBy || '-'}</td>
                               <td className="p-4 text-sm text-neutral-500">
-                                  {new Date(page.updatedAt || page.createdAt || Date.now()).toLocaleDateString('he-IL')}
+                                  {formatDateShort(page.updatedAt || page.createdAt || Date.now())}
                               </td>
                               <td className="p-4 flex gap-2">
                                   {isEditing ? (

@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import Header from '@/components/layout/Header'
 import { getAvatarColor, getInitial } from '@/lib/avatar-colors'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import { formatDateShort } from '@/lib/formatDate'
 
 export default function UsersManagementPage() {
   const { data: session, status } = useSession()
@@ -157,7 +158,7 @@ export default function UsersManagementPage() {
                         </select>
                       </td>
                       <td className="px-6 py-4 text-on-surface/70">
-                        {new Date(user.createdAt).toLocaleDateString('he-IL')}
+                        {formatDateShort(user.createdAt)}
                       </td>
                       <td className="px-6 py-4">
                         <button

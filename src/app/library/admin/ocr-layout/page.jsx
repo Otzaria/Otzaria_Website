@@ -12,6 +12,7 @@ import {
   ZonesFullCard,
 } from '@/components/ocr/layout/LayoutTaskCards'
 import { hasOcrAccess } from '@/lib/roles'
+import { formatDateShort } from '@/lib/formatDate'
 import {
   validateAnswer,
   confirmedAnswerFromPrefill,
@@ -164,7 +165,7 @@ function ReviewModal({ page, onClose, onSaved, onApprove }) {
           <div className="text-sm text-on-surface/60 flex items-center gap-1">
             <span className="material-symbols-outlined text-sm">person</span>
             תויג בידי <span className="font-bold text-on-surface/80">{page.answeredByName}</span>
-            {page.answeredAt && <span>· {new Date(page.answeredAt).toLocaleDateString('he-IL')}</span>}
+            {page.answeredAt && <span>· {formatDateShort(page.answeredAt)}</span>}
           </div>
         )}
 
@@ -532,7 +533,7 @@ export default function AdminOcrLayoutPage() {
                         <span className="material-symbols-outlined text-sm">person</span>
                         <span className="font-medium text-neutral-700">{page.answeredByName}</span>
                         {page.answeredAt && (
-                          <span className="text-xs">{new Date(page.answeredAt).toLocaleDateString('he-IL')}</span>
+                          <span className="text-xs">{formatDateShort(page.answeredAt)}</span>
                         )}
                       </>
                     )}

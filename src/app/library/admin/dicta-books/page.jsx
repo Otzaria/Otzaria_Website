@@ -9,6 +9,7 @@ import SplitBookDialog from '@/components/admin/SplitBookDialog'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import AdminTableShell from '@/components/admin/AdminTableShell'
 import { hasBooksAccess } from '@/lib/roles'
+import { formatDateFull } from '@/lib/formatDate'
 
 function getDateTimestamp(value) {
   if (!value) return null
@@ -20,11 +21,7 @@ function formatHebrewDate(value) {
   const timestamp = getDateTimestamp(value)
   if (timestamp === null) return '-'
 
-  return new Date(timestamp).toLocaleDateString('he-IL', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric'
-  })
+  return formatDateFull(timestamp)
 }
 
 export default function AdminDictaBooksPage() {
