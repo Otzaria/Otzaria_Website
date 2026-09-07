@@ -1118,9 +1118,7 @@ export default function AdminBooksPage() {
 
                     <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                         {isLoadingSubscribers ? (
-                            <div className="flex justify-center py-8 text-aqua-600">
-                                <span className="material-symbols-outlined animate-spin text-3xl">progress_activity</span>
-                            </div>
+                            <LoadingSpinner message="" size="sm" />
                         ) : subscribersList.length === 0 ? (
                             <div className="text-center py-8 text-neutral-400">
                                 <span className="material-symbols-outlined text-4xl mb-2 opacity-30">unsubscribe</span>
