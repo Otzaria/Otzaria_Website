@@ -8,6 +8,9 @@ import BookOcrDialog from '@/components/admin/BookOcrDialog'
 import EditBookInfoDialog from '@/components/admin/EditBookInfoDialog'
 import EditGlobalInstructionsDialog from '@/components/admin/EditGlobalInstructionsDialog'
 import EditCategoriesDialog from '@/components/admin/EditCategoriesDialog'
+import RenameBookDialog from '@/components/admin/RenameBookDialog'
+import NotifyVisibilityDialog from '@/components/admin/NotifyVisibilityDialog'
+import BookSubscribersModal from '@/components/admin/BookSubscribersModal'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 
@@ -21,8 +24,6 @@ export default function AdminBooksPage() {
   const [activeTab, setActiveTab] = useState('all')
 
   const [renamingBook, setRenamingBook] = useState(null)
-  const [newName, setNewName] = useState('')
-  const [newCategory, setNewCategory] = useState('')
 
   const [showMergeDialog, setShowMergeDialog] = useState(false)
   const [selectedBooksToMerge, setSelectedBooksToMerge] = useState([]) 
@@ -38,8 +39,6 @@ export default function AdminBooksPage() {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
 
   const [showSubscribersModal, setShowSubscribersModal] = useState(false)
-  const [subscribersList, setSubscribersList] = useState([])
-  const [isLoadingSubscribers, setIsLoadingSubscribers] = useState(false)
 
   const [showGlobalInstructionsDialog, setShowGlobalInstructionsDialog] = useState(false)
   const [globalInstructionsData, setGlobalInstructionsData] = useState({ sections: [] })
@@ -127,46 +126,8 @@ export default function AdminBooksPage() {
       return cat ? cat.color : '#64748b';
   };
 
-  const handleShowSubscribers = async () => {
+  const handleShowSubscribers = () => {
     setShowSubscribersModal(true);
-    setIsLoadingSubscribers(true);
-    try {
-        const response = await fetch('/api/admin/mailing-list');
-        const data = await response.json();
-        
-        if (data.success && Array.isArray(data.subscribers)) {
-            setSubscribersList(data.subscribers);
-        } else {
-            setSubscribersList([]);
-        }
-    } catch (error) {
-        showAlert('שגיאה', 'שגיאה בטעינת הרשימה');
-    } finally {
-        setIsLoadingSubscribers(false);
-    }
-  };
-
-  const handleDeleteSubscriber = (email) => {
-    showConfirm('הסרת מנוי', 'האם אתה בטוח שברצונך להסיר מנוי זה מהרשימה?', async () => {
-        try {
-            const response = await fetch('/api/admin/mailing-list/delete', { 
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email })
-            });
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                setSubscribersList(prev => prev.filter(s => s.email !== email));
-                showAlert('הצלחה', 'המנוי הוסר בהצלחה');
-            } else {
-                showAlert('שגיאה', result.error || 'שגיאה במחיקת המנוי');
-            }
-        } catch (error) {
-            showAlert('שגיאה', 'שגיאה בתקשורת');
-        }
-    });
   };
 
   const handleDeleteBook = (bookId) => {
@@ -230,27 +191,25 @@ export default function AdminBooksPage() {
     }
   };
 
-  const handleRenameSubmit = async () => {
+  const handleRenameSubmit = async (newName, newCategory) => {
     if (!newName.trim() || !renamingBook) return;
 
     try {
         const response = await fetch('/api/admin/books/update', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                bookId: renamingBook.id, 
+            body: JSON.stringify({
+                bookId: renamingBook.id,
                 name: newName,
                 category: newCategory
             })
         });
 
         if (response.ok) {
-            setBooks(prev => prev.map(b => 
+            setBooks(prev => prev.map(b =>
                 b.id === renamingBook.id ? { ...b, name: newName, category: newCategory } : b
             ));
             setRenamingBook(null);
-            setNewName('');
-            setNewCategory('');
         } else {
             showAlert('שגיאה', 'שגיאה בשינוי הפרטים');
         }
@@ -261,8 +220,6 @@ export default function AdminBooksPage() {
 
   const openRenameDialog = (book) => {
       setRenamingBook(book);
-      setNewName(book.name);
-      setNewCategory(book.category || 'כללי');
   };
 
   const handleDownloadFullText = async (book) => {
@@ -834,129 +791,21 @@ export default function AdminBooksPage() {
         )}
 
         {renamingBook && (
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200 h-screen w-screen">
-                <div 
-                    className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden relative" 
-                    onClick={e => e.stopPropagation()}
-                >
-                    <div className="p-4 border-b bg-neutral-50 flex justify-between items-center">
-                        <h3 className="font-bold text-lg text-neutral-800">שינוי שם ספר</h3>
-                        <button onClick={() => setRenamingBook(null)} className="text-neutral-400 hover:text-neutral-600 rounded-full hover:bg-neutral-200 p-1">
-                            <span className="material-symbols-outlined text-xl">close</span>
-                        </button>
-                    </div>
-                    
-                    <div className="p-6">
-                        <div className="mb-4">
-                            <label className="block text-sm font-medium text-neutral-700 mb-2">שם הספר החדש</label>
-                            <input 
-                                type="text" 
-                                value={newName}
-                                onChange={(e) => setNewName(e.target.value)}
-                                className="w-full border border-neutral-300 rounded-lg p-3 focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all text-base"
-                                autoFocus
-                            />
-                        </div>
-
-                        <div className="mb-6">
-                            <div className="flex justify-between mb-2">
-                                <label className="block text-sm font-medium text-neutral-700">קטגוריה</label>
-                                {(renamingBook.isPrivate || renamingBook.ownerId) && (
-                                    <span className="text-xs text-danger-500 bg-danger-50 px-2 py-0.5 rounded-full border border-danger-100 flex items-center gap-1">
-                                        <span className="material-symbols-outlined text-[10px]">lock</span>
-                                        ספר אישי - לא ניתן לשינוי
-                                    </span>
-                                )}
-                            </div>
-                            
-                            <select
-                                value={newCategory}
-                                onChange={(e) => setNewCategory(e.target.value)}
-                                disabled={renamingBook.isPrivate || renamingBook.ownerId}
-                                className="w-full border border-neutral-300 rounded-lg p-3 focus:ring-2 focus:ring-primary outline-none bg-white disabled:bg-neutral-100 disabled:text-neutral-500 disabled:cursor-not-allowed"
-                            >
-                                {categoriesList && categoriesList.length > 0 ? (
-                                    categoriesList.map((cat, idx) => (
-                                        <option key={idx} value={cat.name}>{cat.name}</option>
-                                    ))
-                                ) : (
-                                    <option value="כללי">כללי</option>
-                                )}
-                            </select>
-                        </div>
-                        
-                        <div className="flex justify-end gap-3 mt-8">
-                            <button 
-                                onClick={() => setRenamingBook(null)}
-                                className="px-5 py-2 text-neutral-600 hover:bg-neutral-100 rounded-lg font-medium transition-colors"
-                            >
-                                ביטול
-                            </button>
-                            <button 
-                                onClick={handleRenameSubmit}
-                                className="px-5 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 font-medium shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                disabled={
-                                    !newName.trim() || 
-                                    (newName === renamingBook.name && newCategory === (renamingBook.category || 'כללי'))
-                                }
-                            >
-                                שמור שינויים
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <RenameBookDialog
+                book={renamingBook}
+                categories={categoriesList}
+                onClose={() => setRenamingBook(null)}
+                onSave={handleRenameSubmit}
+            />
         )}
 
         {showNotifyDialog && bookToToggle && (
-             <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200 h-screen w-screen">
-                <div 
-                    className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden relative" 
-                    onClick={e => e.stopPropagation()}
-                >
-                    <div className="p-4 border-b bg-neutral-50 flex justify-between items-center">
-                        <h3 className="font-bold text-lg text-neutral-800 flex items-center gap-2">
-                             <span className="material-symbols-outlined text-primary">campaign</span>
-                             חשיפת ספר לקהל
-                        </h3>
-                        <button onClick={() => setShowNotifyDialog(false)} className="text-neutral-400 hover:text-neutral-600 rounded-full hover:bg-neutral-200 p-1">
-                            <span className="material-symbols-outlined text-xl">close</span>
-                        </button>
-                    </div>
-                    
-                    <div className="p-6 space-y-4">
-                        <p className="text-neutral-700 text-base">
-                            הספר <strong>"{bookToToggle.name}"</strong> יהפוך כעת לגלוי לכל המשתמשים.
-                        </p>
-                        <p className="font-bold text-neutral-900 text-base">
-                            האם ברצונך לשלוח עדכון במייל למנויים על ספר זה?
-                        </p>
-
-                        <div className="flex flex-col gap-3 mt-6">
-                            <button
-                                onClick={() => updateBookStatus(bookToToggle.id, false, true)}
-                                disabled={isUpdatingStatus}
-                                className="w-full bg-success-600 text-white py-3 rounded-xl hover:bg-success-700 flex items-center justify-center gap-2 font-bold shadow-md transition-all hover:scale-[1.02]"
-                            >
-                                {isUpdatingStatus ? 'מעדכן ושולח...' : (
-                                    <>
-                                        <span className="material-symbols-outlined">send</span>
-                                        כן, חשוף ושלח מייל
-                                    </>
-                                )}
-                            </button>
-                            
-                            <button
-                                onClick={() => updateBookStatus(bookToToggle.id, false, false)}
-                                disabled={isUpdatingStatus}
-                                className="w-full bg-neutral-100 text-neutral-700 py-3 rounded-xl hover:bg-neutral-200 border border-neutral-300 font-medium transition-all"
-                            >
-                                לא, רק חשוף (ללא מייל)
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <NotifyVisibilityDialog
+                book={bookToToggle}
+                isUpdatingStatus={isUpdatingStatus}
+                onConfirm={(sendNotification) => updateBookStatus(bookToToggle.id, false, sendNotification)}
+                onClose={() => setShowNotifyDialog(false)}
+            />
         )}
 
         {showMergeDialog && (
@@ -1088,79 +937,10 @@ export default function AdminBooksPage() {
             </div>
         )}
 
-        {showSubscribersModal && (
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200 h-screen w-screen">
-                <div 
-                    className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden relative flex flex-col max-h-[80vh]" 
-                    onClick={e => e.stopPropagation()}
-                >
-                    <div className="p-4 border-b bg-aqua-50 flex justify-between items-center shrink-0">
-                        <div className="flex items-center gap-2">
-                             <div className="bg-aqua-100 p-2 rounded-full text-aqua-700">
-                                <span className="material-symbols-outlined">group</span>
-                             </div>
-                             <div>
-                                <h3 className="font-bold text-lg text-neutral-800">רשומים להתראות</h3>
-                                <p className="text-xs text-aqua-700 font-medium">עדכונים על ספרים חדשים</p>
-                             </div>
-                        </div>
-                        <button onClick={() => setShowSubscribersModal(false)} className="text-neutral-400 hover:text-neutral-600 rounded-full hover:bg-neutral-200 p-1">
-                            <span className="material-symbols-outlined text-xl">close</span>
-                        </button>
-                    </div>
-                    
-                    <div className="p-4 bg-neutral-50 border-b flex justify-between items-center">
-                        <span className="text-neutral-600 text-sm">סך הכל רשומים:</span>
-                        <span className="bg-aqua-600 text-white px-3 py-1 rounded-full font-bold text-sm">
-                            {isLoadingSubscribers ? '...' : subscribersList.length}
-                        </span>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                        {isLoadingSubscribers ? (
-                            <LoadingSpinner message="" size="sm" />
-                        ) : subscribersList.length === 0 ? (
-                            <div className="text-center py-8 text-neutral-400">
-                                <span className="material-symbols-outlined text-4xl mb-2 opacity-30">unsubscribe</span>
-                                <p>אין רשומים ברשימה זו עדיין.</p>
-                            </div>
-                        ) : (
-                            <ul className="space-y-2">
-                                {subscribersList.map((subscriber, index) => (
-                                    <li key={subscriber.email} className="flex items-center justify-between gap-3 p-3 bg-white border border-neutral-100 rounded-lg hover:border-aqua-200 hover:shadow-sm transition-all group">
-                                        <div className="flex items-center gap-3 overflow-hidden flex-1">
-                                            <span className="text-neutral-400 text-xs w-6">{index + 1}.</span>
-                                            <span className="material-symbols-outlined text-neutral-400 text-sm">mail</span>
-                                            <span className="text-neutral-700 font-mono text-sm truncate select-all" title={subscriber.email}>{subscriber.email}</span>
-                                        </div>
-            
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-neutral-600 text-sm truncate">{subscriber.name}</span>
-                                            <button 
-                                                onClick={() => handleDeleteSubscriber(subscriber.email)}
-                                                className="text-neutral-300 hover:text-danger-500 hover:bg-danger-50 p-1.5 rounded-full transition-all opacity-0 group-hover:opacity-100"
-                                                title="מחק מנוי"
-                >
-                                                <span className="material-symbols-outlined text-lg">delete</span>
-                                            </button>
-                                        </div>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </div>
-                    
-                    <div className="p-4 border-t bg-neutral-50 text-center">
-                        <button 
-                            onClick={() => setShowSubscribersModal(false)}
-                            className="w-full py-2 bg-white border border-neutral-300 text-neutral-700 rounded-lg hover:bg-neutral-100 font-medium text-sm"
-                        >
-                            סגור
-                        </button>
-                    </div>
-                </div>
-            </div>
-        )}
+        <BookSubscribersModal
+            isOpen={showSubscribersModal}
+            onClose={() => setShowSubscribersModal(false)}
+        />
 
         <EditGlobalInstructionsDialog
             isOpen={showGlobalInstructionsDialog}
