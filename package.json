@@ -14,6 +14,7 @@
     "build": "npm run generate-version && npm run check:icons && next build && npm run build:offline-editor && npm run check:perf",
     "start": "next start",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/lib/*.test.mjs",
+    "test:vitest": "vitest run",
     "lint": "eslint"
   },
   "dependencies": {
@@ -56,6 +57,8 @@
     "@babel/preset-react": "^7.28.5",
     "@babel/preset-typescript": "^7.28.5",
     "@tailwindcss/postcss": "^4.1.18",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
     "@types/babel__core": "^7.20.5",
     "@types/node": "^25.0.3",
     "@types/react": "^19",
@@ -63,7 +66,9 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
     "eslint-plugin-security": "^4.0.0",
+    "jsdom": "^30.0.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   }
 }
