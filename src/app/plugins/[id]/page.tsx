@@ -16,6 +16,7 @@ import { formatPluginStatus } from '@/lib/pluginSubmission'
 import { formatHebrewDate } from '@/lib/hebrewDate'
 import { statusBadgeClass } from '@/components/plugins/StatusBadge'
 import DirectInstallButton from '@/components/plugins/DirectInstallButton'
+import Breadcrumbs, { type BreadcrumbItem } from '@/components/plugins/Breadcrumbs'
 import type { CategoryRef } from '@/components/plugins/types'
 
 interface Plugin {
@@ -236,24 +237,16 @@ export default function PluginDetailPage() {
       <main className="flex-1 py-8 px-4">
         <div className="container mx-auto max-w-5xl">
           {/* פירורי לחם: חנות התוספים ‹ קטגוריה ראשונה (אם משובץ) ‹ שם התוסף */}
-          <nav className="flex flex-wrap items-center gap-2 text-sm text-on-surface/60 mb-3" aria-label="פירורי לחם">
-            <Link href="/plugins" className="text-primary hover:underline font-medium">
-              חנות התוספים
-            </Link>
-            {plugin.categories && plugin.categories.length > 0 && (
-              <>
-                <span aria-hidden="true">‹</span>
-                <Link
-                  href={`/plugins/category/${plugin.categories[0].slug}`}
-                  className="text-primary hover:underline font-medium"
-                >
-                  {plugin.categories[0].name}
-                </Link>
-              </>
-            )}
-            <span aria-hidden="true">‹</span>
-            <span className="font-bold text-on-surface">{plugin.name}</span>
-          </nav>
+          <Breadcrumbs
+            className="flex flex-wrap items-center gap-2 text-sm text-on-surface/60 mb-3"
+            items={[
+              { label: 'חנות התוספים', href: '/plugins' },
+              ...(plugin.categories && plugin.categories.length > 0
+                ? [{ label: plugin.categories[0].name, href: `/plugins/category/${plugin.categories[0].slug}` } as BreadcrumbItem]
+                : []),
+              { label: plugin.name }
+            ]}
+          />
 
           {/* Back Button */}
           <Link

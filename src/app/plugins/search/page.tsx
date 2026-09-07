@@ -15,6 +15,7 @@ import { useDialog } from '@/components/providers/DialogContext'
 import { highlightMatches } from '@/components/plugins/PluginSearchBox'
 import { formatPluginStatus } from '@/lib/pluginSubmission'
 import DirectInstallButton from '@/components/plugins/DirectInstallButton'
+import Breadcrumbs from '@/components/plugins/Breadcrumbs'
 import type { PluginSearchResult, PluginCategorySummary } from '@/components/plugins/types'
 
 const SEARCH_DEBOUNCE_MS = 300
@@ -158,13 +159,10 @@ function PluginSearchPageContent() {
         <section className="py-8 px-4 bg-white border-b border-neutral-100">
           <div className="container mx-auto max-w-4xl">
             {/* פירורי לחם */}
-            <nav className="flex items-center gap-2 text-sm text-on-surface/60 mb-4" aria-label="פירורי לחם">
-              <Link href="/plugins" className="text-primary hover:underline font-medium">
-                חנות התוספים
-              </Link>
-              <span aria-hidden="true">‹</span>
-              <span className="font-bold text-on-surface">חיפוש</span>
-            </nav>
+            <Breadcrumbs
+              className="flex items-center gap-2 text-sm text-on-surface/60 mb-4"
+              items={[{ label: 'חנות התוספים', href: '/plugins' }, { label: 'חיפוש' }]}
+            />
             <h1 className="text-3xl font-bold text-on-surface mb-5">חיפוש תוספים</h1>
             <input
               type="search"

@@ -14,6 +14,7 @@ import { useDirectInstall } from '@/components/plugins/useDirectInstall'
 import { useDialog } from '@/components/providers/DialogContext'
 import PluginCard from '@/components/plugins/PluginCard'
 import PluginSearchBox from '@/components/plugins/PluginSearchBox'
+import Breadcrumbs from '@/components/plugins/Breadcrumbs'
 import type { Plugin } from '@/components/plugins/types'
 
 function AllPluginsPageContent() {
@@ -141,13 +142,10 @@ function AllPluginsPageContent() {
         <section className="py-6 px-4 bg-white border-b border-neutral-100">
           <div className="container mx-auto max-w-6xl">
             {/* פירורי לחם */}
-            <nav className="flex items-center gap-2 text-sm text-on-surface/60 mb-3" aria-label="פירורי לחם">
-              <Link href="/plugins" className="text-primary hover:underline font-medium">
-                חנות התוספים
-              </Link>
-              <span aria-hidden="true">‹</span>
-              <span className="font-bold text-on-surface">כל התוספים</span>
-            </nav>
+            <Breadcrumbs
+              className="flex items-center gap-2 text-sm text-on-surface/60 mb-3"
+              items={[{ label: 'חנות התוספים', href: '/plugins' }, { label: 'כל התוספים' }]}
+            />
             <h1 className="text-3xl font-bold text-on-surface mb-6">כל התוספים</h1>
 
             <div className="grid md:grid-cols-[1fr_220px_auto] gap-4 mb-4">
