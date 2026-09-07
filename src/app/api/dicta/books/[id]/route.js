@@ -7,6 +7,7 @@ import User from '@/models/User';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBooksAccess } from '@/lib/roles';
+import { requireBooksAccessOrForbidden } from '../../_auth';
 
 export async function GET(req, { params }) {
   try {
@@ -187,10 +188,8 @@ export async function PUT(req, { params }) {
 
 export async function DELETE(req, { params }) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session || !hasBooksAccess(session.user?.role)) {
-      return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
-    }
+    const auth = await requireBooksAccessOrForbidden();
+    if (!auth.ok) return auth.response;
 
     await connectDB();
     const { id } = await params;

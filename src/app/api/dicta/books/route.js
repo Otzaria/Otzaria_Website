@@ -3,7 +3,7 @@ import connectDB from '@/lib/db';
 import DictaBook from '@/models/DictaBook';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { hasBooksAccess } from '@/lib/roles';
+import { requireBooksAccessOrForbidden } from '../_auth';
 
 export async function GET() {
   try {
@@ -28,10 +28,8 @@ export async function GET() {
 // יצירת ספר חדש - רק למנהלים!
 export async function POST(req) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session || !hasBooksAccess(session.user?.role)) {
-      return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
-    }
+    const auth = await requireBooksAccessOrForbidden();
+    if (!auth.ok) return auth.response;
 
     await connectDB();
     const body = await req.json();
