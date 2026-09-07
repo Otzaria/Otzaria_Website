@@ -1,15 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Header from '@/components/layout/Header'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import { useRequireAuth } from '@/hooks/useRequireAuth'
 
 export default function OcrTrainingListPage() {
-  const { data: session, status } = useSession()
+  const { session, status } = useRequireAuth()
   const router = useRouter()
   const { showAlert } = useDialog()
   const [pages, setPages] = useState([])
@@ -30,12 +30,10 @@ export default function OcrTrainingListPage() {
   }
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/auth/login?callbackUrl=/library/ocr-training')
-    } else if (status === 'authenticated') {
+    if (status === 'authenticated') {
       load()
     }
-  }, [status, router])
+  }, [status])
 
   const handleClaim = async (page) => {
     try {

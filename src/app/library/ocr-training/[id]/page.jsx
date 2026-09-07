@@ -1,17 +1,17 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import Header from '@/components/layout/Header'
 import { useDialog } from '@/components/providers/DialogContext'
 import { hasBookLibraryAccess } from '@/lib/roles'
 import { rotatedSize, remapPointBetweenRotations } from '@/lib/ocr/geometry'
+import { useRequireAuth } from '@/hooks/useRequireAuth'
 
 const MIN_BOX = 6 // גודל מינימלי בפיקסלים מוצגים כדי להיחשב סימון
 
 export default function OcrTrainingEditor() {
-  const { data: session, status } = useSession()
+  const { session, status } = useRequireAuth()
   const router = useRouter()
   const params = useParams()
   const id = params.id
@@ -68,12 +68,10 @@ export default function OcrTrainingEditor() {
   }, [id])
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push(`/auth/login?callbackUrl=/library/ocr-training/${id}`)
-    } else if (status === 'authenticated') {
+    if (status === 'authenticated') {
       load()
     }
-  }, [status, id, load, router])
+  }, [status, id, load])
 
   // ציור העמוד לקנבס (מסובב וממורכז) — זהה לחיתוך בייצוא (sharp.rotate).
   const draw = useCallback(() => {
