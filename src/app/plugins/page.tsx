@@ -59,8 +59,8 @@ function PluginsStoreHomeContent() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [showAllFeatured, setShowAllFeatured] = useState(false)
-  const { installState, install } = useDirectInstall()
   const { showAlert } = useDialog() as { showAlert: (title: string, message: string) => void }
+  const { installState, install } = useDirectInstall(showAlert)
 
   // תאימות לקישורים ישנים: /plugins?tag=X → /plugins/all?tag=X
   useEffect(() => {
@@ -68,26 +68,6 @@ function PluginsStoreHomeContent() {
       router.replace(`/plugins/all?tag=${encodeURIComponent(legacyTag)}`)
     }
   }, [legacyTag, router])
-
-  // הודעת דיאלוג רגילה של האתר כשמגיע דיווח תוצאה מאוצריא
-  useEffect(() => {
-    if (installState.phase === 'success') {
-      showAlert('הצלחה', installState.updated ? 'התוסף עודכן בהצלחה באוצריא!' : 'התוסף הותקן בהצלחה באוצריא!')
-    } else if (installState.phase === 'failure') {
-      showAlert(
-        'שגיאה',
-        installState.error
-          ? `ההתקנה נכשלה: ${installState.error}`
-          : 'ההתקנה נכשלה. אפשר לנסות שוב או להוריד את הקובץ ולהתקין ידנית.'
-      )
-    } else if (installState.phase === 'no_app') {
-      showAlert(
-        'אוצריא לא נמצאה',
-        'נראה שאוצריא אינה מותקנת במחשב זה — בקשת ההתקנה לא הגיעה לתוכנה. ניתן להוריד את אוצריא מהאתר, או להוריד את קובץ התוסף ולהתקינו ידנית.'
-      )
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [installState])
 
   // טעינת דף הבית בקריאה אחת
   useEffect(() => {

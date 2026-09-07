@@ -26,10 +26,16 @@ export interface DirectInstallState {
   updated: boolean
 }
 
+export type ShowAlert = (title: string, message: string) => void
+
 // ניהול התקנה ישירה עם מעקב תוצאה: יוצר טוקן, מנווט ל-otzaria:// עם הטוקן,
 // ועושה polling על סטטוס הדיווח מהאפליקציה. אם יצירת הטוקן נכשלת —
 // מנווט בלי טוקן (בדיוק כמו ההתנהגות הישנה) ולא מציג מעקב.
-export function useDirectInstall() {
+//
+// showAlert (אופציונלי): כשמסופק, ה-hook עצמו מציג את הודעת הדיאלוג הרגילה
+// של האתר בכל שינוי ל-success/failure/no_app — כדי שהקריאה למסכים השונים
+// לא תצטרך לשכפל את ה-useEffect הזה.
+export function useDirectInstall(showAlert?: ShowAlert) {
   const [state, setState] = useState<DirectInstallState>({ phase: 'idle', pluginId: null, error: null, updated: false })
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -41,6 +47,27 @@ export function useDirectInstall() {
   }, [])
 
   useEffect(() => stopPolling, [stopPolling])
+
+  // הודעת דיאלוג רגילה של האתר כשמגיע דיווח תוצאה מאוצריא
+  useEffect(() => {
+    if (!showAlert) return
+    if (state.phase === 'success') {
+      showAlert('הצלחה', state.updated ? 'התוסף עודכן בהצלחה באוצריא!' : 'התוסף הותקן בהצלחה באוצריא!')
+    } else if (state.phase === 'failure') {
+      showAlert(
+        'שגיאה',
+        state.error
+          ? `ההתקנה נכשלה: ${state.error}`
+          : 'ההתקנה נכשלה. אפשר לנסות שוב או להוריד את הקובץ ולהתקין ידנית.'
+      )
+    } else if (state.phase === 'no_app') {
+      showAlert(
+        'אוצריא לא נמצאה',
+        'נראה שאוצריא אינה מותקנת במחשב זה — בקשת ההתקנה לא הגיעה לתוכנה. ניתן להוריד את אוצריא מהאתר, או להוריד את קובץ התוסף ולהתקינו ידנית.'
+      )
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state])
 
   const install = useCallback(async (plugin: { id: string; downloadUrl: string }) => {
     stopPolling()

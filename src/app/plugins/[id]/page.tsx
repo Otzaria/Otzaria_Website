@@ -16,6 +16,9 @@ import { formatPluginStatus } from '@/lib/pluginSubmission'
 import { formatHebrewDate } from '@/lib/hebrewDate'
 import { formatFileSize } from '@/lib/formatFileSize'
 import { getErrorMessage } from '@/lib/errors'
+import { statusBadgeClass } from '@/components/plugins/StatusBadge'
+import DirectInstallButton from '@/components/plugins/DirectInstallButton'
+import Breadcrumbs, { type BreadcrumbItem } from '@/components/plugins/Breadcrumbs'
 import type { CategoryRef } from '@/components/plugins/types'
 
 interface Plugin {
@@ -83,27 +86,7 @@ export default function PluginDetailPage() {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [suspending, setSuspending] = useState(false)
   const [reporting, setReporting] = useState(false)
-  const { installState, install } = useDirectInstall()
-
-  // הודעת דיאלוג רגילה של האתר כשמגיע דיווח תוצאה מאוצריא
-  useEffect(() => {
-    if (installState.phase === 'success') {
-      showAlert('הצלחה', installState.updated ? 'התוסף עודכן בהצלחה באוצריא!' : 'התוסף הותקן בהצלחה באוצריא!')
-    } else if (installState.phase === 'failure') {
-      showAlert(
-        'שגיאה',
-        installState.error
-          ? `ההתקנה נכשלה: ${installState.error}`
-          : 'ההתקנה נכשלה. אפשר לנסות שוב או להוריד את הקובץ ולהתקין ידנית.'
-      )
-    } else if (installState.phase === 'no_app') {
-      showAlert(
-        'אוצריא לא נמצאה',
-        'נראה שאוצריא אינה מותקנת במחשב זה — בקשת ההתקנה לא הגיעה לתוכנה. ניתן להוריד את אוצריא מהאתר, או להוריד את קובץ התוסף ולהתקינו ידנית.'
-      )
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [installState])
+  const { installState, install } = useDirectInstall(showAlert)
   const currentUser = session?.user as { id?: string; role?: string; email?: string | null } | undefined
 
   useEffect(() => {
@@ -242,24 +225,16 @@ export default function PluginDetailPage() {
       <main className="flex-1 py-8 px-4">
         <div className="container mx-auto max-w-5xl">
           {/* פירורי לחם: חנות התוספים ‹ קטגוריה ראשונה (אם משובץ) ‹ שם התוסף */}
-          <nav className="flex flex-wrap items-center gap-2 text-sm text-on-surface/60 mb-3" aria-label="פירורי לחם">
-            <Link href="/plugins" className="text-primary hover:underline font-medium">
-              חנות התוספים
-            </Link>
-            {plugin.categories && plugin.categories.length > 0 && (
-              <>
-                <span aria-hidden="true">‹</span>
-                <Link
-                  href={`/plugins/category/${plugin.categories[0].slug}`}
-                  className="text-primary hover:underline font-medium"
-                >
-                  {plugin.categories[0].name}
-                </Link>
-              </>
-            )}
-            <span aria-hidden="true">‹</span>
-            <span className="font-bold text-on-surface">{plugin.name}</span>
-          </nav>
+          <Breadcrumbs
+            className="flex flex-wrap items-center gap-2 text-sm text-on-surface/60 mb-3"
+            items={[
+              { label: 'חנות התוספים', href: '/plugins' },
+              ...(plugin.categories && plugin.categories.length > 0
+                ? [{ label: plugin.categories[0].name, href: `/plugins/category/${plugin.categories[0].slug}` } as BreadcrumbItem]
+                : []),
+              { label: plugin.name }
+            ]}
+          />
 
           {/* Back Button */}
           <Link
@@ -340,11 +315,7 @@ export default function PluginDetailPage() {
 
                 {/* Status & Version */}
                 <div className="flex items-center gap-3 flex-wrap">
-                  <span className={`px-4 py-2 rounded-full text-sm font-bold ${
-                    plugin.status === 'stable' ? 'bg-primary/10 text-primary' :
-                    plugin.status === 'beta' ? 'bg-primary/15 text-primary' :
-                    'bg-primary/20 text-primary'
-                  }`}>
+                  <span className={`px-4 py-2 rounded-full text-sm font-bold ${statusBadgeClass(plugin.status)}`}>
                     {formatPluginStatus(plugin.status)}
                   </span>
                   <span className="px-4 py-2 rounded-full text-sm font-bold bg-surface text-on-surface/60">
@@ -383,33 +354,15 @@ export default function PluginDetailPage() {
                     <span>הורדה</span>
                   </a>
                   {canDirectInstall(plugin) && (
-                    <button
-                      onClick={handleDirectInstall}
-                      disabled={installState.phase === 'waiting'}
+                    <DirectInstallButton
+                      pluginId={plugin.id}
+                      installState={installState}
+                      onInstall={handleDirectInstall}
                       className="inline-flex items-center gap-2 px-6 py-3 bg-white border-2 border-primary text-primary rounded-xl font-bold hover:bg-primary/5 transition-colors disabled:cursor-default disabled:opacity-80"
-                    >
-                      {installState.phase === 'waiting' ? (
-                        <>
-                          <span className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></span>
-                          <span>מתקין...</span>
-                        </>
-                      ) : installState.phase === 'success' ? (
-                        <>
-                          <span className="material-symbols-outlined">check_circle</span>
-                          <span>{installState.updated ? 'עודכן בהצלחה!' : 'הותקן בהצלחה!'}</span>
-                        </>
-                      ) : installState.phase === 'failure' ? (
-                        <>
-                          <span className="material-symbols-outlined">error</span>
-                          <span>ההתקנה נכשלה - לחץ שוב לנסיון נוסף</span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="material-symbols-outlined">install_desktop</span>
-                          <span>התקנה ישירה לאוצריא</span>
-                        </>
-                      )}
-                    </button>
+                      spinnerClassName="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin"
+                      showIcons
+                      idleLabel="התקנה ישירה לאוצריא"
+                    />
                   )}
                   {plugin.homepage && (
                     <a

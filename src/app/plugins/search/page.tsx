@@ -14,6 +14,8 @@ import { useDirectInstall } from '@/components/plugins/useDirectInstall'
 import { useDialog } from '@/components/providers/DialogContext'
 import { highlightMatches } from '@/components/plugins/PluginSearchBox'
 import { formatPluginStatus } from '@/lib/pluginSubmission'
+import DirectInstallButton from '@/components/plugins/DirectInstallButton'
+import Breadcrumbs from '@/components/plugins/Breadcrumbs'
 import type { PluginSearchResult, PluginCategorySummary } from '@/components/plugins/types'
 
 const SEARCH_DEBOUNCE_MS = 300
@@ -35,30 +37,10 @@ function PluginSearchPageContent() {
   const firstRunRef = useRef(true)
   // השאילתה העדכנית — תשובה של בקשה ישנה שאינה תואמת אותה נזרקת (מניעת race)
   const currentQueryRef = useRef(initialQuery.trim())
-  const { installState, install } = useDirectInstall()
   const { showAlert } = useDialog() as { showAlert: (title: string, message: string) => void }
+  const { installState, install } = useDirectInstall(showAlert)
 
   const trimmedInput = inputValue.trim()
-
-  // הודעת דיאלוג רגילה של האתר כשמגיע דיווח תוצאה מאוצריא
-  useEffect(() => {
-    if (installState.phase === 'success') {
-      showAlert('הצלחה', installState.updated ? 'התוסף עודכן בהצלחה באוצריא!' : 'התוסף הותקן בהצלחה באוצריא!')
-    } else if (installState.phase === 'failure') {
-      showAlert(
-        'שגיאה',
-        installState.error
-          ? `ההתקנה נכשלה: ${installState.error}`
-          : 'ההתקנה נכשלה. אפשר לנסות שוב או להוריד את הקובץ ולהתקין ידנית.'
-      )
-    } else if (installState.phase === 'no_app') {
-      showAlert(
-        'אוצריא לא נמצאה',
-        'נראה שאוצריא אינה מותקנת במחשב זה — בקשת ההתקנה לא הגיעה לתוכנה. ניתן להוריד את אוצריא מהאתר, או להוריד את קובץ התוסף ולהתקינו ידנית.'
-      )
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [installState])
 
   // קטגוריות להצעה במצב אפס-תוצאות (עד 3)
   useEffect(() => {
@@ -177,13 +159,10 @@ function PluginSearchPageContent() {
         <section className="py-8 px-4 bg-white border-b border-neutral-100">
           <div className="container mx-auto max-w-4xl">
             {/* פירורי לחם */}
-            <nav className="flex items-center gap-2 text-sm text-on-surface/60 mb-4" aria-label="פירורי לחם">
-              <Link href="/plugins" className="text-primary hover:underline font-medium">
-                חנות התוספים
-              </Link>
-              <span aria-hidden="true">‹</span>
-              <span className="font-bold text-on-surface">חיפוש</span>
-            </nav>
+            <Breadcrumbs
+              className="flex items-center gap-2 text-sm text-on-surface/60 mb-4"
+              items={[{ label: 'חנות התוספים', href: '/plugins' }, { label: 'חיפוש' }]}
+            />
             <h1 className="text-3xl font-bold text-on-surface mb-5">חיפוש תוספים</h1>
             <input
               type="search"
@@ -330,24 +309,12 @@ function PluginSearchPageContent() {
                           הורדה
                         </a>
                         {canDirectInstall(plugin) && (
-                          <button
-                            onClick={() => install(plugin)}
-                            disabled={installState.pluginId === plugin.id && installState.phase === 'waiting'}
+                          <DirectInstallButton
+                            pluginId={plugin.id}
+                            installState={installState}
+                            onInstall={() => install(plugin)}
                             className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-primary/20 text-primary rounded-full text-sm font-bold hover:bg-primary/5 transition-colors text-center disabled:cursor-default disabled:opacity-80"
-                          >
-                            {installState.pluginId === plugin.id && installState.phase === 'waiting' ? (
-                              <>
-                                <span className="w-3.5 h-3.5 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></span>
-                                <span>מתקין...</span>
-                              </>
-                            ) : installState.pluginId === plugin.id && installState.phase === 'success' ? (
-                              <span>{installState.updated ? 'עודכן בהצלחה!' : 'הותקן בהצלחה!'}</span>
-                            ) : installState.pluginId === plugin.id && installState.phase === 'failure' ? (
-                              <span>ההתקנה נכשלה - לחץ שוב לנסיון נוסף</span>
-                            ) : (
-                              <span>התקנה ישירה</span>
-                            )}
-                          </button>
+                          />
                         )}
                         <Link
                           href={`/plugins/${plugin.id}`}

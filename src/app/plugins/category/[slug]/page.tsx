@@ -13,6 +13,7 @@ import { useDirectInstall } from '@/components/plugins/useDirectInstall'
 import { useDialog } from '@/components/providers/DialogContext'
 import PluginCard from '@/components/plugins/PluginCard'
 import PluginSearchBox from '@/components/plugins/PluginSearchBox'
+import Breadcrumbs from '@/components/plugins/Breadcrumbs'
 import type { Plugin } from '@/components/plugins/types'
 
 interface CategoryData {
@@ -33,28 +34,8 @@ export default function PluginCategoryPage() {
   const [category, setCategory] = useState<CategoryData | null>(null)
   const [notFound, setNotFound] = useState(false)
   const [loading, setLoading] = useState(true)
-  const { installState, install } = useDirectInstall()
   const { showAlert } = useDialog() as { showAlert: (title: string, message: string) => void }
-
-  // הודעת דיאלוג רגילה של האתר כשמגיע דיווח תוצאה מאוצריא
-  useEffect(() => {
-    if (installState.phase === 'success') {
-      showAlert('הצלחה', installState.updated ? 'התוסף עודכן בהצלחה באוצריא!' : 'התוסף הותקן בהצלחה באוצריא!')
-    } else if (installState.phase === 'failure') {
-      showAlert(
-        'שגיאה',
-        installState.error
-          ? `ההתקנה נכשלה: ${installState.error}`
-          : 'ההתקנה נכשלה. אפשר לנסות שוב או להוריד את הקובץ ולהתקין ידנית.'
-      )
-    } else if (installState.phase === 'no_app') {
-      showAlert(
-        'אוצריא לא נמצאה',
-        'נראה שאוצריא אינה מותקנת במחשב זה — בקשת ההתקנה לא הגיעה לתוכנה. ניתן להוריד את אוצריא מהאתר, או להוריד את קובץ התוסף ולהתקינו ידנית.'
-      )
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [installState])
+  const { installState, install } = useDirectInstall(showAlert)
 
   // טעינת הקטגוריה
   useEffect(() => {
@@ -134,13 +115,10 @@ export default function PluginCategoryPage() {
         <section className="py-8 px-4 bg-white border-b border-neutral-100">
           <div className="container mx-auto max-w-6xl">
             {/* פירורי לחם */}
-            <nav className="flex items-center gap-2 text-sm text-on-surface/60 mb-4" aria-label="פירורי לחם">
-              <Link href="/plugins" className="text-primary hover:underline font-medium">
-                חנות התוספים
-              </Link>
-              <span aria-hidden="true">‹</span>
-              <span className="font-bold text-on-surface">{category.name}</span>
-            </nav>
+            <Breadcrumbs
+              className="flex items-center gap-2 text-sm text-on-surface/60 mb-4"
+              items={[{ label: 'חנות התוספים', href: '/plugins' }, { label: category.name }]}
+            />
 
             <div className="flex flex-wrap items-start justify-between gap-6">
               <div className="max-w-2xl">
