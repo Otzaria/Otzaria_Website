@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 
@@ -32,17 +32,29 @@ export default function VerifyRequestPage() {
         }
     }, [session, router]);
 
+    // מריצים polling כל 5 שניות כדי לרענן את הסשן ולבדוק אם אומת. update()
+    // עצמו מייצר אובייקט session חדש - אם session היה ברשימת התלויות של
+    // ה-effect, האינטרוול היה נהרס ונבנה מחדש בכל סבב, בלי סיבה אמיתית
+    // (isVerified לא באמת השתנה). לכן משתמשים ב-ref כדי לקרוא תמיד את ה-update
+    // העדכני מתוך ה-callback, וה-effect עצמו תלוי רק ב"האם צריך לדגום" (יש
+    // session ועדיין לא מאומת) - ערך שמשתנה רק כשמאומת בפועל, לא בכל רענון סשן.
+    const updateRef = useRef(update);
     useEffect(() => {
-        if (session && !session.user.isVerified) {
-            const interval = setInterval(async () => {
-                const newSession = await update();
-                if (newSession?.user?.isVerified) {
-                    router.push('/library/dashboard');
-                }
-            }, 5000);
-            return () => clearInterval(interval);
-        }
-    }, [session, update, router]);
+        updateRef.current = update;
+    }, [update]);
+
+    const needsVerificationPolling = Boolean(session) && !session.user.isVerified;
+
+    useEffect(() => {
+        if (!needsVerificationPolling) return;
+        const interval = setInterval(async () => {
+            const newSession = await updateRef.current();
+            if (newSession?.user?.isVerified) {
+                router.push('/library/dashboard');
+            }
+        }, 5000);
+        return () => clearInterval(interval);
+    }, [needsVerificationPolling, router]);
 
     const handleSendVerification = async () => {
         setVerificationStatus({ loading: true, sent: false, message: '', error: '' });
