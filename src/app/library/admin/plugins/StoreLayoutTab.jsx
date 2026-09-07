@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { formatPluginStatus } from '@/lib/pluginSubmission'
+import { moveItem, reorderList } from './listReorder'
 
 const DEFAULT_HOME_TITLE = 'חנות התוספים של אוצריא'
 const DEFAULT_HOME_SUBTITLE = 'הרחיבו את אוצריא עם תוספים מהקהילה'
@@ -30,23 +31,6 @@ function clientSlugify(name) {
 }
 
 const hasHebrew = (text) => /[֐-׿]/.test(text || '')
-
-// החלפת מקומות בין פריט לשכנו — לשינוי סדר באמצעות חיצים
-function moveItem(list, index, direction) {
-  const target = index + direction
-  if (target < 0 || target >= list.length) return list
-  const copy = [...list]
-  ;[copy[index], copy[target]] = [copy[target], copy[index]]
-  return copy
-}
-
-// העברת פריט מאינדקס לאינדקס — לגרירה-ושחרור
-function reorderList(list, from, to) {
-  const copy = [...list]
-  const [item] = copy.splice(from, 1)
-  copy.splice(to, 0, item)
-  return copy
-}
 
 // גרירה-ושחרור לרשימה אנכית — HTML5 native, ללא תלות חיצונית.
 // חיצי הסדר נשארים לצידה (נגישות מקלדת). מחזיר props לעטיפת כל פריט לפי אינדקס.
