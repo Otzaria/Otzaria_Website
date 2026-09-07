@@ -40,7 +40,7 @@ export default function AdminLayout({ children }) {
         const interval = setInterval(fetchCounts, 60000)
         return () => clearInterval(interval)
     }
-  }, [session])
+  }, [session?.user?.role])
 
   return (
     <div className="flex min-h-screen flex-col bg-background">

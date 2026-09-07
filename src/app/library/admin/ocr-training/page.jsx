@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import AdminTableShell from '@/components/admin/AdminTableShell'
 
 export default function AdminOcrTrainingPage() {
   const [pages, setPages] = useState([])
@@ -297,7 +298,7 @@ export default function AdminOcrTrainingPage() {
       {loading ? (
         <LoadingSpinner message="טוען עמודים..." />
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-neutral-200">
+        <AdminTableShell>
           <table className="w-full bg-white">
             <thead className="bg-neutral-50 border-b border-neutral-200">
               <tr>
@@ -370,7 +371,7 @@ export default function AdminOcrTrainingPage() {
               <p>המאגר ריק. הוסף עמודים בעזרת הטופס למעלה.</p>
             </div>
           )}
-        </div>
+        </AdminTableShell>
       )}
     </div>
   )

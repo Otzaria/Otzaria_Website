@@ -7,6 +7,7 @@ import { useDialog } from '@/components/providers/DialogContext'
 import { useLoading } from '@/components/providers/LoadingContext'
 import SplitBookDialog from '@/components/admin/SplitBookDialog'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import AdminTableShell from '@/components/admin/AdminTableShell'
 import { hasBooksAccess } from '@/lib/roles'
 
 function getDateTimestamp(value) {
@@ -355,11 +356,7 @@ export default function AdminDictaBooksPage() {
   }
 
   // אם עדיין בודקים הרשאות או המשתמש לא אדמין
-  if (status === 'loading') return (
-    <div className="flex justify-center items-center h-64">
-      <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
-    </div>
-  )
+  if (status === 'loading') return <LoadingSpinner message="" />
 
   if (!hasBooksAccess(session?.user?.role)) return null;
 
@@ -459,7 +456,7 @@ export default function AdminDictaBooksPage() {
           )}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-neutral-200">
+        <AdminTableShell>
           <table className="w-full bg-white">
             <thead>
               <tr className="bg-neutral-50 border-b border-neutral-200 text-neutral-700 text-sm">
@@ -587,7 +584,7 @@ export default function AdminDictaBooksPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </AdminTableShell>
       )}
     </div>
       
