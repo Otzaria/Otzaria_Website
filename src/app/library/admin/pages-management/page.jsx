@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import AdminTableShell from '@/components/admin/AdminTableShell'
 
 export default function AdminPagesPage() {
   const [pages, setPages] = useState([])
@@ -370,7 +371,7 @@ export default function AdminPagesPage() {
       {loading ? (
           <LoadingSpinner message="טוען עמודים..." />
       ) : (
-          <div className="overflow-x-auto rounded-xl border border-neutral-200">
+          <AdminTableShell>
               <table className="w-full bg-white">
                   <thead className="bg-neutral-50 border-b border-neutral-200">
                       <tr>
@@ -477,7 +478,7 @@ export default function AdminPagesPage() {
                       <p>לא נמצאו עמודים התואמים את הסינון</p>
                   </div>
               )}
-          </div>
+          </AdminTableShell>
       )}
       
       <div className="mt-4 text-sm text-neutral-500 text-left">

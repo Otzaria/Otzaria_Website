@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import AdminTableShell from '@/components/admin/AdminTableShell'
 import { hasBooksAccess } from '@/lib/roles'
 
 export default function AdminDictionaryPage() {
@@ -204,7 +205,7 @@ export default function AdminDictionaryPage() {
       ) : filteredEntries.length === 0 ? (
         <div className="text-center py-12 text-neutral-500">אין מילים להצגה</div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-neutral-200">
+        <AdminTableShell>
           <table className="w-full bg-white">
             <thead>
               <tr className="bg-neutral-50 border-b border-neutral-200 text-neutral-700 text-sm">
@@ -246,13 +247,13 @@ export default function AdminDictionaryPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </AdminTableShell>
       )}
 
       {!loading && skippedEntries.length > 0 && (
         <div className="mt-8">
           <h3 className="text-lg font-bold text-neutral-800 mb-3">מילים מדולגות</h3>
-          <div className="overflow-x-auto rounded-xl border border-neutral-200">
+          <AdminTableShell>
             <table className="w-full bg-white">
               <thead>
                 <tr className="bg-neutral-50 border-b border-neutral-200 text-neutral-700 text-sm">
@@ -288,7 +289,7 @@ export default function AdminDictionaryPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </AdminTableShell>
         </div>
       )}
     </div>

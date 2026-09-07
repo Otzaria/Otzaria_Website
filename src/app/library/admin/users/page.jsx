@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import AdminTableShell from '@/components/admin/AdminTableShell'
 
 export default function AdminUsersPage() {
   const { data: session } = useSession()
@@ -136,7 +137,7 @@ export default function AdminUsersPage() {
       {loading ? (
         <LoadingSpinner message="טוען משתמשים..." />
       ) : (
-      <div className="overflow-x-auto rounded-xl border border-neutral-200">
+      <AdminTableShell>
         <table className="w-full bg-white">
           <thead className="bg-neutral-50 border-b">
             <tr>
@@ -317,7 +318,7 @@ export default function AdminUsersPage() {
             })}
           </tbody>
         </table>
-      </div>
+      </AdminTableShell>
       )}
     </div>
   )

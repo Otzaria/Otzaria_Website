@@ -7,6 +7,7 @@ import { useDialog } from '@/components/providers/DialogContext'
 import { useLoading } from '@/components/providers/LoadingContext'
 import SplitBookDialog from '@/components/admin/SplitBookDialog'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import AdminTableShell from '@/components/admin/AdminTableShell'
 import { hasBooksAccess } from '@/lib/roles'
 
 function getDateTimestamp(value) {
@@ -455,7 +456,7 @@ export default function AdminDictaBooksPage() {
           )}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-neutral-200">
+        <AdminTableShell>
           <table className="w-full bg-white">
             <thead>
               <tr className="bg-neutral-50 border-b border-neutral-200 text-neutral-700 text-sm">
@@ -583,7 +584,7 @@ export default function AdminDictaBooksPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </AdminTableShell>
       )}
     </div>
       
