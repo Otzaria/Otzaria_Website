@@ -1,8 +1,6 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
 import Header from '@/components/layout/Header'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
@@ -14,6 +12,7 @@ import {
 } from '@/components/ocr/layout/LayoutTaskCards'
 import { validateAnswer } from '@/lib/ocr/layoutValidation'
 import { hasBookLibraryAccess } from '@/lib/roles'
+import { useRequireAuth } from '@/hooks/useRequireAuth'
 
 // דף המתנדב לתיוג מבנה-עמוד: עמוד אחד בכל פעם, כל השאלות שלו יחד.
 // העיקרון: המכונה כבר עשתה את העבודה — המתנדב רק מכריע. ברוב המקרים
@@ -33,8 +32,7 @@ const RULES = [
 ]
 
 export default function OcrLayoutPage() {
-  const { data: session, status } = useSession()
-  const router = useRouter()
+  const { session, status } = useRequireAuth()
   const { showAlert } = useDialog()
 
   const [page, setPage] = useState(null)
@@ -71,13 +69,11 @@ export default function OcrLayoutPage() {
   }, [])
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/auth/login?callbackUrl=/library/ocr-layout')
-    } else if (status === 'authenticated') {
+    if (status === 'authenticated') {
       if (session?.user?.isVerified || hasBookLibraryAccess(session?.user?.role)) load()
       else setLoading(false)
     }
-  }, [status, session, router, load])
+  }, [status, session, load])
 
   // תקפות ההכרעות — אותם כללים כמו בשרת (ולידציה כפולה)
   const allValid = useMemo(() => {
