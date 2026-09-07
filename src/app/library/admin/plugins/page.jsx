@@ -9,6 +9,7 @@ import PluginEditModal from '@/components/plugins/PluginEditModal'
 import PluginApproveModal from '@/components/plugins/PluginApproveModal'
 import StoreLayoutTab from './StoreLayoutTab'
 import { formatPluginStatus } from '@/lib/pluginSubmission'
+import { formatAdminDate } from './formatAdminDate'
 
 export default function AdminPluginsPage() {
   const [activeTab, setActiveTab] = useState('pending') // 'pending' | 'approved' | 'store'
@@ -354,16 +355,6 @@ export default function AdminPluginsPage() {
   const getPluginCategories = (pluginId) =>
     categories.filter((category) => category.plugins.some((item) => item.id === pluginId))
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('he-IL', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  }
-
   const getStatusBadge = (status) => {
     const badges = {
       stable: { label: formatPluginStatus('stable'), class: 'bg-success-100 text-success-800' },
@@ -588,7 +579,7 @@ export default function AdminPluginsPage() {
                     <div>
                       <span className="text-on-surface/60">{hasPendingUpdate(plugin) ? 'נשלח לעדכון:' : 'הועלה:'}</span>
                       <span className="font-medium text-on-surface mr-2">
-                        {formatDate(plugin.lastSubmittedAt || plugin.createdAt)}
+                        {formatAdminDate(plugin.lastSubmittedAt || plugin.createdAt)}
                       </span>
                     </div>
                     {plugin.lastSubmittedBy?.name && (
@@ -603,7 +594,7 @@ export default function AdminPluginsPage() {
                       <div>
                         <span className="text-on-surface/60">אושר:</span>
                         <span className="font-medium text-on-surface mr-2">
-                          {formatDate(plugin.approvedAt)}
+                          {formatAdminDate(plugin.approvedAt)}
                         </span>
                       </div>
                     )}
@@ -712,7 +703,7 @@ export default function AdminPluginsPage() {
                               <div className="min-w-0">
                                 <span className="font-bold text-on-surface">גרסה {v.version}</span>
                                 <span className="mr-2 text-xs text-on-surface/50">
-                                  {formatDate(v.archivedAt)}
+                                  {formatAdminDate(v.archivedAt)}
                                 </span>
                               </div>
                               <div className="flex items-center gap-2">
@@ -969,17 +960,6 @@ export default function AdminPluginsPage() {
 
 // מודאל מודרציית דירוגים — צפייה בכל דירוגי התוסף והסתרה/החזרה של דירוג בודד.
 // הסתרה אינה מוחקת: הדירוג נשאר במסד אך אינו נספר בממוצע, בהתפלגות ובציון המיון.
-function formatRatingDate(value) {
-  if (!value) return ''
-  return new Date(value).toLocaleDateString('he-IL', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
-
 function PluginRatingsModal({ plugin, onClose }) {
   const { showAlert, showConfirm } = useDialog()
   const [loading, setLoading] = useState(true)
@@ -1109,7 +1089,7 @@ function PluginRatingsModal({ plugin, onClose }) {
                           )}
                         </div>
                         <div className="text-xs text-on-surface/50">
-                          {formatRatingDate(rating.updatedAt || rating.createdAt)}
+                          {formatAdminDate(rating.updatedAt || rating.createdAt)}
                           {rating.pluginVersion ? ` · דורג בגרסה ${rating.pluginVersion}` : ''}
                           {rating.userEmail ? ` · ${rating.userEmail}` : ''}
                         </div>
