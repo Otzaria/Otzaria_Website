@@ -15,6 +15,7 @@ import {
   describeDuplicate,
   findDuplicates,
 } from '@/lib/institute-outreach'
+import { formatDateShort } from '@/lib/formatDate'
 
 const EMPTY = Object.freeze({})
 
@@ -23,7 +24,7 @@ function formatDate(value) {
   if (!value) return '—'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '—'
-  return date.toLocaleDateString('he-IL')
+  return formatDateShort(date)
 }
 
 /**

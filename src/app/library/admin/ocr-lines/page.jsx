@@ -9,6 +9,7 @@ import OcrLineContextModal from '@/components/ocr/OcrLineContextModal'
 import AutoGrowTextarea from '@/components/ocr/AutoGrowTextarea'
 import { hasOcrAccess } from '@/lib/roles'
 import { normalizeLineText, findForbidden } from '@/lib/ocr/textStandard'
+import { formatDateShort } from '@/lib/formatDate'
 
 const TABS = [
   { id: 'submitted', label: 'ממתינות לאישור', icon: 'pending_actions' },
@@ -469,7 +470,7 @@ export default function AdminOcrLinesPage() {
                         <span className="font-medium text-neutral-700">{line.transcribedByName}</span>
                         {line.transcribedAt && (
                           <span className="text-xs">
-                            {new Date(line.transcribedAt).toLocaleDateString('he-IL')}
+                            {formatDateShort(line.transcribedAt)}
                           </span>
                         )}
                       </>
