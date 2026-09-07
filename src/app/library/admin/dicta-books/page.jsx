@@ -355,11 +355,7 @@ export default function AdminDictaBooksPage() {
   }
 
   // אם עדיין בודקים הרשאות או המשתמש לא אדמין
-  if (status === 'loading') return (
-    <div className="flex justify-center items-center h-64">
-      <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
-    </div>
-  )
+  if (status === 'loading') return <LoadingSpinner message="" />
 
   if (!hasBooksAccess(session?.user?.role)) return null;
 

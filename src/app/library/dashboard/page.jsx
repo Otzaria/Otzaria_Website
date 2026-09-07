@@ -7,6 +7,7 @@ import Link from 'next/link'
 import Header from '@/components/layout/Header'
 import { useDialog } from '@/components/providers/DialogContext'
 import Pagination from '@/components/ui/Pagination'
+import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { validatePassword, validateMatch, validateDifferent } from '@/lib/validation-utils'
 
 export default function DashboardPage() {
@@ -450,10 +451,8 @@ export default function DashboardPage() {
 
   if (status === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <span className="material-symbols-outlined animate-spin text-6xl text-primary">
-          progress_activity
-        </span>
+      <div className="flex items-center justify-center min-h-screen">
+        <LoadingSpinner message="טוען..." size="lg" />
       </div>
     )
   }
@@ -650,11 +649,7 @@ export default function DashboardPage() {
           <div className="glass-strong p-8 rounded-2xl mb-8">
             <h2 className="text-2xl font-bold mb-6 text-on-surface">העמודים שלי</h2>
             {loading ? (
-              <div className="text-center py-8">
-                <span className="material-symbols-outlined animate-spin text-4xl text-primary">
-                  progress_activity
-                </span>
-              </div>
+              <LoadingSpinner message="" size="sm" />
             ) : stats.recentActivity && stats.recentActivity.length > 0 ? (
               <>
                 <div className="space-y-4">
@@ -715,11 +710,7 @@ export default function DashboardPage() {
           <div className="glass-strong p-8 rounded-2xl mb-8">
             <h2 className="text-2xl font-bold mb-6 text-on-surface">ספרי הדיקטה שלי</h2>
             {loading ? (
-              <div className="text-center py-8">
-                <span className="material-symbols-outlined animate-spin text-4xl text-primary">
-                  progress_activity
-                </span>
-              </div>
+              <LoadingSpinner message="" size="sm" />
             ) : stats.recentDictaBooks && stats.recentDictaBooks.length > 0 ? (
               <>
                 <div className="space-y-4">
