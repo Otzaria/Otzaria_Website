@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import EditorHeader from '@/components/editor/EditorHeader'
 import EditorToolbar from '@/components/editor/EditorToolbar'
@@ -21,6 +20,7 @@ import { useOCR } from '@/hooks/useOCR'
 import { getTextareaCaretTop } from '@/lib/editorUtils'
 import { findNextWholeWordInTextarea as findNextWholeWordInTextareaUtil } from '@/lib/hebrewWordUtils'
 import { hasBookLibraryAccess } from '@/lib/roles'
+import { useRequireAuth } from '@/hooks/useRequireAuth'
 
 // הגדרת ברירת מחדל המבוססת על מקשים פיזיים (Codes)
 const DEFAULT_SHORTCUTS = {
@@ -42,7 +42,7 @@ const DEFAULT_SHORTCUTS = {
 };
 
 export default function EditPage() {
-  const { data: session, status } = useSession()
+  const { session, status } = useRequireAuth()
   const router = useRouter()
   const params = useParams()
   const bookPath = decodeURIComponent(params.path)
@@ -256,9 +256,8 @@ export default function EditPage() {
   }, [])
 
   useEffect(() => {
-    if (status === 'unauthenticated') router.push(`/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
-    else if (status === 'authenticated') loadPageData()
-  // טעינה מותנית-נתיב; loadPageData/router מוחרגים למניעת לולאה
+    if (status === 'authenticated') loadPageData()
+  // טעינה מותנית-נתיב; loadPageData מוחרג למניעת לולאה
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, bookPath, pageNumber])
 

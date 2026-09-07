@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import Button from '@/components/ui/Button'
 import { useDialog } from '@/components/providers/DialogContext'
@@ -11,11 +10,12 @@ import DictaEditorCore from '@/components/editor/DictaEditorCore'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import DictaUploadDialog from '@/components/dicta-tools/DictaUploadDialog'
 import { hasBooksAccess } from '@/lib/roles'
+import { useRequireAuth } from '@/hooks/useRequireAuth'
 
 export default function DictaEditorPage() {
   const params = useParams()
   const router = useRouter()
-  const { data: session, status } = useSession()
+  const { session, status } = useRequireAuth()
   const { showAlert, showConfirm } = useDialog()
   const bookId = params?.bookId
   
@@ -87,16 +87,11 @@ export default function DictaEditorPage() {
   }
 
   useEffect(() => {
-    if (status === 'loading') return
-    if (status === 'unauthenticated') {
-      router.push(`/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
-      return
-    }
-    
+    if (status === 'loading' || status === 'unauthenticated') return
     if (bookId) loadBook()
   // טעינה מותנית-נתיב/הרשאה; loadBook מוחרג למניעת לולאה
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookId, status, router, showAlert])
+  }, [bookId, status, showAlert])
 
   const handleSaveToServer = async (currentContent, silent = false) => {
     try {
