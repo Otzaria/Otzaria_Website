@@ -9,6 +9,7 @@ import { useDialog } from '@/components/providers/DialogContext'
 import { MIN_SUPPORTED_APP_VERSION } from '@/lib/pluginSubmission'
 import { getErrorMessage } from '@/lib/errors'
 import { compareVersions } from '@/lib/semverCompare'
+import { MAX_PLUGIN_BYTES, MAX_IMAGE_BYTES, MAX_SCREENSHOTS, ALLOWED_IMAGE_MIMES } from '@/lib/pluginLimits'
 
 export default function UploadPluginPage() {
   const router = useRouter()
@@ -89,12 +90,6 @@ export default function UploadPluginPage() {
   const removeTag = (tag: string) => {
     handleChange('tags', formData.tags.filter(t => t !== tag))
   }
-
-  // מגבלות חייבות להיות עקביות עם השרת ([src/app/api/plugins/upload/route.js]).
-  const MAX_PLUGIN_BYTES = 50 * 1024 * 1024
-  const MAX_IMAGE_BYTES = 5 * 1024 * 1024
-  const MAX_SCREENSHOTS = 10
-  const ALLOWED_IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
 
   // Reads manifest.json from an .otzplugin (ZIP) file using fflate
   async function readPluginManifest(file: File): Promise<Record<string, unknown>> {

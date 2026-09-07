@@ -1,6 +1,9 @@
 import path from 'path'
 import { promises as fs } from 'fs'
 import crypto from 'crypto'
+import { MAX_PLUGIN_BYTES, MAX_IMAGE_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS, ALLOWED_IMAGE_MIMES } from './pluginLimits.js'
+
+export { MAX_PLUGIN_BYTES, MAX_IMAGE_BYTES, MAX_SCREENSHOT_BYTES, MAX_SCREENSHOTS }
 
 const OPT_CACHE_BASENAME = 'image_opt.webp'
 
@@ -49,14 +52,11 @@ export async function saveOptimizedImage(file, destDir, basename, { maxWidth = 1
   return { ext, contentType }
 }
 
-// מגבלות גודל
-export const MAX_PLUGIN_BYTES = 50 * 1024 * 1024 // 50MB
-export const MAX_IMAGE_BYTES = 5 * 1024 * 1024   // 5MB
-export const MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024
-export const MAX_SCREENSHOTS = 10
+// מגבלות הגודל/כמות עצמן מגיעות מ-./pluginLimits.js (ראו ייבוא וייצוא-מחדש
+// למעלה), כדי שדף העלאת התוסף בלקוח ישתמש באותם ערכים בדיוק.
 
 // סוגי תמונה מותרים (whitelist)
-const ALLOWED_IMAGE_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
+const ALLOWED_IMAGE_MIME = new Set(ALLOWED_IMAGE_MIMES)
 const MIME_TO_EXT = {
   'image/png': '.png',
   'image/jpeg': '.jpg',
