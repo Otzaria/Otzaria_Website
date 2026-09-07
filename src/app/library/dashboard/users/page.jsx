@@ -16,10 +16,12 @@ export default function UsersManagementPage() {
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push(`/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
-    } else if (session?.user?.role !== 'admin') {
-      router.push('/library/dashboard') // 👈 תיקון: הוספת /library
-    } else {
-      fetchUsers()
+    } else if (status === 'authenticated') {
+      if (session?.user?.role !== 'admin') {
+        router.push('/library/dashboard') // 👈 תיקון: הוספת /library
+      } else {
+        fetchUsers()
+      }
     }
   }, [status, session, router])
 
