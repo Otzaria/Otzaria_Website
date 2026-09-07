@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import Header from '@/components/layout/Header'
+import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { useDialog } from '@/components/providers/DialogContext'
 import { canManageLibrarySync } from '@/lib/roles'
 import DiffPreview from '@/components/library/DiffPreview'
@@ -177,7 +178,7 @@ export default function ConflictsPage() {
   const bookName = (path) => (path?.split('/').slice(1).join('/').replace(/\.txt$/, '') || path)
 
   if (status === 'loading') {
-    return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" /></div>
+    return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner message="" /></div>
   }
   if (!canSync) {
     return <div className="min-h-screen bg-[#f8f9fa]"><Header /><div className="container mx-auto px-4 py-20 text-center text-neutral-cool-500">אין לך הרשאת גישה.</div></div>

@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import Header from '@/components/layout/Header'
+import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { useDialog } from '@/components/providers/DialogContext'
 import { canModerateLibrary } from '@/lib/roles'
 import { EDIT_TYPE_LABELS, EDIT_KIND } from '@/lib/dicta/edit-constants'
@@ -153,7 +154,7 @@ export default function ModerationPage() {
   }
 
   if (status === 'loading') {
-    return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" /></div>
+    return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner message="" /></div>
   }
   if (!isModerator) {
     return (
