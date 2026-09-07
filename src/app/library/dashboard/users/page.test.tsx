@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, waitFor } from "@testing-library/react";
 import UsersManagementPage from "./page.jsx";
 
+type MockSession = { data: { user: { id: string; role: string } } | undefined; status: string };
+
 const push = vi.fn();
-let mockSession: { data: any; status: string } = { data: undefined, status: "loading" };
+let mockSession: MockSession = { data: undefined, status: "loading" };
 
 vi.mock("next-auth/react", () => ({
   useSession: () => mockSession,
