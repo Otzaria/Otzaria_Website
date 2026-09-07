@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import AdminTableShell from '@/components/admin/AdminTableShell'
+import { formatDateShort } from '@/lib/formatDate'
 
 export default function AdminOcrTrainingPage() {
   const [pages, setPages] = useState([])
@@ -333,7 +334,7 @@ export default function AdminOcrTrainingPage() {
                   </td>
                   <td className="p-4 text-sm">{p.claimedByName || '-'}</td>
                   <td className="p-4 text-sm text-neutral-500">
-                    {new Date(p.updatedAt || p.createdAt).toLocaleDateString('he-IL')}
+                    {formatDateShort(p.updatedAt || p.createdAt)}
                   </td>
                   <td className="p-4">
                     <div className="flex gap-1">
