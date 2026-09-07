@@ -1,29 +1,28 @@
-'use client'
-
-import { useState, useEffect } from 'react'
 import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 
-export default function LicensePage() {
-  const [licenseText, setLicenseText] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+// אותה נקודת קצה וחלון רענון (פעם בשעה) כמו ב-/api/license, אך נטענת ישירות
+// בצד השרת כדי למנוע מסך טעינה ו-JavaScript מיותר בצד הלקוח.
+async function fetchLicenseText() {
+  try {
+    const res = await fetch('https://raw.githubusercontent.com/Otzaria/otzaria/main/LICENSE', {
+      next: { revalidate: 3600 } // רענון פעם בשעה
+    })
 
-  useEffect(() => {
-    fetch('/api/license')
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to load')
-        return res.text()
-      })
-      .then((text) => {
-        setLicenseText(text)
-        setLoading(false)
-      })
-      .catch(() => {
-        setError(true)
-        setLoading(false)
-      })
-  }, [])
+    if (!res.ok) {
+      throw new Error('Failed to fetch license from GitHub')
+    }
+
+    return await res.text()
+  } catch (error) {
+    console.error('License fetch error:', error)
+    return null
+  }
+}
+
+export default async function LicensePage() {
+  const licenseText = await fetchLicenseText()
+  const error = licenseText === null
 
   return (
     <div className="min-h-screen bg-background">
@@ -51,17 +50,13 @@ export default function LicensePage() {
                   <span className="material-symbols-outlined text-primary">gavel</span>
                   תנאי הרישיון (License)
                 </h2>
-                
+
 
                 <div className="p-4 rounded-xl border border-surface-variant/50 mb-6 dir-ltr text-left font-sans text-sm text-on-surface/90">
-                  {loading ? (
-                    <div className="flex items-center justify-center py-10">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                    </div>
-                  ) : error ? (
+                  {error ? (
                     <div className="text-danger-500 text-center py-4">
                       <p>לא ניתן היה לטעון את הרישיון.</p>
-                      <a 
+                      <a
                         href="https://github.com/Otzaria/otzaria/blob/main/LICENSE"
                         target="_blank"
                         rel="noopener noreferrer"
@@ -81,9 +76,9 @@ export default function LicensePage() {
                    <span className="material-symbols-outlined text-primary text-lg">info</span>
                    <p>
                     לצפייה בקובץ הרישיון המקורי והעדכני ב-GitHub:{' '}
-                    <a 
+                    <a
                       href="https://github.com/Otzaria/otzaria/blob/main/LICENSE"
-                      target="_blank" 
+                      target="_blank"
                       rel="noopener noreferrer"
                       className="text-primary font-bold hover:underline"
                     >
@@ -95,9 +90,9 @@ export default function LicensePage() {
 
               <div className="pt-8 border-t border-surface-variant text-center">
                 <p className="mb-4">יש לך שאלות נוספות בנוגע לרישיון?</p>
-                <a 
-                  href="/forum" 
-                  target="_blank" 
+                <a
+                  href="/forum"
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-xl hover:bg-accent transition-colors font-bold"
                 >

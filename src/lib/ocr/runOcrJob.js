@@ -13,24 +13,9 @@ import {
   callGemini,
   matchGeminiResults,
 } from '@/lib/ocr/gemini';
+import { pageHasText, buildPageUpdate } from '@/lib/ocr/runOcrJob.pure';
 
 const GEMINI_BATCH_SIZE = 5;
-
-// בודק האם עמוד כבר מכיל טקסט כלשהו (תוכן ראשי או טורים).
-function pageHasText(p) {
-  return !!(p.content?.trim() || p.rightColumn?.trim() || p.leftColumn?.trim());
-}
-
-// העדכון שנכתב לעמוד לאחר OCR: הטקסט מחליף את התוכן, והטורים מתאפסים
-// (פלט ה-OCR הוא טקסט יחיד). במצב "דלג" ממילא נוגעים רק בעמודים ריקים.
-function buildPageUpdate(text) {
-  return {
-    content: text,
-    rightColumn: '',
-    leftColumn: '',
-    isTwoColumns: false,
-  };
-}
 
 // מכין את מקטעי התמונה של עמוד ל-OCR: מקטע אחד רגיל, או שניים (ימין/שמאל)
 // כאשר split פעיל. מחזיר מערך של { buffer, mimeType, displayName }.
