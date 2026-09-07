@@ -1,13 +1,13 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useSession } from 'next-auth/react'
-import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import Header from '@/components/layout/Header'
+import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { useDialog } from '@/components/providers/DialogContext'
 import { canManageLibrarySync } from '@/lib/roles'
 import DiffPreview from '@/components/library/DiffPreview'
+import { useRequireAuth } from '@/hooks/useRequireAuth'
 
 // טוען את ה-diff של ספר בודד רק כשפותחים אותו (לחיצה), כדי שעמוד הרשימה לא יריץ
 // diff על כל הספרים — לא בבקשה אחת ולא ב-N בקשות מקבילות עם הרינדור.
@@ -118,9 +118,7 @@ function ConflictDiff({ bookId, onResolved }) {
 }
 
 export default function ConflictsPage() {
-  const { data: session, status } = useSession()
-  const router = useRouter()
-  const pathname = usePathname()
+  const { session, status } = useRequireAuth()
   const { showAlert, showConfirm } = useDialog()
   const [conflicts, setConflicts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -152,13 +150,8 @@ export default function ConflictsPage() {
   }, [])
 
   useEffect(() => {
-    if (status === 'loading') return
-    if (status === 'unauthenticated') {
-      router.push(`/auth/login?callbackUrl=${encodeURIComponent(pathname)}`)
-      return
-    }
+    if (status === 'loading' || status === 'unauthenticated') return
     fetchConflicts()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status])
 
   const resolve = (book, strategy) => {
@@ -185,7 +178,7 @@ export default function ConflictsPage() {
   const bookName = (path) => (path?.split('/').slice(1).join('/').replace(/\.txt$/, '') || path)
 
   if (status === 'loading') {
-    return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" /></div>
+    return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner message="" /></div>
   }
   if (!canSync) {
     return <div className="min-h-screen bg-[#f8f9fa]"><Header /><div className="container mx-auto px-4 py-20 text-center text-neutral-cool-500">אין לך הרשאת גישה.</div></div>

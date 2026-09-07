@@ -2,10 +2,9 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
 import Header from '@/components/layout/Header'
 import { useDialog } from '@/components/providers/DialogContext'
+import { useRequireAuth } from '@/hooks/useRequireAuth'
 
 const BOOK_CATEGORIES = [
   'תנ"ך',
@@ -35,8 +34,7 @@ const AUTHOR_CATEGORIES = [
 ]
 
 export default function UploadPage() {
-  const { status } = useSession()
-  const router = useRouter()
+  const { status } = useRequireAuth()
   const { showConfirm, showAlert } = useDialog()
   
   const [file, setFile] = useState(null)
@@ -60,7 +58,6 @@ export default function UploadPage() {
   const [contemporaryAuthorConfirmed, setContemporaryAuthorConfirmed] = useState(false)
 
   if (status === 'unauthenticated') {
-    router.push(`/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
     return null
   }
 
