@@ -9,6 +9,7 @@ import { formatPluginStatus } from '@/lib/pluginSubmission'
 import { formatHebrewDate } from '@/lib/hebrewDate'
 import RatingStars from '@/components/plugins/RatingStars'
 import { statusBadgeClass } from '@/components/plugins/StatusBadge'
+import DirectInstallButton from '@/components/plugins/DirectInstallButton'
 import type { DirectInstallState } from '@/components/plugins/useDirectInstall'
 import type { Plugin } from '@/components/plugins/types'
 
@@ -107,24 +108,12 @@ export default function PluginCard({ plugin, installState, onInstall }: PluginCa
             הורדה
           </a>
           {canDirectInstall && (
-            <button
-              onClick={() => onInstall(plugin)}
-              disabled={installState.pluginId === plugin.id && installState.phase === 'waiting'}
+            <DirectInstallButton
+              pluginId={plugin.id}
+              installState={installState}
+              onInstall={() => onInstall(plugin)}
               className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-primary/20 text-primary rounded-full text-sm font-bold hover:bg-primary/5 transition-colors text-center disabled:cursor-default disabled:opacity-80"
-            >
-              {installState.pluginId === plugin.id && installState.phase === 'waiting' ? (
-                <>
-                  <span className="w-3.5 h-3.5 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></span>
-                  <span>מתקין...</span>
-                </>
-              ) : installState.pluginId === plugin.id && installState.phase === 'success' ? (
-                <span>{installState.updated ? 'עודכן בהצלחה!' : 'הותקן בהצלחה!'}</span>
-              ) : installState.pluginId === plugin.id && installState.phase === 'failure' ? (
-                <span>ההתקנה נכשלה - לחץ שוב לנסיון נוסף</span>
-              ) : (
-                <span>התקנה ישירה</span>
-              )}
-            </button>
+            />
           )}
         </div>
 

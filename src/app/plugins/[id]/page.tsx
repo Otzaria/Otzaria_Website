@@ -15,6 +15,7 @@ import { useDirectInstall } from '@/components/plugins/useDirectInstall'
 import { formatPluginStatus } from '@/lib/pluginSubmission'
 import { formatHebrewDate } from '@/lib/hebrewDate'
 import { statusBadgeClass } from '@/components/plugins/StatusBadge'
+import DirectInstallButton from '@/components/plugins/DirectInstallButton'
 import type { CategoryRef } from '@/components/plugins/types'
 
 interface Plugin {
@@ -372,33 +373,15 @@ export default function PluginDetailPage() {
                     <span>הורדה</span>
                   </a>
                   {canDirectInstall(plugin) && (
-                    <button
-                      onClick={handleDirectInstall}
-                      disabled={installState.phase === 'waiting'}
+                    <DirectInstallButton
+                      pluginId={plugin.id}
+                      installState={installState}
+                      onInstall={handleDirectInstall}
                       className="inline-flex items-center gap-2 px-6 py-3 bg-white border-2 border-primary text-primary rounded-xl font-bold hover:bg-primary/5 transition-colors disabled:cursor-default disabled:opacity-80"
-                    >
-                      {installState.phase === 'waiting' ? (
-                        <>
-                          <span className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></span>
-                          <span>מתקין...</span>
-                        </>
-                      ) : installState.phase === 'success' ? (
-                        <>
-                          <span className="material-symbols-outlined">check_circle</span>
-                          <span>{installState.updated ? 'עודכן בהצלחה!' : 'הותקן בהצלחה!'}</span>
-                        </>
-                      ) : installState.phase === 'failure' ? (
-                        <>
-                          <span className="material-symbols-outlined">error</span>
-                          <span>ההתקנה נכשלה - לחץ שוב לנסיון נוסף</span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="material-symbols-outlined">install_desktop</span>
-                          <span>התקנה ישירה לאוצריא</span>
-                        </>
-                      )}
-                    </button>
+                      spinnerClassName="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin"
+                      showIcons
+                      idleLabel="התקנה ישירה לאוצריא"
+                    />
                   )}
                   {plugin.homepage && (
                     <a
