@@ -4,28 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
-import StatusBadge from '@/components/status/StatusBadge'
 import StatusConfigModal from '@/components/status/StatusConfigModal'
 import OutreachEditModal from './OutreachEditModal'
-import {
-  MATCH_REASON_LABELS,
-  OPEN_OUTREACH_STATUSES,
-  OUTREACH_STATUSES_CONFIG_KEY,
-  RECENT_DUPLICATE_DAYS,
-  describeDuplicate,
-  findDuplicates,
-} from '@/lib/institute-outreach'
-import { formatDateShort } from '@/lib/formatDate'
+import Chip from './Chip'
+import OutreachRow from './OutreachRow'
+import { filterOutreachItems, computeOutreachStats } from './outreachFilters'
+import { OUTREACH_STATUSES_CONFIG_KEY, findDuplicates } from '@/lib/institute-outreach'
 
 const EMPTY = Object.freeze({})
-
-/** תאריך קצר לתצוגה */
-function formatDate(value) {
-  if (!value) return '—'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return '—'
-  return formatDateShort(date)
-}
 
 /**
  * כרטיסיית "פניות למכונים": מי פנה לאיזה מכון/אדם, מתי, ומה יצא מזה —
@@ -79,35 +65,12 @@ export default function OutreachTab() {
     return map
   }, [items])
 
-  const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase()
-    return items.filter((item) => {
-      if (statusFilter && item.status !== statusFilter) return false
-      if (onlyDuplicates && !duplicatesById.has(item._id)) return false
-      if (!term) return true
-      return [
-        item.instituteName,
-        item.contactName,
-        item.contactPhone,
-        item.contactEmail,
-        item.outreachBy,
-        item.subject,
-      ].some((field) => (field || '').toLowerCase().includes(term))
-    })
-  }, [items, search, statusFilter, onlyDuplicates, duplicatesById])
+  const filtered = useMemo(
+    () => filterOutreachItems(items, { search, statusFilter, onlyDuplicates, duplicatesById }),
+    [items, search, statusFilter, onlyDuplicates, duplicatesById]
+  )
 
-  const stats = useMemo(() => {
-    const byStatus = {}
-    for (const item of items) {
-      byStatus[item.status] = (byStatus[item.status] || 0) + 1
-    }
-    return {
-      total: items.length,
-      open: items.filter((item) => OPEN_OUTREACH_STATUSES.includes(item.status)).length,
-      duplicates: duplicatesById.size,
-      byStatus,
-    }
-  }, [items, duplicatesById])
+  const stats = useMemo(() => computeOutreachStats(items, duplicatesById), [items, duplicatesById])
 
   /**
    * שמירה. כשהשרת מחזיר 409 (כפילות שלא הופיעה ברשימה שנטענה) התשובה
@@ -358,94 +321,6 @@ export default function OutreachTab() {
           onSave={handleSaveStatuses}
           onClose={() => setConfigOpen(false)}
         />
-      )}
-    </div>
-  )
-}
-
-function Chip({ label, value, tone = 'bg-surface-variant text-on-surface' }) {
-  return (
-    <span className={`px-3 py-1.5 rounded-full text-xs font-bold ${tone}`}>
-      {label}: {value}
-    </span>
-  )
-}
-
-/** שורת פנייה, עם סימון כפילות כשקיימת פנייה אחרת לאותו נמען */
-function OutreachRow({ item, statuses, channels, duplicates, onEdit }) {
-  const channelLabel = item.channel ? channels?.[item.channel]?.label || item.channel : ''
-  // כפילות "חמה": פנייה קרובה בזמן או פנייה שעדיין פתוחה
-  const hotDuplicate = duplicates.find((dup) => dup.isRecent || dup.isOpen)
-
-  return (
-    <div className="px-5 py-3 hover:bg-surface-variant/30 transition-colors">
-      <div className="flex flex-col md:flex-row md:items-center gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-medium text-on-surface truncate">
-              {item.contactName || item.instituteName || 'ללא שם'}
-            </span>
-            {item.instituteName && item.contactName && (
-              <span className="text-xs text-on-surface/60 truncate">({item.instituteName})</span>
-            )}
-            {hotDuplicate && (
-              <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-danger-100 text-danger-700 flex items-center gap-1">
-                <span className="material-symbols-outlined text-[13px] leading-none">warning</span>
-                פנייה כפולה
-              </span>
-            )}
-            {!hotDuplicate && duplicates.length > 0 && (
-              <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-warning-100 text-warning-700">
-                פנייה נוספת בעבר
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-on-surface/50 truncate mt-0.5">
-            {[item.contactPhone, item.contactEmail].filter(Boolean).join(' · ') || 'ללא פרטי קשר'}
-            {item.subject ? ` · ${item.subject}` : ''}
-          </p>
-        </div>
-
-        <div className="md:w-40 shrink-0">
-          <StatusBadge status={item.status} statuses={statuses} />
-        </div>
-
-        <div className="md:w-40 shrink-0 text-sm text-on-surface/80 truncate">
-          {item.outreachBy || '—'}
-        </div>
-
-        <div className="md:w-28 shrink-0 text-sm text-on-surface/60 truncate">
-          {formatDate(item.outreachDate)}
-        </div>
-
-        <div className="md:w-24 shrink-0 text-sm text-on-surface/60 truncate">
-          {channelLabel || '—'}
-        </div>
-
-        <button
-          onClick={onEdit}
-          className="shrink-0 px-3 py-1.5 rounded-lg bg-primary text-on-primary text-sm hover:opacity-90 flex items-center gap-1"
-        >
-          <span className="material-symbols-outlined text-sm">edit</span>
-          עריכה
-        </button>
-      </div>
-
-      {duplicates.length > 0 && (
-        <div className="mt-2 mr-1 text-xs text-on-surface/70 border-r-2 border-warning-300 pr-3 space-y-1">
-          {duplicates.slice(0, 3).map((dup) => (
-            <p key={dup._id}>
-              גם {describeDuplicate(dup)} · {statuses?.[dup.status]?.label || dup.status} · התאמה
-              לפי {MATCH_REASON_LABELS[dup.reason] || dup.reason}
-            </p>
-          ))}
-          {duplicates.length > 3 && <p>ועוד {duplicates.length - 3} פניות…</p>}
-          {hotDuplicate && (
-            <p className="text-danger-700">
-              פנייה חוזרת בתוך {RECENT_DUPLICATE_DAYS} ימים או בזמן שפנייה אחרת עדיין פתוחה.
-            </p>
-          )}
-        </div>
       )}
     </div>
   )
