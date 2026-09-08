@@ -20,7 +20,13 @@ import SpellcheckDialog from '@/components/editor/modals/SpellcheckDialog'
 import { getTextareaCaretTop } from '@/lib/editorUtils'
 import { withShortcut } from '@/lib/shortcuts'
 import DOMPurify from 'dompurify'
-import { buildWholeWordRegex, findNextWholeWordInTextarea as findNextWholeWordInTextareaUtil } from '@/lib/hebrewWordUtils'
+import { buildWholeWordRegex, escapeRegExp, findNextWholeWordInTextarea as findNextWholeWordInTextareaUtil } from '@/lib/hebrewWordUtils'
+import {
+  buildTocFromContent,
+  locateTextFlexible,
+  buildWordVariants as buildWordVariantsUtil,
+  applyFindPatternTokens
+} from '@/components/editor/dictaEditorTextUtils'
 
 const DEFAULT_SHORTCUTS = {
   'save': 'Ctrl+KeyS',
@@ -46,75 +52,6 @@ const DEFAULT_SHORTCUTS = {
 
 // תקרת צעדי undo/redo - כל צעד שומר עותק מלא של המסמך, ללא תקרה הזיכרון תופח במסמך גדול
 const MAX_HISTORY = 100
-
-function buildTocFromContent(content) {
-  if (!content) return []
-
-  const headingRegex = /<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi
-  const tocItems = []
-  let match
-  let index = 0
-
-  while ((match = headingRegex.exec(content)) !== null) {
-    const [, rawLevel, innerHtml] = match
-    // הפענוח של &amp; מתבצע אחרון: אחרת "&amp;lt;" (שאמור להישאר "&lt;" מילולי)
-    // היה מפוענח פעמיים ל-"<" בטעות (codeql: js/double-escaping).
-    const headingText = innerHtml
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/&nbsp;/gi, ' ')
-      .replace(/&lt;/gi, '<')
-      .replace(/&gt;/gi, '>')
-      .replace(/&quot;/gi, '"')
-      .replace(/&#39;/gi, "'")
-      .replace(/&amp;/gi, '&')
-      .replace(/\s+/g, ' ')
-      .trim()
-
-    tocItems.push({
-      id: `heading-${index}`,
-      level: Math.min(Math.max(parseInt(rawLevel, 10), 1), 6),
-      text: headingText,
-      html: match[0],
-      position: match.index
-    })
-
-    index += 1
-  }
-
-  return tocItems
-}
-
-/**
- * מאתר קטע מקישור עמוק (?find=) בתוכן הספר. הקטע המדווח מנוקה מתגי HTML
- * בעוד התוכן מכיל אותם, לכן אחרי התאמה מדויקת מנסים regex סובלני: תגים,
- * &nbsp; וישויות HTML בין/בתוך מילים, וגרשיים עבריים מול ASCII.
- */
-function locateTextFlexible(content, phrase) {
-  const cleaned = String(phrase || '').replace(/\s+/g, ' ').trim()
-  if (!cleaned || !content) return null
-
-  const exactIndex = content.indexOf(cleaned)
-  if (exactIndex !== -1) return { start: exactIndex, end: exactIndex + cleaned.length }
-
-  // סדר ההחלפות חשוב: & לפני החלפות שמוסיפות &quot;/&#39; לתבנית.
-  // תקרת 15 מילים — מגנה מפני backtracking קטלוני בקטע ארוך, ו-15 המילים
-  // הראשונות כמעט תמיד ייחודיות מספיק לאיתור.
-  const tokens = cleaned.split(' ').slice(0, 15).map(token =>
-    token
-      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      .replace(/&/g, '&(?:amp;)?')
-      .replace(/["״]/g, '(?:["״]|&quot;)')
-      .replace(/['׳]/g, "(?:['׳]|&#39;)")
-  )
-  try {
-    const tolerant = new RegExp(tokens.join('(?:\\s|&nbsp;|<[^>]*>)+'))
-    const match = tolerant.exec(content)
-    if (match) return { start: match.index, end: match.index + match[0].length }
-  } catch (e) {
-    console.warn('locateTextFlexible: invalid pattern', e)
-  }
-  return null
-}
 
 export default function DictaEditorCore({
   initialContent = '',
@@ -604,11 +541,6 @@ export default function DictaEditorCore({
     }, 0)
   }, [content, showAlert, updateTextWithHistory])
 
-  const normalizeHebrewQuotes = useCallback((value) => {
-    if (!value) return ''
-    return value.replace(/["']/g, m => (m === '"' ? '״' : '׳'))
-  }, [])
-
   const handleFindNextInternal = useCallback((textToFind, isRegexMode, suppressAlerts = false) => {
     if (!textToFind) {
       if (!suppressAlerts) showAlert('שגיאה', 'הזן טקסט לחיפוש')
@@ -618,8 +550,7 @@ export default function DictaEditorCore({
 
     const textarea = textareaRef.current
     const text = content
-    const processPattern = (str) => str.replaceAll('^13', '\n')
-    const patternStr = processPattern(textToFind)
+    const patternStr = applyFindPatternTokens(textToFind)
     
     const startPos = textarea.selectionEnd || 0
     let matchIndex = -1
@@ -762,9 +693,7 @@ export default function DictaEditorCore({
     if (validVariants.length === 0) return false
     
     // Escape special regex characters and create combined pattern
-    const escapedVariants = validVariants.map(word => 
-      word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    )
+    const escapedVariants = validVariants.map(word => escapeRegExp(word))
     const combinedPattern = `(^|\\s|[^\\u05D0-\\u05EA])(${escapedVariants.join('|')})(?=\\s|[^\\u05D0-\\u05EA]|$)`
     
     let combinedRegex
@@ -827,13 +756,7 @@ export default function DictaEditorCore({
     return false
   }, [highlightFirstOccurrence])
 
-  const buildWordVariants = useCallback((word) => {
-    if (!word) return []
-    const normalized = normalizeHebrewQuotes(word)
-    const alt = normalized.replace(/[״׳]/g, m => (m === '״' ? '"' : "'"))
-    const variants = [word, normalized, alt].filter(Boolean)
-    return Array.from(new Set(variants))
-  }, [normalizeHebrewQuotes])
+  const buildWordVariants = useCallback((word) => buildWordVariantsUtil(word), [])
 
   const handleSpellcheckSelect = useCallback((word, ignoreCount = 0) => {
     if (!word) return
@@ -899,9 +822,8 @@ export default function DictaEditorCore({
       return
     }
 
-    const processPattern = (str) => str.replaceAll('^13', '\n')
-    const patternStr = processPattern(textToFind)
-    const replacement = processPattern(textToReplace || '')
+    const patternStr = applyFindPatternTokens(textToFind)
+    const replacement = applyFindPatternTokens(textToReplace || '')
 
     let finalReplacement = replacement
 
@@ -937,16 +859,15 @@ export default function DictaEditorCore({
 
     if (!textToFind) return showAlert('שגיאה', 'הזן טקסט לחיפוש')
     
-    const processPattern = (str) => str.replaceAll('^13', '\n')
-    const patternStr = processPattern(textToFind)
-    const replacement = processPattern(textToReplace || '')
+    const patternStr = applyFindPatternTokens(textToFind)
+    const replacement = applyFindPatternTokens(textToReplace || '')
 
     const createRegex = (global) => {
       try {
         if (isRegexMode) {
           return new RegExp(patternStr, global ? 'g' : '')
         } else {
-          const escaped = patternStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          const escaped = escapeRegExp(patternStr)
           return new RegExp(escaped, global ? 'g' : '')
         }
       } catch (e) {
@@ -1019,16 +940,15 @@ export default function DictaEditorCore({
       if (search.isRemoveDigits) {
         currentContent = currentContent.replace(/\d+/g, '')
       } else {
-        const processPattern = (str) => str.replaceAll('^13', '\n')
-        const patternStr = processPattern(search.findText)
-        const replacement = processPattern(search.replaceText || '')
+        const patternStr = applyFindPatternTokens(search.findText)
+        const replacement = applyFindPatternTokens(search.replaceText || '')
 
         try {
           let regex
           if (search.isRegex) {
             regex = new RegExp(patternStr, 'g')
           } else {
-            const escaped = patternStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            const escaped = escapeRegExp(patternStr)
             regex = new RegExp(escaped, 'g')
           }
 
