@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
+import { revalidateTag } from 'next/cache';
 import connectDB from '@/lib/db';
 import Message from '@/models/Message';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasAnyAdminAccess } from '@/lib/roles';
+import { CACHE_TAGS } from '@/lib/cacheTags';
 
 export async function PUT(request) {
     const session = await getServerSession(authOptions);
@@ -16,6 +18,11 @@ export async function PUT(request) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     await Message.findByIdAndUpdate(messageId, { isRead: true });
+
+    // "סמן כנקרא" הוא פעולת מנהל מפורשת (לא עדכון readBy עקיף) — משנה את
+    // isRead שעליו מבוסס שדה status בתור הניהול, ולכן מבטלים מיד ולא
+    // מסתמכים על חלון הגיבוי.
+    revalidateTag(CACHE_TAGS.MESSAGES_ADMIN_LIST);
 
     return NextResponse.json({ success: true });
 }
