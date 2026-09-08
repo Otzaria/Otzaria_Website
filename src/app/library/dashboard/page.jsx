@@ -12,6 +12,7 @@ import PasswordChangeModal from '@/components/dashboard/PasswordChangeModal'
 import EmailChangeModal from '@/components/dashboard/EmailChangeModal'
 import SubscriptionReminderModal from '@/components/dashboard/SubscriptionReminderModal'
 import NotificationSubscriptionModal from '@/components/dashboard/NotificationSubscriptionModal'
+import { formatDateShortMonthWithYearAndTime } from '@/lib/formatDate'
 
 export default function DashboardPage() {
   const { data: session, status, update } = useSession()
@@ -718,13 +719,7 @@ export default function DashboardPage() {
                                   <span className="mx-2">•</span>
                                 </>
                               )}
-                              {new Date(message.createdAt).toLocaleDateString('he-IL', {
-                                day: 'numeric',
-                                month: 'short',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
+                              {formatDateShortMonthWithYearAndTime(message.createdAt)}
                             </p>
                           </div>
                           <span className={`px-3 py-1 rounded-full text-xs font-bold ${

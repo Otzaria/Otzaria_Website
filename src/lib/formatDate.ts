@@ -27,3 +27,14 @@ export function formatDateFull(date: Date | number | string): string {
     year: 'numeric',
   });
 }
+
+/** תאריך עם שם חודש מקוצר, שנה ושעה: "15 במרץ 2025, 09:05". */
+export function formatDateShortMonthWithYearAndTime(date: Date | number | string): string {
+  return new Date(date).toLocaleDateString('he-IL', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
