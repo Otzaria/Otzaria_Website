@@ -1,8 +1,5 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { apiGet } from '@/lib/api-utils'
-
 const PLATFORMS = [
   {
     key: 'windows',
@@ -27,24 +24,12 @@ function formatSize(bytes) {
 }
 
 /**
- * כרטיסי ההורדה של "עדכוני אוצריא" — הקישורים נטענים מ-/api/offline-update-releases
- * (ה-release האחרון בריפו Otzaria_Offline_update). כשה-API נכשל נשאר קישור לדף ה-releases.
+ * כרטיסי ההורדה של "עדכוני אוצריא" — releases מגיע כבר טעון מהשרת (ראו
+ * OfflineUpdateDownload.jsx, ה-Server Component שעוטף את הרכיב הזה ושולף
+ * את /api/offline-update-releases בזמן רינדור הדף). כש-releases הוא null
+ * (ה-API נכשל) נשאר קישור לדף ה-releases.
  */
-export default function OfflineUpdateDownload({ repoUrl }) {
-  const [releases, setReleases] = useState(null)
-  const [failed, setFailed] = useState(false)
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        setReleases(await apiGet('/api/offline-update-releases'))
-      } catch {
-        setFailed(true)
-      }
-    }
-    load()
-  }, [])
-
+export default function OfflineUpdateDownloadClient({ repoUrl, releases }) {
   const releasesPage = `${repoUrl}/releases/latest`
 
   return (
@@ -54,9 +39,7 @@ export default function OfflineUpdateDownload({ repoUrl }) {
         <p className="text-on-surface/70">
           {releases?.version
             ? `הגרסה האחרונה: ${releases.version}`
-            : failed
-              ? 'לא הצלחנו לטעון את פרטי הגרסה. ניתן להוריד ישירות מדף ההפצות.'
-              : 'טוען את פרטי הגרסה האחרונה...'}
+            : 'לא הצלחנו לטעון את פרטי הגרסה. ניתן להוריד ישירות מדף ההפצות.'}
         </p>
       </div>
 
