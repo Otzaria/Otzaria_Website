@@ -39,6 +39,15 @@ export const CACHE_TAGS = {
   // זהה לכל בעל הרשאת ניהול כלשהי (hasAnyAdminAccess), ראו ההסבר המלא
   // ב-src/app/library/admin/messages/page.jsx על ההבחנה מתיבת-דואר אישית.
   MESSAGES_ADMIN_LIST: 'admin-messages-list',
+  // רשימת הספרים בממשק ניהול הספרים (/library/admin/books) — נתון זהה לכל
+  // מנהל (לא מסונן לפי בעלים; מציג את כל הספרים כולל אישיים/מוסתרים)
+  BOOKS_ADMIN_LIST: 'books-admin-list',
+  // רשימת ההעלאות בממשק ניהול העלאות (/library/admin/uploads) — כל ההעלאות
+  // שאינן באשפה (isDeleted: false), זהה לכל מנהל
+  UPLOADS_ADMIN_LIST: 'uploads-admin-list',
+  // רשימת ספרי הדיקטה בממשק ניהול (/library/admin/dicta-books) — כל הספרים,
+  // זהה לכל מנהל
+  DICTA_BOOKS_ADMIN_LIST: 'dicta-books-admin-list',
 }
 
 /** חלונות revalidate ברירת-מחדל (שניות) — "רשת ביטחון" בנוסף לתגיות. */
@@ -51,4 +60,10 @@ export const REVALIDATE_SECONDS = {
   OCR_TRAINING_LIST: 30,
   USERS_ADMIN_LIST: 45,
   MESSAGES_ADMIN_LIST: 30,
+  // התקדמות עמודים (completedPages/inProgressPages) מתעדכנת בכל שמירת עמוד
+  // בודדת — תדירות גבוהה מדי לתיוג לכל שמירה, ולכן חלון קצר יחסית כרשת ביטחון
+  // (ראו ההסבר על downloadCount למעלה; אותו עיקרון).
+  BOOKS_ADMIN_LIST: 30,
+  UPLOADS_ADMIN_LIST: 30,
+  DICTA_BOOKS_ADMIN_LIST: 30,
 }

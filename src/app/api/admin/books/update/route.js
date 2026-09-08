@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
+import { revalidateTag } from 'next/cache';
 import connectDB from '@/lib/db';
 import Book from '@/models/Book';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { sendBookNotification } from '@/lib/emailService';
 import { hasBookLibraryAccess } from '@/lib/roles';
+import { CACHE_TAGS } from '@/lib/cacheTags';
 
 export async function PUT(request) {
   try {
@@ -57,6 +59,8 @@ export async function PUT(request) {
     if (sendNotification && isHidden === false) {
         await sendBookNotification(updatedBook.name, updatedBook.slug);
     }
+
+    revalidateTag(CACHE_TAGS.BOOKS_ADMIN_LIST);
 
     return NextResponse.json({ success: true, book: updatedBook });
 

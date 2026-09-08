@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
+import { revalidateTag } from 'next/cache'
 import { getServerSession } from 'next-auth/next'
-import dbConnect from '@/lib/db' 
+import dbConnect from '@/lib/db'
 import DictaBook from '@/models/DictaBook'
 import User from '@/models/User'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route' 
+import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { hasBooksAccess } from '@/lib/roles'
+import { CACHE_TAGS } from '@/lib/cacheTags'
 
 // שינינו את קבלת הפרמטרים
 export async function POST(request, context) {
@@ -76,6 +78,8 @@ export async function POST(request, context) {
 
     // 8. הוספת 10 נקודות למשתמש על תפיסת הספר
     await User.findByIdAndUpdate(userId, { $inc: { points: 10 } });
+
+    revalidateTag(CACHE_TAGS.DICTA_BOOKS_ADMIN_LIST);
 
     return NextResponse.json({ success: true, message: 'הספר נתפס בהצלחה' }, { status: 200 });
 

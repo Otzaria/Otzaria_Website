@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { revalidateTag } from 'next/cache';
 import connectDB from '@/lib/db';
 import DictaBook from '@/models/DictaBook';
 import UploadEditCopy from '@/models/UploadEditCopy';
@@ -8,6 +9,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBooksAccess } from '@/lib/roles';
 import { requireBooksAccessOrForbidden } from '../../_auth';
+import { CACHE_TAGS } from '@/lib/cacheTags';
 
 export async function GET(req, { params }) {
   try {
@@ -105,6 +107,7 @@ export async function PUT(req, { params }) {
       book.claimedBy = userId;
       book.claimedAt = new Date();
       await book.save();
+      if (!isEditCopy) revalidateTag(CACHE_TAGS.DICTA_BOOKS_ADMIN_LIST);
       return NextResponse.json({ success: true, message: 'Book claimed' });
     }
 
@@ -121,6 +124,7 @@ export async function PUT(req, { params }) {
         book.completedAt = new Date();
       }
       await book.save();
+      if (!isEditCopy) revalidateTag(CACHE_TAGS.DICTA_BOOKS_ADMIN_LIST);
       return NextResponse.json({ success: true, book });
     }
 
@@ -179,6 +183,7 @@ export async function PUT(req, { params }) {
     }
     
     await book.save();
+    if (!isEditCopy) revalidateTag(CACHE_TAGS.DICTA_BOOKS_ADMIN_LIST);
     return NextResponse.json(book);
   } catch (error) {
     console.error('Failed to update book:', error);
@@ -228,8 +233,9 @@ export async function DELETE(req, { params }) {
     } else {
       // מחיקת ספר דיקטה רגיל
       await DictaBook.findByIdAndDelete(id);
+      revalidateTag(CACHE_TAGS.DICTA_BOOKS_ADMIN_LIST);
     }
-    
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Failed to delete book:', error);

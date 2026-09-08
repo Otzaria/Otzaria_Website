@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { revalidateTag } from 'next/cache';
 import connectDB from '@/lib/db';
 import Book from '@/models/Book';
 import Page from '@/models/Page';
@@ -7,6 +8,7 @@ import path from 'path';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBookLibraryAccess } from '@/lib/roles';
+import { CACHE_TAGS } from '@/lib/cacheTags';
 
 export async function DELETE(request) {
     try {
@@ -48,6 +50,8 @@ export async function DELETE(request) {
 
         // 4. מחיקת רשומת הספר עצמה מה-DB (קורה תמיד!)
         await Book.findByIdAndDelete(bookId);
+
+        revalidateTag(CACHE_TAGS.BOOKS_ADMIN_LIST);
 
         return NextResponse.json({ success: true, message: 'הספר נמחק בהצלחה' });
 
