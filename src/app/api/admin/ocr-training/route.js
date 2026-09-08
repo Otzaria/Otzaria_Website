@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { revalidateTag } from 'next/cache';
 import connectDB from '@/lib/db';
 import OcrTrainingPage from '@/models/OcrTrainingPage';
 import Book from '@/models/Book';
@@ -9,6 +10,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasOcrAccess } from '@/lib/roles';
 import { resolveImageFsPath } from '@/lib/ocr/images';
 import { LINES_PER_PAGE } from '@/lib/ocr/trainingValidation';
+import { CACHE_TAGS } from '@/lib/cacheTags';
 
 // GET: רשימת כל עמודי האימון עם התקדמות סימון השורות.
 export async function GET() {
@@ -114,6 +116,7 @@ export async function POST(request) {
       addedBy: session.user.id || session.user._id,
     });
 
+    revalidateTag(CACHE_TAGS.OCR_TRAINING_LIST);
     return NextResponse.json({ success: true, id: String(doc._id) });
   } catch (error) {
     console.error('OCR training add error:', error);

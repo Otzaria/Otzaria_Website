@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
+import { revalidateTag } from 'next/cache';
 import connectDB from '@/lib/db';
 import OcrTrainingPage from '@/models/OcrTrainingPage';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBookLibraryAccess } from '@/lib/roles';
+import { CACHE_TAGS } from '@/lib/cacheTags';
 
 // POST: המשתמש משחרר עמוד שתפס (מוותר עליו). השורות שסומנו נשמרות.
 export async function POST(request, { params }) {
@@ -31,6 +33,7 @@ export async function POST(request, { params }) {
     page.completedAt = undefined;
     await page.save();
 
+    revalidateTag(CACHE_TAGS.OCR_TRAINING_LIST);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('OCR training release error:', error);
