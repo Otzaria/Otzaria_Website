@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { apiPost, apiUpload } from '@/lib/api-utils'
 
 export function useOCR() {
   const [isProcessing, setIsProcessing] = useState(false)
@@ -15,21 +16,12 @@ export function useOCR() {
 
     const imageBase64 = await base64Promise
 
-    const response = await fetch('/api/gemini-ocr', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        imageBase64,
-        model,
-        userApiKey: apiKey || undefined,
-        customPrompt: prompt || undefined
-      })
+    const result = await apiPost('/api/gemini-ocr', {
+      imageBase64,
+      model,
+      userApiKey: apiKey || undefined,
+      customPrompt: prompt || undefined
     })
-
-    const result = await response.json()
-    if (!result.success) {
-      throw new Error(result.error || 'Gemini OCR failed')
-    }
     return result.text
   }
 
@@ -81,16 +73,7 @@ const performTesseractOCR = async (croppedBlob, onProgress) => {
     formData.append('file', croppedBlob);
 
     // 3. שולחים את הטופס ל-API שלנו
-    const response = await fetch('/api/ocrwin', {
-      method: 'POST',
-      // שים לב: לא שמים Headers של Content-Type, ה-fetch יודע לזהות לבד שזה FormData
-      body: formData
-    });
-
-    const result = await response.json();
-    if (!result.success) {
-      throw new Error(result.error || 'OCRWIN failed');
-    }
+    const result = await apiUpload('/api/ocrwin', formData);
     return result.text;
   };
 

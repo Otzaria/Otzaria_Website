@@ -1,4 +1,5 @@
 import { useRef, useCallback, useState } from 'react'
+import { apiPost } from '@/lib/api-utils'
 
 export function useAutoSave() {
   const timeoutRef = useRef(null)
@@ -18,24 +19,18 @@ export function useAutoSave() {
   }) => {
     setStatus('saving')
     try {
-      const response = await fetch('/api/page-content', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          bookPath,
-          pageNumber,
-          content,
-          leftColumn,
-          rightColumn,
-          twoColumns,
-          isContentSplit,
-          rightColumnName,
-          leftColumnName
-        })
+      await apiPost('/api/page-content', {
+        bookPath,
+        pageNumber,
+        content,
+        leftColumn,
+        rightColumn,
+        twoColumns,
+        isContentSplit,
+        rightColumnName,
+        leftColumnName
       })
-      
-      if (!response.ok) throw new Error('Network response was not ok')
-      
+
       setStatus('saved')
       console.log('✅ Auto-saved')
     } catch (error) {
