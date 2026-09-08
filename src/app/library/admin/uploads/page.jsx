@@ -11,6 +11,7 @@ import UploadNotificationSettings from '@/components/notifications/UploadNotific
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import MetadataDisplay from '@/components/data-display/MetadataDisplay'
 import MessageUploaderDialog from '@/components/admin/MessageUploaderDialog'
+import { formatDateShort } from '@/lib/formatDate'
 
 export default function AdminUploadsPage() {
   const [uploads, setUploads] = useState([])
@@ -701,7 +702,7 @@ export default function AdminUploadsPage() {
                                               </span>
                                               <span className="flex items-center gap-1">
                                                 <span className="material-symbols-outlined text-sm">calendar_today</span>
-                                                {new Date(firstUpload.uploadedAt).toLocaleDateString('he-IL')}
+                                                {formatDateShort(firstUpload.uploadedAt)}
                                               </span>
                                               {!hasMultipleUploads && (
                                                   <span className="flex items-center gap-1" title={firstUpload.originalFileName}>
@@ -943,7 +944,7 @@ export default function AdminUploadsPage() {
                                                       </span>
                                                       <span className="flex items-center gap-1">
                                                         <span className="material-symbols-outlined text-xs">calendar_today</span>
-                                                        {new Date(upload.uploadedAt).toLocaleDateString('he-IL')}
+                                                        {formatDateShort(upload.uploadedAt)}
                                                       </span>
                                                       <span className="flex items-center gap-1" title={upload.originalFileName}>
                                                         <span className="material-symbols-outlined text-xs">attachment</span>
