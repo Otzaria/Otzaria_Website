@@ -9,6 +9,8 @@ import { useDialog } from '@/components/providers/DialogContext'
 import Pagination from '@/components/ui/Pagination'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import PasswordChangeModal from '@/components/dashboard/PasswordChangeModal'
+import EmailChangeModal from '@/components/dashboard/EmailChangeModal'
+import SubscriptionReminderModal from '@/components/dashboard/SubscriptionReminderModal'
 
 export default function DashboardPage() {
   const { data: session, status, update } = useSession()
@@ -48,12 +50,8 @@ export default function DashboardPage() {
   const [loadingSub, setLoadingSub] = useState(false)
 
   const [showEmailModal, setShowEmailModal] = useState(false)
-  const [newEmail, setNewEmail] = useState('')
-  const [updatingEmail, setUpdatingEmail] = useState(false)
-
 
   const [showReminderModal, setShowReminderModal] = useState(false)
-  const [dismissingReminder, setDismissingReminder] = useState(false)
 
   const [showPasswordModal, setShowPasswordModal] = useState(false)
 
@@ -68,9 +66,8 @@ export default function DashboardPage() {
       router.push(`/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`);
     } else if (status === 'authenticated') {
       const isFirstTime = stats.myPages === 0 && stats.recentActivity.length === 0;
-      loadUserStats(isFirstTime); 
+      loadUserStats(isFirstTime);
       loadMyMessages();
-      setNewEmail(session?.user?.email || '');
       checkSubscriptionReminder();
     }
   // טעינה מותנית-הרשאה; קריאת stats היא snapshot מכוון
@@ -154,27 +151,6 @@ export default function DashboardPage() {
     }
   }
 
-  const handleDismissReminderServerSide = async () => {
-    try {
-        setDismissingReminder(true);
-        const response = await fetch('/api/user/notifications/dismiss', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-        
-        if (response.ok) {
-            setShowReminderModal(false);
-        } else {
-            setShowReminderModal(false);
-        }
-    } catch (error) {
-        console.error('Error dismissing reminder:', error);
-        setShowReminderModal(false);
-    } finally {
-        setDismissingReminder(false);
-    }
-  };
-
   const toggleSubscription = async () => {
     try {
       setLoadingSub(true)
@@ -208,41 +184,6 @@ export default function DashboardPage() {
       checkSubscriptionStatus()
     }
   }, [showNotifModal])
-
-  const handleUpdateEmail = async () => {
-    if (!newEmail || !newEmail.includes('@')) {
-        showAlert('שגיאה', 'נא להזין כתובת מייל תקינה');
-        return;
-    }
-    
-    if (newEmail === session?.user?.email) {
-        setShowEmailModal(false);
-        return;
-    }
-
-    setUpdatingEmail(true);
-
-    try {
-        const res = await fetch('/api/auth/update-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: newEmail })
-        });
-        const data = await res.json();
-
-        if (res.ok) {
-            await update();
-            showAlert('הצלחה', 'כתובת המייל עודכנה בהצלחה!');
-            setShowEmailModal(false);
-        } else {
-            showAlert('שגיאה', data.error || 'שגיאה בעדכון המייל');
-        }
-    } catch (error) {
-        showAlert('שגיאה', 'שגיאת תקשורת');
-    } finally {
-        setUpdatingEmail(false);
-    }
-  };
 
   const handleSendMessage = async () => {
     if (!messageSubject.trim() || !messageText.trim()) {
@@ -544,11 +485,8 @@ export default function DashboardPage() {
                 <span className="font-medium text-on-surface">התראות על ספרים חדשים</span>
               </button>
 
-              <button 
-                onClick={() => {
-                    setNewEmail(session?.user?.email || '');
-                    setShowEmailModal(true);
-                }}
+              <button
+                onClick={() => setShowEmailModal(true)}
                 className="flex flex-col items-center gap-3 p-6 bg-primary-container rounded-xl hover:bg-primary/20 transition-all"
               >
                 <span className="material-symbols-outlined text-4xl text-primary">manage_accounts</span>
@@ -705,83 +643,13 @@ export default function DashboardPage() {
       </div>
 
       {showEmailModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="flex flex-col bg-white glass-strong rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-surface-variant bg-white/50 rounded-t-2xl flex justify-between items-center">
-              <h3 className="text-xl font-bold text-on-surface flex items-center gap-3">
-                <span className="material-symbols-outlined text-2xl text-primary">manage_accounts</span>
-                עדכון כתובת מייל
-              </h3>
-              <button 
-                onClick={() => setShowEmailModal(false)} 
-                className="text-neutral-500 hover:text-neutral-800"
-                disabled={updatingEmail}
-              >
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-            
-            <div className="p-6 space-y-6">
-               <div>
-                  <label className="block text-sm font-medium text-on-surface mb-2">כתובת מייל נוכחית</label>
-                  <div className="w-full px-4 py-3 bg-neutral-100 border border-neutral-200 rounded-lg text-neutral-600">
-                    {session?.user?.email}
-                  </div>
-               </div>
-
-               <div>
-                  <label className="block text-sm font-medium text-on-surface mb-2">כתובת מייל חדשה</label>
-                  <input
-                    type="email"
-                    value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
-                    placeholder="הכנס מייל חדש..."
-                    className="w-full px-4 py-3 border border-surface-variant rounded-lg focus:outline-none focus:border-primary bg-white text-on-surface shadow-sm"
-                    disabled={updatingEmail}
-                    dir="ltr"
-                  />
-               </div>
-
-              <div className="flex gap-3 pt-2">
-                <button
-                    onClick={() => setShowEmailModal(false)}
-                    disabled={updatingEmail}
-                    className="flex-1 px-4 py-2 border border-surface-variant text-on-surface rounded-lg hover:bg-surface-variant transition-colors"
-                >
-                    ביטול
-                </button>
-                <button
-                    onClick={() => {
-                        if (!newEmail || !newEmail.includes('@')) {
-                            showAlert('שגיאה', 'נא להזין כתובת מייל תקינה');
-                            return;
-                        }
-                        if (newEmail === session?.user?.email) {
-                            setShowEmailModal(false);
-                            return;
-                        }
-                        showConfirm(
-                            'עדכון כתובת מייל',
-                            'שינוי כתובת המייל ידרוש ביצוע אימות מחדש לכתובת החדשה כדי להמשיך להשתמש בחשבון. האם אתה בטוח?',
-                            () => handleUpdateEmail()
-                        );
-                    }}
-                    disabled={updatingEmail || !newEmail || newEmail === session?.user?.email}
-                    className="flex-[2] px-4 py-2 bg-primary text-on-primary rounded-lg hover:bg-accent transition-colors flex items-center justify-center gap-2 font-bold shadow-md"
-                >
-                    {updatingEmail ? (
-                    <>
-                        <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
-                        <span>מעדכן...</span>
-                    </>
-                    ) : (
-                        'עדכן מייל'
-                    )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <EmailChangeModal
+          onClose={() => setShowEmailModal(false)}
+          currentEmail={session?.user?.email}
+          showAlert={showAlert}
+          showConfirm={showConfirm}
+          updateSession={update}
+        />
       )}
 
       {showPasswordModal && (
@@ -1019,58 +887,11 @@ export default function DashboardPage() {
       )}
 
       {showReminderModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in duration-300">
-          <div className="bg-white glass-strong rounded-2xl w-full max-w-md shadow-2xl p-8 relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-primary to-accent"></div>
-
-            <div className="text-center space-y-6">
-              <div className="inline-flex items-center justify-center p-4 bg-primary/10 rounded-full mb-2">
-                <span className="material-symbols-outlined text-5xl text-primary animate-pulse">
-                  mark_email_unread
-                </span>
-              </div>
-
-              <div>
-                <h3 className="text-2xl font-bold text-on-surface mb-3">
-                  פספסת משהו...
-                </h3>
-                <p className="text-on-surface/80 leading-relaxed">
-                  המערכת זיהתה שאינך רשום לקבלת עדכונים במייל.
-                  <br />
-                  רצינו להזכיר לך שכדאי להירשם כדי לא לפספס ספרים חדשים וחשובים שעולים לספרייה וזמינים לעריכה!
-                </p>
-              </div>
-
-              <div className="space-y-3 pt-4">
-                <button
-                  onClick={async () => {
-                      await toggleSubscription(); 
-                      setShowReminderModal(false);
-                  }}
-                  disabled={loadingSub}
-                  className="w-full py-3 px-6 bg-primary text-white rounded-xl font-bold hover:bg-primary-dark shadow-lg hover:shadow-primary/30 transition-all flex items-center justify-center gap-2"
-                >
-                  {loadingSub ? (
-                    <span className="material-symbols-outlined animate-spin">progress_activity</span>
-                  ) : (
-                    <>
-                      <span className="material-symbols-outlined">mark_email_read</span>
-                      רשום אותי עכשיו
-                    </>
-                  )}
-                </button>
-
-                <button
-                  onClick={handleDismissReminderServerSide}
-                  disabled={dismissingReminder}
-                  className="w-full py-2 px-6 text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100 rounded-xl text-sm font-medium transition-colors"
-                >
-                  {dismissingReminder ? 'מעדכן...' : 'לא מעוניין (הזכר לי שוב בעוד שבוע)'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <SubscriptionReminderModal
+          onClose={() => setShowReminderModal(false)}
+          toggleSubscription={toggleSubscription}
+          loadingSub={loadingSub}
+        />
       )}
 
       {showMessageForm && (

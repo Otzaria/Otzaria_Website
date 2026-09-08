@@ -10,7 +10,7 @@ vi.mock("@/models/BookAcronym", () => ({
   default: { find: findMock },
 }));
 
-function makeQuery(result) {
+function makeQuery(result: unknown) {
   return {
     sort: () => ({
       select: () => ({
