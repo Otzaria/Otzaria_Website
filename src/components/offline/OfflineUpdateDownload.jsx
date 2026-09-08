@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { apiGet } from '@/lib/api-utils'
 
 const PLATFORMS = [
   {
@@ -36,9 +37,7 @@ export default function OfflineUpdateDownload({ repoUrl }) {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch('/api/offline-update-releases')
-        if (!res.ok) throw new Error('bad status')
-        setReleases(await res.json())
+        setReleases(await apiGet('/api/offline-update-releases'))
       } catch {
         setFailed(true)
       }
