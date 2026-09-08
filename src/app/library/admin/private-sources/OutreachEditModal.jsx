@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
+import usePortalMounted from './usePortalMounted'
+import { toDateInput, inputClass } from './modalFormUtils'
 import {
   DEFAULT_OUTREACH_STATUS,
   MATCH_REASON_LABELS,
@@ -24,17 +26,6 @@ const EMPTY_FORM = {
   status: DEFAULT_OUTREACH_STATUS,
   duplicateReason: '',
 }
-
-/** תאריך ל-input[type=date] (yyyy-mm-dd) */
-function toDateInput(value) {
-  if (!value) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  return date.toISOString().slice(0, 10)
-}
-
-const inputClass =
-  'w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary'
 
 /**
  * מודאל הזנה/עריכה של פנייה למכון.
@@ -59,16 +50,11 @@ export default function OutreachEditModal({
   onDelete,
   onClose,
 }) {
-  const [mounted, setMounted] = useState(false)
+  const mounted = usePortalMounted()
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
   // כפילויות שהשרת החזיר בשמירה (במקרה שנוצרו במקביל ולא היו ברשימה שנטענה)
   const [serverDuplicates, setServerDuplicates] = useState([])
-
-  useEffect(() => {
-    setMounted(true)
-    return () => setMounted(false)
-  }, [])
 
   useEffect(() => {
     const statusKeys = Object.keys(statuses || {})

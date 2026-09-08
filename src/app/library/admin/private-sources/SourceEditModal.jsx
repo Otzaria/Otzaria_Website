@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import usePortalMounted from './usePortalMounted'
+import { toDateInput, inputClass } from './modalFormUtils'
 
 // משוכפל מ-src/lib/private-sources.js (DEFAULT_STATUS_KEY) — אותו קובץ טוען מודלים
-// של mongoose ולכן אינו ניתן לייבוא מרכיב לקוח, כמו CONFIG_KEYS ב-page.jsx.
+// של mongoose ולכן אינו ניתן לייבוא מרכיב לקוח, כמו CONFIG_KEYS ב-SourcesTab.jsx.
 const DEFAULT_STATUS_KEY = 'missing_info'
 
 const EMPTY_FORM = {
@@ -26,17 +28,6 @@ const EMPTY_FORM = {
   customFields: [],
 }
 
-/** תאריך ל-input[type=date] (yyyy-mm-dd) */
-function toDateInput(value) {
-  if (!value) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  return date.toISOString().slice(0, 10)
-}
-
-const inputClass =
-  'w-full px-3 py-2 border border-neutral-300 rounded-lg text-sm bg-white text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary'
-
 /**
  * מודאל עריכת רשומת מקור לספר פרטי.
  *
@@ -46,14 +37,9 @@ const inputClass =
  * @param {()=>void} onDelete  מחיקת הרשומה (רק כשקיימת)
  */
 export default function SourceEditModal({ item, options, onSave, onDelete, onClose }) {
-  const [mounted, setMounted] = useState(false)
+  const mounted = usePortalMounted()
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
-
-  useEffect(() => {
-    setMounted(true)
-    return () => setMounted(false)
-  }, [])
 
   useEffect(() => {
     const record = item?.record
