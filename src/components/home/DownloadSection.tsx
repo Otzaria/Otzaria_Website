@@ -1,10 +1,22 @@
-'use client'
+// Server Component: שולף את קישורי ההורדה היציבים מ-/api/github-releases בזמן
+// רינדור הדף, במקום ב-useEffect בדפדפן (כפי שהיה קודם) — כך אין הבהוב טעינה
+// וכל מבקר לא מבצע קריאת רשת נפרדת ל-API הפנימי בעצמו.
+//
+// המידע (releases של GitHub) לא משתנה ע"י פעולת מנהל באתר הזה — אין route
+// מקומי שמעדכן אותו, הוא משתנה רק כשמפרסמים release חדש ב-GitHub. לכן אין
+// טעם ל-revalidateTag כאן (אין ממה לבטל), ומספיק חלון revalidate מבוסס-זמן,
+// כמו ב-/api/license וב-library/docs/[slug] (ראו cacheTags.js לרציונל המלא
+// של דפוס ה-tags, שלא רלוונטי לנתון חיצוני כזה).
+//
+// יישום: fetch() רגיל של Next (לא unstable_cache) — כי אין כאן קריאת DB
+// לעטוף, רק קריאת HTTP למסלול פנימי; ל-fetch יש כבר מנגנון מטמון/revalidate
+// מובנה של Next. חלון 600 שניות (10 דק') תואם בדיוק לחלון שה-API route עצמו
+// כבר משתמש בו לקריאת ה-fetch שלו ל-GitHub (ראו route.js), כך שאין תועלת
+// לרענן כאן בתדירות גבוהה יותר משם.
+import DownloadSectionClient from './DownloadSectionClient'
 
-import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { apiGet } from '@/lib/api-utils'
+const RELEASES_REVALIDATE_SECONDS = 600
 
-// מבנה נתוני ההורדות המוחזר מ-/api/github-releases
 type PlatformLinks = Record<string, string | undefined>
 type Downloads = {
   version?: string
@@ -16,349 +28,23 @@ type Downloads = {
   macos?: PlatformLinks
 }
 
-type PlatformButtonConfig = {
-  icon: string
-  title: string
-  subtitle: string
-  onClick: () => void
+async function getStableDownloads(): Promise<Downloads | null> {
+  try {
+    // כתובת מוחלטת נחוצה ל-fetch מצד השרת; NEXTAUTH_URL הוא בסיס ה-URL של
+    // האתר שכבר מוגדר לסביבה זו (נעשה בו שימוש דומה ב-src/app/api/auth/verify/route.js).
+    const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
+    const response = await fetch(`${baseUrl}/api/github-releases?type=stable`, {
+      next: { revalidate: RELEASES_REVALIDATE_SECONDS }
+    })
+    if (!response.ok) return null
+    return await response.json()
+  } catch (error) {
+    console.error('Failed to load stable downloads:', error)
+    return null
+  }
 }
 
-type DownloadOption = {
-  key: string
-  icon: string
-  title: string
-  desc: string
-  isLink?: boolean
-}
-
-export default function DownloadSection() {
-  const [windowsModalOpen, setWindowsModalOpen] = useState(false)
-  const [linuxModalOpen, setLinuxModalOpen] = useState(false)
-  const [androidModalOpen, setAndroidModalOpen] = useState(false)
-  const [macModalOpen, setMacModalOpen] = useState(false)
-  const [iosModalOpen, setIosModalOpen] = useState(false)
-
-  const [stableDownloads, setStableDownloads] = useState<Downloads | null>(null)
-  const [detectedPlatform, setDetectedPlatform] = useState<string | null>(null)
-  const [showAllPlatforms, setShowAllPlatforms] = useState(false)
-
-  // זיהוי פלטפורמה אוטומטי
-  useEffect(() => {
-    const detectPlatform = () => {
-      const userAgent = navigator.userAgent.toLowerCase()
-      const platform = navigator.platform?.toLowerCase() || ''
-
-      if (/android/.test(userAgent)) {
-        return 'android'
-      } else if (/iphone|ipad|ipod/.test(userAgent)) {
-        return 'ios'
-      } else if (/mac/.test(platform) || /macintosh/.test(userAgent)) {
-        return 'macos'
-      } else if (/win/.test(platform) || /windows/.test(userAgent)) {
-        return 'windows'
-      } else if (/linux/.test(platform) || /linux/.test(userAgent)) {
-        return 'linux'
-      }
-      return null
-    }
-
-    // זיהוי פלטפורמה רץ רק בצד הלקוח (navigator לא קיים בשרת)
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setDetectedPlatform(detectPlatform())
-  }, [])
-
-  // טעינת קישורי הורדה מ-GitHub
-  useEffect(() => {
-    const fetchReleases = async () => {
-        try {
-            const stable = await apiGet('/api/github-releases?type=stable') as Downloads;
-            setStableDownloads(stable);
-        } catch (error) {
-            console.error('Failed to load releases:', error);
-        }
-    };
-    fetchReleases();
-  }, [])
-
-  // פונקציה להחזרת שם הפלטפורמה בעברית
-  const getPlatformName = (platform: string) => {
-    const names: Record<string, string> = {
-      windows: 'Windows',
-      linux: 'Linux',
-      android: 'Android',
-      ios: 'iOS',
-      macos: 'macOS'
-    }
-    return names[platform] || platform
-  }
-
-  // פונקציה להצגת כפתור פלטפורמה
-  const renderPlatformButton = (platform: string, large: boolean = false) => {
-    const platformConfig: Record<string, PlatformButtonConfig> = {
-      windows: {
-        icon: 'desktop_windows',
-        title: 'Windows',
-        subtitle: '10 / 11',
-        onClick: () => setWindowsModalOpen(true)
-      },
-      linux: {
-        icon: 'computer',
-        title: 'Linux',
-        subtitle: 'כל ההפצות',
-        onClick: () => setLinuxModalOpen(true)
-      },
-      android: {
-        icon: 'phone_android',
-        title: 'Android',
-        subtitle: 'Google Play / APK',
-        onClick: () => setAndroidModalOpen(true)
-      },
-      ios: {
-        icon: 'phone_iphone',
-        title: 'iOS',
-        subtitle: 'App Store',
-        onClick: () => setIosModalOpen(true)
-      },
-      macos: {
-        icon: 'laptop_mac',
-        title: 'macOS',
-        subtitle: 'Intel / Apple Silicon',
-        onClick: () => setMacModalOpen(true)
-      }
-    }
-
-    const config = platformConfig[platform]
-    if (!config) return null
-
-    if (large) {
-      return (
-        <button
-          onClick={config.onClick}
-          className="flex items-center gap-6 p-8 bg-white border-2 border-primary rounded-2xl hover:shadow-2xl transition-all group w-full max-w-md"
-        >
-          <div className="w-20 h-20 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0">
-            <span className="material-symbols-outlined text-5xl text-primary group-hover:scale-110 transition-transform">
-              {config.icon}
-            </span>
-          </div>
-          <div className="flex-1 text-right">
-            <h3 className="text-2xl font-bold mb-1">{config.title}</h3>
-            <p className="text-neutral-500">{config.subtitle}</p>
-          </div>
-          <span className="material-symbols-outlined text-3xl text-primary">download</span>
-        </button>
-      )
-    }
-
-    return (
-      <button
-        onClick={config.onClick}
-        className="flex flex-col items-center p-6 bg-white border border-neutral-200 rounded-xl hover:border-primary hover:shadow-lg transition-all group h-full"
-      >
-        <span className="material-symbols-outlined text-6xl text-primary mb-4 group-hover:scale-110 transition-transform">
-          {config.icon}
-        </span>
-        <h3 className="text-xl font-bold mb-1">{config.title}</h3>
-        <p className="text-sm text-neutral-500">{config.subtitle}</p>
-      </button>
-    )
-  }
-
-  return (
-    <>
-      {/* Download Section (Software) */}
-      <section id="download" className="py-20 px-4">
-          <div className="container mx-auto max-w-6xl">
-              <h2 className="text-4xl font-bold text-center mb-4 font-frank">הורדת התוכנה</h2>
-
-              {/* הצגת כפתור הורדה לפלטפורמה שזוהתה */}
-              {detectedPlatform && !showAllPlatforms ? (
-                <div className="max-w-2xl mx-auto">
-                  <p className="text-center text-xl text-neutral-600 mb-8">זיהינו שאתה משתמש ב-{getPlatformName(detectedPlatform)}</p>
-
-                  <div className="flex flex-col items-center gap-4 mb-8">
-                    {renderPlatformButton(detectedPlatform, true)}
-
-                    <button
-                      onClick={() => setShowAllPlatforms(true)}
-                      className="text-primary hover:underline text-sm font-medium flex items-center gap-1"
-                    >
-                      <span>הורד למערכת אחרת</span>
-                      <span className="material-symbols-outlined text-sm">expand_more</span>
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <p className="text-center text-xl text-neutral-600 mb-12">
-                    {detectedPlatform ? 'בחר פלטפורמה' : 'לא הצלחנו לזהות את המערכת שלך - בחר פלטפורמה'}
-                  </p>
-
-                  <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-6">
-                      {renderPlatformButton('windows')}
-                      {renderPlatformButton('linux')}
-                      {renderPlatformButton('android')}
-                      {renderPlatformButton('ios')}
-                      {renderPlatformButton('macos')}
-                  </div>
-
-                  {detectedPlatform && (
-                    <div className="text-center mt-6">
-                      <button
-                        onClick={() => setShowAllPlatforms(false)}
-                        className="text-primary hover:underline text-sm font-medium flex items-center gap-1 mx-auto"
-                      >
-                        <span className="material-symbols-outlined text-sm">expand_less</span>
-                        <span>חזור להורדה ל-{getPlatformName(detectedPlatform)}</span>
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-          </div>
-      </section>
-
-      {/* Modals */}
-      <DownloadModal
-        isOpen={windowsModalOpen}
-        onClose={() => setWindowsModalOpen(false)}
-        platform="Windows"
-        links={stableDownloads?.windows || {}}
-        version={stableDownloads?.versions?.windows ?? stableDownloads?.version}
-      />
-      <DownloadModal
-        isOpen={linuxModalOpen}
-        onClose={() => setLinuxModalOpen(false)}
-        platform="Linux"
-        links={stableDownloads?.linux || {}}
-        version={stableDownloads?.versions?.linux ?? stableDownloads?.version}
-      />
-      <DownloadModal
-        isOpen={androidModalOpen}
-        onClose={() => setAndroidModalOpen(false)}
-        platform="Android"
-        links={{
-          playStore: 'https://play.google.com/store/apps/details?id=org.otzaria.otzaria',
-          apk: stableDownloads?.android?.apk,
-          zipFull: stableDownloads?.android?.zipFull
-        }}
-        version={stableDownloads?.versions?.android ?? stableDownloads?.version}
-      />
-      <DownloadModal
-        isOpen={iosModalOpen}
-        onClose={() => setIosModalOpen(false)}
-        platform="iOS"
-        links={{
-          appStore: 'https://apps.apple.com/us/app/otzaria/id6738098031'
-        }}
-        version={stableDownloads?.version}
-      />
-      <DownloadModal
-        isOpen={macModalOpen}
-        onClose={() => setMacModalOpen(false)}
-        platform="macOS"
-        links={stableDownloads?.macos || {}}
-        version={stableDownloads?.versions?.macos ?? stableDownloads?.version}
-      />
-    </>
-  )
-}
-
-// Download Modal Component
-function DownloadModal({ isOpen, onClose, platform, links, version }: {
-  isOpen: boolean
-  onClose: () => void
-  platform: string
-  links: PlatformLinks
-  version?: string
-}) {
-  if (!isOpen) return null
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        onClick={(e) => e.stopPropagation()}
-        className="flex flex-col bg-white rounded-2xl w-full max-w-2xl shadow-2xl max-h-[90vh]"
-      >
-        {/* Fixed Header */}
-        <div className="flex items-center justify-between p-6 border-b border-neutral-200 flex-shrink-0">
-          <h2 className="text-2xl font-bold text-neutral-800">
-            הורדת אוצריא ל-{platform}
-            {version && <span className="text-sm font-normal text-neutral-500 mr-2"> ({version})</span>}
-          </h2>
-          <button onClick={onClose} className="p-2 hover:bg-neutral-100 rounded-full transition-colors text-neutral-500">
-            <span className="material-symbols-outlined text-2xl block">close</span>
-          </button>
-        </div>
-
-        {/* Scrollable Content */}
-        <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
-          <div className="grid gap-3">
-            {renderDownloadOptions(platform, links)}
-          </div>
-        </div>
-      </motion.div>
-    </div>
-  )
-}
-
-function renderDownloadOptions(platform: string, links: PlatformLinks) {
-  const options: Record<string, DownloadOption[]> = {
-    Windows: [
-      { key: 'exe', icon: 'install_desktop', title: 'EXE Installer', desc: 'קובץ התקנה רגיל — הורדת הספרייה תתבצע דרך התוכנה' },
-      { key: 'exeArm64', icon: 'memory', title: 'EXE Installer (ARM64)', desc: 'למחשבי ARM עם מעבד Snapdragon — רק בגרסה זו התוספים עובדים' },
-      { key: 'exeFull', icon: 'install_desktop', title: 'EXE Installer (Full)', desc: 'מתקין מלא להתקנה במחשב ללא אינטרנט' },
-      { key: 'msix', icon: 'package_2', title: 'MSIX Package', desc: 'התקנה דרך החנות' }
-    ],
-    Linux: [
-      { key: 'deb', icon: 'package_2', title: 'DEB Package', desc: 'עבור Ubuntu/Debian' },
-      { key: 'rpm', icon: 'package_2', title: 'RPM Package', desc: 'עבור Fedora/RedHat' },
-      { key: 'appimage', icon: 'apps', title: 'AppImage', desc: 'קובץ הרצה אוניברסלי' },
-      { key: 'tarFull', icon: 'folder_zip', title: 'Full Package', desc: 'מתקין מלא להתקנה במחשב ללא אינטרנט' }
-    ],
-    Android: [
-      { key: 'playStore', icon: 'shop', title: 'Google Play', desc: 'התקנה מהחנות', isLink: true },
-      { key: 'apk', icon: 'android', title: 'APK File', desc: 'התקנה ידנית — הורדת הספרייה תתבצע דרך התוכנה' },
-      { key: 'zipFull', icon: 'folder_zip', title: 'Full Package', desc: 'מתקין מלא להתקנה ללא אינטרנט' }
-    ],
-    iOS: [
-      { key: 'appStore', icon: 'shop', title: 'App Store', desc: 'הורדה מחנות האפליקציות', isLink: true }
-    ],
-    macOS: [
-      { key: 'dmg', icon: 'album', title: 'DMG Image', desc: 'קובץ התקנה רגיל — הורדת הספרייה תתבצע דרך התוכנה' },
-      { key: 'zip', icon: 'folder_zip', title: 'macOS Package', desc: 'גרסה דחוסה' },
-      { key: 'zipFull', icon: 'folder_zip', title: 'Full Package', desc: 'מתקין מלא להתקנה במחשב ללא אינטרנט' }
-    ]
-  }
-
-  const platformOptions = options[platform] || []
-  const validOptions = platformOptions.filter((opt) => links && links[opt.key])
-
-  if (validOptions.length === 0) {
-    return <p className="text-neutral-500 italic p-4 bg-neutral-50 rounded-lg text-center border border-dashed border-neutral-300">אין הורדות זמינות כרגע לגרסה זו.</p>
-  }
-
-  return validOptions.map((option) => (
-    <a
-      key={option.key}
-      href={links[option.key]}
-      target={option.isLink ? "_blank" : undefined}
-      rel={option.isLink ? "noopener noreferrer" : undefined}
-      className="flex items-center gap-4 p-4 rounded-xl border border-neutral-200 hover:border-primary hover:shadow-md transition-all group bg-neutral-50 hover:bg-white"
-    >
-      <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center shadow-sm text-primary group-hover:scale-110 transition-transform">
-        <span className="material-symbols-outlined text-2xl">{option.icon}</span>
-      </div>
-      <div className="flex-1">
-        <h4 className="font-bold text-neutral-800">{option.title}</h4>
-        <p className="text-sm text-neutral-500">{option.desc}</p>
-      </div>
-      <span className="material-symbols-outlined text-neutral-400 group-hover:text-primary">
-        {option.isLink ? 'open_in_new' : 'download'}
-      </span>
-    </a>
-  ))
+export default async function DownloadSection() {
+  const stableDownloads = await getStableDownloads()
+  return <DownloadSectionClient stableDownloads={stableDownloads} />
 }
