@@ -27,6 +27,7 @@ import {
   buildWordVariants as buildWordVariantsUtil,
   applyFindPatternTokens
 } from '@/components/editor/dictaEditorTextUtils'
+import { buildShortcutCombination, findShortcutActionId } from '@/components/editor/dictaEditorShortcutUtils'
 
 const DEFAULT_SHORTCUTS = {
   'save': 'Ctrl+KeyS',
@@ -1057,22 +1058,10 @@ export default function DictaEditorCore({
     const handleGlobalKeyDown = (e) => {
       if (showShortcutsDialogRef.current) return
 
-      if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return
+      const combination = buildShortcutCombination(e)
+      if (!combination) return
 
-      const modifiers = []
-      if (e.ctrlKey) modifiers.push('Ctrl')
-      if (e.altKey) modifiers.push('Alt')
-      if (e.shiftKey) modifiers.push('Shift')
-      if (e.metaKey) modifiers.push('Meta')
-
-      const code = e.code
-
-      const combination = [...modifiers, code].join('+')
-
-      const shortcuts = userShortcutsRef.current
-      const foundActionId = Object.keys(shortcuts).find(actionId => {
-        return shortcuts[actionId] === combination
-      })
+      const foundActionId = findShortcutActionId(combination, userShortcutsRef.current)
 
       if (foundActionId && actionsMapRef.current[foundActionId]) {
         e.preventDefault()
