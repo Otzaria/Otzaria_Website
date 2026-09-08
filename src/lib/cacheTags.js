@@ -32,6 +32,15 @@ export const CACHE_TAGS = {
   PLUGIN_CATEGORIES: 'plugin-categories',
   // תור אימון OCR (רשימת עמודים זמינים/שלי)
   OCR_TRAINING_LIST: 'ocr-training-list',
+  // רשימת הספרים בממשק ניהול הספרים (/library/admin/books) — נתון זהה לכל
+  // מנהל (לא מסונן לפי בעלים; מציג את כל הספרים כולל אישיים/מוסתרים)
+  BOOKS_ADMIN_LIST: 'books-admin-list',
+  // רשימת ההעלאות בממשק ניהול העלאות (/library/admin/uploads) — כל ההעלאות
+  // שאינן באשפה (isDeleted: false), זהה לכל מנהל
+  UPLOADS_ADMIN_LIST: 'uploads-admin-list',
+  // רשימת ספרי הדיקטה בממשק ניהול (/library/admin/dicta-books) — כל הספרים,
+  // זהה לכל מנהל
+  DICTA_BOOKS_ADMIN_LIST: 'dicta-books-admin-list',
 }
 
 /** חלונות revalidate ברירת-מחדל (שניות) — "רשת ביטחון" בנוסף לתגיות. */
@@ -42,4 +51,10 @@ export const REVALIDATE_SECONDS = {
   STORE_SETTINGS: 60,
   PLUGIN_CATEGORIES: 60,
   OCR_TRAINING_LIST: 30,
+  // התקדמות עמודים (completedPages/inProgressPages) מתעדכנת בכל שמירת עמוד
+  // בודדת — תדירות גבוהה מדי לתיוג לכל שמירה, ולכן חלון קצר יחסית כרשת ביטחון
+  // (ראו ההסבר על downloadCount למעלה; אותו עיקרון).
+  BOOKS_ADMIN_LIST: 30,
+  UPLOADS_ADMIN_LIST: 30,
+  DICTA_BOOKS_ADMIN_LIST: 30,
 }
