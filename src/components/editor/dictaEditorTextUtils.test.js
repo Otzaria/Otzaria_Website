@@ -4,7 +4,9 @@ import {
   locateTextFlexible,
   normalizeHebrewQuotes,
   buildWordVariants,
-  applyFindPatternTokens
+  applyFindPatternTokens,
+  computeInsertTagResult,
+  computeRemoveTagsResult
 } from './dictaEditorTextUtils'
 
 describe('buildTocFromContent', () => {
@@ -139,5 +141,76 @@ describe('applyFindPatternTokens', () => {
 
   it('leaves strings without the token unchanged', () => {
     expect(applyFindPatternTokens('רגיל ללא שינוי')).toBe('רגיל ללא שינוי')
+  })
+})
+
+describe('computeInsertTagResult', () => {
+  it('wraps a plain selection with the given tag and places cursor after it', () => {
+    const content = 'לפני מילה אחרי'
+    const start = content.indexOf('מילה')
+    const end = start + 'מילה'.length
+    const { newText, newCursorPos } = computeInsertTagResult(content, start, end, 'b')
+    expect(newText).toBe('לפני <b>מילה</b> אחרי')
+    expect(newCursorPos).toBe(start + '<b>מילה</b>'.length)
+  })
+
+  it('inserts an empty tag pair at the cursor when nothing is selected', () => {
+    const content = 'לפני  אחרי'
+    const pos = 'לפני '.length
+    const { newText, newCursorPos } = computeInsertTagResult(content, pos, pos, 'i')
+    expect(newText).toBe('לפני <i></i> אחרי')
+    expect(newCursorPos).toBe(pos + 'i'.length + 2)
+  })
+
+  it('trims leading/trailing whitespace out of the wrapped selection', () => {
+    const content = 'א  מילה  ב'
+    const start = content.indexOf('  מילה  ')
+    const end = start + '  מילה  '.length
+    const { newText } = computeInsertTagResult(content, start, end, 'u')
+    expect(newText).toBe('א  <u>מילה</u>  ב')
+  })
+
+  it('strips existing HTML tags from the selection before wrapping in a heading tag', () => {
+    const content = 'לפני <b>מילה</b> אחרי'
+    const start = content.indexOf('<b>')
+    const end = content.indexOf('</b>') + '</b>'.length
+    const { newText } = computeInsertTagResult(content, start, end, 'h1')
+    expect(newText).toBe('לפני <h1>מילה</h1>\n אחרי')
+  })
+
+  it('does not add a trailing newline after a heading when one already follows', () => {
+    const content = 'כותרת\nגוף'
+    const { newText } = computeInsertTagResult(content, 0, 'כותרת'.length, 'h2')
+    expect(newText).toBe('<h2>כותרת</h2>\nגוף')
+  })
+
+  it('does not add a trailing newline after a heading at the end of the document', () => {
+    const content = 'כותרת'
+    const { newText } = computeInsertTagResult(content, 0, 'כותרת'.length, 'h2')
+    expect(newText).toBe('<h2>כותרת</h2>')
+  })
+})
+
+describe('computeRemoveTagsResult', () => {
+  it('returns an error when nothing is selected', () => {
+    const result = computeRemoveTagsResult('תוכן כלשהו', 3, 3)
+    expect(result.error).toBe('יש לבחור טקסט להסרת תגים')
+  })
+
+  it('strips HTML tags from the selected text and keeps the rest of the document intact', () => {
+    const content = 'לפני <b>מילה</b> אחרי'
+    const start = content.indexOf('<b>')
+    const end = content.indexOf('</b>') + '</b>'.length
+    const result = computeRemoveTagsResult(content, start, end)
+    expect(result.newText).toBe('לפני מילה אחרי')
+    expect(result.newSelectionStart).toBe(start)
+    expect(result.newSelectionEnd).toBe(start + 'מילה'.length)
+  })
+
+  it('leaves plain text (no tags) in the selection unchanged', () => {
+    const content = 'טקסט רגיל בלבד'
+    const result = computeRemoveTagsResult(content, 0, content.length)
+    expect(result.newText).toBe(content)
+    expect(result.newSelectionEnd).toBe(content.length)
   })
 })

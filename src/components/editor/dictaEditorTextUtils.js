@@ -104,3 +104,77 @@ export function buildWordVariants(word) {
 export function applyFindPatternTokens(str) {
   return str.replaceAll('^13', '\n')
 }
+
+/**
+ * מחשב את תוצאת insertTag (עטיפת הבחירה הנוכחית בתג HTML): הטקסט החדש
+ * ומיקום הסמן החדש. חולץ מ-DictaEditorCore.insertTag - כל מה שנשאר בקומפוננטה
+ * הוא תופעות הלוואי על ה-DOM (focus/scrollTop/setSelectionRange).
+ *
+ * @param {string} content - תוכן המסמך המלא
+ * @param {number} start - תחילת הבחירה בטקסטאריה
+ * @param {number} end - סוף הבחירה בטקסטאריה
+ * @param {string} tag - שם התג להוספה (למשל 'b', 'h1')
+ * @returns {{ newText: string, newCursorPos: number }}
+ */
+export function computeInsertTagResult(content, start, end, tag) {
+  const selectedText = content.substring(start, end)
+
+  // הסרת רווחים מלפני ואחרי הטקסט הנבחר
+  const trimmedText = selectedText.trim()
+  const leadingSpaces = selectedText.match(/^\s*/)[0]
+  const trailingSpaces = selectedText.match(/\s*$/)[0]
+
+  // בדיקה אם זה תג כותרת
+  const isHeadingTag = /^h[1-6]$/.test(tag)
+
+  let insertion
+
+  if (isHeadingTag && trimmedText) {
+    // עבור כותרות: הסרת כל התגים הקיימים מהטקסט
+    // הערת אבטחה: false positive מאומת עבור התראת CodeQL js/incomplete-multi-character-sanitization (נסגרה ידנית ב-GitHub, ראו הסבר): this is an editor
+    // convenience action (strip tags before wrapping in a heading), not the security
+    // boundary — final content is always run through DOMPurify.sanitize() before render.
+    const cleanText = trimmedText.replace(/<[^>]*>/g, '')
+    insertion = `<${tag}>${cleanText}</${tag}>`
+
+    // הוספת ירידת שורה אחרי הכותרת אם אין כבר
+    const textAfterSelection = content.substring(end)
+    const hasNewlineAfter = textAfterSelection.startsWith('\n')
+    const hasNewlineInTrailing = trailingSpaces.includes('\n')
+    const needsNewline = !hasNewlineAfter && !hasNewlineInTrailing && textAfterSelection.length > 0
+    if (needsNewline) {
+      insertion += '\n'
+    }
+  } else {
+    // עבור תגים רגילים: התנהגות קיימת
+    insertion = trimmedText ? `<${tag}>${trimmedText}</${tag}>` : `<${tag}></${tag}>`
+  }
+
+  const newText = content.substring(0, start) + leadingSpaces + insertion + trailingSpaces + content.substring(end)
+  const newCursorPos = trimmedText ? (start + leadingSpaces.length + insertion.length) : (start + tag.length + 2)
+
+  return { newText, newCursorPos }
+}
+
+/**
+ * מחשב את תוצאת removeTags (הסרת תגי HTML מהטקסט הנבחר): הטקסט החדש
+ * וטווח הבחירה החדש. מחזיר error כאשר אין טקסט נבחר. חולץ מ-
+ * DictaEditorCore.removeTags - תופעות הלוואי על ה-DOM נשארות בקומפוננטה.
+ *
+ * @returns {{ error: string }|{ newText: string, newSelectionStart: number, newSelectionEnd: number }}
+ */
+export function computeRemoveTagsResult(content, start, end) {
+  const selectedText = content.substring(start, end)
+
+  if (!selectedText) {
+    return { error: 'יש לבחור טקסט להסרת תגים' }
+  }
+
+  // הסרת כל תגי ה-HTML מהטקסט הנבחר
+  // הערת אבטחה: false positive מאומת עבור התראת CodeQL js/incomplete-multi-character-sanitization (נסגרה ידנית ב-GitHub, ראו הסבר): editor convenience
+  // action, not the security boundary — rendering always goes through DOMPurify.sanitize() first.
+  const cleanedText = selectedText.replace(/<[^>]*>/g, '')
+  const newText = content.substring(0, start) + cleanedText + content.substring(end)
+
+  return { newText, newSelectionStart: start, newSelectionEnd: start + cleanedText.length }
+}

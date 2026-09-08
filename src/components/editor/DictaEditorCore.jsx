@@ -25,7 +25,9 @@ import {
   buildTocFromContent,
   locateTextFlexible,
   buildWordVariants as buildWordVariantsUtil,
-  applyFindPatternTokens
+  applyFindPatternTokens,
+  computeInsertTagResult,
+  computeRemoveTagsResult
 } from '@/components/editor/dictaEditorTextUtils'
 import { buildShortcutCombination, findShortcutActionId } from '@/components/editor/dictaEditorShortcutUtils'
 
@@ -458,86 +460,43 @@ export default function DictaEditorCore({
 
   const insertTag = useCallback((tag) => {
     if (!textareaRef.current) return
-    
+
     const textarea = textareaRef.current
     const start = textarea.selectionStart
     const end = textarea.selectionEnd
-    const selectedText = content.substring(start, end)
-    
     const scrollTop = textarea.scrollTop
-    
-    // הסרת רווחים מלפני ואחרי הטקסט הנבחר
-    const trimmedText = selectedText.trim()
-    const leadingSpaces = selectedText.match(/^\s*/)[0]
-    const trailingSpaces = selectedText.match(/\s*$/)[0]
-    
-    // בדיקה אם זה תג כותרת
-    const isHeadingTag = /^h[1-6]$/.test(tag)
-    
-    let cleanText = trimmedText
-    let insertion
-    
-    if (isHeadingTag && trimmedText) {
-      // עבור כותרות: הסרת כל התגים הקיימים מהטקסט
-      // הערת אבטחה: false positive מאומת עבור התראת CodeQL js/incomplete-multi-character-sanitization (נסגרה ידנית ב-GitHub, ראו הסבר): this is an editor
-      // convenience action (strip tags before wrapping in a heading), not the security
-      // boundary — final content is always run through DOMPurify.sanitize() before render
-      // (see sanitizedContent above / dangerouslySetInnerHTML usage below).
-      cleanText = trimmedText.replace(/<[^>]*>/g, '')
-      insertion = `<${tag}>${cleanText}</${tag}>`
-      
-      // הוספת ירידת שורה אחרי הכותרת אם אין כבר
-      const textAfterSelection = content.substring(end)
-      const hasNewlineAfter = textAfterSelection.startsWith('\n')
-      const hasNewlineInTrailing = trailingSpaces.includes('\n')
-      const needsNewline = !hasNewlineAfter && !hasNewlineInTrailing && textAfterSelection.length > 0
-      if (needsNewline) {
-        insertion += '\n'
-      }
-    } else {
-      // עבור תגים רגילים: התנהגות קיימת
-      insertion = trimmedText ? `<${tag}>${trimmedText}</${tag}>` : `<${tag}></${tag}>`
-    }
-    
-    const newText = content.substring(0, start) + leadingSpaces + insertion + trailingSpaces + content.substring(end)
-    
+
+    const { newText, newCursorPos } = computeInsertTagResult(content, start, end, tag)
+
     updateTextWithHistory(newText)
-    
+
     setTimeout(() => {
-      const newPos = trimmedText ? (start + leadingSpaces.length + insertion.length) : (start + tag.length + 2)
       textarea.focus()
-      textarea.setSelectionRange(newPos, newPos)
+      textarea.setSelectionRange(newCursorPos, newCursorPos)
       textarea.scrollTop = scrollTop
     }, 0)
   }, [content, updateTextWithHistory])
 
   const removeTags = useCallback(() => {
     if (!textareaRef.current) return
-    
+
     const textarea = textareaRef.current
     const start = textarea.selectionStart
     const end = textarea.selectionEnd
-    const selectedText = content.substring(start, end)
-    
-    if (!selectedText) {
-      showAlert('שגיאה', 'יש לבחור טקסט להסרת תגים')
+    const scrollTop = textarea.scrollTop
+
+    const result = computeRemoveTagsResult(content, start, end)
+    if (result.error) {
+      showAlert('שגיאה', result.error)
       return
     }
-    
-    const scrollTop = textarea.scrollTop
-    
-    // הסרת כל תגי ה-HTML מהטקסט הנבחר
-    // הערת אבטחה: false positive מאומת עבור התראת CodeQL js/incomplete-multi-character-sanitization (נסגרה ידנית ב-GitHub, ראו הסבר): editor convenience
-    // action, not the security boundary — see note on the identical pattern above; rendering
-    // always goes through DOMPurify.sanitize() first.
-    const cleanedText = selectedText.replace(/<[^>]*>/g, '')
-    const newText = content.substring(0, start) + cleanedText + content.substring(end)
-    
+    const { newText, newSelectionStart, newSelectionEnd } = result
+
     updateTextWithHistory(newText)
-    
+
     setTimeout(() => {
       textarea.focus()
-      textarea.setSelectionRange(start, start + cleanedText.length)
+      textarea.setSelectionRange(newSelectionStart, newSelectionEnd)
       textarea.scrollTop = scrollTop
     }, 0)
   }, [content, showAlert, updateTextWithHistory])
