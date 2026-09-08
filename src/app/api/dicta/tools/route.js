@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { revalidateTag } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import connectDB from "@/lib/db";
 import DictaBook from "@/models/DictaBook";
-import { CACHE_TAGS } from "@/lib/cacheTags";
+import { CACHE_TAGS, revalidateNow } from "@/lib/cacheTags";
 
 // ייבוא הלוגיקה העסקית ממקור אמת אחד
 import { 
@@ -182,7 +181,7 @@ export async function POST(request) {
     // (מעדכנים updatedAt), שינוי תדיר מדי ולא מהותי לרשימה כדי לבטל עליו
     // מטמון בכל קריאה — מתעדכן לכשעצמו בתוך חלון ה-revalidate.
     if (tool === 'dicta-sync' && result?.success) {
-      revalidateTag(CACHE_TAGS.DICTA_BOOKS_ADMIN_LIST);
+      revalidateNow(CACHE_TAGS.DICTA_BOOKS_ADMIN_LIST);
     }
 
     return NextResponse.json(result);

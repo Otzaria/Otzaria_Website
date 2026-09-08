@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { revalidateTag } from 'next/cache';
 import path from 'path';
 import fs from 'fs-extra';
 import slugify from 'slugify';
@@ -14,7 +13,7 @@ import { getClientIp } from '@/lib/client-ip';
 import { z } from 'zod';
 import { hasBookLibraryAccess } from '@/lib/roles';
 import { convertPdfToImages } from '@/lib/pdfConverter';
-import { CACHE_TAGS } from '@/lib/cacheTags';
+import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
 
 // סכמת אימות להעלאת ספרים
 const uploadBookSchema = z.object({
@@ -149,7 +148,7 @@ export async function POST(request) {
       await sendBookNotification(bookName, slug);
     }
 
-    revalidateTag(CACHE_TAGS.BOOKS_ADMIN_LIST);
+    revalidateNow(CACHE_TAGS.BOOKS_ADMIN_LIST);
 
     return NextResponse.json({
       success: true, 

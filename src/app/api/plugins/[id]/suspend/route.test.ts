@@ -57,7 +57,7 @@ describe("PATCH /api/plugins/[id]/suspend", () => {
 
     expect(res.status).toBe(200);
     expect(plugin.save).toHaveBeenCalled();
-    expect(revalidateTagMock).toHaveBeenCalledWith(CACHE_TAGS.PLUGINS_PUBLIC);
+    expect(revalidateTagMock).toHaveBeenCalledWith(CACHE_TAGS.PLUGINS_PUBLIC, { expire: 0 });
   });
 
   it("does not invalidate the cache when the request is rejected (not the owner)", async () => {

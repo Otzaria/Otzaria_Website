@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
-import { revalidateTag } from 'next/cache';
 import connectDB from '@/lib/db';
 import DictaBook from '@/models/DictaBook';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBooksAccess } from '@/lib/roles';
-import { CACHE_TAGS } from '@/lib/cacheTags';
+import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
 
 export async function POST(request) {
   const session = await getServerSession(authOptions);
@@ -112,7 +111,7 @@ export async function POST(request) {
       console.log('Original book deleted:', bookId);
       console.log('Book split completed successfully');
 
-      revalidateTag(CACHE_TAGS.DICTA_BOOKS_ADMIN_LIST);
+      revalidateNow(CACHE_TAGS.DICTA_BOOKS_ADMIN_LIST);
 
       return NextResponse.json({
         success: true, 

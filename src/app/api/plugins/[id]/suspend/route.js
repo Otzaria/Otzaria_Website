@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server'
-import { revalidateTag } from 'next/cache'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import { hasPluginsAccess } from '@/lib/roles'
 import { invalidatePluginSearchIndex } from '@/lib/pluginSearchIndex'
-import { CACHE_TAGS } from '@/lib/cacheTags'
+import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags'
 import {
   SUSPEND_ACTIONS,
   applySuspension,
@@ -67,7 +66,7 @@ export async function PATCH(request, { params }) {
     applySuspension(plugin, action, { userId: session.user.id, isAdmin: false })
     await plugin.save()
     invalidatePluginSearchIndex()
-    revalidateTag(CACHE_TAGS.PLUGINS_PUBLIC)
+    revalidateNow(CACHE_TAGS.PLUGINS_PUBLIC)
 
     return NextResponse.json({
       success: true,

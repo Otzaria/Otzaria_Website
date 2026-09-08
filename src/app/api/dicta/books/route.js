@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
-import { revalidateTag } from 'next/cache';
 import connectDB from '@/lib/db';
 import DictaBook from '@/models/DictaBook';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { requireBooksAccessOrForbidden } from '../_auth';
-import { CACHE_TAGS } from '@/lib/cacheTags';
+import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
 
 export async function GET() {
   try {
@@ -47,7 +46,7 @@ export async function POST(req) {
       status: 'available',
     });
 
-    revalidateTag(CACHE_TAGS.DICTA_BOOKS_ADMIN_LIST);
+    revalidateNow(CACHE_TAGS.DICTA_BOOKS_ADMIN_LIST);
 
     return NextResponse.json(newBook, { status: 201 });
   } catch (error) {

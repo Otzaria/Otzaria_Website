@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
-import { revalidateTag } from 'next/cache';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
 import Page from '@/models/Page';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { getAdminUsersWithStats } from '@/lib/adminUsers';
-import { CACHE_TAGS } from '@/lib/cacheTags';
+import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
 
 export async function GET() {
     try {
@@ -97,7 +96,7 @@ export async function PUT(request) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
-        revalidateTag(CACHE_TAGS.USERS_ADMIN_LIST);
+        revalidateNow(CACHE_TAGS.USERS_ADMIN_LIST);
 
         return NextResponse.json({ success: true, user: updatedUser });
     } catch (error) {
@@ -127,7 +126,7 @@ export async function DELETE(request) {
             }
         );
 
-        revalidateTag(CACHE_TAGS.USERS_ADMIN_LIST);
+        revalidateNow(CACHE_TAGS.USERS_ADMIN_LIST);
 
         return NextResponse.json({ success: true });
     } catch (e) {

@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { revalidateTag } from 'next/cache';
 import connectDB from '@/lib/db';
 import OcrTrainingPage from '@/models/OcrTrainingPage';
 import sharp from 'sharp';
@@ -9,7 +8,7 @@ import { hasBookLibraryAccess } from '@/lib/roles';
 import { resolveImageFsPath } from '@/lib/ocr/images';
 import { validateLine, LINES_PER_PAGE } from '@/lib/ocr/trainingValidation';
 import { rotatedSize } from '@/lib/ocr/geometry';
-import { CACHE_TAGS } from '@/lib/cacheTags';
+import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
 
 // POST: סימון עמוד אימון כהושלם.
 // דורש בדיוק LINES_PER_PAGE שורות תקינות: תיבה בתוך גבולות התמונה + טקסט חוקי באלפבית.
@@ -93,7 +92,7 @@ export async function POST(request, { params }) {
     page.completedAt = new Date();
     await page.save();
 
-    revalidateTag(CACHE_TAGS.OCR_TRAINING_LIST);
+    revalidateNow(CACHE_TAGS.OCR_TRAINING_LIST);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('OCR training complete error:', error);

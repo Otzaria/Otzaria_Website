@@ -71,7 +71,7 @@ describe("DELETE /api/dicta/books/[id]", () => {
     expect(res.status).toBe(200);
     expect(data.success).toBe(true);
     expect(findByIdAndDeleteMock).toHaveBeenCalledWith("b1");
-    expect(revalidateTagMock).toHaveBeenCalledWith(CACHE_TAGS.DICTA_BOOKS_ADMIN_LIST);
+    expect(revalidateTagMock).toHaveBeenCalledWith(CACHE_TAGS.DICTA_BOOKS_ADMIN_LIST, { expire: 0 });
   });
 
   it("does not invalidate the cache when the book is not found", async () => {

@@ -12,16 +12,39 @@
  * דפוס העבודה: לכל fetch/unstable_cache שממנו נבנה דף, קובעים גם `revalidate`
  * (חלון זמן גיבוי — TTL קצר, "רשת ביטחון" למקרה ששכחנו תגית במקום כלשהו)
  * וגם `tags` מהרשימה למטה. כל route שמשנה נתון מהדומיין הרלוונטי חייב לקרוא
- * ל-revalidateTag על התגית המתאימה **מיד אחרי שהכתיבה ל-DB הצליחה** — כך
- * שהדף הבא שנטען אחרי שינוי אמיתי (השעיה, אישור, מחיקה וכו') תמיד רואה
+ * ל-revalidateNow (למטה) על התגית המתאימה **מיד אחרי שהכתיבה ל-DB הצליחה** —
+ * כך שהדף הבא שנטען אחרי שינוי אמיתי (השעיה, אישור, מחיקה וכו') תמיד רואה
  * את הנתון החדש, בלי קשר לחלון ה-revalidate.
  *
  * חריגה מכוונת: שדות "עוקבים" טהורים שמתעדכנים בתדירות גבוהה מאוד ואין
  * להם משמעות תפעולית/משפטית (למשל downloadCount, שמתעדכן בכל הורדה) —
- * לא מקבלים תגית משלהם ולא מפעילים revalidateTag; הם פשוט מתעדכנים לכשעצמם
+ * לא מקבלים תגית משלהם ולא מפעילים ביטול; הם פשוט מתעדכנים לכשעצמם
  * בתוך חלון ה-revalidate הרגיל (ראו REVALIDATE_SECONDS). אחרת, invalidation
  * על כל הורדה בודדת היה מבטל את התועלת של המטמון לגמרי בדף עמוס.
+ *
+ * למה revalidateNow ולא revalidateTag(tag) ישירות: החל מ-Next 16,
+ * revalidateTag דורש ארגומנט שני (profile). בלעדיו הפונקציה עדיין עובדת
+ * בפועל (רק מדפיסה אזהרת deprecation ל-console), אבל התיעוד הרשמי מציין
+ * שההתנהגות הזו עשויה להיעלם בגרסה עתידית. הפיתוי הטבעי הוא להוסיף
+ * `'max'` כארגומנט שני (כך שמופיע בדוגמאות הרשמיות) — **אסור לעשות זאת
+ * כאן**: `'max'` נותן סמנטיקת stale-while-revalidate (התוכן הישן ממשיך
+ * להיות מוגש עד שמישהו מבקר בדף ומפעיל רענון ברקע), בעוד כל העיצוב הזה
+ * (למשל "תוסף מושהה נעלם מיד") דורש תפוגה **מיידית**. לפי התיעוד הרשמי של
+ * revalidateTag: "for webhooks or third-party services that need immediate
+ * expiration... pass `{ expire: 0 }`... necessary when external systems
+ * call your Route Handlers" — בדיוק המצב שלנו (Route Handlers, לא Server
+ * Actions, ולכן גם updateTag לא זמין — הוא זורק שגיאה מחוץ ל-Server Action).
  */
+import { revalidateTag } from 'next/cache'
+
+/**
+ * מבטל תגית מטמון **מיידית** (לא stale-while-revalidate) — לקרוא מ-Route
+ * Handler מיד אחרי כתיבה מוצלחת ל-DB. ראו ההסבר המלא למעלה על ההבדל בין
+ * זה לבין revalidateTag(tag, 'max').
+ */
+export function revalidateNow(tag) {
+  revalidateTag(tag, { expire: 0 })
+}
 
 export const CACHE_TAGS = {
   // רשימות/פרטי תוסף ציבוריים (חנות התוספים: page/all/category/[id])

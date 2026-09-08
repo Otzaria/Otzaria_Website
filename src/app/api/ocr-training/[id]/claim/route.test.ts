@@ -55,7 +55,7 @@ describe("POST /api/ocr-training/[id]/claim", () => {
 
     expect(res.status).toBe(200);
     expect(body.success).toBe(true);
-    expect(revalidateTagMock).toHaveBeenCalledWith(CACHE_TAGS.OCR_TRAINING_LIST);
+    expect(revalidateTagMock).toHaveBeenCalledWith(CACHE_TAGS.OCR_TRAINING_LIST, { expire: 0 });
   });
 
   it("does not invalidate the cache when the page is already claimed by someone else", async () => {

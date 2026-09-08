@@ -48,7 +48,7 @@ describe("PUT /api/admin/uploads/move-to-trash", () => {
 
     expect(res.status).toBe(200);
     expect(data.success).toBe(true);
-    expect(revalidateTagMock).toHaveBeenCalledWith(CACHE_TAGS.UPLOADS_ADMIN_LIST);
+    expect(revalidateTagMock).toHaveBeenCalledWith(CACHE_TAGS.UPLOADS_ADMIN_LIST, { expire: 0 });
   });
 
   it("does not invalidate the cache when the upload is not found", async () => {

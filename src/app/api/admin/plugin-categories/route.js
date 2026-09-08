@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server'
-import { revalidateTag } from 'next/cache'
 import slugify from 'slugify'
 import dbConnect from '@/lib/db'
 import PluginCategory from '@/models/PluginCategory'
 import '@/models/Plugin' // רישום הסכימה עבור populate
 import { requirePluginsAdmin } from '@/lib/adminAuth'
-import { CACHE_TAGS } from '@/lib/cacheTags'
+import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags'
 import {
   SLUG_RE,
   PLUGIN_PREVIEW_FIELDS,
@@ -92,8 +91,8 @@ export async function POST(request) {
       createdBy: auth.session.user.id
     })
 
-    revalidateTag(CACHE_TAGS.PLUGIN_CATEGORIES)
-    revalidateTag(CACHE_TAGS.PLUGINS_PUBLIC)
+    revalidateNow(CACHE_TAGS.PLUGIN_CATEGORIES)
+    revalidateNow(CACHE_TAGS.PLUGINS_PUBLIC)
     return NextResponse.json({ success: true, category: formatAdminCategory(category.toObject()) }, { status: 201 })
   } catch (error) {
     if (error?.code === 11000) {

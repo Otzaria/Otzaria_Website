@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { revalidateTag } from 'next/cache';
 import connectDB from '@/lib/db';
 import Message from '@/models/Message';
 import User from '@/models/User';
@@ -7,7 +6,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import mongoose from 'mongoose';
 import { hasAnyAdminAccess, ALL_ADMIN_ROLES } from '@/lib/roles';
-import { CACHE_TAGS } from '@/lib/cacheTags';
+import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
 
 export async function POST(request) {
   try {
@@ -37,7 +36,7 @@ export async function POST(request) {
 
       await Message.insertMany(messages);
 
-      revalidateTag(CACHE_TAGS.MESSAGES_ADMIN_LIST);
+      revalidateNow(CACHE_TAGS.MESSAGES_ADMIN_LIST);
 
       return NextResponse.json({
         success: true,
@@ -56,7 +55,7 @@ export async function POST(request) {
         readBy: [adminId]
       });
 
-      revalidateTag(CACHE_TAGS.MESSAGES_ADMIN_LIST);
+      revalidateNow(CACHE_TAGS.MESSAGES_ADMIN_LIST);
 
       return NextResponse.json({ success: true, message: 'נשלח בהצלחה' });
     }

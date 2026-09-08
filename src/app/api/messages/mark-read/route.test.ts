@@ -58,7 +58,7 @@ describe("PUT /api/messages/mark-read", () => {
 
     expect(res.status).toBe(200);
     expect(findByIdAndUpdateMock).toHaveBeenCalledWith("m1", { isRead: true });
-    expect(revalidateTagMock).toHaveBeenCalledWith(CACHE_TAGS.MESSAGES_ADMIN_LIST);
+    expect(revalidateTagMock).toHaveBeenCalledWith(CACHE_TAGS.MESSAGES_ADMIN_LIST, { expire: 0 });
   });
 
   it("does not invalidate the cache when the request is rejected (not a participant, not admin)", async () => {
