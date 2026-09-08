@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatDateShort, formatDateWithTime, formatDateFull } from "./formatDate";
+import { formatDateShort, formatDateWithTime, formatDateFull, formatDateShortMonthWithYearAndTime } from "./formatDate";
 
 // תאריך ייחוס קבוע: 15 במרץ 2025, 09:05 (שעון מקומי)
 const REF = new Date(2025, 2, 15, 9, 5);
@@ -24,5 +24,11 @@ describe("formatDateWithTime", () => {
 describe("formatDateFull", () => {
   it("formats with day, long month name and year (no time)", () => {
     expect(formatDateFull(REF)).toBe("15 במרץ 2025");
+  });
+});
+
+describe("formatDateShortMonthWithYearAndTime", () => {
+  it("formats with day, short month name, year, hour and minute", () => {
+    expect(formatDateShortMonthWithYearAndTime(REF)).toBe("15 במרץ 2025, 09:05");
   });
 });
