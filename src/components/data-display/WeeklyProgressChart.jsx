@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
+import { apiGet } from '@/lib/api-utils'
 
 // Recharts נטען רק כשיש מה להציג — כך הוא אינו חלק מה-bundle ההתחלתי של הדף
 // (כ-96KB gzip) ואינו מתחרה על הרשת עם התוכן המרכזי.
@@ -18,8 +19,7 @@ export default function WeeklyProgressChart() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await fetch('/api/stats/weekly-progress')
-        const json = await res.json()
+        const json = await apiGet('/api/stats/weekly-progress')
         if (json.success) {
           setData(json.data)
           setTotal(json.total)

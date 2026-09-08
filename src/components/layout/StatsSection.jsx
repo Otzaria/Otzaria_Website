@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
+import { apiGet } from '@/lib/api-utils'
 
 /**
  * מספר שמטפס מ-0 לערכו כשהוא נכנס למסך.
@@ -60,8 +61,7 @@ export default function StatsSection() {
   const [stats, setStats] = useState(null)
 
   useEffect(() => {
-    fetch('/api/stats')
-      .then(res => res.json())
+    apiGet('/api/stats')
       .then(data => {
         if (data.success) setStats(data.stats)
       })
