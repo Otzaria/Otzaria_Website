@@ -25,7 +25,12 @@ import {
   buildTocFromContent,
   locateTextFlexible,
   buildWordVariants as buildWordVariantsUtil,
-  applyFindPatternTokens
+  computeInsertTagResult,
+  computeRemoveTagsResult,
+  computeFindNextMatch,
+  computeReplaceCurrentResult,
+  computeReplaceAllResult,
+  computeSavedReplacementsResult
 } from '@/components/editor/dictaEditorTextUtils'
 import { buildShortcutCombination, findShortcutActionId } from '@/components/editor/dictaEditorShortcutUtils'
 
@@ -458,86 +463,43 @@ export default function DictaEditorCore({
 
   const insertTag = useCallback((tag) => {
     if (!textareaRef.current) return
-    
+
     const textarea = textareaRef.current
     const start = textarea.selectionStart
     const end = textarea.selectionEnd
-    const selectedText = content.substring(start, end)
-    
     const scrollTop = textarea.scrollTop
-    
-    // הסרת רווחים מלפני ואחרי הטקסט הנבחר
-    const trimmedText = selectedText.trim()
-    const leadingSpaces = selectedText.match(/^\s*/)[0]
-    const trailingSpaces = selectedText.match(/\s*$/)[0]
-    
-    // בדיקה אם זה תג כותרת
-    const isHeadingTag = /^h[1-6]$/.test(tag)
-    
-    let cleanText = trimmedText
-    let insertion
-    
-    if (isHeadingTag && trimmedText) {
-      // עבור כותרות: הסרת כל התגים הקיימים מהטקסט
-      // הערת אבטחה: false positive מאומת עבור התראת CodeQL js/incomplete-multi-character-sanitization (נסגרה ידנית ב-GitHub, ראו הסבר): this is an editor
-      // convenience action (strip tags before wrapping in a heading), not the security
-      // boundary — final content is always run through DOMPurify.sanitize() before render
-      // (see sanitizedContent above / dangerouslySetInnerHTML usage below).
-      cleanText = trimmedText.replace(/<[^>]*>/g, '')
-      insertion = `<${tag}>${cleanText}</${tag}>`
-      
-      // הוספת ירידת שורה אחרי הכותרת אם אין כבר
-      const textAfterSelection = content.substring(end)
-      const hasNewlineAfter = textAfterSelection.startsWith('\n')
-      const hasNewlineInTrailing = trailingSpaces.includes('\n')
-      const needsNewline = !hasNewlineAfter && !hasNewlineInTrailing && textAfterSelection.length > 0
-      if (needsNewline) {
-        insertion += '\n'
-      }
-    } else {
-      // עבור תגים רגילים: התנהגות קיימת
-      insertion = trimmedText ? `<${tag}>${trimmedText}</${tag}>` : `<${tag}></${tag}>`
-    }
-    
-    const newText = content.substring(0, start) + leadingSpaces + insertion + trailingSpaces + content.substring(end)
-    
+
+    const { newText, newCursorPos } = computeInsertTagResult(content, start, end, tag)
+
     updateTextWithHistory(newText)
-    
+
     setTimeout(() => {
-      const newPos = trimmedText ? (start + leadingSpaces.length + insertion.length) : (start + tag.length + 2)
       textarea.focus()
-      textarea.setSelectionRange(newPos, newPos)
+      textarea.setSelectionRange(newCursorPos, newCursorPos)
       textarea.scrollTop = scrollTop
     }, 0)
   }, [content, updateTextWithHistory])
 
   const removeTags = useCallback(() => {
     if (!textareaRef.current) return
-    
+
     const textarea = textareaRef.current
     const start = textarea.selectionStart
     const end = textarea.selectionEnd
-    const selectedText = content.substring(start, end)
-    
-    if (!selectedText) {
-      showAlert('שגיאה', 'יש לבחור טקסט להסרת תגים')
+    const scrollTop = textarea.scrollTop
+
+    const result = computeRemoveTagsResult(content, start, end)
+    if (result.error) {
+      showAlert('שגיאה', result.error)
       return
     }
-    
-    const scrollTop = textarea.scrollTop
-    
-    // הסרת כל תגי ה-HTML מהטקסט הנבחר
-    // הערת אבטחה: false positive מאומת עבור התראת CodeQL js/incomplete-multi-character-sanitization (נסגרה ידנית ב-GitHub, ראו הסבר): editor convenience
-    // action, not the security boundary — see note on the identical pattern above; rendering
-    // always goes through DOMPurify.sanitize() first.
-    const cleanedText = selectedText.replace(/<[^>]*>/g, '')
-    const newText = content.substring(0, start) + cleanedText + content.substring(end)
-    
+    const { newText, newSelectionStart, newSelectionEnd } = result
+
     updateTextWithHistory(newText)
-    
+
     setTimeout(() => {
       textarea.focus()
-      textarea.setSelectionRange(start, start + cleanedText.length)
+      textarea.setSelectionRange(newSelectionStart, newSelectionEnd)
       textarea.scrollTop = scrollTop
     }, 0)
   }, [content, showAlert, updateTextWithHistory])
@@ -548,61 +510,31 @@ export default function DictaEditorCore({
       return false
     }
     if (!textareaRef.current) return false
-
     const textarea = textareaRef.current
-    const text = content
-    const patternStr = applyFindPatternTokens(textToFind)
-    
     const startPos = textarea.selectionEnd || 0
-    let matchIndex = -1
-    let matchLength = 0
 
-    if (isRegexMode) {
-      try {
-        const regex = new RegExp(patternStr, 'g')
-        regex.lastIndex = startPos
-        const match = regex.exec(text)
-        
-        if (match) {
-          matchIndex = match.index
-          matchLength = match[0].length
-        } else {
-          regex.lastIndex = 0
-          const matchFromStart = regex.exec(text)
-          if (matchFromStart) {
-            matchIndex = matchFromStart.index
-            matchLength = matchFromStart[0].length
-            if (!suppressAlerts) {
-              showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.')
-            }
-          }
-        }
-      } catch (e) {
-        if (!suppressAlerts) showAlert('שגיאה', 'ביטוי רגולרי לא תקין')
-        return false
-      }
-    } else {
-      matchIndex = text.indexOf(patternStr, startPos)
-      if (matchIndex === -1) {
-        matchIndex = text.indexOf(patternStr, 0)
-        if (matchIndex !== -1 && !suppressAlerts) {
-          showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.')
-        }
-      }
-      matchLength = patternStr.length
+    const result = computeFindNextMatch(content, textToFind, isRegexMode, startPos)
+    if (result.error) {
+      if (!suppressAlerts) showAlert('שגיאה', result.error)
+      return false
     }
 
+    const { matchIndex, matchLength, wrapped } = result
+
     if (matchIndex !== -1) {
+      if (wrapped && !suppressAlerts) {
+        showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.')
+      }
       textarea.focus()
       textarea.setSelectionRange(matchIndex, matchIndex + matchLength)
-      
+
       // שימוש בפונקציה המדויקת לחישוב מיקום הקורסור
       setTimeout(() => {
         const computedLineHeight = Number.parseFloat(window.getComputedStyle(textarea).lineHeight)
         const lineHeight = Number.isFinite(computedLineHeight) ? computedLineHeight : 24
         const caretTop = getTextareaCaretTop(textarea, matchIndex)
         const scrollPos = Math.max(0, caretTop - (textarea.clientHeight / 2) + lineHeight)
-        
+
         textarea.scrollTop = scrollPos
       }, 10)
       return true
@@ -813,41 +745,24 @@ export default function DictaEditorCore({
     }
   }, [buildWordVariants, clearSpellcheckHighlights, editMode, findNextWholeWordInTextarea, showAlert, highlightOccurrenceByIndex])
   const handleReplaceCurrent = useCallback((textToReplace, textToFind, isRegexMode) => {
-    if (!textToFind) return showAlert('שגיאה', 'הזן טקסט לחיפוש')
     if (!textareaRef.current) return
-
     const textarea = textareaRef.current
 
-    if (textarea.selectionStart === textarea.selectionEnd) {
+    const result = computeReplaceCurrentResult(content, textarea.selectionStart, textarea.selectionEnd, textToFind, textToReplace, isRegexMode)
+
+    if (result.error) return showAlert('שגיאה', result.error)
+    if (result.noSelection) {
       handleFindNext(textToFind, isRegexMode)
       return
     }
 
-    const patternStr = applyFindPatternTokens(textToFind)
-    const replacement = applyFindPatternTokens(textToReplace || '')
+    const { newText, newCursorPos } = result
 
-    let finalReplacement = replacement
-
-    if (isRegexMode) {
-      try {
-        const selectedText = textarea.value.substring(textarea.selectionStart, textarea.selectionEnd)
-        const regex = new RegExp(patternStr)
-        finalReplacement = selectedText.replace(regex, replacement)
-      } catch (e) {
-        console.error('Regex replacement error:', e)
-        return showAlert('שגיאה', 'ביטוי רגולרי לא תקין')
-      }
-    }
-
-    const start = textarea.selectionStart
-    const end = textarea.selectionEnd
-    const newText = content.substring(0, start) + finalReplacement + content.substring(end)
-    
     updateTextWithHistory(newText)
-    
+
     setTimeout(() => {
       textarea.focus()
-      textarea.setSelectionRange(start + finalReplacement.length, start + finalReplacement.length)
+      textarea.setSelectionRange(newCursorPos, newCursorPos)
     }, 0)
 
     handleFindNext(textToFind, isRegexMode)
@@ -858,38 +773,15 @@ export default function DictaEditorCore({
     const textToReplace = overrideReplace !== null ? overrideReplace : replaceText
     const isRegexMode = useRegexOverride !== null ? useRegexOverride : useRegex
 
-    if (!textToFind) return showAlert('שגיאה', 'הזן טקסט לחיפוש')
-    
-    const patternStr = applyFindPatternTokens(textToFind)
-    const replacement = applyFindPatternTokens(textToReplace || '')
-
-    const createRegex = (global) => {
-      try {
-        if (isRegexMode) {
-          return new RegExp(patternStr, global ? 'g' : '')
-        } else {
-          const escaped = escapeRegExp(patternStr)
-          return new RegExp(escaped, global ? 'g' : '')
-        }
-      } catch (e) {
-        return null
-      }
-    }
-
-    const regex = createRegex(true)
-    if (!regex) return showAlert('שגיאה', 'ביטוי רגולרי לא תקין')
-
-    const matches = content.match(regex)
-    const count = matches ? matches.length : 0
-    
-    if (count === 0) {
+    const result = computeReplaceAllResult(content, textToFind, textToReplace, isRegexMode)
+    if (result.error) return showAlert('שגיאה', result.error)
+    if (result.count === 0) {
       return showAlert('לידיעתך', 'לא נמצאו תוצאות התואמות לחיפוש.')
     }
 
-    const newContent = content.replace(regex, replacement)
-    updateTextWithHistory(newContent)
-    
-    showAlert('הצלחה', `ההחלפה בוצעה בהצלחה! הוחלפו ${count} מופעים.`)
+    updateTextWithHistory(result.newText)
+
+    showAlert('הצלחה', `ההחלפה בוצעה בהצלחה! הוחלפו ${result.count} מופעים.`)
   }, [content, findText, replaceText, useRegex, showAlert, updateTextWithHistory])
 
   const handleRemoveDigits = useCallback(() => {
@@ -934,37 +826,9 @@ export default function DictaEditorCore({
       return showAlert('שגיאה', 'אין חיפושים שמורים')
     }
 
-    let currentContent = content
-    let totalReplacements = 0
+    const { newText, totalReplacements } = computeSavedReplacementsResult(content, savedSearches)
 
-    savedSearches.forEach(search => {
-      if (search.isRemoveDigits) {
-        currentContent = currentContent.replace(/\d+/g, '')
-      } else {
-        const patternStr = applyFindPatternTokens(search.findText)
-        const replacement = applyFindPatternTokens(search.replaceText || '')
-
-        try {
-          let regex
-          if (search.isRegex) {
-            regex = new RegExp(patternStr, 'g')
-          } else {
-            const escaped = escapeRegExp(patternStr)
-            regex = new RegExp(escaped, 'g')
-          }
-
-          const matches = currentContent.match(regex)
-          if (matches) {
-            totalReplacements += matches.length
-            currentContent = currentContent.replace(regex, replacement)
-          }
-        } catch (e) {
-          console.error('Error in saved search:', e)
-        }
-      }
-    })
-
-    updateTextWithHistory(currentContent)
+    updateTextWithHistory(newText)
     showAlert('הצלחה', `בוצעו ${totalReplacements} החלפות מתוך ${savedSearches.length} חיפושים שמורים.`)
   }, [content, savedSearches, showAlert, updateTextWithHistory])
 
