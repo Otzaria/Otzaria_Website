@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { apiGet, apiPut } from '@/lib/api-utils'
 
 export default function PluginNotificationSettings({ onClose }) {
   const [loading, setLoading] = useState(true)
@@ -17,8 +18,7 @@ export default function PluginNotificationSettings({ onClose }) {
   const loadSettings = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/admin/plugin-notifications')
-      const data = await response.json()
+      const data = await apiGet('/api/admin/plugin-notifications')
       if (data.success) {
         setEnabled(data.enabled)
       }
@@ -32,13 +32,7 @@ export default function PluginNotificationSettings({ onClose }) {
   const handleSave = async () => {
     try {
       setSaving(true)
-      const response = await fetch('/api/admin/plugin-notifications', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled })
-      })
-      
-      const data = await response.json()
+      const data = await apiPut('/api/admin/plugin-notifications', { enabled })
       if (data.success) {
         onClose()
       }

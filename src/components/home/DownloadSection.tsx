@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
+import { apiGet } from '@/lib/api-utils'
 
 // מבנה נתוני ההורדות המוחזר מ-/api/github-releases
 type PlatformLinks = Record<string, string | undefined>
@@ -70,8 +71,8 @@ export default function DownloadSection() {
   useEffect(() => {
     const fetchReleases = async () => {
         try {
-            const stableRes = await fetch('/api/github-releases?type=stable');
-            if (stableRes.ok) setStableDownloads(await stableRes.json());
+            const stable = await apiGet('/api/github-releases?type=stable') as Downloads;
+            setStableDownloads(stable);
         } catch (error) {
             console.error('Failed to load releases:', error);
         }
