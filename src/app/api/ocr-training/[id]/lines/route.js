@@ -55,6 +55,13 @@ export async function PUT(request, { params }) {
     }
     await page.save();
 
+    // בכוונה בלי revalidateTag כאן: זהו autosave שרץ בתדירות גבוהה מאוד
+    // (כמעט בכל הקלדה/גרירה), ולא משנה אילו עמודים נחשבים "זמינים" עבור
+    // משתמשים אחרים (status הופך ל-'available' רק דרך claim/release/admin,
+    // שכן מבוטלים בנפרד). זו אותה חריגה בדיוק כמו downloadCount המתועדת
+    // ב-src/lib/cacheTags.js — ביטול מטמון על כל שמירה בודדת כאן היה מבטל
+    // את התועלת של המטמון; חלון ה-revalidate הרגיל (OCR_TRAINING_LIST)
+    // מספיק כרשת ביטחון לעדכון תצוגת ההתקדמות/סטטוס בעמוד שלי.
     const filled = clean.filter((l) => l.text && l.text.trim()).length;
     return NextResponse.json({ success: true, markedLines: clean.length, filledLines: filled });
   } catch (error) {
