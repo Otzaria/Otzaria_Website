@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { getUploadText } from '@/lib/gridfs-service';
 import { hasBooksAccess } from '@/lib/roles';
+import { combineUploadsContent } from '@/lib/uploadContent';
 
 export async function POST(request) {
   const session = await getServerSession(authOptions);
@@ -32,10 +33,7 @@ export async function POST(request) {
 
   // איחוד כל התוכן
   const parts = await Promise.all(uploads.map(upload => getUploadText(upload)));
-  const combinedContent = parts.map((content, index) => {
-    const separator = index < uploads.length - 1 ? '\n\n---\n\n' : '';
-    return content + separator;
-  }).join('');
+  const combinedContent = combineUploadsContent(parts);
 
   return NextResponse.json({ 
     success: true, 

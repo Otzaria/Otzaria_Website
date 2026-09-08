@@ -7,6 +7,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { getUploadText } from '@/lib/gridfs-service';
 import { hasBooksAccess } from '@/lib/roles';
+import { combineUploadsContent } from '@/lib/uploadContent';
 
 const DEFAULT_REPO_URL = "https://raw.githubusercontent.com/Otzaria/otzaria-library/refs/heads/main";
 const DEFAULT_FOLDER = "DictaToOtzaria/לא ערוך";
@@ -36,10 +37,7 @@ async function resetEditCopyFromUploads(editCopy) {
 
     // איחוד כל התוכן מחדש
     const parts = await Promise.all(uploads.map(upload => getUploadText(upload)));
-    const combinedContent = parts.map((content, index) => {
-      const separator = index < uploads.length - 1 ? '\n\n---\n\n' : '';
-      return content + separator;
-    }).join('');
+    const combinedContent = combineUploadsContent(parts);
 
     // עדכון התוכן בעותק העריכה
     editCopy.content = combinedContent;
