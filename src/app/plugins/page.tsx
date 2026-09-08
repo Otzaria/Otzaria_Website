@@ -5,11 +5,16 @@
 //
 // Server Component: הנתונים נשלפים ישירות מה-DB (אותה לוגיקה בדיוק כמו
 // /api/plugins/store-home, ראו src/app/api/plugins/store-home/route.js) בזמן
-// הרינדור, ולא בקריאת fetch מהדפדפן אחרי הטעינה. ה-route עצמו משאיר
-// Cache-Control: no-cache כדי שהשהיית תוסף תשתקף מיד — force-dynamic כאן
-// שומר על אותה ערבות: כל בקשה לדף מריצה את השאילתה מחדש, בלי caching/ISR.
-export const dynamic = 'force-dynamic'
-
+// הרינדור, ולא בקריאת fetch מהדפדפן אחרי הטעינה.
+//
+// מטמון (Data Cache של Next, לא HTTP): התוצאה נשמרת בזיכרון השרת עם תגיות
+// PLUGINS_PUBLIC/STORE_SETTINGS/PLUGIN_CATEGORIES וחלון גיבוי קצר. כל route
+// שמשנה תוסף/קטגוריה/הגדרות חנות קורא ל-revalidateTag על התגית המתאימה מיד
+// אחרי כתיבה מוצלחת (ראו src/lib/cacheTags.js) — כך שהשעיית/מחיקת/אישור
+// תוסף משתקפים מיד, בלי להמתין לחלון ה-revalidate. שדות "עוקבים" בתדירות
+// גבוהה כמו downloadCount לא מקבלים תגית משלהם ומתעדכנים לכשעצמם בתוך חלון
+// ה-revalidate (ראו ההסבר המלא ב-cacheTags.js) — זה מכוון, לא פספוס.
+import { unstable_cache as nextCache } from 'next/cache'
 import dbConnect from '@/lib/db'
 import PluginModel from '@/models/Plugin'
 import PluginCategory from '@/models/PluginCategory'
@@ -22,11 +27,15 @@ import {
   orderCategoryPlugins,
   formatCategorySummary
 } from '@/lib/pluginStore'
+import { CACHE_TAGS, REVALIDATE_SECONDS } from '@/lib/cacheTags'
 import PluginsStoreHomeClient from './PluginsStoreHomeClient'
 import type { Plugin } from '@/components/plugins/types'
 import type { StoreHomeData } from './storeHomeTypes'
 
-async function loadStoreHomeData(): Promise<StoreHomeData> {
+// ISR: הדף עצמו (לא רק שאילתת ה-DB) נשמר במטמון עד revalidateTag או חלון זה.
+export const revalidate = REVALIDATE_SECONDS.PLUGINS_PUBLIC
+
+async function loadStoreHomeDataUncached(): Promise<StoreHomeData> {
   await dbConnect()
 
   const [settings, categories, totalPublicPlugins] = await Promise.all([
@@ -70,6 +79,11 @@ async function loadStoreHomeData(): Promise<StoreHomeData> {
     totalPublicPlugins
   }
 }
+
+const loadStoreHomeData = nextCache(loadStoreHomeDataUncached, ['plugins-store-home'], {
+  tags: [CACHE_TAGS.PLUGINS_PUBLIC, CACHE_TAGS.STORE_SETTINGS, CACHE_TAGS.PLUGIN_CATEGORIES],
+  revalidate: REVALIDATE_SECONDS.PLUGINS_PUBLIC
+})
 
 export default async function PluginsPage() {
   let data: StoreHomeData | null = null

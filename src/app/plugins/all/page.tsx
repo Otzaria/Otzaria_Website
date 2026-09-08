@@ -5,19 +5,24 @@
 // /api/plugins, ראו src/app/api/plugins/route.js, בלי פרמטרי query — כמו
 // שדף זה קרא לו עד כה: fetch בלי tag/status/search/appVersion) בזמן הרינדור.
 // הסינון עצמו (חיפוש/סטטוס/תגית) נשאר לגמרי בצד הלקוח (AllPluginsClient),
-// כולל שימור המצב ב-URL. force-dynamic מבטיח שכל בקשה מריצה שאילתה מחדש —
-// זו אותה ערבות "תוסף שהושהה נעלם מיד" שה-API route השיג עם no-cache.
-export const dynamic = 'force-dynamic'
-
+// כולל שימור המצב ב-URL.
+//
+// מטמון: כמו plugins/page.tsx — Data Cache עם תגית PLUGINS_PUBLIC + חלון
+// גיבוי קצר, וביטול מיידי (revalidateTag) מכל route שמשנה תוסף. ראו
+// src/lib/cacheTags.js להסבר המלא (כולל למה downloadCount לא מקבל תגית).
+import { unstable_cache as nextCache } from 'next/cache'
 import dbConnect from '@/lib/db'
 import PluginModel from '@/models/Plugin'
 import { getStoreSettings } from '@/models/StoreSettings'
 import { formatPluginForPublic } from '@/lib/pluginSubmission'
 import { PUBLIC_PLUGIN_FILTER } from '@/lib/pluginStore'
+import { CACHE_TAGS, REVALIDATE_SECONDS } from '@/lib/cacheTags'
 import AllPluginsClient from './AllPluginsClient'
 import type { Plugin } from '@/components/plugins/types'
 
-async function loadAllPlugins(): Promise<Plugin[]> {
+export const revalidate = REVALIDATE_SECONDS.PLUGINS_PUBLIC
+
+async function loadAllPluginsUncached(): Promise<Plugin[]> {
   await dbConnect()
 
   const [plugins, settings] = await Promise.all([
@@ -43,6 +48,11 @@ async function loadAllPlugins(): Promise<Plugin[]> {
     formatPluginForPublic(plugin, { isFeatured: featuredRank.has(plugin._id.toString()) }) as Plugin
   )
 }
+
+const loadAllPlugins = nextCache(loadAllPluginsUncached, ['plugins-all'], {
+  tags: [CACHE_TAGS.PLUGINS_PUBLIC, CACHE_TAGS.STORE_SETTINGS],
+  revalidate: REVALIDATE_SECONDS.PLUGINS_PUBLIC
+})
 
 export default async function AllPluginsPage() {
   let plugins: Plugin[] = []

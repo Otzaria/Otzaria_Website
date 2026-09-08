@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { revalidateTag } from 'next/cache'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import mongoose from 'mongoose'
@@ -7,6 +8,7 @@ import Plugin from '@/models/Plugin'
 import PluginCategory from '@/models/PluginCategory'
 import StoreSettings from '@/models/StoreSettings'
 import { invalidatePluginSearchIndex } from '@/lib/pluginSearchIndex'
+import { CACHE_TAGS } from '@/lib/cacheTags'
 import { sendPluginApprovalNotification } from '@/lib/emailService'
 import {
   deletePendingPluginDir,
@@ -72,6 +74,7 @@ export async function PATCH(request, { params }) {
       applySuspension(plugin, action, { userId: auth.session.user.id, isAdmin: true })
       await plugin.save()
       invalidatePluginSearchIndex()
+      revalidateTag(CACHE_TAGS.PLUGINS_PUBLIC)
       return NextResponse.json({
         success: true,
         message: action === 'suspend'
@@ -239,6 +242,7 @@ export async function PATCH(request, { params }) {
     }
 
     invalidatePluginSearchIndex()
+    revalidateTag(CACHE_TAGS.PLUGINS_PUBLIC)
     return NextResponse.json({
       success: true,
       message: action === 'approve' ? 'Plugin approved successfully' : 'Plugin approval revoked successfully',
@@ -294,6 +298,9 @@ export async function DELETE(request, { params }) {
       console.error('Failed to remove deleted plugin from featured list:', err)
     })
     invalidatePluginSearchIndex()
+    revalidateTag(CACHE_TAGS.PLUGINS_PUBLIC)
+    revalidateTag(CACHE_TAGS.PLUGIN_CATEGORIES)
+    revalidateTag(CACHE_TAGS.STORE_SETTINGS)
 
     return NextResponse.json({
       success: true,

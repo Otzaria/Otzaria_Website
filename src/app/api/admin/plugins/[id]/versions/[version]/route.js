@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
+import { revalidateTag } from 'next/cache'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import { deleteVersionDir } from '@/lib/pluginStorage'
 import { invalidatePluginSearchIndex } from '@/lib/pluginSearchIndex'
+import { CACHE_TAGS } from '@/lib/cacheTags'
 import { parsePluginRef } from '@/lib/pluginRef'
 import { hasPluginsAccess } from '@/lib/roles'
 
@@ -54,6 +56,7 @@ export async function DELETE(request, { params }) {
     await plugin.save()
     // רשימת הגרסאות נחשפת בפורמט הציבורי → רענון אינדקס החיפוש (המסמכים בקאש)
     invalidatePluginSearchIndex()
+    revalidateTag(CACHE_TAGS.PLUGINS_PUBLIC)
 
     try {
       await deleteVersionDir(id, version)

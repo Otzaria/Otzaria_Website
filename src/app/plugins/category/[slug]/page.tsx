@@ -4,18 +4,23 @@
 //
 // Server Component: הנתונים נשלפים ישירות מה-DB (אותה לוגיקה בדיוק כמו
 // /api/plugins/categories/[slug], ראו src/app/api/plugins/categories/[slug]/route.js)
-// בזמן הרינדור. ה-route עצמו משאיר Cache-Control: no-cache כדי שהשהיית תוסף
-// תשתקף מיד — force-dynamic כאן שומר על אותה ערבות: כל בקשה מריצה שאילתה
-// מחדש, בלי caching/ISR.
-export const dynamic = 'force-dynamic'
-
+// בזמן הרינדור.
+//
+// מטמון: כמו plugins/page.tsx — Data Cache עם תגיות PLUGINS_PUBLIC +
+// PLUGIN_CATEGORIES וחלון גיבוי קצר, ומפתח נפרד לכל slug (הארגומנט נכנס
+// אוטומטית למפתח של unstable_cache). ביטול מיידי מכל route שמשנה תוסף/
+// קטגוריה — ראו src/lib/cacheTags.js.
+import { unstable_cache as nextCache } from 'next/cache'
 import dbConnect from '@/lib/db'
 import PluginCategory from '@/models/PluginCategory'
 import { formatPluginForPublic } from '@/lib/pluginSubmission'
 import { fetchPublicPluginsByIds, orderCategoryPlugins, resolveSortMode } from '@/lib/pluginStore'
+import { CACHE_TAGS, REVALIDATE_SECONDS } from '@/lib/cacheTags'
 import PluginCategoryClient from './PluginCategoryClient'
 import type { Plugin } from '@/components/plugins/types'
 import type { CategoryData } from './types'
+
+export const revalidate = REVALIDATE_SECONDS.PLUGINS_PUBLIC
 
 // זהה בדיוק ל-SLUG_RE של ה-route (לא ניתן לייבא אותו משם — route.js לא מייצא
 // אותו, ואסור לגעת ב-route). נבדק: לינארי — מפריד '-' חובה בכל איטרציה מונע
@@ -23,7 +28,7 @@ import type { CategoryData } from './types'
 // eslint-disable-next-line security/detect-unsafe-regex
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
-async function loadCategoryData(slug: string): Promise<CategoryData | null> {
+async function loadCategoryDataUncached(slug: string): Promise<CategoryData | null> {
   if (!SLUG_RE.test(slug || '')) return null
 
   await dbConnect()
@@ -44,6 +49,11 @@ async function loadCategoryData(slug: string): Promise<CategoryData | null> {
     total: ordered.length
   }
 }
+
+const loadCategoryData = nextCache(loadCategoryDataUncached, ['plugins-category'], {
+  tags: [CACHE_TAGS.PLUGINS_PUBLIC, CACHE_TAGS.PLUGIN_CATEGORIES],
+  revalidate: REVALIDATE_SECONDS.PLUGINS_PUBLIC
+})
 
 export default async function PluginCategoryPage({
   params

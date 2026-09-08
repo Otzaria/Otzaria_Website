@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
+import { revalidateTag } from 'next/cache'
 import mongoose from 'mongoose'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import { getStoreSettings } from '@/models/StoreSettings'
 import { requirePluginsAdmin } from '@/lib/adminAuth'
 import { invalidatePluginSearchIndex } from '@/lib/pluginSearchIndex'
+import { CACHE_TAGS } from '@/lib/cacheTags'
 
 const LIMITS = { homeTitle: 80, homeSubtitle: 200, featured: 100 }
 
@@ -91,6 +93,8 @@ export async function PATCH(request) {
         { $addToSet: { featuredPluginIds: body.pluginId }, $set: { updatedBy: auth.session.user.id } }
       )
       invalidatePluginSearchIndex()
+      revalidateTag(CACHE_TAGS.STORE_SETTINGS)
+      revalidateTag(CACHE_TAGS.PLUGINS_PUBLIC)
       const fresh = await getStoreSettings()
       return NextResponse.json({
         success: true,
@@ -136,6 +140,8 @@ export async function PATCH(request) {
     await settings.save()
     // רשימת הנבחרים משפיעה על דירוג החיפוש (isFeatured בקאש האינדקס)
     invalidatePluginSearchIndex()
+    revalidateTag(CACHE_TAGS.STORE_SETTINGS)
+    revalidateTag(CACHE_TAGS.PLUGINS_PUBLIC)
 
     return NextResponse.json({
       success: true,

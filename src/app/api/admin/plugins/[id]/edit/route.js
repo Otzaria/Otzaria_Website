@@ -21,6 +21,8 @@ import {
 } from '@/lib/pluginSubmission'
 import { readManifestFromPlugin, compareVersions } from '@/lib/pluginManifest'
 import { invalidatePluginSearchIndex } from '@/lib/pluginSearchIndex'
+import { CACHE_TAGS } from '@/lib/cacheTags'
+import { revalidateTag } from 'next/cache'
 import { archiveCurrentVersion } from '@/lib/pluginVersions'
 import { validatePluginArchive, OTZARIA_DESIGN_TAG } from '@/lib/pluginValidation'
 import { sendPluginReportNoticeIfNeeded } from '@/lib/systemMessages'
@@ -621,6 +623,7 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
     await plugin.save()
     // עריכה ישירה (ללא pendingApproval) משנה את הנתונים החיים → רענון אינדקס החיפוש
     invalidatePluginSearchIndex()
+    revalidateTag(CACHE_TAGS.PLUGINS_PUBLIC)
 
     // אם הוחלף קובץ חדש שלא תאם לעיצוב — מציינים בהודעת ההצלחה שהתגית לא נוספה.
     if (designCompliantFromFile === false) {
