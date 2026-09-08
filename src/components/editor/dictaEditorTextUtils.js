@@ -2,6 +2,8 @@
 // כל פונקציה כאן מקבלת קלט ומחזירה פלט בלבד, ולכן ניתנת לבדיקה מלאה ב-vitest
 // גם בסביבה שבה אין אפשרות לבדוק ויזואלית את העורך עצמו.
 
+import { escapeRegExp } from '@/lib/hebrewWordUtils'
+
 /**
  * בונה את תוכן העניינים מתוך HTML של הספר, לפי תגי כותרות h1-h6.
  * משמש הן לרינדור סרגל התוכן והן לניווט (scrollToHeading).
@@ -177,4 +179,165 @@ export function computeRemoveTagsResult(content, start, end) {
   const newText = content.substring(0, start) + cleanedText + content.substring(end)
 
   return { newText, newSelectionStart: start, newSelectionEnd: start + cleanedText.length }
+}
+
+/**
+ * מחשב את המופע הבא של טקסט לחיפוש בתוכן, כולל "עטיפה" חזרה להתחלה כשלא
+ * נמצא מ-startPos ואילך. חולץ מהלוגיקה הטהורה בתוך
+ * DictaEditorCore.handleFindNextInternal - תופעות הלוואי על ה-DOM
+ * (focus/setSelectionRange/scrollTop) נשארות בקומפוננטה.
+ *
+ * @returns {{ error: string }|{ matchIndex: number, matchLength: number, wrapped: boolean }}
+ *   matchIndex -1 כאשר לא נמצא מופע כלל.
+ */
+export function computeFindNextMatch(content, textToFind, isRegexMode, startPos) {
+  if (!textToFind) {
+    return { error: 'הזן טקסט לחיפוש' }
+  }
+
+  const text = content
+  const patternStr = applyFindPatternTokens(textToFind)
+  let matchIndex = -1
+  let matchLength = 0
+  let wrapped = false
+
+  if (isRegexMode) {
+    let regex
+    try {
+      regex = new RegExp(patternStr, 'g')
+    } catch (e) {
+      return { error: 'ביטוי רגולרי לא תקין' }
+    }
+    regex.lastIndex = startPos
+    const match = regex.exec(text)
+
+    if (match) {
+      matchIndex = match.index
+      matchLength = match[0].length
+    } else {
+      regex.lastIndex = 0
+      const matchFromStart = regex.exec(text)
+      if (matchFromStart) {
+        matchIndex = matchFromStart.index
+        matchLength = matchFromStart[0].length
+        wrapped = true
+      }
+    }
+  } else {
+    matchIndex = text.indexOf(patternStr, startPos)
+    if (matchIndex === -1) {
+      matchIndex = text.indexOf(patternStr, 0)
+      if (matchIndex !== -1) wrapped = true
+    }
+    matchLength = patternStr.length
+  }
+
+  return { matchIndex, matchLength, wrapped }
+}
+
+/**
+ * מחשב את תוצאת החלפת הבחירה הנוכחית (handleReplaceCurrent): הטקסט החדש
+ * ומיקום הסמן החדש. `noSelection: true` כאשר אין בחירה פעילה - במקרה זה
+ * הקומפוננטה קופצת ישירות ל-handleFindNext בלי לגעת בתוכן.
+ *
+ * @returns {{ error: string }|{ noSelection: true }|{ newText: string, newCursorPos: number }}
+ */
+export function computeReplaceCurrentResult(content, selectionStart, selectionEnd, textToFind, textToReplace, isRegexMode) {
+  if (!textToFind) {
+    return { error: 'הזן טקסט לחיפוש' }
+  }
+  if (selectionStart === selectionEnd) {
+    return { noSelection: true }
+  }
+
+  const patternStr = applyFindPatternTokens(textToFind)
+  const replacement = applyFindPatternTokens(textToReplace || '')
+
+  let finalReplacement = replacement
+  if (isRegexMode) {
+    try {
+      const selectedText = content.substring(selectionStart, selectionEnd)
+      const regex = new RegExp(patternStr)
+      finalReplacement = selectedText.replace(regex, replacement)
+    } catch (e) {
+      return { error: 'ביטוי רגולרי לא תקין' }
+    }
+  }
+
+  const newText = content.substring(0, selectionStart) + finalReplacement + content.substring(selectionEnd)
+  const newCursorPos = selectionStart + finalReplacement.length
+
+  return { newText, newCursorPos }
+}
+
+/**
+ * מחשב את תוצאת "החלף הכל" (handleReplaceAll): הטקסט החדש ומספר ההחלפות
+ * שבוצעו. `count: 0` כאשר אין התאמות כלל - הקומפוננטה מציגה הודעה מתאימה
+ * בלי לגעת בהיסטוריה.
+ *
+ * @returns {{ error: string }|{ newText: string, count: number }}
+ */
+export function computeReplaceAllResult(content, textToFind, textToReplace, isRegexMode) {
+  if (!textToFind) {
+    return { error: 'הזן טקסט לחיפוש' }
+  }
+
+  const patternStr = applyFindPatternTokens(textToFind)
+  const replacement = applyFindPatternTokens(textToReplace || '')
+
+  let regex
+  try {
+    regex = isRegexMode
+      ? new RegExp(patternStr, 'g')
+      : new RegExp(escapeRegExp(patternStr), 'g')
+  } catch (e) {
+    return { error: 'ביטוי רגולרי לא תקין' }
+  }
+
+  const matches = content.match(regex)
+  const count = matches ? matches.length : 0
+  if (count === 0) {
+    return { newText: content, count: 0 }
+  }
+
+  const newText = content.replace(regex, replacement)
+  return { newText, count }
+}
+
+/**
+ * מריץ ברצף את כל החיפושים השמורים על התוכן (runAllSavedReplacements),
+ * ומחזיר את התוכן הסופי ואת סך ההחלפות שבוצעו. חיפוש בודד שנכשל (regex
+ * לא תקין) פשוט מדולג, כמו בהתנהגות המקורית.
+ *
+ * @returns {{ newText: string, totalReplacements: number }}
+ */
+export function computeSavedReplacementsResult(content, savedSearches) {
+  let currentContent = content
+  let totalReplacements = 0
+
+  savedSearches.forEach(search => {
+    if (search.isRemoveDigits) {
+      currentContent = currentContent.replace(/\d+/g, '')
+      return
+    }
+
+    const patternStr = applyFindPatternTokens(search.findText)
+    const replacement = applyFindPatternTokens(search.replaceText || '')
+
+    try {
+      const regex = search.isRegex
+        ? new RegExp(patternStr, 'g')
+        : new RegExp(escapeRegExp(patternStr), 'g')
+
+      const matches = currentContent.match(regex)
+      if (matches) {
+        totalReplacements += matches.length
+        currentContent = currentContent.replace(regex, replacement)
+      }
+    } catch (e) {
+      // דילוג על חיפוש שמור עם ביטוי רגולרי לא תקין, כמו בהתנהגות המקורית.
+    }
+  })
+
+  return { newText: currentContent, totalReplacements }
 }
