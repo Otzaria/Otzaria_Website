@@ -72,4 +72,17 @@ describe("PUT /api/admin/uploads/move-to-trash", () => {
     expect(findByIdAndUpdateMock).not.toHaveBeenCalled();
     expect(revalidateTagMock).not.toHaveBeenCalled();
   });
+
+  // רגרסיה: לפני המעבר ל-requireAccess, חוסר session היה מוחזר כ-403 בדיוק כמו
+  // חוסר הרשאה. כעת 401 מיועד במפורש למקרה שאין session בכלל.
+  it("returns 401 instead of 403 when there is no session at all", async () => {
+    const { getServerSession } = await import("next-auth");
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
+
+    const res = await PUT(makeRequest({ uploadId: "u1" }));
+
+    expect(res.status).toBe(401);
+    expect(findByIdAndUpdateMock).not.toHaveBeenCalled();
+    expect(revalidateTagMock).not.toHaveBeenCalled();
+  });
 });

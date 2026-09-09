@@ -5,19 +5,19 @@ import connectDB from '@/lib/db';
 import Upload from '@/models/Upload';
 import { hasBooksAccess } from '@/lib/roles';
 import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
+import { badRequest, requireAccess, serverError } from '@/lib/apiResponse';
 
 // PUT - עדכון סטטוס מרובה
 export async function PUT(request) {
   const session = await getServerSession(authOptions);
-  if (!hasBooksAccess(session?.user?.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const denied = requireAccess(session, hasBooksAccess);
+  if (denied) return denied;
 
   try {
     const { uploadIds, bookStatus } = await request.json();
-    
+
     if (!uploadIds || !Array.isArray(uploadIds) || uploadIds.length === 0 || !bookStatus) {
-      return NextResponse.json({ error: 'Upload IDs array and book status are required' }, { status: 400 });
+      return badRequest('Upload IDs array and book status are required');
     }
 
     await connectDB();
@@ -35,6 +35,6 @@ export async function PUT(request) {
     });
   } catch (error) {
     console.error('Error batch updating book status:', error);
-    return NextResponse.json({ error: 'Failed to batch update book status' }, { status: 500 });
+    return serverError('Failed to batch update book status');
   }
 }

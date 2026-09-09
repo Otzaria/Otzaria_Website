@@ -6,18 +6,18 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { getUploadText } from '@/lib/gridfs-service';
 import { hasBooksAccess } from '@/lib/roles';
 import { combineUploadsContent } from '@/lib/uploadContent';
+import { badRequest, notFound, requireAccess, serverError } from '@/lib/apiResponse';
 
 export async function POST(request) {
   const session = await getServerSession(authOptions);
-  if (!hasBooksAccess(session?.user?.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const denied = requireAccess(session, hasBooksAccess);
+  if (denied) return denied;
 
   try {
     const { uploadIds } = await request.json();
 
     if (!uploadIds || !Array.isArray(uploadIds) || uploadIds.length === 0) {
-      return NextResponse.json({ error: 'Upload IDs are required' }, { status: 400 });
+      return badRequest('Upload IDs are required');
     }
 
     await connectDB();
@@ -29,7 +29,7 @@ export async function POST(request) {
     }).sort({ createdAt: 1 }); // מיון לפי תאריך יצירה
 
     if (uploads.length === 0) {
-      return NextResponse.json({ error: 'No uploads found' }, { status: 404 });
+      return notFound('No uploads found');
     }
 
     // איחוד כל התוכן
@@ -44,6 +44,6 @@ export async function POST(request) {
     });
   } catch (error) {
     console.error('Error getting book content:', error);
-    return NextResponse.json({ error: 'Failed to get book content' }, { status: 500 });
+    return serverError('Failed to get book content');
   }
 }
