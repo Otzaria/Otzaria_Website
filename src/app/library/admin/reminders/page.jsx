@@ -3,7 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useDialog } from '@/components/providers/DialogContext';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { formatTimeAgo, computeRegularRecipients, computeDictaRecipients, generateEmailHtml } from './reminderUtils';
+import ReminderHistoryList from './ReminderHistoryList';
+import ReminderUserSelectionModal from './ReminderUserSelectionModal';
 
 export default function BookReminderPage() {
     const { data: session } = useSession();
@@ -31,28 +33,6 @@ export default function BookReminderPage() {
         error: '',
         success: ''
     });
-
-    const normalizeId = (id) => {
-        if (!id) return null;
-        return String(id).toString();
-    };
-
-    const formatTimeAgo = (dateString) => {
-        const date = new Date(dateString);
-        const now = new Date();
-        const seconds = Math.floor((now - date) / 1000);
-
-        if (seconds < 60) return 'ממש עכשיו';
-        
-        const minutes = Math.floor(seconds / 60);
-        if (minutes < 60) return `לפני ${minutes} דקות`;
-        
-        const hours = Math.floor(minutes / 60);
-        if (hours < 24) return `לפני ${hours === 1 ? 'שעה' : hours + ' שעות'}`;
-        
-        const days = Math.floor(hours / 24);
-        return `לפני ${days === 1 ? 'יום אחד' : days + ' ימים'}`;
-    };
 
     const handleDeleteHistory = (id) => {
         showConfirm(
@@ -156,84 +136,13 @@ export default function BookReminderPage() {
                     const data = await response.json();
 
                     if (data.success && data.pages) {
-                        const userMap = new Map();
-                        allUsers.forEach(u => {
-                            if (u._id) userMap.set(normalizeId(u._id), u);
-                            if (u.id) userMap.set(normalizeId(u.id), u);
-                        });
-
-                        const uniqueUsers = new Map();
-                        
-                        data.pages.forEach(page => {
-                            if (page.status === 'in-progress') {
-                                let rawUserId = page.claimedById || page.holder;
-                                if (rawUserId && typeof rawUserId === 'object' && rawUserId._id) {
-                                    rawUserId = rawUserId._id;
-                                }
-                                const userId = normalizeId(rawUserId);
-
-                                if (userId) {
-                                    const userDetails = userMap.get(userId);
-                                    if (userDetails && userDetails.email && userDetails.acceptReminders && userDetails.isVerified) {
-                                        uniqueUsers.set(userDetails.email, {
-                                            email: userDetails.email,
-                                            name: userDetails.name || 'משתמש ללא שם',
-                                            id: userId
-                                        });
-                                    }
-                                }
-                            }
-                        });
-
-                        const usersList = Array.from(uniqueUsers.values());
+                        const usersList = computeRegularRecipients(data.pages, allUsers);
                         setFoundUsersDetails(usersList);
                         setRecipients(usersList.map(u => u.email));
                     }
                 } else if (bookType === 'dicta') {
                     // טיפול בספרי דיקטה - מאתרים את כל המשתמשים עם ספרים בטיפול
-                    const now = new Date();
-                    const usersWithBooks = new Map();
-
-                    // יצירת Map של משתמשים לפי ID לשיפור ביצועים (O(1) במקום O(N))
-                    const userMap = new Map();
-                    allUsers.forEach(u => {
-                        if (u._id) userMap.set(normalizeId(u._id), u);
-                        if (u.id) userMap.set(normalizeId(u.id), u);
-                    });
-
-                    dictaBooks.forEach(book => {
-                        if (book.status === 'in-progress' && book.claimedBy && book.claimedAt) {
-                            const claimedAt = new Date(book.claimedAt);
-                            const daysSinceClaim = Math.floor((now - claimedAt) / (1000 * 60 * 60 * 24));
-
-                            if (daysSinceClaim >= daysThreshold) {
-                                const claimedById = book.claimedBy._id || book.claimedBy;
-                                const userId = normalizeId(claimedById);
-                                const userDetails = userMap.get(userId);
-
-                                if (userDetails && userDetails.email && userDetails.acceptReminders && userDetails.isVerified) {
-                                    if (!usersWithBooks.has(userId)) {
-                                        usersWithBooks.set(userId, {
-                                            email: userDetails.email,
-                                            name: userDetails.name || 'משתמש ללא שם',
-                                            id: userId,
-                                            books: [],
-                                            maxDays: daysSinceClaim
-                                        });
-                                    }
-                                    
-                                    const userInfo = usersWithBooks.get(userId);
-                                    userInfo.books.push({
-                                        title: book.title,
-                                        daysSinceClaim
-                                    });
-                                    userInfo.maxDays = Math.max(userInfo.maxDays, daysSinceClaim);
-                                }
-                            }
-                        }
-                    });
-
-                    const usersList = Array.from(usersWithBooks.values());
+                    const usersList = computeDictaRecipients(dictaBooks, allUsers, daysThreshold);
                     setFoundUsersDetails(usersList);
                     setRecipients(usersList.map(u => u.email));
                 }
@@ -257,36 +166,6 @@ export default function BookReminderPage() {
                 return [...prev, email];
             }
         });
-    };
-
-    const generateEmailHtml = (bookName, messageBody, isDicta = false) => {
-        const siteUrl = typeof window !== 'undefined' ? window.location.origin : '';
-        const formattedBody = messageBody.replace(/\n/g, '<br/>');
-        const bookLink = isDicta 
-            ? `${siteUrl}/library/dicta-books?status=my-books` 
-            : `${siteUrl}/library/books/${bookName}`;
-
-        return `
-        <div dir="rtl" style="font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 40px; text-align: center;">
-            <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden;">
-                <div style="background-color: #ffffff; padding: 20px; border-bottom: 3px solid #d4a373;">
-                    <img src="https://www.otzaria.org/logo.png" alt="Otzaria Logo" style="width: 120px; height: auto;">
-                    <h2 style="color: #d4a373; margin: 5px 0 0 0; font-size: 20px; font-weight: bold;">ספריית אוצריא</h2>
-                </div>
-                <div style="padding: 30px; color: #333333;">
-                    <h1 style="color: #2c3e50; font-size: 24px; margin-bottom: 10px;">הודעה בנוגע לספר${isDicta ? ' דיקטה' : ''}: ${bookName}</h1>
-                    <div style="font-size: 18px; line-height: 1.6; text-align: right; margin-bottom: 30px;">
-                        ${formattedBody}
-                    </div>
-                    <div style="margin: 30px 0; text-align: center;">
-                        <a href="${bookLink}" style="background-color: #d4a373; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
-                            ${isDicta ? 'כנס לספרי הדיקטה שלי' : 'כנס לספרייה'}
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-        `;
     };
 
     const handleSubmit = (e) => {
@@ -601,144 +480,22 @@ export default function BookReminderPage() {
                 )}
             </form>
 
-            {loadingHistory ? (
-                <div className="mt-12 border-t pt-8">
-                    <h2 className="text-xl font-bold text-neutral-800 mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-neutral-500">history</span>
-                        היסטוריית שליחות אחרונות
-                    </h2>
-                    <LoadingSpinner message="טוען היסטוריה..." />
-                </div>
-            ) : !loadingHistory && history.length > 0 && (
-                <div className="mt-12 border-t pt-8">
-                    <h2 className="text-xl font-bold text-neutral-800 mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-neutral-500">history</span>
-                        היסטוריית שליחות אחרונות
-                    </h2>
-                    <div className="bg-neutral-50 rounded-xl border border-neutral-200 overflow-hidden">
-                        {history.map((item) => (
-                            <div key={item.id} className="p-4 border-b border-neutral-100 last:border-0 hover:bg-white transition-colors flex items-center justify-between group">
-                                <div>
-                                    <div className="font-bold text-neutral-800 flex items-center gap-2">
-                                        {item.bookName}
-                                        {item.bookType === 'dicta' && (
-                                            <span className="text-xs bg-feature-100 text-feature-700 px-2 py-0.5 rounded-full">
-                                                דיקטה
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="text-sm text-neutral-500 flex items-center gap-2 flex-wrap">
-                                        <span>נשלח על ידי: {item.adminName}</span>
-                                        {item.isPartial && (
-                                            <span className="text-xs bg-warning-strong-100 text-warning-strong-700 px-2 py-0.5 rounded-full">
-                                                נשלח לחלק מהמשתמשים
-                                            </span>
-                                        )}
-                                        {item.bookType === 'dicta' && item.daysThreshold !== undefined && (
-                                            <span className="text-xs bg-info-100 text-info-700 px-2 py-0.5 rounded-full">
-                                                {item.daysThreshold === 0 ? 'כל הספרים' : `${item.daysThreshold}+ ימים`}
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                    <div className="text-left">
-                                        <div className="text-sm font-bold text-info-600 bg-info-50 px-2 py-1 rounded-md inline-block">
-                                            {formatTimeAgo(item.timestamp)}
-                                        </div>
-                                        <div className="text-xs text-neutral-400 mt-1" dir="ltr">
-                                            {new Date(item.timestamp).toLocaleTimeString('he-IL', {hour: '2-digit', minute:'2-digit'})}
-                                        </div>
-                                    </div>
-                                    
-                                    <button 
-                                        onClick={() => handleDeleteHistory(item.id)}
-                                        className="text-neutral-300 hover:text-danger-500 transition-colors p-2 rounded-full hover:bg-danger-50 opacity-0 group-hover:opacity-100"
-                                        title="מחק מההיסטוריה"
-                                    >
-                                        <span className="material-symbols-outlined">delete</span>
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
+            <ReminderHistoryList
+                loading={loadingHistory}
+                history={history}
+                onDelete={handleDeleteHistory}
+            />
 
             {showUserSelection && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col">
-                        <div className="p-4 border-b flex justify-between items-center bg-neutral-50 rounded-t-2xl">
-                            <h3 className="font-bold text-lg text-neutral-800">בחירת נמענים</h3>
-                            <button 
-                                type="button"
-                                onClick={() => setShowUserSelection(false)} 
-                                className="text-neutral-500 hover:text-neutral-700"
-                            >
-                                <span className="material-symbols-outlined">close</span>
-                            </button>
-                        </div>
-                        
-                        <div className="p-4 overflow-y-auto flex-1">
-                            <div className="flex justify-between mb-4 text-sm">
-                                <button 
-                                    type="button"
-                                    onClick={() => setRecipients(foundUsersDetails.map(u => u.email))}
-                                    className="text-info-600 hover:underline"
-                                >
-                                    בחר הכל
-                                </button>
-                                <button 
-                                    type="button"
-                                    onClick={() => setRecipients([])}
-                                    className="text-danger-600 hover:underline"
-                                >
-                                    נקה הכל
-                                </button>
-                            </div>
-
-                            <div className="space-y-2">
-                                {foundUsersDetails.map((user) => (
-                                    <label 
-                                        key={user.email} 
-                                        className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all
-                                            ${recipients.includes(user.email) ? 'bg-info-50 border-info-200' : 'hover:bg-neutral-50 border-neutral-100'}`}
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            checked={recipients.includes(user.email)}
-                                            onChange={() => toggleRecipient(user.email)}
-                                            className="w-5 h-5 rounded text-info-600 focus:ring-info-500 mt-0.5"
-                                        />
-                                        <div className="flex-1">
-                                            <div className="font-bold text-neutral-800">{user.name}</div>
-                                            <div className="text-xs text-neutral-500">{user.email}</div>
-                                            {bookType === 'dicta' && user.books && user.books.length > 0 && (
-                                                <div className="mt-2 space-y-1">
-                                                    {user.books.map((book, idx) => (
-                                                        <div key={idx} className="text-xs bg-feature-50 text-feature-700 px-2 py-1 rounded">
-                                                            {book.title} ({book.daysSinceClaim} ימים)
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </label>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="p-4 border-t bg-neutral-50 rounded-b-2xl flex justify-end">
-                            <button
-                                type="button"
-                                onClick={() => setShowUserSelection(false)}
-                                className="bg-primary text-white px-6 py-2 rounded-lg font-bold hover:bg-info-700 transition-colors"
-                            >
-                                אישור ({recipients.length})
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <ReminderUserSelectionModal
+                    users={foundUsersDetails}
+                    selected={recipients}
+                    bookType={bookType}
+                    onToggle={toggleRecipient}
+                    onSelectAll={() => setRecipients(foundUsersDetails.map(u => u.email))}
+                    onSelectNone={() => setRecipients([])}
+                    onClose={() => setShowUserSelection(false)}
+                />
             )}
         </div>
     );
