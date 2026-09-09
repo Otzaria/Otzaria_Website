@@ -5,6 +5,7 @@ import Page from '@/models/Page';
 import User from '@/models/User';
 import DictaBook from '@/models/DictaBook';
 import { cached, shabbatGatedCacheHeaders } from '@/lib/api-cache';
+import { serverError } from '@/lib/apiResponse';
 
 // מספרי הכותרת בדף הבית. אין סיבה להריץ את הספירות בכל ביקור.
 const CACHE_TTL_MS = 5 * 60_000;
@@ -82,6 +83,6 @@ export async function GET() {
     return NextResponse.json(payload, { headers: shabbatGatedCacheHeaders() });
   } catch (error) {
     console.error('Stats API Error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

@@ -5,12 +5,13 @@ import Book from '@/models/Book';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBooksAccess } from '@/lib/roles';
+import { unauthorized, badRequest, notFound, forbidden, serverError } from '@/lib/apiResponse';
 
 // שמירת תוכן (Auto-save)
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session) return unauthorized();
 
     const body = await request.json();
     const { 
@@ -50,7 +51,7 @@ export async function POST(request) {
 
     // שליפת העמוד הנוכחי לבדיקת הרשאות לפני עדכון
     const currentPage = await Page.findOne(query);
-    if (!currentPage) return NextResponse.json({ success: false, error: 'Page not found' }, { status: 404 });
+    if (!currentPage) return notFound('Page not found');
 
     // לוגיקת הרשאות ועדכון סטטוס:
     let updateFields = {
@@ -66,7 +67,7 @@ export async function POST(request) {
     if (currentPage.status !== 'available') {
         const isOwner = currentPage.claimedBy?.toString() === userId;
         if (!isOwner && !isAdmin) {
-            return NextResponse.json({ success: false, error: 'אין לך הרשאה לערוך דף זה' }, { status: 403 });
+            return forbidden('אין לך הרשאה לערוך דף זה');
         }
         // אם הדף Completed, אנחנו מאפשרים עריכה (תיקון טעויות) מבלי לשנות סטטוס, אלא אם נרצה אחרת.
         // הבקשה הייתה לאפשר עריכה "בלי להגדיר את הדף חזרה למצב עריכה", ולכן לא משנים את הסטטוס כאן.
@@ -80,13 +81,13 @@ export async function POST(request) {
     );
 
     if (!updatedPage) {
-      return NextResponse.json({ success: false, message: 'העמוד לא נמצא' }, { status: 404 });
+      return notFound('העמוד לא נמצא');
     }
 
     return NextResponse.json({ success: true, message: 'נשמר בהצלחה', pageStatus: updatedPage.status });
   } catch (error) {
     console.error('Save Content Error:', error);
-    return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }
 
@@ -95,7 +96,7 @@ export async function GET(request) {
     try {
         const session = await getServerSession(authOptions);
         // מאפשרים כניסה רק למחוברים, אך הבדיקה הפרטנית תהיה למטה
-        if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        if (!session) return unauthorized();
 
         const userId = session.user._id || session.user.id;
         const isAdmin = hasBooksAccess(session.user.role);
@@ -105,32 +106,32 @@ export async function GET(request) {
         const pageNumber = searchParams.get('pageNumber');
 
         if (!bookPath || !pageNumber) {
-            return NextResponse.json({ success: false, error: 'Missing parameters' }, { status: 400 });
+            return badRequest('Missing parameters');
         }
 
         await connectDB();
 
         const decodedPath = decodeURIComponent(bookPath);
 
-        const book = await Book.findOne({ 
-            $or: [{ slug: decodedPath }, { name: decodedPath }] 
+        const book = await Book.findOne({
+            $or: [{ slug: decodedPath }, { name: decodedPath }]
         });
 
         if (!book) {
-            return NextResponse.json({ success: false, error: 'Book not found' }, { status: 404 });
+            return notFound('Book not found');
         }
 
-        const page = await Page.findOne({ 
-            book: book._id, 
-            pageNumber: parseInt(pageNumber) 
+        const page = await Page.findOne({
+            book: book._id,
+            pageNumber: parseInt(pageNumber)
         });
 
         if (!page) {
-            return NextResponse.json({ success: false, error: 'Page not found' }, { status: 404 });
+            return notFound('Page not found');
         }
 
         // --- בדיקת הרשאות צפייה/עריכה ---
-        
+
         // 1. דף פנוי (Available) - כולם יכולים להיכנס
         if (page.status === 'available') {
             // הגישה מותרת
@@ -139,14 +140,14 @@ export async function GET(request) {
         else if (page.status === 'in-progress') {
             const isOwner = page.claimedBy?.toString() === userId;
             if (!isOwner && !isAdmin) {
-                return NextResponse.json({ success: false, error: 'הדף נמצא בטיפול על ידי משתמש אחר' }, { status: 403 });
+                return forbidden('הדף נמצא בטיפול על ידי משתמש אחר');
             }
         }
         // 3. דף הושלם (Completed) - רק הבעלים והמנהלים (לצורך תיקונים)
         else if (page.status === 'completed') {
             const isOwner = page.claimedBy?.toString() === userId;
             if (!isOwner && !isAdmin) {
-                return NextResponse.json({ success: false, error: 'הדף הושלם על ידי משתמש אחר ונעול לעריכה' }, { status: 403 });
+                return forbidden('הדף הושלם על ידי משתמש אחר ונעול לעריכה');
             }
         }
 
@@ -169,6 +170,6 @@ export async function GET(request) {
 
     } catch (error) {
         console.error('Get Content Error:', error);
-        return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
+        return serverError();
     }
 }

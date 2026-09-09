@@ -3,6 +3,7 @@ import connectDB from '@/lib/db';
 import Page from '@/models/Page';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/client-ip';
+import { apiError, serverError } from '@/lib/apiResponse';
 
 export async function GET(request) {
     try {
@@ -17,7 +18,7 @@ export async function GET(request) {
         // הגבלת קצב רק על חיפושים אמיתיים — IP אמין דרך src/lib/client-ip.js
         const ip = getClientIp(request);
         if (!checkRateLimit(ip, 'search', 30, 'minute')) {
-            return NextResponse.json({ error: 'יותר מדי בקשות חיפוש. נסה שוב בעוד רגע.' }, { status: 429 });
+            return apiError(429, 'יותר מדי בקשות חיפוש. נסה שוב בעוד רגע.');
         }
 
         await connectDB();
@@ -47,7 +48,7 @@ export async function GET(request) {
 
         return NextResponse.json({ success: true, results });
     } catch (error) {
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return serverError();
     }
 }
 
