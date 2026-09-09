@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import SystemConfig from '@/models/SystemConfig';
+import { serverError } from '@/lib/apiResponse';
 
 export async function GET() {
   try {
@@ -24,9 +25,6 @@ export async function GET() {
 
   } catch (error) {
     console.error('Error fetching global instructions:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch instructions' },
-      { status: 500 }
-    );
+    return serverError('Failed to fetch instructions');
   }
 }

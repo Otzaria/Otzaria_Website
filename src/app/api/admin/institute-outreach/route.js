@@ -5,6 +5,7 @@ import connectDB from '@/lib/db';
 import InstituteOutreach from '@/models/InstituteOutreach';
 import SystemConfig from '@/models/SystemConfig';
 import { isAdmin } from '@/lib/roles';
+import { requireAccess, badRequest, notFound, serverError } from '@/lib/apiResponse';
 import { loadOptionConfigs } from '@/lib/private-sources';
 import {
   OUTREACH_STATUSES,
@@ -13,14 +14,6 @@ import {
   outreachKeys,
   findDuplicates,
 } from '@/lib/institute-outreach';
-
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!isAdmin(session?.user?.role)) return null;
-  return session;
-}
-
-const forbidden = () => NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
 function cleanString(value, max = 2000) {
   if (typeof value !== 'string') return '';
@@ -40,8 +33,9 @@ async function loadOutreachStatuses() {
 
 /** GET — כל הפניות (החדשות בראש) יחד עם רשימות הסטטוסים ואופני הפנייה. */
 export async function GET() {
-  const session = await requireAdmin();
-  if (!session) return forbidden();
+  const session = await getServerSession(authOptions);
+  const denied = requireAccess(session, isAdmin);
+  if (denied) return denied;
 
   try {
     await connectDB();
@@ -59,7 +53,7 @@ export async function GET() {
     });
   } catch (error) {
     console.error('Error loading institute outreach records:', error);
-    return NextResponse.json({ error: 'שגיאה בטעינת הפניות' }, { status: 500 });
+    return serverError('שגיאה בטעינת הפניות');
   }
 }
 
@@ -71,8 +65,9 @@ export async function GET() {
  * כדי שגם שמירה במקביל משני מסכים לא תיצור כפילות בשקט.
  */
 export async function POST(request) {
-  const session = await requireAdmin();
-  if (!session) return forbidden();
+  const session = await getServerSession(authOptions);
+  const denied = requireAccess(session, isAdmin);
+  if (denied) return denied;
 
   try {
     const body = await request.json();
@@ -86,7 +81,7 @@ export async function POST(request) {
     };
 
     if (!contact.instituteName && !contact.contactName) {
-      return NextResponse.json({ error: 'חובה למלא שם מכון או שם איש קשר' }, { status: 400 });
+      return badRequest('חובה למלא שם מכון או שם איש קשר');
     }
 
     let outreachDate = null;
@@ -142,7 +137,7 @@ export async function POST(request) {
     let record;
     if (id) {
       record = await InstituteOutreach.findByIdAndUpdate(id, { $set: update }, { new: true }).lean();
-      if (!record) return NextResponse.json({ error: 'הפנייה לא נמצאה' }, { status: 404 });
+      if (!record) return notFound('הפנייה לא נמצאה');
     } else {
       record = (
         await InstituteOutreach.create({
@@ -155,28 +150,29 @@ export async function POST(request) {
     return NextResponse.json({ success: true, record: serialize(record) });
   } catch (error) {
     console.error('Error saving institute outreach record:', error);
-    return NextResponse.json({ error: 'שגיאה בשמירת הפנייה' }, { status: 500 });
+    return serverError('שגיאה בשמירת הפנייה');
   }
 }
 
 /** DELETE ?id=... — מחיקת פנייה. */
 export async function DELETE(request) {
-  const session = await requireAdmin();
-  if (!session) return forbidden();
+  const session = await getServerSession(authOptions);
+  const denied = requireAccess(session, isAdmin);
+  if (denied) return denied;
 
   try {
     const id = new URL(request.url).searchParams.get('id');
-    if (!id) return NextResponse.json({ error: 'חסר מזהה פנייה' }, { status: 400 });
+    if (!id) return badRequest('חסר מזהה פנייה');
 
     await connectDB();
     const result = await InstituteOutreach.deleteOne({ _id: id });
     if (result.deletedCount === 0) {
-      return NextResponse.json({ error: 'לא נמצאה פנייה למחיקה' }, { status: 404 });
+      return notFound('לא נמצאה פנייה למחיקה');
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting institute outreach record:', error);
-    return NextResponse.json({ error: 'שגיאה במחיקת הפנייה' }, { status: 500 });
+    return serverError('שגיאה במחיקת הפנייה');
   }
 }

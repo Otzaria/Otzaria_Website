@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireModerator } from '@/lib/dicta/require-moderator';
 import { pushLibraryToGitHub } from '@/lib/dicta/library-sync';
+import { apiError, serverError } from '@/lib/apiResponse';
 
 export const maxDuration = 300;
 
@@ -8,7 +9,7 @@ export const maxDuration = 300;
 export async function POST(req) {
   try {
     const auth = await requireModerator('sync');
-    if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
+    if (auth.error) return apiError(auth.status, auth.error);
 
     const body = await req.json().catch(() => ({}));
     const force = body?.force === true;
@@ -18,6 +19,6 @@ export async function POST(req) {
   } catch (error) {
     if (error.code === 'NO_TOKEN') return NextResponse.json({ error: error.message, code: 'NO_TOKEN' }, { status: 400 });
     console.error('Manual push sync failed:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

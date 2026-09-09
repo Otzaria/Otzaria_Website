@@ -6,13 +6,13 @@ import User from '@/models/User';
 import SpellWord from '@/models/SpellWord';
 import SpellWordSkip from '@/models/SpellWordSkip';
 import { hasBooksAccess } from '@/lib/roles';
+import { requireAccess, badRequest, serverError } from '@/lib/apiResponse';
 
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    if (!hasBooksAccess(session?.user?.role)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
+    const denied = requireAccess(session, hasBooksAccess);
+    if (denied) return denied;
 
     await connectDB();
 
@@ -37,29 +37,28 @@ export async function GET() {
     return NextResponse.json({ success: true, entries, skipped });
   } catch (error) {
     console.error('Admin dictionary GET error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }
 
 export async function POST(req) {
   try {
     const session = await getServerSession(authOptions);
-    if (!hasBooksAccess(session?.user?.role)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
+    const denied = requireAccess(session, hasBooksAccess);
+    if (denied) return denied;
 
     const { action, userId, word } = await req.json();
     const clean = typeof word === 'string' ? word.trim() : '';
 
     if (!clean) {
-      return NextResponse.json({ error: 'Invalid word' }, { status: 400 });
+      return badRequest('Invalid word');
     }
 
     await connectDB();
 
     const needsUserId = new Set(["remove-personal", "skip", "unskip"])
     if (needsUserId.has(action) && !userId) {
-      return NextResponse.json({ error: "Missing userId" }, { status: 400 })
+      return badRequest('Missing userId')
     }
 
     switch (action) {
@@ -93,11 +92,11 @@ export async function POST(req) {
         return NextResponse.json({ success: true })
       }
       default:
-        return NextResponse.json({ error: "Unknown action" }, { status: 400 })
+        return badRequest('Unknown action')
     }
 
   } catch (error) {
     console.error('Admin dictionary POST error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

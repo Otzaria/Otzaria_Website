@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Page from '@/models/Page';
 import { cached, shabbatGatedCacheHeaders } from '@/lib/api-cache';
+import { serverError } from '@/lib/apiResponse';
 
 // הנתון הוא ספירת דפים לפי יום — אין טעם לחשב אותו מחדש לכל מבקר.
 const CACHE_TTL_MS = 5 * 60_000;
@@ -71,6 +72,6 @@ export async function GET() {
         return NextResponse.json(payload, { headers: shabbatGatedCacheHeaders() });
     } catch (error) {
         console.error('Weekly stats error:', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return serverError();
     }
 }

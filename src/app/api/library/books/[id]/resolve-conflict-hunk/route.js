@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import { requireModerator } from '@/lib/dicta/require-moderator';
 import { resolveConflictHunk } from '@/lib/dicta/moderation-service';
+import { apiError, badRequest, notFound, serverError } from '@/lib/apiResponse';
 
 // פתרון קונפליקט סנכרון מקטע-מקטע. body: { before, after, strategy: 'ours'|'theirs' }
 // before/after = התוכן המלא של ה-hunk (גיטהאב/האתר), לזיהוי המקטע ללא תלות באינדקס.
 export async function POST(req, { params }) {
   try {
     const auth = await requireModerator('sync');
-    if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
+    if (auth.error) return apiError(auth.status, auth.error);
 
     const { id } = await params;
 
@@ -15,19 +16,19 @@ export async function POST(req, { params }) {
     try {
       body = await req.json();
     } catch {
-      return NextResponse.json({ error: 'גוף הבקשה אינו JSON תקין' }, { status: 400 });
+      return badRequest('גוף הבקשה אינו JSON תקין');
     }
     const { before, after, strategy } = body;
 
     const result = await resolveConflictHunk({ bookId: id, before, after, strategy });
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
-    if (error.code === 'NOT_FOUND') return NextResponse.json({ error: error.message }, { status: 404 });
+    if (error.code === 'NOT_FOUND') return notFound(error.message);
     if (error.code === 'BAD_INPUT' || error.code === 'APPLY_FAILED') {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return badRequest(error.message);
     }
-    if (error.code === 'CONFLICT_RETRY') return NextResponse.json({ error: error.message }, { status: 409 });
+    if (error.code === 'CONFLICT_RETRY') return apiError(409, error.message);
     console.error('Resolve conflict hunk failed:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

@@ -5,13 +5,13 @@ import Page from '@/models/Page';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBooksAccess } from '@/lib/roles';
+import { requireAccess, serverError } from '@/lib/apiResponse';
 
 export async function POST() {
     try {
         const session = await getServerSession(authOptions);
-        if (!hasBooksAccess(session?.user?.role)) {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-        }
+        const denied = requireAccess(session, hasBooksAccess);
+        if (denied) return denied;
 
         await connectDB();
 
@@ -63,6 +63,6 @@ export async function POST() {
 
     } catch (error) {
         console.error('Recalc Error:', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return serverError();
     }
 }

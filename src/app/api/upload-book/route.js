@@ -9,6 +9,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/client-ip';
 import { saveFileToGridFS } from '@/lib/gridfs-service';
 import { z } from 'zod';
+import { unauthorized, badRequest, forbidden, apiError, serverError } from '@/lib/apiResponse';
 
 // סכמת אימות להעלאת קבצים
 const uploadFileSchema = z.object({
@@ -78,17 +79,14 @@ export async function POST(request) {
     try {
         // 1. בדיקת סשן
         const session = await getServerSession(authOptions);
-        if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        if (!session) return unauthorized();
 
         // 2. Rate Limiting - מגבלה של 20 העלאות לשעה למשתמש רגיל — IP אמין
         const ip = getClientIp(request);
         const isAllowed = checkRateLimit(ip, 'user_upload', 20, 'hour');
-        
+
         if (!isAllowed) {
-            return NextResponse.json(
-                { error: 'יותר מדי העלאות. נסה שוב מאוחר יותר.' }, 
-                { status: 429 }
-            );
+            return apiError(429, 'יותר מדי העלאות. נסה שוב מאוחר יותר.');
         }
 
         const formData = await request.formData();
@@ -125,17 +123,17 @@ export async function POST(request) {
 
         if (!validationResult.success) {
           const errors = validationResult.error.issues.map(err => err.message).join(', ');
-          return NextResponse.json({ error: errors }, { status: 400 });
+          return badRequest(errors);
         }
 
         // 4. בדיקת קובץ
         if (!file) {
-          return NextResponse.json({ error: 'חובה להעלות קובץ' }, { status: 400 });
+          return badRequest('חובה להעלות קובץ');
         }
 
         const MAX_SIZE = 10 * 1024 * 1024;
         if (file.size > MAX_SIZE) {
-            return NextResponse.json({ error: 'הקובץ גדול מדי (מקסימום 10MB)' }, { status: 400 });
+            return badRequest('הקובץ גדול מדי (מקסימום 10MB)');
         }
 
         let arrayBuffer = await file.arrayBuffer();
@@ -265,7 +263,7 @@ export async function POST(request) {
 
     } catch (error) {
         console.error('Upload Error:', error);
-        return NextResponse.json({ success: false, error: 'שגיאה בשרת. נסה שוב מאוחר יותר.' }, { status: 500 });
+        return serverError('שגיאה בשרת. נסה שוב מאוחר יותר.');
     }
 }
 
@@ -273,13 +271,13 @@ export async function POST(request) {
 export async function GET(request) {
     try {
         const session = await getServerSession(authOptions);
-        if (!session) return NextResponse.json({ success: true, uploads: [] }); 
+        if (!session) return NextResponse.json({ success: true, uploads: [] });
 
         const { searchParams } = new URL(request.url);
-        const userId = searchParams.get('userId'); 
+        const userId = searchParams.get('userId');
 
         if (userId && userId !== session.user._id && session.user.role !== 'admin') {
-             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+             return forbidden();
         }
 
         await connectDB();
@@ -303,6 +301,6 @@ export async function GET(request) {
 
     } catch (error) {
         console.error('Get Uploads Error:', error);
-        return NextResponse.json({ success: false, error: 'שגיאה בשרת. נסה שוב מאוחר יותר.' }, { status: 500 });
+        return serverError('שגיאה בשרת. נסה שוב מאוחר יותר.');
     }
 }

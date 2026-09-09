@@ -14,6 +14,7 @@ import {
   mergeBookInfoWithPending,
   normalizeBookInfoUpdates
 } from '@/lib/book-info-utils'
+import { unauthorized, badRequest, notFound, serverError } from '@/lib/apiResponse'
 
 function requireAuthenticatedSession(session) {
   return session?.user?.id || session?.user?._id
@@ -24,7 +25,7 @@ export async function GET() {
     const session = await getServerSession(authOptions)
     const userId = requireAuthenticatedSession(session)
     if (!userId) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     await connectDB()
@@ -65,10 +66,7 @@ export async function GET() {
     })
   } catch (error) {
     console.error('GET /api/library/book-info failed:', error)
-    return NextResponse.json(
-      { success: false, error: 'שגיאה בטעינת מידע הספרים' },
-      { status: 500 }
-    )
+    return serverError('שגיאה בטעינת מידע הספרים')
   }
 }
 
@@ -77,29 +75,29 @@ export async function POST(request) {
     const session = await getServerSession(authOptions)
     const userId = requireAuthenticatedSession(session)
     if (!userId) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+      return unauthorized()
     }
 
     const body = await request.json()
     const { bookInfoId, updates: rawUpdates } = body || {}
 
     if (!bookInfoId) {
-      return NextResponse.json({ success: false, error: 'bookInfoId is required' }, { status: 400 })
+      return badRequest('bookInfoId is required')
     }
 
     const { updates, errors } = normalizeBookInfoUpdates(rawUpdates || {})
     if (errors.length > 0) {
-      return NextResponse.json({ success: false, error: errors[0] }, { status: 400 })
+      return badRequest(errors[0])
     }
     if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ success: false, error: 'לא נשלחו שדות לעדכון' }, { status: 400 })
+      return badRequest('לא נשלחו שדות לעדכון')
     }
 
     await connectDB()
 
     const approved = await BookInfo.findById(bookInfoId)
     if (!approved) {
-      return NextResponse.json({ success: false, error: 'רשומת ספר לא נמצאה' }, { status: 404 })
+      return notFound('רשומת ספר לא נמצאה')
     }
 
     const diff = buildDiff(approved.toObject(), updates)
@@ -130,9 +128,6 @@ export async function POST(request) {
     })
   } catch (error) {
     console.error('POST /api/library/book-info failed:', error)
-    return NextResponse.json(
-      { success: false, error: 'שגיאה בשליחת העדכון לאישור מנהל' },
-      { status: 500 }
-    )
+    return serverError('שגיאה בשליחת העדכון לאישור מנהל')
   }
 }

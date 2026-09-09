@@ -5,6 +5,7 @@ import Page from '@/models/Page';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBookLibraryAccess } from '@/lib/roles';
+import { serverError } from '@/lib/apiResponse';
 
 export const dynamic = 'force-dynamic';
 
@@ -74,6 +75,6 @@ export async function GET() {
 
   } catch (error) {
     console.error('Library List Error:', error);
-    return NextResponse.json({ success: false, error: 'שגיאה בטעינת הספרייה' }, { status: 500 });
+    return serverError('שגיאה בטעינת הספרייה');
   }
 }

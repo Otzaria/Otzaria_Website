@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
+import { serverError } from '@/lib/apiResponse'
 
 const HEBREW_WORD_RE = /[\u0590-\u05FF"'"'"'״׳]+/g
 const USE_PREFIXES = ['ו', 'ב', 'כ', 'ל', 'מ', 'ש', 'ה']
@@ -207,6 +208,6 @@ export async function POST(request) {
       wordsLimited: false,
     })
   } catch (err) {
-    return NextResponse.json({ error: err?.message || 'שגיאת שרת' }, { status: 500 })
+    return serverError(err?.message || 'שגיאת שרת')
   }
 }
