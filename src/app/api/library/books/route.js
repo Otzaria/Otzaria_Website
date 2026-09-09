@@ -3,13 +3,14 @@ import connectDB from '@/lib/db';
 import LibraryBook from '@/models/LibraryBook';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { unauthorized, serverError } from '@/lib/apiResponse';
 
 // רשימת הספרים במרחב העריכה (ללא תוכן — מטא בלבד)
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return unauthorized();
     }
 
     await connectDB();
@@ -23,6 +24,6 @@ export async function GET() {
     return NextResponse.json(books);
   } catch (error) {
     console.error('Failed to fetch library books:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

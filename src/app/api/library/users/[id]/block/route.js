@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import { requireModerator } from '@/lib/dicta/require-moderator';
 import { setUserBlock } from '@/lib/dicta/moderation-service';
+import { apiError, notFound, serverError } from '@/lib/apiResponse';
 
 // חסימה/שחרור משתמש מעריכה במרחב. body: { blocked:boolean, reason?, rejectPending?:boolean }
 export async function POST(req, { params }) {
   try {
     const auth = await requireModerator();
-    if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
+    if (auth.error) return apiError(auth.status, auth.error);
 
     const { id } = await params;
     const { blocked, reason, rejectPending } = await req.json();
@@ -20,8 +21,8 @@ export async function POST(req, { params }) {
     });
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
-    if (error.code === 'NOT_FOUND') return NextResponse.json({ error: error.message }, { status: 404 });
+    if (error.code === 'NOT_FOUND') return notFound(error.message);
     console.error('Block user failed:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

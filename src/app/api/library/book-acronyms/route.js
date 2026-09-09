@@ -3,12 +3,9 @@ import { getServerSession } from 'next-auth'
 import connectDB from '@/lib/db'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { hasBooksAccess } from '@/lib/roles'
+import { requireAccess, badRequest, notFound, serverError } from '@/lib/apiResponse'
 import BookAcronym from '@/models/BookAcronym'
 import BookAcronymPendingSuggestion from '@/models/BookAcronymPendingSuggestion'
-
-function requireAdminAccess(session) {
-  return hasBooksAccess(session?.user?.role)
-}
 
 function normalizeAlias(value) {
   if (typeof value !== 'string') return ''
@@ -39,9 +36,8 @@ const GERSHAYIM_ONLY_ERROR =
 export async function GET() {
   try {
     const session = await getServerSession(authOptions)
-    if (!requireAdminAccess(session)) {
-      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 })
-    }
+    const denied = requireAccess(session, hasBooksAccess)
+    if (denied) return denied
 
     await connectDB()
 
@@ -77,16 +73,15 @@ export async function GET() {
     return NextResponse.json({ success: true, rows })
   } catch (error) {
     console.error('GET /api/library/book-acronyms failed:', error)
-    return NextResponse.json({ success: false, error: 'שגיאה בטעינת הכינויים' }, { status: 500 })
+    return serverError('שגיאה בטעינת הכינויים')
   }
 }
 
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions)
-    if (!requireAdminAccess(session)) {
-      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 })
-    }
+    const denied = requireAccess(session, hasBooksAccess)
+    if (denied) return denied
 
     const body = await request.json()
     const { bookAcronymId, pendingId, actionType = 'add', alias, nextAlias } = body || {}
@@ -96,15 +91,15 @@ export async function POST(request) {
     await connectDB()
 
     if (!bookAcronymId) {
-      return NextResponse.json({ success: false, error: 'bookAcronymId is required' }, { status: 400 })
+      return badRequest('bookAcronymId is required')
     }
     if (!['add', 'update', 'delete'].includes(actionType)) {
-      return NextResponse.json({ success: false, error: 'סוג פעולה לא תקין' }, { status: 400 })
+      return badRequest('סוג פעולה לא תקין')
     }
 
     const book = await BookAcronym.findById(bookAcronymId)
     if (!book) {
-      return NextResponse.json({ success: false, error: 'ספר לא נמצא' }, { status: 404 })
+      return notFound('ספר לא נמצא')
     }
 
     const pendingSuggestion = pendingId
@@ -112,10 +107,10 @@ export async function POST(request) {
       : null
 
     if (pendingId && !pendingSuggestion) {
-      return NextResponse.json({ success: false, error: 'ההצעה הממתינה לא נמצאה' }, { status: 404 })
+      return notFound('ההצעה הממתינה לא נמצאה')
     }
     if (pendingSuggestion && String(pendingSuggestion.bookAcronym) !== String(book._id)) {
-      return NextResponse.json({ success: false, error: 'ההצעה לא שייכת לספר שנבחר' }, { status: 400 })
+      return badRequest('ההצעה לא שייכת לספר שנבחר')
     }
 
     const approvedAliases = Array.isArray(book.aliases) ? book.aliases : []
@@ -125,40 +120,40 @@ export async function POST(request) {
 
     if (effectiveActionType === 'add') {
       if (!normalizedAlias) {
-        return NextResponse.json({ success: false, error: 'יש להזין כינוי חדש' }, { status: 400 })
+        return badRequest('יש להזין כינוי חדש')
       }
       if (approvedAliases.some((item) => isSameAlias(item, normalizedAlias))) {
-        return NextResponse.json({ success: false, error: 'הכינוי כבר קיים ומאושר' }, { status: 400 })
+        return badRequest('הכינוי כבר קיים ומאושר')
       }
       if (differsOnlyByGershayim(normalizedAlias, book.displayName)) {
-        return NextResponse.json({ success: false, error: GERSHAYIM_ONLY_ERROR }, { status: 400 })
+        return badRequest(GERSHAYIM_ONLY_ERROR)
       }
       targetAlias = normalizedAlias
     } else if (effectiveActionType === 'delete') {
       if (!normalizedAlias) {
-        return NextResponse.json({ success: false, error: 'יש לבחור כינוי למחיקה' }, { status: 400 })
+        return badRequest('יש לבחור כינוי למחיקה')
       }
       const existing = approvedAliases.find((item) => isSameAlias(item, normalizedAlias))
       if (!existing) {
-        return NextResponse.json({ success: false, error: 'הכינוי לא קיים ברשימה המאושרת' }, { status: 400 })
+        return badRequest('הכינוי לא קיים ברשימה המאושרת')
       }
       currentAlias = existing
     } else if (effectiveActionType === 'update') {
       if (!normalizedAlias || !normalizedNextAlias) {
-        return NextResponse.json({ success: false, error: 'יש לבחור כינוי ישן ולמלא כינוי חדש' }, { status: 400 })
+        return badRequest('יש לבחור כינוי ישן ולמלא כינוי חדש')
       }
       if (isSameAlias(normalizedAlias, normalizedNextAlias)) {
-        return NextResponse.json({ success: false, error: 'הכינוי החדש זהה לכינוי הישן' }, { status: 400 })
+        return badRequest('הכינוי החדש זהה לכינוי הישן')
       }
       const existing = approvedAliases.find((item) => isSameAlias(item, normalizedAlias))
       if (!existing) {
-        return NextResponse.json({ success: false, error: 'הכינוי הישן לא קיים ברשימה המאושרת' }, { status: 400 })
+        return badRequest('הכינוי הישן לא קיים ברשימה המאושרת')
       }
       if (approvedAliases.some((item) => isSameAlias(item, normalizedNextAlias))) {
-        return NextResponse.json({ success: false, error: 'הכינוי החדש כבר קיים ברשימה המאושרת' }, { status: 400 })
+        return badRequest('הכינוי החדש כבר קיים ברשימה המאושרת')
       }
       if (differsOnlyByGershayim(normalizedNextAlias, book.displayName)) {
-        return NextResponse.json({ success: false, error: GERSHAYIM_ONLY_ERROR }, { status: 400 })
+        return badRequest(GERSHAYIM_ONLY_ERROR)
       }
       currentAlias = existing
       targetAlias = normalizedNextAlias
@@ -206,7 +201,7 @@ export async function POST(request) {
     return NextResponse.json({ success: true, pendingId: String(suggestion._id) })
   } catch (error) {
     console.error('POST /api/library/book-acronyms failed:', error)
-    return NextResponse.json({ success: false, error: 'שגיאה בשליחת הכינוי לאישור' }, { status: 500 })
+    return serverError('שגיאה בשליחת הכינוי לאישור')
   }
 }
 

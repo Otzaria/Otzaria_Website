@@ -7,18 +7,19 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { canEditLibraryDirectly } from '@/lib/roles';
 import { submitManualEdit } from '@/lib/dicta/library-service';
+import { unauthorized, notFound, badRequest, serverError } from '@/lib/apiResponse';
 
 // טעינת ספר לעריכה: תוכן + מטא + מצב ההרשאה של המשתמש + הצעתו הממתינה (אם יש)
 export async function GET(req, { params }) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session) return unauthorized();
 
     const { id } = await params;
     await connectDB();
 
     const book = await LibraryBook.findById(id).lean();
-    if (!book) return NextResponse.json({ error: 'הספר לא נמצא' }, { status: 404 });
+    if (!book) return notFound('הספר לא נמצא');
 
     const userDoc = await User.findById(session.user.id).select('role isSupervisor dictaEditBlocked name').lean();
     const canEditDirect = canEditLibraryDirectly(userDoc);
@@ -46,7 +47,7 @@ export async function GET(req, { params }) {
     });
   } catch (error) {
     console.error('Failed to load library book:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }
 
@@ -54,27 +55,27 @@ export async function GET(req, { params }) {
 export async function PUT(req, { params }) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session) return unauthorized();
 
     const { id } = await params;
     const body = await req.json();
     const { content, editType, note, baseVersion } = body;
 
     if (typeof content !== 'string') {
-      return NextResponse.json({ error: 'חסר תוכן' }, { status: 400 });
+      return badRequest('חסר תוכן');
     }
 
     await connectDB();
     const userDoc = await User.findById(session.user.id).select('role isSupervisor dictaEditBlocked name');
-    if (!userDoc) return NextResponse.json({ error: 'משתמש לא נמצא' }, { status: 401 });
+    if (!userDoc) return unauthorized('משתמש לא נמצא');
 
     const result = await submitManualEdit({ bookId: id, userDoc, newContent: content, editType, note, baseVersion });
     return NextResponse.json(result);
   } catch (error) {
     if (error.code === 'BLOCKED') return NextResponse.json({ error: error.message, code: 'BLOCKED' }, { status: 403 });
     if (error.code === 'STALE') return NextResponse.json({ error: error.message, code: 'STALE', currentVersion: error.currentVersion }, { status: 409 });
-    if (error.code === 'NOT_FOUND') return NextResponse.json({ error: error.message }, { status: 404 });
+    if (error.code === 'NOT_FOUND') return notFound(error.message);
     console.error('Failed to submit library edit:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

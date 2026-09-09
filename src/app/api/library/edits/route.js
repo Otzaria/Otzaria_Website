@@ -6,16 +6,17 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { canModerateLibrary } from '@/lib/roles';
 import { focusChange } from '@/lib/dicta/text-diff';
+import { unauthorized, forbidden, serverError } from '@/lib/apiResponse';
 
 // רשימת הצעות לתור האישורים. תומך בסינון לפי סטטוס/ספר/מחבר/סוג/תבנית.
 export async function GET(req) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session) return unauthorized();
 
     await connectDB();
     const userDoc = await User.findById(session.user.id).select('role isSupervisor').lean();
-    if (!canModerateLibrary(userDoc)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!canModerateLibrary(userDoc)) return forbidden();
 
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status') || 'pending';
@@ -65,6 +66,6 @@ export async function GET(req) {
     return NextResponse.json(mapped);
   } catch (error) {
     console.error('Failed to list edits:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }
