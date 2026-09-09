@@ -8,30 +8,30 @@ import Page from '@/models/Page';
 import OcrJob from '@/models/OcrJob';
 import { hasBookLibraryAccess } from '@/lib/roles';
 import { reapStaleOcrJobs } from '@/lib/ocr/staleJobs';
+import { badRequest, notFound, requireAccess, serverError } from '@/lib/apiResponse';
 
 // GET /api/admin/books/ocr/status?bookId=...
 // מחזיר את ספירות העמודים (לקדם-בחירה) ואת העבודה האחרונה/הפעילה של הספר.
 export async function GET(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !hasBookLibraryAccess(session.user?.role)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const denied = requireAccess(session, hasBookLibraryAccess);
+    if (denied) return denied;
 
     const { searchParams } = new URL(request.url);
     const bookId = searchParams.get('bookId');
     if (!bookId) {
-      return NextResponse.json({ error: 'חסר מזהה ספר' }, { status: 400 });
+      return badRequest('חסר מזהה ספר');
     }
     if (!mongoose.isValidObjectId(bookId)) {
-      return NextResponse.json({ error: 'מזהה ספר לא תקין' }, { status: 400 });
+      return badRequest('מזהה ספר לא תקין');
     }
 
     await connectDB();
 
     const book = await Book.findById(bookId).select('_id name').lean();
     if (!book) {
-      return NextResponse.json({ error: 'הספר לא נמצא' }, { status: 404 });
+      return notFound('הספר לא נמצא');
     }
 
     // סימון עבודות תקועות (שרת שהופעל מחדש באמצע) ככשל לפני הקריאה
@@ -72,6 +72,6 @@ export async function GET(request) {
     });
   } catch (error) {
     console.error('OCR status error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError('Internal Server Error');
   }
 }

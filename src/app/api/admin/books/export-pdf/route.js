@@ -9,6 +9,7 @@ import Page from '@/models/Page';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBookLibraryAccess } from '@/lib/roles';
+import { badRequest, notFound, requireAccess, serverError } from '@/lib/apiResponse';
 
 // בניית ה-PDF מתבצעת כולה בזיכרון (pdf-lib אינו תומך בהזרמה), ולכן מאריכים את חלון הזמן
 // ומגבילים את הנפח הכולל כדי להחזיר שגיאה ברורה במקום להפיל את התהליך על ספרים ענקיים.
@@ -35,9 +36,8 @@ function resolveImagePath(imagePath) {
 
 export async function GET(request) {
   const session = await getServerSession(authOptions);
-  if (!hasBookLibraryAccess(session?.user?.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const denied = requireAccess(session, hasBookLibraryAccess);
+  if (denied) return denied;
 
   try {
     await connectDB();
@@ -46,16 +46,16 @@ export async function GET(request) {
     const bookId = searchParams.get('bookId');
 
     if (!bookId) {
-      return NextResponse.json({ success: false, error: 'חסר מזהה ספר (bookId)' }, { status: 400 });
+      return badRequest('חסר מזהה ספר (bookId)');
     }
 
     if (!mongoose.isValidObjectId(bookId)) {
-      return NextResponse.json({ success: false, error: 'מזהה ספר לא תקין' }, { status: 400 });
+      return badRequest('מזהה ספר לא תקין');
     }
 
     const book = await Book.findById(bookId).select('name slug').lean();
     if (!book) {
-      return NextResponse.json({ success: false, error: 'הספר לא נמצא' }, { status: 404 });
+      return notFound('הספר לא נמצא');
     }
 
     // חלק מהעמודים (למשל לאחר מיזוג ספרים) נשמרים תחת השדה bookId ולא book — נשלוף לפי שניהם
@@ -86,10 +86,7 @@ export async function GET(request) {
     }
 
     if (validFiles.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'לא נמצאו תמונות עמודים זמינות לבניית הקובץ' },
-        { status: 404 }
-      );
+      return notFound('לא נמצאו תמונות עמודים זמינות לבניית הקובץ');
     }
 
     if (totalBytes > MAX_TOTAL_IMAGE_BYTES) {
@@ -122,10 +119,7 @@ export async function GET(request) {
     }
 
     if (embeddedCount === 0) {
-      return NextResponse.json(
-        { success: false, error: 'לא נמצאו תמונות עמודים זמינות לבניית הקובץ' },
-        { status: 404 }
-      );
+      return notFound('לא נמצאו תמונות עמודים זמינות לבניית הקובץ');
     }
 
     const pdfBytes = await pdfDoc.save();
@@ -141,9 +135,6 @@ export async function GET(request) {
 
   } catch (error) {
     console.error('Error exporting book PDF:', error);
-    return NextResponse.json(
-      { success: false, error: 'שגיאת שרת פנימית: ' + (error?.message || String(error)) },
-      { status: 500 }
-    );
+    return serverError('שגיאת שרת פנימית: ' + (error?.message || String(error)));
   }
 }

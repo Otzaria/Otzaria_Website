@@ -4,12 +4,12 @@ import Page from '@/models/Page';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBookLibraryAccess } from '@/lib/roles';
+import { badRequest, notFound, requireAccess, serverError } from '@/lib/apiResponse';
 
 export async function GET(request) {
   const session = await getServerSession(authOptions);
-  if (!hasBookLibraryAccess(session?.user?.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const denied = requireAccess(session, hasBookLibraryAccess);
+  if (denied) return denied;
   try {
     await connectDB();
 
@@ -17,10 +17,7 @@ export async function GET(request) {
     const bookId = searchParams.get('bookId');
 
     if (!bookId) {
-      return NextResponse.json(
-        { success: false, error: 'חסר מזהה ספר (bookId)' },
-        { status: 400 }
-      );
+      return badRequest('חסר מזהה ספר (bookId)');
     }
 
     const pages = await Page.find({ book: bookId })
@@ -29,10 +26,7 @@ export async function GET(request) {
       .lean();
 
     if (!pages || pages.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'לא נמצאו עמודים לספר זה' },
-        { status: 404 }
-      );
+      return notFound('לא נמצאו עמודים לספר זה');
     }
 
     const combinedText = pages
@@ -46,9 +40,6 @@ export async function GET(request) {
 
   } catch (error) {
     console.error('Error exporting book text:', error);
-    return NextResponse.json(
-      { success: false, error: 'שגיאת שרת פנימית: ' + error.message },
-      { status: 500 }
-    );
+    return serverError('שגיאת שרת פנימית: ' + error.message);
   }
 }

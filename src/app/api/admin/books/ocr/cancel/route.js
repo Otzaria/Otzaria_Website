@@ -5,25 +5,25 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
 import OcrJob from '@/models/OcrJob';
 import { hasBookLibraryAccess } from '@/lib/roles';
+import { badRequest, notFound, requireAccess, serverError } from '@/lib/apiResponse';
 
 // POST /api/admin/books/ocr/cancel  { bookId } | { jobId }
 // מסמן בקשת ביטול; עבודת הרקע עוצרת בבדיקה הבאה בין הקבוצות/העמודים.
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !hasBookLibraryAccess(session.user?.role)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const denied = requireAccess(session, hasBookLibraryAccess);
+    if (denied) return denied;
 
     const { bookId, jobId } = (await request.json()) || {};
     if (!bookId && !jobId) {
-      return NextResponse.json({ error: 'חסר מזהה ספר או עבודה' }, { status: 400 });
+      return badRequest('חסר מזהה ספר או עבודה');
     }
     if (jobId && !mongoose.isValidObjectId(jobId)) {
-      return NextResponse.json({ error: 'מזהה עבודה לא תקין' }, { status: 400 });
+      return badRequest('מזהה עבודה לא תקין');
     }
     if (bookId && !mongoose.isValidObjectId(bookId)) {
-      return NextResponse.json({ error: 'מזהה ספר לא תקין' }, { status: 400 });
+      return badRequest('מזהה ספר לא תקין');
     }
 
     await connectDB();
@@ -35,12 +35,12 @@ export async function POST(request) {
     );
 
     if (result.matchedCount === 0) {
-      return NextResponse.json({ error: 'לא נמצאה עבודה פעילה לביטול' }, { status: 404 });
+      return notFound('לא נמצאה עבודה פעילה לביטול');
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('OCR cancel error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError('Internal Server Error');
   }
 }

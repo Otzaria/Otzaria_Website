@@ -74,4 +74,28 @@ describe("POST /api/admin/uploads/get-book-content", () => {
     expect(res.status).toBe(500);
     expect(data.error).toBeTruthy();
   });
+
+  // רגרסיה: לפני המעבר ל-requireAccess, חוסר session היה מוחזר כ-403 בדיוק כמו
+  // חוסר הרשאה. כעת 401 מיועד במפורש למקרה שאין session בכלל.
+  it("returns 401 when there is no session at all", async () => {
+    const { getServerSession } = await import("next-auth");
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
+
+    const res = await POST(makeRequest({ uploadIds: ["u1"] }));
+
+    expect(res.status).toBe(401);
+    expect(findMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when a session exists but the role lacks access", async () => {
+    const { getServerSession } = await import("next-auth");
+    (getServerSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      user: { id: "u1", role: "user" },
+    });
+
+    const res = await POST(makeRequest({ uploadIds: ["u1"] }));
+
+    expect(res.status).toBe(403);
+    expect(findMock).not.toHaveBeenCalled();
+  });
 });
