@@ -32,6 +32,7 @@ import {
   PLUGIN_FILE_BASENAME,
   IMAGE_BASENAME
 } from '@/lib/pluginStorage'
+import { unauthorized, badRequest, serverError } from '@/lib/apiResponse'
 
 const PLUGIN_FILE_EXT = '.otzplugin'
 // slug באנגלית בלבד - אותיות קטנות, ספרות ומקפים. לא מתחיל/מסתיים במקף.
@@ -52,16 +53,12 @@ function createSlug(name) {
   return base || `plugin-${crypto.randomBytes(4).toString('hex')}`
 }
 
-function bad(message, status = 400) {
-  return NextResponse.json({ error: message }, { status })
-}
-
 export async function POST(request) {
   let createdPluginId = null
   try {
     const session = await getServerSession(authOptions)
     if (!session) {
-      return bad('Unauthorized - Please login', 401)
+      return unauthorized('Unauthorized - Please login')
     }
 
     const formData = await request.formData()
@@ -72,7 +69,7 @@ export async function POST(request) {
     try {
       tags = normalizeTags(parseJsonArrayField(formData.get('tags'), 'tags'))
     } catch {
-      return bad('Invalid tags format')
+      return badRequest('Invalid tags format')
     }
 
     const pluginFile = formData.get('pluginFile')
@@ -80,23 +77,23 @@ export async function POST(request) {
     const screenshotFiles = formData.getAll('screenshots').filter(f => f && f.size > 0)
 
     if (!description || !pluginFile) {
-      return bad('Missing required fields')
+      return badRequest('Missing required fields')
     }
 
     // אכיפה בצד שרת: העלאת תוסף חדש מחייבת אישור מפורש לקבלת דיווחי משתמשים למייל המפתח.
     const reportsConsent = (formData.get('reportsConsent') || '').toString().trim().toLowerCase()
     if (reportsConsent !== 'true' && reportsConsent !== '1' && reportsConsent !== 'on') {
-      return bad('יש לאשר קבלת דיווחים ממשתמשים למייל שלך כדי להעלות תוסף חדש')
+      return badRequest('יש לאשר קבלת דיווחים ממשתמשים למייל שלך כדי להעלות תוסף חדש')
     }
 
     if (typeof pluginFile.name !== 'string' || !pluginFile.name.toLowerCase().endsWith(PLUGIN_FILE_EXT)) {
-      return bad(`Plugin file must be ${PLUGIN_FILE_EXT} format`)
+      return badRequest(`Plugin file must be ${PLUGIN_FILE_EXT} format`)
     }
     if (typeof pluginFile.size !== 'number' || pluginFile.size <= 0) {
-      return bad('Plugin file is empty')
+      return badRequest('Plugin file is empty')
     }
     if (pluginFile.size > MAX_PLUGIN_BYTES) {
-      return bad(`Plugin file exceeds ${Math.floor(MAX_PLUGIN_BYTES / 1024 / 1024)}MB limit`)
+      return badRequest(`Plugin file exceeds ${Math.floor(MAX_PLUGIN_BYTES / 1024 / 1024)}MB limit`)
     }
 
     // Read name, author, version, shortDescription, status, compatibleWith from manifest
@@ -115,31 +112,31 @@ export async function POST(request) {
       const stability = (manifest.stability || 'stable').toString().trim()
       const minAppVersion = manifest.minAppVersion ? manifest.minAppVersion.toString().trim() : ''
       if (!ALLOWED_PLUGIN_STATUSES.includes(stability))
-        return bad('ערך stability לא תקין ב-manifest.json (ערכים מותרים: stable, beta, experimental)')
+        return badRequest('ערך stability לא תקין ב-manifest.json (ערכים מותרים: stable, beta, experimental)')
       statusFromManifest = stability
       if (!minAppVersion)
-        return bad('חסר שדה minAppVersion ב-manifest.json של קובץ התוסף')
+        return badRequest('חסר שדה minAppVersion ב-manifest.json של קובץ התוסף')
       if (compareVersions(minAppVersion, MIN_SUPPORTED_APP_VERSION) < 0)
-        return bad(`גרסת המינימום (${minAppVersion}) לא יכולה להיות פחות מ-${MIN_SUPPORTED_APP_VERSION}`)
+        return badRequest(`גרסת המינימום (${minAppVersion}) לא יכולה להיות פחות מ-${MIN_SUPPORTED_APP_VERSION}`)
       compatibleWithFromManifest = minAppVersion
       const maxAppVersion = manifest.maxAppVersion ? manifest.maxAppVersion.toString().trim() : ''
       if (maxAppVersion) {
         if (!PLUGIN_VERSION_RE.test(maxAppVersion))
-          return bad('שדה maxAppVersion ב-manifest.json אינו בפורמט גרסה תקין')
+          return badRequest('שדה maxAppVersion ב-manifest.json אינו בפורמט גרסה תקין')
         if (compareVersions(maxAppVersion, minAppVersion) < 0)
-          return bad(`גרסת המקסימום (${maxAppVersion}) לא יכולה להיות נמוכה מגרסת המינימום (${minAppVersion})`)
+          return badRequest(`גרסת המקסימום (${maxAppVersion}) לא יכולה להיות נמוכה מגרסת המינימום (${minAppVersion})`)
       }
       maxAppVersionFromManifest = maxAppVersion || null
       requiresNetworkFromManifest = manifest.network?.enabled === true
     } catch {
-      return bad('לא ניתן לקרוא את manifest.json מקובץ התוסף')
+      return badRequest('לא ניתן לקרוא את manifest.json מקובץ התוסף')
     }
-    if (!pluginUid) return bad('חסר שדה id ב-manifest.json של קובץ התוסף')
-    if (!version) return bad('חסר שדה גרסה ב-manifest.json של קובץ התוסף')
-    if (!PLUGIN_VERSION_RE.test(version)) return bad('גרסה לא תקינה ב-manifest.json של קובץ התוסף (נדרש פורמט X.Y.Z)')
-    if (!name) return bad('חסר שדה name ב-manifest.json של קובץ התוסף')
-    if (!author) return bad('חסר שדה author ב-manifest.json של קובץ התוסף')
-    if (!shortDescription) return bad('חסר שדה description ב-manifest.json של קובץ התוסף')
+    if (!pluginUid) return badRequest('חסר שדה id ב-manifest.json של קובץ התוסף')
+    if (!version) return badRequest('חסר שדה גרסה ב-manifest.json של קובץ התוסף')
+    if (!PLUGIN_VERSION_RE.test(version)) return badRequest('גרסה לא תקינה ב-manifest.json של קובץ התוסף (נדרש פורמט X.Y.Z)')
+    if (!name) return badRequest('חסר שדה name ב-manifest.json של קובץ התוסף')
+    if (!author) return badRequest('חסר שדה author ב-manifest.json של קובץ התוסף')
+    if (!shortDescription) return badRequest('חסר שדה description ב-manifest.json של קובץ התוסף')
 
     // בדיקות תקינות מול ה-API הרשמי: הרשאות לא קיימות, קריאות API לא קיימות וכדומה.
     // errors ו-warnings חוסמים את ההעלאה — לא מאחסנים תוספים שאינם תואמים ל-SDK.
@@ -152,7 +149,7 @@ export async function POST(request) {
       const validation = await validatePluginArchive(pluginBuffer)
       const issues = [...validation.errors, ...validation.warnings]
       if (issues.length > 0) {
-        return bad(`קובץ התוסף לא עבר ולידציה מול ה-SDK הרשמי:\n- ${issues.join('\n- ')}`)
+        return badRequest(`קובץ התוסף לא עבר ולידציה מול ה-SDK הרשמי:\n- ${issues.join('\n- ')}`)
       }
       designCompliant = validation.design?.compliant === true
       designViolations = validation.design?.violations || []
@@ -169,7 +166,7 @@ export async function POST(request) {
       const detail = designViolations.length > 0
         ? `\n- ${designViolations.join('\n- ')}`
         : ''
-      return bad(
+      return badRequest(
         `לא ניתן להוסיף את התגית "${OTZARIA_DESIGN_TAG}" — העיצוב אינו תואם ל-DESIGN_GUIDE.md:${detail}`
       )
     }
@@ -189,39 +186,39 @@ export async function POST(request) {
         tags
       })
     } catch (error) {
-      return bad(error.message)
+      return badRequest(error.message)
     }
 
     if (homepageFromManifest && !isHttpUrl(homepageFromManifest)) {
-      return bad('Homepage must be a valid http(s) URL')
+      return badRequest('Homepage must be a valid http(s) URL')
     }
 
     // ולידציית תמונה ראשית
     let imageMeta = null
     if (imageFile && imageFile.size > 0) {
       if (!isAllowedImage(imageFile.type)) {
-        return bad('Image must be one of: png, jpeg, webp, gif')
+        return badRequest('Image must be one of: png, jpeg, webp, gif')
       }
       if (imageFile.size > MAX_IMAGE_BYTES) {
-        return bad(`Image exceeds ${Math.floor(MAX_IMAGE_BYTES / 1024 / 1024)}MB limit`)
+        return badRequest(`Image exceeds ${Math.floor(MAX_IMAGE_BYTES / 1024 / 1024)}MB limit`)
       }
       imageMeta = { ext: imageExtFromMime(imageFile.type), contentType: imageFile.type.toLowerCase() }
     }
 
     // ולידציית צילומי מסך
     if (screenshotFiles.length < 1) {
-      return bad('חובה לצרף לפחות צילום מסך אחד. ללא צילום מסך התוסף יידחה')
+      return badRequest('חובה לצרף לפחות צילום מסך אחד. ללא צילום מסך התוסף יידחה')
     }
     if (screenshotFiles.length > MAX_SCREENSHOTS) {
-      return bad(`Too many screenshots (max ${MAX_SCREENSHOTS})`)
+      return badRequest(`Too many screenshots (max ${MAX_SCREENSHOTS})`)
     }
     const screenshotMeta = []
     for (const s of screenshotFiles) {
       if (!isAllowedImage(s.type)) {
-        return bad('Screenshots must be png, jpeg, webp, or gif')
+        return badRequest('Screenshots must be png, jpeg, webp, or gif')
       }
       if (s.size > MAX_SCREENSHOT_BYTES) {
-        return bad(`Screenshot exceeds ${Math.floor(MAX_SCREENSHOT_BYTES / 1024 / 1024)}MB limit`)
+        return badRequest(`Screenshot exceeds ${Math.floor(MAX_SCREENSHOT_BYTES / 1024 / 1024)}MB limit`)
       }
       screenshotMeta.push({ ext: imageExtFromMime(s.type), contentType: s.type.toLowerCase() })
     }
@@ -231,14 +228,14 @@ export async function POST(request) {
     // אכיפת ייחודיות המזהה (id) — אסור ששני תוספים שונים יחלקו את אותו manifest.id.
     const existingByUid = await Plugin.findOne({ pluginUid }).select('_id').lean()
     if (existingByUid) {
-      return bad('כבר קיים תוסף עם מזהה (id) זה ב-manifest.json. יש להשתמש במזהה ייחודי.')
+      return badRequest('כבר קיים תוסף עם מזהה (id) זה ב-manifest.json. יש להשתמש במזהה ייחודי.')
     }
 
     // יצירת המסמך תחילה (עם retry על duplicate-key לטיפול ב-race ב-slug)
     const baseSlug = createSlug(name)
     if (!SLUG_RE.test(baseSlug)) {
       // הגנה - createSlug אמור להבטיח את זה, אבל מוודאים סופית.
-      return bad('Failed to derive a valid slug from name', 500)
+      return serverError('Failed to derive a valid slug from name')
     }
     let plugin = null
     for (let attempt = 0; attempt < 5 && !plugin; attempt++) {
@@ -275,7 +272,7 @@ export async function POST(request) {
         if (err && err.code === 11000) {
           // התנגשות במזהה התוסף לא נפתרת ע"י slug אחר (race מול בדיקת הייחודיות שמעל).
           if (err.keyPattern && err.keyPattern.pluginUid) {
-            return bad('כבר קיים תוסף עם מזהה (id) זה ב-manifest.json. יש להשתמש במזהה ייחודי.')
+            return badRequest('כבר קיים תוסף עם מזהה (id) זה ב-manifest.json. יש להשתמש במזהה ייחודי.')
           }
           continue
         }
@@ -283,7 +280,7 @@ export async function POST(request) {
       }
     }
     if (!plugin) {
-      return bad('Failed to allocate unique slug', 500)
+      return serverError('Failed to allocate unique slug')
     }
     createdPluginId = plugin._id.toString()
 
@@ -342,6 +339,6 @@ export async function POST(request) {
         console.error('Cleanup after failed upload errored:', cleanupErr)
       }
     }
-    return bad('Failed to upload plugin', 500)
+    return serverError('Failed to upload plugin')
   }
 }
