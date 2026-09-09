@@ -27,15 +27,7 @@ import {
   applySuspension,
   suspensionError
 } from '@/lib/pluginVisibility'
-
-// וידוא הרשאת מנהל תוספים
-async function requireAdmin() {
-  const session = await getServerSession(authOptions)
-  if (!session || !hasPluginsAccess(session.user?.role)) {
-    return { ok: false, response: NextResponse.json({ error: 'Unauthorized' }, { status: 403 }) }
-  }
-  return { ok: true, session }
-}
+import { requireAccess, badRequest, notFound, serverError } from '@/lib/apiResponse'
 
 // PATCH /api/admin/plugins/[id]  body: { action: 'approve' | 'unapprove' | 'suspend' | 'resume' }
 // באישור נתמך גם categoryIds אופציונלי — שיבוץ התוסף לקטגוריות החנות מיד עם האישור.
@@ -43,34 +35,35 @@ async function requireAdmin() {
 // (פעולות pin/unpin בוטלו ב-31/07/2026 — הוחלפו ב"תוספים נבחרים" ב-store-settings.)
 export async function PATCH(request, { params }) {
   try {
-    const auth = await requireAdmin()
-    if (!auth.ok) return auth.response
+    const session = await getServerSession(authOptions)
+    const denied = requireAccess(session, hasPluginsAccess)
+    if (denied) return denied
 
     const { id } = await params
     let body
     try {
       body = await request.json()
     } catch {
-      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+      return badRequest('Invalid JSON body')
     }
     const action = body?.action
     if (!['approve', 'unapprove', ...SUSPEND_ACTIONS].includes(action)) {
-      return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
+      return badRequest('Invalid action')
     }
 
     await dbConnect()
     const plugin = await Plugin.findById(id).populate('authorId', 'name email')
     if (!plugin) {
-      return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
+      return notFound('Plugin not found')
     }
 
     // השהיה/החזרה — מסלול קצר ונפרד מזרימת האישור
     if (SUSPEND_ACTIONS.includes(action)) {
       const suspendError = suspensionError(plugin, action, { isAdmin: true })
       if (suspendError) {
-        return NextResponse.json({ error: suspendError }, { status: 400 })
+        return badRequest(suspendError)
       }
-      applySuspension(plugin, action, { userId: auth.session.user.id, isAdmin: true })
+      applySuspension(plugin, action, { userId: session.user.id, isAdmin: true })
       await plugin.save()
       invalidatePluginSearchIndex()
       revalidateNow(CACHE_TAGS.PLUGINS_PUBLIC)
@@ -109,10 +102,7 @@ export async function PATCH(request, { params }) {
             // הארכוב הוא תנאי הכרחי לפיצ'ר הגרסאות — בלעדיו תאבד הגרסה הקיימת
             // ומשתמשים בגרסת אוצריא ישנה לא יוכלו לקבל את הגרסה התואמת הקודמת.
             // לכן לא מאשרים ולא דורסים אם הארכוב נכשל.
-            return NextResponse.json(
-              { error: 'שמירת הגרסה הקודמת בהיסטוריה נכשלה. העדכון לא אושר כדי לא לאבד את הגרסה הקיימת.' },
-              { status: 500 }
-            )
+            return serverError('שמירת הגרסה הקודמת בהיסטוריה נכשלה. העדכון לא אושר כדי לא לאבד את הגרסה הקיימת.')
           }
         }
 
@@ -187,7 +177,7 @@ export async function PATCH(request, { params }) {
         plugin.pendingChangeSummary = []
         plugin.submissionType = 'new'
         plugin.isApproved = true
-        plugin.approvedBy = auth.session.user.id
+        plugin.approvedBy = session.user.id
         plugin.approvedAt = new Date()
         await plugin.save()
         await deletePendingPluginDir(pluginId).catch(() => {})
@@ -196,7 +186,7 @@ export async function PATCH(request, { params }) {
         approvalEmailData.version = plugin.version
         approvalEmailData.status = plugin.status
       } else {
-        await plugin.approve(auth.session.user.id)
+        await plugin.approve(session.user.id)
       }
 
       // שיבוץ אופציונלי לקטגוריות החנות מיד עם האישור (המנהל המאשר בוחר היכן לשכן).
@@ -249,22 +239,23 @@ export async function PATCH(request, { params }) {
     })
   } catch (error) {
     console.error('Error updating plugin status:', error)
-    return NextResponse.json({ error: 'Failed to update plugin' }, { status: 500 })
+    return serverError('Failed to update plugin')
   }
 }
 
 // DELETE /api/admin/plugins/[id] - דחייה / מחיקה (כולל קבצים מהדיסק)
 export async function DELETE(request, { params }) {
   try {
-    const auth = await requireAdmin()
-    if (!auth.ok) return auth.response
+    const session = await getServerSession(authOptions)
+    const denied = requireAccess(session, hasPluginsAccess)
+    if (denied) return denied
 
     const { id } = await params
 
     await dbConnect()
     const plugin = await Plugin.findById(id)
     if (!plugin) {
-      return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
+      return notFound('Plugin not found')
     }
 
     if (plugin.isApproved && plugin.pendingUpdate) {
@@ -307,6 +298,6 @@ export async function DELETE(request, { params }) {
     })
   } catch (error) {
     console.error('Error deleting plugin:', error)
-    return NextResponse.json({ error: 'Failed to delete plugin' }, { status: 500 })
+    return serverError('Failed to delete plugin')
   }
 }

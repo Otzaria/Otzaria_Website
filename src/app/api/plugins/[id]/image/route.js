@@ -6,6 +6,7 @@ import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import { readPluginAsset, IMAGE_BASENAME, optimizeImageBuffer, getOptCachePath } from '@/lib/pluginStorage'
 import { canAccessSuspended, isPluginSuspended } from '@/lib/pluginVisibility'
+import { notFound, serverError } from '@/lib/apiResponse'
 
 // GET /api/plugins/[id]/image - הגשת תמונת התוסף מהדיסק
 export async function GET(request, { params }) {
@@ -16,7 +17,7 @@ export async function GET(request, { params }) {
     await dbConnect()
     const plugin = await Plugin.findById(id).select('image isApproved isHidden isSuspended authorId pendingUpdate').lean()
     if (!plugin || plugin.isHidden) {
-      return NextResponse.json({ error: 'Image not found' }, { status: 404 })
+      return notFound('Image not found')
     }
 
     const session = await getServerSession(authOptions)
@@ -25,22 +26,22 @@ export async function GET(request, { params }) {
 
     if (includePending) {
       if (!plugin.pendingUpdate || (!isAdmin && !isOwner)) {
-        return NextResponse.json({ error: 'Image not found' }, { status: 404 })
+        return notFound('Image not found')
       }
     } else if (!plugin.isApproved && !isAdmin && !isOwner) {
-      return NextResponse.json({ error: 'Image not found' }, { status: 404 })
+      return notFound('Image not found')
     }
 
     // תוסף מושהה — נכסיו מוגשים רק למעלה ולמנהל, כמו הדף וההורדה עצמם
     if (isPluginSuspended(plugin) && !canAccessSuspended({ isAdmin, isOwner })) {
-      return NextResponse.json({ error: 'Image not found' }, { status: 404 })
+      return notFound('Image not found')
     }
 
     const source = includePending ? plugin.pendingUpdate : null
     const assetSource = includePending ? (source?.assetSources?.image || (source?.image ? 'live' : 'none')) : 'live'
     const image = includePending ? (source?.image ?? null) : plugin.image
     if (!image || !image.ext || assetSource === 'none') {
-      return NextResponse.json({ error: 'Image not found' }, { status: 404 })
+      return notFound('Image not found')
     }
     const buf = await readPluginAsset(id, `${IMAGE_BASENAME}${image.ext}`, { pending: assetSource === 'pending' })
 
@@ -80,9 +81,9 @@ export async function GET(request, { params }) {
     })
   } catch (error) {
     if (error && error.code === 'ENOENT') {
-      return NextResponse.json({ error: 'Image not found' }, { status: 404 })
+      return notFound('Image not found')
     }
     console.error('Error serving plugin image:', error)
-    return NextResponse.json({ error: 'Failed to serve image' }, { status: 500 })
+    return serverError('Failed to serve image')
   }
 }

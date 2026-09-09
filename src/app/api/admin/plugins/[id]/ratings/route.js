@@ -5,6 +5,7 @@ import Plugin from '@/models/Plugin'
 import PluginRating from '@/models/PluginRating'
 import { requirePluginsAdmin } from '@/lib/adminAuth'
 import { recomputePluginRating } from '@/lib/pluginRatingStore'
+import { badRequest, notFound, serverError } from '@/lib/apiResponse'
 
 // מודרציית דירוגים למנהלי תוספים.
 //   GET   — כל הדירוגים של תוסף (כולל מוסתרים), מהחדש לישן
@@ -25,7 +26,7 @@ export async function GET(request, { params }) {
 
     const { id } = await params
     if (!isValidObjectId(id)) {
-      return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
+      return notFound('Plugin not found')
     }
 
     await dbConnect()
@@ -33,7 +34,7 @@ export async function GET(request, { params }) {
       .select('name ratingCount ratingAvg ratingScore ratingVerifiedCount ratingBreakdown')
       .lean()
     if (!plugin) {
-      return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
+      return notFound('Plugin not found')
     }
 
     const ratings = await PluginRating.find({ pluginId: id })
@@ -70,7 +71,7 @@ export async function GET(request, { params }) {
     })
   } catch (error) {
     console.error('Error fetching plugin ratings:', error)
-    return NextResponse.json({ error: 'Failed to fetch ratings' }, { status: 500 })
+    return serverError('Failed to fetch ratings')
   }
 }
 
@@ -81,19 +82,19 @@ export async function PATCH(request, { params }) {
 
     const { id } = await params
     if (!isValidObjectId(id)) {
-      return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
+      return notFound('Plugin not found')
     }
 
     let body
     try {
       body = await request.json()
     } catch {
-      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+      return badRequest('Invalid JSON body')
     }
 
     const { ratingId, action } = body || {}
     if (!isValidObjectId(ratingId) || !RATING_ACTIONS.includes(action)) {
-      return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 })
+      return badRequest('בקשה לא תקינה')
     }
 
     await dbConnect()
@@ -105,7 +106,7 @@ export async function PATCH(request, { params }) {
         : { $set: { isHidden: false, hiddenBy: null, hiddenAt: null } }
     )
     if (!updated) {
-      return NextResponse.json({ error: 'הדירוג לא נמצא' }, { status: 404 })
+      return notFound('הדירוג לא נמצא')
     }
 
     const aggregate = await recomputePluginRating(id)
@@ -129,6 +130,6 @@ export async function PATCH(request, { params }) {
     })
   } catch (error) {
     console.error('Error moderating plugin rating:', error)
-    return NextResponse.json({ error: 'Failed to moderate rating' }, { status: 500 })
+    return serverError('Failed to moderate rating')
   }
 }
