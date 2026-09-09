@@ -8,24 +8,24 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBookLibraryAccess } from '@/lib/roles';
 import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
+import { badRequest, notFound, requireAccess, serverError } from '@/lib/apiResponse';
 
 export async function DELETE(request) {
     try {
         // 1. אבטחה: בדיקת הרשאות אדמין
         const session = await getServerSession(authOptions);
-        if (!session || !hasBookLibraryAccess(session.user?.role)) {
-            return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
-        }
+        const denied = requireAccess(session, hasBookLibraryAccess);
+        if (denied) return denied;
 
         const { bookId } = await request.json();
         if (!bookId) {
-            return NextResponse.json({ error: 'Book ID is required' }, { status: 400 });
+            return badRequest('Book ID is required');
         }
 
         await connectDB();
 
         const book = await Book.findById(bookId);
-        if (!book) return NextResponse.json({ error: 'Book not found' }, { status: 404 });
+        if (!book) return notFound('Book not found');
 
         // 2. מחיקת קבצים פיזיים (רק אם קיים נתיב)
         if (book.folderPath) {
@@ -56,6 +56,6 @@ export async function DELETE(request) {
 
     } catch (error) {
         console.error('Delete book error:', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return serverError('Internal Server Error');
     }
 }

@@ -6,24 +6,24 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { sendBookNotification } from '@/lib/emailService';
 import { hasBookLibraryAccess } from '@/lib/roles';
 import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
+import { badRequest, notFound, requireAccess, serverError } from '@/lib/apiResponse';
 
 export async function PUT(request) {
   try {
     const session = await getServerSession(authOptions);
-    
+
     // בדיקת הרשאות מנהל
-    if (!hasBookLibraryAccess(session?.user?.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const denied = requireAccess(session, hasBookLibraryAccess);
+    if (denied) return denied;
 
     const { bookId, name, category, author, description, isHidden, sendNotification } = await request.json();
     await connectDB();
 
     // שליפת הספר הנוכחי לבדיקת סטטוס לפני עדכון
     const currentBook = await Book.findById(bookId);
-    
+
     if (!currentBook) {
-        return NextResponse.json({ error: 'Book not found' }, { status: 404 });
+        return notFound('Book not found');
     }
 
     // בדיקה: האם הספר הוא אישי?
@@ -32,16 +32,14 @@ export async function PUT(request) {
 
     // חסימה: אם הספר אישי ומנסים להפוך אותו לגלוי (isHidden = false)
     if (isPersonalBook && isHidden === false) {
-        return NextResponse.json({ 
-            error: 'לא ניתן להפוך ספרים אישיים לגלויים' 
-        }, { status: 400 });
+        return badRequest('לא ניתן להפוך ספרים אישיים לגלויים');
     }
 
     // בדיקה ששם הספר לא תפוס ע"י ספר אחר
     if (name && name !== currentBook.name) {
         const existing = await Book.findOne({ name, _id: { $ne: bookId } });
         if (existing) {
-            return NextResponse.json({ error: 'שם הספר כבר קיים במערכת' }, { status: 400 });
+            return badRequest('שם הספר כבר קיים במערכת');
         }
     }
 
@@ -52,7 +50,7 @@ export async function PUT(request) {
     );
 
     if (!updatedBook) {
-        return NextResponse.json({ error: 'Book not found' }, { status: 404 });
+        return notFound('Book not found');
     }
 
     if (sendNotification && isHidden === false) {
@@ -65,6 +63,6 @@ export async function PUT(request) {
 
   } catch (error) {
     console.error('Update Error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError('Internal Server Error');
   }
 }
