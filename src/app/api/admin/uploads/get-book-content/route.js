@@ -13,32 +13,37 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const { uploadIds } = await request.json();
+  try {
+    const { uploadIds } = await request.json();
 
-  if (!uploadIds || !Array.isArray(uploadIds) || uploadIds.length === 0) {
-    return NextResponse.json({ error: 'Upload IDs are required' }, { status: 400 });
+    if (!uploadIds || !Array.isArray(uploadIds) || uploadIds.length === 0) {
+      return NextResponse.json({ error: 'Upload IDs are required' }, { status: 400 });
+    }
+
+    await connectDB();
+
+    // שליפת כל ההעלאות
+    const uploads = await Upload.find({
+      _id: { $in: uploadIds },
+      isDeleted: false
+    }).sort({ createdAt: 1 }); // מיון לפי תאריך יצירה
+
+    if (uploads.length === 0) {
+      return NextResponse.json({ error: 'No uploads found' }, { status: 404 });
+    }
+
+    // איחוד כל התוכן
+    const parts = await Promise.all(uploads.map(upload => getUploadText(upload)));
+    const combinedContent = combineUploadsContent(parts);
+
+    return NextResponse.json({
+      success: true,
+      content: combinedContent,
+      bookName: uploads[0].bookName,
+      uploadCount: uploads.length
+    });
+  } catch (error) {
+    console.error('Error getting book content:', error);
+    return NextResponse.json({ error: 'Failed to get book content' }, { status: 500 });
   }
-
-  await connectDB();
-
-  // שליפת כל ההעלאות
-  const uploads = await Upload.find({ 
-    _id: { $in: uploadIds },
-    isDeleted: false 
-  }).sort({ createdAt: 1 }); // מיון לפי תאריך יצירה
-
-  if (uploads.length === 0) {
-    return NextResponse.json({ error: 'No uploads found' }, { status: 404 });
-  }
-
-  // איחוד כל התוכן
-  const parts = await Promise.all(uploads.map(upload => getUploadText(upload)));
-  const combinedContent = combineUploadsContent(parts);
-
-  return NextResponse.json({ 
-    success: true, 
-    content: combinedContent,
-    bookName: uploads[0].bookName,
-    uploadCount: uploads.length
-  });
 }
