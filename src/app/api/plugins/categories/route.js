@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import dbConnect from '@/lib/db'
 import PluginCategory from '@/models/PluginCategory'
 import { fetchPublicPluginsByIds, orderByIds, formatCategorySummary } from '@/lib/pluginStore'
+import { serverError } from '@/lib/apiResponse'
 
 // GET /api/plugins/categories — רשימת הקטגוריות הגלויות עם מונה תוספים ציבוריים
 export async function GET() {
@@ -24,6 +25,6 @@ export async function GET() {
     )
   } catch (error) {
     console.error('Error fetching plugin categories:', error)
-    return NextResponse.json({ error: 'Failed to fetch categories' }, { status: 500 })
+    return serverError('Failed to fetch categories')
   }
 }

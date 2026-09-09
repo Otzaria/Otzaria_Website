@@ -10,6 +10,7 @@ import {
   resolveCompatibleVersion,
   lowestSupportedAppVersion
 } from '@/lib/pluginCompatibility'
+import { badRequest, notFound, serverError } from '@/lib/apiResponse'
 
 // GET /api/plugins/<id>/latest
 //   → הגרסה האחרונה (החיה) של התוסף.
@@ -27,22 +28,16 @@ export async function GET(request, { params }) {
     const { id: rawId } = await params
     const { id, version } = parsePluginRef(rawId)
     if (!id || version === false) {
-      return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
+      return notFound('Plugin not found')
     }
     // /latest בוחר גרסה בעצמו — בקשה לגרסה מפורשת בנתיב היא שגיאת שימוש.
     if (version) {
-      return NextResponse.json(
-        { error: `Cannot request a specific version from /latest; use ?${APP_VERSION_PARAM}=<app version> or /api/plugins/<id>@<version>` },
-        { status: 400 }
-      )
+      return badRequest(`Cannot request a specific version from /latest; use ?${APP_VERSION_PARAM}=<app version> or /api/plugins/<id>@<version>`)
     }
 
     const appVersionRaw = (new URL(request.url).searchParams.get(APP_VERSION_PARAM) || '').trim()
     if (appVersionRaw && !isValidAppVersion(appVersionRaw)) {
-      return NextResponse.json(
-        { error: `Invalid ${APP_VERSION_PARAM} - expected a version like 0.9.94` },
-        { status: 400 }
-      )
+      return badRequest(`Invalid ${APP_VERSION_PARAM} - expected a version like 0.9.94`)
     }
 
     await dbConnect()
@@ -51,7 +46,7 @@ export async function GET(request, { params }) {
       .select('name slug version status compatibleWith maxAppVersion requiresNetwork pluginFileExt pluginFileSize versions updatedAt')
       .lean()
     if (!plugin) {
-      return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
+      return notFound('Plugin not found')
     }
 
     const identity = {
@@ -98,6 +93,6 @@ export async function GET(request, { params }) {
     })
   } catch (error) {
     console.error('Error resolving latest plugin version:', error)
-    return NextResponse.json({ error: 'Failed to resolve plugin version' }, { status: 500 })
+    return serverError('Failed to resolve plugin version')
   }
 }

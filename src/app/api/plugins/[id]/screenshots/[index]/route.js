@@ -5,6 +5,7 @@ import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import { readPluginAsset } from '@/lib/pluginStorage'
 import { canAccessSuspended, isPluginSuspended } from '@/lib/pluginVisibility'
+import { badRequest, notFound, serverError } from '@/lib/apiResponse'
 
 // GET /api/plugins/[id]/screenshots/[index] - הגשת צילום מסך מהדיסק
 export async function GET(request, { params }) {
@@ -14,13 +15,13 @@ export async function GET(request, { params }) {
     const includePending = searchParams.get('pending') === '1'
     const idx = Number.parseInt(index, 10)
     if (!Number.isInteger(idx) || idx < 0) {
-      return NextResponse.json({ error: 'Invalid index' }, { status: 400 })
+      return badRequest('Invalid index')
     }
 
     await dbConnect()
     const plugin = await Plugin.findById(id).select('screenshots isApproved isHidden isSuspended authorId pendingUpdate').lean()
     if (!plugin || plugin.isHidden) {
-      return NextResponse.json({ error: 'Screenshot not found' }, { status: 404 })
+      return notFound('Screenshot not found')
     }
 
     const session = await getServerSession(authOptions)
@@ -29,15 +30,15 @@ export async function GET(request, { params }) {
 
     if (includePending) {
       if (!plugin.pendingUpdate || (!isAdmin && !isOwner)) {
-        return NextResponse.json({ error: 'Screenshot not found' }, { status: 404 })
+        return notFound('Screenshot not found')
       }
     } else if (!plugin.isApproved && !isAdmin && !isOwner) {
-      return NextResponse.json({ error: 'Screenshot not found' }, { status: 404 })
+      return notFound('Screenshot not found')
     }
 
     // תוסף מושהה — נכסיו מוגשים רק למעלה ולמנהל, כמו הדף וההורדה עצמם
     if (isPluginSuspended(plugin) && !canAccessSuspended({ isAdmin, isOwner })) {
-      return NextResponse.json({ error: 'Screenshot not found' }, { status: 404 })
+      return notFound('Screenshot not found')
     }
 
     const source = includePending ? plugin.pendingUpdate : null
@@ -47,7 +48,7 @@ export async function GET(request, { params }) {
     const screenshots = includePending ? (source?.screenshots || []) : (plugin.screenshots || [])
 
     if (assetSource === 'none' || !screenshots[idx]) {
-      return NextResponse.json({ error: 'Screenshot not found' }, { status: 404 })
+      return notFound('Screenshot not found')
     }
     const meta = screenshots[idx]
     const buf = await readPluginAsset(id, `screenshots/${idx}${meta.ext}`, { pending: assetSource === 'pending' })
@@ -61,9 +62,9 @@ export async function GET(request, { params }) {
     })
   } catch (error) {
     if (error && error.code === 'ENOENT') {
-      return NextResponse.json({ error: 'Screenshot not found' }, { status: 404 })
+      return notFound('Screenshot not found')
     }
     console.error('Error serving plugin screenshot:', error)
-    return NextResponse.json({ error: 'Failed to serve screenshot' }, { status: 500 })
+    return serverError('Failed to serve screenshot')
   }
 }
