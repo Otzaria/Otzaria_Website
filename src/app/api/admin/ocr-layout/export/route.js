@@ -5,6 +5,7 @@ import { Zip, ZipDeflate } from 'fflate';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasOcrAccess } from '@/lib/roles';
+import { requireAccess, notFound, serverError } from '@/lib/apiResponse';
 
 // ממיר תשובות משימה לשדות שורת-הייצוא. zones-full מקופל לאותם שדות —
 // פרויקט ה-OCR רואה פורמט אחיד בלי קשר לצורת המסך שבה נענתה השאלה.
@@ -43,19 +44,15 @@ function foldTasksToRecord(tasks) {
 // לכל עמוד. הייצוא זורם עם cursor + backpressure כמו בייצוא ocr-lines.
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (!hasOcrAccess(session?.user?.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const denied = requireAccess(session, hasOcrAccess);
+  if (denied) return denied;
 
   try {
     await connectDB();
 
     const total = await OcrLayoutPage.countDocuments({ status: 'approved' });
     if (!total) {
-      return NextResponse.json(
-        { success: false, error: 'אין עמודים מאושרים לייצוא' },
-        { status: 404 }
-      );
+      return notFound('אין עמודים מאושרים לייצוא');
     }
 
     let controllerRef;
@@ -174,6 +171,6 @@ export async function GET() {
     });
   } catch (err) {
     console.error('Admin OCR layout export error:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

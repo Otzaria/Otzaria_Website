@@ -4,6 +4,7 @@ import connectDB from '@/lib/db';
 import OcrLine from '@/models/OcrLine';
 import { resolveImageFsPath, readPageImage } from '@/lib/ocr/images';
 import { requireVerifiedSession } from '@/lib/ocr/linePool';
+import { notFound, serverError } from '@/lib/apiResponse';
 
 // GET: תמונת השורה (חיתוך התיבה מתמונת העמוד), או ?full=1 לעמוד המלא —
 // לתצוגת ההקשר סביב השורה. מוגש רק למשתמשים מאומתים; התמונות אינן חשופות
@@ -19,7 +20,7 @@ export async function GET(request, { params }) {
 
     await connectDB();
     const doc = await OcrLine.findById(id).lean();
-    if (!doc) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (!doc) return notFound('Not found');
 
     const cacheHeaders = { 'Cache-Control': 'private, max-age=3600' };
 
@@ -56,6 +57,6 @@ export async function GET(request, { params }) {
     });
   } catch (err) {
     console.error('OCR line image error:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

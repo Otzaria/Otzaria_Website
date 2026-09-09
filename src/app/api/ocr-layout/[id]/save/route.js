@@ -9,6 +9,7 @@ import {
   confirmedAnswerFromPrefill,
   TASK_LABELS,
 } from '@/lib/ocr/layoutValidation';
+import { unauthorized, badRequest, notFound, serverError } from '@/lib/apiResponse';
 
 // POST: הגשת הכרעות המתנדב לכל משימות העמוד. גוף:
 //   { answers: [{ confirmed: bool, answer: <לפי סוג המשימה> }, ...] }
@@ -26,10 +27,10 @@ export async function POST(request, { params }) {
 
     // אימות מזהים מוקדם — מזהה פסול היה זורק CastError ומחזיר 500
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json({ success: false, error: 'מזהה עמוד לא תקין' }, { status: 400 });
+      return badRequest('מזהה עמוד לא תקין');
     }
     if (!mongoose.Types.ObjectId.isValid(userId)) {
-      return NextResponse.json({ success: false, error: 'מזהה משתמש לא תקין' }, { status: 401 });
+      return unauthorized('מזהה משתמש לא תקין');
     }
 
     const { answers } = await request.json();
@@ -37,14 +38,11 @@ export async function POST(request, { params }) {
     await connectDB();
     const doc = await OcrLayoutPage.findById(id).lean();
     if (!doc) {
-      return NextResponse.json({ success: false, error: 'העמוד לא נמצא' }, { status: 404 });
+      return notFound('העמוד לא נמצא');
     }
 
     if (!Array.isArray(answers) || answers.length !== (doc.tasks || []).length) {
-      return NextResponse.json(
-        { success: false, error: 'יש לענות על כל שאלות העמוד יחד' },
-        { status: 400 }
-      );
+      return badRequest('יש לענות על כל שאלות העמוד יחד');
     }
 
     // ולידציה מול ה-prefill ומידות התמונה — אותם כללים כמו בלקוח
@@ -53,7 +51,7 @@ export async function POST(request, { params }) {
       const task = doc.tasks[i];
       const a = answers[i];
       if (!a || typeof a !== 'object') {
-        return NextResponse.json({ success: false, error: 'תשובה חסרה' }, { status: 400 });
+        return badRequest('תשובה חסרה');
       }
       let answer;
       if (a.confirmed === true) {
@@ -61,10 +59,7 @@ export async function POST(request, { params }) {
       } else {
         const msg = validateAnswer(task.kind, a.answer, task.prefill, doc.imageWidth, doc.imageHeight);
         if (msg) {
-          return NextResponse.json(
-            { success: false, error: `${TASK_LABELS[task.kind]}: ${msg}` },
-            { status: 400 }
-          );
+          return badRequest(`${TASK_LABELS[task.kind]}: ${msg}`);
         }
         answer = cleanAnswer(task.kind, a.answer);
       }
@@ -102,6 +97,6 @@ export async function POST(request, { params }) {
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('OCR layout save error:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

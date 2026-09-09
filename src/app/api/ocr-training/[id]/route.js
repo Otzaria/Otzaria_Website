@@ -4,6 +4,7 @@ import OcrTrainingPage from '@/models/OcrTrainingPage';
 import Page from '@/models/Page';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { unauthorized, notFound, serverError } from '@/lib/apiResponse';
 
 // מרכיב את הטקסט השמור במערכת לעמוד זה (מהתמלול הרגיל), לעזרה למסמן.
 function buildSavedText(p) {
@@ -19,13 +20,13 @@ function buildSavedText(p) {
 // GET: טעינת עמוד אימון בודד (תמונה, מידות, שורות קיימות).
 export async function GET(request, { params }) {
   const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!session) return unauthorized();
 
   try {
     const { id } = await params;
     await connectDB();
     const doc = await OcrTrainingPage.findById(id).lean();
-    if (!doc) return NextResponse.json({ success: false, error: 'העמוד לא נמצא' }, { status: 404 });
+    if (!doc) return notFound('העמוד לא נמצא');
 
     const userId = session.user.id || session.user._id;
     const mine = doc.claimedBy && String(doc.claimedBy) === String(userId);
@@ -69,6 +70,6 @@ export async function GET(request, { params }) {
     });
   } catch (error) {
     console.error('OCR training get error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

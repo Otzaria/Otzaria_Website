@@ -9,6 +9,7 @@ import { hasOcrAccess } from '@/lib/roles';
 import { resolveImageFsPath } from '@/lib/ocr/images';
 import { normalizeLineText } from '@/lib/ocr/textStandard';
 import { validateLine } from '@/lib/ocr/trainingValidation';
+import { requireAccess, notFound, serverError } from '@/lib/apiResponse';
 
 // שם קובץ/תיקייה בטוח: אותיות עבריות/לטיניות/ספרות בלבד, השאר -> קו תחתון.
 function safeName(slug) {
@@ -47,9 +48,8 @@ function readmeText(perScript) {
 // פרמטרים: ?status=completed  (ברירת מחדל: כל עמוד עם שורות תקינות)
 export async function GET(request) {
   const session = await getServerSession(authOptions);
-  if (!hasOcrAccess(session?.user?.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const denied = requireAccess(session, hasOcrAccess);
+  if (denied) return denied;
 
   try {
     await connectDB();
@@ -156,10 +156,7 @@ export async function GET(request) {
 
     const totalLines = perScript.square.lines + perScript.rashi.lines;
     if (totalLines === 0) {
-      return NextResponse.json(
-        { success: false, error: 'אין שורות תקינות עם טקסט לייצוא' },
-        { status: 404 }
-      );
+      return notFound('אין שורות תקינות עם טקסט לייצוא');
     }
 
     // כתיבת manifest + rejected לכל כתב שיש בו תוכן
@@ -198,6 +195,6 @@ export async function GET(request) {
     });
   } catch (error) {
     console.error('OCR training export error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasOcrAccess } from '@/lib/roles';
 import { validateAnswer, cleanAnswer, TASK_LABELS } from '@/lib/ocr/layoutValidation';
+import { requireAccess, badRequest, notFound, serverError } from '@/lib/apiResponse';
 
 // PATCH: פעולות ניהול על עמוד תיוג-מבנה.
 // גוף: { action: 'approve' | 'return' | 'set-answers', answers? }
@@ -15,15 +16,14 @@ import { validateAnswer, cleanAnswer, TASK_LABELS } from '@/lib/ocr/layoutValida
 //   { answer } (או { confirmed:true } נשמר כמו שהוא — אין צורך לשלוח).
 export async function PATCH(request, { params }) {
   const session = await getServerSession(authOptions);
-  if (!hasOcrAccess(session?.user?.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const denied = requireAccess(session, hasOcrAccess);
+  if (denied) return denied;
 
   try {
     const { id } = await params;
     // מזהה לא-תקין → CastError שנתפס ב-catch ומחזיר 500; מסננים מראש ל-400
     if (!/^[0-9a-fA-F]{24}$/.test(String(id))) {
-      return NextResponse.json({ success: false, error: 'מזהה עמוד לא תקין' }, { status: 400 });
+      return badRequest('מזהה עמוד לא תקין');
     }
     const { action, answers } = await request.json();
     await connectDB();
@@ -37,7 +37,7 @@ export async function PATCH(request, { params }) {
       if (!doc) {
         const exists = await OcrLayoutPage.exists({ _id: id });
         if (!exists) {
-          return NextResponse.json({ success: false, error: 'העמוד לא נמצא' }, { status: 404 });
+          return notFound('העמוד לא נמצא');
         }
         return NextResponse.json(
           { success: false, error: 'העמוד אינו ממתין לאישור' },
@@ -51,7 +51,7 @@ export async function PATCH(request, { params }) {
       // איפוס ההכרעות: התשובות נמחקות וה-prefill נשאר — העמוד חוזר לזמינים
       const doc = await OcrLayoutPage.findById(id);
       if (!doc) {
-        return NextResponse.json({ success: false, error: 'העמוד לא נמצא' }, { status: 404 });
+        return notFound('העמוד לא נמצא');
       }
       doc.status = 'available';
       doc.tasks = doc.tasks.map((t) => ({ kind: t.kind, prefill: t.prefill, answer: null, confirmed: false }));
@@ -67,7 +67,7 @@ export async function PATCH(request, { params }) {
     if (action === 'set-answers') {
       const doc = await OcrLayoutPage.findById(id);
       if (!doc) {
-        return NextResponse.json({ success: false, error: 'העמוד לא נמצא' }, { status: 404 });
+        return notFound('העמוד לא נמצא');
       }
       // עריכה רק לעמוד שכבר תויג — עמוד זמין מקבל תשובות דרך זרימת המתנדב
       if (doc.status === 'available') {
@@ -77,10 +77,7 @@ export async function PATCH(request, { params }) {
         );
       }
       if (!Array.isArray(answers) || answers.length !== doc.tasks.length) {
-        return NextResponse.json(
-          { success: false, error: 'נדרשות תשובות לכל משימות העמוד' },
-          { status: 400 }
-        );
+        return badRequest('נדרשות תשובות לכל משימות העמוד');
       }
 
       const tasks = [];
@@ -94,10 +91,7 @@ export async function PATCH(request, { params }) {
         }
         const msg = validateAnswer(task.kind, a.answer, task.prefill, doc.imageWidth, doc.imageHeight);
         if (msg) {
-          return NextResponse.json(
-            { success: false, error: `${TASK_LABELS[task.kind]}: ${msg}` },
-            { status: 400 }
-          );
+          return badRequest(`${TASK_LABELS[task.kind]}: ${msg}`);
         }
         // תיקון מנהל מבטל את דגל "המכונה צדקה" — התשובה כבר אינה ה-prefill
         tasks.push({
@@ -120,10 +114,10 @@ export async function PATCH(request, { params }) {
       });
     }
 
-    return NextResponse.json({ success: false, error: 'פעולה לא מוכרת' }, { status: 400 });
+    return badRequest('פעולה לא מוכרת');
   } catch (err) {
     console.error('Admin OCR layout action error:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }
 
@@ -131,23 +125,22 @@ export async function PATCH(request, { params }) {
 // התמונה בדיסק נשארת בתיקיית האצווה — ניקוי אצוות נעשה ידנית.
 export async function DELETE(request, { params }) {
   const session = await getServerSession(authOptions);
-  if (!hasOcrAccess(session?.user?.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const denied = requireAccess(session, hasOcrAccess);
+  if (denied) return denied;
 
   try {
     const { id } = await params;
     if (!/^[0-9a-fA-F]{24}$/.test(String(id))) {
-      return NextResponse.json({ success: false, error: 'מזהה עמוד לא תקין' }, { status: 400 });
+      return badRequest('מזהה עמוד לא תקין');
     }
     await connectDB();
     const res = await OcrLayoutPage.deleteOne({ _id: id });
     if (!res.deletedCount) {
-      return NextResponse.json({ success: false, error: 'העמוד לא נמצא' }, { status: 404 });
+      return notFound('העמוד לא נמצא');
     }
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('Admin OCR layout delete error:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

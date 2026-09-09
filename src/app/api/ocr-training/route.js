@@ -3,12 +3,13 @@ import connectDB from '@/lib/db';
 import OcrTrainingPage from '@/models/OcrTrainingPage';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { unauthorized, serverError } from '@/lib/apiResponse';
 
 // GET: רשימת עמודי אימון למשתמש — זמינים + אלה שתפוסים על ידו.
 // פרמטר ?mine=1 מחזיר רק את שלי.
 export async function GET(request) {
   const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!session) return unauthorized();
 
   try {
     await connectDB();
@@ -42,6 +43,6 @@ export async function GET(request) {
     return NextResponse.json({ success: true, pages });
   } catch (error) {
     console.error('OCR training user list error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

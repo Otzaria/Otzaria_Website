@@ -4,13 +4,13 @@ import Book from '@/models/Book';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasOcrAccess } from '@/lib/roles';
+import { requireAccess, serverError } from '@/lib/apiResponse';
 
 // GET: כל הספרים לבורר ההוספה — כולל מוסתרים. מחזיר totalPages כדי להגביל את מספר העמוד.
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (!hasOcrAccess(session?.user?.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const denied = requireAccess(session, hasOcrAccess);
+  if (denied) return denied;
 
   try {
     await connectDB();
@@ -31,6 +31,6 @@ export async function GET() {
     });
   } catch (error) {
     console.error('OCR training books error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

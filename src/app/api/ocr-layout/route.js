@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import connectDB from '@/lib/db';
 import OcrLayoutPage from '@/models/OcrLayoutPage';
 import { sampleAvailablePage, requireVerifiedSession } from '@/lib/ocr/layoutPool';
+import { serverError } from '@/lib/apiResponse';
 
 // GET: עמוד זמין אחד, אקראי ומוחכר זמנית למבקש (היחידה כאן היא עמוד —
 // כל השאלות שלו נענות יחד). ?exclude=<id,id> — עמודים שהמתנדב דילג עליהם
@@ -33,6 +34,6 @@ export async function GET(request) {
     return NextResponse.json({ success: true, page, stats: { total, done, mine } });
   } catch (err) {
     console.error('OCR layout page fetch error:', err, 'user:', session?.user?.id);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

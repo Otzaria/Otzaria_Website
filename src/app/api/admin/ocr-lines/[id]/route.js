@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasOcrAccess } from '@/lib/roles';
 import { normalizeLineText, findForbidden } from '@/lib/ocr/textStandard';
+import { requireAccess, badRequest, notFound, serverError } from '@/lib/apiResponse';
 
 // PATCH: פעולות ניהול על שורה.
 // גוף: { action: 'approve' | 'return' | 'set-text' | 'set-script' | 'accept-script' | 'reject-script' | 'unflag', text?, scriptType? }
@@ -16,9 +17,8 @@ import { normalizeLineText, findForbidden } from '@/lib/ocr/textStandard';
 // accept-script / reject-script — הכרעה בהצעת שינוי הכתב של המתמלל.
 export async function PATCH(request, { params }) {
   const session = await getServerSession(authOptions);
-  if (!hasOcrAccess(session?.user?.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const denied = requireAccess(session, hasOcrAccess);
+  if (denied) return denied;
 
   try {
     const { id } = await params;
@@ -35,7 +35,7 @@ export async function PATCH(request, { params }) {
       if (!doc) {
         const existing = await OcrLine.findById(id).select('status suggestedScriptType').lean();
         if (!existing) {
-          return NextResponse.json({ success: false, error: 'השורה לא נמצאה' }, { status: 404 });
+          return notFound('השורה לא נמצאה');
         }
         if (existing.suggestedScriptType) {
           return NextResponse.json(
@@ -78,7 +78,7 @@ export async function PATCH(request, { params }) {
         { returnDocument: 'after', updatePipeline: true }
       );
       if (!doc) {
-        return NextResponse.json({ success: false, error: 'השורה לא נמצאה' }, { status: 404 });
+        return notFound('השורה לא נמצאה');
       }
       return NextResponse.json({ success: true });
     }
@@ -90,21 +90,18 @@ export async function PATCH(request, { params }) {
         { returnDocument: 'after' }
       );
       if (!doc) {
-        return NextResponse.json(
-          { success: false, error: 'השורה לא נמצאה או שאינה מדוגלת' },
-          { status: 404 }
-        );
+        return notFound('השורה לא נמצאה או שאינה מדוגלת');
       }
       return NextResponse.json({ success: true });
     }
 
     if (action === 'set-text') {
       if (typeof text !== 'string') {
-        return NextResponse.json({ success: false, error: 'טקסט לא תקין' }, { status: 400 });
+        return badRequest('טקסט לא תקין');
       }
       const norm = normalizeLineText(text);
       if (!norm) {
-        return NextResponse.json({ success: false, error: 'הטקסט ריק' }, { status: 400 });
+        return badRequest('הטקסט ריק');
       }
       const forbidden = findForbidden(text);
       if (forbidden.length) {
@@ -126,7 +123,7 @@ export async function PATCH(request, { params }) {
       if (!doc) {
         const existing = await OcrLine.findById(id).select('_id').lean();
         if (!existing) {
-          return NextResponse.json({ success: false, error: 'השורה לא נמצאה' }, { status: 404 });
+          return notFound('השורה לא נמצאה');
         }
         return NextResponse.json(
           { success: false, error: 'אפשר לערוך טקסט רק בשורה שהוגשה או אושרה' },
@@ -138,7 +135,7 @@ export async function PATCH(request, { params }) {
 
     if (action === 'set-script') {
       if (scriptType !== 'square' && scriptType !== 'rashi') {
-        return NextResponse.json({ success: false, error: 'סוג כתב לא תקין' }, { status: 400 });
+        return badRequest('סוג כתב לא תקין');
       }
       const doc = await OcrLine.findByIdAndUpdate(
         id,
@@ -146,7 +143,7 @@ export async function PATCH(request, { params }) {
         { returnDocument: 'after' }
       );
       if (!doc) {
-        return NextResponse.json({ success: false, error: 'השורה לא נמצאה' }, { status: 404 });
+        return notFound('השורה לא נמצאה');
       }
       return NextResponse.json({ success: true, scriptType: doc.scriptType });
     }
@@ -162,7 +159,7 @@ export async function PATCH(request, { params }) {
       if (!doc) {
         const existing = await OcrLine.findById(id).select('_id').lean();
         if (!existing) {
-          return NextResponse.json({ success: false, error: 'השורה לא נמצאה' }, { status: 404 });
+          return notFound('השורה לא נמצאה');
         }
         return NextResponse.json(
           { success: false, error: 'אין הצעת שינוי כתב פתוחה לשורה זו' },
@@ -179,35 +176,34 @@ export async function PATCH(request, { params }) {
         { returnDocument: 'after' }
       );
       if (!doc) {
-        return NextResponse.json({ success: false, error: 'השורה לא נמצאה' }, { status: 404 });
+        return notFound('השורה לא נמצאה');
       }
       return NextResponse.json({ success: true, scriptType: doc.scriptType });
     }
 
-    return NextResponse.json({ success: false, error: 'פעולה לא מוכרת' }, { status: 400 });
+    return badRequest('פעולה לא מוכרת');
   } catch (err) {
     console.error('Admin OCR line action error:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }
 
 // DELETE: מחיקת השורה מהמאגר לגמרי (למשל חיתוך פגום).
 export async function DELETE(request, { params }) {
   const session = await getServerSession(authOptions);
-  if (!hasOcrAccess(session?.user?.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const denied = requireAccess(session, hasOcrAccess);
+  if (denied) return denied;
 
   try {
     const { id } = await params;
     await connectDB();
     const res = await OcrLine.deleteOne({ _id: id });
     if (!res.deletedCount) {
-      return NextResponse.json({ success: false, error: 'השורה לא נמצאה' }, { status: 404 });
+      return notFound('השורה לא נמצאה');
     }
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('Admin OCR line delete error:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

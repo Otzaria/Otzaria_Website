@@ -4,6 +4,7 @@ import OcrLine from '@/models/OcrLine';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasOcrAccess } from '@/lib/roles';
+import { requireAccess, serverError } from '@/lib/apiResponse';
 
 const PAGE_LIMIT = 50;
 
@@ -13,9 +14,8 @@ const PAGE_LIMIT = 50;
 //           (שורות אי-הסכמה מפרויקט ה-OCR, עם batch) מהמאגר הוותיק, ?skip=N
 export async function GET(request) {
   const session = await getServerSession(authOptions);
-  if (!hasOcrAccess(session?.user?.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const denied = requireAccess(session, hasOcrAccess);
+  if (denied) return denied;
 
   try {
     await connectDB();
@@ -92,6 +92,6 @@ export async function GET(request) {
     return NextResponse.json({ success: true, lines, total, counts, limit: PAGE_LIMIT });
   } catch (err) {
     console.error('Admin OCR lines list error:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

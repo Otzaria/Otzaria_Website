@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import connectDB from '@/lib/db';
 import OcrLine from '@/models/OcrLine';
 import { requireVerifiedSession } from '@/lib/ocr/linePool';
+import { badRequest, notFound, serverError } from '@/lib/apiResponse';
 
 // POST: דיגול שורה כלא-קריאה/חיתוך-שגוי. גוף: { reason: 'unreadable'|'bad_crop' }.
 // השורה נשארת available אך יוצאת מתור ההצעות (linePool מסנן flagged), וחוזרת
@@ -14,12 +15,12 @@ export async function POST(request, { params }) {
   try {
     const { id } = await params;
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json({ success: false, error: 'מזהה שורה לא תקין' }, { status: 400 });
+      return badRequest('מזהה שורה לא תקין');
     }
 
     const { reason } = await request.json();
     if (reason !== 'unreadable' && reason !== 'bad_crop') {
-      return NextResponse.json({ success: false, error: 'סיבת דיגול לא מוכרת' }, { status: 400 });
+      return badRequest('סיבת דיגול לא מוכרת');
     }
 
     await connectDB();
@@ -36,7 +37,7 @@ export async function POST(request, { params }) {
     if (!doc) {
       const exists = await OcrLine.exists({ _id: id });
       if (!exists) {
-        return NextResponse.json({ success: false, error: 'השורה לא נמצאה' }, { status: 404 });
+        return notFound('השורה לא נמצאה');
       }
       return NextResponse.json(
         { success: false, error: 'השורה כבר תומללה על ידי משתמש אחר' },
@@ -47,6 +48,6 @@ export async function POST(request, { params }) {
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('OCR line flag error:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }
