@@ -5,16 +5,17 @@ import User from '@/models/User';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { createSmtpTransport } from '@/lib/smtp-transport';
+import { apiError, unauthorized, badRequest, serverError } from '@/lib/apiResponse';
 export async function POST() {
     try {
         const session = await getServerSession(authOptions);
-        if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        if (!session) return unauthorized();
 
         await connectDB();
         const user = await User.findOne({ email: session.user.email });
-        
+
         if (user.isVerified) {
-            return NextResponse.json({ error: 'המשתמש כבר מאומת' }, { status: 400 });
+            return badRequest('המשתמש כבר מאומת');
         }
 
         const now = new Date();
@@ -25,18 +26,14 @@ export async function POST() {
         history = history.filter(date => new Date(date) > twentyFourHoursAgo);
 
         if (history.length >= 3) {
-            return NextResponse.json({ 
-                error: 'הגעת למגבלת השליחות היומית (3). אנא נסה שוב מחר.' 
-            }, { status: 429 });
+            return apiError(429, 'הגעת למגבלת השליחות היומית (3). אנא נסה שוב מחר.');
         }
 
         const lastRequestTime = history.length > 0 ? new Date(history[history.length - 1]) : null;
-        
+
         if (lastRequestTime && lastRequestTime > oneHourAgo) {
             const minutesLeft = Math.ceil((lastRequestTime.getTime() + 3600000 - now.getTime()) / 60000);
-            return NextResponse.json({ 
-                error: `ניתן לשלוח מייל אימות אחת לשעה. אנא נסה שוב בעוד ${minutesLeft} דקות.` 
-            }, { status: 429 });
+            return apiError(429, `ניתן לשלוח מייל אימות אחת לשעה. אנא נסה שוב בעוד ${minutesLeft} דקות.`);
         }
 
         // יצירת טוקן אימות חדש
@@ -73,6 +70,6 @@ export async function POST() {
 
     } catch (error) {
         console.error('Verify Send Error:', error);
-        return NextResponse.json({ error: 'שגיאה בשליחת המייל' }, { status: 500 });
+        return serverError('שגיאה בשליחת המייל');
     }
 }

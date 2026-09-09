@@ -3,12 +3,13 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
+import { unauthorized, badRequest, notFound, serverError } from '@/lib/apiResponse';
 
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return unauthorized();
     }
 
     await connectDB();
@@ -16,7 +17,7 @@ export async function GET() {
     return NextResponse.json({ success: true, spellWords: user?.spellWords || [] });
   } catch (error) {
     console.error('Error fetching spell words:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError('Internal Server Error');
   }
 }
 
@@ -24,13 +25,13 @@ export async function POST(req) {
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return unauthorized();
     }
 
     const { word } = await req.json();
     const clean = typeof word === 'string' ? word.trim() : '';
     if (!clean) {
-      return NextResponse.json({ error: 'Invalid word' }, { status: 400 });
+      return badRequest('Invalid word');
     }
 
     await connectDB();
@@ -41,12 +42,12 @@ export async function POST(req) {
     ).select('spellWords');
 
     if (!updatedUser) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return notFound('User not found');
     }
 
     return NextResponse.json({ success: true, spellWords: updatedUser.spellWords });
   } catch (error) {
     console.error('Error saving spell word:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError('Internal Server Error');
   }
 }

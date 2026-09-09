@@ -3,13 +3,14 @@ import connectDB from '@/lib/db';
 import Book from '@/models/Book';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { unauthorized, serverError } from '@/lib/apiResponse';
 
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    
+
     if (!session || !session.user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      return unauthorized();
     }
 
     await connectDB();
@@ -35,6 +36,6 @@ export async function GET() {
 
   } catch (error) {
     console.error('Error fetching user books:', error);
-    return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
+    return serverError('Internal Server Error');
   }
 }

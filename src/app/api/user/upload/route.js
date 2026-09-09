@@ -9,6 +9,7 @@ import User from '@/models/User';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { convertPdfToImages } from '@/lib/pdfConverter';
+import { unauthorized, badRequest, apiError, serverError } from '@/lib/apiResponse';
 
 const UPLOAD_ROOT = process.env.UPLOAD_DIR || path.join(process.cwd(), 'public', 'uploads');
 
@@ -19,7 +20,7 @@ export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        return unauthorized();
     }
 
     const userId = session.user.id || session.user._id;
@@ -34,7 +35,7 @@ export async function POST(request) {
     const category = `אישי - ${userName}`;
 
     if (!file || !bookName) {
-      return NextResponse.json({ success: false, error: 'Missing data' }, { status: 400 });
+      return badRequest('Missing data');
     }
 
     let baseSlug = slugify(bookName, {
@@ -52,10 +53,7 @@ export async function POST(request) {
     const folderExists = await fs.pathExists(bookFolder);
 
     if (existingBook || folderExists) {
-        return NextResponse.json({ 
-            success: false, 
-            error: 'ספר בשם זה כבר קיים במערכת, אנא בחרו שם אחר' 
-        }, { status: 409 });
+        return apiError(409, 'ספר בשם זה כבר קיים במערכת, אנא בחרו שם אחר');
     }
     
     createdFolderPath = bookFolder;
@@ -125,9 +123,6 @@ export async function POST(request) {
         console.error('Rollback failed', cleanupError);
     }
 
-    return NextResponse.json({ 
-        success: false, 
-        error: error.message 
-    }, { status: 500 });
+    return serverError(error.message);
   }
 }

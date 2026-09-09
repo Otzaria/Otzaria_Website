@@ -5,16 +5,17 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasAnyAdminAccess } from '@/lib/roles';
 import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
+import { unauthorized, forbidden } from '@/lib/apiResponse';
 
 export async function PUT(request) {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session) return unauthorized();
 
     const { messageId } = await request.json();
     await connectDB();
     const message = await Message.findOne({ _id: messageId, recipient: session.user._id });
     if (!message && !hasAnyAdminAccess(session.user.role)) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        return forbidden();
     }
     await Message.findByIdAndUpdate(messageId, { isRead: true });
 

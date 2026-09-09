@@ -5,19 +5,20 @@ import User from '@/models/User';
 import DictaBook from '@/models/DictaBook';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { unauthorized, notFound, serverError } from '@/lib/apiResponse';
 
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session) return unauthorized();
 
     await connectDB();
     const userId = session.user.id || session.user._id;
 
     const user = await User.findById(userId).select('points');
-    
+
     if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        return notFound('User not found');
     }
 
     const stats = await Page.aggregate([
@@ -138,6 +139,6 @@ export async function GET() {
 
   } catch (error) {
     console.error('User Stats API Error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError('Internal Server Error');
   }
 }

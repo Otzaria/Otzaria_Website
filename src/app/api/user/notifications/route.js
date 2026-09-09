@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
 import MailingList from '@/models/MailingList';
 import User from '@/models/User';
+import { unauthorized, serverError } from '@/lib/apiResponse';
 
 const LIST_NAME = 'new_books_subscribers';
 
@@ -11,7 +12,7 @@ export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return unauthorized();
     }
 
     await connectDB();
@@ -31,7 +32,7 @@ export async function GET() {
 
   } catch (error) {
     console.error('Notification API Error:', error);
-    return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
+    return serverError('Internal Server Error');
   }
 }
 
@@ -39,7 +40,7 @@ export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return unauthorized();
     }
 
     const { action } = await request.json();
@@ -68,6 +69,6 @@ export async function POST(request) {
 
   } catch (error) {
     console.error('Notification API Error:', error);
-    return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
+    return serverError('Internal Server Error');
   }
 }
