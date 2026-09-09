@@ -5,6 +5,7 @@ import connectDB from '@/lib/db';
 import DictaBook from '@/models/DictaBook';
 import UploadEditCopy from '@/models/UploadEditCopy';
 import { hasBooksAccess } from '@/lib/roles';
+import { unauthorized, forbidden, notFound, serverError } from '@/lib/apiResponse';
 
 function getDownloadBaseName(title = 'dicta-book') {
   const normalizedTitle = typeof title === 'string' ? title : 'dicta-book';
@@ -33,7 +34,7 @@ export async function GET(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return unauthorized('Unauthorized');
     }
 
     const userId = session.user._id || session.user.id;
@@ -51,18 +52,18 @@ export async function GET(request, { params }) {
     }
 
     if (!book) {
-      return NextResponse.json({ error: 'Book not found' }, { status: 404 });
+      return notFound('Book not found');
     }
 
     if (isEditCopy && !isAdmin) {
-      return NextResponse.json({ error: 'Forbidden: Admin access required for edit copies' }, { status: 403 });
+      return forbidden('Forbidden: Admin access required for edit copies');
     }
 
     if (book.status === 'in-progress') {
       const claimedById = book.claimedBy?._id?.toString?.() || book.claimedBy?.toString?.();
       const isOwner = claimedById === userId;
       if (!isAdmin && !isOwner) {
-        return NextResponse.json({ error: 'Forbidden: This book is being edited by another user' }, { status: 403 });
+        return forbidden('Forbidden: This book is being edited by another user');
       }
     }
 
@@ -78,7 +79,7 @@ export async function GET(request, { params }) {
     });
   } catch (error) {
     console.error('Failed to download dicta book:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError('Internal Server Error');
   }
 }
 

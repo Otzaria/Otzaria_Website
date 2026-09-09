@@ -8,6 +8,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { getUploadText } from '@/lib/gridfs-service';
 import { hasBooksAccess } from '@/lib/roles';
 import { combineUploadsContent } from '@/lib/uploadContent';
+import { unauthorized, forbidden, badRequest, notFound, serverError } from '@/lib/apiResponse';
 
 const DEFAULT_REPO_URL = "https://raw.githubusercontent.com/Otzaria/otzaria-library/refs/heads/main";
 const DEFAULT_FOLDER = "DictaToOtzaria/לא ערוך";
@@ -18,9 +19,7 @@ const DEFAULT_FOLDER = "DictaToOtzaria/לא ערוך";
 async function resetEditCopyFromUploads(editCopy) {
   try {
     if (!editCopy.sourceUploadIds || editCopy.sourceUploadIds.length === 0) {
-      return NextResponse.json({ 
-        error: 'לא נמצאו העלאות מקוריות לאיפוס' 
-      }, { status: 400 });
+      return badRequest('לא נמצאו העלאות מקוריות לאיפוס');
     }
 
     // שליפת כל ההעלאות המקוריות
@@ -30,9 +29,7 @@ async function resetEditCopyFromUploads(editCopy) {
     }).sort({ createdAt: 1 });
 
     if (uploads.length === 0) {
-      return NextResponse.json({ 
-        error: 'ההעלאות המקוריות נמחקו או לא נמצאו' 
-      }, { status: 404 });
+      return notFound('ההעלאות המקוריות נמחקו או לא נמצאו');
     }
 
     // איחוד כל התוכן מחדש
@@ -61,10 +58,7 @@ async function resetEditCopyFromUploads(editCopy) {
 
   } catch (error) {
     console.error('Failed to reset edit copy from uploads:', error);
-    return NextResponse.json({ 
-      error: 'שגיאה באיפוס עותק העריכה', 
-      details: error.message 
-    }, { status: 500 });
+    return serverError('שגיאה באיפוס עותק העריכה');
   }
 }
 
@@ -110,10 +104,9 @@ async function resetDictaBookFromGithub(book) {
     const contentResp = await fetch(contentUrl);
     
     if (!contentResp.ok) {
-      return NextResponse.json({ 
-        error: `שגיאה בהורדת הספר מגיטהאב (סטטוס: ${contentResp.status})`,
-        details: `לא ניתן למצוא את הקובץ: ${fileName}`
-      }, { status: 404 });
+      return notFound(
+        `שגיאה בהורדת הספר מגיטהאב (סטטוס: ${contentResp.status}) - לא ניתן למצוא את הקובץ: ${fileName}`
+      );
     }
 
     const freshContent = await contentResp.text();
@@ -131,10 +124,7 @@ async function resetDictaBookFromGithub(book) {
 
   } catch (error) {
     console.error('Failed to reset dicta book from github:', error);
-    return NextResponse.json({ 
-      error: 'שגיאה באיפוס הספר מגיטהאב', 
-      details: error.message 
-    }, { status: 500 });
+    return serverError('שגיאה באיפוס הספר מגיטהאב');
   }
 }
 
@@ -148,7 +138,7 @@ export async function POST(request, context) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'אינך מורשה לבצע פעולה זו' }, { status: 401 });
+      return unauthorized('אינך מורשה לבצע פעולה זו');
     }
 
     const bookId = params.id;
@@ -168,15 +158,13 @@ export async function POST(request, context) {
     }
 
     if (!book) {
-      return NextResponse.json({ error: 'Book not found' }, { status: 404 });
+      return notFound('Book not found');
     }
 
     // בדיקת הרשאות - רק תופס הספר או מנהל
     const isOwner = book.claimedBy?.toString() === userId;
     if (!isAdmin && !isOwner) {
-      return NextResponse.json({ 
-        error: 'אין הרשאה: רק תופס הספר או מנהל יכולים לאפס את הספר' 
-      }, { status: 403 });
+      return forbidden('אין הרשאה: רק תופס הספר או מנהל יכולים לאפס את הספר');
     }
 
     // אם זה עותק עריכה - נאפס מההעלאות המקוריות
@@ -189,9 +177,6 @@ export async function POST(request, context) {
 
   } catch (error) {
     console.error('Failed to reset book:', error);
-    return NextResponse.json({ 
-      error: 'שגיאה פנימית בשרת', 
-      details: error.message 
-    }, { status: 500 });
+    return serverError('שגיאה פנימית בשרת');
   }
 }

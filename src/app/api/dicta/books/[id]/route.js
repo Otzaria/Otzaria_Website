@@ -8,13 +8,14 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBooksAccess } from '@/lib/roles';
 import { requireBooksAccessOrForbidden } from '../../_auth';
+import { unauthorized, forbidden, badRequest, notFound, serverError } from '@/lib/apiResponse';
 import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
 
 export async function GET(req, { params }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return unauthorized('Unauthorized');
     }
 
     const userId = session.user._id || session.user.id;
@@ -34,19 +35,19 @@ export async function GET(req, { params }) {
     }
     
     if (!book) {
-      return NextResponse.json({ error: 'Book not found' }, { status: 404 });
+      return notFound('Book not found');
     }
 
     // עותקי עריכה נגישים רק לאדמין
     if (isEditCopy && !isAdmin) {
-      return NextResponse.json({ error: 'Forbidden: Admin access required for edit copies' }, { status: 403 });
+      return forbidden('Forbidden: Admin access required for edit copies');
     }
 
     // Check access: available books are accessible by all, in-progress only by owner or admin
     if (book.status === 'in-progress') {
       const isOwner = book.claimedBy?._id?.toString() === userId;
       if (!isAdmin && !isOwner) {
-        return NextResponse.json({ error: 'Forbidden: This book is being edited by another user' }, { status: 403 });
+        return forbidden('Forbidden: This book is being edited by another user');
       }
     }
 
@@ -56,7 +57,7 @@ export async function GET(req, { params }) {
     return NextResponse.json(bookData);
   } catch (error) {
     console.error('Failed to fetch book:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError('Internal Server Error');
   }
 }
 
@@ -64,12 +65,12 @@ export async function PUT(req, { params }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return unauthorized('Unauthorized');
     }
-    
+
     const userId = session.user._id || session.user.id;
     if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized: User ID missing' }, { status: 401 });
+      return unauthorized('Unauthorized: User ID missing');
     }
     const isAdmin = hasBooksAccess(session.user.role);
 
@@ -89,18 +90,18 @@ export async function PUT(req, { params }) {
     }
     
     if (!book) {
-      return NextResponse.json({ error: 'Book not found' }, { status: 404 });
+      return notFound('Book not found');
     }
 
     // עותקי עריכה - רק אדמין יכול לערוך
     if (isEditCopy && !isAdmin) {
-      return NextResponse.json({ error: 'Forbidden: Admin access required for edit copies' }, { status: 403 });
+      return forbidden('Forbidden: Admin access required for edit copies');
     }
 
     // פעולת תפיסה (Claim) - תמיד מותר אם הספר פנוי
     if (action === 'claim') {
       if (book.status !== 'available') {
-        return NextResponse.json({ error: 'Book already claimed' }, { status: 400 });
+        return badRequest('Book already claimed');
       }
       book.status = 'in-progress';
       book.claimedBy = userId;
@@ -113,7 +114,7 @@ export async function PUT(req, { params }) {
     // עדכון סטטוס ישיר (אדמין בלבד)
     if (status !== undefined) {
       if (!isAdmin) {
-        return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
+        return forbidden('Forbidden: Admin access required');
       }
       book.status = status;
       if (status === 'available') {
@@ -133,7 +134,7 @@ export async function PUT(req, { params }) {
     // חסימת שמירה אם המשתמש אינו אדמין ואינו התופס (לא רלוונטי לעותקי עריכה)
     if (content !== undefined) {
       if (!isEditCopy && !isAdmin && !isOwner) {
-        return NextResponse.json({ error: 'כדי לערוך יש לתפוס את הספר לעריכה' }, { status: 403 });
+        return forbidden('כדי לערוך יש לתפוס את הספר לעריכה');
       }
       book.content = content;
       
@@ -151,7 +152,7 @@ export async function PUT(req, { params }) {
     // בדיקת הרשאה לשחרור, סיום או ביטול סיום
     if (action === 'release' || action === 'complete' || action === 'uncomplete') {
       if (!isAdmin && !isOwner) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        return forbidden('Forbidden');
       }
       
       if (action === 'release') {
@@ -186,7 +187,7 @@ export async function PUT(req, { params }) {
     return NextResponse.json(book);
   } catch (error) {
     console.error('Failed to update book:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError('Internal Server Error');
   }
 }
 
@@ -209,7 +210,7 @@ export async function DELETE(req, { params }) {
     }
     
     if (!book) {
-      return NextResponse.json({ error: 'Book not found' }, { status: 404 });
+      return notFound('Book not found');
     }
 
     // אם זה עותק עריכה, נעדכן את ההעלאות המקוריות
@@ -238,6 +239,6 @@ export async function DELETE(req, { params }) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Failed to delete book:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError('Internal Server Error');
   }
 }
