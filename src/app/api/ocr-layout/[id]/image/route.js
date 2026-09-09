@@ -4,6 +4,7 @@ import connectDB from '@/lib/db';
 import OcrLayoutPage from '@/models/OcrLayoutPage';
 import { resolveImageFsPath, readPageImage } from '@/lib/ocr/images';
 import { requireVerifiedSession } from '@/lib/ocr/layoutPool';
+import { badRequest, notFound, serverError } from '@/lib/apiResponse';
 
 // GET: תמונת העמוד של משימת תיוג-מבנה. ברירת מחדל — העמוד המלא (השכבות
 // מצוירות בצד הלקוח לפי ה-prefill, ולכן אסור לשנות את מידות התמונה).
@@ -45,7 +46,7 @@ export async function GET(request, { params }) {
     const { id } = await params;
     // מזהה לא-תקין → CastError/500; מסננים מראש ל-400
     if (!/^[0-9a-fA-F]{24}$/.test(String(id))) {
-      return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
+      return badRequest('Invalid ID');
     }
     const { searchParams } = new URL(request.url);
     const taskIdx = searchParams.get('task');
@@ -53,13 +54,13 @@ export async function GET(request, { params }) {
 
     await connectDB();
     const doc = await OcrLayoutPage.findById(id).lean();
-    if (!doc) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (!doc) return notFound('Not found');
 
     const cacheHeaders = { 'Cache-Control': 'private, max-age=3600' };
 
     const task = taskIdx !== null ? (doc.tasks || [])[parseInt(taskIdx, 10)] : null;
     if (taskIdx !== null && !task) {
-      return NextResponse.json({ error: 'Invalid task index' }, { status: 400 });
+      return badRequest('Invalid task index');
     }
 
     // איזה חיתוך נדרש: לפי סוג המשימה, וב-zones-full לפי part
@@ -101,6 +102,6 @@ export async function GET(request, { params }) {
     });
   } catch (err) {
     console.error('OCR layout image error:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

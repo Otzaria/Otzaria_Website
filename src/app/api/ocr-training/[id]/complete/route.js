@@ -9,12 +9,13 @@ import { resolveImageFsPath } from '@/lib/ocr/images';
 import { validateLine, LINES_PER_PAGE } from '@/lib/ocr/trainingValidation';
 import { rotatedSize } from '@/lib/ocr/geometry';
 import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
+import { unauthorized, forbidden, notFound, badRequest, serverError } from '@/lib/apiResponse';
 
 // POST: סימון עמוד אימון כהושלם.
 // דורש בדיוק LINES_PER_PAGE שורות תקינות: תיבה בתוך גבולות התמונה + טקסט חוקי באלפבית.
 export async function POST(request, { params }) {
   const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!session) return unauthorized();
 
   try {
     const { id } = await params;
@@ -23,11 +24,11 @@ export async function POST(request, { params }) {
 
     await connectDB();
     const page = await OcrTrainingPage.findById(id);
-    if (!page) return NextResponse.json({ success: false, error: 'העמוד לא נמצא' }, { status: 404 });
+    if (!page) return notFound('העמוד לא נמצא');
 
     const isOwner = page.claimedBy && page.claimedBy.toString() === String(userId);
     if (!isOwner && !isAdmin) {
-      return NextResponse.json({ success: false, error: 'העמוד אינו משויך אליך' }, { status: 403 });
+      return forbidden('העמוד אינו משויך אליך');
     }
 
     // תמיד קוראים את קובץ התמונה — גם אם המידות כבר שמורות — כדי לוודא שהוא עדיין
@@ -70,10 +71,7 @@ export async function POST(request, { params }) {
     const required = page.targetLines || LINES_PER_PAGE;
 
     if (lines.length > required) {
-      return NextResponse.json(
-        { success: false, error: `יש בדיוק ${lines.length} שורות מסומנות; נדרשות בדיוק ${required}. מחקו שורות עודפות.` },
-        { status: 400 }
-      );
+      return badRequest(`יש בדיוק ${lines.length} שורות מסומנות; נדרשות בדיוק ${required}. מחקו שורות עודפות.`);
     }
     if (validCount !== required) {
       const reasons = invalid.map((x) => `שורה ${x.i + 1}: ${x.res.reason}`).slice(0, 5)
@@ -96,6 +94,6 @@ export async function POST(request, { params }) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('OCR training complete error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

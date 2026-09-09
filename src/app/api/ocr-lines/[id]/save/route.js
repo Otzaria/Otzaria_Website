@@ -4,6 +4,7 @@ import connectDB from '@/lib/db';
 import OcrLine from '@/models/OcrLine';
 import { normalizeLineText, findForbidden } from '@/lib/ocr/textStandard';
 import { requireVerifiedSession } from '@/lib/ocr/linePool';
+import { unauthorized, badRequest, notFound, serverError } from '@/lib/apiResponse';
 
 // POST: שמירת תמלול של שורה. גוף: { text, scriptType? }.
 // השמירה אטומית — מצליחה רק אם השורה עדיין זמינה (הראשון ששומר זוכה).
@@ -19,10 +20,10 @@ export async function POST(request, { params }) {
 
     // אימות מזהים מוקדם — מזהה פסול היה זורק CastError ומחזיר 500
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json({ success: false, error: 'מזהה שורה לא תקין' }, { status: 400 });
+      return badRequest('מזהה שורה לא תקין');
     }
     if (!mongoose.Types.ObjectId.isValid(userId)) {
-      return NextResponse.json({ success: false, error: 'מזהה משתמש לא תקין' }, { status: 401 });
+      return unauthorized('מזהה משתמש לא תקין');
     }
 
     const { text, scriptType } = await request.json();
@@ -30,7 +31,7 @@ export async function POST(request, { params }) {
     // אימות הטקסט מול תקן האלפבית — אותם כללים כמו בייצוא לאימון
     const norm = normalizeLineText(text);
     if (!norm) {
-      return NextResponse.json({ success: false, error: 'הטקסט ריק' }, { status: 400 });
+      return badRequest('הטקסט ריק');
     }
     const forbidden = findForbidden(text);
     if (forbidden.length) {
@@ -75,7 +76,7 @@ export async function POST(request, { params }) {
     if (!doc) {
       const exists = await OcrLine.exists({ _id: id });
       if (!exists) {
-        return NextResponse.json({ success: false, error: 'השורה לא נמצאה' }, { status: 404 });
+        return notFound('השורה לא נמצאה');
       }
       return NextResponse.json(
         { success: false, error: 'השורה כבר תומללה על ידי משתמש אחר' },
@@ -86,6 +87,6 @@ export async function POST(request, { params }) {
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('OCR line save error:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }
