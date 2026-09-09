@@ -3,7 +3,14 @@
 import { useState, useEffect, useMemo } from 'react'
 import PageCanvas, { streamColor } from './PageCanvas'
 import { parsePageNumber } from '@/lib/ocr/gematria'
-import { confirmedAnswerFromPrefill } from '@/lib/ocr/layoutValidation'
+import {
+  splitBandAt,
+  removeBandAt,
+  splitTallestBand,
+  setBandIdentity,
+  derivePartsFromValue,
+  buildZonesFullAnswer,
+} from '@/lib/ocr/layoutBands'
 
 // כרטיסי המיקרו-שאלות של תיוג מבנה-עמוד — משותפים לדף המתנדב ולעריכת מנהל.
 // חוזה מול האב: value = null (טרם הוכרע) | { confirmed:true, answer:null }
@@ -200,37 +207,24 @@ export function StreamsTaskCard({ prefill, imageUrl, imageWidth, imageHeight, va
   const setBands = (next) => onChange({ confirmed: false, answer: { bands: next } })
 
   const splitBand = (i) => {
-    const b = bands[i]
-    // רצועה דקה מדי לפיצול — שתי המחציות היו נופלות מתחת למינימום הוולידציה
-    if (b.y1 - b.y0 < 0.02) return
-    const mid = (b.y0 + b.y1) / 2
-    const next = [
-      ...bands.slice(0, i),
-      { ...b, y1: mid },
-      { y0: mid, y1: b.y1, book_stream: null },
-      ...bands.slice(i + 1),
-    ]
-    setBands(next)
+    const next = splitBandAt(bands, i)
+    if (next) setBands(next)
   }
 
   const removeBand = (i) => {
-    if (bands.length <= 1) return
-    setBands(bands.filter((_, j) => j !== i))
+    const next = removeBandAt(bands, i)
+    if (next) setBands(next)
   }
 
   // "הוסף רצועה" גלוי — חיוני כשזוהה זרם אחד בלבד ובעמוד יש שניים:
   // מפצל את הרצועה הגבוהה ביותר, ואת הגבול גוררים למקום הנכון
   const addBand = () => {
-    if (!bands || !bands.length) return
-    let tallest = 0
-    for (let j = 1; j < bands.length; j++) {
-      if (bands[j].y1 - bands[j].y0 > bands[tallest].y1 - bands[tallest].y0) tallest = j
-    }
-    splitBand(tallest)
+    const next = splitTallestBand(bands)
+    if (next) setBands(next)
   }
 
   const setIdentity = (i, id) => {
-    setBands(bands.map((b, j) => (j === i ? { ...b, book_stream: id } : b)))
+    setBands(setBandIdentity(bands, i, id))
   }
 
   return (
@@ -337,23 +331,8 @@ export function ZonesFullCard({ prefill, imageUrl, pagenumImgSrc, imageWidth, im
 
   // "הכול נכון" מהאב (confirmed ברמת העמוד) — משתקף בתתי-הרכיבים
   useEffect(() => {
-    if (value?.confirmed) {
-      setParts({
-        pagenum: prefill.pagenum ? { confirmed: true, answer: null } : null,
-        header: prefill.header ? { confirmed: true, answer: null } : null,
-        streams: prefill.streams ? { confirmed: true, answer: null } : null,
-      })
-    } else if (!value) {
-      setParts({ pagenum: null, header: null, streams: null })
-    } else if (value.answer) {
-      // עמוד שכבר תויג (סקירת/עריכת מנהל): טוענים את התשובות הקיימות
-      // לתתי-הכרטיסים, אחרת הם מוצגים ריקים
-      setParts({
-        pagenum: prefill.pagenum && value.answer.pagenum ? { confirmed: false, answer: value.answer.pagenum } : null,
-        header: prefill.header && value.answer.header ? { confirmed: false, answer: value.answer.header } : null,
-        streams: prefill.streams && value.answer.streams ? { confirmed: false, answer: value.answer.streams } : null,
-      })
-    }
+    const nextParts = derivePartsFromValue(value, prefill)
+    if (nextParts) setParts(nextParts)
     // רק שינוי חיצוני (איפוס/אישור-הכול/טעינת-תשובות) מעניין אותנו — לא כל עדכון פנימי
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value?.confirmed, value === null])
@@ -361,20 +340,8 @@ export function ZonesFullCard({ prefill, imageUrl, pagenumImgSrc, imageWidth, im
   const setPart = (key, v) => {
     const next = { ...parts, [key]: v }
     setParts(next)
-
     // כל הרכיבים שבשאלה הוכרעו? מדווחים תשובה מלאה וממומשת לאב
-    const needed = ['pagenum', 'header', 'streams'].filter((k) => prefill[k])
-    if (needed.every((k) => next[k])) {
-      const answer = {}
-      for (const k of needed) {
-        answer[k] = next[k].confirmed
-          ? confirmedAnswerFromPrefill(k, prefill[k])
-          : next[k].answer
-      }
-      onChange({ confirmed: false, answer })
-    } else {
-      onChange(null)
-    }
+    onChange(buildZonesFullAnswer(prefill, next))
   }
 
   // הרצועות/תיבה המוצגות על הקנבס המשולב
@@ -478,7 +445,7 @@ export function ZonesFullCard({ prefill, imageUrl, pagenumImgSrc, imageWidth, im
                     value={b.book_stream === null || b.book_stream === undefined ? '' : String(b.book_stream)}
                     onChange={(e) => {
                       const id = e.target.value === '' ? null : parseInt(e.target.value, 10)
-                      const next = (shownBands || []).map((x, j) => (j === i ? { ...x, book_stream: id } : x))
+                      const next = setBandIdentity(shownBands || [], i, id)
                       setPart('streams', { confirmed: false, answer: { bands: next } })
                     }}
                     className="border border-neutral-300 rounded-lg px-2 py-0.5 text-xs bg-white flex-1"
@@ -492,15 +459,8 @@ export function ZonesFullCard({ prefill, imageUrl, pagenumImgSrc, imageWidth, im
                   </select>
                   <button
                     onClick={() => {
-                      if (b.y1 - b.y0 < 0.02) return
-                      const mid = (b.y0 + b.y1) / 2
-                      const next = [
-                        ...shownBands.slice(0, i),
-                        { ...b, y1: mid },
-                        { y0: mid, y1: b.y1, book_stream: null },
-                        ...shownBands.slice(i + 1),
-                      ]
-                      setPart('streams', { confirmed: false, answer: { bands: next } })
+                      const next = splitBandAt(shownBands, i)
+                      if (next) setPart('streams', { confirmed: false, answer: { bands: next } })
                     }}
                     className="text-info-600 hover:bg-info-50 p-0.5 rounded transition-colors"
                     title="פיצול הרצועה לשתיים"
@@ -508,13 +468,10 @@ export function ZonesFullCard({ prefill, imageUrl, pagenumImgSrc, imageWidth, im
                     <span className="material-symbols-outlined text-sm">splitscreen</span>
                   </button>
                   <button
-                    onClick={() =>
-                      shownBands.length > 1 &&
-                      setPart('streams', {
-                        confirmed: false,
-                        answer: { bands: shownBands.filter((_, j) => j !== i) },
-                      })
-                    }
+                    onClick={() => {
+                      const next = removeBandAt(shownBands, i)
+                      if (next) setPart('streams', { confirmed: false, answer: { bands: next } })
+                    }}
                     disabled={(shownBands || []).length <= 1}
                     className="text-danger-600 hover:bg-danger-50 p-0.5 rounded transition-colors disabled:opacity-30"
                     title="הסרת הרצועה"
@@ -525,22 +482,8 @@ export function ZonesFullCard({ prefill, imageUrl, pagenumImgSrc, imageWidth, im
               ))}
               <button
                 onClick={() => {
-                  const bands = shownBands || []
-                  if (!bands.length) return
-                  let t = 0
-                  for (let j = 1; j < bands.length; j++) {
-                    if (bands[j].y1 - bands[j].y0 > bands[t].y1 - bands[t].y0) t = j
-                  }
-                  const b = bands[t]
-                  if (b.y1 - b.y0 < 0.02) return
-                  const mid = (b.y0 + b.y1) / 2
-                  const next = [
-                    ...bands.slice(0, t),
-                    { ...b, y1: mid },
-                    { y0: mid, y1: b.y1, book_stream: null },
-                    ...bands.slice(t + 1),
-                  ]
-                  setPart('streams', { confirmed: false, answer: { bands: next } })
+                  const next = splitTallestBand(shownBands)
+                  if (next) setPart('streams', { confirmed: false, answer: { bands: next } })
                 }}
                 className="border border-dashed border-info-400 text-info-700 hover:bg-info-50 rounded-lg px-2 py-1 text-xs font-bold flex items-center justify-center gap-1 transition-colors"
                 title="מוסיף גבול חדש (מפצל את הרצועה הגדולה) — גררו אותו למקום הנכון"
