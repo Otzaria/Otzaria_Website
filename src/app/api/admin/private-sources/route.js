@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
 import PrivateBookSource from '@/models/PrivateBookSource';
 import { isAdmin } from '@/lib/roles';
+import { requireAccess, badRequest, notFound, serverError } from '@/lib/apiResponse';
 import {
   getMoreBooksList,
   loadOptionConfigs,
@@ -12,15 +13,6 @@ import {
   DEFAULT_STATUS_KEY,
 } from '@/lib/private-sources';
 import { buildSourceEntries } from '@/lib/private-sources-sets';
-
-/** בודק הרשאת מנהל כללי; מחזיר את הסשן או null */
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!isAdmin(session?.user?.role)) return null;
-  return session;
-}
-
-const forbidden = () => NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
 function cleanString(value, max = 2000) {
   if (typeof value !== 'string') return '';
@@ -33,8 +25,9 @@ function cleanString(value, max = 2000) {
  * ?refresh=1 — רענון כפוי של מטמון הגיטהאב.
  */
 export async function GET(request) {
-  const session = await requireAdmin();
-  if (!session) return forbidden();
+  const session = await getServerSession(authOptions);
+  const denied = requireAccess(session, isAdmin);
+  if (denied) return denied;
 
   try {
     await connectDB();
@@ -108,23 +101,21 @@ export async function GET(request) {
     });
   } catch (error) {
     console.error('Error loading private book sources:', error);
-    return NextResponse.json(
-      { error: 'שגיאה בטעינת מקורות הספרים הפרטיים' },
-      { status: 500 }
-    );
+    return serverError('שגיאה בטעינת מקורות הספרים הפרטיים');
   }
 }
 
 /** POST — יצירה/עדכון (upsert) של רשומה לפי bookPath. */
 export async function POST(request) {
-  const session = await requireAdmin();
-  if (!session) return forbidden();
+  const session = await getServerSession(authOptions);
+  const denied = requireAccess(session, isAdmin);
+  if (denied) return denied;
 
   try {
     const body = await request.json();
     const bookPath = cleanString(body?.bookPath, 500);
     if (!bookPath) {
-      return NextResponse.json({ error: 'חסר נתיב ספר (bookPath)' }, { status: 400 });
+      return badRequest('חסר נתיב ספר (bookPath)');
     }
 
     let permissionDate = null;
@@ -183,31 +174,32 @@ export async function POST(request) {
     });
   } catch (error) {
     console.error('Error saving private book source:', error);
-    return NextResponse.json({ error: 'שגיאה בשמירת הרשומה' }, { status: 500 });
+    return serverError('שגיאה בשמירת הרשומה');
   }
 }
 
 /** DELETE ?path=... — מחיקת רשומה (הספר עצמו בגיטהאב אינו מושפע). */
 export async function DELETE(request) {
-  const session = await requireAdmin();
-  if (!session) return forbidden();
+  const session = await getServerSession(authOptions);
+  const denied = requireAccess(session, isAdmin);
+  if (denied) return denied;
 
   try {
     const bookPath = new URL(request.url).searchParams.get('path');
     if (!bookPath) {
-      return NextResponse.json({ error: 'חסר נתיב ספר' }, { status: 400 });
+      return badRequest('חסר נתיב ספר');
     }
 
     await connectDB();
     const result = await PrivateBookSource.deleteOne({ bookPath });
 
     if (result.deletedCount === 0) {
-      return NextResponse.json({ error: 'לא נמצאה רשומה למחיקה' }, { status: 404 });
+      return notFound('לא נמצאה רשומה למחיקה');
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting private book source:', error);
-    return NextResponse.json({ error: 'שגיאה במחיקת הרשומה' }, { status: 500 });
+    return serverError('שגיאה במחיקת הרשומה');
   }
 }
