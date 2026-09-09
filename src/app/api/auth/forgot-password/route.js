@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
 import { createSmtpTransport } from '@/lib/smtp-transport';
+import { apiError, serverError } from '@/lib/apiResponse';
 export async function POST(request) {
   try {
     const { email } = await request.json();
@@ -26,10 +27,7 @@ export async function POST(request) {
         const timeSinceLastRequest = NOW - new Date(user.lastResetRequest).getTime();
         
         if (timeSinceLastRequest < ONE_HOUR) {
-            return NextResponse.json({ 
-                success: false, 
-                error: 'כבר נשלח מייל בשעה האחרונה. אנא בדוק בתיבת הספאם או נסה שוב מאוחר יותר.' 
-            }, { status: 429 });
+            return apiError(429, 'כבר נשלח מייל בשעה האחרונה. אנא בדוק בתיבת הספאם או נסה שוב מאוחר יותר.');
         }
     }
 
@@ -41,10 +39,7 @@ export async function POST(request) {
     }
 
     if (user.dailyResetRequestsCount >= 3) {
-        return NextResponse.json({ 
-            success: false, 
-            error: 'הגעת למגבלת הבקשות היומית (3). נסה שוב מחר.' 
-        }, { status: 429 });
+        return apiError(429, 'הגעת למגבלת הבקשות היומית (3). נסה שוב מחר.');
     }
 
     const resetToken = crypto.randomBytes(32).toString('hex');
@@ -82,6 +77,6 @@ export async function POST(request) {
 
   } catch (error) {
     console.error('Forgot Password Error:', error);
-    return NextResponse.json({ error: 'שגיאה בשרת. נסה שוב מאוחר יותר.' }, { status: 500 });
+    return serverError('שגיאה בשרת. נסה שוב מאוחר יותר.');
   }
 }

@@ -7,13 +7,13 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import mongoose from 'mongoose';
 import { hasAnyAdminAccess, ALL_ADMIN_ROLES } from '@/lib/roles';
 import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
+import { requireAccess, badRequest, serverError } from '@/lib/apiResponse';
 
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!hasAnyAdminAccess(session?.user?.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const denied = requireAccess(session, hasAnyAdminAccess);
+    if (denied) return denied;
 
     const { recipientId, subject, message, sendToAll } = await request.json();
     await connectDB();
@@ -44,7 +44,7 @@ export async function POST(request) {
       });
 
     } else {
-      if (!recipientId) return NextResponse.json({ error: 'Missing recipient' }, { status: 400 });
+      if (!recipientId) return badRequest('Missing recipient');
 
       await Message.create({
         sender: adminId,
@@ -62,6 +62,6 @@ export async function POST(request) {
 
   } catch (error) {
     console.error('Error sending admin message:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError('Internal Server Error');
   }
 }

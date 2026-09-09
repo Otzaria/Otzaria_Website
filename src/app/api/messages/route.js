@@ -7,13 +7,14 @@ import mongoose from 'mongoose';
 import { hasAnyAdminAccess } from '@/lib/roles';
 import { getAdminMessagesList } from '@/lib/adminMessages';
 import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
+import { unauthorized, badRequest, serverError } from '@/lib/apiResponse';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
     try {
         const session = await getServerSession(authOptions);
-        if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        if (!session) return unauthorized();
 
         const { searchParams } = new URL(request.url);
         const showAll = searchParams.get('allMessages');
@@ -75,14 +76,14 @@ export async function GET(request) {
         return NextResponse.json({ success: true, messages: formattedMessages });
     } catch (error) {
         console.error('Error fetching messages:', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return serverError('Internal Server Error');
     }
 }
 
 export async function POST(request) {
     try {
         const session = await getServerSession(authOptions);
-        if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        if (!session) return unauthorized();
 
         const { subject, content, recipientId } = await request.json();
         await connectDB();
@@ -104,18 +105,18 @@ export async function POST(request) {
         return NextResponse.json({ success: true });
     } catch (error) {
         console.error('Error sending message:', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return serverError('Internal Server Error');
     }
 }
 
 export async function PUT(request) {
     console.log('🔄 PUT Request Started');
-    
+
     try {
         const session = await getServerSession(authOptions);
         if (!session) {
             console.log('❌ Unauthorized PUT request');
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+            return unauthorized();
         }
 
         const { messageIds } = await request.json();
@@ -140,7 +141,7 @@ export async function PUT(request) {
             messageObjectIds = messageIds.map(id => new mongoose.Types.ObjectId(id));
         } catch (e) {
             console.error('❌ Conversion Error:', e);
-            return NextResponse.json({ error: 'Invalid ID format' }, { status: 400 });
+            return badRequest('Invalid ID format');
         }
 
         console.log(`🛠️ Executing DB Update...`);
@@ -169,6 +170,6 @@ export async function PUT(request) {
 
     } catch (error) {
         console.error('❌ FATAL ERROR in PUT:', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return serverError('Internal Server Error');
     }
 }
