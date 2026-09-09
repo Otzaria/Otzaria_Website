@@ -22,6 +22,7 @@ import { findNextWholeWordInTextarea as findNextWholeWordInTextareaUtil } from '
 import { hasBookLibraryAccess } from '@/lib/roles'
 import { useRequireAuth } from '@/hooks/useRequireAuth'
 import { computeImagePanelWidth, computeColumnWidth, computeOcrCropParams } from './panelResizeGeometry'
+import { buildShortcutCombination, findMatchingActionId } from './keyboardShortcutMatching'
 
 // הגדרת ברירת מחדל המבוססת על מקשים פיזיים (Codes)
 const DEFAULT_SHORTCUTS = {
@@ -1286,21 +1287,8 @@ export default function EditPage() {
 
       if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
 
-      const modifiers = [];
-      if (e.ctrlKey) modifiers.push('Ctrl');
-      if (e.altKey) modifiers.push('Alt');
-      if (e.shiftKey) modifiers.push('Shift');
-      if (e.metaKey) modifiers.push('Meta');
-
-      const code = e.code; // שימוש בקוד הפיזי (למשל KeyS)
-
-      const combination = [...modifiers, code].join('+');
-
-      // בדיקה אם הקומבינציה קיימת אצל המשתמש
-      const foundActionId = Object.keys(userShortcuts).find(actionId => {
-          const savedCombo = userShortcuts[actionId];
-          return savedCombo === combination;
-      });
+      const combination = buildShortcutCombination(e);
+      const foundActionId = findMatchingActionId(userShortcuts, combination);
 
       if (foundActionId && actionsMap[foundActionId]) {
         e.preventDefault();
