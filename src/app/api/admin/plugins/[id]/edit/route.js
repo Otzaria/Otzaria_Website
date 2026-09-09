@@ -8,11 +8,8 @@ import Plugin from '@/models/Plugin'
 import { sendPluginUploadNotification } from '@/lib/emailService'
 import { hasPluginsAccess } from '@/lib/roles'
 import {
-  ALLOWED_PLUGIN_STATUSES,
-  MIN_SUPPORTED_APP_VERSION,
   PLUGIN_VERSION_RE,
   assertPluginTextLimits,
-  formatPluginForPublic,
   getEditableSource,
   getLivePluginData,
   isHttpUrl,
@@ -20,6 +17,13 @@ import {
   parseJsonArrayField
 } from '@/lib/pluginSubmission'
 import { readManifestFromPlugin, compareVersions } from '@/lib/pluginManifest'
+import {
+  buildEditResponse,
+  deriveOwnerFieldsFromManifest,
+  getAssetSources,
+  resolveDesignTagDecision,
+  validateBasicEditFields
+} from '@/lib/pluginEditLogic'
 import { invalidatePluginSearchIndex } from '@/lib/pluginSearchIndex'
 import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags'
 import { archiveCurrentVersion } from '@/lib/pluginVersions'
@@ -48,14 +52,6 @@ const PLUGIN_FILE_EXT = '.otzplugin'
 
 function bad(message, status = 400) {
   return NextResponse.json({ error: message }, { status })
-}
-
-function getAssetSources(source) {
-  return {
-    pluginFile: source.assetSources?.pluginFile || 'live',
-    image: source.assetSources?.image || (source.image ? 'live' : 'none'),
-    screenshots: source.assetSources?.screenshots || ((source.screenshots || []).length ? 'live' : 'none')
-  }
 }
 
 // asOwner: הבקשה הגיעה מהנתיב הציבורי (/api/plugins/[id]/edit) — שם כל אחד,
@@ -100,24 +96,6 @@ async function resolveExistingManifestId(plugin) {
     return (manifest.id || '').toString().trim()
   } catch {
     return ''
-  }
-}
-
-function buildEditResponse(plugin, source) {
-  const pluginId = plugin._id.toString()
-  const pending = Boolean(plugin.pendingUpdate)
-  return {
-    ...formatPluginForPublic(plugin, { usePending: pending }),
-    _id: pluginId,
-    pluginUid: plugin.pluginUid || null,
-    authorId: plugin.authorId?.toString() || null,
-    pluginFileName: source.pluginFileName || '',
-    isApproved: plugin.isApproved,
-    hasPendingUpdate: pending,
-    submissionType: plugin.submissionType || 'new',
-    imageData: Boolean(source.image),
-    screenshots: (source.screenshots || []).map((_, index) => `/api/plugins/${pluginId}/screenshots/${index}${pending ? '?pending=1' : ''}`),
-    pendingChangeSummary: plugin.pendingChangeSummary || []
   }
 }
 
@@ -260,24 +238,19 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
       return bad(error.message)
     }
 
-    if (!name || !shortDescription || !description || !version || !author || !compatibleWith) {
-      return bad('Missing required fields')
-    }
-    if (!ALLOWED_PLUGIN_STATUSES.includes(status)) {
-      return bad(`Status must be one of: ${ALLOWED_PLUGIN_STATUSES.join(', ')}`)
-    }
-    // הטופס מגיש את הגרסה החיה מה-DB גם כשלא נגעו בה. תוסף שפורסם בגרסה ישנה
-    // ("1.0", "1.0.0.1") נחסם כאן מכל עריכת מטא-דאטה, ולכן אוכפים רק על גרסה חדשה.
-    if (version !== livePlugin.version && !PLUGIN_VERSION_RE.test(version)) {
-      return bad('Version must be in the form X.Y.Z')
-    }
-    if (maxAppVersion) {
-      if (!PLUGIN_VERSION_RE.test(maxAppVersion)) {
-        return bad('שדה maxAppVersion אינו בפורמט גרסה תקין')
-      }
-      if (compareVersions(maxAppVersion, compatibleWith) < 0) {
-        return bad(`גרסת המקסימום (${maxAppVersion}) לא יכולה להיות נמוכה מגרסת המינימום (${compatibleWith})`)
-      }
+    const basicFieldsError = validateBasicEditFields({
+      name,
+      shortDescription,
+      description,
+      version,
+      author,
+      compatibleWith,
+      status,
+      maxAppVersion,
+      liveVersion: livePlugin.version
+    })
+    if (basicFieldsError) {
+      return bad(basicFieldsError)
     }
 
     try {
@@ -361,21 +334,17 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
       }
     }
 
-    if (userRequestedDesignTag && !designCompliant) {
-      const detail = designViolations.length > 0
-        ? `\n- ${designViolations.join('\n- ')}`
-        : ''
-      return bad(
-        `לא ניתן להוסיף את התגית "${OTZARIA_DESIGN_TAG}" — העיצוב אינו תואם ל-DESIGN_GUIDE.md:${detail}`
-      )
+    const designTagDecision = resolveDesignTagDecision({
+      tags,
+      designTag: OTZARIA_DESIGN_TAG,
+      designCompliant,
+      userRequestedDesignTag,
+      designViolations
+    })
+    if (designTagDecision.error) {
+      return bad(designTagDecision.error)
     }
-    if (designCompliant && !userRequestedDesignTag) {
-      tags = [...tags, OTZARIA_DESIGN_TAG]
-    }
-    if (!designCompliant && userRequestedDesignTag) {
-      // הגנת בטחון - לא אמור להגיע לכאן כי נחסם למעלה.
-      tags = tags.filter(tag => tag !== OTZARIA_DESIGN_TAG)
-    }
+    tags = designTagDecision.tags
 
     if (imageFile?.size) {
       if (!isAllowedImage(imageFile.type)) {
@@ -439,38 +408,18 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
 
       // היוצר — שאר המטא-דאטה המוגנת נגזרת מהמניפסט (מנהל עורך אותה ידנית בטופס).
       if (!isAdmin) {
-        // ברירת מחדל זהה לאוצריא ולוולידטור ה-CI — ראו upload/route.js.
-        const manifestStability = (newManifest.stability || 'stable').toString().trim()
-        if (!ALLOWED_PLUGIN_STATUSES.includes(manifestStability)) {
-          return bad('ערך stability לא תקין ב-manifest.json (ערכים מותרים: stable, beta, experimental)')
+        const derived = deriveOwnerFieldsFromManifest(newManifest)
+        if (derived.error) {
+          return bad(derived.error)
         }
-        const manifestMinAppVersion = newManifest.minAppVersion ? newManifest.minAppVersion.toString().trim() : ''
-        if (!manifestMinAppVersion) {
-          return bad('חסר שדה minAppVersion ב-manifest.json של קובץ התוסף')
-        }
-        if (compareVersions(manifestMinAppVersion, MIN_SUPPORTED_APP_VERSION) < 0) {
-          return bad(`גרסת המינימום (${manifestMinAppVersion}) לא יכולה להיות פחות מ-${MIN_SUPPORTED_APP_VERSION}`)
-        }
-        const manifestName = (newManifest.name || '').toString().trim()
-        const manifestAuthor = (newManifest.author || '').toString().trim()
-        const manifestDesc = (newManifest.description || '').toString().trim()
-        if (manifestName) name = manifestName
-        if (manifestAuthor) author = manifestAuthor
-        if (manifestDesc) shortDescription = manifestDesc
-        status = manifestStability
-        compatibleWith = manifestMinAppVersion
-        const manifestMaxAppVersion = newManifest.maxAppVersion ? newManifest.maxAppVersion.toString().trim() : ''
-        if (manifestMaxAppVersion) {
-          if (!PLUGIN_VERSION_RE.test(manifestMaxAppVersion)) {
-            return bad('שדה maxAppVersion ב-manifest.json אינו בפורמט גרסה תקין')
-          }
-          if (compareVersions(manifestMaxAppVersion, manifestMinAppVersion) < 0) {
-            return bad(`גרסת המקסימום (${manifestMaxAppVersion}) לא יכולה להיות נמוכה מגרסת המינימום (${manifestMinAppVersion})`)
-          }
-        }
-        maxAppVersion = manifestMaxAppVersion || null
-        homepage = newManifest.homepage ? newManifest.homepage.toString().trim() : ''
-        requiresNetwork = newManifest.network?.enabled === true
+        if (derived.name) name = derived.name
+        if (derived.author) author = derived.author
+        if (derived.shortDescription) shortDescription = derived.shortDescription
+        status = derived.status
+        compatibleWith = derived.compatibleWith
+        maxAppVersion = derived.maxAppVersion
+        homepage = derived.homepage
+        requiresNetwork = derived.requiresNetwork
       }
     }
 
