@@ -4,21 +4,21 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import { hasPluginsAccess } from '@/lib/roles'
+import { requireAccess, badRequest, serverError } from '@/lib/apiResponse'
 
 // GET /api/admin/plugins?status=pending|approved
 // מאחד את שתי רשימות הניהול תחת ראוט אחד.
 export async function GET(request) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session || !hasPluginsAccess(session.user?.role)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
-    }
+    const denied = requireAccess(session, hasPluginsAccess)
+    if (denied) return denied
 
     const { searchParams } = new URL(request.url)
     const status = (searchParams.get('status') || 'pending').toLowerCase()
 
     if (!['pending', 'approved'].includes(status)) {
-      return NextResponse.json({ error: 'Invalid status filter' }, { status: 400 })
+      return badRequest('Invalid status filter')
     }
 
     await dbConnect()
@@ -45,6 +45,6 @@ export async function GET(request) {
     return NextResponse.json(plugins)
   } catch (error) {
     console.error('Error fetching admin plugins:', error)
-    return NextResponse.json({ error: 'Failed to fetch plugins' }, { status: 500 })
+    return serverError('Failed to fetch plugins')
   }
 }
