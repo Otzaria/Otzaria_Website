@@ -5,14 +5,14 @@ import MailingList from '@/models/MailingList';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBookLibraryAccess } from '@/lib/roles';
+import { requireAccess, serverError } from '@/lib/apiResponse';
 
 export async function GET() {
     try {
         // 1. אבטחה: רק אדמין
         const session = await getServerSession(authOptions);
-        if (!session || !hasBookLibraryAccess(session.user?.role)) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
+        const denied = requireAccess(session, hasBookLibraryAccess);
+        if (denied) return denied;
 
         await connectDB();
 
@@ -34,6 +34,6 @@ export async function GET() {
 
     } catch (error) {
         console.error('Error fetching subscribers:', error);
-        return NextResponse.json({ error: 'Server Error' }, { status: 500 });
+        return serverError('Server Error');
     }
 }

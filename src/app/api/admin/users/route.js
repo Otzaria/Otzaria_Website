@@ -6,13 +6,14 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { getAdminUsersWithStats } from '@/lib/adminUsers';
 import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
+import { isAdmin } from '@/lib/roles';
+import { requireAccess, badRequest, notFound, serverError, apiError } from '@/lib/apiResponse';
 
 export async function GET() {
     try {
         const session = await getServerSession(authOptions);
-        if (session?.user?.role !== 'admin') {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
+        const denied = requireAccess(session, isAdmin);
+        if (denied) return denied;
 
         // ללא מטמון בכוונה: ה-route הזה משמש גם לרענון מיידי בצד הלקוח אחרי
         // עדכון/מחיקת משתמש (ראו page.jsx) — השאילתה עצמה זהה לזו שמוזנת
@@ -22,16 +23,15 @@ export async function GET() {
         return NextResponse.json({ success: true, users: usersWithStats });
     } catch (e) {
         console.error('Admin users error:', e);
-        return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
+        return serverError();
     }
 }
 
 export async function PUT(request) {
     try {
         const session = await getServerSession(authOptions);
-        if (session?.user?.role !== 'admin') {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
+        const denied = requireAccess(session, isAdmin);
+        if (denied) return denied;
 
         const { userId, role, points, name, email, isSupervisor, dictaEditBlocked } = await request.json();
 
@@ -39,7 +39,7 @@ export async function PUT(request) {
 
         const currentUser = await User.findById(userId).select('email');
         if (!currentUser) {
-            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+            return notFound('User not found');
         }
 
         const emailChanged = email && email !== currentUser.email;
@@ -48,12 +48,12 @@ export async function PUT(request) {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             // codeql[js/polynomial-redos]: bound input length before testing.
             if (email.length > 254 || !emailRegex.test(email)) {
-                return NextResponse.json({ error: 'Invalid email address' }, { status: 400 });
+                return badRequest('Invalid email address');
             }
 
             const existingUser = await User.findOne({ email, _id: { $ne: userId } });
             if (existingUser) {
-                return NextResponse.json({ error: 'Email already in use' }, { status: 409 });
+                return apiError(409, 'Email already in use');
             }
         }
 
@@ -93,23 +93,22 @@ export async function PUT(request) {
         ).select('-password -resetPasswordToken -resetPasswordExpires -verificationToken -verificationTokenExpires -verificationRequestHistory -lastResetRequest -dailyResetRequestsCount');
 
         if (!updatedUser) {
-            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+            return notFound('User not found');
         }
 
         revalidateNow(CACHE_TAGS.USERS_ADMIN_LIST);
 
         return NextResponse.json({ success: true, user: updatedUser });
     } catch (error) {
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return serverError();
     }
 }
 
 export async function DELETE(request) {
     try {
         const session = await getServerSession(authOptions);
-        if (session?.user?.role !== 'admin') {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
+        const denied = requireAccess(session, isAdmin);
+        if (denied) return denied;
 
         const { userId } = await request.json();
         await connectDB();
@@ -130,6 +129,6 @@ export async function DELETE(request) {
 
         return NextResponse.json({ success: true });
     } catch (e) {
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return serverError();
     }
 }

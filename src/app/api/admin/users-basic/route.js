@@ -4,14 +4,14 @@ import User from '@/models/User';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasAnyAdminAccess } from '@/lib/roles';
+import { requireAccess, serverError } from '@/lib/apiResponse';
 
 // רשימת משתמשים בסיסית לצורך בחירת נמען בהודעות — נגיש לכל סוגי המנהלים
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    if (!hasAnyAdminAccess(session?.user?.role)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
+    const denied = requireAccess(session, hasAnyAdminAccess);
+    if (denied) return denied;
 
     await connectDB();
 
@@ -22,6 +22,6 @@ export async function GET() {
 
     return NextResponse.json({ success: true, users });
   } catch (e) {
-    return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

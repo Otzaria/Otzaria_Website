@@ -8,6 +8,7 @@ import ReminderHistory from '@/models/reminderHistory';
 import User from '@/models/User';
 import { hasBooksAccess } from '@/lib/roles';
 import { createSmtpTransport } from '@/lib/smtp-transport';
+import { requireAccess, badRequest, serverError } from '@/lib/apiResponse';
 
 // מאפשר עיצוב חופשי (תגיות/סגנון בסיסיים) אך חוסם script/iframe/event handlers וכד'.
 const EMAIL_HTML_OPTIONS = {
@@ -25,15 +26,14 @@ const EMAIL_HTML_OPTIONS = {
 export async function POST(request) {
     try {
         const session = await getServerSession(authOptions);
-        if (!session || !hasBooksAccess(session.user?.role)) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
+        const denied = requireAccess(session, hasBooksAccess);
+        if (denied) return denied;
 
         const body = await request.json();
         const { to, subject, text, html, bcc, cc, bookName, bookPath, isPartial } = body;
 
         if ((!to && !bcc) || !subject) {
-            return NextResponse.json({ error: 'Missing recipients or subject' }, { status: 400 });
+            return badRequest('Missing recipients or subject');
         }
 
         const allRecipients = new Set();
@@ -44,7 +44,7 @@ export async function POST(request) {
         const rawRecipientsArray = Array.from(allRecipients);
 
         if (rawRecipientsArray.length === 0) {
-            return NextResponse.json({ error: 'No recipients provided' }, { status: 400 });
+            return badRequest('No recipients provided');
         }
 
         await dbConnect();
@@ -61,10 +61,7 @@ export async function POST(request) {
         console.log(`[Server Check] Requests: ${rawRecipientsArray.length}, Valid: ${filteredRecipients.length}`);
 
         if (filteredRecipients.length === 0) {
-            return NextResponse.json({ 
-                success: false, 
-                error: 'לא נמצאו נמענים תקניים (מאומתים ומאשרי תזכורות) ברשימה שנשלחה.' 
-            }, { status: 400 });
+            return badRequest('לא נמצאו נמענים תקניים (מאומתים ומאשרי תזכורות) ברשימה שנשלחה.');
         }
 
         // transporter משותף עם אימות TLS מלא (rejectUnauthorized=true כברירת מחדל)
@@ -121,10 +118,7 @@ export async function POST(request) {
         }
 
         if (successful === 0 && filteredRecipients.length > 0) {
-            return NextResponse.json({ 
-                success: false, 
-                error: 'כל שליחות המיילים נכשלו. בדוק את הגדרות ה-SMTP בשרת.' 
-            }, { status: 500 });
+            return serverError('כל שליחות המיילים נכשלו. בדוק את הגדרות ה-SMTP בשרת.');
         }
 
         return NextResponse.json({ 
@@ -134,6 +128,6 @@ export async function POST(request) {
 
     } catch (error) {
         console.error('Main Email API Error:', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return serverError();
     }
 }
