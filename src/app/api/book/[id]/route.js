@@ -5,12 +5,13 @@ import Page from '@/models/Page';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBookLibraryAccess } from '@/lib/roles';
+import { unauthorized, forbidden, notFound, serverError } from '@/lib/apiResponse';
 
 export async function GET(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        return unauthorized('Unauthorized');
     }
     
     const userId = session.user.id || session.user._id;
@@ -29,15 +30,15 @@ export async function GET(request, { params }) {
     }).lean();
     
     if (!book) {
-      return NextResponse.json({ success: false, error: 'הספר לא נמצא' }, { status: 404 });
+      return notFound('הספר לא נמצא');
     }
 
     const isOwner = book.ownerId && (book.ownerId.toString() === userId.toString());
-    
+
     const isRestricted = book.isHidden || book.isPrivate;
 
     if (isRestricted && !isAdmin && !isOwner) {
-      return NextResponse.json({ success: false, error: 'אין הרשאות לצפייה בספר זה' }, { status: 403 });
+      return forbidden('אין הרשאות לצפייה בספר זה');
     }
 
     const pages = await Page.find({ book: book._id })
@@ -78,6 +79,6 @@ export async function GET(request, { params }) {
 
   } catch (error) {
     console.error('Get Book Error:', error);
-    return NextResponse.json({ success: false, error: 'שגיאה בטעינת הספר' }, { status: 500 });
+    return serverError('שגיאה בטעינת הספר');
   }
 }

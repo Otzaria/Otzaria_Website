@@ -4,28 +4,26 @@ import Page from '@/models/Page';
 import Book from '@/models/Book';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { unauthorized, badRequest, notFound, serverError } from '@/lib/apiResponse';
 
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session) return unauthorized('Unauthorized');
 
     const { pageId } = await request.json();
     await connectDB();
 
     const pageBefore = await Page.findOne({ _id: pageId, claimedBy: session.user._id });
-    
+
     if (!pageBefore) {
-        return NextResponse.json({ error: 'העמוד לא נמצא או שאינו משויך אליך' }, { status: 404 });
+        return notFound('העמוד לא נמצא או שאינו משויך אליך');
     }
 
     const parentBook = await Book.findById(pageBefore.book);
-    
+
     if (parentBook && (parentBook.isPrivate || parentBook.ownerId)) {
-        return NextResponse.json({ 
-            success: false, 
-            error: 'לא ניתן לשחרר עמודים בספר אישי' 
-        }, { status: 400 });
+        return badRequest('לא ניתן לשחרר עמודים בספר אישי');
     }
 
     const wasCompleted = pageBefore.status === 'completed';
@@ -46,6 +44,6 @@ export async function POST(request) {
 
   } catch (error) {
     console.error('Release Page Error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError('Internal Server Error');
   }
 }

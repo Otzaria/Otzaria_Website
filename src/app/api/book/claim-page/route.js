@@ -7,13 +7,14 @@ import mongoose from 'mongoose';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBookLibraryAccess } from '@/lib/roles';
+import { unauthorized, notFound, serverError } from '@/lib/apiResponse';
 
 export async function POST(request) {
     try {
         // 1. אימות סשן
         const session = await getServerSession(authOptions);
         if (!session) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+            return unauthorized('Unauthorized');
         }
 
         const userId = session.user.id || session.user._id;
@@ -39,10 +40,10 @@ export async function POST(request) {
 
         // 5. מציאת הספר והעמוד
         const book = await Book.findOne({ slug: decodeURIComponent(bookPath) });
-        if (!book) return NextResponse.json({ error: 'Book not found' }, { status: 404 });
+        if (!book) return notFound('Book not found');
 
         const page = await Page.findOne({ book: book._id, pageNumber });
-        if (!page) return NextResponse.json({ error: 'Page not found' }, { status: 404 });
+        if (!page) return notFound('Page not found');
 
         // 6. בדיקות בעלות (האם תפוס/הושלם ע"י אחר) — אדמין/admin_books עוקף
         const isAdmin = hasBookLibraryAccess(session.user.role);
@@ -76,6 +77,6 @@ export async function POST(request) {
 
     } catch (error) {
         console.error("Claim Page Error:", error);
-        return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
+        return serverError('Internal Server Error');
     }
 }
