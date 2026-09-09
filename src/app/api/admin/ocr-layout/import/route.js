@@ -11,6 +11,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasOcrAccess } from '@/lib/roles';
 import { resolveImageFsPath } from '@/lib/ocr/images';
 import { validatePrefill, TASK_KINDS } from '@/lib/ocr/layoutValidation';
+import { requireAccess, badRequest, serverError } from '@/lib/apiResponse';
 
 // פריקת אצווה יכולה לקחת זמן (מאות תמונות לדיסק)
 export const maxDuration = 300;
@@ -31,18 +32,17 @@ const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,59}$/;
 // עמוד שכבר נענה (submitted/approved) לא נדרס — נספר כ"דולג".
 export async function POST(request) {
   const session = await getServerSession(authOptions);
-  if (!hasOcrAccess(session?.user?.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const denied = requireAccess(session, hasOcrAccess);
+  if (denied) return denied;
 
   try {
     const formData = await request.formData();
     const file = formData.get('file');
     if (!file || typeof file.arrayBuffer !== 'function') {
-      return NextResponse.json({ success: false, error: 'חובה להעלות קובץ ZIP' }, { status: 400 });
+      return badRequest('חובה להעלות קובץ ZIP');
     }
     if (file.size > MAX_ZIP_BYTES) {
-      return NextResponse.json({ success: false, error: 'קובץ גדול מדי (מקסימום 500MB)' }, { status: 400 });
+      return badRequest('קובץ גדול מדי (מקסימום 500MB)');
     }
 
     const bytes = new Uint8Array(await file.arrayBuffer());
@@ -50,20 +50,17 @@ export async function POST(request) {
     try {
       entries = unzipSync(bytes);
     } catch {
-      return NextResponse.json({ success: false, error: 'קובץ ZIP לא תקין' }, { status: 400 });
+      return badRequest('קובץ ZIP לא תקין');
     }
 
     const tasksFile = entries['tasks.jsonl'];
     if (!tasksFile) {
-      return NextResponse.json(
-        { success: false, error: 'לא נמצא tasks.jsonl בשורש ה-ZIP — זו אינה אצוות תיוג-מבנה' },
-        { status: 400 }
-      );
+      return badRequest('לא נמצא tasks.jsonl בשורש ה-ZIP — זו אינה אצוות תיוג-מבנה');
     }
 
     const lines = new TextDecoder().decode(tasksFile).split('\n').filter((l) => l.trim());
     if (!lines.length || lines.length > MAX_RECORDS) {
-      return NextResponse.json({ success: false, error: 'מספר רשומות לא תקין ב-tasks.jsonl' }, { status: 400 });
+      return badRequest('מספר רשומות לא תקין ב-tasks.jsonl');
     }
 
     await connectDB();
@@ -213,6 +210,6 @@ export async function POST(request) {
     return NextResponse.json({ success: true, summary });
   } catch (err) {
     console.error('Admin OCR layout import error:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

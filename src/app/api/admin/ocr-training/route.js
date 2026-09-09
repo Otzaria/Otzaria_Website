@@ -10,13 +10,13 @@ import { hasOcrAccess } from '@/lib/roles';
 import { resolveImageFsPath } from '@/lib/ocr/images';
 import { LINES_PER_PAGE } from '@/lib/ocr/trainingValidation';
 import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
+import { requireAccess, badRequest, notFound, serverError } from '@/lib/apiResponse';
 
 // GET: רשימת כל עמודי האימון עם התקדמות סימון השורות.
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (!hasOcrAccess(session?.user?.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const denied = requireAccess(session, hasOcrAccess);
+  if (denied) return denied;
 
   try {
     await connectDB();
@@ -46,7 +46,7 @@ export async function GET() {
     return NextResponse.json({ success: true, pages });
   } catch (error) {
     console.error('OCR training list error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }
 
@@ -54,14 +54,13 @@ export async function GET() {
 // גוף: { bookId, pageNumber, scriptType? }  — יעד השורות קבוע (10) לכל העמודים.
 export async function POST(request) {
   const session = await getServerSession(authOptions);
-  if (!hasOcrAccess(session?.user?.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const denied = requireAccess(session, hasOcrAccess);
+  if (denied) return denied;
 
   try {
     const { bookId, pageNumber, scriptType } = await request.json();
     if (!bookId || !Number.isInteger(Number(pageNumber))) {
-      return NextResponse.json({ success: false, error: 'חסר מזהה ספר או מספר עמוד' }, { status: 400 });
+      return badRequest('חסר מזהה ספר או מספר עמוד');
     }
     const pageNum = Number(pageNumber);
     const script = scriptType === 'rashi' ? 'rashi' : 'square';
@@ -70,15 +69,12 @@ export async function POST(request) {
 
     const book = await Book.findById(bookId);
     if (!book) {
-      return NextResponse.json({ success: false, error: 'הספר לא נמצא' }, { status: 404 });
+      return notFound('הספר לא נמצא');
     }
 
     const page = await Page.findOne({ book: book._id, pageNumber: pageNum });
     if (!page) {
-      return NextResponse.json(
-        { success: false, error: `עמוד ${pageNum} לא קיים בספר זה` },
-        { status: 404 }
-      );
+      return notFound(`עמוד ${pageNum} לא קיים בספר זה`);
     }
 
     const exists = await OcrTrainingPage.findOne({ book: book._id, pageNumber: pageNum });
@@ -119,6 +115,6 @@ export async function POST(request) {
     return NextResponse.json({ success: true, id: String(doc._id) });
   } catch (error) {
     console.error('OCR training add error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

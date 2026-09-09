@@ -5,32 +5,31 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasOcrAccess } from '@/lib/roles';
 import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
+import { requireAccess, badRequest, notFound, serverError } from '@/lib/apiResponse';
 
 // DELETE: מחיקת עמוד אימון מהמאגר.
 export async function DELETE(request, { params }) {
   const session = await getServerSession(authOptions);
-  if (!hasOcrAccess(session?.user?.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const denied = requireAccess(session, hasOcrAccess);
+  if (denied) return denied;
   try {
     const { id } = await params;
     await connectDB();
     const res = await OcrTrainingPage.findByIdAndDelete(id);
-    if (!res) return NextResponse.json({ success: false, error: 'לא נמצא' }, { status: 404 });
+    if (!res) return notFound();
     revalidateNow(CACHE_TAGS.OCR_TRAINING_LIST);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('OCR training delete error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }
 
 // PATCH: פעולות ניהול. גוף: { action: 'release' } — משחרר שיוך משתמש ומחזיר ל-available.
 export async function PATCH(request, { params }) {
   const session = await getServerSession(authOptions);
-  if (!hasOcrAccess(session?.user?.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const denied = requireAccess(session, hasOcrAccess);
+  if (denied) return denied;
   try {
     const { id } = await params;
     const { action } = await request.json();
@@ -45,14 +44,14 @@ export async function PATCH(request, { params }) {
         },
         { returnDocument: 'after' }
       );
-      if (!doc) return NextResponse.json({ success: false, error: 'לא נמצא' }, { status: 404 });
+      if (!doc) return notFound();
       revalidateNow(CACHE_TAGS.OCR_TRAINING_LIST);
       return NextResponse.json({ success: true });
     }
 
-    return NextResponse.json({ success: false, error: 'פעולה לא מוכרת' }, { status: 400 });
+    return badRequest('פעולה לא מוכרת');
   } catch (error) {
     console.error('OCR training patch error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }
