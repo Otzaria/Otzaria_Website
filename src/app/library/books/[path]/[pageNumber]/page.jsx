@@ -21,6 +21,7 @@ import { getTextareaCaretTop } from '@/lib/editorUtils'
 import { findNextWholeWordInTextarea as findNextWholeWordInTextareaUtil } from '@/lib/hebrewWordUtils'
 import { hasBookLibraryAccess } from '@/lib/roles'
 import { useRequireAuth } from '@/hooks/useRequireAuth'
+import { computeImagePanelWidth, computeColumnWidth, computeOcrCropParams } from './panelResizeGeometry'
 
 // הגדרת ברירת מחדל המבוססת על מקשים פיזיים (Codes)
 const DEFAULT_SHORTCUTS = {
@@ -686,24 +687,12 @@ export default function EditPage() {
       const container = splitContainerRef.current
       if (!container) return
       const rect = container.getBoundingClientRect()
-      let newSize 
-      if (layoutOrientation === 'horizontal') {
-        newSize = swapPanels 
-          ? ((rect.bottom - e.clientY) / rect.height) * 100 
-          : ((e.clientY - rect.top) / rect.height) * 100    
-      } else {
-        newSize = swapPanels 
-            ? ((e.clientX - rect.left) / rect.width) * 100
-            : ((rect.right - e.clientX) / rect.width) * 100
-      }
-      setImagePanelWidth(Math.min(Math.max(newSize, 20), 80))
+      setImagePanelWidth(computeImagePanelWidth(rect, e.clientX, e.clientY, layoutOrientation, swapPanels))
     } else if (isColumnResizing) {
       const editorContainer = textEditorContainerRef.current
       if (!editorContainer) return
       const rect = editorContainer.getBoundingClientRect()
-      const relativeX = rect.right - e.clientX
-      const newWidth = (relativeX / rect.width) * 100
-      setColumnWidth(Math.min(Math.max(newWidth, 10), 90))
+      setColumnWidth(computeColumnWidth(rect, e.clientX))
     }
   }, [isResizing, isColumnResizing, layoutOrientation, swapPanels])
 
@@ -1108,19 +1097,18 @@ export default function EditPage() {
         const blob = await response.blob()
         const img = await createImageBitmap(blob)
         
+        const cropParams = computeOcrCropParams(selectionRect, rotation)
+
         const canvas = document.createElement('canvas')
-        canvas.width = selectionRect.width
-        canvas.height = selectionRect.height
+        canvas.width = cropParams.canvasWidth
+        canvas.height = cropParams.canvasHeight
         const ctx = canvas.getContext('2d')
-        
+
         ctx.translate(canvas.width / 2, canvas.height / 2)
-        
-        ctx.rotate((rotation * Math.PI) / 180)
-        
-        const selCenterX = selectionRect.x + selectionRect.width / 2
-        const selCenterY = selectionRect.y + selectionRect.height / 2
-        
-        ctx.drawImage(img, -selCenterX, -selCenterY)
+
+        ctx.rotate(cropParams.rotationRadians)
+
+        ctx.drawImage(img, cropParams.drawX, cropParams.drawY)
 
         const croppedBlob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.95))
         
@@ -1303,11 +1291,11 @@ export default function EditPage() {
       if (e.altKey) modifiers.push('Alt');
       if (e.shiftKey) modifiers.push('Shift');
       if (e.metaKey) modifiers.push('Meta');
-      
+
       const code = e.code; // שימוש בקוד הפיזי (למשל KeyS)
 
       const combination = [...modifiers, code].join('+');
-      
+
       // בדיקה אם הקומבינציה קיימת אצל המשתמש
       const foundActionId = Object.keys(userShortcuts).find(actionId => {
           const savedCombo = userShortcuts[actionId];
