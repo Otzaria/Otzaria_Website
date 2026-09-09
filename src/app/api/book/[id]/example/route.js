@@ -2,33 +2,34 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Book from '@/models/Book';
 import Page from '@/models/Page';
+import { notFound, serverError } from '@/lib/apiResponse';
 
 export async function GET(request, { params }) {
   try {
     await connectDB();
-    
-    const { id } = await params; 
+
+    const { id } = await params;
     const decodedId = decodeURIComponent(id);
 
-    const book = await Book.findOne({ 
-        $or: [{ slug: decodedId }, { name: decodedId }] 
+    const book = await Book.findOne({
+        $or: [{ slug: decodedId }, { name: decodedId }]
     }).lean();
-    
+
     if (!book) {
-      return NextResponse.json({ success: false, error: 'הספר לא נמצא' }, { status: 404 });
+      return notFound('הספר לא נמצא');
     }
 
     if (!book.examplePage) {
-        return NextResponse.json({ success: false, error: 'לא הוגדר עמוד דוגמא לספר זה' }, { status: 404 });
+        return notFound('לא הוגדר עמוד דוגמא לספר זה');
     }
 
-    const page = await Page.findOne({ 
-        book: book._id, 
-        pageNumber: book.examplePage 
+    const page = await Page.findOne({
+        book: book._id,
+        pageNumber: book.examplePage
     }).lean();
 
     if (!page) {
-        return NextResponse.json({ success: false, error: 'עמוד הדוגמא לא נמצא במערכת' }, { status: 404 });
+        return notFound('עמוד הדוגמא לא נמצא במערכת');
     }
 
     const contentData = {
@@ -50,6 +51,6 @@ export async function GET(request, { params }) {
 
   } catch (error) {
     console.error('Error fetching example page:', error);
-    return NextResponse.json({ success: false, error: 'שגיאה בשרת' }, { status: 500 });
+    return serverError('שגיאה בשרת');
   }
 }

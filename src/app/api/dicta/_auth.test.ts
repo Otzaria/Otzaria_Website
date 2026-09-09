@@ -19,14 +19,14 @@ describe("requireBooksAccessOrForbidden", () => {
     getServerSession.mockReset();
   });
 
-  it("returns a single 403 (not 401) when there is no session at all", async () => {
+  it("returns 401 (not 403) when there is no session at all", async () => {
     getServerSession.mockResolvedValue(null);
     const result = await requireBooksAccessOrForbidden();
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.response.status).toBe(403);
+      expect(result.response.status).toBe(401);
       const body = await result.response.json();
-      expect(body).toEqual({ error: "Forbidden: Admin access required" });
+      expect(body).toEqual({ error: "יש להתחבר כדי לבצע פעולה זו" });
     }
   });
 
@@ -36,6 +36,8 @@ describe("requireBooksAccessOrForbidden", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.response.status).toBe(403);
+      const body = await result.response.json();
+      expect(body).toEqual({ error: "אין הרשאה לבצע פעולה זו" });
     }
   });
 

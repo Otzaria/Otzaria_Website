@@ -6,11 +6,12 @@ import User from '@/models/User';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBookLibraryAccess } from '@/lib/roles';
+import { unauthorized, badRequest, notFound, serverError } from '@/lib/apiResponse';
 
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session) return unauthorized('Unauthorized');
 
     const { pageId } = await request.json();
     await connectDB();
@@ -25,13 +26,11 @@ export async function POST(request) {
     const page = await Page.findOne(query);
 
     if (!page) {
-        return NextResponse.json({ 
-            error: isAdmin ? 'Page not found' : 'Page not found or unauthorized' 
-        }, { status: 404 });
+        return notFound(isAdmin ? 'Page not found' : 'Page not found or unauthorized');
     }
 
     if (page.status !== 'in-progress' && page.status !== 'completed') {
-         return NextResponse.json({ error: 'Cannot complete page in current status' }, { status: 400 });
+         return badRequest('Cannot complete page in current status');
     }
 
     const wasAlreadyCompleted = page.status === 'completed';
@@ -89,7 +88,7 @@ export async function POST(request) {
 
   } catch (error) {
     console.error('Complete Page Error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError('Internal Server Error');
   }
 
 }

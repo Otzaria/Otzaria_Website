@@ -4,6 +4,7 @@ import DictaBook from '@/models/DictaBook';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { requireBooksAccessOrForbidden } from '../_auth';
+import { unauthorized, badRequest, serverError } from '@/lib/apiResponse';
 import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
 
 export async function GET() {
@@ -11,7 +12,7 @@ export async function GET() {
     // בדיקת התחברות
     const session = await getServerSession(authOptions);
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return unauthorized('Unauthorized');
     }
 
     await connectDB();
@@ -22,7 +23,7 @@ export async function GET() {
     return NextResponse.json(books);
   } catch (error) {
     console.error('Failed to fetch books:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError('Internal Server Error');
   }
 }
 
@@ -37,7 +38,7 @@ export async function POST(req) {
     const { title, content } = body;
 
     if (!title) {
-      return NextResponse.json({ error: 'Title is required' }, { status: 400 });
+      return badRequest('Title is required');
     }
 
     const newBook = await DictaBook.create({
@@ -51,6 +52,6 @@ export async function POST(req) {
     return NextResponse.json(newBook, { status: 201 });
   } catch (error) {
     console.error('Failed to create book:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError('Internal Server Error');
   }
 }

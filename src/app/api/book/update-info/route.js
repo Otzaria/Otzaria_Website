@@ -4,14 +4,14 @@ import Book from '@/models/Book';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBookLibraryAccess } from '@/lib/roles';
+import { requireAccess, notFound, serverError } from '@/lib/apiResponse';
 
 export async function POST(request) {
 
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !hasBookLibraryAccess(session.user?.role)) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
+    const denied = requireAccess(session, hasBookLibraryAccess);
+    if (denied) return denied;
 
     const body = await request.json();
     const { bookId, editingInfo, examplePage } = body;
@@ -34,12 +34,12 @@ export async function POST(request) {
 
     if (!book) {
         console.log('❌ Book not found in DB with ID:', bookId);
-        return NextResponse.json({ error: 'Book not found' }, { status: 404 });
+        return notFound('Book not found');
     }
 
     return NextResponse.json({ success: true, message: 'המידע עודכן' });
   } catch (error) {
     console.error('🔥 API ERROR:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError('Internal Server Error');
   }
 }
