@@ -75,13 +75,11 @@ export class VersionManager {
     const versionFilename = `v${versionNum}_${path.basename(this.filePath)}`;
     // הערת אבטחה: false positive מאומת עבור התראת CodeQL js/path-injection (נסגרה ידנית ב-GitHub, ראו הסבר): versionsDir derives from the
     // constructor-validated filePath; versionFilename is generated here, not user input.
-    // eslint-disable-next-line security/detect-non-literal-fs-filename
     const versionPath = path.join(this.versionsDir, versionFilename);
 
     // הערת אבטחה: false positive מאומת עבור התראת CodeQL js/path-injection (נסגרה ידנית ב-GitHub, ראו הסבר): filePath is validated in the constructor;
     // versionPath is built from versionsDir (also derived from the validated filePath) joined
     // with a filename this code generates itself (versionNum + basename), never user input.
-    // eslint-disable-next-line security/detect-non-literal-fs-filename
     await fs.copyFile(this.filePath, versionPath);
 
     // הערת אבטחה: false positive מאומת עבור התראת CodeQL js/path-injection (נסגרה ידנית ב-GitHub, ראו הסבר): versionPath is not user-controlled (see above).
@@ -116,16 +114,13 @@ export class VersionManager {
     // הערת אבטחה: false positive מאומת עבור התראת CodeQL js/path-injection (נסגרה ידנית ב-GitHub, ראו הסבר): versionInfo.filename comes from this.metadata
     // (written only by saveVersion(), never from external input), and versionsDir derives from
     // the constructor-validated filePath.
-    // eslint-disable-next-line security/detect-non-literal-fs-filename
     const versionPath = path.join(this.versionsDir, versionInfo.filename);
     // הערת אבטחה: false positive מאומת עבור התראת CodeQL js/path-injection (נסגרה ידנית ב-GitHub, ראו הסבר): see note above.
-    // eslint-disable-next-line security/detect-non-literal-fs-filename
     if (!fsSync.existsSync(versionPath)) return false;
 
     await this.saveVersion(`לפני שחזור לגירסה ${versionInfo.version}`);
     // הערת אבטחה: false positive מאומת עבור התראת CodeQL js/path-injection (נסגרה ידנית ב-GitHub, ראו הסבר): neither versionPath nor filePath is user input
     // here (see notes above and in the constructor).
-    // eslint-disable-next-line security/detect-non-literal-fs-filename
     await fs.copyFile(versionPath, this.filePath);
     this.metadata.current_version = versionInfo.version;
     await this.saveMetadata();

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import Header from '@/components/layout/Header'
 import { useDialog } from '@/components/providers/DialogContext'
 
@@ -523,12 +524,12 @@ export default function EditingToolsPage() {
                     למדריכים מפורטים על שימוש בכלי העריכה, בקר בעמוד המדריכים או בפורום הקהילה
                   </p>
                   <div className="flex gap-3">
-                    <a
+                    <Link
                       href="/docs"
                       className="text-sm text-primary hover:underline font-medium"
                     >
                       מדריכים
-                    </a>
+                    </Link>
                     <span className="text-on-surface/30">•</span>
                     <a
                       href="https://otzaria.org/forum"

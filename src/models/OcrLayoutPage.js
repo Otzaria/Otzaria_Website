@@ -40,10 +40,10 @@ const OcrLayoutPageSchema = new mongoose.Schema(
     pageStem: { type: String, required: true },
 
     // נתיב התמונה שמעליה מצוירות שכבות ה-prefill. שני מצבים:
-    //  • אצווה עם תמונות: תמונת העמוד המיושרת (deskew) שצורפה ל-ZIP,
-    //    ‏/uploads/ocr-layout/<batch>/… (חסומה כנכס סטטי).
-    //  • מצב-קישור (book מוגדר): מצביע לתמונת-הספר הקיימת באתר
-    //    ‏(/uploads/books/<slug>/page.N.jpg) — ה-prefill במרחב הסריקה
+    //  • אצווה עם תמונות: תמונת העמוד המיושרת (deskew) שצורפה ל-ZIP, בנתיב
+    //    /uploads/ocr-layout/<batch>/… (חסומה כנכס סטטי).
+    //  • מצב-קישור (book מוגדר): מצביע לתמונת-הספר הקיימת באתר, בנתיב
+    //    /uploads/books/<slug>/page.N.jpg — ה-prefill במרחב הסריקה
     //    המקורית, ולכן מתלבש עליה בלי צורך בהעלאה כפולה.
     // בשני המקרים התיבות ב-prefill הן בפיקסלים של התמונה הזו. מוגשת רק
     // דרך /api/ocr-layout/[id]/image.
