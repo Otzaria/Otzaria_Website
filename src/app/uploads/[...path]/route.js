@@ -74,7 +74,7 @@ export async function GET(request, { params }) {
     headers: {
       'Content-Type': contentType,
       'Content-Length': stat.size.toString(),
-      'Cache-Control': 'public, max-age=3600, must-revalidate',
+      'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800, must-revalidate',
       'Last-Modified': lastModified,
       'ETag': etag,
       'X-Content-Type-Options': 'nosniff',

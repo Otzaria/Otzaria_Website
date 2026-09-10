@@ -1,4 +1,4 @@
-import { cached, shabbatGatedCacheHeaders } from '@/lib/api-cache'
+import { cached } from '@/lib/api-cache'
 
 // הקובץ מתעדכן רק כשיוצאת גרסה חדשה של הכלי ב-GitHub, ולכן אין טעם להוריד
 // אותו מחדש מ-GitHub בכל בקשה — נשמר בזיכרון התהליך לזמן קצר, כמו ב-stats/github-releases.
@@ -32,9 +32,9 @@ export async function GET() {
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
         'Content-Disposition': `attachment; filename*=UTF-8''${filename}`,
-        // התשובה עצמה אינה נשמרת בדפדפן/CDN (חסימת השבת צריכה לחול על כל
-        // בקשה); מה שנחסך הוא הפנייה החוזרת ל-GitHub, דרך cached() למעלה.
-        ...shabbatGatedCacheHeaders()
+        // נתון ציבורי-לגמרי, לא תלוי-משתמש/session — ראו הערה מקבילה
+        // ב-book-acronyms/export-json ו-github-releases.
+        'Cache-Control': 'public, max-age=300, stale-while-revalidate=1200'
       }
     })
   } catch (error) {

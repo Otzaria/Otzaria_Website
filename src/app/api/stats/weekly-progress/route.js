@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Page from '@/models/Page';
-import { cached, shabbatGatedCacheHeaders } from '@/lib/api-cache';
+import { cached } from '@/lib/api-cache';
 import { serverError } from '@/lib/apiResponse';
 
 // הנתון הוא ספירת דפים לפי יום — אין טעם לחשב אותו מחדש לכל מבקר.
@@ -69,7 +69,11 @@ export async function GET() {
         const dayKey = new Date().toISOString().slice(0, 10);
         const payload = await cached(`weekly-progress:${dayKey}`, CACHE_TTL_MS, computeWeeklyProgress);
 
-        return NextResponse.json(payload, { headers: shabbatGatedCacheHeaders() });
+        // נתון ציבורי-אגרגטיבי-לגמרי (ספירת דפים כללית, לא תלוי-session/הרשאה) —
+        // מותר CDN/browser caching קצר, ראו הערה מקבילה ב-book-acronyms/export-json.
+        return NextResponse.json(payload, {
+            headers: { 'Cache-Control': 'public, max-age=60, stale-while-revalidate=300' }
+        });
     } catch (error) {
         console.error('Weekly stats error:', error);
         return serverError();

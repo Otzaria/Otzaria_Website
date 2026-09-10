@@ -143,10 +143,34 @@ const nextConfig = {
       // נכסי תמונה קבועים ב-public (נוצרים ב-scripts/optimize-assets.mjs). שמם אינו
       // ממוספר ב-hash — הם מוטמעים גם במיילים וב-HTML של דף השבת — ולכן חודש
       // במקום שנה, עם stale-while-revalidate כדי שהחלפה תתפוס בלי המתנה.
-      ...['/bg.avif', '/bg.webp', '/logo.webp', '/logo.png'].map((source) => ({
+      ...['/bg.avif', '/bg.webp', '/logo.webp', '/logo.png', '/background.png', '/shabbat/sabbath.png', '/spellcheck/:path*', '/תמונה-נטפרי.svg'].map((source) => ({
         source,
         headers: [
           { key: 'Cache-Control', value: 'public, max-age=2592000, stale-while-revalidate=604800' },
+        ],
+      })),
+      // עמודי שיווק סטטיים-בפועל, ללא תלות ב-session/DB. TTL קצר-בינוני עם
+      // stale-while-revalidate כדי לצמצם את חלון "הדליפה" מול שער השבת ב-src/proxy.js
+      // (המידלוור עדיין רץ בכל בקשה; זו רק פשרת caching בצד דפדפן/CDN).
+      ...['/', '/about', '/faq', '/donate', '/privacy', '/license', '/offline', '/docs'].map((source) => ({
+        source,
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=300, stale-while-revalidate=3600' },
+        ],
+      })),
+      {
+        // דף הבית של /library עצמו (לא /library/*) — Server Component ציבורי-לגמרי
+        // ללא session, אך "רגיש-שבת" יותר כי הוא בתוך אזור שבדרך כלל דורש הרשאה — TTL קצר יותר.
+        source: '/library',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=60, stale-while-revalidate=300' },
+        ],
+      },
+      // עמודי חנות התוספים הציבוריים — מיושר ל-revalidate=60 הקיים בקוד הדפים עצמם.
+      ...['/plugins', '/plugins/all', '/plugins/category/:slug*'].map((source) => ({
+        source,
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=60, stale-while-revalidate=300' },
         ],
       })),
     ];

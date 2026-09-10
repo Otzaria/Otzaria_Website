@@ -22,7 +22,7 @@ export async function GET(request, { params }) {
     const doc = await OcrLine.findById(id).lean();
     if (!doc) return notFound('Not found');
 
-    const cacheHeaders = { 'Cache-Control': 'private, max-age=3600' };
+    const cacheHeaders = { 'Cache-Control': 'private, max-age=86400, immutable' };
 
     if (full) {
       // העמוד המלא כפי שהוא — ההדגשה מצוירת בצד הלקוח לפי התיבה,

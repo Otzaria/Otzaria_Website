@@ -80,9 +80,8 @@ export async function GET(request) {
         categories: categoriesPayload,
         totalPublicPlugins
       },
-      // no-cache (ולא max-age): הדפדפן שומר אך מאמת מול השרת בכל טעינה, כדי
-      // שהשהיית תוסף/החזרתו תשתקף מיד בריענון רגיל ולא רק ברענון עמוק.
-      { headers: { 'Cache-Control': 'no-cache' } }
+      // TTL קצר: פשרה מכוונת בין עומס-שרת ל"תוסף שהושהה/חזר ממשיך להיות מוצג לא-מעודכן" לזמן קצר
+      { headers: { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=120' } }
     )
   } catch (error) {
     console.error('Error fetching store home:', error)

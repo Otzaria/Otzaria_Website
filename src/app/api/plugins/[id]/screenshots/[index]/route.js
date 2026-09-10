@@ -56,7 +56,7 @@ export async function GET(request, { params }) {
       headers: {
         'Content-Type': meta.contentType || 'application/octet-stream',
         'Content-Length': buf.length.toString(),
-        'Cache-Control': includePending ? 'private, no-store' : 'public, max-age=0, must-revalidate',
+        'Cache-Control': includePending ? 'private, no-store' : 'public, max-age=3600, stale-while-revalidate=2592000',
         'X-Content-Type-Options': 'nosniff'
       }
     })

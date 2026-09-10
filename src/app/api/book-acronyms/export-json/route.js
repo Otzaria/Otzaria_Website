@@ -1,6 +1,6 @@
 import connectDB from '@/lib/db'
 import BookAcronym from '@/models/BookAcronym'
-import { cached, shabbatGatedCacheHeaders } from '@/lib/api-cache'
+import { cached } from '@/lib/api-cache'
 
 // הרשימה המלאה משמשת יצוא/סנכרון חיצוני ואינה תלויה במשתמש, ולכן אין טעם
 // לשלוף ולמיין אותה מחדש מה-DB בכל בקשה (כמו ב-stats/github-releases).
@@ -56,9 +56,11 @@ export async function GET() {
       headers: {
         'Content-Type': 'application/json; charset=utf-8',
         'Content-Disposition': 'attachment; filename="book_acronym.json"',
-        // ראו הערה ב-header-processor/route.js: no-store נדרש בגלל חסימת
-        // השבת, לא בגלל שהנתונים משתנים לעיתים קרובות.
-        ...shabbatGatedCacheHeaders()
+        // נתון ציבורי-לגמרי, לא תלוי-משתמש/session (יצוא סנכרון חיצוני) —
+        // מאפשרים כאן CDN/browser caching קצר על אף שער השבת ב-src/proxy.js
+        // (פשרה מכוונת: בקשות שמוגשות מהמטמון של הדפדפן/CDN לא יעברו דרך
+        // ה-middleware בזמן שבת/יו"ט, ראו CLAUDE.md).
+        'Cache-Control': 'public, max-age=120, stale-while-revalidate=300'
       }
     })
   } catch (error) {

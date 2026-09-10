@@ -4,7 +4,7 @@ import Book from '@/models/Book';
 import Page from '@/models/Page';
 import User from '@/models/User';
 import DictaBook from '@/models/DictaBook';
-import { cached, shabbatGatedCacheHeaders } from '@/lib/api-cache';
+import { cached } from '@/lib/api-cache';
 import { serverError } from '@/lib/apiResponse';
 
 // מספרי הכותרת בדף הבית. אין סיבה להריץ את הספירות בכל ביקור.
@@ -80,7 +80,11 @@ async function computeStats() {
 export async function GET() {
   try {
     const payload = await cached('site-stats', CACHE_TTL_MS, computeStats);
-    return NextResponse.json(payload, { headers: shabbatGatedCacheHeaders() });
+    // נתון ציבורי-אגרגטיבי-לגמרי (ספירות כלליות, לא תלוי-session/הרשאה) —
+    // מותר CDN/browser caching קצר, ראו הערה מקבילה ב-book-acronyms/export-json.
+    return NextResponse.json(payload, {
+      headers: { 'Cache-Control': 'public, max-age=60, stale-while-revalidate=300' }
+    });
   } catch (error) {
     console.error('Stats API Error:', error);
     return serverError();

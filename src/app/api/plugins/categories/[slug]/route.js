@@ -62,8 +62,8 @@ export async function GET(request, { params }) {
         plugins: page.map((plugin) => resolveForAppVersion(formatPluginForPublic(plugin), appVersion)),
         total: ordered.length
       },
-      // no-cache: אימות מול השרת בכל טעינה — תוסף שהושהה/חזר מתעדכן מיד בריענון רגיל
-      { headers: { 'Cache-Control': 'no-cache' } }
+      // TTL קצר: פשרה מכוונת בין עומס-שרת ל"תוסף שהושהה/חזר ממשיך להיות מוצג לא-מעודכן" לזמן קצר
+      { headers: { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=120' } }
     )
   } catch (error) {
     console.error('Error fetching plugin category:', error)

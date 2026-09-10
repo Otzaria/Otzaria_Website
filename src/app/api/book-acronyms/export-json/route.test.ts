@@ -68,9 +68,11 @@ describe("GET /api/book-acronyms/export-json", () => {
     expect(findMock).toHaveBeenCalledTimes(1);
   });
 
-  it("sets no-store cache headers (Shabbat gate must see every request)", async () => {
+  it("sets short-lived public cache headers (public, non-user-dependent export)", async () => {
     findMock.mockReturnValue(makeQuery([]));
     const res = await GET();
-    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(res.headers.get("Cache-Control")).toBe(
+      "public, max-age=120, stale-while-revalidate=300"
+    );
   });
 });

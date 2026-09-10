@@ -56,7 +56,7 @@ export async function GET(request, { params }) {
     const doc = await OcrLayoutPage.findById(id).lean();
     if (!doc) return notFound('Not found');
 
-    const cacheHeaders = { 'Cache-Control': 'private, max-age=3600' };
+    const cacheHeaders = { 'Cache-Control': 'private, max-age=86400, immutable' };
 
     const task = taskIdx !== null ? (doc.tasks || [])[parseInt(taskIdx, 10)] : null;
     if (taskIdx !== null && !task) {

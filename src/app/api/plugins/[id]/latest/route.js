@@ -78,19 +78,22 @@ export async function GET(request, { params }) {
       )
     }
 
-    return NextResponse.json({
-      ...identity,
-      version: selected.version,
-      status: selected.status,
-      compatibleWith: selected.compatibleWith,
-      maxAppVersion: selected.maxAppVersion,
-      requiresNetwork: selected.requiresNetwork,
-      pluginFileSize: selected.pluginFileSize,
-      releasedAt: selected.releasedAt,
-      downloadUrl: selected.downloadUrl,
-      supportsDirectInstall: selected.supportsDirectInstall,
-      isLatest: selected.isLatest
-    })
+    return NextResponse.json(
+      {
+        ...identity,
+        version: selected.version,
+        status: selected.status,
+        compatibleWith: selected.compatibleWith,
+        maxAppVersion: selected.maxAppVersion,
+        requiresNetwork: selected.requiresNetwork,
+        pluginFileSize: selected.pluginFileSize,
+        releasedAt: selected.releasedAt,
+        downloadUrl: selected.downloadUrl,
+        supportsDirectInstall: selected.supportsDirectInstall,
+        isLatest: selected.isLatest
+      },
+      { headers: { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=120' } }
+    )
   } catch (error) {
     console.error('Error resolving latest plugin version:', error)
     return serverError('Failed to resolve plugin version')
