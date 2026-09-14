@@ -42,7 +42,8 @@
   בקובץ, **0-based**, כולל שורות ריקות/כותרות ריקות שדולגו (האינדקס ממשיך להיספר).
 - `book.sourceId → source.name` = תיקיית המקור במאגר `otzaria-library`
   (`ToratEmetToOtzaria`, `DictaToOtzaria`, `sefariaToOtzaria`, `MoreBooks`, ...).
-  **`Sefaria` (source 1) אין לו קובץ מקומי** (נבנה מה-API) → תמיד טיפול ידני.
+  **ספרי ספריא** (`Sefaria` / `sefariaToOtzaria`) אינם נבנים מקבצי `otzaria-library`: הגנרטור
+  בונה אותם מארכיון `Otzaria/SefariaExport`, והתיקייה ברשימה השחורה שלו → **טיפול חיצוני** (§1.4).
 - נתיב הספר שהתוכנה מציגה: `אוצריא/<קטגוריה>/.../<שם>.txt` (`BookDetailsService`). זהו
   **נתיב יחסי לשורש הספרים**, לא נתיב Git.
 - `schema_meta.db_version` = **מזהה בניית הספרייה** (`library_build_id`).
@@ -52,9 +53,8 @@
 ```
 <source_folder>/ספרים/אוצריא/<rest>                      (רוב המקורות)
 DictaToOtzaria/ערוך/ספרים/אוצריא/<rest>                  (DictaToOtzaria)
-sefariaToOtzaria/sefaria_export/ספרים/אוצריא/<rest>      (sefariaToOtzaria — שני שורשים!)
-sefariaToOtzaria/sefaria_api/ספרים/אוצריא/<rest>
 ```
+ספרי ספריא אינם ממופים לנתיב Git כלל — ראו §1.4.
 כאשר `<rest>` = `file_path` בלי הקידומת `אוצריא/`. שורש מאוחר יותר ברשימה דורס
 מוקדם יותר באריזה — לכן **קיום הקובץ בנתיב המשוער חייב להיבדק מול הריפו**, ואם
 הקובץ קיים ביותר משורש אחד → `source_ambiguous` → ידני. המיפוי הזה הוא **רמז** בלבד
@@ -96,6 +96,16 @@ service_capacity         unsupported_capability   manual_required
 | `text_correction` | הצעת תיקון מובנית: שורה מקורית + בחירה + הצעה. |
 
 ---
+
+### 1.4 ספרי ספריא — טיפול חיצוני
+
+- דיווח על ספר שמקורו ספריא מנותב ל-`external_handling` (`external_target: "sefaria_generator"`),
+  מצב נפרד מ-`manual_review`, ולעולם לא מגיע למפרסם GitHub.
+- נשמרת חבילת שינוי חיצונית עם מאתר: `book_title`, `he_ref` (לא יציב), `db_line_index`,
+  `library_version`, `original_line` (אחרי ניקוי הגנרטור, לא זהה בייט-לבייט למקור),
+  `original_line_sha256`, `new_line` (או `null`), היסטי הבחירה ומזהה הדיווח.
+- **פורמט הקובץ שהגנרטור יקלוט טרם הוגדר** — היום אין בגנרטור שכבת תיקון לשורה בספרי
+  ספריא. המרת החבילה לפורמט הסופי מבודדת בפונקציה אחת (`buildExternalSefariaPackage`).
 
 ## 2. חוזה A — תוכנה → אתר: `POST https://otzaria.org/api/reportingerrors`
 
