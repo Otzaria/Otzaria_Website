@@ -73,3 +73,24 @@ export function canManageLibrarySync(user) {
   if (!user) return false
   return user.role === ROLES.ADMIN || user.role === ROLES.ADMIN_BOOKS
 }
+
+// ===== תיקוני טקסט =====
+// טיפול/אישור תיקונים נפרד מניהול המערכת: מתנדב מסומן בדגל isCorrectionsVolunteer;
+// מנהל כללי ומנהל ספרים מקבלים את ההרשאה אוטומטית.
+
+/** רשאי לטפל בדיווחי תיקונים (לקחת, לאשר, לערוך, לדחות, להעביר) */
+export function canHandleCorrections(user) {
+  if (!user) return false
+  return user.role === ROLES.ADMIN || user.role === ROLES.ADMIN_BOOKS || user.isCorrectionsVolunteer === true
+}
+
+/** רשאי לנהל את מערכת התיקונים (בריאות, השהיית השירות, מינוי מתנדבים, טיפול חיצוני) */
+export function canManageCorrections(user) {
+  if (!user) return false
+  return user.role === ROLES.ADMIN || user.role === ROLES.ADMIN_BOOKS
+}
+
+/** הגדרות מערכת של התיקונים (מתג השירות) — מנהל כללי בלבד */
+export function canConfigureCorrections(user) {
+  return Boolean(user) && user.role === ROLES.ADMIN
+}

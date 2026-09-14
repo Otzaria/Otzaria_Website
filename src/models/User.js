@@ -51,6 +51,9 @@ const UserSchema = new mongoose.Schema({
   dictaEditBlockedReason: { type: String, default: '' },
   dictaEditBlockedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   dictaEditBlockedAt: { type: Date, default: null },
+
+  // מתנדב תיקוני טקסט: רשאי לטפל ולאשר תיקונים (נפרד מהרשאות ניהול המערכת)
+  isCorrectionsVolunteer: { type: Boolean, default: false },
 }, { timestamps: true });
 
 const User = mongoose.models.User || mongoose.model('User', UserSchema);
