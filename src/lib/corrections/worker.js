@@ -70,7 +70,7 @@ export async function claimJob(type, { workerId, now, leaseSeconds }) {
       ],
     },
     { $set: { status: 'leased', leaseOwner: workerId, leaseExpiresAt: new Date(now.getTime() + leaseSeconds * 1000) }, $inc: { fence: 1 } },
-    { new: true, sort: { nextAttemptAt: 1 } },
+    { returnDocument: 'after', sort: { nextAttemptAt: 1 } },
   ).lean();
 }
 
@@ -89,7 +89,7 @@ export async function handoffToManual(reportId, generation, reason, { now = new 
   const updated = await ErrorReport.findOneAndUpdate(
     { _id: reportId, workflowGeneration: generation, state: 'open', 'manual.status': { $ne: 'claimed' } },
     { $set: { ...manualQueueSet(reason, now), 'verification.status': verificationStatus, ...extraSet }, $inc: { workflowGeneration: 1 } },
-    { new: true },
+    { returnDocument: 'after' },
   ).lean();
   if (updated) await logEvent(reportId, 'handoff_manual', actor, updated.workflowGeneration, { reason, ...(data || {}) });
   return updated;
@@ -382,7 +382,7 @@ async function applyServiceDecision({ job, report, rev, source, value, authority
     }
   }
 
-  const updated = await ErrorReport.findOneAndUpdate(filter, update, { new: true }).lean();
+  const updated = await ErrorReport.findOneAndUpdate(filter, update, { returnDocument: 'after' }).lean();
   if (!updated) {
     // החבילה נוצרה לפני העדכון המותנה; כשהוא נכשל היא יתומה ולא מאושרת — מוסרת.
     if (changeId) await ChangePackage.deleteOne({ changeId });
@@ -471,7 +471,7 @@ export async function processPublishJob(job, { config, deps, now }) {
   const started = await ErrorReport.findOneAndUpdate(
     { _id: report._id, workflowGeneration: report.workflowGeneration, 'publish.changeId': change.changeId, state: 'open' },
     { $set: { 'publish.status': 'in_progress', 'publish.attemptId': attemptId, 'publish.updatedAt': now }, $inc: { 'publish.attempts': 1 } },
-    { new: true },
+    { returnDocument: 'after' },
   ).lean();
   if (!started) {
     await PublishAttempt.updateOne({ attemptId }, { $set: { status: 'failed', error: 'superseded_before_write', finishedAt: now } });

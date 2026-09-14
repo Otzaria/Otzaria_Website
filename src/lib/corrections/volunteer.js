@@ -173,13 +173,13 @@ export async function claimReport({ user, id, config, now = new Date() }) {
   let updated = await ErrorReport.findOneAndUpdate(
     { ...base, 'publish.status': { $nin: ['in_progress', 'unknown_needs_reconcile', 'pr_opened', 'ready'] } },
     { $set: claimSet, $inc: { workflowGeneration: 1 } },
-    { new: true },
+    { returnDocument: 'after' },
   ).lean();
   if (!updated) {
     updated = await ErrorReport.findOneAndUpdate(
       { ...base, 'publish.status': 'ready' },
       { $set: { ...claimSet, ...revokeSet }, $inc: { workflowGeneration: 1 } },
-      { new: true },
+      { returnDocument: 'after' },
     ).lean();
     revoked = Boolean(updated);
   }
@@ -202,7 +202,7 @@ export async function releaseReport({ user, id, generation, now = new Date() }) 
   if (!isId(id)) return err(404, 'not_found');
   const filter = { _id: id, workflowGeneration: generation, state: 'open', 'manual.status': 'claimed' };
   if (!canManageCorrections(user)) filter['manual.assignee'] = user._id;
-  const updated = await ErrorReport.findOneAndUpdate(filter, { $set: { ...manualQueueSet('volunteer_released', now), 'manual.status': 'released' } , $inc: { workflowGeneration: 1 } }, { new: true }).lean();
+  const updated = await ErrorReport.findOneAndUpdate(filter, { $set: { ...manualQueueSet('volunteer_released', now), 'manual.status': 'released' }, $inc: { workflowGeneration: 1 } }, { returnDocument: 'after' }).lean();
   if (!updated) return err(409, 'stale_view');
   await logEvent(updated._id, 'released', userActor(user), updated.workflowGeneration);
   return ok({ generation: updated.workflowGeneration });
@@ -219,7 +219,7 @@ export async function reassignReport({ user, id, generation, targetUserId, confi
   const updated = await ErrorReport.findOneAndUpdate(filter, {
     $set: { 'manual.status': 'claimed', 'manual.assignee': target._id, 'manual.assigneeName': target.name, 'manual.claimedAt': now, 'manual.leaseExpiresAt': lease, 'dispatch.verify': false, status: 'in_progress', assignedTo: target._id },
     $inc: { workflowGeneration: 1 },
-  }, { new: true }).lean();
+  }, { returnDocument: 'after' }).lean();
   if (!updated) return err(409, 'stale_view');
   await cancelActiveJobs(updated._id, 'verify', 'manual_reassign');
   await logEvent(updated._id, 'reassigned', userActor(user), updated.workflowGeneration, { to: String(target._id), toName: target.name });
@@ -259,10 +259,10 @@ async function approveRevision({ user, r, rev, pushRevision, config, deps, gener
   const decision = { decisionId: newId('dec'), source: 'volunteer', actorId: user._id, actorName: user.name, revision: rev.revision, generation, at: now };
 
   if (built.alreadyApplied) {
-    const set = { state: 'closed_already_fixed', status: 'resolved', 'publish.status': 'skipped_already_fixed', closedAt: now, resolvedAt: now, closeReason: 'volunteer_verified_already_fixed', 'manual.status': 'released', resolvedSource: { ...built.source, generation } };
+    const set = { state: 'closed_already_fixed', status: 'resolved', 'publish.status': 'skipped_already_fixed', closedAt: now, resolvedAt: now, closeReason: 'volunteer_verified_already_fixed', 'manual.status': 'none', resolvedSource: { ...built.source, generation } };
     const update = { $set: set, $inc: { workflowGeneration: 1 }, $push: { decisions: { ...decision, decision: 'already_fixed', reasonCode: 'ok' } } };
     if (pushRevision) { update.$push.proposals = pushRevision; update.$set.currentRevision = pushRevision.revision; }
-    const updated = await ErrorReport.findOneAndUpdate(filterBase, update, { new: true }).lean();
+    const updated = await ErrorReport.findOneAndUpdate(filterBase, update, { returnDocument: 'after' }).lean();
     if (!updated) return err(409, 'stale_view');
     await logEvent(r._id, 'closed_already_fixed', userActor(user), updated.workflowGeneration);
     return ok({ generation: updated.workflowGeneration, result: 'already_fixed' });
@@ -275,13 +275,13 @@ async function approveRevision({ user, r, rev, pushRevision, config, deps, gener
       'approval.authority': 'volunteer', 'approval.scope': 'technical_and_content', 'approval.by': user._id, 'approval.byName': user.name,
       'approval.at': now, 'approval.revision': rev.revision, 'approval.changeId': c.changeId,
       'publish.status': 'ready', 'publish.changeId': c.changeId, 'publish.conflictReason': null, 'publish.lastError': null,
-      'dispatch.publish': true, 'manual.status': 'released', resolvedSource: { ...built.source, generation: generation + 1 },
+      'dispatch.publish': true, 'manual.status': 'none', status: 'pending', assignedTo: null, resolvedSource: { ...built.source, generation: generation + 1 },
     },
     $inc: { workflowGeneration: 1 },
     $push: { decisions: { ...decision, decision: 'approved', scope: 'technical_and_content', reasonCode: 'ok', changeId: c.changeId } },
   };
   if (pushRevision) { update.$push.proposals = pushRevision; update.$set.currentRevision = pushRevision.revision; }
-  const updated = await ErrorReport.findOneAndUpdate(filterBase, update, { new: true }).lean();
+  const updated = await ErrorReport.findOneAndUpdate(filterBase, update, { returnDocument: 'after' }).lean();
   if (!updated) {
     await ChangePackage.deleteOne({ changeId: c.changeId });
     return err(409, 'stale_view');
@@ -335,11 +335,11 @@ export async function rejectReport({ user, id, generation, reason, now = new Dat
   const updated = await ErrorReport.findOneAndUpdate(
     { _id: r._id, workflowGeneration: generation, state: 'open', 'manual.assignee': user._id, 'publish.status': { $nin: ['in_progress', 'unknown_needs_reconcile', 'pr_opened'] } },
     {
-      $set: { state: 'closed_rejected', status: 'rejected', closedAt: now, resolvedAt: now, closeReason: 'volunteer_rejected', 'manual.status': 'released', 'dispatch.publish': false },
+      $set: { state: 'closed_rejected', status: 'rejected', closedAt: now, resolvedAt: now, closeReason: 'volunteer_rejected', 'manual.status': 'none', 'dispatch.publish': false },
       $inc: { workflowGeneration: 1 },
       $push: { decisions: { decisionId: newId('dec'), source: 'volunteer', decision: 'rejected', reasonCode: 'volunteer', message: reason.slice(0, 2000), actorId: user._id, actorName: user.name, revision: r.currentRevision, generation, at: now } },
     },
-    { new: true },
+    { returnDocument: 'after' },
   ).lean();
   if (!updated) return err(409, 'stale_view');
   await logEvent(r._id, 'rejected', userActor(user), updated.workflowGeneration, { reason: reason.slice(0, 500) });
@@ -353,11 +353,11 @@ export async function closeManualReport({ user, id, generation, note, now = new 
   const updated = await ErrorReport.findOneAndUpdate(
     { _id: r._id, workflowGeneration: generation, state: 'open', 'manual.assignee': user._id, 'publish.status': { $nin: ['in_progress', 'unknown_needs_reconcile', 'pr_opened'] } },
     {
-      $set: { state: 'closed_manual', status: 'resolved', closedAt: now, resolvedAt: now, closeReason: 'volunteer_closed', 'manual.status': 'released', 'dispatch.publish': false },
+      $set: { state: 'closed_manual', status: 'resolved', closedAt: now, resolvedAt: now, closeReason: 'volunteer_closed', 'manual.status': 'none', 'dispatch.publish': false },
       $inc: { workflowGeneration: 1 },
       $push: { decisions: { decisionId: newId('dec'), source: 'volunteer', decision: 'closed_manual', message: typeof note === 'string' ? note.slice(0, 2000) : '', actorId: user._id, actorName: user.name, generation, at: now } },
     },
-    { new: true },
+    { returnDocument: 'after' },
   ).lean();
   if (!updated) return err(409, 'stale_view');
   await logEvent(r._id, 'closed_manual', userActor(user), updated.workflowGeneration);
@@ -383,7 +383,7 @@ export async function resubmitToService({ user, id, generation, config, now = ne
       },
       $inc: { workflowGeneration: 1 },
     },
-    { new: true },
+    { returnDocument: 'after' },
   ).lean();
   if (!updated) return err(409, 'stale_view');
   await logEvent(r._id, 'resubmitted_to_service', userActor(user), updated.workflowGeneration, { requestId: updated.verification.requestId });
@@ -435,7 +435,7 @@ export async function externalTransition({ user, id, generation, action, note, n
   const updated = await ErrorReport.findOneAndUpdate(
     { _id: id, workflowGeneration: generation, state: 'awaiting_external' },
     { $set: set, $inc: { workflowGeneration: 1 }, $push: { decisions: { decisionId: newId('dec'), source: 'volunteer', decision: `external_${action}`, message: set['external.note'] || '', actorId: user._id, actorName: user.name, generation, at: now } } },
-    { new: true },
+    { returnDocument: 'after' },
   ).lean();
   if (!updated) return err(409, 'stale_view');
   await logEvent(updated._id, `external_${action}`, userActor(user), updated.workflowGeneration);

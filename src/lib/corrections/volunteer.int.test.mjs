@@ -96,6 +96,8 @@ test('[T28] ידני מלא מקצה לקצה בלי שירות: רשימה → 
   assert.equal(r.publish.status, 'ready');
   assert.ok(deriveLabels(r).some((l) => l.text === 'אושר וממתין לפרסום'));
   assert.equal(r.state, 'open', 'אישור מתנדב אינו "פורסם"');
+  assert.equal((await listReports({ user: users.a, query: { view: 'queued' } })).body.total, 0, 'מאושר אינו בתור הממתינים');
+  assert.equal((await listReports({ user: users.a, query: { view: 'publishing' } })).body.total, 1);
   await work(at(1));
   r = await ErrorReport.findById(id).lean();
   assert.equal(r.publish.status, 'pr_opened');
