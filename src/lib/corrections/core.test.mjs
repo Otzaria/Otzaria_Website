@@ -323,3 +323,16 @@ test('תוויות: כל תוויות הדרישות נגזרות מהמצב', (
   assert.ok(t({ state: 'closed_published', publish: { status: 'committed' } }).includes('פורסם במקור'));
   assert.ok(!t({ publish: { status: 'pr_opened' } }).includes('פורסם במקור'));
 });
+
+test('diff תצוגה: מילה + גרפמה (אות עם ניקוד לא מתפצלת), טקסט בלבד', async () => {
+  const { buildDiffView, graphemes, revealInvisible } = await import('./diff-view.js');
+  assert.deepEqual(graphemes('בְּרֵ'), ['בְּ', 'רֵ']);
+  const v = buildDiffView('בָּרָ֣א אֱלֹהִ֑ים', 'בָּרָ֣א אֱלֹקִ֑ים');
+  const change = v.find((s) => s.type === 'change');
+  assert.ok(change);
+  assert.deepEqual(change.before.filter((c) => c.type === 'del').map((c) => c.text), ['הִ֑']);
+  assert.deepEqual(change.after.filter((c) => c.type === 'add').map((c) => c.text), ['קִ֑']);
+  const html = buildDiffView('<b>x</b>', '<script>alert(1)</script>');
+  assert.ok(html.every((s) => (s.text === undefined || typeof s.text === 'string')));
+  assert.equal(revealInvisible('א\u00a0ב'), 'א⍽ב');
+});
