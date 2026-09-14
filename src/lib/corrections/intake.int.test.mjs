@@ -105,7 +105,7 @@ test('[T3] null (ללא הצעה) מול "" (מחיקה) נשמרים ומנות
   assert.equal(b.dispatch.verify, true);
 });
 
-test('[T6] שליחה חוזרת של אותו דיווח: אותו רישום, idempotent_replay, בלי כפילות', async (t) => {
+test('[T5][T6] שליחה חוזרת של אותו דיווח (תור אופליין/restart בתוכנה): אותו רישום, idempotent_replay, בלי כפילות', async (t) => {
   if (db.skip) return t.skip(db.skip);
   noSmtp();
   const first = await post(newClient('dup-1'));

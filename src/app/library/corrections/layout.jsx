@@ -10,8 +10,8 @@ export default function CorrectionsLayout({ children }) {
   const pathname = usePathname()
   const { data: session } = useSession()
   const tabs = [
-    { href: '/library/corrections', label: 'תור הדיווחים', icon: 'fact_check' },
-    ...(canManageCorrections(session?.user) ? [{ href: '/library/corrections/admin', label: 'ניהול ובריאות', icon: 'monitor_heart' }] : []),
+    { href: '/library/corrections', label: 'תור הדיווחים', icon: 'checklist' },
+    ...(canManageCorrections(session?.user) ? [{ href: '/library/corrections/admin', label: 'ניהול ובריאות', icon: 'analytics' }] : []),
   ]
   return (
     <div className="flex min-h-screen flex-col bg-background" dir="rtl">

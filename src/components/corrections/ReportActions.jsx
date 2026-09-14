@@ -39,7 +39,7 @@ export default function ReportActions({ detail, meId, busy, run }) {
           ? <span className="text-sm">בטיפול של <b>{report.manual.assigneeName}</b> עד {new Date(report.manual.leaseExpiresAt).toLocaleString('he-IL')}</span>
           : <span className="text-sm">הדיווח אינו משויך למטפל.</span>}
         <button disabled={busy} onClick={() => run({ action: 'claim' })} className={`${btn} bg-primary text-on-primary`}>
-          <span className="material-symbols-outlined text-base">front_hand</span> קח לטיפול
+          <span className="material-symbols-outlined text-base">back_hand</span> קח לטיפול
         </button>
       </div>
     )
@@ -64,8 +64,8 @@ export default function ReportActions({ detail, meId, busy, run }) {
         </button>
         <button disabled={busy} onClick={openEdit} className={`${btn} glass`}><span className="material-symbols-outlined text-base">edit</span> עריכה ואז אישור</button>
         <button disabled={busy} onClick={() => setMode('reject')} className={`${btn} glass text-danger-700`}><span className="material-symbols-outlined text-base">block</span> דחייה</button>
-        <button disabled={busy} onClick={() => setMode('reassign')} className={`${btn} glass`}><span className="material-symbols-outlined text-base">switch_account</span> העברה למטפל</button>
-        <button disabled={busy} onClick={() => setMode('source')} className={`${btn} glass`}><span className="material-symbols-outlined text-base">travel_explore</span> בחירת מקור ידנית</button>
+        <button disabled={busy} onClick={() => setMode('reassign')} className={`${btn} glass`}><span className="material-symbols-outlined text-base">swap_horiz</span> העברה למטפל</button>
+        <button disabled={busy} onClick={() => setMode('source')} className={`${btn} glass`}><span className="material-symbols-outlined text-base">find_in_page</span> בחירת מקור ידנית</button>
         {permissions.canVerify && rev && (
           <button disabled={busy} onClick={() => run({ action: 'resubmit', generation: g })} className={`${btn} glass`}><span className="material-symbols-outlined text-base">send</span> שליחה מחודשת לשירות</button>
         )}
