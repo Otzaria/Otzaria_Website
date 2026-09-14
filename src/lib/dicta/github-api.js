@@ -338,6 +338,7 @@ export function createRepoClient({ repo, token = null, fetchImpl = fetch, timeou
 
   return {
     repo,
+    fetchImpl,
     async getBranchHead(branch) {
       const info = await call(`/branches/${encodeURIComponent(branch)}`);
       return { commitSha: info?.commit?.sha, treeSha: info?.commit?.commit?.tree?.sha };

@@ -25,9 +25,9 @@ const MAX_LINE = 20_000;
 const ok = (body) => ({ status: 200, body });
 const err = (status, error, extra = {}) => ({ status, body: { error, ...extra } });
 
-function gitSourceFor(config, deps) {
+function gitSourceFor(config, deps, headTtlMs = 0) {
   const client = createRepoClient({ repo: config.source.repo, token: config.source.token || null, fetchImpl: deps?.githubFetch || fetch });
-  return createGitSource({ client, ref: config.source.ref, cache: getSharedSourceCache(config.cacheBytes) });
+  return createGitSource({ client, ref: config.source.ref, cache: getSharedSourceCache(config.cacheBytes), headTtlMs });
 }
 
 const isId = (id) => typeof id === 'string' && mongoose.isValidObjectId(id);
@@ -128,7 +128,7 @@ export async function getReportDetail({ user, id, config, deps }) {
   let sourceError = null;
   if (rev && r.state === 'open') {
     try {
-      source = await resolveSource({ report: r, revision: rev, gitSource: gitSourceFor(config, deps), source: config.source, override: overrideFor(rev) });
+      source = await resolveSource({ report: r, revision: rev, gitSource: gitSourceFor(config, deps, config.sourceHeadTtlMs), source: config.source, override: overrideFor(rev) });
     } catch (e) {
       sourceError = e.status ? `github_${e.status}` : 'source_unavailable';
     }

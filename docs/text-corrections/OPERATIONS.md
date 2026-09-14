@@ -70,6 +70,8 @@
 | `CORRECTIONS_GITHUB_REPO` / `_BRANCH` / `_TOKEN` | — | יעד הפרסום. **חובה להגדיר במפורש**; אין ברירת מחדל ליעד |
 | `CORRECTIONS_ALLOW_DIRECT_COMMIT` | כבוי | נדרש בנוסף ל-`direct` |
 | `CORRECTIONS_SOURCE_REPO` / `_REF` | `Otzaria/otzaria-library` / `main` | ממנו קוראים את המקור (קריאה בלבד) |
+| `CORRECTIONS_SOURCE_TOKEN` | טוקן הפרסום אם יש | טוקן קריאה. **מומלץ**: בלי טוקן GitHub מגביל ל-60 בקשות לשעה |
+| `CORRECTIONS_SOURCE_HEAD_TTL_SECONDS` / `_CACHE_BYTES` | 30 / 64MB | מטמון ראש הענף לתצוגות, ומטמון LRU לתוכן לפי blob sha ולרשימות תיקייה לפי קומיט |
 
 כללי בטיחות שנאכפים בקוד (`config.js`):
 

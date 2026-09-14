@@ -134,6 +134,8 @@ export function getCorrectionsConfig(env = process.env, runtime = {}) {
       claimMinutes: int(env.CORRECTIONS_CLAIM_MINUTES, 120, 5, 7 * 24 * 60),
     },
     cacheBytes: int(env.CORRECTIONS_SOURCE_CACHE_BYTES, 64 * 1024 * 1024, 1024 * 1024, 1024 * 1024 * 1024),
+    // תצוגת דיווח בלבד; אישור ופרסום תמיד קוראים את ה-head העדכני.
+    sourceHeadTtlMs: int(env.CORRECTIONS_SOURCE_HEAD_TTL_SECONDS, 30, 0, 600) * 1000,
   };
 }
 

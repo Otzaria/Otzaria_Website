@@ -12,6 +12,8 @@ export function gitBlobShaOfBytes(buffer) {
 }
 
 let sharedCache = null;
+// ראש ענף במטמון קצר לכל fetch (תצוגות UI בלבד); רשימות תיקייה לפי קומיט — בלתי משתנות.
+const headCaches = new WeakMap();
 export function getSharedSourceCache(maxBytes) {
   if (!sharedCache || sharedCache.maxBytes !== maxBytes) sharedCache = new ByteLru(maxBytes);
   return sharedCache;
@@ -20,7 +22,7 @@ export function getSharedSourceCache(maxBytes) {
 /**
  * @param {{client:ReturnType<import('../dicta/github-api.js').createRepoClient>, ref:string, cache:ByteLru}} opts
  */
-export function createGitSource({ client, ref, cache }) {
+export function createGitSource({ client, ref, cache, headTtlMs = 0 }) {
   async function loadBlob(sha) {
     const hit = cache.get(sha);
     if (hit) return hit;
@@ -35,15 +37,30 @@ export function createGitSource({ client, ref, cache }) {
 
   return {
     async getHead() {
+      const key = `${client.repo}@${ref}`;
+      let heads = client.fetchImpl ? headCaches.get(client.fetchImpl) : null;
+      if (headTtlMs > 0 && heads) {
+        const hit = heads.get(key);
+        if (hit && Date.now() - hit.at < headTtlMs) return hit.head;
+      }
       const head = await client.getBranchHead(ref);
       if (!head.commitSha) throw Object.assign(new Error('branch head missing'), { status: 404 });
+      if (client.fetchImpl) {
+        if (!heads) headCaches.set(client.fetchImpl, (heads = new Map()));
+        heads.set(key, { head, at: Date.now() });
+      }
       return head;
     },
     async getFile(path, commitSha) {
       const cut = path.lastIndexOf('/');
       const dir = path.slice(0, cut);
       const name = path.slice(cut + 1);
-      const entries = await client.listDir(dir, commitSha);
+      const dirKey = `dir:${client.repo}:${commitSha}:${dir}`;
+      let entries = cache.get(dirKey);
+      if (entries === undefined) {
+        entries = await client.listDir(dir, commitSha);
+        cache.set(dirKey, entries, 200 + (entries ? entries.length * 200 : 0));
+      }
       if (!entries) return null;
       let sha = entries.find((e) => e.name === name && e.type === 'file')?.sha || null;
       if (!sha && entries.length >= 1000) sha = (await client.getFileMeta(path, commitSha))?.sha || null;

@@ -31,6 +31,8 @@ export default function CorrectionsListPage() {
   const [kind, setKind] = useState('')
   const [source, setSource] = useState('')
   const [reason, setReason] = useState('')
+  const [assignee, setAssignee] = useState('')
+  const [handlers, setHandlers] = useState([])
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -42,6 +44,7 @@ export default function CorrectionsListPage() {
     if (kind) q.set('kind', kind)
     if (source.trim()) q.set('source', source.trim())
     if (reason) q.set('reason', reason)
+    if (assignee) q.set('assignee', assignee)
     try {
       const res = await fetch(`/api/corrections/reports?${q}`, { cache: 'no-store' })
       const body = await res.json()
@@ -52,9 +55,12 @@ export default function CorrectionsListPage() {
     } finally {
       setLoading(false)
     }
-  }, [view, kind, source, reason])
+  }, [view, kind, source, reason, assignee])
 
   useEffect(() => { load() }, [load])
+  useEffect(() => {
+    fetch('/api/corrections/handlers').then((r) => (r.ok ? r.json() : null)).then((b) => b && setHandlers(b.users)).catch(() => {})
+  }, [])
 
   return (
     <div className="space-y-4">
@@ -88,6 +94,13 @@ export default function CorrectionsListPage() {
           <select value={reason} onChange={(e) => setReason(e.target.value)} className="block mt-1 border rounded-lg px-2 py-1 bg-white">
             <option value="">הכל</option>
             {Object.entries(HANDOFF_REASON_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+        </label>
+        <label className="text-sm">
+          מטפל
+          <select value={assignee} onChange={(e) => setAssignee(e.target.value)} className="block mt-1 border rounded-lg px-2 py-1 bg-white">
+            <option value="">הכל</option>
+            {handlers.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
           </select>
         </label>
         <button onClick={load} className="px-3 py-1.5 rounded-lg glass hover:bg-surface-variant flex items-center gap-1">
