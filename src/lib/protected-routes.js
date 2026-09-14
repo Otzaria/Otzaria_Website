@@ -21,12 +21,14 @@ export const PROTECTED_PREFIXES = [
   '/library/dicta-books',
   '/library/ocr-training',
   '/library/ocr-lines',
+  '/library/corrections',
   '/api/admin',
   '/api/ocr-training',
   '/api/ocr-lines',
   '/api/library/book-info',
   '/api/library/book-acronyms',
   '/api/upload-text',
+  '/api/corrections',
 ]
 
 export const isProtectedPath = (path) =>
