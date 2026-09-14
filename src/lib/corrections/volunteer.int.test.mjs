@@ -370,3 +370,31 @@ test('טיפול חיצוני (ספריא): מעברים מותני-גרסה, מ
   assert.equal(r.state, 'closed_manual');
   assert.equal(r.external.status, 'resolved');
 });
+
+test('migration אידמפוטנטית: דיווחים ישנים לא נמחקים ושדותיהם נשמרים; ריצה שנייה לא משנה כלום', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { migrateLegacyReports } = await import('./migrate.js');
+  const base = { senderEmail: 'x@example.org', subject: 's', bookTitle: 'ספר', currentRef: 'א', lineNumber: 1, selectedText: 't', errorDetails: 'e', contextText: 'c', filePath: 'f', sourceFolder: 'MoreBooks', emailSent: true, adminNotes: 'הערה', createdAt: new Date('2025-01-01'), updatedAt: new Date('2025-01-01') };
+  await ErrorReport.collection.insertMany([
+    { ...base, reportId: 'l1', status: 'pending' },
+    { ...base, reportId: 'l2', status: 'in_progress' },
+    { ...base, reportId: 'l3', status: 'resolved' },
+    { ...base, reportId: 'l4', status: 'rejected' },
+  ]);
+  const newId = await ingest('new-after');
+  const dry = await migrateLegacyReports({ apply: false });
+  assert.equal(dry.matched, 4);
+  assert.equal(dry.modified, 0);
+  const first = await migrateLegacyReports({ apply: true });
+  assert.equal(first.modified, 4);
+  const second = await migrateLegacyReports({ apply: true });
+  assert.equal(second.matched, 0);
+  const docs = await ErrorReport.find({ reportId: { $in: ['l1', 'l2', 'l3', 'l4'] } }).sort({ reportId: 1 }).lean();
+  assert.deepEqual(docs.map((d) => d.state), ['open', 'open', 'closed_manual', 'closed_rejected']);
+  assert.deepEqual(docs.map((d) => d.status), ['pending', 'in_progress', 'resolved', 'rejected']);
+  assert.ok(docs.every((d) => d.adminNotes === 'הערה' && d.emailSent === true));
+  assert.equal(docs[0].manual.handoffReason, 'legacy_report');
+  assert.equal(new Date(docs[0].manual.queuedAt).toISOString(), '2025-01-01T00:00:00.000Z');
+  assert.equal((await ErrorReport.findById(newId).lean()).manual.handoffReason, 'service_disabled', 'דיווח חדש לא נגע');
+  assert.equal(await ErrorReport.countDocuments({}), 5);
+});
