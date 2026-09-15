@@ -42,7 +42,10 @@ function overrideFor(rev) {
 
 const LIST_FILTERS = {
   mine: (user) => ({ 'manual.status': 'claimed', 'manual.assignee': user._id }),
-  queued: () => ({ ...OPEN_FILTER, 'manual.status': { $in: ['queued', 'released', null] } }),
+  // שיוך שפג זמין שוב ללקיחה, ולכן מוצג בתור.
+  queued: (user, now) => ({
+    $and: [OPEN_FILTER, { $or: [{ 'manual.status': { $in: ['queued', 'released', null] } }, { 'manual.status': 'claimed', 'manual.leaseExpiresAt': { $lte: now } }] }],
+  }),
   claimed: () => ({ 'manual.status': 'claimed', state: 'open' }),
   auto: () => ({ state: 'open', 'verification.status': { $in: ['queued', 'in_progress'] } }),
   publishing: () => ({ state: 'open', 'publish.status': { $in: ['ready', 'in_progress', 'unknown_needs_reconcile', 'pr_opened', 'failed'] } }),
@@ -51,10 +54,10 @@ const LIST_FILTERS = {
   all: () => ({}),
 };
 
-export async function listReports({ user, query = {} }) {
+export async function listReports({ user, query = {}, now = new Date() }) {
   if (!canHandleCorrections(user)) return err(403, 'Forbidden');
   const view = LIST_FILTERS[query.view] ? query.view : 'queued';
-  const filter = { ...LIST_FILTERS[view](user) };
+  const filter = { ...LIST_FILTERS[view](user, now) };
   if (query.kind === 'free_text' || query.kind === 'text_correction') filter.reportKind = query.kind;
   if (typeof query.source === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(query.source)) filter.sourceFolder = query.source;
   if (typeof query.reason === 'string' && /^[a-z_:]{1,60}$/.test(query.reason)) filter['manual.handoffReason'] = query.reason;

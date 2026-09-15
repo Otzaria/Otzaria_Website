@@ -423,3 +423,14 @@ test('העברה למטפל אינה משייכת דיווח שאישורו ממ
   assert.equal(r.manual.status, 'none');
   assert.equal(r.publish.status, 'ready');
 });
+
+test('שיוך שפג חוזר לתצוגת התור הממתין (לא נעלם מהרשימה)', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const id = await ingest('expired-claim');
+  assert.equal((await act(users.a, id, { action: 'claim' })).status, 200);
+  const during = await listReports({ user: users.b, query: { view: 'queued' }, now: at(60) });
+  assert.equal(during.body.total, 0);
+  const later = at(CONFIG.manual.claimMinutes * 60 + 1);
+  const expired = await listReports({ user: users.b, query: { view: 'queued' }, now: later });
+  assert.deepEqual(expired.body.items.map((i) => i.id), [id]);
+});
