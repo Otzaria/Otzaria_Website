@@ -32,6 +32,7 @@ export function deriveLabels(r) {
   if (pub.status === 'skipped_already_fixed' || r.state === 'closed_already_fixed') add('already_fixed', 'כבר תוקן במקור', 'success');
   if (r.inclusion?.status === 'included_in_release') add('in_release', 'נכלל בגרסת ספרייה', 'success');
   if (r.state === 'closed_rejected') add('rejected', 'נדחה', 'danger');
+  if (r.state === 'email_only') add('email_only', 'נשלח במייל בלבד — לא נכנס למערכת', 'info');
   if (!isFinalState(r.state) && r.resolvedSource?.status === 'already_applied') add('looks_fixed', 'נראה שכבר תוקן במקור', 'info');
   return out;
 }

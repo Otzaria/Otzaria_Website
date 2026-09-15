@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import {
-  VERIFICATION_STATUS, EXTERNAL_STATUS, EXTERNAL_TARGETS, APPROVAL_AUTHORITY, APPROVAL_SCOPE, MANUAL_STATUS, PUBLISH_STATUS, INCLUSION_STATUS, REPORT_STATE,
+  VERIFICATION_STATUS, APPROVAL_AUTHORITY, APPROVAL_SCOPE, MANUAL_STATUS, PUBLISH_STATUS, INCLUSION_STATUS, REPORT_STATE,
 } from '../lib/corrections/states.js';
 
 // גרסת הצעה — בלתי משתנה אחרי יצירתה; עריכה יוצרת revision חדשה.
@@ -130,16 +130,6 @@ const ErrorReportSchema = new mongoose.Schema({
     releaseId: String,
     at: Date,
   },
-  // ספרי ספריא: חבילת איתור חיצונית (לא פורמט המחולל — ראו buildExternalSefariaPackage).
-  external: {
-    target: { type: String, enum: EXTERNAL_TARGETS },
-    status: { type: String, enum: EXTERNAL_STATUS },
-    package: { type: mongoose.Schema.Types.Mixed },
-    decidedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    decidedByName: String,
-    decidedAt: Date,
-    note: String,
-  },
   // outbox: הצורך בעיבוד נשמר באותו מסמך כמו הדיווח (קליטה אטומית בלי טרנזקציה).
   dispatch: {
     verify: Boolean,
@@ -159,6 +149,5 @@ ErrorReportSchema.index({ state: 1, 'manual.status': 1, createdAt: -1 });
 ErrorReportSchema.index({ 'dispatch.verify': 1 }, { partialFilterExpression: { 'dispatch.verify': true } });
 ErrorReportSchema.index({ 'dispatch.publish': 1 }, { partialFilterExpression: { 'dispatch.publish': true } });
 ErrorReportSchema.index({ 'publish.status': 1 });
-ErrorReportSchema.index({ 'external.status': 1 });
 
 export default mongoose.models.ErrorReport || mongoose.model('ErrorReport', ErrorReportSchema);

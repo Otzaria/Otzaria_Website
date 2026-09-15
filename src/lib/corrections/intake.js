@@ -1,16 +1,15 @@
 /**
  * קליטה אטומית של דיווח (CONTRACT §2): הדיווח והצורך בעיבוד (תור ידני / outbox
- * לבדיקה / טיפול חיצוני) נכתבים באותו insert יחיד — אין חלון שבו דיווח נשמר בלי תור.
+ * לבדיקה) נכתבים באותו insert יחיד — אין חלון שבו דיווח נשמר בלי תור.
  */
 import ErrorReport from '../../models/ErrorReport.js';
 import { computeNewLine } from './payload.js';
-import { routeSourceKind } from './resolver.js';
-import { buildExternalSefariaPackage, EXTERNAL_TARGET } from './external.js';
+import { reachesOtzariaInbox } from './report-email.js';
 import { newId, logEvent } from './store.js';
 
 /** מחשב את ניתוב הקליטה (טהור). */
-export function planIntakeRouting({ kind, correction, sourceKind, verifyConfig }) {
-  if (sourceKind === 'external_handling') return { route: 'external' };
+export function planIntakeRouting({ kind, correction, reachesOtzaria, verifyConfig }) {
+  if (!reachesOtzaria) return { route: 'email_only' };
   if (kind !== 'text_correction') return { route: 'manual', reason: 'free_text', verification: 'not_requested' };
   if (correction.proposedText === null) return { route: 'manual', reason: 'no_proposal', verification: 'not_requested' };
   if (/[\r\n]/.test(computeNewLine(correction))) return { route: 'manual', reason: 'structural_change', verification: 'not_requested' };
@@ -55,14 +54,14 @@ function buildDoc({ legacy, validated, config, now }) {
   const plan = planIntakeRouting({
     kind: validated.kind,
     correction: validated.correction,
-    sourceKind: routeSourceKind(doc),
+    // אותו ערך שהמייל מנותב לפיו, כדי שהשרת לא יכריע אחרת מתיבת הדואר.
+    reachesOtzaria: reachesOtzariaInbox(legacy.source_folder),
     verifyConfig: config.verify,
   });
-  if (plan.route === 'external') {
-    doc.state = 'awaiting_external';
+  if (plan.route === 'email_only') {
+    doc.state = 'email_only';
     doc.manual = { status: 'none' };
     doc.verification = { status: 'not_requested' };
-    doc.external = { target: EXTERNAL_TARGET, status: 'awaiting_external', package: null };
   } else if (plan.route === 'verify') {
     doc.manual = { status: 'none' };
     doc.verification = { status: 'queued', requestId: newId('req'), requestedScope: config.verify.requestedScope, attempts: 0 };
@@ -84,7 +83,6 @@ export async function ingestReport({ legacy, validated, config, now = new Date()
 
   const { doc, plan } = buildDoc({ legacy, validated, config, now });
   const created = new ErrorReport(doc);
-  if (plan.route === 'external') created.external.package = buildExternalSefariaPackage(created.toObject());
   try {
     await created.save();
   } catch (err) {

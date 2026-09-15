@@ -336,6 +336,19 @@ function getEmailRecipients(sourceFolder) {
   };
 }
 
+/**
+ * האם מייל הדיווח מגיע לתיבת אוצריא (כנמען ראשי או בעותק) — תנאי הכניסה למערכת התיקונים.
+ * נגזר מ-getEmailRecipients בלבד, כדי שלא יהיו שני כללים שיכולים לסטות זה מזה.
+ */
+export function reachesOtzariaInbox(sourceFolder) {
+  const { primary, cc } = getEmailRecipients(sourceFolder);
+  const otzaria = normalizeRecipient(REPORTING_ERRORS_RECIPIENT);
+  return normalizeRecipient(primary) === otzaria || normalizeRecipient(cc) === otzaria;
+}
+
+/** אותו כלל כמסנן MongoDB לדיווחים ישנים: תיקייה שאינה מגיעה לאוצריא. */
+export const NON_OTZARIA_SOURCE_FOLDER_RE = /sefaria/i;
+
 function buildSefariaLink(bookTitle, currentRef) {
   if (!bookTitle || !currentRef) return '';
   

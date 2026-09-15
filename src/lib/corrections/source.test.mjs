@@ -4,12 +4,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { splitSourceLines, joinSourceLines, applyLineChange } from './source-text.js';
-import { resolveSource, matchLine, candidatePaths, isAllowedRepoPath, routeSourceKind } from './resolver.js';
+import { resolveSource, matchLine, candidatePaths, isAllowedRepoPath } from './resolver.js';
 import { createGitSource, gitBlobShaOfBytes } from './git-source.js';
 import { ByteLru } from './lru.js';
 import { publishChange, reconcilePublish, prBranchName, sanitizePublicText, PublishConflict } from './publisher.js';
-import { buildExternalSefariaPackage } from './external.js';
-import { sha256Hex, computeChangeDigest } from './ocj1.js';
+import { computeChangeDigest } from './ocj1.js';
 import { createRepoClient } from '../dicta/github-api.js';
 import { FakeGitHub } from './testing/fake-github.js';
 
@@ -56,7 +55,6 @@ test('[T22] טקסט חוזר: שינוי רק בשורה לפי אינדקס, �
 test('מיפוי נתיבים: רמז הופך לנתיב Git מועמד בלבד; traversal ונתיב לא מורשה נדחים', () => {
   assert.deepEqual(candidatePaths({ sourceFolder: 'ToratEmetToOtzaria', libraryRelativePath: 'אוצריא/תנך/תורה/בראשית.txt' }), [PATH]);
   assert.deepEqual(candidatePaths({ sourceFolder: 'DictaToOtzaria', libraryRelativePath: 'אוצריא/א.txt' }), ['DictaToOtzaria/ערוך/ספרים/אוצריא/א.txt']);
-  assert.deepEqual(candidatePaths({ sourceFolder: 'sefariaToOtzaria', libraryRelativePath: 'אוצריא/א.txt' }), []);
   assert.deepEqual(candidatePaths({ sourceFolder: 'X', libraryRelativePath: 'אוצריא/../../etc/passwd.txt' }), []);
   assert.deepEqual(candidatePaths({ sourceFolder: '../x', libraryRelativePath: 'אוצריא/a.txt' }), []);
   assert.equal(isAllowedRepoPath(PATH), true);
@@ -100,37 +98,6 @@ test('[T23] resolver מזהה שהתיקון כבר הוחל במקום הנכו
   const elsewhere = setup({ [PATH]: `${FILE}\n${NEW2}`.replace(`${L2}\r\n`, 'אחרת\r\n') });
   const e = await resolveSource({ report: report(), revision: rev(), gitSource: elsewhere.git, source: { repo: REPO, ref: 'main' } });
   assert.notEqual(e.status, 'already_applied');
-});
-
-test('ספרי ספריא → external_handling (לא נתיב Git), ושאר המקורות לא מושפעים', async () => {
-  assert.equal(routeSourceKind(report({ sourceFolder: 'sefariaToOtzaria', sourceHint: null })), 'external_handling');
-  assert.equal(routeSourceKind(report({ sourceFolder: 'Sefaria' })), 'external_handling');
-  assert.equal(routeSourceKind(report({ sourceHint: { sourceName: 'Sefaria', sourceFolder: 'x' } })), 'external_handling');
-  assert.equal(routeSourceKind(report()), 'repo');
-  const { gh, git } = setup();
-  const r = await resolveSource({ report: report({ sourceFolder: 'sefariaToOtzaria', sourceHint: null }), revision: rev(), gitSource: git, source: { repo: REPO, ref: 'main' } });
-  assert.equal(r.status, 'external_handling');
-  assert.equal(gh.calls.length, 0);
-});
-
-test('חבילה חיצונית לספריא מכילה את שדות המאתר, בלי פורמט מחולל ממוצא', () => {
-  const r = report({ sourceFolder: 'sefariaToOtzaria', reportId: 'c1', currentRevision: 1, libraryVersion: '27', location: { lineIndex: 4, libraryBuildId: '28' }, proposals: [rev()] });
-  const p = buildExternalSefariaPackage(r);
-  assert.equal(p.external_target, 'sefaria_generator');
-  assert.equal(p.generator_format, null);
-  assert.equal(p.book_title, 'בראשית');
-  assert.equal(p.he_ref, 'בראשית א');
-  assert.equal(p.he_ref_stable, false);
-  assert.equal(p.db_line_index, 4);
-  assert.equal(p.library_version, '28');
-  assert.equal(p.original_line, L2);
-  assert.equal(p.original_line_sha256, sha256Hex(L2));
-  assert.equal(p.new_line, NEW2);
-  assert.deepEqual(Object.keys(p).includes('selection_offset'), true);
-  assert.equal(p.report_id, 'rep1');
-  const free = buildExternalSefariaPackage(report({ sourceFolder: 'Sefaria', proposals: undefined }));
-  assert.equal(free.new_line, null);
-  assert.equal(free.original_line_sha256, null);
 });
 
 function changeFor(gh, over = {}) {

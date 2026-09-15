@@ -6,6 +6,7 @@ import { randomUUID } from 'crypto';
 import ErrorReport from '../../models/ErrorReport.js';
 import CorrectionEvent from '../../models/CorrectionEvent.js';
 import { legacyStateFromStatus } from './states.js';
+import { reachesOtzariaInbox, NON_OTZARIA_SOURCE_FOLDER_RE } from './report-email.js';
 
 export const newId = (prefix) => `${prefix}_${randomUUID().replace(/-/g, '')}`;
 
@@ -45,11 +46,14 @@ export function manualQueueSet(reason, now) {
 }
 
 /** מסנן לדיווחים פתוחים, כולל דיווחים ישנים שעוד לא עברו migration. */
-export const OPEN_FILTER = { $or: [{ state: 'open' }, { state: { $exists: false }, status: { $in: ['pending', 'in_progress'] } }] };
+export const OPEN_FILTER = {
+  $or: [{ state: 'open' }, { state: { $exists: false }, status: { $in: ['pending', 'in_progress'] }, sourceFolder: { $not: NON_OTZARIA_SOURCE_FOLDER_RE } }],
+};
 
 /** שדרוג עצל ואידמפוטנטי של דיווח ישן למודל החדש (זהה ל-migration). */
 export function legacyUpgradeSet(r, now = new Date()) {
-  const state = legacyStateFromStatus(r.status);
+  const legacyState = legacyStateFromStatus(r.status);
+  const state = legacyState === 'open' && !reachesOtzariaInbox(r.sourceFolder) ? 'email_only' : legacyState;
   const set = {
     state,
     schemaVersion: r.schemaVersion || 1,
@@ -66,6 +70,8 @@ export function legacyUpgradeSet(r, now = new Date()) {
     set['manual.status'] = 'queued';
     set['manual.handoffReason'] = 'legacy_report';
     set['manual.queuedAt'] = r.createdAt || now;
+  } else if (state === 'email_only') {
+    set['manual.status'] = 'none';
   } else {
     set['manual.status'] = 'none';
     set.closeReason = 'legacy_closed';

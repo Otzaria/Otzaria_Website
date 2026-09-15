@@ -26,9 +26,6 @@ const EVENT_LABELS = {
   publish_reconciled: 'בדיקת תוצאת פרסום לא ידועה',
   pr_merged: 'ה-PR מוזג',
   pr_closed_unmerged: 'ה-PR נסגר בלי מיזוג',
-  external_resolve: 'טיפול חיצוני: טופל',
-  external_reject: 'טיפול חיצוני: נדחה',
-  external_return_to_manual: 'הוחזר מטיפול חיצוני',
 }
 
 const AUTHOR = { user: 'המשתמש', service: 'שירות הבדיקה', volunteer: 'מתנדב' }

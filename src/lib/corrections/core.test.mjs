@@ -299,14 +299,15 @@ test('בקשת בדיקה נבנית מההצעה והמקור בלבד (בלי 
   assert.equal(req.workflow_generation, 3);
 });
 
-test('[T8][T28] ניתוב קליטה: חופשי/ללא הצעה/שירות כבוי → ידני; שירות פעיל → outbox', () => {
+test('[T8][T28] ניתוב קליטה: חופשי/ללא הצעה/שירות כבוי → ידני; שירות פעיל → outbox; מייל שלא לאוצריא → email_only', () => {
   const corr = { originalLine: 'א ב', originalSelection: null, proposedText: 'א ג', contextBefore: '', contextAfter: '' };
   const off = { enabled: false, disabledReason: 'service_not_configured' };
-  assert.deepEqual(planIntakeRouting({ kind: 'free_text', correction: null, sourceKind: 'repo', verifyConfig: off }).route, 'manual');
-  assert.equal(planIntakeRouting({ kind: 'text_correction', correction: corr, sourceKind: 'repo', verifyConfig: off }).reason, 'service_not_configured');
-  assert.equal(planIntakeRouting({ kind: 'text_correction', correction: { ...corr, proposedText: null }, sourceKind: 'repo', verifyConfig: { enabled: true } }).reason, 'no_proposal');
-  assert.equal(planIntakeRouting({ kind: 'text_correction', correction: corr, sourceKind: 'repo', verifyConfig: { enabled: true } }).route, 'verify');
-  assert.equal(planIntakeRouting({ kind: 'text_correction', correction: { ...corr, proposedText: 'א\nב' }, sourceKind: 'repo', verifyConfig: { enabled: true } }).reason, 'structural_change');
+  assert.deepEqual(planIntakeRouting({ kind: 'free_text', correction: null, reachesOtzaria: true, verifyConfig: off }).route, 'manual');
+  assert.equal(planIntakeRouting({ kind: 'text_correction', correction: corr, reachesOtzaria: true, verifyConfig: off }).reason, 'service_not_configured');
+  assert.equal(planIntakeRouting({ kind: 'text_correction', correction: { ...corr, proposedText: null }, reachesOtzaria: true, verifyConfig: { enabled: true } }).reason, 'no_proposal');
+  assert.equal(planIntakeRouting({ kind: 'text_correction', correction: corr, reachesOtzaria: true, verifyConfig: { enabled: true } }).route, 'verify');
+  assert.equal(planIntakeRouting({ kind: 'text_correction', correction: { ...corr, proposedText: 'א\nב' }, reachesOtzaria: true, verifyConfig: { enabled: true } }).reason, 'structural_change');
+  assert.equal(planIntakeRouting({ kind: 'text_correction', correction: corr, reachesOtzaria: false, verifyConfig: { enabled: true } }).route, 'email_only');
 });
 
 test('תוויות: כל תוויות הדרישות נגזרות מהמצב', () => {

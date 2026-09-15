@@ -9,10 +9,8 @@ export const APPROVAL_SCOPE = ['none', 'technical_only', 'technical_and_content'
 export const MANUAL_STATUS = ['none', 'queued', 'claimed', 'released'];
 export const PUBLISH_STATUS = ['not_ready', 'ready', 'in_progress', 'unknown_needs_reconcile', 'pr_opened', 'committed', 'failed', 'skipped_already_fixed'];
 export const INCLUSION_STATUS = ['unknown', 'merged_to_main', 'included_in_release'];
-export const REPORT_STATE = ['open', 'awaiting_external', 'closed_published', 'closed_already_fixed', 'closed_rejected', 'closed_manual'];
-// טיפול חיצוני (ספרי ספריא): לעולם לא מתפרסם ל-GitHub.
-export const EXTERNAL_STATUS = ['awaiting_external', 'resolved', 'rejected', 'returned_to_manual'];
-export const EXTERNAL_TARGETS = ['sefaria_generator'];
+// email_only: המייל אינו מגיע לתיבת אוצריא (reachesOtzariaInbox) — נשמר ונשלח כמו תמיד, בלי עיבוד.
+export const REPORT_STATE = ['open', 'email_only', 'closed_published', 'closed_already_fixed', 'closed_rejected', 'closed_manual'];
 export const JOB_TYPES = ['verify', 'publish'];
 export const JOB_STATUS = ['pending', 'leased', 'done', 'failed', 'cancelled'];
 
@@ -66,5 +64,4 @@ export const HANDOFF_REASON_LABELS = {
   claim_expired: 'תוקף השיוך פג',
   final_state: 'הדיווח כבר סגור',
   manual_active: 'מתנדב כבר מטפל',
-  returned_from_external: 'הוחזר מטיפול חיצוני',
 };

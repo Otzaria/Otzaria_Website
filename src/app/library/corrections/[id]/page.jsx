@@ -11,7 +11,6 @@ import TextDiff from '@/components/corrections/TextDiff'
 import ChangeDiff from '@/components/corrections/ChangeDiff'
 import ReportActions from '@/components/corrections/ReportActions'
 import HistoryPanel from '@/components/corrections/HistoryPanel'
-import ExternalPanel from '@/components/corrections/ExternalPanel'
 import { committedNewLine } from '@/lib/corrections/unified-diff'
 
 const ERRORS = {
@@ -37,7 +36,6 @@ const SOURCE_STATUS = {
   selection_not_found: 'השורה לא נמצאה',
   not_found: 'הקובץ לא נמצא במאגר',
   ambiguous: 'כמה התאמות — עמום',
-  external_handling: 'ספר מספריא — טיפול חיצוני',
   manual_only: 'נדרש איתור ידני',
   no_proposal: 'אין שורה מקורית (דיווח חופשי)',
   invalid_path: 'נתיב לא מורשה',
@@ -121,17 +119,16 @@ export default function CorrectionReportPage() {
   if (!detail) return <LoadingSpinner />
   const { report, source, sourceError } = detail
   const rev = report.proposals.find((p) => p.revision === report.currentRevision) || null
-  const external = Boolean(report.external?.target)
-  const currentLine = external ? rev?.originalLine ?? null : source?.currentLine ?? null
+  const currentLine = source?.currentLine ?? null
   const targetLine = rev ? rev.newLine : null
-  const sourceSubtitle = external ? 'אחרי ניקוי הגנרטור — לא בהכרח זהה לגולמי בארכיון' : source ? `${SOURCE_STATUS[source.status] || source.status}${source.path ? ` · ${source.path}` : ''}${Number.isInteger(source.lineIndex) ? ` · שורה ${source.lineIndex + 1}` : ''}${source.commitSha ? ` · ${source.commitSha.slice(0, 8)}` : ''}` : sourceError ? `המקור אינו זמין כרגע (${sourceError})` : 'לא נטען'
+  const sourceSubtitle = source ? `${SOURCE_STATUS[source.status] || source.status}${source.path ? ` · ${source.path}` : ''}${Number.isInteger(source.lineIndex) ? ` · שורה ${source.lineIndex + 1}` : ''}${source.commitSha ? ` · ${source.commitSha.slice(0, 8)}` : ''}` : sourceError ? `המקור אינו זמין כרגע (${sourceError})` : 'לא נטען'
   // הקשר מהקובץ רק כשהשורה אותרה בוודאות; אחרת — השורה מהדיווח בלבד, בלי מספרים מנוחשים.
-  const fileDiff = !external && source?.context && (source.status === 'exact' || source.status === 'relocated')
+  const fileDiff = source?.context && (source.status === 'exact' || source.status === 'relocated')
   const diff = fileDiff
     ? { before: source.currentLine, after: committedNewLine(source, targetLine), context: source.context, lineIndex: source.lineIndex, path: source.path, contextNote: null }
     : {
         before: rev?.originalLine ?? '', after: targetLine, context: null, lineIndex: null, path: null,
-        contextNote: external ? 'ספר מספריא — אין קובץ מקור במאגר; ההשוואה מול השורה מה-DB של התוכנה.' : `הקשר מהקובץ אינו זמין (${source ? SOURCE_STATUS[source.status] || source.status : sourceError ? 'המקור אינו זמין כרגע' : 'המקור לא נטען'}) — מוצגת השורה כפי שנשלחה מהתוכנה.`,
+        contextNote: `הקשר מהקובץ אינו זמין (${source ? SOURCE_STATUS[source.status] || source.status : sourceError ? 'המקור אינו זמין כרגע' : 'המקור לא נטען'}) — מוצגת השורה כפי שנשלחה מהתוכנה.`,
       }
   const expandContext = () => {
     setExpanding(true)
@@ -177,8 +174,6 @@ export default function CorrectionReportPage() {
         </div>
       </section>
 
-      {external ? <ExternalPanel detail={detail} onDone={load} /> : null}
-
       {rev && (
         <>
           <ChangeDiff
@@ -191,7 +186,7 @@ export default function CorrectionReportPage() {
               <div className="space-y-4">
                 <section className="grid gap-4 md:grid-cols-2">
                   <LineBox
-                    title={external ? 'הנוסח הנוכחי (מ-DB של התוכנה)' : 'המקור העדכני במאגר'}
+                    title="המקור העדכני במאגר"
                     tone="source"
                     subtitle={sourceSubtitle}
                     text={currentLine}

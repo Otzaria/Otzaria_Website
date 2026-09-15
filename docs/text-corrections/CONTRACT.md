@@ -42,8 +42,8 @@
   בקובץ, **0-based**, כולל שורות ריקות/כותרות ריקות שדולגו (האינדקס ממשיך להיספר).
 - `book.sourceId → source.name` = תיקיית המקור במאגר `otzaria-library`
   (`ToratEmetToOtzaria`, `DictaToOtzaria`, `sefariaToOtzaria`, `MoreBooks`, ...).
-  **ספרי ספריא** (`Sefaria` / `sefariaToOtzaria`) אינם נבנים מקבצי `otzaria-library`: הגנרטור
-  בונה אותם מארכיון `Otzaria/SefariaExport`, והתיקייה ברשימה השחורה שלו → **טיפול חיצוני** (§1.4).
+  דיווחים על ספרים שהמייל שלהם אינו מגיע לתיבת אוצריא (למשל ספריא) אינם נכנסים למערכת
+  התיקונים כלל (§1.4).
 - נתיב הספר שהתוכנה מציגה: `אוצריא/<קטגוריה>/.../<שם>.txt` (`BookDetailsService`). זהו
   **נתיב יחסי לשורש הספרים**, לא נתיב Git.
 - `schema_meta.db_version` = **מזהה בניית הספרייה** (`library_build_id`).
@@ -54,7 +54,7 @@
 <source_folder>/ספרים/אוצריא/<rest>                      (רוב המקורות)
 DictaToOtzaria/ערוך/ספרים/אוצריא/<rest>                  (DictaToOtzaria)
 ```
-ספרי ספריא אינם ממופים לנתיב Git כלל — ראו §1.4.
+דיווח שאינו זכאי למערכת (§1.4) לא מגיע לשלב המיפוי כלל.
 כאשר `<rest>` = `file_path` בלי הקידומת `אוצריא/`. שורש מאוחר יותר ברשימה דורס
 מוקדם יותר באריזה — לכן **קיום הקובץ בנתיב המשוער חייב להיבדק מול הריפו**, ואם
 הקובץ קיים ביותר משורש אחד → `source_ambiguous` → ידני. המיפוי הזה הוא **רמז** בלבד
@@ -97,18 +97,20 @@ service_capacity         unsupported_capability   manual_required
 
 ---
 
-### 1.4 ספרי ספריא — טיפול חיצוני
+### 1.4 זכאות למערכת התיקונים — המייל מגיע לאוצריא
 
-- דיווח על ספר שמקורו ספריא מנותב ל-`external_handling` (`external_target: "sefaria_generator"`),
-  מצב נפרד מ-`manual_review`, ולעולם לא מגיע לשירות הבדיקה או למפרסם GitHub.
-  באתר זה המצב `awaiting_external`; מעבריו (טופל / נדחה עם סיבה / הוחזר לידני) מותנים בגרסה.
-- **זיהוי (כלל אחד בשני הצדדים):** `source_folder` בהשוואה case-insensitive מדויקת לאחד מ-
-  `{sefaria, sefariatootzaria}`, או `source_hint.source_name === "Sefaria"`. לא התאמת תת-מחרוזת.
-- נשמרת חבילת שינוי חיצונית עם מאתר: `book_title`, `he_ref` (לא יציב), `db_line_index`,
-  `library_version`, `original_line` (אחרי ניקוי הגנרטור, לא זהה בייט-לבייט למקור),
-  `original_line_sha256`, `new_line` (או `null`), היסטי הבחירה ומזהה הדיווח.
-- **פורמט הקובץ שהגנרטור יקלוט טרם הוגדר** — היום אין בגנרטור שכבת תיקון לשורה בספרי
-  ספריא. המרת החבילה לפורמט הסופי מבודדת בפונקציה אחת (`buildExternalSefariaPackage`).
+- **כלל אחד:** דיווח נכנס למערכת התיקונים רק אם מייל ההתראה שלו מגיע לתיבת אוצריא (כנמען
+  ראשי או בעותק), לפי ניתוב המייל הקיים (`getEmailRecipients` → `reachesOtzariaInbox`),
+  ולפי אותו ערך `source_folder` שהמייל מנותב לפיו.
+- היום: `source_folder` שמכיל `sefaria` (תת-מחרוזת, בלי תלות ברישיות) → המייל לספריא
+  (+ עותק לתא שמע) ולא לאוצריא → **לא זכאי**. כל השאר → **זכאי**: מקור עם מייל משלו — המייל
+  לאוצריא + עותק למקור; בלי תיקייה / ברירת מחדל — לאוצריא בלבד.
+- דיווח לא זכאי נשמר (כולל כללי idempotency/409) ונשלח במייל בדיוק כמו קודם, במצב
+  `email_only`: לא תור ידני, לא שירות הבדיקה, ולעולם לא מתפרסם. דיווח v2 עם `correction`
+  ממקור כזה **אינו נדחה** — נשמר כ-`email_only`.
+- דיווח זכאי נשלח במייל כרגיל (גם למקור, אם יש לו מייל) ובמקביל נכנס למערכת.
+- **התוכנה** אינה מציעה את מסלול "הצעת תיקון" לספרים שאינם זכאים (אותו כלל: `source_folder`
+  מכיל `sefaria`, בלי תלות ברישיות) — שם יש רק דיווח חופשי. ההכרעה המחייבת היא תמיד של השרת.
 
 ## 2. חוזה A — תוכנה → אתר: `POST https://otzaria.org/api/reportingerrors`
 
@@ -465,7 +467,7 @@ approval.authority  : none | service | volunteer          approval.scope: none |
 manual.status       : none | queued | claimed | released  (+ handoff_reason, assignee, lease_expires_at)
 publish.status      : not_ready | ready | in_progress | unknown_needs_reconcile | pr_opened | committed | failed | skipped_already_fixed
 inclusion.status    : unknown | merged_to_main | included_in_release (+ release_id אם ידוע)
-report.status       : open | closed_published | closed_already_fixed | closed_rejected | closed_manual
+report.status       : open | email_only | closed_published | closed_already_fixed | closed_rejected | closed_manual
 ```
 
 מעברי מצב מתבצעים **תמיד** עם תנאי גרסה (`workflow_generation` / lease fence) בעדכון

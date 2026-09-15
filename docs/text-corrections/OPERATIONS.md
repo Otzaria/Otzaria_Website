@@ -6,7 +6,7 @@
 ## 1. מבט על
 
 ```
-תוכנת אוצריא ──POST /api/reportingerrors──▶ ErrorReport (insert יחיד: דיווח + תור ידני / outbox / טיפול חיצוני)
+תוכנת אוצריא ──POST /api/reportingerrors──▶ ErrorReport (insert יחיד: דיווח + תור ידני / outbox, או email_only)
                                                  │
             worker (/api/cron/corrections-worker, כל ~30 שניות)
                  ├─ outbox → CorrectionJob (verify / publish)
@@ -31,7 +31,6 @@
 | איתור מקור | `resolver.js`, `git-source.js`, `source-text.js` |
 | פרסום | `publisher.js` מעל `src/lib/dicta/github-api.js` (`createRepoClient`) |
 | מתנדבים | `volunteer.js`, `actions.js`, `http.js`, `src/app/api/corrections/**`, `src/app/library/corrections/**` |
-| טיפול חיצוני (ספריא) | `external.js` (`buildExternalSefariaPackage`) |
 | migration | `src/lib/corrections/migrate.js`, `scripts/migrate-corrections.mjs` |
 
 **תקרות בקליטה.** נדחים (413/400, בלי חיתוך) רק השדות המדויקים של `correction` (20,000 כל אחד) וגוף
@@ -45,7 +44,7 @@
 
 | שדה | ערכים |
 |---|---|
-| `state` | `open`, `awaiting_external`, `closed_published`, `closed_already_fixed`, `closed_rejected`, `closed_manual` |
+| `state` | `open`, `email_only`, `closed_published`, `closed_already_fixed`, `closed_rejected`, `closed_manual` |
 | `verification.status` | `not_requested`, `queued`, `in_progress`, `completed`, `failed`, `superseded`, `skipped_service_disabled` |
 | `approval.authority` / `approval.scope` | `none`/`service`/`volunteer` ו-`none`/`technical_only`/`technical_and_content` |
 | `manual.status` | `none`, `queued`, `claimed`, `released` (+ `handoffReason`, `assignee`, `leaseExpiresAt`) |
@@ -178,21 +177,16 @@ pm2 save
 | מתנדב חדש | דף **ניהול ובריאות** → מתנדבי תיקונים → סימון "מתנדב" (מנהל ספרים/כללי). ההרשאה אינה נותנת גישה לפאנל הניהול |
 | דיווח תקוע בבדיקה | מתנדב לוקח אותו (הבדיקה נפסלת), או השהיית השירות |
 
-## 7. ספרי ספריא — טיפול חיצוני
+## 7. דיווחים שאינם נכנסים למערכת (`email_only`)
 
-ספרים שמקורם ספריא (`source_folder` = `sefariaToOtzaria`/`Sefaria`, או `source_hint.source_name = "Sefaria"`)
-אינם נבנים מקבצי `otzaria-library` אלא מארכיון `Otzaria/SefariaExport` בגנרטור. לכן:
+הזכאות נקבעת לפי ניתוב המייל הקיים (`getEmailRecipients` ב-`report-email.js`, דרך `reachesOtzariaInbox`)
+ולפי אותו `source_folder` (CONTRACT §1.4):
 
-- בקליטה הם מנותבים ל-`state=awaiting_external` (`external.target = sefaria_generator`) — לא לתור הידני,
-  לא לשירות הבדיקה, ולעולם לא למפרסם. ה-resolver לא מנסה נתיבי `sefariaToOtzaria` כלל.
-- נשמרת חבילת איתור (`external.package`, מ-`buildExternalSefariaPackage`): `book_title`, `he_ref`
-  (`he_ref_stable:false`), `db_line_index`, `library_version`, `original_line` (הנוסח ב-DB אחרי ניקוי הגנרטור),
-  `original_line_sha256`, `new_line` (או `null`), היסטי הבחירה, מזהי הדיווח. `generator_format: null` —
-  פורמט הקובץ שהגנרטור יקלוט טרם נקבע; כשייקבע, מחליפים רק את `buildExternalSefariaPackage`.
-- בממשק: לשונית **טיפול חיצוני (ספריא)**; מנהל ספרים/כללי יכול לסמן "טופל", "נדחה" (עם סיבה) או להחזיר
-  לטיפול ידני. כל מעבר מותנה בגרסה.
-- ייצוא: `GET /api/corrections/admin/external-export` (כפתור "ייצוא JSON") — כל הפריטים הממתינים. אין שליחה אוטומטית.
-- מייל ההתראה הקיים לספריא (corrections@sefaria.org) ממשיך כמו קודם.
+- המייל מגיע לתיבת אוצריא (ראשי או עותק) → הדיווח נכנס למערכת; המייל למקור (אם יש) ממשיך במקביל.
+- המייל לא מגיע לאוצריא (היום: `source_folder` שמכיל `sefaria`, בלי תלות ברישיות) → `state=email_only`:
+  נשמר ונשלח במייל בדיוק כמו קודם, בלי תור ידני, בלי בדיקה ובלי פרסום. מופיע רק בלשונית "הכל".
+- שינוי נמעני המייל ב-`getEmailRecipients` משנה אוטומטית גם את הזכאות. דיווחים ישנים שעוד לא עברו
+  migration ממופים לפי אותו כלל (`NON_OTZARIA_SOURCE_FOLDER_RE` — חייב להישאר תואם, מכוסה בבדיקה).
 
 ## 8. Rollout
 

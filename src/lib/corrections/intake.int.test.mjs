@@ -8,6 +8,8 @@ import CorrectionEvent from '../../models/CorrectionEvent.js';
 import { handleReportingErrorsPost } from './reporting-handler.js';
 import { getCorrectionsConfig } from './config.js';
 import { startMongo } from './testing/mongo.js';
+import { notifyReportByEmail } from './report-email.js';
+import { OPEN_FILTER } from './store.js';
 
 let db;
 before(async () => { db = await startMongo(); });
@@ -20,11 +22,11 @@ const noSmtp = () => { for (const k of SMTP_KEYS) delete process.env[k]; };
 const offConfig = getCorrectionsConfig({});
 const onConfig = getCorrectionsConfig({ CORRECTIONS_VERIFY_ENABLED: '1', CORRECTIONS_VERIFY_URL: 'http://127.0.0.1:9', CORRECTIONS_VERIFY_SECRET: 's' });
 
-async function post(body, { config = offConfig, connectDB = async () => {}, raw = false } = {}) {
+async function post(body, { config = offConfig, connectDB = async () => {}, raw = false, notify } = {}) {
   const req = new Request('http://localhost/api/reportingerrors', {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: raw ? body : JSON.stringify(body),
   });
-  const res = await handleReportingErrorsPost(req, { connectDB, config, rateLimit: () => true });
+  const res = await handleReportingErrorsPost(req, { connectDB, config, rateLimit: () => true, notify });
   return { status: res.status, body: await res.json() };
 }
 
@@ -203,20 +205,73 @@ test('כשל DB → 500 savedToDatabase:false (לא מוצג כהצלחה); גו
   assert.equal(await ErrorReport.countDocuments({}), 0);
 });
 
-test('ספר מספריא → awaiting_external עם חבילת איתור, לא לתור הידני ולא לבדיקה', async (t) => {
+// מייל אמיתי (notifyReportByEmail) מול transport מדומה — לבדוק שהניתוב נשאר כמו קודם.
+function captureMail(t) {
+  const sent = [];
+  for (const k of SMTP_KEYS) process.env[k] = k === 'SMTP_PORT' ? '25' : 'x';
+  process.env.SMTP_FROM = 'site@otzaria.org';
+  t.after(noSmtp);
+  const notify = (p) => notifyReportByEmail(p, { transportFactory: () => ({ sendMail: async (m) => { sent.push(m); } }) });
+  return { sent, notify };
+}
+
+const pipelineCounts = async (reportId) => ({
+  queue: await ErrorReport.countDocuments({ $and: [OPEN_FILTER, { reportId }] }),
+  outbox: await ErrorReport.countDocuments({ reportId, state: 'open', 'dispatch.verify': true }),
+});
+
+test('ספריא (המייל לא מגיע לאוצריא) → email_only: נשמר ונשלח לספריא כמו קודם, לא לתור ולא לבדיקה', async (t) => {
   if (db.skip) return t.skip(db.skip);
-  noSmtp();
-  await post(newClient('sef-1', {}, { source_folder: 'sefariaToOtzaria', source_hint: { source_folder: 'sefariaToOtzaria', source_name: 'Sefaria', library_relative_path: 'אוצריא/x.txt' } }), { config: onConfig });
+  const { sent, notify } = captureMail(t);
+  const res = await post(newClient('sef-1', {}, { source_folder: 'sefariaToOtzaria', source_hint: { source_folder: 'sefariaToOtzaria', library_relative_path: 'אוצריא/x.txt' } }), { config: onConfig, notify });
+  assert.equal(res.status, 200, 'דיווח v2 עם correction אינו נדחה');
+  assert.equal(res.body.email_sent, true);
   const r = await ErrorReport.findOne({ reportId: 'sef-1' }).lean();
-  assert.equal(r.state, 'awaiting_external');
+  assert.equal(r.state, 'email_only');
   assert.equal(r.manual.status, 'none');
+  assert.equal(r.verification.status, 'not_requested');
   assert.equal(r.dispatch.verify, false);
-  assert.equal(r.external.target, 'sefaria_generator');
-  assert.equal(r.external.package.original_line, LINE);
-  assert.equal(r.external.package.db_line_index, 2);
-  const legacySefaria = await post({ ...oldClient('sef-old'), source_folder: 'sefariaToOtzaria' });
+  assert.equal(r.dispatch.publish, false);
+  assert.equal(r.proposals.length, 1, 'ההצעה נשמרת לתיעוד');
+  assert.deepEqual(await pipelineCounts('sef-1'), { queue: 0, outbox: 0 });
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].to, 'corrections@sefaria.org');
+  assert.deepEqual(sent[0].cc, ['jewishoffice@gmail.com']);
+  const legacySefaria = await post({ ...oldClient('sef-old'), source_folder: 'my-SEFARIA-x' }, { notify });
   assert.equal(legacySefaria.status, 200);
-  assert.equal((await ErrorReport.findOne({ reportId: 'sef-old' }).lean()).state, 'awaiting_external');
+  assert.equal((await ErrorReport.findOne({ reportId: 'sef-old' }).lean()).state, 'email_only');
+  assert.deepEqual(await pipelineCounts('sef-old'), { queue: 0, outbox: 0 });
+  const replay = await post(newClient('sef-1', {}, { source_folder: 'sefariaToOtzaria', source_hint: { source_folder: 'sefariaToOtzaria', library_relative_path: 'אוצריא/x.txt' } }), { config: onConfig, notify });
+  assert.equal(replay.body.idempotent_replay, true);
+  assert.equal(sent.length, 2, 'רק דיווח sef-old נוסף');
+});
+
+test('wikiSource (מייל לאוצריא + עותק למקור) → נכנס למערכת, והמייל לשניהם ממשיך', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { sent, notify } = captureMail(t);
+  const res = await post(newClient('wiki-1', {}, { source_folder: 'wikiSource' }), { config: onConfig, notify });
+  assert.equal(res.status, 200);
+  const r = await ErrorReport.findOne({ reportId: 'wiki-1' }).lean();
+  assert.equal(r.state, 'open');
+  assert.equal(r.verification.status, 'queued');
+  assert.deepEqual(await pipelineCounts('wiki-1'), { queue: 1, outbox: 1 });
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].to, 'otzaria.200@gmail.com');
+  assert.deepEqual(sent[0].cc, ['novartza@gmail.com']);
+});
+
+test('בלי תיקיית מקור / מקור רגיל → למערכת, המייל לאוצריא בלבד', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { sent, notify } = captureMail(t);
+  const { source_folder: _omit, ...noFolder } = oldClient('def-1');
+  await post(noFolder, { notify });
+  await post(oldClient('def-2'), { notify });
+  for (const id of ['def-1', 'def-2']) {
+    const r = await ErrorReport.findOne({ reportId: id }).lean();
+    assert.equal(r.state, 'open');
+    assert.equal(r.manual.status, 'queued');
+  }
+  assert.ok(sent.every((m) => m.to === 'otzaria.200@gmail.com' && !m.cc));
 });
 
 test('[T4] תיקון שורה ארוכה (7,000 תווים) עם בלוק ה-fallback ב-error_details (§2.5) → 200, ההצעה נשמרת במלואה', async (t) => {

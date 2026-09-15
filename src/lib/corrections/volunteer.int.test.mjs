@@ -15,7 +15,7 @@ import { handleReportingErrorsPost } from './reporting-handler.js';
 import { getCorrectionsConfig } from './config.js';
 import { runWorkerBatch } from './worker.js';
 import { runReportAction } from './actions.js';
-import { listReports, getReportDetail, externalTransition, exportExternalPackages } from './volunteer.js';
+import { listReports, getReportDetail } from './volunteer.js';
 import { handleCorrectionsRequest, checkSameOrigin } from './http.js';
 import { deriveLabels } from './labels.js';
 import { FakeGitHub } from './testing/fake-github.js';
@@ -262,7 +262,6 @@ test('[T26] בלי הרשאות: משתמש רגיל 403, בלי session 401, Or
   }
   assert.equal((await listReports({ user: users.plain })).status, 403);
   assert.equal((await detail(users.plain, id)).status, 403);
-  assert.equal((await exportExternalPackages({ user: users.a })).status, 403);
 
   const fn = async () => ({ status: 200, body: { ok: true } });
   const deps = { getSession: async () => null, connect: async () => {} };
@@ -341,36 +340,25 @@ test('דיווח ישן (לפני המערכת) מופיע בתור הידני, 
   assert.equal(r.emailSent, true);
 });
 
-test('טיפול חיצוני (ספריא): מעברים מותני-גרסה, מנהל בלבד, ייצוא מכיל את המאתר, בלי מפרסם', async (t) => {
+test('email_only (ספריא): לא בתור, לא ללקיחה, לא לבדיקה ולא לפרסום; ישן שלא עבר migration מסווג באותו כלל', async (t) => {
   if (db.skip) return t.skip(db.skip);
-  const id = await ingest('sef', { source_folder: 'sefariaToOtzaria', source_hint: { source_folder: 'sefariaToOtzaria', source_name: 'Sefaria', library_relative_path: 'אוצריא/x.txt' } });
+  const id = await ingest('sef', { source_folder: 'sefariaToOtzaria', source_hint: { source_folder: 'sefariaToOtzaria', library_relative_path: 'אוצריא/x.txt' } });
   await ingest('regular');
-  const ext = await listReports({ user: users.a, query: { view: 'external' } });
-  assert.equal(ext.body.items.length, 1);
+  assert.equal((await ErrorReport.findById(id).lean()).state, 'email_only');
+  const queued = await listReports({ user: users.a, query: { view: 'queued' } });
+  assert.deepEqual(queued.body.items.map((i) => i.state), ['open']);
   assert.equal((await act(users.a, id, { action: 'claim' })).status, 409, 'לא נכנס לתור הידני');
-  const exp = await exportExternalPackages({ user: users.admin });
-  assert.equal(exp.body.count, 1);
-  const item = exp.body.items[0];
-  for (const k of ['book_title', 'he_ref', 'he_ref_stable', 'db_line_index', 'library_version', 'original_line', 'original_line_sha256', 'new_line', 'selection_offset', 'report_id']) assert.ok(k in item, k);
-  assert.equal(item.new_line, NEW);
-  const g = await gen(id);
-  assert.equal((await externalTransition({ user: users.a, id, generation: g, action: 'resolve' })).status, 403);
-  assert.equal((await externalTransition({ user: users.admin, id, generation: g - 1, action: 'resolve' })).status, 409);
-  const back = await externalTransition({ user: users.admin, id, generation: g, action: 'return_to_manual' });
-  assert.equal(back.status, 200);
-  let r = await ErrorReport.findById(id).lean();
-  assert.equal(r.state, 'open');
-  assert.equal(r.manual.handoffReason, 'returned_from_external');
-  assert.equal((await externalTransition({ user: users.admin, id, generation: back.body.generation, action: 'resolve' })).status, 409);
   await work(at(1));
-  assert.equal(gh.calls.length, 0, 'ספריא לעולם לא מגיע ל-GitHub');
-  const id3 = await ingest('sef2', { source_folder: 'Sefaria' });
-  const g3 = await gen(id3);
-  assert.equal((await externalTransition({ user: users.admin, id: id3, generation: g3, action: 'reject', note: '' })).body.error, 'reason_required');
-  assert.equal((await externalTransition({ user: users.admin, id: id3, generation: g3, action: 'resolve', note: 'הועבר למחולל' })).status, 200);
-  r = await ErrorReport.findById(id3).lean();
-  assert.equal(r.state, 'closed_manual');
-  assert.equal(r.external.status, 'resolved');
+  assert.equal(gh.calls.length, 0, 'לעולם לא מגיע ל-GitHub');
+  assert.equal((await listReports({ user: users.a, query: { view: 'all' } })).body.total, 2);
+
+  const legacy = { senderEmail: 'x@example.org', subject: 's', bookTitle: 'ספר', currentRef: 'א', filePath: 'f', status: 'pending', createdAt: new Date('2025-01-01') };
+  const { insertedIds } = await ErrorReport.collection.insertMany([{ ...legacy, reportId: 'lsef', sourceFolder: 'Sefaria' }, { ...legacy, reportId: 'lwiki', sourceFolder: 'wikiSource' }]);
+  const q2 = await listReports({ user: users.a, query: { view: 'queued' } });
+  assert.ok(!q2.body.items.some((i) => i.id === String(insertedIds[0])), 'ספריא ישן אינו בתור');
+  assert.ok(q2.body.items.some((i) => i.id === String(insertedIds[1])));
+  assert.equal((await detail(users.a, String(insertedIds[0]))).body.report.state, 'email_only');
+  assert.equal((await detail(users.a, String(insertedIds[1]))).body.report.state, 'open');
 });
 
 test('migration אידמפוטנטית: דיווחים ישנים לא נמחקים ושדותיהם נשמרים; ריצה שנייה לא משנה כלום', async (t) => {
@@ -382,13 +370,14 @@ test('migration אידמפוטנטית: דיווחים ישנים לא נמחק�
     { ...base, reportId: 'l2', status: 'in_progress' },
     { ...base, reportId: 'l3', status: 'resolved' },
     { ...base, reportId: 'l4', status: 'rejected' },
+    { ...base, reportId: 'l5', status: 'pending', sourceFolder: 'sefariaToOtzaria' },
   ]);
   const newId = await ingest('new-after');
   const dry = await migrateLegacyReports({ apply: false });
-  assert.equal(dry.matched, 4);
+  assert.equal(dry.matched, 5);
   assert.equal(dry.modified, 0);
   const first = await migrateLegacyReports({ apply: true });
-  assert.equal(first.modified, 4);
+  assert.equal(first.modified, 5);
   const second = await migrateLegacyReports({ apply: true });
   assert.equal(second.matched, 0);
   const docs = await ErrorReport.find({ reportId: { $in: ['l1', 'l2', 'l3', 'l4'] } }).sort({ reportId: 1 }).lean();
@@ -398,7 +387,10 @@ test('migration אידמפוטנטית: דיווחים ישנים לא נמחק�
   assert.equal(docs[0].manual.handoffReason, 'legacy_report');
   assert.equal(new Date(docs[0].manual.queuedAt).toISOString(), '2025-01-01T00:00:00.000Z');
   assert.equal((await ErrorReport.findById(newId).lean()).manual.handoffReason, 'service_disabled', 'דיווח חדש לא נגע');
-  assert.equal(await ErrorReport.countDocuments({}), 5);
+  const sef = await ErrorReport.findOne({ reportId: 'l5' }).lean();
+  assert.equal(sef.state, 'email_only', 'ישן שהמייל שלו לא הגיע לאוצריא — לא לתור הידני');
+  assert.equal(sef.manual.status, 'none');
+  assert.equal(await ErrorReport.countDocuments({}), 6);
 });
 
 test('[T3] אישור הצעה שמוחקת את כל תוכן השורה (new_line="") → חבילה נשמרת והשורה מתרוקנת ב-PR', async (t) => {

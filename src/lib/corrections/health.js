@@ -28,7 +28,7 @@ export async function computeHealth({ config, now = new Date() }) {
     publishUnknown: await count({ 'publish.status': 'unknown_needs_reconcile' }),
     publishFailed: await count({ state: 'open', 'publish.status': 'failed' }),
     prOpened: await count({ state: 'open', 'publish.status': 'pr_opened' }),
-    awaitingExternal: await count({ state: 'awaiting_external' }),
+    emailOnly: await count({ state: 'email_only' }),
   };
   const heartbeatAge = ageSec(beat?.lastBeatAt, now);
   const stale = heartbeatAge === null || heartbeatAge > config.worker.staleHeartbeatSeconds;

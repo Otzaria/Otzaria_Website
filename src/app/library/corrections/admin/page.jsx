@@ -15,7 +15,7 @@ const PROBLEMS = {
 const COUNTS = {
   open: 'פתוחים', legacyNotMigrated: 'ישנים שלא עברו migration', manualQueued: 'בתור הידני', claimed: 'בטיפול',
   verifyQueued: 'בבדיקה אוטומטית', outboxPending: 'ממתינים ל-worker', publishReady: 'מאושרים לפרסום',
-  publishUnknown: 'פרסום לא ידוע', publishFailed: 'פרסום נכשל', prOpened: 'PR פתוחים', awaitingExternal: 'טיפול חיצוני',
+  publishUnknown: 'פרסום לא ידוע', publishFailed: 'פרסום נכשל', prOpened: 'PR פתוחים', emailOnly: 'מייל בלבד (לא לאוצריא)',
 }
 const fmtAge = (s) => (s === null || s === undefined ? '—' : s < 120 ? `${s} שניות` : s < 7200 ? `${Math.round(s / 60)} דקות` : `${Math.round(s / 3600)} שעות`)
 
@@ -93,14 +93,6 @@ export default function CorrectionsAdminPage() {
             <button onClick={async () => { if (await post('/api/corrections/admin/settings', { verifyPaused: false })) loadHealth() }} className="px-3 py-2 rounded-lg glass">ביטול ההשהיה</button>
           </div>
         )}
-      </section>
-
-      <section className="glass rounded-xl p-4 space-y-2">
-        <h2 className="font-bold">טיפול חיצוני (ספריא)</h2>
-        <p className="text-sm">{health.counts.awaitingExternal} פריטים ממתינים. הייצוא הוא קובץ JSON עם חבילות האיתור — אין שליחה אוטומטית.</p>
-        <a href="/api/corrections/admin/external-export" className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-primary text-on-primary text-sm">
-          <span className="material-symbols-outlined text-base">download</span> ייצוא JSON
-        </a>
       </section>
 
       <section className="glass rounded-xl p-4 space-y-3">

@@ -12,14 +12,13 @@ const VIEWS = [
   { id: 'claimed', label: 'בטיפול מתנדבים' },
   { id: 'auto', label: 'בבדיקה אוטומטית' },
   { id: 'publishing', label: 'אושרו / בפרסום' },
-  { id: 'external', label: 'טיפול חיצוני (ספריא)' },
   { id: 'closed', label: 'סגורים' },
   { id: 'all', label: 'הכל' },
 ]
 
 const STATE_LABELS = {
   open: 'פתוח',
-  awaiting_external: 'ממתין לטיפול חיצוני',
+  email_only: 'מייל בלבד (לא לאוצריא)',
   closed_published: 'פורסם',
   closed_already_fixed: 'כבר תוקן',
   closed_rejected: 'נדחה',

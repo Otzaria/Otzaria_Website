@@ -12,8 +12,6 @@ const FOLDER_RE = /^[A-Za-z0-9_-]{1,100}$/;
 const SPECIAL_ROOTS = {
   DictaToOtzaria: ['DictaToOtzaria/ערוך/ספרים/אוצריא'],
 };
-// ספרי ספריא נבנים מארכיון SefariaExport ולא מקבצי המאגר → טיפול חיצוני, אין נתיב Git.
-const EXTERNAL_SEFARIA_FOLDERS = new Set(['sefaria', 'sefariatootzaria']);
 
 function safeSegments(rel) {
   if (typeof rel !== 'string' || !rel || rel.length > 1000) return null;
@@ -26,7 +24,6 @@ function safeSegments(rel) {
 
 export function rootsForFolder(folder) {
   if (typeof folder !== 'string' || !FOLDER_RE.test(folder)) return null;
-  if (EXTERNAL_SEFARIA_FOLDERS.has(folder.toLowerCase())) return null;
   return SPECIAL_ROOTS[folder] || [`${folder}/${BOOKS_SEGMENT}`];
 }
 
@@ -38,21 +35,6 @@ export function isAllowedRepoPath(path) {
   const roots = rootsForFolder(folder);
   if (!roots) return false;
   return roots.some((r) => path.startsWith(`${r}/`) && path.length > r.length + 1);
-}
-
-/** האם הדיווח על ספר שמקורו ספריא (לפי תיקיית המקור או שם המקור ברמז). */
-export function isExternalSefariaSource({ sourceFolder, sourceName } = {}) {
-  const f = typeof sourceFolder === 'string' ? sourceFolder.trim().toLowerCase() : '';
-  const n = typeof sourceName === 'string' ? sourceName.trim().toLowerCase() : '';
-  return EXTERNAL_SEFARIA_FOLDERS.has(f) || n === 'sefaria';
-}
-
-/** ניתוב מקור ברמת הדיווח: 'external_handling' לספרי ספריא, אחרת 'repo'. */
-export function routeSourceKind(report) {
-  const hint = report.sourceHint || {};
-  const external = isExternalSefariaSource({ sourceFolder: report.sourceFolder, sourceName: hint.sourceName })
-    || isExternalSefariaSource({ sourceFolder: hint.sourceFolder });
-  return external ? 'external_handling' : 'repo';
 }
 
 /** מועמדי נתיב Git מהרמזים. לעולם אינו מאמת קיום — רק מחשב. */
@@ -133,7 +115,6 @@ export const USABLE_STATUSES = new Set(['exact', 'relocated']);
 export async function resolveSource({ report, revision, gitSource, source, override = null, contextLines = DEFAULT_DIFF_CONTEXT_LINES }) {
   const base = { repo: source.repo, ref: source.ref, commitSha: null, path: null, blobSha: null, lineIndex: null, currentLine: null, match: 'none', candidates: [] };
   const folder = report.sourceHint?.sourceFolder || report.sourceFolder;
-  if (routeSourceKind(report) === 'external_handling') return { ...base, status: 'external_handling', reason: 'sefaria_generator' };
   if (!revision || typeof revision.originalLine !== 'string') return { ...base, status: 'no_proposal', reason: 'free_text' };
 
   let paths;

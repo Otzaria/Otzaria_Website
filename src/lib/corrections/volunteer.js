@@ -18,7 +18,6 @@ import { computeChangeDigest } from './ocj1.js';
 import { extractLineContext, committedNewLine, clampContextLines } from './unified-diff.js';
 import { deriveLabels } from './labels.js';
 import { HANDOFF_REASON_LABELS } from './states.js';
-import { buildExternalSefariaPackage } from './external.js';
 import { newId, logEvent, userActor, currentRevisionOf, manualQueueSet, ensureUpgraded, OPEN_FILTER } from './store.js';
 import { cancelActiveJobs } from './worker.js';
 
@@ -50,7 +49,6 @@ const LIST_FILTERS = {
   claimed: () => ({ 'manual.status': 'claimed', state: 'open' }),
   auto: () => ({ state: 'open', 'verification.status': { $in: ['queued', 'in_progress'] } }),
   publishing: () => ({ state: 'open', 'publish.status': { $in: ['ready', 'in_progress', 'unknown_needs_reconcile', 'pr_opened', 'failed'] } }),
-  external: () => ({ state: 'awaiting_external' }),
   closed: () => ({ state: { $regex: '^closed_' } }),
   all: () => ({}),
 };
@@ -66,7 +64,7 @@ export async function listReports({ user, query = {}, now = new Date() }) {
   const limit = Math.min(100, Math.max(1, Number.parseInt(query.limit, 10) || 50));
   const skip = Math.max(0, Number.parseInt(query.skip, 10) || 0);
   const rows = await ErrorReport.find(filter)
-    .select('reportId bookTitle currentRef sourceFolder reportKind state status manual verification approval publish external workflowGeneration createdAt resolvedSource.status')
+    .select('reportId bookTitle currentRef sourceFolder reportKind state status manual verification approval publish workflowGeneration createdAt resolvedSource.status')
     .sort({ createdAt: -1 }).skip(skip).limit(limit).lean();
   const total = await ErrorReport.countDocuments(filter);
   return ok({
@@ -113,7 +111,6 @@ function publicReport(r, liveSource = null) {
     manual: r.manual ? { ...r.manual, handoffLabel: HANDOFF_REASON_LABELS[r.manual.handoffReason] || r.manual.handoffReason || null } : null,
     publish: r.publish || null,
     inclusion: r.inclusion || null,
-    external: r.external || null,
     decisions: r.decisions || [],
     labels: deriveLabels(liveSource ? { ...r, resolvedSource: liveSource } : r),
     closeReason: r.closeReason || null,
@@ -425,42 +422,3 @@ export async function previewSourceChoice({ user, id, path, lineIndex, config, d
     return err(503, 'source_unavailable', { detail: e.status ? `github_${e.status}` : 'network' });
   }
 }
-
-// ---------------------------------------------------------------- external (ספריא)
-
-const EXTERNAL_ACTIONS = {
-  resolve: { set: { state: 'closed_manual', status: 'resolved', 'external.status': 'resolved', closeReason: 'external_resolved' }, close: true },
-  reject: { set: { state: 'closed_rejected', status: 'rejected', 'external.status': 'rejected', closeReason: 'external_rejected' }, close: true },
-  return_to_manual: { set: { state: 'open', 'external.status': 'returned_to_manual' }, close: false },
-};
-
-export async function externalTransition({ user, id, generation, action, note, now = new Date() }) {
-  if (!canManageCorrections(user)) return err(403, 'Forbidden');
-  const spec = EXTERNAL_ACTIONS[action];
-  if (!spec || !isId(id) || !Number.isSafeInteger(generation)) return err(400, 'invalid_request');
-  if (action === 'reject' && (typeof note !== 'string' || note.trim().length < 3)) return err(400, 'reason_required');
-  const set = { ...spec.set, 'external.decidedBy': user._id, 'external.decidedByName': user.name, 'external.decidedAt': now, 'external.note': typeof note === 'string' ? note.slice(0, 2000) : null };
-  if (spec.close) Object.assign(set, { closedAt: now, resolvedAt: now, 'manual.status': 'none' });
-  else Object.assign(set, manualQueueSet('returned_from_external', now));
-  const updated = await ErrorReport.findOneAndUpdate(
-    { _id: id, workflowGeneration: generation, state: 'awaiting_external' },
-    { $set: set, $inc: { workflowGeneration: 1 }, $push: { decisions: { decisionId: newId('dec'), source: 'volunteer', decision: `external_${action}`, message: set['external.note'] || '', actorId: user._id, actorName: user.name, generation, at: now } } },
-    { returnDocument: 'after' },
-  ).lean();
-  if (!updated) return err(409, 'stale_view');
-  await logEvent(updated._id, `external_${action}`, userActor(user), updated.workflowGeneration);
-  return ok({ generation: updated.workflowGeneration, state: updated.state });
-}
-
-/** ייצוא חבילות האיתור של הפריטים הממתינים לטיפול חיצוני. אין שליחה אוטומטית. */
-export async function exportExternalPackages({ user, limit = 5000 }) {
-  if (!canManageCorrections(user)) return err(403, 'Forbidden');
-  const rows = await ErrorReport.find({ state: 'awaiting_external' }).sort({ createdAt: 1 }).limit(limit).lean();
-  return ok({
-    exported_at: new Date().toISOString(),
-    external_target: 'sefaria_generator',
-    count: rows.length,
-    items: rows.map((r) => r.external?.package || buildExternalSefariaPackage(r)),
-  });
-}
-
