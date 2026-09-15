@@ -12,7 +12,7 @@ import WorkerHeartbeat from '../../models/WorkerHeartbeat.js';
 import User from '../../models/User.js';
 import { handleReportingErrorsPost } from './reporting-handler.js';
 import { getCorrectionsConfig } from './config.js';
-import { runWorkerBatch, claimJob, dispatchOutbox } from './worker.js';
+import { runWorkerBatch, claimJob, dispatchOutbox, processPublishJob } from './worker.js';
 import { claimReport } from './volunteer.js';
 import { deriveLabels } from './labels.js';
 import { FakeGitHub } from './testing/fake-github.js';
@@ -384,4 +384,23 @@ test('[T23] already_fixed מהשירות כשהשורה המדווחת כבר מ
   const s = await load(r._id);
   assert.equal(s.state, 'closed_already_fixed');
   assert.equal(gh.calls.filter((x) => x.method !== 'GET').length, 0);
+});
+
+test('[T18] worker שה-lease שלו על משימת פרסום נלקח ע"י אחר אינו כותב ל-GitHub', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: FILE } });
+  const c = getCorrectionsConfig(FULL_AUTO_ENV);
+  const r = await ingest('t18-pub', c);
+  const verify = createMockVerifyFetch((call) => ({ status: 200, body: buildMockDecision(call.body, { scope: 'technical_and_content' }) }));
+  await run(c, { verifyFetch: verify, githubFetch: gh.fetch }, T0);
+  assert.equal((await load(r._id)).publish.status, 'ready');
+  await dispatchOutbox({ config: c, now: at(1) });
+  const jobA = await claimJob('publish', { workerId: 'A', now: at(1), leaseSeconds: 60 });
+  const jobB = await claimJob('publish', { workerId: 'B', now: at(100), leaseSeconds: 60 });
+  assert.equal(jobB.fence, jobA.fence + 1);
+  const deps = { githubFetch: gh.fetch, random: () => 0 };
+  assert.equal(await processPublishJob(jobA, { config: c, deps, now: at(101) }), 'lease_lost');
+  assert.equal(gh.calls.filter((x) => x.method !== 'GET').length, 0);
+  assert.equal(await processPublishJob(jobB, { config: c, deps, now: at(102) }), 'pr_opened');
+  assert.equal(gh.pulls.length, 1);
 });

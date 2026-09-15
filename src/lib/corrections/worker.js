@@ -444,6 +444,12 @@ export async function processPublishJob(job, { config, deps, now }) {
     await finishJob(job, 'failed', 'change_missing');
     return 'failed';
   }
+  // fence לפני כל כתיבה: worker שה-lease שלו נלקח לא כותב; למחזיק — ה-lease מוארך לחלון הכתיבה.
+  const held = await CorrectionJob.updateOne(
+    { _id: job._id, fence: job.fence, status: 'leased' },
+    { $set: { leaseExpiresAt: new Date(Math.max(now.getTime(), Date.now()) + config.worker.leaseSeconds * 5000) } },
+  );
+  if (held.matchedCount !== 1) return 'lease_lost';
   const client = publishClient(config, deps);
   const target = { branch: config.publish.branch, mode: config.publish.mode, maxRefRetries: config.publish.maxRefRetries };
   const authority = report.approval?.authority;
