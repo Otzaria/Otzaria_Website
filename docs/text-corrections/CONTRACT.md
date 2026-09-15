@@ -100,7 +100,10 @@ service_capacity         unsupported_capability   manual_required
 ### 1.4 ספרי ספריא — טיפול חיצוני
 
 - דיווח על ספר שמקורו ספריא מנותב ל-`external_handling` (`external_target: "sefaria_generator"`),
-  מצב נפרד מ-`manual_review`, ולעולם לא מגיע למפרסם GitHub.
+  מצב נפרד מ-`manual_review`, ולעולם לא מגיע לשירות הבדיקה או למפרסם GitHub.
+  באתר זה המצב `awaiting_external`; מעבריו (טופל / נדחה עם סיבה / הוחזר לידני) מותנים בגרסה.
+- **זיהוי (כלל אחד בשני הצדדים):** `source_folder` בהשוואה case-insensitive מדויקת לאחד מ-
+  `{sefaria, sefariatootzaria}`, או `source_hint.source_name === "Sefaria"`. לא התאמת תת-מחרוזת.
 - נשמרת חבילת שינוי חיצונית עם מאתר: `book_title`, `he_ref` (לא יציב), `db_line_index`,
   `library_version`, `original_line` (אחרי ניקוי הגנרטור, לא זהה בייט-לבייט למקור),
   `original_line_sha256`, `new_line` (או `null`), היסטי הבחירה ומזהה הדיווח.
@@ -182,8 +185,18 @@ service_capacity         unsupported_capability   manual_required
   ו-`context_before + original_selection + context_after === original_line`. אחרת 400.
 - `proposed_text` שווה ל-`original_selection` (או ל-`original_line` כשהבחירה null) →
   `400 proposal_identical` (הצעה ריקה ממשמעות — התוכנה גם חוסמת זאת לפני שליחה).
-- תקרות: `original_line` ≤ 20,000 code units, `proposed_text` ≤ 20,000, גוף ≤ 256KB.
-  חריגה → 413/400, **לא חיתוך**.
+- תקרות: `original_line` ≤ 20,000 code units, `proposed_text` ≤ 20,000, גוף ≤ 256KB
+  (= 262,144 בתי UTF-8 של הגוף המדויק). חריגה בשדה מדויק או בגוף → 413/400, **לא חיתוך**.
+- שדות תצוגה (`error_details`, `selected_text`, `context_text`, `book_title`, `current_ref`,
+  `subject` וכו') **אינם נדחים על אורך**: השרת בודק טיפוס בלבד, וה-digest מחושב על הערכים
+  כפי שהתקבלו. לתצוגה ולמייל הם נשמרים מקוצצים כמו בלקוח v1. (בלוק ה-fallback של §2.5
+  מאריך את `error_details` עד כ-40K, ולכן אסור לדחות עליו.)
+- כש-`original_selection` הוא null: `selection_offset` הוא null ו-`context_before`/`context_after`
+  נשלחים כ-`""`. השרת מתעלם מהם במקרה זה.
+- `proposed_text` שמכיל ירידת שורה נקלט ומנותב לידני (`structural_change`), לא נדחה.
+- surrogate בודד: בשדות המדויקים התוכנה חוסמת לפני שליחה; בשדות החופשיים (`selected_text`,
+  `error_details`, `context_text`) התוכנה מחליפה ב-U+FFFD לפני חישוב ה-digest. לקוח v1 שלא
+  עשה זאת — השרת מחליף (`toWellFormed`) לפני החישוב, ולא דוחה.
 - `content_digest` אם נשלח: השרת מחשב לפי §4.2; אי-התאמה → `400 digest_mismatch`.
 
 ### 2.3 תשובות
@@ -192,11 +205,13 @@ service_capacity         unsupported_capability   manual_required
 |---|---|---|
 | נקלט (חדש) | 200 | `{"success":true,"accepted":true,"reportId":"…","savedToDatabase":true,"correction_supported":true,"email_sent":bool,"duplicate":bool,"message":"הדיווח נקלט"}` |
 | אותו `report_id` + אותו `content_digest` | 200 | כנ"ל + `"idempotent_replay":true` (אין רשומה כפולה) |
-| אותו `report_id` + digest שונה | 409 | `{"success":false,"error":"report_id_conflict","reportId":"…"}` |
+| אותו `report_id` + digest שונה (**v2 בלבד**) | 409 | `{"success":false,"error":"report_id_conflict","reportId":"…"}` |
+| לקוח v1 (בלי `content_digest`) + אותו `report_id` + תוכן שונה | 200 | upsert כמו באתר הישן (רק על דיווח v1 פתוח; דיווח v2 לא נדרס). לעולם לא 409 — לקוחות ישנים מסווגים 409 כזמני ונתקעים |
 | JSON פגום / ולידציה | 400 | `{"success":false,"error":"<reason_code>","reportId":null}` |
 | גוף גדול | 413 | `{"success":false,"error":"body_too_large"}` |
 | rate limit | 429 | `{"success":false,"error":"Too many requests"}` |
 | כשל DB | 500 | `{"success":false,"savedToDatabase":false,...}` (**לא** מוצג כהצלחה) |
+| קליטה כבויה (`CORRECTIONS_INTAKE_ENABLED=0`) או שבת/יו"ט (חסימת ה-proxy) | 503 | `{"success":false,"error":"intake_disabled"}` — זמני |
 
 `message` בתשובה מנוסח כ-"נקלט", לעולם לא "אושר".
 
@@ -206,7 +221,12 @@ service_capacity         unsupported_capability   manual_required
   (אתר ישן): ההצעה **לא אובדת** — ה-payload נשמר בהיסטוריית הנשלחים עם דגל
   `serverAcceptedCorrection=false`, והמשתמש מקבל הודעה ברורה שהאתר אינו תומך עדיין
   בתיקון מובנה (ההצעה נכללה ב-`error_details` כטקסט — ראו 2.5 — ולכן הגיעה כטקסט חופשי).
-- 409 → כשל **קבוע** (לא לתור). 400/413/422 → קבוע. 408/429/5xx/timeout/רשת → זמני (תור).
+- 409 → כשל **קבוע**: אין ניסיון חוזר אוטומטי. דיווח שכבר ישב בתור מקבל `report_id` חדש
+  ונשאר בתור כ"ידני" — שליחה ביוזמת המשתמש היא הגשה חדשה. דיווח חדש מהדיאלוג אינו נכנס לתור.
+- 400/413/422 → קבוע. 408/429/5xx (כולל 503 `intake_disabled`)/timeout/רשת → זמני (תור).
+- כשל קבוע בשליחה אוטומטית מהתור: הדיווח יוצא מהתור אך נרשם בהיסטוריה עם סיבת הדחייה
+  (`rejectionReason`) — לא נמחק בשקט.
+- התוכנה בודקת את גודל הגוף המדויק מול 262,144 בתים לפני שליחה; בחריגה הדיאלוג נשאר פתוח.
 - שדות חדשים חייבים לעבור **בכל המסלולים**: תור אופליין (Hive), גיבוי/שחזור, ייצוא
   סקריפט שליחה (bat/sh), ייבוא.
 
@@ -385,7 +405,8 @@ content_digest = sha256_hex( OCJ1( {
 - מחרוזת: escaping **בדיוק** כמו `JSON.stringify`/`jsonEncode`: `"`→`\"`, `\`→`\\`,
   U+0008/000C/000A/000D/0009 → `\b \f \n \r \t`, שאר < U+0020 → `\u00xx` (hex קטן),
   כל היתר (כולל עברית, ניקוד, U+00A0, U+200F, U+2028) **ליטרלי**. surrogate בודד = קלט פסול.
-- מספרים: **שלמים בלבד**, עשרוני. `true/false/null`.
+- מספרים: **שלמים בלבד** בטווח ±(2^53−1), עשרוני. מחוץ לטווח או לא-שלם = קלט פסול בשני הצדדים.
+  `true/false/null`.
 - מערכים: לפי הסדר.
 - ה-sha256 מחושב על בתי ה-UTF-8 של המחרוזת הקנונית; פלט hex קטן.
 
@@ -426,7 +447,14 @@ report.status       : open | closed_published | closed_already_fixed | closed_re
 
 ### 5.3 פרסום
 
-- ברירת מחדל: **PR מבודד** לכל תיקון (ענף `corrections/<report-id>`), `publish_mode=pr`.
+- ברירת מחדל: **PR מבודד** לכל ניסיון פרסום (ענף `corrections/<report-id>-<publish-attempt-id>`,
+  כדי שה-reconciliation יהיה חד-משמעי), `publish_mode=pr`.
+- ה-worker מושהה בשבת וביום טוב (החלטת מוצר, ברירת מחדל פעילה; `health` מסמן `worker_paused`
+  כשיש עבודה ממתינה). fence ו-lease נבדקים לפני **כל** כתיבה ל-GitHub.
+- תשובת שירות עם `generation` ישן על המשימה הנוכחית: נשמרת להיסטוריה והדיווח עובר לידני
+  (`response_mismatch`), כדי שלא ייתקע ב-`in_progress`. `already_fixed` נסגר רק כשהתיקון
+  נמצא בשורה המדווחת עצמה.
+- `manual.status = released` = שחרור בידי מתנדב בלבד; אחרי אישור/סגירה הערך חוזר ל-`none`.
   `direct` = הגדרה מפורשת + הרשאה. `disabled` = לא מפרסמים (המצב עד שיוגדר טוקן).
 - יעד (ריפו/ענף) = הגדרת שרת בלבד (`CORRECTIONS_GITHUB_REPO`, `CORRECTIONS_GITHUB_BRANCH`);
   לעולם לא מהבקשה/מהשירות.
