@@ -61,6 +61,9 @@ test('מיפוי נתיבים: רמז הופך לנתיב Git מועמד בלב�
   assert.equal(isAllowedRepoPath('ToratEmetToOtzaria/ספרים/אוצריא/../../.github/workflows/x.txt'), false);
   assert.equal(isAllowedRepoPath('.github/workflows/deploy.yml'), false);
   assert.equal(isAllowedRepoPath('sefariaToOtzaria/sefaria_export/ספרים/אוצריא/x.txt'), false);
+  // תיקיית ספריא אינה יעד כתיבה גם בנתיב הספרים הרגיל (בחירה ידנית / רמז מלקוח).
+  assert.equal(isAllowedRepoPath('sefariaToOtzaria/ספרים/אוצריא/x.txt'), false);
+  assert.equal(isAllowedRepoPath('wikiSource/ספרים/אוצריא/x.txt'), true);
 });
 
 test('[T22] resolver: התאמה מדויקת עם BOM ו-CRLF, והמטמון לפי blob sha מונע הורדה חוזרת', async () => {

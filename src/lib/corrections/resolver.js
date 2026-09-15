@@ -5,6 +5,7 @@
 import { splitSourceLines } from './source-text.js';
 import { computeNewLine } from './payload.js';
 import { extractLineContext, DEFAULT_DIFF_CONTEXT_LINES } from './unified-diff.js';
+import { reachesOtzariaInbox } from './report-email.js';
 
 const LIB_PREFIX = 'אוצריא/';
 const BOOKS_SEGMENT = 'ספרים/אוצריא';
@@ -24,6 +25,8 @@ function safeSegments(rel) {
 
 export function rootsForFolder(folder) {
   if (typeof folder !== 'string' || !FOLDER_RE.test(folder)) return null;
+  // תיקייה שדיווחיה לא מגיעים לאוצריא (ספריא) אינה יעד כתיבה, גם בבחירה ידנית או מרמז.
+  if (!reachesOtzariaInbox(folder)) return null;
   return SPECIAL_ROOTS[folder] || [`${folder}/${BOOKS_SEGMENT}`];
 }
 

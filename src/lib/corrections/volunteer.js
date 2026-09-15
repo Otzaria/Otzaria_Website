@@ -402,6 +402,7 @@ export async function previewSourceChoice({ user, id, path, lineIndex, config, d
   if (!isAllowedRepoPath(path) || !Number.isSafeInteger(lineIndex) || lineIndex < 0) return err(400, 'path_not_allowed');
   const r = await ErrorReport.findById(id).select('_id workflowGeneration state').lean();
   if (!r) return err(404, 'not_found');
+  if (r.state !== 'open') return err(409, 'final_state');
   try {
     const git = gitSourceFor(config, deps);
     const head = await git.getHead();
