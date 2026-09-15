@@ -80,7 +80,7 @@ function buildDoc({ legacy, validated, config, now }) {
  */
 export async function ingestReport({ legacy, validated, config, now = new Date() }) {
   const existing = await ErrorReport.findOne({ reportId: legacy.report_id }).lean();
-  if (existing) return compareExisting(existing, validated);
+  if (existing) return compareExisting(existing, validated, legacy);
 
   const { doc, plan } = buildDoc({ legacy, validated, config, now });
   const created = new ErrorReport(doc);
@@ -90,7 +90,7 @@ export async function ingestReport({ legacy, validated, config, now = new Date()
   } catch (err) {
     if (err?.code === 11000) {
       const raced = await ErrorReport.findOne({ reportId: legacy.report_id }).lean();
-      if (raced) return compareExisting(raced, validated);
+      if (raced) return compareExisting(raced, validated, legacy);
     }
     throw err;
   }
@@ -101,9 +101,24 @@ export async function ingestReport({ legacy, validated, config, now = new Date()
   return { outcome: 'created', report, plan };
 }
 
-function compareExisting(existing, validated) {
+async function compareExisting(existing, validated, legacy) {
   // דיווח ישן בלי digest: לא ניתן להשוות, ולכן ההתנהגות הישנה (upsert שקט) נשמרת.
   if (!existing.contentDigest || existing.contentDigest === validated.contentDigest) return { outcome: 'replay', report: existing };
-  return { outcome: 'conflict', report: existing };
+  if (validated.schemaVersion === 2) return { outcome: 'conflict', report: existing };
+  // לקוח ישן מסווג 409 כזמני ונתקע עליו; לכן upsert כמו פעם — ורק על דיווח v1 פתוח, לעולם לא על v2.
+  const updated = await ErrorReport.findOneAndUpdate(
+    { _id: existing._id, schemaVersion: 1, contentDigest: existing.contentDigest, state: 'open' },
+    { $set: { ...legacyDisplaySet(legacy), contentDigest: validated.contentDigest } },
+    { returnDocument: 'after' },
+  ).lean();
+  if (updated) await logEvent(updated._id, 'report_updated_by_legacy_client', { kind: 'public' }, updated.workflowGeneration);
+  return { outcome: 'replay', report: updated || existing };
+}
+
+function legacyDisplaySet(l) {
+  return {
+    subject: l.subject, bookTitle: l.book_title, currentRef: l.current_ref, lineNumber: l.line_number, selectedText: l.selected_text,
+    errorDetails: l.error_details, contextText: l.context_text, filePath: l.file_path, sourceFolder: l.source_folder, libraryVersion: l.library_version,
+  };
 }
 

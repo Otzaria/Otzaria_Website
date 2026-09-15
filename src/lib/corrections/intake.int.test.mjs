@@ -128,8 +128,21 @@ test('[T7] אותו report_id עם תוכן שונה → 409 בלי דריסה',
   assert.deepEqual(res.body, { success: false, error: 'report_id_conflict', reportId: 'c-1' });
   const r = await ErrorReport.findOne({ reportId: 'c-1' }).lean();
   assert.equal(r.proposals[0].proposedText, 'אֱלֹקִ֑ים');
-  const old = await post({ ...oldClient('c-1'), error_details: 'אחר' });
-  assert.equal(old.status, 409);
+});
+
+test('[T7] לקוח ישן (v1) עם אותו report_id ותוכן ערוך → 200 ועדכון (התנהגות ה-upsert הישנה), לעולם לא 409', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  noSmtp();
+  await post(oldClient('v1-edit'));
+  const res = await post({ ...oldClient('v1-edit'), error_details: 'אחר' });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(await ErrorReport.countDocuments({ reportId: 'v1-edit' }), 1);
+  assert.equal((await ErrorReport.findOne({ reportId: 'v1-edit' }).lean()).errorDetails, 'אחר');
+  // v1 לא דורס דיווח v2 קיים
+  await post(newClient('v2-keep'));
+  const cross = await post({ ...oldClient('v2-keep'), error_details: 'אחר' });
+  assert.equal(cross.status, 200);
+  assert.equal((await ErrorReport.findOne({ reportId: 'v2-keep' }).lean()).proposals[0].proposedText, 'אֱלֹקִ֑ים');
 });
 
 test('[T6] שתי בקשות מקבילות זהות → רישום אחד, שתיהן 200', async (t) => {
