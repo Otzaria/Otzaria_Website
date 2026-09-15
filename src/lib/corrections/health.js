@@ -36,6 +36,7 @@ export async function computeHealth({ config, now = new Date() }) {
     || Boolean(oldest.verify || oldest.publish);
   const problems = [];
   if (stale && hasWork) problems.push('worker_not_running');
+  if (!stale && beat?.lastBatch?.paused && hasWork) problems.push('worker_paused');
   if (beat?.lastError) problems.push('worker_last_batch_error');
   if (counts.publishUnknown > 0) problems.push('publish_unknown_pending');
   if (config.errors.length) problems.push('config_errors');

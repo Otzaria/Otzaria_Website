@@ -164,6 +164,7 @@ pm2 save
 | מצב | מה עושים |
 |---|---|
 | `worker_not_running` | `pm2 logs corrections-worker`; לוודא `CRON_SECRET` זהה באתר ובלולאה; `node scripts/corrections-worker.mjs --once` |
+| `worker_paused` | ה-worker מושהה בשבת (`CORRECTIONS_WORKER_PAUSE_ON_SHABBAT`); התור ממשיך בצאת השבת. אין צורך בפעולה |
 | השירות מחזיר שגיאות רבות | להשהות מדף הניהול (הממתינים עוברים לידני). ביטול ההשהיה **לא** מחזיר לשירות דיווחים שבידי מתנדבים; שליחה מחודשת רק ידנית |
 | `publish_unknown_pending` | בדרך כלל נפתר לבד באצווה הבאה (reconciliation). אם GitHub לא זמין — ממתין; אין לפרסם ידנית בינתיים |
 | `publish.status=failed` | הדיווח חוזר לתור הידני עם `publish_failed`; האישור וההצעה נשמרים. לתקן את הסיבה (טוקן/הרשאות/branch protection) ולקחת את הדיווח מחדש |

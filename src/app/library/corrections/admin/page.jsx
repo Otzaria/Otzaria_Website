@@ -7,6 +7,7 @@ import { canConfigureCorrections } from '@/lib/roles'
 
 const PROBLEMS = {
   worker_not_running: 'ה-worker לא דופק לאחרונה ויש עבודה ממתינה — התור אינו מעובד',
+  worker_paused: 'ה-worker מושהה (שבת) ויש עבודה ממתינה — התור ימשיך בצאת השבת',
   worker_last_batch_error: 'האצווה האחרונה של ה-worker נכשלה',
   publish_unknown_pending: 'יש ניסיונות פרסום בתוצאה לא ידועה (ממתינים ל-reconciliation)',
   config_errors: 'יש שגיאות בהגדרות',

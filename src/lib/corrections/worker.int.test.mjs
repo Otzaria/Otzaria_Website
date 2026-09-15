@@ -19,6 +19,7 @@ import { FakeGitHub } from './testing/fake-github.js';
 import { createMockVerifyFetch, buildMockDecision } from './testing/mock-verify.js';
 import { startMongo } from './testing/mongo.js';
 import { computeChangeDigest } from './ocj1.js';
+import { computeHealth } from './health.js';
 
 let db;
 before(async () => { db = await startMongo(); });
@@ -421,4 +422,13 @@ test('משימה שזורקת חריגה לא צפויה נספרת כניסיו
   assert.equal(s.manual.status, 'queued');
   assert.equal(s.manual.handoffReason, 'worker_error');
   assert.equal(verify.calls.length, c.verify.maxAttempts);
+});
+
+test('health: worker מושהה (שבת) כשיש עבודה ממתינה אינו מוצג כתקין', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  await ingest('paused', cfg());
+  await WorkerHeartbeat.create({ workerId: 'w', lastBeatAt: T0, lastBatch: { paused: 'shabbat' }, lastError: null });
+  const h = await computeHealth({ config: cfg(), now: at(10) });
+  assert.equal(h.healthy, false);
+  assert.ok(h.problems.includes('worker_paused'));
 });
