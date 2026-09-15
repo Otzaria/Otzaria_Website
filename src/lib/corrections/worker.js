@@ -595,6 +595,23 @@ async function runPool(items, concurrency, fn) {
   return results;
 }
 
+// חריגה לא צפויה נספרת כניסיון; בלי זה משימה "רעילה" נתפסת מחדש בכל תפוגת lease, לנצח.
+async function recordCrash(job, { config, deps, now }) {
+  const attempts = job.attempts + 1;
+  const retry = computeRetry({
+    attempts, maxAttempts: job.maxAttempts, deadlineAt: job.deadlineAt, now,
+    baseSeconds: config.verify.backoffBaseSeconds, capSeconds: config.verify.backoffCapSeconds, random: deps.random || Math.random,
+  });
+  const failure = { attempts, lastErrorClass: FAILURE_CLASS.UNKNOWN, lastError: 'worker_error' };
+  if (!retry.exhausted) return rescheduleJob(job, { ...failure, nextAttemptAt: retry.nextAttemptAt });
+  if (!(await finishJob(job, 'failed', 'worker_error', failure))) return false;
+  const report = await ErrorReport.findById(job.report).lean();
+  if (!report || report.state !== 'open') return true;
+  if (job.type === 'verify') await handoffToManual(report._id, report.workflowGeneration, 'worker_error', { now });
+  else await ErrorReport.updateOne({ _id: report._id }, { $set: { 'publish.status': 'failed', 'publish.lastError': 'worker_error', 'publish.updatedAt': now, ...manualQueueSet('publish_failed', now) } });
+  return true;
+}
+
 async function processClaimed(type, { config, deps, now, workerId }) {
   const jobs = [];
   for (let n = 0; n < config.worker.batchSize; n++) {
@@ -611,6 +628,7 @@ async function processClaimed(type, { config, deps, now, workerId }) {
     } catch (err) {
       if (err?.simulatedCrash) throw err;
       console.error(`[corrections] ${type} job ${job._id} failed:`, err?.message);
+      await recordCrash(job, { config, deps, now }).catch((e) => console.error('[corrections] recordCrash failed:', e?.message));
       return 'error';
     }
   });

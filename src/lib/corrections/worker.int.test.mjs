@@ -404,3 +404,21 @@ test('[T18] worker שה-lease שלו על משימת פרסום נלקח ע"י �
   assert.equal(await processPublishJob(jobB, { config: c, deps, now: at(102) }), 'pr_opened');
   assert.equal(gh.pulls.length, 1);
 });
+
+test('משימה שזורקת חריגה לא צפויה נספרת כניסיון ובמיצוי עוברת לידני (לא נתפסת לנצח)', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: FILE } });
+  const c = getCorrectionsConfig(FULL_AUTO_ENV);
+  const r = await ingest('poison', c);
+  const verify = createMockVerifyFetch((call) => ({ status: 200, body: buildMockDecision(call.body, { scope: 'technical_and_content' }) }));
+  t.mock.method(ChangePackage, 'create', async () => { throw new Error('boom'); });
+  t.mock.method(console, 'error', () => {});
+  for (let i = 0; i < 12; i++) await run(c, { verifyFetch: verify, githubFetch: gh.fetch }, at(i * 5000));
+  const job = await CorrectionJob.findOne({ report: r._id, type: 'verify' }).lean();
+  assert.equal(job.status, 'failed');
+  assert.equal(job.attempts, c.verify.maxAttempts);
+  const s = await load(r._id);
+  assert.equal(s.manual.status, 'queued');
+  assert.equal(s.manual.handoffReason, 'worker_error');
+  assert.equal(verify.calls.length, c.verify.maxAttempts);
+});
