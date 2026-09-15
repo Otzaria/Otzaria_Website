@@ -400,3 +400,15 @@ test('migration אידמפוטנטית: דיווחים ישנים לא נמחק�
   assert.equal((await ErrorReport.findById(newId).lean()).manual.handoffReason, 'service_disabled', 'דיווח חדש לא נגע');
   assert.equal(await ErrorReport.countDocuments({}), 5);
 });
+
+test('[T3] אישור הצעה שמוחקת את כל תוכן השורה (new_line="") → חבילה נשמרת והשורה מתרוקנת ב-PR', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const id = await ingest('del-line', {}, { original_selection: null, selection_offset: null, proposed_text: '', context_before: '' });
+  const res = await claimAndApprove(users.a, id);
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal((await ChangePackage.findOne({}).lean()).newLine, '');
+  await work(at(1));
+  const r = await ErrorReport.findById(id).lean();
+  assert.equal(r.publish.status, 'pr_opened');
+  assert.equal(gh.readFile(r.publish.branch, PATH), FILE.replace(LINE, ''));
+});

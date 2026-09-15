@@ -13,7 +13,8 @@ const ChangePackageSchema = new mongoose.Schema({
   baseBlobSha: imm(String, { required: true }),
   lineIndex: imm(Number, { required: true }),
   originalLine: imm(String, { required: true }),
-  newLine: imm(String, { required: true }),
+  // '' = מחיקת תוכן השורה; required רגיל של mongoose דוחה מחרוזת ריקה.
+  newLine: imm(String, { required: function () { return typeof this.newLine !== 'string'; } }),
   changeDigest: imm(String, { required: true }),
   createdBy: imm(String, { enum: ['service', 'volunteer'], required: true }),
   createdById: imm(mongoose.Schema.Types.ObjectId, { ref: 'User', default: null }),
