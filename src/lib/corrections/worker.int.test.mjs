@@ -219,6 +219,24 @@ test('[T13] approved מלא → פרסום (PR) רק כשהמדיניות מתי
   assert.equal((await load(r2._id)).manual.handoffReason, 'auto_publish_not_permitted');
 });
 
+test('חוזה B: בקשת ה-worker נושאת diff עם הקשר מאותו blob; החבילה וה-digest אינם תלויים בו', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: FILE } });
+  const c = getCorrectionsConfig({ ...FULL_AUTO_ENV, CORRECTIONS_DIFF_CONTEXT_LINES: '2' });
+  const r = await ingest('tdiff', c);
+  const verify = createMockVerifyFetch((call) => ({ status: 200, body: buildMockDecision(call.body, { scope: 'technical_and_content' }) }));
+  await run(c, { verifyFetch: verify, githubFetch: gh.fetch }, T0);
+  const req = verify.calls[0].body;
+  assert.deepEqual(req.diff.hunk, { start_line: 1, line_number: 3, before: ['<h1>בראשית</h1>', ''], removed: [LINE], added: [NEW], after: ['סוף'], line_ending: 'crlf' });
+  assert.equal(req.diff.context_lines, 2);
+  assert.equal(req.diff.unified, `--- a/${PATH}\n+++ b/${PATH}\n@@ -1,4 +1,4 @@\n <h1>בראשית</h1>\n \n-${LINE}\n+${NEW}\n סוף\n`);
+  const pkg = await ChangePackage.findOne({}).lean();
+  assert.equal(pkg.baseBlobSha, req.source.blob_sha);
+  assert.equal(pkg.changeDigest, computeChangeDigest({ path: PATH, base_blob_sha: req.source.blob_sha, line_index: 2, original_line: LINE, new_line: NEW }));
+  const s = await load(r._id);
+  assert.equal(s.publish.status, 'ready');
+});
+
 test('[T14] שירות שטוען לסמכות מלאה כשהאתר מתיר technical_only → ידני + authority_exceeded', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: FILE } });

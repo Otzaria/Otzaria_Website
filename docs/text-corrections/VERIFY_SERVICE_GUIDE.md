@@ -40,7 +40,9 @@ X-Api-Version: 1
   "proposal": { "original_line", "original_selection", "selection_offset", "proposed_text",
                 "context_before", "context_after" },
   "source": { "repo", "ref", "commit_sha", "path", "blob_sha", "line_index", "current_line", "match" },
-  "change": null
+  "change": null,
+  "diff": { "format": "unified", "context_lines": 3, "unified": "…",
+            "hunk": { "start_line", "line_number", "before", "removed", "added", "after", "line_ending" } } | null
 }
 ```
 
@@ -51,6 +53,30 @@ X-Api-Version: 1
 - `selection_offset` ביחידות UTF-16 בתוך `original_line`.
 - `display_text` הוא צילום תצוגה מהתוכנה (אחרי עיבוד) — **לא** המקור.
 - `source` הוא מה שהאתר איתר (`match: "exact"` ברוב המקרים). האתר לא שולח בקשה בלי מקור שאותר.
+
+### `diff` — השינוי עם הקשר מהקובץ
+
+אותו diff שהמתנדב רואה באתר: שורות הקשר מלפני ומאחרי, השורה שמוסרת והשורה שנכנסת. הוא נבנה מאותו
+`source.blob_sha` ומאותה שורה של `change_digest`, ולכן `hunk.removed[0] === source.current_line`.
+
+```
+--- a/ToratEmetToOtzaria/ספרים/אוצריא/…/בראשית.txt
++++ b/ToratEmetToOtzaria/ספרים/אוצריא/…/בראשית.txt
+@@ -1,4 +1,4 @@
+ <h1>בראשית</h1>
+
+-(א) <big>בְּ</big>רֵאשִׁ֖ית בָּרָ֣א אֱלֹהִ֑ים
++(א) <big>בְּ</big>רֵאשִׁ֖ית בָּרָ֣א אֱלֹקִ֑ים
+ סוף
+```
+
+- מספרי השורות 1-based (`hunk.line_number` = `source.line_index + 1`).
+- שורות מדויקות, **בלי** סיומת שורה: ה-CR של קובץ CRLF אינו בתוך השורה (`hunk.line_ending` אומר איזו
+  סיומת יש לשורה שמשתנה). BOM אינו חלק מהשורה הראשונה. `\ No newline at end of file` כמו ב-git.
+- `added: [""]` = הצעה למחוק את כל תוכן השורה; השורה עצמה נשארת בקובץ, ריקה.
+- **לא נכנס ל-`change_digest`.** ה-digest מחושב רק מהשדות בסעיף 4.
+- `diff: null` כשאין הצעה (`proposed_text: null`), כשהמקור לא אותר בוודאות, או כשאין הקשר זמין —
+  השירות צריך לעבוד גם בלעדיו.
 
 ## 4. תשובה מיידית (200)
 

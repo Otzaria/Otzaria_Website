@@ -4,6 +4,7 @@
  */
 import { splitSourceLines } from './source-text.js';
 import { computeNewLine } from './payload.js';
+import { extractLineContext, DEFAULT_DIFF_CONTEXT_LINES } from './unified-diff.js';
 
 const LIB_PREFIX = 'אוצריא/';
 const BOOKS_SEGMENT = 'ספרים/אוצריא';
@@ -127,8 +128,9 @@ export const USABLE_STATUSES = new Set(['exact', 'relocated']);
  * @param {{getHead:()=>Promise<{commitSha:string}>, getFile:(path:string, commitSha:string)=>Promise<{blobSha:string, content:string}|null>}} args.gitSource
  * @param {{repo:string, ref:string}} args.source
  * @param {{path:string, lineIndex:number}} [args.override]  בחירה ידנית של מתנדב
+ * @param {number} [args.contextLines]  שורות הקשר ל-diff (רק כשהשורה אותרה בוודאות)
  */
-export async function resolveSource({ report, revision, gitSource, source, override = null }) {
+export async function resolveSource({ report, revision, gitSource, source, override = null, contextLines = DEFAULT_DIFF_CONTEXT_LINES }) {
   const base = { repo: source.repo, ref: source.ref, commitSha: null, path: null, blobSha: null, lineIndex: null, currentLine: null, match: 'none', candidates: [] };
   const folder = report.sourceHint?.sourceFolder || report.sourceFolder;
   if (routeSourceKind(report) === 'external_handling') return { ...base, status: 'external_handling', reason: 'sefaria_generator' };
@@ -174,5 +176,6 @@ export async function resolveSource({ report, revision, gitSource, source, overr
     candidates: (m.candidates || []).map((c) => ({ path: file.path, ...c })),
     bomAdjusted: m.originalLine !== undefined && m.originalLine !== revision.originalLine,
     resolvedBy: override ? 'volunteer' : 'auto',
+    context: USABLE_STATUSES.has(m.status) ? extractLineContext(splitSourceLines(file.content), m.lineIndex, contextLines) : null,
   };
 }

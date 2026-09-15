@@ -283,9 +283,36 @@ service_capacity         unsupported_capability   manual_required
     "current_line": "…",                 // השורה כפי שהיא כעת במקור
     "match": "exact" | "unique_normalized" | "none" | "ambiguous"
   },
-  "change": { "change_id": "chg_…", "change_digest": "<sha256>" } | null   // אם כבר נבנתה חבילה
+  "change": { "change_id": "chg_…", "change_digest": "<sha256>" } | null,  // אם כבר נבנתה חבילה
+  "diff": {                              // null: אין הצעה (proposed_text=null), אין מקור שאותר בוודאות, או אין הקשר
+    "format": "unified",
+    "context_lines": 3,                  // מההגדרה CORRECTIONS_DIFF_CONTEXT_LINES (ברירת מחדל 3, 0–50)
+    "unified": "--- a/<path>\n+++ b/<path>\n@@ -1,4 +1,4 @@\n <h1>…</h1>\n \n-<current_line>\n+<new_line>\n סוף\n",
+    "hunk": {
+      "start_line": 1,                   // 1-based: השורה הראשונה ב-hunk
+      "line_number": 3,                  // 1-based: השורה שמשתנה (= source.line_index + 1)
+      "before": ["<h1>…</h1>", ""],      // שורות ההקשר שלפני, עד context_lines (פחות בתחילת הקובץ)
+      "removed": ["<current_line>"],
+      "added": ["<new_line>"],           // תמיד שורה אחת; "" = השורה נשארת בקובץ, ריקה
+      "after": ["סוף"],                  // שורות ההקשר שאחרי (פחות בסוף הקובץ)
+      "line_ending": "crlf" | "lf" | "cr" | "none"   // סיומת השורה שמשתנה; הקומיט שומר אותה כמו שהיא
+    }
+  } | null
 }
 ```
+
+**`diff` — השינוי כפי שייכתב לקובץ (לתצוגה ולעיון בלבד):**
+- נגזר מ**אותו blob** (`source.blob_sha`) ומאותה שורה שמהם נגזר `change_digest` (§4.1):
+  `removed[0]` = `source.current_line`, `added[0]` = `new_line` (אחרי הסרת BOM שהגיע מה-DB בשורה הראשונה).
+- **אינו חלק מ-`change_digest`** ואינו משנה אותו. השירות לא משתמש בו כמקור אמת לשינוי: `change` בתשובה
+  (§3.2) נבנה מ-`source` ומההצעה, כמו קודם.
+- השורות מדויקות בבייט — בלי trim ובלי נרמול — **בלי** סיומת השורה: ה-CR של CRLF (וכל LF/CR) אינו חלק
+  מתוכן השורה, והסוג מדווח ב-`line_ending` של השורה שמשתנה. ה-BOM של הקובץ אינו חלק משום שורה.
+- `unified` בפורמט של `git diff`: כותרות `--- a/<path>` / `+++ b/<path>` עם הנתיב גולמי (UTF-8, בלי
+  quoting), כותרת `@@ -s,n +s,n @@` (בלי `,n` כש-n=1), שורות מופרדות ב-LF ונגמרות ב-LF, וסימון
+  `\ No newline at end of file` אחרי שורה שהיא האחרונה בקובץ ואין אחריה סיומת.
+- `null` כש-`proposed_text` הוא `null`, כש-`source` אינו `exact`/`relocated`, או כשאין הקשר זמין
+  (מקור שנשמר לפני שהשדה נוסף). שירות חייב לעבוד גם כש-`diff` הוא `null`.
 
 ### 3.2 תשובה מיידית — 200
 

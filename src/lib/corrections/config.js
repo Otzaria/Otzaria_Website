@@ -2,6 +2,7 @@
  * הגדרות מערכת תיקוני הטקסט. ההגדרות הבטיחותיות (סוד, כתובת, סמכות, פרסום
  * אוטומטי, מצב פרסום, יעד) נקראות מ-env בלבד; מתג החירום בזמן ריצה יכול רק לכבות.
  */
+import { DEFAULT_DIFF_CONTEXT_LINES, MAX_DIFF_CONTEXT_LINES } from './unified-diff.js';
 
 export const AUTHORITY = Object.freeze({ NONE: 'none', TECHNICAL_ONLY: 'technical_only', FULL: 'technical_and_content' });
 export const PUBLISH_MODES = Object.freeze(['disabled', 'pr', 'direct']);
@@ -136,6 +137,8 @@ export function getCorrectionsConfig(env = process.env, runtime = {}) {
     cacheBytes: int(env.CORRECTIONS_SOURCE_CACHE_BYTES, 64 * 1024 * 1024, 1024 * 1024, 1024 * 1024 * 1024),
     // תצוגת דיווח בלבד; אישור ופרסום תמיד קוראים את ה-head העדכני.
     sourceHeadTtlMs: int(env.CORRECTIONS_SOURCE_HEAD_TTL_SECONDS, 30, 0, 600) * 1000,
+    // שורות הקשר לפני ואחרי השורה ב-diff (תצוגה ובקשת השירות).
+    diffContextLines: int(env.CORRECTIONS_DIFF_CONTEXT_LINES, DEFAULT_DIFF_CONTEXT_LINES, 0, MAX_DIFF_CONTEXT_LINES),
   };
 }
 

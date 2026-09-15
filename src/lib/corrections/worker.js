@@ -238,7 +238,7 @@ export async function processVerifyJob(job, { config, deps, now }) {
   if (!source) {
     try {
       source = await resolveSource({
-        report, revision: rev, gitSource: sourceGit(config, deps), source: config.source,
+        report, revision: rev, gitSource: sourceGit(config, deps), source: config.source, contextLines: config.diffContextLines,
         override: rev.targetPath ? { path: rev.targetPath, lineIndex: rev.targetLineIndex, expectedLine: rev.originalLine } : null,
       });
     } catch (err) {

@@ -4,6 +4,8 @@
  */
 import { computeChangeDigest } from './ocj1.js';
 import { AUTHORITY } from './config.js';
+import { computeNewLine } from './payload.js';
+import { buildLineHunk, committedNewLine } from './unified-diff.js';
 
 export const API_VERSION = '1';
 export const DECISIONS = Object.freeze(['approved', 'rejected', 'needs_review', 'conflict', 'already_fixed']);
@@ -17,6 +19,15 @@ const SHA40 = /^[0-9a-f]{40}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 const ID_RE = /^[A-Za-z0-9_.:-]{1,128}$/;
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+
+// אותו מקור ואותה שורה שמהם נגזר ה-change_digest; מקור לא ודאי או בלי הקשר → null.
+function requestDiff(source, revision) {
+  if (!source || (source.status !== 'exact' && source.status !== 'relocated')) return null;
+  return buildLineHunk({
+    path: source.path, lineIndex: source.lineIndex, originalLine: source.currentLine,
+    newLine: committedNewLine(source, computeNewLine(revision)), context: source.context ?? null,
+  });
+}
 
 /** בונה את גוף הבקשה מתוך הדיווח, ההצעה הנוכחית והמקור שאותר. */
 export function buildVerifyRequest({ report, revision, requestId, requestedScope, source, change = null }) {
@@ -53,6 +64,7 @@ export function buildVerifyRequest({ report, revision, requestId, requestedScope
         }
       : null,
     change: change ? { change_id: change.changeId, change_digest: change.changeDigest } : null,
+    diff: requestDiff(source, revision),
   };
 }
 

@@ -6,8 +6,14 @@ import { computeChangeDigest } from '../ocj1.js';
 
 let seq = 0;
 
+// מחזיר ב-message (טקסט תצוגה בלבד) את כותרת ה-hunk שהתקבלה, כדי שיהיה ברור שה-diff הגיע.
+function mockMessage(req) {
+  const header = typeof req.diff?.unified === 'string' ? req.diff.unified.split('\n').find((l) => l.startsWith('@@')) : null;
+  return header ? `mock · diff ${header}` : 'mock · no diff';
+}
+
 /** מרכיב תשובת 200 תקינה לבקשה, עם החלטה שנקבעה ע"י הקורא. */
-export function buildMockDecision(req, { decision = 'approved', scope = 'technical_only', reasonCode = 'ok', newLine, generation, message = 'mock' } = {}) {
+export function buildMockDecision(req, { decision = 'approved', scope = 'technical_only', reasonCode = 'ok', newLine, generation, message } = {}) {
   const p = req.proposal;
   const s = req.source;
   const target = newLine ?? (p.proposed_text === null ? null : p.original_selection === null ? p.proposed_text : p.context_before + p.proposed_text + p.context_after);
@@ -23,7 +29,7 @@ export function buildMockDecision(req, { decision = 'approved', scope = 'technic
   return {
     api_version: '1', request_id: req.request_id, report_id: req.report_id, proposal_revision: req.proposal_revision,
     workflow_generation: generation ?? req.workflow_generation, decision_id: `dec_mock_${++seq}`, processing_status: 'completed',
-    decision, approval_scope: decision === 'approved' ? scope : null, reason_code: reasonCode, message, change, candidates: [], retry_after_seconds: null,
+    decision, approval_scope: decision === 'approved' ? scope : null, reason_code: reasonCode, message: message ?? mockMessage(req), change, candidates: [], retry_after_seconds: null,
   };
 }
 

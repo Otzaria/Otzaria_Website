@@ -77,6 +77,7 @@
 | `CORRECTIONS_SOURCE_REPO` / `_REF` | `Otzaria/otzaria-library` / `main` | ממנו קוראים את המקור (קריאה בלבד) |
 | `CORRECTIONS_SOURCE_TOKEN` | טוקן הפרסום אם יש | טוקן קריאה. **מומלץ**: בלי טוקן GitHub מגביל ל-60 בקשות לשעה |
 | `CORRECTIONS_SOURCE_HEAD_TTL_SECONDS` / `_CACHE_BYTES` | 30 / 64MB | מטמון ראש הענף לתצוגות, ומטמון LRU לתוכן לפי blob sha ולרשימות תיקייה לפי קומיט |
+| `CORRECTIONS_DIFF_CONTEXT_LINES` | 3 | שורות הקשר לפני ואחרי השורה ב-diff — בתצוגת המתנדב ("הרחב הקשר" מוסיף עד 50) ובשדה `diff` שנשלח לשירות |
 
 כללי בטיחות שנאכפים בקוד (`config.js`):
 

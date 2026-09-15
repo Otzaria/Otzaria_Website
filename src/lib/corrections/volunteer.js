@@ -15,6 +15,7 @@ import { createGitSource, getSharedSourceCache } from './git-source.js';
 import { splitSourceLines } from './source-text.js';
 import { computeNewLine } from './payload.js';
 import { computeChangeDigest } from './ocj1.js';
+import { extractLineContext, committedNewLine, clampContextLines } from './unified-diff.js';
 import { deriveLabels } from './labels.js';
 import { HANDOFF_REASON_LABELS } from './states.js';
 import { buildExternalSefariaPackage } from './external.js';
@@ -121,7 +122,7 @@ function publicReport(r, liveSource = null) {
 }
 
 /** פרטי דיווח + מקור עדכני מה-resolver (לא מתוך הדיווח) + היסטוריה. */
-export async function getReportDetail({ user, id, config, deps }) {
+export async function getReportDetail({ user, id, config, deps, contextLines }) {
   if (!canHandleCorrections(user)) return err(403, 'Forbidden');
   if (!isId(id)) return err(404, 'not_found');
   const r = await ensureUpgraded(id);
@@ -131,7 +132,10 @@ export async function getReportDetail({ user, id, config, deps }) {
   let sourceError = null;
   if (rev && r.state === 'open') {
     try {
-      source = await resolveSource({ report: r, revision: rev, gitSource: gitSourceFor(config, deps, config.sourceHeadTtlMs), source: config.source, override: overrideFor(rev) });
+      source = await resolveSource({
+        report: r, revision: rev, gitSource: gitSourceFor(config, deps, config.sourceHeadTtlMs), source: config.source, override: overrideFor(rev),
+        contextLines: contextLines == null ? config.diffContextLines : clampContextLines(contextLines, config.diffContextLines),
+      });
     } catch (e) {
       sourceError = e.status ? `github_${e.status}` : 'source_unavailable';
     }
@@ -239,7 +243,7 @@ async function buildChangeFromSource({ r, rev, config, deps, seenBlobSha }) {
   if (newLine.length > MAX_LINE) return { error: err(413, 'proposed_text_too_long') };
   let source;
   try {
-    source = await resolveSource({ report: r, revision: rev, gitSource: gitSourceFor(config, deps), source: config.source, override: overrideFor(rev) });
+    source = await resolveSource({ report: r, revision: rev, gitSource: gitSourceFor(config, deps), source: config.source, override: overrideFor(rev), contextLines: config.diffContextLines });
   } catch (e) {
     return { error: err(503, 'source_unavailable', { detail: e.status ? `github_${e.status}` : 'network' }) };
   }
@@ -247,7 +251,7 @@ async function buildChangeFromSource({ r, rev, config, deps, seenBlobSha }) {
   if (!USABLE_STATUSES.has(source.status)) return { error: err(409, 'source_not_resolved', { source }) };
   if (seenBlobSha && seenBlobSha !== source.blobSha) return { error: err(409, 'stale_view', { reason: 'source_changed', source }) };
   const originalLine = source.currentLine;
-  const target = source.bomAdjusted && newLine.startsWith('\ufeff') ? newLine.slice(1) : newLine;
+  const target = committedNewLine(source, newLine);
   const change = {
     changeId: newId('chg'), repo: config.source.repo, path: source.path, baseCommitSha: source.commitSha, baseBlobSha: source.blobSha,
     lineIndex: source.lineIndex, originalLine, newLine: target,
@@ -407,13 +411,15 @@ export async function previewSourceChoice({ user, id, path, lineIndex, config, d
     const f = await git.getFile(path, head.commitSha);
     if (!f) return err(404, 'file_not_found');
     if (f.lossy) return err(409, 'non_utf8_source');
-    const { lines } = splitSourceLines(f.content);
+    const parsed = splitSourceLines(f.content);
+    const { lines } = parsed;
     if (lineIndex >= lines.length) return err(400, 'line_out_of_range');
     const from = Math.max(0, lineIndex - 2);
     await logEvent(r._id, 'source_chosen_preview', userActor(user), r.workflowGeneration, { path, lineIndex, blobSha: f.blobSha });
     return ok({
       path, lineIndex, commitSha: head.commitSha, blobSha: f.blobSha, line: lines[lineIndex].text,
       neighbors: lines.slice(from, lineIndex + 3).map((l, i) => ({ lineIndex: from + i, text: l.text })),
+      context: extractLineContext(parsed, lineIndex, config.diffContextLines),
     });
   } catch (e) {
     return err(503, 'source_unavailable', { detail: e.status ? `github_${e.status}` : 'network' });
