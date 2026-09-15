@@ -412,3 +412,14 @@ test('[T3] אישור הצעה שמוחקת את כל תוכן השורה (new_l
   assert.equal(r.publish.status, 'pr_opened');
   assert.equal(gh.readFile(r.publish.branch, PATH), FILE.replace(LINE, ''));
 });
+
+test('העברה למטפל אינה משייכת דיווח שאישורו ממתין לפרסום (לא מפרסמים דיווח ששויך למטפל)', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const id = await ingest('reassign-ready');
+  assert.equal((await claimAndApprove(users.a, id)).status, 200);
+  const res = await act(users.admin, id, { action: 'reassign', generation: await gen(id), targetUserId: String(users.b._id) });
+  assert.equal(res.status, 409);
+  const r = await ErrorReport.findById(id).lean();
+  assert.equal(r.manual.status, 'none');
+  assert.equal(r.publish.status, 'ready');
+});

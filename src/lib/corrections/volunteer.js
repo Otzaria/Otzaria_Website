@@ -213,7 +213,8 @@ export async function reassignReport({ user, id, generation, targetUserId, confi
   if (!isId(id) || !isId(targetUserId)) return err(400, 'invalid_request');
   const target = await User.findById(targetUserId).select('name role isCorrectionsVolunteer').lean();
   if (!target || !canHandleCorrections(target)) return err(400, 'target_not_authorized');
-  const filter = { _id: id, workflowGeneration: generation, state: 'open' };
+  // אישור שממתין לפרסום/בפרסום לא משויך מחדש — אחרת הוא מתפרסם בזמן שמטפל עובד עליו.
+  const filter = { _id: id, workflowGeneration: generation, state: 'open', 'publish.status': { $nin: ['ready', 'in_progress', 'unknown_needs_reconcile', 'pr_opened'] } };
   if (!canManageCorrections(user)) Object.assign(filter, { 'manual.status': 'claimed', 'manual.assignee': user._id });
   const lease = new Date(now.getTime() + config.manual.claimMinutes * 60_000);
   const updated = await ErrorReport.findOneAndUpdate(filter, {
