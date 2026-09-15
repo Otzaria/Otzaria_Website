@@ -34,6 +34,11 @@
 | טיפול חיצוני (ספריא) | `external.js` (`buildExternalSefariaPackage`) |
 | migration | `src/lib/corrections/migrate.js`, `scripts/migrate-corrections.mjs` |
 
+**תקרות בקליטה.** נדחים (413/400, בלי חיתוך) רק השדות המדויקים של `correction` (20,000 כל אחד) וגוף
+מעל 256KB. שדות התצוגה הישנים (`error_details`, `selected_text`, `context_text` וכו') נבדקים לטיפוס בלבד:
+`error_details` נושא את בלוק ה-fallback של §2.5 (עד 2×20,000). הם נשמרים ונשלחים במייל מקוצצים לתצוגה,
+כמו בלקוח ישן, וה-`content_digest` מחושב על מה שהתקבל — ההצעה המדויקת נשמרת רק מ-`correction`.
+
 ## 2. מצבים
 
 המצב מפוצל לשדות נפרדים על מסמך הדיווח (לא enum יחיד):

@@ -9,19 +9,12 @@ export const LIMITS = {
   proposedText: 20_000,
   contextField: 20_000,
   bodyBytes: 256 * 1024,
-  // שדות התצוגה הישנים — בלקוח v2 חריגה נדחית; בלקוח ישן נשמרת ההתנהגות הישנה (קיצוץ לתצוגה).
-  legacy: {
-    subject: 500,
-    book_title: 300,
-    current_ref: 300,
-    selected_text: 10_000,
-    error_details: 10_000,
-    context_text: 20_000,
-    file_path: 1_000,
-    source_folder: 200,
-  },
   reportId: 128,
 };
+
+// שדות התצוגה הישנים: נבדק רק הטיפוס. הם נשמרים ונשלחים במייל מקוצצים (FIELD_CAPS, כמו בלקוח ישן),
+// וה-digest מחושב על הערכים שהתקבלו. error_details נושא את בלוק ה-fallback (§2.5), עד 2×20K.
+const DISPLAY_FIELDS = ['subject', 'book_title', 'current_ref', 'selected_text', 'error_details', 'context_text', 'file_path', 'source_folder'];
 
 const EXACT_FIELDS = ['original_line', 'original_selection', 'proposed_text', 'context_before', 'context_after'];
 
@@ -128,8 +121,8 @@ export function validateIntakePayload(raw) {
       return fail('invalid_report_kind');
     }
     kind = raw.report_kind === 'text_correction' ? 'text_correction' : 'free_text';
-    for (const [field, max] of Object.entries(LIMITS.legacy)) {
-      if (!validateOptionalString(raw[field], max)) return fail(`invalid_${field}`, typeof raw[field] === 'string' ? 413 : 400);
+    for (const field of DISPLAY_FIELDS) {
+      if (raw[field] != null && typeof raw[field] !== 'string') return fail(`invalid_${field}`);
     }
     if (raw.location != null) {
       if (!isObj(raw.location)) return fail('invalid_location');

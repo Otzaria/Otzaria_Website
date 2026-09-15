@@ -205,3 +205,22 @@ test('ספר מספריא → awaiting_external עם חבילת איתור, לא
   assert.equal(legacySefaria.status, 200);
   assert.equal((await ErrorReport.findOne({ reportId: 'sef-old' }).lean()).state, 'awaiting_external');
 });
+
+test('[T4] תיקון שורה ארוכה (7,000 תווים) עם בלוק ה-fallback ב-error_details (§2.5) → 200, ההצעה נשמרת במלואה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  noSmtp();
+  const line = `${'אבגד '.repeat(1400)}`;
+  const proposed = `${line}ה`;
+  const details = `חסרה אות\n\n--- הצעת תיקון ---\nמקור: ${line}\nמוצע: ${proposed}`;
+  const body = newClient('long-line', {
+    original_line: line, original_selection: null, selection_offset: null, proposed_text: proposed, context_before: '', context_after: '',
+  }, { error_details: details, selected_text: line, context_text: line });
+  const res = await post(body);
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  const r = await ErrorReport.findOne({ reportId: 'long-line' }).lean();
+  assert.equal(r.proposals[0].originalLine, line);
+  assert.equal(r.proposals[0].proposedText, proposed);
+  assert.ok(r.errorDetails.startsWith('חסרה אות'));
+  const replay = await post(body);
+  assert.equal(replay.body.idempotent_replay, true);
+});
