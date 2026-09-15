@@ -8,9 +8,11 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import LabelChips from '@/components/corrections/LabelChips'
 import LineBox from '@/components/corrections/LineBox'
 import TextDiff from '@/components/corrections/TextDiff'
+import ChangeDiff from '@/components/corrections/ChangeDiff'
 import ReportActions from '@/components/corrections/ReportActions'
 import HistoryPanel from '@/components/corrections/HistoryPanel'
 import ExternalPanel from '@/components/corrections/ExternalPanel'
+import { committedNewLine } from '@/lib/corrections/unified-diff'
 
 const ERRORS = {
   stale_view: 'התצוגה לא עדכנית — הדיווח או המקור השתנו מאז שנטען. רעננו ובדקו שוב.',
@@ -49,11 +51,13 @@ export default function CorrectionReportPage() {
   const [notice, setNotice] = useState(null)
   const [busy, setBusy] = useState(false)
   const [stale, setStale] = useState(false)
+  const [contextLines, setContextLines] = useState(null)
+  const [expanding, setExpanding] = useState(false)
   const shown = useRef(null)
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`/api/corrections/reports/${id}`, { cache: 'no-store' })
+      const res = await fetch(`/api/corrections/reports/${id}${contextLines === null ? '' : `?context=${contextLines}`}`, { cache: 'no-store' })
       const body = await res.json()
       if (!res.ok) throw new Error(ERRORS[body.error] || body.error || 'שגיאה בטעינה')
       setDetail(body)
@@ -61,8 +65,10 @@ export default function CorrectionReportPage() {
       shown.current = { generation: body.report.generation, blob: body.source?.blobSha ?? null }
     } catch (e) {
       setError(e.message)
+    } finally {
+      setExpanding(false)
     }
-  }, [id])
+  }, [id, contextLines])
 
   useEffect(() => { load() }, [load])
 
@@ -118,6 +124,19 @@ export default function CorrectionReportPage() {
   const external = Boolean(report.external?.target)
   const currentLine = external ? rev?.originalLine ?? null : source?.currentLine ?? null
   const targetLine = rev ? rev.newLine : null
+  const sourceSubtitle = external ? 'אחרי ניקוי הגנרטור — לא בהכרח זהה לגולמי בארכיון' : source ? `${SOURCE_STATUS[source.status] || source.status}${source.path ? ` · ${source.path}` : ''}${Number.isInteger(source.lineIndex) ? ` · שורה ${source.lineIndex + 1}` : ''}${source.commitSha ? ` · ${source.commitSha.slice(0, 8)}` : ''}` : sourceError ? `המקור אינו זמין כרגע (${sourceError})` : 'לא נטען'
+  // הקשר מהקובץ רק כשהשורה אותרה בוודאות; אחרת — השורה מהדיווח בלבד, בלי מספרים מנוחשים.
+  const fileDiff = !external && source?.context && (source.status === 'exact' || source.status === 'relocated')
+  const diff = fileDiff
+    ? { before: source.currentLine, after: committedNewLine(source, targetLine), context: source.context, lineIndex: source.lineIndex, path: source.path, contextNote: null }
+    : {
+        before: rev?.originalLine ?? '', after: targetLine, context: null, lineIndex: null, path: null,
+        contextNote: external ? 'ספר מספריא — אין קובץ מקור במאגר; ההשוואה מול השורה מה-DB של התוכנה.' : `הקשר מהקובץ אינו זמין (${source ? SOURCE_STATUS[source.status] || source.status : sourceError ? 'המקור אינו זמין כרגע' : 'המקור לא נטען'}) — מוצגת השורה כפי שנשלחה מהתוכנה.`,
+      }
+  const expandContext = () => {
+    setExpanding(true)
+    setContextLines((source?.context?.contextLines ?? 3) + 10)
+  }
 
   return (
     <div className="space-y-4">
@@ -162,29 +181,34 @@ export default function CorrectionReportPage() {
 
       {rev && (
         <>
-          <section className="grid gap-4 md:grid-cols-2">
-            <LineBox
-              title={external ? 'הנוסח הנוכחי (מ-DB של התוכנה)' : 'המקור העדכני במאגר'}
-              tone="source"
-              subtitle={external ? 'אחרי ניקוי הגנרטור — לא בהכרח זהה לגולמי בארכיון' : source ? `${SOURCE_STATUS[source.status] || source.status}${source.path ? ` · ${source.path}` : ''}${Number.isInteger(source.lineIndex) ? ` · שורה ${source.lineIndex + 1}` : ''}${source.commitSha ? ` · ${source.commitSha.slice(0, 8)}` : ''}` : sourceError ? `המקור אינו זמין כרגע (${sourceError})` : 'לא נטען'}
-              text={currentLine}
-              empty="לא אותרה שורה מתאימה במקור"
-            />
-            <LineBox title="התוצאה המיועדת" tone="target" subtitle={`גרסת הצעה ${rev.revision}`} text={targetLine} empty="לא הוצע נוסח (ללא הצעה)" />
-          </section>
-          {currentLine !== null && targetLine !== null && (
-            <section className="glass rounded-xl p-4">
-              <h3 className="font-bold mb-2">השינוי (מילה ותו)</h3>
-              <TextDiff before={currentLine} after={targetLine} />
-            </section>
-          )}
-          {currentLine === null && targetLine !== null && (
-            <section className="glass rounded-xl p-4">
-              <h3 className="font-bold mb-1">השינוי לפי השורה שהמשתמש דיווח</h3>
-              <p className="text-xs text-on-surface/60 mb-2">השורה לא אותרה במקור העדכני; זו ההשוואה מול העותק שנשלח מהתוכנה.</p>
-              <TextDiff before={rev.originalLine} after={targetLine} />
-            </section>
-          )}
+          <ChangeDiff
+            title={fileDiff ? 'השינוי בקובץ המקור' : 'השינוי בשורה'}
+            description={sourceSubtitle}
+            {...diff}
+            onExpand={fileDiff ? expandContext : null}
+            expanding={expanding}
+            split={(
+              <div className="space-y-4">
+                <section className="grid gap-4 md:grid-cols-2">
+                  <LineBox
+                    title={external ? 'הנוסח הנוכחי (מ-DB של התוכנה)' : 'המקור העדכני במאגר'}
+                    tone="source"
+                    subtitle={sourceSubtitle}
+                    text={currentLine}
+                    empty="לא אותרה שורה מתאימה במקור"
+                  />
+                  <LineBox title="התוצאה המיועדת" tone="target" subtitle={`גרסת הצעה ${rev.revision}`} text={targetLine} empty="לא הוצע נוסח (ללא הצעה)" />
+                </section>
+                {currentLine !== null && targetLine !== null && <TextDiff before={currentLine} after={targetLine} />}
+                {currentLine === null && targetLine !== null && (
+                  <div>
+                    <p className="text-xs text-on-surface/60 mb-2">השורה לא אותרה במקור העדכני; זו ההשוואה מול העותק שנשלח מהתוכנה.</p>
+                    <TextDiff before={rev.originalLine} after={targetLine} />
+                  </div>
+                )}
+              </div>
+            )}
+          />
           {source?.candidates?.length > 0 && (
             <section className="glass rounded-xl p-4">
               <h3 className="font-bold mb-2">מועמדים (התאמה לא ודאית — לבחירה ידנית בלבד)</h3>

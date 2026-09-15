@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import UnifiedDiff from '@/components/corrections/UnifiedDiff'
 
 const btn = 'px-3 py-2 rounded-lg font-medium text-sm disabled:opacity-50 flex items-center gap-1'
 
@@ -31,6 +32,10 @@ export default function ReportActions({ detail, meId, busy, run }) {
   if (report.state !== 'open') return null
   const usable = source && (source.status === 'exact' || source.status === 'relocated')
   const baseLine = preview?.line ?? source?.currentLine ?? rev?.originalLine ?? ''
+  // ה-diff של מה שיישמר בפועל: הקשר רק מיעד שנטען בוודאות (בחירה ידנית או מקור שאותר בדיוק).
+  const editTarget = preview
+    ? { context: preview.context ?? null, lineIndex: preview.lineIndex, path: preview.path }
+    : usable ? { context: source.context ?? null, lineIndex: source.lineIndex, path: source.path } : { context: null, lineIndex: null, path: null }
 
   if (!claimedByMe) {
     return (
@@ -95,6 +100,17 @@ export default function ReportActions({ detail, meId, busy, run }) {
             <button onClick={() => setMode(null)} className={`${btn} glass`}>ביטול</button>
           </div>
           {/[\r\n]/.test(newLine) && <p className="text-xs text-danger-700">שורה אחת בלבד — פיצול שורות הוא שינוי מבני שאינו נתמך כאן.</p>}
+          {newLine !== baseLine && !/[\r\n]/.test(newLine) && (
+            <div className="space-y-1">
+              <p className="text-xs font-bold text-on-surface/70">כך ייראה השינוי שיישמר</p>
+              <UnifiedDiff
+                before={baseLine}
+                after={newLine}
+                {...editTarget}
+                contextNote="המקור לא אותר בוודאות, ולכן אין הקשר מהקובץ — מוצגת רק השורה."
+              />
+            </div>
+          )}
         </div>
       )}
 
