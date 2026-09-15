@@ -18,6 +18,7 @@ import { deriveLabels } from './labels.js';
 import { FakeGitHub } from './testing/fake-github.js';
 import { createMockVerifyFetch, buildMockDecision } from './testing/mock-verify.js';
 import { startMongo } from './testing/mongo.js';
+import { computeChangeDigest } from './ocj1.js';
 
 let db;
 before(async () => { db = await startMongo(); });
@@ -351,4 +352,36 @@ test('worker רושם heartbeat גם כשאין עבודה', async (t) => {
   const hb = await WorkerHeartbeat.findOne({ workerId: 'hb' }).lean();
   assert.ok(hb.lastBeatAt);
   assert.equal(hb.lastError, null);
+});
+
+test('[T23] already_fixed מהשירות במיקום אחר מהשורה המדווחת → ידני, לא סגירה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  // התיקון המוצע מופיע בשורה 3, אבל השורה המדווחת (2) עדיין שגויה.
+  const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: FILE.replace('סוף', NEW) } });
+  const r = await ingest('t23-elsewhere', cfg());
+  const verify = createMockVerifyFetch((call) => {
+    const body = buildMockDecision(call.body, { decision: 'already_fixed', reasonCode: 'ok' });
+    const c = body.change;
+    c.target.line_index = 3;
+    c.change_digest = computeChangeDigest({ path: c.target.path, base_blob_sha: c.base.blob_sha, line_index: 3, original_line: c.original_line, new_line: c.new_line });
+    return { status: 200, body };
+  });
+  await run(cfg(), { verifyFetch: verify, githubFetch: gh.fetch }, T0);
+  const s = await load(r._id);
+  assert.equal(s.state, 'open');
+  assert.equal(s.manual.handoffReason, 'already_fixed_unverified');
+});
+
+test('[T23] already_fixed מהשירות כשהשורה המדווחת כבר מכילה את התיקון → נסגר בלי קומיט', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: FILE } });
+  const r = await ingest('t23-here', cfg());
+  const verify = createMockVerifyFetch((call) => {
+    gh.pushExternal('main', { [PATH]: FILE.replace(LINE, NEW) });
+    return { status: 200, body: buildMockDecision(call.body, { decision: 'already_fixed', reasonCode: 'ok' }) };
+  });
+  await run(cfg(), { verifyFetch: verify, githubFetch: gh.fetch }, T0);
+  const s = await load(r._id);
+  assert.equal(s.state, 'closed_already_fixed');
+  assert.equal(gh.calls.filter((x) => x.method !== 'GET').length, 0);
 });

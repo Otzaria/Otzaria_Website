@@ -306,8 +306,11 @@ export async function processVerifyJob(job, { config, deps, now }) {
 
 async function applyServiceDecision({ job, report, rev, source, value, authorityExceeded, config, deps, now }) {
   const sentNewLine = computeNewLine(rev);
-  const localAlreadyFixedVerified = value.decision === 'already_fixed' && value.change
-    ? await verifyLocallyAlreadyFixed(value.change, config, deps) : false;
+  // "כבר תוקן" נבדק רק במיקום שנשלח ולשורה המוצעת — לא בכל מקום שהשירות מצביע עליו.
+  const c = value.change;
+  const sameTarget = c && c.path === source.path && c.lineIndex === source.lineIndex && c.newLine === sentNewLine;
+  const localAlreadyFixedVerified = value.decision === 'already_fixed' && sameTarget
+    ? await verifyLocallyAlreadyFixed(c, config, deps) : false;
   const route = routeVerifyDecision(value, {
     requestedScope: report.verification?.requestedScope || config.verify.requestedScope,
     siteAuthority: config.verify.authority,
