@@ -21,6 +21,7 @@ const ALL_TABS = [
   { id: 'book-info', label: 'מידע על ספרים', icon: 'list_alt', href: '/library/admin/book-info', roles: ['admin', 'admin_books'] },
   { id: 'book-acronyms', label: 'כינויים ור"ת', icon: 'dictionary', href: '/library/admin/book-acronyms', roles: ['admin', 'admin_books'] },
   { id: 'corrections', label: 'תיקוני טקסט', icon: 'spellcheck', href: '/library/corrections', roles: ['admin', 'admin_books'] },
+  { id: 'app-reports', label: 'דיווחי תוכנה', icon: 'bug_report', href: '/library/admin/app-reports', roles: ['admin', 'developer'] },
   { id: 'private-sources', label: 'מקורות ספרים פרטיים', icon: 'copyright', href: '/library/admin/private-sources', roles: ['admin'] },
 ]
 

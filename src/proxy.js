@@ -200,6 +200,13 @@ const authProxy = withAuth(
           ? NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
           : NextResponse.redirect(new URL('/library/unauthorized', req.url));
 
+      // מפתח - דיווחי התוכנה בלבד; שאר /library/admin ו-/api/admin חסומים
+      if (role === 'developer') {
+        if (path === '/library/admin') return NextResponse.redirect(new URL('/library/admin/app-reports', req.url));
+        const allowed = !isApiRoute && (path === '/library/admin/app-reports' || path.startsWith('/library/admin/app-reports/'));
+        return allowed ? NextResponse.next() : unauthorized();
+      }
+
       // לא מנהל בכלל
       if (!hasAnyAdminAccess(role)) return unauthorized();
 

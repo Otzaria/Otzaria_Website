@@ -29,6 +29,7 @@ export const PROTECTED_PREFIXES = [
   '/api/library/book-acronyms',
   '/api/upload-text',
   '/api/corrections',
+  '/api/app-reports/admin',
 ]
 
 export const isProtectedPath = (path) =>

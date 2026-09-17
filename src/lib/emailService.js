@@ -615,3 +615,97 @@ export async function sendPluginReportNotification(reportData) {
         return { sent: false, error: error.message };
     }
 }
+
+// כתובת המענה של מיילי המערכת — מקור אחד
+export function getDefaultReplyTo() {
+    return process.env.SMTP_REPLY_TO || process.env.SMTP_FROM;
+}
+
+function buildAppReportMailHtml({ heading, bodyHtml, ctaUrl, ctaLabel, unsubscribeUrl }) {
+    const logoUrl = `${process.env.NEXTAUTH_URL}/logo.png`;
+    const cta = ctaUrl
+        ? `<div style="margin: 30px 0; text-align: center;">
+                <a href="${escapeHtml(ctaUrl)}" style="background-color: #d4a373; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">${escapeHtml(ctaLabel)}</a>
+            </div>`
+        : '';
+    const unsub = unsubscribeUrl
+        ? `<p style="color: #999; font-size: 12px; margin-top: 30px; text-align: center;">
+                לא מעוניין לקבל עדכונים על הדיווחים שלך? <a href="${escapeHtml(unsubscribeUrl)}" style="color: #999;">להסרה</a>
+            </p>`
+        : '';
+    return `
+        <div dir="rtl" style="font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 40px; text-align: center;">
+            <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden;">
+                <div style="background-color: #ffffff; padding: 20px; border-bottom: 3px solid #d4a373;">
+                    <img src="${logoUrl}" alt="Otzaria Logo" style="width: 120px; height: auto;">
+                    <h2 style="color: #d4a373; font-size: 20px; margin: 5px 0 0 0; font-weight: bold;">אוצריא</h2>
+                </div>
+                <div style="padding: 30px; color: #333333; text-align: right;">
+                    <h1 style="color: #2c3e50; font-size: 22px; margin-bottom: 16px; text-align: center;">${escapeHtml(heading)}</h1>
+                    ${bodyHtml}
+                    ${cta}
+                    ${unsub}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// עדכון למדווח שה-issue של הדיווח שלו על התוכנה נסגר
+export async function sendAppReportClosedNotification({ to, reportTitle, issueUrl, reasonText, unsubscribeUrl }) {
+    try {
+        if (!to) return { sent: false, reason: 'missing_recipient_email' };
+        const html = buildAppReportMailHtml({
+            heading: 'עדכון על הדיווח ששלחת',
+            bodyHtml: `
+                <p style="font-size: 16px; line-height: 1.8;">שלום,</p>
+                <p style="font-size: 16px; line-height: 1.8;">${escapeHtml(reasonText)}</p>
+                <div style="background-color: #f0f0f0; padding: 16px; border-radius: 8px; margin: 20px 0;">
+                    <p style="margin: 0;"><strong>הדיווח:</strong> ${escapeHtml(reportTitle || '')}</p>
+                </div>
+                <p style="font-size: 16px; line-height: 1.8;">תודה שעזרת לשפר את אוצריא!</p>`,
+            ctaUrl: issueUrl,
+            ctaLabel: 'לצפייה בדיון',
+            unsubscribeUrl,
+        });
+        await createTransporter().sendMail({
+            from: { name: 'אוצריא', address: process.env.SMTP_FROM },
+            to,
+            replyTo: getDefaultReplyTo(),
+            subject: `עדכון על הדיווח שלך: ${reportTitle || 'דיווח על התוכנה'}`,
+            html,
+            ...(unsubscribeUrl ? { list: { unsubscribe: unsubscribeUrl } } : {}),
+        });
+        return { sent: true };
+    } catch (error) {
+        console.error('App Report Closed Notification Error:', error);
+        return { sent: false, error: error.message };
+    }
+}
+
+// פנייה של צוות הפיתוח למדווח (מטופס בדף הדיווח בניהול)
+export async function sendAppReportContactEmail({ to, subject, message, reportTitle }) {
+    try {
+        if (!to) return { sent: false, reason: 'missing_recipient_email' };
+        const html = buildAppReportMailHtml({
+            heading: subject,
+            bodyHtml: `
+                <p style="font-size: 16px; line-height: 1.8; white-space: pre-wrap;">${escapeHtml(message)}</p>
+                <div style="background-color: #f0f0f0; padding: 16px; border-radius: 8px; margin: 20px 0;">
+                    <p style="margin: 0;"><strong>בעניין הדיווח:</strong> ${escapeHtml(reportTitle || '')}</p>
+                </div>
+                <p style="color: #666; font-size: 14px;">אפשר להשיב למייל זה.</p>`,
+        });
+        await createTransporter().sendMail({
+            from: { name: 'צוות אוצריא', address: process.env.SMTP_FROM },
+            to,
+            replyTo: getDefaultReplyTo(),
+            subject,
+            html,
+        });
+        return { sent: true };
+    } catch (error) {
+        console.error('App Report Contact Email Error:', error);
+        return { sent: false, error: error.message };
+    }
+}
