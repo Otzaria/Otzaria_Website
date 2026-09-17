@@ -31,11 +31,12 @@ export const DEDUP_WINDOW_MONTHS = Math.max(6, Number(process.env.REPORT_DEDUP_M
 export const SOURCE_EMAIL_MAPPING = {
   'sefariaToOtzaria': 'corrections@sefaria.org',
   'sefaria': 'corrections@sefaria.org',
-  'wiki_jewish_books': 'WikiJewishBooks@gmail.com',
+  'wikiJewishBooks': 'WikiJewishBooks@gmail.com',
   'wikiSource': 'novartza@gmail.com',
   'Pninim': 'contact@pninim.org',
   'Tashma': 'jewishoffice@gmail.com',
   'Ben-Yehuda': 'editor@benyehuda.org',
+  'yam-HaHachma': 'y025837086@gmail.com',
 };
 
 export function toSafeString(value, fallback = '') {

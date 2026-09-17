@@ -287,9 +287,17 @@ describe('getEmailRecipients', () => {
   });
 
   it('routes other known sources to Otzaria with a cc to the source', () => {
-    expect(getEmailRecipients('wiki_jewish_books')).toEqual({
+    expect(getEmailRecipients('wikiJewishBooksToOtzaria')).toEqual({
       primary: REPORTING_ERRORS_RECIPIENT,
       cc: 'WikiJewishBooks@gmail.com',
+      isSefariaOnly: false,
+    });
+  });
+
+  it('routes yam-HaHachma books to Otzaria with a cc to the source repository', () => {
+    expect(getEmailRecipients('yam-HaHachmaToOtzaria')).toEqual({
+      primary: REPORTING_ERRORS_RECIPIENT,
+      cc: 'y025837086@gmail.com',
       isSefariaOnly: false,
     });
   });
