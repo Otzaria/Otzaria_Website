@@ -11,6 +11,8 @@ import { planPublication } from './merge.js';
 import { planClosureNotifications, closureKind, CLOSURE_TEXT_HE } from './state-change.js';
 import { createUnsubscribeToken, verifyUnsubscribeToken, buildUnsubscribeUrl } from './unsubscribe.js';
 import { getAppReportsConfig } from './config.js';
+import { verifyGithubSignature } from './webhook.js';
+import crypto from 'node:crypto';
 import { hasAppReportsAccess, ALL_ADMIN_ROLES, ROLE_LABELS } from '../roles.js';
 
 const manual = (over = {}) => ({
@@ -241,4 +243,18 @@ test('תפקיד מפתח: גישה לדיווחים בלבד, לא חלק מ-AL
   assert.equal(hasAppReportsAccess('admin_books'), false);
   assert.equal(ALL_ADMIN_ROLES.includes('developer'), false);
   assert.equal(ROLE_LABELS.developer, 'מפתח');
+});
+
+test('חתימת webhook: רק HMAC-SHA256 של הגוף המדויק עם הסוד הנכון', () => {
+  const body = Buffer.from('{"action":"closed"}');
+  const sign = (secret, data = body) => `sha256=${crypto.createHmac('sha256', secret).update(data).digest('hex')}`;
+  assert.equal(verifyGithubSignature(body, sign('s3cret'), 's3cret'), true);
+  assert.equal(verifyGithubSignature(body, sign('other'), 's3cret'), false);
+  assert.equal(verifyGithubSignature(Buffer.from('{"action":"reopened"}'), sign('s3cret'), 's3cret'), false);
+  assert.equal(verifyGithubSignature(body, sign('s3cret').replace('sha256=', 'sha1='), 's3cret'), false);
+  assert.equal(verifyGithubSignature(body, 'sha256=short', 's3cret'), false);
+  assert.equal(verifyGithubSignature(body, null, 's3cret'), false);
+  assert.equal(verifyGithubSignature(body, sign(''), ''), false);
+  assert.equal(getAppReportsConfig({ APP_REPORTS_WEBHOOK_SECRET: ' x ' }).webhookSecret, 'x');
+  assert.equal(getAppReportsConfig({}).webhookSecret, null);
 });

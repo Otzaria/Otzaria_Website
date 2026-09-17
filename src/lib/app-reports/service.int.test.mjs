@@ -3,6 +3,7 @@
  */
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import mongoose from 'mongoose';
 import AppReport from '../../models/AppReport.js';
 import { startMongo } from '../corrections/testing/mongo.js';
@@ -10,6 +11,7 @@ import { FakeIssuesGitHub } from './testing/fake-github.js';
 import { handleAppReportPost } from './handler.js';
 import { runAppReportsSync, contactReporter, listReports, getReportDetail, loadReportFile, unsubscribeByToken } from './service.js';
 import { getAppReportsConfig } from './config.js';
+import { handleGithubWebhook } from './webhook.js';
 import { createUnsubscribeToken } from './unsubscribe.js';
 
 let db;
@@ -320,4 +322,74 @@ test('יצירת קשר: 404 לדיווח חסר, 422 בלי מייל, שליח�
 
   const failing = await contactReporter({ reportId: withMail.body.reportId, subject: 'ש', message: 'ה', user }, { sendContactMail: async () => ({ sent: false }) });
   assert.equal(failing.status, 502);
+});
+
+const hookSecret = 'hook-secret';
+const hookConfig = { ...config, webhookSecret: hookSecret };
+
+async function hook(payload, { event = 'issues', secret = hookSecret, cfg = hookConfig } = {}) {
+  const body = JSON.stringify(payload);
+  const signature = `sha256=${crypto.createHmac('sha256', secret).update(body).digest('hex')}`;
+  const req = new Request('http://localhost/api/app-reports/github-webhook', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-github-event': event, 'x-hub-signature-256': signature },
+    body,
+  });
+  const res = await handleGithubWebhook(req, { config: cfg, fetchImpl: gh.fetch, sendClosedMail, connectDB: async () => {} });
+  return res.status;
+}
+
+const closedEvent = (number, over = {}) => ({
+  action: 'closed',
+  issue: { number, state: 'closed', state_reason: 'completed' },
+  repository: { full_name: 'Otzaria/otzaria' },
+  ...over,
+});
+
+test('webhook: סגירה אמיתית שולחת מייל אחרי קריאה מחדש מ-GitHub, וה-cron לא שולח שוב', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const a = await post(manual());
+  gh.setState(a.body.issueNumber, 'closed', 'completed');
+
+  assert.equal(await hook(closedEvent(a.body.issueNumber)), 202);
+  assert.ok(gh.calls.some((c) => c.method === 'GET' && c.path.endsWith(`/issues/${a.body.issueNumber}`)));
+  assert.deepEqual(mails.map((m) => m.to), ['reporter@example.com']);
+
+  await runAppReportsSync(syncDeps());
+  assert.equal(mails.length, 1);
+});
+
+test('webhook: חתימה שגויה או חסרה → 401; בלי סוד מוגדר → 503; בשום מקרה אין מייל', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const a = await post(manual());
+  gh.setState(a.body.issueNumber, 'closed', 'completed');
+
+  assert.equal(await hook(closedEvent(a.body.issueNumber), { secret: 'attacker-guess' }), 401);
+  const unsigned = new Request('http://localhost/api/app-reports/github-webhook', {
+    method: 'POST', headers: { 'x-github-event': 'issues' }, body: JSON.stringify(closedEvent(a.body.issueNumber)),
+  });
+  assert.equal((await handleGithubWebhook(unsigned, { config: hookConfig, fetchImpl: gh.fetch, sendClosedMail, connectDB: async () => {} })).status, 401);
+  assert.equal(await hook(closedEvent(a.body.issueNumber), { cfg: config }), 503);
+  assert.equal(mails.length, 0);
+});
+
+test('webhook: תוכן חתום שטוען "נסגר" על issue שפתוח ב-GitHub אינו שולח מייל', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const a = await post(manual());
+  assert.equal(await hook(closedEvent(a.body.issueNumber)), 202);
+  assert.equal(mails.length, 0);
+  assert.equal((await AppReport.findOne({ reportId: a.body.reportId }).lean()).issueState, 'open');
+});
+
+test('webhook: ping, אירוע אחר, ריפו אחר ו-issue שאינו שלנו → 204/202 בלי קריאות GitHub', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const a = await post(manual());
+  const before = gh.calls.length;
+  assert.equal(await hook({ zen: 'hi' }, { event: 'ping' }), 204);
+  assert.equal(await hook(closedEvent(a.body.issueNumber), { event: 'issue_comment' }), 204);
+  assert.equal(await hook(closedEvent(a.body.issueNumber, { action: 'labeled' })), 204);
+  assert.equal(await hook(closedEvent(a.body.issueNumber, { repository: { full_name: 'evil/repo' } })), 204);
+  assert.equal(await hook(closedEvent(99999)), 202);
+  assert.equal(gh.calls.length, before);
+  assert.equal(mails.length, 0);
 });
