@@ -16,9 +16,8 @@ export function checkSameOrigin(request, env = process.env) {
   if (!origin) return site === 'same-origin' ? { ok: true } : { ok: false, reason: 'origin_missing' };
   const allowed = new Set();
   try { allowed.add(new URL(request.url).origin); } catch { /* ignore */ }
-  for (const v of [env.NEXTAUTH_URL, env.CORRECTIONS_ALLOWED_ORIGIN]) {
-    if (!v) continue;
-    try { allowed.add(new URL(v).origin); } catch { /* ignore */ }
+  if (env.NEXTAUTH_URL) {
+    try { allowed.add(new URL(env.NEXTAUTH_URL).origin); } catch { /* ignore */ }
   }
   return allowed.has(origin) ? { ok: true } : { ok: false, reason: 'origin_mismatch' };
 }

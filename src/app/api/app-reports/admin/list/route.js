@@ -17,7 +17,7 @@ export async function GET(request) {
     return jsonNoStore({
       success: true,
       ...result,
-      github: { repo: config.repo, tokenConfigured: Boolean(config.githubToken), tokenSetAt: config.githubTokenSetAt },
+      github: { repo: config.repo, tokenConfigured: Boolean(config.githubToken) },
     });
   } catch (error) {
     console.error('App reports list failed:', error?.message);

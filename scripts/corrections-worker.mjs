@@ -2,14 +2,14 @@
 /**
  * לולאת ה-worker של תיקוני הטקסט: קוראת ל-/api/cron/corrections-worker כל X שניות.
  * הרצה: node scripts/corrections-worker.mjs [--once]   (תחת pm2 או cron — ראו OPERATIONS.md)
- * env: CRON_SECRET (חובה), CORRECTIONS_WORKER_URL (ברירת מחדל http://127.0.0.1:3000),
- *      CORRECTIONS_WORKER_INTERVAL_SECONDS (ברירת מחדל 30), CORRECTIONS_WORKER_ID.
+ * env: CRON_SECRET (חובה), CORRECTIONS_WORKER_URL (ברירת מחדל http://127.0.0.1:3000), CORRECTIONS_WORKER_ID.
  */
 try { (await import('dotenv')).config(); } catch { /* dotenv אופציונלי */ }
 
 const base = (process.env.CORRECTIONS_WORKER_URL || 'http://127.0.0.1:3000').replace(/\/+$/, '');
 const secret = process.env.CRON_SECRET;
-const interval = Math.max(5, Number(process.env.CORRECTIONS_WORKER_INTERVAL_SECONDS) || 30) * 1000;
+const INTERVAL_SECONDS = 30;
+const interval = INTERVAL_SECONDS * 1000;
 const once = process.argv.includes('--once');
 const workerId = process.env.CORRECTIONS_WORKER_ID || `loop:${process.pid}`;
 

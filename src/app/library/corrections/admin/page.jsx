@@ -17,6 +17,30 @@ const COUNTS = {
   verifyQueued: 'בבדיקה אוטומטית', outboxPending: 'ממתינים ל-worker', publishReady: 'מאושרים לפרסום',
   publishUnknown: 'פרסום לא ידוע', publishFailed: 'פרסום נכשל', prOpened: 'PR פתוחים', emailOnly: 'מייל בלבד (לא לאוצריא)',
 }
+const PUBLISH_MODE_OPTIONS = [
+  { value: 'disabled', label: 'כבוי' },
+  { value: 'pr', label: 'פתיחת PR' },
+  { value: 'direct', label: 'קומיט ישיר' },
+]
+const AUTO_PUBLISH_CONFIRM = 'בפרסום אוטומטי תיקון שעבר את שירות הבדיקה מתפרסם בלי שאף מתנדב ראה אותו. להמשיך?'
+const DIRECT_CONFIRM = 'במצב "קומיט ישיר" כל תיקון שמאושר נכתב ישירות לענף בספרייה — בלי PR ובלי בדיקה אנושית נוספת. להמשיך?'
+
+function Choice({ options, value, onChange }) {
+  return (
+    <div className="flex flex-wrap gap-1">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          onClick={() => onChange(o.value)}
+          className={`px-3 py-1.5 rounded-lg border text-sm ${o.value === value ? 'bg-primary text-on-primary border-primary' : 'bg-white'}`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 const fmtAge = (s) => (s === null || s === undefined ? '—' : s < 120 ? `${s} שניות` : s < 7200 ? `${Math.round(s / 60)} דקות` : `${Math.round(s / 3600)} שעות`)
 
 export default function CorrectionsAdminPage() {
@@ -52,9 +76,22 @@ export default function CorrectionsAdminPage() {
     return res.ok
   }
 
+  const save = async (patch) => { if (await post('/api/corrections/admin/settings', patch)) loadHealth() }
+  // מעבר לקומיט ישיר בלבד דורש אישור מפורש — הוא עוקף את מסלול ה-PR.
+  const changePublishMode = async (mode) => {
+    if (mode !== 'direct') return save({ publishMode: mode })
+    if (!window.confirm(DIRECT_CONFIRM)) return
+    await save({ publishMode: mode, confirm: true })
+  }
+  const changeAutoPublish = async (value) => {
+    if (value && !window.confirm(AUTO_PUBLISH_CONFIRM)) return
+    await save(value ? { autoPublish: true, confirm: true } : { autoPublish: false })
+  }
+
   if (error) return <div className="bg-danger-50 text-danger-700 border border-danger-200 rounded-lg p-4">{error}</div>
   if (!health) return <LoadingSpinner />
   const cfg = health.config
+  const canConfigure = canConfigureCorrections(session?.user)
 
   return (
     <div className="space-y-4">
@@ -79,20 +116,50 @@ export default function CorrectionsAdminPage() {
       </section>
 
       <section className="glass rounded-xl p-4 space-y-2 text-sm">
-        <h2 className="font-bold text-base">הגדרות (לקריאה בלבד — מוגדרות בשרת)</h2>
-        <div>קבלת דיווחים: <b>{cfg.intakeEnabled ? 'פעילה' : 'כבויה'}</b></div>
+        <h2 className="font-bold text-base">הגדרות שירות הבדיקה (מוגדרות בשרת, לקריאה בלבד)</h2>
         <div>שירות הבדיקה: <b>{cfg.verify.enabled ? `פעיל (${cfg.verify.urlHost})` : `כבוי — ${cfg.verify.disabledReason}`}</b>{cfg.verify.isMock ? ' · שרת דמה' : ''}</div>
         <div>סמכות השירות: <b>{cfg.verify.authority}</b> · היקף מבוקש: <b>{cfg.verify.requestedScope}</b> · דחייה אוטומטית: <b>{cfg.verify.autoRejectAllowed ? 'מותרת' : 'לא'}</b></div>
-        <div>פרסום אוטומטי: <b>{cfg.autoPublish ? 'מופעל' : 'כבוי'}</b></div>
-        <div>מצב פרסום: <b>{cfg.publish.mode}</b>{cfg.publish.disabledReason ? ` (${cfg.publish.disabledReason})` : ''} · יעד: <span dir="ltr">{cfg.publish.repo || '—'}@{cfg.publish.branch || '—'}</span></div>
+        <div>יעד הפרסום: <span dir="ltr">{cfg.publish.repo}@{cfg.publish.branch}</span> · טוקן: <b>{cfg.publish.tokenConfigured ? 'מוגדר' : 'חסר'}</b></div>
         <div>מקור לקריאה: <span dir="ltr">{cfg.source.repo}@{cfg.source.ref}</span></div>
         {cfg.errors.length > 0 && <ul className="text-danger-700 list-disc pr-5">{cfg.errors.map((e) => <li key={e} dir="ltr">{e}</li>)}</ul>}
-        {canConfigureCorrections(session?.user) && (
-          <div className="pt-2 flex flex-wrap gap-2">
-            <button onClick={async () => { if (await post('/api/corrections/admin/settings', { verifyPaused: true })) loadHealth() }} className="px-3 py-2 rounded-lg bg-danger-600 text-white">השהיית שירות הבדיקה (ממתינים עוברים לידני)</button>
-            <button onClick={async () => { if (await post('/api/corrections/admin/settings', { verifyPaused: false })) loadHealth() }} className="px-3 py-2 rounded-lg glass">ביטול ההשהיה</button>
-          </div>
-        )}
+      </section>
+
+      <section className="glass rounded-xl p-4 space-y-3 text-sm">
+        <h2 className="font-bold text-base">מתגי המערכת</h2>
+        {!canConfigure && <p className="text-xs text-on-surface/60">לקריאה בלבד — שינוי המתגים מותר למנהל כללי.</p>}
+
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="w-44">קבלת דיווחים מהתוכנה:</span>
+          {canConfigure
+            ? <Choice options={[{ value: true, label: 'פעילה' }, { value: false, label: 'כבויה' }]} value={cfg.intakeEnabled} onChange={(v) => save({ intakeEnabled: v })} />
+            : <b>{cfg.intakeEnabled ? 'פעילה' : 'כבויה'}</b>}
+          <span className="text-xs text-on-surface/60">כבויה: הדיווחים נדחים ב-503 והתוכנה שומרת אותם בתור שלה.</span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="w-44">מצב פרסום:</span>
+          {canConfigure
+            ? <Choice options={PUBLISH_MODE_OPTIONS} value={cfg.publish.requestedMode} onChange={changePublishMode} />
+            : <b>{cfg.publish.requestedMode}</b>}
+          {cfg.publish.disabledReason && cfg.publish.disabledReason !== 'publish_disabled' && <span className="text-danger-700">({cfg.publish.disabledReason})</span>}
+          <span className="text-danger-700 text-xs">&quot;קומיט ישיר&quot; כותב לענף בלי PR ובלי בדיקה אנושית נוספת — מסוכן.</span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="w-44">פרסום אוטומטי:</span>
+          {canConfigure
+            ? <Choice options={[{ value: true, label: 'מופעל' }, { value: false, label: 'כבוי' }]} value={cfg.autoPublish} onChange={changeAutoPublish} />
+            : <b>{cfg.autoPublish ? 'מופעל' : 'כבוי'}</b>}
+          <span className="text-xs text-on-surface/60">פרסום בלי מתנדב, רק אחרי אישור מלא של שירות הבדיקה.</span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="w-44">שירות הבדיקה:</span>
+          {canConfigure
+            ? <Choice options={[{ value: false, label: 'פעיל' }, { value: true, label: 'מושהה' }]} value={cfg.verifyPaused} onChange={(v) => save({ verifyPaused: v })} />
+            : <b>{cfg.verifyPaused ? 'מושהה' : 'פעיל'}</b>}
+          <span className="text-xs text-on-surface/60">בהשהיה הדיווחים הממתינים עוברים לתור הידני.</span>
+        </div>
       </section>
 
       <section className="glass rounded-xl p-4 space-y-3">

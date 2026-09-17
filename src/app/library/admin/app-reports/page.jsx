@@ -53,7 +53,6 @@ export default function AppReportsPage() {
               <span className="mr-2">
                 · issues ב-<span dir="ltr">{data.github.repo}</span>
                 {!data.github.tokenConfigured && <span className="mr-2 text-danger-600 font-bold">(טוקן GitHub לא מוגדר)</span>}
-                {data.github.tokenSetAt && <span className="mr-2">· הטוקן הונפק ב-<span dir="ltr">{data.github.tokenSetAt}</span></span>}
               </span>
             )}
           </p>
