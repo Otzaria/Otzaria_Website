@@ -72,7 +72,8 @@ export function getCorrectionsConfig(env = process.env, runtime = {}) {
   if (requestedScope === AUTHORITY.FULL && authority !== AUTHORITY.FULL) requestedScope = AUTHORITY.TECHNICAL_ONLY;
 
   // ---- פרסום ----
-  const token = env.CORRECTIONS_GITHUB_TOKEN || '';
+  // ברירת מחדל: הטוקן שמרחב עריכת הספרים כבר דוחף בו. פרסום עדיין דורש repo+branch מפורשים.
+  const token = env.CORRECTIONS_GITHUB_TOKEN || env.DICTA_LIBRARY_GITHUB_TOKEN || '';
   const repo = (env.CORRECTIONS_GITHUB_REPO || '').trim();
   const branch = (env.CORRECTIONS_GITHUB_BRANCH || '').trim();
   let publishMode = (env.CORRECTIONS_PUBLISH_MODE || '').trim() || (token ? 'pr' : 'disabled');

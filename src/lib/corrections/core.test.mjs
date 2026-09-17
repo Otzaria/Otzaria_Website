@@ -160,6 +160,11 @@ test('הפרדת דגלים: פרסום כבוי עד טוקן; PR כברירת 
   assert.equal(getCorrectionsConfig({}).publish.mode, 'disabled');
   const pr = getCorrectionsConfig({ CORRECTIONS_GITHUB_TOKEN: 't', CORRECTIONS_GITHUB_REPO: 'Otzaria/otzaria-library', CORRECTIONS_GITHUB_BRANCH: 'main' });
   assert.equal(pr.publish.mode, 'pr');
+  // הטוקן המשותף מספיק לפרסום, אבל בלי repo+branch הוא עדיין כבוי
+  const shared = getCorrectionsConfig({ DICTA_LIBRARY_GITHUB_TOKEN: 't', CORRECTIONS_GITHUB_REPO: 'a/b', CORRECTIONS_GITHUB_BRANCH: 'main' });
+  assert.equal(shared.publish.mode, 'pr');
+  assert.equal(shared.publish.disabledReason, null);
+  assert.equal(getCorrectionsConfig({ DICTA_LIBRARY_GITHUB_TOKEN: 't' }).publish.disabledReason, 'publish_target_not_configured');
   const noTarget = getCorrectionsConfig({ CORRECTIONS_GITHUB_TOKEN: 't' });
   assert.equal(noTarget.publish.mode, 'disabled');
   assert.equal(noTarget.publish.disabledReason, 'publish_target_not_configured');

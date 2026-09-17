@@ -257,4 +257,8 @@ test('חתימת webhook: רק HMAC-SHA256 של הגוף המדויק עם הס�
   assert.equal(verifyGithubSignature(body, sign(''), ''), false);
   assert.equal(getAppReportsConfig({ APP_REPORTS_WEBHOOK_SECRET: ' x ' }).webhookSecret, 'x');
   assert.equal(getAppReportsConfig({}).webhookSecret, null);
+  // נופל לטוקן שהאתר כבר כותב בו לספרייה
+  assert.equal(getAppReportsConfig({ DICTA_LIBRARY_GITHUB_TOKEN: 'shared' }).githubToken, 'shared');
+  assert.equal(getAppReportsConfig({ APP_REPORTS_GITHUB_TOKEN: 'own', DICTA_LIBRARY_GITHUB_TOKEN: 'shared' }).githubToken, 'own');
+  assert.equal(getAppReportsConfig({}).githubToken, null);
 });

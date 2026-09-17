@@ -9,7 +9,8 @@ export function getAppReportsConfig(env = process.env) {
   const rawRepo = (env.APP_REPORTS_GITHUB_REPO || '').trim();
   const repo = REPO_RE.test(rawRepo) ? rawRepo : DEFAULT_REPO;
   return {
-    githubToken: (env.APP_REPORTS_GITHUB_TOKEN || '').trim() || null,
+    // ריק: הטוקן שהאתר כבר כותב בו לספרייה. לבוט יש issues על ריפו התוכנה.
+    githubToken: (env.APP_REPORTS_GITHUB_TOKEN || env.DICTA_LIBRARY_GITHUB_TOKEN || '').trim() || null,
     githubTokenSetAt: (env.APP_REPORTS_GITHUB_TOKEN_SET_AT || '').trim() || null,
     repo,
     repoMisconfigured: Boolean(rawRepo) && rawRepo !== repo,
