@@ -58,6 +58,10 @@ scripts/*
 !scripts/offline-editor-icons.json
 !scripts/check-perf-budget.mjs
 !scripts/check-prefetch.mjs
+# תיקוני טקסט — מופעלים בייצור לפי docs/text-corrections/OPERATIONS.md
+!scripts/corrections-worker.mjs
+!scripts/migrate-corrections.mjs
+!scripts/mock-verify-server.mjs
 empty-uploads-report-1767610989868.json
 .vscode/settings.json
 111.json
