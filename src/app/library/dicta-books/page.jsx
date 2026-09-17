@@ -7,6 +7,7 @@ import Header from '@/components/layout/Header'
 import Link from 'next/link'
 import { useDialog } from '@/components/providers/DialogContext'
 import DictaUploadDialog from '@/components/dicta-tools/DictaUploadDialog'
+import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { hasBooksAccess } from '@/lib/roles'
 
 // קומפוננטת התוכן שמכילה את כל הלוגיקה והממשק
@@ -585,7 +586,7 @@ export default function DictaBooksPublicPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <LoadingSpinner message="" />
       </div>
     }>
       <DictaBooksContent />

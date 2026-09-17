@@ -1,8 +1,6 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, memo } from 'react'
-import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
 import Header from '@/components/layout/Header'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
@@ -10,6 +8,7 @@ import OcrLineContextModal from '@/components/ocr/OcrLineContextModal'
 import AutoGrowTextarea from '@/components/ocr/AutoGrowTextarea'
 import { normalizeLineText, findForbidden } from '@/lib/ocr/textStandard'
 import { hasBookLibraryAccess } from '@/lib/roles'
+import { useRequireAuth } from '@/hooks/useRequireAuth'
 
 // כללי התמלול המוצגים למשתמש — נגזרים מתקן הטקסט של פרויקט ה-OCR.
 const RULES = [
@@ -187,8 +186,7 @@ const LineRow = memo(function LineRow({ line, onSave, onFlag, onOpenContext }) {
 })
 
 export default function OcrLinesPage() {
-  const { data: session, status } = useSession()
-  const router = useRouter()
+  const { session, status } = useRequireAuth()
   const { showAlert } = useDialog()
 
   const [lines, setLines] = useState([])
@@ -220,13 +218,11 @@ export default function OcrLinesPage() {
   }, [])
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/auth/login?callbackUrl=/library/ocr-lines')
-    } else if (status === 'authenticated') {
+    if (status === 'authenticated') {
       if (session?.user?.isVerified || hasBookLibraryAccess(session?.user?.role)) load()
       else setLoading(false)
     }
-  }, [status, session, router, load])
+  }, [status, session, load])
 
   // שמירה: השורה יורדת מהדף בלי תחליף — הרשימה מתקצרת, וכשמתרוקנת מופיע
   // "טען עוד". שאר השורות אינן מתרנדרות מחדש (key לפי id + memo).

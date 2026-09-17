@@ -9,6 +9,7 @@ import OcrJob from '@/models/OcrJob';
 import { hasBookLibraryAccess } from '@/lib/roles';
 import { runOcrJob } from '@/lib/ocr/runOcrJob';
 import { reapStaleOcrJobs } from '@/lib/ocr/staleJobs';
+import { badRequest, notFound, requireAccess, serverError } from '@/lib/apiResponse';
 
 const ALLOWED_METHODS = ['gemini', 'ocrwin'];
 const ALLOWED_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-3-pro-preview'];
@@ -20,21 +21,20 @@ const GEMINI_ENABLED = false;
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !hasBookLibraryAccess(session.user?.role)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const denied = requireAccess(session, hasBookLibraryAccess);
+    if (denied) return denied;
 
     const body = await request.json();
     const { bookId, method, model, existingTextMode, splitColumns } = body || {};
 
     if (!bookId) {
-      return NextResponse.json({ error: 'חסר מזהה ספר' }, { status: 400 });
+      return badRequest('חסר מזהה ספר');
     }
     if (!mongoose.isValidObjectId(bookId)) {
-      return NextResponse.json({ error: 'מזהה ספר לא תקין' }, { status: 400 });
+      return badRequest('מזהה ספר לא תקין');
     }
     if (!ALLOWED_METHODS.includes(method)) {
-      return NextResponse.json({ error: 'שיטת OCR לא חוקית' }, { status: 400 });
+      return badRequest('שיטת OCR לא חוקית');
     }
     if (method === 'gemini' && !GEMINI_ENABLED) {
       return NextResponse.json(
@@ -43,17 +43,17 @@ export async function POST(request) {
       );
     }
     if (method === 'gemini' && !ALLOWED_MODELS.includes(model)) {
-      return NextResponse.json({ error: 'מודל Gemini לא חוקי' }, { status: 400 });
+      return badRequest('מודל Gemini לא חוקי');
     }
     if (!ALLOWED_MODES.includes(existingTextMode)) {
-      return NextResponse.json({ error: 'בחירת טיפול בעמודים ערוכים לא חוקית' }, { status: 400 });
+      return badRequest('בחירת טיפול בעמודים ערוכים לא חוקית');
     }
 
     await connectDB();
 
     const book = await Book.findById(bookId);
     if (!book) {
-      return NextResponse.json({ error: 'הספר לא נמצא' }, { status: 404 });
+      return notFound('הספר לא נמצא');
     }
 
     // שחרור עבודה תקועה (שרת שהופעל מחדש באמצע) לפני הבדיקה, כדי לא לחסום לשווא
@@ -82,14 +82,10 @@ export async function POST(request) {
       existingTextMode === 'skip' ? Math.max(0, pagesWithImage - editedPagesCount) : pagesWithImage;
 
     if (totalToProcess === 0) {
-      return NextResponse.json(
-        {
-          error:
-            existingTextMode === 'skip'
-              ? 'אין עמודים לא-ערוכים לעיבוד (כל העמודים כבר ערוכים)'
-              : 'אין עמודים עם תמונה לעיבוד',
-        },
-        { status: 400 }
+      return badRequest(
+        existingTextMode === 'skip'
+          ? 'אין עמודים לא-ערוכים לעיבוד (כל העמודים כבר ערוכים)'
+          : 'אין עמודים עם תמונה לעיבוד'
       );
     }
 
@@ -125,6 +121,6 @@ export async function POST(request) {
     return NextResponse.json({ success: true, jobId: job._id.toString(), totalPages: totalToProcess });
   } catch (error) {
     console.error('OCR start error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError('Internal Server Error');
   }
 }

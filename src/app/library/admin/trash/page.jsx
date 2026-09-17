@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import { formatDateShort } from '@/lib/formatDate'
 
 export default function AdminTrashPage() {
   const [uploads, setUploads] = useState([])
@@ -221,7 +222,7 @@ export default function AdminTrashPage() {
                                           <div className="flex items-center gap-4 text-sm text-neutral-500 mt-1">
                                               <span className="flex items-center gap-1">
                                                 <span className="material-symbols-outlined text-sm">delete</span>
-                                                נמחק ב-{new Date(firstUpload.deletedAt).toLocaleDateString('he-IL')}
+                                                נמחק ב-{formatDateShort(firstUpload.deletedAt)}
                                               </span>
                                           </div>
                                       </div>
@@ -368,7 +369,7 @@ export default function AdminTrashPage() {
                                                       </span>
                                                       <span className="flex items-center gap-1">
                                                         <span className="material-symbols-outlined text-xs">delete</span>
-                                                        {new Date(upload.deletedAt).toLocaleDateString('he-IL')}
+                                                        {formatDateShort(upload.deletedAt)}
                                                       </span>
                                                   </div>
                                               </div>

@@ -4,6 +4,7 @@ import OcrTrainingPage from '@/models/OcrTrainingPage';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBookLibraryAccess } from '@/lib/roles';
+import { unauthorized, forbidden, notFound, serverError } from '@/lib/apiResponse';
 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
@@ -11,7 +12,7 @@ const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 // רק המשתמש שתפס את העמוד (או אדמין) רשאי לשמור.
 export async function PUT(request, { params }) {
   const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!session) return unauthorized();
 
   try {
     const { id } = await params;
@@ -21,14 +22,11 @@ export async function PUT(request, { params }) {
 
     await connectDB();
     const page = await OcrTrainingPage.findById(id);
-    if (!page) return NextResponse.json({ success: false, error: 'העמוד לא נמצא' }, { status: 404 });
+    if (!page) return notFound('העמוד לא נמצא');
 
     const isOwner = page.claimedBy && page.claimedBy.toString() === String(userId);
     if (!isOwner && !isAdmin) {
-      return NextResponse.json(
-        { success: false, error: 'עליך לתפוס את העמוד לפני עריכה' },
-        { status: 403 }
-      );
+      return forbidden('עליך לתפוס את העמוד לפני עריכה');
     }
 
     const clean = (Array.isArray(lines) ? lines : [])
@@ -55,10 +53,17 @@ export async function PUT(request, { params }) {
     }
     await page.save();
 
+    // בכוונה בלי revalidateTag כאן: זהו autosave שרץ בתדירות גבוהה מאוד
+    // (כמעט בכל הקלדה/גרירה), ולא משנה אילו עמודים נחשבים "זמינים" עבור
+    // משתמשים אחרים (status הופך ל-'available' רק דרך claim/release/admin,
+    // שכן מבוטלים בנפרד). זו אותה חריגה בדיוק כמו downloadCount המתועדת
+    // ב-src/lib/cacheTags.js — ביטול מטמון על כל שמירה בודדת כאן היה מבטל
+    // את התועלת של המטמון; חלון ה-revalidate הרגיל (OCR_TRAINING_LIST)
+    // מספיק כרשת ביטחון לעדכון תצוגת ההתקדמות/סטטוס בעמוד שלי.
     const filled = clean.filter((l) => l.text && l.text.trim()).length;
     return NextResponse.json({ success: true, markedLines: clean.length, filledLines: filled });
   } catch (error) {
     console.error('OCR training save lines error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

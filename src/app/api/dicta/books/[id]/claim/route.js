@@ -1,22 +1,24 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
-import dbConnect from '@/lib/db' 
+import dbConnect from '@/lib/db'
 import DictaBook from '@/models/DictaBook'
 import User from '@/models/User'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route' 
+import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { hasBooksAccess } from '@/lib/roles'
+import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags'
+import { unauthorized, badRequest, notFound, serverError } from '@/lib/apiResponse'
 
 // שינינו את קבלת הפרמטרים
 export async function POST(request, context) {
   // פותרים את ה-Promise של ה-params לפי הסטנדרט החדש של Next.js 15
   const params = await context.params;
-  
+
   try {
     // 1. אימות המשתמש
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'אינך מורשה לבצע פעולה זו - חסר זיהוי משתמש' }, { status: 401 });
+      return unauthorized('אינך מורשה לבצע פעולה זו - חסר זיהוי משתמש');
     }
 
     // עכשיו בטוח לגשת ל-ID
@@ -42,7 +44,7 @@ export async function POST(request, context) {
     
     if (!book) {
       console.log('❌ Book not found in DB.');
-      return NextResponse.json({ error: 'הספר לא נמצא' }, { status: 404 });
+      return notFound('הספר לא נמצא');
     }
 
 
@@ -54,7 +56,7 @@ export async function POST(request, context) {
 
     if ((book.claimedBy || book.status !== 'available') && !isAdmin) {
       console.log('❌ Book is already claimed or not available.');
-      return NextResponse.json({ error: 'הספר כבר תפוס על ידי משתמש אחר או שאינו זמין' }, { status: 400 });
+      return badRequest('הספר כבר תפוס על ידי משתמש אחר או שאינו זמין');
     }
 
     // 5. עדכון נתוני התפיסה בספר
@@ -77,15 +79,14 @@ export async function POST(request, context) {
     // 8. הוספת 10 נקודות למשתמש על תפיסת הספר
     await User.findByIdAndUpdate(userId, { $inc: { points: 10 } });
 
+    revalidateNow(CACHE_TAGS.DICTA_BOOKS_ADMIN_LIST);
+
     return NextResponse.json({ success: true, message: 'הספר נתפס בהצלחה' }, { status: 200 });
 
   } catch (error) {
     console.error('!!! ❌ ERROR IN CLAIM API ❌ !!!');
     console.error('Error message:', error.message);
-    
-    return NextResponse.json({ 
-      error: 'שגיאת שרת פנימית', 
-      details: error.message 
-    }, { status: 500 });
+
+    return serverError('שגיאת שרת פנימית');
   }
 }

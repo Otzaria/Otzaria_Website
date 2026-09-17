@@ -4,14 +4,15 @@ import DictaBook from '@/models/DictaBook';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBooksAccess } from '@/lib/roles';
+import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
+import { requireAccess, badRequest, notFound, serverError } from '@/lib/apiResponse';
 
 export async function POST(request) {
   const session = await getServerSession(authOptions);
-  
+
   try {
-    if (!hasBooksAccess(session?.user?.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const denied = requireAccess(session, hasBooksAccess);
+    if (denied) return denied;
 
     await connectDB();
 
@@ -19,24 +20,20 @@ export async function POST(request) {
     const { bookId, splitPosition, firstBookTitle, secondBookTitle } = body;
 
     if (!bookId || !splitPosition || !firstBookTitle || !secondBookTitle) {
-      return NextResponse.json({ 
-        error: 'חסרים פרמטרים: יש לספק מזהה ספר, מיקום פיצול ושמות לשני הספרים' 
-      }, { status: 400 });
+      return badRequest('חסרים פרמטרים: יש לספק מזהה ספר, מיקום פיצול ושמות לשני הספרים');
     }
 
     // טעינת הספר המקורי
     const originalBook = await DictaBook.findById(bookId);
     if (!originalBook) {
-      return NextResponse.json({ error: 'הספר לא נמצא' }, { status: 404 });
+      return notFound('הספר לא נמצא');
     }
 
     const content = originalBook.content || '';
-    
+
     // וידוא שמיקום הפיצול תקין
     if (splitPosition < 0 || splitPosition > content.length) {
-      return NextResponse.json({ 
-        error: 'מיקום הפיצול לא תקין' 
-      }, { status: 400 });
+      return badRequest('מיקום הפיצול לא תקין');
     }
 
     // פיצול התוכן
@@ -44,25 +41,19 @@ export async function POST(request) {
     const secondContent = content.substring(splitPosition).trim();
 
     if (!firstContent || !secondContent) {
-      return NextResponse.json({ 
-        error: 'אחד מהספרים יהיה ריק. אנא בחר מיקום פיצול אחר' 
-      }, { status: 400 });
+      return badRequest('אחד מהספרים יהיה ריק. אנא בחר מיקום פיצול אחר');
     }
 
     // בדיקה שהשמות לא קיימים
     const existingFirst = await DictaBook.findOne({ title: firstBookTitle });
     const existingSecond = await DictaBook.findOne({ title: secondBookTitle });
-    
+
     if (existingFirst) {
-      return NextResponse.json({ 
-        error: `שם הספר הראשון "${firstBookTitle}" כבר קיים במערכת` 
-      }, { status: 400 });
+      return badRequest(`שם הספר הראשון "${firstBookTitle}" כבר קיים במערכת`);
     }
-    
+
     if (existingSecond) {
-      return NextResponse.json({ 
-        error: `שם הספר השני "${secondBookTitle}" כבר קיים במערכת` 
-      }, { status: 400 });
+      return badRequest(`שם הספר השני "${secondBookTitle}" כבר קיים במערכת`);
     }
 
     // גישה חלופית ללא טרנזקציות - עם rollback ידני במקרה של כשל
@@ -110,7 +101,9 @@ export async function POST(request) {
       console.log('Original book deleted:', bookId);
       console.log('Book split completed successfully');
 
-      return NextResponse.json({ 
+      revalidateNow(CACHE_TAGS.DICTA_BOOKS_ADMIN_LIST);
+
+      return NextResponse.json({
         success: true, 
         firstBookId: firstBook._id,
         secondBookId: secondBook._id,
@@ -144,8 +137,6 @@ export async function POST(request) {
 
   } catch (error) {
     console.error('Error splitting book:', error);
-    return NextResponse.json({ 
-      error: error.message || 'שגיאה בפיצול הספר' 
-    }, { status: 500 });
+    return serverError(error.message || 'שגיאה בפיצול הספר');
   }
 }

@@ -1,5 +1,10 @@
 import connectDB from '@/lib/db'
 import BookAcronym from '@/models/BookAcronym'
+import { cached } from '@/lib/api-cache'
+
+// הרשימה המלאה משמשת יצוא/סנכרון חיצוני ואינה תלויה במשתמש, ולכן אין טעם
+// לשלוף ולמיין אותה מחדש מה-DB בכל בקשה (כמו ב-stats/github-releases).
+const CACHE_TTL_MS = 5 * 60_000
 
 function normalizeBookId(externalId) {
   const asNumber = Number(externalId)
@@ -14,37 +19,48 @@ function normalizeAlias(term) {
   return term.trim()
 }
 
+async function buildExport() {
+  await connectDB()
+
+  const books = await BookAcronym.find({})
+    .sort({ externalId: 1 })
+    .select('externalId aliases')
+    .lean()
+
+  const output = books.flatMap((book) =>
+    (book.aliases || [])
+      .map((term) => normalizeAlias(term))
+      .filter(Boolean)
+      .map((term) => ({
+        bookId: normalizeBookId(book.externalId),
+        term
+      }))
+  )
+
+  output.sort((a, b) => {
+    if (a.bookId === b.bookId) {
+      return String(a.term).localeCompare(String(b.term), 'he')
+    }
+    return String(a.bookId).localeCompare(String(b.bookId), 'en')
+  })
+
+  return output
+}
+
 export async function GET() {
   try {
-    await connectDB()
-
-    const books = await BookAcronym.find({})
-      .sort({ externalId: 1 })
-      .select('externalId aliases')
-      .lean()
-
-    const output = books.flatMap((book) =>
-      (book.aliases || [])
-        .map((term) => normalizeAlias(term))
-        .filter(Boolean)
-        .map((term) => ({
-          bookId: normalizeBookId(book.externalId),
-          term
-        }))
-    )
-
-    output.sort((a, b) => {
-      if (a.bookId === b.bookId) {
-        return String(a.term).localeCompare(String(b.term), 'he')
-      }
-      return String(a.bookId).localeCompare(String(b.bookId), 'en')
-    })
+    const output = await cached('book-acronyms-export-json', CACHE_TTL_MS, buildExport)
 
     return new Response(JSON.stringify(output, null, 2), {
       status: 200,
       headers: {
         'Content-Type': 'application/json; charset=utf-8',
-        'Content-Disposition': 'attachment; filename="book_acronym.json"'
+        'Content-Disposition': 'attachment; filename="book_acronym.json"',
+        // נתון ציבורי-לגמרי, לא תלוי-משתמש/session (יצוא סנכרון חיצוני) —
+        // מאפשרים כאן CDN/browser caching קצר על אף שער השבת ב-src/proxy.js
+        // (פשרה מכוונת: בקשות שמוגשות מהמטמון של הדפדפן/CDN לא יעברו דרך
+        // ה-middleware בזמן שבת/יו"ט, ראו CLAUDE.md).
+        'Cache-Control': 'public, max-age=120, stale-while-revalidate=300'
       }
     })
   } catch (error) {

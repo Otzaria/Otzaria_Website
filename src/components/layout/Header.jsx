@@ -7,6 +7,7 @@ import { getAvatarColor, getInitial } from '@/lib/avatar-colors'
 import { LIBRARY_NAV_LINKS } from '@/lib/navigation-constants'
 import { hasAnyAdminAccess } from '@/lib/roles'
 import { useState, useEffect } from 'react'
+import { apiGet } from '@/lib/api-utils'
 
 export default function Header() {
   const { data: session } = useSession()
@@ -18,8 +19,7 @@ export default function Header() {
       const loadUnreadCount = async () => {
         try {
           // תיקון נתיב: messages/list -> messages
-          const response = await fetch('/api/messages?allMessages=true')
-          const result = await response.json()
+          const result = await apiGet('/api/messages?allMessages=true')
           if (result.success) {
             const unread = result.messages.filter(m => m.status === 'unread').length
             setUnreadMessages(unread)

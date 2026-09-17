@@ -5,32 +5,37 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import mongoose from 'mongoose';
 import { hasAnyAdminAccess } from '@/lib/roles';
+import { getAdminMessagesList } from '@/lib/adminMessages';
+import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
+import { unauthorized, badRequest, serverError } from '@/lib/apiResponse';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
     try {
         const session = await getServerSession(authOptions);
-        if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        
-        await connectDB();
-        
-        const { searchParams } = new URL(request.url);
-        const showAll = searchParams.get('allMessages'); 
+        if (!session) return unauthorized();
 
-        let query = {};
-        
+        const { searchParams } = new URL(request.url);
+        const showAll = searchParams.get('allMessages');
+
         if (hasAnyAdminAccess(session.user.role) && showAll === 'true') {
-             // הודעות מערכת הן אישיות לנמען — אינן מוצגות בניהול ההודעות
-             query = { messageType: { $ne: 'system' } };
-        } else {
-            query = { 
-                $or: [
-                    { sender: session.user._id },
-                    { recipient: session.user._id }
-                ]
-            };
+             // תור הניהול המשותף — ללא מטמון בכוונה: ה-route הזה משמש גם לרענון
+             // מיידי בצד הלקוח אחרי פעולה (ראו admin/messages/page.jsx).
+             // השאילתה עצמה זהה לזו שמוזנת ל-unstable_cache בדף
+             // (getAdminMessagesList, ראו src/lib/adminMessages.js).
+             const formattedMessages = await getAdminMessagesList();
+             return NextResponse.json({ success: true, messages: formattedMessages });
         }
+
+        await connectDB();
+
+        const query = {
+            $or: [
+                { sender: session.user._id },
+                { recipient: session.user._id }
+            ]
+        };
 
         const messages = await Message.find(query)
             .populate('sender', 'name email role')
@@ -71,14 +76,14 @@ export async function GET(request) {
         return NextResponse.json({ success: true, messages: formattedMessages });
     } catch (error) {
         console.error('Error fetching messages:', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return serverError('Internal Server Error');
     }
 }
 
 export async function POST(request) {
     try {
         const session = await getServerSession(authOptions);
-        if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        if (!session) return unauthorized();
 
         const { subject, content, recipientId } = await request.json();
         await connectDB();
@@ -92,21 +97,26 @@ export async function POST(request) {
             readBy: []
         });
 
+        // תור הניהול המשותף מציג כל הודעה שאינה הודעת-מערכת, ללא סינון לפי
+        // נמען (ראו getAdminMessagesList) — כל הודעה חדשה עשויה להופיע בו,
+        // כך שמבטלים את המטמון מיד כדי שהמנהלים לא ימתינו לחלון הגיבוי.
+        revalidateNow(CACHE_TAGS.MESSAGES_ADMIN_LIST);
+
         return NextResponse.json({ success: true });
     } catch (error) {
         console.error('Error sending message:', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return serverError('Internal Server Error');
     }
 }
 
 export async function PUT(request) {
     console.log('🔄 PUT Request Started');
-    
+
     try {
         const session = await getServerSession(authOptions);
         if (!session) {
             console.log('❌ Unauthorized PUT request');
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+            return unauthorized();
         }
 
         const { messageIds } = await request.json();
@@ -131,7 +141,7 @@ export async function PUT(request) {
             messageObjectIds = messageIds.map(id => new mongoose.Types.ObjectId(id));
         } catch (e) {
             console.error('❌ Conversion Error:', e);
-            return NextResponse.json({ error: 'Invalid ID format' }, { status: 400 });
+            return badRequest('Invalid ID format');
         }
 
         console.log(`🛠️ Executing DB Update...`);
@@ -160,6 +170,6 @@ export async function PUT(request) {
 
     } catch (error) {
         console.error('❌ FATAL ERROR in PUT:', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return serverError('Internal Server Error');
     }
 }

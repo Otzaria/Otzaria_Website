@@ -1,17 +1,16 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useSession } from 'next-auth/react'
-import { useRouter, usePathname } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import Header from '@/components/layout/Header'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { useDialog } from '@/components/providers/DialogContext'
 import { hasBooksAccess } from '@/lib/roles'
+import { useRequireAuth } from '@/hooks/useRequireAuth'
 
 export default function LibraryAcronymsPage() {
-  const { data: session, status } = useSession()
+  const { session, status } = useRequireAuth()
   const router = useRouter()
-  const pathname = usePathname()
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -25,15 +24,11 @@ export default function LibraryAcronymsPage() {
   const { showAlert } = useDialog()
 
   useEffect(() => {
-    if (status === 'loading') return
-    if (status === 'unauthenticated') {
-      router.push(`/auth/login?callbackUrl=${encodeURIComponent(pathname)}`)
-      return
-    }
+    if (status === 'loading' || status === 'unauthenticated') return
     if (!hasBooksAccess(session?.user?.role)) {
       router.push('/library/unauthorized')
     }
-  }, [status, session, router, pathname])
+  }, [status, session, router])
 
   const stripGershayim = (value) => String(value || '').trim().replace(/["'׳״]/g, '')
 

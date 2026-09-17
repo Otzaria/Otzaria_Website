@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import SystemConfig from '@/models/SystemConfig';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'; 
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBookLibraryAccess } from '@/lib/roles';
+import { badRequest, requireAccess, serverError } from '@/lib/apiResponse';
 
 const CONFIG_KEY = 'global_editor_instructions';
 
@@ -21,30 +22,23 @@ export async function GET() {
 
   } catch (error) {
     console.error('Error fetching global instructions:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch instructions' },
-      { status: 500 }
-    );
+    return serverError('Failed to fetch instructions');
   }
 }
 
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !hasBookLibraryAccess(session.user?.role)) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
+    const denied = requireAccess(session, hasBookLibraryAccess);
+    if (denied) return denied;
 
     await connectDB();
-    
+
     const body = await request.json();
     const { instructions } = body;
 
     if (!instructions || !Array.isArray(instructions.sections)) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid data format' },
-        { status: 400 }
-      );
+      return badRequest('Invalid data format');
     }
 
     const updatedConfig = await SystemConfig.findOneAndUpdate(
@@ -65,9 +59,6 @@ export async function POST(request) {
 
   } catch (error) {
     console.error('Error saving global instructions:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to save instructions' },
-      { status: 500 }
-    );
+    return serverError('Failed to save instructions');
   }
 }

@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import connectDB from '@/lib/db';
 import OcrLine from '@/models/OcrLine';
 import { LINES_BATCH_SIZE, sampleAvailableLines, requireVerifiedSession } from '@/lib/ocr/linePool';
+import { serverError } from '@/lib/apiResponse';
 
 // GET: מנה של עד 10 שורות זמינות, אקראיות ומוחכרות זמנית למבקש — כדי שמשתמשים
 // שונים לא יעבדו על אותן שורות בו-זמנית. מצורפת סטטיסטיקה: כמה שורות כבר
@@ -32,6 +33,6 @@ export async function GET() {
     return NextResponse.json({ success: true, lines, stats: { total, done, mine } });
   } catch (err) {
     console.error('OCR lines batch error:', err, 'user:', session?.user?.id);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

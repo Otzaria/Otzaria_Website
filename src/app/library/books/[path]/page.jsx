@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import ImagePreviewModal from '@/components/ui/ImagePreviewModal'
 import { useDialog } from '@/components/providers/DialogContext'
 import { useLoading } from '@/components/providers/LoadingContext'
@@ -542,6 +543,7 @@ export default function BookPage() {
               >
                   <PageCard
                     page={page}
+                    viewMode={viewMode}
                     onClaim={handleClaimPage}
                     onComplete={handleMarkComplete}
                     onRelease={handleReleasePage}
@@ -650,7 +652,7 @@ function formatTimeAgo(dateString) {
   }
 }
 
-function PageCard({ page, onClaim, onComplete, onRelease, onUncomplete, onPreview, currentUser, bookPath, isAdmin, isBookOwner }) {
+function PageCard({ page, viewMode, onClaim, onComplete, onRelease, onUncomplete, onPreview, currentUser, bookPath, isAdmin, isBookOwner }) {
   const status = pageStatusConfig[page.status]
 
   const editUrl = `/library/books/${encodeURIComponent(bookPath)}/${page.number}`;
@@ -675,7 +677,18 @@ function PageCard({ page, onClaim, onComplete, onRelease, onUncomplete, onPrevie
       >
         {page.thumbnail ? (
           <>
-            <img src={page.thumbnail} alt={`עמוד ${page.number}`} loading="lazy" decoding="async" fetchPriority="low" className="w-full h-full object-cover" />
+            <Image
+              src={page.thumbnail}
+              alt={`עמוד ${page.number}`}
+              fill
+              loading="lazy"
+              sizes={
+                viewMode === 'double'
+                  ? '(max-width: 640px) 45vw, (max-width: 1024px) 20vw, 10vw'
+                  : '(max-width: 640px) 90vw, (max-width: 1024px) 30vw, 20vw'
+              }
+              className="object-cover"
+            />
             <div className="absolute top-2 left-2 bg-black/70 text-white px-2 py-1 rounded text-xs font-bold z-10 pointer-events-none">{page.number}</div>
           </>
         ) : (

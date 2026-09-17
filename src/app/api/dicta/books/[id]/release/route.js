@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
-import dbConnect from '@/lib/db' 
+import dbConnect from '@/lib/db'
 import DictaBook from '@/models/DictaBook'
 import User from '@/models/User'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route' 
+import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { hasBooksAccess } from '@/lib/roles'
+import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags'
+import { unauthorized, forbidden, notFound, serverError } from '@/lib/apiResponse'
 
 export async function POST(request, context) {
 
@@ -17,7 +19,7 @@ export async function POST(request, context) {
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'אינך מורשה לבצע פעולה זו - חסר זיהוי משתמש' }, { status: 401 });
+      return unauthorized('אינך מורשה לבצע פעולה זו - חסר זיהוי משתמש');
     }
 
     const userId = String(session.user.id); // ממירים למחרוזת ליתר ביטחון
@@ -32,7 +34,7 @@ export async function POST(request, context) {
     const book = await DictaBook.findById(bookId);
     
     if (!book) {
-      return NextResponse.json({ error: 'הספר לא נמצא' }, { status: 404 });
+      return notFound('הספר לא נמצא');
     }
 
     console.log('✅ Book found:', book.title);
@@ -47,11 +49,7 @@ export async function POST(request, context) {
     const isOwner = claimedByIdString === userId;
     
     if (!isOwner && !isAdmin) {
-      // מחזירים את נתוני הדיבוג ללקוח כדי שנוכל לראות אותם בלשונית ה-Network
-      return NextResponse.json({ 
-        error: 'אינך מורשה לשחרר ספר זה',
-        debug: { userId, claimedByIdString, isAdmin }
-      }, { status: 403 });
+      return forbidden('אינך מורשה לשחרר ספר זה');
     }
 
     // 5. איפוס נתוני התפיסה בספר
@@ -74,16 +72,15 @@ export async function POST(request, context) {
     // 8. הפחתת 10 נקודות מהמשתמש על שחרור הספר
     await User.findByIdAndUpdate(userId, { $inc: { points: -10 } });
 
+    revalidateNow(CACHE_TAGS.DICTA_BOOKS_ADMIN_LIST);
+
     return NextResponse.json({ success: true, message: 'הספר שוחרר בהצלחה' }, { status: 200 });
 
   } catch (error) {
     console.error('!!! ❌ ERROR IN RELEASE API ❌ !!!');
     console.error('Error message:', error.message);
     console.error('Stack:', error.stack);
-    
-    return NextResponse.json({ 
-      error: 'שגיאת שרת פנימית', 
-      details: error.message 
-    }, { status: 500 });
+
+    return serverError('שגיאת שרת פנימית');
   }
 }

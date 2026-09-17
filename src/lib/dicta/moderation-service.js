@@ -3,6 +3,7 @@ import LibraryBook from '@/models/LibraryBook';
 import BookEdit from '@/models/BookEdit';
 import User from '@/models/User';
 import { applyHunks, diffToHunks } from '@/lib/dicta/text-diff';
+import { changeStatus, applyChangesSequentially, computeEditClosure } from '@/lib/dicta/moderation-logic';
 
 const norm = (s) => String(s == null ? '' : s).replace(/\r\n/g, '\n');
 
@@ -11,9 +12,6 @@ async function refreshPendingCount(bookId) {
   await LibraryBook.updateOne({ _id: bookId }, { $set: { pendingCount: count } });
   return count;
 }
-
-/** סטטוס מקטע, עם תאימות לאחור: מסמכים שנוצרו לפני שדה ה-status → 'pending'. */
-const changeStatus = (c) => c.status || 'pending';
 
 /** מונה את המקטעים שעדיין ממתינים בהצעה (כולל מקטעים ללא שדה status — ישנים). */
 async function countPendingChanges(editId) {
@@ -39,14 +37,7 @@ async function applyChangeSubset(edit, subset) {
       return { okChanges: [...subset], conflictChanges: [], bookMissing: true };
     }
 
-    let cur = book.content || '';
-    const okChanges = [];
-    const conflictChanges = [];
-    for (const c of subset) {
-      const { content, conflicts } = applyHunks(cur, [{ before: c.before, after: c.after }]);
-      if (conflicts.length) conflictChanges.push(c);
-      else { cur = content; okChanges.push(c); }
-    }
+    const { content: cur, okChanges, conflictChanges } = applyChangesSequentially(book.content || '', subset);
 
     if (cur === (book.content || '')) {
       // שום שינוי טקסטואלי (הכל אידמפוטני או הכל קונפליקט) — אין צורך בכתיבה/בקפיצת גרסה
@@ -263,15 +254,14 @@ export async function moderateChanges({ editId, approve = [], reject = [], moder
 
   // 4) סגירה אטומית: רק אם לא נותר אף מקטע ממתין. הסטטוס נגזר מהאם יש מקטע מאושר.
   const settled = await BookEdit.findById(editId);
-  const remainingPending = settled.changes.filter((c) => changeStatus(c) === 'pending').length;
+  const closure = computeEditClosure(settled.changes);
+  const remainingPending = closure.remainingPending;
   let finalStatus = 'partial';
-  if (remainingPending === 0) {
-    const anyApproved = settled.changes.some((c) => c.status === 'approved');
-    finalStatus = anyApproved ? 'approved' : 'rejected';
-    const allApplied = settled.changes.every((c) => c.status !== 'approved' || c.applied);
+  if (closure.closed) {
+    finalStatus = closure.finalStatus;
     await BookEdit.updateOne(
       { _id: editId, status: 'pending', 'changes.status': { $nin: ['pending', null] } },
-      { $set: { status: finalStatus, applied: allApplied, reviewedBy: moderatorDoc._id, reviewerName: moderatorDoc.name, reviewedAt: new Date(), ...(note ? { reviewNote: note } : {}) } }
+      { $set: { status: finalStatus, applied: closure.allApplied, reviewedBy: moderatorDoc._id, reviewerName: moderatorDoc.name, reviewedAt: new Date(), ...(note ? { reviewNote: note } : {}) } }
     );
   }
   await refreshPendingCount(settled.book);
@@ -319,9 +309,10 @@ export async function reconcileApprovedEdits() {
         if (okSet.has(c)) c.applied = true;
         else if (conflictSet.has(c)) { c.status = 'pending'; c.applied = false; }
       });
-      if (edit.changes.filter((c) => changeStatus(c) === 'pending').length === 0) {
-        edit.status = edit.changes.some((c) => c.status === 'approved') ? 'approved' : 'rejected';
-        edit.applied = edit.changes.every((c) => c.status !== 'approved' || c.applied);
+      const closure = computeEditClosure(edit.changes);
+      if (closure.closed) {
+        edit.status = closure.finalStatus;
+        edit.applied = closure.allApplied;
       }
       await edit.save();
       await refreshPendingCount(edit.book);
@@ -349,8 +340,9 @@ export async function rejectEdit({ editId, moderatorDoc, note }) {
   if (edit.status !== 'pending') return { status: 'not-pending' };
 
   edit.changes.forEach((c) => { if (changeStatus(c) === 'pending') c.status = 'rejected'; });
-  edit.status = edit.changes.some((c) => c.status === 'approved') ? 'approved' : 'rejected';
-  edit.applied = edit.changes.every((c) => c.status !== 'approved' || c.applied);
+  const closure = computeEditClosure(edit.changes);
+  edit.status = closure.finalStatus;
+  edit.applied = closure.allApplied;
   edit.reviewedBy = moderatorDoc._id;
   edit.reviewerName = moderatorDoc.name;
   edit.reviewedAt = new Date();

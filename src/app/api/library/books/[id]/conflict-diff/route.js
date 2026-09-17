@@ -3,23 +3,24 @@ import connectDB from '@/lib/db';
 import LibraryBook from '@/models/LibraryBook';
 import { requireModerator } from '@/lib/dicta/require-moderator';
 import { diffToHunks, focusChange } from '@/lib/dicta/text-diff';
+import { apiError, notFound, serverError } from '@/lib/apiResponse';
 
 // diff בין גרסת האתר לגרסת גיטהאב לספר בודד בקונפליקט (אדום=גיטהאב, ירוק=האתר).
 // נטען לפי דרישה כדי לא לחשב diff על כל הספרים בבת אחת בעמוד הקונפליקטים.
 export async function GET(req, { params }) {
   try {
     const auth = await requireModerator('sync');
-    if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
+    if (auth.error) return apiError(auth.status, auth.error);
 
     const { id } = await params;
 
     await connectDB();
     const book = await LibraryBook.findById(id, 'content conflict syncStatus').lean();
-    if (!book) return NextResponse.json({ error: 'Not Found' }, { status: 404 });
+    if (!book) return notFound('Not Found');
 
     // ללא ולידציה זו, id תקין של ספר שאינו בקונפליקט יחזיר diff מטעה מול מחרוזת ריקה
     if (book.syncStatus !== 'conflict' || book.conflict?.theirsContent == null) {
-      return NextResponse.json({ error: 'Book is not in conflict' }, { status: 409 });
+      return apiError(409, 'Book is not in conflict');
     }
 
     // before = גיטהאב (theirs), after = האתר (ours) → אדום=גיטהאב, ירוק=האתר
@@ -36,6 +37,6 @@ export async function GET(req, { params }) {
     return NextResponse.json({ changeCount: hunks.length, changes });
   } catch (error) {
     console.error('Failed to compute conflict diff:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

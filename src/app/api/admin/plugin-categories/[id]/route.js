@@ -4,6 +4,7 @@ import dbConnect from '@/lib/db'
 import PluginCategory from '@/models/PluginCategory'
 import Plugin from '@/models/Plugin'
 import { requirePluginsAdmin } from '@/lib/adminAuth'
+import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags'
 import {
   PLUGIN_PREVIEW_FIELDS,
   validateCategoryData,
@@ -147,6 +148,8 @@ export async function PATCH(request, { params }) {
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
     }
 
+    revalidateNow(CACHE_TAGS.PLUGIN_CATEGORIES)
+    revalidateNow(CACHE_TAGS.PLUGINS_PUBLIC)
     return NextResponse.json({ success: true, category: await reloadCategory(id) })
   } catch (error) {
     console.error('Error updating plugin category:', error)
@@ -172,6 +175,8 @@ export async function DELETE(request, { params }) {
       return NextResponse.json({ error: 'Category not found' }, { status: 404 })
     }
 
+    revalidateNow(CACHE_TAGS.PLUGIN_CATEGORIES)
+    revalidateNow(CACHE_TAGS.PLUGINS_PUBLIC)
     return NextResponse.json({ success: true, message: 'Category deleted successfully' })
   } catch (error) {
     console.error('Error deleting plugin category:', error)

@@ -2,109 +2,36 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
 import Page from '@/models/Page';
-import DictaBook from '@/models/DictaBook';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { getAdminUsersWithStats } from '@/lib/adminUsers';
+import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
+import { isAdmin } from '@/lib/roles';
+import { requireAccess, badRequest, notFound, serverError, apiError } from '@/lib/apiResponse';
 
 export async function GET() {
     try {
         const session = await getServerSession(authOptions);
-        if (session?.user?.role !== 'admin') {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
+        const denied = requireAccess(session, isAdmin);
+        if (denied) return denied;
 
-        await connectDB();
-
-        // 1. שליפת כל המשתמשים
-        const users = await User.find({})
-            .select('-password -resetPasswordToken -resetPasswordExpires -verificationToken -verificationTokenExpires -verificationRequestHistory -lastResetRequest -dailyResetRequestsCount')
-            .sort({ createdAt: -1 })
-            .lean();
-
-        // 2. חישוב סטטיסטיקות מתקדם (Aggregation)
-        // סופר גם Completed וגם In-Progress
-        const pagesStats = await Page.aggregate([
-            {
-                $match: { 
-                    claimedBy: { $ne: null } // רק עמודים שיש להם משתמש משויך
-                }
-            },
-            {
-                $group: {
-                    _id: '$claimedBy',
-                    completedCount: { 
-                        $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] } 
-                    },
-                    inProgressCount: { 
-                        $sum: { $cond: [{ $eq: ["$status", "in-progress"] }, 1, 0] } 
-                    },
-                    totalCount: { $sum: 1 }
-                }
-            }
-        ]);
-
-        // 2.5. חישוב סטטיסטיקות ספרי דיקטה - רק ספרים שהושלמו
-        const dictaBooksStats = await DictaBook.aggregate([
-            {
-                $match: { 
-                    claimedBy: { $ne: null },
-                    status: 'completed' // רק ספרים שהושלמו
-                }
-            },
-            {
-                $group: {
-                    _id: '$claimedBy',
-                    dictaBooksCount: { $sum: 1 }
-                }
-            }
-        ]);
-
-        // 3. יצירת מפה לגישה מהירה
-        const statsMap = {};
-        pagesStats.forEach(stat => {
-            if (stat._id) {
-                statsMap[stat._id.toString()] = {
-                    completed: stat.completedCount,
-                    inProgress: stat.inProgressCount,
-                    total: stat.totalCount
-                };
-            }
-        });
-
-        // 3.5. יצירת מפה לספרי דיקטה
-        const dictaBooksMap = {};
-        dictaBooksStats.forEach(stat => {
-            if (stat._id) {
-                dictaBooksMap[stat._id.toString()] = stat.dictaBooksCount;
-            }
-        });
-
-        // 4. מיזוג הנתונים למשתמשים
-        const usersWithStats = users.map(user => {
-            const stats = statsMap[user._id.toString()] || { completed: 0, inProgress: 0, total: 0 };
-            const dictaBooksCount = dictaBooksMap[user._id.toString()] || 0;
-            return {
-                ...user,
-                completedPages: stats.completed, // עמודים גמורים
-                inProgressPages: stats.inProgress, // עמודים בטיפול
-                totalPages: stats.total, // סה"כ עמודים משויכים
-                dictaBooks: dictaBooksCount // ספרי דיקטה
-            };
-        });
+        // ללא מטמון בכוונה: ה-route הזה משמש גם לרענון מיידי בצד הלקוח אחרי
+        // עדכון/מחיקת משתמש (ראו page.jsx) — השאילתה עצמה זהה לזו שמוזנת
+        // ל-unstable_cache בדף (getAdminUsersWithStats, ראו src/lib/adminUsers.js).
+        const usersWithStats = await getAdminUsersWithStats();
 
         return NextResponse.json({ success: true, users: usersWithStats });
     } catch (e) {
         console.error('Admin users error:', e);
-        return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
+        return serverError();
     }
 }
 
 export async function PUT(request) {
     try {
         const session = await getServerSession(authOptions);
-        if (session?.user?.role !== 'admin') {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
+        const denied = requireAccess(session, isAdmin);
+        if (denied) return denied;
 
         const { userId, role, points, name, email, isSupervisor, dictaEditBlocked } = await request.json();
 
@@ -112,7 +39,7 @@ export async function PUT(request) {
 
         const currentUser = await User.findById(userId).select('email');
         if (!currentUser) {
-            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+            return notFound('User not found');
         }
 
         const emailChanged = email && email !== currentUser.email;
@@ -121,12 +48,12 @@ export async function PUT(request) {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             // codeql[js/polynomial-redos]: bound input length before testing.
             if (email.length > 254 || !emailRegex.test(email)) {
-                return NextResponse.json({ error: 'Invalid email address' }, { status: 400 });
+                return badRequest('Invalid email address');
             }
 
             const existingUser = await User.findOne({ email, _id: { $ne: userId } });
             if (existingUser) {
-                return NextResponse.json({ error: 'Email already in use' }, { status: 409 });
+                return apiError(409, 'Email already in use');
             }
         }
 
@@ -166,21 +93,22 @@ export async function PUT(request) {
         ).select('-password -resetPasswordToken -resetPasswordExpires -verificationToken -verificationTokenExpires -verificationRequestHistory -lastResetRequest -dailyResetRequestsCount');
 
         if (!updatedUser) {
-            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+            return notFound('User not found');
         }
+
+        revalidateNow(CACHE_TAGS.USERS_ADMIN_LIST);
 
         return NextResponse.json({ success: true, user: updatedUser });
     } catch (error) {
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return serverError();
     }
 }
 
 export async function DELETE(request) {
     try {
         const session = await getServerSession(authOptions);
-        if (session?.user?.role !== 'admin') {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
+        const denied = requireAccess(session, isAdmin);
+        if (denied) return denied;
 
         const { userId } = await request.json();
         await connectDB();
@@ -197,8 +125,10 @@ export async function DELETE(request) {
             }
         );
 
+        revalidateNow(CACHE_TAGS.USERS_ADMIN_LIST);
+
         return NextResponse.json({ success: true });
     } catch (e) {
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return serverError();
     }
 }

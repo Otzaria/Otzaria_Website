@@ -5,16 +5,18 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import mongoose from 'mongoose';
 import { hasAnyAdminAccess } from '@/lib/roles';
+import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
+import { unauthorized, forbidden, badRequest, notFound, serverError } from '@/lib/apiResponse';
 
 export async function POST(request) {
     try {
         const session = await getServerSession(authOptions);
-        if (!session) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 });
+        if (!session) return unauthorized('לא מורשה');
 
         const { messageId, reply, fromAdminPanel } = await request.json();
-        
+
         if (!messageId || !reply || !String(reply).trim()) {
-            return NextResponse.json({ error: 'חסר מזהה הודעה או תוכן תגובה' }, { status: 400 });
+            return badRequest('חסר מזהה הודעה או תוכן תגובה');
         }
 
         const userId = session?.user?._id || session?.user?.id;
@@ -23,16 +25,16 @@ export async function POST(request) {
         const isSentFromAdminInterface = fromAdminPanel === true && hasAnyAdminAccess(session?.user?.role);
 
         const message = await Message.findById(messageId).select('sender recipient allowReplies');
-        if (!message) return NextResponse.json({ error: 'ההודעה לא נמצאה' }, { status: 404 });
+        if (!message) return notFound('ההודעה לא נמצאה');
 
         if (message.allowReplies === false) {
-            return NextResponse.json({ error: 'לא ניתן להשיב על הודעת מערכת' }, { status: 403 });
+            return forbidden('לא ניתן להשיב על הודעת מערכת');
         }
 
         if (!isSentFromAdminInterface) {
             const userIdStr = String(userId);
             const isParticipant = String(message.sender) === userIdStr || String(message.recipient) === userIdStr;
-            if (!isParticipant) return NextResponse.json({ error: 'אין גישה' }, { status: 403 });
+            if (!isParticipant) return forbidden('אין גישה');
         }
 
         const userObjectId = new mongoose.Types.ObjectId(userId);
@@ -54,13 +56,12 @@ export async function POST(request) {
             }
         });
 
+        revalidateNow(CACHE_TAGS.MESSAGES_ADMIN_LIST);
+
         return NextResponse.json({ success: true });
     } catch (error) {
         console.error('Error replying to message:', error);
         const isDev = process.env.NODE_ENV !== 'production';
-        return NextResponse.json(
-            { error: isDev ? error.message : 'אירעה שגיאה בלתי צפויה' },
-            { status: 500 }
-        );
+        return serverError(isDev ? error.message : 'אירעה שגיאה בלתי צפויה');
     }
 }

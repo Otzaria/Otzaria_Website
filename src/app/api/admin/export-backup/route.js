@@ -4,6 +4,8 @@ import User from '@/models/User';
 import Book from '@/models/Book';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { isAdmin } from '@/lib/roles';
+import { requireAccess, serverError } from '@/lib/apiResponse';
 
 export const dynamic = 'force-dynamic'; // מונע קאש סטטי
 
@@ -26,9 +28,8 @@ function sanitizeUser(userDoc) {
 export async function GET() {
     try {
         const session = await getServerSession(authOptions);
-        if (session?.user?.role !== 'admin') {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
+        const denied = requireAccess(session, isAdmin);
+        if (denied) return denied;
 
         await connectDB();
 
@@ -78,6 +79,6 @@ export async function GET() {
 
     } catch (error) {
         console.error('Backup Error:', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return serverError();
     }
 }

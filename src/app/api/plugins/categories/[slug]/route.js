@@ -9,6 +9,7 @@ import {
   hasCompatibleVersion,
   resolveForAppVersion
 } from '@/lib/pluginCompatibility'
+import { badRequest, notFound, serverError } from '@/lib/apiResponse'
 
 // נבדק: לינארי — מפריד '-' חובה בכל איטרציה מונע נסיגה קטסטרופלית
 // eslint-disable-next-line security/detect-unsafe-regex
@@ -23,12 +24,12 @@ export async function GET(request, { params }) {
     const { slug } = await params
 
     if (!SLUG_RE.test(slug || '')) {
-      return NextResponse.json({ error: 'Category not found' }, { status: 404 })
+      return notFound('Category not found')
     }
 
     const category = await PluginCategory.findOne({ slug, isVisible: true }).lean()
     if (!category) {
-      return NextResponse.json({ error: 'Category not found' }, { status: 404 })
+      return notFound('Category not found')
     }
 
     const { searchParams } = new URL(request.url)
@@ -38,7 +39,7 @@ export async function GET(request, { params }) {
     const offset = Number.isInteger(offsetRaw) && offsetRaw > 0 ? offsetRaw : 0
     const { appVersion, invalid } = readAppVersionParam(searchParams)
     if (invalid) {
-      return NextResponse.json({ error: invalidAppVersionMessage() }, { status: 400 })
+      return badRequest(invalidAppVersionMessage())
     }
 
     const pluginsById = await fetchPublicPluginsByIds(category.pluginIds || [])
@@ -61,11 +62,11 @@ export async function GET(request, { params }) {
         plugins: page.map((plugin) => resolveForAppVersion(formatPluginForPublic(plugin), appVersion)),
         total: ordered.length
       },
-      // no-cache: אימות מול השרת בכל טעינה — תוסף שהושהה/חזר מתעדכן מיד בריענון רגיל
-      { headers: { 'Cache-Control': 'no-cache' } }
+      // TTL קצר: פשרה מכוונת בין עומס-שרת ל"תוסף שהושהה/חזר ממשיך להיות מוצג לא-מעודכן" לזמן קצר
+      { headers: { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=120' } }
     )
   } catch (error) {
     console.error('Error fetching plugin category:', error)
-    return NextResponse.json({ error: 'Failed to fetch category' }, { status: 500 })
+    return serverError('Failed to fetch category')
   }
 }

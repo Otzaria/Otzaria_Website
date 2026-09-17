@@ -8,6 +8,8 @@ import Page from '@/models/Page';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBookLibraryAccess } from '@/lib/roles';
+import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
+import { badRequest, notFound, requireAccess, serverError } from '@/lib/apiResponse';
 
 const UPLOAD_ROOT = path.resolve(process.env.UPLOAD_DIR || path.join(process.cwd(), 'public', 'uploads'));
 
@@ -16,9 +18,8 @@ export async function POST(request) {
 
     try {
         const session = await getServerSession(authOptions);
-        if (!hasBookLibraryAccess(session?.user?.role)) {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-        }
+        const denied = requireAccess(session, hasBookLibraryAccess);
+        if (denied) return denied;
 
         await connectDB();
 
@@ -26,19 +27,19 @@ export async function POST(request) {
         const { bookIds, newName, isHidden } = body;
 
         if (!bookIds || !Array.isArray(bookIds) || bookIds.length < 2) {
-            return NextResponse.json({ error: 'יש לבחור לפחות 2 ספרים למיזוג' }, { status: 400 });
+            return badRequest('יש לבחור לפחות 2 ספרים למיזוג');
         }
 
         const existingName = await Book.findOne({ name: newName });
         if (existingName) {
-            return NextResponse.json({ error: 'שם הספר כבר קיים במערכת' }, { status: 400 });
+            return badRequest('שם הספר כבר קיים במערכת');
         }
 
         const oldBooks = await Book.find({ _id: { $in: bookIds } });
         const sortedOldBooks = bookIds.map(id => oldBooks.find(b => b._id.toString() === id)).filter(Boolean);
 
         if (sortedOldBooks.length < 2) {
-            return NextResponse.json({ error: 'חלק מהספרים לא נמצאו' }, { status: 404 });
+            return notFound('חלק מהספרים לא נמצאו');
         }
 
         const safeName = slugify(newName, { replacement: '-', remove: /[*+~.()'"!:@\/\\?]/g, lower: false, strict: false });
@@ -190,11 +191,13 @@ export async function POST(request) {
             }
         }
 
+        revalidateNow(CACHE_TAGS.BOOKS_ADMIN_LIST);
+
         return NextResponse.json({ success: true, bookId: newBook._id });
 
     } catch (error) {
         console.error('CRITICAL MERGE ERROR:', error);
 
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return serverError('Internal Server Error');
     }
 }

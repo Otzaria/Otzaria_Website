@@ -68,7 +68,8 @@ export async function GET(request) {
           formatPluginForPublic(plugin, { isFeatured: featuredRank.has(plugin._id.toString()) })
         ),
         appVersion
-      )
+      ),
+      { headers: { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=120' } }
     )
   } catch (error) {
     console.error('Error fetching plugins:', error)

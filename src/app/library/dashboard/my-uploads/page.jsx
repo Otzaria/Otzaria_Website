@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import Header from '@/components/layout/Header'
+import LoadingSpinner from '@/components/ui/LoadingSpinner'
 
 export default function PersonalLibraryPage() {
   const [flatBooks, setFlatBooks] = useState([])
@@ -108,10 +109,7 @@ export default function PersonalLibraryPage() {
 
             {/* גריד ספרים */}
             {loading ? (
-                <div className="flex flex-col justify-center items-center h-64 opacity-60">
-                    <span className="material-symbols-outlined animate-spin text-5xl text-primary mb-4">progress_activity</span>
-                    <p>טוען...</p>
-                </div>
+                <LoadingSpinner message="טוען..." />
             ) : filteredBooks.length === 0 ? (
                 <div className="text-center py-20 bg-neutral-50 rounded-3xl border-2 border-dashed border-neutral-200">
                     <span className="material-symbols-outlined text-6xl text-neutral-300 mb-4">library_books</span>

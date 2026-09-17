@@ -5,6 +5,7 @@ import Plugin from '@/models/Plugin'
 import { getStoreSettings } from '@/models/StoreSettings'
 import { requirePluginsAdmin } from '@/lib/adminAuth'
 import { invalidatePluginSearchIndex } from '@/lib/pluginSearchIndex'
+import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags'
 
 const LIMITS = { homeTitle: 80, homeSubtitle: 200, featured: 100 }
 
@@ -91,6 +92,8 @@ export async function PATCH(request) {
         { $addToSet: { featuredPluginIds: body.pluginId }, $set: { updatedBy: auth.session.user.id } }
       )
       invalidatePluginSearchIndex()
+      revalidateNow(CACHE_TAGS.STORE_SETTINGS)
+      revalidateNow(CACHE_TAGS.PLUGINS_PUBLIC)
       const fresh = await getStoreSettings()
       return NextResponse.json({
         success: true,
@@ -136,6 +139,8 @@ export async function PATCH(request) {
     await settings.save()
     // רשימת הנבחרים משפיעה על דירוג החיפוש (isFeatured בקאש האינדקס)
     invalidatePluginSearchIndex()
+    revalidateNow(CACHE_TAGS.STORE_SETTINGS)
+    revalidateNow(CACHE_TAGS.PLUGINS_PUBLIC)
 
     return NextResponse.json({
       success: true,

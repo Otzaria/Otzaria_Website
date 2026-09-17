@@ -48,8 +48,8 @@ export async function GET(request) {
     const updates = resolvePluginUpdates(plugins, requests, appVersion)
     return NextResponse.json(
       { appVersion, updates },
-      // בלי cache — השהיית תוסף צריכה להעלים אותו מהתשובה מיד
-      { headers: { 'Cache-Control': 'no-cache' } }
+      // TTL קצר: פשרה מכוונת — השהיית תוסף עלולה להתעכב עד כדי כך בהעלמות מהתשובה
+      { headers: { 'Cache-Control': 'public, max-age=20, stale-while-revalidate=60' } }
     )
   } catch (error) {
     console.error('Error checking plugin updates:', error)

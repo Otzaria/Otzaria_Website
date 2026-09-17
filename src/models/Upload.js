@@ -29,4 +29,9 @@ const UploadSchema = new mongoose.Schema({
   ocrDescription: { type: String }, // תיאור שיטת ה-OCR
 }, { timestamps: true });
 
+// שאילתות תכופות מסננות לפי isDeleted (+ מיון לפי תאריך יצירה) ולפי uploader —
+// בלי אינדקסים אלה כל שאילתא כזו היא סריקת קולקציה מלאה.
+UploadSchema.index({ isDeleted: 1, createdAt: -1 });
+UploadSchema.index({ uploader: 1 });
+
 export default mongoose.models.Upload || mongoose.model('Upload', UploadSchema);

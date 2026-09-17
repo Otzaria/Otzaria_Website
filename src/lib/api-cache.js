@@ -48,18 +48,3 @@ export function invalidate(key) {
   if (key === undefined) store.clear()
   else store.delete(key)
 }
-
-/**
- * כותרות מטמון ל-API שחסימת השבת חלה עליו.
- *
- * no-store, ולא private+max-age: private אמנם מונע שמירה ב-CDN, אבל הוא כן
- * מרשה לדפדפן לענות מהמטמון המקומי בלי לפנות לשרת — כלומר בלי לעבור בחסימת
- * השבת שב-src/proxy.js. גרסה קודמת של הקובץ הזה השתמשה ב-private והנמקה
- * שגויה שלפיה זה מספיק.
- *
- * ההאטה זניחה: החישוב היקר נשמר ממילא ב-cached() בזיכרון התהליך, ולכן בקשה
- * חוזרת נענית מהזיכרון בלי לגעת ב-DB.
- */
-export function shabbatGatedCacheHeaders() {
-  return { 'Cache-Control': 'no-store' }
-}

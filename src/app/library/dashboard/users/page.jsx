@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Header from '@/components/layout/Header'
 import { getAvatarColor, getInitial } from '@/lib/avatar-colors'
+import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import { formatDateShort } from '@/lib/formatDate'
 
 export default function UsersManagementPage() {
   const { data: session, status } = useSession()
@@ -16,10 +18,12 @@ export default function UsersManagementPage() {
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push(`/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
-    } else if (session?.user?.role !== 'admin') {
-      router.push('/library/dashboard') // 👈 תיקון: הוספת /library
-    } else {
-      fetchUsers()
+    } else if (status === 'authenticated') {
+      if (session?.user?.role !== 'admin') {
+        router.push('/library/dashboard') // 👈 תיקון: הוספת /library
+      } else {
+        fetchUsers()
+      }
     }
   }, [status, session, router])
 
@@ -84,10 +88,8 @@ export default function UsersManagementPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <span className="material-symbols-outlined animate-spin text-6xl text-primary">
-          progress_activity
-        </span>
+      <div className="flex items-center justify-center min-h-screen">
+        <LoadingSpinner message="טוען..." size="lg" />
       </div>
     )
   }
@@ -156,7 +158,7 @@ export default function UsersManagementPage() {
                         </select>
                       </td>
                       <td className="px-6 py-4 text-on-surface/70">
-                        {new Date(user.createdAt).toLocaleDateString('he-IL')}
+                        {formatDateShort(user.createdAt)}
                       </td>
                       <td className="px-6 py-4">
                         <button

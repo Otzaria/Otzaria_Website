@@ -1,19 +1,17 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { useSession } from 'next-auth/react'
-import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import Header from '@/components/layout/Header'
+import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { useDialog } from '@/components/providers/DialogContext'
 import { canModerateLibrary } from '@/lib/roles'
 import { EDIT_TYPE_LABELS, EDIT_KIND } from '@/lib/dicta/edit-constants'
 import DiffPreview from '@/components/library/DiffPreview'
+import { useRequireAuth } from '@/hooks/useRequireAuth'
 
 export default function ModerationPage() {
-  const { data: session, status } = useSession()
-  const router = useRouter()
-  const pathname = usePathname()
+  const { session, status } = useRequireAuth()
   const { showAlert, showConfirm } = useDialog()
 
   const [edits, setEdits] = useState([])
@@ -42,13 +40,8 @@ export default function ModerationPage() {
   }
 
   useEffect(() => {
-    if (status === 'loading') return
-    if (status === 'unauthenticated') {
-      router.push(`/auth/login?callbackUrl=${encodeURIComponent(pathname)}`)
-      return
-    }
+    if (status === 'loading' || status === 'unauthenticated') return
     fetchEdits()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status])
 
   const bookName = (path) => (path?.split('/').slice(1).join('/').replace(/\.txt$/, '') || path)
@@ -161,7 +154,7 @@ export default function ModerationPage() {
   }
 
   if (status === 'loading') {
-    return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" /></div>
+    return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner message="" /></div>
   }
   if (!isModerator) {
     return (

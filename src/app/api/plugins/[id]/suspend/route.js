@@ -5,12 +5,14 @@ import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import { hasPluginsAccess } from '@/lib/roles'
 import { invalidatePluginSearchIndex } from '@/lib/pluginSearchIndex'
+import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags'
 import {
   SUSPEND_ACTIONS,
   applySuspension,
   suspensionError,
   suspensionFields
 } from '@/lib/pluginVisibility'
+import { unauthorized, forbidden, badRequest, notFound, serverError } from '@/lib/apiResponse'
 
 // PATCH /api/plugins/[id]/suspend  body: { action: 'suspend' | 'resume' }
 // השהיה/החזרה של תוסף לחנות ע"י מעלה התוסף בלבד (מנהל — בממשק הניהול).
@@ -20,19 +22,19 @@ export async function PATCH(request, { params }) {
   try {
     const session = await getServerSession(authOptions)
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized - Please login' }, { status: 401 })
+      return unauthorized('Unauthorized - Please login')
     }
 
     let body
     try {
       body = await request.json()
     } catch {
-      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+      return badRequest('Invalid JSON body')
     }
 
     const action = body?.action
     if (!SUSPEND_ACTIONS.includes(action)) {
-      return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
+      return badRequest('Invalid action')
     }
 
     const { id } = await params
@@ -40,31 +42,29 @@ export async function PATCH(request, { params }) {
 
     const plugin = await Plugin.findById(id)
     if (!plugin || plugin.isHidden) {
-      return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
+      return notFound('Plugin not found')
     }
 
     // נתיב המעלה בלבד. מנהל משהה ומחזיר דרך ממשק הניהול
     // (PATCH /api/admin/plugins/[id]) — כמו בעריכת תוסף.
     const isOwner = plugin.authorId?.toString() === session.user?.id
     if (!isOwner) {
-      return NextResponse.json(
-        {
-          error: hasPluginsAccess(session.user?.role)
-            ? 'השהיית תוסף כמנהל זמינה רק בממשק הניהול.'
-            : 'Forbidden - You do not have permission to suspend this plugin'
-        },
-        { status: 403 }
+      return forbidden(
+        hasPluginsAccess(session.user?.role)
+          ? 'השהיית תוסף כמנהל זמינה רק בממשק הניהול.'
+          : 'Forbidden - You do not have permission to suspend this plugin'
       )
     }
 
     const error = suspensionError(plugin, action, { isAdmin: false })
     if (error) {
-      return NextResponse.json({ error }, { status: 400 })
+      return badRequest(error)
     }
 
     applySuspension(plugin, action, { userId: session.user.id, isAdmin: false })
     await plugin.save()
     invalidatePluginSearchIndex()
+    revalidateNow(CACHE_TAGS.PLUGINS_PUBLIC)
 
     return NextResponse.json({
       success: true,
@@ -75,6 +75,6 @@ export async function PATCH(request, { params }) {
     })
   } catch (err) {
     console.error('Error updating plugin suspension:', err)
-    return NextResponse.json({ error: 'Failed to update plugin suspension' }, { status: 500 })
+    return serverError('Failed to update plugin suspension')
   }
 }

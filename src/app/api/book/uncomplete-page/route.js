@@ -7,15 +7,16 @@ import User from '@/models/User';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBookLibraryAccess } from '@/lib/roles';
+import { unauthorized, badRequest, serverError } from '@/lib/apiResponse';
 
 export async function POST(request) {
   await connectDB();
 
   const dbSession = await mongoose.startSession();
-  
+
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session) return unauthorized('Unauthorized');
 
     const { pageId } = await request.json();
     const isAdmin = hasBookLibraryAccess(session.user.role);
@@ -39,7 +40,7 @@ export async function POST(request) {
     if (!page) {
       // אם העמוד לא נמצא, מבטלים הכל
       await dbSession.abortTransaction();
-      return NextResponse.json({ error: 'Page update failed or page not found' }, { status: 400 });
+      return badRequest('Page update failed or page not found');
     }
 
     // שלב ב: עדכון הספר (הפחתת מונה)
@@ -79,7 +80,7 @@ export async function POST(request) {
       await dbSession.abortTransaction();
     }
     console.error('Error uncompleting page:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError('Internal Server Error');
   } finally {
     await dbSession.endSession();
   }

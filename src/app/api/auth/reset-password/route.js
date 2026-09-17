@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
 import bcrypt from 'bcryptjs';
+import { badRequest, serverError } from '@/lib/apiResponse';
 
 export async function GET(request) {
     try {
@@ -41,10 +42,10 @@ export async function POST(request) {
         const { token, password } = await request.json();
 
         if (!token || typeof token !== 'string') {
-            return NextResponse.json({ error: 'טוקן לא חוקי' }, { status: 400 });
+            return badRequest('טוקן לא חוקי');
         }
         if (!password || password.length < 8) {
-            return NextResponse.json({ error: 'הסיסמה חייבת להכיל לפחות 8 תווים.' }, { status: 400 });
+            return badRequest('הסיסמה חייבת להכיל לפחות 8 תווים.');
         }
 
         await connectDB();
@@ -55,7 +56,7 @@ export async function POST(request) {
         });
 
         if (!user) {
-            return NextResponse.json({ error: 'קישור לא תקין או שפג תוקפו' }, { status: 400 });
+            return badRequest('קישור לא תקין או שפג תוקפו');
         }
 
         const hashedPassword = await bcrypt.hash(password, 12);
@@ -69,6 +70,6 @@ export async function POST(request) {
 
     } catch (error) {
         console.error('Reset Password Error:', error);
-        return NextResponse.json({ error: 'שגיאה בשרת' }, { status: 500 });
+        return serverError('שגיאה בשרת');
     }
 }

@@ -6,13 +6,14 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import mongoose from 'mongoose';
 import { hasAnyAdminAccess, ALL_ADMIN_ROLES } from '@/lib/roles';
+import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
+import { requireAccess, badRequest, serverError } from '@/lib/apiResponse';
 
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!hasAnyAdminAccess(session?.user?.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const denied = requireAccess(session, hasAnyAdminAccess);
+    if (denied) return denied;
 
     const { recipientId, subject, message, sendToAll } = await request.json();
     await connectDB();
@@ -34,14 +35,16 @@ export async function POST(request) {
       }));
 
       await Message.insertMany(messages);
-      
-      return NextResponse.json({ 
-        success: true, 
-        message: `נשלח בהצלחה ל-${users.length} משתמשים` 
+
+      revalidateNow(CACHE_TAGS.MESSAGES_ADMIN_LIST);
+
+      return NextResponse.json({
+        success: true,
+        message: `נשלח בהצלחה ל-${users.length} משתמשים`
       });
 
     } else {
-      if (!recipientId) return NextResponse.json({ error: 'Missing recipient' }, { status: 400 });
+      if (!recipientId) return badRequest('Missing recipient');
 
       await Message.create({
         sender: adminId,
@@ -52,11 +55,13 @@ export async function POST(request) {
         readBy: [adminId]
       });
 
+      revalidateNow(CACHE_TAGS.MESSAGES_ADMIN_LIST);
+
       return NextResponse.json({ success: true, message: 'נשלח בהצלחה' });
     }
 
   } catch (error) {
     console.error('Error sending admin message:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError('Internal Server Error');
   }
 }

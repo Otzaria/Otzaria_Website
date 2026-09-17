@@ -1,6 +1,13 @@
 'use client'
 
 import { useRef, useState, useCallback } from 'react'
+import {
+  imageCoordsFromClientPoint,
+  dragBandEdge,
+  moveBox,
+  resizeBox,
+  drawBox,
+} from '@/lib/ocr/pageCanvasGeometry'
 
 // קנבס עמוד לתיוג מבנה: תמונת העמוד עם שכבות SVG אינטראקטיביות —
 // רצועות זרמים (גרירת גבולות אופקיים), תיבת כותרת (גרירה/שינוי גודל/ציור)
@@ -23,9 +30,6 @@ export function streamColor(bookStream) {
   return STREAM_COLORS[bookStream % STREAM_COLORS.length]
 }
 
-const MIN_BAND_H = 0.01 // כפול מהמינימום בוולידציה — שלא ליצור רצועות על הגבול
-const MIN_BOX_PX = 8
-
 export default function PageCanvas({
   imageUrl,
   imageWidth: W,
@@ -47,10 +51,7 @@ export default function PageCanvas({
   // המרת אירוע עכבר/מגע לקואורדינטות התמונה
   const toImageCoords = useCallback((e) => {
     const rect = svgRef.current.getBoundingClientRect()
-    return {
-      x: ((e.clientX - rect.left) / rect.width) * W,
-      y: ((e.clientY - rect.top) / rect.height) * viewH,
-    }
+    return imageCoordsFromClientPoint(e, rect, W, viewH)
   }, [W, viewH])
 
   const startDrag = (e, drag) => {
@@ -66,48 +67,14 @@ export default function PageCanvas({
     const p = toImageCoords(e)
 
     if (d.type === 'band-edge' && bands && onBandsChange) {
-      // גרירת גבול רצועה: y0 או y1, קטום לשכנים ולגובה מינימלי
-      const next = bands.map((b) => ({ ...b }))
-      const b = next[d.index]
-      const y = Math.max(0, Math.min(1, p.y / H))
-      if (d.edge === 'y0') {
-        const low = d.index > 0 ? next[d.index - 1].y1 : 0
-        b.y0 = Math.max(low, Math.min(b.y1 - MIN_BAND_H, y))
-      } else {
-        const high = d.index < next.length - 1 ? next[d.index + 1].y0 : 1
-        b.y1 = Math.min(high, Math.max(b.y0 + MIN_BAND_H, y))
-      }
-      onBandsChange(next)
+      onBandsChange(dragBandEdge(bands, d.index, d.edge, p.y, H))
     } else if (d.type === 'box-move' && onHeaderBoxChange) {
-      const dx = p.x - d.start.x
-      const dy = p.y - d.start.y
-      onHeaderBoxChange({
-        x: Math.max(0, Math.min(W - d.box.width, d.box.x + dx)),
-        y: Math.max(0, Math.min(H - d.box.height, d.box.y + dy)),
-        width: d.box.width,
-        height: d.box.height,
-      })
+      onHeaderBoxChange(moveBox(d.box, p.x - d.start.x, p.y - d.start.y, W, H))
     } else if (d.type === 'box-resize' && onHeaderBoxChange) {
-      onHeaderBoxChange({
-        x: d.box.x,
-        y: d.box.y,
-        width: Math.max(MIN_BOX_PX, Math.min(W - d.box.x, d.box.width + (p.x - d.start.x))),
-        height: Math.max(MIN_BOX_PX, Math.min(H - d.box.y, d.box.height + (p.y - d.start.y))),
-      })
+      onHeaderBoxChange(resizeBox(d.box, p.x - d.start.x, p.y - d.start.y, W, H))
     } else if (d.type === 'box-draw' && onHeaderBoxChange) {
       // קטימה לגבולות התמונה — המצביע יכול לחרוג מהן תוך גרירה (pointer capture)
-      const px = Math.max(0, Math.min(W, p.x))
-      const py = Math.max(0, Math.min(H, p.y))
-      const sx = Math.max(0, Math.min(W, d.start.x))
-      const sy = Math.max(0, Math.min(H, d.start.y))
-      const width = Math.max(MIN_BOX_PX, Math.abs(px - sx))
-      const height = Math.max(MIN_BOX_PX, Math.abs(py - sy))
-      onHeaderBoxChange({
-        x: Math.max(0, Math.min(Math.min(sx, px), W - width)),
-        y: Math.max(0, Math.min(Math.min(sy, py), H - height)),
-        width,
-        height,
-      })
+      onHeaderBoxChange(drawBox(d.start, p, W, H))
     }
     forceRender((n) => n + 1)
   }

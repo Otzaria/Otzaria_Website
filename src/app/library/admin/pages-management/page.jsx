@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import AdminTableShell from '@/components/admin/AdminTableShell'
+import { formatDateShort } from '@/lib/formatDate'
 
 export default function AdminPagesPage() {
   const [pages, setPages] = useState([])
@@ -370,7 +372,7 @@ export default function AdminPagesPage() {
       {loading ? (
           <LoadingSpinner message="טוען עמודים..." />
       ) : (
-          <div className="overflow-x-auto rounded-xl border border-neutral-200">
+          <AdminTableShell>
               <table className="w-full bg-white">
                   <thead className="bg-neutral-50 border-b border-neutral-200">
                       <tr>
@@ -418,7 +420,7 @@ export default function AdminPagesPage() {
                               </td>
                               <td className="p-4 text-sm">{page.claimedBy || '-'}</td>
                               <td className="p-4 text-sm text-neutral-500">
-                                  {new Date(page.updatedAt || page.createdAt || Date.now()).toLocaleDateString('he-IL')}
+                                  {formatDateShort(page.updatedAt || page.createdAt || Date.now())}
                               </td>
                               <td className="p-4 flex gap-2">
                                   {isEditing ? (
@@ -477,7 +479,7 @@ export default function AdminPagesPage() {
                       <p>לא נמצאו עמודים התואמים את הסינון</p>
                   </div>
               )}
-          </div>
+          </AdminTableShell>
       )}
       
       <div className="mt-4 text-sm text-neutral-500 text-left">

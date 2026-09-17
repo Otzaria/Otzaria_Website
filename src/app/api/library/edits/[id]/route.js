@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireModerator } from '@/lib/dicta/require-moderator';
 import { approveEdit, rejectEdit, moderateChanges } from '@/lib/dicta/moderation-service';
+import { apiError, badRequest, notFound, serverError } from '@/lib/apiResponse';
 
 // אישור / דחייה של הצעה.
 //   body: { action: 'approve'|'reject', note? }                 — ההצעה כולה
@@ -8,7 +9,7 @@ import { approveEdit, rejectEdit, moderateChanges } from '@/lib/dicta/moderation
 export async function POST(req, { params }) {
   try {
     const auth = await requireModerator();
-    if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
+    if (auth.error) return apiError(auth.status, auth.error);
 
     const { id } = await params;
     const { action, note, approve, reject } = await req.json();
@@ -25,12 +26,12 @@ export async function POST(req, { params }) {
       const result = await moderateChanges({ editId: id, approve, reject, moderatorDoc: auth.userDoc, note });
       return NextResponse.json(result);
     }
-    return NextResponse.json({ error: 'פעולה לא חוקית' }, { status: 400 });
+    return badRequest('פעולה לא חוקית');
   } catch (error) {
-    if (error.code === 'NOT_FOUND') return NextResponse.json({ error: error.message }, { status: 404 });
-    if (error.code === 'BAD_INPUT') return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error.code === 'NOT_FOUND') return notFound(error.message);
+    if (error.code === 'BAD_INPUT') return badRequest(error.message);
     if (error.code === 'RETRY') return NextResponse.json({ error: error.message, code: 'RETRY' }, { status: 409 });
     console.error('Edit moderation failed:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

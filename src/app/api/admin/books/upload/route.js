@@ -13,6 +13,8 @@ import { getClientIp } from '@/lib/client-ip';
 import { z } from 'zod';
 import { hasBookLibraryAccess } from '@/lib/roles';
 import { convertPdfToImages } from '@/lib/pdfConverter';
+import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
+import { badRequest, requireAccess, serverError } from '@/lib/apiResponse';
 
 // סכמת אימות להעלאת ספרים
 const uploadBookSchema = z.object({
@@ -37,9 +39,8 @@ export async function POST(request) {
   try {
     // 1. בדיקת סשן ותפקיד
     const session = await getServerSession(authOptions);
-    if (!session || !hasBookLibraryAccess(session.user?.role)) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
+    const denied = requireAccess(session, hasBookLibraryAccess);
+    if (denied) return denied;
 
     // 2. Rate Limiting - מגבלה של 10 העלאות לשעה לאדמין — IP אמין
     const ip = getClientIp(request);
@@ -72,18 +73,18 @@ export async function POST(request) {
 
     if (!validationResult.success) {
       const errors = validationResult.error.issues.map(err => err.message).join(', ');
-      return NextResponse.json({ error: errors }, { status: 400 });
+      return badRequest(errors);
     }
 
     // 5. בדיקת קובץ
     if (!file || file.type !== 'application/pdf') {
-      return NextResponse.json({ success: false, error: 'חובה להעלות קובץ PDF תקין' }, { status: 400 });
+      return badRequest('חובה להעלות קובץ PDF תקין');
     }
 
     // 6. בדיקת גודל קובץ (מקסימום 50MB)
     const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
     if (file.size > MAX_FILE_SIZE) {
-      return NextResponse.json({ success: false, error: 'קובץ גדול מדי (מקסימום 50MB)' }, { status: 400 });
+      return badRequest('קובץ גדול מדי (מקסימום 50MB)');
     }
 
     // יצירת שם תיקייה (Slug)
@@ -147,7 +148,9 @@ export async function POST(request) {
       await sendBookNotification(bookName, slug);
     }
 
-    return NextResponse.json({ 
+    revalidateNow(CACHE_TAGS.BOOKS_ADMIN_LIST);
+
+    return NextResponse.json({
       success: true, 
       message: 'הספר הועלה ועובד בהצלחה' + (sendNotification ? ' (נשלחו התראות)' : ''),
       bookId: newBook._id 
@@ -181,9 +184,6 @@ export async function POST(request) {
         console.error('Rollback failed! System may have orphan files.', cleanupError);
     }
 
-    return NextResponse.json({ 
-        success: false, 
-        error: 'שגיאה בשרת. נסה שוב מאוחר יותר.' 
-    }, { status: 500 });
+    return serverError('שגיאה בשרת. נסה שוב מאוחר יותר.');
   }
 }

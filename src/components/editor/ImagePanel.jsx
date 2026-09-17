@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
+import { clampPoint, computeMovedRect, computeResizedRect } from './imagePanelGeometry'
 
 const ResizeHandle = ({ cursor, position, handle, onResize, zoom }) => (
   <div
@@ -62,10 +63,7 @@ export default function ImagePanel({
     const imgWidth = imageRef.current.clientWidth
     const imgHeight = imageRef.current.clientHeight
 
-    const clampedPos = {
-        x: Math.max(0, Math.min(rawX, imgWidth)),
-        y: Math.max(0, Math.min(rawY, imgHeight))
-    }
+    const clampedPos = clampPoint({ x: rawX, y: rawY }, imgWidth, imgHeight)
 
     currentCoordsRef.current = clampedPos
 
@@ -73,60 +71,12 @@ export default function ImagePanel({
         setSelectionEnd(clampedPos)
     }
     else if (interactionMode === 'move') {
-        const deltaX = rawX - dragStartRef.current.x
-        const deltaY = rawY - dragStartRef.current.y
-        
-        let newX = dragStartRef.current.rectX + deltaX
-        let newY = dragStartRef.current.rectY + deltaY
-        
-        if (newX < 0) newX = 0
-        if (newY < 0) newY = 0
-        if (newX + dragStartRef.current.rectW > imgWidth) newX = imgWidth - dragStartRef.current.rectW;
-        if (newY + dragStartRef.current.rectH > imgHeight) newY = imgHeight - dragStartRef.current.rectH;
-
-        setSelectionRect({
-            ...selectionRect,
-            x: newX,
-            y: newY,
-            width: dragStartRef.current.rectW,
-            height: dragStartRef.current.rectH
-        })
+        setSelectionRect(computeMovedRect(dragStartRef.current, rawX, rawY, imgWidth, imgHeight))
     }
     else if (interactionMode === 'resize') {
-        const currentX = clampedPos.x
-        const currentY = clampedPos.y
-        const start = dragStartRef.current
-        
-        let newX = start.rectX
-        let newY = start.rectY
-        let newW = start.rectW
-        let newH = start.rectH
-        
-        if (activeHandle.includes('w')) {
-            const rightEdge = start.rectX + start.rectW
-            newX = currentX 
-            newW = rightEdge - newX
-        }
-        if (activeHandle.includes('e')) { newW = currentX - start.rectX }
-        if (activeHandle.includes('n')) { 
-            const bottomEdge = start.rectY + start.rectH
-            newY = currentY
-            newH = bottomEdge - newY
-        }
-        if (activeHandle.includes('s')) { newH = currentY - start.rectY }
-
-        if (newW < 10) { 
-           if (activeHandle.includes('w')) newX = start.rectX + start.rectW - 10; 
-           newW = 10; 
-        }
-        if (newH < 10) {
-           if (activeHandle.includes('n')) newY = start.rectY + start.rectH - 10;
-           newH = 10;
-        }
-
-        setSelectionRect({ x: newX, y: newY, width: newW, height: newH })
+        setSelectionRect(computeResizedRect(activeHandle, dragStartRef.current, clampedPos.x, clampedPos.y))
     }
-  }, [interactionMode, imageZoom, activeHandle, selectionRect, setSelectionEnd, setSelectionRect])
+  }, [interactionMode, imageZoom, activeHandle, setSelectionEnd, setSelectionRect])
 
 
   const handleMouseMove = (e) => {
@@ -355,8 +305,9 @@ export default function ImagePanel({
     const coords = getWrapperCoordinates(e)
     
     if (imageRef.current) {
-         coords.x = Math.max(0, Math.min(coords.x, imageRef.current.clientWidth))
-         coords.y = Math.max(0, Math.min(coords.y, imageRef.current.clientHeight))
+         const clamped = clampPoint(coords, imageRef.current.clientWidth, imageRef.current.clientHeight)
+         coords.x = clamped.x
+         coords.y = clamped.y
     }
 
     setSelectionStart(coords)

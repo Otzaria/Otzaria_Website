@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { apiGet, apiPut } from '@/lib/api-utils'
 
 export default function UploadNotificationSettings({ onClose }) {
   const [loading, setLoading] = useState(true)
@@ -22,8 +23,7 @@ export default function UploadNotificationSettings({ onClose }) {
   const loadSettings = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/admin/upload-notifications')
-      const data = await response.json()
+      const data = await apiGet('/api/admin/upload-notifications')
       if (data.success) {
         setSettings(data.notifications)
       }
@@ -37,13 +37,7 @@ export default function UploadNotificationSettings({ onClose }) {
   const handleSave = async () => {
     try {
       setSaving(true)
-      const response = await fetch('/api/admin/upload-notifications', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings)
-      })
-      
-      const data = await response.json()
+      const data = await apiPut('/api/admin/upload-notifications', settings)
       if (data.success) {
         onClose()
       }

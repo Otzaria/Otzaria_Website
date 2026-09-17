@@ -80,8 +80,8 @@ export async function GET(request) {
           categories: categoriesByPlugin.get(doc._id.toString()) || []
         }))
       },
-      // no-cache: אימות מול השרת בכל בקשה — תוצאות החיפוש לא ימשיכו להציג תוסף שהושהה
-      { headers: { 'Cache-Control': 'no-cache' } }
+      // TTL קצר: פשרה מכוונת בין עומס-שרת ל"תוסף שהושהה ממשיך להופיע" לזמן קצר
+      { headers: { 'Cache-Control': 'public, max-age=20, stale-while-revalidate=60' } }
     )
   } catch (error) {
     console.error('Error searching plugins:', error)

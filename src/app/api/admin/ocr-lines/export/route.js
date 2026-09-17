@@ -9,6 +9,7 @@ import { hasOcrAccess } from '@/lib/roles';
 import { resolveImageFsPath } from '@/lib/ocr/images';
 import { normalizeLineText } from '@/lib/ocr/textStandard';
 import { validateLine } from '@/lib/ocr/trainingValidation';
+import { requireAccess, notFound, serverError } from '@/lib/apiResponse';
 
 // שם קובץ/תיקייה בטוח: אותיות עבריות/לטיניות/ספרות בלבד, השאר -> קו תחתון.
 function safeName(slug) {
@@ -47,19 +48,15 @@ function readmeText(perScript) {
 // אינו תלוי בגודל המאגר.
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (!hasOcrAccess(session?.user?.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const denied = requireAccess(session, hasOcrAccess);
+  if (denied) return denied;
 
   try {
     await connectDB();
 
     const total = await OcrLine.countDocuments({ status: 'approved' });
     if (!total) {
-      return NextResponse.json(
-        { success: false, error: 'אין שורות מאושרות לייצוא' },
-        { status: 404 }
-      );
+      return notFound('אין שורות מאושרות לייצוא');
     }
 
     let controllerRef;
@@ -275,6 +272,6 @@ export async function GET() {
     });
   } catch (err) {
     console.error('Admin OCR lines export error:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

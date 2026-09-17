@@ -4,6 +4,7 @@ import OcrLayoutPage from '@/models/OcrLayoutPage';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasOcrAccess } from '@/lib/roles';
+import { requireAccess, serverError } from '@/lib/apiResponse';
 
 const PAGE_LIMIT = 30;
 
@@ -13,9 +14,8 @@ const PAGE_LIMIT = 30;
 // למנהל גלובלי בלבד — כמו שאר אזורי ה-OCR.
 export async function GET(request) {
   const session = await getServerSession(authOptions);
-  if (!hasOcrAccess(session?.user?.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const denied = requireAccess(session, hasOcrAccess);
+  if (denied) return denied;
 
   try {
     await connectDB();
@@ -85,6 +85,6 @@ export async function GET(request) {
     });
   } catch (err) {
     console.error('Admin OCR layout list error:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

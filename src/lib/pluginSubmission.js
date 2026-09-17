@@ -27,6 +27,10 @@ export const PLUGIN_STATUS_LABELS = {
 // שימו לב: compareVersions כאן (pluginManifest.js) הוא semver מלא — הוא כן מבחין
 // בין "1.0.0.1" ל-"1.0.0" ובין prerelease לשחרור, בשונה מאוצריא ומהוולידטור.
 // הרגקס הוא מה שמונע מהפער להתבטא, כי גרסאות כאלה נחסמות בכניסה.
+// הערת אבטחה: false positive מאומת של security/detect-unsafe-regex — שלוש קבוצות \d+
+// מופרדות בנקודות ליטרליות שחייבות להתאים, כך שאין חפיפה שגורמת ל-backtracking
+// אקספוננציאלי; נבדק בפועל מול קלט עוין (מחרוזות ספרות ארוכות) בלי האטה.
+// eslint-disable-next-line security/detect-unsafe-regex
 export const PLUGIN_VERSION_RE = /^\d+\.\d+\.\d+(?:\+.*)?$/
 export const MIN_SUPPORTED_APP_VERSION = '0.9.89'
 

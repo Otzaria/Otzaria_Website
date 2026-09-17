@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
@@ -14,6 +14,12 @@ import { useDialog } from '@/components/providers/DialogContext'
 import { useDirectInstall } from '@/components/plugins/useDirectInstall'
 import { formatPluginStatus } from '@/lib/pluginSubmission'
 import { formatHebrewDate } from '@/lib/hebrewDate'
+import { formatFileSize } from '@/lib/formatFileSize'
+import { getErrorMessage } from '@/lib/errors'
+import { statusBadgeClass } from '@/components/plugins/StatusBadge'
+import DirectInstallButton from '@/components/plugins/DirectInstallButton'
+import Breadcrumbs, { type BreadcrumbItem } from '@/components/plugins/Breadcrumbs'
+import ScreenshotGallery from '@/components/plugins/ScreenshotGallery'
 import type { CategoryRef } from '@/components/plugins/types'
 
 interface Plugin {
@@ -66,20 +72,6 @@ interface PluginEditPayload extends Plugin {
   }>
 }
 
-// גודל קובץ בתצוגה ידידותית (B/KB/MB)
-function formatFileSize(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toLocaleString('he-IL', { maximumFractionDigits: 0 })} KB`
-  return `${(bytes / (1024 * 1024)).toLocaleString('he-IL', { maximumFractionDigits: 1 })} MB`
-}
-
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) {
-    return error.message
-  }
-  return fallback
-}
-
 export default function PluginDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -92,30 +84,9 @@ export default function PluginDetailPage() {
   const [loading, setLoading] = useState(true)
   const [editingPlugin, setEditingPlugin] = useState<PluginEditPayload | null>(null)
   const [loadingEdit, setLoadingEdit] = useState(false)
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [suspending, setSuspending] = useState(false)
   const [reporting, setReporting] = useState(false)
-  const { installState, install } = useDirectInstall()
-
-  // הודעת דיאלוג רגילה של האתר כשמגיע דיווח תוצאה מאוצריא
-  useEffect(() => {
-    if (installState.phase === 'success') {
-      showAlert('הצלחה', installState.updated ? 'התוסף עודכן בהצלחה באוצריא!' : 'התוסף הותקן בהצלחה באוצריא!')
-    } else if (installState.phase === 'failure') {
-      showAlert(
-        'שגיאה',
-        installState.error
-          ? `ההתקנה נכשלה: ${installState.error}`
-          : 'ההתקנה נכשלה. אפשר לנסות שוב או להוריד את הקובץ ולהתקין ידנית.'
-      )
-    } else if (installState.phase === 'no_app') {
-      showAlert(
-        'אוצריא לא נמצאה',
-        'נראה שאוצריא אינה מותקנת במחשב זה — בקשת ההתקנה לא הגיעה לתוכנה. ניתן להוריד את אוצריא מהאתר, או להוריד את קובץ התוסף ולהתקינו ידנית.'
-      )
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [installState])
+  const { installState, install } = useDirectInstall(showAlert)
   const currentUser = session?.user as { id?: string; role?: string; email?: string | null } | undefined
 
   useEffect(() => {
@@ -138,19 +109,6 @@ export default function PluginDetailPage() {
     }
     loadPlugin()
   }, [params.id, router])
-
-  const screenshotCount = plugin?.screenshots?.length ?? 0
-  const handleLightboxKey = useCallback((e: KeyboardEvent) => {
-    if (lightboxIndex === null) return
-    if (e.key === 'Escape') setLightboxIndex(null)
-    if (e.key === 'ArrowRight') setLightboxIndex(cur => cur !== null && cur > 0 ? cur - 1 : screenshotCount - 1)
-    if (e.key === 'ArrowLeft') setLightboxIndex(cur => cur !== null && cur < screenshotCount - 1 ? cur + 1 : 0)
-  }, [lightboxIndex, screenshotCount])
-
-  useEffect(() => {
-    window.addEventListener('keydown', handleLightboxKey)
-    return () => window.removeEventListener('keydown', handleLightboxKey)
-  }, [handleLightboxKey])
 
   const canDirectInstall = (plugin: Plugin) => {
     return Boolean(plugin.supportsDirectInstall && plugin.downloadUrl)
@@ -254,24 +212,16 @@ export default function PluginDetailPage() {
       <main className="flex-1 py-8 px-4">
         <div className="container mx-auto max-w-5xl">
           {/* פירורי לחם: חנות התוספים ‹ קטגוריה ראשונה (אם משובץ) ‹ שם התוסף */}
-          <nav className="flex flex-wrap items-center gap-2 text-sm text-on-surface/60 mb-3" aria-label="פירורי לחם">
-            <Link href="/plugins" className="text-primary hover:underline font-medium">
-              חנות התוספים
-            </Link>
-            {plugin.categories && plugin.categories.length > 0 && (
-              <>
-                <span aria-hidden="true">‹</span>
-                <Link
-                  href={`/plugins/category/${plugin.categories[0].slug}`}
-                  className="text-primary hover:underline font-medium"
-                >
-                  {plugin.categories[0].name}
-                </Link>
-              </>
-            )}
-            <span aria-hidden="true">‹</span>
-            <span className="font-bold text-on-surface">{plugin.name}</span>
-          </nav>
+          <Breadcrumbs
+            className="flex flex-wrap items-center gap-2 text-sm text-on-surface/60 mb-3"
+            items={[
+              { label: 'חנות התוספים', href: '/plugins' },
+              ...(plugin.categories && plugin.categories.length > 0
+                ? [{ label: plugin.categories[0].name, href: `/plugins/category/${plugin.categories[0].slug}` } as BreadcrumbItem]
+                : []),
+              { label: plugin.name }
+            ]}
+          />
 
           {/* Back Button */}
           <Link
@@ -352,11 +302,7 @@ export default function PluginDetailPage() {
 
                 {/* Status & Version */}
                 <div className="flex items-center gap-3 flex-wrap">
-                  <span className={`px-4 py-2 rounded-full text-sm font-bold ${
-                    plugin.status === 'stable' ? 'bg-primary/10 text-primary' :
-                    plugin.status === 'beta' ? 'bg-primary/15 text-primary' :
-                    'bg-primary/20 text-primary'
-                  }`}>
+                  <span className={`px-4 py-2 rounded-full text-sm font-bold ${statusBadgeClass(plugin.status)}`}>
                     {formatPluginStatus(plugin.status)}
                   </span>
                   <span className="px-4 py-2 rounded-full text-sm font-bold bg-surface text-on-surface/60">
@@ -395,33 +341,15 @@ export default function PluginDetailPage() {
                     <span>הורדה</span>
                   </a>
                   {canDirectInstall(plugin) && (
-                    <button
-                      onClick={handleDirectInstall}
-                      disabled={installState.phase === 'waiting'}
+                    <DirectInstallButton
+                      pluginId={plugin.id}
+                      installState={installState}
+                      onInstall={handleDirectInstall}
                       className="inline-flex items-center gap-2 px-6 py-3 bg-white border-2 border-primary text-primary rounded-xl font-bold hover:bg-primary/5 transition-colors disabled:cursor-default disabled:opacity-80"
-                    >
-                      {installState.phase === 'waiting' ? (
-                        <>
-                          <span className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></span>
-                          <span>מתקין...</span>
-                        </>
-                      ) : installState.phase === 'success' ? (
-                        <>
-                          <span className="material-symbols-outlined">check_circle</span>
-                          <span>{installState.updated ? 'עודכן בהצלחה!' : 'הותקן בהצלחה!'}</span>
-                        </>
-                      ) : installState.phase === 'failure' ? (
-                        <>
-                          <span className="material-symbols-outlined">error</span>
-                          <span>ההתקנה נכשלה - לחץ שוב לנסיון נוסף</span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="material-symbols-outlined">install_desktop</span>
-                          <span>התקנה ישירה לאוצריא</span>
-                        </>
-                      )}
-                    </button>
+                      spinnerClassName="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin"
+                      showIcons
+                      idleLabel="התקנה ישירה לאוצריא"
+                    />
                   )}
                   {plugin.homepage && (
                     <a
@@ -591,74 +519,10 @@ export default function PluginDetailPage() {
             />
           )}
 
-          {/* Screenshots Gallery */}
-          {plugin.screenshots?.length > 0 && (
-            <div className="bg-white rounded-2xl border border-neutral-100 p-6 mt-6">
-              <h2 className="text-xl font-bold text-on-surface mb-4 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary">photo_library</span>
-                <span>צילומי מסך</span>
-              </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                {plugin.screenshots.map((src, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setLightboxIndex(i)}
-                    className="aspect-video rounded-xl overflow-hidden bg-surface hover:ring-2 hover:ring-primary/40 transition-all focus:outline-none focus:ring-2 focus:ring-primary/60"
-                  >
-                    <img
-                      src={src}
-                      alt={`צילום מסך ${i + 1}`}
-                      loading="lazy"
-                      decoding="async"
-                      className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-                    />
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          <ScreenshotGallery screenshots={plugin.screenshots || []} />
 
         </div>
       </main>
-
-      {/* Lightbox */}
-      {lightboxIndex !== null && plugin.screenshots?.length > 0 && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4"
-          onClick={() => setLightboxIndex(null)}
-        >
-          <button
-            onClick={e => { e.stopPropagation(); setLightboxIndex(cur => cur !== null && cur > 0 ? cur - 1 : plugin.screenshots.length - 1) }}
-            className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition-colors"
-            aria-label="הקודם"
-          >
-            <span className="material-symbols-outlined">chevron_right</span>
-          </button>
-          <img
-            src={plugin.screenshots[lightboxIndex]}
-            alt={`צילום מסך ${lightboxIndex + 1}`}
-            className="max-h-[85vh] max-w-full rounded-xl shadow-2xl"
-            onClick={e => e.stopPropagation()}
-          />
-          <button
-            onClick={e => { e.stopPropagation(); setLightboxIndex(cur => cur !== null && cur < plugin.screenshots.length - 1 ? cur + 1 : 0) }}
-            className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition-colors"
-            aria-label="הבא"
-          >
-            <span className="material-symbols-outlined">chevron_left</span>
-          </button>
-          <button
-            onClick={() => setLightboxIndex(null)}
-            className="absolute top-4 left-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/25 text-white flex items-center justify-center transition-colors"
-            aria-label="סגור"
-          >
-            <span className="material-symbols-outlined">close</span>
-          </button>
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/60 text-sm">
-            {lightboxIndex + 1} / {plugin.screenshots.length}
-          </div>
-        </div>
-      )}
 
       <OtzariaSoftwareFooter />
 

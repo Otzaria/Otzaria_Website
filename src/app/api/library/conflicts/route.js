@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import LibraryBook from '@/models/LibraryBook';
 import { requireModerator } from '@/lib/dicta/require-moderator';
+import { apiError, serverError } from '@/lib/apiResponse';
 
 // רשימת ספרים בקונפליקט סנכרון — מטא-דאטה בלבד. ה-diff המלא נטען לפי דרישה
 // לכל ספר בנפרד דרך /api/library/books/[id]/conflict-diff, כדי לא להריץ diff
@@ -9,7 +10,7 @@ import { requireModerator } from '@/lib/dicta/require-moderator';
 export async function GET() {
   try {
     const auth = await requireModerator('sync');
-    if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
+    if (auth.error) return apiError(auth.status, auth.error);
 
     await connectDB();
     const books = await LibraryBook.find(
@@ -29,6 +30,6 @@ export async function GET() {
     })));
   } catch (error) {
     console.error('Failed to list conflicts:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return serverError();
   }
 }

@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { NextResponse } from 'next/server';
-import { revalidateTag } from 'next/cache';
+import { revalidateNow } from '@/lib/cacheTags';
 import { WIKI_CACHE_TAG } from '@/lib/wiki';
 
 // Webhook לרענון מיידי של דפי המדריך אחרי עריכת הוויקי.
@@ -30,6 +30,6 @@ export async function POST(request) {
     return NextResponse.json({ ok: true, ignored: event });
   }
 
-  revalidateTag(WIKI_CACHE_TAG, 'max');
+  revalidateNow(WIKI_CACHE_TAG);
   return NextResponse.json({ ok: true, revalidated: WIKI_CACHE_TAG });
 }

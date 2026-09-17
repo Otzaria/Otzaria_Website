@@ -7,13 +7,9 @@ import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 import { useDialog } from '@/components/providers/DialogContext'
 import { MIN_SUPPORTED_APP_VERSION } from '@/lib/pluginSubmission'
-
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) {
-    return error.message
-  }
-  return fallback
-}
+import { getErrorMessage } from '@/lib/errors'
+import { compareVersions } from '@/lib/semverCompare'
+import { MAX_PLUGIN_BYTES, MAX_IMAGE_BYTES, MAX_SCREENSHOTS, ALLOWED_IMAGE_MIMES } from '@/lib/pluginLimits'
 
 export default function UploadPluginPage() {
   const router = useRouter()
@@ -95,12 +91,6 @@ export default function UploadPluginPage() {
     handleChange('tags', formData.tags.filter(t => t !== tag))
   }
 
-  // מגבלות חייבות להיות עקביות עם השרת ([src/app/api/plugins/upload/route.js]).
-  const MAX_PLUGIN_BYTES = 50 * 1024 * 1024
-  const MAX_IMAGE_BYTES = 5 * 1024 * 1024
-  const MAX_SCREENSHOTS = 10
-  const ALLOWED_IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
-
   // Reads manifest.json from an .otzplugin (ZIP) file using fflate
   async function readPluginManifest(file: File): Promise<Record<string, unknown>> {
     const { unzipSync } = await import('fflate')
@@ -109,16 +99,6 @@ export default function UploadPluginPage() {
     const manifestBytes = unzipped['manifest.json']
     if (!manifestBytes) throw new Error('manifest.json not found in plugin file')
     return JSON.parse(new TextDecoder().decode(manifestBytes))
-  }
-
-  function versionAtLeast(v: string, min: string): boolean {
-    const parse = (s: string) => s.split('.').map(Number)
-    const va = parse(v), vm = parse(min)
-    for (let i = 0; i < Math.max(va.length, vm.length); i++) {
-      const a = va[i] ?? 0, b = vm[i] ?? 0
-      if (a !== b) return a > b
-    }
-    return true
   }
 
   // עיבוד קובץ תוסף (משותף ל-input ול-drop)
@@ -163,7 +143,7 @@ export default function UploadPluginPage() {
       resetInput(); return
     }
     if (!minAppVersion) { showAlert('שגיאה', 'חסר שדה minAppVersion ב-manifest.json'); resetInput(); return }
-    if (!versionAtLeast(minAppVersion, MIN_SUPPORTED_APP_VERSION)) {
+    if (compareVersions(minAppVersion, MIN_SUPPORTED_APP_VERSION) < 0) {
       showAlert('שגיאה', `גרסת המינימום (${minAppVersion}) לא יכולה להיות פחות מ-${MIN_SUPPORTED_APP_VERSION}`)
       resetInput(); return
     }

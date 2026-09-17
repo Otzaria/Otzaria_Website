@@ -4,12 +4,12 @@ import Upload from '@/models/Upload';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBooksAccess } from '@/lib/roles';
+import { requireAccess } from '@/lib/apiResponse';
 
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (!hasBooksAccess(session?.user?.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const denied = requireAccess(session, hasBooksAccess);
+  if (denied) return denied;
 
   await connectDB();
   
