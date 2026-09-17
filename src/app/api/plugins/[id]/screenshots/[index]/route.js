@@ -52,11 +52,15 @@ export async function GET(request, { params }) {
     }
     const meta = screenshots[idx]
     const buf = await readPluginAsset(id, `screenshots/${idx}${meta.ext}`, { pending: assetSource === 'pending' })
+    // תשובה ניתנת למטמון משותף (CDN) רק כאשר כל מבקש (גם ללא הרשאה) רואה את אותו תוכן —
+    // כלומר תוסף מאושר, לא מושהה ולא ב"פנדינג". אחרת (למשל בעל/מנהל צופה בתוסף לא-מאושר
+    // או מושהה) התגובה תלוית-הרשאה ואסור לשתף אותה בין משתמשים.
+    const isPubliclyCacheable = !includePending && plugin.isApproved && !isPluginSuspended(plugin)
     return new NextResponse(buf, {
       headers: {
         'Content-Type': meta.contentType || 'application/octet-stream',
         'Content-Length': buf.length.toString(),
-        'Cache-Control': includePending ? 'private, no-store' : 'public, max-age=3600, stale-while-revalidate=2592000',
+        'Cache-Control': isPubliclyCacheable ? 'public, max-age=3600, stale-while-revalidate=2592000' : 'private, no-store',
         'X-Content-Type-Options': 'nosniff'
       }
     })
