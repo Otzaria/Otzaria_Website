@@ -33,6 +33,8 @@ const COMPONENT_PATHS = [
   'src/components/editor/modals/ShortcutsDialog.jsx',
   'src/components/editor/modals/FindReplaceDialog.jsx',
   'src/components/editor/modals/SpellcheckDialog.jsx',
+  'src/components/editor/dictaEditorTextUtils.js',
+  'src/components/editor/dictaEditorShortcutUtils.js',
   'src/components/editor/DictaEditorCore.jsx',
   'src/components/editor/OfflineEditorApp.jsx',
 ];

@@ -21,7 +21,10 @@ import Page from '@/models/Page'
 import { CACHE_TAGS, REVALIDATE_SECONDS } from '@/lib/cacheTags'
 import AdminBooksClient from './AdminBooksClient'
 
-export const revalidate = REVALIDATE_SECONDS.BOOKS_ADMIN_LIST
+// ליטרל מספרי בכוונה (לא REVALIDATE_SECONDS.BOOKS_ADMIN_LIST) — ה-segment
+// config של Next נחלץ ע"י ניתוח AST סטטי שלא תומך ב-property access על אובייקט
+// מיובא; לעדכן ידנית יחד עם REVALIDATE_SECONDS.BOOKS_ADMIN_LIST.
+export const revalidate = 30
 
 async function loadAdminBooksUncached() {
   await dbConnect()

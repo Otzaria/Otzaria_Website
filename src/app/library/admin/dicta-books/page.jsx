@@ -18,7 +18,10 @@ import DictaBook from '@/models/DictaBook'
 import { CACHE_TAGS, REVALIDATE_SECONDS } from '@/lib/cacheTags'
 import AdminDictaBooksClient from './AdminDictaBooksClient'
 
-export const revalidate = REVALIDATE_SECONDS.DICTA_BOOKS_ADMIN_LIST
+// ליטרל מספרי בכוונה (לא REVALIDATE_SECONDS.DICTA_BOOKS_ADMIN_LIST) — ה-segment
+// config של Next נחלץ ע"י ניתוח AST סטטי שלא תומך ב-property access על אובייקט
+// מיובא; לעדכן ידנית יחד עם REVALIDATE_SECONDS.DICTA_BOOKS_ADMIN_LIST.
+export const revalidate = 30
 
 async function loadAdminDictaBooksUncached() {
   await dbConnect()

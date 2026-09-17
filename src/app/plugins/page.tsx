@@ -33,7 +33,11 @@ import type { Plugin } from '@/components/plugins/types'
 import type { StoreHomeData } from './storeHomeTypes'
 
 // ISR: הדף עצמו (לא רק שאילתת ה-DB) נשמר במטמון עד revalidateTag או חלון זה.
-export const revalidate = REVALIDATE_SECONDS.PLUGINS_PUBLIC
+// ערך זה חייב להישאר ליטרל מספרי (לא REVALIDATE_SECONDS.PLUGINS_PUBLIC) —
+// ה-segment config של Next נחלץ ע"י ניתוח AST סטטי שלא תומך ב-property
+// access על אובייקט מיובא, ומפיל את ה-build עם "Invalid segment configuration
+// export detected". לעדכן ידנית יחד עם REVALIDATE_SECONDS.PLUGINS_PUBLIC.
+export const revalidate = 600
 
 async function loadStoreHomeDataUncached(): Promise<StoreHomeData> {
   await dbConnect()

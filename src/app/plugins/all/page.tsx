@@ -20,7 +20,10 @@ import { CACHE_TAGS, REVALIDATE_SECONDS } from '@/lib/cacheTags'
 import AllPluginsClient from './AllPluginsClient'
 import type { Plugin } from '@/components/plugins/types'
 
-export const revalidate = REVALIDATE_SECONDS.PLUGINS_PUBLIC
+// ליטרל מספרי בכוונה (לא REVALIDATE_SECONDS.PLUGINS_PUBLIC) — ה-segment config
+// של Next נחלץ ע"י ניתוח AST סטטי שלא תומך ב-property access על אובייקט מיובא;
+// לעדכן ידנית יחד עם REVALIDATE_SECONDS.PLUGINS_PUBLIC (ראו plugins/page.tsx).
+export const revalidate = 600
 
 async function loadAllPluginsUncached(): Promise<Plugin[]> {
   await dbConnect()

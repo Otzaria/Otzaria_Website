@@ -32,7 +32,10 @@ import { getAdminMessagesList } from '@/lib/adminMessages'
 import { CACHE_TAGS, REVALIDATE_SECONDS } from '@/lib/cacheTags'
 import AdminMessagesClient from './AdminMessagesClient'
 
-export const revalidate = REVALIDATE_SECONDS.MESSAGES_ADMIN_LIST
+// ליטרל מספרי בכוונה (לא REVALIDATE_SECONDS.MESSAGES_ADMIN_LIST) — ה-segment
+// config של Next נחלץ ע"י ניתוח AST סטטי שלא תומך ב-property access על אובייקט
+// מיובא; לעדכן ידנית יחד עם REVALIDATE_SECONDS.MESSAGES_ADMIN_LIST.
+export const revalidate = 300
 
 const loadAdminMessages = nextCache(getAdminMessagesList, ['admin-messages-list'], {
   tags: [CACHE_TAGS.MESSAGES_ADMIN_LIST],
