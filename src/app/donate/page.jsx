@@ -8,6 +8,15 @@ export default function DonatePage() {
 
       <main className="py-12 px-4">
         <div className="container mx-auto max-w-4xl text-center">
+          <div className="mb-8 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-right">
+            <span className="material-symbols-outlined text-xl text-amber-600 shrink-0">
+              info
+            </span>
+            <p className="text-sm text-amber-900/90 leading-relaxed">
+              לתשומת לבכם: עדיף לתרום בשקלים — עמלת ההמרה ממט״ח (כגון דולרים) בשירות זה גבוהה מאוד.
+            </p>
+          </div>
+
           <h1 className="text-4xl font-bold text-primary mb-6 font-frank">
             תרומה לאוצריא
           </h1>

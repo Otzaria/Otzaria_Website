@@ -16,7 +16,7 @@ setInterval(() => {
             limiterTimestamps.delete(key);
         }
     }
-}, CLEANUP_INTERVAL);
+}, CLEANUP_INTERVAL).unref?.();
 
 /**
  * בדיקת מגבלת קצב (Rate Limit) עם ניקוי זיכרון

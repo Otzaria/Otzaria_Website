@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { validateEmail } from '@/lib/validation-utils';
+import { validateEmail } from './validation-utils.js';
 
 // לוגיקה טהורה עבור src/app/api/reportingerrors/route.js — ולידציה, נירמול,
 // חישוב טביעת אצבע/נמענים ובניית תוכן המייל. לא תלוי ב-request/response של

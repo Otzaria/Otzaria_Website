@@ -59,8 +59,8 @@ export default function Header() {
 
           {session ? (
             <div className="flex items-center gap-2 lg:gap-3 xl:gap-4">
-              {hasAnyAdminAccess(session.user.role) && (
-                <Link href="/library/admin" prefetch={false} className="flex items-center gap-2 text-accent hover:text-accent/80 transition-colors relative font-medium">
+              {(hasAnyAdminAccess(session.user.role) || session.user.role === 'developer') && (
+                <Link href={session.user.role === 'developer' ? '/library/admin/app-reports' : '/library/admin'} prefetch={false} className="flex items-center gap-2 text-accent hover:text-accent/80 transition-colors relative font-medium">
                   <span className="material-symbols-outlined">admin_panel_settings</span>
                   <span>ניהול</span>
                   {unreadMessages > 0 && (

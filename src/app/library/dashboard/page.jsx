@@ -4,6 +4,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { canHandleCorrections } from '@/lib/roles'
 import Header from '@/components/layout/Header'
 import { useDialog } from '@/components/providers/DialogContext'
 import Pagination from '@/components/ui/Pagination'
@@ -456,6 +457,13 @@ export default function DashboardPage() {
                 <span className="material-symbols-outlined text-4xl text-primary">lock_reset</span>
                 <span className="font-medium text-on-surface">שינוי סיסמה</span>
               </button>
+
+              {canHandleCorrections(session?.user) && (
+                <Link href="/library/corrections" className="flex flex-col items-center gap-3 p-6 bg-primary-container rounded-xl hover:bg-primary/20 transition-all">
+                  <span className="material-symbols-outlined text-4xl text-primary">spellcheck</span>
+                  <span className="font-medium text-on-surface">תיקוני טקסט</span>
+                </Link>
+              )}
 
               {isAdmin && (
                 <Link href="/library/admin" className="flex flex-col items-center gap-3 p-6 bg-accent/20 rounded-xl hover:bg-accent/30 transition-all">

@@ -48,11 +48,13 @@ function ghHeaders(token, extra = {}) {
   return headers;
 }
 
-async function ghFetch(url, { token, method = "GET", body } = {}) {
-  const resp = await fetch(url, {
+export async function ghFetch(url, { token, method = "GET", body, fetchImpl = fetch, redirect = "follow", timeoutMs } = {}) {
+  const resp = await fetchImpl(url, {
     method,
     headers: ghHeaders(token, body ? { "Content-Type": "application/json" } : {}),
     body: body ? JSON.stringify(body) : undefined,
+    redirect,
+    signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined,
   });
 
   if (!resp.ok) {
@@ -65,6 +67,7 @@ async function ghFetch(url, { token, method = "GET", body } = {}) {
     }
     const err = new Error(`GitHub API ${method} ${resp.status}${detail}`);
     err.status = resp.status;
+    err.retryAfter = resp.headers?.get?.("retry-after") ?? null;
     throw err;
   }
   return resp.json();
@@ -312,4 +315,94 @@ export function pathToTitle(relativePath) {
 /** עזר: קטגוריה = הסגמנט הראשון בנתיב */
 export function pathToCategory(relativePath) {
   return relativePath.split("/")[0] || "";
+}
+
+// ====================== לקוח ריפו כללי (משמש גם את תיקוני הטקסט) ======================
+
+/**
+ * לקוח ממוקד-ריפו מעל ghFetch, עם fetch מוזרק (בדיקות) ו-timeout לכל קריאה.
+ * redirect=error: יעד הכתיבה נקבע בהגדרה בלבד ולא נגרר להפניה.
+ * @param {{repo:string, token?:string, fetchImpl?:Function, timeoutMs?:number, apiBase?:string}} opts
+ */
+export function createRepoClient({ repo, token = null, fetchImpl = fetch, timeoutMs = 20_000, apiBase = GITHUB_API }) {
+  const base = `${apiBase}/repos/${repo}`;
+  const call = (path, opts = {}) => ghFetch(`${base}${path}`, { token, fetchImpl, timeoutMs, redirect: "error", ...opts });
+  const notFoundAsNull = async (p) => {
+    try {
+      return await p;
+    } catch (err) {
+      if (err.status === 404) return null;
+      throw err;
+    }
+  };
+
+  return {
+    repo,
+    fetchImpl,
+    async getBranchHead(branch) {
+      const info = await call(`/branches/${encodeURIComponent(branch)}`);
+      return { commitSha: info?.commit?.sha, treeSha: info?.commit?.commit?.tree?.sha };
+    },
+    async getRef(branch) {
+      const r = await notFoundAsNull(call(`/git/ref/heads/${encodeGitHubPath(branch)}`));
+      return r?.object?.sha ? { sha: r.object.sha } : null;
+    },
+    async getCommit(sha) {
+      const c = await call(`/git/commits/${sha}`);
+      return { sha: c.sha, message: c.message, treeSha: c.tree?.sha, parents: (c.parents || []).map((p) => p.sha) };
+    },
+    /** רשימת תיקייה ב-ref נתון (שמות + blob sha, בלי תוכן). null אם לא קיימת. */
+    async listDir(dirPath, ref) {
+      const data = await notFoundAsNull(call(`/contents/${encodeGitHubPath(dirPath)}?ref=${encodeURIComponent(ref)}`));
+      return Array.isArray(data) ? data.map((e) => ({ name: e.name, path: e.path, sha: e.sha, type: e.type, size: e.size })) : null;
+    },
+    async getFileMeta(filePath, ref) {
+      const data = await notFoundAsNull(call(`/contents/${encodeGitHubPath(filePath)}?ref=${encodeURIComponent(ref)}`));
+      return data && !Array.isArray(data) && data.type === "file" ? { sha: data.sha, size: data.size } : null;
+    },
+    /** בתי ה-blob הגולמיים (Buffer) — בלי פענוח, כדי לשמר קידוד/BOM/CRLF. */
+    async getBlob(sha) {
+      const blob = await call(`/git/blobs/${sha}`);
+      return Buffer.from(String(blob.content || "").replace(/\s/g, ""), "base64");
+    },
+    async createTree(baseTreeSha, entries) {
+      const t = await call(`/git/trees`, { method: "POST", body: { base_tree: baseTreeSha, tree: entries } });
+      return { sha: t.sha };
+    },
+    async createBlob(buffer) {
+      const b = await call(`/git/blobs`, { method: "POST", body: { content: buffer.toString("base64"), encoding: "base64" } });
+      return { sha: b.sha };
+    },
+    async createCommit({ message, treeSha, parents }) {
+      const c = await call(`/git/commits`, { method: "POST", body: { message, tree: treeSha, parents } });
+      return { sha: c.sha };
+    },
+    /** עדכון ענף בלי force — 422 כשהענף התקדם. */
+    async updateRef(branch, sha) {
+      await call(`/git/refs/heads/${encodeGitHubPath(branch)}`, { method: "PATCH", body: { sha, force: false } });
+    },
+    async createRef(branch, sha) {
+      await call(`/git/refs`, { method: "POST", body: { ref: `refs/heads/${branch}`, sha } });
+    },
+    async listCommits({ sha, path, perPage = 30 }) {
+      const q = new URLSearchParams({ sha, per_page: String(perPage) });
+      if (path) q.set("path", path);
+      const list = await call(`/commits?${q.toString()}`);
+      return (list || []).map((c) => ({ sha: c.sha, message: c.commit?.message || "" }));
+    },
+    async createPull({ title, body, head, base: baseBranch }) {
+      const pr = await call(`/pulls`, { method: "POST", body: { title, body, head, base: baseBranch, maintainer_can_modify: true } });
+      return { number: pr.number, url: pr.html_url, state: pr.state, merged: Boolean(pr.merged_at) };
+    },
+    async findPullByHead(owner, branch) {
+      const q = new URLSearchParams({ head: `${owner}:${branch}`, state: "all", per_page: "5" });
+      const list = await call(`/pulls?${q.toString()}`);
+      const pr = (list || [])[0];
+      return pr ? { number: pr.number, url: pr.html_url, state: pr.state, merged: Boolean(pr.merged_at), mergeCommitSha: pr.merge_commit_sha || null } : null;
+    },
+    async getPull(number) {
+      const pr = await call(`/pulls/${Number(number)}`);
+      return { number: pr.number, url: pr.html_url, state: pr.state, merged: Boolean(pr.merged), mergeCommitSha: pr.merge_commit_sha || null };
+    },
+  };
 }

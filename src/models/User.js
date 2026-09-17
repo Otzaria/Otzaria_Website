@@ -4,7 +4,7 @@ const UserSchema = new mongoose.Schema({
   name: { type: String, required: true, unique: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  role: { type: String, enum: ['user', 'admin', 'admin_plugins', 'admin_books', 'admin_books_only', 'admin_ocr'], default: 'user' },
+  role: { type: String, enum: ['user', 'admin', 'admin_plugins', 'admin_books', 'admin_books_only', 'admin_ocr', 'developer'], default: 'user' },
   points: { type: Number, default: 0 },
   acceptReminders: { type: Boolean, default: false },
   resetPasswordToken: { type: String },
@@ -51,6 +51,9 @@ const UserSchema = new mongoose.Schema({
   dictaEditBlockedReason: { type: String, default: '' },
   dictaEditBlockedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   dictaEditBlockedAt: { type: Date, default: null },
+
+  // מתנדב תיקוני טקסט: רשאי לטפל ולאשר תיקונים (נפרד מהרשאות ניהול המערכת)
+  isCorrectionsVolunteer: { type: Boolean, default: false },
 }, { timestamps: true });
 
 const User = mongoose.models.User || mongoose.model('User', UserSchema);

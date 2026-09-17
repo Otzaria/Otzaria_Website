@@ -8,6 +8,8 @@ export const ROLES = {
   // מנהל OCR: גישה לניהול שלושת אזורי ה-OCR בלבד — מאגר אימון, תמלול שורות
   // ותיוג מבנה עמוד (/library/admin/ocr-*) — ללא שאר מודולי הניהול.
   ADMIN_OCR: 'admin_ocr',
+  // מפתח: דיווחי התוכנה בלבד (/library/admin/app-reports). בכוונה לא ב-ALL_ADMIN_ROLES.
+  DEVELOPER: 'developer',
 }
 
 export const ROLE_LABELS = {
@@ -17,6 +19,7 @@ export const ROLE_LABELS = {
   admin_books: 'מנהל ספרים',
   admin_books_only: 'מנהל ספרים בלבד',
   admin_ocr: 'מנהל OCR',
+  developer: 'מפתח',
 }
 
 export const ALL_ADMIN_ROLES = [ROLES.ADMIN, ROLES.ADMIN_PLUGINS, ROLES.ADMIN_BOOKS, ROLES.ADMIN_BOOKS_ONLY, ROLES.ADMIN_OCR]
@@ -48,6 +51,11 @@ export function hasOcrAccess(role) {
   return role === ROLES.ADMIN || role === ROLES.ADMIN_OCR
 }
 
+/** גישה לדיווחי התוכנה (מנהל כללי או מפתח) */
+export function hasAppReportsAccess(role) {
+  return role === ROLES.ADMIN || role === ROLES.DEVELOPER
+}
+
 /** כל סוג מנהל */
 export function hasAnyAdminAccess(role) {
   return ALL_ADMIN_ROLES.includes(role)
@@ -72,4 +80,25 @@ export function canModerateLibrary(user) {
 export function canManageLibrarySync(user) {
   if (!user) return false
   return user.role === ROLES.ADMIN || user.role === ROLES.ADMIN_BOOKS
+}
+
+// ===== תיקוני טקסט =====
+// טיפול/אישור תיקונים נפרד מניהול המערכת: מתנדב מסומן בדגל isCorrectionsVolunteer;
+// מנהל כללי ומנהל ספרים מקבלים את ההרשאה אוטומטית.
+
+/** רשאי לטפל בדיווחי תיקונים (לקחת, לאשר, לערוך, לדחות, להעביר) */
+export function canHandleCorrections(user) {
+  if (!user) return false
+  return user.role === ROLES.ADMIN || user.role === ROLES.ADMIN_BOOKS || user.isCorrectionsVolunteer === true
+}
+
+/** רשאי לנהל את מערכת התיקונים (בריאות, השהיית השירות, מינוי מתנדבים, טיפול חיצוני) */
+export function canManageCorrections(user) {
+  if (!user) return false
+  return user.role === ROLES.ADMIN || user.role === ROLES.ADMIN_BOOKS
+}
+
+/** הגדרות מערכת של התיקונים (מתג השירות) — מנהל כללי בלבד */
+export function canConfigureCorrections(user) {
+  return Boolean(user) && user.role === ROLES.ADMIN
 }
