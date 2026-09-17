@@ -20,7 +20,10 @@ import { getAdminUsersWithStats } from '@/lib/adminUsers'
 import { CACHE_TAGS, REVALIDATE_SECONDS } from '@/lib/cacheTags'
 import AdminUsersClient from './AdminUsersClient'
 
-export const revalidate = REVALIDATE_SECONDS.USERS_ADMIN_LIST
+// ליטרל מספרי בכוונה (לא REVALIDATE_SECONDS.USERS_ADMIN_LIST) — ה-segment
+// config של Next נחלץ ע"י ניתוח AST סטטי שלא תומך ב-property access על אובייקט
+// מיובא; לעדכן ידנית יחד עם REVALIDATE_SECONDS.USERS_ADMIN_LIST.
+export const revalidate = 45
 
 const loadAdminUsers = nextCache(getAdminUsersWithStats, ['admin-users-list'], {
   tags: [CACHE_TAGS.USERS_ADMIN_LIST],

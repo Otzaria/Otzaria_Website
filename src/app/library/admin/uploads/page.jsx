@@ -18,7 +18,10 @@ import Upload from '@/models/Upload'
 import { CACHE_TAGS, REVALIDATE_SECONDS } from '@/lib/cacheTags'
 import AdminUploadsClient from './AdminUploadsClient'
 
-export const revalidate = REVALIDATE_SECONDS.UPLOADS_ADMIN_LIST
+// ליטרל מספרי בכוונה (לא REVALIDATE_SECONDS.UPLOADS_ADMIN_LIST) — ה-segment
+// config של Next נחלץ ע"י ניתוח AST סטטי שלא תומך ב-property access על אובייקט
+// מיובא; לעדכן ידנית יחד עם REVALIDATE_SECONDS.UPLOADS_ADMIN_LIST.
+export const revalidate = 30
 
 async function loadAdminUploadsUncached() {
   await dbConnect()

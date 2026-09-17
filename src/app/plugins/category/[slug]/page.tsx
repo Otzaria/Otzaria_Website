@@ -20,7 +20,10 @@ import PluginCategoryClient from './PluginCategoryClient'
 import type { Plugin } from '@/components/plugins/types'
 import type { CategoryData } from './types'
 
-export const revalidate = REVALIDATE_SECONDS.PLUGINS_PUBLIC
+// ליטרל מספרי בכוונה (לא REVALIDATE_SECONDS.PLUGINS_PUBLIC) — ה-segment config
+// של Next נחלץ ע"י ניתוח AST סטטי שלא תומך ב-property access על אובייקט מיובא;
+// לעדכן ידנית יחד עם REVALIDATE_SECONDS.PLUGINS_PUBLIC (ראו plugins/page.tsx).
+export const revalidate = 600
 
 // זהה בדיוק ל-SLUG_RE של ה-route (לא ניתן לייבא אותו משם — route.js לא מייצא
 // אותו, ואסור לגעת ב-route). נבדק: לינארי — מפריד '-' חובה בכל איטרציה מונע
