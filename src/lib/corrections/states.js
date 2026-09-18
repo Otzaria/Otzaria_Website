@@ -33,6 +33,7 @@ export function legacyStateFromStatus(status) {
 export const HANDOFF_REASON_LABELS = {
   free_text: 'דיווח חופשי',
   legacy_report: 'דיווח ישן (לפני מערכת התיקונים)',
+  reopened: 'נפתח מחדש אחרי סגירה',
   no_proposal: 'לא הוצע תיקון',
   service_disabled: 'השירות כבוי',
   service_not_configured: 'השירות אינו מוגדר',

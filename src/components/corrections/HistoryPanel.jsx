@@ -10,6 +10,7 @@ const EVENT_LABELS = {
   approved: 'אושר',
   rejected: 'נדחה',
   closed_manual: 'נסגר ידנית',
+  reopened: 'נפתח מחדש',
   closed_already_fixed: 'נסגר — כבר תוקן',
   handoff_manual: 'הועבר לטיפול ידני',
   verify_retry_scheduled: 'נקבע ניסיון חוזר מול השירות',
