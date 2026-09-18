@@ -95,7 +95,7 @@ export function formatExactNumber(value) {
 export const STAT_DEFINITIONS = [
   { key: 'books', icon: 'menu_book', label: 'ספרים' },
   { key: 'links', icon: 'link', label: 'קישורים בין ספרים' },
-  { key: 'lines', icon: 'format_list_numbered', label: 'שורות' },
+  { key: 'lines', icon: 'format_list_numbered', label: 'פסקאות' },
   { key: 'downloads', icon: 'download', label: 'הורדות' },
   { key: 'plugins', icon: 'extension', label: 'תוספים' }
 ]
