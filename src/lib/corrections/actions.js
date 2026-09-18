@@ -6,11 +6,24 @@ import {
   claimReport, releaseReport, reassignReport, approveReport, editAndApproveReport, rejectReport,
   closeManualReport, resubmitToService, previewSourceChoice,
 } from './volunteer.js';
+import { triggerWorkerBatch } from './run-batch.js';
+
+// פעולות שמסמנות dispatch ולכן יוצרות עבודה חדשה לתור.
+const DISPATCHING_ACTIONS = new Set(['approve', 'edit_approve', 'resubmit']);
 
 const int = (v) => (Number.isSafeInteger(v) ? v : undefined);
 const str = (v, max = 20_000) => (typeof v === 'string' && v.length <= max ? v : undefined);
 
 export async function runReportAction({ user, id, body, config, deps = {}, now = new Date() }) {
+  const result = await dispatchAction({ user, id, body, config, deps, now });
+  // "כבר תוקן" נסגר בלי פרסום, ולכן אינו עבודה לתור.
+  if (result.status === 200 && DISPATCHING_ACTIONS.has(body?.action) && result.body?.result !== 'already_fixed') {
+    triggerWorkerBatch(deps.schedule, `action ${body.action} trigger failed`);
+  }
+  return result;
+}
+
+async function dispatchAction({ user, id, body, config, deps, now }) {
   const generation = int(body?.generation);
   const common = { user, id, generation, config, deps, now };
   switch (body?.action) {

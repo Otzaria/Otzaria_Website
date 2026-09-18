@@ -1,10 +1,11 @@
 /**
- * פעולות ניהול של מערכת התיקונים: מינוי מתנדבים, רשימת מטפלים, מתג השירות.
+ * פעולות ניהול של מערכת התיקונים: מינוי מתנדבים, רשימת מטפלים, מתגי המערכת.
  */
 import mongoose from 'mongoose';
 import User from '../../models/User.js';
 import { canHandleCorrections, canManageCorrections, canConfigureCorrections } from '../roles.js';
-import { setVerifyPaused } from './runtime.js';
+import { setRuntimeFlags } from './runtime.js';
+import { PUBLISH_MODES } from './config.js';
 
 const ok = (body) => ({ status: 200, body });
 const err = (status, error) => ({ status, body: { error } });
@@ -35,9 +36,27 @@ export async function setVolunteer({ user, targetUserId, value }) {
   return ok({ ok: true });
 }
 
-export async function setServicePaused({ user, paused }) {
+/**
+ * מעדכן את מתגי ההתנהגות מהמסך. כל מתג אופציונלי; ערך שאינו מהטיפוס/מהרשימה נדחה
+ * בלי לשנות דבר, כדי שלא ייכתב מצב ביניים.
+ */
+export async function setSettings({ user, patch }) {
   if (!canConfigureCorrections(user)) return err(403, 'Forbidden');
-  if (typeof paused !== 'boolean') return err(400, 'invalid_request');
-  await setVerifyPaused(paused, user);
-  return ok({ verifyPaused: paused });
+  if (!patch || typeof patch !== 'object') return err(400, 'invalid_request');
+  const next = {};
+  for (const key of ['verifyPaused', 'intakeEnabled', 'autoPublish']) {
+    if (patch[key] === undefined) continue;
+    if (typeof patch[key] !== 'boolean') return err(400, 'invalid_request');
+    next[key] = patch[key];
+  }
+  if (patch.publishMode !== undefined) {
+    if (!PUBLISH_MODES.includes(patch.publishMode)) return err(400, 'invalid_publish_mode');
+    next.publishMode = patch.publishMode;
+  }
+  if (!Object.keys(next).length) return err(400, 'invalid_request');
+  // מעבר לכתיבה בלי אדם במסלול מחייב אישור מפורש בגוף הבקשה, לא רק דיאלוג בדפדפן.
+  if ((next.publishMode === 'direct' || next.autoPublish === true) && patch.confirm !== true) {
+    return err(400, 'confirmation_required');
+  }
+  return ok(await setRuntimeFlags(next, user));
 }

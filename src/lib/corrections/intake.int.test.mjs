@@ -7,6 +7,7 @@ import ErrorReport from '../../models/ErrorReport.js';
 import CorrectionEvent from '../../models/CorrectionEvent.js';
 import { handleReportingErrorsPost } from './reporting-handler.js';
 import { getCorrectionsConfig } from './config.js';
+import { setRuntimeFlags } from './runtime.js';
 import { startMongo } from './testing/mongo.js';
 import { notifyReportByEmail } from './report-email.js';
 import { OPEN_FILTER } from './store.js';
@@ -22,11 +23,11 @@ const noSmtp = () => { for (const k of SMTP_KEYS) delete process.env[k]; };
 const offConfig = getCorrectionsConfig({});
 const onConfig = getCorrectionsConfig({ CORRECTIONS_VERIFY_ENABLED: '1', CORRECTIONS_VERIFY_URL: 'http://127.0.0.1:9', CORRECTIONS_VERIFY_SECRET: 's' });
 
-async function post(body, { config = offConfig, connectDB = async () => {}, raw = false, notify } = {}) {
+async function post(body, { config = offConfig, connectDB = async () => {}, raw = false, notify, schedule } = {}) {
   const req = new Request('http://localhost/api/reportingerrors', {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: raw ? body : JSON.stringify(body),
   });
-  const res = await handleReportingErrorsPost(req, { connectDB, config, rateLimit: () => true, notify });
+  const res = await handleReportingErrorsPost(req, { connectDB, config, rateLimit: () => true, notify, schedule });
   return { status: res.status, body: await res.json() };
 }
 
@@ -291,4 +292,61 @@ test('[T4] תיקון שורה ארוכה (7,000 תווים) עם בלוק ה-fa
   assert.ok(r.errorDetails.startsWith('חסרה אות'));
   const replay = await post(body);
   assert.equal(replay.body.idempotent_replay, true);
+});
+
+test('קליטה כבויה מהמסך → 503 intake_disabled, בלי שמירה ובלי מייל', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  noSmtp();
+  let mails = 0;
+  const off = getCorrectionsConfig({}, { intakeEnabled: false });
+  const res = await post(newClient('intake-off'), { config: off, notify: async () => { mails += 1; return {}; } });
+  assert.equal(res.status, 503);
+  assert.equal(res.body.error, 'intake_disabled');
+  assert.equal(res.body.success, false);
+  assert.equal(mails, 0);
+  assert.equal(await ErrorReport.countDocuments({ reportId: 'intake-off' }), 0);
+  // המתג נפתח → אותו דיווח נקלט
+  assert.equal((await post(newClient('intake-off'))).status, 200);
+});
+
+test('דיווח שנכנס לתור מריץ אצווה פעם אחת; email_only לא; כשל בהרצה אינו משנה את התשובה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  noSmtp();
+  const scheduled = [];
+  const schedule = (work) => scheduled.push(work);
+  await post(newClient('trg-1'), { schedule });
+  assert.equal(scheduled.length, 1);
+  // שידור חוזר של אותו דיווח אינו עבודה חדשה
+  await post(newClient('trg-1'), { schedule });
+  assert.equal(scheduled.length, 1);
+
+  const emailOnly = await post(newClient('trg-mail', {}, { source_folder: 'sefariaToOtzaria', source_hint: { source_folder: 'sefariaToOtzaria', library_relative_path: 'אוצריא/x.txt' } }), { schedule });
+  assert.equal(emailOnly.status, 200);
+  assert.equal((await ErrorReport.findOne({ reportId: 'trg-mail' }).lean()).state, 'email_only');
+  assert.equal(scheduled.length, 1);
+
+  const boom = await post(newClient('trg-2'), { schedule: () => { throw new Error('boom'); } });
+  assert.equal(boom.status, 200);
+  assert.equal(boom.body.success, true);
+  assert.equal((await ErrorReport.findOne({ reportId: 'trg-2' }).lean()).dispatch.verify, false);
+});
+
+test('בלי הגדרות מוזרקות הנתיב קורא את המתגים מה-DB: כיבוי הקליטה במסך חוסם באמת', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  noSmtp();
+  const bare = async (id) => {
+    const req = new Request('http://localhost/api/reportingerrors', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(newClient(id)),
+    });
+    const res = await handleReportingErrorsPost(req, { connectDB: async () => {}, rateLimit: () => true, notify: async () => ({}) });
+    return { status: res.status, body: await res.json() };
+  };
+  assert.equal((await bare('runtime-on')).status, 200);
+  await setRuntimeFlags({ intakeEnabled: false }, null);
+  const off = await bare('runtime-off');
+  assert.equal(off.status, 503);
+  assert.equal(off.body.error, 'intake_disabled');
+  assert.equal(await ErrorReport.countDocuments({ reportId: 'runtime-off' }), 0);
+  await setRuntimeFlags({ intakeEnabled: true }, null);
+  assert.equal((await bare('runtime-off')).status, 200);
 });

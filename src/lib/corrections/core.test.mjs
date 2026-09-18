@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { canonicalJson, sha256Hex, computeChangeDigest, computeContentDigest, contentDigestInput } from './ocj1.js';
 import { validateIntakePayload, computeNewLine } from './payload.js';
-import { getCorrectionsConfig } from './config.js';
+import { getCorrectionsConfig, describeConfig } from './config.js';
 import { classifyVerifyFailure, computeRetry, parseRetryAfter, describeFetchError } from './classify.js';
 import { validateVerifyResponse, routeVerifyDecision, buildVerifyRequest } from './verify-protocol.js';
 import { deriveLabels } from './labels.js';
@@ -142,8 +142,8 @@ test('[T8] שירות לא מוגדר / כבוי / בלי סוד → מושבת 
 test('[T27] mock מאשר בייצור נחסם: אין שירות, אין סמכות, אין פרסום אוטומטי', () => {
   const cfg = getCorrectionsConfig({
     ...baseEnv, NODE_ENV: 'production', CORRECTIONS_VERIFY_URL: 'https://verify.example.org', CORRECTIONS_VERIFY_MOCK: '1',
-    CORRECTIONS_VERIFY_AUTHORITY: 'technical_and_content', CORRECTIONS_AUTO_PUBLISH: '1', CORRECTIONS_VERIFY_AUTO_REJECT: '1',
-  });
+    CORRECTIONS_VERIFY_AUTHORITY: 'technical_and_content', CORRECTIONS_VERIFY_AUTO_REJECT: '1',
+  }, { autoPublish: true });
   assert.equal(cfg.verify.enabled, false);
   assert.equal(cfg.verify.disabledReason, 'mock_forbidden_in_production');
   assert.equal(cfg.verify.authority, 'none');
@@ -156,23 +156,59 @@ test('[T27] mock מאשר בייצור נחסם: אין שירות, אין סמ�
   assert.equal(http.verify.enabled, false);
 });
 
-test('הפרדת דגלים: פרסום כבוי עד טוקן; PR כברירת מחדל; direct דורש הרשאה מפורשת; יעד מההגדרה בלבד', () => {
+test('פרסום: המצב מגיע מהמתגים; בלי טוקן כבוי; יעד קבוע בקוד; מצב לא מוכר נדחה', () => {
   assert.equal(getCorrectionsConfig({}).publish.mode, 'disabled');
-  const pr = getCorrectionsConfig({ CORRECTIONS_GITHUB_TOKEN: 't', CORRECTIONS_GITHUB_REPO: 'Otzaria/otzaria-library', CORRECTIONS_GITHUB_BRANCH: 'main' });
+  assert.equal(getCorrectionsConfig({}).publish.disabledReason, 'publish_disabled');
+  const pr = getCorrectionsConfig({ DICTA_LIBRARY_GITHUB_TOKEN: 't' }, { publishMode: 'pr' });
   assert.equal(pr.publish.mode, 'pr');
-  // הטוקן המשותף מספיק לפרסום, אבל בלי repo+branch הוא עדיין כבוי
-  const shared = getCorrectionsConfig({ DICTA_LIBRARY_GITHUB_TOKEN: 't', CORRECTIONS_GITHUB_REPO: 'a/b', CORRECTIONS_GITHUB_BRANCH: 'main' });
-  assert.equal(shared.publish.mode, 'pr');
-  assert.equal(shared.publish.disabledReason, null);
-  assert.equal(getCorrectionsConfig({ DICTA_LIBRARY_GITHUB_TOKEN: 't' }).publish.disabledReason, 'publish_target_not_configured');
-  const noTarget = getCorrectionsConfig({ CORRECTIONS_GITHUB_TOKEN: 't' });
-  assert.equal(noTarget.publish.mode, 'disabled');
-  assert.equal(noTarget.publish.disabledReason, 'publish_target_not_configured');
-  const direct = getCorrectionsConfig({ CORRECTIONS_GITHUB_TOKEN: 't', CORRECTIONS_GITHUB_REPO: 'a/b', CORRECTIONS_GITHUB_BRANCH: 'main', CORRECTIONS_PUBLISH_MODE: 'direct' });
-  assert.equal(direct.publish.disabledReason, 'direct_commit_not_authorized');
+  assert.equal(pr.publish.disabledReason, null);
+  assert.deepEqual([pr.publish.repo, pr.publish.branch], ['Otzaria/otzaria-library', 'main']);
+  assert.deepEqual([pr.source.repo, pr.source.ref], ['Otzaria/otzaria-library', 'main']);
+  // אותו טוקן משמש גם לקריאת המקור
+  assert.equal(pr.source.token, 't');
+  const direct = getCorrectionsConfig({ DICTA_LIBRARY_GITHUB_TOKEN: 't' }, { publishMode: 'direct' });
+  assert.equal(direct.publish.mode, 'direct');
+  assert.equal(direct.publish.disabledReason, null);
+  const noToken = getCorrectionsConfig({}, { publishMode: 'pr' });
+  assert.equal(noToken.publish.mode, 'disabled');
+  assert.equal(noToken.publish.disabledReason, 'publish_token_missing');
+  const bad = getCorrectionsConfig({ DICTA_LIBRARY_GITHUB_TOKEN: 't' }, { publishMode: 'force-push' });
+  assert.equal(bad.publish.mode, 'disabled');
+  assert.equal(bad.publish.requestedMode, 'disabled');
+  assert.ok(bad.errors.some((e) => e.includes('publish mode invalid')));
   const authority = getCorrectionsConfig({ ...baseEnv, CORRECTIONS_VERIFY_REQUESTED_SCOPE: 'technical_and_content' });
   assert.equal(authority.verify.requestedScope, 'technical_only');
   assert.equal(authority.autoPublish, false);
+});
+
+test('מתגי ה-runtime: קליטה, פרסום אוטומטי והשהיה — ברירות מחדל ותיאור למסך', () => {
+  const dflt = getCorrectionsConfig({});
+  assert.equal(dflt.intakeEnabled, true);
+  assert.equal(dflt.autoPublish, false);
+  assert.equal(dflt.verifyPaused, false);
+  const off = getCorrectionsConfig({}, { intakeEnabled: false, autoPublish: true, verifyPaused: true });
+  assert.equal(off.intakeEnabled, false);
+  assert.equal(off.autoPublish, true);
+  assert.equal(off.verifyPaused, true);
+  const d = describeConfig(getCorrectionsConfig({ DICTA_LIBRARY_GITHUB_TOKEN: 't' }, { publishMode: 'pr', autoPublish: true }));
+  assert.deepEqual(d.runtimeSwitches, ['intakeEnabled', 'publishMode', 'autoPublish', 'verifyPaused']);
+  assert.equal(d.publish.requestedMode, 'pr');
+  assert.equal(d.publish.tokenConfigured, true);
+  assert.equal(d.autoPublish, true);
+  // סודות לעולם אינם נחשפים לדפדפן
+  assert.equal(JSON.stringify(d).includes('"t"'), false);
+});
+
+test('קבועי הכוונון אינם מושפעים מ-env', () => {
+  const c = getCorrectionsConfig({
+    CORRECTIONS_VERIFY_MAX_ATTEMPTS: '99', CORRECTIONS_WORKER_BATCH: '99', CORRECTIONS_DIFF_CONTEXT_LINES: '9',
+    CORRECTIONS_SOURCE_REPO: 'evil/repo', CORRECTIONS_SOURCE_REF: 'evil', CORRECTIONS_GITHUB_REPO: 'evil/repo',
+  });
+  assert.equal(c.verify.maxAttempts, 6);
+  assert.equal(c.worker.batchSize, 10);
+  assert.equal(c.diffContextLines, 3);
+  assert.equal(c.source.repo, 'Otzaria/otzaria-library');
+  assert.equal(c.publish.repo, 'Otzaria/otzaria-library');
 });
 
 // ---------------------------------------------------------------- classify

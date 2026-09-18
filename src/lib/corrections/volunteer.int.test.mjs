@@ -33,7 +33,7 @@ const NEW = '(א) <big>בְּ</big>רֵאשִׁ֖ית בָּרָ֣א אֱלֹק�
 const FILE = `<h1>בראשית</h1>\r\n\r\n${LINE}\r\nסוף\r\n`;
 const SEL = 'אֱלֹהִ֑ים';
 const START = LINE.indexOf(SEL);
-const CONFIG = getCorrectionsConfig({ CORRECTIONS_GITHUB_TOKEN: 't', CORRECTIONS_GITHUB_REPO: REPO, CORRECTIONS_GITHUB_BRANCH: 'main' });
+const CONFIG = getCorrectionsConfig({ DICTA_LIBRARY_GITHUB_TOKEN: 't' }, { publishMode: 'pr' });
 const T0 = new Date('2026-09-15T10:00:00Z');
 const at = (sec) => new Date(T0.getTime() + sec * 1000);
 
@@ -425,4 +425,29 @@ test('שיוך שפג חוזר לתצוגת התור הממתין (לא נעלם
   const later = at(CONFIG.manual.claimMinutes * 60 + 1);
   const expired = await listReports({ user: users.b, query: { view: 'queued' }, now: later });
   assert.deepEqual(expired.body.items.map((i) => i.id), [id]);
+});
+
+test('אישור מתנדב מריץ אצווה פעם אחת; לקיחה לא; כשל בהרצה אינו משנה את התשובה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const scheduled = [];
+  const withSchedule = (schedule) => (user, id, body) =>
+    runReportAction({ user, id, body, config: CONFIG, deps: { githubFetch: gh.fetch, schedule }, now: T0 });
+  const actS = withSchedule((work) => scheduled.push(work));
+  const id = await ingest('trg-approve');
+  const c = await actS(users.a, id, { action: 'claim' });
+  assert.equal(c.status, 200);
+  assert.equal(scheduled.length, 0, 'לקיחה אינה יוצרת עבודה');
+  const d = await detail(users.a, id);
+  const ap = await actS(users.a, id, { action: 'approve', generation: c.body.generation, revision: d.body.report.currentRevision, seenBlobSha: d.body.source?.blobSha });
+  assert.equal(ap.status, 200, JSON.stringify(ap.body));
+  assert.equal(scheduled.length, 1);
+  assert.equal((await ErrorReport.findById(id).lean()).dispatch.publish, true);
+
+  const id2 = await ingest('trg-approve-2');
+  const boom = withSchedule(() => { throw new Error('boom'); });
+  const c2 = await boom(users.a, id2, { action: 'claim' });
+  const d2 = await detail(users.a, id2);
+  const ap2 = await boom(users.a, id2, { action: 'approve', generation: c2.body.generation, revision: d2.body.report.currentRevision, seenBlobSha: d2.body.source?.blobSha });
+  assert.equal(ap2.status, 200, JSON.stringify(ap2.body));
+  assert.equal((await ErrorReport.findById(id2).lean()).publish.status, 'ready');
 });

@@ -213,7 +213,7 @@ service_capacity         unsupported_capability   manual_required
 | גוף גדול | 413 | `{"success":false,"error":"body_too_large"}` |
 | rate limit | 429 | `{"success":false,"error":"Too many requests"}` |
 | כשל DB | 500 | `{"success":false,"savedToDatabase":false,...}` (**לא** מוצג כהצלחה) |
-| קליטה כבויה (`CORRECTIONS_INTAKE_ENABLED=0`) או שבת/יו"ט (חסימת ה-proxy) | 503 | `{"success":false,"error":"intake_disabled"}` — זמני |
+| קליטה כבויה (מתג `intakeEnabled` במסך הניהול) או שבת/יו"ט (חסימת ה-proxy) | 503 | `{"success":false,"error":"intake_disabled"}` — זמני |
 
 `message` בתשובה מנוסח כ-"נקלט", לעולם לא "אושר".
 
@@ -288,7 +288,7 @@ service_capacity         unsupported_capability   manual_required
   "change": { "change_id": "chg_…", "change_digest": "<sha256>" } | null,  // אם כבר נבנתה חבילה
   "diff": {                              // null: אין הצעה (proposed_text=null), אין מקור שאותר בוודאות, או אין הקשר
     "format": "unified",
-    "context_lines": 3,                  // מההגדרה CORRECTIONS_DIFF_CONTEXT_LINES (ברירת מחדל 3, 0–50)
+    "context_lines": 3,                  // קבוע DIFF_CONTEXT_LINES באתר (3; "הרחב הקשר" עד 50)
     "unified": "--- a/<path>\n+++ b/<path>\n@@ -1,4 +1,4 @@\n <h1>…</h1>\n \n-<current_line>\n+<new_line>\n סוף\n",
     "hunk": {
       "start_line": 1,                   // 1-based: השורה הראשונה ב-hunk
@@ -349,7 +349,7 @@ service_capacity         unsupported_capability   manual_required
 ```
 האתר מבצע polling ב-`GET {CORRECTIONS_VERIFY_URL}/v1/verify/{job_id}` (אותה כתובת
 בסיס מההגדרה — **לעולם לא כתובת שהוחזרה בתשובה**), עם תקרת זמן כוללת
-(`CORRECTIONS_VERIFY_MAX_TOTAL_SECONDS`). מיצוי → ידני. 202 אינו אישור.
+(`VERIFY_MAX_TOTAL_SECONDS`, קבוע באתר). מיצוי → ידני. 202 אינו אישור.
 
 ### 3.4 אימות התשובה באתר (כל סעיף = חובה, כשל = **ידני**, לא retry)
 
@@ -392,8 +392,8 @@ rejected אחרת                            → manual queue (manual_reject_rev
 | `permanent` | שירות כבוי/לא מוגדר/חסר סוד; HTTP 400, 401, 403, 404, 405, 410, 422; ENOTFOUND (DNS קבוע); כשל TLS; JSON פגום; שדות חובה חסרים; `decision` לא מוכר; אי-התאמת מזהים; `unsupported_capability`; api_version לא נתמך | **ידני מיד** עם `handoff_reason` |
 | `unknown` | כל דבר אחר | **ידני** (לא אישור, לא retry אינסופי) |
 
-גבולות retry: `CORRECTIONS_VERIFY_MAX_ATTEMPTS` (ברירת מחדל 6) ו-
-`CORRECTIONS_VERIFY_MAX_TOTAL_SECONDS` (ברירת מחדל 86400). מיצוי → ידני
+גבולות retry (קבועים באתר): `VERIFY_MAX_ATTEMPTS` (6) ו-
+`VERIFY_MAX_TOTAL_SECONDS` (86400). מיצוי → ידני
 (`handoff_reason: retries_exhausted | deadline_exhausted`).
 
 ---
@@ -484,9 +484,8 @@ report.status       : open | email_only | closed_published | closed_already_fixe
   (`response_mismatch`), כדי שלא ייתקע ב-`in_progress`. `already_fixed` נסגר רק כשהתיקון
   נמצא בשורה המדווחת עצמה.
 - `manual.status = released` = שחרור בידי מתנדב בלבד; אחרי אישור/סגירה הערך חוזר ל-`none`.
-  `direct` = הגדרה מפורשת + הרשאה. `disabled` = לא מפרסמים (המצב עד שיוגדר טוקן).
-- יעד (ריפו/ענף) = הגדרת שרת בלבד (`CORRECTIONS_GITHUB_REPO`, `CORRECTIONS_GITHUB_BRANCH`);
-  לעולם לא מהבקשה/מהשירות.
+  `direct` = בחירה מפורשת של מנהל כללי במסך הניהול. `disabled` = לא מפרסמים (ברירת המחדל).
+- יעד (ריפו/ענף) = קבוע בקוד (`Otzaria/otzaria-library@main`); לעולם לא מהבקשה/מהשירות.
 - כתיבה ישירה: read head+blob באותו בסיס → אימות `base_blob_sha` ו-`original_line`
   בשורה `line_index` → הפקת התוכן (שימור BOM/CRLF/שאר הקובץ) → blob/tree/commit עם
   parent=head שנקרא → `PATCH refs` עם `force:false` → אם 422/ענף התקדם: קריאה מחדש

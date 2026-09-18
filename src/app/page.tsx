@@ -3,6 +3,12 @@ import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 import FeaturesSection from '@/components/home/FeaturesSection'
 import DownloadSection from '@/components/home/DownloadSection'
+import StatsSection from '@/components/home/StatsSection'
+
+// דף סטטי עם ISR: נבנה מחדש ברקע לכל היותר פעם ב-10 דק' (תואם לחלון המטמון של
+// DownloadSection ושל StatsSection — ראו src/lib/homeStats/sources.js). ליטרל
+// מספרי בכוונה — ה-segment config של Next נחלץ בניתוח AST סטטי (ראו plugins/page.tsx).
+export const revalidate = 600
 
 export default function Home() {
   return (
@@ -59,6 +65,8 @@ export default function Home() {
         <FeaturesSection />
 
         <DownloadSection />
+
+        <StatsSection />
 
         {/* Offline Update Tool */}
         <section className="py-16 px-4 bg-surface">

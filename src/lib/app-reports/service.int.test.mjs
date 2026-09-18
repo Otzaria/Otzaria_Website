@@ -21,7 +21,7 @@ after(async () => { if (!db.skip) await db.stop(); });
 let gh;
 let files;
 let mails;
-const config = getAppReportsConfig({ APP_REPORTS_GITHUB_TOKEN: 'test-token', NEXTAUTH_SECRET: 'unsub-secret', NEXTAUTH_URL: 'https://otzaria.org' });
+const config = getAppReportsConfig({ DICTA_LIBRARY_GITHUB_TOKEN: 'test-token', NEXTAUTH_SECRET: 'unsub-secret', NEXTAUTH_URL: 'https://otzaria.org' });
 
 beforeEach(async () => {
   if (db.skip) return;

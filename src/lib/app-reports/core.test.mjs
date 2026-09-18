@@ -228,13 +228,13 @@ test('טוקן הסרה: אימות, זיוף נדחה, סוד אחר נדחה',
   assert.match(buildUnsubscribeUrl('https://otzaria.org/', 'rep-1', 's3cret'), /^https:\/\/otzaria\.org\/api\/app-reports\/unsubscribe\?token=/);
 });
 
-test('config: ריפו ברירת מחדל, סוד הסרה נופל ל-NEXTAUTH_SECRET', () => {
-  const c = getAppReportsConfig({ NEXTAUTH_SECRET: 'n', APP_REPORTS_GITHUB_REPO: 'bad repo' });
+test('config: ריפו קבוע בקוד, סוד ההסרה הוא NEXTAUTH_SECRET בלבד', () => {
+  const c = getAppReportsConfig({ NEXTAUTH_SECRET: 'n', APP_REPORTS_GITHUB_REPO: 'other/repo' });
   assert.equal(c.repo, 'Otzaria/otzaria');
-  assert.equal(c.repoMisconfigured, true);
   assert.equal(c.unsubscribeSecret, 'n');
   assert.equal(c.githubToken, null);
-  assert.equal(getAppReportsConfig({ APP_REPORTS_UNSUBSCRIBE_SECRET: 'u', NEXTAUTH_SECRET: 'n' }).unsubscribeSecret, 'u');
+  assert.equal(getAppReportsConfig({ APP_REPORTS_UNSUBSCRIBE_SECRET: 'u' }).unsubscribeSecret, null);
+  assert.equal(getAppReportsConfig({}).unsubscribeSecret, null);
 });
 
 test('תפקיד מפתח: גישה לדיווחים בלבד, לא חלק מ-ALL_ADMIN_ROLES', () => {
@@ -257,8 +257,8 @@ test('חתימת webhook: רק HMAC-SHA256 של הגוף המדויק עם הס�
   assert.equal(verifyGithubSignature(body, sign(''), ''), false);
   assert.equal(getAppReportsConfig({ APP_REPORTS_WEBHOOK_SECRET: ' x ' }).webhookSecret, 'x');
   assert.equal(getAppReportsConfig({}).webhookSecret, null);
-  // נופל לטוקן שהאתר כבר כותב בו לספרייה
+  // טוקן יחיד: אותו טוקן שהאתר כותב בו לספרייה, בלי עקיפה ייעודית
   assert.equal(getAppReportsConfig({ DICTA_LIBRARY_GITHUB_TOKEN: 'shared' }).githubToken, 'shared');
-  assert.equal(getAppReportsConfig({ APP_REPORTS_GITHUB_TOKEN: 'own', DICTA_LIBRARY_GITHUB_TOKEN: 'shared' }).githubToken, 'own');
+  assert.equal(getAppReportsConfig({ APP_REPORTS_GITHUB_TOKEN: 'own' }).githubToken, null);
   assert.equal(getAppReportsConfig({}).githubToken, null);
 });

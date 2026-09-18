@@ -99,10 +99,9 @@ test('diff: קובץ קצר מההקשר ושכנים זהים לשורה — כ
   assert.match(same.unified, /\n@@ -1,3 \+1,3 @@\n/);
 });
 
-test('diff: גודל ההקשר נקבע בהגדרה (ברירת מחדל 3) ונחסם לטווח', () => {
+test('diff: גודל ההקשר קבוע (3) ונחסם לטווח בהרחבה ידנית', () => {
   assert.equal(DEFAULT_DIFF_CONTEXT_LINES, 3);
   assert.equal(getCorrectionsConfig({}).diffContextLines, 3);
-  assert.equal(getCorrectionsConfig({ CORRECTIONS_DIFF_CONTEXT_LINES: '5' }).diffContextLines, 5);
   assert.equal(clampContextLines('999'), 50);
   assert.equal(clampContextLines('abc'), 3);
   assert.equal(clampContextLines(0), 0);

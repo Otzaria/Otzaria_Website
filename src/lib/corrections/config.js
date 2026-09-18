@@ -1,23 +1,41 @@
 /**
- * הגדרות מערכת תיקוני הטקסט. ההגדרות הבטיחותיות (סוד, כתובת, סמכות, פרסום
- * אוטומטי, מצב פרסום, יעד) נקראות מ-env בלבד; מתג החירום בזמן ריצה יכול רק לכבות.
+ * הגדרות מערכת תיקוני הטקסט. סודות וכתובות השירות מ-env בלבד; מתגי ההתנהגות
+ * (קליטה, מצב פרסום, פרסום אוטומטי, השהיית השירות) מגיעים מ-SystemConfig דרך מסך הניהול.
  */
-import { DEFAULT_DIFF_CONTEXT_LINES, MAX_DIFF_CONTEXT_LINES } from './unified-diff.js';
+import { DEFAULT_DIFF_CONTEXT_LINES } from './unified-diff.js';
 
 export const AUTHORITY = Object.freeze({ NONE: 'none', TECHNICAL_ONLY: 'technical_only', FULL: 'technical_and_content' });
 export const PUBLISH_MODES = Object.freeze(['disabled', 'pr', 'direct']);
+
+// ---- קבועי כוונון: אינם ניתנים להגדרה, שינוי דורש שינוי קוד ----
+export const SOURCE_REPO = 'Otzaria/otzaria-library';
+export const SOURCE_REF = 'main';
+export const PUBLISH_REPO = SOURCE_REPO;
+export const PUBLISH_BRANCH = SOURCE_REF;
+export const VERIFY_MAX_ATTEMPTS = 6;
+export const VERIFY_MAX_TOTAL_SECONDS = 86_400;
+export const VERIFY_TIMEOUT_MS = 20_000;
+export const VERIFY_BACKOFF_BASE_SECONDS = 30;
+export const VERIFY_BACKOFF_CAP_SECONDS = 3_600;
+export const PUBLISH_MAX_REF_RETRIES = 3;
+export const PUBLISH_MAX_ATTEMPTS = 5;
+export const WORKER_BATCH_SIZE = 10;
+export const WORKER_CONCURRENCY = 2;
+export const JOB_LEASE_SECONDS = 120;
+// חייב לכסות מחזור cron שלם (10 דקות) ועוד מרווח, אחרת הבריאות תתריע בין הרצה להרצה.
+export const HEARTBEAT_STALE_SECONDS = 900;
+export const MANUAL_CLAIM_MINUTES = 120;
+export const SOURCE_CACHE_BYTES = 64 * 1024 * 1024;
+export const SOURCE_HEAD_TTL_SECONDS = 30;
+export const DIFF_CONTEXT_LINES = DEFAULT_DIFF_CONTEXT_LINES;
+
+/** המתגים שמנוהלים במסך הניהול (SystemConfig) ולא ב-env. */
+export const RUNTIME_SWITCHES = Object.freeze(['intakeEnabled', 'publishMode', 'autoPublish', 'verifyPaused']);
 
 const bool = (v, dflt) => {
   if (v === undefined || v === null || v === '') return dflt;
   return ['1', 'true', 'yes', 'on'].includes(String(v).trim().toLowerCase());
 };
-const int = (v, dflt, min, max) => {
-  const n = Number.parseInt(String(v ?? ''), 10);
-  if (!Number.isFinite(n)) return dflt;
-  return Math.min(max, Math.max(min, n));
-};
-const REPO_RE = /^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/;
-const BRANCH_RE = /^(?!.*\.\.)(?!\/)[A-Za-z0-9_./-]{1,200}(?<!\/)$/;
 
 function isLocalHost(hostname) {
   const h = hostname.toLowerCase().replace(/^\[|\]$/g, '');
@@ -26,7 +44,8 @@ function isLocalHost(hostname) {
 
 /**
  * @param {Record<string,string|undefined>} env
- * @param {{verifyPaused?: boolean}} [runtime] מתג החירום מ-SystemConfig (אופציונלי)
+ * @param {{verifyPaused?:boolean, intakeEnabled?:boolean, publishMode?:string, autoPublish?:boolean}} [runtime]
+ *        מתגי ההתנהגות מ-SystemConfig (מסך הניהול)
  */
 export function getCorrectionsConfig(env = process.env, runtime = {}) {
   const production = env.NODE_ENV === 'production';
@@ -72,33 +91,23 @@ export function getCorrectionsConfig(env = process.env, runtime = {}) {
   if (requestedScope === AUTHORITY.FULL && authority !== AUTHORITY.FULL) requestedScope = AUTHORITY.TECHNICAL_ONLY;
 
   // ---- פרסום ----
-  // ברירת מחדל: הטוקן שמרחב עריכת הספרים כבר דוחף בו. פרסום עדיין דורש repo+branch מפורשים.
-  const token = env.CORRECTIONS_GITHUB_TOKEN || env.DICTA_LIBRARY_GITHUB_TOKEN || '';
-  const repo = (env.CORRECTIONS_GITHUB_REPO || '').trim();
-  const branch = (env.CORRECTIONS_GITHUB_BRANCH || '').trim();
-  let publishMode = (env.CORRECTIONS_PUBLISH_MODE || '').trim() || (token ? 'pr' : 'disabled');
+  // טוקן יחיד לכל כתיבות ה-GitHub של האתר; היעד קבוע בקוד, המצב נבחר במסך הניהול.
+  const token = (env.DICTA_LIBRARY_GITHUB_TOKEN || '').trim();
+  let publishMode = typeof runtime?.publishMode === 'string' ? runtime.publishMode.trim() : 'disabled';
   if (!PUBLISH_MODES.includes(publishMode)) {
-    errors.push('CORRECTIONS_PUBLISH_MODE invalid');
+    errors.push('publish mode invalid');
     publishMode = 'disabled';
   }
   let publishDisabledReason = null;
   if (publishMode === 'disabled') publishDisabledReason = 'publish_disabled';
   else if (!token) publishDisabledReason = 'publish_token_missing';
-  else if (!REPO_RE.test(repo)) publishDisabledReason = 'publish_target_not_configured';
-  else if (!BRANCH_RE.test(branch)) publishDisabledReason = 'publish_target_not_configured';
-  else if (publishMode === 'direct' && !bool(env.CORRECTIONS_ALLOW_DIRECT_COMMIT, false)) publishDisabledReason = 'direct_commit_not_authorized';
   if (publishDisabledReason && publishDisabledReason !== 'publish_disabled') errors.push(`publish: ${publishDisabledReason}`);
-
-  const sourceRepo = (env.CORRECTIONS_SOURCE_REPO || 'Otzaria/otzaria-library').trim();
-  const sourceRef = (env.CORRECTIONS_SOURCE_REF || 'main').trim();
-  if (!REPO_RE.test(sourceRepo) || !BRANCH_RE.test(sourceRef)) errors.push('CORRECTIONS_SOURCE_REPO/REF invalid');
-
-  const autoPublishRequested = bool(env.CORRECTIONS_AUTO_PUBLISH, false);
 
   return {
     production,
     errors,
-    intakeEnabled: bool(env.CORRECTIONS_INTAKE_ENABLED, true),
+    intakeEnabled: runtime?.intakeEnabled !== false,
+    verifyPaused: runtime?.verifyPaused === true,
     verify: {
       enabled: verifyDisabledReason === null,
       disabledReason: verifyDisabledReason,
@@ -108,38 +117,36 @@ export function getCorrectionsConfig(env = process.env, runtime = {}) {
       authority: verifyDisabledReason === null ? authority : AUTHORITY.NONE,
       requestedScope,
       autoRejectAllowed: bool(env.CORRECTIONS_VERIFY_AUTO_REJECT, false) && !(production && isMock),
-      maxAttempts: int(env.CORRECTIONS_VERIFY_MAX_ATTEMPTS, 6, 1, 50),
-      maxTotalSeconds: int(env.CORRECTIONS_VERIFY_MAX_TOTAL_SECONDS, 86_400, 60, 30 * 86_400),
-      timeoutMs: int(env.CORRECTIONS_VERIFY_TIMEOUT_MS, 20_000, 1_000, 120_000),
-      backoffBaseSeconds: int(env.CORRECTIONS_VERIFY_BACKOFF_BASE_SECONDS, 30, 1, 3_600),
-      backoffCapSeconds: int(env.CORRECTIONS_VERIFY_BACKOFF_CAP_SECONDS, 3_600, 1, 86_400),
+      maxAttempts: VERIFY_MAX_ATTEMPTS,
+      maxTotalSeconds: VERIFY_MAX_TOTAL_SECONDS,
+      timeoutMs: VERIFY_TIMEOUT_MS,
+      backoffBaseSeconds: VERIFY_BACKOFF_BASE_SECONDS,
+      backoffCapSeconds: VERIFY_BACKOFF_CAP_SECONDS,
     },
-    autoPublish: autoPublishRequested && !(production && isMock),
+    autoPublish: runtime?.autoPublish === true && !(production && isMock),
     publish: {
       mode: publishDisabledReason ? 'disabled' : publishMode,
       requestedMode: publishMode,
       disabledReason: publishDisabledReason,
-      repo,
-      branch,
+      repo: PUBLISH_REPO,
+      branch: PUBLISH_BRANCH,
       token,
-      maxRefRetries: int(env.CORRECTIONS_PUBLISH_MAX_REF_RETRIES, 3, 1, 10),
-      maxAttempts: int(env.CORRECTIONS_PUBLISH_MAX_ATTEMPTS, 5, 1, 20),
+      maxRefRetries: PUBLISH_MAX_REF_RETRIES,
+      maxAttempts: PUBLISH_MAX_ATTEMPTS,
     },
-    source: { repo: sourceRepo, ref: sourceRef, token: env.CORRECTIONS_SOURCE_TOKEN || token || '' },
+    source: { repo: SOURCE_REPO, ref: SOURCE_REF, token },
     worker: {
-      batchSize: int(env.CORRECTIONS_WORKER_BATCH, 10, 1, 100),
-      concurrency: int(env.CORRECTIONS_WORKER_CONCURRENCY, 2, 1, 10),
-      leaseSeconds: int(env.CORRECTIONS_JOB_LEASE_SECONDS, 120, 10, 3_600),
-      staleHeartbeatSeconds: int(env.CORRECTIONS_HEARTBEAT_STALE_SECONDS, 300, 30, 86_400),
+      batchSize: WORKER_BATCH_SIZE,
+      concurrency: WORKER_CONCURRENCY,
+      leaseSeconds: JOB_LEASE_SECONDS,
+      staleHeartbeatSeconds: HEARTBEAT_STALE_SECONDS,
     },
-    manual: {
-      claimMinutes: int(env.CORRECTIONS_CLAIM_MINUTES, 120, 5, 7 * 24 * 60),
-    },
-    cacheBytes: int(env.CORRECTIONS_SOURCE_CACHE_BYTES, 64 * 1024 * 1024, 1024 * 1024, 1024 * 1024 * 1024),
+    manual: { claimMinutes: MANUAL_CLAIM_MINUTES },
+    cacheBytes: SOURCE_CACHE_BYTES,
     // תצוגת דיווח בלבד; אישור ופרסום תמיד קוראים את ה-head העדכני.
-    sourceHeadTtlMs: int(env.CORRECTIONS_SOURCE_HEAD_TTL_SECONDS, 30, 0, 600) * 1000,
+    sourceHeadTtlMs: SOURCE_HEAD_TTL_SECONDS * 1000,
     // שורות הקשר לפני ואחרי השורה ב-diff (תצוגה ובקשת השירות).
-    diffContextLines: int(env.CORRECTIONS_DIFF_CONTEXT_LINES, DEFAULT_DIFF_CONTEXT_LINES, 0, MAX_DIFF_CONTEXT_LINES),
+    diffContextLines: DIFF_CONTEXT_LINES,
   };
 }
 
@@ -148,7 +155,10 @@ export function describeConfig(cfg) {
   return {
     production: cfg.production,
     errors: cfg.errors,
+    // המתגים האלה נערכים במסך הניהול; השאר מגיע מ-env או קבוע בקוד.
+    runtimeSwitches: RUNTIME_SWITCHES,
     intakeEnabled: cfg.intakeEnabled,
+    verifyPaused: cfg.verifyPaused,
     verify: {
       enabled: cfg.verify.enabled,
       disabledReason: cfg.verify.disabledReason,
@@ -166,8 +176,8 @@ export function describeConfig(cfg) {
       mode: cfg.publish.mode,
       requestedMode: cfg.publish.requestedMode,
       disabledReason: cfg.publish.disabledReason,
-      repo: cfg.publish.repo || null,
-      branch: cfg.publish.branch || null,
+      repo: cfg.publish.repo,
+      branch: cfg.publish.branch,
       tokenConfigured: Boolean(cfg.publish.token),
     },
     source: { repo: cfg.source.repo, ref: cfg.source.ref },

@@ -36,11 +36,14 @@ const START = LINE.indexOf(SEL);
 
 const BASE_ENV = {
   CORRECTIONS_VERIFY_ENABLED: '1', CORRECTIONS_VERIFY_URL: 'http://verify.test', CORRECTIONS_VERIFY_SECRET: 'sec',
-  CORRECTIONS_VERIFY_BACKOFF_BASE_SECONDS: '10', CORRECTIONS_VERIFY_TIMEOUT_MS: '1000',
 };
-const PUBLISH_ENV = { CORRECTIONS_GITHUB_TOKEN: 't', CORRECTIONS_GITHUB_REPO: REPO, CORRECTIONS_GITHUB_BRANCH: 'main' };
-const FULL_AUTO_ENV = { ...BASE_ENV, ...PUBLISH_ENV, CORRECTIONS_VERIFY_AUTHORITY: 'technical_and_content', CORRECTIONS_VERIFY_REQUESTED_SCOPE: 'technical_and_content', CORRECTIONS_AUTO_PUBLISH: '1' };
-const cfg = (over = {}) => getCorrectionsConfig({ ...BASE_ENV, ...over });
+const PUBLISH_ENV = { DICTA_LIBRARY_GITHUB_TOKEN: 't' };
+const FULL_AUTO_ENV = { ...BASE_ENV, ...PUBLISH_ENV, CORRECTIONS_VERIFY_AUTHORITY: 'technical_and_content', CORRECTIONS_VERIFY_REQUESTED_SCOPE: 'technical_and_content' };
+const PR_RUNTIME = { publishMode: 'pr' };
+const AUTO_RUNTIME = { publishMode: 'pr', autoPublish: true };
+// הכוונון קבוע בקוד; הבדיקות מקצרות אותו ישירות על אובייקט ההגדרות.
+const tuneVerify = (c, over) => ({ ...c, verify: { ...c.verify, ...over } });
+const cfg = (over = {}, runtime = {}) => tuneVerify(getCorrectionsConfig({ ...BASE_ENV, ...over }, runtime), { backoffBaseSeconds: 10, timeoutMs: 1000 });
 
 const T0 = new Date('2026-09-15T10:00:00Z');
 const at = (sec) => new Date(T0.getTime() + sec * 1000);
@@ -153,7 +156,7 @@ test('[T11] מיצוי ניסיונות ומיצוי זמן כולל → ידנ�
   if (db.skip) return t.skip(db.skip);
   const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: FILE } });
   const verify = createMockVerifyFetch(() => ({ status: 429 }));
-  const c1 = cfg({ CORRECTIONS_VERIFY_MAX_ATTEMPTS: '2' });
+  const c1 = tuneVerify(cfg(), { maxAttempts: 2 });
   const r1 = await ingest('t11a', c1);
   await run(c1, { verifyFetch: verify, githubFetch: gh.fetch }, T0);
   await run(c1, { verifyFetch: verify, githubFetch: gh.fetch }, at(10_000));
@@ -162,7 +165,7 @@ test('[T11] מיצוי ניסיונות ומיצוי זמן כולל → ידנ�
   assert.ok(deriveLabels(a).some((l) => l.text === 'מוצו הניסיונות'));
 
   await db.reset();
-  const c2 = cfg({ CORRECTIONS_VERIFY_MAX_TOTAL_SECONDS: '60', CORRECTIONS_VERIFY_BACKOFF_BASE_SECONDS: '200' });
+  const c2 = tuneVerify(cfg(), { maxTotalSeconds: 60, backoffBaseSeconds: 200 });
   const r2 = await ingest('t11b', c2);
   await run(c2, { verifyFetch: verify, githubFetch: gh.fetch }, T0);
   assert.equal((await load(r2._id)).manual.handoffReason, 'deadline_exhausted');
@@ -171,7 +174,7 @@ test('[T11] מיצוי ניסיונות ומיצוי זמן כולל → ידנ�
 test('[T12] approved + technical_only → מתנדב; אין חבילה, אין משימת פרסום, אין כתיבה ל-GitHub', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: FILE } });
-  const c = getCorrectionsConfig({ ...BASE_ENV, ...PUBLISH_ENV, CORRECTIONS_AUTO_PUBLISH: '1' });
+  const c = cfg(PUBLISH_ENV, AUTO_RUNTIME);
   const r = await ingest('t12', c);
   const verify = createMockVerifyFetch((call) => ({ status: 200, body: buildMockDecision(call.body, { scope: 'technical_only' }) }));
   await run(c, { verifyFetch: verify, githubFetch: gh.fetch }, T0);
@@ -191,7 +194,7 @@ test('[T13] approved מלא → פרסום (PR) רק כשהמדיניות מתי
   if (db.skip) return t.skip(db.skip);
   const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: FILE } });
   const verify = createMockVerifyFetch((call) => ({ status: 200, body: buildMockDecision(call.body, { scope: 'technical_and_content' }) }));
-  const auto = getCorrectionsConfig(FULL_AUTO_ENV);
+  const auto = cfg(FULL_AUTO_ENV, AUTO_RUNTIME);
   const r = await ingest('t13a', auto);
   assert.equal(r.verification.requestedScope, 'technical_and_content');
   await run(auto, { verifyFetch: verify, githubFetch: gh.fetch }, T0);
@@ -212,7 +215,7 @@ test('[T13] approved מלא → פרסום (PR) רק כשהמדיניות מתי
   assert.equal(s.inclusion.status, 'merged_to_main');
 
   await db.reset();
-  const noAuto = getCorrectionsConfig({ ...FULL_AUTO_ENV, CORRECTIONS_AUTO_PUBLISH: '0' });
+  const noAuto = cfg(FULL_AUTO_ENV, PR_RUNTIME);
   const r2 = await ingest('t13b', noAuto);
   const gh2 = new FakeGitHub({ repo: REPO, files: { [PATH]: FILE } });
   await run(noAuto, { verifyFetch: verify, githubFetch: gh2.fetch }, T0);
@@ -222,7 +225,7 @@ test('[T13] approved מלא → פרסום (PR) רק כשהמדיניות מתי
 test('חוזה B: בקשת ה-worker נושאת diff עם הקשר מאותו blob; החבילה וה-digest אינם תלויים בו', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: FILE } });
-  const c = getCorrectionsConfig({ ...FULL_AUTO_ENV, CORRECTIONS_DIFF_CONTEXT_LINES: '2' });
+  const c = { ...cfg(FULL_AUTO_ENV, AUTO_RUNTIME), diffContextLines: 2 };
   const r = await ingest('tdiff', c);
   const verify = createMockVerifyFetch((call) => ({ status: 200, body: buildMockDecision(call.body, { scope: 'technical_and_content' }) }));
   await run(c, { verifyFetch: verify, githubFetch: gh.fetch }, T0);
@@ -240,7 +243,7 @@ test('חוזה B: בקשת ה-worker נושאת diff עם הקשר מאותו bl
 test('[T14] שירות שטוען לסמכות מלאה כשהאתר מתיר technical_only → ידני + authority_exceeded', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: FILE } });
-  const c = getCorrectionsConfig({ ...BASE_ENV, ...PUBLISH_ENV, CORRECTIONS_AUTO_PUBLISH: '1' });
+  const c = cfg(PUBLISH_ENV, AUTO_RUNTIME);
   const r = await ingest('t14', c);
   const verify = createMockVerifyFetch((call) => ({ status: 200, body: buildMockDecision(call.body, { scope: 'technical_and_content' }) }));
   await run(c, { verifyFetch: verify, githubFetch: gh.fetch }, T0);
@@ -286,7 +289,7 @@ test('[T15] מזהים לא תואמים / generation ישן / תשובה אסי
 test('[T16] מתנדב לקח את הדיווח לפני תשובת השירות → התשובה נשמרת להיסטוריה בלבד', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: FILE } });
-  const auto = getCorrectionsConfig(FULL_AUTO_ENV);
+  const auto = cfg(FULL_AUTO_ENV, AUTO_RUNTIME);
   const vol = await User.create({ name: 'מתנדב', email: 'v@example.org', password: 'x', isCorrectionsVolunteer: true });
   const r = await ingest('t16', auto);
   const verify = createMockVerifyFetch(async (call) => {
@@ -344,8 +347,7 @@ test('[T24] נפילה אחרי הצלחת GitHub → reconciliation לפי מז
   for (const mode of ['pr', 'direct']) {
     await db.reset();
     const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: FILE } });
-    const env = { ...FULL_AUTO_ENV, CORRECTIONS_PUBLISH_MODE: mode, CORRECTIONS_ALLOW_DIRECT_COMMIT: '1' };
-    const c = getCorrectionsConfig(env);
+    const c = cfg(FULL_AUTO_ENV, { publishMode: mode, autoPublish: true });
     const r = await ingest(`t24-${mode}`, c);
     const verify = createMockVerifyFetch((call) => ({ status: 200, body: buildMockDecision(call.body, { scope: 'technical_and_content' }) }));
     await run(c, { verifyFetch: verify, githubFetch: gh.fetch }, T0);
@@ -408,7 +410,7 @@ test('[T23] already_fixed מהשירות כשהשורה המדווחת כבר מ
 test('[T18] worker שה-lease שלו על משימת פרסום נלקח ע"י אחר אינו כותב ל-GitHub', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: FILE } });
-  const c = getCorrectionsConfig(FULL_AUTO_ENV);
+  const c = cfg(FULL_AUTO_ENV, AUTO_RUNTIME);
   const r = await ingest('t18-pub', c);
   const verify = createMockVerifyFetch((call) => ({ status: 200, body: buildMockDecision(call.body, { scope: 'technical_and_content' }) }));
   await run(c, { verifyFetch: verify, githubFetch: gh.fetch }, T0);
@@ -427,7 +429,7 @@ test('[T18] worker שה-lease שלו על משימת פרסום נלקח ע"י �
 test('משימה שזורקת חריגה לא צפויה נספרת כניסיון ובמיצוי עוברת לידני (לא נתפסת לנצח)', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: FILE } });
-  const c = getCorrectionsConfig(FULL_AUTO_ENV);
+  const c = cfg(FULL_AUTO_ENV, AUTO_RUNTIME);
   const r = await ingest('poison', c);
   const verify = createMockVerifyFetch((call) => ({ status: 200, body: buildMockDecision(call.body, { scope: 'technical_and_content' }) }));
   t.mock.method(ChangePackage, 'create', async () => { throw new Error('boom'); });
