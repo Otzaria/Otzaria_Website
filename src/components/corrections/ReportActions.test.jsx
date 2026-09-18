@@ -29,3 +29,20 @@ describe('מצב השיוך בדיווח שאינו בטיפולי', () => {
     expect(screen.getByRole('button', { name: /קח לטיפול/ })).toBeTruthy()
   })
 })
+
+describe('הסבר לאישור כבוי', () => {
+  const mine = { status: 'claimed', assignee: 'me', assigneeName: 'אני', leaseExpiresAt: new Date(Date.now() + HOUR).toISOString() }
+
+  it('דיווח חופשי: האישור כבוי ומוסבר שיש לערוך', () => {
+    renderWith(mine)
+    expect(screen.getByRole('button', { name: /^check אישור$/ }).disabled).toBe(true)
+    expect(screen.getByText(/דיווח חופשי — אין הצעת תיקון/)).toBeTruthy()
+  })
+
+  it('יש הצעה אך המקור לא אותר: מוסבר לבחור מקור', () => {
+    const d = detail(mine)
+    d.report.proposals = [{ revision: 0, newLine: 'חדש', originalLine: 'ישן' }]
+    render(<ReportActions detail={d} meId="me" busy={false} run={async () => true} />)
+    expect(screen.getByText(/המקור לא אותר בוודאות/)).toBeTruthy()
+  })
+})

@@ -61,13 +61,18 @@ export default function ReportActions({ detail, meId, busy, run }) {
     setMode('edit')
   }
 
+  // בלי הסבר, אישור כבוי נראה כתקלה. דיווח חופשי מתוקן דרך 'עריכה ואז אישור'.
+  const approveBlocked = !rev || rev.newLine === null
+    ? 'דיווח חופשי — אין הצעת תיקון לאשר. לתיקון: "עריכה ואז אישור".'
+    : !usable ? 'המקור לא אותר בוודאות — אפשר לבחור אותו ב"בחירת מקור ידנית".' : null
+
   return (
     <div className="glass rounded-xl p-4 space-y-3">
       <div className="text-sm">בטיפולך עד {new Date(report.manual.leaseExpiresAt).toLocaleString('he-IL')}</div>
       <div className="flex flex-wrap gap-2">
         <button
-          disabled={busy || !usable || !rev || rev.newLine === null}
-          title={!usable ? 'אי אפשר לאשר לפני שהמקור אותר בוודאות' : ''}
+          disabled={busy || Boolean(approveBlocked)}
+          title={approveBlocked || ''}
           onClick={() => run({ action: 'approve', generation: g, revision: report.currentRevision, seenBlobSha: source?.blobSha })}
           className={`${btn} bg-success-600 text-white hover:bg-success-700`}
         >
@@ -83,6 +88,7 @@ export default function ReportActions({ detail, meId, busy, run }) {
         <button disabled={busy} onClick={() => setMode('close')} className={`${btn} glass`}><span className="material-symbols-outlined text-base">task_alt</span> סגירה ידנית</button>
         <button disabled={busy} onClick={() => run({ action: 'release', generation: g })} className={`${btn} glass`}><span className="material-symbols-outlined text-base">logout</span> שחרור</button>
       </div>
+      {approveBlocked && <p className="text-xs text-on-surface/70">{approveBlocked}</p>}
 
       {mode === 'edit' && (
         <div className="space-y-2">
