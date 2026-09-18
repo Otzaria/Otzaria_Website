@@ -25,7 +25,7 @@ const COMMON = {
 export async function migrateLegacyReports({ apply = false } = {}) {
   const col = ErrorReport.collection;
   const groups = [
-    // כמו legacyUpgradeSet: דיווח שהמייל שלו לא הגיע לאוצריא (ספריא) אינו נכנס לתור.
+    // דיווח שהמייל שלו לא הגיע לאוצריא (ספריא) אינו נכנס לתור.
     { filter: { state: { $exists: false }, status: { $nin: ['resolved', 'rejected'] }, sourceFolder: NON_OTZARIA_SOURCE_FOLDER_RE }, set: { ...COMMON, state: 'email_only', 'manual.status': 'none' } },
     { filter: { state: { $exists: false }, status: { $nin: ['resolved', 'rejected'] }, sourceFolder: { $not: NON_OTZARIA_SOURCE_FOLDER_RE } }, set: { ...COMMON, state: 'open', 'manual.status': 'queued', 'manual.handoffReason': 'legacy_report', 'manual.queuedAt': { $ifNull: ['$createdAt', '$$NOW'] } } },
     { filter: { state: { $exists: false }, status: 'resolved' }, set: { ...COMMON, state: 'closed_manual', 'manual.status': 'none', closeReason: 'legacy_closed' } },

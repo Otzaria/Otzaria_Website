@@ -31,7 +31,7 @@ async function fetchJson(url, headers) {
   return response.json()
 }
 
-/** ספרים/קישורים/שורות מתוך library_stats.json של ה-release היציב האחרון. */
+/** ספרים/קישורים/פסקאות מתוך library_stats.json של ה-release היציב האחרון. */
 export async function getLibraryStats() {
   try {
     const releases = await fetchJson(SEFORIM_RELEASES_URL, {

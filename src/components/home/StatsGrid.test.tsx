@@ -10,7 +10,7 @@ describe('StatsGrid', () => {
     expect(screen.getByRole('heading', { name: 'אוצריא במספרים' })).toBeInTheDocument()
     const values = screen.getAllByTestId('stat-value').map((el) => el.textContent)
     expect(values).toEqual(['7,367', '5,812,829', '122,836'])
-    expect(screen.queryByText('שורות')).not.toBeInTheDocument()
+    expect(screen.queryByText('פסקאות')).not.toBeInTheDocument()
     expect(screen.queryByText('תוספים')).not.toBeInTheDocument()
   })
 
