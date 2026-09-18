@@ -24,7 +24,7 @@ export const WORKER_CONCURRENCY = 2;
 export const JOB_LEASE_SECONDS = 120;
 // חייב לכסות מחזור cron שלם (10 דקות) ועוד מרווח, אחרת הבריאות תתריע בין הרצה להרצה.
 export const HEARTBEAT_STALE_SECONDS = 900;
-export const MANUAL_CLAIM_MINUTES = 120;
+export const MANUAL_CLAIM_MINUTES = 24 * 60;
 export const SOURCE_CACHE_BYTES = 64 * 1024 * 1024;
 export const SOURCE_HEAD_TTL_SECONDS = 30;
 export const DIFF_CONTEXT_LINES = DEFAULT_DIFF_CONTEXT_LINES;

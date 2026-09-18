@@ -38,11 +38,17 @@ export default function ReportActions({ detail, meId, busy, run }) {
     : usable ? { context: source.context ?? null, lineIndex: source.lineIndex, path: source.path } : { context: null, lineIndex: null, path: null }
 
   if (!claimedByMe) {
+    // שיוך שפג נשאר במסמך (הפקיעה אינה נכתבת), ולכן מוצג במפורש — אחרת היומן נראה סותר.
+    const claimed = report.manual?.status === 'claimed'
+    const leaseEnd = claimed ? new Date(report.manual.leaseExpiresAt) : null
+    const leaseText = leaseEnd?.toLocaleString('he-IL')
     return (
       <div className="glass rounded-xl p-4 flex flex-wrap items-center gap-3">
-        {report.manual?.status === 'claimed' && new Date(report.manual.leaseExpiresAt) > new Date()
-          ? <span className="text-sm">בטיפול של <b>{report.manual.assigneeName}</b> עד {new Date(report.manual.leaseExpiresAt).toLocaleString('he-IL')}</span>
-          : <span className="text-sm">הדיווח אינו משויך למטפל.</span>}
+        {!claimed
+          ? <span className="text-sm">הדיווח אינו משויך למטפל.</span>
+          : leaseEnd > new Date()
+            ? <span className="text-sm">בטיפול של <b>{report.manual.assigneeName}</b> עד {leaseText}</span>
+            : <span className="text-sm">הטיפול של <b>{report.manual.assigneeName}</b> פג ב-{leaseText}.</span>}
         <button disabled={busy} onClick={() => run({ action: 'claim' })} className={`${btn} bg-primary text-on-primary`}>
           <span className="material-symbols-outlined text-base">back_hand</span> קח לטיפול
         </button>
