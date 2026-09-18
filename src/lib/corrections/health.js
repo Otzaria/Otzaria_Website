@@ -39,6 +39,8 @@ export async function computeHealth({ config, now = new Date() }) {
   if (!stale && beat?.lastBatch?.paused && hasWork) problems.push('worker_paused');
   if (beat?.lastError) problems.push('worker_last_batch_error');
   if (counts.publishUnknown > 0) problems.push('publish_unknown_pending');
+  // דיווח בלי state אינו נראה בשום תור; התיקון היחיד הוא הרצת ה-migration.
+  if (counts.legacyNotMigrated > 0) problems.push('legacy_not_migrated');
   if (config.errors.length) problems.push('config_errors');
   return {
     healthy: problems.length === 0,

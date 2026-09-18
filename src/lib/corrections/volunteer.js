@@ -18,7 +18,7 @@ import { computeChangeDigest } from './ocj1.js';
 import { extractLineContext, committedNewLine, clampContextLines } from './unified-diff.js';
 import { deriveLabels } from './labels.js';
 import { HANDOFF_REASON_LABELS } from './states.js';
-import { newId, logEvent, userActor, currentRevisionOf, manualQueueSet, ensureUpgraded, OPEN_FILTER } from './store.js';
+import { newId, logEvent, userActor, currentRevisionOf, manualQueueSet, OPEN_FILTER } from './store.js';
 import { cancelActiveJobs } from './worker.js';
 
 const MAX_LINE = 20_000;
@@ -44,7 +44,7 @@ const LIST_FILTERS = {
   mine: (user) => ({ 'manual.status': 'claimed', 'manual.assignee': user._id }),
   // שיוך שפג זמין שוב ללקיחה, ולכן מוצג בתור.
   queued: (user, now) => ({
-    $and: [OPEN_FILTER, { $or: [{ 'manual.status': { $in: ['queued', 'released', null] } }, { 'manual.status': 'claimed', 'manual.leaseExpiresAt': { $lte: now } }] }],
+    $and: [OPEN_FILTER, { $or: [{ 'manual.status': { $in: ['queued', 'released'] } }, { 'manual.status': 'claimed', 'manual.leaseExpiresAt': { $lte: now } }] }],
   }),
   claimed: () => ({ 'manual.status': 'claimed', state: 'open' }),
   auto: () => ({ state: 'open', 'verification.status': { $in: ['queued', 'in_progress'] } }),
@@ -76,8 +76,8 @@ export async function listReports({ user, query = {}, now = new Date() }) {
       currentRef: r.currentRef,
       sourceFolder: r.sourceFolder,
       kind: r.reportKind || 'free_text',
-      state: r.state || 'open',
-      manual: { status: r.manual?.status || 'queued', handoffReason: r.manual?.handoffReason || (r.state ? null : 'legacy_report'), assigneeName: r.manual?.assigneeName || null, leaseExpiresAt: r.manual?.leaseExpiresAt || null },
+      state: r.state,
+      manual: { status: r.manual?.status || 'none', handoffReason: r.manual?.handoffReason || null, assigneeName: r.manual?.assigneeName || null, leaseExpiresAt: r.manual?.leaseExpiresAt || null },
       labels: deriveLabels(r),
       generation: r.workflowGeneration ?? 0,
       createdAt: r.createdAt,
@@ -102,7 +102,7 @@ function publicReport(r, liveSource = null) {
     libraryVersion: r.libraryVersion,
     location: r.location || null,
     client: r.client || null,
-    state: r.state || 'open',
+    state: r.state,
     generation: r.workflowGeneration ?? 0,
     currentRevision: r.currentRevision || 0,
     proposals: (r.proposals || []).map((p) => ({ ...p, newLine: computeNewLine(p) })),
@@ -122,7 +122,7 @@ function publicReport(r, liveSource = null) {
 export async function getReportDetail({ user, id, config, deps, contextLines }) {
   if (!canHandleCorrections(user)) return err(403, 'Forbidden');
   if (!isId(id)) return err(404, 'not_found');
-  const r = await ensureUpgraded(id);
+  const r = await ErrorReport.findById(id).lean();
   if (!r) return err(404, 'not_found');
   const rev = currentRevisionOf(r);
   let source = null;
@@ -158,7 +158,6 @@ export async function getReportDetail({ user, id, config, deps, contextLines }) 
 export async function claimReport({ user, id, config, now = new Date() }) {
   if (!canHandleCorrections(user)) return err(403, 'Forbidden');
   if (!isId(id)) return err(404, 'not_found');
-  await ensureUpgraded(id);
   const lease = new Date(now.getTime() + config.manual.claimMinutes * 60_000);
   const base = {
     _id: id, state: 'open',

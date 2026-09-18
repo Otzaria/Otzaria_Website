@@ -16,20 +16,6 @@ export const JOB_STATUS = ['pending', 'leased', 'done', 'failed', 'cancelled'];
 
 export const isFinalState = (state) => typeof state === 'string' && state.startsWith('closed_');
 
-/** מיפוי לשדה status הישן (תאימות למסכים/שאילתות קיימים). */
-export function legacyStatusFor(state, manualStatus) {
-  if (state === 'closed_rejected') return 'rejected';
-  if (isFinalState(state)) return 'resolved';
-  return manualStatus === 'claimed' ? 'in_progress' : 'pending';
-}
-
-/** מצב מחושב לדיווח ישן שלא עבר migration. */
-export function legacyStateFromStatus(status) {
-  if (status === 'resolved') return 'closed_manual';
-  if (status === 'rejected') return 'closed_rejected';
-  return 'open';
-}
-
 export const HANDOFF_REASON_LABELS = {
   free_text: 'דיווח חופשי',
   legacy_report: 'דיווח ישן (לפני מערכת התיקונים)',

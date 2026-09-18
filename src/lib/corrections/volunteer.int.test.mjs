@@ -321,12 +321,18 @@ test('תפוגת שיוך: מתנדב אחר יכול לקחת אחרי שפג; 
   assert.equal((await act(users.a, id, { action: 'approve', generation: c.body.generation, revision: 1 }, later)).status, 409);
 });
 
-test('דיווח ישן (לפני המערכת) מופיע בתור הידני, משודרג בעצלות וניתן לסגירה', async (t) => {
+test('דיווח ישן נסתר עד ה-migration ומתריע בבריאות; אחריה בתור הידני וניתן לסגירה', async (t) => {
   if (db.skip) return t.skip(db.skip);
+  const { migrateLegacyReports } = await import('./migrate.js');
+  const { computeHealth } = await import('./health.js');
   await ErrorReport.collection.insertOne({
     reportId: 'legacy-1', senderEmail: 'x@example.org', subject: 's', bookTitle: 'ספר', currentRef: 'א', lineNumber: 1, selectedText: 't',
     errorDetails: 'e', contextText: 'c', filePath: 'f', sourceFolder: 'MoreBooks', libraryVersion: '20', status: 'pending', emailSent: true, createdAt: new Date(), updatedAt: new Date(),
   });
+  assert.equal((await listReports({ user: users.a, query: { view: 'queued' } })).body.items.length, 0);
+  assert.ok((await computeHealth({ config: CONFIG })).problems.includes('legacy_not_migrated'));
+  await migrateLegacyReports({ apply: true });
+  assert.ok(!(await computeHealth({ config: CONFIG })).problems.includes('legacy_not_migrated'));
   const list = await listReports({ user: users.a, query: { view: 'queued' } });
   assert.equal(list.body.items.length, 1);
   assert.equal(list.body.items[0].manual.handoffReason, 'legacy_report');
@@ -340,7 +346,7 @@ test('דיווח ישן (לפני המערכת) מופיע בתור הידני, 
   assert.equal(r.emailSent, true);
 });
 
-test('email_only (ספריא): לא בתור, לא ללקיחה, לא לבדיקה ולא לפרסום; ישן שלא עבר migration מסווג באותו כלל', async (t) => {
+test('email_only (ספריא): לא בתור, לא ללקיחה, לא לבדיקה ולא לפרסום; ישן מסווג ב-migration באותו כלל', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const id = await ingest('sef', { source_folder: 'sefariaToOtzaria', source_hint: { source_folder: 'sefariaToOtzaria', library_relative_path: 'אוצריא/x.txt' } });
   await ingest('regular');
@@ -354,6 +360,7 @@ test('email_only (ספריא): לא בתור, לא ללקיחה, לא לבדיק
 
   const legacy = { senderEmail: 'x@example.org', subject: 's', bookTitle: 'ספר', currentRef: 'א', filePath: 'f', status: 'pending', createdAt: new Date('2025-01-01') };
   const { insertedIds } = await ErrorReport.collection.insertMany([{ ...legacy, reportId: 'lsef', sourceFolder: 'Sefaria' }, { ...legacy, reportId: 'lwiki', sourceFolder: 'wikiSource' }]);
+  await (await import('./migrate.js')).migrateLegacyReports({ apply: true });
   const q2 = await listReports({ user: users.a, query: { view: 'queued' } });
   assert.ok(!q2.body.items.some((i) => i.id === String(insertedIds[0])), 'ספריא ישן אינו בתור');
   assert.ok(q2.body.items.some((i) => i.id === String(insertedIds[1])));

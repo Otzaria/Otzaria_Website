@@ -11,6 +11,7 @@ const PROBLEMS = {
   worker_last_batch_error: 'האצווה האחרונה של ה-worker נכשלה',
   publish_unknown_pending: 'יש ניסיונות פרסום בתוצאה לא ידועה (ממתינים ל-reconciliation)',
   config_errors: 'יש שגיאות בהגדרות',
+  legacy_not_migrated: 'יש דיווחים ישנים שלא עברו migration ואינם מוצגים — יש להריץ scripts/migrate-corrections.mjs --apply',
 }
 const COUNTS = {
   open: 'פתוחים', legacyNotMigrated: 'ישנים שלא עברו migration', manualQueued: 'בתור הידני', claimed: 'בטיפול',
