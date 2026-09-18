@@ -143,6 +143,10 @@ export default function PluginStoreAppBanner() {
               </button>
               <a
                 href={downloadHref}
+                // בכרטיסיה חדשה: אם שליפת ה-release נכשלה ההורדה מפנה לדף ההפצות
+                // בגיטהאב, ואין רוצים לזרוק את המשתמש מהחנות בגלל זה.
+                target="_blank"
+                rel="noopener noreferrer"
                 onClick={closeDialog}
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-2.5 font-bold text-on-primary shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-xl"
               >

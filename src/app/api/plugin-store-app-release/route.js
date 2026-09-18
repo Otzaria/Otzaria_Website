@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { shabbatGatedCacheHeaders } from '@/lib/api-cache'
 
 // דינמי כמו /api/offline-update-releases — המטמון האמיתי הוא על ה-fetch ל-GitHub למטה.
 export const dynamic = 'force-dynamic'
@@ -37,7 +36,9 @@ export async function GET() {
         updatedAt: asset.updated_at,
         releaseUrl: release.html_url
       },
-      { headers: shabbatGatedCacheHeaders() }
+      // נתון ציבורי-לגמרי, לא תלוי-משתמש/session — אותה כותרת כמו
+      // ב-offline-update-releases (TTL קצר בכוונה, ראו הערת שער השבת ב-CLAUDE.md).
+      { headers: { 'Cache-Control': 'public, max-age=300, stale-while-revalidate=1200' } }
     )
   } catch (error) {
     console.error('Error fetching plugin-store-app release:', error)
