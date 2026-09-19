@@ -15,7 +15,19 @@ const CompanionSchema = new mongoose.Schema(
     sha256: { type: String, default: '' },     // מוצג בדף התוסף — הקובץ בר-אימות
     // המתקין מתקין בעצמו גם את קובץ התוסף (מתקין שמריץ את ה-.otzplugin בסופו).
     // אז דף התוסף מציג צעד אחד ולא שניים.
-    installsPlugin: { type: Boolean, default: false }
+    installsPlugin: { type: Boolean, default: false },
+
+    // ===== הצהרת השירות שמאחורי התוכנה =====
+    // id: מזהה יציב שהצרכן (אוצריא, הכלים האוף-ליין) בודק מולו אם התוכנה
+    //     מותקנת אצל המשתמש. minVersion: הגרסה המזערית שהתוסף דורש.
+    // hideUnlessInstalled: אל תציג את התוסף למי שהשירות אינו מותקן אצלו —
+    //     בדיקה שרק הצרכן יכול לעשות, ולכן החנות רק מצהירה ומסננת לפי
+    //     installedServices שהוא מוסר. ראו src/lib/pluginCompanionService.js.
+    service: {
+      id: { type: String, default: '', trim: true, lowercase: true, maxlength: 64 },
+      minVersion: { type: String, default: '', trim: true, maxlength: 40 },
+      hideUnlessInstalled: { type: Boolean, default: false }
+    }
   },
   { _id: false }
 )

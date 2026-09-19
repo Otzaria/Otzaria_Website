@@ -154,7 +154,11 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
     name: plugin.companion?.name || '',
     version: plugin.companion?.version || '',
     platform: plugin.companion?.platform || 'windows',
-    installsPlugin: plugin.companion?.installsPlugin === true
+    installsPlugin: plugin.companion?.installsPlugin === true,
+    // הצהרת השירות שמאחורי התוכנה (null בתוסף שלא הצהיר)
+    serviceId: plugin.companion?.service?.id || '',
+    serviceMinVersion: plugin.companion?.service?.minVersion || '',
+    hideUnlessInstalled: plugin.companion?.service?.hideUnlessInstalled === true
   })
   const [companionFile, setCompanionFile] = useState(null)
   const [removeCompanion, setRemoveCompanion] = useState(false)
@@ -377,6 +381,9 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
         if (!companion.name.trim()) {
           throw new Error('יש למלא את שם התוכנה הנלווית — הוא מוצג למשתמש בדף התוסף')
         }
+        if (companion.hideUnlessInstalled && !companion.serviceId.trim()) {
+          throw new Error('כדי להסתיר את התוסף ממי שהתוכנה אינה מותקנת אצלו יש למלא מזהה שירות')
+        }
         if (companionFile) {
           data.append('companionFile', companionFile)
         }
@@ -384,6 +391,9 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
         data.append('companionVersion', companion.version.trim())
         data.append('companionPlatform', companion.platform)
         data.append('companionInstallsPlugin', companion.installsPlugin ? 'true' : 'false')
+        data.append('companionServiceId', companion.serviceId.trim())
+        data.append('companionServiceMinVersion', companion.serviceMinVersion.trim())
+        data.append('companionHideUnlessInstalled', companion.hideUnlessInstalled ? 'true' : 'false')
       }
 
       if (removeImage) {
@@ -599,6 +609,54 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
                       className="mt-1"
                     />
                     <span>המתקין מתקין בסופו גם את קובץ התוסף באוצריא (דף התוסף יציג אז צעד אחד במקום שניים).</span>
+                  </label>
+
+                  {/* זיהוי השירות — מה שמאפשר לאוצריא ולכלים האוף-ליין לדעת אם
+                      התוכנה כבר מותקנת אצל המשתמש. האתר עצמו אינו יכול לבדוק. */}
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="block text-sm font-bold text-on-surface/60 mb-2">מזהה השירות (אופציונלי)</label>
+                      <input
+                        type="text"
+                        value={companion.serviceId}
+                        onChange={(e) => setCompanion((prev) => ({ ...prev, serviceId: e.target.value }))}
+                        className="w-full px-4 py-3 border border-neutral-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+                        placeholder="hevruta-bridge"
+                        dir="ltr"
+                        maxLength={64}
+                      />
+                      <p className="mt-1 text-sm text-on-surface/50">
+                        אותיות אנגליות קטנות, ספרות, נקודות ומקפים. זה השם שהתוכנה מזדהה בו.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-on-surface/60 mb-2">גרסת שירות מזערית (אופציונלי)</label>
+                      <input
+                        type="text"
+                        value={companion.serviceMinVersion}
+                        onChange={(e) => setCompanion((prev) => ({ ...prev, serviceMinVersion: e.target.value }))}
+                        className="w-full px-4 py-3 border border-neutral-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+                        placeholder="1.2.0"
+                        dir="ltr"
+                        maxLength={40}
+                      />
+                      <p className="mt-1 text-sm text-on-surface/50">
+                        גרסה מספרית. מי שמותקנת אצלו גרסה נמוכה יותר ייחשב כמי שאין לו את התוכנה.
+                      </p>
+                    </div>
+                  </div>
+
+                  <label className="mt-4 flex items-start gap-2 text-sm text-on-surface/70">
+                    <input
+                      type="checkbox"
+                      checked={companion.hideUnlessInstalled}
+                      onChange={(e) => setCompanion((prev) => ({ ...prev, hideUnlessInstalled: e.target.checked }))}
+                      className="mt-1"
+                    />
+                    <span>
+                      אל תציגו את התוסף למי שהתוכנה אינה מותקנת אצלו (דורש מזהה שירות). הבדיקה נעשית
+                      באוצריא ובכלי העדכון האוף-ליין, לא באתר.
+                    </span>
                   </label>
 
                   {companionFile && <p className="mt-3 text-sm text-success-600">✓ נבחר: {companionFile.name}</p>}

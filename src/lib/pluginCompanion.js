@@ -1,4 +1,5 @@
 import path from 'path'
+import { buildCompanionService, serviceFromDoc, serializeServiceForPublic } from './pluginCompanionService.js'
 
 // ===== תוכנה נלווית לתוסף =====
 // יש תוספים שאינם יכולים לעבוד לבדם: הם מדברים עם תוכנה שרצה על המחשב מחוץ
@@ -79,7 +80,8 @@ export function emptyCompanion() {
     ext: '',
     size: 0,
     sha256: '',
-    installsPlugin: false
+    installsPlugin: false,
+    service: { id: '', minVersion: '', hideUnlessInstalled: false }
   }
 }
 
@@ -89,7 +91,17 @@ export function emptyCompanion() {
 // מקבל את הקובץ כשדות (fileName/size/sha256) ולא כאובייקט File, כדי שגם עריכת
 // המטא-דאטה של תוכנה קיימת — בלי להעלות את המתקין מחדש — תעבור באותן בדיקות
 // בדיוק, ובכללן התאמת הסיומת למערכת ההפעלה שהוצהרה.
-export function buildCompanionMeta({ fileName: rawFileName, size, sha256, platform, name, version, installsPlugin, maxBytes }) {
+export function buildCompanionMeta({
+  fileName: rawFileName,
+  size,
+  sha256,
+  platform,
+  name,
+  version,
+  installsPlugin,
+  service,
+  maxBytes
+}) {
   const resolvedPlatform = normalizeCompanionPlatform(platform)
   if (!resolvedPlatform) {
     throw new Error(`יש לבחור את מערכת ההפעלה של התוכנה הנלווית (${COMPANION_PLATFORM_KEYS.join(' / ')})`)
@@ -134,7 +146,10 @@ export function buildCompanionMeta({ fileName: rawFileName, size, sha256, platfo
     ext,
     size,
     sha256: (sha256 || '').toString(),
-    installsPlugin: installsPlugin === true
+    installsPlugin: installsPlugin === true,
+    // ההצהרה על השירות שמאחורי התוכנה — ראו src/lib/pluginCompanionService.js.
+    // זורק Error בעברית בדיוק כמו הבדיקות שלמעלה.
+    service: buildCompanionService(service)
   }
 }
 
@@ -151,7 +166,8 @@ export function companionFromDoc(companion) {
     ext: companion.ext || '',
     size: companion.size || 0,
     sha256: companion.sha256 || '',
-    installsPlugin: companion.installsPlugin === true
+    installsPlugin: companion.installsPlugin === true,
+    service: serviceFromDoc(companion.service)
   }
 }
 
@@ -170,6 +186,9 @@ export function serializeCompanionForPublic(companion, { downloadUrl }) {
     // המתקין מתקין בעצמו גם את קובץ התוסף (כמו ה-setup של חברותא, שמריץ את
     // ה-.otzplugin בסופו) — ואז דף התוסף מציג צעד אחד ולא שניים.
     installsPlugin: companion.installsPlugin === true,
+    // הצהרת השירות שמאחורי התוכנה (null כשאין). צרכן שמסנן לפי מה שמותקן
+    // אצל המשתמש נשען על השדה הזה — ראו src/lib/pluginCompanionService.js.
+    service: serializeServiceForPublic(companion.service),
     downloadUrl
   }
 }

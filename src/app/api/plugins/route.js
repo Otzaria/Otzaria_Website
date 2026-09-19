@@ -10,6 +10,11 @@ import {
   invalidAppVersionMessage,
   resolveListForAppVersion
 } from '@/lib/pluginCompatibility'
+import {
+  readInstalledServicesParam,
+  invalidInstalledServicesMessage,
+  filterByInstalledServices
+} from '@/lib/pluginCompanionService'
 
 // GET - קבלת כל התוספים המאושרים, עם סינון אופציונלי.
 // סדר: "התוספים הנבחרים" (StoreSettings.featuredPluginIds, בסדר האצירה) ראשונים,
@@ -34,6 +39,14 @@ export async function GET(request) {
     const { appVersion, invalid } = readAppVersionParam(searchParams)
     if (invalid) {
       return NextResponse.json({ error: invalidAppVersionMessage() }, { status: 400 })
+    }
+
+    // ?installedServices=<id>@<version>,... — תוספים שהצהירו שאין להציגם למי
+    // שהשירות שלהם אינו מותקן מושמטים. צרכן שאינו מוסר את הפרמטר מקבל את
+    // הרשימה המלאה כמקודם. ראו src/lib/pluginCompanionService.js.
+    const { services: installedServices, invalid: badServices } = readInstalledServicesParam(searchParams)
+    if (badServices) {
+      return NextResponse.json({ error: invalidInstalledServicesMessage() }, { status: 400 })
     }
 
     const query = { ...PUBLIC_PLUGIN_FILTER }
@@ -63,11 +76,14 @@ export async function GET(request) {
     })
 
     return NextResponse.json(
-      resolveListForAppVersion(
-        plugins.map((plugin) =>
-          formatPluginForPublic(plugin, { isFeatured: featuredRank.has(plugin._id.toString()) })
+      filterByInstalledServices(
+        resolveListForAppVersion(
+          plugins.map((plugin) =>
+            formatPluginForPublic(plugin, { isFeatured: featuredRank.has(plugin._id.toString()) })
+          ),
+          appVersion
         ),
-        appVersion
+        installedServices
       ),
       { headers: { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=120' } }
     )

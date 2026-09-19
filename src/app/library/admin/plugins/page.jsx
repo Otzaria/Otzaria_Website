@@ -636,6 +636,19 @@ export default function AdminPluginsPage() {
                         >
                           הורדת המתקין לבדיקה
                         </a>
+                        {/* הצהרת השירות — מנהל שמאשר תוסף מוסתר צריך לראות
+                            שהוא יוצג רק למי שהשירות מותקן אצלו, ולפי איזה מזהה. */}
+                        {plugin.companion.service?.id && (
+                          <div className="mt-1 text-warning-900/70">
+                            שירות: <span className="font-mono" dir="ltr">{plugin.companion.service.id}</span>
+                            {plugin.companion.service.minVersion
+                              ? ` (מגרסה ${plugin.companion.service.minVersion})`
+                              : ''}
+                            {plugin.companion.service.hideUnlessInstalled
+                              ? ' · מוצג רק למי שהשירות מותקן אצלו'
+                              : ''}
+                          </div>
+                        )}
                       </div>
                     )}
                     {activeTab === 'approved' && (

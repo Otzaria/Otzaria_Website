@@ -9,6 +9,11 @@ import {
   hasCompatibleVersion,
   resolveForAppVersion
 } from '@/lib/pluginCompatibility'
+import {
+  readInstalledServicesParam,
+  invalidInstalledServicesMessage,
+  filterByInstalledServices
+} from '@/lib/pluginCompanionService'
 import { badRequest, notFound, serverError } from '@/lib/apiResponse'
 
 // נבדק: לינארי — מפריד '-' חובה בכל איטרציה מונע נסיגה קטסטרופלית
@@ -41,6 +46,10 @@ export async function GET(request, { params }) {
     if (invalid) {
       return badRequest(invalidAppVersionMessage())
     }
+    const { services: installedServices, invalid: badServices } = readInstalledServicesParam(searchParams)
+    if (badServices) {
+      return badRequest(invalidInstalledServicesMessage())
+    }
 
     const pluginsById = await fetchPublicPluginsByIds(category.pluginIds || [])
     let ordered = orderCategoryPlugins(category, pluginsById)
@@ -48,6 +57,8 @@ export async function GET(request, { params }) {
     if (appVersion) {
       ordered = ordered.filter((plugin) => hasCompatibleVersion(plugin, appVersion))
     }
+    // סינון "רק אם השירות מותקן" — גם הוא לפני העימוד ולפני total, מאותו טעם
+    ordered = filterByInstalledServices(ordered, installedServices)
     const page = limit === null ? ordered.slice(offset) : ordered.slice(offset, offset + limit)
 
     return NextResponse.json(

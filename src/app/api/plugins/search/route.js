@@ -11,6 +11,11 @@ import {
   hasCompatibleVersion,
   resolveForAppVersion
 } from '@/lib/pluginCompatibility'
+import {
+  readInstalledServicesParam,
+  invalidInstalledServicesMessage,
+  isVisibleForInstalledServices
+} from '@/lib/pluginCompanionService'
 
 const MAX_QUERY_LENGTH = 120
 
@@ -41,6 +46,10 @@ export async function GET(request) {
     if (invalid) {
       return NextResponse.json({ error: invalidAppVersionMessage() }, { status: 400 })
     }
+    const { services: installedServices, invalid: badServices } = readInstalledServicesParam(searchParams)
+    if (badServices) {
+      return NextResponse.json({ error: invalidInstalledServicesMessage() }, { status: 400 })
+    }
 
     await dbConnect()
     let { results, relaxed } = await searchPlugins(query)
@@ -56,6 +65,10 @@ export async function GET(request) {
     // שממילא היו מושמטים מהתשובה
     if (appVersion) {
       results = results.filter(({ doc }) => hasCompatibleVersion(doc, appVersion))
+    }
+    // אותו טעם לסינון "רק אם השירות מותקן": לפני total ולפני העימוד
+    if (installedServices) {
+      results = results.filter(({ doc }) => isVisibleForInstalledServices(doc.companion, installedServices))
     }
 
     const total = results.length

@@ -244,6 +244,11 @@ export async function POST(request) {
           name: formData.get('companionName'),
           version: formData.get('companionVersion'),
           installsPlugin: formData.get('companionInstallsPlugin') === 'true',
+          service: {
+            id: formData.get('companionServiceId'),
+            minVersion: formData.get('companionServiceMinVersion'),
+            hideUnlessInstalled: formData.get('companionHideUnlessInstalled') === 'true'
+          },
           maxBytes: MAX_COMPANION_BYTES
         })
       } catch (error) {

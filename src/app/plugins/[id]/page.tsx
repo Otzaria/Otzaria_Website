@@ -519,6 +519,19 @@ export default function PluginDetailPage() {
                           </li>
                         </ol>
 
+                        {/* תוסף שהצהיר שאין להציגו בלי התוכנה — באוצריא ובכלי
+                            העדכון האוף-ליין הוא פשוט לא יופיע. באתר אי אפשר
+                            לבדוק מה מותקן, ולכן אומרים את זה במפורש. */}
+                        {plugin.companion.service?.hideUnlessInstalled && (
+                          <p className="text-sm text-warning-900/80">
+                            באוצריא ובכלי העדכון האוף-ליין התוסף מוצג רק למי שהתוכנה הזאת כבר מותקנת אצלו
+                            {plugin.companion.service.minVersion
+                              ? `, בגרסה ${plugin.companion.service.minVersion} ומעלה`
+                              : ''}
+                            .
+                          </p>
+                        )}
+
                         {plugin.companion.sha256 && (
                           <p className="break-all font-mono text-[11px] leading-relaxed text-warning-900/60">
                             SHA-256: {plugin.companion.sha256}

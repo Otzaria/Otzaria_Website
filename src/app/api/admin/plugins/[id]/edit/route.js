@@ -416,6 +416,11 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
           name: formData.get('companionName'),
           version: formData.get('companionVersion'),
           installsPlugin: formData.get('companionInstallsPlugin') === 'true',
+          service: {
+            id: formData.get('companionServiceId'),
+            minVersion: formData.get('companionServiceMinVersion'),
+            hideUnlessInstalled: formData.get('companionHideUnlessInstalled') === 'true'
+          },
           maxBytes: MAX_COMPANION_BYTES
         })
       } catch (error) {
@@ -436,6 +441,13 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
           installsPlugin: formData.has('companionInstallsPlugin')
             ? formData.get('companionInstallsPlugin') === 'true'
             : existingCompanion.installsPlugin,
+          service: formData.has('companionServiceId')
+            ? {
+                id: formData.get('companionServiceId'),
+                minVersion: formData.get('companionServiceMinVersion'),
+                hideUnlessInstalled: formData.get('companionHideUnlessInstalled') === 'true'
+              }
+            : existingCompanion.service,
           maxBytes: MAX_COMPANION_BYTES
         })
       } catch (error) {

@@ -6,6 +6,15 @@ export interface CategoryRef {
   name: string
 }
 
+// הצהרת השירות שמאחורי התוכנה הנלווית. null כשהתוסף לא הצהיר על שירות.
+export interface PluginCompanionService {
+  id: string
+  minVersion: string
+  // 'אל תציג אותי למי שהשירות אינו מותקן אצלו' — בדיקה שרק צרכן שיודע מה
+  // מותקן על המחשב יכול לעשות (ראו src/lib/pluginCompanionService.js)
+  hideUnlessInstalled: boolean
+}
+
 // תוכנה נלווית שהתוסף דורש — תוכנה שרצה על המחשב מחוץ לאוצריא (null לתוסף
 // רגיל). האתר מגיש את המתקין להורדה; הוא אינו מריץ אותו, ואינו יכול.
 export interface PluginCompanion {
@@ -18,6 +27,7 @@ export interface PluginCompanion {
   sha256: string
   // המתקין מתקין בעצמו גם את קובץ התוסף — ואז די בהורדה אחת
   installsPlugin: boolean
+  service: PluginCompanionService | null
   downloadUrl: string
 }
 
