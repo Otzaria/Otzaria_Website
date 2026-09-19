@@ -52,6 +52,9 @@ export function toTokenUserFields(user) {
     role: user.role,
     acceptReminders: user.acceptReminders,
     isVerified: user.isVerified,
+    // חשבון שנוצר דרך Google אין לו סיסמה — הממשק מציע לו "קביעת סיסמה"
+    // במקום "שינוי סיסמה", בלי לבקש סיסמה נוכחית.
+    hasPassword: Boolean(user.password),
     isSupervisor: user.isSupervisor === true,
     isCorrectionsVolunteer: user.isCorrectionsVolunteer === true,
   };

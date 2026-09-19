@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { getProviders, signIn } from 'next-auth/react'
+import { SIGNUP_INTENT_KEY } from '@/lib/googleSignup'
 
 // מטמון ברמת המודול — בדיקה אחת מול /api/auth/providers לכל טעינת דף.
 let providersPromise = null
@@ -23,9 +24,11 @@ function GoogleLogo() {
 
 // כפתור "התחברות עם Google" — מוצג רק כשהספק מוגדר בשרת (אחרת לא מרונדר כלל).
 // loginHint ממלא מראש את חשבון הגוגל המתאים (למשל מייל החשבון בדף האימות).
+// signupIntent=true מסמן שהלחיצה הגיעה ממסלול ההרשמה, כדי שמסך השלמת הפרטים
+// ידלג על ההסבר "אין לך עדיין חשבון".
 // withDivider מוסיף מפריד "או" מעל הכפתור — חלק מהרכיב כדי שלא יוצג מפריד יתום
 // כשהכפתור מוסתר.
-export default function GoogleSignInButton({ callbackUrl, loginHint, label = 'התחברות עם Google', withDivider = false, className = '' }) {
+export default function GoogleSignInButton({ callbackUrl, loginHint, label = 'התחברות עם Google', signupIntent = false, withDivider = false, className = '' }) {
   const [enabled, setEnabled] = useState(false)
   const [loading, setLoading] = useState(false)
 
@@ -39,6 +42,9 @@ export default function GoogleSignInButton({ callbackUrl, loginHint, label = 'ה
 
   const handleClick = () => {
     setLoading(true)
+    if (signupIntent) {
+      try { sessionStorage.setItem(SIGNUP_INTENT_KEY, '1') } catch { /* מצב פרטי/חסימת אחסון */ }
+    }
     signIn('google', { callbackUrl }, loginHint ? { login_hint: loginHint } : undefined)
   }
 

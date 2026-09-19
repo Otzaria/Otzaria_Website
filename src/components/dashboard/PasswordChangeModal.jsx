@@ -11,10 +11,16 @@ import { validatePassword, validateMatch, validateDifferent } from '@/lib/valida
  * הקומפוננטה כאשר יש להציג אותה ולפרק אותה (unmount) כאשר יש לסגור אותה -
  * כך שבכל פתיחה מחדש הטופס מתחיל נקי, בדיוק כמו בהתנהגות המקורית.
  *
+ * חשבון שנוצר דרך התחברות עם Google אין לו סיסמה כלל — במקרה כזה
+ * (hasPassword=false) המודל הופך ל"קביעת סיסמה": שדה הסיסמה הנוכחית אינו מוצג
+ * ואינו נדרש, כי הזהות כבר הוכחה בעצם ההתחברות.
+ *
+ * @param {boolean} hasPassword - האם לחשבון כבר יש סיסמה
  * @param {() => void} onClose - נקרא כדי לסגור את המודל (גם בביטול וגם בהצלחה)
  * @param {(title: string, message: string) => void} showAlert - הצגת הודעת מערכת (מ-DialogContext)
  */
-export default function PasswordChangeModal({ onClose, showAlert }) {
+export default function PasswordChangeModal({ hasPassword = true, onClose, showAlert }) {
+  const title = hasPassword ? 'שינוי סיסמה' : 'קביעת סיסמה'
   const [passwordFormData, setPasswordFormData] = useState({
     currentPassword: '',
     newPassword: '',
@@ -35,7 +41,7 @@ export default function PasswordChangeModal({ onClose, showAlert }) {
   const handleChangePassword = async () => {
     setPasswordMessage({ type: '', text: '' })
 
-    if (!passwordFormData.currentPassword || !passwordFormData.newPassword || !passwordFormData.confirmPassword) {
+    if ((hasPassword && !passwordFormData.currentPassword) || !passwordFormData.newPassword || !passwordFormData.confirmPassword) {
       setPasswordMessage({ type: 'error', text: 'נא למלא את כל השדות' })
       return
     }
@@ -52,10 +58,12 @@ export default function PasswordChangeModal({ onClose, showAlert }) {
       return
     }
 
-    const differentCheck = validateDifferent(passwordFormData.currentPassword, passwordFormData.newPassword, 'הסיסמה החדשה')
-    if (!differentCheck.isValid) {
-      setPasswordMessage({ type: 'error', text: differentCheck.error })
-      return
+    if (hasPassword) {
+      const differentCheck = validateDifferent(passwordFormData.currentPassword, passwordFormData.newPassword, 'הסיסמה החדשה')
+      if (!differentCheck.isValid) {
+        setPasswordMessage({ type: 'error', text: differentCheck.error })
+        return
+      }
     }
 
     try {
@@ -72,7 +80,7 @@ export default function PasswordChangeModal({ onClose, showAlert }) {
       const result = await response.json()
 
       if (response.ok) {
-        showAlert('הצלחה', 'הסיסמה שונתה בהצלחה!')
+        showAlert('הצלחה', hasPassword ? 'הסיסמה שונתה בהצלחה!' : 'הסיסמה נקבעה בהצלחה!')
         setPasswordFormData({ currentPassword: '', newPassword: '', confirmPassword: '' })
         onClose()
       } else {
@@ -91,7 +99,7 @@ export default function PasswordChangeModal({ onClose, showAlert }) {
         <div className="p-6 border-b border-surface-variant bg-white/50 rounded-t-2xl flex justify-between items-center">
           <h3 className="text-xl font-bold text-on-surface flex items-center gap-3">
             <span className="material-symbols-outlined text-2xl text-primary">lock_reset</span>
-            שינוי סיסמה
+            {title}
           </h3>
           <button
             onClick={onClose}
@@ -103,6 +111,14 @@ export default function PasswordChangeModal({ onClose, showAlert }) {
         </div>
 
         <div className="p-6 space-y-4">
+          {!hasPassword && (
+            <p className="text-sm text-on-surface/70 bg-surface-variant/30 border border-surface-variant rounded-lg p-3">
+              החשבון שלך נפתח בהתחברות עם Google ואין לו עדיין סיסמה. קביעת סיסמה
+              תאפשר להתחבר גם עם שם משתמש וסיסמה, בנוסף ל-Google.
+            </p>
+          )}
+
+          {hasPassword && (
           <div>
             <label className="block text-sm font-medium text-on-surface mb-2">סיסמה נוכחית</label>
             <div className="relative">
@@ -125,6 +141,7 @@ export default function PasswordChangeModal({ onClose, showAlert }) {
               </button>
             </div>
           </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-on-surface mb-2">סיסמה חדשה</label>

@@ -63,6 +63,11 @@ test('pickUserForEmail: כמה מועמדים — מעדיף התאמה מדוי
   });
 });
 
+test('toTokenUserFields: חשבון Google מסומן כחסר סיסמה', () => {
+  const fields = toTokenUserFields({ _id: { toString: () => 'g1' }, email: 'g@x.com', name: 'גוגל' });
+  assert.equal(fields.hasPassword, false);
+});
+
 test('toTokenUserFields: ממיר מזהה למחרוזת ומנרמל דגלים', () => {
   const fields = toTokenUserFields({
     _id: { toString: () => 'abc' },
@@ -71,6 +76,7 @@ test('toTokenUserFields: ממיר מזהה למחרוזת ומנרמל דגלי�
     role: 'user',
     acceptReminders: true,
     isVerified: false,
+    password: '$2a$12$hash',
   });
   assert.deepEqual(fields, {
     id: 'abc',
@@ -79,6 +85,7 @@ test('toTokenUserFields: ממיר מזהה למחרוזת ומנרמל דגלי�
     role: 'user',
     acceptReminders: true,
     isVerified: false,
+    hasPassword: true,
     isSupervisor: false,
     isCorrectionsVolunteer: false,
   });
