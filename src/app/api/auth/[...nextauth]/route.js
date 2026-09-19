@@ -1,11 +1,20 @@
 import NextAuth from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
+import GoogleProvider from 'next-auth/providers/google';
 import { compare } from 'bcryptjs';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/client-ip';
 import { z } from 'zod';
+import {
+  GOOGLE_AUTH_ERRORS,
+  isGoogleAuthConfigured,
+  isGoogleProfileVerified,
+  buildEmailLookupQuery,
+  pickUserForEmail,
+  toTokenUserFields,
+} from '@/lib/googleAuth';
 
 // סכמת אימות לקלט התחברות
 const loginSchema = z.object({
@@ -61,21 +70,50 @@ export const authOptions = {
           throw new Error('פרטי התחברות שגויים');
         }
 
-        return {
-          id: user._id.toString(),
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          acceptReminders: user.acceptReminders,
-          isVerified: user.isVerified,
-          isSupervisor: user.isSupervisor === true,
-          isCorrectionsVolunteer: user.isCorrectionsVolunteer === true,
-        };
+        return toTokenUserFields(user);
       },
     }),
+    // התחברות עם Google — רק לחשבונות קיימים, לפי המייל. הספק נרשם רק כשהסודות
+    // מוגדרים; בלעדיהם הכפתור לא מוצג (הלקוח בודק מול /api/auth/providers).
+    ...(isGoogleAuthConfigured()
+      ? [GoogleProvider({
+          clientId: process.env.GOOGLE_CLIENT_ID,
+          clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        })]
+      : []),
   ],
   callbacks: {
-    async jwt({ token, user, trigger }) {
+    async signIn({ account, profile }) {
+      if (account?.provider !== 'google') return true;
+
+      const errorUrl = (code) => `/library/auth/error?error=${code}`;
+      if (!isGoogleProfileVerified(profile)) return errorUrl(GOOGLE_AUTH_ERRORS.EMAIL_NOT_VERIFIED);
+
+      const { user, error } = await findUserForGoogle(profile.email);
+      if (!user) return errorUrl(error);
+
+      // Google כבר אימת את בעלות המייל — מאמתים את החשבון אוטומטית.
+      if (!user.isVerified) {
+        await User.updateOne(
+          { _id: user._id },
+          { $set: { isVerified: true }, $unset: { verificationToken: 1, verificationTokenExpires: 1 } }
+        );
+      }
+      return true;
+    },
+    async jwt({ token, user, account, profile, trigger }) {
+      // ב-Google, `user` הוא פרופיל גוגל ולא המשתמש שלנו — טוענים את החשבון
+      // מה-DB (signIn כבר אישר שקיים ואימת אותו).
+      if (account?.provider === 'google') {
+        const { user: dbUser } = await findUserForGoogle(profile?.email);
+        if (!dbUser) throw new Error('החשבון לא נמצא');
+        user = toTokenUserFields(dbUser);
+        token.sub = user.id;
+        token.email = user.email;
+        token.name = user.name;
+        delete token.picture;
+      }
+
       if (user) {
         token.id = user.id;
         token.role = user.role;
@@ -126,6 +164,13 @@ export const authOptions = {
   session: { strategy: 'jwt' },
   secret: process.env.NEXTAUTH_SECRET,
 };
+
+async function findUserForGoogle(email) {
+  if (!email) return { user: null, error: GOOGLE_AUTH_ERRORS.NO_ACCOUNT };
+  await connectDB();
+  const candidates = await User.find(buildEmailLookupQuery(email)).limit(5);
+  return pickUserForEmail(candidates, email);
+}
 
 const handler = NextAuth(authOptions);
 export { handler as GET, handler as POST };

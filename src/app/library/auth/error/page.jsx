@@ -14,7 +14,11 @@ function ErrorContent() {
     AccessDenied: 'הגישה נדחתה',
     Verification: 'שגיאה באימות',
     Default: 'אירעה שגיאה בהתחברות',
+    GoogleNoAccount: 'לא נמצא חשבון רשום עם כתובת המייל של חשבון ה-Google. ניתן להתחבר עם Google רק לחשבון קיים — יש להירשם תחילה, או להתחבר עם חשבון Google אחר.',
+    GoogleEmailNotVerified: 'כתובת המייל בחשבון ה-Google אינה מאומתת אצל Google, ולכן לא ניתן להתחבר באמצעותה.',
+    GoogleAmbiguousAccount: 'נמצאו כמה חשבונות עם כתובת מייל זו. יש להתחבר עם שם משתמש וסיסמה.',
   }
+  const isNoAccount = error === 'GoogleNoAccount'
 
   const errorMessage = errorMessages[error] || errorMessages.Default
 
@@ -48,6 +52,16 @@ function ErrorContent() {
               <span className="material-symbols-outlined">login</span>
               <span>נסה שוב</span>
             </Link>
+
+            {isNoAccount && (
+              <Link
+                href="/library/auth/register"
+                className="flex items-center justify-center gap-2 w-full py-3 border border-primary text-primary rounded-lg font-medium hover:bg-primary-container transition-all"
+              >
+                <span className="material-symbols-outlined">person_add</span>
+                <span>הרשמה</span>
+              </Link>
+            )}
 
             <Link 
               href="/library"
