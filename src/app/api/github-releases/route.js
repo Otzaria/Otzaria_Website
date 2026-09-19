@@ -62,25 +62,25 @@ function extractPlatformDownloads(platform, assets) {
         zip: findPlatformAsset(assets, 'windows', '.zip', { exclude: ARM64_KEYWORDS }),
         zipArm64: findAssetWithKeywords(assets, '.zip', ['windows', 'arm64'], ['full']),
         exeSilent: findAssetWithKeywords(assets, '.exe', ['windows', 'silent'], ['full', ...ARM64_KEYWORDS]) || findAssetWithKeywords(assets, '.exe', ['win', 'silent'], ['full', ...ARM64_KEYWORDS]),
-        exeFull: findAssetWithKeywords(assets, '.exe', ['windows', 'full'], ['silent', ...ARM64_KEYWORDS]) || findAssetWithKeywords(assets, '.exe', ['win', 'full'], ['silent', ...ARM64_KEYWORDS])
+        exeFull: findAssetWithKeywords(assets, '.exe', ['windows', 'full'], ['silent', 'indexed', ...ARM64_KEYWORDS]) || findAssetWithKeywords(assets, '.exe', ['win', 'full'], ['silent', 'indexed', ...ARM64_KEYWORDS])
       }
     case 'linux':
       return {
         deb: findPlatformAsset(assets, 'linux', '.deb'),
         rpm: findPlatformAsset(assets, 'linux', '.rpm'),
         appimage: findPlatformAsset(assets, 'linux', '.AppImage', { preferPlatformKeyword: false }),
-        tarFull: findAssetWithKeywords(assets, '.tar.gz', ['full'], ['silent'])
+        tarFull: findAssetWithKeywords(assets, '.tar.gz', ['full'], ['silent', 'indexed'])
       }
     case 'macos':
       return {
         dmg: findPlatformAsset(assets, 'macos', '.dmg'),
         zip: findPlatformAsset(assets, 'macos', '.zip'),
-        zipFull: findAssetWithKeywords(assets, '.zip', ['macos', 'full'], ['silent']) || findAssetWithKeywords(assets, '.zip', ['mac', 'full'], ['silent'])
+        zipFull: findAssetWithKeywords(assets, '.zip', ['macos', 'full'], ['silent', 'indexed']) || findAssetWithKeywords(assets, '.zip', ['mac', 'full'], ['silent', 'indexed'])
       }
     case 'android':
       return {
         apk: findPlatformAsset(assets, 'android', '.apk', { preferPlatformKeyword: false }),
-        zipFull: findAssetWithKeywords(assets, '.zip', ['android', 'full'], ['silent'])
+        zipFull: findAssetWithKeywords(assets, '.zip', ['android', 'full'], ['silent', 'indexed'])
       }
     default:
       return {}
