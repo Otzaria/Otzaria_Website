@@ -2,8 +2,9 @@
  * לוגיקת דיווחי התוכנה בלי תלות ב-Next: קליטה, פרסום ל-GitHub, סנכרון מצב, יצירת קשר.
  * תלויות חיצוניות (קבצים, מייל, GitHub) מוזרקות כדי שהבדיקות ירוצו מול Mongo אמיתי.
  */
+import crypto from 'node:crypto';
 import AppReport from '../../models/AppReport.js';
-import { validateAppReport } from './validation.js';
+import { validateAppReport, IMAGE_TYPES } from './validation.js';
 import { computeContentHash, computeSignatureHash } from './hashes.js';
 import { buildIssueTitle, buildIssueBody, buildMergeComment, issueLabels } from './issue-text.js';
 import { createGithubClient, issueHtmlUrl } from './github.js';
@@ -33,8 +34,11 @@ const replyFor = (doc, extra = {}) => ({
   ...extra,
 });
 
+export const IMAGE_TOKEN_RE = /^[A-Za-z0-9_-]{32}$/;
+const newImageToken = () => crypto.randomBytes(24).toString('base64url');
+
 async function storeAttachments(report, value, saveFile) {
-  const fileIds = { diagnostics: null, errors: null };
+  const fileIds = { diagnostics: null, errors: null, images: [] };
   if (value.diagnostics) {
     const buf = Buffer.from(JSON.stringify(value.diagnostics, null, 2), 'utf8');
     const saved = await saveFile(buf, `app-report-${report.reportId}-diagnostics.json`, 'application/json', { appReportId: report.reportId });
@@ -44,6 +48,14 @@ async function storeAttachments(report, value, saveFile) {
     const buf = Buffer.from(value.errorLog, 'utf8');
     const saved = await saveFile(buf, `app-report-${report.reportId}-errors.txt`, 'text/plain; charset=utf-8', { appReportId: report.reportId });
     fileIds.errors = { gridfsId: saved.gridfsId, size: buf.length };
+  }
+  for (const [i, image] of (value.images || []).entries()) {
+    const ext = IMAGE_TYPES[image.mimeType].ext;
+    const saved = await saveFile(image.buffer, `app-report-${report.reportId}-image-${i + 1}.${ext}`, image.mimeType, { appReportId: report.reportId });
+    fileIds.images.push({
+      gridfsId: saved.gridfsId, size: image.buffer.length, mimeType: image.mimeType, fileName: image.fileName,
+      publicToken: newImageToken(),
+    });
   }
   return fileIds;
 }
@@ -81,7 +93,7 @@ export async function ingestAppReport(raw, deps) {
 
   try {
     const fileIds = await storeAttachments(doc, value, deps.saveFile);
-    if (fileIds.diagnostics || fileIds.errors) await AppReport.updateOne({ reportId: value.reportId }, { $set: { fileIds } });
+    if (fileIds.diagnostics || fileIds.errors || fileIds.images.length) await AppReport.updateOne({ reportId: value.reportId }, { $set: { fileIds } });
   } catch (err) {
     // בלי הקבצים הדיווח חסר ערך; מוחקים כדי שהלקוח ישלח שוב (5xx = תור וניסיון חוזר)
     console.error('App report: attachment storage failed:', err?.message);
@@ -225,6 +237,7 @@ export function serializeReport(doc, role) {
     files: {
       diagnostics: doc.fileIds?.diagnostics ? { size: doc.fileIds.diagnostics.size } : null,
       errors: doc.fileIds?.errors ? { size: doc.fileIds.errors.size } : null,
+      images: (doc.fileIds?.images || []).map(({ size, mimeType, fileName }) => ({ size, mimeType, fileName })),
     },
     contactLog: (doc.contactLog || []).map((c) => ({ ...c, byUserId: c.byUserId ? String(c.byUserId) : null })),
   };
@@ -277,6 +290,35 @@ export async function loadReportFile(reportId, kind, readFile) {
   const ref = doc?.fileIds?.[kind];
   if (!ref?.gridfsId) return null;
   return { buffer: await readFile(String(ref.gridfsId)), ...meta };
+}
+
+/**
+ * צילום מסך לפי מיקומו בדיווח (מ-0).
+ * @returns {Promise<{buffer:Buffer, filename:string, contentType:string}|null>}
+ */
+export async function loadReportImage(reportId, index, readFile) {
+  const i = Number(index);
+  if (!Number.isInteger(i) || i < 0) return null;
+  const doc = await AppReport.findOne({ reportId }).select('fileIds.images').lean();
+  const ref = doc?.fileIds?.images?.[i];
+  if (!ref?.gridfsId || !IMAGE_TYPES[ref.mimeType]) return null;
+  return {
+    buffer: await readFile(String(ref.gridfsId)),
+    filename: `image-${i + 1}.${IMAGE_TYPES[ref.mimeType].ext}`,
+    contentType: ref.mimeType,
+  };
+}
+
+/**
+ * צילום מסך לפי הטוקן הציבורי שלו, לקישור שמוטמע ב-issue.
+ * @returns {Promise<{buffer:Buffer, contentType:string}|null>}
+ */
+export async function loadPublicImage(token, readFile) {
+  if (typeof token !== 'string' || !IMAGE_TOKEN_RE.test(token)) return null;
+  const doc = await AppReport.findOne({ 'fileIds.images.publicToken': token }).select('fileIds.images').lean();
+  const ref = doc?.fileIds?.images?.find((img) => img.publicToken === token);
+  if (!ref?.gridfsId || !IMAGE_TYPES[ref.mimeType]) return null;
+  return { buffer: await readFile(String(ref.gridfsId)), contentType: ref.mimeType };
 }
 
 /**

@@ -709,3 +709,52 @@ export async function sendAppReportContactEmail({ to, subject, message, reportTi
         return { sent: false, error: error.message };
     }
 }
+
+const CORRECTION_THANKS_TEXT = {
+    approved: {
+        heading: 'יישר כוח! התיקון שהצעת אושר',
+        intro: 'תודה רבה על הדיווח ששלחת. מתנדב בדק את התיקון שהצעת ואישר אותו, והוא ייכלל באחד מעדכוני הספרייה הקרובים.',
+        merit: 'בזכותך, כל הלומדים באוצריא ילמדו מעתה מתוך טקסט מדויק יותר.',
+    },
+    already_fixed: {
+        heading: 'יישר כוח! הטעות שמצאת תוקנה',
+        intro: 'תודה רבה על הדיווח ששלחת. מתנדב בדק אותו ומצא שצדקת — אכן הייתה שם טעות, והיא כבר תוקנה בספרייה. אם התיקון עדיין לא מופיע אצלך, הוא יגיע עם עדכון הספרייה הבא.',
+        merit: 'עינך הפקוחה היא בדיוק מה שמשמר את הדיוק של הספרייה לכל הלומדים.',
+    },
+};
+
+// תודה למדווח על טעות בספרייה, כשמתנדב אישר את התיקון שהציע או מצא שכבר תוקן
+export async function sendCorrectionApprovedThanks({ to, kind = 'approved', bookTitle, currentRef, unsubscribeUrl }) {
+    try {
+        if (!to) return { sent: false, reason: 'missing_recipient_email' };
+        const text = CORRECTION_THANKS_TEXT[kind] || CORRECTION_THANKS_TEXT.approved;
+        const where = [bookTitle, currentRef].filter(Boolean).join(' — ');
+        const html = buildAppReportMailHtml({
+            heading: text.heading,
+            bodyHtml: `
+                <p style="font-size: 16px; line-height: 1.8;">שלום וברכה,</p>
+                <p style="font-size: 16px; line-height: 1.8;">${text.intro}</p>
+                ${where ? `<div style="background-color: #f0f0f0; padding: 16px; border-radius: 8px; margin: 20px 0;">
+                    <p style="margin: 0;"><strong>המקום שתוקן:</strong> ${escapeHtml(where)}</p>
+                </div>` : ''}
+                <p style="font-size: 16px; line-height: 1.8;">${text.merit} זכית לזַכּוֹת את הרבים, ויהי רצון שתזכה לקיים בעצמך את הכתוב: <strong>"וּמַצְדִּיקֵי הָרַבִּים כַּכּוֹכָבִים לְעוֹלָם וָעֶד"</strong> (דניאל יב, ג).</p>
+                <p style="font-size: 16px; line-height: 1.8;">נשמח שתמשיך לדווח על כל טעות שתמצא.</p>
+                <p style="font-size: 16px; line-height: 1.8;">בברכה,<br>צוות אוצריא</p>`,
+            unsubscribeUrl,
+        });
+        await createTransporter().sendMail({
+            from: { name: 'אוצריא', address: process.env.SMTP_FROM },
+            to,
+            replyTo: getDefaultReplyTo(),
+            subject: kind === 'already_fixed'
+                ? `יישר כוח! הטעות שמצאת${bookTitle ? ` ב${bookTitle}` : ''} תוקנה`
+                : `יישר כוח! התיקון שהצעת${bookTitle ? ` ב${bookTitle}` : ''} אושר`,
+            html,
+            ...(unsubscribeUrl ? { list: { unsubscribe: unsubscribeUrl } } : {}),
+        });
+        return { sent: true };
+    } catch (error) {
+        console.error('Correction Approved Thanks Error:', error);
+        return { sent: false, error: error.message };
+    }
+}

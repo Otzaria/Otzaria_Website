@@ -138,6 +138,9 @@ const ErrorReportSchema = new mongoose.Schema({
   decisions: { type: [DecisionSchema], default: undefined },
   closedAt: Date,
   closeReason: String,
+  // מייל התודה למדווח נשלח פעם אחת לדיווח, גם אם האישור נפסל ואושר שוב.
+  reporterThanks: { sentAt: { type: Date, default: null } },
+  reporterUnsubscribed: { type: Boolean, default: false },
 }, { timestamps: true });
 
 // אינדקס לחיפוש מהיר (reportId מקבל אינדקס אוטומטית דרך unique: true בהגדרת השדה)

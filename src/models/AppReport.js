@@ -6,6 +6,15 @@ const FileRefSchema = new mongoose.Schema({
   size: { type: Number, default: 0 },
 }, { _id: false });
 
+const ImageRefSchema = new mongoose.Schema({
+  gridfsId: { type: mongoose.Schema.Types.ObjectId, required: true },
+  size: { type: Number, default: 0 },
+  mimeType: { type: String, required: true },
+  fileName: { type: String, default: '' },
+  // מזהה אקראי לקישור הציבורי שמוטמע ב-issue; לא ניתן לגזור אותו מהדיווח.
+  publicToken: { type: String, required: true },
+}, { _id: false });
+
 const ContactEntrySchema = new mongoose.Schema({
   byUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   byName: { type: String, default: '' },
@@ -53,6 +62,7 @@ const AppReportSchema = new mongoose.Schema({
   fileIds: {
     diagnostics: { type: FileRefSchema, default: null },
     errors: { type: FileRefSchema, default: null },
+    images: { type: [ImageRefSchema], default: [] },
   },
   contactLog: { type: [ContactEntrySchema], default: [] },
   notifiedClosedAt: { type: Date, default: null },
@@ -63,5 +73,6 @@ AppReportSchema.index({ signatureHash: 1 });
 AppReportSchema.index({ issueNumber: 1 });
 AppReportSchema.index({ issuePending: 1, issueAttemptAt: 1, createdAt: 1 });
 AppReportSchema.index({ createdAt: -1 });
+AppReportSchema.index({ 'fileIds.images.publicToken': 1 }, { sparse: true });
 
 export default mongoose.models.AppReport || mongoose.model('AppReport', AppReportSchema);
