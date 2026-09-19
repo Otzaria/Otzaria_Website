@@ -88,8 +88,9 @@ export default function AppReportDetailPage() {
               errors.txt ({formatBytes(r.files.errors.size)})
             </a>
           )}
-          {!r.files?.diagnostics && !r.files?.errors && <span className="text-on-surface/50">לא צורפו קבצים</span>}
+          {!r.files?.diagnostics && !r.files?.errors && !r.files?.images?.length && <span className="text-on-surface/50">לא צורפו קבצים</span>}
         </div>
+        {r.files?.images?.length > 0 && <ReportImages reportId={r.reportId} images={r.files.images} />}
         {r.files?.diagnostics && <DiagnosticsViewer url={fileUrl('diagnostics')} />}
       </div>
 
@@ -127,6 +128,31 @@ function Section({ title, children }) {
     <div>
       <h3 className="font-bold mb-2">{title}</h3>
       <p className="whitespace-pre-wrap leading-relaxed">{children}</p>
+    </div>
+  )
+}
+
+function ReportImages({ reportId, images }) {
+  return (
+    <div>
+      <h4 className="font-bold mb-2">צילומי מסך ({images.length})</h4>
+      <div className="flex flex-wrap gap-3">
+        {images.map((img, i) => {
+          const url = `/api/app-reports/admin/${encodeURIComponent(reportId)}/images/${i}`
+          return (
+            <a
+              key={i}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`${img.fileName} (${formatBytes(img.size)})`}
+              className="block rounded-lg overflow-hidden border border-surface-variant hover:border-primary"
+            >
+              <img src={url} alt={img.fileName} loading="lazy" className="h-40 w-auto max-w-xs object-contain bg-surface" />
+            </a>
+          )
+        })}
+      </div>
     </div>
   )
 }

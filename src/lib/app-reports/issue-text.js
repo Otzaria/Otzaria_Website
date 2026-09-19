@@ -53,6 +53,15 @@ function osText(report) {
   return extra ? `${report.platform} ${extra}` : report.platform;
 }
 
+export const publicImageUrl = (token) => `${PUBLIC_SITE_URL}/api/app-reports/images/${encodeURIComponent(token)}`;
+
+// ה-API של GitHub אינו מקבל קבצים, ולכן התמונות מוטמעות מקישור ציבורי באתר.
+function imagesSection(report) {
+  const images = (report.fileIds?.images || []).filter((img) => img.publicToken);
+  if (!images.length) return null;
+  return ['### צילומי מסך', ...images.map((img, i) => `![צילום מסך ${i + 1}](${publicImageUrl(img.publicToken)})`)].join('\n\n');
+}
+
 /** @param {{previousIssueNumber?: number|null}} [opts] */
 export function buildIssueBody(report, { previousIssueNumber = null } = {}) {
   const parts = [];
@@ -74,6 +83,8 @@ export function buildIssueBody(report, { previousIssueNumber = null } = {}) {
     parts.push('### חתימה');
     parts.push(codeBlock([report.signature.exceptionType, ...(report.signature.frames || [])].map(sanitizeUserText)));
   }
+  const images = imagesSection(report);
+  if (images) parts.push(images);
   if (previousIssueNumber) parts.push(`קודם: #${previousIssueNumber}`);
   parts.push(`[הדוח המלא והקבצים (למפתחים)](${reportPageUrl(report.reportId)})`);
   parts.push(buildMarkers(report));
@@ -91,6 +102,8 @@ export function buildMergeComment(report) {
     `| מקור | ${TRIGGER_LABELS_HE[report.trigger] || report.trigger} |`,
   ].join('\n'));
   if (report.description) parts.push(sanitizeUserText(report.description));
+  const images = imagesSection(report);
+  if (images) parts.push(images);
   parts.push(`[הדוח המלא והקבצים (למפתחים)](${reportPageUrl(report.reportId)})`);
   parts.push(`<!-- app-report: ${report.reportId} -->`);
   return parts.join('\n\n');

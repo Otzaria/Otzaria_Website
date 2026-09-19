@@ -9,7 +9,8 @@ import AppReport from '../../models/AppReport.js';
 import { startMongo } from '../corrections/testing/mongo.js';
 import { FakeIssuesGitHub } from './testing/fake-github.js';
 import { handleAppReportPost } from './handler.js';
-import { runAppReportsSync, contactReporter, listReports, getReportDetail, loadReportFile, unsubscribeByToken } from './service.js';
+import { MAX_BODY_BYTES } from './validation.js';
+import { runAppReportsSync, contactReporter, listReports, getReportDetail, loadReportFile, loadReportImage, loadPublicImage, unsubscribeByToken } from './service.js';
 import { getAppReportsConfig } from './config.js';
 import { handleGithubWebhook } from './webhook.js';
 import { createUnsubscribeToken } from './unsubscribe.js';
@@ -258,8 +259,11 @@ test('מייל סגירה שנכשל ינוסה שוב בריצה הבאה', asy
 test('ולידציה ברמת HTTP: 400, 413, 422', async (t) => {
   if (db.skip) return t.skip(db.skip);
   assert.equal((await post('{not json', { raw: true })).status, 400);
-  const big = manual({ attachments: { errorLog: 'x'.repeat(710 * 1024) } });
+  const big = manual({ attachments: { errorLog: 'x'.repeat(MAX_BODY_BYTES) } });
   assert.equal((await post(big)).status, 413);
+  const longLog = await post(manual({ attachments: { errorLog: 'x'.repeat(710 * 1024) } }));
+  assert.equal(longLog.status, 422);
+  assert.equal(longLog.body.field, 'attachments.errorLog');
   const bad = await post(manual({ reporterEmail: '' }));
   assert.equal(bad.status, 422);
   assert.equal(bad.body.field, 'reporterEmail');
@@ -392,4 +396,57 @@ test('webhook: ping, אירוע אחר, ריפו אחר ו-issue שאינו של
   assert.equal(await hook(closedEvent(99999)), 202);
   assert.equal(gh.calls.length, before);
   assert.equal(mails.length, 0);
+});
+
+test('צילומי מסך: נשמרים ב-GridFS, נשלפים לפי מיקום, והמספר מופיע ב-issue', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 7, 7]);
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 1]);
+  const body = manual({
+    attachments: {
+      images: [
+        { fileName: 'screenshot-1.png', mimeType: 'image/png', data: png.toString('base64') },
+        { fileName: 'b.jpg', mimeType: 'image/jpeg', data: jpeg.toString('base64') },
+      ],
+    },
+  });
+  const res = await post(body);
+  assert.equal(res.status, 200);
+
+  const first = await loadReportImage(body.reportId, '0', readFile);
+  assert.deepEqual(first.buffer, png);
+  assert.equal(first.contentType, 'image/png');
+  assert.equal(first.filename, 'image-1.png');
+  assert.equal((await loadReportImage(body.reportId, 1, readFile)).contentType, 'image/jpeg');
+  for (const bad of ['2', '-1', 'x', '0.5']) assert.equal(await loadReportImage(body.reportId, bad, readFile), null);
+
+  const doc = await AppReport.findOne({ reportId: body.reportId }).lean();
+  const tokens = doc.fileIds.images.map((img) => img.publicToken);
+  assert.equal(new Set(tokens).size, 2);
+  for (const token of tokens) assert.match(token, /^[A-Za-z0-9_-]{32}$/);
+  const issue = gh.calls.find((c) => c.method === 'POST' && c.path.endsWith('/issues'));
+  for (const token of tokens) assert.ok(issue.body.body.includes(`/api/app-reports/images/${token})`));
+
+  const pub = await loadPublicImage(tokens[0], readFile);
+  assert.deepEqual(pub.buffer, png);
+  assert.equal(pub.contentType, 'image/png');
+  for (const bad of ['x'.repeat(32), 'short', `${tokens[0]}/..`, null]) assert.equal(await loadPublicImage(bad, readFile), null);
+
+  const { report } = await getReportDetail(body.reportId, 'admin');
+  assert.deepEqual(report.files.images, [
+    { size: png.length, mimeType: 'image/png', fileName: 'screenshot-1.png' },
+    { size: jpeg.length, mimeType: 'image/jpeg', fileName: 'b.jpg' },
+  ]);
+  assert.equal(report.fileIds, undefined);
+  assert.doesNotMatch(JSON.stringify(report), new RegExp(tokens[0]));
+});
+
+test('צילום מסך שאינו תמונה → 422 ושום דבר לא נשמר', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const body = manual({ attachments: { images: [{ fileName: 'a.png', mimeType: 'image/png', data: Buffer.from('<svg/>').toString('base64') }] } });
+  const res = await post(body);
+  assert.equal(res.status, 422);
+  assert.equal(res.body.field, 'attachments.images[0]');
+  assert.equal(await AppReport.countDocuments({ reportId: body.reportId }), 0);
+  assert.equal(files.size, 0);
 });

@@ -3,7 +3,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateAppReport, MAX_DIAGNOSTICS_BYTES } from './validation.js';
+import { validateAppReport, MAX_DIAGNOSTICS_BYTES, MAX_IMAGES, MAX_IMAGE_BYTES, MAX_BODY_BYTES, sniffImageType } from './validation.js';
 import { computeContentHash, computeSignatureHash } from './hashes.js';
 import { redactEmails } from './redact.js';
 import { buildIssueTitle, buildIssueBody, buildMergeComment, issueLabels } from './issue-text.js';
@@ -261,4 +261,59 @@ test('חתימת webhook: רק HMAC-SHA256 של הגוף המדויק עם הס�
   assert.equal(getAppReportsConfig({ DICTA_LIBRARY_GITHUB_TOKEN: 'shared' }).githubToken, 'shared');
   assert.equal(getAppReportsConfig({ APP_REPORTS_GITHUB_TOKEN: 'own' }).githubToken, null);
   assert.equal(getAppReportsConfig({}).githubToken, null);
+});
+
+// ---------------------------------------------------------------- images
+
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 9]);
+const img = (buf, over = {}) => ({ fileName: 'shot.png', mimeType: 'image/png', data: buf.toString('base64'), ...over });
+const withImages = (images) => manual({ attachments: { images } });
+
+test('תמונות: PNG ו-JPEG נקלטים; הסוג נקבע לפי הבתים ולא לפי ההצהרה', () => {
+  const r = validateAppReport(withImages([img(PNG), img(JPEG, { fileName: 'b.jpg', mimeType: 'image/png' })]));
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.value.images.map((i) => [i.mimeType, i.fileName]), [['image/png', 'shot.png'], ['image/jpeg', 'b.jpg']]);
+  assert.deepEqual(r.value.images[0].buffer, PNG);
+  assert.deepEqual(validateAppReport(manual()).value.images, []);
+});
+
+test('תמונות: קובץ שאינו PNG/JPEG, base64 פגום, חריגה בכמות ובגודל → 422', () => {
+  const cases = [
+    [[img(Buffer.from('GIF89a...'))], 'attachments.images[0]'],
+    [[img(PNG, { data: '@@@' })], 'attachments.images[0]'],
+    [[{ fileName: 'x.png' }], 'attachments.images[0]'],
+    [Array.from({ length: MAX_IMAGES + 1 }, () => img(PNG)), 'attachments.images'],
+    [[img(Buffer.concat([PNG, Buffer.alloc(MAX_IMAGE_BYTES)]))], 'attachments.images[0]'],
+    ['not-an-array', 'attachments.images'],
+  ];
+  for (const [images, field] of cases) {
+    const r = validateAppReport(withImages(images));
+    assert.equal(r.ok, false, field);
+    assert.equal(r.status, 422);
+    assert.equal(r.field, field);
+  }
+});
+
+test('תמונות: שם הקובץ מנוקה מנתיב ומתווי בקרה; שם ריק מקבל ברירת מחדל', () => {
+  const r = validateAppReport(withImages([img(PNG, { fileName: 'C:\\Users\\dani\\a"b\u0001.png' }), img(JPEG, { fileName: '' })]));
+  assert.deepEqual(r.value.images.map((i) => i.fileName), ['ab.png', 'image-2.jpg']);
+});
+
+test('תמונות: זיהוי סוג לפי חתימה ותקרת הגוף מכילה את המכסה המקודדת', () => {
+  assert.equal(sniffImageType(PNG), 'image/png');
+  assert.equal(sniffImageType(JPEG), 'image/jpeg');
+  assert.equal(sniffImageType(Buffer.from([0x89, 0x50])), null);
+  assert.ok(MAX_BODY_BYTES > Math.ceil((3 * MAX_IMAGE_BYTES) / 3) * 4);
+});
+
+test('issue: צילומי המסך מוטמעים בגוף ובתגובה מהקישור הציבורי', () => {
+  const tokens = ['a'.repeat(32), 'b'.repeat(32)];
+  const value = { ...validateAppReport(manual()).value, fileIds: { images: tokens.map((publicToken) => ({ publicToken })) } };
+  const body = buildIssueBody(value);
+  assert.match(body, /### צילומי מסך/);
+  assert.ok(body.includes(`![צילום מסך 1](https://otzaria.org/api/app-reports/images/${tokens[0]})`));
+  assert.ok(body.includes(`![צילום מסך 2](https://otzaria.org/api/app-reports/images/${tokens[1]})`));
+  assert.ok(buildMergeComment(value).includes(`/api/app-reports/images/${tokens[1]})`));
+  assert.doesNotMatch(buildIssueBody(validateAppReport(manual()).value), /צילומי מסך/);
 });

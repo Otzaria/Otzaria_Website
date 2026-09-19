@@ -4,9 +4,21 @@
  */
 import { validateEmail } from '../validation-utils.js';
 
-export const MAX_BODY_BYTES = 700 * 1024;
 export const MAX_DIAGNOSTICS_BYTES = 300 * 1024;
 export const MAX_ERROR_LOG_BYTES = 250 * 1024;
+
+// צילומי מסך: base64 בתוך ה-JSON, ולכן תקרת הגוף כוללת את הקידוד שלהם (4/3).
+export const MAX_IMAGES = 5;
+export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+export const MAX_IMAGES_TOTAL_BYTES = 15 * 1024 * 1024;
+export const MAX_IMAGE_NAME_CHARS = 200;
+const MAX_TEXT_BODY_BYTES = 700 * 1024;
+export const MAX_BODY_BYTES = MAX_TEXT_BODY_BYTES + Math.ceil(MAX_IMAGES_TOTAL_BYTES / 3) * 4 + 64 * 1024;
+
+export const IMAGE_TYPES = Object.freeze({
+  'image/png': { ext: 'png', magic: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] },
+  'image/jpeg': { ext: 'jpg', magic: [0xff, 0xd8, 0xff] },
+});
 
 export const REPORT_TYPES = Object.freeze(['bug', 'crash', 'performance', 'suggestion']);
 export const TRIGGERS = Object.freeze(['manual', 'crash_prompt', 'auto_crash']);
@@ -19,6 +31,44 @@ const ISO_UTC_FRACTION_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{1,9}Z$/;
 const fail = (field, error = 'invalid') => ({ ok: false, status: 422, field, error: `${field}: ${error}` });
 const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const byteLength = (s) => Buffer.byteLength(s, 'utf8');
+
+/** סוג התמונה לפי הבתים עצמם — לא סומכים על mimeType שהלקוח הצהיר. */
+export function sniffImageType(buffer) {
+  for (const [mimeType, { magic }] of Object.entries(IMAGE_TYPES)) {
+    if (buffer.length >= magic.length && magic.every((b, i) => buffer[i] === b)) return mimeType;
+  }
+  return null;
+}
+
+// שם הקובץ מוצג למנהל ומשמש בכותרת ההורדה: בלי נתיב, תווי בקרה ומרכאות.
+function cleanImageName(raw, index, ext) {
+  const base = typeof raw === 'string'
+    ? raw.split(/[\\/]/).pop().replace(/[\u0000-\u001f\u007f"]/g, '').trim().slice(0, MAX_IMAGE_NAME_CHARS)
+    : '';
+  return base || `image-${index + 1}.${ext}`;
+}
+
+function validateImages(raw) {
+  if (raw === undefined || raw === null) return { value: [] };
+  if (!Array.isArray(raw)) return { error: fail('attachments.images', 'must be an array') };
+  if (raw.length > MAX_IMAGES) return { error: fail('attachments.images', `max ${MAX_IMAGES} items`) };
+  const images = [];
+  let total = 0;
+  for (const [i, item] of raw.entries()) {
+    const field = `attachments.images[${i}]`;
+    if (!isPlainObject(item) || typeof item.data !== 'string') return { error: fail(field, 'data must be a base64 string') };
+    const buffer = Buffer.from(item.data, 'base64');
+    // Buffer.from מדלג בשקט על תווים לא חוקיים; השוואה חוזרת תופסת קלט פגום.
+    if (buffer.toString('base64') !== item.data) return { error: fail(field, 'invalid base64') };
+    if (buffer.length > MAX_IMAGE_BYTES) return { error: fail(field, 'too large') };
+    const mimeType = sniffImageType(buffer);
+    if (!mimeType) return { error: fail(field, 'not a PNG/JPEG image') };
+    total += buffer.length;
+    if (total > MAX_IMAGES_TOTAL_BYTES) return { error: fail('attachments.images', 'total too large') };
+    images.push({ buffer, mimeType, fileName: cleanImageName(item.fileName, i, IMAGE_TYPES[mimeType].ext) });
+  }
+  return { value: images };
+}
 
 function optionalString(raw, field, max) {
   const v = raw[field];
@@ -87,6 +137,7 @@ export function validateAppReport(raw) {
 
   let diagnostics = null;
   let errorLog = '';
+  let images = [];
   if (raw.attachments !== undefined && raw.attachments !== null) {
     if (!isPlainObject(raw.attachments)) return fail('attachments', 'must be an object');
     const d = raw.attachments.diagnostics;
@@ -101,6 +152,9 @@ export function validateAppReport(raw) {
       if (byteLength(log) > MAX_ERROR_LOG_BYTES) return fail('attachments.errorLog', 'too large');
       errorLog = log;
     }
+    const imgs = validateImages(raw.attachments.images);
+    if (imgs.error) return imgs.error;
+    images = imgs.value;
   }
 
   return {
@@ -117,6 +171,7 @@ export function validateAppReport(raw) {
       clientCreatedAt,
       diagnostics,
       errorLog,
+      images,
     },
   };
 }
