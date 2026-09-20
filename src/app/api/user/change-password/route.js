@@ -22,10 +22,15 @@ export async function POST(request) {
     // שליפת המשתמש עם הסיסמה (בדרך כלל הסיסמה לא נשלפת בדיפולט)
     const user = await User.findById(session.user._id);
 
-    // אימות סיסמה ישנה
-    const isValid = await compare(currentPassword, user.password);
-    if (!isValid) {
-      return badRequest('הסיסמה הנוכחית שגויה');
+    if (!user) return unauthorized();
+
+    // חשבון שנוצר דרך Google אין לו סיסמה — זו קביעת סיסמה ראשונה, ואין מה
+    // לאמת מולה. הזהות כבר הוכחה ע"י ה-session.
+    if (user.password) {
+      const isValid = await compare(currentPassword, user.password);
+      if (!isValid) {
+        return badRequest('הסיסמה הנוכחית שגויה');
+      }
     }
 
     // הצפנה ושמירה
@@ -33,7 +38,7 @@ export async function POST(request) {
     user.password = hashedPassword;
     await user.save();
 
-    return NextResponse.json({ success: true, message: 'הסיסמה שונתה בהצלחה' });
+    return NextResponse.json({ success: true, message: 'הסיסמה נשמרה בהצלחה' });
   } catch (error) {
     return serverError('Internal Server Error');
   }

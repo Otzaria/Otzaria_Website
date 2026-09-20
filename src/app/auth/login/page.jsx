@@ -5,6 +5,7 @@ import { signIn, useSession } from 'next-auth/react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
+import GoogleSignInButton from '@/components/auth/GoogleSignInButton'
 
 const DEFAULT_REDIRECT = '/library/dashboard'
 
@@ -218,6 +219,11 @@ function LoginContent() {
               )}
             </button>
           </form>
+
+          <GoogleSignInButton
+            callbackUrl={getSafeCallbackUrl(searchParams.get('callbackUrl'))}
+            withDivider
+          />
 
           <div className="mt-6 text-center">
             <p className="text-on-surface/70">

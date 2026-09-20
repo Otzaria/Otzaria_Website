@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import GoogleSignInButton from '@/components/auth/GoogleSignInButton';
 
 export default function VerifyRequestPage() {
     const { data: session, update } = useSession();
@@ -220,6 +221,17 @@ export default function VerifyRequestPage() {
                     <div className="mt-4 p-4 bg-danger-50 text-danger-800 rounded-xl text-sm border border-danger-200">
                         {verificationStatus.error}
                     </div>
+                )}
+
+                {/* אימות מיידי: התחברות מחדש עם חשבון Google של אותה כתובת מאמתת את
+                    החשבון אוטומטית (מוצג רק כשהתחברות Google מוגדרת בשרת). */}
+                {!isEditingEmail && (
+                    <GoogleSignInButton
+                        withDivider
+                        callbackUrl="/library/dashboard"
+                        loginHint={session?.user?.email}
+                        label="אימות מיידי עם Google"
+                    />
                 )}
 
                 <div className="mt-8 border-t border-neutral-100 pt-4">

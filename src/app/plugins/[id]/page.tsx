@@ -279,9 +279,10 @@ export default function PluginDetailPage() {
 
           {/* Plugin Header */}
           <div className="bg-white rounded-2xl border border-neutral-100 p-8 mb-6">
-            <div className="grid md:grid-cols-[380px_1fr] gap-8">
+            {/* flow-root + תמונה צפה: תיאור ארוך ממשיך לזרום גם מתחת לתמונה במקום להשאיר עמודה ריקה */}
+            <div className="flow-root">
               {/* Plugin Image */}
-              <div className="rounded-2xl overflow-hidden bg-gradient-to-br from-primary/5 to-secondary/5 aspect-[4/3]">
+              <div className="mb-6 w-full rounded-2xl overflow-hidden bg-gradient-to-br from-primary/5 to-secondary/5 aspect-[4/3] md:float-right md:ml-8 md:mb-4 md:w-[380px]">
                 <img
                   src={plugin.image || '/logo.webp'}
                   alt={plugin.name}
@@ -289,13 +290,14 @@ export default function PluginDetailPage() {
                 />
               </div>
 
-              {/* Plugin Info */}
-              <div className="flex flex-col gap-4">
+              {/* Plugin Info — לא flex/grid (הם יוצרים הקשר עיצוב חוסם שלא עוטף את התמונה הצפה) */}
+              <div className="space-y-4">
                 <div>
                   <h1 className="text-4xl font-bold text-on-surface mb-3 font-frank leading-tight">
                     {plugin.name}
                   </h1>
-                  <p className="text-lg text-on-surface/70 leading-relaxed">
+                  {/* whitespace-pre-line: שמירת ירידות השורה שהמפתח הזין בתיאור (issue #175) */}
+                  <p className="text-lg text-on-surface/70 leading-relaxed whitespace-pre-line">
                     {plugin.description}
                   </p>
                 </div>

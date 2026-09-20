@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { signIn } from 'next-auth/react'
 import Link from 'next/link'
 import Image from 'next/image'
+import GoogleSignInButton from '@/components/auth/GoogleSignInButton'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -264,6 +265,13 @@ export default function RegisterPage() {
               )}
             </button>
           </form>
+
+          <GoogleSignInButton
+            withDivider
+            signupIntent
+            label="הרשמה עם Google"
+            callbackUrl="/library/dashboard"
+          />
 
           <div className="mt-6 text-center">
             <p className="text-on-surface/70">

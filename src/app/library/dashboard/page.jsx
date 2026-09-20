@@ -455,7 +455,9 @@ export default function DashboardPage() {
                 className="flex flex-col items-center gap-3 p-6 bg-primary-container rounded-xl hover:bg-primary/20 transition-all"
               >
                 <span className="material-symbols-outlined text-4xl text-primary">lock_reset</span>
-                <span className="font-medium text-on-surface">שינוי סיסמה</span>
+                <span className="font-medium text-on-surface">
+                  {session?.user?.hasPassword === false ? 'קביעת סיסמה' : 'שינוי סיסמה'}
+                </span>
               </button>
 
               {canHandleCorrections(session?.user) && (
@@ -618,6 +620,7 @@ export default function DashboardPage() {
 
       {showPasswordModal && (
         <PasswordChangeModal
+          hasPassword={session?.user?.hasPassword !== false}
           onClose={() => setShowPasswordModal(false)}
           showAlert={showAlert}
         />
