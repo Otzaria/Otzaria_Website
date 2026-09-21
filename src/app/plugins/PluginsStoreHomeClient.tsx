@@ -14,6 +14,7 @@ import { useDirectInstall } from '@/components/plugins/useDirectInstall'
 import { useDialog } from '@/components/providers/DialogContext'
 import PluginCard from '@/components/plugins/PluginCard'
 import PluginSearchBox from '@/components/plugins/PluginSearchBox'
+import PluginStoreAppBanner from '@/components/plugins/PluginStoreAppBanner'
 import type { StoreHomeData } from './storeHomeTypes'
 
 const DEFAULT_HOME_TITLE = 'חנות התוספים של אוצריא'
@@ -97,7 +98,7 @@ function PluginsStoreHomeContent({ data, loadError }: PluginsStoreHomeClientProp
                 {homeSubtitle}
               </p>
               <PluginSearchBox size="lg" placeholder="חפשו תוסף לפי שם, תיאור או נושא..." />
-              <div className="mt-5 flex items-center justify-center gap-4">
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
                 <Link
                   href="/plugins/upload" prefetch={false}
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-primary/20 text-primary rounded-xl font-bold hover:bg-primary/5 transition-colors"
@@ -107,6 +108,7 @@ function PluginsStoreHomeContent({ data, loadError }: PluginsStoreHomeClientProp
                   </svg>
                   <span>העלה תוסף חדש</span>
                 </Link>
+                <PluginStoreAppBanner />
               </div>
             </div>
           </div>
