@@ -554,6 +554,13 @@ export async function sendPluginReportNotification(reportData) {
             ? `<p style="margin: 8px 0;"><strong>כתובת למענה:</strong> <a href="mailto:${safeReporterEmail}" style="color: #d4a373;">${safeReporterEmail}</a></p>`
             : `<p style="margin: 8px 0; color: #666;">המדווח לא השאיר כתובת למענה.</p>`;
 
+        // בלי מייל של המדווח, תשובה למייל תגיע לתיבת אוצריא ולא למדווח — מבקשים לא להשיב
+        const noReplyBlock = reporterEmail
+            ? ''
+            : `<div style="background-color: #fdecea; border: 1px solid #f5c2c0; color: #b42318; border-radius: 8px; padding: 12px 16px; margin: 0 0 20px 0; text-align: center; font-weight: bold;">
+                        אין להשיב למייל זה
+                    </div>`;
+
         const pluginLinkBlock = pluginUrl
             ? `<div style="margin: 30px 0; text-align: center;">
                         <a href="${pluginUrl}" style="background-color: #d4a373; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
@@ -571,6 +578,7 @@ export async function sendPluginReportNotification(reportData) {
                 </div>
                 <div style="padding: 30px; color: #333333; text-align: right;">
                     <h1 style="color: #2c3e50; font-size: 24px; margin-bottom: 10px; text-align: center;">📩 התקבל דיווח על התוסף שלך</h1>
+                    ${noReplyBlock}
                     <p style="font-size: 16px; line-height: 1.8; margin: 0 0 20px 0;">
                         שלום ${safeRecipientName},
                     </p>
@@ -591,7 +599,7 @@ export async function sendPluginReportNotification(reportData) {
                     </div>
                     ${pluginLinkBlock}
                     <p style="color: #666; font-size: 14px; line-height: 1.8; margin-top: 20px;">
-                        הדיווח נשלח על ידי משתמש של התוסף דרך אוצריא.
+                        הדיווח נשלח על ידי משתמש של התוסף דרך אוצריא.${reporterEmail ? '' : '<br><strong>זהו מייל אוטומטי — אין להשיב למייל זה.</strong>'}
                     </p>
                 </div>
             </div>
@@ -604,7 +612,8 @@ export async function sendPluginReportNotification(reportData) {
                 address: process.env.SMTP_FROM
             },
             to: recipientEmail,
-            replyTo: reporterEmail || process.env.SMTP_REPLY_TO || process.env.SMTP_FROM,
+            // בלי מייל של המדווח — כתובת סרק (אם הוגדרה), כדי שתשובות לא יציפו את תיבת אוצריא
+            replyTo: reporterEmail || process.env.SMTP_NO_REPLY || undefined,
             subject: `📩 דיווח חדש על התוסף: ${reportData.pluginName || 'ללא שם'}`,
             html: emailHtml
         });
