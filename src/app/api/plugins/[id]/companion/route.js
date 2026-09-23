@@ -1,12 +1,15 @@
+import { createReadStream, promises as fs } from 'fs'
+import { Readable } from 'stream'
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
-import { readPluginAsset, readVersionAsset, COMPANION_BASENAME } from '@/lib/pluginStorage'
+import { resolvePluginAssetPath, resolveVersionAssetPath, COMPANION_BASENAME } from '@/lib/pluginStorage'
 import { parsePluginRef } from '@/lib/pluginRef'
 import { hasPluginsAccess } from '@/lib/roles'
 import { canAccessSuspended, isPluginSuspended } from '@/lib/pluginVisibility'
+import { attachmentDisposition } from '@/lib/contentDisposition'
 
 // GET /api/plugins/[id]/companion — הורדת מתקין התוכנה הנלווית של התוסף.
 // תומך בגרסה ארכיונית דרך /api/plugins/<id>@<version>/companion, ואז מוגש
@@ -23,14 +26,14 @@ export async function GET(request, { params }) {
     const { id: rawId } = await params
     const { id, version } = parsePluginRef(rawId)
     if (!id || version === false) {
-      return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
+      return notFound('Plugin not found')
     }
 
     await dbConnect()
 
     const plugin = await Plugin.findById(id)
     if (!plugin || plugin.isHidden) {
-      return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
+      return notFound('Plugin not found')
     }
 
     const session = await getServerSession(authOptions)
@@ -38,66 +41,70 @@ export async function GET(request, { params }) {
     const isOwner = plugin.authorId?.toString() === session?.user?.id
 
     if (isPluginSuspended(plugin) && !canAccessSuspended({ isAdmin, isOwner })) {
-      return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
+      return notFound('Plugin not found')
     }
     if (!plugin.isApproved && !isAdmin && !isOwner) {
-      return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
+      return notFound('Plugin not found')
     }
 
     // בקשה לגרסה ארכיונית ספציפית (שאינה הגרסה החיה)
-    if (version && version !== plugin.version) {
-      const entry = (plugin.versions || []).find((v) => v.version === version)
-      if (!entry?.companion?.present) {
-        return NextResponse.json({ error: 'Companion installer not found' }, { status: 404 })
-      }
-      const buf = await readAsset(() =>
-        readVersionAsset(id, version, `${COMPANION_BASENAME}${entry.companion.ext}`)
-      )
-      if (!buf) {
-        return NextResponse.json({ error: 'Companion installer not found' }, { status: 404 })
-      }
-      return companionFileResponse(buf, entry.companion)
+    const entry = version && version !== plugin.version
+      ? (plugin.versions || []).find((v) => v.version === version)
+      : null
+    if (version && version !== plugin.version && !entry) {
+      return notFound('Companion installer not found')
+    }
+    const companion = entry ? entry.companion : plugin.companion
+    if (!companion?.present) {
+      return notFound('Companion installer not found')
     }
 
-    if (!plugin.companion?.present) {
-      return NextResponse.json({ error: 'Companion installer not found' }, { status: 404 })
+    const fileName = `${COMPANION_BASENAME}${companion.ext}`
+    const target = entry
+      ? resolveVersionAssetPath(id, version, fileName)
+      : resolvePluginAssetPath(id, fileName)
+
+    const size = await statSize(target)
+    if (size === null) {
+      return notFound('Companion installer not found')
     }
-    const buf = await readAsset(() =>
-      readPluginAsset(id, `${COMPANION_BASENAME}${plugin.companion.ext}`)
-    )
-    if (!buf) {
-      return NextResponse.json({ error: 'Companion installer not found' }, { status: 404 })
-    }
-    return companionFileResponse(buf, plugin.companion)
+
+    // תוסף שאינו פומבי נגיש כאן רק בזכות ה-session (מנהל/בעלים) — אסור שיישמר
+    // במטמון משותף. גם הגרסה הפומבית אינה נשמרת: קובץ של מאות MB שאינו מתקין
+    // בר-הצגה אין טעם להחזיק ב-CDN, וזה תואם להורדת התוסף.
+    return companionStreamResponse(target, size, companion)
   } catch (error) {
     console.error('Error downloading companion installer:', error)
     return NextResponse.json({ error: 'Failed to download companion installer' }, { status: 500 })
   }
 }
 
-// קורא נכס מהדיסק ומחזיר null אם אינו קיים. שאר השגיאות ממשיכות למעלה.
-async function readAsset(read) {
+function notFound(message) {
+  return NextResponse.json({ error: message }, { status: 404 })
+}
+
+// גודל הקובץ, או null אם אינו קיים. שאר השגיאות ממשיכות למעלה.
+async function statSize(target) {
   try {
-    return await read()
+    return (await fs.stat(target)).size
   } catch (err) {
     if (err && err.code === 'ENOENT') return null
     throw err
   }
 }
 
+// המתקין מוגש כ-stream ולא נקרא לזיכרון: הוא עד 150MB, והורדות מקבילות היו
+// מצטברות ב-heap של תהליך השרת.
 // application/octet-stream + nosniff בכל מקרה: לדפדפן אין שום עסק לנחש טיפוס
-// של מתקין. Content-Disposition תומך בשמות בעברית (RFC 5987), כמו בהורדת התוסף.
-function companionFileResponse(buf, companion) {
-  const rawName = companion.fileName || `companion${companion.ext || ''}`
-  const asciiFallback = rawName.replace(/[^\x20-\x7E]/g, '_').replace(/["\\\r\n]/g, '_')
-  const encodedName = encodeURIComponent(rawName)
-    .replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
-
-  return new NextResponse(buf, {
+// של מתקין.
+function companionStreamResponse(target, size, companion) {
+  const body = Readable.toWeb(createReadStream(target))
+  return new NextResponse(body, {
     headers: {
       'Content-Type': 'application/octet-stream',
-      'Content-Disposition': `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodedName}`,
-      'Content-Length': buf.length.toString(),
+      'Content-Disposition': attachmentDisposition(companion.fileName || `companion${companion.ext || ''}`),
+      'Content-Length': size.toString(),
+      'Cache-Control': 'private, no-store',
       'X-Content-Type-Options': 'nosniff',
       // הגיבוב של הקובץ שמוגש — מאפשר אימות בלי לפתוח את דף התוסף
       ...(companion.sha256 ? { 'X-Companion-SHA256': companion.sha256 } : {})

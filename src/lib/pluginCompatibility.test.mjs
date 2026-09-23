@@ -136,3 +136,29 @@ test('ולידציה של גרסת אוצריא נשלחת', () => {
   assert.equal(isValidAppVersion('0.9.94; rm -rf'), false)
   assert.equal(isValidAppVersion('../../etc'), false)
 })
+
+// ===== התוכנה הנלווית של גרסה ארכיונית =====
+
+test('versionCompanionForPublic — גרסה עם מתקין משלה מוגשת עם קישור @version', async () => {
+  const { versionCompanionForPublic } = await import('./pluginCompatibility.js')
+  const doc = { _id: 'p1', companion: { present: true, name: 'חי', ext: '.exe', platform: 'windows' } }
+  const entry = { version: '1.0.0', companionRecorded: true, companion: { present: true, name: 'ישן', ext: '.msi', platform: 'windows' } }
+  const result = versionCompanionForPublic(doc, entry)
+  assert.equal(result.name, 'ישן')
+  assert.equal(result.downloadUrl, '/api/plugins/p1@1.0.0/companion')
+})
+
+test('versionCompanionForPublic — גרסה שנרשמה בלי מתקין אינה יורשת את המתקין החי', async () => {
+  const { versionCompanionForPublic } = await import('./pluginCompatibility.js')
+  const doc = { _id: 'p1', companion: { present: true, name: 'חי', ext: '.exe', platform: 'windows' } }
+  assert.equal(versionCompanionForPublic(doc, { version: '1.0.0', companionRecorded: true, companion: { present: false } }), null)
+})
+
+test('versionCompanionForPublic — גרסה מלפני הפיצ\'ר (או ארכוב שנכשל) נופלת למתקין החי', async () => {
+  const { versionCompanionForPublic } = await import('./pluginCompatibility.js')
+  const doc = { _id: 'p1', companion: { present: true, name: 'חי', ext: '.exe', platform: 'windows' } }
+  const result = versionCompanionForPublic(doc, { version: '1.0.0', companion: { present: false } })
+  assert.equal(result.name, 'חי')
+  assert.equal(result.downloadUrl, '/api/plugins/p1/companion')
+  assert.equal(versionCompanionForPublic({ _id: 'p1' }, { version: '1.0.0' }), null)
+})

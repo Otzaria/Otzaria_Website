@@ -64,17 +64,30 @@ export function buildVersionEntries(plugin) {
     releasedAt: v.archivedAt ? new Date(v.archivedAt).toISOString().split('T')[0] : null,
     downloadUrl: `/api/plugins/${pluginId}@${v.version}/download`,
     supportsDirectInstall: (v.pluginFileExt || '.otzplugin').toLowerCase() === '.otzplugin',
-    // התוכנה הנלווית שאורכבה עם הגרסה הזאת. null בגרסה שאורכבה לפני שהפיצ'ר
-    // נוסף — הקוראים נופלים אז לתוכנה של הגרסה החיה, כי להציג תוסף שדורש תוכנה
-    // כאילו הוא עומד בפני עצמו הוא הטעות הגרועה מהשתיים.
-    companion: serializeCompanionForPublic(v.companion, {
-      downloadUrl: `/api/plugins/${pluginId}@${v.version}/companion`
-    }),
+    companion: versionCompanionForPublic(plugin, v),
     isLatest: false
   }))
 
   return [buildLiveVersionEntry(plugin), ...archived]
     .sort((a, b) => compareVersions(b.version, a.version))
+}
+
+// התוכנה הנלווית (בייצוג הציבורי) של גרסה ארכיונית.
+//
+// companionRecorded מבחין בין שני מצבים שנראים זהים ב-companion.present=false:
+//  - true: הגרסה אורכבה אחרי שהפיצ'ר נוסף, ובאמת לא היה לה מתקין → null.
+//  - false/חסר: הגרסה אורכבה לפני הפיצ'ר, או שארכוב המתקין שלה נכשל — אין לדעת
+//    מה היה, ולכן נופלים למתקין החי: להציג תוסף שדורש תוכנה כאילו הוא עומד בפני
+//    עצמו הוא הטעות הגרועה מהשתיים.
+export function versionCompanionForPublic(plugin, versionEntry) {
+  const pluginId = plugin._id.toString()
+  const own = serializeCompanionForPublic(versionEntry.companion, {
+    downloadUrl: `/api/plugins/${pluginId}@${versionEntry.version}/companion`
+  })
+  if (own || versionEntry.companionRecorded === true) return own
+  return serializeCompanionForPublic(plugin.companion, {
+    downloadUrl: `/api/plugins/${pluginId}/companion`
+  })
 }
 
 // האם גרסת אוצריא נופלת בטווח התאימות של רשומת גרסה.
@@ -161,9 +174,8 @@ export function resolveForAppVersion(publicPlugin, appVersion) {
     pluginFileSize: best.pluginFileSize,
     downloadUrl: best.downloadUrl,
     supportsDirectInstall: best.supportsDirectInstall,
-    // גרסה שאורכבה בלי מתקין (לפני הוספת הפיצ'ר) מוגשת עם המתקין החי, ולא
-    // בלי מתקין כלל — ראו ההערה ב-buildVersionEntries.
-    companion: best.companion || publicPlugin.companion || null,
+    // כבר כולל את הנפילה למתקין החי כשצריך — ראו versionCompanionForPublic
+    companion: best.companion || null,
     // מועד פרסום הגרסה המוצגת (updatedAt/fileUpdatedAt נשארים של התוסף עצמו)
     releasedAt: best.releasedAt,
     // מטא-דאטה של הרזולוציה — מאפשר לצרכן להסביר למשתמש מה הוא רואה

@@ -197,6 +197,10 @@ const PluginSchema = new mongoose.Schema(
       // המתקין של אותה גרסה נשמר לצידה תחת versions/<version>/companion<ext>,
       // כדי שגרסה ארכיונית תוגש עם התוכנה שהתאימה לה ולא עם החדשה.
       companion: { type: CompanionSchema, default: () => ({}) },
+      // true = הגרסה אורכבה אחרי שהפיצ'ר נוסף והמתקין שלה (או היעדרו) נרשם כאן
+      // במלואו. false = אורכבה לפני הפיצ'ר, או שארכוב המתקין נכשל — ואז היא
+      // מוגשת עם המתקין החי. ראו versionCompanionForPublic ב-pluginCompatibility.js.
+      companionRecorded: { type: Boolean, default: false },
       archivedAt: { type: Date, default: Date.now }
     }],
   },
@@ -219,6 +223,13 @@ PluginSchema.index({ name: 'text', shortDescription: 'text', description: 'text'
 PluginSchema.index({ tags: 1 })
 PluginSchema.index({ isApproved: 1, isHidden: 1 })
 PluginSchema.index({ createdAt: -1 })
+// התוספים שמוסתרים ממי שהשירות שלהם אינו מותקן אצלו (countHiddenForViewer ב-
+// store-home). חלקי — רק המצהירים נכנסים לאינדקס, כך שהוא זעיר ואינו מכביד
+// על הכתיבה של שאר התוספים.
+PluginSchema.index(
+  { 'companion.service.hideUnlessInstalled': 1 },
+  { partialFilterExpression: { 'companion.service.hideUnlessInstalled': true } }
+)
 // מזהה התוסף (pluginUid מתוך manifest.json) ייחודי בין תוספים שונים.
 // אינדקס חלקי (string בלבד) כדי לאפשר תוספים ישנים שטרם נשמר עבורם המזהה (null).
 PluginSchema.index(
@@ -233,10 +244,6 @@ PluginSchema.virtual('imageUrl').get(function () {
 
 PluginSchema.virtual('pluginUrl').get(function () {
   return `/api/plugins/${this._id}/download`
-})
-
-PluginSchema.virtual('companionUrl').get(function () {
-  return this.companion?.present ? `/api/plugins/${this._id}/companion` : null
 })
 
 PluginSchema.virtual('screenshotUrls').get(function () {

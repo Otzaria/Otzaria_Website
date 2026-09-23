@@ -132,14 +132,19 @@ export async function ensureVersionDir(pluginId, version) {
   return dir
 }
 
-// קריאת קובץ של גרסה ארכיונית
-export async function readVersionAsset(pluginId, version, fileName) {
+// הנתיב המוחלט של קובץ בגרסה ארכיונית (מוגן מ-path traversal)
+export function resolveVersionAssetPath(pluginId, version, fileName) {
   const dir = getVersionDir(pluginId, version)
   const target = path.resolve(dir, fileName)
   if (!target.startsWith(dir + path.sep) && target !== dir) {
     throw new Error('Asset path escapes version dir')
   }
-  return fs.readFile(target)
+  return target
+}
+
+// קריאת קובץ של גרסה ארכיונית
+export async function readVersionAsset(pluginId, version, fileName) {
+  return fs.readFile(resolveVersionAssetPath(pluginId, version, fileName))
 }
 
 // מחיקת תיקיית גרסה ארכיונית שלמה
@@ -180,23 +185,39 @@ export async function saveBufferAtomic(buf, destPath, maxBytes) {
   return buf.length
 }
 
-// קריאת קובץ תוסף מהדיסק
-export async function readPluginAsset(pluginId, relativePath, options = {}) {
+// ארכוב קובץ לתיקיית גרסה: hardlink במקום העתקה, כי קבצים כאן (מתקין התוכנה
+// הנלווית בעיקר) מגיעים למאות מגה-בייטים, ובין גרסה לגרסה הם לרוב לא משתנים —
+// העתקה מלאה בכל עליית גרסה הייתה מכפילה את הדיסק. זה בטוח משום שהקובץ החי
+// לעולם אינו נערך במקום: saveBufferAtomic כותב לקובץ זמני ו-rename, ו-
+// removePluginAsset מוחק את הרשומה בלבד — בשני המקרים ה-inode של הארכיון נשאר.
+// מערכת קבצים שאינה תומכת ב-hardlink (או יעד בכונן אחר) נופלת להעתקה רגילה.
+export async function linkOrCopyFile(source, dest) {
+  await fs.rm(dest, { force: true })
+  try {
+    await fs.link(source, dest)
+  } catch (err) {
+    if (err && err.code === 'ENOENT') throw err
+    await fs.copyFile(source, dest)
+  }
+}
+
+// הנתיב המוחלט של קובץ תוסף (מוגן מ-path traversal)
+export function resolvePluginAssetPath(pluginId, relativePath, options = {}) {
   const dir = options.pending ? getPendingPluginDir(pluginId) : getPluginDir(pluginId)
   const target = path.resolve(dir, relativePath)
   if (!target.startsWith(dir + path.sep) && target !== dir) {
     throw new Error('Asset path escapes plugin dir')
   }
-  return fs.readFile(target)
+  return target
+}
+
+// קריאת קובץ תוסף מהדיסק
+export async function readPluginAsset(pluginId, relativePath, options = {}) {
+  return fs.readFile(resolvePluginAssetPath(pluginId, relativePath, options))
 }
 
 export async function removePluginAsset(pluginId, relativePath, options = {}) {
-  const dir = options.pending ? getPendingPluginDir(pluginId) : getPluginDir(pluginId)
-  const target = path.resolve(dir, relativePath)
-  if (!target.startsWith(dir + path.sep) && target !== dir) {
-    throw new Error('Asset path escapes plugin dir')
-  }
-  await fs.rm(target, { force: true, recursive: false })
+  await fs.rm(resolvePluginAssetPath(pluginId, relativePath, options), { force: true, recursive: false })
 }
 
 // מחיקת כל הקבצים של תוסף

@@ -6,6 +6,7 @@ import Plugin from '@/models/Plugin'
 import PluginInstallToken from '@/models/PluginInstallToken'
 import { readPluginAsset, readVersionAsset, PLUGIN_FILE_BASENAME } from '@/lib/pluginStorage'
 import { parsePluginRef } from '@/lib/pluginRef'
+import { attachmentDisposition } from '@/lib/contentDisposition'
 import { hasPluginsAccess } from '@/lib/roles'
 import { canAccessSuspended, isPluginSuspended } from '@/lib/pluginVisibility'
 import { APP_VERSION_PARAM, isValidAppVersion, resolveCompatibleVersion, lowestSupportedAppVersion } from '@/lib/pluginCompatibility'
@@ -167,20 +168,14 @@ export async function GET(request, { params }) {
   }
 }
 
-// בניית תגובת הורדה עם Content-Disposition התומך בשמות קובץ בעברית/Unicode (RFC 5987).
-// encodeURIComponent לא מקודד את ! ' ( ) * - מקודדים ידנית כדי לעמוד ב-RFC 3986.
+// בניית תגובת הורדה עם Content-Disposition התומך בשמות קובץ בעברית/Unicode.
 // X-Plugin-Version מציין איזו גרסה הוגשה בפועל — נחוץ למי שהוריד דרך ?appVersion=
 // ולא ידע מראש איזו גרסה ייבחר עבורו.
 function pluginFileResponse(buf, fileName, fileExt, servedVersion) {
-  const rawName = fileName || `plugin${fileExt}`
-  const asciiFallback = rawName.replace(/[^\x20-\x7E]/g, '_').replace(/["\\\r\n]/g, '_')
-  const encodedName = encodeURIComponent(rawName)
-    .replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
-
   return new NextResponse(buf, {
     headers: {
       'Content-Type': 'application/octet-stream',
-      'Content-Disposition': `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodedName}`,
+      'Content-Disposition': attachmentDisposition(fileName || `plugin${fileExt}`),
       'Content-Length': buf.length.toString(),
       'X-Content-Type-Options': 'nosniff',
       ...(servedVersion ? { 'X-Plugin-Version': servedVersion } : {})
