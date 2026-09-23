@@ -76,14 +76,17 @@ export async function GET(request) {
     })
 
     return NextResponse.json(
-      filterByInstalledServices(
-        resolveListForAppVersion(
+      // הסינון לפי השירותים — לפני הרזולוציה לגרסה, כלומר לפי הצהרת הגרסה החיה,
+      // בדיוק כמו ב-search / store-home / categories: ההצהרה היא של התוסף, ולא
+      // משתנה לפי הגרסה שנבחרה לצרכן.
+      resolveListForAppVersion(
+        filterByInstalledServices(
           plugins.map((plugin) =>
             formatPluginForPublic(plugin, { isFeatured: featuredRank.has(plugin._id.toString()) })
           ),
-          appVersion
+          installedServices
         ),
-        installedServices
+        appVersion
       ),
       { headers: { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=120' } }
     )
