@@ -29,7 +29,12 @@ import { invalidatePluginSearchIndex } from '@/lib/pluginSearchIndex'
 import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags'
 import { archiveCurrentVersion } from '@/lib/pluginVersions'
 import { validatePluginArchive, OTZARIA_DESIGN_TAG } from '@/lib/pluginValidation'
-import { buildCompanionMeta, companionFromDoc, emptyCompanion } from '@/lib/pluginCompanion'
+import {
+  buildCompanionMeta,
+  companionFromDoc,
+  emptyCompanion,
+  ownerCompanionChangeNeedsApproval
+} from '@/lib/pluginCompanion'
 import { sendPluginReportNoticeIfNeeded } from '@/lib/systemMessages'
 import {
   MAX_COMPANION_BYTES,
@@ -169,21 +174,22 @@ async function saveLiveAssets(pluginId, plugin, editableSource, nextPluginData, 
     }
   }
 
-  // מתקין התוכנה הנלווית. הקובץ הישן נמחק במפורש ולא נדרס, כי הסיומת עשויה
-  // להשתנות מ-exe ל-msi, והוא יושב תחת שם אחר. הארכוב להיסטוריה כבר קרה
-  // לפני הקריאה לכאן, ולכן המחיקה אינה מאבדת את הגרסה היוצאת.
-  if (files.removeCompanion || files.companionBuffer) {
-    const previousExt = plugin.companion?.ext
-    if (previousExt) {
-      await removePluginAsset(pluginId, `${COMPANION_BASENAME}${previousExt}`).catch(() => {})
-    }
-  }
+  // מתקין התוכנה הנלווית. קודם נכתב החדש (כתיבה אטומית — באותה סיומת הוא
+  // מחליף את הישן במקום), ורק אחרי שהצליח נמחק הישן אם ישב תחת סיומת אחרת
+  // (exe → msi). בסדר ההפוך, כשל בכתיבה היה משאיר את המסמך מצביע לקובץ שנמחק.
+  // הארכוב להיסטוריה כבר קרה לפני הקריאה לכאן, ולכן המחיקה אינה מאבדת את
+  // הגרסה היוצאת.
+  const previousCompanionExt = plugin.companion?.present ? plugin.companion.ext : ''
   if (files.companionBuffer && files.companionMeta) {
     await saveBufferAtomic(
       files.companionBuffer,
       path.join(dir, `${COMPANION_BASENAME}${files.companionMeta.ext}`),
       MAX_COMPANION_BYTES
     )
+  }
+  const keptCompanionExt = files.companionBuffer ? files.companionMeta?.ext : null
+  if ((files.removeCompanion || files.companionBuffer) && previousCompanionExt && previousCompanionExt !== keptCompanionExt) {
+    await removePluginAsset(pluginId, `${COMPANION_BASENAME}${previousCompanionExt}`).catch(() => {})
   }
 }
 
@@ -456,6 +462,15 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
     }
 
     const isOwnerResubmission = isOwner && !isAdmin
+    // מתקין חדש/מוחלף שהבעלים מעלה לתוסף מאושר — חוזר לאישור מנהל לפני שיוגש
+    // לציבור (ראו ownerCompanionChangeNeedsApproval). נבדק מול המתקין החי, כי
+    // הוא מה שמוגש כרגע.
+    const companionNeedsApproval = ownerCompanionChangeNeedsApproval({
+      isOwnerResubmission,
+      isApproved: plugin.isApproved,
+      previous: companionFromDoc(livePlugin.companion),
+      next: nextCompanion
+    })
 
     // pluginUidToPersist: המזהה (id) לשמירה אם הוחלף קובץ. נשמר בעת ה-save בהמשך.
     let pluginUidToPersist = null
@@ -644,13 +659,15 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
       }
       await deletePendingPluginDir(plugin._id.toString()).catch(() => {})
 
-      if (isOwnerResubmission && !plugin.isApproved) {
+      if (isOwnerResubmission && (!plugin.isApproved || companionNeedsApproval)) {
         plugin.submissionType = 'new'
         plugin.isApproved = false
         plugin.approvedBy = null
         plugin.approvedAt = null
         pendingApproval = true
-        message = 'השינויים נשמרו ונשלחו לאישור מנהל.'
+        message = companionNeedsApproval
+          ? 'השינויים נשמרו. מתקין התוכנה הנלווית החדש נשלח לבדיקת מנהל, ועד לאישורו התוסף אינו מוצג בחנות.'
+          : 'השינויים נשמרו ונשלחו לאישור מנהל.'
       } else {
         plugin.submissionType = 'new'
       }

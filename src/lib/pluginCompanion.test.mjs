@@ -118,3 +118,24 @@ test('הייצוג הציבורי נושא תווית פלטפורמה וקיש�
   assert.equal(pub.sha256, 'ab'.repeat(32));
   assert.equal(pub.ext, undefined);
 });
+
+test('ownerCompanionChangeNeedsApproval — מתקין חדש/מוחלף של בעלים בתוסף מאושר חוזר לאישור', async () => {
+  const { ownerCompanionChangeNeedsApproval: needs } = await import('./pluginCompanion.js');
+  const prev = { present: true, sha256: 'aaa' };
+  const same = { present: true, sha256: 'aaa' };
+  const changed = { present: true, sha256: 'bbb' };
+
+  // הוספת מתקין לתוסף מאושר שלא היה לו אחד
+  assert.equal(needs({ isOwnerResubmission: true, isApproved: true, previous: null, next: changed }), true);
+  // החלפת המתקין
+  assert.equal(needs({ isOwnerResubmission: true, isApproved: true, previous: prev, next: changed }), true);
+  // עריכת מטא-דאטה בלבד — אותו גיבוב
+  assert.equal(needs({ isOwnerResubmission: true, isApproved: true, previous: prev, next: same }), false);
+  // הסרה
+  assert.equal(needs({ isOwnerResubmission: true, isApproved: true, previous: prev, next: null }), false);
+  // גיבוב חסר — אין דרך לדעת שזה אותו קובץ
+  assert.equal(needs({ isOwnerResubmission: true, isApproved: true, previous: prev, next: { present: true, sha256: '' } }), true);
+  // מנהל, או תוסף שעדיין לא אושר (ממילא חוזר לאישור)
+  assert.equal(needs({ isOwnerResubmission: false, isApproved: true, previous: null, next: changed }), false);
+  assert.equal(needs({ isOwnerResubmission: true, isApproved: false, previous: null, next: changed }), false);
+});

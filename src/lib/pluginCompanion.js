@@ -1,5 +1,10 @@
 import path from 'path'
 import { buildCompanionService, serviceFromDoc, serializeServiceForPublic } from './pluginCompanionService.js'
+import {
+  COMPANION_PLATFORMS,
+  COMPANION_PLATFORM_KEYS,
+  companionPlatformLabel
+} from './pluginCompanionPlatforms.js'
 
 // ===== תוכנה נלווית לתוסף =====
 // יש תוספים שאינם יכולים לעבוד לבדם: הם מדברים עם תוכנה שרצה על המחשב מחוץ
@@ -15,18 +20,9 @@ import { buildCompanionService, serviceFromDoc, serializeServiceForPublic } from
 // שנארז בפנים רק תופח בכל התקנה ואיש לא יריץ אותו. לכן קובץ הרצה בתוך החבילה
 // נחסם בהעלאה, וההצהרה נעשית דרך שדה המתקין.
 
-// הפלטפורמות שאפשר להצהיר עליהן, והסיומות שמקובלות כמתקין בכל אחת.
-export const COMPANION_PLATFORMS = {
-  windows: { label: 'Windows', extensions: ['.exe', '.msi'] },
-  linux: { label: 'Linux', extensions: ['.appimage', '.deb', '.rpm', '.sh'] },
-  macos: { label: 'macOS', extensions: ['.dmg', '.pkg'] }
-}
-
-export const COMPANION_PLATFORM_KEYS = Object.keys(COMPANION_PLATFORMS)
-
-// כל הסיומות המותרות כמתקין — ל-accept בטופס ולהודעות שגיאה.
-export const COMPANION_UPLOAD_EXTENSIONS = COMPANION_PLATFORM_KEYS
-  .flatMap((key) => COMPANION_PLATFORMS[key].extensions)
+// הפלטפורמות והסיומות המותרות לכל אחת — ב-./pluginCompanionPlatforms.js, קובץ
+// נטול-תלויות שגם הטפסים בדפדפן מייבאים ממנו (מקור אמת אחד לשרת וללקוח).
+export { COMPANION_PLATFORMS, COMPANION_PLATFORM_KEYS, companionPlatformLabel }
 
 // סיומות שנחשבות קובץ הרצה כשהן נמצאות *בתוך* חבילת התוסף. זו הצהרה, לא
 // אנטי-וירוס: הבדיקה היא על שמות הרשומות ב-central directory של ה-ZIP, בלי
@@ -56,17 +52,13 @@ export function normalizeCompanionPlatform(value) {
   return COMPANION_PLATFORM_KEYS.includes(platform) ? platform : null
 }
 
-export function companionPlatformLabel(platform) {
-  return COMPANION_PLATFORMS[platform]?.label || ''
-}
-
 // גרסת התוכנה הנלווית אינה גרסת התוסף ואינה כפופה ל-X.Y.Z; היא נשמרת כטקסט
 // ומוצגת כמו שהיא. התו-סט מוגבל כדי שלא ייכנס לכאן טקסט חופשי.
 const COMPANION_VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9.+-]{0,39}$/
 
-// אין כאן חישוב גיבוב במכוון: serializeCompanionForPublic נצרך גם מקוד לקוח
-// (דרך pluginSubmission), ו-import של crypto היה נגרר לחבילת הדפדפן. הגיבוב
-// מחושב בנתיב שקורא את הקובץ ומועבר לכאן כפרמטר.
+// אין כאן חישוב גיבוב במכוון: הקובץ נגרר גם לחבילת הדפדפן (דרך pluginSubmission,
+// שדפי העלאה/עריכה מייבאים), ו-import של crypto היה נגרר איתו. הגיבוב מחושב
+// בנתיב שקורא את הקובץ ומועבר לכאן כפרמטר.
 
 // רשומת התוכנה הנלווית של תוסף שאין לו אחת. נשמרת מפורשת (ולא null) כדי
 // שקוראים לא יצטרכו לבדוק קיום לפני present.
@@ -191,4 +183,18 @@ export function serializeCompanionForPublic(companion, { downloadUrl }) {
     service: serializeServiceForPublic(companion.service),
     downloadUrl
   }
+}
+
+// האם עריכה של בעל התוסף מחזירה אותו לאישור מנהל בגלל המתקין.
+//
+// עריכת בעלים של תוסף מאושר נכנסת לאוויר בלי אישור (כך בכל שדות התוסף), אבל
+// מתקין הוא קוד שרץ על המחשב בלי שום ארגז חול — בניגוד לתוסף עצמו — ולכן
+// מתקין חדש או מוחלף שלא נבדק ע"י מנהל אינו יכול להיות מוגש לציבור. תוסף שעוד
+// לא אושר כבר חוזר לאישור בכל מקרה, ומנהל שעורך אינו צריך אישור של עצמו.
+// הסרת המתקין ועריכת המטא-דאטה שלו (אותו קובץ, אותו גיבוב) אינן מגישות קוד חדש.
+export function ownerCompanionChangeNeedsApproval({ isOwnerResubmission, isApproved, previous, next }) {
+  if (!isOwnerResubmission || !isApproved) return false
+  if (!next?.present) return false
+  if (!previous?.present) return true
+  return !next.sha256 || next.sha256 !== previous.sha256
 }

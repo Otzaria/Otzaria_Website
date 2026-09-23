@@ -25,7 +25,12 @@ const SERVICE_ID_RE = /^[a-z0-9][a-z0-9._-]{1,63}$/
 const SERVICE_VERSION_CORE_RE = /^[0-9][0-9.]{0,23}$/
 const SERVICE_VERSION_PRERELEASE_RE = /^[A-Za-z0-9.]{1,20}$/
 
+// תקרת האורך הכוללת — זהה ל-maxlength של service.minVersion במודל. בלעדיה
+// הצירוף של שני הביטויים מתיר עד 45 תווים, וה-save נכשל ב-500 במקום 400.
+export const MAX_SERVICE_VERSION_LENGTH = 40
+
 function isServiceVersion(value) {
+  if (value.length > MAX_SERVICE_VERSION_LENGTH) return false
   const dash = value.indexOf('-')
   const core = dash === -1 ? value : value.slice(0, dash)
   if (!SERVICE_VERSION_CORE_RE.test(core)) return false

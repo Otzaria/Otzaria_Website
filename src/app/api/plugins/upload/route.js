@@ -234,6 +234,11 @@ export async function POST(request) {
     let companionMeta = null
     let companionBuffer = null
     if (companionFile && companionFile.size > 0) {
+      // לפני הקריאה לזיכרון — buildCompanionMeta בודק גם הוא, אבל רק אחרי שהקובץ
+      // כבר כולו ב-buffer, ותקרת הגוף של הבקשה גבוהה בהרבה מתקרת המתקין.
+      if (companionFile.size > MAX_COMPANION_BYTES) {
+        return badRequest(`קובץ המתקין חורג מהמגבלה של ${Math.floor(MAX_COMPANION_BYTES / 1024 / 1024)}MB`)
+      }
       companionBuffer = Buffer.from(await companionFile.arrayBuffer())
       try {
         companionMeta = buildCompanionMeta({
@@ -252,7 +257,7 @@ export async function POST(request) {
           maxBytes: MAX_COMPANION_BYTES
         })
       } catch (error) {
-        return bad(error.message)
+        return badRequest(error.message)
       }
     }
 

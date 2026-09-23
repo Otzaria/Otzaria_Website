@@ -59,6 +59,16 @@ test('buildCompanionService פוסל גרסה עם נקודה כפולה או נ
   assert.throws(() => buildCompanionService({ id: 'bridge', minVersion: '1.2.' }), /גרסת השירות/)
 })
 
+test('buildCompanionService פוסל גרסה ארוכה ממגבלת המודל (40 תווים)', () => {
+  // 24 תווי ליבה + מקף + 20 תווי prerelease = 45: כל חלק תקין לבדו
+  const tooLong = `${'1.'.repeat(11)}12-${'a'.repeat(20)}`
+  assert.equal(tooLong.length, 45)
+  assert.throws(() => buildCompanionService({ id: 'bridge', minVersion: tooLong }), /גרסת השירות/)
+  const atLimit = `${'1.'.repeat(11)}12-${'a'.repeat(15)}`
+  assert.equal(atLimit.length, 40)
+  assert.equal(buildCompanionService({ id: 'bridge', minVersion: atLimit }).minVersion, atLimit)
+})
+
 test('serializeServiceForPublic מחזיר null כשאין מזהה', () => {
   assert.equal(serializeServiceForPublic(undefined), null)
   assert.equal(serializeServiceForPublic({ id: '', hideUnlessInstalled: true }), null)
