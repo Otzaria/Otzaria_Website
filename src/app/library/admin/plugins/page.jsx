@@ -11,8 +11,8 @@ import AssignCategoriesModal from '@/components/admin/AssignCategoriesModal'
 import StoreLayoutTab from './StoreLayoutTab'
 import { formatPluginStatus } from '@/lib/pluginSubmission'
 import { formatAdminDate } from './formatAdminDate'
-
-const COMPANION_PLATFORM_LABELS = { windows: 'Windows', linux: 'Linux', macos: 'macOS' }
+import { companionPlatformLabel } from '@/lib/pluginCompanionPlatforms'
+import { formatFileSize } from '@/lib/formatFileSize'
 
 export default function AdminPluginsPage() {
   const [activeTab, setActiveTab] = useState('pending') // 'pending' | 'approved' | 'store'
@@ -624,9 +624,9 @@ export default function AdminPluginsPage() {
                           {plugin.companion.name}
                           {plugin.companion.version ? ` ${plugin.companion.version}` : ''}
                           {' · '}
-                          {COMPANION_PLATFORM_LABELS[plugin.companion.platform] || plugin.companion.platform}
+                          {companionPlatformLabel(plugin.companion.platform) || plugin.companion.platform}
                           {plugin.companion.size > 0
-                            ? ` · ${(plugin.companion.size / 1024 / 1024).toFixed(1)}MB`
+                            ? ` · ${formatFileSize(plugin.companion.size)}`
                             : ''}
                           {plugin.companion.installsPlugin ? ' · מתקין גם את התוסף' : ''}
                         </span>

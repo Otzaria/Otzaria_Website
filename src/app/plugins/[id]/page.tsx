@@ -20,6 +20,7 @@ import { statusBadgeClass } from '@/components/plugins/StatusBadge'
 import DirectInstallButton from '@/components/plugins/DirectInstallButton'
 import Breadcrumbs, { type BreadcrumbItem } from '@/components/plugins/Breadcrumbs'
 import ScreenshotGallery from '@/components/plugins/ScreenshotGallery'
+import CompanionInstallCard from '@/components/plugins/CompanionInstallCard'
 import type { CategoryRef, PluginCompanion } from '@/components/plugins/types'
 
 interface Plugin {
@@ -73,18 +74,6 @@ interface PluginEditPayload extends Plugin {
   }>
 }
 
-// מערכת ההפעלה שממנה גולשים כרגע — רק כדי לומר למי שגולש מטלפון שהמתקין
-// אינו בשבילו. הסדר חשוב: אנדרואיד מדווח "Linux", ו-iOS מדווח "like Mac OS X".
-function detectViewerPlatform(): 'windows' | 'linux' | 'macos' | 'other' {
-  const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent
-  if (/Android/i.test(ua)) return 'other'
-  if (/iPhone|iPad|iPod/i.test(ua)) return 'other'
-  if (/Windows/i.test(ua)) return 'windows'
-  if (/Macintosh|Mac OS X/i.test(ua)) return 'macos'
-  if (/Linux|X11/i.test(ua)) return 'linux'
-  return 'other'
-}
-
 export default function PluginDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -99,13 +88,7 @@ export default function PluginDetailPage() {
   const [loadingEdit, setLoadingEdit] = useState(false)
   const [suspending, setSuspending] = useState(false)
   const [reporting, setReporting] = useState(false)
-  // נקבע אחרי ה-hydration בלבד (navigator אינו קיים בשרת), ולכן null בהתחלה
-  const [viewerPlatform, setViewerPlatform] = useState<'windows' | 'linux' | 'macos' | 'other' | null>(null)
   const { installState, install } = useDirectInstall(showAlert)
-
-  useEffect(() => {
-    setViewerPlatform(detectViewerPlatform())
-  }, [])
 
   const currentUser = session?.user as { id?: string; role?: string; email?: string | null } | undefined
 
@@ -435,111 +418,13 @@ export default function PluginDetailPage() {
                 {/* תוכנה נלווית — התוסף אינו עובד בלעדיה, ולכן זה כרטיס
                     ולא שורת מידע, וההתקנה כולה נעשית מתוכו לפי הסדר. */}
                 {plugin.companion && (
-                  <div className="rounded-2xl border border-warning-200 bg-warning-50 p-5">
-                    <div className="flex items-start gap-3">
-                      <span className="material-symbols-outlined text-warning-900">desktop_windows</span>
-                      <div className="flex-1 space-y-4">
-                        <div>
-                          <h3 className="text-lg font-bold text-warning-900">התוסף דורש תוכנה נלווית</h3>
-                          <p className="mt-1 text-sm leading-relaxed text-warning-900/80">
-                            התוסף מדבר עם תוכנה שרצה על המחשב מחוץ לאוצריא, ואינו עובד בלעדיה.
-                            יש להוריד את המתקין ולהריץ אותו — האתר אינו מריץ קבצים במחשב שלכם.
-                          </p>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2 text-sm">
-                          <span className="rounded-full bg-white px-3 py-1 font-bold text-warning-900">
-                            {plugin.companion.name}
-                          </span>
-                          {plugin.companion.version && (
-                            <span className="rounded-full bg-white/60 px-3 py-1 text-warning-900/80">
-                              גרסה {plugin.companion.version}
-                            </span>
-                          )}
-                          {plugin.companion.platformLabel && (
-                            <span className="rounded-full bg-white/60 px-3 py-1 text-warning-900/80">
-                              {plugin.companion.platformLabel}
-                            </span>
-                          )}
-                          {plugin.companion.size > 0 && (
-                            <span className="rounded-full bg-white/60 px-3 py-1 text-warning-900/80">
-                              {formatFileSize(plugin.companion.size)}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* גלישה ממערכת אחרת אינה שגיאה — מתקינים על המחשב, גם אם
-                            מעיינים בחנות מהטלפון. לכן הערה ולא אזהרה. */}
-                        {viewerPlatform && plugin.companion.platform && viewerPlatform !== plugin.companion.platform && (
-                          <p className="text-sm text-warning-900/80">
-                            המתקין הוא ל-{plugin.companion.platformLabel}, ואתם גולשים כרגע ממערכת אחרת.
-                            יש להוריד ולהריץ אותו במחשב שאוצריא מותקנת בו.
-                          </p>
-                        )}
-
-                        <ol className="space-y-3">
-                          <li className="flex flex-wrap items-center gap-3">
-                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-warning-900 text-sm font-bold text-white">
-                              1
-                            </span>
-                            <a
-                              href={plugin.companion.downloadUrl}
-                              className="inline-flex items-center gap-2 rounded-xl bg-warning-900 px-6 py-3 font-bold text-white transition-colors hover:bg-warning-900/90"
-                            >
-                              <span className="material-symbols-outlined">download</span>
-                              <span>הורדת התוכנה והתקנתה</span>
-                            </a>
-                            {plugin.companion.fileName && (
-                              <span className="text-sm text-warning-900/70">{plugin.companion.fileName}</span>
-                            )}
-                          </li>
-                          <li className="flex flex-wrap items-center gap-3">
-                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-warning-900/15 text-sm font-bold text-warning-900">
-                              2
-                            </span>
-                            {plugin.companion.installsPlugin ? (
-                              <span className="text-sm text-warning-900/80">
-                                אין צעד שני — המתקין מתקין בסופו גם את התוסף עצמו באוצריא.
-                              </span>
-                            ) : canDirectInstall(plugin) ? (
-                              <DirectInstallButton
-                                pluginId={plugin.id}
-                                installState={installState}
-                                onInstall={handleDirectInstall}
-                                className="inline-flex items-center gap-2 px-6 py-3 bg-white border-2 border-primary text-primary rounded-xl font-bold hover:bg-primary/5 transition-colors disabled:cursor-default disabled:opacity-80"
-                                spinnerClassName="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin"
-                                showIcons
-                                idleLabel="התקנה ישירה לאוצריא"
-                              />
-                            ) : (
-                              <span className="text-sm text-warning-900/80">
-                                הורדת קובץ התוסף (הכפתור למעלה) והתקנתו באוצריא.
-                              </span>
-                            )}
-                          </li>
-                        </ol>
-
-                        {/* תוסף שהצהיר שאין להציגו בלי התוכנה — באוצריא ובכלי
-                            העדכון האוף-ליין הוא פשוט לא יופיע. באתר אי אפשר
-                            לבדוק מה מותקן, ולכן אומרים את זה במפורש. */}
-                        {plugin.companion.service?.hideUnlessInstalled && (
-                          <p className="text-sm text-warning-900/80">
-                            באוצריא ובכלי העדכון האוף-ליין התוסף מוצג רק למי שהתוכנה הזאת כבר מותקנת אצלו
-                            {plugin.companion.service.minVersion
-                              ? `, בגרסה ${plugin.companion.service.minVersion} ומעלה`
-                              : ''}
-                            .
-                          </p>
-                        )}
-
-                        {plugin.companion.sha256 && (
-                          <p className="break-all font-mono text-[11px] leading-relaxed text-warning-900/60">
-                            SHA-256: {plugin.companion.sha256}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                  <CompanionInstallCard
+                    companion={plugin.companion}
+                    pluginId={plugin.id}
+                    canDirectInstall={canDirectInstall(plugin)}
+                    installState={installState}
+                    onDirectInstall={handleDirectInstall}
+                  />
                 )}
 
                 {/* קטגוריות שהתוסף משובץ בהן — צ'יפים מקושרים */}

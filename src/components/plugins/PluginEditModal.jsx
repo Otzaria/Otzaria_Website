@@ -5,16 +5,10 @@ import { createPortal } from 'react-dom'
 import { useSession } from 'next-auth/react'
 import { useDialog } from '@/components/providers/DialogContext'
 import { MIN_SUPPORTED_APP_VERSION, formatPluginStatus } from '@/lib/pluginSubmission'
-import { MAX_COMPANION_BYTES } from '@/lib/pluginLimits'
+import { appendCompanionFields, companionFormFromPublic, validateCompanionForm } from '@/lib/pluginCompanionForm'
+import CompanionFieldset from '@/components/plugins/CompanionFieldset'
 
 const ALLOWED_IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
-// שיקוף של COMPANION_PLATFORMS ב-src/lib/pluginCompanion.js (השרת הוא מקור האמת).
-const COMPANION_EXTENSIONS = {
-  windows: ['.exe', '.msi'],
-  linux: ['.appimage', '.deb', '.rpm', '.sh'],
-  macos: ['.dmg', '.pkg']
-}
-const COMPANION_LABELS = { windows: 'Windows', linux: 'Linux', macos: 'macOS' }
 const STATUS_OPTIONS = [
   { value: 'stable', label: 'יציב' },
   { value: 'beta', label: 'בטא' },
@@ -150,16 +144,7 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
   const [newTag, setNewTag] = useState('')
 
   // תוכנה נלווית. plugin.companion מגיע מהייצוג הציבורי — null לתוסף רגיל.
-  const [companion, setCompanion] = useState({
-    name: plugin.companion?.name || '',
-    version: plugin.companion?.version || '',
-    platform: plugin.companion?.platform || 'windows',
-    installsPlugin: plugin.companion?.installsPlugin === true,
-    // הצהרת השירות שמאחורי התוכנה (null בתוסף שלא הצהיר)
-    serviceId: plugin.companion?.service?.id || '',
-    serviceMinVersion: plugin.companion?.service?.minVersion || '',
-    hideUnlessInstalled: plugin.companion?.service?.hideUnlessInstalled === true
-  })
+  const [companion, setCompanion] = useState(() => companionFormFromPublic(plugin.companion))
   const [companionFile, setCompanionFile] = useState(null)
   const [removeCompanion, setRemoveCompanion] = useState(false)
 
@@ -317,38 +302,6 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
     })
   }
 
-  const companionExtOf = (fileName) => (fileName.match(/\.[^.]+$/)?.[0] || '').toLowerCase()
-
-  const handleCompanionFile = (event) => {
-    const input = event.target
-    const file = input.files?.[0]
-    if (!file) return
-    const allowed = COMPANION_EXTENSIONS[companion.platform]
-    const ext = companionExtOf(file.name)
-    if (!allowed.includes(ext)) {
-      showAlert('שגיאה', `סיומת המתקין (${ext || 'ללא סיומת'}) אינה מתאימה ל-${COMPANION_LABELS[companion.platform]}. מותר: ${allowed.join(', ')}`)
-      input.value = ''
-      return
-    }
-    if (file.size > MAX_COMPANION_BYTES) {
-      showAlert('שגיאה', `קובץ המתקין חורג מהמגבלה של ${MAX_COMPANION_BYTES / 1024 / 1024}MB`)
-      input.value = ''
-      return
-    }
-    setCompanionFile(file)
-    setRemoveCompanion(false)
-  }
-
-  // החלפת מערכת ההפעלה מסירה קובץ שסיומתו אינה מתאימה לה עוד, במקום לשלוח אותו
-  // ולקבל דחייה מהשרת.
-  const handleCompanionPlatform = (platform) => {
-    setCompanion((prev) => ({ ...prev, platform }))
-    if (companionFile && !COMPANION_EXTENSIONS[platform].includes(companionExtOf(companionFile.name))) {
-      setCompanionFile(null)
-      showAlert('הקובץ הוסר', `${companionFile.name} אינו מתקין של ${COMPANION_LABELS[platform]}. יש לבחור קובץ מתאים (${COMPANION_EXTENSIONS[platform].join(', ')}).`)
-    }
-  }
-
   const handleSubmit = async (event) => {
     event.preventDefault()
     setLoading(true)
@@ -377,23 +330,17 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
       // כשאין תוכנה ואין קובץ חדש — לא נשלח שום שדה, והשרת משאיר את הקיים.
       if (removeCompanion) {
         data.append('removeCompanion', 'true')
-      } else if (companionFile || plugin.companion) {
-        if (!companion.name.trim()) {
-          throw new Error('יש למלא את שם התוכנה הנלווית — הוא מוצג למשתמש בדף התוסף')
+      } else {
+        const companionError = validateCompanionForm(companion, {
+          hasFile: Boolean(companionFile),
+          hasExisting: Boolean(plugin.companion)
+        })
+        if (companionError) {
+          throw new Error(companionError)
         }
-        if (companion.hideUnlessInstalled && !companion.serviceId.trim()) {
-          throw new Error('כדי להסתיר את התוסף ממי שהתוכנה אינה מותקנת אצלו יש למלא מזהה שירות')
+        if (companionFile || plugin.companion) {
+          appendCompanionFields(data, companion, companionFile)
         }
-        if (companionFile) {
-          data.append('companionFile', companionFile)
-        }
-        data.append('companionName', companion.name.trim())
-        data.append('companionVersion', companion.version.trim())
-        data.append('companionPlatform', companion.platform)
-        data.append('companionInstallsPlugin', companion.installsPlugin ? 'true' : 'false')
-        data.append('companionServiceId', companion.serviceId.trim())
-        data.append('companionServiceMinVersion', companion.serviceMinVersion.trim())
-        data.append('companionHideUnlessInstalled', companion.hideUnlessInstalled ? 'true' : 'false')
       }
 
       if (removeImage) {
@@ -534,145 +481,16 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
               {!isAdmin && <p className="mt-2 text-sm text-on-surface/50">אם מעלים קובץ חדש, הגרסה תזוהה אוטומטית מ-manifest.json ועליה להיות גבוהה מהגרסה הנוכחית ({originalVersion}). המזהה (id) חייב להישאר זהה.</p>}
             </div>
 
-            <div className="rounded-xl border border-neutral-200 p-4">
-              <label className="mb-2 block text-sm font-bold text-on-surface/60">תוכנה נלווית</label>
-              <p className="text-sm text-on-surface/60">
-                רק אם התוסף אינו עובד לבדו ומדבר עם תוכנה שרצה על המחשב מחוץ לאוצריא. המתקין מועלה
-                כאן ולא בתוך חבילת התוסף. האתר מגיש אותו להורדה ואינו מריץ אותו.
-              </p>
-
-              {removeCompanion ? (
-                <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-                  <span className="text-danger-600">התוכנה הנלווית תוסר בשמירה.</span>
-                  <button type="button" onClick={() => setRemoveCompanion(false)} className="text-primary hover:underline">
-                    ביטול ההסרה
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    <div>
-                      <label className="mb-2 block text-sm font-bold text-on-surface/60">שם התוכנה</label>
-                      <input
-                        type="text"
-                        value={companion.name}
-                        onChange={(e) => setCompanion((prev) => ({ ...prev, name: e.target.value }))}
-                        maxLength={60}
-                        placeholder="לדוגמה: מתאם חברותא"
-                        className="w-full rounded-xl border border-neutral-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-2 block text-sm font-bold text-on-surface/60">גרסת התוכנה (אופציונלי)</label>
-                      <input
-                        type="text"
-                        value={companion.version}
-                        onChange={(e) => setCompanion((prev) => ({ ...prev, version: e.target.value }))}
-                        maxLength={40}
-                        placeholder="6.0.0"
-                        className="w-full rounded-xl border border-neutral-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-2 block text-sm font-bold text-on-surface/60">מערכת הפעלה</label>
-                      <select
-                        value={companion.platform}
-                        onChange={(e) => handleCompanionPlatform(e.target.value)}
-                        className="w-full rounded-xl border border-neutral-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
-                      >
-                        <option value="windows">Windows</option>
-                        <option value="linux">Linux</option>
-                        <option value="macos">macOS</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="mb-2 block text-sm font-bold text-on-surface/60">
-                        {plugin.companion ? 'החלפת קובץ המתקין' : 'קובץ המתקין'}
-                      </label>
-                      <input
-                        type="file"
-                        accept={COMPANION_EXTENSIONS[companion.platform].join(',')}
-                        onChange={handleCompanionFile}
-                        className="w-full rounded-xl border border-neutral-200 px-4 py-3 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
-                      />
-                      <p className="mt-1 text-sm text-on-surface/50">
-                        {COMPANION_EXTENSIONS[companion.platform].join(', ')} · עד {MAX_COMPANION_BYTES / 1024 / 1024}MB
-                      </p>
-                    </div>
-                  </div>
-
-                  <label className="mt-4 flex items-start gap-2 text-sm text-on-surface/70">
-                    <input
-                      type="checkbox"
-                      checked={companion.installsPlugin}
-                      onChange={(e) => setCompanion((prev) => ({ ...prev, installsPlugin: e.target.checked }))}
-                      className="mt-1"
-                    />
-                    <span>המתקין מתקין בסופו גם את קובץ התוסף באוצריא (דף התוסף יציג אז צעד אחד במקום שניים).</span>
-                  </label>
-
-                  {/* זיהוי השירות — מה שמאפשר לאוצריא ולכלים האוף-ליין לדעת אם
-                      התוכנה כבר מותקנת אצל המשתמש. האתר עצמו אינו יכול לבדוק. */}
-                  <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    <div>
-                      <label className="block text-sm font-bold text-on-surface/60 mb-2">מזהה השירות (אופציונלי)</label>
-                      <input
-                        type="text"
-                        value={companion.serviceId}
-                        onChange={(e) => setCompanion((prev) => ({ ...prev, serviceId: e.target.value }))}
-                        className="w-full px-4 py-3 border border-neutral-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
-                        placeholder="hevruta-bridge"
-                        dir="ltr"
-                        maxLength={64}
-                      />
-                      <p className="mt-1 text-sm text-on-surface/50">
-                        אותיות אנגליות קטנות, ספרות, נקודות ומקפים. זה השם שהתוכנה מזדהה בו.
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-on-surface/60 mb-2">גרסת שירות מזערית (אופציונלי)</label>
-                      <input
-                        type="text"
-                        value={companion.serviceMinVersion}
-                        onChange={(e) => setCompanion((prev) => ({ ...prev, serviceMinVersion: e.target.value }))}
-                        className="w-full px-4 py-3 border border-neutral-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
-                        placeholder="1.2.0"
-                        dir="ltr"
-                        maxLength={40}
-                      />
-                      <p className="mt-1 text-sm text-on-surface/50">
-                        גרסה מספרית. מי שמותקנת אצלו גרסה נמוכה יותר ייחשב כמי שאין לו את התוכנה.
-                      </p>
-                    </div>
-                  </div>
-
-                  <label className="mt-4 flex items-start gap-2 text-sm text-on-surface/70">
-                    <input
-                      type="checkbox"
-                      checked={companion.hideUnlessInstalled}
-                      onChange={(e) => setCompanion((prev) => ({ ...prev, hideUnlessInstalled: e.target.checked }))}
-                      className="mt-1"
-                    />
-                    <span>
-                      אל תציגו את התוסף למי שהתוכנה אינה מותקנת אצלו (דורש מזהה שירות). הבדיקה נעשית
-                      באוצריא ובכלי העדכון האוף-ליין, לא באתר.
-                    </span>
-                  </label>
-
-                  {companionFile && <p className="mt-3 text-sm text-success-600">✓ נבחר: {companionFile.name}</p>}
-                  {plugin.companion && !companionFile && (
-                    <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-                      <span className="text-on-surface/50">
-                        מתקין נוכחי: {plugin.companion.fileName || '—'}
-                      </span>
-                      <button type="button" onClick={() => setRemoveCompanion(true)} className="text-danger-600 hover:underline">
-                        הסר תוכנה נלווית
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
+            <CompanionFieldset
+              value={companion}
+              onChange={setCompanion}
+              file={companionFile}
+              onFileChange={setCompanionFile}
+              existing={plugin.companion || null}
+              removed={removeCompanion}
+              onRemovedChange={setRemoveCompanion}
+              showAlert={showAlert}
+            />
 
             <div>
               <label className="mb-2 block text-sm font-bold text-on-surface/60">תמונת תוסף</label>
