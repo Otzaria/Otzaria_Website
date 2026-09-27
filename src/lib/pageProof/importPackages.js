@@ -1,15 +1,22 @@
 import path from 'path';
 import fs from 'fs-extra';
 import sharp from 'sharp';
-import PageProofBook from '@/models/PageProofBook';
-import PageProofPage from '@/models/PageProofPage';
-import { resolveImageFsPath } from '@/lib/ocr/images';
+// נתיבים יחסיים (לא '@/') — כדי שגם סקריפט-הקישור המקומי
+// (scripts/page-proof-link-import.mjs) ירוץ עם node רגיל
+import PageProofBook from '../../models/PageProofBook.js';
+import PageProofPage from '../../models/PageProofPage.js';
+import { resolveImageFsPath } from '../ocr/images.js';
 import { assignSequences, requiredFor, DEFAULT_DOUBLE_PCT } from './sequences.js';
 
 // כתיבת חבילות-עמודים מפוענחות (packageParse) למסד ולדיסק. ייבוא-חוזר של
 // אותו gid מוסיף עמודים ומעדכן עמודים שעוד איש לא נגע בהם; עמוד שיש לו
 // הגשה (ממתינה או מאושרת) לא נדרס — הפעולות שהוגשו מתייחסות למזהי-השורות
 // שלו, והחלפת התוכן הייתה מנתקת אותן.
+//
+// מצב-קישור (links): העמוד מצביע לתמונת-עמוד שכבר קיימת בספר באתר
+// (/uploads/books/<slug>/page.N.jpg) במקום לכתוב תמונה חדשה. הקואורדינטות
+// נשארות במרחב התמונה של תוכנת-הספר (doc.size); העורך מותח את תמונת-האתר
+// על אותו viewBox, ולכן הדבר תקין רק כשיחס-הממדים זהה — הקורא בודק זאת.
 
 export const IMAGE_ROOT = '/uploads/page-proof';
 
@@ -22,10 +29,13 @@ async function toJpeg(bytes) {
   return { buffer, width: meta.width || 0, height: meta.height || 0 };
 }
 
-export async function importPackages(packages, entries, { userId, doublePct } = {}) {
+// links: Map(page → {imagePath, width, height, sitePage}) — עמודים במצב-קישור.
+// siteBook: הספר באתר (Book) שממנו התמונות; title: שם להצגה במקום של החבילה.
+export async function importPackages(packages, entries, { userId, doublePct, links = null, siteBook = null, title: titleOverride = null } = {}) {
   const summary = [];
   for (const pkg of packages) {
-    const { gid, title, script } = pkg.meta;
+    const { gid, script } = pkg.meta;
+    const title = titleOverride || pkg.meta.title;
     const res = { gid, title, created: 0, updated: 0, skippedAnswered: 0, errors: [] };
 
     let book = await PageProofBook.findOne({ gid });
@@ -36,7 +46,10 @@ export async function importPackages(packages, entries, { userId, doublePct } = 
         script,
         doublePct: Number.isFinite(doublePct) ? doublePct : DEFAULT_DOUBLE_PCT,
         importedBy: userId || undefined,
+        siteBook: siteBook || undefined,
       });
+    } else if (siteBook && !book.siteBook) {
+      await PageProofBook.updateOne({ _id: book._id }, { $set: { siteBook } });
     }
 
     // הרצפים מחושבים על כל עמודי הספר (קיימים + חדשים), אבל נכתבים רק
@@ -52,15 +65,23 @@ export async function importPackages(packages, entries, { userId, doublePct } = 
         continue;
       }
       try {
-        const img = await toJpeg(entries[imagePath]);
-        if (img.width !== doc.size[0] || img.height !== doc.size[1]) {
-          res.errors.push(`עמוד ${doc.page}: מידות התמונה (${img.width}×${img.height}) שונות מ-size שבעמוד (${doc.size.join('×')})`);
-          continue;
+        const link = links?.get(doc.page) || null;
+        let img;
+        let rel;
+        if (link) {
+          img = { width: link.width, height: link.height };
+          rel = link.imagePath;
+        } else {
+          img = await toJpeg(entries[imagePath]);
+          if (img.width !== doc.size[0] || img.height !== doc.size[1]) {
+            res.errors.push(`עמוד ${doc.page}: מידות התמונה (${img.width}×${img.height}) שונות מ-size שבעמוד (${doc.size.join('×')})`);
+            continue;
+          }
+          rel = `${IMAGE_ROOT}/${gid}/p${String(doc.page).padStart(4, '0')}.jpg`;
+          const fsPath = resolveImageFsPath(rel);
+          await fs.ensureDir(path.dirname(fsPath));
+          await fs.writeFile(fsPath, img.buffer);
         }
-        const rel = `${IMAGE_ROOT}/${gid}/p${String(doc.page).padStart(4, '0')}.jpg`;
-        const fsPath = resolveImageFsPath(rel);
-        await fs.ensureDir(path.dirname(fsPath));
-        await fs.writeFile(fsPath, img.buffer);
 
         const seq = seqOf.get(doc.page);
         await PageProofPage.updateOne(
@@ -75,6 +96,7 @@ export async function importPackages(packages, entries, { userId, doublePct } = 
               imageWidth: img.width,
               imageHeight: img.height,
               required: requiredFor(gid, seq, book.doublePct),
+              sitePage: link?.sitePage || null,
             },
             $setOnInsert: { activeCount: 0, approvedCount: 0, submitters: [], status: 'open' },
           },
@@ -82,6 +104,7 @@ export async function importPackages(packages, entries, { userId, doublePct } = 
         );
         if (prev) res.updated++;
         else res.created++;
+        if (link) res.linked = (res.linked || 0) + 1;
       } catch (e) {
         res.errors.push(`עמוד ${doc.page}: ${e.message}`);
       }

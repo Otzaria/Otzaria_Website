@@ -18,10 +18,14 @@ const PageProofPageSchema = new mongoose.Schema(
     lineCount: { type: Number, default: 0 },
 
     // /uploads/page-proof/<gid>/pNNN.jpg — חסום כנכס סטטי, מוגש רק דרך
-    // /api/page-proof/pages/[id]/image. הממדים = doc.size (הקואורדינטות בעמוד)
+    // /api/page-proof/pages/[id]/image. הממדים = doc.size (הקואורדינטות בעמוד).
+    // במצב-קישור: תמונת-העמוד של הספר באתר (/uploads/books/...)
     imagePath: { type: String, required: true },
     imageWidth: { type: Number, default: 0 },
     imageHeight: { type: Number, default: 0 },
+    // מצב-קישור: עמוד-הספר באתר שתמונתו מוצגת (imagePath מצביע אליה). אז
+    // imageWidth/Height הם של תמונת-האתר, ו-doc.size של תוכנת-הספר — אותו יחס.
+    sitePage: { type: mongoose.Schema.Types.ObjectId, ref: 'Page', default: null },
 
     required: { type: Number, default: 1, min: 1, max: 2 },
     // הגשות פעילות (ממתינות + מאושרות); דחייה מורידה את המונה ומחזירה מקום

@@ -35,6 +35,7 @@ export default function BooksTable({ books, busy, onDownload, onToggle, onDelete
                   {b.lastImportAt && ` · יובא ${formatDateShort(b.lastImportAt)}`}
                 </div>
                 <div className="text-[10px] text-on-surface/40" dir="ltr">{b.gid}</div>
+                {b.linked && <span className="ml-1 rounded bg-info-100 px-1.5 text-xs text-info-800" title="התמונות מהספר שהועלה לאתר (מצב-קישור)">מקושר לספר באתר</span>}
                 {b.status === 'paused' && <span className="rounded bg-warning-alt-100 px-1.5 text-xs text-warning-alt-800">מושהה</span>}
               </td>
               <td className="p-2 tabular-nums">

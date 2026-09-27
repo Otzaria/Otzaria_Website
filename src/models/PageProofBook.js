@@ -10,6 +10,8 @@ const PageProofBookSchema = new mongoose.Schema(
     title: { type: String, required: true },
     // כתב-הספר (square/rashi) כפי שהגיע בחבילה — להצגה בלבד
     script: { type: String, default: null },
+    // הספר באתר שממנו תמונות-העמודים (מצב-קישור); ריק לחבילה שהועלתה עם תמונות
+    siteBook: { type: mongoose.Schema.Types.ObjectId, ref: 'Book', default: null },
 
     // אחוז הרצפים שמתויגים בידי שני אנשים (למדידת הסכמה); נקבע בייבוא
     // הראשון ונשמר, כדי שייבוא-חוזר לא יחליף רצפים שכבר חולקו

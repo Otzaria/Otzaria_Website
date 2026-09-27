@@ -53,6 +53,7 @@ export async function GET() {
         gid: b.gid,
         title: b.title,
         script: b.script,
+        linked: !!b.siteBook,
         status: b.status,
         doublePct: b.doublePct,
         pageCount: b.pageCount,
