@@ -137,12 +137,14 @@ const OCR_ADMIN_ALLOWED_PAGES = [
   '/library/admin/ocr-training',
   '/library/admin/ocr-lines',
   '/library/admin/ocr-layout',
+  '/library/admin/page-proof',
 ];
 const OCR_ADMIN_ALLOWED_PAGE_EXACT = ['/library/admin'];
 const OCR_ADMIN_ALLOWED_API = [
   '/api/admin/ocr-training',
   '/api/admin/ocr-lines',
   '/api/admin/ocr-layout',
+  '/api/admin/page-proof',
   '/api/admin/stats',
 ];
 
@@ -153,6 +155,7 @@ const BOOKS_ADMIN_BLOCKED_PAGES = [
   '/library/admin/ocr-training',
   '/library/admin/ocr-lines',
   '/library/admin/ocr-layout',
+  '/library/admin/page-proof',
   '/library/admin/private-sources',
 ];
 const BOOKS_ADMIN_BLOCKED_API = [
@@ -168,6 +171,7 @@ const BOOKS_ADMIN_BLOCKED_API = [
   '/api/admin/ocr-training',
   '/api/admin/ocr-lines',
   '/api/admin/ocr-layout',
+  '/api/admin/page-proof',
 ];
 
 const authProxy = withAuth(
