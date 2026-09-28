@@ -58,7 +58,10 @@ export default function BookReminderPage() {
     };
 
     useEffect(() => {
-        const loadInitialData = async () => {
+        // ארבע הבקשות בלתי-תלויות זו בזו, ולכן יוצאות במקביל — קודם רצו בטור
+        // (ספרים → דיקטה → משתמשים → היסטוריה), וכל אחת חיכתה לסיום הקודמת.
+        // כל טעינה מטפלת בשגיאה שלה, כך שכשל באחת לא מונע את האחרות.
+        const loadBooks = async () => {
             try {
                 const booksRes = await fetch('/api/library/list');
                 const booksData = await booksRes.json();
@@ -72,7 +75,13 @@ export default function BookReminderPage() {
                     );
                     setBooks(booksWithWork);
                 }
+            } catch (error) {
+                console.error('Error loading initial data:', error);
+            }
+        };
 
+        const loadDictaBooks = async () => {
+            try {
                 const dictaBooksRes = await fetch('/api/dicta/books');
                 const dictaBooksData = await dictaBooksRes.json();
                 if (Array.isArray(dictaBooksData)) {
@@ -81,35 +90,43 @@ export default function BookReminderPage() {
                     );
                     setDictaBooks(dictaBooksInProgress);
                 }
+            } catch (error) {
+                console.error('Error loading initial data:', error);
+            }
+        };
 
+        const loadUsers = async () => {
+            try {
                 const usersRes = await fetch('/api/admin/users');
                 const usersData = await usersRes.json();
                 if (usersData.success && Array.isArray(usersData.users)) {
                     setAllUsers(usersData.users);
                 }
-
-                try {
-                    const historyRes = await fetch('/api/admin/history');
-                    if (historyRes.ok) {
-                        const historyText = await historyRes.text();
-                        if (historyText) {
-                            const historyData = JSON.parse(historyText);
-                            if (historyData.success) {
-                                setHistory(historyData.history);
-                            }
-                        }
-                    }
-                } catch (e) {
-                    console.error('History fetch failed:', e);
-                } finally {
-                    setLoadingHistory(false);
-                }
-
             } catch (error) {
                 console.error('Error loading initial data:', error);
             }
         };
-        loadInitialData();
+
+        const loadHistory = async () => {
+            try {
+                const historyRes = await fetch('/api/admin/history');
+                if (historyRes.ok) {
+                    const historyText = await historyRes.text();
+                    if (historyText) {
+                        const historyData = JSON.parse(historyText);
+                        if (historyData.success) {
+                            setHistory(historyData.history);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('History fetch failed:', e);
+            } finally {
+                setLoadingHistory(false);
+            }
+        };
+
+        Promise.all([loadBooks(), loadDictaBooks(), loadUsers(), loadHistory()]);
     }, []);
 
     useEffect(() => {

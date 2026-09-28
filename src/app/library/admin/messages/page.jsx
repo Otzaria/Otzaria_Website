@@ -29,6 +29,7 @@ import { unstable_cache as nextCache } from 'next/cache'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { hasAnyAdminAccess } from '@/lib/roles'
 import { getAdminMessagesList } from '@/lib/adminMessages'
+import { toAdminMessageListItem } from '@/lib/adminMessagesView'
 import { CACHE_TAGS, REVALIDATE_SECONDS } from '@/lib/cacheTags'
 import AdminMessagesClient from './AdminMessagesClient'
 
@@ -48,7 +49,8 @@ export default async function AdminMessagesPage() {
   let messages = []
   if (hasAnyAdminAccess(session?.user?.role)) {
     try {
-      messages = await loadAdminMessages()
+      // רק השדות שהדף מציג — הרשימה נכנסת כולה ל-HTML (ראו adminMessagesView.js)
+      messages = (await loadAdminMessages()).map(toAdminMessageListItem)
     } catch (error) {
       console.error('Error loading admin messages:', error)
     }

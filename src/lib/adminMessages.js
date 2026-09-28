@@ -35,6 +35,17 @@ function formatMessage(msg) {
   }
 }
 
+// מסנן ה"לא נקראו" של תור הניהול — מקביל בדיוק ל-status==='unread' ב-formatMessage
+// (!msg.isRead): $ne:true תופס גם false וגם מסמך ישן שאין בו isRead כלל.
+export const ADMIN_UNREAD_MESSAGES_FILTER = { messageType: { $ne: 'system' }, isRead: { $ne: true } }
+
+// מונה ההודעות שלא נקראו בתור הניהול — מה שהכותרת (Header) צריכה לתג, בלי למשוך
+// את כל התור (מאות KB עם populate) רק כדי לספור אותו בדפדפן.
+export async function countUnreadAdminMessages() {
+  await dbConnect()
+  return Message.countDocuments(ADMIN_UNREAD_MESSAGES_FILTER)
+}
+
 // תור ההודעות המשותף לניהול — כל ההודעות שאינן הודעת-מערכת (messageType != 'system'),
 // ללא סינון לפי זהות הצופה: זהה בדיוק לכל בעל הרשאת ניהול כלשהי (hasAnyAdminAccess),
 // בין אם הוא שולח/נמען של הודעה מסוימת ובין אם לא. זו בדיוק אותה שאילתה
