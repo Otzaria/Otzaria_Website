@@ -1,33 +1,23 @@
 import { NextResponse } from 'next/server'
 import dbConnect from '@/lib/db'
-import { checkRateLimit } from '@/lib/rate-limit'
+import { checkSharedRateLimit } from '@/lib/rate-limit'
 import { getClientIp } from '@/lib/client-ip'
-import { searchPlugins } from '@/lib/pluginSearchIndex'
-import { getCategoriesForPlugins } from '@/lib/pluginStore'
-import { formatPluginForPublic, ALLOWED_PLUGIN_STATUSES } from '@/lib/pluginSubmission'
-import {
-  readAppVersionParam,
-  invalidAppVersionMessage,
-  hasCompatibleVersion,
-  resolveForAppVersion
-} from '@/lib/pluginCompatibility'
-
-const MAX_QUERY_LENGTH = 120
+import { runPluginSearch, MAX_PLUGIN_SEARCH_QUERY_LENGTH } from '@/lib/pluginSearchResults'
+import { readAppVersionParam, invalidAppVersionMessage } from '@/lib/pluginCompatibility'
 
 // GET /api/plugins/search?q=&limit=&offset=&status=&tag=&appVersion= — החיפוש החכם.
-// דירוג: רלוונטיות טקסטואלית (שם > תגיות > תיאור קצר > מפתח > תיאור) משוקללת
-// בפופולריות והצמדה. ראו docs/PLUGIN_STORE_REDESIGN_PLAN.md פרק 8.
+// החיפוש ובניית התשובה משותפים עם דף תוצאות החיפוש — ראו src/lib/pluginSearchResults.js.
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url)
-    const query = (searchParams.get('q') || '').trim().slice(0, MAX_QUERY_LENGTH)
+    const query = (searchParams.get('q') || '').trim().slice(0, MAX_PLUGIN_SEARCH_QUERY_LENGTH)
     if (!query) {
       return NextResponse.json({ error: 'Missing query' }, { status: 400 })
     }
 
     // הגבלת קצב — נתיב ציבורי "זול להצפה" (אותו דפוס כמו חיפוש הספרייה)
     const ip = getClientIp(request)
-    if (!checkRateLimit(ip, 'plugin-search', 60, 'minute')) {
+    if (!checkSharedRateLimit(ip, 'plugin-search', 60, 'minute')) {
       return NextResponse.json({ error: 'יותר מדי בקשות חיפוש. נסו שוב בעוד רגע.' }, { status: 429 })
     }
 
@@ -43,43 +33,10 @@ export async function GET(request) {
     }
 
     await dbConnect()
-    let { results, relaxed } = await searchPlugins(query)
-
-    // סינונים אופציונליים — אחרי החיפוש, על המסמכים עצמם
-    if (status && ALLOWED_PLUGIN_STATUSES.includes(status)) {
-      results = results.filter(({ doc }) => doc.status === status)
-    }
-    if (tag) {
-      results = results.filter(({ doc }) => (doc.tags || []).includes(tag))
-    }
-    // סינון תאימות לפני העימוד — אחרת total והעמוד היו נספרים על תוספים
-    // שממילא היו מושמטים מהתשובה
-    if (appVersion) {
-      results = results.filter(({ doc }) => hasCompatibleVersion(doc, appVersion))
-    }
-
-    const total = results.length
-    const page = results.slice(offset, offset + limit)
-
-    // העשרת קטגוריות בשאילתה אחת לכל העמוד
-    const categoriesByPlugin = await getCategoriesForPlugins(page.map(({ doc }) => doc._id))
+    const body = await runPluginSearch({ query, limit, offset, status, tag, appVersion })
 
     return NextResponse.json(
-      {
-        query,
-        total,
-        relaxed,
-        // resolveForAppVersion לא יחזיר null כאן — הסינון למעלה כבר הבטיח תאימות
-        results: page.map(({ doc, score, matchedFields }) => ({
-          ...resolveForAppVersion(
-            formatPluginForPublic(doc, { isFeatured: doc.isFeatured === true }),
-            appVersion
-          ),
-          score: Math.round(score * 100) / 100,
-          matchedFields,
-          categories: categoriesByPlugin.get(doc._id.toString()) || []
-        }))
-      },
+      body,
       // TTL קצר: פשרה מכוונת בין עומס-שרת ל"תוסף שהושהה ממשיך להופיע" לזמן קצר
       { headers: { 'Cache-Control': 'public, max-age=20, stale-while-revalidate=60' } }
     )

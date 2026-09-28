@@ -14,10 +14,11 @@ import { unstable_cache as nextCache } from 'next/cache'
 import dbConnect from '@/lib/db'
 import PluginCategory from '@/models/PluginCategory'
 import { formatPluginForPublic } from '@/lib/pluginSubmission'
+import { toPluginCardData } from '@/lib/pluginCardData'
 import { fetchPublicPluginsByIds, orderCategoryPlugins, resolveSortMode } from '@/lib/pluginStore'
 import { CACHE_TAGS, REVALIDATE_SECONDS } from '@/lib/cacheTags'
 import PluginCategoryClient from './PluginCategoryClient'
-import type { Plugin } from '@/components/plugins/types'
+import type { PluginCardData } from '@/components/plugins/types'
 import type { CategoryData } from './types'
 
 // ליטרל מספרי בכוונה (לא REVALIDATE_SECONDS.PLUGINS_PUBLIC) — ה-segment config
@@ -48,7 +49,8 @@ async function loadCategoryDataUncached(slug: string): Promise<CategoryData | nu
     description: category.description || '',
     icon: category.icon || '',
     sortMode: resolveSortMode(category),
-    plugins: ordered.map((plugin) => formatPluginForPublic(plugin) as Plugin),
+    // רק שדות הכרטיס — ראו src/lib/pluginCardData.js
+    plugins: ordered.map((plugin) => toPluginCardData(formatPluginForPublic(plugin)) as PluginCardData),
     total: ordered.length
   }
 }

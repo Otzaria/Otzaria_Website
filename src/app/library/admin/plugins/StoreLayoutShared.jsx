@@ -5,7 +5,7 @@
 // עם השלמה אוטומטית, שורת תוסף ברשימה ממוינת עם חיצי סדר, וההוק לגרירה-ושחרור.
 
 import { useState } from 'react'
-import { formatPluginStatus } from '@/lib/pluginSubmission'
+import { formatPluginStatus } from '@/lib/pluginStatus'
 
 // גרירה-ושחרור לרשימה אנכית — HTML5 native, ללא תלות חיצונית.
 // חיצי הסדר נשארים לצידה (נגישות מקלדת). מחזיר props לעטיפת כל פריט לפי אינדקס.

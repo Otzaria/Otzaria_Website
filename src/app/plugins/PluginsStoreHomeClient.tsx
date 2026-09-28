@@ -4,6 +4,11 @@
 // Component (src/app/plugins/page.tsx) במקום לשלוף אותם בעצמו ב-fetch, אבל
 // שומר על כל האינטראקטיביות: התקנה ישירה (useDirectInstall) + דיאלוגים, וכן
 // הפניית תאימות לקישורים ישנים ?tag= אל /plugins/all?tag=.
+//
+// ביצועים: useSearchParams מבודד ב-LegacyTagRedirect בתוך Suspense משלו.
+// הדף עצמו סטטי (ISR), ו-useSearchParams בזמן prerender "מחלץ" את כל גבול
+// ה-Suspense הקרוב לרינדור בצד הלקוח — כשהוא ישב ברכיב התוכן, ה-HTML הסטטי
+// הכיל רק שלד, והתוכן (שכבר הגיע מהשרת ב-payload) הופיע רק אחרי hydration.
 
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -45,24 +50,23 @@ interface PluginsStoreHomeClientProps {
   loadError: boolean
 }
 
-function PluginsStoreHomeContent({ data, loadError }: PluginsStoreHomeClientProps) {
+// תאימות לקישורים ישנים: /plugins?tag=X → /plugins/all?tag=X.
+// בזמן ההפניה — שכבת שלד מעל הדף (הניווט בפועל קורה ב-effect).
+function LegacyTagRedirect() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const legacyTag = searchParams.get('tag')
-  const [showAllFeatured, setShowAllFeatured] = useState(false)
-  const { showAlert } = useDialog() as { showAlert: (title: string, message: string) => void }
-  const { installState, install } = useDirectInstall(showAlert)
 
-  // תאימות לקישורים ישנים: /plugins?tag=X → /plugins/all?tag=X
   useEffect(() => {
     if (legacyTag) {
       router.replace(`/plugins/all?tag=${encodeURIComponent(legacyTag)}`)
     }
   }, [legacyTag, router])
 
-  // בזמן הפניית תאימות — שלד (הנווט בפועל קורה ב-effect למעלה)
-  if (legacyTag) {
-    return (
+  if (!legacyTag) return null
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-background">
       <div className="flex min-h-screen flex-col bg-background">
         <OtzariaSoftwareHeader showAuth />
         <main className="flex-1">
@@ -70,8 +74,14 @@ function PluginsStoreHomeContent({ data, loadError }: PluginsStoreHomeClientProp
         </main>
         <OtzariaSoftwareFooter />
       </div>
-    )
-  }
+    </div>
+  )
+}
+
+export default function PluginsStoreHomeClient({ data, loadError }: PluginsStoreHomeClientProps) {
+  const [showAllFeatured, setShowAllFeatured] = useState(false)
+  const { showAlert } = useDialog() as { showAlert: (title: string, message: string) => void }
+  const { installState, install } = useDirectInstall(showAlert)
 
   const featured = data?.featured || []
   const categories = data?.categories || []
@@ -84,6 +94,10 @@ function PluginsStoreHomeContent({ data, loadError }: PluginsStoreHomeClientProp
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
+      <Suspense fallback={null}>
+        <LegacyTagRedirect />
+      </Suspense>
+
       <OtzariaSoftwareHeader showAuth />
 
       <main className="flex-1">
@@ -225,10 +239,11 @@ function PluginsStoreHomeContent({ data, loadError }: PluginsStoreHomeClientProp
                       </div>
                       <h2 className="text-3xl font-bold text-on-surface mb-6">תוספים נבחרים</h2>
                       <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
-                        {visibleFeatured.map(plugin => (
+                        {visibleFeatured.map((plugin, pluginIndex) => (
                           <PluginCard
                             key={plugin.id}
                             plugin={plugin}
+                            priority={pluginIndex === 0}
                             installState={installState}
                             onInstall={install}
                           />
@@ -277,10 +292,11 @@ function PluginsStoreHomeContent({ data, loadError }: PluginsStoreHomeClientProp
 
                       {/* גלילה אופקית במובייל / גריד בדסקטופ */}
                       <div className="flex gap-6 overflow-x-auto pb-4 -mx-4 px-4 md:mx-0 md:px-0 md:pb-0 md:grid md:grid-cols-2 xl:grid-cols-3 md:overflow-visible">
-                        {category.plugins.map(plugin => (
+                        {category.plugins.map((plugin, pluginIndex) => (
                           <div key={plugin.id} className="w-[300px] shrink-0 md:w-auto">
                             <PluginCard
                               plugin={plugin}
+                              priority={featured.length === 0 && index === 0 && pluginIndex === 0}
                               installState={installState}
                               onInstall={install}
                             />
@@ -314,21 +330,5 @@ function PluginsStoreHomeContent({ data, loadError }: PluginsStoreHomeClientProp
 
       <OtzariaSoftwareFooter />
     </div>
-  )
-}
-
-export default function PluginsStoreHomeClient(props: PluginsStoreHomeClientProps) {
-  return (
-    <Suspense fallback={
-      <div className="flex min-h-screen flex-col bg-background">
-        <OtzariaSoftwareHeader showAuth />
-        <main className="flex-1">
-          <StoreHomeSkeleton />
-        </main>
-        <OtzariaSoftwareFooter />
-      </div>
-    }>
-      <PluginsStoreHomeContent {...props} />
-    </Suspense>
   )
 }

@@ -7,9 +7,22 @@
 //
 // לוגיקת הסינון עצמה חולצה ל-src/lib/pluginFilter.js כדי שתהיה ניתנת
 // לבדיקה בנפרד מהקומפוננטה (ראו src/lib/pluginFilter.test.mjs).
+//
+// ביצועים: הדף סטטי (ISR), ולכן המסננים מה-URL נקראים מ-window.location אחרי
+// hydration ולא דרך useSearchParams — useSearchParams בזמן prerender מבטל את
+// רינדור הגבול בשרת, וה-HTML הסטטי הכיל רק ספינר במקום רשימת התוספים. עכשיו
+// ה-HTML מכיל את הרשימה המלאה (מצב ברירת המחדל), וקישור עם ?q=/tag=/status=
+// מסונן מיד אחרי ה-hydration.
+//
+// כדי שקישור מסונן לא יציג קודם את כל הרשימה ואז "יקפוץ" לרשימה המסוננת (CLS):
+// - בטעינה ישירה, סקריפט inline קטן (FILTER_PENDING_SCRIPT) רץ לפני שהתוכן נצבע,
+//   ואם יש ב-URL פרמטר סינון הוא מסתיר את התוכן ומציג במקומו ספינר (כמו ה-Suspense
+//   שהיה כאן קודם) עד שהמסננים הוחלו.
+// - בניווט בתוך האתר (סקריפט שנוצר ב-React אינו רץ) — אתחול המסננים ב-
+//   useLayoutEffect, שרץ לפני הצביעה.
 
-import { useState, useEffect, useMemo, useRef, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
@@ -19,18 +32,30 @@ import PluginCard from '@/components/plugins/PluginCard'
 import PluginSearchBox from '@/components/plugins/PluginSearchBox'
 import Breadcrumbs from '@/components/plugins/Breadcrumbs'
 import { filterPlugins, extractSortedTags } from '@/lib/pluginFilter'
-import type { Plugin } from '@/components/plugins/types'
+import type { PluginCardData } from '@/components/plugins/types'
+
+// מזהה אלמנט ה-style שהסקריפט מוסיף ל-head; מוסר אחרי אתחול המסננים מה-URL.
+// style ב-head ולא attribute על <html>: ל-<html> יש props מ-React (layout.tsx),
+// ו-attribute זר עליו היה מתריע על אי-התאמה ב-hydration.
+const FILTER_PENDING_STYLE_ID = 'plugins-filter-pending'
+
+const FILTER_PENDING_SCRIPT =
+  `if(/[?&](q|tag|status)=/.test(location.search)){` +
+  `var s=document.createElement('style');s.id='${FILTER_PENDING_STYLE_ID}';` +
+  `s.textContent='#all-plugins-main{display:none}#all-plugins-pending{display:flex}';` +
+  `document.head.appendChild(s)}`
 
 interface AllPluginsClientProps {
-  plugins: Plugin[]
+  plugins: PluginCardData[]
 }
 
-function AllPluginsPageContent({ plugins }: AllPluginsClientProps) {
-  const searchParams = useSearchParams()
+export default function AllPluginsClient({ plugins }: AllPluginsClientProps) {
   const router = useRouter()
-  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') || '')
-  const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || 'all')
-  const [activeTag, setActiveTag] = useState(() => searchParams.get('tag') || 'all')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [activeTag, setActiveTag] = useState('all')
+  // האם מצב הסינון כבר אותחל מה-URL (רק בצד הלקוח, אחרי hydration)
+  const [urlStateReady, setUrlStateReady] = useState(false)
   const tagsContainerRef = useRef<HTMLDivElement>(null)
   const [showAllTags, setShowAllTags] = useState(false)
   const [tagsCollapsedHeight, setTagsCollapsedHeight] = useState(130)
@@ -40,23 +65,38 @@ function AllPluginsPageContent({ plugins }: AllPluginsClientProps) {
   const { installState, install } = useDirectInstall(showAlert)
 
   const allTags: string[] = useMemo(() => extractSortedTags(plugins), [plugins])
-  const filteredPlugins: Plugin[] = useMemo(
+  const filteredPlugins: PluginCardData[] = useMemo(
     () => filterPlugins(plugins, { searchQuery, statusFilter, activeTag }),
     [plugins, searchQuery, statusFilter, activeTag]
   )
 
+  // אתחול מצב הסינון מה-URL — קישורים שיתופיים (?q=&tag=&status=).
+  // useLayoutEffect: העדכון והרינדור המסונן קורים לפני הצביעה, כך שבניווט בתוך
+  // האתר לא נצבעת קודם הרשימה המלאה.
+  useLayoutEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    // קריאה חד-פעמית של ה-URL אחרי hydration (הדף סטטי)
+    setSearchQuery(params.get('q') || '')
+    setStatusFilter(params.get('status') || 'all')
+    setActiveTag(params.get('tag') || 'all')
+    setUrlStateReady(true)
+    document.getElementById(FILTER_PENDING_STYLE_ID)?.remove()
+  }, [])
+
   // שימור מצב הסינון ב-URL — קישורים שיתופיים (?q=&tag=&status=)
   useEffect(() => {
+    if (!urlStateReady) return
     const params = new URLSearchParams()
     if (searchQuery) params.set('q', searchQuery)
     if (activeTag !== 'all') params.set('tag', activeTag)
     if (statusFilter !== 'all') params.set('status', statusFilter)
     const next = params.toString()
-    if (next !== searchParams.toString()) {
+    const current = new URLSearchParams(window.location.search).toString()
+    if (next !== current) {
       router.replace(next ? `/plugins/all?${next}` : '/plugins/all', { scroll: false })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery, activeTag, statusFilter])
+  }, [urlStateReady, searchQuery, activeTag, statusFilter])
 
   // מדידת גובה אזור התגיות - הגבלה ל-3 שורות עם כפתור "הצג עוד"
   useEffect(() => {
@@ -79,7 +119,16 @@ function AllPluginsPageContent({ plugins }: AllPluginsClientProps) {
     <div className="flex min-h-screen flex-col bg-background">
       <OtzariaSoftwareHeader showAuth />
 
-      <main className="flex-1">
+      <script dangerouslySetInnerHTML={{ __html: FILTER_PENDING_SCRIPT }} />
+      {/* מוצג (במקום main) רק בזמן שהסקריפט למעלה מזהה פרמטר סינון ב-URL */}
+      <div id="all-plugins-pending" className="hidden min-h-screen flex-1 items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-on-surface/50 font-medium">טוען את כל התוספים...</p>
+        </div>
+      </div>
+
+      <main id="all-plugins-main" className="flex-1">
         {/* Page Header + Filters Section */}
         <section className="py-6 px-4 bg-white border-b border-neutral-100">
           <div className="container mx-auto max-w-6xl">
@@ -92,7 +141,9 @@ function AllPluginsPageContent({ plugins }: AllPluginsClientProps) {
             <div className="grid md:grid-cols-[1fr_220px_auto] gap-4 mb-4">
               <div>
                 <label className="block text-sm font-bold text-on-surface/60 mb-2">חיפוש</label>
+                {/* key: הרכבה מחדש אחרי קריאת ה-URL, כדי שתיבת החיפוש תציג את ?q= */}
                 <PluginSearchBox
+                  key={urlStateReady ? 'url' : 'initial'}
                   placeholder="שם, תיאור או תגית..."
                   defaultValue={searchQuery}
                   onSubmit={(q) => setSearchQuery(q)}
@@ -204,8 +255,9 @@ function AllPluginsPageContent({ plugins }: AllPluginsClientProps) {
               </div>
             ) : (
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredPlugins.map(plugin => (
+                {filteredPlugins.map((plugin, pluginIndex) => (
                   <PluginCard
+                    priority={pluginIndex === 0}
                     key={plugin.id}
                     plugin={plugin}
                     installState={installState}
@@ -262,24 +314,5 @@ function AllPluginsPageContent({ plugins }: AllPluginsClientProps) {
 
       <OtzariaSoftwareFooter />
     </div>
-  )
-}
-
-export default function AllPluginsClient(props: AllPluginsClientProps) {
-  return (
-    <Suspense fallback={
-      <div className="flex min-h-screen flex-col bg-background">
-        <OtzariaSoftwareHeader showAuth />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-on-surface/50 font-medium">טוען את כל התוספים...</p>
-          </div>
-        </main>
-        <OtzariaSoftwareFooter />
-      </div>
-    }>
-      <AllPluginsPageContent {...props} />
-    </Suspense>
   )
 }

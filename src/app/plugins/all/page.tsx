@@ -15,17 +15,18 @@ import dbConnect from '@/lib/db'
 import PluginModel from '@/models/Plugin'
 import { getStoreSettings } from '@/models/StoreSettings'
 import { formatPluginForPublic } from '@/lib/pluginSubmission'
+import { toPluginCardData } from '@/lib/pluginCardData'
 import { PUBLIC_PLUGIN_FILTER } from '@/lib/pluginStore'
 import { CACHE_TAGS, REVALIDATE_SECONDS } from '@/lib/cacheTags'
 import AllPluginsClient from './AllPluginsClient'
-import type { Plugin } from '@/components/plugins/types'
+import type { PluginCardData } from '@/components/plugins/types'
 
 // ליטרל מספרי בכוונה (לא REVALIDATE_SECONDS.PLUGINS_PUBLIC) — ה-segment config
 // של Next נחלץ ע"י ניתוח AST סטטי שלא תומך ב-property access על אובייקט מיובא;
 // לעדכן ידנית יחד עם REVALIDATE_SECONDS.PLUGINS_PUBLIC (ראו plugins/page.tsx).
 export const revalidate = 600
 
-async function loadAllPluginsUncached(): Promise<Plugin[]> {
+async function loadAllPluginsUncached(): Promise<PluginCardData[]> {
   await dbConnect()
 
   const [plugins, settings] = await Promise.all([
@@ -47,8 +48,12 @@ async function loadAllPluginsUncached(): Promise<Plugin[]> {
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   })
 
+  // רק שדות הכרטיס + התיאור המלא (שהחיפוש המקומי מחפש בו) — ראו src/lib/pluginCardData.js
   return plugins.map((plugin) =>
-    formatPluginForPublic(plugin, { isFeatured: featuredRank.has(plugin._id.toString()) }) as Plugin
+    toPluginCardData(
+      formatPluginForPublic(plugin, { isFeatured: featuredRank.has(plugin._id.toString()) }),
+      { includeDescription: true }
+    ) as PluginCardData
   )
 }
 
@@ -58,7 +63,7 @@ const loadAllPlugins = nextCache(loadAllPluginsUncached, ['plugins-all'], {
 })
 
 export default async function AllPluginsPage() {
-  let plugins: Plugin[] = []
+  let plugins: PluginCardData[] = []
   try {
     plugins = await loadAllPlugins()
   } catch (error) {
