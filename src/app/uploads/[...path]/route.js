@@ -19,8 +19,8 @@ const MIME_MAP = {
 
 // תיקיות שאינן מוגשות כנכס סטטי: תמונות תיוג מבנה-עמוד שייכות לקורפוס
 // ה-OCR (לא "ספרים" באתר) ומוגשות רק דרך /api/ocr-layout/[id]/image
-// למשתמשים מאומתים.
-const BLOCKED_PREFIXES = ['ocr-layout/'];
+// למשתמשים מאומתים. כך גם סריקות הגהת-העמודים (/api/page-proof/pages/[id]/image).
+const BLOCKED_PREFIXES = ['ocr-layout/', 'page-proof/'];
 
 export async function GET(request, { params }) {
   const segments = (await params).path;
