@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Header from '@/components/layout/Header'
 import Link from 'next/link'
+import IntentPrefetchLink from '@/components/ui/IntentPrefetchLink'
 import { useDialog } from '@/components/providers/DialogContext'
 import DictaUploadDialog from '@/components/dicta-tools/DictaUploadDialog'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
@@ -347,31 +348,33 @@ function DictaBooksContent() {
               </p>
             </div>
             
+            {/* קישורי עזר — prefetch רק בכוונה: ברירת המחדל הורידה כאן 15 בקשות RSC
+                ואת ה-JavaScript של שלושת היעדים בכל טעינה, במקביל לרשימת הספרים */}
             <div className="flex flex-wrap items-center gap-3 md:justify-end">
-              <Link 
+              <IntentPrefetchLink 
                 href="/docs/dicta" 
                 className="inline-flex items-center gap-2 bg-white border border-neutral-cool-200 text-neutral-cool-700 px-5 py-2.5 rounded-xl hover:bg-neutral-cool-50 transition-all font-semibold shadow-sm"
               >
                 <span className="material-symbols-outlined text-primary">help_outline</span>
                 מדריך לטיפול בספרי דיקטה
-              </Link>
+              </IntentPrefetchLink>
 
-              <Link 
+              <IntentPrefetchLink 
                 href="/library/editingtools" 
                 className="inline-flex items-center gap-2 bg-white border border-neutral-cool-200 text-neutral-cool-700 px-5 py-2.5 rounded-xl hover:bg-neutral-cool-50 transition-all font-semibold shadow-sm"
               >
                 <span className="material-symbols-outlined text-primary">construction</span>
                 כלי עריכה אופליין
-              </Link>
+              </IntentPrefetchLink>
 
               {isAdmin && (
-                <Link 
+                <IntentPrefetchLink 
                   href="/library/admin/dicta-books" 
                   className="inline-flex items-center gap-2 bg-white border border-neutral-cool-200 text-neutral-cool-700 px-5 py-2.5 rounded-xl hover:bg-neutral-cool-50 transition-all font-semibold shadow-sm"
                 >
                   <span className="material-symbols-outlined text-primary">security</span>
                   ממשק ניהול וסנכרון
-                </Link>
+                </IntentPrefetchLink>
               )}
             </div>
           </div>

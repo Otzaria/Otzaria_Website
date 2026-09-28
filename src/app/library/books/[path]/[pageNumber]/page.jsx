@@ -272,7 +272,10 @@ export default function EditPage() {
       setLoading(true)
       setError(null)
     
-      const bookRes = await fetch(`/api/book/${encodeURIComponent(bookPath)}`)
+      // מהספר רק העמוד הנוכחי (?page=) במקום כל עמודי הספר. תוכן העמוד נשלף רק
+      // אחרי שבדיקת ההרשאה שלמטה עברה (ולא במקביל): כך תוכן של ספר מוסתר או של
+      // עמוד נעול לא נשלח לדפדפן של מי שאינו מורשה, ואין בקשת 403 מיותרת.
+      const bookRes = await fetch(`/api/book/${encodeURIComponent(bookPath)}?page=${pageNumber}`)
       const bookResult = await bookRes.json()
 
       if (bookResult.success) {
@@ -1322,7 +1325,9 @@ export default function EditPage() {
     }
   };
 
-  if (loading) return <div className="text-center p-20">טוען...</div>
+  // גובה מלא כמו העורך עצמו (h-[100vh]) — אחרת הפוטר של הספרייה מופיע מתחת
+  // ל"טוען..." ונדחף בבת אחת מסך שלם למטה כשהעורך נטען (layout shift)
+  if (loading) return <div className="h-screen text-center p-20">טוען...</div>
   if (error) return <div className="text-center p-20 text-danger-500">{error}</div>
 
   return (

@@ -1,15 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import dynamic from 'next/dynamic'
 import { apiGet } from '@/lib/api-utils'
-
-// Recharts נטען רק כשיש מה להציג — כך הוא אינו חלק מה-bundle ההתחלתי של הדף
-// (כ-96KB gzip) ואינו מתחרה על הרשת עם התוכן המרכזי.
-const WeeklyProgressArea = dynamic(() => import('./WeeklyProgressArea'), {
-  ssr: false,
-  loading: () => <div className="h-full w-full" />,
-})
+// גרף SVG קטן (בלי Recharts) — מיובא ישירות; אין עוד טעם בטעינה דינמית נפרדת.
+import WeeklyProgressArea from './WeeklyProgressArea'
 
 export default function WeeklyProgressChart() {
   const [data, setData] = useState([])

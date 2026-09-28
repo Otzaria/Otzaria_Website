@@ -41,7 +41,13 @@ export async function GET(request, { params }) {
       return forbidden('אין הרשאות לצפייה בספר זה');
     }
 
-    const pages = await Page.find({ book: book._id })
+    // ?page=N — העורך (/library/books/[path]/[n]) צריך רק את העמוד שלו; בלי
+    // הפרמטר נשלחים כל העמודים (דף הספר), כבעבר. אותו מבנה תגובה בשני המקרים.
+    const pageParam = new URL(request.url).searchParams.get('page');
+    const onlyPage = pageParam !== null && /^\d+$/.test(pageParam) ? Number(pageParam) : null;
+    const pagesQuery = onlyPage === null ? { book: book._id } : { book: book._id, pageNumber: onlyPage };
+
+    const pages = await Page.find(pagesQuery)
       .sort({ pageNumber: 1 })
       .select('pageNumber status imagePath claimedBy claimedAt completedAt') 
       .populate('claimedBy', 'name email') 

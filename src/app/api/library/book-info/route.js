@@ -5,6 +5,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import BookInfo from '@/models/BookInfo'
 import BookInfoPendingChange from '@/models/BookInfoPendingChange'
 import {
+  BOOK_INFO_EDITABLE_FIELDS,
   BOOK_INFO_GENERATION_OPTIONS,
   BOOK_INFO_SUB_GENERATION_OPTIONS_BY_GENERATION
 } from '@/lib/book-info-constants'
@@ -31,7 +32,13 @@ export async function GET() {
     await connectDB()
 
     const [approvedRows, pendingRows] = await Promise.all([
-      BookInfo.find({}).sort({ bookName: 1, authorName: 1 }).lean(),
+      // רק השדות שדף /library/info מציג ועורך (ו-_id). בלי createdAt/updatedAt/
+      // __v/createdFromCsv, שנשלחו פעמיים לכל שורה (approved + effective) — כשליש
+      // מגודל התגובה, שנמשכת כולה (כ-1,200 שורות) בכל כניסה לדף.
+      BookInfo.find({})
+        .select(BOOK_INFO_EDITABLE_FIELDS.join(' '))
+        .sort({ bookName: 1, authorName: 1 })
+        .lean(),
       BookInfoPendingChange.find({})
         .populate('submittedBy', 'name')
         .sort({ updatedAt: -1 })

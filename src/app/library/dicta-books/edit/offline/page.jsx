@@ -5,7 +5,13 @@ import Link from 'next/link'
 import Button from '@/components/ui/Button'
 import dynamic from 'next/dynamic'
 
-const DictaEditorCore = dynamic(() => import('@/components/editor/DictaEditorCore'), { ssr: false })
+// עד שה-chunk של העורך נטען שומרים את המקום שלו (השורש של DictaEditorCore הוא
+// h-screen bg-neutral-50). בלי זה הדף היה ריק, הפוטר של הספרייה עלה לראש
+// המסך ונדחף למטה כשהעורך הופיע (CLS 0.67).
+const DictaEditorCore = dynamic(() => import('@/components/editor/DictaEditorCore'), {
+  ssr: false,
+  loading: () => <div className="h-screen bg-neutral-50" aria-busy="true" />,
+})
 
 export default function OfflineEditorRoute() {
   const [localContent, setLocalContent] = useState(() => {

@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import IntentPrefetchLink from '@/components/ui/IntentPrefetchLink'
 import Header from '@/components/layout/Header'
 import { useDialog } from '@/components/providers/DialogContext'
 import { canModerateLibrary, canManageLibrarySync } from '@/lib/roles'
@@ -184,8 +185,10 @@ function LibraryEditSpaceContent() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* prefetch רק בכוונה: רשת של מאות כרטיסים — ברירת המחדל שלחה בקשת RSC
+                  לכל כרטיס שנכנס לתצוגה (כ-45 בקשות בטעינת הדף במסך מחשב) */}
               {filtered.map((book) => (
-                <Link key={book._id} href={`/library/dicta-edit/${book._id}${findParam ? `?find=${encodeURIComponent(findParam)}` : ''}`}
+                <IntentPrefetchLink key={book._id} href={`/library/dicta-edit/${book._id}${findParam ? `?find=${encodeURIComponent(findParam)}` : ''}`}
                   className="group bg-white rounded-2xl border border-neutral-cool-200 p-6 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/5 transition-all flex flex-col">
                   <div className="flex justify-between items-start mb-3">
                     {book.category && (
@@ -208,7 +211,7 @@ function LibraryEditSpaceContent() {
                     <span className="material-symbols-outlined text-base">edit</span>
                     פתח לתיקון
                   </div>
-                </Link>
+                </IntentPrefetchLink>
               ))}
             </div>
           )}

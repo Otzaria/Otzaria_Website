@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import Header from '@/components/layout/Header'
 import { useDialog } from '@/components/providers/DialogContext'
 import { useRequireAuth } from '@/hooks/useRequireAuth'
@@ -92,8 +93,21 @@ export default function OcrTrainingListClient({ initialPages, loadError }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {shown.map((p) => (
                 <div key={p.id} className="glass-strong rounded-xl overflow-hidden flex flex-col">
-                  <div className="h-40 bg-neutral-100 overflow-hidden flex items-center justify-center">
-                    <img src={p.imagePath} alt={`${p.bookName} עמוד ${p.pageNumber}`} className="w-full h-full object-cover object-top" />
+                  <div className="relative h-40 bg-neutral-100 overflow-hidden flex items-center justify-center">
+                    {/* תמונה ממוזערת: imagePath הוא סריקת עמוד מלאה מ-/uploads. next/image
+                        מקטין ל-WebP לפי רוחב הכרטיס וטוען רק כרטיסים שבתצוגה —
+                        קודם כל הסריקות המלאות ירדו בבת אחת (כ-9MB ב-400 עמודים). */}
+                    {p.imagePath?.startsWith('/') ? (
+                      <Image
+                        src={p.imagePath}
+                        alt={`${p.bookName} עמוד ${p.pageNumber}`}
+                        fill
+                        sizes="(min-width: 1024px) 320px, (min-width: 640px) 50vw, 100vw"
+                        className="object-cover object-top"
+                      />
+                    ) : (
+                      <img src={p.imagePath} alt={`${p.bookName} עמוד ${p.pageNumber}`} loading="lazy" className="w-full h-full object-cover object-top" />
+                    )}
                   </div>
                   <div className="p-4 flex-1 flex flex-col gap-2">
                     <div className="font-bold text-on-surface truncate" title={p.bookName}>{p.bookName}</div>

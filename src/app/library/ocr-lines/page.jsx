@@ -75,6 +75,8 @@ const LineRow = memo(function LineRow({ line, onSave, onFlag, onOpenContext }) {
           <img
             src={`/api/ocr-lines/${line.id}/image`}
             alt="שורה לתמלול"
+            loading="lazy"
+            decoding="async"
             className="max-h-24 w-full object-contain"
             draggable={false}
           />

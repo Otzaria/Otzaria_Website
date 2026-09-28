@@ -28,7 +28,8 @@ export default function LibraryBooksPage() {
             // /api/library נשלף כאן בעבר ונשמר ב-state שאף אחד לא קרא — בקשת DB
             // ותגובה מיותרות לחלוטין. הוסרה.
             const [listRes, catsRes] = await Promise.all([
-                fetch('/api/library/list'),
+                // view=catalog: בלי editingInfo ושדות בעלים שהקטלוג לא קורא (כחצי מהמשקל)
+                fetch('/api/library/list?view=catalog'),
                 fetch('/api/admin/categories')
             ]);
 
