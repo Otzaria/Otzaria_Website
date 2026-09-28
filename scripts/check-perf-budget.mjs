@@ -28,15 +28,28 @@ const NEXT_DIR = path.join(ROOT, '.next')
 // התקציבים נקבעו כ-15% מעל המצב הנמדד בזמן הכתיבה, כדי לתפוס רגרסיה אמיתית
 // ולא גדילה טבעית. כשעוברים אותם — או שמייעלים, או שמעדכנים במודע עם הסבר.
 const PAGE_BUDGETS = [
-  { page: 'index', label: '/', gzipKB: 285, allowFramerMotion: true },
-  { page: 'library', label: '/library', gzipKB: 240, allowFramerMotion: false },
-  { page: 'about', label: '/about', gzipKB: 235, allowFramerMotion: false },
-  { page: 'privacy', label: '/privacy', gzipKB: 235, allowFramerMotion: false },
-  { page: 'docs/dicta', label: '/docs/dicta', gzipKB: 235, allowFramerMotion: false },
+  // framer-motion הוסר גם מדף הבית ומ-/faq (אפקטי CSS במקומו) — אסור בכל דף.
+  // המספרים כאן כוללים גם את ה-polyfills של nomodule (כ-30KB) שדפדפן מודרני
+  // אינו מוריד, ולכן גבוהים מה"JS gzip" שנמדד בדפדפן.
+  { page: 'index', label: '/', gzipKB: 240, allowFramerMotion: false },
+  { page: 'faq', label: '/faq', gzipKB: 240, allowFramerMotion: false },
+  { page: 'library', label: '/library', gzipKB: 238, allowFramerMotion: false },
+  { page: 'about', label: '/about', gzipKB: 236, allowFramerMotion: false },
+  { page: 'privacy', label: '/privacy', gzipKB: 236, allowFramerMotion: false },
+  { page: 'offline', label: '/offline', gzipKB: 237, allowFramerMotion: false },
+  { page: 'docs/dicta', label: '/docs/dicta', gzipKB: 236, allowFramerMotion: false },
+  // חנות התוספים: ייבוא אחד של pluginSubmission/pluginManifest מקוד לקוח מחזיר
+  // polyfills של node (zlib/stream/buffer, כ-60KB gzip) לכל דפי החנות.
+  { page: 'plugins', label: '/plugins', gzipKB: 248, allowFramerMotion: false },
+  { page: 'plugins/all', label: '/plugins/all', gzipKB: 247, allowFramerMotion: false },
+  { page: 'plugins/upload', label: '/plugins/upload', gzipKB: 245, allowFramerMotion: false },
+  // מעטפת הספרייה (Header, מונה הודעות) — נציגים של הדפים המוגנים הסטטיים.
+  { page: 'library/books', label: '/library/books', gzipKB: 246, allowFramerMotion: false },
+  { page: 'library/dashboard', label: '/library/dashboard', gzipKB: 250, allowFramerMotion: false },
 ]
 
 const ASSET_BUDGETS = [
-  { file: 'public/bg.avif', maxKB: 70 },
+  { file: 'public/bg.avif', maxKB: 35 },
   { file: 'public/bg.webp', maxKB: 145 },
   { file: 'public/logo.webp', maxKB: 15 },
   { file: 'public/logo.png', maxKB: 35 },
