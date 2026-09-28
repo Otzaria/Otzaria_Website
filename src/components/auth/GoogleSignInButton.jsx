@@ -28,15 +28,20 @@ function GoogleLogo() {
 // ידלג על ההסבר "אין לך עדיין חשבון".
 // withDivider מוסיף מפריד "או" מעל הכפתור — חלק מהרכיב כדי שלא יוצג מפריד יתום
 // כשהכפתור מוסתר.
-export default function GoogleSignInButton({ callbackUrl, loginHint, label = 'התחברות עם Google', signupIntent = false, withDivider = false, className = '' }) {
-  const [enabled, setEnabled] = useState(false)
+// serverEnabled (אופציונלי): כשרכיב שרת כבר יודע אם Google מוגדר
+// (isGoogleAuthConfigured), הכפתור מרונדר כבר ב-HTML בלי לחכות לבקשת
+// /api/auth/providers — אחרת הוא "קופץ" אחרי ה-hydration ומזיז את הטופס (CLS).
+export default function GoogleSignInButton({ callbackUrl, loginHint, label = 'התחברות עם Google', signupIntent = false, withDivider = false, className = '', serverEnabled }) {
+  const known = typeof serverEnabled === 'boolean'
+  const [enabled, setEnabled] = useState(known ? serverEnabled : false)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
+    if (known) return undefined
     let active = true
     isGoogleEnabled().then((ok) => { if (active) setEnabled(ok) })
     return () => { active = false }
-  }, [])
+  }, [known])
 
   if (!enabled) return null
 

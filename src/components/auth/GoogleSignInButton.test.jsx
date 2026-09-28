@@ -39,4 +39,19 @@ describe('GoogleSignInButton', () => {
     expect(signIn).toHaveBeenCalledWith('google', { callbackUrl: '/library/dashboard' }, { login_hint: 'a@x.com' })
     expect(btn).toBeDisabled()
   })
+
+  it('serverEnabled=true: הכפתור מרונדר מיד, בלי לפנות ל-/api/auth/providers', async () => {
+    const Button = await loadButton()
+    render(<Button withDivider callbackUrl="/x" serverEnabled />)
+    expect(screen.getByRole('button', { name: 'התחברות עם Google' })).toBeInTheDocument()
+    expect(getProviders).not.toHaveBeenCalled()
+  })
+
+  it('serverEnabled=false: לא מרנדר כלום ולא פונה לשרת', async () => {
+    const Button = await loadButton()
+    const { container } = render(<Button withDivider callbackUrl="/x" serverEnabled={false} />)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(container).toBeEmptyDOMElement()
+    expect(getProviders).not.toHaveBeenCalled()
+  })
 })
