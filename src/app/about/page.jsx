@@ -10,13 +10,18 @@ export default function AboutPage() {
         {/* Hero Section */}
         <section className="relative py-16 px-4 overflow-hidden bg-gradient-to-bl from-primary-container via-background to-secondary-container">
           <div className="container mx-auto max-w-4xl relative z-10">
-            <div className="text-center animate-enter-up">
+            {/* ה-hero (והלוגו שבו — אלמנט ה-LCP) בלי אנימציית כניסה: היא דחתה את
+                ה-LCP בכ-0.6 שניות. next/image טוען ברירת מחדל ב-lazy, ולכן eager +
+                עדיפות גבוהה ללוגו שנמצא תמיד בראש הדף. */}
+            <div className="text-center">
               <div className="mb-6 flex justify-center">
                 <Image
                   src="/logo.png"
                   alt="לוגו אוצריא"
                   width={100}
                   height={100}
+                  loading="eager"
+                  fetchPriority="high"
                   className="drop-shadow-2xl"
                 />
               </div>

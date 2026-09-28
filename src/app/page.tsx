@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import IntentPrefetchLink from '@/components/ui/IntentPrefetchLink'
 import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 import FeaturesSection from '@/components/home/FeaturesSection'
@@ -21,10 +22,11 @@ export default function Home() {
             <div className="absolute inset-0 bg-gradient-to-bl from-primary/10 via-background to-secondary/10 opacity-50"></div>
 
             <div className="container mx-auto relative z-10 text-center max-w-4xl">
-                {/* אנימציית CSS ולא framer-motion: כך הלוגו אינו מגיע מהשרת עם
-                    transform:scale(0) ונשאר בלתי נראה עד שה-JavaScript עולה. */}
-                <div className="mb-8 flex justify-center animate-enter-pop">
-                    <img src="/logo.webp" alt="לוגו אוצריא" width={128} height={128} className="w-32 h-32 drop-shadow-2xl" />
+                {/* הלוגו הוא אלמנט ה-LCP של הדף, ולכן בלי אנימציית כניסה: animate-enter-pop
+                    (0.7 שניות מ-opacity:0/scale(0)) דחה את ה-LCP בכ-0.7 שניות אחרי הציור
+                    הראשון. fetchPriority גבוה — כדי שלא ימתין מאחורי שאר המשאבים. */}
+                <div className="mb-8 flex justify-center">
+                    <img src="/logo.webp" alt="לוגו אוצריא" width={128} height={128} fetchPriority="high" className="w-32 h-32 drop-shadow-2xl" />
                 </div>
 
                 <h1 className="text-5xl md:text-6xl font-bold mb-6 font-frank">
@@ -54,9 +56,11 @@ export default function Home() {
                             <span>אודות הספרייה</span>
                         </Link>
                     </div>
-                    <Link href="/library" className="px-4 py-4 bg-white border-2 border-primary text-primary rounded-lg text-sm font-medium hover:bg-primary/5 transition-all">
+                    {/* prefetch רק בכוונה (ריחוף/פוקוס/נגיעה): ברירת המחדל הורידה את ה-RSC
+                        וה-JS של /library בכל טעינה של דף הבית (5 בקשות, כ-27KB) */}
+                    <IntentPrefetchLink href="/library" className="px-4 py-4 bg-white border-2 border-primary text-primary rounded-lg text-sm font-medium hover:bg-primary/5 transition-all">
                         לפרוייקט ספריית אוצריא
-                    </Link>
+                    </IntentPrefetchLink>
                 </div>
             </div>
         </section>

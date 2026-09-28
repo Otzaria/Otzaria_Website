@@ -1,9 +1,6 @@
-'use client'
-
-import { motion } from 'framer-motion'
-
-// תוכן סטטי, אך הרינדור עצמו (motion.div/motion.span עם whileHover) דורש
-// hooks מ-framer-motion שלא ניתן להריץ ברכיב שרת — לכן החלק הזה נשאר client.
+// Server Component: תוכן סטטי לגמרי, בלי JavaScript בדפדפן. אפקטי הריחוף
+// (הרמה והגדלה של הכרטיס, תנועת האייקון) היו whileHover של framer-motion — מה
+// שגרר כ-37KB gzip של framer-motion לדף הבית רק בשבילם. כעת הם מעברי CSS.
 const features = [
   {
     icon: 'auto_stories',
@@ -64,30 +61,26 @@ export default function FeaturesSection() {
             החלק הזה נראה רק אחרי hydration. ההשהיה המדורגת עברה ל-CSS. */}
         <div className="flex flex-wrap justify-center gap-6">
           {features.map((feature, index) => (
-            <motion.div
+            <div
               key={index}
               style={{ animationDelay: `${index * 0.1}s` }}
-              whileHover={{
-                scale: 1.05,
-                y: -8,
-                transition: { type: "spring", stiffness: 300 }
-              }}
-              className="glass p-6 rounded-xl shadow-lg hover:shadow-2xl transition-shadow cursor-pointer group w-full md:w-[calc(50%-12px)] lg:w-[calc(33.33%-16px)] animate-enter-up"
+              className="glass p-6 rounded-xl shadow-lg hover:shadow-2xl transition-[box-shadow,translate,scale] duration-300 ease-out hover:-translate-y-2 hover:scale-105 cursor-pointer group w-full md:w-[calc(50%-12px)] lg:w-[calc(33.33%-16px)] animate-enter-up"
             >
-              <motion.span
-                className="material-symbols-outlined text-6xl text-primary mb-4 block"
-                whileHover={{ rotate: [0, -10, 10, -10, 0], scale: 1.1 }}
-                transition={{ duration: 0.5 }}
-              >
+              {/* w-fit כדי שהסיבוב וההגדלה יהיו סביב מרכז הגליף. mr-auto (פיזי, לא
+                  me-auto: ל-Material Symbols יש direction:ltr, כך שהשוליים הלוגיים
+                  מתהפכים) מצמיד אותו לשמאל הכרטיס כמו ה-block ברוחב מלא שהיה קודם.
+                  הריחוף על האייקון עצמו (לא על כל הכרטיס): נענוע חד-פעמי שחוזר
+                  לזקוף, כמו ה-whileHover של framer-motion שהיה כאן. */}
+              <span className="material-symbols-outlined text-6xl text-primary mb-4 block w-fit mr-auto transition-[scale] duration-500 hover:scale-110 motion-safe:hover:animate-[icon-wiggle_0.5s_ease-in-out]">
                 {feature.icon}
-              </motion.span>
+              </span>
               <h3 className="text-xl font-bold mb-2 text-on-surface group-hover:text-primary transition-colors">
                 {feature.title}
               </h3>
               <p className="text-on-surface/70">
                 {feature.description}
               </p>
-            </motion.div>
+            </div>
           ))}
         </div>
       </div>

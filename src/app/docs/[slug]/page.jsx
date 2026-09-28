@@ -60,7 +60,7 @@ export default async function WikiGuidePage({ params }) {
         <div className="container mx-auto max-w-7xl">
           {/* Breadcrumb */}
           <div className="flex items-center gap-2 text-sm text-on-surface/60 mb-6">
-            <Link href="/" className="hover:text-primary">בית</Link>
+            <Link href="/" prefetch={false} className="hover:text-primary">בית</Link>
             <span>›</span>
             <Link href="/docs" className="hover:text-primary">מדריך למשתמש</Link>
             <span>›</span>
@@ -70,7 +70,10 @@ export default async function WikiGuidePage({ params }) {
           <div className="grid lg:grid-cols-4 gap-8">
             {/* Sidebar */}
             <aside className="lg:col-span-1 space-y-6">
-              {/* ניווט בין דפי המדריך — נבנה דינמית מהוויקי */}
+              {/* ניווט בין דפי המדריך — נבנה דינמית מהוויקי. prefetch={false}: הרשימה
+                  מציגה את כל דפי המדריך, וברירת המחדל שלפה מיד עם הטעינה את כולם
+                  (כ-70 בקשות RSC, כ-190KB) — גם מי שקורא דף אחד בלבד. הדפים עצמם
+                  סטטיים (ISR) ו-loading.jsx מציג fallback מיידי, כך שהמעבר נשאר מהיר. */}
               <div className="glass-strong rounded-xl p-5 sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto">
                 <h3 className="text-lg font-bold text-primary-dark mb-3">מדריך למשתמש</h3>
                 <nav className="space-y-1 mb-5">
@@ -78,6 +81,7 @@ export default async function WikiGuidePage({ params }) {
                     <Link
                       key={item.slug}
                       href={`/docs/${item.slug}`}
+                      prefetch={false}
                       className={`flex items-center gap-2 p-2 rounded-lg text-sm transition-colors ${
                         item.slug === slug
                           ? 'bg-primary/10 text-primary font-bold'

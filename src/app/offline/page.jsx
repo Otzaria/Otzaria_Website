@@ -66,7 +66,9 @@ export default function OfflineUpdatePage() {
       <main className="flex-1">
         {/* Hero */}
         <section className="relative py-16 px-4 overflow-hidden bg-gradient-to-bl from-primary-container via-background to-secondary-container">
-          <div className="container mx-auto max-w-4xl relative z-10 text-center animate-enter-up">
+          {/* בלי אנימציית כניסה: טקסט ה-hero הוא אלמנט ה-LCP, והאנימציה דחתה אותו
+              בכ-0.6 שניות אחרי הציור הראשון */}
+          <div className="container mx-auto max-w-4xl relative z-10 text-center">
             <div className="mb-6 flex justify-center">
               <div className="w-24 h-24 rounded-2xl bg-primary/10 flex items-center justify-center shadow-lg">
                 <span className="material-symbols-outlined text-6xl text-primary">cloud_off</span>
