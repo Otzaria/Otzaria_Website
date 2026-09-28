@@ -24,6 +24,16 @@
     20%, 40%, 60%, 80% { transform: translateX(5px); }
   }
 
+  /* נענוע חד-פעמי של אייקון בריחוף (כרטיסי היכולות בדף הבית) — מקביל ל-
+     rotate: [0, -10, 10, -10, 0] של framer-motion. מאפיין rotate נפרד ולא
+     transform, כדי לא לדרוס את scale של הריחוף. */
+  @keyframes icon-wiggle {
+    0%, 100% { rotate: 0deg; }
+    25% { rotate: -10deg; }
+    50% { rotate: 10deg; }
+    75% { rotate: -10deg; }
+  }
+
   .animate-float {
     animation: float 6s ease-in-out infinite;
   }

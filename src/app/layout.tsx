@@ -45,7 +45,9 @@ export default function RootLayout({
                   {children}
                 </ReminderGuard>
                 
-                <VersionNotice />
+                {/* חותם הדפלוי מוטמע בזמן build (next.config.ts) — חוסך בקשת
+                    version.json בכל טעינת דף */}
+                <VersionNotice deployVersion={process.env.DEPLOY_VERSION} />
               </LoadingProvider>
             </DialogProvider>
           </SessionProvider>
