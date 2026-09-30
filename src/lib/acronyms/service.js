@@ -7,20 +7,31 @@ import { listBooks } from './dump.js'
 import { validateChangeSet } from './changes.js'
 import { ACRONYMS_REPO, branchName, createAcronymsClient, loadForkState, publishChangeSet, refreshChangeSet } from './fork.js'
 
-const SNAPSHOT_TTL_MS = 30_000
+// ה-cron מנקה את המטמון כש-master זז, ולכן אין צורך בתוקף קצר
+const SNAPSHOT_TTL_MS = 10 * 60_000
 // סל שנשאר 'publishing' זמן רב נפל באמצע הפרסום (קריסה/timeout); ה-cron בודק אם ה-PR נפתח.
 const STALE_PUBLISHING_MS = 10 * 60_000
 
 export class AcronymsInputError extends Error {}
 
-let snapshot = null // { at, headSha, books }
+// על globalThis: ב-Next ה-route של הדף וה-route של ה-cron עשויים לקבל עותקים נפרדים של המודול
+const cache = (globalThis.__acronymsForkSnapshot ??= { snapshot: null, inflight: null })
 
-/** ספרי הפורק וכינוייהם, לכל היותר 30 שניות אחרי master. */
+/** ספרי הפורק וכינוייהם; בקשות שמגיעות יחד אחרי שהמטמון פג ממתינות לאותה משיכה מ-GitHub. */
 export async function getForkSnapshot(client = createAcronymsClient()) {
-  if (snapshot && Date.now() - snapshot.at < SNAPSHOT_TTL_MS) return snapshot
-  const base = await loadForkState(client)
-  snapshot = snapshot?.headSha === base.headSha ? { ...snapshot, at: Date.now() } : { at: Date.now(), headSha: base.headSha, books: listBooks(base.state) }
-  return snapshot
+  if (cache.snapshot && Date.now() - cache.snapshot.at < SNAPSHOT_TTL_MS) return cache.snapshot
+  cache.inflight ??= loadForkState(client)
+    .then((base) => rememberSnapshot(base))
+    .finally(() => {
+      cache.inflight = null
+    })
+  return cache.inflight
+}
+
+function rememberSnapshot(base) {
+  const prev = cache.snapshot
+  cache.snapshot = prev?.headSha === base.headSha ? { ...prev, at: Date.now() } : { at: Date.now(), headSha: base.headSha, books: listBooks(base.state) }
+  return cache.snapshot
 }
 
 /** סלים פתוחים, לתצוגת "ממתין ב-PR" ליד כל ספר. */
@@ -79,9 +90,10 @@ export async function syncChangeSets(client = createAcronymsClient(), now = Date
     if (patch.status === 'failed') summary.failed++
   }
 
+  const base = await loadForkState(client)
+  if (cache.snapshot && cache.snapshot.headSha !== base.headSha) rememberSnapshot(base)
   const open = await AcronymChangeSet.find({ status: 'open' }).sort({ createdAt: 1 })
   if (open.length === 0) return summary
-  const base = await loadForkState(client)
   for (const doc of open) {
     summary.checked++
     try {

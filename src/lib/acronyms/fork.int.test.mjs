@@ -83,3 +83,17 @@ test('merged and closed PRs are reported as such', async () => {
   assert.equal((await refreshChangeSet(client, { ...a, ops: [] }, base)).status, 'merged')
   assert.equal((await refreshChangeSet(client, { ...b, ops: [] }, base)).status, 'closed')
 })
+
+test('concurrent page loads after the cache expires share one GitHub fetch', async () => {
+  const { getForkSnapshot } = await import('./service.js')
+  globalThis.__acronymsForkSnapshot.snapshot = null
+  let calls = 0
+  const counting = createRepoClient({ repo: ACRONYMS_REPO, token: 't', fetchImpl: (...a) => (calls++, gh.fetch(...a)) })
+  const [a, b, c] = await Promise.all([getForkSnapshot(counting), getForkSnapshot(counting), getForkSnapshot(counting)])
+  assert.equal(a, b)
+  assert.equal(b, c)
+  const perLoad = calls
+  await getForkSnapshot(counting)
+  assert.equal(calls, perLoad) // בתוך התוקף: בלי פנייה ל-GitHub
+  assert.deepEqual(a.books.find((x) => x.title === 'בראשית').aliases, ["בר'"])
+})
