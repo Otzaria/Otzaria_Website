@@ -12,10 +12,12 @@ import BooksTable from '@/components/pageProof/admin/BooksTable'
 import SubmissionsQueue from '@/components/pageProof/admin/SubmissionsQueue'
 import ReviewModal from '@/components/pageProof/admin/ReviewModal'
 import AdminBookPages from '@/components/pageProof/admin/AdminBookPages'
+import TokensCard from '@/components/pageProof/admin/TokensCard'
 
 // ניהול הגהת-העמודים: ייבוא חבילות מתוכנת-הספר של פרויקט ה-OCR, מעקב
 // התקדמות לכל ספר, רשת-העמודים של ספר (מצב כל עמוד, פתוח/סגור למתנדבים,
-// שחרור תפיסות), תור אישור ההגשות, והורדת תיקונים.json לבעל הפרויקט.
+// שחרור תפיסות), תור אישור ההגשות, הורדת תיקונים.json לבעל הפרויקט, ומפתחות-גישה
+// לתוכנת-הספר (עבודה מולה בלי דפדפן).
 
 export default function PageProofAdmin() {
   const { data: session, status } = useSession()
@@ -190,6 +192,8 @@ export default function PageProofAdmin() {
       />
 
       {reviewId && <ReviewModal id={reviewId} onClose={closeReview} onDone={onReviewed} onPageChanged={loadBooks} />}
+
+      <TokensCard />
     </div>
   )
 }
