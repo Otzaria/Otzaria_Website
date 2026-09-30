@@ -5,8 +5,8 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vites
 // מפתח-גישה של תוכנת-הספר בראוטי הניהול של הגהת-העמודים — מי מקבל מפתח ובאיזו הרשאה:
 //   read   — GET: רשימת-הספרים, רשת-העמודים, תיקונים, ההגשות (תור / לפי עמוד / אחת)
 //   review — PATCH הגשה (אישור/דחייה/שחרור ממתנה), שחרור תפיסות, ו-fixes?mark=1
-//   import — POST ייבוא
-// ושום ראוט אחר: השהיה/מחיקת ספר, "פתוח למתנדבים" וניהול המפתחות — 401 גם עם מפתח תקף.
+//   import — פרסום להגהה: POST ייבוא, PATCH "פתוח למתנדבים" ו-PATCH השהיית ספר/חידושו
+// ושום ראוט אחר: מחיקת ספר וניהול המפתחות — 401 גם עם מפתח תקף בכל ההרשאות.
 // בלי מפתח — ה-session כמו עד היום.
 
 const { getServerSessionMock } = vi.hoisted(() => ({ getServerSessionMock: vi.fn() }))
@@ -82,13 +82,13 @@ const WIRED = () => [
   ['POST שחרור תפיסות', 'review', (s) => releasePOST(at(`/books/${GID}/release`, { secret: s, method: 'POST', json: { scope: 'expired' } }), p({ gid: GID }))],
   ['GET תיקונים עם mark=1', 'review', (s) => fixesGET(at(`/books/${GID}/fixes?mark=1`, { secret: s }), p({ gid: GID }))],
   ['POST ייבוא (בלי קובץ ← 400)', 'import', (s) => importPOST(at('/import', { secret: s, method: 'POST', body: new FormData() }))],
+  ['PATCH פתוח למתנדבים (טווח הפוך ← 400)', 'import', (s) => pagesPATCH(at(`/books/${GID}/pages`, { secret: s, method: 'PATCH', json: { volunteer: true, from: 9, to: 2 } }), p({ gid: GID }))],
+  ['PATCH השהיית ספר (מצב לא מוכר ← 400)', 'import', (s) => bookPATCH(at(`/books/${GID}`, { secret: s, method: 'PATCH', json: { status: 'deleted' } }), p({ gid: GID }))],
 ]
 
 // ראוטים שאינם מקבלים מפתח
 const UNWIRED = () => [
-  ['PATCH השהיית ספר', () => bookPATCH(at(`/books/${GID}`, { secret: keys.all, method: 'PATCH', json: { status: 'paused' } }), p({ gid: GID }))],
   ['DELETE מחיקת ספר', () => bookDELETE(at(`/books/${GID}`, { secret: keys.all, method: 'DELETE' }), p({ gid: GID }))],
-  ['PATCH פתוח למתנדבים', () => pagesPATCH(at(`/books/${GID}/pages`, { secret: keys.all, method: 'PATCH', json: { volunteer: false } }), p({ gid: GID }))],
   ['GET מפתחות', () => tokensGET(at('/tokens', { secret: keys.all }))],
   ['POST מפתח חדש', () => tokensPOST(at('/tokens', { secret: keys.all, method: 'POST', json: { name: 'x' } }))],
   ['DELETE ביטול מפתח', () => tokenDELETE(at(`/tokens/${ids.anyToken}`, { secret: keys.all, method: 'DELETE' }), p({ id: ids.anyToken }))],
@@ -179,6 +179,46 @@ describe('ראוטים מחווטים — ההרשאה הנדרשת בלבד', (
   })
 })
 
+describe('import — פרסום להגהה: "פתוח למתנדבים" והשהיית ספר', () => {
+  it('מפתח import פותח וסוגר עמודים ומשהה/מחדש את הספר — במסד', async () => {
+    // "פתח רק את עמוד 1 וסגור את כל השאר"
+    let res = await pagesPATCH(at(`/books/${GID}/pages`, { secret: keys.import, method: 'PATCH', json: { volunteer: true, from: 1, to: 1, others: false } }), p({ gid: GID }))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ success: true, changed: 1, open: 1, closed: 1 })
+    const open = async () => (await PageProofPage.find({ gid: GID }, { page: 1, volunteer: 1 }).sort({ page: 1 }).lean()).map((x) => [x.page, x.volunteer !== false])
+    expect(await open()).toEqual([
+      [1, true],
+      [2, false],
+    ])
+    // ושוב פתוח — כל הספר
+    res = await pagesPATCH(at(`/books/${GID}/pages`, { secret: keys.import, method: 'PATCH', json: { volunteer: true } }), p({ gid: GID }))
+    expect(await res.json()).toEqual({ success: true, changed: 1, open: 2, closed: 0 })
+    expect(await open()).toEqual([
+      [1, true],
+      [2, true],
+    ])
+
+    res = await bookPATCH(at(`/books/${GID}`, { secret: keys.import, method: 'PATCH', json: { status: 'paused' } }), p({ gid: GID }))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ success: true, status: 'paused' })
+    expect((await PageProofBook.findOne({ gid: GID }).lean()).status).toBe('paused')
+    res = await bookPATCH(at(`/books/${GID}`, { secret: keys.import, method: 'PATCH', json: { status: 'active' } }), p({ gid: GID }))
+    expect(await res.json()).toEqual({ success: true, status: 'active' })
+    expect((await PageProofBook.findOne({ gid: GID }).lean()).status).toBe('active')
+  })
+
+  it('מפתח בלי import (read / review) — 403 token_scope, ושום דבר לא משתנה', async () => {
+    for (const k of ['read', 'review']) {
+      const a = await pagesPATCH(at(`/books/${GID}/pages`, { secret: keys[k], method: 'PATCH', json: { volunteer: false } }), p({ gid: GID }))
+      expect([a.status, (await a.json()).code], k).toEqual([403, 'token_scope'])
+      const b = await bookPATCH(at(`/books/${GID}`, { secret: keys[k], method: 'PATCH', json: { status: 'paused' } }), p({ gid: GID }))
+      expect([b.status, (await b.json()).code], k).toEqual([403, 'token_scope'])
+    }
+    expect(await PageProofPage.countDocuments({ gid: GID, volunteer: false })).toBe(0)
+    expect((await PageProofBook.findOne({ gid: GID }).lean()).status).toBe('active')
+  })
+})
+
 describe('ראוטים שאינם מקבלים מפתח', () => {
   it('401 גם עם מפתח תקף בכל ההרשאות — ושום דבר לא משתנה', async () => {
     for (const [name, call] of UNWIRED()) {
@@ -186,9 +226,24 @@ describe('ראוטים שאינם מקבלים מפתח', () => {
       expect(res.status, name).toBe(401)
     }
     expect(await PageProofBook.countDocuments({ gid: GID, status: 'active' })).toBe(1)
-    expect(await PageProofPage.countDocuments({ volunteer: false })).toBe(0)
+    expect(await PageProofPage.countDocuments({ gid: GID })).toBe(2)
+    expect(await PageProofSubmission.countDocuments({ gid: GID })).toBe(2)
     expect(await PageProofToken.countDocuments({ revokedAt: { $ne: null } })).toBe(0)
     expect(await PageProofToken.countDocuments()).toBe(4)
+  })
+
+  it('מחיקת ספר — 401 בכל מפתח, גם import וגם כל ההרשאות; המפתח אינו נקרא כלל, והספר, עמודיו וההגשות במקומם', async () => {
+    for (const k of ['read', 'review', 'import', 'all']) {
+      const res = await bookDELETE(at(`/books/${GID}`, { secret: keys[k], method: 'DELETE' }), p({ gid: GID }))
+      expect(res.status, k).toBe(401)
+      // התשובה הרגילה של "אין session" — לא token_*: הראוט אינו בודק מפתח
+      expect((await res.json()).code, k).toBeUndefined()
+    }
+    expect(await PageProofBook.countDocuments({ gid: GID })).toBe(1)
+    expect(await PageProofPage.countDocuments({ gid: GID })).toBe(2)
+    expect(await PageProofSubmission.countDocuments({ gid: GID })).toBe(2)
+    // אף מפתח לא "שומש" (lastUsedAt מתעדכן רק כשמפתח עובר את השער)
+    expect(await PageProofToken.countDocuments({ lastUsedAt: { $ne: null } })).toBe(0)
   })
 })
 

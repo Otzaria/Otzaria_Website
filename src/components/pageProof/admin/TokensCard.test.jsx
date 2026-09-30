@@ -82,6 +82,17 @@ describe('TokensCard — רשימה', () => {
     render(<TokensCard />)
     expect(await screen.findByText('אין מפתחות')).toBeInTheDocument()
   })
+
+  it('ההרשאות מוסברות: "ייבוא" כולל פתיחה וסגירה של עמודים למתנדבים והשהיית ספר; מחיקת ספרים — לא במפתח', async () => {
+    mockServer()
+    render(<TokensCard />)
+    await table()
+    const importLabel = screen.getByLabelText(/^ייבוא —/).closest('label')
+    expect(importLabel).toHaveTextContent('חבילות-עמודים')
+    expect(importLabel).toHaveTextContent('פתיחה וסגירה של עמודים למתנדבים')
+    expect(importLabel).toHaveTextContent('השהיית ספר')
+    expect(screen.getByTestId('tokens-card')).toHaveTextContent('לא מחיקת ספרים')
+  })
 })
 
 describe('TokensCard — יצירה', () => {
@@ -94,7 +105,7 @@ describe('TokensCard — יצירה', () => {
 
     fireEvent.change(screen.getByLabelText('שם המפתח'), { target: { value: 'המחשב בבית' } })
     fireEvent.change(screen.getByLabelText('תוקף (ימים)'), { target: { value: '30' } })
-    fireEvent.click(screen.getByLabelText(/^ייבוא חבילות-עמודים/))
+    fireEvent.click(screen.getByLabelText(/^ייבוא —/))
     fireEvent.click(screen.getByRole('button', { name: /צור מפתח/ }))
 
     const reveal = await screen.findByTestId('token-reveal')
@@ -138,7 +149,7 @@ describe('TokensCard — יצירה', () => {
     expect(screen.getByText(/בין 1 ל-365/)).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('תוקף (ימים)'), { target: { value: '180' } })
     expect(button).toBeEnabled()
-    for (const label of [/^קריאה/, /^אישור ודחייה/, /^ייבוא חבילות-עמודים/]) fireEvent.click(screen.getByLabelText(label))
+    for (const label of [/^קריאה/, /^אישור ודחייה/, /^ייבוא —/]) fireEvent.click(screen.getByLabelText(label))
     expect(button).toBeDisabled()
     expect(screen.getByText('יש לבחור לפחות הרשאה אחת')).toBeInTheDocument()
     fireEvent.click(screen.getByLabelText(/^קריאה/))

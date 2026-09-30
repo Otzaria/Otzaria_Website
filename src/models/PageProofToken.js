@@ -2,9 +2,10 @@ import mongoose from 'mongoose';
 // נתיב יחסי (לא '@/') — כדי שהמודל ייטען גם בבדיקות node:test
 import { SCOPES, MAX_NAME, PREFIX_LEN } from '../lib/pageProof/tokenRules.js';
 
-// מפתח-גישה של מנהל OCR לתוכנת-הספר (lib/pageProof/tokenRules.js): מאפשר לה לקרוא, לאשר/לדחות
-// ולייבא בהגהת-העמודים בלי דפדפן — ורק שם (lib/pageProof/tokenAuth.js). המפתח עצמו מוצג פעם
-// אחת ביצירה ואינו נשמר: רק ה-SHA-256 שלו (hash) ו-8 התווים הראשונים (prefix) לזיהוי ברשימה.
+// מפתח-גישה של מנהל OCR לתוכנת-הספר (lib/pageProof/tokenRules.js): מאפשר לה לקרוא, לאשר/לדחות,
+// לייבא ולפתוח/לסגור עמודים למתנדבים בהגהת-העמודים בלי דפדפן — ורק שם (lib/pageProof/tokenAuth.js).
+// המפתח עצמו מוצג פעם אחת ביצירה ואינו נשמר: רק ה-SHA-256 שלו (hash) ו-8 התווים הראשונים (prefix)
+// לזיהוי ברשימה.
 // ביטול (revokedAt) חל מיד — כל בקשה קוראת את המפתח מהמסד. המפתח פועל כל עוד המשתמש
 // שיצר אותו הוא עדיין מנהל OCR (נבדק בכל שימוש). רשומות שבוטלו או פגו נשמרות לתיעוד.
 const PageProofTokenSchema = new mongoose.Schema(

@@ -35,6 +35,9 @@ describe('proxy — מפתח-גישה של תוכנת-הספר', () => {
       '/api/admin/page-proof/submissions/64b7f0c2a1b2c3d4e5f60001',
       '/api/admin/page-proof/books/gAbc12345/fixes',
       '/api/admin/page-proof/books/gAbc12345/submissions',
+      '/api/admin/page-proof/books/gAbc12345/pages',
+      // PATCH (השהיה) מקבל מפתח; DELETE באותו נתיב עונה 401 בראוט עצמו
+      '/api/admin/page-proof/books/gAbc12345',
       '/api/admin/page-proof/import',
     ]) {
       expect(passed(await call(path, `Bearer ${TOKEN}`)), path).toBe(true)

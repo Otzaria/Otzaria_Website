@@ -7,6 +7,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   SCOPES,
+  SCOPE_LABELS,
+  SCOPE_SHORT,
   TOKEN_PREFIX,
   TOKEN_RE,
   MAX_DAYS,
@@ -60,6 +62,9 @@ test('acceptsTokenPath: נתיבי הניהול של הגהת-העמודים —
     '/api/admin/page-proof/submissions',
     '/api/admin/page-proof/submissions/64b7f0c2a1b2c3d4e5f60001',
     '/api/admin/page-proof/books/abcdefgh12/fixes',
+    '/api/admin/page-proof/books/abcdefgh12/pages',
+    // PATCH (השהיה) מקבל מפתח; DELETE באותו נתיב — לא: הראוט מחליט לכל שיטה
+    '/api/admin/page-proof/books/abcdefgh12',
     '/api/admin/page-proof/import',
   ]) {
     assert.ok(acceptsTokenPath(p), p);
@@ -88,6 +93,16 @@ test('proxyLetsBearerThrough: רק Bearer ppt_… ורק לנתיב שמקבל �
   assert.equal(proxyLetsBearerThrough('/api/admin/page-proof', 'Bearer eyJhbGciOi.jwt'), false);
   assert.equal(proxyLetsBearerThrough('/api/admin/page-proof', null), false);
   assert.equal(proxyLetsBearerThrough('/api/admin/page-proof', 'Bearer '), false);
+});
+
+test('SCOPE_LABELS: לכל הרשאה תיאור שפותח בשם הקצר שלה — הטופס והרשימה באותן מילים', () => {
+  for (const s of SCOPES) {
+    assert.ok(SCOPE_SHORT[s], s);
+    assert.ok(SCOPE_LABELS[s].startsWith(`${SCOPE_SHORT[s]} — `), s);
+  }
+  // "ייבוא" = פרסום להגהה: גם פתיחה/סגירה של עמודים למתנדבים והשהיית ספר
+  assert.match(SCOPE_LABELS.import, /פתיחה וסגירה של עמודים למתנדבים/);
+  assert.match(SCOPE_LABELS.import, /השהיית ספר/);
 });
 
 test('normalizeScopes: תת-קבוצה בסדר קבוע, בלי כפילויות; ריקה/לא-מוכרת/לא-מערך — שגיאה', () => {
