@@ -27,12 +27,24 @@ export const FURNITURE_STREAMS = ['header', 'footer', 'sep'];
 
 const CUSTOM_STREAM_RE = /^s_[A-Za-z0-9_]{1,40}$/;
 
-// בדיקה תחבירית בלבד, כמו is_stream בצד שלהם
+// בדיקה תחבירית בלבד, כמו is_stream בצד שלהם: אחד המובנים (כולל ארבעת
+// זרמי-הכותרת שברשימה), או זרם-ספר s_… עם או בלי _heading. אין כותרת
+// לשוליים/לריהוט (margin_heading, header_heading…) — שם הם נדחים.
 export function isStreamKey(k) {
   if (typeof k !== 'string' || !k) return false;
   if (Object.hasOwn(BUILTIN_STREAMS, k)) return true;
   const base = k.endsWith('_heading') ? k.slice(0, -'_heading'.length) : k;
-  return Object.hasOwn(BUILTIN_STREAMS, base) || CUSTOM_STREAM_RE.test(base);
+  return CUSTOM_STREAM_RE.test(base);
+}
+
+// כמו _keep_heading אצלם (core/page/frames.py): שורת-כותרת (…_heading) שנכנסת
+// לזרם אחר — במסגרת או בבחירה ידנית — נשארת כותרת של הזרם החדש, אם יש לו
+// וריאנט-כותרת (אין לשוליים ולריהוט). זרם-היעד שכבר כותרת — נשאר כמות-שהוא
+// (אצלם s_x_heading היה נהיה s_x_heading_heading, כי s_ מתיר קו-תחתון).
+export function keepHeading(newStream, oldStream) {
+  if (typeof newStream !== 'string' || newStream.endsWith('_heading')) return newStream;
+  const heading = `${newStream}_heading`;
+  return typeof oldStream === 'string' && oldStream.endsWith('_heading') && isStreamKey(heading) ? heading : newStream;
 }
 
 export const PARA_STYLES = {
@@ -123,6 +135,10 @@ export const OP_KINDS = {
   line_split: { he: 'פיצול שורה', ids: true, contract: false },
   line_merge: { he: 'איחוד שורות', ids: true, contract: false },
   line_add: { he: 'הוספת שורה', ids: false, contract: false },
+  // פסקה שמתחילה באמצע שורה: value = {word, on} (מילה 0 = para_start)
+  para_break: { he: 'פסקה באמצע שורה', ids: true, contract: false },
+  // "החיתוך בעמוד נבדק ותקין" — אות-אימון לחיתוך השורות; value = true
+  cut_ok: { he: 'החיתוך תקין', ids: false, contract: false },
 };
 
 // צבע לזרם: מהעמוד (streams/stream_vocab), ואחרת מהמובנים, ואחרת אפור
@@ -140,6 +156,47 @@ export function streamInfo(doc, key) {
   };
 }
 
+// שם הזרם בעברית, גם לזרם-כותרת: "כותרת", "כותרת הערות" (מאוצר-המילים), ולזרם שהספר
+// נתן לו שם משלו — "כותרת <השם>". לתוויות-המסגרות ולרשימת-השינויים
+export function streamName(doc, key) {
+  const s = streamInfo(doc, key);
+  if (!s.heading) return s.he;
+  const builtin = BUILTIN_STREAMS[`${s.key}_heading`];
+  return builtin && (!BUILTIN_STREAMS[s.key] || BUILTIN_STREAMS[s.key].he === s.he) ? builtin.he : `כותרת ${s.he}`;
+}
+
 export function isFurnitureStream(key) {
   return FURNITURE_STREAMS.includes(String(key || '').replace(/_heading$/, ''));
+}
+
+// סדר זרמי-התוכן בתפריטים (כמו לשוניות-הזרמים); זרמי-הספר (s_…) — אחריהם
+const CONTENT_ORDER = ['main', 'notes', 'notes2', 'notes3', 'margin'];
+
+// הזרמים לתפריט "זרם" שבסרגל, בשתי קבוצות: {content, furniture}.
+// • content — זרמי-התוכן (בלי כותרות _heading), בסדר הקבוע ואחריהם זרמי-הספר
+//   לפי סדר הופעתם; בלי כפילויות.
+// • furniture — "ריהוט הדף": *תמיד* כל שלושת זרמי-הריהוט (כותרת עמוד, תחתית,
+//   מפריד), גם כשהעמוד לא הביא אותם באוצר-המילים שלו — כדי שהבחירה בריהוט תהיה
+//   שם תמיד. השם והצבע — מהעמוד, ואחרת מהמובנים.
+// streams = [{key, he?, color?}] (streamChoices)
+export function streamMenu(streams) {
+  const byKey = new Map();
+  for (const s of streams || []) {
+    if (!s || typeof s.key !== 'string' || !s.key || s.key.endsWith('_heading') || byKey.has(s.key)) continue;
+    byKey.set(s.key, s);
+  }
+  const rank = (k) => {
+    const i = CONTENT_ORDER.indexOf(k);
+    return i < 0 ? CONTENT_ORDER.length : i;
+  };
+  const content = [...byKey.values()]
+    .filter((s) => !isFurnitureStream(s.key))
+    .map((s, i) => ({ s, i }))
+    .sort((a, b) => rank(a.s.key) - rank(b.s.key) || a.i - b.i)
+    .map(({ s }) => ({ key: s.key, he: s.he || BUILTIN_STREAMS[s.key]?.he || s.key, color: s.color || BUILTIN_STREAMS[s.key]?.color || '#888888' }));
+  const furniture = FURNITURE_STREAMS.map((key) => {
+    const s = byKey.get(key);
+    return { key, he: s?.he || BUILTIN_STREAMS[key].he, color: s?.color || BUILTIN_STREAMS[key].color };
+  });
+  return { content, furniture };
 }

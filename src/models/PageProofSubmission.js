@@ -17,6 +17,12 @@ const PageProofSubmissionSchema = new mongoose.Schema(
 
     ops: { type: [mongoose.Schema.Types.Mixed], default: [] },
     opCount: { type: Number, default: 0 },
+    // הפעולות משנות את חיתוך-השורות (ops.needsRecut) — אחרי אישור העמוד עובר
+    // למצב 'recut' וחוזר לתוכנת-הספר לחיתוך ולזיהוי-מחדש
+    needsRecut: { type: Boolean, default: false },
+    // גרסת-העמוד שעליה נעשתה ההגשה (PageProofPage.revision בעת ההגשה). הגשה
+    // על גרסה קודמת אינה משנה את המונים/המצב של העמוד שהוחלף
+    revision: { type: Number, default: 1 },
     // הערה חופשית של המתייג למנהל (לא נשלחת בתיקונים)
     note: { type: String, default: '' },
 

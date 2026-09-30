@@ -56,6 +56,14 @@ test('straddlingLineIds: שורה שחוצה את גבול המסגרת', () => 
   assert.equal(straddlingLineIds(lines, []).size, 0);
 });
 
+test('straddlingLineIds: סובלנות של פיקסל אחד — כמו בתוכנת-הספר', () => {
+  const f = [{ fid: 'a', bbox: [100, 100, 500, 500] }];
+  // פיקסל אחד מחוץ — עדיין בפנים; שניים — בולטת
+  assert.equal(straddlingLineIds([L(1, [99, 200, 400, 220])], f).size, 0);
+  assert.deepEqual([...straddlingLineIds([L(2, [98, 200, 400, 220])], f)], [2]);
+  assert.deepEqual([...straddlingLineIds([L(3, [150, 200, 502, 220])], f)], [3]);
+});
+
 test('streamChoices: של הספר ואז אוצר-המילים, בלי כפילויות', () => {
   const c = streamChoices({ streams: [{ key: 'main', he: 'ראשי', color: '#1' }], stream_vocab: [{ key: 'main' }, { key: 'notes', he: 'הערות' }] });
   assert.deepEqual(c.map((s) => s.key), ['main', 'notes']);
@@ -64,6 +72,11 @@ test('streamChoices: של הספר ואז אוצר-המילים, בלי כפיל
 test('untouchedLineIds מדלג על ריהוט, חדשות ומתוקנות', () => {
   const v = { lines: [L(1, [0, 0, 1, 1]), L(2, [0, 0, 1, 1], { _textEdited: true }), L(3, [0, 0, 1, 1], { stream: 'header' }), L(-1, [0, 0, 1, 1], { _new: true })] };
   assert.deepEqual(untouchedLineIds(v), [1]);
+});
+
+test('untouchedLineIds: במעבר שני — בלי השורות שאושרו בסבב הקודם (_preOk)', () => {
+  const v = { lines: [L(1, [0, 0, 1, 1]), L(2, [0, 0, 1, 1]), L(3, [0, 0, 1, 1])], _preOk: new Set([1, 3]) };
+  assert.deepEqual(untouchedLineIds(v), [2]);
 });
 
 test('newFid: 6 תווים ולא תפוס', () => {

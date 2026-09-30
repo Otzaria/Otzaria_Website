@@ -33,8 +33,14 @@ const PageProofPageSchema = new mongoose.Schema(
     approvedCount: { type: Number, default: 0 },
     // מי כבר הגיש (הגשה פעילה) — אותו אדם לא יקבל את העמוד שוב (חשוב בכפולים)
     submitters: { type: [mongoose.Schema.Types.ObjectId], default: [] },
-    // open = חסרות הגשות; done = activeCount >= required
-    status: { type: String, enum: ['open', 'done'], default: 'open', index: true },
+    // open = חסרות הגשות; done = activeCount >= required;
+    // recut = הגשה מאושרת שינתה את חיתוך-השורות (פיצול/איחוד/הוספה/תיבה) —
+    // העמוד ממתין לחיתוך ולזיהוי-מחדש בתוכנת-הספר ואינו מוצע למתנדבים, עד
+    // שהגרסה החדשה שלו (revision+1) מיובאת ומחליפה אותו (lib/pageProof/importRules)
+    status: { type: String, enum: ['open', 'done', 'recut'], default: 'open', index: true },
+    // גרסת-העמוד (חוזה-העמוד: revision ברמת-העמוד). עמוד שחזר מזיהוי-מחדש
+    // מגיע עם גרסה גבוהה יותר ונפתח למעבר שני
+    revision: { type: Number, default: 1, min: 1 },
 
     // החכרה: הרצף שמור למתנדב שקיבל אותו עד leasedUntil (מתחדש בכל פתיחה)
     leasedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
