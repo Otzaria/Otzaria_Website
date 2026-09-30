@@ -1,9 +1,13 @@
 'use client'
 
+import { tokenize } from '@/lib/pageProof/textModel'
+import { linkBadge } from '@/lib/pageProof/flowEdit'
 import { Section } from './LineTab'
 
-// כרטיסיית "קישורים": הערה ↔ הציון בגוף, ד"ה ↔ המקור, המשך. הקישורים של
-// המערכת מקווקווים על הסריקה; אישור הופך אותם לקו רציף (אמת אנושית).
+// כרטיסיית "קישורים" בלוח הפרטים: הערה ↔ הציון בגוף, ד"ה ↔ המקור, המשך.
+// קישור חדש נוצר בטקסט עצמו (מילה ← "קישור" ← המילה המקבילה בזרם השני ←
+// "קישור"); כאן — הרשימה, אישור/ביטול של קישורי המערכת, והקישורים החסרים.
+// המספר שליד כל קישור הוא אותו מספר שמופיע אחרי המילים בטקסט.
 
 const KIND_HE = { note: 'הערה', dh: 'דיבור-המתחיל', join: 'המשך' }
 const MISSING_HE = {
@@ -14,11 +18,22 @@ const MISSING_HE = {
 }
 const btn = 'rounded-md px-2 py-0.5 text-xs transition-colors disabled:opacity-40'
 
-export default function LinksTab({ view, mode, linkFrom, readOnly, act }) {
-  const byId = new Map(view.lines.map((l) => [l.id, l]))
-  const label = (id) => {
+function wordsText(line, range) {
+  if (!line || !Array.isArray(range)) return null
+  const ws = tokenize(line.text).filter((t) => t.w === 'word')
+  return ws
+    .slice(range[0], range[1] + 1)
+    .map((w) => w.text)
+    .join(' ')
+}
+
+export default function LinksTab({ view, readOnly = false, linkPending = null, act }) {
+  const byId = new Map((view.lines || []).map((l) => [l.id, l]))
+  const label = (id, range = null) => {
     const l = byId.get(id)
     if (!l) return `שורה ${id}`
+    const w = wordsText(l, range)
+    if (w) return `${(l.line_no ?? 0) + 1}: «${w}»`
     const t = String(l.text || '').slice(0, 28)
     return `${(l.line_no ?? 0) + 1}: ${t}${(l.text || '').length > 28 ? '…' : ''}`
   }
@@ -27,34 +42,47 @@ export default function LinksTab({ view, mode, linkFrom, readOnly, act }) {
 
   return (
     <div className="text-on-surface">
-      <Section title="הוספת קישור">
-        <button
-          disabled={readOnly}
-          onClick={() => act.mode(mode === 'link' ? 'select' : 'link')}
-          className={`rounded-md px-2 py-1 text-sm ${mode === 'link' ? 'bg-primary text-on-primary' : 'bg-surface-variant/60 hover:bg-surface-variant'}`}
-        >
-          {mode === 'link' ? 'ביטול' : 'קישור ידני'}
-        </button>
-        {mode === 'link' && (
-          <p className="mt-2 text-xs text-info-700">
-            {linkFrom == null ? 'לחצו על שורת ההערה (או הד"ה) בסריקה' : `ההערה: ${label(linkFrom)} — עכשיו לחצו על השורה שהיא מפרשת`}
-          </p>
+      <Section title="קישור חדש">
+        <ol className="list-decimal space-y-0.5 pr-4 text-xs text-on-surface/75">
+          <li>סמנו בטקסט את המילה (למשל ציון-ההערה או מילות הדיבור-המתחיל) ולחצו «קישור» (Ctrl+K).</li>
+          <li>עברו ללשונית של הזרם השני וסמנו את המילה המקבילה.</li>
+          <li>לחצו שוב «קישור». Esc — ביטול.</li>
+        </ol>
+        <p className="mt-1 text-xs text-on-surface/60">
+          לכל שורת-הערה (או פירוש) קישור אחד. בשורה עם כמה הערות — קשרו את הראשונה; קישור חדש מאותה שורה מחליף את הקודם (תתבקשו לאשר).
+        </p>
+        {linkPending ? (
+          <div className="mt-2 flex items-center gap-2 rounded-md bg-info-50 px-2 py-1 text-xs text-info-800">
+            <span className="flex-1">ממתין לצד השני{linkPending.from?.text ? ` של «${linkPending.from.text}»` : ''}</span>
+            <button type="button" onClick={act.cancelLink} className={`${btn} bg-white text-info-700`}>
+              ביטול
+            </button>
+          </div>
+        ) : (
+          <button type="button" disabled={readOnly || !act.startLink} onClick={act.startLink} className={`${btn} mt-2 bg-surface-variant/60 hover:bg-surface-variant`}>
+            קישור מהמילה שבסמן
+          </button>
         )}
-        <p className="mt-1 text-xs text-on-surface/60">אפשר גם לבחור שתי שורות בטקסט ולהשתמש ב"קישור ביניהן" בכרטיסיית השורה.</p>
       </Section>
 
       <Section title={`קישורים בעמוד (${links.length})`}>
         {!links.length && <p className="text-xs text-on-surface/60">אין קישורים</p>}
         <ul className="space-y-2 text-sm">
-          {links.map((k) => (
-            <li key={`${k.from_line}-${k.to_line}-${k.to_page}`} className={`rounded-md border p-2 ${k.suspect ? 'border-danger-600' : 'border-surface-variant'}`}>
-              <div className="text-xs text-on-surface/60">
+          {links.map((k, idx) => (
+            <li key={`${k.from_line}-${k.to_line}-${k.to_page}-${idx}`} className={`rounded-md border p-2 ${k.suspect ? 'border-danger-600' : 'border-surface-variant'}`}>
+              <div className="flex items-center gap-1 text-xs text-on-surface/60">
+                <span className="font-bold text-info-700">{linkBadge(idx + 1)}</span>
                 {KIND_HE[k.kind] || k.kind} · {k.src === 'human' ? 'אושר' : `אוטומטי${typeof k.conf === 'number' ? ` ${Math.round(k.conf * 100)}%` : ''}`}
               </div>
-              <button type="button" className="block text-right hover:underline" onClick={() => act.selectLines([k.from_line])}>{label(k.from_line)}</button>
+              <button type="button" className="block text-right hover:underline" onClick={() => act.jumpToLine(k.from_line, k.from_words?.[0])}>
+                {label(k.from_line, k.from_words)}
+              </button>
               <div className="text-xs text-on-surface/50">
-                ← {k.to_page === view.page ? (
-                  <button type="button" className="hover:underline" onClick={() => act.selectLines([k.to_line])}>{label(k.to_line)}</button>
+                ←{' '}
+                {k.to_page == null || k.to_page === view.page ? (
+                  <button type="button" className="hover:underline" onClick={() => act.jumpToLine(k.to_line, (k.to_words || k.words)?.[0])}>
+                    {label(k.to_line, k.to_words || k.words)}
+                  </button>
                 ) : (
                   `עמוד ${k.to_page}, שורה ${k.to_line}`
                 )}
@@ -62,9 +90,13 @@ export default function LinksTab({ view, mode, linkFrom, readOnly, act }) {
               {k.suspect && <div className="text-xs text-danger-700">{k.suspect}</div>}
               <div className="mt-1 flex gap-1">
                 {k.src !== 'human' && k.to_line != null && (
-                  <button disabled={readOnly} onClick={() => act.linkOk(k.from_line)} className={`${btn} bg-success-100 text-success-800`}>✓ נכון</button>
+                  <button type="button" disabled={readOnly} onClick={() => act.linkOk(k.from_line)} className={`${btn} bg-success-100 text-success-800`}>
+                    ✓ נכון
+                  </button>
                 )}
-                <button disabled={readOnly} onClick={() => act.linkDel(k.from_line)} className={`${btn} bg-danger-100 text-danger-700`}>✗ שגוי</button>
+                <button type="button" disabled={readOnly} onClick={() => act.linkDel(k.from_line)} className={`${btn} bg-danger-100 text-danger-700`}>
+                  ✗ שגוי
+                </button>
               </div>
             </li>
           ))}
@@ -76,9 +108,14 @@ export default function LinksTab({ view, mode, linkFrom, readOnly, act }) {
         <ul className="space-y-1 text-sm">
           {missing.map((m, i) => (
             <li key={i} className="rounded-md bg-warning-alt-100/60 p-2">
-              <div className="text-xs font-bold">{MISSING_HE[m.type] || m.type}{m.sign ? ` · ${m.sign}` : ''}</div>
+              <div className="text-xs font-bold">
+                {MISSING_HE[m.type] || m.type}
+                {m.sign ? ` · ${m.sign}` : ''}
+              </div>
               {m.line_id != null && (
-                <button type="button" className="text-right text-xs hover:underline" onClick={() => act.selectLines([m.line_id])}>{label(m.line_id)}</button>
+                <button type="button" className="text-right text-xs hover:underline" onClick={() => act.jumpToLine(m.line_id)}>
+                  {label(m.line_id)}
+                </button>
               )}
               {m.detail && <div className="text-xs text-on-surface/60">{m.detail}</div>}
             </li>
