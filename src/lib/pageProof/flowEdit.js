@@ -597,6 +597,14 @@ const CIRCLED = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳';
 // הסימן הקטן שמוצג אחרי מילה שהיא קצה של קישור (אותו מספר בשני הקצוות)
 export const linkBadge = (n) => (Number.isInteger(n) && n >= 1 && n <= 20 ? [...CIRCLED][n - 1] : `(${n})`);
 
+// "עמוד 4, שורה 12: «…»" — קצה-קישור שבעמוד אחר. מספר-השורה ותחילת הטקסט מחוזה-העמוד
+// (to_line_no/to_text, from_line_no/from_text) או מהפעולה; בלעדיהם — מזהה-השורה
+export function farLabel(page, lineNo, lineId, text) {
+  const t = String(text || '').trim();
+  const short = t.length > 32 ? `${t.slice(0, 32)}…` : t;
+  return `עמוד ${page}, שורה ${lineNo != null ? lineNo + 1 : lineId}${short ? `: «${short}»` : ''}`;
+}
+
 // קצות-הקישורים בעמוד, לכל שורה ומילה: Map(מזהה-שורה → Map(מספר-מילה →
 // [{n, kind, side, other:{lineId, page, i}}])). n = מספר הקישור בעמוד (1…).
 // המילה: מטווח-המילים של הקישור (to_words/words בגוף, from_words בהערה — הקצה
@@ -633,8 +641,14 @@ export function linkEndpoints(view) {
         ? toRange[1]
         : markWord(k.to_line, (x) => x.role === 'anchor' && (x.go == null || x.go === k.from_line))
       : null;
-    add(k.from_line, fi, { n, kind: k.kind, side: 'from', other: { lineId: k.to_line, page: k.to_page ?? view?.page, i: ti } });
-    if (ti != null) add(k.to_line, ti, { n, kind: k.kind, side: 'to', other: { lineId: k.from_line, page: view?.page, i: fi } });
+    // צד בעמוד אחר (קישור-סעיף שזולג, או קישור שהמתנדב יצר לעמוד אחר): העמוד שלו, ו-label
+    // לריחוף על המספר — "עמוד 4, שורה 12: «…»"
+    const toPage = k.to_page ?? view?.page;
+    const fromPage = k.from_page ?? view?.page;
+    const farTo = toPage !== view?.page ? { label: farLabel(toPage, k.to_line_no, k.to_line, k.to_text) } : null;
+    const farFrom = fromPage !== view?.page ? { label: farLabel(fromPage, k.from_line_no, k.from_line, k.from_text) } : null;
+    add(k.from_line, fi, { n, kind: k.kind, side: 'from', other: { lineId: k.to_line, page: toPage, i: ti, ...farTo } });
+    if (ti != null) add(k.to_line, ti, { n, kind: k.kind, side: 'to', other: { lineId: k.from_line, page: fromPage, i: fi, ...farFrom } });
   });
   return out;
 }

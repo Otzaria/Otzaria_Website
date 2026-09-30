@@ -120,7 +120,8 @@ function wordTitle({ low, hover, styles, lemma }) {
 // מספר-הקישור אחרי המילה: ① בשני הקצוות; ריחוף מראה את הצד השני, לחיצה קופצת אליו
 function LinkBadge({ ep, otherText, onJump }) {
   const kind = ep.kind === 'dh' ? 'דיבור המתחיל' : 'הערה'
-  const where = otherText ? `«${otherText}»` : ep.other?.page != null ? `עמוד ${ep.other.page}` : ''
+  // צד בעמוד אחר: "עמוד 4, שורה 12: «…»" (flowEdit.linkEndpoints — label)
+  const where = otherText ? `«${otherText}»` : ep.other?.label || (ep.other?.page != null ? `עמוד ${ep.other.page}` : '')
   return (
     <sup
       contentEditable={false}

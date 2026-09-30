@@ -8,6 +8,8 @@ import PageProofSubmission from '@/models/PageProofSubmission';
 import { hasBookLibraryAccess, hasOcrAccess } from '@/lib/roles';
 import { storedRevision, submissionRevision, revisionFilter } from '@/lib/pageProof/importRules';
 import { pickPrimary } from '@/lib/pageProof/fixesExport';
+import { foreignLinkRefs, withForeignLines } from '@/lib/pageProof/ops';
+import { isFurnitureStream } from '@/lib/pageProof/vocab';
 
 // עזרי-שרת להגהת-עמודים (/api/page-proof): הרשאה, חלוקת רצפים והחכרה.
 // היחידה שמחולקת היא רצף (book+seq) של עד 5 עמודים עוקבים; ההגשה — לעמוד.
@@ -232,6 +234,31 @@ export async function volunteerStats(userId) {
   ]);
   const by = Object.fromEntries(mine.map((m) => [m._id, m.n]));
   return { open, done, mySubmitted: by.submitted || 0, myApproved: by.approved || 0, myRejected: by.rejected || 0 };
+}
+
+// קישורים לעמוד אחר בהגשה (link_add שצד אחד שלו בעמוד אחר של הספר — ops.foreignLinkRefs):
+// אחרי validateOps (שבודק שהעמוד מוצהר) — השורה חייבת להיות בעמוד ההוא, באותו ספר, בלי
+// שהוסרה ולא ריהוט. מספר-השורה ותחילת-הטקסט נלקחים מהעמוד השמור, לא ממה שהדפדפן שלח.
+// page = העמוד של ההגשה ({doc, gid}). מחזיר {ops} או {error} בעברית.
+export async function resolveForeignLinks(page, ops) {
+  const refs = foreignLinkRefs(page?.doc, ops);
+  if (!refs.length) return { ops };
+  const pages = [...new Set(refs.map((r) => r.page))];
+  const rows = await PageProofPage.find(
+    { gid: page.gid, page: { $in: pages } },
+    { page: 1, 'doc.lines.id': 1, 'doc.lines.line_no': 1, 'doc.lines.stream': 1, 'doc.lines.status': 1, 'doc.lines.text': 1, 'doc.lines.text_ocr': 1 }
+  ).lean();
+  const byPage = new Map((rows || []).map((r) => [r.page, new Map((r.doc?.lines || []).map((l) => [l.id, l]))]));
+  const found = new Map();
+  for (const r of refs) {
+    const lines = byPage.get(r.page);
+    if (!lines) return { error: `קישור לעמוד ${r.page}: העמוד הזה אינו בספר` };
+    const line = lines.get(r.id);
+    if (!line || line.status === 'removed') return { error: `קישור לעמוד ${r.page}: השורה שנבחרה אינה בעמוד ההוא` };
+    if (isFurnitureStream(line.stream)) return { error: `קישור לעמוד ${r.page}: ריהוט הדף (כותרת-רצה, מספר עמוד) אינו מקושר` };
+    found.set(`${r.page}:${r.id}`, line);
+  }
+  return { ops: withForeignLines(page.doc, ops, found) };
 }
 
 // צורת העמוד הנשלחת לעורך. שדות-השורה נשלחים כפי שהגיעו (כולל recheck —

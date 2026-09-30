@@ -141,3 +141,20 @@ describe('ReviewModal מול העורך החדש', { timeout: 20000 }, () => {
     expect(screen.queryByRole('button', { name: 'שחרור מהמתנה' })).not.toBeInTheDocument()
   })
 })
+
+describe('ReviewModal — קישור לעמוד אחר', { timeout: 20000 }, () => {
+  it('קישור שהמתייג יצר לעמוד אחר — מסומן בכותרת: העמוד, השורה ותחילת הטקסט', async () => {
+    const link = { kind: 'link_add', page: P, ids: [1, 77], value: { kind: 'note', from_words: [0, 0], to_words: [0, 0], to_page: 4, to_line_no: 11, to_text: 'ב ועוד נראה' } }
+    h.ops = [link]
+    mockFetch(payload({ page: { doc: { page: P, size: [100, 100], lines: [{ id: 1, text: 'שורה' }] } }, submission: { ops: [link] } }))
+    render(<ReviewModal id="s1" onClose={vi.fn()} onDone={vi.fn()} />)
+    expect(await screen.findByTestId('far-link')).toHaveTextContent('קישור לעמוד 4, שורה 12: «ב ועוד נראה»')
+  })
+
+  it('בלי קישור לעמוד אחר — בלי הסימון', async () => {
+    mockFetch(payload())
+    render(<ReviewModal id="s1" onClose={vi.fn()} onDone={vi.fn()} />)
+    await screen.findByTestId('editor')
+    expect(screen.queryByTestId('far-link')).toBeNull()
+  })
+})

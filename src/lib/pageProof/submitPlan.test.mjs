@@ -217,3 +217,19 @@ test('submitSummary: פעולת-חיתוך — recut, והשורה הנעולה 
   assert.equal(s.restCount, 3);
   assert.equal(s.opCount, 1);
 });
+
+
+test('קישור לעמוד אחר: נשלח כמות-שהוא (עם העמוד, השורה והטקסט של הצד הזר) — בכל אחת מהבחירות', () => {
+  const d = doc();
+  const far = { kind: 'link_add', page: 7, ids: [4, 77], value: { kind: 'note', from_words: [0, 0], to_words: [1, 1], to_page: 8, to_line_no: 3, to_text: 'והלכה' }, _g: 'g1' };
+  const untouched = untouchedLineIds(buildView(d, [far]));
+  const r = planSubmission({ baseDoc: d, ops: [far], untouched, choice: SUBMIT_CHOICE.ONLY_APPROVED });
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.ops, [{ kind: 'link_add', page: 7, ids: [4, 77], value: { kind: 'note', to_page: 8, to_line_no: 3, to_text: 'והלכה', from_words: [0, 0], to_words: [1, 1] } }]);
+  const rest = planSubmission({ baseDoc: d, ops: [far], untouched, choice: SUBMIT_CHOICE.APPROVE_REST, readAll: true });
+  assert.equal(rest.ok, true);
+  assert.deepEqual(rest.ops[0].ids, [4, 77]);
+  // בלי הצהרה על העמוד — אותה בדיקה של השרת עוצרת לפני השליחה
+  const bad = planSubmission({ baseDoc: d, ops: [{ ...far, value: { kind: 'note' } }], untouched, choice: SUBMIT_CHOICE.ONLY_APPROVED });
+  assert.deepEqual(bad, { ok: false, error: 'פעולה 1: שורה שאינה בעמוד הזה' });
+});

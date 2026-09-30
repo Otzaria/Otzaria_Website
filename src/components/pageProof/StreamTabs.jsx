@@ -25,7 +25,8 @@ function tabTitle(tab, a) {
   return `${what} · ${lines}${appr}`
 }
 
-export default function StreamTabs({ tabs = [], tabKey, setTabKey, className = '' }) {
+// label — שם רשימת-הלשוניות (לקורא-מסך); למשל בחלון של עמוד אחר
+export default function StreamTabs({ tabs = [], tabKey, setTabKey, className = '', label = 'זרמי הטקסט בעמוד' }) {
   const refs = useRef(new Map())
   // ריהוט הדף תמיד אחרון (streamTabs כבר מסדר כך — כאן רק מבטיחים)
   const ordered = [...tabs.filter((t) => !t.furniture), ...tabs.filter((t) => t.furniture)]
@@ -57,7 +58,7 @@ export default function StreamTabs({ tabs = [], tabKey, setTabKey, className = '
   )
 
   return (
-    <div role="tablist" aria-label="זרמי הטקסט בעמוד" dir="rtl" className={`flex items-end gap-1 overflow-x-auto border-b border-surface-variant px-2 pt-1 custom-scrollbar ${className}`}>
+    <div role="tablist" aria-label={label} dir="rtl" className={`flex items-end gap-1 overflow-x-auto border-b border-surface-variant px-2 pt-1 custom-scrollbar ${className}`}>
       {ordered.map((t, idx) => {
         const active = t.key === tabKey
         const a = approvalOf(t)

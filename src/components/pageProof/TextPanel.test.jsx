@@ -82,3 +82,19 @@ describe('TextPanel — לוח-הטקסט', () => {
     expect(screen.getByText(/תצוגה בלבד/)).toBeInTheDocument()
   })
 })
+
+describe('TextPanel — הצד השני בעמוד אחר', () => {
+  it('קישור ממתין + onOtherPage: הקודם / הבא / מספר-עמוד; בלעדיו — אין כפתורים', async () => {
+    const onOtherPage = vi.fn()
+    const { unmount } = render(
+      <TextPanel view={{ ...view, page: 7 }} tabs={TABS} tabKey="main" setTabKey={vi.fn()} linkPending={{ from: { lineId: 2, words: [0, 1] } }} onCancelLink={vi.fn()} onOtherPage={onOtherPage} />
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'עמוד 6' }))
+    await userEvent.click(screen.getByRole('button', { name: 'עמוד 8' }))
+    await userEvent.click(screen.getByRole('button', { name: 'מספר עמוד…' }))
+    expect(onOtherPage.mock.calls).toEqual([[6], [8], [null]])
+    unmount()
+    render(<TextPanel view={{ ...view, page: 7 }} tabs={TABS} tabKey="main" setTabKey={vi.fn()} linkPending={{ from: { lineId: 2, words: [0, 1] } }} onCancelLink={vi.fn()} />)
+    expect(screen.queryByTestId('other-page-buttons')).toBeNull()
+  })
+})

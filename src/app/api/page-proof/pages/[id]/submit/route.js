@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import connectDB from '@/lib/db';
 import PageProofPage from '@/models/PageProofPage';
 import PageProofSubmission from '@/models/PageProofSubmission';
-import { requireProofSession, whoOf, readJsonBody, tooBigResponse, primaryOf } from '@/lib/pageProof/pool';
+import { requireProofSession, whoOf, readJsonBody, tooBigResponse, primaryOf, resolveForeignLinks } from '@/lib/pageProof/pool';
 import { validateOps, packOps, needsRecut, sanitizeOps } from '@/lib/pageProof/ops';
 import { revisionFilter, sameRevision, storedRevision, statusWhenFull } from '@/lib/pageProof/importRules';
 import { badRequest, notFound, serverError } from '@/lib/apiResponse';
@@ -23,6 +23,7 @@ const RELOAD = 'העמוד עודכן מאז שנפתח (חזר מזיהוי-מ�
 // ההגשה נדחית ב-409 במקום להיבדק מול שורות אחרות. בקשה בלי revision (לשונית
 // ישנה) מתקבלת רק כשהעמוד עדיין בגרסה 1.
 // ההגשה שומרת את הגרסה ואת needsRecut (הפעולות משנות את חיתוך-השורות).
+// קישור שהצד השני שלו בעמוד אחר של הספר — השורה נבדקת שם (pool.resolveForeignLinks).
 export async function POST(request, { params }) {
   const { session, userId, error } = await requireProofSession();
   if (error) return error;
@@ -41,9 +42,13 @@ export async function POST(request, { params }) {
     const sent = body.revision === undefined || body.revision === null ? null : Number(body.revision);
     if (sent === null ? revision > 1 : !sameRevision(sent, revision)) return conflict(RELOAD);
 
-    const ops = packOps(page.doc, sanitizeOps(body.ops));
-    const invalid = validateOps(page.doc, ops);
+    const packed = packOps(page.doc, sanitizeOps(body.ops));
+    const invalid = validateOps(page.doc, packed);
     if (invalid) return badRequest(invalid);
+    // קישור לעמוד אחר: השורה אכן בעמוד ההוא של אותו ספר (מספרה ותחילת-הטקסט — מהעמוד השמור)
+    const far = await resolveForeignLinks(page, packed);
+    if (far.error) return badRequest(far.error);
+    const ops = far.ops;
 
     const uid = new mongoose.Types.ObjectId(userId);
     const now = new Date();

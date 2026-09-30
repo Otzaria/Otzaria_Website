@@ -339,6 +339,22 @@ describe('ScanPanel — סדר ההצעה, שורות מחוץ למסגרות, �
     expect(screen.getByTestId('straddle-note')).toHaveTextContent(/שורה אחת בולטת/)
   })
 
+  it('קו מפריד (ריהוט) שהתיבה שלו נוגעת בתחתית מסגרת — לא מסומן "בולט"; שורת-תוכן באותו מקום — כן', () => {
+    // שורה 2 חופפת את תחתית המסגרת [510, 90, 910, 145] (מרכזה מתחת למסגרת — לא "בתוכה")
+    const withEdge = (stream) => ({
+      ...doc(),
+      frames: [{ fid: 'aa11bb', stream: 'main', bbox: [510, 90, 910, 145], order: 1 }],
+      lines: [L(1, [520, 100, 900, 140]), L(2, [600, 130, 800, 170], stream)],
+    })
+    const { container, unmount } = setup({ base: withEdge('sep') })
+    expect(container.querySelector('[data-straddle]')).toBeNull()
+    expect(screen.queryByTestId('straddle-note')).toBeNull()
+    unmount()
+    const second = setup({ base: withEdge('notes') })
+    expect(second.container.querySelector('[data-straddle="2"]')).toBeInTheDocument()
+    expect(screen.getByTestId('straddle-note')).toHaveTextContent(/שורה אחת בולטת/)
+  })
+
   it('שורות מחוץ לכל מסגרת מסומנות, ו"✓ המסגרות נכונות" שואל לפני האישור', async () => {
     const base = {
       ...doc(),

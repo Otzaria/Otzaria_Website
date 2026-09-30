@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { HELP_SEEN_KEY } from './ProofHelp'
 import { LAYOUT_KEY } from '@/lib/pageProof/layout'
@@ -325,5 +325,67 @@ describe('ProofEditor — תיקוני הביקורת', { timeout: 30000 }, () =
     fireEvent.click(option)
     expect(opsNow()).toEqual([{ kind: 'text', ids: [1], value: 'אמר רב יוחנן' }])
     await waitFor(() => expect(readDomSelection(editor())).toEqual({ anchor: { lineId: 1, offset: 6 }, focus: { lineId: 1, offset: 6 } }))
+  })
+})
+
+// קישור שהצד השני שלו בעמוד אחר של הספר: הצד הראשון כאן, השני בחלון של העמוד האחר (קריאה
+// בלבד, GET של שורות-העמוד — בלי שום בקשה אחרת)
+describe('ProofEditor — קישור לעמוד אחר', { timeout: 30000 }, () => {
+  const FAR = [
+    { id: 101, line_no: 0, order: 1, stream: 'main', para_start: true, para_style: null, text: 'והלכה כרבי יוחנן' },
+    { id: 102, line_no: 1, order: 2, stream: 'notes', para_start: true, para_style: null, text: 'הערה בעמוד הבא' },
+  ]
+  let calls
+  beforeEach(() => {
+    calls = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url, init) => {
+        calls.push([url, init?.method || 'GET'])
+        return { status: 200, json: async () => ({ success: true, page: 10, revision: 1, lines: FAR }) }
+      })
+    )
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('Ctrl+K בהערה ← "עמוד 10" ← מילה בגוף שם = link_add עם to_page/to_line_no/to_text; ביטול מהפרטים, Ctrl+Z מחזיר', async () => {
+    const { editor } = setup({ page: { ...makePage(), gid: 'g1' } })
+    fireEvent.click(screen.getByRole('tab', { name: /הערות/ }))
+    await caretAt(editor(), { lineId: 4, offset: 0 }, { lineId: 4, offset: 10 })
+    fireEvent.keyDown(editor(), { key: 'ל', code: 'KeyK', ctrlKey: true })
+    const bar = screen.getAllByTestId('other-page-buttons')[0]
+    fireEvent.click(within(bar).getByRole('button', { name: 'עמוד 10' }))
+
+    const dialog = await screen.findByRole('dialog', { name: /הצד השני של הקישור/ })
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'יוחנן' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(opsNow()).toEqual([
+      { kind: 'link_add', ids: [4, 101], value: { from_words: [0, 1], to_words: [2, 2], kind: 'note', to_page: 10, to_line_no: 0, to_text: 'והלכה כרבי יוחנן' } },
+    ])
+    // רק קריאה אחת, GET של שורות העמוד האחר
+    expect(calls).toEqual([['/api/page-proof/books/g1/pages/10/lines', 'GET']])
+    expect(screen.queryByText(/נבחר: «/)).toBeNull()
+
+    // בפרטים: "עמוד 10, שורה 1: «…»", ו"ביטול הקישור" מסיר את הפעולה עצמה
+    fireEvent.click(screen.getByRole('button', { name: 'פרטים' }))
+    const drawer = screen.getByRole('complementary', { name: 'פרטים' })
+    expect(within(drawer).getByText(/עמוד 10, שורה 1: «והלכה כרבי יוחנן»/)).toBeInTheDocument()
+    fireEvent.click(within(drawer).getByRole('button', { name: /ביטול הקישור/ }))
+    expect(opsNow()).toEqual([])
+    fireEvent.keyDown(document.body, { key: 'ז', code: 'KeyZ', ctrlKey: true })
+    expect(opsNow().map((o) => o.kind)).toEqual(['link_add'])
+    // המספר שבטקסט (הצד שבעמוד הזה) מראה לאן הקישור הולך
+    fireEvent.click(screen.getByRole('tab', { name: /הערות/ }))
+    const badge = editor().querySelector('[data-line="4"] [data-badge="①"]')
+    expect(badge.getAttribute('title')).toMatch(/עמוד 10, שורה 1/)
+  })
+
+  it('בלי gid (עמוד שלא הגיע מהאתר) ובתצוגה-בלבד — אין כפתורי "עמוד אחר"', async () => {
+    const { editor } = setup()
+    fireEvent.click(screen.getByRole('tab', { name: /הערות/ }))
+    await caretAt(editor(), { lineId: 4, offset: 0 }, { lineId: 4, offset: 10 })
+    fireEvent.keyDown(editor(), { key: 'ל', code: 'KeyK', ctrlKey: true })
+    expect(screen.getByText(/נבחר: «/)).toBeInTheDocument()
+    expect(screen.queryByTestId('other-page-buttons')).toBeNull()
   })
 })

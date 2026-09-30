@@ -3,6 +3,7 @@
 import { tokenize } from '@/lib/pageProof/textModel'
 import { streamInfo } from '@/lib/pageProof/vocab'
 import StreamTabs from './StreamTabs'
+import { OtherPageButtons } from './OtherPagePicker'
 
 // לוח-הטקסט: לשוניות-הזרמים, ומתחתן העורך (FlowEditor — מגיע מבחוץ ב-
 // editorSlot) בתוך אזור-גלילה אחד. מעל העורך — פסי-הודעה לפי המצב: קישור
@@ -12,6 +13,8 @@ import StreamTabs from './StreamTabs'
 // props: view, tabs (streamTabs + approval לכל לשונית), tabKey, setTabKey,
 // editorSlot, linkPending = {from:{lineId, words:[i,j], tabKey?, text?}} | null,
 // onCancelLink, recheckCount, approval = {approved, total} של הלשונית הפעילה.
+// onOtherPage(n) — רשות: הצד השני בעמוד אחר (n = מספר-העמוד, או null — "מספר עמוד…");
+// בלעדיו אין בפס הקישור כפתורי-עמוד.
 // רשות: readOnly, fontSize (px), fontFamily — חלים על אזור-הטקסט (העורך יורש).
 // אזור-הגלילה מסומן data-proof-text-scroll (העורך עצמו לא צריך גלילה משלו).
 
@@ -108,6 +111,7 @@ export default function TextPanel({
   editorSlot = null,
   linkPending = null,
   onCancelLink,
+  onOtherPage = null,
   recheckCount = 0,
   approval = null,
   readOnly = false,
@@ -155,6 +159,7 @@ export default function TextPanel({
             ? 'בחרו עכשיו את המילה המקבילה בזרם השני (לחצו על הלשונית שלו), ואז לחצו שוב על "קישור" (Ctrl+K)'
             : 'סמנו כאן את המילה המקבילה, ואז לחצו שוב על "קישור" (Ctrl+K)'}
           {' · Esc לביטול'}
+          {onOtherPage && <OtherPageButtons page={view?.page} onOtherPage={onOtherPage} />}
         </Banner>
       )}
 

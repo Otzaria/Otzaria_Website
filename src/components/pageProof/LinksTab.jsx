@@ -1,13 +1,19 @@
 'use client'
 
 import { tokenize } from '@/lib/pageProof/textModel'
-import { linkBadge } from '@/lib/pageProof/flowEdit'
+import { linkBadge, farLabel } from '@/lib/pageProof/flowEdit'
 import { Section } from './LineTab'
+import { OtherPageButtons } from './OtherPagePicker'
 
 // כרטיסיית "קישורים" בלוח הפרטים: הערה ↔ הציון בגוף, ד"ה ↔ המקור, המשך.
 // קישור חדש נוצר בטקסט עצמו (מילה ← "קישור" ← המילה המקבילה בזרם השני ←
 // "קישור"); כאן — הרשימה, אישור/ביטול של קישורי המערכת, והקישורים החסרים.
 // המספר שליד כל קישור הוא אותו מספר שמופיע אחרי המילים בטקסט.
+// קישור שהצד השני שלו בעמוד אחר ("עמוד 4, שורה 12: «…»"): מהמערכת — מאשרים/מוחקים
+// בעמוד של הפירוש; קישור שנוסף כאן (_added) — "ביטול" מסיר את הפעולה עצמה (act.removeLink).
+// act.otherPage(n) (רשות) — בחירת הצד השני בעמוד אחר, כשהקישור ממתין לצד השני.
+
+export { farLabel }
 
 const KIND_HE = { note: 'הערה', dh: 'דיבור-המתחיל', join: 'המשך' }
 const MISSING_HE = {
@@ -18,13 +24,8 @@ const MISSING_HE = {
 }
 const btn = 'rounded-md px-2 py-0.5 text-xs transition-colors disabled:opacity-40'
 
-// שורה שבעמוד אחר (קישור-סעיף שזולג בין עמודים): "עמוד 4, שורה 12: «…»" — מספר-השורה ותחילת הטקסט מגיעים
-// מחוזה-העמוד (`to_line_no`/`to_text`, `from_line_no`/`from_text`); בלעדיהם — מזהה-השורה כמו קודם
-export function farLabel(page, lineNo, lineId, text) {
-  const t = String(text || '').trim()
-  const short = t.length > 32 ? `${t.slice(0, 32)}…` : t
-  return `עמוד ${page}, שורה ${lineNo != null ? lineNo + 1 : lineId}${short ? `: «${short}»` : ''}`
-}
+// אחד מצדי הקישור בעמוד אחר
+const isCrossPage = (k, page) => (k.to_page != null && k.to_page !== page) || (k.from_page != null && k.from_page !== page)
 
 function wordsText(line, range) {
   if (!line || !Array.isArray(range)) return null
@@ -59,12 +60,18 @@ export default function LinksTab({ view, readOnly = false, linkPending = null, a
         <p className="mt-1 text-xs text-on-surface/60">
           לכל שורת-הערה (או פירוש) קישור אחד. בשורה עם כמה הערות — קשרו את הראשונה; קישור חדש מאותה שורה מחליף את הקודם (תתבקשו לאשר).
         </p>
+        <p className="mt-1 text-xs text-on-surface/60">
+          הצד השני בעמוד אחר (פירוש שגולש לעמוד הקודם או הבא)? אחרי «קישור» הראשון בחרו את העמוד — בפס הכחול שמעל הטקסט או כאן — ולחצו שם על המילה.
+        </p>
         {linkPending ? (
-          <div className="mt-2 flex items-center gap-2 rounded-md bg-info-50 px-2 py-1 text-xs text-info-800">
-            <span className="flex-1">ממתין לצד השני{linkPending.from?.text ? ` של «${linkPending.from.text}»` : ''}</span>
-            <button type="button" onClick={act.cancelLink} className={`${btn} bg-white text-info-700`}>
-              ביטול
-            </button>
+          <div className="mt-2 rounded-md bg-info-50 px-2 py-1 text-xs text-info-800">
+            <div className="flex items-center gap-2">
+              <span className="flex-1">ממתין לצד השני{linkPending.from?.text ? ` של «${linkPending.from.text}»` : ''}</span>
+              <button type="button" onClick={act.cancelLink} className={`${btn} bg-white text-info-700`}>
+                ביטול
+              </button>
+            </div>
+            {act.otherPage && <OtherPageButtons page={view.page} onOtherPage={act.otherPage} />}
           </div>
         ) : (
           <button type="button" disabled={readOnly || !act.startLink} onClick={act.startLink} className={`${btn} mt-2 bg-surface-variant/60 hover:bg-surface-variant`}>
@@ -100,7 +107,19 @@ export default function LinksTab({ view, readOnly = false, linkPending = null, a
                 )}
               </div>
               {k.suspect && <div className="text-xs text-danger-700">{k.suspect}</div>}
-              {k.from_page != null && k.from_page !== view.page ? (
+              {k._added && isCrossPage(k, view.page) ? (
+                <div className="mt-1 flex gap-1">
+                  <button
+                    type="button"
+                    disabled={readOnly || !act.removeLink}
+                    onClick={() => act.removeLink(k)}
+                    title="הקישור שיצרתם לעמוד אחר לא יישלח (Ctrl+Z מחזיר אותו)"
+                    className={`${btn} bg-danger-100 text-danger-700`}
+                  >
+                    ✗ ביטול הקישור
+                  </button>
+                </div>
+              ) : k.from_page != null && k.from_page !== view.page ? (
                 <div className="mt-1 text-xs text-on-surface/50">מאשרים או מוחקים בעמוד {k.from_page}, שבו הפירוש</div>
               ) : (
               <div className="mt-1 flex gap-1">
