@@ -10,7 +10,7 @@ import ChangesTab from './ChangesTab'
 // הזמן: קישורים, פרטי השורה שבה הסמן, העמוד כולו, ורשימת השינויים.
 // extraTabs (רשות) — [{id, label, render(ctx)}]: לשוניות נוספות של דף עוטף (תוכנת-הספר), אחרי
 // הקבועות; ctx = {view, baseDoc, ops, stats, caretLine, caretLocked, linkPending, readOnly, act}.
-// מזהה שכבר קיים — מתעלמים ממנו.
+// מזהה שכבר קיים — מתעלמים ממנו. lockTitle (רשות) — ההסבר על שורה נעולה בכרטיסיית "שורה" (LineTab).
 
 export const DETAILS_TABS = [
   { id: 'links', label: 'קישורים' },
@@ -33,6 +33,7 @@ export default function DetailsDrawer({
   readOnly = false,
   act,
   extraTabs = null,
+  lockTitle,
   className = '',
 }) {
   const extra = Array.isArray(extraTabs)
@@ -64,7 +65,7 @@ export default function DetailsDrawer({
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-3" role="tabpanel">
         {tab === 'links' && <LinksTab view={view} readOnly={readOnly} linkPending={linkPending} act={act} />}
-        {tab === 'line' && <LineTab key={caretLine?.id ?? 'none'} view={view} line={caretLine} locked={caretLocked} readOnly={readOnly} act={act} />}
+        {tab === 'line' && <LineTab key={caretLine?.id ?? 'none'} view={view} line={caretLine} locked={caretLocked} readOnly={readOnly} act={act} lockTitle={lockTitle} />}
         {tab === 'page' && <PageTab view={view} stats={stats} readOnly={readOnly} act={act} />}
         {tab === 'changes' && <ChangesTab baseDoc={baseDoc} ops={ops} readOnly={readOnly} act={act} />}
         {own && own.render({ view, baseDoc, ops, stats, caretLine, caretLocked, linkPending, readOnly, act })}

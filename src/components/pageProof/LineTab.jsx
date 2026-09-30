@@ -45,8 +45,8 @@ function PredCard({ line }) {
   )
 }
 
-// line — השורה שבה הסמן (מהתצוגה); locked — ממתינה לזיהוי מחדש
-export default function LineTab({ view, line, locked = false, readOnly = false, act }) {
+// line — השורה שבה הסמן (מהתצוגה); locked — ממתינה לזיהוי מחדש; lockTitle — ההסבר עליה (ברירת-מחדל: של האתר)
+export default function LineTab({ view, line, locked = false, readOnly = false, act, lockTitle }) {
   const [why, setWhy] = useState('')
   if (!line) {
     return <div className="py-6 text-center text-sm text-on-surface/60">הציבו את הסמן בשורה בטקסט (או לחצו עליה בסריקה) כדי לראות את פרטיה</div>
@@ -67,7 +67,7 @@ export default function LineTab({ view, line, locked = false, readOnly = false, 
         {line._ok && <span className="rounded bg-success-100 px-1.5 text-xs text-success-800">✓ נכונה</span>}
         {line.recheck === true && <span className="rounded bg-warning-alt-100 px-1.5 text-xs text-warning-alt-900">זוהתה מחדש</span>}
         {(locked || temp) && (
-          <span className="rounded bg-warning-100 px-1.5 text-xs text-warning-800" title={RECUT_LINE_TITLE}>
+          <span className="rounded bg-warning-100 px-1.5 text-xs text-warning-800" title={lockTitle || RECUT_LINE_TITLE}>
             ממתינה לזיהוי מחדש
           </span>
         )}

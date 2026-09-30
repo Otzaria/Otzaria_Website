@@ -681,3 +681,108 @@ describe('ProofEditor — נקודות-הרחבה: משבצות', { timeout: 300
     expect(screen.getByTestId('own-mark').closest('[data-layer="extra"]')).not.toBeNull()
   })
 })
+
+// דף עוטף ששומר בשרת כל צעד (תוכנת-הספר): editorRef (flushable/rebase/goTo), onOpsChange, אישור שכבר נשמר
+// (preOkFromStatus + onUnapprovePre), נוסח לשורה נעולה (help.lockedLine) ופתיחת העזרה (helpAutoOpen)
+describe('ProofEditor — נקודות-הרחבה: שמירה בשרת', { timeout: 30000 }, () => {
+  const refOf = () => ({ current: null })
+  const withLines = (fn) => {
+    const pg = makePage()
+    return { ...pg, doc: { ...pg.doc, lines: pg.doc.lines.map(fn) } }
+  }
+
+  it('editorRef + onOpsChange: מה שלא נשמר (flushable), ו-rebase על העמוד מהשרת — הסמן נשאר, Ctrl+Z עובר לדף העוטף', async () => {
+    const ref = refOf()
+    const onOpsChange = vi.fn()
+    const onUndoEmpty = vi.fn()
+    const { editor, page } = setup({ editorRef: ref, onOpsChange, onUndoEmpty, canUndoEmpty: true })
+    expect(typeof ref.current.flushable).toBe('function')
+    await caretAt(editor(), { lineId: 3, offset: 4 })
+    act(() => {
+      editor().dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: 'ה' }))
+    })
+    await waitFor(() => expect(onOpsChange).toHaveBeenLastCalledWith([expect.objectContaining({ kind: 'text', ids: [3], value: 'ועודה פסקה שנייה' })]))
+    const f = ref.current.flushable({ all: true })
+    expect(f.steps).toHaveLength(1)
+    expect(f.steps[0].ops[0]._s).toBe(f.steps[0].sid)
+    // השרת שמר (והחזיר את השורה עם התיקון)
+    const fresh = { ...page.doc, lines: page.doc.lines.map((l) => (l.id === 3 ? { ...l, text: 'ועודה פסקה שנייה' } : l)) }
+    let r
+    act(() => {
+      r = ref.current.rebase(fresh, { drop: [f.steps[0].sid] })
+    })
+    expect(r.dropped).toEqual([])
+    expect(opsNow()).toEqual([])
+    expect(onOpsChange).toHaveBeenLastCalledWith([])
+    expect(editor()).toHaveTextContent('ועודה פסקה שנייה')
+    expect(readDomSelection(editor())).toEqual({ anchor: { lineId: 3, offset: 5 }, focus: { lineId: 3, offset: 5 } })
+    fireEvent.keyDown(editor(), { key: 'z', code: 'KeyZ', ctrlKey: true })
+    expect(onUndoEmpty).toHaveBeenCalledTimes(1)
+  })
+
+  it('rebase: הסמן עובר דרך מיפוי-המזהים ודרך כיווץ-הרווחים של השרת; goTo מהדף העוטף', async () => {
+    const ref = refOf()
+    const { editor, page } = setup({ editorRef: ref })
+    act(() => editor().focus())
+    await caretAt(editor(), { lineId: 2, offset: 9 })
+    // שורה 2 התחלפה בשרת (מזהה 7), והטקסט שלה חזר עם רווח כפול מכווץ
+    const lines = page.doc.lines.map((l) => (l.id === 2 ? { ...l, id: 7, text: 'משום רבי שמעון' } : l))
+    act(() => {
+      ref.current.rebase({ ...page.doc, lines }, { drop: [], idMap: { 2: 7 } })
+    })
+    expect(readDomSelection(editor())).toEqual({ anchor: { lineId: 7, offset: 9 }, focus: { lineId: 7, offset: 9 } })
+    act(() => {
+      ref.current.rebase({ ...page.doc, lines: lines.map((l) => (l.id === 7 ? { ...l, text: 'משום  רבי שמעון' } : l)) }, { drop: [] })
+    })
+    act(() => {
+      ref.current.rebase({ ...page.doc, lines }, { drop: [] })
+    })
+    expect(readDomSelection(editor())).toEqual({ anchor: { lineId: 7, offset: 9 }, focus: { lineId: 7, offset: 9 } })
+    act(() => {
+      ref.current.goTo(1)
+    })
+    await waitFor(() => expect(screen.getByText('שורה 1')).toBeInTheDocument())
+  })
+
+  it('אישור שכבר נשמר (preOkFromStatus): בלי onUnapprovePre — כמו באתר (הכפתור כבוי); איתו — פעיל, ולדף העוטף', () => {
+    const page = withLines((l) => (l.id <= 2 ? { ...l, status: 'ok' } : l))
+    const site = setup({ page, preOkFromStatus: true })
+    const gutter = () => site.editor().querySelector('[data-para="1:0"] [data-gutter]')
+    expect(site.editor().querySelector('[data-para="1:0"]')).toHaveAttribute('data-approved', '1')
+    expect(gutter()).toBeDisabled()
+    expect(lastArgs.approval).toEqual({ approved: 1, total: 3 })
+    site.unmount()
+
+    const onUnapprovePre = vi.fn()
+    const bk = setup({ page, preOkFromStatus: true, onUnapprovePre })
+    const g = bk.editor().querySelector('[data-para="1:0"] [data-gutter]')
+    expect(g).toBeEnabled()
+    expect(g).toHaveAttribute('aria-label', 'הפסקה אושרה — לחיצה מבטלת את האישור')
+    fireEvent.click(g)
+    expect(onUnapprovePre).toHaveBeenCalledWith({ key: '1:0', lineIds: [1, 2] })
+    expect(opsNow()).toEqual([])
+  })
+
+  it('help.lockedLine — ההסבר על שורה נעולה (בטקסט ובכרטיסיית "שורה"); בלעדיו — הנוסח של האתר', async () => {
+    const lockedLine = 'נוסח של הדף העוטף'
+    const { editor } = setup({ lockedExtra: [2], help: { lockedLine } })
+    expect(editor().querySelector('[data-line="2"]')).toHaveAttribute('title', lockedLine)
+    await caretAt(editor(), { lineId: 2, offset: 1 })
+    fireEvent.click(screen.getByRole('button', { name: 'פרטים' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'שורה', exact: true }))
+    expect(screen.getByText('ממתינה לזיהוי מחדש', { selector: 'span[title]' })).toHaveAttribute('title', lockedLine)
+  })
+
+  it('helpAutoOpen: פתיחת העזרה לבד — גם בלי טיוטות; false — לעולם לא', async () => {
+    window.localStorage.removeItem(HELP_SEEN_KEY)
+    const a = setup({ persist: false, helpAutoOpen: true })
+    await waitFor(() => expect(screen.getByRole('dialog', { name: 'מה עושים בעמוד?' })).toBeInTheDocument())
+    a.unmount()
+    window.localStorage.removeItem(HELP_SEEN_KEY)
+    setup({ helpAutoOpen: false })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    expect(screen.queryByRole('dialog', { name: 'מה עושים בעמוד?' })).toBeNull()
+  })
+})
