@@ -42,7 +42,7 @@ const doc = () => ({
 
 // כמו useProofEditor: בדיקה מול העמוד המקורי, רשימת-פעולות, תצוגה מחושבת.
 // onView(view) — התצוגה העדכנית (הזרם שכל שורה קיבלה מהמסגרות)
-function Harness({ base, log, initialMode = 'frames', readOnly = false, locked, onPick, onView, tab = 'main', currentWord = -1, current = 1 }) {
+function Harness({ base, log, initialMode = 'frames', readOnly = false, locked, onPick, onView, tab = 'main', currentWord = -1, current = 1, ...more }) {
   const [ops, setOps] = useState([])
   const [mode, setMode] = useState(initialMode)
   const view = useMemo(() => buildView(base, ops), [base, ops])
@@ -74,6 +74,7 @@ function Harness({ base, log, initialMode = 'frames', readOnly = false, locked, 
       onPickLine={onPick}
       push={push}
       frameStreamDefault={tab}
+      {...more}
     />
   )
 }
@@ -654,5 +655,61 @@ describe('ScanPanel — "השורה שייכת למסגרת הזו" (שורה ש
   it('תצוגה בלבד — בלי הפעולה', () => {
     setup({ base: base(), current: 2, readOnly: true })
     expect(screen.queryByTestId('straddle-claim')).toBeNull()
+  })
+})
+
+// נקודות-ההרחבה לדף עוטף (תוכנת-הספר): שכבה על הסריקה, פעולות בחלונית-המסגרת, והבחירה
+// בלוח. בלעדיהן (האתר) — הלוח כמו בכל הטסטים שלמעלה
+describe('ScanPanel — נקודות-הרחבה לדף עוטף', () => {
+  it('scanOverlay: שכבה בתוך ה-SVG, מתחת לסמן — ReactNode או פונקציה שמקבלת את הזום והמצב', async () => {
+    const layer = vi.fn(({ zoom, mode }) => <rect data-testid="own-layer" data-zoom={zoom} data-mode={mode} x="0" y="0" width="10" height="10" />)
+    const { container } = setup({ scanOverlay: layer })
+    const own = screen.getByTestId('own-layer')
+    expect(own.closest('[data-layer="extra"]')).not.toBeNull()
+    expect(own.closest('svg')).toBe(svgOf())
+    expect(own).toHaveAttribute('data-zoom', '1')
+    expect(own).toHaveAttribute('data-mode', 'frames')
+    await userEvent.click(screen.getByRole('button', { name: 'שורות' }))
+    expect(screen.getByTestId('own-layer')).toHaveAttribute('data-mode', 'lines')
+    expect(container.querySelector('[data-layer="extra"]').getAttribute('pointer-events')).toBe('none')
+  })
+
+  it('בלי scanOverlay — אין שכבה נוספת', () => {
+    const { container } = setup()
+    expect(container.querySelector('[data-layer="extra"]')).toBeNull()
+  })
+
+  it('frameActions: שורה נוספת בחלונית של המסגרת הנבחרת, עם המסגרת עצמה', () => {
+    const frameActions = vi.fn((f) => <button type="button">המשך בעמוד הבא ({f.fid})</button>)
+    setup({ frameActions })
+    click(700, 170)
+    const extra = within(screen.getByTestId('frame-popover')).getByTestId('frame-extra')
+    expect(extra).toHaveTextContent(/המשך בעמוד הבא/)
+    expect(frameActions).toHaveBeenLastCalledWith(expect.objectContaining({ stream: 'main' }))
+  })
+
+  it('בלי frameActions — החלונית כמו באתר', () => {
+    setup()
+    click(700, 170)
+    expect(within(screen.getByTestId('frame-popover')).queryByTestId('frame-extra')).toBeNull()
+  })
+
+  it('onSelectionChange: השורות שנבחרו במצב "שורות", והמסגרת הנבחרת במצב "מסגרות"', () => {
+    const onSelectionChange = vi.fn()
+    setup({ initialMode: 'lines', onSelectionChange })
+    expect(onSelectionChange).toHaveBeenLastCalledWith({ from: 'scan', lineIds: [], fid: null })
+    click(700, 120)
+    expect(onSelectionChange).toHaveBeenLastCalledWith({ from: 'scan', lineIds: [1], fid: null })
+    click(700, 170, { shiftKey: true })
+    expect(onSelectionChange).toHaveBeenLastCalledWith({ from: 'scan', lineIds: [1, 2], fid: null })
+  })
+
+  it('onSelectionChange במצב "מסגרות": המסגרת שנלחצה', () => {
+    const onSelectionChange = vi.fn()
+    setup({ onSelectionChange })
+    click(700, 170)
+    const last = onSelectionChange.mock.calls.at(-1)[0]
+    expect(last.from).toBe('scan')
+    expect(typeof last.fid).toBe('string')
   })
 })

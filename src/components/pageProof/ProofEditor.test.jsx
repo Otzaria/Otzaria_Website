@@ -5,6 +5,7 @@ import { LAYOUT_KEY } from '@/lib/pageProof/layout'
 import { HINTS } from '@/lib/pageProof/flowEdit'
 import { readDomSelection, setDomSelection } from './flowDom'
 import ProofEditor from './ProofEditor'
+import { CHAR_STYLE_BUTTONS } from './ProofToolbar'
 
 // החלונות (אישור/הודעה) — מדומים, כדי לבחור מה המשתמש עונה
 const dlg = vi.hoisted(() => ({ confirm: false, api: null }))
@@ -581,5 +582,102 @@ describe('ProofEditor — נקודות-הרחבה: מקשים, ביטול וגו
     const panes = container.querySelector('[data-proof-panes]')
     expect(panes).not.toBeNull()
     expect(panes.className).toContain('lg:h-[calc(100vh_-_var(--proof-chrome,12.5rem))]')
+  })
+})
+
+// המשבצות לדף עוטף (תוכנת-הספר): שורות נעולות נוספות, לשוניות בלוח הפרטים, תצוגת-טקסט אחרת,
+// הבחירה, כפתורי עיצוב-תווים, תפריט "⋯", ושכבה/פעולות לסריקה. בלעדיהן (האתר) — כמו קודם
+describe('ProofEditor — נקודות-הרחבה: משבצות', { timeout: 30000 }, () => {
+  it('lockedExtra: הטקסט של השורות האלה נעול, כמו שורה שממתינה לזיהוי-מחדש', () => {
+    const { editor } = setup({ lockedExtra: [1] })
+    expect(editor().querySelector('[data-line="1"]')).toHaveAttribute('contenteditable', 'false')
+    expect(editor().querySelector('[data-line="1"]')).toHaveAttribute('data-locked', '1')
+    expect(editor().querySelector('[data-line="2"]')).not.toHaveAttribute('data-locked')
+  })
+
+  it('בלי lockedExtra — שום שורה אינה נעולה', () => {
+    const { editor } = setup()
+    expect(editor().querySelectorAll('[data-locked]')).toHaveLength(0)
+  })
+
+  it('extraTabs: לשונית נוספת בלוח הפרטים, אחרי הקבועות, עם מה שהעורך יודע (השורה שבסמן)', async () => {
+    const extraTabs = [
+      { id: 'tag', label: 'תיוג', render: (ctx) => <p data-testid="tag-tab">שורה שבסמן: {ctx.caretLine?.id ?? 'אין'}</p> },
+      { id: 'links', label: 'כפולה', render: () => <p>לא אמור להופיע</p> },
+    ]
+    const { editor } = setup({ extraTabs })
+    await caretAt(editor(), { lineId: 2, offset: 1 })
+    fireEvent.click(screen.getByRole('button', { name: 'פרטים' }))
+    const drawer = screen.getByRole('complementary', { name: 'פרטים' })
+    expect(within(drawer).getAllByRole('tab').map((t) => t.textContent)).toEqual(['קישורים', 'שורה', 'עמוד', 'שינויים', 'תיוג'])
+    fireEvent.click(within(drawer).getByRole('tab', { name: 'תיוג' }))
+    expect(within(drawer).getByTestId('tag-tab')).toHaveTextContent('שורה שבסמן: 2')
+  })
+
+  it('textView: מה שמוצג בלוח-הטקסט — עם העורך הזורם (flow) ו-goTo לשורה', async () => {
+    const textView = ({ flow, tabKey, goTo }) => (
+      <div data-testid="own-view" data-tab={tabKey}>
+        <button type="button" onClick={() => goTo(3)}>
+          לשורה 3
+        </button>
+        {flow}
+      </div>
+    )
+    const { editor } = setup({ textView })
+    expect(screen.getByTestId('own-view')).toHaveAttribute('data-tab', 'main')
+    expect(editor()).toHaveTextContent('אמר רבי יוחנן')
+    fireEvent.click(screen.getByRole('button', { name: 'לשורה 3' }))
+    expect(await screen.findByText('שורה 3')).toBeInTheDocument()
+  })
+
+  it('textView שמחליף את העורך — אין עורך זורם', () => {
+    setup({ textView: () => <pre data-testid="codes">קודי אוצריא</pre> })
+    expect(screen.getByTestId('codes')).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: /טקסט הזרם/ })).toBeNull()
+  })
+
+  it('onSelectionChange: הבחירה בטקסט (השורות שבה), וגם מהסריקה', async () => {
+    const onSelectionChange = vi.fn()
+    const { editor } = setup({ onSelectionChange })
+    // מהסריקה: ScanPanel מדווח את הבחירה ההתחלתית (ריקה)
+    expect(onSelectionChange).toHaveBeenCalledWith({ from: 'scan', lineIds: [], fid: null })
+    await caretAt(editor(), { lineId: 1, offset: 2 }, { lineId: 2, offset: 3 })
+    expect(onSelectionChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ from: 'text', anchor: { lineId: 1, offset: 2 }, focus: { lineId: 2, offset: 3 }, lineIds: [1, 2] })
+    )
+    await caretAt(editor(), { lineId: 3, offset: 0 })
+    expect(onSelectionChange).toHaveBeenLastCalledWith(expect.objectContaining({ from: 'text', lineIds: [3] }))
+  })
+
+  it('charStyleButtons: כפתורים נוספים לעיצוב-תווים (למשל "מרווח") — פעולת styles כרגיל', async () => {
+    const charStyleButtons = [...CHAR_STYLE_BUTTONS, { key: 'spaced', sign: 'א ב', he: 'מרווח' }]
+    const { editor } = setup({ charStyleButtons })
+    await caretAt(editor(), { lineId: 1, offset: 5 })
+    fireEvent.click(screen.getByRole('button', { name: 'מרווח' }))
+    expect(opsNow()).toEqual([{ kind: 'styles', ids: [1], value: { style: 'spaced', words: [1, 1], on: true } }])
+  })
+
+  it('בלי charStyleButtons — הכפתורים של האתר, בלי "מרווח"', () => {
+    setup()
+    expect(screen.getByRole('button', { name: 'מודגש' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'מרווח' })).toBeNull()
+  })
+
+  it('moreMenu: תפריט "⋯" בסרגל, והבחירה חוזרת לדף העוטף; בלעדיו — אין תפריט', async () => {
+    const onSelect = vi.fn()
+    setup({ moreMenu: { items: [{ key: 'reanalyze', label: 'ניתוח-מחדש של העמוד' }], onSelect } })
+    fireEvent.click(screen.getByRole('button', { name: 'עוד פעולות' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'ניתוח-מחדש של העמוד' }))
+    expect(onSelect).toHaveBeenCalledWith('reanalyze')
+  })
+
+  it('בלי moreMenu — אין "עוד פעולות"', () => {
+    setup()
+    expect(screen.queryByRole('button', { name: 'עוד פעולות' })).toBeNull()
+  })
+
+  it('scanOverlay עובר לסריקה (שכבה ב-SVG)', () => {
+    setup({ scanOverlay: <circle data-testid="own-mark" cx="10" cy="10" r="5" /> })
+    expect(screen.getByTestId('own-mark').closest('[data-layer="extra"]')).not.toBeNull()
   })
 })

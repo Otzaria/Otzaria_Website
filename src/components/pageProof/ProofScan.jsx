@@ -62,6 +62,8 @@ import {
 //                   המסגרת) הרכיב ממקם אותו מחוץ למסגרת — לצדה, או מעליה/מתחתיה, איפה
 //                   שיש מקום בחלון; בלוח צר — לצדה ברוחב שיש שם (popoverBeside) — ומסתיר
 //                   אותו בזמן גרירה/שינוי-גודל של מסגרת
+//   svgLayer        (רשות, לדף עוטף) שכבה בתוך ה-SVG, במרחב הפיקסלים של התמונה, מתחת לסמן:
+//                   ReactNode או ({zoom, mode, view}) => ReactNode; בלי אירועי-עכבר
 // אירועים (נקודות בפיקסלי-תמונה; תיבות תקינות לחוזה — שלמות ובתוך התמונה):
 //   onClick({point, frame, line, additive, at})  לחיצה בלי גרירה; frame — רק ב-frames.
 //     לחיצה על ידית בלי גרירה אינה לחיצה
@@ -133,6 +135,7 @@ export default function ProofScan({
   drawColor = '#1a56db',
   overlay = null,
   overlayFor = null,
+  svgLayer = null,
   onClick,
   onDraw,
   onBand,
@@ -581,6 +584,12 @@ export default function ProofScan({
                     />
                   )
                 })}
+              </g>
+            )}
+
+            {svgLayer && (
+              <g data-layer="extra" pointerEvents="none">
+                {typeof svgLayer === 'function' ? svgLayer({ zoom, mode, view }) : svgLayer}
               </g>
             )}
 

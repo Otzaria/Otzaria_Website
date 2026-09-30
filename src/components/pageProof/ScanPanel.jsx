@@ -61,6 +61,11 @@ import {
 //                       extra = {wordIndex} כשידועה המילה שמתחת לעכבר (לפי תיבות-המילים)
 //   push(...ops)        הוספת פעולות כקבוצת-Undo אחת; מחזיר true אם התקבלו
 //   frameStreamDefault  הלשונית הפעילה בטקסט — הזרם ההתחלתי של "מסגרת חדשה"
+//   לדף עוטף (תוכנת-הספר), רשות — בלעדיהם הלוח כמו באתר:
+//   scanOverlay         שכבה על הסריקה במרחב הפיקסלים של התמונה (ProofScan: svgLayer)
+//   frameActions(frame) ReactNode נוסף בחלונית של המסגרת הנבחרת (FramePopover: extra)
+//   onSelectionChange({from:'scan', lineIds, fid})  הבחירה בלוח השתנתה: השורות הנבחרות
+//                       (מצב "שורות") והמסגרת הנבחרת
 //
 // מסגרות: כשאין בעמוד מסגרות מוצגת "הצעת המחשב" (autoFrames — מקווקוות, "הצעה").
 // העריכה הראשונה (או "✓ המסגרות נכונות") שומרת את *כל* ההצעות: frames_set +
@@ -212,6 +217,9 @@ export default function ScanPanel({
   onPickLine,
   push,
   frameStreamDefault = 'main',
+  scanOverlay = null,
+  frameActions = null,
+  onSelectionChange = null,
 }) {
   const [W, H] = pageSize(view)
   const P = view?.page
@@ -301,6 +309,13 @@ export default function ScanPanel({
   // הבחירה ל"מסגרת חדשה": זרם, זרם-כותרת או "ריהוט הדף" (הזרם האמיתי נקבע בציור)
   const drawStream = picked && picked.forDefault === frameStreamDefault ? picked.key : drawStreamFor(frameStreamDefault)
   const selFrame = mode === 'frames' ? fs.frames.find((f) => f.fid === selectedFid) || null : null
+
+  // הבחירה בלוח — לדף העוטף (רשות): השורות הנבחרות (מצב "שורות") והמסגרת הנבחרת
+  const selFid = selFrame?.fid ?? null
+  useEffect(() => {
+    onSelectionChange?.({ from: 'scan', lineIds: selectedIds, fid: selFid })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- רק כשהבחירה משתנה
+  }, [selectedIds, selFid])
 
   // "השורה שייכת למסגרת הזו" — לשורה שבולטת מהמסגרת: במצב "מסגרות" לשורה שבסמן (לחיצה על
   // השורה בסריקה או בטקסט), במצב "שורות" לשורה היחידה שנבחרה
@@ -423,6 +438,7 @@ export default function ScanPanel({
         suggested={fs.suggested}
         onClaimLine={claimHere && claimHere.frame.fid === fid ? () => claimLine(claimHere) : null}
         claimTitle={CLAIM_TITLE}
+        extra={typeof frameActions === 'function' ? frameActions(selFrame) : null}
         onStream={(key) => {
           // "ריהוט הדף" — כותרת עמוד / תחתית לפי השורות שבמסגרת ומקומה בעמוד
           const stream = resolveFrameStream(key, selFrame.bbox, lines, H)
@@ -733,6 +749,7 @@ export default function ScanPanel({
           drawColor={choiceInfo(view, drawStream).color}
           overlay={popover}
           overlayFor={popover ? selFrame.fid : null}
+          svgLayer={scanOverlay}
           onClick={mode === 'frames' ? onFramesClick : onLinesClick}
           onDraw={mode === 'frames' ? onDrawFrame : onAddLine}
           onBand={onBand}

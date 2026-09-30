@@ -69,6 +69,17 @@ import { caretTop } from './flowDom'
 //     הכפתור בסרגל נשאר פעיל גם בלי היסטוריה מקומית.
 //   גובה הלוחות במסך רחב: 100vh פחות המשתנה --proof-chrome (ברירת-המחדל 12.5rem — כותרת האתר,
 //     הסרגל ושורת-המצב). דף עוטף עם מסגרת אחרת קובע אותו על אחד ההורים; הלוחות — data-proof-panes.
+//   lockedExtra — מזהי-שורות נוספים שהטקסט שלהם נעול (למשל שורות שממתינות לזיהוי-מחדש אצל הדף העוטף).
+//   extraTabs — [{id, label, render(ctx)}]: לשוניות נוספות בלוח הפרטים; ctx = {view, baseDoc, ops,
+//     stats, caretLine, caretLocked, linkPending, readOnly, act}.
+//   scanOverlay — שכבה על הסריקה במרחב הפיקסלים של התמונה: ReactNode או ({zoom, mode, view}) => ReactNode.
+//   textView({flow, view, tabKey, goTo}) — מה שמוצג בלוח-הטקסט במקום העורך הזורם (flow = העורך).
+//   onSelectionChange(sel) — הבחירה השתנתה: {from:'text', anchor, focus, lineIds} מהטקסט,
+//     או {from:'scan', lineIds, fid} מהסריקה (שורות נבחרות במצב "שורות", המסגרת הנבחרת).
+//   charStyleButtons — כפתורי עיצוב-התווים בסרגל (ברירת-המחדל: ProofToolbar.CHAR_STYLE_BUTTONS).
+//   moreMenu — {items, onSelect, label?, title?}: תפריט "⋯" בסרגל (פריטים כמו ב-ToolbarMenu).
+//   frameActions(frame) — ReactNode נוסף בחלונית של מסגרת נבחרת.
+//   scanOverlay ו-frameActions עוברים ללוח-הסריקה הממוזכר — בזהות קבועה (useMemo/useCallback).
 //
 // הסמן משותף לטקסט ולסריקה: השורה שבה הסמן מסומנת על הסריקה, ולחיצה על
 // הסריקה מעבירה את הסמן לשורה שם (ולשונית הזרם שלה).
@@ -204,6 +215,14 @@ export default function ProofEditor({
   onRedoEmpty = null,
   canUndoEmpty = false,
   canRedoEmpty = false,
+  lockedExtra = null,
+  extraTabs = null,
+  scanOverlay = null,
+  textView = null,
+  onSelectionChange = null,
+  charStyleButtons = null,
+  moreMenu = null,
+  frameActions = null,
 }) {
   const baseDoc = page.doc
   const P = baseDoc.page
@@ -241,7 +260,11 @@ export default function ProofEditor({
 
   // ---- נגזרות ----
   const lineById = useMemo(() => new Map(view.lines.map((l) => [l.id, l])), [view])
-  const locked = useMemo(() => new Set(recutLineIds(baseDoc, ops)), [baseDoc, ops])
+  const locked = useMemo(() => {
+    const s = new Set(recutLineIds(baseDoc, ops))
+    for (const id of lockedExtra || []) s.add(id)
+    return s
+  }, [baseDoc, ops, lockedExtra])
   const recheck = useMemo(() => new Set(recheckLineIds(baseDoc)), [baseDoc])
   const recheckCount = useMemo(() => view.lines.filter((l) => recheck.has(l.id) && l.status !== 'removed').length, [view, recheck])
   const endpoints = useMemo(() => linkEndpoints(view), [view])
@@ -549,7 +572,7 @@ export default function ProofEditor({
   // ---- ה-callbacks היציבים (לרכיבים ממוזכרים) — תמיד על המצב העדכני ----
   const live = useRef(null)
   useLayoutEffect(() => {
-    live.current = { approve, unapprove, goTo, charStyle, joinPara, undo, redo, link, cancelLink, approveAtCaret, goSuspicious, openSuggest, linkPending, readOnly, P, loadOtherPage, onExtraKey }
+    live.current = { approve, unapprove, goTo, charStyle, joinPara, undo, redo, link, cancelLink, approveAtCaret, goSuspicious, openSuggest, linkPending, readOnly, P, loadOtherPage, onExtraKey, onSelectionChange }
   })
   const stable = useMemo(
     () => ({
@@ -573,9 +596,20 @@ export default function ProofEditor({
       setMode: (m) => setScanMode(m),
       // הטעינה של העמוד האחר דרך הדף העוטף — זהות קבועה, כדי שהחלון לא יטען שוב בכל רינדור
       loadOtherPage: (gid, n) => live.current.loadOtherPage(gid, n),
+      // הבחירה בסריקה — לדף העוטף (זהות קבועה: הסריקה ממוזכרת)
+      onScanSelection: (s) => live.current.onSelectionChange?.(s),
     }),
     [say, selectFromText]
   )
+
+  // ---- הבחירה בטקסט — לדף העוטף (רשות; הבחירה בסריקה — ScanPanel) ----
+  // רק כשהבחירה או הלשונית משתנות, לא בכל שינוי בתצוגה (הקלדה)
+  useEffect(() => {
+    if (typeof onSelectionChange !== 'function') return
+    const ranges = sel && !isCollapsed(sel) ? selectionToLineRanges(view, tabKey, sel.anchor, sel.focus) : sel?.focus ? [{ lineId: sel.focus.lineId }] : []
+    onSelectionChange({ from: 'text', anchor: sel?.anchor ?? null, focus: sel?.focus ?? null, lineIds: [...new Set(ranges.map((r) => r.lineId))] })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sel, tabKey])
 
   // ---- הסריקה עוקבת אחרי הסמן (track) ----
   // המדידה: בפריים שאחרי הרינדור (העורך כבר הציב את הסמן וגלל אליו), מהמקום של הסמן
@@ -734,8 +768,37 @@ export default function ProofEditor({
         onPickLine={stable.onPickLine}
         push={push}
         frameStreamDefault={tabKey}
+        scanOverlay={scanOverlay}
+        frameActions={frameActions}
+        onSelectionChange={typeof onSelectionChange === 'function' ? stable.onScanSelection : undefined}
       />
     </div>
+  )
+
+  const flow = (
+    <FlowEditor
+      view={view}
+      tabKey={tabKey}
+      push={push}
+      readOnly={readOnly}
+      locked={locked}
+      recheck={recheck}
+      approval={furnitureTab ? null : tabAppr}
+      endpoints={endpoints}
+      caretLineId={caretLine?.id ?? null}
+      request={request}
+      onSelect={stable.onSelect}
+      onHint={say}
+      onApprove={stable.onApprove}
+      onUnapprove={stable.onUnapprove}
+      onUndo={stable.onUndo}
+      onRedo={stable.onRedo}
+      onFormat={stable.onFormat}
+      onWordEnter={pop.onWordEnter}
+      onWordLeave={pop.onWordLeave}
+      onJump={stable.onJump}
+      onJoinPara={readOnly ? null : stable.onJoinPara}
+    />
   )
 
   const textPane = (
@@ -754,31 +817,7 @@ export default function ProofEditor({
         fontSize={layout.fontSize}
         fontFamily={fontFamily}
         className="h-full"
-        editorSlot={
-          <FlowEditor
-            view={view}
-            tabKey={tabKey}
-            push={push}
-            readOnly={readOnly}
-            locked={locked}
-            recheck={recheck}
-            approval={furnitureTab ? null : tabAppr}
-            endpoints={endpoints}
-            caretLineId={caretLine?.id ?? null}
-            request={request}
-            onSelect={stable.onSelect}
-            onHint={say}
-            onApprove={stable.onApprove}
-            onUnapprove={stable.onUnapprove}
-            onUndo={stable.onUndo}
-            onRedo={stable.onRedo}
-            onFormat={stable.onFormat}
-            onWordEnter={pop.onWordEnter}
-            onWordLeave={pop.onWordLeave}
-            onJump={stable.onJump}
-            onJoinPara={readOnly ? null : stable.onJoinPara}
-          />
-        }
+        editorSlot={typeof textView === 'function' ? textView({ flow, view, tabKey, goTo }) : flow}
       />
     </div>
   )
@@ -812,6 +851,8 @@ export default function ProofEditor({
         actions={actionsNode}
         readOnly={readOnly}
         className={toolbarClassName}
+        charStyleButtons={charStyleButtons ?? undefined}
+        moreMenu={moreMenu}
       />
 
       {ed.error && (
@@ -845,6 +886,7 @@ export default function ProofEditor({
               className="h-full"
               tab={detailsTab}
               setTab={setDetailsTab}
+              extraTabs={extraTabs}
               onClose={() => setDetailsOpen(false)}
               view={view}
               baseDoc={baseDoc}
