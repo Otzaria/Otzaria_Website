@@ -18,6 +18,14 @@ const MISSING_HE = {
 }
 const btn = 'rounded-md px-2 py-0.5 text-xs transition-colors disabled:opacity-40'
 
+// שורה שבעמוד אחר (קישור-סעיף שזולג בין עמודים): "עמוד 4, שורה 12: «…»" — מספר-השורה ותחילת הטקסט מגיעים
+// מחוזה-העמוד (`to_line_no`/`to_text`, `from_line_no`/`from_text`); בלעדיהם — מזהה-השורה כמו קודם
+export function farLabel(page, lineNo, lineId, text) {
+  const t = String(text || '').trim()
+  const short = t.length > 32 ? `${t.slice(0, 32)}…` : t
+  return `עמוד ${page}, שורה ${lineNo != null ? lineNo + 1 : lineId}${short ? `: «${short}»` : ''}`
+}
+
 function wordsText(line, range) {
   if (!line || !Array.isArray(range)) return null
   const ws = tokenize(line.text).filter((t) => t.w === 'word')
@@ -74,9 +82,13 @@ export default function LinksTab({ view, readOnly = false, linkPending = null, a
                 <span className="font-bold text-info-700">{linkBadge(idx + 1)}</span>
                 {KIND_HE[k.kind] || k.kind} · {k.src === 'human' ? 'אושר' : `אוטומטי${typeof k.conf === 'number' ? ` ${Math.round(k.conf * 100)}%` : ''}`}
               </div>
-              <button type="button" className="block text-right hover:underline" onClick={() => act.jumpToLine(k.from_line, k.from_words?.[0])}>
-                {label(k.from_line, k.from_words)}
-              </button>
+              {k.from_page != null && k.from_page !== view.page ? (
+                <div className="text-right">{farLabel(k.from_page, k.from_line_no, k.from_line, k.from_text)}</div>
+              ) : (
+                <button type="button" className="block text-right hover:underline" onClick={() => act.jumpToLine(k.from_line, k.from_words?.[0])}>
+                  {label(k.from_line, k.from_words)}
+                </button>
+              )}
               <div className="text-xs text-on-surface/50">
                 ←{' '}
                 {k.to_page == null || k.to_page === view.page ? (
@@ -84,10 +96,13 @@ export default function LinksTab({ view, readOnly = false, linkPending = null, a
                     {label(k.to_line, k.to_words || k.words)}
                   </button>
                 ) : (
-                  `עמוד ${k.to_page}, שורה ${k.to_line}`
+                  farLabel(k.to_page, k.to_line_no, k.to_line, k.to_text)
                 )}
               </div>
               {k.suspect && <div className="text-xs text-danger-700">{k.suspect}</div>}
+              {k.from_page != null && k.from_page !== view.page ? (
+                <div className="mt-1 text-xs text-on-surface/50">מאשרים או מוחקים בעמוד {k.from_page}, שבו הפירוש</div>
+              ) : (
               <div className="mt-1 flex gap-1">
                 {k.src !== 'human' && k.to_line != null && (
                   <button type="button" disabled={readOnly} onClick={() => act.linkOk(k.from_line)} className={`${btn} bg-success-100 text-success-800`}>
@@ -98,6 +113,7 @@ export default function LinksTab({ view, readOnly = false, linkPending = null, a
                   ✗ שגוי
                 </button>
               </div>
+              )}
             </li>
           ))}
         </ul>
