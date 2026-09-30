@@ -19,6 +19,7 @@ import {
 } from '@/lib/pageProof/importRules';
 import { pageSig, submissionDetail } from '@/lib/pageProof/adminReview';
 import { getPageProofSession } from '@/lib/pageProof/tokenAuth';
+import { cancelRecutRequests, recutReturn } from '@/lib/pageProof/recutRequests';
 
 // גם במפתח-גישה של תוכנת-הספר: GET — read, PATCH — review
 async function gate(request, params, scope) {
@@ -88,7 +89,11 @@ export async function GET(request, { params }) {
 //             הוא ממתין לזיהוי-מחדש בגלל הגשה מאושרת אחרת.
 //   release_recut — העמוד של ההגשה ממתין לזיהוי-מחדש אבל לא יחזור מהתוכנה
 //             (למשל תיקון-החיתוך נכשל שם): נסגר בלי זיהוי-מחדש — הושלם, או פתוח
-//             לבודק נוסף בעמוד כפול. ההגשות עצמן לא משתנות.
+//             לבודק נוסף בעמוד כפול. ההגשות עצמן לא משתנות — חוץ מבקשת מתנדב
+//             לזיהוי-מחדש (recutRequest): היא מתבטלת (rejected, עם הסבר), והעמוד חוזר
+//             אל המתנדב שביקש (התפיסה שלו מתחדשת) — הוא ממשיך מהטיוטה שלו.
+//   בקשת מתנדב לזיהוי-מחדש אינה נדחית ב-reject (היא לא נספרה במונים של העמוד) —
+//   מבטלים אותה ב-release_recut.
 // הגשה שנעשתה על גרסה קודמת של העמוד (שכבר הוחלף) משנה רק את עצמה — לא את
 // המונים ולא את המצב של העמוד החדש.
 // הבודק נרשם מה-session; במפתח-גישה — בעל המפתח, בשם "<שם> (תוכנת-הספר)".
@@ -107,7 +112,7 @@ export async function PATCH(request, { params }) {
       reviewNote: note,
     };
     await connectDB();
-    const sub = await PageProofSubmission.findById(id, { page: 1, user: 1, status: 1, exportedAt: 1, ops: 1, revision: 1 }).lean();
+    const sub = await PageProofSubmission.findById(id, { page: 1, user: 1, status: 1, exportedAt: 1, ops: 1, revision: 1, recutRequest: 1 }).lean();
     if (!sub) return notFound('ההגשה לא נמצאה');
 
     if (body.action === 'approve') {
@@ -164,6 +169,12 @@ export async function PATCH(request, { params }) {
     }
 
     if (body.action === 'reject') {
+      if (sub.recutRequest) {
+        return NextResponse.json(
+          { success: false, error: 'זו בקשת מתנדב לזיהוי-מחדש — מבטלים אותה ב"שחרור מהמתנה" (העמוד חוזר אל המתנדב)' },
+          { status: 409 }
+        );
+      }
       // המצב שלפני העדכון (returnDocument: before) — לא מהקריאה המוקדמת,
       // שעלולה להתיישן אם מנהל אחר אישר בינתיים
       const prev = await PageProofSubmission.findOneAndUpdate(
@@ -207,9 +218,19 @@ export async function PATCH(request, { params }) {
       if (!page) return notFound('העמוד של ההגשה לא נמצא');
       if (page.status !== 'recut') return NextResponse.json({ success: false, error: 'העמוד אינו ממתין לזיהוי-מחדש' }, { status: 409 });
       const next = statusAfterReleaseRecut(page);
-      const r = await PageProofPage.updateOne({ _id: sub.page, status: 'recut', ...revisionFilter(storedRevision(page)) }, { $set: { status: next } });
+      const pageRev = storedRevision(page);
+      // בקשת מתנדב ממתינה — העמוד חוזר אליו (רק כשהוא נפתח שוב, לא כשנסגר כהושלם)
+      const back = next === 'open' ? await recutReturn(sub.page, pageRev) : {};
+      const r = await PageProofPage.updateOne({ _id: sub.page, status: 'recut', ...revisionFilter(pageRev) }, { $set: { status: next, ...back } });
       if (!r.matchedCount) return NextResponse.json({ success: false, error: 'מצב העמוד השתנה בינתיים — טענו מחדש' }, { status: 409 });
-      return NextResponse.json({ success: true, status: sub.status, pageStatus: next });
+      const canceled = await cancelRecutRequests(sub.page, pageRev, reviewer);
+      return NextResponse.json({
+        success: true,
+        status: sub.recutRequest && canceled ? 'rejected' : sub.status,
+        pageStatus: next,
+        canceledRequests: canceled,
+        returnedToRequester: !!back.leasedBy,
+      });
     }
 
     return badRequest('פעולה לא מוכרת');

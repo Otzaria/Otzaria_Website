@@ -24,6 +24,9 @@ export function submissionDetail(sub) {
     exportedAt: sub.exportedAt,
     needsRecut: needsRecut(sub.ops),
     revision: submissionRevision(sub),
+    // בקשת מתנדב לזיהוי-מחדש (recutRequests.js): רק פעולות-חיתוך, "מאושרת" לצורך הזיהוי-מחדש
+    // בלבד; מבטלים אותה ב"שחרור מהמתנה" (release_recut), לא בדחייה
+    recutRequest: !!sub.recutRequest,
   };
 }
 

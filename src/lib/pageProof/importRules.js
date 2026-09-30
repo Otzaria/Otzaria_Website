@@ -186,7 +186,10 @@ export function statusAfterReleaseRecut({ activeCount = 0, required = 1 } = {}) 
 export function importSummaryParts(r) {
   const n = (k) => (Number.isFinite(r?.[k]) ? r[k] : 0);
   const parts = [`${n('created')} עמודים חדשים`, `${n('updated')} עודכנו`];
-  if (n('recut')) parts.push(`${n('recut')} חזרו מזיהוי-מחדש ונפתחו למעבר שני`);
+  if (n('recut')) {
+    const back = n('recutReturned');
+    parts.push(`${n('recut')} חזרו מזיהוי-מחדש ונפתחו למעבר שני${back ? ` (${back === 1 ? 'אחד מהם חזר' : `${back} מהם חזרו`} למתנדב שביקש את הזיהוי-מחדש)` : ''}`);
+  }
   if (n('linked')) parts.push(`${n('linked')} מקושרים לתמונות הספר באתר`);
   if (n('skippedAnswered')) parts.push(`${n('skippedAnswered')} דולגו (כבר הוגשו)`);
   if (n('skippedRecut')) parts.push(`${n('skippedRecut')} ממתינים לזיהוי-מחדש — בחבילה אין גרסה חדשה שלהם`);
@@ -255,7 +258,7 @@ export function importFileErrors(fileName, data, status) {
   return out;
 }
 
-const SUMMED = ['created', 'updated', 'recut', 'linked', 'skippedAnswered', 'skippedRecut', 'skippedUnexported', 'skippedOlder', 'resequenced'];
+const SUMMED = ['created', 'updated', 'recut', 'recutReturned', 'linked', 'skippedAnswered', 'skippedRecut', 'skippedUnexported', 'skippedOlder', 'resequenced'];
 
 // התוצאות של כמה קבצים (ספר גדול בכמה ZIP-ים — אותו gid) ← שורה אחת לכל ספר, בסדר שבו הופיע:
 // המונים מסתכמים, השגיאות מצטרפות

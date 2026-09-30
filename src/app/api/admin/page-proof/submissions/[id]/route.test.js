@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const { getServerSessionMock, Sub, Page } = vi.hoisted(() => ({
   getServerSessionMock: vi.fn(),
-  Sub: { findById: vi.fn(), findOneAndUpdate: vi.fn(), find: vi.fn() },
+  Sub: { findById: vi.fn(), findOneAndUpdate: vi.fn(), find: vi.fn(), updateMany: vi.fn() },
   Page: { findById: vi.fn(), updateOne: vi.fn(), find: vi.fn() },
 }))
 
@@ -41,6 +41,7 @@ beforeEach(() => {
   getServerSessionMock.mockResolvedValue(admin)
   Page.updateOne.mockResolvedValue({ matchedCount: 1, modifiedCount: 1 })
   Sub.find.mockReturnValue(lean([]))
+  Sub.updateMany.mockResolvedValue({ modifiedCount: 0 })
 })
 
 describe('הרשאות', () => {
@@ -227,6 +228,32 @@ describe('שחרור ממתנה לזיהוי-מחדש', () => {
     Page.findById.mockReturnValue(lean(page({ status: 'recut', activeCount: 1, required: 2 })))
     body = await (await PATCH(req({ action: 'release_recut' }), params)).json()
     expect(body.pageStatus).toBe('open')
+  })
+
+  it('בקשת מתנדב לזיהוי-מחדש: מתבטלת והעמוד חוזר אליו (48 שעות); "דחייה" שלה — 409 בלי לגעת במונים', async () => {
+    Sub.findById.mockReturnValue(lean(sub({ status: 'approved', ops: CUT, recutRequest: true })))
+    Page.findById.mockReturnValue(lean(page({ status: 'recut', activeCount: 0, required: 1 })))
+    // recutRequesterOf — הבקשה הממתינה של העמוד
+    Sub.find.mockReturnValue(lean([{ _id: SUB_ID, user: USER_ID, status: 'approved', recutRequest: true, recutDoneAt: null, createdAt: new Date() }]))
+    Sub.updateMany.mockResolvedValue({ modifiedCount: 1 })
+    const body = await (await PATCH(req({ action: 'release_recut' }), params)).json()
+    expect(body).toMatchObject({ success: true, status: 'rejected', pageStatus: 'open', canceledRequests: 1, returnedToRequester: true })
+    const [filter, update] = Page.updateOne.mock.calls[0]
+    expect(filter).toEqual({ _id: PAGE_ID, status: 'recut', revision: { $in: [1, null] } })
+    expect(update.$set).toMatchObject({ status: 'open', leasedBy: USER_ID })
+    expect(update.$set.leasedUntil.getTime() - Date.now()).toBeGreaterThan(47.9 * 3600e3)
+    const [cancelFilter, cancel] = Sub.updateMany.mock.calls[0]
+    expect(cancelFilter).toMatchObject({ recutRequest: true, status: 'approved', recutDoneAt: null, revision: { $in: [1, null] } })
+    expect(cancel.$set).toMatchObject({ status: 'rejected', reviewedByName: 'מנהל' })
+
+    vi.clearAllMocks()
+    getServerSessionMock.mockResolvedValue(admin)
+    Sub.findById.mockReturnValue(lean(sub({ status: 'approved', ops: CUT, recutRequest: true })))
+    const rej = await PATCH(req({ action: 'reject' }), params)
+    expect(rej.status).toBe(409)
+    expect((await rej.json()).error).toMatch(/שחרור מהמתנה/)
+    expect(Sub.findOneAndUpdate).not.toHaveBeenCalled()
+    expect(Page.updateOne).not.toHaveBeenCalled()
   })
 
   it('עמוד שאינו ממתין ← 409', async () => {

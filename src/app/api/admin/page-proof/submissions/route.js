@@ -52,6 +52,8 @@ export async function GET(request) {
           opCount: s.opCount,
           // משנה את חיתוך-השורות — אישור יחזיר את העמוד לזיהוי-מחדש
           needsRecut: !!s.needsRecut,
+          // בקשת מתנדב לזיהוי-מחדש (לא הגשה) — adminReview.submissionDetail
+          recutRequest: !!s.recutRequest,
           revision: s.revision ?? 1,
           note: s.note,
           status: s.status,

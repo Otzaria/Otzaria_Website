@@ -9,6 +9,7 @@ import PageProofSubmission from '../../models/PageProofSubmission.js';
 import { resolveImageFsPath } from '../ocr/images.js';
 import { DEFAULT_DOUBLE_PCT } from './sequences.js';
 import { pickPrimary } from './fixesExport.js';
+import { markRecutDone, recutReturn } from './recutRequests.js';
 import {
   importAction,
   canReplacePage,
@@ -27,6 +28,9 @@ import {
 // שלו, והחלפת התוכן הייתה מנתקת אותן. החריג: עמוד שממתין לזיהוי-מחדש
 // ('recut') מוחלף כשמגיעה גרסה חדשה שלו (revision גבוה מזה שנשמר) ונפתח
 // למעבר שני. ההחלטה לכל עמוד — importRules.importAction (טהור, עם טסטים).
+//
+// עמוד שנשלח לזיהוי-מחדש בבקשת מתנדב (recutRequests.js) — הגרסה החדשה חוזרת אליו: התפיסה
+// שלו מתחדשת ל-48 שעות (בלי זה RECUT_RESET היה מחזיר את העמוד למאגר), והבקשה נרשמת כהושלמה.
 //
 // אחרי הכתיבה כל עמודי הספר מחולקים מחדש לרצפים (importRules.planSequences):
 // עמודים שלא התחילו מקבלים רצף לפי מקומם בספר כולו, ועמודים שכבר חולקו או
@@ -106,6 +110,7 @@ async function resequenceBook(book, { now = new Date(), expectPages = [] } = {})
 // שיועלו אחר כך ב-ZIP) — משתתפים בחישוב הרצפים, כדי שהרצפים יהיו של הספר כולו.
 //
 // הסיכום לכל ספר: created, updated, recut (הוחלפו בגרסה חדשה אחרי זיהוי-מחדש),
+// recutReturned (מהם — חזרו למתנדב שביקש את הזיהוי-מחדש),
 // skippedAnswered, skippedRecut (ממתינים לזיהוי-מחדש, בלי גרסה חדשה בחבילה),
 // skippedOlder (בחבילה גרסה ישנה מזו שבאתר), resequenced, linked, errors.
 export async function importPackages(
@@ -123,6 +128,7 @@ export async function importPackages(
       created: 0,
       updated: 0,
       recut: 0,
+      recutReturned: 0,
       skippedAnswered: 0,
       skippedRecut: 0,
       skippedOlder: 0,
@@ -247,15 +253,20 @@ export async function importPackages(
             done = true;
           } else res.skippedAnswered++;
         } else if (action === 'recut') {
-          // מעבר שני: תוכן, גרסה ותמונה חדשים; מונים, מגישים והחכרה מתאפסים.
-          // מותנה במצב ובגרסה שנקראו — מנהל שביטל בינתיים את האישור קובע
+          // מעבר שני: תוכן, גרסה ותמונה חדשים; מונים, מגישים והחכרה מתאפסים — חוץ מעמוד שנשלח
+          // בבקשת מתנדב: הוא חוזר אליו (התפיסה מתחדשת). מותנה במצב ובגרסה שנקראו — מנהל
+          // שביטל בינתיים את האישור (או את הבקשה) קובע
+          const prevRev = storedRevision(prev);
+          const back = await recutReturn(prev._id, prevRev, now);
           const r = await PageProofPage.updateOne(
-            { _id: prev._id, status: 'recut', ...revisionFilter(storedRevision(prev)) },
-            { $set: { ...content, ...RECUT_RESET } }
+            { _id: prev._id, status: 'recut', ...revisionFilter(prevRev) },
+            { $set: { ...content, ...RECUT_RESET, ...back } }
           );
           if (r.matchedCount) {
             res.recut++;
             done = true;
+            if (back.leasedBy) res.recutReturned++;
+            await markRecutDone(prev._id, prevRev, now);
           } else res.skippedRecut++;
         }
         if (pending) {

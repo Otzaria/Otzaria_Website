@@ -64,12 +64,13 @@ function heldCount(uid, now) {
 // ההגשות (הפעילות) של המשתמש לעמודים האלה ← Map(pageId → {status, createdAt})
 // לגרסה הנוכחית של כל עמוד. הגשה לגרסה קודמת (לפני שהעמוד חזר מזיהוי-מחדש)
 // אינה נספרת — העמוד פתוח שוב גם למי שהגיש אותה. אם המשתמש ב-submitters ואין
-// הגשה בגרסה הזו (לא אמור לקרות) — ההגשה האחרונה שלו לעמוד.
+// הגשה בגרסה הזו (לא אמור לקרות) — ההגשה האחרונה שלו לעמוד. בקשה לזיהוי-מחדש
+// (recutRequest) אינה הגשה — אינה נספרת.
 async function mySubmissions(pages, uid) {
   const out = new Map();
   if (!pages.length) return out;
   const subs = await PageProofSubmission.find(
-    { page: { $in: pages.map((p) => p._id) }, user: uid, status: { $in: ['submitted', 'approved'] } },
+    { page: { $in: pages.map((p) => p._id) }, user: uid, status: { $in: ['submitted', 'approved'] }, recutRequest: { $ne: true } },
     { page: 1, status: 1, revision: 1, createdAt: 1 }
   )
     .sort({ createdAt: -1 })
@@ -341,14 +342,15 @@ export async function claimSequence(gid, seq, userId, now = new Date()) {
 
 // תמונת-מצב של רצף מנקודת המבט של המשתמש (לפס-הרצף בדף המתנדב). הגשה נספרת
 // רק לגרסה שעליה נעשתה — עמוד שחזר מזיהוי-מחדש (גרסה חדשה) פתוח שוב גם למי
-// שהגיש את הקודמת. לעמוד שבטיפולו — עד מתי הוא שמור לו (leasedUntil).
+// שהגיש את הקודמת. לעמוד שבטיפולו — עד מתי הוא שמור לו (leasedUntil). עמוד שממתין
+// לזיהוי-מחדש (גם כזה שהמשתמש שלח בעצמו) — 'recut' (בקשה לזיהוי-מחדש אינה הגשה).
 export async function describeSequence(bookId, seq, uid, now = new Date()) {
   const [book, pages, mine] = await Promise.all([
     PageProofBook.findById(bookId, { gid: 1, title: 1, script: 1 }).lean(),
     PageProofPage.find({ book: bookId, seq }, { page: 1, leasedBy: 1, leasedUntil: 1, submitters: 1, status: 1, lineCount: 1, revision: 1 })
       .sort({ page: 1 })
       .lean(),
-    PageProofSubmission.find({ book: bookId, user: uid, status: { $ne: 'rejected' } }, { page: 1, status: 1, revision: 1 }).lean(),
+    PageProofSubmission.find({ book: bookId, user: uid, status: { $ne: 'rejected' }, recutRequest: { $ne: true } }, { page: 1, status: 1, revision: 1 }).lean(),
   ]);
   const mineByPage = new Map(mine.map((s) => [`${s.page}:${submissionRevision(s)}`, s.status]));
   return {
@@ -358,7 +360,7 @@ export async function describeSequence(bookId, seq, uid, now = new Date()) {
       const revision = storedRevision(p);
       const sub = mineByPage.get(`${p._id}:${revision}`);
       const leasedToMe = p.leasedBy && String(p.leasedBy) === String(uid) && p.leasedUntil > now;
-      const state = sub ? (sub === 'approved' ? 'approved' : 'submitted') : leasedToMe ? 'mine' : 'unavailable';
+      const state = sub ? (sub === 'approved' ? 'approved' : 'submitted') : p.status === 'recut' ? 'recut' : leasedToMe ? 'mine' : 'unavailable';
       return {
         id: String(p._id),
         page: p.page,

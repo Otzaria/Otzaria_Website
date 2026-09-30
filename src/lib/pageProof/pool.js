@@ -87,14 +87,15 @@ export async function releaseLeases(userId, { book = null, seq = null } = {}) {
   return res.modifiedCount;
 }
 
-// open — עמודים פתוחים למתנדבים (בלי מה שהמנהל סגר)
+// open — עמודים פתוחים למתנדבים (בלי מה שהמנהל סגר). בקשות לזיהוי-מחדש (recutRequest) אינן
+// הגשות — אינן נספרות כאן
 export async function volunteerStats(userId) {
   const uid = oid(userId);
   const [open, done, mine] = await Promise.all([
     PageProofPage.countDocuments({ status: 'open', ...volunteerOpenFilter() }),
     PageProofPage.countDocuments({ status: 'done' }),
     PageProofSubmission.aggregate([
-      { $match: { user: uid } },
+      { $match: { user: uid, recutRequest: { $ne: true } } },
       { $group: { _id: '$status', n: { $sum: 1 } } },
     ]),
   ]);

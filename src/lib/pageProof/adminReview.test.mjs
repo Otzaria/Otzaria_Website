@@ -39,6 +39,7 @@ test('submissionDetail: כל השדות של סקירת-הגשה, needsRecut מ�
     'needsRecut',
     'note',
     'ops',
+    'recutRequest',
     'reviewNote',
     'reviewedAt',
     'reviewedByName',
@@ -50,6 +51,9 @@ test('submissionDetail: כל השדות של סקירת-הגשה, needsRecut מ�
   ]);
   assert.equal(submissionDetail({ ...sub, ops: [{ kind: 'text', page: 3, ids: [1], value: 'א' }], revision: 2 }).needsRecut, false);
   assert.equal(submissionDetail({ ...sub, revision: 2 }).revision, 2);
+  // בקשת מתנדב לזיהוי-מחדש — מסומנת (לביטול ב"שחרור מהמתנה", לא בדחייה)
+  assert.equal(d.recutRequest, false);
+  assert.equal(submissionDetail({ ...sub, recutRequest: true }).recutRequest, true);
 });
 
 test('pageSig: אותה חתימה כמו בקובץ-התיקונים (docRevision על הגרסה השמורה)', () => {

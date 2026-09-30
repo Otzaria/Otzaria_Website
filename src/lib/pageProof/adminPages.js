@@ -6,6 +6,7 @@ import PageProofPage from '../../models/PageProofPage.js';
 import User from '../../models/User.js';
 import { storedRevision } from './importRules.js';
 import { adminPageState, adminCounts, leaseOf } from './adminGrid.js';
+import { recutRequestsOfBook } from './recutRequests.js';
 
 // רשת-העמודים של ספר בניהול (/library/admin/page-proof): כל העמודים עם המצב,
 // מי מחזיק ועד מתי; המתג "פתוח למתנדבים" (לעמוד, לטווח, או "פתח רק אותם וסגור
@@ -38,16 +39,22 @@ const bookOf = (gid) => PageProofBook.findOne({ gid: String(gid) }, { gid: 1, ti
 
 // ← {book, pages, counts} או null. לכל עמוד: state (adminGrid.adminPageState),
 // volunteer, holder (שם המתנדב — גם כשהתפיסה פגה ועוד רשומה), leasedUntil,
-// lease ('active'/'expired'/null), pending (הגשות שממתינות לאישור).
+// lease ('active'/'expired'/null), pending (הגשות שממתינות לאישור), ו-recutRequest —
+// לעמוד שממתין לזיהוי-מחדש בבקשת מתנדב: {id (של הבקשה — לביטול ב-release_recut), by, at,
+// picked (תוכנת-הספר כבר משכה אותה)}, אחרת null.
 export async function adminBookPages(gid, now = new Date()) {
   const book = await bookOf(gid);
   if (!book) return null;
-  const pages = await PageProofPage.find({ book: book._id }, FIELDS).sort({ page: 1 }).lean();
+  const [pages, requests] = await Promise.all([
+    PageProofPage.find({ book: book._id }, FIELDS).sort({ page: 1 }).lean(),
+    recutRequestsOfBook(book.gid),
+  ]);
   const holders = [...new Set(pages.filter((p) => p.leasedBy).map((p) => String(p.leasedBy)))];
   const users = holders.length ? await User.find({ _id: { $in: holders.map(oid) } }, { name: 1 }).lean() : [];
   const nameOf = new Map(users.map((u) => [String(u._id), u.name]));
   const out = pages.map((p) => {
     const lease = leaseOf(p, now);
+    const req = p.status === 'recut' ? requests.get(String(p._id)) : null;
     return {
       id: String(p._id),
       page: p.page,
@@ -61,6 +68,7 @@ export async function adminBookPages(gid, now = new Date()) {
       leasedUntil: lease ? p.leasedUntil : null,
       lease,
       pending: Math.max(0, (p.activeCount || 0) - (p.approvedCount || 0)),
+      recutRequest: req && req.revision === storedRevision(p) ? { id: req.id, by: req.by, at: req.at, picked: req.picked } : null,
     };
   });
   return {
