@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { SCRIPTS, CERTAINTY, streamInfo } from '@/lib/pageProof/vocab'
+import { RECUT_LINE_TITLE } from '@/lib/pageProof/helpTexts'
 
 // כרטיסיית "שורה" בלוח הפרטים: מה שנשאר ברמת השורה שבה הסמן — כתב, שורה
 // מעורבת-כתבים, ודאות (עם הסבר), "נכונה כפי שהיא" / "לא-שורה", ומה המערכת
@@ -65,7 +66,11 @@ export default function LineTab({ view, line, locked = false, readOnly = false, 
         {line.status === 'fixed' && <span className="rounded bg-success-100 px-1.5 text-xs text-success-800">תוקנה</span>}
         {line._ok && <span className="rounded bg-success-100 px-1.5 text-xs text-success-800">✓ נכונה</span>}
         {line.recheck === true && <span className="rounded bg-warning-alt-100 px-1.5 text-xs text-warning-alt-900">זוהתה מחדש</span>}
-        {(locked || temp) && <span className="rounded bg-warning-100 px-1.5 text-xs text-warning-800">ממתינה לזיהוי מחדש</span>}
+        {(locked || temp) && (
+          <span className="rounded bg-warning-100 px-1.5 text-xs text-warning-800" title={RECUT_LINE_TITLE}>
+            ממתינה לזיהוי מחדש
+          </span>
+        )}
       </div>
       {temp && <p className="pb-2 text-xs text-info-700">השורה נוצרה בתיקון החיתוך — היא תיחתך ותיקרא בתוכנה, ואז תחזור להגהה.</p>}
 

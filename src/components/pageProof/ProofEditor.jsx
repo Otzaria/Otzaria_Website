@@ -19,6 +19,7 @@ import {
   planCharStyle,
   planEnter,
   planJoin,
+  planJoinPara,
   planParaStyle,
   samePos,
   suspiciousWords,
@@ -483,6 +484,8 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
   }
 
   const charStyle = (style, on) => applyPlan(planCharStyle(view, tabKey, sel, style, on, { locked }))
+  // "חיבור לפסקה הקודמת" מהכפתור שליד הפסקה — כמו Backspace בתחילתה
+  const joinPara = (key) => !readOnly && applyPlan(planJoinPara(view, tabKey, key))
 
   // ביטול/חזרה: הסמן עובר למקום שבו הטקסט השתנה (ולשונית השורה); שינוי שאינו
   // טקסט (סגנון, פסקה, מסגרת) — הסמן נשאר במקומו, בלי לגנוב את המיקוד מהסריקה
@@ -512,7 +515,7 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
   // ---- ה-callbacks היציבים (לרכיבים ממוזכרים) — תמיד על המצב העדכני ----
   const live = useRef(null)
   useLayoutEffect(() => {
-    live.current = { approve, unapprove, goTo, charStyle, undo, redo, link, cancelLink, approveAtCaret, goSuspicious, openSuggest, linkPending, readOnly, P }
+    live.current = { approve, unapprove, goTo, charStyle, joinPara, undo, redo, link, cancelLink, approveAtCaret, goSuspicious, openSuggest, linkPending, readOnly, P }
   })
   const stable = useMemo(
     () => ({
@@ -522,6 +525,7 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
       onUndo: () => live.current.undo(),
       onRedo: () => live.current.redo(),
       onFormat: (style) => live.current.charStyle(style),
+      onJoinPara: (key) => live.current.joinPara(key),
       onJump: (other) => {
         if (!other) return
         if (other.page != null && other.page !== live.current.P) {
@@ -733,6 +737,7 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
             onWordEnter={pop.onWordEnter}
             onWordLeave={pop.onWordLeave}
             onJump={stable.onJump}
+            onJoinPara={readOnly ? null : stable.onJoinPara}
           />
         }
       />

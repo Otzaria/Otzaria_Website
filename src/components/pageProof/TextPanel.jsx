@@ -4,6 +4,7 @@ import { tokenize } from '@/lib/pageProof/textModel'
 import { streamInfo } from '@/lib/pageProof/vocab'
 import StreamTabs from './StreamTabs'
 import { OtherPageButtons } from './OtherPagePicker'
+import { DAMAGED_SHORT, HEADINGS_SHORT } from '@/lib/pageProof/helpTexts'
 
 // לוח-הטקסט: לשוניות-הזרמים, ומתחתן העורך (FlowEditor — מגיע מבחוץ ב-
 // editorSlot) בתוך אזור-גלילה אחד. מעל העורך — פסי-הודעה לפי המצב: קישור
@@ -18,12 +19,11 @@ import { OtherPageButtons } from './OtherPagePicker'
 // רשות: readOnly, fontSize (px), fontFamily — חלים על אזור-הטקסט (העורך יורש).
 // אזור-הגלילה מסומן data-proof-text-scroll (העורך עצמו לא צריך גלילה משלו).
 
-export const TEXT_HINT =
-  'הקלידו ישר בטקסט לתיקון · Enter — פסקה חדשה · Backspace בתחילת פסקה — חיבור · Ctrl+Enter — אישור הפסקה · מילים מסומנות = המחשב חושד בהן (ראו מקרא); ריחוף על מילה בכחול, סגול או כתום מציג הצעות'
+export const TEXT_HINT = `הקלידו ישר בטקסט לתיקון · ${DAMAGED_SHORT} · Enter — פסקה חדשה · Backspace בתחילת פסקה (או ↑ שבין הפסקאות) — חיבור · Ctrl+Enter — אישור הפסקה · מילים מסומנות = המחשב חושד בהן (ראו מקרא); ריחוף על מילה בכחול, סגול או כתום מציג הצעות`
 export const TEXT_HINT_LEGEND =
   'קו אדום מקווקו — זיהוי לא בטוח, בלי הצעות: בדקו מול הסריקה · קו כחול מנוקד — יש חלופות (ריחוף) · רקע סגול — מודל-השפה מציע מילה אחרת (ריחוף) · רקע כתום — חלופת-זיהוי מתאימה יותר להקשר (ריחוף) · מודגש אפור — דיבור המתחיל, מודגש אוטומטית'
 const READONLY_HINT = 'תצוגה בלבד — אפשר לעבור על הטקסט ולבדוק אותו, אבל לא לשנות'
-const FURNITURE_HINT = 'ריהוט הדף (כותרת-רצה, מספר עמוד, קו מפריד) אינו נכנס לספר — רק בדקו שלא הגיע לכאן טקסט של הספר עצמו'
+const FURNITURE_HINT = `ריהוט הדף (כותרת-רצה, מספר עמוד, קו מפריד) אינו נכנס לספר — רק בדקו שלא הגיע לכאן טקסט של הספר עצמו. ${HEADINGS_SHORT}`
 
 // המקרא הגלוי של הסימונים בטקסט (אותם סגנונות כמו ב-FlowEditor): דוגמה קטנה
 // ומילה-שתיים; ההסבר המלא בריחוף

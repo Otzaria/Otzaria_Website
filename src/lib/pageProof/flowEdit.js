@@ -359,6 +359,14 @@ export function planJoin(view, tabKey, pos) {
   return boundary(c, backspaceAtStart(view, tabKey, start), -1, pos);
 }
 
+// "חיבור לפסקה הקודמת" לפסקה לפי המפתח שלה (הכפתור שליד הפסקה, התפריט "סגנון פסקה") —
+// בדיוק כמו Backspace בתחילתה (planJoin מתחילת הפסקה)
+export function planJoinPara(view, tabKey, key) {
+  const p = buildParagraphs(view, tabKey).find((x) => x.key === key);
+  const start = paragraphStart(p);
+  return start ? planJoin(view, tabKey, start) : EMPTY;
+}
+
 // סגנון-פסקה לכל שורות הפסקאות שהבחירה/הסמן נוגעים בהן — פעולה אחת. סגנון
 // שאינו כותרת על שורה שזרמה *_heading מוריד גם את ה-_heading (אחרת היא
 // נשארת כותרת).

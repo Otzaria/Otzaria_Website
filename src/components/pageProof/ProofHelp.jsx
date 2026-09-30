@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { PARA_STYLE_OPTIONS } from './ProofToolbar'
 import { CLAIM_RULE } from '@/lib/pageProof/gridState'
+import { FAQ } from '@/lib/pageProof/helpTexts'
 
 // "מה עושים בעמוד" — ההסבר הקצר של עורך הגהת-העמודים (במקום ProofRules):
 // שלושה צעדים, "איך עושים" מתקפל עם המקשים, ומה עושים בסיום.
@@ -59,7 +60,8 @@ const STEPS = [
       <>
         קראו מול הסריקה ותקנו ישר בטקסט, כמו בכל עורך. הסריקה זזה עם הסמן: השורה שאתם עובדים בה עומדת מול אותה שורה בסריקה, והמילה
         שבסמן מסומנת שם. מילים מסומנות בטקסט = המחשב חושד בהן (ראו &quot;מה אומרים הסימונים&quot; למטה). פסקה שקראתם ונכונה — אשרו
-        אותה ב-✓ שליד הפסקה או ב-<Kbd>Ctrl+Enter</Kbd>.
+        אותה ב-✓ שליד הפסקה או ב-<Kbd>Ctrl+Enter</Kbd>. אות שבורה, פגומה או מחוברת לשכנתה — הקלידו את האותיות שנועדו להיות שם (ראו
+        &quot;שאלות שחוזרות&quot; למטה).
       </>
     ),
   },
@@ -68,7 +70,8 @@ const STEPS = [
     body: (
       <>
         סמנו כותרות, הדגשות ומילים באנגלית (הכפתור &quot;EN&quot; — לועזית) בסרגל שלמעלה, וחלקו לפסקאות כמו במקור: <Kbd>Enter</Kbd>{' '}
-        מתחיל פסקה חדשה, <Kbd>Backspace</Kbd> בתחילת פסקה מחבר אותה לקודמת. סוג הפסקה — בתפריט &quot;סגנון פסקה&quot;: כותרת, ציטוט,
+        מתחיל פסקה חדשה, <Kbd>Backspace</Kbd> בתחילת פסקה מחבר אותה לקודמת — או הכפתור ↑ שמופיע בין הפסקה שבה הסמן לקודמת לה
+        (&quot;חיבור לפסקה הקודמת&quot;, גם בסוף התפריט &quot;סגנון פסקה&quot;). סוג הפסקה — בתפריט &quot;סגנון פסקה&quot;: כותרת, ציטוט,
         דיבור המתחיל, וגם סעיף ממוספר, הגהה, שורות קצרות (שירה) ושורת תוכן עניינים (הרשימה המלאה — ב&quot;איך עושים&quot; למטה).
       </>
     ),
@@ -112,7 +115,7 @@ const KEYS = [
   { what: 'הצעות למילה שבסמן', how: <><Kbd>Alt+↓</Kbd>{or}<Kbd>Ctrl+Space</Kbd></> },
   { what: 'אישור הפסקה ומעבר לבאה', how: <><Kbd>Ctrl+Enter</Kbd>{or}✓ שליד הפסקה</> },
   { what: 'פסקה חדשה מהסמן', how: <Kbd>Enter</Kbd> },
-  { what: 'חיבור לפסקה הקודמת', how: <><Kbd>Backspace</Kbd> בתחילת הפסקה</> },
+  { what: 'חיבור לפסקה הקודמת', how: <><Kbd>Backspace</Kbd> בתחילת הפסקה{or}הכפתור ↑ שבין הפסקאות{or}&quot;סגנון פסקה&quot; ← &quot;חיבור לפסקה הקודמת&quot;</> },
   { what: 'מודגש / נטוי', how: <><Kbd>Ctrl+B</Kbd>{slash}<Kbd>Ctrl+I</Kbd></> },
   {
     what: 'קישור בין שני זרמים',
@@ -150,7 +153,8 @@ const SCAN = [
   <>
     <b>ריהוט הדף</b> — כותרת-רצה, מספר עמוד וקו מפריד: חלק מהדף אבל לא מהספר. שורה כזו שנקראה כטקסט של הספר — שייכו אותה לריהוט:
     במסגרת סביבה (בבחירת הזרם של המסגרת: &quot;ריהוט הדף&quot;), או בתפריט &quot;זרם&quot; שבסרגל (בסוף התפריט: &quot;ריהוט הדף · כותרת
-    עמוד / תחתית / מפריד&quot;). היא עוברת ללשונית &quot;ריהוט הדף&quot;.
+    עמוד / תחתית / מפריד&quot;). היא עוברת ללשונית &quot;ריהוט הדף&quot;. כותרת שפותחת פרק או סעיף בתוך הטקסט אינה ריהוט — היא
+    &quot;כותרת&quot; של הזרם שלה (ראו &quot;שאלות שחוזרות&quot;).
   </>,
   <>
     <b>קו מפריד</b> (הקו שבין הטקסט להערות, גם כשהוא מעוטר) שנקרא כאילו היה טקסט — הוא חלק מהדף אבל לא מהספר: שייכו את השורה לזרם
@@ -170,8 +174,8 @@ const DONE = [
     תופסת שום עמוד.
   </>,
   <>
-    תיקנתם חיתוך? הטקסט של השורות האלה ננעל (&quot;ממתינה לזיהוי מחדש&quot;): אחרי אישור המנהל התוכנה קוראת אותן מחדש, והעמוד חוזר
-    להגהה במעבר שני — שם רק השורות שזוהו מחדש מסומנות בצהוב.
+    תיקנתם חיתוך? הטקסט של השורות האלה ננעל (&quot;ממתינה לזיהוי מחדש&quot;): אחרי אישור המנהל תוכנת-הספר חותכת וקוראת אותן מחדש,
+    והעמוד חוזר להגהה במעבר שני — שם רק השורות שזוהו מחדש מסומנות בצהוב. אתם לא מפעילים את זה: בינתיים המשיכו בשאר השורות ובמבנה.
   </>,
 ]
 
@@ -182,6 +186,7 @@ export default function ProofHelp({ open = false, onClose, autoOpen = true }) {
   const panel = useRef(null)
   const titleId = useId()
   const howId = useId()
+  const faqId = useId()
   const visible = !!open || auto
 
   // פתיחה לבד בפעם הראשונה — רק בדפדפן (localStorage), ולכן אחרי הטעינה
@@ -277,6 +282,21 @@ export default function ProofHelp({ open = false, onClose, autoOpen = true }) {
             <p className="mt-1 text-xs text-on-surface/70">
               מילה עם הצעות: העבירו עליה את העכבר (או הציבו עליה את הסמן ולחצו <Kbd>Alt+↓</Kbd>) ובחרו הצעה. המחשב לעולם לא מתקן לבד.
             </p>
+          </section>
+
+          <section aria-labelledby={faqId} className="rounded-xl bg-info-50/60 px-3 py-2">
+            <div id={faqId} className="mb-1 flex items-center gap-2 font-bold text-on-surface">
+              <span aria-hidden="true" className="material-symbols-outlined text-info-700">help</span>
+              שאלות שחוזרות
+            </div>
+            <dl className="space-y-1.5">
+              {FAQ.map((f) => (
+                <div key={f.key} data-faq={f.key}>
+                  <dt className="font-bold text-on-surface">{f.q}</dt>
+                  <dd>{f.a}</dd>
+                </div>
+              ))}
+            </dl>
           </section>
 
           <div className="overflow-hidden rounded-xl border border-surface-variant">

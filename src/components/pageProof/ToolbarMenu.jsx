@@ -8,9 +8,10 @@ import { isKey } from '@/lib/pageProof/keys'
 // סוגר ומחזיר את הפוקוס לכפתור; לחיצה מחוץ לתפריט סוגרת. לחיצת-עכבר אינה
 // לוקחת את הפוקוס מהעורך — הסמן והבחירה בטקסט נשמרים לפעולה.
 //
-// items: [{key, label (ReactNode), hint?, color?, checked?, disabled?}] או
+// items: [{key, label (ReactNode), hint?, color?, checked?, disabled?, action?, icon?}] או
 // {separator:true}. כשלפחות לפריט אחד יש checked — התפריט הוא "בחירה אחת"
-// (menuitemradio) ומסומן ✓ ליד הנבחר.
+// (menuitemradio) ומסומן ✓ ליד הנבחר. פריט action (למשל "חיבור לפסקה הקודמת" בתפריט
+// סגנון-הפסקה) הוא פעולה ולא בחירה: menuitem, עם icon (אייקון) במקום ה-✓.
 
 const preventFocusLoss = (e) => e.preventDefault()
 
@@ -150,8 +151,8 @@ export default function ToolbarMenu({
                   itemRefs.current[k] = el
                 }}
                 type="button"
-                role={radio ? 'menuitemradio' : 'menuitem'}
-                aria-checked={radio ? !!it.checked : undefined}
+                role={radio && !it.action ? 'menuitemradio' : 'menuitem'}
+                aria-checked={radio && !it.action ? !!it.checked : undefined}
                 aria-disabled={it.disabled || undefined}
                 tabIndex={k === active ? 0 : -1}
                 title={it.title}
@@ -162,9 +163,13 @@ export default function ToolbarMenu({
                   k === active ? 'bg-neutral-100' : ''
                 } ${it.disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'}`}
               >
-                {radio && (
+                {(radio || it.icon) && (
                   <span className="w-4 shrink-0 text-center">
-                    {it.checked && <span className="material-symbols-outlined text-sm text-primary" aria-hidden="true">check</span>}
+                    {it.action && it.icon ? (
+                      <span className="material-symbols-outlined text-sm text-on-surface/60" aria-hidden="true">{it.icon}</span>
+                    ) : (
+                      it.checked && <span className="material-symbols-outlined text-sm text-primary" aria-hidden="true">check</span>
+                    )}
                   </span>
                 )}
                 {it.color && <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: it.color }} aria-hidden="true" />}

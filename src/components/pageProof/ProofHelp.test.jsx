@@ -144,3 +144,23 @@ describe('ProofHelp — "מה עושים בעמוד"', { timeout: 20000 }, () =>
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('ProofHelp — שאלות שחוזרות (מהפורום)', () => {
+  it('אותיות פגומות, כותרת מול ריהוט, שם פרק רק בכותרת-הרצה, חיבור פסקאות, "ממתין לזיהוי-מחדש"', () => {
+    window.localStorage.setItem(HELP_SEEN_KEY, '1')
+    render(<ProofHelp open onClose={vi.fn()} />)
+    const faq = screen.getByRole('region', { name: 'שאלות שחוזרות' })
+    const q = (key) => faq.querySelector(`[data-faq="${key}"]`)
+    expect(q('damaged')).toHaveTextContent(/הקלידו|את האותיות שנועדו להיות שם/)
+    expect(q('damaged')).toHaveTextContent('א ו-ל שנדבקו זו לזו — "אל"')
+    expect(q('damaged')).toHaveTextContent(/ו שבורה שנראית כמו י/)
+    expect(q('damaged')).toHaveTextContent(/רק נקודה/)
+    expect(q('headings')).toHaveTextContent(/כותרת-רצה\) ומספר העמוד — "ריהוט הדף"/)
+    expect(q('headings')).toHaveTextContent(/כותרת שפותחת פרק או סעיף בתוך הטקסט — כותרת של הזרם שלה/)
+    expect(q('running-only')).toHaveTextContent(/השאירו אותה ריהוט.*בהערה למנהל/)
+    expect(q('join')).toHaveTextContent(/Backspace בתחילת הפסקה השנייה.*↑.*חיבור לפסקה הקודמת/)
+    expect(q('recut')).toHaveTextContent(/פיצול, איחוד או שינוי תיבה/)
+    expect(q('recut')).toHaveTextContent(/במעבר שני, שבו בודקים רק אותן/)
+    expect(q('recut')).toHaveTextContent(/אתם לא צריכים להפעיל כלום/)
+  })
+})

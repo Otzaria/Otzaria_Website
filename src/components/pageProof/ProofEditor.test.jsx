@@ -453,3 +453,26 @@ describe('ProofEditor — קיצורי-מקלדת בפריסה עברית', { ti
     expect(opsNow()).toHaveLength(1)
   })
 })
+
+describe('ProofEditor — "חיבור לפסקה הקודמת" שליד הפסקה', { timeout: 30000 }, () => {
+  it('מופיע בפסקה שבה הסמן (לא בראשונה); לחיצה = Backspace בתחילתה; Ctrl+Z מבטל', async () => {
+    const { editor } = setup()
+    await caretAt(editor(), { lineId: 1, offset: 2 })
+    expect(editor().querySelector('[data-join]')).toBeNull() // הפסקה הראשונה — אין לאן לחבר
+    await caretAt(editor(), { lineId: 3, offset: 4 })
+    const join = within(editor().querySelector('[data-para="3:0"]')).getByRole('button', { name: 'חיבור לפסקה הקודמת' })
+    expect(join).toHaveAttribute('title', expect.stringMatching(/Backspace בתחילת הפסקה/))
+    fireEvent.click(join)
+    expect(opsNow()).toEqual([{ kind: 'para_start', ids: [3], value: 0 }])
+    expect(editor().querySelector('[data-para="3:0"]')).toBeNull() // אוחדה עם הקודמת
+    fireEvent.keyDown(editor(), { key: 'ז', code: 'KeyZ', ctrlKey: true })
+    expect(opsNow()).toEqual([])
+    expect(editor().querySelector('[data-para="3:0"]')).not.toBeNull()
+  })
+
+  it('בתצוגה בלבד — אין כפתור', async () => {
+    const { editor } = setup({ readOnly: true })
+    await caretAt(editor(), { lineId: 3, offset: 4 })
+    expect(editor().querySelector('[data-join]')).toBeNull()
+  })
+})

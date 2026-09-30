@@ -5,6 +5,7 @@ import { useDialog } from '@/components/providers/DialogContext'
 import { STATE_UI, editorHref, CLAIM_HOURS } from '@/lib/pageProof/gridState'
 import { formatHebrewDate, formatTimeAgo, formatTimeLeft, formatUntil } from '@/lib/pageProof/dates'
 import ProofPageThumb from './ProofPageThumb'
+import { RECUT_PAGE_TITLE } from '@/lib/pageProof/helpTexts'
 
 // כרטיס של עמוד אחד ברשת-העמודים של ספר בהגהת-עמודים — בנוי כמו PageCard
 // בדף הספר הישן (/library/books/[path]): תמונה ממוזערת בגובה 3:4 עם מספר
@@ -153,7 +154,7 @@ function Actions({ page, canClaimNew, busy, compact, onAskClaim }) {
         <Note
           icon="cached"
           text={t('recut')}
-          title="הגשה שאושרה שינתה את חיתוך השורות. העמוד נחתך ונקרא מחדש בתוכנת-הספר, ויחזור להגהה במעבר שני"
+          title={RECUT_PAGE_TITLE}
           size={size}
         />
       )

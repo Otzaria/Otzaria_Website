@@ -119,12 +119,36 @@ describe('ProofToolbar — סרגל-הכלים', () => {
     ]
     expect(items).toHaveLength(names.length)
     items.forEach((item, k) => expect(item).toHaveAccessibleName(names[k]))
-    // שלוש קבוצות: טקסט רגיל · כותרות · סוגי-פסקה
-    expect(within(menu).getAllByRole('separator')).toHaveLength(2)
+    // שלוש קבוצות: טקסט רגיל · כותרות · סוגי-פסקה — ואחריהן הפעולות על הפסקה
+    expect(within(menu).getAllByRole('separator')).toHaveLength(3)
     expect(within(menu).getByRole('menuitemradio', { name: /כותרת ראשית/ })).toHaveAttribute('aria-checked', 'true')
     await userEvent.click(within(menu).getByRole('menuitemradio', { name: /כותרת פרק/ }))
     expect(p.onParaStyle).toHaveBeenCalledWith('h2')
     expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('בסוף תפריט סגנון-הפסקה: "פסקה חדשה" ו"חיבור לפסקה הקודמת" — פעולות (לא בחירה), בשם מלא', async () => {
+    const p = setup({ paraStyle: 'body' })
+    await userEvent.click(screen.getByRole('button', { name: 'סגנון הפסקה' }))
+    const menu = screen.getByRole('menu')
+    const join = within(menu).getByRole('menuitem', { name: /חיבור לפסקה הקודמת/ })
+    expect(join).not.toHaveAttribute('aria-checked')
+    expect(join).toHaveTextContent('Backspace בתחילתה')
+    await userEvent.click(join)
+    expect(p.onJoinPara).toHaveBeenCalledTimes(1)
+    expect(p.onParaStyle).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: 'סגנון הפסקה' }))
+    await userEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: /פסקה חדשה במקום הסמן/ }))
+    expect(p.onSplitPara).toHaveBeenCalledTimes(1)
+  })
+
+  it('בלי חיבור אפשרי (הפסקה הראשונה) — הפריט מושבת', async () => {
+    const p = setup({ paraStyle: 'body', onJoinPara: null })
+    await userEvent.click(screen.getByRole('button', { name: 'סגנון הפסקה' }))
+    const join = within(screen.getByRole('menu')).getByRole('menuitem', { name: /חיבור לפסקה הקודמת/ })
+    expect(join).toHaveAttribute('aria-disabled', 'true')
+    await userEvent.click(join)
+    expect(p.onParaStyle).not.toHaveBeenCalled()
   })
 
   it('ארבעת סוגי-הפסקה החדשים: הסבר קצר בריחוף, תצוגה מקדימה, ובחירה מחילה אותם', async () => {

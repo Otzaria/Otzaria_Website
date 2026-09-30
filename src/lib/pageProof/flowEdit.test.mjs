@@ -13,6 +13,7 @@ import {
   planDelete,
   planEnter,
   planJoin,
+  planJoinPara,
   planParaStyle,
   planCharStyle,
   planApprove,
@@ -249,6 +250,19 @@ test('planEnter: אמצע שורה ← para_break והסמן בתחילת הפס
   assert.deepEqual(planEnter(v, 'main', caretSel(3, 0)), { ops: [], hint: 'כבר יש כאן תחילת פסקה' });
   // בחירה — Enter בתחילתה, בלי למחוק אותה
   assert.equal(planEnter(v, 'main', range([3, 9], [3, 4])).ops[0].value.word, 1);
+});
+
+test('planJoinPara ("חיבור לפסקה הקודמת" שליד הפסקה): כמו Backspace בתחילת הפסקה', () => {
+  const v = V();
+  const paras = buildParagraphs(v, 'main');
+  assert.ok(paras.length >= 3);
+  // כל פסקה (חוץ מהראשונה) — אותה פעולה כמו planJoin מתחילתה
+  for (const p of paras.slice(1)) {
+    const start = { lineId: p.lines[0].lineId, offset: p.lines[0].start };
+    assert.deepEqual(planJoinPara(v, 'main', p.key), planJoin(v, 'main', start), p.key);
+  }
+  assert.deepEqual(planJoinPara(v, 'main', paras[0].key), { ops: [], hint: HINTS.firstPara });
+  assert.deepEqual(planJoinPara(v, 'main', 'no-such-para'), { ops: [] });
 });
 
 test('planJoin: הפסקה של הסמן מתחברת לקודמת', () => {
