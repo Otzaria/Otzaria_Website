@@ -15,19 +15,19 @@ import MyPagesPanel from '@/components/pageProof/books/MyPagesPanel'
 import { untouchedLineIds } from '@/lib/pageProof/view'
 import { cleanupPageDrafts, pageDraftKey, removePageDrafts } from '@/lib/pageProof/drafts'
 import { planSubmission, recheckLineIds, submitSummary } from '@/lib/pageProof/submitPlan'
-import { CLAIM_HOURS, bookHref, editorHref } from '@/lib/pageProof/gridState'
+import { bookHref, editorHref } from '@/lib/pageProof/gridState'
 
 // דף המתנדב להגהת-עמודים: העורך, לעמודים שכבר בטיפולכם. כל עמוד מוגש בנפרד
 // וממתין לאישור מנהל.
 //
 // הכניסה לדף אינה תופסת שום עמוד: היא טוענת (קריאה בלבד) את "העמודים שלי" —
 // GET /api/page-proof/mine — ומציגה אותם (MyPagesPanel), עם מעבר לבחירת עמודים
-// ברשת (/library/page-proof/books). תפיסה — רק בלחיצה מפורשת: "תפוס" ברשת, או
-// "רצף אחר" כאן (GET /api/page-proof, שתופס רצף).
+// ברשת (/library/page-proof/books). אין חלוקה אוטומטית בשום מקום: עמודים נתפסים רק
+// ברשת-העמודים של הספר, בבחירה של המתנדב (עמוד, או רצף עוקב).
 //
 // ?page=<id> — פתיחה מהרשת או מ"העמודים שלי": הרצף של העמוד הזה, והעמוד עצמו
 // נפתח — אם הוא בטיפולכם או שהגשתם אותו. אחרת — הסבר למה (unavailable),
-// וקישור לרשת של הספר. "רצף אחר" משחרר רק את הרצף שעל המסך.
+// וקישור לרשת של הספר.
 //
 // החוזה מול ProofEditor:
 //   draftKey — מפתח-הטיוטה בדפדפן לפי העמוד *והגרסה שלו* (lib/pageProof/
@@ -83,7 +83,7 @@ export default function PageProofVolunteerPage() {
 
 function PageProofVolunteer() {
   const { session, status } = useRequireAuth()
-  const { showAlert, showConfirm } = useDialog()
+  const { showAlert } = useDialog()
   const router = useRouter()
   const searchParams = useSearchParams()
   const wanted = searchParams?.get('page') || null
@@ -163,7 +163,7 @@ function PageProofVolunteer() {
     else if (status === 'authenticated') setLoading(false)
   }, [status, canWork, loadMine])
 
-  // הכתובת בלי ?page= — כדי שרענון אחרי מעבר לרצף אחר לא יחזיר לעמוד הקודם
+  // הכתובת בלי ?page= — כדי שרענון אחרי חזרה ל"העמודים שלי" לא יחזיר לעמוד הקודם
   const clearPageParam = useCallback(() => {
     if (searchParams?.get('page')) router.replace(BASE_PATH, { scroll: false })
   }, [router, searchParams])
@@ -184,46 +184,6 @@ function PageProofVolunteer() {
     clearPageParam()
     setSeq(null)
     loadMine()
-  }
-
-  // "רצף אחר" — לחיצה מפורשת (ואחרי אישור): הרצף הזה חוזר למאגר, ונתפס רצף אחר
-  // (או שנפתח רצף אחר שכבר בידיכם). זה המקום היחיד בדף שתופס עמודים.
-  const takeSequence = useCallback(
-    async (skip) => {
-      setLoading(true)
-      setCurrent(null)
-      setMissing(null)
-      try {
-        const res = await fetch(`/api/page-proof${skip ? `?skip=${encodeURIComponent(skip)}` : ''}`)
-        const data = await res.json()
-        if (!data.success) throw new Error(data.error || 'הטעינה נכשלה')
-        setStats(data.stats)
-        setSeq(data.sequence || null)
-        const first = data.sequence?.pages?.find((p) => p.state === 'mine')
-        if (first) openPage(first.id)
-        else if (!data.sequence) {
-          showAlert('אין רצף פנוי', 'אין כרגע רצף פנוי להגהה. אפשר לבחור עמודים ברשת-העמודים.')
-          loadMine()
-        }
-      } catch (e) {
-        showAlert('שגיאה', failMessage(e, 'הטעינה נכשלה — בדקו את החיבור ונסו שוב'))
-      } finally {
-        setLoading(false)
-      }
-    },
-    [loadMine, openPage, showAlert]
-  )
-
-  const skipSequence = async () => {
-    const ok = await showConfirm(
-      'רצף אחר',
-      `העמודים של הרצף הזה שלא הוגשו יחזרו למאגר, ויישמר לכם רצף אחר (${CLAIM_HOURS} שעות לכל עמוד). עמודים שתפסתם ברשת-העמודים ברצפים אחרים נשארים שלכם. טיוטות שלא הוגשו יישארו בדפדפן. להמשיך?`
-    )
-    if (!ok) return
-    const body = { action: 'release', ...(seq?.book ? { book: seq.book.id, seq: seq.seq } : {}) }
-    await fetch('/api/page-proof', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    clearPageParam()
-    takeSequence(seq?.book ? `${seq.book.id}:${seq.seq}` : null)
   }
 
   // "הגשת העמוד" בסרגל העורך ← חלון ההגשה
@@ -354,10 +314,12 @@ function PageProofVolunteer() {
                   <span aria-hidden="true" className="material-symbols-outlined text-base">person</span>
                   העמודים שלי
                 </button>
-                <button onClick={skipSequence} className="flex items-center gap-1 rounded-md px-3 py-1 hover:bg-surface-variant" title="החזרת הרצף למאגר, ותפיסת רצף אחר">
-                  <span aria-hidden="true" className="material-symbols-outlined text-base">skip_next</span>
-                  רצף אחר
-                </button>
+                {seq.book?.gid && (
+                  <Link href={bookHref(seq.book.gid)} className="flex items-center gap-1 rounded-md px-3 py-1 hover:bg-surface-variant" title="עמודים נוספים בספר הזה — בוחרים אותם ברשת-העמודים">
+                    <span aria-hidden="true" className="material-symbols-outlined text-base">grid_view</span>
+                    עמודים נוספים בספר
+                  </Link>
+                )}
               </div>
 
               {/* מעבר שני: העמוד חזר מזיהוי-מחדש אחרי תיקון חיתוך */}

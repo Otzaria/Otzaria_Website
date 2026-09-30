@@ -11,14 +11,13 @@ const { session, stats, held, seqOf, brief, writes } = vi.hoisted(() => ({
   held: vi.fn(),
   seqOf: vi.fn(),
   brief: vi.fn(),
-  writes: { claimPage: vi.fn(), claimSequence: vi.fn(), renewLease: vi.fn(), releasePage: vi.fn(), releaseLeases: vi.fn(), autoClaim: vi.fn() },
+  writes: { claimPage: vi.fn(), claimSequence: vi.fn(), renewLease: vi.fn(), releasePage: vi.fn(), releaseLeases: vi.fn() },
 }))
 
 vi.mock('@/lib/db', () => ({ default: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('@/lib/pageProof/pool', () => ({
   requireProofSession: session,
   volunteerStats: stats,
-  claimSequence: writes.autoClaim,
   releaseLeases: writes.releaseLeases,
 }))
 vi.mock('@/lib/pageProof/claims', () => ({

@@ -1,28 +1,31 @@
 import { NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 import connectDB from '@/lib/db';
-import { requireProofSession, claimSequence, releaseLeases, volunteerStats } from '@/lib/pageProof/pool';
-import { sequenceOfPage } from '@/lib/pageProof/claims';
+import { requireProofSession, releaseLeases, volunteerStats } from '@/lib/pageProof/pool';
+import { heldSequences, sequenceOfPage } from '@/lib/pageProof/claims';
 import { badRequest, serverError } from '@/lib/apiResponse';
 
-// GET: "רצף אחר" — הרצף הנוכחי של המתנדב, או רצף חדש שנתפס עבורו + סטטיסטיקה.
-// תופס עמודים, ולכן הדף קורא לזה רק בלחיצה מפורשת ("רצף אחר"), לעולם לא
-// בטעינה — הטעינה היא GET /api/page-proof/mine (קריאה בלבד).
-// ?skip=<bookId>:<seq> — הרצף שדולג עכשיו לא יוצע שוב באותה בקשה.
-// ?page=<pageId> (לקוח ישן) — הרצף של העמוד הזה אם הוא בטיפול המשתמש או שהגיש
-// אותו; אחרת sequence:null — בלי לתפוס רצף אחר במקומו.
+// GET — קריאה בלבד, לעולם אינו תופס עמודים (אין חלוקה אוטומטית: המתנדב בוחר עמודים רק
+// ברשת-העמודים של הספר). הדף הנוכחי טוען את /api/page-proof/mine; כאן — לשונית ישנה:
+//   ?page=<pageId> — הרצף של העמוד הזה אם הוא בטיפול המשתמש או שהגיש אותו, אחרת null;
+//   בלי ?page=     — הרצף שבו המשתמש כבר מחזיק עמודים (שהתפיסה בו נגמרת ראשונה), או null.
+//   ?skip= (של "רצף אחר" שהוסר) — מתעלמים ממנו.
+// ← {success, sequence, stats}
 export async function GET(request) {
   const { userId, error } = await requireProofSession();
   if (error) return error;
   try {
     await connectDB();
-    const sp = new URL(request.url).searchParams;
-    const skip = sp.get('skip');
-    const pageId = sp.get('page');
-    const asked = pageId !== null ? (mongoose.Types.ObjectId.isValid(pageId) ? sequenceOfPage(pageId, userId) : Promise.resolve(null)) : null;
-    const [sequence, stats] = await Promise.all([asked || claimSequence(userId, skip), volunteerStats(userId)]);
+    const pageId = new URL(request.url).searchParams.get('page');
+    const sequence =
+      pageId !== null
+        ? mongoose.Types.ObjectId.isValid(pageId)
+          ? sequenceOfPage(pageId, userId)
+          : Promise.resolve(null)
+        : heldSequences(userId).then((held) => held[0] || null);
+    const [seq, stats] = await Promise.all([sequence, volunteerStats(userId)]);
     return NextResponse.json(
-      { success: true, sequence, stats },
+      { success: true, sequence: seq || null, stats },
       { headers: { 'Cache-Control': 'private, no-store' } }
     );
   } catch (e) {
@@ -31,8 +34,8 @@ export async function GET(request) {
   }
 }
 
-// POST {action:'release', book?, seq?}: שחרור הרצף המוחכר (דילוג). עם book+seq —
-// רק העמודים של הרצף הזה (עמודים שנתפסו ברשת-העמודים במקומות אחרים נשארים).
+// POST {action:'release', book?, seq?} (לשונית ישנה): שחרור הרצף המוחכר. עם book+seq — רק
+// העמודים של הרצף הזה (עמודים שנתפסו ברשת-העמודים במקומות אחרים נשארים). רק שחרור.
 export async function POST(request) {
   const { userId, error } = await requireProofSession();
   if (error) return error;

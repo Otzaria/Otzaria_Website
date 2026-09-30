@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import PageProofBook from '@/models/PageProofBook';
 import PageProofPage from '@/models/PageProofPage';
 import PageProofSubmission from '@/models/PageProofSubmission';
 import { hasBookLibraryAccess, hasOcrAccess } from '@/lib/roles';
@@ -11,12 +10,11 @@ import { pickPrimary } from '@/lib/pageProof/fixesExport';
 import { foreignLinkRefs, withForeignLines } from '@/lib/pageProof/ops';
 import { isFurnitureStream } from '@/lib/pageProof/vocab';
 import { volunteerOpenFilter } from '@/lib/pageProof/gridState';
-import { CLAIM_MS, describeSequence, eligibleFilter } from '@/lib/pageProof/claims';
 
-// עזרי-שרת להגהת-עמודים (/api/page-proof): הרשאה, "רצף אחר" (רצף אוטומטי
-// בלחיצה מפורשת) ושחרור. היחידה שמחולקת כאן היא רצף (book+seq) של עד 5 עמודים
-// עוקבים; ההגשה — לעמוד. בחירת עמודים ברשת, "העמודים שלי" וחידוש התפיסה
-// בפתיחת עמוד — lib/pageProof/claims.js.
+// עזרי-שרת להגהת-עמודים (/api/page-proof): הרשאה, שחרור, סטטיסטיקה והצורה שנשלחת
+// לעורך. שום עמוד אינו מחולק כאן: המתנדב בוחר עמודים רק ברשת-העמודים של הספר (עמוד,
+// או רצף עוקב שהוא בוחר) — lib/pageProof/claims.js, יחד עם "העמודים שלי" וחידוש התפיסה
+// בפתיחת עמוד. ההגשה — לעמוד.
 
 // תקרה לגוף בקשת-הגשה/אישור (JSON). הגשה אמיתית של עמוד — עשרות KB; השרת
 // מקבל גופים גדולים מאוד בנתיבים אחרים (העלאות), ולכן התקרה כאן
@@ -75,69 +73,9 @@ export async function primaryOf(pageId, revision, excludeId = null) {
   return pickPrimary((subs || []).map((s) => ({ ...s, approvedAt: s.reviewedAt })));
 }
 
-async function activeBookIds() {
-  const books = await PageProofBook.find({ status: 'active' }, { _id: 1 }).lean();
-  return books.map((b) => b._id);
-}
-
-// "רצף אחר" (לחיצה מפורשת — שום כניסה לדף אינה קוראת לזה): הרצף הנוכחי של
-// המשתמש (אם יש לו עמודים מוחכרים שלא הגיש), אחרת רצף חדש — רק עמודים פתוחים
-// למתנדבים (eligibleFilter), כל אחד ל-CLAIM_HOURS שעות כמו תפיסה ברשת.
-// skip: "bookId:seq" שהמשתמש דילג עליו עכשיו — לא יוצע שוב באותה בקשה.
-export async function claimSequence(userId, skip = null) {
-  const uid = oid(userId);
-  const now = new Date();
-
-  // כשהמשתמש מחזיק עמודים בכמה מקומות (גם מבחירה ברשת-העמודים) — הרצף שההחכרה
-  // שלו נגמרת ראשונה, כדי שהבחירה תהיה צפויה
-  const held = await PageProofPage.findOne(
-    { leasedBy: uid, leasedUntil: { $gt: now }, status: 'open', submitters: { $ne: uid } },
-    { book: 1, seq: 1 }
-  )
-    .sort({ leasedUntil: 1, _id: 1 })
-    .lean();
-  if (held) return describeSequence(held.book, held.seq, uid, now);
-
-  const books = await activeBookIds();
-  if (!books.length) return null;
-  const [skipBook, skipSeq] = String(skip || '').split(':');
-
-  for (let round = 0; round < 4; round++) {
-    const match = { ...eligibleFilter(uid, now), book: { $in: books } };
-    // רוחב לפני עומק: עדיפות לספרים שקיבלו פחות הגשות (הרוחב חשוב לאימון —
-    // מסמך 40 §1). בתוך הספר — הרצף הראשון הפנוי.
-    const groups = await PageProofPage.aggregate([
-      { $match: match },
-      { $group: { _id: { book: '$book', seq: '$seq' }, n: { $sum: 1 } } },
-      { $sort: { '_id.seq': 1 } },
-      { $group: { _id: '$_id.book', first: { $first: '$_id.seq' }, second: { $push: '$_id.seq' } } },
-      { $sample: { size: 6 } },
-    ]);
-    if (!groups.length) return null;
-
-    const counts = await PageProofSubmission.aggregate([
-      { $match: { book: { $in: groups.map((g) => g._id) }, status: { $ne: 'rejected' } } },
-      { $group: { _id: '$book', n: { $sum: 1 } } },
-    ]);
-    const countOf = new Map(counts.map((c) => [String(c._id), c.n]));
-    groups.sort((a, b) => (countOf.get(String(a._id)) || 0) - (countOf.get(String(b._id)) || 0));
-
-    for (const g of groups) {
-      const seqs = g.second.filter((s) => !(String(g._id) === skipBook && String(s) === skipSeq));
-      const seq = seqs[0];
-      if (seq === undefined) continue;
-      const res = await PageProofPage.updateMany(
-        { ...eligibleFilter(uid, now), book: g._id, seq },
-        { $set: { leasedBy: uid, leasedUntil: new Date(now.getTime() + CLAIM_MS) } }
-      );
-      if (res.modifiedCount > 0) return describeSequence(g._id, seq, uid, now);
-    }
-  }
-  return null;
-}
-
-// שחרור הרצף (דילוג): העמודים שמוחכרים למשתמש ברצף הזה בלבד — לא עמודים
-// שתפס בעצמו ברשת-העמודים בספרים/רצפים אחרים. בלי book/seq — כל ההחכרות שלו.
+// שחרור רצף (POST /api/page-proof — לקוח ישן; הדף הנוכחי משחרר עמוד-עמוד ברשת): העמודים
+// שמוחכרים למשתמש ברצף הזה בלבד — לא עמודים שתפס ברצפים/ספרים אחרים. בלי book/seq — כל
+// ההחכרות שלו. רק משחרר — לעולם לא תופס במקומם.
 export async function releaseLeases(userId, { book = null, seq = null } = {}) {
   const uid = oid(userId);
   const filter = { leasedBy: uid };

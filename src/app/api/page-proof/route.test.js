@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// /api/page-proof: הרצף של המתנדב. ?page=<id> — פתיחה מרשת-העמודים (הרצף של
-// העמוד הזה, אם הוא של המשתמש/פנוי לו); "רצף אחר" משחרר רק את הרצף הנוכחי.
+// /api/page-proof (לשונית ישנה — הדף הנוכחי טוען את /mine): GET קריאה בלבד — לעולם אינו
+// תופס עמודים, גם לא "רצף אחר" (הוסר: המתנדב בוחר עמודים רק ברשת-העמודים). ?page=<id> — הרצף
+// של העמוד הזה אם הוא בטיפול המשתמש או שהגיש אותו; בלי — הרצף שהוא כבר מחזיק. POST — רק שחרור.
 // המודלים מדומים.
 
 const { getServerSessionMock, Page, Book, Sub } = vi.hoisted(() => ({
@@ -79,29 +80,36 @@ describe('GET /api/page-proof?page= (לקוח ישן)', () => {
   })
 })
 
-describe('GET /api/page-proof (רצף אחר — לחיצה מפורשת)', () => {
-  it('בלי עמודים בידיים ← נתפס רצף חדש: רק עמודים פתוחים למתנדבים, כל אחד ל-48 שעות', async () => {
-    Page.findOne.mockReturnValueOnce(chain(null)) // אין רצף מוחזק
-    Book.find.mockReturnValue(chain([{ _id: BOOK_ID }]))
-    Page.aggregate.mockResolvedValueOnce([{ _id: BOOK_ID, first: 0, second: [0] }])
-    Page.updateMany.mockResolvedValue({ modifiedCount: 5 })
-    const before = Date.now()
-    const body = await (await GET(getReq('?skip=x:1'))).json()
-    expect(body.sequence).toMatchObject({ seq: 0, book: { id: BOOK_ID } })
-    const match = Page.aggregate.mock.calls[0][0][0].$match
-    expect(match.volunteer).toEqual({ $ne: false })
-    const [filter, update] = Page.updateMany.mock.calls[0]
-    expect(filter.volunteer).toEqual({ $ne: false })
-    expect(filter.seq).toBe(0)
-    const ms = update.$set.leasedUntil.getTime() - before
-    expect(ms).toBeGreaterThanOrEqual(48 * 3600e3 - 5000)
-    expect(ms).toBeLessThanOrEqual(48 * 3600e3 + 5000)
+describe('GET /api/page-proof בלי ?page= — קריאה בלבד, לעולם אינו תופס', () => {
+  it('מחזיק עמודים ← הרצף שלו (שהתפיסה בו נגמרת ראשונה); ?skip= — מתעלמים; שום עדכון', async () => {
+    // heldSequences: העמודים שבטיפולו, ואז describeSequence לרצף הראשון
+    Page.find.mockReturnValueOnce(chain([{ book: BOOK_ID, seq: 1 }]))
+    const res = await GET(getReq('?skip=x:1'))
+    const body = await res.json()
+    expect(res.status).toBe(200)
+    expect(body.sequence).toMatchObject({ seq: 1, book: { id: BOOK_ID }, pages: [{ id: PAGE_ID, state: 'mine' }] })
+    const heldFilter = Page.find.mock.calls[0][0]
+    expect(String(heldFilter.leasedBy)).toBe(USER_ID)
+    expect(heldFilter.status).toBe('open')
+    expect(Page.updateMany).not.toHaveBeenCalled()
+    expect(Page.aggregate).not.toHaveBeenCalled()
+    expect(Book.find).not.toHaveBeenCalled()
+    expect(res.headers.get('Cache-Control')).toBe('private, no-store')
     // "פתוחים" בסטטיסטיקה — בלי מה שהמנהל סגר
     expect(Page.countDocuments.mock.calls.find(([q]) => q.status === 'open')[0].volunteer).toEqual({ $ne: false })
   })
+
+  it('אין עמודים בטיפול ← sequence:null — ושום רצף אינו נתפס במקום', async () => {
+    Page.find.mockReturnValueOnce(chain([]))
+    const body = await (await GET(getReq())).json()
+    expect(body).toMatchObject({ success: true, sequence: null, stats: expect.any(Object) })
+    expect(Page.updateMany).not.toHaveBeenCalled()
+    expect(Page.aggregate).not.toHaveBeenCalled()
+    expect(Book.find).not.toHaveBeenCalled()
+  })
 })
 
-describe('POST /api/page-proof (רצף אחר)', () => {
+describe('POST /api/page-proof (לשונית ישנה) — רק שחרור', () => {
   it('עם book+seq ← משחרר רק את הרצף הזה', async () => {
     const res = await POST(postReq({ action: 'release', book: BOOK_ID, seq: 3 }))
     expect(res.status).toBe(200)
