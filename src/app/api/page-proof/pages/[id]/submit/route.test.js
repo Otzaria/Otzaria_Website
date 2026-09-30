@@ -148,6 +148,27 @@ describe('POST /api/page-proof/pages/[id]/submit', () => {
     expect((await res.json()).error).toMatch(/זיהוי-מחדש/)
     expect(Sub.create).not.toHaveBeenCalled()
   })
+
+  it('עמוד שהמנהל סגר: מתקבל רק ממי שמחזיק בו; מאחר ← 409 עם הסבר', async () => {
+    Page.findById.mockReturnValue(lean(pageRow()))
+    await POST(req({ ops: TEXT }), params)
+    // מי שמחזיק (גם אחרי שהתפיסה פגה) — תמיד; עמוד פנוי — רק כשהוא פתוח למתנדבים
+    const [holder, freeNull, freeExpired] = Page.findOneAndUpdate.mock.calls[0][0].$or
+    expect(String(holder.leasedBy)).toBe(USER_ID)
+    expect(holder.volunteer).toBeUndefined()
+    expect(freeNull).toMatchObject({ leasedUntil: null, volunteer: { $ne: false } })
+    expect(freeExpired).toMatchObject({ volunteer: { $ne: false } })
+    expect(freeExpired.leasedUntil.$lt).toBeInstanceOf(Date)
+
+    vi.clearAllMocks()
+    getServerSessionMock.mockResolvedValue(volunteer)
+    Page.findById.mockReturnValueOnce(lean(pageRow())).mockReturnValueOnce(lean({ status: 'open', revision: 1, volunteer: false, leasedBy: null }))
+    Page.findOneAndUpdate.mockResolvedValueOnce(null)
+    const res = await POST(req({ ops: TEXT }), params)
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toMatch(/מנהל סגר את העמוד להגהה.*העבודה שמורה בדפדפן/)
+    expect(Sub.create).not.toHaveBeenCalled()
+  })
 })
 
 // קישור לעמוד אחר (link_add שהצד השני שלו — שורה 77 — בעמוד 4 של אותו ספר)

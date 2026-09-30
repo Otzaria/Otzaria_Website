@@ -98,6 +98,23 @@ export function formatTimeAgo(value, now = new Date()) {
   return `לפני ${days} ימים`;
 }
 
+// עד מתי (מועד עתידי, למשל סוף התפיסה של עמוד) לפי שעון הדפדפן: "היום ב-14:05",
+// "מחר ב-09:30", ובהמשך "יום ה' 2.10 ב-14:05". מועד שעבר (או קלט לא תקין) ← ''.
+const WEEKDAY = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
+const pad2 = (n) => String(n).padStart(2, '0');
+export function formatUntil(value, now = new Date()) {
+  const date = toDate(value);
+  if (!date || date.getTime() <= now.getTime()) return '';
+  const time = `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+  // הפרש בימים-קלנדריים (מקומיים; עמיד למעבר שעון-קיץ)
+  const days = Math.round(
+    (new Date(date.getFullYear(), date.getMonth(), date.getDate()) - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / DAY_MS
+  );
+  if (days === 0) return `היום ב-${time}`;
+  if (days === 1) return `מחר ב-${time}`;
+  return `יום ${WEEKDAY[date.getDay()]}' ${date.getDate()}.${date.getMonth() + 1} ב-${time}`;
+}
+
 // כמה זמן נשאר עד מועד עתידי (למשל סוף ההחכרה של עמוד): "עוד 5 שעות".
 // מועד שעבר (או קלט לא תקין) ← ''.
 export function formatTimeLeft(value, now = new Date()) {

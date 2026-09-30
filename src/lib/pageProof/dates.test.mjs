@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { toGematria, formatHebrewDate, formatTimeAgo, formatTimeLeft } from './dates.js';
+import { toGematria, formatHebrewDate, formatTimeAgo, formatTimeLeft, formatUntil } from './dates.js';
 
 // העותק שבדף הספר הישן (src/app/library/books/[path]/page.jsx) — כדי לוודא
 // שהמודול המשותף נותן בדיוק אותו פלט בכל טווח שבשימוש (ימים ושנים)
@@ -92,4 +92,22 @@ test('כמה זמן נשאר: מועד שעבר או קלט לא תקין ← מ
   assert.equal(formatTimeLeft(new Date(NOW.getTime() - 1), NOW), '');
   assert.equal(formatTimeLeft(NOW, NOW), '');
   assert.equal(formatTimeLeft(null, NOW), '');
+});
+
+test('עד מתי: היום / מחר / יום בשבוע ותאריך — לפי שעון הדפדפן; עבר או קלט לא תקין ← ריק', () => {
+  // שעון מקומי (כמו בדפדפן): יום ד', 30.9.2026, 10:00
+  const now = new Date(2026, 8, 30, 10, 0);
+  assert.equal(formatUntil(new Date(2026, 8, 30, 14, 5), now), 'היום ב-14:05');
+  assert.equal(formatUntil(new Date(2026, 8, 30, 23, 59), now), 'היום ב-23:59');
+  assert.equal(formatUntil(new Date(2026, 9, 1, 9, 30), now), 'מחר ב-09:30');
+  assert.equal(formatUntil(new Date(2026, 9, 2, 14, 5), now), "יום ו' 2.10 ב-14:05");
+  assert.equal(formatUntil(new Date(2026, 9, 6, 0, 0), now), "יום ג' 6.10 ב-00:00");
+  // 48 שעות מעכשיו — יום שישי באותה שעה
+  assert.equal(formatUntil(new Date(now.getTime() + 48 * 3600 * 1000), now), "יום ו' 2.10 ב-10:00");
+  assert.equal(formatUntil(new Date(2026, 8, 30, 9, 59), now), '');
+  assert.equal(formatUntil(now, now), '');
+  assert.equal(formatUntil('not a date', now), '');
+  assert.equal(formatUntil(null, now), '');
+  // מחרוזת ISO (כמו מה-API)
+  assert.equal(formatUntil(new Date(2026, 8, 30, 12, 0).toISOString(), now), 'היום ב-12:00');
 });

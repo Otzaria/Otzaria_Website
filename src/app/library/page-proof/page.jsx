@@ -11,16 +11,23 @@ import { hasBookLibraryAccess, hasOcrAccess } from '@/lib/roles'
 import ProofEditor from '@/components/pageProof/ProofEditor'
 import ProofHelp from '@/components/pageProof/ProofHelp'
 import SubmitDialog from '@/components/pageProof/SubmitDialog'
+import MyPagesPanel from '@/components/pageProof/books/MyPagesPanel'
 import { untouchedLineIds } from '@/lib/pageProof/view'
 import { cleanupPageDrafts, pageDraftKey, removePageDrafts } from '@/lib/pageProof/drafts'
 import { planSubmission, recheckLineIds, submitSummary } from '@/lib/pageProof/submitPlan'
+import { CLAIM_HOURS, bookHref, editorHref } from '@/lib/pageProof/gridState'
 
-// דף המתנדב להגהת-עמודים: רצף של עד 5 עמודים עוקבים מספר אחד (החוזה של
-// פרויקט ה-OCR). כל עמוד מוגש בנפרד וממתין לאישור מנהל.
+// דף המתנדב להגהת-עמודים: העורך, לעמודים שכבר בטיפולכם. כל עמוד מוגש בנפרד
+// וממתין לאישור מנהל.
 //
-// ?page=<id> — פתיחה מרשת-העמודים (/library/page-proof/books): הרצף של העמוד
-// הזה, והעמוד עצמו נפתח (לא העמוד הראשון שלכם ברצף). עמוד שמתנדב אחר מחזיק —
-// השרת מחזיר רצף רגיל, והדף מסביר. "רצף אחר" משחרר רק את הרצף שעל המסך.
+// הכניסה לדף אינה תופסת שום עמוד: היא טוענת (קריאה בלבד) את "העמודים שלי" —
+// GET /api/page-proof/mine — ומציגה אותם (MyPagesPanel), עם מעבר לבחירת עמודים
+// ברשת (/library/page-proof/books). תפיסה — רק בלחיצה מפורשת: "תפוס" ברשת, או
+// "רצף אחר" כאן (GET /api/page-proof, שתופס רצף).
+//
+// ?page=<id> — פתיחה מהרשת או מ"העמודים שלי": הרצף של העמוד הזה, והעמוד עצמו
+// נפתח — אם הוא בטיפולכם או שהגשתם אותו. אחרת — הסבר למה (unavailable),
+// וקישור לרשת של הספר. "רצף אחר" משחרר רק את הרצף שעל המסך.
 //
 // החוזה מול ProofEditor:
 //   draftKey — מפתח-הטיוטה בדפדפן לפי העמוד *והגרסה שלו* (lib/pageProof/
@@ -83,6 +90,9 @@ function PageProofVolunteer() {
   // העמוד שביקשו בכתובת — נצרך פעם אחת, בטעינה הראשונה
   const focusRef = useRef(wanted && OBJECT_ID_RE.test(wanted) ? wanted : null)
   const [seq, setSeq] = useState(null)
+  const [held, setHeld] = useState([]) // "העמודים שלי": הרצפים שבהם אתם מחזיקים עמודים
+  const [heldAt, setHeldAt] = useState(null)
+  const [missing, setMissing] = useState(null) // העמוד שביקשו ואינו בטיפולכם
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
   const [current, setCurrent] = useState(null) // {mode, page, submission, draftKey}
@@ -123,58 +133,97 @@ function PageProofVolunteer() {
     [showAlert]
   )
 
-  const loadSequence = useCallback(
-    async (skip = null) => {
-      setLoading(true)
-      setCurrent(null)
-      const focus = focusRef.current
-      focusRef.current = null
-      try {
-        const qs = new URLSearchParams()
-        if (skip) qs.set('skip', skip)
-        if (focus) qs.set('page', focus)
-        const q = qs.toString()
-        const res = await fetch(`/api/page-proof${q ? `?${q}` : ''}`)
-        const data = await res.json()
-        if (!data.success) throw new Error(data.error || 'הטעינה נכשלה')
-        setSeq(data.sequence)
-        setStats(data.stats)
-        const pages = data.sequence?.pages || []
-        const asked = focus ? pages.find((p) => p.id === focus && p.state !== 'unavailable') : null
-        const first = asked || pages.find((p) => p.state === 'mine')
-        if (focus && !asked) {
-          showAlert('העמוד אינו זמין', 'העמוד שבחרתם אינו זמין לכם כרגע — אולי מתנדב אחר עובד עליו. נפתח במקומו הרצף שלכם.')
-        }
-        if (first) openPage(first.id)
-      } catch (e) {
-        showAlert('שגיאה', failMessage(e, 'הטעינה נכשלה — בדקו את החיבור ונסו שוב'))
-      } finally {
-        setLoading(false)
-      }
-    },
-    [openPage, showAlert]
-  )
+  // הכניסה: "העמודים שלי" (קריאה בלבד — שום עמוד אינו נתפס). עם ?page= — גם
+  // הרצף של העמוד הזה, והוא נפתח אם הוא בטיפולכם או שהגשתם אותו
+  const loadMine = useCallback(async () => {
+    setLoading(true)
+    setCurrent(null)
+    const focus = focusRef.current
+    focusRef.current = null
+    try {
+      const res = await fetch(`/api/page-proof/mine${focus ? `?page=${encodeURIComponent(focus)}` : ''}`)
+      const data = await res.json()
+      if (!data.success) throw new Error(data.error || 'הטעינה נכשלה')
+      setHeld(data.held || [])
+      setHeldAt(new Date())
+      setStats(data.stats)
+      const asked = focus ? (data.sequence?.pages || []).find((p) => p.id === focus && p.state !== 'unavailable') : null
+      setSeq(asked ? data.sequence : null)
+      setMissing(focus && !asked ? data.unavailable || { id: focus } : null)
+      if (asked) openPage(asked.id)
+    } catch (e) {
+      showAlert('שגיאה', failMessage(e, 'הטעינה נכשלה — בדקו את החיבור ונסו שוב'))
+    } finally {
+      setLoading(false)
+    }
+  }, [openPage, showAlert])
 
   useEffect(() => {
-    if (status === 'authenticated' && canWork) loadSequence()
+    if (status === 'authenticated' && canWork) loadMine()
     else if (status === 'authenticated') setLoading(false)
-  }, [status, canWork, loadSequence])
+  }, [status, canWork, loadMine])
 
   // הכתובת בלי ?page= — כדי שרענון אחרי מעבר לרצף אחר לא יחזיר לעמוד הקודם
   const clearPageParam = useCallback(() => {
     if (searchParams?.get('page')) router.replace(BASE_PATH, { scroll: false })
   }, [router, searchParams])
 
+  // עמוד מ"העמודים שלי" ← העורך (והכתובת מצביעה עליו, לרענון)
+  const openHeld = useCallback(
+    (sequence, pageId) => {
+      setSeq(sequence)
+      setMissing(null)
+      router.replace(editorHref(pageId), { scroll: false })
+      openPage(pageId)
+    },
+    [openPage, router]
+  )
+
+  // חזרה ל"העמודים שלי" (הטיוטה של העמוד שבעורך שמורה בדפדפן)
+  const showMine = () => {
+    clearPageParam()
+    setSeq(null)
+    loadMine()
+  }
+
+  // "רצף אחר" — לחיצה מפורשת (ואחרי אישור): הרצף הזה חוזר למאגר, ונתפס רצף אחר
+  // (או שנפתח רצף אחר שכבר בידיכם). זה המקום היחיד בדף שתופס עמודים.
+  const takeSequence = useCallback(
+    async (skip) => {
+      setLoading(true)
+      setCurrent(null)
+      setMissing(null)
+      try {
+        const res = await fetch(`/api/page-proof${skip ? `?skip=${encodeURIComponent(skip)}` : ''}`)
+        const data = await res.json()
+        if (!data.success) throw new Error(data.error || 'הטעינה נכשלה')
+        setStats(data.stats)
+        setSeq(data.sequence || null)
+        const first = data.sequence?.pages?.find((p) => p.state === 'mine')
+        if (first) openPage(first.id)
+        else if (!data.sequence) {
+          showAlert('אין רצף פנוי', 'אין כרגע רצף פנוי להגהה. אפשר לבחור עמודים ברשת-העמודים.')
+          loadMine()
+        }
+      } catch (e) {
+        showAlert('שגיאה', failMessage(e, 'הטעינה נכשלה — בדקו את החיבור ונסו שוב'))
+      } finally {
+        setLoading(false)
+      }
+    },
+    [loadMine, openPage, showAlert]
+  )
+
   const skipSequence = async () => {
     const ok = await showConfirm(
-      'דילוג על הרצף',
-      'העמודים של הרצף הזה שלא הוגשו יחזרו למאגר, ותקבלו רצף אחר. עמודים שתפסתם ברשת-העמודים בספרים אחרים נשארים שלכם. טיוטות שלא הוגשו יישארו בדפדפן. להמשיך?'
+      'רצף אחר',
+      `העמודים של הרצף הזה שלא הוגשו יחזרו למאגר, ויישמר לכם רצף אחר (${CLAIM_HOURS} שעות לכל עמוד). עמודים שתפסתם ברשת-העמודים ברצפים אחרים נשארים שלכם. טיוטות שלא הוגשו יישארו בדפדפן. להמשיך?`
     )
     if (!ok) return
     const body = { action: 'release', ...(seq?.book ? { book: seq.book.id, seq: seq.seq } : {}) }
     await fetch('/api/page-proof', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     clearPageParam()
-    loadSequence(seq?.book ? `${seq.book.id}:${seq.seq}` : null)
+    takeSequence(seq?.book ? `${seq.book.id}:${seq.seq}` : null)
   }
 
   // "הגשת העמוד" בסרגל העורך ← חלון ההגשה
@@ -278,18 +327,9 @@ function PageProofVolunteer() {
           )}
 
           {loading ? (
-            <LoadingSpinner message="מחפש עמודים..." />
+            <LoadingSpinner message="טוען את העמודים שלכם..." />
           ) : canWork && !seq ? (
-            <div className="glass-strong flex flex-col items-center gap-4 rounded-xl p-10 text-center">
-              <p className="font-medium text-on-surface/70">אין כרגע עמודים פתוחים להגהה — תודה רבה על העזרה!</p>
-              <div className="flex flex-wrap items-center justify-center gap-2">
-                <button onClick={() => loadSequence()} className="flex items-center gap-2 rounded-lg bg-primary px-6 py-3 font-bold text-on-primary hover:opacity-90">
-                  <span aria-hidden="true" className="material-symbols-outlined">autorenew</span>
-                  בדוק שוב
-                </button>
-                <GridLink className="py-3" />
-              </div>
-            </div>
+            <MyPagesPanel held={held} missing={missing} onOpen={openHeld} now={heldAt} />
           ) : seq ? (
             <>
               {/* הרצף */}
@@ -310,7 +350,11 @@ function PageProofVolunteer() {
                   </button>
                 ))}
                 <span className="flex-1" />
-                <button onClick={skipSequence} className="flex items-center gap-1 rounded-md px-3 py-1 hover:bg-surface-variant" title="החזרת הרצף למאגר וקבלת רצף אחר">
+                <button onClick={showMine} className="flex items-center gap-1 rounded-md px-3 py-1 hover:bg-surface-variant" title="כל העמודים שבטיפולכם">
+                  <span aria-hidden="true" className="material-symbols-outlined text-base">person</span>
+                  העמודים שלי
+                </button>
+                <button onClick={skipSequence} className="flex items-center gap-1 rounded-md px-3 py-1 hover:bg-surface-variant" title="החזרת הרצף למאגר, ותפיסת רצף אחר">
                   <span aria-hidden="true" className="material-symbols-outlined text-base">skip_next</span>
                   רצף אחר
                 </button>
@@ -361,17 +405,19 @@ function PageProofVolunteer() {
                   </p>
                   {remaining === 0 && (
                     <div className="flex flex-wrap items-center justify-center gap-2">
-                      <button
-                        onClick={() => {
-                          clearPageParam()
-                          loadSequence()
-                        }}
-                        className="flex items-center gap-2 rounded-lg bg-primary px-6 py-3 font-bold text-on-primary hover:opacity-90"
-                      >
-                        <span aria-hidden="true" className="material-symbols-outlined">arrow_back</span>
-                        לרצף הבא
+                      {seq.book?.gid && (
+                        <Link
+                          href={bookHref(seq.book.gid)}
+                          className="flex items-center gap-2 rounded-lg bg-primary px-6 py-3 font-bold text-on-primary hover:opacity-90"
+                        >
+                          <span aria-hidden="true" className="material-symbols-outlined">grid_view</span>
+                          לבחירת העמודים הבאים בספר
+                        </Link>
+                      )}
+                      <button onClick={showMine} className="flex items-center gap-1 rounded-full px-3 py-3 text-on-surface/80 transition-colors hover:bg-surface-variant">
+                        <span aria-hidden="true" className="material-symbols-outlined text-base">person</span>
+                        העמודים שלי
                       </button>
-                      <GridLink className="py-3" />
                     </div>
                   )}
                 </div>

@@ -44,4 +44,16 @@ describe('GET /api/admin/page-proof', () => {
     const group = Page.aggregate.mock.calls[0][0][0].$group
     expect(group.recut).toEqual({ $sum: { $cond: [{ $eq: ['$status', 'recut'] }, 1, 0] } })
   })
+
+  it('מונה "סגורים למתנדבים" לכל ספר (0 כשאין)', async () => {
+    Page.aggregate.mockResolvedValue([{ _id: 'b1', open: 3, done: 4, recut: 0, double: 0, leased: 1, closed: 12 }])
+    const body = await (await GET()).json()
+    expect(body.books.map((b) => [b.gid, b.closed])).toEqual([
+      ['g1', 12],
+      ['g2', 0],
+    ])
+    // בלי השדה (עמוד מלפני שנוסף) — פתוח: רק volunteer === false נספר
+    const group = Page.aggregate.mock.calls[0][0][0].$group
+    expect(group.closed).toEqual({ $sum: { $cond: [{ $eq: ['$volunteer', false] }, 1, 0] } })
+  })
 })

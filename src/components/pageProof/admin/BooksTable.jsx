@@ -16,7 +16,8 @@ const btn = 'rounded-md px-2 py-1 text-xs transition-colors disabled:opacity-40 
 const RECUT_TITLE =
   'עמודים שהגשה מאושרת שלהם כללה תיקוני-חיתוך. הם לא מוצעים למתנדבים: התיקונים יוצאים בקובץ-התיקונים, תוכנת-הספר חותכת וקוראת מחדש את השורות שתוקנו, והייבוא הבא של הספר מחזיר את העמודים להגהה במעבר שני.'
 
-export default function BooksTable({ books, busy, onDownload, onToggle, onDelete, onFilter }) {
+// onPages(book) — פתיחת רשת-העמודים של הספר (AdminBookPages); openGid — הספר שהרשת שלו פתוחה
+export default function BooksTable({ books, busy, onDownload, onToggle, onDelete, onFilter, onPages = null, openGid = null }) {
   if (!books.length) {
     return <div className="glass-strong rounded-xl p-6 text-center text-on-surface/60">עוד לא יובאו ספרים</div>
   }
@@ -52,6 +53,7 @@ export default function BooksTable({ books, busy, onDownload, onToggle, onDelete
                 {b.pageCount}
                 {b.double > 0 && <div className="text-xs text-on-surface/50">{b.double} כפולים</div>}
                 {b.leased > 0 && <div className="text-xs text-on-surface/50">{b.leased} בעבודה</div>}
+                {b.closed > 0 && <div className="text-xs text-on-surface/50" title="עמודים שנסגרו למתנדבים ברשת-העמודים">{b.closed} סגורים למתנדבים</div>}
                 {b.recut > 0 && (
                   <div className="mt-0.5 whitespace-nowrap rounded bg-warning-alt-100 px-1.5 text-xs font-bold text-warning-alt-800" title={RECUT_TITLE}>
                     ממתינים לזיהוי-מחדש: {b.recut}
@@ -70,6 +72,16 @@ export default function BooksTable({ books, busy, onDownload, onToggle, onDelete
               <td className="p-2 tabular-nums">{b.unexported}</td>
               <td className="p-2">
                 <div className="flex flex-wrap gap-1">
+                  {onPages && (
+                    <button
+                      onClick={() => onPages(b)}
+                      aria-pressed={openGid === b.gid}
+                      className={`${btn} ${openGid === b.gid ? 'bg-primary text-on-primary hover:bg-primary' : 'bg-info-100 text-info-800'}`}
+                      title="כל עמודי הספר בתמונות: מצב, מי תפס ועד מתי, פתוח/סגור למתנדבים ושחרור"
+                    >
+                      עמודים
+                    </button>
+                  )}
                   <button disabled={busy || !b.unexported} onClick={() => onDownload(b, { set: 'primary', onlyNew: true, mark: true })} className={`${btn} bg-success-100 text-success-800`} title="רק מה שעוד לא יצא, ומסמן כיצא">
                     תיקונים חדשים
                   </button>

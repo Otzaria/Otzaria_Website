@@ -9,7 +9,19 @@ import User from '../../models/User.js';
 import PageProofBook from '../../models/PageProofBook.js';
 import PageProofPage from '../../models/PageProofPage.js';
 import PageProofSubmission from '../../models/PageProofSubmission.js';
-import { listBooks, bookPages, claimPage, releasePage, claimSequence, CLAIM_MS, MAX_HELD } from './claims.js';
+import {
+  listBooks,
+  bookPages,
+  claimPage,
+  releasePage,
+  claimSequence,
+  renewLease,
+  sequenceOfPage,
+  heldSequences,
+  pageBrief,
+  CLAIM_MS,
+  MAX_HELD,
+} from './claims.js';
 import { startMongo } from '../corrections/testing/mongo.js';
 
 let db;
@@ -335,4 +347,131 @@ test('תפיסת רצף: קלט לא תקין וספר חסר', async (t) => {
   assert.equal((await claimSequence('gA', -1, String(me._id))).status, 400);
   assert.equal((await claimSequence('gA', 1.5, String(me._id))).status, 400);
   assert.equal((await claimSequence('nope', 0, String(me._id))).status, 404);
+});
+
+// ---------- עמודים שהמנהל סגר, "העמודים שלי", ופתיחה בעורך ----------
+
+const close = (...nos) => PageProofPage.updateMany({ _id: { $in: nos.map((n) => pages[n]._id) } }, { $set: { volunteer: false } });
+
+test('עמוד שהמנהל סגר: לא ברשת ולא במונים של המתנדב — חוץ ממה שבידיו או שהגיש', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  // 1 פנוי · 2 שלי · 3 של אחר · 5 הגשתי · 7 הושלם (אחר)
+  await close(1, 2, 3, 5, 7);
+  const mine = await bookPages('gA', String(me._id));
+  assert.deepEqual(mine.pages.map((p) => p.page), [2, 4, 5, 6, 8, 9, 10], 'בלי 1, 3, 7');
+  assert.equal(mine.pages.find((p) => p.page === 2).state, 'mine');
+  assert.equal(mine.pages.find((p) => p.page === 5).state, 'submitted');
+  assert.equal(mine.hidden, 3);
+  assert.equal(mine.counts.total, 7);
+  // רשימת הספרים — אותם מונים (בקבוצות במסד)
+  const listed = (await listBooks(String(me._id))).find((b) => b.gid === 'gA');
+  assert.deepEqual(listed.counts, mine.counts);
+  // בעיני המתנדב האחר: 3 שלו, 7 הגיש; 1/2/5 סגורים בשבילו
+  const theirs = await bookPages('gA', String(other._id));
+  assert.deepEqual(theirs.pages.map((p) => p.page), [3, 4, 6, 7, 8, 9, 10]);
+  assert.equal(theirs.pages.find((p) => p.page === 3).state, 'mine');
+  assert.equal(theirs.hidden, 3);
+  assert.deepEqual((await listBooks(String(other._id))).find((b) => b.gid === 'gA').counts, theirs.counts);
+});
+
+test('ספר שכל עמודיו סגורים (ואין בו כלום שלי) — לא ברשימת הספרים; התמונה — מהעמוד הפתוח הראשון', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const bookB = await mkBook('gB', 'ספר ב');
+  await mkPage(bookB, 1, { volunteer: false });
+  await mkPage(bookB, 2, { volunteer: false });
+  await close(1);
+  const list = await listBooks(String(me._id));
+  assert.deepEqual(list.map((b) => b.gid), ['gA']);
+  assert.equal(list[0].firstPage.id, String(pages[2]._id), 'עמוד 1 סגור — התמונה מעמוד 2');
+});
+
+test('עמוד סגור אינו נתפס — לא כעמוד ולא ברצף; עמוד בלי השדה (מלפני שנוסף) פתוח', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  await close(1, 4);
+  assert.deepEqual(await claimPage(String(pages[1]._id), String(me._id)), { ok: false, status: 409, error: 'העמוד אינו פתוח להגהה כרגע' });
+  // רצף 0: 1 סגור · 2 שלי · 3 תפוס · 4 סגור (בודק שני) · 5 הגשתי ← רק 2 (הארכה)
+  const seq = await claimSequence('gA', 0, String(me._id));
+  assert.equal(seq.ok, true);
+  assert.deepEqual(seq.pages.map((p) => p.page), [2]);
+  assert.equal((await PageProofPage.findById(pages[1]._id).lean()).leasedBy, null);
+  // עמוד ישן בלי השדה (9: תפיסה של אחר שפגה — פנוי)
+  await PageProofPage.collection.updateOne({ _id: pages[9]._id }, { $unset: { volunteer: '' } });
+  assert.equal((await PageProofPage.collection.findOne({ _id: pages[9]._id })).volunteer, undefined);
+  assert.equal((await claimPage(String(pages[9]._id), String(me._id))).ok, true);
+});
+
+test('פתיחה בעורך מחדשת ל-48 שעות מלאות רק תפיסה שבתוקף שלי — ולעולם לא תופסת עמוד', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const now = new Date();
+  const uid = String(me._id);
+  // שלי (נשארו 3 שעות) ← 48 שעות מעכשיו
+  const renewed = await renewLease(String(pages[2]._id), uid, now);
+  assert.equal(renewed.leasedUntil.getTime(), now.getTime() + CLAIM_MS);
+  assert.equal(String(renewed.leasedBy), uid);
+  // פנוי / תפיסה שפגה של אחר / תפוס בידי אחר / הגשתי ← null, ושום דבר לא השתנה
+  for (const n of [1, 9, 3, 5]) {
+    const before = await PageProofPage.findById(pages[n]._id).lean();
+    assert.equal(await renewLease(String(pages[n]._id), uid, now), null, `עמוד ${n}`);
+    const after = await PageProofPage.findById(pages[n]._id).lean();
+    assert.equal(String(after.leasedBy), String(before.leasedBy), `עמוד ${n}: המחזיק`);
+    assert.equal(after.leasedUntil?.getTime(), before.leasedUntil?.getTime(), `עמוד ${n}: המועד`);
+  }
+  // התפיסה שלי פגה ← כבר לא שלי: פתיחה אינה תופסת מחדש (תופסים שוב ברשת)
+  await PageProofPage.updateOne({ _id: pages[1]._id }, { $set: { leasedBy: me._id, leasedUntil: inHours(-1) } });
+  assert.equal(await renewLease(String(pages[1]._id), uid, now), null);
+  // עמוד שהמנהל סגר בזמן שהוא בידי — ממשיך להתחדש
+  await close(2);
+  assert.ok(await renewLease(String(pages[2]._id), uid, now));
+  // תפיסה ארוכה יותר אינה מתקצרת
+  await PageProofPage.updateOne({ _id: pages[2]._id }, { $set: { leasedUntil: inHours(100) } });
+  const kept = await renewLease(String(pages[2]._id), uid, now);
+  assert.ok(kept.leasedUntil.getTime() > now.getTime() + CLAIM_MS);
+});
+
+test('הרצף של עמוד (פתיחה בעורך): רק עמוד שבטיפולי או שהגשתי; קריאה בלבד', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const uid = String(me._id);
+  const s = await sequenceOfPage(String(pages[2]._id), uid);
+  assert.equal(s.seq, 0);
+  assert.equal(s.book.gid, 'gA');
+  const byNo = Object.fromEntries(s.pages.map((p) => [p.page, p]));
+  assert.equal(byNo[2].state, 'mine');
+  assert.ok(new Date(byNo[2].leasedUntil) > new Date(), 'עד מתי שמור לי');
+  assert.equal(byNo[1].state, 'unavailable');
+  assert.equal(byNo[1].leasedUntil, null);
+  assert.equal(byNo[5].state, 'submitted');
+  assert.equal((await sequenceOfPage(String(pages[5]._id), uid)).seq, 0, 'עמוד שהגשתי — לצפייה');
+  // פנוי / של אחר / תפיסה שפגה / מזהה לא תקין ← null
+  for (const n of [1, 3, 9]) assert.equal(await sequenceOfPage(String(pages[n]._id), uid), null, `עמוד ${n}`);
+  assert.equal(await sequenceOfPage('not-an-id', uid), null);
+  // שום דבר לא נתפס
+  assert.equal((await PageProofPage.findById(pages[1]._id).lean()).leasedBy, null);
+});
+
+test('"העמודים שלי": הרצפים שבהם אני מחזיק עמודים שלא הגשתי — הקרוב לפקוע ראשון', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const uid = String(me._id);
+  assert.deepEqual((await heldSequences(uid)).map((s) => `${s.book.gid}:${s.seq}`), ['gA:0']);
+  const bookB = await mkBook('gB', 'ספר ב');
+  const b1 = await mkPage(bookB, 1, { leasedBy: me._id, leasedUntil: inHours(1) });
+  await mkPage(bookB, 2, { leasedBy: me._id, leasedUntil: inHours(2) });
+  // תפיסה שפגה ועמוד שהגשתי — לא
+  await mkPage(bookB, 6, { leasedBy: me._id, leasedUntil: inHours(-1) });
+  await mkPage(bookB, 11, { leasedBy: me._id, leasedUntil: inHours(5), submitters: [me._id], activeCount: 1 });
+  const held = await heldSequences(uid);
+  assert.deepEqual(held.map((s) => `${s.book.gid}:${s.seq}`), ['gB:0', 'gA:0'], 'רצף אחד לכל (ספר, רצף), לפי מה שפוקע ראשון');
+  assert.deepEqual(held[0].pages.filter((p) => p.state === 'mine').map((p) => p.id), [String(b1._id), held[0].pages[1].id]);
+  assert.deepEqual(await heldSequences(String(other._id)).then((l) => l.map((s) => `${s.book.gid}:${s.seq}`)), ['gA:0']);
+});
+
+test('עמוד שביקשו ואינו שלי — המצב שלו בעיניי (להסבר ולקישור לרשת)', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const uid = String(me._id);
+  assert.deepEqual(await pageBrief(String(pages[1]._id), uid), { id: String(pages[1]._id), gid: 'gA', page: 1, state: 'open' });
+  assert.equal((await pageBrief(String(pages[3]._id), uid)).state, 'taken');
+  assert.equal((await pageBrief(String(pages[7]._id), uid)).state, 'done');
+  await close(1);
+  assert.equal((await pageBrief(String(pages[1]._id), uid)).state, 'closed');
+  assert.equal(await pageBrief('64b7f0c2a1b2c3d4e5f6ffff', uid), null);
+  assert.equal(await pageBrief('nope', uid), null);
 });

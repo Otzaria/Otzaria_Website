@@ -4,13 +4,16 @@ import connectDB from '@/lib/db';
 import PageProofPage from '@/models/PageProofPage';
 import PageProofBook from '@/models/PageProofBook';
 import PageProofSubmission from '@/models/PageProofSubmission';
-import { requireProofSession, renewLease, editorPageShape } from '@/lib/pageProof/pool';
+import { requireProofSession, editorPageShape } from '@/lib/pageProof/pool';
+import { renewLease } from '@/lib/pageProof/claims';
 import { sameRevision, storedRevision, submissionRevision } from '@/lib/pageProof/importRules';
 import { hasOcrAccess } from '@/lib/roles';
 import { badRequest, notFound, forbidden, serverError } from '@/lib/apiResponse';
 
-// GET: עמוד לעורך. מתנדב — רק עמוד שמוחכר לו (ההחכרה מתחדשת) או עמוד שכבר
-// הגיש (לצפייה, עם הפעולות שלו). מנהל OCR — כל עמוד, לקריאה.
+// GET: עמוד לעורך. מתנדב — רק עמוד שבטיפולו (התפיסה בתוקף; הפתיחה מחדשת אותה
+// ל-48 שעות מלאות — claims.renewLease) או עמוד שכבר הגיש (לצפייה, עם הפעולות
+// שלו). עמוד פנוי אינו נתפס כאן: תפיסה רק בלחיצה מפורשת ברשת-העמודים.
+// מנהל OCR — כל עמוד, לקריאה.
 // "כבר הגיש" = הגשה לגרסה הנוכחית של העמוד: עמוד שחזר מזיהוי-מחדש (גרסה
 // חדשה) נפתח לעריכה גם למי שהגיש את הגרסה הקודמת.
 export async function GET(request, { params }) {
@@ -35,7 +38,7 @@ export async function GET(request, { params }) {
     if (!mine) {
       const renewed = await renewLease(id, userId);
       if (renewed) mode = 'edit';
-      else if (!hasOcrAccess(session.user.role)) return forbidden('העמוד הזה אינו ברצף שלך');
+      else if (!hasOcrAccess(session.user.role)) return forbidden('העמוד הזה אינו בטיפולכם — אפשר לתפוס אותו ברשת-העמודים של הספר');
     }
 
     const book = await PageProofBook.findById(page.book, { title: 1, script: 1 }).lean();

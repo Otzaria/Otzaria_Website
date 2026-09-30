@@ -23,6 +23,11 @@ import {
   bookHref,
   thumbUrl,
   imageUrl,
+  isOpenToVolunteers,
+  volunteerOpenFilter,
+  CLAIM_HOURS,
+  CLAIM_RULE,
+  CLAIM_SHORT,
 } from './gridState.js';
 
 const NOW = new Date('2026-09-29T12:00:00Z');
@@ -242,4 +247,43 @@ test('כתובות: עורך, ספר ותמונות עם גרסת-העמוד', (
   assert.equal(thumbUrl({ id: 'p1', revision: 2 }), '/api/page-proof/pages/p1/thumb?v=2');
   assert.equal(thumbUrl({ id: 'p1' }), '/api/page-proof/pages/p1/thumb?v=1');
   assert.equal(imageUrl({ id: 'p1', revision: 3 }), '/api/page-proof/pages/p1/image?v=3');
+});
+
+test('עמוד שהמנהל סגר (volunteer:false): "closed" — אלא אם הוא של הצופה', () => {
+  const closed = { volunteer: false };
+  assert.equal(stateOf(closed), 'closed');
+  assert.equal(stateOf({ ...closed, required: 2, activeCount: 1, submitters: [OTHER] }), 'closed', 'גם בודק שני — לא מוצע');
+  assert.equal(stateOf({ ...closed, leasedBy: OTHER, leasedUntil: later }), 'closed', 'של אחר — לא מוצג לי');
+  assert.equal(stateOf({ ...closed, status: 'done', activeCount: 1, submitters: [OTHER] }), 'closed');
+  // מי שכבר מחזיק בו ממשיך; מה שהגשתי — נשאר שלי
+  assert.equal(stateOf({ ...closed, leasedBy: ME, leasedUntil: later }), 'mine');
+  assert.equal(stateOf({ ...closed, leasedBy: ME, leasedUntil: earlier }), 'closed', 'התפיסה שלי פגה — כבר לא שלי');
+  assert.equal(stateOf({ ...closed, submitters: [ME], activeCount: 1 }), 'submitted');
+  assert.equal(stateOf({ ...closed, mySubmissionStatus: 'approved', status: 'done' }), 'approved');
+  // בלי השדה (עמוד מלפני שנוסף) / true — פתוח כרגיל
+  assert.equal(stateOf({ volunteer: undefined }), 'open');
+  assert.equal(stateOf({ volunteer: true }), 'open');
+  // 'closed' אינו מצב שנספר או מוצג למתנדב
+  assert.equal(STATES.includes('closed'), false);
+  assert.equal(bookCounts(['closed', 'open']).total, 1);
+  assert.equal(claimRefusal('closed'), 'העמוד אינו פתוח להגהה כרגע');
+});
+
+test('פתוח למתנדבים: עמוד בלי השדה פתוח; המסנן למסד — עותק חדש בכל קריאה', () => {
+  assert.equal(isOpenToVolunteers({}), true);
+  assert.equal(isOpenToVolunteers({ volunteer: true }), true);
+  assert.equal(isOpenToVolunteers({ volunteer: false }), false);
+  assert.equal(isOpenToVolunteers(null), true);
+  const a = volunteerOpenFilter();
+  assert.deepEqual(a, { volunteer: { $ne: false } });
+  assert.notEqual(a.volunteer, volunteerOpenFilter().volunteer);
+});
+
+test('כלל ה-48 שעות כפי שהמתנדב קורא אותו: לכל עמוד לחוד, ומתחדש בכל פתיחה בעורך', () => {
+  assert.equal(CLAIM_HOURS, 48);
+  assert.ok(CLAIM_RULE.includes('48 שעות (לכל עמוד לחוד)'));
+  assert.match(CLAIM_RULE, /כל פתיחה שלו בעורך מחדשת את הזמן ל-48 שעות מלאות/);
+  assert.match(CLAIM_RULE, /חוזר למאגר/);
+  assert.match(CLAIM_RULE, /טיוטה שלא הגשתם נשארת בדפדפן/);
+  assert.equal(CLAIM_SHORT, 'כל עמוד שתפסתם שמור לכם 48 שעות, וכל פתיחה שלו בעורך מחדשת את הזמן.');
 });

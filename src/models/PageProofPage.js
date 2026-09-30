@@ -1,8 +1,8 @@
 import mongoose from 'mongoose';
 
 // עמוד בהגהת-עמודים: עמוד-NNN.json כפי שהגיע (doc) + תמונת-העמוד בדיסק.
-// המתנדב מקבל רצף (seq) של עד 5 עמודים עוקבים מאותו ספר, ומגיש כל עמוד
-// בנפרד (PageProofSubmission). עמוד "כפול" (required=2) דורש הגשות משני
+// המתנדב בוחר ברשת-העמודים עמוד או רצף (seq) של עד 5 עמודים עוקבים מאותו
+// ספר, ומגיש כל עמוד בנפרד (PageProofSubmission). עמוד "כפול" (required=2) דורש הגשות משני
 // אנשים שונים. שום הגשה אינה נכנסת לקובץ-התיקונים בלי אישור מנהל.
 const PageProofPageSchema = new mongoose.Schema(
   {
@@ -42,9 +42,16 @@ const PageProofPageSchema = new mongoose.Schema(
     // מגיע עם גרסה גבוהה יותר ונפתח למעבר שני
     revision: { type: Number, default: 1, min: 1 },
 
-    // החכרה: הרצף שמור למתנדב שקיבל אותו עד leasedUntil (מתחדש בכל פתיחה)
+    // החכרה ("תפיסה"): העמוד שמור למתנדב שתפס אותו עד leasedUntil — CLAIM_HOURS
+    // (48) שעות לכל עמוד לחוד, ומתחדש ל-48 שעות מלאות בכל פתיחה שלו בעורך
+    // (lib/pageProof/claims.js). מנהל יכול לשחרר (lib/pageProof/adminPages.js).
     leasedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     leasedUntil: { type: Date, default: null },
+
+    // פתוח למתנדבים: false = המנהל סגר את העמוד — הוא לא מוצע בשום דרך
+    // (רשת-העמודים, תפיסת עמוד/רצף, רצף אוטומטי, פתיחה בעורך) למי שאינו מחזיק
+    // בו כבר. עמוד בלי השדה (מלפני שנוסף) — פתוח. ייבוא-חוזר אינו נוגע בו.
+    volunteer: { type: Boolean, default: true },
   },
   { timestamps: true }
 );

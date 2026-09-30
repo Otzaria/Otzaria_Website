@@ -38,3 +38,22 @@ describe('BooksTable — ממתינים לזיהוי-מחדש', () => {
     expect(screen.queryByText(/ממתינים לזיהוי-מחדש/)).not.toBeInTheDocument()
   })
 })
+
+describe('BooksTable — רשת-העמודים של ספר', () => {
+  it('"עמודים" פותח את רשת-העמודים של הספר; הספר שהרשת שלו פתוחה מסומן', () => {
+    const onPages = vi.fn()
+    const b = book({ closed: 7 })
+    render(<BooksTable books={[b]} busy={false} onDownload={vi.fn()} onToggle={vi.fn()} onDelete={vi.fn()} onFilter={vi.fn()} onPages={onPages} openGid={b.gid} />)
+    const btn = screen.getByRole('button', { name: 'עמודים' })
+    expect(btn).toHaveAttribute('aria-pressed', 'true')
+    btn.click()
+    expect(onPages).toHaveBeenCalledWith(b)
+    expect(screen.getByText('7 סגורים למתנדבים')).toBeInTheDocument()
+  })
+
+  it('בלי onPages — בלי הכפתור; בלי עמודים סגורים — בלי המונה', () => {
+    renderTable([book()])
+    expect(screen.queryByRole('button', { name: 'עמודים' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/סגורים למתנדבים/)).not.toBeInTheDocument()
+  })
+})

@@ -14,6 +14,7 @@ import ProofProgressBar from './ProofProgressBar'
 import { apiDelete, apiGet, apiPost } from '@/lib/api-utils'
 import {
   CLAIM_HOURS,
+  CLAIM_SHORT,
   MAX_HELD,
   SEQ_HINT,
   SEQ_SIZE,
@@ -29,7 +30,9 @@ import {
 // כמו דף הספר בעריכה הישנה (/library/books/[path]): כותרת דביקה עם חזרה
 // לרשימה, כרטיסי-מונים שהם גם מסננים, "כל העמודים / העמודים שלי", תצוגה
 // רגילה/צפופה, וכרטיס לכל עמוד. בנוסף: "הצג ברצפים של 5" — הכרטיסים בשורות
-// לפי הרצף, עם "תפוס את 5 העמודים".
+// לפי הרצף, עם "תפוס את 5 העמודים". זה המקום היחיד (עם "רצף אחר" בדף המתנדב)
+// שבו עמודים נתפסים — ורק בלחיצה. עמודים שהמנהל סגר להגהה אינם מוצגים (hidden
+// — כמה כאלה, להסבר).
 
 const GRID = {
   single: 'grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5',
@@ -83,7 +86,7 @@ export default function ProofBookGrid({ gid }) {
   const load = useCallback(async () => {
     try {
       const d = await apiGet(`/api/page-proof/books/${encodeURIComponent(gid)}`)
-      setData({ book: d.book, pages: d.pages || [], counts: d.counts, loadedAt: new Date() })
+      setData({ book: d.book, pages: d.pages || [], counts: d.counts, hidden: d.hidden || 0, loadedAt: new Date() })
       setError(null)
     } catch (e) {
       setError(failMessage(e, 'שגיאה בטעינת הספר — בדקו את החיבור ונסו שוב'))
@@ -230,6 +233,13 @@ export default function ProofBookGrid({ gid }) {
               הספר מושהה כרגע: אפשר להמשיך בעמודים שכבר בטיפולכם, אבל לא לתפוס עמודים חדשים.
             </div>
           )}
+          {data.hidden > 0 && (
+            <div className="mb-6 flex items-center gap-2 rounded-xl border border-surface-variant bg-surface/60 p-3 text-sm text-on-surface/70">
+              <span aria-hidden="true" className="material-symbols-outlined">visibility_off</span>
+              {data.hidden === 1 ? 'עמוד אחד בספר עוד לא נפתח להגהה' : `${data.hidden.toLocaleString('he-IL')} עמודים בספר עוד לא נפתחו להגהה`} — הם
+              יופיעו כאן כשהמנהל יפתח אותם.
+            </div>
+          )}
 
           <ProofStatCards counts={counts} active={activeFilter} onSelect={setFilter} />
 
@@ -239,6 +249,10 @@ export default function ProofBookGrid({ gid }) {
               <span className="text-on-surface/60">{counts.total.toLocaleString('he-IL')} סה"כ</span>
             </div>
             <ProofProgressBar counts={counts} legend="labels" />
+            <p className="mt-3 flex items-center gap-1 text-xs text-on-surface/60">
+              <span aria-hidden="true" className="material-symbols-outlined text-sm">schedule</span>
+              {CLAIM_SHORT}
+            </p>
           </div>
 
           <div className="glass-strong rounded-2xl border border-surface-variant/30 p-6">

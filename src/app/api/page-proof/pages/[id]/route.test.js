@@ -81,24 +81,43 @@ describe('GET /api/page-proof/pages/[id]', () => {
     expect(body.page.revision).toBe(1)
   })
 
-  it('פתיחה לעריכה מאריכה את ההחכרה ואינה מקצרת תפיסה של 48 שעות מרשת-העמודים', async () => {
+  it('פתיחה לעריכה מחדשת את התפיסה ל-48 שעות מלאות — רק לעמוד שבטיפולי עכשיו, ולעולם לא תופסת עמוד פנוי', async () => {
     Page.findById.mockReturnValue(lean(page()))
     Sub.find.mockReturnValue(subsQuery([]))
     Page.findOneAndUpdate.mockResolvedValue({ _id: PAGE_ID })
+    const before = Date.now()
     await GET({}, params)
     const [filter, update, opts] = Page.findOneAndUpdate.mock.calls[0]
-    // רק עמוד פתוח שפנוי או שלי — $max לעולם לא פועל על החכרה של אחר
+    // רק עמוד פתוח שאני מחזיק בו והתפיסה בתוקף — בלי "או פנוי"
     expect(filter).toMatchObject({ status: 'open' })
-    expect(filter.$or).toHaveLength(3)
+    expect(String(filter.leasedBy)).toBe(USER_ID)
+    expect(filter.leasedUntil.$gt).toBeInstanceOf(Date)
+    expect(filter.$or).toBeUndefined()
+    // לא נוגעים במחזיק — רק מאריכים את המועד ($max: לעולם לא מתקצר)
     expect(Array.isArray(update)).toBe(true)
-    expect(update[0].$set.leasedUntil.$max).toHaveLength(2)
+    expect(Object.keys(update[0].$set)).toEqual(['leasedUntil'])
+    const [, until] = update[0].$set.leasedUntil.$max
+    expect(until.getTime() - before).toBeGreaterThanOrEqual(48 * 3600e3 - 5000)
+    expect(until.getTime() - before).toBeLessThanOrEqual(48 * 3600e3 + 5000)
     expect(opts).toMatchObject({ updatePipeline: true, lean: true })
   })
 
-  it('לא ברצף שלי ואין הגשה ← 403 למתנדב', async () => {
+  it('עמוד שאינו בטיפולי ואין לי הגשה ← 403 למתנדב, עם הפניה לרשת-העמודים', async () => {
     Page.findById.mockReturnValue(lean(page()))
     Sub.find.mockReturnValue(subsQuery([]))
     Page.findOneAndUpdate.mockResolvedValue(null)
-    expect((await GET({}, params)).status).toBe(403)
+    const res = await GET({}, params)
+    expect(res.status).toBe(403)
+    expect((await res.json()).error).toMatch(/אינו בטיפולכם.*רשת-העמודים/)
+  })
+
+  it('מנהל OCR פותח עמוד שאינו בטיפולו ← צפייה בלבד (בלי לתפוס אותו)', async () => {
+    getServerSessionMock.mockResolvedValueOnce({ user: { id: USER_ID, name: 'מנהל', role: 'admin_ocr', isVerified: true } })
+    Page.findById.mockReturnValue(lean(page()))
+    Sub.find.mockReturnValue(subsQuery([]))
+    Page.findOneAndUpdate.mockResolvedValue(null)
+    const body = await (await GET({}, params)).json()
+    expect(body.mode).toBe('view')
+    expect(Page.findOneAndUpdate.mock.calls[0][0].leasedBy).toBeDefined()
   })
 })

@@ -43,8 +43,8 @@ beforeEach(() => {
   Page.updateMany.mockResolvedValue({ modifiedCount: 2 })
 })
 
-describe('GET /api/page-proof?page=', () => {
-  it('עמוד שמוחכר למשתמש / פנוי לו ← הרצף שלו (בלי לחלק רצף חדש)', async () => {
+describe('GET /api/page-proof?page= (לקוח ישן)', () => {
+  it('עמוד שבטיפול המשתמש / שהגיש ← הרצף שלו (בלי לחלק רצף חדש)', async () => {
     Page.findOne.mockReturnValueOnce(chain({ book: BOOK_ID, seq: 2 }))
     const res = await GET(getReq(`?page=${PAGE_ID}`))
     const body = await res.json()
@@ -53,30 +53,51 @@ describe('GET /api/page-proof?page=', () => {
     expect(Page.findOne).toHaveBeenCalledTimes(1)
     const filter = Page.findOne.mock.calls[0][0]
     expect(String(filter._id)).toBe(PAGE_ID)
-    // לעולם לא עמוד שמתנדב אחר מחזיק: שלי / הגשתי / פתוח ופנוי
-    expect(filter.$or).toHaveLength(3)
-    expect(filter.$or[2]).toMatchObject({ status: 'open' })
+    // רק שלי (התפיסה בתוקף) או שהגשתי — לא "פתוח ופנוי"
+    expect(filter.$or).toHaveLength(2)
+    expect(filter.$or.some((c) => c.status === 'open')).toBe(false)
+    expect(Page.updateMany).not.toHaveBeenCalled()
     expect(res.headers.get('Cache-Control')).toBe('private, no-store')
   })
 
-  it('עמוד שאחר מחזיק (או מזהה לא תקין) ← רצף רגיל במקומו', async () => {
-    // sequenceOfPage לא מצא; ואז claimSequence — הרצף שהמשתמש כבר מחזיק
-    Page.findOne.mockReturnValueOnce(chain(null)).mockReturnValueOnce(chain({ book: BOOK_ID, seq: 5 }))
+  it('עמוד שאינו בטיפולו (או מזהה לא תקין) ← sequence:null, ושום רצף אינו נתפס במקומו', async () => {
+    Page.findOne.mockReturnValueOnce(chain(null))
     const body = await (await GET(getReq(`?page=${PAGE_ID}`))).json()
-    expect(body.sequence.seq).toBe(5)
-    expect(Page.findOne).toHaveBeenCalledTimes(2)
-    // הרצף המוחזק — זה שההחכרה שלו נגמרת ראשונה
-    expect(Page.findOne.mock.results[1].value.sort).toHaveBeenCalledWith({ leasedUntil: 1, _id: 1 })
+    expect(body.success).toBe(true)
+    expect(body.sequence).toBeNull()
+    expect(Page.findOne).toHaveBeenCalledTimes(1)
+    expect(Page.aggregate).not.toHaveBeenCalled()
+    expect(Page.updateMany).not.toHaveBeenCalled()
 
     vi.clearAllMocks()
-    Page.findOne.mockReturnValueOnce(chain({ book: BOOK_ID, seq: 1 }))
-    Book.findById.mockReturnValue(chain({ _id: BOOK_ID, gid: 'abcdefgh12', title: 'ספר' }))
-    Page.find.mockReturnValue(chain([]))
-    Sub.find.mockReturnValue(chain([]))
+    Page.countDocuments.mockResolvedValue(0)
     Sub.aggregate.mockResolvedValue([])
-    await GET(getReq('?page=not-an-id'))
-    // מזהה לא תקין — ישר לחלוקה הרגילה
-    expect(Page.findOne.mock.calls[0][0]).toMatchObject({ status: 'open' })
+    const bad = await (await GET(getReq('?page=not-an-id'))).json()
+    expect(bad.sequence).toBeNull()
+    expect(Page.findOne).not.toHaveBeenCalled()
+    expect(Page.updateMany).not.toHaveBeenCalled()
+  })
+})
+
+describe('GET /api/page-proof (רצף אחר — לחיצה מפורשת)', () => {
+  it('בלי עמודים בידיים ← נתפס רצף חדש: רק עמודים פתוחים למתנדבים, כל אחד ל-48 שעות', async () => {
+    Page.findOne.mockReturnValueOnce(chain(null)) // אין רצף מוחזק
+    Book.find.mockReturnValue(chain([{ _id: BOOK_ID }]))
+    Page.aggregate.mockResolvedValueOnce([{ _id: BOOK_ID, first: 0, second: [0] }])
+    Page.updateMany.mockResolvedValue({ modifiedCount: 5 })
+    const before = Date.now()
+    const body = await (await GET(getReq('?skip=x:1'))).json()
+    expect(body.sequence).toMatchObject({ seq: 0, book: { id: BOOK_ID } })
+    const match = Page.aggregate.mock.calls[0][0][0].$match
+    expect(match.volunteer).toEqual({ $ne: false })
+    const [filter, update] = Page.updateMany.mock.calls[0]
+    expect(filter.volunteer).toEqual({ $ne: false })
+    expect(filter.seq).toBe(0)
+    const ms = update.$set.leasedUntil.getTime() - before
+    expect(ms).toBeGreaterThanOrEqual(48 * 3600e3 - 5000)
+    expect(ms).toBeLessThanOrEqual(48 * 3600e3 + 5000)
+    // "פתוחים" בסטטיסטיקה — בלי מה שהמנהל סגר
+    expect(Page.countDocuments.mock.calls.find(([q]) => q.status === 'open')[0].volunteer).toEqual({ $ne: false })
   })
 })
 
