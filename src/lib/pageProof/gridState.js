@@ -8,10 +8,22 @@ import { hasBookLibraryAccess, hasOcrAccess } from '../roles.js';
 // כמה עמודים ברצף (כמו sequences.SEQ_SIZE — כאן כדי לא לגרור את המודול הזה)
 export const SEQ_SIZE = 5;
 
-// כמה זמן עמוד שנתפס ברשת נשמר למתנדב, וכמה עמודים אפשר להחזיק בבת אחת
-// (רצף אחד) — כאן ולא ב-claims.js, כי גם הממשק מציג אותם
+// כמה זמן עמוד שנתפס נשמר למתנדב, וכמה עמודים אפשר להחזיק בבת אחת (רצף
+// אחד) — כאן ולא ב-claims.js, כי גם הממשק מציג אותם. הזמן נספר לכל עמוד
+// לחוד, וכל פתיחה של העמוד בעורך מחדשת אותו ל-CLAIM_HOURS שעות מלאות
+// (claims.renewLease). כל תפיסה היא בלחיצה מפורשת של המתנדב — שום כניסה לדף
+// אינה תופסת עמודים.
 export const CLAIM_HOURS = 48;
 export const MAX_HELD = 5;
+
+// הכלל כפי שהמתנדב קורא אותו (העזרה, "העמודים שלי"), ובקצרה (רשימת הספרים, הרשת)
+export const CLAIM_RULE = `כל עמוד שתפסתם שמור לכם ${CLAIM_HOURS} שעות (לכל עמוד לחוד), וכל פתיחה שלו בעורך מחדשת את הזמן ל-${CLAIM_HOURS} שעות מלאות. עמוד שלא נפתח ${CLAIM_HOURS} שעות חוזר למאגר — טיוטה שלא הגשתם נשארת בדפדפן שלכם, ותחזור אם תתפסו אותו שוב.`;
+export const CLAIM_SHORT = `כל עמוד שתפסתם שמור לכם ${CLAIM_HOURS} שעות, וכל פתיחה שלו בעורך מחדשת את הזמן.`;
+
+// עמוד שהמנהל סגר למתנדבים (volunteer:false במסד). עמוד בלי השדה — פתוח.
+export const isOpenToVolunteers = (page) => page?.volunteer !== false;
+// מסנן-Mongo תואם (עמוד שאינו סגור) — פונקציה, כדי שכל שאילתה תקבל עותק משלה
+export const volunteerOpenFilter = () => ({ volunteer: { $ne: false } });
 
 // כל המצבים האפשריים של עמוד בעיני הצופה
 //   open      — פנוי: אפשר לתפוס
@@ -22,6 +34,8 @@ export const MAX_HELD = 5;
 //   second    — עמוד כפול (required=2) שמתנדב אחר כבר הגיש: דרוש בודק נוסף
 //   recut     — ממתין לחיתוך ולזיהוי-מחדש בתוכנת-הספר (לא מוצע למתנדבים)
 //   done      — הושלם בידי אחרים (הצופה לא מעורב)
+// ועוד מצב אחד שאינו ברשימה: closed — המנהל סגר את העמוד למתנדבים, והצופה
+// אינו מחזיק בו ולא הגיש אותו. עמוד כזה אינו מוצג למתנדב ואינו נספר.
 export const STATES = ['open', 'mine', 'taken', 'submitted', 'second', 'approved', 'done', 'recut'];
 
 // מצבים שבהם הצופה יכול לתפוס את העמוד
@@ -40,10 +54,12 @@ const timeOf = (value) => {
 };
 
 // page: {status, required, activeCount, approvedCount, submitters:[ids],
-//        leasedBy, leasedUntil, mySubmissionStatus}
+//        leasedBy, leasedUntil, volunteer, mySubmissionStatus}
 // mySubmissionStatus — ההגשה של הצופה לגרסה הנוכחית של העמוד ('submitted' /
 // 'approved'; הגשה שנדחתה — כאילו אין). הגשה של הצופה קודמת לכל השאר: מי
 // שהגיש רואה "הוגש"/"אושר" גם כשהעמוד כבר הושלם או ממתין לזיהוי-מחדש.
+// עמוד סגור (volunteer:false) — 'closed', אלא אם הוא של הצופה (בטיפולו/הגיש):
+// מי שכבר עובד עליו ממשיך בו.
 export function pageStateFor(page, viewerId, now = new Date()) {
   const p = page || {};
   const me = viewerId === null || viewerId === undefined || viewerId === '' ? null : String(viewerId);
@@ -51,12 +67,13 @@ export function pageStateFor(page, viewerId, now = new Date()) {
 
   if (p.mySubmissionStatus === 'approved') return 'approved';
   if (p.mySubmissionStatus === 'submitted' || iSubmitted) return 'submitted';
+  const leased = p.leasedBy && timeOf(p.leasedUntil) > now.getTime();
+  const leasedToMe = leased && me !== null && sameId(p.leasedBy, me);
+  if (!isOpenToVolunteers(p)) return leasedToMe && p.status === 'open' ? 'mine' : 'closed';
   if (p.status === 'recut') return 'recut';
   if (p.status === 'done') return 'done';
 
-  if (p.leasedBy && timeOf(p.leasedUntil) > now.getTime()) {
-    return me !== null && sameId(p.leasedBy, me) ? 'mine' : 'taken';
-  }
+  if (leased) return leasedToMe ? 'mine' : 'taken';
 
   const required = p.required || 1;
   const active = p.activeCount || 0;
@@ -245,6 +262,7 @@ const REFUSAL_HE = Object.freeze({
   approved: 'כבר הגשתם את העמוד הזה',
   done: 'העמוד כבר הושלם',
   recut: 'העמוד ממתין לחיתוך ולזיהוי-מחדש ואינו פתוח כרגע',
+  closed: 'העמוד אינו פתוח להגהה כרגע',
 });
 export const claimRefusal = (state) => REFUSAL_HE[state] || 'אי אפשר לתפוס את העמוד כרגע';
 

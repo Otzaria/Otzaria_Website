@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
@@ -10,9 +11,11 @@ import ImportCard from '@/components/pageProof/admin/ImportCard'
 import BooksTable from '@/components/pageProof/admin/BooksTable'
 import SubmissionsQueue from '@/components/pageProof/admin/SubmissionsQueue'
 import ReviewModal from '@/components/pageProof/admin/ReviewModal'
+import AdminBookPages from '@/components/pageProof/admin/AdminBookPages'
 
 // ניהול הגהת-העמודים: ייבוא חבילות מתוכנת-הספר של פרויקט ה-OCR, מעקב
-// התקדמות לכל ספר, תור אישור ההגשות, והורדת תיקונים.json לבעל הפרויקט.
+// התקדמות לכל ספר, רשת-העמודים של ספר (מצב כל עמוד, פתוח/סגור למתנדבים,
+// שחרור תפיסות), תור אישור ההגשות, והורדת תיקונים.json לבעל הפרויקט.
 
 export default function PageProofAdmin() {
   const { data: session, status } = useSession()
@@ -25,6 +28,8 @@ export default function PageProofAdmin() {
   const [qPage, setQPage] = useState(1)
   const [queue, setQueue] = useState(null)
   const [reviewId, setReviewId] = useState(null)
+  // הספר שרשת-העמודים שלו פתוחה ({gid, title}) או null
+  const [gridBook, setGridBook] = useState(null)
 
   const allowed = hasOcrAccess(session?.user?.role)
 
@@ -97,6 +102,7 @@ export default function PageProofAdmin() {
     const d = await fetch(`/api/admin/page-proof/books/${book.gid}`, { method: 'DELETE' }).then((r) => r.json())
     if (d.success) {
       setBooks((bs) => bs.filter((b) => b.gid !== book.gid))
+      setGridBook((cur) => (cur?.gid === book.gid ? null : cur))
       loadQueue()
     } else showAlert('שגיאה', d.error || 'המחיקה נכשלה')
   }
@@ -144,7 +150,7 @@ export default function PageProofAdmin() {
           הגהת עמודים (חוזה-העמוד)
         </h2>
         <p className="mt-1 text-sm text-on-surface/60">
-          עמודים מתוכנת-הספר של פרויקט ה-OCR. מתנדבים מקבלים רצפים של 5 עמודים עוקבים ומגישים תיקונים; כל הגשה ממתינה לאישור כאן, ורק המאושרות יוצאות בקובץ תיקונים.json לבעל הפרויקט (שם הן עוברות אישור נוסף לפני שנכנסות לאימון). דף המתנדבים: <a href="/library/page-proof" className="text-primary underline">/library/page-proof</a>
+          עמודים מתוכנת-הספר של פרויקט ה-OCR. מתנדבים בוחרים עמודים (או רצף של 5 עוקבים) ברשת-העמודים ומגישים תיקונים; כל הגשה ממתינה לאישור כאן, ורק המאושרות יוצאות בקובץ תיקונים.json לבעל הפרויקט (שם הן עוברות אישור נוסף לפני שנכנסות לאימון). ב&quot;עמודים&quot; שבטבלה: אילו עמודים פתוחים למתנדבים, ושחרור תפיסות. דף המתנדבים: <Link href="/library/page-proof/books" className="text-primary underline">/library/page-proof/books</Link>
         </p>
       </div>
 
@@ -162,8 +168,12 @@ export default function PageProofAdmin() {
             setQStatus('submitted')
             setQPage(1)
           }}
+          openGid={gridBook?.gid || null}
+          onPages={(book) => setGridBook((cur) => (cur?.gid === book.gid ? null : { gid: book.gid, title: book.title }))}
         />
       )}
+
+      {gridBook && <AdminBookPages key={gridBook.gid} gid={gridBook.gid} title={gridBook.title} onClose={() => setGridBook(null)} onChanged={loadBooks} />}
 
       <SubmissionsQueue
         status={qStatus}

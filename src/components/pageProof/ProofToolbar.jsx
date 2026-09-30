@@ -35,6 +35,9 @@ export const PARA_STYLE_OPTIONS = [
 
 // קבוצות בתפריט, עם קו ביניהן: טקסט רגיל · כותרות · סוגי-פסקה
 const PARA_GROUP_START = new Set(['h1', 'quote'])
+// הפעולות בסוף תפריט "סגנון פסקה" (מפתחות שאינם סגנון)
+const PARA_ACTION_SPLIT = '__split'
+const PARA_ACTION_JOIN = '__join'
 
 // איך כל סגנון נראה בתפריט (תצוגה מקדימה קטנה). סימני-הדוגמה (א., *, קו-נקודות)
 // מוסתרים מקוראי-מסך — השם הנגיש הוא שם הסגנון בלבד
@@ -223,6 +226,17 @@ export default function ProofToolbar({
     if (PARA_GROUP_START.has(o.key)) paraItems.push({ separator: true })
     paraItems.push({ key: o.key, checked: o.key === cur?.key, title: o.hint, label: paraPreview(o) })
   }
+  // ובסוף התפריט — הפעולות על הפסקה, בשם מלא (בסרגל הן אייקונים בלבד)
+  paraItems.push(
+    { separator: true },
+    { key: PARA_ACTION_SPLIT, action: true, icon: 'format_paragraph', label: 'פסקה חדשה במקום הסמן', hint: 'Enter', disabled: !edit(onSplitPara) },
+    { key: PARA_ACTION_JOIN, action: true, icon: 'merge', label: 'חיבור לפסקה הקודמת', hint: 'Backspace בתחילתה', disabled: !edit(onJoinPara) }
+  )
+  const onParaMenu = (key) => {
+    if (key === PARA_ACTION_SPLIT) onSplitPara?.()
+    else if (key === PARA_ACTION_JOIN) onJoinPara?.()
+    else onParaStyle?.(key)
+  }
 
   // זרמי-התוכן, ואחרי קו — "ריהוט הדף" (כותרת עמוד, תחתית, מפריד): תמיד בתפריט,
   // בשם של הלשונית שלו. "מפריד" = הקו שבין אזורי-הטקסט בלבד; קישוט או כתם שנקרא
@@ -269,7 +283,7 @@ export default function ProofToolbar({
           disabled={!edit(onParaStyle)}
           label={<span className="inline-block w-20 truncate text-right">{curHe || 'סגנון פסקה'}</span>}
           items={paraItems}
-          onSelect={(key) => onParaStyle?.(key)}
+          onSelect={onParaMenu}
           menuClassName="w-56"
         />
 

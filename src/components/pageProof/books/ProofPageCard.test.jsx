@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import ProofPageCard from './ProofPageCard'
+import { formatUntil } from '@/lib/pageProof/dates'
 
 // כרטיס עמוד ברשת-העמודים: תווית-המצב והכפתור הנכון לכל מצב, ותפיסה/שחרור
 // שעוברים קודם בחלון-שאלה (useDialog מדומה — הכרטיס לא קורא ל-onClaim לפני
@@ -51,18 +52,22 @@ describe('ProofPageCard — תווית וכפתור לפי מצב', () => {
     expect(screen.queryByRole('button', { name: /שחרור/ })).not.toBeInTheDocument()
   })
 
-  it('בטיפולך: "המשך לעבוד" לעורך, "משויך אליך", הזמן שנשאר, וכפתור שחרור', () => {
-    renderCard({ state: 'mine', leasedUntil: new Date(NOW.getTime() + 5.5 * HOUR).toISOString() })
+  it('בטיפולך: "המשך לעבוד" לעורך, "משויך אליך", עד מתי העמוד שמור לך (כמה נשאר — בריחוף), וכפתור שחרור', () => {
+    const until = new Date(NOW.getTime() + 5.5 * HOUR)
+    renderCard({ state: 'mine', leasedUntil: until.toISOString() })
     expect(screen.getByText('בטיפולך')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'המשך לעבוד' })).toHaveAttribute('href', EDITOR)
     expect(screen.getByText('משויך אליך')).toBeInTheDocument()
-    expect(screen.getByText('שמור עוד 5 שעות')).toBeInTheDocument()
+    const kept = screen.getByText(`שמור לך עד ${formatUntil(until, NOW)}`)
+    expect(kept).toHaveAttribute('title', 'עוד 5 שעות')
     expect(screen.getByRole('button', { name: 'שחרור עמוד 12' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'תפוס ועבוד' })).not.toBeInTheDocument()
   })
 
-  it('תפוס: שם המתנדב שמחזיק בו, והסבר במקום כפתור', () => {
-    renderCard({ state: 'taken', claimer: 'ראובן', leasedUntil: new Date(NOW.getTime() + 2 * HOUR).toISOString() })
+  it('תפוס: שם המתנדב שמחזיק בו ועד מתי, והסבר במקום כפתור', () => {
+    const until = new Date(NOW.getTime() + 2 * HOUR)
+    renderCard({ state: 'taken', claimer: 'ראובן', leasedUntil: until.toISOString() })
+    expect(screen.getByText(`שמור עד ${formatUntil(until, NOW)}`)).toBeInTheDocument()
     expect(screen.getByText('תפוס')).toBeInTheDocument()
     expect(screen.getByText('ע"י ראובן')).toBeInTheDocument()
     expect(screen.getByText('תפוס בידי מתנדב אחר')).toBeInTheDocument()
@@ -109,9 +114,10 @@ describe('ProofPageCard — תווית וכפתור לפי מצב', () => {
     expect(screen.queryByRole('button', { name: 'תפוס ועבוד' })).not.toBeInTheDocument()
   })
 
-  it('תצוגה צפופה: תוויות קצרות (המלאה ב-title) ובלי שורת-הזמן', () => {
-    renderCard({ state: 'taken', claimer: 'ראובן', leasedUntil: new Date(NOW.getTime() + 2 * HOUR).toISOString() }, { compact: true })
-    expect(screen.getByText('ע"י ראובן')).toBeInTheDocument()
+  it('תצוגה צפופה: תוויות קצרות (המלאה ב-title) ובלי שורת-הזמן (עד מתי — בריחוף)', () => {
+    const until = new Date(NOW.getTime() + 2 * HOUR)
+    renderCard({ state: 'taken', claimer: 'ראובן', leasedUntil: until.toISOString() }, { compact: true })
+    expect(screen.getByText('ע"י ראובן')).toHaveAttribute('title', `ע"י ראובן · שמור עד ${formatUntil(until, NOW)}`)
     expect(screen.queryByText(/^שמור /)).not.toBeInTheDocument()
     expect(screen.getAllByText('תפוס')).toHaveLength(2) // התווית וההסבר המקוצר
     expect(screen.queryByText('תפוס בידי מתנדב אחר')).not.toBeInTheDocument()

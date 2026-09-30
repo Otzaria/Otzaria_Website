@@ -16,7 +16,7 @@ export default function ProofSequenceRow({ group, canClaimNew = true, busy = fal
   const ask = () =>
     showConfirm(
       `רצף ${group.seq + 1} · ${range}`,
-      `${free === 1 ? 'העמוד הפנוי ברצף יישמר' : `${free} העמודים הפנויים ברצף יישמרו`} עבורכם ל-${CLAIM_HOURS} שעות.\n${SEQ_HINT}`,
+      `${free === 1 ? 'העמוד הפנוי ברצף יישמר' : `${free} העמודים הפנויים ברצף יישמרו`} עבורכם ל-${CLAIM_HOURS} שעות (כל עמוד לחוד; כל פתיחה שלו בעורך מחדשת את הזמן).\n${SEQ_HINT}`,
       () => onClaimSequence(group),
       seqClaimLabel(free, group.pages.length),
       'ביטול'

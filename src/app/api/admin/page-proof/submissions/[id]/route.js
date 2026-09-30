@@ -8,7 +8,7 @@ import PageProofPage from '@/models/PageProofPage';
 import PageProofBook from '@/models/PageProofBook';
 import { hasOcrAccess } from '@/lib/roles';
 import { requireAccess, badRequest, notFound, serverError } from '@/lib/apiResponse';
-import { editorPageShape, primaryOf, readJsonBody, tooBigResponse } from '@/lib/pageProof/pool';
+import { editorPageShape, primaryOf, readJsonBody, tooBigResponse, resolveForeignLinks } from '@/lib/pageProof/pool';
 import { validateOps, packOps, needsRecut, sanitizeOps } from '@/lib/pageProof/ops';
 import {
   revisionFilter,
@@ -123,14 +123,18 @@ export async function PATCH(request, { params }) {
 
     if (body.action === 'approve') {
       const edited = Array.isArray(body.ops);
-      const page = await PageProofPage.findById(sub.page, edited ? { doc: 1, ...PAGE_FIELDS } : PAGE_FIELDS).lean();
+      const page = await PageProofPage.findById(sub.page, edited ? { doc: 1, gid: 1, ...PAGE_FIELDS } : PAGE_FIELDS).lean();
       const set = { status: 'approved', ...reviewer };
       let finalOps = sub.ops || [];
       if (edited) {
         if (!page) return notFound('העמוד של ההגשה לא נמצא');
-        const ops = packOps(page.doc, sanitizeOps(body.ops));
-        const invalid = validateOps(page.doc, ops);
+        const packed = packOps(page.doc, sanitizeOps(body.ops));
+        const invalid = validateOps(page.doc, packed);
         if (invalid) return badRequest(invalid);
+        // קישור לעמוד אחר — כמו בהגשה: השורה אכן בעמוד ההוא של אותו ספר
+        const far = await resolveForeignLinks(page, packed);
+        if (far.error) return badRequest(far.error);
+        const ops = far.ops;
         Object.assign(set, { ops, opCount: ops.length, reviewerEdited: true });
         finalOps = ops;
       }

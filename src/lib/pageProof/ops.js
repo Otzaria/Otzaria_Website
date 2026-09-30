@@ -36,6 +36,10 @@ const FID_RE = /^[A-Za-z0-9]{4,32}$/;
 const LINK_VALUE_KINDS = ['note', 'dh'];
 // מספר השורות המרבי בפעולה אחת
 export const MAX_IDS_PER_OP = 500;
+// קישור לעמוד אחר: אורך מרבי לתחילת-הטקסט של השורה שבעמוד ההוא (to_text/from_text), וכמה
+// ממנה נשלח בפעולה (כמו בחוזה-העמוד, שם 60)
+export const MAX_FAR_TEXT = 200;
+export const FAR_TEXT_SENT = 60;
 
 // פעולות שמשנות את חיתוך-השורות: אחרי אישור העמוד חוזר לתוכנת-הספר
 // לחיתוך ולזיהוי-מחדש של השורות שנגעו בהן, ורק אז למעבר שני באתר
@@ -59,9 +63,96 @@ function checkBox(bb, doc, lineBox = false) {
   return null;
 }
 
+// ---------- קישור לעמוד אחר ----------
+//
+// פירוש שזולג אל אחרי הסעיף שלו: שורה בעמוד הזה מקושרת לשורה בעמוד אחר של אותו ספר. זו
+// הפעולה היחידה שמזהה אחד בה (ורק אחד) אינו שורה בעמוד — וגם אז רק כשהערך מצהיר על העמוד
+// של אותו צד: to_page כשהשורה שבעמוד האחר היא צד הגוף (ids[1]), from_page כשהיא צד
+// ההערה/הפירוש (ids[0]); לצידו מספר-השורה ותחילת-הטקסט שלה (to_line_no/to_text,
+// from_line_no/from_text — אותם שמות של חוזה-העמוד לקישור שבא מעמוד אחר). המזהה הזר לא
+// ממופה ולא נמחק לעולם; הצד שבעמוד ממשיך כמו כל קישור (יישור-מילים, דחיסה, סדר).
+const FAR_SIDES = ['from', 'to'];
+const farKeys = (side) => ({ page: `${side}_page`, lineNo: `${side}_line_no`, text: `${side}_text` });
+
+// המקום (0 = הערה/פירוש, 1 = גוף) של המזהה היחיד ב-link_add שאינו שורה בעמוד, או -1
+function farIndex(op, lines) {
+  if (op?.kind !== 'link_add' || !Array.isArray(op.ids) || op.ids.length !== 2) return -1;
+  const out = op.ids.map((id, k) => (lines.has(id) ? -1 : k)).filter((k) => k >= 0);
+  return out.length === 1 && isInt(op.ids[out[0]]) && op.ids[out[0]] > 0 ? out[0] : -1;
+}
+
+// הצד שבעמוד אחר לפי מה שהערך מצהיר (בלי להסתכל בשורות — כך גם אחרי פיצול/איחוד
+// מקומיים): {side, index, page, lineNo, text} או null
+export function farLinkSide(page, value) {
+  const v = value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+  if (!v) return null;
+  for (const side of FAR_SIDES) {
+    const k = farKeys(side);
+    if (isInt(v[k.page]) && v[k.page] !== page) {
+      return { side, index: side === 'from' ? 0 : 1, page: v[k.page], lineNo: isInt(v[k.lineNo]) ? v[k.lineNo] : null, text: typeof v[k.text] === 'string' ? v[k.text] : '' };
+    }
+  }
+  return null;
+}
+
+// בדיקת צד-העמוד-האחר של link_add (far = המקום של המזהה הזר, או -1)
+function checkFarLink(doc, v, far) {
+  const obj = v && typeof v === 'object' && !Array.isArray(v) ? v : null;
+  if (far >= 0) {
+    const pg = obj?.[farKeys(FAR_SIDES[far]).page];
+    // בלי הצהרה על העמוד — סתם שורה שאינה כאן
+    if (pg === undefined || pg === null) return 'שורה שאינה בעמוד הזה';
+    if (!isInt(pg) || pg < 1 || pg === doc.page) return 'עמוד הקישור שגוי';
+  }
+  if (!obj) return null;
+  for (const side of FAR_SIDES) {
+    const k = farKeys(side);
+    const mine = far >= 0 && FAR_SIDES[far] === side;
+    // עמוד אחר מוצהר רק לצד שאכן בעמוד אחר (לצד שבעמוד — רק העמוד הזה עצמו, או כלום)
+    if (obj[k.page] != null && !mine && obj[k.page] !== doc.page) return 'קישור לעמוד אחר — רק אחד משני הצדדים יכול להיות בעמוד אחר';
+    if (obj[k.lineNo] !== undefined && obj[k.lineNo] !== null && !(isInt(obj[k.lineNo]) && obj[k.lineNo] >= 0)) return 'מספר-השורה בעמוד האחר לא תקין';
+    if (obj[k.text] !== undefined && obj[k.text] !== null && (typeof obj[k.text] !== 'string' || obj[k.text].length > MAX_FAR_TEXT)) {
+      return 'הטקסט של השורה בעמוד האחר לא תקין';
+    }
+  }
+  return null;
+}
+
+// הקישורים לעמוד אחר ברשימת-פעולות (לבדיקה בשרת ולתצוגה): [{i, index, id, side, page,
+// lineNo, text}] — i = מקום הפעולה, id = המזהה שבעמוד האחר. רק link_add שהזר בהם אחד.
+export function foreignLinkRefs(doc, ops) {
+  const lines = lineMap(doc);
+  const out = [];
+  (Array.isArray(ops) ? ops : []).forEach((op, i) => {
+    const k = farIndex(op, lines);
+    if (k < 0) return;
+    const far = farLinkSide(doc?.page, op.value);
+    if (!far || far.index !== k) return;
+    out.push({ i, index: k, id: op.ids[k], side: far.side, page: far.page, lineNo: far.lineNo, text: far.text });
+  });
+  return out;
+}
+
+// מספר-השורה ותחילת-הטקסט של הצד שבעמוד האחר — מהעמוד השמור, לא ממה שהדפדפן שלח.
+// found: Map(`${page}:${id}` → שורה {line_no, text|text_ocr}). פעולה בלי התאמה — כמות-שהיא.
+export function withForeignLines(doc, ops, found) {
+  const refs = new Map(foreignLinkRefs(doc, ops).map((r) => [r.i, r]));
+  if (!refs.size) return Array.isArray(ops) ? ops.slice() : [];
+  return ops.map((op, i) => {
+    const r = refs.get(i);
+    const line = r && found?.get?.(`${r.page}:${r.id}`);
+    if (!line) return op;
+    const k = farKeys(r.side);
+    const text = String(line.text ?? line.text_ocr ?? '').trim().slice(0, FAR_TEXT_SENT);
+    return { ...op, value: { ...op.value, [k.lineNo]: isInt(line.line_no) ? line.line_no : null, [k.text]: text } };
+  });
+}
+
 // בודק פעולה אחת מול העמוד המקורי (כפי שיובא). מחזיר הודעת שגיאה בעברית או null.
 // ids חייבים להיות שורות קיימות בעמוד — אין פעולות על שורות שנוצרו מקומית
-// (פיצול/הוספה): תוכנת-הספר עוד לא קולטת אותן, והמזהים שלהן אינם שלה.
+// (פיצול/הוספה): תוכנת-הספר עוד לא קולטת אותן, והמזהים שלהן אינם שלה. החריג היחיד:
+// קישור לעמוד אחר (link_add עם מזהה זר אחד ועמוד מוצהר — farLinkSide); שם השרת גם בודק
+// שהשורה אכן בעמוד ההוא (pool.resolveForeignLinks).
 export function validateOp(doc, op) {
   if (!op || typeof op !== 'object') return 'פעולה לא תקינה';
   const spec = OP_KINDS[op.kind];
@@ -70,10 +161,11 @@ export function validateOp(doc, op) {
 
   const lines = lineMap(doc);
   const ids = op.ids;
+  const far = farIndex(op, lines);
   if (spec.ids) {
     if (!Array.isArray(ids) || !ids.length) return 'לא נבחרו שורות';
     if (ids.length > MAX_IDS_PER_OP) return 'יותר מדי שורות בפעולה אחת';
-    if (!ids.every((i) => isInt(i) && lines.has(i))) return 'שורה שאינה בעמוד הזה';
+    if (!ids.every((i, k) => isInt(i) && (lines.has(i) || k === far))) return 'שורה שאינה בעמוד הזה';
     if (new Set(ids).size !== ids.length) return op.kind === 'link_add' ? 'קישור הוא בין שתי שורות שונות' : 'שורה כפולה בפעולה';
   } else if (ids !== undefined && !(Array.isArray(ids) && ids.length === 0)) {
     return 'לפעולה הזו אין שורות';
@@ -136,8 +228,11 @@ export function validateOp(doc, op) {
       return isInt(v.seq) && v.seq >= 1 && v.seq <= 50 ? null : 'מספר-מסגרת לא תקין';
     case 'link_add': {
       // ids = [שורת ההערה/הפירוש, שורת הגוף]; value (רשות) = טווחי-המילים
-      // בשתי השורות וסוג הקישור. הצורה הישנה (בלי value) נשארת תקפה.
+      // בשתי השורות וסוג הקישור. הצורה הישנה (בלי value) נשארת תקפה. צד אחד בעמוד
+      // אחר — העמוד שלו חייב להיות מוצהר (checkFarLink)
       if (ids.length !== 2) return 'קישור ידני דורש בדיוק שתי שורות';
+      const fe = checkFarLink(doc, v, far);
+      if (fe) return fe;
       if (v == null) return null;
       if (typeof v !== 'object' || Array.isArray(v)) return 'ערך-קישור לא תקין';
       if (v.from_words !== undefined && !isWordRange(v.from_words)) return 'טווח-המילים בצד ההערה לא תקין';
@@ -239,7 +334,8 @@ function cleanValue(kind, v) {
     case 'link_add': {
       if (v == null) return undefined;
       if (typeof v !== 'object' || Array.isArray(v)) return v;
-      const out = pick(v, ['kind']);
+      // + הצד שבעמוד אחר: העמוד, מספר-השורה ותחילת-הטקסט (farLinkSide)
+      const out = pick(v, ['kind', 'from_page', 'from_line_no', 'from_text', 'to_page', 'to_line_no', 'to_text']);
       if (v.from_words !== undefined) out.from_words = arr(v.from_words);
       if (v.to_words !== undefined) out.to_words = arr(v.to_words);
       return out;
@@ -500,10 +596,20 @@ export function applyOp(doc, op, opIndex = 0) {
     case 'cut_ok':
       return { ...doc, cut_ok: true };
     case 'link_add': {
+      // לכל שורת-הערה/פירוש קישור אחד — החדש מחליף את הקודם (גם כשהשורה בעמוד אחר).
+      // _added: נוסף בעריכה הזו (לא הגיע עם העמוד) — אפשר להסיר את הפעולה עצמה לפני ההגשה
       const links = (doc.links || []).filter((k) => k.from_line !== ids[0]);
-      const link = { from_line: ids[0], from_mark: null, to_line: ids[1], to_page: doc.page, kind: v?.kind || 'note', conf: 1, src: 'human', suspect: null };
+      const link = { from_line: ids[0], from_mark: null, to_line: ids[1], to_page: doc.page, kind: v?.kind || 'note', conf: 1, src: 'human', suspect: null, _added: true };
       if (Array.isArray(v?.from_words)) link.from_words = v.from_words.slice();
       if (Array.isArray(v?.to_words)) link.to_words = v.to_words.slice();
+      // הצד שבעמוד אחר — כמו בחוזה-העמוד: עמוד, מספר-שורה ותחילת-הטקסט (flowEdit.farLabel)
+      const far = farLinkSide(doc.page, v);
+      if (far) {
+        const k = farKeys(far.side);
+        link[k.page] = far.page;
+        link[k.lineNo] = far.lineNo;
+        link[k.text] = far.text;
+      }
       links.push(link);
       return { ...doc, links };
     }
@@ -1152,7 +1258,14 @@ export function describeOp(doc, op) {
       if (!v) return `${where}קישור ידני`;
       const words = (r) => (Array.isArray(r) ? (r[0] === r[1] ? `מילה ${r[0] + 1}` : `מילים ${r[0] + 1}–${r[1] + 1}`) : '—');
       const range = v.from_words || v.to_words ? ` (${words(v.from_words)} ← ${words(v.to_words)})` : '';
-      return `${where}קישור ${v.kind === 'dh' ? 'דיבור-המתחיל' : 'הערה'}${range}`;
+      const what = `קישור ${v.kind === 'dh' ? 'דיבור-המתחיל' : 'הערה'}${range}`;
+      // צד בעמוד אחר: "שורה 3 ← עמוד 4, שורה 12 «…»" (המזהה הזר אינו שורה כאן — בלי '?')
+      const far = farLinkSide(doc.page, v);
+      if (!far) return `${where}${what}`;
+      const here = lines.get(op.ids?.[1 - far.index]);
+      const farEnd = `עמוד ${far.page}, שורה ${far.lineNo != null ? far.lineNo + 1 : op.ids?.[far.index]}${far.text ? ` «${cut(far.text, 32)}»` : ''}`;
+      const hereEnd = `שורה ${here ? (here.line_no ?? 0) + 1 : '?'}`;
+      return `${far.index === 0 ? `${farEnd} ← ${hereEnd}` : `${hereEnd} ← ${farEnd}`}: ${what}`;
     }
     case 'link_ok':
     case 'link_del': {

@@ -68,6 +68,7 @@ import {
   POPOVER_CLEAR,
   popoverBeside,
   badgeAnchor,
+  straddleClaim,
 } from './scanGeometry.js';
 import { validateOp, buildView, FRAME_PAD } from './ops.js';
 import { FURNITURE_TAB, FURNITURE_TAB_HE } from './textModel.js';
@@ -793,4 +794,31 @@ test('popoverBeside: זום, וחלון קטן מהחלונית — נשארת �
 test('badgeAnchor: בתוך המסגרת כשהיא בראש התמונה', () => {
   assert.deepEqual(badgeAnchor([100, 200, 500, 400], 0.5), { x: 250, y: 100, inside: false });
   assert.equal(badgeAnchor([100, 10, 500, 400], 0.5).inside, true);
+});
+
+test('straddleClaim: "השורה שייכת למסגרת הזו" — המסגרת שמכילה את רובה, ופעולת stream אחת', () => {
+  const view = { page: 7, lines: [L(1, [480, 100, 900, 140]), L(2, [520, 150, 930, 190], 'main', { stream_src: 'frame' })] };
+  const frames = [
+    { fid: 'aa', stream: 'notes', bbox: [100, 90, 500, 200], order: 1 },
+    { fid: 'bb', stream: 'main', bbox: [510, 90, 910, 200], order: 2 },
+  ];
+  // שורה 1: 20 פיקסלים בשמאלית, 390 בימנית — הימנית ("ראשי")
+  const c1 = straddleClaim(view, 1, frames);
+  assert.equal(c1.frame.fid, 'bb');
+  assert.deepEqual(c1.op, { kind: 'stream', page: 7, ids: [1], value: 'main' });
+  assert.equal(straddleClaim(view, 2, frames).frame.fid, 'bb');
+  // מסגרת-אובייקט (טבלה/איור) אינה נחשבת; בלי חפיפה — null
+  assert.equal(straddleClaim(view, 1, [{ fid: 'tt', stream: 'main', kind: 'table', bbox: [0, 0, 1000, 1000] }]), null);
+  assert.equal(straddleClaim(view, 1, [{ fid: 'zz', stream: 'main', bbox: [0, 500, 100, 600] }]), null);
+  assert.equal(straddleClaim(view, 99, frames), null);
+});
+
+test('straddleClaim: שורת-כותרת נשארת כותרת של הזרם; שורה שנוצרה בתיקון או שהוסרה — אין פעולה', () => {
+  const frames = [{ fid: 'nn', stream: 'notes', bbox: [100, 90, 500, 200], order: 1 }];
+  const heading = { page: 1, lines: [L(3, [120, 100, 520, 140], 'notes', { _auto: { stream: 'main_heading', stream_src: 'auto' } })] };
+  assert.equal(straddleClaim(heading, 3, frames).value, 'notes_heading');
+  const temp = { page: 1, lines: [L(-1, [120, 100, 520, 140], 'notes', { _new: true })] };
+  assert.equal(straddleClaim(temp, -1, frames), null);
+  const removed = { page: 1, lines: [L(4, [120, 100, 520, 140], 'notes', { status: 'removed' })] };
+  assert.equal(straddleClaim(removed, 4, frames), null);
 });

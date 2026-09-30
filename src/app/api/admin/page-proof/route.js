@@ -28,6 +28,8 @@ export async function GET() {
             recut: { $sum: { $cond: [{ $eq: ['$status', 'recut'] }, 1, 0] } },
             double: { $sum: { $cond: [{ $gt: ['$required', 1] }, 1, 0] } },
             leased: { $sum: { $cond: [{ $gt: ['$leasedUntil', now] }, 1, 0] } },
+            // סגורים למתנדבים (המנהל סגר; בלי השדה — פתוח)
+            closed: { $sum: { $cond: [{ $eq: ['$volunteer', false] }, 1, 0] } },
           },
         },
       ]),
@@ -66,6 +68,7 @@ export async function GET() {
         recut: p.recut || 0,
         double: p.double || 0,
         leased: p.leased || 0,
+        closed: p.closed || 0,
         submitted: s.submitted || 0,
         approved: s.approved || 0,
         rejected: s.rejected || 0,

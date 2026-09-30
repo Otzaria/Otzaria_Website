@@ -1,15 +1,17 @@
 'use client'
 
 import { useEffect, useId, useRef, useState } from 'react'
+import { isKey } from '@/lib/pageProof/keys'
 
 // תפריט נפתח לסרגל-כלים (סגנון-פסקה, זרם לשורות). נפתח בלחיצה או במקלדת
 // (Enter / רווח / ↓ על הכפתור); ↑↓ Home End בתוך התפריט, Enter בוחר, Esc
 // סוגר ומחזיר את הפוקוס לכפתור; לחיצה מחוץ לתפריט סוגרת. לחיצת-עכבר אינה
 // לוקחת את הפוקוס מהעורך — הסמן והבחירה בטקסט נשמרים לפעולה.
 //
-// items: [{key, label (ReactNode), hint?, color?, checked?, disabled?}] או
+// items: [{key, label (ReactNode), hint?, color?, checked?, disabled?, action?, icon?}] או
 // {separator:true}. כשלפחות לפריט אחד יש checked — התפריט הוא "בחירה אחת"
-// (menuitemradio) ומסומן ✓ ליד הנבחר.
+// (menuitemradio) ומסומן ✓ ליד הנבחר. פריט action (למשל "חיבור לפסקה הקודמת" בתפריט
+// סגנון-הפסקה) הוא פעולה ולא בחירה: menuitem, עם icon (אייקון) במקום ה-✓.
 
 const preventFocusLoss = (e) => e.preventDefault()
 
@@ -70,7 +72,7 @@ export default function ToolbarMenu({
       if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false)
     }
     const onKey = (e) => {
-      if (e.key !== 'Escape') return
+      if (!isKey(e, 'Escape')) return
       e.preventDefault()
       e.stopPropagation()
       setOpen(false)
@@ -90,15 +92,15 @@ export default function ToolbarMenu({
   }, [open, byKeyboard, active])
 
   const onMenuKey = (e) => {
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    if (isKey(e, 'ArrowDown') || isKey(e, 'ArrowUp')) {
       e.preventDefault()
       setByKeyboard(true)
-      setActive((a) => step(a, e.key === 'ArrowDown' ? 1 : -1))
-    } else if (e.key === 'Home' || e.key === 'End') {
+      setActive((a) => step(a, isKey(e, 'ArrowDown') ? 1 : -1))
+    } else if (isKey(e, 'Home') || isKey(e, 'End')) {
       e.preventDefault()
       setByKeyboard(true)
-      setActive(e.key === 'Home' ? step(-1, 1) : step(items.length, -1))
-    } else if (e.key === 'Tab') {
+      setActive(isKey(e, 'Home') ? step(-1, 1) : step(items.length, -1))
+    } else if (isKey(e, 'Tab')) {
       setOpen(false)
     }
   }
@@ -117,7 +119,7 @@ export default function ToolbarMenu({
         onMouseDown={preventFocusLoss}
         onClick={() => (open ? setOpen(false) : openMenu(false))}
         onKeyDown={(e) => {
-          if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+          if (isKey(e, 'ArrowDown') || isKey(e, 'Enter') || isKey(e, 'Space')) {
             e.preventDefault()
             openMenu(true)
           }
@@ -149,8 +151,8 @@ export default function ToolbarMenu({
                   itemRefs.current[k] = el
                 }}
                 type="button"
-                role={radio ? 'menuitemradio' : 'menuitem'}
-                aria-checked={radio ? !!it.checked : undefined}
+                role={radio && !it.action ? 'menuitemradio' : 'menuitem'}
+                aria-checked={radio && !it.action ? !!it.checked : undefined}
                 aria-disabled={it.disabled || undefined}
                 tabIndex={k === active ? 0 : -1}
                 title={it.title}
@@ -161,9 +163,13 @@ export default function ToolbarMenu({
                   k === active ? 'bg-neutral-100' : ''
                 } ${it.disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'}`}
               >
-                {radio && (
+                {(radio || it.icon) && (
                   <span className="w-4 shrink-0 text-center">
-                    {it.checked && <span className="material-symbols-outlined text-sm text-primary" aria-hidden="true">check</span>}
+                    {it.action && it.icon ? (
+                      <span className="material-symbols-outlined text-sm text-on-surface/60" aria-hidden="true">{it.icon}</span>
+                    ) : (
+                      it.checked && <span className="material-symbols-outlined text-sm text-primary" aria-hidden="true">check</span>
+                    )}
                   </span>
                 )}
                 {it.color && <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: it.color }} aria-hidden="true" />}

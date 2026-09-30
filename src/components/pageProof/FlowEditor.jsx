@@ -4,6 +4,7 @@ import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRe
 import { buildParagraphs, tabLines, tokenize, isLockedLine, FURNITURE_TAB } from '@/lib/pageProof/textModel'
 import { planInsert, planDelete, planEnter, isCollapsed, samePos, wordMarks, lemmaWords, selectionText, linkBadge } from '@/lib/pageProof/flowEdit'
 import { readDomSelection, setDomSelection, targetRange, segmentElement, revealInScroller } from './flowDom'
+import { RECUT_LINE_TITLE } from '@/lib/pageProof/helpTexts'
 
 // עורך הטקסט הזורם — הלב של דף ההגהה. הטקסט של זרם אחד (לשונית) מוצג
 // כפסקאות רצופות, כמו באוצריא, ולא שורה-לכל-שורה, מיושרות לשני הצדדים כמו בספר
@@ -120,7 +121,8 @@ function wordTitle({ low, hover, styles, lemma }) {
 // מספר-הקישור אחרי המילה: ① בשני הקצוות; ריחוף מראה את הצד השני, לחיצה קופצת אליו
 function LinkBadge({ ep, otherText, onJump }) {
   const kind = ep.kind === 'dh' ? 'דיבור המתחיל' : 'הערה'
-  const where = otherText ? `«${otherText}»` : ep.other?.page != null ? `עמוד ${ep.other.page}` : ''
+  // צד בעמוד אחר: "עמוד 4, שורה 12: «…»" (flowEdit.linkEndpoints — label)
+  const where = otherText ? `«${otherText}»` : ep.other?.label || (ep.other?.page != null ? `עמוד ${ep.other.page}` : '')
   return (
     <sup
       contentEditable={false}
@@ -188,7 +190,7 @@ function Seg({ line, seg, lemma, isLocked, isRecheck, isCaret, lowWord, eps, wor
       data-label={label}
       contentEditable={isLocked && !readOnly ? false : undefined}
       suppressContentEditableWarning
-      title={isLocked ? 'חיתוך השורה תוקן — היא תיחתך ותיקרא מחדש, ואין טעם לתקן עכשיו את הטקסט שלה' : isRecheck ? 'השורה זוהתה מחדש — בדקו אותה מול הסריקה' : undefined}
+      title={isLocked ? RECUT_LINE_TITLE : isRecheck ? 'השורה זוהתה מחדש — בדקו אותה מול הסריקה' : undefined}
       className={cls}
     >
       {empty ? (
@@ -234,7 +236,9 @@ function Seg({ line, seg, lemma, isLocked, isRecheck, isCaret, lowWord, eps, wor
   )
 }
 
-const Para = memo(function Para({ p, byId, info, furniture, locked, recheck, caretLineId, lowWord, endpoints, wordText, readOnly, onApprove, onUnapprove, onWordEnter, onWordLeave, onJump, onRemoveLine }) {
+// joinable — הפסקה שבה הסמן (לא הראשונה בזרם): כפתור "חיבור לפסקה הקודמת" בגבול שבינה לבין
+// הקודמת (כמו Backspace בתחילתה) — onJoin(p.key)
+const Para = memo(function Para({ p, byId, info, furniture, locked, recheck, caretLineId, lowWord, endpoints, wordText, readOnly, joinable = false, onApprove, onUnapprove, onJoin, onWordEnter, onWordLeave, onJump, onRemoveLine }) {
   const approved = !!info?.approved
   // אושרה כבר בסבב הקודם (מעבר שני) — אין כאן מה לבטל
   const pre = approved && !!info?.pre
@@ -273,6 +277,23 @@ const Para = memo(function Para({ p, byId, info, furniture, locked, recheck, car
           style={{ fontSize: '16px' }}
         >
           <span aria-hidden="true" className="material-symbols-outlined text-base leading-none">check</span>
+        </button>
+      )}
+      {joinable && (
+        <button
+          type="button"
+          contentEditable={false}
+          suppressContentEditableWarning
+          data-gutter=""
+          data-join=""
+          aria-label="חיבור לפסקה הקודמת"
+          title="חיבור לפסקה הקודמת — כמו Backspace בתחילת הפסקה (Ctrl+Z מבטל)"
+          onMouseDown={prevent}
+          onClick={() => onJoin?.(p.key)}
+          className="absolute -top-[15px] start-[7px] z-10 flex h-[18px] w-[18px] select-none items-center justify-center rounded-full border border-neutral-300 bg-white not-italic leading-none text-neutral-500 shadow-sm transition-colors hover:border-primary hover:text-primary"
+          style={{ fontSize: '14px' }}
+        >
+          <span aria-hidden="true" className="material-symbols-outlined text-[14px] leading-none">arrow_upward</span>
         </button>
       )}
       {p.lines.map((seg, k) => {
@@ -325,6 +346,7 @@ function FlowEditor({
   onWordEnter,
   onWordLeave,
   onJump,
+  onJoinPara = null,
 }) {
   const rootRef = useRef(null)
   const pending = useRef(null) // בחירה להחזיר אחרי הרינדור הבא (אחרי עריכה שלנו)
@@ -593,28 +615,33 @@ function FlowEditor({
             אין טקסט בזרם הזה
           </p>
         ) : (
-          paras.map((p) => (
-            <Para
-              key={p.key}
-              p={p}
-              byId={byId}
-              info={approval?.byKey?.get?.(p.key) || null}
-              furniture={furniture}
-              locked={locked}
-              recheck={recheck}
-              caretLineId={p.lines.some((s) => s.lineId === caretLineId) ? caretLineId : null}
-              lowWord={lowWord}
-              endpoints={endpoints}
-              wordText={wordText}
-              readOnly={readOnly}
-              onApprove={onApprove}
-              onUnapprove={onUnapprove}
-              onWordEnter={onWordEnter}
-              onWordLeave={onWordLeave}
-              onJump={onJump}
-              onRemoveLine={removeLine}
-            />
-          ))
+          paras.map((p, i) => {
+            const hasCaret = p.lines.some((s) => s.lineId === caretLineId)
+            return (
+              <Para
+                key={p.key}
+                p={p}
+                byId={byId}
+                info={approval?.byKey?.get?.(p.key) || null}
+                furniture={furniture}
+                locked={locked}
+                recheck={recheck}
+                caretLineId={hasCaret ? caretLineId : null}
+                lowWord={lowWord}
+                endpoints={endpoints}
+                wordText={wordText}
+                readOnly={readOnly}
+                joinable={!!onJoinPara && !readOnly && !furniture && i > 0 && hasCaret}
+                onJoin={onJoinPara}
+                onApprove={onApprove}
+                onUnapprove={onUnapprove}
+                onWordEnter={onWordEnter}
+                onWordLeave={onWordLeave}
+                onJump={onJump}
+                onRemoveLine={removeLine}
+              />
+            )
+          })
         )}
       </Fragment>
     </div>

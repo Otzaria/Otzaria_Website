@@ -174,4 +174,18 @@ describe('ProofBookGrid', { timeout: 20000 }, () => {
     expect(await screen.findByText('הספר לא נמצא', {}, { timeout: 5000 })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'חזרה לרשימת הספרים' })).toHaveAttribute('href', '/library/page-proof/books')
   })
+
+  it('עמודים שהמנהל סגר להגהה אינם ברשת — רק הסבר כמה; וכלל ה-48 שעות מוצג', async () => {
+    fetchMock.mockImplementation(() => ok({ book: BOOK, pages: PAGES, counts: COUNTS, hidden: 12 }))
+    render(<ProofBookGrid gid="g1" />)
+    await loaded()
+    expect(screen.getByText(/12 עמודים בספר עוד לא נפתחו להגהה/)).toBeInTheDocument()
+    expect(screen.getByText('כל עמוד שתפסתם שמור לכם 48 שעות, וכל פתיחה שלו בעורך מחדשת את הזמן.')).toBeInTheDocument()
+  })
+
+  it('בלי עמודים סגורים — בלי ההסבר', async () => {
+    render(<ProofBookGrid gid="g1" />)
+    await loaded()
+    expect(screen.queryByText(/לא נפתחו להגהה/)).not.toBeInTheDocument()
+  })
 })

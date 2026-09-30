@@ -3,9 +3,10 @@ import mongoose from 'mongoose';
 import connectDB from '@/lib/db';
 import PageProofPage from '@/models/PageProofPage';
 import PageProofSubmission from '@/models/PageProofSubmission';
-import { requireProofSession, whoOf, readJsonBody, tooBigResponse, primaryOf } from '@/lib/pageProof/pool';
+import { requireProofSession, whoOf, readJsonBody, tooBigResponse, primaryOf, resolveForeignLinks } from '@/lib/pageProof/pool';
 import { validateOps, packOps, needsRecut, sanitizeOps } from '@/lib/pageProof/ops';
 import { revisionFilter, sameRevision, storedRevision, statusWhenFull } from '@/lib/pageProof/importRules';
+import { volunteerOpenFilter } from '@/lib/pageProof/gridState';
 import { badRequest, notFound, serverError } from '@/lib/apiResponse';
 
 const MAX_NOTE = 1000;
@@ -23,6 +24,7 @@ const RELOAD = 'העמוד עודכן מאז שנפתח (חזר מזיהוי-מ�
 // ההגשה נדחית ב-409 במקום להיבדק מול שורות אחרות. בקשה בלי revision (לשונית
 // ישנה) מתקבלת רק כשהעמוד עדיין בגרסה 1.
 // ההגשה שומרת את הגרסה ואת needsRecut (הפעולות משנות את חיתוך-השורות).
+// קישור שהצד השני שלו בעמוד אחר של הספר — השורה נבדקת שם (pool.resolveForeignLinks).
 export async function POST(request, { params }) {
   const { session, userId, error } = await requireProofSession();
   if (error) return error;
@@ -41,29 +43,39 @@ export async function POST(request, { params }) {
     const sent = body.revision === undefined || body.revision === null ? null : Number(body.revision);
     if (sent === null ? revision > 1 : !sameRevision(sent, revision)) return conflict(RELOAD);
 
-    const ops = packOps(page.doc, sanitizeOps(body.ops));
-    const invalid = validateOps(page.doc, ops);
+    const packed = packOps(page.doc, sanitizeOps(body.ops));
+    const invalid = validateOps(page.doc, packed);
     if (invalid) return badRequest(invalid);
+    // קישור לעמוד אחר: השורה אכן בעמוד ההוא של אותו ספר (מספרה ותחילת-הטקסט — מהעמוד השמור)
+    const far = await resolveForeignLinks(page, packed);
+    if (far.error) return badRequest(far.error);
+    const ops = far.ops;
 
     const uid = new mongoose.Types.ObjectId(userId);
     const now = new Date();
+    // מי שמחזיק בעמוד (גם אם התפיסה פגה ואף אחד לא תפס אותו מאז), או עמוד פנוי
+    // שפתוח למתנדבים (למשל מנהל שחרר אותו בזמן שהמתנדב עבד). עמוד שהמנהל סגר —
+    // רק ממי שמחזיק בו
     const claimed = await PageProofPage.findOneAndUpdate(
       {
         _id: id,
         status: 'open',
         ...revisionFilter(revision),
         submitters: { $ne: uid },
-        $or: [{ leasedBy: uid }, { leasedUntil: null }, { leasedUntil: { $lt: now } }],
+        $or: [{ leasedBy: uid }, { ...volunteerOpenFilter(), leasedUntil: null }, { ...volunteerOpenFilter(), leasedUntil: { $lt: now } }],
       },
       { $inc: { activeCount: 1 }, $push: { submitters: uid }, $set: { leasedBy: null, leasedUntil: null } },
       { returnDocument: 'after', lean: true }
     );
     if (!claimed) {
       // הסבר לפי המצב העדכני (לא רק "הוגש או נלקח")
-      const now2 = await PageProofPage.findById(id, { status: 1, revision: 1 }).lean();
+      const now2 = await PageProofPage.findById(id, { status: 1, revision: 1, volunteer: 1, leasedBy: 1 }).lean();
       if (now2 && !sameRevision(storedRevision(now2), revision)) return conflict(RELOAD);
       if (now2?.status === 'recut') {
         return conflict('העמוד הועבר לחיתוך ולזיהוי-מחדש בתוכנה אחרי תיקון-חיתוך שאושר, ולכן אי אפשר להגיש אותו עכשיו. הוא יחזור להגהה במעבר שני.');
+      }
+      if (now2?.status === 'open' && now2.volunteer === false && !now2.leasedBy) {
+        return conflict('מנהל סגר את העמוד להגהה והוא אינו בטיפולכם, ולכן אי אפשר להגיש אותו. העבודה שמורה בדפדפן.');
       }
       return conflict('העמוד כבר הוגש או נלקח בידי מתנדב אחר');
     }

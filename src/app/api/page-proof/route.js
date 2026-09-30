@@ -1,13 +1,16 @@
 import { NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 import connectDB from '@/lib/db';
-import { requireProofSession, claimSequence, releaseLeases, sequenceOfPage, volunteerStats } from '@/lib/pageProof/pool';
+import { requireProofSession, claimSequence, releaseLeases, volunteerStats } from '@/lib/pageProof/pool';
+import { sequenceOfPage } from '@/lib/pageProof/claims';
 import { badRequest, serverError } from '@/lib/apiResponse';
 
-// GET: הרצף הנוכחי של המתנדב (או רצף חדש) + סטטיסטיקה.
+// GET: "רצף אחר" — הרצף הנוכחי של המתנדב, או רצף חדש שנתפס עבורו + סטטיסטיקה.
+// תופס עמודים, ולכן הדף קורא לזה רק בלחיצה מפורשת ("רצף אחר"), לעולם לא
+// בטעינה — הטעינה היא GET /api/page-proof/mine (קריאה בלבד).
 // ?skip=<bookId>:<seq> — הרצף שדולג עכשיו לא יוצע שוב באותה בקשה.
-// ?page=<pageId> — פתיחה מרשת-העמודים: הרצף של העמוד הזה, אם הוא של המשתמש /
-// הוגש על-ידו / פנוי לו; עמוד שמתנדב אחר מחזיק — רצף רגיל במקומו.
+// ?page=<pageId> (לקוח ישן) — הרצף של העמוד הזה אם הוא בטיפול המשתמש או שהגיש
+// אותו; אחרת sequence:null — בלי לתפוס רצף אחר במקומו.
 export async function GET(request) {
   const { userId, error } = await requireProofSession();
   if (error) return error;
@@ -16,8 +19,8 @@ export async function GET(request) {
     const sp = new URL(request.url).searchParams;
     const skip = sp.get('skip');
     const pageId = sp.get('page');
-    const wanted = pageId && mongoose.Types.ObjectId.isValid(pageId) ? await sequenceOfPage(pageId, userId) : null;
-    const [sequence, stats] = await Promise.all([wanted ? Promise.resolve(wanted) : claimSequence(userId, skip), volunteerStats(userId)]);
+    const asked = pageId !== null ? (mongoose.Types.ObjectId.isValid(pageId) ? sequenceOfPage(pageId, userId) : Promise.resolve(null)) : null;
+    const [sequence, stats] = await Promise.all([asked || claimSequence(userId, skip), volunteerStats(userId)]);
     return NextResponse.json(
       { success: true, sequence, stats },
       { headers: { 'Cache-Control': 'private, no-store' } }

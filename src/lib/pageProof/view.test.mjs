@@ -64,6 +64,20 @@ test('straddlingLineIds: סובלנות של פיקסל אחד — כמו בתו
   assert.deepEqual([...straddlingLineIds([L(3, [150, 200, 502, 220])], f)], [3]);
 });
 
+test('straddlingLineIds: רק שורות-תוכן — ריהוט שנוגע בקצה של מסגרת אינו מסומן', () => {
+  const f = [{ fid: 'a', bbox: [100, 100, 500, 500] }];
+  // המפריד שמתחת לשומר-הדף בעמוד-הדוגמה: התיבה שלו חופפת את תחתית המסגרת
+  for (const stream of ['sep', 'header', 'footer']) assert.equal(straddlingLineIds([L(1, [300, 480, 700, 560], { stream })], f).size, 0, stream);
+  // שורת-תוכן באותו מקום — בולטת; כותרת (של תוכן) — גם
+  assert.deepEqual([...straddlingLineIds([L(2, [300, 480, 700, 560]), L(3, [300, 480, 700, 560], { stream: 'notes_heading' })], f)], [2, 3]);
+});
+
+test('straddlingLineIds: שורה שזרמה נקבע ביד ("השורה שייכת למסגרת הזו") — כבר אינה בולטת', () => {
+  const f = [{ fid: 'a', bbox: [100, 100, 500, 500] }];
+  assert.deepEqual([...straddlingLineIds([L(1, [150, 200, 560, 220], { stream_src: 'frame' })], f)], [1]);
+  assert.equal(straddlingLineIds([L(1, [150, 200, 560, 220], { stream_src: 'human' })], f).size, 0);
+});
+
 test('streamChoices: של הספר ואז אוצר-המילים, בלי כפילויות', () => {
   const c = streamChoices({ streams: [{ key: 'main', he: 'ראשי', color: '#1' }], stream_vocab: [{ key: 'main' }, { key: 'notes', he: 'הערות' }] });
   assert.deepEqual(c.map((s) => s.key), ['main', 'notes']);

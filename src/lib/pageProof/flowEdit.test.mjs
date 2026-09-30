@@ -13,6 +13,7 @@ import {
   planDelete,
   planEnter,
   planJoin,
+  planJoinPara,
   planParaStyle,
   planCharStyle,
   planApprove,
@@ -22,6 +23,7 @@ import {
   nextSuspicious,
   linkBadge,
   linkEndpoints,
+  farLabel,
   selectionText,
   isCollapsed,
   samePos,
@@ -250,6 +252,19 @@ test('planEnter: אמצע שורה ← para_break והסמן בתחילת הפס
   assert.equal(planEnter(v, 'main', range([3, 9], [3, 4])).ops[0].value.word, 1);
 });
 
+test('planJoinPara ("חיבור לפסקה הקודמת" שליד הפסקה): כמו Backspace בתחילת הפסקה', () => {
+  const v = V();
+  const paras = buildParagraphs(v, 'main');
+  assert.ok(paras.length >= 3);
+  // כל פסקה (חוץ מהראשונה) — אותה פעולה כמו planJoin מתחילתה
+  for (const p of paras.slice(1)) {
+    const start = { lineId: p.lines[0].lineId, offset: p.lines[0].start };
+    assert.deepEqual(planJoinPara(v, 'main', p.key), planJoin(v, 'main', start), p.key);
+  }
+  assert.deepEqual(planJoinPara(v, 'main', paras[0].key), { ops: [], hint: HINTS.firstPara });
+  assert.deepEqual(planJoinPara(v, 'main', 'no-such-para'), { ops: [] });
+});
+
 test('planJoin: הפסקה של הסמן מתחברת לקודמת', () => {
   const v = V();
   assert.deepEqual(planJoin(v, 'main', at(3, 5)).ops, [{ kind: 'para_start', page: 4, ids: [3], value: 0 }]);
@@ -447,11 +462,26 @@ test('linkEndpoints: טווחי-מילים, ציוני-הערה (marks), צד ב
   // צד ההערה: קישור 1 אחרי מילה 1, השאר — מילה 0
   assert.deepEqual(eps.get(8).get(1).map((e) => e.n), [1]);
   assert.deepEqual(eps.get(8).get(0).map((e) => e.n), [2, 3, 4]);
-  assert.deepEqual(eps.get(8).get(0)[2].other, { lineId: 99, page: 5, i: null });
+  assert.deepEqual(eps.get(8).get(0)[2].other, { lineId: 99, page: 5, i: null, label: 'עמוד 5, שורה 99' });
   assert.equal(linkEndpoints({ lines: [] }).size, 0);
   assert.equal(linkBadge(1), '①');
   assert.equal(linkBadge(20), '⑳');
   assert.equal(linkBadge(21), '(21)');
+});
+
+test('linkEndpoints: קישור לעמוד אחר — הקצה שבעמוד מצביע לעמוד השני, עם "עמוד N, שורה M: «…»"', () => {
+  const b = base();
+  b.links = [
+    // הפירוש בעמוד 3 (צד ה-from זר), הגוף כאן
+    { from_line: 555, from_page: 3, from_line_no: 20, from_text: 'ג והנה', to_line: 3, to_page: 4, kind: 'dh', from_words: [0, 0], to_words: [1, 1] },
+    // הערה כאן, הגוף בעמוד 5
+    { from_line: 8, to_line: 777, to_page: 5, to_line_no: 11, to_text: 'ב ועוד', kind: 'note', from_words: [0, 0], to_words: [0, 0] },
+  ];
+  const eps = linkEndpoints(V([], b));
+  assert.deepEqual(eps.get(3).get(1)[0], { n: 1, kind: 'dh', side: 'to', other: { lineId: 555, page: 3, i: 0, label: 'עמוד 3, שורה 21: «ג והנה»' } });
+  assert.equal(eps.has(555), false);
+  assert.deepEqual(eps.get(8).get(0)[0].other, { lineId: 777, page: 5, i: null, label: 'עמוד 5, שורה 12: «ב ועוד»' });
+  assert.equal(farLabel(4, 11, 77, 'ב ועוד נראה'), 'עמוד 4, שורה 12: «ב ועוד נראה»');
 });
 
 // ---------- העתקה ----------

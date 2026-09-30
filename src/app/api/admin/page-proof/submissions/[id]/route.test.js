@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const { getServerSessionMock, Sub, Page } = vi.hoisted(() => ({
   getServerSessionMock: vi.fn(),
   Sub: { findById: vi.fn(), findOneAndUpdate: vi.fn(), find: vi.fn() },
-  Page: { findById: vi.fn(), updateOne: vi.fn() },
+  Page: { findById: vi.fn(), updateOne: vi.fn(), find: vi.fn() },
 }))
 
 vi.mock('@/lib/db', () => ({ default: vi.fn().mockResolvedValue(undefined) }))
@@ -234,5 +234,34 @@ describe('שחרור ממתנה לזיהוי-מחדש', () => {
     Page.findById.mockReturnValue(lean(page({ status: 'done' })))
     expect((await PATCH(req({ action: 'release_recut' }), params)).status).toBe(409)
     expect(Page.updateOne).not.toHaveBeenCalled()
+  })
+})
+
+describe('אישור עם עריכה — קישור לעמוד אחר', () => {
+  const far = [{ kind: 'link_add', page: 3, ids: [2, 77], value: { from_words: [0, 0], to_words: [0, 0], kind: 'dh', to_page: 4 } }]
+
+  it('השורה בעמוד 4 של אותו ספר ← נשמר, עם מספר-השורה ותחילת-הטקסט מהעמוד השמור', async () => {
+    Sub.findById.mockReturnValue(lean(sub()))
+    Page.findById.mockReturnValue(lean(page({ status: 'open', doc, gid: 'g1' })))
+    Page.find.mockReturnValue(lean([{ page: 4, doc: { lines: [{ id: 77, line_no: 11, stream: 'main', text: 'ב ועוד נראה' }] } }]))
+    Sub.findOneAndUpdate.mockImplementation(async (_f, u) => ({ opCount: u.$set.ops.length }))
+    const res = await PATCH(req({ action: 'approve', ops: far }), params)
+    expect(res.status).toBe(200)
+    // ה-gid נקרא יחד עם העמוד — הקישור נבדק רק בעמודי אותו ספר
+    expect(Page.findById.mock.calls[0][1]).toMatchObject({ doc: 1, gid: 1 })
+    expect(Page.find.mock.calls[0][0]).toEqual({ gid: 'g1', page: { $in: [4] } })
+    expect(Sub.findOneAndUpdate.mock.calls[0][1].$set.ops).toEqual([
+      { kind: 'link_add', page: 3, ids: [2, 77], value: { kind: 'dh', to_page: 4, to_line_no: 11, to_text: 'ב ועוד נראה', from_words: [0, 0], to_words: [0, 0] } },
+    ])
+  })
+
+  it('השורה אינה שם ← 400, ההגשה לא מאושרת', async () => {
+    Sub.findById.mockReturnValue(lean(sub()))
+    Page.findById.mockReturnValue(lean(page({ status: 'open', doc, gid: 'g1' })))
+    Page.find.mockReturnValue(lean([{ page: 4, doc: { lines: [] } }]))
+    const res = await PATCH(req({ action: 'approve', ops: far }), params)
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toMatch(/קישור לעמוד 4/)
+    expect(Sub.findOneAndUpdate).not.toHaveBeenCalled()
   })
 })

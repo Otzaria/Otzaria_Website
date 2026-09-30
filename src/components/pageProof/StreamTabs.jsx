@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef } from 'react'
+import { isKey } from '@/lib/pageProof/keys'
 
 // לשוניות-הזרמים מעל הטקסט: זרם אחד מוצג בכל פעם (ראשי / הערות / …), כמו
 // ספרים נפרדים באוצריא. לכל לשונית: נקודה בצבע הזרם (אותו צבע של המסגרות על
@@ -25,7 +26,8 @@ function tabTitle(tab, a) {
   return `${what} · ${lines}${appr}`
 }
 
-export default function StreamTabs({ tabs = [], tabKey, setTabKey, className = '' }) {
+// label — שם רשימת-הלשוניות (לקורא-מסך); למשל בחלון של עמוד אחר
+export default function StreamTabs({ tabs = [], tabKey, setTabKey, className = '', label = 'זרמי הטקסט בעמוד' }) {
   const refs = useRef(new Map())
   // ריהוט הדף תמיד אחרון (streamTabs כבר מסדר כך — כאן רק מבטיחים)
   const ordered = [...tabs.filter((t) => !t.furniture), ...tabs.filter((t) => t.furniture)]
@@ -43,10 +45,10 @@ export default function StreamTabs({ tabs = [], tabKey, setTabKey, className = '
 
   const onKeyDown = (e, idx) => {
     // RTL: הלשונית הבאה משמאל
-    if (e.key === 'ArrowLeft') go(idx + 1)
-    else if (e.key === 'ArrowRight') go(idx - 1)
-    else if (e.key === 'Home') go(0)
-    else if (e.key === 'End') go(ordered.length - 1)
+    if (isKey(e, 'ArrowLeft')) go(idx + 1)
+    else if (isKey(e, 'ArrowRight')) go(idx - 1)
+    else if (isKey(e, 'Home')) go(0)
+    else if (isKey(e, 'End')) go(ordered.length - 1)
     else return
     e.preventDefault()
   }
@@ -57,7 +59,7 @@ export default function StreamTabs({ tabs = [], tabKey, setTabKey, className = '
   )
 
   return (
-    <div role="tablist" aria-label="זרמי הטקסט בעמוד" dir="rtl" className={`flex items-end gap-1 overflow-x-auto border-b border-surface-variant px-2 pt-1 custom-scrollbar ${className}`}>
+    <div role="tablist" aria-label={label} dir="rtl" className={`flex items-end gap-1 overflow-x-auto border-b border-surface-variant px-2 pt-1 custom-scrollbar ${className}`}>
       {ordered.map((t, idx) => {
         const active = t.key === tabKey
         const a = approvalOf(t)

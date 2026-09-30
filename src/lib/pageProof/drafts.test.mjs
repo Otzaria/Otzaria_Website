@@ -152,3 +152,14 @@ test('removePageDrafts: כל הטיוטות של העמוד — ורק שלו', 
   assert.deepEqual(s.keys(), [draftKeyFor(OTHER, '1:a')]);
   assert.deepEqual(removePageDrafts(null, ID), []);
 });
+
+
+test('cleanupPageDrafts: טיוטה ישנה עם קישור לעמוד אחר (העמוד מוצהר) — תקפה ועוברת; בלי הצהרה — לא', () => {
+  const far = { kind: 'link_add', page: 4, ids: [1, 77], value: { kind: 'note', from_words: [0, 0], to_words: [0, 0], to_page: 5, to_line_no: 0, to_text: 'ב ועוד' } };
+  const p = page();
+  const s = memStorage({ [legacyDraftKey(ID)]: draft([far]) });
+  assert.equal(cleanupPageDrafts(s, p).migrated, true);
+  assert.deepEqual(readDraftOps(s.getItem(pageDraftKey(p))), [far]);
+  const s2 = memStorage({ [legacyDraftKey(ID)]: draft([{ ...far, value: { kind: 'note' } }]) });
+  assert.equal(cleanupPageDrafts(s2, p).migrated, false);
+});

@@ -3,6 +3,8 @@
 import { tokenize } from '@/lib/pageProof/textModel'
 import { streamInfo } from '@/lib/pageProof/vocab'
 import StreamTabs from './StreamTabs'
+import { OtherPageButtons } from './OtherPagePicker'
+import { DAMAGED_SHORT, HEADINGS_SHORT } from '@/lib/pageProof/helpTexts'
 
 // לוח-הטקסט: לשוניות-הזרמים, ומתחתן העורך (FlowEditor — מגיע מבחוץ ב-
 // editorSlot) בתוך אזור-גלילה אחד. מעל העורך — פסי-הודעה לפי המצב: קישור
@@ -12,15 +14,16 @@ import StreamTabs from './StreamTabs'
 // props: view, tabs (streamTabs + approval לכל לשונית), tabKey, setTabKey,
 // editorSlot, linkPending = {from:{lineId, words:[i,j], tabKey?, text?}} | null,
 // onCancelLink, recheckCount, approval = {approved, total} של הלשונית הפעילה.
+// onOtherPage(n) — רשות: הצד השני בעמוד אחר (n = מספר-העמוד, או null — "מספר עמוד…");
+// בלעדיו אין בפס הקישור כפתורי-עמוד.
 // רשות: readOnly, fontSize (px), fontFamily — חלים על אזור-הטקסט (העורך יורש).
 // אזור-הגלילה מסומן data-proof-text-scroll (העורך עצמו לא צריך גלילה משלו).
 
-export const TEXT_HINT =
-  'הקלידו ישר בטקסט לתיקון · Enter — פסקה חדשה · Backspace בתחילת פסקה — חיבור · Ctrl+Enter — אישור הפסקה · מילים מסומנות = המחשב חושד בהן (ראו מקרא); ריחוף על מילה בכחול, סגול או כתום מציג הצעות'
+export const TEXT_HINT = `הקלידו ישר בטקסט לתיקון · ${DAMAGED_SHORT} · Enter — פסקה חדשה · Backspace בתחילת פסקה (או ↑ שבין הפסקאות) — חיבור · Ctrl+Enter — אישור הפסקה · מילים מסומנות = המחשב חושד בהן (ראו מקרא); ריחוף על מילה בכחול, סגול או כתום מציג הצעות`
 export const TEXT_HINT_LEGEND =
   'קו אדום מקווקו — זיהוי לא בטוח, בלי הצעות: בדקו מול הסריקה · קו כחול מנוקד — יש חלופות (ריחוף) · רקע סגול — מודל-השפה מציע מילה אחרת (ריחוף) · רקע כתום — חלופת-זיהוי מתאימה יותר להקשר (ריחוף) · מודגש אפור — דיבור המתחיל, מודגש אוטומטית'
 const READONLY_HINT = 'תצוגה בלבד — אפשר לעבור על הטקסט ולבדוק אותו, אבל לא לשנות'
-const FURNITURE_HINT = 'ריהוט הדף (כותרת-רצה, מספר עמוד, קו מפריד) אינו נכנס לספר — רק בדקו שלא הגיע לכאן טקסט של הספר עצמו'
+const FURNITURE_HINT = `ריהוט הדף (כותרת-רצה, מספר עמוד, קו מפריד) אינו נכנס לספר — רק בדקו שלא הגיע לכאן טקסט של הספר עצמו. ${HEADINGS_SHORT}`
 
 // המקרא הגלוי של הסימונים בטקסט (אותם סגנונות כמו ב-FlowEditor): דוגמה קטנה
 // ומילה-שתיים; ההסבר המלא בריחוף
@@ -108,6 +111,7 @@ export default function TextPanel({
   editorSlot = null,
   linkPending = null,
   onCancelLink,
+  onOtherPage = null,
   recheckCount = 0,
   approval = null,
   readOnly = false,
@@ -155,6 +159,7 @@ export default function TextPanel({
             ? 'בחרו עכשיו את המילה המקבילה בזרם השני (לחצו על הלשונית שלו), ואז לחצו שוב על "קישור" (Ctrl+K)'
             : 'סמנו כאן את המילה המקבילה, ואז לחצו שוב על "קישור" (Ctrl+K)'}
           {' · Esc לביטול'}
+          {onOtherPage && <OtherPageButtons page={view?.page} onOtherPage={onOtherPage} />}
         </Banner>
       )}
 

@@ -95,3 +95,14 @@ test('splitFixesFile: מעל התקרה שלהם — כמה קבצים, בלי �
   assert.deepEqual(splitFixesFile(file, 2).map((p) => p.ops.length), [3, 4, 2]);
   assert.equal(MAX_FILE_OPS, 5000);
 });
+
+test('buildFixesFile: קישור לעמוד אחר — page, ids ו-value (עם העמוד, מספר-השורה ותחילת-הטקסט של הצד הזר) כמות-שהם', () => {
+  const link = { kind: 'link_add', page: 5, ids: [12, 77], value: { kind: 'dh', from_words: [0, 1], to_words: [2, 2], to_page: 4, to_line_no: 11, to_text: 'ב ועוד נראה' } };
+  const back = { kind: 'link_add', page: 5, ids: [55, 13], value: { kind: 'note', from_words: [0, 0], to_words: [1, 1], from_page: 6, from_line_no: 2, from_text: 'ג והנה' } };
+  const file = buildFixesFile(GID, [{ _id: 's1', page: 5, who: 'u1', approvedAt: '2026-09-30', ops: [link, back] }], new Date('2026-09-30T10:00:00Z'));
+  assert.deepEqual(
+    file.ops.map(({ kind, page, ids, value }) => ({ kind, page, ids, value })),
+    [link, back]
+  );
+  assert.deepEqual(file.ops.map((o) => o.op_id), ['s1:0', 's1:1']);
+});

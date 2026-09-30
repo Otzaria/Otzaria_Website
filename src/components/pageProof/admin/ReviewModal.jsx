@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { useDialog } from '@/components/providers/DialogContext'
 import { formatDateWithTime } from '@/lib/formatDate'
-import { needsRecut } from '@/lib/pageProof/ops'
+import { needsRecut, foreignLinkRefs } from '@/lib/pageProof/ops'
+import { farLabel } from '@/lib/pageProof/flowEdit'
 import { cleanOps } from '@/lib/pageProof/submitPlan'
 import ProofEditor from '../ProofEditor'
 
@@ -17,6 +18,8 @@ import ProofEditor from '../ProofEditor'
 // לפי הפעולות הסופיות).
 // הגשה שנעשתה על גרסה קודמת של העמוד (לפני שחזר מזיהוי-מחדש) מוצגת על הגרסה
 // הנוכחית — לכן בלי "עריכה לפני אישור": הפעולות מתייחסות לשורות של הגרסה הקודמת.
+// קישור שהמתייג יצר לעמוד אחר של הספר — מסומן בכותרת ("קישור לעמוד 4, שורה 12: «…»"),
+// וגם ברשימת-הקישורים וברשימת-השינויים שבחלונית "פרטים".
 
 const sameOps = (a, b) => JSON.stringify(cleanOps(a)) === JSON.stringify(cleanOps(b))
 
@@ -120,6 +123,7 @@ export default function ReviewModal({ id, onClose, onDone, onPageChanged }) {
   const canReject = pending || (sub?.status === 'approved' && !sub?.exportedAt)
   const oldRevision = !!sub && rev(sub.revision) !== rev(data.page?.revision)
   const subRecut = !!sub && (sub.needsRecut ?? needsRecut(sub.ops))
+  const farLinks = sub ? foreignLinkRefs(data.page?.doc, sub.ops) : []
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 p-2" dir="rtl">
@@ -143,6 +147,11 @@ export default function ReviewModal({ id, onClose, onDone, onPageChanged }) {
                   כולל תיקוני-חיתוך — {RECUT_HINT}
                 </span>
               )}
+              {farLinks.map((r) => (
+                <span key={r.i} data-testid="far-link" className="rounded bg-info-50 px-2 py-0.5 text-sm text-info-800" title="הצד השני של הקישור בעמוד אחר של הספר">
+                  קישור ל{farLabel(r.page, r.lineNo, r.id, r.text)}
+                </span>
+              ))}
               {oldRevision && (
                 <span className="rounded bg-warning-100 px-2 py-0.5 text-sm text-warning-800">
                   ההגשה נעשתה על גרסה {rev(sub.revision)} של העמוד, והוא הוחלף מאז בגרסה {rev(data.page.revision)} (חזר מזיהוי-מחדש). הפעולות

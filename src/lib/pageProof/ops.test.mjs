@@ -18,6 +18,11 @@ import {
   bookOrder,
   mergeLineOk,
   packOps,
+  farLinkSide,
+  foreignLinkRefs,
+  withForeignLines,
+  FAR_TEXT_SENT,
+  MAX_FAR_TEXT,
 } from './ops.js';
 import { OP_KINDS, isStreamKey, keepHeading } from './vocab.js';
 
@@ -409,8 +414,9 @@ test('applyOp cut_ok ו-frames_set confirmed', () => {
 
 test('applyOp link_add: טווחי-מילים וסוג נשמרים; הצורה הישנה = הערה בלי טווחים; קישור קודם מאותה שורה מוחלף', () => {
   const d = applyOp(doc(), { kind: 'link_add', page: 3, ids: [3, 1], value: { from_words: [0, 0], to_words: [1, 1], kind: 'dh' } });
+  // _added: נוסף בעריכה הזו (LinksTab מציע להסיר את הפעולה עצמה)
   assert.deepEqual(d.links, [
-    { from_line: 3, from_mark: null, to_line: 1, to_page: 3, kind: 'dh', conf: 1, src: 'human', suspect: null, from_words: [0, 0], to_words: [1, 1] },
+    { from_line: 3, from_mark: null, to_line: 1, to_page: 3, kind: 'dh', conf: 1, src: 'human', suspect: null, _added: true, from_words: [0, 0], to_words: [1, 1] },
   ]);
   const d2 = applyOp(d, { kind: 'link_add', page: 3, ids: [3, 2] });
   assert.equal(d2.links.length, 1);
@@ -915,4 +921,136 @@ test('packOps: 62 שורות שאושרו פסקה-פסקה ← פעולת line_
   const packed = packOps(d, [...ops, { kind: 'text', page: 3, ids: [5], value: 'x' }]);
   assert.deepEqual(packed.map((o) => o.kind), ['text', 'line_ok']);
   assert.equal(packed[1].ids.length, 62);
+});
+
+// ---------- קישור לעמוד אחר ----------
+
+// בעמוד 3: שורה 1 (גוף), 3 (הערות). 77 — שורה בעמוד 4, 55 — שורה בעמוד 2 (לא בעמוד הזה)
+const cross = (ids, value) => ({ kind: 'link_add', page: 3, ids, value: { from_words: [0, 0], to_words: [1, 1], kind: 'note', ...value } });
+const toFar = (extra = {}) => cross([3, 77], { to_page: 4, to_line_no: 11, to_text: 'ב ועוד נראה', ...extra });
+const fromFar = (extra = {}) => cross([55, 1], { from_page: 2, from_line_no: 20, from_text: 'ג והנה יש לומר', ...extra });
+
+test('validateOp: קישור לעמוד אחר — מזהה זר אחד, רק כשהעמוד שלו מוצהר', () => {
+  assert.equal(validateOp(doc(), toFar()), null);
+  assert.equal(validateOp(doc(), fromFar()), null);
+  // בלי הצהרה על העמוד (או הצהרה לצד השני) — סתם שורה שאינה כאן
+  assert.equal(validateOp(doc(), cross([3, 77], {})), 'שורה שאינה בעמוד הזה');
+  assert.equal(validateOp(doc(), cross([3, 77], { from_page: 4 })), 'שורה שאינה בעמוד הזה');
+  // העמוד המוצהר: שלם, חיובי ולא העמוד הזה
+  for (const to_page of [3, 0, -2, 4.5, '4', true]) assert.equal(validateOp(doc(), toFar({ to_page })), 'עמוד הקישור שגוי', String(to_page));
+  // שני הצדדים זרים, מזהה זמני/שלילי, או מזהה שאינו מספר
+  assert.equal(validateOp(doc(), cross([55, 77], { from_page: 2, to_page: 4 })), 'שורה שאינה בעמוד הזה');
+  assert.equal(validateOp(doc(), cross([3, -5], { to_page: 4 })), 'שורה שאינה בעמוד הזה');
+  assert.equal(validateOp(doc(), cross([3, '77'], { to_page: 4 })), 'שורה שאינה בעמוד הזה');
+  // עמוד אחר מוצהר לצד שבעמוד הזה — לא תקין; העמוד הזה עצמו — מותר
+  assert.equal(validateOp(doc(), cross([3, 1], { to_page: 4 })), 'קישור לעמוד אחר — רק אחד משני הצדדים יכול להיות בעמוד אחר');
+  assert.equal(validateOp(doc(), toFar({ from_page: 2 })), 'קישור לעמוד אחר — רק אחד משני הצדדים יכול להיות בעמוד אחר');
+  assert.equal(validateOp(doc(), cross([3, 1], { to_page: 3 })), null);
+  // מספר-השורה והטקסט של הצד הזר
+  assert.equal(validateOp(doc(), toFar({ to_line_no: -1 })), 'מספר-השורה בעמוד האחר לא תקין');
+  assert.equal(validateOp(doc(), toFar({ to_line_no: 'x' })), 'מספר-השורה בעמוד האחר לא תקין');
+  assert.equal(validateOp(doc(), toFar({ to_text: 5 })), 'הטקסט של השורה בעמוד האחר לא תקין');
+  assert.equal(validateOp(doc(), toFar({ to_text: 'א'.repeat(MAX_FAR_TEXT + 1) })), 'הטקסט של השורה בעמוד האחר לא תקין');
+  assert.equal(validateOp(doc(), toFar({ to_line_no: null, to_text: null })), null);
+  // שאר הבדיקות של link_add עדיין חלות
+  assert.equal(validateOp(doc(), toFar({ to_words: [3, 1] })), 'טווח-המילים בצד הגוף לא תקין');
+  assert.equal(validateOp(doc(), toFar({ kind: 'x' })), 'סוג-קישור לא מוכר: x');
+});
+
+test('validateOp: כל פעולה אחרת — "שורה שאינה בעמוד הזה" גם עם הצהרה על עמוד', () => {
+  assert.equal(validateOp(doc(), { kind: 'text', page: 3, ids: [77], value: 'x' }), 'שורה שאינה בעמוד הזה');
+  assert.equal(validateOp(doc(), { kind: 'stream', page: 3, ids: [1, 77], value: 'main' }), 'שורה שאינה בעמוד הזה');
+  assert.equal(validateOp(doc(), { kind: 'styles', page: 3, ids: [77], value: { style: 'b', words: [0, 0], on: true, to_page: 4 } }), 'שורה שאינה בעמוד הזה');
+  // אישור/ביטול של קישור — רק מהעמוד של הפירוש
+  assert.equal(validateOp(doc(), { kind: 'link_del', page: 3, value: { src_line: 55, page: 3 } }), 'שורת-המקור של הקישור חסרה');
+  assert.equal(validateOps(doc(), [toFar(), fromFar(), { kind: 'text', page: 3, ids: [1], value: 'x' }]), null);
+});
+
+test('sanitizeOp: שדות הצד שבעמוד האחר נשמרים, זבל יורד', () => {
+  assert.deepEqual(sanitizeOp({ ...toFar({ junk: 1 }), _g: 'g1' }), {
+    kind: 'link_add',
+    page: 3,
+    ids: [3, 77],
+    value: { kind: 'note', to_page: 4, to_line_no: 11, to_text: 'ב ועוד נראה', from_words: [0, 0], to_words: [1, 1] },
+  });
+  assert.deepEqual(sanitizeOp(fromFar()).value, { kind: 'note', from_page: 2, from_line_no: 20, from_text: 'ג והנה יש לומר', from_words: [0, 0], to_words: [1, 1] });
+});
+
+test('farLinkSide: הצד הזר לפי ההצהרה (גם כשהשורה המקומית כבר לא בעמוד — אחרי פיצול)', () => {
+  assert.deepEqual(farLinkSide(3, toFar().value), { side: 'to', index: 1, page: 4, lineNo: 11, text: 'ב ועוד נראה' });
+  assert.deepEqual(farLinkSide(3, fromFar().value), { side: 'from', index: 0, page: 2, lineNo: 20, text: 'ג והנה יש לומר' });
+  assert.equal(farLinkSide(3, { to_page: 3 }), null);
+  assert.equal(farLinkSide(3, null), null);
+});
+
+test('applyOp link_add לעמוד אחר: הקישור נושא עמוד, שורה ותחילת-טקסט — כמו בחוזה-העמוד', () => {
+  const d = applyOp(doc(), toFar());
+  assert.deepEqual(d.links, [
+    {
+      from_line: 3,
+      from_mark: null,
+      to_line: 77,
+      to_page: 4,
+      to_line_no: 11,
+      to_text: 'ב ועוד נראה',
+      kind: 'note',
+      conf: 1,
+      src: 'human',
+      suspect: null,
+      _added: true,
+      from_words: [0, 0],
+      to_words: [1, 1],
+    },
+  ]);
+  const f = applyOp(doc(), fromFar()).links[0];
+  assert.deepEqual([f.from_line, f.from_page, f.from_line_no, f.from_text, f.to_line, f.to_page], [55, 2, 20, 'ג והנה יש לומר', 1, 3]);
+  // קישור חדש מאותה שורת-פירוש (גם זרה) מחליף את הקודם
+  assert.deepEqual(applyOp(applyOp(doc(), fromFar()), cross([55, 2], { from_page: 2 })).links.map((k) => k.to_line), [2]);
+});
+
+test('קישור לעמוד אחר עובר את כל הדרך להגשה: יישור-המילים של הצד המקומי, דחיסה, פיצול של שורה אחרת', () => {
+  const d = doc();
+  // הקישור נקבע על "שורה 3" (מילה 1 = "3"), ואחר כך נוספה מילה בתחילת השורה
+  const ops = [
+    { kind: 'line_split', page: 3, ids: [2], value: { x: 500 } },
+    cross([3, 77], { from_words: [1, 1], to_words: [0, 2], to_page: 4, to_line_no: 11, to_text: 'ב ועוד נראה' }),
+    { kind: 'text', page: 3, ids: [3], value: 'מילה שורה 3' },
+  ];
+  const packed = packOps(d, ops);
+  assert.equal(validateOps(d, packed), null);
+  const link = packed.find((o) => o.kind === 'link_add');
+  assert.deepEqual(link.ids, [3, 77]);
+  assert.deepEqual(link.value, { from_words: [2, 2], to_words: [0, 2], kind: 'note', to_page: 4, to_line_no: 11, to_text: 'ב ועוד נראה' });
+  // הטקסט הסופי לפני הקישור (המספרים שלו מתייחסים אליו), הפיצול נשאר
+  assert.deepEqual(packed.map((o) => o.kind), ['line_split', 'text', 'link_add']);
+  // בתצוגה: הקישור עם הצד הזר, והמילה המקומית זזה עם הטקסט
+  const v = buildView(d, ops);
+  assert.deepEqual([v.links[0].to_page, v.links[0].to_line, v.links[0].from_words], [4, 77, [2, 2]]);
+  // דחיסה בלבד — אין מה לדחוס בקישור, והמזהה הזר לא נוגע
+  assert.deepEqual(compactOps(d, [toFar(), toFar()]).map((o) => o.ids), [[3, 77], [3, 77]]);
+});
+
+test('foreignLinkRefs / withForeignLines: מה השרת בודק, ומה הוא ממלא מהעמוד השמור', () => {
+  const ops = [toFar({ to_line_no: 99, to_text: 'מה שהדפדפן שלח' }), { kind: 'text', page: 3, ids: [1], value: 'x' }, fromFar(), cross([3, 1], {})];
+  const refs = foreignLinkRefs(doc(), ops);
+  assert.deepEqual(
+    refs.map(({ i, index, id, side, page }) => [i, index, id, side, page]),
+    [
+      [0, 1, 77, 'to', 4],
+      [2, 0, 55, 'from', 2],
+    ]
+  );
+  const long = '  ב ועוד נראה ' + 'א'.repeat(100);
+  const found = new Map([['4:77', { id: 77, line_no: 11, text: long }]]);
+  const out = withForeignLines(doc(), ops, found);
+  assert.deepEqual([out[0].value.to_line_no, out[0].value.to_text.length, out[0].value.to_text.startsWith('ב ועוד')], [11, FAR_TEXT_SENT, true]);
+  // שאר הפעולות — אותם אובייקטים
+  assert.equal(out[1], ops[1]);
+  assert.equal(out[2], ops[2]);
+  assert.deepEqual(withForeignLines(doc(), [ops[1]], found), [ops[1]]);
+});
+
+test('describeOp: קישור לעמוד אחר — העמוד, השורה ותחילת הטקסט של הצד השני', () => {
+  assert.equal(describeOp(doc(), toFar()), 'שורה 3 ← עמוד 4, שורה 12 «ב ועוד נראה»: קישור הערה (מילה 1 ← מילה 2)');
+  assert.equal(describeOp(doc(), fromFar({ kind: 'dh' })), 'עמוד 2, שורה 21 «ג והנה יש לומר» ← שורה 1: קישור דיבור-המתחיל (מילה 1 ← מילה 2)');
 });

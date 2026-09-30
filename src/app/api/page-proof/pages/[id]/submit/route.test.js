@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const { getServerSessionMock, Sub, Page } = vi.hoisted(() => ({
   getServerSessionMock: vi.fn(),
   Sub: { create: vi.fn(), find: vi.fn() },
-  Page: { findById: vi.fn(), findOneAndUpdate: vi.fn(), updateOne: vi.fn() },
+  Page: { findById: vi.fn(), findOneAndUpdate: vi.fn(), updateOne: vi.fn(), find: vi.fn() },
 }))
 
 vi.mock('@/lib/db', () => ({ default: vi.fn().mockResolvedValue(undefined) }))
@@ -147,5 +147,73 @@ describe('POST /api/page-proof/pages/[id]/submit', () => {
     expect(res.status).toBe(409)
     expect((await res.json()).error).toMatch(/זיהוי-מחדש/)
     expect(Sub.create).not.toHaveBeenCalled()
+  })
+
+  it('עמוד שהמנהל סגר: מתקבל רק ממי שמחזיק בו; מאחר ← 409 עם הסבר', async () => {
+    Page.findById.mockReturnValue(lean(pageRow()))
+    await POST(req({ ops: TEXT }), params)
+    // מי שמחזיק (גם אחרי שהתפיסה פגה) — תמיד; עמוד פנוי — רק כשהוא פתוח למתנדבים
+    const [holder, freeNull, freeExpired] = Page.findOneAndUpdate.mock.calls[0][0].$or
+    expect(String(holder.leasedBy)).toBe(USER_ID)
+    expect(holder.volunteer).toBeUndefined()
+    expect(freeNull).toMatchObject({ leasedUntil: null, volunteer: { $ne: false } })
+    expect(freeExpired).toMatchObject({ volunteer: { $ne: false } })
+    expect(freeExpired.leasedUntil.$lt).toBeInstanceOf(Date)
+
+    vi.clearAllMocks()
+    getServerSessionMock.mockResolvedValue(volunteer)
+    Page.findById.mockReturnValueOnce(lean(pageRow())).mockReturnValueOnce(lean({ status: 'open', revision: 1, volunteer: false, leasedBy: null }))
+    Page.findOneAndUpdate.mockResolvedValueOnce(null)
+    const res = await POST(req({ ops: TEXT }), params)
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toMatch(/מנהל סגר את העמוד להגהה.*העבודה שמורה בדפדפן/)
+    expect(Sub.create).not.toHaveBeenCalled()
+  })
+})
+
+// קישור לעמוד אחר (link_add שהצד השני שלו — שורה 77 — בעמוד 4 של אותו ספר)
+describe('POST submit — קישור לעמוד אחר', () => {
+  const far = (value = {}) => [
+    { kind: 'link_add', page: 3, ids: [2, 77], value: { from_words: [0, 0], to_words: [0, 0], kind: 'note', to_page: 4, to_line_no: 99, to_text: 'מה שהדפדפן שלח', ...value } },
+  ]
+  const other = (lines) => Page.find.mockReturnValue(lean([{ page: 4, doc: { lines } }]))
+
+  it('השורה אכן בעמוד 4 של הספר ← ההגשה נשמרת; מספר-השורה ותחילת-הטקסט — מהעמוד השמור', async () => {
+    Page.findById.mockReturnValue(lean(pageRow()))
+    other([{ id: 77, line_no: 11, stream: 'main', text: 'ב ועוד נראה' }])
+    const res = await POST(req({ ops: far() }), params)
+    expect(res.status).toBe(200)
+    expect(Page.find.mock.calls[0][0]).toEqual({ gid: 'a1b2c3d4e5', page: { $in: [4] } })
+    const saved = Sub.create.mock.calls[0][0].ops
+    expect(saved).toEqual([
+      { kind: 'link_add', page: 3, ids: [2, 77], value: { kind: 'note', to_page: 4, to_line_no: 11, to_text: 'ב ועוד נראה', from_words: [0, 0], to_words: [0, 0] } },
+    ])
+  })
+
+  it('השורה אינה בעמוד ההוא / הוסרה שם / ריהוט / העמוד אינו בספר ← 400 בעברית, בלי לתפוס מקום', async () => {
+    Page.findById.mockReturnValue(lean(pageRow()))
+    for (const [lines, msg] of [
+      [[{ id: 78, line_no: 0, stream: 'main', text: 'אחרת' }], /השורה שנבחרה אינה בעמוד ההוא/],
+      [[{ id: 77, line_no: 0, stream: 'main', status: 'removed', text: 'x' }], /השורה שנבחרה אינה בעמוד ההוא/],
+      [[{ id: 77, line_no: 0, stream: 'header', text: '12' }], /ריהוט הדף/],
+    ]) {
+      other(lines)
+      const res = await POST(req({ ops: far() }), params)
+      expect(res.status).toBe(400)
+      expect((await res.json()).error).toMatch(msg)
+    }
+    Page.find.mockReturnValue(lean([]))
+    const res = await POST(req({ ops: far() }), params)
+    expect((await res.json()).error).toMatch(/העמוד הזה אינו בספר/)
+    expect(Page.findOneAndUpdate).not.toHaveBeenCalled()
+    expect(Sub.create).not.toHaveBeenCalled()
+  })
+
+  it('בלי הצהרה על העמוד ← "שורה שאינה בעמוד הזה" (בלי לחפש בעמודים אחרים)', async () => {
+    Page.findById.mockReturnValue(lean(pageRow()))
+    const res = await POST(req({ ops: far({ to_page: undefined }) }), params)
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toBe('פעולה 1: שורה שאינה בעמוד הזה')
+    expect(Page.find).not.toHaveBeenCalled()
   })
 })

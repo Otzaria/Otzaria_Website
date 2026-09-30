@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { HELP_SEEN_KEY } from './ProofHelp'
 import { LAYOUT_KEY } from '@/lib/pageProof/layout'
@@ -325,5 +325,154 @@ describe('ProofEditor — תיקוני הביקורת', { timeout: 30000 }, () =
     fireEvent.click(option)
     expect(opsNow()).toEqual([{ kind: 'text', ids: [1], value: 'אמר רב יוחנן' }])
     await waitFor(() => expect(readDomSelection(editor())).toEqual({ anchor: { lineId: 1, offset: 6 }, focus: { lineId: 1, offset: 6 } }))
+  })
+})
+
+// קישור שהצד השני שלו בעמוד אחר של הספר: הצד הראשון כאן, השני בחלון של העמוד האחר (קריאה
+// בלבד, GET של שורות-העמוד — בלי שום בקשה אחרת)
+describe('ProofEditor — קישור לעמוד אחר', { timeout: 30000 }, () => {
+  const FAR = [
+    { id: 101, line_no: 0, order: 1, stream: 'main', para_start: true, para_style: null, text: 'והלכה כרבי יוחנן' },
+    { id: 102, line_no: 1, order: 2, stream: 'notes', para_start: true, para_style: null, text: 'הערה בעמוד הבא' },
+  ]
+  let calls
+  beforeEach(() => {
+    calls = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url, init) => {
+        calls.push([url, init?.method || 'GET'])
+        return { status: 200, json: async () => ({ success: true, page: 10, revision: 1, lines: FAR }) }
+      })
+    )
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('Ctrl+K בהערה ← "עמוד 10" ← מילה בגוף שם = link_add עם to_page/to_line_no/to_text; ביטול מהפרטים, Ctrl+Z מחזיר', async () => {
+    const { editor } = setup({ page: { ...makePage(), gid: 'g1' } })
+    fireEvent.click(screen.getByRole('tab', { name: /הערות/ }))
+    await caretAt(editor(), { lineId: 4, offset: 0 }, { lineId: 4, offset: 10 })
+    fireEvent.keyDown(editor(), { key: 'ל', code: 'KeyK', ctrlKey: true })
+    const bar = screen.getAllByTestId('other-page-buttons')[0]
+    fireEvent.click(within(bar).getByRole('button', { name: 'עמוד 10' }))
+
+    const dialog = await screen.findByRole('dialog', { name: /הצד השני של הקישור/ })
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'יוחנן' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(opsNow()).toEqual([
+      { kind: 'link_add', ids: [4, 101], value: { from_words: [0, 1], to_words: [2, 2], kind: 'note', to_page: 10, to_line_no: 0, to_text: 'והלכה כרבי יוחנן' } },
+    ])
+    // רק קריאה אחת, GET של שורות העמוד האחר
+    expect(calls).toEqual([['/api/page-proof/books/g1/pages/10/lines', 'GET']])
+    expect(screen.queryByText(/נבחר: «/)).toBeNull()
+
+    // בפרטים: "עמוד 10, שורה 1: «…»", ו"ביטול הקישור" מסיר את הפעולה עצמה
+    fireEvent.click(screen.getByRole('button', { name: 'פרטים' }))
+    const drawer = screen.getByRole('complementary', { name: 'פרטים' })
+    expect(within(drawer).getByText(/עמוד 10, שורה 1: «והלכה כרבי יוחנן»/)).toBeInTheDocument()
+    fireEvent.click(within(drawer).getByRole('button', { name: /ביטול הקישור/ }))
+    expect(opsNow()).toEqual([])
+    fireEvent.keyDown(document.body, { key: 'ז', code: 'KeyZ', ctrlKey: true })
+    expect(opsNow().map((o) => o.kind)).toEqual(['link_add'])
+    // המספר שבטקסט (הצד שבעמוד הזה) מראה לאן הקישור הולך
+    fireEvent.click(screen.getByRole('tab', { name: /הערות/ }))
+    const badge = editor().querySelector('[data-line="4"] [data-badge="①"]')
+    expect(badge.getAttribute('title')).toMatch(/עמוד 10, שורה 1/)
+  })
+
+  it('בלי gid (עמוד שלא הגיע מהאתר) ובתצוגה-בלבד — אין כפתורי "עמוד אחר"', async () => {
+    const { editor } = setup()
+    fireEvent.click(screen.getByRole('tab', { name: /הערות/ }))
+    await caretAt(editor(), { lineId: 4, offset: 0 }, { lineId: 4, offset: 10 })
+    fireEvent.keyDown(editor(), { key: 'ל', code: 'KeyK', ctrlKey: true })
+    expect(screen.getByText(/נבחר: «/)).toBeInTheDocument()
+    expect(screen.queryByTestId('other-page-buttons')).toBeNull()
+  })
+})
+
+// קיצורי-המקלדת בכל פריסה: עברית (e.key 'ז' — ולא 'z'), עברית בלי e.code (מקלדת
+// וירטואלית / שולחן-עבודה מרוחק), ו-AZERTY (המקש שכתוב עליו Z הוא KeyW)
+describe('ProofEditor — קיצורי-מקלדת בפריסה עברית', { timeout: 30000 }, () => {
+  const heb = (key, code, extra = {}) => ({ key, code, ctrlKey: true, ...extra })
+
+  it('Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z — עם המקש הפיזי, וגם בלי e.code', async () => {
+    const { editor } = setup()
+    await caretAt(editor(), { lineId: 1, offset: 5 })
+    fireEvent.click(screen.getByRole('button', { name: 'מודגש' }))
+    expect(opsNow()).toHaveLength(1)
+    for (const code of ['KeyZ', '', 'Unidentified']) {
+      fireEvent.keyDown(editor(), heb('ז', code))
+      expect(opsNow()).toEqual([])
+      fireEvent.keyDown(editor(), heb('ט', code === 'KeyZ' ? 'KeyY' : code))
+      expect(opsNow()).toHaveLength(1)
+    }
+    // Ctrl+Shift+Z — חזרה (בפריסה עברית Shift נותן אות לטינית גדולה, או את האות העברית)
+    fireEvent.keyDown(editor(), heb('ז', ''))
+    expect(opsNow()).toEqual([])
+    fireEvent.keyDown(editor(), heb('ז', '', { shiftKey: true }))
+    expect(opsNow()).toHaveLength(1)
+    // גם כשהמיקוד מחוץ לטקסט (בסריקה, בגוף הדף)
+    fireEvent.keyDown(screen.getByTestId('scan-panel'), heb('ז', 'KeyZ'))
+    expect(opsNow()).toEqual([])
+    fireEvent.keyDown(document.body, heb('ט', ''))
+    expect(opsNow()).toHaveLength(1)
+  })
+
+  it('Ctrl+B / Ctrl+I / Ctrl+K / Ctrl+Enter בפריסה עברית', async () => {
+    const { editor } = setup()
+    await caretAt(editor(), { lineId: 1, offset: 5 })
+    fireEvent.keyDown(editor(), heb('נ', 'KeyB'))
+    expect(opsNow()).toEqual([{ kind: 'styles', ids: [1], value: { style: 'b', words: [1, 1], on: true } }])
+    fireEvent.keyDown(editor(), heb('ן', ''))
+    expect(opsNow()[1]).toEqual({ kind: 'styles', ids: [1], value: { style: 'i', words: [1, 1], on: true } })
+    // Ctrl+Enter (גם Enter שבמקלדת המספרים) — אישור הפסקה
+    fireEvent.keyDown(editor(), { key: 'Enter', code: 'NumpadEnter', ctrlKey: true })
+    expect(opsNow().slice(2).map((o) => o.kind)).toEqual(['line_ok', 'line_ok'])
+    // Ctrl+K בלי e.code — הצד הראשון של קישור
+    fireEvent.click(screen.getByRole('tab', { name: /הערות/ }))
+    await caretAt(editor(), { lineId: 4, offset: 0 }, { lineId: 4, offset: 10 })
+    fireEvent.keyDown(editor(), heb('ל', ''))
+    expect(screen.getByText(/נבחר: «/)).toHaveTextContent('רבי יוחנן.')
+  })
+
+  it('AZERTY: המקש שכתוב עליו Z מבטל; המקש שבמקום הפיזי של Z (W) — לא', async () => {
+    const { editor } = setup()
+    await caretAt(editor(), { lineId: 1, offset: 5 })
+    fireEvent.click(screen.getByRole('button', { name: 'מודגש' }))
+    fireEvent.keyDown(editor(), heb('w', 'KeyZ'))
+    expect(opsNow()).toHaveLength(1)
+    fireEvent.keyDown(editor(), heb('z', 'KeyW'))
+    expect(opsNow()).toEqual([])
+  })
+
+  it('AltGr (Ctrl+Alt) אינו קיצור', async () => {
+    const { editor } = setup()
+    await caretAt(editor(), { lineId: 1, offset: 5 })
+    fireEvent.click(screen.getByRole('button', { name: 'מודגש' }))
+    fireEvent.keyDown(editor(), heb('ז', 'KeyZ', { altKey: true }))
+    expect(opsNow()).toHaveLength(1)
+  })
+})
+
+describe('ProofEditor — "חיבור לפסקה הקודמת" שליד הפסקה', { timeout: 30000 }, () => {
+  it('מופיע בפסקה שבה הסמן (לא בראשונה); לחיצה = Backspace בתחילתה; Ctrl+Z מבטל', async () => {
+    const { editor } = setup()
+    await caretAt(editor(), { lineId: 1, offset: 2 })
+    expect(editor().querySelector('[data-join]')).toBeNull() // הפסקה הראשונה — אין לאן לחבר
+    await caretAt(editor(), { lineId: 3, offset: 4 })
+    const join = within(editor().querySelector('[data-para="3:0"]')).getByRole('button', { name: 'חיבור לפסקה הקודמת' })
+    expect(join).toHaveAttribute('title', expect.stringMatching(/Backspace בתחילת הפסקה/))
+    fireEvent.click(join)
+    expect(opsNow()).toEqual([{ kind: 'para_start', ids: [3], value: 0 }])
+    expect(editor().querySelector('[data-para="3:0"]')).toBeNull() // אוחדה עם הקודמת
+    fireEvent.keyDown(editor(), { key: 'ז', code: 'KeyZ', ctrlKey: true })
+    expect(opsNow()).toEqual([])
+    expect(editor().querySelector('[data-para="3:0"]')).not.toBeNull()
+  })
+
+  it('בתצוגה בלבד — אין כפתור', async () => {
+    const { editor } = setup({ readOnly: true })
+    await caretAt(editor(), { lineId: 3, offset: 4 })
+    expect(editor().querySelector('[data-join]')).toBeNull()
   })
 })

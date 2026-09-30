@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import ProofProgressBar from './ProofProgressBar'
-import { bookHref, bookMatches, scriptLabel, thumbUrl, CLAIM_HOURS, MAX_HELD } from '@/lib/pageProof/gridState'
+import { bookHref, bookMatches, scriptLabel, thumbUrl, CLAIM_SHORT, MAX_HELD } from '@/lib/pageProof/gridState'
 
 // רשימת הספרים בהגהת-עמודים (/library/page-proof/books) — בנויה כמו הספרייה
 // הישנה (/library/books): חיפוש, לשוניות-סינון, וכרטיס לכל ספר עם תמונת
@@ -97,25 +97,23 @@ function HowItWorks({ mine }) {
         איך זה עובד?
       </h2>
       <ol className="list-decimal space-y-1 pr-5 text-sm text-on-surface/70">
-        <li>בוחרים ספר, ובו עמוד פנוי — או רצף של 5 עמודים עוקבים.</li>
+        <li>בוחרים ספר, ובו עמוד פנוי — או רצף של 5 עמודים עוקבים — ולוחצים &quot;תפוס&quot;.</li>
         <li>
-          העמוד נשמר עבורכם ל-{CLAIM_HOURS} שעות (עד {MAX_HELD} עמודים בבת אחת). מגיהים אותו בעורך ומגישים.
+          {CLAIM_SHORT} (עד {MAX_HELD} עמודים בבת אחת.) מגיהים בעורך ומגישים.
         </li>
         <li>מנהל בודק כל הגשה לפני שהיא נכנסת לספר.</li>
       </ol>
+      {/* "העמודים שלי" — רק מה שכבר בידיכם; שום עמוד אינו נתפס בכניסה לשם */}
       {mine > 0 && (
-        <p className="rounded-lg bg-info-50 px-3 py-2 text-sm font-medium text-info-800">
-          יש לכם {mine === 1 ? 'עמוד אחד' : `${mine} עמודים`} בטיפול.
-        </p>
+        <Link
+          href="/library/page-proof"
+          className="mt-auto flex items-center gap-2 rounded-lg bg-info-50 px-3 py-2 text-sm font-medium text-info-800 hover:bg-info-100"
+        >
+          <span aria-hidden="true" className="material-symbols-outlined text-base">edit</span>
+          <span className="flex-1">יש לכם {mine === 1 ? 'עמוד אחד' : `${mine} עמודים`} בטיפול — להמשך העבודה</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-base">arrow_back</span>
+        </Link>
       )}
-      <Link
-        href="/library/page-proof"
-        className="mt-auto flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-        title="המערכת תבחר עבורכם רצף של עד 5 עמודים עוקבים"
-      >
-        <span aria-hidden="true" className="material-symbols-outlined text-base">autorenew</span>
-        או קבלו רצף אוטומטית
-      </Link>
     </div>
   )
 }

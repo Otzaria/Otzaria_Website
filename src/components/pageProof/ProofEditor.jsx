@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { buildView, recutLineIds } from '@/lib/pageProof/ops'
+import { buildView, recutLineIds, validateOp } from '@/lib/pageProof/ops'
 import { historyCaret } from '@/lib/pageProof/historyCaret'
 import { streamChoices, untouchedLineIds, replaceWord, viewStats } from '@/lib/pageProof/view'
 import { isFurnitureStream, keepHeading, streamInfo } from '@/lib/pageProof/vocab'
@@ -19,6 +19,7 @@ import {
   planCharStyle,
   planEnter,
   planJoin,
+  planJoinPara,
   planParaStyle,
   samePos,
   suspiciousWords,
@@ -28,7 +29,8 @@ import { hasSuggestions } from '@/lib/pageProof/wordPopup'
 import { recheckLineIds } from '@/lib/pageProof/submitPlan'
 import { pageDraftKey } from '@/lib/pageProof/drafts'
 import { LAYOUT_KEY, SPLIT_MAX, SPLIT_MIN, nudgeSplit, readLayout, splitFromPointer } from '@/lib/pageProof/layout'
-import { LINK_ERRORS, linkEnd, planLink, tabOfLine, wordStartPos } from '@/lib/pageProof/linkFlow'
+import { LINK_ERRORS, linkEnd, planLink, planOtherPageLink, farLabel, tabOfLine, wordStartPos } from '@/lib/pageProof/linkFlow'
+import { isKey, isShortcut } from '@/lib/pageProof/keys'
 import { useDialog } from '@/components/providers/DialogContext'
 import { useProofEditor } from './useProofEditor'
 import { useWordPopup } from './useWordPopup'
@@ -39,6 +41,7 @@ import FlowEditor from './FlowEditor'
 import StatusBar from './StatusBar'
 import DetailsDrawer from './DetailsDrawer'
 import ProofHelp from './ProofHelp'
+import OtherPagePicker from './OtherPagePicker'
 import { caretTop } from './flowDom'
 
 // עורך הגהת-עמוד — המעטפת: סרגל-כלים (בנוסח העורך הישן של האתר), הסריקה
@@ -46,7 +49,8 @@ import { caretTop } from './flowDom'
 // שורת-מצב, ולוח "פרטים" נפתח. כל שינוי = פעולת-חוזה (useProofEditor); העורך
 // משמש את המתנדב (עריכה) ואת המנהל (סקירה, ועריכה לפני אישור).
 //
-// Props: page ({id, page, doc, imageUrl, revision?}), initialOps (הגשה קיימת),
+// Props: page ({id, page, gid?, doc, imageUrl, revision?} — gid (או doc.gid) מאפשר
+// קישור שהצד השני שלו בעמוד אחר של הספר: OtherPagePicker), initialOps (הגשה קיימת),
 // readOnly, persist (טיוטה בדפדפן), draftKey (lib/pageProof/drafts — ברירת-
 // המחדל לפי העמוד והגרסה), toolbarClassName (בתוך חלון: 'sticky top-0 z-30'),
 // actions({ops, view, stats, untouched, approval, reset}) — כפתורי הדף העוטף
@@ -186,6 +190,8 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
   const [request, setRequest] = useState(null)
   const [hint, setHint] = useState(() => (ed.restored ? { text: 'שוחזרה טיוטה שמורה מהדפדפן — אפשר להמשיך מאיפה שהפסקתם', n: 0 } : null))
   const [linkPending, setLinkPending] = useState(null)
+  // הצד השני של קישור בעמוד אחר: {start: מספר-עמוד | null} — החלון פתוח
+  const [otherPage, setOtherPage] = useState(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [detailsTab, setDetailsTab] = useState('links')
   const [helpOpen, setHelpOpen] = useState(false)
@@ -343,13 +349,24 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
   // ---- קישור בין שני זרמים ----
   // לכל שורת-הערה/פירוש קישור אחד (כך גם בתוכנת-הספר): קישור שני מאותה שורה
   // מחליף את הקודם — רק אחרי אישור, ולא בשקט.
+  // המקום של קישור קיים מאותה שורת-הערה (-1 אם אין), ושאלת ההחלפה. בלי קישור קיים אין
+  // המתנה — הפעולה נוספת מיד, באותו אירוע-מקלדת
+  const existingLink = (op) => (view.links || []).findIndex((k) => k.from_line === op.ids[0])
+  const askReplace = (idx) =>
+    showConfirm(
+      'להחליף את הקישור?',
+      `לשורה הזו כבר יש קישור ${linkBadge(idx + 1)} — אפשר קישור אחד לכל שורת-הערה או פירוש. להחליף אותו בקישור החדש?`,
+      null,
+      'החלפה',
+      'ביטול'
+    )
   const link = async () => {
     if (readOnly) return
     const end = linkEnd(view, tabKey, sel)
     if (end.error) return say(end.error)
     if (!linkPending) {
       setLinkPending({ from: end })
-      say(end.hint || `נבחר «${end.text}». עכשיו עברו ללשונית של הזרם השני, סמנו את המילה המקבילה ולחצו שוב "קישור"`)
+      say(end.hint || `נבחר «${end.text}». עכשיו עברו ללשונית של הזרם השני, סמנו את המילה המקבילה ולחצו שוב "קישור" — או, אם היא בעמוד אחר, בחרו אותו בפס הכחול`)
       return
     }
     const r = planLink(view, linkPending.from, end)
@@ -359,26 +376,40 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
       return
     }
     const from = linkPending.from
-    const idx = (view.links || []).findIndex((k) => k.from_line === r.op.ids[0])
-    if (idx >= 0) {
-      const ok = await showConfirm(
-        'להחליף את הקישור?',
-        `לשורה הזו כבר יש קישור ${linkBadge(idx + 1)} — אפשר קישור אחד לכל שורת-הערה או פירוש. להחליף אותו בקישור החדש?`,
-        null,
-        'החלפה',
-        'ביטול'
-      )
-      if (!ok) return say('הקישור הקודם נשאר; הקישור החדש לא נוסף')
-    }
+    const idx = existingLink(r.op)
+    if (idx >= 0 && !(await askReplace(idx))) return say('הקישור הקודם נשאר; הקישור החדש לא נוסף')
     if (push(r.op)) {
       setLinkPending(null)
       say(`${idx >= 0 ? 'הקישור הוחלף' : 'הקישור נוסף'}: «${from.text}» ↔ «${end.text}»`)
     }
   }
+  // הצד השני בעמוד אחר: מילה שנבחרה בחלון העמוד האחר (OtherPagePicker) משלימה את הקישור.
+  // מחזיר הודעת-שגיאה לחלון (שנשאר פתוח) או null
+  const pickOtherPage = async (pick, fview) => {
+    if (readOnly || !linkPending) return LINK_ERRORS.gone
+    const r = planOtherPageLink(view, linkPending.from, pick, fview)
+    if (r.error) return r.error
+    const bad = validateOp(baseDoc, r.op)
+    if (bad) return bad
+    const from = linkPending.from
+    const idx = existingLink(r.op)
+    if (idx >= 0 && !(await askReplace(idx))) return 'הקישור הקודם נשאר; הקישור החדש לא נוסף'
+    if (!push(r.op)) return 'הקישור לא נוסף'
+    setOtherPage(null)
+    setLinkPending(null)
+    say(`${idx >= 0 ? 'הקישור הוחלף' : 'הקישור נוסף'}: «${from.text}» ↔ ${farLabel(pick.page, pick.lineNo, pick.lineId, pick.lineText)}`)
+    return null
+  }
   const cancelLink = useCallback(() => {
+    setOtherPage(null)
     setLinkPending(null)
     say('הקישור בוטל')
   }, [say])
+  // העמוד האחר נפתח רק כשהצד הראשון כבר נבחר, ורק כשידוע הספר (gid)
+  const gid = page.gid ?? baseDoc.gid ?? null
+  const canOtherPage = !readOnly && !!gid && !!linkPending
+  const openOtherPage = useCallback((n) => setOtherPage({ start: Number.isInteger(n) && n >= 1 ? n : null }), [])
+  const closeOtherPage = useCallback(() => setOtherPage(null), [])
 
   // ---- אישור פסקה-פסקה ----
   const approve = (key) => {
@@ -453,6 +484,8 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
   }
 
   const charStyle = (style, on) => applyPlan(planCharStyle(view, tabKey, sel, style, on, { locked }))
+  // "חיבור לפסקה הקודמת" מהכפתור שליד הפסקה — כמו Backspace בתחילתה
+  const joinPara = (key) => !readOnly && applyPlan(planJoinPara(view, tabKey, key))
 
   // ביטול/חזרה: הסמן עובר למקום שבו הטקסט השתנה (ולשונית השורה); שינוי שאינו
   // טקסט (סגנון, פסקה, מסגרת) — הסמן נשאר במקומו, בלי לגנוב את המיקוד מהסריקה
@@ -482,7 +515,7 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
   // ---- ה-callbacks היציבים (לרכיבים ממוזכרים) — תמיד על המצב העדכני ----
   const live = useRef(null)
   useLayoutEffect(() => {
-    live.current = { approve, unapprove, goTo, charStyle, undo, redo, link, cancelLink, approveAtCaret, goSuspicious, openSuggest, linkPending, readOnly, P }
+    live.current = { approve, unapprove, goTo, charStyle, joinPara, undo, redo, link, cancelLink, approveAtCaret, goSuspicious, openSuggest, linkPending, readOnly, P }
   })
   const stable = useMemo(
     () => ({
@@ -492,10 +525,11 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
       onUndo: () => live.current.undo(),
       onRedo: () => live.current.redo(),
       onFormat: (style) => live.current.charStyle(style),
+      onJoinPara: (key) => live.current.joinPara(key),
       onJump: (other) => {
         if (!other) return
         if (other.page != null && other.page !== live.current.P) {
-          say(`הצד השני של הקישור בעמוד ${other.page}`)
+          say(`הצד השני של הקישור: ${other.label || `עמוד ${other.page}`}`)
           return
         }
         live.current.goTo(other.lineId, other.i, { focus: true })
@@ -560,49 +594,49 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
       const inFlow = !!t?.closest?.('[data-proof-flow]')
       const inField = !!t && !inFlow && isTextField(t)
       const ctrl = e.ctrlKey || e.metaKey
-      const code = e.code
-      // e.code ולא e.key: בפריסת-מקלדת עברית Ctrl+Z נותן e.key === 'ז'
-      if (ctrl && !e.altKey && code === 'KeyZ') {
+      // האות של הקיצור בכל פריסה (lib/pageProof/keys): בפריסה עברית Ctrl+Z נותן
+      // e.key === 'ז' — המקש הפיזי (e.code 'KeyZ') קובע, וגם בלעדיו 'ז' ← 'z'
+      if (isShortcut(e, 'z', { shift: null })) {
         if (inField) return
         e.preventDefault()
         if (e.shiftKey) H.redo()
         else H.undo()
         return
       }
-      if (ctrl && !e.altKey && !e.shiftKey && code === 'KeyY') {
+      if (isShortcut(e, 'y')) {
         if (inField) return
         e.preventDefault()
         H.redo()
         return
       }
       if (inField) return
-      if (e.key === 'Escape' && H.linkPending) {
+      if (isKey(e, 'Escape') && H.linkPending) {
         e.preventDefault()
         H.cancelLink()
         return
       }
-      if (code === 'F8' && !ctrl && !e.altKey) {
+      if (isKey(e, 'F8') && !ctrl && !e.altKey) {
         e.preventDefault()
         H.goSuspicious(e.shiftKey ? -1 : 1)
         return
       }
-      if (ctrl && !e.altKey && !e.shiftKey && code === 'KeyK') {
+      if (isShortcut(e, 'k')) {
         e.preventDefault()
         H.link()
         return
       }
       if (!inFlow) return
-      if (ctrl && !e.altKey && !e.shiftKey && (code === 'KeyB' || code === 'KeyI')) {
+      if (isShortcut(e, 'b') || isShortcut(e, 'i')) {
         e.preventDefault()
-        if (!H.readOnly) H.charStyle(code === 'KeyB' ? 'b' : 'i')
+        if (!H.readOnly) H.charStyle(isShortcut(e, 'b') ? 'b' : 'i')
         return
       }
-      if (ctrl && !e.altKey && !e.shiftKey && (code === 'Enter' || code === 'NumpadEnter')) {
+      if (ctrl && !e.altKey && !e.shiftKey && isKey(e, 'Enter')) {
         e.preventDefault()
         H.approveAtCaret()
         return
       }
-      if ((e.altKey && !ctrl && code === 'ArrowDown') || (ctrl && !e.altKey && !e.shiftKey && code === 'Space')) {
+      if ((e.altKey && !ctrl && isKey(e, 'ArrowDown')) || (ctrl && !e.altKey && !e.shiftKey && isKey(e, 'Space'))) {
         e.preventDefault()
         H.openSuggest()
       }
@@ -616,6 +650,14 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
     jumpToLine: (id, i) => goTo(id, Number.isInteger(i) ? i : null, { focus: true }),
     linkOk: (src) => push({ kind: 'link_ok', page: P, value: { src_line: src, page: P } }),
     linkDel: (src) => push({ kind: 'link_del', page: P, value: { src_line: src, page: P } }),
+    // קישור לעמוד אחר שנוסף בעריכה הזו: ביטול = הסרת פעולת-הקישור עצמה (צעד-ביטול אחד;
+    // Ctrl+Z מחזיר) — לא link_del, שהיה נשלח לתוכנת-הספר
+    removeLink: (k) => {
+      if (readOnly) return
+      ed.removeWhere((op) => op?.kind === 'link_add' && op.ids?.[0] === k.from_line && op.ids?.[1] === k.to_line)
+      say('הקישור בוטל (Ctrl+Z מחזיר אותו)')
+    },
+    otherPage: canOtherPage ? openOtherPage : null,
     startLink: readOnly ? null : link,
     cancelLink,
     script: (v) => lineOp('script', v),
@@ -666,6 +708,7 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
         setTabKey={switchTab}
         linkPending={linkPending}
         onCancelLink={cancelLink}
+        onOtherPage={canOtherPage ? openOtherPage : null}
         recheckCount={recheckCount}
         approval={furnitureTab ? null : tabSummary}
         readOnly={readOnly}
@@ -694,6 +737,7 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
             onWordEnter={pop.onWordEnter}
             onWordLeave={pop.onWordLeave}
             onJump={stable.onJump}
+            onJoinPara={readOnly ? null : stable.onJoinPara}
           />
         }
       />
@@ -787,6 +831,9 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
       />
 
       {pop.popup}
+      {otherPage && canOtherPage && (
+        <OtherPagePicker gid={gid} view={view} from={linkPending.from} startPage={otherPage.start} onPick={pickOtherPage} onClose={closeOtherPage} />
+      )}
       <ProofHelp open={helpOpen} onClose={closeHelp} autoOpen={!readOnly && persist} />
     </div>
   )

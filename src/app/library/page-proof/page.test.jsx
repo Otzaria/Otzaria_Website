@@ -7,8 +7,19 @@ import { HELP_SEEN_KEY } from '@/components/pageProof/ProofHelp'
 import PageProofVolunteer from './page.jsx'
 
 // העורך עצמו נבדק בנפרד; כאן — מה שהדף מעביר לו (draftKey), ומה הדף עושה עם
-// actions({ops, view, approval}) שהעורך מחזיר: חלון ההגשה והשליחה.
-const h = vi.hoisted(() => ({ props: null, ops: [], approval: null, dialog: null, search: '', router: null, seqPages: null }))
+// actions({ops, view, approval}) שהעורך מחזיר: חלון ההגשה והשליחה. וגם: הכניסה
+// לדף אינה תופסת שום עמוד — היא טוענת רק את "העמודים שלי" (/api/page-proof/mine).
+const h = vi.hoisted(() => ({
+  props: null,
+  ops: [],
+  approval: null,
+  dialog: null,
+  search: '',
+  router: null,
+  seqPages: null,
+  held: null,
+  unavailable: null,
+}))
 vi.mock('next/navigation', () => ({
   useRouter: () => h.router,
   useSearchParams: () => new URLSearchParams(h.search),
@@ -47,6 +58,20 @@ const makePage = (lines = [line(1), line(2), line(3, { stream: 'notes' })]) => (
 
 let posts
 let pageData
+const STATS = { done: 0, open: 5, mySubmitted: 0, myApproved: 0 }
+const FUTURE = new Date(Date.now() + 30 * 3600e3).toISOString()
+const seqOf = () => ({
+  book: { id: 'b1', gid: 'g1', title: 'ספר ניסוי' },
+  seq: 0,
+  pages: h.seqPages || [{ id: ID, page: P, state: 'mine', lines: 3, revision: pageData.page.revision, leasedUntil: FUTURE }],
+})
+const urls = () => global.fetch.mock.calls.map(([u]) => String(u))
+// בקשות שתופסות עמודים (GET /api/page-proof — "רצף אחר"), להבדיל מ-/mine, מ-/pages/…
+// ומהשחרור (POST)
+const claimCalls = () =>
+  global.fetch.mock.calls
+    .filter(([u, init]) => (init?.method || 'GET') === 'GET' && (String(u) === '/api/page-proof' || String(u).startsWith('/api/page-proof?')))
+    .map(([u]) => String(u))
 function mockFetch() {
   posts = []
   global.fetch = vi.fn(async (url, init) => {
@@ -61,14 +86,20 @@ function mockFetch() {
       return { json: async () => ({ success: true, opCount: body.ops.length }) }
     }
     if (u.startsWith(`/api/page-proof/pages/${ID}`)) return { json: async () => pageData }
-    if (u.startsWith('/api/page-proof')) {
+    if (u.startsWith('/api/page-proof/mine')) {
+      const asked = new URL(u, 'http://x').searchParams.get('page')
       return {
         json: async () => ({
           success: true,
-          sequence: { book: { id: 'b1', title: 'ספר ניסוי' }, seq: 0, pages: h.seqPages || [{ id: ID, page: P, state: 'mine', lines: 3, revision: pageData.page.revision }] },
-          stats: { done: 0, open: 5, mySubmitted: 0, myApproved: 0 },
+          held: h.held ?? [seqOf()],
+          sequence: asked && !h.unavailable ? seqOf() : null,
+          unavailable: asked && h.unavailable ? h.unavailable : null,
+          stats: STATS,
         }),
       }
+    }
+    if (u === '/api/page-proof' || u.startsWith('/api/page-proof?')) {
+      return { json: async () => ({ success: true, sequence: seqOf(), stats: STATS }) }
     }
     throw new Error(`fetch לא צפוי: ${u}`)
   })
@@ -80,9 +111,12 @@ beforeEach(() => {
   h.props = null
   h.ops = []
   h.approval = null
-  h.search = ''
+  // ברירת-המחדל: פתיחה של עמוד שבטיפולכם (?page=) — העורך נפתח
+  h.search = `page=${ID}`
   h.router = { replace: vi.fn(), push: vi.fn() }
   h.seqPages = null
+  h.held = null
+  h.unavailable = null
   pageData = { success: true, mode: 'edit', page: makePage(), submission: null }
   mockFetch()
 })
@@ -205,40 +239,94 @@ describe('דף המתנדב — עזרה', { timeout: 20000 }, () => {
   })
 })
 
-describe('דף המתנדב — פתיחה מרשת-העמודים (?page=) ורצף אחר', { timeout: 20000 }, () => {
-  it('?page=<id> ← הבקשה לרצף כוללת את העמוד, והוא נפתח (לא העמוד הראשון שלכם ברצף)', async () => {
-    h.search = `page=${ID}`
+describe('דף המתנדב — הכניסה אינה תופסת עמודים ("העמודים שלי")', { timeout: 20000 }, () => {
+  it('כניסה בלי ?page= ← רק "העמודים שלי" (קריאה בלבד); לחיצה על עמוד פותחת אותו בעורך', async () => {
+    h.search = ''
+    render(<PageProofVolunteer />)
+    expect(await screen.findByRole('heading', { name: 'העמודים שלי' })).toBeInTheDocument()
+    // בקשה אחת — קריאה בלבד; שום תפיסה, והעורך לא נפתח לבד
+    expect(urls()).toEqual(['/api/page-proof/mine'])
+    expect(screen.queryByTestId('editor')).not.toBeInTheDocument()
+    const btn = screen.getByRole('button', { name: /עמוד 4/ })
+    expect(btn).toHaveTextContent(/שמור לך עד/)
+    await userEvent.click(btn)
+    await screen.findByTestId('editor')
+    expect(urls()).toContain(`/api/page-proof/pages/${ID}`)
+    expect(h.router.replace).toHaveBeenCalledWith(`/library/page-proof?page=${ID}`, { scroll: false })
+    expect(claimCalls()).toEqual([])
+  })
+
+  it('אין עמודים בטיפול ← הסבר וקישור לבחירת עמודים — ושום עמוד אינו נתפס', async () => {
+    h.search = ''
+    h.held = []
+    render(<PageProofVolunteer />)
+    expect(await screen.findByText('אין לכם עמודים בטיפול כרגע.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'בחירת עמודים' })).toHaveAttribute('href', '/library/page-proof/books')
+    expect(urls()).toEqual(['/api/page-proof/mine'])
+  })
+
+  it('?page=<id> ← הבקשה (קריאה בלבד) כוללת את העמוד, והוא נפתח (לא העמוד הראשון שלכם ברצף)', async () => {
     h.seqPages = [
-      { id: OTHER, page: P - 1, state: 'mine', lines: 3, revision: 1 },
-      { id: ID, page: P, state: 'mine', lines: 3, revision: 1 },
+      { id: OTHER, page: P - 1, state: 'mine', lines: 3, revision: 1, leasedUntil: FUTURE },
+      { id: ID, page: P, state: 'mine', lines: 3, revision: 1, leasedUntil: FUTURE },
     ]
     render(<PageProofVolunteer />)
     await screen.findByTestId('editor')
-    const urls = global.fetch.mock.calls.map(([u]) => String(u))
-    expect(urls[0]).toBe(`/api/page-proof?page=${ID}`)
-    expect(urls).toContain(`/api/page-proof/pages/${ID}`)
-    expect(urls).not.toContain(`/api/page-proof/pages/${OTHER}`)
+    expect(urls()[0]).toBe(`/api/page-proof/mine?page=${ID}`)
+    expect(urls()).toContain(`/api/page-proof/pages/${ID}`)
+    expect(urls()).not.toContain(`/api/page-proof/pages/${OTHER}`)
+    expect(claimCalls()).toEqual([])
     expect(h.dialog.showAlert).not.toHaveBeenCalled()
   })
 
-  it('העמוד שביקשו אינו זמין (מתנדב אחר) ← הסבר, ונפתח העמוד הראשון שלכם', async () => {
+  it('העמוד שביקשו אינו בטיפולכם ← הסבר וקישור לרשת של הספר; שום עמוד אינו נתפס או נפתח במקומו', async () => {
     h.search = `page=${OTHER}`
+    h.unavailable = { id: OTHER, gid: 'g1', page: 7, state: 'taken' }
     render(<PageProofVolunteer />)
-    await screen.findByTestId('editor')
-    expect(h.dialog.showAlert).toHaveBeenCalledWith('העמוד אינו זמין', expect.stringMatching(/מתנדב אחר/))
-    expect(global.fetch.mock.calls.map(([u]) => String(u))).toContain(`/api/page-proof/pages/${ID}`)
+    expect(await screen.findByText('עמוד 7 אינו בטיפולכם כרגע')).toBeInTheDocument()
+    expect(screen.getByText('מתנדב אחר עובד עליו כרגע.')).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: 'לרשת-העמודים של הספר' })[0]).toHaveAttribute('href', '/library/page-proof/books/g1')
+    expect(screen.queryByTestId('editor')).not.toBeInTheDocument()
+    expect(urls()).toEqual([`/api/page-proof/mine?page=${OTHER}`])
   })
 
-  it('"רצף אחר" משחרר רק את הרצף הזה (ספר + מספר-רצף) ומנקה את ?page= מהכתובת', async () => {
-    h.search = `page=${ID}`
+  it('עמוד שהתפיסה עליו פגה (פנוי שוב) ← ההסבר אומר שאפשר לתפוס אותו שוב, והטיוטה נשמרה', async () => {
+    h.search = `page=${OTHER}`
+    h.unavailable = { id: OTHER, gid: 'g1', page: 7, state: 'open' }
+    render(<PageProofVolunteer />)
+    expect(await screen.findByText(/עברו 48 שעות.*לתפוס אותו שוב.*טיוטה/)).toBeInTheDocument()
+  })
+
+  it('"העמודים שלי" מתוך העורך ← חזרה לרשימה (טעינה מחדש, קריאה בלבד)', async () => {
     render(<PageProofVolunteer />)
     await screen.findByTestId('editor')
+    await userEvent.click(screen.getByRole('button', { name: /העמודים שלי/ }))
+    expect(await screen.findByRole('heading', { name: 'העמודים שלי' })).toBeInTheDocument()
+    expect(urls().filter((u) => u.startsWith('/api/page-proof/mine'))).toHaveLength(2)
+    expect(claimCalls()).toEqual([])
+  })
+
+  it('אחרי הגשת העמוד האחרון ברצף ← מעבר לרשת של הספר לבחירת העמודים הבאים (בלי לתפוס רצף לבד)', async () => {
+    h.ops = [{ kind: 'line_ok', page: P, ids: [1, 2, 3] }]
+    render(<PageProofVolunteer />)
+    await screen.findByTestId('editor')
+    await userEvent.click(screen.getByRole('button', { name: /הגשת העמוד/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'הגש' }))
+    expect(await screen.findByText('סיימתם את הרצף — תודה!')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /לבחירת העמודים הבאים בספר/ })).toHaveAttribute('href', '/library/page-proof/books/g1')
+    expect(claimCalls()).toEqual([])
+  })
+
+  it('"רצף אחר" — רק בלחיצה: משחרר את הרצף הזה (ספר + מספר-רצף), מנקה את ?page= ותופס רצף אחר', async () => {
+    render(<PageProofVolunteer />)
+    await screen.findByTestId('editor')
+    expect(claimCalls()).toEqual([])
     await userEvent.click(screen.getByRole('button', { name: /רצף אחר/ }))
+    expect(h.dialog.showConfirm).toHaveBeenCalledWith('רצף אחר', expect.stringMatching(/48 שעות/))
     await waitFor(() => expect(posts.some((p) => p.url === '/api/page-proof')).toBe(true))
     expect(posts.find((p) => p.url === '/api/page-proof').body).toEqual({ action: 'release', book: 'b1', seq: 0 })
     expect(h.router.replace).toHaveBeenCalledWith('/library/page-proof', { scroll: false })
-    // הטעינה שאחרי הדילוג — בלי העמוד מהכתובת
-    await waitFor(() => expect(global.fetch.mock.calls.map(([u]) => String(u))).toContain('/api/page-proof?skip=b1%3A0'))
+    await waitFor(() => expect(claimCalls()).toEqual(['/api/page-proof?skip=b1%3A0']))
   })
 
   it('קישור לבחירת עמודים מספר (רשת-העמודים) בכותרת הדף', async () => {
