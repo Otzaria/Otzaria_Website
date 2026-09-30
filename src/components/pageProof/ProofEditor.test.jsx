@@ -380,6 +380,39 @@ describe('ProofEditor — קישור לעמוד אחר', { timeout: 30000 }, () 
     expect(badge.getAttribute('title')).toMatch(/עמוד 10, שורה 1/)
   })
 
+  // עורך שמוטמע מחוץ לאתר (תוכנת-הספר): העמוד האחר נטען דרך loadOtherPage ולא מהאתר
+  const openFarPage = async (editor) => {
+    fireEvent.click(screen.getByRole('tab', { name: /הערות/ }))
+    await caretAt(editor(), { lineId: 4, offset: 0 }, { lineId: 4, offset: 10 })
+    fireEvent.keyDown(editor(), { key: 'ל', code: 'KeyK', ctrlKey: true })
+    fireEvent.click(within(screen.getAllByTestId('other-page-buttons')[0]).getByRole('button', { name: 'עמוד 10' }))
+    return screen.findByRole('dialog', { name: /הצד השני של הקישור/ })
+  }
+
+  it('loadOtherPage: העמוד האחר נטען דרכו — פעם אחת, בלי fetch לאתר — והקישור נוסף כרגיל', async () => {
+    const loadOtherPage = vi.fn(async (gid, n) => ({ page: n, lines: FAR }))
+    const { editor } = setup({ page: { ...makePage(), gid: 'g1' }, loadOtherPage })
+    const dialog = await openFarPage(editor)
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'יוחנן' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(loadOtherPage.mock.calls).toEqual([['g1', 10]])
+    expect(calls).toEqual([])
+    expect(opsNow()).toEqual([
+      { kind: 'link_add', ids: [4, 101], value: { from_words: [0, 1], to_words: [2, 2], kind: 'note', to_page: 10, to_line_no: 0, to_text: 'והלכה כרבי יוחנן' } },
+    ])
+  })
+
+  it('loadOtherPage שנכשל — ההודעה שלו בחלון, והחלון נשאר פתוח', async () => {
+    const loadOtherPage = vi.fn(async () => {
+      throw new Error('עמוד 10 לא נמצא בספר')
+    })
+    const { editor } = setup({ page: { ...makePage(), gid: 'g1' }, loadOtherPage })
+    const dialog = await openFarPage(editor)
+    expect(await within(dialog).findByText('עמוד 10 לא נמצא בספר')).toBeInTheDocument()
+    expect(calls).toEqual([])
+    expect(screen.getByRole('dialog', { name: /הצד השני של הקישור/ })).toBeInTheDocument()
+  })
+
   it('בלי gid (עמוד שלא הגיע מהאתר) ובתצוגה-בלבד — אין כפתורי "עמוד אחר"', async () => {
     const { editor } = setup()
     fireEvent.click(screen.getByRole('tab', { name: /הערות/ }))

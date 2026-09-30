@@ -56,6 +56,13 @@ import { caretTop } from './flowDom'
 // actions({ops, view, stats, untouched, approval, reset}) — כפתורי הדף העוטף
 // בקצה הסרגל; approval = {approved, total} פסקאות-התוכן בכל העמוד.
 //
+// נקודות-הרחבה למי שמטמיע את העורך מחוץ לאתר (תוכנת-הספר). כולן רשות, ובלעדיהן
+// העורך מתנהג בדיוק כמו באתר:
+//   loadOtherPage(gid, n) — טעינת עמוד אחר של הספר לחלון "הצד השני בעמוד אחר"
+//     (Promise של {page, lines} כמו GET /api/page-proof/books/[gid]/pages/[n]/lines;
+//     שגיאה = Error עם הודעה בעברית). בלעדיו — fetch לכתובת הזו.
+//   help — נוסח העזרה לחלקים שתלויים באתר (ProofHelp: texts).
+//
 // הסמן משותף לטקסט ולסריקה: השורה שבה הסמן מסומנת על הסריקה, ולחיצה על
 // הסריקה מעבירה את הסמן לשורה שם (ולשונית הזרם שלה).
 //
@@ -175,7 +182,17 @@ function Splitter({ split, swap, containerRef, onDrag, onCommit, onSwap }) {
   )
 }
 
-export default function ProofEditor({ page, initialOps = null, readOnly = false, persist = true, actions = null, draftKey = null, toolbarClassName }) {
+export default function ProofEditor({
+  page,
+  initialOps = null,
+  readOnly = false,
+  persist = true,
+  actions = null,
+  draftKey = null,
+  toolbarClassName,
+  loadOtherPage = null,
+  help = null,
+}) {
   const baseDoc = page.doc
   const P = baseDoc.page
   const storageKey = useMemo(() => draftKey || pageDraftKey(page), [draftKey, page])
@@ -515,7 +532,7 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
   // ---- ה-callbacks היציבים (לרכיבים ממוזכרים) — תמיד על המצב העדכני ----
   const live = useRef(null)
   useLayoutEffect(() => {
-    live.current = { approve, unapprove, goTo, charStyle, joinPara, undo, redo, link, cancelLink, approveAtCaret, goSuspicious, openSuggest, linkPending, readOnly, P }
+    live.current = { approve, unapprove, goTo, charStyle, joinPara, undo, redo, link, cancelLink, approveAtCaret, goSuspicious, openSuggest, linkPending, readOnly, P, loadOtherPage }
   })
   const stable = useMemo(
     () => ({
@@ -537,6 +554,8 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
       // לחיצה על הסריקה: הסמן עובר לשם, אבל הסריקה עצמה לא זזה (caretY = null)
       onPickLine: (lineId, extra) => live.current.goTo(lineId, extra?.wordIndex ?? null, { focus: false, from: 'scan' }),
       setMode: (m) => setScanMode(m),
+      // הטעינה של העמוד האחר דרך הדף העוטף — זהות קבועה, כדי שהחלון לא יטען שוב בכל רינדור
+      loadOtherPage: (gid, n) => live.current.loadOtherPage(gid, n),
     }),
     [say, selectFromText]
   )
@@ -832,9 +851,17 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
 
       {pop.popup}
       {otherPage && canOtherPage && (
-        <OtherPagePicker gid={gid} view={view} from={linkPending.from} startPage={otherPage.start} onPick={pickOtherPage} onClose={closeOtherPage} />
+        <OtherPagePicker
+          gid={gid}
+          view={view}
+          from={linkPending.from}
+          startPage={otherPage.start}
+          onPick={pickOtherPage}
+          onClose={closeOtherPage}
+          fetchLines={typeof loadOtherPage === 'function' ? stable.loadOtherPage : undefined}
+        />
       )}
-      <ProofHelp open={helpOpen} onClose={closeHelp} autoOpen={!readOnly && persist} />
+      <ProofHelp open={helpOpen} onClose={closeHelp} autoOpen={!readOnly && persist} texts={help} />
     </div>
   )
 }
