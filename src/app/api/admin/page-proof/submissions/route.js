@@ -49,6 +49,9 @@ export async function GET(request) {
           pageNo: s.pageNo,
           userName: s.userName,
           opCount: s.opCount,
+          // משנה את חיתוך-השורות — אישור יחזיר את העמוד לזיהוי-מחדש
+          needsRecut: !!s.needsRecut,
+          revision: s.revision ?? 1,
           note: s.note,
           status: s.status,
           createdAt: s.createdAt,

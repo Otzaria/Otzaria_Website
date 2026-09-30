@@ -1,11 +1,16 @@
 import { getServerSession } from 'next-auth';
+import { zipSync, strToU8 } from 'fflate';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
 import PageProofBook from '@/models/PageProofBook';
+import PageProofPage from '@/models/PageProofPage';
 import PageProofSubmission from '@/models/PageProofSubmission';
 import { hasOcrAccess } from '@/lib/roles';
 import { requireAccess, badRequest, notFound, serverError } from '@/lib/apiResponse';
-import { buildFixesFile, splitPrimary } from '@/lib/pageProof/fixesExport';
+import { buildFixesFile, splitPrimary, splitFixesFile } from '@/lib/pageProof/fixesExport';
+import { needsRecut } from '@/lib/pageProof/ops';
+import { storedRevision } from '@/lib/pageProof/importRules';
+import { docRevision } from '@/lib/pageProof/textModel';
 
 const GID_RE = /^[A-Za-z0-9]{8,64}$/;
 
@@ -14,7 +19,11 @@ const GID_RE = /^[A-Za-z0-9]{8,64}$/;
 //   הנוספות של עמודים כפולים (למדידת הסכמה אצל בעל הפרויקט).
 //   ?only=new — רק מה שעוד לא יצא; ?mark=1 — סימון ההגשות שיצאו.
 // ההפרדה ראשית/כפולה נקבעת על כל המאושרות (לא רק החדשות), כדי שהגשה
-// שנייה לעמוד שכבר יצא לא תיכנס בטעות לקובץ הראשי.
+// שנייה לעמוד שכבר יצא לא תיכנס בטעות לקובץ הראשי; הגשה שמשנה חיתוך קודמת
+// (fixesExport.pickPrimary) — העמוד ממתין לזיהוי-מחדש בגללה.
+// לכל פעולה: revision, op_id ו-sig (חתימת העמוד בגרסה הזו, כשהעמוד השמור
+// עדיין בה) — כדי שתוכנת-הספר תוכל לדלג על פעולה ישנה או כפולה.
+// מעל 5,000 פעולות (התקרה שלהם לקובץ אחד) — ZIP של כמה קבצים, בלי לפצל עמוד.
 export async function GET(request, { params }) {
   const session = await getServerSession(authOptions);
   const denied = requireAccess(session, hasOcrAccess);
@@ -33,31 +42,55 @@ export async function GET(request, { params }) {
 
     const approved = await PageProofSubmission.find(
       { gid, status: 'approved' },
-      { pageNo: 1, who: 1, ops: 1, reviewedAt: 1, createdAt: 1, exportedAt: 1 }
+      { pageNo: 1, revision: 1, who: 1, ops: 1, reviewedAt: 1, createdAt: 1, exportedAt: 1, needsRecut: 1 }
     ).lean();
     const shaped = approved.map((s) => ({
       _id: s._id,
       page: s.pageNo,
+      // מעבר שני של עמוד שחזר מזיהוי-מחדש — ראשי לגרסה שלו (fixesExport)
+      revision: s.revision,
       who: s.who,
       ops: s.ops,
+      needsRecut: !!s.needsRecut || needsRecut(s.ops),
       approvedAt: s.reviewedAt,
       submittedAt: s.createdAt,
       exportedAt: s.exportedAt,
     }));
     const chosen = splitPrimary(shaped)[set].filter((s) => !onlyNew || !s.exportedAt);
-    const file = buildFixesFile(gid, chosen);
+
+    // חתימות-העמודים (מזהי-השורות והגודל) — רק לעמודים שבקובץ, בלי ה-doc הכבד
+    const sigs = new Map();
+    const pageNos = [...new Set(chosen.map((s) => s.page))];
+    if (pageNos.length) {
+      const pages = await PageProofPage.find({ gid, page: { $in: pageNos } }, { page: 1, revision: 1, 'doc.lines.id': 1, 'doc.size': 1 }).lean();
+      for (const p of pages) {
+        const rev = storedRevision(p);
+        sigs.set(`${p.page}:${rev}`, docRevision({ revision: rev, lines: p.doc?.lines || [], size: p.doc?.size }));
+      }
+    }
+    const files = splitFixesFile(buildFixesFile(gid, chosen, new Date(), sigs));
 
     if (mark && chosen.length) {
       await PageProofSubmission.updateMany({ _id: { $in: chosen.map((s) => s._id) } }, { $set: { exportedAt: new Date() } });
     }
 
     const name = `תיקונים${set === 'double' ? '-כפולים' : ''}-${book.title}`.replace(/[\\/:*?"<>|]+/g, '_').slice(0, 120);
-    return new Response(JSON.stringify(file, null, 1), {
+    const headers = { 'Cache-Control': 'private, no-store', 'X-Submission-Count': String(chosen.length), 'X-Fixes-Files': String(files.length) };
+    if (files.length === 1) {
+      return new Response(JSON.stringify(files[0], null, 1), {
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json; charset=utf-8',
+          'Content-Disposition': `attachment; filename="fixes.json"; filename*=UTF-8''${encodeURIComponent(name)}.json`,
+        },
+      });
+    }
+    const entries = Object.fromEntries(files.map((f, i) => [`${name}-${i + 1}.json`, strToU8(JSON.stringify(f, null, 1))]));
+    return new Response(zipSync(entries), {
       headers: {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Content-Disposition': `attachment; filename="fixes.json"; filename*=UTF-8''${encodeURIComponent(name)}.json`,
-        'Cache-Control': 'private, no-store',
-        'X-Submission-Count': String(chosen.length),
+        ...headers,
+        'Content-Type': 'application/zip',
+        'Content-Disposition': `attachment; filename="fixes.zip"; filename*=UTF-8''${encodeURIComponent(name)}.zip`,
       },
     });
   } catch (e) {

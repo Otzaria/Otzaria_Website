@@ -20,7 +20,9 @@ export async function GET(request, { params }) {
     return new Response(buffer, {
       headers: {
         'Content-Type': mimeType,
-        // התמונה לא משתנה אחרי ייבוא (ייבוא-חוזר כותב לאותו נתיב רק לעמוד שלא נענה)
+        // ייבוא-חוזר כותב לאותו נתיב רק לעמוד שלא נענה, או לעמוד שחזר
+        // מזיהוי-מחדש בגרסה חדשה — והגרסה בכתובת (?v=, editorPageShape),
+        // כך שהמטמון לא מגיש תמונה של גרסה קודמת
         'Cache-Control': 'private, max-age=86400',
       },
     });
