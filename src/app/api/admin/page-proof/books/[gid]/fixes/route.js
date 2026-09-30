@@ -9,8 +9,8 @@ import { hasOcrAccess } from '@/lib/roles';
 import { requireAccess, badRequest, notFound, serverError } from '@/lib/apiResponse';
 import { buildFixesFile, splitPrimary, splitFixesFile } from '@/lib/pageProof/fixesExport';
 import { needsRecut } from '@/lib/pageProof/ops';
-import { storedRevision } from '@/lib/pageProof/importRules';
-import { docRevision } from '@/lib/pageProof/textModel';
+import { storedRevision, submissionRevision } from '@/lib/pageProof/importRules';
+import { pageSig } from '@/lib/pageProof/adminReview';
 
 const GID_RE = /^[A-Za-z0-9]{8,64}$/;
 
@@ -18,6 +18,9 @@ const GID_RE = /^[A-Za-z0-9]{8,64}$/;
 //   ?set=primary (ברירת מחדל) — הגשה אחת לכל עמוד; ?set=double — ההגשות
 //   הנוספות של עמודים כפולים (למדידת הסכמה אצל בעל הפרויקט).
 //   ?only=new — רק מה שעוד לא יצא; ?mark=1 — סימון ההגשות שיצאו.
+//   ?pages=recut — רק עמודים שממתינים עכשיו לזיהוי-מחדש (בגרסה השמורה שלהם): לולאת
+//   הזיהוי-מחדש של תוכנת-הספר מושכת בזה את תיקוני-החיתוך המאושרים. עם mark=1 הם
+//   מסומנים שיצאו — בלעדיו ייבוא הגרסה החדשה ידלג על העמוד (importRules: skip-unexported).
 // ההפרדה ראשית/כפולה נקבעת על כל המאושרות (לא רק החדשות), כדי שהגשה
 // שנייה לעמוד שכבר יצא לא תיכנס בטעות לקובץ הראשי; הגשה שמשנה חיתוך קודמת
 // (fixesExport.pickPrimary) — העמוד ממתין לזיהוי-מחדש בגללה.
@@ -35,6 +38,7 @@ export async function GET(request, { params }) {
     const set = sp.get('set') === 'double' ? 'double' : 'primary';
     const onlyNew = sp.get('only') === 'new';
     const mark = sp.get('mark') === '1';
+    const onlyRecut = sp.get('pages') === 'recut';
 
     await connectDB();
     const book = await PageProofBook.findOne({ gid }, { title: 1 }).lean();
@@ -56,17 +60,20 @@ export async function GET(request, { params }) {
       submittedAt: s.createdAt,
       exportedAt: s.exportedAt,
     }));
-    const chosen = splitPrimary(shaped)[set].filter((s) => !onlyNew || !s.exportedAt);
+    let chosen = splitPrimary(shaped)[set].filter((s) => !onlyNew || !s.exportedAt);
+    if (onlyRecut) {
+      // הגשות של הגרסה השמורה בלבד — מצב 'recut' שייך לגרסה הזו
+      const waiting = await PageProofPage.find({ gid, status: 'recut' }, { page: 1, revision: 1 }).lean();
+      const keys = new Set(waiting.map((p) => `${p.page}:${storedRevision(p)}`));
+      chosen = chosen.filter((s) => keys.has(`${s.page}:${submissionRevision(s)}`));
+    }
 
     // חתימות-העמודים (מזהי-השורות והגודל) — רק לעמודים שבקובץ, בלי ה-doc הכבד
     const sigs = new Map();
     const pageNos = [...new Set(chosen.map((s) => s.page))];
     if (pageNos.length) {
       const pages = await PageProofPage.find({ gid, page: { $in: pageNos } }, { page: 1, revision: 1, 'doc.lines.id': 1, 'doc.size': 1 }).lean();
-      for (const p of pages) {
-        const rev = storedRevision(p);
-        sigs.set(`${p.page}:${rev}`, docRevision({ revision: rev, lines: p.doc?.lines || [], size: p.doc?.size }));
-      }
+      for (const p of pages) sigs.set(`${p.page}:${storedRevision(p)}`, pageSig(p));
     }
     const files = splitFixesFile(buildFixesFile(gid, chosen, new Date(), sigs));
 

@@ -19,6 +19,7 @@ import {
   statusAfterReject,
   statusAfterReleaseRecut,
 } from '@/lib/pageProof/importRules';
+import { pageSig, submissionDetail } from '@/lib/pageProof/adminReview';
 
 async function gate(params) {
   const session = await getServerSession(authOptions);
@@ -35,7 +36,8 @@ const RETRIES = 3;
 
 // GET: הגשה אחת + העמוד (לתצוגת העורך) + שאר ההגשות לאותו עמוד (כפולים).
 // submission.revision מול page.revision: הגשה שנעשתה על גרסה קודמת של העמוד
-// (לפני שחזר מזיהוי-מחדש) — העורך מציג אותה על הגרסה הנוכחית.
+// (לפני שחזר מזיהוי-מחדש) — העורך מציג אותה על הגרסה הנוכחית. page.sig — חתימת
+// העמוד השמור, כמו sig בקובץ-התיקונים.
 export async function GET(request, { params }) {
   const { id, denied } = await gate(params);
   if (denied) return denied;
@@ -52,23 +54,8 @@ export async function GET(request, { params }) {
     return NextResponse.json(
       {
         success: true,
-        page: { ...editorPageShape(page, book), status: page.status },
-        submission: {
-          id: String(sub._id),
-          status: sub.status,
-          userName: sub.userName,
-          who: sub.who,
-          ops: sub.ops,
-          note: sub.note,
-          createdAt: sub.createdAt,
-          reviewedByName: sub.reviewedByName,
-          reviewedAt: sub.reviewedAt,
-          reviewNote: sub.reviewNote,
-          reviewerEdited: sub.reviewerEdited,
-          exportedAt: sub.exportedAt,
-          needsRecut: needsRecut(sub.ops),
-          revision: submissionRevision(sub),
-        },
+        page: { ...editorPageShape(page, book), status: page.status, sig: pageSig(page) },
+        submission: submissionDetail(sub),
         siblings: siblings.map((s) => ({
           id: String(s._id),
           userName: s.userName,
