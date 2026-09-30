@@ -198,3 +198,79 @@ export function importSummaryParts(r) {
   if (n('skippedOlder')) parts.push(`${n('skippedOlder')} דולגו — בחבילה גרסה ישנה מזו שבאתר`);
   return parts;
 }
+
+// ---------- ייבוא קובץ-קובץ, ושער שהפסיק לחכות ----------
+//
+// כל קובץ נשלח בבקשה משלו. בקובץ גדול השער של האתר (reverse proxy) מפסיק לחכות לתשובה ומחזיר
+// 502/503/504 — אבל השרת ממשיך לייבא. אז בודקים ברשימת-הספרים של מסך-הניהול
+// (GET /api/admin/page-proof) אם הייבוא הסתיים: לפני כל קובץ מצלמים {gid: lastImportAt},
+// ואחרי ה-504 בודקים כל GATEWAY_POLL_MS, עד GATEWAY_WAIT_MS.
+
+export const GATEWAY_POLL_MS = 10 * 1000;
+export const GATEWAY_WAIT_MS = 10 * 60 * 1000;
+
+// השער הפסיק לחכות לתשובה (השרת עצמו כנראה עדיין עובד)
+export const isGatewayTimeout = (status) => [502, 503, 504].includes(Number(status));
+
+// {gid: lastImportAt} מרשימת-הספרים — התצלום שלפני שליחת הקובץ
+export function importSnapshot(books) {
+  const out = {};
+  for (const b of books || []) if (b?.gid) out[b.gid] = b.lastImportAt ?? null;
+  return out;
+}
+
+const importTime = (v) => {
+  const t = v ? Date.parse(v) : NaN;
+  return Number.isFinite(t) ? t : null;
+};
+
+// הספר שהייבוא שלו הסתיים מאז התצלום (beforeMap), או null: תאריך-הייבוא שלו חדש מזה שבתצלום, או
+// שזה ספר חדש (gid שלא היה בתצלום) — וכבר יש לו תאריך-ייבוא: ספר חדש נוצר בתחילת הייבוא, והתאריך
+// נכתב רק בסופו. כמה כאלה — האחרון שהסתיים. בלי תצלום — אי-אפשר לדעת (null).
+export function finishedImport(beforeMap, books) {
+  if (!beforeMap) return null;
+  let best = null;
+  for (const b of books || []) {
+    const t = importTime(b?.lastImportAt);
+    if (t == null || !b.gid) continue;
+    const prev = Object.hasOwn(beforeMap, b.gid) ? importTime(beforeMap[b.gid]) : null;
+    if (prev != null && t <= prev) continue;
+    if (!best || t > importTime(best.lastImportAt)) best = b;
+  }
+  return best;
+}
+
+// "הייבוא הסתיים: <שם> · N עמודים · M שורות" — לספר שהייבוא שלו הסתיים אחרי שהשער הפסיק לחכות
+export function importFinishedLine(book) {
+  const n = (k) => (Number.isFinite(book?.[k]) ? book[k] : 0);
+  return `הייבוא הסתיים: ${book?.title || book?.gid || ''} · ${n('pageCount')} עמודים · ${n('lineCount')} שורות`;
+}
+
+// השגיאות של קובץ אחד מתשובת-הייבוא: errors של השרת (כבר עם שם הקובץ), error יחיד (400/500 —
+// מקבל את שם הקובץ), ותשובה שאינה JSON — "שגיאת שרת (סטטוס)"
+export function importFileErrors(fileName, data, status) {
+  if (!data || typeof data !== 'object') return [`${fileName}: שגיאת שרת (${status})`];
+  const out = Array.isArray(data.errors) ? data.errors.map(String) : [];
+  if (data.error) out.push(`${fileName}: ${data.error}`);
+  return out;
+}
+
+const SUMMED = ['created', 'updated', 'recut', 'linked', 'skippedAnswered', 'skippedRecut', 'skippedUnexported', 'skippedOlder', 'resequenced'];
+
+// התוצאות של כמה קבצים (ספר גדול בכמה ZIP-ים — אותו gid) ← שורה אחת לכל ספר, בסדר שבו הופיע:
+// המונים מסתכמים, השגיאות מצטרפות
+export function mergeImportResults(results) {
+  const by = new Map();
+  for (const r of results || []) {
+    if (!r?.gid) continue;
+    const cur = by.get(r.gid);
+    if (!cur) {
+      by.set(r.gid, { ...r, errors: [...(r.errors || [])] });
+      continue;
+    }
+    for (const k of SUMMED) if (Number.isFinite(r[k])) cur[k] = (Number.isFinite(cur[k]) ? cur[k] : 0) + r[k];
+    cur.errors.push(...(r.errors || []));
+    if (r.title) cur.title = r.title;
+  }
+  return [...by.values()];
+}

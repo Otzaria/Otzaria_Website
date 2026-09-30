@@ -21,6 +21,14 @@ import {
   statusWhenFull,
   statusAfterReleaseRecut,
   importSummaryParts,
+  GATEWAY_POLL_MS,
+  GATEWAY_WAIT_MS,
+  isGatewayTimeout,
+  importSnapshot,
+  finishedImport,
+  importFinishedLine,
+  importFileErrors,
+  mergeImportResults,
 } from './importRules.js';
 import { requiredFor } from './sequences.js';
 
@@ -268,4 +276,75 @@ test('importAction: גרסה חדשה לעמוד שממתין — מדולגת �
   assert.equal(importAction({ ...recut, unexportedRecut: true }, { page: 1 }), 'skip-recut');
   const parts = importSummaryParts({ created: 0, updated: 0, skippedUnexported: 2 });
   assert.match(parts[2], /^2 לא הוחלפו/);
+});
+
+// ---------- ייבוא קובץ-קובץ, ושער שהפסיק לחכות ----------
+
+const BOOK = (gid, lastImportAt, extra = {}) => ({ gid, title: `ספר ${gid}`, pageCount: 10, lineCount: 400, lastImportAt, ...extra });
+
+test('isGatewayTimeout: 502/503/504 — השער הפסיק לחכות; כל השאר לא', () => {
+  for (const s of [502, 503, 504, '504']) assert.equal(isGatewayTimeout(s), true, String(s));
+  for (const s of [200, 400, 413, 500, undefined, null]) assert.equal(isGatewayTimeout(s), false, String(s));
+  assert.equal(GATEWAY_POLL_MS, 10000);
+  assert.equal(GATEWAY_WAIT_MS, 600000);
+});
+
+test('importSnapshot: {gid: lastImportAt}; ספר בלי תאריך — null', () => {
+  assert.deepEqual(importSnapshot([BOOK('a1', '2026-09-30T08:00:00.000Z'), BOOK('b2', undefined), { title: 'בלי gid' }]), {
+    a1: '2026-09-30T08:00:00.000Z',
+    b2: null,
+  });
+  assert.deepEqual(importSnapshot(null), {});
+});
+
+test('finishedImport: תאריך-ייבוא חדש מהתצלום, או ספר חדש שכבר יש לו תאריך — האחרון שהסתיים', () => {
+  const before = importSnapshot([BOOK('a1', '2026-09-30T08:00:00.000Z'), BOOK('b2', null)]);
+  // שום דבר לא השתנה
+  assert.equal(finishedImport(before, [BOOK('a1', '2026-09-30T08:00:00.000Z'), BOOK('b2', null)]), null);
+  // הייבוא של a1 הסתיים
+  const a1 = BOOK('a1', '2026-09-30T08:01:10.000Z', { pageCount: 92, lineCount: 5000 });
+  assert.equal(finishedImport(before, [a1, BOOK('b2', null)]), a1);
+  // ספר שלא היה לו תאריך — עכשיו יש
+  const b2 = BOOK('b2', '2026-09-30T08:02:00.000Z');
+  assert.equal(finishedImport(before, [BOOK('a1', '2026-09-30T08:00:00.000Z'), b2]), b2);
+  // ספר חדש: נוצר בתחילת הייבוא בלי תאריך — עדיין לא; כשהתאריך נכתב (בסוף) — כן
+  assert.equal(finishedImport(before, [BOOK('c3', undefined)]), null);
+  const c3 = BOOK('c3', '2026-09-30T08:03:00.000Z');
+  assert.equal(finishedImport(before, [BOOK('a1', '2026-09-30T08:00:00.000Z'), c3]), c3);
+  // כמה שהסתיימו — האחרון
+  assert.equal(finishedImport(before, [a1, b2, c3]), c3);
+  // תאריך פגום — לא נחשב; בלי תצלום — אי-אפשר לדעת
+  assert.equal(finishedImport(before, [BOOK('a1', 'לא-תאריך')]), null);
+  assert.equal(finishedImport(null, [c3]), null);
+  assert.equal(finishedImport(before, null), null);
+});
+
+test('importFinishedLine: "הייבוא הסתיים: שם · N עמודים · M שורות"', () => {
+  assert.equal(importFinishedLine(BOOK('a1', null, { title: 'ספר א', pageCount: 92, lineCount: 5000 })), 'הייבוא הסתיים: ספר א · 92 עמודים · 5000 שורות');
+  assert.equal(importFinishedLine({ gid: 'x9' }), 'הייבוא הסתיים: x9 · 0 עמודים · 0 שורות');
+});
+
+test('importFileErrors: שגיאות השרת כמות-שהן, שגיאה יחידה עם שם הקובץ, ותשובה שאינה JSON', () => {
+  assert.deepEqual(importFileErrors('א.zip', { success: false, results: [], errors: ['א.zip: קובץ ה-ZIP פגום'] }, 200), ['א.zip: קובץ ה-ZIP פגום']);
+  assert.deepEqual(importFileErrors('א.zip', { error: 'הייבוא נכשל' }, 500), ['א.zip: הייבוא נכשל']);
+  assert.deepEqual(importFileErrors('א.zip', null, 413), ['א.zip: שגיאת שרת (413)']);
+  assert.deepEqual(importFileErrors('א.zip', { success: true, results: [{ gid: 'a1' }], errors: [] }, 200), []);
+});
+
+test('mergeImportResults: ספר בכמה קבצים — שורה אחת, המונים מסתכמים והשגיאות מצטרפות; ספרים שונים — בסדר הופעתם', () => {
+  const merged = mergeImportResults([
+    { gid: 'a1', title: 'ספר א', created: 30, updated: 0, recut: 1, errors: ['עמוד 3: שגיאה'] },
+    { gid: 'b2', title: 'ספר ב', created: 5, updated: 2, errors: [] },
+    { gid: 'a1', title: 'ספר א', created: 32, updated: 4, skippedAnswered: 2, errors: ['עמוד 40: שגיאה'] },
+    { title: 'בלי gid' },
+  ]);
+  assert.deepEqual(
+    merged.map((r) => [r.gid, r.created, r.updated, r.recut, r.skippedAnswered, r.errors]),
+    [
+      ['a1', 62, 4, 1, 2, ['עמוד 3: שגיאה', 'עמוד 40: שגיאה']],
+      ['b2', 5, 2, undefined, undefined, []],
+    ]
+  );
+  assert.deepEqual(importSummaryParts(merged[0]).slice(0, 2), ['62 עמודים חדשים', '4 עודכנו']);
+  assert.deepEqual(mergeImportResults(null), []);
 });
