@@ -4,13 +4,23 @@ import { formatDateShort } from '@/lib/formatDate'
 
 // טבלת הספרים בהגהת-העמודים: התקדמות, השהיה, והורדת תיקונים.json לבעל
 // הפרויקט (חדשים / הכול / כפולים-למדידת-הסכמה).
+//
+// "ממתינים לזיהוי-מחדש" (recut מה-API: עמודים בסטטוס 'recut') — הלולאה:
+// הגשה שאושרה וכללה תיקוני-חיתוך (פיצול/איחוד/תיבה/שורה חדשה) אינה סוגרת את
+// העמוד. התיקונים יוצאים בקובץ-התיקונים, תוכנת-הספר חותכת וקוראת מחדש את
+// השורות שתוקנו ומייצאת את העמוד שוב (revision+1), והייבוא הבא מחזיר אותו
+// להגהה במעבר שני — רק השורות שזוהו מחדש מסומנות למתנדב.
 
 const btn = 'rounded-md px-2 py-1 text-xs transition-colors disabled:opacity-40 hover:bg-surface-variant'
+
+const RECUT_TITLE =
+  'עמודים שהגשה מאושרת שלהם כללה תיקוני-חיתוך. הם לא מוצעים למתנדבים: התיקונים יוצאים בקובץ-התיקונים, תוכנת-הספר חותכת וקוראת מחדש את השורות שתוקנו, והייבוא הבא של הספר מחזיר את העמודים להגהה במעבר שני.'
 
 export default function BooksTable({ books, busy, onDownload, onToggle, onDelete, onFilter }) {
   if (!books.length) {
     return <div className="glass-strong rounded-xl p-6 text-center text-on-surface/60">עוד לא יובאו ספרים</div>
   }
+  const anyRecut = books.some((b) => b.recut > 0)
   return (
     <div className="glass-strong overflow-x-auto rounded-xl">
       <table className="w-full text-sm">
@@ -42,6 +52,11 @@ export default function BooksTable({ books, busy, onDownload, onToggle, onDelete
                 {b.pageCount}
                 {b.double > 0 && <div className="text-xs text-on-surface/50">{b.double} כפולים</div>}
                 {b.leased > 0 && <div className="text-xs text-on-surface/50">{b.leased} בעבודה</div>}
+                {b.recut > 0 && (
+                  <div className="mt-0.5 whitespace-nowrap rounded bg-warning-alt-100 px-1.5 text-xs font-bold text-warning-alt-800" title={RECUT_TITLE}>
+                    ממתינים לזיהוי-מחדש: {b.recut}
+                  </div>
+                )}
               </td>
               <td className="p-2 tabular-nums">{b.done}</td>
               <td className="p-2 tabular-nums">
@@ -78,6 +93,12 @@ export default function BooksTable({ books, busy, onDownload, onToggle, onDelete
           ))}
         </tbody>
       </table>
+      {anyRecut && (
+        <p className="border-t border-surface-variant px-3 py-2 text-xs text-on-surface/70">
+          <b>ממתינים לזיהוי-מחדש</b> = עמודים שהגשה מאושרת שלהם תיקנה את חיתוך השורות. הם לא מוצעים למתנדבים עד שתוכנת-הספר תחתוך
+          ותקרא מחדש את השורות שתוקנו (לפי קובץ-התיקונים), והייבוא הבא של הספר יחזיר אותם להגהה במעבר שני.
+        </p>
+      )}
     </div>
   )
 }

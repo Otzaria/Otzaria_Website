@@ -1,10 +1,12 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import { importSummaryParts } from '@/lib/pageProof/importRules'
 
 // ייבוא חבילות-עמודים: ZIP של תיקיית "חבילת-עמודים" (חבילה.json + עמוד-NNN.json
 // + pages/) כפי שמפיקה תוכנת-הספר (book-cli export-pages). כמה קבצים יחד;
-// ספר גדול — בכמה ZIP-ים (אותו gid מתמזג).
+// ספר גדול — בכמה ZIP-ים (אותו gid מתמזג). עמוד שחזר מזיהוי-מחדש (גרסה חדשה)
+// מחליף את העמוד שהמתין לו ונפתח למעבר שני.
 
 export default function ImportCard({ onImported }) {
   const fileRef = useRef(null)
@@ -40,10 +42,10 @@ export default function ImportCard({ onImported }) {
         ייבוא חבילת-עמודים
       </h3>
       <p className="mb-3 text-sm text-on-surface/60">
-        ZIP של תיקיית חבילת-עמודים מתוכנת-הספר (חבילה.json, עמוד-NNN.json ו-pages/). אפשר כמה קבצים יחד, עד 150MB לקובץ. ייבוא-חוזר של אותו ספר מוסיף עמודים ואינו דורס עמודים שכבר הוגשו.
+        ZIP של תיקיית חבילת-עמודים מתוכנת-הספר (חבילה.json, עמוד-NNN.json ו-pages/). אפשר כמה קבצים יחד, עד 150MB לקובץ. ייבוא-חוזר של אותו ספר מוסיף עמודים ואינו דורס עמודים שכבר הוגשו — חוץ מעמודים שממתינים לזיהוי-מחדש: גרסה חדשה שלהם מחליפה אותם ופותחת אותם למעבר שני.
       </p>
       <div className="flex flex-wrap items-center gap-3">
-        <input ref={fileRef} type="file" accept=".zip" multiple disabled={busy} className="text-sm" />
+        <input ref={fileRef} type="file" accept=".zip" multiple disabled={busy} className="text-sm" aria-label="קובצי ZIP לייבוא" />
         <label className="flex items-center gap-2 text-sm" title="נקבע בייבוא הראשון של הספר">
           רצפים כפולים (%):
           <input type="number" min={0} max={100} value={pct} onChange={(e) => setPct(Math.max(0, Math.min(100, Number(e.target.value) || 0)))} className="w-16 rounded border border-surface-variant bg-surface px-2 py-1" />
@@ -56,9 +58,8 @@ export default function ImportCard({ onImported }) {
       {result && (
         <div className="mt-3 space-y-1 text-sm">
           {(result.results || []).map((r) => (
-            <div key={r.gid} className="rounded bg-success-50 px-2 py-1 text-success-800">
-              <b>{r.title}</b>: {r.created} עמודים חדשים · {r.updated} עודכנו
-              {r.skippedAnswered > 0 && ` · ${r.skippedAnswered} דולגו (כבר הוגשו)`}
+            <div key={r.gid} className="rounded bg-success-50 px-2 py-1 text-success-800" data-testid="import-result">
+              <b>{r.title}</b>: {importSummaryParts(r).join(' · ')}
               {r.errors?.length > 0 && <ul className="list-disc pr-5 text-danger-700">{r.errors.map((e) => <li key={e}>{e}</li>)}</ul>}
             </div>
           ))}
