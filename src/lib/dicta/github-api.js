@@ -377,9 +377,9 @@ export function createRepoClient({ repo, token = null, fetchImpl = fetch, timeou
       const c = await call(`/git/commits`, { method: "POST", body: { message, tree: treeSha, parents } });
       return { sha: c.sha };
     },
-    /** עדכון ענף בלי force — 422 כשהענף התקדם. */
-    async updateRef(branch, sha) {
-      await call(`/git/refs/heads/${encodeGitHubPath(branch)}`, { method: "PATCH", body: { sha, force: false } });
+    /** עדכון ענף; בלי force — 422 כשהענף התקדם. force רק לענף שהאתר הוא בעליו היחיד. */
+    async updateRef(branch, sha, { force = false } = {}) {
+      await call(`/git/refs/heads/${encodeGitHubPath(branch)}`, { method: "PATCH", body: { sha, force } });
     },
     async createRef(branch, sha) {
       await call(`/git/refs`, { method: "POST", body: { ref: `refs/heads/${branch}`, sha } });

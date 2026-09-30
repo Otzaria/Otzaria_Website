@@ -152,7 +152,11 @@ export class FakeGitHub {
     if (method === 'PATCH' && (m = rest.match(/^\/git\/refs\/heads\/(.+)$/))) {
       const cur = this.refs.get(m[1]);
       if (!cur) return json(422, { message: 'Reference does not exist' });
-      if (body.force !== false) return json(400, { message: 'test fake requires force:false' });
+      if (body.force === true) {
+        this.refs.set(m[1], body.sha);
+        return json(200, { object: { sha: body.sha } });
+      }
+      if (body.force !== false) return json(400, { message: 'test fake requires an explicit force flag' });
       if (!this._isAncestor(cur, body.sha)) return json(422, { message: 'Update is not a fast forward' });
       this.refs.set(m[1], body.sha);
       return json(200, { object: { sha: body.sha } });

@@ -1,0 +1,134 @@
+/**
+ * בדיקות הליבה הטהורה של עדכון הכינויים בפורק. הרצה: npm test
+ * בדיקת ההלוך-חזור מול הקובץ האמיתי רצה רק כש-ACRONYMIZER_SQL מצביע עליו.
+ */
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { existsSync, readFileSync } from 'node:fs'
+import { parseDump, exportDump, listBooks } from './dump.js'
+import { aliasKey, aliasProblem, normalizeAlias } from './normalize.js'
+import { applyChangeSet, planReplace, summarizeChangeSet, validateChangeSet } from './changes.js'
+
+const HEADER = 'PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\nCREATE TABLE IF NOT EXISTS Books (id INTEGER);\n'
+const dump = (books, acronyms, links) =>
+  HEADER +
+  books.map(([id, t]) => `INSERT INTO Books(id,title) VALUES(${id},'${t.replace(/'/g, "''")}');\n`).join('') +
+  acronyms.map(([id, t]) => `INSERT INTO Acronyms(id,acronym) VALUES(${id},'${t.replace(/'/g, "''")}');\n`).join('') +
+  links.map(([id, b, a]) => `INSERT INTO BookAcronyms(id,book_id,acronym_id) VALUES(${id},${b},${a});\n`).join('') +
+  'COMMIT;\n'
+
+const FIXTURE = dump(
+  [[1, 'בראשית'], [2, "ספר קנאת ה' צבאות"], [3, 'תוספות רבי עקיבא איגר על משנה שבת']],
+  [[1, "בר'"], [2, 'ספר בראשית'], [3, 'קנאת ה צבאות'], [5, 'תוס רעק"א שבת'], [6, 'תוס רבי עיקבא איגר שבת']],
+  [[1, 1, 1], [2, 1, 2], [3, 2, 3], [4, 3, 5], [7, 3, 6]],
+)
+
+test('parse + export is byte-identical, including quote escaping and id gaps', () => {
+  assert.equal(exportDump(parseDump(FIXTURE)), FIXTURE)
+})
+
+test('parse rejects CRLF, a missing COMMIT and non-canonical lines', () => {
+  assert.throws(() => parseDump(FIXTURE.replace(/\n/g, '\r\n')), /LF/)
+  assert.throws(() => parseDump(FIXTURE.replace('COMMIT;\n', '')), /COMMIT/)
+  assert.throws(() => parseDump(FIXTURE.replace('COMMIT;', "INSERT INTO Books(id,title) VALUES(9,'x') ;\nCOMMIT;")), /line/)
+})
+
+test('the real fork dump round-trips byte for byte', { skip: !process.env.ACRONYMIZER_SQL || !existsSync(process.env.ACRONYMIZER_SQL) }, () => {
+  const text = readFileSync(process.env.ACRONYMIZER_SQL, 'utf8')
+  assert.equal(exportDump(parseDump(text)), text)
+})
+
+test('listBooks keeps link order', () => {
+  const books = listBooks(parseDump(FIXTURE))
+  assert.deepEqual(books[0], { id: 1, title: 'בראשית', aliases: ["בר'", 'ספר בראשית'] })
+})
+
+test('normalizeAlias: the form SeforimLibrary and the app read best', () => {
+  assert.equal(normalizeAlias('  רַבִּי   עֲקִיבָא\u200F '), 'רבי עקיבא')
+  assert.equal(normalizeAlias('רעק״א'), 'רעק"א')
+  assert.equal(normalizeAlias("מל''א"), 'מל"א')
+  assert.equal(normalizeAlias('ר׳ עקיבא'), "ר' עקיבא")
+  assert.equal(normalizeAlias('בית־יוסף'), 'בית יוסף')
+  assert.equal(normalizeAlias('“תוס”'), '"תוס"')
+})
+
+test('aliasKey ignores quotes the way the app does', () => {
+  assert.equal(aliasKey('רעק"א'), aliasKey("רעק'א"))
+  assert.equal(aliasKey('רעק"א'), aliasKey('רעקא'))
+})
+
+test('aliasProblem rejects empty, title-equivalent and punctuation-only aliases', () => {
+  assert.match(aliasProblem('  ', 'x'), /להזין/)
+  assert.match(aliasProblem('בראשית"', 'בראשית'), /זהה לשם הספר/)
+  assert.match(aliasProblem('"-"', 'x'), /אות או ספרה/)
+  assert.equal(aliasProblem('בר', 'בראשית'), null)
+})
+
+test('add, remove and rename produce a minimal canonical diff and drop orphans', () => {
+  const base = parseDump(FIXTURE)
+  const { state, results } = applyChangeSet(base, [
+    { type: 'add', book: 'בראשית', alias: 'בר"ש' },
+    { type: 'remove', book: "ספר קנאת ה' צבאות", alias: 'קנאת ה צבאות' },
+    { type: 'rename', book: 'תוספות רבי עקיבא איגר על משנה שבת', from: 'תוס רבי עיקבא איגר שבת', to: 'תוס רבי עקיבא איגר שבת' },
+  ])
+  assert.deepEqual(results.map((r) => r.status), ['applied', 'applied', 'applied'])
+  const out = exportDump(state)
+  // קנאת ה צבאות ותוס עיקבא נשארו בלי קישור ונמחקו; קישור 7 הוחלף במקומו.
+  assert.doesNotMatch(out, /VALUES\(3,'קנאת/)
+  assert.doesNotMatch(out, /עיקבא/)
+  assert.match(out, /INSERT INTO BookAcronyms\(id,book_id,acronym_id\) VALUES\(7,3,8\);/)
+  assert.match(out, /INSERT INTO Acronyms\(id,acronym\) VALUES\(7,'בר"ש'\);\nINSERT INTO Acronyms\(id,acronym\) VALUES\(8,'תוס רבי עקיבא איגר שבת'\);/)
+  assert.match(out, /INSERT INTO BookAcronyms\(id,book_id,acronym_id\) VALUES\(8,1,7\);/)
+})
+
+test('replaying a change set on a master that already has it is a no-op', () => {
+  const ops = [{ type: 'add', book: 'בראשית', alias: 'ברא' }, { type: 'remove', book: 'בראשית', alias: "בר'" }]
+  const once = applyChangeSet(parseDump(FIXTURE), ops).state
+  const twice = applyChangeSet(once, ops)
+  assert.deepEqual(twice.results.map((r) => r.status), ['noop', 'noop'])
+  assert.equal(exportDump(twice.state), exportDump(once))
+})
+
+test('an alias that differs only in quotes from an existing one is not added twice', () => {
+  const { results } = applyChangeSet(parseDump(FIXTURE), [{ type: 'add', book: 'בראשית', alias: 'בר' }])
+  assert.equal(results[0].status, 'noop')
+})
+
+test('renaming onto an existing alias merges instead of duplicating', () => {
+  const { state, results } = applyChangeSet(parseDump(FIXTURE), [{ type: 'rename', book: 'בראשית', from: "בר'", to: 'ספר בראשית' }])
+  assert.equal(results[0].reason, 'אוחד עם כינוי קיים')
+  assert.deepEqual(listBooks(state)[0].aliases, ['ספר בראשית'])
+})
+
+test('a new book is created only when marked as new', () => {
+  const state = parseDump(FIXTURE)
+  assert.match(validateChangeSet([{ type: 'add', book: 'ספר חדש', alias: 'ס"ח' }], state).error, /אינו ברשימה/)
+  const { ops } = validateChangeSet([{ type: 'add', book: 'ספר חדש', alias: 'ס"ח', newBook: true }], state)
+  const out = exportDump(applyChangeSet(state, ops).state)
+  assert.match(out, /INSERT INTO Books\(id,title\) VALUES\(4,'ספר חדש'\);/)
+})
+
+test('validateChangeSet normalizes aliases and rejects unknown ones', () => {
+  const state = parseDump(FIXTURE)
+  assert.deepEqual(validateChangeSet([{ type: 'add', book: 'בראשית', alias: ' בר״ש ' }], state).ops, [{ type: 'add', book: 'בראשית', alias: 'בר"ש' }])
+  assert.match(validateChangeSet([{ type: 'remove', book: 'בראשית', alias: 'אין' }], state).error, /לא נמצא/)
+  assert.match(validateChangeSet([], state).error, /ריק/)
+})
+
+test('planReplace finds every alias with the text and flags invalid results', () => {
+  const books = listBooks(parseDump(FIXTURE))
+  const plan = planReplace(books, 'עיקבא', 'עקיבא')
+  assert.deepEqual(plan, [{ book: 'תוספות רבי עקיבא איגר על משנה שבת', from: 'תוס רבי עיקבא איגר שבת', to: 'תוס רבי עקיבא איגר שבת', problem: null }])
+  assert.deepEqual(planReplace(books, '  ', 'x'), [])
+})
+
+test('summarizeChangeSet groups by book and counts only applied changes', () => {
+  const { results } = applyChangeSet(parseDump(FIXTURE), [
+    { type: 'add', book: 'בראשית', alias: 'בר' },
+    { type: 'add', book: 'בראשית', alias: 'ברא' },
+  ])
+  const s = summarizeChangeSet(results)
+  assert.equal(s.counts.add, 1)
+  assert.equal(s.counts.noop, 1)
+  assert.match(s.text, /\*\*בראשית\*\*: \+ `בר` _\(כבר קיים\)_ · \+ `ברא`/)
+})
