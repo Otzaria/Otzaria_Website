@@ -509,3 +509,77 @@ describe('ProofEditor — "חיבור לפסקה הקודמת" שליד הפסק
     expect(editor().querySelector('[data-join]')).toBeNull()
   })
 })
+
+// נקודות-ההרחבה לעורך שמוטמע מחוץ לאתר (תוכנת-הספר) — מקשים, ביטול כשאין היסטוריה מקומית,
+// וגובה הלוחות. בלי ה-props האלה (האתר) הכול כמו קודם — ראו כל הטסטים שלמעלה
+describe('ProofEditor — נקודות-הרחבה: מקשים, ביטול וגובה', { timeout: 30000 }, () => {
+  const toolbarButton = (name) => within(screen.getByRole('toolbar', { name: 'כלי ההגהה' })).getByRole('button', { name })
+
+  it('onExtraKey נקרא ראשון, עם {inFlow, inField, inModal}; true — העורך לא ממשיך (Ctrl+Z לא מבטל); false — ממשיך', async () => {
+    let handled = true
+    const onExtraKey = vi.fn(() => handled)
+    const { editor } = setup({ onExtraKey })
+    await caretAt(editor(), { lineId: 1, offset: 5 })
+    fireEvent.click(screen.getByRole('button', { name: 'מודגש' }))
+    expect(opsNow()).toHaveLength(1)
+
+    fireEvent.keyDown(editor(), { key: 'z', code: 'KeyZ', ctrlKey: true })
+    expect(onExtraKey).toHaveBeenCalledTimes(1)
+    const [ev, ctx] = onExtraKey.mock.calls[0]
+    expect(ev.code).toBe('KeyZ')
+    expect(ctx).toEqual({ inFlow: true, inField: false, inModal: false })
+    expect(opsNow()).toHaveLength(1)
+
+    handled = false
+    fireEvent.keyDown(editor(), { key: 'z', code: 'KeyZ', ctrlKey: true })
+    expect(onExtraKey).toHaveBeenCalledTimes(2)
+    expect(opsNow()).toEqual([])
+    // גם מקשים שהעורך עצמו לא מטפל בהם מגיעים אליו (למשל Alt+1)
+    fireEvent.keyDown(document.body, { key: '1', code: 'Digit1', altKey: true })
+    expect(onExtraKey.mock.calls[2][0].code).toBe('Digit1')
+    expect(onExtraKey.mock.calls[2][1]).toEqual({ inFlow: false, inField: false, inModal: false })
+  })
+
+  it('onUndoEmpty / onRedoEmpty — רק כשההיסטוריה של העורך ריקה; canUndoEmpty משאיר את כפתור-הביטול פעיל', async () => {
+    const onUndoEmpty = vi.fn()
+    const onRedoEmpty = vi.fn()
+    const { editor } = setup({ onUndoEmpty, onRedoEmpty, canUndoEmpty: true })
+    expect(toolbarButton('ביטול')).toBeEnabled()
+    expect(toolbarButton('חזרה')).toBeDisabled()
+    fireEvent.click(toolbarButton('ביטול'))
+    expect(onUndoEmpty).toHaveBeenCalledTimes(1)
+
+    await caretAt(editor(), { lineId: 1, offset: 5 })
+    fireEvent.click(screen.getByRole('button', { name: 'מודגש' }))
+    fireEvent.keyDown(editor(), { key: 'z', code: 'KeyZ', ctrlKey: true })
+    expect(opsNow()).toEqual([])
+    expect(onUndoEmpty).toHaveBeenCalledTimes(1)
+    fireEvent.keyDown(editor(), { key: 'z', code: 'KeyZ', ctrlKey: true })
+    expect(onUndoEmpty).toHaveBeenCalledTimes(2)
+
+    fireEvent.keyDown(editor(), { key: 'y', code: 'KeyY', ctrlKey: true })
+    expect(opsNow()).toHaveLength(1)
+    expect(onRedoEmpty).not.toHaveBeenCalled()
+    fireEvent.keyDown(editor(), { key: 'y', code: 'KeyY', ctrlKey: true })
+    expect(onRedoEmpty).toHaveBeenCalledTimes(1)
+  })
+
+  it('בתצוגה בלבד — אין ביטול, וגם לא onUndoEmpty; בלי canUndoEmpty הכפתור מושבת כשאין היסטוריה', () => {
+    const onUndoEmpty = vi.fn()
+    setup({ readOnly: true, onUndoEmpty, canUndoEmpty: true })
+    fireEvent.keyDown(document.body, { key: 'z', code: 'KeyZ', ctrlKey: true })
+    expect(onUndoEmpty).not.toHaveBeenCalled()
+  })
+
+  it('בלי canUndoEmpty — כמו באתר: אין היסטוריה, הכפתור מושבת', () => {
+    setup({ onUndoEmpty: vi.fn() })
+    expect(toolbarButton('ביטול')).toBeDisabled()
+  })
+
+  it('גובה הלוחות: 100vh פחות --proof-chrome — ברירת-המחדל 12.5rem, כמו באתר', () => {
+    const { container } = setup()
+    const panes = container.querySelector('[data-proof-panes]')
+    expect(panes).not.toBeNull()
+    expect(panes.className).toContain('lg:h-[calc(100vh_-_var(--proof-chrome,12.5rem))]')
+  })
+})

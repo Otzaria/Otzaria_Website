@@ -62,6 +62,13 @@ import { caretTop } from './flowDom'
 //     (Promise של {page, lines} כמו GET /api/page-proof/books/[gid]/pages/[n]/lines;
 //     שגיאה = Error עם הודעה בעברית). בלעדיו — fetch לכתובת הזו.
 //   help — נוסח העזרה לחלקים שתלויים באתר (ProofHelp: texts).
+//   onExtraKey(e, {inFlow, inField, inModal}) — מקשים של הדף העוטף: נקרא ראשון במאזין-המקלדת
+//     של החלון, לפני כל קיצור של העורך; true = טופל, והעורך לא ממשיך (preventDefault — עליו).
+//   onUndoEmpty / onRedoEmpty — ביטול/חזרה (מקלדת או סרגל) כשההיסטוריה של העורך ריקה —
+//     למשל צעד שכבר נשמר בשרת. canUndoEmpty / canRedoEmpty — לדף העוטף יש מה לבטל/להחזיר:
+//     הכפתור בסרגל נשאר פעיל גם בלי היסטוריה מקומית.
+//   גובה הלוחות במסך רחב: 100vh פחות המשתנה --proof-chrome (ברירת-המחדל 12.5rem — כותרת האתר,
+//     הסרגל ושורת-המצב). דף עוטף עם מסגרת אחרת קובע אותו על אחד ההורים; הלוחות — data-proof-panes.
 //
 // הסמן משותף לטקסט ולסריקה: השורה שבה הסמן מסומנת על הסריקה, ולחיצה על
 // הסריקה מעבירה את הסמן לשורה שם (ולשונית הזרם שלה).
@@ -192,6 +199,11 @@ export default function ProofEditor({
   toolbarClassName,
   loadOtherPage = null,
   help = null,
+  onExtraKey = null,
+  onUndoEmpty = null,
+  onRedoEmpty = null,
+  canUndoEmpty = false,
+  canRedoEmpty = false,
 }) {
   const baseDoc = page.doc
   const P = baseDoc.page
@@ -508,7 +520,12 @@ export default function ProofEditor({
   // טקסט (סגנון, פסקה, מסגרת) — הסמן נשאר במקומו, בלי לגנוב את המיקוד מהסריקה
   const history = (which) => {
     const r = which === 'redo' ? ed.redo() : ed.undo()
-    if (!r) return
+    if (!r) {
+      // אין כאן מה לבטל/להחזיר — לדף העוטף (רשות), למשל צעד שכבר נשמר בשרת
+      const empty = which === 'redo' ? onRedoEmpty : onUndoEmpty
+      if (!readOnly && typeof empty === 'function') empty()
+      return
+    }
     const after = buildView(baseDoc, r.all.filter((o) => !o._local))
     const pos = historyCaret(view, after, r.ops)
     const line = pos ? after.lines.find((l) => l.id === pos.lineId) : null
@@ -532,7 +549,7 @@ export default function ProofEditor({
   // ---- ה-callbacks היציבים (לרכיבים ממוזכרים) — תמיד על המצב העדכני ----
   const live = useRef(null)
   useLayoutEffect(() => {
-    live.current = { approve, unapprove, goTo, charStyle, joinPara, undo, redo, link, cancelLink, approveAtCaret, goSuspicious, openSuggest, linkPending, readOnly, P, loadOtherPage }
+    live.current = { approve, unapprove, goTo, charStyle, joinPara, undo, redo, link, cancelLink, approveAtCaret, goSuspicious, openSuggest, linkPending, readOnly, P, loadOtherPage, onExtraKey }
   })
   const stable = useMemo(
     () => ({
@@ -609,9 +626,12 @@ export default function ProofEditor({
       const H = live.current
       if (!H || e.defaultPrevented || e.isComposing) return
       const t = e.target instanceof Element ? e.target : null
-      if (t?.closest?.('[aria-modal="true"]')) return
+      const inModal = !!t?.closest?.('[aria-modal="true"]')
       const inFlow = !!t?.closest?.('[data-proof-flow]')
       const inField = !!t && !inFlow && isTextField(t)
+      // מקשים של הדף העוטף (רשות) — לפני כל קיצור של העורך; true = טופל
+      if (typeof H.onExtraKey === 'function' && H.onExtraKey(e, { inFlow, inField, inModal }) === true) return
+      if (inModal) return
       const ctrl = e.ctrlKey || e.metaKey
       // האות של הקיצור בכל פריסה (lib/pageProof/keys): בפריסה עברית Ctrl+Z נותן
       // e.key === 'ז' — המקש הפיזי (e.code 'KeyZ') קובע, וגם בלעדיו 'ז' ← 'z'
@@ -766,8 +786,8 @@ export default function ProofEditor({
   return (
     <div className="flex flex-col" dir="rtl">
       <ProofToolbar
-        canUndo={ed.canUndo}
-        canRedo={ed.canRedo}
+        canUndo={ed.canUndo || (!!canUndoEmpty && typeof onUndoEmpty === 'function')}
+        canRedo={ed.canRedo || (!!canRedoEmpty && typeof onRedoEmpty === 'function')}
         onUndo={undo}
         onRedo={redo}
         paraStyle={paraStyle}
@@ -805,8 +825,9 @@ export default function ProofEditor({
 
       <div
         ref={splitRef}
+        data-proof-panes=""
         style={{ '--scan-w': `${layout.split}%` }}
-        className="mt-2 flex flex-col gap-2 lg:h-[calc(100vh-12.5rem)] lg:min-h-[560px] lg:flex-row lg:gap-0"
+        className="mt-2 flex flex-col gap-2 lg:h-[calc(100vh_-_var(--proof-chrome,12.5rem))] lg:min-h-[560px] lg:flex-row lg:gap-0"
       >
         {scanPane}
         <Splitter
