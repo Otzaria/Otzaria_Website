@@ -12,6 +12,9 @@ import {
   readDraftOps,
   cleanupPageDrafts,
   removePageDrafts,
+  draftKeyRevision,
+  carryDraftOps,
+  droppedOpLabel,
 } from './drafts.js';
 import { docRevision } from './textModel.js';
 
@@ -162,4 +165,83 @@ test('cleanupPageDrafts: טיוטה ישנה עם קישור לעמוד אחר (
   assert.deepEqual(readDraftOps(s.getItem(pageDraftKey(p))), [far]);
   const s2 = memStorage({ [legacyDraftKey(ID)]: draft([{ ...far, value: { kind: 'note' } }]) });
   assert.equal(cleanupPageDrafts(s2, p).migrated, false);
+});
+
+// ---------- עמוד שחזר מזיהוי-מחדש: הטיוטה עוברת לגרסה החדשה ----------
+
+// גרסה 1: שורות 1–3; גרסה 2 (אחרי זיהוי-מחדש): שורה 3 נחתכה לשתיים — 31, 32
+const rev1 = () => page({ revision: 1 }, { revision: 1, lines: [line(1), line(2), line(3)] });
+const rev2 = () => page({ revision: 2 }, { revision: 2, lines: [line(1), line(2), line(31), line(32)] });
+const OLD_DRAFT = [
+  { kind: 'line_split', page: 4, ids: [3], value: { x: 500 } },
+  { kind: 'text', page: 4, ids: [1], value: 'שורה אחת מתוקנת', _g: 'g1' },
+  { kind: 'text', page: 4, ids: [3], value: 'טקסט על שורה שנחתכה מחדש' },
+  { kind: 'line_ok', page: 4, ids: [2] },
+  { kind: 'seg_ok', page: 4, ids: [2], value: 0, _local: true },
+  { kind: 'cut_ok', page: 4, value: true },
+];
+
+test('draftKeyRevision: מספר-הגרסה שבמפתח; המפתח הישן ומפתחות אחרים — null', () => {
+  assert.equal(draftKeyRevision(draftKeyFor(ID, '2:abc'), ID), 2);
+  assert.equal(draftKeyRevision(draftKeyFor(ID, '17:abc'), ID), 17);
+  assert.equal(draftKeyRevision(legacyDraftKey(ID), ID), null);
+  assert.equal(draftKeyRevision(draftKeyFor(OTHER, '2:abc'), ID), null);
+  assert.equal(draftKeyRevision(draftKeyFor(ID, 'x:abc'), ID), null);
+  assert.equal(draftKeyRevision(null, ID), null);
+});
+
+test('carryDraftOps: חיתוך לא עובר (נעשה כבר); מה שתקף מול הגרסה החדשה — עובר בסדרו; השאר — dropped', () => {
+  const { kept, dropped, cut } = carryDraftOps(rev2().doc, OLD_DRAFT);
+  assert.equal(cut, 1);
+  assert.deepEqual(kept.map((o) => o.kind), ['text', 'line_ok', 'seg_ok']);
+  assert.equal(kept[0]._g, 'g1', 'שדות-העורך נשמרים (קבוצות-ביטול)');
+  // טקסט על שורה שכבר אינה; "החיתוך תקין" — את החיתוך החדש בודקים מחדש
+  assert.deepEqual(dropped.map((o) => o.kind), ['text', 'cut_ok']);
+  // פעולה מקומית על שורה שאינה — לא עוברת (ואינה מדווחת)
+  const local = carryDraftOps(rev2().doc, [{ kind: 'seg_ok', page: 4, ids: [3], value: 0, _local: true }]);
+  assert.deepEqual([local.kept, local.dropped, local.cut], [[], [], 0]);
+  assert.deepEqual(carryDraftOps(rev2().doc, null), { kept: [], dropped: [], cut: 0 });
+});
+
+test('droppedOpLabel: סוג-הפעולה בעברית, ולתיקון-טקסט — מה שהוקלד (מקוצר)', () => {
+  assert.equal(droppedOpLabel({ kind: 'text', value: 'קצר' }), 'טקסט: «קצר»');
+  assert.equal(droppedOpLabel({ kind: 'text', value: 'א'.repeat(60) }), `טקסט: «${'א'.repeat(40)}…»`);
+  assert.equal(droppedOpLabel({ kind: 'cut_ok' }), 'החיתוך תקין');
+  assert.equal(droppedOpLabel({ kind: 'styles' }), 'סגנון-תו');
+});
+
+test('cleanupPageDrafts: עמוד שחזר מזיהוי-מחדש — מה שתקף מהטיוטה הקודמת עובר אליו, ו-carried מספר מה לא עבר', () => {
+  const k1 = pageDraftKey(rev1());
+  const s = memStorage({ [k1]: draft(OLD_DRAFT), [draftKeyFor(OTHER, '1:x')]: draft([okOp]) });
+  const p = rev2();
+  const res = cleanupPageDrafts(s, p);
+  assert.equal(res.key, pageDraftKey(p));
+  assert.deepEqual(readDraftOps(s.getItem(res.key)).map((o) => o.kind), ['text', 'line_ok', 'seg_ok']);
+  assert.deepEqual(res.carried, { from: k1, kept: 2, cut: 1, dropped: ['טקסט: «טקסט על שורה שנחתכה מחדש»', 'החיתוך תקין'] });
+  assert.deepEqual(res.removed, [k1]);
+  assert.deepEqual(s.keys(), [res.key, draftKeyFor(OTHER, '1:x')].sort());
+});
+
+test('cleanupPageDrafts: כמה גרסאות קודמות — עוברת האחרונה שבהן; כבר יש טיוטה לגרסה החדשה — לא נדרסת', () => {
+  const p = page({ revision: 3 }, { revision: 3, lines: [line(1), line(2)] });
+  const s = memStorage({
+    [draftKeyFor(ID, '1:old')]: draft([{ kind: 'text', page: 4, ids: [1], value: 'ישן מאוד' }]),
+    [draftKeyFor(ID, '2:mid')]: draft([{ kind: 'text', page: 4, ids: [1], value: 'מהגרסה השנייה' }]),
+  });
+  const res = cleanupPageDrafts(s, p);
+  assert.deepEqual(readDraftOps(s.getItem(res.key)).map((o) => o.value), ['מהגרסה השנייה']);
+  assert.equal(res.carried.from, draftKeyFor(ID, '2:mid'));
+
+  const s2 = memStorage({ [pageDraftKey(p)]: draft([okOp]), [draftKeyFor(ID, '2:mid')]: draft([{ kind: 'text', page: 4, ids: [1], value: 'x' }]) });
+  const res2 = cleanupPageDrafts(s2, p);
+  assert.equal(res2.carried, null);
+  assert.deepEqual(readDraftOps(s2.getItem(pageDraftKey(p))), [okOp]);
+  assert.deepEqual(res2.removed, [draftKeyFor(ID, '2:mid')]);
+});
+
+test('cleanupPageDrafts: בטיוטה הקודמת רק חיתוך (נשלח לזיהוי-מחדש) — אין מה להעביר ואין מה לספר', () => {
+  const s = memStorage({ [pageDraftKey(rev1())]: draft([OLD_DRAFT[0]]) });
+  const res = cleanupPageDrafts(s, rev2());
+  assert.equal(res.carried, null);
+  assert.deepEqual(s.keys(), []);
 });

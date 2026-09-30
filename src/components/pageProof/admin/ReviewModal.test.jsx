@@ -134,6 +134,23 @@ describe('ReviewModal מול העורך החדש', { timeout: 20000 }, () => {
     expect(screen.queryByRole('button', { name: 'שחרור מהמתנה' })).not.toBeInTheDocument()
   })
 
+  it('בקשת מתנדב לזיהוי-מחדש: מסומנת, בלי "דחייה"; "ביטול הבקשה" — אישור, release_recut, והעמוד חזר אל המתנדב', async () => {
+    const cut = [{ kind: 'line_split', page: P, ids: [1], value: { x: 50 } }]
+    h.ops = cut
+    mockFetch(payload({ page: { status: 'recut' }, submission: { status: 'approved', ops: cut, needsRecut: true, recutRequest: true } }))
+    h.reply = { success: true, status: 'rejected', pageStatus: 'open', canceledRequests: 1, returnedToRequester: true }
+    const onPageChanged = vi.fn()
+    render(<ReviewModal id="s1" onClose={vi.fn()} onDone={vi.fn()} onPageChanged={onPageChanged} />)
+    expect(await screen.findByTestId('recut-request')).toHaveTextContent('בקשת מתנדב לזיהוי-מחדש')
+    expect(screen.queryByRole('button', { name: 'דחייה' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'אישור' })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'ביטול הבקשה' }))
+    expect(h.dialog.showConfirm).toHaveBeenCalledWith('ביטול הבקשה לזיהוי-מחדש', expect.stringContaining('יחזור אל המתנדב שביקש'))
+    await waitFor(() => expect(patches).toEqual([{ action: 'release_recut' }]))
+    await waitFor(() => expect(h.dialog.showAlert).toHaveBeenCalledWith('בוצע', 'הבקשה בוטלה, והעמוד חזר אל המתנדב שביקש.'))
+    expect(onPageChanged).toHaveBeenCalledWith('s1', 'open')
+  })
+
   it('עמוד שאינו ממתין — אין כפתור שחרור', async () => {
     mockFetch(payload({ page: { status: 'done' } }))
     render(<ReviewModal id="s1" onClose={vi.fn()} onDone={vi.fn()} />)

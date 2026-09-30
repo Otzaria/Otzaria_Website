@@ -20,6 +20,8 @@ const h = vi.hoisted(() => ({
   seqPages: null,
   held: null,
   unavailable: null,
+  recutPending: null,
+  recutReply: null,
 }))
 vi.mock('next/navigation', () => ({
   useRouter: () => h.router,
@@ -77,6 +79,11 @@ function mockFetch() {
   posts = []
   global.fetch = vi.fn(async (url, init) => {
     const u = String(url)
+    if (init?.method === 'POST' && u.endsWith('/recut-request')) {
+      const body = JSON.parse(init.body)
+      posts.push({ url: u, body })
+      return { json: async () => h.recutReply || { success: true, submissionId: 's9', opCount: body.ops.length, pending: 1 } }
+    }
     if (init?.method === 'POST' && u.endsWith('/submit')) {
       const body = JSON.parse(init.body)
       posts.push({ url: u, body })
@@ -89,6 +96,7 @@ function mockFetch() {
         json: async () => ({
           success: true,
           held: h.held ?? [seqOf()],
+          recutPending: h.recutPending ?? [],
           sequence: asked && !h.unavailable ? seqOf() : null,
           unavailable: asked && h.unavailable ? h.unavailable : null,
           stats: STATS,
@@ -111,6 +119,8 @@ beforeEach(() => {
   h.seqPages = null
   h.held = null
   h.unavailable = null
+  h.recutPending = null
+  h.recutReply = null
   pageData = { success: true, mode: 'edit', page: makePage(), submission: null }
   mockFetch()
 })
@@ -325,5 +335,84 @@ describe('דף המתנדב — הכניסה אינה תופסת עמודים ("
     render(<PageProofVolunteer />)
     await screen.findByTestId('editor')
     expect(screen.getByRole('link', { name: /בחירת עמודים מספר/ })).toHaveAttribute('href', '/library/page-proof/books')
+  })
+})
+
+describe('דף המתנדב — "שלח לזיהוי-מחדש"', { timeout: 20000 }, () => {
+  const CUT_OP = { kind: 'line_split', page: P, ids: [2], value: { x: 500 }, _g: 'g2' }
+  const TEXT_OP = { kind: 'text', page: P, ids: [1], value: 'שורה 1 מתוקנת', _g: 'g1' }
+
+  it('בלי תיקוני-חיתוך בטיוטה — אין כפתור; עם — יש, עם ההסבר', async () => {
+    h.ops = [TEXT_OP]
+    const { unmount } = render(<PageProofVolunteer />)
+    await screen.findByTestId('editor')
+    expect(screen.queryByRole('button', { name: /שלח לזיהוי-מחדש/ })).not.toBeInTheDocument()
+    unmount()
+    h.ops = [TEXT_OP, CUT_OP]
+    render(<PageProofVolunteer />)
+    await screen.findByTestId('editor')
+    expect(screen.getByRole('button', { name: /שלח לזיהוי-מחדש/ })).toHaveAttribute('title', expect.stringMatching(/ממתינה באתר עד שתוכנת-הספר מעבדת אותה.*חוזר אליכם עם השורות החדשות/))
+  })
+
+  it('אחרי אישור — נשלחים רק תיקוני-החיתוך עם הגרסה; העמוד "בזיהוי-מחדש" ברצף, והטיוטה נשארת', async () => {
+    h.ops = [TEXT_OP, CUT_OP]
+    render(<PageProofVolunteer />)
+    await screen.findByTestId('editor')
+    const key = h.props.draftKey
+    window.localStorage.setItem(key, JSON.stringify({ ops: h.ops, at: 1 }))
+    await userEvent.click(screen.getByRole('button', { name: /שלח לזיהוי-מחדש/ }))
+    expect(h.dialog.showConfirm).toHaveBeenCalledWith('שליחה לזיהוי-מחדש', expect.stringMatching(/תיקון-חיתוך אחד יישלח לתוכנת-הספר.*חוזר אליכם עם השורות החדשות/))
+    await waitFor(() => expect(posts).toHaveLength(1))
+    expect(posts[0]).toEqual({ url: `/api/page-proof/pages/${ID}/recut-request`, body: { revision: 1, ops: [{ kind: 'line_split', page: P, ids: [2], value: { x: 500 } }] } })
+    await waitFor(() => expect(h.dialog.showAlert).toHaveBeenCalledWith('נשלח לזיהוי-מחדש', expect.stringContaining('יחזור אליכם')))
+    // העמוד היחיד ברצף — העורך נסגר; ברצף: "בזיהוי-מחדש", מושבת
+    expect(await screen.findByText('סיימתם את הרצף — תודה!')).toBeInTheDocument()
+    const btn = screen.getByRole('button', { name: /עמוד 4/ })
+    expect(btn).toHaveTextContent('בזיהוי-מחדש')
+    expect(btn).toBeDisabled()
+    // שאר התיקונים מחכים בטיוטה (להגשה הרגילה כשהעמוד יחזור)
+    expect(JSON.parse(window.localStorage.getItem(key)).ops).toHaveLength(2)
+  })
+
+  it('בלי אישור — לא נשלח דבר; שגיאה מהשרת — הודעה, והעמוד נשאר פתוח', async () => {
+    h.ops = [CUT_OP]
+    h.dialog.showConfirm.mockResolvedValueOnce(false)
+    render(<PageProofVolunteer />)
+    await screen.findByTestId('editor')
+    await userEvent.click(screen.getByRole('button', { name: /שלח לזיהוי-מחדש/ }))
+    expect(posts).toEqual([])
+
+    h.recutReply = { success: false, error: 'יש לכם כבר 5 עמודים שממתינים לזיהוי-מחדש — אפשר לשלוח עוד כשאחד מהם יחזור' }
+    await userEvent.click(screen.getByRole('button', { name: /שלח לזיהוי-מחדש/ }))
+    await waitFor(() => expect(h.dialog.showAlert).toHaveBeenCalledWith('שגיאה', h.recutReply.error))
+    expect(screen.getByTestId('editor')).toBeInTheDocument()
+  })
+
+  it('העמוד חזר מזיהוי-מחדש: מה שתקף מהטיוטה הקודמת עבר אליו — וההודעה מספרת מה נשמר ומה לא', async () => {
+    const old = makePage()
+    window.localStorage.setItem(pageDraftKey(old), JSON.stringify({ ops: [TEXT_OP, CUT_OP, { kind: 'text', page: P, ids: [2], value: 'על שורה שנחתכה' }], at: 1 }))
+    const page = makePage([line(1), line(21, { recheck: true }), line(22, { recheck: true }), line(3, { stream: 'notes' })])
+    page.revision = 2
+    page.doc.revision = 2
+    pageData = { success: true, mode: 'edit', page, submission: null }
+    render(<PageProofVolunteer />)
+    await screen.findByTestId('editor')
+    const note = screen.getByRole('status', { name: 'הטיוטה עברה לגרסה החדשה של העמוד' })
+    expect(note).toHaveTextContent('תיקון אחד נשמר')
+    expect(note).toHaveTextContent('תיקון-החיתוך לא הועבר — העמוד נחתך מחדש')
+    expect(note).toHaveTextContent('תיקון אחד לא חל על השורות החדשות')
+    expect(note).toHaveTextContent('טקסט: «על שורה שנחתכה»')
+    expect(JSON.parse(window.localStorage.getItem(h.props.draftKey)).ops).toEqual([TEXT_OP])
+    expect(window.localStorage.getItem(pageDraftKey(old))).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'סגירת ההודעה' }))
+    expect(screen.queryByRole('status', { name: 'הטיוטה עברה לגרסה החדשה של העמוד' })).not.toBeInTheDocument()
+  })
+
+  it('"העמודים שלי" מציגים את העמודים שנשלחו ועוד לא חזרו', async () => {
+    h.search = ''
+    h.recutPending = [{ id: OTHER, gid: 'g1', title: 'ספר ניסוי', page: 9, requestedAt: new Date().toISOString(), picked: false }]
+    render(<PageProofVolunteer />)
+    const box = await screen.findByRole('region', { name: 'ממתינים לזיהוי-מחדש (1)' })
+    expect(box).toHaveTextContent('ספר ניסוי · עמוד 9')
   })
 })

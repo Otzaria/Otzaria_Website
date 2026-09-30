@@ -12,10 +12,13 @@ import ProofEditor from '@/components/pageProof/ProofEditor'
 import ProofHelp from '@/components/pageProof/ProofHelp'
 import SubmitDialog from '@/components/pageProof/SubmitDialog'
 import MyPagesPanel from '@/components/pageProof/books/MyPagesPanel'
+import DraftCarriedNotice from '@/components/pageProof/DraftCarriedNotice'
 import { untouchedLineIds } from '@/lib/pageProof/view'
 import { cleanupPageDrafts, pageDraftKey, removePageDrafts } from '@/lib/pageProof/drafts'
-import { planSubmission, recheckLineIds, submitSummary } from '@/lib/pageProof/submitPlan'
+import { cleanOps, planSubmission, recheckLineIds, submitSummary } from '@/lib/pageProof/submitPlan'
 import { bookHref, editorHref } from '@/lib/pageProof/gridState'
+import { isCutOp } from '@/lib/pageProof/recutRules'
+import { RECUT_REQUEST_HINT, RECUT_SENT } from '@/lib/pageProof/helpTexts'
 
 // דף המתנדב להגהת-עמודים: העורך, לעמודים שכבר בטיפולכם. כל עמוד מוגש בנפרד
 // וממתין לאישור מנהל.
@@ -29,6 +32,11 @@ import { bookHref, editorHref } from '@/lib/pageProof/gridState'
 // נפתח — אם הוא בטיפולכם או שהגשתם אותו. אחרת — הסבר למה (unavailable),
 // וקישור לרשת של הספר.
 //
+// "שלח לזיהוי-מחדש" (כשבטיוטה יש תיקוני-חיתוך): רק תיקוני-החיתוך נשלחים
+// (POST /api/page-proof/pages/[id]/recut-request); שאר התיקונים נשארים בטיוטה. העמוד
+// ממתין לתוכנת-הספר (ב"העמודים שלי" — recutPending) וחוזר אלינו בגרסה חדשה; אז הטיוטה
+// עוברת אליו (drafts.cleanupPageDrafts — carried), והדף מספר מה עבר ומה לא.
+//
 // החוזה מול ProofEditor:
 //   draftKey — מפתח-הטיוטה בדפדפן לפי העמוד *והגרסה שלו* (lib/pageProof/
 //     drafts.js). העורך שומר וקורא את הטיוטה רק במפתח הזה. בפתיחת עמוד
@@ -38,11 +46,12 @@ import { bookHref, editorHref } from '@/lib/pageProof/gridState'
 //     approval = {approved, total}: פסקאות-התוכן שאושרו בכל העמוד.
 // ההחלטה מה נשלח בכל בחירה של חלון ההגשה — lib/pageProof/submitPlan.js.
 
-const STATE_HE = { mine: 'לעבודה', submitted: 'הוגש', approved: 'אושר', unavailable: 'אצל אחר' }
+const STATE_HE = { mine: 'לעבודה', submitted: 'הוגש', approved: 'אושר', recut: 'בזיהוי-מחדש', unavailable: 'אצל אחר' }
 const STATE_CLS = {
   mine: 'bg-surface-variant/70',
   submitted: 'bg-info-100 text-info-800',
   approved: 'bg-success-100 text-success-800',
+  recut: 'bg-feature-100 text-feature-800',
   unavailable: 'opacity-40',
 }
 
@@ -83,7 +92,7 @@ export default function PageProofVolunteerPage() {
 
 function PageProofVolunteer() {
   const { session, status } = useRequireAuth()
-  const { showAlert } = useDialog()
+  const { showAlert, showConfirm } = useDialog()
   const router = useRouter()
   const searchParams = useSearchParams()
   const wanted = searchParams?.get('page') || null
@@ -91,6 +100,7 @@ function PageProofVolunteer() {
   const focusRef = useRef(wanted && OBJECT_ID_RE.test(wanted) ? wanted : null)
   const [seq, setSeq] = useState(null)
   const [held, setHeld] = useState([]) // "העמודים שלי": הרצפים שבהם אתם מחזיקים עמודים
+  const [recutPending, setRecutPending] = useState([]) // עמודים ששלחתם לזיהוי-מחדש ועוד לא חזרו
   const [heldAt, setHeldAt] = useState(null)
   const [missing, setMissing] = useState(null) // העמוד שביקשו ואינו בטיפולכם
   const [stats, setStats] = useState(null)
@@ -103,6 +113,8 @@ function PageProofVolunteer() {
   const [submitCtx, setSubmitCtx] = useState(null) // {ops, untouched, approval}
   const [submitError, setSubmitError] = useState(null)
   const [helpOpen, setHelpOpen] = useState(false)
+  // הטיוטה עברה לגרסה חדשה של העמוד (drafts.cleanupPageDrafts): מה עבר ומה לא
+  const [carried, setCarried] = useState(null)
 
   const role = session?.user?.role
   const canWork = session?.user?.isVerified || hasBookLibraryAccess(role) || hasOcrAccess(role)
@@ -114,14 +126,16 @@ function PageProofVolunteer() {
       setNote('')
       setSubmitCtx(null)
       setSubmitError(null)
+      setCarried(null)
       try {
         const res = await fetch(`/api/page-proof/pages/${id}`)
         const data = await res.json()
         if (!data.success) throw new Error(data.error || 'העמוד לא נטען')
         const draftKey = pageDraftKey(data.page)
-        // עריכה: ניקוי טיוטות של גרסאות אחרות (לפני שהעורך קורא את שלו).
-        // עמוד שכבר הגשתם: הטיוטות שלו מיותרות.
-        if (data.mode === 'edit') withStorage((s) => cleanupPageDrafts(s, data.page, draftKey))
+        // עריכה: ניקוי טיוטות של גרסאות אחרות (לפני שהעורך קורא את שלו); עמוד שחזר
+        // מזיהוי-מחדש — מה שתקף מהטיוטה הקודמת עובר אליו. עמוד שכבר הגשתם: הטיוטות
+        // שלו מיותרות.
+        if (data.mode === 'edit') setCarried(withStorage((s) => cleanupPageDrafts(s, data.page, draftKey))?.carried || null)
         else if (data.submission) withStorage((s) => removePageDrafts(s, data.page.id))
         setCurrent({ ...data, draftKey })
       } catch (e) {
@@ -145,6 +159,7 @@ function PageProofVolunteer() {
       const data = await res.json()
       if (!data.success) throw new Error(data.error || 'הטעינה נכשלה')
       setHeld(data.held || [])
+      setRecutPending(data.recutPending || [])
       setHeldAt(new Date())
       setStats(data.stats)
       const asked = focus ? (data.sequence?.pages || []).find((p) => p.id === focus && p.state !== 'unavailable') : null
@@ -243,6 +258,39 @@ function PageProofVolunteer() {
     }
   }
 
+  // "שלח לזיהוי-מחדש": רק תיקוני-החיתוך נשלחים (השרת שומר רק אותם גם אם נשלח יותר); שאר
+  // התיקונים נשארים בטיוטה. העמוד עובר לזיהוי-מחדש ויחזור אלינו — ממשיכים לעמוד הבא ברצף
+  const sendRecut = async ({ ops } = {}) => {
+    const page = current?.page
+    const cut = cleanOps((ops || []).filter(isCutOp))
+    if (!page || !cut.length) return
+    const ok = await showConfirm(
+      'שליחה לזיהוי-מחדש',
+      `${cut.length === 1 ? 'תיקון-חיתוך אחד יישלח' : `${cut.length} תיקוני-חיתוך יישלחו`} לתוכנת-הספר, ועמוד ${page.page} ייחתך וייקרא מחדש. ${RECUT_REQUEST_HINT}`
+    )
+    if (!ok) return
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/page-proof/pages/${page.id}/recut-request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ revision: page.revision, ops: cut }),
+      })
+      const data = await res.json()
+      if (!data.success) throw new Error(data.error || 'השליחה נכשלה')
+      const pages = (seq?.pages || []).map((p) => (p.id === page.id ? { ...p, state: 'recut' } : p))
+      if (seq) setSeq({ ...seq, pages })
+      showAlert('נשלח לזיהוי-מחדש', RECUT_SENT)
+      const next = pages.find((p) => p.state === 'mine')
+      if (next) openPage(next.id)
+      else setCurrent(null)
+    } catch (e) {
+      showAlert('שגיאה', failMessage(e, 'השליחה נכשלה — בדקו את החיבור ונסו שוב. העבודה שמורה בדפדפן.'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const remaining = seq?.pages.filter((p) => p.state === 'mine').length || 0
 
   return (
@@ -289,7 +337,7 @@ function PageProofVolunteer() {
           {loading ? (
             <LoadingSpinner message="טוען את העמודים שלכם..." />
           ) : canWork && !seq ? (
-            <MyPagesPanel held={held} missing={missing} onOpen={openHeld} now={heldAt} />
+            <MyPagesPanel held={held} recutPending={recutPending} missing={missing} onOpen={openHeld} now={heldAt} />
           ) : seq ? (
             <>
               {/* הרצף */}
@@ -300,7 +348,7 @@ function PageProofVolunteer() {
                 {seq.pages.map((p) => (
                   <button
                     key={p.id}
-                    disabled={p.state === 'unavailable' || loadingPage}
+                    disabled={p.state === 'unavailable' || p.state === 'recut' || loadingPage}
                     onClick={() => openPage(p.id)}
                     className={`rounded-md px-3 py-1 ${STATE_CLS[p.state]} ${current?.page?.id === p.id ? 'ring-2 ring-primary' : ''}`}
                     title={`${p.lines} שורות${p.revision > 1 ? ' · חזר מזיהוי-מחדש (מעבר שני)' : ''}`}
@@ -334,6 +382,8 @@ function PageProofVolunteer() {
                 </div>
               )}
 
+              {editing && carried && !loadingPage && <DraftCarriedNotice carried={carried} onClose={() => setCarried(null)} />}
+
               {loadingPage ? (
                 <LoadingSpinner message="טוען עמוד..." />
               ) : current ? (
@@ -345,14 +395,27 @@ function PageProofVolunteer() {
                   initialOps={editing ? null : current.submission?.ops || []}
                   actions={(args) =>
                     editing ? (
-                      <button
-                        onClick={() => openSubmit(args)}
-                        disabled={saving}
-                        className="flex items-center gap-1 rounded-lg bg-success-600 px-4 py-1.5 font-bold text-white hover:bg-success-700 disabled:opacity-40"
-                      >
-                        <span aria-hidden="true" className="material-symbols-outlined text-base">{saving ? 'hourglass_top' : 'send'}</span>
-                        הגשת העמוד
-                      </button>
+                      <>
+                        {(args.ops || []).some(isCutOp) && (
+                          <button
+                            onClick={() => sendRecut(args)}
+                            disabled={saving}
+                            title={RECUT_REQUEST_HINT}
+                            className="flex items-center gap-1 rounded-lg border border-feature-300 bg-feature-50 px-3 py-1.5 font-bold text-feature-800 hover:bg-feature-100 disabled:opacity-40"
+                          >
+                            <span aria-hidden="true" className="material-symbols-outlined text-base">cached</span>
+                            שלח לזיהוי-מחדש
+                          </button>
+                        )}
+                        <button
+                          onClick={() => openSubmit(args)}
+                          disabled={saving}
+                          className="flex items-center gap-1 rounded-lg bg-success-600 px-4 py-1.5 font-bold text-white hover:bg-success-700 disabled:opacity-40"
+                        >
+                          <span aria-hidden="true" className="material-symbols-outlined text-base">{saving ? 'hourglass_top' : 'send'}</span>
+                          הגשת העמוד
+                        </button>
+                      </>
                     ) : (
                       <span className="rounded bg-info-100 px-2 py-1 text-xs text-info-800">
                         {current.submission?.status === 'approved' ? 'ההגשה שלכם אושרה' : 'ההגשה שלכם ממתינה לאישור'}

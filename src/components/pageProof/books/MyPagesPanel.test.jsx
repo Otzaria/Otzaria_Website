@@ -39,6 +39,24 @@ describe('MyPagesPanel', () => {
     expect(screen.getByRole('link', { name: 'בחירת עמודים' })).toHaveAttribute('href', '/library/page-proof/books')
   })
 
+  it('עמודים ששלחתם לזיהוי-מחדש ועוד לא חזרו — ברשימה נפרדת, בלי כפתור פתיחה (אין מה לפתוח עד שיחזרו)', () => {
+    const pending = [
+      { id: 'r1', gid: 'g1', title: 'ספר ניסוי', page: 21, requestedAt: NOW.toISOString(), picked: false },
+      { id: 'r2', gid: 'g1', title: 'ספר ניסוי', page: 22, requestedAt: new Date(NOW.getTime() - 2 * 86400e3).toISOString(), picked: true },
+    ]
+    render(<MyPagesPanel held={[]} recutPending={pending} onOpen={vi.fn()} now={NOW} />)
+    const box = screen.getByRole('region', { name: 'ממתינים לזיהוי-מחדש (2)' })
+    expect(within(box).getByText(/יחזרו אליכם עם השורות החדשות/)).toBeInTheDocument()
+    const items = within(box).getAllByRole('listitem')
+    expect(items[0]).toHaveTextContent('ספר ניסוי · עמוד 21')
+    expect(items[0]).toHaveTextContent('ממתין לתוכנת-הספר · נשלח היום')
+    expect(items[1]).toHaveTextContent('בעבודה בתוכנת-הספר · נשלח לפני 2 ימים')
+    expect(within(box).queryByRole('button')).toBeNull()
+    // בלי בקשות — בלי הרשימה
+    render(<MyPagesPanel held={[]} onOpen={vi.fn()} now={NOW} />)
+    expect(screen.getAllByRole('region', { name: /ממתינים לזיהוי-מחדש/ })).toHaveLength(1)
+  })
+
   it('בלי עמודים בטיפול ← הסבר, ומעבר לבחירת עמודים', () => {
     render(<MyPagesPanel held={[]} onOpen={vi.fn()} now={NOW} />)
     expect(screen.getByText('אין לכם עמודים בטיפול כרגע.')).toBeInTheDocument()
