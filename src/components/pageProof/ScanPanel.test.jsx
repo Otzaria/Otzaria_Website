@@ -42,7 +42,7 @@ const doc = () => ({
 
 // כמו useProofEditor: בדיקה מול העמוד המקורי, רשימת-פעולות, תצוגה מחושבת.
 // onView(view) — התצוגה העדכנית (הזרם שכל שורה קיבלה מהמסגרות)
-function Harness({ base, log, initialMode = 'frames', readOnly = false, locked, onPick, onView, tab = 'main', currentWord = -1 }) {
+function Harness({ base, log, initialMode = 'frames', readOnly = false, locked, onPick, onView, tab = 'main', currentWord = -1, current = 1 }) {
   const [ops, setOps] = useState([])
   const [mode, setMode] = useState(initialMode)
   const view = useMemo(() => buildView(base, ops), [base, ops])
@@ -68,7 +68,7 @@ function Harness({ base, log, initialMode = 'frames', readOnly = false, locked, 
       mode={mode}
       setMode={setMode}
       readOnly={readOnly}
-      currentLineId={1}
+      currentLineId={current}
       currentWord={currentWord}
       lockedLineIds={locked}
       onPickLine={onPick}
@@ -597,5 +597,62 @@ describe('ScanPanel — זום', () => {
     await userEvent.click(screen.getByRole('button', { name: 'רוחב' }))
     expect(JSON.parse(window.localStorage.getItem('pageProof.scanZoom')).fit).toBe(true)
     expect(screen.getByRole('button', { name: 'רוחב', pressed: true })).toBeInTheDocument()
+  })
+})
+
+describe('ScanPanel — "השורה שייכת למסגרת הזו" (שורה שבולטת מהמסגרת)', () => {
+  // מסגרת שמורה [510, 90, 910, 200]; שורה 2 בולטת ממנה ימינה (עד 930), שורה 1 בתוכה
+  const base = () => ({
+    ...doc(),
+    frames: [{ fid: 'aa11bb', stream: 'main', bbox: [510, 90, 910, 200], order: 1 }],
+    lines: [L(1, [520, 100, 900, 140]), L(2, [520, 150, 930, 190]), L(3, [100, 100, 480, 140]), L(4, [100, 800, 900, 840], 'notes')],
+  })
+  const STREAM_OP = [{ kind: 'stream', page: 3, ids: [2], value: 'main' }]
+
+  it('הסמן על שורה בולטת: הסבר וכפתור; הלחיצה — פעולת stream אחת לפי המסגרת, והסימון האדום יורד', async () => {
+    const { log, container } = setup({ base: base(), current: 2 })
+    expect(container.querySelector('[data-straddle="2"]')).toBeInTheDocument()
+    const bar = screen.getByTestId('straddle-claim')
+    expect(bar).toHaveTextContent('השורה שבסמן בולטת מהמסגרת «ראשי 1»')
+    await userEvent.click(within(bar).getByRole('button', { name: 'השורה שייכת למסגרת הזו' }))
+    expect(log.errors).toEqual([])
+    expect(log.groups).toEqual([STREAM_OP])
+    expect(log.view.lines.find((l) => l.id === 2)).toMatchObject({ stream: 'main', stream_src: 'human' })
+    expect(container.querySelector('[data-straddle="2"]')).toBeNull()
+    expect(screen.queryByTestId('straddle-note')).toBeNull()
+    expect(screen.queryByTestId('straddle-claim')).toBeNull()
+    expect(screen.getByRole('status')).toHaveTextContent('השורה שויכה למסגרת «ראשי 1»')
+  })
+
+  it('לשורה שאינה בולטת — אין כפתור; ההסבר הכללי מזכיר גם פיצול והגדלת המסגרת', () => {
+    setup({ base: base(), current: 1 })
+    expect(screen.queryByTestId('straddle-claim')).toBeNull()
+    const note = screen.getByTestId('straddle-note')
+    expect(note).toHaveTextContent(/מפצלים אותה במצב "שורות"/)
+    expect(note).toHaveTextContent(/הגדילו את המסגרת/)
+    expect(note).toHaveTextContent(/«השורה שייכת למסגרת\s+הזו»/)
+  })
+
+  it('גם בחלונית של המסגרת שהשורה שבסמן בולטת ממנה', async () => {
+    const { log } = setup({ base: base(), current: 2 })
+    click(700, 120)
+    const row = within(screen.getByTestId('frame-popover')).getByTestId('popover-claim')
+    await userEvent.click(within(row).getByRole('button', { name: 'השורה שייכת למסגרת הזו' }))
+    expect(log.groups).toEqual([STREAM_OP])
+  })
+
+  it('במצב "שורות": לשורה בולטת שנבחרה — "שייכת למסגרת «ראשי 1»"', async () => {
+    const { log } = setup({ base: base(), initialMode: 'lines' })
+    click(925, 170) // החלק שמחוץ למסגרת
+    await userEvent.click(screen.getByRole('button', { name: 'שייכת למסגרת «ראשי 1»' }))
+    expect(log.groups).toEqual([STREAM_OP])
+    // שורה שאינה בולטת — בלי הכפתור
+    click(700, 120)
+    expect(screen.queryByRole('button', { name: /שייכת למסגרת/ })).toBeNull()
+  })
+
+  it('תצוגה בלבד — בלי הפעולה', () => {
+    setup({ base: base(), current: 2, readOnly: true })
+    expect(screen.queryByTestId('straddle-claim')).toBeNull()
   })
 })

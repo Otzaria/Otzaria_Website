@@ -19,6 +19,7 @@ import { isObjectFrame, FURNITURE_CHOICE, choiceInfo } from '@/lib/pageProof/sca
 //   style, className  תוספות-עיצוב (המיקום — מ-ProofScan)
 //   onStream(key) — key: זרם, זרם-כותרת (…_heading) או FURNITURE_CHOICE ("ריהוט הדף")
 //   onSeq(n) · onOrder(-1|1) · onKind(kind|null) · onDelete() · onClose() — סגירת החלונית (המסגרת נשארת בחורה)
+//   onClaimLine (רשות) — השורה שבסמן בולטת מהמסגרת הזו: "השורה שייכת למסגרת הזו" (claimTitle — ההסבר)
 
 const small = 'flex h-6 min-w-6 items-center justify-center rounded border border-surface-variant bg-white px-1.5 text-[11px] hover:bg-neutral-50 disabled:opacity-40 disabled:hover:bg-white'
 
@@ -106,6 +107,8 @@ export default function FramePopover({
   onKind,
   onDelete,
   onClose,
+  onClaimLine = null,
+  claimTitle,
 }) {
   if (!frame) return null
   const obj = isObjectFrame(frame)
@@ -186,6 +189,15 @@ export default function FramePopover({
           מחיקה
         </button>
       </div>
+
+      {onClaimLine && (
+        <div className="flex items-center gap-1 rounded bg-danger-50 px-1.5 py-1 text-danger-700" data-testid="popover-claim">
+          <span className="flex-1">השורה שבסמן בולטת מהמסגרת הזו</span>
+          <button type="button" className={small} onClick={onClaimLine} title={claimTitle}>
+            השורה שייכת למסגרת הזו
+          </button>
+        </div>
+      )}
 
       {suggested && <p className="text-[10px] leading-snug text-neutral-500">זו הצעה של המחשב — שינוי כאן ישמור את כל המסגרות המוצעות כמסגרות שלכם.</p>}
     </div>

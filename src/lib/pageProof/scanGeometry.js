@@ -14,7 +14,7 @@
 import { autoFrames, headingStream } from './autoFrames.js';
 import { MIN_LINE_BOX, FRAME_PAD } from './ops.js';
 import { streamChoices } from './view.js';
-import { streamInfo, streamName, isFurnitureStream, isStreamKey, FRAME_OBJECT_KINDS, BUILTIN_STREAMS, FURNITURE_STREAMS } from './vocab.js';
+import { streamInfo, streamName, isFurnitureStream, isStreamKey, keepHeading, FRAME_OBJECT_KINDS, BUILTIN_STREAMS, FURNITURE_STREAMS } from './vocab.js';
 import { hash32 } from './sequences.js';
 import { FURNITURE_TAB, FURNITURE_TAB_HE } from './textModel.js';
 
@@ -614,6 +614,30 @@ export function outsideLineIds(lines, frames) {
     if (!boxes.some((b) => overlaps(l.bbox, b))) out.add(l.id);
   }
   return out;
+}
+
+// "השורה שייכת למסגרת הזו" — לשורה שבולטת מהמסגרת (view.straddlingLineIds): מסגרת-הטקסט
+// שמכילה את רובה (שטח-החפיפה הגדול ביותר; בשוויון — הראשונה בסדר-הקריאה), והפעולה שמשייכת
+// אותה אליה במפורש: stream — תיוג-אדם, צעד-ביטול אחד שיוצא בקובץ-התיקונים כמו כל זרם שנקבע
+// ביד. שורת-כותרת נשארת כותרת של הזרם (keepHeading — כמו זרם-מהמסגרת). אחרי זה הסימון
+// האדום יורד: שורה שזרמה נקבע ביד נספרת כתיוג, בתוך מסגרת או לא.
+// ← {frame, value, op} או null (שורה שנוצרה בתיקון, שהוסרה, או שאינה נוגעת במסגרת-טקסט)
+export function straddleClaim(view, lineId, frames) {
+  const l = (view?.lines || []).find((x) => x?.id === lineId);
+  if (!l || !(l.id > 0) || l._new || l.status === 'removed' || !isBox(l.bbox)) return null;
+  let best = null;
+  let bestArea = 0;
+  for (const f of frames || []) {
+    if (!f || f.kind || !isBox(f.bbox)) continue;
+    const a = overlapArea(l.bbox, f.bbox);
+    if (a > bestArea) {
+      best = f;
+      bestArea = a;
+    }
+  }
+  if (!best || !isStreamKey(best.stream)) return null;
+  const value = keepHeading(best.stream, l._auto?.stream ?? l.stream);
+  return { frame: best, value, op: { kind: 'stream', page: view.page, ids: [l.id], value } };
 }
 
 // השורות שמוצגות "לזיהוי מחדש": כל שורה שפעולת-חיתוך נגעה בה (_recut מ-

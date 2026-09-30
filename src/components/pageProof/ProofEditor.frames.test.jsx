@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { HELP_SEEN_KEY } from './ProofHelp'
 import ProofEditor from './ProofEditor'
 
@@ -84,6 +84,7 @@ const snap = () => ({
   frames: [...document.querySelectorAll('[data-layer="frames"] [data-frame]')].map((r) => ['x', 'y', 'width', 'height'].map((k) => Math.round(+r.getAttribute(k))).join(',')),
   badges: screen.queryAllByTestId('frame-badge').map((b) => b.textContent),
   confirm: within(scan()).getByRole('button', { name: /המסגרות (נכונות|אושרו)/ }).textContent,
+  straddle: [...document.querySelectorAll('[data-straddle]')].map((e) => e.getAttribute('data-straddle')),
   ops: lastArgs.ops.map((o) => o.kind),
 })
 
@@ -224,4 +225,21 @@ describe('ProofEditor — ביטול וחזרה של פעולות-המסגרות
     expect(snap()).toEqual(s3)
   })
 
+  it('"השורה שייכת למסגרת הזו" — פעולת stream אחת: הסימון האדום יורד, Ctrl+Z מחזיר אותו, והפעולה נשלחת בהגשה', async () => {
+    const p = page()
+    p.doc.frames = [{ fid: 'aa11bb', stream: 'main', bbox: [510, 90, 910, 200], order: 1 }]
+    p.doc.lines[1] = L(2, [520, 150, 930, 190], 'דלת הא וו') // בולטת ימינה מהמסגרת
+    render(<ProofEditor page={p} persist={false} actions={actions} />)
+    click(925, 170) // על השורה, מחוץ למסגרת: הסמן עובר אליה
+    // הסריקה מקבלת את שורת-הסמן בפריים שאחרי הרינדור (ProofEditor.measureTrack)
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50))
+    })
+    const { before, after } = expectOneUndoStep(() =>
+      fireEvent.click(within(screen.getByTestId('straddle-claim')).getByRole('button', { name: 'השורה שייכת למסגרת הזו' }))
+    )
+    expect(before.straddle).toEqual(['2'])
+    expect(after.straddle).toEqual([])
+    expect(lastArgs.ops.map(({ kind, ids, value }) => ({ kind, ids, value }))).toEqual([{ kind: 'stream', ids: [2], value: 'main' }])
+  })
 })

@@ -139,3 +139,19 @@ describe('StreamPicker', () => {
     expect(onPick).toHaveBeenCalledWith('main_heading')
   })
 })
+
+describe('FramePopover — השורה שבסמן בולטת מהמסגרת', () => {
+  it('onClaimLine ← שורה עם "השורה שייכת למסגרת הזו" (וההסבר ב-title); בלעדיו — אין', async () => {
+    const onClaimLine = vi.fn()
+    const { unmount } = setup({ onClaimLine, claimTitle: 'ההסבר' })
+    const row = screen.getByTestId('popover-claim')
+    expect(row).toHaveTextContent('השורה שבסמן בולטת מהמסגרת הזו')
+    const btn = within(row).getByRole('button', { name: 'השורה שייכת למסגרת הזו' })
+    expect(btn).toHaveAttribute('title', 'ההסבר')
+    await userEvent.click(btn)
+    expect(onClaimLine).toHaveBeenCalledTimes(1)
+    unmount()
+    setup()
+    expect(screen.queryByTestId('popover-claim')).toBeNull()
+  })
+})

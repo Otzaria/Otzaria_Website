@@ -34,6 +34,8 @@ import {
   toggleSelection,
   outsideLineIds,
   recutSet,
+  straddleClaim,
+  frameLabel,
 } from '@/lib/pageProof/scanGeometry'
 
 // לוח-הסריקה של עורך הגהת-העמודים: כותרת (מצב "מסגרות"/"שורות", זום, הכלים
@@ -69,6 +71,9 @@ import {
 // "סגירה" סוגרת רק אותה — המסגרת נשארת בחורה (Esc / לחיצה מחוץ לה מבטלים את הבחירה).
 // שורות: פיצול / איחוד / שורה חדשה / תיבה / לא-שורה / "החיתוך תקין". שורות
 // שחיתוכן שונה מסומנות "לזיהוי מחדש" — הן ייחתכו וייקראו שוב בתוכנת-הספר.
+// שורה שבולטת מהמסגרת (קו אדום מקווקו): "השורה שייכת למסגרת הזו" — בסרגל-ההסבר ובחלונית
+// של המסגרת (לשורה שבסמן), ובמצב "שורות" (לשורה שנבחרה) — פעולת stream אחת לפי המסגרת
+// שמכילה את רובה (scanGeometry.straddleClaim); אחריה הסימון יורד.
 // כל שינוי במסגרות הוא push אחד = צעד-ביטול אחד (גרירה/שינוי-גודל — רק בשחרור העכבר);
 // Ctrl+Z / Ctrl+Y מטופלים ב-ProofEditor גם כשהמיקוד כאן או בחלונית.
 
@@ -85,8 +90,13 @@ const FRAME_RULES = [
   'כותרת-רצה, מספר עמוד, שומר-דף: "ריהוט הדף" (למעלה — כותרת עמוד, למטה — תחתית). הקו שמפריד בין הטקסט להערות: "עוד…" ← מפריד.',
   'קישוט או כתם שהמחשב קרא כשורה — לא ריהוט ולא מסגרת: במצב "שורות" מסמנים אותו "לא-שורה".',
   'שורה שנחתכה על פני שני טורים — נשארת מחוץ למסגרות; לא מרחיבים מסגרת כדי "לתפוס" אותה (מתקנים אותה במצב "שורות" ← פיצול).',
+  'שורה שכולה שייכת למסגרת ורק בולטת ממנה מעט (קו אדום) — לוחצים עליה ו«השורה שייכת למסגרת הזו», או מגדילים את המסגרת.',
   'כל שינוי במסגרות — ציור, הזזה, גודל, זרם, מספר, אישור או מחיקה — מתבטל ב-Ctrl+Z (או בכפתור הביטול שבסרגל).',
 ]
+
+// ההסבר על "השורה שייכת למסגרת הזו"
+const CLAIM_TITLE =
+  'הזרם של השורה ייקבע ביד לפי המסגרת שמכילה את רובה, והסימון האדום יורד. שורה שנחתכה על פני שני טורים — אל תשייכו אותה: פצלו אותה במצב "שורות"'
 
 const NOTICE = {
   splitTemp: 'את השורה הזאת יצרתם עכשיו בתיקון — היא תיחתך מחדש בתוכנה ואי-אפשר לפצל אותה שוב כאן (לביטול: Ctrl+Z)',
@@ -277,11 +287,10 @@ export default function ScanPanel({
   const seqs = useMemo(() => seqInStream(fs.frames), [fs])
   const chips = useMemo(() => streamChips(view, fs.frames), [view, fs])
   const recut = useMemo(() => recutSet(view?.lines, lockedLineIds), [view, lockedLineIds])
-  // גם על ההצעה: שורה שנחתכה על פני שני טורים נשארת מחוץ למסגרות המוצעות — ורואים אותה לפני האישור
-  const straddle = useMemo(
-    () => (mode === 'frames' && fs.frames.length ? straddlingLineIds(view?.lines || [], fs.frames) : EMPTY),
-    [mode, fs, view]
-  )
+  // גם על ההצעה: שורה שנחתכה על פני שני טורים נשארת מחוץ למסגרות המוצעות — ורואים אותה לפני
+  // האישור. מחושב בשני המצבים (בשביל "השורה שייכת למסגרת הזו"); הסימון האדום — רק ב"מסגרות"
+  const straddleAll = useMemo(() => (fs.frames.length ? straddlingLineIds(view?.lines || [], fs.frames) : EMPTY), [fs, view])
+  const straddle = mode === 'frames' ? straddleAll : EMPTY
   const outside = useMemo(() => (mode === 'frames' ? outsideLineIds(view?.lines, fs.frames) : EMPTY), [mode, fs, view])
   const asking = askFor === fs && outside.size > 0
   const selInfo = useMemo(() => selectionInfo(view?.lines, selectedIds), [view, selectedIds])
@@ -290,6 +299,16 @@ export default function ScanPanel({
   // הבחירה ל"מסגרת חדשה": זרם, זרם-כותרת או "ריהוט הדף" (הזרם האמיתי נקבע בציור)
   const drawStream = picked && picked.forDefault === frameStreamDefault ? picked.key : drawStreamFor(frameStreamDefault)
   const selFrame = mode === 'frames' ? fs.frames.find((f) => f.fid === selectedFid) || null : null
+
+  // "השורה שייכת למסגרת הזו" — לשורה שבולטת מהמסגרת: במצב "מסגרות" לשורה שבסמן (לחיצה על
+  // השורה בסריקה או בטקסט), במצב "שורות" לשורה היחידה שנבחרה
+  const claimOf = (id) => (canEdit && id != null && straddleAll.has(id) ? straddleClaim(view, id, fs.frames) : null)
+  const claimHere = mode === 'frames' ? claimOf(currentLineId) : null
+  const claimSel = mode === 'lines' && selInfo.live.length === 1 && !selInfo.removed.length ? claimOf(selInfo.live[0]) : null
+  const claimLabel = (c) => frameLabel(view, c.frame, seqs.get(c.frame.fid) ?? null)
+  const claimLine = (c) => {
+    if (c && push(c.op)) setNotice(`השורה שויכה למסגרת «${claimLabel(c)}» — הזרם שלה נקבע ביד (Ctrl+Z מבטל)`)
+  }
   const liveLines = () => lines.filter((l) => l.status !== 'removed' && Array.isArray(l.bbox))
   // מסגרת-טקסט מתהדקת לשורות שמרכזן בתוכה (כיווץ בלבד); מסגרת-אובייקט (טבלה/איור) — כמו שצוירה
   const hug = (box, frame = null) => (frame && isObjectFrame(frame) ? clampBox(box, W, H) : clampBox(snapFrame(box, liveLines()), W, H))
@@ -400,6 +419,8 @@ export default function ScanPanel({
         orderCount={fs.frames.length}
         chips={chips}
         suggested={fs.suggested}
+        onClaimLine={claimHere && claimHere.frame.fid === fid ? () => claimLine(claimHere) : null}
+        claimTitle={CLAIM_TITLE}
         onStream={(key) => {
           // "ריהוט הדף" — כותרת עמוד / תחתית לפי השורות שבמסגרת ומקומה בעמוד
           const stream = resolveFrameStream(key, selFrame.bbox, lines, H)
@@ -575,6 +596,11 @@ export default function ScanPanel({
                     לא-שורה
                   </ActBtn>
                 )}
+                {claimSel && (
+                  <ActBtn onClick={() => claimLine(claimSel)} title={CLAIM_TITLE}>
+                    שייכת למסגרת «{claimLabel(claimSel)}»
+                  </ActBtn>
+                )}
               </>
             )}
           </>
@@ -639,7 +665,16 @@ export default function ScanPanel({
         {mode === 'frames' && straddle.size > 0 && (
           <span className="text-danger-700" data-testid="straddle-note">
             {straddle.size === 1 ? 'שורה אחת בולטת' : `${straddle.size} שורות בולטות`} מהמסגרות (באדום) ולא ייספרו — שורה שנחתכה על פני שני
-            טורים: משאירים כך ומפצלים אותה במצב &quot;שורות&quot;; אחרת — הגדילו את המסגרת
+            טורים: משאירים כך ומפצלים אותה במצב &quot;שורות&quot;; שורה שכולה של המסגרת ורק בולטת ממנה — לחצו עליה ו«השורה שייכת למסגרת
+            הזו»; אחרת — הגדילו את המסגרת
+          </span>
+        )}
+        {claimHere && (
+          <span className="flex flex-wrap items-center gap-1.5 font-medium text-danger-700" data-testid="straddle-claim">
+            השורה שבסמן בולטת מהמסגרת «{claimLabel(claimHere)}»
+            <ActBtn onClick={() => claimLine(claimHere)} title={CLAIM_TITLE}>
+              השורה שייכת למסגרת הזו
+            </ActBtn>
           </span>
         )}
         {mode === 'frames' && outside.size > 0 && !asking && (

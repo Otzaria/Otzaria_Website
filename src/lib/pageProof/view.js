@@ -110,13 +110,15 @@ const inside = (a, b, tol = STRICT_TOL) => a[0] >= b[0] - tol && a[1] >= b[1] - 
 // שורות-תוכן שנוגעות במסגרת-טקסט אבל אינן כולן בתוך אף מסגרת — "בולטות מהמסגרת"
 // ואינן נספרות כתיוג (קו אדום מקווקו במדריך-התיוג §3). שורת ריהוט (כותרת-רצה, תחתית,
 // מפריד) שרק נוגעת בקצה של מסגרת אינה "בולטת": היא ממילא לא אמורה להיות בתוכה (שורה
-// שמרכזה בתוך מסגרת-טקסט כבר קיבלה בתצוגה את זרם המסגרת, ונבדקת כשורת-תוכן)
+// שמרכזה בתוך מסגרת-טקסט כבר קיבלה בתצוגה את זרם המסגרת, ונבדקת כשורת-תוכן). גם שורה
+// שזרמה נקבע ביד (stream_src 'human' — למשל "השורה שייכת למסגרת הזו",
+// scanGeometry.straddleClaim) אינה בולטת: היא נספרת כתיוג בלי קשר למסגרות
 export function straddlingLineIds(lines, frames) {
   const tf = (frames || []).filter((f) => !f.kind);
   if (!tf.length) return new Set();
   const out = new Set();
   for (const l of lines) {
-    if (!l.bbox || l.status === 'removed' || isFurnitureStream(l.stream)) continue;
+    if (!l.bbox || l.status === 'removed' || isFurnitureStream(l.stream) || l.stream_src === 'human') continue;
     if (tf.some((f) => inside(l.bbox, f.bbox))) continue;
     if (tf.some((f) => overlaps(l.bbox, f.bbox))) out.add(l.id);
   }
