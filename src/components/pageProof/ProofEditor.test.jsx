@@ -389,3 +389,67 @@ describe('ProofEditor — קישור לעמוד אחר', { timeout: 30000 }, () 
     expect(screen.queryByTestId('other-page-buttons')).toBeNull()
   })
 })
+
+// קיצורי-המקלדת בכל פריסה: עברית (e.key 'ז' — ולא 'z'), עברית בלי e.code (מקלדת
+// וירטואלית / שולחן-עבודה מרוחק), ו-AZERTY (המקש שכתוב עליו Z הוא KeyW)
+describe('ProofEditor — קיצורי-מקלדת בפריסה עברית', { timeout: 30000 }, () => {
+  const heb = (key, code, extra = {}) => ({ key, code, ctrlKey: true, ...extra })
+
+  it('Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z — עם המקש הפיזי, וגם בלי e.code', async () => {
+    const { editor } = setup()
+    await caretAt(editor(), { lineId: 1, offset: 5 })
+    fireEvent.click(screen.getByRole('button', { name: 'מודגש' }))
+    expect(opsNow()).toHaveLength(1)
+    for (const code of ['KeyZ', '', 'Unidentified']) {
+      fireEvent.keyDown(editor(), heb('ז', code))
+      expect(opsNow()).toEqual([])
+      fireEvent.keyDown(editor(), heb('ט', code === 'KeyZ' ? 'KeyY' : code))
+      expect(opsNow()).toHaveLength(1)
+    }
+    // Ctrl+Shift+Z — חזרה (בפריסה עברית Shift נותן אות לטינית גדולה, או את האות העברית)
+    fireEvent.keyDown(editor(), heb('ז', ''))
+    expect(opsNow()).toEqual([])
+    fireEvent.keyDown(editor(), heb('ז', '', { shiftKey: true }))
+    expect(opsNow()).toHaveLength(1)
+    // גם כשהמיקוד מחוץ לטקסט (בסריקה, בגוף הדף)
+    fireEvent.keyDown(screen.getByTestId('scan-panel'), heb('ז', 'KeyZ'))
+    expect(opsNow()).toEqual([])
+    fireEvent.keyDown(document.body, heb('ט', ''))
+    expect(opsNow()).toHaveLength(1)
+  })
+
+  it('Ctrl+B / Ctrl+I / Ctrl+K / Ctrl+Enter בפריסה עברית', async () => {
+    const { editor } = setup()
+    await caretAt(editor(), { lineId: 1, offset: 5 })
+    fireEvent.keyDown(editor(), heb('נ', 'KeyB'))
+    expect(opsNow()).toEqual([{ kind: 'styles', ids: [1], value: { style: 'b', words: [1, 1], on: true } }])
+    fireEvent.keyDown(editor(), heb('ן', ''))
+    expect(opsNow()[1]).toEqual({ kind: 'styles', ids: [1], value: { style: 'i', words: [1, 1], on: true } })
+    // Ctrl+Enter (גם Enter שבמקלדת המספרים) — אישור הפסקה
+    fireEvent.keyDown(editor(), { key: 'Enter', code: 'NumpadEnter', ctrlKey: true })
+    expect(opsNow().slice(2).map((o) => o.kind)).toEqual(['line_ok', 'line_ok'])
+    // Ctrl+K בלי e.code — הצד הראשון של קישור
+    fireEvent.click(screen.getByRole('tab', { name: /הערות/ }))
+    await caretAt(editor(), { lineId: 4, offset: 0 }, { lineId: 4, offset: 10 })
+    fireEvent.keyDown(editor(), heb('ל', ''))
+    expect(screen.getByText(/נבחר: «/)).toHaveTextContent('רבי יוחנן.')
+  })
+
+  it('AZERTY: המקש שכתוב עליו Z מבטל; המקש שבמקום הפיזי של Z (W) — לא', async () => {
+    const { editor } = setup()
+    await caretAt(editor(), { lineId: 1, offset: 5 })
+    fireEvent.click(screen.getByRole('button', { name: 'מודגש' }))
+    fireEvent.keyDown(editor(), heb('w', 'KeyZ'))
+    expect(opsNow()).toHaveLength(1)
+    fireEvent.keyDown(editor(), heb('z', 'KeyW'))
+    expect(opsNow()).toEqual([])
+  })
+
+  it('AltGr (Ctrl+Alt) אינו קיצור', async () => {
+    const { editor } = setup()
+    await caretAt(editor(), { lineId: 1, offset: 5 })
+    fireEvent.click(screen.getByRole('button', { name: 'מודגש' }))
+    fireEvent.keyDown(editor(), heb('ז', 'KeyZ', { altKey: true }))
+    expect(opsNow()).toHaveLength(1)
+  })
+})

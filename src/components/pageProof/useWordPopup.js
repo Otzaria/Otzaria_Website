@@ -3,6 +3,7 @@
 import { createElement, useCallback, useEffect, useId, useLayoutEffect, useMemo, useReducer, useRef } from 'react'
 import { popupReducer, POPUP_CLOSED, POPUP_OPEN_DELAY_MS, POPUP_CLOSE_DELAY_MS } from '@/lib/pageProof/popupState'
 import { hasSuggestions, moveActive, popupWordKey, suggestionData } from '@/lib/pageProof/wordPopup'
+import { isKey } from '@/lib/pageProof/keys'
 import WordSuggestions, { WORD_POPUP_SELECTOR } from './WordSuggestions'
 
 // חלונית ההצעות למילה: מתי נפתחת ומתי נסגרת. הכללים — ב-popupState.js
@@ -185,21 +186,21 @@ export function useWordPopup(view, { onPick = null, readOnly = false, lockedLine
   useEffect(() => {
     if (!open) return undefined
     const onKey = (e) => {
-      if (e.key === 'Escape') {
+      if (isKey(e, 'Escape')) {
         e.preventDefault()
         e.stopPropagation()
         dispatch({ type: 'escape' })
       } else if (!keyboard) {
         return
-      } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      } else if (isKey(e, 'ArrowDown') || isKey(e, 'ArrowUp')) {
         e.preventDefault()
         e.stopPropagation()
-        dispatch({ type: 'active', index: moveActive(active, e.key === 'ArrowDown' ? 1 : -1, count) })
-      } else if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        dispatch({ type: 'active', index: moveActive(active, isKey(e, 'ArrowDown') ? 1 : -1, count) })
+      } else if (isKey(e, 'Enter') && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault()
         e.stopPropagation()
         if (!choose(active)) dispatch({ type: 'escape' })
-      } else if (e.key === 'Tab') {
+      } else if (isKey(e, 'Tab')) {
         dispatch({ type: 'escape' })
       }
     }

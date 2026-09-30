@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useId, useRef, useState } from 'react'
+import { isKey } from '@/lib/pageProof/keys'
 
 // תפריט נפתח לסרגל-כלים (סגנון-פסקה, זרם לשורות). נפתח בלחיצה או במקלדת
 // (Enter / רווח / ↓ על הכפתור); ↑↓ Home End בתוך התפריט, Enter בוחר, Esc
@@ -70,7 +71,7 @@ export default function ToolbarMenu({
       if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false)
     }
     const onKey = (e) => {
-      if (e.key !== 'Escape') return
+      if (!isKey(e, 'Escape')) return
       e.preventDefault()
       e.stopPropagation()
       setOpen(false)
@@ -90,15 +91,15 @@ export default function ToolbarMenu({
   }, [open, byKeyboard, active])
 
   const onMenuKey = (e) => {
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    if (isKey(e, 'ArrowDown') || isKey(e, 'ArrowUp')) {
       e.preventDefault()
       setByKeyboard(true)
-      setActive((a) => step(a, e.key === 'ArrowDown' ? 1 : -1))
-    } else if (e.key === 'Home' || e.key === 'End') {
+      setActive((a) => step(a, isKey(e, 'ArrowDown') ? 1 : -1))
+    } else if (isKey(e, 'Home') || isKey(e, 'End')) {
       e.preventDefault()
       setByKeyboard(true)
-      setActive(e.key === 'Home' ? step(-1, 1) : step(items.length, -1))
-    } else if (e.key === 'Tab') {
+      setActive(isKey(e, 'Home') ? step(-1, 1) : step(items.length, -1))
+    } else if (isKey(e, 'Tab')) {
       setOpen(false)
     }
   }
@@ -117,7 +118,7 @@ export default function ToolbarMenu({
         onMouseDown={preventFocusLoss}
         onClick={() => (open ? setOpen(false) : openMenu(false))}
         onKeyDown={(e) => {
-          if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+          if (isKey(e, 'ArrowDown') || isKey(e, 'Enter') || isKey(e, 'Space')) {
             e.preventDefault()
             openMenu(true)
           }

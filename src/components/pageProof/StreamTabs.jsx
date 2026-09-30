@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef } from 'react'
+import { isKey } from '@/lib/pageProof/keys'
 
 // לשוניות-הזרמים מעל הטקסט: זרם אחד מוצג בכל פעם (ראשי / הערות / …), כמו
 // ספרים נפרדים באוצריא. לכל לשונית: נקודה בצבע הזרם (אותו צבע של המסגרות על
@@ -44,10 +45,10 @@ export default function StreamTabs({ tabs = [], tabKey, setTabKey, className = '
 
   const onKeyDown = (e, idx) => {
     // RTL: הלשונית הבאה משמאל
-    if (e.key === 'ArrowLeft') go(idx + 1)
-    else if (e.key === 'ArrowRight') go(idx - 1)
-    else if (e.key === 'Home') go(0)
-    else if (e.key === 'End') go(ordered.length - 1)
+    if (isKey(e, 'ArrowLeft')) go(idx + 1)
+    else if (isKey(e, 'ArrowRight')) go(idx - 1)
+    else if (isKey(e, 'Home')) go(0)
+    else if (isKey(e, 'End')) go(ordered.length - 1)
     else return
     e.preventDefault()
   }

@@ -5,6 +5,7 @@ import ProofScan from './ProofScan'
 import FramePopover, { StreamPicker } from './FramePopover'
 import { snapFrame } from '@/lib/pageProof/ops'
 import { linesInRect, newFid, straddlingLineIds } from '@/lib/pageProof/view'
+import { isKey } from '@/lib/pageProof/keys'
 import {
   pageSize,
   clampZoom,
@@ -489,7 +490,7 @@ export default function ScanPanel({
     const tag = t?.tagName
     // שדה-הקלדה — שלו; תיבת-סימון או רשימה בחלונית עדיין נסגרות ב-Esc
     if (t && (tag === 'TEXTAREA' || t.isContentEditable || (tag === 'INPUT' && !/^(checkbox|radio|button)$/.test(t.type)))) return
-    if (e.key === 'Escape') {
+    if (isKey(e, 'Escape')) {
       let closed = false
       const close = (fn) => {
         fn()
@@ -511,7 +512,7 @@ export default function ScanPanel({
       return
     }
     if (tag === 'INPUT' || tag === 'SELECT') return
-    if (!canEdit || (e.key !== 'Delete' && e.key !== 'Backspace')) return
+    if (!canEdit || !(isKey(e, 'Delete') || isKey(e, 'Backspace'))) return
     if (mode === 'frames' && selFrame) {
       e.preventDefault()
       if (commitFrames(removeFrame(fs.frames, selFrame.fid))) setSelectedFid(null)

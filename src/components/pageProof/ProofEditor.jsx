@@ -29,6 +29,7 @@ import { recheckLineIds } from '@/lib/pageProof/submitPlan'
 import { pageDraftKey } from '@/lib/pageProof/drafts'
 import { LAYOUT_KEY, SPLIT_MAX, SPLIT_MIN, nudgeSplit, readLayout, splitFromPointer } from '@/lib/pageProof/layout'
 import { LINK_ERRORS, linkEnd, planLink, planOtherPageLink, farLabel, tabOfLine, wordStartPos } from '@/lib/pageProof/linkFlow'
+import { isKey, isShortcut } from '@/lib/pageProof/keys'
 import { useDialog } from '@/components/providers/DialogContext'
 import { useProofEditor } from './useProofEditor'
 import { useWordPopup } from './useWordPopup'
@@ -589,49 +590,49 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
       const inFlow = !!t?.closest?.('[data-proof-flow]')
       const inField = !!t && !inFlow && isTextField(t)
       const ctrl = e.ctrlKey || e.metaKey
-      const code = e.code
-      // e.code ולא e.key: בפריסת-מקלדת עברית Ctrl+Z נותן e.key === 'ז'
-      if (ctrl && !e.altKey && code === 'KeyZ') {
+      // האות של הקיצור בכל פריסה (lib/pageProof/keys): בפריסה עברית Ctrl+Z נותן
+      // e.key === 'ז' — המקש הפיזי (e.code 'KeyZ') קובע, וגם בלעדיו 'ז' ← 'z'
+      if (isShortcut(e, 'z', { shift: null })) {
         if (inField) return
         e.preventDefault()
         if (e.shiftKey) H.redo()
         else H.undo()
         return
       }
-      if (ctrl && !e.altKey && !e.shiftKey && code === 'KeyY') {
+      if (isShortcut(e, 'y')) {
         if (inField) return
         e.preventDefault()
         H.redo()
         return
       }
       if (inField) return
-      if (e.key === 'Escape' && H.linkPending) {
+      if (isKey(e, 'Escape') && H.linkPending) {
         e.preventDefault()
         H.cancelLink()
         return
       }
-      if (code === 'F8' && !ctrl && !e.altKey) {
+      if (isKey(e, 'F8') && !ctrl && !e.altKey) {
         e.preventDefault()
         H.goSuspicious(e.shiftKey ? -1 : 1)
         return
       }
-      if (ctrl && !e.altKey && !e.shiftKey && code === 'KeyK') {
+      if (isShortcut(e, 'k')) {
         e.preventDefault()
         H.link()
         return
       }
       if (!inFlow) return
-      if (ctrl && !e.altKey && !e.shiftKey && (code === 'KeyB' || code === 'KeyI')) {
+      if (isShortcut(e, 'b') || isShortcut(e, 'i')) {
         e.preventDefault()
-        if (!H.readOnly) H.charStyle(code === 'KeyB' ? 'b' : 'i')
+        if (!H.readOnly) H.charStyle(isShortcut(e, 'b') ? 'b' : 'i')
         return
       }
-      if (ctrl && !e.altKey && !e.shiftKey && (code === 'Enter' || code === 'NumpadEnter')) {
+      if (ctrl && !e.altKey && !e.shiftKey && isKey(e, 'Enter')) {
         e.preventDefault()
         H.approveAtCaret()
         return
       }
-      if ((e.altKey && !ctrl && code === 'ArrowDown') || (ctrl && !e.altKey && !e.shiftKey && code === 'Space')) {
+      if ((e.altKey && !ctrl && isKey(e, 'ArrowDown')) || (ctrl && !e.altKey && !e.shiftKey && isKey(e, 'Space'))) {
         e.preventDefault()
         H.openSuggest()
       }

@@ -200,6 +200,21 @@ describe('ProofEditor — ביטול וחזרה של פעולות-המסגרות
     })
   })
 
+  it('פריסה עברית גם בלי e.code (מקלדת וירטואלית / שולחן-עבודה מרוחק): Ctrl+Z / Ctrl+Y על פעולת-מסגרת מהסריקה', () => {
+    render(<ProofEditor page={page()} persist={false} actions={actions} />)
+    const before = snap()
+    fireEvent.click(within(scan()).getByRole('button', { name: /המסגרות נכונות/ }))
+    const after = snap()
+    expect(after).not.toEqual(before)
+    fireEvent.keyDown(scan(), { key: 'ז', code: '', ctrlKey: true })
+    expect(snap()).toEqual(before)
+    fireEvent.keyDown(scan(), { key: 'ט', code: 'Unidentified', ctrlKey: true })
+    expect(snap()).toEqual(after)
+    // AZERTY: המקש שבמקום הפיזי של Z הוא W — אינו מבטל
+    fireEvent.keyDown(scan(), { key: 'w', code: 'KeyZ', ctrlKey: true })
+    expect(snap()).toEqual(after)
+  })
+
   it('כמה פעולות ברצף — כל Ctrl+Z מבטל אחת, מהאחרונה לראשונה', () => {
     render(<ProofEditor page={page()} persist={false} actions={actions} />)
     const s0 = snap()
