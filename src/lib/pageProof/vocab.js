@@ -109,6 +109,44 @@ export const CERTAINTY = {
 // מסגרת-אובייקט (טבלה/איור/לוח) — אינה קולטת שורות לזרם
 export const FRAME_OBJECT_KINDS = { table: 'טבלה', figure: 'איור', plate: 'לוח' };
 
+// אוצר-מילים נוסף מצרכן שמטמיע את העורך (תוכנת-הספר: סגנונות-פסקה שהוגדרו לספר מסוים,
+// ערך-ודאות נוסף וכו'). הערכים נכנסים לטבלאות שלמעלה עצמן — כך הבדיקה (ops.validateOp),
+// השמות בעברית (הסרגל, רשימת-השינויים) והרשימות בלוח הפרטים רואים אותם בלי שינוי נוסף.
+// רק מפתחות חדשים: מפתח מובנה לעולם אינו נדרס. האתר עצמו אינו קורא לזה — אצלו הכול כמו קודם.
+// מחזיר פונקציה שמסירה בדיוק את מה שנוסף (בדיקות, החלפת ספר).
+//
+// v = {paraStyles: {key: {he, group?}}, charStyles: {key: {he, sign?}},
+//      pageTypes: {key: he}, scripts: {key: he}, certainty: {key: he}}
+// מפתח: אותיות לטיניות, ספרות וקו-תחתון (כמו מפתחות הסגנונות המותאמים בתוכנת-הספר)
+const VOCAB_KEY_RE = /^[A-Za-z0-9_]{1,40}$/;
+const VOCAB_GROUPS = new Set(['text', 'head', 'furniture']);
+
+export function registerVocab(v = {}) {
+  const added = [];
+  const put = (table, key, value) => {
+    if (typeof key !== 'string' || !VOCAB_KEY_RE.test(key) || Object.hasOwn(table, key)) return;
+    table[key] = value;
+    added.push([table, key]);
+  };
+  const he = (x, key) => (typeof x === 'string' && x.trim() ? x.trim() : key);
+  for (const [k, s] of Object.entries(v?.paraStyles || {})) {
+    put(PARA_STYLES, k, { he: he(s?.he, k), group: VOCAB_GROUPS.has(s?.group) ? s.group : 'text' });
+  }
+  for (const [k, s] of Object.entries(v?.charStyles || {})) {
+    put(CHAR_STYLES, k, { he: he(s?.he, k), sign: typeof s?.sign === 'string' && s.sign ? s.sign : '✦' });
+  }
+  for (const [table, extra] of [
+    [PAGE_TYPES, v?.pageTypes],
+    [SCRIPTS, v?.scripts],
+    [CERTAINTY, v?.certainty],
+  ]) {
+    for (const [k, name] of Object.entries(extra || {})) put(table, k, he(name, k));
+  }
+  return () => {
+    for (const [table, key] of added.splice(0)) delete table[key];
+  };
+}
+
 // סוגי-הפעולות. contract=true — בחוזה גרסה 1 ונקלטים אצלם היום.
 // contract=false — הצעה (מסמך 41 §5.1/§5.3) שעוד לא נקלטת; מותרת בגרסה 1
 // (צרכן ישן מתעלם מסוג לא-מוכר), ולכן נשמרת ונשלחת כמו השאר.
