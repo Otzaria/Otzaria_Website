@@ -595,6 +595,14 @@ describe('ProofEditor — נקודות-הרחבה: משבצות', { timeout: 300
     expect(editor().querySelector('[data-line="2"]')).not.toHaveAttribute('data-locked')
   })
 
+  it('כפתורי האתר ("הגשת העמוד", "שלח לזיהוי-מחדש") באים רק מ-actions של דף המתנדב: דף עוטף בלי actions אינו רואה אותם — גם כשבטיוטה יש תיקון-חיתוך', () => {
+    const { editor } = setup({ actions: undefined, initialOps: [{ kind: 'bbox', page: P, ids: [2], value: [100, 118, 900, 162] }] })
+    expect(editor().querySelector('[data-line="2"]')).toHaveAttribute('data-locked', '1')
+    expect(screen.queryByRole('button', { name: /שלח לזיהוי-מחדש/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /הגשת העמוד/ })).toBeNull()
+    expect(screen.queryByTestId('actions')).toBeNull()
+  })
+
   it('בלי lockedExtra — שום שורה אינה נעולה', () => {
     const { editor } = setup()
     expect(editor().querySelectorAll('[data-locked]')).toHaveLength(0)

@@ -54,7 +54,10 @@ import { caretTop, readDomSelection } from './flowDom'
 // readOnly, persist (טיוטה בדפדפן), draftKey (lib/pageProof/drafts — ברירת-
 // המחדל לפי העמוד והגרסה), toolbarClassName (בתוך חלון: 'sticky top-0 z-30'),
 // actions({ops, view, stats, untouched, approval, reset}) — כפתורי הדף העוטף
-// בקצה הסרגל; approval = {approved, total} פסקאות-התוכן בכל העמוד.
+// בקצה הסרגל; approval = {approved, total} פסקאות-התוכן בכל העמוד. הכפתורים של האתר —
+// "הגשת העמוד" ו"שלח לזיהוי-מחדש" של דף המתנדב (app/library/page-proof) — באים רק מכאן:
+// העורך עצמו אינו מציג אותם, ולכן דף עוטף שנותן actions משלו (או בלי) — תוכנת-הספר, שחותכת
+// ומזהה מחדש אצלה — לעולם אינו רואה אותם, בלי שום prop נוסף.
 //
 // נקודות-הרחבה למי שמטמיע את העורך מחוץ לאתר (תוכנת-הספר). כולן רשות, ובלעדיהן
 // העורך מתנהג בדיוק כמו באתר:
