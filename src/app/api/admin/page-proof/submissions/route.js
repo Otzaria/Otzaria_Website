@@ -1,19 +1,20 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
 import PageProofSubmission from '@/models/PageProofSubmission';
 import PageProofBook from '@/models/PageProofBook';
 import { hasOcrAccess } from '@/lib/roles';
 import { requireAccess, serverError } from '@/lib/apiResponse';
+import { getPageProofSession } from '@/lib/pageProof/tokenAuth';
 
 const PAGE_SIZE = 50;
 const STATUSES = ['submitted', 'approved', 'rejected'];
 
 // GET: תור ההגשות. ?status=submitted|approved|rejected ?gid= ?page=N (עימוד)
-// בלי הפעולות עצמן — רק מונים, כדי שהרשימה תהיה קלה.
+// בלי הפעולות עצמן — רק מונים, כדי שהרשימה תהיה קלה (עם הפעולות, לפי עמוד:
+// books/[gid]/submissions). גם במפתח-גישה של תוכנת-הספר (read).
 export async function GET(request) {
-  const session = await getServerSession(authOptions);
+  const { session, denied: keyDenied } = await getPageProofSession(request, 'read');
+  if (keyDenied) return keyDenied;
   const denied = requireAccess(session, hasOcrAccess);
   if (denied) return denied;
   try {

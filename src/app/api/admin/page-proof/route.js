@@ -1,16 +1,17 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
 import PageProofBook from '@/models/PageProofBook';
 import PageProofPage from '@/models/PageProofPage';
 import PageProofSubmission from '@/models/PageProofSubmission';
 import { hasOcrAccess } from '@/lib/roles';
 import { requireAccess, serverError } from '@/lib/apiResponse';
+import { getPageProofSession } from '@/lib/pageProof/tokenAuth';
 
-// GET: רשימת הספרים בהגהת-עמודים עם מוני-התקדמות לכל ספר
-export async function GET() {
-  const session = await getServerSession(authOptions);
+// GET: רשימת הספרים בהגהת-עמודים עם מוני-התקדמות לכל ספר.
+// גם במפתח-גישה של תוכנת-הספר (read) — שם גם בודקים שייבוא שהשער "נטש" (504) הסתיים.
+export async function GET(request) {
+  const { session, denied: keyDenied } = await getPageProofSession(request, 'read');
+  if (keyDenied) return keyDenied;
   const denied = requireAccess(session, hasOcrAccess);
   if (denied) return denied;
   try {

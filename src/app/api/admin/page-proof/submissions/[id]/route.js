@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
 import mongoose from 'mongoose';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
 import PageProofSubmission from '@/models/PageProofSubmission';
 import PageProofPage from '@/models/PageProofPage';
@@ -20,9 +18,12 @@ import {
   statusAfterReleaseRecut,
 } from '@/lib/pageProof/importRules';
 import { pageSig, submissionDetail } from '@/lib/pageProof/adminReview';
+import { getPageProofSession } from '@/lib/pageProof/tokenAuth';
 
-async function gate(params) {
-  const session = await getServerSession(authOptions);
+// גם במפתח-גישה של תוכנת-הספר: GET — read, PATCH — review
+async function gate(request, params, scope) {
+  const { session, denied: keyDenied } = await getPageProofSession(request, scope);
+  if (keyDenied) return { denied: keyDenied };
   const denied = requireAccess(session, hasOcrAccess);
   if (denied) return { denied };
   const { id } = await params;
@@ -39,7 +40,7 @@ const RETRIES = 3;
 // (לפני שחזר מזיהוי-מחדש) — העורך מציג אותה על הגרסה הנוכחית. page.sig — חתימת
 // העמוד השמור, כמו sig בקובץ-התיקונים.
 export async function GET(request, { params }) {
-  const { id, denied } = await gate(params);
+  const { id, denied } = await gate(request, params, 'read');
   if (denied) return denied;
   try {
     await connectDB();
@@ -90,8 +91,9 @@ export async function GET(request, { params }) {
 //             לבודק נוסף בעמוד כפול. ההגשות עצמן לא משתנות.
 // הגשה שנעשתה על גרסה קודמת של העמוד (שכבר הוחלף) משנה רק את עצמה — לא את
 // המונים ולא את המצב של העמוד החדש.
+// הבודק נרשם מה-session; במפתח-גישה — בעל המפתח, בשם "<שם> (תוכנת-הספר)".
 export async function PATCH(request, { params }) {
-  const { session, id, denied } = await gate(params);
+  const { session, id, denied } = await gate(request, params, 'review');
   if (denied) return denied;
   try {
     const { body: raw, tooBig } = await readJsonBody(request);

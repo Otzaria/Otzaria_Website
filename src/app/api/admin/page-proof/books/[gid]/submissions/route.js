@@ -1,5 +1,3 @@
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
 import PageProofBook from '@/models/PageProofBook';
 import PageProofPage from '@/models/PageProofPage';
@@ -9,6 +7,7 @@ import { requireAccess, badRequest, notFound, serverError } from '@/lib/apiRespo
 import { editorPageShape } from '@/lib/pageProof/pool';
 import { pageSig, pageWindow, submissionDetail } from '@/lib/pageProof/adminReview';
 import { json, noStore } from '@/lib/pageProof/respond';
+import { getPageProofSession } from '@/lib/pageProof/tokenAuth';
 
 // GET: ההגשות של ספר אחד לפי עמוד — עם הפעולות ועם העמוד השמור שעליו הן חלות, בבקשה
 // אחת (לתצוגת "לפני/אחרי" בתוכנת-הספר; תור-ההגשות הכללי — submissions — בלי הפעולות).
@@ -22,7 +21,7 @@ import { json, noStore } from '@/lib/pageProof/respond';
 //                    needsRecut, revision}]}]}
 // submission.revision שונה מ-page.revision — ההגשה נעשתה על גרסה קודמת של העמוד (האתר
 // שומר רק את הגרסה הנוכחית). page.sig — כמו sig בקובץ-התיקונים. imageUrl — לדפדפן בלבד.
-// רק מנהל OCR. private, no-store.
+// רק מנהל OCR — גם במפתח-גישה של תוכנת-הספר (read). private, no-store.
 
 const GID_RE = /^[A-Za-z0-9]{8,64}$/;
 const STATUSES = ['submitted', 'approved', 'rejected'];
@@ -32,7 +31,8 @@ const MAX_LIMIT = 25;
 const intParam = (v) => (v !== null && /^\d{1,6}$/.test(v) ? Number(v) : null);
 
 export async function GET(request, { params }) {
-  const session = await getServerSession(authOptions);
+  const { session, denied: keyDenied } = await getPageProofSession(request, 'read');
+  if (keyDenied) return noStore(keyDenied);
   const denied = requireAccess(session, hasOcrAccess);
   if (denied) return noStore(denied);
   try {

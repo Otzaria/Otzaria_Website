@@ -1,6 +1,4 @@
-import { getServerSession } from 'next-auth';
 import { zipSync, strToU8 } from 'fflate';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
 import PageProofBook from '@/models/PageProofBook';
 import PageProofPage from '@/models/PageProofPage';
@@ -11,6 +9,7 @@ import { buildFixesFile, splitPrimary, splitFixesFile } from '@/lib/pageProof/fi
 import { needsRecut } from '@/lib/pageProof/ops';
 import { storedRevision, submissionRevision } from '@/lib/pageProof/importRules';
 import { pageSig } from '@/lib/pageProof/adminReview';
+import { getPageProofSession } from '@/lib/pageProof/tokenAuth';
 
 const GID_RE = /^[A-Za-z0-9]{8,64}$/;
 
@@ -27,17 +26,19 @@ const GID_RE = /^[A-Za-z0-9]{8,64}$/;
 // לכל פעולה: revision, op_id ו-sig (חתימת העמוד בגרסה הזו, כשהעמוד השמור
 // עדיין בה) — כדי שתוכנת-הספר תוכל לדלג על פעולה ישנה או כפולה.
 // מעל 5,000 פעולות (התקרה שלהם לקובץ אחד) — ZIP של כמה קבצים, בלי לפצל עמוד.
+// מפתח-גישה של תוכנת-הספר: read; עם mark=1 (משנה מצב) — גם review.
 export async function GET(request, { params }) {
-  const session = await getServerSession(authOptions);
+  const sp = new URL(request.url).searchParams;
+  const mark = sp.get('mark') === '1';
+  const { session, denied: keyDenied } = await getPageProofSession(request, mark ? ['read', 'review'] : 'read');
+  if (keyDenied) return keyDenied;
   const denied = requireAccess(session, hasOcrAccess);
   if (denied) return denied;
   try {
     const { gid } = await params;
     if (!GID_RE.test(String(gid))) return badRequest('gid לא תקין');
-    const sp = new URL(request.url).searchParams;
     const set = sp.get('set') === 'double' ? 'double' : 'primary';
     const onlyNew = sp.get('only') === 'new';
-    const mark = sp.get('mark') === '1';
     const onlyRecut = sp.get('pages') === 'recut';
 
     await connectDB();

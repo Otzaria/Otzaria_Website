@@ -1,21 +1,21 @@
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
 import { hasOcrAccess } from '@/lib/roles';
 import { requireAccess, badRequest, serverError } from '@/lib/apiResponse';
 import { releaseClaims } from '@/lib/pageProof/adminPages';
 import { fromResult, noStore } from '@/lib/pageProof/respond';
+import { getPageProofSession } from '@/lib/pageProof/tokenAuth';
 
 // POST {ids} | {scope:'expired'|'all'}: שחרור תפיסות בידי מנהל — גם כשהמתנדב
 // עוד מחזיק בעמוד (למשל תפיסה "תקועה"). ids — העמודים האלה; 'expired' — כל
 // התפיסות שפגו ועוד רשומות בספר; 'all' — כל התפיסות בספר.
 // ← {success, released}. טיוטה שהמתנדב לא הגיש נשארת רק בדפדפן שלו (הממשק
-// מזהיר לפני). רק מנהל OCR. private, no-store.
+// מזהיר לפני). רק מנהל OCR — גם במפתח-גישה של תוכנת-הספר (review). private, no-store.
 
 const GID_RE = /^[A-Za-z0-9]{8,64}$/;
 
 export async function POST(request, { params }) {
-  const session = await getServerSession(authOptions);
+  const { session, denied: keyDenied } = await getPageProofSession(request, 'review');
+  if (keyDenied) return noStore(keyDenied);
   const denied = requireAccess(session, hasOcrAccess);
   if (denied) return noStore(denied);
   try {
