@@ -167,8 +167,8 @@ describe('ScanPanel — מסגרות', () => {
     expect(within(pop).getByRole('button', { name: 'מספר גדול יותר בזרם' })).toBeDisabled()
   })
 
-  it('ציור מסגרת חדשה: מתהדקת סביב השורות, בזרם הנבחר, ונבחרת', async () => {
-    const { log } = setup()
+  it('ציור מסגרת חדשה: מתהדקת סביב השורות, בזרם הנבחר, ונבחרת — בלי לפתוח את החלונית', async () => {
+    const { log, container } = setup()
     // קודם מאשרים את ההצעה, כדי שהציור יהיה עריכה של מסגרות קיימות
     await userEvent.click(screen.getByRole('button', { name: /המסגרות נכונות/ }))
     await userEvent.click(screen.getByRole('button', { name: 'מסגרת חדשה' }))
@@ -183,8 +183,31 @@ describe('ScanPanel — מסגרות', () => {
     const added = g[0].value.frames.filter((f) => !before.has(f.fid))
     expect(added).toHaveLength(1)
     expect(added[0]).toMatchObject({ stream: 'notes', bbox: [96, 96, 484, 144] })
-    expect(screen.getByTestId('frame-popover')).toBeInTheDocument()
+    // נבחרת (הידיות שלה מוצגות), אבל החלונית לא נפתחת מעצמה — רק בלחיצה על המסגרת
+    expect(screen.queryByTestId('frame-popover')).not.toBeInTheDocument()
+    expect(container.querySelectorAll(`[data-handle][data-fid="${added[0].fid}"]`)).toHaveLength(8)
     expect(screen.getByRole('button', { name: 'בחירה', pressed: true })).toBeInTheDocument()
+  })
+
+  it('ציור מסגרת כשהחלונית פתוחה למסגרת אחרת — החלונית לא עוברת למסגרת החדשה; לחיצה עליה פותחת את שלה', async () => {
+    const { log, container } = setup()
+    click(700, 120)
+    expect(screen.getByTestId('frame-popover')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'מסגרת חדשה' }))
+    // באזור בלי שורות — המסגרת נשארת כפי שצוירה
+    fireEvent.pointerDown(svgOf(), { button: 0, clientX: 300, clientY: 400, pointerId: 1 })
+    fireEvent.pointerMove(svgOf(), { clientX: 700, clientY: 500, pointerId: 1 })
+    fireEvent.pointerUp(svgOf(), { clientX: 700, clientY: 500, pointerId: 1 })
+    expect(log.errors).toEqual([])
+    expect(log.groups).toHaveLength(1)
+    const added = log.groups[0][0].value.frames.find((f) => f.bbox[1] === 400)
+    expect(added).toMatchObject({ stream: 'main', bbox: [300, 400, 700, 500] })
+    expect(screen.queryByTestId('frame-popover')).not.toBeInTheDocument()
+    expect(container.querySelectorAll(`[data-handle][data-fid="${added.fid}"]`)).toHaveLength(8)
+    click(500, 450)
+    const pop = screen.getByTestId('frame-popover')
+    expect(within(pop).getByRole('button', { name: 'ראשי', pressed: true })).toBeInTheDocument()
+    expect(container.querySelectorAll(`[data-handle][data-fid="${added.fid}"]`)).toHaveLength(8)
   })
 
   it('לקריאה בלבד: בלי כלים ובלי אישור; לחיצה עדיין מזיזה את הסמן', () => {
@@ -430,7 +453,9 @@ describe('ScanPanel — זרם המסגרת: כותרות וריהוט הדף', 
     expect(added).toMatchObject({ bbox: [516, 96, 904, 144] })
     expect(log.view.lines.find((l) => l.id === 1)).toMatchObject({ stream: 'notes_heading', stream_src: 'frame' })
     expect(screen.getAllByTestId('frame-badge').map((b) => b.textContent)).toContain('2הערות — כותרת 1')
-    // בחלונית: הכותרת פעילה
+    // בחלונית (נפתחת בלחיצה על המסגרת החדשה — היא הקטנה שבנקודה): הכותרת פעילה
+    expect(screen.queryByTestId('frame-popover')).not.toBeInTheDocument()
+    click(700, 120)
     expect(within(screen.getByTestId('frame-popover')).getByRole('button', { name: 'כותרת הערות', pressed: true })).toBeInTheDocument()
   })
 

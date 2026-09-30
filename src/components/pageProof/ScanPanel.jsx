@@ -64,7 +64,8 @@ import {
 // frame_seq לכל מסגרת, כקבוצה אחת. המספר-בזרם נגזר מסדר-הקריאה (כמו בתוכנת-הספר).
 // מסגרת מתהדקת לטקסט שבתוכה (snapFrame, כיווץ בלבד) — כשמציירים אותה, מזיזים אותה או
 // משנים את גודלה. הזרם: זרם-תוכן, הכותרת שלו ("כותרת הערות"), או "ריהוט הדף".
-// החלונית של מסגרת נבחרת נפתחת בלחיצה עליה, יושבת מחוץ למסגרת ונעלמת בזמן גרירה;
+// החלונית של מסגרת נבחרת נפתחת בלחיצה עליה (לא בציור מסגרת חדשה — זו רק נבחרת, עם הידיות),
+// יושבת מחוץ למסגרת ונעלמת בזמן גרירה;
 // "סגירה" סוגרת רק אותה — המסגרת נשארת בחורה (Esc / לחיצה מחוץ לה מבטלים את הבחירה).
 // שורות: פיצול / איחוד / שורה חדשה / תיבה / לא-שורה / "החיתוך תקין". שורות
 // שחיתוכן שונה מסומנות "לזיהוי מחדש" — הן ייחתכו וייקראו שוב בתוכנת-הספר.
@@ -212,8 +213,8 @@ export default function ScanPanel({
   const [framesTool, setFramesTool] = useState('select')
   const [linesTool, setLinesTool] = useState('select')
   const [selectedFid, setSelectedFid] = useState(null)
-  // החלונית של המסגרת הנבחרת פתוחה: נפתחת בלחיצה על מסגרת או בציור מסגרת חדשה; "סגירה"
-  // סוגרת רק אותה (המסגרת נשארת בחורה); גרירה/שינוי-גודל אינם פותחים אותה
+  // החלונית של המסגרת הנבחרת פתוחה: נפתחת רק בלחיצה על מסגרת; "סגירה" סוגרת רק אותה (המסגרת
+  // נשארת בחורה); ציור מסגרת חדשה, גרירה ושינוי-גודל אינם פותחים אותה
   const [popOpen, setPopOpen] = useState(false)
   const [selectedIds, setSelectedIds] = useState([])
   const [picked, setPicked] = useState(null) // {forDefault, key} — זרם שנבחר ביד ל"מסגרת חדשה"
@@ -343,8 +344,10 @@ export default function ScanPanel({
     const stream = resolveFrameStream(drawStream, bbox, lines, H)
     const fid = newFid(new Set(fs.frames.map((f) => f.fid)))
     if (commitFrames(insertFrame(fs.frames, { fid, stream, bbox, order: 0 }))) {
+      // המסגרת החדשה נבחרת (הידיות שלה מוצגות), אבל החלונית לא נפתחת — כמו אחרי הזזה או שינוי-גודל;
+      // היא נפתחת בלחיצה על המסגרת. במפורש false: אחרת חלונית שהייתה פתוחה למסגרת אחרת הייתה עוברת אליה
       setSelectedFid(fid)
-      setPopOpen(true)
+      setPopOpen(false)
       setFramesTool('select')
     }
   }
