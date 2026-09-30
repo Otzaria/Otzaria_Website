@@ -24,6 +24,8 @@ export async function GET() {
             _id: '$book',
             open: { $sum: { $cond: [{ $eq: ['$status', 'open'] }, 1, 0] } },
             done: { $sum: { $cond: [{ $eq: ['$status', 'done'] }, 1, 0] } },
+            // ממתינים לזיהוי-מחדש בתוכנת-הספר (הגשה מאושרת שינתה את החיתוך)
+            recut: { $sum: { $cond: [{ $eq: ['$status', 'recut'] }, 1, 0] } },
             double: { $sum: { $cond: [{ $gt: ['$required', 1] }, 1, 0] } },
             leased: { $sum: { $cond: [{ $gt: ['$leasedUntil', now] }, 1, 0] } },
           },
@@ -61,6 +63,7 @@ export async function GET() {
         lastImportAt: b.lastImportAt,
         open: p.open || 0,
         done: p.done || 0,
+        recut: p.recut || 0,
         double: p.double || 0,
         leased: p.leased || 0,
         submitted: s.submitted || 0,

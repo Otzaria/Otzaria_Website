@@ -5,11 +5,14 @@ import PageProofPage from '@/models/PageProofPage';
 import PageProofBook from '@/models/PageProofBook';
 import PageProofSubmission from '@/models/PageProofSubmission';
 import { requireProofSession, renewLease, editorPageShape } from '@/lib/pageProof/pool';
+import { sameRevision, storedRevision, submissionRevision } from '@/lib/pageProof/importRules';
 import { hasOcrAccess } from '@/lib/roles';
 import { badRequest, notFound, forbidden, serverError } from '@/lib/apiResponse';
 
 // GET: עמוד לעורך. מתנדב — רק עמוד שמוחכר לו (ההחכרה מתחדשת) או עמוד שכבר
 // הגיש (לצפייה, עם הפעולות שלו). מנהל OCR — כל עמוד, לקריאה.
+// "כבר הגיש" = הגשה לגרסה הנוכחית של העמוד: עמוד שחזר מזיהוי-מחדש (גרסה
+// חדשה) נפתח לעריכה גם למי שהגיש את הגרסה הקודמת.
 export async function GET(request, { params }) {
   const { session, userId, error } = await requireProofSession();
   if (error) return error;
@@ -18,11 +21,15 @@ export async function GET(request, { params }) {
     if (!mongoose.Types.ObjectId.isValid(id)) return badRequest('מזהה עמוד לא תקין');
     await connectDB();
 
-    const [page, mine] = await Promise.all([
+    const [page, subs] = await Promise.all([
       PageProofPage.findById(id).lean(),
-      PageProofSubmission.findOne({ page: id, user: userId, status: { $ne: 'rejected' } }, { ops: 1, status: 1, note: 1 }).lean(),
+      PageProofSubmission.find({ page: id, user: userId, status: { $ne: 'rejected' } }, { ops: 1, status: 1, note: 1, revision: 1 })
+        .sort({ createdAt: -1 })
+        .lean(),
     ]);
     if (!page) return notFound('העמוד לא נמצא');
+    const revision = storedRevision(page);
+    const mine = subs.find((s) => sameRevision(submissionRevision(s), revision)) || null;
 
     let mode = 'view';
     if (!mine) {

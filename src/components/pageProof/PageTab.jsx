@@ -3,19 +3,27 @@
 import { PAGE_TYPES } from '@/lib/pageProof/vocab'
 import { Section } from './LineTab'
 
-// כרטיסיית "עמוד": סוג-העמוד, בדיקת-השפיות של החיתוך, הוספת שורה שהוחמצה,
-// ו"כל השאר נכון" — אישור מפורש לשורות שנבדקו ולא דרשו תיקון.
+// כרטיסיית "עמוד" בלוח הפרטים: סוג-העמוד, בדיקת-השפיות של החיתוך, "החיתוך
+// בעמוד תקין", מעבר לתיקון החיתוך בסריקה (פיצול/איחוד/שורה שחסרה), שחזור
+// שורות שסומנו "לא-שורה", והתקדמות.
 
 const btn = 'rounded-md px-2 py-1 text-sm transition-colors disabled:opacity-40'
 
-export default function PageTab({ view, stats, untouched, mode, pendingAdd, streams, readOnly, act }) {
+export default function PageTab({ view, stats, readOnly = false, act }) {
   const sanity = view.sanity
+  const removed = (view.lines || []).filter((l) => l.status === 'removed')
   return (
     <div className="text-on-surface">
-      {sanity && sanity.verdict !== 'ok' && (
+      {sanity && sanity.verdict && sanity.verdict !== 'ok' && (
         <div className="my-2 rounded-md bg-danger-100 p-2 text-sm text-danger-700">
-          <b>בדיקת-השפיות חשודה בחיתוך שבור.</b> אם שורות רבות מפוצלות או חוצות טורים — אל תתייגו את העמוד; סמנו &quot;לא בטוח&quot; והוסיפו הערה למנהל.
-          {sanity.reasons?.length > 0 && <ul className="mt-1 list-disc pr-4 text-xs">{sanity.reasons.map((r, i) => <li key={i}>{typeof r === 'string' ? r : JSON.stringify(r)}</li>)}</ul>}
+          <b>בדיקת-השפיות חשודה בחיתוך שבור.</b> אם שורות רבות מפוצלות או חוצות טורים — תקנו במצב &quot;שורות&quot; בסריקה, או סמנו &quot;לא בטוח&quot; והוסיפו הערה למנהל.
+          {sanity.reasons?.length > 0 && (
+            <ul className="mt-1 list-disc pr-4 text-xs">
+              {sanity.reasons.map((r, i) => (
+                <li key={i}>{typeof r === 'string' ? r : JSON.stringify(r)}</li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
@@ -24,62 +32,62 @@ export default function PageTab({ view, stats, untouched, mode, pendingAdd, stre
           disabled={readOnly}
           value={view.page_type || 'regular'}
           onChange={(e) => act.pageType(e.target.value)}
+          aria-label="סוג העמוד"
           className="w-full rounded-md border border-surface-variant bg-surface px-2 py-1 text-sm"
         >
           {Object.entries(PAGE_TYPES).map(([k, v]) => (
-            <option key={k} value={k}>{v}</option>
+            <option key={k} value={k}>
+              {v}
+            </option>
           ))}
         </select>
       </Section>
 
-      <Section title="התקדמות">
-        <ul className="space-y-0.5 text-sm">
-          <li>{stats.lines} שורות · {stats.edited} תוקנו · {stats.ok} סומנו נכונות · {stats.removed} הוסרו</li>
-          <li>{stats.frames} מסגרות · {stats.ops} פעולות</li>
-        </ul>
-        <button
-          disabled={readOnly || !untouched.length}
-          onClick={act.okRest}
-          className={`${btn} mt-2 bg-success-100 text-success-800 hover:bg-success-200`}
-          title="מסמן 'השורה נכונה' לכל שורת-תוכן שלא תוקנה — רק אחרי שבאמת קראתם אותן"
-        >
-          ✓ כל השאר נכון ({untouched.length} שורות)
-        </button>
+      <Section title="חיתוך השורות" hint="שורה שחוצה שני טורים, שתי שורות בתיבה אחת, שורה שחסרה — מתקנים בסריקה, במצב 'שורות'">
+        <div className="flex flex-wrap gap-1">
+          <button type="button" onClick={act.toLinesMode} className={`${btn} bg-surface-variant/60 hover:bg-surface-variant`} title="פיצול, איחוד, שורה חדשה, תיבה, לא-שורה">
+            לתיקון החיתוך בסריקה
+          </button>
+          <button
+            type="button"
+            disabled={readOnly || !!view.cut_ok}
+            onClick={act.cutOk}
+            className={`${btn} ${view.cut_ok ? 'bg-success-100 text-success-800' : 'bg-success-600 text-white hover:bg-success-700'}`}
+            title="בדקתי את כל תיבות השורות בעמוד והחיתוך נכון"
+          >
+            {view.cut_ok ? '✓ החיתוך סומן כתקין' : '✓ החיתוך בעמוד תקין'}
+          </button>
+        </div>
       </Section>
 
-      <Section title="שורה שהוחמצה" hint="שורת-טקסט שהחיתוך לא מצא בכלל">
-        {!pendingAdd ? (
-          <>
-            <button
-              disabled={readOnly}
-              onClick={() => act.mode(mode === 'add' ? 'select' : 'add')}
-              className={`${btn} ${mode === 'add' ? 'bg-primary text-on-primary' : 'bg-surface-variant/60 hover:bg-surface-variant'}`}
-            >
-              {mode === 'add' ? 'ביטול' : 'הוספת שורה'}
-            </button>
-            {mode === 'add' && <p className="mt-1 text-xs text-info-700">גררו מלבן סביב השורה החסרה בסריקה</p>}
-          </>
-        ) : (
-          <form
-            className="space-y-2"
-            onSubmit={(e) => {
-              e.preventDefault()
-              const fd = new FormData(e.currentTarget)
-              act.addLine(String(fd.get('text') || ''), String(fd.get('stream') || 'main'))
-            }}
-          >
-            <input name="text" autoFocus placeholder="הטקסט של השורה" maxLength={2000} className="w-full rounded-md border border-surface-variant bg-surface px-2 py-1 text-sm" />
-            <select name="stream" defaultValue="main" className="w-full rounded-md border border-surface-variant bg-surface px-2 py-1 text-sm">
-              {streams.map((s) => (
-                <option key={s.key} value={s.key}>{s.he}</option>
-              ))}
-            </select>
-            <div className="flex gap-1">
-              <button type="submit" className={`${btn} bg-primary text-on-primary`}>הוסף</button>
-              <button type="button" onClick={act.cancelAdd} className={`${btn} bg-surface-variant/60`}>ביטול</button>
-            </div>
-          </form>
-        )}
+      <Section title={`שורות שסומנו "לא-שורה" (${removed.length})`}>
+        {!removed.length && <p className="text-xs text-on-surface/60">אין</p>}
+        <ul className="space-y-1 text-sm">
+          {removed.map((l) => (
+            <li key={l.id} className="flex items-center gap-2 rounded bg-surface-variant/40 px-2 py-1">
+              <span className="min-w-0 flex-1 truncate text-xs line-through">
+                {l.id > 0 ? `${(l.line_no ?? 0) + 1}: ` : ''}
+                {l.text || '(ריקה)'}
+              </span>
+              {l.id > 0 && (
+                <button type="button" disabled={readOnly} onClick={() => act.restoreLine(l.id)} className="text-xs text-info-700 hover:underline disabled:opacity-40">
+                  שחזור
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      </Section>
+
+      <Section title="התקדמות">
+        <ul className="space-y-0.5 text-sm">
+          <li>
+            {stats.lines} שורות · {stats.edited} תוקנו · {stats.ok} אושרו · {stats.removed} הוסרו
+          </li>
+          <li>
+            {stats.frames} מסגרות · {stats.ops} פעולות
+          </li>
+        </ul>
       </Section>
     </div>
   )

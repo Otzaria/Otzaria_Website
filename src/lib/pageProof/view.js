@@ -102,7 +102,10 @@ export function hitFrame(frames, [x, y], tol = 0) {
 }
 
 const overlaps = (a, b) => Math.min(a[2], b[2]) > Math.max(a[0], b[0]) && Math.min(a[3], b[3]) > Math.max(a[1], b[1]);
-const inside = (a, b, tol = 3) => a[0] >= b[0] - tol && a[1] >= b[1] - tol && a[2] <= b[2] + tol && a[3] <= b[3] + tol;
+// סובלנות של פיקסל אחד — כמו strict_where בתוכנת-הספר: שורה שבולטת יותר
+// מזה מהמסגרת אינה נספרת אצלם כתיוג
+const STRICT_TOL = 1;
+const inside = (a, b, tol = STRICT_TOL) => a[0] >= b[0] - tol && a[1] >= b[1] - tol && a[2] <= b[2] + tol && a[3] <= b[3] + tol;
 
 // שורות שנוגעות במסגרת-טקסט אבל אינן כולן בתוך אף מסגרת — "בולטות מהמסגרת"
 // ואינן נספרות כתיוג (קו אדום מקווקו במדריך-התיוג §3)
@@ -132,10 +135,13 @@ export function streamChoices(doc) {
   return list;
 }
 
-// שורות-תוכן שעוד לא נבדקו בהגשה הזו (לא תוקנו, לא אושרו, לא הוסרו, לא חדשות)
+// שורות-תוכן שעוד לא נבדקו בהגשה הזו (לא תוקנו, לא אושרו, לא הוסרו, לא
+// חדשות) — ובלי שורות שאושרו כבר לפני ההגהה הזו (view._preOk: במעבר שני,
+// מה שאושר בסבב הקודם), שאין צורך לאשר שוב
 export function untouchedLineIds(view) {
+  const pre = view?._preOk instanceof Set ? view._preOk : null;
   return (view?.lines || [])
-    .filter((l) => l.id > 0 && !l._textEdited && !l._ok && !l._new && l.status !== 'removed' && !isFurnitureStream(l.stream))
+    .filter((l) => l.id > 0 && !l._textEdited && !l._ok && !l._new && l.status !== 'removed' && !isFurnitureStream(l.stream) && !pre?.has(l.id))
     .map((l) => l.id);
 }
 

@@ -23,6 +23,14 @@
  * הסף (--max-diff): עמוד שהמנוע לא שינה נותן כאן 3–5 (תמונת-האתר היא JPEG
  * מרנדרר אחר ברזולוציה נמוכה); עמוד שיושר — 12 ומעלה (נמדד על "חכמת אדם",
  * 28/09/2026). עדיף להעלות עמוד מיותר מאשר לקשר עמוד שהתיבות שלו לא ייפלו עליו.
+ *
+ * רצפים (5 עמודים עוקבים למתנדב): מחושבים על הספר כולו במעבר אחד — גם העמודים
+ * שיועלו אחר כך ב-ZIP משתתפים בדירוג כבר עכשיו (expectPages), כך שעמוד מקושר
+ * לא "יתפוס" רצף של עמודים שאינם שכניו. ייבוא ה-ZIP מחלק שוב את כל עמודי הספר
+ * שעוד לא התחילו (importPackages), ועמודים שכבר חולקו שומרים את רצפם.
+ *
+ * עמוד שחזר מזיהוי-מחדש (מצב 'recut' באתר) מוחלף כשבחבילה גרסה חדשה שלו
+ * (revision גבוה יותר) — בשני המסלולים.
  */
 
 import fs from 'node:fs'
@@ -37,6 +45,7 @@ import Book from '../src/models/Book.js'
 import Page from '../src/models/Page.js'
 import { parsePackageEntries } from '../src/lib/pageProof/packageParse.js'
 import { importPackages } from '../src/lib/pageProof/importPackages.js'
+import { importSummaryParts } from '../src/lib/pageProof/importRules.js'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 dotenv.config({ path: path.join(ROOT, '.env.local') })
@@ -113,7 +122,10 @@ async function main() {
   for (const { doc, imagePath } of pkg.pages) {
     const sp = sitePages.get(doc.page)
     if (!sp) {
-      console.warn(`  עמוד ${doc.page}: אין עמוד כזה בספר באתר — דילוג`)
+      // אין תמונת-אתר לקשר אליה — העמוד עולה עם התמונה של המנוע (ב-ZIP). בלי זה
+      // הוא היה נספר ברצפים (expectPages) ולא מגיע לעולם, ותופס מקום ברצף
+      console.warn(`  עמוד ${doc.page}: אין עמוד כזה בספר באתר — יועלה ב-ZIP עם התמונה של המנוע`)
+      upload.push({ doc, imagePath })
       continue
     }
     const siteBuf = await fetchImage(o.site + encodeURI(sp.imagePath))
@@ -142,15 +154,31 @@ async function main() {
     files['pkg/חבילה.json'] = new TextEncoder().encode(JSON.stringify(meta))
     const zipPath = path.resolve(o.pkg) + '-להעלאה.zip'
     fs.writeFileSync(zipPath, zipSync(files, { level: 0 }))
-    console.log(`📦 ${upload.length} עמודים שיושרו במנוע — להעלות בכפתור הייבוא במסך הניהול:\n   ${zipPath}`)
+    console.log(
+      `📦 ${upload.length} עמודים (שיושרו במנוע, או שאין להם עמוד בספר באתר) — להעלות בכפתור הייבוא במסך הניהול:\n   ${zipPath}\n` +
+        '   (בייבוא ה-ZIP הרצפים מחושבים שוב על הספר כולו — עמודים שכבר חולקו למתנדבים שומרים את רצפם)'
+    )
   }
 
   if (o.dryRun) {
     console.log('— dry-run: לא נכתב דבר למסד —')
   } else if (links.size) {
     const linked = { ...pkg, pages: pkg.pages.filter((p) => links.has(p.doc.page)) }
-    const res = await importPackages([linked], entries, { links, siteBook: book._id, title: book.name, doublePct: o.doublePct })
-    console.log('✅', JSON.stringify(res))
+    // כל עמודי החבילה — גם אלה שיועלו ב-ZIP — משתתפים בחישוב הרצפים
+    const expectPages = pkg.pages.map((p) => p.doc.page)
+    const res = await importPackages([linked], entries, {
+      links,
+      siteBook: book._id,
+      title: book.name,
+      doublePct: o.doublePct,
+      expectPages,
+    })
+    for (const r of res) {
+      const reseq = r.resequenced ? ` · ${r.resequenced} שויכו לרצף אחר` : ''
+      console.log(`✅ ${r.title}: ${importSummaryParts(r).join(' · ')}${reseq}`)
+      for (const e of r.errors || []) console.warn(`   ⚠ ${e}`)
+    }
+    console.log(JSON.stringify(res))
   }
   await mongoose.disconnect()
 }

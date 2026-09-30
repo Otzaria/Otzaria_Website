@@ -62,12 +62,15 @@ export default function PageProofAdmin() {
       const res = await fetch(`/api/admin/page-proof/books/${book.gid}/fixes?${qs}`)
       if (!res.ok) throw new Error('ההורדה נכשלה')
       const n = Number(res.headers.get('X-Submission-Count') || 0)
+      // מעל 5,000 פעולות (התקרה של תוכנת-הספר לקובץ אחד) השרת מחזיר ZIP של כמה קבצים
+      const zip = String(res.headers.get('Content-Type') || '').includes('zip')
       const blob = await res.blob()
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
-      a.download = `תיקונים${set === 'double' ? '-כפולים' : ''}-${book.title}.json`
+      a.download = `תיקונים${set === 'double' ? '-כפולים' : ''}-${book.title}.${zip ? 'zip' : 'json'}`
       a.click()
       URL.revokeObjectURL(a.href)
+      if (zip) showAlert('כמה קבצים', 'יש יותר מ-5,000 תיקונים, ולכן הם הורדו כ-ZIP של כמה קבצי-תיקונים. יבאו אותם בתוכנה אחד-אחד, לפי הסדר.')
       if (mark && n) setBooks((bs) => bs.map((b) => (b.gid === book.gid ? { ...b, unexported: Math.max(0, b.unexported - n) } : b)))
     } catch (e) {
       showAlert('שגיאה', e.message)
@@ -98,10 +101,12 @@ export default function PageProofAdmin() {
     } else showAlert('שגיאה', d.error || 'המחיקה נכשלה')
   }
 
-  // אחרי אישור/דחייה: עדכון מקומי של התור והמונים
+  // אחרי אישור/דחייה: עדכון מקומי של התור והמונים. מצב העמוד (ממתין לזיהוי-
+  // מחדש, הושלם) נקבע בשרת — מוני-הספרים נטענים מחדש כדי שיהיו מדויקים
   const onReviewed = (id, newStatus) => {
     const item = queue?.items.find((s) => s.id === id)
     setReviewId(null)
+    loadBooks()
     if (!item) return loadQueue()
     setQueue((q) => ({
       ...q,
@@ -174,7 +179,7 @@ export default function PageProofAdmin() {
         onOpen={setReviewId}
       />
 
-      {reviewId && <ReviewModal id={reviewId} onClose={closeReview} onDone={onReviewed} />}
+      {reviewId && <ReviewModal id={reviewId} onClose={closeReview} onDone={onReviewed} onPageChanged={loadBooks} />}
     </div>
   )
 }
