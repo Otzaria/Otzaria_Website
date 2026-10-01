@@ -6,6 +6,8 @@ import { requireAccess, badRequest, serverError } from '@/lib/apiResponse'
 import AcronymChangeSet from '@/models/AcronymChangeSet'
 import { AcronymsInputError, getForkSnapshot, listOpenChangeSets, submitChangeSet } from '@/lib/acronyms/service'
 
+export const maxDuration = 300
+
 const anySignedIn = () => true
 const MAX_OPEN_PER_USER = 20
 const MIN_SECONDS_BETWEEN_SUBMISSIONS = 15

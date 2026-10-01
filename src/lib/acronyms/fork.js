@@ -14,6 +14,7 @@ export const ACRONYMS_BRANCH = 'master'
 export const ACRONYMS_PATH = 'data/acronymizer.sql'
 const PR_BODY_LIMIT = 60_000
 const FALLBACK_SIGNOFF = 'Otzaria Website <noreply@otzaria.org>'
+const DUMP_UPLOAD_TIMEOUT_MS = 120_000
 
 /** הטוקן המשותף לכל כתיבות ה-GitHub של האתר (כמו תיקוני הספרים). */
 export function createAcronymsClient({ token = process.env.DICTA_LIBRARY_GITHUB_TOKEN, fetchImpl } = {}) {
@@ -73,15 +74,17 @@ function bodyFor(changeSet, summary) {
 
 const summarize = (results) => summarizeChangeSet(results, { maxLength: PR_BODY_LIMIT })
 
-// GitHub מחזיר 401 גם לטוקן תקין כשההעלאה נמשכת מעל כדקה; העלאה שנכשלה לא יוצרת כלום,
-// ולכן ניסיון נוסף בטוח.
+// קובץ ה-dump קרוב ל-10MB והעלאתו עלולה להימשך יותר מדקת ברירת המחדל.
+// blob מזוהה לפי תוכנו, לכן אפשר לנסות שוב אחרי 401 או timeout גם אם התשובה הראשונה אבדה.
 async function uploadDump(client, text) {
   const bytes = Buffer.from(text, 'utf8')
-  try {
-    return await client.createBlob(bytes, { utf8: true })
-  } catch (err) {
-    if (err.status !== 401) throw err
-    return client.createBlob(bytes, { utf8: true })
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      return await client.createBlob(bytes, { utf8: true, timeoutMs: DUMP_UPLOAD_TIMEOUT_MS })
+    } catch (err) {
+      const timedOut = err?.name === 'TimeoutError' || err?.name === 'AbortError'
+      if (attempt > 0 || (err?.status !== 401 && !timedOut)) throw err
+    }
   }
 }
 

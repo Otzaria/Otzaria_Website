@@ -370,9 +370,9 @@ export function createRepoClient({ repo, token = null, fetchImpl = fetch, timeou
       return { sha: t.sha };
     },
     /** utf8: התוכן הוא טקסט UTF-8 תקין, ונשלח כמו שהוא — קטן בכרבע מ-base64. */
-    async createBlob(buffer, { utf8 = false } = {}) {
+    async createBlob(buffer, { utf8 = false, timeoutMs: requestTimeoutMs } = {}) {
       const body = utf8 ? { content: buffer.toString("utf8"), encoding: "utf-8" } : { content: buffer.toString("base64"), encoding: "base64" };
-      const b = await call(`/git/blobs`, { method: "POST", body });
+      const b = await call(`/git/blobs`, { method: "POST", body, ...(requestTimeoutMs == null ? {} : { timeoutMs: requestTimeoutMs }) });
       return { sha: b.sha };
     },
     async createCommit({ message, treeSha, parents }) {

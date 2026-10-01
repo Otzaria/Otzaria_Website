@@ -112,6 +112,12 @@ test('concurrent page loads after the cache expires share one GitHub fetch', asy
 
 test('a 401 on the slow dump upload is retried once, and the file goes up as utf-8 text', async () => {
   let blobPosts = 0
+  const timeouts = []
+  const originalTimeout = AbortSignal.timeout
+  AbortSignal.timeout = (ms) => {
+    timeouts.push(ms)
+    return originalTimeout(ms)
+  }
   const flaky = createRepoClient({
     repo: ACRONYMS_REPO,
     token: 't',
@@ -124,7 +130,29 @@ test('a 401 on the slow dump upload is retried once, and the file goes up as utf
       return gh.fetch(url, init)
     },
   })
-  const res = await publishChangeSet(flaky, { id: 'r1', ops: [{ type: 'add', book: 'ברכות', alias: 'בר"כ' }] })
+  try {
+    const res = await publishChangeSet(flaky, { id: 'r1', ops: [{ type: 'add', book: 'ברכות', alias: 'בר"כ' }] })
+    assert.equal(blobPosts, 2)
+    assert.ok(timeouts.includes(120_000), `expected the dump upload to use a 120-second timeout; got ${timeouts}`)
+    assert.deepEqual(aliasesOn(res.branch, 'ברכות'), ['בר"כ'])
+  } finally {
+    AbortSignal.timeout = originalTimeout
+  }
+})
+
+test('a timed-out dump upload is retried once', async () => {
+  let blobPosts = 0
+  const flaky = createRepoClient({
+    repo: ACRONYMS_REPO,
+    token: 't',
+    fetchImpl: async (url, init = {}) => {
+      if ((init.method || 'GET') === 'POST' && String(url).endsWith('/git/blobs') && blobPosts++ === 0) {
+        throw new DOMException('request timed out', 'TimeoutError')
+      }
+      return gh.fetch(url, init)
+    },
+  })
+  const res = await publishChangeSet(flaky, { id: 'r2', ops: [{ type: 'add', book: 'ברכות', alias: 'בר"כ' }] })
   assert.equal(blobPosts, 2)
   assert.deepEqual(aliasesOn(res.branch, 'ברכות'), ['בר"כ'])
 })
