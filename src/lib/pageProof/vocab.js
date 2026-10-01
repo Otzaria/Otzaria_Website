@@ -106,6 +106,13 @@ export const CERTAINTY = {
   ambiguous: 'לא בטוח',
 };
 
+// "פגם בדפוס": השורה תוקנה למה שאמור להיות כתוב בספר, ולא למה שרואים בסריקה (נקודה
+// במקום ו', "כה" במקום "כח"). הטקסט המתוקן נכנס לספר, אבל השורה אינה מלמדת את מודל-
+// הזיהוי — אחרת הוא לומד "לראות" אות שאינה בדף. בחוזה: certainty = ambiguous עם הסיבה
+// הזו (בתוכנת-הספר שורה "עמומה" אינה נכנסת לאימון — archive.py); בלי ערך-חוזה חדש.
+export const PRINT_DEFECT_WHY = 'פגם בדפוס — תוקן שלא לפי המקור';
+export const isPrintDefect = (line) => line?.certainty === 'ambiguous' && String(line?.certainty_why || '').startsWith(PRINT_DEFECT_WHY);
+
 // מסגרת-אובייקט (טבלה/איור/לוח) — אינה קולטת שורות לזרם
 export const FRAME_OBJECT_KINDS = { table: 'טבלה', figure: 'איור', plate: 'לוח' };
 

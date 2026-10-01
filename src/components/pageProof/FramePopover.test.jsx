@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import FramePopover, { StreamPicker } from './FramePopover'
-import { FURNITURE_CHOICE } from '@/lib/pageProof/scanGeometry'
+import { FURNITURE_CHOICE, NOTES_RUNHEAD_CHOICE } from '@/lib/pageProof/scanGeometry'
 
 const chips = {
   content: [
@@ -153,5 +153,29 @@ describe('FramePopover — השורה שבסמן בולטת מהמסגרת', () 
     unmount()
     setup()
     expect(screen.queryByTestId('popover-claim')).toBeNull()
+  })
+})
+
+// פורום (2026-10-01): המתנדבים סימנו את כותרת-הרצה שמעל ההערות כ"כותרת הערות" — שנכנסת לספר
+describe('StreamPicker — "כותרת-רצה של ההערות"', () => {
+  it('מוצגת רק כשיש בעמוד הערות, ובחירתה שולחת את הבחירה המפורשת', async () => {
+    const onPick = vi.fn()
+    const { rerender } = render(<StreamPicker chips={chips} value="main" onPick={onPick} />)
+    const btn = within(streams()).getByRole('button', { name: 'כותרת-רצה של ההערות' })
+    expect(btn).toHaveAttribute('title', expect.stringContaining('לא נכנסת לספר'))
+    // וההסבר על "כותרת הערות" אומר שהיא כן נכנסת, ומפנה לכותרת-הרצה
+    expect(within(streams()).getByRole('button', { name: 'כותרת הערות' })).toHaveAttribute('title', expect.stringContaining('כותרת-רצה של ההערות'))
+    await userEvent.click(btn)
+    expect(onPick).toHaveBeenLastCalledWith(NOTES_RUNHEAD_CHOICE)
+
+    // מסגרת שכבר "כותרת עמוד" — אין שינוי לשלוח
+    onPick.mockClear()
+    rerender(<StreamPicker chips={chips} value="header" onPick={onPick} />)
+    await userEvent.click(within(streams()).getByRole('button', { name: 'כותרת-רצה של ההערות' }))
+    expect(onPick).not.toHaveBeenCalled()
+
+    // עמוד בלי הערות — הכפתור אינו מוצג
+    rerender(<StreamPicker chips={{ ...chips, content: [chips.content[0]], headings: [chips.headings[0]] }} value="main" onPick={onPick} />)
+    expect(within(streams()).queryByRole('button', { name: 'כותרת-רצה של ההערות' })).not.toBeInTheDocument()
   })
 })

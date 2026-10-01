@@ -7,7 +7,7 @@ import ToolbarMenu from './ToolbarMenu'
 // סרגל-הכלים של עורך הגהת-העמודים — בנוסח סרגל העורך הישן של האתר
 // (components/editor/EditorToolbar): פס לבן, קבוצות-כפתורים אפורות, כפתורים
 // של 28px וטולטיפ עם קיצור-המקלדת. מימין לשמאל: ביטול/חזרה · סגנון-פסקה ·
-// עיצוב-תווים · פסקאות · קישור · מילים חשודות · זרם לשורות · תצוגה · עזרה ופרטים
+// עיצוב-תווים · פסקאות · קישור · מילים חשודות · זרם לשורות · פגם בדפוס · תצוגה · עזרה ופרטים
 // · ובקצה השמאלי — כפתורי הדף העוטף (actions, למשל "הגשה").
 //
 // כפתור שאין לו פעולה (handler חסר) — מושבת: כך העורך אומר "לא רלוונטי עכשיו"
@@ -204,6 +204,9 @@ export default function ProofToolbar({
   onNextSuspicious,
   streams = [],
   onStreamForLines,
+  // "פגם בדפוס" (מתג לשורות שבבחירה): printDefect — שורת-הסמן כבר מסומנת
+  onPrintDefect,
+  printDefect = false,
   fontSize = PROOF_FONT_SIZE.default,
   setFontSize,
   fontFamily = DEFAULT_PROOF_FONT,
@@ -372,6 +375,22 @@ export default function ProofToolbar({
           onSelect={(key) => onStreamForLines?.(key)}
           menuClassName="w-72"
         />
+
+        {/* פגם בדפוס — תיקון למה שאמור להיות בספר ולא למה שבסריקה: נכנס לספר, לא לאימון */}
+        <LabeledButton
+          label="פגם בדפוס"
+          title={
+            printDefect
+              ? 'השורה מסומנת «פגם בדפוס» — לחיצה מסירה את הסימון'
+              : 'פגם בדפוס: תיקנתי את השורה למה שאמור להיות כתוב בספר, לא למה שרואים בסריקה (נקודה במקום ו\', "כה" במקום "כח"). הטקסט המתוקן נכנס לספר, אבל השורה לא תשמש לאימון מודל-הזיהוי. חל על השורות שבבחירה'
+          }
+          pressed={!!printDefect}
+          onClick={onPrintDefect}
+          disabled={!edit(onPrintDefect)}
+        >
+          <span className="material-symbols-outlined text-sm" aria-hidden="true">flag</span>
+          <span className="text-[10px] font-medium">פגם בדפוס</span>
+        </LabeledButton>
 
         <Divider />
 

@@ -34,6 +34,7 @@ import {
   selectionInfo,
   toggleSelection,
   outsideLineIds,
+  furnitureMarks,
   recutSet,
   straddleClaim,
   frameLabel,
@@ -87,13 +88,16 @@ const ZOOM_KEY = 'pageProof.scanZoom'
 // רוחב משוער לפני שהלוח נמדד (סביבת-בדיקות / רגע הטעינה)
 const DEFAULT_VIEWPORT = 640
 const EMPTY = new Set()
+const NO_MARKS = []
 
 const FRAME_RULES = [
   'מסגרת = אזור רציף אחד של זרם אחד. פסקה חדשה באותו זרם — לא מסגרת חדשה.',
   'טקסט בשני טורים: שתי מסגרות באותו זרם — הימנית 1, השמאלית 2.',
   'הערות בתחתית: מסגרת בזרם "הערות".',
-  'כותרת (של פרק, של סעיף, של ההערות): מסגרת משלה בזרם הכותרת — "כותרת", "כותרת הערות" וכן הלאה.',
+  'כותרת של פרק או של סעיף: מסגרת משלה בזרם הכותרת — "כותרת" בטקסט, "כותרת הערות" בתוך ההערות. היא נכנסת לספר.',
   'כותרת-רצה, מספר עמוד, שומר-דף: "ריהוט הדף" (למעלה — כותרת עמוד, למטה — תחתית). הקו שמפריד בין הטקסט להערות: "עוד…" ← מפריד.',
+  'כותרת שחוזרת בכל עמוד מעל ההערות (שם החיבור שבהערות): "כותרת-רצה של ההערות" — ריהוט, לא "כותרת הערות".',
+  'ריהוט שהמחשב כבר זיהה מסומן באפור מקווקו — אין צורך לצייר לו מסגרת.',
   'שם הפרק מופיע רק בכותרת-הרצה? היא נשארת ריהוט — ובהגשה כתבו בהערה למנהל שפרק חדש מתחיל בעמוד הזה.',
   'קישוט או כתם שהמחשב קרא כשורה — לא ריהוט ולא מסגרת: במצב "שורות" מסמנים אותו "לא-שורה".',
   'שורה שנחתכה על פני שני טורים — נשארת מחוץ למסגרות; לא מרחיבים מסגרת כדי "לתפוס" אותה (מתקנים אותה במצב "שורות" ← פיצול).',
@@ -302,6 +306,8 @@ export default function ScanPanel({
   const straddleAll = useMemo(() => (fs.frames.length ? straddlingLineIds(view?.lines || [], fs.frames) : EMPTY), [fs, view])
   const straddle = mode === 'frames' ? straddleAll : EMPTY
   const outside = useMemo(() => (mode === 'frames' ? outsideLineIds(view?.lines, fs.frames) : EMPTY), [mode, fs, view])
+  // ריהוט שזוהה (בלי מסגרת) — אפור במצב "מסגרות", כדי שלא יציירו לו מסגרת
+  const furniture = useMemo(() => (mode === 'frames' ? furnitureMarks(view?.lines, fs.frames) : NO_MARKS), [mode, fs, view])
   const asking = askFor === fs && outside.size > 0
   const selInfo = useMemo(() => selectionInfo(view?.lines, selectedIds), [view, selectedIds])
 
@@ -695,6 +701,12 @@ export default function ScanPanel({
             </ActBtn>
           </span>
         )}
+        {mode === 'frames' && furniture.length > 0 && (
+          <span className="text-neutral-600" data-testid="furniture-note">
+            {furniture.length === 1 ? 'שורת ריהוט אחת' : `${furniture.length} שורות ריהוט`} (באפור — כותרת-רצה, מספר עמוד, מפריד) כבר זוהו: לא נכנסות
+            לספר, ואין צורך לצייר להן מסגרת
+          </span>
+        )}
         {mode === 'frames' && outside.size > 0 && !asking && (
           <span className="text-warning-800" data-testid="outside-note">
             {linesHe(outside.size)} מחוץ לכל מסגרת (בכתום) — טקסט בלי מסגרת: ציירו לו מסגרת; שורה שנחתכה על פני שני טורים: פצלו אותה במצב
@@ -742,6 +754,7 @@ export default function ScanPanel({
           recutIds={recut}
           straddleIds={straddle}
           outsideIds={outside}
+          furniture={furniture}
           currentLineId={currentLineId}
           currentWord={currentWord}
           caretY={caretY}
