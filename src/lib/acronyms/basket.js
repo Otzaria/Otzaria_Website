@@ -74,9 +74,23 @@ export function basketOps(basket) {
   })
 }
 
-/** חיפוש ספרים לפי שם או כינוי (כולל כינויים שבסל), בלי הבדלי גרשיים. */
-export function filterBooks(books, query) {
+/** הכינויים שעוד לא בפורק: הוספות ועריכות מהסל ומ-PR-ים פתוחים, לפי ספר. */
+export function unmergedAliases(basket, pending) {
+  const map = new Map()
+  const ops = [...basket, ...pending.flatMap((cs) => cs.ops || [])]
+  for (const op of ops) {
+    const alias = op.type === 'add' ? op.alias : op.type === 'rename' ? op.to : null
+    if (!alias) continue
+    if (!map.has(op.book)) map.set(op.book, [])
+    map.get(op.book).push(alias)
+  }
+  return map
+}
+
+/** חיפוש ספרים לפי שם או כינוי, כולל כינויים שבסל ובבקשות פתוחות, בלי הבדלי גרשיים. */
+export function filterBooks(books, query, extraAliases = new Map()) {
   const q = aliasKey(query)
   if (!q) return books
-  return books.filter((b) => aliasKey(b.title).includes(q) || b.aliases.some((a) => aliasKey(a).includes(q)))
+  const matches = (a) => aliasKey(a).includes(q)
+  return books.filter((b) => matches(b.title) || b.aliases.some(matches) || (extraAliases.get(b.title) || []).some(matches))
 }

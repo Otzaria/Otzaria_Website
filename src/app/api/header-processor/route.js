@@ -33,7 +33,7 @@ export async function GET() {
         'Content-Type': 'text/html; charset=utf-8',
         'Content-Disposition': `attachment; filename*=UTF-8''${filename}`,
         // נתון ציבורי-לגמרי, לא תלוי-משתמש/session — ראו הערה מקבילה
-        // ב-book-acronyms/export-json ו-github-releases.
+        // ב-github-releases.
         'Cache-Control': 'public, max-age=300, stale-while-revalidate=1200'
       }
     })

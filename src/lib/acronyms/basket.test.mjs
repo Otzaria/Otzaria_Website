@@ -1,7 +1,7 @@
 /** בדיקות סל השינויים בדף הכינויים. הרצה: npm test */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { addToBasket, basketOps, bookView, filterBooks, removeFromBasket } from './basket.js'
+import { addToBasket, basketOps, bookView, filterBooks, removeFromBasket, unmergedAliases } from './basket.js'
 
 const B = 'ברכות'
 
@@ -67,4 +67,15 @@ test('filterBooks matches titles and aliases regardless of quotes', () => {
   assert.deepEqual(filterBooks(books, 'רעקא').map((b) => b.title), ['רעק"א'])
   assert.deepEqual(filterBooks(books, "בר'כ").map((b) => b.title), ['ברכות'])
   assert.equal(filterBooks(books, '  ').length, 3)
+})
+
+test('search also finds books by aliases waiting in the basket or in an open PR', () => {
+  const books = [{ title: 'ברכות', aliases: [] }, { title: 'שבת', aliases: ['שב'] }, { title: 'עירובין', aliases: [] }]
+  const basket = [{ type: 'add', book: 'ברכות', alias: 'מס׳ ברכות' }, { type: 'rename', book: 'שבת', from: 'שב', to: 'שבת קודש' }]
+  const pending = [{ ops: [{ type: 'add', book: 'עירובין', alias: 'ערו"ב' }, { type: 'remove', book: 'שבת', alias: 'שב' }] }]
+  const extra = unmergedAliases(basket, pending)
+  assert.deepEqual(filterBooks(books, "מס' ברכות", extra).map((b) => b.title), ['ברכות'])
+  assert.deepEqual(filterBooks(books, 'קודש', extra).map((b) => b.title), ['שבת'])
+  assert.deepEqual(filterBooks(books, 'ערוב', extra).map((b) => b.title), ['עירובין'])
+  assert.deepEqual(filterBooks(books, 'קודש').map((b) => b.title), [])
 })

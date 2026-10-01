@@ -15,6 +15,7 @@ export class FakeGitHub {
     this.commits = new Map();
     this.refs = new Map();
     this.pulls = [];
+    this.issueComments = [];
     this.calls = [];
     this.hooks = {};
     const tree = this._putTree(this._filesToEntries(files));
@@ -194,6 +195,16 @@ export class FakeGitHub {
     if (method === 'GET' && (m = rest.match(/^\/pulls\/(\d+)$/))) {
       const pr = this.pulls[Number(m[1]) - 1];
       return pr ? json(200, pr) : json(404, {});
+    }
+    if (method === 'PATCH' && (m = rest.match(/^\/pulls\/(\d+)$/))) {
+      const pr = this.pulls[Number(m[1]) - 1];
+      if (!pr) return json(404, {});
+      for (const k of ['state', 'title', 'body']) if (body[k] !== undefined) pr[k] = body[k];
+      return json(200, pr);
+    }
+    if (method === 'POST' && (m = rest.match(/^\/issues\/(\d+)\/comments$/))) {
+      this.issueComments.push({ number: Number(m[1]), body: body.body });
+      return json(201, { id: this.issueComments.length });
     }
     return json(404, { message: `fake: no route ${method} ${rest}` });
   }

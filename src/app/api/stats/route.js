@@ -81,7 +81,7 @@ export async function GET() {
   try {
     const payload = await cached('site-stats', CACHE_TTL_MS, computeStats);
     // נתון ציבורי-אגרגטיבי-לגמרי (ספירות כלליות, לא תלוי-session/הרשאה) —
-    // מותר CDN/browser caching קצר, ראו הערה מקבילה ב-book-acronyms/export-json.
+    // מותר CDN/browser caching קצר, ראו הערה מקבילה ב-github-releases.
     return NextResponse.json(payload, {
       headers: { 'Cache-Control': 'public, max-age=60, stale-while-revalidate=300' }
     });

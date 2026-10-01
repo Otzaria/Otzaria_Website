@@ -7,16 +7,24 @@ const PREVIEW_LIMIT = 500
 
 /**
  * החלפה גורפת בטקסט הכינויים בכל הספרים (למשל כל "עיקבא" ל"עקיבא"), עם תצוגה מקדימה.
- * @param {{books:Array<{title:string, aliases:string[]}>, onAdd:(items:Array<{book:string, from:string, to:string}>)=>void, onClose:()=>void}} props
+ * @param {{books:Array<{title:string, aliases:string[]}>, room:number, onAdd:(items:Array<{book:string, from:string, to:string}>)=>void, onClose:()=>void}} props
  */
-export default function BulkReplacePanel({ books, onAdd, onClose }) {
+export default function BulkReplacePanel({ books, room, onAdd, onClose }) {
   const [find, setFind] = useState('')
   const [replace, setReplace] = useState('')
   const [excluded, setExcluded] = useState(() => new Set())
+  const [showAll, setShowAll] = useState(false)
 
   const plan = useMemo(() => planReplace(books, find, replace), [books, find, replace])
   const keyOf = (item) => `${item.book}\u0000${item.from}`
   const selected = plan.filter((item) => !item.problem && !excluded.has(keyOf(item)))
+  const shown = showAll ? plan : plan.slice(0, PREVIEW_LIMIT)
+  const overflow = selected.length > room
+  const setFindText = (value) => {
+    setFind(value)
+    setExcluded(new Set())
+    setShowAll(false)
+  }
 
   const toggle = (item) =>
     setExcluded((prev) => {
@@ -38,17 +46,24 @@ export default function BulkReplacePanel({ books, onAdd, onClose }) {
         </button>
       </div>
       <div className="flex flex-col md:flex-row gap-2 mb-3">
-        <input type="text" value={find} onChange={(e) => { setFind(e.target.value); setExcluded(new Set()) }} placeholder="טקסט לחיפוש, למשל: עיקבא" className="flex-1 border rounded-lg px-3 py-2" />
+        <input type="text" value={find} onChange={(e) => setFindText(e.target.value)} placeholder="טקסט לחיפוש, למשל: עיקבא" className="flex-1 border rounded-lg px-3 py-2" />
         <input type="text" value={replace} onChange={(e) => setReplace(e.target.value)} placeholder="החלפה, למשל: עקיבא" className="flex-1 border rounded-lg px-3 py-2" />
       </div>
       {find.trim() && (
         <>
-          <div className="text-sm text-on-surface/70 mb-2">
-            נמצאו {plan.length} כינויים; ייכנסו לסל {selected.length}.
-            {plan.length > PREVIEW_LIMIT && ` מוצגים ${PREVIEW_LIMIT} הראשונים, וכל המסומנים ייכנסו לסל.`}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-on-surface/70 mb-2">
+            <span>
+              נמצאו {plan.length} כינויים; ייכנסו לסל {selected.length}.
+              {!showAll && plan.length > PREVIEW_LIMIT && ` מוצגים ${PREVIEW_LIMIT} הראשונים, וכל המסומנים ייכנסו לסל.`}
+            </span>
+            {!showAll && plan.length > PREVIEW_LIMIT && (
+              <button type="button" onClick={() => setShowAll(true)} className="text-primary underline">הצגת כל {plan.length}</button>
+            )}
+            <button type="button" onClick={() => setExcluded(new Set())} className="text-primary underline">סימון הכול</button>
+            <button type="button" onClick={() => setExcluded(new Set(plan.map(keyOf)))} className="text-primary underline">ביטול הסימון</button>
           </div>
           <div className="max-h-80 overflow-y-auto border rounded-lg divide-y">
-            {plan.slice(0, PREVIEW_LIMIT).map((item) => (
+            {shown.map((item) => (
               <label key={keyOf(item)} className={`flex items-start gap-2 px-3 py-2 text-sm ${item.problem ? 'opacity-60' : ''}`}>
                 <input type="checkbox" disabled={Boolean(item.problem)} checked={!item.problem && !excluded.has(keyOf(item))} onChange={() => toggle(item)} className="mt-1" />
                 <span className="flex-1">
@@ -58,10 +73,15 @@ export default function BulkReplacePanel({ books, onAdd, onClose }) {
               </label>
             ))}
           </div>
-          <div className="mt-3 flex justify-end">
+          <div className="mt-3 flex flex-wrap items-center justify-end gap-3">
+            {overflow && (
+              <span className="text-sm text-danger-700">
+                {room > 0 ? `בסל נשאר מקום ל-${room} שינויים בלבד; בטלו חלק מהסימונים, או שלחו קודם את הסל.` : 'הסל מלא; שלחו אותו קודם.'}
+              </span>
+            )}
             <button
               type="button"
-              disabled={selected.length === 0}
+              disabled={selected.length === 0 || overflow}
               onClick={() => { onAdd(selected); setFind(''); setReplace('') }}
               className="px-4 py-2 rounded-lg bg-primary text-on-primary disabled:opacity-50 flex items-center gap-1"
             >

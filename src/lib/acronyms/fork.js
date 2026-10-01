@@ -73,9 +73,11 @@ function bodyFor(changeSet, summary) {
   return [...intro, text, '', `Change-Set: ${changeSet.id}`].join('\n')
 }
 
+/** סל שכל פעולותיו כבר חלו על master אינו מייצר קומיט; מחזיר commitSha: null. */
 async function commitChangeSet(client, base, changeSet) {
   const { state, results } = applyChangeSet(base.state, changeSet.ops)
   const summary = summarizeChangeSet(results)
+  if (!results.some((r) => r.status === 'applied')) return { commitSha: null, summary }
   const blob = await client.createBlob(Buffer.from(exportDump(state), 'utf8'))
   const tree = await client.createTree(base.treeSha, [{ path: ACRONYMS_PATH, mode: '100644', type: 'blob', sha: blob.sha }])
   const signoff = await resolveSignoff(client)
@@ -92,6 +94,7 @@ async function commitChangeSet(client, base, changeSet) {
 export async function publishChangeSet(client, changeSet, base) {
   base ||= await loadForkState(client)
   const { commitSha, summary } = await commitChangeSet(client, base, changeSet)
+  if (!commitSha) throw Object.assign(new Error('כל השינויים בסל כבר קיימים בפורק'), { code: 'NO_EFFECT' })
   const branch = branchName(changeSet.id)
   await client.createRef(branch, commitSha)
   const pr = await client.createPull({ title: titleFor(changeSet, summary), body: bodyFor(changeSet, summary), head: branch, base: ACRONYMS_BRANCH })
@@ -99,7 +102,17 @@ export async function publishChangeSet(client, changeSet, base) {
 }
 
 /**
- * מצב PR פתוח של סל, ובנייה מחדש שלו מעל master כשהוא התקדם.
+ * פותח PR לענף קיים של סל (למשל כשתשובת GitHub על פתיחת ה-PR אבדה). הכותרת מחושבת מול base.
+ * @returns {Promise<{prNumber:number, prUrl:string, summary:object}>}
+ */
+export async function openPullForBranch(client, changeSet, base) {
+  const summary = summarizeChangeSet(applyChangeSet(base.state, changeSet.ops).results)
+  const pr = await client.createPull({ title: titleFor(changeSet, summary), body: bodyFor(changeSet, summary), head: branchName(changeSet.id), base: ACRONYMS_BRANCH })
+  return { prNumber: pr.number, prUrl: pr.url, summary }
+}
+
+/**
+ * מצב PR פתוח של סל, ובנייה מחדש שלו מעל master כשהוא התקדם. PR שכל שינוייו כבר ב-master נסגר.
  * @returns {Promise<{status:'merged'|'closed'|'open'|'rebuilt'|'modified', headSha?:string, baseSha?:string, summary?:object}>}
  */
 export async function refreshChangeSet(client, changeSet, base) {
@@ -110,6 +123,11 @@ export async function refreshChangeSet(client, changeSet, base) {
   const ref = await client.getRef(changeSet.branch)
   if (!ref || ref.sha !== changeSet.headSha) return { status: 'modified' }
   const { commitSha, summary } = await commitChangeSet(client, base, changeSet)
+  if (!commitSha) {
+    await client.commentOnIssue(changeSet.prNumber, 'כל השינויים ב-PR הזה כבר נמצאים ב-`master`, ולכן הוא נסגר.')
+    await client.updatePull(changeSet.prNumber, { state: 'closed' })
+    return { status: 'closed' }
+  }
   await client.updateRef(changeSet.branch, commitSha, { force: true })
   return { status: 'rebuilt', headSha: commitSha, baseSha: base.headSha, summary }
 }

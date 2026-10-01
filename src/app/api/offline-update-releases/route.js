@@ -45,7 +45,7 @@ export async function GET() {
         macos: findAsset(assets, a => lower(a).includes('macos') && lower(a).endsWith('.zip'))
       },
       // נתון ציבורי-לגמרי, לא תלוי-משתמש/session — ראו הערה מקבילה
-      // ב-book-acronyms/export-json ו-github-releases.
+      // ב-github-releases.
       { headers: { 'Cache-Control': 'public, max-age=300, stale-while-revalidate=1200' } }
     )
   } catch (error) {

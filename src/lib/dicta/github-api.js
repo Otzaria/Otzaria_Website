@@ -404,5 +404,12 @@ export function createRepoClient({ repo, token = null, fetchImpl = fetch, timeou
       const pr = await call(`/pulls/${Number(number)}`);
       return { number: pr.number, url: pr.html_url, state: pr.state, merged: Boolean(pr.merged), mergeCommitSha: pr.merge_commit_sha || null };
     },
+    /** fields: { state?: 'open'|'closed', title?, body? } */
+    async updatePull(number, fields) {
+      await call(`/pulls/${Number(number)}`, { method: "PATCH", body: fields });
+    },
+    async commentOnIssue(number, body) {
+      await call(`/issues/${Number(number)}/comments`, { method: "POST", body: { body } });
+    },
   };
 }

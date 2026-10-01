@@ -9,7 +9,8 @@ import BookAliasesCard from '@/components/acronyms/BookAliasesCard'
 import BulkReplacePanel from '@/components/acronyms/BulkReplacePanel'
 import NewBookForm from '@/components/acronyms/NewBookForm'
 import ChangeBasketBar from '@/components/acronyms/ChangeBasketBar'
-import { addToBasket, basketOps, filterBooks, removeFromBasket } from '@/lib/acronyms/basket'
+import { addToBasket, basketOps, filterBooks, removeFromBasket, unmergedAliases } from '@/lib/acronyms/basket'
+import { MAX_OPS_PER_CHANGE_SET } from '@/lib/acronyms/changes'
 
 const BASKET_KEY = 'acronyms-basket-v1'
 const PAGE_SIZE = 30
@@ -90,14 +91,21 @@ export default function LibraryAcronymsPage() {
     return map
   }, [pending])
 
-  const filtered = useMemo(() => filterBooks(allBooks, search), [allBooks, search])
+  const extraAliases = useMemo(() => unmergedAliases(basket, pending), [basket, pending])
+  const filtered = useMemo(() => filterBooks(allBooks, search, extraAliases), [allBooks, search, extraAliases])
 
-  const addOp = (op) => updateBasket(addToBasket(basket, op))
   const onError = (message) => showAlert('לא ניתן להוסיף לסל', message)
+  const fullBasketMessage = `בסל אפשר לשלוח עד ${MAX_OPS_PER_CHANGE_SET} שינויים בבת אחת. שלחו את הסל הנוכחי, ואז המשיכו.`
+  const addOp = (op) => {
+    const next = addToBasket(basket, op)
+    if (next.length > MAX_OPS_PER_CHANGE_SET) return onError(fullBasketMessage)
+    updateBasket(next)
+  }
 
   const addReplacements = (items) => {
     let next = basket
     for (const item of items) next = addToBasket(next, { type: 'rename', book: item.book, from: item.from, to: item.to })
+    if (next.length > MAX_OPS_PER_CHANGE_SET) return onError(fullBasketMessage)
     updateBasket(next)
     setPanel(null)
   }
@@ -167,7 +175,7 @@ export default function LibraryAcronymsPage() {
             </div>
           )}
 
-          {panel === 'replace' && <BulkReplacePanel books={books} onAdd={addReplacements} onClose={() => setPanel(null)} />}
+          {panel === 'replace' && <BulkReplacePanel books={books} room={MAX_OPS_PER_CHANGE_SET - basket.length} onAdd={addReplacements} onClose={() => setPanel(null)} />}
           {panel === 'new-book' && (
             <NewBookForm
               onClose={() => setPanel(null)}
@@ -200,7 +208,7 @@ export default function LibraryAcronymsPage() {
           )}
         </div>
       </main>
-      <ChangeBasketBar basket={basket} submitting={submitting} onRemove={(i) => updateBasket(removeFromBasket(basket, i))} onClear={() => updateBasket([])} onSubmit={submit} />
+      <ChangeBasketBar basket={basket} limit={MAX_OPS_PER_CHANGE_SET} submitting={submitting} onRemove={(i) => updateBasket(removeFromBasket(basket, i))} onClear={() => updateBasket([])} onSubmit={submit} />
     </div>
   )
 }

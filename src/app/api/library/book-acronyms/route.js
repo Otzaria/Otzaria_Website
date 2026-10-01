@@ -56,6 +56,6 @@ export async function POST(request) {
   } catch (error) {
     if (error instanceof AcronymsInputError) return badRequest(error.message)
     console.error('POST /api/library/book-acronyms failed:', error)
-    return serverError('שגיאה בפתיחת הבקשה לעדכון הכינויים')
+    return serverError('שגיאה בפתיחת הבקשה לעדכון הכינויים. ייתכן שהיא נפתחה בכל זאת; אם השינויים יופיעו בדף כממתינים בעוד כמה דקות, אין צורך לשלוח שוב')
   }
 }

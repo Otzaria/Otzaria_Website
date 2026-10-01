@@ -4,8 +4,8 @@
  */
 import AcronymChangeSet from '../../models/AcronymChangeSet.js'
 import { listBooks } from './dump.js'
-import { validateChangeSet } from './changes.js'
-import { ACRONYMS_REPO, branchName, createAcronymsClient, loadForkState, publishChangeSet, refreshChangeSet } from './fork.js'
+import { applyChangeSet, summarizeChangeSet, validateChangeSet } from './changes.js'
+import { ACRONYMS_REPO, branchName, createAcronymsClient, loadForkState, openPullForBranch, publishChangeSet, refreshChangeSet } from './fork.js'
 
 // ה-cron מנקה את המטמון כש-master זז, ולכן אין צורך בתוקף קצר
 const SNAPSHOT_TTL_MS = 10 * 60_000
@@ -51,6 +51,9 @@ export async function submitChangeSet({ rawOps, userId = null, kind = 'user', la
   const base = await loadForkState(client)
   const checked = validateChangeSet(rawOps, base.state)
   if (checked.error) throw new AcronymsInputError(checked.error)
+  if (!applyChangeSet(base.state, checked.ops).results.some((r) => r.status === 'applied')) {
+    throw new AcronymsInputError('כל השינויים בסל כבר קיימים בפורק')
+  }
 
   const doc = await AcronymChangeSet.create({ ops: checked.ops, kind, label, submittedBy: userId, status: 'publishing', legacyPendingIds })
   const id = String(doc._id)
@@ -62,19 +65,32 @@ export async function submitChangeSet({ rawOps, userId = null, kind = 'user', la
     )
     return { id, prUrl: res.prUrl, prNumber: res.prNumber, counts: res.summary.counts, books: res.summary.books }
   } catch (err) {
-    await AcronymChangeSet.updateOne({ _id: doc._id }, { $set: { status: 'failed', lastError: String(err?.message || err).slice(0, 500) } })
+    // תשובה שנכשלה אינה אומרת שהענף או ה-PR לא נוצרו; בודקים מול GitHub לפני שמסמנים כישלון
+    const lastError = String(err?.message || err).slice(0, 500)
+    const patch = await reconcilePublishing(client, { _id: doc._id, ops: checked.ops, label }, base).catch(() => null)
+    // כשגם הבדיקה נכשלה הסל נשאר 'publishing', וה-cron יברר שוב
+    await AcronymChangeSet.updateOne({ _id: doc._id }, { $set: { ...(patch || {}), lastError } })
+    if (patch?.status === 'open') return { id, prUrl: patch.prUrl, prNumber: patch.prNumber, counts: patch.counts, books: patch.books }
     throw err
   }
 }
 
-async function reconcilePublishing(client, doc) {
+/** סל שנתקע ב-'publishing': מה נוצר בפועל ב-GitHub. ענף בלי PR מקבל PR. */
+async function reconcilePublishing(client, doc, base) {
   const [owner] = ACRONYMS_REPO.split('/')
-  const branch = doc.branch || branchName(String(doc._id))
-  const pr = await client.findPullByHead(owner, branch)
-  if (!pr) return { status: 'failed', lastError: 'הפרסום לא הושלם' }
+  const id = String(doc._id)
+  const branch = branchName(id)
   const ref = await client.getRef(branch)
+  const found = await client.findPullByHead(owner, branch)
+  if (!found && !ref) return { status: 'failed', lastError: 'הפרסום לא הושלם' }
+  if (found?.merged) return { status: 'merged', branch, prNumber: found.number, prUrl: found.url }
+  if (found && found.state === 'closed') return { status: 'closed', branch, prNumber: found.number, prUrl: found.url }
+  let pr = found && { prNumber: found.number, prUrl: found.url }
+  let summary
+  if (!pr) ({ summary, ...pr } = await openPullForBranch(client, { id, ops: doc.ops, label: doc.label }, base))
+  summary ||= summarizeChangeSet(applyChangeSet(base.state, doc.ops).results)
   const head = ref ? await client.getCommit(ref.sha) : null
-  return { status: 'open', branch, prNumber: pr.number, prUrl: pr.url, headSha: ref?.sha || null, baseSha: head?.parents?.[0] || null }
+  return { status: 'open', branch, ...pr, headSha: ref?.sha || null, baseSha: head?.parents?.[0] || null, counts: summary.counts, books: summary.books }
 }
 
 /**
@@ -83,14 +99,19 @@ async function reconcilePublishing(client, doc) {
  */
 export async function syncChangeSets(client = createAcronymsClient(), now = Date.now()) {
   const summary = { checked: 0, rebuilt: 0, merged: 0, closed: 0, modified: 0, failed: 0 }
+  const base = await loadForkState(client)
   const stale = await AcronymChangeSet.find({ status: 'publishing', updatedAt: { $lt: new Date(now - STALE_PUBLISHING_MS) } })
   for (const doc of stale) {
-    const patch = await reconcilePublishing(client, doc)
-    await AcronymChangeSet.updateOne({ _id: doc._id }, { $set: patch })
-    if (patch.status === 'failed') summary.failed++
+    try {
+      const patch = await reconcilePublishing(client, doc, base)
+      await AcronymChangeSet.updateOne({ _id: doc._id }, { $set: patch })
+      if (patch.status === 'failed') summary.failed++
+    } catch (err) {
+      await AcronymChangeSet.updateOne({ _id: doc._id }, { $set: { lastError: String(err?.message || err).slice(0, 500) } })
+      summary.failed++
+    }
   }
 
-  const base = await loadForkState(client)
   if (cache.snapshot && cache.snapshot.headSha !== base.headSha) rememberSnapshot(base)
   const open = await AcronymChangeSet.find({ status: 'open' }).sort({ createdAt: 1 })
   if (open.length === 0) return summary

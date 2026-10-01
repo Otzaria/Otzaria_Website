@@ -10,12 +10,13 @@ function describe(op) {
 
 /**
  * פס הסל בתחתית הדף: פירוט השינויים ושליחתם כבקשת שינוי (PR) אחת לפורק.
- * @param {{basket:object[], submitting:boolean, onRemove:(index:number)=>void, onClear:()=>void, onSubmit:()=>void}} props
+ * @param {{basket:object[], limit:number, submitting:boolean, onRemove:(index:number)=>void, onClear:()=>void, onSubmit:()=>void}} props
  */
-export default function ChangeBasketBar({ basket, submitting, onRemove, onClear, onSubmit }) {
+export default function ChangeBasketBar({ basket, limit, submitting, onRemove, onClear, onSubmit }) {
   const [open, setOpen] = useState(false)
   if (basket.length === 0) return null
   const books = new Set(basket.map((o) => o.book)).size
+  const tooBig = basket.length > limit
 
   return (
     <div className="fixed bottom-0 inset-x-0 z-30 border-t border-surface-variant bg-white shadow-lg">
@@ -39,11 +40,12 @@ export default function ChangeBasketBar({ basket, submitting, onRemove, onClear,
           <button type="button" onClick={() => setOpen((v) => !v)} className="text-on-surface font-medium">
             {basket.length} שינויים ב-{books} ספרים {open ? '▲' : '▼'}
           </button>
+          {tooBig && <span className="text-sm text-danger-700">אפשר לשלוח עד {limit} שינויים בבת אחת; הסירו {basket.length - limit} מהסל.</span>}
           <div className="flex items-center gap-2">
             <button type="button" onClick={onClear} disabled={submitting} className="px-4 py-2 rounded-lg border border-neutral-300 disabled:opacity-50">
               ניקוי הסל
             </button>
-            <button type="button" onClick={onSubmit} disabled={submitting} className="px-4 py-2 rounded-lg bg-primary text-on-primary disabled:opacity-50 flex items-center gap-1">
+            <button type="button" onClick={onSubmit} disabled={submitting || tooBig} className="px-4 py-2 rounded-lg bg-primary text-on-primary disabled:opacity-50 flex items-center gap-1">
               <span className="material-symbols-outlined text-base">send</span>
               {submitting ? 'שולח...' : 'שליחה לבדיקה'}
             </button>
