@@ -1,12 +1,12 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { planReplace } from '@/lib/acronyms/changes'
+import { planAddAliases } from '@/lib/acronyms/changes'
 
 const PREVIEW_LIMIT = 500
 
 /**
- * החלפה גורפת בטקסט הכינויים בכל הספרים (למשל כל "עיקבא" ל"עקיבא"), עם תצוגה מקדימה.
+ * כינוי קבוע למילה: לכל ספר ששמו או כינוייו כוללים את המילה נוסף כינוי עם הצורה החלופית (למשל "עקיבא" ← "עקיבה"), עם תצוגה מקדימה.
  * @param {{books:Array<{title:string, aliases:string[]}>, room:number, onAdd:(items:Array<{book:string, from:string, to:string}>)=>void, onClose:()=>void}} props
  */
 export default function BulkReplacePanel({ books, room, onAdd, onClose }) {
@@ -15,7 +15,7 @@ export default function BulkReplacePanel({ books, room, onAdd, onClose }) {
   const [excluded, setExcluded] = useState(() => new Set())
   const [showAll, setShowAll] = useState(false)
 
-  const plan = useMemo(() => planReplace(books, find, replace), [books, find, replace])
+  const plan = useMemo(() => planAddAliases(books, find, replace), [books, find, replace])
   const keyOf = (item) => `${item.book}\u0000${item.from}`
   const selected = plan.filter((item) => !item.problem && !excluded.has(keyOf(item)))
   const shown = showAll ? plan : plan.slice(0, PREVIEW_LIMIT)
@@ -39,21 +39,21 @@ export default function BulkReplacePanel({ books, room, onAdd, onClose }) {
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-lg font-bold text-on-surface flex items-center gap-1">
           <span className="material-symbols-outlined">find_replace</span>
-          החלפה בכל הכינויים
+          כינוי קבוע למילה
         </h2>
         <button type="button" onClick={onClose} aria-label="סגירה" className="p-1 rounded hover:bg-surface-variant">
           <span className="material-symbols-outlined">close</span>
         </button>
       </div>
       <div className="flex flex-col md:flex-row gap-2 mb-3">
-        <input type="text" value={find} onChange={(e) => setFindText(e.target.value)} placeholder="טקסט לחיפוש, למשל: עיקבא" className="flex-1 border rounded-lg px-3 py-2" />
-        <input type="text" value={replace} onChange={(e) => setReplace(e.target.value)} placeholder="החלפה, למשל: עקיבא" className="flex-1 border rounded-lg px-3 py-2" />
+        <input type="text" value={find} onChange={(e) => setFindText(e.target.value)} placeholder="מילה שמופיעה בשם או בכינוי, למשל: עקיבא" className="flex-1 border rounded-lg px-3 py-2" />
+        <input type="text" value={replace} onChange={(e) => setReplace(e.target.value)} placeholder="הצורה לכינוי החדש, למשל: עקיבה" className="flex-1 border rounded-lg px-3 py-2" />
       </div>
       {find.trim() && (
         <>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-on-surface/70 mb-2">
             <span>
-              נמצאו {plan.length} כינויים; ייכנסו לסל {selected.length}.
+              נמצאו {plan.length} כינויים אפשריים; ייכנסו לסל {selected.length}.
               {!showAll && plan.length > PREVIEW_LIMIT && ` מוצגים ${PREVIEW_LIMIT} הראשונים, וכל המסומנים ייכנסו לסל.`}
             </span>
             {!showAll && plan.length > PREVIEW_LIMIT && (
@@ -67,7 +67,7 @@ export default function BulkReplacePanel({ books, room, onAdd, onClose }) {
               <label key={keyOf(item)} className={`flex items-start gap-2 px-3 py-2 text-sm ${item.problem ? 'opacity-60' : ''}`}>
                 <input type="checkbox" disabled={Boolean(item.problem)} checked={!item.problem && !excluded.has(keyOf(item))} onChange={() => toggle(item)} className="mt-1" />
                 <span className="flex-1">
-                  <span className="font-medium">{item.book}</span>: {item.from} ← {item.to}
+                  <span className="font-medium">{item.book}</span>: {item.from} ← כינוי חדש: {item.to}
                   {item.problem && <span className="block text-danger-700">{item.problem}</span>}
                 </span>
               </label>

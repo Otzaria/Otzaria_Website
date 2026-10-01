@@ -104,7 +104,7 @@ export default function LibraryAcronymsPage() {
 
   const addReplacements = (items) => {
     let next = basket
-    for (const item of items) next = addToBasket(next, { type: 'rename', book: item.book, from: item.from, to: item.to })
+    for (const item of items) next = addToBasket(next, { type: 'add', book: item.book, alias: item.to })
     if (next.length > MAX_OPS_PER_CHANGE_SET) return onError(fullBasketMessage)
     updateBasket(next)
     setPanel(null)
@@ -155,7 +155,7 @@ export default function LibraryAcronymsPage() {
               <div className="flex gap-2">
                 <button type="button" onClick={() => setPanel(panel === 'replace' ? null : 'replace')} className="px-3 py-1.5 rounded-lg border border-primary text-primary flex items-center gap-1 text-sm">
                   <span className="material-symbols-outlined text-base">find_replace</span>
-                  החלפה בכל הכינויים
+                  כינוי קבוע למילה
                 </button>
                 <button type="button" onClick={() => setPanel(panel === 'new-book' ? null : 'new-book')} className="px-3 py-1.5 rounded-lg border border-primary text-primary flex items-center gap-1 text-sm">
                   <span className="material-symbols-outlined text-base">add</span>
