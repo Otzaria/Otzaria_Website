@@ -369,8 +369,10 @@ export function createRepoClient({ repo, token = null, fetchImpl = fetch, timeou
       const t = await call(`/git/trees`, { method: "POST", body: { base_tree: baseTreeSha, tree: entries } });
       return { sha: t.sha };
     },
-    async createBlob(buffer) {
-      const b = await call(`/git/blobs`, { method: "POST", body: { content: buffer.toString("base64"), encoding: "base64" } });
+    /** utf8: התוכן הוא טקסט UTF-8 תקין, ונשלח כמו שהוא — קטן בכרבע מ-base64. */
+    async createBlob(buffer, { utf8 = false } = {}) {
+      const body = utf8 ? { content: buffer.toString("utf8"), encoding: "utf-8" } : { content: buffer.toString("base64"), encoding: "base64" };
+      const b = await call(`/git/blobs`, { method: "POST", body });
       return { sha: b.sha };
     },
     async createCommit({ message, treeSha, parents }) {

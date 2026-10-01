@@ -97,3 +97,22 @@ test('concurrent page loads after the cache expires share one GitHub fetch', asy
   assert.equal(calls, perLoad) // בתוך התוקף: בלי פנייה ל-GitHub
   assert.deepEqual(a.books.find((x) => x.title === 'בראשית').aliases, ["בר'"])
 })
+
+test('a 401 on the slow dump upload is retried once, and the file goes up as utf-8 text', async () => {
+  let blobPosts = 0
+  const flaky = createRepoClient({
+    repo: ACRONYMS_REPO,
+    token: 't',
+    fetchImpl: async (url, init = {}) => {
+      if ((init.method || 'GET') === 'POST' && String(url).endsWith('/git/blobs')) {
+        blobPosts++
+        assert.equal(JSON.parse(init.body).encoding, 'utf-8')
+        if (blobPosts === 1) return new Response(JSON.stringify({ message: 'Bad credentials' }), { status: 401 })
+      }
+      return gh.fetch(url, init)
+    },
+  })
+  const res = await publishChangeSet(flaky, { id: 'r1', ops: [{ type: 'add', book: 'ברכות', alias: 'בר"כ' }] })
+  assert.equal(blobPosts, 2)
+  assert.deepEqual(aliasesOn(res.branch, 'ברכות'), ['בר"כ'])
+})

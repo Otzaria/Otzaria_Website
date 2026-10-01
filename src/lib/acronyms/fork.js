@@ -73,12 +73,24 @@ function bodyFor(changeSet, summary) {
   return [...intro, text, '', `Change-Set: ${changeSet.id}`].join('\n')
 }
 
+// GitHub מחזיר 401 גם לטוקן תקין כשההעלאה נמשכת מעל כדקה; העלאה שנכשלה לא יוצרת כלום,
+// ולכן ניסיון נוסף בטוח.
+async function uploadDump(client, text) {
+  const bytes = Buffer.from(text, 'utf8')
+  try {
+    return await client.createBlob(bytes, { utf8: true })
+  } catch (err) {
+    if (err.status !== 401) throw err
+    return client.createBlob(bytes, { utf8: true })
+  }
+}
+
 /** סל שכל פעולותיו כבר חלו על master אינו מייצר קומיט; מחזיר commitSha: null. */
 async function commitChangeSet(client, base, changeSet) {
   const { state, results } = applyChangeSet(base.state, changeSet.ops)
   const summary = summarizeChangeSet(results)
   if (!results.some((r) => r.status === 'applied')) return { commitSha: null, summary }
-  const blob = await client.createBlob(Buffer.from(exportDump(state), 'utf8'))
+  const blob = await uploadDump(client, exportDump(state))
   const tree = await client.createTree(base.treeSha, [{ path: ACRONYMS_PATH, mode: '100644', type: 'blob', sha: blob.sha }])
   const signoff = await resolveSignoff(client)
   const message = `${titleFor(changeSet, summary)}\n\nChange-Set: ${changeSet.id}\n\nSigned-off-by: ${signoff}`
