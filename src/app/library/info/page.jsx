@@ -245,13 +245,15 @@ export default function LibraryInfoPage() {
             <form onSubmit={handleSubmit} className="p-5 space-y-4">
               <h2 className="text-xl font-bold">עריכת מידע ספר</h2>
 
+              {/* שם הספר הוא שם הקובץ בספרייה, שלפיו הדור מקושר לספר; לכן אינו נערך כאן */}
               <Field label="שם הספר">
                 <input
                   type="text"
                   value={formData.bookName}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, bookName: e.target.value }))}
-                  className="w-full border rounded-lg px-3 py-2"
+                  readOnly
+                  className="w-full border rounded-lg px-3 py-2 bg-surface text-on-surface/70 cursor-not-allowed"
                 />
+                <p className="text-xs text-on-surface/60 mt-1">שם הספר זהה לשמו בספרייה ואינו ניתן לשינוי.</p>
               </Field>
 
               <Field label="שם המחבר">

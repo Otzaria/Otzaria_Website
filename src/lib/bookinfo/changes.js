@@ -48,6 +48,9 @@ export function validateChangeSet(rawOps, state) {
     if (errors.length > 0) return { error: `${where} (${book}): ${errors[0]}` }
 
     const changes = buildDiff(current, updates)
+    // שם הספר הוא book.title בספרייה (המפתח שבו SeforimLibrary מקשר את הדור לספר); שורה ששמה שונה
+    // כאן כבר לא מתאימה לאף ספר, וה-CI של ריפו הספרייה מוחק אותה כיתומה
+    if ('bookName' in changes) return { error: `${where} (${book}): לא ניתן לשנות את שם הספר, כי הוא חייב להיות זהה לשם הספר בספרייה` }
     if (Object.keys(changes).length === 0) return { error: `${where} (${book}): אין שינוי מול הנתון בקובץ` }
     ops.push({ type: 'update', book, author, changes })
   }

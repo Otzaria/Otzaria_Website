@@ -59,6 +59,12 @@ test('validateChangeSet keeps only the changed fields and checks the generation 
   assert.match(validateChangeSet([{ book: 'אין כזה', author: '', updates: { startYear: 1 } }], state).error, /אינו ברשימה/)
   assert.match(validateChangeSet([{ book: 'אבן עזרא', author: 'אברהם אבן עזרא', updates: { startYear: 1089 } }], state).error, /אין שינוי/)
   assert.match(validateChangeSet([], state).error, /ריק/)
+  // שם הספר הוא המפתח לספר בספרייה ואינו נערך; שליחתו כמו שהוא (כמו שהטופס שולח) אינה שינוי
+  assert.match(validateChangeSet([{ book: 'אבן עזרא', author: 'אברהם אבן עזרא', updates: { bookName: 'אבן עזרא החדש' } }], state).error, /שם הספר/)
+  assert.deepEqual(validateChangeSet([{ book: 'אבן עזרא', author: 'אברהם אבן עזרא', updates: { bookName: 'אבן עזרא', endYear: 1167 } }], state).ops[0].changes, { endYear: 1167 })
+  // תורה שבכתב: אחד מחמשת הדורות של האפליקציה, בלי דורות משנה
+  assert.deepEqual(validateChangeSet([{ book: 'בראשית רבה', author: '', updates: { generationName: 'תורה שבכתב', subGenerationName: '' } }], state).ops[0].changes, { generationName: 'תורה שבכתב', subGenerationName: null })
+  assert.match(validateChangeSet([{ book: 'בראשית רבה', author: '', updates: { generationName: 'תורה שבכתב' } }], state).error, /דור המשנה/)
 })
 
 test('applyChangeSet updates rows, no-ops what is already there, and refuses a rename onto an existing book', () => {
