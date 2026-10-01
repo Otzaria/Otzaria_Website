@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { SCRIPTS, CERTAINTY, streamInfo } from '@/lib/pageProof/vocab'
+import { SCRIPTS, CERTAINTY, isPrintDefect, streamInfo } from '@/lib/pageProof/vocab'
 import { RECUT_LINE_TITLE } from '@/lib/pageProof/helpTexts'
 
 // כרטיסיית "שורה" בלוח הפרטים: מה שנשאר ברמת השורה שבה הסמן — כתב, שורה
@@ -65,6 +65,11 @@ export default function LineTab({ view, line, locked = false, readOnly = false, 
         </span>
         {line.status === 'fixed' && <span className="rounded bg-success-100 px-1.5 text-xs text-success-800">תוקנה</span>}
         {line._ok && <span className="rounded bg-success-100 px-1.5 text-xs text-success-800">✓ נכונה</span>}
+        {isPrintDefect(line) && (
+          <span className="rounded bg-warning-100 px-1.5 text-xs text-warning-800" title="תוקנה למה שאמור להיות בספר — נכנסת לספר, לא לאימון">
+            פגם בדפוס
+          </span>
+        )}
         {line.recheck === true && <span className="rounded bg-warning-alt-100 px-1.5 text-xs text-warning-alt-900">זוהתה מחדש</span>}
         {(locked || temp) && (
           <span className="rounded bg-warning-100 px-1.5 text-xs text-warning-800" title={lockTitle || RECUT_LINE_TITLE}>
@@ -111,6 +116,14 @@ export default function LineTab({ view, line, locked = false, readOnly = false, 
           className="mt-2 w-full rounded-md border border-surface-variant bg-surface px-2 py-1 text-sm"
         />
         {line.certainty_why && <p className="mt-1 text-xs text-on-surface/60">ההסבר שנשמר: {line.certainty_why}</p>}
+        {act.printDefect && (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button type="button" disabled={dis} onClick={act.printDefect} className={pick(isPrintDefect(line))}>
+              פגם בדפוס
+            </button>
+            <span className="text-xs text-on-surface/60">תיקנתי למה שאמור להיות כתוב בספר, לא למה שבסריקה — נכנס לספר, לא לאימון</span>
+          </div>
+        )}
       </Section>
 
       <Section title="השורה עצמה">

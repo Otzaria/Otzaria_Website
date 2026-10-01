@@ -24,3 +24,15 @@ test('"ממתין לזיהוי-מחדש": השאלה בעזרה, הכותרת ב
   assert.match(RECUT_REQUEST_HINT, /רק תיקוני-החיתוך נשלחים/);
   assert.match(RECUT_SENT, /יחזור אליכם עם השורות החדשות/);
 });
+
+test('שאלות מהפורום (2026-10-01): כותרת-רצה של ההערות — ריהוט; פגם בדפוס — נכנס לספר, לא לאימון', () => {
+  const run = FAQ.find((f) => f.key === 'notes-running-head');
+  assert.match(run.a, /«כותרת-רצה של ההערות»/);
+  assert.match(run.a, /"כותרת הערות" היא כותרת של פרק או סעיף בתוך ההערות, והיא כן נכנסת לספר/);
+  const defect = FAQ.find((f) => f.key === 'print-defect');
+  assert.match(defect.a, /«פגם בדפוס»/);
+  assert.match(defect.a, /הטקסט המתוקן נכנס לספר, אבל השורה לא תשמש לאימון/);
+  // לא סותר את "אות שבורה": שם מקלידים את האות הנכונה בלי סימון
+  assert.match(defect.a, /אות שבורה או חלקית שעוד רואים מה היא — זה לא פגם בדפוס/);
+  assert.equal(new Set(FAQ.map((f) => f.key)).size, FAQ.length);
+});

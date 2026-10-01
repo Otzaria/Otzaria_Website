@@ -420,23 +420,33 @@ const CANON = ['main', 'notes', 'notes2', 'notes3', 'margin'];
 export const FURNITURE_CHOICE = FURNITURE_TAB;
 const FURNITURE_COLOR = BUILTIN_STREAMS.header.color;
 
+// "כותרת-רצה של ההערות": כותרת שחוזרת בכל עמוד מעל ההערות (שם החיבור שבהערות) — ריהוט,
+// ולא "כותרת הערות" (כותרת של פרק או סעיף בתוך ההערות, שנכנסת לספר). אינו זרם בחוזה —
+// נשמר כ"כותרת עמוד" (header), כמו כל כותרת-רצה: אינו נכנס לספר, ולמודל-המבנה הוא כותרת-רצה.
+export const NOTES_RUNHEAD_CHOICE = '__notes_runhead';
+export const NOTES_RUNHEAD_HE = 'כותרת-רצה של ההערות';
+
 // שם הזרם לבחירה: "ריהוט הדף"; כותרת — "כותרת" / "כותרת הערות" (מאוצר-המילים), ולזרם
 // שהספר נתן לו שם משלו — "כותרת <השם>" (vocab.streamName)
 export function streamLabel(view, key) {
   if (key === FURNITURE_CHOICE) return FURNITURE_TAB_HE;
+  if (key === NOTES_RUNHEAD_CHOICE) return NOTES_RUNHEAD_HE;
   return streamName(view, key);
 }
 
 // {key, he, color, heading} של בחירה (זרם, כותרת או "ריהוט הדף")
 export function choiceInfo(view, key) {
   if (key === FURNITURE_CHOICE) return { key, he: FURNITURE_TAB_HE, color: FURNITURE_COLOR, heading: false };
+  if (key === NOTES_RUNHEAD_CHOICE) return { key, he: NOTES_RUNHEAD_HE, color: FURNITURE_COLOR, heading: false };
   const s = streamInfo(view, key);
   return { key, he: streamLabel(view, key), color: s.color, heading: s.heading };
 }
 
 // זרם-הריהוט של מסגרת "ריהוט הדף": אם בתוכה שורות-ריהוט (לפי הזרם שלהן, או הזרם
 // שיובא) — הזרם הנפוץ ביניהן, כדי שהמסגרת תסכים עם השורות; אחרת לפי המקום בעמוד,
-// כמו בתוכנת-הספר (book/rules.py): בחצי העליון — כותרת עמוד, בתחתון — תחתית.
+// כמו בתוכנת-הספר (book/rules.py): בחצי העליון — כותרת עמוד, בתחתון — תחתית. ריהוט
+// שיש מתחתיו טקסט (כותרת-רצה מעל ההערות, גם בחצי התחתון) — כותרת עמוד: תחתית היא
+// מה שבסוף העמוד (מספר עמוד, שומר-דף), לא כותרת שפותחת אזור.
 export function furnitureStreamFor(bbox, lines, H) {
   const count = new Map();
   if (isBox(bbox)) {
@@ -449,13 +459,22 @@ export function furnitureStreamFor(bbox, lines, H) {
   let best = null;
   for (const k of FURNITURE_STREAMS) if ((count.get(k) || 0) > (count.get(best) || 0)) best = k;
   if (best) return best;
+  if (isBox(bbox) && textBelow(bbox, lines)) return 'header';
   const cy = isBox(bbox) ? (bbox[1] + bbox[3]) / 2 : 0;
   return cy < (Number(H) || 0) / 2 ? 'header' : 'footer';
 }
 
+// יש שורת-טקסט (לא ריהוט) שמתחילה מתחת לתיבה וחופפת לה לרוחב
+function textBelow(bbox, lines) {
+  return liveLines(lines).some(
+    (l) => !isFurnitureStream(l.stream) && !isFurnitureStream(l._auto?.stream) && l.bbox[1] >= bbox[3] - 1 && Math.min(l.bbox[2], bbox[2]) > Math.max(l.bbox[0], bbox[0])
+  );
+}
+
 // הזרם שנשמר במסגרת עבור בחירה: "ריהוט הדף" — זרם-ריהוט אמיתי (furnitureStreamFor);
-// כל בחירה אחרת — כמות-שהיא
+// "כותרת-רצה של ההערות" — כותרת עמוד; כל בחירה אחרת — כמות-שהיא
 export function resolveFrameStream(choice, bbox, lines, H) {
+  if (choice === NOTES_RUNHEAD_CHOICE) return 'header';
   return choice === FURNITURE_CHOICE ? furnitureStreamFor(bbox, lines, H) : choice;
 }
 
@@ -605,6 +624,16 @@ const overlaps = (a, b) => Math.min(a[2], b[2]) > Math.max(a[0], b[0]) && Math.m
 // שורות-תוכן שאינן נוגעות באף מסגרת: לפי המסגרות הן אינן שייכות לשום זרם, ובסדר-הקריאה
 // הן נכנסות רק אחרי כל המסגרות. ריהוט (כותרת-עמוד, תחתית, מפריד) אינו נספר — בלי מסגרת
 // הוא נשאר ריהוט. בלי מסגרות בכלל — ריק (אין "מחוץ").
+// שורות-הריהוט שאין סביבן מסגרת (כותרת-רצה, מספר עמוד, מפריד — לרוב מהזיהוי האוטומטי):
+// במצב "מסגרות" הן מסומנות באפור, כדי שהמתנדב יראה שהן כבר זוהו ולא יצייר להן מסגרת חדשה.
+// ← [{id, bbox, stream}] בסדר העמוד
+export function furnitureMarks(lines, frames) {
+  const boxes = (frames || []).filter((f) => f && !isObjectFrame(f)).map((f) => f.bbox).filter(isBox);
+  return liveLines(lines)
+    .filter((l) => isFurnitureStream(l.stream) && !boxes.some((b) => contains(b, center(l.bbox))))
+    .map((l) => ({ id: l.id, bbox: l.bbox, stream: frameBase(l.stream) }));
+}
+
 export function outsideLineIds(lines, frames) {
   const boxes = (frames || []).map((f) => f?.bbox).filter(isBox);
   const out = new Set();

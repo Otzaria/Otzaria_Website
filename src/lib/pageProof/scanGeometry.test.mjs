@@ -49,6 +49,8 @@ import {
   frameOfLine,
   streamChips,
   FURNITURE_CHOICE,
+  NOTES_RUNHEAD_CHOICE,
+  furnitureMarks,
   streamLabel,
   choiceInfo,
   furnitureStreamFor,
@@ -510,6 +512,44 @@ test('furnitureStreamFor / resolveFrameStream: לפי שורות-הריהוט ש
   // בחירה אחרת — כמות-שהיא
   assert.equal(resolveFrameStream('notes_heading', [0, 0, 10, 10], lines, 2000), 'notes_heading');
   assert.equal(resolveFrameStream(FURNITURE_CHOICE, [390, 30, 610, 80], lines, 2000), 'header');
+});
+
+test('"כותרת-רצה של ההערות": נשמרת ככותרת עמוד, וריהוט שיש מתחתיו טקסט אינו "תחתית" (פורום, 2026-10-01)', () => {
+  const lines = [
+    L(1, [400, 40, 600, 70], 'header'),
+    L(2, [100, 120, 900, 1100], 'main'),
+    L(3, [380, 1160, 620, 1190], 'notes_heading'),
+    L(4, [100, 1220, 900, 1800], 'notes'),
+    L(5, [480, 1900, 520, 1930], 'footer'),
+  ];
+  // הבחירה המפורשת — תמיד header, בכל מקום בעמוד (אינה זרם בחוזה)
+  assert.equal(resolveFrameStream(NOTES_RUNHEAD_CHOICE, [380, 1160, 620, 1190], lines, 2000), 'header');
+  assert.equal(streamLabel(null, NOTES_RUNHEAD_CHOICE), 'כותרת-רצה של ההערות');
+  assert.equal(choiceInfo(null, NOTES_RUNHEAD_CHOICE).heading, false);
+  // "ריהוט הדף" סביב כותרת-רצה מעל ההערות, בחצי התחתון: יש מתחתיה טקסט — כותרת עמוד, לא תחתית
+  assert.equal(furnitureStreamFor([370, 1150, 630, 1200], lines.filter((l) => l.id !== 3), 2000), 'header');
+  // מספר-העמוד בסוף העמוד (רק ריהוט מתחתיו) — עדיין תחתית
+  assert.equal(furnitureStreamFor([470, 1890, 530, 1940], lines.filter((l) => l.id !== 5), 2000), 'footer');
+  // טקסט מתחת אבל לא באותו רוחב (טור אחר) אינו קובע
+  assert.equal(furnitureStreamFor([920, 1850, 990, 1880], lines, 2000), 'footer');
+});
+
+test('furnitureMarks: שורות-ריהוט בלי מסגרת סביבן (לסימון באפור במצב "מסגרות")', () => {
+  const lines = [
+    L(1, [400, 40, 600, 70], 'header'),
+    L(2, [100, 120, 900, 1100], 'main'),
+    L(3, [480, 1900, 520, 1930], 'footer'),
+    L(4, [100, 1950, 900, 1960], 'sep', { status: 'removed' }),
+    L(5, [100, 1110, 900, 1115], 'sep'),
+  ];
+  const ids = (fr) => furnitureMarks(lines, fr).map((m) => m.id);
+  assert.deepEqual(ids([]), [1, 3, 5]);
+  // שורה שבתוך מסגרת (גם מסגרת-ריהוט שצוירה) — כבר רואים אותה; שורה שהוסרה — לא מסומנת
+  assert.deepEqual(ids([{ fid: 'a', stream: 'main', bbox: [90, 30, 910, 1120], order: 1 }]), [3]);
+  // מסגרת-אובייקט (טבלה/איור) אינה "מכסה" ריהוט
+  assert.deepEqual(ids([{ fid: 'b', stream: 'main', kind: 'table', bbox: [0, 0, 1000, 2000], order: 1 }]), [1, 3, 5]);
+  assert.deepEqual(furnitureMarks(lines, [])[0], { id: 1, bbox: [400, 40, 600, 70], stream: 'header' });
+  assert.deepEqual(furnitureMarks(null, null), []);
 });
 
 test('drawStreamFor', () => {
