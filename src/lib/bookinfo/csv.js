@@ -101,6 +101,30 @@ export function parseBookInfoCsv(text) {
   return { rows }
 }
 
+/**
+ * מצב מתוך רשומות (למשל BookInfo מ-Mongo), באותה נורמליזציה של הקריאה מהקובץ: מחרוזת ריקה בדור
+ * היא null, שם מחבר חסר הוא ''. ייצוא שלו הוא הקובץ הראשוני להעלאה ל-ForDB.
+ */
+export function bookInfoStateFromRows(records) {
+  const rows = new Map()
+  for (const record of records) {
+    const row = {}
+    for (const column of BOOK_INFO_COLUMNS) {
+      const value = record[column]
+      if (column === 'bookName' || column === 'authorName') row[column] = value ?? ''
+      else row[column] = value === '' || value === undefined ? null : value
+    }
+    if (!row.bookName) throw new Error('book info record without bookName')
+    for (const column of ['startYear', 'endYear']) {
+      if (row[column] !== null && !Number.isInteger(row[column])) throw new Error(`book info "${row.bookName}": ${column} is not an integer`)
+    }
+    const key = rowKey(row.bookName, row.authorName)
+    if (rows.has(key)) throw new Error(`duplicate book "${row.bookName}" by "${row.authorName}"`)
+    rows.set(key, row)
+  }
+  return { rows }
+}
+
 const quote = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
 
 /** @param {ReturnType<typeof parseBookInfoCsv>} state */

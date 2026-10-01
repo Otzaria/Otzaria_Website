@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { exportBookInfoCsv, listBookInfo, parseBookInfoCsv } from './csv.js'
+import { bookInfoStateFromRows, exportBookInfoCsv, listBookInfo, parseBookInfoCsv } from './csv.js'
 import { applyChangeSet, summarizeChangeSet, validateChangeSet } from './changes.js'
 
 const FIXTURE = [
@@ -34,6 +34,21 @@ test('parse rejects CRLF, a wrong header, duplicates and non-integer years', () 
   assert.throws(() => parseBookInfoCsv('a,b\n'), /header/)
   assert.throws(() => parseBookInfoCsv(FIXTURE + '"בראשית רבה","","","","",""\n'), /duplicate/)
   assert.throws(() => parseBookInfoCsv(FIXTURE.replace('"1089"', '"x"')), /integer/)
+})
+
+test('rows from Mongo export to a file the parser reads back unchanged', () => {
+  const mongoRows = [
+    { _id: 'x', bookName: 'בראשית רבה', authorName: '', generationName: 'חז"ל', subGenerationName: '', startYear: 300, endYear: 500 },
+    { _id: 'y', bookName: 'אבן עזרא', generationName: null, startYear: null },
+  ]
+  const csv = exportBookInfoCsv(bookInfoStateFromRows(mongoRows))
+  assert.ok(!csv.startsWith(String.fromCharCode(0xfeff)))
+  assert.deepEqual(listBookInfo(parseBookInfoCsv(csv)), [
+    { bookName: 'אבן עזרא', authorName: '', generationName: null, subGenerationName: null, startYear: null, endYear: null },
+    { bookName: 'בראשית רבה', authorName: '', generationName: 'חז"ל', subGenerationName: null, startYear: 300, endYear: 500 },
+  ])
+  assert.throws(() => bookInfoStateFromRows([...mongoRows, { bookName: 'אבן עזרא', authorName: '' }]), /duplicate/)
+  assert.throws(() => bookInfoStateFromRows([{ bookName: 'א', startYear: 1.5 }]), /integer/)
 })
 
 test('validateChangeSet keeps only the changed fields and checks the generation pair', () => {

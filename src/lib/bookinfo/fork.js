@@ -30,7 +30,7 @@ export async function loadBookInfoState(client) {
   const head = await client.getBranchHead(BOOK_INFO_BRANCH)
   const dir = BOOK_INFO_PATH.slice(0, BOOK_INFO_PATH.lastIndexOf('/'))
   const meta = (await client.listDir(dir, head.commitSha))?.find((e) => e.path === BOOK_INFO_PATH && e.type === 'file')
-  if (!meta) throw new Error(`${BOOK_INFO_PATH} not found in ${BOOK_INFO_REPO}@${BOOK_INFO_BRANCH}`)
+  if (!meta) throw Object.assign(new Error(`${BOOK_INFO_PATH} not found in ${BOOK_INFO_REPO}@${BOOK_INFO_BRANCH}`), { code: 'FILE_MISSING' })
   if (cachedParse?.blobSha !== meta.sha) {
     const bytes = await client.getBlob(meta.sha)
     cachedParse = { blobSha: meta.sha, state: parseBookInfoCsv(bytes.toString('utf8')) }
