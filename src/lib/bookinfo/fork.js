@@ -16,7 +16,7 @@ export const BOOK_INFO_PATH = 'ForDB/book_info.csv'
 const PR_BODY_LIMIT = 60_000
 
 /** הטוקן המשותף לכל כתיבות ה-GitHub של האתר (כמו הכינויים ותיקוני הספרים). */
-export function createBookInfoClient({ token = process.env.DICTA_LIBRARY_GITHUB_TOKEN, fetchImpl } = {}) {
+export function createBookInfoClient({ token = (process.env.DICTA_LIBRARY_GITHUB_TOKEN || '').trim(), fetchImpl } = {}) {
   if (!token) throw Object.assign(new Error('DICTA_LIBRARY_GITHUB_TOKEN is not configured'), { code: 'TOKEN_MISSING' })
   return createRepoClient({ repo: BOOK_INFO_REPO, token, ...(fetchImpl ? { fetchImpl } : {}), timeoutMs: 60_000 })
 }

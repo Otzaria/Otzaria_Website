@@ -109,7 +109,8 @@ export default function LibraryInfoPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          bookInfoId: editRow.id,
+          book: editRow.approved?.bookName,
+          author: editRow.approved?.authorName || '',
           updates: formData
         })
       })
@@ -128,22 +129,14 @@ export default function LibraryInfoPage() {
             endYear: formData.endYear === '' ? null : Number(formData.endYear)
           }
 
-          if (data.pendingCleared) {
-            return {
-              ...row,
-              effective: row.approved,
-              pending: null
-            }
-          }
-
           return {
             ...row,
             effective: normalizedEffective,
             pending: {
-              id: data.pendingId || row.pending?.id || '',
-              changedFields: data.changedFields || row.pending?.changedFields || [],
-              submittedBy: row.pending?.submittedBy || 'משתמש',
-              updatedAt: new Date().toISOString()
+              id: data.id,
+              prNumber: data.prNumber,
+              prUrl: data.prUrl,
+              changedFields: Object.keys(formData).filter((field) => normalizedEffective[field] !== row.approved?.[field])
             }
           }
         })
