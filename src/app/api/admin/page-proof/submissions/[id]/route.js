@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
 import mongoose from 'mongoose';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
 import PageProofSubmission from '@/models/PageProofSubmission';
 import PageProofPage from '@/models/PageProofPage';
@@ -19,9 +17,14 @@ import {
   statusAfterReject,
   statusAfterReleaseRecut,
 } from '@/lib/pageProof/importRules';
+import { pageSig, submissionDetail } from '@/lib/pageProof/adminReview';
+import { getPageProofSession } from '@/lib/pageProof/tokenAuth';
+import { cancelRecutRequests, recutReturn } from '@/lib/pageProof/recutRequests';
 
-async function gate(params) {
-  const session = await getServerSession(authOptions);
+// גם במפתח-גישה של תוכנת-הספר: GET — read, PATCH — review
+async function gate(request, params, scope) {
+  const { session, denied: keyDenied } = await getPageProofSession(request, scope);
+  if (keyDenied) return { denied: keyDenied };
   const denied = requireAccess(session, hasOcrAccess);
   if (denied) return { denied };
   const { id } = await params;
@@ -35,9 +38,10 @@ const RETRIES = 3;
 
 // GET: הגשה אחת + העמוד (לתצוגת העורך) + שאר ההגשות לאותו עמוד (כפולים).
 // submission.revision מול page.revision: הגשה שנעשתה על גרסה קודמת של העמוד
-// (לפני שחזר מזיהוי-מחדש) — העורך מציג אותה על הגרסה הנוכחית.
+// (לפני שחזר מזיהוי-מחדש) — העורך מציג אותה על הגרסה הנוכחית. page.sig — חתימת
+// העמוד השמור, כמו sig בקובץ-התיקונים.
 export async function GET(request, { params }) {
-  const { id, denied } = await gate(params);
+  const { id, denied } = await gate(request, params, 'read');
   if (denied) return denied;
   try {
     await connectDB();
@@ -52,23 +56,8 @@ export async function GET(request, { params }) {
     return NextResponse.json(
       {
         success: true,
-        page: { ...editorPageShape(page, book), status: page.status },
-        submission: {
-          id: String(sub._id),
-          status: sub.status,
-          userName: sub.userName,
-          who: sub.who,
-          ops: sub.ops,
-          note: sub.note,
-          createdAt: sub.createdAt,
-          reviewedByName: sub.reviewedByName,
-          reviewedAt: sub.reviewedAt,
-          reviewNote: sub.reviewNote,
-          reviewerEdited: sub.reviewerEdited,
-          exportedAt: sub.exportedAt,
-          needsRecut: needsRecut(sub.ops),
-          revision: submissionRevision(sub),
-        },
+        page: { ...editorPageShape(page, book), status: page.status, sig: pageSig(page) },
+        submission: submissionDetail(sub),
         siblings: siblings.map((s) => ({
           id: String(s._id),
           userName: s.userName,
@@ -100,11 +89,16 @@ export async function GET(request, { params }) {
 //             הוא ממתין לזיהוי-מחדש בגלל הגשה מאושרת אחרת.
 //   release_recut — העמוד של ההגשה ממתין לזיהוי-מחדש אבל לא יחזור מהתוכנה
 //             (למשל תיקון-החיתוך נכשל שם): נסגר בלי זיהוי-מחדש — הושלם, או פתוח
-//             לבודק נוסף בעמוד כפול. ההגשות עצמן לא משתנות.
+//             לבודק נוסף בעמוד כפול. ההגשות עצמן לא משתנות — חוץ מבקשת מתנדב
+//             לזיהוי-מחדש (recutRequest): היא מתבטלת (rejected, עם הסבר), והעמוד חוזר
+//             אל המתנדב שביקש (התפיסה שלו מתחדשת) — הוא ממשיך מהטיוטה שלו.
+//   בקשת מתנדב לזיהוי-מחדש אינה נדחית ב-reject (היא לא נספרה במונים של העמוד) —
+//   מבטלים אותה ב-release_recut.
 // הגשה שנעשתה על גרסה קודמת של העמוד (שכבר הוחלף) משנה רק את עצמה — לא את
 // המונים ולא את המצב של העמוד החדש.
+// הבודק נרשם מה-session; במפתח-גישה — בעל המפתח, בשם "<שם> (תוכנת-הספר)".
 export async function PATCH(request, { params }) {
-  const { session, id, denied } = await gate(params);
+  const { session, id, denied } = await gate(request, params, 'review');
   if (denied) return denied;
   try {
     const { body: raw, tooBig } = await readJsonBody(request);
@@ -118,7 +112,7 @@ export async function PATCH(request, { params }) {
       reviewNote: note,
     };
     await connectDB();
-    const sub = await PageProofSubmission.findById(id, { page: 1, user: 1, status: 1, exportedAt: 1, ops: 1, revision: 1 }).lean();
+    const sub = await PageProofSubmission.findById(id, { page: 1, user: 1, status: 1, exportedAt: 1, ops: 1, revision: 1, recutRequest: 1 }).lean();
     if (!sub) return notFound('ההגשה לא נמצאה');
 
     if (body.action === 'approve') {
@@ -175,6 +169,12 @@ export async function PATCH(request, { params }) {
     }
 
     if (body.action === 'reject') {
+      if (sub.recutRequest) {
+        return NextResponse.json(
+          { success: false, error: 'זו בקשת מתנדב לזיהוי-מחדש — מבטלים אותה ב"שחרור מהמתנה" (העמוד חוזר אל המתנדב)' },
+          { status: 409 }
+        );
+      }
       // המצב שלפני העדכון (returnDocument: before) — לא מהקריאה המוקדמת,
       // שעלולה להתיישן אם מנהל אחר אישר בינתיים
       const prev = await PageProofSubmission.findOneAndUpdate(
@@ -218,9 +218,19 @@ export async function PATCH(request, { params }) {
       if (!page) return notFound('העמוד של ההגשה לא נמצא');
       if (page.status !== 'recut') return NextResponse.json({ success: false, error: 'העמוד אינו ממתין לזיהוי-מחדש' }, { status: 409 });
       const next = statusAfterReleaseRecut(page);
-      const r = await PageProofPage.updateOne({ _id: sub.page, status: 'recut', ...revisionFilter(storedRevision(page)) }, { $set: { status: next } });
+      const pageRev = storedRevision(page);
+      // בקשת מתנדב ממתינה — העמוד חוזר אליו (רק כשהוא נפתח שוב, לא כשנסגר כהושלם)
+      const back = next === 'open' ? await recutReturn(sub.page, pageRev) : {};
+      const r = await PageProofPage.updateOne({ _id: sub.page, status: 'recut', ...revisionFilter(pageRev) }, { $set: { status: next, ...back } });
       if (!r.matchedCount) return NextResponse.json({ success: false, error: 'מצב העמוד השתנה בינתיים — טענו מחדש' }, { status: 409 });
-      return NextResponse.json({ success: true, status: sub.status, pageStatus: next });
+      const canceled = await cancelRecutRequests(sub.page, pageRev, reviewer);
+      return NextResponse.json({
+        success: true,
+        status: sub.recutRequest && canceled ? 'rejected' : sub.status,
+        pageStatus: next,
+        canceledRequests: canceled,
+        returnedToRequester: !!back.leasedBy,
+      });
     }
 
     return badRequest('פעולה לא מוכרת');

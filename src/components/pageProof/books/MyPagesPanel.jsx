@@ -2,13 +2,15 @@
 
 import Link from 'next/link'
 import { CLAIM_HOURS, CLAIM_RULE, bookHref } from '@/lib/pageProof/gridState'
-import { formatUntil } from '@/lib/pageProof/dates'
+import { formatTimeAgo, formatUntil } from '@/lib/pageProof/dates'
 
 // "העמודים שלי" — מה שדף המתנדב (/library/page-proof) מציג בכניסה: הרצפים שבהם
 // אתם מחזיקים עמודים, ולכל עמוד עד מתי הוא שמור לכם; לחיצה על עמוד פותחת אותו
 // בעורך. שום עמוד אינו נתפס כאן — לבחירת עמודים: רשת-העמודים (/library/page-proof/books).
 //
 // held    — הרצפים מ-GET /api/page-proof/mine ({book, seq, pages:[{id, page, state, leasedUntil}]})
+// recutPending — העמודים ששלחתם לזיהוי-מחדש ועוד לא חזרו ({id, gid, title, page, requestedAt,
+//           picked}); הם חוזרים אליכם לבד, עם השורות החדשות
 // missing — העמוד שביקשו בכתובת (?page=) ואינו בטיפולכם: {id, gid?, page?, state?}
 // onOpen(sequence, pageId) · now — מתי נטען (לחישוב "עד מתי")
 
@@ -20,7 +22,7 @@ const MISSING_WHY = {
   second: 'הוא ממתין לבודק נוסף — אפשר לתפוס אותו ברשת-העמודים של הספר.',
   taken: 'מתנדב אחר עובד עליו כרגע.',
   done: 'הוא כבר הושלם.',
-  recut: 'הוא ממתין לחיתוך ולזיהוי-מחדש, ויחזור להגהה במעבר שני.',
+  recut: 'הוא ממתין לחיתוך ולזיהוי-מחדש בתוכנת-הספר, ויחזור להגהה במעבר שני (עמוד ששלחתם בעצמכם — יחזור אליכם).',
   closed: 'הוא אינו פתוח להגהה כרגע.',
 }
 
@@ -57,7 +59,33 @@ function pageNote(p, now) {
   return until ? `שמור לך עד ${until}` : 'בטיפולך'
 }
 
-export default function MyPagesPanel({ held = [], missing = null, onOpen, now = null }) {
+// העמודים ששלחתם לזיהוי-מחדש ועוד לא חזרו — אין מה לפתוח בהם עד שיחזרו
+function RecutPending({ items, now }) {
+  return (
+    <section aria-labelledby="recut-pending-title" className="rounded-xl border border-feature-200 bg-feature-50/60 p-3">
+      <h3 id="recut-pending-title" className="flex items-center gap-2 text-sm font-bold text-feature-800">
+        <span aria-hidden="true" className="material-symbols-outlined text-base">cached</span>
+        ממתינים לזיהוי-מחדש ({items.length})
+      </h3>
+      <p className="mt-1 text-xs text-on-surface/70">
+        העמודים יחזרו אליכם עם השורות החדשות אחרי שתוכנת-הספר תעבד אותם, ויישמרו לכם שוב 48 שעות. שאר התיקונים שלכם מחכים לכם בהם.
+      </p>
+      <ul className="mt-2 flex flex-wrap gap-2">
+        {items.map((r) => (
+          <li key={r.id} className="rounded-lg border border-feature-200 bg-surface px-3 py-1.5 text-sm">
+            <span className="font-bold">{r.title ? `${r.title} · ` : ''}עמוד {r.page}</span>
+            <span className="block text-xs text-on-surface/60">
+              {r.picked ? 'בעבודה בתוכנת-הספר' : 'ממתין לתוכנת-הספר'}
+              {r.requestedAt ? ` · נשלח ${formatTimeAgo(r.requestedAt, now)}` : ''}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+export default function MyPagesPanel({ held = [], recutPending = [], missing = null, onOpen, now = null }) {
   const at = now || new Date(0)
   return (
     <section aria-labelledby="my-pages-title" className="glass-strong flex flex-col gap-4 rounded-xl p-5">
@@ -74,6 +102,8 @@ export default function MyPagesPanel({ held = [], missing = null, onOpen, now = 
         </Link>
       </div>
       <p className="text-sm text-on-surface/60">{CLAIM_RULE}</p>
+
+      {recutPending.length > 0 && <RecutPending items={recutPending} now={now || new Date()} />}
 
       {held.length === 0 ? (
         <div className="rounded-xl border-2 border-dashed border-surface-variant bg-surface/30 px-4 py-10 text-center">

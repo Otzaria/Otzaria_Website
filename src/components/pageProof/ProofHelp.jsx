@@ -13,8 +13,14 @@ import { FAQ } from '@/lib/pageProof/helpTexts'
 // הראשונה (כל עוד אין 'pageProof.helpSeen' ב-localStorage); סגירה מסמנת
 // שנראה. autoOpen=false — בלי פתיחה לבד (למשל בסקירת מנהל). אם כמה מופעים
 // מורכבים יחד (הדף והעורך) — רק אחד מהם נפתח לבד.
+// texts (רשות) — נוסח אחר לחלקים שתלויים באתר, בשביל עורך שמוטמע במקום אחר (תוכנת-הספר:
+// אין שם הגשה, מנהל או תפיסת-עמוד). כל שדה רשות, ובלעדיו — הנוסח של האתר:
+//   intro — משפט-הפתיחה · extra — ReactNode מיד אחריו · faq — [{key, q, a}] במקום FAQ
+//   · done — [ReactNode] במקום "סיימתי — מה עכשיו?" (מערך ריק — בלי הסעיף; כך גם faq)
 
 export const HELP_SEEN_KEY = 'pageProof.helpSeen'
+
+export const HELP_INTRO = 'המחשב כבר קרא את העמוד. אתם בודקים מול הסריקה ומתקנים — כל שינוי נבדק בידי מנהל לפני שהוא נכנס לספר.'
 
 // המופע שנפתח לבד בטעינה הזו
 let autoOwner = null
@@ -174,12 +180,16 @@ const DONE = [
     תופסת שום עמוד.
   </>,
   <>
-    תיקנתם חיתוך? הטקסט של השורות האלה ננעל (&quot;ממתינה לזיהוי מחדש&quot;): אחרי אישור המנהל תוכנת-הספר חותכת וקוראת אותן מחדש,
-    והעמוד חוזר להגהה במעבר שני — שם רק השורות שזוהו מחדש מסומנות בצהוב. אתם לא מפעילים את זה: בינתיים המשיכו בשאר השורות ובמבנה.
+    תיקנתם חיתוך? הטקסט של השורות האלה ננעל (&quot;ממתינה לזיהוי מחדש&quot;). &quot;שלח לזיהוי-מחדש&quot; — העמוד נחתך ונקרא מחדש בתוכנת-הספר
+    וחוזר אליכם עם השורות החדשות (מסומנות בצהוב), ושאר התיקונים שלכם מחכים לכם בו; או הגישו את העמוד — ואחרי אישור המנהל הוא חוזר
+    להגהה במעבר שני. בינתיים המשיכו בשאר השורות ובמבנה.
   </>,
 ]
 
-export default function ProofHelp({ open = false, onClose, autoOpen = true }) {
+export default function ProofHelp({ open = false, onClose, autoOpen = true, texts = null }) {
+  const intro = texts?.intro ?? HELP_INTRO
+  const faq = Array.isArray(texts?.faq) ? texts.faq : FAQ
+  const done = Array.isArray(texts?.done) ? texts.done : DONE
   const [auto, setAuto] = useState(false)
   const [howOpen, setHowOpen] = useState(false)
   const token = useRef(null)
@@ -248,7 +258,8 @@ export default function ProofHelp({ open = false, onClose, autoOpen = true }) {
         </div>
 
         <div className="flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 py-4 text-sm leading-relaxed text-on-surface/85">
-          <p>המחשב כבר קרא את העמוד. אתם בודקים מול הסריקה ומתקנים — כל שינוי נבדק בידי מנהל לפני שהוא נכנס לספר.</p>
+          <p>{intro}</p>
+          {texts?.extra}
 
           <ol className="space-y-3">
             {STEPS.map((s, i) => (
@@ -284,20 +295,22 @@ export default function ProofHelp({ open = false, onClose, autoOpen = true }) {
             </p>
           </section>
 
-          <section aria-labelledby={faqId} className="rounded-xl bg-info-50/60 px-3 py-2">
-            <div id={faqId} className="mb-1 flex items-center gap-2 font-bold text-on-surface">
-              <span aria-hidden="true" className="material-symbols-outlined text-info-700">help</span>
-              שאלות שחוזרות
-            </div>
-            <dl className="space-y-1.5">
-              {FAQ.map((f) => (
-                <div key={f.key} data-faq={f.key}>
-                  <dt className="font-bold text-on-surface">{f.q}</dt>
-                  <dd>{f.a}</dd>
-                </div>
-              ))}
-            </dl>
-          </section>
+          {faq.length > 0 && (
+            <section aria-labelledby={faqId} className="rounded-xl bg-info-50/60 px-3 py-2">
+              <div id={faqId} className="mb-1 flex items-center gap-2 font-bold text-on-surface">
+                <span aria-hidden="true" className="material-symbols-outlined text-info-700">help</span>
+                שאלות שחוזרות
+              </div>
+              <dl className="space-y-1.5">
+                {faq.map((f) => (
+                  <div key={f.key} data-faq={f.key}>
+                    <dt className="font-bold text-on-surface">{f.q}</dt>
+                    <dd>{f.a}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          )}
 
           <div className="overflow-hidden rounded-xl border border-surface-variant">
             <button
@@ -347,17 +360,19 @@ export default function ProofHelp({ open = false, onClose, autoOpen = true }) {
             )}
           </div>
 
-          <div>
-            <div className="mb-1 flex items-center gap-2 font-bold text-on-surface">
-              <span aria-hidden="true" className="material-symbols-outlined text-success-600">task_alt</span>
-              סיימתי — מה עכשיו?
+          {done.length > 0 && (
+            <div>
+              <div className="mb-1 flex items-center gap-2 font-bold text-on-surface">
+                <span aria-hidden="true" className="material-symbols-outlined text-success-600">task_alt</span>
+                סיימתי — מה עכשיו?
+              </div>
+              <ul className="list-disc space-y-1 pr-5">
+                {done.map((d, i) => (
+                  <li key={i}>{d}</li>
+                ))}
+              </ul>
             </div>
-            <ul className="list-disc space-y-1 pr-5">
-              {DONE.map((d, i) => (
-                <li key={i}>{d}</li>
-              ))}
-            </ul>
-          </div>
+          )}
         </div>
 
         <div className="flex justify-end border-t border-surface-variant px-5 py-3">

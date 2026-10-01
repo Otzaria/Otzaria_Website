@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import path from 'path';
 import fs from 'fs-extra';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
 import PageProofBook from '@/models/PageProofBook';
 import PageProofPage from '@/models/PageProofPage';
@@ -12,11 +10,14 @@ import { requireAccess, badRequest, notFound, serverError } from '@/lib/apiRespo
 import { resolveImageFsPath } from '@/lib/ocr/images';
 import { IMAGE_ROOT } from '@/lib/pageProof/importPackages';
 import { removeThumbs } from '@/lib/pageProof/thumbs';
+import { getPageProofSession, getSessionOnly } from '@/lib/pageProof/tokenAuth';
 
 const GID_RE = /^[A-Za-z0-9]{8,64}$/;
 
-async function gate(params) {
-  const session = await getServerSession(authOptions);
+// auth: getPageProofSession(...) / getSessionOnly()
+async function gate(params, auth) {
+  const { session, denied: keyDenied } = await auth;
+  if (keyDenied) return { denied: keyDenied };
   const denied = requireAccess(session, hasOcrAccess);
   if (denied) return { denied };
   const { gid } = await params;
@@ -24,9 +25,10 @@ async function gate(params) {
   return { gid };
 }
 
-// PATCH {status: 'active'|'paused'}: השהיית חלוקה / חידוש
+// PATCH {status: 'active'|'paused'}: השהיית חלוקה / חידוש.
+// גם במפתח-גישה של תוכנת-הספר (import — פרסום עמודים להגהה).
 export async function PATCH(request, { params }) {
-  const { gid, denied } = await gate(params);
+  const { gid, denied } = await gate(params, getPageProofSession(request, 'import'));
   if (denied) return denied;
   try {
     const body = await request.json().catch(() => ({}));
@@ -44,8 +46,9 @@ export async function PATCH(request, { params }) {
 // DELETE: מחיקת הספר, עמודיו, ההגשות והתמונות — כולל התמונות הממוזערות של
 // רשת-העמודים, שאינן בתיקיית הספר. הגשות מאושרות שלא יצאו בקובץ-תיקונים
 // יאבדו — הלקוח מזהיר לפני כן (unexported במונים).
+// רק session — לעולם לא במפתח-גישה (גם לא עם כל ההרשאות).
 export async function DELETE(request, { params }) {
-  const { gid, denied } = await gate(params);
+  const { gid, denied } = await gate(params, getSessionOnly());
   if (denied) return denied;
   try {
     await connectDB();

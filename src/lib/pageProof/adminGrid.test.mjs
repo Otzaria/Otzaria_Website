@@ -13,6 +13,7 @@ import {
   bulkReleaseMessage,
   DRAFT_WARNING,
   CLAIM_NOTE,
+  cancelRecutMessage,
 } from './adminGrid.js';
 
 // רשת-העמודים בניהול: המצב בעיני המנהל, מונים, מסננים, טווח-עמודים ונוסחי
@@ -101,4 +102,12 @@ test('נוסחי השחרור: מי מחזיק, והאזהרה שהטיוטה ש
 test('ההסבר בניהול: 48 שעות לכל עמוד לחוד, ומתחדש בכל פתיחה בעורך', () => {
   assert.match(CLAIM_NOTE, /48 שעות \(לכל עמוד לחוד\)/);
   assert.match(CLAIM_NOTE, /מחדשת את הזמן ל-48 שעות מלאות/);
+});
+
+test('cancelRecutMessage: מי ביקש, שהעמוד חוזר אליו ל-48 שעות; ואם תוכנת-הספר כבר משכה — מה יקרה אז', () => {
+  const m = cancelRecutMessage({ page: 7, recutRequest: { by: 'ראובן', picked: false } });
+  assert.match(m, /^לבטל את הבקשה לזיהוי-מחדש של עמוד 7\?/);
+  assert.match(m, /יחזור אל ראובן \(שמור לו 48 שעות\) בלי זיהוי-מחדש/);
+  assert.doesNotMatch(m, /משכה/);
+  assert.match(cancelRecutMessage({ page: 7, recutRequest: { by: '', picked: true } }), /יחזור אל המתנדב.*\nתוכנת-הספר כבר משכה את הבקשה/s);
 });

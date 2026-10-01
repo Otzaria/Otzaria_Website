@@ -112,5 +112,14 @@ export function bulkReleaseMessage(scope, n) {
   return `${what}\n${DRAFT_WARNING}`;
 }
 
+// נוסח חלון-האישור לביטול בקשת מתנדב לזיהוי-מחדש (release_recut על הבקשה). page — מהרשת,
+// עם recutRequest: {by, picked}
+export function cancelRecutMessage(page) {
+  const r = page?.recutRequest || {};
+  const who = r.by || 'המתנדב';
+  const picked = r.picked ? '\nתוכנת-הספר כבר משכה את הבקשה; אם תחזיר גרסה חדשה של העמוד, הייבוא יעדכן אותו כל עוד איש לא הגיש אותו.' : '';
+  return `לבטל את הבקשה לזיהוי-מחדש של עמוד ${page?.page}?\nהעמוד יחזור אל ${who} (שמור לו ${CLAIM_HOURS} שעות) בלי זיהוי-מחדש, עם התיקונים שבטיוטה שלו.${picked}`;
+}
+
 // כמה זמן תפיסה נמשכת (להסבר בניהול)
 export const CLAIM_NOTE = `כל עמוד שמתנדב תופס שמור לו ${CLAIM_HOURS} שעות (לכל עמוד לחוד), וכל פתיחה של העמוד בעורך מחדשת את הזמן ל-${CLAIM_HOURS} שעות מלאות. תפיסה שפגה — העמוד שוב פנוי לכולם.`;

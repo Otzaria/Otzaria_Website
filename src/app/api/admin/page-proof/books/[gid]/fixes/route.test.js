@@ -88,4 +88,22 @@ describe('GET /api/admin/page-proof/books/[gid]/fixes', () => {
     expect((await get()).status).toBe(403)
     expect((await GET({ url: 'http://x' }, { params: Promise.resolve({ gid: 'x' }) })).status).toBe(400)
   })
+
+  it('?pages=recut — רק עמודים שממתינים לזיהוי-מחדש, ורק הגשות של הגרסה השמורה שלהם', async () => {
+    Sub.find.mockReturnValue(
+      lean([
+        // עמוד 7: ממתין בגרסה 2 — מעבר ראשון (גרסה 1) כבר יצא ואינו שייך
+        sub('old', 7, { revision: 1, exportedAt: new Date('2026-09-20'), ops: [{ kind: 'text', page: 7, ids: [3], value: 'א' }] }),
+        sub('cut', 7, { revision: 2, needsRecut: true, ops: [{ kind: 'line_merge', page: 7, ids: [3, 4] }] }),
+        // עמוד 8: אינו ממתין
+        sub('done', 8, { ops: [{ kind: 'text', page: 8, ids: [1], value: 'ב' }] }),
+      ])
+    )
+    // קודם: העמודים שממתינים (status: 'recut'); אחר-כך: החתימות
+    Page.find.mockReturnValueOnce(lean([{ page: 7, revision: 2 }])).mockReturnValueOnce(lean([{ page: 7, revision: 2, doc: { size: [1, 1], lines: [{ id: 3 }] } }]))
+    const file = JSON.parse(await (await get('?pages=recut&mark=1')).text())
+    expect(file.ops.map((o) => [o.op_id, o.revision])).toEqual([['cut:0', 2]])
+    expect(Page.find.mock.calls[0][0]).toEqual({ gid: GID, status: 'recut' })
+    expect(Sub.updateMany.mock.calls[0][0]._id.$in).toEqual(['cut'])
+  })
 })

@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import User from '../../models/User.js';
 import PageProofBook from '../../models/PageProofBook.js';
 import PageProofPage from '../../models/PageProofPage.js';
+import PageProofSubmission from '../../models/PageProofSubmission.js';
 import { adminBookPages, setVolunteer, releaseClaims } from './adminPages.js';
 import { bookPages, claimPage } from './claims.js';
 import { startMongo } from '../corrections/testing/mongo.js';
@@ -186,4 +187,38 @@ test('שחרור: קלט לא תקין ← 400, ספר חסר ← 404', async (t
   }
   assert.deepEqual(await releaseClaims('nope', { scope: 'all' }), { ok: false, status: 404, error: 'הספר לא נמצא' });
   assert.equal(await PageProofPage.countDocuments({ leasedBy: { $ne: null } }), 3, 'שום דבר לא שוחרר');
+});
+
+test('עמוד שממתין לזיהוי-מחדש בבקשת מתנדב — מי ביקש, מתי, ומזהה הבקשה; בקשה שבוטלה או של גרסה קודמת — לא', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const at = new Date('2026-09-30T10:00:00Z');
+  const req = (page, extra = {}) =>
+    PageProofSubmission.create({
+      page: page._id,
+      book: page.book,
+      gid: page.gid,
+      pageNo: page.page,
+      user: vol._id,
+      userName: 'ראובן',
+      who: `otz-${vol._id}`,
+      ops: [{ kind: 'line_add', page: page.page, value: { bbox: [1, 1, 9, 9] } }],
+      opCount: 1,
+      needsRecut: true,
+      status: 'approved',
+      recutRequest: true,
+      reviewedAt: at,
+      createdAt: at,
+      ...extra,
+    });
+  const r7 = await req(pages[7]);
+  await PageProofPage.updateMany({ _id: { $in: [pages[8]._id, pages[9]._id] } }, { $set: { status: 'recut' } });
+  await req(pages[8], { status: 'rejected' });
+  await req(pages[9], { revision: 2 });
+  const byNo = Object.fromEntries((await adminBookPages('gAdmin01')).pages.map((p) => [p.page, p]));
+  assert.deepEqual(byNo[7].recutRequest, { id: String(r7._id), by: 'ראובן', at, picked: false });
+  assert.equal(byNo[8].recutRequest, null, 'בקשה שבוטלה');
+  assert.equal(byNo[9].recutRequest, null, 'בקשה של גרסה אחרת');
+  assert.equal(byNo[1].recutRequest, null);
+  await PageProofSubmission.updateOne({ _id: r7._id }, { $set: { exportedAt: new Date() } });
+  assert.equal((await adminBookPages('gAdmin01')).pages.find((p) => p.page === 7).recutRequest.picked, true);
 });

@@ -15,6 +15,9 @@ import ToolbarMenu from './ToolbarMenu'
 // העריכה ומשאיר ניווט, תצוגה, עזרה ופרטים.
 // כפתורי-העיצוב אינם לוקחים פוקוס (mousedown ← preventDefault), כדי שהבחירה
 // בטקסט תישאר כשלוחצים עליהם.
+// לדף עוטף (תוכנת-הספר), רשות: charStyleButtons — כפתורי עיצוב-התווים (ברירת-המחדל
+// CHAR_STYLE_BUTTONS; כל key חייב להיות ב-vocab.CHAR_STYLES); moreMenu = {items, onSelect,
+// label?, title?} — תפריט "⋯" לפני "עזרה" (פריטים כמו ב-ToolbarMenu). בלעדיהם — כמו באתר.
 
 // סגנונות-הפסקה שבסרגל: כותרות (ל-<h2>–<h4> באוצריא), ציטוט (<blockquote>),
 // דיבור-המתחיל (מודגש ומקושר למקור), ועוד ארבעה סוגי-פסקה שתוכנת-הספר מכירה
@@ -212,6 +215,8 @@ export default function ProofToolbar({
   readOnly = false,
   // דביק מתחת לכותרת האתר (h-16 + הגבול שלה); בתוך חלון (ReviewModal) — top-0
   className = 'sticky top-[calc(var(--spacing)*16_+_1px)] z-30',
+  charStyleButtons = CHAR_STYLE_BUTTONS,
+  moreMenu = null,
 }) {
   const active = charStyles instanceof Set ? charStyles : new Set(Array.isArray(charStyles) ? charStyles : [])
   const edit = (f) => !readOnly && isFn(f)
@@ -291,7 +296,7 @@ export default function ProofToolbar({
 
         {/* עיצוב-תווים — מתג: לחיצה על עיצוב פעיל מסירה אותו */}
         <Group label="עיצוב תווים">
-          {CHAR_STYLE_BUTTONS.map((c) => {
+          {charStyleButtons.map((c) => {
             const on = styleActive(active, c.key)
             return (
               <GroupButton
@@ -412,6 +417,21 @@ export default function ProofToolbar({
         </div>
 
         <Divider />
+
+        {/* "⋯" — פעולות של הדף העוטף (רשות; באתר אין) */}
+        {moreMenu?.items?.length > 0 && (
+          <>
+            <ToolbarMenu
+              ariaLabel={moreMenu.title || 'עוד פעולות'}
+              title={moreMenu.title || 'עוד פעולות'}
+              label={<span aria-hidden="true">{moreMenu.label || '⋯'}</span>}
+              items={moreMenu.items}
+              onSelect={(key) => moreMenu.onSelect?.(key)}
+              menuClassName="w-64"
+            />
+            <Divider />
+          </>
+        )}
 
         {/* עזרה ופרטים */}
         <LabeledButton label="עזרה" title="עזרה — מה עושים בעמוד, וקיצורי המקלדת" onClick={onHelp} disabled={!isFn(onHelp)} tone="info">

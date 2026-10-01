@@ -15,7 +15,8 @@ import { badRequest, notFound, forbidden, serverError } from '@/lib/apiResponse'
 // שלו). עמוד פנוי אינו נתפס כאן: תפיסה רק בלחיצה מפורשת ברשת-העמודים.
 // מנהל OCR — כל עמוד, לקריאה.
 // "כבר הגיש" = הגשה לגרסה הנוכחית של העמוד: עמוד שחזר מזיהוי-מחדש (גרסה
-// חדשה) נפתח לעריכה גם למי שהגיש את הגרסה הקודמת.
+// חדשה) נפתח לעריכה גם למי שהגיש את הגרסה הקודמת. בקשה לזיהוי-מחדש (recutRequest)
+// אינה הגשה.
 export async function GET(request, { params }) {
   const { session, userId, error } = await requireProofSession();
   if (error) return error;
@@ -26,7 +27,7 @@ export async function GET(request, { params }) {
 
     const [page, subs] = await Promise.all([
       PageProofPage.findById(id).lean(),
-      PageProofSubmission.find({ page: id, user: userId, status: { $ne: 'rejected' } }, { ops: 1, status: 1, note: 1, revision: 1 })
+      PageProofSubmission.find({ page: id, user: userId, status: { $ne: 'rejected' }, recutRequest: { $ne: true } }, { ops: 1, status: 1, note: 1, revision: 1 })
         .sort({ createdAt: -1 })
         .lean(),
     ]);

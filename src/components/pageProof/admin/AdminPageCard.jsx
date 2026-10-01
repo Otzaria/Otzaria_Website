@@ -2,17 +2,20 @@
 
 import ProofPageThumb from '../books/ProofPageThumb'
 import { ADMIN_STATE_UI } from '@/lib/pageProof/adminGrid'
-import { formatUntil } from '@/lib/pageProof/dates'
+import { formatTimeAgo, formatUntil } from '@/lib/pageProof/dates'
 
 // כרטיס עמוד ברשת-העמודים של המנהל (AdminBookPages): אותה תמונה ממוזערת כמו
 // אצל המתנדב (ProofPageThumb), המצב בעיני המנהל, מי מחזיק ועד מתי, המתג
 // "פתוח למתנדבים", ושחרור התפיסה (onRelease — אחרי אישור, ב-AdminBookPages).
-// page: {id, page, revision, state, volunteer, holder, leasedUntil, lease, pending}
+// עמוד שממתין לזיהוי-מחדש בבקשת מתנדב — מי ביקש ומתי, והאם תוכנת-הספר כבר משכה את
+// הבקשה, עם "ביטול הבקשה" (onCancelRecut — העמוד חוזר אל המתנדב).
+// page: {id, page, revision, state, volunteer, holder, leasedUntil, lease, pending, recutRequest}
 
-export default function AdminPageCard({ page, busy = false, now, onToggle, onRelease, onPreview }) {
+export default function AdminPageCard({ page, busy = false, now, onToggle, onRelease, onCancelRecut, onPreview }) {
   const ui = ADMIN_STATE_UI[page.state] || ADMIN_STATE_UI.open
   const until = page.lease === 'active' ? formatUntil(page.leasedUntil, now) : ''
   const closed = !page.volunteer
+  const req = page.recutRequest
   return (
     <div
       className={`group relative flex h-full flex-col overflow-hidden rounded-xl border-2 glass transition-all ${
@@ -40,6 +43,13 @@ export default function AdminPageCard({ page, busy = false, now, onToggle, onRel
             {until && <span className="block text-[10px] text-on-surface/50">שמור עד {until}</span>}
           </p>
         )}
+        {req && (
+          <p className="text-xs text-feature-800" data-testid="recut-request">
+            לבקשת {req.by || 'מתנדב'}
+            {req.at && <span className="text-on-surface/50"> · {formatTimeAgo(req.at, now || new Date())}</span>}
+            <span className="block text-[10px] text-on-surface/50">{req.picked ? 'תוכנת-הספר משכה את הבקשה' : 'ממתין לתוכנת-הספר'}</span>
+          </p>
+        )}
         {page.pending > 0 && page.state !== 'submitted' && (
           <p className="text-[11px] text-warning-alt-800">{page.pending === 1 ? 'הגשה אחת ממתינה לאישור' : `${page.pending} הגשות ממתינות לאישור`}</p>
         )}
@@ -56,6 +66,18 @@ export default function AdminPageCard({ page, busy = false, now, onToggle, onRel
             />
             פתוח למתנדבים
           </label>
+          {req && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onCancelRecut?.(page)}
+              aria-label={`ביטול הבקשה לזיהוי-מחדש של עמוד ${page.page}`}
+              className="flex items-center justify-center gap-1 rounded-md bg-feature-100 px-2 py-1 text-xs font-bold text-feature-800 transition-colors hover:bg-feature-200 disabled:opacity-50"
+            >
+              <span aria-hidden="true" className="material-symbols-outlined text-sm">undo</span>
+              ביטול הבקשה
+            </button>
+          )}
           {page.holder && (
             <button
               type="button"

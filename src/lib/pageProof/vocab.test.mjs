@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { streamMenu, streamName, PARA_STYLES, FURNITURE_STREAMS, BUILTIN_STREAMS } from './vocab.js';
+import { streamMenu, streamName, registerVocab, PARA_STYLES, CHAR_STYLES, PAGE_TYPES, SCRIPTS, CERTAINTY, FURNITURE_STREAMS, BUILTIN_STREAMS } from './vocab.js';
 import { validateOp, describeOp } from './ops.js';
 import { buildFixesFile } from './fixesExport.js';
 
@@ -85,4 +85,61 @@ test('סעיף ממוספר, הגהה, שירה, תוכן-עניינים: פעו
     ops.map((o) => ['para', o.value])
   );
   assert.equal(validateOp(doc, { kind: 'para', page: 7, ids: [1], value: 'poetry' }), 'סגנון-פסקה לא מוכר: poetry');
+});
+
+// אוצר-מילים נוסף מצרכן שמטמיע את העורך (תוכנת-הספר): סגנונות-פסקה של ספר מסוים ועוד —
+// עוברים את הבדיקה ומקבלים שם בעברית; בלי registerVocab (האתר) — הכול כמו קודם
+test('registerVocab: סגנון-פסקה וערך-ודאות נוספים עוברים את validateOp, ובהסרה — שוב לא מוכרים', () => {
+  const doc = { page: 7, size: [1000, 1000], lines: [{ id: 1, line_no: 0, text: 'שורה', stream: 'main', bbox: [10, 10, 900, 50] }] };
+  const para = { kind: 'para', page: 7, ids: [1], value: 'book_intro' };
+  const cert = { kind: 'certainty', page: 7, ids: [1], value: { v: 'clear', why: null } };
+  assert.equal(validateOp(doc, para), 'סגנון-פסקה לא מוכר: book_intro');
+  assert.equal(validateOp(doc, cert), 'ערך-ודאות לא מוכר');
+
+  const undo = registerVocab({ paraStyles: { book_intro: { he: 'פסקת פתיחה', group: 'text' } }, certainty: { clear: 'ניקוי' } });
+  try {
+    assert.equal(validateOp(doc, para), null);
+    assert.equal(validateOp(doc, cert), null);
+    assert.deepEqual(PARA_STYLES.book_intro, { he: 'פסקת פתיחה', group: 'text' });
+    assert.equal(describeOp(doc, para), 'שורה 1: סגנון-פסקה ← פסקת פתיחה');
+  } finally {
+    undo();
+  }
+  assert.equal(Object.hasOwn(PARA_STYLES, 'book_intro'), false);
+  assert.equal(Object.hasOwn(CERTAINTY, 'clear'), false);
+  assert.equal(validateOp(doc, para), 'סגנון-פסקה לא מוכר: book_intro');
+});
+
+test('registerVocab: מפתח מובנה אינו נדרס; מפתח לא-תקין נדחה; שם חסר ← המפתח; קבוצה לא מוכרת ← text', () => {
+  const bodyBefore = { ...PARA_STYLES.body };
+  const undo = registerVocab({
+    paraStyles: { body: { he: 'דריסה', group: 'head' }, 'bad key': { he: 'x' }, '': { he: 'x' }, '9x': {}, odd: { he: 'משונה', group: 'weird' } },
+    charStyles: { b: { he: 'דריסה' }, wavy: { he: 'גלי' } },
+    pageTypes: { regular: 'דריסה', index: 'מפתח' },
+    scripts: { square: 'דריסה', yiddish: 'יידיש' },
+  });
+  try {
+    assert.deepEqual(PARA_STYLES.body, bodyBefore);
+    assert.equal(Object.hasOwn(PARA_STYLES, 'bad key'), false);
+    assert.equal(Object.hasOwn(PARA_STYLES, ''), false);
+    assert.deepEqual(PARA_STYLES['9x'], { he: '9x', group: 'text' });
+    assert.deepEqual(PARA_STYLES.odd, { he: 'משונה', group: 'text' });
+    assert.notEqual(CHAR_STYLES.b.he, 'דריסה');
+    assert.deepEqual(CHAR_STYLES.wavy, { he: 'גלי', sign: '✦' });
+    assert.equal(PAGE_TYPES.regular, 'עמוד רגיל');
+    assert.equal(PAGE_TYPES.index, 'מפתח');
+    assert.equal(SCRIPTS.square, 'מרובע');
+    assert.equal(SCRIPTS.yiddish, 'יידיש');
+  } finally {
+    undo();
+  }
+  for (const [t, k] of [[PARA_STYLES, '9x'], [PARA_STYLES, 'odd'], [CHAR_STYLES, 'wavy'], [PAGE_TYPES, 'index'], [SCRIPTS, 'yiddish']]) {
+    assert.equal(Object.hasOwn(t, k), false, k);
+  }
+  assert.deepEqual(PARA_STYLES.body, bodyBefore);
+  // בלי ארגומנט / ארגומנט ריק — כלום, והסרה כפולה בטוחה
+  const none = registerVocab();
+  none();
+  none();
+  registerVocab(null)();
 });

@@ -475,3 +475,22 @@ test('עמוד שביקשו ואינו שלי — המצב שלו בעיניי (
   assert.equal(await pageBrief('64b7f0c2a1b2c3d4e5f6ffff', uid), null);
   assert.equal(await pageBrief('nope', uid), null);
 });
+
+test('בקשה לזיהוי-מחדש שהמתנדב שלח אינה הגשה: ברשת ובפס-הרצף העמוד "ממתין לזיהוי-מחדש", לא "אושר"', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const uid = String(me._id);
+  // עמוד 2 (שבטיפולי) נשלח לזיהוי-מחדש: הבקשה "מאושרת" לזיהוי-מחדש, העמוד ב-recut והתפיסה שוחררה
+  await PageProofPage.updateOne({ _id: pages[2]._id }, { $set: { status: 'recut', leasedBy: null, leasedUntil: null } });
+  await mkSub(pages[2], me, 'approved', { recutRequest: true, needsRecut: true, revision: 1 });
+  const grid = await bookPages('gA', uid);
+  assert.equal(grid.pages.find((p) => p.page === 2).state, 'recut');
+  assert.equal(grid.counts.approved, 1, 'רק עמוד 6 — הבקשה אינה נספרת');
+  const seq = await sequenceOfPage(String(pages[1]._id), uid);
+  assert.equal(seq, null, 'עמוד 1 אינו בטיפולי');
+  // פס-הרצף: עמוד 2 — 'recut' (לא 'approved' ולא "אצל אחר")
+  const held = await PageProofPage.updateOne({ _id: pages[1]._id }, { $set: { leasedBy: me._id, leasedUntil: inHours(3) } });
+  assert.equal(held.modifiedCount, 1);
+  const s = await sequenceOfPage(String(pages[1]._id), uid);
+  assert.equal(s.pages.find((p) => p.page === 2).state, 'recut');
+  assert.equal(s.pages.find((p) => p.page === 1).state, 'mine');
+});

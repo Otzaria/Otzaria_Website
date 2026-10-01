@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
-import { useProofEditor, COALESCE_MS } from './useProofEditor'
+import { useProofEditor, COALESCE_MS, mapCaretOffset, rebaseOps } from './useProofEditor'
 import { SEG_OK } from '@/lib/pageProof/textModel'
+import { tempLineId } from '@/lib/pageProof/ops'
 
 const P = 3
 const line = (id, text, extra = {}) => ({ id, order: id, line_no: id - 1, bbox: [100, id * 50, 900, id * 50 + 40], text, text_ocr: text, status: 'pending', stream: 'main', words: [], ...extra })
@@ -220,5 +221,190 @@ describe('useProofEditor', () => {
     const pass1 = { ...doc, lines: [{ ...doc.lines[0], status: 'ok' }, doc.lines[1]] }
     const one = renderHook(() => useProofEditor({ baseDoc: pass1, draftKey: KEY }))
     expect(one.result.current.view._preOk.size).toBe(0)
+  })
+})
+
+// דף עוטף ששומר בשרת כל צעד (תוכנת-הספר): מזהי-צעד, flushable, rebase, preOkFromStatus.
+// באתר אף אחד מהם אינו נקרא — הבדיקות שלמעלה (בלי השדות האלה) הן ההתנהגות של האתר.
+describe('useProofEditor — שמירה בשרת לכל צעד (דף עוטף)', () => {
+  beforeEach(() => window.localStorage.clear())
+  afterEach(() => vi.useRealTimers())
+  const book = (props = {}) => renderHook((p) => useProofEditor({ baseDoc: doc, persist: false, ...p }), { initialProps: props })
+  const serverDoc = (lines) => ({ ...doc, lines })
+
+  it('מזהה-צעד (_s) לכל push; push של כמה פעולות — מזהה אחד; הקלדה מצטברת — מזהה חדש בכל הקשה', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-30T10:00:00Z'))
+    const { result } = book()
+    act(() => {
+      result.current.push({ kind: 'line_ok', page: P, ids: [1] }, { kind: 'line_ok', page: P, ids: [2] })
+    })
+    const [a, b] = result.current.allOps
+    expect(a._s).toBeTruthy()
+    expect(b._s).toBe(a._s)
+    act(() => {
+      result.current.push(text(1, 'אלף ביתא'), { coalesceKey: 'text:1' })
+    })
+    const first = result.current.allOps[2]._s
+    expect(first).not.toBe(a._s)
+    vi.setSystemTime(new Date(Date.now() + 300))
+    act(() => {
+      result.current.push(text(1, 'אלף ביתאב'), { coalesceKey: 'text:1' })
+    })
+    expect(result.current.allOps).toHaveLength(3)
+    expect(result.current.allOps[2]._s).not.toBe(first)
+  })
+
+  it('flushable: צעדים לפי הסדר, בלי המקומיות; פרץ-הקלדה פתוח נשאר בחוץ (אלא אם all); skip; מזהים זמניים לחיתוך', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-30T10:00:00Z'))
+    const { result } = book()
+    act(() => {
+      result.current.push({ kind: SEG_OK, page: P, ids: [1], value: 0, _local: true }, { kind: 'line_ok', page: P, ids: [2] })
+    })
+    act(() => {
+      result.current.push({ kind: 'line_split', page: P, ids: [1], value: { x: 500 } })
+    })
+    act(() => {
+      result.current.push(text(2, 'גימל דלתא'), { coalesceKey: 'text:2' })
+    })
+    let f = result.current.flushable()
+    expect(f.held).toBe(1)
+    expect(f.steps.map((s) => s.ops.map((o) => o.kind))).toEqual([['line_ok'], ['line_split']])
+    // ה-split הוא הפעולה השנייה שאינה מקומית (אינדקס 1) — כמו buildView
+    expect(f.steps[1].tmp).toEqual([[tempLineId(1, 0), tempLineId(1, 1)]])
+    expect(result.current.view.lines.map((l) => l.id)).toEqual(expect.arrayContaining([tempLineId(1, 0), tempLineId(1, 1)]))
+    f = result.current.flushable({ all: true })
+    expect(f.held).toBe(0)
+    expect(f.steps.map((s) => s.ops[0].kind)).toEqual(['line_ok', 'line_split', 'text'])
+    // אחרי COALESCE_MS הפרץ כבר סגור — יוצא גם בלי all
+    vi.setSystemTime(new Date(Date.now() + COALESCE_MS + 1))
+    expect(result.current.flushable().steps).toHaveLength(3)
+    expect(result.current.flushable({ skip: new Set([f.steps[0].sid]) }).steps.map((s) => s.ops[0].kind)).toEqual(['line_split', 'text'])
+  })
+
+  it('rebase: מה שנשלח יורד, מה שנוסף בינתיים נשאר ונבדק שוב, העמוד מתחלף, ההיסטוריה המקומית מתאפסת', () => {
+    const { result } = book()
+    act(() => {
+      result.current.push(text(1, 'אלף בית מתוקן'))
+    })
+    const sent = result.current.flushable().steps
+    act(() => {
+      result.current.push(text(2, 'גימל דלת מתוקן'))
+    })
+    act(() => {
+      result.current.push({ kind: 'line_ok', page: P, ids: [1] })
+    })
+    expect(result.current.canUndo).toBe(true)
+    // השרת החיל את הצעד הראשון; שורה 2 נמחקה שם בינתיים (מסך אחר)
+    const fresh = serverDoc([{ ...doc.lines[0], text: 'אלף בית מתוקן' }])
+    let r
+    let before
+    act(() => {
+      r = result.current.rebase(fresh, { drop: sent.map((s) => s.sid) })
+      // מיד (לפני הרינדור): מה שנשלח כבר לא "ממתין" — אחרת היה נשלח פעמיים
+      before = result.current.flushable({ all: true }).steps.map((s) => s.ops[0].kind)
+    })
+    expect(before).toEqual(['line_ok'])
+    expect(result.current.baseDoc).toBe(fresh)
+    expect(result.current.ops.map((o) => o.kind)).toEqual(['line_ok'])
+    expect(r.dropped).toEqual([{ op: expect.objectContaining({ kind: 'text', ids: [2] }), error: expect.stringMatching(/שורה/) }])
+    expect(result.current.view.lines[0].text).toBe('אלף בית מתוקן')
+    expect(result.current.view.lines[0]._textEdited).toBeFalsy()
+    expect(result.current.canRedo).toBe(false)
+    // Ctrl+Z מקומי: רק מה שלא נשמר (אין צילומים — הקבוצה האחרונה)
+    act(() => {
+      result.current.undo()
+    })
+    expect(result.current.ops).toEqual([])
+    expect(result.current.undo()).toBeNull()
+  })
+
+  it('rebase: פעולה מקומית נשארת רק אם השורה שלה עוד בעמוד; תיקון שכבר זהה לעמוד — יורד בשקט', () => {
+    const { result } = book()
+    act(() => {
+      result.current.push({ kind: SEG_OK, page: P, ids: [1], value: 1, _local: true }, { kind: SEG_OK, page: P, ids: [2], value: 1, _local: true })
+    })
+    act(() => {
+      result.current.push(text(1, 'אלף בית ג'))
+    })
+    let r
+    act(() => {
+      r = result.current.rebase(serverDoc([{ ...doc.lines[0], text: 'אלף בית ג' }]), { drop: [] })
+    })
+    expect(r.dropped).toEqual([])
+    expect(result.current.allOps).toEqual([expect.objectContaining({ kind: SEG_OK, ids: [1] })])
+  })
+
+  it('rebase: מיפוי-המזהים — מהשרת (מחרוזות), ומזהים זמניים של חיתוך שנשאר ומקומו ברשימה זז', () => {
+    const { result } = book()
+    act(() => {
+      result.current.push(text(2, 'גימל'))
+    })
+    act(() => {
+      result.current.push({ kind: 'line_split', page: P, ids: [1], value: { x: 500 } })
+    })
+    const first = result.current.flushable().steps[0].sid
+    let r
+    act(() => {
+      r = result.current.rebase(serverDoc([doc.lines[0], { ...doc.lines[1], text: 'גימל' }]), { drop: [first], idMap: { '-1': 1, '-2': 7 } })
+    })
+    // השרת מיפה (מחרוזות ← מספרים); ה-split עבר ממקום 1 למקום 0 ברשימה: -11/-12 ← -1/-2
+    expect(r.idMap).toEqual({ '-1': 1, '-2': 7, [tempLineId(1, 0)]: tempLineId(0, 0), [tempLineId(1, 1)]: tempLineId(0, 1) })
+    expect(result.current.view.lines.map((l) => l.id)).toEqual(expect.arrayContaining([tempLineId(0, 0), tempLineId(0, 1), 2]))
+    expect(r.textOf(2)).toBe('גימל')
+    const second = { id: 7, order: 3, line_no: 2, bbox: [100, 100, 500, 140], text: 'בית', text_ocr: 'בית', status: 'pending', stream: 'main', words: [] }
+    let r2
+    act(() => {
+      r2 = result.current.rebase(serverDoc([doc.lines[0], second]), {
+        drop: result.current.flushable().steps.map((s) => s.sid),
+        idMap: { [tempLineId(0, 0)]: 1, [tempLineId(0, 1)]: 7 },
+      })
+    })
+    expect(r2.idMap).toEqual({ [tempLineId(0, 0)]: 1, [tempLineId(0, 1)]: 7 })
+    expect(r2.textOf(7)).toBe('בית')
+    expect(result.current.ops).toEqual([])
+  })
+
+  it('rebase: prop חדש של העמוד גובר על העמוד שהשרת החזיר; בתצוגה בלבד — אין rebase', () => {
+    const { result, rerender } = book()
+    const fresh = serverDoc([{ ...doc.lines[0], text: 'מהשרת' }, doc.lines[1]])
+    act(() => {
+      result.current.rebase(fresh, { drop: [] })
+    })
+    expect(result.current.view.lines[0].text).toBe('מהשרת')
+    const other = serverDoc([{ ...doc.lines[0], text: 'עמוד חדש' }, doc.lines[1]])
+    rerender({ baseDoc: other })
+    expect(result.current.baseDoc).toBe(other)
+    expect(result.current.view.lines[0].text).toBe('עמוד חדש')
+    const ro = renderHook(() => useProofEditor({ baseDoc: doc, readOnly: true }))
+    expect(ro.result.current.rebase(fresh, {})).toBeNull()
+    expect(ro.result.current.baseDoc).toBe(doc)
+  })
+
+  it('preOkFromStatus: שורות ok/fixed מאושרות גם בלי מעבר שני (בלי recheck); שורה עם recheck — לא', () => {
+    const lines = [{ ...doc.lines[0], status: 'fixed' }, { ...doc.lines[1], status: 'ok' }, line(3, 'עוד', { status: 'pending' })]
+    const pass1 = { ...doc, lines }
+    const site = renderHook(() => useProofEditor({ baseDoc: pass1, draftKey: KEY }))
+    expect(site.result.current.view._preOk.size).toBe(0)
+    const bk = renderHook(() => useProofEditor({ baseDoc: pass1, persist: false, preOkFromStatus: true }))
+    expect([...bk.result.current.view._preOk]).toEqual([1, 2])
+    const rc = { ...doc, lines: [lines[0], { ...lines[1], recheck: true }, lines[2]] }
+    const bk2 = renderHook(() => useProofEditor({ baseDoc: rc, persist: false, preOkFromStatus: true }))
+    expect([...bk2.result.current.view._preOk]).toEqual([1])
+  })
+
+  it('rebaseOps / mapCaretOffset — טהורים', () => {
+    const a = { ...text(1, 'x'), _s: 's1' }
+    const b = { ...text(2, 'גימל דלת'), _s: 's2' }
+    expect(rebaseOps(doc, [a, b], new Set(['s1'])).kept).toEqual([])
+    expect(rebaseOps(doc, [a, b], new Set([a])).kept).toEqual([])
+    expect(rebaseOps(doc, [a], new Set()).kept).toEqual([a])
+    // כיווץ-רווחים של השרת: הסמן אחרי אותן אותיות
+    expect(mapCaretOffset('אלף  בית', 'אלף בית', 5)).toBe(4)
+    expect(mapCaretOffset('אלף בית ', 'אלף בית', 8)).toBe(7)
+    expect(mapCaretOffset(' אלף', 'אלף', 2)).toBe(1)
+    expect(mapCaretOffset('אלף בית', 'אלף בית', 3)).toBe(3)
+    expect(mapCaretOffset('אלף', 'אלף בית גימל', 99)).toBe(3)
   })
 })

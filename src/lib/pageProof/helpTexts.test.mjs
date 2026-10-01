@@ -1,0 +1,26 @@
+/**
+ * נוסחי העזרה של הגהת-העמודים (helpTexts.js) — מה שהם מבטיחים למתנדב חייב להיות נכון:
+ * שורה נעולה (חיתוך שתוקן) חוזרת אליו רק כשהוא שלח את העמוד בעצמו ("שלח לזיהוי-מחדש" — התפיסה
+ * שלו מתחדשת בייבוא); אחרי הגשה ואישור מנהל העמוד חוזר להגהה, לא בהכרח אליו (importRules.RECUT_RESET).
+ * הרצה: npm run test:node
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { FAQ, RECUT_LINE_TITLE, RECUT_PAGE_TITLE, RECUT_REQUEST_HINT, RECUT_SENT } from './helpTexts.js';
+
+test('שורה נעולה: שתי הדרכים — "שלח לזיהוי-מחדש" חוזר אליכם; הגשה — חוזרת להגהה, למי שיתפוס אותו', () => {
+  assert.match(RECUT_LINE_TITLE, /"שלח לזיהוי-מחדש" — והעמוד יחזור אליכם עם השורות החדשות/);
+  assert.match(RECUT_LINE_TITLE, /הגישו את העמוד — ואחרי אישור המנהל הוא יחזור להגהה במעבר שני, למי שיתפוס אותו/);
+  // הנוסח הישן הבטיח שהעמוד "יחזור אליכם" גם אחרי הגשה — לא נכון (המגישים והתפיסה מתאפסים)
+  assert.doesNotMatch(RECUT_LINE_TITLE, /אחרי אישור המנהל היא תיחתך ותיקרא מחדש בתוכנת-הספר ותחזור אליכם/);
+});
+
+test('"ממתין לזיהוי-מחדש": השאלה בעזרה, הכותרת ברשת וההודעות של הבקשה — אותו סיפור', () => {
+  const recut = FAQ.find((f) => f.key === 'recut');
+  assert.match(recut.a, /"שלח לזיהוי-מחדש" בסרגל — הבקשה ממתינה באתר עד שתוכנת-הספר מעבדת אותה, והעמוד חוזר אליכם/);
+  assert.match(recut.a, /או להגיש את העמוד כרגיל/);
+  assert.match(RECUT_PAGE_TITLE, /בבקשה של המתנדב שעבד עליו/);
+  assert.match(RECUT_PAGE_TITLE, /עמוד שמתנדב שלח חוזר אליו/);
+  assert.match(RECUT_REQUEST_HINT, /רק תיקוני-החיתוך נשלחים/);
+  assert.match(RECUT_SENT, /יחזור אליכם עם השורות החדשות/);
+});

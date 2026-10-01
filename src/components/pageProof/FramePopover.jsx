@@ -20,6 +20,7 @@ import { isObjectFrame, FURNITURE_CHOICE, choiceInfo } from '@/lib/pageProof/sca
 //   onStream(key) — key: זרם, זרם-כותרת (…_heading) או FURNITURE_CHOICE ("ריהוט הדף")
 //   onSeq(n) · onOrder(-1|1) · onKind(kind|null) · onDelete() · onClose() — סגירת החלונית (המסגרת נשארת בחורה)
 //   onClaimLine (רשות) — השורה שבסמן בולטת מהמסגרת הזו: "השורה שייכת למסגרת הזו" (claimTitle — ההסבר)
+//   extra (רשות) — ReactNode של דף עוטף (תוכנת-הספר: שרשור לעמוד אחר וכו'), בשורה משלו בתחתית
 
 const small = 'flex h-6 min-w-6 items-center justify-center rounded border border-surface-variant bg-white px-1.5 text-[11px] hover:bg-neutral-50 disabled:opacity-40 disabled:hover:bg-white'
 
@@ -109,6 +110,7 @@ export default function FramePopover({
   onClose,
   onClaimLine = null,
   claimTitle,
+  extra = null,
 }) {
   if (!frame) return null
   const obj = isObjectFrame(frame)
@@ -196,6 +198,12 @@ export default function FramePopover({
           <button type="button" className={small} onClick={onClaimLine} title={claimTitle}>
             השורה שייכת למסגרת הזו
           </button>
+        </div>
+      )}
+
+      {extra != null && extra !== false && (
+        <div className="flex flex-wrap items-center gap-1 border-t border-surface-variant pt-1.5" data-testid="frame-extra">
+          {extra}
         </div>
       )}
 

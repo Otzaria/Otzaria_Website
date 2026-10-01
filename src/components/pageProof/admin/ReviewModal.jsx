@@ -20,6 +20,8 @@ import ProofEditor from '../ProofEditor'
 // הנוכחית — לכן בלי "עריכה לפני אישור": הפעולות מתייחסות לשורות של הגרסה הקודמת.
 // קישור שהמתייג יצר לעמוד אחר של הספר — מסומן בכותרת ("קישור לעמוד 4, שורה 12: «…»"),
 // וגם ברשימת-הקישורים וברשימת-השינויים שבחלונית "פרטים".
+// בקשת מתנדב לזיהוי-מחדש (recutRequest — רק תיקוני-חיתוך, בלי אישור מנהל): מסומנת; אין לה
+// "דחייה" — מבטלים אותה ב"ביטול הבקשה" (release_recut), והעמוד חוזר אל המתנדב.
 
 const sameOps = (a, b) => JSON.stringify(cleanOps(a)) === JSON.stringify(cleanOps(b))
 
@@ -31,6 +33,8 @@ const RECUT_SKIPPED =
   'הגשה אחרת לעמוד הזה כבר יצאה בקובץ-התיקונים הראשי, ולכן תיקוני-החיתוך של ההגשה הזו ייצאו רק בקובץ הכפולים — העמוד לא יעבור לזיהוי-מחדש בגללם.'
 const RELEASE_TITLE =
   'העמוד ממתין לזיהוי-מחדש בתוכנת-הספר. אם התוכנה לא תחזיר גרסה חדשה שלו (למשל תיקון-החיתוך נכשל שם) — שחררו אותו: הוא ייסגר בלי זיהוי-מחדש'
+const REQUEST_BADGE = 'בקשת מתנדב לזיהוי-מחדש — רק תיקוני-החיתוך, נשלחה בלי אישור מנהל; שאר התיקונים של המתנדב יגיעו בהגשה רגילה'
+const CANCEL_TITLE = 'ביטול הבקשה: העמוד חוזר אל המתנדב שביקש (שמור לו 48 שעות), בלי זיהוי-מחדש'
 
 // onPageChanged (רשות) — מצב העמוד השתנה בלי שההגשה השתנתה (שחרור ממתנה)
 export default function ReviewModal({ id, onClose, onDone, onPageChanged }) {
@@ -94,9 +98,12 @@ export default function ReviewModal({ id, onClose, onDone, onPageChanged }) {
 
   // העמוד ממתין לזיהוי-מחדש שלא יגיע — נסגר בלי זיהוי-מחדש (ההגשה עצמה לא משתנה)
   const releaseRecut = async () => {
+    const request = !!data?.submission?.recutRequest
     const ok = await showConfirm(
-      'שחרור העמוד מהמתנה',
-      'העמוד ייסגר בלי זיהוי-מחדש: תיקוני-החיתוך שבהגשות שלו לא יחזרו מהתוכנה בגרסה חדשה (שאר התיקונים כבר בקובץ-התיקונים). עמוד כפול שחסרה לו הגשה — ייפתח לבודק נוסף. להמשיך?'
+      request ? 'ביטול הבקשה לזיהוי-מחדש' : 'שחרור העמוד מהמתנה',
+      request
+        ? 'הבקשה תבוטל והעמוד יחזור אל המתנדב שביקש (שמור לו 48 שעות), בלי זיהוי-מחדש — עם התיקונים שבטיוטה שלו. להמשיך?'
+        : 'העמוד ייסגר בלי זיהוי-מחדש: תיקוני-החיתוך שבהגשות שלו לא יחזרו מהתוכנה בגרסה חדשה (שאר התיקונים כבר בקובץ-התיקונים). עמוד כפול שחסרה לו הגשה — ייפתח לבודק נוסף. להמשיך?'
     )
     if (!ok) return
     setBusy(true)
@@ -108,8 +115,15 @@ export default function ReviewModal({ id, onClose, onDone, onPageChanged }) {
       })
       const d = await res.json()
       if (!d.success) throw new Error(d.error || 'הפעולה נכשלה')
-      setData((cur) => (cur ? { ...cur, page: { ...cur.page, status: d.pageStatus } } : cur))
-      showAlert('בוצע', d.pageStatus === 'done' ? 'העמוד שוחרר ונסגר כהושלם.' : 'העמוד שוחרר ונפתח לבודק נוסף.')
+      setData((cur) => (cur ? { ...cur, page: { ...cur.page, status: d.pageStatus }, submission: { ...cur.submission, status: d.status ?? cur.submission.status } } : cur))
+      showAlert(
+        'בוצע',
+        d.returnedToRequester
+          ? 'הבקשה בוטלה, והעמוד חזר אל המתנדב שביקש.'
+          : d.pageStatus === 'done'
+            ? 'העמוד שוחרר ונסגר כהושלם.'
+            : 'העמוד שוחרר ונפתח לבודק נוסף.'
+      )
       onPageChanged?.(id, d.pageStatus)
     } catch (e) {
       showAlert('שגיאה', e.message)
@@ -120,7 +134,8 @@ export default function ReviewModal({ id, onClose, onDone, onPageChanged }) {
 
   const sub = data?.submission
   const pending = sub?.status === 'submitted'
-  const canReject = pending || (sub?.status === 'approved' && !sub?.exportedAt)
+  const request = !!sub?.recutRequest
+  const canReject = !request && (pending || (sub?.status === 'approved' && !sub?.exportedAt))
   const oldRevision = !!sub && rev(sub.revision) !== rev(data.page?.revision)
   const subRecut = !!sub && (sub.needsRecut ?? needsRecut(sub.ops))
   const farLinks = sub ? foreignLinkRefs(data.page?.doc, sub.ops) : []
@@ -142,10 +157,16 @@ export default function ReviewModal({ id, onClose, onDone, onPageChanged }) {
                 {data.page.required > 1 && ' · עמוד כפול'}
               </span>
               {sub.note && <span className="rounded bg-warning-alt-100 px-2 py-0.5 text-sm">הערת המתייג: {sub.note}</span>}
-              {subRecut && (
-                <span className="rounded bg-info-100 px-2 py-0.5 text-sm text-info-800">
-                  כולל תיקוני-חיתוך — {RECUT_HINT}
+              {request ? (
+                <span data-testid="recut-request" className="rounded bg-feature-100 px-2 py-0.5 text-sm text-feature-800">
+                  {REQUEST_BADGE}
                 </span>
+              ) : (
+                subRecut && (
+                  <span className="rounded bg-info-100 px-2 py-0.5 text-sm text-info-800">
+                    כולל תיקוני-חיתוך — {RECUT_HINT}
+                  </span>
+                )
               )}
               {farLinks.map((r) => (
                 <span key={r.i} data-testid="far-link" className="rounded bg-info-50 px-2 py-0.5 text-sm text-info-800" title="הצד השני של הקישור בעמוד אחר של הספר">
@@ -175,10 +196,10 @@ export default function ReviewModal({ id, onClose, onDone, onPageChanged }) {
                     type="button"
                     onClick={releaseRecut}
                     disabled={busy}
-                    title={RELEASE_TITLE}
+                    title={request ? CANCEL_TITLE : RELEASE_TITLE}
                     className="rounded border border-warning-alt-300 bg-white px-2 py-0.5 text-xs hover:bg-warning-alt-50 disabled:opacity-40"
                   >
-                    שחרור מהמתנה
+                    {request ? 'ביטול הבקשה' : 'שחרור מהמתנה'}
                   </button>
                 </span>
               )}

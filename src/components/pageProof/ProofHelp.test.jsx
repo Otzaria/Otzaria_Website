@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import ProofHelp, { HELP_SEEN_KEY } from './ProofHelp'
+import ProofHelp, { HELP_INTRO, HELP_SEEN_KEY } from './ProofHelp'
 import { PARA_STYLE_OPTIONS } from './ProofToolbar'
 
 beforeEach(() => {
@@ -159,8 +159,49 @@ describe('ProofHelp — שאלות שחוזרות (מהפורום)', () => {
     expect(q('headings')).toHaveTextContent(/כותרת שפותחת פרק או סעיף בתוך הטקסט — כותרת של הזרם שלה/)
     expect(q('running-only')).toHaveTextContent(/השאירו אותה ריהוט.*בהערה למנהל/)
     expect(q('join')).toHaveTextContent(/Backspace בתחילת הפסקה השנייה.*↑.*חיבור לפסקה הקודמת/)
+    expect(q('recut')).toHaveTextContent(/"שלח לזיהוי-מחדש" בסרגל.*חוזר אליכם עם השורות החדשות/)
     expect(q('recut')).toHaveTextContent(/פיצול, איחוד או שינוי תיבה/)
     expect(q('recut')).toHaveTextContent(/במעבר שני, שבו בודקים רק אותן/)
     expect(q('recut')).toHaveTextContent(/אתם לא צריכים להפעיל כלום/)
+  })
+})
+
+// עורך שמוטמע מחוץ לאתר (תוכנת-הספר): אין שם הגשה, מנהל או תפיסת-עמוד — texts מחליף את
+// החלקים האלה; בלי texts (האתר) — הנוסח המקורי, כמו בטסטים שלמעלה
+describe('ProofHelp — texts (נוסח אחר מחוץ לאתר)', () => {
+  it('בלי texts — משפט-הפתיחה, השאלות וסעיף "סיימתי" של האתר', () => {
+    window.localStorage.setItem(HELP_SEEN_KEY, '1')
+    render(<ProofHelp open onClose={vi.fn()} />)
+    expect(screen.getByText(HELP_INTRO)).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'שאלות שחוזרות' })).toBeInTheDocument()
+    expect(screen.getByText('סיימתי — מה עכשיו?')).toBeInTheDocument()
+    expect(screen.getByText(/מנהל בודק כל הגשה/)).toBeInTheDocument()
+  })
+
+  it('intro, extra, faq ו-done מחליפים את נוסח האתר; מערך ריק מסתיר את הסעיף', () => {
+    window.localStorage.setItem(HELP_SEEN_KEY, '1')
+    const texts = {
+      intro: 'פתיחה אחרת',
+      extra: <p data-testid="help-extra">תוספת של הדף העוטף</p>,
+      faq: [{ key: 'own', q: 'שאלה משלנו?', a: 'תשובה משלנו' }],
+      done: [],
+    }
+    render(<ProofHelp open onClose={vi.fn()} texts={texts} />)
+    const dialog = screen.getByRole('dialog', { name: 'מה עושים בעמוד?' })
+    expect(within(dialog).getByText('פתיחה אחרת')).toBeInTheDocument()
+    expect(within(dialog).queryByText(HELP_INTRO)).toBeNull()
+    expect(within(dialog).getByTestId('help-extra')).toHaveTextContent('תוספת של הדף העוטף')
+    const faq = within(dialog).getByRole('region', { name: 'שאלות שחוזרות' })
+    expect(faq.querySelectorAll('[data-faq]')).toHaveLength(1)
+    expect(faq.querySelector('[data-faq="own"]')).toHaveTextContent('שאלה משלנו?תשובה משלנו')
+    expect(within(dialog).queryByText('סיימתי — מה עכשיו?')).toBeNull()
+    expect(within(dialog).queryByText(/מנהל/)).toBeNull()
+  })
+
+  it('faq: [] — בלי סעיף השאלות', () => {
+    window.localStorage.setItem(HELP_SEEN_KEY, '1')
+    render(<ProofHelp open onClose={vi.fn()} texts={{ faq: [] }} />)
+    expect(screen.queryByRole('region', { name: 'שאלות שחוזרות' })).toBeNull()
+    expect(screen.getByText(HELP_INTRO)).toBeInTheDocument()
   })
 })

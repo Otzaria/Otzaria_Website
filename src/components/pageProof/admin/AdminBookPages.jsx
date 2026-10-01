@@ -6,13 +6,15 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { useDialog } from '@/components/providers/DialogContext'
 import AdminPageCard from './AdminPageCard'
 import { imageUrl } from '@/lib/pageProof/gridState'
-import { CLAIM_NOTE, adminMatches, bulkReleaseMessage, parsePageRange, rangeLabel, releaseMessage } from '@/lib/pageProof/adminGrid'
+import { CLAIM_NOTE, adminMatches, bulkReleaseMessage, cancelRecutMessage, parsePageRange, rangeLabel, releaseMessage } from '@/lib/pageProof/adminGrid'
 
 // רשת-העמודים של ספר בניהול הגהת-העמודים (נפתחת מ"עמודים" בטבלת הספרים):
 // תמונה ממוזערת לכל עמוד עם המצב (פנוי / תפוס — בידי מי ועד מתי / ממתין לאישור /
 // אושר / ממתין לזיהוי-מחדש), המתג "פתוח למתנדבים" לכל עמוד ולטווח ("עמודים
 // 1–20 פתוחים", "וסגור את כל השאר"), ושחרור תפיסה בידי מנהל — לעמוד, או כל
 // התפיסות שפגו / כל התפיסות בספר. השרת: /api/admin/page-proof/books/[gid]/(pages|release).
+// עמוד שממתין לזיהוי-מחדש בבקשת מתנדב — "ביטול הבקשה" (release_recut על הבקשה: העמוד חוזר
+// אל המתנדב בלי זיהוי-מחדש).
 // onChanged — אחרי כל שינוי (מוני טבלת-הספרים).
 
 const FILTERS = [
@@ -62,11 +64,12 @@ export default function AdminBookPages({ gid, title = '', onClose, onChanged }) 
     load()
   }, [load])
 
-  // שליחה לשרת; אחריה הרשת נטענת מחדש (גם בשגיאה — המצב אולי השתנה בינתיים)
+  // שליחה לשרת; אחריה הרשת נטענת מחדש (גם בשגיאה — המצב אולי השתנה בינתיים).
+  // path — יחסי לספר, או כתובת מלאה (מתחילה ב-/)
   const send = async (path, method, body) => {
     setBusy(true)
     try {
-      const res = await fetch(`${base}/${path}`, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const res = await fetch(path.startsWith('/') ? path : `${base}/${path}`, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       const d = await res.json()
       if (!d.success) throw new Error(d.error || 'הפעולה נכשלה')
       await load()
@@ -119,6 +122,12 @@ export default function AdminBookPages({ gid, title = '', onClose, onChanged }) 
     )
 
   const release = (page) => confirmThen('שחרור עמוד', releaseMessage(page), 'שחרר', () => send('release', 'POST', { ids: [page.id] }))
+
+  // בקשת מתנדב לזיהוי-מחדש — ביטול ("שחרור מהמתנה" על הבקשה עצמה)
+  const cancelRecut = (page) =>
+    confirmThen('ביטול בקשה לזיהוי-מחדש', cancelRecutMessage(page), 'בטל את הבקשה', () =>
+      send(`/api/admin/page-proof/submissions/${encodeURIComponent(page.recutRequest.id)}`, 'PATCH', { action: 'release_recut' })
+    )
 
   const releaseAll = (scope, n) =>
     confirmThen(scope === 'expired' ? 'ניקוי תפיסות שפגו' : 'שחרור כל התפיסות', bulkReleaseMessage(scope, n), 'שחרר', async () => {
@@ -244,7 +253,7 @@ export default function AdminBookPages({ gid, title = '', onClose, onChanged }) 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
           {visible.map((p) => (
             <div key={`${p.id}:${p.revision}`} style={{ contentVisibility: 'auto', containIntrinsicSize: '180px 360px' }}>
-              <AdminPageCard page={p} busy={busy} now={data.loadedAt} onToggle={toggle} onRelease={release} onPreview={openPreview} />
+              <AdminPageCard page={p} busy={busy} now={data.loadedAt} onToggle={toggle} onRelease={release} onCancelRecut={cancelRecut} onPreview={openPreview} />
             </div>
           ))}
         </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { buildView, recutLineIds, validateOp } from '@/lib/pageProof/ops'
 import { historyCaret } from '@/lib/pageProof/historyCaret'
 import { streamChoices, untouchedLineIds, replaceWord, viewStats } from '@/lib/pageProof/view'
@@ -32,7 +32,7 @@ import { LAYOUT_KEY, SPLIT_MAX, SPLIT_MIN, nudgeSplit, readLayout, splitFromPoin
 import { LINK_ERRORS, linkEnd, planLink, planOtherPageLink, farLabel, tabOfLine, wordStartPos } from '@/lib/pageProof/linkFlow'
 import { isKey, isShortcut } from '@/lib/pageProof/keys'
 import { useDialog } from '@/components/providers/DialogContext'
-import { useProofEditor } from './useProofEditor'
+import { mapCaretOffset, useProofEditor } from './useProofEditor'
 import { useWordPopup } from './useWordPopup'
 import ProofToolbar, { DEFAULT_PROOF_FONT, clampFontSize } from './ProofToolbar'
 import ScanPanel from './ScanPanel'
@@ -42,7 +42,7 @@ import StatusBar from './StatusBar'
 import DetailsDrawer from './DetailsDrawer'
 import ProofHelp from './ProofHelp'
 import OtherPagePicker from './OtherPagePicker'
-import { caretTop } from './flowDom'
+import { caretTop, readDomSelection } from './flowDom'
 
 // עורך הגהת-עמוד — המעטפת: סרגל-כלים (בנוסח העורך הישן של האתר), הסריקה
 // (מסגרות / שורות) והטקסט הזורם זה לצד זה עם מפריד נגרר וצדדים מתחלפים,
@@ -54,7 +54,44 @@ import { caretTop } from './flowDom'
 // readOnly, persist (טיוטה בדפדפן), draftKey (lib/pageProof/drafts — ברירת-
 // המחדל לפי העמוד והגרסה), toolbarClassName (בתוך חלון: 'sticky top-0 z-30'),
 // actions({ops, view, stats, untouched, approval, reset}) — כפתורי הדף העוטף
-// בקצה הסרגל; approval = {approved, total} פסקאות-התוכן בכל העמוד.
+// בקצה הסרגל; approval = {approved, total} פסקאות-התוכן בכל העמוד. הכפתורים של האתר —
+// "הגשת העמוד" ו"שלח לזיהוי-מחדש" של דף המתנדב (app/library/page-proof) — באים רק מכאן:
+// העורך עצמו אינו מציג אותם, ולכן דף עוטף שנותן actions משלו (או בלי) — תוכנת-הספר, שחותכת
+// ומזהה מחדש אצלה — לעולם אינו רואה אותם, בלי שום prop נוסף.
+//
+// נקודות-הרחבה למי שמטמיע את העורך מחוץ לאתר (תוכנת-הספר). כולן רשות, ובלעדיהן
+// העורך מתנהג בדיוק כמו באתר:
+//   loadOtherPage(gid, n) — טעינת עמוד אחר של הספר לחלון "הצד השני בעמוד אחר"
+//     (Promise של {page, lines} כמו GET /api/page-proof/books/[gid]/pages/[n]/lines;
+//     שגיאה = Error עם הודעה בעברית). בלעדיו — fetch לכתובת הזו.
+//   help — נוסח העזרה לחלקים שתלויים באתר (ProofHelp: texts).
+//   onExtraKey(e, {inFlow, inField, inModal}) — מקשים של הדף העוטף: נקרא ראשון במאזין-המקלדת
+//     של החלון, לפני כל קיצור של העורך; true = טופל, והעורך לא ממשיך (preventDefault — עליו).
+//   onUndoEmpty / onRedoEmpty — ביטול/חזרה (מקלדת או סרגל) כשההיסטוריה של העורך ריקה —
+//     למשל צעד שכבר נשמר בשרת. canUndoEmpty / canRedoEmpty — לדף העוטף יש מה לבטל/להחזיר:
+//     הכפתור בסרגל נשאר פעיל גם בלי היסטוריה מקומית.
+//   גובה הלוחות במסך רחב: 100vh פחות המשתנה --proof-chrome (ברירת-המחדל 12.5rem — כותרת האתר,
+//     הסרגל ושורת-המצב). דף עוטף עם מסגרת אחרת קובע אותו על אחד ההורים; הלוחות — data-proof-panes.
+//   lockedExtra — מזהי-שורות נוספים שהטקסט שלהם נעול (למשל שורות שממתינות לזיהוי-מחדש אצל הדף העוטף).
+//   extraTabs — [{id, label, render(ctx)}]: לשוניות נוספות בלוח הפרטים; ctx = {view, baseDoc, ops,
+//     stats, caretLine, caretLocked, linkPending, readOnly, act}.
+//   scanOverlay — שכבה על הסריקה במרחב הפיקסלים של התמונה: ReactNode או ({zoom, mode, view}) => ReactNode.
+//   textView({flow, view, tabKey, goTo}) — מה שמוצג בלוח-הטקסט במקום העורך הזורם (flow = העורך).
+//   onSelectionChange(sel) — הבחירה השתנתה: {from:'text', anchor, focus, lineIds} מהטקסט,
+//     או {from:'scan', lineIds, fid} מהסריקה (שורות נבחרות במצב "שורות", המסגרת הנבחרת).
+//   charStyleButtons — כפתורי עיצוב-התווים בסרגל (ברירת-המחדל: ProofToolbar.CHAR_STYLE_BUTTONS).
+//   moreMenu — {items, onSelect, label?, title?}: תפריט "⋯" בסרגל (פריטים כמו ב-ToolbarMenu).
+//   frameActions(frame) — ReactNode נוסף בחלונית של מסגרת נבחרת.
+//   scanOverlay ו-frameActions עוברים ללוח-הסריקה הממוזכר — בזהות קבועה (useMemo/useCallback).
+//   ולדף עוטף ששומר בשרת כל צעד (useProofEditor — flushable/rebase):
+//   editorRef — ref שמקבל {flushable(opts), rebase(doc, opts), goTo(lineId, word?), say(text)}; rebase של
+//     העורך מעביר גם את הסמן (והבחירה) דרך מיפוי-המזהים ודרך כיווץ-הרווחים של השרת.
+//   onOpsChange(allOps) — רשימת-הפעולות השתנתה (הוספה, ביטול, rebase): אחרי הרינדור.
+//   preOkFromStatus — שורות ok/fixed בעמוד מאושרות תמיד (useProofEditor).
+//   onUnapprovePre({key, lineIds}) — ביטול אישור של פסקה שאושרה לפני העריכה הזו (אישור שכבר נשמר): בלעדיו —
+//     כמו באתר ("אושרה בסבב קודם", הכפתור כבוי); איתו — הכפתור פעיל, והדף העוטף מבטל בשרת.
+//   helpAutoOpen — פתיחת העזרה לבד בפעם הראשונה (ברירת-המחדל: בעריכה עם טיוטות — persist).
+//   help.lockedLine — ההסבר על שורה נעולה (ממתינה לזיהוי-מחדש) במקום הנוסח של האתר.
 //
 // הסמן משותף לטקסט ולסריקה: השורה שבה הסמן מסומנת על הסריקה, ולחיצה על
 // הסריקה מעבירה את הסמן לשורה שם (ולשונית הזרם שלה).
@@ -175,11 +212,40 @@ function Splitter({ split, swap, containerRef, onDrag, onCommit, onSwap }) {
   )
 }
 
-export default function ProofEditor({ page, initialOps = null, readOnly = false, persist = true, actions = null, draftKey = null, toolbarClassName }) {
-  const baseDoc = page.doc
-  const P = baseDoc.page
+export default function ProofEditor({
+  page,
+  initialOps = null,
+  readOnly = false,
+  persist = true,
+  actions = null,
+  draftKey = null,
+  toolbarClassName,
+  loadOtherPage = null,
+  help = null,
+  onExtraKey = null,
+  onUndoEmpty = null,
+  onRedoEmpty = null,
+  canUndoEmpty = false,
+  canRedoEmpty = false,
+  lockedExtra = null,
+  extraTabs = null,
+  scanOverlay = null,
+  textView = null,
+  onSelectionChange = null,
+  charStyleButtons = null,
+  moreMenu = null,
+  frameActions = null,
+  editorRef = null,
+  onOpsChange = null,
+  preOkFromStatus = false,
+  onUnapprovePre = null,
+  helpAutoOpen = null,
+}) {
   const storageKey = useMemo(() => draftKey || pageDraftKey(page), [draftKey, page])
-  const ed = useProofEditor({ baseDoc, initialOps, readOnly, persist, draftKey: storageKey })
+  const ed = useProofEditor({ baseDoc: page.doc, initialOps, readOnly, persist, draftKey: storageKey, preOkFromStatus })
+  // העמוד שמולו עובדים: page.doc, או מה שהשרת החזיר אחרי שמירה (rebase)
+  const baseDoc = ed.baseDoc
+  const P = baseDoc.page
   const { view, ops, push } = ed
   const { showAlert, showConfirm } = useDialog()
 
@@ -212,7 +278,11 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
 
   // ---- נגזרות ----
   const lineById = useMemo(() => new Map(view.lines.map((l) => [l.id, l])), [view])
-  const locked = useMemo(() => new Set(recutLineIds(baseDoc, ops)), [baseDoc, ops])
+  const locked = useMemo(() => {
+    const s = new Set(recutLineIds(baseDoc, ops))
+    for (const id of lockedExtra || []) s.add(id)
+    return s
+  }, [baseDoc, ops, lockedExtra])
   const recheck = useMemo(() => new Set(recheckLineIds(baseDoc)), [baseDoc])
   const recheckCount = useMemo(() => view.lines.filter((l) => recheck.has(l.id) && l.status !== 'removed').length, [view, recheck])
   const endpoints = useMemo(() => linkEndpoints(view), [view])
@@ -418,8 +488,12 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
     return plan.ops.length ? push(...plan.ops) : false
   }
   const unapprove = (key) => {
-    // פסקה שאושרה בסבב קודם (לפני ההגהה הזו) — אין כאן אישור לבטל
-    if (tabAppr.byKey.get(key)?.pre) return say('הפסקה הזו אושרה כבר בסבב קודם — אין כאן אישור לבטל')
+    // פסקה שאושרה בסבב קודם (לפני ההגהה הזו) — אין כאן אישור לבטל; דף עוטף ששומר כל צעד מבטל אותו בשרת
+    const info = tabAppr.byKey.get(key)
+    if (info?.pre) {
+      if (typeof onUnapprovePre === 'function' && !readOnly) return onUnapprovePre({ key, lineIds: info.lineIds.slice() })
+      return say('הפסקה הזו אושרה כבר בסבב קודם — אין כאן אישור לבטל')
+    }
     const pred = unapproveMatcher(view, tabKey, key, { locked })
     if (!pred) return
     ed.removeWhere(pred)
@@ -491,7 +565,12 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
   // טקסט (סגנון, פסקה, מסגרת) — הסמן נשאר במקומו, בלי לגנוב את המיקוד מהסריקה
   const history = (which) => {
     const r = which === 'redo' ? ed.redo() : ed.undo()
-    if (!r) return
+    if (!r) {
+      // אין כאן מה לבטל/להחזיר — לדף העוטף (רשות), למשל צעד שכבר נשמר בשרת
+      const empty = which === 'redo' ? onRedoEmpty : onUndoEmpty
+      if (!readOnly && typeof empty === 'function') empty()
+      return
+    }
     const after = buildView(baseDoc, r.all.filter((o) => !o._local))
     const pos = historyCaret(view, after, r.ops)
     const line = pos ? after.lines.find((l) => l.id === pos.lineId) : null
@@ -512,11 +591,49 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
     return push(op)
   }
 
+  // ---- שמירה בשרת (דף עוטף — editorRef): העמוד החדש מהשרת, והסמן נשאר במקומו ----
+  // הבחירה נלקחת מהדפדפן כשהטקסט במיקוד (עדכנית מ-sel, שמתעדכן אחרי השהיה קצרה); מזהה זמני עובר
+  // למזהה שהשרת נתן (idMap), וההיסט — דרך כיווץ-הרווחים של השרת (mapCaretOffset)
+  const rebaseKeepCaret = (doc, opts) => {
+    const root = textPaneRef.current?.querySelector?.('[data-proof-flow]') || null
+    const focused = !!root && root.ownerDocument?.activeElement === root
+    const cur = (focused && readDomSelection(root)) || selRef.current
+    const r = ed.rebase(doc, opts)
+    if (!r || !cur?.focus) return r
+    const pos = (p) => {
+      if (!p) return null
+      const id = r.idMap[p.lineId] ?? p.lineId
+      const after = r.textOf(id)
+      if (after == null) return null
+      const before = lineById.get(p.lineId)
+      return { lineId: id, offset: mapCaretOffset(before ? String(before.text ?? '') : after, after, p.offset) }
+    }
+    const focus = pos(cur.focus)
+    if (!focus) return r
+    const next = { anchor: pos(cur.anchor) || focus, focus }
+    if (focused || !sameSel(next, cur)) moveCaret(next, focused)
+    return r
+  }
+
   // ---- ה-callbacks היציבים (לרכיבים ממוזכרים) — תמיד על המצב העדכני ----
   const live = useRef(null)
   useLayoutEffect(() => {
-    live.current = { approve, unapprove, goTo, charStyle, joinPara, undo, redo, link, cancelLink, approveAtCaret, goSuspicious, openSuggest, linkPending, readOnly, P }
+    live.current = { approve, unapprove, goTo, charStyle, joinPara, undo, redo, link, cancelLink, approveAtCaret, goSuspicious, openSuggest, linkPending, readOnly, P, loadOtherPage, onExtraKey, onSelectionChange, ed, rebaseKeepCaret, onOpsChange }
   })
+  useImperativeHandle(
+    editorRef,
+    () => ({
+      flushable: (o) => live.current.ed.flushable(o),
+      rebase: (doc, o) => live.current.rebaseKeepCaret(doc, o),
+      goTo: (lineId, word = null) => live.current.goTo(lineId, word, { focus: true }),
+      say: (text) => say(text),
+    }),
+    [say]
+  )
+  // רשימת-הפעולות השתנתה — לדף העוטף (שמירה אוטומטית), אחרי הרינדור
+  useEffect(() => {
+    live.current?.onOpsChange?.(ed.allOps)
+  }, [ed.allOps])
   const stable = useMemo(
     () => ({
       onSelect: selectFromText,
@@ -537,9 +654,22 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
       // לחיצה על הסריקה: הסמן עובר לשם, אבל הסריקה עצמה לא זזה (caretY = null)
       onPickLine: (lineId, extra) => live.current.goTo(lineId, extra?.wordIndex ?? null, { focus: false, from: 'scan' }),
       setMode: (m) => setScanMode(m),
+      // הטעינה של העמוד האחר דרך הדף העוטף — זהות קבועה, כדי שהחלון לא יטען שוב בכל רינדור
+      loadOtherPage: (gid, n) => live.current.loadOtherPage(gid, n),
+      // הבחירה בסריקה — לדף העוטף (זהות קבועה: הסריקה ממוזכרת)
+      onScanSelection: (s) => live.current.onSelectionChange?.(s),
     }),
     [say, selectFromText]
   )
+
+  // ---- הבחירה בטקסט — לדף העוטף (רשות; הבחירה בסריקה — ScanPanel) ----
+  // רק כשהבחירה או הלשונית משתנות, לא בכל שינוי בתצוגה (הקלדה)
+  useEffect(() => {
+    if (typeof onSelectionChange !== 'function') return
+    const ranges = sel && !isCollapsed(sel) ? selectionToLineRanges(view, tabKey, sel.anchor, sel.focus) : sel?.focus ? [{ lineId: sel.focus.lineId }] : []
+    onSelectionChange({ from: 'text', anchor: sel?.anchor ?? null, focus: sel?.focus ?? null, lineIds: [...new Set(ranges.map((r) => r.lineId))] })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sel, tabKey])
 
   // ---- הסריקה עוקבת אחרי הסמן (track) ----
   // המדידה: בפריים שאחרי הרינדור (העורך כבר הציב את הסמן וגלל אליו), מהמקום של הסמן
@@ -590,9 +720,12 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
       const H = live.current
       if (!H || e.defaultPrevented || e.isComposing) return
       const t = e.target instanceof Element ? e.target : null
-      if (t?.closest?.('[aria-modal="true"]')) return
+      const inModal = !!t?.closest?.('[aria-modal="true"]')
       const inFlow = !!t?.closest?.('[data-proof-flow]')
       const inField = !!t && !inFlow && isTextField(t)
+      // מקשים של הדף העוטף (רשות) — לפני כל קיצור של העורך; true = טופל
+      if (typeof H.onExtraKey === 'function' && H.onExtraKey(e, { inFlow, inField, inModal }) === true) return
+      if (inModal) return
       const ctrl = e.ctrlKey || e.metaKey
       // האות של הקיצור בכל פריסה (lib/pageProof/keys): בפריסה עברית Ctrl+Z נותן
       // e.key === 'ז' — המקש הפיזי (e.code 'KeyZ') קובע, וגם בלעדיו 'ז' ← 'z'
@@ -695,8 +828,39 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
         onPickLine={stable.onPickLine}
         push={push}
         frameStreamDefault={tabKey}
+        scanOverlay={scanOverlay}
+        frameActions={frameActions}
+        onSelectionChange={typeof onSelectionChange === 'function' ? stable.onScanSelection : undefined}
       />
     </div>
+  )
+
+  const flow = (
+    <FlowEditor
+      view={view}
+      tabKey={tabKey}
+      push={push}
+      readOnly={readOnly}
+      locked={locked}
+      recheck={recheck}
+      approval={furnitureTab ? null : tabAppr}
+      endpoints={endpoints}
+      caretLineId={caretLine?.id ?? null}
+      request={request}
+      onSelect={stable.onSelect}
+      onHint={say}
+      onApprove={stable.onApprove}
+      onUnapprove={stable.onUnapprove}
+      onUndo={stable.onUndo}
+      onRedo={stable.onRedo}
+      onFormat={stable.onFormat}
+      onWordEnter={pop.onWordEnter}
+      onWordLeave={pop.onWordLeave}
+      onJump={stable.onJump}
+      onJoinPara={readOnly ? null : stable.onJoinPara}
+      lockTitle={help?.lockedLine}
+      unapprovePre={!readOnly && typeof onUnapprovePre === 'function'}
+    />
   )
 
   const textPane = (
@@ -715,31 +879,7 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
         fontSize={layout.fontSize}
         fontFamily={fontFamily}
         className="h-full"
-        editorSlot={
-          <FlowEditor
-            view={view}
-            tabKey={tabKey}
-            push={push}
-            readOnly={readOnly}
-            locked={locked}
-            recheck={recheck}
-            approval={furnitureTab ? null : tabAppr}
-            endpoints={endpoints}
-            caretLineId={caretLine?.id ?? null}
-            request={request}
-            onSelect={stable.onSelect}
-            onHint={say}
-            onApprove={stable.onApprove}
-            onUnapprove={stable.onUnapprove}
-            onUndo={stable.onUndo}
-            onRedo={stable.onRedo}
-            onFormat={stable.onFormat}
-            onWordEnter={pop.onWordEnter}
-            onWordLeave={pop.onWordLeave}
-            onJump={stable.onJump}
-            onJoinPara={readOnly ? null : stable.onJoinPara}
-          />
-        }
+        editorSlot={typeof textView === 'function' ? textView({ flow, view, tabKey, goTo }) : flow}
       />
     </div>
   )
@@ -747,8 +887,8 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
   return (
     <div className="flex flex-col" dir="rtl">
       <ProofToolbar
-        canUndo={ed.canUndo}
-        canRedo={ed.canRedo}
+        canUndo={ed.canUndo || (!!canUndoEmpty && typeof onUndoEmpty === 'function')}
+        canRedo={ed.canRedo || (!!canRedoEmpty && typeof onRedoEmpty === 'function')}
         onUndo={undo}
         onRedo={redo}
         paraStyle={paraStyle}
@@ -773,6 +913,8 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
         actions={actionsNode}
         readOnly={readOnly}
         className={toolbarClassName}
+        charStyleButtons={charStyleButtons ?? undefined}
+        moreMenu={moreMenu}
       />
 
       {ed.error && (
@@ -786,8 +928,9 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
 
       <div
         ref={splitRef}
+        data-proof-panes=""
         style={{ '--scan-w': `${layout.split}%` }}
-        className="mt-2 flex flex-col gap-2 lg:h-[calc(100vh-12.5rem)] lg:min-h-[560px] lg:flex-row lg:gap-0"
+        className="mt-2 flex flex-col gap-2 lg:h-[calc(100vh_-_var(--proof-chrome,12.5rem))] lg:min-h-[560px] lg:flex-row lg:gap-0"
       >
         {scanPane}
         <Splitter
@@ -805,6 +948,7 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
               className="h-full"
               tab={detailsTab}
               setTab={setDetailsTab}
+              extraTabs={extraTabs}
               onClose={() => setDetailsOpen(false)}
               view={view}
               baseDoc={baseDoc}
@@ -815,6 +959,7 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
               linkPending={linkPending}
               readOnly={readOnly}
               act={drawerAct}
+              lockTitle={help?.lockedLine}
             />
           </div>
         )}
@@ -832,9 +977,17 @@ export default function ProofEditor({ page, initialOps = null, readOnly = false,
 
       {pop.popup}
       {otherPage && canOtherPage && (
-        <OtherPagePicker gid={gid} view={view} from={linkPending.from} startPage={otherPage.start} onPick={pickOtherPage} onClose={closeOtherPage} />
+        <OtherPagePicker
+          gid={gid}
+          view={view}
+          from={linkPending.from}
+          startPage={otherPage.start}
+          onPick={pickOtherPage}
+          onClose={closeOtherPage}
+          fetchLines={typeof loadOtherPage === 'function' ? stable.loadOtherPage : undefined}
+        />
       )}
-      <ProofHelp open={helpOpen} onClose={closeHelp} autoOpen={!readOnly && persist} />
+      <ProofHelp open={helpOpen} onClose={closeHelp} autoOpen={typeof helpAutoOpen === 'boolean' ? helpAutoOpen : !readOnly && persist} texts={help} />
     </div>
   )
 }

@@ -348,3 +348,14 @@ test('mergeImportResults: ספר בכמה קבצים — שורה אחת, המו
   assert.deepEqual(importSummaryParts(merged[0]).slice(0, 2), ['62 עמודים חדשים', '4 עודכנו']);
   assert.deepEqual(mergeImportResults(null), []);
 });
+
+test('importSummaryParts / mergeImportResults: עמודים שחזרו למתנדב שביקש את הזיהוי-מחדש', () => {
+  assert.equal(importSummaryParts({ created: 0, updated: 0, recut: 3, recutReturned: 1 })[2], '3 חזרו מזיהוי-מחדש ונפתחו למעבר שני (אחד מהם חזר למתנדב שביקש את הזיהוי-מחדש)');
+  assert.equal(importSummaryParts({ recut: 3, recutReturned: 2 })[2], '3 חזרו מזיהוי-מחדש ונפתחו למעבר שני (2 מהם חזרו למתנדב שביקש את הזיהוי-מחדש)');
+  assert.equal(importSummaryParts({ recut: 2 })[2], '2 חזרו מזיהוי-מחדש ונפתחו למעבר שני');
+  const [m] = mergeImportResults([
+    { gid: 'g', recut: 1, recutReturned: 1, errors: [] },
+    { gid: 'g', recut: 2, recutReturned: 1, errors: [] },
+  ]);
+  assert.equal(m.recutReturned, 2);
+});

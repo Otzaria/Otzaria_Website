@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
 import { unzipSync } from 'fflate';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
 import { hasOcrAccess } from '@/lib/roles';
 import { requireAccess, badRequest, serverError } from '@/lib/apiResponse';
 import { parsePackageEntries } from '@/lib/pageProof/packageParse';
 import { importPackages } from '@/lib/pageProof/importPackages';
+import { getPageProofSession } from '@/lib/pageProof/tokenAuth';
 
 // המרת תמונות גדולות (עד 6000×7500) לוקחת זמן
 export const maxDuration = 300;
@@ -18,9 +17,11 @@ const MAX_FILES = 5;
 
 // POST multipart: file (אחד או יותר) — ZIP של תיקיית חבילה-עמודים אחת או
 // יותר (חבילה.json + עמוד-NNN.json + pages/). doublePct — אחוז הרצפים
-// הכפולים לספר חדש (ברירת מחדל 10).
+// הכפולים לספר חדש (ברירת מחדל 10). עמוד שממתין לזיהוי-מחדש מוחלף בגרסה
+// חדשה שלו (importRules.importAction). גם במפתח-גישה של תוכנת-הספר (import).
 export async function POST(request) {
-  const session = await getServerSession(authOptions);
+  const { session, denied: keyDenied } = await getPageProofSession(request, 'import');
+  if (keyDenied) return keyDenied;
   const denied = requireAccess(session, hasOcrAccess);
   if (denied) return denied;
 

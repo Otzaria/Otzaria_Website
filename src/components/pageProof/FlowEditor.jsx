@@ -33,6 +33,9 @@ import { RECUT_LINE_TITLE } from '@/lib/pageProof/helpTexts'
 //   onUndo / onRedo / onFormat(style)   מתפריט-העריכה של הדפדפן
 //   onWordEnter(lineId, i, rect) / onWordLeave(lineId, i)   חלונית-ההצעות
 //   onJump(other)       לחיצה על מספר-קישור: {lineId, page, i} של הצד השני
+//   lockTitle           (רשות) ההסבר על שורה נעולה — במקום הנוסח של האתר (RECUT_LINE_TITLE)
+//   unapprovePre        (רשות) פסקה שאושרה לפני העריכה הזו ניתנת לביטול-אישור (הדף העוטף מבטל אותו
+//                       בשרת — ProofEditor.onUnapprovePre): הכפתור פעיל ובנוסח של פסקה מאושרת רגילה
 
 const DELETE_UNITS = {
   deleteContentBackward: [-1, 'char'],
@@ -163,7 +166,7 @@ function NotLineButton({ lineId, onRemove }) {
   )
 }
 
-function Seg({ line, seg, lemma, isLocked, isRecheck, isCaret, lowWord, eps, wordText, readOnly, onWordEnter, onWordLeave, onJump, onRemoveLine }) {
+function Seg({ line, seg, lemma, isLocked, isRecheck, isCaret, lowWord, eps, wordText, readOnly, onWordEnter, onWordLeave, onJump, onRemoveLine, lockTitle }) {
   const text = String(line?.text ?? '')
   const empty = text.length === 0
   const marks = wordMarks(line, lowWord)
@@ -190,7 +193,7 @@ function Seg({ line, seg, lemma, isLocked, isRecheck, isCaret, lowWord, eps, wor
       data-label={label}
       contentEditable={isLocked && !readOnly ? false : undefined}
       suppressContentEditableWarning
-      title={isLocked ? RECUT_LINE_TITLE : isRecheck ? 'השורה זוהתה מחדש — בדקו אותה מול הסריקה' : undefined}
+      title={isLocked ? lockTitle || RECUT_LINE_TITLE : isRecheck ? 'השורה זוהתה מחדש — בדקו אותה מול הסריקה' : undefined}
       className={cls}
     >
       {empty ? (
@@ -238,10 +241,10 @@ function Seg({ line, seg, lemma, isLocked, isRecheck, isCaret, lowWord, eps, wor
 
 // joinable — הפסקה שבה הסמן (לא הראשונה בזרם): כפתור "חיבור לפסקה הקודמת" בגבול שבינה לבין
 // הקודמת (כמו Backspace בתחילתה) — onJoin(p.key)
-const Para = memo(function Para({ p, byId, info, furniture, locked, recheck, caretLineId, lowWord, endpoints, wordText, readOnly, joinable = false, onApprove, onUnapprove, onJoin, onWordEnter, onWordLeave, onJump, onRemoveLine }) {
+const Para = memo(function Para({ p, byId, info, furniture, locked, recheck, caretLineId, lowWord, endpoints, wordText, readOnly, joinable = false, onApprove, onUnapprove, onJoin, onWordEnter, onWordLeave, onJump, onRemoveLine, lockTitle, unapprovePre = false }) {
   const approved = !!info?.approved
-  // אושרה כבר בסבב הקודם (מעבר שני) — אין כאן מה לבטל
-  const pre = approved && !!info?.pre
+  // אושרה כבר בסבב הקודם (מעבר שני) — אין כאן מה לבטל (אלא אם הדף העוטף מבטל אותו בשרת — unapprovePre)
+  const pre = approved && !!info?.pre && !unapprovePre
   const approvable = !furniture && !!info?.approvable
   const first = p.lines[0]
   const lemma = p.style === 'dh' && first ? lemmaWords(String(byId.get(first.lineId)?.text ?? ''), first.w0) : null
@@ -317,6 +320,7 @@ const Para = memo(function Para({ p, byId, info, furniture, locked, recheck, car
               onWordLeave={onWordLeave}
               onJump={onJump}
               onRemoveLine={onRemoveLine}
+              lockTitle={lockTitle}
             />
           </Fragment>
         )
@@ -347,6 +351,8 @@ function FlowEditor({
   onWordLeave,
   onJump,
   onJoinPara = null,
+  lockTitle,
+  unapprovePre = false,
 }) {
   const rootRef = useRef(null)
   const pending = useRef(null) // בחירה להחזיר אחרי הרינדור הבא (אחרי עריכה שלנו)
@@ -639,6 +645,8 @@ function FlowEditor({
                 onWordLeave={onWordLeave}
                 onJump={onJump}
                 onRemoveLine={removeLine}
+                lockTitle={lockTitle}
+                unapprovePre={unapprovePre}
               />
             )
           })

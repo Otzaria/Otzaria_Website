@@ -55,6 +55,8 @@ describe('GET /api/page-proof/pages/[id]', () => {
     expect(body.mode).toBe('view')
     expect(body.submission).toMatchObject({ id: 's1', status: 'approved' })
     expect(Page.findOneAndUpdate).not.toHaveBeenCalled()
+    // בקשה לזיהוי-מחדש (recutRequest) אינה "ההגשה שלי" — לא נשלפת כאן
+    expect(Sub.find.mock.calls[0][0]).toMatchObject({ status: { $ne: 'rejected' }, recutRequest: { $ne: true } })
   })
 
   it('הגשה רק לגרסה קודמת ← העמוד (גרסה 2) נפתח לעריכה, בלי ההגשה הישנה', async () => {

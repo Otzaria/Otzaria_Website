@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // רשת-העמודים של ספר בניהול: GET (המצב של כל עמוד) ו-PATCH (המתג "פתוח
 // למתנדבים"). רק מנהל OCR (401/403), gid לא תקין ← 400, והתוצאה של
 // adminPages.js ← JSON; הכול private, no-store. adminPages מדומה.
+// שניהם מקבלים גם מפתח-גישה של תוכנת-הספר (GET — read, PATCH — import); המפתח
+// עצמו מול מסד אמיתי — tokenAccess.test.js. כאן: כש-Bearer נשלח, הוא קובע ולא ה-session.
 
 const { getServerSessionMock, adminBookPages, setVolunteer } = vi.hoisted(() => ({
   getServerSessionMock: vi.fn(),
@@ -15,15 +17,17 @@ vi.mock('next-auth', () => ({ getServerSession: getServerSessionMock }))
 vi.mock('@/app/api/auth/[...nextauth]/route', () => ({ authOptions: {} }))
 vi.mock('@/lib/pageProof/adminPages', () => ({ adminBookPages, setVolunteer }))
 
+import { bearerFailures } from '@/lib/pageProof/tokenThrottle'
 import { GET, PATCH } from './route'
 
 const GID = 'a1b2c3d4e5f6a7b8'
 const ctx = (gid = GID) => ({ params: Promise.resolve({ gid }) })
-const patchReq = (body) => ({ json: vi.fn().mockResolvedValue(body) })
+const patchReq = (body, authorization) => ({ json: vi.fn().mockResolvedValue(body), headers: new Headers(authorization ? { authorization } : {}) })
 const DATA = { book: { gid: GID, title: 'ספר' }, pages: [{ id: 'p1', page: 1, state: 'open', volunteer: true }], counts: { total: 1 } }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  bearerFailures.reset()
   getServerSessionMock.mockResolvedValue({ user: { id: 'u1', role: 'admin_ocr' } })
   adminBookPages.mockResolvedValue(DATA)
   setVolunteer.mockResolvedValue({ ok: true, changed: 3, open: 20, closed: 5 })
@@ -81,6 +85,15 @@ describe('PATCH /api/admin/page-proof/books/[gid]/pages', () => {
     expect((await PATCH(patchReq([1, 2]), ctx())).status).toBe(400)
     getServerSessionMock.mockResolvedValueOnce({ user: { role: 'admin_books_only' } })
     expect((await PATCH(patchReq({ volunteer: true }), ctx())).status).toBe(403)
+    expect(setVolunteer).not.toHaveBeenCalled()
+  })
+
+  it('עם Bearer — המפתח קובע ולא ה-session (גם כשמנהל מחובר): מפתח פגום ← 401 token_invalid, בלי לגעת בעמודים', async () => {
+    const res = await PATCH(patchReq({ volunteer: false }, 'Bearer not-a-key'), ctx())
+    expect(res.status).toBe(401)
+    expect((await res.json()).code).toBe('token_invalid')
+    expect(res.headers.get('Cache-Control')).toBe('private, no-store')
+    expect(getServerSessionMock).not.toHaveBeenCalled()
     expect(setVolunteer).not.toHaveBeenCalled()
   })
 })

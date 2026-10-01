@@ -2,7 +2,8 @@
 
 import { formatDateWithTime } from '@/lib/formatDate'
 
-// תור ההגשות לפי מצב, עם מעבר לסקירה
+// תור ההגשות לפי מצב, עם מעבר לסקירה. בקשת מתנדב לזיהוי-מחדש (recutRequest) מסומנת —
+// היא "מאושרת" לצורך הזיהוי-מחדש בלבד (ReviewModal: ביטול הבקשה)
 
 const TABS = [
   { id: 'submitted', label: 'ממתינות לאישור' },
@@ -51,7 +52,10 @@ export default function SubmissionsQueue({ status, setStatus, gid, clearGid, dat
                   {s.title} · <b>{s.pageNo}</b>
                   {s.note && <div className="text-xs text-on-surface/60">«{s.note}»</div>}
                 </td>
-                <td className="p-1">{s.userName}</td>
+                <td className="p-1">
+                  {s.userName}
+                  {s.recutRequest && <div className="text-xs text-feature-800">בקשה לזיהוי-מחדש</div>}
+                </td>
                 <td className="p-1 tabular-nums">{s.opCount}</td>
                 <td className="p-1 text-xs">
                   {formatDateWithTime(s.createdAt)}

@@ -39,6 +39,7 @@ const PAGES = [
   A(6, 'submitted', { pending: 1 }),
   A(7, 'approved'),
   A(8, 'recut', { volunteer: false }),
+  A(9, 'recut', { recutRequest: { id: 'req9', by: 'ראובן', at: new Date().toISOString(), picked: false } }),
 ]
 const BOOK = { gid: 'g1abcdef', title: 'ספר הבדיקה', script: 'square', active: true }
 const BASE = '/api/admin/page-proof/books/g1abcdef'
@@ -58,6 +59,7 @@ beforeEach(() => {
     if (u === `${BASE}/pages` && method === 'GET') return ok({ book: BOOK, pages: PAGES, counts: adminCounts(PAGES) })
     if (u === `${BASE}/pages` && method === 'PATCH') return ok({ changed: 3, open: 20, closed: 180 })
     if (u === `${BASE}/release` && method === 'POST') return ok({ released: 1 })
+    if (u === '/api/admin/page-proof/submissions/req9' && method === 'PATCH') return ok({ status: 'rejected', pageStatus: 'open', returnedToRequester: true })
     return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({ success: false, error: 'לא צפוי' }) })
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -192,6 +194,21 @@ describe('AdminBookPages', { timeout: 20000 }, () => {
     await loaded()
     fireEvent.click(screen.getByRole('checkbox', { name: 'עמוד 1 פתוח למתנדבים' }))
     await waitFor(() => expect(showAlert).toHaveBeenCalledWith('שגיאה', 'טווח עמודים לא תקין'))
+  })
+
+  it('עמוד שממתין לזיהוי-מחדש בבקשת מתנדב: מי ביקש ומתי; "ביטול הבקשה" ← אישור, ואז release_recut על הבקשה', async () => {
+    render(<AdminBookPages gid="g1abcdef" onClose={vi.fn()} />)
+    await loaded()
+    const c9 = card(9)
+    expect(within(c9).getByTestId('recut-request')).toHaveTextContent('לבקשת ראובן · היום')
+    expect(within(c9).getByTestId('recut-request')).toHaveTextContent('ממתין לתוכנת-הספר')
+    // זיהוי-מחדש שלא בבקשה — בלי השורה ובלי הכפתור
+    expect(within(card(8)).queryByTestId('recut-request')).toBeNull()
+    expect(within(card(8)).queryByRole('button', { name: /ביטול הבקשה/ })).toBeNull()
+
+    fireEvent.click(within(c9).getByRole('button', { name: 'ביטול הבקשה לזיהוי-מחדש של עמוד 9' }))
+    expect(showConfirm).toHaveBeenCalledWith('ביטול בקשה לזיהוי-מחדש', expect.stringContaining('יחזור אל ראובן'), expect.any(Function), 'בטל את הבקשה', 'ביטול')
+    await waitFor(() => expect(calls).toEqual([{ url: '/api/admin/page-proof/submissions/req9', method: 'PATCH', body: { action: 'release_recut' } }]))
   })
 
   it('"סגירה" קוראת ל-onClose', async () => {

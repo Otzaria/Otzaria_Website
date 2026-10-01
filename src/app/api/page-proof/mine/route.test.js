@@ -1,26 +1,28 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextResponse } from 'next/server'
 
-// GET /api/page-proof/mine — מה שדף המתנדב טוען בכניסה: "העמודים שלי", ועם
-// ?page= — הרצף של העמוד הזה או למה הוא אינו נפתח. קריאה בלבד: שום פונקציה
-// שתופסת/מחדשת/משחררת אינה נקראת. claims.js ו-pool.js מדומים.
+// GET /api/page-proof/mine — מה שדף המתנדב טוען בכניסה: "העמודים שלי" (וגם העמודים
+// שהמתנדב שלח לזיהוי-מחדש ועוד לא חזרו), ועם ?page= — הרצף של העמוד הזה או למה הוא
+// אינו נפתח. קריאה בלבד: שום פונקציה שתופסת/מחדשת/משחררת אינה נקראת. claims.js,
+// pool.js ו-recutRequests.js מדומים.
 
-const { session, stats, held, seqOf, brief, writes } = vi.hoisted(() => ({
+const { session, stats, held, seqOf, brief, pending, writes } = vi.hoisted(() => ({
   session: vi.fn(),
   stats: vi.fn(),
   held: vi.fn(),
   seqOf: vi.fn(),
   brief: vi.fn(),
-  writes: { claimPage: vi.fn(), claimSequence: vi.fn(), renewLease: vi.fn(), releasePage: vi.fn(), releaseLeases: vi.fn(), autoClaim: vi.fn() },
+  pending: vi.fn(),
+  writes: { claimPage: vi.fn(), claimSequence: vi.fn(), renewLease: vi.fn(), releasePage: vi.fn(), releaseLeases: vi.fn() },
 }))
 
 vi.mock('@/lib/db', () => ({ default: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('@/lib/pageProof/pool', () => ({
   requireProofSession: session,
   volunteerStats: stats,
-  claimSequence: writes.autoClaim,
   releaseLeases: writes.releaseLeases,
 }))
+vi.mock('@/lib/pageProof/recutRequests', () => ({ recutPendingOf: pending }))
 vi.mock('@/lib/pageProof/claims', () => ({
   heldSequences: held,
   sequenceOfPage: seqOf,
@@ -38,6 +40,7 @@ const PAGE_ID = '64b7f0c2a1b2c3d4e5f60002'
 const req = (qs = '') => ({ url: `http://x/api/page-proof/mine${qs}` })
 const SEQ = { book: { id: 'b1', gid: 'g1', title: 'ספר' }, seq: 0, pages: [{ id: PAGE_ID, page: 3, state: 'mine' }] }
 const STATS = { open: 10, done: 2, mySubmitted: 1, myApproved: 0, myRejected: 0 }
+const PENDING = [{ id: '64b7f0c2a1b2c3d4e5f60009', gid: 'g1', title: 'ספר', page: 7, requestedAt: '2026-09-30T10:00:00.000Z', picked: false }]
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -46,6 +49,7 @@ beforeEach(() => {
   held.mockResolvedValue([SEQ])
   seqOf.mockResolvedValue(null)
   brief.mockResolvedValue(null)
+  pending.mockResolvedValue([])
 })
 
 const noWrites = () => {
@@ -65,10 +69,18 @@ describe('GET /api/page-proof/mine', () => {
     const res = await GET(req())
     const body = await res.json()
     expect(res.status).toBe(200)
-    expect(body).toEqual({ success: true, held: [SEQ], sequence: null, unavailable: null, stats: STATS })
+    expect(body).toEqual({ success: true, held: [SEQ], recutPending: [], sequence: null, unavailable: null, stats: STATS })
     expect(held).toHaveBeenCalledWith(USER_ID, expect.any(Date))
+    expect(pending).toHaveBeenCalledWith(USER_ID)
     expect(seqOf).not.toHaveBeenCalled()
     expect(res.headers.get('Cache-Control')).toBe('private, no-store')
+    noWrites()
+  })
+
+  it('עמודים שנשלחו לזיהוי-מחדש ועוד לא חזרו ← recutPending (קריאה בלבד)', async () => {
+    pending.mockResolvedValue(PENDING)
+    const body = await (await GET(req())).json()
+    expect(body.recutPending).toEqual(PENDING)
     noWrites()
   })
 
@@ -97,6 +109,7 @@ describe('GET /api/page-proof/mine', () => {
     session.mockResolvedValue({ userId: USER_ID })
     held.mockResolvedValue([])
     stats.mockResolvedValue(STATS)
+    pending.mockResolvedValue([])
     const bad = await (await GET(req('?page=../../etc'))).json()
     expect(bad.unavailable).toEqual({ id: null })
     expect(seqOf).not.toHaveBeenCalled()

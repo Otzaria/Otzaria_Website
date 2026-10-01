@@ -35,6 +35,15 @@ const PageProofSubmissionSchema = new mongoose.Schema(
 
     // מתי יצאה בקובץ-תיקונים ("הורד חדשים" מסמן)
     exportedAt: { type: Date, default: null },
+
+    // בקשת מתנדב לזיהוי-מחדש (lib/pageProof/recutRequests.js): רק פעולות-חיתוך, ונשמרת
+    // מאושרת לצורך הזיהוי-מחדש בלבד (status 'approved', reviewedByName "בקשת מתנדב
+    // לזיהוי-מחדש") — כך קובץ-התיקונים (?pages=recut) והייבוא מטפלים בה כמו בכל תיקון-חיתוך
+    // מאושר. אינה הגשה של העמוד: לא נספרת במונים שלו, ב"העמודים שלי" ובסטטיסטיקה של המתנדב.
+    // ביטול — "שחרור מהמתנה" של מנהל (status 'rejected'); recutDoneAt — מתי חזר העמוד בגרסה
+    // החדשה (עד אז — ממתינה, ונספרת בתקרת הבקשות של המתנדב).
+    recutRequest: { type: Boolean, default: false },
+    recutDoneAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
