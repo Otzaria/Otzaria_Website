@@ -19,6 +19,10 @@ function readDeployVersion(): string {
 const nextConfig = {
   // הסרת חשיפת טכנולוגיית השרת (ZAP: Server Leaks Information via X-Powered-By)
   poweredByHeader: false,
+  // הדחיסה (gzip) עברה ל-nginx שלפני האתר (gzip_types כולל application/json),
+  // ולכן לא צריך גם את ה-compression המובנה של Next — זה היה עובד כפול בחינם
+  // (nginx ממילא לא דוחס מחדש תוכן גזוף) ועדיין צורך CPU על תהליך ה-Node.
+  compress: false,
   env: {
     DEPLOY_VERSION: readDeployVersion(),
   },
