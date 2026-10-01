@@ -154,6 +154,23 @@ export async function syncEdits(client = createBookInfoClient(), now = Date.now(
       summary.failed++
     }
   }
+
+  // PR שנדחף אליו ידנית אינו נבנה מחדש, אבל עדיין צריך לזהות מתי מוזג או נסגר. אחרת הספר נשאר
+  // חסום לעריכות חדשות לתמיד (submitEdit דוחה ספר שיש לו עריכה ב-'modified').
+  const modified = await BookInfoChangeSet.find({ status: 'modified' }).select('prNumber').lean()
+  for (const doc of modified) {
+    summary.checked++
+    try {
+      const pr = await client.getPull(doc.prNumber)
+      const status = pr.merged ? 'merged' : pr.state === 'closed' ? 'closed' : null
+      if (!status) continue
+      await BookInfoChangeSet.updateOne({ _id: doc._id }, { $set: { status, lastError: null } })
+      summary[status]++
+    } catch (err) {
+      await BookInfoChangeSet.updateOne({ _id: doc._id }, { $set: { lastError: String(err?.message || err).slice(0, 500) } })
+      summary.failed++
+    }
+  }
   return summary
 }
 
