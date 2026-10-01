@@ -16,8 +16,11 @@ const PR_BODY_LIMIT = 60_000
 const FALLBACK_SIGNOFF = 'Otzaria Website <noreply@otzaria.org>'
 const DUMP_UPLOAD_TIMEOUT_MS = 120_000
 
+// trim כמו בתיקוני הספרים (corrections/config.js): רווח או שבירת שורה בסוף הערך גורמים ל-401
+const envToken = () => (process.env.DICTA_LIBRARY_GITHUB_TOKEN || '').trim()
+
 /** הטוקן המשותף לכל כתיבות ה-GitHub של האתר (כמו תיקוני הספרים). */
-export function createAcronymsClient({ token = process.env.DICTA_LIBRARY_GITHUB_TOKEN, fetchImpl } = {}) {
+export function createAcronymsClient({ token = envToken(), fetchImpl } = {}) {
   if (!token) throw Object.assign(new Error('DICTA_LIBRARY_GITHUB_TOKEN is not configured'), { code: 'TOKEN_MISSING' })
   return createRepoClient({ repo: ACRONYMS_REPO, token, ...(fetchImpl ? { fetchImpl } : {}), timeoutMs: 60_000 })
 }
@@ -43,7 +46,7 @@ export async function loadForkState(client) {
 let cachedSignoff = null
 
 /** שורת ה-DCO שהפורק דורש בכל קומיט: המשתמש שהטוקן שייך לו, עם כתובת noreply שלו. */
-export async function resolveSignoff(client, token = process.env.DICTA_LIBRARY_GITHUB_TOKEN) {
+export async function resolveSignoff(client, token = envToken()) {
   if (process.env.ACRONYMS_SIGNOFF) return process.env.ACRONYMS_SIGNOFF
   if (cachedSignoff) return cachedSignoff
   try {

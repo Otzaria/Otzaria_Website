@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import { FakeGitHub } from '../corrections/testing/fake-github.js'
 import { createRepoClient } from '../dicta/github-api.js'
 import { parseDump, listBooks } from './dump.js'
-import { ACRONYMS_PATH, ACRONYMS_REPO, loadForkState, publishChangeSet, refreshChangeSet, resetForkCaches } from './fork.js'
+import { ACRONYMS_PATH, ACRONYMS_REPO, createAcronymsClient, loadForkState, publishChangeSet, refreshChangeSet, resetForkCaches } from './fork.js'
 
 const DUMP = [
   'PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n',
@@ -155,4 +155,19 @@ test('a timed-out dump upload is retried once', async () => {
   const res = await publishChangeSet(flaky, { id: 'r2', ops: [{ type: 'add', book: 'ברכות', alias: 'בר"כ' }] })
   assert.equal(blobPosts, 2)
   assert.deepEqual(aliasesOn(res.branch, 'ברכות'), ['בר"כ'])
+})
+
+test('a token with trailing whitespace from .env (e.g. CRLF) is sent trimmed, like in book corrections', async () => {
+  const saved = process.env.DICTA_LIBRARY_GITHUB_TOKEN
+  process.env.DICTA_LIBRARY_GITHUB_TOKEN = 'github_pat_abc \r\n'
+  try {
+    const sent = []
+    const client = createAcronymsClient({ fetchImpl: (url, init = {}) => (sent.push(init.headers.Authorization), gh.fetch(url, init)) })
+    await loadForkState(client)
+    assert.ok(sent.length > 0)
+    assert.ok(sent.every((h) => h === 'Bearer github_pat_abc'))
+  } finally {
+    if (saved === undefined) delete process.env.DICTA_LIBRARY_GITHUB_TOKEN
+    else process.env.DICTA_LIBRARY_GITHUB_TOKEN = saved
+  }
 })
