@@ -369,17 +369,19 @@ export function createRepoClient({ repo, token = null, fetchImpl = fetch, timeou
       const t = await call(`/git/trees`, { method: "POST", body: { base_tree: baseTreeSha, tree: entries } });
       return { sha: t.sha };
     },
-    async createBlob(buffer) {
-      const b = await call(`/git/blobs`, { method: "POST", body: { content: buffer.toString("base64"), encoding: "base64" } });
+    /** utf8: התוכן הוא טקסט UTF-8 תקין, ונשלח כמו שהוא — קטן בכרבע מ-base64. */
+    async createBlob(buffer, { utf8 = false, timeoutMs: requestTimeoutMs } = {}) {
+      const body = utf8 ? { content: buffer.toString("utf8"), encoding: "utf-8" } : { content: buffer.toString("base64"), encoding: "base64" };
+      const b = await call(`/git/blobs`, { method: "POST", body, ...(requestTimeoutMs == null ? {} : { timeoutMs: requestTimeoutMs }) });
       return { sha: b.sha };
     },
     async createCommit({ message, treeSha, parents }) {
       const c = await call(`/git/commits`, { method: "POST", body: { message, tree: treeSha, parents } });
       return { sha: c.sha };
     },
-    /** עדכון ענף בלי force — 422 כשהענף התקדם. */
-    async updateRef(branch, sha) {
-      await call(`/git/refs/heads/${encodeGitHubPath(branch)}`, { method: "PATCH", body: { sha, force: false } });
+    /** עדכון ענף; בלי force — 422 כשהענף התקדם. force רק לענף שהאתר הוא בעליו היחיד. */
+    async updateRef(branch, sha, { force = false } = {}) {
+      await call(`/git/refs/heads/${encodeGitHubPath(branch)}`, { method: "PATCH", body: { sha, force } });
     },
     async createRef(branch, sha) {
       await call(`/git/refs`, { method: "POST", body: { ref: `refs/heads/${branch}`, sha } });
@@ -403,6 +405,13 @@ export function createRepoClient({ repo, token = null, fetchImpl = fetch, timeou
     async getPull(number) {
       const pr = await call(`/pulls/${Number(number)}`);
       return { number: pr.number, url: pr.html_url, state: pr.state, merged: Boolean(pr.merged), mergeCommitSha: pr.merge_commit_sha || null };
+    },
+    /** fields: { state?: 'open'|'closed', title?, body? } */
+    async updatePull(number, fields) {
+      await call(`/pulls/${Number(number)}`, { method: "PATCH", body: fields });
+    },
+    async commentOnIssue(number, body) {
+      await call(`/issues/${Number(number)}/comments`, { method: "POST", body: { body } });
     },
   };
 }

@@ -70,7 +70,7 @@ export async function GET() {
         const payload = await cached(`weekly-progress:${dayKey}`, CACHE_TTL_MS, computeWeeklyProgress);
 
         // נתון ציבורי-אגרגטיבי-לגמרי (ספירת דפים כללית, לא תלוי-session/הרשאה) —
-        // מותר CDN/browser caching קצר, ראו הערה מקבילה ב-book-acronyms/export-json.
+        // מותר CDN/browser caching קצר, ראו הערה מקבילה ב-github-releases.
         return NextResponse.json(payload, {
             headers: { 'Cache-Control': 'public, max-age=60, stale-while-revalidate=300' }
         });

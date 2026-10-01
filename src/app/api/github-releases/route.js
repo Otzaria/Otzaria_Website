@@ -146,7 +146,8 @@ export async function GET(request) {
       },
       // נתון ציבורי-לגמרי, לא תלוי-משתמש/session (מידע גרסאות GitHub) —
       // מאפשרים CDN/browser caching קצר על אף שער השבת ב-src/proxy.js
-      // (ראו הערה מקבילה ב-book-acronyms/export-json).
+      // (פשרה מכוונת: בקשות שמוגשות ממטמון הדפדפן/CDN לא עוברות דרך ה-middleware
+      // בזמן שבת/יו"ט, ראו CLAUDE.md).
       { headers: { 'Cache-Control': 'public, max-age=300, stale-while-revalidate=1200' } }
     )
   } catch (error) {
