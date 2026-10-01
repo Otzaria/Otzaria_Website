@@ -177,20 +177,27 @@ export function applyChangeSet(baseState, ops) {
 }
 
 /**
- * החלפה גורפת בטקסט הכינויים (למשל כל "עיקבא" ל"עקיבא"), לתצוגה מקדימה לפני הוספה לסל.
+ * כינוי קבוע למילה: לכל ספר ששמו או אחד מכינוייו כוללים את `find` מתווסף כינוי חדש
+ * שבו `find` מוחלף ב-`replace` (למשל "אותיות דרבי עקיבא" ← "אותיות דרבי עקיבה").
+ * המקור נשאר כמות שהוא; הכינוי החדש רק נוסף לצידו. לתצוגה מקדימה לפני הוספה לסל.
  * @param {Array<{title:string, aliases:string[]}>} books
  * @returns {Array<{book:string, from:string, to:string, problem:string|null}>}
  */
-export function planReplace(books, find, replace) {
+export function planAddAliases(books, find, replace) {
   const needle = String(find ?? '')
   if (!needle.trim()) return []
   const out = []
   for (const book of books) {
-    for (const alias of book.aliases) {
-      if (!alias.includes(needle)) continue
-      const to = normalizeAlias(alias.split(needle).join(String(replace ?? '')))
-      if (to === alias) continue
-      out.push({ book: book.title, from: alias, to, problem: aliasProblem(to, book.title) })
+    const existing = new Set(book.aliases.map(aliasKey))
+    const seen = new Set()
+    for (const source of [book.title, ...book.aliases]) {
+      if (!source.includes(needle)) continue
+      const to = normalizeAlias(source.split(needle).join(String(replace ?? '')))
+      const key = aliasKey(to)
+      if (seen.has(key)) continue
+      seen.add(key)
+      const problem = aliasProblem(to, book.title) || (existing.has(key) ? 'הכינוי כבר קיים בספר' : null)
+      out.push({ book: book.title, from: source, to, problem })
     }
   }
   return out

@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { parseDump, exportDump, listBooks } from './dump.js'
 import { aliasKey, aliasProblem, normalizeAlias } from './normalize.js'
-import { applyChangeSet, planReplace, summarizeChangeSet, validateChangeSet } from './changes.js'
+import { applyChangeSet, planAddAliases, summarizeChangeSet, validateChangeSet } from './changes.js'
 
 const HEADER = 'PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\nCREATE TABLE IF NOT EXISTS Books (id INTEGER);\n'
 const dump = (books, acronyms, links) =>
@@ -115,11 +115,18 @@ test('validateChangeSet normalizes aliases and rejects unknown ones', () => {
   assert.match(validateChangeSet([], state).error, /ריק/)
 })
 
-test('planReplace finds every alias with the text and flags invalid results', () => {
+test('planAddAliases adds a variant alias for every title/alias containing the text', () => {
   const books = listBooks(parseDump(FIXTURE))
-  const plan = planReplace(books, 'עיקבא', 'עקיבא')
-  assert.deepEqual(plan, [{ book: 'תוספות רבי עקיבא איגר על משנה שבת', from: 'תוס רבי עיקבא איגר שבת', to: 'תוס רבי עקיבא איגר שבת', problem: null }])
-  assert.deepEqual(planReplace(books, '  ', 'x'), [])
+  const plan = planAddAliases(books, 'עיקבא', 'עקיבה')
+  assert.deepEqual(plan, [{ book: 'תוספות רבי עקיבא איגר על משנה שבת', from: 'תוס רבי עיקבא איגר שבת', to: 'תוס רבי עקיבה איגר שבת', problem: null }])
+  const byTitle = planAddAliases(books, 'עקיבא', 'עקיבה')
+  assert.deepEqual(byTitle.map((p) => [p.from, p.to]), [['תוספות רבי עקיבא איגר על משנה שבת', 'תוספות רבי עקיבה איגר על משנה שבת']])
+  assert.deepEqual(planAddAliases(books, '  ', 'x'), [])
+})
+
+test('planAddAliases flags a variant that already exists in the book', () => {
+  const books = [{ title: 'אותיות דרבי עקיבא', aliases: ['אותיות דרבי עקיבה'] }]
+  assert.equal(planAddAliases(books, 'עקיבא', 'עקיבה')[0].problem, 'הכינוי כבר קיים בספר')
 })
 
 test('summarizeChangeSet: a before/after table per book, strike-through for removals, no-ops folded', () => {
