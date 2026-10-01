@@ -68,10 +68,10 @@ function bodyFor(changeSet, summary) {
     '> דחיפה ידנית לענף עוצרת את הבנייה מחדש; לתיקון עדיף לבקש שינוי ולסגור.',
     '',
   ]
-  let text = summary.text
-  if (text.length > PR_BODY_LIMIT) text = `${text.slice(0, PR_BODY_LIMIT)}\n\n… (הרשימה קוצרה — הפירוט המלא ב-diff ובתגובת ההבדלים)`
-  return [...intro, text, '', `Change-Set: ${changeSet.id}`].join('\n')
+  return [...intro, summary.text, '', `Change-Set: ${changeSet.id}`].join('\n')
 }
+
+const summarize = (results) => summarizeChangeSet(results, { maxLength: PR_BODY_LIMIT })
 
 // GitHub מחזיר 401 גם לטוקן תקין כשההעלאה נמשכת מעל כדקה; העלאה שנכשלה לא יוצרת כלום,
 // ולכן ניסיון נוסף בטוח.
@@ -88,7 +88,7 @@ async function uploadDump(client, text) {
 /** סל שכל פעולותיו כבר חלו על master אינו מייצר קומיט; מחזיר commitSha: null. */
 async function commitChangeSet(client, base, changeSet) {
   const { state, results } = applyChangeSet(base.state, changeSet.ops)
-  const summary = summarizeChangeSet(results)
+  const summary = summarize(results)
   if (!results.some((r) => r.status === 'applied')) return { commitSha: null, summary }
   const blob = await uploadDump(client, exportDump(state))
   const tree = await client.createTree(base.treeSha, [{ path: ACRONYMS_PATH, mode: '100644', type: 'blob', sha: blob.sha }])
@@ -118,7 +118,7 @@ export async function publishChangeSet(client, changeSet, base) {
  * @returns {Promise<{prNumber:number, prUrl:string, summary:object}>}
  */
 export async function openPullForBranch(client, changeSet, base) {
-  const summary = summarizeChangeSet(applyChangeSet(base.state, changeSet.ops).results)
+  const summary = summarize(applyChangeSet(base.state, changeSet.ops).results)
   const pr = await client.createPull({ title: titleFor(changeSet, summary), body: bodyFor(changeSet, summary), head: branchName(changeSet.id), base: ACRONYMS_BRANCH })
   return { prNumber: pr.number, prUrl: pr.url, summary }
 }
@@ -141,6 +141,8 @@ export async function refreshChangeSet(client, changeSet, base) {
     return { status: 'closed' }
   }
   await client.updateRef(changeSet.branch, commitSha, { force: true })
+  // מול master חדש חלק מהשינויים עשויים להפוך ל"ללא השפעה"; הכותרת והטבלה מתעדכנות בהתאם
+  await client.updatePull(changeSet.prNumber, { title: titleFor(changeSet, summary), body: bodyFor(changeSet, summary) })
   return { status: 'rebuilt', headSha: commitSha, baseSha: base.headSha, summary }
 }
 

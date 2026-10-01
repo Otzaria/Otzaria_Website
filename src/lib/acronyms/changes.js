@@ -196,14 +196,37 @@ export function planReplace(books, find, replace) {
   return out
 }
 
-function describe(op) {
-  if (op.type === 'add') return `+ \`${op.alias}\``
-  if (op.type === 'remove') return `− \`${op.alias}\``
-  return `\`${op.from}\` ← \`${op.to}\``
+// תא בטבלת markdown: כינוי כקוד, בלי ש-| או ` ישברו את הטבלה
+function cell(text) {
+  const safe = String(text).replace(/\|/g, '\\|')
+  return safe.includes('`') ? safe : `\`${safe}\``
 }
 
-/** גוף PR בעברית: שינויים מקובצים לפי ספר, ופעולות שלא השפיעו מסומנות. */
-export function summarizeChangeSet(results) {
+const ACTION = { add: '➕ הוספה', remove: '➖ מחיקה', rename: '✏️ עריכה' }
+
+function row(r, bookCell) {
+  const { op } = r
+  const before = op.type === 'add' ? '' : op.type === 'remove' ? `~~${cell(op.alias)}~~` : cell(op.from)
+  const after = op.type === 'remove' ? '' : cell(op.type === 'add' ? op.alias : op.to)
+  const note = r.reason ? ` _(${r.reason})_` : ''
+  return `| ${bookCell} | ${ACTION[op.type]} | ${before} | ${after}${note} |`
+}
+
+function bookRows(byBook, keep) {
+  const rows = []
+  for (const [book, list] of byBook) {
+    const mine = list.filter(keep)
+    const label = `**${book.replace(/\|/g, '\\|')}**${mine.some((r) => r.op.newBook) ? ' _(ספר חדש)_' : ''}`
+    mine.forEach((r, i) => rows.push(row(r, i === 0 ? label : '')))
+  }
+  return rows
+}
+
+/**
+ * גוף PR בעברית: טבלת לפני/אחרי לפי ספר, מחיקה בקו חוצה, ופעולות בלי השפעה מקופלות בסוף.
+ * maxLength מקצר בשורות שלמות, כדי שהטבלה לא תישבר באמצע.
+ */
+export function summarizeChangeSet(results, { maxLength = Infinity } = {}) {
   const byBook = new Map()
   for (const r of results) {
     const list = byBook.get(r.op.book) || []
@@ -212,15 +235,27 @@ export function summarizeChangeSet(results) {
   }
   const counts = { add: 0, remove: 0, rename: 0, noop: 0 }
   for (const r of results) counts[r.status === 'applied' ? r.op.type : 'noop']++
-  const lines = [
-    `**${results.length} שינויים ב-${byBook.size} ספרים**: ${counts.add} הוספות, ${counts.remove} מחיקות, ${counts.rename} עריכות` +
-      (counts.noop ? `, ${counts.noop} ללא השפעה.` : '.'),
-    '',
-  ]
-  for (const [book, list] of byBook) {
-    const newBook = list.some((r) => r.op.newBook) ? ' _(ספר חדש)_' : ''
-    const items = list.map((r) => describe(r.op) + (r.reason ? ` _(${r.reason})_` : ''))
-    lines.push(`- **${book}**${newBook}: ${items.join(' · ')}`)
+  const applied = counts.add + counts.remove + counts.rename
+  const books = new Set(results.filter((r) => r.status === 'applied').map((r) => r.op.book)).size
+  const head = `**${applied} שינויים ב-${books} ספרים**: ${counts.add} הוספות, ${counts.remove} מחיקות, ${counts.rename} עריכות` +
+    (counts.noop ? `; ועוד ${counts.noop} ללא השפעה.` : '.')
+  const TABLE = ['| ספר | פעולה | לפני | אחרי |', '|---|---|---|---|']
+  const NOTE = '\n\n… הרשימה קוצרה. הפירוט המלא נמצא ב-diff ובתגובת ההבדלים.'
+
+  const lines = [head, '']
+  let length = head.length
+  const push = (rows) => {
+    for (const line of rows) {
+      if (length + line.length + 1 > maxLength - NOTE.length) return false
+      lines.push(line)
+      length += line.length + 1
+    }
+    return true
   }
-  return { text: lines.join('\n'), counts, books: byBook.size }
+  let complete = applied === 0 || push([...TABLE, ...bookRows(byBook, (r) => r.status === 'applied')])
+  if (complete && counts.noop) {
+    complete = push(['', `<details><summary>${counts.noop} שינויים שכבר היו במצב המבוקש</summary>`, '', ...TABLE, ...bookRows(byBook, (r) => r.status !== 'applied'), '', '</details>'])
+    if (!complete) lines.push('', '</details>')
+  }
+  return { text: lines.join('\n') + (complete ? '' : NOTE), counts, books }
 }

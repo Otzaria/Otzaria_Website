@@ -36,7 +36,7 @@ test('a change set opens its own PR with a signed-off commit', async () => {
   assert.equal(gh.pulls.length, 1)
   assert.equal(gh.pulls[0].base, 'master')
   assert.match(gh.pulls[0].title, /כינויים מהאתר: 1 שינויים ב-1 ספרים/)
-  assert.match(gh.pulls[0].body, /\*\*ברכות\*\*: \+ `בר"כ`/)
+  assert.ok(gh.pulls[0].body.includes('| **ברכות** | ➕ הוספה |  | `בר"כ` |'))
   assert.match(gh.commits.get(res.headSha).message, /\nSigned-off-by: Test Bot <1\+bot@users\.noreply\.github\.com>$/)
   assert.deepEqual(aliasesOn('site/acronyms-a1', 'ברכות'), ['בר"כ'])
   assert.equal(gh.readFile('master', ACRONYMS_PATH), DUMP)
@@ -55,6 +55,18 @@ test('after one PR merges, the other open PR is rebuilt on master without id cla
   const text = gh.readFile('site/acronyms-b', ACRONYMS_PATH)
   assert.match(text, /VALUES\(2,'ברכ'\);\nINSERT INTO Acronyms\(id,acronym\) VALUES\(3,'ברא'\);/)
   assert.deepEqual(aliasesOn('site/acronyms-b', 'ברכות'), ['ברכ'])
+})
+
+test('a rebuild refreshes the PR title and table against the new master', async () => {
+  const ops = [{ type: 'add', book: 'ברכות', alias: 'ברכ' }, { type: 'add', book: 'בראשית', alias: 'ברא' }]
+  const a = await publishChangeSet(client, { id: 'a', ops: [ops[0]] })
+  const b = await publishChangeSet(client, { id: 'b', ops })
+  assert.match(gh.pulls[1].title, /2 שינויים ב-2 ספרים/)
+  gh.mergePull(a.prNumber)
+
+  await refreshChangeSet(client, { ...b, id: 'b', ops }, await loadForkState(client))
+  assert.match(gh.pulls[1].title, /1 שינויים ב-1 ספרים/)
+  assert.match(gh.pulls[1].body, /<details><summary>1 שינויים שכבר היו במצב המבוקש/)
 })
 
 test('an up-to-date PR is left alone', async () => {

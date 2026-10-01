@@ -122,13 +122,31 @@ test('planReplace finds every alias with the text and flags invalid results', ()
   assert.deepEqual(planReplace(books, '  ', 'x'), [])
 })
 
-test('summarizeChangeSet groups by book and counts only applied changes', () => {
+test('summarizeChangeSet: a before/after table per book, strike-through for removals, no-ops folded', () => {
   const { results } = applyChangeSet(parseDump(FIXTURE), [
     { type: 'add', book: 'בראשית', alias: 'בר' },
     { type: 'add', book: 'בראשית', alias: 'ברא' },
+    { type: 'remove', book: 'בראשית', alias: 'ספר בראשית' },
+    { type: 'rename', book: "ספר קנאת ה' צבאות", from: 'קנאת ה צבאות', to: 'קנאת ה|צבאות' },
   ])
   const s = summarizeChangeSet(results)
-  assert.equal(s.counts.add, 1)
-  assert.equal(s.counts.noop, 1)
-  assert.match(s.text, /\*\*בראשית\*\*: \+ `בר` _\(כבר קיים\)_ · \+ `ברא`/)
+  assert.deepEqual(s.counts, { add: 1, remove: 1, rename: 1, noop: 1 })
+  const lines = s.text.split('\n')
+  assert.equal(lines[0], '**3 שינויים ב-2 ספרים**: 1 הוספות, 1 מחיקות, 1 עריכות; ועוד 1 ללא השפעה.')
+  assert.deepEqual(lines.slice(2, 7), [
+    '| ספר | פעולה | לפני | אחרי |',
+    '|---|---|---|---|',
+    '| **בראשית** | ➕ הוספה |  | `ברא` |',
+    '|  | ➖ מחיקה | ~~`ספר בראשית`~~ |  |',
+    "| **ספר קנאת ה' צבאות** | ✏️ עריכה | `קנאת ה צבאות` | `קנאת ה\\|צבאות` |",
+  ])
+  assert.match(s.text, /<details><summary>1 שינויים שכבר היו במצב המבוקש<\/summary>[\s\S]*\| \*\*בראשית\*\* \| ➕ הוספה \|  \| `בר` _\(כבר קיים\)_ \|[\s\S]*<\/details>$/)
+})
+
+test('summarizeChangeSet truncates on whole rows and says so', () => {
+  const ops = Array.from({ length: 50 }, (_, i) => ({ type: 'add', book: 'בראשית', alias: `כינוי ${i}` }))
+  const s = summarizeChangeSet(applyChangeSet(parseDump(FIXTURE), ops).results, { maxLength: 800 })
+  assert.ok(s.text.length <= 800)
+  assert.match(s.text, /\| `כינוי \d+` \|\n\n… הרשימה קוצרה\./)
+  assert.equal(s.counts.add, 50)
 })
