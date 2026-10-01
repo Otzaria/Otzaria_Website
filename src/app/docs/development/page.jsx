@@ -23,7 +23,8 @@ export default function DevelopmentTutorialPage() {
         <div className="container mx-auto max-w-6xl">
           {/* Breadcrumb */}
           <div className="flex items-center gap-2 text-sm text-on-surface/60 mb-6">
-            <Link href="/" className="hover:text-primary">בית</Link>
+            {/* דף הבית כבד (סטטיסטיקות, הורדות) ואינו היעד הסביר מכאן — בלי prefetch */}
+            <Link href="/" prefetch={false} className="hover:text-primary">בית</Link>
             <span>›</span>
             <Link href="/docs" className="hover:text-primary">מדריכים</Link>
             <span>›</span>

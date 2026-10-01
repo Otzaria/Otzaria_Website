@@ -28,6 +28,9 @@ vi.mock('next-auth/react', () => ({
     return { data: session, update }
   },
   signOut: vi.fn(),
+  // GoogleSignInButton שבדף בודק את הספקים המוגדרים; כאן Google לא מוגדר
+  getProviders: vi.fn().mockResolvedValue({ credentials: {} }),
+  signIn: vi.fn(),
 }))
 
 // next/navigation.useRouter האמיתי מחזיר אובייקט router יציב (אותה הפניה)

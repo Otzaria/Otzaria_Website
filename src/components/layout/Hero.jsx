@@ -25,8 +25,9 @@ export default function Hero() {
 
       <div className="container mx-auto relative z-10">
         <div className="max-w-4xl mx-auto text-center">
-          {/* לוגו עם אנימציה */}
-          <div className="mb-8 flex justify-center animate-enter-pop">
+          {/* הלוגו והכותרת — בלי אנימציית כניסה: הם אלמנטי ה-LCP של הדף, ו-opacity:0
+              בתחילת האנימציה דחה את ה-LCP בכ-0.7 שניות אחרי הציור הראשון */}
+          <div className="mb-8 flex justify-center">
             <div className="transition-transform duration-300 hover:scale-110 hover:rotate-[5deg]">
               <Image
                 src="/logo.png"
@@ -39,11 +40,7 @@ export default function Hero() {
             </div>
           </div>
 
-          {/* כותרת עם אנימציה */}
-          <h1
-            className="text-5xl md:text-6xl font-bold mb-6 text-on-background font-frank animate-enter-up"
-            style={{ animationDelay: '0.2s' }}
-          >
+          <h1 className="text-5xl md:text-6xl font-bold mb-6 text-on-background font-frank">
             פרוייקט ספריית אוצריא
           </h1>
 

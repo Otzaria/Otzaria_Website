@@ -1,13 +1,13 @@
-'use client'
-
 import Link from 'next/link'
 import Image from 'next/image'
-import { useSearchParams } from 'next/navigation'
-import { Suspense } from 'react'
 
-function ErrorContent() {
-  const searchParams = useSearchParams()
-  const error = searchParams.get('error')
+// Server Component: הודעת השגיאה נגזרת מ-?error= כבר בשרת. בעבר זה היה 'use client'
+// עם useSearchParams בתוך Suspense — ה-HTML הכיל רק "טוען..." והתוכן הופיע אחרי
+// הורדת ה-JS וה-hydration (LCP כשנייה אחרי FCP במובייל).
+export default async function AuthErrorPage({ searchParams }) {
+  const params = await searchParams
+  const rawError = params?.error
+  const error = Array.isArray(rawError) ? rawError[0] : rawError
 
   const errorMessages = {
     Configuration: 'שגיאה בהגדרות השרת',
@@ -20,7 +20,7 @@ function ErrorContent() {
   }
   const isNoAccount = error === 'GoogleNoAccount'
 
-  const errorMessage = errorMessages[error] || errorMessages.Default
+  const errorMessage = (error && Object.hasOwn(errorMessages, error) && errorMessages[error]) || errorMessages.Default
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-gradient-to-bl from-primary-container via-background to-secondary-container">
@@ -74,17 +74,5 @@ function ErrorContent() {
         </div>
       </div>
     </div>
-  )
-}
-
-export default function AuthErrorPage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">טוען...</div>
-      </div>
-    }>
-      <ErrorContent />
-    </Suspense>
   )
 }

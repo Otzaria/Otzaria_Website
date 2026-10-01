@@ -494,7 +494,7 @@ export default function AdminOcrLayoutPage() {
                 title="פתיחת סקירה מלאה של העמוד"
               >
                 <img
-                  src={`/api/ocr-layout/${page.id}/image`}
+                  src={`/api/ocr-layout/${page.id}/image?thumb=1`}
                   alt={`${page.edition}/${page.pageStem}`}
                   className="max-h-40 w-full object-contain"
                   loading="lazy"

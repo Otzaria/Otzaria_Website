@@ -118,8 +118,9 @@ export default function PluginCategoryClient({ category, notFound }: PluginCateg
               </div>
             ) : (
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {category.plugins.map(plugin => (
+                {category.plugins.map((plugin, pluginIndex) => (
                   <PluginCard
+                    priority={pluginIndex === 0}
                     key={plugin.id}
                     plugin={plugin}
                     installState={installState}

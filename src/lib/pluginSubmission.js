@@ -14,12 +14,14 @@ export const PLUGIN_LIMITS = {
   tag: 40
 }
 
-export const ALLOWED_PLUGIN_STATUSES = ['stable', 'beta', 'experimental']
-export const PLUGIN_STATUS_LABELS = {
-  stable: 'יציב',
-  beta: 'בטא',
-  experimental: 'ניסיוני'
-}
+// קבועי הסטטוס/התאימות עצמם חיים במודול בטוח-ללקוח (ראו ההסבר שם) —
+// רכיבי לקוח מייבאים משם ישירות; כאן re-export לשימור הייבוא הקיים בשרת.
+export {
+  ALLOWED_PLUGIN_STATUSES,
+  PLUGIN_STATUS_LABELS,
+  MIN_SUPPORTED_APP_VERSION,
+  formatPluginStatus
+} from './pluginStatus.js'
 // פורמט גרסה מחמיר: major.minor.patch בלבד (+build metadata אופציונלי). זהה
 // לרגקס באוצריא (plugin_manifest_validator.dart) ובוולידטור ה-CI. prerelease
 // (-rc1) ו-4 רמות אסורים: compareCoreVersions באוצריא מתעלם מהם, כך שהיו
@@ -32,12 +34,6 @@ export const PLUGIN_STATUS_LABELS = {
 // אקספוננציאלי; נבדק בפועל מול קלט עוין (מחרוזות ספרות ארוכות) בלי האטה.
 // eslint-disable-next-line security/detect-unsafe-regex
 export const PLUGIN_VERSION_RE = /^\d+\.\d+\.\d+(?:\+.*)?$/
-export const MIN_SUPPORTED_APP_VERSION = '0.9.89'
-
-export function formatPluginStatus(status) {
-  return PLUGIN_STATUS_LABELS[status] || 'לא ידוע'
-}
-
 export function isHttpUrl(value) {
   try {
     const url = new URL(value)

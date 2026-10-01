@@ -13,16 +13,17 @@ export default function Header() {
   const { data: session } = useSession()
   const [unreadMessages, setUnreadMessages] = useState(0)
 
+  const role = session?.user?.role
+
   useEffect(() => {
-    const role = session?.user?.role
     if (role === 'admin' || role === 'admin_plugins' || role === 'admin_books') {
       const loadUnreadCount = async () => {
         try {
-          // תיקון נתיב: messages/list -> messages
-          const result = await apiGet('/api/messages?allMessages=true')
+          // מונה בלבד — בעבר נמשך כאן כל תור ההודעות (/api/messages?allMessages=true,
+          // מאות KB עד MB) בכל דף ובכל דקה, רק כדי לספור את ה-unread בדפדפן.
+          const result = await apiGet('/api/messages/unread-count')
           if (result.success) {
-            const unread = result.messages.filter(m => m.status === 'unread').length
-            setUnreadMessages(unread)
+            setUnreadMessages(result.count)
           }
         } catch (error) {
           console.error('Error loading messages:', error)
@@ -32,7 +33,7 @@ export default function Header() {
       const interval = setInterval(loadUnreadCount, 60000)
       return () => clearInterval(interval)
     }
-  }, [session])
+  }, [role])
 
   return (
     <header className="sticky top-0 z-50 w-full glass-strong border-b border-neutral-200 bg-white/80 backdrop-blur-md">

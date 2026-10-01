@@ -39,6 +39,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // סקריפטי Node תחזוקה (CommonJS) — לא חלק מאפליקציית Next.js.
     "scripts/**",
+    // worktrees של סוכנים (.claude/worktrees) — עותקים מלאים של הריפו, לא קוד לבדיקה.
+    ".claude/**",
   ]),
 ]);
 

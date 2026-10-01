@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useSession } from 'next-auth/react'
 import { useDialog } from '@/components/providers/DialogContext'
-import { MIN_SUPPORTED_APP_VERSION, formatPluginStatus } from '@/lib/pluginSubmission'
+import { MIN_SUPPORTED_APP_VERSION, formatPluginStatus } from '@/lib/pluginStatus'
 
 const ALLOWED_IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
 const STATUS_OPTIONS = [

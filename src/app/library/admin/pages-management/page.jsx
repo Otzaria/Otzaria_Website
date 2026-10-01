@@ -23,28 +23,16 @@ export default function AdminPagesPage() {
 
   const { showAlert, showConfirm } = useDialog()
 
-  // טעינת כל הספרים והמשתמשים בתחילה
+  // רשימות הבחירה של מסנני הספר והמשתמש. קודם נבנו מהורדת כל העמודים
+  // (/api/admin/pages/list?limit=10000, כ-2.5MB) — עכשיו השרת מחזיר רק אותן.
   const loadAllBooksAndUsers = async () => {
     try {
-      // טעינת כל העמודים ללא סינון כדי לקבל את כל הספרים
-      const res = await fetch('/api/admin/pages/list?limit=10000')
+      const res = await fetch('/api/admin/pages/filter-options')
       const data = await res.json()
-      
+
       if (data.success) {
-        // יצירת רשימת ספרים ייחודית מכל העמודים
-        const books = [...new Set(data.pages.map(p => p.bookName))].sort()
-        setBooksList(books)
-        
-        // יצירת רשימת משתמשים ייחודית מכל העמודים
-        const users = data.pages
-            .filter(p => p.claimedBy)
-            .reduce((acc, p) => {
-                if (!acc.some(u => u.id === p.claimedById)) {
-                    acc.push({ id: p.claimedById, name: p.claimedBy })
-                }
-                return acc
-            }, [])
-        setUsersList(users)
+        setBooksList(data.books)
+        setUsersList(data.users)
       }
     } catch (e) {
       console.error(e)
@@ -72,11 +60,10 @@ export default function AdminPagesPage() {
     }
   }
 
+  // טעינת הרשימה עצמה בעלייה נעשית ב-effect של filters שמתחת (הוא רץ גם
+  // בעלייה) — קריאה נוספת כאן הורידה את אותה רשימה פעמיים.
   useEffect(() => {
     loadAllBooksAndUsers()
-    loadPages()
-  // טעינה חד-פעמית בעליה; loadPages מוחרג
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {

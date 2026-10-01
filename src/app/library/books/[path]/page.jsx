@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -11,6 +11,7 @@ import { useLoading } from '@/components/providers/LoadingContext'
 import Header from '@/components/layout/Header'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { hasBookLibraryAccess } from '@/lib/roles'
+import { formatHebrewDate, formatTimeAgo } from './pageCardDates'
 
 const pageStatusConfig = {
   available: {
@@ -33,6 +34,39 @@ const pageStatusConfig = {
   },
 }
 
+// מספר כרטיסי העמודים שנוספים בכל פעם. ספר של מאות עמודים צויר בעבר בבת אחת —
+// מאות כרטיסים (עשרות אלפי צמתי DOM) לפני שהראשון הופיע; עכשיו כמו בקטלוג
+// (/library/books): מנה ראשונה, והשאר נטען אוטומטית כשמתקרבים לסוף הרשימה.
+const PAGE_BATCH = 60
+
+// אחרי המנה הראשונה, שאר הכרטיסים מתווספים ברקע בזמן שה-main thread פנוי
+// (requestIdleCallback), במנות קטנות כדי שאף משימה לא תהיה ארוכה. כך הטעינה
+// הראשונה נשארת קלה, ובתוך זמן קצר כל עמודי הספר נמצאים ב-DOM — חיפוש בדף
+// (Ctrl+F) ומקש End מגיעים לכל עמוד, כמו כשכל הכרטיסים צוירו בבת אחת.
+const IDLE_BATCH = 20
+
+// התמונות הממוזערות של השורה הראשונה הן ה-LCP של הדף: נטענות מיד ובעדיפות גבוהה
+// במקום loading="lazy" (שמחכה ל-layout ומתחיל בעדיפות נמוכה)
+const EAGER_THUMBNAILS = 4
+
+function filterBookPages(pages, activeFilter, ownershipFilter, session) {
+  return pages.filter(page => {
+    const matchesStatus = activeFilter === 'all' || page.status === activeFilter;
+
+    let matchesOwnership = true;
+    if (ownershipFilter === 'mine') {
+        if (!session?.user) return false;
+        const userId = session.user._id || session.user.id;
+        matchesOwnership = (
+            page.claimedBy === session.user.name ||
+            page.claimedById === userId
+        );
+    }
+
+    return matchesStatus && matchesOwnership;
+  })
+}
+
 export default function BookPage() {
   const { startLoading, stopLoading } = useLoading()
   const { data: session } = useSession()
@@ -51,6 +85,42 @@ export default function BookPage() {
   const [previewImage, setPreviewImage] = useState(null)
   const [activeFilter, setActiveFilter] = useState('all')
   const [ownershipFilter, setOwnershipFilter] = useState('all')
+  const [visibleCount, setVisibleCount] = useState(PAGE_BATCH)
+
+  // כל שינוי סינון מתחיל מחדש מהמנה הראשונה
+  useEffect(() => {
+    setVisibleCount(PAGE_BATCH)
+  }, [activeFilter, ownershipFilter])
+
+  // observer חדש אחרי כל מנה: אם ה-sentinel עדיין בטווח (מסך גבוה), הקריאה
+  // הראשונית של ה-observer מוסיפה מיד מנה נוספת
+  const observerRef = useRef(null)
+  const sentinelRef = useCallback((node) => {
+    observerRef.current?.disconnect()
+    observerRef.current = null
+    if (!node) return
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) setVisibleCount((count) => count + PAGE_BATCH) },
+      { rootMargin: '600px' }
+    )
+    observer.observe(node)
+    observerRef.current = observer
+  // visibleCount בכוונה בתלויות — יוצר observer מחדש אחרי כל מנה
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleCount])
+
+  const filteredPages = filterBookPages(pages, activeFilter, ownershipFilter, session)
+  const filteredCount = filteredPages.length
+  useEffect(() => {
+    if (visibleCount >= filteredCount) return
+    const grow = () => setVisibleCount((count) => count + IDLE_BATCH)
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(grow, { timeout: 2000 })
+      return () => window.cancelIdleCallback(id)
+    }
+    const id = window.setTimeout(grow, 100)
+    return () => window.clearTimeout(id)
+  }, [visibleCount, filteredCount])
 
   const loadBookData = useCallback(async () => {
     try {
@@ -519,23 +589,9 @@ export default function BookPage() {
               ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4'
               : 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-4'
           }>
-            {pages
-              .filter(page => {
-                  const matchesStatus = activeFilter === 'all' || page.status === activeFilter;
-                  
-                  let matchesOwnership = true;
-                  if (ownershipFilter === 'mine') {
-                      if (!session?.user) return false;
-                      const userId = session.user._id || session.user.id;
-                      matchesOwnership = (
-                          page.claimedBy === session.user.name ||
-                          page.claimedById === userId
-                      );
-                  }
-
-                  return matchesStatus && matchesOwnership;
-              })
-              .map((page) => (
+            {filteredPages
+              .slice(0, visibleCount)
+              .map((page, index) => (
               <div
                 key={page.id || page.number}
                 className="relative"
@@ -543,6 +599,7 @@ export default function BookPage() {
               >
                   <PageCard
                     page={page}
+                    eagerImage={index < EAGER_THUMBNAILS}
                     viewMode={viewMode}
                     onClaim={handleClaimPage}
                     onComplete={handleMarkComplete}
@@ -557,6 +614,17 @@ export default function BookPage() {
               </div>
             ))}
           </div>
+
+          {visibleCount < filteredPages.length && (
+            <div ref={sentinelRef} className="flex justify-center pt-6">
+              <button
+                onClick={() => setVisibleCount((count) => count + PAGE_BATCH)}
+                className="px-6 py-2 bg-white border border-surface-variant text-primary rounded-lg hover:bg-surface-variant transition-colors font-medium"
+              >
+                טען עוד עמודים
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -566,93 +634,7 @@ export default function BookPage() {
   )
 }
 
-function toGematria(num) {
-  if (num === 15) return 'ט"ו';
-  if (num === 16) return 'ט"ז';
-  
-  const letters = [
-      { val: 400, char: 'ת' },
-      { val: 300, char: 'ש' },
-      { val: 200, char: 'ר' },
-      { val: 100, char: 'ק' },
-      { val: 90, char: 'צ' },
-      { val: 80, char: 'פ' },
-      { val: 70, char: 'ע' },
-      { val: 60, char: 'ס' },
-      { val: 50, char: 'נ' },
-      { val: 40, char: 'מ' },
-      { val: 30, char: 'ל' },
-      { val: 20, char: 'כ' },
-      { val: 10, char: 'י' },
-      { val: 9, char: 'ט' },
-      { val: 8, char: 'ח' },
-      { val: 7, char: 'ז' },
-      { val: 6, char: 'ו' },
-      { val: 5, char: 'ה' },
-      { val: 4, char: 'ד' },
-      { val: 3, char: 'ג' },
-      { val: 2, char: 'ב' },
-      { val: 1, char: 'א' }
-  ];
-
-  let result = '';
-  let n = num;
-  
-  for (const { val, char } of letters) {
-      while (n >= val) {
-          result += char;
-          n -= val;
-      }
-  }
-  
-  if (result.length > 1) {
-      return result.slice(0, -1) + '"' + result.slice(-1);
-  } 
-  return result + "'";
-}
-
-function formatHebrewDate(dateString) {
-  if (!dateString) return '';
-  try {
-    const date = new Date(dateString);
-    const parts = new Intl.DateTimeFormat('he-IL-u-ca-hebrew-nu-latn', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric'
-    }).formatToParts(date);
-    
-    const dayPart = parts.find(p => p.type === 'day');
-    const monthPart = parts.find(p => p.type === 'month');
-    const yearPart = parts.find(p => p.type === 'year');
-    
-    if (!dayPart || !monthPart || !yearPart) return '';
-    
-    const day = parseInt(dayPart.value, 10);
-    const year = parseInt(yearPart.value, 10);
-    
-    return `${toGematria(day)} ב${monthPart.value} ${toGematria(year % 1000)}`;
-  } catch (e) {
-    return '';
-  }
-}
-
-function formatTimeAgo(dateString) {
-  if (!dateString) return '';
-  try {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = now - date;
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) return 'היום';
-    if (diffDays === 1) return 'אתמול';
-    return `לפני ${diffDays} ימים`;
-  } catch (e) {
-    return '';
-  }
-}
-
-function PageCard({ page, viewMode, onClaim, onComplete, onRelease, onUncomplete, onPreview, currentUser, bookPath, isAdmin, isBookOwner }) {
+function PageCard({ page, eagerImage, viewMode, onClaim, onComplete, onRelease, onUncomplete, onPreview, currentUser, bookPath, isAdmin, isBookOwner }) {
   const status = pageStatusConfig[page.status]
 
   const editUrl = `/library/books/${encodeURIComponent(bookPath)}/${page.number}`;
@@ -681,7 +663,8 @@ function PageCard({ page, viewMode, onClaim, onComplete, onRelease, onUncomplete
               src={page.thumbnail}
               alt={`עמוד ${page.number}`}
               fill
-              loading="lazy"
+              loading={eagerImage ? 'eager' : 'lazy'}
+              fetchPriority={eagerImage ? 'high' : undefined}
               sizes={
                 viewMode === 'double'
                   ? '(max-width: 640px) 45vw, (max-width: 1024px) 20vw, 10vw'

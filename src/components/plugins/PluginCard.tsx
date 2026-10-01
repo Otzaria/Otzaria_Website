@@ -5,21 +5,24 @@
 // את מצב ההתקנה ואת ה-handler כ-props.
 
 import Link from 'next/link'
-import { formatPluginStatus } from '@/lib/pluginSubmission'
+import { formatPluginStatus } from '@/lib/pluginStatus'
 import { formatHebrewDate } from '@/lib/hebrewDate'
 import RatingStars from '@/components/plugins/RatingStars'
 import { statusBadgeClass } from '@/components/plugins/StatusBadge'
 import DirectInstallButton from '@/components/plugins/DirectInstallButton'
 import type { DirectInstallState } from '@/components/plugins/useDirectInstall'
-import type { Plugin } from '@/components/plugins/types'
+import type { PluginCardData } from '@/components/plugins/types'
 
 interface PluginCardProps {
-  plugin: Plugin
+  plugin: PluginCardData
   installState: DirectInstallState
-  onInstall: (plugin: Plugin) => void
+  onInstall: (plugin: PluginCardData) => void
+  // הכרטיס הראשון בדף (בדרך כלל ה-LCP): התמונה נטענת מיד ובעדיפות גבוהה
+  // במקום lazy — lazy מחכה לחישוב הפריסה לפני שהבקשה בכלל יוצאת.
+  priority?: boolean
 }
 
-export default function PluginCard({ plugin, installState, onInstall }: PluginCardProps) {
+export default function PluginCard({ plugin, installState, onInstall, priority = false }: PluginCardProps) {
   const canDirectInstall = Boolean(plugin.supportsDirectInstall && plugin.downloadUrl)
 
   return (
@@ -34,7 +37,8 @@ export default function PluginCard({ plugin, installState, onInstall }: PluginCa
         <img
           src={plugin.image || '/logo.webp'}
           alt={plugin.name}
-          loading="lazy"
+          loading={priority ? 'eager' : 'lazy'}
+          fetchPriority={priority ? 'high' : undefined}
           decoding="async"
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
         />

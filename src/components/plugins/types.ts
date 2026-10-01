@@ -39,6 +39,28 @@ export interface Plugin {
   categories?: CategoryRef[]
 }
 
+// השדות שכרטיס תוסף מציג — מה שדפי החנות מעבירים לרכיבי הלקוח (ולא את
+// הייצוג המלא), ראו src/lib/pluginCardData.js. description נכלל רק בדף
+// "כל התוספים", שהחיפוש המקומי שלו מחפש גם בתיאור המלא.
+export type PluginCardData = Pick<
+  Plugin,
+  | 'id'
+  | 'name'
+  | 'shortDescription'
+  | 'version'
+  | 'status'
+  | 'image'
+  | 'downloadUrl'
+  | 'supportsDirectInstall'
+  | 'tags'
+  | 'downloadCount'
+  | 'ratingAvg'
+  | 'ratingCount'
+  | 'fileUpdatedAt'
+  | 'originalDate'
+  | 'updatedAt'
+> & { description?: string }
+
 // תקציר קטגוריה (כפי שמוחזר מ-/api/plugins/categories ומ-store-home)
 export interface PluginCategorySummary {
   id: string

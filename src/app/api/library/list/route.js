@@ -9,8 +9,14 @@ import { serverError } from '@/lib/apiResponse';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+// ?view=catalog — קטלוג /library/books: אותן שורות, בלי השדות שהקטלוג אינו קורא
+// (editingInfo — ההנחיות המלאות של כל ספר, רוב משקל התגובה — lastUpdated ושמות
+// הבעלים). בלי הפרמטר (ניהול ספרים, תזכורות) — התגובה המלאה, כבעבר.
+const CATALOG_OMITTED_FIELDS = ['editingInfo', 'lastUpdated', 'ownerName', 'originalOwnerId', 'originalOwnerName'];
+
+export async function GET(request) {
   try {
+    const catalogView = new URL(request.url).searchParams.get('view') === 'catalog';
 
     const session = await getServerSession(authOptions);
     const isAdmin = hasBookLibraryAccess(session?.user?.role);
@@ -19,10 +25,13 @@ export async function GET() {
 
     const query = isAdmin ? {} : { isHidden: { $ne: true } };
 
-    const books = await Book.find(query)
-      .select('name slug totalPages category updatedAt isHidden editingInfo ownerId originalOwnerId isPrivate')
-      .populate('ownerId', 'name')
-      .populate('originalOwnerId', 'name')
+    let booksQuery = Book.find(query)
+      .select(catalogView
+        ? 'name slug totalPages category updatedAt isHidden ownerId isPrivate'
+        : 'name slug totalPages category updatedAt isHidden editingInfo ownerId originalOwnerId isPrivate')
+      .populate('ownerId', 'name');
+    if (!catalogView) booksQuery = booksQuery.populate('originalOwnerId', 'name');
+    const books = await booksQuery
       .sort({ updatedAt: -1 })
       .lean();
 
@@ -70,6 +79,12 @@ export async function GET() {
         isPrivate: book.isPrivate || false
       };
     });
+
+    if (catalogView) {
+      for (const book of formattedBooks) {
+        for (const field of CATALOG_OMITTED_FIELDS) delete book[field];
+      }
+    }
 
     return NextResponse.json({ success: true, books: formattedBooks });
 

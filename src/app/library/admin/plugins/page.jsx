@@ -9,7 +9,7 @@ import PluginApproveModal from '@/components/plugins/PluginApproveModal'
 import PluginRatingsModal from '@/components/admin/PluginRatingsModal'
 import AssignCategoriesModal from '@/components/admin/AssignCategoriesModal'
 import StoreLayoutTab from './StoreLayoutTab'
-import { formatPluginStatus } from '@/lib/pluginSubmission'
+import { formatPluginStatus } from '@/lib/pluginStatus'
 import { formatAdminDate } from './formatAdminDate'
 
 export default function AdminPluginsPage() {

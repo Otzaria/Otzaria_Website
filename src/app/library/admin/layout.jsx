@@ -1,46 +1,31 @@
-'use client'
-
-import { useState, useEffect } from 'react'
-import Header from '@/components/layout/Header'
+// ה-layout של פאנל הניהול — Server Component.
+//
+// קודם זה היה Client Component שקרא ל-useSession: ב-SSR הסשן עוד לא ידוע,
+// ולכן שורת הלשוניות (AdminNav) וכותרת התפקיד יצאו ריקות ב-HTML ונוספו רק
+// אחרי ה-hydration ובקשת /api/auth/session — מה שדחף את תוכן העמוד כ-480px
+// למטה (CLS 0.33 בכל עמודי /library/admin). עכשיו הסשן (JWT בלבד, בלי DB)
+// ומוני התג נקראים כאן בשרת, והלשוניות מגיעות מוכנות ב-HTML.
 import Link from 'next/link'
-import { useSession } from 'next-auth/react'
-import AdminNav from './AdminNav'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import Header from '@/components/layout/Header'
 import { ROLE_LABELS } from '@/lib/roles'
+import { getAdminBadgeCounts } from '@/lib/adminBadgeCounts'
+import { EMPTY_ADMIN_BADGE_COUNTS } from '@/lib/adminBadgeScope'
+import AdminNav from './AdminNav'
 
-export default function AdminLayout({ children }) {
-  const { data: session } = useSession()
-  const [counts, setCounts] = useState({ unreadMessages: 0, pendingUploads: 0, pendingPlugins: 0 })
+export default async function AdminLayout({ children }) {
+  const session = await getServerSession(authOptions)
+  const role = session?.user?.role
 
-  useEffect(() => {
-    const fetchCounts = async () => {
-      try {
-        const role = session?.user?.role
-        const canSeeUploads = role === 'admin' || role === 'admin_books'
-        const canSeePlugins = role === 'admin' || role === 'admin_plugins'
-
-        const [msgData, uploadData, pluginsData] = await Promise.all([
-          fetch('/api/messages?allMessages=true').then(r => r.json()).catch(() => null),
-          canSeeUploads ? fetch('/api/admin/uploads/list').then(r => r.json()).catch(() => null) : null,
-          canSeePlugins ? fetch('/api/admin/plugins?status=pending').then(r => r.json()).catch(() => null) : null,
-        ])
-
-        setCounts({
-          unreadMessages: msgData?.success ? msgData.messages.filter(m => m.status === 'unread').length : 0,
-          pendingUploads: uploadData?.success ? uploadData.uploads.filter(u => u.status === 'pending').length : 0,
-          pendingPlugins: Array.isArray(pluginsData) ? pluginsData.length : 0,
-        })
-      } catch (e) {
-        console.error('Error loading admin counts', e)
-      }
-    }
-
-    const role = session?.user?.role
-    if (role === 'admin' || role === 'admin_plugins' || role === 'admin_books') {
-        fetchCounts()
-        const interval = setInterval(fetchCounts, 60000)
-        return () => clearInterval(interval)
-    }
-  }, [session?.user?.role])
+  // המונים תלויים בתפקיד הצופה — נספרים לכל בקשה, בלי מטמון משותף.
+  // כשל בספירה לא מפיל את הפאנל: מציגים אפסים והרענון התקופתי ב-AdminNav יתקן.
+  let initialCounts = EMPTY_ADMIN_BADGE_COUNTS
+  try {
+    initialCounts = await getAdminBadgeCounts(role)
+  } catch (e) {
+    console.error('Error loading admin counts', e)
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -57,7 +42,7 @@ export default function AdminLayout({ children }) {
                   </span>
                   פאנל ניהול
                 </h1>
-                <p className="text-on-surface/60 mt-2">{ROLE_LABELS[session?.user?.role] || 'ניהול מלא של המערכת'}</p>
+                <p className="text-on-surface/60 mt-2">{ROLE_LABELS[role] || 'ניהול מלא של המערכת'}</p>
               </div>
               <div className="flex gap-3">
                 {session?.user?.name === 'admin' && (
@@ -80,11 +65,7 @@ export default function AdminLayout({ children }) {
               </div>
             </div>
 
-            <AdminNav
-              unreadMessagesCount={counts.unreadMessages}
-              pendingUploadsCount={counts.pendingUploads}
-              pendingPluginsCount={counts.pendingPlugins}
-            />
+            <AdminNav role={role} initialCounts={initialCounts} />
 
             <div className="min-h-[500px]">
                 {children}
@@ -95,9 +76,3 @@ export default function AdminLayout({ children }) {
     </div>
   )
 }
-
-
-
-
-
-

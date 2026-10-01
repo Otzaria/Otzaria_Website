@@ -6,20 +6,49 @@ import { useState, useEffect, useRef } from 'react'
 // צמודה יותר מזה — היא רצה בכל טאב פתוח של כל משתמש.
 const CHECK_INTERVAL_MS = 3 * 60_000
 
+// הזוג "גרסה רצה|גרסה בשרת" שעליו כבר הוצגה ההודעה בטאב הזה (sessionStorage).
+// כש-public/version.json חדש מהגרסה שרצה בפועל (build שנכשל אחרי
+// generate-version, או חלון ה-build עצמו), רענון לא משנה את הגרסה שרצה — ובלי
+// זה ההודעה הייתה חוזרת אחרי כל רענון. אותו זוג בטאב אחרי רענון = לא להציג שוב.
+const SHOWN_STORAGE_KEY = 'otzaria:version-notice-shown'
+
+function readShownPair() {
+  try {
+    return window.sessionStorage.getItem(SHOWN_STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+
+function writeShownPair(pair) {
+  try {
+    window.sessionStorage.setItem(SHOWN_STORAGE_KEY, pair)
+  } catch {
+    // sessionStorage חסום — ההודעה פשוט עשויה לחזור אחרי רענון
+  }
+}
+
 async function fetchVersion() {
   // no-store במקום ?t=Date.now(): אותה תוצאה בלי לייצר URL חדש בכל בקשה
   // (URL ייחודי מנטרל גם את מטמון ה-CDN וגם מזהם לוגים).
   const res = await fetch('/version.json', { cache: 'no-store' })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return (await res.json()).version
+  return String((await res.json()).version)
 }
 
-export default function VersionNotice() {
+/**
+ * @param {{ deployVersion?: string }} props
+ *   deployVersion — חותם הגרסה שאיתו נבנה הדף (נקרא מ-public/version.json בזמן
+ *   ה-build, ראו next.config.ts). כשהוא ידוע אין צורך לשאול את השרת בעליית
+ *   הדף מהי הגרסה ההתחלתית — בקשה אחת פחות בכל טעינת דף. בלעדיו (למשל ב-dev
+ *   לפני generate-version) ההתנהגות הקודמת: הבדיקה הראשונה קובעת את הבסיס.
+ */
+export default function VersionNotice({ deployVersion }) {
   const [hasUpdate, setHasUpdate] = useState(false)
   // הגרסה שאיתה נטענה האפליקציה. ב-ref ולא ב-state: הקומפוננטה אינה מציגה
   // אותה, וכ-state היא הייתה תלות של ה-useEffect וגורמת לבקשה כפולה בעלייה
   // ולבנייה מחדש של ה-interval.
-  const initialVersion = useRef(null)
+  const initialVersion = useRef(deployVersion ? String(deployVersion) : null)
 
   useEffect(() => {
     let cancelled = false
@@ -31,13 +60,19 @@ export default function VersionNotice() {
         const version = await fetchVersion()
         if (cancelled) return
         if (initialVersion.current === null) initialVersion.current = version
-        else if (version !== initialVersion.current) setHasUpdate(true)
+        else if (version !== initialVersion.current) {
+          const pair = `${initialVersion.current}|${version}`
+          if (readShownPair() === pair) return
+          writeShownPair(pair)
+          setHasUpdate(true)
+        }
       } catch {
         // התעלמות משגיאות רשת זמניות
       }
     }
 
-    check()
+    // בלי גרסת build ידועה — הבדיקה המיידית קובעת את הבסיס (כמו קודם)
+    if (initialVersion.current === null) check()
     const interval = setInterval(check, CHECK_INTERVAL_MS)
     document.addEventListener('visibilitychange', check)
 

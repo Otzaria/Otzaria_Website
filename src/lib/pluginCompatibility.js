@@ -1,5 +1,8 @@
-// סיומת .js מפורשת — הקובץ נטען גם ע"י node --test (ESM ללא רזולוציית webpack)
-import { compareVersions } from './pluginManifest.js'
+// סיומת .js מפורשת — הקובץ נטען גם ע"י node --test (ESM ללא רזולוציית webpack).
+// ישירות מ-semverCompare ולא דרך pluginManifest.js (שמייצא מחדש את אותה
+// פונקציה) — pluginManifest מייבא את 'zlib', וכל מי שייבא את הקובץ הזה מרכיב
+// לקוח היה מושך את ה-polyfills של zlib/stream/buffer ל-bundle של הדפדפן.
+import { compareVersions } from './semverCompare.js'
 
 // בחירת גרסת התוסף המתאימה לגרסת אוצריא נתונה.
 //

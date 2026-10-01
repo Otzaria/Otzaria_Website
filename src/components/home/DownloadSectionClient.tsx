@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
 
 // מבנה נתוני ההורדות המוחזר מ-/api/github-releases
 type PlatformLinks = Record<string, string | undefined>
@@ -263,12 +262,12 @@ function DownloadModal({ isOpen, onClose, platform, links, version }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
+      {/* כניסה ב-CSS (אותה דעיכה והגדלה מ-0.95 שהייתה ב-framer-motion). ה-exit
+          של framer לא פעל ממילא — המודל אינו עטוף ב-AnimatePresence. */}
+      <div
         onClick={(e) => e.stopPropagation()}
-        className="flex flex-col bg-white rounded-2xl w-full max-w-2xl shadow-2xl max-h-[90vh]"
+        style={{ animationDuration: '0.3s' }}
+        className="flex flex-col bg-white rounded-2xl w-full max-w-2xl shadow-2xl max-h-[90vh] animate-enter-scale"
       >
         {/* Fixed Header */}
         <div className="flex items-center justify-between p-6 border-b border-neutral-200 flex-shrink-0">
@@ -287,7 +286,7 @@ function DownloadModal({ isOpen, onClose, platform, links, version }: {
             {renderDownloadOptions(platform, links)}
           </div>
         </div>
-      </motion.div>
+      </div>
     </div>
   )
 }

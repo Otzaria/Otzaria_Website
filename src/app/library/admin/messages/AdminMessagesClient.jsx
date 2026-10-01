@@ -11,6 +11,10 @@ import { formatDateWithTime } from '@/lib/formatDate'
 // רענון אחרי תגובה/מחיקה/שליחה ממשיך לקרוא ל-API כרגיל (ראו loadData),
 // בלי קשר למטמון. רשימת המשתמשים לבחירת נמען (users-basic) עדיין נטענת
 // כאן בצד הלקוח כמו קודם — היא לא חלק מהנתונים הממוטמנים של דף זה.
+// כמה הודעות מוצגות בכל פעם. התור יכול להכיל אלפי הודעות עם כל התגובות;
+// רינדור כולן בבת אחת עלה כחצי שנייה של חסימת ה-main thread (TBT) במובייל.
+const MESSAGES_PAGE_SIZE = 50
+
 export default function AdminMessagesClient({ initialMessages }) {
   const { data: session } = useSession()
   const { showAlert, showConfirm } = useDialog()
@@ -33,6 +37,7 @@ export default function AdminMessagesClient({ initialMessages }) {
   }
 
   const [messages, setMessages] = useState(() => sortMessages(initialMessages || []))
+  const [visibleCount, setVisibleCount] = useState(MESSAGES_PAGE_SIZE)
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(false)
 
@@ -212,7 +217,7 @@ export default function AdminMessagesClient({ initialMessages }) {
           </div>
       ) : (
           <div className="space-y-4">
-              {messages.map(message => (
+              {messages.slice(0, visibleCount).map(message => (
                   <div
                     key={message.id}
                     className={`p-6 rounded-lg transition-all ${
@@ -323,6 +328,17 @@ export default function AdminMessagesClient({ initialMessages }) {
                       )}
                   </div>
               ))}
+              {messages.length > visibleCount && (
+                  <div className="flex justify-center pt-2">
+                      <button
+                        onClick={() => setVisibleCount(c => c + MESSAGES_PAGE_SIZE)}
+                        className="flex items-center gap-2 px-5 py-2 glass rounded-lg hover:bg-surface-variant transition-colors font-medium"
+                      >
+                          <span className="material-symbols-outlined">expand_more</span>
+                          הצג עוד הודעות ({messages.length - visibleCount} נוספות)
+                      </button>
+                  </div>
+              )}
           </div>
       )}
     </div>

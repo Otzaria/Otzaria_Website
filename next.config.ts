@@ -1,7 +1,31 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+
+// חותם הגרסה של הדפלוי, כפי ש-generate-version כתב אותו ל-public/version.json
+// ממש לפני next build. מוטמע ב-HTML (layout.tsx → VersionNotice) כדי שהלקוח לא
+// יצטרך לשאול את השרת בכל טעינת דף מהי הגרסה ההתחלתית. כשהקובץ חסר (dev לפני
+// build ראשון) — מחרוזת ריקה, ו-VersionNotice חוזר להתנהגות הקודמת.
+function readDeployVersion(): string {
+  try {
+    const raw = readFileSync(path.join(process.cwd(), 'public', 'version.json'), 'utf8')
+    const version = JSON.parse(raw)?.version
+    return version == null ? '' : String(version)
+  } catch {
+    return ''
+  }
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // הסרת חשיפת טכנולוגיית השרת (ZAP: Server Leaks Information via X-Powered-By)
   poweredByHeader: false,
+  // הדחיסה (gzip) עברה ל-nginx שלפני האתר (gzip_types כולל application/json),
+  // ולכן לא צריך גם את ה-compression המובנה של Next — זה היה עובד כפול בחינם
+  // (nginx ממילא לא דוחס מחדש תוכן גזוף) ועדיין צורך CPU על תהליך ה-Node.
+  compress: false,
+  env: {
+    DEPLOY_VERSION: readDeployVersion(),
+  },
   serverExternalPackages: ['pdf-to-img', 'pdfjs-dist'],
   experimental: {
     serverActions: {
@@ -152,7 +176,10 @@ const nextConfig = {
       // עמודי שיווק סטטיים-בפועל, ללא תלות ב-session/DB. TTL קצר-בינוני עם
       // stale-while-revalidate כדי לצמצם את חלון "הדליפה" מול שער השבת ב-src/proxy.js
       // (המידלוור עדיין רץ בכל בקשה; זו רק פשרת caching בצד דפדפן/CDN).
-      ...['/', '/about', '/faq', '/donate', '/privacy', '/license', '/offline', '/docs'].map((source) => ({
+      // /docs/:slug — דפי המדריך (docs/[slug], docs/dicta, docs/development): ציבוריים
+      // וללא session, כמו /docs עצמו. בלי זה קיבלו רק s-maxage של ISR, והדפדפן
+      // אימת מחדש כל טעינה.
+      ...['/', '/about', '/faq', '/donate', '/privacy', '/license', '/offline', '/docs', '/docs/:slug'].map((source) => ({
         source,
         headers: [
           { key: 'Cache-Control', value: 'public, max-age=300, stale-while-revalidate=3600' },

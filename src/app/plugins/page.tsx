@@ -20,6 +20,7 @@ import PluginModel from '@/models/Plugin'
 import PluginCategory from '@/models/PluginCategory'
 import { getStoreSettings } from '@/models/StoreSettings'
 import { formatPluginForPublic } from '@/lib/pluginSubmission'
+import { toPluginCardData } from '@/lib/pluginCardData'
 import {
   PUBLIC_PLUGIN_FILTER,
   fetchPublicPluginsByIds,
@@ -29,7 +30,7 @@ import {
 } from '@/lib/pluginStore'
 import { CACHE_TAGS, REVALIDATE_SECONDS } from '@/lib/cacheTags'
 import PluginsStoreHomeClient from './PluginsStoreHomeClient'
-import type { Plugin } from '@/components/plugins/types'
+import type { PluginCardData } from '@/components/plugins/types'
 import type { StoreHomeData } from './storeHomeTypes'
 
 // ISR: הדף עצמו (לא רק שאילתת ה-DB) נשמר במטמון עד revalidateTag או חלון זה.
@@ -57,9 +58,10 @@ async function loadStoreHomeDataUncached(): Promise<StoreHomeData> {
 
   // התוספים הנבחרים נשארים בסדר הידני של המנהל
   // formatPluginForPublic (JS, לא-מוקלד) הוא אותה פונקציה בדיוק שה-API route
-  // הישן משתמש בה; ה-cast כאן רק מגשר על ההיסק המבני של TS, ולא משנה נתונים.
-  const featured: Plugin[] = orderByIds(settings.featuredPluginIds, pluginsById)
-    .map((plugin) => formatPluginForPublic(plugin, { isFeatured: true }) as Plugin)
+  // הישן משתמש בה; toPluginCardData משאיר ממנה רק את שדות הכרטיס (ה-props
+  // נשלחים לדפדפן פעמיים — HTML ו-payload). ה-cast רק מגשר על ההיסק של TS.
+  const featured = orderByIds(settings.featuredPluginIds, pluginsById)
+    .map((plugin) => toPluginCardData(formatPluginForPublic(plugin, { isFeatured: true })) as PluginCardData)
 
   const categoriesPayload = categories.map((category) => {
     // שורת דף-הבית מציגה את ראש הקטגוריה — ולכן באותו מיון בדיוק כמו דף הקטגוריה
@@ -68,7 +70,7 @@ async function loadStoreHomeDataUncached(): Promise<StoreHomeData> {
       ...formatCategorySummary(category, publicPlugins.length),
       showOnHome: category.showOnHome === true,
       plugins: category.showOnHome
-        ? publicPlugins.slice(0, category.homeLimit || 6).map((plugin) => formatPluginForPublic(plugin) as Plugin)
+        ? publicPlugins.slice(0, category.homeLimit || 6).map((plugin) => toPluginCardData(formatPluginForPublic(plugin)) as PluginCardData)
         : []
     }
   })

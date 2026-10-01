@@ -12,6 +12,9 @@ import { badRequest, notFound, serverError } from '@/lib/apiResponse';
 // העליונה (header). ?part=pagenum|header — אותם חיתוכים למשימת zones-full.
 // מוגש רק למשתמשים מאומתים; התמונות אינן חשופות כנכס סטטי דרך הדף הזה.
 
+// רוחב התמונה המוקטנת (?thumb=1): תיבה של 160px ב-DPR 2
+const THUMB_WIDTH = 320;
+
 // חיתוך רצועת מספר-העמוד: התיבה מה-prefill בהגדלה נדיבה סביבה
 function pagenumCrop(prefill, imgW, imgH) {
   const box = prefill?.box;
@@ -70,6 +73,19 @@ export async function GET(request, { params }) {
       const prefill = task.kind === 'zones-full' ? task.prefill?.[part] : task.prefill;
       if (kind === 'pagenum') crop = { fn: pagenumCrop, prefill };
       else if (kind === 'header') crop = { fn: headerCrop, prefill };
+    }
+
+    // ?thumb=1 (בלי task): תמונה מוקטנת לרשימת הניהול (/library/admin/ocr-layout),
+    // שמציגה כל עמוד בתיבה של 160px. קודם ירדה שם סריקת העמוד המלאה לכל שורה.
+    // תצוגות התיוג עצמן לא שולחות thumb ולכן ממשיכות לקבל את המידות המקוריות.
+    if (!task && searchParams.get('thumb') === '1') {
+      const buf = await sharp(resolveImageFsPath(doc.imagePath))
+        .resize({ width: THUMB_WIDTH, withoutEnlargement: true })
+        .webp({ quality: 70 })
+        .toBuffer();
+      return new NextResponse(buf, {
+        headers: { 'Content-Type': 'image/webp', ...cacheHeaders },
+      });
     }
 
     if (!crop) {

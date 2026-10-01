@@ -347,6 +347,8 @@ export default function AdminOcrLinesPage() {
                   <img
                     src={`/api/ocr-lines/${line.id}/image`}
                     alt="שורה"
+                    loading="lazy"
+                    decoding="async"
                     className="max-h-20 w-full object-contain"
                     draggable={false}
                   />

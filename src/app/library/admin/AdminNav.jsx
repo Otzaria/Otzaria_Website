@@ -1,8 +1,10 @@
 'use client'
 
-import Link from 'next/link'
+import { useState, useEffect } from 'react'
+import IntentPrefetchLink from '@/components/ui/IntentPrefetchLink'
 import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
+import { hasAnyAdminBadge } from '@/lib/adminBadgeScope'
 
 const ALL_TABS = [
   { id: 'dashboard', label: 'דשבורד', icon: 'analytics', href: '/library/admin', roles: ['admin', 'admin_books', 'admin_plugins', 'admin_books_only', 'admin_ocr'] },
@@ -26,10 +28,40 @@ const ALL_TABS = [
   { id: 'private-sources', label: 'מקורות ספרים פרטיים', icon: 'copyright', href: '/library/admin/private-sources', roles: ['admin'] },
 ]
 
-export default function AdminNav({ unreadMessagesCount = 0, pendingUploadsCount = 0, pendingPluginsCount = 0 }) {
+// role ו-initialCounts מגיעים מה-layout (Server Component), כדי שהלשוניות
+// והמונים יהיו כבר ב-HTML. useSession משמש רק כעדכון אם הסשן השתנה בצד הלקוח.
+export default function AdminNav({ role: serverRole, initialCounts }) {
   const pathname = usePathname()
   const { data: session } = useSession()
-  const role = session?.user?.role
+  const role = session?.user?.role ?? serverRole
+  const [counts, setCounts] = useState(initialCounts)
+
+  // רענון המונים כל 60 שניות (כמו קודם). הטעינה הראשונה כבר נעשתה בשרת.
+  // שלושה מספרים בלבד — קודם הורדו כאן שלוש רשימות מלאות רק כדי לספור אותן;
+  // ההרשאה לכל מונה נבדקת בשרת (src/lib/adminBadgeScope.js).
+  useEffect(() => {
+    if (!hasAnyAdminBadge(role)) return
+    const fetchCounts = async () => {
+      try {
+        const res = await fetch('/api/badge-counts')
+        const data = await res.json().catch(() => null)
+        if (!data?.success) return
+        setCounts({
+          unreadMessages: data.unreadMessages || 0,
+          pendingUploads: data.pendingUploads || 0,
+          pendingPlugins: data.pendingPlugins || 0,
+        })
+      } catch (e) {
+        console.error('Error loading admin counts', e)
+      }
+    }
+    const interval = setInterval(fetchCounts, 60000)
+    return () => clearInterval(interval)
+  }, [role])
+
+  const unreadMessagesCount = counts?.unreadMessages || 0
+  const pendingUploadsCount = counts?.pendingUploads || 0
+  const pendingPluginsCount = counts?.pendingPlugins || 0
 
   const tabs = ALL_TABS
     .filter(tab => tab.roles.includes(role))
@@ -45,8 +77,9 @@ export default function AdminNav({ unreadMessagesCount = 0, pendingUploadsCount 
     <div className="flex w-full max-w-full flex-wrap justify-center gap-2 mb-6 overflow-visible p-3">
       {tabs.map((tab) => {
         const isActive = pathname === tab.href
+        // prefetch רק בכוונה (ריחוף/פוקוס/נגיעה) — 18 לשוניות בכל עמוד ניהול
         return (
-          <Link
+          <IntentPrefetchLink
             key={tab.id}
             href={tab.href}
             className={`px-4 py-2 rounded-lg font-medium transition-all whitespace-nowrap relative group shrink-0 text-center ${
@@ -65,7 +98,7 @@ export default function AdminNav({ unreadMessagesCount = 0, pendingUploadsCount 
               <span className="material-symbols-outlined">{tab.icon}</span>
               {tab.label}
             </span>
-          </Link>
+          </IntentPrefetchLink>
         )
       })}
     </div>

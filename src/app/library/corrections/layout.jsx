@@ -24,7 +24,9 @@ export default function CorrectionsLayout({ children }) {
                 <span className="material-symbols-outlined text-4xl text-accent">spellcheck</span>
                 תיקוני טקסט
               </h1>
-              <nav className="flex gap-2">
+              {/* w-full במסך צר: הלשונית השנייה (ניהול) מופיעה רק אחרי שה-session נטען, ובלי
+                  שורה משלה היא גלשה לשורה חדשה ודחפה את כל התוכן 56px למטה (CLS) */}
+              <nav className="flex gap-2 w-full sm:w-auto">
                 {tabs.map((t) => (
                   <Link
                     key={t.href}
