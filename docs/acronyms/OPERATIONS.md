@@ -12,13 +12,19 @@
 - `ACRONYMS_SIGNOFF` (אופציונלי) — שורת ה-DCO לקומיטים, למשל `Otzaria Bot <1+bot@users.noreply.github.com>`.
   בלעדיו נלקח המשתמש של הטוקן מ-`GET /user`. הפורק דוחה PR שקומיט בו חסר `Signed-off-by`.
 
-## cron
+## סנכרון אחרי מיזוג
 
-הקובץ בפורק ממוין לפי id, ולכן כל שני PR-ים שמוסיפים שורות מתנגשים. אחרי כל מיזוג ה-cron בונה מחדש מעל
-`master` כל PR פתוח של האתר (force-push לענף שלו), ומעדכן סלים שמוזגו או נסגרו:
+הקובץ בפורק ממוין לפי id, ולכן כל שני PR-ים שמוסיפים שורות מתנגשים. אחרי כל מיזוג האתר בונה מחדש מעל
+`master` כל PR פתוח שלו (force-push לענף שלו), ומעדכן סלים שמוזגו או נסגרו.
+
+את הסנכרון מפעיל ה-workflow `site-sync.yml` בפורק, אחרי כל push ל-`master`. הוא שולח ל-`/api/cron/acronyms-sync`
+אסימון OIDC של GitHub, והשרת מאמת את החתימה ואת מזהה הריפו (`src/lib/acronyms/github-oidc.js`), ולכן אין סוד להגדיר.
+השרת עונה 202 וממשיך ברקע; סנכרון אחד בכל פעם, וקריאות בזמן ריצה מצטרפות לסבב נוסף אחריו.
+
+אפשר גם להפעיל ידנית עם `CRON_SECRET`, למשל אם ה-workflow נכשל:
 
 ```
-*/10 * * * * curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" http://127.0.0.1:3000/api/cron/acronyms-sync >> /var/log/acronyms-sync.log 2>&1
+curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" http://127.0.0.1:3000/api/cron/acronyms-sync
 ```
 
 ענף שמישהו דחף אליו ידנית מסומן `modified` ואינו נבנה מחדש.

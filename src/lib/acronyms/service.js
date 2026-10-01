@@ -93,6 +93,33 @@ async function reconcilePublishing(client, doc, base) {
   return { status: 'open', branch, ...pr, headSha: ref?.sha || null, baseSha: head?.parents?.[0] || null, counts: summary.counts, books: summary.books }
 }
 
+// שני סנכרונים במקביל היו מזהים כל אחד את הבנייה של השני כדחיפה ידנית ומסמנים 'modified'
+const runner = (globalThis.__acronymsSyncRunner ??= { running: null, again: false })
+
+/**
+ * סנכרון אחד בכל פעם: קריאה בזמן ריצה מצטרפת לסבב אחד נוסף אחריה, שרואה את master העדכני.
+ * @returns {Promise<Record<string, number>>} סיכום הסבב האחרון
+ */
+export function requestSync(sync = () => syncChangeSets()) {
+  if (runner.running) {
+    runner.again = true
+    return runner.running
+  }
+  runner.running = (async () => {
+    try {
+      let summary
+      do {
+        runner.again = false
+        summary = await sync()
+      } while (runner.again)
+      return summary
+    } finally {
+      runner.running = null
+    }
+  })()
+  return runner.running
+}
+
 /**
  * ל-cron: מעדכן סלים שמוזגו/נסגרו, ובונה מחדש מעל master סלים שהוא התקדם תחתם.
  * @returns {Promise<Record<string, number>>}

@@ -9,7 +9,7 @@ import { FakeGitHub } from '../corrections/testing/fake-github.js'
 import { createRepoClient } from '../dicta/github-api.js'
 import AcronymChangeSet from '../../models/AcronymChangeSet.js'
 import { ACRONYMS_PATH, ACRONYMS_REPO, resetForkCaches } from './fork.js'
-import { AcronymsInputError, submitChangeSet, syncChangeSets } from './service.js'
+import { AcronymsInputError, requestSync, submitChangeSet, syncChangeSets } from './service.js'
 
 const DUMP = [
   'PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n',
@@ -127,4 +127,23 @@ test('an open PR whose changes reached master another way is closed, not rebuilt
   assert.equal(gh.pulls[1].state, 'closed')
   assert.match(gh.issueComments[0].body, /כבר נמצאים ב-`master`/)
   assert.deepEqual((await AcronymChangeSet.find().sort({ createdAt: 1 }).lean()).map((d) => d.status), ['merged', 'closed'])
+})
+
+test('syncs never overlap: calls during a run join one more round after it', async () => {
+  let active = 0
+  let maxActive = 0
+  let rounds = 0
+  const sync = async () => {
+    active++
+    maxActive = Math.max(maxActive, active)
+    rounds++
+    await new Promise((r) => setTimeout(r, 20))
+    active--
+    return { round: rounds }
+  }
+  const results = await Promise.all([requestSync(sync), requestSync(sync), requestSync(sync), requestSync(sync)])
+  assert.equal(maxActive, 1)
+  assert.equal(rounds, 2)
+  assert.deepEqual(results.map((r) => r.round), [2, 2, 2, 2])
+  assert.deepEqual(await requestSync(sync), { round: 3 })
 })
