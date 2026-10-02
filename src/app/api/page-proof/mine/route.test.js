@@ -23,6 +23,9 @@ vi.mock('@/lib/pageProof/pool', () => ({
   releaseLeases: writes.releaseLeases,
 }))
 vi.mock('@/lib/pageProof/recutRequests', () => ({ recutPendingOf: pending }))
+// מתג המנהל ל"שלח לזיהוי-מחדש" (runtime.js) — כאן פתוח
+const recutStatus = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/pageProof/runtime', () => ({ recutStatus }))
 vi.mock('@/lib/pageProof/claims', () => ({
   heldSequences: held,
   sequenceOfPage: seqOf,
@@ -50,6 +53,7 @@ beforeEach(() => {
   seqOf.mockResolvedValue(null)
   brief.mockResolvedValue(null)
   pending.mockResolvedValue([])
+  recutStatus.mockResolvedValue({ effective: true, settings: { recutRequests: 'on', autoMinutes: 15 }, seenAt: null })
 })
 
 const noWrites = () => {
@@ -69,7 +73,7 @@ describe('GET /api/page-proof/mine', () => {
     const res = await GET(req())
     const body = await res.json()
     expect(res.status).toBe(200)
-    expect(body).toEqual({ success: true, held: [SEQ], recutPending: [], sequence: null, unavailable: null, stats: STATS })
+    expect(body).toEqual({ success: true, held: [SEQ], recutPending: [], sequence: null, unavailable: null, stats: STATS, recutRequests: true })
     expect(held).toHaveBeenCalledWith(USER_ID, expect.any(Date))
     expect(pending).toHaveBeenCalledWith(USER_ID)
     expect(seqOf).not.toHaveBeenCalled()
@@ -115,6 +119,12 @@ describe('GET /api/page-proof/mine', () => {
     expect(seqOf).not.toHaveBeenCalled()
     expect(brief).not.toHaveBeenCalled()
     noWrites()
+  })
+
+  it('המנהל כיבה את "שלח לזיהוי-מחדש" (או "אוטומטי" בלי תוכנת-הספר) ← recutRequests: false', async () => {
+    recutStatus.mockResolvedValueOnce({ effective: false, settings: { recutRequests: 'auto', autoMinutes: 15 }, seenAt: null })
+    const body = await (await GET(req())).json()
+    expect(body.recutRequests).toBe(false)
   })
 
   it('תקלה ← 500 בלי מטמון', async () => {

@@ -16,6 +16,8 @@ vi.mock('@/app/api/auth/[...nextauth]/route', () => ({ authOptions: {} }))
 vi.mock('@/models/PageProofSubmission', () => ({ default: Sub }))
 vi.mock('@/models/PageProofPage', () => ({ default: Page }))
 vi.mock('@/models/PageProofBook', () => ({ default: Book }))
+// מתג המנהל ל"שלח לזיהוי-מחדש" (runtime.js) — כאן פתוח
+vi.mock('@/lib/pageProof/runtime', () => ({ recutStatus: vi.fn().mockResolvedValue({ effective: true, settings: { recutRequests: 'on', autoMinutes: 15 }, seenAt: null }) }))
 
 import { GET } from './route'
 

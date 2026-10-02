@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { buildView } from '@/lib/pageProof/ops'
 import { draftKeyFor, legacyDraftKey, pageDraftKey } from '@/lib/pageProof/drafts'
 import { HELP_SEEN_KEY } from '@/components/pageProof/ProofHelp'
+import { RECUT_OFF_HELP } from '@/lib/pageProof/helpTexts'
 import PageProofVolunteer from './page.jsx'
 
 // העורך עצמו נבדק בנפרד; כאן — מה שהדף מעביר לו (draftKey), ומה הדף עושה עם
@@ -372,6 +373,27 @@ describe('דף המתנדב — "שלח לזיהוי-מחדש"', { timeout: 2000
     expect(btn).toBeDisabled()
     // שאר התיקונים מחכים בטיוטה (להגשה הרגילה כשהעמוד יחזור)
     expect(JSON.parse(window.localStorage.getItem(key)).ops).toHaveLength(2)
+  })
+
+  // מתג המנהל (2026-10-02): כבוי — או "אוטומטי" כשתוכנת-הספר לא מחוברת — הכפתור אינו מופיע, וההסבר
+  // על שורה נעולה ובעזרה מדבר רק על הגשה
+  it('המנהל כיבה את השליחה — אין כפתור גם עם תיקוני-חיתוך, והעורך מקבל את נוסח-ההגשה בלבד', async () => {
+    h.ops = [TEXT_OP, CUT_OP]
+    pageData = { ...pageData, recutRequests: false }
+    render(<PageProofVolunteer />)
+    await screen.findByTestId('editor')
+    expect(screen.queryByRole('button', { name: /שלח לזיהוי-מחדש/ })).not.toBeInTheDocument()
+    expect(h.props.help).toBe(RECUT_OFF_HELP)
+  })
+
+  it('השרת מחזיר "כבוי" באמצע (recut_off) — הודעה, והכפתור יורד', async () => {
+    h.ops = [CUT_OP]
+    h.recutReply = { success: false, code: 'recut_off', error: 'שליחה לזיהוי-מחדש כבויה כרגע.' }
+    render(<PageProofVolunteer />)
+    await screen.findByTestId('editor')
+    await userEvent.click(screen.getByRole('button', { name: /שלח לזיהוי-מחדש/ }))
+    await waitFor(() => expect(h.dialog.showAlert).toHaveBeenCalledWith('שגיאה', h.recutReply.error))
+    await waitFor(() => expect(screen.queryByRole('button', { name: /שלח לזיהוי-מחדש/ })).not.toBeInTheDocument())
   })
 
   it('בלי אישור — לא נשלח דבר; שגיאה מהשרת — הודעה, והעמוד נשאר פתוח', async () => {

@@ -6,7 +6,18 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { FAQ, RECUT_LINE_TITLE, RECUT_PAGE_TITLE, RECUT_REQUEST_HINT, RECUT_SENT } from './helpTexts.js';
+import { FAQ, RECUT_LINE_TITLE, RECUT_PAGE_TITLE, RECUT_REQUEST_HINT, RECUT_SENT, RECUT_OFF_HELP, RECUT_LINE_TITLE_OFF } from './helpTexts.js';
+
+// מתג המנהל כבוי (2026-10-02): רק הדרך של ההגשה — בלי "שלח לזיהוי-מחדש" שאינו מופיע
+test('"שלח לזיהוי-מחדש" כבוי: השורה הנעולה והשאלה בעזרה מדברות רק על הגשה', () => {
+  assert.doesNotMatch(RECUT_LINE_TITLE_OFF, /שלח לזיהוי-מחדש/);
+  assert.match(RECUT_LINE_TITLE_OFF, /אחרי שתגישו את העמוד ומנהל יאשר/);
+  assert.equal(RECUT_OFF_HELP.lockedLine, RECUT_LINE_TITLE_OFF);
+  const recut = RECUT_OFF_HELP.faq.find((f) => f.key === 'recut');
+  assert.doesNotMatch(recut.a, /שלח לזיהוי-מחדש/);
+  assert.match(recut.a, /הגישו את העמוד כרגיל/);
+  assert.equal(RECUT_OFF_HELP.faq.length, FAQ.length);
+});
 
 test('שורה נעולה: שתי הדרכים — "שלח לזיהוי-מחדש" חוזר אליכם; הגשה — חוזרת להגהה, למי שיתפוס אותו', () => {
   assert.match(RECUT_LINE_TITLE, /"שלח לזיהוי-מחדש" — והעמוד יחזור אליכם עם השורות החדשות/);

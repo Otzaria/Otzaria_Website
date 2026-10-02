@@ -8,6 +8,7 @@ import { requireProofSession, editorPageShape } from '@/lib/pageProof/pool';
 import { renewLease } from '@/lib/pageProof/claims';
 import { sameRevision, storedRevision, submissionRevision } from '@/lib/pageProof/importRules';
 import { hasOcrAccess } from '@/lib/roles';
+import { recutStatus } from '@/lib/pageProof/runtime';
 import { badRequest, notFound, forbidden, serverError } from '@/lib/apiResponse';
 
 // GET: עמוד לעורך. מתנדב — רק עמוד שבטיפולו (התפיסה בתוקף; הפתיחה מחדשת אותה
@@ -42,13 +43,15 @@ export async function GET(request, { params }) {
       else if (!hasOcrAccess(session.user.role)) return forbidden('העמוד הזה אינו בטיפולכם — אפשר לתפוס אותו ברשת-העמודים של הספר');
     }
 
-    const book = await PageProofBook.findById(page.book, { title: 1, script: 1 }).lean();
+    const [book, recut] = await Promise.all([PageProofBook.findById(page.book, { title: 1, script: 1 }).lean(), recutStatus()]);
     return NextResponse.json(
       {
         success: true,
         mode,
         page: editorPageShape(page, book),
         submission: mine ? { id: String(mine._id), status: mine.status, ops: mine.ops, note: mine.note } : null,
+        // "שלח לזיהוי-מחדש" פתוח עכשיו? (מתג המנהל — runtime.recutStatus)
+        recutRequests: recut.effective,
       },
       { headers: { 'Cache-Control': 'private, no-store' } }
     );

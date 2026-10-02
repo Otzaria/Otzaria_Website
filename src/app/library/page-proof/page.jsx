@@ -18,7 +18,7 @@ import { cleanupPageDrafts, pageDraftKey, removePageDrafts } from '@/lib/pagePro
 import { cleanOps, planSubmission, recheckLineIds, submitSummary } from '@/lib/pageProof/submitPlan'
 import { bookHref, editorHref } from '@/lib/pageProof/gridState'
 import { isCutOp } from '@/lib/pageProof/recutRules'
-import { RECUT_REQUEST_HINT, RECUT_SENT } from '@/lib/pageProof/helpTexts'
+import { RECUT_OFF_HELP, RECUT_REQUEST_HINT, RECUT_SENT } from '@/lib/pageProof/helpTexts'
 
 // דף המתנדב להגהת-עמודים: העורך, לעמודים שכבר בטיפולכם. כל עמוד מוגש בנפרד
 // וממתין לאישור מנהל.
@@ -101,6 +101,8 @@ function PageProofVolunteer() {
   const [seq, setSeq] = useState(null)
   const [held, setHeld] = useState([]) // "העמודים שלי": הרצפים שבהם אתם מחזיקים עמודים
   const [recutPending, setRecutPending] = useState([]) // עמודים ששלחתם לזיהוי-מחדש ועוד לא חזרו
+  // "שלח לזיהוי-מחדש" פתוח? (מתג המנהל — runtime.recutStatus; מגיע עם "העמודים שלי" ועם כל עמוד)
+  const [recutOpen, setRecutOpen] = useState(true)
   const [heldAt, setHeldAt] = useState(null)
   const [missing, setMissing] = useState(null) // העמוד שביקשו ואינו בטיפולכם
   const [stats, setStats] = useState(null)
@@ -131,6 +133,7 @@ function PageProofVolunteer() {
         const res = await fetch(`/api/page-proof/pages/${id}`)
         const data = await res.json()
         if (!data.success) throw new Error(data.error || 'העמוד לא נטען')
+        if (typeof data.recutRequests === 'boolean') setRecutOpen(data.recutRequests)
         const draftKey = pageDraftKey(data.page)
         // עריכה: ניקוי טיוטות של גרסאות אחרות (לפני שהעורך קורא את שלו); עמוד שחזר
         // מזיהוי-מחדש — מה שתקף מהטיוטה הקודמת עובר אליו. עמוד שכבר הגשתם: הטיוטות
@@ -160,6 +163,7 @@ function PageProofVolunteer() {
       if (!data.success) throw new Error(data.error || 'הטעינה נכשלה')
       setHeld(data.held || [])
       setRecutPending(data.recutPending || [])
+      if (typeof data.recutRequests === 'boolean') setRecutOpen(data.recutRequests)
       setHeldAt(new Date())
       setStats(data.stats)
       const asked = focus ? (data.sequence?.pages || []).find((p) => p.id === focus && p.state !== 'unavailable') : null
@@ -277,6 +281,8 @@ function PageProofVolunteer() {
         body: JSON.stringify({ revision: page.revision, ops: cut }),
       })
       const data = await res.json()
+      // המנהל כיבה את השליחה בינתיים — הכפתור יורד, וההסבר אומר להגיש כרגיל
+      if (data.code === 'recut_off') setRecutOpen(false)
       if (!data.success) throw new Error(data.error || 'השליחה נכשלה')
       const pages = (seq?.pages || []).map((p) => (p.id === page.id ? { ...p, state: 'recut' } : p))
       if (seq) setSeq({ ...seq, pages })
@@ -393,10 +399,11 @@ function PageProofVolunteer() {
                   draftKey={current.draftKey}
                   readOnly={!editing}
                   initialOps={editing ? null : current.submission?.ops || []}
+                  help={recutOpen ? undefined : RECUT_OFF_HELP}
                   actions={(args) =>
                     editing ? (
                       <>
-                        {(args.ops || []).some(isCutOp) && (
+                        {recutOpen && (args.ops || []).some(isCutOp) && (
                           <button
                             onClick={() => sendRecut(args)}
                             disabled={saving}

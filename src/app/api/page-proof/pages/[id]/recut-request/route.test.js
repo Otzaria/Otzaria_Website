@@ -30,6 +30,8 @@ import { GET as mineGET } from '@/app/api/page-proof/mine/route'
 import { GET as fixesGET } from '@/app/api/admin/page-proof/books/[gid]/fixes/route'
 import { GET as adminPagesGET } from '@/app/api/admin/page-proof/books/[gid]/pages/route'
 import { PATCH as subPATCH } from '@/app/api/admin/page-proof/submissions/[id]/route'
+import { GET as settingsGET, PATCH as settingsPATCH } from '@/app/api/admin/page-proof/settings/route'
+import { POST as releasePOST } from '@/app/api/admin/page-proof/recut-requests/release/route'
 
 // מסד אמיתי — תחת עומס (כל הבדיקות במקביל) בקשות רבות לוקחות יותר מ-5 שניות
 vi.setConfig({ testTimeout: 30000 })
@@ -288,5 +290,83 @@ describe('המנהל', () => {
     expect((await patch('approve')).status).toBe(409)
     expect(await pageOf(4)).toMatchObject({ status: 'recut', activeCount: 0, approvedCount: 0 })
     expect((await PageProofSubmission.findById(submissionId).lean()).status).toBe('approved')
+  })
+})
+
+// מתג המנהל (2026-10-02): פועל / כבוי / אוטומטי — "אוטומטי" = תוכנת-הספר נראתה ב-15 הדקות האחרונות
+// (מפתח-גישה עם הרשאת import שהשתמשו בו); ו"החזר את כל הממתינים למתנדבים"
+describe('מתג המנהל לשליחת מתנדבים לזיהוי-מחדש', () => {
+  const settingsReq = (method, body, authorization) =>
+    new Request('http://localhost/api/admin/page-proof/settings', {
+      method,
+      headers: { 'content-type': 'application/json', ...(authorization ? { authorization } : {}) },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    })
+  const setMode = async (recutRequests) => {
+    as(admin)
+    const res = await settingsPATCH(settingsReq('PATCH', { recutRequests }))
+    expect(res.status).toBe(200)
+    as(vol)
+    return res.json()
+  }
+  const seen = (minutesAgo) => PageProofToken.updateMany({}, { $set: { lastUsedAt: new Date(Date.now() - minutesAgo * 60 * 1000) } })
+
+  it('ברירת-המחדל — פועל; כבוי ← 409 recut_off בלי לגעת במסד, ו"העמודים שלי" אומר שהכפתור סגור', async () => {
+    expect((await mine()).recutRequests).toBe(true)
+    const body = await setMode('off')
+    expect(body).toMatchObject({ success: true, settings: { recutRequests: 'off', autoMinutes: 15 }, effective: { recutRequests: false } })
+    const res = await request(1)
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ success: false, error: RECUT_MSG.off, code: 'recut_off' })
+    expect(await pageOf(1)).toMatchObject({ status: 'open' })
+    expect(await PageProofSubmission.countDocuments()).toBe(0)
+    expect((await mine()).recutRequests).toBe(false)
+  })
+
+  it('אוטומטי: תוכנת-הספר לא נראתה 20 דקות ← 409; נראתה לפני דקה ← הבקשה עוברת', async () => {
+    await setMode('auto')
+    await seen(20)
+    expect((await request(1)).status).toBe(409)
+    await seen(1)
+    expect((await mine()).recutRequests).toBe(true)
+    expect((await request(1)).status).toBe(200)
+  })
+
+  it('GET/PATCH: מנהל OCR, או מפתח-גישה (קריאה ב-read); מתנדב ← 403; ערך לא מוכר ← 400', async () => {
+    await request(1)
+    await seen(30)
+    const res = await settingsGET(settingsReq('GET', null, `Bearer ${secret}`))
+    expect(res.status).toBe(200)
+    expect(res.headers.get('Cache-Control')).toBe('private, no-store')
+    const body = await res.json()
+    expect(body).toMatchObject({ success: true, settings: { recutRequests: 'on' }, effective: { recutRequests: true }, pendingRecut: { waiting: 1, picked: 0 } })
+    // הקריאה עצמה במפתח היא "תוכנת-הספר נראתה" — עכשיו (tokenAuth מעדכן lastUsedAt)
+    expect(close(body.bookSoftwareSeenAt, Date.now(), 60 * 1000)).toBe(true)
+    expect((await settingsPATCH(settingsReq('PATCH', { recutRequests: 'off' }))).status).toBe(403)
+    as(admin)
+    expect((await settingsPATCH(settingsReq('PATCH', { recutRequests: 'maybe' }))).status).toBe(400)
+    const viaKey = await settingsPATCH(settingsReq('PATCH', { recutRequests: 'auto', autoMinutes: 30 }, `Bearer ${secret}`))
+    expect(await viaKey.json()).toMatchObject({ settings: { recutRequests: 'auto', autoMinutes: 30 } })
+  })
+
+  it('"החזר את כל הממתינים למתנדבים": מה שעוד לא נמשך — חוזר למבקש (תפיסה מחודשת); מה שכבר בתוכנה — נשאר', async () => {
+    const { submissionId: s1 } = await (await request(1)).json()
+    const { submissionId: s2 } = await (await request(2)).json()
+    await PageProofSubmission.updateOne({ _id: s2 }, { $set: { exportedAt: new Date() } })
+    await setMode('off')
+    expect(await pageOf(1), 'כיבוי אינו מבטל בקשות שממתינות').toMatchObject({ status: 'recut' })
+    as(admin)
+    const res = await releasePOST(new Request('http://localhost/x', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ success: true, released: 1, skipped: 0, picked: 1 })
+    const page = await pageOf(1)
+    expect(page).toMatchObject({ status: 'open' })
+    expect(String(page.leasedBy)).toBe(String(vol._id))
+    expect(close(page.leasedUntil, Date.now() + 48 * HOUR, 60 * 1000)).toBe(true)
+    expect(await PageProofSubmission.findById(s1).lean()).toMatchObject({ status: 'rejected', reviewNote: RECUT_CANCEL_NOTE })
+    expect(await pageOf(2)).toMatchObject({ status: 'recut' })
+    expect((await PageProofSubmission.findById(s2).lean()).status).toBe('approved')
+    as(vol)
+    expect((await releasePOST(new Request('http://localhost/x', { method: 'POST', body: '{}' }))).status).toBe(403)
   })
 })

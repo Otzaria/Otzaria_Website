@@ -15,6 +15,12 @@ import {
   recutEligibleFilter,
   claimBack,
   requesterOf,
+  RECUT_MODES,
+  AUTO_MINUTES,
+  normalizeProofRuntime,
+  proofRuntimePatch,
+  recutEffective,
+  seenAgoLabel,
 } from './recutRules.js';
 
 const line = (id, extra = {}) => ({ id, bbox: [100, id * 50, 900, id * 50 + 40], text: `שורה ${id}`, stream: 'main', ...extra });
@@ -97,4 +103,44 @@ test('requesterOf: הבקשה הממתינה האחרונה — לא בוטלה 
   assert.equal(requesterOf([r('a', 1, { recutRequest: false })]), null);
   assert.equal(requesterOf([]), null);
   assert.equal(requesterOf(null), null);
+});
+
+// מתג המנהל (2026-10-02): פועל / כבוי / אוטומטי — "אוטומטי" = תוכנת-הספר נראתה ב-autoMinutes האחרונות
+test('normalizeProofRuntime: ברירת-המחדל "פועל" ו-15 דקות; ערך פגום מתוקן', () => {
+  assert.deepEqual(normalizeProofRuntime(), { recutRequests: 'on', autoMinutes: AUTO_MINUTES });
+  assert.deepEqual(normalizeProofRuntime({ recutRequests: 'auto', autoMinutes: 30 }), { recutRequests: 'auto', autoMinutes: 30 });
+  assert.deepEqual(normalizeProofRuntime({ recutRequests: 'maybe', autoMinutes: 0 }), { recutRequests: 'on', autoMinutes: 15 });
+  assert.deepEqual(normalizeProofRuntime(null), { recutRequests: 'on', autoMinutes: 15 });
+  assert.deepEqual(RECUT_MODES, ['on', 'off', 'auto']);
+});
+
+test('proofRuntimePatch: רק מפתחות מוכרים וערכים תקינים', () => {
+  assert.deepEqual(proofRuntimePatch({ recutRequests: 'off', extra: 1 }), { patch: { recutRequests: 'off' } });
+  assert.deepEqual(proofRuntimePatch({ autoMinutes: 20 }), { patch: { autoMinutes: 20 } });
+  assert.match(proofRuntimePatch({ recutRequests: 'yes' }).error, /on, off או auto/);
+  assert.match(proofRuntimePatch({ autoMinutes: 9999 }).error, /בין 1 ל-240/);
+  assert.match(proofRuntimePatch({}).error, /אין מה לעדכן/);
+  assert.match(proofRuntimePatch(null).error, /אין מה לעדכן/);
+});
+
+test('recutEffective: פועל — תמיד; כבוי — אף פעם; אוטומטי — רק כשתוכנת-הספר נראתה לאחרונה', () => {
+  const ago = (min) => new Date(NOW.getTime() - min * 60 * 1000);
+  assert.equal(recutEffective({ recutRequests: 'on' }, null, NOW), true);
+  assert.equal(recutEffective({ recutRequests: 'off' }, ago(0), NOW), false);
+  assert.equal(recutEffective({ recutRequests: 'auto' }, ago(14), NOW), true);
+  assert.equal(recutEffective({ recutRequests: 'auto' }, ago(16), NOW), false);
+  assert.equal(recutEffective({ recutRequests: 'auto', autoMinutes: 30 }, ago(16), NOW), true);
+  assert.equal(recutEffective({ recutRequests: 'auto' }, null, NOW), false);
+  assert.match(RECUT_MSG.off, /הגישו את העמוד כרגיל עם תיקוני-החיתוך/);
+});
+
+test('seenAgoLabel: עכשיו / דקות / שעות / ימים; בלי — "עוד לא נראתה"', () => {
+  const ago = (ms) => new Date(NOW.getTime() - ms);
+  assert.equal(seenAgoLabel(ago(10 * 1000), NOW), 'עכשיו');
+  assert.equal(seenAgoLabel(ago(60 * 1000), NOW), 'לפני דקה');
+  assert.equal(seenAgoLabel(ago(7 * 60 * 1000), NOW), 'לפני 7 דקות');
+  assert.equal(seenAgoLabel(ago(HOUR), NOW), 'לפני שעה');
+  assert.equal(seenAgoLabel(ago(5 * HOUR), NOW), 'לפני 5 שעות');
+  assert.equal(seenAgoLabel(ago(50 * HOUR), NOW), 'לפני 2 ימים');
+  assert.match(seenAgoLabel(null, NOW), /עוד לא נראתה/);
 });

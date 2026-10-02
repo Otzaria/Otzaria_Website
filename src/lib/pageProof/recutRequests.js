@@ -4,7 +4,7 @@ import mongoose from 'mongoose';
 import PageProofBook from '../../models/PageProofBook.js';
 import PageProofPage from '../../models/PageProofPage.js';
 import PageProofSubmission from '../../models/PageProofSubmission.js';
-import { revisionFilter, sameRevision, storedRevision } from './importRules.js';
+import { revisionFilter, sameRevision, statusAfterReleaseRecut, storedRevision } from './importRules.js';
 import {
   MAX_PENDING_RECUT,
   RECUT_CANCEL_NOTE,
@@ -167,6 +167,49 @@ export async function recutPendingOf(userId) {
     requestedAt: r.createdAt,
     picked: !!r.exportedAt,
   }));
+}
+
+// כמה בקשות-מתנדבים ממתינות (בכל האתר, או בספר): {waiting, picked} — picked = תוכנת-הספר כבר משכה
+// אותן (exportedAt) והן בטיפול שם; waiting = עוד לא
+export async function pendingRecutTotals(gid = null) {
+  const q = { ...PENDING, ...(gid ? { gid: String(gid) } : {}) };
+  const [all, picked] = await Promise.all([
+    PageProofSubmission.countDocuments(q),
+    PageProofSubmission.countDocuments({ ...q, exportedAt: { $ne: null } }),
+  ]);
+  return { waiting: all - picked, picked };
+}
+
+// "החזר את כל הממתינים למתנדבים" (מתג המנהל, 2026-10-02): כל בקשה שעוד לא נמשכה לתוכנת-הספר
+// מתבטלת, והעמוד חוזר אל המתנדב שביקש — בדיוק כמו "שחרור מהמתנה" של עמוד בודד (release_recut):
+// התפיסה שלו מתחדשת, והטיוטה שלו (תיקוני-החיתוך ושאר התיקונים) מחכה לו בדפדפן. בקשה שכבר נמשכה —
+// בטיפול בתוכנה ותחזור בגרסה חדשה; לא נוגעים בה (נספרת ב-picked). gid (רשות) — רק בספר הזה.
+// reviewer: {reviewedBy, reviewedByName, reviewedAt}. ← {released, skipped, picked}
+export async function releaseAllRecutRequests({ gid = null, reviewer = {}, now = new Date() } = {}) {
+  const q = { ...PENDING, exportedAt: null, ...(gid ? { gid: String(gid) } : {}) };
+  const reqs = await PageProofSubmission.find(q, { page: 1, revision: 1 }).lean();
+  const pages = new Map();
+  for (const r of reqs) pages.set(String(r.page), r.revision ?? 1);
+  let released = 0;
+  let skipped = 0;
+  for (const [pid, rev] of pages) {
+    const page = await PageProofPage.findById(oid(pid), { status: 1, revision: 1, activeCount: 1, required: 1 }).lean();
+    if (!page || page.status !== 'recut' || !sameRevision(storedRevision(page), rev)) {
+      skipped++;
+      continue;
+    }
+    const next = statusAfterReleaseRecut(page);
+    const back = next === 'open' ? await recutReturn(pid, rev, now) : {};
+    const r = await PageProofPage.updateOne({ _id: oid(pid), status: 'recut', ...revisionFilter(rev) }, { $set: { status: next, ...back } });
+    if (!r.matchedCount) {
+      skipped++;
+      continue;
+    }
+    await cancelRecutRequests(pid, rev, reviewer);
+    released++;
+  }
+  const { picked } = await pendingRecutTotals(gid);
+  return { released, skipped, picked };
 }
 
 // לרשת-העמודים של המנהל: הבקשות הממתינות בספר ← Map(pageId → {id, by, at, picked, revision})

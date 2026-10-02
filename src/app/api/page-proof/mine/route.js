@@ -3,13 +3,15 @@ import connectDB from '@/lib/db';
 import { requireProofSession, volunteerStats } from '@/lib/pageProof/pool';
 import { heldSequences, pageBrief, sequenceOfPage } from '@/lib/pageProof/claims';
 import { recutPendingOf } from '@/lib/pageProof/recutRequests';
+import { recutStatus } from '@/lib/pageProof/runtime';
 import { json, noStore } from '@/lib/pageProof/respond';
 import { serverError } from '@/lib/apiResponse';
 
 // GET: "העמודים שלי" — מה שדף המתנדב (/library/page-proof) טוען בכניסה. קריאה
 // בלבד: שום עמוד אינו נתפס, מתחדש או משתחרר כאן (תפיסה — רק בלחיצה מפורשת
 // ברשת-העמודים של הספר; אין חלוקה אוטומטית).
-// ← {success, held, recutPending, sequence, unavailable, stats}
+// ← {success, held, recutPending, sequence, unavailable, stats, recutRequests}
+//   recutRequests — האם "שלח לזיהוי-מחדש" פתוח עכשיו (מתג המנהל — runtime.recutStatus)
 //   held        — הרצפים שבהם המתנדב מחזיק עכשיו עמודים שלא הגיש (claims.heldSequences)
 //   recutPending — העמודים שהוא שלח לזיהוי-מחדש ועוד לא חזרו ({id, gid, title, page,
 //                 requestedAt, picked} — recutRequests.recutPendingOf)
@@ -24,15 +26,16 @@ export async function GET(request) {
     const pageId = new URL(request.url).searchParams.get('page');
     const asked = pageId && mongoose.Types.ObjectId.isValid(pageId) ? pageId : null;
     const now = new Date();
-    const [held, recutPending, sequence, stats] = await Promise.all([
+    const [held, recutPending, sequence, stats, recut] = await Promise.all([
       heldSequences(userId, now),
       recutPendingOf(userId),
       asked ? sequenceOfPage(asked, userId, now) : null,
       volunteerStats(userId),
+      recutStatus({ now }),
     ]);
     let unavailable = null;
     if (pageId !== null && !sequence) unavailable = (asked && (await pageBrief(asked, userId, now))) || { id: asked };
-    return json({ success: true, held, recutPending, sequence: sequence || null, unavailable, stats });
+    return json({ success: true, held, recutPending, sequence: sequence || null, unavailable, stats, recutRequests: recut.effective });
   } catch (e) {
     console.error('page-proof mine GET', e);
     return noStore(serverError());

@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import connectDB from '@/lib/db';
 import { requireProofSession, readJsonBody } from '@/lib/pageProof/pool';
 import { requestRecut } from '@/lib/pageProof/recutRequests';
+import { recutStatus } from '@/lib/pageProof/runtime';
 import { RECUT_MSG, RECUT_RATE } from '@/lib/pageProof/recutRules';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { fromResult, json, noStore } from '@/lib/pageProof/respond';
@@ -17,7 +18,9 @@ import { badRequest, serverError } from '@/lib/apiResponse';
 // הבקשה ממתינה באתר עד שתוכנת-הספר מושכת אותה (fixes?pages=recut&mark=1) ומחזירה גרסה חדשה —
 // ואז העמוד חוזר אליו. מנהל מבטל ב"שחרור מהמתנה" (release_recut).
 // ← {success, submissionId, opCount, pending} · 400 (אין תיקוני-חיתוך / פעולה לא תקינה) ·
-//   409 (העמוד אינו בטיפולו / הוחלף / כבר ממתין / תקרה) · 413 · 429. הכול private, no-store.
+//   409 (העמוד אינו בטיפולו / הוחלף / כבר ממתין / תקרה; או code 'recut_off' — המנהל כיבה את
+//   השליחה, או "אוטומטי" ותוכנת-הספר לא מחוברת: recutRules.recutEffective) · 413 · 429.
+//   הכול private, no-store.
 export async function POST(request, { params }) {
   const { session, userId, error } = await requireProofSession();
   if (error) return noStore(error);
@@ -31,6 +34,8 @@ export async function POST(request, { params }) {
       return json({ success: false, error: RECUT_MSG.rate }, 429);
     }
     await connectDB();
+    // מתג המנהל (runtime.js): כבוי — או "אוטומטי" כשתוכנת-הספר לא נראתה לאחרונה — אין בקשות חדשות
+    if (!(await recutStatus()).effective) return json({ success: false, error: RECUT_MSG.off, code: 'recut_off' }, 409);
     const revision = Number.isInteger(body.revision) ? body.revision : null;
     return fromResult(await requestRecut(id, userId, { revision, ops: body.ops, userName: session.user?.name || '' }));
   } catch (e) {
