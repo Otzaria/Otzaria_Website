@@ -713,6 +713,64 @@ describe('ProofEditor — נקודות-הרחבה: משבצות', { timeout: 300
     setup({ scanOverlay: <circle data-testid="own-mark" cx="10" cy="10" r="5" /> })
     expect(screen.getByTestId('own-mark').closest('[data-layer="extra"]')).not.toBeNull()
   })
+
+  it('paraStyleOptions: הפריטים בתפריט "סגנון פסקה" — בחירה מחילה אותם; בלעדיו — הרשימה של האתר', async () => {
+    const paraStyleOptions = [{ key: 'body', he: 'טקסט רגיל' }, { separator: true }, { key: 'note', he: 'הערה' }]
+    const { editor } = setup({ paraStyleOptions })
+    await caretAt(editor(), { lineId: 1, offset: 2 })
+    fireEvent.click(screen.getByRole('button', { name: 'סגנון הפסקה' }))
+    const items = await screen.findAllByRole('menuitemradio')
+    expect(items).toHaveLength(2)
+    expect(items[0]).toHaveAccessibleName('טקסט רגיל')
+    expect(items[1]).toHaveAccessibleName('הערה')
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'הערה' }))
+    expect(opsNow()).toEqual([{ kind: 'para', ids: [1, 2], value: 'note' }])
+  })
+
+  it('editorRef.push / act.push: פעולות מהדף העוטף נכנסות לרשימת-הפעולות (צעד-ביטול אחד); פעולה פסולה נדחית', async () => {
+    const ref = { current: null }
+    const extraTabs = [
+      {
+        id: 'own',
+        label: 'שלי',
+        render: (ctx) => (
+          <button type="button" onClick={() => ctx.act.push({ kind: 'line_ok', page: P, ids: [3] })}>
+            אשר את שורה 3
+          </button>
+        ),
+      },
+    ]
+    setup({ editorRef: ref, extraTabs })
+    let ok
+    act(() => {
+      ok = ref.current.push({ kind: 'line_ok', page: P, ids: [1] }, { kind: 'line_ok', page: P, ids: [2] })
+    })
+    expect(ok).toBe(true)
+    expect(opsNow()).toEqual([
+      { kind: 'line_ok', ids: [1], value: undefined },
+      { kind: 'line_ok', ids: [2], value: undefined },
+    ])
+    act(() => {
+      ok = ref.current.push({ kind: 'line_ok', page: P, ids: [999] })
+    })
+    expect(ok).toBe(false)
+    expect(opsNow()).toHaveLength(2)
+    // snapshot: מה שהעורך מציג — עם הפעולות שעוד לא נשמרו
+    const snap = ref.current.snapshot()
+    expect(snap.tabKey).toBe('main')
+    expect(snap.view.lines.find((l) => l.id === 1)._ok).toBe(true)
+    // openDetails: לוח הפרטים נפתח על הלשונית שביקשו — גם של extraTabs
+    act(() => ref.current.openDetails('own'))
+    const drawer = screen.getByRole('complementary', { name: 'פרטים' })
+    expect(within(drawer).getByRole('tab', { name: 'שלי' })).toHaveAttribute('aria-selected', 'true')
+    fireEvent.click(within(drawer).getByRole('button', { name: 'אשר את שורה 3' }))
+    expect(opsNow().map((o) => o.ids[0])).toEqual([1, 2, 3])
+    // Ctrl+Z מבטל את הצעד האחרון בלבד (שורה 3), ואחריו — את שתי השורות שנדחפו יחד
+    fireEvent.keyDown(document.body, { key: 'z', code: 'KeyZ', ctrlKey: true })
+    expect(opsNow().map((o) => o.ids[0])).toEqual([1, 2])
+    fireEvent.keyDown(document.body, { key: 'z', code: 'KeyZ', ctrlKey: true })
+    expect(opsNow()).toEqual([])
+  })
 })
 
 // דף עוטף ששומר בשרת כל צעד (תוכנת-הספר): editorRef (flushable/rebase/goTo), onOpsChange, אישור שכבר נשמר

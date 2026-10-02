@@ -17,7 +17,9 @@ import ToolbarMenu from './ToolbarMenu'
 // בטקסט תישאר כשלוחצים עליהם.
 // לדף עוטף (תוכנת-הספר), רשות: charStyleButtons — כפתורי עיצוב-התווים (ברירת-המחדל
 // CHAR_STYLE_BUTTONS; כל key חייב להיות ב-vocab.CHAR_STYLES); moreMenu = {items, onSelect,
-// label?, title?} — תפריט "⋯" לפני "עזרה" (פריטים כמו ב-ToolbarMenu). בלעדיהם — כמו באתר.
+// label?, title?} — תפריט "⋯" לפני "עזרה" (פריטים כמו ב-ToolbarMenu); paraStyleOptions — הפריטים
+// בתפריט "סגנון פסקה" (ברירת-המחדל PARA_STYLE_OPTIONS; פריט {separator:true} = קו; כל key חייב
+// להיות ב-vocab.PARA_STYLES — למשל סגנונות שהוגדרו לספר ונרשמו ב-registerVocab). בלעדיהם — כמו באתר.
 
 // סגנונות-הפסקה שבסרגל: כותרות (ל-<h2>–<h4> באוצריא), ציטוט (<blockquote>),
 // דיבור-המתחיל (מודגש ומקושר למקור), ועוד ארבעה סוגי-פסקה שתוכנת-הספר מכירה
@@ -220,18 +222,27 @@ export default function ProofToolbar({
   className = 'sticky top-[calc(var(--spacing)*16_+_1px)] z-30',
   charStyleButtons = CHAR_STYLE_BUTTONS,
   moreMenu = null,
+  paraStyleOptions = PARA_STYLE_OPTIONS,
 }) {
   const active = charStyles instanceof Set ? charStyles : new Set(Array.isArray(charStyles) ? charStyles : [])
   const edit = (f) => !readOnly && isFn(f)
-  const cur = PARA_STYLE_OPTIONS.find((o) => o.key === (paraStyle || null))
+  const cur = paraStyleOptions.find((o) => !o.separator && o.key === (paraStyle || null))
   // סגנון שאינו בתפריט (למשל "הערה" מהזיהוי) — מוצג בשמו ולא כ"ללא סגנון"
   const curHe = cur?.he || (paraStyle && PARA_STYLES[paraStyle]?.he) || null
   const size = clampFontSize(fontSize)
   const fonts = PROOF_FONTS.some((f) => f.value === fontFamily) || !fontFamily ? PROOF_FONTS : [...PROOF_FONTS, { value: fontFamily, he: 'אחר' }]
 
+  // קו בין קבוצות — לא בראש התפריט ולא שניים ברצף (כשהדף העוטף מעביר רשימה משלו)
   const paraItems = []
-  for (const o of PARA_STYLE_OPTIONS) {
-    if (PARA_GROUP_START.has(o.key)) paraItems.push({ separator: true })
+  const sep = () => {
+    if (paraItems.length && !paraItems[paraItems.length - 1].separator) paraItems.push({ separator: true })
+  }
+  for (const o of paraStyleOptions) {
+    if (o.separator) {
+      sep()
+      continue
+    }
+    if (PARA_GROUP_START.has(o.key)) sep()
     paraItems.push({ key: o.key, checked: o.key === cur?.key, title: o.hint, label: paraPreview(o) })
   }
   // ובסוף התפריט — הפעולות על הפסקה, בשם מלא (בסרגל הן אייקונים בלבד)

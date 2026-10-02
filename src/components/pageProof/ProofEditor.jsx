@@ -80,12 +80,16 @@ import { caretTop, readDomSelection } from './flowDom'
 //   onSelectionChange(sel) — הבחירה השתנתה: {from:'text', anchor, focus, lineIds} מהטקסט,
 //     או {from:'scan', lineIds, fid} מהסריקה (שורות נבחרות במצב "שורות", המסגרת הנבחרת).
 //   charStyleButtons — כפתורי עיצוב-התווים בסרגל (ברירת-המחדל: ProofToolbar.CHAR_STYLE_BUTTONS).
+//   paraStyleOptions — הפריטים בתפריט "סגנון פסקה" (ברירת-המחדל: ProofToolbar.PARA_STYLE_OPTIONS).
 //   moreMenu — {items, onSelect, label?, title?}: תפריט "⋯" בסרגל (פריטים כמו ב-ToolbarMenu).
 //   frameActions(frame) — ReactNode נוסף בחלונית של מסגרת נבחרת.
 //   scanOverlay ו-frameActions עוברים ללוח-הסריקה הממוזכר — בזהות קבועה (useMemo/useCallback).
 //   ולדף עוטף ששומר בשרת כל צעד (useProofEditor — flushable/rebase):
-//   editorRef — ref שמקבל {flushable(opts), rebase(doc, opts), goTo(lineId, word?), say(text)}; rebase של
-//     העורך מעביר גם את הסמן (והבחירה) דרך מיפוי-המזהים ודרך כיווץ-הרווחים של השרת.
+//   editorRef — ref שמקבל {flushable(opts), rebase(doc, opts), goTo(lineId, word?), say(text), push(...ops),
+//     openDetails(tab?), snapshot()}; rebase של העורך מעביר גם את הסמן (והבחירה) דרך מיפוי-המזהים ודרך
+//     כיווץ-הרווחים של השרת. push — פעולות-חוזה מהדף העוטף אל רשימת-הפעולות של העורך, כמו לחיצה בסרגל (נבדקות,
+//     צעד-ביטול אחד; false = נדחו). openDetails — פתיחת לוח הפרטים (על הלשונית, אם ניתנה — גם של extraTabs).
+//     snapshot — {view, locked, tabKey}: מה שהעורך מציג עכשיו (קריאה בלבד). גם בלוח הפרטים: act.push.
 //   onOpsChange(allOps) — רשימת-הפעולות השתנתה (הוספה, ביטול, rebase): אחרי הרינדור.
 //   preOkFromStatus — שורות ok/fixed בעמוד מאושרות תמיד (useProofEditor).
 //   onUnapprovePre({key, lineIds}) — ביטול אישור של פסקה שאושרה לפני העריכה הזו (אישור שכבר נשמר): בלעדיו —
@@ -233,6 +237,7 @@ export default function ProofEditor({
   textView = null,
   onSelectionChange = null,
   charStyleButtons = null,
+  paraStyleOptions = null,
   moreMenu = null,
   frameActions = null,
   editorRef = null,
@@ -643,7 +648,7 @@ export default function ProofEditor({
   // ---- ה-callbacks היציבים (לרכיבים ממוזכרים) — תמיד על המצב העדכני ----
   const live = useRef(null)
   useLayoutEffect(() => {
-    live.current = { approve, unapprove, goTo, charStyle, joinPara, undo, redo, link, cancelLink, approveAtCaret, goSuspicious, openSuggest, linkPending, readOnly, P, loadOtherPage, onExtraKey, onSelectionChange, ed, rebaseKeepCaret, onOpsChange }
+    live.current = { approve, unapprove, goTo, charStyle, joinPara, undo, redo, link, cancelLink, approveAtCaret, goSuspicious, openSuggest, linkPending, readOnly, P, loadOtherPage, onExtraKey, onSelectionChange, ed, rebaseKeepCaret, onOpsChange, push, view, locked, tabKey }
   })
   useImperativeHandle(
     editorRef,
@@ -652,6 +657,12 @@ export default function ProofEditor({
       rebase: (doc, o) => live.current.rebaseKeepCaret(doc, o),
       goTo: (lineId, word = null) => live.current.goTo(lineId, word, { focus: true }),
       say: (text) => say(text),
+      push: (...args) => live.current.push(...args),
+      openDetails: (tab) => {
+        if (typeof tab === 'string' && tab) setDetailsTab(tab)
+        setDetailsOpen(true)
+      },
+      snapshot: () => ({ view: live.current.view, locked: live.current.locked, tabKey: live.current.tabKey }),
     }),
     [say]
   )
@@ -831,6 +842,8 @@ export default function ProofEditor({
     cutOk: () => push({ kind: 'cut_ok', page: P, value: true }),
     toLinesMode: () => setScanMode('lines'),
     removeOp: (i) => ed.removeAt(i),
+    // לשונית של דף עוטף (extraTabs): פעולות-חוזה אל רשימת-הפעולות, כמו לחיצה בסרגל
+    push: (...args) => push(...args),
   }
 
   // ---- הסרגל ----
@@ -942,6 +955,7 @@ export default function ProofEditor({
         readOnly={readOnly}
         className={toolbarClassName}
         charStyleButtons={charStyleButtons ?? undefined}
+        paraStyleOptions={paraStyleOptions ?? undefined}
         moreMenu={moreMenu}
       />
 

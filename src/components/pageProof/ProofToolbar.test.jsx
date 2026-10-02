@@ -127,6 +127,31 @@ describe('ProofToolbar — סרגל-הכלים', () => {
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
+  it('paraStyleOptions (דף עוטף): הרשימה שלו בתפריט — קווים רק בין קבוצות, והנוכחי מסומן', async () => {
+    const paraStyleOptions = [
+      { separator: true },
+      { key: 'body', he: 'טקסט רגיל' },
+      { key: 'h1', he: 'כותרת ראשית' },
+      { separator: true },
+      { separator: true },
+      { key: 'note', he: 'הערה', hint: 'פסקת הערה' },
+    ]
+    const p = setup({ paraStyle: 'note', paraStyleOptions })
+    const trigger = screen.getByRole('button', { name: 'סגנון הפסקה' })
+    expect(trigger).toHaveTextContent('הערה')
+    await userEvent.click(trigger)
+    const menu = screen.getByRole('menu')
+    const items = within(menu).getAllByRole('menuitemradio')
+    const names = ['טקסט רגיל', 'כותרת ראשית', 'הערה']
+    expect(items).toHaveLength(names.length)
+    names.forEach((n, k) => expect(items[k]).toHaveAccessibleName(n))
+    // body · (קו לפני h1) h1 · (קו אחד) note · (קו) הפעולות
+    expect(within(menu).getAllByRole('separator')).toHaveLength(3)
+    expect(within(menu).getByRole('menuitemradio', { name: 'הערה' })).toHaveAttribute('aria-checked', 'true')
+    await userEvent.click(within(menu).getByRole('menuitemradio', { name: 'כותרת ראשית' }))
+    expect(p.onParaStyle).toHaveBeenCalledWith('h1')
+  })
+
   it('בסוף תפריט סגנון-הפסקה: "פסקה חדשה" ו"חיבור לפסקה הקודמת" — פעולות (לא בחירה), בשם מלא', async () => {
     const p = setup({ paraStyle: 'body' })
     await userEvent.click(screen.getByRole('button', { name: 'סגנון הפסקה' }))
