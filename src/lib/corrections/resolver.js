@@ -40,15 +40,54 @@ export function isAllowedRepoPath(path) {
   return roots.some((r) => path.startsWith(`${r}/`) && path.length > r.length + 1);
 }
 
-/** מועמדי נתיב Git מהרמזים. לעולם אינו מאמת קיום — רק מחשב. */
-export function candidatePaths({ sourceFolder, libraryRelativePath }) {
-  if (typeof libraryRelativePath !== 'string' || !libraryRelativePath.startsWith(LIB_PREFIX)) return [];
+/** שורשי הספרים בריפו ומקטעי הנתיב היחסי מהרמזים, או null כשהרמזים לא תקינים. */
+function hintedLocation({ sourceFolder, libraryRelativePath }) {
+  if (typeof libraryRelativePath !== 'string' || !libraryRelativePath.startsWith(LIB_PREFIX)) return null;
   const rest = libraryRelativePath.slice(LIB_PREFIX.length);
   const segs = safeSegments(rest);
-  if (!segs || !rest.toLowerCase().endsWith('.txt')) return [];
+  if (!segs || !rest.toLowerCase().endsWith('.txt')) return null;
   const roots = rootsForFolder(sourceFolder);
-  if (!roots) return [];
-  return roots.map((r) => `${r}/${rest}`).filter(isAllowedRepoPath);
+  return roots ? { roots, rest, segs } : null;
+}
+
+/** מועמדי נתיב Git מהרמזים. לעולם אינו מאמת קיום — רק מחשב. */
+export function candidatePaths(hints) {
+  const loc = hintedLocation(hints);
+  if (!loc) return [];
+  return loc.roots.map((r) => `${r}/${loc.rest}`).filter(isAllowedRepoPath);
+}
+
+// מחולל ה-DB (SeforimLibrary, Generator.kt: normalizeHebrewLabel/normalizeCategorySegments) משנה את
+// שמות התיקיות והספרים: מירכאות הופכות לגרשיים, "שות"/"תנך" מקבלים גרשיים, "תלמוד ירושלים" הופך
+// ל"תלמוד ירושלמי". הנתיב שהאפליקציה שולחת הוא של ה-DB, ולכן בריפו התיקייה "שות" ולא "שו״ת".
+const SEGMENT_ALIASES = new Map([['תלמוד ירושלים', 'תלמוד ירושלמי']]);
+
+/** מפתח השוואה לשם תיקייה/קובץ: בלי מירכאות, גרשיים וגרש, ורווחים מאוחדים. */
+export function comparableSegment(name) {
+  const s = name.normalize('NFC').replace(/["״'׳`“”‘’]/g, '').replace(/\s+/g, ' ').trim();
+  return SEGMENT_ALIASES.get(s) ?? s;
+}
+
+/**
+ * הנתיב בריפו לנתיב ספרייה שאויית אחרת (ראו comparableSegment). בכל רמה שם זהה קודם, ואחרת שם
+ * יחיד שזהה אחרי נרמול; יותר מאחד או אף אחד = null, כדי שספק יישאר ידני.
+ */
+export async function findNormalizedPath(gitSource, root, segs, commitSha) {
+  let dir = root;
+  for (const [i, seg] of segs.entries()) {
+    const entries = await gitSource.listDir(dir, commitSha);
+    if (!entries) return null;
+    const pool = entries.filter((e) => e.type === (i === segs.length - 1 ? 'file' : 'dir'));
+    let hit = pool.find((e) => e.name === seg);
+    if (!hit) {
+      const key = comparableSegment(seg);
+      const same = pool.filter((e) => comparableSegment(e.name) === key);
+      if (same.length !== 1) return null;
+      hit = same[0];
+    }
+    dir = `${dir}/${hit.name}`;
+  }
+  return isAllowedRepoPath(dir) ? dir : null;
 }
 
 const normalizeLoose = (s) => s.normalize('NFC').replace(/\s+/g, ' ').trim();
@@ -121,11 +160,12 @@ export async function resolveSource({ report, revision, gitSource, source, overr
   if (!revision || typeof revision.originalLine !== 'string') return { ...base, status: 'no_proposal', reason: 'free_text' };
 
   let paths;
+  const hints = { sourceFolder: folder, libraryRelativePath: report.sourceHint?.libraryRelativePath || report.filePath };
   if (override) {
     if (!isAllowedRepoPath(override.path)) return { ...base, status: 'invalid_path', reason: 'path_not_allowed' };
     paths = [override.path];
   } else {
-    paths = candidatePaths({ sourceFolder: folder, libraryRelativePath: report.sourceHint?.libraryRelativePath || report.filePath });
+    paths = candidatePaths(hints);
     if (!paths.length) return { ...base, status: 'not_found', reason: 'no_candidate_path' };
   }
 
@@ -134,6 +174,17 @@ export async function resolveSource({ report, revision, gitSource, source, overr
   for (const p of paths) {
     const f = await gitSource.getFile(p, head.commitSha);
     if (f) found.push({ path: p, ...f });
+  }
+  // הנתיב כלשונו לא קיים: מחפשים אותו לפי שמות התיקיות בפועל (האיות של ה-DB שונה מזה של הריפו)
+  let pathMatch = 'exact';
+  if (!found.length && !override && typeof gitSource.listDir === 'function') {
+    const loc = hintedLocation(hints);
+    for (const root of loc.roots) {
+      const p = await findNormalizedPath(gitSource, root, loc.segs, head.commitSha);
+      const f = p && (await gitSource.getFile(p, head.commitSha));
+      if (f) found.push({ path: p, ...f });
+    }
+    if (found.length) pathMatch = 'normalized';
   }
   const withHead = { ...base, commitSha: head.commitSha };
   if (!found.length) return { ...withHead, status: 'not_found', reason: 'file_missing_in_repo', candidates: paths.map((p) => ({ path: p })) };
@@ -159,6 +210,7 @@ export async function resolveSource({ report, revision, gitSource, source, overr
     match: m.match,
     candidates: (m.candidates || []).map((c) => ({ path: file.path, ...c })),
     bomAdjusted: m.originalLine !== undefined && m.originalLine !== revision.originalLine,
+    pathMatch,
     resolvedBy: override ? 'volunteer' : 'auto',
     context: USABLE_STATUSES.has(m.status) ? extractLineContext(splitSourceLines(file.content), m.lineIndex, contextLines) : null,
   };
