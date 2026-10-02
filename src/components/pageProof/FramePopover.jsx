@@ -1,7 +1,7 @@
 'use client'
 
 import { FRAME_OBJECT_KINDS, isFurnitureStream } from '@/lib/pageProof/vocab'
-import { isObjectFrame, FURNITURE_CHOICE, choiceInfo } from '@/lib/pageProof/scanGeometry'
+import { isObjectFrame, FURNITURE_CHOICE, NOTES_RUNHEAD_CHOICE, choiceInfo } from '@/lib/pageProof/scanGeometry'
 
 // חלונית קטנה ליד מסגרת נבחרת בסריקה: הזרם שלה (כולל כותרת של כל זרם ו"ריהוט הדף"),
 // המספר שלה בזרם, מקומה בסדר-הקריאה של העמוד, סוג (טקסט / טבלה / איור / לוח) ומחיקה.
@@ -17,7 +17,8 @@ import { isObjectFrame, FURNITURE_CHOICE, choiceInfo } from '@/lib/pageProof/sca
 //   chips        streamChips(): {content, headings, furniture, more, moreHeadings}; כל פריט {key, he, color}
 //   suggested    המסגרות הן הצעת המחשב (שינוי כאן שומר את כולן)
 //   style, className  תוספות-עיצוב (המיקום — מ-ProofScan)
-//   onStream(key) — key: זרם, זרם-כותרת (…_heading) או FURNITURE_CHOICE ("ריהוט הדף")
+//   onStream(key) — key: זרם, זרם-כותרת (…_heading), FURNITURE_CHOICE ("ריהוט הדף") או
+//                   NOTES_RUNHEAD_CHOICE ("כותרת-רצה של ההערות" — נשמר כ"כותרת עמוד")
 //   onSeq(n) · onOrder(-1|1) · onKind(kind|null) · onDelete() · onClose() — סגירת החלונית (המסגרת נשארת בחורה)
 //   onClaimLine (רשות) — השורה שבסמן בולטת מהמסגרת הזו: "השורה שייכת למסגרת הזו" (claimTitle — ההסבר)
 //   extra (רשות) — ReactNode של דף עוטף (תוכנת-הספר: שרשור לעמוד אחר וכו'), בשורה משלו בתחתית
@@ -25,7 +26,11 @@ import { isObjectFrame, FURNITURE_CHOICE, choiceInfo } from '@/lib/pageProof/sca
 const small = 'flex h-6 min-w-6 items-center justify-center rounded border border-surface-variant bg-white px-1.5 text-[11px] hover:bg-neutral-50 disabled:opacity-40 disabled:hover:bg-white'
 
 const EMPTY_CHIPS = { content: [], headings: [], furniture: [], more: [], moreHeadings: [] }
-const FURNITURE_TITLE = 'כותרת-רצה, מספר עמוד, שומר-דף — אינם נכנסים לספר'
+const FURNITURE_TITLE = 'כותרת-רצה (גם של ההערות), מספר עמוד, שומר-דף — אינם נכנסים לספר'
+const NOTES_RUNHEAD_TITLE = 'כותרת שחוזרת בכל עמוד מעל ההערות (שם החיבור שבהערות) — ריהוט, לא נכנסת לספר. כותרת של פרק או סעיף בתוך ההערות — «כותרת הערות»'
+const HEADING_TITLE = 'מסגרת סביב כותרת (של פרק, סעיף וכדומה) בזרם הזה'
+const NOTES_HEADING_TITLE = 'כותרת של פרק או סעיף בתוך ההערות — נכנסת לספר. כותרת שחוזרת בכל עמוד מעל ההערות — «כותרת-רצה של ההערות»'
+const isNotesKey = (k) => /^notes\d?$/.test(String(k || ''))
 
 // כפתור-זרם (נקודת-צבע + שם) — גם בסרגל "מסגרת חדשה" של ScanPanel
 export function StreamChip({ s, active, onClick, title }) {
@@ -51,13 +56,15 @@ export function StreamPicker({ chips, value, onPick, label = 'הזרם של המ
   const c = { ...EMPTY_CHIPS, ...(chips || {}) }
   const furnitureOn = value === FURNITURE_CHOICE || isFurnitureStream(value)
   const pick = (key) => {
-    if (key === value || (key === FURNITURE_CHOICE && furnitureOn)) return
+    if (key === value || (key === FURNITURE_CHOICE && furnitureOn) || (key === NOTES_RUNHEAD_CHOICE && value === 'header')) return
     onPick?.(key)
   }
   const headingOf = new Map(c.moreHeadings.map((s) => [s.base, s]))
   const rare = c.more.flatMap((s) => (headingOf.has(s.key) ? [s, headingOf.get(s.key)] : [s]))
   const inSelect = [...rare, ...c.furniture].some((s) => s.key === value)
   const furniture = choiceInfo(null, FURNITURE_CHOICE)
+  // רק בעמוד/ספר שיש בו הערות — שם המתנדבים בחרו "כותרת הערות" (שנכנסת לספר) לכותרת-הרצה שלהן
+  const notesRunhead = c.content.some((s) => isNotesKey(s.key)) ? choiceInfo(null, NOTES_RUNHEAD_CHOICE) : null
 
   return (
     <div role="group" aria-label={label} className={`flex flex-wrap items-center gap-1 ${className}`}>
@@ -65,9 +72,10 @@ export function StreamPicker({ chips, value, onPick, label = 'הזרם של המ
         <StreamChip key={s.key} s={s} active={value === s.key} onClick={() => pick(s.key)} />
       ))}
       {c.headings.map((s) => (
-        <StreamChip key={s.key} s={s} active={value === s.key} onClick={() => pick(s.key)} title="מסגרת סביב כותרת (של פרק, סעיף וכדומה) בזרם הזה" />
+        <StreamChip key={s.key} s={s} active={value === s.key} onClick={() => pick(s.key)} title={isNotesKey(s.base) ? NOTES_HEADING_TITLE : HEADING_TITLE} />
       ))}
       <StreamChip s={furniture} active={furnitureOn} onClick={() => pick(FURNITURE_CHOICE)} title={FURNITURE_TITLE} />
+      {notesRunhead && <StreamChip s={notesRunhead} active={false} onClick={() => pick(NOTES_RUNHEAD_CHOICE)} title={NOTES_RUNHEAD_TITLE} />}
       {rare.length + c.furniture.length > 0 && (
         <select
           value={inSelect ? value : ''}

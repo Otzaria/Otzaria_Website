@@ -356,6 +356,32 @@ describe('ScanPanel — סדר ההצעה, שורות מחוץ למסגרות, �
     expect(screen.getByTestId('straddle-note')).toHaveTextContent(/שורה אחת בולטת/)
   })
 
+  // פורום (2026-10-01): "כל מה שבריהוט עמוד אוטומטי לא מופיע במסגרות ... ואז מגדיר אותו בתור מסגרת חדשה"
+  it('ריהוט שזוהה (בלי מסגרת) מסומן באפור עם תווית, ואינו נספר כ"מחוץ למסגרת"', async () => {
+    const base = { ...doc(), lines: [...doc().lines, L(5, [400, 20, 600, 50], 'header'), L(6, [480, 950, 520, 980], 'footer')] }
+    const { container } = setup({ base })
+    expect(container.querySelector('[data-furniture="5"]')).toBeInTheDocument()
+    expect(container.querySelector('[data-furniture="6"]')).toBeInTheDocument()
+    expect(screen.getAllByTestId('furniture-label').map((x) => x.textContent)).toEqual(['ריהוט · כותרת עמוד', 'ריהוט · תחתית'])
+    expect(screen.getByTestId('furniture-note')).toHaveTextContent(/2 שורות ריהוט/)
+    expect(container.querySelector('[data-outside="5"]')).not.toBeInTheDocument()
+    // במצב "שורות" — תיבות-השורות הרגילות, בלי סימון-הריהוט
+    await userEvent.click(screen.getByRole('button', { name: /שורות/ }))
+    expect(container.querySelector('[data-furniture]')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('furniture-note')).not.toBeInTheDocument()
+  })
+
+  it('ריהוט שבתוך מסגרת — כבר רואים אותו, ואינו מסומן שוב', () => {
+    const base = {
+      ...doc(),
+      lines: [...doc().lines, L(5, [400, 20, 600, 50], 'header')],
+      frames: [{ fid: 'ee33ff', stream: 'header', bbox: [390, 10, 610, 60], order: 1 }],
+    }
+    const { container } = setup({ base })
+    expect(container.querySelector('[data-furniture]')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('furniture-note')).not.toBeInTheDocument()
+  })
+
   it('שורות מחוץ לכל מסגרת מסומנות, ו"✓ המסגרות נכונות" שואל לפני האישור', async () => {
     const base = {
       ...doc(),
