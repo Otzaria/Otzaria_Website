@@ -768,25 +768,34 @@ function applyFrameStreams(doc) {
   };
 }
 
-// מיון-קריאה (_rows_rtl): מלמעלה למטה; שורות באותו קו-גובה — מימין לשמאל
-function rowsRtl(items) {
-  const sorted = items.slice().sort((a, b) => cyOf(a.bbox) - cyOf(b.bbox));
-  const out = [];
-  let i = 0;
-  while (i < sorted.length) {
-    const run = [sorted[i]];
-    while (i + 1 < sorted.length) {
-      const a = run[run.length - 1].bbox;
-      const b = sorted[i + 1].bbox;
-      if (vOverlap(a, b) > 0.5 * Math.min(a[3] - a[1], b[3] - b[1])) {
-        run.push(sorted[i + 1]);
-        i++;
-      } else break;
-    }
-    run.sort((a, b) => b.bbox[0] - a.bbox[0]);
-    out.push(...run);
-    i++;
+// מיון-קריאה (_rows_rtl): מלמעלה למטה; שורות באותו קו-גובה — מימין לשמאל.
+// "אותו קו-גובה" = חפיפה לגובה של יותר מחצי הגובה הקטן עם אחת מהשורות שכבר בשורה — אבל לעולם לא שתי
+// תיבות שחופפות לרוחב (יותר מ-30% מהצרה וגם יותר מגובה-וחצי): אלה שתי שורות של אותו טור שהתיבות שלהן
+// גבוהות (רש"י צפוף, דף עקום), וסדרן מלמעלה למטה. בלי זה הסדר ביניהן נקבע לפי פיקסלים בודדים בקצה השמאלי
+// ושורה תחתונה נקראה לפני העליונה. אותו כלל כמו בתוכנת-הספר (orderguard.py); המקרים המשותפים —
+// rowOrder.cases.json.
+export const ROW_RULE = { V_JOIN: 0.5, X_CLASH: 0.3, H_CLASH: 1.5 };
+const hOf = (b) => b[3] - b[1];
+const hOverlap = (a, b) => Math.min(a[2], b[2]) - Math.max(a[0], b[0]);
+function rowClash(a, b) {
+  const ov = hOverlap(a, b);
+  return ov > ROW_RULE.X_CLASH * Math.min(a[2] - a[0], b[2] - b[0]) && ov > ROW_RULE.H_CLASH * Math.min(hOf(a), hOf(b));
+}
+function joinsRow(row, b) {
+  return (
+    row.some((it) => vOverlap(it.bbox, b) > ROW_RULE.V_JOIN * Math.min(hOf(it.bbox), hOf(b))) &&
+    !row.some((it) => rowClash(it.bbox, b))
+  );
+}
+export function rowsRtl(items) {
+  const rows = [];
+  for (const it of items.slice().sort((a, b) => cyOf(a.bbox) - cyOf(b.bbox))) {
+    const last = rows[rows.length - 1];
+    if (last && joinsRow(last, it.bbox)) last.push(it);
+    else rows.push([it]);
   }
+  const out = [];
+  for (const row of rows) out.push(...row.sort((a, b) => b.bbox[0] - a.bbox[0]));
   return out;
 }
 
