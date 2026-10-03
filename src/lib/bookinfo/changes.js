@@ -112,14 +112,19 @@ export function applyChangeSet(baseState, ops) {
   return { state, results }
 }
 
-// תא בטבלת markdown: ערך כקוד, בלי ש-| או ` ישברו את הטבלה
+// Escape once, including the escape character itself, so user text cannot alter the table or labels.
+const markdownText = (value) => String(value).replace(/[\\|`*_{}[\]()<>]/g, '\\$&').replace(/\n/g, '<br>')
+
+// Backslash escapes are literal inside code spans; use plain escaped text for those values.
 function cell(value) {
   if (value === null || value === undefined || value === '') return '—'
-  const safe = String(value).replace(/\|/g, '\\|')
-  return safe.includes('`') ? safe : `\`${safe}\``
+  const text = String(value)
+  if (/[\\`\n]/.test(text)) return markdownText(text)
+  const safe = text.replace(/[\\|]/g, '\\$&')
+  return `\`${safe}\``
 }
 
-const bookLabel = (op) => `**${op.book.replace(/\|/g, '\\|')}**${op.author ? ` _(${op.author.replace(/\|/g, '\\|')})_` : ''}`
+const bookLabel = (op) => `**${markdownText(op.book)}**${op.author ? ` _(${markdownText(op.author)})_` : ''}`
 
 function rowsFor(r) {
   const changed = r.status === 'applied' ? r.after : r.op.changes
@@ -127,7 +132,7 @@ function rowsFor(r) {
   return fields.map((field, i) => {
     const before = r.status === 'applied' ? cell(r.before[field]) : ''
     const after = cell(r.status === 'applied' ? r.after[field] : r.op.changes[field])
-    const note = r.reason && i === 0 ? ` _(${r.reason})_` : ''
+    const note = r.reason && i === 0 ? ` _(${markdownText(r.reason)})_` : ''
     return `| ${i === 0 ? bookLabel(r.op) : ''} | ${FIELD_LABELS[field]} | ${before} | ${after}${note} |`
   })
 }

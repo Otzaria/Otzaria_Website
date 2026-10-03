@@ -1,5 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { unified } from 'unified'
+import remarkParse from 'remark-parse'
+import remarkGfm from 'remark-gfm'
 import { bookInfoStateFromRows, exportBookInfoCsv, listBookInfo, parseBookInfoCsv } from './csv.js'
 import { applyChangeSet, summarizeChangeSet, validateChangeSet } from './changes.js'
 
@@ -110,6 +113,32 @@ test('summarizeChangeSet truncates on whole rows and says so', () => {
   const s = summarizeChangeSet(results, { maxLength: 900 })
   assert.ok(s.text.length <= 900)
   assert.match(s.text, /הרשימה קוצרה/)
+})
+
+test('PR Markdown preserves literal user text and four table cells with backslashes, pipes and markup', () => {
+  const values = ['A|B', 'A\\|B', 'A\\\\|B', 'A\\B', '`quoted` **bold** _italic_ [link](url) <tag>', 'first\nsecond']
+  const text = (node) => node.type === 'html' && node.value === '<br>' ? '\n' : node.value ?? (node.children || []).map(text).join('')
+  for (const value of values) {
+    const summary = summarizeChangeSet([{
+      status: 'applied', op: { book: value, author: value, changes: { authorName: value } },
+      before: { authorName: value }, after: { authorName: value },
+    }])
+    const ast = unified().use(remarkParse).use(remarkGfm).parse(summary.text)
+    const table = ast.children.find((node) => node.type === 'table')
+    assert.equal(table.children.length, 2, value)
+    const cells = table.children[1].children
+    assert.equal(cells.length, 4, value)
+    assert.equal(text(cells[0]), `${value} (${value})`, value)
+    assert.equal(text(cells[2]), value, value)
+    assert.equal(text(cells[3]), value, value)
+    assert.equal(cells[0].children[0].type, 'strong')
+    assert.equal(cells[0].children[0].children.every((node) => node.type === 'text' || node.type === 'html'), true)
+  }
+  const summary = summarizeChangeSet([{ status: 'conflict', reason: 'changed\\|row\ncheck', op: { book: 'book', author: '', changes: { startYear: 1 } } }])
+  const ast = unified().use(remarkParse).use(remarkGfm).parse(summary.text)
+  const table = ast.children.find((node) => node.type === 'table')
+  assert.equal(table.children[1].children.length, 4)
+  assert.equal(text(table.children[1].children[3]), '1 (changed\\|row\ncheck)')
 })
 
 test('storage invariant rejects fractions, exponents, overflow, booleans, CR and NUL before publication', () => {
