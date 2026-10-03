@@ -75,7 +75,7 @@ describe('BookInfoChangeSetsList', () => {
   ]
 
   it('shows open requests with a link to the PR, and all of them on demand', async () => {
-    vi.spyOn(global, 'fetch').mockImplementation(() => jsonResponse({ success: true, rows: changeSets }))
+    vi.spyOn(global, 'fetch').mockImplementation((url) => jsonResponse({ success: true, rows: String(url).includes('active=false') ? changeSets : changeSets.filter((row) => row.status === 'open') }))
     render(<BookInfoChangeSetsList />)
 
     expect(await screen.findByText('אבן עזרא')).toBeInTheDocument()
@@ -84,7 +84,7 @@ describe('BookInfoChangeSetsList', () => {
     expect(screen.queryByText('בראשית רבה')).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByLabelText('רק בקשות פתוחות'))
-    expect(screen.getByText('בראשית רבה')).toBeInTheDocument()
+    expect(await screen.findByText('בראשית רבה')).toBeInTheDocument()
     expect(screen.getByText('מוזג')).toBeInTheDocument()
   })
 })

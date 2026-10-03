@@ -30,6 +30,10 @@ const BookInfoPendingChangeSchema = new mongoose.Schema(
       ref: 'User',
       required: true
     },
+    csvIdentity: { type: mongoose.Schema.Types.Mixed, default: null },
+    identityRevision: { type: Number, default: null },
+    expectedCsvRow: { type: mongoose.Schema.Types.Mixed, default: null },
+    lastPublishedChangeSetId: { type: mongoose.Schema.Types.ObjectId, ref: 'BookInfoChangeSet', default: null },
     changes: {
       type: PendingChangesSchema,
       required: true

@@ -5,6 +5,9 @@ import Header from '@/components/layout/Header'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 
 export default function LibraryInfoPage() {
+  const [sourceRevision, setSourceRevision] = useState(0)
+  const [page, setPage] = useState(0)
+  const [unresolvedEdits, setUnresolvedEdits] = useState([])
   const [rows, setRows] = useState([])
   const [generationOptions, setGenerationOptions] = useState([])
   const [subGenerationOptionsByGeneration, setSubGenerationOptionsByGeneration] = useState({})
@@ -16,9 +19,9 @@ export default function LibraryInfoPage() {
   const [formData, setFormData] = useState(null)
   const [lastPr, setLastPr] = useState(null)
 
-  const loadData = async () => {
+  const loadData = async (quiet = false) => {
     try {
-      setLoading(true)
+      if (!quiet) setLoading(true)
       setError('')
       const response = await fetch('/api/library/book-info', { cache: 'no-store' })
       const data = await response.json()
@@ -26,6 +29,8 @@ export default function LibraryInfoPage() {
         throw new Error(data.error || 'שגיאה בטעינת המידע')
       }
       setRows(data.rows || [])
+      setUnresolvedEdits(data.unresolvedEdits || [])
+      setSourceRevision(data.identityRevision || 0)
       setGenerationOptions(data.generationOptions || [])
       setSubGenerationOptionsByGeneration(data.subGenerationOptionsByGeneration || {})
     } catch (loadError) {
@@ -37,6 +42,10 @@ export default function LibraryInfoPage() {
 
   useEffect(() => {
     loadData()
+    const refresh = () => { if (!document.hidden) loadData(true) }
+    const interval = setInterval(refresh, 60_000)
+    window.addEventListener('focus', refresh)
+    return () => { clearInterval(interval); window.removeEventListener('focus', refresh) }
   }, [])
 
   const filteredRows = useMemo(() => {
@@ -64,7 +73,7 @@ export default function LibraryInfoPage() {
   }, [rows, search])
 
   const openEdit = (row) => {
-    setEditRow(row)
+    setEditRow({ ...row, identityRevision: sourceRevision })
     setFormData({
       bookName: row.effective?.bookName || '',
       authorName: row.effective?.authorName || '',
@@ -112,7 +121,12 @@ export default function LibraryInfoPage() {
         body: JSON.stringify({
           book: editRow.approved?.bookName,
           author: editRow.approved?.authorName || '',
-          updates: formData
+          identityRevision: editRow.identityRevision,
+          baseRow: editRow.approved,
+          updates: Object.fromEntries(Object.entries(formData).filter(([field, value]) => {
+            const normalized = ['startYear', 'endYear'].includes(field) ? (value === '' ? null : Number(value)) : (value || null)
+            return normalized !== (editRow.approved?.[field] || null)
+          }))
         })
       })
       const data = await response.json()
@@ -151,6 +165,10 @@ export default function LibraryInfoPage() {
     }
   }
 
+  const pageCount = Math.max(1, Math.ceil(filteredRows.length / 100))
+  const visiblePage = Math.min(page, pageCount - 1)
+  const pageRows = filteredRows.slice(visiblePage * 100, (visiblePage + 1) * 100)
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -165,7 +183,7 @@ export default function LibraryInfoPage() {
             <input
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setPage(0) }}
               placeholder="חיפוש לפי ספר/מחבר"
               className="w-full md:w-80 border rounded-lg px-4 py-2 bg-white"
             />
@@ -187,6 +205,12 @@ export default function LibraryInfoPage() {
             </div>
           )}
 
+          {unresolvedEdits.length > 0 && (
+            <div className="mb-4 border border-danger-200 bg-danger-50 rounded-lg p-3">
+              <p>בקשות לספרים שהוסרו או שזהותם דורשת בדיקה נשמרו:</p>
+              <ul>{unresolvedEdits.map((pending) => <li key={pending.id}>{pending.book}: {pending.lastError || 'נדרשת בדיקת מנהל'} <PendingLink pending={{ ...pending, status: 'conflict' }} /></li>)}</ul>
+            </div>
+          )}
           {loading ? (
             <LoadingSpinner message="טוען נתוני ספרים..." />
           ) : (
@@ -203,7 +227,7 @@ export default function LibraryInfoPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredRows.map((row) => (
+                  {pageRows.map((row) => (
                     <tr key={row.id} className="border-t border-surface-variant/70">
                       <td className="px-3 py-3 font-medium">{row.effective?.bookName || '-'}</td>
                       <td className="px-3 py-3">{row.effective?.authorName || '-'}</td>
@@ -230,6 +254,11 @@ export default function LibraryInfoPage() {
               </table>
             </div>
           )}
+          {!loading && pageCount > 1 && <div className="flex items-center gap-4 mt-4">
+            <button disabled={visiblePage === 0} onClick={() => setPage(visiblePage - 1)} className="text-primary disabled:opacity-40">הקודם</button>
+            <span>עמוד {visiblePage + 1} מתוך {pageCount} ({filteredRows.length} ספרים)</span>
+            <button disabled={visiblePage + 1 >= pageCount} onClick={() => setPage(visiblePage + 1)} className="text-primary disabled:opacity-40">הבא</button>
+          </div>}
         </div>
       </main>
 
@@ -341,7 +370,7 @@ export default function LibraryInfoPage() {
 
 // לספר עם בקשה פתוחה אי אפשר לפתוח בקשה נוספת (השרת דוחה), ולכן במקום כפתור העריכה מוצג קישור אליה
 function PendingLink({ pending }) {
-  const label = pending.prNumber ? `ממתין לבדיקה (#${pending.prNumber})` : 'ממתין לבדיקה'
+  const label = pending.status === 'conflict' ? 'נדרשת בדיקה של הבקשה' : pending.prNumber ? `ממתין לבדיקה (#${pending.prNumber})` : 'ממתין לבדיקה'
   if (!pending.prUrl) return <span className="text-sm text-on-surface/60">{label}</span>
   return (
     <a
@@ -349,7 +378,7 @@ function PendingLink({ pending }) {
       target="_blank"
       rel="noreferrer"
       className="inline-flex items-center gap-1 text-sm text-primary underline whitespace-nowrap"
-      title="יש כבר בקשה פתוחה לספר זה"
+      title={pending.lastError || 'יש כבר בקשה פתוחה לספר זה'}
     >
       {label}
       <span className="material-symbols-outlined text-base">open_in_new</span>

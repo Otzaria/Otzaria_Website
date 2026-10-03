@@ -54,7 +54,7 @@ test('rows from Mongo export to a file the parser reads back unchanged', () => {
 test('validateChangeSet keeps only the changed fields and checks the generation pair', () => {
   const state = parseBookInfoCsv(FIXTURE)
   const ok = validateChangeSet([{ book: 'אבן עזרא', author: 'אברהם אבן עזרא', updates: { startYear: '1090', generationName: 'ראשונים' } }], state)
-  assert.deepEqual(ok.ops, [{ type: 'update', book: 'אבן עזרא', author: 'אברהם אבן עזרא', changes: { startYear: 1090 } }])
+  assert.deepEqual(ok.ops.map(({ baseRow, ...op }) => op), [{ type: 'update', book: 'אבן עזרא', author: 'אברהם אבן עזרא', changes: { startYear: 1090 } }])
   assert.match(validateChangeSet([{ book: 'אבן עזרא', author: 'אברהם אבן עזרא', updates: { subGenerationName: 'אמוראים' } }], state).error, /דור המשנה/)
   assert.match(validateChangeSet([{ book: 'אין כזה', author: '', updates: { startYear: 1 } }], state).error, /אינו ברשימה/)
   assert.match(validateChangeSet([{ book: 'אבן עזרא', author: 'אברהם אבן עזרא', updates: { startYear: 1089 } }], state).error, /אין שינוי/)
@@ -75,7 +75,7 @@ test('applyChangeSet updates rows, no-ops what is already there, and refuses a r
     { type: 'update', book: 'נעלם', author: '', changes: { startYear: 1 } },
     { type: 'update', book: 'בראשית רבה', author: '', changes: { bookName: 'אבן עזרא', authorName: 'אברהם אבן עזרא' } },
   ])
-  assert.deepEqual(results.map((r) => r.status), ['applied', 'noop', 'noop', 'noop'])
+  assert.deepEqual(results.map((r) => r.status), ['applied', 'noop', 'conflict', 'conflict'])
   assert.deepEqual(results[0].before, { endYear: null })
   assert.equal(listBookInfo(next).find((r) => r.bookName === 'אבן עזרא').endYear, 1167)
   assert.equal(listBookInfo(state).find((r) => r.bookName === 'אבן עזרא').endYear, null)
@@ -93,7 +93,7 @@ test('applyChangeSet supports renaming a book and clearing a field', () => {
 
 test('summarizeChangeSet: a before/after table per field, no-ops folded', () => {
   const { results } = applyChangeSet(parseBookInfoCsv(FIXTURE), [
-    { type: 'update', book: 'אבן עזרא', author: 'אברהם אבן עזרא', changes: { endYear: 1167, generationName: 'אחרונים' } },
+    { type: 'update', book: 'אבן עזרא', author: 'אברהם אבן עזרא', changes: { endYear: 1167, generationName: 'אחרונים', subGenerationName: 'ראשוני האחרונים' } },
     { type: 'update', book: 'נעלם', author: '', changes: { startYear: 1 } },
   ])
   const s = summarizeChangeSet(results)
@@ -110,4 +110,37 @@ test('summarizeChangeSet truncates on whole rows and says so', () => {
   const s = summarizeChangeSet(results, { maxLength: 900 })
   assert.ok(s.text.length <= 900)
   assert.match(s.text, /הרשימה קוצרה/)
+})
+
+test('storage invariant rejects fractions, exponents, overflow, booleans, CR and NUL before publication', () => {
+  for (const updates of [{ startYear: 100.5 }, { endYear: 1e21 }, { endYear: 2147483648 }, { endYear: '1e3' }, { endYear: true }, { authorName: 'A\rB' }, { authorName: 'A\0B' }]) {
+    assert.ok(validateChangeSet([{ book: 'אבן עזרא', author: 'אברהם אבן עזרא', updates }], parseBookInfoCsv(FIXTURE)).error)
+  }
+  assert.throws(() => parseBookInfoCsv(FIXTURE.replace('"1089"', '"999999999999999999999"')), /32-bit/)
+  assert.throws(() => exportBookInfoCsv({ rows: new Map([['x', { bookName: 'x', authorName: 'A\rB' }]]) }), /unsupported/)
+})
+
+test('rebase detects touched-field lost update and validates the complete rebased row', () => {
+  const original = parseBookInfoCsv(FIXTURE)
+  const { ops } = validateChangeSet([{ book: 'בראשית רבה', author: '', updates: { endYear: 501 } }], original)
+  const touched = parseBookInfoCsv(FIXTURE.replace('"300","500"', '"300","502"'))
+  assert.equal(applyChangeSet(touched, ops).results[0].status, 'conflict')
+  const invalid = parseBookInfoCsv(FIXTURE.replace('"300","500"', '"600","700"'))
+  assert.equal(applyChangeSet(invalid, ops).results[0].status, 'conflict')
+  assert.equal(listBookInfo(applyChangeSet(invalid, ops).state).find((r) => r.bookName === 'בראשית רבה').endYear, 700)
+})
+
+test('canonical sort matches Python code point ordering for astral author names', () => {
+  const rows = [{ bookName: 'same', authorName: '😀' }, { bookName: 'same', authorName: '\ue000' }]
+  const csv = exportBookInfoCsv(bookInfoStateFromRows(rows))
+  assert.ok(csv.indexOf('\ue000') < csv.indexOf('😀'))
+})
+
+test('the reader rejects malformed quoting and the full semantic/storage contract', () => {
+  for (const csv of [FIXTURE.replace('"1089"', '"1089"junk'), FIXTURE.replace('"1089"', '10"89'), FIXTURE.replace('"1089"', '"2147483648"'), FIXTURE.replace('"300","500"', '"600","500"'), FIXTURE.replace('"אמוראים"', '"גאונים"'), FIXTURE.replace('"ראשונים"', '"unknown"'), FIXTURE.replace('אברהם אבן עזרא', 'A\ufeffB'), FIXTURE + '\n']) assert.throws(() => parseBookInfoCsv(csv))
+})
+
+test('lone UTF16 surrogates are rejected before UTF8 can change a published identity', () => {
+  assert.ok(validateChangeSet([{ book: 'אבן עזרא', author: 'אברהם אבן עזרא', updates: { authorName: 'A\ud800B' } }], parseBookInfoCsv(FIXTURE)).error)
+  assert.throws(() => exportBookInfoCsv({ rows: new Map([['x', { bookName: 'x', authorName: 'A\ud800B' }]]) }), /unsupported/)
 })

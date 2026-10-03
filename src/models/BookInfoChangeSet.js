@@ -12,7 +12,7 @@ const BookInfoChangeSetSchema = new mongoose.Schema(
     submittedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
     status: {
       type: String,
-      enum: ['publishing', 'open', 'merged', 'closed', 'modified', 'failed'],
+      enum: ['publishing', 'open', 'merged', 'closed', 'modified', 'conflict', 'failed'],
       default: 'publishing',
       index: true,
     },
@@ -21,11 +21,26 @@ const BookInfoChangeSetSchema = new mongoose.Schema(
     prUrl: { type: String, default: null },
     baseSha: { type: String, default: null },
     headSha: { type: String, default: null },
+    revision: { type: Number, default: 0 },
+    checkedAt: { type: Date, default: () => new Date(0) },
+    baseBlobSha: String,
+    baseIdentitySha: String,
+    pendingHeadSha: String,
+    pendingBaseSha: String,
+    pendingBlobSha: String,
+    pendingIdentitySha: String,
+    pendingTitle: String,
+    pendingBody: String,
+    pendingOps: [mongoose.Schema.Types.Mixed],
     lastError: { type: String, default: null },
   },
   { timestamps: true }
 )
 
+BookInfoChangeSetSchema.index({ bookKey: 1 }, { name: 'active_book_unique', unique: true, partialFilterExpression: { status: { $in: ['publishing', 'open', 'modified', 'conflict'] } } })
+BookInfoChangeSetSchema.index({ status: 1, checkedAt: 1, createdAt: 1 })
+BookInfoChangeSetSchema.index({ status: 1, createdAt: -1, _id: -1 })
+BookInfoChangeSetSchema.index({ createdAt: -1, _id: -1 })
 BookInfoChangeSetSchema.index({ submittedBy: 1, createdAt: -1 })
 
 export default mongoose.models.BookInfoChangeSet || mongoose.model('BookInfoChangeSet', BookInfoChangeSetSchema)

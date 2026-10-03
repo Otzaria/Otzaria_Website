@@ -7,7 +7,7 @@ import BookInfoPendingChange from '@/models/BookInfoPendingChange'
 import { BOOK_INFO_EDITABLE_FIELDS } from '@/lib/book-info-constants'
 import { getChangedFields } from '@/lib/book-info-utils'
 import { hasBooksAccess } from '@/lib/roles';
-import { BookInfoInputError, submitEdit } from '@/lib/bookinfo/service'
+import { BookInfoInputError, resolveLegacyEdit, submitEdit } from '@/lib/bookinfo/service'
 
 // העברת הצעה ל-PR פותחת אותו ב-GitHub; הדף שולח הצעה אחת בכל בקשה
 export const maxDuration = 120
@@ -204,7 +204,7 @@ export async function POST(request) {
  */
 async function publishAsPullRequest(selection, adminId) {
   const changeDoc = await BookInfoPendingChange.findById(selection?.changeId)
-    .populate('bookInfo', 'bookName authorName')
+    .populate('bookInfo')
     .lean()
   if (!changeDoc) {
     return NextResponse.json({ success: false, error: 'ההצעה לא נמצאה' }, { status: 404 })
@@ -220,10 +220,20 @@ async function publishAsPullRequest(selection, adminId) {
   }
 
   try {
+    const resolved = await resolveLegacyEdit(changeDoc)
+    const expected = changeDoc.expectedCsvRow || changeDoc.bookInfo
+    for (const field of fields) {
+      const current = resolved.row[field] ?? null
+      if (field !== 'bookName' && current !== (expected[field] ?? null) && current !== (changeDoc.changes[field] ?? null)) throw new BookInfoInputError(`הנתון בקובץ השתנה מאז ההצעה: ${field}; ההצעה נשמרה לבדיקה`)
+    }
+    // Save provenance before publication, even if a response is lost.
+    await BookInfoPendingChange.updateOne({ _id: changeDoc._id }, { $set: { csvIdentity: resolved.identity, identityRevision: resolved.identityRevision, expectedCsvRow: resolved.row } })
     const result = await submitEdit({
       edit: {
-        book: changeDoc.bookInfo.bookName,
-        author: changeDoc.bookInfo.authorName || '',
+        book: resolved.identity.bookName,
+        author: resolved.identity.authorName,
+        baseRow: resolved.row,
+        identityRevision: resolved.identityRevision,
         updates: Object.fromEntries(fields.map((field) => [field, changeDoc.changes[field]]))
       },
       userId: changeDoc.submittedBy || adminId
@@ -233,7 +243,7 @@ async function publishAsPullRequest(selection, adminId) {
     if (getChangedFields(remaining).length === 0) {
       await BookInfoPendingChange.deleteOne({ _id: changeDoc._id })
     } else {
-      await BookInfoPendingChange.updateOne({ _id: changeDoc._id }, { $set: { changes: remaining } })
+      await BookInfoPendingChange.updateOne({ _id: changeDoc._id }, { $set: { changes: remaining, csvIdentity: resolved.identity, identityRevision: resolved.identityRevision, expectedCsvRow: resolved.row, lastPublishedChangeSetId: result.id } })
     }
     return NextResponse.json({ success: true, processed: 1, prNumber: result.prNumber, prUrl: result.prUrl })
   } catch (error) {

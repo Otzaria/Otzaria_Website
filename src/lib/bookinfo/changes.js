@@ -6,7 +6,7 @@
  */
 import { BOOK_INFO_EDITABLE_FIELDS } from '../book-info-constants.js'
 import { buildDiff, normalizeBookInfoUpdates } from '../book-info-utils.js'
-import { cloneBookInfoState, rowKey } from './csv.js'
+import { assertStorageRow, cloneBookInfoState, rowKey } from './csv.js'
 
 export const MAX_OPS_PER_CHANGE_SET = 500
 
@@ -44,15 +44,24 @@ export function validateChangeSet(rawOps, state) {
     // מאמתים את השורה כולה אחרי העדכון, כדי שדור ותת-דור יבדקו זה מול זה גם כשרק אחד מהם נשלח
     const merged = {}
     for (const field of BOOK_INFO_EDITABLE_FIELDS) merged[field] = field in (raw.updates || {}) ? raw.updates[field] : current[field]
+    for (const field of ['startYear', 'endYear']) {
+      const value = merged[field]
+      if (value != null && value !== '' && !((typeof value === 'number' && Number.isInteger(value)) || (typeof value === 'string' && /^-?\d+$/.test(value.trim())))) return { error: `${where} (${book}): ${field} חייב להיות מספר שלם` }
+    }
     const { updates, errors } = normalizeBookInfoUpdates(merged)
     if (errors.length > 0) return { error: `${where} (${book}): ${errors[0]}` }
 
+    try { assertStorageRow(updates) } catch (err) { return { error: `${where} (${book}): ${err.message}` } }
+    if (raw.baseRow) {
+      const touched = Object.keys(raw.updates || {}).filter((field) => !same(raw.baseRow[field], updates[field]))
+      if (touched.some((field) => !same(current[field], raw.baseRow[field]) && !same(current[field], updates[field]))) return { error: `${where} (${book}): הנתון בקובץ השתנה מאז פתיחת הטופס; יש לרענן ולבדוק את השינוי` }
+    }
     const changes = buildDiff(current, updates)
     // שם הספר הוא book.title בספרייה (המפתח שבו SeforimLibrary מקשר את הדור לספר); שורה ששמה שונה
     // כאן כבר לא מתאימה לאף ספר, וה-CI של ריפו הספרייה מוחק אותה כיתומה
     if ('bookName' in changes) return { error: `${where} (${book}): לא ניתן לשנות את שם הספר, כי הוא חייב להיות זהה לשם הספר בספרייה` }
     if (Object.keys(changes).length === 0) return { error: `${where} (${book}): אין שינוי מול הנתון בקובץ` }
-    ops.push({ type: 'update', book, author, changes })
+    ops.push({ type: 'update', book, author, changes, baseRow: { ...current } })
   }
   return { ops }
 }
@@ -69,7 +78,7 @@ export function applyChangeSet(baseState, ops) {
     const key = rowKey(op.book, op.author)
     const row = state.rows.get(key)
     if (!row) {
-      results.push({ op, status: 'noop', reason: 'הספר כבר אינו ברשימה' })
+      results.push({ op, status: 'conflict', reason: 'הספר אינו בקובץ; יש לבדוק מחיקה או שינוי זהות' })
       continue
     }
     const effective = {}
@@ -78,10 +87,21 @@ export function applyChangeSet(baseState, ops) {
       results.push({ op, status: 'noop', reason: 'כבר קיים' })
       continue
     }
+    const conflicts = Object.keys(effective).filter((field) => op.baseRow && !same(row[field], op.baseRow[field]))
+    if (conflicts.length) {
+      results.push({ op, status: 'conflict', reason: `הנתון בקובץ השתנה מאז ההצעה: ${conflicts.join(', ')}` })
+      continue
+    }
     const next = { ...row, ...Object.fromEntries(Object.entries(effective).map(([f, v]) => [f, v === '' && f !== 'authorName' && f !== 'bookName' ? null : v])) }
+    const checked = normalizeBookInfoUpdates(next)
+    try { assertStorageRow(next) } catch (err) { checked.errors.push(err.message) }
+    if (checked.errors.length) {
+      results.push({ op, status: 'conflict', reason: checked.errors[0] })
+      continue
+    }
     const nextKey = rowKey(next.bookName, next.authorName)
     if (nextKey !== key && state.rows.has(nextKey)) {
-      results.push({ op, status: 'noop', reason: 'ספר באותו שם ומחבר כבר קיים' })
+      results.push({ op, status: 'conflict', reason: 'ספר באותו שם ומחבר כבר קיים' })
       continue
     }
     const before = Object.fromEntries(Object.keys(effective).map((f) => [f, row[f]]))

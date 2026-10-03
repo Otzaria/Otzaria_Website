@@ -1,18 +1,18 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BOOK_INFO_FIELD_LABELS, formatBookInfoValue } from './bookInfoDisplay'
 
 const STATUS = {
   publishing: { label: 'בפתיחה', className: 'bg-neutral-cool-100 text-neutral-cool-700' },
   open: { label: 'ממתין למיזוג', className: 'bg-primary/10 text-primary' },
+  conflict: { label: 'נדרשת בדיקה', className: 'bg-danger-100 text-danger-700' },
   modified: { label: 'נערך ידנית ב-GitHub', className: 'bg-warning-100 text-warning-800' },
   merged: { label: 'מוזג', className: 'bg-success-100 text-success-800' },
   closed: { label: 'נסגר', className: 'bg-neutral-cool-100 text-neutral-cool-700' },
   failed: { label: 'נכשל', className: 'bg-danger-100 text-danger-700' }
 }
 
-const ACTIVE = new Set(['publishing', 'open', 'modified'])
 
 /**
  * עריכות מידע-על-ספרים שנפתחו כ-PR לריפו הספרייה. האישור עצמו הוא מיזוג ה-PR ב-GitHub;
@@ -23,6 +23,8 @@ export default function BookInfoChangeSetsList({ refreshKey = 0 }) {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [cursor, setCursor] = useState(null)
+  const [nextCursor, setNextCursor] = useState(null)
   const [activeOnly, setActiveOnly] = useState(true)
 
   useEffect(() => {
@@ -31,12 +33,12 @@ export default function BookInfoChangeSetsList({ refreshKey = 0 }) {
       try {
         setLoading(true)
         setError('')
-        const response = await fetch('/api/admin/book-info/change-sets', { cache: 'no-store' })
+        const response = await fetch(`/api/admin/book-info/change-sets?active=${activeOnly}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { cache: 'no-store' })
         const data = await response.json()
         if (!response.ok || !data.success) {
           throw new Error(data.error || 'שגיאה בטעינת הבקשות')
         }
-        if (!cancelled) setRows(data.rows || [])
+        if (!cancelled) { setRows(data.rows || []); setNextCursor(data.nextCursor || null) }
       } catch (loadError) {
         if (!cancelled) setError(loadError.message)
       } finally {
@@ -47,16 +49,16 @@ export default function BookInfoChangeSetsList({ refreshKey = 0 }) {
     return () => {
       cancelled = true
     }
-  }, [refreshKey])
+  }, [refreshKey, activeOnly, cursor])
 
-  const visibleRows = useMemo(() => (activeOnly ? rows.filter((row) => ACTIVE.has(row.status)) : rows), [rows, activeOnly])
+  const visibleRows = rows
 
   return (
     <section>
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-3">
         <h3 className="text-lg font-bold text-on-surface">בקשות שנפתחו ב-GitHub</h3>
         <label className="inline-flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={activeOnly} onChange={(e) => setActiveOnly(e.target.checked)} />
+          <input type="checkbox" checked={activeOnly} onChange={(e) => { setActiveOnly(e.target.checked); setCursor(null) }} />
           רק בקשות פתוחות
         </label>
       </div>
@@ -87,6 +89,10 @@ export default function BookInfoChangeSetsList({ refreshKey = 0 }) {
           </table>
         </div>
       )}
+      <div className="flex gap-3 mt-3">
+        {cursor && <button onClick={() => setCursor(null)} className="text-primary underline">לעמוד הראשון</button>}
+        {nextCursor && <button onClick={() => setCursor(nextCursor)} className="text-primary underline">לעמוד הבא</button>}
+      </div>
     </section>
   )
 }

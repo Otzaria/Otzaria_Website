@@ -3,6 +3,7 @@ import connectDB from '@/lib/db'
 import { authorizeCron } from '@/lib/corrections/runtime'
 import { requestSync } from '@/lib/bookinfo/service'
 
+export const maxDuration = 120
 export const dynamic = 'force-dynamic'
 
 /**
