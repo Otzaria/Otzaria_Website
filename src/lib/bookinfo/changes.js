@@ -2,7 +2,7 @@
  * סל עריכות של "מידע על ספרים": אימות, החלה על מצב הקובץ וסיכום ל-PR.
  *
  * עריכה מזוהה לפי מפתח טבעי (שם הספר ושם המחבר כפי שהם ב-book_info.csv) ולא לפי id, ונושאת רק
- * את השדות ששונו. כך אפשר להחיל אותה מחדש על כל master עדכני, ו-PR פתוח נבנה מחדש אחרי כל מיזוג.
+ * את השדות ששונו, ערכי המקור וגרסת הזהות. שינויי CI מתועדים נעקבים, וערכים מתנגשים נשמרים לבדיקה.
  */
 import { BOOK_INFO_EDITABLE_FIELDS } from '../book-info-constants.js'
 import { buildDiff, normalizeBookInfoUpdates } from '../book-info-utils.js'

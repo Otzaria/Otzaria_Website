@@ -1,9 +1,8 @@
 /**
  * פרסום עריכות "מידע על ספרים" כ-PR לריפו Otzaria/otzaria-library (ForDB/book_info.csv).
  *
- * לכל עריכה ענף משלה (site/book-info-<id>) עם קומיט אחד מעל main. אחרי כל מיזוג כל PR פתוח נבנה
- * מתעדכן בקומיט fast-forward (refreshChangeSet); דחיפה ידנית מקבילה נדחית אטומית.
- * אותו מנגנון כמו src/lib/acronyms/fork.js, על קובץ אחר.
+ * לכל עריכה ענף משלה (site/book-info-<id>). שינוי CSV או זהויות ב-main גורר עדכון מדורג
+ * בקומיט fast-forward (refreshChangeSet); דחיפה ידנית מקבילה נדחית אטומית.
  */
 import { createRepoClient } from '../dicta/github-api.js'
 import { resolveSignoff } from '../acronyms/fork.js'
