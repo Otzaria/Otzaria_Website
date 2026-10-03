@@ -23,6 +23,8 @@ import {
   nextSuspicious,
   linkBadge,
   linkEndpoints,
+  linksInDisplayOrder,
+  linkNumber,
   farLabel,
   selectionText,
   isCollapsed,
@@ -455,13 +457,15 @@ test('linkEndpoints: טווחי-מילים, ציוני-הערה (marks), צד ב
   ];
   b.marks = { 6: [{ a: 3, b: 6, role: 'anchor', go: 8 }] };
   const eps = linkEndpoints(V([], b));
+  // המספרים לפי סדר ההופעה בעמוד: שורה 2 (①) · שורה 3 (②) · שורה 6 (③) · הקישור שקצהו היחיד כאן בשורה 8 (④)
   assert.deepEqual([...eps.get(3).keys()], [2]);
-  assert.deepEqual(eps.get(3).get(2)[0], { n: 1, kind: 'note', side: 'to', other: { lineId: 8, page: 4, i: 1 } });
-  assert.deepEqual(eps.get(2).get(0)[0].n, 2);
+  assert.deepEqual(eps.get(3).get(2)[0], { n: 2, kind: 'note', side: 'to', other: { lineId: 8, page: 4, i: 1 } });
+  assert.deepEqual(eps.get(2).get(0)[0].n, 1);
   assert.deepEqual([...eps.get(6).keys()], [1], 'מהציון שבשורה (מיקום-תווים 3 = מילה 1)');
-  // צד ההערה: קישור 1 אחרי מילה 1, השאר — מילה 0
-  assert.deepEqual(eps.get(8).get(1).map((e) => e.n), [1]);
-  assert.deepEqual(eps.get(8).get(0).map((e) => e.n), [2, 3, 4]);
+  assert.deepEqual(eps.get(6).get(1)[0].n, 3);
+  // צד ההערה: קישור ② אחרי מילה 1, השאר — מילה 0
+  assert.deepEqual(eps.get(8).get(1).map((e) => e.n), [2]);
+  assert.deepEqual(eps.get(8).get(0).map((e) => e.n), [1, 3, 4]);
   assert.deepEqual(eps.get(8).get(0)[2].other, { lineId: 99, page: 5, i: null, label: 'עמוד 5, שורה 99' });
   assert.equal(linkEndpoints({ lines: [] }).size, 0);
   assert.equal(linkBadge(1), '①');
@@ -482,6 +486,43 @@ test('linkEndpoints: קישור לעמוד אחר — הקצה שבעמוד מצ
   assert.equal(eps.has(555), false);
   assert.deepEqual(eps.get(8).get(0)[0].other, { lineId: 777, page: 5, i: null, label: 'עמוד 5, שורה 12: «ב ועוד»' });
   assert.equal(farLabel(4, 11, 77, 'ב ועוד נראה'), 'עמוד 4, שורה 12: «ב ועוד נראה»');
+});
+
+test('linksInDisplayOrder: המספור לפי סדר ההופעה בעמוד, לא לפי סדר היצירה', () => {
+  const b = base();
+  b.links = [
+    // נוצרו בסדר מבולבל: קודם הגוף בשורה 4, אחר כך שורה 2, ואז שתי מילים בשורה 3 (המאוחרת קודם)
+    { from_line: 8, to_line: 4, to_page: 4, kind: 'note', from_words: [1, 1], to_words: [0, 0] },
+    { from_line: 81, to_line: 2, to_page: 4, kind: 'note', to_words: [2, 2] },
+    { from_line: 82, to_line: 3, to_page: 4, kind: 'note', to_words: [2, 2] },
+    { from_line: 83, to_line: 3, to_page: 4, kind: 'note' },
+    // הפירוש בעמוד 3, הגוף כאן בשורה 5 — המקום לפי הקצה שבעמוד
+    { from_line: 555, from_page: 3, to_line: 5, to_page: 4, kind: 'dh', from_words: [0, 0], to_words: [1, 1] },
+    // שני קצות בעמודים אחרים (לא אמור לקרות) — בסוף, לפי העמוד האחר
+    { from_line: 666, from_page: 6, to_line: 667, to_page: 6, kind: 'note' },
+    { from_line: 556, from_page: 2, to_line: 557, to_page: 2, kind: 'note' },
+  ];
+  b.marks = { 3: [{ a: 0, b: 3, role: 'anchor', go: 83 }] };
+  const v = V([], b);
+  const got = linksInDisplayOrder(v);
+  assert.deepEqual(got.map((x) => x.link.from_line), [81, 83, 82, 8, 555, 556, 666]);
+  assert.deepEqual(got.map((x) => x.n), [1, 2, 3, 4, 5, 6, 7]);
+  assert.deepEqual(got.map((x) => x.idx), [1, 3, 2, 0, 4, 6, 5]);
+  assert.equal(linkNumber(v, (k) => k.from_line === 8), 4);
+  assert.equal(linkNumber(v, (k) => k.from_line === 12345), 0);
+  // אותו מספר אחרי המילה בטקסט
+  const eps = linkEndpoints(v);
+  assert.equal(eps.get(2).get(2)[0].n, 1);
+  assert.equal(eps.get(3).get(0)[0].n, 2);
+  assert.equal(eps.get(3).get(2)[0].n, 3);
+  assert.equal(eps.get(4).get(0)[0].n, 4);
+  assert.equal(eps.get(5).get(1)[0].n, 5);
+  // קישור שנוסף עכשיו (link_add נוסף לסוף view.links) מקבל את המספר של מקומו בעמוד
+  const v2 = V([{ kind: 'link_add', page: 4, ids: [84, 2], value: { kind: 'note', to_words: [0, 0] } }], b);
+  assert.equal(v2.links[v2.links.length - 1].from_line, 84);
+  assert.equal(linkNumber(v2, (k) => k.from_line === 84), 1);
+  assert.equal(linkNumber(v2, (k) => k.from_line === 81), 2);
+  assert.equal(linksInDisplayOrder({ lines: [] }).length, 0);
 });
 
 // ---------- העתקה ----------

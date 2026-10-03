@@ -13,6 +13,7 @@ import {
   isCollapsed,
   linkBadge,
   linkEndpoints,
+  linkNumber,
   nextAfterApprove,
   nextSuspicious,
   paragraphIndexAt,
@@ -486,13 +487,14 @@ export default function ProofEditor({
   // ---- קישור בין שני זרמים ----
   // לכל שורת-הערה/פירוש קישור אחד (כך גם בתוכנת-הספר): קישור שני מאותה שורה
   // מחליף את הקודם — רק אחרי אישור, ולא בשקט.
-  // המקום של קישור קיים מאותה שורת-הערה (-1 אם אין), ושאלת ההחלפה. בלי קישור קיים אין
+  // המספר של קישור קיים מאותה שורת-הערה (0 אם אין) — כמו בטקסט וברשימה, לפי סדר ההופעה
+  // בעמוד (flowEdit.linkNumber) — ושאלת ההחלפה. בלי קישור קיים אין
   // המתנה — הפעולה נוספת מיד, באותו אירוע-מקלדת
-  const existingLink = (op) => (view.links || []).findIndex((k) => k.from_line === op.ids[0])
-  const askReplace = (idx) =>
+  const existingLink = (op) => linkNumber(view, (k) => k.from_line === op.ids[0])
+  const askReplace = (n) =>
     showConfirm(
       'להחליף את הקישור?',
-      `לשורה הזו כבר יש קישור ${linkBadge(idx + 1)} — אפשר קישור אחד לכל שורת-הערה או פירוש. להחליף אותו בקישור החדש?`,
+      `לשורה הזו כבר יש קישור ${linkBadge(n)} — אפשר קישור אחד לכל שורת-הערה או פירוש. להחליף אותו בקישור החדש?`,
       null,
       'החלפה',
       'ביטול'
@@ -513,11 +515,11 @@ export default function ProofEditor({
       return
     }
     const from = linkPending.from
-    const idx = existingLink(r.op)
-    if (idx >= 0 && !(await askReplace(idx))) return say('הקישור הקודם נשאר; הקישור החדש לא נוסף')
+    const n = existingLink(r.op)
+    if (n > 0 && !(await askReplace(n))) return say('הקישור הקודם נשאר; הקישור החדש לא נוסף')
     if (push(r.op)) {
       setLinkPending(null)
-      say(`${idx >= 0 ? 'הקישור הוחלף' : 'הקישור נוסף'}: «${from.text}» ↔ «${end.text}»`)
+      say(`${n > 0 ? 'הקישור הוחלף' : 'הקישור נוסף'}: «${from.text}» ↔ «${end.text}»`)
     }
   }
   // הצד השני בעמוד אחר: מילה שנבחרה בחלון העמוד האחר (OtherPagePicker) משלימה את הקישור.
@@ -529,12 +531,12 @@ export default function ProofEditor({
     const bad = validateOp(baseDoc, r.op)
     if (bad) return bad
     const from = linkPending.from
-    const idx = existingLink(r.op)
-    if (idx >= 0 && !(await askReplace(idx))) return 'הקישור הקודם נשאר; הקישור החדש לא נוסף'
+    const n = existingLink(r.op)
+    if (n > 0 && !(await askReplace(n))) return 'הקישור הקודם נשאר; הקישור החדש לא נוסף'
     if (!push(r.op)) return 'הקישור לא נוסף'
     setOtherPage(null)
     setLinkPending(null)
-    say(`${idx >= 0 ? 'הקישור הוחלף' : 'הקישור נוסף'}: «${from.text}» ↔ ${farLabel(pick.page, pick.lineNo, pick.lineId, pick.lineText)}`)
+    say(`${n > 0 ? 'הקישור הוחלף' : 'הקישור נוסף'}: «${from.text}» ↔ ${farLabel(pick.page, pick.lineNo, pick.lineId, pick.lineText)}`)
     return null
   }
   const cancelLink = useCallback(() => {

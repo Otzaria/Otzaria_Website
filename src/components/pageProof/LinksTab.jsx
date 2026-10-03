@@ -1,14 +1,15 @@
 'use client'
 
 import { tokenize } from '@/lib/pageProof/textModel'
-import { linkBadge, farLabel } from '@/lib/pageProof/flowEdit'
+import { linkBadge, farLabel, linksInDisplayOrder } from '@/lib/pageProof/flowEdit'
 import { Section } from './LineTab'
 import { OtherPageButtons } from './OtherPagePicker'
 
 // כרטיסיית "קישורים" בלוח הפרטים: הערה ↔ הציון בגוף, ד"ה ↔ המקור, המשך.
 // קישור חדש נוצר בטקסט עצמו (מילה ← "קישור" ← המילה המקבילה בזרם השני ←
 // "קישור"); כאן — הרשימה, אישור/ביטול של קישורי המערכת, והקישורים החסרים.
-// המספר שליד כל קישור הוא אותו מספר שמופיע אחרי המילים בטקסט.
+// המספר שליד כל קישור הוא אותו מספר שמופיע אחרי המילים בטקסט, והרשימה בסדר הזה —
+// סדר הופעת הקישורים בעמוד (flowEdit.linksInDisplayOrder), לא סדר יצירתם.
 // קישור שהצד השני שלו בעמוד אחר ("עמוד 4, שורה 12: «…»"): מהמערכת — מאשרים/מוחקים
 // בעמוד של הפירוש; קישור שנוסף כאן (_added) — "ביטול" מסיר את הפעולה עצמה (act.removeLink).
 // act.otherPage(n) (רשות) — בחירת הצד השני בעמוד אחר, כשהקישור ממתין לצד השני.
@@ -46,7 +47,7 @@ export default function LinksTab({ view, readOnly = false, linkPending = null, a
     const t = String(l.text || '').slice(0, 28)
     return `${(l.line_no ?? 0) + 1}: ${t}${(l.text || '').length > 28 ? '…' : ''}`
   }
-  const links = view.links || []
+  const links = linksInDisplayOrder(view)
   const missing = view.missing || []
 
   return (
@@ -83,10 +84,10 @@ export default function LinksTab({ view, readOnly = false, linkPending = null, a
       <Section title={`קישורים בעמוד (${links.length})`}>
         {!links.length && <p className="text-xs text-on-surface/60">אין קישורים</p>}
         <ul className="space-y-2 text-sm">
-          {links.map((k, idx) => (
-            <li key={`${k.from_line}-${k.to_line}-${k.to_page}-${idx}`} className={`rounded-md border p-2 ${k.suspect ? 'border-danger-600' : 'border-surface-variant'}`}>
+          {links.map(({ link: k, n }) => (
+            <li key={`${k.from_line}-${k.to_line}-${k.to_page}-${n}`} className={`rounded-md border p-2 ${k.suspect ? 'border-danger-600' : 'border-surface-variant'}`}>
               <div className="flex items-center gap-1 text-xs text-on-surface/60">
-                <span className="font-bold text-info-700">{linkBadge(idx + 1)}</span>
+                <span className="font-bold text-info-700">{linkBadge(n)}</span>
                 {KIND_HE[k.kind] || k.kind} · {k.src === 'human' ? 'אושר' : `אוטומטי${typeof k.conf === 'number' ? ` ${Math.round(k.conf * 100)}%` : ''}`}
               </div>
               {k.from_page != null && k.from_page !== view.page ? (
