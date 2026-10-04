@@ -32,6 +32,7 @@ export const PROTECTED_PREFIXES = [
   '/api/upload-text',
   '/api/corrections',
   '/api/app-reports/admin',
+  '/api/search-feedback/admin',
 ]
 
 export const isProtectedPath = (path) =>

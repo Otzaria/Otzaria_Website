@@ -30,18 +30,19 @@ export { normalizePayload, ensureSmtpConfig } from '../errorReportLogic.js';
 // אבל ה-API כבר אינו מקבל body ללא הגבלה גם בלעדיה.
 export const MAX_REPORT_BODY_BYTES = 256 * 1024; // 256KB — הרבה מעל כל דיווח אמיתי
 
-export async function readJsonBodyLimited(request, maxBytes) {
+/**
+ * הבתים הגולמיים של הגוף, עם אותה תקרה כפולה. גוף חסר → מערך ריק.
+ * @returns {Promise<Uint8Array>}
+ */
+export async function readBodyBytesLimited(request, maxBytes) {
   const tooLarge = () => Object.assign(new Error('body too large'), { code: 'BODY_TOO_LARGE' });
-  const invalidJson = () => Object.assign(new Error('invalid JSON'), { code: 'INVALID_JSON' });
 
   const contentLength = Number(request.headers.get('content-length') || '');
   if (Number.isFinite(contentLength) && contentLength > maxBytes) {
     throw tooLarge();
   }
 
-  if (!request.body) {
-    throw invalidJson();
-  }
+  if (!request.body) return new Uint8Array(0);
 
   const reader = request.body.getReader();
   const chunks = [];
@@ -63,6 +64,13 @@ export async function readJsonBodyLimited(request, maxBytes) {
     merged.set(chunk, offset);
     offset += chunk.byteLength;
   }
+  return merged;
+}
+
+export async function readJsonBodyLimited(request, maxBytes) {
+  const invalidJson = () => Object.assign(new Error('invalid JSON'), { code: 'INVALID_JSON' });
+  // גוף חסר מגיע כמערך ריק, ו-JSON.parse('') נכשל → INVALID_JSON.
+  const merged = await readBodyBytesLimited(request, maxBytes);
 
   try {
     return JSON.parse(new TextDecoder('utf-8').decode(merged));

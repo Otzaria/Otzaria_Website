@@ -150,6 +150,13 @@ const OCR_ADMIN_ALLOWED_API = [
   '/api/admin/stats',
 ];
 
+// ===== מאמן מודלים =====
+// בדיוק מה שמנהל OCR מקבל, ובנוסף דף משוב החיפוש. ה-API של המשוב אינו תחת /api/admin
+// (/api/search-feedback/admin) ונבדק בראוט עצמו (hasSearchFeedbackAccess).
+const MODEL_TRAINER_ALLOWED_PAGES = [...OCR_ADMIN_ALLOWED_PAGES, '/library/admin/search-feedback'];
+const MODEL_TRAINER_ALLOWED_PAGE_EXACT = ['/library/admin'];
+const MODEL_TRAINER_ALLOWED_API = OCR_ADMIN_ALLOWED_API;
+
 // נתיבי דפים/API החסומים למנהל ספרים (אזורי ה-OCR — למנהל גלובלי ולמנהל OCR בלבד)
 const BOOKS_ADMIN_BLOCKED_PAGES = [
   '/library/admin/users',
@@ -159,6 +166,7 @@ const BOOKS_ADMIN_BLOCKED_PAGES = [
   '/library/admin/ocr-layout',
   '/library/admin/page-proof',
   '/library/admin/private-sources',
+  '/library/admin/search-feedback',
 ];
 const BOOKS_ADMIN_BLOCKED_API = [
   '/api/admin/users',
@@ -237,6 +245,14 @@ const authProxy = withAuth(
         const allowed = isApiRoute
           ? OCR_ADMIN_ALLOWED_API.some(p => path === p || path.startsWith(p + '/'))
           : OCR_ADMIN_ALLOWED_PAGE_EXACT.includes(path) || OCR_ADMIN_ALLOWED_PAGES.some(p => path === p || path.startsWith(p + '/'));
+        if (!allowed) return unauthorized();
+      }
+
+      // מאמן מודלים - כמו מנהל OCR, ועוד משוב החיפוש (allowlist)
+      if (role === 'model_trainer') {
+        const allowed = isApiRoute
+          ? MODEL_TRAINER_ALLOWED_API.some(p => path === p || path.startsWith(p + '/'))
+          : MODEL_TRAINER_ALLOWED_PAGE_EXACT.includes(path) || MODEL_TRAINER_ALLOWED_PAGES.some(p => path === p || path.startsWith(p + '/'));
         if (!allowed) return unauthorized();
       }
 
