@@ -13,6 +13,8 @@ const SearchFeedbackKeySchema = new mongoose.Schema({
   lastSeenAt: { type: Date, default: Date.now },
   eventCount: { type: Number, default: 0 },
   batchCount: { type: Number, default: 0 },
+  // At most one bounded, recoverable batch per installation; cleared after completion.
+  pendingIngest: { type: mongoose.Schema.Types.Mixed },
 }, { timestamps: false });
 
 SearchFeedbackKeySchema.index({ status: 1 });

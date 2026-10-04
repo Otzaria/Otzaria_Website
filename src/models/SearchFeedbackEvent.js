@@ -33,13 +33,22 @@ const SearchFeedbackEventSchema = new mongoose.Schema({
   receivedAt: { type: Date, required: true },
   context: { type: ContextSchema, required: true },
   payload: { type: mongoose.Schema.Types.Mixed, required: true },
+  ingestToken: { type: String },
+  ingestCommitted: { type: Boolean },
+  // Present only after an explicit purge; ordinary training data never expires.
+  purgedUntil: { type: Date },
 }, { minimize: false });
 
-SearchFeedbackEventSchema.index({ type: 1 });
+SearchFeedbackEventSchema.index({ type: 1, receivedAt: 1, _id: 1 });
 SearchFeedbackEventSchema.index({ searchSessionId: 1 });
-SearchFeedbackEventSchema.index({ receivedAt: 1 });
-SearchFeedbackEventSchema.index({ 'context.engine.modelFamilyId': 1 });
-SearchFeedbackEventSchema.index({ 'context.engine.modelQuantization': 1 });
-SearchFeedbackEventSchema.index({ keyId: 1 });
+// The tie breaker is part of the export ordering, so it must be in the index too.
+SearchFeedbackEventSchema.index({ receivedAt: 1, _id: 1 });
+SearchFeedbackEventSchema.index({ 'context.engine.modelFamilyId': 1, receivedAt: 1, _id: 1 });
+SearchFeedbackEventSchema.index({ 'context.engine.modelFamilyId': 1, 'context.engine.modelQuantization': 1, receivedAt: 1, _id: 1 });
+SearchFeedbackEventSchema.index({ 'context.engine.modelQuantization': 1, receivedAt: 1, _id: 1 });
+SearchFeedbackEventSchema.index({ keyId: 1, receivedAt: 1, _id: 1 });
+SearchFeedbackEventSchema.index({ ingestToken: 1 });
+SearchFeedbackEventSchema.index({ ingestCommitted: 1, receivedAt: 1, _id: 1 });
+SearchFeedbackEventSchema.index({ purgedUntil: 1 }, { expireAfterSeconds: 0 });
 
 export default mongoose.models.SearchFeedbackEvent || mongoose.model('SearchFeedbackEvent', SearchFeedbackEventSchema);

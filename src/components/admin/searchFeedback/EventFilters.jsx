@@ -1,10 +1,13 @@
 'use client'
 
-import { EVENT_TYPE_LABELS, modelLabel, selectableModels } from './labels'
+import { EVENT_TYPE_LABELS, modelFromValue, modelLabel, modelValue, selectableModels } from './labels'
 
 /** מסנני תאריך קליטה/סוג/מודל, משותפים לייצוא ולניקוי. */
 export default function EventFilters({ filters, onChange, models }) {
   const set = (key) => (e) => onChange({ ...filters, [key]: e.target.value })
+  const choices = selectableModels(models)
+  const selected = modelFromValue(filters.model)
+  if (selected && !choices.some((m) => modelValue(m) === filters.model)) choices.push(selected)
   return (
     <div className="flex flex-wrap gap-4 text-sm">
       <label className="flex items-center gap-2">
@@ -26,7 +29,7 @@ export default function EventFilters({ filters, onChange, models }) {
         <span className="text-on-surface/70">מודל:</span>
         <select value={filters.model} onChange={set('model')} className="border rounded-lg px-3 py-2 bg-white max-w-xs">
           <option value="">הכל</option>
-          {selectableModels(models).map((m, i) => <option key={modelLabel(m)} value={String(i)}>{modelLabel(m)}</option>)}
+          {choices.map((m) => <option key={modelValue(m)} value={modelValue(m)}>{modelLabel(m)}</option>)}
         </select>
       </label>
     </div>

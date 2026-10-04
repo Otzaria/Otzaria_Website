@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import EventFilters from './EventFilters'
 import { EMPTY_FILTERS, filtersToCriteria, formatDateTime } from './labels'
 
@@ -29,6 +29,8 @@ export default function PurgePanel({ models, onPurged }) {
   const [typedCount, setTypedCount] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState({ text: '', error: false })
+  const revision = useRef(0)
+  const previousPreviewId = useRef(null)
 
   const criteria = () => {
     if (all) return { all: true }
@@ -37,6 +39,7 @@ export default function PurgePanel({ models, onPurged }) {
     return c
   }
   const resetPreview = () => {
+    revision.current += 1
     setPreview(null)
     setTypedCount('')
     setMessage({ text: '', error: false })
@@ -45,22 +48,28 @@ export default function PurgePanel({ models, onPurged }) {
   const runPreview = async () => {
     setBusy(true)
     resetPreview()
+    const requestedRevision = revision.current
+    const requestedCriteria = criteria()
     try {
-      const json = await postPurge(criteria(), true)
-      setPreview({ count: json.count, asOf: json.asOf, criteria: criteria() })
+      const json = await postPurge({ ...requestedCriteria, ...(previousPreviewId.current ? { replacePreviewId: previousPreviewId.current } : {}) }, true)
+      previousPreviewId.current = json.previewId || null
+      if (revision.current === requestedRevision) {
+        setPreview({ count: json.count, asOf: json.asOf, previewId: json.previewId, criteria: requestedCriteria })
+      }
     } catch (err) {
-      setMessage({ text: err.message, error: true })
+      if (revision.current === requestedRevision) setMessage({ text: err.message, error: true })
     } finally {
       setBusy(false)
     }
   }
 
   const runPurge = async () => {
-    if (!preview || Number(typedCount) !== preview.count) return
+    if (!preview || Number(typedCount) !== preview.count || JSON.stringify(preview.criteria) !== JSON.stringify(criteria())) return
     if (!window.confirm(`למחוק לצמיתות ${preview.count.toLocaleString('he-IL')} אירועים? אין דרך לשחזר אותם.`)) return
     setBusy(true)
     try {
-      const json = await postPurge({ ...preview.criteria, asOf: preview.asOf, confirmCount: preview.count }, false)
+      const json = await postPurge({ ...preview.criteria, asOf: preview.asOf, previewId: preview.previewId, confirmCount: preview.count }, false)
+      previousPreviewId.current = null
       setPreview(null)
       setTypedCount('')
       setMessage({ text: `נמחקו ${json.deleted.toLocaleString('he-IL')} אירועים`, error: false })
@@ -104,7 +113,7 @@ export default function PurgePanel({ models, onPurged }) {
         <span>תצוגה מקדימה</span>
       </button>
 
-      {preview && (
+      {preview && JSON.stringify(preview.criteria) === JSON.stringify(criteria()) && (
         <div className="rounded-xl border border-danger-600/40 p-3 space-y-2 text-sm">
           <p>
             יימחקו <strong>{preview.count.toLocaleString('he-IL')}</strong> אירועים

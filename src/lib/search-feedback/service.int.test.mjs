@@ -14,6 +14,7 @@ import {
 import { getSearchFeedbackConfig } from './config.js';
 import { checkRateLimit } from '../rate-limit.js';
 import { MAX_EVENTS_BODY_BYTES } from './validation.js';
+import { committedEvents } from './ingestion.js';
 import { startMongo } from '../corrections/testing/mongo.js';
 import { RFC_SEED_HEX, keyPairFromSeed, randomKeyPair, batch, event, registerBody } from './testing/fixtures.js';
 
@@ -384,7 +385,9 @@ test('ניקוי: תצוגה מקדימה, אישור בספירה מדויקת,
   const p3 = await previewPurge(all.filter);
   assert.equal(p3.count, 5);
   assert.deepEqual(await purgeEvents(all.filter, { confirmCount: 5, asOf: p3.asOf }), { ok: true, deleted: 5 });
-  assert.equal(await SearchFeedbackEvent.countDocuments(), 0);
+  assert.equal(await SearchFeedbackEvent.countDocuments(committedEvents()), 0);
+  const erased = await SearchFeedbackEvent.find({}).lean();
+  assert.ok(erased.every((event) => !event.payload && !event.context && !event.keyId && event.purgedUntil instanceof Date));
   // מוני המפתחות סופרים מה שנקלט ואינם יורדים בניקוי
   assert.equal((await SearchFeedbackKey.findOne({ keyId: keyIdOf(a) }).lean()).eventCount, 6);
 });

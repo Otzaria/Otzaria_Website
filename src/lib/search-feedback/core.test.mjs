@@ -294,7 +294,7 @@ test('מסנן ניקוי: חובה מסנן או all:true מפורש, ולא ש
 });
 
 test('ממשק: מסנני הדף מתורגמים לשרת — קוונטיזציה null נשלחת במפורש', async () => {
-  const { filtersToCriteria, criteriaToSearchParams } = await import('../../components/admin/searchFeedback/labels.js');
+  const { filtersToCriteria, criteriaToSearchParams, modelValue } = await import('../../components/admin/searchFeedback/labels.js');
   const models = [
     { modelFamilyId: null, modelQuantization: null, count: 3 },
     { modelFamilyId: 'fam@1', modelQuantization: 'int8', count: 2 },
@@ -302,8 +302,11 @@ test('ממשק: מסנני הדף מתורגמים לשרת — קוונטיזצ
   ];
   const base = { from: '', to: '', type: '', model: '' };
   assert.deepEqual(filtersToCriteria(base, models), {});
-  assert.deepEqual(filtersToCriteria({ ...base, model: '0' }, models), { modelFamilyId: 'fam@1', modelQuantization: 'int8' });
-  const noQ = filtersToCriteria({ ...base, model: '1', type: 'vote' }, models);
+  const selection = { ...base, model: modelValue(models[1]) };
+  assert.deepEqual(filtersToCriteria(selection, models), { modelFamilyId: 'fam@1', modelQuantization: 'int8' });
+  assert.deepEqual(filtersToCriteria(selection, [...models].reverse()), { modelFamilyId: 'fam@1', modelQuantization: 'int8' });
+  assert.deepEqual(filtersToCriteria(selection, []), { modelFamilyId: 'fam@1', modelQuantization: 'int8' });
+  const noQ = filtersToCriteria({ ...base, model: modelValue(models[2]), type: 'vote' }, models);
   assert.deepEqual(noQ, { type: 'vote', modelFamilyId: 'fam@1', modelQuantization: null });
   assert.equal(criteriaToSearchParams(noQ).toString(), 'type=vote&modelFamilyId=fam%401&noQuantization=1');
   assert.deepEqual(buildPurgeFilter(noQ).filter['context.engine.modelQuantization'], null);

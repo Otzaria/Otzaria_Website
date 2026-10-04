@@ -22,8 +22,22 @@ export function modelLabel({ modelFamilyId, modelQuantization }) {
 /** רק מודלים עם משפחה ידועה ניתנים לסינון. */
 export const selectableModels = (models) => models.filter((m) => m.modelFamilyId)
 
+// A model's identity must survive changes in the order of the statistics rows.
+export const modelValue = (model) => JSON.stringify([model.modelFamilyId, model.modelQuantization ?? null])
+
+export function modelFromValue(value) {
+  try {
+    const pair = JSON.parse(value)
+    if (Array.isArray(pair) && pair.length === 2 && typeof pair[0] === 'string' && pair[0] &&
+        (pair[1] === null || typeof pair[1] === 'string')) {
+      return { modelFamilyId: pair[0], modelQuantization: pair[1] }
+    }
+  } catch { /* an empty or invalid selection */ }
+  return null
+}
+
 /**
- * מסננים בצורת אובייקט אחיד לשרת. model הוא אינדקס ב-selectableModels;
+ * מסננים בצורת אובייקט אחיד לשרת. model הוא זהות יציבה של משפחה וקוונטיזציה;
  * קוונטיזציה null נשלחת במפורש כ-null (= רק בלי קוונטיזציה), לא מושמטת (= כל הקוונטיזציות).
  */
 export function filtersToCriteria(filters, models) {
@@ -31,7 +45,7 @@ export function filtersToCriteria(filters, models) {
   if (filters.from) criteria.from = new Date(filters.from).toISOString()
   if (filters.to) criteria.to = new Date(filters.to).toISOString()
   if (filters.type) criteria.type = filters.type
-  const model = filters.model === '' ? null : selectableModels(models)[Number(filters.model)]
+  const model = filters.model === '' ? null : selectableModels(models).find((m) => modelValue(m) === filters.model) || modelFromValue(filters.model)
   if (model) {
     criteria.modelFamilyId = model.modelFamilyId
     criteria.modelQuantization = model.modelQuantization ?? null

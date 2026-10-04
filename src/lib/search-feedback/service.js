@@ -5,6 +5,9 @@ import SearchFeedbackKey from '../../models/SearchFeedbackKey.js';
 import SearchFeedbackEvent from '../../models/SearchFeedbackEvent.js';
 import { KEY_ID_RE, computeKeyId } from './crypto.js';
 import { EVENT_TYPES } from './validation.js';
+import { committedEvents, ingestWithReceipt, maintainStagedEvents } from './ingestion.js';
+import { orderedEvents } from './event-query.js';
+import { createPurgeSnapshot, deletePurgeSnapshot } from './purge-snapshot.js';
 
 /**
  * רישום אידמפוטנטי. מפתח חסום נשאר חסום גם ברישום חוזר.
@@ -12,6 +15,7 @@ import { EVENT_TYPES } from './validation.js';
  * @returns {Promise<{keyId:string, status:'active'|'blocked'}>}
  */
 export async function registerKey(reg, { now = new Date() } = {}) {
+  await SearchFeedbackKey.init();
   const keyId = computeKeyId(reg.publicKey);
   const doc = await SearchFeedbackKey.findOneAndUpdate(
     { keyId },
@@ -35,6 +39,7 @@ export async function registerKey(reg, { now = new Date() } = {}) {
 
 /** @returns {Promise<{keyId:string, publicKey:Buffer, status:string}|null>} */
 export async function findKey(keyId) {
+  await SearchFeedbackKey.init();
   const doc = await SearchFeedbackKey.findOne({ keyId }).select('keyId publicKey status').lean();
   if (!doc) return null;
   return { keyId: doc.keyId, publicKey: Buffer.from(doc.publicKey, 'base64'), status: doc.status };
@@ -46,48 +51,7 @@ export async function findKey(keyId) {
  * @returns {Promise<{accepted:number, duplicates:number, rejected:number, rejectedSamples:object[]}>}
  */
 export async function ingestEvents(keyId, batch, { now = new Date() } = {}) {
-  const seen = new Set();
-  const unique = [];
-  for (const event of batch.events) {
-    if (seen.has(event.eventId)) continue;
-    seen.add(event.eventId);
-    unique.push(event);
-  }
-
-  let accepted = 0;
-  if (unique.length) {
-    const ops = unique.map((e) => ({
-      updateOne: {
-        filter: { eventId: e.eventId },
-        update: {
-          $setOnInsert: {
-            keyId,
-            batchId: batch.batchId,
-            type: e.type,
-            searchSessionId: e.searchSessionId,
-            msSinceSearch: e.msSinceSearch,
-            clientTime: e.clientTime,
-            sentAt: batch.sentAt,
-            receivedAt: now,
-            context: batch.context,
-            payload: e.payload,
-          },
-        },
-        upsert: true,
-      },
-    }));
-    const result = await SearchFeedbackEvent.bulkWrite(ops, { ordered: false });
-    accepted = result.upsertedCount ?? 0;
-  }
-
-  // batchCount סופר מנות שתרמו נתונים: שליחה חוזרת של מנה שכבר נקלטה (כפילויות בלבד) אינה מנה חדשה.
-  await SearchFeedbackKey.updateOne(
-    { keyId },
-    {
-      $inc: { eventCount: accepted, batchCount: accepted > 0 ? 1 : 0 },
-      $set: { lastSeenAt: now, appVersionLast: batch.context.appVersion },
-    },
-  );
+  const accepted = await ingestWithReceipt(keyId, batch, now);
   return {
     accepted,
     duplicates: batch.events.length - accepted,
@@ -132,17 +96,20 @@ export async function getStats({ days = 30, now = new Date(), fresh = false } = 
   if (!fresh && statsCache.value && now.getTime() - statsCache.at < STATS_CACHE_MS) {
     return { ...statsCache.value, cachedAt: new Date(statsCache.at) };
   }
+  await maintainStagedEvents();
   const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  const readable = { $match: committedEvents() };
   const [totalEvents, byType, byDay, byModel, byAppVersion, keyStatus, topKeys] = await Promise.all([
-    SearchFeedbackEvent.estimatedDocumentCount(),
-    SearchFeedbackEvent.aggregate(groupCount('$type')),
+    Promise.all([SearchFeedbackEvent.estimatedDocumentCount(), SearchFeedbackEvent.countDocuments({ ingestCommitted: false })])
+      .then(([total, staged]) => Math.max(0, total - staged)),
+    SearchFeedbackEvent.aggregate(groupCount('$type', [readable])),
     SearchFeedbackEvent.aggregate([
-      { $match: { receivedAt: { $gte: since } } },
+      { $match: { ...committedEvents(), receivedAt: { $gte: since } } },
       { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$receivedAt', timezone: 'UTC' } }, count: { $sum: 1 } } },
       { $sort: { _id: 1 } },
     ]),
-    SearchFeedbackEvent.aggregate(groupCount({ modelFamilyId: '$context.engine.modelFamilyId', modelQuantization: '$context.engine.modelQuantization' })),
-    SearchFeedbackEvent.aggregate([...groupCount('$context.appVersion'), { $limit: 30 }]),
+    SearchFeedbackEvent.aggregate(groupCount({ modelFamilyId: '$context.engine.modelFamilyId', modelQuantization: '$context.engine.modelQuantization' }, [readable])),
+    SearchFeedbackEvent.aggregate([...groupCount('$context.appVersion', [readable]), { $limit: 30 }]),
     SearchFeedbackKey.aggregate(groupCount('$status')),
     SearchFeedbackKey.find({})
       .sort({ eventCount: -1 })
@@ -243,17 +210,14 @@ export async function exportEventsStream({ filter, includeBlocked }) {
     const blocked = await SearchFeedbackKey.distinct('keyId', { status: 'blocked' });
     if (blocked.length) query.keyId = filter.keyId ? { $eq: filter.keyId, $nin: blocked } : { $nin: blocked };
   }
-  const cursor = SearchFeedbackEvent.find(query)
-    .sort({ receivedAt: 1, _id: 1 })
-    .select('-_id -__v')
-    .lean()
-    .cursor({ batchSize: 500 });
+  const cursor = await orderedEvents(query, { selection: '-_id -__v -ingestToken -ingestCommitted -purgedUntil' });
   const encoder = new TextEncoder();
   return new ReadableStream({
     async pull(controller) {
       try {
         const doc = await cursor.next();
         if (!doc) {
+          await cursor.close();
           controller.close();
           return;
         }
@@ -286,26 +250,19 @@ export function buildPurgeFilter(body) {
   return parsed;
 }
 
-// asOf מקבע את הקבוצה: אירועים שנקלטו אחרי התצוגה המקדימה אינם נספרים ואינם נמחקים.
-function boundedByAsOf(filter, asOf) {
-  return { ...filter, receivedAt: { ...(filter.receivedAt || {}), $lte: asOf } };
-}
-
-/** תצוגה מקדימה: כמה אירועים יימחקו, נכון לרגע asOf. */
-export async function previewPurge(filter, { now = new Date() } = {}) {
-  const count = await SearchFeedbackEvent.countDocuments(boundedByAsOf(filter, now));
-  return { count, asOf: now };
+/** תצוגה מקדימה: שמירת המזהים המדויקים של הקבוצה המאושרת, בצברים זמניים מוגבלים. */
+export async function previewPurge(filter, { now = new Date(), replacePreviewId } = {}) {
+  return createPurgeSnapshot(filter, now, replacePreviewId);
 }
 
 /**
- * מחיקה בפועל. confirmCount חייב להיות בדיוק תוצאת התצוגה המקדימה לאותו asOf; אחרת לא נמחק דבר.
+ * מחיקה בפועל. האישור שייך לקבוצת המזהים השמורה; קליטה מקבילה אינה יכולה להרחיב אותה.
+ * אירועים שנמחקו בינתיים בידי מנהל אחר מדולגים.
  * מוני eventCount של המפתחות אינם יורדים — הם סופרים מה שנקלט, לא מה שנשמר.
  */
-export async function purgeEvents(filter, { confirmCount, asOf }) {
-  const bounded = boundedByAsOf(filter, asOf);
-  const count = await SearchFeedbackEvent.countDocuments(bounded);
-  if (count !== confirmCount) return { ok: false, count };
-  const result = await SearchFeedbackEvent.deleteMany(bounded);
+export async function purgeEvents(filter, approval) {
+  const result = await deletePurgeSnapshot(filter, approval);
+  if (!result.ok) return result;
   invalidateStatsCache();
-  return { ok: true, deleted: result.deletedCount ?? 0 };
+  return result;
 }
