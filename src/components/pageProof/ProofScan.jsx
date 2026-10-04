@@ -49,6 +49,8 @@ import {
 //   recutIds        Set — שורות "לזיהוי מחדש" (כתום מקווקו + תווית)
 //   straddleIds     Set — שורות שבולטות מהמסגרות (אדום מקווקו, גם במצב מסגרות)
 //   outsideIds      Set — שורות-תוכן מחוץ לכל מסגרת (כתום מקווקו, במצב מסגרות)
+//   furniture       [{id, bbox, stream}] — שורות-ריהוט בלי מסגרת (furnitureMarks): אפור מקווקו
+//                   ותווית "ריהוט", במצב מסגרות — כדי שלא יציירו להן מסגרת חדשה
 //   currentLineId   השורה של הסמן בטקסט — פס שקוף + חץ בקצה המסגרת
 //   currentWord     מספר המילה של הסמן בשורה (אינדקס ב-words[]; אין = -1) — מודגשת
 //                   על הסריקה לפי words[i].bbox, בשני המצבים
@@ -75,6 +77,7 @@ import {
 //   onZoom(nextZoom)                         Ctrl+גלגלת (העוגן — הנקודה שמתחת לעכבר)
 
 const EMPTY = new Set()
+const EMPTY_LIST = []
 const OBJECT_COLOR = '#6b7280'
 // סמן שזז בגלל לחיצה על הסריקה (בתוך הזמן הזה אחריה) — בלי גלילה-אוטומטית
 const PICK_NO_REVEAL_MS = 800
@@ -128,6 +131,7 @@ export default function ProofScan({
   recutIds = EMPTY,
   straddleIds = EMPTY,
   outsideIds = EMPTY,
+  furniture = EMPTY_LIST,
   currentLineId = null,
   currentWord = -1,
   caretY = null,
@@ -523,6 +527,17 @@ export default function ProofScan({
                     />
                   )
                 })}
+                {(furniture || []).filter((m) => isBox(m.bbox)).map((m) => (
+                  <rect
+                    key={`f${m.id}`}
+                    data-furniture={m.id}
+                    {...rectProps(m.bbox)}
+                    className="fill-neutral-400/10 stroke-neutral-500"
+                    strokeWidth={1.25 * u}
+                    strokeDasharray={dash(2, 3)}
+                    pointerEvents="none"
+                  />
+                ))}
                 {lines
                   .filter((l) => straddle.has(l.id) && isBox(l.bbox))
                   .map((l) => (
@@ -677,6 +692,20 @@ export default function ProofScan({
                   </div>
                 )
               })}
+            {mode === 'frames' &&
+              (furniture || [])
+                .filter((m) => isBox(m.bbox))
+                .map((m) => (
+                  <span
+                    key={`f${m.id}`}
+                    data-testid="furniture-label"
+                    title="ריהוט הדף שהמחשב זיהה — לא נכנס לספר; אין צורך לצייר לו מסגרת"
+                    className="absolute rounded-sm bg-neutral-100/90 px-1 text-[10px] leading-4 text-neutral-600"
+                    style={{ left: m.bbox[0] * zoom + 2, top: m.bbox[1] * zoom + 1 }}
+                  >
+                    ריהוט · {streamInfo(view, m.stream).he}
+                  </span>
+                ))}
             {mode === 'lines' &&
               lines
                 .filter((l) => recut.has(l.id) && l.status !== 'removed' && isBox(l.bbox))

@@ -4,7 +4,7 @@ import { memo, useCallback, useEffect, useImperativeHandle, useLayoutEffect, use
 import { buildView, recutLineIds, validateOp } from '@/lib/pageProof/ops'
 import { historyCaret } from '@/lib/pageProof/historyCaret'
 import { streamChoices, untouchedLineIds, replaceWord, viewStats } from '@/lib/pageProof/view'
-import { isFurnitureStream, keepHeading, streamInfo } from '@/lib/pageProof/vocab'
+import { isFurnitureStream, isPrintDefect, keepHeading, PRINT_DEFECT_WHY, streamInfo } from '@/lib/pageProof/vocab'
 import { streamTabs, paragraphApproval, pageApproval, buildParagraphs, selectionToLineRanges, tokenize, FURNITURE_TAB, FURNITURE_TAB_HE } from '@/lib/pageProof/textModel'
 import {
   HINTS,
@@ -546,6 +546,31 @@ export default function ProofEditor({
     }
   }
 
+  // ---- "פגם בדפוס" לשורות שבבחירה (או לשורת-הסמן): תוקן למה שאמור להיות בספר, לא למה שבסריקה ----
+  // מתג: כשכל השורות כבר מסומנות — הסימון יורד ("סביר": בחוזה אין "ללא ודאות")
+  const defectLines = () => {
+    const ranges = sel && !isCollapsed(sel) ? selectionToLineRanges(view, tabKey, sel.anchor, sel.focus) : caret ? [{ lineId: caret.lineId }] : []
+    const out = []
+    for (const r of ranges) {
+      const l = lineById.get(r.lineId)
+      if (l && l.id > 0 && !l._new && !out.includes(l)) out.push(l)
+    }
+    return out
+  }
+  const printDefect = () => {
+    const ls = defectLines()
+    if (!ls.length) return say(HINTS.noWord)
+    const off = ls.every(isPrintDefect)
+    const value = off ? { v: 'probable', why: null } : { v: 'ambiguous', why: PRINT_DEFECT_WHY }
+    if (!push({ kind: 'certainty', page: P, ids: ls.map((l) => l.id), value })) return
+    const one = ls.length === 1
+    say(
+      off
+        ? `הסימון «פגם בדפוס» הוסר מ${one ? 'השורה' : `-${ls.length} שורות`}`
+        : `${one ? 'השורה סומנה' : `${ls.length} שורות סומנו`} «פגם בדפוס»: הטקסט המתוקן נכנס לספר, ו${one ? 'השורה לא תשמש' : 'הן לא ישמשו'} לאימון מודל-הזיהוי`
+    )
+  }
+
   const goSuspicious = (dir) => {
     const r = nextSuspicious(view, tabKey, sel, dir)
     if (r.hint) say(r.hint)
@@ -796,6 +821,7 @@ export default function ProofEditor({
     script: (v) => lineOp('script', v),
     mixed: (b) => lineOp('mixed_line', b ? 1 : 0),
     certainty: (v, why) => lineOp('certainty', { v, why: why || null }),
+    printDefect: () => printDefect(),
     lineOk: () => lineOp('line_ok'),
     remove: () => {
       if (lineOp('status', 'removed')) say('השורה סומנה "לא-שורה" והוסרה מהטקסט — שחזור בכרטיסיית "עמוד"')
@@ -903,6 +929,8 @@ export default function ProofEditor({
         onNextSuspicious={suspectCount > 0 ? goSuspicious : null}
         streams={streams}
         onStreamForLines={edit && hasCaret ? streamForLines : null}
+        onPrintDefect={edit && hasCaret && !furnitureTab ? printDefect : null}
+        printDefect={!!caretLine && isPrintDefect(caretLine)}
         fontSize={layout.fontSize}
         setFontSize={(n) => updateLayout({ fontSize: clampFontSize(n) })}
         fontFamily={fontFamily}

@@ -306,6 +306,31 @@ describe('ProofEditor — תיקוני הביקורת', { timeout: 30000 }, () =
     expect(editor()).toHaveTextContent('משום רבי שמעון')
   })
 
+  // פורום (2026-10-01): "נדרש לפתח אפשרות להגדרת שורה שהיא מתוקנת שלא על פי המקור"
+  it('"פגם בדפוס" בסרגל ← certainty=ambiguous עם הסיבה הקבועה; לחיצה שנייה מסירה; Ctrl+Z מבטל', async () => {
+    const { editor } = setup()
+    await caretAt(editor(), { lineId: 1, offset: 2 })
+    const btn = () => screen.getByRole('button', { name: 'פגם בדפוס' })
+    expect(btn()).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(btn())
+    expect(opsNow()).toEqual([{ kind: 'certainty', ids: [1], value: { v: 'ambiguous', why: 'פגם בדפוס — תוקן שלא לפי המקור' } }])
+    expect(screen.getByText(/השורה סומנה «פגם בדפוס»: הטקסט המתוקן נכנס לספר, והשורה לא תשמש לאימון/)).toBeInTheDocument()
+    expect(btn()).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(btn())
+    expect(opsNow()[1]).toEqual({ kind: 'certainty', ids: [1], value: { v: 'probable', why: null } })
+    expect(btn()).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.keyDown(document.body, { key: 'ז', code: 'KeyZ', ctrlKey: true })
+    fireEvent.keyDown(document.body, { key: 'ז', code: 'KeyZ', ctrlKey: true })
+    expect(opsNow()).toEqual([])
+  })
+
+  it('"פגם בדפוס" לכמה שורות שבבחירה — פעולה אחת', async () => {
+    const { editor } = setup()
+    await caretAt(editor(), { lineId: 1, offset: 1 }, { lineId: 2, offset: 3 })
+    fireEvent.click(screen.getByRole('button', { name: 'פגם בדפוס' }))
+    expect(opsNow()).toEqual([{ kind: 'certainty', ids: [1, 2], value: { v: 'ambiguous', why: 'פגם בדפוס — תוקן שלא לפי המקור' } }])
+  })
+
   it('סגנון-פסקה חדש מהסרגל (סעיף ממוספר) — פעולת para לכל שורות הפסקה, והסרגל מציג אותו', async () => {
     const { editor } = setup()
     await caretAt(editor(), { lineId: 2, offset: 1 })
