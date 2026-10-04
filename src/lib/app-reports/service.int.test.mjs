@@ -1,6 +1,7 @@
 /**
  * בדיקות אינטגרציה של דיווחי התוכנה מול MongoDB אמיתי ו-GitHub מדומה. הרצה: npm test
  */
+import { GIF87A, ANIMATED_GIF } from './testing/gif-fixtures.js';
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -449,4 +450,32 @@ test('צילום מסך שאינו תמונה → 422 ושום דבר לא נש�
   assert.equal(res.body.field, 'attachments.images[0]');
   assert.equal(await AppReport.countDocuments({ reportId: body.reportId }), 0);
   assert.equal(files.size, 0);
+});
+
+test('GIF: original bytes, MIME and extension survive ingest and public/admin reads', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const images = [GIF87A, ANIMATED_GIF];
+  const body = manual({ attachments: { images: images.map((buffer) => ({
+    data: buffer.toString('base64'), mimeType: 'image/png', fileName: '',
+  })) } });
+  const res = await post(body);
+  assert.equal(res.status, 200);
+  const doc = await AppReport.findOne({ reportId: body.reportId }).lean();
+  const issue = gh.calls.find((c) => c.method === 'POST' && c.path.endsWith('/issues'));
+  for (const [i, buffer] of images.entries()) {
+    const ref = doc.fileIds.images[i];
+    const saved = files.get(String(ref.gridfsId));
+    assert.deepEqual(saved.buf, buffer);
+    assert.equal(saved.contentType, 'image/gif');
+    assert.equal(saved.filename, `app-report-${body.reportId}-image-${i + 1}.gif`);
+    assert.equal(ref.fileName, `image-${i + 1}.gif`);
+    const admin = await loadReportImage(body.reportId, i, readFile);
+    assert.deepEqual(admin.buffer, buffer);
+    assert.equal(admin.contentType, 'image/gif');
+    assert.equal(admin.filename, `image-${i + 1}.gif`);
+    const pub = await loadPublicImage(ref.publicToken, readFile);
+    assert.deepEqual(pub.buffer, buffer);
+    assert.equal(pub.contentType, 'image/gif');
+    assert.ok(issue.body.body.includes(`/api/app-reports/images/${ref.publicToken})`));
+  }
 });

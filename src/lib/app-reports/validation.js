@@ -36,7 +36,13 @@ const byteLength = (s) => Buffer.byteLength(s, 'utf8');
 /** סוג התמונה לפי הבתים עצמם — לא סומכים על mimeType שהלקוח הצהיר. */
 export function sniffImageType(buffer) {
   for (const [mimeType, { magic }] of Object.entries(IMAGE_TYPES)) {
-    if (buffer.length >= magic.length && magic.every((b, i) => buffer[i] === b)) return mimeType;
+    if (buffer.length < magic.length || !magic.every((b, i) => buffer[i] === b)) continue;
+    // GIF8 alone also matches truncated headers and unsupported versions.
+    if (mimeType === 'image/gif') {
+      const header = buffer.subarray(0, 6).toString('latin1');
+      if (header !== 'GIF87a' && header !== 'GIF89a') continue;
+    }
+    return mimeType;
   }
   return null;
 }
