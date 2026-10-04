@@ -1,6 +1,7 @@
 /**
  * בדיקות הליבה הטהורה של דיווחי התוכנה. הרצה: npm test
  */
+import { GIF87A, GIF89A, ANIMATED_GIF } from './testing/gif-fixtures.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { validateAppReport, MAX_DIAGNOSTICS_BYTES, MAX_IMAGES, MAX_IMAGE_BYTES, MAX_BODY_BYTES, sniffImageType } from './validation.js';
@@ -267,20 +268,25 @@ test('חתימת webhook: רק HMAC-SHA256 של הגוף המדויק עם הס�
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 9]);
+const GIF = GIF89A;
 const img = (buf, over = {}) => ({ fileName: 'shot.png', mimeType: 'image/png', data: buf.toString('base64'), ...over });
 const withImages = (images) => manual({ attachments: { images } });
 
-test('תמונות: PNG ו-JPEG נקלטים; הסוג נקבע לפי הבתים ולא לפי ההצהרה', () => {
-  const r = validateAppReport(withImages([img(PNG), img(JPEG, { fileName: 'b.jpg', mimeType: 'image/png' })]));
+test('תמונות: PNG, JPEG ו-GIF נקלטים; הסוג נקבע לפי הבתים ולא לפי ההצהרה', () => {
+  const r = validateAppReport(withImages([
+    img(PNG),
+    img(JPEG, { fileName: 'b.jpg', mimeType: 'image/png' }),
+    img(GIF, { fileName: '', mimeType: 'image/png' }),
+  ]));
   assert.equal(r.ok, true);
-  assert.deepEqual(r.value.images.map((i) => [i.mimeType, i.fileName]), [['image/png', 'shot.png'], ['image/jpeg', 'b.jpg']]);
+  assert.deepEqual(r.value.images.map((i) => [i.mimeType, i.fileName]), [['image/png', 'shot.png'], ['image/jpeg', 'b.jpg'], ['image/gif', 'image-3.gif']]);
   assert.deepEqual(r.value.images[0].buffer, PNG);
   assert.deepEqual(validateAppReport(manual()).value.images, []);
 });
 
-test('תמונות: קובץ שאינו PNG/JPEG, base64 פגום, חריגה בכמות ובגודל → 422', () => {
+test('תמונות: קובץ שאינו PNG/JPEG/GIF, base64 פגום, חריגה בכמות ובגודל → 422', () => {
   const cases = [
-    [[img(Buffer.from('GIF89a...'))], 'attachments.images[0]'],
+    [[img(Buffer.from('<svg/>'))], 'attachments.images[0]'],
     [[img(PNG, { data: '@@@' })], 'attachments.images[0]'],
     [[{ fileName: 'x.png' }], 'attachments.images[0]'],
     [Array.from({ length: MAX_IMAGES + 1 }, () => img(PNG)), 'attachments.images'],
@@ -295,6 +301,31 @@ test('תמונות: קובץ שאינו PNG/JPEG, base64 פגום, חריגה ב
   }
 });
 
+test('GIF: both complete headers accepted; truncated and invalid headers rejected', () => {
+  for (const buffer of [GIF87A, GIF89A, ANIMATED_GIF]) {
+    assert.equal(sniffImageType(buffer), 'image/gif');
+    const r = validateAppReport(withImages([img(buffer, { fileName: '', mimeType: 'image/png' })]));
+    assert.equal(r.ok, true);
+    assert.equal(r.value.images[0].mimeType, 'image/gif');
+    assert.equal(r.value.images[0].fileName, 'image-1.gif');
+    assert.deepEqual(r.value.images[0].buffer, buffer);
+  }
+  const invalid = [
+    ...Array.from({ length: 6 }, (_, length) => GIF89A.subarray(0, length)),
+    Buffer.from('GIF8xxnot-an-image'),
+    Buffer.from('GIF88a'),
+    Buffer.from('GIF89b'),
+    Buffer.from([0x47, 0x49, 0x46, 0x38, 0xb9, 0x61]),
+  ];
+  for (const buffer of invalid) {
+    assert.equal(sniffImageType(buffer), null);
+    const r = validateAppReport(withImages([img(buffer)]));
+    assert.equal(r.ok, false);
+    assert.equal(r.status, 422);
+    assert.equal(r.field, 'attachments.images[0]');
+  }
+});
+
 test('תמונות: שם הקובץ מנוקה מנתיב ומתווי בקרה; שם ריק מקבל ברירת מחדל', () => {
   const r = validateAppReport(withImages([img(PNG, { fileName: 'C:\\Users\\dani\\a"b\u0001.png' }), img(JPEG, { fileName: '' })]));
   assert.deepEqual(r.value.images.map((i) => i.fileName), ['ab.png', 'image-2.jpg']);
@@ -303,6 +334,7 @@ test('תמונות: שם הקובץ מנוקה מנתיב ומתווי בקרה;
 test('תמונות: זיהוי סוג לפי חתימה ותקרת הגוף מכילה את המכסה המקודדת', () => {
   assert.equal(sniffImageType(PNG), 'image/png');
   assert.equal(sniffImageType(JPEG), 'image/jpeg');
+  assert.equal(sniffImageType(GIF), 'image/gif');
   assert.equal(sniffImageType(Buffer.from([0x89, 0x50])), null);
   assert.ok(MAX_BODY_BYTES > Math.ceil((3 * MAX_IMAGE_BYTES) / 3) * 4);
 });

@@ -18,6 +18,7 @@ export const MAX_BODY_BYTES = MAX_TEXT_BODY_BYTES + Math.ceil(MAX_IMAGES_TOTAL_B
 export const IMAGE_TYPES = Object.freeze({
   'image/png': { ext: 'png', magic: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] },
   'image/jpeg': { ext: 'jpg', magic: [0xff, 0xd8, 0xff] },
+  'image/gif': { ext: 'gif', magic: [0x47, 0x49, 0x46, 0x38] },
 });
 
 export const REPORT_TYPES = Object.freeze(['bug', 'crash', 'performance', 'suggestion']);
@@ -35,7 +36,13 @@ const byteLength = (s) => Buffer.byteLength(s, 'utf8');
 /** סוג התמונה לפי הבתים עצמם — לא סומכים על mimeType שהלקוח הצהיר. */
 export function sniffImageType(buffer) {
   for (const [mimeType, { magic }] of Object.entries(IMAGE_TYPES)) {
-    if (buffer.length >= magic.length && magic.every((b, i) => buffer[i] === b)) return mimeType;
+    if (buffer.length < magic.length || !magic.every((b, i) => buffer[i] === b)) continue;
+    // GIF8 alone also matches truncated headers and unsupported versions.
+    if (mimeType === 'image/gif') {
+      const header = buffer.subarray(0, 6).toString('latin1');
+      if (header !== 'GIF87a' && header !== 'GIF89a') continue;
+    }
+    return mimeType;
   }
   return null;
 }
@@ -62,7 +69,7 @@ function validateImages(raw) {
     if (buffer.toString('base64') !== item.data) return { error: fail(field, 'invalid base64') };
     if (buffer.length > MAX_IMAGE_BYTES) return { error: fail(field, 'too large') };
     const mimeType = sniffImageType(buffer);
-    if (!mimeType) return { error: fail(field, 'not a PNG/JPEG image') };
+    if (!mimeType) return { error: fail(field, 'not a PNG/JPEG/GIF image') };
     total += buffer.length;
     if (total > MAX_IMAGES_TOTAL_BYTES) return { error: fail('attachments.images', 'total too large') };
     images.push({ buffer, mimeType, fileName: cleanImageName(item.fileName, i, IMAGE_TYPES[mimeType].ext) });
