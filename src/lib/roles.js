@@ -8,6 +8,8 @@ export const ROLES = {
   // מנהל OCR: גישה לניהול שלושת אזורי ה-OCR בלבד — מאגר אימון, תמלול שורות
   // ותיוג מבנה עמוד (/library/admin/ocr-*) — ללא שאר מודולי הניהול.
   ADMIN_OCR: 'admin_ocr',
+  // מאמן מודלים: כל מה שמנהל OCR רואה, ובנוסף משוב החיפוש הסמנטי (/library/admin/search-feedback).
+  MODEL_TRAINER: 'model_trainer',
   // מפתח: דיווחי התוכנה בלבד (/library/admin/app-reports). בכוונה לא ב-ALL_ADMIN_ROLES.
   DEVELOPER: 'developer',
 }
@@ -19,10 +21,11 @@ export const ROLE_LABELS = {
   admin_books: 'מנהל ספרים',
   admin_books_only: 'מנהל ספרים בלבד',
   admin_ocr: 'מנהל OCR',
+  model_trainer: 'מאמן מודלים',
   developer: 'מפתח',
 }
 
-export const ALL_ADMIN_ROLES = [ROLES.ADMIN, ROLES.ADMIN_PLUGINS, ROLES.ADMIN_BOOKS, ROLES.ADMIN_BOOKS_ONLY, ROLES.ADMIN_OCR]
+export const ALL_ADMIN_ROLES = [ROLES.ADMIN, ROLES.ADMIN_PLUGINS, ROLES.ADMIN_BOOKS, ROLES.ADMIN_BOOKS_ONLY, ROLES.ADMIN_OCR, ROLES.MODEL_TRAINER]
 
 /** גישה לכל מה שבניהול */
 export function isAdmin(role) {
@@ -48,12 +51,17 @@ export function hasBookLibraryAccess(role) {
 
 /** גישה לניהול שלושת אזורי ה-OCR (מאגר אימון, תמלול שורות, תיוג מבנה עמוד) */
 export function hasOcrAccess(role) {
-  return role === ROLES.ADMIN || role === ROLES.ADMIN_OCR
+  return role === ROLES.ADMIN || role === ROLES.ADMIN_OCR || role === ROLES.MODEL_TRAINER
 }
 
 /** גישה לדיווחי התוכנה (מנהל כללי או מפתח) */
 export function hasAppReportsAccess(role) {
   return role === ROLES.ADMIN || role === ROLES.DEVELOPER
+}
+
+/** משוב החיפוש הסמנטי (סטטיסטיקה, ייצוא, ניקוי, חסימת מפתחות) — מנהל כללי ומאמן מודלים */
+export function hasSearchFeedbackAccess(role) {
+  return role === ROLES.ADMIN || role === ROLES.MODEL_TRAINER
 }
 
 /** כל סוג מנהל */

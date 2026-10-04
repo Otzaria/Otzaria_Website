@@ -224,6 +224,7 @@ export default function AdminUsersClient({ initialUsers }) {
                         <option value="admin_books">מנהל ספרים</option>
                         <option value="admin_books_only">מנהל ספרים בלבד</option>
                         <option value="admin_ocr">מנהל OCR</option>
+                        <option value="model_trainer">מאמן מודלים</option>
                         <option value="developer">מפתח</option>
                       </select>
                     ) : (
@@ -233,6 +234,7 @@ export default function AdminUsersClient({ initialUsers }) {
                         user.role === 'admin_books' ? 'bg-success-100 text-success-800' :
                         user.role === 'admin_books_only' ? 'bg-aqua-100 text-aqua-800' :
                         user.role === 'admin_ocr' ? 'bg-warning-100 text-warning-800' :
+                        user.role === 'model_trainer' ? 'bg-warning-100 text-warning-800' :
                         user.role === 'developer' ? 'bg-info-100 text-info-800' :
                         'bg-neutral-100 text-neutral-800'
                       }`}>
@@ -241,6 +243,7 @@ export default function AdminUsersClient({ initialUsers }) {
                          user.role === 'admin_books' ? 'מנהל ספרים' :
                          user.role === 'admin_books_only' ? 'מנהל ספרים בלבד' :
                          user.role === 'admin_ocr' ? 'מנהל OCR' :
+                         user.role === 'model_trainer' ? 'מאמן מודלים' :
                          user.role === 'developer' ? 'מפתח' : 'משתמש'}
                       </span>
                     )}

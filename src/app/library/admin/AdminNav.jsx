@@ -7,23 +7,24 @@ import { useSession } from 'next-auth/react'
 import { hasAnyAdminBadge } from '@/lib/adminBadgeScope'
 
 const ALL_TABS = [
-  { id: 'dashboard', label: 'דשבורד', icon: 'analytics', href: '/library/admin', roles: ['admin', 'admin_books', 'admin_plugins', 'admin_books_only', 'admin_ocr'] },
+  { id: 'dashboard', label: 'דשבורד', icon: 'analytics', href: '/library/admin', roles: ['admin', 'admin_books', 'admin_plugins', 'admin_books_only', 'admin_ocr', 'model_trainer'] },
   { id: 'users', label: 'משתמשים', icon: 'group', href: '/library/admin/users', roles: ['admin'] },
   { id: 'books', label: 'ספרים', icon: 'menu_book', href: '/library/admin/books', roles: ['admin', 'admin_books', 'admin_books_only'] },
   { id: 'dicta-books', label: 'ספרי דיקטה', icon: 'edit_document', href: '/library/admin/dicta-books', roles: ['admin', 'admin_books'] },
   { id: 'uploads', label: 'העלאות', icon: 'upload_file', href: '/library/admin/uploads', roles: ['admin', 'admin_books'] },
   { id: 'plugins', label: 'תוספים', icon: 'extension', href: '/library/admin/plugins', roles: ['admin', 'admin_plugins'] },
   { id: 'pages', label: 'עמודים', icon: 'description', href: '/library/admin/pages-management', roles: ['admin', 'admin_books'] },
-  { id: 'ocr-training', label: 'מאגר אימון OCR', icon: 'model_training', href: '/library/admin/ocr-training', roles: ['admin', 'admin_ocr'] },
-  { id: 'ocr-lines', label: 'תמלול שורות OCR', icon: 'edit_note', href: '/library/admin/ocr-lines', roles: ['admin', 'admin_ocr'] },
-  { id: 'ocr-layout', label: 'תיוג מבנה עמוד', icon: 'space_dashboard', href: '/library/admin/ocr-layout', roles: ['admin', 'admin_ocr'] },
-  { id: 'page-proof', label: 'הגהת עמודים', icon: 'fact_check', href: '/library/admin/page-proof', roles: ['admin', 'admin_ocr'] },
+  { id: 'ocr-training', label: 'מאגר אימון OCR', icon: 'model_training', href: '/library/admin/ocr-training', roles: ['admin', 'admin_ocr', 'model_trainer'] },
+  { id: 'ocr-lines', label: 'תמלול שורות OCR', icon: 'edit_note', href: '/library/admin/ocr-lines', roles: ['admin', 'admin_ocr', 'model_trainer'] },
+  { id: 'ocr-layout', label: 'תיוג מבנה עמוד', icon: 'space_dashboard', href: '/library/admin/ocr-layout', roles: ['admin', 'admin_ocr', 'model_trainer'] },
+  { id: 'page-proof', label: 'הגהת עמודים', icon: 'fact_check', href: '/library/admin/page-proof', roles: ['admin', 'admin_ocr', 'model_trainer'] },
   { id: 'messages', label: 'הודעות', icon: 'mail', href: '/library/admin/messages', roles: ['admin', 'admin_plugins', 'admin_books'] },
   { id: 'reminders', label: 'תזכורות', icon: 'notifications', href: '/library/admin/reminders', roles: ['admin', 'admin_books'] },
   { id: 'dictionary', label: 'מילון', icon: 'spellcheck', href: '/library/admin/dictionary', roles: ['admin', 'admin_books'] },
   { id: 'book-info', label: 'מידע על ספרים', icon: 'list_alt', href: '/library/admin/book-info', roles: ['admin', 'admin_books'] },
   { id: 'corrections', label: 'תיקוני טקסט', icon: 'spellcheck', href: '/library/corrections', roles: ['admin', 'admin_books'] },
   { id: 'app-reports', label: 'דיווחי תוכנה', icon: 'bug_report', href: '/library/admin/app-reports', roles: ['admin', 'developer'] },
+  { id: 'search-feedback', label: 'משוב חיפוש', icon: 'feedback', href: '/library/admin/search-feedback', roles: ['admin', 'model_trainer'] },
   { id: 'private-sources', label: 'מקורות ספרים פרטיים', icon: 'copyright', href: '/library/admin/private-sources', roles: ['admin'] },
 ]
 
