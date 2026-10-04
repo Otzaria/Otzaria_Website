@@ -6,7 +6,7 @@ const UserSchema = new mongoose.Schema({
   // אופציונלי: חשבון שנוצר דרך התחברות עם Google אין לו סיסמה כלל (ההתחברות
   // בסיסמה נדחית עבורו). בהרשמה הרגילה הסיסמה עדיין חובה, ונאכפת בראוט ההרשמה.
   password: { type: String },
-  role: { type: String, enum: ['user', 'admin', 'admin_plugins', 'admin_books', 'admin_books_only', 'admin_ocr', 'developer'], default: 'user' },
+  role: { type: String, enum: ['user', 'admin', 'admin_plugins', 'admin_books', 'admin_books_only', 'admin_ocr', 'model_trainer', 'developer'], default: 'user' },
   points: { type: Number, default: 0 },
   acceptReminders: { type: Boolean, default: false },
   resetPasswordToken: { type: String },
