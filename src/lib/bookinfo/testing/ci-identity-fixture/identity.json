@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "events": [
+    {
+      "id": 1,
+      "kind": "rename",
+      "old": {
+        "bookName": "אמת ואמונה - מנחם מנדל מקוצק",
+        "authorName": "מנחם מנדל מקוצק"
+      },
+      "new": {
+        "bookName": "אמת ואמונה",
+        "authorName": "מנחם מנדל מקוצק"
+      },
+      "commit": "041f2d910c8dc0386f4719e3164296e97a209e49"
+    },
+    {
+      "id": 2,
+      "kind": "rename",
+      "old": {
+        "bookName": "אמת ואמונה - מנחם מנדל מקוצק",
+        "authorName": "עורך \"הוצאה\""
+      },
+      "new": {
+        "bookName": "אמת ואמונה",
+        "authorName": "עורך \"הוצאה\""
+      },
+      "commit": "041f2d910c8dc0386f4719e3164296e97a209e49"
+    },
+    {
+      "id": 3,
+      "kind": "remove",
+      "old": {
+        "bookName": "יתום",
+        "authorName": "עורך נוסף"
+      },
+      "reason": "orphan",
+      "commit": "408acd251204d031b58b996ba3f80b37070e0409"
+    }
+  ]
+}

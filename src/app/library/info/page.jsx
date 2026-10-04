@@ -5,6 +5,9 @@ import Header from '@/components/layout/Header'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 
 export default function LibraryInfoPage() {
+  const [sourceRevision, setSourceRevision] = useState(0)
+  const [page, setPage] = useState(0)
+  const [unresolvedEdits, setUnresolvedEdits] = useState([])
   const [rows, setRows] = useState([])
   const [generationOptions, setGenerationOptions] = useState([])
   const [subGenerationOptionsByGeneration, setSubGenerationOptionsByGeneration] = useState({})
@@ -14,10 +17,11 @@ export default function LibraryInfoPage() {
   const [search, setSearch] = useState('')
   const [editRow, setEditRow] = useState(null)
   const [formData, setFormData] = useState(null)
+  const [lastPr, setLastPr] = useState(null)
 
-  const loadData = async () => {
+  const loadData = async (quiet = false) => {
     try {
-      setLoading(true)
+      if (!quiet) setLoading(true)
       setError('')
       const response = await fetch('/api/library/book-info', { cache: 'no-store' })
       const data = await response.json()
@@ -25,6 +29,8 @@ export default function LibraryInfoPage() {
         throw new Error(data.error || 'שגיאה בטעינת המידע')
       }
       setRows(data.rows || [])
+      setUnresolvedEdits(data.unresolvedEdits || [])
+      setSourceRevision(data.identityRevision || 0)
       setGenerationOptions(data.generationOptions || [])
       setSubGenerationOptionsByGeneration(data.subGenerationOptionsByGeneration || {})
     } catch (loadError) {
@@ -36,6 +42,10 @@ export default function LibraryInfoPage() {
 
   useEffect(() => {
     loadData()
+    const refresh = () => { if (!document.hidden) loadData(true) }
+    const interval = setInterval(refresh, 60_000)
+    window.addEventListener('focus', refresh)
+    return () => { clearInterval(interval); window.removeEventListener('focus', refresh) }
   }, [])
 
   const filteredRows = useMemo(() => {
@@ -63,7 +73,7 @@ export default function LibraryInfoPage() {
   }, [rows, search])
 
   const openEdit = (row) => {
-    setEditRow(row)
+    setEditRow({ ...row, identityRevision: sourceRevision })
     setFormData({
       bookName: row.effective?.bookName || '',
       authorName: row.effective?.authorName || '',
@@ -109,14 +119,21 @@ export default function LibraryInfoPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          bookInfoId: editRow.id,
-          updates: formData
+          book: editRow.approved?.bookName,
+          author: editRow.approved?.authorName || '',
+          identityRevision: editRow.identityRevision,
+          baseRow: editRow.approved,
+          updates: Object.fromEntries(Object.entries(formData).filter(([field, value]) => {
+            const normalized = ['startYear', 'endYear'].includes(field) ? (value === '' ? null : Number(value)) : (value || null)
+            return normalized !== (editRow.approved?.[field] || null)
+          }))
         })
       })
       const data = await response.json()
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'שגיאה בשמירה')
       }
+      setLastPr({ url: data.prUrl, number: data.prNumber })
       setRows((prev) =>
         prev.map((row) => {
           if (row.id !== editRow.id) return row
@@ -128,22 +145,14 @@ export default function LibraryInfoPage() {
             endYear: formData.endYear === '' ? null : Number(formData.endYear)
           }
 
-          if (data.pendingCleared) {
-            return {
-              ...row,
-              effective: row.approved,
-              pending: null
-            }
-          }
-
           return {
             ...row,
             effective: normalizedEffective,
             pending: {
-              id: data.pendingId || row.pending?.id || '',
-              changedFields: data.changedFields || row.pending?.changedFields || [],
-              submittedBy: row.pending?.submittedBy || 'משתמש',
-              updatedAt: new Date().toISOString()
+              id: data.id,
+              prNumber: data.prNumber,
+              prUrl: data.prUrl,
+              changedFields: Object.keys(formData).filter((field) => normalizedEffective[field] !== row.approved?.[field])
             }
           }
         })
@@ -156,6 +165,10 @@ export default function LibraryInfoPage() {
     }
   }
 
+  const pageCount = Math.max(1, Math.ceil(filteredRows.length / 100))
+  const visiblePage = Math.min(page, pageCount - 1)
+  const pageRows = filteredRows.slice(visiblePage * 100, (visiblePage + 1) * 100)
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -165,16 +178,26 @@ export default function LibraryInfoPage() {
             <div>
               <h1 className="text-3xl font-bold text-on-surface">מידע על ספרים</h1>
               <p className="text-on-surface/70 mt-1">המידע בדף זה משמש את אוצריא לסידור הספרים בתוכנה לפי סדר הדורות.</p>
-              <p className="text-on-surface/70 mt-1">תרמו לפרוייקט בהוספת מידע חסר על ספרים ומחברים. כל שינוי נשמר כהצעה ומחכה לאישור מנהל.</p>
+              <p className="text-on-surface/70 mt-1">תרמו לפרוייקט בהוספת מידע חסר על ספרים ומחברים. כל שינוי נפתח כבקשה (PR) בריפו הספרייה ב-GitHub, ונכנס לאוצריא אחרי שהיא נבדקת וממוזגת.</p>
             </div>
             <input
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setPage(0) }}
               placeholder="חיפוש לפי ספר/מחבר"
               className="w-full md:w-80 border rounded-lg px-4 py-2 bg-white"
             />
           </div>
+
+          {lastPr && (
+            <div className="mb-4 rounded-xl border border-success-200 bg-success-50 text-success-800 p-4 flex items-center justify-between gap-2">
+              <span>תודה! השינוי נשלח לבדיקה.</span>
+              <a href={lastPr.url} target="_blank" rel="noreferrer" className="underline flex items-center gap-1">
+                בקשה #{lastPr.number}
+                <span className="material-symbols-outlined text-base">open_in_new</span>
+              </a>
+            </div>
+          )}
 
           {error && (
             <div className="mb-4 rounded-lg border border-danger-200 bg-danger-50 px-4 py-3 text-danger-700">
@@ -182,6 +205,12 @@ export default function LibraryInfoPage() {
             </div>
           )}
 
+          {unresolvedEdits.length > 0 && (
+            <div className="mb-4 border border-danger-200 bg-danger-50 rounded-lg p-3">
+              <p>בקשות לספרים שהוסרו או שזהותם דורשת בדיקה נשמרו:</p>
+              <ul>{unresolvedEdits.map((pending) => <li key={pending.id}>{pending.book}: {pending.lastError || 'נדרשת בדיקת מנהל'} <PendingLink pending={{ ...pending, status: 'conflict' }} /></li>)}</ul>
+            </div>
+          )}
           {loading ? (
             <LoadingSpinner message="טוען נתוני ספרים..." />
           ) : (
@@ -198,7 +227,7 @@ export default function LibraryInfoPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredRows.map((row) => (
+                  {pageRows.map((row) => (
                     <tr key={row.id} className="border-t border-surface-variant/70">
                       <td className="px-3 py-3 font-medium">{row.effective?.bookName || '-'}</td>
                       <td className="px-3 py-3">{row.effective?.authorName || '-'}</td>
@@ -208,12 +237,16 @@ export default function LibraryInfoPage() {
                         {row.effective?.startYear ?? '-'} - {row.effective?.endYear ?? '-'}
                       </td>
                       <td className="px-3 py-3">
-                        <button
-                          onClick={() => openEdit(row)}
-                          className="px-3 py-1.5 rounded-md bg-primary text-on-primary text-sm"
-                        >
-                          עריכה
-                        </button>
+                        {row.pending ? (
+                          <PendingLink pending={row.pending} />
+                        ) : (
+                          <button
+                            onClick={() => openEdit(row)}
+                            className="px-3 py-1.5 rounded-md bg-primary text-on-primary text-sm"
+                          >
+                            עריכה
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -221,6 +254,11 @@ export default function LibraryInfoPage() {
               </table>
             </div>
           )}
+          {!loading && pageCount > 1 && <div className="flex items-center gap-4 mt-4">
+            <button disabled={visiblePage === 0} onClick={() => setPage(visiblePage - 1)} className="text-primary disabled:opacity-40">הקודם</button>
+            <span>עמוד {visiblePage + 1} מתוך {pageCount} ({filteredRows.length} ספרים)</span>
+            <button disabled={visiblePage + 1 >= pageCount} onClick={() => setPage(visiblePage + 1)} className="text-primary disabled:opacity-40">הבא</button>
+          </div>}
         </div>
       </main>
 
@@ -236,13 +274,15 @@ export default function LibraryInfoPage() {
             <form onSubmit={handleSubmit} className="p-5 space-y-4">
               <h2 className="text-xl font-bold">עריכת מידע ספר</h2>
 
+              {/* שם הספר הוא שם הקובץ בספרייה, שלפיו הדור מקושר לספר; לכן אינו נערך כאן */}
               <Field label="שם הספר">
                 <input
                   type="text"
                   value={formData.bookName}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, bookName: e.target.value }))}
-                  className="w-full border rounded-lg px-3 py-2"
+                  readOnly
+                  className="w-full border rounded-lg px-3 py-2 bg-surface text-on-surface/70 cursor-not-allowed"
                 />
+                <p className="text-xs text-on-surface/60 mt-1">שם הספר זהה לשמו בספרייה ואינו ניתן לשינוי.</p>
               </Field>
 
               <Field label="שם המחבר">
@@ -317,7 +357,7 @@ export default function LibraryInfoPage() {
                   className="px-4 py-2 rounded-lg bg-primary text-on-primary"
                   disabled={saving}
                 >
-                  {saving ? 'שומר...' : 'שלח לאישור'}
+                  {saving ? 'שולח...' : 'שלח לבדיקה'}
                 </button>
               </div>
             </form>
@@ -325,6 +365,24 @@ export default function LibraryInfoPage() {
         </div>
       )}
     </div>
+  )
+}
+
+// לספר עם בקשה פתוחה אי אפשר לפתוח בקשה נוספת (השרת דוחה), ולכן במקום כפתור העריכה מוצג קישור אליה
+function PendingLink({ pending }) {
+  const label = pending.status === 'conflict' ? 'נדרשת בדיקה של הבקשה' : pending.prNumber ? `ממתין לבדיקה (#${pending.prNumber})` : 'ממתין לבדיקה'
+  if (!pending.prUrl) return <span className="text-sm text-on-surface/60">{label}</span>
+  return (
+    <a
+      href={pending.prUrl}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-1 text-sm text-primary underline whitespace-nowrap"
+      title={pending.lastError || 'יש כבר בקשה פתוחה לספר זה'}
+    >
+      {label}
+      <span className="material-symbols-outlined text-base">open_in_new</span>
+    </a>
   )
 }
 

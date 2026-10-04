@@ -2,7 +2,7 @@ import {
   BOOK_INFO_EDITABLE_FIELDS,
   BOOK_INFO_GENERATION_OPTIONS,
   BOOK_INFO_SUB_GENERATION_OPTIONS_BY_GENERATION
-} from '@/lib/book-info-constants'
+} from './book-info-constants.js'
 
 function asNullableString(value) {
   if (typeof value !== 'string') {
