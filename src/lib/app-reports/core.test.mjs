@@ -267,20 +267,25 @@ test('חתימת webhook: רק HMAC-SHA256 של הגוף המדויק עם הס�
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 9]);
+const GIF = Buffer.from('GIF89a ', 'latin1');
 const img = (buf, over = {}) => ({ fileName: 'shot.png', mimeType: 'image/png', data: buf.toString('base64'), ...over });
 const withImages = (images) => manual({ attachments: { images } });
 
-test('תמונות: PNG ו-JPEG נקלטים; הסוג נקבע לפי הבתים ולא לפי ההצהרה', () => {
-  const r = validateAppReport(withImages([img(PNG), img(JPEG, { fileName: 'b.jpg', mimeType: 'image/png' })]));
+test('תמונות: PNG, JPEG ו-GIF נקלטים; הסוג נקבע לפי הבתים ולא לפי ההצהרה', () => {
+  const r = validateAppReport(withImages([
+    img(PNG),
+    img(JPEG, { fileName: 'b.jpg', mimeType: 'image/png' }),
+    img(GIF, { fileName: '', mimeType: 'image/png' }),
+  ]));
   assert.equal(r.ok, true);
-  assert.deepEqual(r.value.images.map((i) => [i.mimeType, i.fileName]), [['image/png', 'shot.png'], ['image/jpeg', 'b.jpg']]);
+  assert.deepEqual(r.value.images.map((i) => [i.mimeType, i.fileName]), [['image/png', 'shot.png'], ['image/jpeg', 'b.jpg'], ['image/gif', 'image-3.gif']]);
   assert.deepEqual(r.value.images[0].buffer, PNG);
   assert.deepEqual(validateAppReport(manual()).value.images, []);
 });
 
-test('תמונות: קובץ שאינו PNG/JPEG, base64 פגום, חריגה בכמות ובגודל → 422', () => {
+test('תמונות: קובץ שאינו PNG/JPEG/GIF, base64 פגום, חריגה בכמות ובגודל → 422', () => {
   const cases = [
-    [[img(Buffer.from('GIF89a...'))], 'attachments.images[0]'],
+    [[img(Buffer.from('<svg/>'))], 'attachments.images[0]'],
     [[img(PNG, { data: '@@@' })], 'attachments.images[0]'],
     [[{ fileName: 'x.png' }], 'attachments.images[0]'],
     [Array.from({ length: MAX_IMAGES + 1 }, () => img(PNG)), 'attachments.images'],
@@ -303,6 +308,7 @@ test('תמונות: שם הקובץ מנוקה מנתיב ומתווי בקרה;
 test('תמונות: זיהוי סוג לפי חתימה ותקרת הגוף מכילה את המכסה המקודדת', () => {
   assert.equal(sniffImageType(PNG), 'image/png');
   assert.equal(sniffImageType(JPEG), 'image/jpeg');
+  assert.equal(sniffImageType(GIF), 'image/gif');
   assert.equal(sniffImageType(Buffer.from([0x89, 0x50])), null);
   assert.ok(MAX_BODY_BYTES > Math.ceil((3 * MAX_IMAGE_BYTES) / 3) * 4);
 });
