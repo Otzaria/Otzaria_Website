@@ -35,6 +35,16 @@ export function createGitSource({ client, ref, cache, headTtlMs = 0 }) {
     return value;
   }
 
+  async function listDir(dir, commitSha) {
+    const dirKey = `dir:${client.repo}:${commitSha}:${dir}`;
+    let entries = cache.get(dirKey);
+    if (entries === undefined) {
+      entries = await client.listDir(dir, commitSha);
+      cache.set(dirKey, entries, 200 + (entries ? entries.length * 200 : 0));
+    }
+    return entries;
+  }
+
   return {
     async getHead() {
       const key = `${client.repo}@${ref}`;
@@ -55,12 +65,7 @@ export function createGitSource({ client, ref, cache, headTtlMs = 0 }) {
       const cut = path.lastIndexOf('/');
       const dir = path.slice(0, cut);
       const name = path.slice(cut + 1);
-      const dirKey = `dir:${client.repo}:${commitSha}:${dir}`;
-      let entries = cache.get(dirKey);
-      if (entries === undefined) {
-        entries = await client.listDir(dir, commitSha);
-        cache.set(dirKey, entries, 200 + (entries ? entries.length * 200 : 0));
-      }
+      const entries = await listDir(dir, commitSha);
       if (!entries) return null;
       let sha = entries.find((e) => e.name === name && e.type === 'file')?.sha || null;
       if (!sha && entries.length >= 1000) sha = (await client.getFileMeta(path, commitSha))?.sha || null;
@@ -68,6 +73,8 @@ export function createGitSource({ client, ref, cache, headTtlMs = 0 }) {
       const blob = await loadBlob(sha);
       return { blobSha: sha, content: blob.content, lossy: blob.lossy };
     },
+    /** רשומות התיקייה ({name, type, sha}) בקומיט, או null כשהיא לא קיימת. */
+    listDir,
     loadBlob,
   };
 }

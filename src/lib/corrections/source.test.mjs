@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { splitSourceLines, joinSourceLines, applyLineChange } from './source-text.js';
-import { resolveSource, matchLine, candidatePaths, isAllowedRepoPath } from './resolver.js';
+import { resolveSource, matchLine, candidatePaths, isAllowedRepoPath, comparableSegment } from './resolver.js';
 import { createGitSource, gitBlobShaOfBytes } from './git-source.js';
 import { ByteLru } from './lru.js';
 import { publishChange, reconcilePublish, prBranchName, sanitizePublicText, PublishConflict } from './publisher.js';
@@ -101,6 +101,45 @@ test('[T23] resolver מזהה שהתיקון כבר הוחל במקום הנכו
   const elsewhere = setup({ [PATH]: `${FILE}\n${NEW2}`.replace(`${L2}\r\n`, 'אחרת\r\n') });
   const e = await resolveSource({ report: report(), revision: rev(), gitSource: elsewhere.git, source: { repo: REPO, ref: 'main' } });
   assert.notEqual(e.status, 'already_applied');
+});
+
+test('resolver: נתיב שה-DB איית אחרת (שו״ת מול התיקייה שות) נמצא לפי שמות התיקיות בפועל', async () => {
+  const repoPath = 'DictaToOtzaria/ערוך/ספרים/אוצריא/שות/אחרונים/בית הלוי/בית הלוי חלק א.txt';
+  const { gh, git } = setup({ [repoPath]: FILE, 'DictaToOtzaria/ערוך/ספרים/אוצריא/שות/אחרונים/אחר.txt': 'x' });
+  const dicta = (libraryRelativePath) => report({ sourceFolder: 'DictaToOtzaria', filePath: libraryRelativePath, sourceHint: { sourceFolder: 'DictaToOtzaria', libraryRelativePath } });
+  const r = await resolveSource({ report: dicta('אוצריא/שו״ת/אחרונים/בית הלוי/בית הלוי חלק א.txt'), revision: rev(), gitSource: git, source: { repo: REPO, ref: 'main' } });
+  assert.equal(r.status, 'exact');
+  assert.equal(r.path, repoPath);
+  assert.equal(r.pathMatch, 'normalized');
+  assert.equal(r.blobSha, gh.fileSha('main', repoPath));
+  // נתיב שקיים כלשונו לא עובר דרך הנרמול
+  const direct = await resolveSource({ report: report(), revision: rev(), gitSource: setup().git, source: { repo: REPO, ref: 'main' } });
+  assert.equal(direct.pathMatch, 'exact');
+});
+
+test('resolver: מירכאות בשם הספר ותלמוד ירושלים/ירושלמי נמצאים; שני מועמדים אחרי נרמול נשארים ידניים', async () => {
+  const quoted = 'ToratEmetToOtzaria/ספרים/אוצריא/תלמוד ירושלים/חידושי הרשב"א.txt';
+  const one = setup({ [quoted]: FILE });
+  const hinted = (libraryRelativePath) => report({ filePath: libraryRelativePath, sourceHint: { sourceFolder: 'ToratEmetToOtzaria', libraryRelativePath } });
+  const r = await resolveSource({ report: hinted('אוצריא/תלמוד ירושלמי/חידושי הרשב״א.txt'), revision: rev(), gitSource: one.git, source: { repo: REPO, ref: 'main' } });
+  assert.equal(r.path, quoted);
+  assert.equal(r.status, 'exact');
+
+  const two = setup({
+    'ToratEmetToOtzaria/ספרים/אוצריא/שות/ספר.txt': FILE,
+    'ToratEmetToOtzaria/ספרים/אוצריא/שו"ת/ספר.txt': FILE,
+  });
+  const a = await resolveSource({ report: hinted('אוצריא/שו״ת/ספר.txt'), revision: rev(), gitSource: two.git, source: { repo: REPO, ref: 'main' } });
+  assert.equal(a.status, 'not_found');
+  assert.equal(a.reason, 'file_missing_in_repo');
+});
+
+test('comparableSegment מתעלם מסוגי מירכאות וגרשיים בלבד', () => {
+  assert.equal(comparableSegment('שו״ת'), comparableSegment('שות'));
+  assert.equal(comparableSegment('תנ"ך'), comparableSegment('תנ״ך'));
+  assert.equal(comparableSegment("רמב''ן"), comparableSegment('רמב״ן'));
+  assert.equal(comparableSegment('תלמוד ירושלים'), comparableSegment('תלמוד ירושלמי'));
+  assert.notEqual(comparableSegment('בראשית (חדש).txt'), comparableSegment('בראשית.txt'));
 });
 
 function changeFor(gh, over = {}) {
