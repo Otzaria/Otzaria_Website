@@ -347,7 +347,7 @@ export default function ScanPanel({
   const selInfo = useMemo(() => selectionInfo(view?.lines, selectedIds), [view, selectedIds])
 
   const tool = mode === 'frames' ? framesTool : linesTool
-  // הבחירה ל"מסגרת חדשה": זרם, זרם-כותרת או "ריהוט הדף" (הזרם האמיתי נקבע בציור)
+  // הבחירה ל"מסגרת חדשה": זרם או "ריהוט הדף" (בלי זרמי-כותרת — כותרת היא סגנון-פסקה; הזרם האמיתי נקבע בציור)
   const drawStream = picked && picked.forDefault === frameStreamDefault ? picked.key : drawStreamFor(frameStreamDefault)
   const selFrame = mode === 'frames' ? fs.frames.find((f) => f.fid === selectedFid) || null : null
 

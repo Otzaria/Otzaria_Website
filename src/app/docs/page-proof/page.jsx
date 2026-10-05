@@ -3,12 +3,13 @@ import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 import { CLAIM_HOURS, MAX_HELD } from '@/lib/pageProof/gridState'
 import { SUBMITTED_WAITING } from '@/lib/pageProof/helpTexts'
+import { STAGE_TEXT } from '@/lib/pageProof/stages'
 import { FurnitureFigure, SectionNumberFigure, SplitLineFigure, TwoColumnsFigure, UnlinkFigure } from '@/components/pageProof/guide/GuideFigures'
 
 // הנחיות להגהת עמודים — דף אחד קצר למתנדבים, עם תמונות (שרטוטים סינתטיים — GuideFigures). ציבורי (בלי התחברות),
 // כדי שאפשר יהיה לקשר אליו מהפורום; העורך מקשר אליו מהסרגל ("הנחיות") ומחלון העזרה (helpTexts.GUIDE_PATH).
-// הכללים כאן הם "הקו האחיד" שבעל הפרויקט קבע (2026-10-05), במקום תשובות פזורות באשכול. שורות שמתארות את האתר
-// בשני שלבים (מבנה ואחר-כך טקסט, שמירה בשרת) מסומנות "phase C" — הן נכנסות יחד עם השלב הזה.
+// הכללים כאן הם "הקו האחיד" שבעל הפרויקט קבע (2026-10-05), במקום תשובות פזורות באשכול. שמות הכפתורים של שני השלבים
+// (מבנה ואחר-כך טקסט) נלקחים מ-lib/pageProof/stages.js (STAGE_TEXT) — אותו נוסח כמו בעורך (StageBar, StagedEditor).
 
 export const metadata = {
   title: 'הנחיות להגהת עמודים - אוצריא',
@@ -67,7 +68,6 @@ export default function PageProofGuidePage() {
               fact_check
             </span>
             <h1 className="mb-4 font-frank text-4xl font-bold text-primary-dark">הנחיות להגהת עמודים</h1>
-            {/* phase C — שני שלבים, ושמירה בשרת */}
             <p className="mx-auto max-w-2xl text-xl text-on-surface/75">
               כל עמוד עובר שני שלבים: <b>קודם המבנה</b> (מסגרות ושורות), <b>ואחר כך הטקסט</b>. כל מה שתעשו נשמר לבד, גם בשרת — אפשר
               להמשיך ממחשב אחר.
@@ -104,10 +104,9 @@ export default function PageProofGuidePage() {
               <li>
                 <b>שורה שחתוכה לא נכון</b> (חצי שורה, שתי שורות בתיבה אחת, שורה שלא סומנה) — במצב &quot;שורות&quot;: פיצול, איחוד או שורה
                 חדשה.
-                    {/* phase C — כפתור-הסיום של שלב המבנה (lib/pageProof/stages.js: STAGE_TEXT, finishStructure) */}
                 <p className="mt-2">
-                  כשמסיימים — <b>&quot;✓ המבנה נכון — להגהת הטקסט&quot;</b> (ואם אין מה לתקן: <b>&quot;דלג — המבנה נכון&quot;</b>) ועוברים
-                  מיד לשלב הטקסט. אם תיקנתם את חיתוך השורות, הכפתור הוא <b>&quot;✓ המבנה נכון — לזיהוי-מחדש&quot;</b>: העמוד נשלח
+                  כשמסיימים — <b>&quot;{STAGE_TEXT.finish}&quot;</b> (ואם אין מה לתקן: <b>&quot;{STAGE_TEXT.skip}&quot;</b>, בפס שמעל העורך) ועוברים
+                  מיד לשלב הטקסט. אם תיקנתם את חיתוך השורות, הכפתור הוא <b>&quot;{STAGE_TEXT.finishRecut}&quot;</b>: העמוד נשלח
                   לזיהוי-מחדש וחוזר אליכם לשלב הטקסט כשיזוהה (תראו אותו ב&quot;העמודים שלי&quot;). אם אי אפשר לשלוח אותו עכשיו — עוברים
                   לשלב הטקסט, והשורות שנחתכו נעולות עד ההגשה.
                 </p>
@@ -153,10 +152,13 @@ export default function PageProofGuidePage() {
               <li>
                 <b>אישור:</b> ✓ ליד הפסקה (או <Kbd>Ctrl+Enter</Kbd>) = &quot;בדקתי, הטקסט נכון&quot;.
               </li>
-              {/* phase C — בשלב הטקסט: חזרה למבנה, וההגשה מכאן */}
               <li>
-                <b>בסוף:</b> מגישים את העמוד משלב הטקסט. צריך לתקן עוד מסגרת או שורה? <b>&quot;חזרה לשלב המבנה&quot;</b> — הטקסט שתיקנתם
-                נשאר.
+                <b>בסוף:</b> <b>&quot;הגשת העמוד&quot;</b> — משלב הטקסט. צריך לתקן עוד מסגרת או שורה? <b>&quot;{STAGE_TEXT.back}&quot;</b> — הטקסט
+                שתיקנתם נשאר.
+              </li>
+              <li>
+                <b>עמוד שמתנדב אחר כבר עבד עליו</b> (או עמוד שנפתח מחדש אחרי אישור) — מגיע עם התיקונים שלו, מסומנים בקו מנוקד (בריחוף —
+                הטקסט המקורי). תיקון שגוי — בלוח הפרטים ← &quot;שינויים&quot; ← <b>&quot;החזר למקור&quot;</b>.
               </li>
             </ol>
           </Section>
@@ -179,7 +181,7 @@ export default function PageProofGuidePage() {
           <Section id="time" icon="schedule" title="זמנים">
             <ul className="list-disc space-y-3 pr-6">
               <li>
-                עמוד שתפסתם שמור לכם <b>{CLAIM_HOURS} שעות</b> (שבת וחג לא נספרים), וכל פתיחה מחדשת את הזמן. אפשר להחזיק עד {MAX_HELD} עמודים
+                עמוד שתפסתם שמור לכם <b>{CLAIM_HOURS} שעות</b> (שבת וחג אינם נספרים), וכל פתיחה מחדשת את הזמן. אפשר להחזיק עד {MAX_HELD} עמודים
                 בבת אחת; עד מתי כל עמוד שמור — ב&quot;העמודים שלי&quot;.
               </li>
               <li>

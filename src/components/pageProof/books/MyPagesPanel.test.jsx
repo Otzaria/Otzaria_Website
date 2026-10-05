@@ -75,7 +75,7 @@ describe('MyPagesPanel', () => {
     expect(screen.getByText('הוא אינו פתוח להגהה כרגע.')).toBeInTheDocument()
 
     rerender(<MyPagesPanel held={[]} missing={{ id: 'x', gid: 'g9', page: 7, state: 'open' }} now={NOW} />)
-    expect(screen.getByText(/עברו 48 שעות \(בלי שבת וחג\) מאז שנפתח והוא חזר למאגר.*לתפוס אותו שוב/)).toBeInTheDocument()
+    expect(screen.getByText(/עברו 48 שעות \(שבת וחג אינם נספרים\) מאז שנפתח והוא חזר למאגר.*לתפוס אותו שוב/)).toBeInTheDocument()
 
     rerender(<MyPagesPanel held={[]} missing={{ id: null }} now={NOW} />)
     expect(screen.getByText('העמוד שביקשתם לא נמצא')).toBeInTheDocument()
