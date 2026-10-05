@@ -319,7 +319,8 @@ describe('ProofEditor — תיקוני הביקורת', { timeout: 30000 }, () =
     fireEvent.click(btn())
     expect(btn()).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByTestId('book-only-status')).toHaveTextContent('"לספר בלבד" פעיל')
-    expect(window.localStorage.getItem('pageProof.bookOnly')).toBe('1')
+    // המצב אינו נשמר בדפדפן (כבוי בכל פתיחת עמוד)
+    expect(window.localStorage.getItem('pageProof.bookOnly')).toBeNull()
     await caretAt(editor(), { lineId: 3, offset: 4 })
     typeChar(editor(), 'ה')
     typeChar(editor(), 'ו')
@@ -339,6 +340,32 @@ describe('ProofEditor — תיקוני הביקורת', { timeout: 30000 }, () =
     expect(opsNow().map((o) => `${o.kind}:${o.ids}`)).toEqual(['train_text:3', 'text:3'])
     fireEvent.keyDown(editor(), { key: 'ז', code: 'KeyZ', ctrlKey: true })
     expect(opsNow()).toEqual([])
+  })
+
+  // החלטת בעל הפרויקט (2026-10-05): מתנדב ששכח את המצב דולק לא יוציא בשקט שורות רבות מהאימון
+  it('"לספר בלבד" כבוי בכל פתיחת עמוד: לא נקרא מהדפדפן, ועמוד אחר — גם באותו מופע — נפתח כשהוא כבוי', async () => {
+    window.localStorage.setItem('pageProof.bookOnly', '1') // ערך מגרסה שזכרה את המצב — אינו נקרא
+    const { rerender, unmount } = setup()
+    const btn = () => screen.getByRole('button', { name: 'לספר בלבד' })
+    expect(btn()).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(btn())
+    expect(btn()).toHaveAttribute('aria-pressed', 'true')
+    const next = makePage()
+    rerender(<ProofEditor page={{ ...next, id: 'pg2', page: P + 1, doc: { ...next.doc, page: P + 1 } }} draftKey="page-proof-draft:pg2:1:x" actions={actions} />)
+    expect(btn()).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.queryByTestId('book-only-status')).toBeNull()
+    unmount()
+    setup()
+    expect(btn()).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('"לספר בלבד" אינו מסמן ריהוט: הקלדה בלשונית "ריהוט הדף" כשהמצב דולק — בלי train_text', async () => {
+    const { editor } = setup()
+    fireEvent.click(screen.getByRole('button', { name: 'לספר בלבד' }))
+    fireEvent.click(screen.getByRole('tab', { name: /ריהוט/ }))
+    await caretAt(editor(), { lineId: 5, offset: 2 })
+    typeChar(editor(), '3')
+    expect(opsNow()).toEqual([{ kind: 'text', ids: [5], value: '123' }])
   })
 
   it('"לספר בלבד": אישור פסקה בלי שינוי אינו מסמן; עיצוב וזרם אינם מסמנים; כבוי — הקלדה בלי סימון', async () => {
@@ -408,6 +435,23 @@ describe('ProofEditor — תיקוני הביקורת', { timeout: 30000 }, () =
     ])
     expect(screen.getByTestId('book-only-badge')).toBeInTheDocument()
     expect(within(drawer()).getByRole('button', { name: 'ודאי' })).toHaveClass('bg-primary')
+  })
+
+  // סקירה: תוכנת-הספר מייצאת שורה בנוסח הישן עם הוודאות הישנה וגם train_text = 0 (pagedoc), ובמסד שלה הסימון הוא
+  // עדיין רק הוודאות — בחירת-ודאות בלי train_text = 0 הייתה מוחקת אותו שם
+  it('בחירת-ודאות בשורה בנוסח הישן שהגיעה גם עם train_text = 0 — train_text = 0 נשלח באותו צעד', async () => {
+    const legacy = { certainty: 'ambiguous', certainty_why: 'פגם בדפוס — תוקן שלא לפי המקור', train_text: 0 }
+    const { editor } = setup({ page: makePage([L(1, 'שורה ראשונה לדוגמה', { para_start: true, ...legacy })]) })
+    await caretAt(editor(), { lineId: 1, offset: 2 })
+    fireEvent.click(screen.getByRole('button', { name: 'פרטים' }))
+    const drawer = screen.getByRole('complementary', { name: 'פרטים' })
+    fireEvent.click(within(drawer).getByRole('tab', { name: 'שורה' }))
+    fireEvent.click(within(drawer).getByRole('button', { name: 'ודאי' }))
+    expect(opsNow()).toEqual([
+      { kind: 'certainty', ids: [1], value: { v: 'certain', why: null } },
+      { kind: 'train_text', ids: [1], value: 0 },
+    ])
+    expect(screen.getByTestId('book-only-badge')).toBeInTheDocument()
   })
 
   it('סגנון-פסקה חדש מהסרגל (סעיף ממוספר) — פעולת para לכל שורות הפסקה, והסרגל מציג אותו', async () => {

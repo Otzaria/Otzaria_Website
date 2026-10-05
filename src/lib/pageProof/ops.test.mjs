@@ -1136,3 +1136,12 @@ test('"לספר בלבד" בנוסח הישן (ודאות "פגם בדפוס"): 
   const v = buildView(d, [legacy]);
   assert.equal(withBookOnly([{ kind: 'text', page: 3, ids: [1], value: 'אחר' }], v, 3).length, 1);
 });
+
+// ריהוט (כותרת עמוד, תחתית, מפריד) אינו נכנס לספר — "לספר בלבד" אינו מסמן אותו (כמו הכפתור הישן, שהיה כבוי שם)
+test('withBookOnly: תיקון-טקסט בריהוט — בלי סימון; ריהוט שמתנדב העביר לזרם של טקסט — כן', () => {
+  const d = { ...doc(), lines: [...doc().lines, line(4, [400, 20, 600, 50], { stream: 'header', text: '12', text_ocr: '12' })] };
+  const v = buildView(d, []);
+  assert.equal(withBookOnly([{ kind: 'text', page: 3, ids: [4], value: '123' }], v, 3).length, 1);
+  const v2 = buildView(d, [{ kind: 'stream', page: 3, ids: [4], value: 'main' }]);
+  assert.deepEqual(withBookOnly([{ kind: 'text', page: 3, ids: [4], value: '123' }], v2, 3).map((o) => o.kind), ['train_text', 'text']);
+});

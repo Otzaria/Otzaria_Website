@@ -100,9 +100,11 @@ import { caretTop, readDomSelection } from './flowDom'
 //   help.lockedLine — ההסבר על שורה נעולה (ממתינה לזיהוי-מחדש) במקום הנוסח של האתר.
 //   help.bookOnlyTitle — ההסבר על הכפתור "לספר בלבד" (כשהוא כבוי) במקום הנוסח של האתר ("אחרי אישור המנהל").
 //
-// מצב "לספר בלבד" (כפתור בסרגל, נשמר בדפדפן — BOOK_ONLY_KEY): כל עוד הוא דולק, כל תיקון-טקסט
-// בשורה מקורית שעוד אינה מסומנת מקבל באותו צעד גם train_text = 0 (ops.withBookOnly) — Ctrl+Z
-// אחד מבטל את שניהם. אישור בלי שינוי אינו מסמן. לשורה בודדת — לוח הפרטים ← שורה.
+// מצב "לספר בלבד" (כפתור בסרגל): כל עוד הוא דולק, כל תיקון-טקסט בשורה מקורית שעוד אינה מסומנת
+// מקבל באותו צעד גם train_text = 0 (ops.withBookOnly) — Ctrl+Z אחד מבטל את שניהם. אישור בלי שינוי
+// אינו מסמן, וגם לא ריהוט (לשונית הריהוט). לשורה בודדת — לוח הפרטים ← שורה. המצב כבוי בכל פתיחת
+// עמוד: אינו נשמר בדפדפן ואינו עובר לעמוד אחר (החלטת בעל הפרויקט — מי ששכח אותו דולק לא יוציא
+// בשקט שורות רבות מהאימון).
 // סימון בנוסח הישן ("פגם בדפוס": ודאות "לא בטוח" עם סיבה קבועה — vocab.isPrintDefect) נקרא כ"לספר
 // בלבד" ואינו הולך לאיבוד: הסרת "לספר בלבד" מורידה גם אותו, ושינוי-ודאות בשורה כזו מעביר אותו
 // ל-train_text = 0 — כל אחד בצעד-ביטול אחד.
@@ -147,24 +149,6 @@ function isTextField(t) {
   if (t.tagName === 'TEXTAREA') return true
   if (t.tagName === 'INPUT') return !NON_TEXT_INPUTS.has(String(t.type || 'text').toLowerCase())
   return !!t.isContentEditable
-}
-
-// מצב "לספר בלבד" — נשמר בדפדפן (כמו הפריסה); בדפדפן בלי אחסון — כבוי
-export const BOOK_ONLY_KEY = 'pageProof.bookOnly'
-function loadBookOnly() {
-  try {
-    return window.localStorage.getItem(BOOK_ONLY_KEY) === '1'
-  } catch {
-    return false
-  }
-}
-function saveBookOnly(on) {
-  try {
-    if (on) window.localStorage.setItem(BOOK_ONLY_KEY, '1')
-    else window.localStorage.removeItem(BOOK_ONLY_KEY)
-  } catch {
-    /* אחסון חסום — המצב פשוט לא נשמר */
-  }
 }
 
 function loadLayout() {
@@ -281,8 +265,11 @@ export default function ProofEditor({
   const P = baseDoc.page
   const { view, ops } = ed
   const { showAlert, showConfirm } = useDialog()
-  // מצב "לספר בלבד": כל תיקון-טקסט בשורה מסמן אותה (train_text = 0) — ראו push למטה
-  const [bookOnly, setBookOnly] = useState(loadBookOnly)
+  // מצב "לספר בלבד": כל תיקון-טקסט בשורה מסמן אותה (train_text = 0) — ראו push למטה. דולק רק בעמוד שבו
+  // הודלק (העמוד + מספרו): בפתיחת עמוד — גם אם הדף העוטף מחליף עמוד בלי מופע חדש — הוא כבוי
+  const bookOnlyPage = `${page?.id ?? ''}|${P}`
+  const [bookOnlyAt, setBookOnlyAt] = useState(null)
+  const bookOnly = bookOnlyAt === bookOnlyPage
 
   const [layout, setLayout] = useState(loadLayout)
   const [scanMode, setScanMode] = useState('frames')
@@ -381,8 +368,7 @@ export default function ProofEditor({
   )
   const toggleBookOnly = () => {
     const on = !bookOnly
-    setBookOnly(on)
-    saveBookOnly(on)
+    setBookOnlyAt(on ? bookOnlyPage : null)
     bo.current.told = false
     say(on ? BOOK_ONLY_HINTS.on : BOOK_ONLY_HINTS.off)
   }
@@ -871,10 +857,11 @@ export default function ProofEditor({
     script: (v) => lineOp('script', v),
     mixed: (b) => lineOp('mixed_line', b ? 1 : 0),
     // ודאות; בשורה שסומנה "לספר בלבד" בנוסח הישן (ודאות "פגם בדפוס") — הסימון עובר באותו צעד ל-train_text = 0,
-    // כדי שבחירת-ודאות לא תמחק אותו בשקט
+    // כדי שבחירת-ודאות לא תמחק אותו בשקט. תמיד, גם כשהשורה הגיעה כבר עם train_text = 0: תוכנת-הספר מייצאת כך
+    // שורה בנוסח הישן (pagedoc), ובמסד שלה הסימון הוא עדיין רק הוודאות שהפעולה הזו מחליפה
     certainty: (v, why) => {
       const value = { v, why: why || null }
-      if (!isPrintDefect(caretLine) || caretLine.train_text === 0 || !(caretLine.id > 0)) return lineOp('certainty', value)
+      if (!isPrintDefect(caretLine) || !(caretLine.id > 0)) return lineOp('certainty', value)
       const ids = [caretLine.id]
       return push({ kind: 'certainty', page: P, ids, value }, { kind: 'train_text', page: P, ids, value: 0 })
     },

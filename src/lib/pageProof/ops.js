@@ -1229,7 +1229,8 @@ export function recutLineIds(baseDoc, ops) {
 
 // מצב "לספר בלבד" בעורך: כל עוד הוא דולק, כל תיקון-טקסט בשורה מקורית (מזהה חיובי
 // מהעמוד שיובא) שעוד אינה מסומנת — מקבל באותו push גם {kind:'train_text', value:0}.
-// שורה שסומנה בנוסח הישן ("פגם בדפוס" — vocab.isPrintDefect) כבר מסומנת.
+// שורה שסומנה בנוסח הישן ("פגם בדפוס" — vocab.isPrintDefect) כבר מסומנת. ריהוט (כותרת
+// עמוד, תחתית, מפריד — לשונית הריהוט) אינו מסומן: הוא אינו נכנס לספר.
 // הפעולה הנלווית מסומנת _cmp (שדה-פנים): useProofEditor שם אותה באותו צעד-ביטול של
 // ההקלדה, וצבירת-ההקלדה ממשיכה לעבוד. תיקון שאינו משנה את הטקסט — בלי סימון; אישור
 // בלי שינוי (line_ok) — בלי סימון (החלטת בעל הפרויקט, 2026-10-02).
@@ -1242,7 +1243,16 @@ export function withBookOnly(list, view, page) {
   for (const op of args) {
     const id = op && typeof op === 'object' && op.kind === 'text' && !op._local && Array.isArray(op.ids) && op.ids.length === 1 ? op.ids[0] : null;
     const l = id != null ? lines.get(id) : null;
-    if (l && isInt(id) && id > 0 && !l._new && !isBookOnly(l) && !marked.has(id) && String(op.value ?? '') !== String(l.text ?? l.text_ocr ?? '')) {
+    if (
+      l &&
+      isInt(id) &&
+      id > 0 &&
+      !l._new &&
+      !isBookOnly(l) &&
+      !isFurnitureStream(l.stream) &&
+      !marked.has(id) &&
+      String(op.value ?? '') !== String(l.text ?? l.text_ocr ?? '')
+    ) {
       marked.add(id);
       out.push({ kind: 'train_text', page: op.page ?? page, ids: [id], value: 0, _cmp: true });
     }
