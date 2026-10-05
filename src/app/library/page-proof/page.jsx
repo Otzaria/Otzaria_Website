@@ -13,13 +13,17 @@ import ProofHelp from '@/components/pageProof/ProofHelp'
 import SubmitDialog from '@/components/pageProof/SubmitDialog'
 import MyPagesPanel from '@/components/pageProof/books/MyPagesPanel'
 import DraftCarriedNotice from '@/components/pageProof/DraftCarriedNotice'
+import DraftConflictNotice from '@/components/pageProof/DraftConflictNotice'
+import StagedEditor from '@/components/pageProof/StagedEditor'
 import { untouchedLineIds } from '@/lib/pageProof/view'
 import { cleanupPageDrafts, pageDraftKey, removePageDrafts } from '@/lib/pageProof/drafts'
+import { applyServerDraft, removeDraftMeta, resolveDraftConflict } from '@/lib/pageProof/draftRules'
 import { cleanOps, planSubmission, recheckLineIds, submitSummary } from '@/lib/pageProof/submitPlan'
 import { bookHref, editorHref } from '@/lib/pageProof/gridState'
 import { isCutOp } from '@/lib/pageProof/recutRules'
-import { RECUT_OFF_HELP, RECUT_REQUEST_HINT, RECUT_SENT, submittedWaiting } from '@/lib/pageProof/helpTexts'
+import { RECUT_OFF_HELP, submittedWaiting } from '@/lib/pageProof/helpTexts'
 import { formatSince, formatUntil } from '@/lib/pageProof/dates'
+import { STAGE_TEXT } from '@/lib/pageProof/stages'
 
 // דף המתנדב להגהת-עמודים: העורך, לעמודים שכבר בטיפולכם. כל עמוד מוגש בנפרד
 // וממתין לאישור מנהל.
@@ -33,16 +37,19 @@ import { formatSince, formatUntil } from '@/lib/pageProof/dates'
 // נפתח — אם הוא בטיפולכם או שהגשתם אותו. אחרת — הסבר למה (unavailable),
 // וקישור לרשת של הספר.
 //
-// "שלח לזיהוי-מחדש" (כשבטיוטה יש תיקוני-חיתוך): רק תיקוני-החיתוך נשלחים
-// (POST /api/page-proof/pages/[id]/recut-request); שאר התיקונים נשארים בטיוטה. העמוד
-// ממתין לתוכנת-הספר (ב"העמודים שלי" — recutPending) וחוזר אלינו בגרסה חדשה; אז הטיוטה
-// עוברת אליו (drafts.cleanupPageDrafts — carried), והדף מספר מה עבר ומה לא.
+// שני שלבים (docs/63 §3; StagedEditor): קודם "מבנה" (מסגרות ושורות), ואז "טקסט". שינוי-חיתוך בשלב "מבנה" נשלח
+// לזיהוי-מחדש מעצמו (POST /api/page-proof/pages/[id]/recut-request — רק תיקוני-החיתוך); העמוד ממתין לתוכנת-הספר
+// (ב"העמודים שלי" — recutPending) וחוזר אלינו בגרסה חדשה, לשלב "טקסט"; אז הטיוטה עוברת אליו (בשרת, וגם
+// drafts.cleanupPageDrafts — carried), והדף מספר מה עבר ומה לא.
 //
 // החוזה מול ProofEditor:
 //   draftKey — מפתח-הטיוטה בדפדפן לפי העמוד *והגרסה שלו* (lib/pageProof/
 //     drafts.js). העורך שומר וקורא את הטיוטה רק במפתח הזה. בפתיחת עמוד
 //     נמחקות הטיוטות של גרסאות אחרות שלו (עמוד שחזר מזיהוי-מחדש) והמפתח
 //     הישן בלי גרסה (טיוטה ישנה תקפה עוברת קודם למפתח החדש).
+//   הטיוטה בשרת (docs/63 §2): העמוד מגיע עם draft — החדשה מבין המקומית לזו שבשרת נכתבת למפתח לפני שהעורך נפתח
+//     (draftRules.applyServerDraft), והעורך בעריכה (StagedEditor) שומר אותה באתר בכל שינוי. כך עמוד שעבר
+//     ממתנדב אחר מגיע עם העבודה שנעשתה בו, ומתנדב ממשיך ממחשב אחר.
 //   actions({ops, view, untouched, approval}) — כפתור ההגשה בסרגל העורך;
 //     approval = {approved, total}: פסקאות-התוכן שאושרו בכל העמוד.
 // ההחלטה מה נשלח בכל בחירה של חלון ההגשה — lib/pageProof/submitPlan.js.
@@ -103,7 +110,7 @@ export default function PageProofVolunteerPage() {
 
 function PageProofVolunteer() {
   const { session, status } = useRequireAuth()
-  const { showAlert, showConfirm } = useDialog()
+  const { showAlert } = useDialog()
   const router = useRouter()
   const searchParams = useSearchParams()
   const wanted = searchParams?.get('page') || null
@@ -143,6 +150,7 @@ function PageProofVolunteer() {
       setCarried(null)
       try {
         const res = await fetch(`/api/page-proof/pages/${id}`)
+        const received = Date.now()
         const data = await res.json()
         if (!data.success) throw new Error(data.error || 'העמוד לא נטען')
         if (typeof data.recutRequests === 'boolean') setRecutOpen(data.recutRequests)
@@ -150,11 +158,16 @@ function PageProofVolunteer() {
         if (data.leasedUntil) setSeq((s) => (s ? { ...s, pages: s.pages.map((p) => (p.id === id ? { ...p, leasedUntil: data.leasedUntil } : p)) } : s))
         const draftKey = pageDraftKey(data.page)
         // עריכה: ניקוי טיוטות של גרסאות אחרות (לפני שהעורך קורא את שלו); עמוד שחזר
-        // מזיהוי-מחדש — מה שתקף מהטיוטה הקודמת עובר אליו. עמוד שכבר הגשתם: הטיוטות
-        // שלו מיותרות.
-        if (data.mode === 'edit') setCarried(withStorage((s) => cleanupPageDrafts(s, data.page, draftKey))?.carried || null)
-        else if (data.submission) withStorage((s) => removePageDrafts(s, data.page.id))
-        setCurrent({ ...data, draftKey })
+        // מזיהוי-מחדש — מה שתקף מהטיוטה הקודמת עובר אליו. ואז הטיוטה שבשרת מול המקומית —
+        // החדשה מבין השתיים נכנסת לעורך. עמוד שכבר הגשתם: הטיוטות שלו מיותרות.
+        let draftInfo = null
+        if (data.mode === 'edit') {
+          const local = withStorage((s) => cleanupPageDrafts(s, data.page, draftKey))?.carried || null
+          const skewMs = data.now ? Date.parse(data.now) - received : 0
+          draftInfo = withStorage((s) => applyServerDraft(s, { pageId: data.page.id, draftKey, server: data.draft || null, skewMs }))
+          setCarried((draftInfo?.source === 'server' && data.draft?.carried) || local)
+        } else if (data.submission) withStorage((s) => removePageDrafts(s, data.page.id))
+        setCurrent({ ...data, draftKey, draftInfo })
       } catch (e) {
         showAlert('שגיאה', failMessage(e, 'העמוד לא נטען — בדקו את החיבור ונסו שוב'))
       } finally {
@@ -287,17 +300,38 @@ function PageProofVolunteer() {
     }
   }
 
-  // "שלח לזיהוי-מחדש": רק תיקוני-החיתוך נשלחים (השרת שומר רק אותם גם אם נשלח יותר); שאר
-  // התיקונים נשארים בטיוטה. העמוד עובר לזיהוי-מחדש ויחזור אלינו — ממשיכים לעמוד הבא ברצף
+  // "התחל מאפס" (טיוטה שהתקבלה ממתנדב קודם): הטיוטה באתר כבר התרוקנה — גם המקומית, והעמוד נטען מחדש
+  // שתי גרסאות סותרות של הטיוטה (כאן ובאתר) — מה שהמתנדב בחר נכתב לטיוטה המקומית, ואז העורך נפתח
+  const chooseDraft = useCallback(
+    (choice) => {
+      const cur = current
+      if (!cur || cur.draftInfo?.source !== 'conflict') return
+      const info = withStorage((s) =>
+        resolveDraftConflict(s, { pageId: cur.page.id, draftKey: cur.draftKey, server: cur.draft || null, conflict: cur.draftInfo.conflict, choice })
+      )
+      setCurrent({ ...cur, draftInfo: info || { source: null, stage: cur.draft?.stage ?? null, srv: cur.draft?.updatedAt ?? null } })
+    },
+    [current]
+  )
+
+  const resetDraft = useCallback(
+    (pageId) => {
+      withStorage((s) => {
+        removePageDrafts(s, pageId)
+        removeDraftMeta(s, pageId)
+      })
+      openPage(pageId)
+    },
+    [openPage]
+  )
+
+  // שלב "מבנה" עם שינוי-חיתוך ← זיהוי-מחדש בלי מנהל (docs/63 §3; StagedEditor — אחרי שהטיוטה נשמרה באתר): רק
+  // תיקוני-החיתוך נשלחים (השרת שומר רק אותם גם אם נשלח יותר); שאר התיקונים נשארים בטיוטה. העמוד עובר לזיהוי-מחדש
+  // ויחזור אלינו לשלב "טקסט" — ממשיכים לעמוד הבא ברצף. ← {ok} או {ok:false, error} (העורך עובר לשלב "טקסט" כמו היום)
   const sendRecut = async ({ ops } = {}) => {
     const page = current?.page
     const cut = cleanOps((ops || []).filter(isCutOp))
-    if (!page || !cut.length) return
-    const ok = await showConfirm(
-      'שליחה לזיהוי-מחדש',
-      `${cut.length === 1 ? 'תיקון-חיתוך אחד יישלח' : `${cut.length} תיקוני-חיתוך יישלחו`} לתוכנת-הספר, ועמוד ${page.page} ייחתך וייקרא מחדש. ${RECUT_REQUEST_HINT}`
-    )
-    if (!ok) return
+    if (!page || !cut.length) return { ok: false, error: null }
     setSaving(true)
     try {
       const res = await fetch(`/api/page-proof/pages/${page.id}/recut-request`, {
@@ -306,17 +340,18 @@ function PageProofVolunteer() {
         body: JSON.stringify({ revision: page.revision, ops: cut }),
       })
       const data = await res.json()
-      // המנהל כיבה את השליחה בינתיים — הכפתור יורד, וההסבר אומר להגיש כרגיל
+      // המנהל כיבה את השליחה בינתיים — ההסבר בעורך אומר להגיש כרגיל
       if (data.code === 'recut_off') setRecutOpen(false)
       if (!data.success) throw new Error(data.error || 'השליחה נכשלה')
       const pages = (seq?.pages || []).map((p) => (p.id === page.id ? { ...p, state: 'recut' } : p))
       if (seq) setSeq({ ...seq, pages })
-      showAlert('נשלח לזיהוי-מחדש', RECUT_SENT)
+      showAlert('נשלח לזיהוי-מחדש', STAGE_TEXT.recutSent)
       const next = pages.find((p) => p.state === 'mine')
       if (next) openPage(next.id)
       else setCurrent(null)
+      return { ok: true }
     } catch (e) {
-      showAlert('שגיאה', failMessage(e, 'השליחה נכשלה — בדקו את החיבור ונסו שוב. העבודה שמורה בדפדפן.'))
+      return { ok: false, error: failMessage(e, 'השליחה נכשלה — בדקו את החיבור') }
     } finally {
       setSaving(false)
     }
@@ -435,45 +470,35 @@ function PageProofVolunteer() {
 
               {loadingPage ? (
                 <LoadingSpinner message="טוען עמוד..." />
+              ) : current && editing && current.draftInfo?.source === 'conflict' ? (
+                <DraftConflictNotice conflict={current.draftInfo.conflict} onChoose={chooseDraft} />
+              ) : current && editing ? (
+                <StagedEditor
+                  key={current.draftKey}
+                  current={current}
+                  help={recutOpen ? undefined : RECUT_OFF_HELP}
+                  recutOpen={recutOpen}
+                  saving={saving}
+                  onSubmit={openSubmit}
+                  onSendRecut={sendRecut}
+                  onReset={() => resetDraft(current.page.id)}
+                  onReload={() => openPage(current.page.id)}
+                />
               ) : current ? (
                 <ProofEditor
                   key={current.draftKey}
                   page={current.page}
                   draftKey={current.draftKey}
-                  readOnly={!editing}
-                  initialOps={editing ? null : current.submission?.ops || []}
+                  readOnly
+                  initialOps={current.submission?.ops || []}
                   help={recutOpen ? undefined : RECUT_OFF_HELP}
-                  actions={(args) =>
-                    editing ? (
-                      <>
-                        {recutOpen && (args.ops || []).some(isCutOp) && (
-                          <button
-                            onClick={() => sendRecut(args)}
-                            disabled={saving}
-                            title={RECUT_REQUEST_HINT}
-                            className="flex items-center gap-1 rounded-lg border border-feature-300 bg-feature-50 px-3 py-1.5 font-bold text-feature-800 hover:bg-feature-100 disabled:opacity-40"
-                          >
-                            <span aria-hidden="true" className="material-symbols-outlined text-base">cached</span>
-                            שלח לזיהוי-מחדש
-                          </button>
-                        )}
-                        <button
-                          onClick={() => openSubmit(args)}
-                          disabled={saving}
-                          className="flex items-center gap-1 rounded-lg bg-success-600 px-4 py-1.5 font-bold text-white hover:bg-success-700 disabled:opacity-40"
-                        >
-                          <span aria-hidden="true" className="material-symbols-outlined text-base">{saving ? 'hourglass_top' : 'send'}</span>
-                          הגשת העמוד
-                        </button>
-                      </>
-                    ) : (
-                      <span className="rounded bg-info-100 px-2 py-1 text-xs text-info-800">
-                        {current.submission?.status === 'approved'
-                          ? 'ההגשה שלכם אושרה'
-                          : submittedWaiting(current.submission?.createdAt ? formatSince(current.submission.createdAt, new Date()) : '')}
-                      </span>
-                    )
-                  }
+                  actions={() => (
+                    <span className="rounded bg-info-100 px-2 py-1 text-xs text-info-800">
+                      {current.submission?.status === 'approved'
+                        ? 'ההגשה שלכם אושרה'
+                        : submittedWaiting(current.submission?.createdAt ? formatSince(current.submission.createdAt, new Date()) : '')}
+                    </span>
+                  )}
                 />
               ) : (
                 <div className="glass-strong flex flex-col items-center gap-4 rounded-xl p-8 text-center">

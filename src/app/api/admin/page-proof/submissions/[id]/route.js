@@ -20,6 +20,8 @@ import {
 import { pageSig, submissionDetail } from '@/lib/pageProof/adminReview';
 import { getPageProofSession } from '@/lib/pageProof/tokenAuth';
 import { cancelRecutRequests, recutReturn } from '@/lib/pageProof/recutRequests';
+import { basedOnOf } from '@/lib/pageProof/basedOn';
+import { sameRound } from '@/lib/pageProof/reopenRules';
 
 // גם במפתח-גישה של תוכנת-הספר: GET — read, PATCH — review
 async function gate(request, params, scope) {
@@ -32,7 +34,7 @@ async function gate(request, params, scope) {
   return { session, id };
 }
 
-const PAGE_FIELDS = { status: 1, revision: 1, activeCount: 1, required: 1 };
+const PAGE_FIELDS = { status: 1, revision: 1, activeCount: 1, required: 1, round: 1 };
 // עדכון מותנה במצב שנקרא — אם מנהל אחר שינה אותו בינתיים, קוראים שוב ומחשבים מחדש
 const RETRIES = 3;
 
@@ -47,17 +49,18 @@ export async function GET(request, { params }) {
     await connectDB();
     const sub = await PageProofSubmission.findById(id).lean();
     if (!sub) return notFound('ההגשה לא נמצאה');
-    const [page, book, siblings] = await Promise.all([
+    const [page, book, siblings, based] = await Promise.all([
       PageProofPage.findById(sub.page).lean(),
       PageProofBook.findById(sub.book, { title: 1, script: 1 }).lean(),
       PageProofSubmission.find({ page: sub.page, _id: { $ne: sub._id } }, { ops: 0 }).sort({ createdAt: 1 }).lean(),
+      basedOnOf([sub], { withOps: true }),
     ]);
     if (!page) return notFound('העמוד של ההגשה לא נמצא');
     return NextResponse.json(
       {
         success: true,
         page: { ...editorPageShape(page, book), status: page.status, sig: pageSig(page) },
-        submission: submissionDetail(sub),
+        submission: submissionDetail(sub, based.get(String(sub._id)) || null),
         siblings: siblings.map((s) => ({
           id: String(s._id),
           userName: s.userName,
@@ -83,7 +86,8 @@ export async function GET(request, { params }) {
 //             חדשה. עמוד כפול שעוד חסרה לו הגשה — ממתין להגשה האחרונה
 //             (importRules.statusAfterApprove). הגשה שמשנה חיתוך אבל אינה הראשית
 //             (הגשה אחרת לעמוד כבר יצאה בקובץ) — recutSkipped: תיקוני-החיתוך
-//             שלה ייצאו רק בקובץ הכפולים.
+//             שלה ייצאו רק בקובץ הכפולים. הגשה ראשית שתיקוני-החיתוך שלה כולם של ההגשה
+//             שעליה היא מבוססת (שכבר יצאה) — בלי recutSkipped: הם כבר בדרך.
 //   reject  — מ-submitted, או ממאושרת שעוד לא יצאה בקובץ-תיקונים. העמוד
 //             חוזר למאגר (המקום מתפנה, ומי שהגיש יכול לקבל אותו שוב) — אלא אם
 //             הוא ממתין לזיהוי-מחדש בגלל הגשה מאושרת אחרת.
@@ -112,7 +116,7 @@ export async function PATCH(request, { params }) {
       reviewNote: note,
     };
     await connectDB();
-    const sub = await PageProofSubmission.findById(id, { page: 1, user: 1, status: 1, exportedAt: 1, ops: 1, revision: 1, recutRequest: 1 }).lean();
+    const sub = await PageProofSubmission.findById(id, { page: 1, user: 1, status: 1, exportedAt: 1, ops: 1, revision: 1, recutRequest: 1, round: 1 }).lean();
     if (!sub) return notFound('ההגשה לא נמצאה');
 
     if (body.action === 'approve') {
@@ -142,12 +146,15 @@ export async function PATCH(request, { params }) {
       let pageStatus = page?.status ?? null;
       let recutSkipped = false;
       const pageRev = storedRevision(page);
-      if (page && sameRevision(submissionRevision(sub), pageRev)) {
+      // הגשה מסבב קודם (העמוד נפתח מחדש אחרי אישור — reopenRules.js) אינה משנה את המונים של הסבב הנוכחי
+      if (page && sameRevision(submissionRevision(sub), pageRev) && sameRound(sub, page)) {
         await PageProofPage.updateOne({ _id: sub.page, ...revisionFilter(pageRev) }, { $inc: { approvedCount: 1 } });
         // הראשית אחרי האישור הזה (אותו כלל של קובץ-התיקונים)
         const primary = await primaryOf(sub.page, pageRev);
-        const primaryRecut = !!primary?.needsRecut;
-        recutSkipped = recut && !primaryRecut;
+        const primaryRecut = !!primary?.recut;
+        // "תיקוני-החיתוך לא יחזרו" — רק כשההגשה הזו אינה הראשית. כשהיא הראשית (ההמשך המצטבר של הבודק השני) ואין בה
+        // חיתוך משלה, תיקוני-החיתוך שלה הם של ההגשה שעליה היא מבוססת — וזו כבר יצאה לתוכנת-הספר: אין מה להזהיר
+        recutSkipped = recut && !primaryRecut && String(primary?._id ?? '') !== String(sub._id);
         let cur = page;
         for (let k = 0; k < RETRIES && cur; k++) {
           const next = statusAfterApprove(cur.status, primaryRecut, cur);
@@ -189,10 +196,10 @@ export async function PATCH(request, { params }) {
       let page = await PageProofPage.findById(sub.page, PAGE_FIELDS).lean();
       const pageRev = storedRevision(page);
       let pageStatus = page?.status ?? null;
-      if (page && sameRevision(submissionRevision(prev), pageRev)) {
+      if (page && sameRevision(submissionRevision(prev), pageRev) && sameRound(prev, page)) {
         // עמוד שממתין לזיהוי-מחדש נשאר כך אם ההגשה הראשית שנשארה (בלי זו) משנה חיתוך
         const rest = await primaryOf(sub.page, pageRev, prev._id);
-        const stillRecut = !!rest?.needsRecut;
+        const stillRecut = !!rest?.recut;
         for (let k = 0; k < RETRIES && page; k++) {
           const next = statusAfterReject(page.status, stillRecut);
           // המסנן כולל את המצב שנקרא — אישור מקביל שהעביר ל-recut לא נדרס

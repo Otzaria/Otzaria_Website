@@ -122,6 +122,15 @@ function storageKeys(storage) {
   return out;
 }
 
+function readDraftAt(raw) {
+  try {
+    const at = Number(JSON.parse(raw)?.at);
+    return Number.isFinite(at) ? at : null;
+  } catch {
+    return null;
+  }
+}
+
 // הניקוי בפתיחת עמוד. מחזיר {key, migrated, removed:[מפתחות שנמחקו], carried}.
 // טיוטה ישנה (בלי גרסה) עוברת רק לעמוד בגרסה 1, רק אם אין כבר טיוטה במפתח החדש, ורק
 // אם כל פעולותיה עוברות את בדיקת-התקינות מול העמוד (אחרת היא של עמוד אחר).
@@ -150,7 +159,9 @@ export function cleanupPageDrafts(storage, page, key = pageDraftKey(page)) {
     const ops = older ? readDraftOps(storage.getItem(older.k)) : null;
     if (ops?.length) {
       const c = carryDraftOps(page.doc, ops);
-      if (c.kept.length) storage.setItem(key, JSON.stringify({ ops: c.kept, at: Date.now() }));
+      // הזמן של הטיוטה הקודמת נשמר — מתי נעשה בה השינוי האחרון (draftRules.mergeCarried, pickDraft), לא מתי עברה
+      const at = readDraftAt(storage.getItem(older.k));
+      if (c.kept.length) storage.setItem(key, JSON.stringify({ ops: c.kept, at: at ?? Date.now() }));
       const kept = c.kept.filter((o) => !o._local).length;
       if (kept || c.dropped.length) res.carried = { from: older.k, kept, cut: c.cut, dropped: c.dropped.map(droppedOpLabel) };
     }

@@ -52,6 +52,12 @@ const PageProofPageSchema = new mongoose.Schema(
     // (רשת-העמודים, תפיסת עמוד/רצף, פתיחה בעורך) למי שאינו מחזיק
     // בו כבר. עמוד בלי השדה (מלפני שנוסף) — פתוח. ייבוא-חוזר אינו נוגע בו.
     volunteer: { type: Boolean, default: true },
+
+    // סבב (lib/pageProof/reopenRules.js): עמוד מאושר שמנהל פתח מחדש לעריכה (docs/63 §5) — הסבב עולה, המונים והמגישים
+    // מתאפסים וההגשות המאושרות נשארות בהיסטוריה (כל הגשה נרשמת בסבב שבו נעשתה). בלי השדה — 0.
+    round: { type: Number, default: 0, min: 0 },
+    reopenedAt: { type: Date, default: null },
+    reopenedByName: { type: String, default: '' },
   },
   { timestamps: true }
 );

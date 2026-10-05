@@ -31,6 +31,9 @@ import {
 import { hasSuggestions } from '@/lib/pageProof/wordPopup'
 import { recheckLineIds } from '@/lib/pageProof/submitPlan'
 import { pageDraftKey } from '@/lib/pageProof/drafts'
+import { stageFocus } from '@/lib/pageProof/stages'
+import { splitInherited } from '@/lib/pageProof/draftRules'
+import { inverseOps } from '@/lib/pageProof/inverseOps'
 import { LAYOUT_KEY, SPLIT_MAX, SPLIT_MIN, nudgeSplit, readLayout, splitFromPointer } from '@/lib/pageProof/layout'
 import { LINK_ERRORS, linkEnd, planLink, planOtherPageLink, farLabel, tabOfLine, wordStartPos } from '@/lib/pageProof/linkFlow'
 import { LINK_HE, unlinkPlan } from '@/lib/pageProof/linkCancel'
@@ -104,6 +107,11 @@ import { caretTop, readDomSelection } from './flowDom'
 //   help.bookOnlyTitle — ההסבר על הכפתור "לספר בלבד" (כשהוא כבוי) במקום הנוסח של האתר ("אחרי אישור המנהל").
 //   help.guide — דף ההנחיות (כפתור "הנחיות" בסרגל וקישור בחלון העזרה — ProofHelp.guideOf): {href?, open?(href)};
 //     null — בלי. בלעדיו — הדף של האתר (GUIDE_PATH) בלשונית חדשה.
+//   focus — השלב בדף המתנדב של האתר ('structure' / 'text' — lib/pageProof/stages.stageFocus): "מבנה" — הטקסט לקריאה בלבד
+//     ומעומעם ובסרגל רק מה שנוגע למבנה; "טקסט" — הסריקה בלי כלים. בלעדיו (כמו בתוכנת-הספר) — הכול פתוח, כמו תמיד.
+//   inherited — {ops, source}: פעולות שהטיוטה קיבלה ממישהו אחר (הבודק השני — ההגשה הקודמת; עמוד שנפתח מחדש — הגרסה
+//     שאושרה; מתנדב קודם — draftRules.splitInherited). השורות שלהן מסומנות בטקסט ("תוקן בידי מתנדב קודם", והטקסט המקורי
+//     בריחוף), ובלוח הפרטים ← שינויים הן ברשימה נפרדת, כל אחת עם "החזר למקור". בלעדיו — כמו תמיד.
 //
 // מצב "לספר בלבד" (כפתור בסרגל): כל עוד הוא דולק, כל תיקון-טקסט בשורה מקורית שעוד אינה מסומנת
 // מקבל באותו צעד גם train_text = 0 (ops.withBookOnly) — Ctrl+Z אחד מבטל את שניהם. אישור בלי שינוי
@@ -262,9 +270,23 @@ export default function ProofEditor({
   preOkFromStatus = false,
   onUnapprovePre = null,
   helpAutoOpen = null,
+  focus = null,
+  inherited = null,
 }) {
   const storageKey = useMemo(() => draftKey || pageDraftKey(page), [draftKey, page])
   const ed = useProofEditor({ baseDoc: page.doc, initialOps, readOnly, persist, draftKey: storageKey, preOkFromStatus })
+  // השלב (focus): textRO — עריכת הטקסט סגורה; scanRO — כלי הסריקה סגורים
+  const fx = stageFocus(focus)
+  const textRO = readOnly || !!fx?.textReadOnly
+  const scanRO = readOnly || !!fx?.scanReadOnly
+  // מה שהתקבל ממישהו אחר (inherited) — אילו מהפעולות שבטיוטה, ואילו שורות; בריחוף — הטקסט המקורי
+  const inh = useMemo(() => (inherited?.ops?.length ? splitInherited(ed.ops, inherited.ops) : null), [ed.ops, inherited])
+  const inhLabel = inherited?.source === 'approved' ? 'בגרסה שאושרה' : 'תוקן בידי מתנדב קודם'
+  const marked = useMemo(() => {
+    if (!inh?.lines.size) return null
+    const base = new Map((ed.baseDoc?.lines || []).map((l) => [l?.id, String(l?.text ?? l?.text_ocr ?? '')]))
+    return new Map([...inh.lines].map((id) => [id, `${inhLabel} · במקור: «${base.get(id) ?? ''}»`]))
+  }, [inh, ed.baseDoc, inhLabel])
   // העמוד שמולו עובדים: page.doc, או מה שהשרת החזיר אחרי שמירה (rebase)
   const baseDoc = ed.baseDoc
   const P = baseDoc.page
@@ -281,7 +303,7 @@ export default function ProofEditor({
   const [tabPick, setTabPick] = useState(null)
   const [sel, setSel] = useState(null)
   const [request, setRequest] = useState(null)
-  const [hint, setHint] = useState(() => (ed.restored ? { text: 'שוחזרה טיוטה שמורה מהדפדפן — אפשר להמשיך מאיפה שהפסקתם', n: 0 } : null))
+  const [hint, setHint] = useState(() => (ed.restored ? { text: 'שוחזרה טיוטה שמורה — אפשר להמשיך מאיפה שהפסקתם', n: 0 } : null))
   const [linkPending, setLinkPending] = useState(null)
   // הצד השני של קישור בעמוד אחר: {start: מספר-עמוד | null} — החלון פתוח
   const [otherPage, setOtherPage] = useState(null)
@@ -353,7 +375,7 @@ export default function ProofEditor({
   // יציב לאורך חיי המופע — המצב והתצוגה העדכניים דרך ref ----
   const bo = useRef({ on: false, view, P, told: false })
   useLayoutEffect(() => {
-    bo.current.on = bookOnly && !readOnly
+    bo.current.on = bookOnly && !textRO
     bo.current.view = view
     bo.current.P = P
   })
@@ -460,7 +482,7 @@ export default function ProofEditor({
     },
     [lineById, push, P, moveCaret]
   )
-  const pop = useWordPopup(view, { onPick: onPickWord, readOnly, lockedLineIds: locked })
+  const pop = useWordPopup(view, { onPick: onPickWord, readOnly: textRO, lockedLineIds: locked })
   const { onCaretMove, closeNow } = pop
   useEffect(() => {
     onCaretMove(ci?.lineId ?? null, ci?.wordIndex ?? -1)
@@ -493,7 +515,7 @@ export default function ProofEditor({
       'ביטול'
     )
   const link = async () => {
-    if (readOnly) return
+    if (textRO) return
     const end = linkEnd(view, tabKey, sel)
     if (end.error) return say(end.error)
     if (!linkPending) {
@@ -518,7 +540,7 @@ export default function ProofEditor({
   // הצד השני בעמוד אחר: מילה שנבחרה בחלון העמוד האחר (OtherPagePicker) משלימה את הקישור.
   // מחזיר הודעת-שגיאה לחלון (שנשאר פתוח) או null
   const pickOtherPage = async (pick, fview) => {
-    if (readOnly || !linkPending) return LINK_ERRORS.gone
+    if (textRO || !linkPending) return LINK_ERRORS.gone
     const r = planOtherPageLink(view, linkPending.from, pick, fview)
     if (r.error) return r.error
     const bad = validateOp(baseDoc, r.op)
@@ -539,7 +561,7 @@ export default function ProofEditor({
   }, [say])
   // העמוד האחר נפתח רק כשהצד הראשון כבר נבחר, ורק כשידוע הספר (gid)
   const gid = page.gid ?? baseDoc.gid ?? null
-  const canOtherPage = !readOnly && !!gid && !!linkPending
+  const canOtherPage = !textRO && !!gid && !!linkPending
   const openOtherPage = useCallback((n) => setOtherPage({ start: Number.isInteger(n) && n >= 1 ? n : null }), [])
   const closeOtherPage = useCallback(() => setOtherPage(null), [])
 
@@ -553,7 +575,7 @@ export default function ProofEditor({
     // פסקה שאושרה בסבב קודם (לפני ההגהה הזו) — אין כאן אישור לבטל; דף עוטף ששומר כל צעד מבטל אותו בשרת
     const info = tabAppr.byKey.get(key)
     if (info?.pre) {
-      if (typeof onUnapprovePre === 'function' && !readOnly) return onUnapprovePre({ key, lineIds: info.lineIds.slice() })
+      if (typeof onUnapprovePre === 'function' && !textRO) return onUnapprovePre({ key, lineIds: info.lineIds.slice() })
       return say('הפסקה הזו אושרה כבר בסבב קודם — אין כאן אישור לבטל')
     }
     const pred = unapproveMatcher(view, tabKey, key, { locked })
@@ -562,7 +584,7 @@ export default function ProofEditor({
     say('אישור הפסקה בוטל (Ctrl+Z מחזיר אותו)')
   }
   const approveAtCaret = () => {
-    if (readOnly) return
+    if (textRO) return
     // ריהוט הדף אינו טקסט של הספר — אין בו פסקאות לאישור (בלי line_ok נסתר)
     if (furnitureTab) return say(HINTS.furnitureApprove)
     const key = ci?.paraKey
@@ -621,7 +643,7 @@ export default function ProofEditor({
 
   const charStyle = (style, on) => applyPlan(planCharStyle(view, tabKey, sel, style, on, { locked }))
   // "חיבור לפסקה הקודמת" מהכפתור שליד הפסקה — כמו Backspace בתחילתה
-  const joinPara = (key) => !readOnly && applyPlan(planJoinPara(view, tabKey, key))
+  const joinPara = (key) => !textRO && applyPlan(planJoinPara(view, tabKey, key))
 
   // ביטול/חזרה: הסמן עובר למקום שבו הטקסט השתנה (ולשונית השורה); שינוי שאינו
   // טקסט (סגנון, פסקה, מסגרת) — הסמן נשאר במקומו, בלי לגנוב את המיקוד מהסריקה
@@ -680,7 +702,7 @@ export default function ProofEditor({
   // ---- ה-callbacks היציבים (לרכיבים ממוזכרים) — תמיד על המצב העדכני ----
   const live = useRef(null)
   useLayoutEffect(() => {
-    live.current = { approve, unapprove, goTo, charStyle, joinPara, undo, redo, link, cancelLink, approveAtCaret, goSuspicious, openSuggest, linkPending, readOnly, P, loadOtherPage, onExtraKey, onSelectionChange, ed, rebaseKeepCaret, onOpsChange, push, view, locked, tabKey }
+    live.current = { approve, unapprove, goTo, charStyle, joinPara, undo, redo, link, cancelLink, approveAtCaret, goSuspicious, openSuggest, linkPending, readOnly: textRO, P, loadOtherPage, onExtraKey, onSelectionChange, ed, rebaseKeepCaret, onOpsChange, push, view, locked, tabKey }
   })
   useImperativeHandle(
     editorRef,
@@ -862,12 +884,17 @@ export default function ProofEditor({
     // הפעולה link_add עצמה יורדת (צעד-ביטול אחד; לא link_del, שהיה נשלח יחד איתה); קישור שהגיע עם העמוד,
     // אוטומטי או ידני — link_del; קישור שהפירוש שלו בעמוד אחר — מבטלים שם
     unlink: (k) => {
-      if (readOnly) return false
+      if (textRO) return false
       const plan = unlinkPlan(view, k, P, baseDoc)
       if (plan.action === 'remove') {
         // הקישור החדש החליף קישור שהגיע עם העמוד — גם הוא מבוטל, באותו צעד (plan.add)
         const pred = (op) => plan.match(op)
         pred.add = plan.add
+        // קישור שהתקבל ממישהו אחר (inherited — הבודק השני, עמוד שנפתח מחדש): ההגשה הקודמת אולי כבר הוחלה בספר,
+        // ולכן במקום הורדה שקטה — "אין קישור" מפורש (revert), כמו ב"החזר למקור"
+        if (inh && ed.ops.some((op, i) => inh.idx.has(i) && plan.match(op))) {
+          pred.add = [{ kind: 'link_del', page: P, value: { src_line: k.from_line, page: P }, revert: true }]
+        }
         ed.removeWhere(pred)
         say(LINK_HE.cancelledAdded)
         return true
@@ -883,7 +910,7 @@ export default function ProofEditor({
     // "החזר לאוטומטי" לקישור שבוטל (entry מ-linkCancel.cancelledLinks): בעריכה הזו — פעולת-הביטול יורדת;
     // קודם — link_reset (ובוטלה ההחזרה — הפעולה שלה יורדת)
     restoreLink: (c) => {
-      if (readOnly || !c?.restore) return
+      if (textRO || !c?.restore) return
       if (c.restore.action === 'remove') {
         ed.removeWhere(c.restore.match)
         say(c.pending ? LINK_HE.resetUndone : LINK_HE.restored)
@@ -894,7 +921,7 @@ export default function ProofEditor({
     // השם הקודם (קישור שנוסף בעריכה הזו) — אותו דבר כמו unlink
     removeLink: (k) => drawerAct.unlink(k),
     otherPage: canOtherPage ? openOtherPage : null,
-    startLink: readOnly ? null : link,
+    startLink: textRO ? null : link,
     cancelLink,
     script: (v) => lineOp('script', v),
     mixed: (b) => lineOp('mixed_line', b ? 1 : 0),
@@ -928,6 +955,17 @@ export default function ProofEditor({
     cutOk: () => push({ kind: 'cut_ok', page: P, value: true }),
     toLinesMode: () => setScanMode('lines'),
     removeOp: (i) => ed.removeAt(i),
+    // "החזר למקור" לפעולה שהתקבלה ממישהו אחר — יורדת מהטיוטה, ובמקומה פעולה הפוכה מפורשת (inverseOps: הערך שבעמוד
+    // המקורי), כדי שההחזרה תגיע לספר גם כשההגשה הקודמת כבר הוחלה שם. צעד-ביטול אחד
+    revertInherited: (i) => {
+      if (readOnly || !inh?.idx.has(i)) return
+      const target = ed.ops[i]
+      if (!target) return
+      const pred = (op) => op === target
+      pred.add = inverseOps(ed.baseDoc, target)
+      ed.removeWhere(pred)
+      say('השינוי הוחזר למקור (Ctrl+Z מחזיר אותו)')
+    },
     // לשונית של דף עוטף (extraTabs): פעולות-חוזה אל רשימת-הפעולות, כמו לחיצה בסרגל
     push: (...args) => push(...args),
   }
@@ -942,6 +980,7 @@ export default function ProofEditor({
 
   // ---- הסרגל ----
   const edit = !readOnly
+  const textEdit = !textRO
   const paraStyle = ci ? (ci.heading && !['h1', 'h2', 'h3'].includes(ci.paraStyle) ? null : ci.paraStyle) : null
   const actionsNode = actions ? actions({ ops, view, stats, untouched, approval: approvalSummary, reset: ed.reset }) : null
   const fontFamily = layout.fontFamily || DEFAULT_PROOF_FONT
@@ -953,7 +992,7 @@ export default function ProofEditor({
         imageUrl={page.imageUrl}
         mode={scanMode}
         setMode={stable.setMode}
-        readOnly={readOnly}
+        readOnly={scanRO}
         currentLineId={track.lineId}
         currentWord={track.word}
         caretY={track.y}
@@ -973,9 +1012,10 @@ export default function ProofEditor({
       view={view}
       tabKey={tabKey}
       push={push}
-      readOnly={readOnly}
+      readOnly={textRO}
       locked={locked}
       recheck={recheck}
+      marked={marked}
       approval={furnitureTab ? null : tabAppr}
       endpoints={endpoints}
       caretLineId={caretLine?.id ?? null}
@@ -991,14 +1031,19 @@ export default function ProofEditor({
       onWordLeave={pop.onWordLeave}
       onJump={stable.onJump}
       onBadge={stable.onBadge}
-      onJoinPara={readOnly ? null : stable.onJoinPara}
+      onJoinPara={textRO ? null : stable.onJoinPara}
       lockTitle={help?.lockedLine}
-      unapprovePre={!readOnly && typeof onUnapprovePre === 'function'}
+      unapprovePre={!textRO && typeof onUnapprovePre === 'function'}
     />
   )
 
   const textPane = (
-    <div ref={textPaneRef} style={{ order: layout.swap ? 1 : 3 }} className="h-[70vh] min-h-[360px] min-w-0 flex-1 lg:h-auto lg:min-h-0">
+    <div
+      ref={textPaneRef}
+      style={{ order: layout.swap ? 1 : 3 }}
+      data-focus-dim={fx?.dimText ? '' : undefined}
+      className={`h-[70vh] min-h-[360px] min-w-0 flex-1 lg:h-auto lg:min-h-0 ${fx?.dimText ? 'opacity-70' : ''}`}
+    >
       <TextPanel
         view={view}
         tabs={tabs}
@@ -1009,7 +1054,7 @@ export default function ProofEditor({
         onOtherPage={canOtherPage ? openOtherPage : null}
         recheckCount={recheckCount}
         approval={furnitureTab ? null : tabSummary}
-        readOnly={readOnly}
+        readOnly={textRO}
         fontSize={layout.fontSize}
         fontFamily={fontFamily}
         className="h-full"
@@ -1026,19 +1071,19 @@ export default function ProofEditor({
         onUndo={undo}
         onRedo={redo}
         paraStyle={paraStyle}
-        onParaStyle={edit && hasCaret && !furnitureTab ? (style) => applyPlan(planParaStyle(view, tabKey, sel, style)) : null}
+        onParaStyle={textEdit && hasCaret && !furnitureTab ? (style) => applyPlan(planParaStyle(view, tabKey, sel, style)) : null}
         charStyles={ci?.charStyles}
-        onCharStyle={edit && hasCaret ? charStyle : null}
-        onSplitPara={edit && hasCaret && !furnitureTab ? () => applyPlan(planEnter(view, tabKey, sel)) : null}
-        onJoinPara={edit && hasCaret && !furnitureTab && paraIdx > 0 ? () => applyPlan(planJoin(view, tabKey, caret)) : null}
-        onLink={edit && (hasCaret || linkPending) ? link : null}
+        onCharStyle={textEdit && hasCaret ? charStyle : null}
+        onSplitPara={textEdit && hasCaret && !furnitureTab ? () => applyPlan(planEnter(view, tabKey, sel)) : null}
+        onJoinPara={textEdit && hasCaret && !furnitureTab && paraIdx > 0 ? () => applyPlan(planJoin(view, tabKey, caret)) : null}
+        onLink={textEdit && (hasCaret || linkPending) ? link : null}
         linkPending={linkPending}
         onSuggest={hasCaret && ci.wordIndex >= 0 && hasSuggestions(caretLine, ci.wordIndex) ? openSuggest : null}
         onNextSuspicious={suspectCount > 0 ? goSuspicious : null}
         streams={streams}
         onStreamForLines={edit && hasCaret ? streamForLines : null}
-        onBookOnly={edit ? toggleBookOnly : null}
-        bookOnly={edit && bookOnly}
+        onBookOnly={textEdit ? toggleBookOnly : null}
+        bookOnly={textEdit && bookOnly}
         bookOnlyTitle={typeof help?.bookOnlyTitle === 'string' ? help.bookOnlyTitle : undefined}
         fontSize={layout.fontSize}
         setFontSize={(n) => updateLayout({ fontSize: clampFontSize(n) })}
@@ -1054,6 +1099,7 @@ export default function ProofEditor({
         charStyleButtons={charStyleButtons ?? undefined}
         paraStyleOptions={paraStyleOptions ?? undefined}
         moreMenu={moreMenu}
+        hide={fx?.hide}
       />
 
       {ed.error && (
@@ -1099,6 +1145,7 @@ export default function ProofEditor({
               readOnly={readOnly}
               act={drawerAct}
               lockTitle={help?.lockedLine}
+              inherited={inh ? { idx: inh.idx, label: inhLabel } : null}
             />
           </div>
         )}
@@ -1112,7 +1159,7 @@ export default function ProofEditor({
         opsCount={ops.length}
         approval={approvalSummary}
         hint={hint?.text ?? null}
-        bookOnly={edit && bookOnly}
+        bookOnly={textEdit && bookOnly}
       />
 
       {pop.popup}

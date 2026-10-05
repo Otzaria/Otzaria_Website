@@ -316,6 +316,28 @@ describe('ProofToolbar — סרגל-הכלים', () => {
     setup({ actions: <button type="button">הגשה</button> })
     expect(screen.getByRole('button', { name: 'הגשה' })).toBeInTheDocument()
   })
+
+  // שלב "מבנה" בדף המתנדב (stages.stageFocus): רק מה שנוגע למבנה; בלי hide — הכול, כמו תמיד (גם בתוכנת-הספר)
+  it('hide מסתיר קבוצות (והקו שאחרי כל אחת); השאר — כרגיל', () => {
+    setup({ hide: ['paraStyle', 'charStyles', 'paragraphs', 'link', 'suspicious', 'bookOnly'], onBookOnly: vi.fn() })
+    // "לספר בלבד" / "פגם בדפוס" (שם הכפתור משתנה בסבב אחר — כאן שניהם)
+    for (const name of ['מודגש', 'פסקה חדשה', 'קישור', 'הצעות למילה', /^(לספר בלבד|פגם בדפוס)$/]) {
+      expect(screen.queryByRole('button', { name }), String(name)).not.toBeInTheDocument()
+    }
+    expect(screen.queryByRole('button', { name: 'סגנון הפסקה' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'ביטול' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'זרם לשורות' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'עזרה' })).toBeInTheDocument()
+    const visibleDividers = [...screen.getByRole('toolbar').querySelectorAll('div.w-px')].filter((d) => !d.hidden)
+    expect(visibleDividers.length).toBeLessThan(5)
+  })
+
+  it('בלי hide — כל הקבוצות מוצגות', () => {
+    setup({ onBookOnly: vi.fn() })
+    for (const name of ['מודגש', 'פסקה חדשה', 'קישור', 'הצעות למילה', /^(לספר בלבד|פגם בדפוס)$/, 'סגנון הפסקה']) {
+      expect(screen.getByRole('button', { name }), String(name)).toBeInTheDocument()
+    }
+  })
 })
 
 // "הנחיות" (2026-10-05) — כפתור בסרגל רק כשיש לאן (onGuide); ומצב "פגם בדפוס" מוסבר כמצב

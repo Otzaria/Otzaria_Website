@@ -141,6 +141,19 @@ describe('אישור', () => {
     expect(statusCall()).toBeUndefined()
   })
 
+  it('הבודק השני: ההגשה המצטברת ראשית, ותיקוני-החיתוך שלה כולם של ההגשה הקודמת שכבר יצאה ← לא recut, ובלי recutSkipped', async () => {
+    Sub.findById.mockReturnValue(lean(sub({ ops: CUT })))
+    Page.findById.mockReturnValue(lean(page()))
+    Sub.findOneAndUpdate.mockResolvedValue({ opCount: 1 })
+    approved(
+      { _id: 'first', needsRecut: true, ops: CUT, exportedAt: new Date('2026-09-29T10:30:00Z'), reviewedAt: new Date('2026-09-29T10:00:00Z') },
+      { _id: SUB_ID, needsRecut: true, ops: CUT, basedOn: 'first', reviewedAt: new Date('2026-09-29T11:00:00Z') }
+    )
+    const body = await (await PATCH(req({ action: 'approve' }), params)).json()
+    expect(body).toMatchObject({ needsRecut: true, recutSkipped: false, pageStatus: 'done' })
+    expect(statusCall()).toBeUndefined()
+  })
+
   it('המצב השתנה בינתיים (עדכון מותנה לא תפס) ← נקרא שוב ומחושב מחדש', async () => {
     Sub.findById.mockReturnValue(lean(sub({ ops: CUT })))
     Page.findById.mockReturnValueOnce(lean(page({ status: 'open' }))).mockReturnValueOnce(lean(page({ status: 'done' })))

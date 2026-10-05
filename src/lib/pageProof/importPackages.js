@@ -8,7 +8,7 @@ import PageProofPage from '../../models/PageProofPage.js';
 import PageProofSubmission from '../../models/PageProofSubmission.js';
 import { resolveImageFsPath } from '../ocr/images.js';
 import { DEFAULT_DOUBLE_PCT } from './sequences.js';
-import { pickPrimary } from './fixesExport.js';
+import { pendingRecut, pickPrimary } from './fixesExport.js';
 import { markRecutDone, recutReturn } from './recutRequests.js';
 import {
   importAction,
@@ -70,10 +70,11 @@ async function writeTemp(rel, buffer) {
 async function hasUnexportedRecut(prev) {
   const subs = await PageProofSubmission.find(
     { page: prev._id, status: 'approved', ...revisionFilter(storedRevision(prev)) },
-    { needsRecut: 1, exportedAt: 1, reviewedAt: 1 }
+    { needsRecut: 1, exportedAt: 1, reviewedAt: 1, round: 1, basedOn: 1, ops: 1 }
   ).lean();
-  const primary = pickPrimary(subs.map((s) => ({ ...s, approvedAt: s.reviewedAt })));
-  return !!primary?.needsRecut && !primary.exportedAt;
+  const shaped = subs.map((s) => ({ ...s, approvedAt: s.reviewedAt }));
+  // הבודק השני: הראשית היא ההגשה המצטברת; תיקוני-חיתוך שזהים לאלה של הגשה שכבר יצאה — כבר בגרסה (pendingRecut)
+  return pendingRecut(pickPrimary(shaped), new Map(shaped.map((s) => [String(s._id), s])));
 }
 
 // JPEG באיכות גבוהה במידות המקור (הקואורדינטות בפיקסלים שלהן): PNG של

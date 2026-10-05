@@ -6,7 +6,7 @@ import PageProofPage from '@/models/PageProofPage';
 import PageProofSubmission from '@/models/PageProofSubmission';
 import { hasBookLibraryAccess, hasOcrAccess } from '@/lib/roles';
 import { storedRevision, revisionFilter } from '@/lib/pageProof/importRules';
-import { pickPrimary } from '@/lib/pageProof/fixesExport';
+import { pickPrimary, recutOf } from '@/lib/pageProof/fixesExport';
 import { foreignLinkRefs, withForeignLines } from '@/lib/pageProof/ops';
 import { isFurnitureStream } from '@/lib/pageProof/vocab';
 import { volunteerOpenFilter } from '@/lib/pageProof/gridState';
@@ -69,8 +69,11 @@ export const whoOf = (userId) => `otz-${String(userId)}`;
 export async function primaryOf(pageId, revision, excludeId = null) {
   const filter = { page: pageId, status: 'approved', ...revisionFilter(revision) };
   if (excludeId) filter._id = { $ne: excludeId };
-  const subs = await PageProofSubmission.find(filter, { needsRecut: 1, exportedAt: 1, reviewedAt: 1 }).lean();
-  return pickPrimary((subs || []).map((s) => ({ ...s, approvedAt: s.reviewedAt })));
+  const subs = await PageProofSubmission.find(filter, { needsRecut: 1, exportedAt: 1, reviewedAt: 1, round: 1, basedOn: 1, ops: 1 }).lean();
+  const shaped = (subs || []).map((s) => ({ ...s, approvedAt: s.reviewedAt }));
+  const primary = pickPrimary(shaped);
+  // recut — העמוד ממתין לזיהוי-מחדש בגלל הראשית (fixesExport.recutOf: בהמשך של הגשה שכבר יצאה — רק החיתוך שלה עצמה)
+  return primary ? { ...primary, recut: recutOf(primary, new Map(shaped.map((s) => [String(s._id), s]))) } : null;
 }
 
 // שחרור רצף (POST /api/page-proof — לקוח ישן; הדף הנוכחי משחרר עמוד-עמוד ברשת): העמודים

@@ -5,6 +5,7 @@ import connectDB from '@/lib/db';
 import PageProofBook from '@/models/PageProofBook';
 import PageProofPage from '@/models/PageProofPage';
 import PageProofSubmission from '@/models/PageProofSubmission';
+import PageProofDraft from '@/models/PageProofDraft';
 import { hasOcrAccess } from '@/lib/roles';
 import { requireAccess, badRequest, notFound, serverError } from '@/lib/apiResponse';
 import { resolveImageFsPath } from '@/lib/ocr/images';
@@ -56,6 +57,8 @@ export async function DELETE(request, { params }) {
     if (!book) return notFound('הספר לא נמצא');
     const pageIds = (await PageProofPage.find({ book: book._id }, { _id: 1 }).lean()).map((p) => String(p._id));
     await PageProofSubmission.deleteMany({ book: book._id });
+    // הטיוטות בשרת (docs/63 §2) — לפי gid (בטיוטה אין שדה book)
+    await PageProofDraft.deleteMany({ gid });
     await PageProofPage.deleteMany({ book: book._id });
     await PageProofBook.deleteOne({ _id: book._id });
     const dir = resolveImageFsPath(`${IMAGE_ROOT}/${gid}`);

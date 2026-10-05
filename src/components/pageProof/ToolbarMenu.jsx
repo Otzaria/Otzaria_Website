@@ -25,6 +25,7 @@ export default function ToolbarMenu({
   heading = null,
   triggerClassName = '',
   menuClassName = 'w-56',
+  hidden = false,
 }) {
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(-1)
@@ -106,7 +107,7 @@ export default function ToolbarMenu({
   }
 
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className="relative" hidden={hidden || undefined}>
       <button
         ref={triggerRef}
         type="button"

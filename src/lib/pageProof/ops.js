@@ -375,6 +375,9 @@ function cleanValue(kind, v) {
 
 // פעולה בצורת-החוזה: {kind, page, ids?, value?} עם ערך שנבנה מחדש מהשדות
 // המוכרים בלבד. אותו ניקוי בדפדפן (לפני ההגשה) ובשרת (לפני הבדיקה והשמירה).
+// revert: true — "החזר למקור" על שינוי שהתקבל ממתנדב קודם (inverseOps, docs/63 §4–§5): הערך הוא זה שבעמוד המקורי,
+// ולכן בעורך הפעולה אינה משנה דבר — אבל היא חייבת לצאת: ההגשה הקודמת אולי כבר הוחלה בתוכנת-הספר. הדחיסה (compactOps,
+// bookOrder) אינה מורידה אותה כ"זהה למקור". צרכן שאינו מכיר את השדה — מחיל את הערך כרגיל.
 export function sanitizeOp(o) {
   const op = { kind: o?.kind, page: o?.page };
   if (Array.isArray(o?.ids)) op.ids = o.ids.slice();
@@ -382,8 +385,17 @@ export function sanitizeOp(o) {
     const v = cleanValue(op.kind, o.value);
     if (v !== undefined) op.value = v;
   }
+  if (o?.revert === true) {
+    op.revert = true;
+    // revert_status — מצב-השורה בעמוד המקורי (בתיקון-טקסט הפוך): תוכנת-הספר מחזירה גם אותו, כדי שההחזרה לא תיחשב
+    // "אושר" חדש של טקסט ה-OCR לאימון — גם כשהפעולה מגיעה בקובץ-התיקונים, בלי הקשר לפעולה שהיא מבטלת
+    if (op.kind === 'text' && REVERT_STATUSES.includes(o?.revert_status)) op.revert_status = o.revert_status;
+  }
   return op;
 }
+
+// מצבי-שורה שמותר להחזיר אליהם (מצבי השורה בתוכנת-הספר, בלי 'removed' — מחיקה היא פעולת status)
+export const REVERT_STATUSES = ['pending', 'ok', 'fixed', 'bad', 'seg', 'skip'];
 
 export const sanitizeOps = (ops) => (Array.isArray(ops) ? ops.map(sanitizeOp) : []);
 
@@ -1015,11 +1027,11 @@ export function compactOps(baseDoc, ops) {
     if (op.kind === 'text') {
       if (supersededText.has(i)) return false;
       const before = curText.has(id) ? curText.get(id) : l ? (l.text ?? l.text_ocr ?? '') : undefined;
-      if (op.value === before) return false;
+      if (op.value === before && op.revert !== true) return false;
       curText.set(id, op.value);
       return true;
     }
-    if (op.kind === 'status' && op.value === 'restore' && l && l.status !== 'removed') return false;
+    if (op.kind === 'status' && op.value === 'restore' && l && l.status !== 'removed' && op.revert !== true) return false;
     return true;
   });
   // manual:true נשלח רק בעריכה הראשונה של ההצעה; frames_set מאוחר "דורס" אותה —
@@ -1131,7 +1143,8 @@ export function bookOrder(baseDoc, ops) {
   for (const [id, p] of anchor) {
     const c = chains.get(id);
     const last = list[c.at[c.at.length - 1]];
-    if (c.texts[c.texts.length - 1] === c.texts[0]) continue;
+    // חזר לטקסט המקורי — יורד, אלא אם זו החזרה מפורשת של שינוי שהתקבל (revert): היא חייבת להגיע לספר
+    if (c.texts[c.texts.length - 1] === c.texts[0] && last?.revert !== true) continue;
     if (!emitAt.has(p)) emitAt.set(p, []);
     emitAt.get(p).push(last);
   }

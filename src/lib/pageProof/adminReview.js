@@ -7,8 +7,11 @@ import { needsRecut } from './ops.js';
 import { storedRevision, submissionRevision } from './importRules.js';
 import { docRevision } from './textModel.js';
 
-// ההגשה המלאה, עם הפעולות (packed — חוזה-העמוד §3). revision — הגרסה שעליה נעשתה
-export function submissionDetail(sub) {
+// ההגשה המלאה, עם הפעולות (packed — חוזה-העמוד §3). revision — הגרסה שעליה נעשתה.
+// based (רשות — basedOn.basedOnOf): ההגשה מבוססת על הגשה קודמת לעמוד (הבודק השני, עמוד שנפתח מחדש — docs/63 §4–§5) ←
+// basedOn: {id, userName, status, createdAt, kind, added, removed} ("מבוססת על הגשה X", ומה השתנה מעבר לה) ו-sameAs (לכל
+// פעולה — "<מזהה-הקודמת>:<מקום>" לפעולה זהה, אחרת null). בלעדיו — null.
+export function submissionDetail(sub, based = null) {
   return {
     id: String(sub._id),
     status: sub.status,
@@ -27,6 +30,8 @@ export function submissionDetail(sub) {
     // בקשת מתנדב לזיהוי-מחדש (recutRequests.js): רק פעולות-חיתוך, "מאושרת" לצורך הזיהוי-מחדש
     // בלבד; מבטלים אותה ב"שחרור מהמתנה" (release_recut), לא בדחייה
     recutRequest: !!sub.recutRequest,
+    basedOn: based ? { ...based.base, added: based.added, removed: based.removed } : null,
+    sameAs: based?.sameAs || null,
   };
 }
 

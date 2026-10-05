@@ -8,6 +8,7 @@ import { editorPageShape } from '@/lib/pageProof/pool';
 import { pageSig, pageWindow, submissionDetail } from '@/lib/pageProof/adminReview';
 import { json, noStore } from '@/lib/pageProof/respond';
 import { getPageProofSession } from '@/lib/pageProof/tokenAuth';
+import { basedOnOf } from '@/lib/pageProof/basedOn';
 
 // GET: ההגשות של ספר אחד לפי עמוד — עם הפעולות ועם העמוד השמור שעליו הן חלות, בבקשה
 // אחת (לתצוגת "לפני/אחרי" בתוכנת-הספר; תור-ההגשות הכללי — submissions — בלי הפעולות).
@@ -55,13 +56,15 @@ export async function GET(request, { params }) {
         ])
       : [[], []];
     const pageBy = new Map(pages.map((p) => [p.page, p]));
+    // הבודק השני / עמוד שנפתח מחדש: "מבוססת על הגשה X" ו-sameAs לכל פעולה (lib/pageProof/basedOn.js)
+    const based = await basedOnOf(subs);
     const out = win.pages
       .filter((n) => pageBy.has(n))
       .map((n) => {
         const p = pageBy.get(n);
         return {
           page: { ...editorPageShape(p, book), status: p.status, sig: pageSig(p) },
-          submissions: subs.filter((s) => s.pageNo === n).map(submissionDetail),
+          submissions: subs.filter((s) => s.pageNo === n).map((s) => submissionDetail(s, based.get(String(s._id)) || null)),
         };
       });
     return json({ success: true, gid, title: book.title, script: book.script || null, status, total: win.total, next: win.next, pages: out });

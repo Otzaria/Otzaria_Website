@@ -9,9 +9,10 @@ import { formatTimeAgo, formatUntil } from '@/lib/pageProof/dates'
 // "פתוח למתנדבים", ושחרור התפיסה (onRelease — אחרי אישור, ב-AdminBookPages).
 // עמוד שממתין לזיהוי-מחדש בבקשת מתנדב — מי ביקש ומתי, והאם תוכנת-הספר כבר משכה את
 // הבקשה, עם "ביטול הבקשה" (onCancelRecut — העמוד חוזר אל המתנדב).
-// page: {id, page, revision, state, volunteer, holder, leasedUntil, lease, pending, recutRequest}
+// עמוד מאושר — "פתח מחדש לעריכה" (onReopen — רק מנהל, docs/63 §5); עמוד שנפתח מחדש — מסומן (reopened).
+// page: {id, page, revision, state, volunteer, holder, leasedUntil, lease, pending, recutRequest, reopened}
 
-export default function AdminPageCard({ page, busy = false, now, onToggle, onRelease, onCancelRecut, onPreview }) {
+export default function AdminPageCard({ page, busy = false, now, onToggle, onRelease, onCancelRecut, onReopen, onPreview }) {
   const ui = ADMIN_STATE_UI[page.state] || ADMIN_STATE_UI.open
   const until = page.lease === 'active' ? formatUntil(page.leasedUntil, now) : ''
   const closed = !page.volunteer
@@ -50,6 +51,11 @@ export default function AdminPageCard({ page, busy = false, now, onToggle, onRel
             <span className="block text-[10px] text-on-surface/50">{req.picked ? 'תוכנת-הספר משכה את הבקשה' : 'ממתין לתוכנת-הספר'}</span>
           </p>
         )}
+        {page.reopened && page.state !== 'approved' && (
+          <p className="text-[11px] text-info-800" data-testid="reopened">
+            נפתח מחדש לעריכה
+          </p>
+        )}
         {page.pending > 0 && page.state !== 'submitted' && (
           <p className="text-[11px] text-warning-alt-800">{page.pending === 1 ? 'הגשה אחת ממתינה לאישור' : `${page.pending} הגשות ממתינות לאישור`}</p>
         )}
@@ -76,6 +82,19 @@ export default function AdminPageCard({ page, busy = false, now, onToggle, onRel
             >
               <span aria-hidden="true" className="material-symbols-outlined text-sm">undo</span>
               ביטול הבקשה
+            </button>
+          )}
+          {page.state === 'approved' && onReopen && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onReopen(page)}
+              aria-label={`פתיחה מחדש לעריכה של עמוד ${page.page}`}
+              title="העמוד יחזור להיות פתוח למתנדבים; מי שיתפוס אותו יתחיל מהגרסה שאושרה. האישור הבא — שוב בידי מנהל"
+              className="flex items-center justify-center gap-1 rounded-md bg-info-100 px-2 py-1 text-xs font-bold text-info-800 transition-colors hover:bg-info-200 disabled:opacity-50"
+            >
+              <span aria-hidden="true" className="material-symbols-outlined text-sm">lock_reset</span>
+              פתח מחדש לעריכה
             </button>
           )}
           {page.holder && (

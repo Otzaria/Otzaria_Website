@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import connectDB from '@/lib/db';
 import { requireProofSession, readJsonBody } from '@/lib/pageProof/pool';
 import { requestRecut } from '@/lib/pageProof/recutRequests';
+import { markRecutSent } from '@/lib/pageProof/serverDrafts';
 import { recutStatus } from '@/lib/pageProof/runtime';
 import { RECUT_MSG, RECUT_RATE } from '@/lib/pageProof/recutRules';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -37,7 +38,10 @@ export async function POST(request, { params }) {
     // מתג המנהל (runtime.js): כבוי — או "אוטומטי" כשתוכנת-הספר לא נראתה לאחרונה — אין בקשות חדשות
     if (!(await recutStatus()).effective) return json({ success: false, error: RECUT_MSG.off, code: 'recut_off' }, 409);
     const revision = Number.isInteger(body.revision) ? body.revision : null;
-    return fromResult(await requestRecut(id, userId, { revision, ops: body.ops, userName: session.user?.name || '' }));
+    const r = await requestRecut(id, userId, { revision, ops: body.ops, userName: session.user?.name || '' });
+    // הטיוטה שבשרת (docs/63 §3): כשהעמוד יחזור — שלב "טקסט"
+    if (r.ok) await markRecutSent(id, userId).catch((e) => console.error('page-proof recut-request markRecutSent', e?.name));
+    return fromResult(r);
   } catch (e) {
     console.error('page-proof recut-request POST', e);
     return noStore(serverError());

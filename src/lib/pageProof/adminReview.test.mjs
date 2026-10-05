@@ -33,6 +33,7 @@ test('submissionDetail: כל השדות של סקירת-הגשה, needsRecut מ�
   assert.equal(d.revision, 1);
   assert.deepEqual(d.ops, sub.ops);
   assert.deepEqual(Object.keys(d).sort(), [
+    'basedOn',
     'createdAt',
     'exportedAt',
     'id',
@@ -45,11 +46,17 @@ test('submissionDetail: כל השדות של סקירת-הגשה, needsRecut מ�
     'reviewedByName',
     'reviewerEdited',
     'revision',
+    'sameAs',
     'status',
     'userName',
     'who',
   ]);
   assert.equal(submissionDetail({ ...sub, ops: [{ kind: 'text', page: 3, ids: [1], value: 'א' }], revision: 2 }).needsRecut, false);
+  // הבודק השני (basedOn.basedOnOf): "מבוססת על הגשה X" ו-sameAs; בלי — null
+  assert.deepEqual([d.basedOn, d.sameAs], [null, null]);
+  const based = { base: { id: 'sA', userName: 'שמעון', status: 'approved', kind: 'submission' }, sameAs: ['sA:0'], added: 0, removed: [] };
+  assert.deepEqual(submissionDetail(sub, based).basedOn, { id: 'sA', userName: 'שמעון', status: 'approved', kind: 'submission', added: 0, removed: [] });
+  assert.deepEqual(submissionDetail(sub, based).sameAs, ['sA:0']);
   assert.equal(submissionDetail({ ...sub, revision: 2 }).revision, 2);
   // בקשת מתנדב לזיהוי-מחדש — מסומנת (לביטול ב"שחרור מהמתנה", לא בדחייה)
   assert.equal(d.recutRequest, false);

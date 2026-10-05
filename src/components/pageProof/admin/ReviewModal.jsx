@@ -23,6 +23,8 @@ import ProofEditor from '../ProofEditor'
 // וגם ברשימת-הקישורים וברשימת-השינויים שבחלונית "פרטים".
 // בקשת מתנדב לזיהוי-מחדש (recutRequest — רק תיקוני-חיתוך, בלי אישור מנהל): מסומנת; אין לה
 // "דחייה" — מבטלים אותה ב"ביטול הבקשה" (release_recut), והעמוד חוזר אל המתנדב.
+// הבודק השני / עמוד שנפתח מחדש (docs/63 §4–§5; submission.basedOn): "מבוססת על ההגשה של X", כמה שינויים מעבר לה וכמה
+// הוחזרו; בעורך — מה שהתקבל מההגשה הקודמת מסומן, ובלוח הפרטים ← שינויים הוא ברשימה נפרדת ממה שנוסף.
 
 const sameOps = (a, b) => JSON.stringify(cleanOps(a)) === JSON.stringify(cleanOps(b))
 
@@ -38,6 +40,16 @@ const RELEASE_TITLE =
   'העמוד ממתין לזיהוי-מחדש בתוכנת-הספר. אם התוכנה לא תחזיר גרסה חדשה שלו (למשל תיקון-החיתוך נכשל שם) — שחררו אותו: הוא ייסגר בלי זיהוי-מחדש'
 const REQUEST_BADGE = 'בקשת מתנדב לזיהוי-מחדש — רק תיקוני-החיתוך, נשלחה בלי אישור מנהל; שאר התיקונים של המתנדב יגיעו בהגשה רגילה'
 const CANCEL_TITLE = 'ביטול הבקשה: העמוד חוזר אל המתנדב שביקש (שמור לו 48 שעות), בלי זיהוי-מחדש'
+const BASE_STATUS = { submitted: 'ממתינה לאישור', approved: 'אושרה', rejected: 'נדחתה' }
+
+// "מבוססת על ההגשה של X (אושרה) · מעבר לה: 3 שינויים חדשים · 1 הוחזר למקור"
+function basedOnLine(b) {
+  const what = b.kind === 'approved' ? 'הגרסה שאושרה' : 'ההגשה'
+  const status = b.missing ? 'נמחקה' : BASE_STATUS[b.status] || ''
+  const added = b.added === 1 ? 'שינוי חדש אחד' : `${b.added || 0} שינויים חדשים`
+  const removed = (b.removed || []).length
+  return `מבוססת על ${what} של ${b.userName || 'מתנדב קודם'}${status ? ` (${status})` : ''} · מעבר לה: ${added}${removed ? ` · ${removed === 1 ? 'אחד הוחזר למקור' : `${removed} הוחזרו למקור`}` : ''}`
+}
 
 // onPageChanged (רשות) — מצב העמוד השתנה בלי שההגשה השתנתה (שחרור ממתנה)
 export default function ReviewModal({ id, onClose, onDone, onPageChanged }) {
@@ -188,6 +200,11 @@ export default function ReviewModal({ id, onClose, onDone, onPageChanged }) {
                   מוצגות על הגרסה הנוכחית ואולי לא יתאימו לה; אישור או דחייה משנים רק את ההגשה עצמה.
                 </span>
               )}
+              {sub.basedOn && (
+                <span data-testid="based-on" className="rounded bg-info-50 px-2 py-0.5 text-sm text-info-800" title="בעורך: מה שהתקבל מההגשה הקודמת מסומן בקו מנוקד, ובלוח הפרטים ← שינויים הוא ברשימה נפרדת ממה שנוסף">
+                  {basedOnLine(sub.basedOn)}
+                </span>
+              )}
               {data.siblings.length > 0 && (
                 <span className="text-xs text-on-surface/60">
                   הגשות נוספות לעמוד: {data.siblings.map((s) => `${s.userName} (${s.status}, ${s.opCount})`).join(' · ')}
@@ -230,6 +247,7 @@ export default function ReviewModal({ id, onClose, onDone, onPageChanged }) {
               initialOps={sub.ops}
               readOnly={!editing}
               persist={false}
+              inherited={sub.basedOn?.ops?.length ? { ops: sub.basedOn.ops, source: sub.basedOn.kind === 'approved' ? 'approved' : 'submission' } : null}
               toolbarClassName="sticky top-0 z-30"
               actions={({ ops, approval }) => (
                 <>

@@ -20,6 +20,7 @@ import { RECUT_LINE_TITLE } from '@/lib/pageProof/helpTexts'
 //   readOnly            תצוגה בלבד: בלי עריכה, אבל אפשר לסמן ולזוז
 //   locked              Set — שורות שממתינות לזיהוי מחדש (recutLineIds)
 //   recheck             Set — שורות שזוהו מחדש (מעבר שני) — רקע צהוב
+//   marked              (רשות) Map(מזהה-שורה ← הסבר) — שורות ששינה מישהו אחר (הבודק השני בדף המתנדב): קו מנוקד, והסבר בריחוף
 //   approval            paragraphApproval(view, tabKey) — ה-✓ שליד כל פסקה
 //   endpoints           linkEndpoints(view) — מספר קטן אחרי מילה שהיא קצה-קישור
 //   caretLineId         השורה של הסמן — רקע עדין
@@ -171,7 +172,7 @@ function NotLineButton({ lineId, onRemove }) {
   )
 }
 
-function Seg({ line, seg, lemma, isLocked, isRecheck, isCaret, lowWord, eps, wordText, readOnly, onWordEnter, onWordLeave, onJump, onBadge, onRemoveLine, lockTitle }) {
+function Seg({ line, seg, lemma, isLocked, isRecheck, isCaret, lowWord, eps, wordText, readOnly, onWordEnter, onWordLeave, onJump, onBadge, onRemoveLine, lockTitle, markTitle = null }) {
   const text = String(line?.text ?? '')
   const empty = text.length === 0
   const marks = wordMarks(line, lowWord)
@@ -182,6 +183,7 @@ function Seg({ line, seg, lemma, isLocked, isRecheck, isCaret, lowWord, eps, wor
     isLocked ? 'text-on-surface/45 after:ms-1 after:rounded after:bg-warning-100 after:px-1 after:text-[0.6em] after:font-normal after:text-warning-800 after:content-[attr(data-label)]' : '',
     isRecheck && !isLocked ? 'bg-warning-alt-100' : '',
     isCaret && !isRecheck ? 'bg-primary-container' : '',
+    markTitle && !isLocked ? 'underline decoration-info-500 decoration-dotted decoration-2 underline-offset-[6px]' : '',
     empty && !isLocked ? 'after:text-[0.75em] after:text-on-surface/40 after:content-[attr(data-label)]' : '',
   ]
     .filter(Boolean)
@@ -195,10 +197,11 @@ function Seg({ line, seg, lemma, isLocked, isRecheck, isCaret, lowWord, eps, wor
       data-empty={empty ? '1' : undefined}
       data-locked={isLocked ? '1' : undefined}
       data-recheck={isRecheck ? '1' : undefined}
+      data-inherited={markTitle ? '1' : undefined}
       data-label={label}
       contentEditable={isLocked && !readOnly ? false : undefined}
       suppressContentEditableWarning
-      title={isLocked ? lockTitle || RECUT_LINE_TITLE : isRecheck ? 'השורה זוהתה מחדש — בדקו אותה מול הסריקה' : undefined}
+      title={isLocked ? lockTitle || RECUT_LINE_TITLE : isRecheck ? 'השורה זוהתה מחדש — בדקו אותה מול הסריקה' : markTitle || undefined}
       className={cls}
     >
       {empty ? (
@@ -246,7 +249,7 @@ function Seg({ line, seg, lemma, isLocked, isRecheck, isCaret, lowWord, eps, wor
 
 // joinable — הפסקה שבה הסמן (לא הראשונה בזרם): כפתור "חיבור לפסקה הקודמת" בגבול שבינה לבין
 // הקודמת (כמו Backspace בתחילתה) — onJoin(p.key)
-const Para = memo(function Para({ p, byId, info, furniture, locked, recheck, caretLineId, lowWord, endpoints, wordText, readOnly, joinable = false, onApprove, onUnapprove, onJoin, onWordEnter, onWordLeave, onJump, onBadge, onRemoveLine, lockTitle, unapprovePre = false }) {
+const Para = memo(function Para({ p, byId, info, furniture, locked, recheck, marked = null, caretLineId, lowWord, endpoints, wordText, readOnly, joinable = false, onApprove, onUnapprove, onJoin, onWordEnter, onWordLeave, onJump, onBadge, onRemoveLine, lockTitle, unapprovePre = false }) {
   const approved = !!info?.approved
   // אושרה כבר בסבב הקודם (מעבר שני) — אין כאן מה לבטל (אלא אם הדף העוטף מבטל אותו בשרת — unapprovePre)
   const pre = approved && !!info?.pre && !unapprovePre
@@ -316,6 +319,7 @@ const Para = memo(function Para({ p, byId, info, furniture, locked, recheck, car
               lemma={k === 0 ? lemma : null}
               isLocked={isLockedLine(line, locked)}
               isRecheck={!!recheck?.has?.(line.id) || line.recheck === true}
+              markTitle={marked?.get?.(line.id) || null}
               isCaret={caretLineId === line.id}
               lowWord={lowWord}
               eps={endpoints?.get?.(line.id) || null}
@@ -342,6 +346,7 @@ function FlowEditor({
   readOnly = false,
   locked = null,
   recheck = null,
+  marked = null,
   approval = null,
   endpoints = null,
   caretLineId = null,
@@ -639,6 +644,7 @@ function FlowEditor({
                 furniture={furniture}
                 locked={locked}
                 recheck={recheck}
+                marked={marked}
                 caretLineId={hasCaret ? caretLineId : null}
                 lowWord={lowWord}
                 endpoints={endpoints}

@@ -8,6 +8,8 @@ import { validateOps, packOps, needsRecut, sanitizeOps } from '@/lib/pageProof/o
 import { revisionFilter, sameRevision, storedRevision, statusWhenFull } from '@/lib/pageProof/importRules';
 import { volunteerOpenFilter } from '@/lib/pageProof/gridState';
 import { badRequest, notFound, serverError } from '@/lib/apiResponse';
+import { draftBasis, dropDraft } from '@/lib/pageProof/serverDrafts';
+import { roundOf } from '@/lib/pageProof/reopenRules';
 
 const MAX_NOTE = 1000;
 
@@ -25,6 +27,8 @@ const RELOAD = 'העמוד עודכן מאז שנפתח (חזר מזיהוי-מ�
 // ישנה) מתקבלת רק כשהעמוד עדיין בגרסה 1.
 // ההגשה שומרת את הגרסה ואת needsRecut (הפעולות משנות את חיתוך-השורות).
 // קישור שהצד השני שלו בעמוד אחר של הספר — השורה נבדקת שם (pool.resolveForeignLinks).
+// ההגשה מוחקת את הטיוטה שבשרת (serverDrafts.dropDraft — docs/63 §2). טיוטה שהתחילה מהגשה קודמת (הבודק השני — §4)
+// — ההגשה נרשמת "מבוססת על" ההגשה ההיא (basedOn — serverDrafts.draftBasis).
 export async function POST(request, { params }) {
   const { session, userId, error } = await requireProofSession();
   if (error) return error;
@@ -37,7 +41,7 @@ export async function POST(request, { params }) {
     const note = typeof body.note === 'string' ? body.note.trim().slice(0, MAX_NOTE) : '';
 
     await connectDB();
-    const page = await PageProofPage.findById(id, { doc: 1, gid: 1, page: 1, book: 1, required: 1, revision: 1, status: 1 }).lean();
+    const page = await PageProofPage.findById(id, { doc: 1, gid: 1, page: 1, book: 1, required: 1, revision: 1, status: 1, round: 1 }).lean();
     if (!page) return notFound('העמוד לא נמצא');
     const revision = storedRevision(page);
     const sent = body.revision === undefined || body.revision === null ? null : Number(body.revision);
@@ -81,6 +85,8 @@ export async function POST(request, { params }) {
     }
 
     const recut = needsRecut(ops);
+    // על מה ההגשה מבוססת (מהטיוטה שבשרת) — לא מכשיל את ההגשה אם הקריאה נכשלה
+    const basis = await draftBasis(page._id, uid).catch(() => ({}));
     let sub;
     try {
       sub = await PageProofSubmission.create({
@@ -95,7 +101,9 @@ export async function POST(request, { params }) {
         opCount: ops.length,
         needsRecut: recut,
         revision,
+        round: roundOf(page),
         note,
+        ...basis,
       });
     } catch (e) {
       // ביטול תפיסת-המקום — אחרת העמוד "תקוע" עם מונה שאין מאחוריו הגשה
@@ -103,13 +111,16 @@ export async function POST(request, { params }) {
       throw e;
     }
 
+    // ההגשה כבר נשמרה — כשל במחיקת הטיוטה אינו מכשיל אותה (היא תידרס במחזיק הבא)
+    await dropDraft(page._id).catch((e) => console.error('page-proof submit dropDraft', e?.name));
+
     if (claimed.activeCount >= claimed.required) {
       // העמוד מלא. אם ההגשה הראשית שכבר אושרה לו משנה חיתוך (אישור שחיכה
       // להגשה האחרונה של עמוד כפול) — הוא עובר עכשיו לזיהוי-מחדש; אחרת 'done'
       const primary = await primaryOf(page._id, revision);
       await PageProofPage.updateOne(
         { _id: id, status: 'open', activeCount: { $gte: claimed.required } },
-        { $set: { status: statusWhenFull(!!primary?.needsRecut) } }
+        { $set: { status: statusWhenFull(!!primary?.recut) } }
       );
     }
 

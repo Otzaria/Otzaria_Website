@@ -8,6 +8,7 @@ import User from '../../models/User.js';
 import { storedRevision, submissionRevision } from './importRules.js';
 import { pageStateFor, bookCounts, claimRefusal, volunteerOpenFilter, CLAIM_HOURS, MAX_HELD } from './gridState.js';
 import { leaseEnd } from './lease.js';
+import { roundOf } from './reopenRules.js';
 
 // בחירת עמודים בידי המתנדב (כמו "תפוס לעריכה" בספרים הישנים): רשימת הספרים
 // עם מונים, רשת-העמודים של ספר, תפיסה/שחרור של עמוד או של רצף שלם, "העמודים
@@ -46,6 +47,7 @@ const STATE_FIELDS = {
   leasedUntil: 1,
   revision: 1,
   volunteer: 1,
+  round: 1,
 };
 
 // "העמוד פנוי לתפיסה בידי המשתמש הזה": פתוח, פתוח למתנדבים, המשתמש לא הגיש
@@ -74,7 +76,7 @@ async function mySubmissions(pages, uid) {
   if (!pages.length) return out;
   const subs = await PageProofSubmission.find(
     { page: { $in: pages.map((p) => p._id) }, user: uid, status: { $in: ['submitted', 'approved'] }, recutRequest: { $ne: true } },
-    { page: 1, status: 1, revision: 1, createdAt: 1 }
+    { page: 1, status: 1, revision: 1, createdAt: 1, round: 1 }
   )
     .sort({ createdAt: -1 })
     .lean();
@@ -87,7 +89,8 @@ async function mySubmissions(pages, uid) {
   for (const p of pages) {
     const list = byPage.get(String(p._id)) || [];
     const rev = storedRevision(p);
-    const current = list.find((s) => submissionRevision(s) === rev);
+    // עמוד שמנהל פתח מחדש אחרי אישור (סבב חדש) — ההגשה מהסבב הקודם כבר אינה "שלי לעמוד"
+    const current = list.find((s) => submissionRevision(s) === rev && roundOf(s) === roundOf(p));
     const listed = (p.submitters || []).some((s) => String(s) === String(uid));
     const sub = current || (listed ? list[0] : null);
     if (sub) out.set(String(p._id), { status: sub.status, createdAt: sub.createdAt });
@@ -351,18 +354,18 @@ export async function claimSequence(gid, seq, userId, now = new Date()) {
 export async function describeSequence(bookId, seq, uid, now = new Date()) {
   const [book, pages, mine] = await Promise.all([
     PageProofBook.findById(bookId, { gid: 1, title: 1, script: 1 }).lean(),
-    PageProofPage.find({ book: bookId, seq }, { page: 1, leasedBy: 1, leasedUntil: 1, submitters: 1, status: 1, lineCount: 1, revision: 1 })
+    PageProofPage.find({ book: bookId, seq }, { page: 1, leasedBy: 1, leasedUntil: 1, submitters: 1, status: 1, lineCount: 1, revision: 1, round: 1 })
       .sort({ page: 1 })
       .lean(),
-    PageProofSubmission.find({ book: bookId, user: uid, status: { $ne: 'rejected' }, recutRequest: { $ne: true } }, { page: 1, status: 1, revision: 1, createdAt: 1 }).lean(),
+    PageProofSubmission.find({ book: bookId, user: uid, status: { $ne: 'rejected' }, recutRequest: { $ne: true } }, { page: 1, status: 1, revision: 1, createdAt: 1, round: 1 }).lean(),
   ]);
-  const mineByPage = new Map(mine.map((s) => [`${s.page}:${submissionRevision(s)}`, s]));
+  const mineByPage = new Map(mine.map((s) => [`${s.page}:${submissionRevision(s)}:${roundOf(s)}`, s]));
   return {
     book: book ? { id: String(book._id), gid: book.gid, title: book.title, script: book.script } : null,
     seq,
     pages: pages.map((p) => {
       const revision = storedRevision(p);
-      const sub = mineByPage.get(`${p._id}:${revision}`);
+      const sub = mineByPage.get(`${p._id}:${revision}:${roundOf(p)}`);
       const leasedToMe = p.leasedBy && String(p.leasedBy) === String(uid) && p.leasedUntil > now;
       const state = sub ? (sub.status === 'approved' ? 'approved' : 'submitted') : p.status === 'recut' ? 'recut' : leasedToMe ? 'mine' : 'unavailable';
       return {

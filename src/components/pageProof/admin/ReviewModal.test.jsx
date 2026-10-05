@@ -220,4 +220,26 @@ describe('ReviewModal — קישור לעמוד אחר', { timeout: 20000 }, () 
     await screen.findByTestId('editor')
     expect(screen.queryByTestId('far-link')).toBeNull()
   })
+
+  // הבודק השני (docs/63 §4): "מבוססת על ההגשה של X" ומה השתנה מעבר לה; בעורך — מה שהתקבל מסומן
+  it('הגשה שמבוססת על הגשה קודמת — השורה "מבוססת על", והעורך מקבל את הפעולות הקודמות כ-inherited', async () => {
+    const baseOps = [{ kind: 'line_ok', page: P, ids: [1] }, { kind: 'para', page: P, ids: [1], value: 'h2' }]
+    mockFetch(
+      payload({
+        submission: { basedOn: { id: 'sA', userName: 'שמעון', status: 'approved', kind: 'submission', added: 2, removed: [baseOps[1]], ops: baseOps }, sameAs: ['sA:0'] },
+      })
+    )
+    render(<ReviewModal id="s1" onClose={vi.fn()} onDone={vi.fn()} />)
+    await screen.findByTestId('editor')
+    expect(screen.getByTestId('based-on')).toHaveTextContent('מבוססת על ההגשה של שמעון (אושרה) · מעבר לה: 2 שינויים חדשים · אחד הוחזר למקור')
+    expect(h.props.inherited).toEqual({ ops: baseOps, source: 'submission' })
+  })
+
+  it('הגשה רגילה — בלי "מבוססת על" ובלי inherited', async () => {
+    mockFetch(payload())
+    render(<ReviewModal id="s1" onClose={vi.fn()} onDone={vi.fn()} />)
+    await screen.findByTestId('editor')
+    expect(screen.queryByTestId('based-on')).not.toBeInTheDocument()
+    expect(h.props.inherited).toBeNull()
+  })
 })

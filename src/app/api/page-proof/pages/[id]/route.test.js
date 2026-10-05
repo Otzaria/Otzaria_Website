@@ -3,11 +3,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // עמוד לעורך: הגשה נחשבת "שלי" רק לגרסה הנוכחית של העמוד — עמוד שחזר
 // מזיהוי-מחדש נפתח לעריכה גם למי שהגיש את הגרסה הקודמת. המודלים מדומים.
 
-const { getServerSessionMock, Sub, Page, Book } = vi.hoisted(() => ({
+const { getServerSessionMock, Sub, Page, Book, ctxMock } = vi.hoisted(() => ({
   getServerSessionMock: vi.fn(),
   Sub: { find: vi.fn() },
   Page: { findById: vi.fn(), findOneAndUpdate: vi.fn() },
   Book: { findById: vi.fn() },
+  ctxMock: vi.fn(),
 }))
 
 vi.mock('@/lib/db', () => ({ default: vi.fn().mockResolvedValue(undefined) }))
@@ -18,6 +19,8 @@ vi.mock('@/models/PageProofPage', () => ({ default: Page }))
 vi.mock('@/models/PageProofBook', () => ({ default: Book }))
 // מתג המנהל ל"שלח לזיהוי-מחדש" (runtime.js) — כאן פתוח
 vi.mock('@/lib/pageProof/runtime', () => ({ recutStatus: vi.fn().mockResolvedValue({ effective: true, settings: { recutRequests: 'on', autoMinutes: 15 }, seenAt: null }) }))
+// הטיוטה בשרת (serverDrafts.js — נבדקת מול מסד אמיתי בבדיקות שלה); כאן — מה שהראוט מעביר לה ומחזיר
+vi.mock('@/lib/pageProof/serverDrafts', () => ({ editorContext: ctxMock }))
 
 import { GET } from './route'
 import { leaseEnd } from '@/lib/pageProof/lease'
@@ -43,6 +46,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   getServerSessionMock.mockResolvedValue(volunteer)
   Book.findById.mockReturnValue(lean({ title: 'ספר', script: 'square' }))
+  ctxMock.mockResolvedValue({ draft: null, canRecut: false })
 })
 
 describe('GET /api/page-proof/pages/[id]', () => {
@@ -121,6 +125,21 @@ describe('GET /api/page-proof/pages/[id]', () => {
     expect((await res.json()).error).toMatch(/אינו בטיפולכם.*רשת-העמודים/)
   })
 
+  it('עם העמוד: הטיוטה שבשרת, "אפשר לשלוח לזיהוי-מחדש" ושעון השרת — למחזיק בעריכה', async () => {
+    Page.findById.mockReturnValue(lean(page()))
+    Sub.find.mockReturnValue(subsQuery([]))
+    Page.findOneAndUpdate.mockResolvedValue({ _id: PAGE_ID })
+    const draft = { ops: [{ kind: 'line_ok', page: 3, ids: [1] }], stage: 'text', mine: true, handover: false }
+    ctxMock.mockResolvedValueOnce({ draft, canRecut: true })
+    const body = await (await GET({}, params)).json()
+    expect(body).toMatchObject({ mode: 'edit', draft, canRecut: true })
+    expect(Math.abs(Date.parse(body.now) - Date.now())).toBeLessThan(60000)
+    const [pg, uid, opts] = ctxMock.mock.calls[0]
+    expect(pg._id).toBe(PAGE_ID)
+    expect(uid).toBe(USER_ID)
+    expect(opts).toMatchObject({ edit: true, admin: false, userName: 'מתנדב', recutOn: true })
+  })
+
   it('מנהל OCR פותח עמוד שאינו בטיפולו ← צפייה בלבד (בלי לתפוס אותו)', async () => {
     getServerSessionMock.mockResolvedValueOnce({ user: { id: USER_ID, name: 'מנהל', role: 'admin_ocr', isVerified: true } })
     Page.findById.mockReturnValue(lean(page()))
@@ -129,5 +148,7 @@ describe('GET /api/page-proof/pages/[id]', () => {
     const body = await (await GET({}, params)).json()
     expect(body.mode).toBe('view')
     expect(Page.findOneAndUpdate.mock.calls[0][0].leasedBy).toBeDefined()
+    // הטיוטה של המחזיק — לקריאה בלבד (בלי להעביר אותה למנהל)
+    expect(ctxMock.mock.calls[0][2]).toMatchObject({ edit: false, admin: true })
   })
 })

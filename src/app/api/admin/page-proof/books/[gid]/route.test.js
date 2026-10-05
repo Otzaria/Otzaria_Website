@@ -6,9 +6,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // בתיקיית הספר) נמחקות. המודלים, הדיסק והממוזערות — מדומים; המפתח עצמו מול מסד אמיתי —
 // tokenAccess.test.js.
 
-const { getServerSessionMock, Sub, Page, Book, removeThumbs, fsRemove } = vi.hoisted(() => ({
+const { getServerSessionMock, Sub, Draft, Page, Book, removeThumbs, fsRemove } = vi.hoisted(() => ({
   getServerSessionMock: vi.fn(),
   Sub: { deleteMany: vi.fn() },
+  Draft: { deleteMany: vi.fn() },
   Page: { find: vi.fn(), deleteMany: vi.fn() },
   Book: { findOne: vi.fn(), deleteOne: vi.fn(), findOneAndUpdate: vi.fn() },
   removeThumbs: vi.fn(),
@@ -20,6 +21,7 @@ vi.mock('next-auth', () => ({ getServerSession: getServerSessionMock }))
 vi.mock('@/app/api/auth/[...nextauth]/route', () => ({ authOptions: {} }))
 vi.mock('@/models/PageProofSubmission', () => ({ default: Sub }))
 vi.mock('@/models/PageProofPage', () => ({ default: Page }))
+vi.mock('@/models/PageProofDraft', () => ({ default: Draft }))
 vi.mock('@/models/PageProofBook', () => ({ default: Book }))
 vi.mock('@/lib/pageProof/importPackages', () => ({ IMAGE_ROOT: '/uploads/page-proof' }))
 vi.mock('@/lib/ocr/images', () => ({ resolveImageFsPath: (rel) => `/data${rel}` }))
@@ -84,17 +86,19 @@ describe('DELETE /api/admin/page-proof/books/[gid] — רק session, לעולם 
     expect(Book.deleteOne).not.toHaveBeenCalled()
     expect(Page.deleteMany).not.toHaveBeenCalled()
     expect(Sub.deleteMany).not.toHaveBeenCalled()
+    expect(Draft.deleteMany).not.toHaveBeenCalled()
     expect(fsRemove).not.toHaveBeenCalled()
     expect(removeThumbs).not.toHaveBeenCalled()
   })
 })
 
 describe('DELETE /api/admin/page-proof/books/[gid]', () => {
-  it('מוחק עמודים, הגשות, תיקיית-התמונות — וגם את הממוזערות של העמודים', async () => {
+  it('מוחק עמודים, הגשות, טיוטות, תיקיית-התמונות — וגם את הממוזערות של העמודים', async () => {
     const res = await DELETE({}, params)
     expect(res.status).toBe(200)
     expect(Page.deleteMany).toHaveBeenCalledWith({ book: 'b1' })
     expect(Sub.deleteMany).toHaveBeenCalledWith({ book: 'b1' })
+    expect(Draft.deleteMany).toHaveBeenCalledWith({ gid: GID })
     expect(fsRemove).toHaveBeenCalledWith(`/data/uploads/page-proof/${GID}`)
     expect(removeThumbs).toHaveBeenCalledWith(['p1', 'p2'])
     // המזהים נאספו לפני המחיקה

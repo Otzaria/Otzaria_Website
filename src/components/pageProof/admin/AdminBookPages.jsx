@@ -7,6 +7,7 @@ import { useDialog } from '@/components/providers/DialogContext'
 import AdminPageCard from './AdminPageCard'
 import { imageUrl } from '@/lib/pageProof/gridState'
 import { CLAIM_NOTE, adminMatches, bulkReleaseMessage, cancelRecutMessage, parsePageRange, rangeLabel, releaseMessage } from '@/lib/pageProof/adminGrid'
+import { reopenMessage } from '@/lib/pageProof/reopenRules'
 
 // רשת-העמודים של ספר בניהול הגהת-העמודים (נפתחת מ"עמודים" בטבלת הספרים):
 // תמונה ממוזערת לכל עמוד עם המצב (פנוי / תפוס — בידי מי ועד מתי / ממתין לאישור /
@@ -15,6 +16,7 @@ import { CLAIM_NOTE, adminMatches, bulkReleaseMessage, cancelRecutMessage, parse
 // התפיסות שפגו / כל התפיסות בספר. השרת: /api/admin/page-proof/books/[gid]/(pages|release).
 // עמוד שממתין לזיהוי-מחדש בבקשת מתנדב — "ביטול הבקשה" (release_recut על הבקשה: העמוד חוזר
 // אל המתנדב בלי זיהוי-מחדש).
+// עמוד מאושר — "פתח מחדש לעריכה" (POST .../reopen — רק מנהל; docs/63 §5).
 // onChanged — אחרי כל שינוי (מוני טבלת-הספרים).
 
 const FILTERS = [
@@ -128,6 +130,13 @@ export default function AdminBookPages({ gid, title = '', onClose, onChanged }) 
     confirmThen('ביטול בקשה לזיהוי-מחדש', cancelRecutMessage(page), 'בטל את הבקשה', () =>
       send(`/api/admin/page-proof/submissions/${encodeURIComponent(page.recutRequest.id)}`, 'PATCH', { action: 'release_recut' })
     )
+
+  // עמוד מאושר ← פתוח לעריכה שוב (ההגשות שאושרו נשארות; מי שיתפוס אותו מתחיל מהגרסה שאושרה)
+  const reopen = (page) =>
+    confirmThen('פתיחה מחדש לעריכה', reopenMessage(page), 'פתח מחדש', async () => {
+      const d = await send('reopen', 'POST', { ids: [page.id] })
+      if (d && !d.reopened) showAlert('לא נפתח', d.skipped?.[0]?.error || 'העמוד לא נפתח מחדש')
+    })
 
   const releaseAll = (scope, n) =>
     confirmThen(scope === 'expired' ? 'ניקוי תפיסות שפגו' : 'שחרור כל התפיסות', bulkReleaseMessage(scope, n), 'שחרר', async () => {
@@ -253,7 +262,16 @@ export default function AdminBookPages({ gid, title = '', onClose, onChanged }) 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
           {visible.map((p) => (
             <div key={`${p.id}:${p.revision}`} style={{ contentVisibility: 'auto', containIntrinsicSize: '180px 360px' }}>
-              <AdminPageCard page={p} busy={busy} now={data.loadedAt} onToggle={toggle} onRelease={release} onCancelRecut={cancelRecut} onPreview={openPreview} />
+              <AdminPageCard
+                page={p}
+                busy={busy}
+                now={data.loadedAt}
+                onToggle={toggle}
+                onRelease={release}
+                onCancelRecut={cancelRecut}
+                onReopen={reopen}
+                onPreview={openPreview}
+              />
             </div>
           ))}
         </div>
