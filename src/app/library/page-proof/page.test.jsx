@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { buildView } from '@/lib/pageProof/ops'
 import { draftKeyFor, legacyDraftKey, pageDraftKey } from '@/lib/pageProof/drafts'
 import { HELP_SEEN_KEY } from '@/components/pageProof/ProofHelp'
 import { RECUT_OFF_HELP } from '@/lib/pageProof/helpTexts'
+import { formatSince, formatUntil } from '@/lib/pageProof/dates'
 import PageProofVolunteer from './page.jsx'
 
 // העורך עצמו נבדק בנפרד; כאן — מה שהדף מעביר לו (draftKey), ומה הדף עושה עם
@@ -22,6 +23,7 @@ const h = vi.hoisted(() => ({
   held: null,
   unavailable: null,
   recutPending: null,
+  submitted: null,
   recutReply: null,
 }))
 vi.mock('next/navigation', () => ({
@@ -98,6 +100,7 @@ function mockFetch() {
           success: true,
           held: h.held ?? [seqOf()],
           recutPending: h.recutPending ?? [],
+          submitted: h.submitted ?? [],
           sequence: asked && !h.unavailable ? seqOf() : null,
           unavailable: asked && h.unavailable ? h.unavailable : null,
           stats: STATS,
@@ -121,6 +124,7 @@ beforeEach(() => {
   h.held = null
   h.unavailable = null
   h.recutPending = null
+  h.submitted = null
   h.recutReply = null
   pageData = { success: true, mode: 'edit', page: makePage(), submission: null }
   mockFetch()
@@ -436,5 +440,36 @@ describe('דף המתנדב — "שלח לזיהוי-מחדש"', { timeout: 2000
     render(<PageProofVolunteer />)
     const box = await screen.findByRole('region', { name: 'ממתינים לזיהוי-מחדש (1)' })
     expect(box).toHaveTextContent('ספר ניסוי · עמוד 9')
+  })
+})
+
+// "שמור לך עד …" (שבת וחג אינם נספרים) ו"הוגש — ממתין לבדיקת מנהל (מאז …)" (פורום, 2026-10-05)
+describe('דף המתנדב — עד מתי העמוד שמור, ומה עם עמוד שהוגש', { timeout: 20000 }, () => {
+  it('העמוד שבעורך: "עמוד N שמור לך עד …" לפי המועד שהפתיחה קבעה', async () => {
+    const until = new Date(Date.now() + 40 * 3600e3)
+    pageData = { ...pageData, leasedUntil: until.toISOString() }
+    render(<PageProofVolunteer />)
+    const chip = await screen.findByTestId('lease-until')
+    expect(chip).toHaveTextContent(`עמוד ${P} שמור לך עד ${formatUntil(until, new Date())}`)
+    expect(chip).toHaveAttribute('title', expect.stringMatching(/שבת וחג אינם נספרים/))
+  })
+
+  it('"העמודים שלי": ההגשות שממתינות לבדיקת מנהל, עם "מאז"; לחיצה פותחת לצפייה עם אותה הודעה', async () => {
+    h.search = ''
+    const at = new Date(Date.now() - 26 * 3600e3).toISOString()
+    h.held = []
+    h.submitted = [{ id: ID, submissionId: 's1', gid: 'g1', title: 'ספר ניסוי', page: P, submittedAt: at, revision: 1 }]
+    h.seqPages = [{ id: ID, page: P, state: 'submitted', lines: 3, revision: 1, leasedUntil: null, submittedAt: at }]
+    pageData = { success: true, mode: 'view', page: makePage(), submission: { id: 's1', status: 'submitted', ops: [], note: '', createdAt: at } }
+    render(<PageProofVolunteer />)
+    const box = await screen.findByRole('region', { name: 'ממתינים לבדיקת מנהל (1)' })
+    const since = formatSince(at, new Date())
+    expect(box).toHaveTextContent(`הוגש — ממתין לבדיקת מנהל (מאז ${since})`)
+    await userEvent.click(within(box).getByRole('button', { name: /ספר ניסוי · עמוד/ }))
+    expect(h.router.replace).toHaveBeenCalledWith(`/library/page-proof?page=${ID}`, { scroll: false })
+    await screen.findByTestId('editor')
+    expect(urls()).toContain(`/api/page-proof/mine?page=${ID}`)
+    expect(screen.getByText(`הוגש — ממתין לבדיקת מנהל (מאז ${since})`)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /עמוד 4 · הוגש/ })).toHaveAttribute('title', expect.stringContaining(`ממתין לבדיקת מנהל (מאז ${since})`))
   })
 })

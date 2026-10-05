@@ -306,19 +306,22 @@ describe('ProofEditor — תיקוני הביקורת', { timeout: 30000 }, () =
     expect(editor()).toHaveTextContent('משום רבי שמעון')
   })
 
-  // בעל הפרויקט (2026-10-02): "לספר בלבד" — מצב שנשאר דולק; כל שורה שמשנים בה טקסט מסומנת לבד
+  // בעל הפרויקט (2026-10-02): "לספר בלבד" — מצב שנשאר דולק; כל שורה שמשנים בה טקסט מסומנת לבד.
+  // השם שהמתנדב רואה — "פגם בדפוס" (2026-10-05; המנגנון והשמות הפנימיים נשארו)
   const typeChar = (editor, ch) =>
     act(() => {
       editor.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: ch }))
     })
 
-  it('"לספר בלבד" בסרגל = מצב: הקלדה בשתי שורות ← לכל אחת train_text אחד; הקלדה רצופה — סימון אחד; Ctrl+Z אחד מוריד טקסט וסימון', async () => {
+  it('"פגם בדפוס" בסרגל = מצב: הקלדה בשתי שורות ← לכל אחת train_text אחד; הקלדה רצופה — סימון אחד; Ctrl+Z אחד מוריד טקסט וסימון', async () => {
     const { editor } = setup()
-    const btn = () => screen.getByRole('button', { name: 'לספר בלבד' })
+    const btn = () => screen.getByRole('button', { name: 'פגם בדפוס' })
     expect(btn()).toHaveAttribute('aria-pressed', 'false')
+    // ההסבר אומר שזה מצב
+    expect(btn()).toHaveAttribute('title', expect.stringContaining('כשהמצב דולק, כל תיקון-טקסט נכנס לספר, אבל השורה לא משמשת לאימון המחשב'))
     fireEvent.click(btn())
     expect(btn()).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByTestId('book-only-status')).toHaveTextContent('"לספר בלבד" פעיל')
+    expect(screen.getByTestId('book-only-status')).toHaveTextContent('"פגם בדפוס" דולק')
     // המצב אינו נשמר בדפדפן (כבוי בכל פתיחת עמוד)
     expect(window.localStorage.getItem('pageProof.bookOnly')).toBeNull()
     await caretAt(editor(), { lineId: 3, offset: 4 })
@@ -328,7 +331,7 @@ describe('ProofEditor — תיקוני הביקורת', { timeout: 30000 }, () =
       { kind: 'train_text', ids: [3], value: 0 },
       { kind: 'text', ids: [3], value: 'ועודהו פסקה שנייה' },
     ])
-    expect(screen.getByText('השורה סומנה "לספר בלבד": תיכנס לספר, לא לאימון')).toBeInTheDocument()
+    expect(screen.getByText('השורה סומנה "פגם בדפוס": תיכנס לספר, לא לאימון')).toBeInTheDocument()
     await caretAt(editor(), { lineId: 1, offset: 3 })
     typeChar(editor(), 'א')
     expect(opsNow().filter((o) => o.kind === 'train_text')).toEqual([
@@ -343,10 +346,10 @@ describe('ProofEditor — תיקוני הביקורת', { timeout: 30000 }, () =
   })
 
   // החלטת בעל הפרויקט (2026-10-05): מתנדב ששכח את המצב דולק לא יוציא בשקט שורות רבות מהאימון
-  it('"לספר בלבד" כבוי בכל פתיחת עמוד: לא נקרא מהדפדפן, ועמוד אחר — גם באותו מופע — נפתח כשהוא כבוי', async () => {
+  it('"פגם בדפוס" כבוי בכל פתיחת עמוד: לא נקרא מהדפדפן, ועמוד אחר — גם באותו מופע — נפתח כשהוא כבוי', async () => {
     window.localStorage.setItem('pageProof.bookOnly', '1') // ערך מגרסה שזכרה את המצב — אינו נקרא
     const { rerender, unmount } = setup()
-    const btn = () => screen.getByRole('button', { name: 'לספר בלבד' })
+    const btn = () => screen.getByRole('button', { name: 'פגם בדפוס' })
     expect(btn()).toHaveAttribute('aria-pressed', 'false')
     fireEvent.click(btn())
     expect(btn()).toHaveAttribute('aria-pressed', 'true')
@@ -359,74 +362,74 @@ describe('ProofEditor — תיקוני הביקורת', { timeout: 30000 }, () =
     expect(btn()).toHaveAttribute('aria-pressed', 'false')
   })
 
-  it('"לספר בלבד" אינו מסמן ריהוט: הקלדה בלשונית "ריהוט הדף" כשהמצב דולק — בלי train_text', async () => {
+  it('"פגם בדפוס" אינו מסמן ריהוט: הקלדה בלשונית "ריהוט הדף" כשהמצב דולק — בלי train_text', async () => {
     const { editor } = setup()
-    fireEvent.click(screen.getByRole('button', { name: 'לספר בלבד' }))
+    fireEvent.click(screen.getByRole('button', { name: 'פגם בדפוס' }))
     fireEvent.click(screen.getByRole('tab', { name: /ריהוט/ }))
     await caretAt(editor(), { lineId: 5, offset: 2 })
     typeChar(editor(), '3')
     expect(opsNow()).toEqual([{ kind: 'text', ids: [5], value: '123' }])
   })
 
-  it('"לספר בלבד": אישור פסקה בלי שינוי אינו מסמן; עיצוב וזרם אינם מסמנים; כבוי — הקלדה בלי סימון', async () => {
+  it('"פגם בדפוס": אישור פסקה בלי שינוי אינו מסמן; עיצוב וזרם אינם מסמנים; כבוי — הקלדה בלי סימון', async () => {
     const { editor } = setup()
-    fireEvent.click(screen.getByRole('button', { name: 'לספר בלבד' }))
+    fireEvent.click(screen.getByRole('button', { name: 'פגם בדפוס' }))
     await caretAt(editor(), { lineId: 1, offset: 0 })
     fireEvent.keyDown(editor(), { key: 'Enter', code: 'Enter', ctrlKey: true })
     await caretAt(editor(), { lineId: 3, offset: 5 })
     fireEvent.click(screen.getByRole('button', { name: 'מודגש' }))
     expect(opsNow().map((o) => o.kind)).toEqual(['line_ok', 'line_ok', 'styles'])
-    fireEvent.click(screen.getByRole('button', { name: 'לספר בלבד' }))
+    fireEvent.click(screen.getByRole('button', { name: 'פגם בדפוס' }))
     expect(screen.queryByTestId('book-only-status')).toBeNull()
     await caretAt(editor(), { lineId: 3, offset: 4 })
     typeChar(editor(), 'ה')
     expect(opsNow().map((o) => o.kind)).toEqual(['line_ok', 'line_ok', 'styles', 'text'])
   })
 
-  it('"לספר בלבד" לשורה אחת מלוח הפרטים — וכפתור-המצב לא משנה אותו', async () => {
+  it('"פגם בדפוס" לשורה אחת מלוח הפרטים — וכפתור-המצב לא משנה אותו', async () => {
     const { editor } = setup()
     await caretAt(editor(), { lineId: 2, offset: 1 })
     fireEvent.click(screen.getByRole('button', { name: 'פרטים' }))
     const drawer = screen.getByRole('complementary', { name: 'פרטים' })
     fireEvent.click(within(drawer).getByRole('tab', { name: 'שורה' }))
-    const box = screen.getByRole('checkbox', { name: 'לספר בלבד (לא לאימון)' })
+    const box = screen.getByRole('checkbox', { name: 'פגם בדפוס (לא לאימון)' })
     fireEvent.click(box)
     expect(opsNow()).toEqual([{ kind: 'train_text', ids: [2], value: 0 }])
-    expect(screen.getByTestId('book-only-badge')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('checkbox', { name: 'לספר בלבד (לא לאימון)' }))
+    expect(screen.getByTestId('book-only-badge')).toHaveTextContent('פגם בדפוס')
+    fireEvent.click(screen.getByRole('checkbox', { name: 'פגם בדפוס (לא לאימון)' }))
     expect(opsNow()[1]).toEqual({ kind: 'train_text', ids: [2], value: 1 })
     expect(screen.queryByTestId('book-only-badge')).toBeNull()
   })
 
-  // הכפתור "פגם בדפוס" (#186) הוחלף ב"לספר בלבד"; סימונים שכבר נעשו בו (ודאות "לא בטוח" עם סיבה קבועה) לא הולכים לאיבוד
-  it('"לספר בלבד" בנוסח הישן ("פגם בדפוס"): מוצג כ"לספר בלבד"; הסרה מורידה גם את הוודאות; בחירת-ודאות אינה מוחקת אותו', async () => {
+  // הכפתור "פגם בדפוס" של #186 כתב ודאות "לא בטוח" עם סיבה קבועה; עכשיו המצב שומר train_text = 0 (ובשם "פגם בדפוס"),
+  // וסימונים שכבר נעשו בנוסח הישן לא הולכים לאיבוד
+  it('סימון "פגם בדפוס" בנוסח הישן (ודאות עם סיבה קבועה): מוצג כ"פגם בדפוס"; הסרה מורידה גם את הוודאות; בחירת-ודאות אינה מוחקת אותו', async () => {
     const legacy = { certainty: 'ambiguous', certainty_why: 'פגם בדפוס — תוקן שלא לפי המקור' }
     const page = makePage([L(1, 'שורה ראשונה לדוגמה', { para_start: true, ...legacy }), L(2, 'שורה שנייה לדוגמה', legacy)])
     const { editor } = setup({ page })
-    // בסרגל — "לספר בלבד"; "פגם בדפוס" כבר אינו מופיע
-    expect(screen.getByRole('button', { name: 'לספר בלבד' })).toHaveAttribute('aria-pressed', 'false')
-    expect(screen.queryByRole('button', { name: /פגם בדפוס/ })).toBeNull()
+    // בסרגל — מצב "פגם בדפוס", כבוי
+    expect(screen.getByRole('button', { name: 'פגם בדפוס' })).toHaveAttribute('aria-pressed', 'false')
     await caretAt(editor(), { lineId: 1, offset: 2 })
     fireEvent.click(screen.getByRole('button', { name: 'פרטים' }))
     const drawer = () => screen.getByRole('complementary', { name: 'פרטים' })
     fireEvent.click(within(drawer()).getByRole('tab', { name: 'שורה' }))
-    expect(screen.getByTestId('book-only-badge')).toHaveTextContent('לספר בלבד')
-    expect(screen.getByRole('checkbox', { name: 'לספר בלבד (לא לאימון)' })).toBeChecked()
+    expect(screen.getByTestId('book-only-badge')).toHaveTextContent('פגם בדפוס')
+    expect(screen.getByRole('checkbox', { name: 'פגם בדפוס (לא לאימון)' })).toBeChecked()
     // לא "לא בטוח" עם ההסבר הישן
     expect(within(drawer()).getByRole('button', { name: 'לא בטוח' })).not.toHaveClass('bg-primary')
-    expect(document.body).not.toHaveTextContent(/פגם בדפוס/)
-    // הסרת "לספר בלבד": גם הוודאות הישנה יורדת — צעד-ביטול אחד
-    fireEvent.click(screen.getByRole('checkbox', { name: 'לספר בלבד (לא לאימון)' }))
+    expect(document.body).not.toHaveTextContent(/תוקן שלא לפי המקור/)
+    // הסרת "פגם בדפוס": גם הוודאות הישנה יורדת — צעד-ביטול אחד
+    fireEvent.click(screen.getByRole('checkbox', { name: 'פגם בדפוס (לא לאימון)' }))
     expect(opsNow()).toEqual([
       { kind: 'train_text', ids: [1], value: 1 },
       { kind: 'certainty', ids: [1], value: { v: 'probable', why: null } },
     ])
     expect(screen.queryByTestId('book-only-badge')).toBeNull()
-    expect(screen.getByRole('checkbox', { name: 'לספר בלבד (לא לאימון)' })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'פגם בדפוס (לא לאימון)' })).not.toBeChecked()
     fireEvent.keyDown(document.body, { key: 'ז', code: 'KeyZ', ctrlKey: true })
     expect(opsNow()).toEqual([])
     expect(screen.getByTestId('book-only-badge')).toBeInTheDocument()
-    // שורה 2: בחירת "ודאי" — הסימון עובר ל-train_text = 0 באותו צעד, ונשאר "לספר בלבד"
+    // שורה 2: בחירת "ודאי" — הסימון עובר ל-train_text = 0 באותו צעד, ונשאר "פגם בדפוס"
     await caretAt(editor(), { lineId: 2, offset: 2 })
     fireEvent.click(within(drawer()).getByRole('button', { name: 'ודאי' }))
     expect(opsNow()).toEqual([
@@ -515,11 +518,11 @@ describe('ProofEditor — קישור לעמוד אחר', { timeout: 30000 }, () 
     expect(calls).toEqual([['/api/page-proof/books/g1/pages/10/lines', 'GET']])
     expect(screen.queryByText(/נבחר: «/)).toBeNull()
 
-    // בפרטים: "עמוד 10, שורה 1: «…»", ו"ביטול הקישור" מסיר את הפעולה עצמה
+    // בפרטים: "עמוד 10, שורה 1: «…»", ו"בטל קישור" מסיר את הפעולה עצמה
     fireEvent.click(screen.getByRole('button', { name: 'פרטים' }))
     const drawer = screen.getByRole('complementary', { name: 'פרטים' })
     expect(within(drawer).getByText(/עמוד 10, שורה 1: «והלכה כרבי יוחנן»/)).toBeInTheDocument()
-    fireEvent.click(within(drawer).getByRole('button', { name: /ביטול הקישור/ }))
+    fireEvent.click(within(drawer).getByRole('button', { name: /בטל קישור/ }))
     expect(opsNow()).toEqual([])
     fireEvent.keyDown(document.body, { key: 'ז', code: 'KeyZ', ctrlKey: true })
     expect(opsNow().map((o) => o.kind)).toEqual(['link_add'])

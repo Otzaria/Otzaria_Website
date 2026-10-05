@@ -33,6 +33,8 @@ import { RECUT_LINE_TITLE } from '@/lib/pageProof/helpTexts'
 //   onUndo / onRedo / onFormat(style)   מתפריט-העריכה של הדפדפן
 //   onWordEnter(lineId, i, rect) / onWordLeave(lineId, i)   חלונית-ההצעות
 //   onJump(other)       לחיצה על מספר-קישור: {lineId, page, i} של הצד השני
+//   onBadge(ep, rect)   (רשות) לחיצה על מספר-קישור פותחת חלונית במקום לקפוץ (ProofEditor — LinkPopover:
+//                       "עבור לצד השני", "✓ נכון", "בטל קישור"); ep = הקצה מ-linkEndpoints, rect — של המספר
 //   lockTitle           (רשות) ההסבר על שורה נעולה — במקום הנוסח של האתר (RECUT_LINE_TITLE)
 //   unapprovePre        (רשות) פסקה שאושרה לפני העריכה הזו ניתנת לביטול-אישור (הדף העוטף מבטל אותו
 //                       בשרת — ProofEditor.onUnapprovePre): הכפתור פעיל ובנוסח של פסקה מאושרת רגילה
@@ -121,8 +123,9 @@ function wordTitle({ low, hover, styles, lemma }) {
   return t.length ? t.join(' · ') : undefined
 }
 
-// מספר-הקישור אחרי המילה: ① בשני הקצוות; ריחוף מראה את הצד השני, לחיצה קופצת אליו
-function LinkBadge({ ep, otherText, onJump }) {
+// מספר-הקישור אחרי המילה: ① בשני הקצוות; ריחוף מראה את הצד השני. לחיצה — חלונית הקישור (onBadge:
+// עבור לצד השני / ✓ נכון / בטל קישור), ובלעדיה — קפיצה לצד השני
+function LinkBadge({ ep, otherText, onJump, onBadge }) {
   const kind = ep.kind === 'dh' ? 'דיבור המתחיל' : 'הערה'
   // צד בעמוד אחר: "עמוד 4, שורה 12: «…»" (flowEdit.linkEndpoints — label)
   const where = otherText ? `«${otherText}»` : ep.other?.label || (ep.other?.page != null ? `עמוד ${ep.other.page}` : '')
@@ -132,14 +135,16 @@ function LinkBadge({ ep, otherText, onJump }) {
       suppressContentEditableWarning
       data-badge={linkBadge(ep.n)}
       data-link-n={ep.n}
-      title={`קישור ${ep.n} (${kind})${where ? ` ← ${where}` : ''} — לחיצה עוברת לצד השני`}
+      data-link-side={ep.side}
+      title={`קישור ${ep.n} (${kind})${where ? ` ← ${where}` : ''} — ${onBadge ? 'לחיצה: מעבר לצד השני או ביטול הקישור' : 'לחיצה עוברת לצד השני'}`}
       onMouseDown={(e) => {
         e.preventDefault()
         e.stopPropagation()
       }}
       onClick={(e) => {
         e.preventDefault()
-        onJump?.(ep.other)
+        if (onBadge) onBadge(ep, e.currentTarget.getBoundingClientRect())
+        else onJump?.(ep.other)
       }}
       className="mx-px cursor-pointer select-none text-[0.65em] font-bold text-info-700 after:content-[attr(data-badge)] hover:text-info-900"
     />
@@ -166,7 +171,7 @@ function NotLineButton({ lineId, onRemove }) {
   )
 }
 
-function Seg({ line, seg, lemma, isLocked, isRecheck, isCaret, lowWord, eps, wordText, readOnly, onWordEnter, onWordLeave, onJump, onRemoveLine, lockTitle }) {
+function Seg({ line, seg, lemma, isLocked, isRecheck, isCaret, lowWord, eps, wordText, readOnly, onWordEnter, onWordLeave, onJump, onBadge, onRemoveLine, lockTitle }) {
   const text = String(line?.text ?? '')
   const empty = text.length === 0
   const marks = wordMarks(line, lowWord)
@@ -222,7 +227,7 @@ function Seg({ line, seg, lemma, isLocked, isRecheck, isCaret, lowWord, eps, wor
             >
               {t.text}
               {badges?.map((ep) => (
-                <LinkBadge key={`${ep.n}-${ep.side}`} ep={ep} otherText={wordText(ep.other)} onJump={onJump} />
+                <LinkBadge key={`${ep.n}-${ep.side}`} ep={ep} otherText={wordText(ep.other)} onJump={onJump} onBadge={onBadge} />
               ))}
             </span>
           )
@@ -241,7 +246,7 @@ function Seg({ line, seg, lemma, isLocked, isRecheck, isCaret, lowWord, eps, wor
 
 // joinable — הפסקה שבה הסמן (לא הראשונה בזרם): כפתור "חיבור לפסקה הקודמת" בגבול שבינה לבין
 // הקודמת (כמו Backspace בתחילתה) — onJoin(p.key)
-const Para = memo(function Para({ p, byId, info, furniture, locked, recheck, caretLineId, lowWord, endpoints, wordText, readOnly, joinable = false, onApprove, onUnapprove, onJoin, onWordEnter, onWordLeave, onJump, onRemoveLine, lockTitle, unapprovePre = false }) {
+const Para = memo(function Para({ p, byId, info, furniture, locked, recheck, caretLineId, lowWord, endpoints, wordText, readOnly, joinable = false, onApprove, onUnapprove, onJoin, onWordEnter, onWordLeave, onJump, onBadge, onRemoveLine, lockTitle, unapprovePre = false }) {
   const approved = !!info?.approved
   // אושרה כבר בסבב הקודם (מעבר שני) — אין כאן מה לבטל (אלא אם הדף העוטף מבטל אותו בשרת — unapprovePre)
   const pre = approved && !!info?.pre && !unapprovePre
@@ -319,6 +324,7 @@ const Para = memo(function Para({ p, byId, info, furniture, locked, recheck, car
               onWordEnter={onWordEnter}
               onWordLeave={onWordLeave}
               onJump={onJump}
+              onBadge={onBadge}
               onRemoveLine={onRemoveLine}
               lockTitle={lockTitle}
             />
@@ -350,6 +356,7 @@ function FlowEditor({
   onWordEnter,
   onWordLeave,
   onJump,
+  onBadge = null,
   onJoinPara = null,
   lockTitle,
   unapprovePre = false,
@@ -644,6 +651,7 @@ function FlowEditor({
                 onWordEnter={onWordEnter}
                 onWordLeave={onWordLeave}
                 onJump={onJump}
+                onBadge={onBadge}
                 onRemoveLine={removeLine}
                 lockTitle={lockTitle}
                 unapprovePre={unapprovePre}

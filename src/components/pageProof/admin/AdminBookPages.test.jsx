@@ -93,7 +93,7 @@ describe('AdminBookPages', { timeout: 20000 }, () => {
     expect(screen.getByRole('button', { name: 'שחרור עמוד 4' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'שחרור עמוד 5' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'שחרור עמוד 1' })).not.toBeInTheDocument()
-    expect(screen.getByText(/שמור לו 48 שעות \(לכל עמוד לחוד\)/)).toBeInTheDocument()
+    expect(screen.getByText(/שמור לו 48 שעות \(לכל עמוד לחוד; שבת וחג אינם נספרים\)/)).toBeInTheDocument()
   })
 
   it('המסננים: "סגורים למתנדבים" מציג רק אותם', async () => {

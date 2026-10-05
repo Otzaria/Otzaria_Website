@@ -18,7 +18,8 @@ import { cleanupPageDrafts, pageDraftKey, removePageDrafts } from '@/lib/pagePro
 import { cleanOps, planSubmission, recheckLineIds, submitSummary } from '@/lib/pageProof/submitPlan'
 import { bookHref, editorHref } from '@/lib/pageProof/gridState'
 import { isCutOp } from '@/lib/pageProof/recutRules'
-import { RECUT_OFF_HELP, RECUT_REQUEST_HINT, RECUT_SENT } from '@/lib/pageProof/helpTexts'
+import { RECUT_OFF_HELP, RECUT_REQUEST_HINT, RECUT_SENT, submittedWaiting } from '@/lib/pageProof/helpTexts'
+import { formatSince, formatUntil } from '@/lib/pageProof/dates'
 
 // דף המתנדב להגהת-עמודים: העורך, לעמודים שכבר בטיפולכם. כל עמוד מוגש בנפרד
 // וממתין לאישור מנהל.
@@ -53,6 +54,16 @@ const STATE_CLS = {
   approved: 'bg-success-100 text-success-800',
   recut: 'bg-feature-100 text-feature-800',
   unavailable: 'opacity-40',
+}
+
+// הריחוף על עמוד בפס-הרצף: כמה שורות, מעבר שני, ועד מתי הוא שמור / מאז מתי ממתין לבדיקה
+function seqPageTitle(p, now) {
+  const parts = [`${p.lines} שורות`]
+  if (p.revision > 1) parts.push('חזר מזיהוי-מחדש (מעבר שני)')
+  const until = p.state === 'mine' ? formatUntil(p.leasedUntil, now) : ''
+  if (until) parts.push(`שמור לך עד ${until}`)
+  if (p.state === 'submitted') parts.push(submittedWaiting(formatSince(p.submittedAt, now)))
+  return parts.join(' · ')
 }
 
 // localStorage עלול להיות חסום (מצב פרטי/מדיניות-דפדפן) — אז פשוט בלי טיוטות
@@ -101,6 +112,7 @@ function PageProofVolunteer() {
   const [seq, setSeq] = useState(null)
   const [held, setHeld] = useState([]) // "העמודים שלי": הרצפים שבהם אתם מחזיקים עמודים
   const [recutPending, setRecutPending] = useState([]) // עמודים ששלחתם לזיהוי-מחדש ועוד לא חזרו
+  const [submitted, setSubmitted] = useState([]) // ההגשות שלכם שממתינות לבדיקת מנהל
   // "שלח לזיהוי-מחדש" פתוח? (מתג המנהל — runtime.recutStatus; מגיע עם "העמודים שלי" ועם כל עמוד)
   const [recutOpen, setRecutOpen] = useState(true)
   const [heldAt, setHeldAt] = useState(null)
@@ -134,6 +146,8 @@ function PageProofVolunteer() {
         const data = await res.json()
         if (!data.success) throw new Error(data.error || 'העמוד לא נטען')
         if (typeof data.recutRequests === 'boolean') setRecutOpen(data.recutRequests)
+        // הפתיחה חידשה את התפיסה — "שמור לך עד …" בפס-הרצף לפי המועד החדש
+        if (data.leasedUntil) setSeq((s) => (s ? { ...s, pages: s.pages.map((p) => (p.id === id ? { ...p, leasedUntil: data.leasedUntil } : p)) } : s))
         const draftKey = pageDraftKey(data.page)
         // עריכה: ניקוי טיוטות של גרסאות אחרות (לפני שהעורך קורא את שלו); עמוד שחזר
         // מזיהוי-מחדש — מה שתקף מהטיוטה הקודמת עובר אליו. עמוד שכבר הגשתם: הטיוטות
@@ -163,6 +177,7 @@ function PageProofVolunteer() {
       if (!data.success) throw new Error(data.error || 'הטעינה נכשלה')
       setHeld(data.held || [])
       setRecutPending(data.recutPending || [])
+      setSubmitted(data.submitted || [])
       if (typeof data.recutRequests === 'boolean') setRecutOpen(data.recutRequests)
       setHeldAt(new Date())
       setStats(data.stats)
@@ -196,6 +211,16 @@ function PageProofVolunteer() {
       openPage(pageId)
     },
     [openPage, router]
+  )
+
+  // הגשה שממתינה לבדיקת מנהל (מ"העמודים שלי") ← הרצף שלה, והיא נפתחת לצפייה — כמו ?page=
+  const openSubmitted = useCallback(
+    (pageId) => {
+      focusRef.current = pageId
+      router.replace(editorHref(pageId), { scroll: false })
+      loadMine()
+    },
+    [loadMine, router]
   )
 
   // חזרה ל"העמודים שלי" (הטיוטה של העמוד שבעורך שמורה בדפדפן)
@@ -248,7 +273,7 @@ function PageProofVolunteer() {
       withStorage((s) => removePageDrafts(s, page.id))
       setSubmitCtx(null)
       // עדכון מקומי של הרצף — בלי לטעון אותו מחדש
-      const pages = seq.pages.map((p) => (p.id === page.id ? { ...p, state: 'submitted' } : p))
+      const pages = seq.pages.map((p) => (p.id === page.id ? { ...p, state: 'submitted', submittedAt: new Date().toISOString() } : p))
       setSeq({ ...seq, pages })
       setStats((s) => (s ? { ...s, mySubmitted: s.mySubmitted + 1 } : s))
       const next = pages.find((p) => p.state === 'mine')
@@ -343,7 +368,15 @@ function PageProofVolunteer() {
           {loading ? (
             <LoadingSpinner message="טוען את העמודים שלכם..." />
           ) : canWork && !seq ? (
-            <MyPagesPanel held={held} recutPending={recutPending} missing={missing} onOpen={openHeld} now={heldAt} />
+            <MyPagesPanel
+              held={held}
+              recutPending={recutPending}
+              submitted={submitted}
+              missing={missing}
+              onOpen={openHeld}
+              onOpenSubmitted={openSubmitted}
+              now={heldAt}
+            />
           ) : seq ? (
             <>
               {/* הרצף */}
@@ -357,12 +390,22 @@ function PageProofVolunteer() {
                     disabled={p.state === 'unavailable' || p.state === 'recut' || loadingPage}
                     onClick={() => openPage(p.id)}
                     className={`rounded-md px-3 py-1 ${STATE_CLS[p.state]} ${current?.page?.id === p.id ? 'ring-2 ring-primary' : ''}`}
-                    title={`${p.lines} שורות${p.revision > 1 ? ' · חזר מזיהוי-מחדש (מעבר שני)' : ''}`}
+                    title={seqPageTitle(p, new Date())}
                   >
                     עמוד {p.page} · {STATE_HE[p.state]}
                     {p.revision > 1 && <span className="mr-1 rounded bg-warning-100 px-1 text-xs text-warning-800">מעבר שני</span>}
                   </button>
                 ))}
+                {(() => {
+                  // העמוד שבעורך: עד מתי הוא שמור לכם (שבת וחג אינם נספרים — lease.js)
+                  const cur = seq.pages.find((p) => p.id === current?.page?.id && p.state === 'mine')
+                  const until = cur ? formatUntil(cur.leasedUntil, new Date()) : ''
+                  return until ? (
+                    <span data-testid="lease-until" className="text-xs text-on-surface/60" title="כל פתיחה של העמוד בעורך מחדשת את הזמן; שבת וחג אינם נספרים">
+                      עמוד {cur.page} שמור לך עד {until}
+                    </span>
+                  ) : null
+                })()}
                 <span className="flex-1" />
                 <button onClick={showMine} className="flex items-center gap-1 rounded-md px-3 py-1 hover:bg-surface-variant" title="כל העמודים שבטיפולכם">
                   <span aria-hidden="true" className="material-symbols-outlined text-base">person</span>
@@ -425,7 +468,9 @@ function PageProofVolunteer() {
                       </>
                     ) : (
                       <span className="rounded bg-info-100 px-2 py-1 text-xs text-info-800">
-                        {current.submission?.status === 'approved' ? 'ההגשה שלכם אושרה' : 'ההגשה שלכם ממתינה לאישור'}
+                        {current.submission?.status === 'approved'
+                          ? 'ההגשה שלכם אושרה'
+                          : submittedWaiting(current.submission?.createdAt ? formatSince(current.submission.createdAt, new Date()) : '')}
                       </span>
                     )
                   }

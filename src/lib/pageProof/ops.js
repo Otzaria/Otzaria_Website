@@ -248,11 +248,19 @@ export function validateOp(doc, op) {
       if (v.page !== doc.page) return 'עמוד הקישור שגוי';
       return null;
     }
+    case 'link_reset': {
+      // "החזר לאוטומטי": רק קישור שהגיע עם העמוד (מהשורה הזו) — את מה שנעשה בעריכה הזו מבטלים בהסרת הפעולה
+      if (!v || !isInt(v.src_line) || !lines.has(v.src_line)) return 'שורת-המקור של הקישור חסרה';
+      if (v.page !== doc.page) return 'עמוד הקישור שגוי';
+      // ורק לקישור שבוטל ("אין קישור" — בלי יעד): קישור חי אינו "חוזר" לאוטומטי מכאן
+      if (!(doc.links || []).some((k) => k && k.from_line === v.src_line)) return 'אין בעמוד קישור מהשורה הזו';
+      return (doc.links || []).some((k) => k && k.from_line === v.src_line && k.to_line == null) ? null : 'הקישור מהשורה הזו לא בוטל';
+    }
     case 'certainty':
       if (!v || !Object.hasOwn(CERTAINTY, v.v)) return 'ערך-ודאות לא מוכר';
       return v.why == null || (typeof v.why === 'string' && v.why.length <= MAX_WHY) ? null : 'הסבר ארוך מדי';
     case 'train_text':
-      return v === 0 || v === 1 ? null : 'הערך חייב להיות 0 (לספר בלבד) או 1 (רגיל)';
+      return v === 0 || v === 1 ? null : 'הערך חייב להיות 0 (פגם בדפוס) או 1 (רגיל)';
     case 'line_ok':
       return null;
     case 'line_split': {
@@ -346,6 +354,7 @@ function cleanValue(kind, v) {
     }
     case 'link_ok':
     case 'link_del':
+    case 'link_reset':
       return pick(v, ['src_line', 'page']);
     case 'certainty':
       return pick(v, ['v', 'why']);
@@ -621,6 +630,9 @@ export function applyOp(doc, op, opIndex = 0) {
       return { ...doc, links: (doc.links || []).map((k) => (k.from_line === v.src_line ? { ...k, src: 'human', suspect: null } : k)) };
     case 'link_del':
       return { ...doc, links: (doc.links || []).filter((k) => k.from_line !== v.src_line) };
+    case 'link_reset':
+      // מה שהמחשב יקבע — רק בתוכנת-הספר; כאן הקישור מסומן "יחזור לאוטומטי" (LinksTab)
+      return { ...doc, links: (doc.links || []).map((k) => (k.from_line === v.src_line ? { ...k, _reset: true } : k)) };
     case 'mixed_line':
       return mapLines(doc, ids, (l) => ({ ...l, flags: { ...(l.flags || {}), mixed_line: !!v }, _touched: true }));
     case 'certainty':
@@ -1368,7 +1380,8 @@ export function describeOp(doc, op) {
       return `${far.index === 0 ? `${farEnd} ← ${hereEnd}` : `${hereEnd} ← ${farEnd}`}: ${what}`;
     }
     case 'link_ok':
-    case 'link_del': {
+    case 'link_del':
+    case 'link_reset': {
       const l = lines.get(v.src_line);
       return `${kindHe} (שורה ${l ? (l.line_no ?? 0) + 1 : '?'})`;
     }
@@ -1376,10 +1389,10 @@ export function describeOp(doc, op) {
       return `${where}${v ? 'שורה מעורבת-כתבים' : 'לא מעורבת'}`;
     case 'certainty':
       // הנוסח הישן של "לספר בלבד" (הכפתור "פגם בדפוס") — מתואר כ"לספר בלבד", כמו שהוא נקרא
-      if (isPrintDefectOp(op)) return `${where}לספר בלבד — נכנס לספר, לא לאימון`;
+      if (isPrintDefectOp(op)) return `${where}פגם בדפוס — נכנס לספר, לא לאימון`;
       return `${where}${CERTAINTY[v.v]}${v.why ? ` — ${cut(v.why, 60)}` : ''}`;
     case 'train_text':
-      return `${where}${v === 0 ? 'לספר בלבד — נכנס לספר, לא לאימון' : 'חזרה לאימון (בלי "לספר בלבד")'}`;
+      return `${where}${v === 0 ? 'פגם בדפוס — נכנס לספר, לא לאימון' : 'חזרה לאימון (בלי "פגם בדפוס")'}`;
     case 'line_split':
       return `${where}פיצול בנקודה x=${v.x}`;
     case 'line_merge':

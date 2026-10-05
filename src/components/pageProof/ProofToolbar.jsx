@@ -2,7 +2,7 @@
 
 import { PARA_STYLES, streamMenu } from '@/lib/pageProof/vocab'
 import { styleActive } from '@/lib/pageProof/flowEdit'
-import { BOOK_ONLY_TITLE_OFF, BOOK_ONLY_TITLE_ON } from '@/lib/pageProof/helpTexts'
+import { BOOK_ONLY_NAME, BOOK_ONLY_TITLE_OFF, BOOK_ONLY_TITLE_ON, GUIDE_LABEL, GUIDE_TITLE } from '@/lib/pageProof/helpTexts'
 import ToolbarMenu from './ToolbarMenu'
 
 // סרגל-הכלים של עורך הגהת-העמודים — בנוסח סרגל העורך הישן של האתר
@@ -222,6 +222,8 @@ export default function ProofToolbar({
   fontFamily = DEFAULT_PROOF_FONT,
   setFontFamily,
   onHelp,
+  // דף ההנחיות (רשות): לחיצה פותחת אותו (ProofEditor — help.guide / ProofHelp.openGuide); בלי — בלי הכפתור
+  onGuide = null,
   detailsOpen = false,
   onToggleDetails,
   actions = null,
@@ -397,7 +399,7 @@ export default function ProofToolbar({
 
         {/* "לספר בלבד" — מצב: כל עוד הוא לחוץ, כל שורה שמשנים בה טקסט מסומנת (נכנס לספר, לא לאימון) */}
         <LabeledButton
-          label="לספר בלבד"
+          label={BOOK_ONLY_NAME}
           title={bookOnly ? BOOK_ONLY_TITLE_ON : bookOnlyTitle}
           pressed={!!bookOnly}
           tone="warning"
@@ -405,7 +407,7 @@ export default function ProofToolbar({
           disabled={!edit(onBookOnly)}
         >
           <span className="material-symbols-outlined text-sm" aria-hidden="true">flag</span>
-          <span className="text-[10px] font-medium">לספר בלבד</span>
+          <span className="text-[10px] font-medium">{BOOK_ONLY_NAME}</span>
         </LabeledButton>
 
         <Divider />
@@ -473,6 +475,12 @@ export default function ProofToolbar({
           <span className="material-symbols-outlined text-sm" aria-hidden="true">help_outline</span>
           <span className="text-[10px] font-medium">עזרה</span>
         </LabeledButton>
+        {isFn(onGuide) && (
+          <LabeledButton label={GUIDE_LABEL} title={GUIDE_TITLE} onClick={onGuide}>
+            <span className="material-symbols-outlined text-sm" aria-hidden="true">menu_book</span>
+            <span className="text-[10px] font-medium">{GUIDE_LABEL}</span>
+          </LabeledButton>
+        )}
         <LabeledButton
           label="פרטים"
           title={detailsOpen ? 'סגירת לוח הפרטים' : 'פרטים: קישורים, שורה, עמוד ושינויים'}

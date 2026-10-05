@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { SCRIPTS, CERTAINTY, isBookOnly, isPrintDefect, streamInfo } from '@/lib/pageProof/vocab'
-import { BOOK_ONLY_LINE, BOOK_ONLY_LINE_TITLE, CERTAINTY_HINT, RECUT_LINE_TITLE } from '@/lib/pageProof/helpTexts'
+import { BOOK_ONLY_LINE, BOOK_ONLY_LINE_TITLE, BOOK_ONLY_NAME, CERTAINTY_HINT, RECUT_LINE_TITLE } from '@/lib/pageProof/helpTexts'
 
 // כרטיסיית "שורה" בלוח הפרטים: מה שנשאר ברמת השורה שבה הסמן — כתב, שורה
 // מעורבת-כתבים, ודאות (עם הסבר), "נכונה כפי שהיא" / "לא-שורה", ומה המערכת
@@ -71,7 +71,7 @@ export default function LineTab({ view, line, locked = false, readOnly = false, 
         {line._ok && <span className="rounded bg-success-100 px-1.5 text-xs text-success-800">✓ נכונה</span>}
         {isBookOnly(line) && (
           <span data-testid="book-only-badge" className="rounded bg-warning-100 px-1.5 text-xs text-warning-800" title={BOOK_ONLY_LINE_TITLE}>
-            לספר בלבד
+            {BOOK_ONLY_NAME}
           </span>
         )}
         {line.recheck === true && <span className="rounded bg-warning-alt-100 px-1.5 text-xs text-warning-alt-900">זוהתה מחדש</span>}
@@ -98,7 +98,7 @@ export default function LineTab({ view, line, locked = false, readOnly = false, 
       </Section>
 
       {act.bookOnly && (
-        <Section title="לספר בלבד" hint={BOOK_ONLY_LINE_TITLE}>
+        <Section title={BOOK_ONLY_NAME} hint={BOOK_ONLY_LINE_TITLE}>
           <label className="flex items-center gap-2 text-sm" title={BOOK_ONLY_LINE_TITLE}>
             <input type="checkbox" disabled={dis} checked={isBookOnly(line)} onChange={(e) => act.bookOnly(e.target.checked)} />
             {BOOK_ONLY_LINE}

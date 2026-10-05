@@ -1071,8 +1071,8 @@ test('train_text: תצוגה, דחיסה (האחרונה קובעת), תיאור
   const v = buildView(d, ops);
   assert.deepEqual(v.lines.map((l) => l.train_text), [1, 0, undefined]);
   assert.deepEqual(compactOps(d, ops).map((o) => [o.ids[0], o.value]), [[1, 1], [2, 0]]);
-  assert.equal(describeOp(d, ops[0]), 'שורה 1: לספר בלבד — נכנס לספר, לא לאימון');
-  assert.equal(describeOp(d, ops[1]), 'שורה 1: חזרה לאימון (בלי "לספר בלבד")');
+  assert.equal(describeOp(d, ops[0]), 'שורה 1: פגם בדפוס — נכנס לספר, לא לאימון');
+  assert.equal(describeOp(d, ops[1]), 'שורה 1: חזרה לאימון (בלי "פגם בדפוס")');
   assert.deepEqual(sanitizeOp({ ...ops[0], _cmp: true, _g: 'g' }), { kind: 'train_text', page: 3, ids: [1], value: 0 });
   assert.equal(OP_KINDS.train_text.contract, true);
 });
@@ -1114,14 +1114,14 @@ test('dropIdleBookOnly: סימון אוטומטי על שורה שחזרה לט�
 
 // הנוסח הישן של "לספר בלבד" — הכפתור "פגם בדפוס" (#186): ודאות "לא בטוח" עם הסיבה הקבועה. אין לו עוד כפתור,
 // אבל סימונים שכבר נעשו (טיוטות והגשות) נקראים, נספרים ומתוארים כ"לספר בלבד"
-test('"לספר בלבד" בנוסח הישן (ודאות "פגם בדפוס"): נקרא, נספר ומתואר כ"לספר בלבד"; ודאות אחרת מבטלת אותו', () => {
+test('"פגם בדפוס" בנוסח הישן (ודאות "פגם בדפוס"): נקרא, נספר ומתואר כ"פגם בדפוס"; ודאות אחרת מבטלת אותו', () => {
   const d = doc();
   const legacy = { kind: 'certainty', page: 3, ids: [1], value: { v: 'ambiguous', why: PRINT_DEFECT_WHY } };
   assert.equal(isPrintDefectOp(legacy), true);
   assert.equal(isPrintDefectOp({ ...legacy, value: { v: 'ambiguous', why: 'לא ברור מה כתוב' } }), false);
   assert.equal(isPrintDefectOp({ ...legacy, kind: 'train_text', value: 0 }), false);
   assert.equal(isBookOnly(buildView(d, [legacy]).lines.find((l) => l.id === 1)), true);
-  assert.equal(describeOp(d, legacy), 'שורה 1: לספר בלבד — נכנס לספר, לא לאימון');
+  assert.equal(describeOp(d, legacy), 'שורה 1: פגם בדפוס — נכנס לספר, לא לאימון');
   assert.equal(describeOp(d, { ...legacy, value: { v: 'ambiguous', why: 'לא ברור' } }), 'שורה 1: לא בטוח — לא ברור');
   // נספר בחלון ההגשה ובסקירה, גם לצד train_text; ודאות אחרת אחריו (הסרת הסימון) — כבר לא
   assert.deepEqual(bookOnlyLineIds([legacy]), [1]);

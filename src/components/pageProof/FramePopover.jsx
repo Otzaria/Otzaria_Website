@@ -27,9 +27,10 @@ const small = 'flex h-6 min-w-6 items-center justify-center rounded border borde
 
 const EMPTY_CHIPS = { content: [], headings: [], furniture: [], more: [], moreHeadings: [] }
 const FURNITURE_TITLE = 'כותרת-רצה (גם של ההערות), מספר עמוד, שומר-דף — אינם נכנסים לספר'
-const NOTES_RUNHEAD_TITLE = 'כותרת שחוזרת בכל עמוד מעל ההערות (שם החיבור שבהערות) — ריהוט, לא נכנסת לספר. כותרת של פרק או סעיף בתוך ההערות — «כותרת הערות»'
-const HEADING_TITLE = 'מסגרת סביב כותרת (של פרק, סעיף וכדומה) בזרם הזה'
-const NOTES_HEADING_TITLE = 'כותרת של פרק או סעיף בתוך ההערות — נכנסת לספר. כותרת שחוזרת בכל עמוד מעל ההערות — «כותרת-רצה של ההערות»'
+const NOTES_RUNHEAD_TITLE = 'כותרת שחוזרת בכל עמוד מעל ההערות (שם החיבור שבהערות) — ריהוט, לא נכנסת לספר. כותרת של פרק או סעיף בתוך ההערות — סגנון-הפסקה «כותרת» בטקסט, לא מסגרת'
+// מסגרת-כותרת (…_heading) — כבר לא בבחירה (בעל הפרויקט, 2026-10-05: כותרת היא סגנון-פסקה, לא מסגרת). מסגרת כזו שכבר
+// קיימת בעמוד עדיין נטענת ומוצגת (שבב אחד, של הזרם שלה) ואפשר להחליף לה זרם — בלי מיגרציה
+const HEADING_TITLE = 'מסגרת-כותרת מגרסה קודמת. היום כותרת אינה מסגרת: היא חלק מהטקסט, בסגנון-הפסקה «כותרת»'
 const isNotesKey = (k) => /^notes\d?$/.test(String(k || ''))
 
 // כפתור-זרם (נקודת-צבע + שם) — גם בסרגל "מסגרת חדשה" של ScanPanel
@@ -49,9 +50,9 @@ export function StreamChip({ s, active, onClick, title }) {
   )
 }
 
-// בחירת הזרם של מסגרת — אותה בחירה בחלונית ובסרגל "מסגרת חדשה": זרמי-התוכן, הכותרת של
-// כל אחד מהם ("כותרת", "כותרת הערות"…), "ריהוט הדף", ו"עוד…" לזרמים נדירים ולסוג-הריהוט
-// המדויק. value — הזרם הנוכחי (או FURNITURE_CHOICE); onPick(key) רק כשהבחירה משתנה.
+// בחירת הזרם של מסגרת — אותה בחירה בחלונית ובסרגל "מסגרת חדשה": זרמי-התוכן, "ריהוט הדף", ו"עוד…"
+// לזרמים נדירים ולסוג-הריהוט המדויק. כותרת אינה מסגרת (2026-10-05) — בלי זרמי-הכותרת; מסגרת שכבר בזרם-כותרת
+// מוצגת בשבב שלה בלבד. value — הזרם הנוכחי (או FURNITURE_CHOICE); onPick(key) רק כשהבחירה משתנה.
 export function StreamPicker({ chips, value, onPick, label = 'הזרם של המסגרת', className = '' }) {
   const c = { ...EMPTY_CHIPS, ...(chips || {}) }
   const furnitureOn = value === FURNITURE_CHOICE || isFurnitureStream(value)
@@ -59,8 +60,9 @@ export function StreamPicker({ chips, value, onPick, label = 'הזרם של המ
     if (key === value || (key === FURNITURE_CHOICE && furnitureOn) || (key === NOTES_RUNHEAD_CHOICE && value === 'header')) return
     onPick?.(key)
   }
-  const headingOf = new Map(c.moreHeadings.map((s) => [s.base, s]))
-  const rare = c.more.flatMap((s) => (headingOf.has(s.key) ? [s, headingOf.get(s.key)] : [s]))
+  const rare = c.more
+  // מסגרת קיימת בזרם-כותרת (מגרסה קודמת): רק השבב שלה, כדי שיראו אותו
+  const legacyHeading = [...c.headings, ...c.moreHeadings].find((s) => s.key === value) || null
   const inSelect = [...rare, ...c.furniture].some((s) => s.key === value)
   const furniture = choiceInfo(null, FURNITURE_CHOICE)
   // רק בעמוד/ספר שיש בו הערות — שם המתנדבים בחרו "כותרת הערות" (שנכנסת לספר) לכותרת-הרצה שלהן
@@ -71,9 +73,7 @@ export function StreamPicker({ chips, value, onPick, label = 'הזרם של המ
       {c.content.map((s) => (
         <StreamChip key={s.key} s={s} active={value === s.key} onClick={() => pick(s.key)} />
       ))}
-      {c.headings.map((s) => (
-        <StreamChip key={s.key} s={s} active={value === s.key} onClick={() => pick(s.key)} title={isNotesKey(s.base) ? NOTES_HEADING_TITLE : HEADING_TITLE} />
-      ))}
+      {legacyHeading && <StreamChip s={legacyHeading} active onClick={() => {}} title={HEADING_TITLE} />}
       <StreamChip s={furniture} active={furnitureOn} onClick={() => pick(FURNITURE_CHOICE)} title={FURNITURE_TITLE} />
       {notesRunhead && <StreamChip s={notesRunhead} active={false} onClick={() => pick(NOTES_RUNHEAD_CHOICE)} title={NOTES_RUNHEAD_TITLE} />}
       {rare.length + c.furniture.length > 0 && (

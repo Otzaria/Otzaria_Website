@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { useEffect, useMemo, useState } from 'react'
 import { render, screen, fireEvent, within, act, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -534,28 +534,25 @@ describe('ScanPanel — זרם המסגרת: כותרות וריהוט הדף', 
   }
   const lastFrames = (log) => log.groups[log.groups.length - 1][0].value.frames
 
-  it('"מסגרת חדשה" מציעה כותרת לכל זרם-תוכן ("כותרת", "כותרת הערות") ו"ריהוט הדף"', async () => {
+  // בעל הפרויקט (2026-10-05): כותרת היא סגנון-פסקה בטקסט, לא מסגרת — "מסגרת חדשה" אינה מציעה זרם-כותרת
+  it('"מסגרת חדשה" מציעה את זרמי-התוכן ו"ריהוט הדף" — בלי "כותרת" / "כותרת הערות"', async () => {
     setup()
     await userEvent.click(screen.getByRole('button', { name: 'מסגרת חדשה' }))
     const g = drawBar()
-    for (const name of ['ראשי', 'הערות', 'כותרת', 'כותרת הערות', 'ריהוט הדף']) expect(within(g).getByRole('button', { name })).toBeInTheDocument()
+    for (const name of ['ראשי', 'הערות', 'ריהוט הדף']) expect(within(g).getByRole('button', { name })).toBeInTheDocument()
+    for (const name of ['כותרת', 'כותרת הערות']) expect(within(g).queryByRole('button', { name })).toBeNull()
     expect(within(g).getByRole('button', { name: 'ראשי', pressed: true })).toBeInTheDocument()
   })
 
-  it('מסגרת "כותרת הערות": נשמרת בזרם notes_heading, והשורה שבתוכה עוברת לזרם-הכותרת', async () => {
-    const { log } = setup()
-    await userEvent.click(screen.getByRole('button', { name: 'מסגרת חדשה' }))
-    await userEvent.click(within(drawBar()).getByRole('button', { name: 'כותרת הערות' }))
-    draw(505, 95, 915, 145)
-    expect(log.errors).toEqual([])
-    const added = lastFrames(log).find((f) => f.stream === 'notes_heading')
-    expect(added).toMatchObject({ bbox: [516, 96, 904, 144] })
+  it('מסגרת-כותרת שכבר בעמוד (מגרסה קודמת) — נטענת ומוצגת כמו קודם, והשורה שבתוכה בזרם-הכותרת; בחלונית — השבב שלה', () => {
+    const base = { ...doc(), frames: [{ fid: 'hh11aa', stream: 'notes_heading', bbox: [510, 90, 910, 145], order: 1 }] }
+    const { log } = setup({ base })
     expect(log.view.lines.find((l) => l.id === 1)).toMatchObject({ stream: 'notes_heading', stream_src: 'frame' })
-    expect(screen.getAllByTestId('frame-badge').map((b) => b.textContent)).toContain('2הערות — כותרת 1')
-    // בחלונית (נפתחת בלחיצה על המסגרת החדשה — היא הקטנה שבנקודה): הכותרת פעילה
-    expect(screen.queryByTestId('frame-popover')).not.toBeInTheDocument()
+    expect(screen.getAllByTestId('frame-badge').map((b) => b.textContent)).toContain('1הערות — כותרת 1')
     click(700, 120)
-    expect(within(screen.getByTestId('frame-popover')).getByRole('button', { name: 'כותרת הערות', pressed: true })).toBeInTheDocument()
+    const pop = screen.getByTestId('frame-popover')
+    expect(within(pop).getByRole('button', { name: 'כותרת הערות', pressed: true })).toBeInTheDocument()
+    expect(within(pop).queryByRole('button', { name: 'כותרת' })).toBeNull()
   })
 
   it('"ריהוט הדף": בראש העמוד — כותרת עמוד, בתחתיתו — תחתית; מלשונית-הריהוט בטקסט זו הבחירה ההתחלתית', async () => {
@@ -571,7 +568,7 @@ describe('ScanPanel — זרם המסגרת: כותרות וריהוט הדף', 
     expect(lastFrames(log).find((f) => f.bbox[1] === 900)).toMatchObject({ stream: 'footer' })
   })
 
-  it('בחלונית: "ריהוט הדף" מעביר מסגרת קיימת לריהוט לפי מקומה, ו"כותרת" — לזרם-הכותרת', async () => {
+  it('בחלונית: "ריהוט הדף" מעביר מסגרת קיימת לריהוט לפי מקומה; זרם-כותרת אינו בבחירה', async () => {
     const { log } = setup()
     click(500, 820)
     const pop = () => screen.getByTestId('frame-popover')
@@ -580,9 +577,7 @@ describe('ScanPanel — זרם המסגרת: כותרות וריהוט הדף', 
     expect(lastFrames(log).map((f) => f.stream)).toEqual(['main', 'main', 'footer'])
     expect(log.view.lines.find((l) => l.id === 4).stream).toBe('footer')
     click(700, 120)
-    await userEvent.click(within(pop()).getByRole('button', { name: 'כותרת' }))
-    expect(lastFrames(log).map((f) => f.stream)).toEqual(['main_heading', 'main', 'footer'])
-    expect(log.view.lines.find((l) => l.id === 2).stream).toBe('main_heading')
+    expect(within(pop()).queryByRole('button', { name: 'כותרת' })).toBeNull()
   })
 })
 
@@ -793,5 +788,86 @@ describe('ScanPanel — נקודות-הרחבה לדף עוטף', () => {
     const last = onSelectionChange.mock.calls.at(-1)[0]
     expect(last.from).toBe('scan')
     expect(typeof last.fid).toBe('string')
+  })
+})
+
+// "בלי סימונים" (פורום, 2026-10-05): הסריקה כמו שהיא — בלי שום דבר מצויר עליה; נזכר בדפדפן
+describe('ScanPanel — "בלי סימונים"', () => {
+  const KEY = 'pageProof.scanClean'
+  afterEach(() => {
+    window.localStorage.removeItem(KEY)
+    vi.restoreAllMocks()
+  })
+  const cleanBtn = () => screen.getByRole('button', { name: /בלי סימונים/ })
+  const base = () => ({
+    ...doc(),
+    lines: [
+      L(1, [520, 100, 900, 140], 'main', { words: [{ text: 'שורה', bbox: [700, 100, 900, 140] }, { text: '1', bbox: [520, 100, 680, 140] }] }),
+      ...doc().lines.slice(1),
+      // כותרת-רצה שזוהתה — מסומנת באפור במצב "מסגרות"
+      L(5, [300, 20, 700, 50], 'header'),
+    ],
+  })
+
+  it('מסתיר מסגרות ותוויות, ריהוט, סימון הסמן והמילה ושכבת הדף העוטף — נשארת התמונה; לחיצה עדיין מזיזה את הסמן', async () => {
+    const layer = () => <rect data-testid="own-layer" x="0" y="0" width="10" height="10" />
+    const { container, onPick, log } = setup({ base: base(), currentWord: 1, scanOverlay: layer })
+    expect(screen.getAllByTestId('frame-badge').length).toBeGreaterThan(0)
+    expect(screen.getByTestId('furniture-label')).toBeInTheDocument()
+    expect(screen.getByTestId('caret-marker')).toBeInTheDocument()
+    expect(screen.getByTestId('word-highlight')).toBeInTheDocument()
+    expect(screen.getByTestId('own-layer')).toBeInTheDocument()
+    expect(cleanBtn()).toHaveAttribute('aria-pressed', 'false')
+
+    await userEvent.click(cleanBtn())
+    expect(cleanBtn()).toHaveAttribute('aria-pressed', 'true')
+    expect(window.localStorage.getItem(KEY)).toBe('1')
+    expect(svgOf().querySelector('image')).not.toBeNull()
+    expect(container.querySelector('[data-layer]')).toBeNull()
+    expect(screen.queryAllByTestId('frame-badge')).toHaveLength(0)
+    expect(screen.queryByTestId('furniture-label')).toBeNull()
+    expect(screen.queryByTestId('caret-marker')).toBeNull()
+    expect(screen.queryByTestId('word-highlight')).toBeNull()
+    expect(screen.queryByTestId('own-layer')).toBeNull()
+    expect(screen.getByTestId('proof-scan')).toHaveAttribute('data-clean', '1')
+    // בלי כלי-העריכה של הסריקה, וההסבר אומר מה מוצג
+    expect(screen.queryByRole('button', { name: /המסגרות נכונות/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'מסגרת חדשה' })).toBeNull()
+    expect(screen.getByText(/הסריקה מוצגת בלי סימונים/)).toBeInTheDocument()
+    // לחיצה על שורה: הסמן עובר אליה — בלי חלונית-מסגרת ובלי שום פעולה
+    click(700, 170)
+    expect(onPick).toHaveBeenLastCalledWith(2)
+    expect(screen.queryByTestId('frame-popover')).toBeNull()
+    expect(log.groups).toEqual([])
+    // גם במצב "שורות" — בלי תיבות-השורות ובלי בחירה בלחיצה
+    await userEvent.click(screen.getByRole('button', { name: 'שורות' }))
+    expect(container.querySelectorAll('[data-line-box]')).toHaveLength(0)
+    expect(screen.queryByRole('button', { name: 'איחוד' })).toBeNull()
+
+    // ושוב — הסימונים חוזרים, והבחירה יורדת מהדפדפן
+    await userEvent.click(cleanBtn())
+    expect(window.localStorage.getItem(KEY)).toBeNull()
+    expect(container.querySelectorAll('[data-line-box]').length).toBeGreaterThan(0)
+    expect(screen.getByTestId('caret-marker')).toBeInTheDocument()
+  })
+
+  it('נזכר בדפדפן: עם המפתח — נפתח נקי; אחסון חסום — הכפתור עובד ולא נופל', async () => {
+    window.localStorage.setItem(KEY, '1')
+    const { unmount } = setup()
+    expect(cleanBtn()).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryAllByTestId('frame-badge')).toHaveLength(0)
+    unmount()
+    window.localStorage.removeItem(KEY)
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked')
+    })
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('blocked')
+    })
+    setup()
+    expect(cleanBtn()).toHaveAttribute('aria-pressed', 'false')
+    await userEvent.click(cleanBtn())
+    expect(cleanBtn()).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryAllByTestId('frame-badge')).toHaveLength(0)
   })
 })

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { PARA_STYLE_OPTIONS } from './ProofToolbar'
 import { CLAIM_RULE } from '@/lib/pageProof/gridState'
-import { BOOK_ONLY_TEXT_STEP, FAQ } from '@/lib/pageProof/helpTexts'
+import { BOOK_ONLY_TEXT_STEP, FAQ, GUIDE_PATH, GUIDE_TITLE } from '@/lib/pageProof/helpTexts'
 
 // "מה עושים בעמוד" — ההסבר הקצר של עורך הגהת-העמודים (במקום ProofRules):
 // שלושה צעדים, "איך עושים" מתקפל עם המקשים, ומה עושים בסיום.
@@ -17,6 +17,22 @@ import { BOOK_ONLY_TEXT_STEP, FAQ } from '@/lib/pageProof/helpTexts'
 // אין שם הגשה, מנהל או תפיסת-עמוד). כל שדה רשות, ובלעדיו — הנוסח של האתר:
 //   intro — משפט-הפתיחה · extra — ReactNode מיד אחריו · faq — [{key, q, a}] במקום FAQ
 //   · done — [ReactNode] במקום "סיימתי — מה עכשיו?" (מערך ריק — בלי הסעיף; כך גם faq)
+//   · guide — דף ההנחיות (GUIDE_PATH): {href?, open?(href)} — open פותח אותו בעצמו (עורך מוטמע: בדפדפן החיצוני);
+//     null/false — בלי הקישור. בלי השדה — הקישור של האתר, בלשונית חדשה (גם בסרגל — ProofEditor)
+
+// דף ההנחיות: {href, open} או null (ראו texts.guide למעלה)
+export function guideOf(texts) {
+  const g = texts?.guide
+  if (g === null || g === false) return null
+  return { href: (g && typeof g.href === 'string' && g.href) || GUIDE_PATH, open: g && typeof g.open === 'function' ? g.open : null }
+}
+
+// פתיחת דף ההנחיות: open של הדף העוטף, ואחרת לשונית חדשה
+export function openGuide(guide) {
+  if (!guide) return
+  if (guide.open) guide.open(guide.href)
+  else if (typeof window !== 'undefined') window.open(guide.href, '_blank', 'noopener,noreferrer')
+}
 
 export const HELP_SEEN_KEY = 'pageProof.helpSeen'
 
@@ -159,8 +175,8 @@ const SCAN = [
   <>
     <b>ריהוט הדף</b> — כותרת-רצה, מספר עמוד וקו מפריד: חלק מהדף אבל לא מהספר. שורה כזו שנקראה כטקסט של הספר — שייכו אותה לריהוט:
     במסגרת סביבה (בבחירת הזרם של המסגרת: &quot;ריהוט הדף&quot;), או בתפריט &quot;זרם&quot; שבסרגל (בסוף התפריט: &quot;ריהוט הדף · כותרת
-    עמוד / תחתית / מפריד&quot;). היא עוברת ללשונית &quot;ריהוט הדף&quot;. כותרת שפותחת פרק או סעיף בתוך הטקסט אינה ריהוט — היא
-    &quot;כותרת&quot; של הזרם שלה (ראו &quot;שאלות שחוזרות&quot;).
+    עמוד / תחתית / מפריד&quot;). היא עוברת ללשונית &quot;ריהוט הדף&quot;. כותרת שפותחת פרק או סעיף בתוך הטקסט אינה ריהוט ואינה מסגרת —
+    מסמנים אותה בסגנון-הפסקה &quot;כותרת&quot; (ראו &quot;שאלות שחוזרות&quot;).
   </>,
   <>
     <b>קו מפריד</b> (הקו שבין הטקסט להערות, גם כשהוא מעוטר) שנקרא כאילו היה טקסט — הוא חלק מהדף אבל לא מהספר: שייכו את השורה לזרם
@@ -190,6 +206,7 @@ export default function ProofHelp({ open = false, onClose, autoOpen = true, text
   const intro = texts?.intro ?? HELP_INTRO
   const faq = Array.isArray(texts?.faq) ? texts.faq : FAQ
   const done = Array.isArray(texts?.done) ? texts.done : DONE
+  const guide = guideOf(texts)
   const [auto, setAuto] = useState(false)
   const [howOpen, setHowOpen] = useState(false)
   const token = useRef(null)
@@ -259,6 +276,24 @@ export default function ProofHelp({ open = false, onClose, autoOpen = true, text
 
         <div className="flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 py-4 text-sm leading-relaxed text-on-surface/85">
           <p>{intro}</p>
+          {guide && (
+            <a
+              href={guide.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-guide-link=""
+              title={GUIDE_TITLE}
+              onClick={(e) => {
+                if (!guide.open) return
+                e.preventDefault()
+                openGuide(guide)
+              }}
+              className="flex items-center gap-2 rounded-lg border border-info-200 bg-info-50 px-3 py-2 font-bold text-info-800 hover:bg-info-100"
+            >
+              <span aria-hidden="true" className="material-symbols-outlined">menu_book</span>
+              הנחיות להגהה — דף אחד קצר, עם תמונות
+            </a>
+          )}
           {texts?.extra}
 
           <ol className="space-y-3">

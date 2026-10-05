@@ -51,36 +51,41 @@ describe('FramePopover', () => {
     expect(screen.getByTestId('frame-seq')).toHaveTextContent('1')
   })
 
-  it('כותרת לכל זרם-תוכן ו"ריהוט הדף" — כאפשרויות בבחירת הזרם', async () => {
+  // בעל הפרויקט (2026-10-05): כותרת היא סגנון-פסקה בטקסט, לא מסגרת — זרמי-הכותרת אינם בבחירה
+  it('בבחירת הזרם: זרמי-התוכן ו"ריהוט הדף" — בלי "כותרת" / "כותרת הערות"', async () => {
     const { on } = setup()
     const g = streams()
-    expect(within(g).getByRole('button', { name: 'כותרת' })).toBeInTheDocument()
-    await userEvent.click(within(g).getByRole('button', { name: 'כותרת הערות' }))
-    expect(on.onStream).toHaveBeenLastCalledWith('notes_heading')
+    expect(within(g).queryByRole('button', { name: 'כותרת' })).toBeNull()
+    expect(within(g).queryByRole('button', { name: 'כותרת הערות' })).toBeNull()
     await userEvent.click(within(g).getByRole('button', { name: 'ריהוט הדף' }))
     expect(on.onStream).toHaveBeenLastCalledWith(FURNITURE_CHOICE)
     // אין עוד מתג "כותרת" נפרד — הכותרות הן חלק מבחירת הזרם
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
   })
 
-  it('בחירת זרם אחר — onStream; הזרם הפעיל אינו שולח שוב; "עוד…" — נדירים, הכותרות שלהם וסוג-הריהוט', async () => {
+  it('בחירת זרם אחר — onStream; הזרם הפעיל אינו שולח שוב; "עוד…" — נדירים וסוג-הריהוט (בלי כותרות)', async () => {
     const { on } = setup()
     await userEvent.click(screen.getByRole('button', { name: 'הערות' }))
     expect(on.onStream).toHaveBeenCalledWith('notes')
     await userEvent.click(screen.getByRole('button', { name: 'ראשי' }))
     expect(on.onStream).toHaveBeenCalledTimes(1)
     const more = screen.getByRole('combobox', { name: 'זרם אחר' })
-    expect(within(more).getAllByRole('option').map((o) => o.value)).toEqual(['', 'notes2', 'notes2_heading', 'header', 'footer', 'sep'])
-    await userEvent.selectOptions(more, 'notes2_heading')
-    expect(on.onStream).toHaveBeenLastCalledWith('notes2_heading')
+    expect(within(more).getAllByRole('option').map((o) => o.value)).toEqual(['', 'notes2', 'header', 'footer', 'sep'])
+    await userEvent.selectOptions(more, 'notes2')
+    expect(on.onStream).toHaveBeenLastCalledWith('notes2')
     await userEvent.selectOptions(more, 'footer')
     expect(on.onStream).toHaveBeenLastCalledWith('footer')
   })
 
-  it('מסגרת-כותרת: הכותרת פעילה, והזרם הבסיסי לא', () => {
-    setup({ frame: frame({ stream: 'notes_heading' }) })
-    expect(within(streams()).getByRole('button', { name: 'כותרת הערות', pressed: true })).toBeInTheDocument()
-    expect(within(streams()).getByRole('button', { name: 'הערות', pressed: false })).toBeInTheDocument()
+  it('מסגרת-כותרת מגרסה קודמת: מוצגת בשבב שלה (פעיל), ואפשר להעביר אותה לזרם-תוכן', async () => {
+    const { on } = setup({ frame: frame({ stream: 'notes_heading' }) })
+    const legacy = within(streams()).getByRole('button', { name: 'כותרת הערות', pressed: true })
+    expect(legacy).toHaveAttribute('title', expect.stringContaining('סגנון-הפסקה'))
+    expect(within(streams()).queryByRole('button', { name: 'כותרת' })).toBeNull()
+    await userEvent.click(legacy)
+    expect(on.onStream).not.toHaveBeenCalled()
+    await userEvent.click(within(streams()).getByRole('button', { name: 'הערות', pressed: false }))
+    expect(on.onStream).toHaveBeenCalledWith('notes')
   })
 
   it('מסגרת-ריהוט: "ריהוט הדף" פעיל והסוג המדויק ב"עוד…"; לחיצה שנייה על "ריהוט הדף" לא משנה', async () => {
@@ -135,8 +140,8 @@ describe('StreamPicker', () => {
     const g = screen.getByRole('group', { name: 'בחירה' })
     expect(within(g).getByRole('button', { name: 'ריהוט הדף', pressed: true })).toBeInTheDocument()
     expect(within(g).queryByRole('combobox')).not.toBeInTheDocument()
-    await userEvent.click(within(g).getByRole('button', { name: 'כותרת' }))
-    expect(onPick).toHaveBeenCalledWith('main_heading')
+    await userEvent.click(within(g).getByRole('button', { name: 'ראשי' }))
+    expect(onPick).toHaveBeenCalledWith('main')
   })
 })
 
@@ -163,8 +168,8 @@ describe('StreamPicker — "כותרת-רצה של ההערות"', () => {
     const { rerender } = render(<StreamPicker chips={chips} value="main" onPick={onPick} />)
     const btn = within(streams()).getByRole('button', { name: 'כותרת-רצה של ההערות' })
     expect(btn).toHaveAttribute('title', expect.stringContaining('לא נכנסת לספר'))
-    // וההסבר על "כותרת הערות" אומר שהיא כן נכנסת, ומפנה לכותרת-הרצה
-    expect(within(streams()).getByRole('button', { name: 'כותרת הערות' })).toHaveAttribute('title', expect.stringContaining('כותרת-רצה של ההערות'))
+    // וההסבר אומר שכותרת של פרק בתוך ההערות היא סגנון-פסקה, לא מסגרת
+    expect(btn).toHaveAttribute('title', expect.stringContaining('סגנון-הפסקה «כותרת»'))
     await userEvent.click(btn)
     expect(onPick).toHaveBeenLastCalledWith(NOTES_RUNHEAD_CHOICE)
 

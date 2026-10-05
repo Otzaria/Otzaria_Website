@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vites
 
 // "שלח לזיהוי-מחדש" — הבקשה של המתנדב והלולאה כולה, מול מסד אמיתי:
 //   בקשה (רק פעולות-החיתוך, "מאושרת" לזיהוי-מחדש; העמוד ל-'recut') ← תוכנת-הספר מושכת אותה
-//   במפתח-הגישה (fixes?pages=recut&mark=1) ← ייבוא הגרסה החדשה ← העמוד חוזר למבקש (48 שעות).
+//   במפתח-הגישה (fixes?pages=recut&mark=1) ← ייבוא הגרסה החדשה ← העמוד חוזר למבקש (48 שעות, בלי שבת וחג).
 //   וגם: אחת לעמוד, עד 5 ממתינות למתנדב, האטה, רק עמוד שבטיפולו; "העמודים שלי" ורשת המנהל
 //   מראים את ההמתנה; ביטול בידי המנהל ("שחרור מהמתנה") מחזיר את העמוד למבקש ואינו חוזר.
 
@@ -24,6 +24,8 @@ import { generateToken, hashToken } from '@/lib/pageProof/tokenSecret'
 import { tokenPrefixOf } from '@/lib/pageProof/tokenRules'
 import { importPackages } from '@/lib/pageProof/importPackages'
 import { MAX_PENDING_RECUT, RECUT_CANCEL_NOTE, RECUT_MSG, RECUT_RATE, RECUT_REVIEWER } from '@/lib/pageProof/recutRules'
+// 48 שעות — בלי שבת וחג (lease.leaseEnd)
+import { leaseEnd } from '@/lib/pageProof/lease'
 import { POST } from './route'
 import { POST as submitPOST } from '../submit/route'
 import { GET as mineGET } from '@/app/api/page-proof/mine/route'
@@ -233,7 +235,7 @@ describe('הלולאה עם תוכנת-הספר', () => {
     const page = await pageOf(1)
     expect(page).toMatchObject({ status: 'open', revision: 2, activeCount: 0, submitters: [] })
     expect(String(page.leasedBy)).toBe(String(vol._id))
-    expect(close(page.leasedUntil, now + 48 * HOUR, 60 * 1000)).toBe(true)
+    expect(close(page.leasedUntil, leaseEnd(now), 60 * 1000)).toBe(true)
     expect((await PageProofSubmission.findById(submissionId).lean()).recutDoneAt).not.toBeNull()
     const m = await mine()
     expect(m.recutPending).toEqual([])
@@ -267,7 +269,7 @@ describe('המנהל', () => {
     const page = await pageOf(3)
     expect(page).toMatchObject({ status: 'open', revision: 1 })
     expect(String(page.leasedBy)).toBe(String(vol._id))
-    expect(close(page.leasedUntil, Date.now() + 48 * HOUR, 60 * 1000)).toBe(true)
+    expect(close(page.leasedUntil, leaseEnd(Date.now()), 60 * 1000)).toBe(true)
     expect(await PageProofSubmission.findById(submissionId).lean()).toMatchObject({ status: 'rejected', reviewNote: RECUT_CANCEL_NOTE, reviewedByName: 'מנהל' })
 
     as(vol)
@@ -362,7 +364,7 @@ describe('מתג המנהל לשליחת מתנדבים לזיהוי-מחדש', 
     const page = await pageOf(1)
     expect(page).toMatchObject({ status: 'open' })
     expect(String(page.leasedBy)).toBe(String(vol._id))
-    expect(close(page.leasedUntil, Date.now() + 48 * HOUR, 60 * 1000)).toBe(true)
+    expect(close(page.leasedUntil, leaseEnd(Date.now()), 60 * 1000)).toBe(true)
     expect(await PageProofSubmission.findById(s1).lean()).toMatchObject({ status: 'rejected', reviewNote: RECUT_CANCEL_NOTE })
     expect(await pageOf(2)).toMatchObject({ status: 'recut' })
     expect((await PageProofSubmission.findById(s2).lean()).status).toBe('approved')

@@ -317,3 +317,28 @@ describe('ProofToolbar — סרגל-הכלים', () => {
     expect(screen.getByRole('button', { name: 'הגשה' })).toBeInTheDocument()
   })
 })
+
+// "הנחיות" (2026-10-05) — כפתור בסרגל רק כשיש לאן (onGuide); ומצב "פגם בדפוס" מוסבר כמצב
+describe('ProofToolbar — "הנחיות" ו"פגם בדפוס"', () => {
+  it('"הנחיות" — בלי onGuide אין כפתור', () => {
+    setup()
+    expect(screen.queryByRole('button', { name: 'הנחיות' })).toBeNull()
+  })
+
+  it('"הנחיות" עם onGuide — הלחיצה קוראת לו', async () => {
+    const onGuide = vi.fn()
+    setup({ onGuide })
+    const b = screen.getByRole('button', { name: 'הנחיות' })
+    expect(b).toHaveAttribute('title', expect.stringContaining('הנחיות להגהת עמודים'))
+    await userEvent.click(b)
+    expect(onGuide).toHaveBeenCalled()
+  })
+
+  it('"פגם בדפוס": השם בסרגל, וההסבר אומר שזה מצב', () => {
+    setup({ onBookOnly: vi.fn() })
+    const b = screen.getByRole('button', { name: 'פגם בדפוס' })
+    expect(b).toHaveAttribute('aria-pressed', 'false')
+    expect(b).toHaveAttribute('title', expect.stringContaining('כשהמצב דולק, כל תיקון-טקסט נכנס לספר, אבל השורה לא משמשת לאימון המחשב'))
+    expect(screen.queryByRole('button', { name: 'לספר בלבד' })).toBeNull()
+  })
+})

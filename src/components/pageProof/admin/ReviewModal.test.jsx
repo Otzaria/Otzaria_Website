@@ -62,7 +62,7 @@ describe('ReviewModal מול העורך החדש', { timeout: 20000 }, () => {
     expect(patches).toEqual([{ action: 'approve', note: '' }])
   })
 
-  it('"לספר בלבד" בהגשה — המנהל רואה כמה שורות (האחרונה לכל שורה קובעת)', async () => {
+  it('"פגם בדפוס" בהגשה — המנהל רואה כמה שורות (האחרונה לכל שורה קובעת)', async () => {
     const ops = [
       { kind: 'train_text', page: P, ids: [1], value: 0 },
       { kind: 'train_text', page: P, ids: [2], value: 0 },
@@ -71,10 +71,10 @@ describe('ReviewModal מול העורך החדש', { timeout: 20000 }, () => {
     mockFetch(payload({ submission: { ops } }))
     render(<ReviewModal id="s1" onClose={vi.fn()} onDone={vi.fn()} />)
     await screen.findByTestId('editor')
-    expect(screen.getByTestId('review-book-only')).toHaveTextContent('שורה אחת "לספר בלבד" — לא לאימון')
+    expect(screen.getByTestId('review-book-only')).toHaveTextContent('שורה אחת עם פגם בדפוס — לא לאימון')
   })
 
-  it('הגשה עם הכפתור הישן "פגם בדפוס" (ודאות עם הסיבה הקבועה) — נספרת כ"לספר בלבד"', async () => {
+  it('הגשה עם הסימון הישן של "פגם בדפוס" (ודאות עם הסיבה הקבועה) — נספרת יחד עם train_text', async () => {
     const ops = [
       { kind: 'certainty', page: P, ids: [1], value: { v: 'ambiguous', why: 'פגם בדפוס — תוקן שלא לפי המקור' } },
       { kind: 'train_text', page: P, ids: [2], value: 0 },
@@ -83,7 +83,7 @@ describe('ReviewModal מול העורך החדש', { timeout: 20000 }, () => {
     mockFetch(payload({ submission: { ops } }))
     render(<ReviewModal id="s1" onClose={vi.fn()} onDone={vi.fn()} />)
     await screen.findByTestId('editor')
-    expect(screen.getByTestId('review-book-only')).toHaveTextContent('2 שורות "לספר בלבד" — לא לאימון')
+    expect(screen.getByTestId('review-book-only')).toHaveTextContent('2 שורות עם פגם בדפוס — לא לאימון')
   })
 
   it('עריכה לפני אישור — נשלחות הפעולות בצורת-החוזה בלבד (בלי _g/_c)', async () => {
@@ -100,7 +100,7 @@ describe('ReviewModal מול העורך החדש', { timeout: 20000 }, () => {
   })
 
   // סקירה: כמו בהגשה של המתנדב — סימון "לספר בלבד" אוטומטי על שורה שהטקסט שלה חזר בסוף לזה שיובא יורד
-  it('עריכה לפני אישור — סימון "לספר בלבד" אוטומטי בלי שינוי-טקסט יורד; עם שינוי — נשאר', async () => {
+  it('עריכה לפני אישור — סימון "פגם בדפוס" אוטומטי בלי שינוי-טקסט יורד; עם שינוי — נשאר', async () => {
     const lines = [
       { id: 2, line_no: 1, bbox: [10, 30, 90, 40], text: 'ישן', text_ocr: 'ישן', stream: 'main' },
       { id: 3, line_no: 2, bbox: [10, 50, 90, 60], text: 'עוד', text_ocr: 'עוד', stream: 'main' },

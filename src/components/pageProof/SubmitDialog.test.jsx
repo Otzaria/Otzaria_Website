@@ -37,12 +37,12 @@ describe('SubmitDialog — חלון ההגשה', () => {
     expect(onSubmit).toHaveBeenCalledWith(SUBMIT_CHOICE.SUBMIT, { readAll: false })
   })
 
-  it('"לספר בלבד": כמה שורות מסומנות — שורה מסבירה; בלי — כלום', () => {
+  it('"פגם בדפוס": כמה שורות מסומנות — שורה מסבירה; בלי — כלום', () => {
     renderDialog({ summary: summary({ bookOnlyCount: 3 }) })
-    expect(screen.getByTestId('submit-book-only')).toHaveTextContent('3 שורות מסומנות "לספר בלבד": התיקון ייכנס לספר, והשורות לא ישמשו לאימון.')
+    expect(screen.getByTestId('submit-book-only')).toHaveTextContent('3 שורות עם פגם בדפוס: התיקון ייכנס לספר, והשורות לא ישמשו לאימון.')
   })
 
-  it('בלי "לספר בלבד" — בלי השורה', () => {
+  it('בלי "פגם בדפוס" — בלי השורה', () => {
     renderDialog()
     expect(screen.queryByTestId('submit-book-only')).toBeNull()
   })

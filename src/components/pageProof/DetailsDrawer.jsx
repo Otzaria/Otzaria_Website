@@ -64,7 +64,7 @@ export default function DetailsDrawer({
         </button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-3" role="tabpanel">
-        {tab === 'links' && <LinksTab view={view} readOnly={readOnly} linkPending={linkPending} act={act} />}
+        {tab === 'links' && <LinksTab view={view} baseDoc={baseDoc} ops={ops} readOnly={readOnly} linkPending={linkPending} act={act} />}
         {tab === 'line' && <LineTab key={caretLine?.id ?? 'none'} view={view} line={caretLine} locked={caretLocked} readOnly={readOnly} act={act} lockTitle={lockTitle} />}
         {tab === 'page' && <PageTab view={view} stats={stats} readOnly={readOnly} act={act} />}
         {tab === 'changes' && <ChangesTab baseDoc={baseDoc} ops={ops} readOnly={readOnly} act={act} />}

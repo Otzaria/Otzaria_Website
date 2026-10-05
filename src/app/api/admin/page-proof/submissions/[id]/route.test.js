@@ -101,7 +101,7 @@ describe('אישור', () => {
 
   // סקירה: גם לקוח ששולח את הפעולות עם השדות הפנימיים — סימון "לספר בלבד" אוטומטי (_cmp) על שורה שהטקסט שלה
   // חזר בסוף לזה שיובא יורד, כמו בהגשה; סימון ידני נשאר
-  it('המנהל ערך — סימון "לספר בלבד" אוטומטי בלי שינוי-טקסט יורד, ידני נשאר', async () => {
+  it('המנהל ערך — סימון "פגם בדפוס" אוטומטי בלי שינוי-טקסט יורד, ידני נשאר', async () => {
     Sub.findById.mockReturnValue(lean(sub()))
     Page.findById.mockReturnValue(lean(page({ status: 'open', doc })))
     Sub.findOneAndUpdate.mockImplementation(async (_f, u) => ({ opCount: u.$set.ops.length }))

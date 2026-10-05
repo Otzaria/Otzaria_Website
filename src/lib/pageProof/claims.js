@@ -7,6 +7,7 @@ import PageProofSubmission from '../../models/PageProofSubmission.js';
 import User from '../../models/User.js';
 import { storedRevision, submissionRevision } from './importRules.js';
 import { pageStateFor, bookCounts, claimRefusal, volunteerOpenFilter, CLAIM_HOURS, MAX_HELD } from './gridState.js';
+import { leaseEnd } from './lease.js';
 
 // בחירת עמודים בידי המתנדב (כמו "תפוס לעריכה" בספרים הישנים): רשימת הספרים
 // עם מונים, רשת-העמודים של ספר, תפיסה/שחרור של עמוד או של רצף שלם, "העמודים
@@ -19,6 +20,8 @@ import { pageStateFor, bookCounts, claimRefusal, volunteerOpenFilter, CLAIM_HOUR
 // אטומית (findOneAndUpdate/updateMany עם התנאי) — שני מתנדבים לא יקבלו אותו עמוד.
 // כל עמוד שמור CLAIM_HOURS שעות (לכל עמוד לחוד), ומתחדש ל-CLAIM_HOURS שעות מלאות
 // בכל פתיחה בעורך (renewLease); מחזיקים לכל היותר MAX_HELD עמודים (gridState.js).
+// שעות שבתוך שבת או חג אינן נספרות — מועד-הסיום מחושב תמיד ב-lease.leaseEnd (הכלל המדויק שם).
+// CLAIM_MS — משך התפיסה בלי שבת וחג באמצע (ימי-חול רצופים).
 
 export const CLAIM_MS = CLAIM_HOURS * 60 * 60 * 1000;
 export { MAX_HELD };
@@ -249,7 +252,7 @@ async function currentState(pid, uid, now) {
 
 // ---------- תפיסה ושחרור ----------
 
-// תפיסת עמוד אחד ל-CLAIM_MS. עמוד שכבר של המשתמש — ההחכרה מתארכת.
+// תפיסת עמוד אחד ל-CLAIM_HOURS שעות (בלי שבת וחג — leaseEnd). עמוד שכבר של המשתמש — ההחכרה מתארכת.
 // ← {ok:true, page:{id, page, leasedUntil}} או {ok:false, status, error}
 export async function claimPage(pageId, userId, now = new Date()) {
   const uid = oid(userId);
@@ -265,7 +268,7 @@ export async function claimPage(pageId, userId, now = new Date()) {
 
   const doc = await PageProofPage.findOneAndUpdate(
     { _id: pid, ...eligibleFilter(uid, now) },
-    { $set: { leasedBy: uid, leasedUntil: new Date(now.getTime() + CLAIM_MS) } },
+    { $set: { leasedBy: uid, leasedUntil: leaseEnd(now) } },
     { returnDocument: 'after' }
   )
     .select({ page: 1, leasedUntil: 1 })
@@ -320,7 +323,7 @@ export async function claimSequence(gid, seq, userId, now = new Date()) {
   const ids = [...cand.filter(isMine), ...take].map((p) => p._id);
   if (!ids.length) return fail(409, 'אין ברצף הזה עמודים פנויים לתפיסה');
 
-  const until = new Date(now.getTime() + CLAIM_MS);
+  const until = leaseEnd(now);
   const res = await PageProofPage.updateMany(
     { _id: { $in: ids }, ...eligibleFilter(uid, now) },
     { $set: { leasedBy: uid, leasedUntil: until } }
@@ -343,16 +346,17 @@ export async function claimSequence(gid, seq, userId, now = new Date()) {
 // תמונת-מצב של רצף מנקודת המבט של המשתמש (לפס-הרצף בדף המתנדב). הגשה נספרת
 // רק לגרסה שעליה נעשתה — עמוד שחזר מזיהוי-מחדש (גרסה חדשה) פתוח שוב גם למי
 // שהגיש את הקודמת. לעמוד שבטיפולו — עד מתי הוא שמור לו (leasedUntil). עמוד שממתין
-// לזיהוי-מחדש (גם כזה שהמשתמש שלח בעצמו) — 'recut' (בקשה לזיהוי-מחדש אינה הגשה).
+// לזיהוי-מחדש (גם כזה שהמשתמש שלח בעצמו) — 'recut' (בקשה לזיהוי-מחדש אינה הגשה). לעמוד שהגיש —
+// מתי הגיש (submittedAt: "הוגש — ממתין לבדיקת מנהל (מאז …)").
 export async function describeSequence(bookId, seq, uid, now = new Date()) {
   const [book, pages, mine] = await Promise.all([
     PageProofBook.findById(bookId, { gid: 1, title: 1, script: 1 }).lean(),
     PageProofPage.find({ book: bookId, seq }, { page: 1, leasedBy: 1, leasedUntil: 1, submitters: 1, status: 1, lineCount: 1, revision: 1 })
       .sort({ page: 1 })
       .lean(),
-    PageProofSubmission.find({ book: bookId, user: uid, status: { $ne: 'rejected' }, recutRequest: { $ne: true } }, { page: 1, status: 1, revision: 1 }).lean(),
+    PageProofSubmission.find({ book: bookId, user: uid, status: { $ne: 'rejected' }, recutRequest: { $ne: true } }, { page: 1, status: 1, revision: 1, createdAt: 1 }).lean(),
   ]);
-  const mineByPage = new Map(mine.map((s) => [`${s.page}:${submissionRevision(s)}`, s.status]));
+  const mineByPage = new Map(mine.map((s) => [`${s.page}:${submissionRevision(s)}`, s]));
   return {
     book: book ? { id: String(book._id), gid: book.gid, title: book.title, script: book.script } : null,
     seq,
@@ -360,7 +364,7 @@ export async function describeSequence(bookId, seq, uid, now = new Date()) {
       const revision = storedRevision(p);
       const sub = mineByPage.get(`${p._id}:${revision}`);
       const leasedToMe = p.leasedBy && String(p.leasedBy) === String(uid) && p.leasedUntil > now;
-      const state = sub ? (sub === 'approved' ? 'approved' : 'submitted') : p.status === 'recut' ? 'recut' : leasedToMe ? 'mine' : 'unavailable';
+      const state = sub ? (sub.status === 'approved' ? 'approved' : 'submitted') : p.status === 'recut' ? 'recut' : leasedToMe ? 'mine' : 'unavailable';
       return {
         id: String(p._id),
         page: p.page,
@@ -368,6 +372,7 @@ export async function describeSequence(bookId, seq, uid, now = new Date()) {
         revision,
         state,
         leasedUntil: state === 'mine' ? p.leasedUntil : null,
+        submittedAt: sub ? sub.createdAt || null : null,
       };
     }),
   };
@@ -420,13 +425,13 @@ export async function pageBrief(pageId, userId, now = new Date()) {
 }
 
 // פתיחת עמוד בעורך (GET /api/page-proof/pages/[id]) מחדשת את התפיסה שלו ל-
-// CLAIM_HOURS שעות מלאות מעכשיו — רק לעמוד שהמשתמש מחזיק (התפיסה בתוקף)
+// CLAIM_HOURS שעות מלאות מעכשיו (בלי שבת וחג — leaseEnd) — רק לעמוד שהמשתמש מחזיק (התפיסה בתוקף)
 // ועוד לא הגיש, גם אם המנהל סגר אותו בינתיים. עמוד פנוי, עמוד שהתפיסה עליו
 // פגה ועמוד של אחר — לא נתפסים כאן (null): תפיסה היא רק בלחיצה מפורשת.
 // ההחכרה רק מתארכת ($max) — לעולם לא מתקצרת.
 export async function renewLease(pageId, userId, now = new Date()) {
   const uid = oid(userId);
-  const until = new Date(now.getTime() + CLAIM_MS);
+  const until = leaseEnd(now);
   return PageProofPage.findOneAndUpdate(
     { _id: oid(pageId), status: 'open', submitters: { $ne: uid }, leasedBy: uid, leasedUntil: { $gt: now } },
     [{ $set: { leasedUntil: { $max: [{ $ifNull: ['$leasedUntil', until] }, until] } } }],

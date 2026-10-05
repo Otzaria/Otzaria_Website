@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import ProofPageCard from './ProofPageCard'
-import { formatUntil } from '@/lib/pageProof/dates'
+import { formatSince, formatUntil } from '@/lib/pageProof/dates'
 
 // כרטיס עמוד ברשת-העמודים: תווית-המצב והכפתור הנכון לכל מצב, ותפיסה/שחרור
 // שעוברים קודם בחלון-שאלה (useDialog מדומה — הכרטיס לא קורא ל-onClaim לפני
@@ -75,10 +75,17 @@ describe('ProofPageCard — תווית וכפתור לפי מצב', () => {
     expect(screen.queryByRole('button', { name: /תפוס/ })).not.toBeInTheDocument()
   })
 
-  it('הוגש: "צפייה" לעורך, ומתי הוגש (תאריך עברי ולפני כמה ימים)', () => {
-    renderCard({ state: 'submitted', submittedAt: new Date(NOW.getTime() - 50 * HOUR).toISOString() })
+  it('הוגש: "צפייה" לעורך, ו"הוגש — ממתין לבדיקת מנהל (מאז …)" (התאריך העברי ולפני כמה ימים — בריחוף)', () => {
+    const at = new Date(NOW.getTime() - 50 * HOUR).toISOString()
+    renderCard({ state: 'submitted', submittedAt: at })
     expect(screen.getByText('הוגש')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'צפייה' })).toHaveAttribute('href', EDITOR)
+    const waiting = screen.getByText(`הוגש — ממתין לבדיקת מנהל (מאז ${formatSince(at, NOW)})`)
+    expect(waiting).toHaveAttribute('title', expect.stringMatching(/^הוגש .+, לפני 2 ימים$/))
+  })
+
+  it('אושר: מתי הוגש (תאריך עברי ולפני כמה ימים)', () => {
+    renderCard({ state: 'approved', submittedAt: new Date(NOW.getTime() - 50 * HOUR).toISOString() })
     expect(screen.getByText(/^הוגש .+, לפני 2 ימים$/)).toBeInTheDocument()
   })
 

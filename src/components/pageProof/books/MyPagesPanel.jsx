@@ -2,7 +2,8 @@
 
 import Link from 'next/link'
 import { CLAIM_HOURS, CLAIM_RULE, bookHref } from '@/lib/pageProof/gridState'
-import { formatTimeAgo, formatUntil } from '@/lib/pageProof/dates'
+import { formatSince, formatTimeAgo, formatUntil } from '@/lib/pageProof/dates'
+import { SUBMITTED_HINT, submittedWaiting } from '@/lib/pageProof/helpTexts'
 
 // "העמודים שלי" — מה שדף המתנדב (/library/page-proof) מציג בכניסה: הרצפים שבהם
 // אתם מחזיקים עמודים, ולכל עמוד עד מתי הוא שמור לכם; לחיצה על עמוד פותחת אותו
@@ -11,6 +12,8 @@ import { formatTimeAgo, formatUntil } from '@/lib/pageProof/dates'
 // held    — הרצפים מ-GET /api/page-proof/mine ({book, seq, pages:[{id, page, state, leasedUntil}]})
 // recutPending — העמודים ששלחתם לזיהוי-מחדש ועוד לא חזרו ({id, gid, title, page, requestedAt,
 //           picked}); הם חוזרים אליכם לבד, עם השורות החדשות
+// submitted — ההגשות שלכם שממתינות לבדיקת מנהל ({id, submissionId, gid, title, page, submittedAt}) —
+//           "הוגש — ממתין לבדיקת מנהל (מאז …)", גם כשכל הרצף כבר הוגש; onOpenSubmitted(pageId) — לצפייה
 // missing — העמוד שביקשו בכתובת (?page=) ואינו בטיפולכם: {id, gid?, page?, state?}
 // onOpen(sequence, pageId) · now — מתי נטען (לחישוב "עד מתי")
 
@@ -18,7 +21,7 @@ const GRID_PATH = '/library/page-proof/books'
 
 // למה העמוד שביקשו אינו נפתח, לפי מצבו בעיני המתנדב (gridState.pageStateFor)
 const MISSING_WHY = {
-  open: `הוא פנוי: אם תפסתם אותו, עברו ${CLAIM_HOURS} שעות מאז שנפתח והוא חזר למאגר. אפשר לתפוס אותו שוב ברשת-העמודים של הספר — טיוטה שלא הגשתם שמורה בדפדפן.`,
+  open: `הוא פנוי: אם תפסתם אותו, עברו ${CLAIM_HOURS} שעות (בלי שבת וחג) מאז שנפתח והוא חזר למאגר. אפשר לתפוס אותו שוב ברשת-העמודים של הספר — טיוטה שלא הגשתם שמורה בדפדפן.`,
   second: 'הוא ממתין לבודק נוסף — אפשר לתפוס אותו ברשת-העמודים של הספר.',
   taken: 'מתנדב אחר עובד עליו כרגע.',
   done: 'הוא כבר הושלם.',
@@ -53,7 +56,7 @@ const PAGE_CLS = {
 }
 
 function pageNote(p, now) {
-  if (p.state === 'submitted') return 'הוגש — ממתין לאישור'
+  if (p.state === 'submitted') return submittedWaiting(formatSince(p.submittedAt, now?.getTime() > 0 ? now : new Date()))
   if (p.state === 'approved') return 'אושר'
   const until = formatUntil(p.leasedUntil, now)
   return until ? `שמור לך עד ${until}` : 'בטיפולך'
@@ -68,7 +71,7 @@ function RecutPending({ items, now }) {
         ממתינים לזיהוי-מחדש ({items.length})
       </h3>
       <p className="mt-1 text-xs text-on-surface/70">
-        העמודים יחזרו אליכם עם השורות החדשות אחרי שתוכנת-הספר תעבד אותם, ויישמרו לכם שוב 48 שעות. שאר התיקונים שלכם מחכים לכם בהם.
+        העמודים יחזרו אליכם עם השורות החדשות אחרי שתוכנת-הספר תעבד אותם, ויישמרו לכם שוב {CLAIM_HOURS} שעות (שבת וחג אינם נספרים). שאר התיקונים שלכם מחכים לכם בהם.
       </p>
       <ul className="mt-2 flex flex-wrap gap-2">
         {items.map((r) => (
@@ -85,7 +88,46 @@ function RecutPending({ items, now }) {
   )
 }
 
-export default function MyPagesPanel({ held = [], recutPending = [], missing = null, onOpen, now = null }) {
+// ההגשות שממתינות לבדיקת מנהל — כל אחת עם מועד ההגשה. לחיצה פותחת אותה לצפייה (ההגשה שלכם, כמו שהוגשה)
+function SubmittedPending({ items, now, onOpen }) {
+  return (
+    <section aria-labelledby="submitted-pending-title" className="rounded-xl border border-warning-alt-200 bg-warning-alt-50/60 p-3">
+      <h3 id="submitted-pending-title" className="flex items-center gap-2 text-sm font-bold text-warning-alt-800">
+        <span aria-hidden="true" className="material-symbols-outlined text-base">hourglass_top</span>
+        ממתינים לבדיקת מנהל ({items.length})
+      </h3>
+      <p className="mt-1 text-xs text-on-surface/70">{SUBMITTED_HINT}</p>
+      <ul className="mt-2 flex flex-wrap gap-2">
+        {items.map((s) => {
+          const body = (
+            <>
+              <span className="font-bold">{s.title ? `${s.title} · ` : ''}עמוד {s.page}</span>
+              <span className="block text-xs text-on-surface/70">{submittedWaiting(formatSince(s.submittedAt, now))}</span>
+            </>
+          )
+          return (
+            <li key={s.submissionId || s.id}>
+              {onOpen ? (
+                <button
+                  type="button"
+                  onClick={() => onOpen(s.id)}
+                  className="rounded-lg border border-warning-alt-200 bg-surface px-3 py-1.5 text-right text-sm transition-colors hover:bg-warning-alt-100"
+                  title="פתיחה לצפייה — ההגשה שלכם, כמו שהוגשה"
+                >
+                  {body}
+                </button>
+              ) : (
+                <div className="rounded-lg border border-warning-alt-200 bg-surface px-3 py-1.5 text-sm">{body}</div>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}
+
+export default function MyPagesPanel({ held = [], recutPending = [], submitted = [], missing = null, onOpen, onOpenSubmitted = null, now = null }) {
   const at = now || new Date(0)
   return (
     <section aria-labelledby="my-pages-title" className="glass-strong flex flex-col gap-4 rounded-xl p-5">
@@ -104,6 +146,8 @@ export default function MyPagesPanel({ held = [], recutPending = [], missing = n
       <p className="text-sm text-on-surface/60">{CLAIM_RULE}</p>
 
       {recutPending.length > 0 && <RecutPending items={recutPending} now={now || new Date()} />}
+
+      {submitted.length > 0 && <SubmittedPending items={submitted} now={now || new Date()} onOpen={onOpenSubmitted} />}
 
       {held.length === 0 ? (
         <div className="rounded-xl border-2 border-dashed border-surface-variant bg-surface/30 px-4 py-10 text-center">

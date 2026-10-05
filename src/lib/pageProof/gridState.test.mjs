@@ -279,11 +279,11 @@ test('פתוח למתנדבים: עמוד בלי השדה פתוח; המסנן �
   assert.notEqual(a.volunteer, volunteerOpenFilter().volunteer);
 });
 
-test('כלל ה-48 שעות כפי שהמתנדב קורא אותו: לכל עמוד לחוד, ומתחדש בכל פתיחה בעורך', () => {
+test('כלל ה-48 שעות כפי שהמתנדב קורא אותו: לכל עמוד לחוד, בלי שבת וחג, ומתחדש בכל פתיחה בעורך', () => {
   assert.equal(CLAIM_HOURS, 48);
-  assert.ok(CLAIM_RULE.includes('48 שעות (לכל עמוד לחוד)'));
+  assert.ok(CLAIM_RULE.includes('48 שעות (לכל עמוד לחוד; שבת וחג אינם נספרים)'));
   assert.match(CLAIM_RULE, /כל פתיחה שלו בעורך מחדשת את הזמן ל-48 שעות מלאות/);
   assert.match(CLAIM_RULE, /חוזר למאגר/);
   assert.match(CLAIM_RULE, /טיוטה שלא הגשתם נשארת בדפדפן/);
-  assert.equal(CLAIM_SHORT, 'כל עמוד שתפסתם שמור לכם 48 שעות, וכל פתיחה שלו בעורך מחדשת את הזמן.');
+  assert.equal(CLAIM_SHORT, 'כל עמוד שתפסתם שמור לכם 48 שעות (שבת וחג אינם נספרים), וכל פתיחה שלו בעורך מחדשת את הזמן.');
 });

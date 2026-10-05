@@ -5,6 +5,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { leaseEnd } from './lease.js';
 import {
   MAX_PENDING_RECUT,
   RECUT_MSG,
@@ -89,9 +90,14 @@ test('recutEligibleFilter: אותם תנאים, כמסנן לעדכון האטו
   assert.deepEqual(recutEligibleFilter('u1', 3, NOW).revision, 3);
 });
 
-test('claimBack: 48 שעות מלאות למבקש; בלי מבקש — כלום', () => {
+test('claimBack: 48 שעות מלאות למבקש — בלי שבת וחג (lease.leaseEnd); בלי מבקש — כלום', () => {
   assert.equal(CLAIM_BACK_MS, 48 * HOUR);
-  assert.deepEqual(claimBack('u1', NOW), { leasedBy: 'u1', leasedUntil: later(48) });
+  // יום רביעי רגיל: 48 שעות בדיוק
+  const wed = new Date('2026-10-07T07:00:00Z');
+  assert.deepEqual(claimBack('u1', wed), { leasedBy: 'u1', leasedUntil: new Date(wed.getTime() + 48 * HOUR) });
+  // NOW = רביעי 30.9.2026 15:00 בירושלים: 45 שעות עד שישי 12:00, ואחרי מוצאי שמיני-עצרת/שבת (22:00) — עוד 3
+  assert.deepEqual(claimBack('u1', NOW), { leasedBy: 'u1', leasedUntil: leaseEnd(NOW) });
+  assert.equal(leaseEnd(NOW).toISOString(), '2026-10-03T22:00:00.000Z');
   assert.deepEqual(claimBack(null, NOW), {});
 });
 

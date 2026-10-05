@@ -7,6 +7,7 @@ import { formatDateWithTime } from '@/lib/formatDate'
 import { needsRecut, foreignLinkRefs, bookOnlyLineIds, dropIdleBookOnly } from '@/lib/pageProof/ops'
 import { farLabel } from '@/lib/pageProof/flowEdit'
 import { cleanOps } from '@/lib/pageProof/submitPlan'
+import { bookOnlyCount } from '@/lib/pageProof/helpTexts'
 import ProofEditor from '../ProofEditor'
 
 // סקירת הגשה במסך מלא: העמוד עם הפעולות של המתייג מוחלות (רשימת הפעולות —
@@ -32,7 +33,7 @@ const RECUT_HINT = 'אחרי האישור העמוד ימתין לזיהוי-מ�
 const RECUT_SKIPPED =
   'הגשה אחרת לעמוד הזה כבר יצאה בקובץ-התיקונים הראשי, ולכן תיקוני-החיתוך של ההגשה הזו ייצאו רק בקובץ הכפולים — העמוד לא יעבור לזיהוי-מחדש בגללם.'
 const BOOK_ONLY_REVIEW_TITLE =
-  'המתייג סימן שורות "לספר בלבד": הטקסט המתוקן ייכנס לספר, אבל השורות לא ישמשו לאימון מודל-הזיהוי (המבנה שלהן כן נלמד). אם הסימון מיותר — "עריכה לפני אישור", ובלוח הפרטים ← שורה מורידים אותו.'
+  'המתייג סימן שורות "פגם בדפוס": הטקסט המתוקן ייכנס לספר, אבל השורות לא ישמשו לאימון מודל-הזיהוי (המבנה שלהן כן נלמד). אם הסימון מיותר — "עריכה לפני אישור", ובלוח הפרטים ← שורה מורידים אותו.'
 const RELEASE_TITLE =
   'העמוד ממתין לזיהוי-מחדש בתוכנת-הספר. אם התוכנה לא תחזיר גרסה חדשה שלו (למשל תיקון-החיתוך נכשל שם) — שחררו אותו: הוא ייסגר בלי זיהוי-מחדש'
 const REQUEST_BADGE = 'בקשת מתנדב לזיהוי-מחדש — רק תיקוני-החיתוך, נשלחה בלי אישור מנהל; שאר התיקונים של המתנדב יגיעו בהגשה רגילה'
@@ -173,7 +174,7 @@ export default function ReviewModal({ id, onClose, onDone, onPageChanged }) {
               )}
               {bookOnlyN > 0 && (
                 <span data-testid="review-book-only" className="rounded bg-warning-100 px-2 py-0.5 text-sm text-warning-800" title={BOOK_ONLY_REVIEW_TITLE}>
-                  {bookOnlyN === 1 ? 'שורה אחת' : `${bookOnlyN} שורות`} &quot;לספר בלבד&quot; — לא לאימון
+                  {bookOnlyCount(bookOnlyN)} — לא לאימון
                 </span>
               )}
               {farLinks.map((r) => (

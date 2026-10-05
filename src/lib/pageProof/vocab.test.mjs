@@ -96,7 +96,7 @@ test('לספר בלבד: train_text 0/1 — פעולה תקינה גם לכמה 
   ] };
   assert.equal(validateOp(doc, { kind: 'train_text', page: 7, ids: [1, 2], value: 0 }), null);
   assert.equal(validateOp(doc, { kind: 'train_text', page: 7, ids: [1], value: 1 }), null);
-  assert.match(validateOp(doc, { kind: 'train_text', page: 7, ids: [1], value: true }), /0 \(לספר בלבד\) או 1/);
+  assert.match(validateOp(doc, { kind: 'train_text', page: 7, ids: [1], value: true }), /0 \(פגם בדפוס\) או 1/);
   assert.match(validateOp(doc, { kind: 'train_text', page: 7, value: 0 }), /לא נבחרו שורות/);
   assert.equal(isBookOnly({ train_text: 0 }), true);
   assert.equal(isBookOnly({ train_text: 1 }), false);

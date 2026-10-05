@@ -11,6 +11,7 @@
 import { CUT_KINDS, needsRecut, packOps, sanitizeOps, validateOps } from './ops.js';
 import { revisionFilter } from './importRules.js';
 import { CLAIM_HOURS } from './gridState.js';
+import { leaseEnd } from './lease.js';
 
 // בקשות ממתינות למתנדב אחד (עמוד שנשלח ועוד לא חזר)
 export const MAX_PENDING_RECUT = 5;
@@ -147,10 +148,10 @@ export function recutEligibleFilter(userId, revision, now = new Date()) {
 }
 
 // התפיסה שהמתנדב מקבל בחזרה (העמוד חזר מהזיהוי-מחדש, או שהמנהל ביטל את הבקשה): כמו פתיחה
-// בעורך — CLAIM_HOURS שעות מלאות מעכשיו
+// בעורך — CLAIM_HOURS שעות מלאות מעכשיו, בלי שבת וחג (lease.leaseEnd)
 export const CLAIM_BACK_MS = CLAIM_HOURS * 60 * 60 * 1000;
 export function claimBack(userId, now = new Date()) {
-  return userId ? { leasedBy: userId, leasedUntil: new Date(now.getTime() + CLAIM_BACK_MS) } : {};
+  return userId ? { leasedBy: userId, leasedUntil: leaseEnd(now) } : {};
 }
 
 // הבקשה שקובעת למי העמוד חוזר: הבקשה הממתינה האחרונה (בגרסה הזו), או null

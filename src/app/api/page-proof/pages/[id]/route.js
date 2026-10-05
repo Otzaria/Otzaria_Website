@@ -12,7 +12,7 @@ import { recutStatus } from '@/lib/pageProof/runtime';
 import { badRequest, notFound, forbidden, serverError } from '@/lib/apiResponse';
 
 // GET: עמוד לעורך. מתנדב — רק עמוד שבטיפולו (התפיסה בתוקף; הפתיחה מחדשת אותה
-// ל-48 שעות מלאות — claims.renewLease) או עמוד שכבר הגיש (לצפייה, עם הפעולות
+// ל-48 שעות מלאות, בלי שבת וחג — claims.renewLease; leasedUntil בתשובה) או עמוד שכבר הגיש (לצפייה, עם הפעולות
 // שלו). עמוד פנוי אינו נתפס כאן: תפיסה רק בלחיצה מפורשת ברשת-העמודים.
 // מנהל OCR — כל עמוד, לקריאה.
 // "כבר הגיש" = הגשה לגרסה הנוכחית של העמוד: עמוד שחזר מזיהוי-מחדש (גרסה
@@ -28,7 +28,7 @@ export async function GET(request, { params }) {
 
     const [page, subs] = await Promise.all([
       PageProofPage.findById(id).lean(),
-      PageProofSubmission.find({ page: id, user: userId, status: { $ne: 'rejected' }, recutRequest: { $ne: true } }, { ops: 1, status: 1, note: 1, revision: 1 })
+      PageProofSubmission.find({ page: id, user: userId, status: { $ne: 'rejected' }, recutRequest: { $ne: true } }, { ops: 1, status: 1, note: 1, revision: 1, createdAt: 1 })
         .sort({ createdAt: -1 })
         .lean(),
     ]);
@@ -37,9 +37,13 @@ export async function GET(request, { params }) {
     const mine = subs.find((s) => sameRevision(submissionRevision(s), revision)) || null;
 
     let mode = 'view';
+    let leasedUntil = null;
     if (!mine) {
       const renewed = await renewLease(id, userId);
-      if (renewed) mode = 'edit';
+      if (renewed) {
+        mode = 'edit';
+        leasedUntil = renewed.leasedUntil || null;
+      }
       else if (!hasOcrAccess(session.user.role)) return forbidden('העמוד הזה אינו בטיפולכם — אפשר לתפוס אותו ברשת-העמודים של הספר');
     }
 
@@ -49,7 +53,9 @@ export async function GET(request, { params }) {
         success: true,
         mode,
         page: editorPageShape(page, book),
-        submission: mine ? { id: String(mine._id), status: mine.status, ops: mine.ops, note: mine.note } : null,
+        submission: mine ? { id: String(mine._id), status: mine.status, ops: mine.ops, note: mine.note, createdAt: mine.createdAt || null } : null,
+        // עד מתי העמוד שמור למתנדב אחרי הפתיחה הזו ("שמור לך עד …") — רק בעריכה
+        leasedUntil,
         // "שלח לזיהוי-מחדש" פתוח עכשיו? (מתג המנהל — runtime.recutStatus)
         recutRequests: recut.effective,
       },

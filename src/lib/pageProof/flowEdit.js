@@ -628,6 +628,11 @@ function linkMarkWord(lines, marks, lineId, pred) {
 
 const pageLines = (view) => new Map((view?.lines || []).filter((l) => l && l.status !== 'removed').map((l) => [l.id, l]));
 const pageMarks = (view) => (view?.marks && typeof view.marks === 'object' ? view.marks : {});
+
+// קישור שבוטל: הכרעה "אין קישור" מהשורה הזו — בתוכנת-הספר שורת-קישור ידנית בלי יעד (מה ש-link_del כותב
+// שם), ובחוזה-העמוד to_line ריק. הוא אינו קישור: בלי מספר, בלי סימן בטקסט, ובלוח הקישורים — ברשימת
+// "קישורים שבוטלו", עם "החזר לאוטומטי" (linkCancel.js)
+export const isCancelledLink = (k) => !!k && k.to_line == null;
 const anchorOf = (k) => (x) => x.role === 'anchor' && (x.go == null || x.go === k.from_line);
 const isOpener = (x) => x.role === 'opener';
 
@@ -638,6 +643,7 @@ const isOpener = (x) => x.role === 'opener';
 // לפי הסדר המקורי. המספור לכל עמוד בנפרד, מ-1. כל מי שמציג מספר-קישור (המספר אחרי
 // המילה בטקסט, רשימת "קישורים בעמוד", שאלת ההחלפה) לוקח אותו מכאן. אותו כלל בתוכנת-הספר
 // (pagedoc.link_display_key). מחזיר [{link, n, idx}] — idx = המקום ב-view.links.
+// קישור שבוטל (isCancelledLink) אינו נספר ואינו ברשימה.
 export function linksInDisplayOrder(view) {
   const lines = pageLines(view);
   const marks = pageMarks(view);
@@ -650,7 +656,7 @@ export function linksInDisplayOrder(view) {
   );
   const items = [];
   (view?.links || []).forEach((k, idx) => {
-    if (!k) return;
+    if (!k || isCancelledLink(k)) return;
     const ends = [];
     const fromPage = k.from_page ?? page;
     if (fromPage === page && rank.has(k.from_line)) {

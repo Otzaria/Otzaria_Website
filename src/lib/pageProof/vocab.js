@@ -181,10 +181,12 @@ export const OP_KINDS = {
   link_add: { he: 'קישור ידני', ids: true, contract: true },
   link_ok: { he: 'אישור קישור', ids: false, contract: true },
   link_del: { he: 'ביטול קישור', ids: false, contract: true },
+  // value = {src_line, page}: קישור שבוטל ("אין קישור") — ההכרעה הידנית יורדת, והמחשב קובע את הקישור מחדש
+  link_reset: { he: 'קישור — חזרה לאוטומטי', ids: false, contract: true },
   mixed_line: { he: 'שורה מעורבת', ids: true, contract: true },
   certainty: { he: 'ודאות', ids: true, contract: true },
   // value = 0 (לספר בלבד — לא לאימון-הזיהוי) או 1 (רגיל)
-  train_text: { he: 'לספר בלבד', ids: true, contract: true },
+  train_text: { he: 'פגם בדפוס', ids: true, contract: true },
   line_ok: { he: 'השורה נכונה', ids: true, contract: false },
   line_split: { he: 'פיצול שורה', ids: true, contract: false },
   line_merge: { he: 'איחוד שורות', ids: true, contract: false },

@@ -80,6 +80,11 @@ export default async function DocsIndexPage() {
               <h3 className="text-lg font-bold text-primary-dark mb-1">מדריך פיתוח — עריכת אוצריא</h3>
               <p className="text-sm text-on-surface/60">איך לערוך ולשפר את התוכנה בעצמכם</p>
             </Link>
+            <Link href="/docs/page-proof" className="glass-strong rounded-xl p-6 hover:shadow-lg transition-shadow">
+              <span className="material-symbols-outlined text-3xl text-primary mb-2 block">fact_check</span>
+              <h3 className="text-lg font-bold text-primary-dark mb-1">הנחיות להגהת עמודים</h3>
+              <p className="text-sm text-on-surface/60">דף אחד קצר למתנדבים: מבנה, טקסט, קישורים וזמנים — עם תמונות</p>
+            </Link>
           </div>
 
           {/* קישור לתיעוד מפתחים */}

@@ -69,6 +69,8 @@ import {
 //                   אותו בזמן גרירה/שינוי-גודל של מסגרת
 //   svgLayer        (רשות, לדף עוטף) שכבה בתוך ה-SVG, במרחב הפיקסלים של התמונה, מתחת לסמן:
 //                   ReactNode או ({zoom, mode, view}) => ReactNode; בלי אירועי-עכבר
+//   clean           "בלי סימונים" (ScanPanel): רק התמונה — בלי מסגרות, תיבות-שורה, ריהוט, סימונים,
+//                   סימון הסמן והמילה, svgLayer, תוויות וחלונית. גרירה מזיזה את הסריקה; לחיצה מדווחת
 // אירועים (נקודות בפיקסלי-תמונה; תיבות תקינות לחוזה — שלמות ובתוך התמונה):
 //   onClick({point, frame, line, additive, at})  לחיצה בלי גרירה; frame — רק ב-frames.
 //     לחיצה על ידית בלי גרירה אינה לחיצה
@@ -150,6 +152,7 @@ export default function ProofScan({
   overlay = null,
   overlayFor = null,
   svgLayer = null,
+  clean = false,
   onClick,
   onDraw,
   onBand,
@@ -327,7 +330,9 @@ export default function ProofScan({
     const d = { kind: 'click', start: p, client: [e.clientX, e.clientY], additive: e.shiftKey || e.ctrlKey || e.metaKey, dragging: false }
     const hf = hFid ? frameById(hFid) : null
     const hl = hLine != null ? lineById(Number(hLine)) : null
-    if (!readOnly && handle && hf) Object.assign(d, { kind: 'frame-resize', fid: hf.fid, corner: handle, orig: hf.bbox })
+    // בלי סימונים — אין מה לבחור או לגרור על הסריקה: גרירה מזיזה אותה, לחיצה מעבירה את הסמן
+    if (clean) Object.assign(d, { kind: 'pan', scroll: [scroller.current?.scrollLeft || 0, scroller.current?.scrollTop || 0] })
+    else if (!readOnly && handle && hf) Object.assign(d, { kind: 'frame-resize', fid: hf.fid, corner: handle, orig: hf.bbox })
     else if (!readOnly && handle && isBox(hl?.bbox)) Object.assign(d, { kind: 'line-resize', id: hl.id, corner: handle, orig: hl.bbox })
     else if (mode === 'frames') {
       const sel = selectedFid ? frameById(selectedFid) : null
@@ -453,7 +458,7 @@ export default function ProofScan({
   const recut = asSet(recutIds)
   const straddle = asSet(straddleIds)
   const outside = asSet(outsideIds)
-  const marker = caretMarker(view, mode === 'frames' ? frames : [], currentLineId, { size: 12 * u, gap: 3 * u })
+  const marker = clean ? null : caretMarker(view, mode === 'frames' ? frames : [], currentLineId, { size: 12 * u, gap: 3 * u })
   const caretLine = marker ? lineById(marker.lineId) : null
   const wordBox = caretLine ? wordBoxOf(caretLine, currentWord) : null
   const dash = (a, b) => `${a * u} ${b * u}`
@@ -491,7 +496,7 @@ export default function ProofScan({
   const ovShown = !!ovKey && ovPos?.key === ovKey && temp?.kind !== 'frame'
 
   return (
-    <div className="relative h-full w-full" data-testid="proof-scan">
+    <div className="relative h-full w-full" data-testid="proof-scan" data-clean={clean ? '1' : undefined}>
       {imgFailed && (
         <div className="absolute inset-x-0 top-2 z-20 mx-auto w-fit rounded bg-danger-100 px-3 py-1 text-sm text-danger-700" dir="rtl">
           תמונת-העמוד לא נטענה
@@ -516,7 +521,7 @@ export default function ProofScan({
           >
             <image href={imageUrl} x="0" y="0" width={W} height={H} preserveAspectRatio="none" onError={() => setImgFailed(true)} />
 
-            {mode === 'frames' && (
+            {mode === 'frames' && !clean && (
               <g data-layer="frames">
                 {frames.map((f) => {
                   const b = frameBox(f)
@@ -577,7 +582,7 @@ export default function ProofScan({
               </g>
             )}
 
-            {mode === 'lines' && (
+            {mode === 'lines' && !clean && (
               <g data-layer="lines">
                 {lines.map((l) => {
                   const b = lineBox(l)
@@ -612,7 +617,7 @@ export default function ProofScan({
               </g>
             )}
 
-            {svgLayer && (
+            {svgLayer && !clean && (
               <g data-layer="extra" pointerEvents="none">
                 {typeof svgLayer === 'function' ? svgLayer({ zoom, mode, view }) : svgLayer}
               </g>
@@ -670,7 +675,8 @@ export default function ProofScan({
             )}
           </svg>
 
-          {/* תוויות (HTML, בפיקסלי-מסך — קריאות בכל זום) */}
+          {/* תוויות (HTML, בפיקסלי-מסך — קריאות בכל זום); בלי סימונים — בלי תוויות */}
+          {!clean && (
           <div className="pointer-events-none absolute inset-0" dir="rtl">
             {mode === 'frames' &&
               frames.map((f) => {
@@ -736,8 +742,9 @@ export default function ProofScan({
                   </span>
                 ))}
           </div>
+          )}
 
-          {overlay && (
+          {overlay && !clean && (
             <div
               ref={ovRef}
               data-testid="scan-overlay"

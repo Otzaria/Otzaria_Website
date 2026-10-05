@@ -14,6 +14,7 @@ import {
   linkBadge,
   linkEndpoints,
   linkNumber,
+  linksInDisplayOrder,
   nextAfterApprove,
   nextSuspicious,
   paragraphIndexAt,
@@ -32,6 +33,7 @@ import { recheckLineIds } from '@/lib/pageProof/submitPlan'
 import { pageDraftKey } from '@/lib/pageProof/drafts'
 import { LAYOUT_KEY, SPLIT_MAX, SPLIT_MIN, nudgeSplit, readLayout, splitFromPointer } from '@/lib/pageProof/layout'
 import { LINK_ERRORS, linkEnd, planLink, planOtherPageLink, farLabel, tabOfLine, wordStartPos } from '@/lib/pageProof/linkFlow'
+import { LINK_HE, unlinkPlan } from '@/lib/pageProof/linkCancel'
 import { isKey, isShortcut } from '@/lib/pageProof/keys'
 import { useDialog } from '@/components/providers/DialogContext'
 import { mapCaretOffset, useProofEditor } from './useProofEditor'
@@ -42,8 +44,9 @@ import TextPanel from './TextPanel'
 import FlowEditor from './FlowEditor'
 import StatusBar from './StatusBar'
 import DetailsDrawer from './DetailsDrawer'
-import ProofHelp from './ProofHelp'
+import ProofHelp, { guideOf, openGuide } from './ProofHelp'
 import OtherPagePicker from './OtherPagePicker'
+import LinkPopover from './LinkPopover'
 import { caretTop, readDomSelection } from './flowDom'
 
 // עורך הגהת-עמוד — המעטפת: סרגל-כלים (בנוסח העורך הישן של האתר), הסריקה
@@ -99,6 +102,8 @@ import { caretTop, readDomSelection } from './flowDom'
 //   helpAutoOpen — פתיחת העזרה לבד בפעם הראשונה (ברירת-המחדל: בעריכה עם טיוטות — persist).
 //   help.lockedLine — ההסבר על שורה נעולה (ממתינה לזיהוי-מחדש) במקום הנוסח של האתר.
 //   help.bookOnlyTitle — ההסבר על הכפתור "לספר בלבד" (כשהוא כבוי) במקום הנוסח של האתר ("אחרי אישור המנהל").
+//   help.guide — דף ההנחיות (כפתור "הנחיות" בסרגל וקישור בחלון העזרה — ProofHelp.guideOf): {href?, open?(href)};
+//     null — בלי. בלעדיו — הדף של האתר (GUIDE_PATH) בלשונית חדשה.
 //
 // מצב "לספר בלבד" (כפתור בסרגל): כל עוד הוא דולק, כל תיקון-טקסט בשורה מקורית שעוד אינה מסומנת
 // מקבל באותו צעד גם train_text = 0 (ops.withBookOnly) — Ctrl+Z אחד מבטל את שניהם. אישור בלי שינוי
@@ -280,6 +285,8 @@ export default function ProofEditor({
   const [linkPending, setLinkPending] = useState(null)
   // הצד השני של קישור בעמוד אחר: {start: מספר-עמוד | null} — החלון פתוח
   const [otherPage, setOtherPage] = useState(null)
+  // חלונית הקישור (לחיצה על המספר שאחרי המילה): {from, to, other, rect} — הקישור לפי שתי השורות שלו
+  const [linkPop, setLinkPop] = useState(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [detailsTab, setDetailsTab] = useState('links')
   const [helpOpen, setHelpOpen] = useState(false)
@@ -712,6 +719,13 @@ export default function ProofEditor({
         }
         live.current.goTo(other.lineId, other.i, { focus: true })
       },
+      // לחיצה על מספר-קישור בטקסט ← חלונית הקישור (LinkPopover); לחיצה שנייה על אותו קישור — סוגרת
+      onBadge: (ep, rect) => {
+        const item = linksInDisplayOrder(live.current.view).find((x) => x.n === ep?.n)
+        if (!item) return
+        const k = item.link
+        setLinkPop((cur) => (cur && cur.from === k.from_line && cur.to === k.to_line ? null : { from: k.from_line, to: k.to_line, other: ep.other, rect }))
+      },
       // לחיצה על הסריקה: הסמן עובר לשם, אבל הסריקה עצמה לא זזה (caretY = null)
       onPickLine: (lineId, extra) => live.current.goTo(lineId, extra?.wordIndex ?? null, { focus: false, from: 'scan' }),
       setMode: (m) => setScanMode(m),
@@ -844,13 +858,41 @@ export default function ProofEditor({
     jumpToLine: (id, i) => goTo(id, Number.isInteger(i) ? i : null, { focus: true }),
     linkOk: (src) => push({ kind: 'link_ok', page: P, value: { src_line: src, page: P } }),
     linkDel: (src) => push({ kind: 'link_del', page: P, value: { src_line: src, page: P } }),
-    // קישור לעמוד אחר שנוסף בעריכה הזו: ביטול = הסרת פעולת-הקישור עצמה (צעד-ביטול אחד;
-    // Ctrl+Z מחזיר) — לא link_del, שהיה נשלח לתוכנת-הספר
-    removeLink: (k) => {
-      if (readOnly) return
-      ed.removeWhere((op) => op?.kind === 'link_add' && op.ids?.[0] === k.from_line && op.ids?.[1] === k.to_line)
-      say('הקישור בוטל (Ctrl+Z מחזיר אותו)')
+    // "בטל קישור" — לכל קישור (linkCancel.unlinkPlan): קישור שנוסף בעריכה הזו (גם בעמוד, גם לעמוד אחר) —
+    // הפעולה link_add עצמה יורדת (צעד-ביטול אחד; לא link_del, שהיה נשלח יחד איתה); קישור שהגיע עם העמוד,
+    // אוטומטי או ידני — link_del; קישור שהפירוש שלו בעמוד אחר — מבטלים שם
+    unlink: (k) => {
+      if (readOnly) return false
+      const plan = unlinkPlan(view, k, P, baseDoc)
+      if (plan.action === 'remove') {
+        // הקישור החדש החליף קישור שהגיע עם העמוד — גם הוא מבוטל, באותו צעד (plan.add)
+        const pred = (op) => plan.match(op)
+        pred.add = plan.add
+        ed.removeWhere(pred)
+        say(LINK_HE.cancelledAdded)
+        return true
+      }
+      if (plan.action === 'op') {
+        if (!push(plan.op)) return false
+        say(LINK_HE.cancelled)
+        return true
+      }
+      if (plan.hint) say(plan.hint)
+      return false
     },
+    // "החזר לאוטומטי" לקישור שבוטל (entry מ-linkCancel.cancelledLinks): בעריכה הזו — פעולת-הביטול יורדת;
+    // קודם — link_reset (ובוטלה ההחזרה — הפעולה שלה יורדת)
+    restoreLink: (c) => {
+      if (readOnly || !c?.restore) return
+      if (c.restore.action === 'remove') {
+        ed.removeWhere(c.restore.match)
+        say(c.pending ? LINK_HE.resetUndone : LINK_HE.restored)
+      } else if (c.restore.action === 'op' && push(c.restore.op)) {
+        say(LINK_HE.resetQueued)
+      }
+    },
+    // השם הקודם (קישור שנוסף בעריכה הזו) — אותו דבר כמו unlink
+    removeLink: (k) => drawerAct.unlink(k),
     otherPage: canOtherPage ? openOtherPage : null,
     startLink: readOnly ? null : link,
     cancelLink,
@@ -889,6 +931,14 @@ export default function ProofEditor({
     // לשונית של דף עוטף (extraTabs): פעולות-חוזה אל רשימת-הפעולות, כמו לחיצה בסרגל
     push: (...args) => push(...args),
   }
+
+  // ---- חלונית הקישור: הקישור שנפתח (לפי שתי השורות שלו — המספר עשוי להשתנות) ----
+  const popItem = linkPop ? linksInDisplayOrder(view).find((x) => x.link.from_line === linkPop.from && x.link.to_line === linkPop.to) || null : null
+  const closeLinkPop = useCallback(() => setLinkPop(null), [])
+  // הקישור בוטל או השתנה (גם מלוח הפרטים, או ב-Ctrl+Z) — החלונית נסגרת
+  useEffect(() => {
+    if (linkPop && !popItem) setLinkPop(null)
+  }, [linkPop, popItem])
 
   // ---- הסרגל ----
   const edit = !readOnly
@@ -940,6 +990,7 @@ export default function ProofEditor({
       onWordEnter={pop.onWordEnter}
       onWordLeave={pop.onWordLeave}
       onJump={stable.onJump}
+      onBadge={stable.onBadge}
       onJoinPara={readOnly ? null : stable.onJoinPara}
       lockTitle={help?.lockedLine}
       unapprovePre={!readOnly && typeof onUnapprovePre === 'function'}
@@ -994,6 +1045,7 @@ export default function ProofEditor({
         fontFamily={fontFamily}
         setFontFamily={(f) => updateLayout({ fontFamily: f })}
         onHelp={() => setHelpOpen(true)}
+        onGuide={guideOf(help) ? () => openGuide(guideOf(help)) : null}
         detailsOpen={detailsOpen}
         onToggleDetails={() => setDetailsOpen((o) => !o)}
         actions={actionsNode}
@@ -1064,6 +1116,28 @@ export default function ProofEditor({
       />
 
       {pop.popup}
+      {popItem && (
+        <LinkPopover
+          view={view}
+          link={popItem.link}
+          n={popItem.n}
+          anchorRect={linkPop.rect}
+          readOnly={readOnly}
+          onClose={closeLinkPop}
+          onJump={() => {
+            closeLinkPop()
+            stable.onJump(linkPop.other)
+          }}
+          onOk={(k) => {
+            closeLinkPop()
+            if (drawerAct.linkOk(k.from_line)) say('הקישור אושר')
+          }}
+          onUnlink={(k) => {
+            closeLinkPop()
+            drawerAct.unlink(k)
+          }}
+        />
+      )}
       {otherPage && canOtherPage && (
         <OtherPagePicker
           gid={gid}

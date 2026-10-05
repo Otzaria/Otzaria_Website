@@ -20,6 +20,7 @@ vi.mock('@/models/PageProofBook', () => ({ default: Book }))
 vi.mock('@/lib/pageProof/runtime', () => ({ recutStatus: vi.fn().mockResolvedValue({ effective: true, settings: { recutRequests: 'on', autoMinutes: 15 }, seenAt: null }) }))
 
 import { GET } from './route'
+import { leaseEnd } from '@/lib/pageProof/lease'
 
 const PAGE_ID = '64b7f0c2a1b2c3d4e5f60002'
 const USER_ID = '64b7f0c2a1b2c3d4e5f60003'
@@ -52,10 +53,12 @@ describe('GET /api/page-proof/pages/[id]', () => {
 
   it('הגשה לגרסה הנוכחית ← מצב צפייה עם ההגשה', async () => {
     Page.findById.mockReturnValue(lean(page()))
-    Sub.find.mockReturnValue(subsQuery([{ _id: 's1', status: 'approved', ops: [], note: '' }]))
+    Sub.find.mockReturnValue(subsQuery([{ _id: 's1', status: 'approved', ops: [], note: '', createdAt: new Date('2026-10-01T09:00:00Z') }]))
     const body = await (await GET({}, params)).json()
     expect(body.mode).toBe('view')
-    expect(body.submission).toMatchObject({ id: 's1', status: 'approved' })
+    // מועד ההגשה — ל"הוגש — ממתין לבדיקת מנהל (מאז …)"
+    expect(body.submission).toMatchObject({ id: 's1', status: 'approved', createdAt: '2026-10-01T09:00:00.000Z' })
+    expect(body.leasedUntil).toBeNull()
     expect(Page.findOneAndUpdate).not.toHaveBeenCalled()
     // בקשה לזיהוי-מחדש (recutRequest) אינה "ההגשה שלי" — לא נשלפת כאן
     expect(Sub.find.mock.calls[0][0]).toMatchObject({ status: { $ne: 'rejected' }, recutRequest: { $ne: true } })
@@ -85,12 +88,15 @@ describe('GET /api/page-proof/pages/[id]', () => {
     expect(body.page.revision).toBe(1)
   })
 
-  it('פתיחה לעריכה מחדשת את התפיסה ל-48 שעות מלאות — רק לעמוד שבטיפולי עכשיו, ולעולם לא תופסת עמוד פנוי', async () => {
+  it('פתיחה לעריכה מחדשת את התפיסה ל-48 שעות מלאות (בלי שבת וחג) — רק לעמוד שבטיפולי עכשיו, ולעולם לא תופסת עמוד פנוי', async () => {
     Page.findById.mockReturnValue(lean(page()))
     Sub.find.mockReturnValue(subsQuery([]))
-    Page.findOneAndUpdate.mockResolvedValue({ _id: PAGE_ID })
+    const renewedUntil = new Date('2026-10-07T10:00:00Z')
+    Page.findOneAndUpdate.mockResolvedValue({ _id: PAGE_ID, leasedUntil: renewedUntil })
     const before = Date.now()
-    await GET({}, params)
+    const body = await (await GET({}, params)).json()
+    // "שמור לך עד …" — המועד שנקבע בפתיחה הזו
+    expect(body.leasedUntil).toBe(renewedUntil.toISOString())
     const [filter, update, opts] = Page.findOneAndUpdate.mock.calls[0]
     // רק עמוד פתוח שאני מחזיק בו והתפיסה בתוקף — בלי "או פנוי"
     expect(filter).toMatchObject({ status: 'open' })
@@ -101,8 +107,8 @@ describe('GET /api/page-proof/pages/[id]', () => {
     expect(Array.isArray(update)).toBe(true)
     expect(Object.keys(update[0].$set)).toEqual(['leasedUntil'])
     const [, until] = update[0].$set.leasedUntil.$max
-    expect(until.getTime() - before).toBeGreaterThanOrEqual(48 * 3600e3 - 5000)
-    expect(until.getTime() - before).toBeLessThanOrEqual(48 * 3600e3 + 5000)
+    // 48 שעות שאינן בשבת או בחג (lease.leaseEnd) — ביום חול רגיל: בדיוק 48 שעות
+    expect(Math.abs(until.getTime() - leaseEnd(new Date(before)).getTime())).toBeLessThanOrEqual(5000)
     expect(opts).toMatchObject({ updatePipeline: true, lean: true })
   })
 
