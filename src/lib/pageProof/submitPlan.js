@@ -6,7 +6,7 @@
 //     שאישרתי" (הפעולות כמות-שהן, בלי line_ok נוסף).
 // הגשה ריקה אינה מותרת. לוגיקה טהורה — הדף והחלון רק מציגים ושולחים.
 
-import { packOps, needsRecut, recutLineIds, validateOps, sanitizeOp, MAX_IDS_PER_OP } from './ops.js';
+import { packOps, needsRecut, recutLineIds, validateOps, sanitizeOp, bookOnlyLineIds, dropIdleBookOnly, MAX_IDS_PER_OP } from './ops.js';
 
 export const SUBMIT_CHOICE = Object.freeze({
   // "אשר גם את כל השאר והגש"
@@ -75,12 +75,15 @@ function normApproval(a) {
 //   (כל הלשוניות, בלי ריהוט), כפי שהעורך מחשב; null = לא ידוע.
 // "הכול אושר" כשאין שורה שנשארה לאישור, או כשהעורך מדווח שכל הפסקאות אושרו.
 export function submitSummary({ baseDoc, ops, untouched, approval = null }) {
-  const clean = cleanOps(ops);
+  const clean = cleanOps(dropIdleBookOnly(baseDoc, ops));
   const restIds = restLineIds({ baseDoc, ops: clean, untouched });
   const appr = normApproval(approval);
   const allApproved = restIds.length === 0 || (appr != null && appr.total > 0 && appr.approved >= appr.total);
+  const packed = packOps(baseDoc, clean);
   return {
-    opCount: packOps(baseDoc, clean).length,
+    opCount: packed.length,
+    // שורות שיסומנו "לספר בלבד" (train_text = 0) — חלון ההגשה מציג את המספר
+    bookOnlyCount: bookOnlyLineIds(packed).length,
     restCount: restIds.length,
     approval: appr,
     allApproved,
@@ -93,7 +96,8 @@ export function submitSummary({ baseDoc, ops, untouched, approval = null }) {
 // הפעולות שיישלחו לבחירה שנבחרה: {ok:true, ops} (נקיות ודחוסות — כמו שהשרת
 // ישמור) או {ok:false, error} בעברית.
 export function planSubmission({ baseDoc, ops, untouched, choice, readAll = false }) {
-  const clean = cleanOps(ops);
+  // סימון "לספר בלבד" אוטומטי על שורה שהטקסט שלה חזר בסוף לזה שיובא — יורד (ops.dropIdleBookOnly)
+  const clean = cleanOps(dropIdleBookOnly(baseDoc, ops));
   let toSend = clean;
   if (choice === SUBMIT_CHOICE.APPROVE_REST) {
     if (!readAll) return { ok: false, error: SUBMIT_ERRORS.readAll };

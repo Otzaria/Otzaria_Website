@@ -2,12 +2,13 @@
 
 import { PARA_STYLES, streamMenu } from '@/lib/pageProof/vocab'
 import { styleActive } from '@/lib/pageProof/flowEdit'
+import { BOOK_ONLY_TITLE_OFF, BOOK_ONLY_TITLE_ON } from '@/lib/pageProof/helpTexts'
 import ToolbarMenu from './ToolbarMenu'
 
 // סרגל-הכלים של עורך הגהת-העמודים — בנוסח סרגל העורך הישן של האתר
 // (components/editor/EditorToolbar): פס לבן, קבוצות-כפתורים אפורות, כפתורים
 // של 28px וטולטיפ עם קיצור-המקלדת. מימין לשמאל: ביטול/חזרה · סגנון-פסקה ·
-// עיצוב-תווים · פסקאות · קישור · מילים חשודות · זרם לשורות · פגם בדפוס · תצוגה · עזרה ופרטים
+// עיצוב-תווים · פסקאות · קישור · מילים חשודות · זרם לשורות · לספר בלבד · תצוגה · עזרה ופרטים
 // · ובקצה השמאלי — כפתורי הדף העוטף (actions, למשל "הגשה").
 //
 // כפתור שאין לו פעולה (handler חסר) — מושבת: כך העורך אומר "לא רלוונטי עכשיו"
@@ -170,7 +171,12 @@ function GroupButton({ label, title, onClick, disabled, pressed, wide = false, c
 
 // כפתור לבן עם מסגרת, אייקון ותווית (כמו "חיפוש"/"איות" בסרגל הישן)
 function LabeledButton({ label, title, onClick, disabled, pressed, tone = 'neutral', children }) {
-  const on = tone === 'info' ? 'border-info-200 bg-info-50 text-info-700' : 'border-neutral-300 bg-neutral-100 text-neutral-900'
+  const on =
+    tone === 'info'
+      ? 'border-info-200 bg-info-50 text-info-700'
+      : tone === 'warning'
+        ? 'border-warning-300 bg-warning-100 text-warning-800'
+        : 'border-neutral-300 bg-neutral-100 text-neutral-900'
   return (
     <button
       type="button"
@@ -206,9 +212,11 @@ export default function ProofToolbar({
   onNextSuspicious,
   streams = [],
   onStreamForLines,
-  // "פגם בדפוס" (מתג לשורות שבבחירה): printDefect — שורת-הסמן כבר מסומנת
-  onPrintDefect,
-  printDefect = false,
+  // מצב "לספר בלבד" (מתג שנשאר דולק): bookOnly — המצב דולק; bookOnlyTitle — הנוסח כשהוא כבוי
+  // (ברירת-המחדל: של האתר — "אחרי אישור המנהל"; עורך מוטמע מחליף)
+  onBookOnly,
+  bookOnly = false,
+  bookOnlyTitle = BOOK_ONLY_TITLE_OFF,
   fontSize = PROOF_FONT_SIZE.default,
   setFontSize,
   fontFamily = DEFAULT_PROOF_FONT,
@@ -387,20 +395,17 @@ export default function ProofToolbar({
           menuClassName="w-72"
         />
 
-        {/* פגם בדפוס — תיקון למה שאמור להיות בספר ולא למה שבסריקה: נכנס לספר, לא לאימון */}
+        {/* "לספר בלבד" — מצב: כל עוד הוא לחוץ, כל שורה שמשנים בה טקסט מסומנת (נכנס לספר, לא לאימון) */}
         <LabeledButton
-          label="פגם בדפוס"
-          title={
-            printDefect
-              ? 'השורה מסומנת «פגם בדפוס» — לחיצה מסירה את הסימון'
-              : 'פגם בדפוס: תיקנתי את השורה למה שאמור להיות כתוב בספר, לא למה שרואים בסריקה (נקודה במקום ו\', "כה" במקום "כח"). הטקסט המתוקן נכנס לספר, אבל השורה לא תשמש לאימון מודל-הזיהוי. חל על השורות שבבחירה'
-          }
-          pressed={!!printDefect}
-          onClick={onPrintDefect}
-          disabled={!edit(onPrintDefect)}
+          label="לספר בלבד"
+          title={bookOnly ? BOOK_ONLY_TITLE_ON : bookOnlyTitle}
+          pressed={!!bookOnly}
+          tone="warning"
+          onClick={onBookOnly}
+          disabled={!edit(onBookOnly)}
         >
           <span className="material-symbols-outlined text-sm" aria-hidden="true">flag</span>
-          <span className="text-[10px] font-medium">פגם בדפוס</span>
+          <span className="text-[10px] font-medium">לספר בלבד</span>
         </LabeledButton>
 
         <Divider />

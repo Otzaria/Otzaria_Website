@@ -4,7 +4,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { PARA_STYLE_OPTIONS } from './ProofToolbar'
 import { CLAIM_RULE } from '@/lib/pageProof/gridState'
-import { FAQ } from '@/lib/pageProof/helpTexts'
+import { BOOK_ONLY_TEXT_STEP, FAQ } from '@/lib/pageProof/helpTexts'
 
 // "מה עושים בעמוד" — ההסבר הקצר של עורך הגהת-העמודים (במקום ProofRules):
 // שלושה צעדים, "איך עושים" מתקפל עם המקשים, ומה עושים בסיום.
@@ -67,7 +67,7 @@ const STEPS = [
         קראו מול הסריקה ותקנו ישר בטקסט, כמו בכל עורך. הסריקה זזה עם הסמן: השורה שאתם עובדים בה עומדת מול אותה שורה בסריקה, והמילה
         שבסמן מסומנת שם. מילים מסומנות בטקסט = המחשב חושד בהן (ראו &quot;מה אומרים הסימונים&quot; למטה). פסקה שקראתם ונכונה — אשרו
         אותה ב-✓ שליד הפסקה או ב-<Kbd>Ctrl+Enter</Kbd>. אות שבורה, פגומה או מחוברת לשכנתה — הקלידו את האותיות שנועדו להיות שם (ראו
-        &quot;שאלות שחוזרות&quot; למטה).
+        &quot;שאלות שחוזרות&quot; למטה). {BOOK_ONLY_TEXT_STEP}
       </>
     ),
   },

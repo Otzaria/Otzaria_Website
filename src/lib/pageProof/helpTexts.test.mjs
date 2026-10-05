@@ -6,7 +6,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { FAQ, RECUT_LINE_TITLE, RECUT_PAGE_TITLE, RECUT_REQUEST_HINT, RECUT_SENT, RECUT_OFF_HELP, RECUT_LINE_TITLE_OFF } from './helpTexts.js';
+import { FAQ, RECUT_LINE_TITLE, RECUT_PAGE_TITLE, RECUT_REQUEST_HINT, RECUT_SENT, RECUT_OFF_HELP, RECUT_LINE_TITLE_OFF, BOOK_ONLY_TITLE_OFF, BOOK_ONLY_LINE_TITLE, CERTAINTY_HINT, bookOnlySubmitLine } from './helpTexts.js';
 
 // מתג המנהל כבוי (2026-10-02): רק הדרך של ההגשה — בלי "שלח לזיהוי-מחדש" שאינו מופיע
 test('"שלח לזיהוי-מחדש" כבוי: השורה הנעולה והשאלה בעזרה מדברות רק על הגשה', () => {
@@ -36,14 +36,28 @@ test('"ממתין לזיהוי-מחדש": השאלה בעזרה, הכותרת ב
   assert.match(RECUT_SENT, /יחזור אליכם עם השורות החדשות/);
 });
 
-test('שאלות מהפורום (2026-10-01): כותרת-רצה של ההערות — ריהוט; פגם בדפוס — נכנס לספר, לא לאימון', () => {
+test('שאלות מהפורום (2026-10-01): כותרת-רצה של ההערות — ריהוט', () => {
   const run = FAQ.find((f) => f.key === 'notes-running-head');
   assert.match(run.a, /«כותרת-רצה של ההערות»/);
   assert.match(run.a, /"כותרת הערות" היא כותרת של פרק או סעיף בתוך ההערות, והיא כן נכנסת לספר/);
-  const defect = FAQ.find((f) => f.key === 'print-defect');
-  assert.match(defect.a, /«פגם בדפוס»/);
-  assert.match(defect.a, /הטקסט המתוקן נכנס לספר, אבל השורה לא תשמש לאימון/);
-  // לא סותר את "אות שבורה": שם מקלידים את האות הנכונה בלי סימון
-  assert.match(defect.a, /אות שבורה או חלקית שעוד רואים מה היא — זה לא פגם בדפוס/);
   assert.equal(new Set(FAQ.map((f) => f.key)).size, FAQ.length);
+});
+
+// בעל הפרויקט (2026-10-02): "לספר בלבד" — ולומר במפורש שהמבנה ממשיך ללמד
+test('"לספר בלבד": נכנס לספר, לא לאימון — לא המתוקן ולא מה שהמחשב קרא; המבנה כן נלמד', () => {
+  const faq = FAQ.find((f) => f.key === 'print-defect');
+  assert.match(faq.a, /והדליקו "לספר בלבד" בסרגל: כל שורה שתשנו בה טקסט תסומן מעצמה/);
+  assert.match(faq.a, /לא הנוסח המתוקן ולא מה שהמחשב קרא/);
+  assert.match(faq.a, /מסגרות, זרמים, סגנונות פסקה ותו, פסקאות וקישורים שתעשו נשמרים כרגיל ומשמשים ללימוד מבנה הדף/);
+  // לא סותר את "אות שבורה": שם מקלידים את האות הנכונה בלי סימון
+  assert.match(faq.a, /אות שבורה או חלקית שעוד רואים מה היא היא לא "לספר בלבד"/);
+  assert.match(BOOK_ONLY_TITLE_OFF, /מסגרות, זרמים, סגנונות, פסקאות וקישורים נשמרים כרגיל/);
+  assert.match(BOOK_ONLY_LINE_TITLE, /המבנה והעיצוב של השורה כן נלמדים/);
+  // "ודאות" כבר אינו "הלמידה מתעלמת" (לא ברור איזו); מפנה ל"לספר בלבד"
+  assert.doesNotMatch(CERTAINTY_HINT, /מתעלמת/);
+  assert.match(CERTAINTY_HINT, /לטעות-דפוס יש את "לספר בלבד"/);
+  // "לא בטוח" אינו חומר-אימון גם למבנה (בתוכנת-הספר: pool.build(drop_ambiguous=True)) — בניגוד ל"לספר בלבד"
+  assert.match(CERTAINTY_HINT, /לא של הזיהוי ולא של מבנה הדף/);
+  assert.equal(bookOnlySubmitLine(1), 'שורה אחת מסומנת "לספר בלבד": התיקון ייכנס לספר, והשורה לא תשמש לאימון.');
+  assert.match(bookOnlySubmitLine(3), /^3 שורות מסומנות "לספר בלבד".*והשורות לא ישמשו לאימון\.$/);
 });

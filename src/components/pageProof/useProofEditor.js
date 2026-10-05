@@ -19,6 +19,10 @@ import { segOkState } from '@/lib/pageProof/textModel'
 //   כך ש-Ctrl+Z מבטל "משפט" ולא אות. פרץ שחזר בדיוק לטקסט שלפניו (הקלדה
 //   ומחיקה מיד) — יורד כולו, עם צעד-הביטול שלו: הוא לא שינה דבר.
 //   _c/_t/_from הם שדות פנימיים.
+// • פעולות נלוות (_cmp: true — מצב "לספר בלבד" מוסיף train_text לתיקון-טקסט,
+//   ops.withBookOnly): נכנסות לפני הפעולה באותה קבוצה (_cg על הפעולה הראשית), אינן
+//   נספרות כ"עוד פעולה" לצבירת-ההקלדה, והפרץ ממשיך גם אחריהן — Ctrl+Z אחד מבטל את
+//   הטקסט ואת הסימון יחד; פרץ פתוח נשמר בשרת רק כשהוא נסגר, עם הנלוות שלו.
 // • פעולות מקומיות (_local: true — חצי-אישור של שורה שמתחלקת בין שתי פסקאות,
 //   textModel.SEG_OK): נשמרות ברשימה (בשביל Undo והטיוטה) אבל אינן בתצוגה
 //   ואינן יוצאות מהדפדפן — ops (ההגשה, רשימת השינויים) הוא בלעדיהן.
@@ -245,26 +249,37 @@ export function useProofEditor({ baseDoc, initialOps = null, readOnly = false, p
       const now = Date.now()
       const g = list.length > 1 ? newGroup() : null
       const s = newStep()
-      const single = key && list.length === 1 ? list[0] : null
+      // פעולות נלוות (_cmp — "לספר בלבד" שנוסף לתיקון-טקסט, ops.withBookOnly) אינן שוברות צבירת-הקלדה:
+      // "פעולה בודדת" = בלעדיהן. הן לפניה ברשימה, באותה קבוצה — צעד-ביטול אחד
+      const primary = list.filter((op) => !op._cmp)
+      const single = key && primary.length === 1 ? primary[0] : null
+      const withCmp = !!single && list.length > 1
       // הטקסט של השורה לפני הפעולה — אם זו תחילת פרץ, הפרץ "חוזר לכלום" כשהוא שווה לו
       const from = single?.kind === 'text' ? lineTextIn(viewRef.current, single.ids?.[0]) : null
       const tagged = list.map((op) => {
         let o = g ? { ...op, _g: g, _s: s } : { ...op, _s: s }
-        if (key) o = { ...o, _c: key, _t: now }
+        if (key && !op._cmp) o = { ...o, _c: key, _t: now, ...(withCmp ? { _cg: true } : {}) }
         return o
       })
       setH((cur) => {
         const last = cur.all[cur.all.length - 1]
-        if (single && cur.burst === key && last && !last._g && last._c === key && now - (last._t || 0) < COALESCE_MS) {
-          const merged = last._from !== undefined ? { ...tagged[0], _from: last._from } : tagged[0]
+        // ממשיכים פרץ גם כשההקשה הראשונה שלו באה עם פעולה נלווית (_cg: הקבוצה = הפרץ ופעולותיו הנלוות)
+        if (single && cur.burst === key && last && (!last._g || last._cg) && last._c === key && now - (last._t || 0) < COALESCE_MS) {
+          const extra = tagged.filter((o) => o._cmp).map((o) => (last._g ? { ...o, _g: last._g } : o))
+          let merged = tagged.find((o) => !o._cmp)
+          if (last._from !== undefined) merged = { ...merged, _from: last._from }
+          if (last._g) merged = { ...merged, _g: last._g, _cg: true }
           if (merged.kind === 'text' && typeof merged._from === 'string' && merged.value === merged._from) {
-            // הפרץ חזר לטקסט שלפניו — יורד כולו, עם צעד-הביטול שלו
-            const prev = cur.past.length ? cur.past[cur.past.length - 1] : cur.all.slice(0, -1)
+            // הפרץ חזר לטקסט שלפניו — יורד כולו (עם הנלוות שלו), עם צעד-הביטול שלו
+            const prev = cur.past.length ? cur.past[cur.past.length - 1] : cur.all.slice(0, -tailSize(cur.all))
             return { all: prev, past: cur.past.slice(0, -1), future: [], burst: null }
           }
-          return { ...cur, all: [...cur.all.slice(0, -1), merged], future: [] }
+          // הנלוות של הפרץ עוברות למזהה-הצעד החדש שלו — בשמירה בשרת הן צעד אחד עם הטקסט (Undo אחד שם)
+          let kept = cur.all.slice(0, -1)
+          if (last._g) kept = kept.map((o) => (o._g === last._g && o._cmp ? { ...o, _s: merged._s } : o))
+          return { ...cur, all: [...kept, ...extra, merged], future: [] }
         }
-        const added = single && typeof from === 'string' ? [{ ...tagged[0], _from: from }] : tagged
+        const added = single && typeof from === 'string' ? tagged.map((o) => (o._cmp ? o : { ...o, _from: from })) : tagged
         return { all: [...cur.all, ...added], past: trimPast([...cur.past, cur.all]), future: [], burst: single ? key : null }
       })
       return true
@@ -354,13 +369,15 @@ export function useProofEditor({ baseDoc, initialOps = null, readOnly = false, p
     const cur = hRef.current
     const last = cur.all[cur.all.length - 1]
     const open =
-      !everything && cur.burst && last && !last._local && !last._g && last._c === cur.burst && Date.now() - (last._t || 0) < COALESCE_MS ? last : null
+      !everything && cur.burst && last && !last._local && (!last._g || last._cg) && last._c === cur.burst && Date.now() - (last._t || 0) < COALESCE_MS ? last : null
+    // פרץ פתוח עם פעולה נלווית ("לספר בלבד") — גם היא נשארת בחוץ עד שהפרץ נסגר: נשלחות יחד
+    const openGroup = open?._g || null
     const steps = []
     let i = -1
     for (const op of cur.all) {
       if (!op || op._local) continue
       i++
-      if (op === open) continue
+      if (op === open || (openGroup && op._g === openGroup)) continue
       const sid = op._s || `op${i}`
       if (skip && typeof skip.has === 'function' && skip.has(sid)) continue
       const n = TMP_LINES[op.kind] || 0

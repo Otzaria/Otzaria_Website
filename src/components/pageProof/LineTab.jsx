@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { SCRIPTS, CERTAINTY, isPrintDefect, streamInfo } from '@/lib/pageProof/vocab'
-import { RECUT_LINE_TITLE } from '@/lib/pageProof/helpTexts'
+import { SCRIPTS, CERTAINTY, isBookOnly, isPrintDefect, streamInfo } from '@/lib/pageProof/vocab'
+import { BOOK_ONLY_LINE, BOOK_ONLY_LINE_TITLE, CERTAINTY_HINT, RECUT_LINE_TITLE } from '@/lib/pageProof/helpTexts'
 
 // כרטיסיית "שורה" בלוח הפרטים: מה שנשאר ברמת השורה שבה הסמן — כתב, שורה
 // מעורבת-כתבים, ודאות (עם הסבר), "נכונה כפי שהיא" / "לא-שורה", ומה המערכת
@@ -54,6 +54,10 @@ export default function LineTab({ view, line, locked = false, readOnly = false, 
   const temp = !(line.id > 0) || !!line._new
   const dis = readOnly || temp
   const s = streamInfo(view, line.stream)
+  // סימון "לספר בלבד" בנוסח הישן (ודאות "פגם בדפוס") — מוצג כ"לספר בלבד", לא כ"לא בטוח" עם הסבר
+  const legacyBookOnly = isPrintDefect(line)
+  const certainty = legacyBookOnly ? null : line.certainty
+  const certaintyWhy = legacyBookOnly ? null : line.certainty_why
 
   return (
     <div className="text-on-surface">
@@ -65,9 +69,9 @@ export default function LineTab({ view, line, locked = false, readOnly = false, 
         </span>
         {line.status === 'fixed' && <span className="rounded bg-success-100 px-1.5 text-xs text-success-800">תוקנה</span>}
         {line._ok && <span className="rounded bg-success-100 px-1.5 text-xs text-success-800">✓ נכונה</span>}
-        {isPrintDefect(line) && (
-          <span className="rounded bg-warning-100 px-1.5 text-xs text-warning-800" title="תוקנה למה שאמור להיות בספר — נכנסת לספר, לא לאימון">
-            פגם בדפוס
+        {isBookOnly(line) && (
+          <span data-testid="book-only-badge" className="rounded bg-warning-100 px-1.5 text-xs text-warning-800" title={BOOK_ONLY_LINE_TITLE}>
+            לספר בלבד
           </span>
         )}
         {line.recheck === true && <span className="rounded bg-warning-alt-100 px-1.5 text-xs text-warning-alt-900">זוהתה מחדש</span>}
@@ -93,7 +97,17 @@ export default function LineTab({ view, line, locked = false, readOnly = false, 
         </label>
       </Section>
 
-      <Section title="ודאות" hint="עדיף סימון-עמימות על ניחוש — הלמידה מתעלמת מעמומים">
+      {act.bookOnly && (
+        <Section title="לספר בלבד" hint={BOOK_ONLY_LINE_TITLE}>
+          <label className="flex items-center gap-2 text-sm" title={BOOK_ONLY_LINE_TITLE}>
+            <input type="checkbox" disabled={dis} checked={isBookOnly(line)} onChange={(e) => act.bookOnly(e.target.checked)} />
+            {BOOK_ONLY_LINE}
+          </label>
+          <p className="mt-1 text-xs text-on-surface/60">{BOOK_ONLY_LINE_TITLE}</p>
+        </Section>
+      )}
+
+      <Section title="ודאות" hint={CERTAINTY_HINT}>
         <div className="flex flex-wrap gap-1">
           {Object.entries(CERTAINTY).map(([k, v]) => (
             <button
@@ -101,7 +115,7 @@ export default function LineTab({ view, line, locked = false, readOnly = false, 
               type="button"
               disabled={dis || (k === 'ambiguous' && !why.trim())}
               onClick={() => act.certainty(k, k === 'ambiguous' ? why.trim() : null)}
-              className={pick(line.certainty === k)}
+              className={pick(certainty === k)}
             >
               {v}
             </button>
@@ -115,15 +129,8 @@ export default function LineTab({ view, line, locked = false, readOnly = false, 
           placeholder='למה לא בטוח? (חובה ל"לא בטוח")'
           className="mt-2 w-full rounded-md border border-surface-variant bg-surface px-2 py-1 text-sm"
         />
-        {line.certainty_why && <p className="mt-1 text-xs text-on-surface/60">ההסבר שנשמר: {line.certainty_why}</p>}
-        {act.printDefect && (
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <button type="button" disabled={dis} onClick={act.printDefect} className={pick(isPrintDefect(line))}>
-              פגם בדפוס
-            </button>
-            <span className="text-xs text-on-surface/60">תיקנתי למה שאמור להיות כתוב בספר, לא למה שבסריקה — נכנס לספר, לא לאימון</span>
-          </div>
-        )}
+        {certaintyWhy && <p className="mt-1 text-xs text-on-surface/60">ההסבר שנשמר: {certaintyWhy}</p>}
+        <p className="mt-1 text-xs text-on-surface/60">{CERTAINTY_HINT}</p>
       </Section>
 
       <Section title="השורה עצמה">

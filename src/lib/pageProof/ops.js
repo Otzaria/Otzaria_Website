@@ -16,6 +16,8 @@ import {
   FRAME_OBJECT_KINDS,
   isStreamKey,
   isFurnitureStream,
+  isBookOnly,
+  isPrintDefect,
   keepHeading,
   streamName,
 } from './vocab.js';
@@ -249,6 +251,8 @@ export function validateOp(doc, op) {
     case 'certainty':
       if (!v || !Object.hasOwn(CERTAINTY, v.v)) return 'ערך-ודאות לא מוכר';
       return v.why == null || (typeof v.why === 'string' && v.why.length <= MAX_WHY) ? null : 'הסבר ארוך מדי';
+    case 'train_text':
+      return v === 0 || v === 1 ? null : 'הערך חייב להיות 0 (לספר בלבד) או 1 (רגיל)';
     case 'line_ok':
       return null;
     case 'line_split': {
@@ -621,6 +625,8 @@ export function applyOp(doc, op, opIndex = 0) {
       return mapLines(doc, ids, (l) => ({ ...l, flags: { ...(l.flags || {}), mixed_line: !!v }, _touched: true }));
     case 'certainty':
       return mapLines(doc, ids, (l) => ({ ...l, certainty: v.v, certainty_why: v.why ?? null }));
+    case 'train_text':
+      return mapLines(doc, ids, (l) => ({ ...l, train_text: v }));
     case 'line_ok':
       return mapLines(doc, ids, (l) => ({ ...l, _ok: true, status: l.status === 'pending' ? 'ok' : l.status }));
     case 'line_split': {
@@ -930,7 +936,7 @@ export { autoFrames } from './autoFrames.js';
 // text מטופל בנפרד (ראו compactOps); styles ו-para_break — הפעלה/כיבוי, הסדר חשוב.
 const LAST_WINS = new Set([
   'stream', 'para', 'para_start', 'script', 'status', 'bbox',
-  'page_type', 'mixed_line', 'certainty', 'line_ok', 'frames_set', 'cut_ok',
+  'page_type', 'mixed_line', 'certainty', 'train_text', 'line_ok', 'frames_set', 'cut_ok',
 ]);
 const PAGE_LEVEL = new Set(['frames_set', 'page_type', 'cut_ok']);
 
@@ -1213,6 +1219,75 @@ export function recutLineIds(baseDoc, ops) {
   return [...out].sort((a, b) => a - b);
 }
 
+// ---------- "לספר בלבד" (train_text) ----------
+
+// מצב "לספר בלבד" בעורך: כל עוד הוא דולק, כל תיקון-טקסט בשורה מקורית (מזהה חיובי
+// מהעמוד שיובא) שעוד אינה מסומנת — מקבל באותו push גם {kind:'train_text', value:0}.
+// שורה שסומנה בנוסח הישן ("פגם בדפוס" — vocab.isPrintDefect) כבר מסומנת.
+// הפעולה הנלווית מסומנת _cmp (שדה-פנים): useProofEditor שם אותה באותו צעד-ביטול של
+// ההקלדה, וצבירת-ההקלדה ממשיכה לעבוד. תיקון שאינו משנה את הטקסט — בלי סימון; אישור
+// בלי שינוי (line_ok) — בלי סימון (החלטת בעל הפרויקט, 2026-10-02).
+// list = הארגומנטים של push (פעולות, ואולי אפשרויות בסוף); view = התצוגה הנוכחית.
+export function withBookOnly(list, view, page) {
+  const args = Array.isArray(list) ? list : [];
+  const lines = lineMap(view);
+  const marked = new Set();
+  const out = [];
+  for (const op of args) {
+    const id = op && typeof op === 'object' && op.kind === 'text' && !op._local && Array.isArray(op.ids) && op.ids.length === 1 ? op.ids[0] : null;
+    const l = id != null ? lines.get(id) : null;
+    if (l && isInt(id) && id > 0 && !l._new && !isBookOnly(l) && !marked.has(id) && String(op.value ?? '') !== String(l.text ?? l.text_ocr ?? '')) {
+      marked.add(id);
+      out.push({ kind: 'train_text', page: op.page ?? page, ids: [id], value: 0, _cmp: true });
+    }
+    out.push(op);
+  }
+  return out;
+}
+
+// הטקסט הסופי של כל שורה לפי רשימת-הפעולות (רק מה שתיקוני-הטקסט קבעו)
+function finalTexts(ops) {
+  const out = new Map();
+  for (const op of ops || []) if (op?.kind === 'text' && op.ids?.length === 1) out.set(op.ids[0], String(op.value ?? ''));
+  return out;
+}
+
+// סימון אוטומטי (_cmp) על שורה שהטקסט שלה חזר בסוף לזה שיובא — יורד לפני ההגשה:
+// "לספר בלבד" מסמן רק שורות שהטקסט בהן *השתנה*. סימון ידני (לוח הפרטים) — נשאר.
+export function dropIdleBookOnly(baseDoc, ops) {
+  const list = Array.isArray(ops) ? ops : [];
+  if (!list.some((o) => o?._cmp)) return list;
+  const base = lineMap(baseDoc);
+  const fin = finalTexts(list);
+  return list.filter((o) => {
+    if (!o?._cmp || o.kind !== 'train_text') return true;
+    const id = o.ids?.[0];
+    const l = base.get(id);
+    return !!l && fin.has(id) && fin.get(id) !== String(l.text ?? l.text_ocr ?? '');
+  });
+}
+
+// הנוסח הישן של "לספר בלבד": פעולת-ודאות של הכפתור "פגם בדפוס" (2026-10-01) — "לא בטוח" עם הסיבה
+// הקבועה (vocab.PRINT_DEFECT_WHY). עדיין יכולה להגיע מטיוטה או מהגשה מלפני "לספר בלבד"
+export const isPrintDefectOp = (op) => op?.kind === 'certainty' && isPrintDefect({ certainty: op.value?.v, certainty_why: op.value?.why });
+
+// השורות שיסומנו "לספר בלבד" בהגשה — לחלון ההגשה ולמסך הסקירה של המנהל. כמו isBookOnly בשורה:
+// train_text = 0, או הנוסח הישן (ודאות "פגם בדפוס"); לכל אחד מהשדות הפעולה האחרונה לשורה קובעת
+export function bookOnlyLineIds(ops) {
+  const train = new Map();
+  const legacy = new Map();
+  const seen = new Set();
+  for (const op of ops || []) {
+    if (op?.kind !== 'train_text' && op?.kind !== 'certainty') continue;
+    for (const id of op.ids || []) {
+      seen.add(id);
+      if (op.kind === 'train_text') train.set(id, op.value);
+      else legacy.set(id, isPrintDefectOp(op));
+    }
+  }
+  return [...seen].filter((id) => train.get(id) === 0 || legacy.get(id));
+}
+
 // ---------- תיאור ----------
 
 const cut = (s, n = 40) => {
@@ -1284,7 +1359,11 @@ export function describeOp(doc, op) {
     case 'mixed_line':
       return `${where}${v ? 'שורה מעורבת-כתבים' : 'לא מעורבת'}`;
     case 'certainty':
+      // הנוסח הישן של "לספר בלבד" (הכפתור "פגם בדפוס") — מתואר כ"לספר בלבד", כמו שהוא נקרא
+      if (isPrintDefectOp(op)) return `${where}לספר בלבד — נכנס לספר, לא לאימון`;
       return `${where}${CERTAINTY[v.v]}${v.why ? ` — ${cut(v.why, 60)}` : ''}`;
+    case 'train_text':
+      return `${where}${v === 0 ? 'לספר בלבד — נכנס לספר, לא לאימון' : 'חזרה לאימון (בלי "לספר בלבד")'}`;
     case 'line_split':
       return `${where}פיצול בנקודה x=${v.x}`;
     case 'line_merge':

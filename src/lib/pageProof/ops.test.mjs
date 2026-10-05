@@ -23,8 +23,12 @@ import {
   withForeignLines,
   FAR_TEXT_SENT,
   MAX_FAR_TEXT,
+  withBookOnly,
+  dropIdleBookOnly,
+  bookOnlyLineIds,
+  isPrintDefectOp,
 } from './ops.js';
-import { OP_KINDS, isStreamKey, keepHeading } from './vocab.js';
+import { OP_KINDS, isStreamKey, keepHeading, isBookOnly, PRINT_DEFECT_WHY } from './vocab.js';
 
 const line = (id, bbox, extra = {}) => ({
   id,
@@ -1053,4 +1057,82 @@ test('foreignLinkRefs / withForeignLines: מה השרת בודק, ומה הוא 
 test('describeOp: קישור לעמוד אחר — העמוד, השורה ותחילת הטקסט של הצד השני', () => {
   assert.equal(describeOp(doc(), toFar()), 'שורה 3 ← עמוד 4, שורה 12 «ב ועוד נראה»: קישור הערה (מילה 1 ← מילה 2)');
   assert.equal(describeOp(doc(), fromFar({ kind: 'dh' })), 'עמוד 2, שורה 21 «ג והנה יש לומר» ← שורה 1: קישור דיבור-המתחיל (מילה 1 ← מילה 2)');
+});
+
+// ---------- "לספר בלבד" (train_text, 2026-10-02) ----------
+
+test('train_text: תצוגה, דחיסה (האחרונה קובעת), תיאור וצורת-החוזה', () => {
+  const d = doc();
+  const ops = [
+    { kind: 'train_text', page: 3, ids: [1], value: 0 },
+    { kind: 'train_text', page: 3, ids: [1], value: 1 },
+    { kind: 'train_text', page: 3, ids: [2], value: 0 },
+  ];
+  const v = buildView(d, ops);
+  assert.deepEqual(v.lines.map((l) => l.train_text), [1, 0, undefined]);
+  assert.deepEqual(compactOps(d, ops).map((o) => [o.ids[0], o.value]), [[1, 1], [2, 0]]);
+  assert.equal(describeOp(d, ops[0]), 'שורה 1: לספר בלבד — נכנס לספר, לא לאימון');
+  assert.equal(describeOp(d, ops[1]), 'שורה 1: חזרה לאימון (בלי "לספר בלבד")');
+  assert.deepEqual(sanitizeOp({ ...ops[0], _cmp: true, _g: 'g' }), { kind: 'train_text', page: 3, ids: [1], value: 0 });
+  assert.equal(OP_KINDS.train_text.contract, true);
+});
+
+test('withBookOnly: תיקון-טקסט בשורה מקורית שעוד לא סומנה ← סימון נלווה לפניו; בלי שינוי / שורה מסומנת / שורה חדשה — בלי', () => {
+  const d = doc();
+  const v = buildView(d, [{ kind: 'train_text', page: 3, ids: [2], value: 0 }]);
+  const t1 = { kind: 'text', page: 3, ids: [1], value: 'שורה אחת' };
+  const opts = { coalesceKey: 'text:1' };
+  const out = withBookOnly([t1, opts], v, 3);
+  assert.deepEqual(out, [{ kind: 'train_text', page: 3, ids: [1], value: 0, _cmp: true }, t1, opts]);
+  // כבר מסומנת (בתצוגה) / הטקסט לא השתנה / לא תיקון-טקסט / שורה זמנית
+  assert.equal(withBookOnly([{ kind: 'text', page: 3, ids: [2], value: 'אחר' }], v, 3).length, 1);
+  assert.equal(withBookOnly([{ kind: 'text', page: 3, ids: [1], value: 'שורה 1' }], v, 3).length, 1);
+  assert.equal(withBookOnly([{ kind: 'line_ok', page: 3, ids: [1] }], v, 3).length, 1);
+  assert.equal(withBookOnly([{ kind: 'text', page: 3, ids: [-5], value: 'x' }], v, 3).length, 1);
+  // כמה שורות בבת אחת (תוכנית של העורך) — סימון לכל אחת, פעם אחת
+  const two = withBookOnly([t1, { kind: 'text', page: 3, ids: [3], value: 'ג' }, { ...t1, value: 'עוד' }], v, 3);
+  assert.deepEqual(two.filter((o) => o.kind === 'train_text').map((o) => o.ids[0]), [1, 3]);
+});
+
+test('dropIdleBookOnly: סימון אוטומטי על שורה שחזרה לטקסט המקורי יורד; ידני — נשאר', () => {
+  const d = doc();
+  const ops = [
+    { kind: 'train_text', page: 3, ids: [1], value: 0, _cmp: true },
+    { kind: 'text', page: 3, ids: [1], value: 'שורה אחת' },
+    { kind: 'text', page: 3, ids: [1], value: 'שורה 1' },
+    { kind: 'train_text', page: 3, ids: [2], value: 0, _cmp: true },
+    { kind: 'text', page: 3, ids: [2], value: 'שורה שתיים' },
+    { kind: 'train_text', page: 3, ids: [3], value: 0 },
+  ];
+  const out = dropIdleBookOnly(d, ops);
+  assert.deepEqual(out.filter((o) => o.kind === 'train_text').map((o) => o.ids[0]), [2, 3]);
+  assert.deepEqual(bookOnlyLineIds(out), [2, 3]);
+  assert.deepEqual(bookOnlyLineIds([...out, { kind: 'train_text', page: 3, ids: [3], value: 1 }]), [2]);
+  const manualOnly = [ops[5]];
+  assert.equal(dropIdleBookOnly(d, manualOnly), manualOnly, 'בלי סימון אוטומטי — אותה רשימה');
+});
+
+// הנוסח הישן של "לספר בלבד" — הכפתור "פגם בדפוס" (#186): ודאות "לא בטוח" עם הסיבה הקבועה. אין לו עוד כפתור,
+// אבל סימונים שכבר נעשו (טיוטות והגשות) נקראים, נספרים ומתוארים כ"לספר בלבד"
+test('"לספר בלבד" בנוסח הישן (ודאות "פגם בדפוס"): נקרא, נספר ומתואר כ"לספר בלבד"; ודאות אחרת מבטלת אותו', () => {
+  const d = doc();
+  const legacy = { kind: 'certainty', page: 3, ids: [1], value: { v: 'ambiguous', why: PRINT_DEFECT_WHY } };
+  assert.equal(isPrintDefectOp(legacy), true);
+  assert.equal(isPrintDefectOp({ ...legacy, value: { v: 'ambiguous', why: 'לא ברור מה כתוב' } }), false);
+  assert.equal(isPrintDefectOp({ ...legacy, kind: 'train_text', value: 0 }), false);
+  assert.equal(isBookOnly(buildView(d, [legacy]).lines.find((l) => l.id === 1)), true);
+  assert.equal(describeOp(d, legacy), 'שורה 1: לספר בלבד — נכנס לספר, לא לאימון');
+  assert.equal(describeOp(d, { ...legacy, value: { v: 'ambiguous', why: 'לא ברור' } }), 'שורה 1: לא בטוח — לא ברור');
+  // נספר בחלון ההגשה ובסקירה, גם לצד train_text; ודאות אחרת אחריו (הסרת הסימון) — כבר לא
+  assert.deepEqual(bookOnlyLineIds([legacy]), [1]);
+  assert.deepEqual(bookOnlyLineIds([legacy, { kind: 'train_text', page: 3, ids: [2], value: 0 }]), [1, 2]);
+  const off = [legacy, { kind: 'train_text', page: 3, ids: [1], value: 1 }, { kind: 'certainty', page: 3, ids: [1], value: { v: 'probable', why: null } }];
+  assert.deepEqual(bookOnlyLineIds(off), []);
+  assert.equal(isBookOnly(buildView(d, off).lines.find((l) => l.id === 1)), false);
+  // ודאות אחרת שבאה עם train_text = 0 (העורך מעביר את הסימון) — עדיין "לספר בלבד"
+  const moved = [legacy, { kind: 'certainty', page: 3, ids: [1], value: { v: 'certain', why: null } }, { kind: 'train_text', page: 3, ids: [1], value: 0 }];
+  assert.deepEqual(bookOnlyLineIds(moved), [1]);
+  // מצב "לספר בלבד" אינו מסמן שוב שורה שכבר מסומנת בנוסח הישן
+  const v = buildView(d, [legacy]);
+  assert.equal(withBookOnly([{ kind: 'text', page: 3, ids: [1], value: 'אחר' }], v, 3).length, 1);
 });

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { useDialog } from '@/components/providers/DialogContext'
 import { formatDateWithTime } from '@/lib/formatDate'
-import { needsRecut, foreignLinkRefs } from '@/lib/pageProof/ops'
+import { needsRecut, foreignLinkRefs, bookOnlyLineIds } from '@/lib/pageProof/ops'
 import { farLabel } from '@/lib/pageProof/flowEdit'
 import { cleanOps } from '@/lib/pageProof/submitPlan'
 import ProofEditor from '../ProofEditor'
@@ -31,6 +31,8 @@ const rev = (v) => (Number.isInteger(v) && v >= 1 ? v : 1)
 const RECUT_HINT = 'אחרי האישור העמוד ימתין לזיהוי-מחדש בתוכנת-הספר ויחזור להגהה במעבר שני'
 const RECUT_SKIPPED =
   'הגשה אחרת לעמוד הזה כבר יצאה בקובץ-התיקונים הראשי, ולכן תיקוני-החיתוך של ההגשה הזו ייצאו רק בקובץ הכפולים — העמוד לא יעבור לזיהוי-מחדש בגללם.'
+const BOOK_ONLY_REVIEW_TITLE =
+  'המתייג סימן שורות "לספר בלבד": הטקסט המתוקן ייכנס לספר, אבל השורות לא ישמשו לאימון מודל-הזיהוי (המבנה שלהן כן נלמד). אם הסימון מיותר — "עריכה לפני אישור", ובלוח הפרטים ← שורה מורידים אותו.'
 const RELEASE_TITLE =
   'העמוד ממתין לזיהוי-מחדש בתוכנת-הספר. אם התוכנה לא תחזיר גרסה חדשה שלו (למשל תיקון-החיתוך נכשל שם) — שחררו אותו: הוא ייסגר בלי זיהוי-מחדש'
 const REQUEST_BADGE = 'בקשת מתנדב לזיהוי-מחדש — רק תיקוני-החיתוך, נשלחה בלי אישור מנהל; שאר התיקונים של המתנדב יגיעו בהגשה רגילה'
@@ -139,6 +141,7 @@ export default function ReviewModal({ id, onClose, onDone, onPageChanged }) {
   const oldRevision = !!sub && rev(sub.revision) !== rev(data.page?.revision)
   const subRecut = !!sub && (sub.needsRecut ?? needsRecut(sub.ops))
   const farLinks = sub ? foreignLinkRefs(data.page?.doc, sub.ops) : []
+  const bookOnlyN = sub ? bookOnlyLineIds(sub.ops).length : 0
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 p-2" dir="rtl">
@@ -167,6 +170,11 @@ export default function ReviewModal({ id, onClose, onDone, onPageChanged }) {
                     כולל תיקוני-חיתוך — {RECUT_HINT}
                   </span>
                 )
+              )}
+              {bookOnlyN > 0 && (
+                <span data-testid="review-book-only" className="rounded bg-warning-100 px-2 py-0.5 text-sm text-warning-800" title={BOOK_ONLY_REVIEW_TITLE}>
+                  {bookOnlyN === 1 ? 'שורה אחת' : `${bookOnlyN} שורות`} &quot;לספר בלבד&quot; — לא לאימון
+                </span>
               )}
               {farLinks.map((r) => (
                 <span key={r.i} data-testid="far-link" className="rounded bg-info-50 px-2 py-0.5 text-sm text-info-800" title="הצד השני של הקישור בעמוד אחר של הספר">

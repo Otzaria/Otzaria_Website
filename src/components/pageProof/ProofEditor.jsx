@@ -1,10 +1,11 @@
 'use client'
 
 import { memo, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { buildView, recutLineIds, validateOp } from '@/lib/pageProof/ops'
+import { buildView, recutLineIds, validateOp, withBookOnly } from '@/lib/pageProof/ops'
 import { historyCaret } from '@/lib/pageProof/historyCaret'
 import { streamChoices, untouchedLineIds, replaceWord, viewStats } from '@/lib/pageProof/view'
-import { isFurnitureStream, isPrintDefect, keepHeading, PRINT_DEFECT_WHY, streamInfo } from '@/lib/pageProof/vocab'
+import { isFurnitureStream, isPrintDefect, keepHeading, streamInfo } from '@/lib/pageProof/vocab'
+import { BOOK_ONLY_HINTS } from '@/lib/pageProof/helpTexts'
 import { streamTabs, paragraphApproval, pageApproval, buildParagraphs, selectionToLineRanges, tokenize, FURNITURE_TAB, FURNITURE_TAB_HE } from '@/lib/pageProof/textModel'
 import {
   HINTS,
@@ -96,6 +97,14 @@ import { caretTop, readDomSelection } from './flowDom'
 //     כמו באתר ("אושרה בסבב קודם", הכפתור כבוי); איתו — הכפתור פעיל, והדף העוטף מבטל בשרת.
 //   helpAutoOpen — פתיחת העזרה לבד בפעם הראשונה (ברירת-המחדל: בעריכה עם טיוטות — persist).
 //   help.lockedLine — ההסבר על שורה נעולה (ממתינה לזיהוי-מחדש) במקום הנוסח של האתר.
+//   help.bookOnlyTitle — ההסבר על הכפתור "לספר בלבד" (כשהוא כבוי) במקום הנוסח של האתר ("אחרי אישור המנהל").
+//
+// מצב "לספר בלבד" (כפתור בסרגל, נשמר בדפדפן — BOOK_ONLY_KEY): כל עוד הוא דולק, כל תיקון-טקסט
+// בשורה מקורית שעוד אינה מסומנת מקבל באותו צעד גם train_text = 0 (ops.withBookOnly) — Ctrl+Z
+// אחד מבטל את שניהם. אישור בלי שינוי אינו מסמן. לשורה בודדת — לוח הפרטים ← שורה.
+// סימון בנוסח הישן ("פגם בדפוס": ודאות "לא בטוח" עם סיבה קבועה — vocab.isPrintDefect) נקרא כ"לספר
+// בלבד" ואינו הולך לאיבוד: הסרת "לספר בלבד" מורידה גם אותו, ושינוי-ודאות בשורה כזו מעביר אותו
+// ל-train_text = 0 — כל אחד בצעד-ביטול אחד.
 //
 // הסמן משותף לטקסט ולסריקה: השורה שבה הסמן מסומנת על הסריקה, ולחיצה על
 // הסריקה מעבירה את הסמן לשורה שם (ולשונית הזרם שלה).
@@ -137,6 +146,24 @@ function isTextField(t) {
   if (t.tagName === 'TEXTAREA') return true
   if (t.tagName === 'INPUT') return !NON_TEXT_INPUTS.has(String(t.type || 'text').toLowerCase())
   return !!t.isContentEditable
+}
+
+// מצב "לספר בלבד" — נשמר בדפדפן (כמו הפריסה); בדפדפן בלי אחסון — כבוי
+export const BOOK_ONLY_KEY = 'pageProof.bookOnly'
+function loadBookOnly() {
+  try {
+    return window.localStorage.getItem(BOOK_ONLY_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+function saveBookOnly(on) {
+  try {
+    if (on) window.localStorage.setItem(BOOK_ONLY_KEY, '1')
+    else window.localStorage.removeItem(BOOK_ONLY_KEY)
+  } catch {
+    /* אחסון חסום — המצב פשוט לא נשמר */
+  }
 }
 
 function loadLayout() {
@@ -251,8 +278,10 @@ export default function ProofEditor({
   // העמוד שמולו עובדים: page.doc, או מה שהשרת החזיר אחרי שמירה (rebase)
   const baseDoc = ed.baseDoc
   const P = baseDoc.page
-  const { view, ops, push } = ed
+  const { view, ops } = ed
   const { showAlert, showConfirm } = useDialog()
+  // מצב "לספר בלבד": כל תיקון-טקסט בשורה מסמן אותה (train_text = 0) — ראו push למטה
+  const [bookOnly, setBookOnly] = useState(loadBookOnly)
 
   const [layout, setLayout] = useState(loadLayout)
   const [scanMode, setScanMode] = useState('frames')
@@ -323,6 +352,39 @@ export default function ProofEditor({
     const t = setTimeout(() => setHint(null), HINT_MS)
     return () => clearTimeout(t)
   }, [hint])
+
+  // ---- push: כל פעולה עוברת כאן. במצב "לספר בלבד" תיקון-טקסט בשורה שעוד אינה מסומנת מקבל
+  // באותו צעד גם train_text = 0 (ops.withBookOnly; צעד-ביטול אחד, צבירת-ההקלדה נשמרת).
+  // יציב לאורך חיי המופע — המצב והתצוגה העדכניים דרך ref ----
+  const bo = useRef({ on: false, view, P, told: false })
+  useLayoutEffect(() => {
+    bo.current.on = bookOnly && !readOnly
+    bo.current.view = view
+    bo.current.P = P
+  })
+  const rawPush = ed.push
+  const push = useCallback(
+    (...args) => {
+      const b = bo.current
+      if (!b.on) return rawPush(...args)
+      const list = withBookOnly(args, b.view, b.P)
+      const marked = list.length > args.length
+      const ok = rawPush(...list)
+      if (ok && marked && !b.told) {
+        b.told = true
+        say(BOOK_ONLY_HINTS.firstMark)
+      }
+      return ok
+    },
+    [rawPush, say]
+  )
+  const toggleBookOnly = () => {
+    const on = !bookOnly
+    setBookOnly(on)
+    saveBookOnly(on)
+    bo.current.told = false
+    say(on ? BOOK_ONLY_HINTS.on : BOOK_ONLY_HINTS.off)
+  }
 
   // ---- פריסה: רוחב, צדדים, גודל וגופן (נשמרים בדפדפן) ----
   const updateLayout = useCallback((patch, save = true) => {
@@ -549,31 +611,6 @@ export default function ProofEditor({
           : `${moved} לזרם «${he}» — ${shown} עכשיו בלשונית שלו`
       )
     }
-  }
-
-  // ---- "פגם בדפוס" לשורות שבבחירה (או לשורת-הסמן): תוקן למה שאמור להיות בספר, לא למה שבסריקה ----
-  // מתג: כשכל השורות כבר מסומנות — הסימון יורד ("סביר": בחוזה אין "ללא ודאות")
-  const defectLines = () => {
-    const ranges = sel && !isCollapsed(sel) ? selectionToLineRanges(view, tabKey, sel.anchor, sel.focus) : caret ? [{ lineId: caret.lineId }] : []
-    const out = []
-    for (const r of ranges) {
-      const l = lineById.get(r.lineId)
-      if (l && l.id > 0 && !l._new && !out.includes(l)) out.push(l)
-    }
-    return out
-  }
-  const printDefect = () => {
-    const ls = defectLines()
-    if (!ls.length) return say(HINTS.noWord)
-    const off = ls.every(isPrintDefect)
-    const value = off ? { v: 'probable', why: null } : { v: 'ambiguous', why: PRINT_DEFECT_WHY }
-    if (!push({ kind: 'certainty', page: P, ids: ls.map((l) => l.id), value })) return
-    const one = ls.length === 1
-    say(
-      off
-        ? `הסימון «פגם בדפוס» הוסר מ${one ? 'השורה' : `-${ls.length} שורות`}`
-        : `${one ? 'השורה סומנה' : `${ls.length} שורות סומנו`} «פגם בדפוס»: הטקסט המתוקן נכנס לספר, ו${one ? 'השורה לא תשמש' : 'הן לא ישמשו'} לאימון מודל-הזיהוי`
-    )
   }
 
   const goSuspicious = (dir) => {
@@ -831,8 +868,26 @@ export default function ProofEditor({
     cancelLink,
     script: (v) => lineOp('script', v),
     mixed: (b) => lineOp('mixed_line', b ? 1 : 0),
-    certainty: (v, why) => lineOp('certainty', { v, why: why || null }),
-    printDefect: () => printDefect(),
+    // ודאות; בשורה שסומנה "לספר בלבד" בנוסח הישן (ודאות "פגם בדפוס") — הסימון עובר באותו צעד ל-train_text = 0,
+    // כדי שבחירת-ודאות לא תמחק אותו בשקט
+    certainty: (v, why) => {
+      const value = { v, why: why || null }
+      if (!isPrintDefect(caretLine) || caretLine.train_text === 0 || !(caretLine.id > 0)) return lineOp('certainty', value)
+      const ids = [caretLine.id]
+      return push({ kind: 'certainty', page: P, ids, value }, { kind: 'train_text', page: P, ids, value: 0 })
+    },
+    // "לספר בלבד" לשורה אחת (בלי קשר למצב שבסרגל): on — 0, אחרת 1 (חזרה לאימון). שורה שסומנה בנוסח
+    // הישן — ההסרה מורידה גם את ודאות "פגם בדפוס" (חזרה ל"סביר"), באותו צעד
+    bookOnly: (on) => {
+      const legacy = !on && isPrintDefect(caretLine) && caretLine.id > 0
+      const ok = legacy
+        ? push(
+            { kind: 'train_text', page: P, ids: [caretLine.id], value: 1 },
+            { kind: 'certainty', page: P, ids: [caretLine.id], value: { v: 'probable', why: null } }
+          )
+        : lineOp('train_text', on ? 0 : 1)
+      if (ok) say(on ? BOOK_ONLY_HINTS.lineOn : BOOK_ONLY_HINTS.lineOff)
+    },
     lineOk: () => lineOp('line_ok'),
     remove: () => {
       if (lineOp('status', 'removed')) say('השורה סומנה "לא-שורה" והוסרה מהטקסט — שחזור בכרטיסיית "עמוד"')
@@ -942,8 +997,9 @@ export default function ProofEditor({
         onNextSuspicious={suspectCount > 0 ? goSuspicious : null}
         streams={streams}
         onStreamForLines={edit && hasCaret ? streamForLines : null}
-        onPrintDefect={edit && hasCaret && !furnitureTab ? printDefect : null}
-        printDefect={!!caretLine && isPrintDefect(caretLine)}
+        onBookOnly={edit ? toggleBookOnly : null}
+        bookOnly={edit && bookOnly}
+        bookOnlyTitle={typeof help?.bookOnlyTitle === 'string' ? help.bookOnlyTitle : undefined}
         fontSize={layout.fontSize}
         setFontSize={(n) => updateLayout({ fontSize: clampFontSize(n) })}
         fontFamily={fontFamily}
@@ -1015,6 +1071,7 @@ export default function ProofEditor({
         opsCount={ops.length}
         approval={approvalSummary}
         hint={hint?.text ?? null}
+        bookOnly={edit && bookOnly}
       />
 
       {pop.popup}
