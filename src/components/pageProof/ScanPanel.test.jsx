@@ -371,7 +371,7 @@ describe('ScanPanel — סדר ההצעה, שורות מחוץ למסגרות, �
     expect(screen.queryByTestId('furniture-note')).not.toBeInTheDocument()
   })
 
-  it('ריהוט שבתוך מסגרת — כבר רואים אותו, ואינו מסומן שוב', () => {
+  it('ריהוט שבתוך מסגרת-ריהוט — כבר רואים אותו, ואינו מסומן שוב', () => {
     const base = {
       ...doc(),
       lines: [...doc().lines, L(5, [400, 20, 600, 50], 'header')],
@@ -380,6 +380,39 @@ describe('ScanPanel — סדר ההצעה, שורות מחוץ למסגרות, �
     const { container } = setup({ base })
     expect(container.querySelector('[data-furniture]')).not.toBeInTheDocument()
     expect(screen.queryByTestId('furniture-note')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('furniture-in-text-note')).not.toBeInTheDocument()
+  })
+
+  // סקירת #186: מסגרת "ראשי" גדולה שכוללת את כותרת-הרצה שזוהתה — הסימון נשאר, ואומר שכך היא תיכנס לספר
+  it('ריהוט שזוהה בתוך מסגרת של טקסט — מסומן, עם התווית וההודעה "בתוך מסגרת של טקסט"', () => {
+    const base = {
+      ...doc(),
+      lines: [...doc().lines, L(5, [400, 20, 600, 50], 'header'), L(6, [480, 950, 520, 980], 'footer')],
+      frames: [{ fid: 'aa11bb', stream: 'main', bbox: [90, 10, 910, 200], order: 1 }],
+    }
+    const { container, log } = setup({ base })
+    // בתצוגה השורה בזרם של המסגרת ("ראשי") — ועדיין מסומנת כריהוט שזוהה
+    expect(log.view.lines.find((l) => l.id === 5).stream).toBe('main')
+    expect(container.querySelector('[data-furniture="5"]')).toBeInTheDocument()
+    expect(container.querySelector('[data-furniture="6"]')).toBeInTheDocument()
+    const labels = screen.getAllByTestId('furniture-label')
+    expect(labels.map((x) => x.textContent)).toEqual(['ריהוט · כותרת עמוד · בתוך מסגרת של טקסט', 'ריהוט · תחתית'])
+    expect(labels[0]).toHaveAttribute('title', expect.stringMatching(/וכך הוא ייכנס לספר כטקסט/))
+    expect(screen.getByTestId('furniture-in-text-note')).toHaveTextContent(/שורת ריהוט אחת שזוהתה \(באפור\) נמצאת בתוך מסגרת של טקסט.*"ריהוט הדף"/)
+    expect(screen.getByTestId('furniture-note')).toHaveTextContent(/שורת ריהוט אחת/)
+  })
+
+  it('גם מסגרת-כותרת או מסגרת-אובייקט אינן מסתירות ריהוט שזוהה', () => {
+    const withFrame = (frame) => ({ ...doc(), lines: [...doc().lines, L(5, [400, 20, 600, 50], 'header')], frames: [frame] })
+    const first = setup({ base: withFrame({ fid: 'aa11bb', stream: 'main_heading', bbox: [390, 10, 610, 60], order: 1 }) })
+    expect(first.container.querySelector('[data-furniture="5"]')).toBeInTheDocument()
+    expect(screen.getByTestId('furniture-in-text-note')).toBeInTheDocument()
+    first.unmount()
+    // מסגרת-אובייקט אינה נותנת זרם לשורות — הכותרת נשארת ריהוט, בלי "בתוך מסגרת של טקסט"
+    const second = setup({ base: withFrame({ fid: 'cc22dd', stream: 'main', kind: 'table', bbox: [0, 0, 1000, 1000], order: 1 }) })
+    expect(second.container.querySelector('[data-furniture="5"]')).toBeInTheDocument()
+    expect(screen.getAllByTestId('furniture-label').map((x) => x.textContent)).toEqual(['ריהוט · כותרת עמוד'])
+    expect(screen.queryByTestId('furniture-in-text-note')).not.toBeInTheDocument()
   })
 
   it('שורות מחוץ לכל מסגרת מסומנות, ו"✓ המסגרות נכונות" שואל לפני האישור', async () => {

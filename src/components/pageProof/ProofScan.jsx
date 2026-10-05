@@ -49,8 +49,9 @@ import {
 //   recutIds        Set — שורות "לזיהוי מחדש" (כתום מקווקו + תווית)
 //   straddleIds     Set — שורות שבולטות מהמסגרות (אדום מקווקו, גם במצב מסגרות)
 //   outsideIds      Set — שורות-תוכן מחוץ לכל מסגרת (כתום מקווקו, במצב מסגרות)
-//   furniture       [{id, bbox, stream}] — שורות-ריהוט בלי מסגרת (furnitureMarks): אפור מקווקו
-//                   ותווית "ריהוט", במצב מסגרות — כדי שלא יציירו להן מסגרת חדשה
+//   furniture       [{id, bbox, stream, inText}] — שורות-ריהוט שזוהו ואין סביבן מסגרת-ריהוט
+//                   (furnitureMarks): אפור מקווקו ותווית "ריהוט", במצב מסגרות — כדי שלא יציירו להן
+//                   מסגרת חדשה; inText — מסגרת של טקסט בלעה אותה (התווית אומרת שכך תיכנס לספר)
 //   currentLineId   השורה של הסמן בטקסט — פס שקוף + חץ בקצה המסגרת
 //   currentWord     מספר המילה של הסמן בשורה (אינדקס ב-words[]; אין = -1) — מודגשת
 //                   על הסריקה לפי words[i].bbox, בשני המצבים
@@ -78,6 +79,10 @@ import {
 
 const EMPTY = new Set()
 const EMPTY_LIST = []
+// הכיתוב של ריהוט שזוהה (furnitureMarks): בלי מסגרת סביבו — אין מה לעשות; בתוך מסגרת של טקסט — כך ייכנס לספר
+const FURNITURE_TITLE = 'ריהוט הדף שהמחשב זיהה — לא נכנס לספר; אין צורך לצייר לו מסגרת'
+const FURNITURE_IN_TEXT_TITLE =
+  'ריהוט הדף שהמחשב זיהה, בתוך מסגרת של טקסט — וכך הוא ייכנס לספר כטקסט. אם זה ריהוט: הקטינו את המסגרת, או ציירו סביבו מסגרת "ריהוט הדף"'
 const OBJECT_COLOR = '#6b7280'
 // סמן שזז בגלל לחיצה על הסריקה (בתוך הזמן הזה אחריה) — בלי גלילה-אוטומטית
 const PICK_NO_REVEAL_MS = 800
@@ -699,11 +704,12 @@ export default function ProofScan({
                   <span
                     key={`f${m.id}`}
                     data-testid="furniture-label"
-                    title="ריהוט הדף שהמחשב זיהה — לא נכנס לספר; אין צורך לצייר לו מסגרת"
+                    title={m.inText ? FURNITURE_IN_TEXT_TITLE : FURNITURE_TITLE}
                     className="absolute rounded-sm bg-neutral-100/90 px-1 text-[10px] leading-4 text-neutral-600"
                     style={{ left: m.bbox[0] * zoom + 2, top: m.bbox[1] * zoom + 1 }}
                   >
                     ריהוט · {streamInfo(view, m.stream).he}
+                    {m.inText && ' · בתוך מסגרת של טקסט'}
                   </span>
                 ))}
             {mode === 'lines' &&

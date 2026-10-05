@@ -543,13 +543,53 @@ test('furnitureMarks: שורות-ריהוט בלי מסגרת סביבן (לסי
     L(5, [100, 1110, 900, 1115], 'sep'),
   ];
   const ids = (fr) => furnitureMarks(lines, fr).map((m) => m.id);
+  // שורה שהוסרה — לא מסומנת
   assert.deepEqual(ids([]), [1, 3, 5]);
-  // שורה שבתוך מסגרת (גם מסגרת-ריהוט שצוירה) — כבר רואים אותה; שורה שהוסרה — לא מסומנת
-  assert.deepEqual(ids([{ fid: 'a', stream: 'main', bbox: [90, 30, 910, 1120], order: 1 }]), [3]);
-  // מסגרת-אובייקט (טבלה/איור) אינה "מכסה" ריהוט
-  assert.deepEqual(ids([{ fid: 'b', stream: 'main', kind: 'table', bbox: [0, 0, 1000, 2000], order: 1 }]), [1, 3, 5]);
-  assert.deepEqual(furnitureMarks(lines, [])[0], { id: 1, bbox: [400, 40, 600, 70], stream: 'header' });
+  // רק מסגרת-ריהוט מכסה — בה כבר רואים את השורה: כותרת עמוד, תחתית, מפריד, ו"ריהוט הדף" / "כותרת-רצה
+  // של ההערות" אם הגיעו כבחירה
+  assert.deepEqual(ids([{ fid: 'a', stream: 'header', bbox: [390, 30, 610, 80], order: 1 }]), [3, 5]);
+  assert.deepEqual(ids([{ fid: 'a', stream: 'footer', bbox: [470, 1890, 530, 1940], order: 1 }]), [1, 5]);
+  assert.deepEqual(ids([{ fid: 'a', stream: 'sep', bbox: [90, 1105, 910, 1120], order: 1 }]), [1, 3]);
+  assert.deepEqual(ids([{ fid: 'a', stream: FURNITURE_CHOICE, bbox: [390, 30, 610, 80], order: 1 }]), [3, 5]);
+  assert.deepEqual(ids([{ fid: 'a', stream: NOTES_RUNHEAD_CHOICE, bbox: [390, 30, 610, 80], order: 1 }]), [3, 5]);
+  // סקירת #186: מסגרת של טקסט רגיל — גם גדולה, על כל הטקסט — אינה מסתירה ריהוט שזוהה
+  assert.deepEqual(ids([{ fid: 'b', stream: 'main', bbox: [90, 30, 910, 1120], order: 1 }]), [1, 3, 5]);
+  assert.deepEqual(ids([{ fid: 'b', stream: 'notes', bbox: [0, 0, 1000, 2000], order: 1 }]), [1, 3, 5]);
+  // ...וגם לא מסגרת-כותרת ("כותרת", "כותרת הערות")
+  assert.deepEqual(ids([{ fid: 'c', stream: 'main_heading', bbox: [390, 30, 610, 80], order: 1 }]), [1, 3, 5]);
+  assert.deepEqual(ids([{ fid: 'c', stream: 'notes_heading', bbox: [470, 1890, 530, 1940], order: 1 }]), [1, 3, 5]);
+  // מסגרת-אובייקט (טבלה/איור) אינה "מכסה" ריהוט — גם כשהזרם שלה ריהוט
+  assert.deepEqual(ids([{ fid: 'd', stream: 'main', kind: 'table', bbox: [0, 0, 1000, 2000], order: 1 }]), [1, 3, 5]);
+  assert.deepEqual(ids([{ fid: 'd', stream: 'header', kind: 'figure', bbox: [390, 30, 610, 80], order: 1 }]), [1, 3, 5]);
+  assert.deepEqual(furnitureMarks(lines, [])[0], { id: 1, bbox: [400, 40, 600, 70], stream: 'header', inText: false });
   assert.deepEqual(furnitureMarks(null, null), []);
+});
+
+// סקירת #186 (Y-PLONI): בתצוגה (buildView) מסגרת-טקסט נותנת לשורות שבתוכה את הזרם שלה — כותרת-רצה שמסגרת
+// "ראשי" גדולה בלעה נראית "ראשי". היא עדיין ריהוט שזוהה: מסומנת, ו-inText אומר שכך היא תיכנס לספר כטקסט
+test('furnitureMarks על התצוגה: ריהוט שמסגרת-טקסט בלעה — מסומן (inText); בתוך מסגרת-ריהוט — לא; זרם שנקבע ביד קובע', () => {
+  const base = {
+    ...twoCols(),
+    lines: [L(1, [400, 40, 600, 70], 'header'), L(2, [100, 120, 900, 1100], 'main'), L(3, [480, 1900, 520, 1930], 'footer')],
+  };
+  const marks = (frames, ops = []) => furnitureMarks(buildView({ ...base, frames }, ops).lines, frames);
+  const big = { fid: 'aa11bb', stream: 'main', bbox: [90, 30, 910, 1120], order: 1 };
+  // מסגרת "ראשי" על כל הטקסט, כולל כותרת-הרצה: בתצוגה השורה "ראשי" — ועדיין מסומנת, עם inText
+  assert.equal(buildView({ ...base, frames: [big] }).lines.find((l) => l.id === 1).stream, 'main');
+  assert.deepEqual(marks([big]), [
+    { id: 1, bbox: [400, 40, 600, 70], stream: 'header', inText: true },
+    { id: 3, bbox: [480, 1900, 520, 1930], stream: 'footer', inText: false },
+  ]);
+  // מסגרת "כותרת עמוד" קטנה בתוך הגדולה — הפנימית קובעת: השורה ריהוט, וכבר רואים אותה
+  const head = { fid: 'cc22dd', stream: 'header', bbox: [390, 30, 610, 80], order: 2 };
+  assert.deepEqual(marks([big, head]).map((m) => m.id), [3]);
+  // מסגרת-אובייקט אינה בולעת שורות ואינה מכסה
+  assert.deepEqual(marks([{ fid: 'ee33ff', stream: 'main', kind: 'table', bbox: [0, 0, 1000, 2000], order: 1 }]).map((m) => [m.id, m.inText]), [
+    [1, false],
+    [3, false],
+  ]);
+  // המתנדב קבע לכותרת-הרצה "ראשי" ביד — כבר אינה ריהוט, ואין סימון
+  assert.deepEqual(marks([big], [{ kind: 'stream', page: 7, ids: [1], value: 'main' }]).map((m) => m.id), [3]);
 });
 
 test('drawStreamFor', () => {

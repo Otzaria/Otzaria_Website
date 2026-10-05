@@ -621,19 +621,34 @@ export function toggleSelection(current, list, additive) {
 
 const overlaps = (a, b) => Math.min(a[2], b[2]) > Math.max(a[0], b[0]) && Math.min(a[3], b[3]) > Math.max(a[1], b[1]);
 
+// מסגרת-ריהוט: מסגרת-טקסט שהזרם שלה ריהוט — כותרת עמוד, תחתית או מפריד. "ריהוט הדף" ו"כותרת-רצה
+// של ההערות" נשמרים כזרם-ריהוט (resolveFrameStream), ואם הבחירה עצמה הגיעה כזרם — גם היא ריהוט.
+// מסגרת של טקסט רגיל או של כותרת ("כותרת", "כותרת הערות") אינה מסגרת-ריהוט, וגם לא מסגרת-אובייקט.
+export function isFurnitureFrame(f) {
+  if (!f || isObjectFrame(f)) return false;
+  return f.stream === FURNITURE_CHOICE || f.stream === NOTES_RUNHEAD_CHOICE || isFurnitureStream(f.stream);
+}
+
+// הזרם שזוהה לשורה: שורה שמסגרת-טקסט נתנה לה את הזרם שלה (ops.applyFrameStreams — stream_src
+// 'frame') — הזרם שיובא, שנשמר ב-_auto. כך כותרת-רצה שמסגרת "ראשי" גדולה בלעה היא עדיין ריהוט שזוהה
+const detectedStream = (l) => (l.stream_src === 'frame' && l._auto ? l._auto.stream : l.stream);
+
+// שורות-הריהוט שזוהו (כותרת-רצה, מספר עמוד, מפריד — לרוב מהזיהוי האוטומטי) ואין סביבן מסגרת-ריהוט:
+// במצב "מסגרות" הן מסומנות באפור, כדי שהמתנדב יראה שהן כבר זוהו ולא יצייר להן מסגרת חדשה. רק
+// מסגרת-ריהוט (isFurnitureFrame) "מכסה" שורה כזו — בה כבר רואים אותה. מסגרת של טקסט רגיל או של
+// כותרת אינה מסתירה אותה (בתוך מסגרת "ראשי" גדולה היא נכנסת לספר כטקסט — inText), וגם לא
+// מסגרת-אובייקט. שורה שהמתנדב קבע לה ביד זרם שאינו ריהוט — כבר אינה ריהוט.
+// ← [{id, bbox, stream, inText}] בסדר העמוד; inText — השורה כרגע בזרם של המסגרת, לא ריהוט
+export function furnitureMarks(lines, frames) {
+  const boxes = (frames || []).filter(isFurnitureFrame).map((f) => f.bbox).filter(isBox);
+  return liveLines(lines)
+    .filter((l) => isFurnitureStream(detectedStream(l)) && !boxes.some((b) => contains(b, center(l.bbox))))
+    .map((l) => ({ id: l.id, bbox: l.bbox, stream: frameBase(detectedStream(l)), inText: !isFurnitureStream(l.stream) }));
+}
+
 // שורות-תוכן שאינן נוגעות באף מסגרת: לפי המסגרות הן אינן שייכות לשום זרם, ובסדר-הקריאה
 // הן נכנסות רק אחרי כל המסגרות. ריהוט (כותרת-עמוד, תחתית, מפריד) אינו נספר — בלי מסגרת
 // הוא נשאר ריהוט. בלי מסגרות בכלל — ריק (אין "מחוץ").
-// שורות-הריהוט שאין סביבן מסגרת (כותרת-רצה, מספר עמוד, מפריד — לרוב מהזיהוי האוטומטי):
-// במצב "מסגרות" הן מסומנות באפור, כדי שהמתנדב יראה שהן כבר זוהו ולא יצייר להן מסגרת חדשה.
-// ← [{id, bbox, stream}] בסדר העמוד
-export function furnitureMarks(lines, frames) {
-  const boxes = (frames || []).filter((f) => f && !isObjectFrame(f)).map((f) => f.bbox).filter(isBox);
-  return liveLines(lines)
-    .filter((l) => isFurnitureStream(l.stream) && !boxes.some((b) => contains(b, center(l.bbox))))
-    .map((l) => ({ id: l.id, bbox: l.bbox, stream: frameBase(l.stream) }));
-}
-
 export function outsideLineIds(lines, frames) {
   const boxes = (frames || []).map((f) => f?.bbox).filter(isBox);
   const out = new Set();

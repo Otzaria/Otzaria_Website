@@ -97,7 +97,7 @@ const FRAME_RULES = [
   'כותרת של פרק או של סעיף: מסגרת משלה בזרם הכותרת — "כותרת" בטקסט, "כותרת הערות" בתוך ההערות. היא נכנסת לספר.',
   'כותרת-רצה, מספר עמוד, שומר-דף: "ריהוט הדף" (למעלה — כותרת עמוד, למטה — תחתית). הקו שמפריד בין הטקסט להערות: "עוד…" ← מפריד.',
   'כותרת שחוזרת בכל עמוד מעל ההערות (שם החיבור שבהערות): "כותרת-רצה של ההערות" — ריהוט, לא "כותרת הערות".',
-  'ריהוט שהמחשב כבר זיהה מסומן באפור מקווקו — אין צורך לצייר לו מסגרת.',
+  'ריהוט שהמחשב כבר זיהה מסומן באפור מקווקו — אין צורך לצייר לו מסגרת, רק לא לכלול אותו במסגרת של טקסט.',
   'שם הפרק מופיע רק בכותרת-הרצה? היא נשארת ריהוט — ובהגשה כתבו בהערה למנהל שפרק חדש מתחיל בעמוד הזה.',
   'קישוט או כתם שהמחשב קרא כשורה — לא ריהוט ולא מסגרת: במצב "שורות" מסמנים אותו "לא-שורה".',
   'שורה שנחתכה על פני שני טורים — נשארת מחוץ למסגרות; לא מרחיבים מסגרת כדי "לתפוס" אותה (מתקנים אותה במצב "שורות" ← פיצול).',
@@ -306,8 +306,11 @@ export default function ScanPanel({
   const straddleAll = useMemo(() => (fs.frames.length ? straddlingLineIds(view?.lines || [], fs.frames) : EMPTY), [fs, view])
   const straddle = mode === 'frames' ? straddleAll : EMPTY
   const outside = useMemo(() => (mode === 'frames' ? outsideLineIds(view?.lines, fs.frames) : EMPTY), [mode, fs, view])
-  // ריהוט שזוהה (בלי מסגרת) — אפור במצב "מסגרות", כדי שלא יציירו לו מסגרת
+  // ריהוט שזוהה (בלי מסגרת-ריהוט סביבו) — אפור במצב "מסגרות", כדי שלא יציירו לו מסגרת. מסגרת של טקסט
+  // אינה מסתירה אותו: בתוכה הוא נכנס לספר כטקסט (inText), וההודעה אומרת מה עושים
   const furniture = useMemo(() => (mode === 'frames' ? furnitureMarks(view?.lines, fs.frames) : NO_MARKS), [mode, fs, view])
+  const furnitureInText = furniture.filter((m) => m.inText).length
+  const furnitureFree = furniture.length - furnitureInText
   const asking = askFor === fs && outside.size > 0
   const selInfo = useMemo(() => selectionInfo(view?.lines, selectedIds), [view, selectedIds])
 
@@ -701,10 +704,17 @@ export default function ScanPanel({
             </ActBtn>
           </span>
         )}
-        {mode === 'frames' && furniture.length > 0 && (
+        {mode === 'frames' && furnitureFree > 0 && (
           <span className="text-neutral-600" data-testid="furniture-note">
-            {furniture.length === 1 ? 'שורת ריהוט אחת' : `${furniture.length} שורות ריהוט`} (באפור — כותרת-רצה, מספר עמוד, מפריד) כבר זוהו: לא נכנסות
+            {furnitureFree === 1 ? 'שורת ריהוט אחת' : `${furnitureFree} שורות ריהוט`} (באפור — כותרת-רצה, מספר עמוד, מפריד) כבר זוהו: לא נכנסות
             לספר, ואין צורך לצייר להן מסגרת
+          </span>
+        )}
+        {mode === 'frames' && furnitureInText > 0 && (
+          <span className="text-warning-800" data-testid="furniture-in-text-note">
+            {furnitureInText === 1
+              ? 'שורת ריהוט אחת שזוהתה (באפור) נמצאת בתוך מסגרת של טקסט, וכך היא תיכנס לספר. אם זה ריהוט: הקטינו את המסגרת, או ציירו סביבה מסגרת "ריהוט הדף"'
+              : `${furnitureInText} שורות ריהוט שזוהו (באפור) נמצאות בתוך מסגרת של טקסט, וכך הן ייכנסו לספר. אם זה ריהוט: הקטינו את המסגרת, או ציירו סביבן מסגרת "ריהוט הדף"`}
           </span>
         )}
         {mode === 'frames' && outside.size > 0 && !asking && (
