@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { useDialog } from '@/components/providers/DialogContext'
 import { formatDateWithTime } from '@/lib/formatDate'
-import { needsRecut, foreignLinkRefs, bookOnlyLineIds } from '@/lib/pageProof/ops'
+import { needsRecut, foreignLinkRefs, bookOnlyLineIds, dropIdleBookOnly } from '@/lib/pageProof/ops'
 import { farLabel } from '@/lib/pageProof/flowEdit'
 import { cleanOps } from '@/lib/pageProof/submitPlan'
 import ProofEditor from '../ProofEditor'
@@ -240,7 +240,12 @@ export default function ReviewModal({ id, onClose, onDone, onPageChanged }) {
                   {pending && (
                     <button
                       disabled={busy || !ops.length}
-                      onClick={() => act('approve', editing && !sameOps(ops, sub.ops) ? ops : null)}
+                      onClick={() => {
+                        // עריכה לפני אישור: סימון "לספר בלבד" אוטומטי על שורה שהטקסט שלה חזר בסוף לזה שיובא —
+                        // יורד, כמו בהגשה של המתנדב (submitPlan)
+                        const edited = editing ? dropIdleBookOnly(data.page?.doc, ops) : null
+                        act('approve', edited && !sameOps(edited, sub.ops) ? edited : null)
+                      }}
                       title={needsRecut(ops) && !oldRevision ? RECUT_HINT : undefined}
                       className="rounded-lg bg-success-600 px-4 py-1.5 font-bold text-white hover:bg-success-700 disabled:opacity-40"
                     >

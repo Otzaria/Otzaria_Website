@@ -99,6 +99,23 @@ describe('אישור', () => {
     expect(statusCall()[1].$set.status).toBe('recut')
   })
 
+  // סקירה: גם לקוח ששולח את הפעולות עם השדות הפנימיים — סימון "לספר בלבד" אוטומטי (_cmp) על שורה שהטקסט שלה
+  // חזר בסוף לזה שיובא יורד, כמו בהגשה; סימון ידני נשאר
+  it('המנהל ערך — סימון "לספר בלבד" אוטומטי בלי שינוי-טקסט יורד, ידני נשאר', async () => {
+    Sub.findById.mockReturnValue(lean(sub()))
+    Page.findById.mockReturnValue(lean(page({ status: 'open', doc })))
+    Sub.findOneAndUpdate.mockImplementation(async (_f, u) => ({ opCount: u.$set.ops.length }))
+    const edited = [
+      { kind: 'train_text', page: 3, ids: [1], value: 0, _cmp: true },
+      { kind: 'text', page: 3, ids: [1], value: 'ישן' },
+      { kind: 'train_text', page: 3, ids: [2], value: 0 },
+    ]
+    const body = await (await PATCH(req({ action: 'approve', ops: edited }), params)).json()
+    expect(body.success).toBe(true)
+    const set = Sub.findOneAndUpdate.mock.calls[0][1].$set
+    expect(set.ops.filter((o) => o.kind === 'train_text')).toEqual([{ kind: 'train_text', page: 3, ids: [2], value: 0 }])
+  })
+
   it('עמוד כפול שעוד חסרה לו הגשה ← נשאר פתוח (הבודק השני ממשיך); ההחכרה לא נמחקת', async () => {
     Sub.findById.mockReturnValue(lean(sub({ ops: CUT })))
     Page.findById.mockReturnValue(lean(page({ status: 'open', activeCount: 1, required: 2 })))

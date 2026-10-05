@@ -99,6 +99,28 @@ describe('ReviewModal מול העורך החדש', { timeout: 20000 }, () => {
     expect(patches[0].ops).toEqual([...subOps, { kind: 'text', page: P, ids: [2], value: 'מתוקן' }])
   })
 
+  // סקירה: כמו בהגשה של המתנדב — סימון "לספר בלבד" אוטומטי על שורה שהטקסט שלה חזר בסוף לזה שיובא יורד
+  it('עריכה לפני אישור — סימון "לספר בלבד" אוטומטי בלי שינוי-טקסט יורד; עם שינוי — נשאר', async () => {
+    const lines = [
+      { id: 2, line_no: 1, bbox: [10, 30, 90, 40], text: 'ישן', text_ocr: 'ישן', stream: 'main' },
+      { id: 3, line_no: 2, bbox: [10, 50, 90, 60], text: 'עוד', text_ocr: 'עוד', stream: 'main' },
+    ]
+    mockFetch(payload({ page: { doc: { page: P, size: [100, 100], lines } } }))
+    render(<ReviewModal id="s1" onClose={vi.fn()} onDone={vi.fn()} />)
+    await screen.findByTestId('editor')
+    h.ops = [
+      ...subOps,
+      { kind: 'train_text', page: P, ids: [2], value: 0, _cmp: true, _g: 'g1' },
+      { kind: 'text', page: P, ids: [2], value: 'ישן', _g: 'g1' },
+      { kind: 'train_text', page: P, ids: [3], value: 0, _cmp: true, _g: 'g2' },
+      { kind: 'text', page: P, ids: [3], value: 'חדש', _g: 'g2' },
+    ]
+    await userEvent.click(screen.getByRole('checkbox', { name: 'עריכה לפני אישור' }))
+    await userEvent.click(screen.getByRole('button', { name: 'אישור' }))
+    await waitFor(() => expect(patches).toHaveLength(1))
+    expect(patches[0].ops.filter((o) => o.kind === 'train_text')).toEqual([{ kind: 'train_text', page: P, ids: [3], value: 0 }])
+  })
+
   it('עריכה שלא שינתה דבר (רק שדות פנימיים) — נשלח בלי ops', async () => {
     mockFetch(payload())
     render(<ReviewModal id="s1" onClose={vi.fn()} onDone={vi.fn()} />)

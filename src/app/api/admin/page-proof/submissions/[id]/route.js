@@ -7,7 +7,7 @@ import PageProofBook from '@/models/PageProofBook';
 import { hasOcrAccess } from '@/lib/roles';
 import { requireAccess, badRequest, notFound, serverError } from '@/lib/apiResponse';
 import { editorPageShape, primaryOf, readJsonBody, tooBigResponse, resolveForeignLinks } from '@/lib/pageProof/pool';
-import { validateOps, packOps, needsRecut, sanitizeOps } from '@/lib/pageProof/ops';
+import { validateOps, packOps, needsRecut, sanitizeOps, dropIdleBookOnly } from '@/lib/pageProof/ops';
 import {
   revisionFilter,
   sameRevision,
@@ -122,7 +122,9 @@ export async function PATCH(request, { params }) {
       let finalOps = sub.ops || [];
       if (edited) {
         if (!page) return notFound('העמוד של ההגשה לא נמצא');
-        const packed = packOps(page.doc, sanitizeOps(body.ops));
+        // סימון "לספר בלבד" אוטומטי (_cmp) על שורה שהטקסט שלה חזר לזה שיובא — יורד, כמו בהגשה (לפני הניקוי,
+        // שמוריד את _cmp; הדף כבר מוריד אותו בעצמו — כאן גם ללקוח שלא עשה זאת)
+        const packed = packOps(page.doc, sanitizeOps(dropIdleBookOnly(page.doc, body.ops)));
         const invalid = validateOps(page.doc, packed);
         if (invalid) return badRequest(invalid);
         // קישור לעמוד אחר — כמו בהגשה: השורה אכן בעמוד ההוא של אותו ספר
