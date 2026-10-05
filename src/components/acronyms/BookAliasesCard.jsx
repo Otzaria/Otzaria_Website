@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { aliasProblem } from '@/lib/acronyms/normalize'
+import { aliasProblem, conflictingTitle } from '@/lib/acronyms/normalize'
 import { bookView } from '@/lib/acronyms/basket'
 
 const CHIP_CLASSES = {
@@ -70,17 +70,25 @@ function AliasChip({ chip, onEdit, onRemove, onUndo }) {
 
 /**
  * ספר אחד: הכינויים כפי שייראו אחרי הסל, ושינויים שכבר ממתינים ב-PR פתוח.
- * @param {{book:{title:string, aliases:string[]}, basket:object[], pending:Array<{op:object, prNumber:number, prUrl:string}>, onOp:(op:object)=>void, onError:(msg:string)=>void}} props
+ * @param {{book:{title:string, aliases:string[]}, basket:object[], pending:Array<{op:object, prNumber:number, prUrl:string}>, titlesByKey:Map<string,string>, onOp:(op:object)=>void, onError:(msg:string)=>void, onConflict:(alias:string, otherTitle:string, apply:()=>void)=>void}} props
  */
-export default function BookAliasesCard({ book, basket, pending, onOp, onError }) {
+export default function BookAliasesCard({ book, basket, pending, titlesByKey, onOp, onError, onConflict }) {
   const [newAlias, setNewAlias] = useState('')
   const chips = bookView(book.aliases, basket, book.title)
+
+  const applyUnlessConflict = (alias, apply) => {
+    const other = conflictingTitle(alias, book.title, titlesByKey)
+    if (other) onConflict(alias, other, apply)
+    else apply()
+  }
 
   const submitAdd = () => {
     const problem = aliasProblem(newAlias, book.title)
     if (problem) return onError(problem)
-    onOp({ type: 'add', book: book.title, alias: newAlias, ...(book.isNew ? { newBook: true } : {}) })
-    setNewAlias('')
+    applyUnlessConflict(newAlias, () => {
+      onOp({ type: 'add', book: book.title, alias: newAlias, ...(book.isNew ? { newBook: true } : {}) })
+      setNewAlias('')
+    })
   }
 
   const edit = (chip, value) => {
@@ -90,7 +98,7 @@ export default function BookAliasesCard({ book, basket, pending, onOp, onError }
       return false
     }
     if (value.trim() === chip.text) return true
-    onOp({ type: 'rename', book: book.title, from: chip.from || chip.text, to: value })
+    applyUnlessConflict(value, () => onOp({ type: 'rename', book: book.title, from: chip.from || chip.text, to: value }))
     return true
   }
 

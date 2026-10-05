@@ -11,6 +11,7 @@ import NewBookForm from '@/components/acronyms/NewBookForm'
 import ChangeBasketBar from '@/components/acronyms/ChangeBasketBar'
 import { addToBasket, basketOps, filterBooks, removeFromBasket, unmergedAliases } from '@/lib/acronyms/basket'
 import { MAX_OPS_PER_CHANGE_SET } from '@/lib/acronyms/changes'
+import { aliasKey } from '@/lib/acronyms/normalize'
 
 const BASKET_KEY = 'acronyms-basket-v1'
 const PAGE_SIZE = 30
@@ -34,7 +35,7 @@ function storeBasket(basket) {
 
 export default function LibraryAcronymsPage() {
   const { status } = useRequireAuth()
-  const { showAlert } = useDialog()
+  const { showAlert, showConfirm } = useDialog()
   const [books, setBooks] = useState([])
   const [pending, setPending] = useState([])
   const [loading, setLoading] = useState(true)
@@ -79,6 +80,8 @@ export default function LibraryAcronymsPage() {
     return [...extra.map((title) => ({ title, aliases: [], isNew: true })), ...books]
   }, [books, newTitles, basket])
 
+  const titlesByKey = useMemo(() => new Map(allBooks.map((b) => [aliasKey(b.title), b.title])), [allBooks])
+
   const pendingByBook = useMemo(() => {
     const map = new Map()
     for (const cs of pending) {
@@ -95,6 +98,13 @@ export default function LibraryAcronymsPage() {
   const filtered = useMemo(() => filterBooks(allBooks, search, extraAliases), [allBooks, search, extraAliases])
 
   const onError = (message) => showAlert('לא ניתן להוסיף לסל', message)
+  const onConflict = (alias, otherTitle, apply) =>
+    showConfirm(
+      'הכינוי הוא שם של ספר אחר',
+      `"${alias}" הוא גם שם הספר "${otherTitle}". מי שיחפש את הספר ההוא בתוכנה עלול להגיע לספר הזה במקומו. להוסיף בכל זאת?`,
+      apply,
+      'להוסיף בכל זאת',
+    )
   const fullBasketMessage = `בסל אפשר לשלוח עד ${MAX_OPS_PER_CHANGE_SET} שינויים בבת אחת. שלחו את הסל הנוכחי, ואז המשיכו.`
   const addOp = (op) => {
     const next = addToBasket(basket, op)
@@ -194,7 +204,7 @@ export default function LibraryAcronymsPage() {
               <div className="text-sm text-on-surface/60 mb-2">{filtered.length} ספרים</div>
               <div className="space-y-4">
                 {filtered.slice(0, visible).map((book) => (
-                  <BookAliasesCard key={book.title} book={book} basket={basket} pending={pendingByBook.get(book.title) || []} onOp={addOp} onError={onError} />
+                  <BookAliasesCard key={book.title} book={book} basket={basket} pending={pendingByBook.get(book.title) || []} titlesByKey={titlesByKey} onOp={addOp} onError={onError} onConflict={onConflict} />
                 ))}
               </div>
               {filtered.length > visible && (

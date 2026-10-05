@@ -6,7 +6,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { parseDump, exportDump, listBooks } from './dump.js'
-import { aliasKey, aliasProblem, normalizeAlias } from './normalize.js'
+import { aliasKey, aliasProblem, conflictingTitle, normalizeAlias } from './normalize.js'
 import { applyChangeSet, planAddAliases, summarizeChangeSet, validateChangeSet } from './changes.js'
 
 const HEADER = 'PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\nCREATE TABLE IF NOT EXISTS Books (id INTEGER);\n'
@@ -55,6 +55,13 @@ test('normalizeAlias: the form SeforimLibrary and the app read best', () => {
 test('aliasKey ignores quotes the way the app does', () => {
   assert.equal(aliasKey('רעק"א'), aliasKey("רעק'א"))
   assert.equal(aliasKey('רעק"א'), aliasKey('רעקא'))
+})
+
+test('conflictingTitle finds another book with the same title, ignoring quotes', () => {
+  const titles = new Map(['בח', 'בראשית'].map((t) => [aliasKey(t), t]))
+  assert.equal(conflictingTitle('ב"ח', 'בן איש חי', titles), 'בח')
+  assert.equal(conflictingTitle('בראשית', 'בראשית', titles), null)
+  assert.equal(conflictingTitle('בא"ח', 'בן איש חי', titles), null)
 })
 
 test('aliasProblem rejects empty, title-equivalent and punctuation-only aliases', () => {
