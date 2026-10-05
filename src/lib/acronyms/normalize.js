@@ -48,6 +48,16 @@ export function aliasProblem(alias, bookTitle) {
   return null
 }
 
+/**
+ * שם ספר אחר שהכינוי זהה לו (בלי הבדלי גרשיים), או null. כינוי כזה עלול להוביל את מי שמחפש את
+ * הספר האחר בתוכנה לספר הזה, אבל לפעמים הוא מכוון (מהדורה אחרת של אותו חיבור), ולכן רק מזהירים.
+ * @param {Map<string,string>} titlesByKey aliasKey של שם ספר ← שם הספר
+ */
+export function conflictingTitle(alias, ownTitle, titlesByKey) {
+  const other = titlesByKey.get(aliasKey(alias))
+  return other && aliasKey(other) !== aliasKey(ownTitle) ? other : null
+}
+
 /** שם ספר חדש: אותו ניקוי, בלי המרת גרשיים — השם חייב להיות זהה לשם בספריית אוצריא. */
 export function normalizeBookTitle(value) {
   return String(value ?? '').replace(INVISIBLE, ' ').replace(/\s+/g, ' ').trim()
