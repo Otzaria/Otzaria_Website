@@ -442,17 +442,17 @@ export function choiceInfo(view, key) {
   return { key, he: streamLabel(view, key), color: s.color, heading: s.heading };
 }
 
-// זרם-הריהוט של מסגרת "ריהוט הדף": אם בתוכה שורות-ריהוט (לפי הזרם שלהן, או הזרם
-// שיובא) — הזרם הנפוץ ביניהן, כדי שהמסגרת תסכים עם השורות; אחרת לפי המקום בעמוד,
-// כמו בתוכנת-הספר (book/rules.py): בחצי העליון — כותרת עמוד, בתחתון — תחתית. ריהוט
-// שיש מתחתיו טקסט (כותרת-רצה מעל ההערות, גם בחצי התחתון) — כותרת עמוד: תחתית היא
+// זרם-הריהוט של מסגרת "ריהוט הדף": אם בתוכה שורות-ריהוט (לפי הזרם שלהן, הזרם שיובא,
+// או הזרם שזוהה — detectedStream) — הזרם הנפוץ ביניהן, כדי שהמסגרת תסכים עם השורות; אחרת
+// לפי המקום בעמוד, כמו בתוכנת-הספר (book/rules.py): בחצי העליון — כותרת עמוד, בתחתון — תחתית.
+// ריהוט שיש מתחתיו טקסט (כותרת-רצה מעל ההערות, גם בחצי התחתון) — כותרת עמוד: תחתית היא
 // מה שבסוף העמוד (מספר עמוד, שומר-דף), לא כותרת שפותחת אזור.
 export function furnitureStreamFor(bbox, lines, H) {
   const count = new Map();
   if (isBox(bbox)) {
     for (const l of liveLines(lines)) {
       if (!contains(bbox, center(l.bbox))) continue;
-      const s = [l.stream, l._auto?.stream].find((k) => isFurnitureStream(k));
+      const s = [l.stream, l._auto?.stream, detectedStream(l)].find((k) => isFurnitureStream(k));
       if (s) count.set(frameBase(s), (count.get(frameBase(s)) || 0) + 1);
     }
   }
@@ -467,7 +467,12 @@ export function furnitureStreamFor(bbox, lines, H) {
 // יש שורת-טקסט (לא ריהוט) שמתחילה מתחת לתיבה וחופפת לה לרוחב
 function textBelow(bbox, lines) {
   return liveLines(lines).some(
-    (l) => !isFurnitureStream(l.stream) && !isFurnitureStream(l._auto?.stream) && l.bbox[1] >= bbox[3] - 1 && Math.min(l.bbox[2], bbox[2]) > Math.max(l.bbox[0], bbox[0])
+    (l) =>
+      !isFurnitureStream(l.stream) &&
+      !isFurnitureStream(l._auto?.stream) &&
+      !isFurnitureStream(detectedStream(l)) &&
+      l.bbox[1] >= bbox[3] - 1 &&
+      Math.min(l.bbox[2], bbox[2]) > Math.max(l.bbox[0], bbox[0])
   );
 }
 
@@ -629,21 +634,45 @@ export function isFurnitureFrame(f) {
   return f.stream === FURNITURE_CHOICE || f.stream === NOTES_RUNHEAD_CHOICE || isFurnitureStream(f.stream);
 }
 
-// הזרם שזוהה לשורה: שורה שמסגרת-טקסט נתנה לה את הזרם שלה (ops.applyFrameStreams — stream_src
-// 'frame') — הזרם שיובא, שנשמר ב-_auto. כך כותרת-רצה שמסגרת "ראשי" גדולה בלעה היא עדיין ריהוט שזוהה
-const detectedStream = (l) => (l.stream_src === 'frame' && l._auto ? l._auto.stream : l.stream);
+// הזרם שזוהה לשורה — לא זה שמסגרת-טקסט נתנה לה (stream_src 'frame'): הזרם שיובא (_auto, שנשמר
+// בתצוגה לפני המסגרות — ops.applyFrameStreams); ואם גם הוא בא ממסגרת — המסגרות כבר הוחלו בתוכנת-הספר,
+// שנותנת לכל שורה במסגרת את הזרם שלה — הניחוש של הניתוח שם (pred.stream). כך כותרת-רצה שמסגרת "ראשי"
+// גדולה בלעה היא עדיין ריהוט שזוהה — גם אחרי שהעמוד חזר מתוכנת-הספר
+export function detectedStream(l) {
+  if (l?.stream_src !== 'frame') return l?.stream;
+  if (l._auto && l._auto.stream_src !== 'frame') return l._auto.stream;
+  return l.pred?.stream?.v ?? l._auto?.stream ?? l.stream;
+}
 
 // שורות-הריהוט שזוהו (כותרת-רצה, מספר עמוד, מפריד — לרוב מהזיהוי האוטומטי) ואין סביבן מסגרת-ריהוט:
-// במצב "מסגרות" הן מסומנות באפור, כדי שהמתנדב יראה שהן כבר זוהו ולא יצייר להן מסגרת חדשה. רק
-// מסגרת-ריהוט (isFurnitureFrame) "מכסה" שורה כזו — בה כבר רואים אותה. מסגרת של טקסט רגיל או של
-// כותרת אינה מסתירה אותה (בתוך מסגרת "ראשי" גדולה היא נכנסת לספר כטקסט — inText), וגם לא
-// מסגרת-אובייקט. שורה שהמתנדב קבע לה ביד זרם שאינו ריהוט — כבר אינה ריהוט.
-// ← [{id, bbox, stream, inText}] בסדר העמוד; inText — השורה כרגע בזרם של המסגרת, לא ריהוט
+// במצב "מסגרות" הן מסומנות באפור, כדי שהמתנדב יראה שהן כבר זוהו ולא יצייר להן מסגרת חדשה. ההכרעה —
+// לפי המסגרת שהשורה שייכת אליה (frameOfLine: הקטנה ביותר שמכילה את מרכזה, כמו ops.applyFrameStreams):
+// רק מסגרת-ריהוט (isFurnitureFrame) מכסה אותה — בה כבר רואים אותה. מסגרת של טקסט רגיל או של כותרת
+// אינה מסתירה אותה (בתוך מסגרת "ראשי" גדולה היא נכנסת לספר כטקסט — inText), וגם לא מסגרת-אובייקט.
+// שורה שהמתנדב קבע לה ביד זרם שאינו ריהוט — כבר אינה ריהוט.
+// ← [{id, bbox, stream, inText, byHand}] בסדר העמוד; inText — מסגרת-טקסט בלעה אותה (הזרם שלה כרגע אינו
+// ריהוט); byHand — הזרם נקבע ביד (לא המחשב זיהה)
 export function furnitureMarks(lines, frames) {
-  const boxes = (frames || []).filter(isFurnitureFrame).map((f) => f.bbox).filter(isBox);
-  return liveLines(lines)
-    .filter((l) => isFurnitureStream(detectedStream(l)) && !boxes.some((b) => contains(b, center(l.bbox))))
-    .map((l) => ({ id: l.id, bbox: l.bbox, stream: frameBase(detectedStream(l)), inText: !isFurnitureStream(l.stream) }));
+  const out = [];
+  for (const l of liveLines(lines)) {
+    const det = detectedStream(l);
+    if (!isFurnitureStream(det)) continue;
+    const own = frameOfLine(frames, l);
+    if (isFurnitureFrame(own)) continue;
+    out.push({ id: l.id, bbox: l.bbox, stream: frameBase(det), inText: !!own && !isFurnitureStream(l.stream), byHand: l.stream_src === 'human' });
+  }
+  return out;
+}
+
+// מקום התווית של ריהוט שזוהה (furnitureMarks), בפיקסלי-מסך — מחוץ לתיבת-השורה, שלא תסתיר את הדיו שלה:
+// מעליה, צמודה לקצה העליון (above — הדף מעלה אותה בגובה שלה: translateY(-100%)); שורה בראש התמונה,
+// שאין מעליה מקום לתווית — מתחתיה
+export const FURNITURE_LABEL_H = 16;
+export function furnitureLabelAnchor(bbox, zoom, h = FURNITURE_LABEL_H) {
+  const left = Math.round(bbox[0] * zoom);
+  const top = Math.round(bbox[1] * zoom);
+  if (top >= h + 2) return { left, top: top - 1, above: true };
+  return { left, top: Math.round(bbox[3] * zoom) + 1, above: false };
 }
 
 // שורות-תוכן שאינן נוגעות באף מסגרת: לפי המסגרות הן אינן שייכות לשום זרם, ובסדר-הקריאה

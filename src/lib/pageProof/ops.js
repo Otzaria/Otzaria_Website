@@ -692,8 +692,14 @@ function keepSeq(doc, fid) {
 }
 
 // שורה שנוצרה מקומית (פיצול/איחוד/הוספה): נעולה לעריכה נוספת עד הקליטה,
-// וממתינה לחיתוך ולזיהוי-מחדש בתוכנת-הספר (_recut)
+// וממתינה לחיתוך ולזיהוי-מחדש בתוכנת-הספר (_recut). חלקי-פיצול ושורה מאוחדת יורשים
+// מהשורה המקורית גם את מה שזוהה לה — הזרם שיובא (_auto) והניחוש לזרם (pred.stream) —
+// כך שכותרת-רצה שפוצלה נשארת "ריהוט שזוהה" גם בתוך מסגרת של טקסט (scanGeometry.furnitureMarks)
 function blankLine(src) {
+  const detected = {
+    ...(src?._auto ? { _auto: { ...src._auto } } : {}),
+    pred: src?.pred?.stream ? { stream: src.pred.stream } : {},
+  };
   return {
     line_no: src?.line_no ?? null,
     polygon: null,
@@ -708,11 +714,11 @@ function blankLine(src) {
     para_start: false,
     para_style: src?.para_style || null,
     script: src?.script || null,
-    pred: {},
     flags: {},
     certainty: null,
     alternatives: [],
     lm_flags: [],
+    ...detected,
     _new: true,
     _recut: true,
   };

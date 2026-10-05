@@ -51,6 +51,8 @@ import {
   FURNITURE_CHOICE,
   NOTES_RUNHEAD_CHOICE,
   furnitureMarks,
+  detectedStream,
+  furnitureLabelAnchor,
   streamLabel,
   choiceInfo,
   furnitureStreamFor,
@@ -561,11 +563,11 @@ test('furnitureMarks: שורות-ריהוט בלי מסגרת סביבן (לסי
   // מסגרת-אובייקט (טבלה/איור) אינה "מכסה" ריהוט — גם כשהזרם שלה ריהוט
   assert.deepEqual(ids([{ fid: 'd', stream: 'main', kind: 'table', bbox: [0, 0, 1000, 2000], order: 1 }]), [1, 3, 5]);
   assert.deepEqual(ids([{ fid: 'd', stream: 'header', kind: 'figure', bbox: [390, 30, 610, 80], order: 1 }]), [1, 3, 5]);
-  assert.deepEqual(furnitureMarks(lines, [])[0], { id: 1, bbox: [400, 40, 600, 70], stream: 'header', inText: false });
+  assert.deepEqual(furnitureMarks(lines, [])[0], { id: 1, bbox: [400, 40, 600, 70], stream: 'header', inText: false, byHand: false });
   assert.deepEqual(furnitureMarks(null, null), []);
 });
 
-// סקירת #186 (Y-PLONI): בתצוגה (buildView) מסגרת-טקסט נותנת לשורות שבתוכה את הזרם שלה — כותרת-רצה שמסגרת
+// סקירת #186: בתצוגה (buildView) מסגרת-טקסט נותנת לשורות שבתוכה את הזרם שלה — כותרת-רצה שמסגרת
 // "ראשי" גדולה בלעה נראית "ראשי". היא עדיין ריהוט שזוהה: מסומנת, ו-inText אומר שכך היא תיכנס לספר כטקסט
 test('furnitureMarks על התצוגה: ריהוט שמסגרת-טקסט בלעה — מסומן (inText); בתוך מסגרת-ריהוט — לא; זרם שנקבע ביד קובע', () => {
   const base = {
@@ -577,8 +579,8 @@ test('furnitureMarks על התצוגה: ריהוט שמסגרת-טקסט בלע�
   // מסגרת "ראשי" על כל הטקסט, כולל כותרת-הרצה: בתצוגה השורה "ראשי" — ועדיין מסומנת, עם inText
   assert.equal(buildView({ ...base, frames: [big] }).lines.find((l) => l.id === 1).stream, 'main');
   assert.deepEqual(marks([big]), [
-    { id: 1, bbox: [400, 40, 600, 70], stream: 'header', inText: true },
-    { id: 3, bbox: [480, 1900, 520, 1930], stream: 'footer', inText: false },
+    { id: 1, bbox: [400, 40, 600, 70], stream: 'header', inText: true, byHand: false },
+    { id: 3, bbox: [480, 1900, 520, 1930], stream: 'footer', inText: false, byHand: false },
   ]);
   // מסגרת "כותרת עמוד" קטנה בתוך הגדולה — הפנימית קובעת: השורה ריהוט, וכבר רואים אותה
   const head = { fid: 'cc22dd', stream: 'header', bbox: [390, 30, 610, 80], order: 2 };
@@ -590,6 +592,107 @@ test('furnitureMarks על התצוגה: ריהוט שמסגרת-טקסט בלע�
   ]);
   // המתנדב קבע לכותרת-הרצה "ראשי" ביד — כבר אינה ריהוט, ואין סימון
   assert.deepEqual(marks([big], [{ kind: 'stream', page: 7, ids: [1], value: 'main' }]).map((m) => m.id), [3]);
+  // ...ושורה שסומנה "כותרת עמוד" ביד — ריהוט שסומן ביד (byHand), והזרם שנקבע ביד גובר על המסגרת: לא inText
+  assert.deepEqual(marks([big], [{ kind: 'stream', page: 7, ids: [2], value: 'header' }]).map((m) => [m.id, m.inText, m.byHand]), [
+    [1, true, false],
+    [2, false, true],
+    [3, false, false],
+  ]);
+});
+
+// סקירה: העמוד חזר מתוכנת-הספר אחרי שהמסגרות הוחלו שם — כל שורה במסגרת קיבלה את הזרם שלה (stream_src 'frame'),
+// כך שגם הזרם שיובא (_auto) בא ממסגרת; מה שזוהה לשורה נשאר בניחוש של הניתוח (pred.stream)
+test('furnitureMarks אחרי סבב בתוכנת-הספר: הזרם שיובא בא ממסגרת — לפי pred.stream', () => {
+  const big = { fid: 'aa11bb', stream: 'main', bbox: [90, 30, 910, 1120], order: 1 };
+  const head = L(1, [400, 40, 600, 70], 'main', { stream_src: 'frame', pred: { stream: { v: 'header', conf: 0.9, why: 'כותרת-רצה' } } });
+  const base = { ...twoCols(), frames: [big], lines: [head, L(2, [100, 120, 900, 1100], 'main', { stream_src: 'frame' }), L(3, [480, 1900, 520, 1930], 'footer')] };
+  const v = buildView(base, []);
+  assert.deepEqual(v.lines.find((l) => l.id === 1)._auto, { stream: 'main', stream_src: 'frame' });
+  assert.equal(detectedStream(v.lines.find((l) => l.id === 1)), 'header');
+  assert.equal(detectedStream(v.lines.find((l) => l.id === 2)), 'main');
+  assert.deepEqual(furnitureMarks(v.lines, base.frames).map((m) => [m.id, m.stream, m.inText]), [
+    [1, 'header', true],
+    [3, 'footer', false],
+  ]);
+  // המתנדב הקטין את המסגרת כך שכותרת-הרצה מחוצה לה — עדיין מסומנת, ובלי "בתוך מסגרת של טקסט"
+  const small = { ...big, bbox: [90, 110, 910, 1120] };
+  const op = { kind: 'frames_set', page: 7, value: { frames: [small], manual: true } };
+  const v2 = buildView(base, [op]);
+  assert.deepEqual(furnitureMarks(v2.lines, v2.frames).map((m) => [m.id, m.inText]), [
+    [1, false],
+    [3, false],
+  ]);
+  // ...או ציירה סביבה "ריהוט הדף": הזרם שזוהה (מ-pred) קובע את זרם-הריהוט — כותרת עמוד
+  assert.equal(furnitureStreamFor([390, 30, 610, 80], v.lines, 2000), 'header');
+  // בלי pred — אין ממה לדעת: הזרם של המסגרת
+  assert.equal(detectedStream({ stream: 'main', stream_src: 'frame', _auto: { stream: 'main', stream_src: 'frame' } }), 'main');
+  assert.equal(detectedStream({ stream: 'main', stream_src: 'frame' }), 'main');
+  assert.equal(detectedStream({ stream: 'notes', stream_src: 'human' }), 'notes');
+  assert.equal(detectedStream(null), undefined);
+});
+
+test('furnitureStreamFor: קו-מפריד שמסגרת "ראשי" בלעה בתוכנת-הספר (pred: מפריד) — "ריהוט הדף" סביבו הוא מפריד, לא כותרת עמוד', () => {
+  const lines = [
+    L(1, [100, 120, 900, 1100], 'main', { stream_src: 'frame' }),
+    L(2, [100, 1110, 900, 1115], 'main', { stream_src: 'frame', pred: { stream: { v: 'sep' } } }),
+    L(3, [100, 1200, 900, 1800], 'notes'),
+  ];
+  const v = buildView({ ...twoCols(), frames: [{ fid: 'aa11bb', stream: 'main', bbox: [90, 110, 910, 1120], order: 1 }], lines }, []);
+  assert.equal(furnitureStreamFor([90, 1105, 910, 1120], v.lines, 2000), 'sep');
+  // ...והמפריד אינו "טקסט שמתחתיו" לריהוט שמעליו
+  assert.equal(furnitureStreamFor([470, 1080, 530, 1100], v.lines.filter((l) => l.id !== 1 && l.id !== 3), 2000), 'footer');
+});
+
+// סקירה: מסגרות חופפות — הזרם של השורה הוא של המסגרת הקטנה ביותר שמכילה את מרכזה (ops.applyFrameStreams);
+// "ריהוט הדף" רחב שסביבו אינו מכסה אותה כשמסגרת-כותרת צמודה בתוכו לקחה אותה
+test('furnitureMarks: מסגרות חופפות — לפי המסגרת שהשורה שייכת אליה (הקטנה ביותר)', () => {
+  const band = { fid: 'aa11bb', stream: 'header', bbox: [0, 0, 1000, 110], order: 1 };
+  const heading = { fid: 'cc22dd', stream: 'main_heading', bbox: [390, 30, 610, 80], order: 2 };
+  const text = { fid: 'ee33ff', stream: 'main', bbox: [90, 110, 910, 1900], order: 3 };
+  const base = { ...twoCols(), lines: [L(1, [400, 40, 600, 70], 'header'), L(2, [100, 120, 900, 160], 'main')] };
+  const frames = [band, heading, text];
+  const v = buildView({ ...base, frames }, []);
+  assert.equal(v.lines.find((l) => l.id === 1).stream, 'main_heading');
+  assert.equal(frameOfLine(frames, v.lines.find((l) => l.id === 1)).fid, 'cc22dd');
+  assert.deepEqual(furnitureMarks(v.lines, frames).map((m) => [m.id, m.inText]), [[1, true]]);
+  // בלי מסגרת-הכותרת — ה"ריהוט הדף" הרחב הוא המסגרת שלה, ואין סימון
+  const v2 = buildView({ ...base, frames: [band, text] }, []);
+  assert.deepEqual(furnitureMarks(v2.lines, [band, text]), []);
+});
+
+test('furnitureMarks: חלקי-פיצול ושורה מאוחדת של כותרת-רצה יורשים את מה שזוהה לה — מסומנים גם בתוך מסגרת של טקסט', () => {
+  const big = { fid: 'aa11bb', stream: 'main', bbox: [90, 30, 910, 1120], order: 1 };
+  const base = {
+    ...twoCols(),
+    frames: [big],
+    lines: [L(1, [400, 40, 600, 70], 'header'), L(2, [610, 40, 700, 70], 'header'), L(3, [100, 120, 900, 1100], 'main')],
+  };
+  const split = buildView(base, [{ kind: 'line_split', page: 7, ids: [1], value: { x: 500 } }]);
+  const halves = split.lines.filter((l) => l._new);
+  assert.equal(halves.length, 2);
+  assert.deepEqual(halves.map((l) => l._auto), [
+    { stream: 'header', stream_src: 'auto' },
+    { stream: 'header', stream_src: 'auto' },
+  ]);
+  const halfMarks = furnitureMarks(split.lines, [big]).filter((m) => halves.some((h) => h.id === m.id));
+  assert.equal(halfMarks.length, 2);
+  assert.ok(halfMarks.every((m) => m.inText && m.stream === 'header'));
+  const merged = buildView(base, [{ kind: 'line_merge', page: 7, ids: [1, 2] }]);
+  const m = merged.lines.find((l) => l._new);
+  assert.deepEqual(furnitureMarks(merged.lines, [big]).filter((x) => x.id === m.id).map((x) => [x.stream, x.inText]), [['header', true]]);
+  // ...וגם הניחוש (pred.stream) של כותרת-רצה שהמסגרות שלה הוחלו בתוכנת-הספר
+  const up = { ...base, lines: [L(1, [400, 40, 600, 70], 'main', { stream_src: 'frame', pred: { stream: { v: 'header' } } }), base.lines[2]] };
+  const upSplit = buildView(up, [{ kind: 'line_split', page: 7, ids: [1], value: { x: 500 } }]);
+  assert.deepEqual(upSplit.lines.filter((l) => l._new).map((l) => l.pred), [{ stream: { v: 'header' } }, { stream: { v: 'header' } }]);
+  assert.equal(furnitureMarks(upSplit.lines, [big]).filter((x) => upSplit.lines.some((l) => l._new && l.id === x.id)).length, 2);
+});
+
+test('furnitureLabelAnchor: התווית מעל תיבת-השורה, לא על הדיו; בראש התמונה — מתחתיה', () => {
+  assert.deepEqual(furnitureLabelAnchor([400, 40, 600, 70], 1), { left: 400, top: 39, above: true });
+  assert.deepEqual(furnitureLabelAnchor([400, 40, 600, 70], 0.5), { left: 200, top: 19, above: true });
+  // אין מעליה מקום לתווית (16 פיקסלים ועוד שניים) — מתחת לתיבה
+  assert.deepEqual(furnitureLabelAnchor([400, 30, 600, 70], 0.5), { left: 200, top: 36, above: false });
+  assert.deepEqual(furnitureLabelAnchor([400, 0, 600, 30], 1), { left: 400, top: 31, above: false });
 });
 
 test('drawStreamFor', () => {

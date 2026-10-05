@@ -398,8 +398,31 @@ describe('ScanPanel — סדר ההצעה, שורות מחוץ למסגרות, �
     const labels = screen.getAllByTestId('furniture-label')
     expect(labels.map((x) => x.textContent)).toEqual(['ריהוט · כותרת עמוד · בתוך מסגרת של טקסט', 'ריהוט · תחתית'])
     expect(labels[0]).toHaveAttribute('title', expect.stringMatching(/וכך הוא ייכנס לספר כטקסט/))
+    // התווית מעל השורה, לא על הדיו שלה (furnitureLabelAnchor)
+    expect(labels.map((x) => x.dataset.place)).toEqual(['above', 'above'])
+    expect(labels[0].style.transform).toBe('translateY(-100%)')
     expect(screen.getByTestId('furniture-in-text-note')).toHaveTextContent(/שורת ריהוט אחת שזוהתה \(באפור\) נמצאת בתוך מסגרת של טקסט.*"ריהוט הדף"/)
     expect(screen.getByTestId('furniture-note')).toHaveTextContent(/שורת ריהוט אחת/)
+  })
+
+  // סקירה: העמוד חזר מתוכנת-הספר אחרי שהמסגרות הוחלו שם — כותרת-הרצה בזרם של המסגרת (stream_src 'frame'),
+  // ומה שזוהה לה — בניחוש של הניתוח (pred.stream)
+  it('ריהוט שמסגרת בלעה כבר בתוכנת-הספר (pred) — מסומן; ריהוט שסומן ביד — ההסבר אומר שסומן ביד', () => {
+    const base = {
+      ...doc(),
+      lines: [
+        ...doc().lines,
+        L(5, [400, 20, 600, 50], 'main', { stream_src: 'frame', pred: { stream: { v: 'header', conf: 0.9 } } }),
+        L(6, [480, 950, 520, 980], 'footer', { stream_src: 'human' }),
+      ],
+      frames: [{ fid: 'aa11bb', stream: 'main', bbox: [90, 10, 910, 200], order: 1 }],
+    }
+    const { container } = setup({ base })
+    expect(container.querySelector('[data-furniture="5"]')).toBeInTheDocument()
+    const labels = screen.getAllByTestId('furniture-label')
+    expect(labels.map((x) => x.textContent)).toEqual(['ריהוט · כותרת עמוד · בתוך מסגרת של טקסט', 'ריהוט · תחתית'])
+    expect(labels[1]).toHaveAttribute('title', expect.stringMatching(/^ריהוט הדף שסומן ביד/))
+    expect(labels[1]).not.toHaveAttribute('title', expect.stringMatching(/שהמחשב זיהה/))
   })
 
   it('גם מסגרת-כותרת או מסגרת-אובייקט אינן מסתירות ריהוט שזוהה', () => {
