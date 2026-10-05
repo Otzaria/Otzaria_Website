@@ -1,95 +1,9 @@
 import { NextResponse } from 'next/server'
+import { extractPlatformDownloads, hasPlatformAssets } from '@/lib/githubReleaseAssets'
 
 // המסלול דינמי (הוא קורא את searchParams), ולכן revalidate ברמת המסלול היה
 // חסר משמעות וסתר את force-dynamic. המטמון האמיתי הוא על ה-fetch ל-GitHub למטה.
 export const dynamic = 'force-dynamic'
-
-const platformAliases = {
-  windows: ['windows', 'win'],
-  linux: ['linux'],
-  macos: ['macos', 'mac', 'darwin', 'osx'],
-  android: ['android']
-}
-
-// נכסי ARM64 חייבים הדרה מפורשת מהבחירה ל-x64. GitHub מחזיר את הנכסים בסדר
-// אלפביתי, ומקף קודם לנקודה, ולכן המתקין של ARM מקדים את זה של x64 ברשימה —
-// בלי ההדרה כל מבקר x64 היה מקבל את מתקין ה-ARM.
-const ARM64_KEYWORDS = ['arm64', 'aarch64']
-
-const otherPlatformKeywords = {
-  windows: [...platformAliases.linux, ...platformAliases.macos, ...platformAliases.android],
-  linux: [...platformAliases.windows, ...platformAliases.macos, ...platformAliases.android],
-  macos: [...platformAliases.windows, ...platformAliases.linux, ...platformAliases.android],
-  android: [...platformAliases.windows, ...platformAliases.linux, ...platformAliases.macos]
-}
-
-function findAssetWithKeywords(assets, extension, includeKeywords = [], excludeKeywords = []) {
-  const lowerExtension = extension.toLowerCase()
-  const lowerIncludeKeywords = includeKeywords.map(k => k.toLowerCase())
-  const lowerExcludeKeywords = excludeKeywords.map(k => k.toLowerCase())
-
-  return assets.find(a => {
-    const name = a.name.toLowerCase()
-    return name.endsWith(lowerExtension) &&
-           lowerIncludeKeywords.every(k => name.includes(k)) &&
-           lowerExcludeKeywords.every(k => !name.includes(k))
-  })?.browser_download_url
-}
-
-function findPlatformAsset(assets, platform, extension, { full = false, preferPlatformKeyword = true, exclude = [] } = {}) {
-  const includeKeywords = full ? ['full'] : []
-  const excludeKeywords = full ? [...exclude] : ['full', ...exclude]
-  const aliases = platformAliases[platform] || []
-  const excludedPlatforms = otherPlatformKeywords[platform] || []
-
-  if (preferPlatformKeyword) {
-    for (const alias of aliases) {
-      const asset = findAssetWithKeywords(assets, extension, [...includeKeywords, alias], excludeKeywords)
-      if (asset) return asset
-    }
-  }
-
-  return findAssetWithKeywords(assets, extension, includeKeywords, [...excludeKeywords, ...excludedPlatforms])
-}
-
-function extractPlatformDownloads(platform, assets) {
-  switch (platform) {
-    case 'windows':
-      return {
-        exe: findAssetWithKeywords(assets, '.exe', ['windows'], ['silent', 'full', ...ARM64_KEYWORDS]) || findAssetWithKeywords(assets, '.exe', ['win'], ['silent', 'full', ...ARM64_KEYWORDS]),
-        exeArm64: findAssetWithKeywords(assets, '.exe', ['windows', 'arm64'], ['silent', 'full']) || findAssetWithKeywords(assets, '.exe', ['win', 'aarch64'], ['silent', 'full']),
-        msix: findPlatformAsset(assets, 'windows', '.msix', { exclude: ARM64_KEYWORDS }),
-        zip: findPlatformAsset(assets, 'windows', '.zip', { exclude: ARM64_KEYWORDS }),
-        zipArm64: findAssetWithKeywords(assets, '.zip', ['windows', 'arm64'], ['full']),
-        exeSilent: findAssetWithKeywords(assets, '.exe', ['windows', 'silent'], ['full', ...ARM64_KEYWORDS]) || findAssetWithKeywords(assets, '.exe', ['win', 'silent'], ['full', ...ARM64_KEYWORDS]),
-        exeFull: findAssetWithKeywords(assets, '.exe', ['windows', 'full'], ['silent', 'indexed', ...ARM64_KEYWORDS]) || findAssetWithKeywords(assets, '.exe', ['win', 'full'], ['silent', 'indexed', ...ARM64_KEYWORDS])
-      }
-    case 'linux':
-      return {
-        deb: findPlatformAsset(assets, 'linux', '.deb'),
-        rpm: findPlatformAsset(assets, 'linux', '.rpm'),
-        appimage: findPlatformAsset(assets, 'linux', '.AppImage', { preferPlatformKeyword: false }),
-        tarFull: findAssetWithKeywords(assets, '.tar.gz', ['full'], ['silent', 'indexed'])
-      }
-    case 'macos':
-      return {
-        dmg: findPlatformAsset(assets, 'macos', '.dmg'),
-        zip: findPlatformAsset(assets, 'macos', '.zip'),
-        zipFull: findAssetWithKeywords(assets, '.zip', ['macos', 'full'], ['silent', 'indexed']) || findAssetWithKeywords(assets, '.zip', ['mac', 'full'], ['silent', 'indexed'])
-      }
-    case 'android':
-      return {
-        apk: findPlatformAsset(assets, 'android', '.apk', { preferPlatformKeyword: false }),
-        zipFull: findAssetWithKeywords(assets, '.zip', ['android', 'full'], ['silent', 'indexed'])
-      }
-    default:
-      return {}
-  }
-}
-
-function hasPlatformAssets(data) {
-  return Object.values(data).some(v => v)
-}
 
 export async function GET(request) {
   try {
