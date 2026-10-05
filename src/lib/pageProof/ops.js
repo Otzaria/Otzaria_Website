@@ -399,6 +399,24 @@ export const REVERT_STATUSES = ['pending', 'ok', 'fixed', 'bad', 'seg', 'skip'];
 
 export const sanitizeOps = (ops) => (Array.isArray(ops) ? ops.map(sanitizeOp) : []);
 
+// בשרת (הגשה ועריכת-מנהל לפני אישור), אחרי sanitizeOps: revert/revert_status על תיקון-טקסט נשארים רק כשזו באמת "החזר
+// למקור" — הערך הוא הטקסט של השורה בעמוד המקורי (baseDoc), ו-revert_status הוא מצב-השורה שם (או חסר, כשהמצב אינו מהמותרים).
+// אחרת שני השדות יורדים: בתוכנת-הספר revert_status קובע את מצב-האימון של השורה ועוקף את השומר "תוקן כאן אחרי הייצוא",
+// ולכן לקוח אינו יכול לסמן כך תיקון-טקסט רגיל. פעולות אחרות — כמות-שהן. טהור (פעולות חדשות; הקלט אינו משתנה).
+export function trustRevert(baseDoc, ops) {
+  if (!Array.isArray(ops)) return [];
+  const lines = new Map((baseDoc?.lines || []).filter((l) => l && Number.isInteger(l.id)).map((l) => [l.id, l]));
+  return ops.map((o) => {
+    if (!o || o.kind !== 'text' || (o.revert === undefined && o.revert_status === undefined)) return o;
+    const l = Array.isArray(o.ids) && o.ids.length === 1 ? lines.get(o.ids[0]) : null;
+    const baseText = l ? String(l.text ?? l.text_ocr ?? '') : null;
+    const baseStatus = l && REVERT_STATUSES.includes(l.status) ? l.status : undefined;
+    if (o.revert === true && l && o.value === baseText && o.revert_status === baseStatus) return o;
+    const { revert: _r, revert_status: _s, ...rest } = o;
+    return rest;
+  });
+}
+
 // ---------- החלה מקומית ----------
 
 const union = (boxes) => [

@@ -1145,3 +1145,32 @@ test('withBookOnly: תיקון-טקסט בריהוט — בלי סימון; רי
   const v2 = buildView(d, [{ kind: 'stream', page: 3, ids: [4], value: 'main' }]);
   assert.deepEqual(withBookOnly([{ kind: 'text', page: 3, ids: [4], value: '123' }], v2, 3).map((o) => o.kind), ['train_text', 'text']);
 });
+
+test('trustRevert: revert/revert_status על תיקון-טקסט — רק כשהערך והמצב הם של העמוד המקורי; אחרת שניהם יורדים', async () => {
+  const { trustRevert } = await import('./ops.js');
+  const base = { page: 3, lines: [{ id: 1, text: 'ישן', status: 'ok' }, { id: 2, text_ocr: 'עוד', status: 'removed' }, { id: 3, text: 'ג' }] };
+  const T = (id, value, extra = {}) => ({ kind: 'text', page: 3, ids: [id], value, ...extra });
+  const out = trustRevert(base, [
+    T(1, 'ישן', { revert: true, revert_status: 'ok' }), // אמיתי
+    T(1, 'חדש', { revert: true, revert_status: 'ok' }), // ערך אחר
+    T(1, 'ישן', { revert: true, revert_status: 'fixed' }), // מצב אחר
+    T(1, 'ישן', { revert: true }), // בלי מצב, כשלשורה מצב מותר
+    T(2, 'עוד', { revert: true }), // מצב שאינו מהמותרים ('removed') — בלי revert_status
+    T(2, 'עוד', { revert: true, revert_status: 'removed' }),
+    T(3, 'ג', { revert_status: 'ok' }), // revert_status בלי revert
+    T(9, 'x', { revert: true }), // שורה שאינה בעמוד
+    { kind: 'stream', page: 3, ids: [1], value: 'main', revert: true }, // לא טקסט — כמות-שהיא
+  ]);
+  assert.deepEqual(out, [
+    T(1, 'ישן', { revert: true, revert_status: 'ok' }),
+    T(1, 'חדש'),
+    T(1, 'ישן'),
+    T(1, 'ישן'),
+    T(2, 'עוד', { revert: true }),
+    T(2, 'עוד'),
+    T(3, 'ג'),
+    T(9, 'x'),
+    { kind: 'stream', page: 3, ids: [1], value: 'main', revert: true },
+  ]);
+  assert.deepEqual(trustRevert(base, null), []);
+});

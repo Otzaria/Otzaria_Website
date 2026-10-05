@@ -125,6 +125,31 @@ describe('POST /api/page-proof/pages/[id]/submit', () => {
     ])
   })
 
+  // סקירה (שלב ג): revert/revert_status רק להחזרה אמיתית — הטקסט והמצב שבעמוד המקורי (ops.trustRevert); אחרת יורדים
+  it('"החזר למקור" נשמר רק כשהטקסט והמצב הם של העמוד המקורי; revert מזויף על תיקון רגיל — יורד', async () => {
+    const sdoc = { ...doc, lines: [{ ...doc.lines[0], status: 'ok' }, { ...doc.lines[1], status: 'pending' }] }
+    Page.findById.mockReturnValue(lean(pageRow({ doc: sdoc })))
+    const ops = [
+      { kind: 'text', page: 3, ids: [1], value: 'ישן', revert: true, revert_status: 'ok' },
+      { kind: 'text', page: 3, ids: [2], value: 'חדש', revert: true, revert_status: 'ok' },
+    ]
+    expect((await POST(req({ ops }), params)).status).toBe(200)
+    const saved = Sub.create.mock.calls[0][0].ops
+    expect(saved.find((o) => o.ids[0] === 1)).toEqual({ kind: 'text', page: 3, ids: [1], value: 'ישן', revert: true, revert_status: 'ok' })
+    expect(saved.find((o) => o.ids[0] === 2)).toEqual({ kind: 'text', page: 3, ids: [2], value: 'חדש' })
+  })
+
+  it('"החזר למקור" עם מצב-שורה שאינו של העמוד המקורי — השדות יורדים (והפעולה, זהה למקור, נדחסת)', async () => {
+    const sdoc = { ...doc, lines: [{ ...doc.lines[0], status: 'ok' }, { ...doc.lines[1], status: 'pending' }] }
+    Page.findById.mockReturnValue(lean(pageRow({ doc: sdoc })))
+    const ops = [
+      { kind: 'text', page: 3, ids: [2], value: 'עוד', revert: true, revert_status: 'ok' },
+      { kind: 'text', page: 3, ids: [1], value: 'חדש' },
+    ]
+    expect((await POST(req({ ops }), params)).status).toBe(200)
+    expect(Sub.create.mock.calls[0][0].ops).toEqual([{ kind: 'text', page: 3, ids: [1], value: 'חדש' }])
+  })
+
   it('סגנון-תו עם טווח-מילים ענק ← 400 (אצלם הוא נפרש לרשימה)', async () => {
     Page.findById.mockReturnValue(lean(pageRow()))
     const res = await POST(req({ ops: [{ kind: 'styles', page: 3, ids: [1], value: { style: 'b', words: [0, 2000000000], on: true } }] }), params)

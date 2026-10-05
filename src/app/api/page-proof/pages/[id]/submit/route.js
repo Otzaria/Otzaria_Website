@@ -4,7 +4,7 @@ import connectDB from '@/lib/db';
 import PageProofPage from '@/models/PageProofPage';
 import PageProofSubmission from '@/models/PageProofSubmission';
 import { requireProofSession, whoOf, readJsonBody, tooBigResponse, primaryOf, resolveForeignLinks } from '@/lib/pageProof/pool';
-import { validateOps, packOps, needsRecut, sanitizeOps } from '@/lib/pageProof/ops';
+import { validateOps, packOps, needsRecut, sanitizeOps, trustRevert } from '@/lib/pageProof/ops';
 import { revisionFilter, sameRevision, storedRevision, statusWhenFull } from '@/lib/pageProof/importRules';
 import { volunteerOpenFilter } from '@/lib/pageProof/gridState';
 import { badRequest, notFound, serverError } from '@/lib/apiResponse';
@@ -47,7 +47,8 @@ export async function POST(request, { params }) {
     const sent = body.revision === undefined || body.revision === null ? null : Number(body.revision);
     if (sent === null ? revision > 1 : !sameRevision(sent, revision)) return conflict(RELOAD);
 
-    const packed = packOps(page.doc, sanitizeOps(body.ops));
+    // revert/revert_status — רק להחזרה אמיתית לטקסט ולמצב שבעמוד המקורי (ops.trustRevert)
+    const packed = packOps(page.doc, trustRevert(page.doc, sanitizeOps(body.ops)));
     const invalid = validateOps(page.doc, packed);
     if (invalid) return badRequest(invalid);
     // קישור לעמוד אחר: השורה אכן בעמוד ההוא של אותו ספר (מספרה ותחילת-הטקסט — מהעמוד השמור)

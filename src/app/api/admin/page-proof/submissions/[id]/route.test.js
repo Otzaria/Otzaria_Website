@@ -116,6 +116,22 @@ describe('אישור', () => {
     expect(set.ops.filter((o) => o.kind === 'train_text')).toEqual([{ kind: 'train_text', page: 3, ids: [2], value: 0 }])
   })
 
+  it('המנהל ערך — revert/revert_status נשארים רק להחזרה לטקסט ולמצב שבעמוד המקורי', async () => {
+    Sub.findById.mockReturnValue(lean(sub()))
+    const sdoc = { ...doc, lines: [{ ...doc.lines[0], status: 'fixed' }, doc.lines[1]] }
+    Page.findById.mockReturnValue(lean(page({ status: 'open', doc: sdoc })))
+    Sub.findOneAndUpdate.mockImplementation(async (_f, u) => ({ opCount: u.$set.ops.length }))
+    const edited = [
+      { kind: 'text', page: 3, ids: [1], value: 'ישן', revert: true, revert_status: 'fixed' },
+      { kind: 'text', page: 3, ids: [2], value: 'אחר', revert: true, revert_status: 'ok' },
+    ]
+    const body = await (await PATCH(req({ action: 'approve', ops: edited }), params)).json()
+    expect(body.success).toBe(true)
+    const set = Sub.findOneAndUpdate.mock.calls[0][1].$set
+    expect(set.ops.find((o) => o.ids[0] === 1)).toEqual({ kind: 'text', page: 3, ids: [1], value: 'ישן', revert: true, revert_status: 'fixed' })
+    expect(set.ops.find((o) => o.ids[0] === 2)).toEqual({ kind: 'text', page: 3, ids: [2], value: 'אחר' })
+  })
+
   it('עמוד כפול שעוד חסרה לו הגשה ← נשאר פתוח (הבודק השני ממשיך); ההחכרה לא נמחקת', async () => {
     Sub.findById.mockReturnValue(lean(sub({ ops: CUT })))
     Page.findById.mockReturnValue(lean(page({ status: 'open', activeCount: 1, required: 2 })))
