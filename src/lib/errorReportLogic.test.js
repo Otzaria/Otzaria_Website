@@ -294,6 +294,14 @@ describe('getEmailRecipients', () => {
     });
   });
 
+  it('routes Dicta books to Otzaria with a cc to Tashma', () => {
+    expect(getEmailRecipients('DictaToOtzaria')).toEqual({
+      primary: REPORTING_ERRORS_RECIPIENT,
+      cc: 'jewishoffice@gmail.com',
+      isSefariaOnly: false,
+    });
+  });
+
   it('routes yam-HaHachma books to Otzaria with a cc to the source repository', () => {
     expect(getEmailRecipients('yam-HaHachmaToOtzaria')).toEqual({
       primary: REPORTING_ERRORS_RECIPIENT,
