@@ -5,6 +5,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { requireAccess, badRequest, serverError } from '@/lib/apiResponse'
 import AcronymChangeSet from '@/models/AcronymChangeSet'
 import { AcronymsInputError, getForkSnapshot, listOpenChangeSets, submitChangeSet } from '@/lib/acronyms/service'
+import { getBookInfoSnapshot } from '@/lib/bookinfo/service'
 
 export const maxDuration = 300
 
@@ -13,13 +14,18 @@ const MAX_OPEN_PER_USER = 20
 const MIN_SECONDS_BETWEEN_SUBMISSIONS = 15
 
 // הכינויים נקראים מהפורק Otzaria/SeforimAcronymizer, וכל סל נשלח אליו כ-PR.
-export async function GET() {
+export async function GET(request) {
   try {
     const session = await getServerSession(authOptions)
     const denied = requireAccess(session, anySignedIn)
     if (denied) return denied
 
     await connectDB()
+    // שמות הספרים בספרייה (מ"מידע על ספרים"), לבדיקת שם של ספר חדש; נטען רק לפי בקשה
+    if (new URL(request.url).searchParams.has('libraryTitles')) {
+      const { rows } = await getBookInfoSnapshot()
+      return NextResponse.json({ success: true, titles: [...new Set(rows.map((r) => r.bookName))] }, { headers: { 'Cache-Control': 'private, max-age=600' } })
+    }
     const [snapshot, pending] = await Promise.all([getForkSnapshot(), listOpenChangeSets()])
     return NextResponse.json(
       { success: true, headSha: snapshot.headSha, books: snapshot.books.map(({ title, aliases }) => ({ title, aliases })), pending },

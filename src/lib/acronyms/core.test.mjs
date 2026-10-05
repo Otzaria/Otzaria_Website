@@ -6,7 +6,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { parseDump, exportDump, listBooks } from './dump.js'
-import { aliasKey, aliasProblem, conflictingTitle, normalizeAlias } from './normalize.js'
+import { aliasKey, aliasProblem, conflictingTitle, duplicateAlias, hasQuotes, matchesLibraryTitle, normalizeAlias, suggestLibraryTitles } from './normalize.js'
 import { applyChangeSet, planAddAliases, summarizeChangeSet, validateChangeSet } from './changes.js'
 
 const HEADER = 'PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\nCREATE TABLE IF NOT EXISTS Books (id INTEGER);\n'
@@ -55,6 +55,28 @@ test('normalizeAlias: the form SeforimLibrary and the app read best', () => {
 test('aliasKey ignores quotes the way the app does', () => {
   assert.equal(aliasKey('רעק"א'), aliasKey("רעק'א"))
   assert.equal(aliasKey('רעק"א'), aliasKey('רעקא'))
+})
+
+test('aliasKey ignores punctuation the way the app does', () => {
+  assert.equal(aliasKey('שו״ע-או״ח'), aliasKey('שו"ע או"ח'))
+  assert.equal(aliasKey('רמבם, מסירת תורה שבעל פה'), aliasKey('רמב"ם מסירת תורה-שבעל-פה'))
+  assert.equal(aliasKey('אור הישר.'), aliasKey('אור הישר'))
+  assert.notEqual(aliasKey('אור הישר'), aliasKey('אור ישר'))
+})
+
+test('duplicateAlias finds an existing form the app cannot tell apart', () => {
+  assert.equal(duplicateAlias('רמב"ם הל\' שבת', ['רמבם הל שבת', 'רמב"ם שבת']), 'רמבם הל שבת')
+  assert.equal(duplicateAlias('רמב"ם שבתות', ['רמב"ם שבת']), null)
+  assert.equal(hasQuotes('רמב״ם'), true)
+  assert.equal(hasQuotes('רמבם'), false)
+})
+
+test('matchesLibraryTitle accepts only names SeforimLibrary looks up', () => {
+  const titles = ['פסקי הרא"ש על נדה', 'משנה תורה, הלכות שבת']
+  assert.equal(matchesLibraryTitle('פסקי הראש על נדה', titles), true)
+  assert.equal(matchesLibraryTitle('משנה תורה  הלכות שבת', titles), true)
+  assert.equal(matchesLibraryTitle('פסקי הראש על נידה', titles), false)
+  assert.deepEqual(suggestLibraryTitles('פסקי הראש על נידה', titles), ['פסקי הרא"ש על נדה'])
 })
 
 test('conflictingTitle finds another book with the same title, ignoring quotes', () => {
