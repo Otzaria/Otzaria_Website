@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import DownloadAssistantOptions, { AndroidAssistantNotice, hasDownloadAssistant } from './DownloadAssistantOptions'
 
 // מבנה נתוני ההורדות המוחזר מ-/api/github-releases
 type PlatformLinks = Record<string, string | undefined>
@@ -115,6 +116,10 @@ export default function DownloadSectionClient({ stableDownloads }: { stableDownl
 
     const config = platformConfig[platform]
     if (!config) return null
+    const assistantLinks = stableDownloads?.[platform as keyof Downloads]
+    const subtitle = hasDownloadAssistant(config.title, (assistantLinks as PlatformLinks | undefined) || {})
+      ? `${config.subtitle} · באמצעות מסייע ההורדה`
+      : config.subtitle
 
     if (large) {
       return (
@@ -129,7 +134,7 @@ export default function DownloadSectionClient({ stableDownloads }: { stableDownl
           </div>
           <div className="flex-1 text-right">
             <h3 className="text-2xl font-bold mb-1">{config.title}</h3>
-            <p className="text-neutral-500">{config.subtitle}</p>
+            <p className="text-neutral-500">{subtitle}</p>
           </div>
           <span className="material-symbols-outlined text-3xl text-primary">download</span>
         </button>
@@ -145,7 +150,7 @@ export default function DownloadSectionClient({ stableDownloads }: { stableDownl
           {config.icon}
         </span>
         <h3 className="text-xl font-bold mb-1">{config.title}</h3>
-        <p className="text-sm text-neutral-500">{config.subtitle}</p>
+        <p className="text-sm text-neutral-500">{subtitle}</p>
       </button>
     )
   }
@@ -226,7 +231,8 @@ export default function DownloadSectionClient({ stableDownloads }: { stableDownl
         links={{
           playStore: 'https://play.google.com/store/apps/details?id=org.otzaria.otzaria',
           apk: stableDownloads?.android?.apk,
-          zipFull: stableDownloads?.android?.zipFull
+          zipFull: stableDownloads?.android?.zipFull,
+          windowsAssistant: stableDownloads?.windows?.assistant
         }}
         version={stableDownloads?.versions?.android ?? stableDownloads?.version}
       />
@@ -292,6 +298,11 @@ function DownloadModal({ isOpen, onClose, platform, links, version }: {
 }
 
 function renderDownloadOptions(platform: string, links: PlatformLinks) {
+  // כשיש מסייע הורדה לפלטפורמה מוצג רק הוא; release ישן בלעדיו מציג את הקבצים הישירים.
+  if (hasDownloadAssistant(platform, links)) {
+    return <DownloadAssistantOptions platform={platform} links={links} />
+  }
+
   const options: Record<string, DownloadOption[]> = {
     Windows: [
       { key: 'exe', icon: 'install_desktop', title: 'EXE Installer', desc: 'קובץ התקנה רגיל — הורדת הספרייה תתבצע דרך התוכנה' },
@@ -327,7 +338,7 @@ function renderDownloadOptions(platform: string, links: PlatformLinks) {
     return <p className="text-neutral-500 italic p-4 bg-neutral-50 rounded-lg text-center border border-dashed border-neutral-300">אין הורדות זמינות כרגע לגרסה זו.</p>
   }
 
-  return validOptions.map((option) => (
+  const optionLinks = validOptions.map((option) => (
     <a
       key={option.key}
       href={links[option.key]}
@@ -347,4 +358,9 @@ function renderDownloadOptions(platform: string, links: PlatformLinks) {
       </span>
     </a>
   ))
+
+  if (platform === 'Android' && links.windowsAssistant) {
+    return [...optionLinks, <AndroidAssistantNotice key="windowsAssistant" href={links.windowsAssistant} />]
+  }
+  return optionLinks
 }
