@@ -108,3 +108,10 @@ test('הדחיסה לפני ההגשה (packOps בשרת, planSubmission בדפ�
   const plain = inv.map(({ revert: _r, revert_status: _s, ...o }) => o);
   assert.deepEqual(packOps(base, sanitizeOps(plain)).map((o) => o.kind), ['stream']);
 });
+
+test('inverseOps: "החזר לאוטומטי" (link_reset) על קישור שהגיע מבוטל — ההיפוך הוא שוב "אין קישור"', () => {
+  const doc = { ...DOC, links: [...DOC.links, { from_line: 1, to_line: null, src: 'human' }] };
+  assert.deepEqual(inverseOps(doc, { kind: 'link_reset', page: 7, value: { src_line: 1, page: 7 } }), [
+    R({ kind: 'link_del', page: 7, value: { src_line: 1, page: 7 } }),
+  ]);
+});
