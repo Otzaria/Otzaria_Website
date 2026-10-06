@@ -3,10 +3,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // הגשת עמוד בהגהת-עמודים: needsRecut וגרסת-העמוד נשמרים בהגשה, ותפיסת-המקום
 // מותנית בגרסה. הפעולות מנוקות ונארזות (ops.packOps). המודלים מדומים.
 
-const { getServerSessionMock, Sub, Page } = vi.hoisted(() => ({
+const { getServerSessionMock, Sub, Page, drafts } = vi.hoisted(() => ({
   getServerSessionMock: vi.fn(),
   Sub: { create: vi.fn(), find: vi.fn() },
   Page: { findById: vi.fn(), findOneAndUpdate: vi.fn(), updateOne: vi.fn(), find: vi.fn() },
+  drafts: { dropDraft: vi.fn(), draftBasis: vi.fn() },
 }))
 
 vi.mock('@/lib/db', () => ({ default: vi.fn().mockResolvedValue(undefined) }))
@@ -15,6 +16,8 @@ vi.mock('@/app/api/auth/[...nextauth]/route', () => ({ authOptions: {} }))
 vi.mock('@/models/PageProofSubmission', () => ({ default: Sub }))
 vi.mock('@/models/PageProofPage', () => ({ default: Page }))
 vi.mock('@/models/PageProofBook', () => ({ default: {} }))
+// הטיוטה בשרת (serverDrafts.js — נבדקת מול מסד אמיתי בבדיקות שלה)
+vi.mock('@/lib/pageProof/serverDrafts', () => drafts)
 
 import { POST } from './route'
 import { MAX_BODY_BYTES } from '@/lib/pageProof/pool'
@@ -38,6 +41,8 @@ beforeEach(() => {
   Page.updateOne.mockResolvedValue({ matchedCount: 1 })
   Sub.create.mockResolvedValue({ _id: 'sub1' })
   Sub.find.mockReturnValue(lean([]))
+  drafts.dropDraft.mockResolvedValue(1)
+  drafts.draftBasis.mockResolvedValue({})
 })
 
 describe('POST /api/page-proof/pages/[id]/submit', () => {
@@ -57,6 +62,23 @@ describe('POST /api/page-proof/pages/[id]/submit', () => {
     expect(Sub.create.mock.calls[0][0]).toMatchObject({ needsRecut: true, revision: 2, opCount: 2 })
     // תפיסת-המקום מותנית בגרסה
     expect(Page.findOneAndUpdate.mock.calls[0][0]).toMatchObject({ _id: PAGE_ID, status: 'open', revision: 2 })
+    // הטיוטה שבשרת נמחקת (docs/63 §2)
+    expect(drafts.dropDraft).toHaveBeenCalledWith(PAGE_ID)
+  })
+
+  it('טיוטה שהתחילה מהגשה קודמת (הבודק השני) — ההגשה נרשמת "מבוססת על" ההגשה ההיא', async () => {
+    Page.findById.mockReturnValue(lean(pageRow()))
+    drafts.draftBasis.mockResolvedValueOnce({ basedOn: 'subPrev', basedOnName: 'מתנדב קודם', basedOnKind: 'submission' })
+    expect((await POST(req({ ops: TEXT, revision: 1 }), params)).status).toBe(200)
+    expect(Sub.create.mock.calls[0][0]).toMatchObject({ basedOn: 'subPrev', basedOnName: 'מתנדב קודם', basedOnKind: 'submission' })
+  })
+
+  it('כשל במחיקת הטיוטה אינו מכשיל הגשה שכבר נשמרה', async () => {
+    Page.findById.mockReturnValue(lean(pageRow()))
+    drafts.dropDraft.mockRejectedValueOnce(new Error('db'))
+    const res = await POST(req({ ops: TEXT, revision: 1 }), params)
+    expect(res.status).toBe(200)
+    expect((await res.json()).success).toBe(true)
   })
 
   it('בלי פעולות-חיתוך ← needsRecut=false; עמוד בלי שדה revision = גרסה 1 (גם בלי revision בבקשה)', async () => {
@@ -101,6 +123,31 @@ describe('POST /api/page-proof/pages/[id]/submit', () => {
       { kind: 'text', page: 3, ids: [2], value: 'חדש' },
       { kind: 'line_ok', page: 3, ids: [1, 2] },
     ])
+  })
+
+  // סקירה (שלב ג): revert/revert_status רק להחזרה אמיתית — הטקסט והמצב שבעמוד המקורי (ops.trustRevert); אחרת יורדים
+  it('"החזר למקור" נשמר רק כשהטקסט והמצב הם של העמוד המקורי; revert מזויף על תיקון רגיל — יורד', async () => {
+    const sdoc = { ...doc, lines: [{ ...doc.lines[0], status: 'ok' }, { ...doc.lines[1], status: 'pending' }] }
+    Page.findById.mockReturnValue(lean(pageRow({ doc: sdoc })))
+    const ops = [
+      { kind: 'text', page: 3, ids: [1], value: 'ישן', revert: true, revert_status: 'ok' },
+      { kind: 'text', page: 3, ids: [2], value: 'חדש', revert: true, revert_status: 'ok' },
+    ]
+    expect((await POST(req({ ops }), params)).status).toBe(200)
+    const saved = Sub.create.mock.calls[0][0].ops
+    expect(saved.find((o) => o.ids[0] === 1)).toEqual({ kind: 'text', page: 3, ids: [1], value: 'ישן', revert: true, revert_status: 'ok' })
+    expect(saved.find((o) => o.ids[0] === 2)).toEqual({ kind: 'text', page: 3, ids: [2], value: 'חדש' })
+  })
+
+  it('"החזר למקור" עם מצב-שורה שאינו של העמוד המקורי — השדות יורדים (והפעולה, זהה למקור, נדחסת)', async () => {
+    const sdoc = { ...doc, lines: [{ ...doc.lines[0], status: 'ok' }, { ...doc.lines[1], status: 'pending' }] }
+    Page.findById.mockReturnValue(lean(pageRow({ doc: sdoc })))
+    const ops = [
+      { kind: 'text', page: 3, ids: [2], value: 'עוד', revert: true, revert_status: 'ok' },
+      { kind: 'text', page: 3, ids: [1], value: 'חדש' },
+    ]
+    expect((await POST(req({ ops }), params)).status).toBe(200)
+    expect(Sub.create.mock.calls[0][0].ops).toEqual([{ kind: 'text', page: 3, ids: [1], value: 'חדש' }])
   })
 
   it('סגנון-תו עם טווח-מילים ענק ← 400 (אצלם הוא נפרש לרשימה)', async () => {

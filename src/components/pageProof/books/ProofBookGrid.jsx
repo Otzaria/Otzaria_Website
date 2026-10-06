@@ -233,14 +233,8 @@ export default function ProofBookGrid({ gid }) {
               הספר מושהה כרגע: אפשר להמשיך בעמודים שכבר בטיפולכם, אבל לא לתפוס עמודים חדשים.
             </div>
           )}
-          {data.hidden > 0 && (
-            <div className="mb-6 flex items-center gap-2 rounded-xl border border-surface-variant bg-surface/60 p-3 text-sm text-on-surface/70">
-              <span aria-hidden="true" className="material-symbols-outlined">visibility_off</span>
-              {data.hidden === 1 ? 'עמוד אחד בספר עוד לא נפתח להגהה' : `${data.hidden.toLocaleString('he-IL')} עמודים בספר עוד לא נפתחו להגהה`} — הם
-              יופיעו כאן כשהמנהל יפתח אותם.
-            </div>
-          )}
-
+          {/* עמודים שהמנהל סגר למתנדבים אינם מוצגים ואינם נספרים — וגם לא ההודעה כמה הם (בעל הפרויקט, 2026-10-06):
+              זה עניין של המנהל, ובדף-הניהול הוא רואה אותם */}
           <ProofStatCards counts={counts} active={activeFilter} onSelect={setFilter} />
 
           <div className="glass mb-8 rounded-xl border border-surface-variant/30 p-4">

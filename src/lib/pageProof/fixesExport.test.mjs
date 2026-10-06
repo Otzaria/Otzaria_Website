@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildFixesFile, splitPrimary, pickPrimary, splitFixesFile, MAX_FILE_OPS } from './fixesExport.js';
+import { buildFixesFile, splitPrimary, pickPrimary, pendingRecut, recutOf, splitFixesFile, MAX_FILE_OPS } from './fixesExport.js';
 
 const GID = 'a1b2c3d4e5f6a7b8';
 
@@ -105,4 +105,67 @@ test('buildFixesFile: קישור לעמוד אחר — page, ids ו-value (עם 
     [link, back]
   );
   assert.deepEqual(file.ops.map((o) => o.op_id), ['s1:0', 's1:1']);
+});
+
+test('buildFixesFile: פעולה הפוכה ("החזר למקור") יוצאת עם revert', () => {
+  const s = { _id: 's', page: 4, revision: 1, who: 'w', approvedAt: '2026-10-05T10:00:00Z', ops: [{ kind: 'text', page: 4, ids: [1], value: 'מקור', revert: true }, tA] };
+  assert.deepEqual(buildFixesFile('g', [s]).ops.map((o) => o.revert ?? null), [true, null]);
+});
+
+test('buildFixesFile: הגשה שמבוססת על הגשה קודמת (הבודק השני) — same_as לכל פעולה זהה, ובלי השדה לשאר', () => {
+  const ops = [
+    { kind: 'text', page: 4, ids: [1], value: 'א' },
+    { kind: 'para', page: 4, ids: [2], value: 'h2' },
+  ];
+  const f = buildFixesFile(GID, [{ _id: 'sB', page: 4, who: 'u2', approvedAt: '2026-10-05', ops, sameAs: ['sA:3', null] }], new Date('2026-10-05T10:00:00Z'));
+  assert.equal(f.ops[0].same_as, 'sA:3');
+  assert.equal('same_as' in f.ops[1], false);
+  // בלי sameAs — כמו תמיד
+  assert.equal(buildFixesFile(GID, [{ _id: 's1', page: 4, who: 'u1', approvedAt: '2026-10-05', ops }]).ops.some((o) => 'same_as' in o), false);
+});
+
+// ---------- הבודק השני: ההגשה המצטברת ראשית (docs/63 §4) ----------
+const tA = { kind: 'text', page: 4, ids: [1], value: 'x' };
+const tB = { kind: 'text', page: 4, ids: [2], value: 'y' };
+const subA = (extra = {}) => ({ _id: 'a', page: 4, revision: 1, approvedAt: '2026-10-05T10:00:00Z', ops: [tA], ...extra });
+const subB = (extra = {}) => ({ _id: 'b', page: 4, revision: 1, approvedAt: '2026-10-05T10:05:00Z', basedOn: 'a', ops: [tA, tB], ...extra });
+
+test('pickPrimary: הגשה שהגשה מאושרת אחרת מבוססת עליה אינה ראשית — המצטברת היא', () => {
+  const r = splitPrimary([subA(), subB()]);
+  assert.deepEqual(r.primary.map((s) => s._id), ['b']);
+  assert.deepEqual(r.double.map((s) => s._id), ['a']);
+  // גם כש-B אושרה לפני A, וגם כש-A משנה חיתוך
+  assert.equal(pickPrimary([subA({ needsRecut: true, approvedAt: '2026-10-05T11:00:00Z' }), subB()])._id, 'b');
+});
+
+test('pickPrimary: A כבר יצאה בקובץ ראשי — B ראשית בקובץ הבא, כהמשך (same_as מונע החלה כפולה)', () => {
+  const r = splitPrimary([subA({ exportedAt: '2026-10-05T10:30:00Z' }), subB()]);
+  assert.deepEqual(r.primary.map((s) => s._id), ['b']);
+  const file = buildFixesFile('g', [{ ...subB(), sameAs: ['a:0', null] }]);
+  assert.deepEqual(file.ops.map((o) => o.same_as ?? null), ['a:0', null]);
+});
+
+test('pickPrimary: שרשרת A ← B ← C — C ראשית; מבוססת על הגשה שאינה בקבוצה (נדחתה) — כרגיל', () => {
+  const C = { _id: 'c', page: 4, revision: 1, approvedAt: '2026-10-05T10:10:00Z', basedOn: 'b', ops: [tA, tB] };
+  assert.equal(pickPrimary([subA(), subB(), C])._id, 'c');
+  assert.equal(pickPrimary([subB({ basedOn: 'z' }), subA()])._id, 'a');
+  // מזהה כאובייקט (ObjectId אחרי lean) — אותו דבר
+  assert.equal(pickPrimary([subA(), subB({ basedOn: { _id: 'a' } })])._id, 'b');
+});
+
+test('pendingRecut: המשך של הגשה שיצאה — רק תיקוני-חיתוך משלו נספרים', () => {
+  const cut = { kind: 'line_add', page: 4, value: { bbox: [1, 2, 3, 4], text: 'ש' } };
+  const cut2 = { kind: 'line_add', page: 4, value: { bbox: [5, 6, 7, 8], text: 'ת' } };
+  const A = subA({ ops: [cut], needsRecut: true, exportedAt: '2026-10-05T10:30:00Z' });
+  const byId = (...l) => new Map(l.map((s) => [s._id, s]));
+  const B = subB({ ops: [cut, tB], needsRecut: true });
+  assert.equal(pendingRecut(B, byId(A, B)), false, 'החיתוך של A כבר יצא');
+  const B2 = subB({ ops: [cut, cut2], needsRecut: true });
+  assert.equal(pendingRecut(B2, byId(A, B2)), true, 'חיתוך חדש של B');
+  assert.equal(pendingRecut(subA({ ops: [cut], needsRecut: true }), byId()), true);
+  // ראוטי האישור וההגשה (recutOf): אותו כלל, גם כשהראשית עצמה כבר יצאה (העמוד ממתין בגללה)
+  assert.equal(recutOf(B, byId(A, B)), false, 'רק החיתוך של A — כבר בדרך לתוכנת-הספר');
+  assert.equal(recutOf(B2, byId(A, B2)), true);
+  assert.equal(recutOf(subA({ ops: [cut], needsRecut: true, exportedAt: '2026-10-05T10:30:00Z' }), byId()), true);
+  assert.equal(pendingRecut(subB({ needsRecut: false }), byId(A)), false);
 });

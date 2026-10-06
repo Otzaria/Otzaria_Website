@@ -127,6 +127,31 @@ describe('ProofToolbar — סרגל-הכלים', () => {
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
+  it('paraStyleOptions (דף עוטף): הרשימה שלו בתפריט — קווים רק בין קבוצות, והנוכחי מסומן', async () => {
+    const paraStyleOptions = [
+      { separator: true },
+      { key: 'body', he: 'טקסט רגיל' },
+      { key: 'h1', he: 'כותרת ראשית' },
+      { separator: true },
+      { separator: true },
+      { key: 'note', he: 'הערה', hint: 'פסקת הערה' },
+    ]
+    const p = setup({ paraStyle: 'note', paraStyleOptions })
+    const trigger = screen.getByRole('button', { name: 'סגנון הפסקה' })
+    expect(trigger).toHaveTextContent('הערה')
+    await userEvent.click(trigger)
+    const menu = screen.getByRole('menu')
+    const items = within(menu).getAllByRole('menuitemradio')
+    const names = ['טקסט רגיל', 'כותרת ראשית', 'הערה']
+    expect(items).toHaveLength(names.length)
+    names.forEach((n, k) => expect(items[k]).toHaveAccessibleName(n))
+    // body · (קו לפני h1) h1 · (קו אחד) note · (קו) הפעולות
+    expect(within(menu).getAllByRole('separator')).toHaveLength(3)
+    expect(within(menu).getByRole('menuitemradio', { name: 'הערה' })).toHaveAttribute('aria-checked', 'true')
+    await userEvent.click(within(menu).getByRole('menuitemradio', { name: 'כותרת ראשית' }))
+    expect(p.onParaStyle).toHaveBeenCalledWith('h1')
+  })
+
   it('בסוף תפריט סגנון-הפסקה: "פסקה חדשה" ו"חיבור לפסקה הקודמת" — פעולות (לא בחירה), בשם מלא', async () => {
     const p = setup({ paraStyle: 'body' })
     await userEvent.click(screen.getByRole('button', { name: 'סגנון הפסקה' }))
@@ -290,5 +315,52 @@ describe('ProofToolbar — סרגל-הכלים', () => {
   it('כפתורי הדף העוטף (actions) בסרגל', () => {
     setup({ actions: <button type="button">הגשה</button> })
     expect(screen.getByRole('button', { name: 'הגשה' })).toBeInTheDocument()
+  })
+
+  // שלב "מבנה" בדף המתנדב (stages.stageFocus): רק מה שנוגע למבנה; בלי hide — הכול, כמו תמיד (גם בתוכנת-הספר)
+  it('hide מסתיר קבוצות (והקו שאחרי כל אחת); השאר — כרגיל', () => {
+    setup({ hide: ['paraStyle', 'charStyles', 'paragraphs', 'link', 'suspicious', 'bookOnly'], onBookOnly: vi.fn() })
+    // "לספר בלבד" / "פגם בדפוס" (שם הכפתור משתנה בסבב אחר — כאן שניהם)
+    for (const name of ['מודגש', 'פסקה חדשה', 'קישור', 'הצעות למילה', /^(לספר בלבד|פגם בדפוס)$/]) {
+      expect(screen.queryByRole('button', { name }), String(name)).not.toBeInTheDocument()
+    }
+    expect(screen.queryByRole('button', { name: 'סגנון הפסקה' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'ביטול' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'זרם לשורות' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'עזרה' })).toBeInTheDocument()
+    const visibleDividers = [...screen.getByRole('toolbar').querySelectorAll('div.w-px')].filter((d) => !d.hidden)
+    expect(visibleDividers.length).toBeLessThan(5)
+  })
+
+  it('בלי hide — כל הקבוצות מוצגות', () => {
+    setup({ onBookOnly: vi.fn() })
+    for (const name of ['מודגש', 'פסקה חדשה', 'קישור', 'הצעות למילה', /^(לספר בלבד|פגם בדפוס)$/, 'סגנון הפסקה']) {
+      expect(screen.getByRole('button', { name }), String(name)).toBeInTheDocument()
+    }
+  })
+})
+
+// "הנחיות" (2026-10-05) — כפתור בסרגל רק כשיש לאן (onGuide); ומצב "פגם בדפוס" מוסבר כמצב
+describe('ProofToolbar — "הנחיות" ו"פגם בדפוס"', () => {
+  it('"הנחיות" — בלי onGuide אין כפתור', () => {
+    setup()
+    expect(screen.queryByRole('button', { name: 'הנחיות' })).toBeNull()
+  })
+
+  it('"הנחיות" עם onGuide — הלחיצה קוראת לו', async () => {
+    const onGuide = vi.fn()
+    setup({ onGuide })
+    const b = screen.getByRole('button', { name: 'הנחיות' })
+    expect(b).toHaveAttribute('title', expect.stringContaining('הנחיות להגהת עמודים'))
+    await userEvent.click(b)
+    expect(onGuide).toHaveBeenCalled()
+  })
+
+  it('"פגם בדפוס": השם בסרגל, וההסבר אומר שזה מצב', () => {
+    setup({ onBookOnly: vi.fn() })
+    const b = screen.getByRole('button', { name: 'פגם בדפוס' })
+    expect(b).toHaveAttribute('aria-pressed', 'false')
+    expect(b).toHaveAttribute('title', expect.stringContaining('כשהמצב דולק, כל תיקון-טקסט נכנס לספר, אבל השורה לא משמשת לאימון המחשב'))
+    expect(screen.queryByRole('button', { name: 'לספר בלבד' })).toBeNull()
   })
 })

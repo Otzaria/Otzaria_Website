@@ -99,6 +99,39 @@ describe('אישור', () => {
     expect(statusCall()[1].$set.status).toBe('recut')
   })
 
+  // סקירה: גם לקוח ששולח את הפעולות עם השדות הפנימיים — סימון "לספר בלבד" אוטומטי (_cmp) על שורה שהטקסט שלה
+  // חזר בסוף לזה שיובא יורד, כמו בהגשה; סימון ידני נשאר
+  it('המנהל ערך — סימון "פגם בדפוס" אוטומטי בלי שינוי-טקסט יורד, ידני נשאר', async () => {
+    Sub.findById.mockReturnValue(lean(sub()))
+    Page.findById.mockReturnValue(lean(page({ status: 'open', doc })))
+    Sub.findOneAndUpdate.mockImplementation(async (_f, u) => ({ opCount: u.$set.ops.length }))
+    const edited = [
+      { kind: 'train_text', page: 3, ids: [1], value: 0, _cmp: true },
+      { kind: 'text', page: 3, ids: [1], value: 'ישן' },
+      { kind: 'train_text', page: 3, ids: [2], value: 0 },
+    ]
+    const body = await (await PATCH(req({ action: 'approve', ops: edited }), params)).json()
+    expect(body.success).toBe(true)
+    const set = Sub.findOneAndUpdate.mock.calls[0][1].$set
+    expect(set.ops.filter((o) => o.kind === 'train_text')).toEqual([{ kind: 'train_text', page: 3, ids: [2], value: 0 }])
+  })
+
+  it('המנהל ערך — revert/revert_status נשארים רק להחזרה לטקסט ולמצב שבעמוד המקורי', async () => {
+    Sub.findById.mockReturnValue(lean(sub()))
+    const sdoc = { ...doc, lines: [{ ...doc.lines[0], status: 'fixed' }, doc.lines[1]] }
+    Page.findById.mockReturnValue(lean(page({ status: 'open', doc: sdoc })))
+    Sub.findOneAndUpdate.mockImplementation(async (_f, u) => ({ opCount: u.$set.ops.length }))
+    const edited = [
+      { kind: 'text', page: 3, ids: [1], value: 'ישן', revert: true, revert_status: 'fixed' },
+      { kind: 'text', page: 3, ids: [2], value: 'אחר', revert: true, revert_status: 'ok' },
+    ]
+    const body = await (await PATCH(req({ action: 'approve', ops: edited }), params)).json()
+    expect(body.success).toBe(true)
+    const set = Sub.findOneAndUpdate.mock.calls[0][1].$set
+    expect(set.ops.find((o) => o.ids[0] === 1)).toEqual({ kind: 'text', page: 3, ids: [1], value: 'ישן', revert: true, revert_status: 'fixed' })
+    expect(set.ops.find((o) => o.ids[0] === 2)).toEqual({ kind: 'text', page: 3, ids: [2], value: 'אחר' })
+  })
+
   it('עמוד כפול שעוד חסרה לו הגשה ← נשאר פתוח (הבודק השני ממשיך); ההחכרה לא נמחקת', async () => {
     Sub.findById.mockReturnValue(lean(sub({ ops: CUT })))
     Page.findById.mockReturnValue(lean(page({ status: 'open', activeCount: 1, required: 2 })))
@@ -121,6 +154,19 @@ describe('אישור', () => {
 
     const body = await (await PATCH(req({ action: 'approve' }), params)).json()
     expect(body).toMatchObject({ needsRecut: true, recutSkipped: true, pageStatus: 'done' })
+    expect(statusCall()).toBeUndefined()
+  })
+
+  it('הבודק השני: ההגשה המצטברת ראשית, ותיקוני-החיתוך שלה כולם של ההגשה הקודמת שכבר יצאה ← לא recut, ובלי recutSkipped', async () => {
+    Sub.findById.mockReturnValue(lean(sub({ ops: CUT })))
+    Page.findById.mockReturnValue(lean(page()))
+    Sub.findOneAndUpdate.mockResolvedValue({ opCount: 1 })
+    approved(
+      { _id: 'first', needsRecut: true, ops: CUT, exportedAt: new Date('2026-09-29T10:30:00Z'), reviewedAt: new Date('2026-09-29T10:00:00Z') },
+      { _id: SUB_ID, needsRecut: true, ops: CUT, basedOn: 'first', reviewedAt: new Date('2026-09-29T11:00:00Z') }
+    )
+    const body = await (await PATCH(req({ action: 'approve' }), params)).json()
+    expect(body).toMatchObject({ needsRecut: true, recutSkipped: false, pageStatus: 'done' })
     expect(statusCall()).toBeUndefined()
   })
 

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import ProofHelp, { HELP_INTRO, HELP_SEEN_KEY } from './ProofHelp'
+import ProofHelp, { HELP_INTRO, HELP_SEEN_KEY, guideOf, openGuide } from './ProofHelp'
 import { PARA_STYLE_OPTIONS } from './ProofToolbar'
 
 beforeEach(() => {
@@ -156,13 +156,13 @@ describe('ProofHelp — שאלות שחוזרות (מהפורום)', () => {
     expect(q('damaged')).toHaveTextContent(/ו שבורה שנראית כמו י/)
     expect(q('damaged')).toHaveTextContent(/רק נקודה/)
     expect(q('headings')).toHaveTextContent(/כותרת-רצה\) ומספר העמוד — "ריהוט הדף"/)
-    expect(q('headings')).toHaveTextContent(/כותרת שפותחת פרק או סעיף בתוך הטקסט — כותרת של הזרם שלה/)
+    expect(q('headings')).toHaveTextContent(/לא ריהוט ולא מסגרת נפרדת\. מסמנים אותה בטקסט בסגנון-הפסקה "כותרת"/)
     expect(q('running-only')).toHaveTextContent(/השאירו אותה ריהוט.*בהערה למנהל/)
     expect(q('join')).toHaveTextContent(/Backspace בתחילת הפסקה השנייה.*↑.*חיבור לפסקה הקודמת/)
-    expect(q('recut')).toHaveTextContent(/"שלח לזיהוי-מחדש" בסרגל.*חוזר אליכם עם השורות החדשות/)
+    expect(q('recut')).toHaveTextContent(/"✓ המבנה נכון — לזיהוי-מחדש": העמוד נשלח, נעול עד שיזוהה מחדש, וחוזר אליכם לשלב הטקסט/)
     expect(q('recut')).toHaveTextContent(/פיצול, איחוד או שינוי תיבה/)
-    expect(q('recut')).toHaveTextContent(/במעבר שני, שבו בודקים רק אותן/)
-    expect(q('recut')).toHaveTextContent(/אתם לא צריכים להפעיל כלום/)
+    expect(q('recut')).toHaveTextContent(/"✓ המבנה נכון — לאישור זיהוי-מחדש": העמוד ממתין לאישור מנהל, נעול גם הוא/)
+    expect(q('recut')).toHaveTextContent(/בינתיים אפשר לתפוס עמודים אחרים/)
   })
 })
 
@@ -203,5 +203,37 @@ describe('ProofHelp — texts (נוסח אחר מחוץ לאתר)', () => {
     render(<ProofHelp open onClose={vi.fn()} texts={{ faq: [] }} />)
     expect(screen.queryByRole('region', { name: 'שאלות שחוזרות' })).toBeNull()
     expect(screen.getByText(HELP_INTRO)).toBeInTheDocument()
+  })
+})
+
+// דף ההנחיות למתנדבים (2026-10-05): קישור בחלון העזרה — באתר לשונית חדשה; עורך מוטמע פותח בעצמו (help.guide.open)
+describe('ProofHelp — קישור לדף ההנחיות', { timeout: 20000 }, () => {
+  it('באתר: קישור ל-/docs/page-proof בלשונית חדשה', () => {
+    render(<ProofHelp open onClose={() => {}} />)
+    const a = screen.getByRole('link', { name: /הנחיות להגהה/ })
+    expect(a).toHaveAttribute('href', '/docs/page-proof')
+    expect(a).toHaveAttribute('target', '_blank')
+    expect(a).toHaveAttribute('rel', expect.stringContaining('noopener'))
+  })
+
+  it('עורך מוטמע: guide.open מקבל את הכתובת (ולא ניווט בדף); guide: null — בלי הקישור', async () => {
+    const open = vi.fn()
+    const { unmount } = render(<ProofHelp open onClose={() => {}} texts={{ guide: { href: 'https://example.org/docs/page-proof', open } }} />)
+    const a = screen.getByRole('link', { name: /הנחיות להגהה/ })
+    expect(a).toHaveAttribute('href', 'https://example.org/docs/page-proof')
+    await userEvent.click(a)
+    expect(open).toHaveBeenCalledWith('https://example.org/docs/page-proof')
+    unmount()
+    render(<ProofHelp open onClose={() => {}} texts={{ guide: null }} />)
+    expect(screen.queryByRole('link', { name: /הנחיות להגהה/ })).toBeNull()
+  })
+
+  it('guideOf / openGuide: ברירת-המחדל, href בלי open — לשונית חדשה', () => {
+    expect(guideOf(null)).toEqual({ href: '/docs/page-proof', open: null })
+    expect(guideOf({ guide: false })).toBeNull()
+    const spy = vi.spyOn(window, 'open').mockImplementation(() => null)
+    openGuide(guideOf({ guide: { href: '/x' } }))
+    expect(spy).toHaveBeenCalledWith('/x', '_blank', 'noopener,noreferrer')
+    spy.mockRestore()
   })
 })

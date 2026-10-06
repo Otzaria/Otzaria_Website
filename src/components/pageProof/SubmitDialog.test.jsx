@@ -37,6 +37,16 @@ describe('SubmitDialog — חלון ההגשה', () => {
     expect(onSubmit).toHaveBeenCalledWith(SUBMIT_CHOICE.SUBMIT, { readAll: false })
   })
 
+  it('"פגם בדפוס": כמה שורות מסומנות — שורה מסבירה; בלי — כלום', () => {
+    renderDialog({ summary: summary({ bookOnlyCount: 3 }) })
+    expect(screen.getByTestId('submit-book-only')).toHaveTextContent('3 שורות עם פגם בדפוס: התיקון ייכנס לספר, והשורות לא ישמשו לאימון.')
+  })
+
+  it('בלי "פגם בדפוס" — בלי השורה', () => {
+    renderDialog()
+    expect(screen.queryByTestId('submit-book-only')).toBeNull()
+  })
+
   it('לא הכול אושר: "אשר גם את כל השאר" חסום עד "קראתי את כל הטקסט בעמוד"', async () => {
     const { onSubmit } = renderDialog()
     expect(screen.getByText('אושרו 2 מתוך 5 פסקאות')).toBeInTheDocument()

@@ -88,7 +88,7 @@ test('רשת המנהל: המצב של כל עמוד, מי מחזיק ועד מ�
   assert.equal(byNo[6].pending, 0);
   assert.ok(res.pages.every((p) => p.volunteer === true), 'ברירת-המחדל: פתוח');
   // פנויים: 1, 3 (התפיסה פגה), 8–12
-  assert.deepEqual(res.counts, { total: 12, closed: 0, leased: 1, expired: 1, open: 7, second: 1, taken: 1, submitted: 1, approved: 1, recut: 1 });
+  assert.deepEqual(res.counts, { total: 12, closed: 0, leased: 1, expired: 1, open: 7, second: 1, taken: 1, submitted: 1, approved: 1, recut: 1, recut_ask: 0 });
   // בלי מזהי-משתמשים ובלי רשימת המגישים
   for (const p of res.pages) {
     assert.equal('leasedBy' in p, false);

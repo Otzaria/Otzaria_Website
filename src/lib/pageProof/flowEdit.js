@@ -613,14 +613,89 @@ export function farLabel(page, lineNo, lineId, text) {
   return `עמוד ${page}, שורה ${lineNo != null ? lineNo + 1 : lineId}${short ? `: «${short}»` : ''}`;
 }
 
+// המילה של ציון-ההערה בשורה (marks — {a: מיקום-התווים, role: anchor|opener, go}), או null
+function linkMarkWord(lines, marks, lineId, pred) {
+  const list = marks[String(lineId)];
+  const line = lines.get(lineId);
+  const mk = Array.isArray(list) && line ? list.find((x) => x && pred(x)) : null;
+  if (!mk) return null;
+  if (Number.isFinite(mk.a)) {
+    const i = wordAt(textOf(line), mk.a);
+    return i >= 0 ? i : null;
+  }
+  return Number.isInteger(mk.i) && mk.i >= 0 ? mk.i : null;
+}
+
+const pageLines = (view) => new Map((view?.lines || []).filter((l) => l && l.status !== 'removed').map((l) => [l.id, l]));
+const pageMarks = (view) => (view?.marks && typeof view.marks === 'object' ? view.marks : {});
+
+// קישור שבוטל: הכרעה "אין קישור" מהשורה הזו — בתוכנת-הספר שורת-קישור ידנית בלי יעד (מה ש-link_del כותב
+// שם), ובחוזה-העמוד to_line ריק. הוא אינו קישור: בלי מספר, בלי סימן בטקסט, ובלוח הקישורים — ברשימת
+// "קישורים שבוטלו", עם "החזר לאוטומטי" (linkCancel.js)
+export const isCancelledLink = (k) => !!k && k.to_line == null;
+const anchorOf = (k) => (x) => x.role === 'anchor' && (x.go == null || x.go === k.from_line);
+const isOpener = (x) => x.role === 'opener';
+
+// מספור הקישורים בעמוד — לפי סדר הופעתם בעמוד, לא לפי הסדר שבו נוצרו (בעל הפרויקט,
+// 2026-10-04). מקום הקישור = הקצה המוקדם מבין קצותיו שבעמוד הזה, בסדר-הקריאה: סדר
+// השורה (order), ואז מספר-המילה (תחילת טווח-המילים, ואחרת ציון-ההערה, ואחרת 0).
+// קצה בעמוד אחר אינו קובע מקום. שוויון (או קישור בלי קצה כאן) — לפי העמוד האחר, ואז
+// לפי הסדר המקורי. המספור לכל עמוד בנפרד, מ-1. כל מי שמציג מספר-קישור (המספר אחרי
+// המילה בטקסט, רשימת "קישורים בעמוד", שאלת ההחלפה) לוקח אותו מכאן. אותו כלל בתוכנת-הספר
+// (pagedoc.link_display_key). מחזיר [{link, n, idx}] — idx = המקום ב-view.links.
+// קישור שבוטל (isCancelledLink) אינו נספר ואינו ברשימה.
+export function linksInDisplayOrder(view) {
+  const lines = pageLines(view);
+  const marks = pageMarks(view);
+  const page = view?.page;
+  const rank = new Map(
+    [...lines.values()]
+      .map((l, i) => ({ l, i }))
+      .sort((a, b) => (a.l.order ?? 0) - (b.l.order ?? 0) || a.i - b.i)
+      .map((x, r) => [x.l.id, r])
+  );
+  const items = [];
+  (view?.links || []).forEach((k, idx) => {
+    if (!k || isCancelledLink(k)) return;
+    const ends = [];
+    const fromPage = k.from_page ?? page;
+    if (fromPage === page && rank.has(k.from_line)) {
+      const w = Array.isArray(k.from_words) ? k.from_words[0] : linkMarkWord(lines, marks, k.from_line, isOpener);
+      ends.push([rank.get(k.from_line), Number.isInteger(w) ? w : 0]);
+    }
+    const toPage = k.to_page ?? page;
+    if (toPage === page && rank.has(k.to_line)) {
+      const r = Array.isArray(k.to_words) ? k.to_words : Array.isArray(k.words) ? k.words : null;
+      const w = r ? r[0] : linkMarkWord(lines, marks, k.to_line, anchorOf(k));
+      ends.push([rank.get(k.to_line), Number.isInteger(w) ? w : 0]);
+    }
+    ends.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const other = toPage !== page ? toPage : fromPage !== page ? fromPage : page;
+    items.push({ link: k, idx, pos: ends[0] || null, other: Number.isFinite(other) ? other : 0 });
+  });
+  const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+  items.sort((a, b) => {
+    if (!a.pos !== !b.pos) return a.pos ? -1 : 1;
+    return (a.pos && b.pos ? cmp(a.pos[0], b.pos[0]) || cmp(a.pos[1], b.pos[1]) : 0) || cmp(a.other, b.other) || a.idx - b.idx;
+  });
+  return items.map(({ link, idx }, i) => ({ link, n: i + 1, idx }));
+}
+
+// המספר שמוצג לקישור (1…) — לפי linksInDisplayOrder; 0 אם אינו בעמוד
+export function linkNumber(view, pred) {
+  const hit = linksInDisplayOrder(view).find((x) => pred(x.link));
+  return hit ? hit.n : 0;
+}
+
 // קצות-הקישורים בעמוד, לכל שורה ומילה: Map(מזהה-שורה → Map(מספר-מילה →
-// [{n, kind, side, other:{lineId, page, i}}])). n = מספר הקישור בעמוד (1…).
+// [{n, kind, side, other:{lineId, page, i}}])). n = מספר הקישור בעמוד (1…, לפי
+// linksInDisplayOrder — סדר ההופעה בעמוד).
 // המילה: מטווח-המילים של הקישור (to_words/words בגוף, from_words בהערה — הקצה
 // האחרון של הטווח), ואחרת מציון-ההערה בשורה (marks, לפי מיקום-התווים).
 // בצד ההערה בלי מידע — המילה הראשונה; בצד הגוף בלי מידע — בלי סימן.
 export function linkEndpoints(view) {
-  const lines = new Map((view?.lines || []).filter((l) => l && l.status !== 'removed').map((l) => [l.id, l]));
-  const marks = view?.marks && typeof view.marks === 'object' ? view.marks : {};
+  const lines = pageLines(view);
+  const marks = pageMarks(view);
   const out = new Map();
   const add = (lineId, i, ep) => {
     if (!lines.has(lineId) || !Number.isInteger(i) || i < 0) return;
@@ -629,25 +704,16 @@ export function linkEndpoints(view) {
     if (!m.has(i)) m.set(i, []);
     m.get(i).push(ep);
   };
-  const markWord = (lineId, pred) => {
-    const list = marks[String(lineId)];
-    const line = lines.get(lineId);
-    const mk = Array.isArray(list) && line ? list.find((x) => x && pred(x)) : null;
-    if (!mk || !Number.isFinite(mk.a)) return null;
-    const i = wordAt(textOf(line), mk.a);
-    return i >= 0 ? i : null;
-  };
-  (view?.links || []).forEach((k, idx) => {
-    if (!k) return;
-    const n = idx + 1;
+  const markWord = (lineId, pred) => linkMarkWord(lines, marks, lineId, pred);
+  linksInDisplayOrder(view).forEach(({ link: k, n }) => {
     const samePage = k.to_page == null || k.to_page === view.page;
     const toRange = Array.isArray(k.to_words) ? k.to_words : Array.isArray(k.words) ? k.words : null;
-    let fi = Array.isArray(k.from_words) ? k.from_words[1] : markWord(k.from_line, (x) => x.role === 'opener');
+    let fi = Array.isArray(k.from_words) ? k.from_words[1] : markWord(k.from_line, isOpener);
     if (fi == null && lines.has(k.from_line)) fi = 0;
     const ti = samePage
       ? toRange
         ? toRange[1]
-        : markWord(k.to_line, (x) => x.role === 'anchor' && (x.go == null || x.go === k.from_line))
+        : markWord(k.to_line, anchorOf(k))
       : null;
     // צד בעמוד אחר (קישור-סעיף שזולג, או קישור שהמתנדב יצר לעמוד אחר): העמוד שלו, ו-label
     // לריחוף על המספר — "עמוד 4, שורה 12: «…»"

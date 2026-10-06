@@ -8,8 +8,8 @@ import { getPageProofSession } from '@/lib/pageProof/tokenAuth';
 // POST {ids} | {scope:'expired'|'all'}: שחרור תפיסות בידי מנהל — גם כשהמתנדב
 // עוד מחזיק בעמוד (למשל תפיסה "תקועה"). ids — העמודים האלה; 'expired' — כל
 // התפיסות שפגו ועוד רשומות בספר; 'all' — כל התפיסות בספר.
-// ← {success, released}. טיוטה שהמתנדב לא הגיש נשארת רק בדפדפן שלו (הממשק
-// מזהיר לפני). רק מנהל OCR — גם במפתח-גישה של תוכנת-הספר (review). private, no-store.
+// ← {success, released}. טיוטה שהמתנדב לא הגיש שמורה באתר ועוברת עם העמוד
+// (serverDrafts.js — הממשק מסביר לפני). רק מנהל OCR — גם במפתח-גישה של תוכנת-הספר (review). private, no-store.
 
 const GID_RE = /^[A-Za-z0-9]{8,64}$/;
 

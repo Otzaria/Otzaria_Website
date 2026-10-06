@@ -23,6 +23,9 @@ const PageProofSubmissionSchema = new mongoose.Schema(
     // גרסת-העמוד שעליה נעשתה ההגשה (PageProofPage.revision בעת ההגשה). הגשה
     // על גרסה קודמת אינה משנה את המונים/המצב של העמוד שהוחלף
     revision: { type: Number, default: 1 },
+    // הסבב של העמוד בעת ההגשה (PageProofPage.round — עמוד שנפתח מחדש אחרי אישור; בלי השדה — 0). הגשה מסבב קודם אינה
+    // "ההגשה הנוכחית" של העמוד ואינה משנה את המונים שלו; בקובץ-התיקונים — הסבב הגבוה הוא הראשי
+    round: { type: Number, default: 0 },
     // הערה חופשית של המתייג למנהל (לא נשלחת בתיקונים)
     note: { type: String, default: '' },
 
@@ -44,6 +47,14 @@ const PageProofSubmissionSchema = new mongoose.Schema(
     // החדשה (עד אז — ממתינה, ונספרת בתקרת הבקשות של המתנדב).
     recutRequest: { type: Boolean, default: false },
     recutDoneAt: { type: Date, default: null },
+
+    // הבודק השני (docs/63 §4) — וגם עמוד שמנהל פתח מחדש אחרי אישור (§5): ההגשה נעשתה מטיוטה שהתחילה מהגשה קודמת לעמוד
+    // (basedOn; basedOnKind: 'submission' — ההגשה של המתנדב הקודם, 'approved' — הגרסה שאושרה). ההגשה מלאה (כוללת גם
+    // מה שקיבל ולא שינה); בסקירה — "מבוססת על הגשה X" ומה השתנה מעבר לה, ובקובץ-התיקונים — same_as לכל פעולה זהה
+    // (lib/pageProof/basedOn.js) — כדי שתוכנת-הספר לא תחיל פעמיים מה שכבר החילה מההגשה הקודמת.
+    basedOn: { type: mongoose.Schema.Types.ObjectId, ref: 'PageProofSubmission', default: null },
+    basedOnName: { type: String, default: '' },
+    basedOnKind: { type: String, default: null },
   },
   { timestamps: true }
 );

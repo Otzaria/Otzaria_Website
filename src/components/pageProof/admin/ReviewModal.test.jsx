@@ -62,6 +62,30 @@ describe('ReviewModal מול העורך החדש', { timeout: 20000 }, () => {
     expect(patches).toEqual([{ action: 'approve', note: '' }])
   })
 
+  it('"פגם בדפוס" בהגשה — המנהל רואה כמה שורות (האחרונה לכל שורה קובעת)', async () => {
+    const ops = [
+      { kind: 'train_text', page: P, ids: [1], value: 0 },
+      { kind: 'train_text', page: P, ids: [2], value: 0 },
+      { kind: 'train_text', page: P, ids: [2], value: 1 },
+    ]
+    mockFetch(payload({ submission: { ops } }))
+    render(<ReviewModal id="s1" onClose={vi.fn()} onDone={vi.fn()} />)
+    await screen.findByTestId('editor')
+    expect(screen.getByTestId('review-book-only')).toHaveTextContent('שורה אחת עם פגם בדפוס — לא לאימון')
+  })
+
+  it('הגשה עם הסימון הישן של "פגם בדפוס" (ודאות עם הסיבה הקבועה) — נספרת יחד עם train_text', async () => {
+    const ops = [
+      { kind: 'certainty', page: P, ids: [1], value: { v: 'ambiguous', why: 'פגם בדפוס — תוקן שלא לפי המקור' } },
+      { kind: 'train_text', page: P, ids: [2], value: 0 },
+      { kind: 'certainty', page: P, ids: [3], value: { v: 'ambiguous', why: 'לא ברור מה כתוב' } },
+    ]
+    mockFetch(payload({ submission: { ops } }))
+    render(<ReviewModal id="s1" onClose={vi.fn()} onDone={vi.fn()} />)
+    await screen.findByTestId('editor')
+    expect(screen.getByTestId('review-book-only')).toHaveTextContent('2 שורות עם פגם בדפוס — לא לאימון')
+  })
+
   it('עריכה לפני אישור — נשלחות הפעולות בצורת-החוזה בלבד (בלי _g/_c)', async () => {
     mockFetch(payload())
     render(<ReviewModal id="s1" onClose={vi.fn()} onDone={vi.fn()} />)
@@ -73,6 +97,28 @@ describe('ReviewModal מול העורך החדש', { timeout: 20000 }, () => {
     await userEvent.click(screen.getByRole('button', { name: 'אישור' }))
     await waitFor(() => expect(patches).toHaveLength(1))
     expect(patches[0].ops).toEqual([...subOps, { kind: 'text', page: P, ids: [2], value: 'מתוקן' }])
+  })
+
+  // סקירה: כמו בהגשה של המתנדב — סימון "לספר בלבד" אוטומטי על שורה שהטקסט שלה חזר בסוף לזה שיובא יורד
+  it('עריכה לפני אישור — סימון "פגם בדפוס" אוטומטי בלי שינוי-טקסט יורד; עם שינוי — נשאר', async () => {
+    const lines = [
+      { id: 2, line_no: 1, bbox: [10, 30, 90, 40], text: 'ישן', text_ocr: 'ישן', stream: 'main' },
+      { id: 3, line_no: 2, bbox: [10, 50, 90, 60], text: 'עוד', text_ocr: 'עוד', stream: 'main' },
+    ]
+    mockFetch(payload({ page: { doc: { page: P, size: [100, 100], lines } } }))
+    render(<ReviewModal id="s1" onClose={vi.fn()} onDone={vi.fn()} />)
+    await screen.findByTestId('editor')
+    h.ops = [
+      ...subOps,
+      { kind: 'train_text', page: P, ids: [2], value: 0, _cmp: true, _g: 'g1' },
+      { kind: 'text', page: P, ids: [2], value: 'ישן', _g: 'g1' },
+      { kind: 'train_text', page: P, ids: [3], value: 0, _cmp: true, _g: 'g2' },
+      { kind: 'text', page: P, ids: [3], value: 'חדש', _g: 'g2' },
+    ]
+    await userEvent.click(screen.getByRole('checkbox', { name: 'עריכה לפני אישור' }))
+    await userEvent.click(screen.getByRole('button', { name: 'אישור' }))
+    await waitFor(() => expect(patches).toHaveLength(1))
+    expect(patches[0].ops.filter((o) => o.kind === 'train_text')).toEqual([{ kind: 'train_text', page: P, ids: [3], value: 0 }])
   })
 
   it('עריכה שלא שינתה דבר (רק שדות פנימיים) — נשלח בלי ops', async () => {
@@ -173,5 +219,27 @@ describe('ReviewModal — קישור לעמוד אחר', { timeout: 20000 }, () 
     render(<ReviewModal id="s1" onClose={vi.fn()} onDone={vi.fn()} />)
     await screen.findByTestId('editor')
     expect(screen.queryByTestId('far-link')).toBeNull()
+  })
+
+  // הבודק השני (docs/63 §4): "מבוססת על ההגשה של X" ומה השתנה מעבר לה; בעורך — מה שהתקבל מסומן
+  it('הגשה שמבוססת על הגשה קודמת — השורה "מבוססת על", והעורך מקבל את הפעולות הקודמות כ-inherited', async () => {
+    const baseOps = [{ kind: 'line_ok', page: P, ids: [1] }, { kind: 'para', page: P, ids: [1], value: 'h2' }]
+    mockFetch(
+      payload({
+        submission: { basedOn: { id: 'sA', userName: 'שמעון', status: 'approved', kind: 'submission', added: 2, removed: [baseOps[1]], ops: baseOps }, sameAs: ['sA:0'] },
+      })
+    )
+    render(<ReviewModal id="s1" onClose={vi.fn()} onDone={vi.fn()} />)
+    await screen.findByTestId('editor')
+    expect(screen.getByTestId('based-on')).toHaveTextContent('מבוססת על ההגשה של שמעון (אושרה) · מעבר לה: 2 שינויים חדשים · אחד הוחזר למקור')
+    expect(h.props.inherited).toEqual({ ops: baseOps, source: 'submission' })
+  })
+
+  it('הגשה רגילה — בלי "מבוססת על" ובלי inherited', async () => {
+    mockFetch(payload())
+    render(<ReviewModal id="s1" onClose={vi.fn()} onDone={vi.fn()} />)
+    await screen.findByTestId('editor')
+    expect(screen.queryByTestId('based-on')).not.toBeInTheDocument()
+    expect(h.props.inherited).toBeNull()
   })
 })

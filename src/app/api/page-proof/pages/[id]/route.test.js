@@ -3,11 +3,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // עמוד לעורך: הגשה נחשבת "שלי" רק לגרסה הנוכחית של העמוד — עמוד שחזר
 // מזיהוי-מחדש נפתח לעריכה גם למי שהגיש את הגרסה הקודמת. המודלים מדומים.
 
-const { getServerSessionMock, Sub, Page, Book } = vi.hoisted(() => ({
+const { getServerSessionMock, Sub, Page, Book, ctxMock } = vi.hoisted(() => ({
   getServerSessionMock: vi.fn(),
   Sub: { find: vi.fn() },
   Page: { findById: vi.fn(), findOneAndUpdate: vi.fn() },
   Book: { findById: vi.fn() },
+  ctxMock: vi.fn(),
 }))
 
 vi.mock('@/lib/db', () => ({ default: vi.fn().mockResolvedValue(undefined) }))
@@ -16,8 +17,13 @@ vi.mock('@/app/api/auth/[...nextauth]/route', () => ({ authOptions: {} }))
 vi.mock('@/models/PageProofSubmission', () => ({ default: Sub }))
 vi.mock('@/models/PageProofPage', () => ({ default: Page }))
 vi.mock('@/models/PageProofBook', () => ({ default: Book }))
+// מתג המנהל ל"שלח לזיהוי-מחדש" (runtime.js) — כאן פתוח
+vi.mock('@/lib/pageProof/runtime', () => ({ recutStatus: vi.fn().mockResolvedValue({ effective: true, settings: { recutRequests: 'on', autoMinutes: 15 }, seenAt: null }) }))
+// הטיוטה בשרת (serverDrafts.js — נבדקת מול מסד אמיתי בבדיקות שלה); כאן — מה שהראוט מעביר לה ומחזיר
+vi.mock('@/lib/pageProof/serverDrafts', () => ({ editorContext: ctxMock }))
 
 import { GET } from './route'
+import { leaseEnd } from '@/lib/pageProof/lease'
 
 const PAGE_ID = '64b7f0c2a1b2c3d4e5f60002'
 const USER_ID = '64b7f0c2a1b2c3d4e5f60003'
@@ -40,6 +46,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   getServerSessionMock.mockResolvedValue(volunteer)
   Book.findById.mockReturnValue(lean({ title: 'ספר', script: 'square' }))
+  ctxMock.mockResolvedValue({ draft: null, canRecut: false })
 })
 
 describe('GET /api/page-proof/pages/[id]', () => {
@@ -50,10 +57,12 @@ describe('GET /api/page-proof/pages/[id]', () => {
 
   it('הגשה לגרסה הנוכחית ← מצב צפייה עם ההגשה', async () => {
     Page.findById.mockReturnValue(lean(page()))
-    Sub.find.mockReturnValue(subsQuery([{ _id: 's1', status: 'approved', ops: [], note: '' }]))
+    Sub.find.mockReturnValue(subsQuery([{ _id: 's1', status: 'approved', ops: [], note: '', createdAt: new Date('2026-10-01T09:00:00Z') }]))
     const body = await (await GET({}, params)).json()
     expect(body.mode).toBe('view')
-    expect(body.submission).toMatchObject({ id: 's1', status: 'approved' })
+    // מועד ההגשה — ל"הוגש — ממתין לבדיקת מנהל (מאז …)"
+    expect(body.submission).toMatchObject({ id: 's1', status: 'approved', createdAt: '2026-10-01T09:00:00.000Z' })
+    expect(body.leasedUntil).toBeNull()
     expect(Page.findOneAndUpdate).not.toHaveBeenCalled()
     // בקשה לזיהוי-מחדש (recutRequest) אינה "ההגשה שלי" — לא נשלפת כאן
     expect(Sub.find.mock.calls[0][0]).toMatchObject({ status: { $ne: 'rejected' }, recutRequest: { $ne: true } })
@@ -83,12 +92,15 @@ describe('GET /api/page-proof/pages/[id]', () => {
     expect(body.page.revision).toBe(1)
   })
 
-  it('פתיחה לעריכה מחדשת את התפיסה ל-48 שעות מלאות — רק לעמוד שבטיפולי עכשיו, ולעולם לא תופסת עמוד פנוי', async () => {
+  it('פתיחה לעריכה מחדשת את התפיסה ל-48 שעות מלאות (בלי שבת וחג) — רק לעמוד שבטיפולי עכשיו, ולעולם לא תופסת עמוד פנוי', async () => {
     Page.findById.mockReturnValue(lean(page()))
     Sub.find.mockReturnValue(subsQuery([]))
-    Page.findOneAndUpdate.mockResolvedValue({ _id: PAGE_ID })
+    const renewedUntil = new Date('2026-10-07T10:00:00Z')
+    Page.findOneAndUpdate.mockResolvedValue({ _id: PAGE_ID, leasedUntil: renewedUntil })
     const before = Date.now()
-    await GET({}, params)
+    const body = await (await GET({}, params)).json()
+    // "שמור לך עד …" — המועד שנקבע בפתיחה הזו
+    expect(body.leasedUntil).toBe(renewedUntil.toISOString())
     const [filter, update, opts] = Page.findOneAndUpdate.mock.calls[0]
     // רק עמוד פתוח שאני מחזיק בו והתפיסה בתוקף — בלי "או פנוי"
     expect(filter).toMatchObject({ status: 'open' })
@@ -99,8 +111,8 @@ describe('GET /api/page-proof/pages/[id]', () => {
     expect(Array.isArray(update)).toBe(true)
     expect(Object.keys(update[0].$set)).toEqual(['leasedUntil'])
     const [, until] = update[0].$set.leasedUntil.$max
-    expect(until.getTime() - before).toBeGreaterThanOrEqual(48 * 3600e3 - 5000)
-    expect(until.getTime() - before).toBeLessThanOrEqual(48 * 3600e3 + 5000)
+    // 48 שעות שאינן בשבת או בחג (lease.leaseEnd) — ביום חול רגיל: בדיוק 48 שעות
+    expect(Math.abs(until.getTime() - leaseEnd(new Date(before)).getTime())).toBeLessThanOrEqual(5000)
     expect(opts).toMatchObject({ updatePipeline: true, lean: true })
   })
 
@@ -113,6 +125,21 @@ describe('GET /api/page-proof/pages/[id]', () => {
     expect((await res.json()).error).toMatch(/אינו בטיפולכם.*רשת-העמודים/)
   })
 
+  it('עם העמוד: הטיוטה שבשרת, "אפשר לשלוח לזיהוי-מחדש" ושעון השרת — למחזיק בעריכה', async () => {
+    Page.findById.mockReturnValue(lean(page()))
+    Sub.find.mockReturnValue(subsQuery([]))
+    Page.findOneAndUpdate.mockResolvedValue({ _id: PAGE_ID })
+    const draft = { ops: [{ kind: 'line_ok', page: 3, ids: [1] }], stage: 'text', mine: true, handover: false }
+    ctxMock.mockResolvedValueOnce({ draft, canRecut: true })
+    const body = await (await GET({}, params)).json()
+    expect(body).toMatchObject({ mode: 'edit', draft, canRecut: true })
+    expect(Math.abs(Date.parse(body.now) - Date.now())).toBeLessThan(60000)
+    const [pg, uid, opts] = ctxMock.mock.calls[0]
+    expect(pg._id).toBe(PAGE_ID)
+    expect(uid).toBe(USER_ID)
+    expect(opts).toMatchObject({ edit: true, admin: false, userName: 'מתנדב', recutOn: true })
+  })
+
   it('מנהל OCR פותח עמוד שאינו בטיפולו ← צפייה בלבד (בלי לתפוס אותו)', async () => {
     getServerSessionMock.mockResolvedValueOnce({ user: { id: USER_ID, name: 'מנהל', role: 'admin_ocr', isVerified: true } })
     Page.findById.mockReturnValue(lean(page()))
@@ -121,5 +148,7 @@ describe('GET /api/page-proof/pages/[id]', () => {
     const body = await (await GET({}, params)).json()
     expect(body.mode).toBe('view')
     expect(Page.findOneAndUpdate.mock.calls[0][0].leasedBy).toBeDefined()
+    // הטיוטה של המחזיק — לקריאה בלבד (בלי להעביר אותה למנהל)
+    expect(ctxMock.mock.calls[0][2]).toMatchObject({ edit: false, admin: true })
   })
 })

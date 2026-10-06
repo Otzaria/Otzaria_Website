@@ -1,5 +1,7 @@
 'use client'
 
+import { BOOK_ONLY_STATUS, BOOK_ONLY_TITLE_ON } from '@/lib/pageProof/helpTexts'
+
 // שורת-המצב בתחתית העורך: איפה הסמן (שורה · זרם · מילה), כמה שינויים נעשו,
 // כמה פסקאות אושרו, ורמז-רגע (למשל "זה סוף-שורה בסריקה — אי אפשר למחוק אותו
 // כאן"). הרמז מוכרז גם לקוראי-מסך (aria-live).
@@ -31,7 +33,8 @@ function Sep() {
   )
 }
 
-export default function StatusBar({ lineNo = null, streamHe = null, wordIndex = null, opsCount = 0, approval = null, hint = null, className = '' }) {
+// bookOnly — מצב "לספר בלבד" דולק: תווית קבועה בשורת-המצב (כדי שלא יישכח דולק)
+export default function StatusBar({ lineNo = null, streamHe = null, wordIndex = null, opsCount = 0, approval = null, hint = null, bookOnly = false, className = '' }) {
   const parts = []
   if (lineNo != null && lineNo !== '') parts.push({ key: 'line', node: `שורה ${lineNo}` })
   if (streamHe) parts.push({ key: 'stream', node: streamHe })
@@ -69,6 +72,13 @@ export default function StatusBar({ lineNo = null, streamHe = null, wordIndex = 
           {done && (
             <span className="material-symbols-outlined text-sm text-success-600" aria-hidden="true">check_circle</span>
           )}
+        </span>
+      )}
+
+      {bookOnly && (
+        <span data-testid="book-only-status" className="flex shrink-0 items-center gap-1 rounded bg-warning-100 px-2 font-bold text-warning-800" title={BOOK_ONLY_TITLE_ON}>
+          <span className="material-symbols-outlined text-sm" aria-hidden="true">flag</span>
+          {BOOK_ONLY_STATUS}
         </span>
       )}
 

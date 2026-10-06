@@ -2,12 +2,13 @@
 
 import { PARA_STYLES, streamMenu } from '@/lib/pageProof/vocab'
 import { styleActive } from '@/lib/pageProof/flowEdit'
+import { BOOK_ONLY_NAME, BOOK_ONLY_TITLE_OFF, BOOK_ONLY_TITLE_ON, GUIDE_LABEL, GUIDE_TITLE } from '@/lib/pageProof/helpTexts'
 import ToolbarMenu from './ToolbarMenu'
 
 // סרגל-הכלים של עורך הגהת-העמודים — בנוסח סרגל העורך הישן של האתר
 // (components/editor/EditorToolbar): פס לבן, קבוצות-כפתורים אפורות, כפתורים
 // של 28px וטולטיפ עם קיצור-המקלדת. מימין לשמאל: ביטול/חזרה · סגנון-פסקה ·
-// עיצוב-תווים · פסקאות · קישור · מילים חשודות · זרם לשורות · פגם בדפוס · תצוגה · עזרה ופרטים
+// עיצוב-תווים · פסקאות · קישור · מילים חשודות · זרם לשורות · לספר בלבד · תצוגה · עזרה ופרטים
 // · ובקצה השמאלי — כפתורי הדף העוטף (actions, למשל "הגשה").
 //
 // כפתור שאין לו פעולה (handler חסר) — מושבת: כך העורך אומר "לא רלוונטי עכשיו"
@@ -17,7 +18,11 @@ import ToolbarMenu from './ToolbarMenu'
 // בטקסט תישאר כשלוחצים עליהם.
 // לדף עוטף (תוכנת-הספר), רשות: charStyleButtons — כפתורי עיצוב-התווים (ברירת-המחדל
 // CHAR_STYLE_BUTTONS; כל key חייב להיות ב-vocab.CHAR_STYLES); moreMenu = {items, onSelect,
-// label?, title?} — תפריט "⋯" לפני "עזרה" (פריטים כמו ב-ToolbarMenu). בלעדיהם — כמו באתר.
+// label?, title?} — תפריט "⋯" לפני "עזרה" (פריטים כמו ב-ToolbarMenu); paraStyleOptions — הפריטים
+// בתפריט "סגנון פסקה" (ברירת-המחדל PARA_STYLE_OPTIONS; פריט {separator:true} = קו; כל key חייב
+// להיות ב-vocab.PARA_STYLES — למשל סגנונות שהוגדרו לספר ונרשמו ב-registerVocab). בלעדיהם — כמו באתר.
+// hide (רשות) — קבוצות שאינן מוצגות (השלבים של דף המתנדב — stages.stageFocus): 'paraStyle' · 'charStyles' · 'paragraphs' ·
+// 'link' · 'suspicious' · 'bookOnly' (עם הקו שאחרי כל אחת). בלעדיו — הכול מוצג.
 
 // סגנונות-הפסקה שבסרגל: כותרות (ל-<h2>–<h4> באוצריא), ציטוט (<blockquote>),
 // דיבור-המתחיל (מודגש ומקושר למקור), ועוד ארבעה סוגי-פסקה שתוכנת-הספר מכירה
@@ -134,16 +139,16 @@ export const clampFontSize = (n) =>
 const isFn = (f) => typeof f === 'function'
 const preventFocusLoss = (e) => e.preventDefault()
 
-function Group({ label, children }) {
+function Group({ label, hidden = false, children }) {
   return (
-    <div role="group" aria-label={label} className="flex items-center gap-0 rounded-md bg-neutral-100 p-0.5">
+    <div role="group" aria-label={label} hidden={hidden || undefined} className="flex items-center gap-0 rounded-md bg-neutral-100 p-0.5">
       {children}
     </div>
   )
 }
 
-function Divider() {
-  return <div className="h-5 w-px bg-neutral-200" aria-hidden="true" />
+function Divider({ hidden = false }) {
+  return <div className="h-5 w-px bg-neutral-200" aria-hidden="true" hidden={hidden || undefined} />
 }
 
 // כפתור בתוך קבוצה אפורה (כמו B/I/A+ בסרגל הישן)
@@ -167,8 +172,13 @@ function GroupButton({ label, title, onClick, disabled, pressed, wide = false, c
 }
 
 // כפתור לבן עם מסגרת, אייקון ותווית (כמו "חיפוש"/"איות" בסרגל הישן)
-function LabeledButton({ label, title, onClick, disabled, pressed, tone = 'neutral', children }) {
-  const on = tone === 'info' ? 'border-info-200 bg-info-50 text-info-700' : 'border-neutral-300 bg-neutral-100 text-neutral-900'
+function LabeledButton({ label, title, onClick, disabled, pressed, tone = 'neutral', hidden = false, children }) {
+  const on =
+    tone === 'info'
+      ? 'border-info-200 bg-info-50 text-info-700'
+      : tone === 'warning'
+        ? 'border-warning-300 bg-warning-100 text-warning-800'
+        : 'border-neutral-300 bg-neutral-100 text-neutral-900'
   return (
     <button
       type="button"
@@ -176,6 +186,7 @@ function LabeledButton({ label, title, onClick, disabled, pressed, tone = 'neutr
       title={title || label}
       aria-pressed={pressed}
       disabled={disabled}
+      hidden={hidden || undefined}
       onMouseDown={preventFocusLoss}
       onClick={onClick}
       className={`flex h-7 items-center gap-1 rounded-md border px-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
@@ -204,14 +215,18 @@ export default function ProofToolbar({
   onNextSuspicious,
   streams = [],
   onStreamForLines,
-  // "פגם בדפוס" (מתג לשורות שבבחירה): printDefect — שורת-הסמן כבר מסומנת
-  onPrintDefect,
-  printDefect = false,
+  // מצב "לספר בלבד" (מתג שנשאר דולק): bookOnly — המצב דולק; bookOnlyTitle — הנוסח כשהוא כבוי
+  // (ברירת-המחדל: של האתר — "אחרי אישור המנהל"; עורך מוטמע מחליף)
+  onBookOnly,
+  bookOnly = false,
+  bookOnlyTitle = BOOK_ONLY_TITLE_OFF,
   fontSize = PROOF_FONT_SIZE.default,
   setFontSize,
   fontFamily = DEFAULT_PROOF_FONT,
   setFontFamily,
   onHelp,
+  // דף ההנחיות (רשות): לחיצה פותחת אותו (ProofEditor — help.guide / ProofHelp.openGuide); בלי — בלי הכפתור
+  onGuide = null,
   detailsOpen = false,
   onToggleDetails,
   actions = null,
@@ -220,18 +235,29 @@ export default function ProofToolbar({
   className = 'sticky top-[calc(var(--spacing)*16_+_1px)] z-30',
   charStyleButtons = CHAR_STYLE_BUTTONS,
   moreMenu = null,
+  paraStyleOptions = PARA_STYLE_OPTIONS,
+  hide = null,
 }) {
+  const hid = (k) => Array.isArray(hide) && hide.includes(k)
   const active = charStyles instanceof Set ? charStyles : new Set(Array.isArray(charStyles) ? charStyles : [])
   const edit = (f) => !readOnly && isFn(f)
-  const cur = PARA_STYLE_OPTIONS.find((o) => o.key === (paraStyle || null))
+  const cur = paraStyleOptions.find((o) => !o.separator && o.key === (paraStyle || null))
   // סגנון שאינו בתפריט (למשל "הערה" מהזיהוי) — מוצג בשמו ולא כ"ללא סגנון"
   const curHe = cur?.he || (paraStyle && PARA_STYLES[paraStyle]?.he) || null
   const size = clampFontSize(fontSize)
   const fonts = PROOF_FONTS.some((f) => f.value === fontFamily) || !fontFamily ? PROOF_FONTS : [...PROOF_FONTS, { value: fontFamily, he: 'אחר' }]
 
+  // קו בין קבוצות — לא בראש התפריט ולא שניים ברצף (כשהדף העוטף מעביר רשימה משלו)
   const paraItems = []
-  for (const o of PARA_STYLE_OPTIONS) {
-    if (PARA_GROUP_START.has(o.key)) paraItems.push({ separator: true })
+  const sep = () => {
+    if (paraItems.length && !paraItems[paraItems.length - 1].separator) paraItems.push({ separator: true })
+  }
+  for (const o of paraStyleOptions) {
+    if (o.separator) {
+      sep()
+      continue
+    }
+    if (PARA_GROUP_START.has(o.key)) sep()
     paraItems.push({ key: o.key, checked: o.key === cur?.key, title: o.hint, label: paraPreview(o) })
   }
   // ובסוף התפריט — הפעולות על הפסקה, בשם מלא (בסרגל הן אייקונים בלבד)
@@ -293,12 +319,13 @@ export default function ProofToolbar({
           items={paraItems}
           onSelect={onParaMenu}
           menuClassName="w-56"
+          hidden={hid('paraStyle')}
         />
 
-        <Divider />
+        <Divider hidden={hid('paraStyle')} />
 
         {/* עיצוב-תווים — מתג: לחיצה על עיצוב פעיל מסירה אותו */}
-        <Group label="עיצוב תווים">
+        <Group label="עיצוב תווים" hidden={hid('charStyles')}>
           {charStyleButtons.map((c) => {
             const on = styleActive(active, c.key)
             return (
@@ -316,10 +343,10 @@ export default function ProofToolbar({
           })}
         </Group>
 
-        <Divider />
+        <Divider hidden={hid('charStyles')} />
 
         {/* פסקאות — אייקונים בלבד (לסרגל בשורה אחת ברוחב מחשב-נייד); השם בטולטיפ */}
-        <Group label="פסקאות">
+        <Group label="פסקאות" hidden={hid('paragraphs')}>
           <GroupButton label="פסקה חדשה" title="פסקה חדשה במקום הסמן (Enter)" onClick={onSplitPara} disabled={!edit(onSplitPara)}>
             <span className="material-symbols-outlined text-sm" aria-hidden="true">format_paragraph</span>
           </GroupButton>
@@ -328,7 +355,7 @@ export default function ProofToolbar({
           </GroupButton>
         </Group>
 
-        <Divider />
+        <Divider hidden={hid('paragraphs')} />
 
         {/* קישור בין זרמים */}
         <LabeledButton
@@ -342,15 +369,16 @@ export default function ProofToolbar({
           tone="info"
           onClick={onLink}
           disabled={!edit(onLink)}
+          hidden={hid('link')}
         >
           <span className="material-symbols-outlined text-sm" aria-hidden="true">link</span>
           <span className="text-[10px] font-medium">{linkPending ? 'השלמת קישור' : 'קישור'}</span>
         </LabeledButton>
 
-        <Divider />
+        <Divider hidden={hid('link')} />
 
         {/* מילים חשודות */}
-        <Group label="מילים חשודות">
+        <Group label="מילים חשודות" hidden={hid('suspicious')}>
           <GroupButton label="הצעות למילה" title="הצעות למילה שבסמן (Alt+↓)" onClick={onSuggest} disabled={!isFn(onSuggest)}>
             <span className="material-symbols-outlined text-sm" aria-hidden="true">tips_and_updates</span>
           </GroupButton>
@@ -362,7 +390,7 @@ export default function ProofToolbar({
           </GroupButton>
         </Group>
 
-        <Divider />
+        <Divider hidden={hid('suspicious')} />
 
         {/* זרם לשורות — לשורה בודדת שנכנסה לזרם הלא-נכון (גם לריהוט הדף) */}
         <ToolbarMenu
@@ -376,20 +404,18 @@ export default function ProofToolbar({
           menuClassName="w-72"
         />
 
-        {/* פגם בדפוס — תיקון למה שאמור להיות בספר ולא למה שבסריקה: נכנס לספר, לא לאימון */}
+        {/* "לספר בלבד" — מצב: כל עוד הוא לחוץ, כל שורה שמשנים בה טקסט מסומנת (נכנס לספר, לא לאימון) */}
         <LabeledButton
-          label="פגם בדפוס"
-          title={
-            printDefect
-              ? 'השורה מסומנת «פגם בדפוס» — לחיצה מסירה את הסימון'
-              : 'פגם בדפוס: תיקנתי את השורה למה שאמור להיות כתוב בספר, לא למה שרואים בסריקה (נקודה במקום ו\', "כה" במקום "כח"). הטקסט המתוקן נכנס לספר, אבל השורה לא תשמש לאימון מודל-הזיהוי. חל על השורות שבבחירה'
-          }
-          pressed={!!printDefect}
-          onClick={onPrintDefect}
-          disabled={!edit(onPrintDefect)}
+          label={BOOK_ONLY_NAME}
+          title={bookOnly ? BOOK_ONLY_TITLE_ON : bookOnlyTitle}
+          pressed={!!bookOnly}
+          tone="warning"
+          onClick={onBookOnly}
+          disabled={!edit(onBookOnly)}
+          hidden={hid('bookOnly')}
         >
           <span className="material-symbols-outlined text-sm" aria-hidden="true">flag</span>
-          <span className="text-[10px] font-medium">פגם בדפוס</span>
+          <span className="text-[10px] font-medium">{BOOK_ONLY_NAME}</span>
         </LabeledButton>
 
         <Divider />
@@ -457,6 +483,12 @@ export default function ProofToolbar({
           <span className="material-symbols-outlined text-sm" aria-hidden="true">help_outline</span>
           <span className="text-[10px] font-medium">עזרה</span>
         </LabeledButton>
+        {isFn(onGuide) && (
+          <LabeledButton label={GUIDE_LABEL} title={GUIDE_TITLE} onClick={onGuide}>
+            <span className="material-symbols-outlined text-sm" aria-hidden="true">menu_book</span>
+            <span className="text-[10px] font-medium">{GUIDE_LABEL}</span>
+          </LabeledButton>
+        )}
         <LabeledButton
           label="פרטים"
           title={detailsOpen ? 'סגירת לוח הפרטים' : 'פרטים: קישורים, שורה, עמוד ושינויים'}

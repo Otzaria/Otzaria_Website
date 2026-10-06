@@ -217,6 +217,8 @@ test('cleanupPageDrafts: עמוד שחזר מזיהוי-מחדש — מה שתק
   const res = cleanupPageDrafts(s, p);
   assert.equal(res.key, pageDraftKey(p));
   assert.deepEqual(readDraftOps(s.getItem(res.key)).map((o) => o.kind), ['text', 'line_ok', 'seg_ok']);
+  // הזמן של הטיוטה הקודמת נשמר (מתי נעשה השינוי האחרון — draftRules.mergeCarried), לא מתי עברה
+  assert.equal(JSON.parse(s.getItem(res.key)).at, 1);
   assert.deepEqual(res.carried, { from: k1, kept: 2, cut: 1, dropped: ['טקסט: «טקסט על שורה שנחתכה מחדש»', 'החיתוך תקין'] });
   assert.deepEqual(res.removed, [k1]);
   assert.deepEqual(s.keys(), [res.key, draftKeyFor(OTHER, '1:x')].sort());

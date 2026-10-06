@@ -283,6 +283,37 @@ describe('useProofEditor — שמירה בשרת לכל צעד (דף עוטף)',
     expect(result.current.flushable({ skip: new Set([f.steps[0].sid]) }).steps.map((s) => s.ops[0].kind)).toEqual(['line_split', 'text'])
   })
 
+  it('פעולה נלווית (_cmp, "לספר בלבד"): הפרץ ממשיך אחריה, Ctrl+Z אחד מוריד את שתיהן; פרץ פתוח נשמר יחד עם הנלווית', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-10-02T10:00:00Z'))
+    const { result } = book()
+    const mark = { kind: 'train_text', page: P, ids: [2], value: 0, _cmp: true }
+    act(() => {
+      result.current.push(mark, text(2, 'גימל דלתא'), { coalesceKey: 'text:2' })
+    })
+    vi.setSystemTime(new Date(Date.now() + 500))
+    act(() => {
+      result.current.push(text(2, 'גימל דלתאב'), { coalesceKey: 'text:2' })
+    })
+    expect(result.current.ops.map((o) => [o.kind, o.value])).toEqual([['train_text', 0], ['text', 'גימל דלתאב']])
+    expect(result.current.view.lines[1].train_text).toBe(0)
+    // פרץ פתוח — גם הנלווית שלו בחוץ (אחרת הסימון היה נשמר בלי הטקסט)
+    expect(result.current.flushable().steps).toEqual([])
+    // ...ואחרי שנסגר — צעד אחד (מזהה-צעד אחד לטקסט ולסימון: Undo אחד גם בשרת)
+    expect(result.current.flushable({ all: true }).steps.map((s) => s.ops.map((o) => o.kind))).toEqual([['train_text', 'text']])
+    act(() => result.current.undo())
+    expect(result.current.ops).toEqual([])
+    // פרץ שחזר לטקסט שלפניו — יורד עם הנלווית שלו
+    act(() => {
+      result.current.push({ ...mark }, text(2, 'גימל דלתא'), { coalesceKey: 'text:2' })
+    })
+    vi.setSystemTime(new Date(Date.now() + 300))
+    act(() => {
+      result.current.push(text(2, 'גימל דלת'), { coalesceKey: 'text:2' })
+    })
+    expect(result.current.ops).toEqual([])
+  })
+
   it('rebase: מה שנשלח יורד, מה שנוסף בינתיים נשאר ונבדק שוב, העמוד מתחלף, ההיסטוריה המקומית מתאפסת', () => {
     const { result } = book()
     act(() => {

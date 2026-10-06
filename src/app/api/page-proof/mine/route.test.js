@@ -4,10 +4,12 @@ import { NextResponse } from 'next/server'
 // GET /api/page-proof/mine — מה שדף המתנדב טוען בכניסה: "העמודים שלי" (וגם העמודים
 // שהמתנדב שלח לזיהוי-מחדש ועוד לא חזרו), ועם ?page= — הרצף של העמוד הזה או למה הוא
 // אינו נפתח. קריאה בלבד: שום פונקציה שתופסת/מחדשת/משחררת אינה נקראת. claims.js,
-// pool.js ו-recutRequests.js מדומים.
+// pool.js, recutRequests.js ו-pendingSubmissions.js מדומים (ההגשות שממתינות לבדיקת מנהל —
+// מול מסד אמיתי ב-submitted.test.js).
 
-const { session, stats, held, seqOf, brief, pending, writes } = vi.hoisted(() => ({
+const { session, stats, held, seqOf, brief, pending, submitted, writes } = vi.hoisted(() => ({
   session: vi.fn(),
+  submitted: vi.fn(),
   stats: vi.fn(),
   held: vi.fn(),
   seqOf: vi.fn(),
@@ -23,6 +25,10 @@ vi.mock('@/lib/pageProof/pool', () => ({
   releaseLeases: writes.releaseLeases,
 }))
 vi.mock('@/lib/pageProof/recutRequests', () => ({ recutPendingOf: pending }))
+vi.mock('@/lib/pageProof/pendingSubmissions', () => ({ pendingSubmissionsOf: submitted }))
+// מתג המנהל ל"שלח לזיהוי-מחדש" (runtime.js) — כאן פתוח
+const recutStatus = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/pageProof/runtime', () => ({ recutStatus }))
 vi.mock('@/lib/pageProof/claims', () => ({
   heldSequences: held,
   sequenceOfPage: seqOf,
@@ -50,6 +56,8 @@ beforeEach(() => {
   seqOf.mockResolvedValue(null)
   brief.mockResolvedValue(null)
   pending.mockResolvedValue([])
+  submitted.mockResolvedValue([])
+  recutStatus.mockResolvedValue({ effective: true, settings: { recutRequests: 'on', autoMinutes: 15 }, seenAt: null })
 })
 
 const noWrites = () => {
@@ -69,11 +77,20 @@ describe('GET /api/page-proof/mine', () => {
     const res = await GET(req())
     const body = await res.json()
     expect(res.status).toBe(200)
-    expect(body).toEqual({ success: true, held: [SEQ], recutPending: [], sequence: null, unavailable: null, stats: STATS })
+    expect(body).toEqual({ success: true, held: [SEQ], recutPending: [], submitted: [], sequence: null, unavailable: null, stats: STATS, recutRequests: true })
     expect(held).toHaveBeenCalledWith(USER_ID, expect.any(Date))
     expect(pending).toHaveBeenCalledWith(USER_ID)
     expect(seqOf).not.toHaveBeenCalled()
     expect(res.headers.get('Cache-Control')).toBe('private, no-store')
+    noWrites()
+  })
+
+  it('הגשות שממתינות לבדיקת מנהל ← submitted (קריאה בלבד)', async () => {
+    const SUBMITTED = [{ id: PAGE_ID, submissionId: 's1', gid: 'g1', title: 'ספר', page: 3, submittedAt: '2026-10-01T09:00:00.000Z', revision: 1 }]
+    submitted.mockResolvedValue(SUBMITTED)
+    const body = await (await GET(req())).json()
+    expect(body.submitted).toEqual(SUBMITTED)
+    expect(submitted).toHaveBeenCalledWith(USER_ID)
     noWrites()
   })
 
@@ -110,11 +127,18 @@ describe('GET /api/page-proof/mine', () => {
     held.mockResolvedValue([])
     stats.mockResolvedValue(STATS)
     pending.mockResolvedValue([])
+    submitted.mockResolvedValue([])
     const bad = await (await GET(req('?page=../../etc'))).json()
     expect(bad.unavailable).toEqual({ id: null })
     expect(seqOf).not.toHaveBeenCalled()
     expect(brief).not.toHaveBeenCalled()
     noWrites()
+  })
+
+  it('המנהל כיבה את "שלח לזיהוי-מחדש" (או "אוטומטי" בלי תוכנת-הספר) ← recutRequests: false', async () => {
+    recutStatus.mockResolvedValueOnce({ effective: false, settings: { recutRequests: 'auto', autoMinutes: 15 }, seenAt: null })
+    const body = await (await GET(req())).json()
+    expect(body.recutRequests).toBe(false)
   })
 
   it('תקלה ← 500 בלי מטמון', async () => {

@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { useDialog } from '@/components/providers/DialogContext'
 import { formatDateWithTime } from '@/lib/formatDate'
-import { needsRecut, foreignLinkRefs } from '@/lib/pageProof/ops'
+import { needsRecut, foreignLinkRefs, bookOnlyLineIds, dropIdleBookOnly } from '@/lib/pageProof/ops'
 import { farLabel } from '@/lib/pageProof/flowEdit'
 import { cleanOps } from '@/lib/pageProof/submitPlan'
+import { bookOnlyCount } from '@/lib/pageProof/helpTexts'
 import ProofEditor from '../ProofEditor'
 
 // סקירת הגשה במסך מלא: העמוד עם הפעולות של המתייג מוחלות (רשימת הפעולות —
@@ -22,6 +23,8 @@ import ProofEditor from '../ProofEditor'
 // וגם ברשימת-הקישורים וברשימת-השינויים שבחלונית "פרטים".
 // בקשת מתנדב לזיהוי-מחדש (recutRequest — רק תיקוני-חיתוך, בלי אישור מנהל): מסומנת; אין לה
 // "דחייה" — מבטלים אותה ב"ביטול הבקשה" (release_recut), והעמוד חוזר אל המתנדב.
+// הבודק השני / עמוד שנפתח מחדש (docs/63 §4–§5; submission.basedOn): "מבוססת על ההגשה של X", כמה שינויים מעבר לה וכמה
+// הוחזרו; בעורך — מה שהתקבל מההגשה הקודמת מסומן, ובלוח הפרטים ← שינויים הוא ברשימה נפרדת ממה שנוסף.
 
 const sameOps = (a, b) => JSON.stringify(cleanOps(a)) === JSON.stringify(cleanOps(b))
 
@@ -31,10 +34,22 @@ const rev = (v) => (Number.isInteger(v) && v >= 1 ? v : 1)
 const RECUT_HINT = 'אחרי האישור העמוד ימתין לזיהוי-מחדש בתוכנת-הספר ויחזור להגהה במעבר שני'
 const RECUT_SKIPPED =
   'הגשה אחרת לעמוד הזה כבר יצאה בקובץ-התיקונים הראשי, ולכן תיקוני-החיתוך של ההגשה הזו ייצאו רק בקובץ הכפולים — העמוד לא יעבור לזיהוי-מחדש בגללם.'
+const BOOK_ONLY_REVIEW_TITLE =
+  'המתייג סימן שורות "פגם בדפוס": הטקסט המתוקן ייכנס לספר, אבל השורות לא ישמשו לאימון מודל-הזיהוי (המבנה שלהן כן נלמד). אם הסימון מיותר — "עריכה לפני אישור", ובלוח הפרטים ← שורה מורידים אותו.'
 const RELEASE_TITLE =
   'העמוד ממתין לזיהוי-מחדש בתוכנת-הספר. אם התוכנה לא תחזיר גרסה חדשה שלו (למשל תיקון-החיתוך נכשל שם) — שחררו אותו: הוא ייסגר בלי זיהוי-מחדש'
 const REQUEST_BADGE = 'בקשת מתנדב לזיהוי-מחדש — רק תיקוני-החיתוך, נשלחה בלי אישור מנהל; שאר התיקונים של המתנדב יגיעו בהגשה רגילה'
 const CANCEL_TITLE = 'ביטול הבקשה: העמוד חוזר אל המתנדב שביקש (שמור לו 48 שעות), בלי זיהוי-מחדש'
+const BASE_STATUS = { submitted: 'ממתינה לאישור', approved: 'אושרה', rejected: 'נדחתה' }
+
+// "מבוססת על ההגשה של X (אושרה) · מעבר לה: 3 שינויים חדשים · 1 הוחזר למקור"
+function basedOnLine(b) {
+  const what = b.kind === 'approved' ? 'הגרסה שאושרה' : 'ההגשה'
+  const status = b.missing ? 'נמחקה' : BASE_STATUS[b.status] || ''
+  const added = b.added === 1 ? 'שינוי חדש אחד' : `${b.added || 0} שינויים חדשים`
+  const removed = (b.removed || []).length
+  return `מבוססת על ${what} של ${b.userName || 'מתנדב קודם'}${status ? ` (${status})` : ''} · מעבר לה: ${added}${removed ? ` · ${removed === 1 ? 'אחד הוחזר למקור' : `${removed} הוחזרו למקור`}` : ''}`
+}
 
 // onPageChanged (רשות) — מצב העמוד השתנה בלי שההגשה השתנתה (שחרור ממתנה)
 export default function ReviewModal({ id, onClose, onDone, onPageChanged }) {
@@ -139,6 +154,7 @@ export default function ReviewModal({ id, onClose, onDone, onPageChanged }) {
   const oldRevision = !!sub && rev(sub.revision) !== rev(data.page?.revision)
   const subRecut = !!sub && (sub.needsRecut ?? needsRecut(sub.ops))
   const farLinks = sub ? foreignLinkRefs(data.page?.doc, sub.ops) : []
+  const bookOnlyN = sub ? bookOnlyLineIds(sub.ops).length : 0
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 p-2" dir="rtl">
@@ -168,6 +184,11 @@ export default function ReviewModal({ id, onClose, onDone, onPageChanged }) {
                   </span>
                 )
               )}
+              {bookOnlyN > 0 && (
+                <span data-testid="review-book-only" className="rounded bg-warning-100 px-2 py-0.5 text-sm text-warning-800" title={BOOK_ONLY_REVIEW_TITLE}>
+                  {bookOnlyCount(bookOnlyN)} — לא לאימון
+                </span>
+              )}
               {farLinks.map((r) => (
                 <span key={r.i} data-testid="far-link" className="rounded bg-info-50 px-2 py-0.5 text-sm text-info-800" title="הצד השני של הקישור בעמוד אחר של הספר">
                   קישור ל{farLabel(r.page, r.lineNo, r.id, r.text)}
@@ -177,6 +198,11 @@ export default function ReviewModal({ id, onClose, onDone, onPageChanged }) {
                 <span className="rounded bg-warning-100 px-2 py-0.5 text-sm text-warning-800">
                   ההגשה נעשתה על גרסה {rev(sub.revision)} של העמוד, והוא הוחלף מאז בגרסה {rev(data.page.revision)} (חזר מזיהוי-מחדש). הפעולות
                   מוצגות על הגרסה הנוכחית ואולי לא יתאימו לה; אישור או דחייה משנים רק את ההגשה עצמה.
+                </span>
+              )}
+              {sub.basedOn && (
+                <span data-testid="based-on" className="rounded bg-info-50 px-2 py-0.5 text-sm text-info-800" title="בעורך: מה שהתקבל מההגשה הקודמת מסומן בקו מנוקד, ובלוח הפרטים ← שינויים הוא ברשימה נפרדת ממה שנוסף">
+                  {basedOnLine(sub.basedOn)}
                 </span>
               )}
               {data.siblings.length > 0 && (
@@ -221,6 +247,7 @@ export default function ReviewModal({ id, onClose, onDone, onPageChanged }) {
               initialOps={sub.ops}
               readOnly={!editing}
               persist={false}
+              inherited={sub.basedOn?.ops?.length ? { ops: sub.basedOn.ops, source: sub.basedOn.kind === 'approved' ? 'approved' : 'submission' } : null}
               toolbarClassName="sticky top-0 z-30"
               actions={({ ops, approval }) => (
                 <>
@@ -232,7 +259,12 @@ export default function ReviewModal({ id, onClose, onDone, onPageChanged }) {
                   {pending && (
                     <button
                       disabled={busy || !ops.length}
-                      onClick={() => act('approve', editing && !sameOps(ops, sub.ops) ? ops : null)}
+                      onClick={() => {
+                        // עריכה לפני אישור: סימון "לספר בלבד" אוטומטי על שורה שהטקסט שלה חזר בסוף לזה שיובא —
+                        // יורד, כמו בהגשה של המתנדב (submitPlan)
+                        const edited = editing ? dropIdleBookOnly(data.page?.doc, ops) : null
+                        act('approve', edited && !sameOps(edited, sub.ops) ? edited : null)
+                      }}
                       title={needsRecut(ops) && !oldRevision ? RECUT_HINT : undefined}
                       className="rounded-lg bg-success-600 px-4 py-1.5 font-bold text-white hover:bg-success-700 disabled:opacity-40"
                     >

@@ -11,8 +11,9 @@ import { STATE_UI, CLAIM_HOURS } from './gridState.js';
 //   submitted — הוגש, ממתין לאישור מנהל (כל ההגשות הנדרשות הגיעו, לא כולן אושרו)
 //   approved  — אושר
 //   recut     — ממתין לחיתוך ולזיהוי-מחדש בתוכנת-הספר
+//   recut_ask — מתנדב תיקן חיתוך, והעמוד ממתין לאישור המנהל לזיהוי-מחדש (נעול; recutRequests.decideRecutAsk)
 // "סגור למתנדבים" אינו מצב אלא מתג (volunteer) — עמוד סגור יכול להיות בכל מצב.
-export const ADMIN_STATES = Object.freeze(['open', 'second', 'taken', 'submitted', 'approved', 'recut']);
+export const ADMIN_STATES = Object.freeze(['open', 'second', 'taken', 'submitted', 'approved', 'recut', 'recut_ask']);
 
 const timeOf = (value) => {
   if (!value) return Number.NaN;
@@ -23,6 +24,7 @@ const timeOf = (value) => {
 export function adminPageState(page, now = new Date()) {
   const p = page || {};
   if (p.status === 'recut') return 'recut';
+  if (p.status === 'recut_ask') return 'recut_ask';
   const required = p.required || 1;
   const active = p.activeCount || 0;
   const approved = p.approvedCount || 0;
@@ -45,6 +47,16 @@ export const ADMIN_STATE_UI = Object.freeze({
   submitted: { ...STATE_UI.submitted, label: 'ממתין לאישור', short: 'לאישור' },
   approved: STATE_UI.approved,
   recut: STATE_UI.recut,
+  recut_ask: {
+    ...STATE_UI.recut,
+    label: 'ממתין לאישורך לזיהוי-מחדש',
+    short: 'לאישור חיתוך',
+    icon: 'pending_actions',
+    color: 'text-warning-alt-800',
+    bgColor: 'bg-warning-alt-100',
+    borderColor: 'border-warning-alt-400',
+    bar: 'bg-warning-alt-400',
+  },
 });
 
 // מונים לרשת: לכל מצב, ועוד closed (סגורים למתנדבים), leased (תפיסות בתוקף),
@@ -71,6 +83,7 @@ export const ADMIN_FILTERS = Object.freeze({
   submitted: (p) => p.state === 'submitted',
   approved: (p) => p.state === 'approved',
   recut: (p) => p.state === 'recut',
+  recut_ask: (p) => p.state === 'recut_ask',
   closed: (p) => p.volunteer === false,
   expired: (p) => p.lease === 'expired',
 });
@@ -93,9 +106,12 @@ export function parsePageRange(fromRaw, toRaw) {
 
 export const rangeLabel = ({ from, to }) => (from === to ? `עמוד ${from}` : `עמודים ${from}–${to}`);
 
-// האזהרה בשחרור בידי מנהל: הטיוטה של המתנדב אינה באתר — רק בדפדפן שלו
+// עמוד שהתפיסה שלו פגה (בכרטיס-העמוד של המנהל): חוזר למתנדבים מעצמו — בלי כפתור "שחרור"
+export const EXPIRED_NOTE = 'פנוי שוב לכל מתנדב, בלי צורך לשחרר. מה שעשה ולא הגיש נשמר, ומי שיתפוס את העמוד ימשיך ממנו.';
+
+// האזהרה בשחרור בידי מנהל: הטיוטה של המתנדב שמורה באתר ועוברת עם העמוד (docs/63 §2 — serverDrafts.js)
 export const DRAFT_WARNING =
-  'טיוטה שהמתנדב עוד לא הגיש שמורה רק בדפדפן שלו — היא לא נשמרת באתר. אם העמוד יישאר פנוי, הוא יוכל לתפוס אותו שוב ולהמשיך ממנה; אם מתנדב אחר יתפוס אותו — העבודה ההיא לא תגיע.';
+  'העבודה שהמתנדב עוד לא הגיש שמורה באתר כטיוטה של העמוד ועוברת איתו: מי שיתפוס אותו — גם מתנדב אחר — ימשיך ממנה, והשינויים שקיבל מסומנים אצלו.';
 
 // נוסח חלון-האישור לשחרור עמוד אחד
 export function releaseMessage(page) {
@@ -121,5 +137,18 @@ export function cancelRecutMessage(page) {
   return `לבטל את הבקשה לזיהוי-מחדש של עמוד ${page?.page}?\nהעמוד יחזור אל ${who} (שמור לו ${CLAIM_HOURS} שעות) בלי זיהוי-מחדש, עם התיקונים שבטיוטה שלו.${picked}`;
 }
 
+// בקשה לזיהוי-מחדש שממתינה לאישור המנהל (recut_ask) — הנוסחים של חלון-האישור. reason — recutRules.ASK_REASONS
+const ASK_WHY = Object.freeze({ off: 'השליחה בלי מנהל כבויה', cap: 'למתנדב כבר יש 5 עמודים שממתינים לזיהוי-מחדש', other: 'לעמוד יש הגשה של מתנדב אחר' });
+export function askDecideMessage(page, decision) {
+  const a = page?.recutAsk || {};
+  const who = a.by || 'המתנדב';
+  const why = ASK_WHY[a.reason] ? ` (${ASK_WHY[a.reason]})` : '';
+  if (decision === 'approve') {
+    const other = a.reason === 'other' ? '\nלעמוד יש הגשה של מתנדב אחר — היא נעשתה על החיתוך הקודם, ותישאר לבדיקתך.' : '';
+    return `לאשר זיהוי-מחדש לעמוד ${page?.page}${why}?\nהעמוד ימתין לתוכנת-הספר ויחזור אל ${who} לשלב הטקסט אחרי הזיהוי-מחדש.${other}`;
+  }
+  return `לא לאשר זיהוי-מחדש לעמוד ${page?.page}?\nהעמוד יחזור אל ${who} (שמור לו ${CLAIM_HOURS} שעות) לשלב הטקסט, ותיקוני-החיתוך שלו ייצאו עם ההגשה — ואז תחליט עליהם.`;
+}
+
 // כמה זמן תפיסה נמשכת (להסבר בניהול)
-export const CLAIM_NOTE = `כל עמוד שמתנדב תופס שמור לו ${CLAIM_HOURS} שעות (לכל עמוד לחוד), וכל פתיחה של העמוד בעורך מחדשת את הזמן ל-${CLAIM_HOURS} שעות מלאות. תפיסה שפגה — העמוד שוב פנוי לכולם.`;
+export const CLAIM_NOTE = `כל עמוד שמתנדב תופס שמור לו ${CLAIM_HOURS} שעות (לכל עמוד לחוד; שבת וחג אינם נספרים), וכל פתיחה של העמוד בעורך מחדשת את הזמן ל-${CLAIM_HOURS} שעות מלאות. תפיסה שפגה — העמוד שוב פנוי לכולם מעצמו, בלי צורך לשחרר, והעבודה שהמתנדב לא הגיש עוברת עם העמוד למי שיתפוס אותו.`;

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { streamMenu, streamName, registerVocab, PARA_STYLES, CHAR_STYLES, PAGE_TYPES, SCRIPTS, CERTAINTY, FURNITURE_STREAMS, BUILTIN_STREAMS, PRINT_DEFECT_WHY, isPrintDefect } from './vocab.js';
+import { streamMenu, streamName, registerVocab, PARA_STYLES, CHAR_STYLES, PAGE_TYPES, SCRIPTS, CERTAINTY, FURNITURE_STREAMS, BUILTIN_STREAMS, PRINT_DEFECT_WHY, isPrintDefect, isBookOnly } from './vocab.js';
 import { validateOp, describeOp } from './ops.js';
 import { buildFixesFile } from './fixesExport.js';
 
@@ -87,20 +87,25 @@ test('סעיף ממוספר, הגהה, שירה, תוכן-עניינים: פעו
   assert.equal(validateOp(doc, { kind: 'para', page: 7, ids: [1], value: 'poetry' }), 'סגנון-פסקה לא מוכר: poetry');
 });
 
-// "פגם בדפוס" (פורום, 2026-10-01): בלי ערך-חוזה חדש — certainty=ambiguous עם הסיבה הקבועה, שתוכנת-
-// הספר כבר מוציאה מהאימון. הפעולה עוברת את validateOp גם לכמה שורות, ונשמרת בתצוגה
-test('פגם בדפוס: certainty=ambiguous עם הסיבה הקבועה — פעולה תקינה, גם לכמה שורות', () => {
+// "לספר בלבד" (2026-10-02): שדה-חוזה משלו, train_text (0 = לספר בלבד, 1 = רגיל) — נפרד מ"ודאות".
+// הנוסח הישן ("פגם בדפוס": certainty=ambiguous עם הסיבה הקבועה) עדיין נקרא כ"לספר בלבד"
+test('לספר בלבד: train_text 0/1 — פעולה תקינה גם לכמה שורות; ערך אחר נדחה; isBookOnly קורא גם את הנוסח הישן', () => {
   const doc = { page: 7, size: [1000, 1000], lines: [
     { id: 1, line_no: 0, text: 'שורה', stream: 'main', bbox: [10, 10, 900, 50] },
     { id: 2, line_no: 1, text: 'שנייה', stream: 'main', bbox: [10, 60, 900, 100] },
   ] };
-  const op = { kind: 'certainty', page: 7, ids: [1, 2], value: { v: 'ambiguous', why: PRINT_DEFECT_WHY } };
-  assert.equal(validateOp(doc, op), null);
-  assert.equal(isPrintDefect({ certainty: 'ambiguous', certainty_why: PRINT_DEFECT_WHY }), true);
-  // "לא בטוח" מסיבה אחרת אינו פגם בדפוס (אבל גם הוא אינו נכנס לאימון)
+  assert.equal(validateOp(doc, { kind: 'train_text', page: 7, ids: [1, 2], value: 0 }), null);
+  assert.equal(validateOp(doc, { kind: 'train_text', page: 7, ids: [1], value: 1 }), null);
+  assert.match(validateOp(doc, { kind: 'train_text', page: 7, ids: [1], value: true }), /0 \(פגם בדפוס\) או 1/);
+  assert.match(validateOp(doc, { kind: 'train_text', page: 7, value: 0 }), /לא נבחרו שורות/);
+  assert.equal(isBookOnly({ train_text: 0 }), true);
+  assert.equal(isBookOnly({ train_text: 1 }), false);
+  assert.equal(isBookOnly({}), false);
+  assert.equal(isBookOnly({ certainty: 'ambiguous', certainty_why: PRINT_DEFECT_WHY }), true);
+  // "לא בטוח" מסיבה אחרת אינו "לספר בלבד" (אבל גם הוא אינו נכנס לאימון)
   assert.equal(isPrintDefect({ certainty: 'ambiguous', certainty_why: 'לא ברור מה כתוב' }), false);
   assert.equal(isPrintDefect({ certainty: 'probable', certainty_why: PRINT_DEFECT_WHY }), false);
-  assert.equal(isPrintDefect(null), false);
+  assert.equal(isBookOnly(null), false);
 });
 
 // אוצר-מילים נוסף מצרכן שמטמיע את העורך (תוכנת-הספר): סגנונות-פסקה של ספר מסוים ועוד —

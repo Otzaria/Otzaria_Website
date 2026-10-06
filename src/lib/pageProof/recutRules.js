@@ -11,6 +11,7 @@
 import { CUT_KINDS, needsRecut, packOps, sanitizeOps, validateOps } from './ops.js';
 import { revisionFilter } from './importRules.js';
 import { CLAIM_HOURS } from './gridState.js';
+import { leaseEnd } from './lease.js';
 
 // בקשות ממתינות למתנדב אחד (עמוד שנשלח ועוד לא חזר)
 export const MAX_PENDING_RECUT = 5;
@@ -26,7 +27,49 @@ export const RECUT_MSG = Object.freeze({
   reload: 'העמוד עודכן מאז שנפתח (חזר מזיהוי-מחדש) — טענו אותו מחדש',
   tooMany: `יש לכם כבר ${MAX_PENDING_RECUT} עמודים שממתינים לזיהוי-מחדש — אפשר לשלוח עוד כשאחד מהם יחזור`,
   rate: 'יותר מדי בקשות לזיהוי-מחדש בזמן קצר — נסו שוב מאוחר יותר',
+  off: 'שליחה לזיהוי-מחדש כבויה כרגע. הגישו את העמוד כרגיל עם תיקוני-החיתוך: אחרי אישור המנהל הוא ייחתך ויזוהה מחדש ויחזור להגהה.',
 });
+
+// ---------- מתג המנהל: האם מתנדבים יכולים לשלוח לזיהוי-מחדש (2026-10-02) ----------
+//
+// הזיהוי-מחדש רץ בתוכנת-הספר אצל בעל הפרויקט, רק כשהיא פתוחה; כשהיא סגורה הבקשות ממתינות באתר
+// בלי סוף. לכן מתג אחד לכל האתר (SystemConfig 'pageProof.runtime' — runtime.js):
+//   on   — הכפתור "שלח לזיהוי-מחדש" מופיע למתנדבים (כמו עד היום; ברירת-המחדל);
+//   off  — לא מופיע, ובקשה נדחית (409 — RECUT_MSG.off): תיקוני-חיתוך עוברים בהגשה הרגילה;
+//   auto — מופיע רק כשתוכנת-הספר נראתה מחוברת ב-autoMinutes הדקות האחרונות (מפתח-גישה עם הרשאת
+//          import שהשתמשו בו — tokenAuth מעדכן lastUsedAt, לכל היותר פעם בדקה).
+// בקשות שכבר ממתינות נשארות בכל מצב; "החזר את כל הממתינים למתנדבים" — פעולה נפרדת
+// (recutRequests.releaseAllRecutRequests).
+export const RECUT_MODES = Object.freeze(['on', 'off', 'auto']);
+export const AUTO_MINUTES = 15;
+const MAX_AUTO_MINUTES = 240;
+
+// ברירות המחדל כשאין מסמך, וגם התיקון לערך פגום
+export function normalizeProofRuntime(value = {}) {
+  const v = value && typeof value === 'object' ? value : {};
+  const m = Number(v.autoMinutes);
+  return {
+    recutRequests: RECUT_MODES.includes(v.recutRequests) ? v.recutRequests : 'on',
+    autoMinutes: Number.isInteger(m) && m >= 1 && m <= MAX_AUTO_MINUTES ? m : AUTO_MINUTES,
+  };
+}
+
+// בדיקת קלט של עדכון (PATCH): {patch} או {error} בעברית. רק המפתחות המוכרים
+export function proofRuntimePatch(body) {
+  const b = body && typeof body === 'object' ? body : {};
+  const patch = {};
+  if (b.recutRequests !== undefined) {
+    if (!RECUT_MODES.includes(b.recutRequests)) return { error: 'מצב לא מוכר — on, off או auto' };
+    patch.recutRequests = b.recutRequests;
+  }
+  if (b.autoMinutes !== undefined) {
+    const m = Number(b.autoMinutes);
+    if (!Number.isInteger(m) || m < 1 || m > MAX_AUTO_MINUTES) return { error: `מספר הדקות חייב להיות בין 1 ל-${MAX_AUTO_MINUTES}` };
+    patch.autoMinutes = m;
+  }
+  if (!Object.keys(patch).length) return { error: 'אין מה לעדכן' };
+  return { patch };
+}
 
 export const isCutOp = (op) => CUT_KINDS.includes(op?.kind);
 
@@ -50,6 +93,30 @@ const timeOf = (d) => {
   return Number.isFinite(t) ? t : NaN;
 };
 
+// "תוכנת-הספר נראתה לאחרונה: …" — לכרטיס המנהל
+export function seenAgoLabel(seenAt, now = new Date()) {
+  const t = timeOf(seenAt);
+  if (!Number.isFinite(t)) return 'עוד לא נראתה (אין שימוש במפתח-גישה עם הרשאת ייבוא)';
+  const min = Math.max(0, Math.floor((now.getTime() - t) / 60000));
+  if (min < 1) return 'עכשיו';
+  if (min === 1) return 'לפני דקה';
+  if (min < 60) return `לפני ${min} דקות`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return h === 1 ? 'לפני שעה' : `לפני ${h} שעות`;
+  const d = Math.floor(h / 24);
+  return d === 1 ? 'לפני יום' : `לפני ${d} ימים`;
+}
+
+// האם הכפתור פתוח למתנדבים עכשיו: settings — normalizeProofRuntime; seenAt — מתי תוכנת-הספר נראתה
+// לאחרונה (runtime.bookSoftwareSeenAt), או null
+export function recutEffective(settings, seenAt, now = new Date()) {
+  const s = normalizeProofRuntime(settings);
+  if (s.recutRequests === 'on') return true;
+  if (s.recutRequests === 'off') return false;
+  const t = timeOf(seenAt);
+  return Number.isFinite(t) && now.getTime() - t <= s.autoMinutes * 60 * 1000;
+}
+
 // למה אי אפשר לשלוח את העמוד עכשיו (לפי המצב השמור), או null. page: {status, leasedBy,
 // leasedUntil, submitters, activeCount}. הכללים: העמוד פתוח, בטיפול המתנדב (התפיסה בתוקף),
 // הוא לא הגיש אותו, ואין לעמוד הגשה פעילה של מתנדב אחר (עמוד כפול) — אחרת הזיהוי-מחדש היה
@@ -67,6 +134,51 @@ export function recutRefusal(page, userId, now = new Date()) {
   return null;
 }
 
+// ---------- נעול עד אחרי הזיהוי-מחדש (בעל הפרויקט, 2026-10-06) ----------
+//
+// מתנדב שתיקן חיתוך אינו ממשיך עוד לשלב הטקסט כשאי אפשר לשלוח את העמוד בעצמו: העמוד נעול עד שיחזור מהזיהוי-מחדש.
+// כשהשליחה בלי מנהל אינה אפשרית מאחת הסיבות האלה — הבקשה ממתינה לאישור מנהל (מצב העמוד 'recut_ask'; recutRequests
+// .askRecut), והמתנדב פנוי לתפוס עמודים אחרים (עמוד שממתין אינו נספר בחמשת העמודים שהוא מחזיק):
+//   off      — המנהל כיבה את "שלח לזיהוי-מחדש"
+//   cap      — יש למתנדב כבר MAX_PENDING_RECUT עמודים שממתינים לזיהוי-מחדש
+//   other    — לעמוד יש הגשה של מתנדב אחר (עמוד כפול): הזיהוי-מחדש יחליף עמוד שמישהו כבר הגיש
+// במצב "אוטומטי" כשתוכנת-הספר אינה מחוברת — הבקשה נכנסת לתור הרגיל וממתינה עד שתתחבר (בלי מנהל): זה מה ש"אוטומטי"
+// אומר. שאר הסירובים (העמוד אינו בטיפולו, כבר הוגש או הושלם, כבר ממתין) — שגיאה, כמו קודם.
+export const ASK_REASONS = Object.freeze({
+  off: 'שליחה לזיהוי-מחדש בלי מנהל כבויה כרגע',
+  cap: `יש לכם כבר ${MAX_PENDING_RECUT} עמודים שממתינים לזיהוי-מחדש`,
+  other: 'לעמוד הזה כבר יש הגשה של מתנדב אחר',
+});
+export const ASK_MSG = Object.freeze({
+  asked: 'העמוד ממתין לאישור מנהל לזיהוי-מחדש, ונעול עד שיחזור מהזיהוי-מחדש. בינתיים אפשר לתפוס עמודים אחרים.',
+  approved: 'המנהל אישר — העמוד ממתין לזיהוי-מחדש ויחזור אליכם לשלב הטקסט.',
+  rejected: 'המנהל לא אישר זיהוי-מחדש לעמוד הזה. העמוד חזר אליכם: הגיהו את הטקסט והגישו אותו עם תיקוני-החיתוך, והמנהל יחליט.',
+  notAsk: 'העמוד אינו ממתין לאישור זיהוי-מחדש',
+});
+
+// איך יוצאת בקשה של המתנדב עכשיו: {route: 'auto'} (לבד, כמו עד היום) / {route: 'ask', reason} (לאישור מנהל) /
+// {error} (אי אפשר בכלל). page — כמו ב-recutRefusal; mode — מתג המנהל (normalizeProofRuntime.recutRequests);
+// pending — כמה בקשות ממתינות למתנדב
+export function recutRoute(page, userId, { mode = 'on', pending = 0, now = new Date() } = {}) {
+  if (!page) return { error: 'העמוד לא נמצא' };
+  if (page.status === 'recut_ask') return { error: 'העמוד כבר ממתין לאישור מנהל לזיהוי-מחדש' };
+  // הגשה של מתנדב אחר — מנהל מחליט (רק אחרי שאר התנאים: העמוד בטיפולו, לא הגיש וכו')
+  const why = recutRefusal({ ...page, activeCount: 0 }, userId, now);
+  if (why) return { error: why };
+  if ((page.activeCount || 0) > 0) return { route: 'ask', reason: 'other' };
+  if (mode === 'off') return { route: 'ask', reason: 'off' };
+  if (pending >= MAX_PENDING_RECUT) return { route: 'ask', reason: 'cap' };
+  // "אוטומטי" בלי תוכנת-הספר — לתור הרגיל, ממתין עד שתתחבר
+  return { route: 'auto' };
+}
+
+// מסנן-Mongo למעבר open ← recut_ask: כמו recutEligibleFilter, אבל בלי התנאי "אין הגשה של אחר" (בזה מנהל מחליט)
+export function askEligibleFilter(userId, revision, now = new Date()) {
+  const f = recutEligibleFilter(userId, revision, now);
+  delete f.activeCount;
+  return f;
+}
+
 // מסנן-Mongo תואם ל-recutRefusal (לעדכון האטומי open ← recut): אם בינתיים מישהו הגיש, התפיסה
 // פגה או העמוד הוחלף — העדכון לא חל
 export function recutEligibleFilter(userId, revision, now = new Date()) {
@@ -81,10 +193,10 @@ export function recutEligibleFilter(userId, revision, now = new Date()) {
 }
 
 // התפיסה שהמתנדב מקבל בחזרה (העמוד חזר מהזיהוי-מחדש, או שהמנהל ביטל את הבקשה): כמו פתיחה
-// בעורך — CLAIM_HOURS שעות מלאות מעכשיו
+// בעורך — CLAIM_HOURS שעות מלאות מעכשיו, בלי שבת וחג (lease.leaseEnd)
 export const CLAIM_BACK_MS = CLAIM_HOURS * 60 * 60 * 1000;
 export function claimBack(userId, now = new Date()) {
-  return userId ? { leasedBy: userId, leasedUntil: new Date(now.getTime() + CLAIM_BACK_MS) } : {};
+  return userId ? { leasedBy: userId, leasedUntil: leaseEnd(now) } : {};
 }
 
 // הבקשה שקובעת למי העמוד חוזר: הבקשה הממתינה האחרונה (בגרסה הזו), או null

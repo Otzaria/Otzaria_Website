@@ -10,6 +10,7 @@ import { needsRecut } from '@/lib/pageProof/ops';
 import { storedRevision, submissionRevision } from '@/lib/pageProof/importRules';
 import { pageSig } from '@/lib/pageProof/adminReview';
 import { getPageProofSession } from '@/lib/pageProof/tokenAuth';
+import { basedOnOf } from '@/lib/pageProof/basedOn';
 
 const GID_RE = /^[A-Za-z0-9]{8,64}$/;
 
@@ -24,7 +25,8 @@ const GID_RE = /^[A-Za-z0-9]{8,64}$/;
 // שנייה לעמוד שכבר יצא לא תיכנס בטעות לקובץ הראשי; הגשה שמשנה חיתוך קודמת
 // (fixesExport.pickPrimary) — העמוד ממתין לזיהוי-מחדש בגללה.
 // לכל פעולה: revision, op_id ו-sig (חתימת העמוד בגרסה הזו, כשהעמוד השמור
-// עדיין בה) — כדי שתוכנת-הספר תוכל לדלג על פעולה ישנה או כפולה.
+// עדיין בה) — כדי שתוכנת-הספר תוכל לדלג על פעולה ישנה או כפולה. הגשה שמבוססת על הגשה קודמת (הבודק השני — docs/63 §4):
+// same_as לכל פעולה שזהה לפעולה בקודמת (op_id שלה) — תוכנת-הספר אינה מחילה פעמיים מה שכבר החילה מהקודמת.
 // מעל 5,000 פעולות (התקרה שלהם לקובץ אחד) — ZIP של כמה קבצים, בלי לפצל עמוד.
 // מפתח-גישה של תוכנת-הספר: read; עם mark=1 (משנה מצב) — גם review.
 export async function GET(request, { params }) {
@@ -47,7 +49,7 @@ export async function GET(request, { params }) {
 
     const approved = await PageProofSubmission.find(
       { gid, status: 'approved' },
-      { pageNo: 1, revision: 1, who: 1, ops: 1, reviewedAt: 1, createdAt: 1, exportedAt: 1, needsRecut: 1 }
+      { pageNo: 1, revision: 1, who: 1, ops: 1, reviewedAt: 1, createdAt: 1, exportedAt: 1, needsRecut: 1, basedOn: 1, basedOnName: 1, basedOnKind: 1, round: 1 }
     ).lean();
     const shaped = approved.map((s) => ({
       _id: s._id,
@@ -60,6 +62,9 @@ export async function GET(request, { params }) {
       approvedAt: s.reviewedAt,
       submittedAt: s.createdAt,
       exportedAt: s.exportedAt,
+      basedOn: s.basedOn,
+      // עמוד שנפתח מחדש אחרי אישור — הסבב האחרון ראשי (fixesExport.pickPrimary)
+      round: s.round,
     }));
     let chosen = splitPrimary(shaped)[set].filter((s) => !onlyNew || !s.exportedAt);
     if (onlyRecut) {
@@ -68,6 +73,10 @@ export async function GET(request, { params }) {
       const keys = new Set(waiting.map((p) => `${p.page}:${storedRevision(p)}`));
       chosen = chosen.filter((s) => keys.has(`${s.page}:${submissionRevision(s)}`));
     }
+
+    // same_as — להגשות שמבוססות על הגשה קודמת
+    const based = await basedOnOf(chosen);
+    chosen = chosen.map((s) => (based.has(String(s._id)) ? { ...s, sameAs: based.get(String(s._id)).sameAs } : s));
 
     // חתימות-העמודים (מזהי-השורות והגודל) — רק לעמודים שבקובץ, בלי ה-doc הכבד
     const sigs = new Map();

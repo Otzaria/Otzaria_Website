@@ -16,9 +16,10 @@ export const SEQ_SIZE = 5;
 export const CLAIM_HOURS = 48;
 export const MAX_HELD = 5;
 
-// הכלל כפי שהמתנדב קורא אותו (העזרה, "העמודים שלי"), ובקצרה (רשימת הספרים, הרשת)
-export const CLAIM_RULE = `כל עמוד שתפסתם שמור לכם ${CLAIM_HOURS} שעות (לכל עמוד לחוד), וכל פתיחה שלו בעורך מחדשת את הזמן ל-${CLAIM_HOURS} שעות מלאות. עמוד שלא נפתח ${CLAIM_HOURS} שעות חוזר למאגר — טיוטה שלא הגשתם נשארת בדפדפן שלכם, ותחזור אם תתפסו אותו שוב.`;
-export const CLAIM_SHORT = `כל עמוד שתפסתם שמור לכם ${CLAIM_HOURS} שעות, וכל פתיחה שלו בעורך מחדשת את הזמן.`;
+// הכלל כפי שהמתנדב קורא אותו (העזרה, "העמודים שלי"), ובקצרה (רשימת הספרים, הרשת). שבת וחג אינם נספרים
+// בשעות (lease.js — הכלל המדויק: משישי ב-12:00 עד מוצאי-שבת ב-22:00, ומערב-החג ב-12:00 עד צאתו ב-22:00)
+export const CLAIM_RULE = `כל עמוד שתפסתם שמור לכם ${CLAIM_HOURS} שעות (לכל עמוד לחוד; שבת וחג אינם נספרים), וכל פתיחה שלו בעורך מחדשת את הזמן ל-${CLAIM_HOURS} שעות מלאות. עמוד שלא נפתח בזמן הזה חוזר למאגר — טיוטה שלא הגשתם נשארת בדפדפן שלכם, ותחזור אם תתפסו אותו שוב.`;
+export const CLAIM_SHORT = `כל עמוד שתפסתם שמור לכם ${CLAIM_HOURS} שעות (שבת וחג אינם נספרים), וכל פתיחה שלו בעורך מחדשת את הזמן.`;
 
 // עמוד שהמנהל סגר למתנדבים (volunteer:false במסד). עמוד בלי השדה — פתוח.
 export const isOpenToVolunteers = (page) => page?.volunteer !== false;
@@ -70,7 +71,8 @@ export function pageStateFor(page, viewerId, now = new Date()) {
   const leased = p.leasedBy && timeOf(p.leasedUntil) > now.getTime();
   const leasedToMe = leased && me !== null && sameId(p.leasedBy, me);
   if (!isOpenToVolunteers(p)) return leasedToMe && p.status === 'open' ? 'mine' : 'closed';
-  if (p.status === 'recut') return 'recut';
+  // ממתין לאישור מנהל לזיהוי-מחדש (recut_ask) — בעיני המתנדבים כמו "ממתין לזיהוי-מחדש": נעול
+  if (p.status === 'recut' || p.status === 'recut_ask') return 'recut';
   if (p.status === 'done') return 'done';
 
   if (leased) return leasedToMe ? 'mine' : 'taken';
@@ -181,24 +183,45 @@ export function bookCounts(items) {
   return counts;
 }
 
-// הסדר בפס ההתקדמות: מה שנגמר (ירוק) ← ממתין ← בעבודה ← זיהוי-מחדש ← פנוי
-export const BAR_ORDER = Object.freeze(['done', 'approved', 'submitted', 'second', 'mine', 'taken', 'recut', 'open']);
+// הקבוצות של הספר כולו — אותן קבוצות, אותם מספרים ואותם צבעים בכרטיסים הגדולים ובפס ההתקדמות, כך שהכרטיסים
+// מסתכמים ל"סה"כ" (בעל הפרויקט, 2026-10-06: "אין הצלבה בין הגרף לריבועים" — הכרטיסים ספרו רק את עמודי הצופה,
+// והפס את כל הספר). הסדר — סדר הפס: מה שנגמר (ירוק) ← ממתין לאישור ← בעבודה ← זיהוי-מחדש ← פנוי.
+//   done      — הושלמו: הגשה מספיקה (של כל מתנדב), גם אם המנהל עוד לא אישר; mineOf — כמה מהם שלך ואושרו
+//   submitted — הגשת, וממתין לאישור מנהל
+//   mine      — בטיפולך
+//   taken     — בטיפול מתנדבים אחרים
+//   recut     — ממתין לזיהוי-מחדש (מוצג רק כשיש)
+//   available — פנויים לתפיסה (כולל עמוד כפול שדרוש לו בודק נוסף)
+export const GROUPS = Object.freeze([
+  { key: 'done', label: 'הושלמו', states: ['done', 'approved'], mineOf: 'approved', bar: 'bg-success-500', color: 'text-success-700',
+    hint: 'עמודים שהוגשו (בידי כל המתנדבים) — גם כאלה שהמנהל עוד לא אישר' },
+  { key: 'submitted', label: 'הגשת — ממתין לאישור', states: ['submitted'], bar: 'bg-warning-alt-500', color: 'text-warning-alt-700',
+    hint: 'עמודים שהגשתם וממתינים לאישור מנהל' },
+  { key: 'mine', label: 'בטיפולך', states: ['mine'], bar: 'bg-info-500', color: 'text-info-700' },
+  { key: 'taken', label: 'אצל מתנדבים אחרים', states: ['taken'], bar: 'bg-info-300', color: 'text-info-700',
+    hint: 'עמודים שמתנדב אחר תפס ועובד עליהם' },
+  { key: 'recut', label: 'ממתינים לזיהוי-מחדש', states: ['recut'], optional: true, bar: 'bg-feature-400', color: 'text-feature-700',
+    hint: 'עמודים שחיתוך השורות שלהם תוקן — יחזרו להגהה אחרי הזיהוי-מחדש' },
+  { key: 'available', label: 'פנויים', states: ['open', 'second'], bar: 'bg-neutral-300', color: 'text-neutral-700',
+    hint: 'אפשר לתפוס — כולל עמודים לבדיקה כפולה שדרוש להם בודק נוסף' },
+]);
+export const groupCount = (counts, g) => g.states.reduce((n, s) => n + (counts?.[s] || 0), 0);
 
-// מקטעי פס ההתקדמות ← [{state, n, pct}] רק למצבים שיש בהם עמודים
+// מקטעי פס ההתקדמות ← [{key, label, n, pct, bar, color}] רק לקבוצות שיש בהן עמודים
 export function barSegments(counts) {
   const total = counts?.total || 0;
   if (!(total > 0)) return [];
-  return BAR_ORDER.filter((s) => (counts[s] || 0) > 0).map((s) => ({ state: s, n: counts[s], pct: (counts[s] / total) * 100 }));
+  return GROUPS.map((g) => ({ ...g, n: groupCount(counts, g) }))
+    .filter((g) => g.n > 0)
+    .map((g) => ({ key: g.key, label: g.label, n: g.n, pct: (g.n / total) * 100, bar: g.bar, color: g.color }));
 }
 
-// כרטיסי-הסינון בראש רשת העמודים
+// כרטיסי-הסינון בראש רשת העמודים — מפתח לכל קבוצה (GROUPS), ועוד "הכול"
 export const FILTERS = Object.freeze({
   all: () => true,
-  available: canClaim,
-  mine: (s) => s === 'mine',
-  submitted: (s) => s === 'submitted',
+  ...Object.fromEntries(GROUPS.map((g) => [g.key, (s) => g.states.includes(s)])),
+  // מפתח ישן (כרטיס "אושרו") — עמודים שלך שאושרו
   approved: (s) => s === 'approved',
-  recut: (s) => s === 'recut',
 });
 
 // filter — מפתח ב-FILTERS; ownership — 'all' / 'mine' (העמודים שלי)

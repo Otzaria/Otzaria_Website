@@ -43,7 +43,12 @@ import {
 // לוח-הסריקה של עורך הגהת-העמודים: כותרת (מצב "מסגרות"/"שורות", זום, הכלים
 // של המצב והסבר של שורה אחת) + הסריקה (ProofScan) + חלונית המסגרת הנבחרת
 // (FramePopover). כל עריכה = פעולות-חוזה דרך push; שום דבר לא נשמר כאן חוץ
-// מהעדפת הזום (localStorage 'pageProof.scanZoom').
+// מהעדפת הזום (localStorage 'pageProof.scanZoom') ו"בלי סימונים" (SCAN_CLEAN_KEY).
+//
+// "בלי סימונים" (פורום, 2026-10-05 — "להציג את הסריקה בלי הסימונים"): מתג בשורת-הכלים שמסתיר כל מה
+// שמצויר על הסריקה — מסגרות ותוויותיהן, תיבות-השורות, הריהוט שזוהה, הסימונים האדומים/הכתומים, סימון
+// הסמן והמילה, השכבה של דף עוטף (scanOverlay) והחלונית של המסגרת — ונשארת התמונה בלבד, עם הזום. לחיצה
+// על הסריקה עדיין מעבירה את הסמן בטקסט; עריכת מסגרות/שורות — רק כשהסימונים מוצגים. נזכר בדפדפן.
 //
 // Props (החוזה מול ProofEditor):
 //   view                התצוגה (buildView) — size, page, lines, frames, frames_confirmed, cut_ok, streams
@@ -72,7 +77,7 @@ import {
 // העריכה הראשונה (או "✓ המסגרות נכונות") שומרת את *כל* ההצעות: frames_set +
 // frame_seq לכל מסגרת, כקבוצה אחת. המספר-בזרם נגזר מסדר-הקריאה (כמו בתוכנת-הספר).
 // מסגרת מתהדקת לטקסט שבתוכה (snapFrame, כיווץ בלבד) — כשמציירים אותה, מזיזים אותה או
-// משנים את גודלה. הזרם: זרם-תוכן, הכותרת שלו ("כותרת הערות"), או "ריהוט הדף".
+// משנים את גודלה. הזרם: זרם-תוכן או "ריהוט הדף" (כותרת אינה מסגרת — סגנון-פסקה "כותרת"; מסגרת-כותרת ישנה עדיין מוצגת).
 // החלונית של מסגרת נבחרת נפתחת בלחיצה עליה (לא בציור מסגרת חדשה — זו רק נבחרת, עם הידיות),
 // יושבת מחוץ למסגרת ונעלמת בזמן גרירה;
 // "סגירה" סוגרת רק אותה — המסגרת נשארת בחורה (Esc / לחיצה מחוץ לה מבטלים את הבחירה).
@@ -85,6 +90,8 @@ import {
 // Ctrl+Z / Ctrl+Y מטופלים ב-ProofEditor גם כשהמיקוד כאן או בחלונית.
 
 const ZOOM_KEY = 'pageProof.scanZoom'
+// "בלי סימונים" — '1' = הסריקה מוצגת נקייה (דף עוטף יכול לשקף את המפתח להעדפות שלו)
+export const SCAN_CLEAN_KEY = 'pageProof.scanClean'
 // רוחב משוער לפני שהלוח נמדד (סביבת-בדיקות / רגע הטעינה)
 const DEFAULT_VIEWPORT = 640
 const EMPTY = new Set()
@@ -94,10 +101,10 @@ const FRAME_RULES = [
   'מסגרת = אזור רציף אחד של זרם אחד. פסקה חדשה באותו זרם — לא מסגרת חדשה.',
   'טקסט בשני טורים: שתי מסגרות באותו זרם — הימנית 1, השמאלית 2.',
   'הערות בתחתית: מסגרת בזרם "הערות".',
-  'כותרת של פרק או של סעיף: מסגרת משלה בזרם הכותרת — "כותרת" בטקסט, "כותרת הערות" בתוך ההערות. היא נכנסת לספר.',
+  'כותרת של פרק או של סעיף (גם בתוך ההערות): לא מסגרת נפרדת — היא חלק מהטקסט, בתוך המסגרת של הזרם שלה. מסמנים אותה בטקסט בסגנון-הפסקה "כותרת". היא נכנסת לספר.',
   'כותרת-רצה, מספר עמוד, שומר-דף: "ריהוט הדף" (למעלה — כותרת עמוד, למטה — תחתית). הקו שמפריד בין הטקסט להערות: "עוד…" ← מפריד.',
-  'כותרת שחוזרת בכל עמוד מעל ההערות (שם החיבור שבהערות): "כותרת-רצה של ההערות" — ריהוט, לא "כותרת הערות".',
-  'ריהוט שהמחשב כבר זיהה מסומן באפור מקווקו — אין צורך לצייר לו מסגרת.',
+  'כותרת שחוזרת בכל עמוד מעל ההערות (שם החיבור שבהערות): "כותרת-רצה של ההערות" — ריהוט, לא נכנסת לספר.',
+  'ריהוט שהמחשב כבר זיהה מסומן באפור מקווקו — גם לו ציירו מסגרת "ריהוט הדף": מהמסגרות שמתנדבים מציירים המחשב לומד לזהות ריהוט. את הטקסט שלו לא מגיהים, ולא כוללים אותו במסגרת של טקסט.',
   'שם הפרק מופיע רק בכותרת-הרצה? היא נשארת ריהוט — ובהגשה כתבו בהערה למנהל שפרק חדש מתחיל בעמוד הזה.',
   'קישוט או כתם שהמחשב קרא כשורה — לא ריהוט ולא מסגרת: במצב "שורות" מסמנים אותו "לא-שורה".',
   'שורה שנחתכה על פני שני טורים — נשארת מחוץ למסגרות; לא מרחיבים מסגרת כדי "לתפוס" אותה (מתקנים אותה במצב "שורות" ← פיצול).',
@@ -142,6 +149,26 @@ function saveZoomPref(v) {
     /* אחסון חסום — הזום פשוט לא נזכר */
   }
 }
+
+function loadCleanPref() {
+  try {
+    return window.localStorage.getItem(SCAN_CLEAN_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function saveCleanPref(on) {
+  try {
+    if (on) window.localStorage.setItem(SCAN_CLEAN_KEY, '1')
+    else window.localStorage.removeItem(SCAN_CLEAN_KEY)
+  } catch {
+    /* אחסון חסום — הבחירה פשוט לא נזכרת */
+  }
+}
+
+const CLEAN_TIP =
+  'הסריקה מוצגת בלי סימונים — בלי מסגרות, תיבות-שורה, ריהוט וסימון הסמן. לחיצה על הסריקה עדיין מעבירה את הסמן בטקסט. לעריכת מסגרות או שורות — «בלי סימונים» שוב.'
 
 // ---- רכיבי-הכותרת (במראה של סרגל-העורך הישן) ----
 
@@ -194,7 +221,8 @@ function ActBtn({ children, tone = 'plain', ...rest }) {
 
 const Sep = () => <span className="h-5 w-px bg-neutral-200" aria-hidden="true" />
 
-function explanation({ mode, tool, readOnly, fs }) {
+function explanation({ mode, tool, readOnly, fs, clean = false }) {
+  if (clean) return CLEAN_TIP
   if (mode === 'frames') {
     if (readOnly) return 'לחיצה על הסריקה מעבירה את הסמן בטקסט לשורה שם'
     if (tool === 'draw') return 'גררו מלבן סביב אזור טקסט — הוא יתהדק סביב השורות שבתוכו. הזרם של המסגרת החדשה:'
@@ -228,7 +256,9 @@ export default function ScanPanel({
   const [W, H] = pageSize(view)
   const P = view?.page
   const lines = view?.lines || []
-  const canEdit = !readOnly && typeof push === 'function'
+  // "בלי סימונים": רק התמונה (ראו למעלה) — ובלי עריכה על הסריקה עד שהסימונים חוזרים
+  const [clean, setClean] = useState(loadCleanPref)
+  const canEdit = !readOnly && typeof push === 'function' && !clean
 
   const rootRef = useRef(null)
   const bodyRef = useRef(null)
@@ -304,15 +334,21 @@ export default function ScanPanel({
   // גם על ההצעה: שורה שנחתכה על פני שני טורים נשארת מחוץ למסגרות המוצעות — ורואים אותה לפני
   // האישור. מחושב בשני המצבים (בשביל "השורה שייכת למסגרת הזו"); הסימון האדום — רק ב"מסגרות"
   const straddleAll = useMemo(() => (fs.frames.length ? straddlingLineIds(view?.lines || [], fs.frames) : EMPTY), [fs, view])
-  const straddle = mode === 'frames' ? straddleAll : EMPTY
-  const outside = useMemo(() => (mode === 'frames' ? outsideLineIds(view?.lines, fs.frames) : EMPTY), [mode, fs, view])
-  // ריהוט שזוהה (בלי מסגרת) — אפור במצב "מסגרות", כדי שלא יציירו לו מסגרת
-  const furniture = useMemo(() => (mode === 'frames' ? furnitureMarks(view?.lines, fs.frames) : NO_MARKS), [mode, fs, view])
+  // בלי סימונים — אף אחד מהסימונים (וגם ההסברים עליהם) אינו מוצג
+  const marks = mode === 'frames' && !clean
+  const straddle = marks ? straddleAll : EMPTY
+  const outside = useMemo(() => (marks ? outsideLineIds(view?.lines, fs.frames) : EMPTY), [marks, fs, view])
+  // ריהוט שזוהה (בלי מסגרת-ריהוט סביבו) — אפור במצב "מסגרות", וההודעה מבקשת לצייר סביבו מסגרת-ריהוט: רק מסגרת
+  // שמתנדב צייר נלמדת כאמת (הכרעת בעל הפרויקט, 2026-10-06; הזיהוי האוטומטי לבדו אינו אמת). מסגרת של טקסט
+  // אינה מסתירה אותו: בתוכה הוא נכנס לספר כטקסט (inText), וההודעה אומרת מה עושים
+  const furniture = useMemo(() => (marks ? furnitureMarks(view?.lines, fs.frames) : NO_MARKS), [marks, fs, view])
+  const furnitureInText = furniture.filter((m) => m.inText).length
+  const furnitureFree = furniture.length - furnitureInText
   const asking = askFor === fs && outside.size > 0
   const selInfo = useMemo(() => selectionInfo(view?.lines, selectedIds), [view, selectedIds])
 
   const tool = mode === 'frames' ? framesTool : linesTool
-  // הבחירה ל"מסגרת חדשה": זרם, זרם-כותרת או "ריהוט הדף" (הזרם האמיתי נקבע בציור)
+  // הבחירה ל"מסגרת חדשה": זרם או "ריהוט הדף" (בלי זרמי-כותרת — כותרת היא סגנון-פסקה; הזרם האמיתי נקבע בציור)
   const drawStream = picked && picked.forDefault === frameStreamDefault ? picked.key : drawStreamFor(frameStreamDefault)
   const selFrame = mode === 'frames' ? fs.frames.find((f) => f.fid === selectedFid) || null : null
 
@@ -545,7 +581,19 @@ export default function ScanPanel({
     }
   }
 
-  const tip = notice || explanation({ mode, tool, readOnly: !canEdit, fs })
+  const tip = notice || explanation({ mode, tool, readOnly: !canEdit, fs, clean })
+  const toggleClean = () => {
+    const on = !clean
+    setClean(on)
+    saveCleanPref(on)
+    setNotice(null)
+    setMoreOpen(false)
+    setAskFor(null)
+    if (on) {
+      setSelectedFid(null)
+      setSelectedIds([])
+    }
+  }
 
   return (
     <div
@@ -577,6 +625,21 @@ export default function ScanPanel({
             רוחב
           </SegBtn>
         </Seg>
+        <SegBtn
+          active={clean}
+          onClick={toggleClean}
+          data-scan-clean=""
+          title={
+            clean
+              ? 'הסימונים מוסתרים — לחיצה מחזירה את המסגרות, תיבות-השורות והסימונים'
+              : 'הצגת הסריקה בלי סימונים: בלי מסגרות, תיבות-שורה, ריהוט וסימון הסמן (נזכר בדפדפן הזה)'
+          }
+        >
+          <span aria-hidden="true" className="material-symbols-outlined text-sm">
+            {clean ? 'visibility' : 'visibility_off'}
+          </span>
+          בלי סימונים
+        </SegBtn>
 
         {canEdit && mode === 'frames' && (
           <>
@@ -701,10 +764,17 @@ export default function ScanPanel({
             </ActBtn>
           </span>
         )}
-        {mode === 'frames' && furniture.length > 0 && (
+        {mode === 'frames' && furnitureFree > 0 && (
           <span className="text-neutral-600" data-testid="furniture-note">
-            {furniture.length === 1 ? 'שורת ריהוט אחת' : `${furniture.length} שורות ריהוט`} (באפור — כותרת-רצה, מספר עמוד, מפריד) כבר זוהו: לא נכנסות
-            לספר, ואין צורך לצייר להן מסגרת
+            {furnitureFree === 1 ? 'שורת ריהוט אחת' : `${furnitureFree} שורות ריהוט`} (באפור — כותרת-רצה, מספר עמוד, מפריד) זוהו: לא נכנסות
+            לספר. ציירו סביבן מסגרת &quot;ריהוט הדף&quot; — מהמסגרות שלכם המחשב לומד לזהות ריהוט
+          </span>
+        )}
+        {mode === 'frames' && furnitureInText > 0 && (
+          <span className="text-warning-800" data-testid="furniture-in-text-note">
+            {furnitureInText === 1
+              ? 'שורת ריהוט אחת שזוהתה (באפור) נמצאת בתוך מסגרת של טקסט, וכך היא תיכנס לספר. אם זה ריהוט: הקטינו את המסגרת, או ציירו סביבה מסגרת "ריהוט הדף"'
+              : `${furnitureInText} שורות ריהוט שזוהו (באפור) נמצאות בתוך מסגרת של טקסט, וכך הן ייכנסו לספר. אם זה ריהוט: הקטינו את המסגרת, או ציירו סביבן מסגרת "ריהוט הדף"`}
           </span>
         )}
         {mode === 'frames' && outside.size > 0 && !asking && (
@@ -722,7 +792,7 @@ export default function ScanPanel({
             <ActBtn onClick={() => setAskFor(null)}>ביטול</ActBtn>
           </span>
         )}
-        {mode === 'lines' && recut.size > 0 && (
+        {mode === 'lines' && !clean && recut.size > 0 && (
           <span className="text-warning-800">שורות מקווקוות בכתום יזוהו מחדש אחרי האישור — אין צורך לתקן עכשיו את הטקסט שלהן</span>
         )}
         {mode === 'frames' && canEdit && (
@@ -745,7 +815,7 @@ export default function ScanPanel({
           zoom={zoom}
           mode={mode}
           tool={canEdit ? tool : 'select'}
-          frames={mode === 'frames' ? fs.frames : []}
+          frames={mode === 'frames' && !clean ? fs.frames : []}
           suggested={fs.suggested}
           seqs={seqs}
           selectedFid={selFrame?.fid ?? null}
@@ -763,7 +833,8 @@ export default function ScanPanel({
           overlay={popover}
           overlayFor={popover ? selFrame.fid : null}
           svgLayer={scanOverlay}
-          onClick={mode === 'frames' ? onFramesClick : onLinesClick}
+          clean={clean}
+          onClick={clean ? ({ point, line }) => pickLine(line, point) : mode === 'frames' ? onFramesClick : onLinesClick}
           onDraw={mode === 'frames' ? onDrawFrame : onAddLine}
           onBand={onBand}
           onFrameBox={onFrameBox}

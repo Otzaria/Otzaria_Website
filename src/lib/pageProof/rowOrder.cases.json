@@ -1,0 +1,54 @@
+{
+  "comment": "Shared row-order cases (docs/48): the same file is tested by src/book/test_orderguard.py (orderguard.rows_rtl) and by the site (src/lib/pageProof/rowOrder.cases.json, ops.js rowsRtl). Boxes are [x0, y0, x1, y1] in image pixels; 'expect' = reading order by the row rule; 'old' = what the chained rule gave before 2026-10-02 (when it differs).",
+  "rule": {"V_JOIN": 0.5, "X_CLASH": 0.3, "H_CLASH": 1.5},
+  "cases": [
+    {
+      "name": "same column, tall overlapping boxes: the upper line first (book 80 p21)",
+      "items": [{"id": 1, "bbox": [1289, 1669, 2477, 1791]}, {"id": 2, "bbox": [1292, 1740, 2435, 1823]}],
+      "expect": [1, 2],
+      "old": [2, 1]
+    },
+    {
+      "name": "two fragments of one text line: the right one first",
+      "items": [{"id": 1, "bbox": [100, 105, 1400, 165]}, {"id": 2, "bbox": [1500, 100, 2400, 160]}],
+      "expect": [2, 1]
+    },
+    {
+      "name": "a short fragment at the start of the line stays in its row",
+      "items": [{"id": 1, "bbox": [300, 205, 2350, 265]}, {"id": 2, "bbox": [2300, 200, 2420, 260]},
+                {"id": 3, "bbox": [300, 285, 2400, 345]}],
+      "expect": [2, 1, 3]
+    },
+    {
+      "name": "two columns side by side: row by row, right then left",
+      "items": [{"id": 1, "bbox": [1300, 100, 2400, 160]}, {"id": 2, "bbox": [100, 102, 1200, 162]},
+                {"id": 3, "bbox": [1300, 180, 2400, 240]}, {"id": 4, "bbox": [100, 182, 1200, 242]}],
+      "expect": [1, 2, 3, 4]
+    },
+    {
+      "name": "a chain through a tall merged box: top to bottom",
+      "items": [{"id": 1, "bbox": [300, 100, 2300, 300]}, {"id": 2, "bbox": [320, 250, 2290, 330]},
+                {"id": 3, "bbox": [310, 330, 2280, 410]}],
+      "expect": [1, 2, 3],
+      "old": [2, 1, 3]
+    },
+    {
+      "name": "dense or curved page: 12 lines whose boxes are 2.2 x the line pitch stay monotone",
+      "items": [{"id": 1, "bbox": [300, 100, 2400, 210]}, {"id": 2, "bbox": [303, 150, 2398, 260]},
+                {"id": 3, "bbox": [306, 200, 2396, 310]}, {"id": 4, "bbox": [309, 250, 2400, 360]},
+                {"id": 5, "bbox": [312, 300, 2398, 410]}, {"id": 6, "bbox": [301, 350, 2396, 460]},
+                {"id": 7, "bbox": [304, 400, 2400, 510]}, {"id": 8, "bbox": [307, 450, 2398, 560]},
+                {"id": 9, "bbox": [310, 500, 2396, 610]}, {"id": 10, "bbox": [313, 550, 2400, 660]},
+                {"id": 11, "bbox": [302, 600, 2398, 710]}, {"id": 12, "bbox": [305, 650, 2396, 760]}],
+      "expect": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+      "old": [10, 5, 9, 4, 8, 3, 12, 7, 2, 11, 6, 1]
+    },
+    {
+      "name": "the next line of the right column is not pulled into a row through the left fragment",
+      "items": [{"id": 1, "bbox": [1500, 100, 2400, 160]}, {"id": 2, "bbox": [100, 105, 1400, 165]},
+                {"id": 3, "bbox": [1450, 130, 2380, 200]}],
+      "expect": [1, 2, 3],
+      "old": [1, 3, 2]
+    }
+  ]
+}

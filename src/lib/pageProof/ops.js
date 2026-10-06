@@ -16,6 +16,8 @@ import {
   FRAME_OBJECT_KINDS,
   isStreamKey,
   isFurnitureStream,
+  isBookOnly,
+  isPrintDefect,
   keepHeading,
   streamName,
 } from './vocab.js';
@@ -246,9 +248,19 @@ export function validateOp(doc, op) {
       if (v.page !== doc.page) return 'עמוד הקישור שגוי';
       return null;
     }
+    case 'link_reset': {
+      // "החזר לאוטומטי": רק קישור שהגיע עם העמוד (מהשורה הזו) — את מה שנעשה בעריכה הזו מבטלים בהסרת הפעולה
+      if (!v || !isInt(v.src_line) || !lines.has(v.src_line)) return 'שורת-המקור של הקישור חסרה';
+      if (v.page !== doc.page) return 'עמוד הקישור שגוי';
+      // ורק לקישור שבוטל ("אין קישור" — בלי יעד): קישור חי אינו "חוזר" לאוטומטי מכאן
+      if (!(doc.links || []).some((k) => k && k.from_line === v.src_line)) return 'אין בעמוד קישור מהשורה הזו';
+      return (doc.links || []).some((k) => k && k.from_line === v.src_line && k.to_line == null) ? null : 'הקישור מהשורה הזו לא בוטל';
+    }
     case 'certainty':
       if (!v || !Object.hasOwn(CERTAINTY, v.v)) return 'ערך-ודאות לא מוכר';
       return v.why == null || (typeof v.why === 'string' && v.why.length <= MAX_WHY) ? null : 'הסבר ארוך מדי';
+    case 'train_text':
+      return v === 0 || v === 1 ? null : 'הערך חייב להיות 0 (פגם בדפוס) או 1 (רגיל)';
     case 'line_ok':
       return null;
     case 'line_split': {
@@ -342,6 +354,7 @@ function cleanValue(kind, v) {
     }
     case 'link_ok':
     case 'link_del':
+    case 'link_reset':
       return pick(v, ['src_line', 'page']);
     case 'certainty':
       return pick(v, ['v', 'why']);
@@ -362,6 +375,9 @@ function cleanValue(kind, v) {
 
 // פעולה בצורת-החוזה: {kind, page, ids?, value?} עם ערך שנבנה מחדש מהשדות
 // המוכרים בלבד. אותו ניקוי בדפדפן (לפני ההגשה) ובשרת (לפני הבדיקה והשמירה).
+// revert: true — "החזר למקור" על שינוי שהתקבל ממתנדב קודם (inverseOps, docs/63 §4–§5): הערך הוא זה שבעמוד המקורי,
+// ולכן בעורך הפעולה אינה משנה דבר — אבל היא חייבת לצאת: ההגשה הקודמת אולי כבר הוחלה בתוכנת-הספר. הדחיסה (compactOps,
+// bookOrder) אינה מורידה אותה כ"זהה למקור". צרכן שאינו מכיר את השדה — מחיל את הערך כרגיל.
 export function sanitizeOp(o) {
   const op = { kind: o?.kind, page: o?.page };
   if (Array.isArray(o?.ids)) op.ids = o.ids.slice();
@@ -369,10 +385,37 @@ export function sanitizeOp(o) {
     const v = cleanValue(op.kind, o.value);
     if (v !== undefined) op.value = v;
   }
+  if (o?.revert === true) {
+    op.revert = true;
+    // revert_status — מצב-השורה בעמוד המקורי (בתיקון-טקסט הפוך): תוכנת-הספר מחזירה גם אותו, כדי שההחזרה לא תיחשב
+    // "אושר" חדש של טקסט ה-OCR לאימון — גם כשהפעולה מגיעה בקובץ-התיקונים, בלי הקשר לפעולה שהיא מבטלת
+    if (op.kind === 'text' && REVERT_STATUSES.includes(o?.revert_status)) op.revert_status = o.revert_status;
+  }
   return op;
 }
 
+// מצבי-שורה שמותר להחזיר אליהם (מצבי השורה בתוכנת-הספר, בלי 'removed' — מחיקה היא פעולת status)
+export const REVERT_STATUSES = ['pending', 'ok', 'fixed', 'bad', 'seg', 'skip'];
+
 export const sanitizeOps = (ops) => (Array.isArray(ops) ? ops.map(sanitizeOp) : []);
+
+// בשרת (הגשה ועריכת-מנהל לפני אישור), אחרי sanitizeOps: revert/revert_status על תיקון-טקסט נשארים רק כשזו באמת "החזר
+// למקור" — הערך הוא הטקסט של השורה בעמוד המקורי (baseDoc), ו-revert_status הוא מצב-השורה שם (או חסר, כשהמצב אינו מהמותרים).
+// אחרת שני השדות יורדים: בתוכנת-הספר revert_status קובע את מצב-האימון של השורה ועוקף את השומר "תוקן כאן אחרי הייצוא",
+// ולכן לקוח אינו יכול לסמן כך תיקון-טקסט רגיל. פעולות אחרות — כמות-שהן. טהור (פעולות חדשות; הקלט אינו משתנה).
+export function trustRevert(baseDoc, ops) {
+  if (!Array.isArray(ops)) return [];
+  const lines = new Map((baseDoc?.lines || []).filter((l) => l && Number.isInteger(l.id)).map((l) => [l.id, l]));
+  return ops.map((o) => {
+    if (!o || o.kind !== 'text' || (o.revert === undefined && o.revert_status === undefined)) return o;
+    const l = Array.isArray(o.ids) && o.ids.length === 1 ? lines.get(o.ids[0]) : null;
+    const baseText = l ? String(l.text ?? l.text_ocr ?? '') : null;
+    const baseStatus = l && REVERT_STATUSES.includes(l.status) ? l.status : undefined;
+    if (o.revert === true && l && o.value === baseText && o.revert_status === baseStatus) return o;
+    const { revert: _r, revert_status: _s, ...rest } = o;
+    return rest;
+  });
+}
 
 // ---------- החלה מקומית ----------
 
@@ -617,10 +660,15 @@ export function applyOp(doc, op, opIndex = 0) {
       return { ...doc, links: (doc.links || []).map((k) => (k.from_line === v.src_line ? { ...k, src: 'human', suspect: null } : k)) };
     case 'link_del':
       return { ...doc, links: (doc.links || []).filter((k) => k.from_line !== v.src_line) };
+    case 'link_reset':
+      // מה שהמחשב יקבע — רק בתוכנת-הספר; כאן הקישור מסומן "יחזור לאוטומטי" (LinksTab)
+      return { ...doc, links: (doc.links || []).map((k) => (k.from_line === v.src_line ? { ...k, _reset: true } : k)) };
     case 'mixed_line':
       return mapLines(doc, ids, (l) => ({ ...l, flags: { ...(l.flags || {}), mixed_line: !!v }, _touched: true }));
     case 'certainty':
       return mapLines(doc, ids, (l) => ({ ...l, certainty: v.v, certainty_why: v.why ?? null }));
+    case 'train_text':
+      return mapLines(doc, ids, (l) => ({ ...l, train_text: v }));
     case 'line_ok':
       return mapLines(doc, ids, (l) => ({ ...l, _ok: true, status: l.status === 'pending' ? 'ok' : l.status }));
     case 'line_split': {
@@ -686,8 +734,14 @@ function keepSeq(doc, fid) {
 }
 
 // שורה שנוצרה מקומית (פיצול/איחוד/הוספה): נעולה לעריכה נוספת עד הקליטה,
-// וממתינה לחיתוך ולזיהוי-מחדש בתוכנת-הספר (_recut)
+// וממתינה לחיתוך ולזיהוי-מחדש בתוכנת-הספר (_recut). חלקי-פיצול ושורה מאוחדת יורשים
+// מהשורה המקורית גם את מה שזוהה לה — הזרם שיובא (_auto) והניחוש לזרם (pred.stream) —
+// כך שכותרת-רצה שפוצלה נשארת "ריהוט שזוהה" גם בתוך מסגרת של טקסט (scanGeometry.furnitureMarks)
 function blankLine(src) {
+  const detected = {
+    ...(src?._auto ? { _auto: { ...src._auto } } : {}),
+    pred: src?.pred?.stream ? { stream: src.pred.stream } : {},
+  };
   return {
     line_no: src?.line_no ?? null,
     polygon: null,
@@ -702,11 +756,11 @@ function blankLine(src) {
     para_start: false,
     para_style: src?.para_style || null,
     script: src?.script || null,
-    pred: {},
     flags: {},
     certainty: null,
     alternatives: [],
     lm_flags: [],
+    ...detected,
     _new: true,
     _recut: true,
   };
@@ -768,25 +822,34 @@ function applyFrameStreams(doc) {
   };
 }
 
-// מיון-קריאה (_rows_rtl): מלמעלה למטה; שורות באותו קו-גובה — מימין לשמאל
-function rowsRtl(items) {
-  const sorted = items.slice().sort((a, b) => cyOf(a.bbox) - cyOf(b.bbox));
-  const out = [];
-  let i = 0;
-  while (i < sorted.length) {
-    const run = [sorted[i]];
-    while (i + 1 < sorted.length) {
-      const a = run[run.length - 1].bbox;
-      const b = sorted[i + 1].bbox;
-      if (vOverlap(a, b) > 0.5 * Math.min(a[3] - a[1], b[3] - b[1])) {
-        run.push(sorted[i + 1]);
-        i++;
-      } else break;
-    }
-    run.sort((a, b) => b.bbox[0] - a.bbox[0]);
-    out.push(...run);
-    i++;
+// מיון-קריאה (_rows_rtl): מלמעלה למטה; שורות באותו קו-גובה — מימין לשמאל.
+// "אותו קו-גובה" = חפיפה לגובה של יותר מחצי הגובה הקטן עם אחת מהשורות שכבר בשורה — אבל לעולם לא שתי
+// תיבות שחופפות לרוחב (יותר מ-30% מהצרה וגם יותר מגובה-וחצי): אלה שתי שורות של אותו טור שהתיבות שלהן
+// גבוהות (רש"י צפוף, דף עקום), וסדרן מלמעלה למטה. בלי זה הסדר ביניהן נקבע לפי פיקסלים בודדים בקצה השמאלי
+// ושורה תחתונה נקראה לפני העליונה. אותו כלל כמו בתוכנת-הספר (orderguard.py); המקרים המשותפים —
+// rowOrder.cases.json.
+export const ROW_RULE = { V_JOIN: 0.5, X_CLASH: 0.3, H_CLASH: 1.5 };
+const hOf = (b) => b[3] - b[1];
+const hOverlap = (a, b) => Math.min(a[2], b[2]) - Math.max(a[0], b[0]);
+function rowClash(a, b) {
+  const ov = hOverlap(a, b);
+  return ov > ROW_RULE.X_CLASH * Math.min(a[2] - a[0], b[2] - b[0]) && ov > ROW_RULE.H_CLASH * Math.min(hOf(a), hOf(b));
+}
+function joinsRow(row, b) {
+  return (
+    row.some((it) => vOverlap(it.bbox, b) > ROW_RULE.V_JOIN * Math.min(hOf(it.bbox), hOf(b))) &&
+    !row.some((it) => rowClash(it.bbox, b))
+  );
+}
+export function rowsRtl(items) {
+  const rows = [];
+  for (const it of items.slice().sort((a, b) => cyOf(a.bbox) - cyOf(b.bbox))) {
+    const last = rows[rows.length - 1];
+    if (last && joinsRow(last, it.bbox)) last.push(it);
+    else rows.push([it]);
   }
+  const out = [];
+  for (const row of rows) out.push(...row.sort((a, b) => b.bbox[0] - a.bbox[0]));
   return out;
 }
 
@@ -921,7 +984,7 @@ export { autoFrames } from './autoFrames.js';
 // text מטופל בנפרד (ראו compactOps); styles ו-para_break — הפעלה/כיבוי, הסדר חשוב.
 const LAST_WINS = new Set([
   'stream', 'para', 'para_start', 'script', 'status', 'bbox',
-  'page_type', 'mixed_line', 'certainty', 'line_ok', 'frames_set', 'cut_ok',
+  'page_type', 'mixed_line', 'certainty', 'train_text', 'line_ok', 'frames_set', 'cut_ok',
 ]);
 const PAGE_LEVEL = new Set(['frames_set', 'page_type', 'cut_ok']);
 
@@ -982,11 +1045,11 @@ export function compactOps(baseDoc, ops) {
     if (op.kind === 'text') {
       if (supersededText.has(i)) return false;
       const before = curText.has(id) ? curText.get(id) : l ? (l.text ?? l.text_ocr ?? '') : undefined;
-      if (op.value === before) return false;
+      if (op.value === before && op.revert !== true) return false;
       curText.set(id, op.value);
       return true;
     }
-    if (op.kind === 'status' && op.value === 'restore' && l && l.status !== 'removed') return false;
+    if (op.kind === 'status' && op.value === 'restore' && l && l.status !== 'removed' && op.revert !== true) return false;
     return true;
   });
   // manual:true נשלח רק בעריכה הראשונה של ההצעה; frames_set מאוחר "דורס" אותה —
@@ -1098,7 +1161,8 @@ export function bookOrder(baseDoc, ops) {
   for (const [id, p] of anchor) {
     const c = chains.get(id);
     const last = list[c.at[c.at.length - 1]];
-    if (c.texts[c.texts.length - 1] === c.texts[0]) continue;
+    // חזר לטקסט המקורי — יורד, אלא אם זו החזרה מפורשת של שינוי שהתקבל (revert): היא חייבת להגיע לספר
+    if (c.texts[c.texts.length - 1] === c.texts[0] && last?.revert !== true) continue;
     if (!emitAt.has(p)) emitAt.set(p, []);
     emitAt.get(p).push(last);
   }
@@ -1204,6 +1268,85 @@ export function recutLineIds(baseDoc, ops) {
   return [...out].sort((a, b) => a - b);
 }
 
+// ---------- "לספר בלבד" (train_text) ----------
+
+// מצב "לספר בלבד" בעורך: כל עוד הוא דולק, כל תיקון-טקסט בשורה מקורית (מזהה חיובי
+// מהעמוד שיובא) שעוד אינה מסומנת — מקבל באותו push גם {kind:'train_text', value:0}.
+// שורה שסומנה בנוסח הישן ("פגם בדפוס" — vocab.isPrintDefect) כבר מסומנת. ריהוט (כותרת
+// עמוד, תחתית, מפריד — לשונית הריהוט) אינו מסומן: הוא אינו נכנס לספר.
+// הפעולה הנלווית מסומנת _cmp (שדה-פנים): useProofEditor שם אותה באותו צעד-ביטול של
+// ההקלדה, וצבירת-ההקלדה ממשיכה לעבוד. תיקון שאינו משנה את הטקסט — בלי סימון; אישור
+// בלי שינוי (line_ok) — בלי סימון (החלטת בעל הפרויקט, 2026-10-02).
+// list = הארגומנטים של push (פעולות, ואולי אפשרויות בסוף); view = התצוגה הנוכחית.
+export function withBookOnly(list, view, page) {
+  const args = Array.isArray(list) ? list : [];
+  const lines = lineMap(view);
+  const marked = new Set();
+  const out = [];
+  for (const op of args) {
+    const id = op && typeof op === 'object' && op.kind === 'text' && !op._local && Array.isArray(op.ids) && op.ids.length === 1 ? op.ids[0] : null;
+    const l = id != null ? lines.get(id) : null;
+    if (
+      l &&
+      isInt(id) &&
+      id > 0 &&
+      !l._new &&
+      !isBookOnly(l) &&
+      !isFurnitureStream(l.stream) &&
+      !marked.has(id) &&
+      String(op.value ?? '') !== String(l.text ?? l.text_ocr ?? '')
+    ) {
+      marked.add(id);
+      out.push({ kind: 'train_text', page: op.page ?? page, ids: [id], value: 0, _cmp: true });
+    }
+    out.push(op);
+  }
+  return out;
+}
+
+// הטקסט הסופי של כל שורה לפי רשימת-הפעולות (רק מה שתיקוני-הטקסט קבעו)
+function finalTexts(ops) {
+  const out = new Map();
+  for (const op of ops || []) if (op?.kind === 'text' && op.ids?.length === 1) out.set(op.ids[0], String(op.value ?? ''));
+  return out;
+}
+
+// סימון אוטומטי (_cmp) על שורה שהטקסט שלה חזר בסוף לזה שיובא — יורד לפני ההגשה:
+// "לספר בלבד" מסמן רק שורות שהטקסט בהן *השתנה*. סימון ידני (לוח הפרטים) — נשאר.
+export function dropIdleBookOnly(baseDoc, ops) {
+  const list = Array.isArray(ops) ? ops : [];
+  if (!list.some((o) => o?._cmp)) return list;
+  const base = lineMap(baseDoc);
+  const fin = finalTexts(list);
+  return list.filter((o) => {
+    if (!o?._cmp || o.kind !== 'train_text') return true;
+    const id = o.ids?.[0];
+    const l = base.get(id);
+    return !!l && fin.has(id) && fin.get(id) !== String(l.text ?? l.text_ocr ?? '');
+  });
+}
+
+// הנוסח הישן של "לספר בלבד": פעולת-ודאות של הכפתור "פגם בדפוס" (2026-10-01) — "לא בטוח" עם הסיבה
+// הקבועה (vocab.PRINT_DEFECT_WHY). עדיין יכולה להגיע מטיוטה או מהגשה מלפני "לספר בלבד"
+export const isPrintDefectOp = (op) => op?.kind === 'certainty' && isPrintDefect({ certainty: op.value?.v, certainty_why: op.value?.why });
+
+// השורות שיסומנו "לספר בלבד" בהגשה — לחלון ההגשה ולמסך הסקירה של המנהל. כמו isBookOnly בשורה:
+// train_text = 0, או הנוסח הישן (ודאות "פגם בדפוס"); לכל אחד מהשדות הפעולה האחרונה לשורה קובעת
+export function bookOnlyLineIds(ops) {
+  const train = new Map();
+  const legacy = new Map();
+  const seen = new Set();
+  for (const op of ops || []) {
+    if (op?.kind !== 'train_text' && op?.kind !== 'certainty') continue;
+    for (const id of op.ids || []) {
+      seen.add(id);
+      if (op.kind === 'train_text') train.set(id, op.value);
+      else legacy.set(id, isPrintDefectOp(op));
+    }
+  }
+  return [...seen].filter((id) => train.get(id) === 0 || legacy.get(id));
+}
+
 // ---------- תיאור ----------
 
 const cut = (s, n = 40) => {
@@ -1268,14 +1411,19 @@ export function describeOp(doc, op) {
       return `${far.index === 0 ? `${farEnd} ← ${hereEnd}` : `${hereEnd} ← ${farEnd}`}: ${what}`;
     }
     case 'link_ok':
-    case 'link_del': {
+    case 'link_del':
+    case 'link_reset': {
       const l = lines.get(v.src_line);
       return `${kindHe} (שורה ${l ? (l.line_no ?? 0) + 1 : '?'})`;
     }
     case 'mixed_line':
       return `${where}${v ? 'שורה מעורבת-כתבים' : 'לא מעורבת'}`;
     case 'certainty':
+      // הנוסח הישן של "לספר בלבד" (הכפתור "פגם בדפוס") — מתואר כ"לספר בלבד", כמו שהוא נקרא
+      if (isPrintDefectOp(op)) return `${where}פגם בדפוס — נכנס לספר, לא לאימון`;
       return `${where}${CERTAINTY[v.v]}${v.why ? ` — ${cut(v.why, 60)}` : ''}`;
+    case 'train_text':
+      return `${where}${v === 0 ? 'פגם בדפוס — נכנס לספר, לא לאימון' : 'חזרה לאימון (בלי "פגם בדפוס")'}`;
     case 'line_split':
       return `${where}פיצול בנקודה x=${v.x}`;
     case 'line_merge':

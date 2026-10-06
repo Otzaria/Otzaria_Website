@@ -9,7 +9,7 @@ const SHOW = 6
 
 export default function DraftCarriedNotice({ carried, onClose }) {
   if (!carried) return null
-  const { kept = 0, cut = 0, dropped = [] } = carried
+  const { kept = 0, cut = 0, dropped = [], update = false } = carried
   return (
     <div
       role="status"
@@ -19,7 +19,7 @@ export default function DraftCarriedNotice({ carried, onClose }) {
       <span aria-hidden="true" className="material-symbols-outlined">history</span>
       <div className="flex-1">
         <p>
-          <b>העמוד חזר מזיהוי-מחדש, והטיוטה שלכם עברה אליו:</b>{' '}
+          <b>{update ? 'העמוד עודכן מתוכנת-הספר, והטיוטה עברה אליו:' : 'העמוד חזר מזיהוי-מחדש, והטיוטה שלכם עברה אליו:'}</b>{' '}
           {kept > 0 ? (kept === 1 ? 'תיקון אחד נשמר.' : `${kept} תיקונים נשמרו.`) : 'אף תיקון לא נשמר.'}
           {cut > 0 && ` ${cut === 1 ? 'תיקון-החיתוך לא הועבר' : `${cut} תיקוני-החיתוך לא הועברו`} — העמוד נחתך מחדש; בדקו את החיתוך החדש.`}
         </p>

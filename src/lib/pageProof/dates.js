@@ -115,6 +115,21 @@ export function formatUntil(value, now = new Date()) {
   return `יום ${WEEKDAY[date.getDay()]}' ${date.getDate()}.${date.getMonth() + 1} ב-${time}`;
 }
 
+// מאז מתי (מועד שעבר, למשל הגשה שממתינה לבדיקת מנהל) לפי שעון הדפדפן: "היום ב-14:05", "אתמול ב-09:30",
+// בשבוע האחרון "יום ה' 1.10", ולפני כן "21.9 (לפני 14 ימים)". קלט לא תקין ← ''; מועד עתידי — כמו "היום".
+export function formatSince(value, now = new Date()) {
+  const date = toDate(value);
+  if (!date) return '';
+  const time = `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+  const days = Math.round(
+    (new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(date.getFullYear(), date.getMonth(), date.getDate())) / DAY_MS
+  );
+  if (days <= 0) return `היום ב-${time}`;
+  if (days === 1) return `אתמול ב-${time}`;
+  if (days < 7) return `יום ${WEEKDAY[date.getDay()]}' ${date.getDate()}.${date.getMonth() + 1}`;
+  return `${date.getDate()}.${date.getMonth() + 1} (לפני ${days} ימים)`;
+}
+
 // כמה זמן נשאר עד מועד עתידי (למשל סוף ההחכרה של עמוד): "עוד 5 שעות".
 // מועד שעבר (או קלט לא תקין) ← ''.
 export function formatTimeLeft(value, now = new Date()) {

@@ -23,6 +23,8 @@ import {
   MAX_HELD,
 } from './claims.js';
 import { startMongo } from '../corrections/testing/mongo.js';
+// מועד-הסיום: CLAIM_MS שעות בלי שבת וחג (lease.js) — כך הבדיקות נכונות גם כשהן רצות ביום חמישי
+import { leaseEnd } from './lease.js';
 
 let db;
 before(async () => {
@@ -189,7 +191,7 @@ test(`תפיסת עמוד פנוי: ל-${CLAIM_MS / HOUR} שעות, ומאותו
   const res = await claimPage(String(pages[1]._id), String(me._id), now);
   assert.equal(res.ok, true);
   assert.equal(res.page.page, 1);
-  assert.equal(new Date(res.page.leasedUntil).getTime(), now.getTime() + CLAIM_MS);
+  assert.equal(new Date(res.page.leasedUntil).getTime(), leaseEnd(now).getTime());
 
   const refused = await claimPage(String(pages[1]._id), String(other._id));
   assert.deepEqual(refused, { ok: false, status: 409, error: 'העמוד נתפס בינתיים בידי מתנדב אחר' });
@@ -206,7 +208,7 @@ test('תפיסה: החכרה שפגה, בודק שני, והארכת עמוד ש
   const now = new Date();
   assert.equal((await claimPage(String(pages[2]._id), String(me._id), now)).ok, true);
   const p2 = await PageProofPage.findById(pages[2]._id).lean();
-  assert.equal(p2.leasedUntil.getTime(), now.getTime() + CLAIM_MS, 'ההחכרה (3 שעות) הוארכה לתקופת-התפיסה המלאה');
+  assert.equal(p2.leasedUntil.getTime(), leaseEnd(now).getTime(), 'ההחכרה (3 שעות) הוארכה לתקופת-התפיסה המלאה');
   // עמוד שחזר מזיהוי-מחדש (גרסה 2) פתוח שוב גם למי שהגיש את גרסה 1
   assert.equal((await claimPage(String(pages[10]._id), String(me._id))).ok, true);
 });
@@ -329,7 +331,7 @@ test('תפיסת רצף: כל העמודים הפנויים בו, בלי לגע�
     after.map((p) => (p.leasedBy ? String(p.leasedBy) : null)),
     [String(me._id), String(me._id), String(other._id), String(me._id), null]
   );
-  assert.equal(after[0].leasedUntil.getTime(), now.getTime() + CLAIM_MS);
+  assert.equal(after[0].leasedUntil.getTime(), leaseEnd(now).getTime());
 
   // רצף 1: 6 אושר, 7 הושלם, 8 זיהוי-מחדש, 9 החכרה שפגה, 10 גרסה חדשה
   const second = await claimSequence('gA', 1, String(me._id), now);
@@ -406,7 +408,7 @@ test('פתיחה בעורך מחדשת ל-48 שעות מלאות רק תפיסה
   const uid = String(me._id);
   // שלי (נשארו 3 שעות) ← 48 שעות מעכשיו
   const renewed = await renewLease(String(pages[2]._id), uid, now);
-  assert.equal(renewed.leasedUntil.getTime(), now.getTime() + CLAIM_MS);
+  assert.equal(renewed.leasedUntil.getTime(), leaseEnd(now).getTime());
   assert.equal(String(renewed.leasedBy), uid);
   // פנוי / תפיסה שפגה של אחר / תפוס בידי אחר / הגשתי ← null, ושום דבר לא השתנה
   for (const n of [1, 9, 3, 5]) {
@@ -423,9 +425,10 @@ test('פתיחה בעורך מחדשת ל-48 שעות מלאות רק תפיסה
   await close(2);
   assert.ok(await renewLease(String(pages[2]._id), uid, now));
   // תפיסה ארוכה יותר אינה מתקצרת
-  await PageProofPage.updateOne({ _id: pages[2]._id }, { $set: { leasedUntil: inHours(100) } });
+  const longer = new Date(leaseEnd(now).getTime() + 5 * HOUR);
+  await PageProofPage.updateOne({ _id: pages[2]._id }, { $set: { leasedUntil: longer } });
   const kept = await renewLease(String(pages[2]._id), uid, now);
-  assert.ok(kept.leasedUntil.getTime() > now.getTime() + CLAIM_MS);
+  assert.equal(kept.leasedUntil.getTime(), longer.getTime());
 });
 
 test('הרצף של עמוד (פתיחה בעורך): רק עמוד שבטיפולי או שהגשתי; קריאה בלבד', async (t) => {

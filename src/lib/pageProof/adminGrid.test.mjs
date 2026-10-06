@@ -17,7 +17,7 @@ import {
 } from './adminGrid.js';
 
 // רשת-העמודים בניהול: המצב בעיני המנהל, מונים, מסננים, טווח-עמודים ונוסחי
-// האזהרה בשחרור (הטיוטה של המתנדב נשארת רק בדפדפן שלו).
+// האזהרה בשחרור (הטיוטה של המתנדב שמורה באתר ועוברת עם העמוד).
 
 const NOW = new Date('2026-09-30T12:00:00Z');
 const later = new Date(NOW.getTime() + 3600e3);
@@ -61,7 +61,7 @@ test('מונים ומסננים: לכל מצב, סגורים למתנדבים, �
     { state: 'zzz' },
   ];
   const c = adminCounts(pages);
-  assert.deepEqual(c, { total: 7, closed: 3, leased: 1, expired: 1, open: 2, second: 1, taken: 1, submitted: 1, approved: 1, recut: 1 });
+  assert.deepEqual(c, { total: 7, closed: 3, leased: 1, expired: 1, open: 2, second: 1, taken: 1, submitted: 1, approved: 1, recut: 1, recut_ask: 0 });
   const idx = (f) => pages.map((p, i) => (adminMatches(p, f) ? i : -1)).filter((i) => i >= 0);
   assert.deepEqual(idx('open'), [0, 1, 2], 'פנויים = פנוי + בודק נוסף');
   assert.deepEqual(idx('closed'), [1, 3, 6]);
@@ -84,7 +84,7 @@ test('טווח עמודים מהטופס', () => {
 });
 
 test('נוסחי השחרור: מי מחזיק, והאזהרה שהטיוטה של המתנדב נשארת רק בדפדפן שלו', () => {
-  assert.match(DRAFT_WARNING, /טיוטה שהמתנדב עוד לא הגיש שמורה רק בדפדפן שלו/);
+  assert.match(DRAFT_WARNING, /שמורה באתר כטיוטה של העמוד ועוברת איתו/);
   const one = releaseMessage({ page: 12, holder: 'ראובן', lease: 'active' });
   assert.ok(one.startsWith('לשחרר את עמוד 12 (בידי ראובן)?'));
   assert.ok(one.includes('פנוי לכל מתנדב'));
@@ -100,7 +100,7 @@ test('נוסחי השחרור: מי מחזיק, והאזהרה שהטיוטה ש
 });
 
 test('ההסבר בניהול: 48 שעות לכל עמוד לחוד, ומתחדש בכל פתיחה בעורך', () => {
-  assert.match(CLAIM_NOTE, /48 שעות \(לכל עמוד לחוד\)/);
+  assert.match(CLAIM_NOTE, /48 שעות \(לכל עמוד לחוד; שבת וחג אינם נספרים\)/);
   assert.match(CLAIM_NOTE, /מחדשת את הזמן ל-48 שעות מלאות/);
 });
 

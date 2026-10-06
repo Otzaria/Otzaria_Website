@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { SUBMIT_CHOICE, SUBMIT_ERRORS } from '@/lib/pageProof/submitPlan'
+import { bookOnlySubmitLine } from '@/lib/pageProof/helpTexts'
 
 // חלון ההגשה של דף המתנדב. summary — הפלט של submitSummary (lib/pageProof/
 // submitPlan.js): כמה פסקאות אושרו, כמה שינויים, ואילו בחירות מוצעות.
@@ -34,7 +35,7 @@ export default function SubmitDialog({ pageNo, summary, note = '', onNote, savin
   }, [saving, onCancel])
 
   if (!summary || typeof document === 'undefined') return null
-  const { approval, opCount, restCount, allApproved, recut, recheckCount } = summary
+  const { approval, opCount, restCount, allApproved, recut, recheckCount, bookOnlyCount = 0 } = summary
 
   const submit = (choice) => {
     setClicked(choice)
@@ -74,6 +75,11 @@ export default function SubmitDialog({ pageNo, summary, note = '', onNote, savin
         {recheckCount > 0 && (
           <p className="rounded-lg border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-800">
             מעבר שני: {plural(recheckCount, 'שורה אחת זוהתה', 'שורות זוהו')} מחדש ומסומנות בצהוב — ודאו שבדקתם אותן לפני ההגשה.
+          </p>
+        )}
+        {bookOnlyCount > 0 && (
+          <p data-testid="submit-book-only" className="rounded-lg border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-800">
+            {bookOnlySubmitLine(bookOnlyCount)}
           </p>
         )}
         {recut && (

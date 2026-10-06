@@ -12,6 +12,7 @@ import {
   planSubmission,
 } from './submitPlan.js';
 import { buildView } from './ops.js';
+import { PRINT_DEFECT_WHY } from './vocab.js';
 import { untouchedLineIds } from './view.js';
 
 const line = (id, bbox, extra = {}) => ({
@@ -180,6 +181,7 @@ test('submitSummary: לא הכול אושר — שתי בחירות, ספירו�
   const s = submitSummary({ ...ctx(ops, d), approval: { approved: 1, total: 3 } });
   assert.deepEqual(s, {
     opCount: 2,
+    bookOnlyCount: 0,
     restCount: 2,
     approval: { approved: 1, total: 3 },
     allApproved: false,
@@ -232,4 +234,31 @@ test('קישור לעמוד אחר: נשלח כמות-שהוא (עם העמוד,
   // בלי הצהרה על העמוד — אותה בדיקה של השרת עוצרת לפני השליחה
   const bad = planSubmission({ baseDoc: d, ops: [{ ...far, value: { kind: 'note' } }], untouched, choice: SUBMIT_CHOICE.ONLY_APPROVED });
   assert.deepEqual(bad, { ok: false, error: 'פעולה 1: שורה שאינה בעמוד הזה' });
+});
+
+// "לספר בלבד" (2026-10-02): חלון ההגשה סופר את השורות; סימון אוטומטי על שורה שחזרה למקור — לא נשלח
+test('submitSummary/planSubmission: מונה "לספר בלבד", וסימון אוטומטי בלי שינוי-טקסט יורד', () => {
+  const ops = [
+    { kind: 'train_text', page: P, ids: [1], value: 0, _cmp: true, _g: 'g1' },
+    { ...textOp(1, 'שורה אחת'), _g: 'g1' },
+    { kind: 'train_text', page: P, ids: [2], value: 0, _cmp: true, _g: 'g2' },
+    { ...textOp(2, 'שורה שתיים'), _g: 'g2' },
+    textOp(2, 'שורה 2'),
+  ];
+  const s = submitSummary(ctx(ops));
+  assert.equal(s.bookOnlyCount, 1);
+  const r = planSubmission({ ...ctx(ops), choice: SUBMIT_CHOICE.ONLY_APPROVED });
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.ops.filter((o) => o.kind === 'train_text'), [{ kind: 'train_text', page: P, ids: [1], value: 0 }]);
+  assert.equal(submitSummary(ctx([textOp(1, 'א')])).bookOnlyCount, 0);
+});
+
+// טיוטה מלפני "לספר בלבד" עם הכפתור הישן "פגם בדפוס" (ודאות עם הסיבה הקבועה) — נספרת בחלון ההגשה ונשלחת כמות-שהיא
+test('submitSummary/planSubmission: סימון "פגם בדפוס" ישן בטיוטה נספר כ"לספר בלבד" ונשלח', () => {
+  const legacy = { kind: 'certainty', page: P, ids: [3], value: { v: 'ambiguous', why: PRINT_DEFECT_WHY } };
+  const ops = [legacy, textOp(3, 'שורה שלוש')];
+  assert.equal(submitSummary(ctx(ops)).bookOnlyCount, 1);
+  const r = planSubmission({ ...ctx(ops), choice: SUBMIT_CHOICE.ONLY_APPROVED });
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.ops.filter((o) => o.kind === 'certainty'), [legacy]);
 });

@@ -36,8 +36,27 @@ const PageProofPageSchema = new mongoose.Schema(
     // open = חסרות הגשות; done = activeCount >= required;
     // recut = הגשה מאושרת שינתה את חיתוך-השורות (פיצול/איחוד/הוספה/תיבה) —
     // העמוד ממתין לחיתוך ולזיהוי-מחדש בתוכנת-הספר ואינו מוצע למתנדבים, עד
-    // שהגרסה החדשה שלו (revision+1) מיובאת ומחליפה אותו (lib/pageProof/importRules)
-    status: { type: String, enum: ['open', 'done', 'recut'], default: 'open', index: true },
+    // שהגרסה החדשה שלו (revision+1) מיובאת ומחליפה אותו (lib/pageProof/importRules);
+    // recut_ask = מתנדב תיקן חיתוך והעמוד לא יכול היה לצאת לזיהוי-מחדש בלי מנהל (המתג כבוי, תקרת הבקשות, הגשה
+    // של מתנדב אחר): הוא נעול — לא מוצע ולא נערך — עד שהמנהל מאשר (← recut) או דוחה (← open, חוזר למתנדב);
+    // הבקשה עצמה ב-recutAsk (lib/pageProof/recutRequests.js — askRecut)
+    status: { type: String, enum: ['open', 'done', 'recut', 'recut_ask'], default: 'open', index: true },
+    // הבקשה הממתינה לאישור מנהל (רק במצב recut_ask): user/userName — מי ביקש (העמוד חוזר אליו), ops — תיקוני-החיתוך
+    // (ארוזים ונבדקים כמו בהגשה), revision — הגרסה שעליה נעשו, reason — למה לא יצא לבד (ASK_REASONS), at
+    recutAsk: {
+      type: new mongoose.Schema(
+        {
+          user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+          userName: { type: String, default: '' },
+          ops: { type: [mongoose.Schema.Types.Mixed], default: [] },
+          revision: { type: Number, default: 1 },
+          reason: { type: String, default: '' },
+          at: { type: Date, default: null },
+        },
+        { _id: false }
+      ),
+      default: null,
+    },
     // גרסת-העמוד (חוזה-העמוד: revision ברמת-העמוד). עמוד שחזר מזיהוי-מחדש
     // מגיע עם גרסה גבוהה יותר ונפתח למעבר שני
     revision: { type: Number, default: 1, min: 1 },
@@ -52,6 +71,12 @@ const PageProofPageSchema = new mongoose.Schema(
     // (רשת-העמודים, תפיסת עמוד/רצף, פתיחה בעורך) למי שאינו מחזיק
     // בו כבר. עמוד בלי השדה (מלפני שנוסף) — פתוח. ייבוא-חוזר אינו נוגע בו.
     volunteer: { type: Boolean, default: true },
+
+    // סבב (lib/pageProof/reopenRules.js): עמוד מאושר שמנהל פתח מחדש לעריכה (docs/63 §5) — הסבב עולה, המונים והמגישים
+    // מתאפסים וההגשות המאושרות נשארות בהיסטוריה (כל הגשה נרשמת בסבב שבו נעשתה). בלי השדה — 0.
+    round: { type: Number, default: 0, min: 0 },
+    reopenedAt: { type: Date, default: null },
+    reopenedByName: { type: String, default: '' },
   },
   { timestamps: true }
 );

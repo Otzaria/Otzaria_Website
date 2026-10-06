@@ -33,6 +33,12 @@ const FIELDS = {
   leasedUntil: 1,
   revision: 1,
   volunteer: 1,
+  round: 1,
+  reopenedAt: 1,
+  'recutAsk.userName': 1,
+  'recutAsk.at': 1,
+  'recutAsk.reason': 1,
+  'recutAsk.ops': 1,
 };
 
 const bookOf = (gid) => PageProofBook.findOne({ gid: String(gid) }, { gid: 1, title: 1, script: 1, status: 1 }).lean();
@@ -69,6 +75,13 @@ export async function adminBookPages(gid, now = new Date()) {
       lease,
       pending: Math.max(0, (p.activeCount || 0) - (p.approvedCount || 0)),
       recutRequest: req && req.revision === storedRevision(p) ? { id: req.id, by: req.by, at: req.at, picked: req.picked } : null,
+      // ממתין לאישור המנהל לזיהוי-מחדש (recut_ask): מי ביקש, מתי, למה לא יצא לבד, וכמה תיקוני-חיתוך
+      recutAsk:
+        p.status === 'recut_ask' && p.recutAsk
+          ? { by: p.recutAsk.userName || '', at: p.recutAsk.at || null, reason: p.recutAsk.reason || '', opCount: (p.recutAsk.ops || []).length }
+          : null,
+      // מנהל פתח את העמוד מחדש לעריכה אחרי אישור (docs/63 §5)
+      reopened: (p.round || 0) > 0,
     };
   });
   return {
@@ -128,7 +141,7 @@ export async function setVolunteer(gid, { volunteer, ids = null, from = null, to
 
 // שחרור בידי מנהל: ids — העמודים האלה (גם כשהתפיסה בתוקף — המתנדב עוד עובד);
 // scope 'expired' — כל התפיסות שפגו ועוד רשומות בספר (ניקוי); scope 'all' — כל
-// התפיסות בספר. העמוד חוזר למאגר; טיוטה שלא הוגשה נשארת רק בדפדפן של המתנדב.
+// התפיסות בספר. העמוד חוזר למאגר; טיוטה שלא הוגשה שמורה באתר ועוברת עם העמוד (serverDrafts.js).
 // ← {ok, released}
 export async function releaseClaims(gid, { ids = null, scope = null } = {}, now = new Date()) {
   const filter = { leasedBy: { $ne: null } };

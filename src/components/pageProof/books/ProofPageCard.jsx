@@ -3,9 +3,9 @@
 import Link from 'next/link'
 import { useDialog } from '@/components/providers/DialogContext'
 import { STATE_UI, editorHref, CLAIM_HOURS } from '@/lib/pageProof/gridState'
-import { formatHebrewDate, formatTimeAgo, formatTimeLeft, formatUntil } from '@/lib/pageProof/dates'
+import { formatHebrewDate, formatSince, formatTimeAgo, formatTimeLeft, formatUntil } from '@/lib/pageProof/dates'
 import ProofPageThumb from './ProofPageThumb'
-import { RECUT_PAGE_TITLE } from '@/lib/pageProof/helpTexts'
+import { RECUT_PAGE_TITLE, SUBMITTED_WAITING, submittedWaiting } from '@/lib/pageProof/helpTexts'
 
 // כרטיס של עמוד אחד ברשת-העמודים של ספר בהגהת-עמודים — בנוי כמו PageCard
 // בדף הספר הישן (/library/books/[path]): תמונה ממוזערת בגובה 3:4 עם מספר
@@ -70,11 +70,13 @@ function Holder({ page, now, compact }) {
   }
   if (compact) return null
   if ((page.state === 'submitted' || page.state === 'approved') && page.submittedAt) {
+    const when = `הוגש ${formatHebrewDate(page.submittedAt)}, ${formatTimeAgo(page.submittedAt, now)}`
     return (
       <div className="mb-2">
         <p className="truncate text-xs font-medium text-on-surface/60">משויך אליך</p>
-        <p className="text-[10px] leading-tight text-on-surface/50">
-          הוגש {formatHebrewDate(page.submittedAt)}, {formatTimeAgo(page.submittedAt, now)}
+        {/* הוגש ועוד לא נבדק — "ממתין לבדיקת מנהל (מאז …)", כדי שלא ייראה "תקוע" (פורום, 2026-10-05) */}
+        <p className="text-[10px] leading-tight text-on-surface/50" title={page.state === 'submitted' ? when : undefined}>
+          {page.state === 'submitted' ? submittedWaiting(formatSince(page.submittedAt, now)) : when}
         </p>
       </div>
     )
@@ -134,7 +136,7 @@ function Actions({ page, canClaimNew, busy, compact, onAskClaim }) {
         <Link
           href={href}
           className={`${BTN_BASE} ${SIZE[size]} bg-primary/10 text-primary hover:bg-primary/20`}
-          title={page.state === 'approved' ? 'ההגשה שלכם אושרה' : 'ההגשה שלכם ממתינה לאישור'}
+          title={page.state === 'approved' ? 'ההגשה שלכם אושרה' : SUBMITTED_WAITING}
         >
           {icon('visibility')}
           <span>{t('view')}</span>
