@@ -9,7 +9,8 @@ import {
   pageStateFor,
   bookCounts,
   barSegments,
-  BAR_ORDER,
+  GROUPS,
+  FILTERS,
   matchesFilter,
   bookMatches,
   groupBySequence,
@@ -105,7 +106,10 @@ test('כל מצב מוחזר שייך לרשימת המצבים ויש לו תו
     assert.match(ui.bar, /^bg-/);
   }
   assert.deepEqual(Object.keys(STATE_UI).sort(), [...STATES].sort());
-  assert.deepEqual([...BAR_ORDER].sort(), [...STATES].sort());
+  // כל מצב בקבוצה אחת בדיוק — כך הכרטיסים והפס מסתכמים ל"סה"כ"
+  assert.deepEqual(GROUPS.flatMap((g) => g.states).sort(), [...STATES].sort());
+  for (const g of GROUPS) assert.ok(g.label && g.bar.startsWith('bg-') && g.color, g.key);
+  for (const g of GROUPS) assert.ok(FILTERS[g.key], `מסנן לכרטיס ${g.key}`);
 });
 
 test('אפשר לתפוס רק פנוי ודרוש-בודק-נוסף; העמודים שלי = בטיפולך/הוגש/אושר', () => {
@@ -126,10 +130,11 @@ test('מונים לפי מצב, כולל משקלים ופנויים/שלי', ()
   assert.deepEqual(bookCounts(undefined), { ...Object.fromEntries(STATES.map((s) => [s, 0])), total: 0, available: 0, my: 0 });
 });
 
-test('פס ההתקדמות: רק מצבים עם עמודים, בסדר הקבוע, אחוזים שמסתכמים ל-100', () => {
-  const c = bookCounts([{ state: 'open', n: 5 }, { state: 'done', n: 3 }, { state: 'mine', n: 2 }]);
+test('פס ההתקדמות: רק קבוצות עם עמודים, בסדר הקבוע, אחוזים שמסתכמים ל-100', () => {
+  const c = bookCounts([{ state: 'open', n: 4 }, { state: 'second', n: 1 }, { state: 'done', n: 2 }, { state: 'approved', n: 1 }, { state: 'mine', n: 2 }]);
   const seg = barSegments(c);
-  assert.deepEqual(seg.map((s) => s.state), ['done', 'mine', 'open']);
+  assert.deepEqual(seg.map((s) => s.key), ['done', 'mine', 'available']);
+  assert.deepEqual(seg.map((s) => s.n), [3, 2, 5]);
   assert.deepEqual(seg.map((s) => s.pct), [30, 20, 50]);
   assert.deepEqual(barSegments(bookCounts([])), []);
   assert.deepEqual(barSegments(null), []);

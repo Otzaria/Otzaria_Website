@@ -175,17 +175,28 @@ describe('ProofBookGrid', { timeout: 20000 }, () => {
     expect(screen.getByRole('link', { name: 'חזרה לרשימת הספרים' })).toHaveAttribute('href', '/library/page-proof/books')
   })
 
-  it('עמודים שהמנהל סגר להגהה אינם ברשת — רק הסבר כמה; וכלל ה-48 שעות מוצג', async () => {
+  it('עמודים שהמנהל סגר להגהה — המתנדב אינו רואה אותם וגם לא הודעה כמה הם; כלל ה-48 שעות מוצג', async () => {
     fetchMock.mockImplementation(() => ok({ book: BOOK, pages: PAGES, counts: COUNTS, hidden: 12 }))
     render(<ProofBookGrid gid="g1" />)
     await loaded()
-    expect(screen.getByText(/12 עמודים בספר עוד לא נפתחו להגהה/)).toBeInTheDocument()
+    expect(screen.queryByText(/לא נפתחו להגהה/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/12 עמודים/)).not.toBeInTheDocument()
     expect(screen.getByText('כל עמוד שתפסתם שמור לכם 48 שעות (שבת וחג אינם נספרים), וכל פתיחה שלו בעורך מחדשת את הזמן.')).toBeInTheDocument()
   })
 
-  it('בלי עמודים סגורים — בלי ההסבר', async () => {
+  it('הכרטיסים והפס — אותן קבוצות ואותם מספרים, והכרטיסים מסתכמים ל"סה"כ"', async () => {
     render(<ProofBookGrid gid="g1" />)
     await loaded()
-    expect(screen.queryByText(/לא נפתחו להגהה/)).not.toBeInTheDocument()
+    const num = (key) => Number(document.querySelector(`[data-group="${key}"] p`).textContent)
+    // פנויים 3 · בטיפולך 1 · אצל אחרים 1 · הגשת 1 · הושלמו 2 (אחד של אחרים + אחד שלך שאושר)
+    expect(['available', 'mine', 'taken', 'submitted', 'done'].map(num)).toEqual([3, 1, 1, 1, 2])
+    expect(num('all')).toBe(8)
+    expect(num('available') + num('mine') + num('taken') + num('submitted') + num('done')).toBe(num('all'))
+    expect(document.querySelector('[data-group="done"]')).toHaveTextContent('מתוכם 1 שלך שאושרו')
+    const legend = screen.getByRole('img', { name: /מצב העמודים/ }).getAttribute('aria-label')
+    expect(legend).toBe('מצב העמודים — הושלמו: 2, הגשת — ממתין לאישור: 1, בטיפולך: 1, אצל מתנדבים אחרים: 1, פנויים: 3')
+    // כרטיס "הושלמו" מסנן גם את שלך שאושרו
+    fireEvent.click(document.querySelector('[data-group="done"]'))
+    expect(cards()).toEqual([7, 8])
   })
 })
