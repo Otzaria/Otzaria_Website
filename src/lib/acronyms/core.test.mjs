@@ -64,6 +64,30 @@ test('aliasKey ignores punctuation the way the app does', () => {
   assert.notEqual(aliasKey('אור הישר'), aliasKey('אור ישר'))
 })
 
+test('aliasKey expands amud marks before removing quotes, like FindRef', () => {
+  const cases = [
+    ['ב.', 'ב א'],
+    ['ב:', 'ב ב'],
+    ['ברכות קכא.', 'ברכות קכא א'],
+    ['ברכות קכאב.', 'ברכות קכאב'],
+    ['בְּ. ג:', 'ב א ג ב'],
+    ['תוס. נדרים', 'תוס א נדרים'],
+    ['תוס\' נדרים', 'תוס נדרים'],
+    ['פ"א.', 'פא'],
+    ['פ״א.', 'פא'],
+    ['פ\'א:', 'פא'],
+    ['א.ב.', 'א ב א'],
+    ['ברכות ב.,', 'ברכות ב'],
+    ['ברכות ב.ג:', 'ברכות ב ג ב'],
+    ['שו"ע או"ח א.', 'שוע אוח א א'],
+    ['ABC 12_34', 'abc 12 34'],
+  ]
+  for (const [input, expected] of cases) assert.equal(aliasKey(input), expected, input)
+  assert.notEqual(aliasKey('ב.'), aliasKey('ב:'))
+  assert.equal(duplicateAlias('תוס. נדרים', ['תוס\' נדרים']), null)
+  assert.equal(aliasProblem('שמואל א.', 'שמואל א'), null)
+})
+
 test('duplicateAlias finds an existing form the app cannot tell apart', () => {
   assert.equal(duplicateAlias('רמב"ם הל\' שבת', ['רמבם הל שבת', 'רמב"ם שבת']), 'רמבם הל שבת')
   assert.equal(duplicateAlias('רמב"ם שבתות', ['רמב"ם שבת']), null)
@@ -121,6 +145,27 @@ test('replaying a change set on a master that already has it is a no-op', () => 
 test('an alias that differs only in quotes from an existing one is not added twice', () => {
   const { results } = applyChangeSet(parseDump(FIXTURE), [{ type: 'add', book: 'בראשית', alias: 'בר' }])
   assert.equal(results[0].status, 'noop')
+})
+
+test('punctuation duplicates are skipped but distinct amud aliases are retained', () => {
+  const base = parseDump(dump([[1, 'ספר בדיקה']], [[1, 'תוס\' נדרים']], [[1, 1, 1]]))
+  const { ops } = validateChangeSet([
+    { type: 'add', book: 'ספר בדיקה', alias: 'תוס-נדרים' },
+    { type: 'add', book: 'ספר בדיקה', alias: 'תוס. נדרים' },
+    { type: 'add', book: 'ספר בדיקה', alias: 'תוס: נדרים' },
+  ], base)
+  const { state, results } = applyChangeSet(base, ops)
+  assert.deepEqual(results.map((r) => r.status), ['noop', 'applied', 'applied'])
+  assert.deepEqual(listBooks(state)[0].aliases, ['תוס\' נדרים', 'תוס. נדרים', 'תוס: נדרים'])
+})
+
+test('editing an amud alias does not merge it into a different search key', () => {
+  const base = parseDump(dump([[1, 'תוספתא נדרים']], [[1, 'תוס\' נדרים'], [2, 'תוס. נדרים']], [[1, 1, 1], [2, 1, 2]]))
+  const { ops } = validateChangeSet([{ type: 'rename', book: 'תוספתא נדרים', from: 'תוס. נדרים', to: 'תוס. נדרים!' }], base)
+  const { state, results } = applyChangeSet(base, ops)
+  assert.equal(results[0].reason, undefined)
+  assert.deepEqual(listBooks(state)[0].aliases, ['תוס\' נדרים', 'תוס. נדרים!'])
+  assert.equal(state.links.size, base.links.size)
 })
 
 test('renaming onto an existing alias merges instead of duplicating', () => {

@@ -86,7 +86,7 @@ export default function BookAliasesCard({ book, basket, pending, titlesByKey, on
   const duplicateProblem = (alias, exceptText) => {
     const existing = duplicateAlias(alias, chips.filter((c) => c.state !== 'removed' && c.text !== exceptText).map((c) => c.text))
     if (!existing) return null
-    const base = `הכינוי כבר קיים בספר בצורה "${existing}". התוכנה מתעלמת מגרשיים ומפיסוק, ולכן אין צורך בשניהם.`
+    const base = `הכינוי כבר קיים בספר בצורה "${existing}". התוכנה מתאימה את שניהם לאותו חיפוש, ולכן אין צורך בשניהם.`
     return hasQuotes(alias) && !hasQuotes(existing) ? `${base} כדי לשמור את הצורה עם הגרשיים, ערכו את "${existing}".` : base
   }
 

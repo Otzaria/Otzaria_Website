@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { matchesLibraryTitle, normalizeBookTitle, suggestLibraryTitles } from '@/lib/acronyms/normalize'
 
+const LIBRARY_TITLES_TIMEOUT_MS = 15_000
+
 /**
  * הוספת ספר שאין לו עדיין כינויים ברשימה. השם חייב להיות זהה לשם הספר בספריית אוצריא,
  * כי SeforimLibrary מחפש את הכינויים לפי השם המדויק.
@@ -10,26 +12,38 @@ import { matchesLibraryTitle, normalizeBookTitle, suggestLibraryTitles } from '@
  */
 export default function NewBookForm({ onCreate, onClose }) {
   const [title, setTitle] = useState('')
-  const [libraryTitles, setLibraryTitles] = useState(null)
+  const [library, setLibrary] = useState({ status: 'loading', titles: [] })
   const [unmatched, setUnmatched] = useState(null)
   const clean = normalizeBookTitle(title)
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/library/book-acronyms?libraryTitles=1')
-      .then((r) => r.json())
-      .then((data) => !cancelled && data.success && setLibraryTitles(data.titles))
-      // בלי הרשימה אין בדיקה, והטופס עובד כמו קודם
-      .catch(() => {})
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), LIBRARY_TITLES_TIMEOUT_MS)
+    fetch('/api/library/book-acronyms?libraryTitles=1', { signal: controller.signal })
+      .then((r) => {
+        if (!r.ok) throw new Error('Library titles request failed')
+        return r.json()
+      })
+      .then((data) => {
+        if (!data?.success || !Array.isArray(data.titles) || !data.titles.every((t) => typeof t === 'string')) throw new Error('Invalid library titles response')
+        if (!cancelled) setLibrary({ status: 'ready', titles: data.titles })
+      })
+      // כשל טעינה אינו חוסם ספרים שאינם ברשימה, אבל מוצג כדי שהמשתמש ידע שלא בוצעה בדיקה.
+      .catch(() => !cancelled && setLibrary({ status: 'failed', titles: [] }))
+      .finally(() => clearTimeout(timeout))
     return () => {
       cancelled = true
+      clearTimeout(timeout)
+      controller.abort()
     }
   }, [])
 
   // רשימת "מידע על ספרים" אינה כוללת כל ספר, ולכן שם שלא נמצא מקבל אזהרה ולא חסימה
   const submit = () => {
-    if (!libraryTitles || matchesLibraryTitle(clean, libraryTitles)) return onCreate(clean)
-    setUnmatched({ title: clean, suggestions: suggestLibraryTitles(clean, libraryTitles) })
+    if (!clean || library.status === 'loading') return
+    if (library.status === 'failed' || matchesLibraryTitle(clean, library.titles)) return onCreate(clean)
+    setUnmatched({ title: clean, suggestions: suggestLibraryTitles(clean, library.titles) })
   }
 
   return (
@@ -56,10 +70,17 @@ export default function NewBookForm({ onCreate, onClose }) {
           placeholder="שם הספר המדויק"
           className="flex-1 border rounded-lg px-3 py-2"
         />
-        <button type="button" disabled={!clean} onClick={submit} className="px-4 py-2 rounded-lg bg-primary text-on-primary disabled:opacity-50">
+        <button type="button" disabled={!clean || library.status === 'loading'} onClick={submit} className="px-4 py-2 rounded-lg bg-primary text-on-primary disabled:opacity-50">
           המשך
         </button>
       </div>
+      {library.status !== 'ready' && (
+        <p role="status" className="mt-2 text-sm text-on-surface/70">
+          {library.status === 'loading'
+            ? 'טוען את רשימת ספרי אוצריא…'
+            : 'לא ניתן לטעון את רשימת הספרים. אפשר להמשיך, אך יש לוודא שהשם זהה לשם הספר בתוכנה.'}
+        </p>
+      )}
       {unmatched && (
         <div className="mt-3 rounded-lg border border-warning-strong-200 bg-warning-strong-50 text-warning-strong-800 p-3 text-sm">
           <div className="flex items-start gap-1 mb-2">

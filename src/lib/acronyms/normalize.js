@@ -2,8 +2,9 @@
  * הצורה שבה כינוי נשמר בפורק, והמפתח שלפיו אוצריא רואה שני כינויים כזהים.
  *
  * SeforimLibrary (Generator.sanitizeAcronymTerm) מסיר ניקוד וטעמים, מחליף מקף עברי ברווח ומוחק
- * ׳ ו-״, ואילו האפליקציה (normalizeForFindRefMatch) מתעלמת מכל גרשיים ומכל פיסוק. לכן נשמר כינוי
- * נקי, עם גרשיים ASCII אחידים, וכינוי שנבדל מאחר רק בגרשיים או בפיסוק נחשב כפילות.
+ * ׳ ו-״, ואילו האפליקציה (normalizeForFindRefMatch) מסירה גרשיים ופיסוק רגיל, אבל מפרשת
+ * נקודה ונקודתיים אחרי רצף עברי קצר כסימון עמוד. כינוי נשמר נקי, עם גרשיים ASCII אחידים;
+ * כפילות נקבעת לפי מפתח החיפוש, תוך שמירה על ההבחנה בין סימוני העמוד.
  */
 
 const DIACRITICS = /[֑-ֽֿׁ-ׂׄ-ׇ]/g
@@ -29,9 +30,18 @@ export function normalizeAlias(value) {
     .trim()
 }
 
-/** המפתח שלפיו אוצריא מתאימה כינוי: גרשיים נמחקים, וכל תו שאינו אות או ספרה הוא רווח. */
+/** מפתח החיפוש של כינוי בצורת השמירה, לפי normalizeForFindRefMatch בתוכנה. */
 export function aliasKey(value) {
-  return normalizeAlias(value).replace(/["']/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().toLowerCase()
+  // סימון עמוד מפוענח לפני מחיקת הגרשיים: ב. → ב א, ב: → ב ב, אבל פ"א. → פא.
+  // https://github.com/Otzaria/otzaria/blob/master/lib/utils/text/text_manipulation.dart
+  return normalizeAlias(value)
+    .replace(/(?<![א-ת'"״׳])([א-ת]{1,3})\.(?=\s|$)/g, '$1 א')
+    .replace(/(?<![א-ת'"״׳])([א-ת]{1,3}):(?=\s|$)/g, '$1 ב')
+    .replace(/["']/g, '')
+    .replace(/[^a-zA-Z0-9\u0590-\u05FF\s]/g, ' ')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 /** כינוי קיים שאוצריא אינה מבדילה בינו לבין [alias], או null. */

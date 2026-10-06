@@ -23,6 +23,18 @@ test('an add is normalized and not duplicated by a quote variant', () => {
   assert.deepEqual(basketOps(basket), [{ type: 'add', book: B, alias: 'בר"כ' }])
 })
 
+test('amud variants stay separate in the basket', () => {
+  let basket = addToBasket([], { type: 'add', book: B, alias: 'תוס\' נדרים' })
+  basket = addToBasket(basket, { type: 'add', book: B, alias: 'תוס. נדרים' })
+  basket = addToBasket(basket, { type: 'add', book: B, alias: 'תוס: נדרים' })
+  assert.equal(basket.length, 3)
+  const removed = [{ type: 'remove', book: B, alias: 'תוס. נדרים' }]
+  assert.deepEqual(addToBasket(removed, { type: 'add', book: B, alias: 'תוס: נדרים' }), [
+    ...removed,
+    { type: 'add', book: B, alias: 'תוס: נדרים' },
+  ])
+})
+
 test('renaming a basket-only alias edits the add itself', () => {
   let basket = addToBasket([], { type: 'add', book: B, alias: 'ברכ' })
   basket = addToBasket(basket, { type: 'rename', book: B, from: 'ברכ', to: 'ברכו' })
