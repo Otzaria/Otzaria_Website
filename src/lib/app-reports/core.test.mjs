@@ -4,7 +4,8 @@
 import { GIF87A, GIF89A, ANIMATED_GIF } from './testing/gif-fixtures.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateAppReport, MAX_DIAGNOSTICS_BYTES, MAX_IMAGES, MAX_IMAGE_BYTES, MAX_BODY_BYTES, sniffImageType } from './validation.js';
+import zlib from 'node:zlib';
+import { validateAppReport, MAX_DIAGNOSTICS_BYTES, MAX_IMAGES, MAX_IMAGE_BYTES, MAX_IMAGES_TOTAL_BYTES, MAX_MINIDUMP_BYTES, MAX_BODY_BYTES, sniffImageType } from './validation.js';
 import { computeContentHash, computeSignatureHash } from './hashes.js';
 import { redactEmails } from './redact.js';
 import { buildIssueTitle, buildIssueBody, buildMergeComment, issueLabels } from './issue-text.js';
@@ -348,4 +349,47 @@ test('issue: צילומי המסך מוטמעים בגוף ובתגובה מהק
   assert.ok(body.includes(`![צילום מסך 2](https://otzaria.org/api/app-reports/images/${tokens[1]})`));
   assert.ok(buildMergeComment(value).includes(`/api/app-reports/images/${tokens[1]})`));
   assert.doesNotMatch(buildIssueBody(validateAppReport(manual()).value), /צילומי מסך/);
+});
+
+// ---------------------------------------------------------------- minidump
+const DUMP = Buffer.concat([Buffer.from('MDMP', 'latin1'), Buffer.from([0x93, 0xa7, 0, 0]), Buffer.alloc(64, 7)]);
+const withDump = (minidump) => crash({ attachments: { minidump } });
+
+test('minidump: גולמי או gzip נשמר פתוח, שם בלי נתיב וסיומת gz', () => {
+  const raw = validateAppReport(withDump({ fileName: 'C:\\Users\\dani\\.sentry-native\\reports\\a"b.dmp', data: DUMP.toString('base64') }));
+  assert.equal(raw.ok, true);
+  assert.deepEqual(raw.value.minidump.buffer, DUMP);
+  assert.equal(raw.value.minidump.fileName, 'ab.dmp');
+
+  const gz = validateAppReport(withDump({ fileName: 'x.dmp.gz', data: zlib.gzipSync(DUMP).toString('base64') }));
+  assert.deepEqual(gz.value.minidump.buffer, DUMP);
+  assert.equal(gz.value.minidump.fileName, 'x.dmp');
+  assert.equal(validateAppReport(withDump({ data: DUMP.toString('base64') })).value.minidump.fileName, 'crash.dmp');
+  assert.equal(validateAppReport(crash()).value.minidump, null);
+});
+
+test('minidump: קלט פגום או גדול מדי → 422 על השדה', () => {
+  const huge = Buffer.concat([DUMP, Buffer.alloc(MAX_MINIDUMP_BYTES)]);
+  const cases = [
+    'not-an-object',
+    { fileName: 'a.dmp' },
+    { data: '@@@' },
+    { data: Buffer.from('PNG..not a dump').toString('base64') },
+    { data: Buffer.from([0x1f, 0x8b, 1, 2, 3]).toString('base64') },
+    { data: zlib.gzipSync(huge).toString('base64') },
+    { data: 'A'.repeat(Math.ceil(MAX_MINIDUMP_BYTES / 3) * 4 + 4) },
+  ];
+  for (const minidump of cases) {
+    const r = validateAppReport(withDump(minidump));
+    assert.equal(r.ok, false, JSON.stringify(minidump).slice(0, 60));
+    assert.equal(r.field, 'attachments.minidump');
+  }
+});
+
+test('minidump: תקרת הגוף מכילה dump מקודד לצד צילומי המסך, והוא לא משנה את טביעת התוכן', () => {
+  assert.ok(MAX_BODY_BYTES > Math.ceil(MAX_MINIDUMP_BYTES / 3) * 4 + Math.ceil(MAX_IMAGES_TOTAL_BYTES / 3) * 4);
+  const a = validateAppReport(crash()).value;
+  const b = validateAppReport(withDump({ data: DUMP.toString('base64') })).value;
+  assert.equal(computeContentHash(a), computeContentHash(b));
+  assert.doesNotMatch(buildIssueBody(b), /minidump|\.dmp/i);
 });

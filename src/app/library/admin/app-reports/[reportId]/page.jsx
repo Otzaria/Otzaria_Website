@@ -88,7 +88,13 @@ export default function AppReportDetailPage() {
               errors.txt ({formatBytes(r.files.errors.size)})
             </a>
           )}
-          {!r.files?.diagnostics && !r.files?.errors && !r.files?.images?.length && <span className="text-on-surface/50">לא צורפו קבצים</span>}
+          {r.files?.minidump && (
+            <a href={fileUrl('minidump')} className="flex items-center gap-2 px-4 py-2 bg-surface hover:bg-surface-variant rounded-lg" title="קובץ קריסה נייטיבית — שמור באתר בלבד">
+              <span className="material-symbols-outlined">download</span>
+              {r.files.minidump.fileName || 'crash.dmp'} ({formatBytes(r.files.minidump.size)})
+            </a>
+          )}
+          {!r.files?.diagnostics && !r.files?.errors && !r.files?.minidump && !r.files?.images?.length && <span className="text-on-surface/50">לא צורפו קבצים</span>}
         </div>
         {r.files?.images?.length > 0 && <ReportImages reportId={r.reportId} images={r.files.images} />}
         {r.files?.diagnostics && <DiagnosticsViewer url={fileUrl('diagnostics')} />}

@@ -6,6 +6,13 @@ const FileRefSchema = new mongoose.Schema({
   size: { type: Number, default: 0 },
 }, { _id: false });
 
+// minidump של קריסה נייטיבית: באתר בלבד, לא ב-GitHub — מכיל זיכרון של התהליך.
+const MinidumpRefSchema = new mongoose.Schema({
+  gridfsId: { type: mongoose.Schema.Types.ObjectId, required: true },
+  size: { type: Number, default: 0 },
+  fileName: { type: String, default: '' },
+}, { _id: false });
+
 const ImageRefSchema = new mongoose.Schema({
   gridfsId: { type: mongoose.Schema.Types.ObjectId, required: true },
   size: { type: Number, default: 0 },
@@ -62,6 +69,7 @@ const AppReportSchema = new mongoose.Schema({
   fileIds: {
     diagnostics: { type: FileRefSchema, default: null },
     errors: { type: FileRefSchema, default: null },
+    minidump: { type: MinidumpRefSchema, default: null },
     images: { type: [ImageRefSchema], default: [] },
   },
   contactLog: { type: [ContactEntrySchema], default: [] },

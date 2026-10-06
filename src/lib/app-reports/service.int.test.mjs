@@ -5,6 +5,7 @@ import { GIF87A, ANIMATED_GIF } from './testing/gif-fixtures.js';
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import zlib from 'node:zlib';
 import mongoose from 'mongoose';
 import AppReport from '../../models/AppReport.js';
 import { startMongo } from '../corrections/testing/mongo.js';
@@ -478,4 +479,32 @@ test('GIF: original bytes, MIME and extension survive ingest and public/admin re
     assert.equal(pub.contentType, 'image/gif');
     assert.ok(issue.body.body.includes(`/api/app-reports/images/${ref.publicToken})`));
   }
+});
+
+test('minidump: נשמר פתוח ב-GridFS, מוגש רק דרך ניהול, ולא מוזכר ב-issue', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const dump = Buffer.concat([Buffer.from('MDMP', 'latin1'), Buffer.alloc(200, 3)]);
+  const body = crash({ attachments: { minidump: { fileName: 'e1f2.dmp', data: zlib.gzipSync(dump).toString('base64') } } });
+  const res = await post(body);
+  assert.equal(res.status, 200);
+
+  const file = await loadReportFile(body.reportId, 'minidump', readFile);
+  assert.deepEqual(file.buffer, dump);
+  assert.equal(file.contentType, 'application/octet-stream');
+  assert.equal(file.filename, 'crash.dmp');
+
+  const { report } = await getReportDetail(body.reportId, 'developer');
+  assert.deepEqual(report.files.minidump, { size: dump.length, fileName: 'e1f2.dmp' });
+  const issue = gh.calls.find((c) => c.method === 'POST' && c.path.endsWith('/issues'));
+  assert.doesNotMatch(issue.body.body, /minidump|\.dmp/i);
+});
+
+test('minidump שאינו dump → 422 ושום דבר לא נשמר', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const body = crash({ attachments: { minidump: { data: Buffer.from('hello').toString('base64') } } });
+  const res = await post(body);
+  assert.equal(res.status, 422);
+  assert.equal(res.body.field, 'attachments.minidump');
+  assert.equal(await AppReport.countDocuments({ reportId: body.reportId }), 0);
+  assert.equal(files.size, 0);
 });
