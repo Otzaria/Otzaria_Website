@@ -102,6 +102,8 @@ test('[T28] ידני מלא מקצה לקצה בלי שירות: רשימה → 
   r = await ErrorReport.findById(id).lean();
   assert.equal(r.publish.status, 'pr_opened');
   assert.equal(gh.readFile(r.publish.branch, PATH), FILE.replace(LINE, NEW));
+  assert.equal((await listReports({ user: users.a, query: { view: 'all' } })).body.total, 0, 'PR פתוח אינו ב"הכל" — רק ב"אושרו / בפרסום"');
+  assert.equal((await listReports({ user: users.a, query: { view: 'publishing' } })).body.total, 1);
   gh.mergePull(r.publish.prNumber);
   await work(at(2));
   r = await ErrorReport.findById(id).lean();
@@ -115,6 +117,8 @@ test('[T28] דיווח חופשי: לקיחה וסגירה ידנית; דחיי�
   if (db.skip) return t.skip(db.skip);
   const id = await ingest('free', { report_kind: 'free_text', correction: null });
   const id2 = await ingest('free2', { report_kind: 'free_text', correction: null });
+  // דיווח חופשי חדש נשאר במייל בלבד; דיווחים חופשיים ישנים עדיין בתור ומטופלים ידנית.
+  await ErrorReport.updateMany({ _id: { $in: [id, id2] } }, { $set: { state: 'open', 'manual.status': 'queued', 'manual.handoffReason': 'free_text' } });
   const c = await act(users.a, id, { action: 'claim' });
   assert.equal((await act(users.a, id, { action: 'close_manual', generation: c.body.generation, note: 'טופל' })).status, 200);
   assert.equal((await ErrorReport.findById(id).lean()).state, 'closed_manual');
@@ -356,7 +360,7 @@ test('email_only (ספריא): לא בתור, לא ללקיחה, לא לבדיק
   assert.equal((await act(users.a, id, { action: 'claim' })).status, 409, 'לא נכנס לתור הידני');
   await work(at(1));
   assert.equal(gh.calls.length, 0, 'לעולם לא מגיע ל-GitHub');
-  assert.equal((await listReports({ user: users.a, query: { view: 'all' } })).body.total, 2);
+  assert.equal((await listReports({ user: users.a, query: { view: 'all' } })).body.total, 1, '"הכל" אינו כולל מייל-בלבד');
 
   const legacy = { senderEmail: 'x@example.org', subject: 's', bookTitle: 'ספר', currentRef: 'א', filePath: 'f', status: 'pending', createdAt: new Date('2025-01-01') };
   const { insertedIds } = await ErrorReport.collection.insertMany([{ ...legacy, reportId: 'lsef', sourceFolder: 'Sefaria' }, { ...legacy, reportId: 'lwiki', sourceFolder: 'wikiSource' }]);

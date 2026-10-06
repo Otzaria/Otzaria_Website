@@ -340,12 +340,13 @@ test('בקשת בדיקה נבנית מההצעה והמקור בלבד (בלי 
   assert.equal(req.workflow_generation, 3);
 });
 
-test('[T8][T28] ניתוב קליטה: חופשי/ללא הצעה/שירות כבוי → ידני; שירות פעיל → outbox; מייל שלא לאוצריא → email_only', () => {
+test('[T8][T28] ניתוב קליטה: חופשי/ללא הצעה → מייל בלבד; שירות כבוי → ידני; שירות פעיל → outbox; מייל שלא לאוצריא → email_only', () => {
   const corr = { originalLine: 'א ב', originalSelection: null, proposedText: 'א ג', contextBefore: '', contextAfter: '' };
   const off = { enabled: false, disabledReason: 'service_not_configured' };
-  assert.deepEqual(planIntakeRouting({ kind: 'free_text', correction: null, reachesOtzaria: true, verifyConfig: off }).route, 'manual');
+  assert.deepEqual(planIntakeRouting({ kind: 'free_text', correction: null, reachesOtzaria: true, verifyConfig: off }).route, 'email_only');
   assert.equal(planIntakeRouting({ kind: 'text_correction', correction: corr, reachesOtzaria: true, verifyConfig: off }).reason, 'service_not_configured');
-  assert.equal(planIntakeRouting({ kind: 'text_correction', correction: { ...corr, proposedText: null }, reachesOtzaria: true, verifyConfig: { enabled: true } }).reason, 'no_proposal');
+  assert.equal(planIntakeRouting({ kind: 'text_correction', correction: { ...corr, proposedText: null }, reachesOtzaria: true, verifyConfig: { enabled: true } }).route, 'email_only');
+  assert.equal(planIntakeRouting({ kind: 'text_correction', correction: { ...corr, proposedText: '' }, reachesOtzaria: true, verifyConfig: { enabled: true } }).route, 'verify', 'מחיקה היא הצעה');
   assert.equal(planIntakeRouting({ kind: 'text_correction', correction: corr, reachesOtzaria: true, verifyConfig: { enabled: true } }).route, 'verify');
   assert.equal(planIntakeRouting({ kind: 'text_correction', correction: { ...corr, proposedText: 'א\nב' }, reachesOtzaria: true, verifyConfig: { enabled: true } }).reason, 'structural_change');
   assert.equal(planIntakeRouting({ kind: 'text_correction', correction: corr, reachesOtzaria: false, verifyConfig: { enabled: true } }).route, 'email_only');
@@ -355,7 +356,7 @@ test('תוויות: כל תוויות הדרישות נגזרות מהמצב', (
   const t = (r) => deriveLabels({ state: 'open', ...r }).map((l) => l.text);
   assert.ok(t({ approval: { authority: 'service', scope: 'technical_only' } }).includes('אושר טכנית בלבד'));
   assert.ok(t({ manual: { handoffReason: 'needs_content_review' } }).includes('נדרש אישור תוכן'));
-  assert.ok(t({ manual: { handoffReason: 'service_not_configured' } }).includes('השירות אינו מוגדר'));
+  assert.ok(t({ manual: { handoffReason: 'service_not_configured' } }).includes('שירות בדיקה חיצונית עצמאית אינו מוגדר'));
   assert.ok(t({ verification: { status: 'queued', attempts: 2 } }).includes('ממתין לניסיון חוזר'));
   assert.ok(t({ manual: { handoffReason: 'retries_exhausted' } }).includes('מוצו הניסיונות'));
   assert.ok(t({ manual: { handoffReason: 'source_changed' } }).includes('התנגשות'));

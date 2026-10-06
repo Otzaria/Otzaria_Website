@@ -53,7 +53,7 @@ const newClient = (id = 'new-1', correction = {}, over = {}) => ({
   ...over,
 });
 
-test('[T1] דיווח חופשי מלקוח ישן: 200, נשמר, בתור הידני, תאימות שדות התשובה', async (t) => {
+test('[T1] דיווח חופשי מלקוח ישן: 200, נשמר כמייל בלבד (לא לתור), תאימות שדות התשובה', async (t) => {
   if (db.skip) return t.skip(db.skip);
   noSmtp();
   const res = await post(oldClient());
@@ -68,9 +68,8 @@ test('[T1] דיווח חופשי מלקוח ישן: 200, נשמר, בתור הי
   const r = await ErrorReport.findOne({ reportId: 'old-1' }).lean();
   assert.equal(r.reportKind, 'free_text');
   assert.equal(r.schemaVersion, 1);
-  assert.equal(r.state, 'open');
-  assert.equal(r.manual.status, 'queued');
-  assert.equal(r.manual.handoffReason, 'free_text');
+  assert.equal(r.state, 'email_only');
+  assert.equal(r.manual.status, 'none');
   assert.equal(r.location, null);
   assert.equal(r.proposals, undefined);
   assert.equal(r.lineNumber, 3);
@@ -94,7 +93,7 @@ test('[T2][T4] הצעת תיקון מלקוח חדש: ההצעה נשמרת בי
   assert.equal(r.verification.status, 'skipped_service_disabled');
 });
 
-test('[T3] null (ללא הצעה) מול "" (מחיקה) נשמרים ומנותבים אחרת', async (t) => {
+test('[T3] null (ללא הצעה = דיווח חופשי → מייל בלבד) מול "" (מחיקה → בדיקה) נשמרים ומנותבים אחרת', async (t) => {
   if (db.skip) return t.skip(db.skip);
   noSmtp();
   await post(newClient('n-null', { proposed_text: null }), { config: onConfig });
@@ -103,7 +102,7 @@ test('[T3] null (ללא הצעה) מול "" (מחיקה) נשמרים ומנות
   const b = await ErrorReport.findOne({ reportId: 'n-del' }).lean();
   assert.equal(a.proposals[0].proposedText, null);
   assert.equal(b.proposals[0].proposedText, '');
-  assert.equal(a.manual.handoffReason, 'no_proposal');
+  assert.equal(a.state, 'email_only');
   assert.equal(b.verification.status, 'queued');
   assert.equal(b.dispatch.verify, true);
 });
@@ -183,7 +182,7 @@ test('[T25] כשל SMTP אחרי שמירה → 200 עם email_sent:false, הד�
     const r = await ErrorReport.findOne({ reportId: 'smtp-1' }).lean();
     assert.equal(r.emailSent, false);
     assert.match(r.adminNotes, /שגיאה בשליחת מייל/);
-    assert.equal(r.manual.status, 'queued');
+    assert.equal(r.state, 'email_only');
   } finally {
     noSmtp();
   }
@@ -247,7 +246,7 @@ test('ספריא (המייל לא מגיע לאוצריא) → email_only: נש�
   assert.equal(sent.length, 2, 'רק דיווח sef-old נוסף');
 });
 
-test('wikiSource (מייל לאוצריא + עותק למקור) → נכנס למערכת, והמייל לשניהם ממשיך', async (t) => {
+test('wikiSource: הצעת תיקון נכנסת למערכת בלי מייל; דיווח חופשי נשלח במייל לאוצריא + עותק למקור', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const { sent, notify } = captureMail(t);
   const res = await post(newClient('wiki-1', {}, { source_folder: 'wikiSource' }), { config: onConfig, notify });
@@ -256,12 +255,16 @@ test('wikiSource (מייל לאוצריא + עותק למקור) → נכנס ל
   assert.equal(r.state, 'open');
   assert.equal(r.verification.status, 'queued');
   assert.deepEqual(await pipelineCounts('wiki-1'), { queue: 1, outbox: 1 });
+  assert.equal(res.body.email_sent, false);
+  assert.equal(sent.length, 0, 'הצעת תיקון לא נשלחת במייל');
+  await post({ ...oldClient('wiki-free'), source_folder: 'wikiSource' }, { notify });
+  assert.equal((await ErrorReport.findOne({ reportId: 'wiki-free' }).lean()).state, 'email_only');
   assert.equal(sent.length, 1);
   assert.equal(sent[0].to, 'otzaria.200@gmail.com');
   assert.deepEqual(sent[0].cc, ['novartza@gmail.com']);
 });
 
-test('בלי תיקיית מקור / מקור רגיל → למערכת, המייל לאוצריא בלבד', async (t) => {
+test('דיווח חופשי בלי תיקיית מקור / מקור רגיל → מייל לאוצריא בלבד, לא לתור', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const { sent, notify } = captureMail(t);
   const { source_folder: _omit, ...noFolder } = oldClient('def-1');
@@ -269,9 +272,10 @@ test('בלי תיקיית מקור / מקור רגיל → למערכת, המי�
   await post(oldClient('def-2'), { notify });
   for (const id of ['def-1', 'def-2']) {
     const r = await ErrorReport.findOne({ reportId: id }).lean();
-    assert.equal(r.state, 'open');
-    assert.equal(r.manual.status, 'queued');
+    assert.equal(r.state, 'email_only');
+    assert.deepEqual(await pipelineCounts(id), { queue: 0, outbox: 0 });
   }
+  assert.equal(sent.length, 2);
   assert.ok(sent.every((m) => m.to === 'otzaria.200@gmail.com' && !m.cc));
 });
 

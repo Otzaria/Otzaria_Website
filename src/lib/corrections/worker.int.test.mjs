@@ -94,7 +94,7 @@ test('[T8] שירות לא מוגדר → ידני מיד, בלי קריאות �
   await run(getCorrectionsConfig({}), { verifyFetch: verify }, T0);
   assert.equal((await load(r._id)).manual.handoffReason, 'service_disabled');
   assert.equal(verify.calls.length, 0);
-  assert.ok(deriveLabels(await load(r._id)).some((l) => l.text === 'השירות אינו מוגדר'));
+  assert.ok(deriveLabels(await load(r._id)).some((l) => l.text === 'שירות בדיקה חיצונית עצמאית אינו מוגדר'));
 });
 
 test('[T9] כשל הרשאה (401) / חוזה (api_version) → ידני מיד בלי retry', async (t) => {

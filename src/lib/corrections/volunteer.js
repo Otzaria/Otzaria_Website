@@ -40,6 +40,8 @@ function overrideFor(rev) {
 
 // ---------------------------------------------------------------- list / detail
 
+const PUBLISHING_STATUSES = ['ready', 'in_progress', 'unknown_needs_reconcile', 'pr_opened'];
+
 const LIST_FILTERS = {
   mine: (user) => ({ 'manual.status': 'claimed', 'manual.assignee': user._id }),
   // שיוך שפג זמין שוב ללקיחה, ולכן מוצג בתור.
@@ -48,9 +50,10 @@ const LIST_FILTERS = {
   }),
   claimed: () => ({ 'manual.status': 'claimed', state: 'open' }),
   auto: () => ({ state: 'open', 'verification.status': { $in: ['queued', 'in_progress'] } }),
-  publishing: () => ({ state: 'open', 'publish.status': { $in: ['ready', 'in_progress', 'unknown_needs_reconcile', 'pr_opened', 'failed'] } }),
+  publishing: () => ({ state: 'open', 'publish.status': { $in: [...PUBLISHING_STATUSES, 'failed'] } }),
   closed: () => ({ state: { $regex: '^closed_' } }),
-  all: () => ({}),
+  // בלי מייל-בלבד (לא נכנסו למערכת) ובלי מה שאושר וממתין לפרסום/מיזוג — אלה בלשונית "אושרו / בפרסום".
+  all: () => ({ state: { $ne: 'email_only' }, 'publish.status': { $nin: PUBLISHING_STATUSES } }),
 };
 
 export async function listReports({ user, query = {}, now = new Date() }) {

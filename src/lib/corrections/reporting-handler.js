@@ -72,11 +72,11 @@ export async function handleReportingErrorsPost(request, deps = {}) {
     triggerWorkerBatch(deps.schedule, 'intake trigger failed');
   }
 
+  // מייל רק לדיווח שאינו נכנס למערכת (דיווח חופשי / מקור שאינו אוצריא); הצעת תיקון מטופלת באתר בלבד.
+  const emailOnly = result.outcome === 'created' ? result.plan?.route === 'email_only' : result.report.state === 'email_only';
   let email = { emailSent: false, duplicate: false };
-  if (result.outcome === 'replay' && result.report.emailSent) {
-    email = { emailSent: false, duplicate: true };
-  } else {
-    email = await notify(payload);
+  if (emailOnly) {
+    email = result.outcome === 'replay' && result.report.emailSent ? { emailSent: false, duplicate: true } : await notify(payload);
   }
 
   return json({

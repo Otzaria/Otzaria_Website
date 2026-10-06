@@ -22,7 +22,7 @@ export const HANDOFF_REASON_LABELS = {
   reopened: 'נפתח מחדש אחרי סגירה',
   no_proposal: 'לא הוצע תיקון',
   service_disabled: 'השירות כבוי',
-  service_not_configured: 'השירות אינו מוגדר',
+  service_not_configured: 'שירות בדיקה חיצונית עצמאית אינו מוגדר',
   service_misconfigured: 'הגדרת השירות שגויה',
   service_secret_missing: 'חסר סוד לשירות',
   service_paused: 'השירות הושהה ע"י מנהל',
