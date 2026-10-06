@@ -1,12 +1,13 @@
 'use client'
 
 import ProofPageThumb from '../books/ProofPageThumb'
-import { ADMIN_STATE_UI } from '@/lib/pageProof/adminGrid'
+import { ADMIN_STATE_UI, EXPIRED_NOTE } from '@/lib/pageProof/adminGrid'
 import { formatTimeAgo, formatUntil } from '@/lib/pageProof/dates'
 
 // כרטיס עמוד ברשת-העמודים של המנהל (AdminBookPages): אותה תמונה ממוזערת כמו
 // אצל המתנדב (ProofPageThumb), המצב בעיני המנהל, מי מחזיק ועד מתי, המתג
-// "פתוח למתנדבים", ושחרור התפיסה (onRelease — אחרי אישור, ב-AdminBookPages).
+// "פתוח למתנדבים", ושחרור התפיסה (onRelease — אחרי אישור, ב-AdminBookPages) — רק לתפיסה בתוקף: עמוד שתפיסתו פגה
+// כבר פנוי לכל מתנדב מעצמו, והטיוטה שלא הוגשה עוברת איתו (serverDrafts.js) — אין מה לשחרר.
 // עמוד שממתין לזיהוי-מחדש בבקשת מתנדב — מי ביקש ומתי, והאם תוכנת-הספר כבר משכה את
 // הבקשה, עם "ביטול הבקשה" (onCancelRecut — העמוד חוזר אל המתנדב).
 // עמוד מאושר — "פתח מחדש לעריכה" (onReopen — רק מנהל, docs/63 §5); עמוד שנפתח מחדש — מסומן (reopened).
@@ -41,6 +42,11 @@ export default function AdminPageCard({ page, busy = false, now, onToggle, onRel
         {page.holder && (
           <p className="text-xs text-on-surface/70">
             {page.lease === 'active' ? `ע"י ${page.holder}` : `התפיסה של ${page.holder} פגה`}
+            {page.lease === 'expired' && (
+              <span className="block text-[10px] text-on-surface/50">
+                {EXPIRED_NOTE}
+              </span>
+            )}
             {until && <span className="block text-[10px] text-on-surface/50">שמור עד {until}</span>}
           </p>
         )}
@@ -97,7 +103,7 @@ export default function AdminPageCard({ page, busy = false, now, onToggle, onRel
               פתח מחדש לעריכה
             </button>
           )}
-          {page.holder && (
+          {page.holder && page.lease === 'active' && (
             <button
               type="button"
               disabled={busy}

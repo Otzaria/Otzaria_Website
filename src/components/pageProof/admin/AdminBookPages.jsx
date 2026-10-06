@@ -139,7 +139,7 @@ export default function AdminBookPages({ gid, title = '', onClose, onChanged }) 
     })
 
   const releaseAll = (scope, n) =>
-    confirmThen(scope === 'expired' ? 'ניקוי תפיסות שפגו' : 'שחרור כל התפיסות', bulkReleaseMessage(scope, n), 'שחרר', async () => {
+    confirmThen('שחרור כל התפיסות', bulkReleaseMessage(scope, n), 'שחרר', async () => {
       const d = await send('release', 'POST', { scope })
       if (d) showAlert('בוצע', d.released === 1 ? 'עמוד אחד שוחרר' : `${d.released} עמודים שוחררו`)
     })
@@ -179,7 +179,6 @@ export default function AdminBookPages({ gid, title = '', onClose, onChanged }) 
   }
 
   const c = data.counts
-  const claims = c.leased + c.expired
   return (
     <section aria-label="עמודי הספר" className="glass-strong flex flex-col gap-4 rounded-xl p-4">
       {heading}
@@ -235,20 +234,14 @@ export default function AdminBookPages({ gid, title = '', onClose, onChanged }) 
         )}
       </div>
 
-      {/* שחרור בבת אחת */}
-      {claims > 0 && (
+      {/* שחרור בבת אחת — רק תפיסות בתוקף; תפיסה שפגה כבר פנויה מעצמה (EXPIRED_NOTE) */}
+      {c.leased > 0 && (
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="text-on-surface/70">
-            {c.leased > 0 && `${c.leased} תפוסים עכשיו`}
-            {c.leased > 0 && c.expired > 0 && ' · '}
-            {c.expired > 0 && `${c.expired} תפיסות שפגו`}
+            {`${c.leased} תפוסים עכשיו`}
+            {c.expired > 0 && ` · ${c.expired} תפיסות שפגו (כבר פנויים)`}
           </span>
-          {c.expired > 0 && (
-            <button type="button" disabled={busy} onClick={() => releaseAll('expired', c.expired)} className={`${btn} hover:bg-surface-variant`}>
-              נקה תפיסות שפגו
-            </button>
-          )}
-          <button type="button" disabled={busy} onClick={() => releaseAll('all', claims)} className={`${btn} bg-danger-100 text-danger-700 hover:bg-danger-200`}>
+          <button type="button" disabled={busy} onClick={() => releaseAll('all', c.leased)} className={`${btn} bg-danger-100 text-danger-700 hover:bg-danger-200`}>
             שחרר את כל התפיסות בספר
           </button>
         </div>

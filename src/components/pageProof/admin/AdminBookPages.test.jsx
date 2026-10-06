@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import AdminBookPages from './AdminBookPages'
-import { adminCounts, DRAFT_WARNING } from '@/lib/pageProof/adminGrid'
+import { adminCounts, DRAFT_WARNING, EXPIRED_NOTE } from '@/lib/pageProof/adminGrid'
 import { formatUntil } from '@/lib/pageProof/dates'
 
 // רשת-העמודים של ספר בניהול: המצב של כל עמוד (מי מחזיק ועד מתי), המתג "פתוח
@@ -90,9 +90,10 @@ describe('AdminBookPages', { timeout: 20000 }, () => {
     expect(within(card(2)).getByText('סגור למתנדבים')).toBeInTheDocument()
     expect(screen.getByRole('checkbox', { name: 'עמוד 2 פתוח למתנדבים' })).not.toBeChecked()
     expect(screen.getByRole('checkbox', { name: 'עמוד 1 פתוח למתנדבים' })).toBeChecked()
-    // שחרור — רק לעמוד שמישהו רשום עליו (בתוקף או שפג)
+    // שחרור — רק לתפיסה בתוקף; תפיסה שפגה כבר פנויה מעצמה, והטיוטה עוברת עם העמוד
     expect(screen.getByRole('button', { name: 'שחרור עמוד 4' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'שחרור עמוד 5' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'שחרור עמוד 5' })).not.toBeInTheDocument()
+    expect(within(card(5)).getByText(EXPIRED_NOTE)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'שחרור עמוד 1' })).not.toBeInTheDocument()
     expect(screen.getByText(/שמור לו 48 שעות \(לכל עמוד לחוד; שבת וחג אינם נספרים\)/)).toBeInTheDocument()
   })
@@ -169,21 +170,17 @@ describe('AdminBookPages', { timeout: 20000 }, () => {
     expect(calls).toHaveLength(0)
   })
 
-  it('בבת אחת: ניקוי התפיסות שפגו, ושחרור כל התפיסות בספר — כל אחד עם אזהרה', async () => {
+  it('בבת אחת: שחרור כל התפיסות בספר (רק תפיסות בתוקף נספרות), עם אזהרה; תפיסות שפגו — בלי כפתור, כבר פנויות', async () => {
     render(<AdminBookPages gid="g1abcdef" />)
     await loaded()
-    expect(screen.getByText('1 תפוסים עכשיו · 1 תפיסות שפגו')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'נקה תפיסות שפגו' }))
-    await waitFor(() => expect(calls).toHaveLength(1))
-    expect(calls[0].body).toEqual({ scope: 'expired' })
-    expect(showConfirm.mock.calls[0][1]).toContain('תפיסה אחת שפגה')
-    await waitFor(() => expect(showAlert).toHaveBeenCalledWith('בוצע', 'עמוד אחד שוחרר'))
+    expect(screen.getByText('1 תפוסים עכשיו · 1 תפיסות שפגו (כבר פנויים)')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'נקה תפיסות שפגו' })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'שחרר את כל התפיסות בספר' }))
-    await waitFor(() => expect(calls).toHaveLength(2))
-    expect(calls[1].body).toEqual({ scope: 'all' })
-    expect(showConfirm.mock.calls[1][1]).toContain('את כל 2 העמודים התפוסים')
-    expect(showConfirm.mock.calls[1][1]).toContain(DRAFT_WARNING)
+    await waitFor(() => expect(calls).toHaveLength(1))
+    expect(calls[0].body).toEqual({ scope: 'all' })
+    expect(showConfirm.mock.calls[0][1]).toContain('את העמוד התפוס')
+    expect(showConfirm.mock.calls[0][1]).toContain(DRAFT_WARNING)
   })
 
   it('שגיאה מהשרת ← הודעה, והרשת נטענת מחדש', async () => {
