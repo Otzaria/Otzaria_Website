@@ -55,7 +55,8 @@ export async function GET(request, { params }) {
 
     const [book, recut] = await Promise.all([PageProofBook.findById(page.book, { title: 1, script: 1 }).lean(), recutStatus()]);
     const admin = hasOcrAccess(session.user.role);
-    const ctx = await editorContext(page, userId, { edit: mode === 'edit', admin, userName: session.user.name || '', recutOn: recut.effective });
+    // canRecut — לבד בלי מנהל; כבוי ← לאישור מנהל (recutRules.recutRoute). "אוטומטי" בלי תוכנת-הספר — לתור הרגיל
+    const ctx = await editorContext(page, userId, { edit: mode === 'edit', admin, userName: session.user.name || '', recutOn: recut.settings.recutRequests !== 'off' });
     return NextResponse.json(
       {
         success: true,

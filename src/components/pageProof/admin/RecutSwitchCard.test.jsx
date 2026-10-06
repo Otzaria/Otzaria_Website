@@ -49,18 +49,26 @@ afterEach(() => {
 })
 
 describe('RecutSwitchCard', () => {
-  it('מציג את המצב, מתי תוכנת-הספר נראתה וכמה ממתינים; "כבוי" נשמר והכפתור למתנדבים יורד', async () => {
+  it('מציג את המצב, מתי תוכנת-הספר נראתה וכמה ממתינים; "כבוי" נשמר — וכל בקשה ממתינה לאישור', async () => {
     const calls = mockServer()
     render(<RecutSwitchCard />)
     await screen.findByRole('radio', { name: 'פועל' })
     expect(screen.getByRole('radio', { name: 'פועל' })).toHaveAttribute('aria-checked', 'true')
-    expect(screen.getByTestId('recut-effective')).toHaveTextContent('הכפתור מופיע למתנדבים')
+    expect(screen.getByTestId('recut-effective')).toHaveTextContent('מתנדבים שולחים לזיהוי-מחדש בלי מנהל')
+    expect(screen.getByTestId('recut-asks')).toHaveTextContent('ממתינים לאישורכם: אין')
     expect(screen.getByText(/תוכנת-הספר נראתה לאחרונה: לפני 5 דקות/)).toBeInTheDocument()
     expect(screen.getByTestId('recut-waiting')).toHaveTextContent('ממתינים עכשיו: 2 עמודים (ועוד 1 שכבר בתוכנת-הספר)')
     fireEvent.click(screen.getByRole('radio', { name: 'כבוי' }))
     await waitFor(() => expect(screen.getByRole('radio', { name: 'כבוי' })).toHaveAttribute('aria-checked', 'true'))
     expect(calls.find((c) => c.method === 'PATCH').body).toEqual({ recutRequests: 'off' })
-    expect(screen.getByTestId('recut-effective')).toHaveTextContent('הכפתור אינו מופיע למתנדבים')
+    expect(screen.getByTestId('recut-effective')).toHaveTextContent('כל בקשה ממתינה לאישורכם')
+  })
+
+  it('עמודים שממתינים לאישור — המספר, והיכן מחליטים', async () => {
+    mockServer(state({ recutAsks: 3 }))
+    render(<RecutSwitchCard />)
+    await screen.findByRole('radio', { name: 'פועל' })
+    expect(screen.getByTestId('recut-asks')).toHaveTextContent('ממתינים לאישורכם: 3 עמודים — בעמודי הספר, בסינון "ממתינים לאישורך לזיהוי-מחדש"')
   })
 
   it('"החזר את כל הממתינים למתנדבים" — באישור, ואחריו אין ממתינים (הכפתור כבוי)', async () => {
@@ -78,7 +86,7 @@ describe('RecutSwitchCard', () => {
     mockServer(state({ settings: { recutRequests: 'auto', autoMinutes: 15 }, effective: { recutRequests: false }, bookSoftwareSeenAt: null }))
     render(<RecutSwitchCard />)
     await screen.findByRole('radio', { name: 'אוטומטי' })
-    expect(screen.getByTestId('recut-effective')).toHaveTextContent('הכפתור אינו מופיע למתנדבים (אוטומטי — לפי 15 הדקות האחרונות)')
+    expect(screen.getByTestId('recut-effective')).toHaveTextContent('הבקשות ממתינות בתור עד שתוכנת-הספר תתחבר (אוטומטי — לפי 15 הדקות האחרונות)')
     expect(screen.getByText(/עוד לא נראתה/)).toBeInTheDocument()
   })
 })

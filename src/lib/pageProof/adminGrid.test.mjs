@@ -61,7 +61,7 @@ test('מונים ומסננים: לכל מצב, סגורים למתנדבים, �
     { state: 'zzz' },
   ];
   const c = adminCounts(pages);
-  assert.deepEqual(c, { total: 7, closed: 3, leased: 1, expired: 1, open: 2, second: 1, taken: 1, submitted: 1, approved: 1, recut: 1 });
+  assert.deepEqual(c, { total: 7, closed: 3, leased: 1, expired: 1, open: 2, second: 1, taken: 1, submitted: 1, approved: 1, recut: 1, recut_ask: 0 });
   const idx = (f) => pages.map((p, i) => (adminMatches(p, f) ? i : -1)).filter((i) => i >= 0);
   assert.deepEqual(idx('open'), [0, 1, 2], 'פנויים = פנוי + בודק נוסף');
   assert.deepEqual(idx('closed'), [1, 3, 6]);

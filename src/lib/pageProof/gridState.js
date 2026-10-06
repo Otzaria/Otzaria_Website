@@ -71,7 +71,8 @@ export function pageStateFor(page, viewerId, now = new Date()) {
   const leased = p.leasedBy && timeOf(p.leasedUntil) > now.getTime();
   const leasedToMe = leased && me !== null && sameId(p.leasedBy, me);
   if (!isOpenToVolunteers(p)) return leasedToMe && p.status === 'open' ? 'mine' : 'closed';
-  if (p.status === 'recut') return 'recut';
+  // ממתין לאישור מנהל לזיהוי-מחדש (recut_ask) — בעיני המתנדבים כמו "ממתין לזיהוי-מחדש": נעול
+  if (p.status === 'recut' || p.status === 'recut_ask') return 'recut';
   if (p.status === 'done') return 'done';
 
   if (leased) return leasedToMe ? 'mine' : 'taken';

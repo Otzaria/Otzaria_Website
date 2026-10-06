@@ -48,8 +48,15 @@ const P = (page, extra = {}) => ({
 });
 const byId = (list) => Object.fromEntries(list.map((u) => [u._id, u.seq]));
 
-test('PAGE_STATUSES כולל את recut', () => {
-  assert.deepEqual(PAGE_STATUSES, ['open', 'done', 'recut']);
+test('PAGE_STATUSES כולל את recut ואת recut_ask (ממתין לאישור מנהל לזיהוי-מחדש)', () => {
+  assert.deepEqual(PAGE_STATUSES, ['open', 'done', 'recut', 'recut_ask']);
+});
+
+test('ייבוא לעמוד שממתין לאישור מנהל לזיהוי-מחדש: אותה גרסה — מדלגים; גרסה חדשה — מחליפה (המנהל חתך בתוכנה)', () => {
+  const prev = { status: 'recut_ask', revision: 1, activeCount: 0 };
+  assert.equal(importAction(prev, { revision: 1 }), 'skip-recut');
+  assert.equal(importAction(prev, { revision: 2 }), 'recut');
+  assert.equal(canReplacePage(prev, { revision: 2 }), true);
 });
 
 test('גרסאות: חסר/לא תקין = 1, והשוואה מנרמלת', () => {
@@ -146,6 +153,7 @@ test('RECUT_RESET: מאפס מונים, מגישים והחכרה, ונפתח ע
     required: 1,
     leasedBy: null,
     leasedUntil: null,
+    recutAsk: null,
   });
   assert.equal(Object.isFrozen(RECUT_RESET), true);
 });

@@ -134,6 +134,51 @@ export function recutRefusal(page, userId, now = new Date()) {
   return null;
 }
 
+// ---------- נעול עד אחרי הזיהוי-מחדש (בעל הפרויקט, 2026-10-06) ----------
+//
+// מתנדב שתיקן חיתוך אינו ממשיך עוד לשלב הטקסט כשאי אפשר לשלוח את העמוד בעצמו: העמוד נעול עד שיחזור מהזיהוי-מחדש.
+// כשהשליחה בלי מנהל אינה אפשרית מאחת הסיבות האלה — הבקשה ממתינה לאישור מנהל (מצב העמוד 'recut_ask'; recutRequests
+// .askRecut), והמתנדב פנוי לתפוס עמודים אחרים (עמוד שממתין אינו נספר בחמשת העמודים שהוא מחזיק):
+//   off      — המנהל כיבה את "שלח לזיהוי-מחדש"
+//   cap      — יש למתנדב כבר MAX_PENDING_RECUT עמודים שממתינים לזיהוי-מחדש
+//   other    — לעמוד יש הגשה של מתנדב אחר (עמוד כפול): הזיהוי-מחדש יחליף עמוד שמישהו כבר הגיש
+// במצב "אוטומטי" כשתוכנת-הספר אינה מחוברת — הבקשה נכנסת לתור הרגיל וממתינה עד שתתחבר (בלי מנהל): זה מה ש"אוטומטי"
+// אומר. שאר הסירובים (העמוד אינו בטיפולו, כבר הוגש או הושלם, כבר ממתין) — שגיאה, כמו קודם.
+export const ASK_REASONS = Object.freeze({
+  off: 'שליחה לזיהוי-מחדש בלי מנהל כבויה כרגע',
+  cap: `יש לכם כבר ${MAX_PENDING_RECUT} עמודים שממתינים לזיהוי-מחדש`,
+  other: 'לעמוד הזה כבר יש הגשה של מתנדב אחר',
+});
+export const ASK_MSG = Object.freeze({
+  asked: 'העמוד ממתין לאישור מנהל לזיהוי-מחדש, ונעול עד שיחזור מהזיהוי-מחדש. בינתיים אפשר לתפוס עמודים אחרים.',
+  approved: 'המנהל אישר — העמוד ממתין לזיהוי-מחדש ויחזור אליכם לשלב הטקסט.',
+  rejected: 'המנהל לא אישר זיהוי-מחדש לעמוד הזה. העמוד חזר אליכם: הגיהו את הטקסט והגישו אותו עם תיקוני-החיתוך, והמנהל יחליט.',
+  notAsk: 'העמוד אינו ממתין לאישור זיהוי-מחדש',
+});
+
+// איך יוצאת בקשה של המתנדב עכשיו: {route: 'auto'} (לבד, כמו עד היום) / {route: 'ask', reason} (לאישור מנהל) /
+// {error} (אי אפשר בכלל). page — כמו ב-recutRefusal; mode — מתג המנהל (normalizeProofRuntime.recutRequests);
+// pending — כמה בקשות ממתינות למתנדב
+export function recutRoute(page, userId, { mode = 'on', pending = 0, now = new Date() } = {}) {
+  if (!page) return { error: 'העמוד לא נמצא' };
+  if (page.status === 'recut_ask') return { error: 'העמוד כבר ממתין לאישור מנהל לזיהוי-מחדש' };
+  // הגשה של מתנדב אחר — מנהל מחליט (רק אחרי שאר התנאים: העמוד בטיפולו, לא הגיש וכו')
+  const why = recutRefusal({ ...page, activeCount: 0 }, userId, now);
+  if (why) return { error: why };
+  if ((page.activeCount || 0) > 0) return { route: 'ask', reason: 'other' };
+  if (mode === 'off') return { route: 'ask', reason: 'off' };
+  if (pending >= MAX_PENDING_RECUT) return { route: 'ask', reason: 'cap' };
+  // "אוטומטי" בלי תוכנת-הספר — לתור הרגיל, ממתין עד שתתחבר
+  return { route: 'auto' };
+}
+
+// מסנן-Mongo למעבר open ← recut_ask: כמו recutEligibleFilter, אבל בלי התנאי "אין הגשה של אחר" (בזה מנהל מחליט)
+export function askEligibleFilter(userId, revision, now = new Date()) {
+  const f = recutEligibleFilter(userId, revision, now);
+  delete f.activeCount;
+  return f;
+}
+
 // מסנן-Mongo תואם ל-recutRefusal (לעדכון האטומי open ← recut): אם בינתיים מישהו הגיש, התפיסה
 // פגה או העמוד הוחלף — העדכון לא חל
 export function recutEligibleFilter(userId, revision, now = new Date()) {

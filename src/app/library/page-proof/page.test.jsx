@@ -436,7 +436,8 @@ describe('דף המתנדב — הכניסה אינה תופסת עמודים ("
 })
 
 // שני השלבים (docs/63 §3): עמוד חדש נפתח בשלב "מבנה"; "✓ המבנה נכון" בלי שינוי-חיתוך ← "טקסט"; עם שינוי-חיתוך ←
-// זיהוי-מחדש בלי מנהל (העמוד יחזור לשלב "טקסט"); אי אפשר לשלוח — "טקסט" כמו היום (השורות נעולות עד ההגשה)
+// זיהוי-מחדש בלי מנהל (העמוד יחזור לשלב "טקסט"); אי אפשר לשלוח בלי מנהל — לאישור מנהל, נעול עד הזיהוי-מחדש (בעל הפרויקט,
+// 2026-10-06); השליחה נכשלה — נשארים בשלב "מבנה"
 describe('דף המתנדב — שני השלבים', { timeout: 20000 }, () => {
   const CUT_OP = { kind: 'line_split', page: P, ids: [2], value: { x: 500 }, _g: 'g2' }
   const TEXT_OP = { kind: 'text', page: P, ids: [1], value: 'שורה 1 מתוקנת', _g: 'g1' }
@@ -491,33 +492,36 @@ describe('דף המתנדב — שני השלבים', { timeout: 20000 }, () => 
     expect(seqBtn).toBeDisabled()
   })
 
-  it('המנהל כיבה את השליחה — "טקסט" כמו היום: בלי בקשה, הסבר שהשורות נעולות עד ההגשה, ונוסח-העזרה של ההגשה', async () => {
+  it('אי אפשר לשלוח בלי מנהל (המתג כבוי) — "לאישור זיהוי-מחדש": הבקשה נשלחת, העמוד ממתין לאישור מנהל ונעול, וממשיכים הלאה', async () => {
     pageData = { ...pageData, recutRequests: false, canRecut: false }
+    h.recutReply = { success: true, asked: true, reason: 'off', opCount: 1 }
     h.ops = [TEXT_OP, CUT_OP]
     render(<PageProofVolunteer />)
     await screen.findByTestId('editor')
     expect(h.props.help).toBe(RECUT_OFF_HELP)
     report([TEXT_OP, CUT_OP])
-    expect(screen.getByRole('button', { name: /המבנה נכון — להגהת הטקסט/ })).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: /המבנה נכון — להגהת הטקסט/ }))
-    await waitFor(() => expect(stageOf()).toBe('text'))
-    expect(posts).toEqual([])
-    expect(screen.getByTestId('stage-note')).toHaveTextContent('השורות שנחתכו נעולות לעריכה')
-    expect(screen.getByTestId('stage-note')).toHaveTextContent('יישלחו עם ההגשה')
+    const btn = screen.getByRole('button', { name: /המבנה נכון — לאישור זיהוי-מחדש/ })
+    expect(btn).toHaveAttribute('title', expect.stringMatching(/ימתין לאישור מנהל, נעול/))
+    expect(screen.queryByRole('button', { name: /המבנה נכון — להגהת הטקסט/ })).not.toBeInTheDocument()
+    await userEvent.click(btn)
+    await waitFor(() => expect(posts).toHaveLength(1))
+    expect(posts[0].url).toBe(`/api/page-proof/pages/${ID}/recut-request`)
+    await waitFor(() => expect(h.dialog.showAlert).toHaveBeenCalledWith('ממתין לאישור מנהל', expect.stringContaining('נעול עד שיחזור')))
+    expect(await screen.findByText('סיימתם את הרצף — תודה!')).toBeInTheDocument()
   })
 
-  it('השרת דוחה את השליחה (recut_off באמצע / תקרה) — "טקסט" עם ההסבר והסיבה, והעורך נשאר פתוח', async () => {
+  it('השליחה נכשלה (למשל התפיסה פגה בינתיים) — נשארים בשלב "מבנה" עם הסיבה; העורך נשאר פתוח ואין מעבר לטקסט', async () => {
     pageData = { ...pageData, canRecut: true }
-    h.recutReply = { success: false, code: 'recut_off', error: 'שליחה לזיהוי-מחדש כבויה כרגע.' }
+    h.recutReply = { success: false, error: 'העמוד אינו בטיפולכם' }
     h.ops = [CUT_OP]
     render(<PageProofVolunteer />)
     await screen.findByTestId('editor')
     report([CUT_OP])
     await userEvent.click(screen.getByRole('button', { name: /המבנה נכון — לזיהוי-מחדש/ }))
-    await waitFor(() => expect(stageOf()).toBe('text'))
-    expect(screen.getByTestId('stage-note')).toHaveTextContent('שליחה לזיהוי-מחדש כבויה כרגע')
+    await waitFor(() => expect(screen.getByTestId('stage-note')).toHaveTextContent('העמוד אינו בטיפולכם'))
+    expect(stageOf()).toBe('structure')
+    expect(screen.getByTestId('stage-note')).toHaveTextContent('נשאר בשלב המבנה')
     expect(screen.getByTestId('editor')).toBeInTheDocument()
-    expect(h.props.help).toBe(RECUT_OFF_HELP)
   })
 
   it('עמוד שחזר מזיהוי-מחדש — נפתח ישר בשלב "טקסט" (מהטיוטה בשרת); "במה כבר טיפלתי" — חזר', async () => {

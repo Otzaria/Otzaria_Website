@@ -7,6 +7,8 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vites
 //   במפתח-הגישה (fixes?pages=recut&mark=1) ← ייבוא הגרסה החדשה ← העמוד חוזר למבקש (48 שעות, בלי שבת וחג).
 //   וגם: אחת לעמוד, עד 5 ממתינות למתנדב, האטה, רק עמוד שבטיפולו; "העמודים שלי" ורשת המנהל
 //   מראים את ההמתנה; ביטול בידי המנהל ("שחרור מהמתנה") מחזיר את העמוד למבקש ואינו חוזר.
+//   נעול עד אחרי הזיהוי-מחדש (בעל הפרויקט, 2026-10-06): מה שאינו יכול לצאת בלי מנהל — המתג כבוי, תקרת 5, הגשה של
+//   אחר — ממתין לאישור מנהל (העמוד 'recut_ask'), ולא נדחה; המנהל מאשר או דוחה (admin/page-proof/pages/[id]/recut-ask).
 
 const { getServerSessionMock, rateMock } = vi.hoisted(() => ({ getServerSessionMock: vi.fn(), rateMock: vi.fn() }))
 vi.mock('@/lib/db', () => ({ default: vi.fn().mockResolvedValue(undefined) }))
@@ -34,6 +36,7 @@ import { GET as adminPagesGET } from '@/app/api/admin/page-proof/books/[gid]/pag
 import { PATCH as subPATCH } from '@/app/api/admin/page-proof/submissions/[id]/route'
 import { GET as settingsGET, PATCH as settingsPATCH } from '@/app/api/admin/page-proof/settings/route'
 import { POST as releasePOST } from '@/app/api/admin/page-proof/recut-requests/release/route'
+import { POST as askPOST } from '@/app/api/admin/page-proof/pages/[id]/recut-ask/route'
 
 // מסד אמיתי — תחת עומס (כל הבדיקות במקביל) בקשות רבות לוקחות יותר מ-5 שניות
 vi.setConfig({ testTimeout: 30000 })
@@ -135,12 +138,44 @@ describe('הבקשה', () => {
     expect(await PageProofSubmission.countDocuments({ page: pages[1]._id })).toBe(1)
   })
 
-  it(`עד ${MAX_PENDING_RECUT} ממתינות למתנדב — השישית נדחית והעמוד נשאר בידיו`, async () => {
+  it(`עד ${MAX_PENDING_RECUT} ממתינות למתנדב — השישית ממתינה לאישור מנהל, נעולה, והמתנדב יכול לתפוס עמודים אחרים`, async () => {
     for (const n of [1, 2, 3, 4, 5]) expect((await request(n)).status, `עמוד ${n}`).toBe(200)
     const res = await request(6)
-    expect(res.status).toBe(409)
-    expect((await res.json()).error).toBe(RECUT_MSG.tooMany)
-    expect(await pageOf(6)).toMatchObject({ status: 'open', leasedBy: vol._id })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ success: true, asked: true, reason: 'cap' })
+    const p6 = await pageOf(6)
+    expect(p6).toMatchObject({ status: 'recut_ask', leasedBy: null })
+    expect(p6.recutAsk.ops.map((o) => o.kind)).toEqual(['line_split'])
+    // לא נוצרה בקשה רגילה, ולא נספר בעמודים שהוא מחזיק
+    expect(await PageProofSubmission.countDocuments({ page: pages[6]._id })).toBe(0)
+    const m = await mine()
+    expect(m.held).toEqual([])
+    expect(m.recutPending.map((r) => [r.page, !!r.asked])).toContainEqual([6, true])
+  })
+
+  it('המנהל מאשר (הבקשה עוברת לתור בשם המתנדב) או דוחה (העמוד חוזר אליו); מתנדב אינו יכול להחליט', async () => {
+    for (const n of [1, 2, 3, 4, 5]) await request(n)
+    await request(6)
+    const decide = (n, action) => askPOST(post({ action }), p({ id: String(pages[n]._id) }))
+    expect((await decide(6, 'approve')).status).toBe(403)
+    as(admin)
+    expect((await decide(6, 'maybe')).status).toBe(400)
+    expect(await (await decide(6, 'approve')).json()).toMatchObject({ success: true, decision: 'approve' })
+    expect(await pageOf(6)).toMatchObject({ status: 'recut', recutAsk: null })
+    const req = await PageProofSubmission.findOne({ page: pages[6]._id }).lean()
+    expect(req).toMatchObject({ recutRequest: true, status: 'approved', reviewedByName: 'מנהל' })
+    expect(String(req.user)).toBe(String(vol._id))
+    // שוב — כבר אינו ממתין
+    expect((await decide(6, 'reject')).status).toBe(409)
+    // דחייה: עמוד כפול שמתנדב אחר הגיש — ממתין; המנהל דוחה ← חוזר למתנדב
+    as(vol)
+    await PageProofPage.updateOne({ _id: pages[7]._id }, { $set: { leasedBy: vol._id, required: 2, activeCount: 1, submitters: [other._id] } })
+    expect(await (await request(7)).json()).toMatchObject({ asked: true, reason: 'other' })
+    as(admin)
+    expect((await decide(7, 'reject')).status).toBe(200)
+    const p7 = await pageOf(7)
+    expect(p7).toMatchObject({ status: 'open', recutAsk: null })
+    expect(String(p7.leasedBy)).toBe(String(vol._id))
   })
 
   it('רק עמוד שבטיפולו, בגרסה שנפתחה, בלי הגשה של אחר — ורק כשיש תיקוני-חיתוך', async () => {
@@ -158,10 +193,7 @@ describe('הבקשה', () => {
     // פעולת-חיתוך לא תקינה — אותה בדיקה של הגשה
     res = await send(1, { revision: 1, ops: [{ kind: 'line_split', page: 1, ids: [99], value: { x: 500 } }] })
     expect(res.status).toBe(400)
-    // עמוד כפול שמתנדב אחר כבר הגיש
-    await PageProofPage.updateOne({ _id: pages[2]._id }, { $set: { required: 2, activeCount: 1, submitters: [other._id] } })
-    res = await request(2)
-    expect([res.status, (await res.json()).error]).toEqual([409, expect.stringMatching(/הגשה של מתנדב אחר/)])
+    // (עמוד כפול שמתנדב אחר כבר הגיש — ממתין לאישור מנהל; בבדיקה של המנהל למעלה)
     // התפיסה פגה
     await PageProofPage.updateOne({ _id: pages[3]._id }, { $set: { leasedUntil: new Date(Date.now() - HOUR) } })
     expect((await request(3)).status).toBe(409)
@@ -171,7 +203,7 @@ describe('הבקשה', () => {
     expect((await send(1, { revision: 1 })).status).toBe(400)
     // שום דבר לא השתנה
     expect(await PageProofSubmission.countDocuments()).toBe(0)
-    expect(await PageProofPage.countDocuments({ status: 'recut' })).toBe(0)
+    expect(await PageProofPage.countDocuments({ status: { $in: ['recut', 'recut_ask'] } })).toBe(0)
   })
 
   it('בלי התחברות ← 401; משתמש לא מאומת ← 403; האטה ← 429 — בלי לגעת במסד', async () => {
@@ -313,25 +345,28 @@ describe('מתג המנהל לשליחת מתנדבים לזיהוי-מחדש', 
   }
   const seen = (minutesAgo) => PageProofToken.updateMany({}, { $set: { lastUsedAt: new Date(Date.now() - minutesAgo * 60 * 1000) } })
 
-  it('ברירת-המחדל — פועל; כבוי ← 409 recut_off בלי לגעת במסד, ו"העמודים שלי" אומר שהכפתור סגור', async () => {
+  it('ברירת-המחדל — פועל; כבוי ← הבקשה ממתינה לאישור מנהל (נעול), בלי בקשה בתור; "העמודים שלי" אומר שהשליחה בלי מנהל סגורה', async () => {
     expect((await mine()).recutRequests).toBe(true)
     const body = await setMode('off')
-    expect(body).toMatchObject({ success: true, settings: { recutRequests: 'off', autoMinutes: 15 }, effective: { recutRequests: false } })
+    expect(body).toMatchObject({ success: true, settings: { recutRequests: 'off', autoMinutes: 15 }, effective: { recutRequests: false }, recutAsks: 0 })
     const res = await request(1)
-    expect(res.status).toBe(409)
-    expect(await res.json()).toMatchObject({ success: false, error: RECUT_MSG.off, code: 'recut_off' })
-    expect(await pageOf(1)).toMatchObject({ status: 'open' })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ success: true, asked: true, reason: 'off' })
+    expect(await pageOf(1)).toMatchObject({ status: 'recut_ask' })
     expect(await PageProofSubmission.countDocuments()).toBe(0)
     expect((await mine()).recutRequests).toBe(false)
+    as(admin)
+    expect(await (await settingsGET(settingsReq('GET'))).json()).toMatchObject({ recutAsks: 1 })
   })
 
-  it('אוטומטי: תוכנת-הספר לא נראתה 20 דקות ← 409; נראתה לפני דקה ← הבקשה עוברת', async () => {
+  it('אוטומטי: תוכנת-הספר לא נראתה 20 דקות ← הבקשה בתור הרגיל וממתינה (בלי מנהל); נראתה לפני דקה ← עוברת', async () => {
     await setMode('auto')
     await seen(20)
-    expect((await request(1)).status).toBe(409)
+    expect((await request(1)).status).toBe(200)
+    expect(await pageOf(1)).toMatchObject({ status: 'recut' })
     await seen(1)
     expect((await mine()).recutRequests).toBe(true)
-    expect((await request(1)).status).toBe(200)
+    expect((await request(2)).status).toBe(200)
   })
 
   it('GET/PATCH: מנהל OCR, או מפתח-גישה (קריאה ב-read); מתנדב ← 403; ערך לא מוכר ← 400', async () => {

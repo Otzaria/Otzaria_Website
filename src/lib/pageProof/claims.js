@@ -367,7 +367,8 @@ export async function describeSequence(bookId, seq, uid, now = new Date()) {
       const revision = storedRevision(p);
       const sub = mineByPage.get(`${p._id}:${revision}:${roundOf(p)}`);
       const leasedToMe = p.leasedBy && String(p.leasedBy) === String(uid) && p.leasedUntil > now;
-      const state = sub ? (sub.status === 'approved' ? 'approved' : 'submitted') : p.status === 'recut' ? 'recut' : leasedToMe ? 'mine' : 'unavailable';
+      const waiting = p.status === 'recut' || p.status === 'recut_ask';
+      const state = sub ? (sub.status === 'approved' ? 'approved' : 'submitted') : waiting ? 'recut' : leasedToMe ? 'mine' : 'unavailable';
       return {
         id: String(p._id),
         page: p.page,

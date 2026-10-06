@@ -4,13 +4,13 @@ import { requireAccess, badRequest, serverError } from '@/lib/apiResponse';
 import { json, noStore } from '@/lib/pageProof/respond';
 import { getPageProofSession } from '@/lib/pageProof/tokenAuth';
 import { recutStatus, setProofRuntime } from '@/lib/pageProof/runtime';
-import { pendingRecutTotals } from '@/lib/pageProof/recutRequests';
+import { pendingRecutTotals, recutAskCount } from '@/lib/pageProof/recutRequests';
 import { proofRuntimePatch, recutEffective } from '@/lib/pageProof/recutRules';
 
 // מתגי הגהת-העמודים (lib/pageProof/runtime.js) — היום: האם מתנדבים יכולים לשלוח לזיהוי-מחדש.
 // GET   (session, או מפתח-גישה 'read' — תוכנת-הספר מציגה את המתג) ←
 //       {success, settings: {recutRequests: 'on'|'off'|'auto', autoMinutes}, effective: {recutRequests: bool},
-//        bookSoftwareSeenAt, pendingRecut: {waiting, picked}}
+//        bookSoftwareSeenAt, pendingRecut: {waiting, picked}, recutAsks — עמודים שממתינים לאישור מנהל לזיהוי-מחדש}
 // PATCH {recutRequests?, autoMinutes?} (session, או מפתח 'import') ← אותה צורה.
 //       כיבוי אינו נוגע בבקשות שכבר ממתינות ("החזר את כל הממתינים" — recut-requests/release).
 // private, no-store.
@@ -31,6 +31,7 @@ async function reply() {
     effective: { recutRequests: recutEffective(settings, seenAt) },
     bookSoftwareSeenAt: seenAt,
     pendingRecut: await pendingRecutTotals(),
+    recutAsks: await recutAskCount(),
   });
 }
 

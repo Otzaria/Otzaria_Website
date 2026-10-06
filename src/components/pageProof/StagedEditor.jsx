@@ -13,8 +13,9 @@ import { STAGE_TEXT, cutOpsOf, finishStructure, initialStage } from '@/lib/pageP
 //   • השלב: נשמר בטיוטה (ולכן עובר מחשב ועובר מתנדב); עמוד חדש ← "מבנה"; טיוטה בעבודה מלפני השלבים, או עמוד שחזר
 //     מזיהוי-מחדש ← "טקסט" (stages.initialStage). העורך מקבל focus לפי השלב.
 //   • "מבנה" ← "✓ המבנה נכון — להגהת הטקסט" (או "דלג — המבנה נכון"): בלי שינוי-חיתוך — "טקסט" מיד; עם שינוי-חיתוך —
-//     הטיוטה נשמרת באתר ותיקוני-החיתוך נשלחים לזיהוי-מחדש (בלי מנהל; העמוד יחזור לאותו מתנדב, לשלב "טקסט"); אי אפשר
-//     לשלוח עכשיו (canRecut מהשרת, או שהשליחה נדחתה) — "טקסט" כמו היום, והשורות שנחתכו נעולות עד ההגשה.
+//     הטיוטה נשמרת באתר ותיקוני-החיתוך נשלחים לזיהוי-מחדש: בלי מנהל כשאפשר (canRecut מהשרת), אחרת לאישור מנהל — ובשני
+//     המקרים העמוד נעול עד שיחזור, לשלב "טקסט" (בעל הפרויקט, 2026-10-06). השליחה נכשלה — נשארים בשלב "מבנה".
+//     מנהל שדחה את הבקשה — העמוד חוזר בשלב "טקסט" עם הודעה (draft.recut.rejectedAt), והשורות שנחתכו נעולות עד ההגשה.
 //   • "טקסט" ← ההגשה (חלון-ההגשה של הדף); "חזרה לשלב המבנה" — הטקסט שתוקן נשאר.
 //   • "במה כבר טיפלתי" (StagePanel) — בקצה הסרגל, ליד הכפתור של השלב.
 //   • טיוטה שהתקבלה ממישהו אחר (הבודק השני, עמוד שנפתח מחדש, מתנדב קודם — draft.inherited): ההודעה עם "התחל מאפס",
@@ -22,7 +23,7 @@ import { STAGE_TEXT, cutOpsOf, finishStructure, initialStage } from '@/lib/pageP
 // הדף מחליט מה נטען לעורך (drafts.cleanupPageDrafts + draftRules.applyServerDraft) לפני שהוא נפתח.
 //
 // Props: current — מה שהדף קיבל (GET /api/page-proof/pages/[id]: page, draft, canRecut) + draftKey + draftInfo
-// ({source, srv, stage}); help — נוסח העזרה; recutOpen — מתג המנהל (מעודכן בדף); saving — הדף באמצע הגשה/שליחה;
+// ({source, srv, stage}); help — נוסח העזרה; saving — הדף באמצע הגשה/שליחה;
 // onSubmit(args) — חלון ההגשה; onSendRecut({ops}) — שליחת תיקוני-החיתוך: Promise של {ok, error} (בהצלחה הדף ממשיך
 // לעמוד הבא); onReset() — "התחל מאפס" נשמר באתר: הדף טוען את העמוד מחדש; onReload() — "טען מחדש" כשהשמירה באתר נדחתה
 // (הטיוטה נשמרה בינתיים בלשונית/מחשב אחר, או העמוד הוחלף) — בלי למחוק את המקומית.
@@ -33,7 +34,7 @@ import { STAGE_TEXT, cutOpsOf, finishStructure, initialStage } from '@/lib/pageP
 const hasOps = (info, draft) =>
   info?.source === 'local' || info?.source === 'merged' || (info?.source === 'server' && (draft?.ops?.length || 0) > 0)
 
-export default function StagedEditor({ current, help, recutOpen = true, saving = false, onSubmit, onSendRecut, onReset, onReload }) {
+export default function StagedEditor({ current, help, saving = false, onSubmit, onSendRecut, onReset, onReload }) {
   const page = current.page
   const draft = current.draft || null
   const saved = current.draftInfo?.stage ?? null
@@ -47,7 +48,8 @@ export default function StagedEditor({ current, help, recutOpen = true, saving =
     initial: draft ? { ops: draft.ops, srv: draft.updatedAt } : null,
   })
   const [noticeOpen, setNoticeOpen] = useState(true)
-  const [note, setNote] = useState(null)
+  // מנהל דחה בקשה לזיהוי-מחדש — ההודעה מוצגת בפתיחה (עד שנסגרת)
+  const [note, setNote] = useState(() => (draft?.recut?.rejectedAt && stage === 'text' ? STAGE_TEXT.recutRejected(draft.recut.note) : null))
   const [busy, setBusy] = useState(false)
   // הרשימה העדכנית מהעורך (onOpsChange) — לכפתורי-השלב
   const opsRef = useRef([])
@@ -77,10 +79,9 @@ export default function StagedEditor({ current, help, recutOpen = true, saving =
 
   // "✓ המבנה נכון — להגהת הטקסט" / "דלג — המבנה נכון"
   const finish = useCallback(async () => {
-    const plan = finishStructure({ ops: opsRef.current, canRecut: !!current.canRecut && recutOpen })
+    const plan = finishStructure({ ops: opsRef.current, canRecut: !!current.canRecut })
     setNote(null)
     if (plan.next !== 'recut') {
-      if (plan.locked) setNote(STAGE_TEXT.recutLocked(plan.locked))
       await goStage('text')
       return
     }
@@ -94,11 +95,13 @@ export default function StagedEditor({ current, help, recutOpen = true, saving =
       }
       const r = await onSendRecut?.({ ops: plan.cut })
       if (r?.ok) return
-      setNote(`${STAGE_TEXT.recutLocked(plan.cut.length)}${r?.error ? ` (${r.error})` : ''}`)
+      // לא נשלח — העמוד נשאר בשלב המבנה (נעול עד הזיהוי-מחדש: אין מעבר לטקסט בלי שליחה)
+      await goStage('structure')
+      setNote(STAGE_TEXT.recutFailed(r?.error))
     } finally {
       setBusy(false)
     }
-  }, [current.canRecut, recutOpen, goStage, onSendRecut])
+  }, [current.canRecut, goStage, onSendRecut])
 
   const back = useCallback(() => {
     setNote(null)
@@ -144,7 +147,11 @@ export default function StagedEditor({ current, help, recutOpen = true, saving =
           stage === 'structure' ? (
             <>
               <StagePanel stage={stage} view={args.view} ops={args.ops} recut={recut} />
-              <FinishButton cut={cutOpsOf(args.ops).length > 0 && !!current.canRecut && recutOpen} onClick={finish} disabled={working} />
+              <FinishButton
+                cut={cutOpsOf(args.ops).length > 0 ? (current.canRecut ? 'auto' : 'ask') : null}
+                onClick={finish}
+                disabled={working}
+              />
             </>
           ) : (
             <>
@@ -166,19 +173,22 @@ export default function StagedEditor({ current, help, recutOpen = true, saving =
   )
 }
 
+// cut: null (בלי שינוי-חיתוך) / 'auto' (לזיהוי-מחדש בלי מנהל) / 'ask' (לאישור מנהל)
 function FinishButton({ cut, onClick, disabled }) {
+  const title = cut === 'ask' ? STAGE_TEXT.finishAskTitle : cut ? STAGE_TEXT.finishRecutTitle : STAGE_TEXT.finishTitle
+  const label = cut === 'ask' ? STAGE_TEXT.finishAsk : cut ? STAGE_TEXT.finishRecut : STAGE_TEXT.finish
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      title={cut ? STAGE_TEXT.finishRecutTitle : STAGE_TEXT.finishTitle}
+      title={title}
       className={`flex items-center gap-1 rounded-lg px-4 py-1.5 font-bold text-white disabled:opacity-40 ${
         cut ? 'bg-feature-600 hover:bg-feature-700' : 'bg-success-600 hover:bg-success-700'
       }`}
     >
       <span aria-hidden="true" className="material-symbols-outlined text-base">{cut ? 'cached' : 'task_alt'}</span>
-      {cut ? STAGE_TEXT.finishRecut : STAGE_TEXT.finish}
+      {label}
     </button>
   )
 }

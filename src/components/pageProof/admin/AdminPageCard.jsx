@@ -11,13 +11,15 @@ import { formatTimeAgo, formatUntil } from '@/lib/pageProof/dates'
 // עמוד שממתין לזיהוי-מחדש בבקשת מתנדב — מי ביקש ומתי, והאם תוכנת-הספר כבר משכה את
 // הבקשה, עם "ביטול הבקשה" (onCancelRecut — העמוד חוזר אל המתנדב).
 // עמוד מאושר — "פתח מחדש לעריכה" (onReopen — רק מנהל, docs/63 §5); עמוד שנפתח מחדש — מסומן (reopened).
-// page: {id, page, revision, state, volunteer, holder, leasedUntil, lease, pending, recutRequest, reopened}
+// עמוד שממתין לאישורך לזיהוי-מחדש (recutAsk) — מי ביקש, וכפתורי "אשר זיהוי-מחדש" / "לא לאשר" (onDecideAsk(page, decision)).
+// page: {id, page, revision, state, volunteer, holder, leasedUntil, lease, pending, recutRequest, recutAsk, reopened}
 
-export default function AdminPageCard({ page, busy = false, now, onToggle, onRelease, onCancelRecut, onReopen, onPreview }) {
+export default function AdminPageCard({ page, busy = false, now, onToggle, onRelease, onCancelRecut, onDecideAsk, onReopen, onPreview }) {
   const ui = ADMIN_STATE_UI[page.state] || ADMIN_STATE_UI.open
   const until = page.lease === 'active' ? formatUntil(page.leasedUntil, now) : ''
   const closed = !page.volunteer
   const req = page.recutRequest
+  const ask = page.recutAsk
   return (
     <div
       className={`group relative flex h-full flex-col overflow-hidden rounded-xl border-2 glass transition-all ${
@@ -57,6 +59,13 @@ export default function AdminPageCard({ page, busy = false, now, onToggle, onRel
             <span className="block text-[10px] text-on-surface/50">{req.picked ? 'תוכנת-הספר משכה את הבקשה' : 'ממתין לתוכנת-הספר'}</span>
           </p>
         )}
+        {ask && (
+          <p className="text-xs text-warning-alt-800" data-testid="recut-ask">
+            {ask.by || 'מתנדב'} תיקן חיתוך ({ask.opCount === 1 ? 'תיקון אחד' : `${ask.opCount} תיקונים`})
+            {ask.at && <span className="text-on-surface/50"> · {formatTimeAgo(ask.at, now || new Date())}</span>}
+            <span className="block text-[10px] text-on-surface/50">נעול עד ההחלטה שלך</span>
+          </p>
+        )}
         {page.reopened && page.state !== 'approved' && (
           <p className="text-[11px] text-info-800" data-testid="reopened">
             נפתח מחדש לעריכה
@@ -89,6 +98,30 @@ export default function AdminPageCard({ page, busy = false, now, onToggle, onRel
               <span aria-hidden="true" className="material-symbols-outlined text-sm">undo</span>
               ביטול הבקשה
             </button>
+          )}
+          {ask && onDecideAsk && (
+            <div className="flex gap-1">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onDecideAsk(page, 'approve')}
+                aria-label={`אישור זיהוי-מחדש לעמוד ${page.page}`}
+                className="flex flex-1 items-center justify-center gap-1 rounded-md bg-feature-100 px-2 py-1 text-xs font-bold text-feature-800 transition-colors hover:bg-feature-200 disabled:opacity-50"
+              >
+                <span aria-hidden="true" className="material-symbols-outlined text-sm">cached</span>
+                אשר זיהוי-מחדש
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onDecideAsk(page, 'reject')}
+                aria-label={`בלי זיהוי-מחדש לעמוד ${page.page}`}
+                className="flex items-center justify-center gap-1 rounded-md bg-surface-variant/70 px-2 py-1 text-xs font-bold text-on-surface/80 transition-colors hover:bg-surface-variant disabled:opacity-50"
+              >
+                <span aria-hidden="true" className="material-symbols-outlined text-sm">block</span>
+                לא לאשר
+              </button>
+            </div>
           )}
           {page.state === 'approved' && onReopen && (
             <button

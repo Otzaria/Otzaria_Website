@@ -3,8 +3,9 @@
 //
 //   מבנה — הסריקה פתוחה (מסגרות, שורות: ציור, פיצול, איחוד, שורה חדשה, "✓ המסגרות נכונות", "✓ החיתוך תקין"), סוג-העמוד;
 //           הטקסט לקריאה בלבד ומעומעם, ובסרגל רק מה שנוגע למבנה. בסוף — "✓ המבנה נכון — להגהת הטקסט" (finishStructure):
-//           בלי שינוי-חיתוך ← "טקסט" מיד; עם שינוי-חיתוך ← זיהוי-מחדש בלי מנהל (העמוד חוזר לאותו מתנדב, לשלב "טקסט");
-//           אי אפשר לשלוח עכשיו ← "טקסט" כמו היום (השורות שנחתכו נעולות, ותיקוני-החיתוך יוצאים עם ההגשה).
+//           בלי שינוי-חיתוך ← "טקסט" מיד; עם שינוי-חיתוך ← זיהוי-מחדש (העמוד חוזר לאותו מתנדב, לשלב "טקסט") — בלי מנהל
+//           כשאפשר, ואחרת לאישור מנהל (recutRules.recutRoute). בשני המקרים העמוד נעול עד שיחזור מהזיהוי-מחדש (בעל הפרויקט,
+//           2026-10-06) — אין עוד "ממשיכים לטקסט והשורות נעולות". רק מנהל שדחה את הבקשה מחזיר אותו לשלב "טקסט".
 //   טקסט  — עריכת-הטקסט, אישור-פסקה, סגנונות פסקה ותו, קישורים, הצעות, "פגם בדפוס"; כלי הסריקה מוסתרים (לחיצה עליה עדיין
 //           מזיזה את הסמן); ההגשה — מכאן.
 // העורך המוטמע בתוכנת-הספר אינו מעביר שלב (focus) — שם הכול פתוח, כמו תמיד.
@@ -40,14 +41,13 @@ export function initialStage({ saved = null, inProgress = false, revision = 1 } 
 
 export const cutOpsOf = (ops) => (Array.isArray(ops) ? ops.filter((o) => o && !o._local && CUT_KINDS.includes(o.kind)) : []);
 
-// "✓ המבנה נכון — להגהת הטקסט" (וגם "דלג — המבנה נכון"): ← {next: 'text'} / {next: 'recut', cut} (שליחה לזיהוי-מחדש,
-// בלי מנהל) / {next: 'text', locked: n} (יש שינוי-חיתוך ואי אפשר לשלוח עכשיו: השורות נעולות עד ההגשה).
-// canRecut — מהשרת (מתג המנהל, תקרת הבקשות, הגשה של אחר — serverDrafts.editorContext)
+// "✓ המבנה נכון — להגהת הטקסט" (וגם "דלג — המבנה נכון"): ← {next: 'text'} / {next: 'recut', cut, ask} — שליחה לזיהוי-מחדש;
+// ask — לאישור מנהל (canRecut מהשרת: מתג המנהל, תקרת הבקשות, הגשה של אחר — serverDrafts.editorContext). השרת מכריע
+// בעצמו בשליחה (recutRules.recutRoute); ask כאן קובע רק את נוסח הכפתור וההודעה
 export function finishStructure({ ops, canRecut = false } = {}) {
   const cut = cutOpsOf(ops);
   if (!cut.length) return { next: 'text' };
-  if (canRecut) return { next: 'recut', cut };
-  return { next: 'text', locked: cut.length };
+  return { next: 'recut', cut, ask: !canRecut };
 }
 
 const countKinds = (ops, kinds) => (Array.isArray(ops) ? ops.filter((o) => o && !o._local && kinds.includes(o.kind)).length : 0);
@@ -62,7 +62,7 @@ export function handledItems(stage, { view = null, ops = [], approval = null, re
       { key: 'cut', label: 'חיתוך נבדק', done: !!view?.cut_ok, title: '"✓ החיתוך בעמוד תקין" במצב "שורות" של הסריקה' },
     ];
     const cut = cutOpsOf(ops).length;
-    if (cut) out.push({ key: 'cutFixes', label: `תיקוני-חיתוך: ${cut}`, done: null, title: 'יישלחו לזיהוי-מחדש כשתעברו לשלב הטקסט' });
+    if (cut) out.push({ key: 'cutFixes', label: `תיקוני-חיתוך: ${cut}`, done: null, title: 'יישלחו לזיהוי-מחדש כשתסיימו את שלב המבנה' });
     if (recut?.sentAt) out.push({ key: 'recut', label: recut.backAt ? 'נשלח לזיהוי-מחדש וחזר' : 'נשלח לזיהוי-מחדש', done: !!recut.backAt, title: null });
     return out;
   }
@@ -72,6 +72,7 @@ export function handledItems(stage, { view = null, ops = [], approval = null, re
       out.push({ key: 'paras', label: `פסקאות שאושרו ${approval.approved}/${approval.total}`, done: approval.approved >= approval.total, title: null });
     }
     if (recut?.backAt) out.push({ key: 'recut', label: 'חזר מזיהוי-מחדש', done: true, title: 'השורות שנחתכו זוהו מחדש — בדקו אותן (מסומנות בצהוב)' });
+    if (recut?.rejectedAt) out.push({ key: 'recut', label: 'המנהל לא אישר זיהוי-מחדש', done: null, title: recut.note || 'תיקוני-החיתוך יוצאים עם ההגשה' });
     const defects = bookOnlyLineIds(ops).length;
     if (defects) out.push({ key: 'defects', label: `שורות עם פגם בדפוס: ${defects}`, done: null, title: 'נכנסות לספר כפי שתיקנתם, ולא לאימון הזיהוי' });
     const styles = countKinds(ops, ['para', 'styles']);
@@ -91,11 +92,16 @@ export const STAGE_TEXT = Object.freeze({
   finishRecut: '✓ המבנה נכון — לזיהוי-מחדש',
   finishTitle: 'עוברים לשלב הטקסט. המסגרות והתיקונים שעשיתם נשמרים בטיוטה ויוגשו עם העמוד.',
   finishRecutTitle: 'שיניתם את חיתוך השורות: העמוד יישלח עכשיו לזיהוי-מחדש (בלי מנהל) ויחזור אליכם לשלב הטקסט כשיזוהה מחדש.',
+  finishAsk: '✓ המבנה נכון — לאישור זיהוי-מחדש',
+  finishAskTitle:
+    'שיניתם את חיתוך השורות, ועכשיו העמוד לא יכול לצאת לזיהוי-מחדש בלי מנהל: הוא ימתין לאישור מנהל, נעול, ויחזור אליכם לשלב הטקסט אחרי הזיהוי-מחדש. בינתיים אפשר לתפוס עמודים אחרים.',
   skip: 'דלג — המבנה נכון',
   skipTitle: 'המבנה בעמוד הזה נכון — ישר להגהת הטקסט (לחיצה אחת)',
   back: 'חזרה לשלב המבנה',
   backTitle: 'חזרה למסגרות ולשורות. הטקסט שתיקנתם נשאר.',
   recutSent: 'העמוד נשלח לזיהוי-מחדש — הוא יחזור אליכם לשלב הטקסט כשיזוהה מחדש (תראו אותו ב"העמודים שלי"). שאר התיקונים שמורים בטיוטה.',
-  recutLocked: (n) =>
-    `${n === 1 ? 'תיקון-החיתוך' : `${n} תיקוני-החיתוך`} לא נשלח עכשיו לזיהוי-מחדש, ולכן השורות שנחתכו נעולות לעריכה ("ממתינה לזיהוי-מחדש"). תיקוני-החיתוך יישלחו עם ההגשה, ואחרי אישור המנהל העמוד ייחתך ויזוהה מחדש.`,
+  recutAsked: 'העמוד ממתין לאישור מנהל לזיהוי-מחדש, ונעול עד שיחזור מהזיהוי-מחדש (תראו אותו ב"העמודים שלי"). בינתיים אפשר לתפוס עמודים אחרים.',
+  recutFailed: (err) => `העמוד לא נשלח לזיהוי-מחדש${err ? ` (${err})` : ''}. הוא נשאר בשלב המבנה — נסו שוב.`,
+  recutRejected: (note) =>
+    `המנהל לא אישר זיהוי-מחדש לעמוד הזה${note ? `: ${note}` : ''}. הגיהו את הטקסט והגישו את העמוד — תיקוני-החיתוך יוצאים עם ההגשה, והשורות שנחתכו נעולות עד אז.`,
 });

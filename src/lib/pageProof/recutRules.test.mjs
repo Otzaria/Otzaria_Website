@@ -22,6 +22,10 @@ import {
   proofRuntimePatch,
   recutEffective,
   seenAgoLabel,
+  recutRoute,
+  askEligibleFilter,
+  ASK_REASONS,
+  ASK_MSG,
 } from './recutRules.js';
 
 const line = (id, extra = {}) => ({ id, bbox: [100, id * 50, 900, id * 50 + 40], text: `שורה ${id}`, stream: 'main', ...extra });
@@ -76,6 +80,29 @@ test('recutRefusal: רק עמוד פתוח שבטיפול המתנדב, שלא �
   assert.match(recutRefusal({ ...mine, leasedBy: null, leasedUntil: null }, 'u1', NOW), /אינו בטיפולכם/);
   assert.match(recutRefusal({ ...mine, activeCount: 1, required: 2 }, 'u1', NOW), /הגשה של מתנדב אחר/);
   assert.equal(recutRefusal(null, 'u1', NOW), 'העמוד לא נמצא');
+});
+
+test('recutRoute: נעול עד אחרי הזיהוי-מחדש — לבד כשאפשר, אחרת לאישור מנהל (כבוי / תקרה / הגשה של אחר); שאר הסירובים — שגיאה', () => {
+  const mine = { status: 'open', leasedBy: 'u1', leasedUntil: later(5), submitters: [], activeCount: 0 };
+  assert.deepEqual(recutRoute(mine, 'u1', { mode: 'on', pending: 0, now: NOW }), { route: 'auto' });
+  // "אוטומטי" (גם כשתוכנת-הספר אינה מחוברת) — לתור הרגיל
+  assert.deepEqual(recutRoute(mine, 'u1', { mode: 'auto', pending: 0, now: NOW }), { route: 'auto' });
+  assert.deepEqual(recutRoute(mine, 'u1', { mode: 'off', pending: 0, now: NOW }), { route: 'ask', reason: 'off' });
+  assert.deepEqual(recutRoute(mine, 'u1', { mode: 'on', pending: MAX_PENDING_RECUT, now: NOW }), { route: 'ask', reason: 'cap' });
+  assert.deepEqual(recutRoute({ ...mine, activeCount: 1, required: 2 }, 'u1', { mode: 'on', now: NOW }), { route: 'ask', reason: 'other' });
+  assert.match(recutRoute({ ...mine, leasedBy: 'u2' }, 'u1', { now: NOW }).error, /אינו בטיפולכם/);
+  assert.match(recutRoute({ ...mine, submitters: ['u1'] }, 'u1', { now: NOW }).error, /כבר הגשתם/);
+  assert.match(recutRoute({ ...mine, status: 'recut' }, 'u1', { now: NOW }).error, /כבר ממתין לזיהוי-מחדש/);
+  assert.match(recutRoute({ ...mine, status: 'recut_ask' }, 'u1', { now: NOW }).error, /ממתין לאישור מנהל/);
+  assert.equal(recutRoute(null, 'u1').error, 'העמוד לא נמצא');
+  assert.deepEqual(Object.keys(ASK_REASONS), ['off', 'cap', 'other']);
+  assert.match(ASK_MSG.asked, /נעול/);
+});
+
+test('askEligibleFilter: כמו recutEligibleFilter, בלי התנאי "אין הגשה של אחר" (בזה המנהל מחליט)', () => {
+  const f = askEligibleFilter('u1', 2, NOW);
+  assert.equal(f.activeCount, undefined);
+  assert.deepEqual({ ...f, activeCount: { $not: { $gt: 0 } } }, recutEligibleFilter('u1', 2, NOW));
 });
 
 test('recutEligibleFilter: אותם תנאים, כמסנן לעדכון האטומי (גם הגרסה)', () => {

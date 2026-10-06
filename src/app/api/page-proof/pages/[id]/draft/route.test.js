@@ -180,21 +180,21 @@ describe('שני השלבים — בשרת', () => {
     expect((await open(2)).draft).toMatchObject({ stage: 'text', count: 1 })
   })
 
-  it('המתג של המנהל כבוי: canRecut=false, ובקשה ← 409 recut_off — העמוד נשאר אצל המתנדב והטיוטה בשלב שלו', async () => {
+  it('המתג של המנהל כבוי: canRecut=false, ובקשה ← ממתינה לאישור מנהל: העמוד נעול (recut_ask), והטיוטה — לשלב הטקסט כשיחזור', async () => {
     as(admin)
     expect((await settingsPATCH(req('PATCH', { recutRequests: 'off' }))).status).toBe(200)
     as(a)
-    await put(3, { revision: 1, ops: [TEXT(3), CUT(3)], stage: 'text' })
+    await put(3, { revision: 1, ops: [TEXT(3), CUT(3)], stage: 'structure' })
     const got = await open(3)
     expect(got.canRecut).toBe(false)
     expect(got.recutRequests).toBe(false)
     const r = await recutPOST(req('POST', { revision: 1, ops: [CUT(3)] }), p({ id: String(pages[3]._id) }))
-    expect([r.status, (await r.json()).code]).toEqual([409, 'recut_off'])
-    expect(await PageProofPage.findById(pages[3]._id).lean()).toMatchObject({ status: 'open' })
-    expect(await draftOf(3)).toMatchObject({ stage: 'text', recut: null })
-    // ההגשה כוללת את תיקוני-החיתוך (כמו היום)
+    expect([r.status, (await r.json()).asked]).toEqual([200, true])
+    expect(await PageProofPage.findById(pages[3]._id).lean()).toMatchObject({ status: 'recut_ask', leasedBy: null })
+    expect(await draftOf(3)).toMatchObject({ stage: 'text', recut: { asked: true } })
+    // נעול: אין הגשה עד שיחזור
     const sub = await submitPOST(req('POST', { revision: 1, ops: [TEXT(3), CUT(3)] }), p({ id: String(pages[3]._id) }))
-    expect((await sub.json()).needsRecut).toBe(true)
+    expect(sub.status).not.toBe(200)
   })
 
   it('עמוד עם הגשה של מתנדב אחר (כפול): canRecut=false — שינוי-חיתוך יוצא עם ההגשה', async () => {

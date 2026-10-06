@@ -33,8 +33,9 @@ test('השלב בפתיחה: השמור; טיוטה בעבודה מלפני הש
 test('"✓ המבנה נכון": בלי שינוי-חיתוך ← טקסט; עם — זיהוי-מחדש כשאפשר, אחרת טקסט עם השורות נעולות', () => {
   assert.deepEqual(finishStructure({ ops: [TEXT], canRecut: true }), { next: 'text' });
   assert.deepEqual(finishStructure({ ops: [] }), { next: 'text' });
-  assert.deepEqual(finishStructure({ ops: [TEXT, SPLIT, ADD], canRecut: true }), { next: 'recut', cut: [SPLIT, ADD] });
-  assert.deepEqual(finishStructure({ ops: [TEXT, SPLIT, BBOX], canRecut: false }), { next: 'text', locked: 2 });
+  assert.deepEqual(finishStructure({ ops: [TEXT, SPLIT, ADD], canRecut: true }), { next: 'recut', cut: [SPLIT, ADD], ask: false });
+  // אי אפשר לשלוח בלי מנהל — לא ממשיכים לטקסט: לאישור מנהל, והעמוד נעול עד הזיהוי-מחדש (בעל הפרויקט, 2026-10-06)
+  assert.deepEqual(finishStructure({ ops: [TEXT, SPLIT, BBOX], canRecut: false }), { next: 'recut', cut: [SPLIT, BBOX], ask: true });
   // חצי-אישור מקומי אינו נספר
   assert.deepEqual(cutOpsOf([{ ...SPLIT, _local: true }, null, BBOX]), [BBOX]);
 });
@@ -73,8 +74,10 @@ test('"במה כבר טיפלתי" — טקסט: פסקאות N/M, פגם בדפ
 });
 
 test('הנוסחים — "פגם בדפוס", ושורות נעולות', () => {
-  assert.match(STAGE_TEXT.recutLocked(1), /^תיקון-החיתוך לא נשלח/);
-  assert.match(STAGE_TEXT.recutLocked(3), /^3 תיקוני-החיתוך/);
+  assert.match(STAGE_TEXT.recutAsked, /ממתין לאישור מנהל/);
+  assert.match(STAGE_TEXT.recutFailed('x'), /נשאר בשלב המבנה/);
+  assert.match(STAGE_TEXT.recutRejected(''), /המנהל לא אישר/);
+  assert.match(STAGE_TEXT.finishAsk, /לאישור זיהוי-מחדש/);
   assert.match(STAGE_TEXT.recutSent, /יחזור אליכם לשלב הטקסט/);
   assert.equal(JSON.stringify(STAGE_TEXT).includes('לספר בלבד'), false);
 });

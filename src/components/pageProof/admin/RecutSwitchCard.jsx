@@ -9,11 +9,13 @@ import { seenAgoLabel } from '@/lib/pageProof/recutRules'
 // אצל בעל הפרויקט, רק כשהיא פתוחה — כשהיא סגורה, בקשות ממתינות באתר. שלושה מצבים: פועל · כבוי ·
 // אוטומטי (רק כשתוכנת-הספר מחוברת). כיבוי אינו מבטל בקשות שכבר ממתינות; "החזר את כל הממתינים
 // למתנדבים" — POST recut-requests/release (בקשה שכבר נמשכה לתוכנה נשארת).
+// עמוד שמתנדב תיקן בו חיתוך נעול עד אחרי הזיהוי-מחדש (בעל הפרויקט, 2026-10-06): כשהוא לא יכול לצאת בלי מנהל — המתג
+// כבוי, תקרת הבקשות, הגשה של אחר — הוא ממתין לאישורכם (recutAsks; "אשר" / "לא לאשר" בעמודי הספר).
 
 const MODES = [
-  { key: 'on', he: 'פועל', title: 'הכפתור "שלח לזיהוי-מחדש" מופיע למתנדבים תמיד' },
-  { key: 'off', he: 'כבוי', title: 'הכפתור אינו מופיע; תיקוני-חיתוך עוברים בהגשה הרגילה, אחרי אישורכם' },
-  { key: 'auto', he: 'אוטומטי', title: 'הכפתור מופיע רק כשתוכנת-הספר נראתה מחוברת בדקות האחרונות' },
+  { key: 'on', he: 'פועל', title: 'מתנדב שתיקן חיתוך שולח את העמוד לזיהוי-מחדש בעצמו, בלי מנהל' },
+  { key: 'off', he: 'כבוי', title: 'כל עמוד שמתנדב תיקן בו חיתוך ממתין לאישורכם, נעול, לפני הזיהוי-מחדש' },
+  { key: 'auto', he: 'אוטומטי', title: 'בלי מנהל; כשתוכנת-הספר אינה מחוברת — הבקשות ממתינות בתור עד שתתחבר' },
 ]
 
 export default function RecutSwitchCard() {
@@ -82,6 +84,7 @@ export default function RecutSwitchCard() {
 
   const mode = data?.settings?.recutRequests
   const waiting = data?.pendingRecut?.waiting || 0
+  const asks = data?.recutAsks || 0
   const picked = data?.pendingRecut?.picked || 0
 
   return (
@@ -91,8 +94,9 @@ export default function RecutSwitchCard() {
         שליחת מתנדבים לזיהוי-מחדש
       </h3>
       <p className="mb-3 text-sm text-on-surface/60">
-        הכפתור &quot;שלח לזיהוי-מחדש&quot; מאפשר למתנדב שתיקן חיתוך לשלוח את העמוד בעצמו. הזיהוי-מחדש רץ בתוכנת-הספר במחשב של בעל
-        הפרויקט, רק כשהיא פתוחה — כשהיא סגורה הבקשות ממתינות כאן. כיבוי אינו מבטל בקשות שכבר ממתינות.
+        מתנדב שתיקן חיתוך שולח את העמוד לזיהוי-מחדש בסוף שלב המבנה, והעמוד נעול עד שיחזור אליו. כשהמתג פועל — בלי מנהל; כשהוא
+        כבוי, או כשאי אפשר אחרת (למתנדב כבר 5 עמודים ממתינים, לעמוד יש הגשה של אחר) — הבקשה ממתינה לאישורכם. הזיהוי-מחדש רץ
+        בתוכנת-הספר במחשב של בעל הפרויקט, רק כשהיא פתוחה. כיבוי אינו מבטל בקשות שכבר ממתינות.
       </p>
 
       {loadError && <p className="mb-2 rounded bg-danger-50 px-2 py-1 text-sm text-danger-700">{loadError}</p>}
@@ -117,8 +121,12 @@ export default function RecutSwitchCard() {
           <ul className="mt-3 space-y-1 text-sm text-on-surface/80">
             <li data-testid="recut-effective">
               עכשיו:{' '}
-              <b className={data.effective?.recutRequests ? 'text-success-700' : 'text-warning-800'}>
-                {data.effective?.recutRequests ? 'הכפתור מופיע למתנדבים' : 'הכפתור אינו מופיע למתנדבים'}
+              <b className={mode === 'off' ? 'text-warning-800' : data.effective?.recutRequests ? 'text-success-700' : 'text-warning-800'}>
+                {mode === 'off'
+                  ? 'כל בקשה ממתינה לאישורכם'
+                  : data.effective?.recutRequests
+                    ? 'מתנדבים שולחים לזיהוי-מחדש בלי מנהל'
+                    : 'הבקשות ממתינות בתור עד שתוכנת-הספר תתחבר'}
               </b>
               {mode === 'auto' && ` (אוטומטי — לפי ${data.settings.autoMinutes} הדקות האחרונות)`}
             </li>
@@ -126,6 +134,10 @@ export default function RecutSwitchCard() {
             <li data-testid="recut-waiting">
               ממתינים עכשיו: {waiting === 1 ? 'עמוד אחד' : `${waiting} עמודים`}
               {picked > 0 && ` (ועוד ${picked} שכבר בתוכנת-הספר)`}
+            </li>
+            <li data-testid="recut-asks" className={asks > 0 ? 'font-bold text-warning-alt-800' : undefined}>
+              ממתינים לאישורכם: {asks === 0 ? 'אין' : asks === 1 ? 'עמוד אחד' : `${asks} עמודים`}
+              {asks > 0 && ' — בעמודי הספר, בסינון "ממתינים לאישורך לזיהוי-מחדש"'}
             </li>
           </ul>
           <button

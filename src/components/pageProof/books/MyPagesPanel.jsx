@@ -62,7 +62,7 @@ function pageNote(p, now) {
   return until ? `שמור לך עד ${until}` : 'בטיפולך'
 }
 
-// העמודים ששלחתם לזיהוי-מחדש ועוד לא חזרו — אין מה לפתוח בהם עד שיחזרו
+// העמודים ששלחתם לזיהוי-מחדש ועוד לא חזרו — אין מה לפתוח בהם עד שיחזרו (נעולים; גם מה שממתין לאישור מנהל — asked)
 function RecutPending({ items, now }) {
   return (
     <section aria-labelledby="recut-pending-title" className="rounded-xl border border-feature-200 bg-feature-50/60 p-3">
@@ -78,7 +78,7 @@ function RecutPending({ items, now }) {
           <li key={r.id} className="rounded-lg border border-feature-200 bg-surface px-3 py-1.5 text-sm">
             <span className="font-bold">{r.title ? `${r.title} · ` : ''}עמוד {r.page}</span>
             <span className="block text-xs text-on-surface/60">
-              {r.picked ? 'בעבודה בתוכנת-הספר' : 'ממתין לתוכנת-הספר'}
+              {r.asked ? 'ממתין לאישור מנהל' : r.picked ? 'בעבודה בתוכנת-הספר' : 'ממתין לתוכנת-הספר'}
               {r.requestedAt ? ` · נשלח ${formatTimeAgo(r.requestedAt, now)}` : ''}
             </span>
           </li>

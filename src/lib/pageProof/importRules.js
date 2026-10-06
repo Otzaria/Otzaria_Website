@@ -12,7 +12,7 @@
 
 import { resequence, requiredFor, DEFAULT_DOUBLE_PCT } from './sequences.js';
 
-export const PAGE_STATUSES = ['open', 'done', 'recut'];
+export const PAGE_STATUSES = ['open', 'done', 'recut', 'recut_ask'];
 
 const validRev = (v) => (Number.isInteger(v) && v >= 1 ? v : null);
 
@@ -72,9 +72,10 @@ export function notStartedFilter(now = new Date()) {
 // ---------- ייבוא ----------
 
 // עמוד שממתין לזיהוי-מחדש מוחלף רק בגרסה חדשה יותר ממה שנשמר — גם כשיש לו
-// הגשות מאושרות (הן כבר מולאו בתוכנת-הספר, ומהן נולדה הגרסה החדשה)
+// הגשות מאושרות (הן כבר מולאו בתוכנת-הספר, ומהן נולדה הגרסה החדשה). גם עמוד שממתין לאישור מנהל
+// לזיהוי-מחדש (recut_ask): גרסה חדשה (המנהל חתך אותו בתוכנה בעצמו) מחליפה אותו, והבקשה נעלמת (RECUT_RESET)
 export function canReplacePage(prev, doc) {
-  return !!prev && prev.status === 'recut' && incomingRevision(doc) > storedRevision(prev);
+  return !!prev && (prev.status === 'recut' || prev.status === 'recut_ask') && incomingRevision(doc) > storedRevision(prev);
 }
 
 // מה עושים בעמוד שמגיע בחבילה, מול העמוד השמור (prev; undefined = אין):
@@ -93,7 +94,7 @@ export function importAction(prev, doc) {
   if (!prev) return 'create';
   if (canReplacePage(prev, doc)) return prev.unexportedRecut ? 'skip-unexported' : 'recut';
   if (incomingRevision(doc) < storedRevision(prev)) return 'skip-older';
-  if (prev.status === 'recut') return 'skip-recut';
+  if (prev.status === 'recut' || prev.status === 'recut_ask') return 'skip-recut';
   if (isAnswered(prev)) return 'skip-answered';
   return 'update';
 }
@@ -108,6 +109,7 @@ export const RECUT_RESET = Object.freeze({
   required: 1,
   leasedBy: null,
   leasedUntil: null,
+  recutAsk: null,
 });
 
 // ---------- רצפים ----------

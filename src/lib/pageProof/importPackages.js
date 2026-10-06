@@ -10,6 +10,7 @@ import { resolveImageFsPath } from '../ocr/images.js';
 import { DEFAULT_DOUBLE_PCT } from './sequences.js';
 import { pendingRecut, pickPrimary } from './fixesExport.js';
 import { markRecutDone, recutReturn } from './recutRequests.js';
+import { claimBack } from './recutRules.js';
 import {
   importAction,
   canReplacePage,
@@ -87,7 +88,7 @@ async function toJpeg(bytes) {
 }
 
 // השדות שנדרשים לחלוקה לרצפים ולהחלטת-הייבוא (בלי doc — כבד)
-const PLAN_FIELDS = { page: 1, seq: 1, required: 1, revision: 1, status: 1, activeCount: 1, approvedCount: 1, leasedUntil: 1, imagePath: 1 };
+const PLAN_FIELDS = { page: 1, seq: 1, required: 1, revision: 1, status: 1, activeCount: 1, approvedCount: 1, leasedUntil: 1, imagePath: 1, 'recutAsk.user': 1 };
 
 // חלוקה-מחדש לרצפים של כל עמודי הספר. העדכון מותנה ב"עדיין לא התחיל" — עמוד
 // שמתנדב קיבל בינתיים שומר את הרצף שלו. מחזיר כמה עמודים עודכנו.
@@ -257,10 +258,11 @@ export async function importPackages(
           // מעבר שני: תוכן, גרסה ותמונה חדשים; מונים, מגישים והחכרה מתאפסים — חוץ מעמוד שנשלח
           // בבקשת מתנדב: הוא חוזר אליו (התפיסה מתחדשת). מותנה במצב ובגרסה שנקראו — מנהל
           // שביטל בינתיים את האישור (או את הבקשה) קובע
+          // עמוד שחיכה לאישור מנהל לזיהוי-מחדש (recut_ask) והמנהל חתך אותו בתוכנה בעצמו — חוזר למבקש, והבקשה נעלמת
           const prevRev = storedRevision(prev);
-          const back = await recutReturn(prev._id, prevRev, now);
+          const back = prev.status === 'recut_ask' ? claimBack(prev.recutAsk?.user || null, now) : await recutReturn(prev._id, prevRev, now);
           const r = await PageProofPage.updateOne(
-            { _id: prev._id, status: 'recut', ...revisionFilter(prevRev) },
+            { _id: prev._id, status: prev.status === 'recut_ask' ? 'recut_ask' : 'recut', ...revisionFilter(prevRev) },
             { $set: { ...content, ...RECUT_RESET, ...back } }
           );
           if (r.matchedCount) {

@@ -340,12 +340,12 @@ function PageProofVolunteer() {
         body: JSON.stringify({ revision: page.revision, ops: cut }),
       })
       const data = await res.json()
-      // המנהל כיבה את השליחה בינתיים — ההסבר בעורך אומר להגיש כרגיל
-      if (data.code === 'recut_off') setRecutOpen(false)
       if (!data.success) throw new Error(data.error || 'השליחה נכשלה')
+      // נשלח לבד, או ממתין לאישור מנהל (data.asked — recutRules.recutRoute): בשני המקרים העמוד נעול עד שיחזור
       const pages = (seq?.pages || []).map((p) => (p.id === page.id ? { ...p, state: 'recut' } : p))
       if (seq) setSeq({ ...seq, pages })
-      showAlert('נשלח לזיהוי-מחדש', STAGE_TEXT.recutSent)
+      if (data.asked) showAlert('ממתין לאישור מנהל', STAGE_TEXT.recutAsked)
+      else showAlert('נשלח לזיהוי-מחדש', STAGE_TEXT.recutSent)
       const next = pages.find((p) => p.state === 'mine')
       if (next) openPage(next.id)
       else setCurrent(null)
@@ -477,7 +477,6 @@ function PageProofVolunteer() {
                   key={current.draftKey}
                   current={current}
                   help={recutOpen ? undefined : RECUT_OFF_HELP}
-                  recutOpen={recutOpen}
                   saving={saving}
                   onSubmit={openSubmit}
                   onSendRecut={sendRecut}

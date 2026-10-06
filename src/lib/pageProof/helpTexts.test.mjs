@@ -31,14 +31,16 @@ test('"שלח לזיהוי-מחדש" כבוי: השורה הנעולה והשא�
   assert.doesNotMatch(RECUT_LINE_TITLE_OFF, /שלח לזיהוי-מחדש/);
   assert.match(RECUT_LINE_TITLE_OFF, /אחרי שתגישו את העמוד ומנהל יאשר/);
   assert.equal(RECUT_OFF_HELP.lockedLine, RECUT_LINE_TITLE_OFF);
+  // כבוי — העמוד ממתין לאישור מנהל, נעול (בעל הפרויקט, 2026-10-06): אותה תשובה כמו כשפועל
   const recut = RECUT_OFF_HELP.faq.find((f) => f.key === 'recut');
   assert.doesNotMatch(recut.a, /שלח לזיהוי-מחדש/);
-  assert.match(recut.a, /הגישו את העמוד כרגיל/);
+  assert.match(recut.a, /לאישור זיהוי-מחדש/);
+  assert.match(recut.a, /נעול/);
   assert.equal(RECUT_OFF_HELP.faq.length, FAQ.length);
 });
 
-test('שורה נעולה: שתי הדרכים — "שלח לזיהוי-מחדש" חוזר אליכם; הגשה — חוזרת להגהה, למי שיתפוס אותו', () => {
-  assert.match(RECUT_LINE_TITLE, /"שלח לזיהוי-מחדש" — והעמוד יחזור אליכם עם השורות החדשות/);
+test('שורה נעולה (בשלב הטקסט — רק אחרי שהמנהל לא אישר זיהוי-מחדש): הגשה — חוזרת להגהה, למי שיתפוס אותו', () => {
+  assert.doesNotMatch(RECUT_LINE_TITLE, /שלח לזיהוי-מחדש/);
   assert.match(RECUT_LINE_TITLE, /הגישו את העמוד — ואחרי אישור המנהל הוא יחזור להגהה במעבר שני, למי שיתפוס אותו/);
   // הנוסח הישן הבטיח שהעמוד "יחזור אליכם" גם אחרי הגשה — לא נכון (המגישים והתפיסה מתאפסים)
   assert.doesNotMatch(RECUT_LINE_TITLE, /אחרי אישור המנהל היא תיחתך ותיקרא מחדש בתוכנת-הספר ותחזור אליכם/);
@@ -46,8 +48,9 @@ test('שורה נעולה: שתי הדרכים — "שלח לזיהוי-מחדש
 
 test('"ממתין לזיהוי-מחדש": השאלה בעזרה, הכותרת ברשת וההודעות של הבקשה — אותו סיפור', () => {
   const recut = FAQ.find((f) => f.key === 'recut');
-  assert.match(recut.a, /"שלח לזיהוי-מחדש" בסרגל — הבקשה ממתינה באתר עד שתוכנת-הספר מעבדת אותה, והעמוד חוזר אליכם/);
-  assert.match(recut.a, /או להגיש את העמוד כרגיל/);
+  assert.match(recut.a, /"✓ המבנה נכון — לזיהוי-מחדש": העמוד נשלח, נעול עד שיזוהה מחדש, וחוזר אליכם לשלב הטקסט/);
+  assert.match(recut.a, /"✓ המבנה נכון — לאישור זיהוי-מחדש": העמוד ממתין לאישור מנהל/);
+  assert.match(recut.a, /עמוד שממתין אינו נספר בעמודים שאתם מחזיקים/);
   assert.match(RECUT_PAGE_TITLE, /בבקשה של המתנדב שעבד עליו/);
   assert.match(RECUT_PAGE_TITLE, /עמוד שמתנדב שלח חוזר אליו/);
   assert.match(RECUT_REQUEST_HINT, /רק תיקוני-החיתוך נשלחים/);

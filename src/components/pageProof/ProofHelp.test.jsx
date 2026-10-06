@@ -159,10 +159,10 @@ describe('ProofHelp — שאלות שחוזרות (מהפורום)', () => {
     expect(q('headings')).toHaveTextContent(/לא ריהוט ולא מסגרת נפרדת\. מסמנים אותה בטקסט בסגנון-הפסקה "כותרת"/)
     expect(q('running-only')).toHaveTextContent(/השאירו אותה ריהוט.*בהערה למנהל/)
     expect(q('join')).toHaveTextContent(/Backspace בתחילת הפסקה השנייה.*↑.*חיבור לפסקה הקודמת/)
-    expect(q('recut')).toHaveTextContent(/"שלח לזיהוי-מחדש" בסרגל.*חוזר אליכם עם השורות החדשות/)
+    expect(q('recut')).toHaveTextContent(/"✓ המבנה נכון — לזיהוי-מחדש": העמוד נשלח, נעול עד שיזוהה מחדש, וחוזר אליכם לשלב הטקסט/)
     expect(q('recut')).toHaveTextContent(/פיצול, איחוד או שינוי תיבה/)
-    expect(q('recut')).toHaveTextContent(/במעבר שני, שבו בודקים רק אותן/)
-    expect(q('recut')).toHaveTextContent(/אתם לא צריכים להפעיל כלום/)
+    expect(q('recut')).toHaveTextContent(/"✓ המבנה נכון — לאישור זיהוי-מחדש": העמוד ממתין לאישור מנהל, נעול גם הוא/)
+    expect(q('recut')).toHaveTextContent(/בינתיים אפשר לתפוס עמודים אחרים/)
   })
 })
 

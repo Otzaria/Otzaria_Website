@@ -1,10 +1,11 @@
 import mongoose from 'mongoose';
 import connectDB from '@/lib/db';
 import { requireProofSession, readJsonBody } from '@/lib/pageProof/pool';
-import { requestRecut } from '@/lib/pageProof/recutRequests';
+import PageProofPage from '@/models/PageProofPage';
+import { askRecut, pendingRecutCount, requestRecut } from '@/lib/pageProof/recutRequests';
 import { markRecutSent } from '@/lib/pageProof/serverDrafts';
 import { recutStatus } from '@/lib/pageProof/runtime';
-import { RECUT_MSG, RECUT_RATE } from '@/lib/pageProof/recutRules';
+import { RECUT_RATE, RECUT_MSG, recutRoute } from '@/lib/pageProof/recutRules';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { fromResult, json, noStore } from '@/lib/pageProof/respond';
 import { badRequest, serverError } from '@/lib/apiResponse';
@@ -18,9 +19,11 @@ import { badRequest, serverError } from '@/lib/apiResponse';
 //   • בקשה אחת ממתינה לעמוד (העמוד עובר ל-'recut'), עד MAX_PENDING_RECUT למתנדב, והאטה למשתמש.
 // הבקשה ממתינה באתר עד שתוכנת-הספר מושכת אותה (fixes?pages=recut&mark=1) ומחזירה גרסה חדשה —
 // ואז העמוד חוזר אליו. מנהל מבטל ב"שחרור מהמתנה" (release_recut).
-// ← {success, submissionId, opCount, pending} · 400 (אין תיקוני-חיתוך / פעולה לא תקינה) ·
-//   409 (העמוד אינו בטיפולו / הוחלף / כבר ממתין / תקרה; או code 'recut_off' — המנהל כיבה את
-//   השליחה, או "אוטומטי" ותוכנת-הספר לא מחוברת: recutRules.recutEffective) · 413 · 429.
+// נעול עד אחרי הזיהוי-מחדש (בעל הפרויקט, 2026-10-06; recutRules.recutRoute): כשאי אפשר לשלוח בלי מנהל — המתג כבוי,
+// תקרת הבקשות, הגשה של מתנדב אחר — הבקשה נשמרת לאישור מנהל (recutRequests.askRecut; העמוד 'recut_ask', נעול), ולא
+// נדחית. "אוטומטי" כשתוכנת-הספר לא מחוברת — לתור הרגיל, עד שתתחבר.
+// ← {success, submissionId, opCount, pending} · {success, asked:true, reason, opCount, message} (ממתין לאישור מנהל) ·
+//   400 (אין תיקוני-חיתוך / פעולה לא תקינה) · 409 (העמוד אינו בטיפולו / הוחלף / כבר ממתין) · 413 · 429.
 //   הכול private, no-store.
 export async function POST(request, { params }) {
   const { session, userId, error } = await requireProofSession();
@@ -35,10 +38,18 @@ export async function POST(request, { params }) {
       return json({ success: false, error: RECUT_MSG.rate }, 429);
     }
     await connectDB();
-    // מתג המנהל (runtime.js): כבוי — או "אוטומטי" כשתוכנת-הספר לא נראתה לאחרונה — אין בקשות חדשות
-    if (!(await recutStatus()).effective) return json({ success: false, error: RECUT_MSG.off, code: 'recut_off' }, 409);
     const revision = Number.isInteger(body.revision) ? body.revision : null;
-    const r = await requestRecut(id, userId, { revision, ops: body.ops, userName: session.user?.name || '' });
+    const userName = session.user?.name || '';
+    // לבד או לאישור מנהל (מתג המנהל — runtime.js; תקרת הבקשות; הגשה של מתנדב אחר)
+    const [page, status, pending] = await Promise.all([
+      PageProofPage.findById(id, { status: 1, revision: 1, leasedBy: 1, leasedUntil: 1, submitters: 1, activeCount: 1 }).lean(),
+      recutStatus(),
+      pendingRecutCount(userId),
+    ]);
+    const route = recutRoute(page, userId, { mode: status.settings.recutRequests, pending });
+    if (route.error) return json({ success: false, error: route.error || RECUT_MSG.reload }, page ? 409 : 404);
+    if (route.route === 'ask') return fromResult(await askRecut(id, userId, { revision, ops: body.ops, userName, reason: route.reason }));
+    const r = await requestRecut(id, userId, { revision, ops: body.ops, userName });
     // הטיוטה שבשרת (docs/63 §3): כשהעמוד יחזור — שלב "טקסט"
     if (r.ok) await markRecutSent(id, userId).catch((e) => console.error('page-proof recut-request markRecutSent', e?.name));
     return fromResult(r);
