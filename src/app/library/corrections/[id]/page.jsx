@@ -16,6 +16,9 @@ import { committedNewLine } from '@/lib/corrections/unified-diff'
 const ERRORS = {
   stale_view: 'התצוגה לא עדכנית — הדיווח או המקור השתנו מאז שנטען. רעננו ובדקו שוב.',
   claim_conflict: 'מתנדב אחר כבר לקח את הדיווח.',
+  approved_locked: 'הדיווח כבר אושר ונמצא בפרסום — אי אפשר לקחת אותו לטיפול. אפשר רק לדחות.',
+  publish_in_progress: 'הפרסום ל-GitHub מתבצע כרגע. נסו שוב בעוד דקה.',
+  not_approved: 'הדיווח אינו ממתין לפרסום.',
   claim_required: 'יש לקחת את הדיווח לטיפול קודם (או שתוקף השיוך פג).',
   source_not_resolved: 'המקור לא אותר בוודאות או השתנה — אי אפשר לאשר. אפשר לבחור מקור ידנית ולערוך.',
   final_state: 'הדיווח כבר סגור.',
@@ -98,6 +101,11 @@ export default function CorrectionReportPage() {
         return false
       }
       if (opts.keep) return data
+      if (body.action === 'reject_approved') {
+        setNotice(data.prClosed === false
+          ? { tone: 'danger', text: `הדיווח נדחה, אבל סגירת PR #${data.prNumber} ב-GitHub נכשלה — יש לסגור אותו ידנית.` }
+          : { tone: 'success', text: data.prNumber ? `הדיווח נדחה ו-PR #${data.prNumber} נסגר.` : 'הדיווח נדחה והפרסום בוטל.' })
+      }
       if (body.action === 'approve' || body.action === 'edit_approve') {
         setNotice({
           tone: 'success',

@@ -80,6 +80,12 @@ async function claimAndApprove(id, now = T0) {
   return act(id, { action: 'approve', generation: c.body.generation, revision: d.body.report.currentRevision, seenBlobSha: d.body.source?.blobSha }, now);
 }
 
+// אישור שנפסל וחזר לתור הידני (למשל פרסום שנכשל) — הדרך היחידה לאשר שוב דיווח שאושר.
+const returnToQueue = (id) => ErrorReport.updateOne({ _id: id }, {
+  $set: { 'approval.authority': 'none', 'approval.scope': 'none', 'approval.changeId': null, 'publish.status': 'failed', 'dispatch.publish': false, 'manual.status': 'queued', 'manual.handoffReason': 'publish_failed' },
+  $inc: { workflowGeneration: 1 },
+});
+
 test('אישור מתנדב שולח למדווח מייל תודה אחד, גם כשהאישור נפסל ומאושר שוב', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const id = await ingest('thx-1', 'reporter@example.org');
@@ -92,7 +98,8 @@ test('אישור מתנדב שולח למדווח מייל תודה אחד, גם
   assert.ok(mails[0].unsubscribeUrl.startsWith('https://otzaria.test/api/corrections/unsubscribe?token='));
   assert.ok((await ErrorReport.findById(id).lean()).reporterThanks.sentAt);
 
-  // לקיחה מחדש פוסלת את האישור; האישור השני אינו שולח שוב.
+  // האישור נפסל וחזר לתור; האישור השני אינו שולח שוב.
+  await returnToQueue(id);
   assert.equal((await claimAndApprove(id, at(1))).status, 200);
   assert.equal(mails.length, 1);
 });
@@ -126,6 +133,7 @@ test('כשל שליחה משחרר את הסימון, והאישור הבא שו
   assert.equal((await claimAndApprove(id)).status, 200, 'כשל המייל אינו מכשיל את האישור');
   assert.equal((await ErrorReport.findById(id).lean()).reporterThanks.sentAt, null);
   mailResult = { sent: true };
+  await returnToQueue(id);
   assert.equal((await claimAndApprove(id, at(1))).status, 200);
   assert.equal(mails.length, 2);
   assert.ok((await ErrorReport.findById(id).lean()).reporterThanks.sentAt);

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import UnifiedDiff from '@/components/corrections/UnifiedDiff'
 
 const btn = 'px-3 py-2 rounded-lg font-medium text-sm disabled:opacity-50 flex items-center gap-1'
+const PUBLISHING = new Set(['ready', 'in_progress', 'unknown_needs_reconcile', 'pr_opened'])
 
 /**
  * פעולות המתנדב על דיווח. כל שליחה נושאת את ה-generation שהוצג; השרת דוחה תצוגה ישנה.
@@ -36,6 +37,51 @@ export default function ReportActions({ detail, meId, busy, run }) {
   const editTarget = preview
     ? { context: preview.context ?? null, lineIndex: preview.lineIndex, path: preview.path }
     : usable ? { context: source.context ?? null, lineIndex: source.lineIndex, path: source.path } : { context: null, lineIndex: null, path: null }
+
+  // אושר וממתין לפרסום / בפרסום / PR פתוח: אין לקיחה ואין פעולות — רק דחייה (שסוגרת את ה-PR).
+  const pub = report.publish?.status
+  if (PUBLISHING.has(pub)) {
+    const writing = pub === 'in_progress' || pub === 'unknown_needs_reconcile'
+    const pr = pub === 'pr_opened' && report.publish?.prUrl
+    return (
+      <div className="glass rounded-xl p-4 space-y-3">
+        <div className="text-sm flex flex-wrap items-center gap-x-2">
+          <span className="material-symbols-outlined text-base text-success-700">verified</span>
+          <span>
+            הדיווח אושר{report.approval?.byName ? <> ע&quot;י <b>{report.approval.byName}</b></> : null}
+            {pr
+              ? <> ונפתח עבורו <a href={report.publish.prUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline">PR #{report.publish.prNumber}</a>. הוא ייסגר אוטומטית כשה-PR ימוזג.</>
+              : writing ? ' והפרסום ל-GitHub מתבצע כעת.' : ' וממתין לפרסום.'}
+          </span>
+        </div>
+        <p className="text-xs text-on-surface/70">אי אפשר לקחת לטיפול דיווח שאושר — זה יוצר PR כפול. אם האישור שגוי, אפשר לדחות אותו.</p>
+        {writing ? (
+          <p className="text-xs text-warning-800">הפרסום מתבצע כרגע; הדחייה תתאפשר כשיסתיים.</p>
+        ) : mode !== 'reject' ? (
+          <button disabled={busy} onClick={() => setMode('reject')} className={`${btn} glass text-danger-700`}>
+            <span className="material-symbols-outlined text-base">block</span> דחייה
+          </button>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-sm text-danger-700 font-medium">
+              {pr ? `הדחייה תסגור את PR #${report.publish.prNumber} ב-GitHub בלי למזג אותו, ותסגור את הדיווח.` : 'הדחייה תבטל את הפרסום המתוכנן ותסגור את הדיווח.'}
+            </p>
+            <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} placeholder="סיבת הדחייה (חובה)" className="w-full border rounded-lg p-2 bg-white" />
+            <div className="flex gap-2">
+              <button
+                disabled={busy || reason.trim().length < 3}
+                onClick={async () => { if (await run({ action: 'reject_approved', generation: g, reason })) setMode(null) }}
+                className={`${btn} bg-danger-600 text-white`}
+              >
+                {pr ? 'דחייה וסגירת ה-PR' : 'דחייה סופית'}
+              </button>
+              <button onClick={() => setMode(null)} className={`${btn} glass`}>ביטול</button>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   if (!claimedByMe) {
     // שיוך שפג נשאר במסמך (הפקיעה אינה נכתבת), ולכן מוצג במפורש — אחרת היומן נראה סותר.
