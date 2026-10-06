@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { buildView, recutLineIds, validateOp, withBookOnly } from '@/lib/pageProof/ops'
+import { buildView, recutLineIds, validateOp, withBookOnly, sameLinkSlot, linkOpValue } from '@/lib/pageProof/ops'
 import { historyCaret } from '@/lib/pageProof/historyCaret'
 import { streamChoices, untouchedLineIds, replaceWord, viewStats } from '@/lib/pageProof/view'
 import { isFurnitureStream, isPrintDefect, keepHeading, streamInfo } from '@/lib/pageProof/vocab'
@@ -500,16 +500,16 @@ export default function ProofEditor({
   )
 
   // ---- קישור בין שני זרמים ----
-  // לכל שורת-הערה/פירוש קישור אחד (כך גם בתוכנת-הספר): קישור שני מאותה שורה
-  // מחליף את הקודם — רק אחרי אישור, ולא בשקט.
-  // המספר של קישור קיים מאותה שורת-הערה (0 אם אין) — כמו בטקסט וברשימה, לפי סדר ההופעה
-  // בעמוד (flowEdit.linkNumber) — ושאלת ההחלפה. בלי קישור קיים אין
-  // המתנה — הפעולה נוספת מיד, באותו אירוע-מקלדת
-  const existingLink = (op) => linkNumber(view, (k) => k.from_line === op.ids[0])
+  // כמה קישורים לשורת-הערה/פירוש (2026-10-04; כך גם בתוכנת-הספר): קישור הוא (שורת-ההערה, המילים
+  // בה — ops.sameLinkSlot). קישור למילים אחרות באותה שורה (הערה שנגמרת ואחריה הבאה, או שתי הערות
+  // קצרות) — נוסף לצד הקודם. קישור למילים שכבר מקושרות — מחליף את הקודם, רק אחרי אישור.
+  // המספר של הקישור הקיים באותן מילים (0 אם אין) — כמו בטקסט וברשימה, לפי סדר ההופעה בעמוד
+  // (flowEdit.linkNumber) — ושאלת ההחלפה. בלי קישור חופף אין המתנה — הפעולה נוספת מיד
+  const existingLink = (op) => linkNumber(view, (k) => sameLinkSlot(k, op.ids[0], op.value?.from_words))
   const askReplace = (n) =>
     showConfirm(
       'להחליף את הקישור?',
-      `לשורה הזו כבר יש קישור ${linkBadge(n)} — אפשר קישור אחד לכל שורת-הערה או פירוש. להחליף אותו בקישור החדש?`,
+      `המילים האלה בשורת-ההערה כבר מקושרות — קישור ${linkBadge(n)}. להחליף אותו בקישור החדש? (קישור ממילים אחרות באותה שורה — למשל ההערה הבאה שמתחילה באמצע השורה — נוסף לצדו)`,
       null,
       'החלפה',
       'ביטול'
@@ -878,8 +878,9 @@ export default function ProofEditor({
   // ---- פעולות לוח הפרטים ----
   const drawerAct = {
     jumpToLine: (id, i) => goTo(id, Number.isInteger(i) ? i : null, { focus: true }),
-    linkOk: (src) => push({ kind: 'link_ok', page: P, value: { src_line: src, page: P } }),
-    linkDel: (src) => push({ kind: 'link_del', page: P, value: { src_line: src, page: P } }),
+    // k (רשות) — הקישור עצמו: בשורה שיש בה כמה קישורים — רק הוא (from_words), ולא כל קישורי השורה
+    linkOk: (src, k) => push({ kind: 'link_ok', page: P, value: linkOpValue(view, src, k, P) }),
+    linkDel: (src, k) => push({ kind: 'link_del', page: P, value: linkOpValue(view, src, k, P) }),
     // "בטל קישור" — לכל קישור (linkCancel.unlinkPlan): קישור שנוסף בעריכה הזו (גם בעמוד, גם לעמוד אחר) —
     // הפעולה link_add עצמה יורדת (צעד-ביטול אחד; לא link_del, שהיה נשלח יחד איתה); קישור שהגיע עם העמוד,
     // אוטומטי או ידני — link_del; קישור שהפירוש שלו בעמוד אחר — מבטלים שם
@@ -893,7 +894,7 @@ export default function ProofEditor({
         // קישור שהתקבל ממישהו אחר (inherited — הבודק השני, עמוד שנפתח מחדש): ההגשה הקודמת אולי כבר הוחלה בספר,
         // ולכן במקום הורדה שקטה — "אין קישור" מפורש (revert), כמו ב"החזר למקור"
         if (inh && ed.ops.some((op, i) => inh.idx.has(i) && plan.match(op))) {
-          pred.add = [{ kind: 'link_del', page: P, value: { src_line: k.from_line, page: P }, revert: true }]
+          pred.add = [{ kind: 'link_del', page: P, value: linkOpValue(view, k.from_line, k, P), revert: true }]
         }
         ed.removeWhere(pred)
         say(LINK_HE.cancelledAdded)

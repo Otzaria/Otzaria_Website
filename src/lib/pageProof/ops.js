@@ -35,6 +35,7 @@ export const MIN_LINE_BOX = [8, 6];
 const MAX_LINK_WORD = MAX_TEXT / 2;
 const MAX_WHY = 300;
 const FID_RE = /^[A-Za-z0-9]{4,32}$/;
+const FTYPE_RE = /^[A-Za-z0-9_]{1,40}$/;
 const LINK_VALUE_KINDS = ['note', 'dh'];
 // מספר השורות המרבי בפעולה אחת
 export const MAX_IDS_PER_OP = 500;
@@ -52,6 +53,33 @@ const isBox = (b) => Array.isArray(b) && b.length === 4 && b.every(Number.isFini
 const lineMap = (doc) => new Map((doc?.lines || []).map((l) => [l.id, l]));
 const isWordRange = (r, max = MAX_LINK_WORD) =>
   Array.isArray(r) && r.length === 2 && r.every((n) => isInt(n) && n >= 0 && n <= max) && r[0] <= r[1];
+
+// ---------- כמה קישורים לשורת-הערה (2026-10-04) ----------
+// זהות הקישור = (שורת-ההערה, טווח-המילים בה — from_words). קישור בלי טווח מתחיל בתחילת השורה
+// (מילה 0) — כך נגזרים קישורי תוכנת-הספר (קטע-הערה מתחיל בשורה). בשורה אחת יכולים להיות כמה
+// קישורים, כל עוד הטווחים שלהם אינם חופפים: שורה שמסיימת הערה אחת ופותחת את הבאה, או שתי
+// הערות קצרות בשורה אחת. קישור חדש מחליף רק קישור שהטווח שלו חופף.
+export const linkFromRange = (k) => (isWordRange(k?.from_words) ? k.from_words : [0, 0]);
+const rangesOverlap = (a, b) => a[0] <= b[1] && b[0] <= a[1];
+// האם הקישור k תופס את המקום (שורת-ההערה, טווח-המילים) — כלומר קישור חדש שם יחליף אותו
+export function sameLinkSlot(k, fromLine, fromWords) {
+  return !!k && k.from_line === fromLine && rangesOverlap(linkFromRange(k), isWordRange(fromWords) ? fromWords : [0, 0]);
+}
+// הקישורים שפעולת link_ok/link_del פוגעת בהם: עם from_words — הקישור הזה בלבד; בלעדיו — כל קישורי
+// השורה (link_del; כך היה כשלכל שורה היה קישור אחד) / הקישור שמתחיל בתחילת השורה (link_ok)
+// value של link_ok/link_del מרשימת-הקישורים: בשורה שיש בה יותר מקישור אחד — גם from_words (איזה מהם);
+// בשורה עם קישור אחד — כמו תמיד (src_line, page)
+export function linkOpValue(view, srcLine, k, page) {
+  const v = { src_line: srcLine, page };
+  if (k && (view?.links || []).filter((x) => x && x.from_line === srcLine).length > 1) v.from_words = linkFromRange(k).slice();
+  return v;
+}
+
+function linkTargets(k, v, kind) {
+  if (!k || k.from_line !== v?.src_line) return false;
+  if (isWordRange(v.from_words)) return sameLinkSlot(k, v.src_line, v.from_words);
+  return kind === 'link_del' || sameLinkSlot(k, v.src_line, [0, 0]);
+}
 
 // lineBox — תיבת-שורה (תיבה/שורה חדשה): גם גודל מזערי, כמו אצלם
 function checkBox(bb, doc, lineBox = false) {
@@ -219,6 +247,9 @@ export function validateOp(doc, op) {
         if (e) return `מסגרת: ${e}`;
         if (!isInt(f.order) || f.order < 1) return 'סדר-מסגרת לא תקין';
         if (f.kind !== undefined && !Object.hasOwn(FRAME_OBJECT_KINDS, f.kind)) return 'סוג-מסגרת לא מוכר';
+        // ftype — סוג-מסגרת (vocab.FRAME_TYPES); מפתח תקין תחבירית מספיק כאן: סוג שספר הגדיר לעצמו אינו מוכר
+        // בדף שלא רשם אותו, ותוכנת-הספר בודקת מול הרשימה שלה (סוג לא מוכר — יורד שם)
+        if (f.ftype !== undefined && f.ftype !== null && !(typeof f.ftype === 'string' && FTYPE_RE.test(f.ftype))) return 'סוג-מסגרת לא תקין';
       }
       return null;
     }
@@ -246,6 +277,8 @@ export function validateOp(doc, op) {
     case 'link_del': {
       if (!v || !isInt(v.src_line) || !lines.has(v.src_line)) return 'שורת-המקור של הקישור חסרה';
       if (v.page !== doc.page) return 'עמוד הקישור שגוי';
+      // from_words (רשות) — איזה מהקישורים של השורה (כמה קישורים לשורת-הערה אחת)
+      if (v.from_words !== undefined && !isWordRange(v.from_words)) return 'טווח-המילים של הקישור לא תקין';
       return null;
     }
     case 'link_reset': {
@@ -327,7 +360,7 @@ function cleanValue(kind, v) {
       const out = {};
       if (v && Array.isArray(v.frames)) {
         out.frames = v.frames.map((f) => {
-          const fr = pick(f, ['fid', 'stream', 'order', 'kind']);
+          const fr = pick(f, ['fid', 'stream', 'order', 'kind', 'ftype']);
           if (f && f.bbox !== undefined) fr.bbox = arr(f.bbox);
           return fr;
         });
@@ -353,7 +386,11 @@ function cleanValue(kind, v) {
       return out;
     }
     case 'link_ok':
-    case 'link_del':
+    case 'link_del': {
+      const out = pick(v, ['src_line', 'page']);
+      if (v && v.from_words !== undefined) out.from_words = arr(v.from_words);
+      return out;
+    }
     case 'link_reset':
       return pick(v, ['src_line', 'page']);
     case 'certainty':
@@ -639,9 +676,10 @@ export function applyOp(doc, op, opIndex = 0) {
     case 'cut_ok':
       return { ...doc, cut_ok: true };
     case 'link_add': {
-      // לכל שורת-הערה/פירוש קישור אחד — החדש מחליף את הקודם (גם כשהשורה בעמוד אחר).
-      // _added: נוסף בעריכה הזו (לא הגיע עם העמוד) — אפשר להסיר את הפעולה עצמה לפני ההגשה
-      const links = (doc.links || []).filter((k) => k.from_line !== ids[0]);
+      // כמה קישורים לשורת-הערה: החדש מחליף רק קישור מאותה שורה שטווח-המילים שלו חופף (sameLinkSlot;
+      // בלי טווח — תחילת השורה). _added: נוסף בעריכה הזו (לא הגיע עם העמוד) — אפשר להסיר את
+      // הפעולה עצמה לפני ההגשה
+      const links = (doc.links || []).filter((k) => !sameLinkSlot(k, ids[0], v?.from_words));
       const link = { from_line: ids[0], from_mark: null, to_line: ids[1], to_page: doc.page, kind: v?.kind || 'note', conf: 1, src: 'human', suspect: null, _added: true };
       if (Array.isArray(v?.from_words)) link.from_words = v.from_words.slice();
       if (Array.isArray(v?.to_words)) link.to_words = v.to_words.slice();
@@ -657,9 +695,9 @@ export function applyOp(doc, op, opIndex = 0) {
       return { ...doc, links };
     }
     case 'link_ok':
-      return { ...doc, links: (doc.links || []).map((k) => (k.from_line === v.src_line ? { ...k, src: 'human', suspect: null } : k)) };
+      return { ...doc, links: (doc.links || []).map((k) => (linkTargets(k, v, 'link_ok') ? { ...k, src: 'human', suspect: null } : k)) };
     case 'link_del':
-      return { ...doc, links: (doc.links || []).filter((k) => k.from_line !== v.src_line) };
+      return { ...doc, links: (doc.links || []).filter((k) => !linkTargets(k, v, 'link_del')) };
     case 'link_reset':
       // מה שהמחשב יקבע — רק בתוכנת-הספר; כאן הקישור מסומן "יחזור לאוטומטי" (LinksTab)
       return { ...doc, links: (doc.links || []).map((k) => (k.from_line === v.src_line ? { ...k, _reset: true } : k)) };
@@ -1004,6 +1042,7 @@ function wordIndexedLines(op) {
     if (op.value?.to_words) out.push(op.ids?.[1]);
     return out;
   }
+  if ((op.kind === 'link_ok' || op.kind === 'link_del') && op.value?.from_words) return [op.value.src_line];
   return [];
 }
 
@@ -1197,6 +1236,14 @@ export function bookOrder(baseDoc, ops) {
         if (r) value[key] = r;
         else delete value[key];
       }
+      return out.push({ ...op, value });
+    }
+    if ((op?.kind === 'link_ok' || op?.kind === 'link_del') && Array.isArray(op.value?.from_words) && chains.has(op.value.src_line)) {
+      // הקישור מזוהה בטווח-המילים שלו בשורת-ההערה — לפי הטקסט הסופי שלה
+      const r = toFinalRange(op.value.src_line, i, op.value.from_words);
+      const value = { ...op.value };
+      if (r) value.from_words = r;
+      else delete value.from_words;
       return out.push({ ...op, value });
     }
     return out.push(op);
@@ -1414,7 +1461,8 @@ export function describeOp(doc, op) {
     case 'link_del':
     case 'link_reset': {
       const l = lines.get(v.src_line);
-      return `${kindHe} (שורה ${l ? (l.line_no ?? 0) + 1 : '?'})`;
+      const w = isWordRange(v.from_words) ? (v.from_words[0] === v.from_words[1] ? `, מילה ${v.from_words[0] + 1}` : `, מילים ${v.from_words[0] + 1}–${v.from_words[1] + 1}`) : '';
+      return `${kindHe} (שורה ${l ? (l.line_no ?? 0) + 1 : '?'}${w})`;
     }
     case 'mixed_line':
       return `${where}${v ? 'שורה מעורבת-כתבים' : 'לא מעורבת'}`;

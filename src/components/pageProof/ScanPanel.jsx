@@ -27,7 +27,8 @@ import {
   isObjectFrame,
   streamChips,
   choiceInfo,
-  resolveFrameStream,
+  resolveFrameChoice,
+  framePatchFor,
   drawStreamFor,
   nearestLine,
   wordAtPoint,
@@ -422,9 +423,10 @@ export default function ScanPanel({
 
   const onDrawFrame = (box) => {
     const bbox = hug(box)
-    const stream = resolveFrameStream(drawStream, bbox, lines, H)
+    // סוג-מסגרת (כותרת-רצה של ההערות, מילת-המשך, הערת-צד…) — הזרם שלו, והסוג נשמר במסגרת (ftype)
+    const { stream, ftype } = resolveFrameChoice(drawStream, bbox, lines, H)
     const fid = newFid(new Set(fs.frames.map((f) => f.fid)))
-    if (commitFrames(insertFrame(fs.frames, { fid, stream, bbox, order: 0 }))) {
+    if (commitFrames(insertFrame(fs.frames, { fid, stream, bbox, order: 0, ...(ftype ? { ftype } : {}) }))) {
       // המסגרת החדשה נבחרת (הידיות שלה מוצגות), אבל החלונית לא נפתחת — כמו אחרי הזזה או שינוי-גודל;
       // היא נפתחת בלחיצה על המסגרת. במפורש false: אחרת חלונית שהייתה פתוחה למסגרת אחרת הייתה עוברת אליה
       setSelectedFid(fid)
@@ -482,9 +484,10 @@ export default function ScanPanel({
         claimTitle={CLAIM_TITLE}
         extra={typeof frameActions === 'function' ? frameActions(selFrame) : null}
         onStream={(key) => {
-          // "ריהוט הדף" — כותרת עמוד / תחתית לפי השורות שבמסגרת ומקומה בעמוד
-          const stream = resolveFrameStream(key, selFrame.bbox, lines, H)
-          if (stream !== selFrame.stream) commitFrames(patchFrame(fs.frames, fid, { stream }))
+          // "ריהוט הדף" — כותרת עמוד / תחתית לפי השורות שבמסגרת ומקומה בעמוד; סוג-מסגרת — הזרם שלו + ftype
+          // (ובחירה של זרם רגיל במסגרת שהיה לה סוג — ftype:null, הסוג יורד)
+          const patch = framePatchFor(selFrame, key, lines, H)
+          if (patch) commitFrames(patchFrame(fs.frames, fid, patch))
         }}
         onSeq={(n) => commitFrames(reorderInStream(fs.frames, fid, n), { seqFids: [fid] })}
         onOrder={(dir) => commitFrames(moveInOrder(fs.frames, fid, dir))}
