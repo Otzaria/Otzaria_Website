@@ -75,6 +75,25 @@ export function createGitSource({ client, ref, cache, headTtlMs = 0 }) {
     },
     /** רשומות התיקייה ({name, type, sha}) בקומיט, או null כשהיא לא קיימת. */
     listDir,
+    /**
+     * נתיבי קבצי ה-txt (יחסיים לתיקייה) בכל עומק, בקריאה רקורסיבית אחת לקומיט.
+     * null כשהתיקייה לא קיימת או שגיטהאב חתך את העץ (אז אין רשימה מלאה לסמוך עליה).
+     */
+    async listTxtFilesUnder(dir, commitSha) {
+      const key = `tree:${client.repo}:${commitSha}:${dir}`;
+      let files = cache.get(key);
+      if (files !== undefined) return files;
+      const cut = dir.lastIndexOf('/');
+      const parent = await listDir(dir.slice(0, cut), commitSha);
+      const sha = parent?.find((e) => e.name === dir.slice(cut + 1) && e.type === 'dir')?.sha;
+      files = null;
+      if (sha) {
+        const tree = await client.getTreeRecursive(sha);
+        if (!tree.truncated) files = tree.entries.filter((e) => e.type === 'file' && e.path.toLowerCase().endsWith('.txt')).map((e) => e.path);
+      }
+      cache.set(key, files, 200 + (files ? files.reduce((n, p) => n + p.length * 2 + 40, 0) : 0));
+      return files;
+    },
     loadBlob,
   };
 }

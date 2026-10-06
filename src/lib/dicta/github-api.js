@@ -356,6 +356,12 @@ export function createRepoClient({ repo, token = null, fetchImpl = fetch, timeou
       const data = await notFoundAsNull(call(`/contents/${encodeGitHubPath(dirPath)}?ref=${encodeURIComponent(ref)}`));
       return Array.isArray(data) ? data.map((e) => ({ name: e.name, path: e.path, sha: e.sha, type: e.type, size: e.size })) : null;
     },
+    /** כל רשומות העץ תחת tree sha, רקורסיבית (נתיבים יחסיים); truncated=true כשגיטהאב חתך. */
+    async getTreeRecursive(treeSha) {
+      const data = await call(`/git/trees/${treeSha}?recursive=1`);
+      const kind = (t) => (t === "blob" ? "file" : t === "tree" ? "dir" : t);
+      return { truncated: Boolean(data?.truncated), entries: (data?.tree || []).map((t) => ({ path: t.path, type: kind(t.type), sha: t.sha })) };
+    },
     async getFileMeta(filePath, ref) {
       const data = await notFoundAsNull(call(`/contents/${encodeGitHubPath(filePath)}?ref=${encodeURIComponent(ref)}`));
       return data && !Array.isArray(data) && data.type === "file" ? { sha: data.sha, size: data.size } : null;

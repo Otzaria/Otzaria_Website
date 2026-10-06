@@ -117,6 +117,38 @@ test('resolver: נתיב שה-DB איית אחרת (שו״ת מול התיקיי
   assert.equal(direct.pathMatch, 'exact');
 });
 
+test('resolver: רמז של שם קובץ בלבד (בלי נתיב קטגוריה) נמצא בכל עומק תחת תיקיית המקור', async () => {
+  const deep = 'ToratEmetToOtzaria/ספרים/אוצריא/תלמוד בבלי/מפרשים/חברותא על ברכות.txt';
+  const bare = (libraryRelativePath, sourceFolder = 'ToratEmetToOtzaria') => report({ sourceFolder, filePath: libraryRelativePath, sourceHint: { sourceFolder, libraryRelativePath } });
+  const one = setup({ [deep]: FILE, 'ToratEmetToOtzaria/ספרים/אוצריא/תלמוד בבלי/ברכות.txt': 'x' });
+  const r = await resolveSource({ report: bare('חברותא על ברכות.txt'), revision: rev(), gitSource: one.git, source: { repo: REPO, ref: 'main' } });
+  assert.equal(r.status, 'exact');
+  assert.equal(r.path, deep);
+  assert.equal(r.pathMatch, 'filename');
+  assert.equal(r.blobSha, one.gh.fileSha('main', deep));
+
+  // שם זהה אחרי נרמול בלבד (מירכאות) — נמצא כשהוא יחיד
+  const quoted = setup({ 'ToratEmetToOtzaria/ספרים/אוצריא/שות/שו"ת הרשב"א.txt': FILE });
+  const q = await resolveSource({ report: bare('שו״ת הרשב״א.txt'), revision: rev(), gitSource: quoted.git, source: { repo: REPO, ref: 'main' } });
+  assert.equal(q.status, 'exact');
+
+  // אותו שם בשתי קטגוריות — עמום, המועמדים לבחירה ידנית
+  const twice = setup({ [deep]: FILE, 'ToratEmetToOtzaria/ספרים/אוצריא/אחר/חברותא על ברכות.txt': FILE });
+  const a = await resolveSource({ report: bare('חברותא על ברכות.txt'), revision: rev(), gitSource: twice.git, source: { repo: REPO, ref: 'main' } });
+  assert.equal(a.status, 'ambiguous');
+  assert.equal(a.candidates.length, 2);
+
+  // לא קיים / עץ שנחתך / תיקייה שאינה יעד כתיבה — לא נמצא
+  const missing = await resolveSource({ report: bare('אין כזה.txt'), revision: rev(), gitSource: one.git, source: { repo: REPO, ref: 'main' } });
+  assert.equal(missing.status, 'not_found');
+  const cut = setup({ [deep]: FILE });
+  cut.gh.truncateTrees = true;
+  const t = await resolveSource({ report: bare('חברותא על ברכות.txt'), revision: rev(), gitSource: cut.git, source: { repo: REPO, ref: 'main' } });
+  assert.equal(t.status, 'not_found');
+  const sefaria = await resolveSource({ report: bare('חברותא על ברכות.txt', 'Sefaria'), revision: rev(), gitSource: one.git, source: { repo: REPO, ref: 'main' } });
+  assert.equal(sefaria.reason, 'no_candidate_path');
+});
+
 test('resolver: מירכאות בשם הספר ותלמוד ירושלים/ירושלמי נמצאים; שני מועמדים אחרי נרמול נשארים ידניים', async () => {
   const quoted = 'ToratEmetToOtzaria/ספרים/אוצריא/תלמוד ירושלים/חידושי הרשב"א.txt';
   const one = setup({ [quoted]: FILE });

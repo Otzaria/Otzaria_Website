@@ -14,6 +14,7 @@ export class FakeGitHub {
     this.trees = new Map();
     this.commits = new Map();
     this.refs = new Map();
+    this.subtrees = new Map();
     this.pulls = [];
     this.issueComments = [];
     this.calls = [];
@@ -130,9 +131,22 @@ export class FakeGitHub {
         const tail = fp.slice(p.length + 1);
         const slash = tail.indexOf('/');
         if (slash === -1) children.set(tail, { name: tail, path: fp, sha, type: 'file', size: this.blobs.get(sha).length });
-        else children.set(tail.slice(0, slash), { name: tail.slice(0, slash), path: `${p}/${tail.slice(0, slash)}`, sha: 'dir', type: 'dir' });
+        else {
+          const dir = `${p}/${tail.slice(0, slash)}`;
+          const sha = sha1(`subtree:${commitSha}:${dir}`);
+          this.subtrees.set(sha, { commitSha, dir });
+          children.set(tail.slice(0, slash), { name: tail.slice(0, slash), path: dir, sha, type: 'dir' });
+        }
       }
       return children.size ? json(200, [...children.values()]) : json(404, { message: 'Not Found' });
+    }
+    // עץ-משנה רקורסיבי לפי ה-sha שהוחזר ברשימת תיקייה (רק קבצים — די לבדיקות).
+    if (method === 'GET' && (m = rest.match(/^\/git\/trees\/([0-9a-f]{40})$/))) {
+      const sub = this.subtrees.get(m[1]);
+      if (!sub) return json(404, {});
+      const tree = this.trees.get(this.commits.get(sub.commitSha).tree);
+      const entries = [...tree].filter(([fp]) => fp.startsWith(`${sub.dir}/`)).map(([fp, sha]) => ({ path: fp.slice(sub.dir.length + 1), type: 'blob', sha }));
+      return json(200, { sha: m[1], tree: entries, truncated: this.truncateTrees === true });
     }
     if (method === 'GET' && (m = rest.match(/^\/git\/blobs\/([0-9a-f]{40})$/))) {
       const b = this.blobs.get(m[1]);
