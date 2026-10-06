@@ -6,7 +6,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { parseDump, exportDump, listBooks } from './dump.js'
-import { aliasKey, aliasProblem, conflictingTitle, normalizeAlias } from './normalize.js'
+import { aliasKey, aliasProblem, conflictingTitle, duplicateAlias, hasQuotes, matchesLibraryTitle, normalizeAlias, suggestLibraryTitles } from './normalize.js'
 import { applyChangeSet, planAddAliases, summarizeChangeSet, validateChangeSet } from './changes.js'
 
 const HEADER = 'PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\nCREATE TABLE IF NOT EXISTS Books (id INTEGER);\n'
@@ -57,6 +57,52 @@ test('aliasKey ignores quotes the way the app does', () => {
   assert.equal(aliasKey('רעק"א'), aliasKey('רעקא'))
 })
 
+test('aliasKey ignores punctuation the way the app does', () => {
+  assert.equal(aliasKey('שו״ע-או״ח'), aliasKey('שו"ע או"ח'))
+  assert.equal(aliasKey('רמבם, מסירת תורה שבעל פה'), aliasKey('רמב"ם מסירת תורה-שבעל-פה'))
+  assert.equal(aliasKey('אור הישר.'), aliasKey('אור הישר'))
+  assert.notEqual(aliasKey('אור הישר'), aliasKey('אור ישר'))
+})
+
+test('aliasKey expands amud marks before removing quotes, like FindRef', () => {
+  const cases = [
+    ['ב.', 'ב א'],
+    ['ב:', 'ב ב'],
+    ['ברכות קכא.', 'ברכות קכא א'],
+    ['ברכות קכאב.', 'ברכות קכאב'],
+    ['בְּ. ג:', 'ב א ג ב'],
+    ['תוס. נדרים', 'תוס א נדרים'],
+    ['תוס\' נדרים', 'תוס נדרים'],
+    ['פ"א.', 'פא'],
+    ['פ״א.', 'פא'],
+    ['פ\'א:', 'פא'],
+    ['א.ב.', 'א ב א'],
+    ['ברכות ב.,', 'ברכות ב'],
+    ['ברכות ב.ג:', 'ברכות ב ג ב'],
+    ['שו"ע או"ח א.', 'שוע אוח א א'],
+    ['ABC 12_34', 'abc 12 34'],
+  ]
+  for (const [input, expected] of cases) assert.equal(aliasKey(input), expected, input)
+  assert.notEqual(aliasKey('ב.'), aliasKey('ב:'))
+  assert.equal(duplicateAlias('תוס. נדרים', ['תוס\' נדרים']), null)
+  assert.equal(aliasProblem('שמואל א.', 'שמואל א'), null)
+})
+
+test('duplicateAlias finds an existing form the app cannot tell apart', () => {
+  assert.equal(duplicateAlias('רמב"ם הל\' שבת', ['רמבם הל שבת', 'רמב"ם שבת']), 'רמבם הל שבת')
+  assert.equal(duplicateAlias('רמב"ם שבתות', ['רמב"ם שבת']), null)
+  assert.equal(hasQuotes('רמב״ם'), true)
+  assert.equal(hasQuotes('רמבם'), false)
+})
+
+test('matchesLibraryTitle accepts only names SeforimLibrary looks up', () => {
+  const titles = ['פסקי הרא"ש על נדה', 'משנה תורה, הלכות שבת']
+  assert.equal(matchesLibraryTitle('פסקי הראש על נדה', titles), true)
+  assert.equal(matchesLibraryTitle('משנה תורה  הלכות שבת', titles), true)
+  assert.equal(matchesLibraryTitle('פסקי הראש על נידה', titles), false)
+  assert.deepEqual(suggestLibraryTitles('פסקי הראש על נידה', titles), ['פסקי הרא"ש על נדה'])
+})
+
 test('conflictingTitle finds another book with the same title, ignoring quotes', () => {
   const titles = new Map(['בח', 'בראשית'].map((t) => [aliasKey(t), t]))
   assert.equal(conflictingTitle('ב"ח', 'בן איש חי', titles), 'בח')
@@ -99,6 +145,27 @@ test('replaying a change set on a master that already has it is a no-op', () => 
 test('an alias that differs only in quotes from an existing one is not added twice', () => {
   const { results } = applyChangeSet(parseDump(FIXTURE), [{ type: 'add', book: 'בראשית', alias: 'בר' }])
   assert.equal(results[0].status, 'noop')
+})
+
+test('punctuation duplicates are skipped but distinct amud aliases are retained', () => {
+  const base = parseDump(dump([[1, 'ספר בדיקה']], [[1, 'תוס\' נדרים']], [[1, 1, 1]]))
+  const { ops } = validateChangeSet([
+    { type: 'add', book: 'ספר בדיקה', alias: 'תוס-נדרים' },
+    { type: 'add', book: 'ספר בדיקה', alias: 'תוס. נדרים' },
+    { type: 'add', book: 'ספר בדיקה', alias: 'תוס: נדרים' },
+  ], base)
+  const { state, results } = applyChangeSet(base, ops)
+  assert.deepEqual(results.map((r) => r.status), ['noop', 'applied', 'applied'])
+  assert.deepEqual(listBooks(state)[0].aliases, ['תוס\' נדרים', 'תוס. נדרים', 'תוס: נדרים'])
+})
+
+test('editing an amud alias does not merge it into a different search key', () => {
+  const base = parseDump(dump([[1, 'תוספתא נדרים']], [[1, 'תוס\' נדרים'], [2, 'תוס. נדרים']], [[1, 1, 1], [2, 1, 2]]))
+  const { ops } = validateChangeSet([{ type: 'rename', book: 'תוספתא נדרים', from: 'תוס. נדרים', to: 'תוס. נדרים!' }], base)
+  const { state, results } = applyChangeSet(base, ops)
+  assert.equal(results[0].reason, undefined)
+  assert.deepEqual(listBooks(state)[0].aliases, ['תוס\' נדרים', 'תוס. נדרים!'])
+  assert.equal(state.links.size, base.links.size)
 })
 
 test('renaming onto an existing alias merges instead of duplicating', () => {

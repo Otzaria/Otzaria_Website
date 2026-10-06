@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { aliasProblem, conflictingTitle } from '@/lib/acronyms/normalize'
+import { aliasProblem, conflictingTitle, duplicateAlias, hasQuotes } from '@/lib/acronyms/normalize'
 import { bookView } from '@/lib/acronyms/basket'
 
 const CHIP_CLASSES = {
@@ -82,8 +82,16 @@ export default function BookAliasesCard({ book, basket, pending, titlesByKey, on
     else apply()
   }
 
+  // כינוי שהתוכנה אינה מבדילה בינו לבין כינוי קיים של הספר
+  const duplicateProblem = (alias, exceptText) => {
+    const existing = duplicateAlias(alias, chips.filter((c) => c.state !== 'removed' && c.text !== exceptText).map((c) => c.text))
+    if (!existing) return null
+    const base = `הכינוי כבר קיים בספר בצורה "${existing}". התוכנה מתאימה את שניהם לאותו חיפוש, ולכן אין צורך בשניהם.`
+    return hasQuotes(alias) && !hasQuotes(existing) ? `${base} כדי לשמור את הצורה עם הגרשיים, ערכו את "${existing}".` : base
+  }
+
   const submitAdd = () => {
-    const problem = aliasProblem(newAlias, book.title)
+    const problem = aliasProblem(newAlias, book.title) || duplicateProblem(newAlias)
     if (problem) return onError(problem)
     applyUnlessConflict(newAlias, () => {
       onOp({ type: 'add', book: book.title, alias: newAlias, ...(book.isNew ? { newBook: true } : {}) })
@@ -92,7 +100,7 @@ export default function BookAliasesCard({ book, basket, pending, titlesByKey, on
   }
 
   const edit = (chip, value) => {
-    const problem = aliasProblem(value, book.title)
+    const problem = aliasProblem(value, book.title) || duplicateProblem(value, chip.text)
     if (problem) {
       onError(problem)
       return false
