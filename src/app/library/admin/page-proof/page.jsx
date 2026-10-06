@@ -14,6 +14,7 @@ import ReviewModal from '@/components/pageProof/admin/ReviewModal'
 import AdminBookPages from '@/components/pageProof/admin/AdminBookPages'
 import TokensCard from '@/components/pageProof/admin/TokensCard'
 import RecutSwitchCard from '@/components/pageProof/admin/RecutSwitchCard'
+import GuideEditorCard from '@/components/pageProof/admin/GuideEditorCard'
 
 // ניהול הגהת-העמודים: ייבוא חבילות מתוכנת-הספר של פרויקט ה-OCR, מעקב
 // התקדמות לכל ספר, רשת-העמודים של ספר (מצב כל עמוד, פתוח/סגור למתנדבים,
@@ -195,6 +196,7 @@ export default function PageProofAdmin() {
       {reviewId && <ReviewModal id={reviewId} onClose={closeReview} onDone={onReviewed} onPageChanged={loadBooks} />}
 
       <RecutSwitchCard />
+      <GuideEditorCard />
       <TokensCard />
     </div>
   )

@@ -71,6 +71,8 @@ export const CACHE_TAGS = {
   // רשימת ספרי הדיקטה בממשק ניהול (/library/admin/dicta-books) — כל הספרים,
   // זהה לכל מנהל
   DICTA_BOOKS_ADMIN_LIST: 'dicta-books-admin-list',
+  // דף ההנחיות להגהת עמודים (/docs/page-proof) — ציבורי, זהה לכל צופה; נערך בדף הניהול (lib/pageProof/guideStore)
+  PAGE_PROOF_GUIDE: 'page-proof-guide',
 }
 
 /**
