@@ -54,9 +54,10 @@ export default function StagedEditor({ current, help, recutOpen = true, saving =
 
   // שלב שנקבע עכשיו (עמוד חדש, או טיוטה מלפני השלבים) — נשמר בטיוטה מיד
   const [firstStage] = useState(stage)
+  const saveStage = sync.setStage
   useEffect(() => {
-    if (firstStage !== saved) sync.setStage(firstStage)
-  }, [firstStage, saved, sync])
+    if (firstStage !== saved) saveStage(firstStage)
+  }, [firstStage, saved, saveStage])
 
   const onOps = useCallback(
     (all) => {
