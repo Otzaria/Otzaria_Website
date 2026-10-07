@@ -3,7 +3,10 @@
  * שגיאה מחזירה 422 עם שם השדה — הלקוח מתייחס לזה כדחייה סופית.
  */
 import zlib from 'node:zlib';
+import { promisify } from 'node:util';
 import { validateEmail } from '../validation-utils.js';
+
+const gunzip = promisify(zlib.gunzip);
 
 export const MAX_DIAGNOSTICS_BYTES = 300 * 1024;
 export const MAX_ERROR_LOG_BYTES = 250 * 1024;
@@ -15,12 +18,14 @@ export const MAX_IMAGES_TOTAL_BYTES = 15 * 1024 * 1024;
 export const MAX_IMAGE_NAME_CHARS = 200;
 // minidump של sentry-native (קריסה נייטיבית): גולמי או gzip. נשמר באתר בלבד — מכיל זיכרון של התהליך.
 export const MAX_MINIDUMP_BYTES = 16 * 1024 * 1024;
+// gzip עשוי להגדיל מידע שאינו דחיס; תקרת הקלט נפרדת מתקרת הפלט.
+export const MAX_MINIDUMP_INPUT_BYTES = MAX_MINIDUMP_BYTES + 64 * 1024;
 const MINIDUMP_MAGIC = Buffer.from('MDMP', 'latin1');
 const GZIP_MAGIC = Buffer.from([0x1f, 0x8b]);
 const MAX_TEXT_BODY_BYTES = 700 * 1024;
 export const MAX_BODY_BYTES = MAX_TEXT_BODY_BYTES
   + Math.ceil(MAX_IMAGES_TOTAL_BYTES / 3) * 4
-  + Math.ceil(MAX_MINIDUMP_BYTES / 3) * 4
+  + Math.ceil(MAX_MINIDUMP_INPUT_BYTES / 3) * 4
   + 64 * 1024;
 
 export const IMAGE_TYPES = Object.freeze({
@@ -91,17 +96,18 @@ function validateImages(raw) {
 const startsWith = (buffer, magic) => buffer.length >= magic.length && magic.every((b, i) => buffer[i] === b);
 
 /** {fileName, data: base64} — data הוא ה-dump עצמו או gzip שלו; נשמר תמיד פתוח, כדי שייפתח ישירות בכלי ניפוי. */
-function validateMinidump(raw) {
+async function validateMinidump(raw) {
   if (raw === undefined || raw === null) return { value: null };
   const field = 'attachments.minidump';
   if (!isPlainObject(raw) || typeof raw.data !== 'string') return { error: fail(field, 'data must be a base64 string') };
   // בדיקת אורך לפני הפענוח: base64 של יותר מהתקרה לא מפוענח בכלל
-  if (raw.data.length > Math.ceil(MAX_MINIDUMP_BYTES / 3) * 4) return { error: fail(field, 'too large') };
+  if (raw.data.length > Math.ceil(MAX_MINIDUMP_INPUT_BYTES / 3) * 4) return { error: fail(field, 'too large') };
   let buffer = Buffer.from(raw.data, 'base64');
   if (buffer.toString('base64') !== raw.data) return { error: fail(field, 'invalid base64') };
+  if (buffer.length > MAX_MINIDUMP_INPUT_BYTES) return { error: fail(field, 'too large') };
   if (startsWith(buffer, GZIP_MAGIC)) {
     try {
-      buffer = zlib.gunzipSync(buffer, { maxOutputLength: MAX_MINIDUMP_BYTES });
+      buffer = await gunzip(buffer, { maxOutputLength: MAX_MINIDUMP_BYTES });
     } catch (err) {
       return { error: fail(field, err?.code === 'ERR_BUFFER_TOO_LARGE' ? 'too large' : 'invalid gzip') };
     }
@@ -123,9 +129,9 @@ function optionalString(raw, field, max) {
 
 /**
  * @param {unknown} raw גוף הבקשה אחרי JSON.parse
- * @returns {{ok:true, value:object} | {ok:false, status:number, field:string, error:string}}
+ * @returns {Promise<{ok:true, value:object} | {ok:false, status:number, field:string, error:string}>}
  */
-export function validateAppReport(raw) {
+export async function validateAppReport(raw) {
   if (!isPlainObject(raw)) return fail('body', 'must be an object');
   if (raw.schema !== 1) return fail('schema', 'unsupported');
 
@@ -198,7 +204,7 @@ export function validateAppReport(raw) {
     const imgs = validateImages(raw.attachments.images);
     if (imgs.error) return imgs.error;
     images = imgs.value;
-    const dump = validateMinidump(raw.attachments.minidump);
+    const dump = await validateMinidump(raw.attachments.minidump);
     if (dump.error) return dump.error;
     minidump = dump.value;
   }

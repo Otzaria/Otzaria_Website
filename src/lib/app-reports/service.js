@@ -68,10 +68,10 @@ async function storeAttachments(report, value, saveFile) {
 /**
  * קליטת דיווח מאומת. מחזיר {status, body}.
  * @param {unknown} raw
- * @param {{saveFile:Function, config:object, github?:object, fetchImpl?:Function}} deps
+ * @param {{saveFile:Function, deleteFile:Function, config:object, github?:object, fetchImpl?:Function}} deps
  */
 export async function ingestAppReport(raw, deps) {
-  const v = validateAppReport(raw);
+  const v = await validateAppReport(raw);
   if (!v.ok) return { status: v.status, body: { error: v.error, field: v.field } };
   const value = v.value;
   const contentHash = computeContentHash(value);
@@ -96,13 +96,30 @@ export async function ingestAppReport(raw, deps) {
     return { status: 200, body: replyFor(before, { duplicate: true }) };
   }
 
+  const savedFileIds = [];
+  const saveAttachment = async (...args) => {
+    const saved = await deps.saveFile(...args);
+    savedFileIds.push(saved.gridfsId);
+    return saved;
+  };
   try {
-    const fileIds = await storeAttachments(doc, value, deps.saveFile);
+    const fileIds = await storeAttachments(doc, value, saveAttachment);
     if (fileIds.diagnostics || fileIds.errors || fileIds.minidump || fileIds.images.length) await AppReport.updateOne({ reportId: value.reportId }, { $set: { fileIds } });
   } catch (err) {
     // בלי הקבצים הדיווח חסר ערך; מוחקים כדי שהלקוח ישלח שוב (5xx = תור וניסיון חוזר)
     console.error('App report: attachment storage failed:', err?.message);
-    await AppReport.deleteOne({ reportId: value.reportId, issueNumber: null });
+    const removed = await AppReport.deleteOne({ reportId: value.reportId, issueNumber: null });
+    // מנקים רק אחרי מחיקת הדיווח: ייתכן שהעדכון נשמר למרות השגיאה וה-cron כבר פרסם אותו.
+    // אחרת כל ניסיון חוזר של דיווח שנמחק משאיר עותק יתום של הקבצים שנשמרו לפני הכשל.
+    if (removed.deletedCount) {
+      for (const gridfsId of savedFileIds) {
+        try {
+          await deps.deleteFile(String(gridfsId));
+        } catch (cleanupError) {
+          console.error('App report: attachment cleanup failed:', gridfsId, cleanupError?.message);
+        }
+      }
+    }
     return { status: 500, body: { error: 'Failed to store attachments' } };
   }
 
