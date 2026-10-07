@@ -1,0 +1,19 @@
+# Email Worker לתשובות המדווחים — ראו README.md בתיקייה הזו
+name = "otzaria-app-reports-inbound"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+# ניסיון חוזר לתשובות שהאתר לא קיבל (שבת/תקלה)
+[triggers]
+crons = ["*/15 * * * *"]
+
+[[kv_namespaces]]
+binding = "PENDING"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+[vars]
+SITE_URL = "https://otzaria.org"
+# תיבה רגילה (כתובת יעד מאומתת ב-Email Routing) למיילים שהאתר דחה — טוקן לא מוכר וכד'
+FALLBACK_TO = ""
+
+# סוד (לא כאן): wrangler secret put INBOUND_SECRET — אותו ערך כמו APP_REPORTS_INBOUND_SECRET באתר

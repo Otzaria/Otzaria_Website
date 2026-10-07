@@ -3,6 +3,7 @@ import { contactReporter } from '@/lib/app-reports/service';
 import { checkSameOrigin } from '@/lib/corrections/http';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { sendAppReportContactEmail } from '@/lib/emailService';
+import { getAppReportsConfig } from '@/lib/app-reports/config';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +27,7 @@ export async function POST(request, { params }) {
   try {
     const result = await contactReporter(
       { reportId: String(reportId), subject: body?.subject, message: body?.message, user: auth.user },
-      { sendContactMail: sendAppReportContactEmail },
+      { sendContactMail: sendAppReportContactEmail, config: getAppReportsConfig() },
     );
     return jsonNoStore(result.body, result.status);
   } catch (error) {

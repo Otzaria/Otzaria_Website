@@ -11,7 +11,11 @@ const MAX_TITLE_CHARS = 250;
 
 export const reportPageUrl = (reportId) => `${PUBLIC_SITE_URL}/library/admin/app-reports/${encodeURIComponent(reportId)}`;
 
-export const issueLabels = (report) => ['from-app', report.type, `platform:${report.platform}`];
+// auto-report: נשלח בלי פעולה של המשתמש (auto_crash). התווית קיימת בריפו — טוקן בלי triage לא יוצר תוויות חדשות.
+export const issueLabels = (report) => [
+  'from-app', report.type, `platform:${report.platform}`,
+  ...(report.trigger === 'auto_crash' ? ['auto-report'] : []),
+];
 
 // טקסט משתמש: בלי מייל, בלי תיוג משתמשי GitHub ובלי סימונים שמתחזים למרקרים שלנו
 export function sanitizeUserText(text) {

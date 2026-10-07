@@ -11,11 +11,15 @@ import { createGithubClient, issueHtmlUrl } from './github.js';
 import { handleIssueStateChange } from './state-change.js';
 import { planPublication } from './merge.js';
 import { verifyUnsubscribeToken } from './unsubscribe.js';
+import {
+  newReplyToken, buildReplyAddress, validateInboundPayload, isAutoReply, inboundMessageBody, buildInboundComment,
+} from './inbound.js';
 export { hasAppReportsAccess } from '../roles.js';
 
 const LEASE_MS = 2 * 60 * 1000;
 export const PENDING_BATCH = 20;
 export const STATE_BATCH = 30;
+export const INBOUND_BATCH = 20;
 
 function githubFor(deps) {
   if (deps.github) return deps.github;
@@ -207,7 +211,12 @@ export async function publishReport(reportId, deps) {
 export async function runAppReportsSync(deps) {
   const now = deps.now || new Date();
   const github = githubFor(deps);
-  const summary = { githubConfigured: Boolean(github), pending: { attempted: 0, published: 0 }, states: { checked: 0, closed: 0, notified: 0, failed: 0, errors: 0 } };
+  const summary = {
+    githubConfigured: Boolean(github),
+    pending: { attempted: 0, published: 0 },
+    states: { checked: 0, closed: 0, notified: 0, failed: 0, errors: 0 },
+    inbound: { reports: 0, posted: 0, errors: 0 },
+  };
   if (!github) return summary;
   const d = { ...deps, github, now };
 
@@ -218,6 +227,18 @@ export async function runAppReportsSync(deps) {
     summary.pending.attempted += 1;
     const r = await publishReport(p.reportId, d);
     if (r && !r.issuePending) summary.pending.published += 1;
+  }
+
+  // תשובות במייל שעוד לא פורסמו ב-issue (ה-issue נוצר מאוחר יותר, או ש-GitHub נכשל בקליטה)
+  const withReplies = await AppReport.find({
+    issueNumber: { $ne: null },
+    contactLog: { $elemMatch: { direction: 'in', issueComment: 'pending' } },
+  }).select('reportId').sort({ lastInboundAt: 1 }).limit(INBOUND_BATCH).lean();
+  for (const { reportId } of withReplies) {
+    summary.inbound.reports += 1;
+    const r = await postInboundComments(reportId, d);
+    summary.inbound.posted += r.posted;
+    summary.inbound.errors += r.errors;
   }
 
   const issues = await AppReport.aggregate([
@@ -249,7 +270,8 @@ export async function runAppReportsSync(deps) {
 /** המייל חשוף למנהל כללי בלבד. */
 export function serializeReport(doc, role) {
   if (!doc) return null;
-  const { reporterEmail, issueLeaseUntil, contentHash, __v, ...rest } = doc;
+  // replyToken הוא הרשאה לכתוב לדיווח (מי שמחזיק בו יכול לשלוח "תשובה") — לא יוצא מהשרת
+  const { reporterEmail, issueLeaseUntil, contentHash, replyToken, __v, ...rest } = doc;
   return {
     ...rest,
     _id: String(doc._id),
@@ -262,7 +284,12 @@ export function serializeReport(doc, role) {
       minidump: doc.fileIds?.minidump ? { size: doc.fileIds.minidump.size, fileName: doc.fileIds.minidump.fileName || '' } : null,
       images: (doc.fileIds?.images || []).map(({ size, mimeType, fileName }) => ({ size, mimeType, fileName })),
     },
-    contactLog: (doc.contactLog || []).map((c) => ({ ...c, byUserId: c.byUserId ? String(c.byUserId) : null })),
+    contactLog: (doc.contactLog || []).map(({ fromEmail, ...c }) => ({
+      ...c,
+      direction: c.direction || 'out',
+      byUserId: c.byUserId ? String(c.byUserId) : null,
+      ...(role === 'admin' && fromEmail ? { fromEmail } : {}),
+    })),
   };
 }
 
@@ -356,16 +383,91 @@ export async function contactReporter({ reportId, subject, message, user }, deps
   if (!s || s.length > 200) return { status: 422, body: { error: 'subject: 1..200 chars', field: 'subject' } };
   if (!m || m.length > 5000) return { status: 422, body: { error: 'message: 1..5000 chars', field: 'message' } };
 
-  const doc = await AppReport.findOne({ reportId }).select('reportId title reporterEmail').lean();
+  const doc = await AppReport.findOne({ reportId }).select('reportId title reporterEmail replyToken').lean();
   if (!doc) return { status: 404, body: { error: 'Report not found' } };
   if (!doc.reporterEmail) return { status: 422, body: { error: 'Reporter left no email', field: 'reporterEmail' } };
 
-  const result = await deps.sendContactMail({ to: doc.reporterEmail, subject: s, message: m, reportTitle: doc.title });
+  const replyDomain = deps.config?.replyDomain;
+  const replyTo = replyDomain ? buildReplyAddress(doc.replyToken || await ensureReplyToken(reportId), replyDomain) : null;
+  const result = await deps.sendContactMail({ to: doc.reporterEmail, subject: s, message: m, reportTitle: doc.title, replyTo });
   if (!result?.sent) return { status: 502, body: { error: 'Failed to send email' } };
 
-  const entry = { byUserId: user.id || null, byName: user.name || '', subject: s, message: m, sentAt: deps.now || new Date() };
+  const entry = { direction: 'out', byUserId: user.id || null, byName: user.name || '', subject: s, message: m, sentAt: deps.now || new Date() };
   await AppReport.updateOne({ reportId }, { $push: { contactLog: entry } });
   return { status: 200, body: { success: true, entry: { ...entry, byUserId: entry.byUserId ? String(entry.byUserId) : null } } };
+}
+
+/** הטוקן של כתובת המענה; נוצר פעם אחת לדיווח, גם כששתי פניות רצות במקביל. */
+export async function ensureReplyToken(reportId) {
+  const created = await AppReport.findOneAndUpdate(
+    { reportId, replyToken: { $exists: false } },
+    { $set: { replyToken: newReplyToken() } },
+    { returnDocument: 'after' },
+  ).select('replyToken').lean();
+  if (created?.replyToken) return created.replyToken;
+  const doc = await AppReport.findOne({ reportId }).select('replyToken').lean();
+  return doc?.replyToken ?? null;
+}
+
+/**
+ * תשובת מדווח שהגיעה מה-Email Worker. מחזיר {status, body}.
+ * 404 = טוקן לא מוכר (ה-Worker מעביר אז את המייל לתיבה רגילה); כפילות לפי Message-ID מחזירה 200.
+ * @param {unknown} raw
+ * @param {{config:object, github?:object, fetchImpl?:Function, now?:Date}} deps
+ */
+export async function ingestInboundReply(raw, deps) {
+  const v = validateInboundPayload(raw);
+  if (!v.ok) return { status: 422, body: { error: v.error, field: v.field } };
+  const { token, from, subject, messageId, text, html, headers, attachments } = v.value;
+
+  const doc = await AppReport.findOne({ replyToken: token }).select('reportId reporterEmail issueNumber').lean();
+  if (!doc) return { status: 404, body: { error: 'unknown_token' } };
+  if (isAutoReply(headers)) return { status: 200, body: { ok: true, status: 'ignored_auto', reportId: doc.reportId } };
+
+  const now = deps.now || new Date();
+  // כתובת אחרת מזו שבדיווח: נשמר לצוות, אבל לא מתפרסם ב-issue הציבורי בלי בדיקה
+  const fromReporter = Boolean(from && doc.reporterEmail && from === doc.reporterEmail.toLowerCase());
+  const entry = {
+    direction: 'in', byName: '', subject, message: inboundMessageBody({ text, html }), sentAt: now,
+    fromEmail: from || null, messageId, attachments, issueComment: fromReporter ? 'pending' : 'held',
+  };
+  const filter = { reportId: doc.reportId, ...(messageId ? { 'contactLog.messageId': { $ne: messageId } } : {}) };
+  const upd = await AppReport.updateOne(filter, { $push: { contactLog: entry }, $set: { lastInboundAt: now } });
+  if (!upd.modifiedCount) return { status: 200, body: { ok: true, status: 'duplicate', reportId: doc.reportId } };
+
+  if (fromReporter && doc.issueNumber) {
+    // GitHub לא זמין? התשובה כבר שמורה, וה-cron יפרסם אותה
+    await postInboundComments(doc.reportId, deps).catch((err) => console.error('Inbound reply comment failed:', err?.message));
+  }
+  return { status: 200, body: { ok: true, status: 'stored', reportId: doc.reportId } };
+}
+
+/** מפרסם ב-issue את התשובות הממתינות של דיווח אחד. כל תשובה נתפסת (posting) לפני הפרסום, כדי שלא תתפרסם פעמיים. */
+export async function postInboundComments(reportId, deps) {
+  const result = { posted: 0, errors: 0 };
+  const github = githubFor(deps);
+  if (!github) return result;
+  const doc = await AppReport.findOne({ reportId }).select('reportId issueNumber contactLog').lean();
+  if (!doc?.issueNumber) return result;
+  for (const [i, c] of (doc.contactLog || []).entries()) {
+    if (c.direction !== 'in' || c.issueComment !== 'pending') continue;
+    const key = `contactLog.${i}`;
+    const claimed = await AppReport.updateOne(
+      { reportId, [`${key}.issueComment`]: 'pending' },
+      { $set: { [`${key}.issueComment`]: 'posting' } },
+    );
+    if (!claimed.modifiedCount) continue;
+    try {
+      const { url } = await github.createComment(doc.issueNumber, buildInboundComment({ reportId, message: c.message, attachments: c.attachments }));
+      await AppReport.updateOne({ reportId }, { $set: { [`${key}.issueComment`]: 'posted', [`${key}.issueCommentUrl`]: url } });
+      result.posted += 1;
+    } catch (err) {
+      result.errors += 1;
+      console.error(`App report ${reportId}: reply comment failed:`, err?.message);
+      await AppReport.updateOne({ reportId }, { $set: { [`${key}.issueComment`]: 'pending' } });
+    }
+  }
+  return result;
 }
 
 /** הסרה חלה על כל הדיווחים של אותה כתובת. */

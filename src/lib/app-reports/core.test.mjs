@@ -136,6 +136,8 @@ test('issue: כותרת לפי סוג, בלי מייל/אבחון/לוג, עם �
   assert.match(body, /\| מקור \| ידני \|/);
   assert.match(body, /10\.0\.26200 \(x64\)/);
   assert.deepEqual(issueLabels(report), ['from-app', 'bug', 'platform:windows']);
+  assert.deepEqual(issueLabels({ ...report, type: 'crash', trigger: 'auto_crash' }), ['from-app', 'crash', 'platform:windows', 'auto-report']);
+  assert.deepEqual(issueLabels({ ...report, type: 'crash', trigger: 'crash_prompt' }), ['from-app', 'crash', 'platform:windows']);
 });
 
 test('issue קריסה: כותרת [קריסה], חתימה בבלוק קוד, מרקר חתימה והפניה ל-issue קודם', async () => {
