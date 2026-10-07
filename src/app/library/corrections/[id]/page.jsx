@@ -98,6 +98,8 @@ export default function CorrectionReportPage() {
       if (!res.ok) {
         setNotice({ tone: 'danger', text: ERRORS[data.error] || data.error || 'הפעולה נכשלה' })
         if (data.error === 'stale_view' || data.error === 'claim_conflict') setStale(true)
+        // לקיחה אוטומטית הצליחה והפעולה נכשלה: הגרסה התקדמה — מרעננים כדי שהניסיון הבא לא ייפול על "לא עדכני".
+        if (opts.reloadOnFail) await load()
         return false
       }
       if (opts.keep) return data
@@ -145,7 +147,12 @@ export default function CorrectionReportPage() {
 
   return (
     <div className="space-y-4">
-      <Link href="/library/corrections" className="text-sm text-primary flex items-center gap-1"><span className="material-symbols-outlined text-base">arrow_forward</span> חזרה לתור</Link>
+      {/* נשאר גלוי בגלילה, מתחת לכותרת האתר (sticky top-0, h-16) */}
+      <div className="sticky top-16 z-40 -mx-1 px-1 py-2 bg-background/95 backdrop-blur-sm">
+        <Link href="/library/corrections" className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
+          <span className="material-symbols-outlined text-base">arrow_forward</span> חזרה לתור
+        </Link>
+      </div>
 
       {stale && (
         <div className="bg-warning-50 border border-warning-200 text-warning-800 rounded-lg p-3 flex items-center justify-between gap-2">
