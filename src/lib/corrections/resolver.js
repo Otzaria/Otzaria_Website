@@ -90,7 +90,39 @@ export async function findNormalizedPath(gitSource, root, segs, commitSha) {
   return isAllowedRepoPath(dir) ? dir : null;
 }
 
-const normalizeLoose = (s) => s.normalize('NFC').replace(/\s+/g, ' ').trim();
+/**
+ * רמז שהוא שם קובץ בלבד — האפליקציה לא ידעה את נתיב הקטגוריה של הספר (ספר שנפתח
+ * מקישור/חיפוש). מחזיר את שורשי התיקייה ושם הקובץ, או null.
+ */
+function bareFileHint({ sourceFolder, libraryRelativePath }) {
+  const segs = safeSegments(libraryRelativePath);
+  if (!segs || segs.length !== 1 || !libraryRelativePath.toLowerCase().endsWith('.txt')) return null;
+  const roots = rootsForFolder(sourceFolder);
+  return roots ? { roots, name: segs[0] } : null;
+}
+
+/**
+ * כל הקבצים בשם הזה מתחת לשורשי התיקייה: שם זהה קודם, ואחרת זהה אחרי נרמול
+ * (comparableSegment). הקורא מחליט: אחד = נמצא, יותר = עמום (ידני).
+ */
+export async function findByFileName(gitSource, { roots, name }, commitSha) {
+  const key = comparableSegment(name);
+  const exact = [];
+  const loose = [];
+  for (const root of roots) {
+    const files = await gitSource.listTxtFilesUnder(root, commitSha);
+    for (const rel of files || []) {
+      const path = `${root}/${rel}`;
+      if (!isAllowedRepoPath(path)) continue;
+      const base = rel.slice(rel.lastIndexOf('/') + 1);
+      if (base === name) exact.push(path);
+      else if (comparableSegment(base) === key) loose.push(path);
+    }
+  }
+  return exact.length ? exact : loose;
+}
+
+const normalizeLoose =(s) => s.normalize('NFC').replace(/\s+/g, ' ').trim();
 
 function findCandidates(lines, original, selection, limit = 5) {
   const out = [];
@@ -160,24 +192,35 @@ export async function resolveSource({ report, revision, gitSource, source, overr
   if (!revision || typeof revision.originalLine !== 'string') return { ...base, status: 'no_proposal', reason: 'free_text' };
 
   let paths;
+  let byName = null;
   const hints = { sourceFolder: folder, libraryRelativePath: report.sourceHint?.libraryRelativePath || report.filePath };
   if (override) {
     if (!isAllowedRepoPath(override.path)) return { ...base, status: 'invalid_path', reason: 'path_not_allowed' };
     paths = [override.path];
   } else {
     paths = candidatePaths(hints);
-    if (!paths.length) return { ...base, status: 'not_found', reason: 'no_candidate_path' };
+    if (!paths.length && typeof gitSource.listTxtFilesUnder === 'function') byName = bareFileHint(hints);
+    if (!paths.length && !byName) return { ...base, status: 'not_found', reason: 'no_candidate_path' };
   }
 
   const head = await gitSource.getHead();
+  const withHead = { ...base, commitSha: head.commitSha };
   const found = [];
   for (const p of paths) {
     const f = await gitSource.getFile(p, head.commitSha);
     if (f) found.push({ path: p, ...f });
   }
-  // הנתיב כלשונו לא קיים: מחפשים אותו לפי שמות התיקיות בפועל (האיות של ה-DB שונה מזה של הריפו)
   let pathMatch = 'exact';
-  if (!found.length && !override && typeof gitSource.listDir === 'function') {
+  // רק שם קובץ: מחפשים אותו בכל עומק תחת תיקיית המקור. כמה התאמות = עמום, לבחירה ידנית.
+  if (byName) {
+    const hits = await findByFileName(gitSource, byName, head.commitSha);
+    if (hits.length > 1) return { ...withHead, status: 'ambiguous', reason: 'source_ambiguous', match: 'ambiguous', candidates: hits.map((path) => ({ path })) };
+    const f = hits.length === 1 && (await gitSource.getFile(hits[0], head.commitSha));
+    if (f) found.push({ path: hits[0], ...f });
+    pathMatch = 'filename';
+  }
+  // הנתיב כלשונו לא קיים: מחפשים אותו לפי שמות התיקיות בפועל (האיות של ה-DB שונה מזה של הריפו)
+  if (!found.length && paths.length && !override && typeof gitSource.listDir === 'function') {
     const loc = hintedLocation(hints);
     for (const root of loc.roots) {
       const p = await findNormalizedPath(gitSource, root, loc.segs, head.commitSha);
@@ -186,7 +229,6 @@ export async function resolveSource({ report, revision, gitSource, source, overr
     }
     if (found.length) pathMatch = 'normalized';
   }
-  const withHead = { ...base, commitSha: head.commitSha };
   if (!found.length) return { ...withHead, status: 'not_found', reason: 'file_missing_in_repo', candidates: paths.map((p) => ({ path: p })) };
   if (found.length > 1) return { ...withHead, status: 'ambiguous', reason: 'source_ambiguous', match: 'ambiguous', candidates: found.map((f) => ({ path: f.path })) };
 
