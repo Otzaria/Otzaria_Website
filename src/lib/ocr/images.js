@@ -1,9 +1,10 @@
+// Uploads/storage are supplied by the live installation, not bundled build assets.
 import path from 'path';
 import fs from 'fs/promises';
 import sharp from 'sharp';
 
 // שורש קבצי ההעלאה - חייב להיות זהה לזה שב-/api/admin/books/upload.
-const UPLOAD_ROOT = path.resolve(process.env.UPLOAD_DIR || path.join(process.cwd(), 'public', 'uploads'));
+const UPLOAD_ROOT = path.resolve(/*turbopackIgnore: true*/ process.env.UPLOAD_DIR || path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', 'uploads'));
 
 // ממיר נתיב תמונה כפי שנשמר ב-DB (למשל /uploads/books/<slug>/page.1.jpg)
 // לנתיב מערכת-קבצים אמיתי תחת UPLOAD_ROOT, עם אימות מפני Path Traversal.
@@ -32,7 +33,7 @@ const MIME_BY_EXT = {
 // קריאה ישירה מהדיסק נמנעת מצורך ב-self-HTTP בעבודת רקע.
 export async function readPageImage(imagePath) {
   const fsPath = resolveImageFsPath(imagePath);
-  const buffer = await fs.readFile(fsPath);
+  const buffer = await fs.readFile(/*turbopackIgnore: true*/ fsPath);
   const ext = path.extname(fsPath).toLowerCase();
   const mimeType = MIME_BY_EXT[ext] || 'image/jpeg';
   return { buffer, mimeType, displayName: path.basename(fsPath) };

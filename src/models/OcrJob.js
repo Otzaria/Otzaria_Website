@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 // עבודת OCR על ספר שלם, רצה ברקע בשרת. הנהלת הספרים מתחילה עבודה,
 // יכולה לעזוב את החלון, ולחזור מאוחר יותר לראות את ההתקדמות (polling על status).
 const OcrJobSchema = new mongoose.Schema({
-  book: { type: mongoose.Schema.Types.ObjectId, ref: 'Book', required: true, index: true },
+  book: { type: mongoose.Schema.Types.ObjectId, ref: 'Book', required: true },
   bookName: { type: String, default: '' },
   bookSlug: { type: String, default: '' },
 

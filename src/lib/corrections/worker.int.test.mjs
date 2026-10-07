@@ -344,6 +344,9 @@ test('[T18] שני workers: תפיסה אטומית אחת; lease שפג נלק�
 
 test('[T24] נפילה אחרי הצלחת GitHub → reconciliation לפי מזהה הניסיון, בלי קומיט/PR כפול', async (t) => {
   if (db.skip) return t.skip(db.skip);
+  // Lease renewal uses the wall clock as well as the injected worker time.
+  // Keep both on this scenario's timeline so it remains valid after T0.
+  t.mock.method(Date, 'now', () => at(1).getTime());
   for (const mode of ['pr', 'direct']) {
     await db.reset();
     const gh = new FakeGitHub({ repo: REPO, files: { [PATH]: FILE } });

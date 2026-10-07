@@ -1,10 +1,11 @@
+// Uploads/storage are supplied by the live installation, not bundled build assets.
 import path from 'path';
 import fs from 'fs';
 import { promises as fsp } from 'fs';
 
 const UPLOAD_ROOT = process.env.UPLOAD_DIR
   ? path.resolve(process.env.UPLOAD_DIR)
-  : path.resolve(process.cwd(), 'public', 'uploads');
+  : path.resolve(/*turbopackIgnore: true*/ process.cwd(), 'public', 'uploads');
 
 const MIME_MAP = {
   '.jpg': 'image/jpeg',

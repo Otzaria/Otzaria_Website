@@ -67,6 +67,7 @@ npm ci --legacy-peer-deps
 npm install "github:Otzaria/otzaria-plugin-validator#$VALIDATOR_REF" --legacy-peer-deps --no-save
 node scripts/patch-plugin-validator.cjs
 npm run test:plugin-safety
+npm run test:deployment-regressions
 npm run build
 test -s .next/prerender-manifest.json
 test -s .next/BUILD_ID

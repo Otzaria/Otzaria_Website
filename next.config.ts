@@ -27,6 +27,20 @@ const nextConfig = {
     DEPLOY_VERSION: readDeployVersion(),
   },
   serverExternalPackages: ['pdf-to-img', 'pdfjs-dist'],
+  // Workers execute these source files directly, outside the route bundles.
+  // Keep them explicitly after excluding mutable uploads/storage from tracing.
+  outputFileTracingIncludes: {
+    '/api/**': [
+      './scripts/plugin-validation-worker.mjs',
+      './src/lib/pluginValidationCore.js',
+      './src/lib/pluginArchive.js',
+      './src/lib/pluginLimits.js',
+      './node_modules/otzaria-plugin-validator/**/*',
+    ],
+  },
+  outputFileTracingExcludes: {
+    '/*': ['./public/uploads/**/*', './storage/**/*'],
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: '500mb',

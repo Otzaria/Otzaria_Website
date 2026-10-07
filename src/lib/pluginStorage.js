@@ -1,3 +1,4 @@
+// Uploads/storage are supplied by the live installation, not bundled build assets.
 import path from 'path'
 import { promises as fs } from 'fs'
 import crypto from 'crypto'
@@ -45,7 +46,7 @@ export async function saveOptimizedImage(file, destDir, basename, { maxWidth = 1
     } catch { /* fallback to original */ }
   }
 
-  const dest = path.join(destDir, `${basename}${ext}`)
+  const dest = path.join(/*turbopackIgnore: true*/ destDir, `${basename}${ext}`)
   const tmp = `${dest}.${crypto.randomBytes(6).toString('hex')}.tmp`
   await fs.writeFile(tmp, saveBuf, { mode: 0o640 })
   await fs.rename(tmp, dest)

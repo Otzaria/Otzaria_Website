@@ -1,3 +1,4 @@
+// Uploads/storage are supplied by the live installation, not bundled build assets.
 import { NextResponse } from 'next/server';
 import path from 'path';
 import fs from 'fs-extra';
@@ -15,7 +16,7 @@ import { badRequest, notFound, requireAccess, serverError } from '@/lib/apiRespo
 // ומגבילים את הנפח הכולל כדי להחזיר שגיאה ברורה במקום להפיל את התהליך על ספרים ענקיים.
 export const maxDuration = 300;
 
-const UPLOAD_ROOT = path.resolve(process.env.UPLOAD_DIR || path.join(process.cwd(), 'public', 'uploads'));
+const UPLOAD_ROOT = path.resolve(/*turbopackIgnore: true*/ process.env.UPLOAD_DIR || path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', 'uploads'));
 
 // תקרת נפח כולל של תמונות העמודים (ברירת מחדל 200MB, ניתן לכוונון דרך משתנה סביבה)
 const MAX_TOTAL_IMAGE_BYTES = Number(process.env.PDF_EXPORT_MAX_BYTES) || 200 * 1024 * 1024;
@@ -76,7 +77,7 @@ export async function GET(request) {
       if (!filePath) continue;
       let stat;
       try {
-        stat = await fs.stat(filePath);
+        stat = await fs.stat(/*turbopackIgnore: true*/ filePath);
       } catch {
         console.warn(`Missing image for page ${page.pageNumber}: ${page.imagePath}`);
         continue;

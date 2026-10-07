@@ -1,3 +1,4 @@
+// Uploads/storage are supplied by the live installation, not bundled build assets.
 import { NextResponse } from 'next/server';
 import path from 'path';
 import fs from 'fs-extra';
@@ -30,7 +31,7 @@ function normalizeOptionalText(value) {
   return trimmed === '' ? undefined : trimmed;
 }
 
-const UPLOAD_ROOT = process.env.UPLOAD_DIR || path.join(process.cwd(), 'public', 'uploads');
+const UPLOAD_ROOT = process.env.UPLOAD_DIR || path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', 'uploads');
 
 export async function POST(request) {
   let createdBookId = null;
@@ -101,13 +102,13 @@ export async function POST(request) {
 
     while (true) {
         const existingBook = await Book.findOne({ slug: slug });
-        const folderExists = await fs.pathExists(path.join(UPLOAD_ROOT, 'books', slug));
+        const folderExists = await fs.pathExists(/*turbopackIgnore: true*/ path.join(/*turbopackIgnore: true*/ UPLOAD_ROOT, 'books', slug));
         if (!existingBook && !folderExists) break;
         slug = `${baseSlug}-${counter}`;
         counter++;
     }
     
-    const bookFolder = path.join(UPLOAD_ROOT, 'books', slug);
+    const bookFolder = path.join(/*turbopackIgnore: true*/ UPLOAD_ROOT, 'books', slug);
     createdFolderPath = bookFolder;
     await fs.ensureDir(bookFolder);
 
@@ -173,7 +174,7 @@ export async function POST(request) {
         }
 
         // 2. מחיקת התיקייה הפיזית
-        if (createdFolderPath && await fs.pathExists(createdFolderPath)) {
+        if (createdFolderPath && await fs.pathExists(/*turbopackIgnore: true*/ createdFolderPath)) {
             await fs.remove(createdFolderPath);
             console.log('- Deleted physical folder');
         }

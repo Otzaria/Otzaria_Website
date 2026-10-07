@@ -1,10 +1,10 @@
 import { defineConfig, globalIgnores } from "eslint/config";
-import nextVitals from "eslint-config-next"; // <-- התיקון כאן: שינינו מ-otzaria ל-next
+import nextVitals from "eslint-config-next";
 import nextTs from "eslint-config-next/typescript";
 import pluginSecurity from "eslint-plugin-security";
 
 const eslintConfig = defineConfig([
-  nextVitals, // <-- שינינו מ-...nextVitals (כי זה לא מערך בגרסה הזו)
+  ...nextVitals,
   ...nextTs,
   pluginSecurity.configs.recommended,
 

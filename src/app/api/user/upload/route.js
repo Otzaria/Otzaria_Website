@@ -1,3 +1,4 @@
+// Uploads/storage are supplied by the live installation, not bundled build assets.
 import { NextResponse } from 'next/server';
 import path from 'path';
 import fs from 'fs-extra';
@@ -11,7 +12,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { convertPdfToImages } from '@/lib/pdfConverter';
 import { unauthorized, badRequest, apiError, serverError } from '@/lib/apiResponse';
 
-const UPLOAD_ROOT = process.env.UPLOAD_DIR || path.join(process.cwd(), 'public', 'uploads');
+const UPLOAD_ROOT = process.env.UPLOAD_DIR || path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', 'uploads');
 
 export async function POST(request) {
   let createdBookId = null;
@@ -49,8 +50,8 @@ export async function POST(request) {
     const slug = baseSlug.replace(/^-+|-+$/g, '') || 'my-book';
 
     const existingBook = await Book.findOne({ slug: slug });
-    const bookFolder = path.join(UPLOAD_ROOT, 'books', slug);
-    const folderExists = await fs.pathExists(bookFolder);
+    const bookFolder = path.join(/*turbopackIgnore: true*/ UPLOAD_ROOT, 'books', slug);
+    const folderExists = await fs.pathExists(/*turbopackIgnore: true*/ bookFolder);
 
     if (existingBook || folderExists) {
         return apiError(409, 'ספר בשם זה כבר קיים במערכת, אנא בחרו שם אחר');
@@ -116,7 +117,7 @@ export async function POST(request) {
             await Book.findByIdAndDelete(createdBookId);
             await Page.deleteMany({ book: createdBookId });
         }
-        if (createdFolderPath && await fs.pathExists(createdFolderPath)) {
+        if (createdFolderPath && await fs.pathExists(/*turbopackIgnore: true*/ createdFolderPath)) {
             await fs.remove(createdFolderPath);
         }
     } catch (cleanupError) {

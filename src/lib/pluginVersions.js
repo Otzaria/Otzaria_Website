@@ -1,3 +1,4 @@
+// Uploads/storage are supplied by the live installation, not bundled build assets.
 import path from 'path'
 import { promises as fs } from 'fs'
 import {
@@ -19,7 +20,7 @@ export async function archiveCurrentVersion(plugin) {
   }
 
   const fileExt = plugin.pluginFileExt || '.otzplugin'
-  const liveFile = path.join(getPluginDir(pluginId), `${PLUGIN_FILE_BASENAME}${fileExt}`)
+  const liveFile = path.join(/*turbopackIgnore: true*/ getPluginDir(pluginId), `${PLUGIN_FILE_BASENAME}${fileExt}`)
 
   try {
     await fs.access(liveFile)
@@ -30,7 +31,7 @@ export async function archiveCurrentVersion(plugin) {
   }
 
   const versionDir = await ensureVersionDir(pluginId, version)
-  const dest = path.join(versionDir, `${PLUGIN_FILE_BASENAME}${fileExt}`)
+  const dest = path.join(/*turbopackIgnore: true*/ versionDir, `${PLUGIN_FILE_BASENAME}${fileExt}`)
   await fs.copyFile(liveFile, dest)
 
   const entry = {

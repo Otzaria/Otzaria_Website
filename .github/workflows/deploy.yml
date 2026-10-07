@@ -59,7 +59,7 @@ jobs:
       - name: Was this validator already deployed?
         id: seen
         if: github.event_name == 'schedule'
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6.1.0
         with:
           path: .validator-deployed
           key: validator-v1-${{ steps.v1.outputs.sha }}
@@ -84,12 +84,27 @@ jobs:
     needs: gate
     if: needs.gate.outputs.deploy == 'true'
     runs-on: ubuntu-latest
+    # Prerender exercises real data loaders against an isolated empty database.
+    # Production still builds against its own database in the staging checkout.
+    env:
+      MONGODB_URI: mongodb://127.0.0.1:27017/otzaria_ci
+      MONGODB_SERVER_SELECTION_TIMEOUT_MS: '5000'
+    services:
+      mongodb:
+        image: mongo:8.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Node.js 24 with Cache
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7.0.0
         with:
           node-version: '24'
           cache: 'npm'
@@ -109,6 +124,9 @@ jobs:
           node scripts/patch-plugin-validator.cjs
           npm run test:plugin-safety
 
+      - name: Verify deployment regressions
+        run: npm run test:deployment-regressions
+
       - name: Try to Build
         run: npm run build
 
@@ -119,7 +137,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Deploy using SSH
-        uses: appleboy/ssh-action@v1.0.0
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
@@ -135,17 +153,22 @@ jobs:
             deploy_script="$(git show "${{ github.sha }}:scripts/deploy-web.sh")"
             printf '%s\n' "$deploy_script" | bash -s -- "${{ github.sha }}" "${{ needs.gate.outputs.sha }}"
 
-  # שלב 3: רישום מה נפרס, כדי שה-cron הבא לא יפרוס את אותו דבר שוב.
-  # רץ גם אחרי push, ולכן ה-cron שלאחריו יודע שהגרסה כבר נקלטה.
-  mark-deployed:
-    needs: [gate, deploy]
-    if: needs.gate.outputs.deploy == 'true'
-    runs-on: ubuntu-latest
-    steps:
+      # Record only after successful activation, in this job to avoid another
+      # runner queue. Immutable cache keys cannot be overwritten.
+      - name: Check the deployed validator marker
+        id: marker
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: .validator-deployed
+          key: validator-v1-${{ needs.gate.outputs.sha }}
+          lookup-only: true
+
       - name: Record the deployed validator
+        if: steps.marker.outputs.cache-hit != 'true'
         run: echo "${{ needs.gate.outputs.sha }}" > .validator-deployed
 
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@v6.1.0
+        if: steps.marker.outputs.cache-hit != 'true'
         with:
           path: .validator-deployed
           key: validator-v1-${{ needs.gate.outputs.sha }}

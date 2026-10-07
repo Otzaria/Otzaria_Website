@@ -1,3 +1,4 @@
+// Uploads/storage are supplied by the live installation, not bundled build assets.
 import { NextResponse } from 'next/server';
 import path from 'path';
 import fs from 'fs-extra';
@@ -11,7 +12,7 @@ import { hasBookLibraryAccess } from '@/lib/roles';
 import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
 import { badRequest, notFound, requireAccess, serverError } from '@/lib/apiResponse';
 
-const UPLOAD_ROOT = path.resolve(process.env.UPLOAD_DIR || path.join(process.cwd(), 'public', 'uploads'));
+const UPLOAD_ROOT = path.resolve(/*turbopackIgnore: true*/ process.env.UPLOAD_DIR || path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', 'uploads'));
 
 export async function POST(request) {
     console.log('--- Starting Merge Process (Fix V2) ---');
@@ -45,7 +46,7 @@ export async function POST(request) {
         const safeName = slugify(newName, { replacement: '-', remove: /[*+~.()'"!:@\/\\?]/g, lower: false, strict: false });
         const sanitizedName = safeName.replace(/[^\w\u0590-\u05FF\-]/g, '');
         const slug = `${sanitizedName}-${Date.now().toString().slice(-6)}`;
-        const newBookFolder = path.join(UPLOAD_ROOT, 'books', slug);
+        const newBookFolder = path.join(/*turbopackIgnore: true*/ UPLOAD_ROOT, 'books', slug);
         const newRelativeFolderPath = `/uploads/books/${slug}`;
 
         await fs.ensureDir(newBookFolder);
@@ -59,10 +60,10 @@ export async function POST(request) {
                 const oldThumbName = path.basename(firstBook.thumbnail);
                 // Decode URI to handle Hebrew chars in paths
                 const decodedThumbPath = decodeURIComponent(firstBook.thumbnail);
-                const absoluteOldThumbPath = path.join(process.cwd(), 'public', decodedThumbPath);
+                const absoluteOldThumbPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', decodedThumbPath);
 
-                if (await fs.pathExists(absoluteOldThumbPath)) {
-                    await fs.copy(absoluteOldThumbPath, path.join(newBookFolder, oldThumbName));
+                if (await fs.pathExists(/*turbopackIgnore: true*/ absoluteOldThumbPath)) {
+                    await fs.copy(/*turbopackIgnore: true*/ absoluteOldThumbPath, path.join(/*turbopackIgnore: true*/ newBookFolder, oldThumbName));
                     newThumbnailPath = `${newRelativeFolderPath}/${oldThumbName}`;
                 }
             } catch (e) {
@@ -110,7 +111,7 @@ export async function POST(request) {
                 }
 
                 const decodedSourcePath = decodeURIComponent(sourceImagePath);
-                const oldAbsolutePath = path.join(process.cwd(), 'public', decodedSourcePath);
+                const oldAbsolutePath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', decodedSourcePath);
 
                 const extension = path.extname(decodedSourcePath) || '.jpg';
                 const newFileName = `page-${globalPageCount}${extension}`;
@@ -118,7 +119,7 @@ export async function POST(request) {
                 const newRelativePath = `${newRelativeFolderPath}/${newFileName}`;
 
                 // העתקה
-                if (await fs.pathExists(oldAbsolutePath)) {
+                if (await fs.pathExists(/*turbopackIgnore: true*/ oldAbsolutePath)) {
                     await fs.copy(oldAbsolutePath, newAbsolutePath);
                 } else {
                     console.warn(`File missing on disk: ${oldAbsolutePath}`);
@@ -169,7 +170,7 @@ export async function POST(request) {
                     const normalizedRelative = decodedFolder.startsWith('/') ? decodedFolder.slice(1) : decodedFolder;
 
                     // בניית נתיב מוחלט לקובץ בתוך תיקיית public
-                    const absoluteFolderToDelete = path.resolve(process.cwd(), 'public', normalizedRelative);
+                    const absoluteFolderToDelete = path.resolve(/*turbopackIgnore: true*/ process.cwd(), 'public', normalizedRelative);
 
                     // הכלל המוזהב: אימות שהתיקייה למחיקה כלואה בתוך UPLOAD_ROOT
                     // אנחנו מוסיפים path.sep כדי למנוע מחיקה של תיקייה כמו "uploads_backup"
@@ -177,7 +178,7 @@ export async function POST(request) {
 
                         // בדיקה נוספת: לא מוחקים את תיקיית השורש עצמה בטעות
                         if (absoluteFolderToDelete !== UPLOAD_ROOT) {
-                            if (await fs.pathExists(absoluteFolderToDelete)) {
+                            if (await fs.pathExists(/*turbopackIgnore: true*/ absoluteFolderToDelete)) {
                                 await fs.remove(absoluteFolderToDelete);
                                 console.log(`Successfully deleted folder: ${absoluteFolderToDelete}`);
                             }

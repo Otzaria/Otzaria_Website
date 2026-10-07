@@ -1,3 +1,4 @@
+// Uploads/storage are supplied by the live installation, not bundled build assets.
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Book from '@/models/Book';
@@ -30,12 +31,12 @@ export async function DELETE(request) {
         // 2. מחיקת קבצים פיזיים (רק אם קיים נתיב)
         if (book.folderPath) {
             const relativePath = book.folderPath.startsWith('/') ? book.folderPath.slice(1) : book.folderPath;
-            const baseUploadDir = path.resolve(process.cwd(), 'public', 'uploads');
-            const fullPath = path.resolve(process.cwd(), 'public', relativePath);
+            const baseUploadDir = path.resolve(/*turbopackIgnore: true*/ process.cwd(), 'public', 'uploads');
+            const fullPath = path.resolve(/*turbopackIgnore: true*/ process.cwd(), 'public', relativePath);
 
             // אימות בטיחות נתיב (Path Traversal Protection)
             if (fullPath.startsWith(baseUploadDir + path.sep)) {
-                if (await fs.pathExists(fullPath)) {
+                if (await fs.pathExists(/*turbopackIgnore: true*/ fullPath)) {
                     await fs.remove(fullPath);
                 }
             } else {

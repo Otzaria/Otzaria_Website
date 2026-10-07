@@ -1,3 +1,4 @@
+// Uploads/storage are supplied by the live installation, not bundled build assets.
 import { pdf } from 'pdf-to-img';
 import sharp from 'sharp';
 import path from 'path';
@@ -20,20 +21,26 @@ export async function convertPdfToImages(pdfSource, outputFolder, options = {}) 
     scale,
     docInitParams: {
       wasmUrl: pdfjsWasmUrl,
+      isEvalSupported: false,
     },
   });
   const pages = [];
   let pageNumber = 0;
 
-  for await (const pngBuffer of document) {
-    pageNumber++;
-    const outputPath = path.join(outputFolder, `${filenamePrefix}.${pageNumber}.jpg`);
-    await sharp(pngBuffer)
-      .resize(width, height, { fit: 'inside', withoutEnlargement: true })
-      .jpeg({ quality })
-      .toFile(outputPath);
-    pages.push({ page: pageNumber, path: outputPath });
+  try {
+    for await (const pngBuffer of document) {
+      pageNumber++;
+      const outputPath = path.join(/*turbopackIgnore: true*/ outputFolder, `${filenamePrefix}.${pageNumber}.jpg`);
+      await sharp(pngBuffer)
+        .resize(width, height, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality })
+        .toFile(outputPath);
+      pages.push({ page: pageNumber, path: outputPath });
+    }
+    return pages;
+  } finally {
+    // pdf-to-img 7 requires explicit release of the PDF.js worker/document,
+    // including when rendering or writing one of the images fails.
+    await document.destroy();
   }
-
-  return pages;
 }

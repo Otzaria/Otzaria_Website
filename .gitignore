@@ -66,6 +66,7 @@ scripts/*
 !scripts/patch-plugin-validator.cjs
 !scripts/plugin-validation-worker.mjs
 !scripts/deploy-web.sh
+!scripts/check-production-trace.cjs
 empty-uploads-report-1767610989868.json
 .vscode/settings.json
 111.json

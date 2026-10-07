@@ -16,6 +16,20 @@ if (!cached) {
  * Connect to MongoDB with connection pooling and caching
  * @returns {Promise<Object>} Mongoose connection
  */
+export function mongoConnectionOptions(env = process.env) {
+  // Connection establishment and server selection have separate deadlines.
+  // Preserve the production driver's 30s selection budget; CI uses 5s.
+  const selectionTimeout = Number(env.MONGODB_SERVER_SELECTION_TIMEOUT_MS ?? 30000)
+  if (!Number.isInteger(selectionTimeout) || selectionTimeout < 100 || selectionTimeout > 120000) {
+    throw new Error('MONGODB_SERVER_SELECTION_TIMEOUT_MS must be an integer between 100 and 120000')
+  }
+  return {
+    bufferCommands: false, maxPoolSize: 10, minPoolSize: 5,
+    connectTimeoutMS: 5000, socketTimeoutMS: 45000,
+    serverSelectionTimeoutMS: selectionTimeout,
+  }
+}
+
 async function connectDB() {
   // Return existing connection if available
   if (cached.conn) {
@@ -24,13 +38,7 @@ async function connectDB() {
 
   // Create new connection promise if not exists
   if (!cached.promise) {
-    const connectOptions = {
-      bufferCommands: false,
-      maxPoolSize: 10,
-      minPoolSize: 5,
-      connectTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
-    }
+    const connectOptions = mongoConnectionOptions()
 
     cached.promise = mongoose
       .connect(MONGODB_URI, connectOptions)

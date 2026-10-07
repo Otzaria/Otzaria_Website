@@ -32,6 +32,7 @@ case "$1" in
   install) [[ "$*" == *"#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"* ]] || exit 8 ;;
   run)
     if [[ "$2" == test:plugin-safety ]]; then [[ "$TEST_MODE" != safety ]] || exit 9; fi
+    if [[ "$2" == test:deployment-regressions ]]; then [[ "$TEST_MODE" != regressions ]] || exit 9; fi
     if [[ "$2" == build ]]; then
       [[ "$TEST_MODE" != build ]] || exit 9
       # The build must not traverse mutable runtime data (including symlinks).
@@ -62,10 +63,17 @@ exec /bin/mv "$@"
   command('git', `if [[ "$TEST_MODE" == rollback_git && "$*" == "reset --hard $TEST_OLD" ]]; then exit 9; fi
 exec /usr/bin/git "$@"
 `)
-  const run = () => spawnSync('bash', [deployScript, next, 'a'.repeat(40), app], {
-    env: { ...process.env, PATH: bin + path.delimiter + process.env.PATH, TEST_ROOT: root, TEST_APP: app, TEST_MODE: mode, TEST_OLD: old },
-    encoding: 'utf8', timeout: 8000,
-  })
+  const run = () => {
+    const result = spawnSync('bash', [deployScript, next, 'a'.repeat(40), app], {
+      env: { ...process.env, PATH: bin + path.delimiter + process.env.PATH, TEST_ROOT: root, TEST_APP: app, TEST_MODE: mode, TEST_OLD: old },
+      encoding: 'utf8', timeout: 30000,
+    })
+    // An injected deployment failure must come from the script, not from the
+    // test harness killing a slow child before rollback finished.
+    assert.equal(result.error, undefined, String(result.error))
+    assert.equal(result.signal, null)
+    return result
+  }
   return { root, app, run, git, old, next, read: p => fs.readFileSync(path.join(app, p), 'utf8').trim(),
     trace: () => fs.existsSync(path.join(root, 'trace')) ? fs.readFileSync(path.join(root, 'trace'), 'utf8') : '',
     stages: () => fs.readdirSync(root).filter(n => n.startsWith('.otzaria-deploy.')),
@@ -77,7 +85,7 @@ test('deployment rejects mutable refs before touching a checkout', () => {
   const r = spawnSync('bash', [deployScript, 'master', 'v1', '/missing/app'], { encoding: 'utf8' })
   assert.notEqual(r.status, 0); assert.match(r.stderr, /immutable/)
 })
-for (const mode of ['install', 'safety', 'build', 'incomplete']) {
+for (const mode of ['install', 'safety', 'regressions', 'build', 'incomplete']) {
   test(`deployment ${mode} failure leaves active code/build/dependencies intact`, () => {
     const f = fixture(mode)
     try {

@@ -16,7 +16,6 @@ const Message = require('../src/models/Message.js').default;
 const Book = require('../src/models/Book.js').default;
 const Page = require('../src/models/Page.js').default;
 const Upload = require('../src/models/Upload.js').default;
-const Upload = require('../src/models/Upload.js').default;
 
 // הגדרות
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/otzaria_db';
@@ -382,6 +381,7 @@ async function migrateUploads() {
     }
     console.log(`📄 שוחזר תוכן עבור ${uploadsWithContent} קבצי uploads`);
 }
+async function migrateBooksAndPages() {
     console.log('\n📚 מתחיל מיגרציה של ספרים ועמודים...');
     
     // קריאת נתוני הדפים מ-backups.json
