@@ -59,11 +59,9 @@ git archive "$DEPLOY_REF" | tar -x -C "$STAGE"
 for env_file in .env .env.local .env.production .env.production.local; do
   if [[ -f "$APP_DIR/$env_file" ]]; then ln -s "$APP_DIR/$env_file" "$STAGE/$env_file"; fi
 done
-if [[ -d "$APP_DIR/storage" ]]; then ln -s "$APP_DIR/storage" "$STAGE/storage"; fi
-if [[ -d "$APP_DIR/public/uploads" ]]; then
-  mkdir -p "$STAGE/public"
-  ln -s "$APP_DIR/public/uploads" "$STAGE/public/uploads"
-fi
+# Persistent uploads/storage are runtime data and remain in APP_DIR. Linking
+# them into the build exposes user-created external symlinks to Turbopack's
+# filesystem sandbox and can abort compilation. Build only the Git snapshot.
 cd "$STAGE"
 npm ci --legacy-peer-deps
 npm install "github:Otzaria/otzaria-plugin-validator#$VALIDATOR_REF" --legacy-peer-deps --no-save

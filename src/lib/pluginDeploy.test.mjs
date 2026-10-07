@@ -34,6 +34,8 @@ case "$1" in
     if [[ "$2" == test:plugin-safety ]]; then [[ "$TEST_MODE" != safety ]] || exit 9; fi
     if [[ "$2" == build ]]; then
       [[ "$TEST_MODE" != build ]] || exit 9
+      # The build must not traverse mutable runtime data (including symlinks).
+      [[ ! -e public/uploads && ! -L public/uploads && ! -e storage && ! -L storage ]] || exit 10
       mkdir -p .next public/export-editor
       echo new > .next/marker; echo fixture > .next/BUILD_ID
       [[ "$TEST_MODE" == incomplete ]] || echo '{}' > .next/prerender-manifest.json
@@ -94,6 +96,20 @@ test('successful deployment installs one coherent build and preserves persistent
     assert.equal(f.read('storage/keep'), 'persistent'); assert.equal(f.read('public/uploads/keep'), 'persistent'); assert.equal(f.read('.env'), 'fixture')
     assert.equal(f.git('rev-parse', 'HEAD'), f.next); assert.deepEqual(f.stages(), [])
     assert.ok(f.trace().indexOf('npm run build') < f.trace().indexOf('pm2 stop'))
+  } finally { f.remove() }
+})
+test('external upload symlinks stay in the live installation and never enter the build', () => {
+  const f = fixture('success')
+  try {
+    const target = path.join(f.root, 'external-page.jpg')
+    fs.writeFileSync(target, 'uploaded image')
+    const link = path.join(f.app, 'public/uploads/page.jpg')
+    fs.symlinkSync(target, link)
+    const r = f.run(); assert.equal(r.status, 0, r.stdout + r.stderr)
+    assert.equal(fs.readlinkSync(link), target)
+    assert.equal(fs.readFileSync(link, 'utf8'), 'uploaded image')
+    assert.equal(f.git('rev-parse', 'HEAD'), f.next)
+    assert.deepEqual(f.stages(), [])
   } finally { f.remove() }
 })
 for (const mode of ['restart', 'health', 'wrong']) {
