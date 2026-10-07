@@ -38,7 +38,7 @@ test('extractReplyText: Gmail בעברית עם תווי כיווניות', () =
 test('extractReplyText: Outlook, הודעה מקורית ושורת החיתוך שלנו', () => {
   assert.equal(extractReplyText('ok\n\nFrom: Otzaria <no-reply@otzaria.org>\nSent: Monday\nTo: me\n\nbody'), 'ok');
   assert.equal(extractReplyText('ok\n-----Original Message-----\nbody'), 'ok');
-  assert.equal(extractReplyText(`התשובה שלי\n> — ${REPLY_ABOVE_MARKER} —\n> שאלה`), 'התשובה שלי');
+  assert.equal(extractReplyText(`התשובה שלי\n> ↑ ${REPLY_ABOVE_MARKER}\n> שאלה`), 'התשובה שלי');
   // "From:" בלי כותרות Outlook אחריו אינו ציטוט
   assert.equal(extractReplyText('From: my experience\nit crashes'), 'From: my experience\nit crashes');
 });

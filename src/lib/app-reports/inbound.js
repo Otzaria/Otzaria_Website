@@ -15,7 +15,7 @@ export const MAX_INBOUND_SUBJECT_CHARS = 200;
 const MAX_RAW_TEXT_CHARS = 200000;
 
 // נשמר בגוף המייל היוצא; כל מה שמתחתיו בתשובה נחתך
-export const REPLY_ABOVE_MARKER = 'נא לכתוב את התשובה מעל שורה זו';
+export const REPLY_ABOVE_MARKER = 'אפשר להשיב מעל שורה זו';
 
 export const newReplyToken = () => crypto.randomBytes(20).toString('hex');
 

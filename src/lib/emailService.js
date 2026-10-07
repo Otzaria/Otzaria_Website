@@ -645,7 +645,7 @@ function buildAppReportMailHtml({ heading, bodyHtml, ctaUrl, ctaLabel, unsubscri
         : '';
     // שורת החיתוך בראש המייל: בתשובה, כל מה שמתחתיה (הציטוט של המייל הזה) לא נשמר
     const marker = replyMarker
-        ? `<p style="color: #999; font-size: 12px; margin: 0 0 16px 0;">— ${escapeHtml(REPLY_ABOVE_MARKER)} —</p>`
+        ? `<p style="color: #bbb; font-size: 11px; margin: 0 0 12px 0;">↑ ${escapeHtml(REPLY_ABOVE_MARKER)}</p>`
         : '';
     return `
         <div dir="rtl" style="font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 40px; text-align: center;">
