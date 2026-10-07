@@ -40,6 +40,6 @@ test('כללי המניפסט שהחנות אינה חוסמת עליהם מוכ
   ])
   const notEnforcedByStore = validator.ALL_MANIFEST_RULES.filter((r) => !enforcedByStore.has(r))
   assert.deepEqual(notEnforcedByStore, [
-    'id', 'version', 'stability', 'appVersionRange', 'databaseSources', 'toolTabIcon',
+    'id', 'version', 'stability', 'appVersionRange', 'databaseSources', 'headless', 'toolTabIcon',
   ])
 })

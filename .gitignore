@@ -63,6 +63,9 @@ scripts/*
 !scripts/migrate-corrections.mjs
 !scripts/mock-verify-server.mjs
 !scripts/page-proof-link-import.mjs
+!scripts/patch-plugin-validator.cjs
+!scripts/plugin-validation-worker.mjs
+!scripts/deploy-web.sh
 empty-uploads-report-1767610989868.json
 .vscode/settings.json
 111.json

@@ -1,61 +1,9 @@
-import { inflateRawSync } from 'zlib'
 import { compareVersions } from './semverCompare.js'
+import { runPluginValidationJob } from './pluginValidationRunner.js'
 
 export { compareVersions }
 
-/**
- * Reads and parses manifest.json from an .otzplugin (ZIP) Buffer.
- * Uses the central directory so it works even with data-descriptor ZIPs.
- * Throws if manifest.json is not found or cannot be parsed.
- */
-export function readManifestFromPlugin(buffer) {
-  // Find EOCD (End of Central Directory) by searching backwards
-  let eocdOffset = -1
-  for (let i = buffer.length - 22; i >= Math.max(0, buffer.length - 65558); i--) {
-    if (buffer.readUInt32LE(i) === 0x06054b50) { eocdOffset = i; break }
-  }
-  if (eocdOffset === -1) throw new Error('Not a valid ZIP file')
-
-  const cdOffset = buffer.readUInt32LE(eocdOffset + 16)
-  const cdEntries = buffer.readUInt16LE(eocdOffset + 10)
-
-  // Scan central directory for manifest.json
-  let cdPos = cdOffset
-  for (let i = 0; i < cdEntries; i++) {
-    if (buffer.readUInt32LE(cdPos) !== 0x02014b50) break
-    const compressionMethod = buffer.readUInt16LE(cdPos + 10)
-    const compressedSize = buffer.readUInt32LE(cdPos + 20)
-    const fileNameLength = buffer.readUInt16LE(cdPos + 28)
-    const extraFieldLength = buffer.readUInt16LE(cdPos + 30)
-    const commentLength = buffer.readUInt16LE(cdPos + 32)
-    const localHeaderOffset = buffer.readUInt32LE(cdPos + 42)
-    const fileName = buffer.toString('utf8', cdPos + 46, cdPos + 46 + fileNameLength)
-    cdPos += 46 + fileNameLength + extraFieldLength + commentLength
-
-    if (fileName !== 'manifest.json') continue
-
-    // Use local file header to find actual data offset
-    const localFnLen = buffer.readUInt16LE(localHeaderOffset + 26)
-    const localExtraLen = buffer.readUInt16LE(localHeaderOffset + 28)
-    const dataStart = localHeaderOffset + 30 + localFnLen + localExtraLen
-    const compressedData = buffer.subarray(dataStart, dataStart + compressedSize)
-
-    let data
-    if (compressionMethod === 0) {
-      data = compressedData
-    } else if (compressionMethod === 8) {
-      data = inflateRawSync(compressedData)
-    } else {
-      throw new Error(`Unsupported ZIP compression method: ${compressionMethod}`)
-    }
-    // הסרת UTF-8 BOM אם קיים — עורכים בווינדוז (Notepad, VS Code עם הגדרה ברירת מחדל)
-    // שומרים לעיתים JSON עם BOM ש-JSON.parse נופל עליו.
-    return JSON.parse(data.toString('utf8').replace(/^\uFEFF/, ''))
-  }
-
-  throw new Error('manifest.json not found in plugin file')
+// Even manifest-only reads are isolated: a hostile ZIP/JSON must not block Next.
+export async function readManifestFromPlugin(buffer) {
+  return runPluginValidationJob('manifest', buffer)
 }
-
-// compareVersions מיוצא מחדש מ-./semverCompare.js (ראו ייבוא למעלה) — כאן
-// נשארה רק קריאת ה-ZIP, כדי שהשוואת הגרסאות תהיה זהה גם ללקוח (דף העלאת
-// תוסף) וגם לשרת, בלי לשכפל את הלוגיקה.

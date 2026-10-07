@@ -92,10 +92,13 @@ async function resolveExistingManifestId(plugin) {
       plugin._id.toString(),
       `${PLUGIN_FILE_BASENAME}${plugin.pluginFileExt || PLUGIN_FILE_EXT}`
     )
-    const manifest = readManifestFromPlugin(buffer)
-    return (manifest.id || '').toString().trim()
-  } catch {
-    return ''
+    const manifest = await readManifestFromPlugin(buffer)
+    const id = (manifest.id || '').toString().trim()
+    if (!id) throw new Error('Stored manifest has no plugin id')
+    return id
+  } catch (error) {
+    console.error('Reading existing plugin identity failed:', error)
+    throw new Error('לא ניתן לאמת את מזהה התוסף הקיים; השינויים לא נשמרו. נסה שוב מאוחר יותר.')
   }
 }
 
@@ -299,6 +302,7 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
         usedApiMethods = validation.usedApiMethods || []
       } catch (validationError) {
         console.error('Plugin validation crashed during edit:', validationError)
+        return bad('בדיקת התוסף נכשלה או חרגה ממגבלת הזמן. השינויים לא נשמרו; נסה שוב מאוחר יותר.', 503)
       }
     }
 
@@ -376,7 +380,7 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
     if (pluginFile?.size) {
       let newManifest
       try {
-        newManifest = readManifestFromPlugin(pluginBuffer)
+        newManifest = await readManifestFromPlugin(pluginBuffer)
       } catch {
         return bad('לא ניתן לקרוא את manifest.json מקובץ התוסף')
       }
@@ -386,7 +390,12 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
       if (!manifestId) {
         return bad('חסר שדה id ב-manifest.json של קובץ התוסף')
       }
-      const existingId = await resolveExistingManifestId(plugin)
+      let existingId
+      try {
+        existingId = await resolveExistingManifestId(plugin)
+      } catch (error) {
+        return bad(error.message, 503)
+      }
       if (existingId && manifestId !== existingId) {
         return bad(`המזהה (id) בקובץ (${manifestId}) חייב להיות זהה למזהה הקיים של התוסף (${existingId})`)
       }

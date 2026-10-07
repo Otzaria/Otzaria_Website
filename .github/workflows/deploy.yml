@@ -101,8 +101,13 @@ jobs:
       # בלי השורה הזאת כלל ולידציה חדש בוולידטור לא היה מגיע לחנות עד לרענון
       # ה-lock. כאן הוא מגיע בכל בנייה. חייב להישאר זהה בשני מקומות ההתקנה,
       # אחרת הפרודקשן פותר גרסה שה-CI לא בדק.
-      - name: Refresh the plugin validator (head of v1)
-        run: npm install "github:Otzaria/otzaria-plugin-validator#v1" --legacy-peer-deps --no-save
+      - name: Install the resolved plugin validator commit
+        run: npm install "github:Otzaria/otzaria-plugin-validator#${{ needs.gate.outputs.sha }}" --legacy-peer-deps --no-save
+
+      - name: Verify plugin upload safety
+        run: |
+          node scripts/patch-plugin-validator.cjs
+          npm run test:plugin-safety
 
       - name: Try to Build
         run: npm run build
@@ -123,40 +128,12 @@ jobs:
           timeout: 5m
           command_timeout: 30m
           script: |
-            # 1. פונקציית "דופק" שתרוץ ברקע ותדפיס נקודה כל 20 שניות
-            # זה שומר על החיבור ה-SSH חי כי עובר מידע ב-Stream
-            ( while true; do echo "--- SSH Keep-alive Heartbeat ---"; sleep 20; done ) &
-            HEARTBEAT_PID=$!
-
-            # פונקציה לניקוי ה-PID בסיום (גם אם יש שגיאה)
-            trap "kill $HEARTBEAT_PID" EXIT
-            
-            set -e
-
-            APP_DIR="/var/www/otzaria-web"
-
-            echo "🚀 Starting In-Place Deployment (with build cache)..."
-
-            cd $APP_DIR
-
-            echo "📥 Pulling latest code (preserving node_modules & build cache)..."
-            git fetch --depth 1 origin master
-            git reset --hard origin/master
-
-            echo "📦 Installing dependencies..."
-            npm install --legacy-peer-deps
-
-            # אותו רענון כמו ב-build-check: ראש תגית v1 של הוולידטור בכל דריסה.
-            echo "🔎 Refreshing the plugin validator (head of v1)..."
-            npm install "github:Otzaria/otzaria-plugin-validator#v1" --legacy-peer-deps --no-save
-
-            echo "🛠 Building project (incremental cache enabled)..."
-            npm run build
-
-            echo "🔄 Reloading PM2..."
-            pm2 reload otzaria-web || pm2 restart otzaria-web
-
-            echo "🎉 Deployment Finished Successfully!"
+            set -eu
+            cd /var/www/otzaria-web
+            git fetch --depth 1 origin "${{ github.sha }}"
+            # Execute the incoming script without replacing live code/dependencies.
+            deploy_script="$(git show "${{ github.sha }}:scripts/deploy-web.sh")"
+            printf '%s\n' "$deploy_script" | bash -s -- "${{ github.sha }}" "${{ needs.gate.outputs.sha }}"
 
   # שלב 3: רישום מה נפרס, כדי שה-cron הבא לא יפרוס את אותו דבר שוב.
   # רץ גם אחרי push, ולכן ה-cron שלאחריו יודע שהגרסה כבר נקלטה.

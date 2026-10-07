@@ -32,7 +32,7 @@ import {
   PLUGIN_FILE_BASENAME,
   IMAGE_BASENAME
 } from '@/lib/pluginStorage'
-import { unauthorized, badRequest, serverError } from '@/lib/apiResponse'
+import { unauthorized, badRequest, serverError, apiError } from '@/lib/apiResponse'
 
 const PLUGIN_FILE_EXT = '.otzplugin'
 // slug באנגלית בלבד - אותיות קטנות, ספרות ומקפים. לא מתחיל/מסתיים במקף.
@@ -100,7 +100,7 @@ export async function POST(request) {
     const pluginBuffer = Buffer.from(await pluginFile.arrayBuffer())
     let name, author, version, shortDescription, statusFromManifest, compatibleWithFromManifest, maxAppVersionFromManifest, homepageFromManifest, requiresNetworkFromManifest, pluginUid
     try {
-      const manifest = readManifestFromPlugin(pluginBuffer)
+      const manifest = await readManifestFromPlugin(pluginBuffer)
       pluginUid = (manifest.id || '').toString().trim()
       version = (manifest.version || '').toString().trim()
       name = (manifest.name || '').toString().trim()
@@ -156,7 +156,7 @@ export async function POST(request) {
       usedApiMethods = validation.usedApiMethods || []
     } catch (validationError) {
       console.error('Plugin validation crashed:', validationError)
-      // אם הולידציה עצמה נפלה, לא מבטלים את ההעלאה אלא מתעדים בלוג בלבד.
+      return apiError(503, 'בדיקת התוסף נכשלה או חרגה ממגבלת הזמן. התוסף לא נשמר; נסה שוב מאוחר יותר.')
     }
 
     // אכיפת תגית "מראה תואם לאוצריא": אסור להוסיף ידנית בלי שהעיצוב באמת תואם;

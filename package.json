@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "postinstall": "node scripts/patch-plugin-validator.cjs",
     "dev": "next dev",
     "generate-version": "node -e \"const fs = require('fs'); fs.writeFileSync('./public/version.json', JSON.stringify({ version: Date.now() }));\"",
     "build:offline-editor": "node scripts/build-offline-editor.js",
@@ -11,10 +12,11 @@
     "refresh:editor-icons": "node scripts/build-offline-editor.js --refresh-icons",
     "check:icons": "node scripts/build-icon-font.mjs --check",
     "check:perf": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/check-perf-budget.mjs",
-    "build": "npm run generate-version && npm run check:icons && next build && npm run build:offline-editor && npm run check:perf",
+    "build": "node scripts/patch-plugin-validator.cjs && npm run generate-version && npm run check:icons && next build && npm run build:offline-editor && npm run check:perf",
     "start": "next start",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/lib/*.test.mjs src/lib/*/*.test.mjs && vitest run",
     "test:node": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/lib/*.test.mjs src/lib/*/*.test.mjs",
+    "test:plugin-safety": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/lib/pluginArchive.test.mjs src/lib/pluginValidationIsolation.test.mjs src/lib/pluginValidatorPatch.test.mjs src/lib/pluginDeploy.test.mjs && vitest run src/app/api/plugins/upload/safety.test.ts",
     "test:vitest": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint"
