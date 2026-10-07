@@ -12,7 +12,9 @@ import { startMongo } from '../corrections/testing/mongo.js';
 import { FakeIssuesGitHub } from './testing/fake-github.js';
 import { handleAppReportPost } from './handler.js';
 import { MAX_BODY_BYTES, MAX_MINIDUMP_BYTES } from './validation.js';
-import { runAppReportsSync, contactReporter, listReports, getReportDetail, loadReportFile, loadReportImage, loadPublicImage, unsubscribeByToken } from './service.js';
+import { runAppReportsSync, contactReporter, listReports, getReportDetail, loadReportFile, loadReportImage, loadPublicImage, unsubscribeByToken, ingestInboundReply } from './service.js';
+import { handleInboundEmailPost } from './inbound-handler.js';
+import { parseReplyAddress } from './inbound.js';
 import { getAppReportsConfig } from './config.js';
 import { handleGithubWebhook } from './webhook.js';
 import { createUnsubscribeToken } from './unsubscribe.js';
@@ -329,6 +331,133 @@ test('יצירת קשר: 404 לדיווח חסר, 422 בלי מייל, שליח�
 
   const failing = await contactReporter({ reportId: withMail.body.reportId, subject: 'ש', message: 'ה', user }, { sendContactMail: async () => ({ sent: false }) });
   assert.equal(failing.status, 502);
+});
+
+const replyConfig = { ...config, replyDomain: 'reply.otzaria.org', inboundSecret: 'inbound-secret' };
+const user = () => ({ id: String(new mongoose.Types.ObjectId()), name: 'מפתח' });
+
+/** פנייה למדווח עם כתובת reply+; מחזיר את הכתובת שנשלחה במייל */
+async function contactWithReply(reportId) {
+  const sent = [];
+  const r = await contactReporter(
+    { reportId, subject: 'שאלה', message: 'אפשר פרטים?', user: user() },
+    { config: replyConfig, sendContactMail: async (m) => { sent.push(m); return { sent: true }; } },
+  );
+  assert.equal(r.status, 200);
+  return sent[0].replyTo;
+}
+
+const inbound = (to, over = {}) => ({
+  to, from: 'Reporter@Example.com', subject: 'Re: שאלה', messageId: '<m1@mail.example.com>',
+  text: 'זה קורה רק בפתיחה הראשונה.\n\nOn Mon, Oct 5, 2026 at 10:00 AM צוות אוצריא <no-reply@otzaria.org> wrote:\n> אפשר פרטים?',
+  headers: {}, attachments: 0, ...over,
+});
+const inboundDeps = (over = {}) => ({ config: replyConfig, fetchImpl: gh.fetch, ...over });
+
+test('כתובת מענה: נוצרת פעם אחת לדיווח, יציבה בין פניות, ולא נחשפת בממשק', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const rep = await post(manual());
+  const first = await contactWithReply(rep.body.reportId);
+  const second = await contactWithReply(rep.body.reportId);
+  assert.match(first, /^reply\+[0-9a-f]{40}@reply\.otzaria\.org$/);
+  assert.equal(second, first);
+
+  const detail = await getReportDetail(rep.body.reportId, 'admin');
+  assert.equal(JSON.stringify(detail).includes(parseReplyAddress(first)), false);
+  assert.equal(detail.report.contactLog[0].direction, 'out');
+
+  // בלי דומיין מוגדר — אין כתובת ייעודית (המייל חוזר למענה הרגיל)
+  const sent = [];
+  await contactReporter({ reportId: rep.body.reportId, subject: 'ש', message: 'ה', user: user() },
+    { config, sendContactMail: async (m) => { sent.push(m); return { sent: true }; } });
+  assert.equal(sent[0].replyTo, null);
+});
+
+test('תשובה במייל: נשמרת בלי הציטוט, מתפרסמת ב-issue, וכפילות לפי Message-ID מתעלמת', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const rep = await post(manual());
+  const to = await contactWithReply(rep.body.reportId);
+
+  const r = await ingestInboundReply(inbound(to), inboundDeps());
+  assert.deepEqual(r, { status: 200, body: { ok: true, status: 'stored', reportId: rep.body.reportId } });
+  const doc = await AppReport.findOne({ reportId: rep.body.reportId }).lean();
+  const entry = doc.contactLog.at(-1);
+  assert.equal(entry.direction, 'in');
+  assert.equal(entry.message, 'זה קורה רק בפתיחה הראשונה.');
+  assert.equal(entry.issueComment, 'posted');
+  assert.ok(doc.lastInboundAt);
+
+  const comment = gh.comments.at(-1);
+  assert.equal(comment.issue, rep.body.issueNumber);
+  assert.ok(comment.body.includes('> זה קורה רק בפתיחה הראשונה.'));
+  assert.equal(comment.body.includes('example.com'), false);
+  assert.equal(entry.issueCommentUrl, comment.html_url);
+
+  const again = await ingestInboundReply(inbound(to), inboundDeps());
+  assert.equal(again.body.status, 'duplicate');
+  assert.equal((await AppReport.findOne({ reportId: rep.body.reportId }).lean()).contactLog.length, 2);
+  assert.equal(gh.comments.length, 1);
+
+  // הכתובת של השולח גלויה למנהל כללי בלבד
+  const devView = await getReportDetail(rep.body.reportId, 'developer');
+  assert.equal(JSON.stringify(devView).includes('reporter@example.com'), false);
+  assert.equal((await getReportDetail(rep.body.reportId, 'admin')).report.contactLog.at(-1).fromEmail, 'reporter@example.com');
+});
+
+test('תשובה במייל: טוקן לא מוכר 404, מענה אוטומטי מתעלם, כתובת זרה לא מתפרסמת', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const rep = await post(manual());
+  const to = await contactWithReply(rep.body.reportId);
+
+  assert.equal((await ingestInboundReply(inbound(`reply+${'0'.repeat(40)}@reply.otzaria.org`), inboundDeps())).status, 404);
+  assert.equal((await ingestInboundReply(inbound('someone@reply.otzaria.org'), inboundDeps())).status, 422);
+  const auto = await ingestInboundReply(inbound(to, { headers: { 'auto-submitted': 'auto-replied' } }), inboundDeps());
+  assert.equal(auto.body.status, 'ignored_auto');
+
+  const other = await ingestInboundReply(inbound(to, { from: 'stranger@example.org', messageId: '<m2@x>' }), inboundDeps());
+  assert.equal(other.body.status, 'stored');
+  const doc = await AppReport.findOne({ reportId: rep.body.reportId }).lean();
+  assert.equal(doc.contactLog.filter((c) => c.direction === 'in').length, 1);
+  assert.equal(doc.contactLog.at(-1).issueComment, 'held');
+  assert.equal(gh.comments.length, 0);
+});
+
+test('תשובה במייל: GitHub נכשל → נשמרת כממתינה, וה-cron מפרסם', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const rep = await post(manual());
+  const to = await contactWithReply(rep.body.reportId);
+  gh.failNext = 1;
+  const r = await ingestInboundReply(inbound(to), inboundDeps());
+  assert.equal(r.body.status, 'stored');
+  let doc = await AppReport.findOne({ reportId: rep.body.reportId }).lean();
+  assert.equal(doc.contactLog.at(-1).issueComment, 'pending');
+
+  const summary = await runAppReportsSync({ ...syncDeps(), config: replyConfig });
+  assert.deepEqual(summary.inbound, { reports: 1, posted: 1, errors: 0 });
+  doc = await AppReport.findOne({ reportId: rep.body.reportId }).lean();
+  assert.equal(doc.contactLog.at(-1).issueComment, 'posted');
+  assert.equal(gh.comments.length, 1);
+});
+
+test('נתיב inbound-email: סוד חסר/שגוי, גוף שבור, וקליטה תקינה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const rep = await post(manual());
+  const to = await contactWithReply(rep.body.reportId);
+  const call = async (body, { auth = 'Bearer inbound-secret', cfg = replyConfig } = {}) => {
+    const req = new Request('http://localhost/api/app-reports/inbound-email', {
+      method: 'POST', headers: { 'content-type': 'application/json', ...(auth ? { authorization: auth } : {}) },
+      body: typeof body === 'string' ? body : JSON.stringify(body),
+    });
+    const res = await handleInboundEmailPost(req, { config: cfg, fetchImpl: gh.fetch, connectDB: async () => {} });
+    return { status: res.status, body: await res.json() };
+  };
+  assert.equal((await call(inbound(to), { cfg: config })).status, 503);
+  assert.equal((await call(inbound(to), { auth: null })).status, 401);
+  assert.equal((await call(inbound(to), { auth: 'Bearer wrong' })).status, 401);
+  assert.equal((await call('{not json')).status, 400);
+  const ok = await call(inbound(to));
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.status, 'stored');
 });
 
 const hookSecret = 'hook-secret';

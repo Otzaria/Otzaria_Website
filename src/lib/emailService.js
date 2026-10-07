@@ -11,6 +11,7 @@ import {
     buildStaleReminderHtml,
     formatPluginReportType,
 } from '@/lib/email-templates';
+import { REPLY_ABOVE_MARKER } from '@/lib/app-reports/inbound';
 
 // Transporter מרכזי — הגדרות TLS/timeouts מאוחדות ב-src/lib/smtp-transport.js
 function createTransporter() {
@@ -630,7 +631,7 @@ export function getDefaultReplyTo() {
     return process.env.SMTP_REPLY_TO || process.env.SMTP_FROM;
 }
 
-function buildAppReportMailHtml({ heading, bodyHtml, ctaUrl, ctaLabel, unsubscribeUrl }) {
+function buildAppReportMailHtml({ heading, bodyHtml, ctaUrl, ctaLabel, unsubscribeUrl, replyMarker = false }) {
     const logoUrl = `${process.env.NEXTAUTH_URL}/logo.png`;
     const cta = ctaUrl
         ? `<div style="margin: 30px 0; text-align: center;">
@@ -642,8 +643,13 @@ function buildAppReportMailHtml({ heading, bodyHtml, ctaUrl, ctaLabel, unsubscri
                 לא מעוניין לקבל עדכונים על הדיווחים שלך? <a href="${escapeHtml(unsubscribeUrl)}" style="color: #999;">להסרה</a>
             </p>`
         : '';
+    // שורת החיתוך בראש המייל: בתשובה, כל מה שמתחתיה (הציטוט של המייל הזה) לא נשמר
+    const marker = replyMarker
+        ? `<p style="color: #bbb; font-size: 11px; margin: 0 0 12px 0;">↑ ${escapeHtml(REPLY_ABOVE_MARKER)}</p>`
+        : '';
     return `
         <div dir="rtl" style="font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 40px; text-align: center;">
+            ${marker}
             <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden;">
                 <div style="background-color: #ffffff; padding: 20px; border-bottom: 3px solid #d4a373;">
                     <img src="${logoUrl}" alt="Otzaria Logo" style="width: 120px; height: auto;">
@@ -692,12 +698,14 @@ export async function sendAppReportClosedNotification({ to, reportTitle, issueUr
     }
 }
 
-// פנייה של צוות הפיתוח למדווח (מטופס בדף הדיווח בניהול)
-export async function sendAppReportContactEmail({ to, subject, message, reportTitle }) {
+// פנייה של צוות הפיתוח למדווח (מטופס בדף הדיווח בניהול).
+// replyTo — כתובת reply+ ייחודית לדיווח: התשובה נקלטת אוטומטית לדף הדיווח (src/lib/app-reports/inbound.js).
+export async function sendAppReportContactEmail({ to, subject, message, reportTitle, replyTo }) {
     try {
         if (!to) return { sent: false, reason: 'missing_recipient_email' };
         const html = buildAppReportMailHtml({
             heading: subject,
+            replyMarker: Boolean(replyTo),
             bodyHtml: `
                 <p style="font-size: 16px; line-height: 1.8; white-space: pre-wrap;">${escapeHtml(message)}</p>
                 <div style="background-color: #f0f0f0; padding: 16px; border-radius: 8px; margin: 20px 0;">
@@ -708,7 +716,7 @@ export async function sendAppReportContactEmail({ to, subject, message, reportTi
         await createTransporter().sendMail({
             from: { name: 'צוות אוצריא', address: process.env.SMTP_FROM },
             to,
-            replyTo: getDefaultReplyTo(),
+            replyTo: replyTo || getDefaultReplyTo(),
             subject,
             html,
         });

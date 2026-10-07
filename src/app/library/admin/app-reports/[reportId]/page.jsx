@@ -233,16 +233,7 @@ function ContactPanel({ report }) {
       <h3 className="text-xl font-bold">יצירת קשר עם המדווח</h3>
       {log.length > 0 && (
         <ul className="space-y-3">
-          {log.map((c, i) => (
-            <li key={i} className="bg-surface rounded-lg p-3 text-sm">
-              <div className="flex flex-wrap gap-3 text-on-surface/60 mb-1">
-                <span>{c.byName}</span>
-                <span>{formatDateTime(c.sentAt)}</span>
-              </div>
-              <div className="font-bold">{c.subject}</div>
-              <p className="whitespace-pre-wrap">{c.message}</p>
-            </li>
-          ))}
+          {log.map((c, i) => <ContactEntry key={i} entry={c} />)}
         </ul>
       )}
       {report.hasEmail ? (
@@ -277,4 +268,44 @@ function ContactPanel({ report }) {
       )}
     </div>
   )
+}
+
+// out = פנייה של הצוות; in = תשובת המדווח שנקלטה מהמייל (src/lib/app-reports/inbound.js)
+function ContactEntry({ entry: c }) {
+  const incoming = c.direction === 'in'
+  return (
+    <li className={`rounded-lg p-3 text-sm ${incoming ? 'bg-info-50 border-r-4 border-info-400' : 'bg-surface'}`}>
+      <div className="flex flex-wrap items-center gap-3 text-on-surface/60 mb-1">
+        {incoming ? (
+          <span className="flex items-center gap-1 font-bold text-info-800">
+            <span className="material-symbols-outlined text-base">reply</span>
+            תשובת המדווח
+          </span>
+        ) : (
+          <span>{c.byName}</span>
+        )}
+        <span>{formatDateTime(c.sentAt)}</span>
+        {incoming && c.fromEmail && <span dir="ltr">{c.fromEmail}</span>}
+        {incoming && c.attachments > 0 && <span>צורפו {c.attachments} קבצים (לא נשמרו)</span>}
+      </div>
+      {c.subject && <div className="font-bold">{c.subject}</div>}
+      <p className="whitespace-pre-wrap">{c.message}</p>
+      {incoming && <InboundIssueStatus entry={c} />}
+    </li>
+  )
+}
+
+function InboundIssueStatus({ entry: c }) {
+  if (c.issueComment === 'posted' && c.issueCommentUrl) {
+    return (
+      <a href={c.issueCommentUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline">
+        <span className="material-symbols-outlined text-sm">open_in_new</span>
+        פורסם כתגובה ב-issue
+      </a>
+    )
+  }
+  if (c.issueComment === 'held') {
+    return <p className="mt-2 text-xs text-warning-700">נשלח מכתובת אחרת מזו שבדיווח — לא פורסם ב-issue.</p>
+  }
+  return <p className="mt-2 text-xs text-on-surface/50">ממתין לפרסום ב-issue</p>
 }

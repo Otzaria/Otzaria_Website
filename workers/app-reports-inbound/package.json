@@ -1,0 +1,16 @@
+{
+  "name": "otzaria-app-reports-inbound",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "test": "node smoke.mjs"
+  },
+  "dependencies": {
+    "postal-mime": "^4.0.4"
+  },
+  "devDependencies": {
+    "wrangler": "^4.148.0"
+  }
+}

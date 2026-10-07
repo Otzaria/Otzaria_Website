@@ -108,6 +108,7 @@ export default function AppReportsPage() {
                       {r.title}
                     </Link>
                     {r.hasEmail && <span className="material-symbols-outlined text-base text-on-surface/40 mr-2 align-middle" title="השאיר כתובת מייל">mail</span>}
+                    {r.lastInboundAt && <span className="material-symbols-outlined text-base text-info-600 mr-2 align-middle" title={`המדווח השיב במייל (${formatDateTime(r.lastInboundAt)})`}>reply</span>}
                   </td>
                   <td className="p-4 text-sm">{TYPE_LABELS[r.type] || r.type}</td>
                   <td className="p-4 text-sm">{TRIGGER_LABELS[r.trigger] || r.trigger}</td>
