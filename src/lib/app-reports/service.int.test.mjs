@@ -5,12 +5,13 @@ import { GIF87A, ANIMATED_GIF } from './testing/gif-fixtures.js';
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import zlib from 'node:zlib';
 import mongoose from 'mongoose';
 import AppReport from '../../models/AppReport.js';
 import { startMongo } from '../corrections/testing/mongo.js';
 import { FakeIssuesGitHub } from './testing/fake-github.js';
 import { handleAppReportPost } from './handler.js';
-import { MAX_BODY_BYTES } from './validation.js';
+import { MAX_BODY_BYTES, MAX_MINIDUMP_BYTES } from './validation.js';
 import { runAppReportsSync, contactReporter, listReports, getReportDetail, loadReportFile, loadReportImage, loadPublicImage, unsubscribeByToken } from './service.js';
 import { getAppReportsConfig } from './config.js';
 import { handleGithubWebhook } from './webhook.js';
@@ -39,6 +40,7 @@ const saveFile = async (buf, filename, contentType) => {
   return { gridfsId };
 };
 const readFile = async (id) => files.get(String(id)).buf;
+const deleteFile = async (id) => { files.delete(String(id)); };
 const sendClosedMail = async (m) => { mails.push(m); return { sent: true }; };
 
 let seq = 0;
@@ -60,7 +62,7 @@ async function post(body, { raw = false, deps = {} } = {}) {
   const req = new Request('http://localhost/api/app-reports', {
     method: 'POST', headers: { 'content-type': 'application/json; charset=utf-8' }, body: raw ? body : JSON.stringify(body),
   });
-  const res = await handleAppReportPost(req, { saveFile, config, fetchImpl: gh.fetch, connectDB: async () => {}, rateLimit: () => true, ...deps });
+  const res = await handleAppReportPost(req, { saveFile, deleteFile, config, fetchImpl: gh.fetch, connectDB: async () => {}, rateLimit: () => true, ...deps });
   return { status: res.status, body: await res.json() };
 }
 
@@ -478,4 +480,124 @@ test('GIF: original bytes, MIME and extension survive ingest and public/admin re
     assert.equal(pub.contentType, 'image/gif');
     assert.ok(issue.body.body.includes(`/api/app-reports/images/${ref.publicToken})`));
   }
+});
+
+test('minidump: נשמר פתוח ב-GridFS, מוגש רק דרך ניהול, ולא מוזכר ב-issue', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const dump = Buffer.concat([Buffer.from('MDMP', 'latin1'), Buffer.alloc(200, 3)]);
+  const body = crash({ attachments: { minidump: { fileName: 'e1f2.dmp', data: zlib.gzipSync(dump).toString('base64') } } });
+  const res = await post(body);
+  assert.equal(res.status, 200);
+
+  const file = await loadReportFile(body.reportId, 'minidump', readFile);
+  assert.deepEqual(file.buffer, dump);
+  assert.equal(file.contentType, 'application/octet-stream');
+  assert.equal(file.filename, 'crash.dmp');
+
+  const { report } = await getReportDetail(body.reportId, 'developer');
+  assert.deepEqual(report.files.minidump, { size: dump.length, fileName: 'e1f2.dmp' });
+  const issue = gh.calls.find((c) => c.method === 'POST' && c.path.endsWith('/issues'));
+  assert.doesNotMatch(issue.body.body, /minidump|\.dmp/i);
+});
+
+test('minidump שאינו dump → 422 ושום דבר לא נשמר', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const body = crash({ attachments: { minidump: { data: Buffer.from('hello').toString('base64') } } });
+  const res = await post(body);
+  assert.equal(res.status, 422);
+  assert.equal(res.body.field, 'attachments.minidump');
+  assert.equal(await AppReport.countDocuments({ reportId: body.reportId }), 0);
+  assert.equal(files.size, 0);
+});
+
+const rollbackReport = (dumpBytes = 72) => {
+  const dump = Buffer.alloc(dumpBytes);
+  dump.write('MDMP');
+  return crash({ attachments: {
+    diagnostics: { settings: { theme: 'dark' } },
+    errorLog: 'native crash',
+    minidump: { data: zlib.gzipSync(dump).toString('base64') },
+    images: [{ data: GIF87A.toString('base64') }],
+  } });
+};
+
+test('כשל אחרי שמירת dump מנקה את כל הקבצים; ניסיון חוזר לא משאיר עותקים יתומים', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const body = rollbackReport(MAX_MINIDUMP_BYTES);
+  let calls = 0;
+  const failImage = async (...args) => {
+    calls += 1;
+    if (calls === 4) throw new Error('image storage failed');
+    return saveFile(...args);
+  };
+  const failed = await post(body, { deps: { saveFile: failImage } });
+  assert.equal(failed.status, 500);
+  assert.equal(calls, 4);
+  assert.equal(await AppReport.countDocuments(), 0);
+  assert.equal(files.size, 0);
+  assert.equal(gh.issues.size, 0);
+
+  const retry = await post(body);
+  assert.equal(retry.status, 200);
+  assert.equal(retry.body.duplicate, false);
+  assert.equal(files.size, 4);
+  assert.equal(await AppReport.countDocuments(), 1);
+  const doc = await AppReport.findOne({ reportId: body.reportId }).lean();
+  const refs = [doc.fileIds.diagnostics, doc.fileIds.errors, doc.fileIds.minidump, ...doc.fileIds.images];
+  assert.deepEqual([...files.keys()].sort(), refs.map((ref) => String(ref.gridfsId)).sort());
+  assert.equal((await loadReportFile(body.reportId, 'minidump', readFile)).buffer.length, MAX_MINIDUMP_BYTES);
+});
+
+test('כשל בעדכון הפניות הקבצים ב-Mongo מנקה גם שמירה מלאה של הקבצים', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  let saved = 0;
+  t.mock.method(AppReport, 'updateOne', async () => { throw new Error('file references update failed'); });
+  const res = await post(rollbackReport(), { deps: { saveFile: async (...args) => {
+    saved += 1;
+    return saveFile(...args);
+  } } });
+  assert.equal(res.status, 500);
+  assert.equal(saved, 4);
+  assert.equal(await AppReport.countDocuments(), 0);
+  assert.equal(files.size, 0);
+  assert.equal(gh.issues.size, 0);
+});
+
+test('כשל במחיקת קובץ אחד אינו מונע ניקוי של שאר הקבצים או מחליף את תגובת ה-500', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const attempted = [];
+  const res = await post(rollbackReport(), { deps: {
+    saveFile: async (...args) => {
+      if (args[1].endsWith('.gif')) throw new Error('image storage failed');
+      return saveFile(...args);
+    },
+    deleteFile: async (id) => {
+      attempted.push(id);
+      if (attempted.length === 1) throw new Error('cleanup unavailable');
+      await deleteFile(id);
+    },
+  } });
+  assert.equal(res.status, 500);
+  assert.equal(attempted.length, 3);
+  assert.equal(files.size, 1);
+  assert.equal(files.has(attempted[0]), true);
+  assert.equal(await AppReport.countDocuments(), 0);
+  assert.equal(gh.issues.size, 0);
+});
+
+test('עדכון שהצליח אך תשובתו אבדה: קבצים של דיווח שכבר פורסם אינם נמחקים', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const body = rollbackReport();
+  const updateOne = AppReport.updateOne.bind(AppReport);
+  t.mock.method(AppReport, 'updateOne', async (filter, update) => {
+    await updateOne(filter, { $set: { ...update.$set, issueNumber: 123, issuePending: false } });
+    throw new Error('update response lost after concurrent publication');
+  });
+  const res = await post(body);
+  assert.equal(res.status, 500);
+  assert.equal(await AppReport.countDocuments(), 1);
+  assert.equal(files.size, 4);
+  const doc = await AppReport.findOne({ reportId: body.reportId }).lean();
+  assert.equal(doc.issueNumber, 123);
+  assert.deepEqual((await loadReportFile(body.reportId, 'minidump', readFile)).buffer, files.get(String(doc.fileIds.minidump.gridfsId)).buf);
 });

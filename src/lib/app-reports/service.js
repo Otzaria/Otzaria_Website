@@ -38,7 +38,7 @@ export const IMAGE_TOKEN_RE = /^[A-Za-z0-9_-]{32}$/;
 const newImageToken = () => crypto.randomBytes(24).toString('base64url');
 
 async function storeAttachments(report, value, saveFile) {
-  const fileIds = { diagnostics: null, errors: null, images: [] };
+  const fileIds = { diagnostics: null, errors: null, minidump: null, images: [] };
   if (value.diagnostics) {
     const buf = Buffer.from(JSON.stringify(value.diagnostics, null, 2), 'utf8');
     const saved = await saveFile(buf, `app-report-${report.reportId}-diagnostics.json`, 'application/json', { appReportId: report.reportId });
@@ -48,6 +48,11 @@ async function storeAttachments(report, value, saveFile) {
     const buf = Buffer.from(value.errorLog, 'utf8');
     const saved = await saveFile(buf, `app-report-${report.reportId}-errors.txt`, 'text/plain; charset=utf-8', { appReportId: report.reportId });
     fileIds.errors = { gridfsId: saved.gridfsId, size: buf.length };
+  }
+  if (value.minidump) {
+    const { buffer } = value.minidump;
+    const saved = await saveFile(buffer, `app-report-${report.reportId}-minidump.dmp`, 'application/octet-stream', { appReportId: report.reportId });
+    fileIds.minidump = { gridfsId: saved.gridfsId, size: buffer.length, fileName: value.minidump.fileName };
   }
   for (const [i, image] of (value.images || []).entries()) {
     const ext = IMAGE_TYPES[image.mimeType].ext;
@@ -63,10 +68,10 @@ async function storeAttachments(report, value, saveFile) {
 /**
  * קליטת דיווח מאומת. מחזיר {status, body}.
  * @param {unknown} raw
- * @param {{saveFile:Function, config:object, github?:object, fetchImpl?:Function}} deps
+ * @param {{saveFile:Function, deleteFile:Function, config:object, github?:object, fetchImpl?:Function}} deps
  */
 export async function ingestAppReport(raw, deps) {
-  const v = validateAppReport(raw);
+  const v = await validateAppReport(raw);
   if (!v.ok) return { status: v.status, body: { error: v.error, field: v.field } };
   const value = v.value;
   const contentHash = computeContentHash(value);
@@ -91,13 +96,30 @@ export async function ingestAppReport(raw, deps) {
     return { status: 200, body: replyFor(before, { duplicate: true }) };
   }
 
+  const savedFileIds = [];
+  const saveAttachment = async (...args) => {
+    const saved = await deps.saveFile(...args);
+    savedFileIds.push(saved.gridfsId);
+    return saved;
+  };
   try {
-    const fileIds = await storeAttachments(doc, value, deps.saveFile);
-    if (fileIds.diagnostics || fileIds.errors || fileIds.images.length) await AppReport.updateOne({ reportId: value.reportId }, { $set: { fileIds } });
+    const fileIds = await storeAttachments(doc, value, saveAttachment);
+    if (fileIds.diagnostics || fileIds.errors || fileIds.minidump || fileIds.images.length) await AppReport.updateOne({ reportId: value.reportId }, { $set: { fileIds } });
   } catch (err) {
     // בלי הקבצים הדיווח חסר ערך; מוחקים כדי שהלקוח ישלח שוב (5xx = תור וניסיון חוזר)
     console.error('App report: attachment storage failed:', err?.message);
-    await AppReport.deleteOne({ reportId: value.reportId, issueNumber: null });
+    const removed = await AppReport.deleteOne({ reportId: value.reportId, issueNumber: null });
+    // מנקים רק אחרי מחיקת הדיווח: ייתכן שהעדכון נשמר למרות השגיאה וה-cron כבר פרסם אותו.
+    // אחרת כל ניסיון חוזר של דיווח שנמחק משאיר עותק יתום של הקבצים שנשמרו לפני הכשל.
+    if (removed.deletedCount) {
+      for (const gridfsId of savedFileIds) {
+        try {
+          await deps.deleteFile(String(gridfsId));
+        } catch (cleanupError) {
+          console.error('App report: attachment cleanup failed:', gridfsId, cleanupError?.message);
+        }
+      }
+    }
     return { status: 500, body: { error: 'Failed to store attachments' } };
   }
 
@@ -237,6 +259,7 @@ export function serializeReport(doc, role) {
     files: {
       diagnostics: doc.fileIds?.diagnostics ? { size: doc.fileIds.diagnostics.size } : null,
       errors: doc.fileIds?.errors ? { size: doc.fileIds.errors.size } : null,
+      minidump: doc.fileIds?.minidump ? { size: doc.fileIds.minidump.size, fileName: doc.fileIds.minidump.fileName || '' } : null,
       images: (doc.fileIds?.images || []).map(({ size, mimeType, fileName }) => ({ size, mimeType, fileName })),
     },
     contactLog: (doc.contactLog || []).map((c) => ({ ...c, byUserId: c.byUserId ? String(c.byUserId) : null })),
@@ -280,6 +303,8 @@ export async function getReportDetail(reportId, role) {
 export const FILE_KINDS = Object.freeze({
   diagnostics: { filename: 'diagnostics.json', contentType: 'application/json; charset=utf-8' },
   errors: { filename: 'errors.txt', contentType: 'text/plain; charset=utf-8' },
+  // באתר בלבד: לא מקושר מה-issue ואין לו טוקן ציבורי
+  minidump: { filename: 'crash.dmp', contentType: 'application/octet-stream' },
 });
 
 /** @returns {Promise<{buffer:Buffer, filename:string, contentType:string}|null>} */

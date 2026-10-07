@@ -4,7 +4,7 @@ import { getFileFromGridFS } from '@/lib/gridfs-service';
 
 export const dynamic = 'force-dynamic';
 
-// kind: diagnostics | errors
+// kind: diagnostics | errors | minidump
 export async function GET(_request, { params }) {
   const auth = await requireAppReportsAccess();
   if (!auth.ok) return auth.response;

@@ -4,7 +4,9 @@
 import { GIF87A, GIF89A, ANIMATED_GIF } from './testing/gif-fixtures.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateAppReport, MAX_DIAGNOSTICS_BYTES, MAX_IMAGES, MAX_IMAGE_BYTES, MAX_BODY_BYTES, sniffImageType } from './validation.js';
+import zlib from 'node:zlib';
+import { randomBytes } from 'node:crypto';
+import { validateAppReport, MAX_DIAGNOSTICS_BYTES, MAX_IMAGES, MAX_IMAGE_BYTES, MAX_IMAGES_TOTAL_BYTES, MAX_MINIDUMP_BYTES, MAX_MINIDUMP_INPUT_BYTES, MAX_BODY_BYTES, sniffImageType } from './validation.js';
 import { computeContentHash, computeSignatureHash } from './hashes.js';
 import { redactEmails } from './redact.js';
 import { buildIssueTitle, buildIssueBody, buildMergeComment, issueLabels } from './issue-text.js';
@@ -33,39 +35,39 @@ const crash = (over = {}) => manual({
 
 // ---------------------------------------------------------------- validation
 
-test('ולידציה: דיווח ידני תקין מנורמל (מייל באותיות קטנות)', () => {
-  const r = validateAppReport(manual());
+test('ולידציה: דיווח ידני תקין מנורמל (מייל באותיות קטנות)', async () => {
+  const r = await validateAppReport(manual());
   assert.equal(r.ok, true);
   assert.equal(r.value.reporterEmail, 'user@example.com');
   assert.equal(r.value.clientCreatedAt.toISOString(), '2026-09-17T10:00:00.000Z');
   assert.deepEqual(r.value.diagnostics, { settings: { a: 1 } });
 });
 
-test('ולידציה: מייל חובה רק בדיווח ידני', () => {
+test('ולידציה: מייל חובה רק בדיווח ידני', async () => {
   for (const email of [undefined, '']) {
-    const r = validateAppReport(manual({ reporterEmail: email }));
+    const r = await validateAppReport(manual({ reporterEmail: email }));
     assert.equal(r.ok, false);
     assert.equal(r.status, 422);
     assert.equal(r.field, 'reporterEmail');
   }
   for (const trigger of ['crash_prompt', 'auto_crash']) {
-    assert.equal(validateAppReport(crash({ trigger, reporterEmail: undefined })).ok, true);
-    assert.equal(validateAppReport(crash({ trigger, reporterEmail: '' })).ok, true);
+    assert.equal((await validateAppReport(crash({ trigger, reporterEmail: undefined }))).ok, true);
+    assert.equal((await validateAppReport(crash({ trigger, reporterEmail: '' }))).ok, true);
   }
 });
 
-test('ולידציה: מייל לא תקין שאינו ריק נדחה גם בקריסה', () => {
-  const r = validateAppReport(crash({ reporterEmail: 'not-an-email' }));
+test('ולידציה: מייל לא תקין שאינו ריק נדחה גם בקריסה', async () => {
+  const r = await validateAppReport(crash({ reporterEmail: 'not-an-email' }));
   assert.equal(r.ok, false);
   assert.equal(r.field, 'reporterEmail');
 });
 
-test('ולידציה: תיאור חובה רק בדיווח ידני', () => {
-  assert.equal(validateAppReport(manual({ description: '   ' })).field, 'description');
-  assert.equal(validateAppReport(crash({ description: '' })).ok, true);
+test('ולידציה: תיאור חובה רק בדיווח ידני', async () => {
+  assert.equal((await validateAppReport(manual({ description: '   ' }))).field, 'description');
+  assert.equal((await validateAppReport(crash({ description: '' }))).ok, true);
 });
 
-test('ולידציה: ערכים לא מוכרים ושדות חסרים → 422 עם שם השדה', () => {
+test('ולידציה: ערכים לא מוכרים ושדות חסרים → 422 עם שם השדה', async () => {
   const cases = [
     [{ type: 'other' }, 'type'], [{ trigger: 'x' }, 'trigger'], [{ platform: 'beos' }, 'platform'],
     [{ title: '' }, 'title'], [{ title: 'א'.repeat(201) }, 'title'], [{ appVersion: '' }, 'appVersion'],
@@ -81,23 +83,23 @@ test('ולידציה: ערכים לא מוכרים ושדות חסרים → 422
     [{ title: 7 }, 'title'],
   ];
   for (const [over, field] of cases) {
-    const r = validateAppReport(manual(over));
+    const r = await validateAppReport(manual(over));
     assert.equal(r.ok, false, JSON.stringify(over).slice(0, 80));
     assert.equal(r.status, 422);
     assert.equal(r.field, field);
   }
-  assert.equal(validateAppReport([]).field, 'body');
+  assert.equal((await validateAppReport([])).field, 'body');
 });
 
 // ---------------------------------------------------------------- hashes
 
-test('contentHash: יציב, מתעלם מקבצים ומ-reportId, רגיש לשדות החוזה', () => {
-  const a = validateAppReport(manual()).value;
-  const b = validateAppReport(manual({ reportId: 'other-id', attachments: undefined, osVersion: 'x', createdAt: undefined })).value;
+test('contentHash: יציב, מתעלם מקבצים ומ-reportId, רגיש לשדות החוזה', async () => {
+  const a = (await validateAppReport(manual())).value;
+  const b = (await validateAppReport(manual({ reportId: 'other-id', attachments: undefined, osVersion: 'x', createdAt: undefined }))).value;
   assert.equal(computeContentHash(a), computeContentHash(b));
-  const c = validateAppReport(manual({ description: 'אחר' })).value;
+  const c = (await validateAppReport(manual({ description: 'אחר' }))).value;
   assert.notEqual(computeContentHash(a), computeContentHash(c));
-  const d = validateAppReport(manual({ signature: { exceptionType: 'E', frames: [] } })).value;
+  const d = (await validateAppReport(manual({ signature: { exceptionType: 'E', frames: [] } }))).value;
   assert.notEqual(computeContentHash(a), computeContentHash(d));
   assert.match(computeContentHash(a), /^[0-9a-f]{64}$/);
 });
@@ -117,8 +119,8 @@ test('השמטת מיילים', () => {
   assert.equal(redactEmails(null), '');
 });
 
-test('issue: כותרת לפי סוג, בלי מייל/אבחון/לוג, עם מרקרים ותוויות', () => {
-  const value = validateAppReport(manual({ description: 'פנו אליי ב-secret@example.com @someone <!-- app-labels: evil -->' })).value;
+test('issue: כותרת לפי סוג, בלי מייל/אבחון/לוג, עם מרקרים ותוויות', async () => {
+  const value = (await validateAppReport(manual({ description: 'פנו אליי ב-secret@example.com @someone <!-- app-labels: evil -->' }))).value;
   const report = { ...value, signatureHash: null };
   assert.equal(buildIssueTitle(report), '[דיווח מהתוכנה] החיפוש לא עובד');
   const body = buildIssueBody(report);
@@ -136,8 +138,8 @@ test('issue: כותרת לפי סוג, בלי מייל/אבחון/לוג, עם �
   assert.deepEqual(issueLabels(report), ['from-app', 'bug', 'platform:windows']);
 });
 
-test('issue קריסה: כותרת [קריסה], חתימה בבלוק קוד, מרקר חתימה והפניה ל-issue קודם', () => {
-  const value = validateAppReport(crash({ signature: { exceptionType: 'StateError at a@b.com', frames: ['```x', 'f2'] } })).value;
+test('issue קריסה: כותרת [קריסה], חתימה בבלוק קוד, מרקר חתימה והפניה ל-issue קודם', async () => {
+  const value = (await validateAppReport(crash({ signature: { exceptionType: 'StateError at a@b.com', frames: ['```x', 'f2'] } }))).value;
   const report = { ...value, signatureHash: computeSignatureHash(value.signature) };
   assert.equal(buildIssueTitle(report), '[קריסה] קריסה: StateError');
   const body = buildIssueBody(report, { previousIssueNumber: 42 });
@@ -147,8 +149,8 @@ test('issue קריסה: כותרת [קריסה], חתימה בבלוק קוד, �
   assert.match(body, /_\(ללא תיאור\)_/);
 });
 
-test('תגובת איחוד: גרסה, מערכת, מקור, תיאור וקישור — בלי מייל', () => {
-  const value = validateAppReport(crash({ trigger: 'crash_prompt', description: 'קרס שוב, me@x.org', reporterEmail: 'me@x.org' })).value;
+test('תגובת איחוד: גרסה, מערכת, מקור, תיאור וקישור — בלי מייל', async () => {
+  const value = (await validateAppReport(crash({ trigger: 'crash_prompt', description: 'קרס שוב, me@x.org', reporterEmail: 'me@x.org' }))).value;
   const comment = buildMergeComment(value);
   assert.match(comment, /0\.9\.98/);
   assert.match(comment, /אחרי קריסה/);
@@ -157,15 +159,15 @@ test('תגובת איחוד: גרסה, מערכת, מקור, תיאור וקיש
   assert.match(comment, /app-reports\/6f1c1f0e/);
 });
 
-test('כותרת ארוכה מקוצרת ל-256 התווים ש-GitHub מקבל', () => {
-  const value = validateAppReport(manual({ title: '@a'.repeat(100) })).value;
+test('כותרת ארוכה מקוצרת ל-256 התווים ש-GitHub מקבל', async () => {
+  const value = (await validateAppReport(manual({ title: '@a'.repeat(100) }))).value;
   const title = buildIssueTitle({ ...value, signatureHash: null });
   assert.ok([...title].length <= 256, `אורך ${[...title].length}`);
   assert.match(title, /…$/);
 });
 
-test('תא בטבלה: קו נטוי הפוך לפני קו אנכי אינו שובר את הטבלה', () => {
-  const value = validateAppReport(manual({ osVersion: 'win \\| 11 | x' })).value;
+test('תא בטבלה: קו נטוי הפוך לפני קו אנכי אינו שובר את הטבלה', async () => {
+  const value = (await validateAppReport(manual({ osVersion: 'win \\| 11 | x' }))).value;
   const row = buildIssueBody({ ...value, signatureHash: null }).split('\n').find((l) => l.startsWith('| מערכת הפעלה'));
   // פיצול תאים כמו GFM: קו נטוי הפוך מבטל את התו שאחריו
   const cells = [''];
@@ -272,8 +274,8 @@ const GIF = GIF89A;
 const img = (buf, over = {}) => ({ fileName: 'shot.png', mimeType: 'image/png', data: buf.toString('base64'), ...over });
 const withImages = (images) => manual({ attachments: { images } });
 
-test('תמונות: PNG, JPEG ו-GIF נקלטים; הסוג נקבע לפי הבתים ולא לפי ההצהרה', () => {
-  const r = validateAppReport(withImages([
+test('תמונות: PNG, JPEG ו-GIF נקלטים; הסוג נקבע לפי הבתים ולא לפי ההצהרה', async () => {
+  const r = await validateAppReport(withImages([
     img(PNG),
     img(JPEG, { fileName: 'b.jpg', mimeType: 'image/png' }),
     img(GIF, { fileName: '', mimeType: 'image/png' }),
@@ -281,10 +283,10 @@ test('תמונות: PNG, JPEG ו-GIF נקלטים; הסוג נקבע לפי הב
   assert.equal(r.ok, true);
   assert.deepEqual(r.value.images.map((i) => [i.mimeType, i.fileName]), [['image/png', 'shot.png'], ['image/jpeg', 'b.jpg'], ['image/gif', 'image-3.gif']]);
   assert.deepEqual(r.value.images[0].buffer, PNG);
-  assert.deepEqual(validateAppReport(manual()).value.images, []);
+  assert.deepEqual((await validateAppReport(manual())).value.images, []);
 });
 
-test('תמונות: קובץ שאינו PNG/JPEG/GIF, base64 פגום, חריגה בכמות ובגודל → 422', () => {
+test('תמונות: קובץ שאינו PNG/JPEG/GIF, base64 פגום, חריגה בכמות ובגודל → 422', async () => {
   const cases = [
     [[img(Buffer.from('<svg/>'))], 'attachments.images[0]'],
     [[img(PNG, { data: '@@@' })], 'attachments.images[0]'],
@@ -294,17 +296,17 @@ test('תמונות: קובץ שאינו PNG/JPEG/GIF, base64 פגום, חריג�
     ['not-an-array', 'attachments.images'],
   ];
   for (const [images, field] of cases) {
-    const r = validateAppReport(withImages(images));
+    const r = await validateAppReport(withImages(images));
     assert.equal(r.ok, false, field);
     assert.equal(r.status, 422);
     assert.equal(r.field, field);
   }
 });
 
-test('GIF: both complete headers accepted; truncated and invalid headers rejected', () => {
+test('GIF: both complete headers accepted; truncated and invalid headers rejected', async () => {
   for (const buffer of [GIF87A, GIF89A, ANIMATED_GIF]) {
     assert.equal(sniffImageType(buffer), 'image/gif');
-    const r = validateAppReport(withImages([img(buffer, { fileName: '', mimeType: 'image/png' })]));
+    const r = await validateAppReport(withImages([img(buffer, { fileName: '', mimeType: 'image/png' })]));
     assert.equal(r.ok, true);
     assert.equal(r.value.images[0].mimeType, 'image/gif');
     assert.equal(r.value.images[0].fileName, 'image-1.gif');
@@ -319,15 +321,15 @@ test('GIF: both complete headers accepted; truncated and invalid headers rejecte
   ];
   for (const buffer of invalid) {
     assert.equal(sniffImageType(buffer), null);
-    const r = validateAppReport(withImages([img(buffer)]));
+    const r = await validateAppReport(withImages([img(buffer)]));
     assert.equal(r.ok, false);
     assert.equal(r.status, 422);
     assert.equal(r.field, 'attachments.images[0]');
   }
 });
 
-test('תמונות: שם הקובץ מנוקה מנתיב ומתווי בקרה; שם ריק מקבל ברירת מחדל', () => {
-  const r = validateAppReport(withImages([img(PNG, { fileName: 'C:\\Users\\dani\\a"b\u0001.png' }), img(JPEG, { fileName: '' })]));
+test('תמונות: שם הקובץ מנוקה מנתיב ומתווי בקרה; שם ריק מקבל ברירת מחדל', async () => {
+  const r = await validateAppReport(withImages([img(PNG, { fileName: 'C:\\Users\\dani\\a"b\u0001.png' }), img(JPEG, { fileName: '' })]));
   assert.deepEqual(r.value.images.map((i) => i.fileName), ['ab.png', 'image-2.jpg']);
 });
 
@@ -339,13 +341,85 @@ test('תמונות: זיהוי סוג לפי חתימה ותקרת הגוף מכ
   assert.ok(MAX_BODY_BYTES > Math.ceil((3 * MAX_IMAGE_BYTES) / 3) * 4);
 });
 
-test('issue: צילומי המסך מוטמעים בגוף ובתגובה מהקישור הציבורי', () => {
+test('issue: צילומי המסך מוטמעים בגוף ובתגובה מהקישור הציבורי', async () => {
   const tokens = ['a'.repeat(32), 'b'.repeat(32)];
-  const value = { ...validateAppReport(manual()).value, fileIds: { images: tokens.map((publicToken) => ({ publicToken })) } };
+  const value = { ...(await validateAppReport(manual())).value, fileIds: { images: tokens.map((publicToken) => ({ publicToken })) } };
   const body = buildIssueBody(value);
   assert.match(body, /### צילומי מסך/);
   assert.ok(body.includes(`![צילום מסך 1](https://otzaria.org/api/app-reports/images/${tokens[0]})`));
   assert.ok(body.includes(`![צילום מסך 2](https://otzaria.org/api/app-reports/images/${tokens[1]})`));
   assert.ok(buildMergeComment(value).includes(`/api/app-reports/images/${tokens[1]})`));
-  assert.doesNotMatch(buildIssueBody(validateAppReport(manual()).value), /צילומי מסך/);
+  assert.doesNotMatch(buildIssueBody((await validateAppReport(manual())).value), /צילומי מסך/);
+});
+
+// ---------------------------------------------------------------- minidump
+const DUMP = Buffer.concat([Buffer.from('MDMP', 'latin1'), Buffer.from([0x93, 0xa7, 0, 0]), Buffer.alloc(64, 7)]);
+const withDump = (minidump) => crash({ attachments: { minidump } });
+
+test('minidump: גולמי או gzip נשמר פתוח, שם בלי נתיב וסיומת gz', async () => {
+  const raw = await validateAppReport(withDump({ fileName: 'C:\\Users\\dani\\.sentry-native\\reports\\a"b.dmp', data: DUMP.toString('base64') }));
+  assert.equal(raw.ok, true);
+  assert.deepEqual(raw.value.minidump.buffer, DUMP);
+  assert.equal(raw.value.minidump.fileName, 'ab.dmp');
+
+  const gz = await validateAppReport(withDump({ fileName: 'x.dmp.gz', data: zlib.gzipSync(DUMP).toString('base64') }));
+  assert.deepEqual(gz.value.minidump.buffer, DUMP);
+  assert.equal(gz.value.minidump.fileName, 'x.dmp');
+  assert.equal((await validateAppReport(withDump({ data: DUMP.toString('base64') }))).value.minidump.fileName, 'crash.dmp');
+  assert.equal((await validateAppReport(crash())).value.minidump, null);
+});
+
+test('minidump: קלט פגום או גדול מדי → 422 על השדה', async () => {
+  const huge = Buffer.concat([DUMP, Buffer.alloc(MAX_MINIDUMP_BYTES)]);
+  const cases = [
+    'not-an-object',
+    { fileName: 'a.dmp' },
+    { data: '@@@' },
+    { data: Buffer.from('PNG..not a dump').toString('base64') },
+    { data: Buffer.from([0x1f, 0x8b, 1, 2, 3]).toString('base64') },
+    { data: zlib.gzipSync(huge).toString('base64') },
+    { data: 'A'.repeat(Math.ceil(MAX_MINIDUMP_BYTES / 3) * 4 + 4) },
+    { data: 'A'.repeat(Math.ceil(MAX_MINIDUMP_INPUT_BYTES / 3) * 4 + 4) },
+  ];
+  for (const minidump of cases) {
+    const r = await validateAppReport(withDump(minidump));
+    assert.equal(r.ok, false, JSON.stringify(minidump).slice(0, 60));
+    assert.equal(r.field, 'attachments.minidump');
+  }
+});
+
+test('minidump: תקרת הגוף מכילה dump מקודד לצד צילומי המסך, והוא לא משנה את טביעת התוכן', async () => {
+  assert.ok(MAX_BODY_BYTES > Math.ceil(MAX_MINIDUMP_INPUT_BYTES / 3) * 4 + Math.ceil(MAX_IMAGES_TOTAL_BYTES / 3) * 4);
+  const a = (await validateAppReport(crash())).value;
+  const b = (await validateAppReport(withDump({ data: DUMP.toString('base64') }))).value;
+  assert.equal(computeContentHash(a), computeContentHash(b));
+  assert.doesNotMatch(buildIssueBody(b), /minidump|\.dmp/i);
+});
+
+test('minidump: dump בתקרת הגודל מתקבל גם כש-gzip מגדיל אותו', async () => {
+  const dump = randomBytes(MAX_MINIDUMP_BYTES);
+  dump.write('MDMP');
+  const gzip = zlib.gzipSync(dump);
+  assert.ok(gzip.length > MAX_MINIDUMP_BYTES);
+  assert.ok(gzip.length <= MAX_MINIDUMP_INPUT_BYTES);
+  for (const buffer of [dump, gzip]) {
+    const result = await validateAppReport(withDump({ data: buffer.toString('base64') }));
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.value.minidump.buffer, dump);
+  }
+});
+
+test('minidump: פתיחת gzip מאפשרת ל-event loop להתקדם', async () => {
+  const dump = Buffer.alloc(MAX_MINIDUMP_BYTES);
+  dump.write('MDMP');
+  const input = withDump({ data: zlib.gzipSync(dump).toString('base64') });
+  let yielded = false;
+  const tick = new Promise((resolve) => setImmediate(() => { yielded = true; resolve(); }));
+  try {
+    const result = await validateAppReport(input);
+    assert.equal(result.ok, true);
+    assert.equal(yielded, true, 'gzip decompression blocked the event loop');
+  } finally {
+    await tick;
+  }
 });

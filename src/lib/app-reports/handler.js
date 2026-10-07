@@ -13,7 +13,7 @@ const json = (body, status = 200) => Response.json(body, { status, headers: { 'c
 
 /**
  * @param {Request} request
- * @param {{saveFile:Function, connectDB?:Function, config?:object, rateLimit?:Function, github?:object, fetchImpl?:Function}} deps
+ * @param {{saveFile:Function, deleteFile:Function, connectDB?:Function, config?:object, rateLimit?:Function, github?:object, fetchImpl?:Function}} deps
  */
 export async function handleAppReportPost(request, deps) {
   const rateLimit = deps.rateLimit || ((req) => checkRateLimit(getClientIp(req), 'app-report', 8, 'minute'));
