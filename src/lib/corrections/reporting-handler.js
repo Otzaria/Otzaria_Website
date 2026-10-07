@@ -72,12 +72,12 @@ export async function handleReportingErrorsPost(request, deps = {}) {
     triggerWorkerBatch(deps.schedule, 'intake trigger failed');
   }
 
-  // מייל רק לדיווח שאינו נכנס למערכת (דיווח חופשי / מקור שאינו אוצריא); הצעת תיקון מטופלת באתר בלבד.
+  // דיווח שאינו נכנס למערכת (חופשי / מקור שאינו אוצריא) — מייל כרגיל. הצעת תיקון מטופלת באתר:
+  // לא נשלחת לתיבת אוצריא, אבל מקור חיצוני (פנינים, בן יהודה וכו') עדיין מקבל אותה במייל.
   const emailOnly = result.outcome === 'created' ? result.plan?.route === 'email_only' : result.report.state === 'email_only';
-  let email = { emailSent: false, duplicate: false };
-  if (emailOnly) {
-    email = result.outcome === 'replay' && result.report.emailSent ? { emailSent: false, duplicate: true } : await notify(payload);
-  }
+  const email = result.outcome === 'replay' && result.report.emailSent
+    ? { emailSent: false, duplicate: true }
+    : await notify(payload, emailOnly ? {} : { excludeOtzaria: true });
 
   return json({
     success: true,

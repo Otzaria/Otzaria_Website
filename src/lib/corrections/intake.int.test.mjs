@@ -211,7 +211,7 @@ function captureMail(t) {
   for (const k of SMTP_KEYS) process.env[k] = k === 'SMTP_PORT' ? '25' : 'x';
   process.env.SMTP_FROM = 'site@otzaria.org';
   t.after(noSmtp);
-  const notify = (p) => notifyReportByEmail(p, { transportFactory: () => ({ sendMail: async (m) => { sent.push(m); } }) });
+  const notify = (p, opts) => notifyReportByEmail(p, { ...opts, transportFactory: () => ({ sendMail: async (m) => { sent.push(m); } }) });
   return { sent, notify };
 }
 
@@ -246,7 +246,7 @@ test('ספריא (המייל לא מגיע לאוצריא) → email_only: נש�
   assert.equal(sent.length, 2, 'רק דיווח sef-old נוסף');
 });
 
-test('wikiSource: הצעת תיקון נכנסת למערכת בלי מייל; דיווח חופשי נשלח במייל לאוצריא + עותק למקור', async (t) => {
+test('wikiSource: הצעת תיקון נכנסת למערכת ונשלחת במייל למקור בלבד (לא לאוצריא); דיווח חופשי — לאוצריא + עותק למקור', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const { sent, notify } = captureMail(t);
   const res = await post(newClient('wiki-1', {}, { source_folder: 'wikiSource' }), { config: onConfig, notify });
@@ -255,13 +255,28 @@ test('wikiSource: הצעת תיקון נכנסת למערכת בלי מייל; �
   assert.equal(r.state, 'open');
   assert.equal(r.verification.status, 'queued');
   assert.deepEqual(await pipelineCounts('wiki-1'), { queue: 1, outbox: 1 });
-  assert.equal(res.body.email_sent, false);
-  assert.equal(sent.length, 0, 'הצעת תיקון לא נשלחת במייל');
-  await post({ ...oldClient('wiki-free'), source_folder: 'wikiSource' }, { notify });
-  assert.equal((await ErrorReport.findOne({ reportId: 'wiki-free' }).lean()).state, 'email_only');
+  assert.equal(res.body.email_sent, true);
   assert.equal(sent.length, 1);
-  assert.equal(sent[0].to, 'otzaria.200@gmail.com');
-  assert.deepEqual(sent[0].cc, ['novartza@gmail.com']);
+  assert.equal(sent[0].to, 'novartza@gmail.com', 'המקור מקבל את הצעת התיקון');
+  assert.equal(sent[0].cc, undefined, 'בלי עותק לאוצריא');
+  // שידור חוזר אינו שולח שוב
+  await post(newClient('wiki-1', {}, { source_folder: 'wikiSource' }), { config: onConfig, notify });
+  assert.equal(sent.length, 1);
+
+  await post({ ...oldClient('wiki-free'), source_folder: 'wikiSource', selected_text: 'אחר', error_details: 'דיווח אחר' }, { notify });
+  assert.equal((await ErrorReport.findOne({ reportId: 'wiki-free' }).lean()).state, 'email_only');
+  assert.equal(sent.length, 2);
+  assert.equal(sent[1].to, 'otzaria.200@gmail.com');
+  assert.deepEqual(sent[1].cc, ['novartza@gmail.com']);
+});
+
+test('הצעת תיקון ממקור בלי כתובת משלו → לא נשלח מייל כלל', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { sent, notify } = captureMail(t);
+  const res = await post(newClient('plain-corr'), { notify });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.email_sent, false);
+  assert.equal(sent.length, 0);
 });
 
 test('דיווח חופשי בלי תיקיית מקור / מקור רגיל → מייל לאוצריא בלבד, לא לתור', async (t) => {
