@@ -6,6 +6,7 @@ import FramePopover, { StreamPicker } from './FramePopover'
 import { snapFrame } from '@/lib/pageProof/ops'
 import { linesInRect, newFid, straddlingLineIds } from '@/lib/pageProof/view'
 import { isKey } from '@/lib/pageProof/keys'
+import { cutSuspects, cutSuspectText, nextCutSuspect } from '@/lib/pageProof/cutSuspect'
 import {
   pageSize,
   clampZoom,
@@ -332,6 +333,8 @@ export default function ScanPanel({
   const seqs = useMemo(() => seqInStream(fs.frames), [fs])
   const chips = useMemo(() => streamChips(view, fs.frames), [view, fs])
   const recut = useMemo(() => recutSet(view?.lines, lockedLineIds), [view, lockedLineIds])
+  // שורות חשודות בחיתוך (תוכנת-הספר — flags.cut_suspect; lib/pageProof/cutSuspect): מסומנות במצב "שורות", ו"לחשודה הבאה"
+  const suspects = useMemo(() => cutSuspects(view, lockedLineIds), [view, lockedLineIds])
   // גם על ההצעה: שורה שנחתכה על פני שני טורים נשארת מחוץ למסגרות המוצעות — ורואים אותה לפני
   // האישור. מחושב בשני המצבים (בשביל "השורה שייכת למסגרת הזו"); הסימון האדום — רק ב"מסגרות"
   const straddleAll = useMemo(() => (fs.frames.length ? straddlingLineIds(view?.lines || [], fs.frames) : EMPTY), [fs, view])
@@ -521,7 +524,19 @@ export default function ScanPanel({
     if (linesTool === 'add') return
     setSelectedIds((ids) => toggleSelection(ids, line ? [line.id] : [], additive))
     if (line && (!(line.id > 0) || line._new)) setNotice(NOTICE.tempSelected)
+    else if (line && suspects.has(line.id)) setNotice(`שורה חשודה: ${cutSuspectText(suspects.get(line.id))}`)
     if (line && !additive) pickLine(line, point)
+  }
+
+  // "לחשודה הבאה": בוחרת אותה, מעבירה אליה את הסמן (והסריקה נגללת אליה), ומסבירה למה היא חשודה
+  const goNextSuspect = () => {
+    const id = nextCutSuspect(view, suspects, selectedIds.length === 1 ? selectedIds[0] : currentLineId)
+    const line = id == null ? null : lines.find((l) => l.id === id)
+    if (!line) return
+    if (linesTool !== 'select') setLinesTool('select')
+    setSelectedIds([id])
+    setNotice(`שורה חשודה: ${cutSuspectText(suspects.get(id))}`)
+    pickLine(line)
   }
 
   const onBand = (box, additive) => setSelectedIds((ids) => toggleSelection(ids, linesInRect(lines, box), additive))
@@ -732,6 +747,11 @@ export default function ScanPanel({
           </>
         )}
 
+        {!clean && mode === 'lines' && suspects.size > 0 && (
+          <ActBtn onClick={goNextSuspect} title="המחשב סימן באדום שורות שכנראה חתוכות לא נכון — מעבר לבאה" data-testid="next-suspect">
+            לחשודה הבאה ({suspects.size})
+          </ActBtn>
+        )}
         {canEdit && mode === 'lines' && (
           <ActBtn tone={view?.cut_ok ? 'done' : 'ok'} disabled={!!view?.cut_ok} onClick={markCutOk} title="בדקתי את כל תיבות השורות בעמוד והחיתוך נכון">
             {view?.cut_ok ? '✓ החיתוך סומן כתקין' : '✓ החיתוך בעמוד תקין'}
@@ -751,6 +771,11 @@ export default function ScanPanel({
             label="הזרם של המסגרת החדשה"
             onPick={(key) => setPicked({ forDefault: frameStreamDefault, key })}
           />
+        )}
+        {mode === 'frames' && !clean && suspects.size > 0 && (
+          <button type="button" onClick={() => changeMode('lines')} className="text-danger-700 underline" data-testid="suspect-note">
+            {suspects.size === 1 ? 'שורה אחת חשודה בחיתוך' : `${suspects.size} שורות חשודות בחיתוך`} — לבדוק במצב &quot;שורות&quot;
+          </button>
         )}
         {mode === 'frames' && straddle.size > 0 && (
           <span className="text-danger-700" data-testid="straddle-note">
@@ -825,6 +850,7 @@ export default function ScanPanel({
           selectedIds={selectedIds}
           resizeLineId={mode === 'lines' && linesTool === 'select' ? selInfo.resizeId : null}
           recutIds={recut}
+          suspectIds={mode === 'lines' && !clean ? suspects : null}
           straddleIds={straddle}
           outsideIds={outside}
           furniture={furniture}
