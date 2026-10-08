@@ -13,6 +13,7 @@ import {
   CUT_KINDS,
   needsRecut,
   framesChanged,
+  outsideFrameIds,
   recutLineIds,
   tempLineId,
   sanitizeOp,
@@ -581,6 +582,38 @@ test('framesChanged / needsRecut(ops, baseDoc): שינוי-מסגרות מעבי
   assert.equal(needsRecut([set([F1])], base), true);
   assert.equal(needsRecut([set([F1, F2], { confirmed: true })], base), false);
   assert.equal(needsRecut([{ kind: 'bbox', page: 3, ids: [2], value: [1, 1, 5, 5] }], base), true);
+});
+
+test('outsideFrameIds + buildView: מה שמחוץ למסגרות אינו בטקסט (מרכז, אובייקט, זרם ביד; מסגרות מקומיות מול outside_frames)', () => {
+  const L = (id, bbox, extra = {}) => ({ id, bbox, text: `ש${id}`, stream: 'main', order: id, status: 'auto', ...extra });
+  const lines = [
+    L(1, [100, 100, 400, 130]), // בתוך המסגרת
+    L(2, [100, 700, 400, 730]), // מחוץ לכל מסגרת
+    L(3, [380, 140, 700, 170]), // בולטת: נוגעת, המרכז בחוץ
+    L(4, [380, 180, 700, 210], { stream_src: 'human' }), // בולטת, זרם ביד — בפנים
+    L(5, [620, 600, 680, 620]), // בתוך מסגרת-אובייקט
+    L(6, [100, 800, 400, 830], { status: 'removed' }),
+  ];
+  const frames = [
+    { fid: 'aaaaaa', stream: 'main', order: 1, bbox: [90, 90, 420, 500] },
+    { fid: 'bbbbbb', stream: 'main', order: 2, kind: 'table', bbox: [600, 580, 700, 640] },
+  ];
+  assert.deepEqual([...outsideFrameIds(lines, frames)].sort(), [2, 3]);
+  assert.deepEqual([...outsideFrameIds(lines, [])], []);
+  // בלי עריכת-מסגרות כאן — מה שתוכנת-הספר קבעה (outside_frames)
+  const base = { page: 3, size: [1000, 1000], lines: lines.map((l) => (l.id === 5 ? { ...l, outside_frames: true } : l)), frames };
+  const v0 = buildView(base, []);
+  assert.deepEqual(v0.lines.filter((l) => l._outside).map((l) => l.id), [5]);
+  // מסגרות שנערכו כאן — לפי הכלל, על המסגרות שבעורך
+  const v1 = buildView(base, [{ kind: 'frames_set', page: 3, value: { frames } }]);
+  assert.deepEqual(v1.lines.filter((l) => l._outside).map((l) => l.id).sort(), [2, 3]);
+  // הגדלת המסגרת מחזירה את השורה (שום דבר לא נמחק)
+  const big = [{ ...frames[0], bbox: [90, 90, 720, 760] }, frames[1]];
+  const v2 = buildView(base, [{ kind: 'frames_set', page: 3, value: { frames: big } }]);
+  assert.deepEqual(v2.lines.filter((l) => l._outside).map((l) => l.id), []);
+  // ניקוי המסגרות — אין "מחוץ"
+  const v3 = buildView(base, [{ kind: 'frames_clear', page: 3 }]);
+  assert.deepEqual(v3.lines.filter((l) => l._outside).map((l) => l.id), []);
 });
 
 test('compactOps: טקסט נשמר כשאחריו פעולה שמתייחסת למספרי-המילים שלו', () => {

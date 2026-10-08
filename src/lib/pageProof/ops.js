@@ -860,6 +860,45 @@ function applyFrameStreams(doc) {
   };
 }
 
+// "מה שמחוץ למסגרות אינו טקסט" (הכרעת בעל הפרויקט, 2026-10-04 — docs/47 §9 בתוכנת-הספר): אותו כלל כמו
+// framescope.outside_of שם, על העמוד כפי שהוא בעורך. עמוד שיש בו מסגרת כלשהי; שורה שמרכזה אינו בתוך אף מסגרת
+// (גם מסגרת-אובייקט — טבלה/איור — נחשבת "בפנים", כדי שטקסט של טבלה לא ייזרק); חריג — שורה שנוגעת במסגרת-טקסט
+// וזרמה נקבע ביד ("השורה שייכת למסגרת הזו"). שורות שהוסרו / בלי תיבה — לא. ← Set של מזהי-שורות
+export function outsideFrameIds(lines, frames) {
+  const fr = (frames || []).filter((f) => f && isBox(f.bbox));
+  const out = new Set();
+  if (!fr.length) return out;
+  const text = fr.filter((f) => !f.kind).map((f) => f.bbox);
+  const inBox = (b, l) => {
+    const cx = cxOf(l);
+    const cy = cyOf(l);
+    return b[0] <= cx && cx <= b[2] && b[1] <= cy && cy <= b[3];
+  };
+  const touches = (a, b) => Math.min(a[2], b[2]) > Math.max(a[0], b[0]) && Math.min(a[3], b[3]) > Math.max(a[1], b[1]);
+  for (const l of lines || []) {
+    if (!l || l.status === 'removed' || l.id == null || !isBox(l.bbox)) continue;
+    if (fr.some((f) => inBox(f.bbox, l.bbox))) continue;
+    if (l.stream_src === 'human' && text.some((b) => touches(b, l.bbox))) continue;
+    out.add(l.id);
+  }
+  return out;
+}
+
+// _outside לכל שורה: מסגרות שנערכו כאן (frames_confirmed קיים) — לפי הכלל, על המסגרות שבעורך; אחרת — מה
+// שתוכנת-הספר קבעה בעמוד (outside_frames, docs/37 §2.1 שם). שורה כזו אינה בטקסט הזורם (textModel) ואינה
+// נספרת ב"אשר גם את כל השאר" — היא לא תיכנס לספר; בסריקה היא נשארת (כתום / אדום)
+function markOutside(doc) {
+  const local = typeof doc.frames_confirmed === 'boolean';
+  const ids = local ? outsideFrameIds(doc.lines, doc.frames) : null;
+  return {
+    ...doc,
+    lines: doc.lines.map((l) => {
+      const out = local ? ids.has(l.id) : l.outside_frames === true;
+      return out ? { ...l, _outside: true } : l._outside ? { ...l, _outside: false } : l;
+    }),
+  };
+}
+
 // מיון-קריאה (_rows_rtl): מלמעלה למטה; שורות באותו קו-גובה — מימין לשמאל.
 // "אותו קו-גובה" = חפיפה לגובה של יותר מחצי הגובה הקטן עם אחת מהשורות שכבר בשורה — אבל לעולם לא שתי
 // תיבות שחופפות לרוחב (יותר מ-30% מהצרה וגם יותר מגובה-וחצי): אלה שתי שורות של אותו טור שהתיבות שלהן
@@ -979,6 +1018,7 @@ export function buildView(baseDoc, ops = []) {
   });
   doc = applyFrameStreams(doc);
   if (typeof doc.frames_confirmed === 'boolean') doc = applyFrameOrder(doc);
+  doc = markOutside(doc);
   doc.lines = doc.lines.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   return doc;
 }

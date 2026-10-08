@@ -242,6 +242,10 @@ function Splitter({ split, swap, containerRef, onDrag, onCommit, onSwap }) {
   )
 }
 
+// לחיצה על שורה שמחוץ לכל מסגרת (בסריקה, ב"בעיות")
+const OUTSIDE_HINT =
+  'השורה הזו מחוץ לכל מסגרת, ולכן היא לא נכנסת לספר ואינה בטקסט. כדי שתיכנס — ציירו לה מסגרת, או הגדילו מסגרת קיימת, במצב "מסגרות" של הסריקה.'
+
 export default function ProofEditor({
   page,
   initialOps = null,
@@ -441,6 +445,11 @@ export default function ProofEditor({
     (lineId, wordIndex = null, { focus = true, selectWord = false, from = 'text' } = {}) => {
       const line = lineById.get(lineId)
       if (!line || line.status === 'removed') return false
+      // שורה מחוץ לכל מסגרת אינה בטקסט הזורם (ops.markOutside) — הסבר במקום סמן שאין לו לשונית
+      if (line._outside && !isFurnitureStream(line.stream)) {
+        say(OUTSIDE_HINT)
+        return false
+      }
       let s = null
       if (selectWord && Number.isInteger(wordIndex)) {
         const w = tokenize(line.text).filter((t) => t.w === 'word')[wordIndex]
@@ -454,7 +463,7 @@ export default function ProofEditor({
       moveCaret(s, focus, from)
       return true
     },
-    [lineById, moveCaret]
+    [lineById, moveCaret, say]
   )
 
   // תוכנית מ-flowEdit ← push, רמז, והבחירה אחריה
