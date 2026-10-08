@@ -959,7 +959,6 @@ export default function ProofEditor({
     },
     restoreLine: (id) => push({ kind: 'status', page: P, ids: [id], value: 'restore' }),
     pageType: (v) => push({ kind: 'page_type', page: P, value: v }),
-    cutOk: () => push({ kind: 'cut_ok', page: P, value: true }),
     toLinesMode: () => setScanMode('lines'),
     removeOp: (i) => ed.removeAt(i),
     // "החזר למקור" לפעולה שהתקבלה ממישהו אחר — יורדת מהטיוטה, ובמקומה פעולה הפוכה מפורשת (inverseOps: הערך שבעמוד

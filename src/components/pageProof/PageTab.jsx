@@ -3,9 +3,10 @@
 import { PAGE_TYPES } from '@/lib/pageProof/vocab'
 import { Section } from './LineTab'
 
-// כרטיסיית "עמוד" בלוח הפרטים: סוג-העמוד, בדיקת-השפיות של החיתוך, "החיתוך
-// בעמוד תקין", מעבר לתיקון החיתוך בסריקה (פיצול/איחוד/שורה שחסרה), שחזור
-// שורות שסומנו "לא-שורה", והתקדמות.
+// כרטיסיית "עמוד" בלוח הפרטים: סוג-העמוד, בדיקת-השפיות של החיתוך, מעבר לתיקון
+// החיתוך בסריקה (פיצול/איחוד/שורה שחסרה), שחזור שורות שסומנו "לא-שורה", והתקדמות.
+// "✓ החיתוך בעמוד תקין" — רק בסרגל-הסריקה במצב "שורות" (ScanPanel), שם בודקים את
+// החיתוך: כל פעולה במקום אחד.
 
 const btn = 'rounded-md px-2 py-1 text-sm transition-colors disabled:opacity-40'
 
@@ -43,19 +44,10 @@ export default function PageTab({ view, stats, readOnly = false, act }) {
         </select>
       </Section>
 
-      <Section title="חיתוך השורות" hint="שורה שחוצה שני טורים, שתי שורות בתיבה אחת, שורה שחסרה — מתקנים בסריקה, במצב 'שורות'">
+      <Section title="חיתוך השורות" hint="שורה שחוצה שני טורים, שתי שורות בתיבה אחת, שורה שחסרה — מתקנים בסריקה, במצב 'שורות'; שם גם '✓ החיתוך בעמוד תקין'">
         <div className="flex flex-wrap gap-1">
-          <button type="button" onClick={act.toLinesMode} className={`${btn} bg-surface-variant/60 hover:bg-surface-variant`} title="פיצול, איחוד, שורה חדשה, תיבה, לא-שורה">
-            לתיקון החיתוך בסריקה
-          </button>
-          <button
-            type="button"
-            disabled={readOnly || !!view.cut_ok}
-            onClick={act.cutOk}
-            className={`${btn} ${view.cut_ok ? 'bg-success-100 text-success-800' : 'bg-success-600 text-white hover:bg-success-700'}`}
-            title="בדקתי את כל תיבות השורות בעמוד והחיתוך נכון"
-          >
-            {view.cut_ok ? '✓ החיתוך סומן כתקין' : '✓ החיתוך בעמוד תקין'}
+          <button type="button" onClick={act.toLinesMode} className={`${btn} bg-surface-variant/60 hover:bg-surface-variant`} title="פיצול, איחוד, שורה חדשה, תיבה, לא-שורה, ו'✓ החיתוך בעמוד תקין'">
+            {view.cut_ok ? 'לחיתוך בסריקה (✓ סומן כתקין)' : 'לתיקון החיתוך בסריקה'}
           </button>
         </div>
       </Section>
