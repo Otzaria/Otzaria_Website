@@ -222,7 +222,8 @@ export const isHeadingLine = (line) => String(line?.stream || '').endsWith('_hea
 
 // הלשוניות לפי הזרמים שבעמוד: [{key, he, color, count, furniture}]. כותרת
 // (*_heading) נספרת בזרם-הבסיס שלה; כל הריהוט (כותרת-עמוד, תחתית, מפריד) —
-// לשונית אחת אחרונה. שורות שהוסרו אינן נספרות.
+// לשונית אחת אחרונה. שורות שהוסרו אינן נספרות, וגם לא שורת-תוכן שמחוץ למסגרות
+// (_outside — ops.markOutside: היא לא תיכנס לספר).
 export function streamTabs(view) {
   const counts = new Map();
   const seen = [];
@@ -233,6 +234,7 @@ export function streamTabs(view) {
       furniture++;
       continue;
     }
+    if (l._outside) continue;
     const b = baseOf(l.stream);
     if (!counts.has(b)) {
       counts.set(b, 0);
@@ -249,11 +251,13 @@ export function streamTabs(view) {
   return tabs;
 }
 
-// שורות הלשונית בסדר-הקריאה (בלי שורות שהוסרו)
+// שורות הלשונית בסדר-הקריאה (בלי שורות שהוסרו, ובלי שורות-תוכן שמחוץ למסגרות)
 export function tabLines(view, tabKey) {
   const fur = tabKey === FURNITURE_TAB;
   return (view?.lines || [])
-    .filter((l) => l && l.status !== 'removed' && (fur ? isFurnitureStream(l.stream) : !isFurnitureStream(l.stream) && baseOf(l.stream) === tabKey))
+    .filter(
+      (l) => l && l.status !== 'removed' && (fur ? isFurnitureStream(l.stream) : !isFurnitureStream(l.stream) && !l._outside && baseOf(l.stream) === tabKey)
+    )
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 }
 

@@ -107,7 +107,8 @@ async function carryToRevision(d, page, now, { sameRev = false } = {}) {
     sig: pageSig(page),
     ops: c.kept,
     opCount: liveCount(c.kept),
-    carried: { from: d.revision || 1, kept: liveCount(c.kept), cut: c.cut, dropped: c.dropped.map(droppedOpLabel), ...(sameRev ? { update: true } : {}) },
+    // held — תיקוני-טקסט בשורות שזוהו מחדש: לא הוחלו, המתנדב בוחר (drafts.carryDraftOps)
+    carried: { from: d.revision || 1, kept: liveCount(c.kept), cut: c.cut, dropped: c.dropped.map(droppedOpLabel), held: c.held, ...(sameRev ? { update: true } : {}) },
     inherited: inh ? { ...inh, ops: carryDraftOps(page.doc, inh.ops || []).kept } : null,
   };
   if (!sameRev) Object.assign(set, { stage: 'text', recut: { ...(d.recut && typeof d.recut === 'object' ? d.recut : {}), backAt: now } });

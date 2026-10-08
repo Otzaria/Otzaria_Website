@@ -85,7 +85,8 @@ export async function POST(request, { params }) {
       return conflict('העמוד כבר הוגש או נלקח בידי מתנדב אחר');
     }
 
-    const recut = needsRecut(ops);
+    // פעולות-חיתוך, או מסגרות ששונו מאלה שיובאו (ops.framesChanged) — אחרי אישור העמוד עובר לזיהוי-מחדש
+    const recut = needsRecut(ops, page.doc);
     // על מה ההגשה מבוססת (מהטיוטה שבשרת) — לא מכשיל את ההגשה אם הקריאה נכשלה
     const basis = await draftBasis(page._id, uid).catch(() => ({}));
     let sub;

@@ -14,7 +14,7 @@
 import { autoFrames, headingStream } from './autoFrames.js';
 import { MIN_LINE_BOX, FRAME_PAD } from './ops.js';
 import { streamChoices } from './view.js';
-import { streamInfo, streamName, isFurnitureStream, isStreamKey, keepHeading, FRAME_OBJECT_KINDS, BUILTIN_STREAMS, FURNITURE_STREAMS } from './vocab.js';
+import { streamInfo, streamName, isFurnitureStream, isStreamKey, keepHeading, FRAME_OBJECT_KINDS, FRAME_TYPES, BUILTIN_STREAMS, FURNITURE_STREAMS } from './vocab.js';
 import { hash32 } from './sequences.js';
 import { FURNITURE_TAB, FURNITURE_TAB_HE } from './textModel.js';
 
@@ -355,6 +355,8 @@ export function framesState(view) {
 export function frameForOp(f, W, H) {
   const out = { fid: String(f.fid), stream: f.stream, bbox: clampBox(f.bbox, W, H), order: f.order };
   if (isObjectFrame(f)) out.kind = f.kind;
+  // סוג-המסגרת (ftype): נשלח כשיש — ו-null כשהוסר במפורש (תוכנת-הספר: בלי המפתח — הסוג השמור נשאר)
+  else if (typeof f.ftype === 'string' || f.ftype === null) out.ftype = f.ftype;
   return out;
 }
 
@@ -392,6 +394,8 @@ export function frameEditOps(page, frames, W, H, { materialise = false, extra = 
 // התווית שעל המסגרת: "ראשי 1", "הערות 2", "ראשי — כותרת 1", "טבלה"
 export function frameLabel(view, frame, seq) {
   if (isObjectFrame(frame)) return FRAME_OBJECT_KINDS[frame.kind];
+  // סוג-מסגרת (כותרת-רצה של ההערות, מילת-המשך, הערת-צד…) — השם שלו
+  if (typeof frame?.ftype === 'string' && Object.hasOwn(FRAME_TYPES, frame.ftype)) return `${FRAME_TYPES[frame.ftype].he}${seq ? ` ${seq}` : ''}`;
   const s = streamInfo(view, frame?.stream);
   return `${s.he}${s.heading ? ' — כותרת' : ''}${seq ? ` ${seq}` : ''}`;
 }
@@ -420,24 +424,46 @@ const CANON = ['main', 'notes', 'notes2', 'notes3', 'margin'];
 export const FURNITURE_CHOICE = FURNITURE_TAB;
 const FURNITURE_COLOR = BUILTIN_STREAMS.header.color;
 
-// "כותרת-רצה של ההערות": כותרת שחוזרת בכל עמוד מעל ההערות (שם החיבור שבהערות) — ריהוט,
-// ולא "כותרת הערות" (כותרת של פרק או סעיף בתוך ההערות, שנכנסת לספר). אינו זרם בחוזה —
-// נשמר כ"כותרת עמוד" (header), כמו כל כותרת-רצה: אינו נכנס לספר, ולמודל-המבנה הוא כותרת-רצה.
-export const NOTES_RUNHEAD_CHOICE = '__notes_runhead';
-export const NOTES_RUNHEAD_HE = 'כותרת-רצה של ההערות';
+// סוג-מסגרת כבחירה (vocab.FRAME_TYPES): "ftype:<מפתח>". הסוג קובע את הזרם (resolveFrameChoice) ונשמר
+// במסגרת (ftype) — כך אחרי השמירה הבחירה מסומנת כפי שנבחרה, ולא "ריהוט הדף" / "כותרת עמוד".
+export const FRAME_TYPE_PREFIX = 'ftype:';
+export const typeChoice = (k) => `${FRAME_TYPE_PREFIX}${k}`;
+// מפתח-הסוג של בחירה, או null (בחירה של זרם / "ריהוט הדף")
+export function choiceType(choice) {
+  if (typeof choice !== 'string' || !choice.startsWith(FRAME_TYPE_PREFIX)) return null;
+  const k = choice.slice(FRAME_TYPE_PREFIX.length);
+  return Object.hasOwn(FRAME_TYPES, k) ? k : null;
+}
 
-// שם הזרם לבחירה: "ריהוט הדף"; כותרת — "כותרת" / "כותרת הערות" (מאוצר-המילים), ולזרם
-// שהספר נתן לו שם משלו — "כותרת <השם>" (vocab.streamName)
+// "כותרת-רצה של ההערות": כותרת שחוזרת בכל עמוד מעל ההערות (שם החיבור שבהערות) — ריהוט,
+// ולא "כותרת הערות" (כותרת של פרק או סעיף בתוך ההערות, שנכנסת לספר). סוג-מסגרת: נשמר
+// כ"כותרת עמוד" (header) עם ftype — אינו נכנס לספר, ולמודל-המבנה הוא כותרת-רצה.
+export const NOTES_RUNHEAD_CHOICE = typeChoice('notes_runhead');
+export const NOTES_RUNHEAD_HE = FRAME_TYPES.notes_runhead.he;
+
+// הבחירה שמייצגת מסגרת קיימת: הסוג שלה (אם מוכר), אחרת הזרם
+export function frameChoice(frame) {
+  const t = frame?.ftype;
+  return typeof t === 'string' && Object.hasOwn(FRAME_TYPES, t) ? typeChoice(t) : frame?.stream;
+}
+
+// שם הזרם לבחירה: "ריהוט הדף"; סוג-מסגרת — השם שלו; כותרת — "כותרת" / "כותרת הערות"
+// (מאוצר-המילים), ולזרם שהספר נתן לו שם משלו — "כותרת <השם>" (vocab.streamName)
 export function streamLabel(view, key) {
   if (key === FURNITURE_CHOICE) return FURNITURE_TAB_HE;
-  if (key === NOTES_RUNHEAD_CHOICE) return NOTES_RUNHEAD_HE;
+  const t = choiceType(key);
+  if (t) return FRAME_TYPES[t].he;
   return streamName(view, key);
 }
 
-// {key, he, color, heading} של בחירה (זרם, כותרת או "ריהוט הדף")
+// {key, he, color, heading} של בחירה (זרם, כותרת, סוג-מסגרת או "ריהוט הדף")
 export function choiceInfo(view, key) {
   if (key === FURNITURE_CHOICE) return { key, he: FURNITURE_TAB_HE, color: FURNITURE_COLOR, heading: false };
-  if (key === NOTES_RUNHEAD_CHOICE) return { key, he: NOTES_RUNHEAD_HE, color: FURNITURE_COLOR, heading: false };
+  const t = choiceType(key);
+  if (t) {
+    const T = FRAME_TYPES[t];
+    return { key, he: T.he, color: T.color || streamInfo(view, T.stream).color, heading: false, kind: T.kind, hint: T.hint };
+  }
   const s = streamInfo(view, key);
   return { key, he: streamLabel(view, key), color: s.color, heading: s.heading };
 }
@@ -477,10 +503,31 @@ function textBelow(bbox, lines) {
 }
 
 // הזרם שנשמר במסגרת עבור בחירה: "ריהוט הדף" — זרם-ריהוט אמיתי (furnitureStreamFor);
-// "כותרת-רצה של ההערות" — כותרת עמוד; כל בחירה אחרת — כמות-שהיא
+// סוג-מסגרת — הזרם של הסוג ("כותרת-רצה של ההערות" — כותרת עמוד); כל בחירה אחרת — כמות-שהיא
 export function resolveFrameStream(choice, bbox, lines, H) {
-  if (choice === NOTES_RUNHEAD_CHOICE) return 'header';
+  const t = choiceType(choice);
+  if (t) return FRAME_TYPES[t].stream;
   return choice === FURNITURE_CHOICE ? furnitureStreamFor(bbox, lines, H) : choice;
+}
+
+// {stream, ftype} של בחירה: ftype = מפתח-הסוג, או null (זרם רגיל / "ריהוט הדף")
+export function resolveFrameChoice(choice, bbox, lines, H) {
+  return { stream: resolveFrameStream(choice, bbox, lines, H), ftype: choiceType(choice) };
+}
+
+// השינוי במסגרת כשבוחרים לה בחירה: זרם, וסוג (או הסרת הסוג — ftype:null — כשהיה לה). null = אין שינוי
+export function framePatchFor(frame, choice, lines, H) {
+  const { stream, ftype } = resolveFrameChoice(choice, frame?.bbox, lines, H);
+  const had = typeof frame?.ftype === 'string' && frame.ftype ? frame.ftype : null;
+  if (stream === frame?.stream && ftype === had) return null;
+  const patch = { stream };
+  if (ftype || had) patch.ftype = ftype;
+  return patch;
+}
+
+// סוגי-המסגרת לבחירה (vocab.FRAME_TYPES — המובנים ואלה שהספר הגדיר): [{key:"ftype:…", he, color, kind, hint, type}]
+export function frameTypeChips(view) {
+  return Object.keys(FRAME_TYPES).map((k) => ({ ...choiceInfo(view, typeChoice(k)), type: k }));
 }
 
 // הזרמים לבחירה במסגרת:
@@ -530,7 +577,7 @@ export function streamChips(view, frames = []) {
       .filter(Boolean);
   const c = sorted(content);
   const m = sorted(more);
-  return { content: c, headings: headingsOf(c), furniture, more: m, moreHeadings: headingsOf(m) };
+  return { content: c, headings: headingsOf(c), furniture, more: m, moreHeadings: headingsOf(m), types: frameTypeChips(view) };
 }
 
 // הבחירה ההתחלתית ל"מסגרת חדשה" לפי הלשונית הפעילה בטקסט: לשונית-הריהוט — "ריהוט הדף"

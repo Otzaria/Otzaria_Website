@@ -29,6 +29,7 @@ import {
   frameLabel,
   isObjectFrame,
 } from '@/lib/pageProof/scanGeometry'
+import { CUT_REASON_SHORT, cutSuspectText } from '@/lib/pageProof/cutSuspect'
 
 // משטח-הסריקה: תמונת-העמוד ומעליה SVG במרחב הפיקסלים של התמונה (viewBox =
 // doc.size) — כל קואורדינטה של החוזה מצוירת כמות-שהיא, והזום הוא רק גודל
@@ -48,6 +49,7 @@ import {
 //   selectedIds     Set/מערך — השורות הנבחרות (lines)
 //   resizeLineId    השורה שמקבלת ידיות בפינות ובצדדים (lines + select)
 //   recutIds        Set — שורות "לזיהוי מחדש" (כתום מקווקו + תווית)
+//   suspectIds      Map מזהה → [סיבות] — שורות חשודות בחיתוך (lib/pageProof/cutSuspect): אדום עבה + תווית קצרה (lines)
 //   straddleIds     Set — שורות שבולטות מהמסגרות (אדום מקווקו, גם במצב מסגרות)
 //   outsideIds      Set — שורות-תוכן מחוץ לכל מסגרת (כתום מקווקו, במצב מסגרות)
 //   furniture       [{id, bbox, stream, inText, byHand}] — שורות-ריהוט שזוהו ואין סביבן מסגרת-ריהוט
@@ -142,6 +144,7 @@ export default function ProofScan({
   resizeLineId = null,
   recutIds = EMPTY,
   straddleIds = EMPTY,
+  suspectIds = null,
   outsideIds = EMPTY,
   furniture = EMPTY_LIST,
   currentLineId = null,
@@ -590,24 +593,28 @@ export default function ProofScan({
                   const removed = l.status === 'removed'
                   const isRecut = recut.has(l.id) && !removed
                   const isSel = selSet.has(l.id)
+                  const isSuspect = !removed && !isRecut && !!suspectIds?.has?.(l.id)
                   const cls = isSel
                     ? 'stroke-primary fill-primary/15'
                     : removed
                       ? 'stroke-neutral-400 fill-none'
                       : isRecut
                         ? 'stroke-warning-600 fill-warning-500/10'
-                        : l.recheck
-                          ? 'stroke-neutral-500 fill-warning-alt-300/40'
-                          : 'stroke-neutral-500 fill-none'
+                        : isSuspect
+                          ? 'stroke-danger-600 fill-danger-500/10'
+                          : l.recheck
+                            ? 'stroke-neutral-500 fill-warning-alt-300/40'
+                            : 'stroke-neutral-500 fill-none'
                   return (
                     <rect
                       key={l.id}
                       data-line-box={l.id}
                       data-recut={isRecut ? '1' : undefined}
                       data-removed={removed ? '1' : undefined}
+                      data-suspect={isSuspect ? '1' : undefined}
                       {...rectProps(b)}
                       className={cls}
-                      strokeWidth={(isSel ? 2.5 : 1.25) * u}
+                      strokeWidth={(isSel ? 2.5 : isSuspect ? 3 : 1.25) * u}
                       strokeOpacity={removed ? 0.7 : 1}
                       strokeDasharray={removed || isRecut ? dash(5, 3) : undefined}
                       pointerEvents="none"
@@ -739,6 +746,21 @@ export default function ProofScan({
                     style={{ left: l.bbox[0] * zoom + 2, top: l.bbox[1] * zoom + 1 }}
                   >
                     לזיהוי מחדש
+                  </span>
+                ))}
+            {mode === 'lines' &&
+              suspectIds?.size > 0 &&
+              lines
+                .filter((l) => suspectIds.has(l.id) && l.status !== 'removed' && !recut.has(l.id) && isBox(l.bbox))
+                .map((l) => (
+                  <span
+                    key={`s${l.id}`}
+                    data-testid="suspect-label"
+                    title={cutSuspectText(suspectIds.get(l.id))}
+                    className="absolute rounded-sm bg-danger-100/90 px-1 text-[10px] leading-4 text-danger-800"
+                    style={{ left: l.bbox[0] * zoom + 2, top: Math.max(0, l.bbox[1] * zoom - 15) }}
+                  >
+                    {suspectIds.get(l.id).map((r) => CUT_REASON_SHORT[r]).filter((v, i, a) => v && a.indexOf(v) === i).join(' ')}
                   </span>
                 ))}
           </div>

@@ -84,7 +84,7 @@ export default function SubmitDialog({ pageNo, summary, note = '', onNote, savin
         )}
         {recut && (
           <p className="rounded-lg border border-info-200 bg-info-50 px-3 py-2 text-sm text-info-800">
-            תיקנתם את חיתוך השורות: אחרי אישור המנהל העמוד יחזור לתוכנה, השורות שתוקנו ייקראו מחדש, והעמוד יחזור להגהה במעבר שני.
+            תיקנתם את חיתוך השורות או את המסגרות: אחרי אישור המנהל העמוד יחזור לתוכנה, ייחתך מחדש לפיהם, השורות שהשתנו ייקראו מחדש, והעמוד יחזור להגהה במעבר שני.
           </p>
         )}
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { FRAME_OBJECT_KINDS, isFurnitureStream } from '@/lib/pageProof/vocab'
-import { isObjectFrame, FURNITURE_CHOICE, NOTES_RUNHEAD_CHOICE, choiceInfo } from '@/lib/pageProof/scanGeometry'
+import { isObjectFrame, FURNITURE_CHOICE, choiceInfo, frameChoice, frameTypeChips } from '@/lib/pageProof/scanGeometry'
 
 // חלונית קטנה ליד מסגרת נבחרת בסריקה: הזרם שלה (כולל כותרת של כל זרם ו"ריהוט הדף"),
 // המספר שלה בזרם, מקומה בסדר-הקריאה של העמוד, סוג (טקסט / טבלה / איור / לוח) ומחיקה.
@@ -18,7 +18,8 @@ import { isObjectFrame, FURNITURE_CHOICE, NOTES_RUNHEAD_CHOICE, choiceInfo } fro
 //   suggested    המסגרות הן הצעת המחשב (שינוי כאן שומר את כולן)
 //   style, className  תוספות-עיצוב (המיקום — מ-ProofScan)
 //   onStream(key) — key: זרם, זרם-כותרת (…_heading), FURNITURE_CHOICE ("ריהוט הדף") או
-//                   NOTES_RUNHEAD_CHOICE ("כותרת-רצה של ההערות" — נשמר כ"כותרת עמוד")
+//                   סוג-מסגרת "ftype:<מפתח>" (כותרת-רצה של ההערות, מילת-המשך, הערת-צד, וסוגי הספר —
+//                   vocab.FRAME_TYPES; נשמר במסגרת כ-ftype, ScanPanel: framePatchFor)
 //   onSeq(n) · onOrder(-1|1) · onKind(kind|null) · onDelete() · onClose() — סגירת החלונית (המסגרת נשארת בחורה)
 //   onClaimLine (רשות) — השורה שבסמן בולטת מהמסגרת הזו: "השורה שייכת למסגרת הזו" (claimTitle — ההסבר)
 //   extra (רשות) — ReactNode של דף עוטף (תוכנת-הספר: שרשור לעמוד אחר וכו'), בשורה משלו בתחתית
@@ -27,7 +28,6 @@ const small = 'flex h-6 min-w-6 items-center justify-center rounded border borde
 
 const EMPTY_CHIPS = { content: [], headings: [], furniture: [], more: [], moreHeadings: [] }
 const FURNITURE_TITLE = 'כותרת-רצה (גם של ההערות), מספר עמוד, שומר-דף — אינם נכנסים לספר'
-const NOTES_RUNHEAD_TITLE = 'כותרת שחוזרת בכל עמוד מעל ההערות (שם החיבור שבהערות) — ריהוט, לא נכנסת לספר. כותרת של פרק או סעיף בתוך ההערות — סגנון-הפסקה «כותרת» בטקסט, לא מסגרת'
 // מסגרת-כותרת (…_heading) — כבר לא בבחירה (בעל הפרויקט, 2026-10-05: כותרת היא סגנון-פסקה, לא מסגרת). מסגרת כזו שכבר
 // קיימת בעמוד עדיין נטענת ומוצגת (שבב אחד, של הזרם שלה) ואפשר להחליף לה זרם — בלי מיגרציה
 const HEADING_TITLE = 'מסגרת-כותרת מגרסה קודמת. היום כותרת אינה מסגרת: היא חלק מהטקסט, בסגנון-הפסקה «כותרת»'
@@ -50,14 +50,15 @@ export function StreamChip({ s, active, onClick, title }) {
   )
 }
 
-// בחירת הזרם של מסגרת — אותה בחירה בחלונית ובסרגל "מסגרת חדשה": זרמי-התוכן, "ריהוט הדף", ו"עוד…"
-// לזרמים נדירים ולסוג-הריהוט המדויק. כותרת אינה מסגרת (2026-10-05) — בלי זרמי-הכותרת; מסגרת שכבר בזרם-כותרת
-// מוצגת בשבב שלה בלבד. value — הזרם הנוכחי (או FURNITURE_CHOICE); onPick(key) רק כשהבחירה משתנה.
+// בחירת הזרם של מסגרת — אותה בחירה בחלונית ובסרגל "מסגרת חדשה": זרמי-התוכן, "ריהוט הדף", סוגי-המסגרת (כותרת-רצה של
+// ההערות, מילת-המשך, הערת-צד, וסוגים שהספר הגדיר — vocab.FRAME_TYPES), ו"עוד…" לזרמים נדירים ולסוג-הריהוט המדויק.
+// כותרת אינה מסגרת (2026-10-05) — בלי זרמי-הכותרת; מסגרת שכבר בזרם-כותרת מוצגת בשבב שלה בלבד.
+// value — הבחירה הנוכחית (frameChoice: הסוג, או הזרם, או FURNITURE_CHOICE); onPick(key) רק כשהבחירה משתנה.
 export function StreamPicker({ chips, value, onPick, label = 'הזרם של המסגרת', className = '' }) {
   const c = { ...EMPTY_CHIPS, ...(chips || {}) }
   const furnitureOn = value === FURNITURE_CHOICE || isFurnitureStream(value)
   const pick = (key) => {
-    if (key === value || (key === FURNITURE_CHOICE && furnitureOn) || (key === NOTES_RUNHEAD_CHOICE && value === 'header')) return
+    if (key === value || (key === FURNITURE_CHOICE && furnitureOn)) return
     onPick?.(key)
   }
   const rare = c.more
@@ -65,8 +66,9 @@ export function StreamPicker({ chips, value, onPick, label = 'הזרם של המ
   const legacyHeading = [...c.headings, ...c.moreHeadings].find((s) => s.key === value) || null
   const inSelect = [...rare, ...c.furniture].some((s) => s.key === value)
   const furniture = choiceInfo(null, FURNITURE_CHOICE)
-  // רק בעמוד/ספר שיש בו הערות — שם המתנדבים בחרו "כותרת הערות" (שנכנסת לספר) לכותרת-הרצה שלהן
-  const notesRunhead = c.content.some((s) => isNotesKey(s.key)) ? choiceInfo(null, NOTES_RUNHEAD_CHOICE) : null
+  // סוגי-המסגרת. "כותרת-רצה של ההערות" — רק בעמוד/ספר שיש בו הערות (או כשהיא הבחירה הנוכחית)
+  const hasNotes = c.content.some((s) => isNotesKey(s.key))
+  const types = (chips?.types || frameTypeChips(null)).filter((t) => t.type !== 'notes_runhead' || hasNotes || value === t.key)
 
   return (
     <div role="group" aria-label={label} className={`flex flex-wrap items-center gap-1 ${className}`}>
@@ -75,7 +77,9 @@ export function StreamPicker({ chips, value, onPick, label = 'הזרם של המ
       ))}
       {legacyHeading && <StreamChip s={legacyHeading} active onClick={() => {}} title={HEADING_TITLE} />}
       <StreamChip s={furniture} active={furnitureOn} onClick={() => pick(FURNITURE_CHOICE)} title={FURNITURE_TITLE} />
-      {notesRunhead && <StreamChip s={notesRunhead} active={false} onClick={() => pick(NOTES_RUNHEAD_CHOICE)} title={NOTES_RUNHEAD_TITLE} />}
+      {types.map((t) => (
+        <StreamChip key={t.key} s={t} active={value === t.key} onClick={() => pick(t.key)} title={t.hint} />
+      ))}
       {rare.length + c.furniture.length > 0 && (
         <select
           value={inSelect ? value : ''}
@@ -151,7 +155,7 @@ export default function FramePopover({
       {!obj && (
         <div className="flex items-start gap-1">
           <span className="mt-1 shrink-0 text-neutral-600">זרם:</span>
-          <StreamPicker chips={chips} value={frame.stream} onPick={onStream} />
+          <StreamPicker chips={chips} value={frameChoice(frame)} onPick={onStream} />
         </div>
       )}
 

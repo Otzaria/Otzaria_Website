@@ -200,7 +200,7 @@ test('carryDraftOps: חיתוך לא עובר (נעשה כבר); מה שתקף �
   // פעולה מקומית על שורה שאינה — לא עוברת (ואינה מדווחת)
   const local = carryDraftOps(rev2().doc, [{ kind: 'seg_ok', page: 4, ids: [3], value: 0, _local: true }]);
   assert.deepEqual([local.kept, local.dropped, local.cut], [[], [], 0]);
-  assert.deepEqual(carryDraftOps(rev2().doc, null), { kept: [], dropped: [], cut: 0 });
+  assert.deepEqual(carryDraftOps(rev2().doc, null), { kept: [], dropped: [], cut: 0, held: [] });
 });
 
 test('droppedOpLabel: סוג-הפעולה בעברית, ולתיקון-טקסט — מה שהוקלד (מקוצר)', () => {
@@ -219,7 +219,7 @@ test('cleanupPageDrafts: עמוד שחזר מזיהוי-מחדש — מה שתק
   assert.deepEqual(readDraftOps(s.getItem(res.key)).map((o) => o.kind), ['text', 'line_ok', 'seg_ok']);
   // הזמן של הטיוטה הקודמת נשמר (מתי נעשה השינוי האחרון — draftRules.mergeCarried), לא מתי עברה
   assert.equal(JSON.parse(s.getItem(res.key)).at, 1);
-  assert.deepEqual(res.carried, { from: k1, kept: 2, cut: 1, dropped: ['טקסט: «טקסט על שורה שנחתכה מחדש»', 'החיתוך תקין'] });
+  assert.deepEqual(res.carried, { from: k1, kept: 2, cut: 1, dropped: ['טקסט: «טקסט על שורה שנחתכה מחדש»', 'החיתוך תקין'], held: [] });
   assert.deepEqual(res.removed, [k1]);
   assert.deepEqual(s.keys(), [res.key, draftKeyFor(OTHER, '1:x')].sort());
 });
@@ -246,4 +246,39 @@ test('cleanupPageDrafts: בטיוטה הקודמת רק חיתוך (נשלח ל�
   const res = cleanupPageDrafts(s, rev2());
   assert.equal(res.carried, null);
   assert.deepEqual(s.keys(), []);
+});
+
+test('carryDraftOps: תיקון-טקסט בשורה שזוהתה מחדש (recheck) — לא מוחל אלא נשמר לבחירה (held); זהה לזיהוי — אין מה לבחור', () => {
+  // גרסה 16: שורה 2 נחתכה מחדש (תיבה) וזוהתה מחדש — אותו מזהה, הטקסט המלא; שורה 1 לא נגעו בה
+  const doc = { ...rev2().doc, page: 4, lines: [line(1), { ...line(2), text: 'שורה 2 עם המילים שחסרו', recheck: true }] };
+  const ops = [
+    { kind: 'text', page: 4, ids: [1], value: 'שורה אחת מתוקנת' },
+    { kind: 'bbox', page: 4, ids: [2], value: [50, 100, 950, 140] },
+    { kind: 'text', page: 4, ids: [2], value: 'שורה 2 קצוצה' },
+    { kind: 'line_ok', page: 4, ids: [2] },
+  ];
+  const c = carryDraftOps(doc, ops);
+  assert.deepEqual(c.kept.map((o) => [o.kind, o.ids]), [['text', [1]]]);
+  assert.equal(c.cut, 1);
+  assert.deepEqual(c.held, [{ id: 2, page: 4, mine: 'שורה 2 קצוצה', ocr: 'שורה 2 עם המילים שחסרו' }]);
+  // אישור הקריאה הישנה — לא עובר (את השורה הצהובה בודקים מחדש)
+  assert.deepEqual(c.dropped.map((o) => o.kind), ['line_ok']);
+  // הנוסח של המתנדב זהה לזיהוי החדש — לא נשמר לבחירה ולא מוחל (אין שינוי)
+  const same = carryDraftOps(doc, [{ kind: 'text', page: 4, ids: [2], value: 'שורה 2 עם המילים שחסרו' }]);
+  assert.deepEqual([same.kept, same.held], [[], []]);
+  // כמה תיקונים לאותה שורה — המאוחר
+  const two = carryDraftOps(doc, [
+    { kind: 'text', page: 4, ids: [2], value: 'א' },
+    { kind: 'text', page: 4, ids: [2], value: 'ב' },
+  ]);
+  assert.deepEqual(two.held.map((h) => h.mine), ['ב']);
+});
+
+test('cleanupPageDrafts: carried.held — תיקון בשורה שזוהתה מחדש מדווח לבחירה ואינו בטיוטה החדשה', () => {
+  const k1 = pageDraftKey(rev1());
+  const p2 = page({ revision: 2 }, { revision: 2, lines: [line(1), { ...line(2), text: 'חדש', recheck: true }] });
+  const s = memStorage({ [k1]: draft([{ kind: 'text', page: 4, ids: [2], value: 'ישן' }]) });
+  const res = cleanupPageDrafts(s, p2);
+  assert.deepEqual(res.carried.held, [{ id: 2, page: 4, mine: 'ישן', ocr: 'חדש' }]);
+  assert.equal(s.getItem(pageDraftKey(p2)), null);
 });

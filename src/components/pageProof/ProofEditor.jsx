@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { buildView, recutLineIds, validateOp, withBookOnly } from '@/lib/pageProof/ops'
+import { buildView, recutLineIds, validateOp, withBookOnly, sameLinkSlot, linkOpValue } from '@/lib/pageProof/ops'
 import { historyCaret } from '@/lib/pageProof/historyCaret'
 import { streamChoices, untouchedLineIds, replaceWord, viewStats } from '@/lib/pageProof/view'
 import { isFurnitureStream, isPrintDefect, keepHeading, streamInfo } from '@/lib/pageProof/vocab'
@@ -109,9 +109,10 @@ import { caretTop, readDomSelection } from './flowDom'
 //     null — בלי. בלעדיו — הדף של האתר (GUIDE_PATH) בלשונית חדשה.
 //   focus — השלב בדף המתנדב של האתר ('structure' / 'text' — lib/pageProof/stages.stageFocus): "מבנה" — הטקסט לקריאה בלבד
 //     ומעומעם ובסרגל רק מה שנוגע למבנה; "טקסט" — הסריקה בלי כלים. בלעדיו (כמו בתוכנת-הספר) — הכול פתוח, כמו תמיד.
-//   inherited — {ops, source}: פעולות שהטיוטה קיבלה ממישהו אחר (הבודק השני — ההגשה הקודמת; עמוד שנפתח מחדש — הגרסה
+//   inherited — {ops, source, label?}: פעולות שהטיוטה קיבלה ממישהו אחר (הבודק השני — ההגשה הקודמת; עמוד שנפתח מחדש — הגרסה
 //     שאושרה; מתנדב קודם — draftRules.splitInherited). השורות שלהן מסומנות בטקסט ("תוקן בידי מתנדב קודם", והטקסט המקורי
-//     בריחוף), ובלוח הפרטים ← שינויים הן ברשימה נפרדת, כל אחת עם "החזר למקור". בלעדיו — כמו תמיד.
+//     בריחוף), ובלוח הפרטים ← שינויים הן ברשימה נפרדת, כל אחת עם "החזר למקור". בלעדיו — כמו תמיד. label — הנוסח של
+//     הסימון במקום "תוקן בידי מתנדב קודם" / "בגרסה שאושרה" (בסקירת-הגשה בתוכנת-הספר — "תוקן בידי המתנדב"); בלעדיו — כמו תמיד.
 //
 // מצב "לספר בלבד" (כפתור בסרגל): כל עוד הוא דולק, כל תיקון-טקסט בשורה מקורית שעוד אינה מסומנת
 // מקבל באותו צעד גם train_text = 0 (ops.withBookOnly) — Ctrl+Z אחד מבטל את שניהם. אישור בלי שינוי
@@ -241,6 +242,10 @@ function Splitter({ split, swap, containerRef, onDrag, onCommit, onSwap }) {
   )
 }
 
+// לחיצה על שורה שמחוץ לכל מסגרת (בסריקה, ב"בעיות")
+const OUTSIDE_HINT =
+  'השורה הזו מחוץ לכל מסגרת, ולכן היא לא נכנסת לספר ואינה בטקסט. כדי שתיכנס — ציירו לה מסגרת, או הגדילו מסגרת קיימת, במצב "מסגרות" של הסריקה.'
+
 export default function ProofEditor({
   page,
   initialOps = null,
@@ -281,7 +286,12 @@ export default function ProofEditor({
   const scanRO = readOnly || !!fx?.scanReadOnly
   // מה שהתקבל ממישהו אחר (inherited) — אילו מהפעולות שבטיוטה, ואילו שורות; בריחוף — הטקסט המקורי
   const inh = useMemo(() => (inherited?.ops?.length ? splitInherited(ed.ops, inherited.ops) : null), [ed.ops, inherited])
-  const inhLabel = inherited?.source === 'approved' ? 'בגרסה שאושרה' : 'תוקן בידי מתנדב קודם'
+  const inhLabel =
+    typeof inherited?.label === 'string' && inherited.label.trim()
+      ? inherited.label.trim()
+      : inherited?.source === 'approved'
+        ? 'בגרסה שאושרה'
+        : 'תוקן בידי מתנדב קודם'
   const marked = useMemo(() => {
     if (!inh?.lines.size) return null
     const base = new Map((ed.baseDoc?.lines || []).map((l) => [l?.id, String(l?.text ?? l?.text_ocr ?? '')]))
@@ -435,6 +445,11 @@ export default function ProofEditor({
     (lineId, wordIndex = null, { focus = true, selectWord = false, from = 'text' } = {}) => {
       const line = lineById.get(lineId)
       if (!line || line.status === 'removed') return false
+      // שורה מחוץ לכל מסגרת אינה בטקסט הזורם (ops.markOutside) — הסבר במקום סמן שאין לו לשונית
+      if (line._outside && !isFurnitureStream(line.stream)) {
+        say(OUTSIDE_HINT)
+        return false
+      }
       let s = null
       if (selectWord && Number.isInteger(wordIndex)) {
         const w = tokenize(line.text).filter((t) => t.w === 'word')[wordIndex]
@@ -448,7 +463,7 @@ export default function ProofEditor({
       moveCaret(s, focus, from)
       return true
     },
-    [lineById, moveCaret]
+    [lineById, moveCaret, say]
   )
 
   // תוכנית מ-flowEdit ← push, רמז, והבחירה אחריה
@@ -500,16 +515,16 @@ export default function ProofEditor({
   )
 
   // ---- קישור בין שני זרמים ----
-  // לכל שורת-הערה/פירוש קישור אחד (כך גם בתוכנת-הספר): קישור שני מאותה שורה
-  // מחליף את הקודם — רק אחרי אישור, ולא בשקט.
-  // המספר של קישור קיים מאותה שורת-הערה (0 אם אין) — כמו בטקסט וברשימה, לפי סדר ההופעה
-  // בעמוד (flowEdit.linkNumber) — ושאלת ההחלפה. בלי קישור קיים אין
-  // המתנה — הפעולה נוספת מיד, באותו אירוע-מקלדת
-  const existingLink = (op) => linkNumber(view, (k) => k.from_line === op.ids[0])
+  // כמה קישורים לשורת-הערה/פירוש (2026-10-04; כך גם בתוכנת-הספר): קישור הוא (שורת-ההערה, המילים
+  // בה — ops.sameLinkSlot). קישור למילים אחרות באותה שורה (הערה שנגמרת ואחריה הבאה, או שתי הערות
+  // קצרות) — נוסף לצד הקודם. קישור למילים שכבר מקושרות — מחליף את הקודם, רק אחרי אישור.
+  // המספר של הקישור הקיים באותן מילים (0 אם אין) — כמו בטקסט וברשימה, לפי סדר ההופעה בעמוד
+  // (flowEdit.linkNumber) — ושאלת ההחלפה. בלי קישור חופף אין המתנה — הפעולה נוספת מיד
+  const existingLink = (op) => linkNumber(view, (k) => sameLinkSlot(k, op.ids[0], op.value?.from_words))
   const askReplace = (n) =>
     showConfirm(
       'להחליף את הקישור?',
-      `לשורה הזו כבר יש קישור ${linkBadge(n)} — אפשר קישור אחד לכל שורת-הערה או פירוש. להחליף אותו בקישור החדש?`,
+      `המילים האלה בשורת-ההערה כבר מקושרות — קישור ${linkBadge(n)}. להחליף אותו בקישור החדש? (קישור ממילים אחרות באותה שורה — למשל ההערה הבאה שמתחילה באמצע השורה — נוסף לצדו)`,
       null,
       'החלפה',
       'ביטול'
@@ -878,8 +893,9 @@ export default function ProofEditor({
   // ---- פעולות לוח הפרטים ----
   const drawerAct = {
     jumpToLine: (id, i) => goTo(id, Number.isInteger(i) ? i : null, { focus: true }),
-    linkOk: (src) => push({ kind: 'link_ok', page: P, value: { src_line: src, page: P } }),
-    linkDel: (src) => push({ kind: 'link_del', page: P, value: { src_line: src, page: P } }),
+    // k (רשות) — הקישור עצמו: בשורה שיש בה כמה קישורים — רק הוא (from_words), ולא כל קישורי השורה
+    linkOk: (src, k) => push({ kind: 'link_ok', page: P, value: linkOpValue(view, src, k, P) }),
+    linkDel: (src, k) => push({ kind: 'link_del', page: P, value: linkOpValue(view, src, k, P) }),
     // "בטל קישור" — לכל קישור (linkCancel.unlinkPlan): קישור שנוסף בעריכה הזו (גם בעמוד, גם לעמוד אחר) —
     // הפעולה link_add עצמה יורדת (צעד-ביטול אחד; לא link_del, שהיה נשלח יחד איתה); קישור שהגיע עם העמוד,
     // אוטומטי או ידני — link_del; קישור שהפירוש שלו בעמוד אחר — מבטלים שם
@@ -893,7 +909,7 @@ export default function ProofEditor({
         // קישור שהתקבל ממישהו אחר (inherited — הבודק השני, עמוד שנפתח מחדש): ההגשה הקודמת אולי כבר הוחלה בספר,
         // ולכן במקום הורדה שקטה — "אין קישור" מפורש (revert), כמו ב"החזר למקור"
         if (inh && ed.ops.some((op, i) => inh.idx.has(i) && plan.match(op))) {
-          pred.add = [{ kind: 'link_del', page: P, value: { src_line: k.from_line, page: P }, revert: true }]
+          pred.add = [{ kind: 'link_del', page: P, value: linkOpValue(view, k.from_line, k, P), revert: true }]
         }
         ed.removeWhere(pred)
         say(LINK_HE.cancelledAdded)
@@ -952,7 +968,6 @@ export default function ProofEditor({
     },
     restoreLine: (id) => push({ kind: 'status', page: P, ids: [id], value: 'restore' }),
     pageType: (v) => push({ kind: 'page_type', page: P, value: v }),
-    cutOk: () => push({ kind: 'cut_ok', page: P, value: true }),
     toLinesMode: () => setScanMode('lines'),
     removeOp: (i) => ed.removeAt(i),
     // "החזר למקור" לפעולה שהתקבלה ממישהו אחר — יורדת מהטיוטה, ובמקומה פעולה הפוכה מפורשת (inverseOps: הערך שבעמוד
