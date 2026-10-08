@@ -265,7 +265,7 @@ export default function ReviewModal({ id, onClose, onDone, onPageChanged }) {
                         const edited = editing ? dropIdleBookOnly(data.page?.doc, ops) : null
                         act('approve', edited && !sameOps(edited, sub.ops) ? edited : null)
                       }}
-                      title={needsRecut(ops) && !oldRevision ? RECUT_HINT : undefined}
+                      title={needsRecut(ops, data.page?.doc) && !oldRevision ? RECUT_HINT : undefined}
                       className="rounded-lg bg-success-600 px-4 py-1.5 font-bold text-white hover:bg-success-700 disabled:opacity-40"
                     >
                       אישור

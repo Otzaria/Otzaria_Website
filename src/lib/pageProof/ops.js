@@ -1295,9 +1295,33 @@ export function packOps(baseDoc, ops) {
 const RECUT_ID_KINDS = new Set(['line_split', 'line_merge', 'bbox']);
 
 // האם הרשימה משנה את חיתוך-השורות — ואז, אחרי אישור, העמוד חוזר לתוכנת-הספר
-// לחיתוך ולזיהוי-מחדש ('recut') לפני מעבר שני באתר
-export function needsRecut(ops) {
-  return (ops || []).some((op) => CUT_KINDS.includes(op?.kind));
+// לחיתוך ולזיהוי-מחדש ('recut') לפני מעבר שני באתר. baseDoc (העמוד שיובא) — גם
+// שינוי-מסגרות (framesChanged): בתוכנת-הספר המסגרת היא הסמכות, והעמוד נחתך שם
+// מחדש לפיה (docs/47 §10 שלהם). בלי baseDoc — רק פעולות-החיתוך, כמו קודם.
+export function needsRecut(ops, baseDoc = null) {
+  if ((ops || []).some((op) => CUT_KINDS.includes(op?.kind))) return true;
+  return !!baseDoc && framesChanged(baseDoc, ops);
+}
+
+const frameKey = (f) => {
+  const b = Array.isArray(f?.bbox) ? f.bbox.slice(0, 4).map((x) => Math.round(Number(x) || 0)) : [];
+  return JSON.stringify([b, f?.stream ?? null, f?.kind ?? null, f?.ftype ?? null]);
+};
+
+// האם המסגרות בסוף הרשימה שונות מהמסגרות שיובאו: מסגרת חדשה, מסגרת שנמחקה, תיבה
+// (הזזה/גודל), זרם, סוג-אובייקט או סוג-מסגרת. סדר-הקריאה (order/seq) ו"✓ המסגרות
+// נכונות" בלי שינוי (confirmed) — אינם שינוי: הם אינם משנים את החיתוך, ולא כל עמוד
+// שהמתנדב אישר בו את המסגרות צריך מעבר שני. frames_auto מחושב בתוכנת-הספר — לא נספר.
+export function framesChanged(baseDoc, ops) {
+  let last = null;
+  for (const op of ops || []) {
+    if (op?.kind === 'frames_set' && Array.isArray(op.value?.frames)) last = op.value.frames;
+    else if (op?.kind === 'frames_clear') last = [];
+  }
+  if (last === null) return false;
+  const before = new Map((baseDoc?.frames || []).filter((f) => f && f.fid).map((f) => [f.fid, frameKey(f)]));
+  if (before.size !== last.length) return true;
+  return last.some((f) => before.get(f?.fid) !== frameKey(f));
 }
 
 // מזהי השורות *המקוריות* (מהעמוד שיובא) שפעולות-חיתוך נוגעות בהן — פיצול,

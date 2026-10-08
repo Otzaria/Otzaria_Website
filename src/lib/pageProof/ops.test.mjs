@@ -12,6 +12,7 @@ import {
   describeOp,
   CUT_KINDS,
   needsRecut,
+  framesChanged,
   recutLineIds,
   tempLineId,
   sanitizeOp,
@@ -551,6 +552,35 @@ test('CUT_KINDS / needsRecut / recutLineIds', () => {
   assert.deepEqual(recutLineIds(doc(), ops), [2, 3]);
   assert.deepEqual(recutLineIds(doc(), []), []);
   assert.deepEqual(recutLineIds(null, [{ kind: 'bbox', ids: [4, -2] }]), [4]);
+});
+
+test('framesChanged / needsRecut(ops, baseDoc): שינוי-מסגרות מעביר לזיהוי-מחדש, סדר ואישור — לא', () => {
+  const F1 = { fid: 'f1', stream: 'main', order: 1, bbox: [10, 10, 500, 400] };
+  const F2 = { fid: 'f2', stream: 'notes', order: 2, bbox: [10, 420, 500, 600] };
+  const base = { page: 3, lines: [], frames: [F1, F2], frames_confirmed: false };
+  const set = (frames, extra = {}) => ({ kind: 'frames_set', page: 3, value: { frames, ...extra } });
+  // אותן מסגרות, רק אישור ("✓ המסגרות נכונות") או סדר-קריאה אחר — אין שינוי
+  assert.equal(framesChanged(base, [set([F1, F2], { confirmed: true })]), false);
+  assert.equal(framesChanged(base, [set([{ ...F2, order: 1 }, { ...F1, order: 2, seq: 3 }])]), false);
+  // תיבה (הזזה/גודל), זרם, סוג, מסגרת חדשה, מסגרת שנמחקה, ניקוי — שינוי
+  assert.equal(framesChanged(base, [set([{ ...F1, bbox: [10, 10, 520, 400] }, F2])]), true);
+  assert.equal(framesChanged(base, [set([{ ...F1, stream: 'notes' }, F2])]), true);
+  assert.equal(framesChanged(base, [set([{ ...F1, ftype: 'margin_note' }, F2])]), true);
+  assert.equal(framesChanged(base, [set([F1, F2, { fid: 'f3', stream: 'main', order: 3, bbox: [1, 1, 5, 5] }])]), true);
+  assert.equal(framesChanged(base, [set([F1])]), true);
+  assert.equal(framesChanged(base, [{ kind: 'frames_clear', page: 3 }]), true);
+  // הקובע הוא המצב בסוף: שינוי שהוחזר — אין שינוי
+  assert.equal(framesChanged(base, [set([F1]), set([F1, F2])]), false);
+  // עמוד בלי מסגרות, ושום פעולת-מסגרות — אין שינוי
+  assert.equal(framesChanged({ lines: [] }, []), false);
+  assert.equal(framesChanged({ lines: [] }, [{ kind: 'frames_clear', page: 3 }]), false);
+  // תיבה בשברים — מעוגלת (המסגרות שיובאו שלמות)
+  assert.equal(framesChanged(base, [set([{ ...F1, bbox: [10.2, 9.8, 500.4, 400] }, F2])]), false);
+  // needsRecut: בלי baseDoc — רק פעולות-חיתוך (כמו קודם); עם baseDoc — גם מסגרות
+  assert.equal(needsRecut([set([F1])]), false);
+  assert.equal(needsRecut([set([F1])], base), true);
+  assert.equal(needsRecut([set([F1, F2], { confirmed: true })], base), false);
+  assert.equal(needsRecut([{ kind: 'bbox', page: 3, ids: [2], value: [1, 1, 5, 5] }], base), true);
 });
 
 test('compactOps: טקסט נשמר כשאחריו פעולה שמתייחסת למספרי-המילים שלו', () => {

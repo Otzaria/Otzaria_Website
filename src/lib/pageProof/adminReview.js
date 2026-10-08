@@ -25,7 +25,8 @@ export function submissionDetail(sub, based = null) {
     reviewNote: sub.reviewNote,
     reviewerEdited: sub.reviewerEdited,
     exportedAt: sub.exportedAt,
-    needsRecut: needsRecut(sub.ops),
+    // מה שנקבע בהגשה (גם מסגרות ששונו — ops.framesChanged); הגשה ישנה בלי השדה — לפי פעולות-החיתוך
+    needsRecut: sub.needsRecut ?? needsRecut(sub.ops),
     revision: submissionRevision(sub),
     // בקשת מתנדב לזיהוי-מחדש (recutRequests.js): רק פעולות-חיתוך, "מאושרת" לצורך הזיהוי-מחדש
     // בלבד; מבטלים אותה ב"שחרור מהמתנה" (release_recut), לא בדחייה
