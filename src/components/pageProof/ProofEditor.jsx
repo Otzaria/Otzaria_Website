@@ -109,9 +109,10 @@ import { caretTop, readDomSelection } from './flowDom'
 //     null — בלי. בלעדיו — הדף של האתר (GUIDE_PATH) בלשונית חדשה.
 //   focus — השלב בדף המתנדב של האתר ('structure' / 'text' — lib/pageProof/stages.stageFocus): "מבנה" — הטקסט לקריאה בלבד
 //     ומעומעם ובסרגל רק מה שנוגע למבנה; "טקסט" — הסריקה בלי כלים. בלעדיו (כמו בתוכנת-הספר) — הכול פתוח, כמו תמיד.
-//   inherited — {ops, source}: פעולות שהטיוטה קיבלה ממישהו אחר (הבודק השני — ההגשה הקודמת; עמוד שנפתח מחדש — הגרסה
+//   inherited — {ops, source, label?}: פעולות שהטיוטה קיבלה ממישהו אחר (הבודק השני — ההגשה הקודמת; עמוד שנפתח מחדש — הגרסה
 //     שאושרה; מתנדב קודם — draftRules.splitInherited). השורות שלהן מסומנות בטקסט ("תוקן בידי מתנדב קודם", והטקסט המקורי
-//     בריחוף), ובלוח הפרטים ← שינויים הן ברשימה נפרדת, כל אחת עם "החזר למקור". בלעדיו — כמו תמיד.
+//     בריחוף), ובלוח הפרטים ← שינויים הן ברשימה נפרדת, כל אחת עם "החזר למקור". בלעדיו — כמו תמיד. label — הנוסח של
+//     הסימון במקום "תוקן בידי מתנדב קודם" / "בגרסה שאושרה" (בסקירת-הגשה בתוכנת-הספר — "תוקן בידי המתנדב"); בלעדיו — כמו תמיד.
 //
 // מצב "לספר בלבד" (כפתור בסרגל): כל עוד הוא דולק, כל תיקון-טקסט בשורה מקורית שעוד אינה מסומנת
 // מקבל באותו צעד גם train_text = 0 (ops.withBookOnly) — Ctrl+Z אחד מבטל את שניהם. אישור בלי שינוי
@@ -281,7 +282,12 @@ export default function ProofEditor({
   const scanRO = readOnly || !!fx?.scanReadOnly
   // מה שהתקבל ממישהו אחר (inherited) — אילו מהפעולות שבטיוטה, ואילו שורות; בריחוף — הטקסט המקורי
   const inh = useMemo(() => (inherited?.ops?.length ? splitInherited(ed.ops, inherited.ops) : null), [ed.ops, inherited])
-  const inhLabel = inherited?.source === 'approved' ? 'בגרסה שאושרה' : 'תוקן בידי מתנדב קודם'
+  const inhLabel =
+    typeof inherited?.label === 'string' && inherited.label.trim()
+      ? inherited.label.trim()
+      : inherited?.source === 'approved'
+        ? 'בגרסה שאושרה'
+        : 'תוקן בידי מתנדב קודם'
   const marked = useMemo(() => {
     if (!inh?.lines.size) return null
     const base = new Map((ed.baseDoc?.lines || []).map((l) => [l?.id, String(l?.text ?? l?.text_ocr ?? '')]))
