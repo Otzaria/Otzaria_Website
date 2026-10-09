@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { PRODUCT_KEYS, DEFAULT_PRODUCT } from '../lib/app-reports/products.js';
 
 // דיווח על התוכנה עצמה (לא על ספר). הקבצים ב-GridFS; המייל גלוי למנהל כללי בלבד.
 const FileRefSchema = new mongoose.Schema({
@@ -42,6 +43,8 @@ const ContactEntrySchema = new mongoose.Schema({
 const AppReportSchema = new mongoose.Schema({
   reportId: { type: String, required: true, unique: true },
   schema: { type: Number, default: 1 },
+  // המוצר המדווח (products.js). מסמכים ישנים בלי השדה שייכים לאוצריא — שאילתות דרך productFilter.
+  product: { type: String, enum: PRODUCT_KEYS, default: DEFAULT_PRODUCT },
   type: { type: String, enum: ['bug', 'crash', 'performance', 'suggestion'], required: true },
   trigger: { type: String, enum: ['manual', 'crash_prompt', 'auto_crash'], required: true },
   title: { type: String, required: true, maxlength: 200 },
@@ -89,8 +92,9 @@ const AppReportSchema = new mongoose.Schema({
   unsubscribed: { type: Boolean, default: false },
 }, { timestamps: true });
 
-AppReportSchema.index({ signatureHash: 1 });
-AppReportSchema.index({ issueNumber: 1 });
+// מספרי issue וחתימות אינם ייחודיים בין מוצרים (ריפו נפרד לכל מוצר)
+AppReportSchema.index({ product: 1, signatureHash: 1 });
+AppReportSchema.index({ product: 1, issueNumber: 1 });
 AppReportSchema.index({ issuePending: 1, issueAttemptAt: 1, createdAt: 1 });
 AppReportSchema.index({ createdAt: -1 });
 AppReportSchema.index({ 'fileIds.images.publicToken': 1 }, { sparse: true });

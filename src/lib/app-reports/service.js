@@ -14,6 +14,7 @@ import { verifyUnsubscribeToken } from './unsubscribe.js';
 import {
   newReplyToken, buildReplyAddress, validateInboundPayload, isAutoReply, inboundMessageBody, buildInboundComment,
 } from './inbound.js';
+import { PRODUCT_KEYS, getProduct, productFilter, productOf } from './products.js';
 export { hasAppReportsAccess } from '../roles.js';
 
 const LEASE_MS = 2 * 60 * 1000;
@@ -21,10 +22,11 @@ export const PENDING_BATCH = 20;
 export const STATE_BATCH = 30;
 export const INBOUND_BATCH = 20;
 
-function githubFor(deps) {
-  if (deps.github) return deps.github;
+/** לקוח GitHub לריפו של המוצר; deps.githubFor מחליף אותו (בדיקות). null כשאין טוקן. */
+function githubFor(deps, product) {
+  if (deps.githubFor) return deps.githubFor(product);
   if (!deps.config?.githubToken) return null;
-  return createGithubClient({ token: deps.config.githubToken, repo: deps.config.repo, fetchImpl: deps.fetchImpl });
+  return createGithubClient({ token: deps.config.githubToken, repo: getProduct(product).repo, fetchImpl: deps.fetchImpl });
 }
 
 const replyFor = (doc, extra = {}) => ({
@@ -72,7 +74,7 @@ async function storeAttachments(report, value, saveFile) {
 /**
  * קליטת דיווח מאומת. מחזיר {status, body}.
  * @param {unknown} raw
- * @param {{saveFile:Function, deleteFile:Function, config:object, github?:object, fetchImpl?:Function}} deps
+ * @param {{saveFile:Function, deleteFile:Function, config:object, githubFor?:Function, fetchImpl?:Function}} deps
  */
 export async function ingestAppReport(raw, deps) {
   const v = await validateAppReport(raw);
@@ -82,7 +84,7 @@ export async function ingestAppReport(raw, deps) {
   const signatureHash = computeSignatureHash(value.signature);
 
   const doc = {
-    reportId: value.reportId, schema: 1, type: value.type, trigger: value.trigger, title: value.title,
+    reportId: value.reportId, schema: 1, product: value.product, type: value.type, trigger: value.trigger, title: value.title,
     description: value.description, stepsToReproduce: value.stepsToReproduce, reporterEmail: value.reporterEmail || null,
     appVersion: value.appVersion, platform: value.platform, osVersion: value.osVersion, arch: value.arch,
     signature: value.signature, sentryEventId: value.sentryEventId, clientCreatedAt: value.clientCreatedAt,
@@ -137,8 +139,13 @@ export async function ingestAppReport(raw, deps) {
  */
 export async function publishReport(reportId, deps) {
   const now = deps.now || new Date();
-  const github = githubFor(deps);
   const current = () => AppReport.findOne({ reportId }).lean();
+  const target = await AppReport.findOne({ reportId }).select('product').lean();
+  if (!target) return null;
+  // ה-issue, האיחוד לפי חתימה והסימון כסגור — כולם בתוך המוצר של הדיווח בלבד
+  const product = productOf(target);
+  const scope = productFilter(product);
+  const github = githubFor(deps, product);
   if (!github) return current();
 
   // הנעילה נמדדת בשעון אמיתי: ריצת cron ארוכה מחזיקה now ישן, ונעילה שחושבה ממנו כבר פגה
@@ -154,11 +161,11 @@ export async function publishReport(reportId, deps) {
   try {
     // דיווח אחר עם אותה חתימה נמצא כרגע בפרסום — משאירים ממתין כדי לא ליצור issue כפול
     const racing = leased.signatureHash
-      ? await AppReport.exists({ signatureHash: leased.signatureHash, reportId: { $ne: reportId }, issuePending: true, issueLeaseUntil: { $gt: leaseNow } })
+      ? await AppReport.exists({ ...scope, signatureHash: leased.signatureHash, reportId: { $ne: reportId }, issuePending: true, issueLeaseUntil: { $gt: leaseNow } })
       : null;
 
     const related = leased.signatureHash
-      ? await AppReport.find({ signatureHash: leased.signatureHash, issueNumber: { $ne: null }, reportId: { $ne: reportId } })
+      ? await AppReport.find({ ...scope, signatureHash: leased.signatureHash, issueNumber: { $ne: null }, reportId: { $ne: reportId } })
         .select('issueNumber issueState issueUrl createdAt').lean()
       : [];
     plan = planPublication(related);
@@ -194,7 +201,7 @@ export async function publishReport(reportId, deps) {
     console.error('App report: GitHub publish failed:', err?.message);
     // ה-issue נמחק או ננעל: בלי סימונו כסגור כל דיווח נוסף עם אותה חתימה יישאר ממתין לנצח
     if (plan?.action === 'comment' && (err?.status === 404 || err?.status === 410 || (err?.status === 403 && /locked/i.test(String(err?.message))))) {
-      await AppReport.updateMany({ issueNumber: plan.issueNumber }, { $set: { issueState: 'closed' } });
+      await AppReport.updateMany({ ...scope, issueNumber: plan.issueNumber }, { $set: { issueState: 'closed' } });
     }
     return AppReport.findOneAndUpdate(
       { reportId },
@@ -206,21 +213,29 @@ export async function publishReport(reportId, deps) {
 
 /**
  * ריצת ה-cron: קודם דיווחים ממתינים, אחר כך בדיקת מצב ה-issues (הישנים ביותר שנבדקו קודם).
- * @param {{sendClosedMail:Function, config:object, github?:object, fetchImpl?:Function, now?:Date}} deps
+ * כל מוצר בנפרד, עם הלקוח לריפו שלו ותקרות משלו — מוצר אחד עמוס לא יחסום את השני.
+ * @param {{sendClosedMail:Function, config:object, githubFor?:Function, fetchImpl?:Function, now?:Date}} deps
  */
 export async function runAppReportsSync(deps) {
   const now = deps.now || new Date();
-  const github = githubFor(deps);
+  const clients = new Map(PRODUCT_KEYS.map((key) => [key, githubFor(deps, key)]));
   const summary = {
-    githubConfigured: Boolean(github),
+    githubConfigured: [...clients.values()].some(Boolean),
     pending: { attempted: 0, published: 0 },
     states: { checked: 0, closed: 0, notified: 0, failed: 0, errors: 0 },
     inbound: { reports: 0, posted: 0, errors: 0 },
   };
-  if (!github) return summary;
-  const d = { ...deps, github, now };
+  const d = { ...deps, githubFor: (key) => clients.get(key) ?? null, now };
+  for (const [product, github] of clients) {
+    if (github) await syncProduct(product, github, d, summary);
+  }
+  return summary;
+}
 
-  const pending = await AppReport.find({ issuePending: true, $or: [{ issueLeaseUntil: null }, { issueLeaseUntil: { $lt: now } }] })
+async function syncProduct(product, github, d, summary) {
+  const { now } = d;
+  const scope = productFilter(product);
+  const pending = await AppReport.find({ ...scope, issuePending: true, $or: [{ issueLeaseUntil: null }, { issueLeaseUntil: { $lt: now } }] })
     // לפי מועד הניסיון האחרון: דיווח שנכשל תמיד (כותרת פסולה, issue חסום) לא יחסום את התור
     .select('reportId').sort({ issueAttemptAt: 1, createdAt: 1 }).limit(PENDING_BATCH).lean();
   for (const p of pending) {
@@ -231,6 +246,7 @@ export async function runAppReportsSync(deps) {
 
   // תשובות במייל שעוד לא פורסמו ב-issue (ה-issue נוצר מאוחר יותר, או ש-GitHub נכשל בקליטה)
   const withReplies = await AppReport.find({
+    ...scope,
     issueNumber: { $ne: null },
     contactLog: { $elemMatch: { direction: 'in', issueComment: 'pending' } },
   }).select('reportId').sort({ lastInboundAt: 1 }).limit(INBOUND_BATCH).lean();
@@ -242,7 +258,7 @@ export async function runAppReportsSync(deps) {
   }
 
   const issues = await AppReport.aggregate([
-    { $match: { issueNumber: { $ne: null } } },
+    { $match: { ...scope, issueNumber: { $ne: null } } },
     { $group: { _id: '$issueNumber', checkedAt: { $min: '$issueCheckedAt' } } },
     { $sort: { checkedAt: 1, _id: 1 } },
     { $limit: STATE_BATCH },
@@ -250,21 +266,20 @@ export async function runAppReportsSync(deps) {
   for (const { _id: number } of issues) {
     try {
       const issue = await github.getIssue(number);
-      const r = await handleIssueStateChange(issue, d);
+      const r = await handleIssueStateChange(issue, { ...d, product });
       summary.states.checked += 1;
       if (r.transition === 'closed') summary.states.closed += 1;
       summary.states.notified += r.notified;
       summary.states.failed += r.failed;
     } catch (err) {
       summary.states.errors += 1;
-      console.error(`App report sync: issue #${number} failed:`, err?.message);
+      console.error(`App report sync: ${product} issue #${number} failed:`, err?.message);
       // issue שנמחק/הועבר לא יחסום את התור
       if (err?.status === 404 || err?.status === 410) {
-        await AppReport.updateMany({ issueNumber: number }, { $set: { issueCheckedAt: now } });
+        await AppReport.updateMany({ ...scope, issueNumber: number }, { $set: { issueCheckedAt: now } });
       }
     }
   }
-  return summary;
 }
 
 /** המייל חשוף למנהל כללי בלבד. */
@@ -274,6 +289,7 @@ export function serializeReport(doc, role) {
   const { reporterEmail, issueLeaseUntil, contentHash, replyToken, __v, ...rest } = doc;
   return {
     ...rest,
+    product: productOf(doc),
     _id: String(doc._id),
     hasEmail: Boolean(reporterEmail),
     ...(role === 'admin' ? { reporterEmail: reporterEmail || null } : {}),
@@ -294,13 +310,14 @@ export function serializeReport(doc, role) {
 }
 
 export const LIST_FILTERS = Object.freeze({
+  product: PRODUCT_KEYS,
   type: ['bug', 'crash', 'performance', 'suggestion'],
   trigger: ['manual', 'crash_prompt', 'auto_crash'],
   issueState: ['open', 'closed', 'pending'],
 });
 
-export async function listReports({ type, trigger, issueState, page = 1, limit = 50 }, role) {
-  const q = {};
+export async function listReports({ product, type, trigger, issueState, page = 1, limit = 50 }, role) {
+  const q = LIST_FILTERS.product.includes(product) ? productFilter(product) : {};
   if (LIST_FILTERS.type.includes(type)) q.type = type;
   if (LIST_FILTERS.trigger.includes(trigger)) q.trigger = trigger;
   if (issueState === 'pending') q.issuePending = true;
@@ -318,7 +335,7 @@ export async function getReportDetail(reportId, role) {
   const doc = await AppReport.findOne({ reportId }).lean();
   if (!doc) return null;
   const related = doc.issueNumber
-    ? await AppReport.find({ issueNumber: doc.issueNumber, reportId: { $ne: reportId } })
+    ? await AppReport.find({ ...productFilter(productOf(doc)), issueNumber: doc.issueNumber, reportId: { $ne: reportId } })
       .select('reportId title type trigger appVersion platform createdAt').sort({ createdAt: -1 }).limit(200).lean()
     : [];
   return {
@@ -383,13 +400,15 @@ export async function contactReporter({ reportId, subject, message, user }, deps
   if (!s || s.length > 200) return { status: 422, body: { error: 'subject: 1..200 chars', field: 'subject' } };
   if (!m || m.length > 5000) return { status: 422, body: { error: 'message: 1..5000 chars', field: 'message' } };
 
-  const doc = await AppReport.findOne({ reportId }).select('reportId title reporterEmail replyToken').lean();
+  const doc = await AppReport.findOne({ reportId }).select('reportId product title reporterEmail replyToken').lean();
   if (!doc) return { status: 404, body: { error: 'Report not found' } };
   if (!doc.reporterEmail) return { status: 422, body: { error: 'Reporter left no email', field: 'reporterEmail' } };
 
   const replyDomain = deps.config?.replyDomain;
   const replyTo = replyDomain ? buildReplyAddress(doc.replyToken || await ensureReplyToken(reportId), replyDomain) : null;
-  const result = await deps.sendContactMail({ to: doc.reporterEmail, subject: s, message: m, reportTitle: doc.title, replyTo });
+  const result = await deps.sendContactMail({
+    to: doc.reporterEmail, subject: s, message: m, reportTitle: doc.title, replyTo, product: productOf(doc),
+  });
   if (!result?.sent) return { status: 502, body: { error: 'Failed to send email' } };
 
   const entry = { direction: 'out', byUserId: user.id || null, byName: user.name || '', subject: s, message: m, sentAt: deps.now || new Date() };
@@ -413,7 +432,7 @@ export async function ensureReplyToken(reportId) {
  * תשובת מדווח שהגיעה מה-Email Worker. מחזיר {status, body}.
  * 404 = טוקן לא מוכר (ה-Worker מעביר אז את המייל לתיבה רגילה); כפילות לפי Message-ID מחזירה 200.
  * @param {unknown} raw
- * @param {{config:object, github?:object, fetchImpl?:Function, now?:Date}} deps
+ * @param {{config:object, githubFor?:Function, fetchImpl?:Function, now?:Date}} deps
  */
 export async function ingestInboundReply(raw, deps) {
   const v = validateInboundPayload(raw);
@@ -445,10 +464,10 @@ export async function ingestInboundReply(raw, deps) {
 /** מפרסם ב-issue את התשובות הממתינות של דיווח אחד. כל תשובה נתפסת (posting) לפני הפרסום, כדי שלא תתפרסם פעמיים. */
 export async function postInboundComments(reportId, deps) {
   const result = { posted: 0, errors: 0 };
-  const github = githubFor(deps);
-  if (!github) return result;
-  const doc = await AppReport.findOne({ reportId }).select('reportId issueNumber contactLog').lean();
+  const doc = await AppReport.findOne({ reportId }).select('reportId product issueNumber contactLog').lean();
   if (!doc?.issueNumber) return result;
+  const github = githubFor(deps, productOf(doc));
+  if (!github) return result;
   for (const [i, c] of (doc.contactLog || []).entries()) {
     if (c.direction !== 'in' || c.issueComment !== 'pending') continue;
     const key = `contactLog.${i}`;
