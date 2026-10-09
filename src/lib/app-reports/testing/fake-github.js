@@ -52,6 +52,32 @@ export class FakeIssuesGitHub {
   };
 }
 
+/**
+ * כמה ריפו מדומים מאחורי fetch אחד (מוצר לכל ריפו). המספור בכל ריפו מתחיל ב-100,
+ * כך שאותו מספר issue קיים בשניהם — בדיוק ההתנגשות שהבדיקות צריכות.
+ */
+export class FakeGitHubRepos {
+  constructor(repos) {
+    this.repos = new Map(repos.map((repo) => [repo.toLowerCase(), new FakeIssuesGitHub({ repo })]));
+  }
+
+  /** @returns {FakeIssuesGitHub} */
+  repo(name) {
+    return this.repos.get(name.toLowerCase());
+  }
+
+  get calls() {
+    return [...this.repos.values()].flatMap((r) => r.calls);
+  }
+
+  fetch = async (url, init = {}) => {
+    const m = new URL(url).pathname.match(/^\/repos\/([^/]+\/[^/]+)\//);
+    const target = m && this.repos.get(m[1].toLowerCase());
+    if (!target) return json(404, { message: 'Not Found' });
+    return target.fetch(url, init);
+  };
+}
+
 function json(status, data) {
   return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
 }

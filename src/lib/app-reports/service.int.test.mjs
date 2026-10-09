@@ -9,7 +9,7 @@ import zlib from 'node:zlib';
 import mongoose from 'mongoose';
 import AppReport from '../../models/AppReport.js';
 import { startMongo } from '../corrections/testing/mongo.js';
-import { FakeIssuesGitHub } from './testing/fake-github.js';
+import { FakeIssuesGitHub, FakeGitHubRepos } from './testing/fake-github.js';
 import { handleAppReportPost } from './handler.js';
 import { MAX_BODY_BYTES, MAX_MINIDUMP_BYTES } from './validation.js';
 import { runAppReportsSync, contactReporter, listReports, getReportDetail, loadReportFile, loadReportImage, loadPublicImage, unsubscribeByToken, ingestInboundReply } from './service.js';
@@ -729,4 +729,309 @@ test('עדכון שהצליח אך תשובתו אבדה: קבצים של דיו
   const doc = await AppReport.findOne({ reportId: body.reportId }).lean();
   assert.equal(doc.issueNumber, 123);
   assert.deepEqual((await loadReportFile(body.reportId, 'minidump', readFile)).buffer, files.get(String(doc.fileIds.minidump.gridfsId)).buf);
+});
+
+// ---------------------------------------------------------------- מוצרים: אוצריא ועדכוני אוצריא
+
+const OTZ_REPO = 'Otzaria/otzaria';
+const UPD_REPO = 'Otzaria/Otzaria_Offline_update';
+const updater = (make, over = {}) => make({ product: 'offline-update', ...over });
+
+/** שני ריפו מדומים; שניהם ממספרים מ-100, כך ש-#100 קיים בשניהם */
+function twoRepos() {
+  const hub = new FakeGitHubRepos([OTZ_REPO, UPD_REPO]);
+  return { hub, otz: hub.repo(OTZ_REPO), upd: hub.repo(UPD_REPO) };
+}
+const postVia = (hub, body) => post(body, { deps: { fetchImpl: hub.fetch } });
+const syncVia = (hub, over = {}) => runAppReportsSync({ config, fetchImpl: hub.fetch, sendClosedMail, ...over });
+
+async function hookVia(hub, payload) {
+  const body = JSON.stringify(payload);
+  const signature = `sha256=${crypto.createHmac('sha256', hookSecret).update(body).digest('hex')}`;
+  const req = new Request('http://localhost/api/app-reports/github-webhook', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-github-event': 'issues', 'x-hub-signature-256': signature },
+    body,
+  });
+  const res = await handleGithubWebhook(req, { config: hookConfig, fetchImpl: hub.fetch, sendClosedMail, connectDB: async () => {} });
+  return res.status;
+}
+
+/** דיווח "ישן": נקלט כרגיל, ואז השדה product נמחק ישירות ב-Mongo (כמו מסמך מלפני השינוי) */
+async function makeLegacy(reportId) {
+  await AppReport.collection.updateOne({ reportId }, { $unset: { product: '' } });
+  const raw = await AppReport.collection.findOne({ reportId });
+  assert.equal('product' in raw, false);
+}
+
+test('מוצרים: כל דיווח נפתח בריפו של המוצר שלו; תשובת ה-API זהה במבנה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { hub, otz, upd } = twoRepos();
+  const a = await postVia(hub, manual());
+  const b = await postVia(hub, updater(manual));
+  assert.deepEqual(Object.keys(b.body).sort(), Object.keys(a.body).sort());
+  assert.equal(a.body.issueUrl, `https://github.com/${OTZ_REPO}/issues/100`);
+  assert.equal(b.body.issueUrl, `https://github.com/${UPD_REPO}/issues/100`);
+  assert.equal(otz.issues.size, 1);
+  assert.equal(upd.issues.size, 1);
+  assert.deepEqual(upd.calls.find((c) => c.method === 'POST').body.labels, ['from-app', 'bug', 'platform:windows']);
+  assert.equal(upd.issues.get(100).title, '[דיווח מהתוכנה] החיפוש לא עובד');
+  assert.equal((await AppReport.findOne({ reportId: a.body.reportId }).lean()).product, 'otzaria');
+  assert.equal((await AppReport.findOne({ reportId: b.body.reportId }).lean()).product, 'offline-update');
+});
+
+test('מוצרים: product לא מוכר → 422 ושום דבר לא נשמר', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { hub } = twoRepos();
+  for (const product of ['other', '', 7, 'Otzaria']) {
+    const res = await postVia(hub, manual({ product }));
+    assert.equal(res.status, 422);
+    assert.deepEqual(res.body, { error: 'product: unknown', field: 'product' });
+  }
+  assert.equal(await AppReport.countDocuments(), 0);
+  assert.equal(hub.calls.length, 0);
+  assert.equal(files.size, 0);
+});
+
+test('מוצרים: אותו reportId ותוכן תחת מוצר אחר → 409 ולא duplicate', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { hub } = twoRepos();
+  const body = manual();
+  await postVia(hub, body);
+  const dup = await postVia(hub, { ...body, product: 'otzaria' });
+  assert.equal(dup.body.duplicate, true);
+  const conflict = await postVia(hub, { ...body, product: 'offline-update' });
+  assert.equal(conflict.status, 409);
+  const upd = updater(manual);
+  await postVia(hub, upd);
+  assert.equal((await postVia(hub, upd)).body.duplicate, true);
+  assert.equal((await postVia(hub, { ...upd, product: undefined })).status, 409);
+});
+
+test('מוצרים: אותה חתימה בשני מוצרים → issue נפרד לכל אחד, איחוד רק בתוך המוצר', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { hub, otz, upd } = twoRepos();
+  const a = await postVia(hub, crash());
+  const b = await postVia(hub, updater(crash));
+  assert.equal(b.body.merged, false);
+  assert.equal(b.body.issueUrl, `https://github.com/${UPD_REPO}/issues/100`);
+  assert.equal(otz.comments.length + upd.comments.length, 0);
+
+  const c = await postVia(hub, updater(crash, { description: 'שוב אצלי' }));
+  assert.equal(c.body.merged, true);
+  assert.equal(c.body.issueUrl, `https://github.com/${UPD_REPO}/issues/100`);
+  assert.equal(upd.comments.length, 1);
+  assert.equal(otz.comments.length, 0);
+
+  const d = await postVia(hub, crash({ description: 'ואצלי' }));
+  assert.equal(d.body.merged, true);
+  assert.equal(d.body.issueUrl, a.body.issueUrl);
+  assert.equal(otz.comments.length, 1);
+  assert.equal(upd.comments.length, 1);
+
+  // רק ה-issue של אוצריא נסגר → דיווח חדש באוצריא פותח issue חדש, בעדכונים ממשיך להתאחד
+  otz.setState(100, 'closed', 'completed');
+  await syncVia(hub);
+  const e = await postVia(hub, crash({ description: 'אחרי הסגירה' }));
+  assert.equal(e.body.merged, false);
+  assert.equal(e.body.issueUrl, `https://github.com/${OTZ_REPO}/issues/101`);
+  assert.match(otz.issues.get(101).body, /קודם: #100/);
+  const f = await postVia(hub, updater(crash, { description: 'עדיין פתוח' }));
+  assert.equal(f.body.merged, true);
+  assert.equal(upd.issues.size, 1);
+});
+
+test('מוצרים: אותו מספר issue בשני הריפו — ה-cron סוגר ושולח מייל רק למוצר הנכון', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { hub, otz, upd } = twoRepos();
+  const a = await postVia(hub, manual({ reporterEmail: 'otz@example.com' }));
+  const b = await postVia(hub, updater(manual, { reporterEmail: 'upd@example.com' }));
+  assert.equal(a.body.issueNumber, 100);
+  assert.equal(b.body.issueNumber, 100);
+
+  upd.setState(100, 'closed', 'completed');
+  const s1 = await syncVia(hub);
+  assert.equal(s1.states.checked, 2);
+  assert.equal(s1.states.closed, 1);
+  assert.deepEqual(mails.map((m) => [m.to, m.product, m.issueUrl]), [['upd@example.com', 'offline-update', `https://github.com/${UPD_REPO}/issues/100`]]);
+  assert.match(mails[0].reasonText, /עדכוני אוצריא/);
+  assert.equal((await AppReport.findOne({ reportId: a.body.reportId }).lean()).issueState, 'open');
+  assert.equal((await AppReport.findOne({ reportId: b.body.reportId }).lean()).issueState, 'closed');
+
+  otz.setState(100, 'closed', 'completed');
+  await syncVia(hub);
+  assert.deepEqual(mails.map((m) => m.to), ['upd@example.com', 'otz@example.com']);
+  assert.equal(mails[1].product, 'otzaria');
+  assert.equal(mails[1].reasonText, 'הבעיה שדיווחת עליה טופלה. התיקון ייכלל בגרסה הבאה של אוצריא (אם עוד לא נכלל).');
+
+  // פתיחה מחדש בריפו אחד מאפסת רק את הדיווחים שלו
+  upd.setState(100, 'open', 'reopened');
+  await syncVia(hub);
+  assert.equal((await AppReport.findOne({ reportId: b.body.reportId }).lean()).issueState, 'open');
+  assert.equal((await AppReport.findOne({ reportId: a.body.reportId }).lean()).issueState, 'closed');
+});
+
+test('מוצרים: webhook מריפו העדכונים (רישיות שונה) מטפל רק בדיווחי העדכונים; ריפו לא מוכר מתעלם', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { hub, otz, upd } = twoRepos();
+  const a = await postVia(hub, manual({ reporterEmail: 'otz@example.com' }));
+  const b = await postVia(hub, updater(manual, { reporterEmail: 'upd@example.com' }));
+  otz.setState(100, 'closed', 'completed');
+  upd.setState(100, 'closed', 'not_planned');
+
+  const before = hub.calls.length;
+  assert.equal(await hookVia(hub, closedEvent(100, { repository: { full_name: 'evil/Otzaria_Offline_update' } })), 204);
+  assert.equal(hub.calls.length, before);
+
+  assert.equal(await hookVia(hub, closedEvent(100, { repository: { full_name: 'otzaria/otzaria_offline_update' } })), 202);
+  assert.deepEqual(upd.calls.filter((c) => c.method === 'GET').map((c) => c.path), [`/repos/${UPD_REPO}/issues/100`]);
+  assert.equal(otz.calls.filter((c) => c.method === 'GET').length, 0);
+  assert.deepEqual(mails.map((m) => [m.to, m.reasonKind, m.product]), [['upd@example.com', 'not_planned', 'offline-update']]);
+  assert.equal((await AppReport.findOne({ reportId: a.body.reportId }).lean()).issueState, 'open');
+  assert.equal((await AppReport.findOne({ reportId: b.body.reportId }).lean()).issueState, 'closed');
+
+  // issue של העדכונים שאין לו דיווח אצלנו — בלי קריאה ל-GitHub
+  assert.equal(await hookVia(hub, closedEvent(555, { repository: { full_name: UPD_REPO } })), 202);
+  assert.equal(upd.calls.filter((c) => c.method === 'GET').length, 1);
+
+  assert.equal(await hookVia(hub, closedEvent(100)), 202);
+  assert.deepEqual(mails.map((m) => m.to), ['upd@example.com', 'otz@example.com']);
+});
+
+test('מוצרים: מסמך ישן בלי product מתנהג כאוצריא (איחוד, cron, webhook, רשימה, idempotency)', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { hub, otz, upd } = twoRepos();
+  const legacyBody = crash({ trigger: 'crash_prompt', reporterEmail: 'old@example.com' });
+  const legacy = await postVia(hub, legacyBody);
+  await makeLegacy(legacy.body.reportId);
+
+  // שליחה חוזרת של הדיווח הישן — duplicate (הטביעה לא השתנתה), בלי קריאות GitHub
+  const calls = hub.calls.length;
+  const again = await postVia(hub, legacyBody);
+  assert.equal(again.body.duplicate, true);
+  assert.equal(hub.calls.length, calls);
+
+  const upd1 = await postVia(hub, updater(crash, { reporterEmail: 'upd@example.com', trigger: 'crash_prompt' }));
+  assert.equal(upd1.body.merged, false);
+  const otz2 = await postVia(hub, crash({ description: 'חדש' }));
+  assert.equal(otz2.body.merged, true);
+  assert.equal(otz2.body.issueNumber, legacy.body.issueNumber);
+  assert.equal(otz.comments.length, 1);
+
+  const list = await listReports({ product: 'otzaria' }, 'admin');
+  assert.deepEqual(list.reports.map((r) => r.reportId).sort(), [legacy.body.reportId, otz2.body.reportId].sort());
+  assert.ok(list.reports.every((r) => r.product === 'otzaria'));
+  assert.deepEqual((await listReports({ product: 'offline-update' }, 'admin')).reports.map((r) => r.reportId), [upd1.body.reportId]);
+  assert.equal((await listReports({}, 'admin')).total, 3);
+  assert.equal((await listReports({ product: 'bogus' }, 'admin')).total, 3);
+
+  const detail = await getReportDetail(legacy.body.reportId, 'admin');
+  assert.equal(detail.report.product, 'otzaria');
+  assert.deepEqual(detail.related.map((r) => r.reportId), [otz2.body.reportId]);
+  assert.deepEqual((await getReportDetail(upd1.body.reportId, 'admin')).related, []);
+
+  otz.setState(100, 'closed', 'completed');
+  await syncVia(hub);
+  assert.deepEqual(mails.map((m) => [m.to, m.product]), [['old@example.com', 'otzaria']]);
+  assert.equal((await AppReport.findOne({ reportId: legacy.body.reportId }).lean()).issueState, 'closed');
+  assert.equal((await AppReport.findOne({ reportId: upd1.body.reportId }).lean()).issueState, 'open');
+  assert.equal(upd.issues.get(100).state, 'open');
+
+  // webhook על issue של אוצריא מוצא גם מסמך ישן
+  await AppReport.collection.updateOne({ reportId: legacy.body.reportId }, { $set: { notifiedClosedAt: null } });
+  otz.setState(100, 'closed', 'duplicate');
+  assert.equal(await hookVia(hub, closedEvent(100)), 202);
+  assert.equal(mails.at(-1).to, 'old@example.com');
+  assert.equal(mails.at(-1).reasonKind, 'duplicate');
+  assert.equal('product' in await AppReport.collection.findOne({ reportId: legacy.body.reportId }), false);
+});
+
+test('מוצרים: issue שנמחק מסומן סגור רק במוצר שלו', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { hub, upd } = twoRepos();
+  const a = await postVia(hub, crash());
+  const b = await postVia(hub, updater(crash));
+  upd.issues.delete(100);
+  const c = await postVia(hub, updater(crash, { description: 'שוב' }));
+  assert.equal(c.body.issuePending, true);
+  assert.equal((await AppReport.findOne({ reportId: b.body.reportId }).lean()).issueState, 'closed');
+  assert.equal((await AppReport.findOne({ reportId: a.body.reportId }).lean()).issueState, 'open');
+
+  await syncVia(hub);
+  const doc = await AppReport.findOne({ reportId: c.body.reportId }).lean();
+  assert.equal(doc.issuePending, false);
+  assert.equal(doc.issueUrl, `https://github.com/${UPD_REPO}/issues/101`);
+});
+
+test('מוצרים: הסנכרון מפרסם ממתינים של כל מוצר בריפו שלו', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { hub, otz, upd } = twoRepos();
+  otz.failNext = 1;
+  upd.failNext = 1;
+  const a = await postVia(hub, manual());
+  const b = await postVia(hub, updater(manual));
+  assert.equal(a.body.issuePending, true);
+  assert.equal(b.body.issuePending, true);
+  const s = await syncVia(hub);
+  assert.deepEqual(s.pending, { attempted: 2, published: 2 });
+  assert.equal((await AppReport.findOne({ reportId: a.body.reportId }).lean()).issueUrl, `https://github.com/${OTZ_REPO}/issues/100`);
+  assert.equal((await AppReport.findOne({ reportId: b.body.reportId }).lean()).issueUrl, `https://github.com/${UPD_REPO}/issues/100`);
+});
+
+test('מוצרים: פנייה ותשובה במייל — המוצר עובר למייל, והתגובה מתפרסמת בריפו של המוצר', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { hub, otz, upd } = twoRepos();
+  await postVia(hub, manual());
+  const rep = await postVia(hub, updater(manual));
+  const sent = [];
+  const r = await contactReporter(
+    { reportId: rep.body.reportId, subject: 'שאלה', message: 'אפשר פרטים?', user: user() },
+    { config: replyConfig, sendContactMail: async (m) => { sent.push(m); return { sent: true }; } },
+  );
+  assert.equal(r.status, 200);
+  assert.equal(sent[0].product, 'offline-update');
+
+  upd.failNext = 1;
+  const stored = await ingestInboundReply(inbound(sent[0].replyTo), { config: replyConfig, fetchImpl: hub.fetch });
+  assert.equal(stored.body.status, 'stored');
+  assert.equal(upd.comments.length, 0);
+  const s = await syncVia(hub, { config: replyConfig });
+  assert.deepEqual(s.inbound, { reports: 1, posted: 1, errors: 0 });
+  assert.equal(upd.comments.length, 1);
+  assert.equal(upd.comments[0].issue, 100);
+  assert.equal(otz.comments.length, 0);
+});
+
+test('מוצרים: נעילת פרסום של מוצר אחר עם אותה חתימה אינה מעכבת (racing מצומצם למוצר)', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { hub, otz, upd } = twoRepos();
+  upd.failNext = 1;
+  const b = await postVia(hub, updater(crash));
+  assert.equal(b.body.issuePending, true);
+  await AppReport.updateOne({ reportId: b.body.reportId }, { $set: { issueLeaseUntil: new Date(Date.now() + 60_000) } });
+
+  const a = await postVia(hub, crash());
+  assert.equal(a.body.issuePending, false);
+  assert.equal(a.body.issueUrl, `https://github.com/${OTZ_REPO}/issues/100`);
+  assert.equal(otz.issues.size, 1);
+  assert.equal(upd.issues.size, 0);
+
+  // בתוך אותו מוצר הנעילה כן מעכבת (אחרת ייווצר issue כפול)
+  const c = await postVia(hub, updater(crash, { description: 'עוד אחד' }));
+  assert.equal(c.body.issuePending, true);
+  assert.equal(upd.issues.size, 0);
+});
+
+test('מוצרים: הסרה ממייל חלה על כל הדיווחים של הכתובת, בשני המוצרים', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { hub } = twoRepos();
+  const a = await postVia(hub, manual({ reporterEmail: 'same@example.com' }));
+  const b = await postVia(hub, updater(manual, { reporterEmail: 'Same@Example.com' }));
+  const other = await postVia(hub, updater(manual, { reporterEmail: 'other@example.com' }));
+  const r = await unsubscribeByToken(createUnsubscribeToken(a.body.reportId, config.unsubscribeSecret), config);
+  assert.equal(r.ok, true);
+  const flags = async (id) => (await AppReport.findOne({ reportId: id }).lean()).unsubscribed;
+  assert.equal(await flags(a.body.reportId), true);
+  assert.equal(await flags(b.body.reportId), true);
+  assert.equal(await flags(other.body.reportId), false);
 });
