@@ -144,6 +144,13 @@ export function reachesOtzariaInbox(sourceFolder) {
   return normalizeRecipient(primary) === otzaria || normalizeRecipient(cc) === otzaria;
 }
 
+/** נמעני המייל של מקור הספר בלבד (בלי תיבת אוצריא). ריק = למקור אין כתובת משלו. */
+export function sourceRecipients(sourceFolder) {
+  const { primary, cc } = getEmailRecipients(sourceFolder);
+  const otzaria = normalizeRecipient(REPORTING_ERRORS_RECIPIENT);
+  return [...new Set([primary, cc].map(normalizeRecipient).filter((r) => r && r !== otzaria))];
+}
+
 /** אותו כלל כמסנן MongoDB לדיווחים ישנים: תיקייה שאינה מגיעה לאוצריא. */
 export const NON_OTZARIA_SOURCE_FOLDER_RE = /sefaria/i;
 
@@ -151,7 +158,9 @@ export const NON_OTZARIA_SOURCE_FOLDER_RE = /sefaria/i;
  * שולח את מייל ההתראה עבור דיווח שכבר נשמר. לעולם אינו זורק.
  * @returns {Promise<{emailSent:boolean, duplicate:boolean, error:(string|null)}>}
  */
-export async function notifyReportByEmail(payload, { transportFactory = createSmtpTransport } = {}) {
+export async function notifyReportByEmail(payload, { transportFactory = createSmtpTransport, excludeOtzaria = false } = {}) {
+  // הצעת תיקון מטופלת באתר ולא בתיבת אוצריא — אבל המקור החיצוני (פנינים, בן יהודה וכו') עדיין מקבל מייל.
+  if (excludeOtzaria && !sourceRecipients(payload.source_folder).length) return { emailSent: false, duplicate: false, error: null };
   const missingSmtp = ensureSmtpConfig();
   if (missingSmtp.length > 0) {
     await markEmail(payload.report_id, { emailSent: false, adminNotes: `מייל לא נשלח: חסרים משתני סביבה ${missingSmtp.join(', ')}` });
@@ -166,9 +175,9 @@ export async function notifyReportByEmail(payload, { transportFactory = createSm
     const senderValidation = validateEmail(payload.sender_email);
     const replyTo = senderValidation.isValid ? payload.sender_email : undefined;
     const emailInfo = getEmailRecipients(payload.source_folder);
-    const candidateRecipients = [
-      ...new Set([emailInfo.primary, emailInfo.cc].map(normalizeRecipient).filter(Boolean)),
-    ];
+    const candidateRecipients = excludeOtzaria
+      ? sourceRecipients(payload.source_folder)
+      : [...new Set([emailInfo.primary, emailInfo.cc].map(normalizeRecipient).filter(Boolean))];
 
     // מניעת כפילות אטומית: תפיסת כל נמען לפני השליחה (ראו claimRecipient).
     contentHash = computeContentHash(payload);

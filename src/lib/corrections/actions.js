@@ -3,7 +3,7 @@
  * רק כתנאי "התצוגה עדכנית" — לעולם לא כמקור ליעד כתיבה.
  */
 import {
-  claimReport, releaseReport, reassignReport, approveReport, editAndApproveReport, rejectReport,
+  claimReport, releaseReport, reassignReport, approveReport, editAndApproveReport, rejectReport, rejectApprovedReport,
   closeManualReport, resubmitToService, previewSourceChoice,
 } from './volunteer.js';
 import { triggerWorkerBatch } from './run-batch.js';
@@ -48,6 +48,8 @@ async function dispatchAction({ user, id, body, config, deps, now }) {
       });
     case 'reject':
       return rejectReport({ ...common, reason: str(body.reason, 2000) });
+    case 'reject_approved':
+      return rejectApprovedReport({ ...common, reason: str(body.reason, 2000) });
     case 'close_manual':
       return closeManualReport({ ...common, note: str(body.note, 2000) });
     case 'resubmit':

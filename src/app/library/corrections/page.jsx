@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import LabelChips from '@/components/corrections/LabelChips'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
@@ -15,6 +15,10 @@ const VIEWS = [
   { id: 'closed', label: 'סגורים' },
   { id: 'all', label: 'הכל' },
 ]
+
+// תקרת השרת ל-limit היא 100.
+const PAGE_SIZE = 50
+const FILTERS_KEY = 'corrections:listFilters'
 
 const STATE_LABELS = {
   open: 'פתוח',
@@ -35,28 +39,85 @@ export default function CorrectionsListPage() {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [ready, setReady] = useState(false)
+  const sentinel = useRef(null)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    const q = new URLSearchParams({ view })
+  // הסינון נשמר ב-sessionStorage כדי ש"חזרה לתור" מדף דיווח לא תאפס אותו.
+  useEffect(() => {
+    try {
+      const f = JSON.parse(sessionStorage.getItem(FILTERS_KEY) || 'null')
+      if (f) {
+        if (VIEWS.some((v) => v.id === f.view)) setView(f.view)
+        setKind(f.kind || '')
+        setSource(f.source || '')
+        setReason(f.reason || '')
+        setAssignee(f.assignee || '')
+      }
+    } catch { /* אחסון חסום — ברירות מחדל */ }
+    setReady(true)
+  }, [])
+
+  useEffect(() => {
+    if (!ready) return
+    try {
+      sessionStorage.setItem(FILTERS_KEY, JSON.stringify({ view, kind, source, reason, assignee }))
+    } catch { /* אחסון חסום */ }
+  }, [ready, view, kind, source, reason, assignee])
+
+  const fetchPage = useCallback(async (skip) => {
+    const q = new URLSearchParams({ view, limit: String(PAGE_SIZE), skip: String(skip) })
     if (kind) q.set('kind', kind)
     if (source.trim()) q.set('source', source.trim())
     if (reason) q.set('reason', reason)
     if (assignee) q.set('assignee', assignee)
+    const res = await fetch(`/api/corrections/reports?${q}`, { cache: 'no-store' })
+    const body = await res.json()
+    if (!res.ok) throw new Error(res.status === 403 ? 'אין לך הרשאה לטפל בתיקוני טקסט' : body.error || 'שגיאה בטעינה')
+    return body
+  }, [view, kind, source, reason, assignee])
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
     try {
-      const res = await fetch(`/api/corrections/reports?${q}`, { cache: 'no-store' })
-      const body = await res.json()
-      if (!res.ok) throw new Error(res.status === 403 ? 'אין לך הרשאה לטפל בתיקוני טקסט' : body.error || 'שגיאה בטעינה')
-      setData(body)
+      setData(await fetchPage(0))
     } catch (e) {
       setError(e.message)
     } finally {
       setLoading(false)
     }
-  }, [view, kind, source, reason, assignee])
+  }, [fetchPage])
 
-  useEffect(() => { load() }, [load])
+  const hasMore = Boolean(data && data.items.length < data.total)
+
+  const loadMore = useCallback(async () => {
+    if (!data || loadingMore || !hasMore) return
+    setLoadingMore(true)
+    try {
+      const body = await fetchPage(data.items.length)
+      // דיווח שנסגר בינתיים מזיז את ההיסט — מסננים כפילויות לפי מזהה.
+      setData((prev) => {
+        const seen = new Set(prev.items.map((r) => r.id))
+        return { ...body, items: [...prev.items, ...body.items.filter((r) => !seen.has(r.id))] }
+      })
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [data, loadingMore, hasMore, fetchPage])
+
+  useEffect(() => { if (ready) load() }, [ready, load])
+
+  // טעינה אוטומטית כשמגיעים לתחתית הרשימה.
+  useEffect(() => {
+    const el = sentinel.current
+    if (!el || !hasMore) return
+    const io = new IntersectionObserver((entries) => { if (entries[0].isIntersecting) loadMore() }, { rootMargin: '400px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [hasMore, loadMore])
   useEffect(() => {
     fetch('/api/corrections/handlers').then((r) => (r.ok ? r.json() : null)).then((b) => b && setHandlers(b.users)).catch(() => {})
   }, [])
@@ -133,6 +194,15 @@ export default function CorrectionsListPage() {
             ))}
             {!data.items.length && <div className="text-center text-on-surface/60 py-10">אין דיווחים בתצוגה זו</div>}
           </div>
+          {hasMore && (
+            <div ref={sentinel} className="flex justify-center py-4">
+              {loadingMore ? <LoadingSpinner /> : (
+                <button onClick={loadMore} className="px-4 py-2 rounded-lg glass hover:bg-surface-variant text-sm">
+                  טען עוד ({data.items.length} מתוך {data.total})
+                </button>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>

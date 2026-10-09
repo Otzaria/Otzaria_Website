@@ -159,6 +159,19 @@ test('lineDiffParts: טקסט זהה → חלק אחד ברמה 0; תגיות HT
   assert.deepEqual(p.removed, [{ text: '<b>א</b>', level: 0 }]);
 });
 
+test('lineDiffParts: שורה ארוכה מאוד — רק המילים שהשתנו מודגשות, לא כל השורה', () => {
+  const pad = Array.from({ length: 2000 }, (_, i) => `מילה${i}`).join(' ');
+  const before = `${pad} שהרי היא (חומרא) [אמרה] בכל מקום ${pad}`;
+  const after = `${pad} שהרי (היא חומרא) [הוא אמרה] בכל מקום ${pad}`;
+  const p = lineDiffParts(before, after);
+  assert.equal(p.removed.map((x) => x.text).join(''), before);
+  assert.equal(p.added.map((x) => x.text).join(''), after);
+  const changed = (parts) => parts.filter((x) => x.level > 0).map((x) => x.text).join('');
+  assert.ok(changed(p.removed).length < 30, changed(p.removed));
+  assert.ok(changed(p.added).includes('הוא'));
+  assert.ok(!changed(p.added).includes('מילה'));
+});
+
 // ---------------------------------------------------------------- resolver + חוזה B
 
 const REPO = 'Otzaria/otzaria-library';

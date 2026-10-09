@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import UnifiedDiff from '@/components/corrections/UnifiedDiff'
 
 const btn = 'px-3 py-2 rounded-lg font-medium text-sm disabled:opacity-50 flex items-center gap-1'
+const PUBLISHING = new Set(['ready', 'in_progress', 'unknown_needs_reconcile', 'pr_opened'])
 
 /**
  * פעולות המתנדב על דיווח. כל שליחה נושאת את ה-generation שהוצג; השרת דוחה תצוגה ישנה.
@@ -37,23 +38,67 @@ export default function ReportActions({ detail, meId, busy, run }) {
     ? { context: preview.context ?? null, lineIndex: preview.lineIndex, path: preview.path }
     : usable ? { context: source.context ?? null, lineIndex: source.lineIndex, path: source.path } : { context: null, lineIndex: null, path: null }
 
-  if (!claimedByMe) {
-    // שיוך שפג נשאר במסמך (הפקיעה אינה נכתבת), ולכן מוצג במפורש — אחרת היומן נראה סותר.
-    const claimed = report.manual?.status === 'claimed'
-    const leaseEnd = claimed ? new Date(report.manual.leaseExpiresAt) : null
-    const leaseText = leaseEnd?.toLocaleString('he-IL')
+  // אושר וממתין לפרסום / בפרסום / PR פתוח: אין לקיחה ואין פעולות — רק דחייה (שסוגרת את ה-PR).
+  const pub = report.publish?.status
+  if (PUBLISHING.has(pub)) {
+    const writing = pub === 'in_progress' || pub === 'unknown_needs_reconcile'
+    const pr = pub === 'pr_opened' && report.publish?.prUrl
     return (
-      <div className="glass rounded-xl p-4 flex flex-wrap items-center gap-3">
-        {!claimed
-          ? <span className="text-sm">הדיווח אינו משויך למטפל.</span>
-          : leaseEnd > new Date()
-            ? <span className="text-sm">בטיפול של <b>{report.manual.assigneeName}</b> עד {leaseText}</span>
-            : <span className="text-sm">הטיפול של <b>{report.manual.assigneeName}</b> פג ב-{leaseText}.</span>}
-        <button disabled={busy} onClick={() => run({ action: 'claim' })} className={`${btn} bg-primary text-on-primary`}>
-          <span className="material-symbols-outlined text-base">back_hand</span> קח לטיפול
-        </button>
+      <div className="glass rounded-xl p-4 space-y-3">
+        <div className="text-sm flex flex-wrap items-center gap-x-2">
+          <span className="material-symbols-outlined text-base text-success-700">verified</span>
+          <span>
+            הדיווח אושר{report.approval?.byName ? <> ע&quot;י <b>{report.approval.byName}</b></> : null}
+            {pr
+              ? <> ונפתח עבורו <a href={report.publish.prUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline">PR #{report.publish.prNumber}</a>. הוא ייסגר אוטומטית כשה-PR ימוזג.</>
+              : writing ? ' והפרסום ל-GitHub מתבצע כעת.' : ' וממתין לפרסום.'}
+          </span>
+        </div>
+        <p className="text-xs text-on-surface/70">אי אפשר לקחת לטיפול דיווח שאושר — זה יוצר PR כפול. אם האישור שגוי, אפשר לדחות אותו.</p>
+        {writing ? (
+          <p className="text-xs text-warning-800">הפרסום מתבצע כרגע; הדחייה תתאפשר כשיסתיים.</p>
+        ) : mode !== 'reject' ? (
+          <button disabled={busy} onClick={() => setMode('reject')} className={`${btn} glass text-danger-700`}>
+            <span className="material-symbols-outlined text-base">block</span> דחייה
+          </button>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-sm text-danger-700 font-medium">
+              {pr ? `הדחייה תסגור את PR #${report.publish.prNumber} ב-GitHub בלי למזג אותו, ותסגור את הדיווח.` : 'הדחייה תבטל את הפרסום המתוכנן ותסגור את הדיווח.'}
+            </p>
+            <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} placeholder="סיבת הדחייה (חובה)" className="w-full border rounded-lg p-2 bg-white" />
+            <div className="flex gap-2">
+              <button
+                disabled={busy || reason.trim().length < 3}
+                onClick={async () => { if (await run({ action: 'reject_approved', generation: g, reason })) setMode(null) }}
+                className={`${btn} bg-danger-600 text-white`}
+              >
+                {pr ? 'דחייה וסגירת ה-PR' : 'דחייה סופית'}
+              </button>
+              <button onClick={() => setMode(null)} className={`${btn} glass`}>ביטול</button>
+            </div>
+          </div>
+        )}
       </div>
     )
+  }
+
+  // שיוך שפג נשאר במסמך (הפקיעה אינה נכתבת), ולכן מוצג במפורש — אחרת היומן נראה סותר.
+  const claimed = report.manual?.status === 'claimed'
+  const leaseEnd = claimed ? new Date(report.manual.leaseExpiresAt) : null
+  const leaseText = leaseEnd?.toLocaleString('he-IL')
+  if (claimed && !claimedByMe && leaseEnd > new Date()) {
+    return (
+      <div className="glass rounded-xl p-4 text-sm">בטיפול של <b>{report.manual.assigneeName}</b> עד {leaseText}</div>
+    )
+  }
+
+  // אין צורך ב"קח לטיפול" נפרד: פעולה על דיווח שאינו משויך לוקחת אותו קודם, ואז מבצעת.
+  const act = async (body) => {
+    if (claimedByMe) return run(body)
+    const c = await run({ action: 'claim' }, { keep: true })
+    if (!c) return false
+    return run({ ...body, generation: c.generation }, { reloadOnFail: true })
   }
 
   const openEdit = () => {
@@ -68,12 +113,16 @@ export default function ReportActions({ detail, meId, busy, run }) {
 
   return (
     <div className="glass rounded-xl p-4 space-y-3">
-      <div className="text-sm">בטיפולך עד {new Date(report.manual.leaseExpiresAt).toLocaleString('he-IL')}</div>
+      <div className="text-sm">
+        {claimedByMe
+          ? <>בטיפולך עד {leaseText}</>
+          : <>{claimed ? <>הטיפול של <b>{report.manual.assigneeName}</b> פג ב-{leaseText}. </> : 'הדיווח אינו משויך למטפל. '}<span className="text-on-surface/60">כל פעולה תשייך אותו אליך.</span></>}
+      </div>
       <div className="flex flex-wrap gap-2">
         <button
           disabled={busy || Boolean(approveBlocked)}
           title={approveBlocked || ''}
-          onClick={() => run({ action: 'approve', generation: g, revision: report.currentRevision, seenBlobSha: source?.blobSha })}
+          onClick={() => act({ action: 'approve', generation: g, revision: report.currentRevision, seenBlobSha: source?.blobSha })}
           className={`${btn} bg-success-600 text-white hover:bg-success-700`}
         >
           <span className="material-symbols-outlined text-base">check</span> אישור
@@ -83,10 +132,10 @@ export default function ReportActions({ detail, meId, busy, run }) {
         <button disabled={busy} onClick={() => setMode('reassign')} className={`${btn} glass`}><span className="material-symbols-outlined text-base">swap_horiz</span> העברה למטפל</button>
         <button disabled={busy} onClick={() => setMode('source')} className={`${btn} glass`}><span className="material-symbols-outlined text-base">find_in_page</span> בחירת מקור ידנית</button>
         {permissions.canVerify && rev && (
-          <button disabled={busy} onClick={() => run({ action: 'resubmit', generation: g })} className={`${btn} glass`}><span className="material-symbols-outlined text-base">send</span> שליחה מחודשת לשירות</button>
+          <button disabled={busy} onClick={() => act({ action: 'resubmit', generation: g })} className={`${btn} glass`}><span className="material-symbols-outlined text-base">send</span> שליחה מחודשת לשירות</button>
         )}
         <button disabled={busy} onClick={() => setMode('close')} className={`${btn} glass`}><span className="material-symbols-outlined text-base">task_alt</span> סגירה ידנית</button>
-        <button disabled={busy} onClick={() => run({ action: 'release', generation: g })} className={`${btn} glass`}><span className="material-symbols-outlined text-base">logout</span> שחרור</button>
+        {claimedByMe && <button disabled={busy} onClick={() => run({ action: 'release', generation: g })} className={`${btn} glass`}><span className="material-symbols-outlined text-base">logout</span> שחרור</button>}
       </div>
       {approveBlocked && <p className="text-xs text-on-surface/70">{approveBlocked}</p>}
 
@@ -98,7 +147,7 @@ export default function ReportActions({ detail, meId, busy, run }) {
             <button
               disabled={busy || newLine === baseLine || /[\r\n]/.test(newLine)}
               onClick={async () => {
-                const ok = await run({
+                const ok = await act({
                   action: 'edit_approve', generation: g, revision: report.currentRevision, baseLine, newLine,
                   targetPath: preview ? preview.path : null, targetLineIndex: preview ? preview.lineIndex : undefined,
                   seenBlobSha: preview ? preview.blobSha : source?.blobSha,
@@ -129,14 +178,14 @@ export default function ReportActions({ detail, meId, busy, run }) {
       {mode === 'reject' && (
         <div className="space-y-2">
           <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} placeholder="סיבת הדחייה (חובה)" className="w-full border rounded-lg p-2 bg-white" />
-          <button disabled={busy || reason.trim().length < 3} onClick={async () => { if (await run({ action: 'reject', generation: g, reason })) setMode(null) }} className={`${btn} bg-danger-600 text-white`}>דחייה סופית</button>
+          <button disabled={busy || reason.trim().length < 3} onClick={async () => { if (await act({ action: 'reject', generation: g, reason })) setMode(null) }} className={`${btn} bg-danger-600 text-white`}>דחייה סופית</button>
         </div>
       )}
 
       {mode === 'close' && (
         <div className="space-y-2">
           <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} placeholder="הערה (למשל: טופל מחוץ למערכת)" className="w-full border rounded-lg p-2 bg-white" />
-          <button disabled={busy} onClick={async () => { if (await run({ action: 'close_manual', generation: g, note: reason })) setMode(null) }} className={`${btn} bg-primary text-on-primary`}>סגירה</button>
+          <button disabled={busy} onClick={async () => { if (await act({ action: 'close_manual', generation: g, note: reason })) setMode(null) }} className={`${btn} bg-primary text-on-primary`}>סגירה</button>
         </div>
       )}
 
@@ -146,7 +195,7 @@ export default function ReportActions({ detail, meId, busy, run }) {
             <option value="">בחירת מטפל…</option>
             {handlers.filter((h) => h.id !== String(meId)).map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
           </select>
-          <button disabled={busy || !target} onClick={async () => { if (await run({ action: 'reassign', generation: g, targetUserId: target })) setMode(null) }} className={`${btn} bg-primary text-on-primary`}>העברה</button>
+          <button disabled={busy || !target} onClick={async () => { if (await (permissions.canManage ? run : act)({ action: 'reassign', generation: g, targetUserId: target })) setMode(null) }} className={`${btn} bg-primary text-on-primary`}>העברה</button>
         </div>
       )}
 

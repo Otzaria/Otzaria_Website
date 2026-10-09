@@ -40,6 +40,8 @@ function overrideFor(rev) {
 
 // ---------------------------------------------------------------- list / detail
 
+const PUBLISHING_STATUSES = ['ready', 'in_progress', 'unknown_needs_reconcile', 'pr_opened'];
+
 const LIST_FILTERS = {
   mine: (user) => ({ 'manual.status': 'claimed', 'manual.assignee': user._id }),
   // שיוך שפג זמין שוב ללקיחה, ולכן מוצג בתור.
@@ -48,9 +50,10 @@ const LIST_FILTERS = {
   }),
   claimed: () => ({ 'manual.status': 'claimed', state: 'open' }),
   auto: () => ({ state: 'open', 'verification.status': { $in: ['queued', 'in_progress'] } }),
-  publishing: () => ({ state: 'open', 'publish.status': { $in: ['ready', 'in_progress', 'unknown_needs_reconcile', 'pr_opened', 'failed'] } }),
+  publishing: () => ({ state: 'open', 'publish.status': { $in: [...PUBLISHING_STATUSES, 'failed'] } }),
   closed: () => ({ state: { $regex: '^closed_' } }),
-  all: () => ({}),
+  // בלי מייל-בלבד (לא נכנסו למערכת) ובלי מה שאושר וממתין לפרסום/מיזוג — אלה בלשונית "אושרו / בפרסום".
+  all: () => ({ state: { $ne: 'email_only' }, 'publish.status': { $nin: PUBLISHING_STATUSES } }),
 };
 
 export async function listReports({ user, query = {}, now = new Date() }) {
@@ -167,29 +170,16 @@ export async function claimReport({ user, id, config, now = new Date() }) {
     'manual.status': 'claimed', 'manual.assignee': user._id, 'manual.assigneeName': user.name, 'manual.claimedAt': now,
     'manual.leaseExpiresAt': lease, 'dispatch.verify': false, status: 'in_progress', assignedTo: user._id,
   };
-  // אישור שממתין לפרסום נפסל באותו עדכון אטומי: המטפל עשוי לשנות את ההצעה.
-  const revokeSet = {
-    'approval.authority': 'none', 'approval.scope': 'none', 'approval.changeId': null,
-    'publish.status': 'not_ready', 'publish.changeId': null, 'dispatch.publish': false,
-  };
-  let revoked = false;
-  let updated = await ErrorReport.findOneAndUpdate(
-    { ...base, 'publish.status': { $nin: ['in_progress', 'unknown_needs_reconcile', 'pr_opened', 'ready'] } },
+  // דיווח שאושר (ממתין לפרסום / בפרסום / PR פתוח) אינו נלקח: לקיחה ואישור חוזר יצרו PR כפול.
+  // הפעולה היחידה עליו היא דחייה (rejectApprovedReport).
+  const updated = await ErrorReport.findOneAndUpdate(
+    { ...base, 'publish.status': { $nin: PUBLISHING_STATUSES } },
     { $set: claimSet, $inc: { workflowGeneration: 1 } },
     { returnDocument: 'after' },
   ).lean();
   if (!updated) {
-    updated = await ErrorReport.findOneAndUpdate(
-      { ...base, 'publish.status': 'ready' },
-      { $set: { ...claimSet, ...revokeSet }, $inc: { workflowGeneration: 1 } },
-      { returnDocument: 'after' },
-    ).lean();
-    revoked = Boolean(updated);
-  }
-  if (!updated) return err(409, 'claim_conflict');
-  if (revoked) {
-    await cancelActiveJobs(updated._id, 'publish', 'approval_revoked_by_claim');
-    await logEvent(updated._id, 'approval_revoked_by_claim', userActor(user), updated.workflowGeneration);
+    const cur = await ErrorReport.findById(id).select('publish.status').lean();
+    return err(409, PUBLISHING_STATUSES.includes(cur?.publish?.status) ? 'approved_locked' : 'claim_conflict');
   }
   // בדיקה אוטומטית ממתינה נפסלת; תשובה מאוחרת תישמר להיסטוריה בלבד.
   if (['queued', 'in_progress'].includes(updated.verification?.status)) {
@@ -348,6 +338,56 @@ export async function rejectReport({ user, id, generation, reason, now = new Dat
   if (!updated) return err(409, 'stale_view');
   await logEvent(r._id, 'rejected', userActor(user), updated.workflowGeneration, { reason: reason.slice(0, 500) });
   return ok({ generation: updated.workflowGeneration });
+}
+
+/**
+ * דחיית דיווח שכבר אושר — הפעולה היחידה עליו (בלי לקיחה). ממתין לפרסום: הפרסום מבוטל.
+ * PR פתוח: הדיווח נסגר וה-PR נסגר ב-GitHub עם הסיבה. בזמן כתיבה ל-GitHub — חסום עד שתסתיים.
+ */
+export async function rejectApprovedReport({ user, id, generation, reason, config, deps, now = new Date() }) {
+  if (!canHandleCorrections(user)) return err(403, 'Forbidden');
+  if (!isId(id) || !Number.isSafeInteger(generation)) return err(400, 'invalid_request');
+  if (typeof reason !== 'string' || reason.trim().length < 3) return err(400, 'reason_required');
+  const r = await ErrorReport.findById(id).lean();
+  if (!r) return err(404, 'not_found');
+  if (r.state !== 'open') return err(409, 'final_state');
+  if (r.workflowGeneration !== generation) return err(409, 'stale_view');
+  const pub = r.publish?.status;
+  if (pub === 'in_progress' || pub === 'unknown_needs_reconcile') return err(409, 'publish_in_progress');
+  if (pub !== 'ready' && pub !== 'pr_opened') return err(409, 'not_approved');
+  const prNumber = pub === 'pr_opened' ? r.publish.prNumber : null;
+  const message = reason.slice(0, 2000);
+  const updated = await ErrorReport.findOneAndUpdate(
+    // התנאי על publish.status מונע מרוץ מול ה-worker (שמעביר ready → in_progress מותנה-גרסה).
+    { _id: r._id, workflowGeneration: generation, state: 'open', 'publish.status': pub },
+    {
+      $set: {
+        state: 'closed_rejected', status: 'rejected', closedAt: now, resolvedAt: now, closeReason: 'volunteer_rejected_after_approval',
+        'manual.status': 'none', 'dispatch.publish': false, 'publish.status': 'failed',
+        'publish.lastError': prNumber ? 'pr_closed_by_rejection' : 'rejected_before_publish', 'publish.updatedAt': now,
+      },
+      $inc: { workflowGeneration: 1 },
+      $push: { decisions: { decisionId: newId('dec'), source: 'volunteer', decision: 'rejected', reasonCode: 'rejected_after_approval', message, actorId: user._id, actorName: user.name, revision: r.currentRevision, generation, at: now } },
+    },
+    { returnDocument: 'after' },
+  ).lean();
+  if (!updated) return err(409, 'stale_view');
+  await cancelActiveJobs(r._id, 'publish', 'rejected_after_approval');
+  let prClosed = null;
+  if (prNumber) {
+    try {
+      const client = createRepoClient({ repo: config.publish.repo, token: config.publish.token || null, fetchImpl: deps?.githubFetch || fetch });
+      await client.commentOnIssue(prNumber, `הדיווח נדחה במערכת תיקוני הטקסט ע"י ${user.name || 'מתנדב'}: ${message}`);
+      await client.updatePull(prNumber, { state: 'closed' });
+      prClosed = true;
+    } catch (e) {
+      // הדיווח כבר סגור; ה-PR נשאר פתוח לסגירה ידנית — מתועד ומוחזר למסך.
+      prClosed = false;
+      await logEvent(r._id, 'pr_close_failed', userActor(user), updated.workflowGeneration, { prNumber, error: e.status ? `github_${e.status}` : 'network' });
+    }
+  }
+  await logEvent(r._id, 'rejected_after_approval', userActor(user), updated.workflowGeneration, { reason: message.slice(0, 500), prNumber, prClosed });
+  return ok({ generation: updated.workflowGeneration, prNumber, prClosed });
 }
 
 /** סגירה ידנית (למשל דיווח חופשי שטופל מחוץ למערכת). */

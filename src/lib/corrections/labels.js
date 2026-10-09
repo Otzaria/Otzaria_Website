@@ -18,7 +18,7 @@ export function deriveLabels(r) {
 
   if (appr.authority === 'service' && appr.scope === 'technical_only') add('technical_only', 'אושר טכנית בלבד', 'info');
   if (handoff === 'needs_content_review') add('needs_content', 'נדרש אישור תוכן', 'warn');
-  if (NOT_CONFIGURED.has(handoff) || v.status === 'skipped_service_disabled') add('service_off', 'השירות אינו מוגדר', 'info');
+  if (NOT_CONFIGURED.has(handoff) || v.status === 'skipped_service_disabled') add('service_off', 'שירות בדיקה חיצונית עצמאית אינו מוגדר', 'info');
   if (v.status === 'queued' && v.attempts > 0) add('retry_wait', 'ממתין לניסיון חוזר', 'warn');
   if (RETRY_EXHAUSTED.has(handoff)) add('exhausted', 'מוצו הניסיונות', 'danger');
   if (CONFLICT.has(handoff) || pub.conflictReason) add('conflict', 'התנגשות', 'danger');

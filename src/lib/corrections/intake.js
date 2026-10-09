@@ -10,8 +10,8 @@ import { newId, logEvent } from './store.js';
 /** מחשב את ניתוב הקליטה (טהור). */
 export function planIntakeRouting({ kind, correction, reachesOtzaria, verifyConfig }) {
   if (!reachesOtzaria) return { route: 'email_only' };
-  if (kind !== 'text_correction') return { route: 'manual', reason: 'free_text', verification: 'not_requested' };
-  if (correction.proposedText === null) return { route: 'manual', reason: 'no_proposal', verification: 'not_requested' };
+  // דיווח חופשי נשאר במייל בלבד. "הצעת תיקון" בלי הצעה (proposedText=null) היא בעצם דיווח חופשי.
+  if (kind !== 'text_correction' || !correction || correction.proposedText === null) return { route: 'email_only', reason: 'free_text' };
   if (/[\r\n]/.test(computeNewLine(correction))) return { route: 'manual', reason: 'structural_change', verification: 'not_requested' };
   if (!verifyConfig.enabled) return { route: 'manual', reason: verifyConfig.disabledReason, verification: 'skipped_service_disabled' };
   return { route: 'verify' };
@@ -105,7 +105,7 @@ async function compareExisting(existing, validated, legacy) {
   if (validated.schemaVersion === 2) return { outcome: 'conflict', report: existing };
   // לקוח ישן מסווג 409 כזמני ונתקע עליו; לכן upsert כמו פעם — ורק על דיווח v1 פתוח, לעולם לא על v2.
   const updated = await ErrorReport.findOneAndUpdate(
-    { _id: existing._id, schemaVersion: 1, contentDigest: existing.contentDigest, state: 'open' },
+    { _id: existing._id, schemaVersion: 1, contentDigest: existing.contentDigest, state: { $in: ['open', 'email_only'] } },
     { $set: { ...legacyDisplaySet(legacy), contentDigest: validated.contentDigest } },
     { returnDocument: 'after' },
   ).lean();

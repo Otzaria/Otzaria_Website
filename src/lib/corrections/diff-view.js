@@ -47,12 +47,34 @@ export function diffGraphemes(before, after) {
   return lcsDiff(a, b);
 }
 
+/** אורך הקידומת והסיומת המשותפות, מקוצר לגבול רווח כדי לא לפצל מילה (או אות מהניקוד שלה). */
+function commonEdges(a, b) {
+  const min = Math.min(a.length, b.length);
+  let prefix = 0;
+  while (prefix < min && a[prefix] === b[prefix]) prefix++;
+  if (prefix === a.length && prefix === b.length) return { prefix, suffix: 0 };
+  while (prefix > 0 && !/\s/.test(a[prefix - 1])) prefix--;
+  let suffix = 0;
+  while (suffix < min - prefix && a[a.length - 1 - suffix] === b[b.length - 1 - suffix]) suffix++;
+  while (suffix > 0 && !/\s/.test(a[a.length - suffix])) suffix--;
+  return { prefix, suffix };
+}
+
 /**
  * @returns {Array<{type:'equal'|'del'|'add'|'change', text?:string, before?:Array, after?:Array}>}
  * change = מילה שהוחלפה, עם פירוט תווים לכל צד.
  */
 export function buildDiffView(before, after) {
-  const words = diffWords(before ?? '', after ?? '');
+  const a = before ?? '';
+  const b = after ?? '';
+  // קידומת/סיומת משותפת נחתכות (בגבול רווח) לפני ה-diff: בשורה ארוכה diffWords חורג
+  // מתקרת הטוקנים ומחזיר את כל השורה כבלוק אחד — וכך שינוי קטן לא היה מודגש בכלל.
+  const { prefix, suffix } = commonEdges(a, b);
+  const words = [
+    ...(prefix ? [{ type: 'equal', text: a.slice(0, prefix) }] : []),
+    ...diffWords(a.slice(prefix, a.length - suffix), b.slice(prefix, b.length - suffix)),
+    ...(suffix ? [{ type: 'equal', text: a.slice(a.length - suffix) }] : []),
+  ];
   const out = [];
   for (let k = 0; k < words.length; k++) {
     const w = words[k];

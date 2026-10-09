@@ -102,6 +102,8 @@ test('[T28] ידני מלא מקצה לקצה בלי שירות: רשימה → 
   r = await ErrorReport.findById(id).lean();
   assert.equal(r.publish.status, 'pr_opened');
   assert.equal(gh.readFile(r.publish.branch, PATH), FILE.replace(LINE, NEW));
+  assert.equal((await listReports({ user: users.a, query: { view: 'all' } })).body.total, 0, 'PR פתוח אינו ב"הכל" — רק ב"אושרו / בפרסום"');
+  assert.equal((await listReports({ user: users.a, query: { view: 'publishing' } })).body.total, 1);
   gh.mergePull(r.publish.prNumber);
   await work(at(2));
   r = await ErrorReport.findById(id).lean();
@@ -115,6 +117,8 @@ test('[T28] דיווח חופשי: לקיחה וסגירה ידנית; דחיי�
   if (db.skip) return t.skip(db.skip);
   const id = await ingest('free', { report_kind: 'free_text', correction: null });
   const id2 = await ingest('free2', { report_kind: 'free_text', correction: null });
+  // דיווח חופשי חדש נשאר במייל בלבד; דיווחים חופשיים ישנים עדיין בתור ומטופלים ידנית.
+  await ErrorReport.updateMany({ _id: { $in: [id, id2] } }, { $set: { state: 'open', 'manual.status': 'queued', 'manual.handoffReason': 'free_text' } });
   const c = await act(users.a, id, { action: 'claim' });
   assert.equal((await act(users.a, id, { action: 'close_manual', generation: c.body.generation, note: 'טופל' })).status, 200);
   assert.equal((await ErrorReport.findById(id).lean()).state, 'closed_manual');
@@ -144,31 +148,25 @@ test('[T17] שני מתנדבים: לקיחה אטומית אחת; אישור כ
   assert.equal(forbidden.status, 409);
 });
 
-test('[T19] שינוי הצעה אחרי אישור: לקיחה מחדש פוסלת את האישור, ורק הגרסה החדשה מתפרסמת', async (t) => {
+test('[T19] אחרי אישור אין לקיחה ואין עריכה — רק הגרסה שאושרה מתפרסמת, ב-PR אחד', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const id = await ingest('t19');
   assert.equal((await claimAndApprove(users.a, id)).status, 200);
   const first = (await ErrorReport.findById(id).lean()).approval.changeId;
   const c = await act(users.b, id, { action: 'claim' }, at(1));
-  assert.equal(c.status, 200);
+  assert.equal(c.body.error, 'approved_locked');
   let r = await ErrorReport.findById(id).lean();
-  assert.equal(r.approval.authority, 'none');
-  assert.equal(r.publish.status, 'not_ready');
-  await work(at(2));
-  assert.equal(gh.pulls.length, 0, 'האישור הישן לא פורסם');
-  const edited = `${NEW} — מתוקן`;
+  assert.equal(r.approval.changeId, first, 'האישור לא נפסל');
   const d = await detail(users.b, id);
-  const e = await act(users.b, id, { action: 'edit_approve', generation: c.body.generation, revision: 1, baseLine: d.body.source.currentLine, newLine: edited, seenBlobSha: d.body.source.blobSha }, at(3));
-  assert.equal(e.status, 200, JSON.stringify(e.body));
-  r = await ErrorReport.findById(id).lean();
-  assert.equal(r.currentRevision, 2);
-  assert.equal(r.proposals[1].author, 'volunteer');
-  assert.notEqual(r.approval.changeId, first);
-  await work(at(4));
+  const e = await act(users.b, id, { action: 'edit_approve', generation: r.workflowGeneration, revision: 1, baseLine: d.body.report.proposals[0].originalLine, newLine: `${NEW} — מתוקן` }, at(2));
+  assert.equal(e.body.error, 'claim_required');
+  await work(at(3));
   assert.equal(gh.pulls.length, 1);
   r = await ErrorReport.findById(id).lean();
-  assert.equal(gh.readFile(r.publish.branch, PATH), FILE.replace(LINE, edited));
-  assert.equal((await act(users.b, id, { action: 'approve', generation: 1, revision: 1 })).status, 409);
+  assert.equal(gh.readFile(r.publish.branch, PATH), FILE.replace(LINE, NEW));
+  assert.equal((await act(users.b, id, { action: 'claim' }, at(4))).body.error, 'approved_locked', 'גם עם PR פתוח');
+  await work(at(5));
+  assert.equal(gh.pulls.length, 1, 'בלי PR כפול');
 });
 
 test('[T20] שינוי מקור לפני אישור → 409; תצוגה ישנה → 409; שינוי בין אישור לפרסום → האישור נפסל', async (t) => {
@@ -356,7 +354,7 @@ test('email_only (ספריא): לא בתור, לא ללקיחה, לא לבדיק
   assert.equal((await act(users.a, id, { action: 'claim' })).status, 409, 'לא נכנס לתור הידני');
   await work(at(1));
   assert.equal(gh.calls.length, 0, 'לעולם לא מגיע ל-GitHub');
-  assert.equal((await listReports({ user: users.a, query: { view: 'all' } })).body.total, 2);
+  assert.equal((await listReports({ user: users.a, query: { view: 'all' } })).body.total, 1, '"הכל" אינו כולל מייל-בלבד');
 
   const legacy = { senderEmail: 'x@example.org', subject: 's', bookTitle: 'ספר', currentRef: 'א', filePath: 'f', status: 'pending', createdAt: new Date('2025-01-01') };
   const { insertedIds } = await ErrorReport.collection.insertMany([{ ...legacy, reportId: 'lsef', sourceFolder: 'Sefaria' }, { ...legacy, reportId: 'lwiki', sourceFolder: 'wikiSource' }]);
@@ -421,6 +419,49 @@ test('העברה למטפל אינה משייכת דיווח שאישורו ממ
   const r = await ErrorReport.findById(id).lean();
   assert.equal(r.manual.status, 'none');
   assert.equal(r.publish.status, 'ready');
+});
+
+test('דיווח שאושר אינו נלקח (מונע PR כפול); דחייה לפני פרסום מבטלת את הפרסום', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const id = await ingest('locked-ready');
+  assert.equal((await claimAndApprove(users.a, id)).status, 200);
+  const claim = await act(users.b, id, { action: 'claim' });
+  assert.equal(claim.status, 409);
+  assert.equal(claim.body.error, 'approved_locked');
+  let r = await ErrorReport.findById(id).lean();
+  assert.equal(r.publish.status, 'ready', 'האישור לא נפסל');
+  assert.equal(r.manual.status, 'none');
+
+  assert.equal((await act(users.b, id, { action: 'reject_approved', generation: r.workflowGeneration, reason: '' })).body.error, 'reason_required');
+  const rej = await act(users.b, id, { action: 'reject_approved', generation: r.workflowGeneration, reason: 'האישור שגוי' });
+  assert.equal(rej.status, 200, JSON.stringify(rej.body));
+  assert.equal(rej.body.prNumber, null);
+  r = await ErrorReport.findById(id).lean();
+  assert.equal(r.state, 'closed_rejected');
+  assert.equal(r.dispatch.publish, false);
+  await work(at(1));
+  assert.equal(writes(), 0, 'הפרסום בוטל — אין כתיבה ל-GitHub');
+});
+
+test('דחיית דיווח עם PR פתוח סוגרת את ה-PR עם הסיבה; הלקיחה חסומה גם כאן', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const id = await ingest('locked-pr');
+  assert.equal((await claimAndApprove(users.a, id)).status, 200);
+  await work(at(1));
+  let r = await ErrorReport.findById(id).lean();
+  assert.equal(r.publish.status, 'pr_opened');
+  assert.equal((await act(users.b, id, { action: 'claim' })).body.error, 'approved_locked');
+  assert.equal((await act(users.b, id, { action: 'approve', generation: r.workflowGeneration, revision: 1 })).body.error, 'claim_required');
+
+  const rej = await act(users.b, id, { action: 'reject_approved', generation: r.workflowGeneration, reason: 'נוסח שגוי' });
+  assert.equal(rej.status, 200, JSON.stringify(rej.body));
+  assert.equal(rej.body.prClosed, true);
+  const pr = gh.pulls[r.publish.prNumber - 1];
+  assert.equal(pr.state, 'closed');
+  assert.ok(gh.issueComments.some((c) => c.number === r.publish.prNumber && c.body.includes('נוסח שגוי')), 'הערה עם הסיבה');
+  r = await ErrorReport.findById(id).lean();
+  assert.equal(r.state, 'closed_rejected');
+  assert.equal(r.publish.lastError, 'pr_closed_by_rejection');
 });
 
 test('שיוך שפג חוזר לתצוגת התור הממתין (לא נעלם מהרשימה)', async (t) => {

@@ -16,6 +16,9 @@ import { committedNewLine } from '@/lib/corrections/unified-diff'
 const ERRORS = {
   stale_view: 'התצוגה לא עדכנית — הדיווח או המקור השתנו מאז שנטען. רעננו ובדקו שוב.',
   claim_conflict: 'מתנדב אחר כבר לקח את הדיווח.',
+  approved_locked: 'הדיווח כבר אושר ונמצא בפרסום — אי אפשר לקחת אותו לטיפול. אפשר רק לדחות.',
+  publish_in_progress: 'הפרסום ל-GitHub מתבצע כרגע. נסו שוב בעוד דקה.',
+  not_approved: 'הדיווח אינו ממתין לפרסום.',
   claim_required: 'יש לקחת את הדיווח לטיפול קודם (או שתוקף השיוך פג).',
   source_not_resolved: 'המקור לא אותר בוודאות או השתנה — אי אפשר לאשר. אפשר לבחור מקור ידנית ולערוך.',
   final_state: 'הדיווח כבר סגור.',
@@ -95,9 +98,16 @@ export default function CorrectionReportPage() {
       if (!res.ok) {
         setNotice({ tone: 'danger', text: ERRORS[data.error] || data.error || 'הפעולה נכשלה' })
         if (data.error === 'stale_view' || data.error === 'claim_conflict') setStale(true)
+        // לקיחה אוטומטית הצליחה והפעולה נכשלה: הגרסה התקדמה — מרעננים כדי שהניסיון הבא לא ייפול על "לא עדכני".
+        if (opts.reloadOnFail) await load()
         return false
       }
       if (opts.keep) return data
+      if (body.action === 'reject_approved') {
+        setNotice(data.prClosed === false
+          ? { tone: 'danger', text: `הדיווח נדחה, אבל סגירת PR #${data.prNumber} ב-GitHub נכשלה — יש לסגור אותו ידנית.` }
+          : { tone: 'success', text: data.prNumber ? `הדיווח נדחה ו-PR #${data.prNumber} נסגר.` : 'הדיווח נדחה והפרסום בוטל.' })
+      }
       if (body.action === 'approve' || body.action === 'edit_approve') {
         setNotice({
           tone: 'success',
@@ -137,7 +147,12 @@ export default function CorrectionReportPage() {
 
   return (
     <div className="space-y-4">
-      <Link href="/library/corrections" className="text-sm text-primary flex items-center gap-1"><span className="material-symbols-outlined text-base">arrow_forward</span> חזרה לתור</Link>
+      {/* נשאר גלוי בגלילה, מתחת לכותרת האתר (sticky top-0, h-16) */}
+      <div className="sticky top-16 z-40 -mx-1 px-1 py-2 bg-background/95 backdrop-blur-sm">
+        <Link href="/library/corrections" className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
+          <span className="material-symbols-outlined text-base">arrow_forward</span> חזרה לתור
+        </Link>
+      </div>
 
       {stale && (
         <div className="bg-warning-50 border border-warning-200 text-warning-800 rounded-lg p-3 flex items-center justify-between gap-2">
