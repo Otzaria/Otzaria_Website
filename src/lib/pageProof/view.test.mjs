@@ -101,3 +101,8 @@ test('newFid: 6 תווים ולא תפוס', () => {
   assert.match(f, /^[0-9a-f]{6}$/);
   assert.ok(!taken.has(f));
 });
+
+test('untouchedLineIds — בלי שורות שמחוץ למסגרות (אינן בטקסט שנקרא)', () => {
+  const view = { lines: [{ id: 1, stream: 'main' }, { id: 2, stream: 'main', _outside: true }] };
+  assert.deepEqual(untouchedLineIds(view), [1]);
+});

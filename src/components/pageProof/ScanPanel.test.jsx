@@ -871,3 +871,45 @@ describe('ScanPanel — "בלי סימונים"', () => {
     expect(screen.queryAllByTestId('frame-badge')).toHaveLength(0)
   })
 })
+
+describe('ScanPanel — שורות חשודות בחיתוך (flags.cut_suspect מתוכנת-הספר)', () => {
+  const flagged = () => {
+    const d = doc()
+    d.lines[1] = { ...d.lines[1], flags: { cut_suspect: ['tall'] } }
+    d.lines[3] = { ...d.lines[3], flags: { cut_suspect: ['frag'] } }
+    return d
+  }
+
+  it('במצב "שורות": אדום ותווית קצרה; "לחשודה הבאה (2)" עוברת ביניהן בסדר-הקריאה ומסבירה', async () => {
+    const { container, onPick } = setup({ base: flagged(), initialMode: 'lines' })
+    const marked = [...container.querySelectorAll('[data-suspect="1"]')].map((r) => r.getAttribute('data-line-box'))
+    expect(marked).toEqual(['2', '4'])
+    expect(screen.getAllByTestId('suspect-label').map((s) => s.textContent)).toEqual(['שתי שורות?', 'חלק משורה?'])
+    const next = screen.getByTestId('next-suspect')
+    expect(next).toHaveTextContent('לחשודה הבאה (2)')
+    await userEvent.click(next)
+    expect(onPick).toHaveBeenLastCalledWith(2)
+    expect(screen.getByRole('status')).toHaveTextContent('שורה חשודה: כנראה שתי שורות בתיבה אחת')
+    await userEvent.click(next)
+    expect(onPick).toHaveBeenLastCalledWith(4)
+  })
+
+  it('שורה שתוקנה יורדת; "✓ החיתוך בעמוד תקין" — אין עוד; במצב "מסגרות" — רק הודעה שמעבירה ל"שורות"', async () => {
+    const { container, log } = setup({ base: flagged(), initialMode: 'frames' })
+    expect(container.querySelectorAll('[data-suspect]')).toHaveLength(0)
+    expect(screen.getByTestId('suspect-note')).toHaveTextContent('2 שורות חשודות בחיתוך — לבדוק במצב "שורות"')
+    await userEvent.click(screen.getByTestId('suspect-note'))
+    expect(screen.getByTestId('next-suspect')).toHaveTextContent('(2)')
+    await userEvent.click(screen.getByRole('button', { name: /החיתוך בעמוד תקין/ }))
+    expect(log.groups.at(-1)).toEqual([{ kind: 'cut_ok', page: 3, value: true }])
+    expect(screen.queryByTestId('next-suspect')).toBeNull()
+    expect(container.querySelectorAll('[data-suspect]')).toHaveLength(0)
+  })
+
+  it('חבילה בלי השדה — כמו היום (בלי סימון ובלי כפתור)', () => {
+    const { container } = setup({ initialMode: 'lines' })
+    expect(container.querySelectorAll('[data-suspect]')).toHaveLength(0)
+    expect(screen.queryByTestId('next-suspect')).toBeNull()
+    expect(screen.queryByTestId('suspect-label')).toBeNull()
+  })
+})

@@ -18,6 +18,7 @@
 
 import { tokenize } from './textModel.js';
 import { farLabel, isCancelledLink } from './flowEdit.js';
+import { sameLinkSlot, linkOpValue } from './ops.js';
 
 export { isCancelledLink };
 
@@ -37,7 +38,7 @@ export const LINK_HE = Object.freeze({
   farHint: (page) => `הפירוש של הקישור הזה בעמוד ${page} — מאשרים או מבטלים אותו שם`,
 });
 
-const KIND_HE = { note: 'הערה', dh: 'דיבור-המתחיל', join: 'המשך' };
+const KIND_HE = { note: 'הערה', dh: 'דיבור-המתחיל', join: 'המשך', side: 'הערת-צד' };
 export const linkKindHe = (k) => KIND_HE[k?.kind] || k?.kind || 'קישור';
 
 // מצב הקישור בשתי מילים: "אושר" (ידני) / "אוטומטי 85%"
@@ -85,17 +86,20 @@ export function linkEndLabel(view, side, k) {
 export function unlinkPlan(view, k, page = view?.page, baseDoc = null) {
   if (!k || isCancelledLink(k)) return { action: 'none' };
   if (k._added) {
+    // כמה קישורים לשורת-הערה (2026-10-04): הקישור החדש החליף רק קישור שהטווח שלו חופף (sameLinkSlot), ורק אותו מבטלים
     const replaced = (baseDoc?.links || []).find(
-      (b) => b && b.from_line === k.from_line && !isCancelledLink(b) && !isIncomingFar(b, page)
+      (b) => sameLinkSlot(b, k.from_line, k.from_words) && !isCancelledLink(b) && !isIncomingFar(b, page)
     );
     return {
       action: 'remove',
-      match: (op) => op?.kind === 'link_add' && op.ids?.[0] === k.from_line && op.ids?.[1] === k.to_line,
-      add: replaced ? [{ kind: 'link_del', page, value: { src_line: k.from_line, page } }] : [],
+      match: (op) =>
+        op?.kind === 'link_add' && op.ids?.[0] === k.from_line && op.ids?.[1] === k.to_line && sameLinkSlot(k, op.ids[0], op.value?.from_words),
+      add: replaced ? [{ kind: 'link_del', page, value: linkOpValue(baseDoc, k.from_line, replaced, page) }] : [],
     };
   }
   if (isIncomingFar(k, page)) return { action: 'far', hint: LINK_HE.farHint(k.from_page) };
-  return { action: 'op', op: { kind: 'link_del', page, value: { src_line: k.from_line, page } } };
+  // בשורה שיש בה כמה קישורים — רק הקישור הזה (from_words), ולא כל קישורי השורה
+  return { action: 'op', op: { kind: 'link_del', page, value: linkOpValue(view, k.from_line, k, page) } };
 }
 
 // הקישורים שבוטלו, לרשימה "קישורים שבוטלו" בלוח הקישורים:

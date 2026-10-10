@@ -173,9 +173,9 @@ describe('StreamPicker — "כותרת-רצה של ההערות"', () => {
     await userEvent.click(btn)
     expect(onPick).toHaveBeenLastCalledWith(NOTES_RUNHEAD_CHOICE)
 
-    // מסגרת שכבר "כותרת עמוד" — אין שינוי לשלוח
+    // מסגרת שכבר "כותרת-רצה של ההערות" (סוג-המסגרת, frameChoice — 2026-10-04) — אין שינוי לשלוח
     onPick.mockClear()
-    rerender(<StreamPicker chips={chips} value="header" onPick={onPick} />)
+    rerender(<StreamPicker chips={chips} value={NOTES_RUNHEAD_CHOICE} onPick={onPick} />)
     await userEvent.click(within(streams()).getByRole('button', { name: 'כותרת-רצה של ההערות' }))
     expect(onPick).not.toHaveBeenCalled()
 

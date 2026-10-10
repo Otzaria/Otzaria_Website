@@ -61,18 +61,36 @@ export function draftKeyRevision(key, pageId) {
 //   • פעולות-החיתוך (פיצול / איחוד / שורה חדשה / תיבה) — לא עוברות: העמוד כבר נחתך מחדש (cut);
 //   • "החיתוך תקין" (cut_ok) — לא עובר: את החיתוך החדש בודקים מחדש (dropped);
 //   • פעולה מקומית (_local — חצי-אישור של פסקה) — עוברת רק אם כל השורות שלה עוד בעמוד;
+//   • תיקון-טקסט בשורה שזוהתה מחדש (recheck בעמוד החדש) — לא מוחל: הוא נעשה על הקריאה הישנה (אולי של שורה
+//     קצוצה), והיה מסתיר את הזיהוי החדש בשקט (2026-10-07: מילים "נעלמו" כך). הוא נשמר בצד (held) — הנוסח של
+//     המתנדב מול הזיהוי החדש — והמתנדב בוחר (DraftCarriedNotice). כשהנוסח שלו זהה לזיהוי החדש — אין מה לבחור;
+//     אישור-שורה (line_ok) של הקריאה הישנה בשורה כזו — dropped (את השורה הצהובה בודקים מחדש);
 //   • כל השאר — עוברות אם הן תקינות מול העמוד החדש (אותה בדיקה של הגשה — validateOp), אחרת
 //     (השורה נחתכה מחדש או נעלמה) — dropped.
-// הסדר נשמר. ← {kept, dropped, cut}
+// הסדר נשמר. ← {kept, dropped, cut, held: [{id, page, mine, ocr}]}
 export function carryDraftOps(doc, ops) {
   const kept = [];
   const dropped = [];
+  const held = new Map();
   let cut = 0;
   const lines = new Set((doc?.lines || []).map((l) => l?.id));
+  const reread = new Map((doc?.lines || []).filter((l) => l?.recheck === true && l.status !== 'removed').map((l) => [l.id, l]));
   for (const op of Array.isArray(ops) ? ops : []) {
     if (!op || typeof op !== 'object') continue;
     if (CUT_KINDS.includes(op.kind)) {
       cut++;
+      continue;
+    }
+    const again = !op._local && Array.isArray(op.ids) && op.ids.length === 1 ? reread.get(op.ids[0]) : null;
+    if (again && op.kind === 'text' && typeof op.value === 'string') {
+      const ocr = String(again.text ?? again.text_ocr ?? '');
+      // המאוחר גובר (כמו בעורך); נוסח שזהה לזיהוי החדש — אין מה לבחור
+      if (op.value === ocr) held.delete(again.id);
+      else held.set(again.id, { id: again.id, page: op.page ?? doc?.page ?? null, mine: op.value, ocr });
+      continue;
+    }
+    if (again && op.kind === 'line_ok') {
+      dropped.push(op);
       continue;
     }
     if (op.kind === 'cut_ok') {
@@ -86,7 +104,7 @@ export function carryDraftOps(doc, ops) {
     if (validateOp(doc, op)) dropped.push(op);
     else kept.push(op);
   }
-  return { kept, dropped, cut };
+  return { kept, dropped, cut, held: [...held.values()] };
 }
 
 const clip = (s, n = 40) => {
@@ -163,7 +181,8 @@ export function cleanupPageDrafts(storage, page, key = pageDraftKey(page)) {
       const at = readDraftAt(storage.getItem(older.k));
       if (c.kept.length) storage.setItem(key, JSON.stringify({ ops: c.kept, at: at ?? Date.now() }));
       const kept = c.kept.filter((o) => !o._local).length;
-      if (kept || c.dropped.length) res.carried = { from: older.k, kept, cut: c.cut, dropped: c.dropped.map(droppedOpLabel) };
+      if (kept || c.dropped.length || c.held.length)
+        res.carried = { from: older.k, kept, cut: c.cut, dropped: c.dropped.map(droppedOpLabel), held: c.held };
     }
   }
   for (const k of stale) {

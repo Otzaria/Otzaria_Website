@@ -11,6 +11,7 @@
 // העורך המוטמע בתוכנת-הספר אינו מעביר שלב (focus) — שם הכול פתוח, כמו תמיד.
 
 import { CUT_KINDS, bookOnlyLineIds } from './ops.js';
+import { cutSuspects } from './cutSuspect.js';
 
 export const STAGES = Object.freeze(['structure', 'text']);
 export const isStage = (s) => STAGES.includes(s);
@@ -61,6 +62,17 @@ export function handledItems(stage, { view = null, ops = [], approval = null, re
       { key: 'frames', label: 'מסגרות אושרו', done: view?.frames_confirmed === true, title: '"✓ המסגרות נכונות" במצב "מסגרות" של הסריקה' },
       { key: 'cut', label: 'חיתוך נבדק', done: !!view?.cut_ok, title: '"✓ החיתוך בעמוד תקין" במצב "שורות" של הסריקה' },
     ];
+    // שורות שהמחשב סימן כחשודות בחיתוך (cutSuspect) — כמה נשארו; מוצג רק בעמוד שיש בו סימון כזה
+    const flagged = (view?.lines || []).some((l) => Array.isArray(l?.flags?.cut_suspect) && l.flags.cut_suspect.length);
+    if (flagged) {
+      const left = cutSuspects(view).size;
+      out.push({
+        key: 'suspects',
+        label: left ? `שורות חשודות בחיתוך: ${left}` : 'שורות חשודות בחיתוך — טופלו',
+        done: left === 0,
+        title: 'מסומנות באדום במצב "שורות" של הסריקה ("לחשודה הבאה"). שורה שתיקנתם — יורדת; שורה תקינה — "✓ החיתוך בעמוד תקין" בסוף',
+      });
+    }
     const cut = cutOpsOf(ops).length;
     if (cut) out.push({ key: 'cutFixes', label: `תיקוני-חיתוך: ${cut}`, done: null, title: 'יישלחו לזיהוי-מחדש כשתסיימו את שלב המבנה' });
     if (recut?.sentAt) out.push({ key: 'recut', label: recut.backAt ? 'נשלח לזיהוי-מחדש וחזר' : 'נשלח לזיהוי-מחדש', done: !!recut.backAt, title: null });

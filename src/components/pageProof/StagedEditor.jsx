@@ -34,7 +34,7 @@ import { STAGE_TEXT, cutOpsOf, finishStructure, initialStage } from '@/lib/pageP
 const hasOps = (info, draft) =>
   info?.source === 'local' || info?.source === 'merged' || (info?.source === 'server' && (draft?.ops?.length || 0) > 0)
 
-export default function StagedEditor({ current, help, saving = false, onSubmit, onSendRecut, onReset, onReload }) {
+export default function StagedEditor({ current, help, saving = false, onSubmit, onSendRecut, onReset, onReload, editorRef = null }) {
   const page = current.page
   const draft = current.draft || null
   const saved = current.draftInfo?.stage ?? null
@@ -138,6 +138,7 @@ export default function StagedEditor({ current, help, saving = false, onSubmit, 
       <ProofEditor
         page={page}
         draftKey={current.draftKey}
+        editorRef={editorRef}
         readOnly={false}
         help={help}
         focus={stage}

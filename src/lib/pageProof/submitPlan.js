@@ -88,7 +88,7 @@ export function submitSummary({ baseDoc, ops, untouched, approval = null }) {
     approval: appr,
     allApproved,
     choices: allApproved ? [SUBMIT_CHOICE.SUBMIT] : [SUBMIT_CHOICE.APPROVE_REST, SUBMIT_CHOICE.ONLY_APPROVED],
-    recut: needsRecut(clean),
+    recut: needsRecut(clean, baseDoc),
     recheckCount: recheckLineIds(baseDoc).length,
   };
 }

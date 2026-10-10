@@ -563,3 +563,20 @@ test('isLockedLine + segKey', () => {
   assert.equal(isLockedLine(null), true);
   assert.equal(segKey(7, 0), '7:0');
 });
+
+test('שורת-תוכן מחוץ למסגרות (_outside) — לא בלשוניות, לא בפסקאות; ריהוט נשאר', () => {
+  const view = {
+    lines: [
+      { id: 1, stream: 'main', text: 'א ב', order: 1 },
+      { id: 2, stream: 'main', text: 'ג ד', order: 2, _outside: true },
+      { id: 3, stream: 'notes', text: 'ה', order: 3, _outside: true },
+      { id: 4, stream: 'header', text: 'כותרת', order: 4, _outside: true },
+    ],
+  };
+  const tabs = streamTabs(view);
+  assert.deepEqual(tabs.map((t) => [t.key, t.count]), [['main', 1], [tabs[1].key, 1]]);
+  assert.equal(tabs[1].furniture, true);
+  assert.deepEqual(tabLines(view, 'main').map((l) => l.id), [1]);
+  assert.deepEqual(tabLines(view, 'notes').map((l) => l.id), []);
+  assert.deepEqual(buildParagraphs(view, 'main').flatMap((p) => p.lines.map((x) => x.lineId)), [1]);
+});

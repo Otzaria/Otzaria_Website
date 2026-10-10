@@ -44,7 +44,7 @@ export default function LinksTab({ view, baseDoc = null, ops = null, readOnly = 
           <li>לחצו שוב «קישור». Esc — ביטול.</li>
         </ol>
         <p className="mt-1 text-xs text-on-surface/60">
-          לכל שורת-הערה (או פירוש) קישור אחד. בשורה עם כמה הערות — קשרו את הראשונה; קישור חדש מאותה שורה מחליף את הקודם (תתבקשו לאשר).
+          בשורת-הערה (או פירוש) אפשר כמה קישורים — כל אחד מהמילים שלו: שורה שמסיימת הערה ופותחת את הבאה, או שתי הערות קצרות בשורה אחת — סמנו את הציון של כל הערה וקשרו בנפרד. קישור מאותן מילים מחליף את הקודם (תתבקשו לאשר).
         </p>
         <p className="mt-1 text-xs text-on-surface/60">
           הצד השני בעמוד אחר (פירוש שגולש לעמוד הקודם או הבא)? אחרי «קישור» הראשון בחרו את העמוד — בפס הכחול שמעל הטקסט או כאן — ולחצו שם על המילה.
@@ -106,7 +106,7 @@ export default function LinksTab({ view, baseDoc = null, ops = null, readOnly = 
               ) : (
                 <div className="mt-1 flex flex-wrap gap-1">
                   {k.src !== 'human' && !k._added && k.to_line != null && (
-                    <button type="button" disabled={readOnly} onClick={() => act.linkOk(k.from_line)} className={`${btn} bg-success-100 text-success-800`}>
+                    <button type="button" disabled={readOnly} onClick={() => act.linkOk(k.from_line, k)} className={`${btn} bg-success-100 text-success-800`}>
                       ✓ נכון
                     </button>
                   )}

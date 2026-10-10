@@ -141,11 +141,14 @@ export function streamChoices(doc) {
 
 // שורות-תוכן שעוד לא נבדקו בהגשה הזו (לא תוקנו, לא אושרו, לא הוסרו, לא
 // חדשות) — ובלי שורות שאושרו כבר לפני ההגהה הזו (view._preOk: במעבר שני,
-// מה שאושר בסבב הקודם), שאין צורך לאשר שוב
+// מה שאושר בסבב הקודם), שאין צורך לאשר שוב. בלי שורות שמחוץ למסגרות (_outside):
+// הן אינן בטקסט שהמתנדב קרא, ולכן "אשר גם את כל השאר" אינו מאשר אותן
 export function untouchedLineIds(view) {
   const pre = view?._preOk instanceof Set ? view._preOk : null;
   return (view?.lines || [])
-    .filter((l) => l.id > 0 && !l._textEdited && !l._ok && !l._new && l.status !== 'removed' && !isFurnitureStream(l.stream) && !pre?.has(l.id))
+    .filter(
+      (l) => l.id > 0 && !l._textEdited && !l._ok && !l._new && !l._outside && l.status !== 'removed' && !isFurnitureStream(l.stream) && !pre?.has(l.id)
+    )
     .map((l) => l.id);
 }
 

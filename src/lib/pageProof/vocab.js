@@ -123,6 +123,37 @@ export const isPrintDefect = (line) => line?.certainty === 'ambiguous' && String
 // מסגרת-אובייקט (טבלה/איור/לוח) — אינה קולטת שורות לזרם
 export const FRAME_OBJECT_KINDS = { table: 'טבלה', figure: 'איור', plate: 'לוח' };
 
+// סוגי-מסגרת (2026-10-04, תוכנת-הספר: frametypes.py): מסגרת-טקסט יכולה לשאת סוג (ftype) נוסף על הזרם. הסוג קובע
+// את הזרם (stream) ואת סגנון-הפסקה של השורות שבתוכה — ונשמר במסגרת, כך שאחרי השמירה רואים מה בחרו (ולא "ריהוט הדף").
+// kind: furniture — ריהוט, לא נכנס לספר; side — הערת-צד: זרם משלה, פסקה משלה, מקושרת לשורה שלידה; text — זרם רגיל.
+// סוגים שספר הגדיר לעצמו — דרך registerVocab({frameTypes}) (מפתח c1, c2…).
+export const FRAME_TYPES = {
+  notes_runhead: {
+    he: 'כותרת-רצה של ההערות',
+    kind: 'furniture',
+    stream: 'header',
+    color: '#64748b',
+    hint: 'כותרת שחוזרת בכל עמוד מעל ההערות (שם החיבור שבהערות) — ריהוט, לא נכנסת לספר. כותרת של פרק או סעיף בתוך ההערות — סגנון-הפסקה «כותרת» בטקסט, לא מסגרת',
+  },
+  catchword: {
+    he: 'מילת-המשך',
+    kind: 'furniture',
+    stream: 'footer',
+    color: '#78716c',
+    hint: 'המילה בתחתית העמוד (של הגוף או של ההערות) שחוזרת בראש העמוד הבא — שומר-דף; לא נכנסת לספר',
+  },
+  side_note: {
+    he: 'הערת-צד',
+    kind: 'side',
+    stream: 'margin',
+    color: '#c2410c',
+    hint: 'הערה שיושבת בצד הטקסט או נכנסת לתוכו — זרם משלה, לא נדבקת לטקסט הרץ; מקושרת לשורה שלידה',
+  },
+};
+export const FRAME_TYPE_KINDS = { text: 'טקסט', furniture: 'ריהוט (לא נכנס לספר)', side: 'הערת-צד' };
+const FTYPE_KEY_RE = /^[A-Za-z0-9_]{1,40}$/;
+export const isFrameType = (k) => typeof k === 'string' && FTYPE_KEY_RE.test(k) && Object.hasOwn(FRAME_TYPES, k);
+
 // אוצר-מילים נוסף מצרכן שמטמיע את העורך (תוכנת-הספר: סגנונות-פסקה שהוגדרו לספר מסוים,
 // ערך-ודאות נוסף וכו'). הערכים נכנסים לטבלאות שלמעלה עצמן — כך הבדיקה (ops.validateOp),
 // השמות בעברית (הסרגל, רשימת-השינויים) והרשימות בלוח הפרטים רואים אותם בלי שינוי נוסף.
@@ -130,7 +161,8 @@ export const FRAME_OBJECT_KINDS = { table: 'טבלה', figure: 'איור', plate
 // מחזיר פונקציה שמסירה בדיוק את מה שנוסף (בדיקות, החלפת ספר).
 //
 // v = {paraStyles: {key: {he, group?}}, charStyles: {key: {he, sign?}},
-//      pageTypes: {key: he}, scripts: {key: he}, certainty: {key: he}}
+//      pageTypes: {key: he}, scripts: {key: he}, certainty: {key: he},
+//      frameTypes: {key: {he, kind, stream, color?, hint?}}  (stream — מפתח-זרם תקין; kind — FRAME_TYPE_KINDS)}
 // מפתח: אותיות לטיניות, ספרות וקו-תחתון (כמו מפתחות הסגנונות המותאמים בתוכנת-הספר)
 const VOCAB_KEY_RE = /^[A-Za-z0-9_]{1,40}$/;
 const VOCAB_GROUPS = new Set(['text', 'head', 'furniture']);
@@ -155,6 +187,17 @@ export function registerVocab(v = {}) {
     [CERTAINTY, v?.certainty],
   ]) {
     for (const [k, name] of Object.entries(extra || {})) put(table, k, he(name, k));
+  }
+  for (const [k, t] of Object.entries(v?.frameTypes || {})) {
+    if (!t || !isStreamKey(t.stream) || !Object.hasOwn(FRAME_TYPE_KINDS, t.kind)) continue;
+    const color = typeof t.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(t.color) ? t.color : null;
+    put(FRAME_TYPES, k, {
+      he: he(t.he, k),
+      kind: t.kind,
+      stream: t.stream,
+      ...(color ? { color } : {}),
+      ...(typeof t.hint === 'string' && t.hint ? { hint: t.hint } : {}),
+    });
   }
   return () => {
     for (const [table, key] of added.splice(0)) delete table[key];

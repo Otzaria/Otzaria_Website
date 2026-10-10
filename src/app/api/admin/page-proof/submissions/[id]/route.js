@@ -138,7 +138,8 @@ export async function PATCH(request, { params }) {
         Object.assign(set, { ops, opCount: ops.length, reviewerEdited: true });
         finalOps = ops;
       }
-      const recut = needsRecut(finalOps);
+      // עריכת-מנהל — מחדש מול העמוד (גם מסגרות ששונו — ops.framesChanged); אחרת מה שנקבע בהגשה
+      const recut = edited ? needsRecut(finalOps, page.doc) : (sub.needsRecut ?? needsRecut(finalOps));
       set.needsRecut = recut;
       const done = await PageProofSubmission.findOneAndUpdate({ _id: id, status: 'submitted' }, { $set: set }, { returnDocument: 'after', lean: true });
       if (!done) return NextResponse.json({ success: false, error: 'ההגשה כבר טופלה' }, { status: 409 });
