@@ -50,6 +50,23 @@ test('רשימת הגרסאות ממוינת מהגבוהה לנמוכה, החי
   assert.equal(entries[1].downloadUrl, '/api/plugins/6a3b41de42427e3be09afcba@1.5.0/download')
 })
 
+test('כל רשומת גרסה נושאת sha256 משלה; קובץ ישן בלי טביעה → null', () => {
+  const hashed = plugin({
+    version: '2.0.0',
+    compatibleWith: '0.9.96',
+    versions: [
+      { version: '1.5.0', pluginFileExt: '.otzplugin', pluginFileSha256: 'b'.repeat(64) },
+      { version: '1.0.0', pluginFileExt: '.otzplugin' }
+    ]
+  })
+  hashed.pluginFileSha256 = 'a'.repeat(64)
+  assert.deepEqual(
+    buildVersionEntries(hashed).map((e) => [e.version, e.sha256]),
+    [['2.0.0', 'a'.repeat(64)], ['1.5.0', 'b'.repeat(64)], ['1.0.0', null]]
+  )
+  assert.equal(buildVersionEntries(SAMPLE)[0].sha256, null)
+})
+
 test('גרסת אוצריא חדשה מקבלת את הגרסה החיה', () => {
   assert.equal(resolveCompatibleVersion(SAMPLE, '0.9.96').version, '2.0.0')
   assert.equal(resolveCompatibleVersion(SAMPLE, '1.0.0').version, '2.0.0')

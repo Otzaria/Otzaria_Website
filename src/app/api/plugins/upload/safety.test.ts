@@ -1,13 +1,16 @@
+import { createHash } from 'node:crypto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const m = vi.hoisted(() => ({
   session: vi.fn(), manifest: vi.fn(), validate: vi.fn(), find: vi.fn(), create: vi.fn(),
-  saveFile: vi.fn(), ensureDir: vi.fn(), readAsset: vi.fn(), archive: vi.fn(), mail: vi.fn(), invalidate: vi.fn(),
+  saveFile: vi.fn(), ensureDir: vi.fn(), pendingDir: vi.fn(), readAsset: vi.fn(), archive: vi.fn(), mail: vi.fn(), invalidate: vi.fn(),
 }))
 vi.mock('next-auth', () => ({ getServerSession: m.session }))
 vi.mock('@/app/api/auth/[...nextauth]/route', () => ({ authOptions: {} }))
 vi.mock('@/lib/db', () => ({ default: vi.fn() }))
-vi.mock('@/models/Plugin', () => ({ default: { findById: m.find, create: m.create } }))
+vi.mock('@/models/Plugin', () => ({
+  default: { findById: m.find, create: m.create, findOne: () => ({ select: () => ({ lean: async () => null }) }) },
+}))
 vi.mock('@/lib/pluginManifest', async () => ({ readManifestFromPlugin: m.manifest, ...(await import('@/lib/semverCompare.js')) }))
 vi.mock('@/lib/pluginValidation', () => ({ validatePluginArchive: m.validate, OTZARIA_DESIGN_TAG: 'מראה תואם לאוצריא' }))
 vi.mock('@/lib/pluginSearchIndex', () => ({ invalidatePluginSearchIndex: m.invalidate }))
@@ -19,9 +22,10 @@ vi.mock('@/lib/pluginStorage', () => ({
   MAX_PLUGIN_BYTES: 50 * 1024 * 1024, MAX_IMAGE_BYTES: 5 * 1024 * 1024, MAX_SCREENSHOT_BYTES: 5 * 1024 * 1024, MAX_SCREENSHOTS: 10,
   PLUGIN_FILE_BASENAME: 'plugin', IMAGE_BASENAME: 'image', ensurePluginDir: m.ensureDir,
   saveFileFromFormData: m.saveFile, readPluginAsset: m.readAsset,
-  deletePluginDir: vi.fn(), deletePendingPluginDir: vi.fn(), getPendingPluginDir: vi.fn(),
+  deletePluginDir: vi.fn(), deletePendingPluginDir: vi.fn(async () => {}), getPendingPluginDir: m.pendingDir,
   isAllowedImage: vi.fn(() => true), imageExtFromMime: vi.fn(() => '.png'),
   saveOptimizedImage: vi.fn(), clearImageOptCache: vi.fn(), removePluginAsset: vi.fn(),
+  pluginFileSha256: (buf: Buffer) => createHash('sha256').update(buf).digest('hex'),
 }))
 
 import { POST } from './route'
@@ -104,5 +108,48 @@ describe('plugin submission fails closed', () => {
   it('edit: changing a known plugin id is rejected', async () => {
     m.manifest.mockResolvedValue({ ...newManifest, id: 'other.plugin' })
     expect((await PUT(request(), context)).status).toBe(400); expectNoWrites()
+  })
+})
+
+describe('plugin file sha256', () => {
+  const zeros8 = createHash('sha256').update(new Uint8Array(8)).digest('hex')
+
+  it('edit: a replaced plugin file stores the sha256 of its bytes', async () => {
+    plugin.pluginFileSha256 = 'f'.repeat(64)
+    m.ensureDir.mockResolvedValue('plugin-dir')
+    const res = await PUT(request(), context)
+    expect(res.status).toBe(200)
+    expect(plugin.save).toHaveBeenCalled()
+    expect(plugin.pluginFileSha256).toBe(zeros8)
+  })
+
+  it('edit: promoting a pending file stores the hash of the promoted file, not a stale one', async () => {
+    const { mkdtemp, mkdir, writeFile } = await import('node:fs/promises')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const live = await mkdtemp(join(tmpdir(), 'plugin-live-'))
+    const pending = join(live, 'pending')
+    await mkdir(pending)
+    const pendingBytes = Buffer.from('pending build')
+    await writeFile(join(pending, 'plugin.otzplugin'), pendingBytes)
+    m.ensureDir.mockResolvedValue(live)
+    m.pendingDir.mockReturnValue(pending)
+    plugin.pendingUpdate = {
+      name: 'בדיקה', version: '1.0.0', author: 'בודק', shortDescription: 'תיאור', description: 'תיאור', status: 'stable',
+      compatibleWith: '0.9.97', pluginFileName: 'p.otzplugin', pluginFileExt: '.otzplugin', pluginFileSha256: 'f'.repeat(64),
+      assetSources: { pluginFile: 'pending' },
+    }
+    const res = await PUT(request({ file: false }), context)
+    expect(res.status).toBe(200)
+    expect(plugin.pluginFileSha256).toBe(createHash('sha256').update(pendingBytes).digest('hex'))
+  })
+
+  it('upload: a new plugin is created with the sha256 of its file', async () => {
+    m.ensureDir.mockResolvedValue('plugin-dir')
+    m.create.mockImplementation(async (doc: Record<string, unknown>) => ({ ...doc, _id: { toString: () => '0123456789abcdef01234567' }, save: vi.fn() }))
+    const data = await request().formData()
+    data.set('screenshots', new File([new Uint8Array(4)], 's.png', { type: 'image/png' }))
+    await POST({ formData: async () => data } as Request)
+    expect(m.create).toHaveBeenCalledWith(expect.objectContaining({ pluginFileSha256: zeros8 }))
   })
 })

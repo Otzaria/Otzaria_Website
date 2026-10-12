@@ -93,6 +93,7 @@ export function resolvePluginUpdates(plugins, requests, appVersion) {
       status: selected.status,
       requiresNetwork: selected.requiresNetwork,
       pluginFileSize: selected.pluginFileSize,
+      sha256: selected.sha256,
       releasedAt: selected.releasedAt,
       downloadUrl: `/api/plugins/${plugin._id.toString()}@${selected.version}/download`,
       isLatest: selected.isLatest

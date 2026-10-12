@@ -52,6 +52,8 @@ const PluginSchema = new mongoose.Schema(
     pluginFileName: { type: String, required: true }, // שם קובץ מקורי שהועלה (לשימוש ב-Content-Disposition)
     pluginFileExt: { type: String, required: true },  // הסיומת בפועל בדיסק (כולל נקודה), למשל ".otzplugin"
     pluginFileSize: { type: Number, default: 0 },
+    // SHA-256 (hex קטן) של קובץ התוסף. null בקבצים ישנים — משלים בהורדה הראשונה (download route).
+    pluginFileSha256: { type: String, default: null },
 
     image: {
       ext: { type: String, default: null },          // סיומת כולל נקודה, למשל ".png"
@@ -149,6 +151,7 @@ const PluginSchema = new mongoose.Schema(
       pluginFileName: { type: String, default: '' },
       pluginFileExt: { type: String, default: '.otzplugin' },
       pluginFileSize: { type: Number, default: 0 },
+      pluginFileSha256: { type: String, default: null },
       status: { type: String, enum: ['stable', 'beta', 'experimental'], default: 'stable' },
       compatibleWith: { type: String, default: '' },
       maxAppVersion: { type: String, default: null },

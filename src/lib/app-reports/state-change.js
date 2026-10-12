@@ -4,6 +4,7 @@
  */
 import AppReport from '../../models/AppReport.js';
 import { buildUnsubscribeUrl } from './unsubscribe.js';
+import { DEFAULT_PRODUCT, getProduct, productFilter } from './products.js';
 
 export const CLOSURE_KINDS = Object.freeze(['completed', 'not_planned', 'duplicate', 'other']);
 
@@ -11,12 +12,18 @@ export function closureKind(stateReason) {
   return ['completed', 'not_planned', 'duplicate'].includes(stateReason) ? stateReason : 'other';
 }
 
-export const CLOSURE_TEXT_HE = Object.freeze({
-  completed: 'הבעיה שדיווחת עליה טופלה. התיקון ייכלל בגרסה הבאה של אוצריא (אם עוד לא נכלל).',
-  not_planned: 'הדיווח נבדק, והוחלט שלא לטפל בו בשלב זה.',
-  duplicate: 'הדיווח נסגר כי הבעיה כבר מטופלת בדיווח אחר.',
-  other: 'הדיווח נסגר.',
-});
+/** טקסט הסגירה במייל, לפי שם המוצר המוצג. */
+export function closureText(kind, product = DEFAULT_PRODUCT) {
+  switch (kind) {
+    case 'completed': return `הבעיה שדיווחת עליה טופלה. התיקון ייכלל בגרסה הבאה של ${getProduct(product).displayName} (אם עוד לא נכלל).`;
+    case 'not_planned': return 'הדיווח נבדק, והוחלט שלא לטפל בו בשלב זה.';
+    case 'duplicate': return 'הדיווח נסגר כי הבעיה כבר מטופלת בדיווח אחר.';
+    default: return 'הדיווח נסגר.';
+  }
+}
+
+// הטקסטים של אוצריא (ברירת המחדל)
+export const CLOSURE_TEXT_HE = Object.freeze(Object.fromEntries(CLOSURE_KINDS.map((k) => [k, closureText(k)])));
 
 /**
  * מי מקבל מייל: יש מייל, לא הסיר את עצמו, וטרם קיבל הודעה על הסגירה הזו. מייל אחד לכל כתובת.
@@ -35,13 +42,15 @@ export function planClosureNotifications(reports) {
 
 /**
  * @param {{number:number, state:string, state_reason?:string|null, url?:string}} issue
- * @param {{sendClosedMail:Function, config:object, now?:Date, Model?:object}} deps
+ * @param {{sendClosedMail:Function, config:object, product?:string, now?:Date, Model?:object}} deps
+ *   product — המוצר שה-issue בריפו שלו; אותו מספר בריפו אחר שייך לדיווחים אחרים.
  * @returns {Promise<{transition:string, notified:number, failed:number}>}
  */
 export async function handleIssueStateChange(issue, deps) {
   const Model = deps.Model || AppReport;
   const now = deps.now || new Date();
-  const filter = { issueNumber: issue.number };
+  const product = deps.product || DEFAULT_PRODUCT;
+  const filter = { ...productFilter(product), issueNumber: issue.number };
 
   if (issue.state !== 'closed') {
     await Model.updateMany(filter, { $set: { issueState: 'open', issueStateReason: null, notifiedClosedAt: null, issueCheckedAt: now } });
@@ -70,11 +79,12 @@ export async function handleIssueStateChange(issue, deps) {
     try {
       result = await deps.sendClosedMail({
         to: group.email,
+        product,
         reportTitle: first.title,
         issueNumber: issue.number,
         issueUrl: issue.url || null,
         reasonKind: kind,
-        reasonText: CLOSURE_TEXT_HE[kind],
+        reasonText: closureText(kind, product),
         unsubscribeUrl: deps.config?.unsubscribeSecret
           ? buildUnsubscribeUrl(deps.config.siteUrl, first.reportId, deps.config.unsubscribeSecret)
           : null,

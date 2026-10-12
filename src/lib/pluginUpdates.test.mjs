@@ -137,3 +137,19 @@ test('כמה תוספים בבקשה אחת', () => {
   assert.equal(results.find((r) => r.uid === 'org.example.sample').hasUpdate, false)
   assert.equal(results.find((r) => r.uid === 'org.example.other').hasUpdate, true)
 })
+
+test('העדכון המוצע נושא את sha256 של הגרסה שנבחרה (null לקובץ ישן)', () => {
+  const p = plugin({
+    uid: 'org.example.h',
+    version: '2.0.0',
+    compatibleWith: '0.9.96',
+    versions: [{ version: '1.5.0', compatibleWith: '0.9.94', maxAppVersion: '0.9.95', pluginFileExt: '.otzplugin', pluginFileSha256: 'b'.repeat(64) }]
+  })
+  p.pluginFileSha256 = 'a'.repeat(64)
+  const [live] = resolvePluginUpdates([p], [{ uid: 'org.example.h', installedVersion: '1.0.0' }], '0.9.97')
+  assert.equal(live.sha256, 'a'.repeat(64))
+  const [old] = resolvePluginUpdates([p], [{ uid: 'org.example.h', installedVersion: '1.0.0' }], '0.9.95')
+  assert.equal(old.sha256, 'b'.repeat(64))
+  const [legacy] = resolvePluginUpdates([SAMPLE], [{ uid: 'org.example.sample', installedVersion: '1.5.0' }], '0.9.97')
+  assert.equal(legacy.sha256, null)
+})

@@ -45,7 +45,8 @@ import {
   removePluginAsset,
   saveFileFromFormData,
   saveOptimizedImage,
-  clearImageOptCache
+  clearImageOptCache,
+  pluginFileSha256
 } from '@/lib/pluginStorage'
 
 const PLUGIN_FILE_EXT = '.otzplugin'
@@ -131,6 +132,7 @@ async function saveLiveAssets(pluginId, plugin, editableSource, nextPluginData, 
     const target = path.join(dir, `${PLUGIN_FILE_BASENAME}${PLUGIN_FILE_EXT}`)
     await fs.rm(target, { force: true })
     await fs.rename(path.join(pendingDir, `${PLUGIN_FILE_BASENAME}${PLUGIN_FILE_EXT}`), target)
+    nextPluginData.pluginFileSha256 = pluginFileSha256(await fs.readFile(target))
   }
 
   if (files.removeImage) {
@@ -481,6 +483,7 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
       pluginFileName: editableSource.pluginFileName || livePlugin.pluginFileName,
       pluginFileExt: PLUGIN_FILE_EXT,
       pluginFileSize: editableSource.pluginFileSize || livePlugin.pluginFileSize || 0,
+      pluginFileSha256: editableSource.pluginFileSha256 || null,
       image: editableSource.image ? { ...editableSource.image } : null,
       screenshots: (editableSource.screenshots || []).map((screenshot) => ({ ...screenshot })),
       assetSources: getAssetSources(editableSource)
@@ -489,6 +492,7 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
     if (pluginFile?.size) {
       nextPluginData.pluginFileName = path.basename(pluginFile.name)
       nextPluginData.pluginFileSize = pluginFile.size
+      nextPluginData.pluginFileSha256 = pluginFileSha256(pluginBuffer)
     }
     if (imageFile?.size) {
       nextPluginData.image = {
@@ -545,6 +549,7 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
       plugin.pluginFileName = nextPluginData.pluginFileName
       plugin.pluginFileExt = nextPluginData.pluginFileExt
       plugin.pluginFileSize = nextPluginData.pluginFileSize
+      plugin.pluginFileSha256 = nextPluginData.pluginFileSha256
       // תאריך "עודכן" בחנות משקף רק החלפה בפועל של קובץ התוסף — לא עריכת מטא-דאטה
       if (pluginFile?.size) {
         plugin.fileUpdatedAt = new Date()

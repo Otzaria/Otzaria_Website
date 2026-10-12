@@ -176,6 +176,11 @@ export async function saveFileFromFormData(file, destPath, maxBytes) {
   return buf.length
 }
 
+/** SHA-256 של קובץ תוסף כ-hex קטן — השדה sha256 ב-API. */
+export function pluginFileSha256(buf) {
+  return crypto.createHash('sha256').update(buf).digest('hex')
+}
+
 // קריאת קובץ תוסף מהדיסק
 export async function readPluginAsset(pluginId, relativePath, options = {}) {
   const dir = options.pending ? getPendingPluginDir(pluginId) : getPluginDir(pluginId)

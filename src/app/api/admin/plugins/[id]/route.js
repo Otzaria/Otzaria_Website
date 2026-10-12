@@ -15,7 +15,8 @@ import {
   ensurePluginDir,
   getPendingPluginDir,
   removePluginAsset,
-  clearImageOptCache
+  clearImageOptCache,
+  pluginFileSha256
 } from '@/lib/pluginStorage'
 import { archiveCurrentVersion } from '@/lib/pluginVersions'
 import { compareVersions } from '@/lib/pluginManifest'
@@ -126,6 +127,7 @@ export async function PATCH(request, { params }) {
           const target = path.join(pluginDir, `plugin${pending.pluginFileExt}`)
           await fs.rm(target, { force: true })
           await fs.rename(source, target)
+          plugin.pluginFileSha256 = pluginFileSha256(await fs.readFile(target))
           // קובץ התוסף הוחלף בפועל — מעדכן את תאריך העדכון המוצג בחנות
           plugin.fileUpdatedAt = new Date()
         }

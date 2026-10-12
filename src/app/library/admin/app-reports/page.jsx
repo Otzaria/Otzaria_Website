@@ -3,12 +3,12 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
-import { TYPE_LABELS, TRIGGER_LABELS, IssueStateBadge, formatDateTime } from './shared'
+import { PRODUCT_LABELS, ProductBadge, TYPE_LABELS, TRIGGER_LABELS, IssueStateBadge, formatDateTime } from './shared'
 
 const PAGE_SIZE = 50
 
 export default function AppReportsPage() {
-  const [filters, setFilters] = useState({ type: '', trigger: '', issueState: '' })
+  const [filters, setFilters] = useState({ product: '', type: '', trigger: '', issueState: '' })
   const [page, setPage] = useState(1)
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
@@ -51,7 +51,13 @@ export default function AppReportsPage() {
             {data ? `${data.total} דיווחים` : 'טוען...'}
             {data?.github && (
               <span className="mr-2">
-                · issues ב-<span dir="ltr">{data.github.repo}</span>
+                · issues ב-
+                {(data.github.repos || [{ product: 'otzaria', repo: data.github.repo }]).map((r, i) => (
+                  <span key={r.product}>
+                    {i > 0 && ', '}
+                    <span dir="ltr">{r.repo}</span>
+                  </span>
+                ))}
                 {!data.github.tokenConfigured && <span className="mr-2 text-danger-600 font-bold">(טוקן GitHub לא מוגדר)</span>}
               </span>
             )}
@@ -67,6 +73,7 @@ export default function AppReportsPage() {
       </div>
 
       <div className="glass rounded-2xl p-4 flex flex-wrap gap-4">
+        <FilterSelect label="מוצר" value={filters.product} onChange={(v) => updateFilter('product', v)} options={PRODUCT_LABELS} />
         <FilterSelect label="סוג" value={filters.type} onChange={(v) => updateFilter('type', v)} options={TYPE_LABELS} />
         <FilterSelect label="מקור" value={filters.trigger} onChange={(v) => updateFilter('trigger', v)} options={TRIGGER_LABELS} />
         <FilterSelect
@@ -92,6 +99,7 @@ export default function AppReportsPage() {
             <thead className="border-b border-surface-variant text-sm text-on-surface/60">
               <tr>
                 <th className="p-4">כותרת</th>
+                <th className="p-4">מוצר</th>
                 <th className="p-4">סוג</th>
                 <th className="p-4">מקור</th>
                 <th className="p-4">גרסה</th>
@@ -110,6 +118,7 @@ export default function AppReportsPage() {
                     {r.hasEmail && <span className="material-symbols-outlined text-base text-on-surface/40 mr-2 align-middle" title="השאיר כתובת מייל">mail</span>}
                     {r.lastInboundAt && <span className="material-symbols-outlined text-base text-info-600 mr-2 align-middle" title={`המדווח השיב במייל (${formatDateTime(r.lastInboundAt)})`}>reply</span>}
                   </td>
+                  <td className="p-4 text-sm"><ProductBadge report={r} /></td>
                   <td className="p-4 text-sm">{TYPE_LABELS[r.type] || r.type}</td>
                   <td className="p-4 text-sm">{TRIGGER_LABELS[r.trigger] || r.trigger}</td>
                   <td className="p-4 text-sm" dir="ltr">{r.appVersion}</td>

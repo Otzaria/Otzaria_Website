@@ -23,7 +23,7 @@ function bearerMatches(request, secret) {
 
 /**
  * @param {Request} request
- * @param {{config?:object, connectDB?:Function, github?:object, fetchImpl?:Function, now?:Date}} deps
+ * @param {{config?:object, connectDB?:Function, githubFor?:Function, fetchImpl?:Function, now?:Date}} deps
  */
 export async function handleInboundEmailPost(request, deps = {}) {
   const config = deps.config || getAppReportsConfig();

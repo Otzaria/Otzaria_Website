@@ -43,7 +43,7 @@ export async function GET(request, { params }) {
     await dbConnect()
     // תוסף מושהה אינו נחשף בנתיב הציבורי הזה (ראו pluginVisibility)
     const plugin = await Plugin.findOne({ _id: id, ...PUBLIC_PLUGIN_FILTER })
-      .select('name slug version status compatibleWith maxAppVersion requiresNetwork pluginFileExt pluginFileSize versions updatedAt')
+      .select('name slug version status compatibleWith maxAppVersion requiresNetwork pluginFileExt pluginFileSize pluginFileSha256 versions updatedAt')
       .lean()
     if (!plugin) {
       return notFound('Plugin not found')
@@ -87,6 +87,7 @@ export async function GET(request, { params }) {
         maxAppVersion: selected.maxAppVersion,
         requiresNetwork: selected.requiresNetwork,
         pluginFileSize: selected.pluginFileSize,
+        sha256: selected.sha256,
         releasedAt: selected.releasedAt,
         downloadUrl: selected.downloadUrl,
         supportsDirectInstall: selected.supportsDirectInstall,

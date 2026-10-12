@@ -42,7 +42,7 @@ export async function GET(request) {
       pluginUid: { $in: requests.map((r) => r.uid) },
       ...PUBLIC_PLUGIN_FILTER
     })
-      .select('pluginUid version status compatibleWith maxAppVersion requiresNetwork pluginFileExt pluginFileSize versions updatedAt')
+      .select('pluginUid version status compatibleWith maxAppVersion requiresNetwork pluginFileExt pluginFileSize pluginFileSha256 versions updatedAt')
       .lean()
 
     const updates = resolvePluginUpdates(plugins, requests, appVersion)

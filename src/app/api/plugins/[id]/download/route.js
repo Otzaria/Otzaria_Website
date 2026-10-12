@@ -4,14 +4,16 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import PluginInstallToken from '@/models/PluginInstallToken'
-import { readPluginAsset, readVersionAsset, PLUGIN_FILE_BASENAME } from '@/lib/pluginStorage'
+import { readPluginAsset, readVersionAsset, PLUGIN_FILE_BASENAME, pluginFileSha256 } from '@/lib/pluginStorage'
+import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags'
+import { invalidatePluginSearchIndex } from '@/lib/pluginSearchIndex'
 import { parsePluginRef } from '@/lib/pluginRef'
 import { hasPluginsAccess } from '@/lib/roles'
 import { canAccessSuspended, isPluginSuspended } from '@/lib/pluginVisibility'
 import { APP_VERSION_PARAM, isValidAppVersion, resolveCompatibleVersion, lowestSupportedAppVersion } from '@/lib/pluginCompatibility'
 
 // GET /api/plugins/[id]/download - הורדת קובץ התוסף.
-// תומך גם בהורדת גרסה ארכיונית ספציפית דרך /api/plugins/<id>@<version>/download,
+// תומך גם בהורדת גרסה ספציפית דרך /api/plugins/<id>@<version>/download או ?version=<version>,
 // וגם בבחירת גרסה אוטומטית לפי גרסת אוצריא דרך ?appVersion=0.9.94 — מוריד את
 // הגרסה הגבוהה ביותר של התוסף שתומכת בגרסת האפליקציה הזו (ראו pluginCompatibility).
 // רק תוספים מאושרים פתוחים לציבור; מנהלי תוספים יכולים להוריד גם תוספים לא מאושרים.
@@ -25,6 +27,20 @@ export async function GET(request, { params }) {
     }
     const { searchParams } = new URL(request.url)
     const includePending = searchParams.get('pending') === '1'
+
+    // ?version=<גרסת תוסף> — בדיוק הגרסה הזו (חיה או ארכיונית), 404 כשאינה קיימת
+    const pinnedVersion = searchParams.get('version')
+    if (pinnedVersion !== null) {
+      if (version || includePending || searchParams.get(APP_VERSION_PARAM)) {
+        return NextResponse.json(
+          { error: `Cannot combine version with @version, pending=1 or ${APP_VERSION_PARAM}` },
+          { status: 400 }
+        )
+      }
+      if (!pinnedVersion.trim()) {
+        return NextResponse.json({ error: 'Plugin version not found' }, { status: 404 })
+      }
+    }
 
     // ?appVersion=<גרסת אוצריא> — השרת בוחר את גרסת התוסף המתאימה.
     const appVersionRaw = (searchParams.get(APP_VERSION_PARAM) || '').trim()
@@ -77,7 +93,7 @@ export async function GET(request, { params }) {
 
     // רזולוציה לפי גרסת אוצריא: הופכת את appVersion לגרסת תוסף קונקרטית.
     // resolvedVersion=null פירושו "הגרסה החיה" — ממשיך לזרימה הרגילה למטה.
-    let resolvedVersion = version
+    let resolvedVersion = version || pinnedVersion
     if (appVersionRaw) {
       if (!plugin.isApproved && !isAdmin && !isOwner) {
         return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
@@ -119,6 +135,12 @@ export async function GET(request, { params }) {
         }
         throw err
       }
+      if (!entry.pluginFileSha256) {
+        await rememberFileSha256(
+          { _id: plugin._id, versions: { $elemMatch: { version: resolvedVersion, pluginFileSha256: null } } },
+          { 'versions.$.pluginFileSha256': pluginFileSha256(archiveBuf) }
+        )
+      }
       if (plugin.isApproved) {
         plugin.incrementDownload(resolvedVersion).catch(e => console.error('Failed to increment download count:', e))
       }
@@ -154,6 +176,13 @@ export async function GET(request, { params }) {
       throw err
     }
 
+    if (!includePending && !plugin.pluginFileSha256) {
+      await rememberFileSha256(
+        { _id: plugin._id, version: plugin.version, pluginFileSha256: null },
+        { pluginFileSha256: pluginFileSha256(buf) }
+      )
+    }
+
     if (!includePending && plugin.isApproved) {
       // עדכון מונה הורדות רק לתוספים פומביים, לא בעת בדיקת מנהל
       plugin.incrementDownload().catch(e => console.error('Failed to increment download count:', e))
@@ -164,6 +193,21 @@ export async function GET(request, { params }) {
   } catch (error) {
     console.error('Error downloading plugin:', error)
     return NextResponse.json({ error: 'Failed to download plugin' }, { status: 500 })
+  }
+}
+
+// קובץ ישן בלי טביעה: נשמרת בהורדה הראשונה. העלאה חדשה כבר שומרת טביעה, ולכן התנאי null
+// מונע דריסה של קובץ שהוחלף בינתיים.
+async function rememberFileSha256(filter, set) {
+  try {
+    const res = await Plugin.updateOne(filter, { $set: set })
+    if (res?.modifiedCount) {
+      invalidatePluginSearchIndex()
+      revalidateNow(CACHE_TAGS.PLUGINS_PUBLIC)
+    }
+  } catch (e) {
+    // ההורדה עצמה לא תלויה בטביעה — ננסה שוב בהורדה הבאה
+    console.error('Failed to store plugin file sha256:', e)
   }
 }
 

@@ -5,6 +5,7 @@
 import zlib from 'node:zlib';
 import { promisify } from 'node:util';
 import { validateEmail } from '../validation-utils.js';
+import { DEFAULT_PRODUCT, isProductKey } from './products.js';
 
 const gunzip = promisify(zlib.gunzip);
 
@@ -140,6 +141,9 @@ export async function validateAppReport(raw) {
 
   if (!REPORT_TYPES.includes(raw.type)) return fail('type', 'unknown');
   if (!TRIGGERS.includes(raw.trigger)) return fail('trigger', 'unknown');
+  // שדה אופציונלי: בלעדיו (או null) הדיווח של אוצריא, כמו בלקוחות הישנים
+  const product = raw.product === undefined || raw.product === null ? DEFAULT_PRODUCT : raw.product;
+  if (!isProductKey(product)) return fail('product', 'unknown');
   const manual = raw.trigger === 'manual';
 
   const strings = {};
@@ -214,6 +218,7 @@ export async function validateAppReport(raw) {
     value: {
       schema: 1,
       reportId,
+      product,
       type: raw.type,
       trigger: raw.trigger,
       ...strings,

@@ -3,7 +3,7 @@ import { SearchFeedbackPurgeSnapshot as Snapshot, SearchFeedbackPurgeChunk as Ch
 import SearchFeedbackEvent from '../../models/SearchFeedbackEvent.js';
 import { orderedEvents } from './event-query.js';
 import { committedEvents } from './ingestion.js';
-import { MAX_EVENT_AGE_MS, CLOCK_SKEW_MS } from './validation.js';
+import { MAX_CARRIED_EVENT_AGE_MS, CLOCK_SKEW_MS } from './validation.js';
 
 export const PURGE_PREVIEW_MS = 15 * 60 * 1000;
 export const PURGE_CHUNK_SIZE = 1000;
@@ -108,7 +108,7 @@ export async function deletePurgeSnapshot(filter, { confirmCount, asOf, previewI
         [{ $replaceWith: {
           _id: '$_id', eventId: '$eventId', ingestCommitted: { $literal: false },
           purgedUntil: { $max: [
-            { $add: [{ $ifNull: ['$clientTime', '$$NOW'] }, MAX_EVENT_AGE_MS + CLOCK_SKEW_MS] },
+            { $add: [{ $ifNull: ['$clientTime', '$$NOW'] }, MAX_CARRIED_EVENT_AGE_MS + CLOCK_SKEW_MS] },
             { $add: ['$$NOW', CLOCK_SKEW_MS] },
           ] },
         } }],

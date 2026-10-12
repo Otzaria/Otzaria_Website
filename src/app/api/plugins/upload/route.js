@@ -30,7 +30,8 @@ import {
   saveOptimizedImage,
   deletePluginDir,
   PLUGIN_FILE_BASENAME,
-  IMAGE_BASENAME
+  IMAGE_BASENAME,
+  pluginFileSha256
 } from '@/lib/pluginStorage'
 import { unauthorized, badRequest, serverError, apiError } from '@/lib/apiResponse'
 
@@ -259,6 +260,7 @@ export async function POST(request) {
           pluginFileName: path.basename(pluginFile.name),
           pluginFileExt: PLUGIN_FILE_EXT,
           pluginFileSize: pluginFile.size,
+          pluginFileSha256: pluginFileSha256(pluginBuffer),
           fileUpdatedAt: new Date(),
           image: imageMeta || { ext: null, contentType: null },
           screenshots: screenshotMeta,

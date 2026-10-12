@@ -39,6 +39,7 @@ export async function archiveCurrentVersion(plugin) {
     pluginFileName: plugin.pluginFileName || '',
     pluginFileExt: fileExt,
     pluginFileSize: plugin.pluginFileSize || 0,
+    pluginFileSha256: plugin.pluginFileSha256 || null,
     status: plugin.status,
     compatibleWith: plugin.compatibleWith || '',
     maxAppVersion: plugin.maxAppVersion || null,
@@ -70,6 +71,7 @@ export function formatVersionForPublic(livePublic, plugin, versionEntry) {
     shortDescription: versionEntry.shortDescription || livePublic.shortDescription,
     description: versionEntry.description || livePublic.description,
     pluginFileSize: versionEntry.pluginFileSize || 0,
+    sha256: versionEntry.pluginFileSha256 || null,
     updatedAt: versionEntry.archivedAt
       ? new Date(versionEntry.archivedAt).toISOString().split('T')[0]
       : livePublic.updatedAt,

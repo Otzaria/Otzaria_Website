@@ -107,6 +107,7 @@ export function getLivePluginData(plugin) {
     pluginFileName: plugin.pluginFileName || '',
     pluginFileExt: plugin.pluginFileExt || '.otzplugin',
     pluginFileSize: plugin.pluginFileSize || 0,
+    pluginFileSha256: plugin.pluginFileSha256 || null,
     image: plugin.image?.ext ? { ext: plugin.image.ext, contentType: plugin.image.contentType || null } : null,
     screenshots: (plugin.screenshots || []).map((screenshot) => ({
       ext: screenshot.ext,
@@ -137,6 +138,7 @@ function buildVersionsList(plugin) {
     maxAppVersion: entry.maxAppVersion,
     requiresNetwork: entry.requiresNetwork,
     pluginFileSize: entry.pluginFileSize,
+    sha256: entry.sha256,
     downloadUrl: entry.downloadUrl,
     releasedAt: entry.releasedAt,
     supportsDirectInstall: entry.supportsDirectInstall,
@@ -192,6 +194,8 @@ export function formatPluginForPublic(plugin, options = {}) {
     ...ratingFieldsForPublic(plugin),
     // גודל קובץ התוסף בבייטים (0 = לא ידוע, לתוספים ותיקים שטרם עברו backfill)
     pluginFileSize: source.pluginFileSize || 0,
+    // SHA-256 של הקובץ שמוגש ב-downloadUrl; null בקבצים ישנים שטרם הורדו
+    sha256: source.pluginFileSha256 || null,
     supportsDirectInstall: (source.pluginFileExt || '').toLowerCase() === '.otzplugin',
     // תאימות לאחור: השדה נשאר בשם isPinned אך משמעותו כיום "נבחר" (featured).
     // רק נתיבים שיודעים את רשימת הנבחרים מעבירים options.isFeatured.

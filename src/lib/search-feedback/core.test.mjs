@@ -216,6 +216,33 @@ test('events: גבולות מותרים — אירוע בן 30 יום, dwell ש�
   assert.equal(validateEventsBatch(big, NOW).ok, true);
 });
 
+test('events: carriedOffline:true מקבל אירוע עד 90 יום; בלעדיו אותו אירוע נדחה', () => {
+  const DAY = 24 * 3600 * 1000;
+  const aged = (days, extra = {}) => {
+    const raw = batch(NOW, extra);
+    raw.events[0].clientTime = new Date(NOW.getTime() - days * DAY).toISOString();
+    return raw;
+  };
+  const plain = validateEventsBatch(aged(60), NOW);
+  assert.equal(plain.ok, true);
+  assert.deepEqual(plain.value.rejectedSamples, [{ index: 0, field: 'events[0].clientTime' }]);
+
+  const carried = validateEventsBatch(aged(90, { carriedOffline: true }), NOW);
+  assert.equal(carried.ok, true);
+  assert.equal(carried.value.rejected, 0);
+
+  const tooOld = validateEventsBatch(aged(91, { carriedOffline: true }), NOW);
+  assert.deepEqual(tooOld.value.rejectedSamples, [{ index: 0, field: 'events[0].clientTime' }]);
+
+  assert.equal(validateEventsBatch(aged(31, { carriedOffline: false }), NOW).value.rejected, 1);
+});
+
+test('events: carriedOffline שאינו בוליאני → 422 על השדה', () => {
+  for (const bad of ['true', 1, null, {}]) {
+    assert.deepEqual(validateEventsBatch(batch(NOW, { carriedOffline: bad }), NOW), { ok: false, field: 'carriedOffline' }, String(bad));
+  }
+});
+
 // ------------------------------------------------------------ config/admin
 
 test('config: הקליטה פעילה כברירת מחדל; רק 0/false מפורש מכבה', () => {

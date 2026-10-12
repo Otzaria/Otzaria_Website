@@ -1,13 +1,16 @@
 /**
- * הגדרות דיווחי התוכנה. היעד קבוע בקוד; בלי טוקן הדיווחים נשמרים כ-issuePending וה-cron ינסה שוב.
+ * הגדרות דיווחי התוכנה. היעדים קבועים בקוד (products.js); בלי טוקן הדיווחים נשמרים כ-issuePending וה-cron ינסה שוב.
  */
-export const DEFAULT_REPO = 'Otzaria/otzaria';
+import { PRODUCTS, DEFAULT_PRODUCT } from './products.js';
+
+export const DEFAULT_REPO = PRODUCTS[DEFAULT_PRODUCT].repo;
 export const PUBLIC_SITE_URL = 'https://otzaria.org';
 
 export function getAppReportsConfig(env = process.env) {
   return {
-    // אותו טוקן שהאתר כותב בו לספרייה; לבוט יש issues על ריפו התוכנה.
+    // אותו טוקן שהאתר כותב בו לספרייה, לכל המוצרים; לבוט יש issues על הריפו של כל מוצר.
     githubToken: (env.DICTA_LIBRARY_GITHUB_TOKEN || '').trim() || null,
+    // ריפו אוצריא, לתאימות; הריפו של כל מוצר — getProduct(key).repo
     repo: DEFAULT_REPO,
     webhookSecret: (env.APP_REPORTS_WEBHOOK_SECRET || '').trim() || null,
     unsubscribeSecret: env.NEXTAUTH_SECRET || null,

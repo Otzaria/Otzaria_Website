@@ -1,5 +1,19 @@
 'use client'
 
+import { PRODUCTS, productOf } from '@/lib/app-reports/products'
+
+export const PRODUCT_LABELS = Object.fromEntries(Object.values(PRODUCTS).map((p) => [p.key, p.displayName]))
+
+// המוצר שהדיווח הגיע ממנו; לכל מוצר ריפו issues משלו
+export function ProductBadge({ report }) {
+  const product = productOf(report)
+  return (
+    <span className="rounded-full bg-primary-container px-3 py-1 text-xs font-bold text-primary whitespace-nowrap">
+      {PRODUCT_LABELS[product] || product}
+    </span>
+  )
+}
+
 export const TYPE_LABELS = { bug: 'תקלה', crash: 'קריסה', performance: 'ביצועים', suggestion: 'הצעה' }
 export const TRIGGER_LABELS = { manual: 'ידני', crash_prompt: 'אחרי קריסה', auto_crash: 'אוטומטי' }
 

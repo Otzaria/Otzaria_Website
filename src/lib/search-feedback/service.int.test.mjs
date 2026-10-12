@@ -329,6 +329,29 @@ test('תיקון B: אירוע שגוי או ישן מ-30 יום מדולג, ש�
   assert.equal(key.batchCount, 1);
 });
 
+test('carriedOffline: אירוע בן 80 יום נקלט; אחרי ניקוי שליחה חוזרת אינה מחזירה אותו', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const kp = randomKeyPair();
+  await register(kp);
+  const now = new Date();
+  const old = new Date(now.getTime() - 80 * 24 * 3600 * 1000);
+  const body = batch(now, { carriedOffline: true, events: [event('vote', old)] });
+  const first = await sendEvents(kp, body);
+  assert.equal(first.status, 200, JSON.stringify(first.body));
+  assert.equal(first.body.accepted, 1);
+  assert.equal((await sendEvents(kp, { ...body, carriedOffline: undefined, batchId: `${body.batchId}x` })).body.rejected, 1);
+
+  const all = buildPurgeFilter({ all: true });
+  const preview = await previewPurge(all.filter);
+  assert.deepEqual(await purgeEvents(all.filter, { confirmCount: 1, asOf: preview.asOf }), { ok: true, deleted: 1 });
+  // המצבה חייבת להחזיק כל עוד מנה מועברת עוד יכולה להביא את האירוע (90 יום), לא רק 30
+  const [tomb] = await SearchFeedbackEvent.find({ purgedUntil: { $exists: true } }).lean();
+  assert.ok(tomb.purgedUntil.getTime() >= old.getTime() + 90 * 24 * 3600 * 1000);
+  const again = await sendEvents(kp, { ...body, batchId: `${body.batchId}y` });
+  assert.equal(again.body.accepted, 0, JSON.stringify(again.body));
+  assert.equal(await SearchFeedbackEvent.countDocuments(committedEvents()), 0);
+});
+
 test('סטטיסטיקה: מטמון קצר, fresh עוקף, חסימה פוסלת', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const kp = randomKeyPair();

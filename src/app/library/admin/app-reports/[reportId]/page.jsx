@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { useDialog } from '@/components/providers/DialogContext'
-import { TYPE_LABELS, TRIGGER_LABELS, IssueStateBadge, formatDateTime, formatBytes } from '../shared'
+import { ProductBadge, TYPE_LABELS, TRIGGER_LABELS, IssueStateBadge, formatDateTime, formatBytes } from '../shared'
 
 export default function AppReportDetailPage() {
   const { reportId } = useParams()
@@ -41,6 +41,7 @@ export default function AppReportDetailPage() {
       <div className="glass rounded-2xl p-6 space-y-4">
         <div className="flex flex-wrap items-center gap-3">
           <h2 className="text-2xl font-bold text-on-surface">{r.title}</h2>
+          <ProductBadge report={r} />
           <span className="rounded-full bg-info-100 px-3 py-1 text-xs font-bold text-info-800">{TYPE_LABELS[r.type] || r.type}</span>
           <span className="rounded-full bg-surface px-3 py-1 text-xs font-bold text-on-surface/60">{TRIGGER_LABELS[r.trigger] || r.trigger}</span>
           <IssueStateBadge report={r} />
