@@ -10,6 +10,7 @@ import { formatHebrewDate } from '@/lib/hebrewDate'
 import RatingStars from '@/components/plugins/RatingStars'
 import { statusBadgeClass } from '@/components/plugins/StatusBadge'
 import DirectInstallButton from '@/components/plugins/DirectInstallButton'
+import PlatformBadges from '@/components/plugins/PlatformBadges'
 import type { DirectInstallState } from '@/components/plugins/useDirectInstall'
 import type { PluginCardData } from '@/components/plugins/types'
 
@@ -88,6 +89,9 @@ export default function PluginCard({ plugin, installState, onInstall, priority =
             {plugin.shortDescription}
           </p>
         </Link>
+
+        {/* פלטפורמות — רק לתוסף שהגביל את עצמו לחלק מהפלטפורמות */}
+        <PlatformBadges platforms={plugin.platforms} />
 
         {/* Tags */}
         <div className="flex flex-wrap gap-2">

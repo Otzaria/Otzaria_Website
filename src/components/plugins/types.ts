@@ -1,5 +1,8 @@
 // טיפוסים משותפים לדפי חנות התוספים (ראו docs/PLUGIN_STORE_REDESIGN_PLAN.md סעיף 7.0)
 
+// מזהי הפלטפורמות (ראו src/lib/pluginPlatforms.js)
+export type PluginPlatformId = 'windows' | 'linux' | 'macos' | 'android' | 'ios'
+
 // הפניה מינימלית לקטגוריה (כפי שמצורפת לתוסף ע"י ה-API)
 export interface CategoryRef {
   slug: string
@@ -20,6 +23,8 @@ export interface Plugin {
   // מועד השינוי האחרון של קובץ התוסף בפועל (לא אישורים/עריכות מטא-דאטה)
   fileUpdatedAt?: string
   compatibleWith: string
+  // פלטפורמות נתמכות מה-manifest ("platforms"); [] / חסר = כל הפלטפורמות
+  platforms?: PluginPlatformId[]
   tags: string[]
   image: string
   screenshots: string[]
@@ -53,6 +58,7 @@ export type PluginCardData = Pick<
   | 'downloadUrl'
   | 'supportsDirectInstall'
   | 'tags'
+  | 'platforms'
   | 'downloadCount'
   | 'ratingAvg'
   | 'ratingCount'

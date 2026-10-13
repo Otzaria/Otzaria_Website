@@ -4,6 +4,7 @@ import { extractZipFiles, readPluginZipDirectory, parsePluginManifest } from './
 const {
   buildManifest, validateManifestFields, validateStartupWhenConditions,
   analyzeApiUsage, checkDesignCompliance, isCodeLikeFile, isStyleLikeFile,
+  MANIFEST_RULES, analyzePlatforms,
 } = otzariaValidator
 
 // hosts חשופים (ללא סכימה) שמותרים ב-network.allowlist.
@@ -19,6 +20,9 @@ const STORE_MANIFEST_RULES = [
   'description',
   'toolTabTitle',
   'permissions',
+  // שדה "platforms" (אופציונלי) — ערך פגום נשמר לתצוגה ולסינון בחנות, ולכן נחסם.
+  // מוגן בבדיקת קיום: גרסת וולידטור שקדמה לשדה פשוט לא מריצה את הכלל.
+  ...(MANIFEST_RULES?.platforms ? ['platforms'] : []),
 ]
 
 // --- Public entry point ------------------------------------------------------
@@ -147,6 +151,20 @@ export function validatePluginArchiveCore(buffer, spec) {
   for (const finding of usage.methodVersionErrors) errors.push(finding.message)
   for (const finding of usage.missingEventPermissions) warnings.push(finding.message)
 
+  // ---- פלטפורמות: הצהרה מול קריאות API מוגבלות-פלטפורמה ----
+  // היוריסטיקה (סריקה סטטית) — ולכן advisory ולא warning: נתיבי ההעלאה פוסלים על
+  // כל אזהרה, והסקה שגויה לא אמורה לחסום תוסף שעובד.
+  let platforms = null
+  if (typeof analyzePlatforms === 'function') {
+    try {
+      platforms = analyzePlatforms({ manifest: normalized, files, apiUsage: usage.apiUsage })
+      for (const finding of platforms.mismatches) advisories.push(finding.message)
+      if (platforms.suggestion) advisories.push(platforms.suggestion.message)
+    } catch (platformErr) {
+      console.warn('[pluginValidation] platform analysis failed:', platformErr?.message)
+    }
+  }
+
   // ---- Design compliance ----
   let design = { compliant: false, violations: [] }
   try {
@@ -161,6 +179,8 @@ export function validatePluginArchiveCore(buffer, spec) {
     advisories,
     design,
     usedApiMethods: [...usage.apiUsage.keys()],
+    // { declared, inferred } — null בגרסת וולידטור שאינה מכירה את השדה
+    platforms: platforms ? { declared: platforms.declared, inferred: platforms.inferred } : null,
     spec: { source: spec.source, fetchedAt: spec.fetchedAt }
   }
 }

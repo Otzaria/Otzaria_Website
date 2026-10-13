@@ -1,10 +1,13 @@
 // סינון מקומי (בצד הלקוח) של רשימת "כל התוספים" — חולץ מ-src/app/plugins/all
 // כדי שהלוגיקה תהיה ניתנת לבדיקה בנפרד מהקומפוננטה (ראו pluginFilter.test.mjs).
 //
-// שלושת התנאים הם AND: חיפוש חופשי (שם/תיאור קצר/תיאור מלא/תגית), סטטוס
-// מדויק, ותגית מדויקת. 'all' משמעו "בלי סינון" עבור סטטוס/תגית.
+// ארבעת התנאים הם AND: חיפוש חופשי (שם/תיאור קצר/תיאור מלא/תגית), סטטוס
+// מדויק, תגית מדויקת ופלטפורמה. 'all' משמעו "בלי סינון". בסינון פלטפורמה,
+// תוסף שלא הצהיר על platforms נחשב זמין בכולן (ראו pluginPlatforms.js).
 
-export function filterPlugins(plugins, { searchQuery = '', statusFilter = 'all', activeTag = 'all' } = {}) {
+import { pluginSupportsPlatform } from './pluginPlatforms.js'
+
+export function filterPlugins(plugins, { searchQuery = '', statusFilter = 'all', activeTag = 'all', platformFilter = 'all' } = {}) {
   let filtered = plugins
 
   if (searchQuery) {
@@ -23,6 +26,10 @@ export function filterPlugins(plugins, { searchQuery = '', statusFilter = 'all',
 
   if (activeTag !== 'all') {
     filtered = filtered.filter(plugin => plugin.tags?.includes(activeTag))
+  }
+
+  if (platformFilter !== 'all') {
+    filtered = filtered.filter(plugin => pluginSupportsPlatform(plugin, platformFilter))
   }
 
   return filtered

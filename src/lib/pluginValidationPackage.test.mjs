@@ -37,6 +37,8 @@ test('כללי המניפסט שהחנות אינה חוסמת עליהם מוכ
   // אין כאן "מה נכון" — יש כאן "מה הוכרע". הרחבת הרשימה היא החלטת מדיניות.
   const enforcedByStore = new Set([
     'schemaVersion', 'name', 'description', 'toolTabTitle', 'permissions',
+    // הוכרע: ערך platforms פגום נחסם, כי החנות שומרת ומסננת לפיו (וולידטור 1.20+)
+    'platforms',
   ])
   const notEnforcedByStore = validator.ALL_MANIFEST_RULES.filter((r) => !enforcedByStore.has(r))
   assert.deepEqual(notEnforcedByStore, [
