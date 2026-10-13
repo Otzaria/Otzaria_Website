@@ -16,7 +16,7 @@ const FIELD_BOOSTS = { name: 8, tags: 5, shortDescription: 3, author: 2, descrip
 
 const SELECT_FIELDS = [
   'name', 'slug', 'shortDescription', 'description', 'version', 'status', 'author',
-  'authorId', 'compatibleWith', 'maxAppVersion', 'requiresNetwork', 'tags', 'homepage',
+  'authorId', 'compatibleWith', 'maxAppVersion', 'requiresNetwork', 'platforms', 'tags', 'homepage',
   'pluginFileName', 'pluginFileExt', 'pluginFileSize', 'image', 'screenshots',
   'originalDate', 'fileUpdatedAt', 'downloadCount', 'versions', 'updatedAt', 'createdAt',
   'ratingCount', 'ratingAvg', 'ratingVerifiedCount', 'ratingBreakdown', 'ratingScore'

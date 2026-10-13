@@ -1,5 +1,6 @@
 import { ALLOWED_PLUGIN_STATUSES, MIN_SUPPORTED_APP_VERSION, PLUGIN_VERSION_RE, formatPluginForPublic } from '@/lib/pluginSubmission'
 import { compareVersions } from '@/lib/pluginManifest'
+import { normalizeManifestPlatforms } from '@/lib/pluginPlatforms'
 
 // לוגיקה טהורה עבור src/app/api/admin/plugins/[id]/edit/route.js — ולידציית
 // שדות הטופס, בניית תשובת ה-GET ומודל ההחלטה של תגית "מראה תואם לאוצריא".
@@ -126,6 +127,7 @@ export function deriveOwnerFieldsFromManifest(manifest) {
     maxAppVersion: manifestMaxAppVersion || null,
     homepage: manifest.homepage ? manifest.homepage.toString().trim() : '',
     requiresNetwork: manifest.network?.enabled === true,
+    platforms: normalizeManifestPlatforms(manifest.platforms),
     ...(manifestName ? { name: manifestName } : {}),
     ...(manifestAuthor ? { author: manifestAuthor } : {}),
     ...(manifestDesc ? { shortDescription: manifestDesc } : {})

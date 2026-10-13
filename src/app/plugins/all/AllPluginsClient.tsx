@@ -2,7 +2,7 @@
 
 // חלק הלקוח של דף "כל התוספים" — מקבל את הרשימה המלאה כ-prop מה-Server
 // Component (page.tsx) במקום לשלוף אותה בעצמו ב-fetch, אבל שומר על כל
-// האינטראקטיביות: סינון מקומי (חיפוש/סטטוס/תגית, עם שימור מצב ב-URL),
+// האינטראקטיביות: סינון מקומי (חיפוש/סטטוס/תגית/פלטפורמה, עם שימור מצב ב-URL),
 // התקנה ישירה (useDirectInstall) + דיאלוגים.
 //
 // לוגיקת הסינון עצמה חולצה ל-src/lib/pluginFilter.js כדי שתהיה ניתנת
@@ -11,8 +11,13 @@
 // ביצועים: הדף סטטי (ISR), ולכן המסננים מה-URL נקראים מ-window.location אחרי
 // hydration ולא דרך useSearchParams — useSearchParams בזמן prerender מבטל את
 // רינדור הגבול בשרת, וה-HTML הסטטי הכיל רק ספינר במקום רשימת התוספים. עכשיו
-// ה-HTML מכיל את הרשימה המלאה (מצב ברירת המחדל), וקישור עם ?q=/tag=/status=
+// ה-HTML מכיל את הרשימה המלאה (מצב ברירת המחדל), וקישור עם ?q=/tag=/status=/platform=
 // מסונן מיד אחרי ה-hydration.
+//
+// פלטפורמה: ?platform= מפורש גובר; אחרת ברירת המחדל מזוהה מה-User-Agent של הגולש
+// (initialPlatformFilter) ואינה נכתבת ל-URL — רק בחירה מפורשת של המשתמש נשמרת בו.
+// הזיהוי האוטומטי מסתיר רק תוספים שהצהירו במפורש על פלטפורמות אחרות, ולכן
+// "קפיצה" אחרי ה-hydration נדירה (רוב התוספים אינם מגבילים את עצמם).
 //
 // כדי שקישור מסונן לא יציג קודם את כל הרשימה ואז "יקפוץ" לרשימה המסוננת (CLS):
 // - בטעינה ישירה, סקריפט inline קטן (FILTER_PENDING_SCRIPT) רץ לפני שהתוכן נצבע,
@@ -32,6 +37,7 @@ import PluginCard from '@/components/plugins/PluginCard'
 import PluginSearchBox from '@/components/plugins/PluginSearchBox'
 import Breadcrumbs from '@/components/plugins/Breadcrumbs'
 import { filterPlugins, extractSortedTags } from '@/lib/pluginFilter'
+import { PLUGIN_PLATFORMS, initialPlatformFilter } from '@/lib/pluginPlatforms'
 import type { PluginCardData } from '@/components/plugins/types'
 
 // מזהה אלמנט ה-style שהסקריפט מוסיף ל-head; מוסר אחרי אתחול המסננים מה-URL.
@@ -40,7 +46,7 @@ import type { PluginCardData } from '@/components/plugins/types'
 const FILTER_PENDING_STYLE_ID = 'plugins-filter-pending'
 
 const FILTER_PENDING_SCRIPT =
-  `if(/[?&](q|tag|status)=/.test(location.search)){` +
+  `if(/[?&](q|tag|status|platform)=/.test(location.search)){` +
   `var s=document.createElement('style');s.id='${FILTER_PENDING_STYLE_ID}';` +
   `s.textContent='#all-plugins-main{display:none}#all-plugins-pending{display:flex}';` +
   `document.head.appendChild(s)}`
@@ -54,6 +60,9 @@ export default function AllPluginsClient({ plugins }: AllPluginsClientProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [activeTag, setActiveTag] = useState('all')
+  const [platformFilter, setPlatformFilter] = useState('all')
+  // האם הפלטפורמה נבחרה במפורש (URL או המשתמש) — רק אז נשמרת ב-URL
+  const [platformExplicit, setPlatformExplicit] = useState(false)
   // האם מצב הסינון כבר אותחל מה-URL (רק בצד הלקוח, אחרי hydration)
   const [urlStateReady, setUrlStateReady] = useState(false)
   const tagsContainerRef = useRef<HTMLDivElement>(null)
@@ -66,8 +75,8 @@ export default function AllPluginsClient({ plugins }: AllPluginsClientProps) {
 
   const allTags: string[] = useMemo(() => extractSortedTags(plugins), [plugins])
   const filteredPlugins: PluginCardData[] = useMemo(
-    () => filterPlugins(plugins, { searchQuery, statusFilter, activeTag }),
-    [plugins, searchQuery, statusFilter, activeTag]
+    () => filterPlugins(plugins, { searchQuery, statusFilter, activeTag, platformFilter }),
+    [plugins, searchQuery, statusFilter, activeTag, platformFilter]
   )
 
   // אתחול מצב הסינון מה-URL — קישורים שיתופיים (?q=&tag=&status=).
@@ -79,6 +88,9 @@ export default function AllPluginsClient({ plugins }: AllPluginsClientProps) {
     setSearchQuery(params.get('q') || '')
     setStatusFilter(params.get('status') || 'all')
     setActiveTag(params.get('tag') || 'all')
+    const initialPlatform = initialPlatformFilter(params.get('platform'), navigator.userAgent)
+    setPlatformFilter(initialPlatform.platform)
+    setPlatformExplicit(initialPlatform.fromUrl)
     setUrlStateReady(true)
     document.getElementById(FILTER_PENDING_STYLE_ID)?.remove()
   }, [])
@@ -90,13 +102,14 @@ export default function AllPluginsClient({ plugins }: AllPluginsClientProps) {
     if (searchQuery) params.set('q', searchQuery)
     if (activeTag !== 'all') params.set('tag', activeTag)
     if (statusFilter !== 'all') params.set('status', statusFilter)
+    if (platformExplicit) params.set('platform', platformFilter)
     const next = params.toString()
     const current = new URLSearchParams(window.location.search).toString()
     if (next !== current) {
       router.replace(next ? `/plugins/all?${next}` : '/plugins/all', { scroll: false })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlStateReady, searchQuery, activeTag, statusFilter])
+  }, [urlStateReady, searchQuery, activeTag, statusFilter, platformFilter, platformExplicit])
 
   // מדידת גובה אזור התגיות - הגבלה ל-3 שורות עם כפתור "הצג עוד"
   useEffect(() => {
@@ -138,7 +151,7 @@ export default function AllPluginsClient({ plugins }: AllPluginsClientProps) {
             />
             <h1 className="text-3xl font-bold text-on-surface mb-6">כל התוספים</h1>
 
-            <div className="grid md:grid-cols-[1fr_220px_auto] gap-4 mb-4">
+            <div className="grid md:grid-cols-[1fr_180px_180px_auto] gap-4 mb-4">
               <div>
                 <label className="block text-sm font-bold text-on-surface/60 mb-2">חיפוש</label>
                 {/* key: הרכבה מחדש אחרי קריאת ה-URL, כדי שתיבת החיפוש תציג את ?q= */}
@@ -161,6 +174,24 @@ export default function AllPluginsClient({ plugins }: AllPluginsClientProps) {
                   <option value="stable">יציב</option>
                   <option value="beta">בטא</option>
                   <option value="experimental">ניסיוני</option>
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="plugins-platform-filter" className="block text-sm font-bold text-on-surface/60 mb-2">פלטפורמה</label>
+                <select
+                  id="plugins-platform-filter"
+                  value={platformFilter}
+                  onChange={(e) => {
+                    setPlatformFilter(e.target.value)
+                    setPlatformExplicit(true)
+                  }}
+                  className="w-full px-4 py-3 border border-neutral-200 rounded-xl focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all"
+                >
+                  <option value="all">כל הפלטפורמות</option>
+                  {PLUGIN_PLATFORMS.map((p) => (
+                    <option key={p.id} value={p.id}>{p.label}</option>
+                  ))}
                 </select>
               </div>
 
@@ -250,7 +281,7 @@ export default function AllPluginsClient({ plugins }: AllPluginsClientProps) {
                 <p className="text-on-surface/60 leading-relaxed">
                   {plugins.length === 0
                     ? 'אם יש לכם תוסף מוכן לאוצריא, אפשר לשלוח אותו לחנות ולהציג אותו כאן עם עמוד מסודר, תגיות, הוראות וקישורי התקנה.'
-                    : 'נסו לחפש בשם אחר, להסיר תגית, או לבחור סטטוס שונה כדי לראות תוצאות נוספות.'}
+                    : 'נסו לחפש בשם אחר, להסיר תגית, או לבחור סטטוס או פלטפורמה אחרים כדי לראות תוצאות נוספות.'}
                 </p>
               </div>
             ) : (

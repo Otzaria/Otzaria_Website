@@ -1,6 +1,7 @@
 import path from 'path'
 import { buildVersionEntries } from './pluginCompatibility'
 import { ratingFieldsForPublic } from './pluginRating'
+import { normalizeManifestPlatforms } from './pluginPlatforms.js'
 
 export const PLUGIN_LIMITS = {
   // שם התוסף מוצג בראש לשונית התוסף ב"כלים" — מעבר ל-14 תווים גולש מהכרטיסייה.
@@ -102,6 +103,7 @@ export function getLivePluginData(plugin) {
     compatibleWith: plugin.compatibleWith,
     maxAppVersion: plugin.maxAppVersion || null,
     requiresNetwork: plugin.requiresNetwork === true,
+    platforms: normalizeManifestPlatforms(plugin.platforms),
     tags: plugin.tags || [],
     homepage: plugin.homepage || '',
     pluginFileName: plugin.pluginFileName || '',
@@ -120,7 +122,9 @@ export function getEditableSource(plugin) {
   // נירמול שדות שעשויים להיות חסרים ב-pendingUpdate שנשמרו לפני הוספת השדה ל-schema
   return {
     ...source,
-    requiresNetwork: source.requiresNetwork === true
+    requiresNetwork: source.requiresNetwork === true,
+    // pendingUpdate ישן נשמר לפני שהשדה נוסף — נופלים לערך החי
+    platforms: normalizeManifestPlatforms(source.platforms ?? plugin.platforms)
   }
 }
 
@@ -181,6 +185,8 @@ export function formatPluginForPublic(plugin, options = {}) {
     compatibleWith: source.compatibleWith,
     maxAppVersion: source.maxAppVersion || null,
     requiresNetwork: source.requiresNetwork === true,
+    // פלטפורמות נתמכות מה-manifest; [] = לא הוגבל (כל הפלטפורמות)
+    platforms: normalizeManifestPlatforms(source.platforms),
     tags: source.tags || [],
     image: source.image?.ext ? `/api/plugins/${pluginId}/image${options.usePending ? '?pending=1' : ''}` : null,
     screenshots: (source.screenshots || []).map((_, index) => `/api/plugins/${pluginId}/screenshots/${index}${options.usePending ? '?pending=1' : ''}`),

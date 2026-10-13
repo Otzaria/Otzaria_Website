@@ -33,6 +33,7 @@ import {
   IMAGE_BASENAME
 } from '@/lib/pluginStorage'
 import { unauthorized, badRequest, serverError, apiError } from '@/lib/apiResponse'
+import { normalizeManifestPlatforms } from '@/lib/pluginPlatforms'
 
 const PLUGIN_FILE_EXT = '.otzplugin'
 // slug באנגלית בלבד - אותיות קטנות, ספרות ומקפים. לא מתחיל/מסתיים במקף.
@@ -98,7 +99,7 @@ export async function POST(request) {
 
     // Read name, author, version, shortDescription, status, compatibleWith from manifest
     const pluginBuffer = Buffer.from(await pluginFile.arrayBuffer())
-    let name, author, version, shortDescription, statusFromManifest, compatibleWithFromManifest, maxAppVersionFromManifest, homepageFromManifest, requiresNetworkFromManifest, pluginUid
+    let name, author, version, shortDescription, statusFromManifest, compatibleWithFromManifest, maxAppVersionFromManifest, homepageFromManifest, requiresNetworkFromManifest, platformsFromManifest, pluginUid
     try {
       const manifest = await readManifestFromPlugin(pluginBuffer)
       pluginUid = (manifest.id || '').toString().trim()
@@ -128,6 +129,8 @@ export async function POST(request) {
       }
       maxAppVersionFromManifest = maxAppVersion || null
       requiresNetworkFromManifest = manifest.network?.enabled === true
+      // צורת השדה נבדקת בוולידציית הארכיון (validatePluginArchive); כאן רק נרמול לשמירה.
+      platformsFromManifest = normalizeManifestPlatforms(manifest.platforms)
     } catch {
       return badRequest('לא ניתן לקרוא את manifest.json מקובץ התוסף')
     }
@@ -255,6 +258,7 @@ export async function POST(request) {
           compatibleWith: compatibleWithFromManifest,
           maxAppVersion: maxAppVersionFromManifest,
           requiresNetwork: requiresNetworkFromManifest,
+          platforms: platformsFromManifest,
           tags,
           pluginFileName: path.basename(pluginFile.name),
           pluginFileExt: PLUGIN_FILE_EXT,
