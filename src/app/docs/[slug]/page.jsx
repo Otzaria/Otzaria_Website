@@ -1,8 +1,15 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader';
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter';
 import WikiMarkdown from '@/components/wiki/WikiMarkdown';
+import DocsArticle from '@/components/docs/DocsArticle';
+import DocsBreadcrumbs from '@/components/docs/DocsBreadcrumbs';
+import DocsGuideNav from '@/components/docs/DocsGuideNav';
+import DocsHero from '@/components/docs/DocsHero';
+import DocsLayout from '@/components/docs/DocsLayout';
+import DocsPrevNext from '@/components/docs/DocsPrevNext';
+import DocsWikiSourceNote from '@/components/docs/DocsWikiSourceNote';
+import { getAdjacentGuides, wikiTocItems } from '@/components/docs/docsNav';
 import { getUserGuideNav, getWikiPage, iconForSlug } from '@/lib/wiki';
 
 export const revalidate = 1800;
@@ -51,102 +58,47 @@ export default async function WikiGuidePage({ params }) {
 
   const current = nav.find((n) => n.slug === slug);
   const title = current?.title || page.title || 'מדריך למשתמש';
+  const { prev, next } = getAdjacentGuides(nav, slug);
+  const navProps = { title: 'מדריך למשתמש', items: nav, current: slug, iconFor: iconForSlug };
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="flex min-h-screen flex-col overflow-x-clip bg-background text-on-surface">
       <OtzariaSoftwareHeader />
 
-      <main className="py-12 px-4">
-        <div className="container mx-auto max-w-7xl">
-          {/* Breadcrumb */}
-          <div className="flex items-center gap-2 text-sm text-on-surface/60 mb-6">
-            <Link href="/" prefetch={false} className="hover:text-primary">בית</Link>
-            <span>›</span>
-            <Link href="/docs" className="hover:text-primary">מדריך למשתמש</Link>
-            <span>›</span>
-            <span className="text-on-surface">{title}</span>
-          </div>
-
-          <div className="grid lg:grid-cols-4 gap-8">
-            {/* Sidebar */}
-            <aside className="lg:col-span-1 space-y-6">
-              {/* ניווט בין דפי המדריך — נבנה דינמית מהוויקי. prefetch={false}: הרשימה
-                  מציגה את כל דפי המדריך, וברירת המחדל שלפה מיד עם הטעינה את כולם
-                  (כ-70 בקשות RSC, כ-190KB) — גם מי שקורא דף אחד בלבד. הדפים עצמם
-                  סטטיים (ISR) ו-loading.jsx מציג fallback מיידי, כך שהמעבר נשאר מהיר. */}
-              <div className="glass-strong rounded-xl p-5 sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto">
-                <h3 className="text-lg font-bold text-primary-dark mb-3">מדריך למשתמש</h3>
-                <nav className="space-y-1 mb-5">
-                  {nav.map((item) => (
-                    <Link
-                      key={item.slug}
-                      href={`/docs/${item.slug}`}
-                      prefetch={false}
-                      className={`flex items-center gap-2 p-2 rounded-lg text-sm transition-colors ${
-                        item.slug === slug
-                          ? 'bg-primary/10 text-primary font-bold'
-                          : 'text-on-surface/70 hover:text-primary hover:bg-surface-variant'
-                      }`}
-                    >
-                      <span className="material-symbols-outlined text-base">{iconForSlug(item.slug)}</span>
-                      {item.title}
-                    </Link>
-                  ))}
-                </nav>
-
-                {page.toc.length > 1 && (
-                  <>
-                    <h3 className="text-lg font-bold text-primary-dark mb-3 pt-4 border-t border-neutral-200">
-                      בעמוד זה
-                    </h3>
-                    <nav className="space-y-1">
-                      {page.toc.map((h) => (
-                        <a
-                          key={h.id}
-                          href={`#${h.id}`}
-                          className="block p-2 text-sm text-on-surface/60 hover:text-primary rounded-lg transition-colors"
-                        >
-                          {h.text}
-                        </a>
-                      ))}
-                    </nav>
-                  </>
-                )}
-              </div>
-            </aside>
-
-            {/* Content */}
-            <article className="lg:col-span-3">
-              <div className="glass-strong rounded-2xl p-8 md:p-12 mb-8">
-                <div className="flex items-center gap-4 mb-8 pb-6 border-b-2 border-primary/20">
-                  <span className="material-symbols-outlined text-6xl text-primary">{iconForSlug(slug)}</span>
-                  <h1 className="text-4xl font-bold text-primary-dark font-frank">{title}</h1>
-                </div>
-                <WikiMarkdown markdown={page.markdown} />
-              </div>
-
-              {/* מקור התוכן ותיקונים */}
-              <div className="mt-6 flex items-center justify-center gap-2 text-sm text-on-surface/50">
-                <span className="material-symbols-outlined text-base">sync</span>
-                <p>
-                  דף זה נטען אוטומטית מהוויקי של הפרויקט ב-GitHub. מצאתם טעות או רוצים להוסיף?{' '}
-                  <a
-                    href={`https://github.com/Otzaria/otzaria/wiki/${page.pageName}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary/80 hover:text-primary underline underline-offset-2 font-medium"
-                  >
-                    ערכו את הדף בוויקי
-                  </a>{' '}
-                  — והתיקון יופיע כאן.
-                </p>
-              </div>
-            </article>
-          </div>
-        </div>
+      <main id="main-content" className="flex-1">
+        <DocsLayout
+          titleId="docs-title"
+          breadcrumbs={
+            <DocsBreadcrumbs
+              items={[
+                { label: 'בית', href: '/', prefetch: false },
+                { label: 'מדריך למשתמש', href: '/docs' },
+                { label: title },
+              ]}
+            />
+          }
+          hero={<DocsHero id="docs-title" icon={iconForSlug(slug)} title={title} align="start" />}
+          nav={{
+            // "בעמוד זה" משולב בניווט, מתחת לדף הנוכחי (DocsLayout)
+            panel: (toc) => <DocsGuideNav {...navProps} variant="panel" currentChildren={toc} />,
+            folded: <DocsGuideNav {...navProps} variant="folded" />,
+          }}
+          // תוכן העניינים מוצג רק כשיש בדף יותר מכותרת אחת
+          toc={page.toc.length > 1 ? { title: 'בעמוד זה', items: wikiTocItems(page.toc) } : undefined}
+          after={
+            <>
+              <DocsPrevNext prev={prev} next={next} className="mt-8" />
+              <DocsWikiSourceNote pageName={page.pageName} className="mt-6" />
+            </>
+          }
+        >
+          <DocsArticle>
+            <WikiMarkdown markdown={page.markdown} />
+          </DocsArticle>
+        </DocsLayout>
       </main>
 
-      <OtzariaSoftwareFooter />
+      <OtzariaSoftwareFooter className="mt-20" />
     </div>
   );
 }

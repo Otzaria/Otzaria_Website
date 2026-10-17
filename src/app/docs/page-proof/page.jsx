@@ -27,7 +27,7 @@ export default async function PageProofGuidePage() {
     <div className="min-h-screen bg-background">
       <OtzariaSoftwareHeader />
 
-      <main className="px-4 py-12">
+      <main id="main-content" className="px-4 py-12">
         <div className="container mx-auto max-w-4xl space-y-8">
           <div className="flex items-center gap-2 text-sm text-on-surface/60">
             <Link href="/" prefetch={false} className="hover:text-primary">
@@ -61,7 +61,7 @@ export default async function PageProofGuidePage() {
         </div>
       </main>
 
-      <OtzariaSoftwareFooter />
+      <OtzariaSoftwareFooter className="mt-20" />
     </div>
   )
 }

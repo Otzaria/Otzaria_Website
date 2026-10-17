@@ -1,383 +1,232 @@
-import Link from 'next/link'
 import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
+import DocsArticle from '@/components/docs/DocsArticle'
+import DocsBeforeAfter from '@/components/docs/DocsBeforeAfter'
+import DocsBreadcrumbs from '@/components/docs/DocsBreadcrumbs'
+import DocsCallout from '@/components/docs/DocsCallout'
+import DocsCodeBlock from '@/components/docs/DocsCodeBlock'
+import DocsHeadingLevels from '@/components/docs/DocsHeadingLevels'
+import DocsHelpCard from '@/components/docs/DocsHelpCard'
+import DocsHero from '@/components/docs/DocsHero'
+import DocsLayout from '@/components/docs/DocsLayout'
+import DocsSection from '@/components/docs/DocsSection'
+import { PROSE } from '@/components/docs/proseClasses'
+import Button from '@/components/ui/Button'
 
+const tocItems = [
+  { href: '#intro', label: 'הקדמה' },
+  { href: '#structure', label: 'מבנה הכותרות' },
+  { href: '#markup', label: 'סימני התוכנה' },
+  { href: '#tools', label: 'התוכנות והאפשרויות' },
+  { href: '#demo', label: 'הדגמה מעשית' },
+  { href: '#notes', label: 'הערות חשובות' }
+]
+
+const MARKUP_LEVELS = [
+  { title: 'כותרת רמה 1', code: '<h1>שם הספר</h1>' },
+  { title: 'כותרת רמה 2', code: '<h2>פרק ראשון</h2>' },
+  { title: 'כותרת רמה 3', code: '<h3>סימן א</h3>' }
+]
+
+const TOOL_BOX = 'rounded-card bg-surface-container-low p-4 sm:p-5'
+const TOOL_TITLE = 'mb-3 text-title-lg text-on-surface'
+
+// עיצוב כיוון א': אותה מעטפת כמו דפי הוויקי (DocsLayout) — כותרת, תוכן עניינים דביק בצד
+// (מקפל בנייד) ועמודת קריאה אחת. הנוסח — ללא שינוי.
 export default function DictaTutorialPage() {
-  const tocItems = [
-    { href: '#intro', label: 'הקדמה' },
-    { href: '#structure', label: 'מבנה הכותרות' },
-    { href: '#markup', label: 'סימני התוכנה' },
-    { href: '#tools', label: 'התוכנות והאפשרויות' },
-    { href: '#demo', label: 'הדגמה מעשית' },
-    { href: '#notes', label: 'הערות חשובות' }
-  ]
-
   return (
-    <div className="min-h-screen">
+    <div className="flex min-h-screen flex-col overflow-x-clip bg-background text-on-surface">
       <OtzariaSoftwareHeader />
 
-      <main className="py-12 px-4">
-        <div className="container mx-auto max-w-6xl">
-          {/* Breadcrumb */}
-          <div className="flex items-center gap-2 text-sm text-on-surface/60 mb-6">
-            {/* דף הבית כבד (סטטיסטיקות, הורדות) ואינו היעד הסביר מכאן — בלי prefetch */}
-            <Link href="/" prefetch={false} className="hover:text-primary">בית</Link>
-            <span>›</span>
-            <Link href="/docs" className="hover:text-primary">מדריכים</Link>
-            <span>›</span>
-            <span className="text-on-surface">מדריך לטיפול בספרי דיקטה</span>
-          </div>
+      <main id="main-content" className="flex-1">
+        <DocsLayout
+          titleId="dicta-title"
+          breadcrumbs={
+            <DocsBreadcrumbs
+              items={[
+                { label: 'בית', href: '/', prefetch: false },
+                { label: 'מדריכים', href: '/docs' },
+                { label: 'מדריך לטיפול בספרי דיקטה' }
+              ]}
+            />
+          }
+          hero={
+            <DocsHero
+              id="dicta-title"
+              icon="school"
+              title="מדריך לטיפול בספרי דיקטה"
+              subtitle="הדרכה מפורטת ליצירת כותרות וניווט בספרים"
+            />
+          }
+          toc={{ title: 'תוכן עניינים', items: tocItems }}
+          after={
+            <>
+              <DocsCallout tone="success" icon="celebration" className="mt-8">
+                <p><strong>כל הכבוד!</strong> עכשיו אתם יודעים כיצד לעבד ספרי דיקטה ולהפוך אותם לספרים עם ניווט מלא באוצריא!</p>
+              </DocsCallout>
 
-          {/* Hero */}
-          <div className="text-center mb-12 glass-strong rounded-2xl p-12 border-4 border-primary animate-enter-up">
-            <span className="material-symbols-outlined text-7xl text-primary mb-4 block">
-              school
-            </span>
-            <h1 className="text-4xl font-bold text-primary-dark mb-4 font-frank">
-              מדריך לטיפול בספרי דיקטה
-            </h1>
-            <p className="text-xl text-on-surface/70">
-              הדרכה מפורטת ליצירת כותרות וניווט בספרים
-            </p>
-          </div>
+              <DocsHelpCard
+                id="dicta-help"
+                title="זקוק לעזרה?"
+                action={
+                  <Button href="/faq" icon="arrow_back">
+                    לשאלות נפוצות
+                  </Button>
+                }
+              >
+                אם יש לך שאלות על עיבוד ספרי דיקטה, פנה לקהילה או לצוות הפיתוח.
+              </DocsHelpCard>
+            </>
+          }
+        >
+          <DocsArticle>
+            <DocsSection id="intro" icon="info" title="הקדמה">
+              <p>ישנם מאות ספרים שהגיעו ממאגר חינמי, אך אינם מתאימים לאוצריא מכיוון שאין בהם אפשרות לניווט (כלומר, הם לא מחולקים לפרקים/תשובות וכדומה).</p>
+              <p><strong className={PROSE.strong}>המטרה:</strong> לקחת את קובץ הטקסט שקיבלנו, ולחלק אותו לכותרות.</p>
+              <p>העבודה בבסיסה ידנית, ולבקשת העורכים נוצרו תוכנות שמייעלות את העבודה, ועושות חלק ממנה בצורה אוטומטית.</p>
+              <DocsCallout tone="tip" icon="lightbulb">
+                <p><strong>טיפ חשוב:</strong> צרו גיבוי לעבודה מדי פעם, כך שגם אם הרצתם איזו תוכנה שעשתה פעולה לא נכונה, תוכלו לחזור אחורה.</p>
+              </DocsCallout>
+            </DocsSection>
 
-          <div className="grid lg:grid-cols-4 gap-8">
-            {/* Sidebar TOC */}
-            <aside className="lg:col-span-1">
-              <div className="glass-strong rounded-xl p-6 sticky top-24 custom-scrollbar max-h-[calc(100vh-120px)] overflow-y-auto">
-                <h3 className="text-xl font-bold text-primary-dark mb-4">תוכן עניינים</h3>
-                <nav className="space-y-2">
-                  {tocItems.map((item, i) => (
-                    <a
-                      key={i}
-                      href={item.href}
-                      className="block p-2 text-sm text-on-surface/70 hover:text-primary hover:bg-surface-variant rounded-lg transition-colors"
-                    >
-                      {item.label}
-                    </a>
-                  ))}
-                </nav>
+            <DocsSection id="structure" icon="account_tree" title="הסבר מבנה הכותרות">
+              <p>כל ספר מורכב מכותרות היררכיות. למשל, שם הספר הוא כותרת ברמה הגבוהה ביותר - <strong className={PROSE.strong}>רמה 1</strong>. לאחריו מגיעה <strong className={PROSE.strong}>רמה 2</strong> שהיא החלוקה הראשונית, <strong className={PROSE.strong}>רמה 3</strong> היא חלוקה פנימית וכן הלאה.</p>
+              <div className="grid gap-4 md:grid-cols-2">
+                <DocsHeadingLevels
+                  title="דוגמה 1: מסכת"
+                  rows={[
+                    { level: 1, label: 'מסכת ברכות' },
+                    { level: 2, label: 'פרק ראשון' },
+                    { level: 3, label: 'דף ב עמוד א' }
+                  ]}
+                />
+                <DocsHeadingLevels
+                  title={'דוגמה 2: ספר שו"ת'}
+                  rows={[
+                    { level: 1, label: 'שו"ת הרשב"א' },
+                    { level: 2, label: 'חלק א' },
+                    { level: 3, label: 'סימן א' }
+                  ]}
+                />
               </div>
-            </aside>
+            </DocsSection>
 
-            {/* Main Content */}
-            <article className="lg:col-span-3 space-y-8">
-              {/* Intro Section */}
-              <section
-                id="intro"
-                className="glass-strong rounded-xl p-8 animate-enter-up"
-              >
-                <h2 className="text-3xl font-bold text-primary-dark mb-6 flex items-center gap-3">
-                  <span className="material-symbols-outlined text-4xl">info</span>
-                  הקדמה
-                </h2>
-                <div className="space-y-4 text-lg">
-                  <p>ישנם מאות ספרים שהגיעו ממאגר חינמי, אך אינם מתאימים לאוצריא מכיוון שאין בהם אפשרות לניווט (כלומר, הם לא מחולקים לפרקים/תשובות וכדומה).</p>
-                  <p><strong>המטרה:</strong> לקחת את קובץ הטקסט שקיבלנו, ולחלק אותו לכותרות.</p>
-                  <p>העבודה בבסיסה ידנית, ולבקשת העורכים נוצרו תוכנות שמייעלות את העבודה, ועושות חלק ממנה בצורה אוטומטית.</p>
+            <DocsSection id="markup" icon="code" title="סימני התוכנה">
+              <p>כדי לסמן כותרות בקובץ הטקסט, משתמשים בתגיות HTML:</p>
+              <div className="space-y-4">
+                {MARKUP_LEVELS.map((item) => (
+                  <div key={item.title}>
+                    <h3 className="mb-2 text-title-lg text-on-surface">{item.title}</h3>
+                    <DocsCodeBlock>{item.code}</DocsCodeBlock>
+                  </div>
+                ))}
+              </div>
+              <DocsCallout tone="info" icon="info">
+                <p><strong>הערה:</strong> ניתן להשתמש עד רמה 6 (h1 עד h6), אך ברוב המקרים מספיקות 3-4 רמות.</p>
+              </DocsCallout>
+            </DocsSection>
+
+            <DocsSection id="tools" icon="build" title="התוכנות והאפשרויות">
+              <p>ישנן מספר דרכים לעבוד על הקבצים:</p>
+              <div className="space-y-4">
+                <div className={TOOL_BOX}>
+                  <h3 className={TOOL_TITLE}>1. עריכה ידנית</h3>
+                  <p className="mb-3">השתמשו בעורך טקסט כמו Notepad++ או VS Code:</p>
+                  <ul className={PROSE.ul}>
+                    <li>פתחו את קובץ הטקסט</li>
+                    <li>חפשו את הכותרות</li>
+                    <li>הוסיפו תגיות HTML מתאימות</li>
+                    <li>שמרו את הקובץ</li>
+                  </ul>
                 </div>
-                <div className="mt-6 p-4 bg-warning-strong-50 border-r-4 border-warning-strong-400 rounded">
-                  <div className="flex items-start gap-3">
-                    <span className="material-symbols-outlined text-warning-strong-600">lightbulb</span>
-                    <div>
-                      <p className="text-warning-strong-900"><strong>טיפ חשוב:</strong> צרו גיבוי לעבודה מדי פעם, כך שגם אם הרצתם איזו תוכנה שעשתה פעולה לא נכונה, תוכלו לחזור אחורה.</p>
-                    </div>
-                  </div>
+
+                <div className={TOOL_BOX}>
+                  <h3 className={TOOL_TITLE}>2. שימוש בחיפוש והחלפה</h3>
+                  <p className="mb-3">אם יש דפוס קבוע בכותרות, תוכלו להשתמש בחיפוש והחלפה:</p>
+                  <ul className={PROSE.ul}>
+                    <li>חפשו דפוס חוזר (למשל &quot;פרק&quot;)</li>
+                    <li>החליפו אותו ב-&quot;<bdi dir="ltr">{'<'}h2{'>'}</bdi>פרק&quot; ובסוף השורה הוסיפו &quot;<bdi dir="ltr">{'<'}/h2{'>'}</bdi>&quot;</li>
+                    <li>בדקו שהתוצאה נכונה</li>
+                  </ul>
                 </div>
-              </section>
 
-              {/* Structure Section */}
-              <section
-                id="structure"
-                className="glass-strong rounded-xl p-8 animate-enter-up"
-              >
-                <h2 className="text-3xl font-bold text-primary-dark mb-6 flex items-center gap-3">
-                  <span className="material-symbols-outlined text-4xl">account_tree</span>
-                  הסבר מבנה הכותרות
-                </h2>
-                <div className="space-y-6">
-                  <p className="text-lg">כל ספר מורכב מכותרות היררכיות. למשל, שם הספר הוא כותרת ברמה הגבוהה ביותר - <strong>רמה 1</strong>. לאחריו מגיעה <strong>רמה 2</strong> שהיא החלוקה הראשונית, <strong>רמה 3</strong> היא חלוקה פנימית וכן הלאה.</p>
-                  
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div className="p-6 bg-surface-variant rounded-xl">
-                      <h4 className="text-xl font-bold text-primary mb-4">דוגמה 1: מסכת</h4>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-3 p-3 bg-danger-100 rounded-lg">
-                          <span className="w-8 h-8 bg-danger-600 text-white rounded-full flex items-center justify-center font-bold text-sm">1</span>
-                          <span className="font-bold">מסכת ברכות</span>
-                        </div>
-                        <div className="flex items-center gap-3 p-3 bg-info-100 rounded-lg mr-6">
-                          <span className="w-8 h-8 bg-info-600 text-white rounded-full flex items-center justify-center font-bold text-sm">2</span>
-                          <span>פרק ראשון</span>
-                        </div>
-                        <div className="flex items-center gap-3 p-3 bg-neutral-100 rounded-lg mr-12">
-                          <span className="w-8 h-8 bg-neutral-600 text-white rounded-full flex items-center justify-center font-bold text-sm">3</span>
-                          <span>דף ב עמוד א</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="p-6 bg-surface-variant rounded-xl">
-                      <h4 className="text-xl font-bold text-primary mb-4">דוגמה 2: ספר שו"ת</h4>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-3 p-3 bg-danger-100 rounded-lg">
-                          <span className="w-8 h-8 bg-danger-600 text-white rounded-full flex items-center justify-center font-bold text-sm">1</span>
-                          <span className="font-bold">שו"ת הרשב"א</span>
-                        </div>
-                        <div className="flex items-center gap-3 p-3 bg-info-100 rounded-lg mr-6">
-                          <span className="w-8 h-8 bg-info-600 text-white rounded-full flex items-center justify-center font-bold text-sm">2</span>
-                          <span>חלק א</span>
-                        </div>
-                        <div className="flex items-center gap-3 p-3 bg-neutral-100 rounded-lg mr-12">
-                          <span className="w-8 h-8 bg-neutral-600 text-white rounded-full flex items-center justify-center font-bold text-sm">3</span>
-                          <span>סימן א</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              {/* Markup Section */}
-              <section
-                id="markup"
-                className="glass-strong rounded-xl p-8 animate-enter-up"
-              >
-                <h2 className="text-3xl font-bold text-primary-dark mb-6 flex items-center gap-3">
-                  <span className="material-symbols-outlined text-4xl">code</span>
-                  סימני התוכנה
-                </h2>
-                <div className="space-y-6">
-                  <p className="text-lg">כדי לסמן כותרות בקובץ הטקסט, משתמשים בתגיות HTML:</p>
-                  
-                  <div className="space-y-4">
-                    <div className="p-6 bg-surface-variant rounded-xl">
-                      <h4 className="text-xl font-bold text-primary-dark mb-3">כותרת רמה 1</h4>
-                      <pre className="bg-neutral-800 text-white p-4 rounded overflow-x-auto text-sm">
-                        <code>&lt;h1&gt;שם הספר&lt;/h1&gt;</code>
-                      </pre>
-                    </div>
-
-                    <div className="p-6 bg-surface-variant rounded-xl">
-                      <h4 className="text-xl font-bold text-primary-dark mb-3">כותרת רמה 2</h4>
-                      <pre className="bg-neutral-800 text-white p-4 rounded overflow-x-auto text-sm">
-                        <code>&lt;h2&gt;פרק ראשון&lt;/h2&gt;</code>
-                      </pre>
-                    </div>
-
-                    <div className="p-6 bg-surface-variant rounded-xl">
-                      <h4 className="text-xl font-bold text-primary-dark mb-3">כותרת רמה 3</h4>
-                      <pre className="bg-neutral-800 text-white p-4 rounded overflow-x-auto text-sm">
-                        <code>&lt;h3&gt;סימן א&lt;/h3&gt;</code>
-                      </pre>
-                    </div>
-                  </div>
-
-                  <div className="p-4 bg-info-50 border-r-4 border-info-400 rounded">
-                    <div className="flex items-start gap-3">
-                      <span className="material-symbols-outlined text-info-600">info</span>
-                      <div>
-                        <p className="text-info-900"><strong>הערה:</strong> ניתן להשתמש עד רמה 6 (h1 עד h6), אך ברוב המקרים מספיקות 3-4 רמות.</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              {/* Tools Section */}
-              <section
-                id="tools"
-                className="glass-strong rounded-xl p-8 animate-enter-up"
-              >
-                <h2 className="text-3xl font-bold text-primary-dark mb-6 flex items-center gap-3">
-                  <span className="material-symbols-outlined text-4xl">build</span>
-                  התוכנות והאפשרויות
-                </h2>
-                <div className="space-y-6">
-                  <p className="text-lg">ישנן מספר דרכים לעבוד על הקבצים:</p>
-                  
-                  <div className="space-y-4">
-                    <div className="p-6 bg-surface-variant rounded-xl">
-                      <h4 className="text-xl font-bold text-primary mb-3">1. עריכה ידנית</h4>
-                      <p className="mb-3">השתמשו בעורך טקסט כמו Notepad++ או VS Code:</p>
-                      <ul className="list-disc mr-6 space-y-2">
-                        <li>פתחו את קובץ הטקסט</li>
-                        <li>חפשו את הכותרות</li>
-                        <li>הוסיפו תגיות HTML מתאימות</li>
-                        <li>שמרו את הקובץ</li>
-                      </ul>
-                    </div>
-
-                    <div className="p-6 bg-surface-variant rounded-xl">
-                      <h4 className="text-xl font-bold text-primary mb-3">2. שימוש בחיפוש והחלפה</h4>
-                      <p className="mb-3">אם יש דפוס קבוע בכותרות, תוכלו להשתמש בחיפוש והחלפה:</p>
-                      <ul className="list-disc mr-6 space-y-2">
-                        <li>חפשו דפוס חוזר (למשל "פרק")</li>
-                        <li>החליפו אותו ב-"{'<'}h2{'>'}פרק" ובסוף השורה הוסיפו "{'<'}/h2{'>'}"</li>
-                        <li>בדקו שהתוצאה נכונה</li>
-                      </ul>
-                    </div>
-
-                    <div className="p-6 bg-surface-variant rounded-xl">
-                      <h4 className="text-xl font-bold text-primary mb-3">3. כלים אוטומטיים</h4>
-                      <p className="mb-3">ניתן להשתמש בכלי AI או סקריפטים:</p>
-                      <ul className="list-disc mr-6 space-y-2">
-                        <li>ChatGPT או Claude - תנו להם חלק מהטקסט ובקשו לזהות כותרות</li>
-                        <li>סקריפטים מותאמים אישית</li>
-                        <li>תוכנות המרה מיוחדות</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              {/* Demo Section */}
-              <section
-                id="demo"
-                className="glass-strong rounded-xl p-8 animate-enter-up"
-              >
-                <h2 className="text-3xl font-bold text-primary-dark mb-6 flex items-center gap-3">
-                  <span className="material-symbols-outlined text-4xl">play_circle</span>
-                  הדגמה מעשית
-                </h2>
-                <div className="space-y-6">
-                  <p className="text-lg">דוגמה לעבודה על קטע מספר שו"ת:</p>
-                  
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div>
-                      <h4 className="text-xl font-bold text-danger-600 mb-3">לפני העריכה:</h4>
-                      <div className="p-4 bg-danger-50 border-2 border-danger-200 rounded-lg">
-                        <pre className="text-sm whitespace-pre-wrap">
-                            <div>שו"ת הרשב"א</div>
-                            <div>חלק ראשון</div>
-                            <div>סימן א</div>
-                            <div>שאלה: מה דין כהן שנטמא...</div>
-                            <div>תשובה: הנה התשובה...</div>
-                            <div>סימן ב</div>
-                            <div>שאלה: מה דין לוי שעבר...</div>
-                            <div>תשובה: כך נראה לי...</div>
-                        </pre>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h4 className="text-xl font-bold text-success-600 mb-3">אחרי העריכה:</h4>
-                      <div className="p-4 bg-success-50 border-2 border-success-200 rounded-lg">
-                        <pre className="text-sm whitespace-pre-wrap">
-                            <div>&lt;h1&gt;שו"ת הרשב"א&lt;/h1&gt;</div>
-                            <div>&lt;h2&gt;חלק ראשון&lt;/h2&gt;</div>
-                            <div>&lt;h3&gt;סימן א&lt;/h3&gt;</div>
-                            <div>שאלה: מה דין כהן שנטמא...</div>
-                            <div>תשובה: הנה התשובה...</div>
-                            <div>&lt;h3&gt;סימן ב&lt;/h3&gt;</div>
-                            <div>שאלה: מה דין לוי שעבר...</div>
-                            <div>תשובה: כך נראה לי...</div>
-                        </pre>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-4 bg-warning-strong-50 border-r-4 border-warning-strong-400 rounded">
-                    <div className="flex items-start gap-3">
-                      <span className="material-symbols-outlined text-warning-strong-600">tips_and_updates</span>
-                      <div>
-                        <p className="text-warning-strong-900"><strong>טיפ:</strong> התחילו עם קטע קטן כדי לבדוק שהתוצאה נכונה, ורק אז המשיכו לכל הספר.</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              {/* Notes Section */}
-              <section
-                id="notes"
-                className="glass-strong rounded-xl p-8 animate-enter-up"
-              >
-                <h2 className="text-3xl font-bold text-primary-dark mb-6 flex items-center gap-3">
-                  <span className="material-symbols-outlined text-4xl">note</span>
-                  הערות חשובות
-                </h2>
-                <div className="space-y-6">
-                  <div className="space-y-4">
-                    <div className="p-4 bg-danger-50 border-r-4 border-danger-400 rounded">
-                      <div className="flex items-start gap-3">
-                        <span className="material-symbols-outlined text-danger-600">warning</span>
-                        <div>
-                          <p className="text-danger-900 font-bold mb-2">זהירות:</p>
-                          <ul className="list-disc mr-6 space-y-1 text-danger-900">
-                            <li>וודאו שהתגיות נסגרות נכון ({'<'}h1{'>'}...{'<'}/h1{'>'})</li>
-                            <li>אל תשכחו את הסלש בתגית הסגירה</li>
-                            <li>השתמשו ברמות נכונות (h1 לכותרת הראשית, h2 לחלוקה הבאה וכו')</li>
-                          </ul>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="p-4 bg-info-50 border-r-4 border-info-400 rounded">
-                      <div className="flex items-start gap-3">
-                        <span className="material-symbols-outlined text-info-600">info</span>
-                        <div>
-                          <p className="text-info-900 font-bold mb-2">טיפים נוספים:</p>
-                          <ul className="list-disc mr-6 space-y-1 text-info-900">
-                            <li>שמרו גיבוי לפני שמתחילים</li>
-                            <li>עבדו בחלקים קטנים ובדקו התוצאה</li>
-                            <li>השתמשו בעורך טקסט עם הדגשת תחביר (Syntax Highlighting)</li>
-                            <li>בדקו את התוצאה באוצריא לפני שמסיימים</li>
-                          </ul>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="p-4 bg-success-50 border-r-4 border-success-400 rounded">
-                      <div className="flex items-start gap-3">
-                        <span className="material-symbols-outlined text-success-600">check_circle</span>
-                        <div>
-                          <p className="text-success-900 font-bold mb-2">בדיקת איכות:</p>
-                          <ul className="list-disc mr-6 space-y-1 text-success-900">
-                            <li>פתחו את הספר באוצריא ובדקו שהניווט עובד</li>
-                            <li>וודאו שכל הכותרות מופיעות בעץ הניווט</li>
-                            <li>בדקו שאין כותרות ריקות או שגויות</li>
-                            <li>וודאו שהתוכן לא נפגע בתהליך</li>
-                          </ul>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              {/* Success Box */}
-              <div className="p-6 bg-success-50 border-r-4 border-success-400 rounded-xl flex items-start gap-4 animate-enter-up">
-                <span className="material-symbols-outlined text-4xl text-success-600">celebration</span>
-                <div>
-                  <p className="text-success-900 text-lg"><strong>כל הכבוד!</strong> עכשיו אתם יודעים כיצד לעבד ספרי דיקטה ולהפוך אותם לספרים עם ניווט מלא באוצריא!</p>
+                <div className={TOOL_BOX}>
+                  <h3 className={TOOL_TITLE}>3. כלים אוטומטיים</h3>
+                  <p className="mb-3">ניתן להשתמש בכלי AI או סקריפטים:</p>
+                  <ul className={PROSE.ul}>
+                    <li>ChatGPT או Claude - תנו להם חלק מהטקסט ובקשו לזהות כותרות</li>
+                    <li>סקריפטים מותאמים אישית</li>
+                    <li>תוכנות המרה מיוחדות</li>
+                  </ul>
                 </div>
               </div>
+            </DocsSection>
 
-              {/* Help Card */}
-              <div className="glass-strong rounded-xl p-8 animate-enter-up">
-                <div className="flex items-start gap-4">
-                  <span className="material-symbols-outlined text-5xl text-primary">help</span>
-                  <div className="flex-1">
-                    <h4 className="text-2xl font-bold text-primary-dark mb-3">זקוק לעזרה?</h4>
-                    <p className="mb-4">אם יש לך שאלות על עיבוד ספרי דיקטה, פנה לקהילה או לצוות הפיתוח.</p>
-                    <Link
-                      href="/faq"
-                      className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-on-primary rounded-lg hover:bg-accent transition-colors font-bold"
-                    >
-                      <span className="material-symbols-outlined">arrow_back</span>
-                      <span>לשאלות נפוצות</span>
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            </article>
-          </div>
-        </div>
+            <DocsSection id="demo" icon="play_circle" title="הדגמה מעשית">
+              <p>דוגמה לעבודה על קטע מספר שו&quot;ת:</p>
+              <DocsBeforeAfter
+                before={{
+                  title: 'לפני העריכה:',
+                  lines: [
+                    'שו"ת הרשב"א',
+                    'חלק ראשון',
+                    'סימן א',
+                    'שאלה: מה דין כהן שנטמא...',
+                    'תשובה: הנה התשובה...',
+                    'סימן ב',
+                    'שאלה: מה דין לוי שעבר...',
+                    'תשובה: כך נראה לי...'
+                  ]
+                }}
+                after={{
+                  title: 'אחרי העריכה:',
+                  lines: [
+                    '<h1>שו"ת הרשב"א</h1>',
+                    '<h2>חלק ראשון</h2>',
+                    '<h3>סימן א</h3>',
+                    'שאלה: מה דין כהן שנטמא...',
+                    'תשובה: הנה התשובה...',
+                    '<h3>סימן ב</h3>',
+                    'שאלה: מה דין לוי שעבר...',
+                    'תשובה: כך נראה לי...'
+                  ]
+                }}
+              />
+              <DocsCallout tone="tip" icon="tips_and_updates">
+                <p><strong>טיפ:</strong> התחילו עם קטע קטן כדי לבדוק שהתוצאה נכונה, ורק אז המשיכו לכל הספר.</p>
+              </DocsCallout>
+            </DocsSection>
+
+            <DocsSection id="notes" icon="note" title="הערות חשובות">
+              <DocsCallout tone="caution" icon="warning" title="זהירות:">
+                <ul className={PROSE.ul}>
+                  <li>וודאו שהתגיות נסגרות נכון (<bdi dir="ltr">{'<'}h1{'>'}...{'<'}/h1{'>'}</bdi>)</li>
+                  <li>אל תשכחו את הסלש בתגית הסגירה</li>
+                  <li>השתמשו ברמות נכונות (h1 לכותרת הראשית, h2 לחלוקה הבאה וכו&apos;)</li>
+                </ul>
+              </DocsCallout>
+              <DocsCallout tone="info" icon="info" title="טיפים נוספים:">
+                <ul className={PROSE.ul}>
+                  <li>שמרו גיבוי לפני שמתחילים</li>
+                  <li>עבדו בחלקים קטנים ובדקו התוצאה</li>
+                  <li>השתמשו בעורך טקסט עם הדגשת תחביר (Syntax Highlighting)</li>
+                  <li>בדקו את התוצאה באוצריא לפני שמסיימים</li>
+                </ul>
+              </DocsCallout>
+              <DocsCallout tone="success" icon="check_circle" title="בדיקת איכות:">
+                <ul className={PROSE.ul}>
+                  <li>פתחו את הספר באוצריא ובדקו שהניווט עובד</li>
+                  <li>וודאו שכל הכותרות מופיעות בעץ הניווט</li>
+                  <li>בדקו שאין כותרות ריקות או שגויות</li>
+                  <li>וודאו שהתוכן לא נפגע בתהליך</li>
+                </ul>
+              </DocsCallout>
+            </DocsSection>
+          </DocsArticle>
+        </DocsLayout>
       </main>
 
-      <OtzariaSoftwareFooter />
+      <OtzariaSoftwareFooter className="mt-20" />
     </div>
   )
 }
-
