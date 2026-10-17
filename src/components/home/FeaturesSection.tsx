@@ -1,6 +1,10 @@
-// Server Component: תוכן סטטי לגמרי, בלי JavaScript בדפדפן. אפקטי הריחוף
-// (הרמה והגדלה של הכרטיס, תנועת האייקון) היו whileHover של framer-motion — מה
-// שגרר כ-37KB gzip של framer-motion לדף הבית רק בשבילם. כעת הם מעברי CSS.
+import Section from '@/components/ui/Section'
+import SectionHeading from '@/components/ui/SectionHeading'
+import FeatureCard from './FeatureCard'
+
+// Server Component: תוכן סטטי לגמרי, בלי JavaScript בדפדפן (בלי framer-motion — ראו
+// היסטוריה). בעיצוב "האפליקציה עצמה" הכרטיסים הם AppCard: בלי מסגרת ובלי צל, אריח
+// אייקון טונלי, וריחוף שקט (cardSelectionOverlay) במקום הרמה והגדלה.
 const features = [
   {
     icon: 'auto_stories',
@@ -15,7 +19,7 @@ const features = [
   {
     icon: 'search',
     title: 'חיפוש מתקדם',
-    description: 'מצאו כל פסוק, מאמר או מושג בקלות'
+    description: 'מצא כל פסוק, מאמר או מושג בקלות'
   },
   {
     icon: 'edit_note',
@@ -46,44 +50,22 @@ const features = [
 
 export default function FeaturesSection() {
   return (
-    <section id="features" className="py-20 px-4 bg-surface relative overflow-hidden">
-      <div className="container mx-auto relative z-10">
-        <div className="animate-enter-down">
-          <h2 className="text-4xl font-bold text-center mb-4 text-on-surface">
-            למה לבחור באוצריא?
-          </h2>
-          <p className="text-center text-on-surface/70 mb-12 max-w-2xl mx-auto">
-            פלטפורמה מתקדמת המשלבת טכנולוגיה חדישה עם כבוד למסורת
-          </p>
-        </div>
+    <Section id="features" labelledBy="features-heading" anchor>
+      <SectionHeading
+        id="features-heading"
+        title="למה לבחור באוצריא?"
+        subtitle="פלטפורמה מתקדמת המשלבת טכנולוגיה חדישה עם כבוד למסורת"
+      />
 
-        {/* כרטיסי היכולות היו כולם opacity:0 ב-HTML של השרת — כלומר כל תוכן
-            החלק הזה נראה רק אחרי hydration. ההשהיה המדורגת עברה ל-CSS. */}
-        <div className="flex flex-wrap justify-center gap-6">
-          {features.map((feature, index) => (
-            <div
-              key={index}
-              style={{ animationDelay: `${index * 0.1}s` }}
-              className="glass p-6 rounded-xl shadow-lg hover:shadow-2xl transition-[box-shadow,translate,scale] duration-300 ease-out hover:-translate-y-2 hover:scale-105 cursor-pointer group w-full md:w-[calc(50%-12px)] lg:w-[calc(33.33%-16px)] animate-enter-up"
-            >
-              {/* w-fit כדי שהסיבוב וההגדלה יהיו סביב מרכז הגליף. mr-auto (פיזי, לא
-                  me-auto: ל-Material Symbols יש direction:ltr, כך שהשוליים הלוגיים
-                  מתהפכים) מצמיד אותו לשמאל הכרטיס כמו ה-block ברוחב מלא שהיה קודם.
-                  הריחוף על האייקון עצמו (לא על כל הכרטיס): נענוע חד-פעמי שחוזר
-                  לזקוף, כמו ה-whileHover של framer-motion שהיה כאן. */}
-              <span className="material-symbols-outlined text-6xl text-primary mb-4 block w-fit mr-auto transition-[scale] duration-500 hover:scale-110 motion-safe:hover:animate-[icon-wiggle_0.5s_ease-in-out]">
-                {feature.icon}
-              </span>
-              <h3 className="text-xl font-bold mb-2 text-on-surface group-hover:text-primary transition-colors">
-                {feature.title}
-              </h3>
-              <p className="text-on-surface/70">
-                {feature.description}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
+      {/* נייד: עמודה אחת; טבלט: שתיים; דסקטופ רחב: ארבע. הכניסה המדורגת ב-CSS
+          (הכרטיסים כבר ב-HTML של השרת, לא מחכים ל-hydration). */}
+      <ul className="grid gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
+        {features.map((feature, index) => (
+          <li key={feature.title} className="flex">
+            <FeatureCard {...feature} index={index} />
+          </li>
+        ))}
+      </ul>
+    </Section>
   )
 }
