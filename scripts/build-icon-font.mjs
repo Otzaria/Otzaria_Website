@@ -15,13 +15,21 @@
  *   public/fonts/material-symbols-outlined.<hash>.woff2   הגופן עצמו (שם ממוספר ב-hash)
  *   src/app/styles/icon-font.css                          הצהרת @font-face
  *   src/lib/icon-font.js                                  ה-URL לשימוש ב-preload
- *   scripts/icon-font.manifest.json                       רשימת האייקונים שנכללו (ל---check)
+ *   scripts/icon-font.manifest.json                       רשימת האייקונים שנכללו
+ *   scripts/material-symbols-names.txt                    כל שמות האייקונים התקפים (ל---check offline)
+ *
+ * איזה שמות נכנסים: רק מחרוזות בהקשר של אייקון (src/lib/iconFontScan.mjs), אחרי סינון
+ * מול רשימת השמות התקפים. אחרי ההורדה נקראות הליגטורות מהגופן עצמו
+ * (src/lib/woff2Ligatures.mjs), כדי לוודא שכל אייקון שבשימוש באמת נמצא בו.
  */
 
 import { createHash } from 'node:crypto'
 import { readFile, writeFile, readdir, unlink } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { collectIconNames, filterKnown, ICON_NAMES_MAX_CHARS, iconNamesParamLength } from '../src/lib/iconFontScan.mjs'
+import { woff2LigatureNames } from '../src/lib/woff2Ligatures.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -30,6 +38,7 @@ const FONTS_DIR = path.join(ROOT, 'public', 'fonts')
 const CSS_OUT = path.join(ROOT, 'src', 'app', 'styles', 'icon-font.css')
 const MODULE_OUT = path.join(ROOT, 'src', 'lib', 'icon-font.js')
 const MANIFEST_OUT = path.join(ROOT, 'scripts', 'icon-font.manifest.json')
+const UNIVERSE_OUT = path.join(ROOT, 'scripts', 'material-symbols-names.txt')
 
 const FONT_BASENAME = 'material-symbols-outlined'
 const FAMILY = 'Material Symbols Outlined'
@@ -41,22 +50,14 @@ const CSS_API = 'https://fonts.googleapis.com/css2'
 const MODERN_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
-const CODE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx', '.css', '.md', '.json'])
+/** subset תקין שוקל עשרות KB; מעל זה — Google החזיר את הגופן המלא (ראו build). */
+const MAX_SUBSET_BYTES = 150 * 1024
 
-/** כל שם אפשרי של אייקון שמופיע בקוד — סריקה רחבה בכוונה (ראה collectCandidates). */
-const TOKEN_RE = /[a-z][a-z0-9_]{2,}/g
-
-/**
- * מקומות שבהם שם אייקון מופיע *בוודאות*, לצורך בדיקת --check:
- *  1. טקסט בתוך אלמנט עם המחלקה material-symbols-outlined
- *  2. שדה icon: 'name' באובייקטי תצורה
- *  3. prop בצורת icon="name"
- */
-const PRECISE_PATTERNS = [
-  /material-symbols-outlined[^>]*>\s*([a-z][a-z0-9_]*)\s*</g,
-  /\bicon:\s*['"]([a-z][a-z0-9_]*)['"]/g,
-  /\bicon=["']([a-z][a-z0-9_]*)["']/g,
-]
+// אייקונים מוצגים רק מקוד JS/TS (אין שימוש ב-CSS content/Markdown). קובצי טסט אינם מרונדרים.
+const CODE_EXTENSIONS = new Set(['.js', '.jsx', '.mjs', '.ts', '.tsx'])
+const isTestFile = (name) => /\.test\.[cm]?[jt]sx?$/.test(name)
+// הסורק וקורא הגופן מכילים דוגמאות בהערות, ואינם מרנדרים אייקונים
+const SKIP_FILES = new Set(['iconFontScan.mjs', 'woff2Ligatures.mjs'])
 
 async function collectFiles(dir) {
   const out = []
@@ -64,42 +65,13 @@ async function collectFiles(dir) {
     if (entry.name.startsWith('.') || entry.name === 'node_modules') continue
     const full = path.join(dir, entry.name)
     if (entry.isDirectory()) out.push(...(await collectFiles(full)))
-    else if (CODE_EXTENSIONS.has(path.extname(entry.name))) out.push(full)
+    else if (CODE_EXTENSIONS.has(path.extname(entry.name)) && !isTestFile(entry.name) && !SKIP_FILES.has(entry.name)) out.push(full)
   }
   return out
 }
 
 async function readAll(files) {
-  return Promise.all(files.map((f) => readFile(f, 'utf8').then((text) => ({ file: f, text }))))
-}
-
-/**
- * סריקה רחבה: כל token בקוד ששמו תואם שם אייקון קיים נכנס ל-subset.
- * זו הכללה מכוונת — היא תופסת גם אייקונים שנקבעים דינמית (משתנה, תנאי, טבלת
- * תצורה) ולכן אינם מזוהים בסריקה מדויקת. המחיר הוא כמה KB של אייקונים מיותרים,
- * והתמורה היא שאייקון לא "נעלם" בפרודקשן.
- */
-function collectCandidates(contents, universe) {
-  const found = new Set()
-  for (const { text } of contents) {
-    for (const token of text.matchAll(TOKEN_RE)) {
-      if (universe.has(token[0])) found.add(token[0])
-    }
-  }
-  return found
-}
-
-/** סריקה מדויקת: רק מקומות שהם בוודאות שם אייקון. */
-function collectPrecise(contents) {
-  const found = new Map() // name -> file
-  for (const { file, text } of contents) {
-    for (const pattern of PRECISE_PATTERNS) {
-      for (const match of text.matchAll(pattern)) {
-        if (!found.has(match[1])) found.set(match[1], path.relative(ROOT, file))
-      }
-    }
-  }
-  return found
+  return Promise.all(files.map((f) => readFile(f, 'utf8').then((text) => ({ file: path.relative(ROOT, f), text }))))
 }
 
 /**
@@ -156,20 +128,47 @@ async function fetchSubset(names) {
   return Buffer.from(await fontRes.arrayBuffer())
 }
 
+/** שמות שבשימוש שאינם בגופן (לפי הליגטורות שבו). */
+function missingFromFont(names, woff2) {
+  const ligatures = new Set(woff2LigatureNames(woff2))
+  return names.filter((name) => !ligatures.has(name))
+}
+
 async function build() {
   const contents = await readAll(await collectFiles(SCAN_DIR))
   const universe = await fetchIconUniverse()
 
-  const precise = collectPrecise(contents)
-  const unknown = [...precise.keys()].filter((n) => !universe.has(n))
+  const found = collectIconNames(contents)
+  const { known: names, unknown } = filterKnown(found.keys(), universe)
   if (unknown.length) {
-    console.warn(`⚠️  שמות אייקונים שאינם מוכרים ל-${FAMILY}: ${unknown.join(', ')}`)
+    // מחרוזות בהקשר של אייקון שאינן שם אייקון: ערכי case, 'none', מחלקות CSS וכו'.
+    // מוצגות כדי שטעות כתיב בשם אייקון אמיתי לא תעבור בשקט.
+    console.log(`ℹ️  ${unknown.length} מחרוזות בהקשר אייקון אינן שם של ${FAMILY} ולא נכללו:`)
+    for (const name of unknown) console.log(`   ${name}  (${found.get(name)})`)
   }
 
-  // האייקונים הוודאיים תמיד נכללים, גם אם אינם ברשימת המטא-דאטה.
-  const names = [...new Set([...collectCandidates(contents, universe), ...precise.keys()])].sort()
+  // מעל 4,096 תווים ב-icon_names, Google מחזיר בשקט את הגופן המלא. נכשלים לפני הבקשה.
+  const paramLength = iconNamesParamLength(names)
+  if (paramLength > ICON_NAMES_MAX_CHARS) {
+    throw new Error(
+      `רשימת האייקונים ארוכה מדי ל-Google Fonts: ${paramLength} תווים (${names.length} שמות), ` +
+        `והמגבלה היא ${ICON_NAMES_MAX_CHARS}. יש לבדוק אם הסריקה (src/lib/iconFontScan.mjs) אוספת מחרוזות שאינן אייקונים.`
+    )
+  }
 
   const woff2 = await fetchSubset(names)
+  // רשת ביטחון: subset תקין שוקל עשרות KB. גופן גדול מזה הוא כנראה הגופן המלא.
+  if (woff2.length > MAX_SUBSET_BYTES) {
+    throw new Error(
+      `הגופן שהתקבל שוקל ${(woff2.length / 1024).toFixed(1)}KB (${names.length} שמות, ${paramLength} תווים) — ` +
+        'כנראה Google התעלם מה-subset.'
+    )
+  }
+  const missing = missingFromFont(names, woff2)
+  if (missing.length) {
+    throw new Error(`אייקונים שבשימוש חסרים בגופן שהתקבל: ${missing.join(', ')}`)
+  }
+
   const hash = createHash('sha256').update(woff2).digest('hex').slice(0, 8)
   const fileName = `${FONT_BASENAME}.${hash}.woff2`
   const publicUrl = `/fonts/${fileName}`
@@ -212,6 +211,9 @@ export const ICON_FONT_URL = '${publicUrl}'
     `${JSON.stringify({ family: FAMILY, axes: AXES, file: publicUrl, bytes: woff2.length, icons: names }, null, 2)}\n`
   )
 
+  // רשימת כל השמות התקפים — כדי ש---check (offline) ידע אילו מחרוזות הן שמות אייקון
+  await writeFile(UNIVERSE_OUT, `${[...universe].sort().join('\n')}\n`)
+
   console.log(`✓ ${fileName} — ${names.length} אייקונים, ${(woff2.length / 1024).toFixed(1)}KB`)
 }
 
@@ -236,29 +238,32 @@ function reportFailure(message, details = []) {
 
 async function check() {
   let manifest
+  let universe
+  let woff2
   try {
     manifest = JSON.parse(await readFile(MANIFEST_OUT, 'utf8'))
-  } catch {
-    reportFailure('אין icon-font.manifest.json')
+    universe = new Set((await readFile(UNIVERSE_OUT, 'utf8')).split(/\r?\n/).filter(Boolean))
+    woff2 = await readFile(path.join(ROOT, 'public', manifest.file))
+  } catch (err) {
+    reportFailure(`חסר קובץ של גופן האייקונים: ${err.message}`)
     return
   }
 
-  const included = new Set(manifest.icons)
-  const precise = collectPrecise(await readAll(await collectFiles(SCAN_DIR)))
-  const missing = [...precise].filter(([name]) => !included.has(name))
+  // המקור הקובע הוא הגופן עצמו (הליגטורות שבו), לא רק רשימת השמות שבמניפסט.
+  const found = collectIconNames(await readAll(await collectFiles(SCAN_DIR)))
+  const { known } = filterKnown(found.keys(), universe)
+  const missing = missingFromFont(known, woff2)
 
   if (missing.length === 0) {
-    console.log(`✓ גופן האייקונים מכסה את כל ${precise.size} האייקונים שבקוד`)
+    console.log(`✓ גופן האייקונים מכסה את כל ${known.length} האייקונים שבקוד`)
     return
   }
 
-  // הערה על גבולות הבדיקה: היא מזהה רק שימושים שניתן לקרוא מהקוד סטטית
-  // (טקסט בתוך span עם המחלקה, שדה icon:, prop בצורת icon="..."). אייקון
-  // שנקבע דינמית לגמרי — למשל מתוך תשובת API — אינו נתפס כאן. ה-subset עצמו
-  // נבנה מסריקה רחבה בהרבה, ולכן בפועל הוא מכיל יותר ממה שהבדיקה מוודאת.
+  // גבולות הבדיקה: היא מזהה שימושים שניתן לקרוא מהקוד סטטית (ראו iconFontScan.mjs).
+  // אייקון שמגיע מנתונים — למשל אייקון של קטגוריית תוספים שהוזן בממשק הניהול — אינו נתפס.
   reportFailure(
     `${missing.length} אייקונים אינם ב-subset ולא יוצגו:`,
-    missing.map(([name, file]) => `${name}  (${file})`)
+    missing.map((name) => `${name}  (${found.get(name)})`)
   )
 }
 

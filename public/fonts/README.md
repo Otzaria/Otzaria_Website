@@ -16,20 +16,32 @@ npm run build:icons
 ```
 
 הסקריפט (`scripts/build-icon-font.mjs`) סורק את `src/`, מוריד subset מ-Google
-ומעדכן את הגופן, את `src/app/styles/icon-font.css`, את `src/lib/icon-font.js`
-ואת `scripts/icon-font.manifest.json`. הפלטים נשמרים ב-Git כדי שה-build לא יהיה
+ומעדכן את הגופן, את `src/app/styles/icon-font.css`, את `src/lib/icon-font.js`,
+את `scripts/icon-font.manifest.json` ואת `scripts/material-symbols-names.txt` (כל
+שמות האייקונים התקפים, לבדיקה offline). הפלטים נשמרים ב-Git כדי שה-build לא יהיה
 תלוי ברשת.
 
-`npm run build` מריץ `check:icons`. הבדיקה עצמה offline, ומשווה את האייקונים
-שבקוד למניפסט:
+איזה אייקונים נכללים (`src/lib/iconFontScan.mjs`): רק מחרוזות בהקשר של אייקון —
+תוכן של `span.material-symbols-outlined` (כולל טרנרי בתוכו), `<AppIcon name>`,
+ערך של שדה/prop/משתנה שבשמו `icon` (`icon:`, `iconEnd=`, `PAGE_ICONS = {…}`,
+`function getIcon() {…}`), וארגומנט במקום של פרמטר בשם `icon`
+(`toolButton(tool, icon, label)`). אחר כך מסננים מול רשימת השמות התקפים.
+
+למה לא כל מילה בקוד: Google מתעלם בשקט מ-`icon_names` שאורכו מעל 4,096 תווים,
+ומחזיר את הגופן המלא (316KB). סריקה של כל token אספה כ-470 "שמות" (function,
+class, map...) וחצתה את המגבלה. הסקריפט נכשל לפני הבקשה אם הרשימה ארוכה מדי, נכשל
+אם הגופן שהתקבל גדול מ-150KB, וקורא את הליגטורות מהגופן עצמו
+(`src/lib/woff2Ligatures.mjs`) כדי לוודא שכל אייקון שבשימוש באמת נמצא בו.
+
+`npm run build` מריץ `check:icons`. הבדיקה offline, ומשווה את האייקונים שבקוד
+לליגטורות שבגופן המחויב:
 
 - מקומית — אזהרה בלבד, כדי לא לחסום עבודה (התיקון דורש רשת).
 - ב-CI (או עם `--strict`) — מכשילה את ה-build. אייקון חסר מוצג למשתמש כטקסט.
 
-מה שהבדיקה **לא** מכסה: אייקון שנקבע דינמית לגמרי, למשל מתוך תשובת API. היא
-מזהה שימושים שניתן לקרוא מהקוד סטטית — טקסט בתוך `span.material-symbols-outlined`,
-שדה `icon:` ו-prop בצורת `icon="..."`. ה-subset עצמו נבנה מסריקה רחבה יותר
-(כל token בקוד שתואם שם אייקון), ולכן בפועל הוא מכיל יותר ממה שנבדק.
+מה שהבדיקה **לא** מכסה: אייקון שמגיע מנתונים, למשל אייקון של קטגוריית תוספים
+שהוזן בממשק הניהול. אייקון שנבנה בקוד בדרך שאינה אחת מההקשרים שלמעלה — יש לכתוב
+אותו בהקשר מוכר (למשל שדה `icon:`), אחרת הוא לא ייכלל בגופן.
 
 ## גופן הכותרות (Frank Ruehl CLM)
 

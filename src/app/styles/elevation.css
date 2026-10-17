@@ -1,10 +1,13 @@
 /* ============================================================
- * elevation.css — טוקני עומק גלובליים (צללים)
+ * elevation.css — טוקני עומק (צללים)
  * ------------------------------------------------------------
- * הערכים מכוונים לצללים רכים ועדינים יותר מברירת המחדל של Tailwind.
+ *  1. הסולם (--shadow-2xs … --shadow-2xl, drop/inset/text) — לעמודים קיימים. רך מברירת
+ *     המחדל של Tailwind.
+ *  2. תפקידים — רכיבים חדשים משתמשים רק בהם (shadow-raised, shadow-menu, shadow-dialog...).
  *
- * שינוי ערך כאן ישפיע על מחלקות כמו shadow-lg / drop-shadow-xl
- * בכל הפרויקט.
+ * עקרון השפה ("האפליקציה עצמה"): משטחים שטוחים. כרטיס (AppCard) — *בלי* צל ובלי מסגרת;
+ * ההפרדה היא בצבע המשטח. צל רק למה שצף מעל הדף: תפריט, רמז, דיאלוג, גיליון, כותרת דביקה
+ * כשהדף נגלל מתחתיה. גוון הצל חם (neutral-10 של הפלטה), לא שחור.
  * ============================================================ */
 
 @theme {
@@ -35,4 +38,17 @@
     0px 1px 1px rgb(0 0 0 / 0.1), 0px 1px 2px rgb(0 0 0 / 0.1), 0px 2px 4px rgb(0 0 0 / 0.1);
   --text-shadow-lg:
     0px 1px 2px rgb(0 0 0 / 0.1), 0px 3px 2px rgb(0 0 0 / 0.1), 0px 4px 8px rgb(0 0 0 / 0.1);
+
+  /* --- תפקידים (רמות עומק) ---
+   * raised  — כרטיס שצריך להיבדל מהגיבור שמעליו (שורת המספרים): צל רך בלבד.
+   * menu    — תפריט נפתח: קו מתאר דק + צל.
+   * tooltip — כרטיס-רמז (רמז התרומה).
+   * dialog  — דיאלוג ממורכז; sheet — גיליון תחתון בנייד (הצל כלפי מעלה).
+   * overlay — לוח נפתח מתחת לכותרת (התפריט הנייד). */
+  --shadow-raised: var(--shadow-md);
+  --shadow-menu: 0 0 0 1px color-mix(in srgb, var(--color-outline-variant) 70%, transparent), var(--shadow-lg);
+  --shadow-tooltip: 0 0 0 1px var(--color-outline-variant), 0 10px 28px -12px rgb(86 52 18 / 0.32), 0 2px 6px -2px rgb(86 52 18 / 0.12);
+  --shadow-dialog: 0 16px 48px rgb(32 27 19 / 0.24);
+  --shadow-sheet: 0 -8px 32px rgb(32 27 19 / 0.18);
+  --shadow-overlay: 0 12px 24px -12px color-mix(in srgb, var(--color-shadow) 22%, transparent);
 }

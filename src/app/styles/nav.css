@@ -1,0 +1,198 @@
+/* ============================================================
+ * nav.css — ניווט הכותרת העליונה: פריט נפתח (NavDropdown) וקבוצה מקוננת בתפריט הנייד
+ * ------------------------------------------------------------
+ * מצב הפתיחה נקבע ב-CSS: ריחוף (גם ב-HTML סטטי בלי React) או data-open="true" שהרכיב
+ * כותב (פוקוס מקלדת, לחיצה/נגיעה). data-dismissed (Esc) גובר על הריחוף.
+ * ============================================================ */
+
+:root {
+  /* הריפוד השקוף שמחבר את הכפתור לרשימה — אין "רווח" שבו הריחוף נקטע */
+  --nav-dropdown-bridge: calc(var(--spacing) * 2);
+  --nav-dropdown-width: 17rem;
+  --nav-dropdown-shift: -0.25rem;
+  --nav-dropdown-duration: 160ms;
+  /* כמה זמן הרשימה נשארת אחרי שהעכבר יצא — מעבר אלכסוני אליה לא מפיל אותה */
+  --nav-dropdown-close-delay: 120ms;
+}
+
+@layer components {
+  /* הכפתור — באותו מראה טונלי של פריט הניווט המודגש (highlight) */
+  .nav-dropdown-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 0.5);
+    padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3) calc(var(--spacing) * 2) calc(var(--spacing) * 2);
+    border-radius: var(--radius-control);
+    background-color: var(--color-secondary-container);
+    color: var(--color-on-secondary-container);
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    font-weight: var(--font-weight-medium);
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color var(--default-transition-duration) var(--default-transition-timing-function);
+  }
+
+  .nav-dropdown[data-open='true'] .nav-dropdown-trigger,
+  .nav-dropdown-trigger:hover {
+    background-color: color-mix(in srgb, var(--color-tile) 70%, var(--color-outline-variant));
+  }
+
+  /* טבעת הפוקוס האחידה (ui/focusRing.ts — FOCUS_RING), דרך --focus-ring-* */
+  .nav-dropdown-trigger:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .nav-dropdown-chevron {
+    font-size: 1.125rem;
+    transition: rotate var(--nav-dropdown-duration) var(--ease-out);
+  }
+
+  .nav-dropdown[data-open='true'] .nav-dropdown-chevron {
+    rotate: 180deg;
+  }
+
+  /* הרשימה: צמודה לקצה ההתחלה (ימין ב-RTL) של הכפתור. סגורה — שקופה, מוזזת מעט למעלה
+     ו-visibility: hidden (לא נגישה לפוקוס/קורא מסך); visibility מתעכב עד סוף הדעיכה */
+  .nav-dropdown-panel {
+    position: absolute;
+    inset-inline-start: 0;
+    top: 100%;
+    z-index: var(--z-raised);
+    padding-top: var(--nav-dropdown-bridge);
+    opacity: 0;
+    visibility: hidden;
+    translate: 0 var(--nav-dropdown-shift);
+    transition:
+      opacity var(--nav-dropdown-duration) var(--ease-in) var(--nav-dropdown-close-delay),
+      translate var(--nav-dropdown-duration) var(--ease-in) var(--nav-dropdown-close-delay),
+      visibility 0s linear calc(var(--nav-dropdown-duration) + var(--nav-dropdown-close-delay));
+  }
+
+  .nav-dropdown[data-open='true'] .nav-dropdown-panel {
+    opacity: 1;
+    visibility: visible;
+    translate: 0 0;
+    transition:
+      opacity var(--nav-dropdown-duration) var(--ease-out),
+      translate var(--nav-dropdown-duration) var(--ease-out),
+      visibility 0s;
+  }
+
+  /* ריחוף ב-CSS בלבד — רק במכשיר עם ריחוף אמיתי (במגע :hover "נתקע" אחרי נגיעה) */
+  @media (hover: hover) {
+    .nav-dropdown:not([data-dismissed]):hover .nav-dropdown-trigger {
+      background-color: color-mix(in srgb, var(--color-tile) 70%, var(--color-outline-variant));
+    }
+
+    .nav-dropdown:not([data-dismissed]):hover .nav-dropdown-chevron {
+      rotate: 180deg;
+    }
+
+    .nav-dropdown:not([data-dismissed]):hover .nav-dropdown-panel {
+      opacity: 1;
+      visibility: visible;
+      translate: 0 0;
+      transition:
+        opacity var(--nav-dropdown-duration) var(--ease-out),
+        translate var(--nav-dropdown-duration) var(--ease-out),
+        visibility 0s;
+    }
+  }
+
+  /* Esc — נסגר מיד, בלי ההשהיה של יציאת העכבר */
+  .nav-dropdown[data-dismissed] .nav-dropdown-panel {
+    transition: opacity var(--nav-dropdown-duration) var(--ease-in), visibility 0s linear var(--nav-dropdown-duration);
+  }
+
+  .nav-dropdown-list {
+    width: var(--nav-dropdown-width);
+    padding: calc(var(--spacing) * 1.5);
+    border-radius: var(--radius-container);
+    background-color: var(--color-surface);
+    box-shadow: var(--shadow-menu);
+  }
+
+  .nav-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 3);
+    min-height: 2.75rem; /* מטרת מגע 44px */
+    padding-inline: calc(var(--spacing) * 3);
+    border-radius: var(--radius-control);
+    color: var(--color-on-surface);
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    font-weight: var(--font-weight-medium);
+    transition: background-color var(--default-transition-duration) var(--default-transition-timing-function);
+  }
+
+  .nav-dropdown-item:hover,
+  .nav-dropdown-item:focus-visible {
+    background-color: var(--color-card-selected);
+  }
+
+  /* פריט ברשימה — טבעת פנימית (FOCUS_RING_INSET), כדי שלא תיחתך בקצה הרשימה */
+  .nav-dropdown-item:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: calc(var(--focus-ring-width) * -1);
+  }
+
+  .nav-dropdown-icon {
+    font-size: 1.25rem;
+    color: var(--color-primary);
+  }
+
+  /* "עוד..." — מופרד בקו, בצבע הראשי, עם חץ שזז קלות בריחוף */
+  .nav-dropdown-more {
+    margin-top: calc(var(--spacing) * 1.5);
+    padding-top: calc(var(--spacing) * 1.5);
+    border-top: 1px solid var(--color-outline-variant);
+  }
+
+  .nav-dropdown-more .nav-dropdown-item {
+    color: var(--color-primary);
+  }
+
+  .nav-dropdown-arrow {
+    font-size: 1.125rem;
+    transition: translate var(--default-transition-duration) var(--ease-out);
+  }
+
+  .nav-dropdown-item:hover .nav-dropdown-arrow,
+  .nav-dropdown-item:focus-visible .nav-dropdown-arrow {
+    translate: -0.1875rem 0;
+  }
+
+  /* התפריט הנייד: הקבוצה כותרת (לא קישור) ומתחתיה הקישורים, מוזחים פנימה עם קו בצד */
+  .mobile-nav-group-label {
+    padding: calc(var(--spacing) * 3) calc(var(--spacing) * 3) calc(var(--spacing) * 1);
+    color: var(--color-on-surface-variant);
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .mobile-nav-group-list {
+    margin-inline-start: calc(var(--spacing) * 3);
+    padding-inline-start: calc(var(--spacing) * 2);
+    border-inline-start: 2px solid var(--color-outline-variant);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .nav-dropdown-panel,
+    .nav-dropdown[data-open='true'] .nav-dropdown-panel {
+      translate: none;
+    }
+
+    .nav-dropdown-chevron,
+    .nav-dropdown-arrow {
+      transition: none;
+    }
+
+    .nav-dropdown-item:hover .nav-dropdown-arrow,
+    .nav-dropdown-item:focus-visible .nav-dropdown-arrow {
+      translate: none;
+    }
+  }
+}

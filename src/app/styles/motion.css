@@ -1,13 +1,34 @@
 /* ============================================================
- * motion.css — טוקני תנועה וטשטוש גלובליים
+ * motion.css — טוקני תנועה וטשטוש
  * ------------------------------------------------------------
- * הערכים מכוונים לתנועה מעט רגועה וטשטוש רך יותר.
+ * עקרון: תנועה קצרה ושקטה, שמסבירה מה קרה (נפתח / נסגר / נבחר) — לא קישוט.
+ *
+ * משכים (--motion-duration-*), לפי תפקיד:
+ *   instant  —  0ms   שינוי מיידי
+ *   fast     — 150ms  יציאה (סגירת דיאלוג/תפריט), שינוי צבע קטן
+ *   standard — 180ms  ברירת המחדל: ריחוף, מעבר צבע, כניסת דיאלוג (= --default-transition-duration)
+ *   emphasis — 300ms  מעבר גדול (גיליון, פאנל)
+ *   (התפריט הנפתח בכותרת: 160ms — --nav-dropdown-duration ב-nav.css)
+ * עקומות (Tailwind יוצר מהן ease-*):
+ *   ease-standard — שינוי במקום (צבע, גודל).   ease-enter — כניסה (מאט בסוף).
+ *   ease-exit     — יציאה (מאיץ בסוף).
+ *
+ * reduced-motion (prefers-reduced-motion: reduce): מסירים *תזוזה* (translate / scale / rotate, לולאות,
+ * פעימות, parallax) ומשאירים דהייה ושינוי צבע — הם לא גורמים לסחרחורת, והם מסבירים שמשהו
+ * השתנה. כל רכיב מבטל את התזוזה שלו במפורש (motion-reduce:... או @media), כמו היום
+ * (animations.css, effects.css, tooltip.css, GoldenBook, DonateAnimatedIcon). לכן המשכים
+ * כאן *לא* מתאפסים גלובלית.
  * ============================================================ */
 
 @theme {
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
   --ease-out: cubic-bezier(0, 0, 0.2, 1);
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* --- עקומות לפי תפקיד --- */
+  --ease-standard: var(--ease-in-out);
+  --ease-enter: var(--ease-out);
+  --ease-exit: var(--ease-in);
 
   --blur-xs: 4px;
   --blur-sm: 8px;
@@ -20,3 +41,13 @@
   --default-transition-duration: 180ms;
   --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* משכים — ב-:root ולא ב-@theme: ל-Tailwind v4 אין namespace למשכים. שימוש:
+   duration-(--motion-duration-fast) במחלקה, או var(--motion-duration-fast) ב-CSS. */
+:root {
+  --motion-duration-instant: 0ms;
+  --motion-duration-fast: 150ms;
+  --motion-duration-standard: 180ms;
+  --motion-duration-emphasis: 300ms;
+}
+

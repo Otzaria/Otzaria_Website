@@ -1,27 +1,41 @@
 @import "tailwindcss";
 
 /* ============================================================
- * מערכת העיצוב של אוצריא — מאוגדת בקבצי styles/ ייעודיים.
- * כל שינוי עיצוב גלובלי מתבצע באחד הקבצים הבאים:
- *   styles/colors.css      — צבעי מותג + רמפות סמנטיות (מקור האמת לצבעים)
- *   styles/typography.css  — משפחות גופנים
- *   styles/layout.css      — מרווחים, מידות בסיס ושבירות מסך
- *   styles/shape.css       — רדיוסים ופינות
- *   styles/elevation.css   — צללים ועומק
- *   styles/motion.css      — easing, blur וברירות מחדל של transition
+ * מערכת העיצוב של אוצריא — מאוגדת בקבצי styles/ ייעודיים (פירוט: styles/README.md,
+ * והמדריך המלא: refactor-notes/redesign/design-system.md).
+ *
+ * טוקנים — שלוש שכבות:
+ *   styles/palette.css          — 1. פלטת הייחוס (--ref-*): הגוונים הגולמיים. לא בשימוש ישיר.
+ *   styles/colors.css           — 2. תפקידי צבע (surface / on-surface / primary ...) + כינויים
+ *   styles/theme-dark.css       —    ערכה כהה: מחליפה את שכבה 2 (מוכנה, לא מופעלת)
+ *   styles/typography.css       —    גופנים, סולם גדלים + סולם תפקידים (display/headline/...)
+ *   styles/layout.css           —    מרווח בסיס, שבירות, מכלים, gutter, שכבות z
+ *   styles/shape.css            —    רדיוסים (סולם + תפקידים: control/card/...)
+ *   styles/elevation.css        —    צללים (סולם + תפקידים: raised/menu/dialog/...)
+ *   styles/motion.css           —    עקומות ומשכים (כולל reduced-motion)
+ *   styles/component-tokens.css — 3. טוקני רכיב (button/card/input/nav/dialog/tooltip/badge)
+ *
+ * סגנונות:
  *   styles/icon-font.css   — @font-face של גופן האייקונים (נוצר אוטומטית)
- *   styles/base.css        — html / body / רקע / אייקונים
- *   styles/effects.css     — זכוכית, פס גלילה, ריחוף, הדגשת איות
+ *   styles/base.css        — html / body / אייקונים
+ *   styles/effects.css     — זכוכית, כפתור התרומה, אייקון מותאם, קישוט הכותרת, עוגן, פס גלילה
+ *   styles/tooltip.css     — כרטיס-הרמז (ui/Tooltip)
+ *   styles/nav.css         — ניווט הכותרת: פריט נפתח וקבוצה בתפריט הנייד
  *   styles/animations.css  — keyframes + מחלקות animate-*
  * ============================================================ */
 
+@import "./styles/palette.css";
 @import "./styles/colors.css";
+@import "./styles/theme-dark.css";
 @import "./styles/typography.css";
 @import "./styles/layout.css";
 @import "./styles/shape.css";
 @import "./styles/elevation.css";
 @import "./styles/motion.css";
+@import "./styles/component-tokens.css";
 @import "./styles/icon-font.css";
 @import "./styles/base.css";
 @import "./styles/effects.css";
+@import "./styles/tooltip.css";
+@import "./styles/nav.css";
 @import "./styles/animations.css";

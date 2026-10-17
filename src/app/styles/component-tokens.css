@@ -1,0 +1,111 @@
+/* ============================================================
+ * component-tokens.css — שכבה 3 מתוך 3: טוקני רכיב
+ * ------------------------------------------------------------
+ * כל רכיב משותף (src/components/ui/*) קורא את הצבעים, הרדיוסים והמידות שלו מכאן, וכאן
+ * הם מצביעים על התפקידים (colors.css / shape.css / typography.css). שינוי "כל הכפתורים
+ * הטונליים" = שורה כאן; שינוי "כל המשטחים" = שורה ב-colors.css.
+ *
+ * ב-:root ולא ב-@theme: אלה לא מחלקות כלליות (אין bg-button-filled לשימוש חופשי בעמודים).
+ * הרכיבים צורכים אותם בתחביר המשתנה של Tailwind v4: bg-(--button-filled-bg),
+ * rounded-(--card-radius), min-h-(--button-height-md). עמוד לא צריך לגעת בהם — הוא משתמש
+ * ברכיב. ערכה כהה לא נוגעת כאן (היא מחליפה את שכבה 2), חוץ ממקרים מתועדים.
+ * ============================================================ */
+
+:root {
+  /* ---------- טבעת פוקוס (כל רכיב אינטראקטיבי) ---------- */
+  --focus-ring-color: var(--color-focus-ring);
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+
+  /* ---------- כפתור (ui/Button) ----------
+   * גובה: sm = מטרת המגע המינימלית (44px); md = הכפתורים הראשיים של דף הבית (min-h-12,
+   * 45.6px); lg = קריאה לפעולה בסוף אזור (48px). header = פעולה בשורת הכותרת (התחבר,
+   * התנתק, תרומות): גובה חזותי נמוך יותר כדי לא להעיב על הניווט, ומטרת המגע (44px) נשמרת
+   * דרך ::before (ראו buttonStyles.ts ו-.donation-nav-link ב-effects.css). */
+  --button-radius: var(--radius-control);
+  --button-height-sm: var(--touch-target);
+  --button-height-md: calc(var(--spacing) * 12);
+  --button-height-lg: 3rem;
+  --button-height-header: calc(var(--spacing) * 9);
+  --button-icon-size-sm: 1.25rem;
+  --button-icon-size-md: 22px;
+  --button-icon-size-lg: 1.375rem;
+  --button-icon-size-header: 1.15rem;
+
+  /* ---------- אזור החשבון בכותרת (layout/AccountActions) ----------
+   * רוחב אחד לשלושת המצבים — טוען (skeleton), אורח ("התחבר", טקסט בלבד), מחובר (עיגול האות +
+   * חץ, בלי שם) — וכל אחד ממלא אותו: אין קפיצה כשה-session נטען, ואין רווח ריק ליד "תרומות".
+   * 4.5rem (כ-72px): "התחבר" עם הריפוד של header צריך כ-67px, כפתור החשבון כ-64px; המרווח הקטן
+   * שנשאר — לגופן החלופי, שעשוי להיות רחב מעט יותר. */
+  --account-slot-width: 4.5rem;
+
+  --button-filled-bg: var(--color-primary);
+  --button-filled-bg-hover: var(--color-primary-hover);
+  --button-filled-bg-pressed: var(--color-primary-pressed);
+  --button-filled-fg: var(--color-on-primary);
+
+  --button-tonal-bg: var(--color-secondary-container);
+  --button-tonal-bg-hover: var(--color-secondary-container-hover);
+  --button-tonal-fg: var(--color-on-secondary-container);
+
+  --button-outlined-border: var(--color-outline);
+  --button-outlined-fg: var(--color-primary);
+  --button-outlined-bg-hover: var(--color-surface-selected);
+
+  --button-text-fg: var(--color-primary);
+  --button-text-bg-hover: var(--color-surface-selected);
+
+  /* danger — פעולה הרסנית (מחיקה). מלא בצבע השגיאה; ריחוף = שכבת מצב של 8% */
+  --button-danger-bg: var(--color-error);
+  --button-danger-bg-hover: color-mix(in srgb, var(--color-on-error) 8%, var(--color-error));
+  --button-danger-fg: var(--color-on-error);
+
+  --button-disabled-opacity: 0.6;
+
+  /* ---------- כרטיס (ui/Card) ----------
+   * AppCard: משטח surface, בלי מסגרת ובלי צל. raised — הכרטיס היחיד שצף (שורת המספרים). */
+  --card-radius: var(--radius-card);
+  --card-bg: var(--color-card);
+  --card-bg-hover: var(--color-card-selected);
+  --card-bg-tonal: color-mix(in oklab, var(--color-tile) 40%, transparent);
+  /* אותו גוון טונלי, אטום (מורכב על רקע הדף) — לטבעת של TitleOrnament בתוך כרטיס טונלי */
+  --card-bg-tonal-solid: color-mix(in oklab, var(--color-tile) 40%, var(--color-background));
+  --card-raised-ring: color-mix(in oklab, var(--color-outline-variant) 60%, transparent);
+  --card-raised-shadow: var(--shadow-raised);
+
+  /* ---------- פס גלילה דק (.scrollbar-thin ב-effects.css) — לאזורי גלילה פנימיים ---------- */
+  --scrollbar-size: 6px;
+  --scrollbar-thumb: var(--color-outline-variant);
+  --scrollbar-thumb-hover: var(--color-outline);
+
+  /* ---------- אריח אייקון (ui/IconTile) ---------- */
+  --icon-tile-radius: var(--radius-card);
+  --icon-tile-bg: var(--color-tile);
+  --icon-tile-fg: var(--color-on-tile);
+  --icon-size-sm: 22px;
+  --icon-size-md: 26px;
+  --icon-size-lg: 30px;
+
+  /* ---------- דיאלוג וגיליון (ui/Dialog) ---------- */
+  --dialog-bg: var(--color-background);
+  --dialog-radius: var(--radius-dialog);
+  --dialog-sheet-radius: var(--radius-sheet);
+  --dialog-shadow: var(--shadow-dialog);
+  --dialog-sheet-shadow: var(--shadow-sheet);
+  --dialog-scrim: color-mix(in oklab, var(--color-scrim) 45%, transparent);
+  --dialog-width: var(--container-lg);
+  --dialog-z: var(--z-overlay);
+
+  /* ---------- רמז (ui/Tooltip; .tooltip ב-tooltip.css) ---------- */
+  --tooltip-bg: var(--color-surface);
+  --tooltip-fg: var(--color-on-surface);
+  --tooltip-radius: var(--radius-shape);
+  --tooltip-shadow: var(--shadow-tooltip);
+  --tooltip-max-width: 15rem;
+  --tooltip-delay: 280ms;
+
+  /* ---------- תג / תגית (ui/Badge) ---------- */
+  --badge-radius: var(--radius-pill);
+  --badge-height-sm: 1.5rem;
+  --badge-height-md: 1.875rem;
+}

@@ -1,0 +1,128 @@
+/* ============================================================
+ * palette.css — שכבה 1 מתוך 3: פלטת הייחוס (reference palette)
+ * ------------------------------------------------------------
+ * הגוונים הגולמיים שמהם נגזר כל צבע באתר. **אין להשתמש בהם ישירות ברכיבים** — רק
+ * דרך הטוקנים הסמנטיים (colors.css), שמגדירים *תפקיד* (משטח, טקסט, קו, פעולה ראשית...).
+ * לכן הם ב-:root רגיל ולא ב-@theme: Tailwind לא יוצר מהם מחלקות (אין bg-ref-*), והם
+ * תמיד נפלטים (אין גיזום של משתנים שלא בשימוש).
+ *
+ * המקור: ערכת Material 3 של אפליקציית אוצריא — ColorScheme.fromSeed(#2C1B02,
+ * DynamicSchemeVariant.tonalSpot), כפי ש-AppThemeData.createColorScheme בונה אותה.
+ * הערכים חושבו ב-material_color_utilities 0.13.0 (אותה ספרייה שבה Flutter משתמש), ולא
+ * "בערך": המספר בשם הוא ה-tone של HCT (בהירות L* של CIELAB, 0 = שחור, 100 = לבן).
+ *   primary        — חום-זהב (כפתור ראשי, קישורים)
+ *   secondary      — חום-חול (אריחי אייקון, כפתור טונלי)
+ *   tertiary       — זית (שמור; עדיין לא בשימוש — מועמד ל"הצלחה" הרמונית)
+ *   neutral        — משטחים וטקסט
+ *   neutral-variant— קווים ומסגרות
+ *   error          — שגיאה
+ *
+ * הרחבות מותג (לא מה-seed; נמדדו מהאפליקציה/המתקין או נבחרו לאתר), שמות לפי אותו tone:
+ *   parchment — רקע הדף (panelBackground של האפליקציה, ובאתר — גרסה מובהרת שלו) ושכבת
+ *               הבחירה של כרטיס (cardSelectionOverlay)
+ *   ink       — טקסט חום-קפה חם (האתר משתמש בו במקום onSurface הכמעט-שחור, ראו colors.css)
+ *   gold      — זהב: הילה ונקודת הקישוט
+ *   rust      — חלוד: התרומה
+ *   state     — שכבות מצב (M3 state layers) מחושבות מראש: onPrimary ב-8%/12% מעל primary,
+ *               ו-onSecondaryContainer מעל secondaryContainer. מחושבות מראש (ולא color-mix)
+ *               כדי שהערכה הבהירה תישאר זהה לפיקסל; בערכה הכהה הן נגזרות ב-color-mix.
+ * ============================================================ */
+
+:root {
+  /* --- primary (Hue ≈ 70°, חום-זהב) --- */
+  --ref-primary-10: #291800;
+  --ref-primary-20: #452b00;
+  --ref-primary-30: #633f00;
+  --ref-primary-40: #805610;
+  --ref-primary-50: #9c6e28;
+  --ref-primary-60: #b9883f;
+  --ref-primary-70: #d6a257;
+  --ref-primary-80: #f4bd6f;
+  --ref-primary-90: #ffddb3;
+  --ref-primary-95: #ffeedc;
+  --ref-primary-99: #fffbff;
+
+  /* --- secondary (חום-חול) --- */
+  --ref-secondary-10: #271904;
+  --ref-secondary-20: #3e2d16;
+  --ref-secondary-30: #56442a;
+  --ref-secondary-40: #6f5b40;
+  --ref-secondary-50: #8a7357;
+  --ref-secondary-60: #a58d6f;
+  --ref-secondary-70: #c1a788;
+  --ref-secondary-80: #ddc2a1;
+  --ref-secondary-90: #fbdebc;
+  --ref-secondary-95: #ffeedc;
+
+  /* --- tertiary (זית) — שמור --- */
+  --ref-tertiary-10: #102004;
+  --ref-tertiary-20: #243515;
+  --ref-tertiary-30: #3a4c2a;
+  --ref-tertiary-40: #51643f;
+  --ref-tertiary-80: #b8cea1;
+  --ref-tertiary-90: #d4eabb;
+
+  /* --- neutral (משטחים) — כולל ה-tones של סולם surfaceContainer של M3 --- */
+  --ref-neutral-0: #000000;
+  --ref-neutral-4: #120d07;
+  --ref-neutral-6: #18120b;
+  --ref-neutral-10: #201b13;
+  --ref-neutral-12: #251f17;
+  --ref-neutral-17: #2f2921;
+  --ref-neutral-20: #362f27;
+  --ref-neutral-22: #3b342b;
+  --ref-neutral-24: #3f3830;
+  --ref-neutral-30: #4d453d;
+  --ref-neutral-40: #665d53;
+  --ref-neutral-50: #7f766b;
+  --ref-neutral-60: #998f84;
+  --ref-neutral-70: #b4a99e;
+  --ref-neutral-80: #d0c5b9;
+  --ref-neutral-87: #e4d8cc;
+  --ref-neutral-90: #ede0d4;
+  --ref-neutral-92: #f3e6da;
+  --ref-neutral-93: #f6e9dc;
+  --ref-neutral-94: #f9ecdf;
+  --ref-neutral-95: #fcefe2;
+  --ref-neutral-96: #fff1e5;
+  --ref-neutral-98: #fff8f4;
+  --ref-neutral-100: #ffffff;
+
+  /* --- neutral-variant (קווים) --- */
+  --ref-neutral-variant-30: #4f4539;
+  --ref-neutral-variant-40: #685d50;
+  --ref-neutral-variant-50: #817567;
+  --ref-neutral-variant-60: #9c8f80;
+  --ref-neutral-variant-80: #d3c4b4;
+  --ref-neutral-variant-90: #f0e0cf;
+
+  /* --- error --- */
+  --ref-error-10: #410002;
+  --ref-error-20: #690005;
+  --ref-error-30: #93000a;
+  --ref-error-40: #ba1a1a;
+  --ref-error-80: #ffb4ab;
+  --ref-error-90: #ffdad6;
+
+  /* --- הרחבות מותג --- */
+  --ref-parchment-86: #e1d4c8;   /* קו הכותרת/פוטר (TITLE_BAR_BORDER של המתקין) */
+  --ref-parchment-94: #f6ede5;   /* panelBackground של האפליקציה (רקע הלוח/המתקין) */
+  --ref-parchment-95: #f8f1ea;   /* רקע הדף באתר — panelBackground מובהר מעט (החלטת עיצוב לאתר) */
+  --ref-parchment-96: #fef0e3;   /* cardSelectionOverlay — כרטיס בריחוף/בחירה */
+
+  --ref-ink-12: #2e1c08;         /* צל חם (כותרת דביקה, תפריט נייד) — לא לטקסט */
+  --ref-ink-17: #3a2610;         /* טקסט ראשי חם */
+  --ref-ink-35: #664d33;         /* טקסט משני חם */
+
+  --ref-gold-78: #e9b96a;        /* זהב — הילה, נקודת הקישוט */
+
+  --ref-rust-31: #7a3219;        /* תרומה — ריחוף */
+  --ref-rust-36: #8c3b1f;        /* תרומה (לבן עליו 7.6:1) */
+  --ref-rust-78: #e2b7a3;        /* מסגרת התרומה הטונלית */
+  --ref-rust-86: #f2cfbd;        /* רקע התרומה הטונלית בריחוף */
+  --ref-rust-91: #f8e1d5;        /* רקע התרומה הטונלית */
+
+  --ref-state-primary-hover: #8a6423;     /* onPrimary 8% מעל primary-40 */
+  --ref-state-primary-pressed: #8f6a2d;   /* onPrimary 12% מעל primary-40 */
+  --ref-state-secondary-container-hover: #f6d4ad; /* ריחוף הכפתור הטונלי (נמדד מדף הבית) */
+}

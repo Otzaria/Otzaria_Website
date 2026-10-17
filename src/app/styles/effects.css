@@ -4,10 +4,6 @@
  * ============================================================ */
 
 @layer utilities {
-  .font-frank {
-    font-family: var(--font-frank);
-  }
-
   .glass {
     background-color: color-mix(in srgb, var(--color-background) 60%, transparent);
     backdrop-filter: blur(12px);
@@ -20,51 +16,398 @@
     border: 1px solid var(--color-surface-variant);
   }
 
-  /* תרומה — הדגשה עדינה, בהשראת כפתור התרומה בפורום */
-  .donation-nav-link {
-    position: relative;
+  /* ============================================================
+   * כפתור התרומה — משותף לכותרת העליונה (.donation-nav-link) ולאזור הסיום של דף הבית
+   * (.donation-button-lg). טונלי ולא מלא: רקע חלוד-בהיר, מסגרת דקה וטקסט חלוד
+   * (--color-donation-container* ב-colors.css) — פריט מיוחד אחד שבולט בצבעו, בלי להיות
+   * "גוש" כבד שמתחרה ב"הורידו בחינם". הלב "פועם" פעימה כפולה עדינה כל כמה שניות, ובריחוף
+   * הכפתור מתמלא קלות והלב מתרומם. reduced-motion — בלי פעימה ובלי תנועה.
+   * מטרת מגע 44px ומעלה (בכותרת — דרך ::before, ראו .donation-nav-link).
+   * ============================================================ */
+  .donation-button {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
-    margin-inline-start: 0.25rem;
-    padding: 0.375rem 0.625rem;
-    color: var(--color-donation) !important;
-    border-inline-start: 1px solid color-mix(in srgb, var(--color-donation) 22%, transparent);
-    border-radius: 0.5rem;
-    animation: donation-nav-pulse 3s infinite;
+    justify-content: center;
+    gap: 0.375rem;
+    min-height: 2.75rem;
+    padding: 0.5rem 1rem;
+    color: var(--color-donation);
+    background-color: var(--color-donation-container);
+    box-shadow: inset 0 0 0 1px var(--color-donation-outline);
+    /* רדיוס הצורה האחד של הכפתורים (shape.css) — כמו ui/Button שלצדו בכותרת ובדפים */
+    border-radius: var(--button-radius);
+    font-weight: var(--font-weight-semibold);
+    white-space: nowrap;
+    transition:
+      background-color var(--default-transition-duration) var(--default-transition-timing-function),
+      box-shadow var(--default-transition-duration) var(--default-transition-timing-function);
   }
 
-  .donation-nav-link:hover {
-    color: var(--color-donation-strong) !important;
-    background-color: color-mix(in srgb, var(--color-donation) 7%, transparent);
+  .donation-button:hover {
+    background-color: var(--color-donation-container-hover);
+    box-shadow: inset 0 0 0 1px var(--color-donation), 0 4px 12px -6px color-mix(in srgb, var(--color-donation) 45%, transparent);
   }
 
-  .donation-nav-icon {
-    animation: donation-heart-bounce 3s infinite ease-in-out;
+  /* טבעת הפוקוס האחידה של האתר (ui/focusRing.ts), כמו שאר פריטי הכותרת */
+  .donation-button:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
   }
 
-  @keyframes donation-nav-pulse {
-    0% {
-      box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-donation) 20%, transparent);
+  /* אייקון מותאם (AppIcon custom) — מסכה בצבע הטקסט ובגודל 1em, בדיוק כמו גליף מהגופן,
+     כך שמחלקות הגודל/הצבע/האנימציה של הגליפים חלות עליו כמו שהן. */
+  .app-icon {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 1em;
+    height: 1em;
+    background-color: currentColor;
+    mask: var(--app-icon-src) center / contain no-repeat;
+  }
+
+  .app-icon-donate {
+    --app-icon-src: url('/icons/donate-mask.png');
+  }
+
+  .donation-button-icon {
+    font-size: 1.15rem;
+    line-height: 1;
+    color: var(--color-donation);
+  }
+
+  .donation-button:hover .donation-button-icon,
+  .donation-button:focus-visible .donation-button-icon {
+    translate: 0 -1px;
+    transition: translate var(--default-transition-duration) var(--ease-out);
+  }
+
+  /* ---- אנימציית ההמתנה של הלב — מבודדת כאן (מחלקה אחת + keyframes אחד), להחלפה בקלות.
+     פעימה כפולה ("לב") בתחילת המחזור, ואחריה מנוחה ארוכה — תנועה חיה ולא מטרידה. ---- */
+  .donation-button-icon {
+    transform-origin: 50% 60%;
+    animation: donation-heartbeat var(--donation-beat-duration, 4.8s) var(--ease-in-out) infinite;
+  }
+
+  /* האייקון המונפש (DonateAnimatedIcon) נושא אנימציה משלו — בלי פעימת ההמתנה מעליו */
+  .donation-button-icon.donation-animated-icon {
+    animation: none;
+  }
+
+  /* ---- DonateAnimatedIcon — מטבעות לקופה שנפתחת לספר (CSS טהור, transform/opacity בלבד).
+     מחזור אחד --donate-anim-duration; נקודות הזמן (0/4/14/18/28/32/42/50/75/94/95/100%):
+     שלושה מטבעות נופלים (4–32%), הקופה מתמלאת בשלוש מדרגות (14–50%), קו החשיפה עולה
+     והקופה נפתחת לספר (50–75%), מנוחה על הספר, ואיפוס מהיר (94–95%). ---- */
+  .donate-anim {
+    --donate-anim-duration: 4.2s;
+    animation: donate-anim-fade var(--donate-anim-duration) linear infinite;
+  }
+
+  .donate-anim :is(.donate-anim-reveal-box, .donate-anim-reveal-book, .donate-anim-fill, .donate-anim-coin) {
+    transform-box: view-box;
+    animation-duration: var(--donate-anim-duration);
+    animation-iteration-count: infinite;
+  }
+
+  .donate-anim-reveal-box {
+    transform-origin: 0 0;
+    animation-name: donate-anim-reveal-box;
+    animation-timing-function: ease-in-out;
+  }
+
+  .donate-anim-reveal-book {
+    animation-name: donate-anim-reveal-book;
+    animation-timing-function: ease-in-out;
+  }
+
+  .donate-anim-fill {
+    transform-origin: 12px 20px;
+    animation-name: donate-anim-fill;
+    animation-timing-function: ease-in-out;
+  }
+
+  .donate-anim-coin {
+    opacity: 0;
+    animation-timing-function: linear;
+  }
+
+  .donate-anim-coin-1 { animation-name: donate-anim-coin-1; }
+  .donate-anim-coin-2 { animation-name: donate-anim-coin-2; }
+  .donate-anim-coin-3 { animation-name: donate-anim-coin-3; }
+
+  @keyframes donate-anim-fade {
+    0%, 94% { opacity: 1; }
+    95% { opacity: 0; }
+    100% { opacity: 1; }
+  }
+
+  /* קו החשיפה ב-24 (קופה) → 4 (ספר): הקופה נחתכת מלמטה, הספר נחשף מלמעלה.
+     נקודת ההתחלה בתחתית ה-viewBox (24) ולא ב-22: תחתית עובי הספר (BOOK_THICKNESS) יורדת עד
+     y=21.8, ועם חצי ה-stroke (העגול) היא חוצה את 22 — ונראתה כנקודה מתחת לקופה עד החשיפה. */
+  @keyframes donate-anim-reveal-box {
+    0%, 50% { transform: scaleY(1); }
+    75%, 94% { transform: scaleY(0.1667); }
+    95%, 100% { transform: scaleY(1); }
+  }
+
+  @keyframes donate-anim-reveal-book {
+    0%, 50% { transform: translateY(24px); }
+    75%, 94% { transform: translateY(4px); }
+    95%, 100% { transform: translateY(24px); }
+  }
+
+  /* המילוי עולה מתחתית הקופה (y=20) בשלוש מדרגות */
+  @keyframes donate-anim-fill {
+    0%, 14% { transform: scaleY(0); }
+    18%, 28% { transform: scaleY(0.3333); }
+    32%, 42% { transform: scaleY(0.6667); }
+    50%, 94% { transform: scaleY(1); }
+    95%, 100% { transform: scaleY(0); }
+  }
+
+  @keyframes donate-anim-coin-1 {
+    0% { opacity: 0; transform: none; }
+    4% { opacity: 1; transform: none; }
+    14% { opacity: 1; transform: translateY(8.5px); }
+    18%, 100% { opacity: 0; transform: translateY(8.5px); }
+  }
+
+  @keyframes donate-anim-coin-2 {
+    0%, 14% { opacity: 0; transform: none; }
+    18% { opacity: 1; transform: none; }
+    28% { opacity: 1; transform: translateY(8.5px); }
+    32%, 100% { opacity: 0; transform: translateY(8.5px); }
+  }
+
+  @keyframes donate-anim-coin-3 {
+    0%, 28% { opacity: 0; transform: none; }
+    32% { opacity: 1; transform: none; }
+    42% { opacity: 1; transform: translateY(8.5px); }
+    50%, 100% { opacity: 0; transform: translateY(8.5px); }
+  }
+
+  /* reduced-motion: ספר סטטי מלא, בלי קופה ומטבעות */
+  @media (prefers-reduced-motion: reduce) {
+    .donate-anim,
+    .donate-anim :is(.donate-anim-reveal-box, .donate-anim-reveal-book, .donate-anim-fill, .donate-anim-coin) {
+      animation: none;
     }
-    70% {
-      box-shadow: 0 0 0 8px color-mix(in srgb, var(--color-donation) 0%, transparent);
+
+    .donate-anim-box,
+    .donate-anim-coins {
+      display: none;
     }
-    100% {
-      box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-donation) 0%, transparent);
+
+    .donate-anim-reveal-book {
+      transform: none;
     }
   }
 
-  @keyframes donation-heart-bounce {
-    0%, 20%, 50%, 80%, 100% {
-      transform: translateY(0);
+  @keyframes donation-heartbeat {
+    0%, 22%, 100% { scale: 1; }
+    5% { scale: 1.2; }
+    10% { scale: 1; }
+    15% { scale: 1.12; }
+  }
+
+  /* אזור הסיום — בגודל הכפתורים הראשיים של הדף (48px) */
+  .donation-button-lg {
+    min-height: 3rem;
+    padding-inline: 2rem;
+    gap: 0.5rem;
+    font-size: var(--text-base);
+    border-radius: var(--radius-lg);
+  }
+
+  .donation-button-lg .donation-button-icon {
+    font-size: 1.375rem;
+  }
+
+  /* בכותרת: בגובה הנראה של פריטי הניווט שלצדו, כדי שכל השורה תעמוד על קו אחד; בנייד —
+     ממורכז מול כפתור התפריט. מטרת המגע נשארת 44px: ::before שקוף מרחיב את אזור הלחיצה
+     אנכית, בלי להגדיל את הכפתור הנראה. */
+  /* בכותרת: אותם גובה וריפוד כמו ui/Button בגודל header (התחבר/התנתק שלצדו) */
+  .donation-nav-link {
+    position: relative;
+    min-height: var(--button-height-header);
+    padding: 0 calc(var(--spacing) * 3.5);
+  }
+
+  .donation-nav-link::before {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    top: 50%;
+    height: max(100%, 2.75rem);
+    transform: translateY(-50%);
+  }
+
+  /* ---- תוכן רמז התרומה (DonationButton, בתוך ui/Tooltip): שתי שורות — "אין לאוצריא גוף מממן:"
+     בטקסט משני, ו"אתה הכוח המניע שלה" מודגש — ולצדן אייקון התרומה בזהב. ---- */
+  .donation-tip-icon {
+    font-size: 1.375rem;
+    line-height: 1;
+    color: var(--color-glow);
+  }
+
+  .donation-tip-text {
+    display: flex;
+    flex-direction: column;
+    text-wrap: balance;
+  }
+
+  .donation-tip-lead {
+    color: var(--color-on-surface-variant);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .donation-tip-punch {
+    color: var(--color-on-surface);
+    font-weight: var(--font-weight-bold);
+  }
+
+  /* בתפריט הנייד: המשפט עצמו, ליד קישור התרומה */
+  .donation-note {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 3);
+    min-height: 2.75rem;
+    margin-top: calc(var(--spacing) * 2);
+    padding: calc(var(--spacing) * 3);
+    border-radius: var(--radius-lg);
+    background-color: var(--color-donation-container);
+    box-shadow: inset 0 0 0 1px var(--color-donation-outline);
+    color: var(--color-donation);
+    font-size: var(--text-sm);
+    line-height: var(--leading-snug);
+    font-weight: var(--font-weight-medium);
+  }
+
+  /* בתוך התפריט הנייד הנגלל — טבעת פנימית (FOCUS_RING_INSET), כדי שלא תיחתך */
+  .donation-note:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: calc(var(--focus-ring-width) * -1);
+  }
+
+  .donation-note .donation-button-icon {
+    font-size: 1.375rem;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .donation-button-icon {
+      animation: none;
     }
-    40% {
-      transform: translateY(-2px);
+
+    .donation-button:hover .donation-button-icon,
+    .donation-button:focus-visible .donation-button-icon {
+      translate: none;
     }
-    60% {
-      transform: translateY(-1px);
+
+  }
+
+  /* קישוט הכותרת של אוצריא (מסכי המתקין): קו דק בצבע outlineVariant ונקודת זהב במרכזו. */
+  /* רוחב יחסי לכותרת שמעליו (כמו בבלוק הכותרת של המתקין, שבו הקו נמתח כמעט לרוחב הטקסט):
+     ההורה הוא עטיפה ברוחב התוכן (w-fit) סביב הכותרת והקישוט, והקישוט תופס --ornament-ratio
+     מרוחבה, לא פחות מ---ornament-min. */
+  .title-ornament {
+    --ornament-ratio: 70%;
+    --ornament-min: 120px;
+    position: relative;
+    display: block;
+    width: max(var(--ornament-min), var(--ornament-ratio));
+    max-width: 100%;
+    height: 7px;
+    margin-inline: auto;
+  }
+
+  .title-ornament::before {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    top: 3px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--color-outline-variant) 12%, var(--color-outline-variant) 88%, transparent);
+  }
+
+  .title-ornament::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: calc(50% - 3.5px);
+    width: 7px;
+    height: 7px;
+    border-radius: 9999px;
+    background-color: var(--color-glow);
+    box-shadow: 0 0 0 3px var(--ornament-bg, var(--color-background));
+  }
+
+  /* ============================================================
+   * מחוון הטעינה (ui/Loader) — "שלוש נקודות עיטור": שלושה יהלומים נושמים בגל מימין לשמאל.
+   * מחזור 1500ms; כל יהלום מגיע לשיא ב-30% מהמחזור שלו, וההשהיות (0 / -1300 / -1100ms)
+   * מזיזות את השיא: ימין (450ms) → אמצע (650ms) → שמאל (850ms), ואז מנוחה עד המחזור הבא.
+   * רק transform ו-opacity. reduced-motion: סטטי, האמצעי מודגש והצדדיים מעומעמים.
+   * ============================================================ */
+  .loader {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.625rem;
+    vertical-align: middle;
+  }
+
+  .loader-mark {
+    display: block;
+    flex-shrink: 0;
+    overflow: visible;
+    fill: currentColor;
+  }
+
+  /* רוחב לפי הגודל, גובה 2/3 ממנו (viewBox 24×16) */
+  .loader-mark { aspect-ratio: 3 / 2; height: auto; }
+  /* inline: בגובה 1em — כמו גליף שהוא מחליף (ברוחב 1.5em) */
+  .loader--inline .loader-mark { width: 1.5em; }
+  .loader--sm .loader-mark { width: 1.25rem; }
+  .loader--md .loader-mark { width: 2rem; }
+  .loader--lg .loader-mark { width: 5rem; }
+
+  .loader-label {
+    color: var(--color-on-surface-variant);
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-semibold);
+    text-align: center;
+  }
+
+  .loader-dot {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: loader-breathe 1500ms var(--ease-standard) infinite;
+  }
+
+  .loader-dot-2 { animation-delay: -1300ms; }
+  .loader-dot-3 { animation-delay: -1100ms; }
+
+  @keyframes loader-breathe {
+    0%, 70%, 100% { transform: scale(0.55); opacity: 0.35; }
+    30% { transform: scale(1); opacity: 1; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .loader-dot {
+      animation: none;
+      transform: scale(0.7);
+      opacity: 0.45;
     }
+
+    .loader-dot-2 {
+      transform: none;
+      opacity: 1;
+    }
+  }
+
+  /* עוגן של אזור בדף הבית (#download מכפתור "הורד עכשיו" וכו'): הקפיצה נעצרת מתחת לכותרת
+     העליונה הדביקה ולא מאחוריה (המרווח עד הכותרת — הריפוד של האזור עצמו). בכוונה בלי גובה-מסך מלא לאזורים: במסך
+     גדול זה יצר ריק, והאזור הבא שמציץ מלמטה הוא רמז חשוב שיש עוד תוכן. */
+  .anchor-section {
+    scroll-margin-top: var(--site-header-height);
   }
 
   /* הסתרת פס גלילה */
@@ -75,6 +418,84 @@
 
   .custom-scrollbar::-webkit-scrollbar {
     display: none;
+  }
+
+  /* פס גלילה דק לאזור גלילה פנימי (סרגל צד דביק, תוכן עניינים, טבלה או בלוק קוד רחבים):
+     ~6px, בלי חצים, מסילה שקופה, ואגודל מעוגל בצבע קו המתאר שמתכהה בריחוף.
+     Chromium/Safari — ::-webkit-scrollbar (שם scrollbar-color היה מבטל את העיצוב הזה, ולכן
+     התקני הוא רק לדפדפן בלי ::-webkit-scrollbar, כלומר Firefox). לא לפס הגלילה הראשי של הדף. */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: var(--scrollbar-size);
+    height: var(--scrollbar-size);
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track,
+  .scrollbar-thin::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-button {
+    display: none;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
+    border-radius: var(--radius-pill);
+  }
+
+  .scrollbar-thin:hover::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb-hover);
+  }
+
+  @supports not selector(::-webkit-scrollbar) {
+    .scrollbar-thin {
+      scrollbar-width: thin;
+      scrollbar-color: var(--scrollbar-thumb) transparent;
+    }
+
+    .scrollbar-thin:hover {
+      scrollbar-color: var(--scrollbar-thumb-hover) transparent;
+    }
+  }
+
+  /* פס גלילה שמופיע רק כשצריך אותו: בריחוף, בפוקוס מקלדת בתוך האזור (:focus-visible — לא אחרי
+     לחיצת עכבר על קישור), או בזמן גלילה
+     ([data-scrolling], ראו docs/DocsSidebar). בשאר הזמן האגודל שקוף — כמו בממשקים מודרניים.
+     (עם scrollbar-thin; ב-Firefox — scrollbar-color שקוף.) */
+  .scrollbar-autohide::-webkit-scrollbar-thumb {
+    background-color: transparent;
+  }
+
+  .scrollbar-autohide:hover::-webkit-scrollbar-thumb,
+  .scrollbar-autohide:has(:focus-visible)::-webkit-scrollbar-thumb,
+  .scrollbar-autohide[data-scrolling]::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
+  }
+
+  .scrollbar-autohide::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-thumb-hover);
+  }
+
+  @supports not selector(::-webkit-scrollbar) {
+    .scrollbar-autohide {
+      scrollbar-color: transparent transparent;
+    }
+
+    .scrollbar-autohide:hover,
+    .scrollbar-autohide:has(:focus-visible),
+    .scrollbar-autohide[data-scrolling] {
+      scrollbar-color: var(--scrollbar-thumb) transparent;
+    }
+  }
+
+  /* פס הגלילה בקצה החיצוני (ימין) של סרגל בצד ימין של עמוד RTL — לא בין הסרגל לתוכן.
+     המכל LTR (שם הדפדפן מצייר את הפס מימין), והתוכן שבתוכו חוזר ל-RTL. */
+  .scrollbar-end-right {
+    direction: ltr;
+  }
+
+  .scrollbar-end-right > * {
+    direction: rtl;
   }
 
   .spellcheck-highlight {

@@ -1,0 +1,79 @@
+/* ============================================================
+ * theme-dark.css — ערכה כהה: פיגום מוכן, **לא מופעל**
+ * ------------------------------------------------------------
+ * מצב: אין באתר מתג ערכה, ואף אלמנט לא מקבל data-theme="dark" — לכן הקובץ הזה אינו משפיע
+ * על שום עמוד. הוא קיים כדי שהטוקנים יתוכננו מראש לשתי ערכות, ושההפעלה תהיה שינוי מבוקר.
+ *
+ * מה מוחלף: רק שכבה 2 (התפקידים ב-colors.css). שכבה 1 (palette.css) קבועה, ושכבה 3
+ * (component-tokens.css) מצביעה על התפקידים — ולכן מתעדכנת מעצמה.
+ * המקור: ערכת ה-dark של אותו seed (#2C1B02, tonalSpot), material_color_utilities 0.13.0 —
+ * מה שהאפליקציה הייתה מייצרת לזרע הזה (ברירת המחדל הכהה באפליקציה עצמה היא זרע סגול).
+ * ערכים שאינם מ-M3 (רקע הדף, שכבת הבחירה, תרומה) נגזרים באותו יחס כמו בערכה הבהירה.
+ *
+ * הפעלה (שלב ה' בתוכנית) — סדר מומלץ:
+ *  1. להעביר עמוד-עמוד ל-ui/* ולטוקנים (אין bg-white / text-neutral-* / hex) — אחרת חלקים
+ *     יישארו בהירים. ראו design-system-audit.md: כ-430 bg-white ו-235 text-white באתר.
+ *  2. לבדוק ניגודיות בכל הזוגות (הערכים כאן לא נבדקו בדף אמיתי — רק נגזרו).
+ *  3. למצב "לפי המערכת": לשנות את הסלקטור ל-
+ *       @media (prefers-color-scheme: dark) { :root:not([data-theme='light']) { ... } }
+ *     ולהוסיף מתג שכותב data-theme על <html> (לפני הציור הראשון, כדי שלא יהבהב).
+ *  4. גופן האייקונים, תמונות (הספר המוזהב, הלוגו) — לבדוק על רקע כהה.
+ * ============================================================ */
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* משטחים — הדף כהה מהכרטיס, כמו בבהירה (שם הדף כהה מעט מהכרטיס) */
+  --color-background: var(--ref-neutral-6);
+  --color-surface: var(--ref-neutral-10);
+  --color-surface-container-low: var(--ref-neutral-10);
+  --color-surface-container: var(--ref-neutral-12);
+  --color-surface-container-high: var(--ref-neutral-17);
+  --color-surface-container-highest: var(--ref-neutral-22);
+  /* cardSelectionOverlay = secondaryContainer ב-30% מעל הכרטיס — אותה נוסחה כמו בבהירה */
+  --color-surface-selected: color-mix(in srgb, var(--ref-secondary-30) 30%, var(--ref-neutral-10));
+
+  --color-on-surface: var(--ref-neutral-90);
+  --color-on-surface-variant: var(--ref-neutral-variant-80);
+
+  --color-outline: var(--ref-neutral-variant-60);
+  --color-outline-variant: var(--ref-neutral-variant-30);
+  --color-outline-subtle: var(--ref-neutral-22);
+
+  /* שכבות מצב M3: onPrimary ב-8%/12% מעל primary */
+  --color-primary: var(--ref-primary-80);
+  --color-on-primary: var(--ref-primary-20);
+  --color-primary-hover: color-mix(in srgb, var(--ref-primary-20) 8%, var(--ref-primary-80));
+  --color-primary-pressed: color-mix(in srgb, var(--ref-primary-20) 12%, var(--ref-primary-80));
+
+  --color-secondary: var(--ref-secondary-80);
+  --color-secondary-container: var(--ref-secondary-30);
+  --color-on-secondary-container: var(--ref-secondary-90);
+  --color-secondary-container-hover: color-mix(in srgb, var(--ref-secondary-90) 8%, var(--ref-secondary-30));
+
+  /* תרומה — טיוטה: החלוד הבהיר כצבע, ורקע טונלי חלוד-כהה */
+  --color-donation: var(--ref-rust-78);
+  --color-donation-container: color-mix(in srgb, var(--ref-rust-36) 35%, var(--ref-neutral-10));
+  --color-donation-container-hover: color-mix(in srgb, var(--ref-rust-36) 45%, var(--ref-neutral-10));
+  --color-on-donation-container: var(--ref-rust-86);
+  --color-donation-outline: var(--ref-rust-36);
+
+  --color-error: var(--ref-error-80);
+  --color-on-error: var(--ref-error-20);
+  --color-error-container: var(--ref-error-30);
+  --color-on-error-container: var(--ref-error-90);
+  --color-success: var(--color-success-400);
+  --color-success-container: var(--color-success-950);
+  --color-on-success-container: var(--color-success-100);
+  --color-warning-container: var(--color-warning-950);
+  --color-on-warning-container: var(--color-warning-100);
+  --color-info-container: var(--color-info-950);
+  --color-on-info-container: var(--color-info-100);
+
+  --color-top-bar: var(--ref-neutral-17);
+  --color-scrim: var(--ref-neutral-0);
+  --color-shadow: var(--ref-neutral-0);
+  /* זהב הקישוט — בכהה מספיק בהיר כמו שהוא (78 על רקע 6); מוגדר כאן במפורש כדי שכל תפקיד
+     ב-colors.css יופיע בשתי הערכות */
+  --color-glow: var(--ref-gold-78);
+}
