@@ -13,8 +13,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
-import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
+import Button from '@/components/ui/Button'
 import { useDirectInstall } from '@/components/plugins/useDirectInstall'
 import { useDialog } from '@/components/providers/DialogContext'
 import PluginCard from '@/components/plugins/PluginCard'
@@ -66,14 +65,10 @@ function LegacyTagRedirect() {
   if (!legacyTag) return null
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-background">
-      <div className="flex min-h-screen flex-col bg-background">
-        <OtzariaSoftwareHeader showAuth />
-        <main className="flex-1">
-          <StoreHomeSkeleton />
-        </main>
-        <OtzariaSoftwareFooter />
-      </div>
+    // מתחת לכותרת (שב-plugins/layout.tsx), כדי שהיא תישאר גלויה בזמן ההפניה; div ולא <main>,
+    // כי ה-<main id="main-content"> של הדף עדיין ב-DOM מתחת לשכבה
+    <div className="fixed inset-x-0 bottom-0 top-(--site-header-height) z-(--z-below-header) overflow-y-auto bg-background">
+      <StoreHomeSkeleton />
     </div>
   )
 }
@@ -93,14 +88,12 @@ export default function PluginsStoreHomeClient({ data, loadError }: PluginsStore
   const visibleFeatured = showAllFeatured ? featured : featured.slice(0, FEATURED_PREVIEW_COUNT)
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="flex flex-1 flex-col">
       <Suspense fallback={null}>
         <LegacyTagRedirect />
       </Suspense>
 
-      <OtzariaSoftwareHeader showAuth />
-
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         {/* Hero קומפקטי: כותרת + חיפוש בולט + העלאת תוסף */}
         <section className="bg-white border-b border-neutral-100 py-12 px-4">
           <div className="container mx-auto max-w-6xl">
@@ -113,15 +106,9 @@ export default function PluginsStoreHomeClient({ data, loadError }: PluginsStore
               </p>
               <PluginSearchBox size="lg" placeholder="חפשו תוסף לפי שם, תיאור או נושא..." />
               <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
-                <Link
-                  href="/plugins/upload" prefetch={false}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-primary/20 text-primary rounded-xl font-bold hover:bg-primary/5 transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  <span>העלה תוסף חדש</span>
-                </Link>
+                <Button href="/plugins/upload" variant="outlined" icon="add">
+                  העלה תוסף חדש
+                </Button>
                 <PluginStoreAppBanner />
               </div>
             </div>
@@ -327,8 +314,6 @@ export default function PluginsStoreHomeClient({ data, loadError }: PluginsStore
           </div>
         </div>
       </main>
-
-      <OtzariaSoftwareFooter />
     </div>
   )
 }

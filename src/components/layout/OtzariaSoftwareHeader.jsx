@@ -1,12 +1,15 @@
 'use client'
 
 import Link from 'next/link'
-import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import { useState } from 'react'
-import { useSession, signOut } from 'next-auth/react'
-import { getAvatarColor, getInitial } from '@/lib/avatar-colors'
+import { useSession } from 'next-auth/react'
 import { MAIN_NAV_LINKS } from '@/lib/navigation-constants'
+import { FOCUS_RING, FOCUS_RING_INSET } from '@/components/ui/focusRing'
+import { useDisclosureMenu } from '@/hooks/useDisclosureMenu'
+import HeaderLogo from './HeaderLogo'
+import AccountActions from './AccountActions'
+import NavDropdown from './NavDropdown'
+import DonationButton, { DonationNote } from './DonationButton'
 
 /**
  * קישור ניווט בכותרת.
@@ -19,7 +22,7 @@ import { MAIN_NAV_LINKS } from '@/lib/navigation-constants'
  * מסלולים חיצוניים (כמו /forum, שאינו מסלול Next ומחזיר redirect) מקבלים <a>
  * רגיל, כדי שלא ינסו ניווט צד-לקוח או prefetch של RSC שאינו קיים.
  */
-function NavLink({ link, className, onClick, children }) {
+function NavLink({ link, className, onClick, current, children }) {
   if (link.external) {
     return (
       <a href={link.href} target="_blank" rel="noopener noreferrer" className={className} onClick={onClick}>
@@ -29,139 +32,150 @@ function NavLink({ link, className, onClick, children }) {
   }
 
   return (
-    <Link href={link.href} prefetch={false} className={className} onClick={onClick}>
+    <Link href={link.href} prefetch={false} className={className} onClick={onClick} aria-current={current ? 'page' : undefined}>
       {children}
     </Link>
   )
 }
 
-/**
- * אזור התחברות/חשבון בכותרת — מוצג רק כש-showAuth מופעל (חנות התוספים).
- * ההתחברות חוזרת לדף הנוכחי דרך callbackUrl, וההתנתקות משאירה את המשתמש באותו דף.
- */
-function AuthActions({ pathname, compact = false, onNavigate }) {
-  const { data: session } = useSession()
-  const loginHref = `/auth/login?callbackUrl=${encodeURIComponent(pathname)}`
-
-  if (session) {
-    return (
-      <div className={compact ? 'flex items-center gap-3 p-2' : 'flex items-center gap-3'}>
-        <Link
-          href="/library/dashboard"
-          prefetch={false}
-          onClick={onNavigate}
-          className="flex items-center justify-center hover:opacity-80 transition-opacity"
-          title={session.user.name}
-        >
-          <div
-            className="w-9 h-9 rounded-full text-white flex items-center justify-center font-bold text-sm shadow-md hover:shadow-lg transition-shadow"
-            style={{ backgroundColor: getAvatarColor(session.user.name) }}
-          >
-            {getInitial(session.user.name)}
-          </div>
-        </Link>
-        <button
-          onClick={() => signOut({ callbackUrl: pathname })}
-          className="flex items-center gap-2 px-4 py-2 border border-primary text-primary rounded-lg hover:bg-primary/10 transition-colors text-sm font-medium"
-        >
-          <span className="material-symbols-outlined text-lg">logout</span>
-          <span>התנתק</span>
-        </button>
-      </div>
-    )
-  }
-
+/** קישור בתפריט הנייד */
+function MobileNavLink({ link, pathname, onNavigate }) {
+  const isActive = pathname === link.href
   return (
-    <Link
-      href={loginHref}
-      prefetch={false}
+    <NavLink
+      link={link}
       onClick={onNavigate}
-      className={`flex items-center gap-2 px-5 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-sm font-medium ${
-        compact ? 'justify-center text-lg' : 'text-sm'
+      current={isActive}
+      className={`rounded-lg px-3 py-3 text-base font-medium hover:bg-card-selected ${FOCUS_RING_INSET} ${
+        isActive ? 'text-primary' : 'text-on-surface'
       }`}
     >
-      <span className="material-symbols-outlined text-lg">login</span>
-      <span>התחבר</span>
-    </Link>
+      {link.label}
+    </NavLink>
   )
 }
 
-export default function OtzariaSoftwareHeader({ showAuth = false }) {
+/**
+ * אזור התחברות/חשבון בכותרת — אותו רכיב כמו בכותרת הספרייה (AccountActions); כאן ההתחברות
+ * חוזרת לדף הנוכחי וההתנתקות משאירה את המשתמש בו.
+ */
+function AuthActions({ pathname, compact = false, onNavigate }) {
+  const { data: session, status } = useSession()
+  const actions = (
+    <AccountActions
+      session={session}
+      status={status}
+      compact={compact}
+      onNavigate={onNavigate}
+      loginCallbackUrl={pathname}
+      signOutCallbackUrl={pathname}
+    />
+  )
+  // בתפריט הנייד — מופרד מהקישורים בקו, כמו בתפריט הנייד של הספרייה
+  return compact ? <div className="mt-2 border-t border-outline-variant px-3 pt-3">{actions}</div> : actions
+}
+
+/**
+ * הכותרת העליונה הדביקה, משותפת לכל העמודים.
+ *
+ * מיקום הניווט קבוע בכל העמודים ובכל המצבים: רשת של שלוש עמודות (לוגו | ניווט | פעולות),
+ * והניווט ממורכז בעמודה האמצעית — כך שרוחב הלוגו (גם בזמן החלפת הגופן) ורוחב אזור הפעולות לא
+ * מזיזים אותו — גם לא בין דף בלי אזור חשבון לדף איתו (העמודה האמצעית ממורכזת בשורה).
+ * showAuth — אזור החשבון ("התחבר" / כפתור החשבון), רק בחנות התוספים (plugins/layout), כמו
+ *   ב-master. כשהוא מוצג — ברוחב קבוע (--account-slot-width) בכל מצב: טוען, אורח, מחובר.
+ *   בלעדיו (דף הבית ודפי השיווק) אין מקום שמור — לא נשאר רווח ריק ליד כפתור התרומות.
+ * התפריט הנייד — useDisclosureMenu (כמו בכותרת הספרייה): Esc ולחיצה בחוץ סוגרים, Esc מחזיר את
+ *   הפוקוס לכפתור, aria-controls, ונסגר גם במעבר נתיב שלא עבר דרכו (חזרה בדפדפן בחנות, שם
+ *   הכותרת חיה ב-layout ולא נטענת מחדש).
+ * wordmarkHandoff — דף הבית בלבד: הלוגו קבוע, ושם האתר נכנס כשהמילה "אוצריא" שבכותרת הראשית
+ * של הגיבור נגללת אל מתחת לכותרת (HeaderLogo).
+ */
+export default function OtzariaSoftwareHeader({ showAuth = false, wordmarkHandoff = false }) {
   const pathname = usePathname()
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const menu = useDisclosureMenu(pathname)
+  const donationLink = MAIN_NAV_LINKS.find(link => link.emphasis === 'donation')
+  const navLinks = MAIN_NAV_LINKS.filter(link => link.emphasis !== 'donation')
 
+  // כותרת בסגנון ה-topBar של האפליקציה: רקע surfaceContainerHigh אטום, בלי זכוכית ובלי קו
+  // תחתון — הרקע השונה מהדף מספיק כדי להפריד. כשהדף נגלל מתחתיה מופיע צל רך (.site-header
+  // ב-animations.css, מקושר לגלילה בלי JS), כדי שהתוכן ייראה עובר מתחת לה ולא נחתך בה.
   return (
-    <header className="sticky top-0 z-50 w-full glass-strong border-b border-neutral-200 bg-white/80 backdrop-blur-md">
-      <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-8">
-        {/* קישור הלוגו מופיע בכל דף ואינו מצדיק prefetch */}
-        <Link href="/" prefetch={false} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-          <Image src="/logo.webp" alt="לוגו אוצריא" width={32} height={32} />
-          <span className="text-xl font-bold text-foreground font-frank">אוצריא</span>
-        </Link>
-        
-        {/* Desktop Nav */}
-        <nav className="hidden md:flex items-center gap-6">
-          {MAIN_NAV_LINKS.map(link => {
-            const isDonationLink = link.emphasis === 'donation'
+    <header className="site-header sticky top-0 z-(--z-sticky) w-full bg-top-bar">
+      <div className="container mx-auto grid h-16 max-w-[76rem] 2xl:max-w-[84rem] grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 md:px-8">
+        <div className="col-start-1 flex justify-self-start">
+          <HeaderLogo handoff={wordmarkHandoff} />
+        </div>
 
+        {/* Desktop Nav */}
+        <nav aria-label="ראשי" className="col-start-2 hidden lg:flex items-center gap-1 whitespace-nowrap">
+          {navLinks.map(link => {
+            if (link.children) return <NavDropdown key={link.label} label={link.label} items={link.children} />
+            const isActive = pathname === link.href
             return (
               <NavLink
                 key={link.label}
                 link={link}
-                className={`text-sm font-medium transition-colors hover:text-primary ${
-                  pathname === link.href && !isDonationLink ? 'text-primary font-bold' : 'text-foreground/80'
-                } ${link.highlight ? 'bg-primary/10 text-primary px-3 py-1.5 rounded-lg hover:bg-primary/20' : ''} ${
-                  isDonationLink ? 'donation-nav-link' : ''
+                current={isActive}
+                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${FOCUS_RING} ${
+                  link.highlight
+                    ? 'bg-secondary-container text-on-secondary-container hover:bg-tile/70'
+                    : isActive
+                      ? 'bg-card-selected text-primary'
+                      : 'text-on-surface-variant hover:bg-card-selected hover:text-on-surface'
                 }`}
               >
-                {isDonationLink && (
-                  <span className="material-symbols-outlined donation-nav-icon" aria-hidden="true">
-                    {link.icon}
-                  </span>
-                )}
                 {link.label}
               </NavLink>
             )
           })}
-          {showAuth && <AuthActions pathname={pathname} />}
         </nav>
 
-        {/* Mobile Menu Button */}
-        <button 
-          className="md:hidden p-2 text-foreground"
-          onClick={() => setIsMenuOpen(!isMenuOpen)}
-        >
-          <span className="material-symbols-outlined text-3xl">menu</span>
-        </button>
+        <div className="col-start-3 flex items-center gap-2 justify-self-end">
+          {donationLink && <DonationButton link={donationLink} />}
+          {showAuth && (
+            <div className="hidden lg:block">
+              <AuthActions pathname={pathname} />
+            </div>
+          )}
+
+          <button
+            type="button"
+            {...menu.buttonProps}
+            aria-label="תפריט"
+            className={`lg:hidden flex h-12 w-12 items-center justify-center rounded-lg text-on-surface hover:bg-card-selected ${FOCUS_RING}`}
+          >
+            <span aria-hidden="true" className="material-symbols-outlined text-2xl">{menu.isOpen ? 'close' : 'menu'}</span>
+          </button>
+        </div>
       </div>
 
-      {/* Mobile Menu */}
-      {isMenuOpen && (
-        <div className="md:hidden absolute top-16 left-0 w-full bg-white border-b border-neutral-200 shadow-lg p-4 flex flex-col gap-4">
-          {MAIN_NAV_LINKS.map(link => {
-            const isDonationLink = link.emphasis === 'donation'
-
-            return (
-              <NavLink
-                key={link.label}
-                link={link}
-                onClick={() => setIsMenuOpen(false)}
-                className={`text-lg font-medium p-2 hover:bg-neutral-50 rounded-lg text-foreground ${
-                  isDonationLink ? 'donation-nav-link' : ''
-                }`}
-              >
-                {isDonationLink && (
-                  <span className="material-symbols-outlined donation-nav-icon" aria-hidden="true">
-                    {link.icon}
-                  </span>
-                )}
-                {link.label}
-              </NavLink>
-            )
-          })}
-          {showAuth && <AuthActions pathname={pathname} compact onNavigate={() => setIsMenuOpen(false)} />}
+      {/* התפריט הנייד: נשאר ב-DOM כשהוא סגור (hidden), כדי ש-aria-controls יצביע תמיד על אלמנט
+          קיים. top-full — צמוד לתחתית הכותרת בכל גובה שלה. גבוה מהמסך בנייד נמוך (הקבוצה
+          המקוננת) — נגלל בתוך עצמו, לא דרך הדף. */}
+      <nav
+        {...menu.panelProps}
+        aria-label="ראשי"
+        hidden={!menu.isOpen}
+        className="lg:hidden absolute top-full inset-x-0 max-h-[calc(100svh-var(--site-header-height))] overflow-y-auto overscroll-contain bg-top-bar p-3 shadow-overlay"
+      >
+        <div className="flex flex-col gap-0.5">
+          {navLinks.map(link => link.children ? (
+            // פריט נפתח (NavDropdown בדסקטופ) — כאן קבוצה פתוחה: כותרת, ומתחתיה הקישורים
+            <div key={link.label} role="group" aria-labelledby={`mobile-nav-${link.href}`}>
+              <div id={`mobile-nav-${link.href}`} className="mobile-nav-group-label">{link.label}</div>
+              <div className="mobile-nav-group-list flex flex-col gap-0.5">
+                {link.children.map(child => (
+                  <MobileNavLink key={child.href + child.label} link={child} pathname={pathname} onNavigate={menu.close} />
+                ))}
+              </div>
+            </div>
+          ) : (
+            <MobileNavLink key={link.label} link={link} pathname={pathname} onNavigate={menu.close} />
+          ))}
+          {donationLink && <DonationNote link={donationLink} onNavigate={menu.close} />}
+          {showAuth && <AuthActions pathname={pathname} compact onNavigate={menu.close} />}
         </div>
-      )}
+      </nav>
     </header>
   )
 }

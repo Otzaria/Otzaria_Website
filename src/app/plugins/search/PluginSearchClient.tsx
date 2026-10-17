@@ -17,8 +17,6 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
-import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 import { useDirectInstall } from '@/components/plugins/useDirectInstall'
 import { useDialog } from '@/components/providers/DialogContext'
 import { highlightMatches } from '@/components/plugins/PluginSearchBox'
@@ -27,6 +25,7 @@ import DirectInstallButton from '@/components/plugins/DirectInstallButton'
 import Breadcrumbs from '@/components/plugins/Breadcrumbs'
 import type { PluginSearchResult, PluginCategorySummary } from '@/components/plugins/types'
 import { SEARCH_PAGE_SIZE, type PluginSearchResponse } from './searchConfig'
+import Loader from '@/components/ui/Loader'
 
 const SEARCH_DEBOUNCE_MS = 300
 const PAGE_SIZE = SEARCH_PAGE_SIZE
@@ -190,10 +189,9 @@ export default function PluginSearchClient({ initialQuery, initialResults }: Plu
   const showZeroResults = hasQuery && !searching && executedQuery && results.length === 0
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <OtzariaSoftwareHeader showAuth />
+    <div className="flex flex-1 flex-col">
 
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         {/* Search Header */}
         <section className="py-8 px-4 bg-white border-b border-neutral-100">
           <div className="container mx-auto max-w-4xl">
@@ -378,7 +376,7 @@ export default function PluginSearchClient({ initialQuery, initialResults }: Plu
                     >
                       {loadingMore ? (
                         <>
-                          <span className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></span>
+                          <Loader size="inline" decorative className="text-base" />
                           <span>טוען...</span>
                         </>
                       ) : (
@@ -392,8 +390,6 @@ export default function PluginSearchClient({ initialQuery, initialResults }: Plu
           </div>
         </section>
       </main>
-
-      <OtzariaSoftwareFooter />
     </div>
   )
 }

@@ -5,8 +5,6 @@
 // האינטראקטיביות: התקנה ישירה (useDirectInstall) + דיאלוגים.
 
 import Link from 'next/link'
-import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
-import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 import { useDirectInstall } from '@/components/plugins/useDirectInstall'
 import { useDialog } from '@/components/providers/DialogContext'
 import PluginCard from '@/components/plugins/PluginCard'
@@ -25,9 +23,8 @@ export default function PluginCategoryClient({ category, notFound }: PluginCateg
 
   if (notFound || !category) {
     return (
-      <div className="flex min-h-screen flex-col bg-background">
-        <OtzariaSoftwareHeader showAuth />
-        <main className="flex-1 flex items-center justify-center px-4">
+      <div className="flex flex-1 flex-col">
+        <main id="main-content" className="flex-1 flex items-center justify-center px-4">
           <div className="text-center max-w-lg bg-white rounded-2xl border border-neutral-100 py-16 px-8">
             <span className="material-symbols-outlined text-5xl text-primary/40 mb-4 inline-block">search_off</span>
             <h1 className="text-3xl font-bold text-on-surface mb-3">הקטגוריה לא נמצאה</h1>
@@ -43,16 +40,14 @@ export default function PluginCategoryClient({ category, notFound }: PluginCateg
             </Link>
           </div>
         </main>
-        <OtzariaSoftwareFooter />
       </div>
     )
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <OtzariaSoftwareHeader showAuth />
+    <div className="flex flex-1 flex-col">
 
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         {/* Category Header */}
         <section className="py-8 px-4 bg-white border-b border-neutral-100">
           <div className="container mx-auto max-w-6xl">
@@ -132,8 +127,6 @@ export default function PluginCategoryClient({ category, notFound }: PluginCateg
           </div>
         </section>
       </main>
-
-      <OtzariaSoftwareFooter />
     </div>
   )
 }
