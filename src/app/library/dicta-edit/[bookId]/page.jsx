@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, Suspense } from 'react'
 import { useParams, useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
-import Button from '@/components/ui/Button'
+import Button from '@/components/ui/legacy/LegacyButton'
 import { useDialog } from '@/components/providers/DialogContext'
 import { getAvatarColor, getInitial } from '@/lib/avatar-colors'
 import DictaEditorCore from '@/components/editor/DictaEditorCore'
@@ -151,39 +151,42 @@ function LibraryEditorContent() {
   )
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen"><LoadingSpinner message="טוען ספר..." /></div>
+    return <main id="main-content" className="flex items-center justify-center min-h-screen"><LoadingSpinner message="טוען ספר..." /></main>
   }
   if (!book) {
-    return <div className="flex items-center justify-center min-h-screen"><div className="text-xl text-danger-600">הספר לא נמצא</div></div>
+    return <main id="main-content" className="flex items-center justify-center min-h-screen"><div className="text-xl text-danger-600">הספר לא נמצא</div></main>
   }
 
   return (
     <>
-      {blocked && (
-        <div className="bg-danger-600 text-white text-center py-2 text-sm font-medium">
-          חשבונך חסום מעריכה במרחב זה. ניתן לצפות בלבד.
-        </div>
-      )}
-      {!canEditDirect && !blocked && (
-        <div className="bg-warning-50 border-b border-warning-200 text-warning-800 text-center py-2 text-sm">
-          עריכותיך יישמרו כ<strong>הצעת תיקון</strong> וייכנסו לספר רק לאחר אישור מפקח. ניתן לערוך בחופשיות — לא ניתן לקלקל את הספר.
-        </div>
-      )}
+      {/* יעד "דלג לתוכן" — ה-<main> עצמו נמצא בתוך DictaEditorCore */}
+      <div id="main-content">
+        {blocked && (
+          <div className="bg-danger-600 text-white text-center py-2 text-sm font-medium">
+            חשבונך חסום מעריכה במרחב זה. ניתן לצפות בלבד.
+          </div>
+        )}
+        {!canEditDirect && !blocked && (
+          <div className="bg-warning-50 border-b border-warning-200 text-warning-800 text-center py-2 text-sm">
+            עריכותיך יישמרו כ<strong>הצעת תיקון</strong> וייכנסו לספר רק לאחר אישור מפקח. ניתן לערוך בחופשיות — לא ניתן לקלקל את הספר.
+          </div>
+        )}
 
-      <DictaEditorCore
-        initialContent={seedContent}
-        initialFind={initialFind}
-        title={book.title}
-        canEdit={canEdit}
-        isCompleted={false}
-        onSave={handleSave}
-        saving={saving}
-        saveLabel={canEditDirect ? 'שמירה' : 'שלח הצעת תיקון'}
-        hasUnsavedChangesOuter={hasUnsavedChanges}
-        setHasUnsavedChanges={setHasUnsavedChanges}
-        headerStartElement={headerStart}
-        headerEndElement={headerEnd}
-      />
+        <DictaEditorCore
+          initialContent={seedContent}
+          initialFind={initialFind}
+          title={book.title}
+          canEdit={canEdit}
+          isCompleted={false}
+          onSave={handleSave}
+          saving={saving}
+          saveLabel={canEditDirect ? 'שמירה' : 'שלח הצעת תיקון'}
+          hasUnsavedChangesOuter={hasUnsavedChanges}
+          setHasUnsavedChanges={setHasUnsavedChanges}
+          headerStartElement={headerStart}
+          headerEndElement={headerEnd}
+        />
+      </div>
 
       {showFindReplace && (
         <FindReplaceCorrectionModal
@@ -201,7 +204,7 @@ function LibraryEditorContent() {
 // עטיפת Suspense — נדרשת ל-useSearchParams ב-Next.js כדי למנוע שגיאת build
 export default function LibraryEditorPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><LoadingSpinner message="טוען ספר..." /></div>}>
+    <Suspense fallback={<main id="main-content" className="flex items-center justify-center min-h-screen"><LoadingSpinner message="טוען ספר..." /></main>}>
       <LibraryEditorContent />
     </Suspense>
   )
