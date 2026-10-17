@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    const res = await fetch('https://raw.githubusercontent.com/Otzaria/otzaria/main/LICENSE', {
+    // ענף dev ולא main — בכוונה: הרישיון החדש (Personal Use License 1.0) קיים כרגע רק
+    // ב-dev, וב-main של otzaria עדיין יש GPL. לחזור ל-main (כאן וב-src/app/license/page.jsx)
+    // אחרי שהרישיון ימוזג ל-main.
+    const res = await fetch('https://raw.githubusercontent.com/Otzaria/otzaria/dev/LICENSE', {
       next: { revalidate: 3600 } // רענון פעם בשעה
     });
 
@@ -16,6 +19,8 @@ export async function GET() {
       status: 200,
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
+        // ציבורי וזהה לכל המבקרים (לא תלוי session) — מותר במטמון CDN/דפדפן, TTL קצר.
+        'Cache-Control': 'public, max-age=300',
       },
     });
   } catch (error) {
