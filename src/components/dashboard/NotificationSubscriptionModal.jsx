@@ -1,4 +1,5 @@
 'use client'
+import Loader from '@/components/ui/Loader'
 
 /**
  * NotificationSubscriptionModal - מודל הצגת סטטוס הרשמה להתראות על ספרים חדשים
@@ -59,7 +60,7 @@ export default function NotificationSubscriptionModal({ onClose, toggleSubscript
             }`}
           >
             {loadingSub ? (
-              <span className="material-symbols-outlined animate-spin">progress_activity</span>
+              <Loader size="inline" decorative />
             ) : (
               <>
                 <span className="material-symbols-outlined">

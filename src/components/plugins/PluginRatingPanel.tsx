@@ -10,6 +10,7 @@ import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import RatingStars from '@/components/plugins/RatingStars'
 import { useDialog } from '@/components/providers/DialogContext'
+import { FOCUS_RING } from '@/components/ui/focusRing'
 
 interface RatingSummary {
   ratingAvg: number
@@ -177,16 +178,17 @@ export default function PluginRatingPanel({ pluginId, initial }: PluginRatingPan
           <p className="text-sm text-on-surface/70">
             <Link
               href={`/auth/login?callbackUrl=${encodeURIComponent(`/plugins/${pluginId}`)}`}
-              className="font-bold text-primary hover:underline"
+              prefetch={false}
+              className={`rounded font-bold text-primary hover:underline ${FOCUS_RING}`}
             >
-              התחברו לאתר
+              התחבר לאתר
             </Link>
-            {' '}כדי לדרג את התוסף. דירוג אחד לכל משתמש, וניתן לשנותו בכל עת.
+            {' '}כדי לדרג את התוסף. דירוג אחד לכל משתמש, ואפשר לשנות אותו בכל עת.
           </p>
         ) : (
           <div className="flex flex-wrap items-center gap-4">
             <span className="text-sm font-bold text-on-surface/60">
-              {myRating ? 'הדירוג שלך:' : 'דרגו את התוסף:'}
+              {myRating ? 'הדירוג שלך:' : 'דרג את התוסף:'}
             </span>
             <div className="flex items-center" onMouseLeave={() => setHovered(null)}>
               {[1, 2, 3, 4, 5].map((star) => (

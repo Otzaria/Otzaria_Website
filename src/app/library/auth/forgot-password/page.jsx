@@ -30,7 +30,7 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-neutral-50">
+    <main id="main-content" className="min-h-screen flex items-center justify-center px-4 bg-neutral-50">
       <div className="max-w-md w-full glass-strong p-8 rounded-2xl shadow-xl text-center">
         <div className="flex justify-center mb-6">
             <Image src="/logo.png" alt="Logo" width={60} height={60} />
@@ -63,6 +63,6 @@ export default function ForgotPasswordPage() {
             <Link href="/auth/login" className="text-sm text-neutral-500 hover:text-primary">חזרה להתחברות</Link>
         </div>
       </div>
-    </div>
+    </main>
   )
 }

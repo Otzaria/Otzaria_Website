@@ -1,39 +1,148 @@
 /* ============================================================
- * colors.css — מקור האמת היחיד לכל צבעי הממשק
+ * colors.css — שכבה 2 מתוך 3: הטוקנים הסמנטיים (התפקידים)
  * ------------------------------------------------------------
- * זהו הקובץ המרכזי לשינוי עיצוב גלובלי. שינוי ערך כאן משנה את
- * כל הופעות ה-class המתאים בכל הפרוייקט באופן מיידי.
+ * מערכת הצבעים בנויה בשלוש שכבות:
+ *   1. palette.css          — פלטת הייחוס: הגוונים הגולמיים (--ref-*). לא בשימוש ישיר.
+ *   2. colors.css (כאן)     — תפקידים: משטח, טקסט, קו, פעולה ראשית, תרומה, מצבים... כל
+ *                             טוקן מצביע על גוון מהפלטה (var(--ref-*)), ו-Tailwind יוצר ממנו
+ *                             מחלקות (bg-surface, text-on-surface, border-outline-variant...).
+ *   3. component-tokens.css — טוקני רכיב (כפתור, כרטיס, שדה, דיאלוג...) שמצביעים על התפקידים.
+ * ערכה כהה (theme-dark.css) מחליפה רק את שכבה 2 — לכן אסור לכתוב hex בשכבות 2–3 או ברכיבים.
  *
- * • טוקני המותג (primary / surface / accent ...) = זהות אוצריא.
- * • הרמפות הסמנטיות (neutral / danger / success / info / warning ...)
- *   קיבלו בדיוק את הערכים שהיו לצבעי Tailwind שהן החליפו, כך
- *   שהמראה הנוכחי נשמר 100%. נוצר אוטומטית מ-theme.css של Tailwind.
+ * מוסכמות שמות: שמות Material 3 (surface, surface-container-high, on-surface-variant,
+ * outline-variant, secondary-container...). on-X = הצבע שכותבים *על* X (טקסט/אייקון).
+ * כל טוקן מוגדר פעם אחת; שמות נוספים לאותו תפקיד הם כינויים (var) — לא ערך כפול.
  *
- * מיפוי מקור (Tailwind -> סמנטי):
- *   gray->neutral  slate->neutral-cool  stone->neutral-warm
- *   red->danger  green->success  emerald->success-alt
- *   blue->info  indigo->info-alt
- *   amber->warning  yellow->warning-alt  orange->warning-strong
- *   purple->feature  teal->aqua  pink->pink
+ * כינויים מסומנים:
+ *   [רכיב]   — שם קצר לתפקיד ברכיב מסוים (card, tile, top-bar). מותר לשימוש.
+ *   [מיושן]  — שם ישן שנשמר רק כדי שעמודים קיימים לא יישברו. אין להשתמש בו בקוד חדש;
+ *              בהעברת עמוד — להחליף לשם הקנוני שבהערה. ראו refactor-notes/redesign/design-system.md.
  *
- * לרענון הערכים לאחר שדרוג Tailwind: node scripts/gen-color-tokens.js
+ * הרמפות שבסוף הקובץ (neutral / danger / success / info / warning ... 50–950) הן צבעי
+ * Tailwind הגולמיים תחת שמות סמנטיים, בערכים זהים בדיוק. הן "מורשת" של הממשק הישן
+ * (/library, העורכים): אינן חלק מפלטת אוצריא, אינן מתחלפות בערכה כהה, ואין להשתמש בהן
+ * ברכיבים חדשים — רק בתפקידי הסטטוס (success / warning / info) שמצביעים עליהן.
  * ============================================================ */
 
 @theme {
-  /* --- צבעי המותג (אוצריא) --- */
-  --color-background: #fefbf6;
-  --color-surface: #f8f4ef;
-  --color-surface-variant: #e7e0d8;
-  --color-primary: #6b5d4f;
-  --color-primary-container: #f4ede3;
-  --color-secondary: #8b7355;
-  --color-secondary-container: #f5ead8;
-  --color-accent: #9c7c4f;
-  --color-donation: #a93226;
-  --color-donation-strong: #8e2a20;
-  --color-on-background: #1c1b1a;
-  --color-on-surface: #1c1b1a;
-  --color-on-primary: #ffffff;
+  /* ---------------- משטחים (surfaces) ----------------
+   * background — רקע הדף. surface — גוף הכרטיס (AppCard: בלי מסגרת ובלי צל).
+   * סולם surface-container של M3 — משטחים מורמים לפי עומק (שדה, כותרת, דיאלוג...).
+   * surface-selected — כרטיס/פריט בריחוף או בבחירה (cardSelectionOverlay). */
+  --color-background: var(--ref-parchment-95);
+  --color-surface: var(--ref-neutral-98);
+  --color-surface-container-low: var(--ref-neutral-96);
+  --color-surface-container: var(--ref-neutral-94);
+  --color-surface-container-high: var(--ref-neutral-92);
+  --color-surface-container-highest: var(--ref-neutral-90);
+  --color-surface-selected: var(--ref-parchment-96);
+  /* top-bar — הכותרת העליונה, הפוטר והתפריט הנייד: tone אחד מתחת לרקע הדף. באפליקציה
+     topBarBackground = surfaceContainerHigh (tone 92) מול panelBackground (L* 94.2); באתר הדף
+     הובהר (L* 95.5), ולכן גם הכותרת עלתה ל-tone 93 — אותו מרווח בהירות (כ-2.4 L*), כך שהיא
+     עדיין נבדלת מהדף. טקסט הניווט עליה: on-surface-variant 6.6:1, on-surface 12.0:1, primary 5.4:1. */
+  --color-top-bar: var(--ref-neutral-93);
+
+  /* ---------------- טקסט ואייקונים על משטח ----------------
+   * חום-קפה כהה ממשפחת הפלטה, במקום onSurface הכמעט-שחור (#201b13) והאפרפר (#4f4539) של
+   * האפליקציה — חם יותר, ועדיין הרבה מעל AA (4.5:1): ראשי 12.8:1 על background / 13.7:1 על
+   * surface / 11.1:1 על tile; משני 7.0:1 / 7.5:1 / 6.1:1. */
+  --color-on-surface: var(--ref-ink-17);
+  --color-on-surface-variant: var(--ref-ink-35);
+
+  /* ---------------- קווים ----------------
+   * outline         — מסגרת שדה, כפתור outlined (4.3:1 על surface — לא לטקסט קטן).
+   * outline-variant — קו הפרדה וקישוט (#D3C4B4 של המתקין). זה קו ההפרדה הקנוני.
+   * outline-subtle  — קו עדין מאוד (גבול הכותרת/פוטר; היה surface-variant). */
+  --color-outline: var(--ref-neutral-variant-50);
+  --color-outline-variant: var(--ref-neutral-variant-80);
+  --color-outline-subtle: var(--ref-parchment-86);
+
+  /* ---------------- פעולה ראשית (primary) ---------------- */
+  --color-primary: var(--ref-primary-40);
+  --color-on-primary: var(--ref-neutral-100);
+  --color-primary-hover: var(--ref-state-primary-hover);
+  --color-primary-pressed: var(--ref-state-primary-pressed);
+
+  /* ---------------- משני / טונלי (secondary) ----------------
+   * secondary-container — אריח אייקון, כפתור טונלי, פריט ניווט מודגש. */
+  --color-secondary: var(--ref-secondary-40);
+  --color-secondary-container: var(--ref-secondary-90);
+  --color-on-secondary-container: var(--ref-secondary-30);
+  --color-secondary-container-hover: var(--ref-state-secondary-container-hover);
+
+  /* ---------------- מותג: זהב ---------------- */
+  --color-glow: var(--ref-gold-78);       /* הילה ונקודת הקישוט — דקורטיבי בלבד, לא לטקסט */
+
+  /* ---------------- תרומה ----------------
+   * donation — צבע התרומה (קו המסגרת בריחוף, הילת הריחוף; לבן עליו 7.6:1).
+   * טונלי (הכפתור בכותרת ובסוף דף הבית): רקע חלוד-בהיר, טקסט חלוד. הטקסט על הרקע 6.1:1,
+   * ובריחוף 5.2:1 — מעל AA. המסגרת דקורטיבית (הטקסט מזהה). */
+  --color-donation: var(--ref-rust-36);
+  --color-donation-container: var(--ref-rust-91);
+  --color-donation-container-hover: var(--ref-rust-86);
+  --color-on-donation-container: var(--ref-rust-36);
+  --color-donation-outline: var(--ref-rust-78);
+
+  /* ---------------- מצבים (status) ----------------
+   * error מהפלטה של אוצריא (M3). success / warning / info — עדיין אין להם גוון הרמוני
+   * בפלטה, ולכן הם מצביעים על הרמפות הקיימות (אותם ערכים שה-/library כבר משתמש בהם),
+   * בגוונים שעוברים AA: X על surface ≥ 4.5:1, on-X-container על X-container ≥ 7:1. החלפה
+   * לגוונים הרמוניים (למשל tertiary לזית) — שאלה פתוחה, שינוי שורה.
+   * מוגדרים רק התפקידים שבשימוש: תפקיד M3 שאין לו צרכן (inverse-*, surface-container-lowest,
+   * on-warning, info...) נמחק, ומוסיפים אותו (כאן וב-theme-dark.css) יחד עם הרכיב שצריך אותו. */
+  --color-error: var(--ref-error-40);
+  --color-on-error: var(--ref-neutral-100);
+  --color-error-container: var(--ref-error-90);
+  --color-on-error-container: var(--ref-error-30);
+  --color-success: var(--color-success-700);
+  --color-success-container: var(--color-success-100);
+  --color-on-success-container: var(--color-success-900);
+  --color-warning-container: var(--color-warning-100);
+  --color-on-warning-container: var(--color-warning-900);
+  --color-info-container: var(--color-info-100);
+  --color-on-info-container: var(--color-info-900);
+
+  /* ---------------- תשתית אינטראקציה ----------------
+   * focus-ring — טבעת הפוקוס של כל רכיב (outline 2px, offset 2px; ראו component-tokens.css).
+   * scrim — שכבת ההחשכה מאחורי דיאלוג (בשקיפות שקובע הרכיב, למשל bg-scrim/45).
+   * שים לב: כינוי (var) כמו focus-ring מחושב פעם אחת, על :root, ומשם עובר בירושה כערך סופי.
+   * לכן ערכה כהה עובדת רק כשהיא מוחלת על :root עצמו (כמו ב-theme-dark.css). אם בעתיד יוחל
+   * data-theme="dark" על תת-עץ בלבד, focus-ring (וכל כינוי אחר כאן) יישאר בצבע הבהיר — וצריך
+   * להגדיר אותו מחדש גם על אותו אלמנט. */
+  --color-focus-ring: var(--color-primary);
+  --color-scrim: var(--color-on-surface);
+  /* shadow — צבע הצל החם (בשקיפות שקובע הצרכן: color-mix(in srgb, var(--color-shadow) 22%,
+     transparent)). בערכה הכהה — שחור; צל חום על רקע כהה נראה כהילה בוצית. */
+  --color-shadow: var(--ref-ink-12);
+
+  /* ---------------- כינויים [רכיב] ---------------- */
+  --color-card: var(--color-surface);                          /* [רכיב] AppSurfaces.card */
+  --color-card-selected: var(--color-surface-selected);        /* [רכיב] כרטיס בריחוף/בחירה */
+  --color-tile: var(--color-secondary-container);              /* [רכיב] אריח אייקון */
+  --color-on-tile: var(--color-on-secondary-container);        /* [רכיב] גליף על האריח */
+
+  /* ---------------- כינויים [מיושן] — אין להשתמש בקוד חדש ---------------- */
+  /* [מיושן] → on-surface. שם מ-M2; זהה בערכו. */
+  --color-on-background: var(--color-on-surface);
+  /* [מיושן] → surface-selected. שימו לב: ב-M3 primaryContainer הוא גוון אחר (#FFDDB3,
+     --ref-primary-90); כאן השם מחזיק את שכבת הבחירה, ולכן לא נעשה בו שימוש לתפקיד ה-M3. */
+  --color-primary-container: var(--color-surface-selected);
+  /* [מיושן] → primary-pressed (רקע) / primary (טקסט). כטקסט על background נותן 4.4:1 —
+     מתחת ל-AA; אין להשתמש בו כצבע טקסט. */
+  --color-accent: var(--color-primary-pressed);
+  /* [מיושן] → outline-subtle (כקו) או surface-container-highest (כמשטח). ב-M3
+     surfaceVariant הוא משטח ולא קו; כאן הוא שימש לשניהם, ולכן ההעברה מחייבת החלטה לכל שימוש. */
+  --color-surface-variant: var(--color-outline-subtle);
+
+  /* שמות שבשימוש בקוד ואינם מוגדרים בכלל (המחלקות לא עושות כלום היום, והטקסט יורש צבע):
+     primary-dark (59 שימושים, בעיקר docs), foreground (9), on-secondary (Button הישן).
+     בכוונה *לא* מוגדרים כאן: הגדרה הייתה משנה את מראה העמודים. ראו design-system-audit.md. */
+
+  /* ================ רמפות מורשת (צבעי Tailwind תחת שם סמנטי) ================
+   * מיפוי: gray→neutral  slate→neutral-cool  stone→neutral-warm  red→danger  green→success
+   *        emerald→success-alt  blue→info  indigo→info-alt  amber→warning  yellow→warning-alt
+   *        orange→warning-strong  purple→feature  teal→aqua  pink→pink
+   * לא מתחלפות בערכה כהה. בקוד חדש — רק דרך תפקידי הסטטוס שלמעלה. */
 
   /* --- ניטרלי (היה gray) --- */
   --color-neutral-50: oklch(98.5% 0.002 247.839);

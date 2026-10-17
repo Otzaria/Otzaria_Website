@@ -2,11 +2,29 @@ import Header from '@/components/layout/OtzariaSoftwareHeader'
 import Image from 'next/image'
 import Link from 'next/link'
 
+// תחומי הספרייה ומקורות נוספים — רשימות שחזרו על אותו markup פריט אחר פריט
+const LIBRARY_SECTIONS = [
+  'תנ"ך ומפרשיו',
+  'משנה ומפרשיה',
+  'תלמודים בבלי וירושלמי עם ראשונים ואחרונים',
+  'ספרי הלכה כולל טושו"ע וכל נושאי הכלים',
+  'ספרי מחשבה ומוסר',
+  'ספרי קבלה'
+]
+
+const MORE_SOURCES = [
+  { href: 'https://oraita.net/', label: 'אורייתא' },
+  { href: 'http://mobile.tora.ws/', label: 'ובלכתך בדרך' },
+  { href: 'https://www.toratemetfreeware.com/online/', label: 'תורת אמת' },
+  { href: 'https://wiki.jewishbooks.org.il/', label: 'אוצר הספרים היהודי השיתופי' },
+  { href: 'https://pninim.org/', label: 'פנינים' }
+]
+
 export default function AboutPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         {/* Hero Section */}
         <section className="relative py-16 px-4 overflow-hidden bg-gradient-to-bl from-primary-container via-background to-secondary-container">
           <div className="container mx-auto max-w-4xl relative z-10">
@@ -50,30 +68,12 @@ export default function AboutPage() {
                     <strong className="text-primary">נכון לתאריך ר"ח ניסן תשפ"ו</strong> הספרייה כוללת כ-<strong className="text-accent">7,000 ספרים</strong> הכוללים את רוב ספרי היסוד:
                   </p>
                   <ul className="space-y-3 mr-6">
-                    <li className="flex items-start gap-3">
-                      <span className="material-symbols-outlined text-accent mt-1">menu_book</span>
-                      <span>תנ"ך ומפרשיו</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <span className="material-symbols-outlined text-accent mt-1">menu_book</span>
-                      <span>משנה ומפרשיה</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <span className="material-symbols-outlined text-accent mt-1">menu_book</span>
-                      <span>תלמודים בבלי וירושלמי עם ראשונים ואחרונים</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <span className="material-symbols-outlined text-accent mt-1">menu_book</span>
-                      <span>ספרי הלכה כולל טושו"ע וכל נושאי הכלים</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <span className="material-symbols-outlined text-accent mt-1">menu_book</span>
-                      <span>ספרי מחשבה ומוסר</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <span className="material-symbols-outlined text-accent mt-1">menu_book</span>
-                      <span>ספרי קבלה</span>
-                    </li>
+                    {LIBRARY_SECTIONS.map((section) => (
+                      <li key={section} className="flex items-start gap-3">
+                        <span className="material-symbols-outlined text-accent mt-1">menu_book</span>
+                        <span>{section}</span>
+                      </li>
+                    ))}
                   </ul>
                 </div>
               </div>
@@ -108,61 +108,14 @@ export default function AboutPage() {
                   <div className="bg-surface/50 p-5 rounded-lg">
                     <h3 className="font-bold text-xl text-on-surface mb-3">מקורות נוספים:</h3>
                     <ul className="space-y-2 text-on-surface/80">
-                      <li className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-sm text-primary">check_circle</span>
-                        <a
-                          href="https://oraita.net/"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary hover:underline"
-                        >
-                          אורייתא
-                        </a>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-sm text-primary">check_circle</span>
-                        <a
-                          href="http://mobile.tora.ws/"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary hover:underline"
-                        >
-                          ובלכתך בדרך
-                        </a>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-sm text-primary">check_circle</span>
-                        <a
-                          href="https://www.toratemetfreeware.com/online/"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary hover:underline"
-                        >
-                          תורת אמת
-                        </a>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-sm text-primary">check_circle</span>
-                        <a
-                          href="https://wiki.jewishbooks.org.il/"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary hover:underline"
-                        >
-                          אוצר הספרים היהודי השיתופי
-                        </a>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-sm text-primary">check_circle</span>
-                        <a
-                          href="https://pninim.org/"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary hover:underline"
-                        >
-                          פנינים
-                        </a>
-                      </li>
+                      {MORE_SOURCES.map((source) => (
+                        <li key={source.href} className="flex items-center gap-2">
+                          <span className="material-symbols-outlined text-sm text-primary">check_circle</span>
+                          <a href={source.href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                            {source.label}
+                          </a>
+                        </li>
+                      ))}
                     </ul>
                   </div>
 

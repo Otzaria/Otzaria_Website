@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useDialog } from '@/components/providers/DialogContext'
+import Loader from '@/components/ui/Loader'
 
 export default function SplitBookDialog({ book, onClose, onSuccess }) {
   const { showAlert, showConfirm } = useDialog()
@@ -238,7 +239,7 @@ export default function SplitBookDialog({ book, onClose, onSuccess }) {
             >
               {splitting ? (
                 <>
-                  <span className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
+                  <Loader size="inline" decorative className="text-base" />
                   <span>מפצל...</span>
                 </>
               ) : (

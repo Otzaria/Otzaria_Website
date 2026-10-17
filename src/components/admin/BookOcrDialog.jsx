@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import Loader from '@/components/ui/Loader'
 
 const GEMINI_MODELS = [
   { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (מהיר וזול)' },
@@ -120,14 +121,14 @@ export default function BookOcrDialog({ book, onClose }) {
 
         <div className="p-6 overflow-y-auto custom-scrollbar">
           {loading ? (
-            <div className="flex justify-center py-10 text-primary">
-              <span className="material-symbols-outlined animate-spin text-3xl">progress_activity</span>
+            <div className="flex justify-center py-10">
+              <Loader size="md" />
             </div>
           ) : isRunning ? (
             // ===== תצוגת התקדמות =====
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-info-700 bg-info-50 rounded-lg p-3 text-sm">
-                <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                <Loader size="inline" decorative />
                 <span>העבודה רצה ברקע. אפשר לסגור את החלון ולחזור מאוחר יותר — העיבוד ימשיך.</span>
               </div>
 
@@ -303,7 +304,7 @@ export default function BookOcrDialog({ book, onClose }) {
                 className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary text-on-primary rounded-xl hover:bg-accent font-bold shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 {starting ? (
-                  <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                  <Loader size="inline" decorative />
                 ) : (
                   <>
                     <span className="material-symbols-outlined">play_arrow</span>

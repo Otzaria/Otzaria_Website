@@ -1,4 +1,7 @@
 import type { ReactNode } from 'react'
+import Card from '@/components/ui/Card'
+import DownloadNote, { LtrCode, Nowrap } from './DownloadNote'
+import DownloadOptionCard from './DownloadOptionCard'
 
 type PlatformLinks = Record<string, string | undefined>
 
@@ -6,54 +9,53 @@ type AssistantButton = {
   key: string
   icon: string
   title: string
-  desc: string
+  desc: ReactNode
 }
 
 type AssistantPlatformConfig = {
+  /** מה עושים בקובץ שהורד (מוצג מתחת ל-ASSISTANT_LEAD_TITLE) */
+  lead: ReactNode
   buttons: AssistantButton[]
-  steps: ReactNode[]
-  note?: ReactNode
+  /** הערה שאין לה מקום אחר (מוצגת אחרי הכפתורים) */
+  note?: { icon: string; text: ReactNode; onlyWithMultipleButtons?: boolean }
 }
 
-// שמות קבצים ופקודות הם LTR; בלי בידוד הסוגריים והנקודה סביבם מתהפכים בפסקה עברית.
-function Ltr({ children }: { children: string }) {
-  return <bdi dir="ltr" className="font-mono text-sm">{children}</bdi>
-}
+// הנוסח תואם את מסכי המסייע ואת docs/download_assistant.md בריפו של אוצריא.
+// לא להוסיף כאן שלבים שהמסייע מסביר בעצמו (בחירת המחשב, היקף ההורדה, glib-networking, עמוד הסיום).
+// העובדה החשובה בכל החלונות — שורה מודגשת נפרדת מעל ההסבר הספציפי למערכת.
+// הרווח שלפני כל קו מפריד ב-lead אינו נשבר (nbsp): בטקסט ממורכז קו בתחילת שורה נראה כתבליט.
+const ASSISTANT_LEAD_TITLE = 'זה מסייע ההורדה, לא תוכנת ההתקנה.'
 
-// ההוראות תואמות את docs/download_assistant.md בריפו של אוצריא — לא להוסיף שלב שאינו מתועד שם.
 const ASSISTANT_CONFIG: Record<string, AssistantPlatformConfig> = {
   Windows: {
+    lead: 'הפעל אותו, והוא יוריד את אוצריא ויכין התקנה\u00a0— למחשב הזה או למחשב בלי אינטרנט.',
     buttons: [
-      { key: 'assistant', icon: 'install_desktop', title: 'מסייע ההורדה של אוצריא', desc: 'ל-Windows 10 / 11 — מתאים גם למחשבי ARM, המסייע מזהה את סוג המעבד בעצמו' }
-    ],
-    steps: [
-      <>הפעילו את הקובץ שהורד, <Ltr>Otzaria-Download-Assistant-windows.exe</Ltr>.</>,
-      'בחרו "הורדה והתקנה במחשב הזה", או "הכנת התקנה למחשב אחר" (למשל מחשב ללא אינטרנט).',
-      'המשיכו בשלבי המסייע עד הסוף. במחשב הזה הוא מפעיל בסיום את מתקין אוצריא; למחשב אחר הוא מכין את קובצי ההתקנה להעברה אליו.'
+      { key: 'assistant', icon: 'install_desktop', title: 'מסייע ההורדה של אוצריא', desc: <><bdi dir="ltr">Windows 10 / 11</bdi>, כולל מחשבי ARM</> }
     ]
   },
   macOS: {
+    lead: <>פתח את <Nowrap>ה-<LtrCode>ZIP</LtrCode></Nowrap> שהורד והפעל את המסייע שבתוכו&nbsp;— משם הוא ינחה אותך.</>,
     buttons: [
-      { key: 'assistant', icon: 'laptop_mac', title: 'מסייע ההורדה של אוצריא', desc: 'ל-macOS 12 ומעלה — Intel ו-Apple Silicon' }
+      { key: 'assistant', icon: 'laptop_mac', title: 'מסייע ההורדה של אוצריא', desc: 'macOS 12 ומעלה, Intel ו-Apple Silicon' }
     ],
-    steps: [
-      <>פתחו בלחיצה כפולה את הקובץ שהורד, <Ltr>Otzaria-Download-Assistant-macos.zip</Ltr>, והפעילו את <Ltr>Otzaria-Download-Assistant</Ltr> שנפתח לצדו.</>,
-      'בפתיחה הראשונה macOS חוסם את המסייע מפני שאינו חתום בחתימת מפתחים של Apple — יש לאשר "פתח בכל זאת" בהגדרות המערכת.',
-      'המשיכו בשלבי המסייע עד הסוף. הוא מכין תיקייה עם קובץ ההתקנה; בסיום פתחו את הקובץ שהוכן כדי להתקין את אוצריא.'
-    ]
+    // החסימה מופיעה לפני שהמסייע נפתח — רק האתר יכול להסביר אותה
+    note: {
+      icon: 'shield',
+      text: 'בפתיחה הראשונה macOS יחסום את המסייע, כי אינו חתום אצל Apple. לחץ על "פתח בכל זאת" בהגדרות המערכת.'
+    }
   },
   Linux: {
+    lead: <>חלץ את <Nowrap>ה-<LtrCode>tar.gz</LtrCode></Nowrap> שהורד והפעל את <LtrCode>Otzaria-Download-Assistant</LtrCode> שבתיקייה&nbsp;— משם הוא ינחה אותך.</>,
     buttons: [
-      { key: 'assistantX64', icon: 'computer', title: 'מסייע ההורדה של אוצריא (x64)', desc: 'למחשב רגיל — מעבד Intel או AMD' },
-      { key: 'assistantArm64', icon: 'memory', title: 'מסייע ההורדה של אוצריא (ARM64)', desc: 'למחשב עם מעבד מסוג ARM' }
+      { key: 'assistantX64', icon: 'computer', title: 'מסייע ההורדה (x64)', desc: 'מעבד Intel או AMD — רוב המחשבים' },
+      { key: 'assistantArm64', icon: 'memory', title: 'מסייע ההורדה (ARM64)', desc: 'מעבד ARM' }
     ],
-    note: <>לא בטוחים איזו גרסה? הריצו בטרמינל <Ltr>uname -m</Ltr>: התשובה <Ltr>x86_64</Ltr> פירושה x64, והתשובה <Ltr>aarch64</Ltr> פירושה ARM64.</>,
-    steps: [
-      <>חלצו את הקובץ שהורד (<Ltr>tar.gz</Ltr>) בלחיצה כפולה במנהל הקבצים.</>,
-      <>בתיקייה <Ltr>Otzaria-Download-Assistant</Ltr> שנוצרה, הפעילו את הקובץ <Ltr>Otzaria-Download-Assistant</Ltr>.</>,
-      'המשיכו בשלבי המסייע עד הסוף. הוא מכין תיקייה עם קובצי ההתקנה; בסיום התקינו את אוצריא מהקובץ שהוכן.',
-      <>אם מופיעה הודעה שחסרה החבילה <Ltr>glib-networking</Ltr> — התקינו אותה והפעילו את המסייע שוב.</>
-    ]
+    // שני קבצים נפרדים, והבחירה ביניהם קודמת להפעלת המסייע
+    note: {
+      icon: 'terminal',
+      onlyWithMultipleButtons: true,
+      text: <>לא בטוח? הרץ בטרמינל <LtrCode>uname -m</LtrCode>: <LtrCode>x86_64</LtrCode> פירושו x64, ו-<LtrCode>aarch64</LtrCode> פירושו ARM64.</>
+    }
   }
 }
 
@@ -67,76 +69,47 @@ export default function DownloadAssistantOptions({ platform, links }: { platform
   const config = ASSISTANT_CONFIG[platform]
   if (!config) return null
   const buttons = config.buttons.filter((button) => links[button.key])
+  const showNote = config.note && (!config.note.onlyWithMultipleButtons || buttons.length > 1)
 
   return (
-    <div className="grid gap-4">
-      <div role="note" className="flex gap-3 p-4 rounded-xl border-2 border-amber-400 bg-amber-50 text-amber-900">
-        <span className="material-symbols-outlined text-3xl text-amber-600 flex-shrink-0">warning</span>
-        <div>
-          <p className="font-bold text-lg mb-1">שימו לב: זה אינו קובץ ההתקנה של אוצריא עצמה, אלא מסייע ההורדה.</p>
-          <p>
-            אחרי ההורדה יש להפעיל אותו ולהמשיך בשלביו — הוא יוריד את התוכנה (ואם תבחרו, גם את הספרייה המלאה)
-            ויכין קובץ התקנה.
-          </p>
-        </div>
-      </div>
+    <>
+      <DownloadNote variant="lead" title={ASSISTANT_LEAD_TITLE}>{config.lead}</DownloadNote>
 
-      {buttons.map((button) => (
-        <a
+      {buttons.map((button, index) => (
+        <DownloadOptionCard
           key={button.key}
-          href={links[button.key]}
-          className="flex items-center gap-4 p-4 rounded-xl border-2 border-primary hover:shadow-md transition-all group bg-white"
-        >
-          <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
-            <span className="material-symbols-outlined text-2xl">{button.icon}</span>
-          </div>
-          <div className="flex-1">
-            <h4 className="font-bold text-neutral-800">{button.title}</h4>
-            <p className="text-sm text-neutral-500">{button.desc}</p>
-          </div>
-          <span className="material-symbols-outlined text-primary">download</span>
-        </a>
+          href={links[button.key] as string}
+          icon={button.icon}
+          title={button.title}
+          desc={button.desc}
+          emphasis={index === 0 ? 'primary' : 'tonal'}
+        />
       ))}
 
-      {config.note && buttons.length > 1 && (
-        <p className="text-sm text-neutral-600">{config.note}</p>
-      )}
-
-      <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200">
-        <h4 className="font-bold text-neutral-800 mb-2">איך ממשיכים אחרי ההורדה</h4>
-        <ol className="list-decimal pr-5 space-y-1 text-neutral-700">
-          {config.steps.map((step, index) => (
-            <li key={index}>{step}</li>
-          ))}
-        </ol>
-      </div>
-    </div>
+      {showNote && config.note && <DownloadNote icon={config.note.icon}>{config.note.text}</DownloadNote>}
+    </>
   )
 }
 
-// מסייע ה-Windows יודע להכין גם יעד Android: ה-APK, או החבילה המלאה עם הספרייה.
+// מסייע ה-Windows יודע להכין גם יעד Android (סוג מחשב אחר ← Android), והוא עצמו מסביר
+// מה עושים עם ה-APK ועם קובצי הספרייה.
 export function AndroidAssistantNotice({ href }: { href: string }) {
   return (
-    <div role="note" className="flex gap-3 p-4 mt-2 rounded-xl border-2 border-amber-400 bg-amber-50 text-amber-900">
-      <span className="material-symbols-outlined text-3xl text-amber-600 flex-shrink-0">info</span>
-      <div className="flex-1">
-        <p className="font-bold text-lg mb-1">אין אינטרנט במכשיר?</p>
-        <p>
-          אפשר להוריד במחשב Windows את מסייע ההורדה של אוצריא, ולהכין בעזרתו התקנה לאנדרואיד — קובץ ה-APK בלבד,
-          או חבילה מלאה הכוללת גם את הספרייה.
-        </p>
-        <p className="mt-2">
-          במסייע בחרו &quot;הכנת התקנה למחשב אחר&quot; ואז Android. את קובצי ה-ZIP של החבילה המלאה מעבירים למכשיר
-          ומחלצים לאותה תיקייה באפליקציית ZIP; ההוראות המלאות בקובץ README שבתוכם.
+    <Card tone="tonal" padding="sm" role="note" className="mt-1 flex gap-3 text-on-surface">
+      <span aria-hidden="true" className="material-symbols-outlined mt-px shrink-0 text-[22px] text-on-tile">wifi_off</span>
+      <div className="min-w-0 flex-1">
+        <p className="font-bold">אין אינטרנט במכשיר?</p>
+        <p className="mt-1 text-sm leading-relaxed">
+          אפשר להכין התקנה במחשב Windows בעזרת מסייע ההורדה: בחר בו &quot;סוג מחשב אחר&quot; ואז Android.
         </p>
         <a
           href={href}
-          className="inline-flex items-center gap-2 mt-3 px-4 py-2 rounded-lg border-2 border-primary bg-white text-primary font-bold hover:shadow-md transition-all"
+          className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg bg-card px-4 text-sm font-semibold text-primary transition-colors hover:bg-card-selected focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         >
-          <span className="material-symbols-outlined">download</span>
-          <span>הורדת מסייע ההורדה ל-Windows</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-xl">download</span>
+          <span>הורדת המסייע ל-Windows</span>
         </a>
       </div>
-    </div>
+    </Card>
   )
 }

@@ -9,6 +9,7 @@ import ImagePreviewModal from '@/components/ui/ImagePreviewModal'
 import { useDialog } from '@/components/providers/DialogContext'
 import { useLoading } from '@/components/providers/LoadingContext'
 import Header from '@/components/layout/Header'
+import { FOCUS_RING } from '@/components/ui/focusRing'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { hasBookLibraryAccess } from '@/lib/roles'
 import { formatHebrewDate, formatTimeAgo } from './pageCardDates'
@@ -413,15 +414,15 @@ export default function BookPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <main id="main-content" className="min-h-screen flex items-center justify-center">
         <LoadingSpinner message="טוען את הספר..." size="lg" />
-      </div>
+      </main>
     )
   }
 
   if (error || !bookData) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <main id="main-content" className="min-h-screen flex items-center justify-center">
         <div className="text-center glass-strong p-8 rounded-2xl max-w-md">
           <span className="material-symbols-outlined text-6xl text-danger-500 mb-4 block">
             error
@@ -436,7 +437,7 @@ export default function BookPage() {
             <span>חזרה לספרייה</span>
           </Link>
         </div>
-      </div>
+      </main>
     )
   }
 
@@ -452,13 +453,15 @@ export default function BookPage() {
     {/* Global Header Component */}
     <Header />
 
-    {/* Sticky Page Header */}
-    <header className="glass-strong border-b border-surface-variant sticky top-0 z-40">
+    {/* יעד "דלג לתוכן". כותרת העמוד בתוך ה-<main> (כותרת הספר, לא banner נוסף), ודבוקה
+        מתחת לכותרת הספרייה הדביקה (Header: h-16 = --site-header-height) ולא עליה */}
+    <main id="main-content" className="flex flex-col flex-grow">
+    <header className="glass-strong border-b border-surface-variant sticky top-(--site-header-height) z-(--z-below-header)">
       <div className="container mx-auto px-4 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link 
             href={bookData.isOwner ? '/library/dashboard/my-uploads' : '/library/books'} 
-            className="flex items-center gap-2 text-on-surface hover:text-primary transition-colors"
+            className={`flex items-center gap-2 rounded text-on-surface hover:text-primary transition-colors ${FOCUS_RING}`}
           >
             <span className="material-symbols-outlined">arrow_forward</span>
             <span>{bookData.isOwner ? 'חזרה לספרים שלי' : 'חזרה לרשימת הספרים'}</span>
@@ -628,6 +631,7 @@ export default function BookPage() {
         </div>
       </div>
     </div>
+    </main>
 
     <ImagePreviewModal isOpen={!!previewImage} onClose={() => setPreviewImage(null)} imageSrc={previewImage} altText="תצוגת עמוד" />
   </div>

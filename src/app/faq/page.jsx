@@ -8,7 +8,7 @@ export default function FAQPage() {
     <div className="min-h-screen bg-background">
       <OtzariaSoftwareHeader />
 
-      <main className="py-12 px-4">
+      <main id="main-content" className="py-12 px-4">
         <div className="container mx-auto max-w-4xl">
           <div className="text-center mb-12">
             <h1 className="text-4xl font-bold text-primary mb-4 font-frank">
@@ -23,7 +23,7 @@ export default function FAQPage() {
         </div>
       </main>
 
-      <OtzariaSoftwareFooter />
+      <OtzariaSoftwareFooter className="mt-20" />
     </div>
   )
 }

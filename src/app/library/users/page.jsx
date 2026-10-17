@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Header from '@/components/layout/Header'
 import { getAvatarColor, getInitial } from '@/lib/avatar-colors'
+import Loader from '@/components/ui/Loader'
 
 export default function UsersPage() {
   const [users, setUsers] = useState([])
@@ -98,7 +99,7 @@ export default function UsersPage() {
     <div className="flex min-h-screen flex-col bg-background">
       <Header />
       
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         <div className="container mx-auto px-4 py-12">
           <div className="max-w-7xl mx-auto">
             
@@ -167,10 +168,7 @@ export default function UsersPage() {
             {/* Users Grid */}
             {loading ? (
               <div className="text-center py-20">
-                <span className="material-symbols-outlined animate-spin text-6xl text-primary/50">
-                  progress_activity
-                </span>
-                <p className="mt-4 text-on-surface/60">טוען את נבחרת העורכים...</p>
+                <Loader size="lg" label="טוען את נבחרת העורכים…" />
               </div>
             ) : sortedAndFilteredUsers.length === 0 ? (
                 <div className="text-center py-20 glass rounded-xl">

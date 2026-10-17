@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import Header from '@/components/layout/Header'
+import { FOCUS_RING } from '@/components/ui/focusRing'
 import { ROLE_LABELS } from '@/lib/roles'
 import { getAdminBadgeCounts } from '@/lib/adminBadgeCounts'
 import { EMPTY_ADMIN_BADGE_COUNTS } from '@/lib/adminBadgeScope'
@@ -31,7 +32,7 @@ export default async function AdminLayout({ children }) {
     <div className="flex min-h-screen flex-col bg-background">
       <Header />
 
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         <div className="w-full px-6 py-12">
           <div className="w-full max-w-7xl mx-auto">
             <div className="flex items-center justify-between mb-8">
@@ -49,7 +50,7 @@ export default async function AdminLayout({ children }) {
                   <a
                     href="/api/admin/export-backup"
                     download
-                    className="flex items-center gap-2 px-4 py-2 bg-success-600 text-white rounded-lg hover:bg-success-700 transition-colors"
+                    className={`flex items-center gap-2 px-4 py-2 bg-success-600 text-white rounded-lg hover:bg-success-700 transition-colors ${FOCUS_RING}`}
                   >
                     <span className="material-symbols-outlined">download</span>
                     <span>גיבוי מלא</span>
@@ -57,7 +58,7 @@ export default async function AdminLayout({ children }) {
                 )}
                 <Link
                   href="/library/dashboard"
-                  className="flex items-center gap-2 px-4 py-2 glass rounded-lg hover:bg-surface-variant transition-colors"
+                  className={`flex items-center gap-2 px-4 py-2 glass rounded-lg hover:bg-surface-variant transition-colors ${FOCUS_RING}`}
                 >
                   <span className="material-symbols-outlined">arrow_forward</span>
                   <span>חזרה לדשבורד</span>

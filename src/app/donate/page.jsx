@@ -6,7 +6,7 @@ export default function DonatePage() {
     <div className="min-h-screen bg-background">
       <OtzariaSoftwareHeader />
 
-      <main className="py-12 px-4">
+      <main id="main-content" className="py-12 px-4">
         <div className="container mx-auto max-w-4xl text-center">
           <div className="mb-8 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-right">
             <span className="material-symbols-outlined text-xl text-amber-600 shrink-0">
@@ -43,7 +43,7 @@ export default function DonatePage() {
         </div>
       </main>
 
-      <OtzariaSoftwareFooter />
+      <OtzariaSoftwareFooter className="mt-20" />
     </div>
   )
 }

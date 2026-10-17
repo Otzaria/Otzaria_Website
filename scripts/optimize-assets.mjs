@@ -5,6 +5,7 @@
  * למה: הנכסים המקוריים הוגשו כמו שהם. logo.svg היה מעטפת SVG סביב PNG של
  * 1024×1024 בבסיס-64 (2.23MB, 1.68MB דחוס) שהוצג לעיתים ב-32×32; image.png שקל
  * 1.97MB ונטען כרקע בכל דף באתר ב-15% אטימות. יחד — כ-3.6MB בכל ביקור קר.
+ * (תמונת הרקע הוסרה מאז מהאתר לגמרי, ואיתה bg.avif/bg.webp והמקור שלהם.)
  *
  * המקורות (assets/) אינם מוגשים לדפדפן. הפלטים (public/) נשמרים ב-Git.
  *
@@ -24,13 +25,6 @@ const APP = path.join(ROOT, 'src', 'app')
 
 // הלוגו מוצג לכל היותר ב-128px (הירו בדף הבית) — 256px נותן 2x לצפיפות גבוהה.
 const LOGO_SIZE = 256
-// רקע הדף: הרזולוציה המקורית. הוא מוצג ב-15% אטימות ולכן איכות נמוכה אינה מורגשת.
-// AVIF ירד מ-40 ל-25 (56KB → 30KB, נטען בכל דף): אחרי הרכבה ב-15% על צבע הרקע
-// ההפרש הממוצע מהמקור עולה מ-0.9 ל-1.3 רמות (מתוך 255) — לא נראה לעין. הקטנת
-// הרוחב נבדקה ונדחתה: ב-1024px ההפרש כפול מזה (1.8) ובמסך רחב הרקע כבר מוגדל.
-const BG_WIDTH = 1376
-const BG_AVIF_QUALITY = 25
-const BG_WEBP_QUALITY = 50
 
 /** שולף את ה-PNG המוטמע בבסיס-64 מתוך מעטפת ה-SVG של הלוגו המרובע. */
 async function squareLogoMaster() {
@@ -73,11 +67,6 @@ async function main() {
     // iOS אינו מכבד שקיפות ומצייר רקע שחור — לכן משטיחים על לבן.
     await sharp(square).resize(180, 180, { fit: 'contain', background: '#ffffff' }).flatten({ background: '#ffffff' }).png({ compressionLevel: 9, palette: true, colors: 128 }).toBuffer()
   )
-
-  // רקע הדף — AVIF עם נפילה ל-WebP (styles/base.css משתמש ב-image-set).
-  const bg = sharp(path.join(ASSETS, 'background-master.png')).resize({ width: BG_WIDTH, withoutEnlargement: true })
-  await emit(path.join(PUBLIC, 'bg.avif'), await bg.clone().avif({ quality: BG_AVIF_QUALITY }).toBuffer())
-  await emit(path.join(PUBLIC, 'bg.webp'), await bg.clone().webp({ quality: BG_WEBP_QUALITY }).toBuffer())
 
   console.log(`✓ נוצרו ${report.length} נכסים:`)
   for (const line of report) console.log(`   ${line}`)

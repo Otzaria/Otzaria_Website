@@ -2,6 +2,7 @@ const fs = require('fs/promises');
 const path = require('path');
 const Babel = require('@babel/core');
 const presetReact = require('@babel/preset-react');
+const presetTypescript = require('@babel/preset-typescript');
 
 const ROOT_DIR = process.cwd();
 const OUTPUT_PATH = path.join(ROOT_DIR, 'public', 'export-editor', 'dicta-editor-offline.html');
@@ -17,7 +18,9 @@ const COMPONENT_PATHS = [
   'src/components/providers/DialogContext.jsx',
   'src/components/ui/Modal.jsx',
   'src/components/ui/FormInput.jsx',
-  'src/components/ui/Button.jsx',
+  'src/components/ui/cx.ts',
+  'src/components/ui/Loader.tsx',
+  'src/components/ui/legacy/LegacyButton.jsx',
   'src/components/ui/LoadingSpinner.jsx',
   'src/components/providers/LoadingContext.jsx',
   'src/components/dicta-tools/CreateHeadersModal.jsx',
@@ -79,6 +82,7 @@ function stripImportsAndExports(source) {
     .replace(/^\s*import\s+[\'\"].*?[\'\"];?\s*$/gm, '')
     .replace(/export default function\s+/g, 'function ')
     .replace(/export default\s+([A-Za-z0-9_$]+);?/g, '')
+    .replace(/^\s*export\s+(type|interface)\s+/gm, '$1 ') // TS: נמחקים ע"י preset-typescript
     .replace(/export\s+(const|function|class|let|var)\s+/g, '$1 ')
     .replace(/export\s*\{[^}]*\};?/g, '');
 }
@@ -133,7 +137,11 @@ function transpileComponent(source, filename, claimedNames, renamed) {
     compact: false,
     sourceType: 'unambiguous',
     plugins: [createRenameCollisionsPlugin(claimedNames, filename, renamed)],
-    presets: [[presetReact, { runtime: 'classic' }]],
+    // רכיבי ui/ החדשים כתובים ב-TS (Loader, cx) — מסירים טיפוסים לפני השרשור
+    presets: [
+      [presetReact, { runtime: 'classic' }],
+      ...(/\.tsx?$/.test(filename) ? [[presetTypescript, { isTSX: filename.endsWith('.tsx'), allExtensions: true }]] : []),
+    ],
   });
 
   return result && result.code ? result.code : cleaned;
@@ -448,7 +456,7 @@ async function collectUsedIcons() {
         babelrc: false,
         configFile: false,
         parserOpts: {
-          plugins: ['jsx'],
+          plugins: /\.tsx?$/.test(relativePath) ? ['jsx', 'typescript'] : ['jsx'],
           errorRecovery: true,
         },
       });

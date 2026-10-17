@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import Loader from '@/components/ui/Loader'
 
 export default function PluginApproveModal({ plugin, onClose, onConfirm }) {
   const [mounted, setMounted] = useState(false)
@@ -95,7 +96,7 @@ export default function PluginApproveModal({ plugin, onClose, onConfirm }) {
             </p>
             {loadingCategories ? (
               <div className="flex items-center gap-2 text-sm text-on-surface/60">
-                <span className="material-symbols-outlined animate-spin text-base">progress_activity</span>
+                <Loader size="inline" decorative className="text-base" />
                 <span>טוען קטגוריות...</span>
               </div>
             ) : categoriesError ? (
@@ -146,7 +147,7 @@ export default function PluginApproveModal({ plugin, onClose, onConfirm }) {
             >
               {submitting ? (
                 <>
-                  <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                  <Loader size="inline" decorative />
                   <span>מאשר...</span>
                 </>
               ) : (

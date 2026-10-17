@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { apiGet } from '@/lib/api-utils'
 // גרף SVG קטן (בלי Recharts) — מיובא ישירות; אין עוד טעם בטעינה דינמית נפרדת.
 import WeeklyProgressArea from './WeeklyProgressArea'
+import Loader from '@/components/ui/Loader'
 
 export default function WeeklyProgressChart() {
   const [data, setData] = useState([])
@@ -30,9 +31,7 @@ export default function WeeklyProgressChart() {
   if (loading) {
     return (
       <div className="bg-white rounded-xl border border-neutral-200 h-40 flex items-center justify-center shadow-sm">
-        <span className="material-symbols-outlined animate-spin text-3xl text-primary/50">
-          progress_activity
-        </span>
+<Loader size="md" />
       </div>
     )
   }

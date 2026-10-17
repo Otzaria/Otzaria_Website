@@ -1,6 +1,7 @@
 'use client'
 
 import type { DirectInstallState } from '@/components/plugins/useDirectInstall'
+import Loader from '@/components/ui/Loader'
 
 interface DirectInstallButtonProps {
   // מזהה התוסף של הכפתור הזה — משמש להשוואה מול installState.pluginId,
@@ -11,7 +12,6 @@ interface DirectInstallButtonProps {
   // מחלקות ה-CSS של הכפתור עצמו — משתנות בין המקומות (כרטיס קטן מול דף
   // פרטים גדול), ולכן הן פרמטר ולא קבועות ברכיב
   className: string
-  spinnerClassName?: string
   // דף פרטי התוסף מציג אייקון material-symbols לצד הטקסט בכל מצב;
   // הכרטיס ותוצאות החיפוש לא
   showIcons?: boolean
@@ -25,7 +25,6 @@ export default function DirectInstallButton({
   installState,
   onInstall,
   className,
-  spinnerClassName = 'w-3.5 h-3.5 border-2 border-primary/30 border-t-primary rounded-full animate-spin',
   showIcons = false,
   idleLabel = 'התקנה ישירה'
 }: DirectInstallButtonProps) {
@@ -36,11 +35,12 @@ export default function DirectInstallButton({
     <button
       onClick={onInstall}
       disabled={phase === 'waiting'}
+      aria-busy={phase === 'waiting' || undefined}
       className={className}
     >
       {phase === 'waiting' ? (
         <>
-          <span className={spinnerClassName}></span>
+          <Loader size="inline" decorative />
           <span>מתקין...</span>
         </>
       ) : phase === 'success' ? (

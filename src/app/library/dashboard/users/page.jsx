@@ -88,9 +88,9 @@ export default function UsersManagementPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <main id="main-content" className="flex items-center justify-center min-h-screen">
         <LoadingSpinner message="טוען..." size="lg" />
-      </div>
+      </main>
     )
   }
 
@@ -98,7 +98,7 @@ export default function UsersManagementPage() {
     <div className="min-h-screen bg-background">
       <Header />
 
-      <div className="container mx-auto px-4 py-12">
+      <main id="main-content" className="container mx-auto px-4 py-12">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center justify-between mb-8">
             <div>
@@ -176,7 +176,7 @@ export default function UsersManagementPage() {
             </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   )
 }

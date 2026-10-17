@@ -3,14 +3,17 @@
  * ============================================================ */
 
 @layer base {
+  /* רקע הדף — צבע אחיד (--color-background). תמונת ארון הספרים שהייתה כאן ב-15% שקיפות
+     הוסרה: כמעט לא נראתה, האפירה את הרקע, ועלתה בהורדה של תמונה בכל עמוד. */
   html {
     direction: rtl;
-    /* 1. העבר את צבע הרקע לכאן */
     background-color: var(--color-background);
+    /* מקום קבוע לפס הגלילה: בלעדיו, מעבר בין עמוד קצר (למשל loading.jsx בזמן ניווט) לעמוד ארוך
+       מוסיף/מסיר את הפס ומשנה את רוחב הדף ב-15px — וכל מה שממורכז (הניווט בכותרת) זז בחצי. */
+    scrollbar-gutter: stable;
   }
 
   body {
-    /* 2. שנה את צבע הרקע של הגוף לשקוף */
     background-color: transparent;
     color: var(--color-on-background);
     font-family: var(--font-hebrew);
@@ -19,27 +22,15 @@
     min-height: 100vh;
   }
 
-  /* תמונת הרקע (הקרע) - נשאר כפי שהוא */
-  body::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    /* השורה הראשונה היא נפילה לדפדפנים בלי image-set/AVIF.
-       המקור: assets/background-master.png (ראה scripts/optimize-assets.mjs). */
-    background-image: url('/bg.webp');
-    background-image: image-set(
-      url('/bg.avif') type('image/avif'),
-      url('/bg.webp') type('image/webp')
-    );
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    opacity: 0.15;
-    z-index: -1;
-    pointer-events: none;
+  /* יעד "דלג לתוכן" (components/layout/SkipLink.jsx): הפוקוס עובר אליו מקוד, והוא אזור תוכן
+     שלם — בלי טבעת פוקוס סביב כל העמוד. scroll-margin — כדי שהכותרת הדביקה לא תסתיר את ראשו
+     כשהקישור עובד בלי JS (ניווט עוגן רגיל) */
+  [data-skip-target]:focus {
+    outline: none;
+  }
+
+  #main-content {
+    scroll-margin-top: var(--site-header-height);
   }
 
   /* ה-@font-face עצמו ב-styles/icon-font.css (subset מקומי, נוצר אוטומטית) */
@@ -52,6 +43,11 @@
     letter-spacing: normal;
     text-transform: none;
     display: inline-block;
+    /* רוחב של גליף אחד גם לפני שגופן האייקונים עולה (font-display: block מסתיר את הטקסט אבל
+       פורס אותו ברוחבו — "expand_more" ברוחב מילה שלמה). בלי זה, עליית הגופן כיווצה את
+       הניווט בכותרת ב-80px והזיזה את כל הקישורים (נמדד ב-CDP). גליפי Material Symbols ריבועיים. */
+    width: 1em;
+    overflow: hidden;
     white-space: nowrap;
     word-wrap: normal;
     direction: ltr;

@@ -1,68 +1,53 @@
-# מערכת העיצוב של אוצריא
+# מערכת העיצוב של אוצריא — קבצי הסגנון
 
-כל כללי העיצוב הגלובליים מרוכזים כאן. כדי לשנות עיצוב גלובלי — ערוך קובץ אחד מתוך התיקייה הזו, והשינוי חל על כל הפרוייקט מיידית.
+כל כללי העיצוב הגלובליים מרוכזים כאן, ונטענים דרך `src/app/globals.css` (אחרי `@import "tailwindcss"`).
+המדריך המלא (איך משתמשים, מה אסור, איך מעבירים עמוד): `refactor-notes/redesign/design-system.md`.
 
-נטען דרך `src/app/globals.css` (שמייבא את כל הקבצים לאחר `@import "tailwindcss"`).
+## שלוש שכבות של טוקנים
 
-## הקבצים
+| שכבה | קובץ | מה יש בו | מי משתמש |
+|------|------|-----------|----------|
+| 1. ייחוס | `palette.css` | הגוונים הגולמיים `--ref-<משפחה>-<tone>` — ערכת M3 של אוצריא (seed `#2C1B02`) + הרחבות מותג (parchment, ink, gold, rust) | רק שכבה 2 |
+| 2. תפקידים | `colors.css` (+ `theme-dark.css`) | `--color-surface`, `on-surface`, `primary`, `outline-variant`, `donation`, `success`... → מחלקות `bg-surface` וכו' | עמודים ורכיבים |
+| 3. רכיב | `component-tokens.css` | `--button-*`, `--card-*`, `--dialog-*`, `--tooltip-*`, `--badge-*`, `--account-*` (רק טוקנים שבשימוש — טוקן לרכיב עתידי נוסף יחד עם הרכיב) | רכיבי `src/components/ui/*` |
 
-| קובץ | אחריות | מתי לערוך |
-|------|--------|-----------|
-| `colors.css` | **מקור האמת לכל הצבעים** — טוקני מותג + רמפות סמנטיות | שינוי כל צבע בממשק |
-| `typography.css` | גופנים, גדלי טקסט, משקלים, line-height ו-letter-spacing | שינוי טיפוגרפיה גלובלית |
-| `layout.css` | מרווחים, מידות בסיס ושבירות מסך (`--spacing`, `--breakpoint-*`, `--container-*`) | שינוי צפיפות, קצב מרווחים או נקודות שבירה |
-| `shape.css` | רדיוסים (`--radius-*`) | שינוי עיגול פינות גלובלי |
-| `elevation.css` | צללים (`--shadow-*`, `--drop-shadow-*`, `--text-shadow-*`) | שינוי עומק, הרמות וצללים |
-| `motion.css` | easing, blur וברירות מחדל של transition | שינוי תנועה, טשטוש ומהירות מעברים |
-| `base.css` | `html` / `body` / תמונת רקע / אייקוני Material | רקע, כיווניות, אייקונים |
-| `effects.css` | `glass`, `custom-scrollbar`, `hover-lift`, `spellcheck-highlight` | אפקטים ויזואליים משותפים |
-| `animations.css` | `@keyframes` + מחלקות `animate-*` | אנימציות |
+אותו עיקרון בשאר הקבצים: **סולם** (שנשאר לעמודים קיימים) + **תפקידים** (לרכיבים חדשים).
 
-## הצבעים (colors.css)
+| קובץ | סולם (קיים) | תפקידים (לקוד חדש) |
+|------|-------------|---------------------|
+| `typography.css` | `text-xs … text-9xl`, `font-display`, `font-frank` | `text-display-*`, `text-headline-*`, `text-title-*`, `text-body-*`, `text-label-*` |
+| `shape.css` | `rounded-sm … rounded-4xl` | `rounded-control`, `rounded-card`, `rounded-dialog`, `rounded-container`, `rounded-sheet`, `rounded-pill` — כולם מ-`--radius-shape` |
+| `elevation.css` | `shadow-sm … shadow-2xl` | `shadow-raised`, `shadow-menu`, `shadow-tooltip`, `shadow-dialog`, `shadow-sheet`, `shadow-overlay` |
+| `motion.css` | `ease-in/out/in-out` | `ease-standard/enter/exit`, `--motion-duration-*` (**לא** מתאפסים גלובלית ב-reduced-motion — כל רכיב מבטל את התזוזה שלו במפורש; ראו ההערה בראש `motion.css`) |
+| `layout.css` | `--spacing` (3.8px), `--breakpoint-*`, `max-w-6xl` | `max-w-content`, `max-w-content-wide`, `max-w-narrow`, `max-w-measure`, `--page-gutter*`, `--touch-target`, `--z-*` (סקלת שכבות: raised, below-header, sticky, overlay, legacy-modal, skip) |
 
-שני סוגי טוקנים:
+## כללים קצרים
 
-1. **טוקני מותג** — זהות אוצריא: `primary`, `secondary`, `accent`, `surface`, `surface-variant`, `background`, `on-surface`, `on-primary` וכו'. בשימוש כ-`bg-primary`, `text-on-surface`, `border-surface-variant`...
+- **אין hex / rgb ברכיבים.** צבע חדש → גוון ב-`palette.css` + תפקיד ב-`colors.css`.
+- **אין צבעי Tailwind גולמיים** (`gray-*`, `blue-*`, `bg-white`) ולא רמפות המורשת (`neutral-*`, `danger-*`...) בקוד חדש — רק תפקידים.
+- שמות שמסומנים `[מיושן]` ב-`colors.css` (`accent`, `primary-container`, `surface-variant`, `on-background`) — נשמרו רק כדי לא לשבור עמודים קיימים.
+- מחלקות `text-primary-dark`, `text-foreground`, `text-on-secondary` **אינן מוגדרות** (לא עושות כלום) — בהעברת עמוד מחליפים אותן לתפקיד אמיתי.
 
-2. **רמפות סמנטיות (50–950)** — החליפו את צבעי Tailwind הגולמיים שהיו מפוזרים בקוד, **בערכים זהים בדיוק** (אפס שינוי ויזואלי):
+## variants מותאמים (`layout.css`)
 
-   | רמפה סמנטית | תפקיד | (היה Tailwind) |
-   |-------------|-------|----------------|
-   | `neutral` | ניטרלי ראשי | gray |
-   | `neutral-cool` | ניטרלי קריר | slate |
-   | `neutral-warm` | ניטרלי חמים | stone |
-   | `danger` | שגיאה / סכנה | red |
-   | `success` / `success-alt` | הצלחה | green / emerald |
-   | `info` / `info-alt` | מידע | blue / indigo |
-   | `warning` / `warning-alt` / `warning-strong` | אזהרה | amber / yellow / orange |
-   | `feature` | מבטא / מאפיין | purple |
-   | `aqua` | אקווה | teal |
-   | `pink` | ורוד | pink (אותו שם, מרוכז) |
+| variant | מתי |
+|---------|-----|
+| `short:` | מ-md ובגובה ≤ 820px (לפטופ נמוך) — כללי לכל האתר |
+| `tall:` | מ-2xl ובגובה ≥ 1050px — גיבור דף הבית |
+| `narrow:` | רוחב < 400px |
+| `dark:` | תחת `data-theme="dark"` — מוכן, לא מופעל |
 
-   שימוש: `bg-neutral-50`, `text-danger-600`, `border-info-200`, `bg-success-alt-600`...
+## מחלקות CSS משותפות
 
-   > **כדי לשנות גוון גלובלית:** ערוך את ערך ה-`--color-<רמפה>-<גוון>` ב-`colors.css`. למשל שינוי כל גווני השגיאה = עריכת ערכי `--color-danger-*`.
-
-## טיפוגרפיה, צורה, פריסה, עומק ותנועה
-
-הקבצים `typography.css`, `layout.css`, `shape.css`, `elevation.css`, ו-`motion.css` הם פרופיל העיצוב הגלובלי הנוכחי: קומפקטי מעט, רך יותר, עם פינות עגולות יותר וצללים עדינים יותר. שינוי בהם משפיע על כל מחלקות Tailwind המתאימות בכל הפרויקט.
-
-דוגמאות:
-
-- שינוי `--radius-lg` ב-`shape.css` ישפיע על כל `rounded-lg`.
-- שינוי `--spacing` ב-`layout.css` ישפיע על מרווחים ומידות מספריים כמו `p-4`, `gap-6`, `w-12`.
-- שינוי `--shadow-xl` ב-`elevation.css` ישפיע על כל `shadow-xl`.
-- שינוי `--text-lg` ב-`typography.css` ישפיע על כל `text-lg`.
-- שינוי `--default-transition-duration` ב-`motion.css` ישפיע על `transition-*` ללא duration מפורש.
-
-יש לשנות את הערכים האלה בזהירות, כי הם משפיעים על שטח רחב מאוד.
+`effects.css`: `.glass`, `.donation-button` (+`-lg`, `.donation-nav-link`, `.donation-note`), `.donation-tip-*` (טיפ התרומה), `.donate-anim*` (`.donation-animated-icon`, אייקון התרומה המונפש), `.app-icon` (+`-donate`), `.loader*` (ui/Loader), `.title-ornament`, `.anchor-section`, `.spellcheck-highlight`, `.hover-lift`.
+פסי גלילה (`effects.css`): `.custom-scrollbar` **מסתיר** את פס הגלילה (גלילה בלי פס גלוי); `.scrollbar-thin` — פס דק ומעוצב לאזור גלילה פנימי (+`.scrollbar-end-right`).
+`tooltip.css`: `.tooltip`, `.tooltip-host`, `.tooltip-bubble` (ui/Tooltip).
+`nav.css`: `.nav-dropdown*`, `.mobile-nav-group*`.
+`animations.css`: `@keyframes` + `animate-*`, וגם מחלקות של אנימציות דף הבית — `.wordmark-handoff-target` ("מעבר שם האתר", `useWordmarkHandoff`), `.forever-*` (השורה המונפשת), `.golden-book-sprite` (הספר המוזהב).
 
 ## תחזוקה
 
-ערכי הרמפות הסמנטיות נוצרו אוטומטית מערכי ברירת המחדל של Tailwind. לרענון לאחר שדרוג Tailwind:
-
-```bash
-node scripts/gen-color-tokens.js
-```
-
-> הערה: רמפות סמנטיות מגדירות גם מחדש שמות פלטה מובנים של Tailwind (`neutral`, `pink`) — מכוון, לריכוז שליטה. אין להשתמש בקוד חדש בצבעי Tailwind גולמיים (`gray-*`, `red-*` וכו') — יש להשתמש בטוקנים הסמנטיים.
+- רמפות המורשת (`neutral`, `danger`...) הן העתק מדויק של צבעי Tailwind 4 (gray, red...). הסקריפט שיצר אותן
+  (`scripts/gen-color-tokens.js`) כבר לא קיים בריפו; לא צריך לרענן אותן — הן מוקפאות עד שהעמודים יעברו לתפקידים.
+- ערכי `palette.css` חושבו ב-`material_color_utilities` 0.13.0 (`SchemeTonalSpot`, seed `0xFF2C1B02`). שינוי
+  seed = חישוב מחדש של הפלטה, לא עריכה ידנית של גוונים.

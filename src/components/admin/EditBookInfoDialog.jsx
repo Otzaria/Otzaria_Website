@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useDialog } from '@/components/providers/DialogContext'
+import Loader from '@/components/ui/Loader'
 
 export default function EditBookInfoDialog({ book, onClose, onSave }) {
   const { showAlert } = useDialog()
@@ -304,7 +305,7 @@ export default function EditBookInfoDialog({ book, onClose, onSave }) {
           >
             {saving ? (
               <>
-                <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                <Loader size="inline" decorative />
                 <span>שומר...</span>
               </>
             ) : (

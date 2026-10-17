@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import Image from 'next/image'
+import Loader from '@/components/ui/Loader'
 
 export default function ApproveTermsPage() {
   const router = useRouter()
@@ -46,7 +47,7 @@ export default function ApproveTermsPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-gradient-to-bl from-primary-container via-background to-secondary-container">
+    <main id="main-content" className="min-h-screen flex items-center justify-center px-4 py-12 bg-gradient-to-bl from-primary-container via-background to-secondary-container">
       <div className="w-full max-w-md">
         <div className="glass-strong rounded-2xl p-8 shadow-2xl border border-primary/20">
           
@@ -97,7 +98,7 @@ export default function ApproveTermsPage() {
             >
               {loading ? (
                 <>
-                  <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                  <Loader size="inline" decorative />
                   <span>מעדכן...</span>
                 </>
               ) : (
@@ -111,6 +112,6 @@ export default function ApproveTermsPage() {
 
         </div>
       </div>
-    </div>
+    </main>
   )
 }

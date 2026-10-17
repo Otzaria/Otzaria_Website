@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import LibraryInfoPage from './page'
 vi.mock('@/components/layout/Header', () => ({ default: () => null }))
 vi.mock('@/components/ui/LoadingSpinner', () => ({ default: () => <div>loading</div> }))
@@ -16,9 +15,11 @@ describe('book info source refresh and bounded rendering', () => {
     expect(await screen.findByText('ספר 00000')).toBeInTheDocument()
     expect(container.querySelectorAll('tbody tr')).toHaveLength(100)
     expect(screen.getByText(/הספר הוסר; ההצעה נשמרה/)).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'הבא' }))
+    fireEvent.click(screen.getByRole('button', { name: 'הבא' }))
     expect(screen.getByText('ספר 00100')).toBeInTheDocument()
-    await userEvent.type(screen.getByPlaceholderText('חיפוש לפי ספר/מחבר'), 'ספר 07813')
+    // fireEvent.change ולא userEvent.type: הקלדה תו-תו מסננת את 7,814 השורות מחדש בכל תו
+    // (9 רינדורים), וזה חרג ממגבלת 5 השניות תחת עומס. הטסט בודק את התוצאה, לא את ההקלדה.
+    fireEvent.change(screen.getByPlaceholderText('חיפוש לפי ספר/מחבר'), { target: { value: 'ספר 07813' } })
     await waitFor(() => expect(screen.getByText('ספר 07813')).toBeInTheDocument())
     expect(container.querySelectorAll('tbody tr')).toHaveLength(1)
     vi.restoreAllMocks()

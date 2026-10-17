@@ -10,8 +10,6 @@ import { useParams, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
-import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
-import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 import RatingStars from '@/components/plugins/RatingStars'
 import PluginRatingPanel from '@/components/plugins/PluginRatingPanel'
 import { useDialog } from '@/components/providers/DialogContext'
@@ -26,6 +24,7 @@ import DirectInstallButton from '@/components/plugins/DirectInstallButton'
 import Breadcrumbs, { type BreadcrumbItem } from '@/components/plugins/Breadcrumbs'
 import ScreenshotGallery from '@/components/plugins/ScreenshotGallery'
 import type { CategoryRef } from '@/components/plugins/types'
+import Loader from '@/components/ui/Loader'
 
 // חלונות העריכה (למעלה התוסף בלבד) והדיווח נפתחים רק בלחיצה — נטענים
 // בנפרד כדי שלא יכבידו על הטעינה הראשונה של כל צופה בדף. בזמן הטעינה מוצגת
@@ -33,8 +32,8 @@ import type { CategoryRef } from '@/components/plugins/types'
 // מרענן את הדף במקום להפיל אותו ל-error boundary.
 function ModalLoadingOverlay() {
   return (
-    <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/50 p-4" role="status" aria-label="טוען...">
-      <div className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
+    <div className="fixed inset-0 z-[calc(var(--z-legacy-modal)_-_1)] flex items-center justify-center bg-black/50 p-4">
+      <Loader size="lg" tone="current" showLabel={false} className="text-white" />
     </div>
   )
 }
@@ -174,15 +173,12 @@ export default function PluginDetailClient({ initialPlugin }: PluginDetailClient
 
   if (loading) {
     return (
-      <div className="flex min-h-screen flex-col bg-background">
-        <OtzariaSoftwareHeader showAuth />
-        <main className="flex-1 flex items-center justify-center">
+      <div className="flex flex-1 flex-col">
+        <main id="main-content" className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-on-surface/50 font-medium">טוען פרטי תוסף...</p>
+            <Loader size="lg" label="טוען פרטי תוסף…" />
           </div>
         </main>
-        <OtzariaSoftwareFooter />
       </div>
     )
   }
@@ -258,10 +254,9 @@ export default function PluginDetailClient({ initialPlugin }: PluginDetailClient
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <OtzariaSoftwareHeader showAuth />
+    <div className="flex flex-1 flex-col">
       
-      <main className="flex-1 py-8 px-4">
+      <main id="main-content" className="flex-1 py-8 px-4">
         <div className="container mx-auto max-w-5xl">
           {/* פירורי לחם: חנות התוספים ‹ קטגוריה ראשונה (אם משובץ) ‹ שם התוסף */}
           <Breadcrumbs
@@ -400,7 +395,6 @@ export default function PluginDetailClient({ initialPlugin }: PluginDetailClient
                       installState={installState}
                       onInstall={handleDirectInstall}
                       className="inline-flex items-center gap-2 px-6 py-3 bg-white border-2 border-primary text-primary rounded-xl font-bold hover:bg-primary/5 transition-colors disabled:cursor-default disabled:opacity-80"
-                      spinnerClassName="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin"
                       showIcons
                       idleLabel="התקנה ישירה לאוצריא"
                     />
@@ -577,8 +571,6 @@ export default function PluginDetailClient({ initialPlugin }: PluginDetailClient
 
         </div>
       </main>
-
-      <OtzariaSoftwareFooter />
 
       {reporting && (
         <PluginReportModal

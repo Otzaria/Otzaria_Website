@@ -19,15 +19,17 @@ export default function PageProofBookPage() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <Header />
-      {status === 'loading' ? (
-        <LoadingSpinner message="טוען..." />
-      ) : status === 'authenticated' && !allowed ? (
-        <div className="container mx-auto px-4 py-8">
-          <ProofAccessNotice />
-        </div>
-      ) : allowed && gid ? (
-        <ProofBookGrid key={gid} gid={gid} />
-      ) : null}
+      <main id="main-content" className="flex flex-1 flex-col">
+        {status === 'loading' ? (
+          <LoadingSpinner message="טוען..." />
+        ) : status === 'authenticated' && !allowed ? (
+          <div className="container mx-auto px-4 py-8">
+            <ProofAccessNotice />
+          </div>
+        ) : allowed && gid ? (
+          <ProofBookGrid key={gid} gid={gid} />
+        ) : null}
+      </main>
     </div>
   )
 }

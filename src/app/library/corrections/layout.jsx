@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import Header from '@/components/layout/Header'
+import { FOCUS_RING } from '@/components/ui/focusRing'
 import { canManageCorrections } from '@/lib/roles'
 
 export default function CorrectionsLayout({ children }) {
@@ -16,7 +17,7 @@ export default function CorrectionsLayout({ children }) {
   return (
     <div className="flex min-h-screen flex-col bg-background" dir="rtl">
       <Header />
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         <div className="w-full px-4 md:px-6 py-8">
           <div className="w-full max-w-7xl mx-auto">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
@@ -31,7 +32,8 @@ export default function CorrectionsLayout({ children }) {
                   <Link
                     key={t.href}
                     href={t.href}
-                    className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${pathname === t.href ? 'bg-primary text-on-primary' : 'glass text-on-surface hover:bg-surface-variant'}`}
+                    aria-current={pathname === t.href ? 'page' : undefined}
+                    className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${FOCUS_RING} ${pathname === t.href ? 'bg-primary text-on-primary' : 'glass text-on-surface hover:bg-surface-variant'}`}
                   >
                     <span className="material-symbols-outlined">{t.icon}</span>
                     {t.label}

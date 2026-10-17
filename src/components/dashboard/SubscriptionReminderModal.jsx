@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Loader from '@/components/ui/Loader'
 
 /**
  * SubscriptionReminderModal - תזכורת הרשמה להתראות על ספרים חדשים
@@ -68,7 +69,7 @@ export default function SubscriptionReminderModal({ onClose, toggleSubscription,
               className="w-full py-3 px-6 bg-primary text-white rounded-xl font-bold hover:bg-primary-dark shadow-lg hover:shadow-primary/30 transition-all flex items-center justify-center gap-2"
             >
               {loadingSub ? (
-                <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                <Loader size="inline" decorative />
               ) : (
                 <>
                   <span className="material-symbols-outlined">mark_email_read</span>

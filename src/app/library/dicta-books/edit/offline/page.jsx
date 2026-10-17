@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
-import Button from '@/components/ui/Button'
+import Button from '@/components/ui/legacy/LegacyButton'
 import dynamic from 'next/dynamic'
 
 // עד שה-chunk של העורך נטען שומרים את המקום שלו (השורש של DictaEditorCore הוא
@@ -10,7 +10,8 @@ import dynamic from 'next/dynamic'
 // המסך ונדחף למטה כשהעורך הופיע (CLS 0.67).
 const DictaEditorCore = dynamic(() => import('@/components/editor/DictaEditorCore'), {
   ssr: false,
-  loading: () => <div className="h-screen bg-neutral-50" aria-busy="true" />,
+  // <main> בזמן הטעינה: ה-<main> של העורך עצמו נמצא בתוך DictaEditorCore, שעוד לא נטען
+  loading: () => <main className="h-screen bg-neutral-50" aria-busy="true" />,
 })
 
 export default function OfflineEditorRoute() {
@@ -116,19 +117,22 @@ export default function OfflineEditorRoute() {
   )
 
   return (
-    <DictaEditorCore 
-      initialContent={localContent}
-      title={fileName}
-      canEdit={true}
-      isCompleted={false}
-      onSave={handleSaveToLocalFile}
-      hasUnsavedChangesOuter={hasUnsavedChanges}
-      setHasUnsavedChanges={setHasUnsavedChanges}
-      headerStartElement={headerStart}
-      headerEndElement={headerEnd}
-      singleLineHeader={true}
-      enableSpellcheck={false}
-    />
+    // יעד "דלג לתוכן" — ה-<main> עצמו נמצא בתוך DictaEditorCore
+    <div id="main-content">
+      <DictaEditorCore 
+        initialContent={localContent}
+        title={fileName}
+        canEdit={true}
+        isCompleted={false}
+        onSave={handleSaveToLocalFile}
+        hasUnsavedChangesOuter={hasUnsavedChanges}
+        setHasUnsavedChanges={setHasUnsavedChanges}
+        headerStartElement={headerStart}
+        headerEndElement={headerEnd}
+        singleLineHeader={true}
+        enableSpellcheck={false}
+      />
+    </div>
   )
 }
 

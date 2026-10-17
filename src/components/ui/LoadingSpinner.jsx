@@ -1,33 +1,28 @@
+import Loader, { DEFAULT_LOADER_LABEL } from './Loader'
+
+/** גודל ה-API הישן → גודל המחוון (ui/Loader) */
+const SIZE_MAP = { sm: 'md', md: 'lg', lg: 'lg' }
+
 /**
- * LoadingSpinner - קומפוננטת מחוון טעינה אחידה
- * 
- * @param {string} message - הטקסט שיוצג מתחת למחוון (אופציונלי)
- * @param {string} size - גודל המחוון: 'sm', 'md', 'lg' (ברירת מחדל: 'md')
+ * LoadingSpinner — עטיפה לאחור סביב ui/Loader (שלוש נקודות עיטור) לאזור טעינה ממורכז.
+ * בקוד חדש עדיף להשתמש ב-Loader ישירות.
+ *
+ * @param {string} message - כיתוב גלוי מתחת למחוון; ריק — בלי כיתוב גלוי (ההכרזה "טוען…" נשארת)
+ * @param {'sm'|'md'|'lg'} size - sm → Loader md (32px); md/lg → Loader lg (80px)
  * @param {string} className - מחלקות CSS נוספות (אופציונלי)
  */
-export default function LoadingSpinner({ 
-  message = 'טוען...', 
+export default function LoadingSpinner({
+  message = 'טוען...',
   size = 'md',
-  className = '' 
+  className = ''
 }) {
-  const sizeClasses = {
-    sm: 'h-8 w-8 border-2',
-    md: 'h-12 w-12 border-b-2',
-    lg: 'h-16 w-16 border-b-2'
-  };
-
-  const textSizeClasses = {
-    sm: 'text-sm',
-    md: 'text-base',
-    lg: 'text-lg'
-  };
-
   return (
     <div className={`text-center py-20 ${className}`}>
-      <div className={`inline-block animate-spin rounded-full border-primary ${sizeClasses[size]}`}></div>
-      {message && (
-        <p className={`mt-4 text-neutral-600 ${textSizeClasses[size]}`}>{message}</p>
-      )}
+      <Loader
+        size={SIZE_MAP[size] ?? 'lg'}
+        label={message || DEFAULT_LOADER_LABEL}
+        showLabel={Boolean(message)}
+      />
     </div>
-  );
+  )
 }

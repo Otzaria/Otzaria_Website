@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import IntentPrefetchLink from '@/components/ui/IntentPrefetchLink'
+import { FOCUS_RING } from '@/components/ui/focusRing'
 import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { hasAnyAdminBadge } from '@/lib/adminBadgeScope'
@@ -82,7 +83,8 @@ export default function AdminNav({ role: serverRole, initialCounts }) {
           <IntentPrefetchLink
             key={tab.id}
             href={tab.href}
-            className={`px-4 py-2 rounded-lg font-medium transition-all whitespace-nowrap relative group shrink-0 text-center ${
+            aria-current={isActive ? 'page' : undefined}
+            className={`px-4 py-2 rounded-lg font-medium transition-all whitespace-nowrap relative group shrink-0 text-center ${FOCUS_RING} ${
               isActive
                 ? 'bg-primary text-on-primary'
                 : 'glass text-on-surface hover:bg-surface-variant'

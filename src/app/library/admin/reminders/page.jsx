@@ -6,6 +6,7 @@ import { useDialog } from '@/components/providers/DialogContext';
 import { formatTimeAgo, computeRegularRecipients, computeDictaRecipients, generateEmailHtml } from './reminderUtils';
 import ReminderHistoryList from './ReminderHistoryList';
 import ReminderUserSelectionModal from './ReminderUserSelectionModal';
+import Loader from '@/components/ui/Loader'
 
 export default function BookReminderPage() {
     const { data: session } = useSession();
@@ -353,7 +354,7 @@ export default function BookReminderPage() {
                             {isCheckingRecipients ? (
                                 <div className="mt-3">
                                     <span className="text-info-600 flex items-center gap-2">
-                                        <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+                                        <Loader size="inline" decorative className="text-sm" />
                                         מאתר נמענים...
                                     </span>
                                 </div>
@@ -408,7 +409,7 @@ export default function BookReminderPage() {
                                     <div>
                                         {isCheckingRecipients ? (
                                             <span className="text-info-600 flex items-center gap-2">
-                                                <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+                                                <Loader size="inline" decorative className="text-sm" />
                                                 מאתר נמענים...
                                             </span>
                                         ) : foundUsersDetails.length > 0 ? (
@@ -465,7 +466,7 @@ export default function BookReminderPage() {
                 >
                     {status.loading ? (
                         <>
-                            <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                            <Loader size="inline" decorative />
                             שולח הודעות...
                         </>
                     ) : (

@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import GoogleSignInButton from '@/components/auth/GoogleSignInButton';
+import Loader from '@/components/ui/Loader'
 
 export default function VerifyRequestPage() {
     const { data: session, update } = useSession();
@@ -111,7 +112,7 @@ export default function VerifyRequestPage() {
     };
 
     return (
-        <div className={`min-h-screen flex items-center justify-center ${theme.pageBg} px-4`} dir="rtl">
+        <main id="main-content" className={`min-h-screen flex items-center justify-center ${theme.pageBg} px-4`} dir="rtl">
             <div className={`max-w-md w-full bg-white rounded-2xl shadow-sm border ${theme.cardBorder} p-8 text-center animate-in fade-in zoom-in-95 duration-300`}>
 
                 <div className={`w-20 h-20 ${theme.iconBg} rounded-full flex items-center justify-center mx-auto mb-6`}>
@@ -195,7 +196,7 @@ export default function VerifyRequestPage() {
                 >
                     {verificationStatus.loading ? (
                         <>
-                            <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                            <Loader size="inline" decorative />
                             שולח...
                         </>
                     ) : verificationStatus.sent ? (
@@ -244,6 +245,6 @@ export default function VerifyRequestPage() {
                     </button>
                 </div>
             </div>
-        </div>
+        </main>
     );
 }
