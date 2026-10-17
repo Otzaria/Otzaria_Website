@@ -96,7 +96,9 @@ export default function AppReportDetailPage() {
           )}
           {!r.files?.diagnostics && !r.files?.errors && !r.files?.minidump && !r.files?.images?.length && <span className="text-on-surface/50">לא צורפו קבצים</span>}
         </div>
-        {r.files?.images?.length > 0 && <ReportImages reportId={r.reportId} images={r.files.images} />}
+        {r.files?.images?.length > 0 && (
+          <ReportImages images={r.files.images} urlFor={(i) => `/api/app-reports/admin/${encodeURIComponent(r.reportId)}/images/${i}`} />
+        )}
         {r.files?.diagnostics && <DiagnosticsViewer url={fileUrl('diagnostics')} />}
       </div>
 
@@ -138,13 +140,13 @@ function Section({ title, children }) {
   )
 }
 
-function ReportImages({ reportId, images }) {
+function ReportImages({ images, urlFor, title = 'צילומי מסך' }) {
   return (
     <div>
-      <h4 className="font-bold mb-2">צילומי מסך ({images.length})</h4>
+      <h4 className="font-bold mb-2">{title} ({images.length})</h4>
       <div className="flex flex-wrap gap-3">
         {images.map((img, i) => {
-          const url = `/api/app-reports/admin/${encodeURIComponent(reportId)}/images/${i}`
+          const url = urlFor(i)
           return (
             <a
               key={i}
@@ -233,7 +235,7 @@ function ContactPanel({ report }) {
       <h3 className="text-xl font-bold">יצירת קשר עם המדווח</h3>
       {log.length > 0 && (
         <ul className="space-y-3">
-          {log.map((c, i) => <ContactEntry key={i} entry={c} />)}
+          {log.map((c, i) => <ContactEntry key={i} entry={c} index={i} reportId={report.reportId} />)}
         </ul>
       )}
       {report.hasEmail ? (
@@ -271,7 +273,7 @@ function ContactPanel({ report }) {
 }
 
 // out = פנייה של הצוות; in = תשובת המדווח שנקלטה מהמייל (src/lib/app-reports/inbound.js)
-function ContactEntry({ entry: c }) {
+function ContactEntry({ entry: c, index, reportId }) {
   const incoming = c.direction === 'in'
   return (
     <li className={`rounded-lg p-3 text-sm ${incoming ? 'bg-info-50 border-r-4 border-info-400' : 'bg-surface'}`}>
@@ -286,10 +288,19 @@ function ContactEntry({ entry: c }) {
         )}
         <span>{formatDateTime(c.sentAt)}</span>
         {incoming && c.fromEmail && <span dir="ltr">{c.fromEmail}</span>}
-        {incoming && c.attachments > 0 && <span>צורפו {c.attachments} קבצים (לא נשמרו)</span>}
+        {incoming && c.attachments > 0 && <span>צורפו {c.attachments} קבצים{c.images?.length ? ' נוספים' : ''} (לא נשמרו)</span>}
       </div>
       {c.subject && <div className="font-bold">{c.subject}</div>}
       <p className="whitespace-pre-wrap">{c.message}</p>
+      {c.images?.length > 0 && (
+        <div className="mt-2">
+          <ReportImages
+            title="תמונות"
+            images={c.images}
+            urlFor={(i) => `/api/app-reports/admin/${encodeURIComponent(reportId)}/contact-images/${index}/${i}`}
+          />
+        </div>
+      )}
       {incoming && <InboundIssueStatus entry={c} />}
     </li>
   )

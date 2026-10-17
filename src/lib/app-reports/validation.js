@@ -67,8 +67,21 @@ function cleanFileName(raw) {
     : '';
 }
 
-function cleanImageName(raw, index, ext) {
+export function cleanImageName(raw, index, ext) {
   return cleanFileName(raw) || `image-${index + 1}.${ext}`;
+}
+
+/** תמונה אחת ({data: base64}) → {buffer, mimeType}, או {error}. */
+export function decodeImage(item) {
+  if (!isPlainObject(item) || typeof item.data !== 'string') return { error: 'data must be a base64 string' };
+  if (item.data.length > Math.ceil(MAX_IMAGE_BYTES / 3) * 4) return { error: 'too large' };
+  const buffer = Buffer.from(item.data, 'base64');
+  // Buffer.from מדלג בשקט על תווים לא חוקיים; השוואה חוזרת תופסת קלט פגום.
+  if (buffer.toString('base64') !== item.data) return { error: 'invalid base64' };
+  if (buffer.length > MAX_IMAGE_BYTES) return { error: 'too large' };
+  const mimeType = sniffImageType(buffer);
+  if (!mimeType) return { error: 'not a PNG/JPEG/GIF image' };
+  return { buffer, mimeType };
 }
 
 function validateImages(raw) {
@@ -78,14 +91,8 @@ function validateImages(raw) {
   const images = [];
   let total = 0;
   for (const [i, item] of raw.entries()) {
-    const field = `attachments.images[${i}]`;
-    if (!isPlainObject(item) || typeof item.data !== 'string') return { error: fail(field, 'data must be a base64 string') };
-    const buffer = Buffer.from(item.data, 'base64');
-    // Buffer.from מדלג בשקט על תווים לא חוקיים; השוואה חוזרת תופסת קלט פגום.
-    if (buffer.toString('base64') !== item.data) return { error: fail(field, 'invalid base64') };
-    if (buffer.length > MAX_IMAGE_BYTES) return { error: fail(field, 'too large') };
-    const mimeType = sniffImageType(buffer);
-    if (!mimeType) return { error: fail(field, 'not a PNG/JPEG/GIF image') };
+    const { buffer, mimeType, error } = decodeImage(item);
+    if (error) return { error: fail(`attachments.images[${i}]`, error) };
     total += buffer.length;
     if (total > MAX_IMAGES_TOTAL_BYTES) return { error: fail('attachments.images', 'total too large') };
     images.push({ buffer, mimeType, fileName: cleanImageName(item.fileName, i, IMAGE_TYPES[mimeType].ext) });

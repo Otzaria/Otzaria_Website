@@ -2,8 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   newReplyToken, buildReplyAddress, parseReplyAddress, extractReplyText, htmlToText, isAutoReply,
-  validateInboundPayload, inboundMessageBody, buildInboundComment, REPLY_ABOVE_MARKER, MAX_INBOUND_MESSAGE_CHARS,
+  validateInboundPayload, inboundMessageBody, replyContentIds, buildInboundComment, REPLY_ABOVE_MARKER, MAX_INBOUND_MESSAGE_CHARS,
 } from './inbound.js';
+import { MAX_IMAGES, MAX_IMAGE_BYTES, MAX_IMAGES_TOTAL_BYTES } from './validation.js';
 
 const TOKEN = 'a'.repeat(40);
 
@@ -92,4 +93,81 @@ test('buildInboundComment: ציטוט, בלי מיילים ותיוגים, עם 
   assert.ok(!body.includes('@octocat'));
   assert.ok(body.includes('צורפו למייל 1 קבצים'));
   assert.ok(body.includes('/library/admin/app-reports/r-1'));
+});
+
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2]);
+const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 3]);
+const img = (buf, fileName = 'a.png') => ({ fileName, mimeType: 'image/png', data: buf.toString('base64') });
+
+test('validateInboundPayload: תמונות PNG/JPEG נשמרות לפי הבתים; שאינה תמונה נספרת עם הקבצים', () => {
+  const v = validateInboundPayload({
+    to: `reply+${TOKEN}@x.org`, attachments: 1,
+    images: [img(PNG, 'dir/shots/image.png'), img(JPEG, ''), img(Buffer.from('<svg/>'), 'x.png'), { data: '!!' }, 'junk'],
+  });
+  assert.equal(v.ok, true);
+  assert.deepEqual(v.value.images.map((i) => [i.mimeType, i.fileName]), [['image/png', 'image.png'], ['image/jpeg', 'image-2.jpg']]);
+  assert.deepEqual(v.value.images[0].buffer, PNG);
+  assert.equal(v.value.attachments, 4);
+});
+
+test('validateInboundPayload: בלי images (Worker ישן) — רשימה ריקה; מעבר לתקרות לא נשמר', () => {
+  const old = validateInboundPayload({ to: `reply+${TOKEN}@x.org`, attachments: 2 });
+  assert.deepEqual(old.value.images, []);
+  assert.equal(old.value.attachments, 2);
+
+  const many = validateInboundPayload({ to: `reply+${TOKEN}@x.org`, images: Array.from({ length: MAX_IMAGES + 2 }, () => img(PNG)) });
+  assert.equal(many.value.images.length, MAX_IMAGES);
+  assert.equal(many.value.attachments, 2);
+
+  const big = Buffer.concat([PNG, Buffer.alloc(MAX_IMAGE_BYTES)]);
+  const nearCap = Buffer.concat([PNG, Buffer.alloc(MAX_IMAGE_BYTES - PNG.length)]);
+  const tooBig = validateInboundPayload({ to: `reply+${TOKEN}@x.org`, images: [img(big), img(nearCap), img(nearCap), img(nearCap), img(PNG)] });
+  assert.equal(tooBig.value.images.length, 3);
+  assert.ok(tooBig.value.images.reduce((n, i) => n + i.buffer.length, 0) <= MAX_IMAGES_TOTAL_BYTES);
+  assert.equal(tooBig.value.attachments, 2);
+});
+
+test('buildInboundComment: תמונות עם טוקן מוטמעות, בלי טוקן לא; שאר הקבצים בשורת מספר', () => {
+  const body = buildInboundComment({
+    reportId: 'r-1', message: 'הנה', attachments: 2,
+    images: [{ publicToken: 'A'.repeat(32) }, { publicToken: undefined }],
+  });
+  assert.ok(body.includes(`![תמונה 1](https://otzaria.org/api/app-reports/images/${'A'.repeat(32)})`));
+  assert.ok(!body.includes('תמונה 2'));
+  assert.ok(body.includes('_צורפו למייל 2 קבצים נוספים — לא פורסמו._'));
+  assert.ok(!buildInboundComment({ reportId: 'r-1', message: 'x' }).includes('צורפו'));
+});
+
+const inl = (buf, contentId) => ({ ...img(buf, `${contentId}.png`), inline: true, contentId });
+const gmailHtml = [
+  '<div dir="rtl">הנה צילום<br><img src="cid:ii_new"></div>',
+  '<div class="gmail_signature"><img src="cid:ii_sig"></div>',
+  '<div class="gmail_quote">On Mon, Oct 5, 2026 at 10:00 AM X &lt;x@y.z&gt; wrote:<blockquote><img src="cid:ii_old"></blockquote></div>',
+].join('');
+
+test('תמונות מוטמעות: נשמרות רק אם מוצגות בתשובה החדשה; ציטוט, חתימה ולוגו שלא מוצג — לא נשמרים ולא נספרים', () => {
+  const v = validateInboundPayload({
+    to: `reply+${TOKEN}@x.org`, text: 'הנה צילום', html: gmailHtml, attachments: 1,
+    images: [img(JPEG, 'b.jpg'), inl(PNG, 'ii_new'), inl(PNG, 'ii_sig'), inl(PNG, 'ii_old'), inl(PNG, 'image001.png@01DA')],
+  });
+  assert.deepEqual(v.value.images.map((i) => i.fileName), ['b.jpg', 'ii_new.png']);
+  assert.equal(v.value.attachments, 1);
+});
+
+test('תמונות מוטמעות: Content-ID עם סוגריים ו-Outlook (From:/Sent:); תשובה שכולה ציטוט — אין תמונות', () => {
+  const outlook = '<p>ראה צילום</p><p><img src="cid:image001.png@01DA1234.5678"></p><div id="divRplyFwdMsg"><b>From:</b> X<br><b>Sent:</b> Monday<br><b>To:</b> me</div><div><img src="cid:image002.png@01DA1234.5678"></div>';
+  assert.deepEqual([...replyContentIds(outlook)], ['image001.png@01DA1234.5678']);
+  const v = validateInboundPayload({
+    to: `reply+${TOKEN}@x.org`, html: outlook,
+    images: [inl(PNG, '<image001.png@01DA1234.5678>'), inl(PNG, 'image002.png@01DA1234.5678')],
+  });
+  assert.equal(v.value.images.length, 1);
+  const onlyQuote = '<div class="gmail_quote">On Mon, Oct 5, 2026 at 10:00 AM X wrote:<img src="cid:a"></div>';
+  assert.equal(replyContentIds(onlyQuote).size, 0);
+  assert.equal(replyContentIds('<img src="cid:a">').has('a'), true);
+});
+
+test('תמונות בלי inline/contentId (Worker קודם) — נשמרות כמו היום', () => {
+  const v = validateInboundPayload({ to: `reply+${TOKEN}@x.org`, html: gmailHtml, images: [img(PNG), img(JPEG, 'b.jpg')] });
+  assert.equal(v.value.images.length, 2);
 });

@@ -4,7 +4,8 @@
  * טהור — בלי Mongo ובלי רשת.
  */
 import crypto from 'node:crypto';
-import { sanitizeUserText, reportPageUrl } from './issue-text.js';
+import { sanitizeUserText, reportPageUrl, publicImageUrl } from './issue-text.js';
+import { decodeImage, cleanImageName, IMAGE_TYPES, MAX_IMAGES, MAX_IMAGES_TOTAL_BYTES } from './validation.js';
 
 // hex באותיות קטנות: יש שרתי דואר שמשנים רישיות בחלק המקומי של הכתובת
 export const REPLY_TOKEN_RE = /^[0-9a-f]{40}$/;
@@ -94,6 +95,32 @@ export function htmlToText(html) {
     .trim();
 }
 
+const CID_RE = /<img\b[^>]*?\bsrc\s*=\s*["']?cid:([^"'\s>]+)[^>]*>/gi;
+const SIGNATURE_RE = /<div[^>]{0,200}(class="[^"]{0,100}gmail_signature|id="(x_)?Signature")/i;
+
+const normalizeCid = (id) => {
+  const bare = String(id ?? '').trim().replace(/^<|>$/g, '');
+  try {
+    return decodeURIComponent(bare);
+  } catch {
+    return bare;
+  }
+};
+
+/**
+ * ה-Content-ID של התמונות שמוצגות בחלק החדש של התשובה, לפי אותו חיתוך ציטוט של הטקסט.
+ * תמונה שמופיעה רק בציטוט או בחתימה אינה נכללת.
+ */
+export function replyContentIds(html) {
+  let s = String(html ?? '').slice(0, MAX_RAW_TEXT_CHARS);
+  const sigAt = s.search(SIGNATURE_RE);
+  if (sigAt >= 0) s = s.slice(0, sigAt);
+  const marked = htmlToText(s.replace(CID_RE, (_, id) => ` [[cid:${encodeURIComponent(normalizeCid(id))}]] `));
+  // שורה קבועה בראש: בלי טקסט חדש extractReplyText מחזיר את הכל, כולל תמונות הציטוט
+  const kept = extractReplyText(`.\n${marked}`);
+  return new Set([...kept.matchAll(/\[\[cid:([^\]\s]+)\]\]/g)].map((m) => decodeURIComponent(m[1])));
+}
+
 const HEADER_NAMES = ['auto-submitted', 'precedence', 'x-autoreply', 'x-autorespond', 'x-auto-response-suppress'];
 
 /** מענה אוטומטי (מחוץ למשרד וכד') — לא נשמר ולא מתפרסם. */
@@ -106,6 +133,29 @@ export function isAutoReply(headers = {}) {
 }
 
 const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
+
+// תמונה פגומה או מעבר לתקרות הדיווח אינה מכשילה את התשובה: היא לא נשמרת ונספרת עם שאר הקבצים.
+// תמונה מוטמעת נשמרת רק אם היא מוצגת בחלק החדש של התשובה; אחרת היא מהציטוט או מהחתימה, ואינה נספרת.
+function inboundImages(raw, html) {
+  const images = [];
+  let skipped = 0;
+  let total = 0;
+  let replyCids = null;
+  for (const item of Array.isArray(raw) ? raw.slice(0, 100) : []) {
+    if (item?.inline === true) {
+      replyCids ??= replyContentIds(html);
+      if (!replyCids.has(normalizeCid(item.contentId))) continue;
+    }
+    const { buffer, mimeType, error } = decodeImage(item);
+    if (error || images.length >= MAX_IMAGES || total + buffer.length > MAX_IMAGES_TOTAL_BYTES) {
+      skipped += 1;
+      continue;
+    }
+    total += buffer.length;
+    images.push({ buffer, mimeType, fileName: cleanImageName(item.fileName, images.length, IMAGE_TYPES[mimeType].ext) });
+  }
+  return { images, skipped };
+}
 
 /**
  * אימות גוף הבקשה מה-Worker.
@@ -122,7 +172,10 @@ export function validateInboundPayload(raw) {
       if (typeof raw.headers[name] === 'string') headers[name] = raw.headers[name].slice(0, 200);
     }
   }
-  const attachments = Number.isInteger(raw.attachments) && raw.attachments > 0 ? Math.min(raw.attachments, 1000) : 0;
+  // attachments = הקבצים שלא נשלחו ב-images (ה-Worker הישן שולח רק את המספר)
+  const sent = Number.isInteger(raw.attachments) && raw.attachments > 0 ? raw.attachments : 0;
+  const { images, skipped } = inboundImages(raw.images, str(raw.html, MAX_RAW_TEXT_CHARS));
+  const attachments = Math.min(sent + skipped, 1000);
   return {
     ok: true,
     value: {
@@ -134,6 +187,7 @@ export function validateInboundPayload(raw) {
       html: str(raw.html, MAX_RAW_TEXT_CHARS),
       headers,
       attachments,
+      images,
     },
   };
 }
@@ -144,11 +198,25 @@ export function inboundMessageBody({ text, html }) {
   return extractReplyText(source).slice(0, MAX_INBOUND_MESSAGE_CHARS);
 }
 
-/** התגובה הציבורית ב-issue: בלי כתובת מייל ובלי תיוג משתמשים. */
-export function buildInboundComment({ reportId, message, attachments = 0 }) {
+/** הערה ב-issue כשהצוות שלח מייל למדווח: הנושא והתוכן, בלי כתובת המדווח. */
+export function buildOutboundComment({ reportId, subject, message }) {
+  const quoted = sanitizeUserText(message || '(ללא טקסט)').split('\n').map((l) => `> ${l}`).join('\n');
+  return [
+    '**נשלח מייל למדווח**',
+    `נושא: ${sanitizeUserText(subject || '')}`,
+    quoted,
+    `[הדוח המלא (למפתחים)](${reportPageUrl(reportId)})`,
+    `<!-- app-report-contact: ${reportId} -->`,
+  ].join('\n\n');
+}
+
+/** התגובה הציבורית ב-issue: בלי כתובת מייל ובלי תיוג משתמשים; תמונות רק עם טוקן ציבורי. */
+export function buildInboundComment({ reportId, message, attachments = 0, images = [] }) {
   const quoted = sanitizeUserText(message || '(ללא טקסט)').split('\n').map((l) => `> ${l}`).join('\n');
   const parts = ['**תשובת המדווח במייל**', quoted];
-  if (attachments > 0) parts.push(`_צורפו למייל ${attachments} קבצים — לא פורסמו._`);
+  const shown = images.filter((img) => img.publicToken);
+  if (shown.length) parts.push(shown.map((img, i) => `![תמונה ${i + 1}](${publicImageUrl(img.publicToken)})`).join('\n\n'));
+  if (attachments > 0) parts.push(`_צורפו למייל ${attachments} קבצים${shown.length ? ' נוספים' : ''} — לא פורסמו._`);
   parts.push(`[הדוח המלא (למפתחים)](${reportPageUrl(reportId)})`);
   parts.push(`<!-- app-report-reply: ${reportId} -->`);
   return parts.join('\n\n');

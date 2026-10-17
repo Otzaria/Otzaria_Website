@@ -16,6 +16,11 @@ const RETRY_BATCH = 50;
 const PERMANENT = new Set([404, 413, 422]);
 const REPLY_RE = /^reply\+[0-9a-f]{40}@/i;
 const HEADERS = ['auto-submitted', 'precedence', 'x-autoreply', 'x-autorespond', 'x-auto-response-suppress'];
+// אותן תקרות כמו בצילומי המסך של הדיווח (src/lib/app-reports/validation.js באתר)
+const MAX_IMAGES = 5;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_IMAGES_TOTAL_BYTES = 15 * 1024 * 1024;
+const IMAGE_MAGIC = [[0x89, 0x50, 0x4e, 0x47], [0xff, 0xd8, 0xff], [0x47, 0x49, 0x46, 0x38]];
 
 async function forwardToHuman(message, env, reason) {
   if (!env.FALLBACK_TO) {
@@ -29,9 +34,66 @@ async function forwardToHuman(message, env, reason) {
   }
 }
 
+const decodedSize = (b64) => Math.floor((b64.length * 3) / 4) - (b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0);
+
+// לפי הבתים ולא לפי ה-MIME שהוצהר; האתר בודק שוב
+function isImage(att) {
+  if (typeof att.content !== 'string' || !att.content) return false;
+  let head;
+  try {
+    head = atob(att.content.slice(0, 12));
+  } catch {
+    return false;
+  }
+  return IMAGE_MAGIC.some((magic) => magic.every((b, i) => head.charCodeAt(i) === b));
+}
+
+const isInline = (att) => att.disposition === 'inline' || (!att.disposition && Boolean(att.contentId));
+const bareCid = (id) => String(id || '').trim().replace(/^<|>$/g, '');
+
+/**
+ * תמונות כ-base64, בתקרות: קודם המצורפות, אחר כך המוטמעות לפי מיקומן ב-HTML (התשובה החדשה למעלה).
+ * מוטמעת שאינה מוצגת ב-HTML לא נשלחת. האתר מסנן את מה שבציטוט ובחתימה; attachments = מצורפים שלא נשלחו.
+ */
+function splitAttachments(list, html) {
+  const images = [];
+  let total = 0;
+  let others = 0;
+  const candidates = [];
+  for (const att of list) {
+    const image = isImage(att);
+    if (!image) {
+      if (!isInline(att)) others += 1;
+      continue;
+    }
+    if (!isInline(att)) {
+      candidates.push({ att, inline: false, order: -1 });
+      continue;
+    }
+    const at = att.contentId ? html.indexOf(`cid:${bareCid(att.contentId)}`) : -1;
+    if (at >= 0) candidates.push({ att, inline: true, order: at });
+  }
+  candidates.sort((a, b) => a.order - b.order);
+  for (const { att, inline } of candidates) {
+    const size = decodedSize(att.content);
+    if (images.length < MAX_IMAGES && size <= MAX_IMAGE_BYTES && total + size <= MAX_IMAGES_TOTAL_BYTES) {
+      total += size;
+      images.push({
+        fileName: att.filename || '', mimeType: att.mimeType || '', data: att.content,
+        inline, ...(inline ? { contentId: bareCid(att.contentId) } : {}),
+      });
+    } else if (!inline) {
+      others += 1;
+    }
+  }
+  return { images, others };
+}
+
 async function buildPayload(message) {
   const raw = await new Response(message.raw).arrayBuffer();
-  const email = await PostalMime.parse(raw);
+  const email = await PostalMime.parse(raw, { attachmentEncoding: 'base64' });
+  const html = (email.html || '').slice(0, MAX_TEXT_CHARS);
+  const { images, others } = splitAttachments(email.attachments || [], html);
   const headers = {};
   for (const name of HEADERS) {
     const value = message.headers.get(name);
@@ -43,9 +105,11 @@ async function buildPayload(message) {
     subject: email.subject || '',
     messageId: email.messageId || message.headers.get('message-id') || null,
     text: (email.text || '').slice(0, MAX_TEXT_CHARS),
-    html: email.text ? '' : (email.html || '').slice(0, MAX_TEXT_CHARS),
+    // האתר צריך את ה-HTML גם כשיש טקסט, כדי לדעת אילו תמונות מוטמעות שייכות לתשובה החדשה
+    html: !email.text || images.some((img) => img.inline) ? html : '',
     headers,
-    attachments: (email.attachments || []).filter((a) => a.disposition !== 'inline').length,
+    attachments: others,
+    images,
     receivedAt: new Date().toISOString(),
   };
 }

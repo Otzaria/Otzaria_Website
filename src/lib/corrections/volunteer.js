@@ -18,6 +18,7 @@ import { computeChangeDigest } from './ocj1.js';
 import { extractLineContext, committedNewLine, clampContextLines } from './unified-diff.js';
 import { deriveLabels } from './labels.js';
 import { HANDOFF_REASON_LABELS } from './states.js';
+import { escapeRegExp } from '../hebrewWordUtils.js';
 import { newId, logEvent, userActor, currentRevisionOf, manualQueueSet, OPEN_FILTER } from './store.js';
 import { cancelActiveJobs } from './worker.js';
 
@@ -64,6 +65,8 @@ export async function listReports({ user, query = {}, now = new Date() }) {
   if (typeof query.source === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(query.source)) filter.sourceFolder = query.source;
   if (typeof query.reason === 'string' && /^[a-z_:]{1,60}$/.test(query.reason)) filter['manual.handoffReason'] = query.reason;
   if (isId(query.assignee)) filter['manual.assignee'] = new mongoose.Types.ObjectId(query.assignee);
+  const book = typeof query.book === 'string' ? query.book.trim().slice(0, 200) : '';
+  if (book) filter.bookTitle = { $regex: escapeRegExp(book) };
   const limit = Math.min(100, Math.max(1, Number.parseInt(query.limit, 10) || 50));
   const skip = Math.max(0, Number.parseInt(query.skip, 10) || 0);
   const rows = await ErrorReport.find(filter)
@@ -86,6 +89,18 @@ export async function listReports({ user, query = {}, now = new Date() }) {
       createdAt: r.createdAt,
     })),
   });
+}
+
+/** אפשרויות לתפריטי הסינון: תיקיות מקור וספרים שיש להם דיווחים במערכת (בלי מייל-בלבד). */
+export async function listFilterOptions({ user }) {
+  if (!canHandleCorrections(user)) return err(403, 'Forbidden');
+  const inSystem = { state: { $exists: true, $ne: 'email_only' } };
+  const [sourceFolders, books] = await Promise.all([
+    ErrorReport.distinct('sourceFolder', inSystem),
+    ErrorReport.distinct('bookTitle', inSystem),
+  ]);
+  const clean = (arr) => arr.filter((v) => typeof v === 'string' && v.trim()).sort((a, b) => a.localeCompare(b, 'he'));
+  return ok({ sourceFolders: clean(sourceFolders), books: clean(books) });
 }
 
 function publicReport(r, liveSource = null) {

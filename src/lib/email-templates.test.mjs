@@ -6,6 +6,7 @@ import {
   renderPluginChanges,
   buildStaleReminderHtml,
   formatPluginReportType,
+  isWebPluginReport,
 } from './email-templates.js';
 
 // ==================== cleanBookName ====================
@@ -104,4 +105,18 @@ test('formatPluginReportType: ממפה סוגים ידועים', () => {
 test('formatPluginReportType: סוג לא ידוע נופל ל-"אחר"', () => {
   assert.equal(formatPluginReportType('something-unknown'), 'אחר');
   assert.equal(formatPluginReportType(undefined), 'אחר');
+});
+
+// ==================== isWebPluginReport ====================
+
+test('isWebPluginReport: platform "web" — דיווח מדף התוסף באתר', () => {
+  assert.equal(isWebPluginReport('web'), true);
+  assert.equal(isWebPluginReport(' Web '), true);
+});
+
+test('isWebPluginReport: מערכת הפעלה או ערך חסר — דיווח מהתוכנה', () => {
+  assert.equal(isWebPluginReport('windows'), false);
+  assert.equal(isWebPluginReport(''), false);
+  assert.equal(isWebPluginReport(undefined), false);
+  assert.equal(isWebPluginReport(null), false);
 });

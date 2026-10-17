@@ -82,3 +82,11 @@ const PLUGIN_REPORT_TYPE_LABELS = {
 export function formatPluginReportType(type) {
     return PLUGIN_REPORT_TYPE_LABELS[type] || PLUGIN_REPORT_TYPE_LABELS.other;
 }
+
+// מזהה המקור של דיווח על תוסף: טופס הדיווח בדף התוסף באתר שולח platform: 'web'
+// (PluginReportModal); כל ערך אחר (מערכת הפעלה, או חסר) — דיווח מתוכנת אוצריא.
+export const PLUGIN_REPORT_WEB_PLATFORM = 'web';
+
+export function isWebPluginReport(platform) {
+    return typeof platform === 'string' && platform.trim().toLowerCase() === PLUGIN_REPORT_WEB_PLATFORM;
+}

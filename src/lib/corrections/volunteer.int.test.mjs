@@ -15,7 +15,7 @@ import { handleReportingErrorsPost } from './reporting-handler.js';
 import { getCorrectionsConfig } from './config.js';
 import { runWorkerBatch } from './worker.js';
 import { runReportAction } from './actions.js';
-import { listReports, getReportDetail } from './volunteer.js';
+import { listReports, getReportDetail, listFilterOptions } from './volunteer.js';
 import { handleCorrectionsRequest, checkSameOrigin } from './http.js';
 import { deriveLabels } from './labels.js';
 import { FakeGitHub } from './testing/fake-github.js';
@@ -498,4 +498,19 @@ test('אישור מתנדב מריץ אצווה פעם אחת; לקיחה לא; 
   const ap2 = await boom(users.a, id2, { action: 'approve', generation: c2.body.generation, revision: d2.body.report.currentRevision, seenBlobSha: d2.body.source?.blobSha });
   assert.equal(ap2.status, 200, JSON.stringify(ap2.body));
   assert.equal((await ErrorReport.findById(id2).lean()).publish.status, 'ready');
+});
+
+test('סינון לפי ספר (חלק מהשם, בלי פרשנות regex) ואפשרויות לתפריטים בלי מייל-בלבד', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  await ingest('b1');
+  await ingest('b2', { book_title: 'כתר ראש (גר"א)' });
+  await ingest('sef', { source_folder: 'sefariaToOtzaria', book_title: 'ספר מספריא', source_hint: { source_folder: 'sefariaToOtzaria', library_relative_path: 'אוצריא/x.txt' } });
+  const byBook = (book) => listReports({ user: users.a, query: { view: 'queued', book } }).then((r) => r.body.items.map((i) => i.bookTitle));
+  assert.deepEqual(await byBook('כתר'), ['כתר ראש (גר"א)']);
+  assert.deepEqual(await byBook('(גר"א)'), ['כתר ראש (גר"א)'], 'סוגריים כטקסט ולא כ-regex');
+  assert.deepEqual(await byBook('.*'), []);
+  const opts = await listFilterOptions({ user: users.a });
+  assert.deepEqual(opts.body.sourceFolders, ['ToratEmetToOtzaria']);
+  assert.deepEqual(opts.body.books, ['בראשית', 'כתר ראש (גר"א)']);
+  assert.equal((await listFilterOptions({ user: users.plain })).status, 403);
 });

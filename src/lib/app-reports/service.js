@@ -12,7 +12,7 @@ import { handleIssueStateChange } from './state-change.js';
 import { planPublication } from './merge.js';
 import { verifyUnsubscribeToken } from './unsubscribe.js';
 import {
-  newReplyToken, buildReplyAddress, validateInboundPayload, isAutoReply, inboundMessageBody, buildInboundComment,
+  newReplyToken, buildReplyAddress, validateInboundPayload, isAutoReply, inboundMessageBody, buildInboundComment, buildOutboundComment,
 } from './inbound.js';
 export { hasAppReportsAccess } from '../roles.js';
 
@@ -40,6 +40,27 @@ const replyFor = (doc, extra = {}) => ({
 
 export const IMAGE_TOKEN_RE = /^[A-Za-z0-9_-]{32}$/;
 const newImageToken = () => crypto.randomBytes(24).toString('base64url');
+
+async function deleteSavedFiles(gridfsIds, deleteFile) {
+  for (const gridfsId of gridfsIds) {
+    try {
+      await deleteFile(String(gridfsId));
+    } catch (cleanupError) {
+      console.error('App report: attachment cleanup failed:', gridfsId, cleanupError?.message);
+    }
+  }
+}
+
+/** שומר ב-GridFS ומחזיר גם את מזהי מה שנשמר, כדי שאפשר יהיה לנקות אחרי כשל. */
+function trackingSaver(saveFile) {
+  const saved = [];
+  const save = async (...args) => {
+    const result = await saveFile(...args);
+    saved.push(result.gridfsId);
+    return result;
+  };
+  return { save, saved };
+}
 
 async function storeAttachments(report, value, saveFile) {
   const fileIds = { diagnostics: null, errors: null, minidump: null, images: [] };
@@ -100,14 +121,9 @@ export async function ingestAppReport(raw, deps) {
     return { status: 200, body: replyFor(before, { duplicate: true }) };
   }
 
-  const savedFileIds = [];
-  const saveAttachment = async (...args) => {
-    const saved = await deps.saveFile(...args);
-    savedFileIds.push(saved.gridfsId);
-    return saved;
-  };
+  const tracker = trackingSaver(deps.saveFile);
   try {
-    const fileIds = await storeAttachments(doc, value, saveAttachment);
+    const fileIds = await storeAttachments(doc, value, tracker.save);
     if (fileIds.diagnostics || fileIds.errors || fileIds.minidump || fileIds.images.length) await AppReport.updateOne({ reportId: value.reportId }, { $set: { fileIds } });
   } catch (err) {
     // בלי הקבצים הדיווח חסר ערך; מוחקים כדי שהלקוח ישלח שוב (5xx = תור וניסיון חוזר)
@@ -115,15 +131,7 @@ export async function ingestAppReport(raw, deps) {
     const removed = await AppReport.deleteOne({ reportId: value.reportId, issueNumber: null });
     // מנקים רק אחרי מחיקת הדיווח: ייתכן שהעדכון נשמר למרות השגיאה וה-cron כבר פרסם אותו.
     // אחרת כל ניסיון חוזר של דיווח שנמחק משאיר עותק יתום של הקבצים שנשמרו לפני הכשל.
-    if (removed.deletedCount) {
-      for (const gridfsId of savedFileIds) {
-        try {
-          await deps.deleteFile(String(gridfsId));
-        } catch (cleanupError) {
-          console.error('App report: attachment cleanup failed:', gridfsId, cleanupError?.message);
-        }
-      }
-    }
+    if (removed.deletedCount) await deleteSavedFiles(tracker.saved, deps.deleteFile);
     return { status: 500, body: { error: 'Failed to store attachments' } };
   }
 
@@ -284,8 +292,9 @@ export function serializeReport(doc, role) {
       minidump: doc.fileIds?.minidump ? { size: doc.fileIds.minidump.size, fileName: doc.fileIds.minidump.fileName || '' } : null,
       images: (doc.fileIds?.images || []).map(({ size, mimeType, fileName }) => ({ size, mimeType, fileName })),
     },
-    contactLog: (doc.contactLog || []).map(({ fromEmail, ...c }) => ({
+    contactLog: (doc.contactLog || []).map(({ fromEmail, images, ...c }) => ({
       ...c,
+      ...(images?.length ? { images: images.map(({ size, mimeType, fileName }) => ({ size, mimeType, fileName })) } : {}),
       direction: c.direction || 'out',
       byUserId: c.byUserId ? String(c.byUserId) : null,
       ...(role === 'admin' && fromEmail ? { fromEmail } : {}),
@@ -362,13 +371,33 @@ export async function loadReportImage(reportId, index, readFile) {
 }
 
 /**
- * צילום מסך לפי הטוקן הציבורי שלו, לקישור שמוטמע ב-issue.
+ * תמונה מתשובת מדווח במייל, לפי מיקום התשובה בהיסטוריה ומיקום התמונה בה (מ-0).
+ * @returns {Promise<{buffer:Buffer, filename:string, contentType:string}|null>}
+ */
+export async function loadContactImage(reportId, entryIndex, index, readFile) {
+  const e = Number(entryIndex);
+  const i = Number(index);
+  if (!Number.isInteger(e) || e < 0 || !Number.isInteger(i) || i < 0) return null;
+  const doc = await AppReport.findOne({ reportId }).select('contactLog.images').lean();
+  const ref = doc?.contactLog?.[e]?.images?.[i];
+  if (!ref?.gridfsId || !IMAGE_TYPES[ref.mimeType]) return null;
+  return {
+    buffer: await readFile(String(ref.gridfsId)),
+    filename: `reply-${e + 1}-image-${i + 1}.${IMAGE_TYPES[ref.mimeType].ext}`,
+    contentType: ref.mimeType,
+  };
+}
+
+/**
+ * צילום מסך (מהדיווח או מתשובה במייל) לפי הטוקן הציבורי שלו, לקישור שמוטמע ב-issue.
  * @returns {Promise<{buffer:Buffer, contentType:string}|null>}
  */
 export async function loadPublicImage(token, readFile) {
   if (typeof token !== 'string' || !IMAGE_TOKEN_RE.test(token)) return null;
-  const doc = await AppReport.findOne({ 'fileIds.images.publicToken': token }).select('fileIds.images').lean();
-  const ref = doc?.fileIds?.images?.find((img) => img.publicToken === token);
+  const doc = await AppReport.findOne({ $or: [{ 'fileIds.images.publicToken': token }, { 'contactLog.images.publicToken': token }] })
+    .select('fileIds.images contactLog.images').lean();
+  const all = [...(doc?.fileIds?.images || []), ...(doc?.contactLog || []).flatMap((c) => c.images || [])];
+  const ref = all.find((img) => img.publicToken === token);
   if (!ref?.gridfsId || !IMAGE_TYPES[ref.mimeType]) return null;
   return { buffer: await readFile(String(ref.gridfsId)), contentType: ref.mimeType };
 }
@@ -383,7 +412,7 @@ export async function contactReporter({ reportId, subject, message, user }, deps
   if (!s || s.length > 200) return { status: 422, body: { error: 'subject: 1..200 chars', field: 'subject' } };
   if (!m || m.length > 5000) return { status: 422, body: { error: 'message: 1..5000 chars', field: 'message' } };
 
-  const doc = await AppReport.findOne({ reportId }).select('reportId title reporterEmail replyToken').lean();
+  const doc = await AppReport.findOne({ reportId }).select('reportId title reporterEmail replyToken issueNumber').lean();
   if (!doc) return { status: 404, body: { error: 'Report not found' } };
   if (!doc.reporterEmail) return { status: 422, body: { error: 'Reporter left no email', field: 'reporterEmail' } };
 
@@ -394,6 +423,12 @@ export async function contactReporter({ reportId, subject, message, user }, deps
 
   const entry = { direction: 'out', byUserId: user.id || null, byName: user.name || '', subject: s, message: m, sentAt: deps.now || new Date() };
   await AppReport.updateOne({ reportId }, { $push: { contactLog: entry } });
+  // המייל כבר נשלח — כשל ב-GitHub לא מכשיל את הפנייה
+  const github = doc.issueNumber ? githubFor(deps) : null;
+  if (github) {
+    await github.createComment(doc.issueNumber, buildOutboundComment({ reportId, subject: s, message: m }))
+      .catch((err) => console.error(`App report ${reportId}: contact comment failed:`, err?.message));
+  }
   return { status: 200, body: { success: true, entry: { ...entry, byUserId: entry.byUserId ? String(entry.byUserId) : null } } };
 }
 
@@ -413,12 +448,12 @@ export async function ensureReplyToken(reportId) {
  * תשובת מדווח שהגיעה מה-Email Worker. מחזיר {status, body}.
  * 404 = טוקן לא מוכר (ה-Worker מעביר אז את המייל לתיבה רגילה); כפילות לפי Message-ID מחזירה 200.
  * @param {unknown} raw
- * @param {{config:object, github?:object, fetchImpl?:Function, now?:Date}} deps
+ * @param {{saveFile:Function, deleteFile:Function, config:object, github?:object, fetchImpl?:Function, now?:Date}} deps
  */
 export async function ingestInboundReply(raw, deps) {
   const v = validateInboundPayload(raw);
   if (!v.ok) return { status: 422, body: { error: v.error, field: v.field } };
-  const { token, from, subject, messageId, text, html, headers, attachments } = v.value;
+  const { token, from, subject, messageId, text, html, headers, attachments, images } = v.value;
 
   const doc = await AppReport.findOne({ replyToken: token }).select('reportId reporterEmail issueNumber').lean();
   if (!doc) return { status: 404, body: { error: 'unknown_token' } };
@@ -427,13 +462,39 @@ export async function ingestInboundReply(raw, deps) {
   const now = deps.now || new Date();
   // כתובת אחרת מזו שבדיווח: נשמר לצוות, אבל לא מתפרסם ב-issue הציבורי בלי בדיקה
   const fromReporter = Boolean(from && doc.reporterEmail && from === doc.reporterEmail.toLowerCase());
+  const duplicate = { status: 200, body: { ok: true, status: 'duplicate', reportId: doc.reportId } };
+  // ה-Worker שולח שוב אחרי כל כשל: בודקים כפילות לפני שמירת התמונות
+  if (messageId && images.length && await AppReport.exists({ reportId: doc.reportId, 'contactLog.messageId': messageId })) return duplicate;
+
+  const tracker = trackingSaver(deps.saveFile);
+  const imageRefs = [];
+  try {
+    for (const [i, image] of images.entries()) {
+      const ext = IMAGE_TYPES[image.mimeType].ext;
+      const saved = await tracker.save(image.buffer, `app-report-${doc.reportId}-reply-image-${i + 1}.${ext}`, image.mimeType, { appReportId: doc.reportId });
+      imageRefs.push({
+        gridfsId: saved.gridfsId, size: image.buffer.length, mimeType: image.mimeType, fileName: image.fileName,
+        ...(fromReporter ? { publicToken: newImageToken() } : {}),
+      });
+    }
+  } catch (err) {
+    console.error('Inbound reply: image storage failed:', err?.message);
+    await deleteSavedFiles(tracker.saved, deps.deleteFile);
+    return { status: 500, body: { error: 'Failed to store attachments' } };
+  }
+
   const entry = {
     direction: 'in', byName: '', subject, message: inboundMessageBody({ text, html }), sentAt: now,
     fromEmail: from || null, messageId, attachments, issueComment: fromReporter ? 'pending' : 'held',
+    ...(imageRefs.length ? { images: imageRefs } : {}),
   };
   const filter = { reportId: doc.reportId, ...(messageId ? { 'contactLog.messageId': { $ne: messageId } } : {}) };
   const upd = await AppReport.updateOne(filter, { $push: { contactLog: entry }, $set: { lastInboundAt: now } });
-  if (!upd.modifiedCount) return { status: 200, body: { ok: true, status: 'duplicate', reportId: doc.reportId } };
+  if (!upd.modifiedCount) {
+    // שני משלוחים של אותו מייל במקביל: רק אחד נשמר, והתמונות של השני נמחקות
+    await deleteSavedFiles(tracker.saved, deps.deleteFile);
+    return duplicate;
+  }
 
   if (fromReporter && doc.issueNumber) {
     // GitHub לא זמין? התשובה כבר שמורה, וה-cron יפרסם אותה
@@ -458,7 +519,7 @@ export async function postInboundComments(reportId, deps) {
     );
     if (!claimed.modifiedCount) continue;
     try {
-      const { url } = await github.createComment(doc.issueNumber, buildInboundComment({ reportId, message: c.message, attachments: c.attachments }));
+      const { url } = await github.createComment(doc.issueNumber, buildInboundComment({ reportId, message: c.message, attachments: c.attachments, images: c.images || [] }));
       await AppReport.updateOne({ reportId }, { $set: { [`${key}.issueComment`]: 'posted', [`${key}.issueCommentUrl`]: url } });
       result.posted += 1;
     } catch (err) {

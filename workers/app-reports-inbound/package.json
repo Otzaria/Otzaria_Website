@@ -5,7 +5,7 @@
   "scripts": {
     "deploy": "wrangler deploy",
     "tail": "wrangler tail",
-    "test": "node smoke.mjs"
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON smoke.mjs"
   },
   "dependencies": {
     "postal-mime": "^4.0.4"

@@ -9,8 +9,10 @@ import connectDBDefault from '../db.js';
 import { readJsonBodyLimited } from '../corrections/report-email.js';
 import { getAppReportsConfig } from './config.js';
 import { ingestInboundReply } from './service.js';
+import { MAX_IMAGES_TOTAL_BYTES } from './validation.js';
 
-export const MAX_INBOUND_BODY_BYTES = 2 * 1024 * 1024;
+// טקסט ו-HTML, ועוד התמונות כ-base64 (4/3)
+export const MAX_INBOUND_BODY_BYTES = 2 * 1024 * 1024 + Math.ceil(MAX_IMAGES_TOTAL_BYTES / 3) * 4;
 
 const json = (body, status = 200) => Response.json(body, { status, headers: { 'cache-control': 'no-store' } });
 
@@ -23,7 +25,7 @@ function bearerMatches(request, secret) {
 
 /**
  * @param {Request} request
- * @param {{config?:object, connectDB?:Function, github?:object, fetchImpl?:Function, now?:Date}} deps
+ * @param {{saveFile:Function, deleteFile:Function, config?:object, connectDB?:Function, github?:object, fetchImpl?:Function, now?:Date}} deps
  */
 export async function handleInboundEmailPost(request, deps = {}) {
   const config = deps.config || getAppReportsConfig();

@@ -33,6 +33,10 @@ export default function CorrectionsListPage() {
   const [view, setView] = useState('queued')
   const [kind, setKind] = useState('')
   const [source, setSource] = useState('')
+  const [book, setBook] = useState('')
+  // השאילתה יוצאת רק אחרי הפסקה בהקלדה, לא על כל אות.
+  const [bookQuery, setBookQuery] = useState('')
+  const [options, setOptions] = useState({ sourceFolders: [], books: [] })
   const [reason, setReason] = useState('')
   const [assignee, setAssignee] = useState('')
   const [handlers, setHandlers] = useState([])
@@ -51,6 +55,8 @@ export default function CorrectionsListPage() {
         if (VIEWS.some((v) => v.id === f.view)) setView(f.view)
         setKind(f.kind || '')
         setSource(f.source || '')
+        setBook(f.book || '')
+        setBookQuery((f.book || '').trim())
         setReason(f.reason || '')
         setAssignee(f.assignee || '')
       }
@@ -61,21 +67,27 @@ export default function CorrectionsListPage() {
   useEffect(() => {
     if (!ready) return
     try {
-      sessionStorage.setItem(FILTERS_KEY, JSON.stringify({ view, kind, source, reason, assignee }))
+      sessionStorage.setItem(FILTERS_KEY, JSON.stringify({ view, kind, source, book, reason, assignee }))
     } catch { /* אחסון חסום */ }
-  }, [ready, view, kind, source, reason, assignee])
+  }, [ready, view, kind, source, book, reason, assignee])
 
   const fetchPage = useCallback(async (skip) => {
     const q = new URLSearchParams({ view, limit: String(PAGE_SIZE), skip: String(skip) })
     if (kind) q.set('kind', kind)
-    if (source.trim()) q.set('source', source.trim())
+    if (source) q.set('source', source)
+    if (bookQuery) q.set('book', bookQuery)
     if (reason) q.set('reason', reason)
     if (assignee) q.set('assignee', assignee)
     const res = await fetch(`/api/corrections/reports?${q}`, { cache: 'no-store' })
     const body = await res.json()
     if (!res.ok) throw new Error(res.status === 403 ? 'אין לך הרשאה לטפל בתיקוני טקסט' : body.error || 'שגיאה בטעינה')
     return body
-  }, [view, kind, source, reason, assignee])
+  }, [view, kind, source, bookQuery, reason, assignee])
+
+  useEffect(() => {
+    const t = setTimeout(() => setBookQuery(book.trim()), 300)
+    return () => clearTimeout(t)
+  }, [book])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -120,6 +132,7 @@ export default function CorrectionsListPage() {
   }, [hasMore, loadMore])
   useEffect(() => {
     fetch('/api/corrections/handlers').then((r) => (r.ok ? r.json() : null)).then((b) => b && setHandlers(b.users)).catch(() => {})
+    fetch('/api/corrections/filters').then((r) => (r.ok ? r.json() : null)).then((b) => b && setOptions(b)).catch(() => {})
   }, [])
 
   return (
@@ -147,7 +160,25 @@ export default function CorrectionsListPage() {
         </label>
         <label className="text-sm">
           תיקיית מקור
-          <input value={source} onChange={(e) => setSource(e.target.value)} placeholder="למשל ToratEmetToOtzaria" className="block mt-1 border rounded-lg px-2 py-1 bg-white" dir="ltr" />
+          <select value={source} onChange={(e) => setSource(e.target.value)} className="block mt-1 border rounded-lg px-2 py-1 bg-white" dir="ltr">
+            <option value="">הכל</option>
+            {/* ערך שמור מסשן קודם שכבר אינו ברשימה — עדיין מוצג כדי שהסינון הפעיל יהיה גלוי */}
+            {source && !options.sourceFolders.includes(source) && <option value={source}>{source}</option>}
+            {options.sourceFolders.map((f) => <option key={f} value={f}>{f}</option>)}
+          </select>
+        </label>
+        <label className="text-sm">
+          ספר
+          <input
+            value={book}
+            onChange={(e) => setBook(e.target.value)}
+            list="corrections-books"
+            placeholder="שם ספר (או חלק ממנו)"
+            className="block mt-1 border rounded-lg px-2 py-1 bg-white"
+          />
+          <datalist id="corrections-books">
+            {options.books.map((b) => <option key={b} value={b} />)}
+          </datalist>
         </label>
         <label className="text-sm">
           סיבת העברה לידני

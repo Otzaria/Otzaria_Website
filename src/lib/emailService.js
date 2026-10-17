@@ -10,6 +10,7 @@ import {
     renderPluginChanges,
     buildStaleReminderHtml,
     formatPluginReportType,
+    isWebPluginReport,
 } from '@/lib/email-templates';
 import { REPLY_ABOVE_MARKER } from '@/lib/app-reports/inbound';
 
@@ -527,7 +528,7 @@ export async function sendPluginApprovalNotification(pluginData) {
     }
 }
 
-// שליחת התראה למפתח התוסף על דיווח שהתקבל ממשתמש באוצריא
+// שליחת התראה למפתח התוסף על דיווח שהתקבל ממשתמש (מתוכנת אוצריא או מדף התוסף באתר)
 export async function sendPluginReportNotification(reportData) {
     try {
         const recipientEmail = (reportData.recipientEmail || '').trim();
@@ -550,6 +551,21 @@ export async function sendPluginReportNotification(reportData) {
         const safeAppVersion = escapeHtml(reportData.appVersion || 'לא צוין');
         const safePlatform = escapeHtml(reportData.platform || 'לא צוין');
         const safeReporterEmail = escapeHtml(reporterEmail);
+
+        // מקור הדיווח קובע את הנוסח: טופס בדף התוסף באתר, או מתוך תוכנת אוצריא.
+        // בדיווח מהאתר אין גרסת תוכנה/מערכת הפעלה — השורות האלה מושמטות.
+        const fromWeb = isWebPluginReport(reportData.platform);
+        const sourceIntro = fromWeb
+            ? 'משתמש שלח דיווח על התוסף שלך דרך דף התוסף באתר אוצריא.'
+            : 'משתמש בתוסף שלך שלח דיווח דרך תוכנת אוצריא.';
+        const sourceFooter = fromWeb
+            ? 'הדיווח נשלח דרך טופס הדיווח בדף התוסף באתר אוצריא.'
+            : 'הדיווח נשלח על ידי משתמש של התוסף דרך תוכנת אוצריא.';
+        const sourceRow = `<p style="margin: 8px 0;"><strong>מקור הדיווח:</strong> ${fromWeb ? 'דף התוסף באתר' : 'תוכנת אוצריא'}</p>`;
+        const appDetailsRows = fromWeb
+            ? ''
+            : `<p style="margin: 8px 0;"><strong>גרסת אוצריא:</strong> ${safeAppVersion}</p>
+                        <p style="margin: 8px 0;"><strong>מערכת הפעלה:</strong> ${safePlatform}</p>`;
 
         const replyToBlock = reporterEmail
             ? `<p style="margin: 8px 0;"><strong>כתובת למענה:</strong> <a href="mailto:${safeReporterEmail}" style="color: #d4a373;">${safeReporterEmail}</a></p>`
@@ -584,14 +600,14 @@ export async function sendPluginReportNotification(reportData) {
                         שלום ${safeRecipientName},
                     </p>
                     <p style="font-size: 16px; line-height: 1.8; margin: 0 0 20px 0;">
-                        משתמש בתוסף שלך שלח דיווח דרך תוכנת אוצריא.
+                        ${sourceIntro}
                     </p>
                     <div style="background-color: #f0f0f0; padding: 20px; border-radius: 8px; margin: 20px 0;">
                         <p style="margin: 8px 0;"><strong>שם התוסף:</strong> ${safePluginName}</p>
                         <p style="margin: 8px 0;"><strong>גרסת התוסף:</strong> ${safePluginVersion}</p>
                         <p style="margin: 8px 0;"><strong>סוג הדיווח:</strong> ${safeReportType}</p>
-                        <p style="margin: 8px 0;"><strong>גרסת אוצריא:</strong> ${safeAppVersion}</p>
-                        <p style="margin: 8px 0;"><strong>מערכת הפעלה:</strong> ${safePlatform}</p>
+                        ${sourceRow}
+                        ${appDetailsRows}
                         ${replyToBlock}
                     </div>
                     <div style="background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin: 20px 0;">
@@ -600,7 +616,7 @@ export async function sendPluginReportNotification(reportData) {
                     </div>
                     ${pluginLinkBlock}
                     <p style="color: #666; font-size: 14px; line-height: 1.8; margin-top: 20px;">
-                        הדיווח נשלח על ידי משתמש של התוסף דרך אוצריא.${reporterEmail ? '' : '<br><strong>זהו מייל אוטומטי — אין להשיב למייל זה.</strong>'}
+                        ${sourceFooter}${reporterEmail ? '' : '<br><strong>זהו מייל אוטומטי — אין להשיב למייל זה.</strong>'}
                     </p>
                 </div>
             </div>

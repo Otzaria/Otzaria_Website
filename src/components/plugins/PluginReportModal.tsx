@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { PLUGIN_REPORT_WEB_PLATFORM } from '@/lib/email-templates'
 
 // חלון קופץ לדיווח לבעל התוסף מתוך דף התוסף באתר.
 // משתמש באותה נקודת קצה שמשמשת את תוכנת אוצריא (POST /api/plugin-reports).
@@ -58,7 +59,8 @@ export default function PluginReportModal({ plugin, defaultEmail, onClose, onSuc
           reportType,
           details: trimmed,
           reporterEmail: reporterEmail.trim() || undefined,
-          platform: 'web',
+          // מזהה מקור: קובע את נוסח המייל למפתח ("מדף התוסף באתר" ולא "מהתוכנה")
+          platform: PLUGIN_REPORT_WEB_PLATFORM,
         }),
       })
       const result = await response.json().catch(() => ({}))
