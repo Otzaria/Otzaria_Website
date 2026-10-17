@@ -127,6 +127,12 @@ jobs:
       - name: Verify deployment regressions
         run: npm run test:deployment-regressions
 
+      # תת-קבוצה מהירה של vitest — רכיבי המעטפת והדפים הציבוריים (כותרת, תפריטים, דף הבית,
+      # מדריכים, UI משותף). הריצה המלאה ארוכה מדי לכל פריסה; זו שומרת על מה שכל מבקר רואה.
+      # testTimeout מוגדל: render של RTL על runner איטי חרג לפעמים מ-5 השניות של ברירת המחדל.
+      - name: Run UI component tests (vitest subset)
+        run: npx vitest run --testTimeout=20000 src/components/ui src/components/layout src/components/home src/components/offline src/components/docs src/components/notFound
+
       - name: Try to Build
         run: npm run build
 
