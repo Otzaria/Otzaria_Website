@@ -110,7 +110,7 @@ export default function LibraryBooksPage() {
     <div className="min-h-screen flex flex-col bg-background pb-12">
       <Header />
       
-      <main className="flex-1 container mx-auto px-4 py-8">
+      <main id="main-content" className="flex-1 container mx-auto px-4 py-8">
         <div className="max-w-7xl mx-auto flex flex-col gap-8">
             
             <div className="flex flex-col lg:flex-row gap-6 items-stretch">

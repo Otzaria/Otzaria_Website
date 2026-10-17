@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { clampPoint, computeMovedRect, computeResizedRect } from './imagePanelGeometry'
+import Loader from '@/components/ui/Loader'
 
 const ResizeHandle = ({ cursor, position, handle, onResize, zoom }) => (
   <div
@@ -523,9 +524,9 @@ export default function ImagePanel({
                     title="זהה טקסט"
                     style={{ transform: `scale(${100 / imageZoom})`, transformOrigin: 'top right', cursor: 'pointer' }}
                   >
-                    <span className={`material-symbols-outlined text-[18px] ${isOcrProcessing ? 'animate-spin' : ''}`}>
-                      {isOcrProcessing ? 'progress_activity' : 'check'}
-                    </span>
+                    {isOcrProcessing
+                      ? <Loader size="inline" decorative className="text-[18px]" />
+                      : <span className="material-symbols-outlined text-[18px]">check</span>}
                   </button>
                 </div>
               )}

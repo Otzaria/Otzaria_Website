@@ -47,7 +47,7 @@ export default function OcrTrainingListClient({ initialPages, loadError }) {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <Header />
-      <main className="flex-1 w-full px-6 py-10">
+      <main id="main-content" className="flex-1 w-full px-6 py-10">
         <div className="max-w-5xl mx-auto">
           <div className="mb-6">
             <h1 className="text-3xl font-bold text-on-surface flex items-center gap-3">

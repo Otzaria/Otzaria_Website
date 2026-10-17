@@ -26,7 +26,17 @@ describe('מצב השיוך בדיווח שאינו בטיפולי', () => {
     renderWith({ status: 'claimed', assignee: 'other', assigneeName: 'ראובן', leaseExpiresAt: new Date(Date.now() - HOUR).toISOString() })
     expect(screen.getByText(/הטיפול של/).textContent).toMatch(/פג ב-/)
     expect(screen.queryByText('הדיווח אינו משויך למטפל.')).toBeNull()
-    expect(screen.getByRole('button', { name: /קח לטיפול/ })).toBeTruthy()
+    // אין "קח לטיפול" נפרד (5898a91): הפעולות מוצגות, וכל פעולה לוקחת את הדיווח קודם.
+    expect(screen.getByText('כל פעולה תשייך אותו אליך.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /קח לטיפול/ })).toBeNull()
+    expect(screen.getByRole('button', { name: /עריכה ואז אישור/ })).toBeTruthy()
+    // "שחרור" רק כשהדיווח בטיפולך
+    expect(screen.queryByRole('button', { name: /שחרור/ })).toBeNull()
+  })
+
+  it('שיוך בתוקף של מטפל אחר — בלי פעולות', () => {
+    renderWith({ status: 'claimed', assignee: 'other', assigneeName: 'ראובן', leaseExpiresAt: new Date(Date.now() + HOUR).toISOString() })
+    expect(screen.queryAllByRole('button')).toHaveLength(0)
   })
 })
 

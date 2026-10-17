@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { apiGet, apiPut } from '@/lib/api-utils'
+import Loader from '@/components/ui/Loader'
 
 export default function PluginNotificationSettings({ onClose }) {
   const [loading, setLoading] = useState(true)
@@ -48,7 +49,7 @@ export default function PluginNotificationSettings({ onClose }) {
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
         <div className="bg-white rounded-xl p-8 max-w-md w-full mx-4">
           <div className="flex justify-center">
-            <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
+            <Loader size="md" />
           </div>
         </div>
       </div>
@@ -117,7 +118,7 @@ export default function PluginNotificationSettings({ onClose }) {
             disabled={saving}
             className="flex-1 py-3 bg-info-alt-600 text-white rounded-lg font-bold hover:bg-info-alt-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            {saving && <span className="material-symbols-outlined animate-spin">progress_activity</span>}
+            {saving && <Loader size="inline" decorative />}
             {saving ? 'שומר...' : 'שמור'}
           </button>
           <button

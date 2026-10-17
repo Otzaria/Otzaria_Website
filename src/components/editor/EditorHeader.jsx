@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { getAvatarColor, getInitial } from '@/lib/avatar-colors'
+import Loader from '@/components/ui/Loader'
 
 export default function EditorHeader({ bookName, pageNumber, bookPath, session, saveStatus, onToggleFullScreen }) {
   return (
@@ -41,7 +42,7 @@ export default function EditorHeader({ bookName, pageNumber, bookPath, session, 
               )}
               {saveStatus === 'saving' && (
                 <div className="flex items-center gap-2 text-sm text-info-600 animate-in fade-in duration-300">
-                  <span className="material-symbols-outlined text-base animate-spin">sync</span>
+                  <Loader size="inline" decorative className="text-base" />
                   <span>שומר...</span>
                 </div>
               )}

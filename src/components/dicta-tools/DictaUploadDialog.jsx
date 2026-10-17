@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import Loader from '@/components/ui/Loader'
 
 export default function DictaUploadDialog({ bookTitle, onConfirm, onCancel, loading }) {
   useEffect(() => {
@@ -65,7 +66,7 @@ export default function DictaUploadDialog({ bookTitle, onConfirm, onCancel, load
           >
             {loading ? (
               <>
-                <span className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-white"></span>
+                <Loader size="inline" decorative className="text-xl" />
                 <span>מעלה...</span>
               </>
             ) : (

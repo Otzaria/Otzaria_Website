@@ -5,18 +5,18 @@ export const metadata = {
   description: 'ניהול ועריכת ספרים',
 }
 
+/**
+ * העוטף של כל דפי הספרייה. <div> ולא <main>: כל עמוד מצייר את הכותרת (Header) בעצמו,
+ * ומיד אחריה <main id="main-content"> משלו. עוטף <main> כאן היה יוצר <main> מקונן,
+ * ומכניס את הכותרת לתוך התוכן הראשי (ואז היא לא מזוהה כ-banner).
+ */
 export default function LibraryLayout({ children }) {
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      {/* Header יוצג בכל דפי הספרייה */}
-      {/* <Header /> כבר נמצא בתוך הדפים הספציפיים בקוד המקורי, 
-          אך עדיף שיהיה כאן אם רוצים אותו בכל הספרייה. 
-          לבינתיים נשאיר אותו בדפים כדי לא לשבור עיצוב קיים. */}
-      
-      <main className="flex-1">
+      <div className="flex-1">
         {children}
-      </main>
-      
+      </div>
+
       <Footer />
     </div>
   )

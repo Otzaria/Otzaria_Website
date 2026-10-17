@@ -12,6 +12,7 @@
 // - onClose(): נקרא בסגירה
 
 import { createPortal } from 'react-dom'
+import Loader from '@/components/ui/Loader'
 
 export default function AssignCategoriesModal({ plugin, categories, assignedCategoryIds, processingCategoryId, onToggle, onClose }) {
   return createPortal(
@@ -65,7 +66,7 @@ export default function AssignCategoriesModal({ plugin, categories, assignedCate
                       <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-xs font-bold text-on-surface/60">מוסתרת</span>
                     )}
                     {processing && (
-                      <span className="material-symbols-outlined animate-spin text-base text-primary">progress_activity</span>
+                      <Loader size="inline" label="מעדכן…" tone="primary" className="text-base" />
                     )}
                   </label>
                 )

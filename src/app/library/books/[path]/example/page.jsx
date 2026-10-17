@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import ImagePanel from '@/components/editor/ImagePanel'
+import Loader from '@/components/ui/Loader'
 
 export default function ExamplePageViewer() {
   const params = useParams()
@@ -71,16 +72,15 @@ export default function ExamplePageViewer() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-neutral-50 gap-4">
-        <span className="material-symbols-outlined animate-spin text-5xl text-info-600">progress_activity</span>
-        <p className="text-neutral-600 font-medium">טוען עמוד דוגמא...</p>
-      </div>
+      <main id="main-content" className="min-h-screen flex flex-col items-center justify-center bg-neutral-50 gap-4">
+        <Loader size="lg" label="טוען עמוד דוגמא…" />
+      </main>
     )
   }
 
   if (error) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-neutral-50">
+      <main id="main-content" className="min-h-screen flex flex-col items-center justify-center bg-neutral-50">
         <div className="bg-white p-8 rounded-2xl shadow-lg text-center max-w-md">
             <span className="material-symbols-outlined text-6xl text-danger-500 mb-4">error_outline</span>
             <h1 className="text-2xl font-bold text-neutral-900 mb-2">שגיאה</h1>
@@ -92,14 +92,14 @@ export default function ExamplePageViewer() {
                 סגור חלונית
             </button>
         </div>
-      </div>
+      </main>
     )
   }
 
   const { twoColumns, rightColumn, leftColumn, content, rightColumnName, leftColumnName } = data.text;
 
   return (
-    <div className="h-screen flex flex-col bg-neutral-100 overflow-hidden" dir="rtl">
+    <main id="main-content" className="h-screen flex flex-col bg-neutral-100 overflow-hidden" dir="rtl">
       
       <header className="bg-white border-b border-neutral-200 px-6 py-3 flex items-center justify-between shadow-sm z-10">
         <div className="flex items-center gap-3">
@@ -186,6 +186,6 @@ export default function ExamplePageViewer() {
 
         </div>
       </div>
-    </div>
+    </main>
   )
 }

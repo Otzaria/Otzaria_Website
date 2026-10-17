@@ -102,7 +102,7 @@ function GridLink({ className = '' }) {
 // useSearchParams דורש גבול-Suspense בדף (אחרת בניית Next נכשלת)
 export default function PageProofVolunteerPage() {
   return (
-    <Suspense fallback={<LoadingSpinner message="טוען..." />}>
+    <Suspense fallback={<main id="main-content"><LoadingSpinner message="טוען..." /></main>}>
       <PageProofVolunteer />
     </Suspense>
   )
@@ -362,7 +362,7 @@ function PageProofVolunteer() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <Header />
-      <main className="w-full flex-1 px-3 py-4 lg:px-6">
+      <main id="main-content" className="w-full flex-1 px-3 py-4 lg:px-6">
         <div className="mx-auto flex max-w-[1800px] flex-col gap-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>

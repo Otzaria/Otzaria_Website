@@ -7,6 +7,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import CompleteProfileForm from '@/components/auth/CompleteProfileForm'
 import { SIGNUP_INTENT_KEY } from '@/lib/googleSignup'
+import Loader from '@/components/ui/Loader'
 
 function readSignupIntent() {
   try {
@@ -110,7 +111,7 @@ function CompleteProfileContent() {
   if (!pending) {
     return card(
       <div className="flex justify-center py-8">
-        <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
+        <Loader size="md" />
       </div>
     )
   }
@@ -166,12 +167,12 @@ function CompleteProfileContent() {
 
 export default function CompleteProfilePage() {
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-gradient-to-bl from-primary-container via-background to-secondary-container" dir="rtl">
+    <main id="main-content" className="min-h-screen flex items-center justify-center px-4 py-12 bg-gradient-to-bl from-primary-container via-background to-secondary-container" dir="rtl">
       <Suspense fallback={
-        <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
+        <Loader size="lg" />
       }>
         <CompleteProfileContent />
       </Suspense>
-    </div>
+    </main>
   )
 }

@@ -278,7 +278,7 @@ export default function OcrLinesPage() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <Header />
-      <main className="flex-1 w-full px-6 py-10">
+      <main id="main-content" className="flex-1 w-full px-6 py-10">
         <div className="max-w-5xl mx-auto">
           <div className="mb-6 flex items-start justify-between flex-wrap gap-3">
             <div>

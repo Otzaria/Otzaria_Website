@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Loader from '@/components/ui/Loader'
 
 /**
  * EmailChangeModal - מודל עדכון כתובת מייל בדשבורד המשתמש
@@ -124,7 +125,7 @@ export default function EmailChangeModal({ onClose, currentEmail, showAlert, sho
             >
                 {updatingEmail ? (
                 <>
-                    <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+                    <Loader size="inline" decorative className="text-sm" />
                     <span>מעדכן...</span>
                 </>
                 ) : (

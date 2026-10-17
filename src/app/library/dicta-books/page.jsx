@@ -337,7 +337,7 @@ function DictaBooksContent() {
     <div className="min-h-screen bg-[#f8f9fa]">
       <Header />
       
-      <main className="container mx-auto px-4 py-12">
+      <main id="main-content" className="container mx-auto px-4 py-12">
         <div className="max-w-6xl mx-auto">
           
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-4">
@@ -381,7 +381,7 @@ function DictaBooksContent() {
 
           <div className="flex flex-col md:flex-row gap-4 mb-8">
             <div className="relative flex-1">
-              <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-neutral-cool-400 w-5 h-5">
+              <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-neutral-cool-400 text-xl">
                 search
               </span>
               <input 
@@ -588,9 +588,9 @@ function DictaBooksContent() {
 export default function DictaBooksPublicPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa]">
+      <main id="main-content" className="min-h-screen flex items-center justify-center bg-[#f8f9fa]">
         <LoadingSpinner message="" />
-      </div>
+      </main>
     }>
       <DictaBooksContent />
     </Suspense>

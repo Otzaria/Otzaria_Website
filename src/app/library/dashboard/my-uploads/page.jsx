@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import Header from '@/components/layout/Header'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import Loader from '@/components/ui/Loader'
 
 export default function PersonalLibraryPage() {
   const [flatBooks, setFlatBooks] = useState([])
@@ -51,7 +52,7 @@ export default function PersonalLibraryPage() {
     <div className="min-h-screen flex flex-col bg-background pb-12">
       <Header />
       
-      <main className="flex-1 container mx-auto px-4 py-8">
+      <main id="main-content" className="flex-1 container mx-auto px-4 py-8">
         <div className="max-w-7xl mx-auto flex flex-col gap-8">
             
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
@@ -235,7 +236,7 @@ function UploadModal({ onClose, onSuccess }) {
                     >
                         {isUploading ? (
                             <>
-                             <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+                             <Loader size="inline" decorative className="text-sm" />
                              מעלה...
                             </>
                         ) : 'העלה'}

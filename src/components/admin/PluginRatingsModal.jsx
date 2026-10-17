@@ -12,6 +12,7 @@ import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useDialog } from '@/components/providers/DialogContext'
 import { formatAdminDate } from '@/app/library/admin/plugins/formatAdminDate'
+import Loader from '@/components/ui/Loader'
 
 export default function PluginRatingsModal({ plugin, onClose }) {
   const { showAlert, showConfirm } = useDialog()
@@ -157,9 +158,9 @@ export default function PluginRatingsModal({ plugin, onClose }) {
                             : 'bg-danger-100 text-danger-700 hover:bg-danger-200'
                         }`}
                       >
-                        <span className="material-symbols-outlined text-base">
-                          {processingId === rating.id ? 'progress_activity' : rating.isHidden ? 'visibility' : 'visibility_off'}
-                        </span>
+                        {processingId === rating.id
+                          ? <Loader size="inline" decorative className="text-base" />
+                          : <span className="material-symbols-outlined text-base">{rating.isHidden ? 'visibility' : 'visibility_off'}</span>}
                         <span>{rating.isHidden ? 'החזר' : 'הסתר'}</span>
                       </button>
                     </div>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { validatePassword, validateMatch, validateDifferent } from '@/lib/validation-utils'
+import Loader from '@/components/ui/Loader'
 
 /**
  * PasswordChangeModal - מודל שינוי סיסמה בדשבורד המשתמש
@@ -227,7 +228,7 @@ export default function PasswordChangeModal({ hasPassword = true, onClose, showA
             >
                 {loadingPassword ? (
                 <>
-                    <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+                    <Loader size="inline" decorative className="text-sm" />
                     <span>משנה סיסמה...</span>
                 </>
                 ) : (

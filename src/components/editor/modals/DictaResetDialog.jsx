@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import Loader from '@/components/ui/Loader'
 
 // דיאלוג אישור לאיפוס עריכת ספר דיקטה (חזרה למקור מגיטהאב/העלאות).
 export default function DictaResetDialog({ bookTitle, onConfirm, onCancel, loading, isEditCopy }) {
@@ -49,7 +50,7 @@ export default function DictaResetDialog({ bookTitle, onConfirm, onCancel, loadi
           >
             {loading ? (
               <>
-                <span className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-white"></span>
+                <Loader size="inline" decorative className="text-xl" />
                 <span>מאפס...</span>
               </>
             ) : (
