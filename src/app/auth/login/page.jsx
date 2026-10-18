@@ -22,7 +22,7 @@ export default async function LoginPage({ searchParams }) {
   if (session) redirect(getSafeCallbackUrl(callbackUrl))
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-gradient-to-bl from-primary-container via-background to-secondary-container">
+    <main id="main-content" className="min-h-screen flex items-center justify-center px-4 py-12 bg-gradient-to-bl from-primary-container via-background to-secondary-container">
       {/* key: ניווט צד-לקוח לאותו דף עם פרמטרים אחרים מאתחל את הטופס, כמו
           שה-useEffect על searchParams עשה קודם להודעת השגיאה */}
       <LoginForm
@@ -31,6 +31,6 @@ export default async function LoginPage({ searchParams }) {
         initialError={loginErrorMessage(errorType)}
         googleEnabled={isGoogleAuthConfigured()}
       />
-    </div>
+    </main>
   )
 }

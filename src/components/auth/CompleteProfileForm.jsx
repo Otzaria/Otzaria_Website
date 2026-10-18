@@ -1,4 +1,5 @@
 'use client'
+import Loader from '@/components/ui/Loader'
 
 // טופס השלמת הרשמה שהתחילה ב-Google: המייל כבר מאומת ומוצג לקריאה בלבד,
 // והמשתמש בוחר שם משתמש ומאשר קבלת עדכונים (כמו בהרשמה הרגילה).
@@ -66,7 +67,7 @@ export default function CompleteProfileForm({
       >
         {loading ? (
           <>
-            <span className="material-symbols-outlined animate-spin">progress_activity</span>
+            <Loader size="inline" decorative />
             <span>יוצר חשבון...</span>
           </>
         ) : (

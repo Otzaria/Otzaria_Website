@@ -2,6 +2,7 @@
 import { useSession } from 'next-auth/react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
+import Loader from '@/components/ui/Loader'
 
 export default function ReminderGuard({ children }) {
     const { data: session, status } = useSession();
@@ -59,7 +60,7 @@ export default function ReminderGuard({ children }) {
 function LoadingScreen() {
     return (
         <div className="min-h-screen flex items-center justify-center bg-neutral-50">
-            <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
+            <Loader size="lg" />
         </div>
     );
 }

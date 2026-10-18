@@ -8,8 +8,8 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner'
  */
 export default function LibraryLoading() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
+    <main id="main-content" className="min-h-screen flex items-center justify-center bg-background">
       <LoadingSpinner message="טוען..." size="lg" />
-    </div>
+    </main>
   )
 }

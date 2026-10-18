@@ -1,29 +1,30 @@
 import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
-import FaqListClient from './FaqListClient'
+import FaqList from '@/components/faq/FaqList'
+import IconTile from '@/components/ui/IconTile'
+import PageHeader from '@/components/ui/PageHeader'
+import Section from '@/components/ui/Section'
+import { categories, faqs } from '@/lib/faq-data'
 
-// רכיב שרת: רק רשימת השאלות (סינון + אקורדיון) רצה בדפדפן.
+// עיצוב כיוון א' (כמו /offline ו-/docs): אריח אייקון, כותרת + קישוט, ומתחתיה השאלות מקובצות לפי
+// קטגוריה. רכיב שרת: רק רשימת השאלות (סינון + עוגנים) רצה בדפדפן. בלי אנימציית כניסה — הכותרת
+// היא אלמנט ה-LCP.
 export default function FAQPage() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex min-h-screen flex-col overflow-x-clip bg-background text-on-surface">
       <OtzariaSoftwareHeader />
 
-      <main className="py-12 px-4">
-        <div className="container mx-auto max-w-4xl">
-          <div className="text-center mb-12">
-            <h1 className="text-4xl font-bold text-primary mb-4 font-frank">
-              שאלות נפוצות
-            </h1>
-            <p className="text-on-surface/70 text-lg">
-              מענה לשאלות הנפוצות ביותר על תוכנת אוצריא
-            </p>
+      <main id="main-content" className="flex-1">
+        <Section labelledBy="faq-title" container="narrow" spacing="none" className="pt-10 pb-14 md:pt-14 md:pb-16">
+          <div className="mb-4 flex justify-center">
+            <IconTile icon="quiz" size="lg" />
           </div>
-
-          <FaqListClient />
-        </div>
+          <PageHeader id="faq-title" title="שאלות נפוצות" subtitle="מענה לשאלות הנפוצות ביותר על תוכנת אוצריא" />
+          <FaqList categories={categories} faqs={faqs} />
+        </Section>
       </main>
 
-      <OtzariaSoftwareFooter />
+      <OtzariaSoftwareFooter className="mt-20" />
     </div>
   )
 }

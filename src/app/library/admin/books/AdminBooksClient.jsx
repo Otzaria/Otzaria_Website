@@ -14,6 +14,7 @@ import BookSubscribersModal from '@/components/admin/BookSubscribersModal'
 import MergeBooksDialog from '@/components/admin/MergeBooksDialog'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import Loader from '@/components/ui/Loader'
 
 export default function AdminBooksClient({ initialBooks }) {
   const { showAlert, showConfirm } = useDialog()
@@ -616,9 +617,9 @@ export default function AdminBooksClient({ initialBooks }) {
                                 className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-danger-50 text-danger-700 hover:bg-danger-100 rounded-lg text-sm font-medium transition-colors mb-1 disabled:opacity-60 disabled:cursor-not-allowed"
                                 title="הורד את הספר המלא כקובץ PDF (מתמונות העמודים)"
                             >
-                                <span className={`material-symbols-outlined text-sm ${downloadingPdfId === book.id ? 'animate-spin' : ''}`}>
-                                    {downloadingPdfId === book.id ? 'progress_activity' : 'picture_as_pdf'}
-                                </span>
+                                {downloadingPdfId === book.id
+                                    ? <Loader size="inline" decorative className="text-sm" />
+                                    : <span className="material-symbols-outlined text-sm">picture_as_pdf</span>}
                                 {downloadingPdfId === book.id ? 'מכין PDF…' : 'הורד PDF מלא'}
                             </button>
 

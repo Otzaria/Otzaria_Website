@@ -3,54 +3,10 @@
  * ============================================================ */
 
 @layer utilities {
-  @keyframes float {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-20px); }
-  }
-
-  @keyframes pulse-glow {
-    0%, 100% { box-shadow: 0 0 20px rgba(107, 93, 79, 0.3); }
-    50% { box-shadow: 0 0 40px rgba(107, 93, 79, 0.6); }
-  }
-
-  @keyframes shimmer {
-    0% { background-position: -1000px 0; }
-    100% { background-position: 1000px 0; }
-  }
-
   @keyframes shake {
     0%, 100% { transform: translateX(0); }
     10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
     20%, 40%, 60%, 80% { transform: translateX(5px); }
-  }
-
-  /* נענוע חד-פעמי של אייקון בריחוף (כרטיסי היכולות בדף הבית) — מקביל ל-
-     rotate: [0, -10, 10, -10, 0] של framer-motion. מאפיין rotate נפרד ולא
-     transform, כדי לא לדרוס את scale של הריחוף. */
-  @keyframes icon-wiggle {
-    0%, 100% { rotate: 0deg; }
-    25% { rotate: -10deg; }
-    50% { rotate: 10deg; }
-    75% { rotate: -10deg; }
-  }
-
-  .animate-float {
-    animation: float 6s ease-in-out infinite;
-  }
-
-  .animate-pulse-glow {
-    animation: pulse-glow 3s ease-in-out infinite;
-  }
-
-  .animate-shimmer {
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      rgba(255, 255, 255, 0.1) 50%,
-      transparent 100%
-    );
-    background-size: 1000px 100%;
-    animation: shimmer 3s infinite;
   }
 
   .animate-shake {
@@ -73,16 +29,8 @@
     from { opacity: 0; transform: translateY(20px); }
   }
 
-  @keyframes enter-down {
-    from { opacity: 0; transform: translateY(-20px); }
-  }
-
   @keyframes enter-scale {
     from { opacity: 0; transform: scale(0.95); }
-  }
-
-  @keyframes enter-pop {
-    from { opacity: 0; transform: scale(0) rotate(-180deg); }
   }
 
   /* הודעה שנכנסת מלמטה (toast) */
@@ -126,16 +74,8 @@
     animation: enter-up 0.6s ease-out backwards;
   }
 
-  .animate-enter-down {
-    animation: enter-down 0.6s ease-out backwards;
-  }
-
   .animate-enter-scale {
     animation: enter-scale 0.6s ease-out backwards;
-  }
-
-  .animate-enter-pop {
-    animation: enter-pop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
   }
 
   .animate-enter-toast {
@@ -166,11 +106,148 @@
     animation: pan 5s linear infinite;
   }
 
+  /* הספר המוזהב נפתח (GoldenBook): רצועה אופקית של 24 פריימים. התמונה עצמה (background-image)
+     נקבעת ב-GoldenBook.tsx — שם הנתיב היחיד שלה. background-size 2400% = פריים אחד ברוחב
+     האלמנט; steps(23) עובר 0%→100% ב-23 קפיצות = 24 פריימים, 24fps כמו במתקין. */
+  @keyframes golden-book-open {
+    from { background-position: 0% 0; }
+    to { background-position: 100% 0; }
+  }
+
+  .golden-book-sprite {
+    background-size: 2400% 100%;
+    background-repeat: no-repeat;
+    animation: golden-book-open 1s steps(23) forwards;
+  }
+
+  /* ============================================================
+   * הכותרת העליונה: צל רך כשהדף נגלל מתחתיה (במקום קו תחתון קבוע).
+   * מקושר לגלילה בלי JS; דפדפן בלי animation-timeline — בלי צל, כמו קודם.
+   * ============================================================ */
+  @keyframes site-header-lift {
+    from { box-shadow: 0 0 0 0 transparent, 0 0 0 0 transparent; }
+    to {
+      box-shadow:
+        0 1px 0 0 color-mix(in srgb, var(--color-shadow) 5%, transparent),
+        0 8px 20px -10px color-mix(in srgb, var(--color-shadow) 28%, transparent);
+    }
+  }
+
+  @supports (animation-timeline: scroll()) {
+    .site-header {
+      animation: site-header-lift linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 0 32px;
+    }
+  }
+
+  /* ============================================================
+   * מעבר שם האתר (דף הבית): המילה "אוצריא" שבכותרת הראשית נגללת עם הדף אל מתחת לכותרת
+   * העליונה (כמו ה-large title של iOS), וכשהיא מוסתרת שם כולה — שם האתר שליד הלוגו נכנס.
+   * המצב נמדד ב-JS (src/hooks/useWordmarkHandoff.js, IntersectionObserver) ונכתב על <html>;
+   * כאן רק transition קצר של opacity ו-transform — בזמן, לא לפי הגלילה, ואותו דבר בכל הדפדפנים.
+   *
+   * data-wordmark-handoff על <html>:
+   *   (אין)  — לפני ה-hydration: שם האתר מוסתר (המילה בגיבור היא השם).
+   *   hero   — המילה בגיבור נראית: שם האתר מוסתר.
+   *   docked — המילה מתחת לכותרת: שם האתר מוצג.
+   *   off    — אין כותרת ראשית בדף / אי אפשר למדוד: שם אתר רגיל.
+   * כניסה: 260ms, האטה חזקה בסוף (emphasized decelerate) ועלייה של 0.3em — "מתיישב" במקומו.
+   * יציאה: 140ms, מהירה ובלי תזוזה — לא מושכת את העין כשחוזרים לראש הדף.
+   * reduced-motion: בלי תזוזה ובלי מעבר — השם פשוט מופיע/נעלם.
+   * ============================================================ */
+  .wordmark-handoff-target {
+    opacity: 0;
+    transform: translateY(0.3em);
+    transition: opacity 140ms ease-in, transform 0s linear 140ms;
+  }
+
+  :root[data-wordmark-handoff='docked'] .wordmark-handoff-target,
+  :root[data-wordmark-handoff='off'] .wordmark-handoff-target {
+    opacity: 1;
+    transform: none;
+    transition: opacity 260ms cubic-bezier(0.2, 0, 0, 1), transform 260ms cubic-bezier(0.2, 0, 0, 1);
+  }
+
   @media (prefers-reduced-motion: reduce) {
+    .wordmark-handoff-target,
+    :root[data-wordmark-handoff='docked'] .wordmark-handoff-target,
+    :root[data-wordmark-handoff='off'] .wordmark-handoff-target {
+      transform: none;
+      transition: none;
+    }
+  }
+
+  /* ============================================================
+   * "חינם" → "חינם לנצח!" מתחת לספר בגיבור (ForeverTagline) — פעם אחת, ונעצר.
+   *
+   * השורה עצמה היא תמיד הצירוף המלא "חינם לנצח!" (ממורכז, ולכן המקום שמור ברוחבו המלא
+   * ואין קפיצת layout). התנועה היא רק transform/opacity/filter, עם fill-mode forwards:
+   *   0–0.6s     "חינם" עולה מטשטוש — ממורכז לבד (מוזז שמאלה ב---forever-shift = חצי
+   *              רוחב "לנצח!" + חצי הרווח; ה-JS מודד רק את המספר הזה)
+   *   1.5–2.2s   "חינם" מחליק ימינה (RTL: "לנצח!" בא אחריו) למקומו בצירוף
+   *   1.75s+     "לנצח!" נכנס למקום שהתפנה, אות אחר אות (60ms ביניהן) — fade, עלייה
+   *              קצרה וטשטוש שמתבהר, כך שהוא "נכנס למקום" ולא "קופץ" — ו"חינם לנצח!"
+   *              נשאר ממורכז.
+   * מתחיל ב-data-state="play" — אחרי שהספר סיים להיפתח (HeroEmblem).
+   * ============================================================ */
+  @keyframes forever-enter {
+    from { opacity: 0; transform: translateY(0.35em); filter: blur(10px); }
+    to { opacity: 1; transform: none; filter: blur(0); }
+  }
+
+  @keyframes forever-slide {
+    from { transform: translateX(calc(var(--forever-shift, 1.6em) * -1)); }
+    to { transform: translateX(0); }
+  }
+
+  @keyframes forever-letter {
+    from { opacity: 0; transform: translateY(0.3em); filter: blur(8px); }
+    to { opacity: 1; transform: none; filter: blur(0); }
+  }
+
+  .forever-line,
+  .forever-letter {
+    opacity: 0;
+  }
+
+  .forever-first {
+    transform: translateX(calc(var(--forever-shift, 1.6em) * -1));
+  }
+
+  .forever-letter {
+    display: inline-block;
+  }
+
+  [data-state='play'] .forever-line {
+    animation: forever-enter 600ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  [data-state='play'] .forever-first {
+    /* האטה רכה בשני הקצוות — החלקה, לא דחיפה */
+    animation: forever-slide 700ms cubic-bezier(0.65, 0, 0.35, 1) 1.5s forwards;
+  }
+
+  [data-state='play'] .forever-letter {
+    animation: forever-letter 650ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation-delay: calc(1.75s + var(--i, 0) * 60ms);
+  }
+
+  /* בלי תנועה: "חינם לנצח!" סטטי, ממורכז, מיד */
+  @media (prefers-reduced-motion: reduce) {
+    .forever-line,
+    .forever-first,
+    .forever-letter {
+      opacity: 1;
+      transform: none;
+      animation: none !important;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-shake,
     .animate-enter-up,
-    .animate-enter-down,
     .animate-enter-scale,
-    .animate-enter-pop,
     .animate-enter-toast,
     .animate-enter-dialog,
     .animate-enter-fade,
@@ -179,6 +256,11 @@
     .animate-drift,
     .animate-pan {
       animation: none;
+    }
+
+    .golden-book-sprite {
+      animation: none;
+      background-position: 100% 0;
     }
   }
 }

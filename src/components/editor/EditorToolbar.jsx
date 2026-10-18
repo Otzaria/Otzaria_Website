@@ -1,4 +1,5 @@
 import { withShortcut } from '@/lib/shortcuts';
+import Loader from '@/components/ui/Loader'
 
 export default function EditorToolbar({
   pageNumber,
@@ -108,12 +109,13 @@ export default function EditorToolbar({
       <button
         onClick={ocrMethod === 'gemini' ? handleGeminiFullPage : toggleSelectionMode}
         disabled={isOcrProcessing || !thumbnailUrl}
+        aria-busy={isOcrProcessing || undefined}
         className={`w-7 h-7 rounded-md border flex items-center justify-center ${isSelectionMode && ocrMethod !== 'gemini' ? 'bg-info-50 text-info-700 border-info-200' : 'bg-white hover:bg-neutral-50 text-neutral-700 border-neutral-200'} disabled:opacity-40`}
         title={ocrMethod === 'gemini' ? "Gemini OCR לעמוד שלם" : tip("זיהוי טקסט מאזור נבחר", 'selectionMode')}
       >
-        <span className={`material-symbols-outlined text-sm ${isOcrProcessing ? 'animate-spin' : ''}`}>
-          {isOcrProcessing ? 'progress_activity' : (ocrMethod === 'gemini' ? 'auto_fix_high' : 'document_scanner')}
-        </span>
+        {isOcrProcessing
+          ? <Loader size="inline" decorative className="text-sm" />
+          : <span className="material-symbols-outlined text-sm">{ocrMethod === 'gemini' ? 'auto_fix_high' : 'document_scanner'}</span>}
       </button>
 
       {selectionRect && (

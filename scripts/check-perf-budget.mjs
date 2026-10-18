@@ -49,12 +49,20 @@ const PAGE_BUDGETS = [
 ]
 
 const ASSET_BUDGETS = [
-  { file: 'public/bg.avif', maxKB: 35 },
-  { file: 'public/bg.webp', maxKB: 145 },
   { file: 'public/logo.webp', maxKB: 15 },
   { file: 'public/logo.png', maxKB: 35 },
   { file: 'src/app/icon.png', maxKB: 8 },
   { file: 'src/app/apple-icon.png', maxKB: 8 },
+  // דף הבית: הספר הסגור הוא תמונת ה-LCP; הרצועה היא הנכס הכבד ביותר בדף.
+  { file: 'public/home/golden-book-closed.webp', maxKB: 23 },
+  { file: 'public/home/golden-book.webp', maxKB: 41 },
+  { file: 'public/home/golden-book-sprite.webp', maxKB: 353 },
+  // גופן שם האתר והכותרות (next/font/local, עם preload) — נטען בכל עמוד. OTVilna-Bold.woff2
+  // נשאר בתיקייה אבל אינו נטען (layout.tsx), ולכן אין לו תקציב; אם יחובר — להוסיף כאן.
+  { file: 'src/app/fonts/OTVilna-Regular.woff2', maxKB: 18 },
+  // כותרות הדפים הישנים (font-frank, בלי preload) — נטען רק בעמוד שמבקש אותו, ורק המשקל שבשימוש.
+  { file: 'src/app/fonts/FrankRuehlCLM-Medium.woff2', maxKB: 20 },
+  { file: 'src/app/fonts/FrankRuehlCLM-Bold.woff2', maxKB: 20 },
 ]
 
 // גופן האייקונים: שמו כולל hash, ולכן מאותר לפי התחילית.

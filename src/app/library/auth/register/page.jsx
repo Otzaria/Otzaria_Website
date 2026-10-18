@@ -6,6 +6,7 @@ import { signIn } from 'next-auth/react'
 import Link from 'next/link'
 import Image from 'next/image'
 import GoogleSignInButton from '@/components/auth/GoogleSignInButton'
+import Loader from '@/components/ui/Loader'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -114,7 +115,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-gradient-to-bl from-primary-container via-background to-secondary-container">
+    <main id="main-content" className="min-h-screen flex items-center justify-center px-4 py-12 bg-gradient-to-bl from-primary-container via-background to-secondary-container">
       <div className="w-full max-w-md">
         <div className="glass-strong rounded-2xl p-8 shadow-2xl">
           {/* Logo */}
@@ -254,7 +255,7 @@ export default function RegisterPage() {
             >
               {loading ? (
                 <>
-                  <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                  <Loader size="inline" decorative />
                   <span>נרשם...</span>
                 </>
               ) : (
@@ -290,6 +291,6 @@ export default function RegisterPage() {
           </div>
         </div>
       </div>
-    </div>
+    </main>
   )
 }

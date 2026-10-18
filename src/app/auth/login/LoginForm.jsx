@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import GoogleSignInButton from '@/components/auth/GoogleSignInButton'
 import { getSafeCallbackUrl } from '@/lib/loginRedirect'
+import Loader from '@/components/ui/Loader'
 
 // ניווט מלא (ולא router.replace צד-לקוח) בכוונה:
 // לאחר signIn ה-cookie נכתב, אך ה-SessionProvider וה-Router Cache של Next
@@ -89,7 +90,7 @@ export default function LoginForm({ callbackUrl = null, initialError = '', googl
   if (status === 'authenticated') {
     return (
       <div className="w-full max-w-md flex justify-center items-center min-h-[400px]">
-        <span className="material-symbols-outlined animate-spin text-4xl text-primary">progress_activity</span>
+        <Loader size="md" />
       </div>
     )
   }
@@ -183,7 +184,7 @@ export default function LoginForm({ callbackUrl = null, initialError = '', googl
             >
               {loading ? (
                 <>
-                  <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                  <Loader size="inline" decorative />
                   <span>מתחבר...</span>
                 </>
               ) : (

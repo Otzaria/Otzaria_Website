@@ -1,6 +1,12 @@
-import Link from 'next/link';
 import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader';
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter';
+import DocsDevelopersCard from '@/components/docs/DocsDevelopersCard';
+import DocsGuideCard from '@/components/docs/DocsGuideCard';
+import DocsHero from '@/components/docs/DocsHero';
+import { PROSE } from '@/components/docs/proseClasses';
+import Card from '@/components/ui/Card';
+import Section from '@/components/ui/Section';
+import SectionHeading from '@/components/ui/SectionHeading';
 import { getUserGuideNav, iconForSlug } from '@/lib/wiki';
 
 export const revalidate = 1800;
@@ -10,6 +16,32 @@ export const metadata = {
   description: 'המדריך המלא לשימוש בתוכנת אוצריא: התקנה, ספרייה, קריאה, חיפוש, הגדרות ועוד',
 };
 
+const WIKI_URL = 'https://github.com/Otzaria/otzaria/wiki';
+
+// מדריכים נוספים (תוכן ייחודי שאינו בוויקי)
+const MORE_GUIDES = [
+  {
+    href: '/docs/dicta',
+    icon: 'edit',
+    title: 'מדריך לטיפול בספרי דיקטה',
+    description: 'יצירת כותרות וניווט בספרים — כולל כלים אוטומטיים',
+  },
+  {
+    href: '/docs/development',
+    icon: 'code',
+    title: 'מדריך פיתוח — עריכת אוצריא',
+    description: 'איך לערוך ולשפר את התוכנה בעצמכם',
+  },
+  {
+    href: '/docs/page-proof',
+    icon: 'fact_check',
+    title: 'הנחיות להגהת עמודים',
+    description: 'דף אחד קצר למתנדבים: מבנה, טקסט, קישורים וזמנים — עם תמונות',
+  },
+];
+
+// עיצוב כיוון א': כותרת + קישוט, ומתחתיה דפי המדריך ככרטיסים בשפת כרטיסי דף הבית
+// (אריח אייקון וכותרת). בלי אנימציית כניסה — הכותרת היא אלמנט ה-LCP.
 export default async function DocsIndexPage() {
   let nav = [];
   try {
@@ -19,97 +51,60 @@ export default async function DocsIndexPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="flex min-h-screen flex-col overflow-x-clip bg-background text-on-surface">
       <OtzariaSoftwareHeader />
 
-      <main className="py-12 px-4">
-        <div className="container mx-auto max-w-6xl">
-          {/* Hero */}
-          <div className="text-center mb-12 glass-strong rounded-2xl p-12">
-            <span className="material-symbols-outlined text-7xl text-primary mb-4 block">menu_book</span>
-            <h1 className="text-4xl font-bold text-primary-dark mb-4 font-frank">מדריך למשתמש</h1>
-            <p className="text-xl text-on-surface/70 max-w-2xl mx-auto">
-              כל מה שצריך לדעת על אוצריא — מההתקנה הראשונה ועד הכלים המתקדמים.
-              המדריך מתעדכן אוטומטית מוויקי הפרויקט.
-            </p>
-          </div>
+      <main id="main-content" className="flex-1">
+        <Section labelledBy="docs-title" spacing="none" className="pt-10 pb-14 md:pt-14 md:pb-16">
+          <DocsHero
+            id="docs-title"
+            icon="menu_book"
+            title="מדריך למשתמש"
+            subtitle={
+              <>
+                כל מה שצריך לדעת על אוצריא — מההתקנה הראשונה ועד הכלים המתקדמים.
+                המדריך מתעדכן אוטומטית מוויקי הפרויקט.
+              </>
+            }
+          />
 
-          {/* דפי המדריך — נטענים דינמית מהוויקי */}
+          {/* דפי המדריך — נטענים דינמית מהוויקי, בסדר הסרגל שלו */}
           {nav.length > 0 ? (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-12">
+            <ul className="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
               {nav.map((item) => (
-                <Link
-                  key={item.slug}
-                  href={`/docs/${item.slug}`}
-                  className="glass-strong rounded-xl p-6 hover:shadow-xl hover:-translate-y-1 transition-all group"
-                >
-                  <span className="material-symbols-outlined text-4xl text-primary mb-3 block group-hover:scale-110 transition-transform">
-                    {iconForSlug(item.slug)}
-                  </span>
-                  <h2 className="text-xl font-bold text-primary-dark">{item.title}</h2>
-                </Link>
+                <li key={item.slug}>
+                  <DocsGuideCard href={`/docs/${item.slug}`} icon={iconForSlug(item.slug)} title={item.title} />
+                </li>
               ))}
-            </div>
+            </ul>
           ) : (
-            <div className="glass-strong rounded-xl p-8 text-center mb-12">
-              <p className="text-lg text-on-surface/70">
+            <Card tone="tonal" padding="lg" role="note" className="mx-auto max-w-narrow text-center">
+              <p className="text-body-md text-on-surface md:text-body-lg">
                 המדריך אינו זמין כרגע — נסו לרענן בעוד רגע, או עיינו בו ישירות{' '}
-                <a
-                  href="https://github.com/Otzaria/otzaria/wiki"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary underline underline-offset-2"
-                >
+                <a href={WIKI_URL} target="_blank" rel="noopener noreferrer" className={PROSE.link}>
                   בוויקי הפרויקט
                 </a>
                 .
               </p>
-            </div>
+            </Card>
           )}
+        </Section>
 
-          {/* מדריכים נוספים (תוכן ייחודי שאינו בוויקי) */}
-          <h2 className="text-2xl font-bold text-primary-dark mb-5 font-frank">מדריכים נוספים</h2>
-          <div className="grid sm:grid-cols-2 gap-5 mb-12">
-            <Link href="/docs/dicta" className="glass-strong rounded-xl p-6 hover:shadow-lg transition-shadow">
-              <span className="material-symbols-outlined text-3xl text-primary mb-2 block">edit</span>
-              <h3 className="text-lg font-bold text-primary-dark mb-1">מדריך לטיפול בספרי דיקטה</h3>
-              <p className="text-sm text-on-surface/60">יצירת כותרות וניווט בספרים — כולל כלים אוטומטיים</p>
-            </Link>
-            <Link href="/docs/development" className="glass-strong rounded-xl p-6 hover:shadow-lg transition-shadow">
-              <span className="material-symbols-outlined text-3xl text-primary mb-2 block">code</span>
-              <h3 className="text-lg font-bold text-primary-dark mb-1">מדריך פיתוח — עריכת אוצריא</h3>
-              <p className="text-sm text-on-surface/60">איך לערוך ולשפר את התוכנה בעצמכם</p>
-            </Link>
-            <Link href="/docs/page-proof" className="glass-strong rounded-xl p-6 hover:shadow-lg transition-shadow">
-              <span className="material-symbols-outlined text-3xl text-primary mb-2 block">fact_check</span>
-              <h3 className="text-lg font-bold text-primary-dark mb-1">הנחיות להגהת עמודים</h3>
-              <p className="text-sm text-on-surface/60">דף אחד קצר למתנדבים: מבנה, טקסט, קישורים וזמנים — עם תמונות</p>
-            </Link>
-          </div>
+        <Section labelledBy="more-guides-heading" spacing="none" className="pb-14 md:pb-20">
+          <SectionHeading id="more-guides-heading" title="מדריכים נוספים" />
+          <ul className="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
+            {MORE_GUIDES.map((guide) => (
+              <li key={guide.href}>
+                <DocsGuideCard {...guide} titleAs="h3" />
+              </li>
+            ))}
+          </ul>
 
-          {/* קישור לתיעוד מפתחים */}
-          <div className="glass-strong rounded-xl p-6 flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-3">
-              <span className="material-symbols-outlined text-3xl text-primary">terminal</span>
-              <div>
-                <div className="font-bold text-primary-dark">מפתחים?</div>
-                <div className="text-sm text-on-surface/60">תיעוד הארכיטקטורה המלא נמצא בוויקי הפרויקט ב-GitHub</div>
-              </div>
-            </div>
-            <a
-              href="https://github.com/Otzaria/otzaria/wiki"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-5 py-2 bg-surface-variant rounded-lg hover:bg-neutral-200 transition-colors font-bold text-primary-dark"
-            >
-              <span className="material-symbols-outlined text-base">open_in_new</span>
-              <span>לתיעוד המפתחים</span>
-            </a>
-          </div>
-        </div>
+          <DocsDevelopersCard href={WIKI_URL} className="mt-8" />
+        </Section>
       </main>
 
-      <OtzariaSoftwareFooter />
+      <OtzariaSoftwareFooter className="mt-20" />
     </div>
   );
 }

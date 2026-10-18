@@ -9,6 +9,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { moveItem, reorderList } from './listReorder'
 import { useDragReorder, StatusBadge, MiniImage, PluginPicker, OrderedPluginRow } from './StoreLayoutShared'
 import CategoryModal from './CategoryModal'
+import Loader from '@/components/ui/Loader'
 
 const DEFAULT_HOME_TITLE = 'חנות התוספים של אוצריא'
 const DEFAULT_HOME_SUBTITLE = 'הרחיבו את אוצריא עם תוספים מהקהילה'
@@ -374,7 +375,7 @@ export default function StoreLayoutTab() {
             >
               {savingSettings ? (
                 <>
-                  <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                  <Loader size="inline" decorative />
                   <span>שומר...</span>
                 </>
               ) : (
@@ -456,9 +457,9 @@ export default function StoreLayoutTab() {
                       className="flex min-w-0 flex-1 items-center gap-3 text-right"
                     >
                       <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                        <span className="material-symbols-outlined text-primary">
-                          {reorderingId === category.id ? 'progress_activity' : (category.icon || 'category')}
-                        </span>
+                        {reorderingId === category.id
+                          ? <Loader size="inline" decorative tone="primary" className="text-2xl" />
+                          : <span className="material-symbols-outlined text-primary">{category.icon || 'category'}</span>}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
@@ -561,9 +562,9 @@ export default function StoreLayoutTab() {
                         className="flex items-center gap-1 rounded-xl bg-warning-100 px-3 py-2 text-sm font-bold text-warning-800 transition-colors hover:bg-warning-200 disabled:cursor-not-allowed disabled:opacity-50"
                         title="הוסף לרשימת הנבחרים בדף הבית"
                       >
-                        <span className="material-symbols-outlined text-base">
-                          {unplacedActionId === plugin.id ? 'progress_activity' : 'star'}
-                        </span>
+                        {unplacedActionId === plugin.id
+                          ? <Loader size="inline" decorative className="text-base" />
+                          : <span className="material-symbols-outlined text-base">star</span>}
                         <span>הוסף לנבחרים</span>
                       </button>
                     )}

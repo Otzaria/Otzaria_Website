@@ -8,7 +8,7 @@ export default function UnauthorizedPage() {
   const router = useRouter()
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-gradient-to-bl from-primary-container via-background to-secondary-container">
+    <main id="main-content" className="min-h-screen flex items-center justify-center px-4 py-12 bg-gradient-to-bl from-primary-container via-background to-secondary-container">
       <div className="w-full max-w-md">
         <div className="glass-strong rounded-2xl p-8 shadow-2xl text-center">
           <div className="flex justify-center mb-6">
@@ -54,6 +54,6 @@ export default function UnauthorizedPage() {
           </div>
         </div>
       </div>
-    </div>
+    </main>
   )
 }

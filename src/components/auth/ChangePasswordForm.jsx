@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { apiPost } from '@/lib/api-utils'
 import { validatePassword, validateMatch, validateDifferent } from '@/lib/validation-utils'
+import Loader from '@/components/ui/Loader'
 
 export default function ChangePasswordForm() {
   const [formData, setFormData] = useState({
@@ -177,7 +178,7 @@ export default function ChangePasswordForm() {
         >
           {loading ? (
             <>
-              <span className="material-symbols-outlined animate-spin">progress_activity</span>
+              <Loader size="inline" decorative />
               <span>משנה סיסמה...</span>
             </>
           ) : (

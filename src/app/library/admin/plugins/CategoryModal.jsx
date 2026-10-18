@@ -15,6 +15,7 @@ import { createPortal } from 'react-dom'
 import { useDialog } from '@/components/providers/DialogContext'
 import { moveItem, reorderList } from './listReorder'
 import { useDragReorder, PluginPicker, OrderedPluginRow } from './StoreLayoutShared'
+import Loader from '@/components/ui/Loader'
 
 // זהה ל-SLUG_RE בצד השרת (src/lib/pluginCategoryAdmin.js)
 // נבדק: לינארי — מפריד '-' חובה בכל איטרציה מונע נסיגה קטסטרופלית
@@ -385,7 +386,7 @@ export default function CategoryModal({ category, pickerOptions, onClose, onChan
             >
               {saving ? (
                 <>
-                  <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                  <Loader size="inline" decorative />
                   <span>שומר...</span>
                 </>
               ) : (
@@ -463,7 +464,7 @@ export default function CategoryModal({ category, pickerOptions, onClose, onChan
               >
                 {savingAssign ? (
                   <>
-                    <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                    <Loader size="inline" decorative />
                     <span>שומר...</span>
                   </>
                 ) : (
@@ -481,7 +482,7 @@ export default function CategoryModal({ category, pickerOptions, onClose, onChan
                 disabled={deleting}
                 className="flex items-center gap-2 rounded-xl bg-danger-100 px-4 py-2.5 font-bold text-danger-700 transition-colors hover:bg-danger-200 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <span className="material-symbols-outlined">{deleting ? 'progress_activity' : 'delete'}</span>
+                {deleting ? <Loader size="inline" decorative className="text-2xl" /> : <span className="material-symbols-outlined">delete</span>}
                 <span>מחק קטגוריה</span>
               </button>
             ) : (

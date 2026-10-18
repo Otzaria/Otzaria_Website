@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useDialog } from '@/components/providers/DialogContext'
+import Loader from '@/components/ui/Loader'
 
 /**
  * BookSubscribersModal - חלון רשימת הרשומים להתראות על ספרים חדשים
@@ -109,8 +110,8 @@ export default function BookSubscribersModal({ isOpen, onClose }) {
 
         <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
           {isLoadingSubscribers ? (
-            <div className="flex justify-center py-8 text-aqua-600">
-              <span className="material-symbols-outlined animate-spin text-3xl">progress_activity</span>
+            <div className="flex justify-center py-8">
+              <Loader size="md" />
             </div>
           ) : subscribersList.length === 0 ? (
             <div className="text-center py-8 text-neutral-400">

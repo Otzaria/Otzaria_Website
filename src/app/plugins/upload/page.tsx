@@ -3,8 +3,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
-import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 import { useDialog } from '@/components/providers/DialogContext'
 import { MIN_SUPPORTED_APP_VERSION } from '@/lib/pluginStatus'
 import { getErrorMessage } from '@/lib/errors'
@@ -327,10 +325,9 @@ export default function UploadPluginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <OtzariaSoftwareHeader showAuth />
+    <div className="flex flex-1 flex-col">
       
-      <main className="flex-1 py-12 px-4">
+      <main id="main-content" className="flex-1 py-12 px-4">
         <div className="container mx-auto max-w-4xl">
           {/* Header */}
           <div className="mb-8">
@@ -582,8 +579,6 @@ export default function UploadPluginPage() {
           </form>
         </div>
       </main>
-
-      <OtzariaSoftwareFooter />
     </div>
   )
 }

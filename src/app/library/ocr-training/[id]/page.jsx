@@ -301,7 +301,7 @@ export default function OcrTrainingEditor() {
     return (
       <div className="flex min-h-screen flex-col bg-background">
         <Header />
-        <div className="text-center p-20 text-on-surface/60">טוען...</div>
+        <main id="main-content" className="text-center p-20 text-on-surface/60">טוען...</main>
       </div>
     )
 
@@ -309,7 +309,7 @@ export default function OcrTrainingEditor() {
     return (
       <div className="flex min-h-screen flex-col bg-background">
         <Header />
-        <div className="text-center p-20 text-danger-500">{error}</div>
+        <main id="main-content" className="text-center p-20 text-danger-500">{error}</main>
       </div>
     )
 
@@ -331,7 +331,7 @@ export default function OcrTrainingEditor() {
           setImgLoaded(true)
         }}
       />
-      <main className="flex-1 w-full px-4 py-6">
+      <main id="main-content" className="flex-1 w-full px-4 py-6">
         <div className="max-w-7xl mx-auto">
           {/* סרגל עליון */}
           <div className="flex items-center justify-between flex-wrap gap-3 mb-4">

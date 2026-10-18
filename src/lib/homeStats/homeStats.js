@@ -1,7 +1,7 @@
-// homeStats — לוגיקה טהורה לאזור "אוצריא במספרים" בדף הבית.
+// homeStats — לוגיקה טהורה לשורת המספרים שבמסך הפתיחה של דף הבית (HeroStats).
 //
 // אין כאן fetch/DB — רק בחירה, ולידציה ועיצוב של נתונים שכבר נשלפו
-// (השליפה עצמה ב-sources.js). כל נתון לא תקין הופך ל-null, והעיגול שלו
+// (השליפה עצמה ב-sources.js). כל נתון לא תקין הופך ל-null, והפריט שלו
 // פשוט לא מוצג — אף פעם לא מציגים 0 או ערך משוער.
 
 export const LIBRARY_STATS_ASSET = 'library_stats.json'
@@ -54,12 +54,12 @@ export function pickLibraryStatsAssetUrl(releases) {
  * בלי לפסול את האחרים. schema_version שאינו 1 — כל הקובץ נחשב לא מוכר.
  */
 export function parseLibraryStats(json) {
-  const empty = { books: null, links: null, lines: null }
+  // השדה lines (פסקאות) קיים בקובץ, אבל אינו מוצג עוד ולכן גם לא נקרא
+  const empty = { books: null, links: null }
   if (!json || typeof json !== 'object' || json.schema_version !== 1) return empty
   return {
     books: isPositiveInteger(json.books) ? json.books : null,
-    links: isPositiveInteger(json.links) ? json.links : null,
-    lines: isPositiveInteger(json.lines) ? json.lines : null
+    links: isPositiveInteger(json.links) ? json.links : null
   }
 }
 
@@ -91,22 +91,71 @@ export function formatExactNumber(value) {
   return negative ? `-${out}` : out
 }
 
-// סדר העיגולים באזור — קבוע כאן, לא ברכיב
+// מספרים גדולים מוצגים בגיבור בקיצור עברי ("5.8 מיליון"), כי מספר מדויק בן 7 ספרות
+// נקרא כרעש ולא כנתון. עד 100,000 — מדויק עם מפריד אלפים. תמיד מעוגל כלפי מטה, כדי לא
+// להציג יותר ממה שיש. הקיצור הוא ההצגה בלבד: לקוראי מסך מוגש המספר המדויק.
+const COMPACT_FROM = 100_000
+
+/**
+ * @returns {{ number: string, unit: string | null }} החלק המספרי והיחידה (אלף/מיליון/מיליארד), בנפרד —
+ *   כדי שהרכיב יוכל להציג את היחידה בגודל קטן יותר מהמספר.
+ */
+export function formatStatParts(value) {
+  if (!Number.isFinite(value)) return { number: '', unit: null }
+  if (value >= 1_000_000_000) {
+    return { number: String(Math.floor(value / 100_000_000) / 10), unit: 'מיליארד' }
+  }
+  if (value >= 1_000_000) {
+    return { number: String(Math.floor(value / 100_000) / 10), unit: 'מיליון' }
+  }
+  if (value >= COMPACT_FROM) return { number: String(Math.floor(value / 1000)), unit: 'אלף' }
+  return { number: formatExactNumber(value), unit: null }
+}
+
+// סדר הנתונים בשורה — קבוע כאן, לא ברכיב
 export const STAT_DEFINITIONS = [
-  { key: 'books', icon: 'menu_book', label: 'ספרים' },
-  { key: 'links', icon: 'link', label: 'קישורים בין ספרים' },
-  { key: 'lines', icon: 'format_list_numbered', label: 'פסקאות' },
-  { key: 'downloads', icon: 'download', label: 'הורדות' },
-  { key: 'plugins', icon: 'extension', label: 'תוספים' }
+  { key: 'books', label: 'ספרים' },
+  { key: 'links', label: 'קישורים בין ספרים' },
+  { key: 'downloads', label: 'הורדות' },
+  { key: 'plugins', label: 'תוספים' }
 ]
 
 /**
- * ממפה את הנתונים שנאספו לרשימת עיגולים להצגה, לפי הסדר הקבוע. נתון חסר/
- * לא תקין (null, 0, שלילי, לא שלם) — העיגול שלו מושמט לגמרי.
+ * ממפה את הנתונים שנאספו לרשימת פריטים להצגה, לפי הסדר הקבוע. נתון חסר/
+ * לא תקין (null, 0, שלילי, לא שלם) — הפריט שלו מושמט לגמרי.
  */
 export function buildStatItems(values) {
   const source = values || {}
   return STAT_DEFINITIONS
     .filter((def) => isPositiveInteger(source[def.key]))
     .map((def) => ({ ...def, value: source[def.key] }))
+}
+
+/**
+ * מחכה להבטחה לכל היותר ms מילישניות. אם היא לא הוכרעה עד אז — מחזיר fallback (ולא זורק).
+ *
+ * כך מקור איטי אחד (למשל MongoDB שמחכה ל-serverSelectionTimeoutMS של 30 שניות) לא מעכב את
+ * שורת המספרים כולה. חשוב: זה לא מבטל את הפעולה עצמה (החיבור ל-DB ממשיך ברקע ומשרת את
+ * הבקשה הבאה) — רק מפסיק לחכות לה. דחייה מאוחרת של ההבטחה המקורית נבלעת כאן, כדי שלא
+ * תהפוך ל-unhandled rejection. הטיימר מנוקה ברגע שההבטחה מוכרעת, כדי שלא יחזיק את התהליך.
+ *
+ * @template T, F
+ * @param {Promise<T>} promise
+ * @param {number} ms
+ * @param {F} fallback
+ * @param {(() => void)} [onTimeout] — נקרא פעם אחת אם הזמן עבר (לרישום בלוג)
+ * @returns {Promise<T | F>}
+ */
+export function withTimeout(promise, ms, fallback, onTimeout) {
+  let timer
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => {
+      onTimeout?.()
+      resolve(fallback)
+    }, ms)
+  })
+  const settled = Promise.resolve(promise).finally(() => clearTimeout(timer))
+  // הדחייה עצמה עוברת הלאה ל-race (אם הגיעה בזמן); כאן רק מונעים unhandled rejection
+  settled.catch(() => {})
+  return Promise.race([settled, timeout])
 }

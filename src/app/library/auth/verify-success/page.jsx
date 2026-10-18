@@ -14,7 +14,7 @@ export default function VerifySuccessPage() {
     }, [status, update]);
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+        <main id="main-content" className="min-h-screen flex items-center justify-center bg-neutral-50">
             <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-lg text-center animate-in fade-in zoom-in-95 duration-500">
                 <div className="w-20 h-20 bg-success-100 rounded-full flex items-center justify-center mx-auto mb-6">
                     <span className="material-symbols-outlined text-5xl text-success-600">verified</span>
@@ -32,6 +32,6 @@ export default function VerifySuccessPage() {
                     כניסה למערכת
                 </button>
             </div>
-        </div>
+        </main>
     );
 }

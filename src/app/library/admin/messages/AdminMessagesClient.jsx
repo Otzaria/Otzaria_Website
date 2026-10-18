@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { formatDateWithTime } from '@/lib/formatDate'
+import Loader from '@/components/ui/Loader'
 
 // כל האינטראקטיביות של דף ניהול ההודעות. רשימת ההודעות הראשונית מגיעה
 // כ-prop מה-Server Component (page.jsx, נשלפת ממטמון ה-Data Cache) —
@@ -456,7 +457,7 @@ export default function AdminMessagesClient({ initialMessages }) {
                       >
                           {sendingNewMessage ? (
                               <>
-                                <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                                <Loader size="inline" decorative />
                                 <span>שולח...</span>
                               </>
                           ) : (

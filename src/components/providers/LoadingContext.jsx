@@ -1,6 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useCallback } from 'react'
+import Loader from '@/components/ui/Loader'
 
 const LoadingContext = createContext(null)
 
@@ -39,12 +40,10 @@ export function LoadingProvider({ children }) {
             className="fixed inset-0 z-[10000] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-enter-fade"
           >
             <div
+              role="status"
               className="glass-strong px-12 py-10 rounded-3xl flex flex-col items-center shadow-2xl border border-surface-variant/50 min-w-[300px] animate-enter-dialog"
             >
-              <div className="relative w-20 h-20 mb-6">
-                <div className="absolute inset-0 border-4 border-t-primary border-r-transparent border-b-primary border-l-transparent rounded-full animate-spin"></div>
-                <div className="absolute inset-2 border-4 border-t-secondary border-r-transparent border-b-secondary border-l-transparent rounded-full animate-spin reverse-spin opacity-70" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
-              </div>
+              <Loader size="lg" decorative className="mb-6" />
 
               <h3 className="text-xl font-frank font-bold text-on-surface tracking-wide animate-pulse text-center">
                 {loadingState.message}

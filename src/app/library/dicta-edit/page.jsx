@@ -117,7 +117,7 @@ function LibraryEditSpaceContent() {
   return (
     <div className="min-h-screen bg-[#f8f9fa]">
       <Header />
-      <main className="container mx-auto px-4 py-12">
+      <main id="main-content" className="container mx-auto px-4 py-12">
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
             <div>
@@ -224,7 +224,7 @@ function LibraryEditSpaceContent() {
 // עטיפת Suspense — נדרשת ל-useSearchParams ב-Next.js כדי למנוע שגיאת build
 export default function LibraryEditSpacePage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#f8f9fa]" />}>
+    <Suspense fallback={<main id="main-content" className="min-h-screen bg-[#f8f9fa]" />}>
       <LibraryEditSpaceContent />
     </Suspense>
   )

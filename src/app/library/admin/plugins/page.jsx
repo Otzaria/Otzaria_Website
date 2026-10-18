@@ -11,6 +11,7 @@ import AssignCategoriesModal from '@/components/admin/AssignCategoriesModal'
 import StoreLayoutTab from './StoreLayoutTab'
 import { formatPluginStatus } from '@/lib/pluginStatus'
 import { formatAdminDate } from './formatAdminDate'
+import Loader from '@/components/ui/Loader'
 
 export default function AdminPluginsPage() {
   const [activeTab, setActiveTab] = useState('pending') // 'pending' | 'approved' | 'store'
@@ -720,9 +721,9 @@ export default function AdminPluginsPage() {
                                   disabled={deletingVersion === `${plugin._id}:${v.version}`}
                                   className="inline-flex items-center gap-1 rounded-lg bg-danger-100 px-3 py-1.5 text-xs font-medium text-danger-700 transition-colors hover:bg-danger-200 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
-                                  <span className="material-symbols-outlined text-base">
-                                    {deletingVersion === `${plugin._id}:${v.version}` ? 'progress_activity' : 'delete'}
-                                  </span>
+                                  {deletingVersion === `${plugin._id}:${v.version}`
+                                    ? <Loader size="inline" decorative className="text-base" />
+                                    : <span className="material-symbols-outlined text-base">delete</span>}
                                   <span>מחק</span>
                                 </button>
                               </div>
@@ -747,7 +748,7 @@ export default function AdminPluginsPage() {
                       >
                         {processingId === plugin._id ? (
                           <>
-                            <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                            <Loader size="inline" decorative />
                             <span>מעבד...</span>
                           </>
                         ) : (
@@ -765,7 +766,7 @@ export default function AdminPluginsPage() {
                       >
                         {processingId === plugin._id ? (
                           <>
-                            <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                            <Loader size="inline" decorative />
                             <span>מעבד...</span>
                           </>
                         ) : (
@@ -819,7 +820,7 @@ export default function AdminPluginsPage() {
                       >
                         {processingId === plugin._id ? (
                           <>
-                            <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                            <Loader size="inline" decorative />
                             <span>מעבד...</span>
                           </>
                         ) : (
@@ -839,7 +840,7 @@ export default function AdminPluginsPage() {
                       >
                         {processingId === plugin._id ? (
                           <>
-                            <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                            <Loader size="inline" decorative />
                             <span>מעבד...</span>
                           </>
                         ) : (
@@ -857,7 +858,7 @@ export default function AdminPluginsPage() {
                       >
                         {processingId === plugin._id ? (
                           <>
-                            <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                            <Loader size="inline" decorative />
                             <span>מעבד...</span>
                           </>
                         ) : (

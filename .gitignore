@@ -54,6 +54,7 @@ scripts/*
 # סקריפטי build אמיתיים — נדרשים ל-npm run build ולכן נשמרים
 !scripts/build-icon-font.mjs
 !scripts/icon-font.manifest.json
+!scripts/material-symbols-names.txt
 !scripts/optimize-assets.mjs
 !scripts/offline-editor-icons.json
 !scripts/check-perf-budget.mjs

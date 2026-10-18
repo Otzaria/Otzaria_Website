@@ -14,6 +14,7 @@ import { getDateTimestamp, computeStatusCounts, filterBooksByStatus, sortBooks, 
 import DictaStatusBadge from './DictaStatusBadge'
 import CreateDictaBookModal from './CreateDictaBookModal'
 import EditDictaBookStatusModal from './EditDictaBookStatusModal'
+import Loader from '@/components/ui/Loader'
 
 function formatHebrewDate(value) {
   const timestamp = getDateTimestamp(value)
@@ -321,7 +322,7 @@ export default function AdminDictaBooksClient({ initialBooks }) {
                 className="bg-aqua-600 text-white px-4 py-2 rounded-lg hover:bg-aqua-700 transition flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed shadow-sm"
             >
                 {syncing ? (
-                    <span className="material-symbols-outlined animate-spin text-sm">sync</span>
+                    <Loader size="inline" decorative className="text-sm" />
                 ) : (
                     <span className="material-symbols-outlined text-sm">cloud_sync</span>
                 )}

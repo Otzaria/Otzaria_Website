@@ -1,0 +1,104 @@
+/* ============================================================
+ * tooltip.css — כרטיס-רמז (ui/Tooltip)
+ * ------------------------------------------------------------
+ * כרטיס קטן ובהיר מתחת לרכיב — בשפת הכרטיסים של האתר (משטח surface, מסגרת outline-variant
+ * דקה, צל חם ורך), לא בועת מערכת כהה. ממורכז מתחת לרכיב והחוד במרכזו; ה-JS (ui/Tooltip) רק
+ * מזיז את הכרטיס פנימה (--tooltip-shift) אם הוא חורג מקצה המסך — החוד נשאר מול הרכיב.
+ *
+ * מופיע בריחוף (בהשהיה --tooltip-delay, כדי שמעבר מקרי לא יקפיץ אותו) ובפוקוס מקלדת; דהייה
+ * והחלקה של 4px (reduced-motion — דהייה בלבד). ניתן לריחוף (גשר שקוף בין הרכיב לכרטיס), ונסגר
+ * ב-Esc (data-tip-dismissed) — WCAG 1.4.13. במגע אין ריחוף: מידע חיוני לא יכול לחיות רק ברמז.
+ * הצבעים, הרדיוס, הצל, הרוחב וההשהיה — מ-component-tokens.css (--tooltip-*).
+ * ============================================================ */
+
+@layer components {
+  .tooltip-host {
+    --tooltip-bridge: calc(var(--spacing) * 2.5);
+    --tooltip-slide: 0.25rem;
+    --tooltip-caret: 0.4375rem;
+    --tooltip-shift: 0px;
+    position: relative;
+    display: inline-flex;
+  }
+
+  /* ברוחב הרכיב (inset-inline: 0) — כך מרכזו הוא מרכז הרכיב; גובהו הוא הגשר השקוף */
+  .tooltip {
+    position: absolute;
+    top: 100%;
+    inset-inline: 0;
+    z-index: var(--z-raised);
+    height: var(--tooltip-bridge);
+    opacity: 0;
+    visibility: hidden;
+    translate: 0 calc(var(--tooltip-slide) * -1);
+    transition:
+      opacity var(--motion-duration-standard) var(--ease-exit),
+      translate var(--motion-duration-standard) var(--ease-exit),
+      visibility 0s linear var(--motion-duration-standard);
+    pointer-events: none;
+  }
+
+  .tooltip-bubble {
+    position: absolute;
+    top: var(--tooltip-bridge);
+    left: 50%;
+    translate: calc(-50% + var(--tooltip-shift)) 0;
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 2.5);
+    width: max-content;
+    max-width: var(--tooltip-max-width);
+    padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 3.5);
+    border-radius: var(--tooltip-radius);
+    background-color: var(--tooltip-bg);
+    color: var(--tooltip-fg);
+    box-shadow: var(--tooltip-shadow);
+    font-size: var(--text-sm);
+    line-height: var(--leading-snug);
+    white-space: normal;
+  }
+
+  /* החוד: ריבוע מסובב עם אותה מסגרת, ממורכז מול הרכיב, מעל הכרטיס (חצי ממנו נבלע בו) */
+  .tooltip-bubble::before {
+    content: '';
+    position: absolute;
+    top: calc(var(--tooltip-caret) / -2);
+    left: calc(50% - var(--tooltip-shift) - var(--tooltip-caret) / 2);
+    width: var(--tooltip-caret);
+    height: var(--tooltip-caret);
+    rotate: 45deg;
+    background-color: var(--tooltip-bg);
+    box-shadow: -1px -1px 0 0 var(--color-outline-variant);
+  }
+
+  .tooltip-host:not([data-tip-dismissed]):has(:focus-visible) .tooltip {
+    opacity: 1;
+    visibility: visible;
+    translate: 0 0;
+    pointer-events: auto;
+    transition:
+      opacity var(--motion-duration-standard) var(--ease-enter),
+      translate var(--motion-duration-standard) var(--ease-enter),
+      visibility 0s;
+  }
+
+  @media (hover: hover) {
+    .tooltip-host:not([data-tip-dismissed]):hover .tooltip {
+      opacity: 1;
+      visibility: visible;
+      translate: 0 0;
+      pointer-events: auto;
+      transition:
+        opacity var(--motion-duration-standard) var(--ease-enter) var(--tooltip-delay),
+        translate var(--motion-duration-standard) var(--ease-enter) var(--tooltip-delay),
+        visibility 0s linear var(--tooltip-delay);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    /* דהייה בלבד, בלי החלקה */
+    .tooltip {
+      --tooltip-slide: 0px;
+    }
+  }
+}

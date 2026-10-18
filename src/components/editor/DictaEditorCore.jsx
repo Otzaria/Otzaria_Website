@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo, useCallback, useTransition, useDeferredValue } from 'react'
-import Button from '@/components/ui/Button'
+import Button from '@/components/ui/legacy/LegacyButton'
 import { useDialog } from '@/components/providers/DialogContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import CreateHeadersModal from '@/components/dicta-tools/CreateHeadersModal'

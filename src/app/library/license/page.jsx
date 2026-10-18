@@ -6,7 +6,7 @@ export default function LicensePage() {
     <div className="flex min-h-screen flex-col">
       <Header />
 
-      <main className="py-12 px-4">
+      <main id="main-content" className="py-12 px-4">
         <div className="container mx-auto max-w-4xl">
           <div className="glass-strong rounded-3xl p-8 md:p-12 shadow-xl border border-surface-variant animate-enter-up">
             <h1 className="text-4xl font-bold text-primary mb-8 font-frank border-b pb-4">
@@ -48,7 +48,7 @@ export default function LicensePage() {
                 <div className="flex items-center gap-2 text-sm bg-surface p-3 rounded-lg border border-surface-variant/50">
                    <span className="material-symbols-outlined text-primary text-lg">info</span>
                    <p>
-                    לצפייה ברשיון המאגר המלא:{' '}
+                    לצפייה ברישיון המאגר המלא:{' '}
                     <Link href="/license" className="text-primary font-bold hover:underline">
                       לחצו כאן
                     </Link>

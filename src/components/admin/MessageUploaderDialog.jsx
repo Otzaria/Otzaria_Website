@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useDialog } from '@/components/providers/DialogContext'
+import Loader from '@/components/ui/Loader'
 
 /**
  * MessageUploaderDialog - חלון שליחת הודעה למשתמש שהעלה ספר/עמוד
@@ -127,7 +128,7 @@ export default function MessageUploaderDialog({ recipient, initialSubject, onClo
           >
             {sendingMessage ? (
               <>
-                <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                <Loader size="inline" decorative />
                 <span>שולח...</span>
               </>
             ) : (

@@ -35,7 +35,7 @@ export default function PageProofBooksPage() {
   return (
     <div className="flex min-h-screen flex-col bg-background pb-12">
       <Header />
-      <main className="container mx-auto flex-1 px-4 py-8">
+      <main id="main-content" className="container mx-auto flex-1 px-4 py-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-8">
           {status === 'loading' ? (
             <LoadingSpinner message="טוען..." />

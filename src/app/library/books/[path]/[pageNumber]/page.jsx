@@ -1327,11 +1327,12 @@ export default function EditPage() {
 
   // גובה מלא כמו העורך עצמו (h-[100vh]) — אחרת הפוטר של הספרייה מופיע מתחת
   // ל"טוען..." ונדחף בבת אחת מסך שלם למטה כשהעורך נטען (layout shift)
-  if (loading) return <div className="h-screen text-center p-20">טוען...</div>
-  if (error) return <div className="text-center p-20 text-danger-500">{error}</div>
+  if (loading) return <main id="main-content" className="h-screen text-center p-20">טוען...</main>
+  if (error) return <main id="main-content" className="text-center p-20 text-danger-500">{error}</main>
 
   return (
-    <div 
+    <main
+      id="main-content"
       className={`bg-background flex flex-col overflow-hidden transition-all duration-300 ${
         isFullScreen ? 'fixed inset-0 z-[100] h-screen w-screen' : 'h-[calc(100vh-0px)]' 
       }`}
@@ -1518,7 +1519,7 @@ export default function EditPage() {
           onCancel={() => setShowUploadDialog(false)}
         />
       )}
-    </div>
+    </main>
   )
 }
 

@@ -14,7 +14,7 @@ npm run build             # generate-version → check:icons → next build → 
 npm run lint               # eslint
 npx tsc --noEmit            # type-check (checkJs כבוי — קבצי .js לא נבדקים, ראו "מלכודות" למטה)
 
-npm test                  # כל הטסטים: node:test (src/lib/**/*.test.mjs) + vitest
+npm test                  # כל הטסטים: node:test (*.test.mjs תחת src/lib ו-src/app) + vitest
 npm run test:node          # רק node:test (מודולים טהורים, .test.mjs)
 npm run test:vitest         # רק vitest (קומפוננטות RTL + .test.ts/.test.js)
 npm run test:watch          # vitest --watch
@@ -131,9 +131,12 @@ Middleware שחוסם את כל האתר (מלבד `/api/cron`, `/api/auth`, ו�
 - **מוסכמת קומיטים**: כותרת בעברית בפורמט `תחום/קובץ: מה השתנה` (למשל "API ניהול OCR
   (layout/lines/training): מעבר ל-requireAccess ותיקון 401/403") — לא "fix bug" גנרי. קומיט
   אחד = שינוי לוגי אחד; מיזוגים מסומנים במפורש בכותרת ("מיזוג: ...").
-- **מיקום/שם קובצי טסט**: לוגיקה טהורה ב-`.js`/`.mjs` נטולת JSX → `*.test.mjs` (רץ ב-`node:test`,
-  `npm run test:node`). כל השאר (קומפוננטות React, `.ts`/`.tsx`) → `*.test.ts`/`*.test.tsx`/
-  `*.test.js` עם Vitest+RTL. תמיד צמוד לקובץ המקור באותה תיקייה, לא בתיקיית `__tests__` נפרדת.
+- **מיקום/שם קובצי טסט**: הסיומת קובעת איפה הטסט רץ: `*.test.mjs` רץ ב-`node:test`
+  (`npm run test:node`, שאוסף רק מ-`src/lib/*`, `src/lib/*/*` ו-`src/app/**`), וכל השאר
+  (`*.test.js`/`.jsx`/`.ts`/`.tsx`) רץ ב-Vitest (+RTL לקומפוננטות). לוגיקה טהורה נטולת JSX/DOM
+  בתיקיות האלה → `*.test.mjs`; לוגיקה טהורה תחת `src/components/` או `src/hooks/` (שאינן
+  נאספות ב-`test:node`) → `*.test.js`/`.ts` ב-Vitest. `.mjs` מחוץ לנתיבים האלה לא ירוץ אף פעם.
+  תמיד צמוד לקובץ המקור באותה תיקייה, לא בתיקיית `__tests__` נפרדת.
 
 ## מלכודות ידועות (למדו בכאב בריפקטור האחרון)
 
