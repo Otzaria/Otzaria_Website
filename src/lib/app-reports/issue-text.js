@@ -34,12 +34,27 @@ function codeBlock(lines) {
   return `${fence}\n${content}\n${fence}`;
 }
 
+// דיווח ביצועים שלא נשלח ידנית — תקיעת ממשק (Windows "לא מגיב", ANR באנדרואיד)
+export function isHangReport(report) {
+  return report.type === 'performance' && report.trigger !== 'manual';
+}
+
 export function isCrashReport(report) {
-  return report.type === 'crash' || report.trigger !== 'manual';
+  return report.type === 'crash' || (report.trigger !== 'manual' && !isHangReport(report));
+}
+
+export function triggerLabel(report) {
+  if (report.trigger === 'crash_prompt' && isHangReport(report)) return 'אחרי תקיעה';
+  return TRIGGER_LABELS_HE[report.trigger] || report.trigger;
+}
+
+function titlePrefix(report) {
+  if (isHangReport(report)) return '[תקיעה]';
+  return isCrashReport(report) ? '[קריסה]' : '[דיווח מהתוכנה]';
 }
 
 export function buildIssueTitle(report) {
-  const prefix = isCrashReport(report) ? '[קריסה]' : '[דיווח מהתוכנה]';
+  const prefix = titlePrefix(report);
   const title = `${prefix} ${sanitizeUserText(report.title).replace(/\s+/g, ' ').trim()}`;
   // GitHub דוחה כותרת ארוכה מ-256 תווים, והניקוי מאריך את הטקסט (מייל, @, <!--)
   return [...title].length > MAX_TITLE_CHARS ? `${[...title].slice(0, MAX_TITLE_CHARS - 1).join('')}…` : title;
@@ -81,7 +96,7 @@ export function buildIssueBody(report, { previousIssueNumber = null } = {}) {
     `| סוג | ${TYPE_LABELS_HE[report.type] || report.type} |`,
     `| גרסה | ${tableCell(report.appVersion)} |`,
     `| מערכת הפעלה | ${tableCell(osText(report))} |`,
-    `| מקור | ${TRIGGER_LABELS_HE[report.trigger] || report.trigger} |`,
+    `| מקור | ${triggerLabel(report)} |`,
   ].join('\n'));
   if (report.signature?.exceptionType) {
     parts.push('### חתימה');
@@ -103,7 +118,7 @@ export function buildMergeComment(report) {
     '|---|---|',
     `| גרסה | ${tableCell(report.appVersion)} |`,
     `| מערכת הפעלה | ${tableCell(osText(report))} |`,
-    `| מקור | ${TRIGGER_LABELS_HE[report.trigger] || report.trigger} |`,
+    `| מקור | ${triggerLabel(report)} |`,
   ].join('\n'));
   if (report.description) parts.push(sanitizeUserText(report.description));
   const images = imagesSection(report);

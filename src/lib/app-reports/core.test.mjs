@@ -161,6 +161,24 @@ test('תגובת איחוד: גרסה, מערכת, מקור, תיאור וקיש
   assert.match(comment, /app-reports\/6f1c1f0e/);
 });
 
+test('issue תקיעה: ביצועים לא-ידני → [תקיעה] ו"אחרי תקיעה"; ביצועים ידני וקריסה ללא שינוי', async () => {
+  const hang = (over) => crash({ type: 'performance', title: 'תקיעה: הממשק לא הגיב 7 שניות', signature: undefined, ...over });
+  const auto = (await validateAppReport(hang())).value;
+  assert.equal(buildIssueTitle(auto), '[תקיעה] תקיעה: הממשק לא הגיב 7 שניות');
+  assert.match(buildIssueBody(auto), /\| מקור \| אוטומטי \|/);
+  assert.deepEqual(issueLabels(auto), ['from-app', 'performance', 'platform:windows', 'auto-report']);
+  const prompted = (await validateAppReport(hang({ trigger: 'crash_prompt' }))).value;
+  assert.equal(buildIssueTitle(prompted), '[תקיעה] תקיעה: הממשק לא הגיב 7 שניות');
+  assert.match(buildIssueBody(prompted), /\| מקור \| אחרי תקיעה \|/);
+  assert.match(buildMergeComment(prompted), /אחרי תקיעה/);
+  assert.doesNotMatch(buildIssueBody(prompted), /קריסה/);
+  const manualPerf = (await validateAppReport(manual({ type: 'performance' }))).value;
+  assert.equal(buildIssueTitle(manualPerf), '[דיווח מהתוכנה] החיפוש לא עובד');
+  const crashPrompt = (await validateAppReport(crash({ trigger: 'crash_prompt' }))).value;
+  assert.equal(buildIssueTitle(crashPrompt), '[קריסה] קריסה: StateError');
+  assert.match(buildIssueBody(crashPrompt), /\| מקור \| אחרי קריסה \|/);
+});
+
 test('כותרת ארוכה מקוצרת ל-256 התווים ש-GitHub מקבל', async () => {
   const value = (await validateAppReport(manual({ title: '@a'.repeat(100) }))).value;
   const title = buildIssueTitle({ ...value, signatureHash: null });

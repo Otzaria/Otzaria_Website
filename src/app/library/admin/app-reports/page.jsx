@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
-import { TYPE_LABELS, TRIGGER_LABELS, IssueStateBadge, formatDateTime } from './shared'
+import { TYPE_LABELS, TRIGGER_LABELS, triggerLabel, IssueStateBadge, formatDateTime } from './shared'
 
 const PAGE_SIZE = 50
 
@@ -111,7 +111,7 @@ export default function AppReportsPage() {
                     {r.lastInboundAt && <span className="material-symbols-outlined text-base text-info-600 mr-2 align-middle" title={`המדווח השיב במייל (${formatDateTime(r.lastInboundAt)})`}>reply</span>}
                   </td>
                   <td className="p-4 text-sm">{TYPE_LABELS[r.type] || r.type}</td>
-                  <td className="p-4 text-sm">{TRIGGER_LABELS[r.trigger] || r.trigger}</td>
+                  <td className="p-4 text-sm">{triggerLabel(r)}</td>
                   <td className="p-4 text-sm" dir="ltr">{r.appVersion}</td>
                   <td className="p-4 text-sm" dir="ltr">{r.platform}</td>
                   <td className="p-4 text-sm"><IssueStateBadge report={r} /></td>

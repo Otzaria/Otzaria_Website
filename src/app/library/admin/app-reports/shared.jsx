@@ -3,6 +3,12 @@
 export const TYPE_LABELS = { bug: 'תקלה', crash: 'קריסה', performance: 'ביצועים', suggestion: 'הצעה' }
 export const TRIGGER_LABELS = { manual: 'ידני', crash_prompt: 'אחרי קריסה', auto_crash: 'אוטומטי' }
 
+// דיווח ביצועים שלא נשלח ידנית הוא תקיעה, לא קריסה
+export function triggerLabel(report) {
+  if (report.trigger === 'crash_prompt' && report.type === 'performance') return 'אחרי תקיעה'
+  return TRIGGER_LABELS[report.trigger] || report.trigger
+}
+
 const CLOSE_REASON_LABELS = { completed: 'טופל', not_planned: 'לא יטופל', duplicate: 'כפול' }
 
 export function formatDateTime(value) {
