@@ -240,6 +240,12 @@ describe('deriveOwnerFieldsFromManifest', () => {
     expect(result.shortDescription).toBe('New short description');
   });
 
+  it('derives platforms from the manifest, normalized; [] when absent', () => {
+    expect(deriveOwnerFieldsFromManifest({ ...validManifest, platforms: ['macos', 'windows', 'web'] }).platforms)
+      .toEqual(['windows', 'macos']);
+    expect(deriveOwnerFieldsFromManifest(validManifest).platforms).toEqual([]);
+  });
+
   it('defaults stability to stable when missing', () => {
     const result = deriveOwnerFieldsFromManifest({ minAppVersion: MIN_SUPPORTED_APP_VERSION });
     expect(result.error).toBeNull();

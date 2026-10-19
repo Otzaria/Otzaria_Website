@@ -17,6 +17,7 @@ import {
   parseJsonArrayField
 } from '@/lib/pluginSubmission'
 import { readManifestFromPlugin, compareVersions } from '@/lib/pluginManifest'
+import { normalizeManifestPlatforms } from '@/lib/pluginPlatforms'
 import {
   buildEditResponse,
   deriveOwnerFieldsFromManifest,
@@ -233,6 +234,9 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
     let requiresNetwork = isAdmin
       ? formData.get('requiresNetwork') === 'true'
       : (editableSource.requiresNetwork ?? livePlugin.requiresNetwork) === true
+    // platforms: תמיד נגזר מהמניפסט (גם למנהל — אין לו עריכה ידנית בטופס), ולכן
+    // משתנה רק בהחלפת קובץ.
+    let platforms = normalizeManifestPlatforms(editableSource.platforms ?? livePlugin.platforms)
 
     let tags
     try {
@@ -414,6 +418,7 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
         return bad(`הגרסה בקובץ (${manifestVersion}) חייבת להיות גבוהה מהגרסה הנוכחית (${livePlugin.version})`)
       }
       version = manifestVersion
+      platforms = normalizeManifestPlatforms(newManifest.platforms)
 
       // היוצר — שאר המטא-דאטה המוגנת נגזרת מהמניפסט (מנהל עורך אותה ידנית בטופס).
       if (!isAdmin) {
@@ -476,6 +481,7 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
       compatibleWith,
       maxAppVersion,
       requiresNetwork,
+      platforms,
       tags,
       homepage,
       pluginFileName: editableSource.pluginFileName || livePlugin.pluginFileName,
@@ -540,6 +546,7 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
       plugin.compatibleWith = nextPluginData.compatibleWith
       plugin.maxAppVersion = nextPluginData.maxAppVersion || null
       plugin.requiresNetwork = nextPluginData.requiresNetwork === true
+      plugin.platforms = nextPluginData.platforms
       plugin.tags = nextPluginData.tags
       plugin.homepage = nextPluginData.homepage
       plugin.pluginFileName = nextPluginData.pluginFileName

@@ -30,6 +30,7 @@ function publicPlugin(overrides = {}) {
     screenshots: ['/api/plugins/p1/screenshots/0'],
     downloadUrl: '/api/plugins/p1/download',
     homepage: 'https://example.test',
+    platforms: ['windows', 'linux'],
     downloadCount: 7,
     ratingAvg: 4.5,
     ratingCount: 2,

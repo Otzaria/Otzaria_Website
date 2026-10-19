@@ -26,7 +26,8 @@ import { statusBadgeClass } from '@/components/plugins/StatusBadge'
 import DirectInstallButton from '@/components/plugins/DirectInstallButton'
 import Breadcrumbs, { type BreadcrumbItem } from '@/components/plugins/Breadcrumbs'
 import ScreenshotGallery from '@/components/plugins/ScreenshotGallery'
-import type { CategoryRef } from '@/components/plugins/types'
+import PlatformBadges from '@/components/plugins/PlatformBadges'
+import type { CategoryRef, PluginPlatformId } from '@/components/plugins/types'
 
 // חלונות העריכה (למעלה התוסף בלבד) והדיווח נפתחים רק בלחיצה — נטענים
 // בנפרד כדי שלא יכבידו על הטעינה הראשונה של כל צופה בדף. בזמן הטעינה מוצגת
@@ -62,6 +63,7 @@ export interface Plugin {
   fileUpdatedAt?: string
   compatibleWith: string
   requiresNetwork?: boolean
+  platforms?: PluginPlatformId[]
   tags: string[]
   image: string
   screenshots: string[]
@@ -528,6 +530,14 @@ export default function PluginDetailClient({ initialPlugin }: PluginDetailClient
                 <div className="p-4 bg-surface rounded-xl col-span-2">
                   <div className="text-sm text-on-surface/60 mb-1">תאימות</div>
                   <div className="font-bold text-on-surface">{plugin.compatibleWith}</div>
+                </div>
+                <div className="p-4 bg-surface rounded-xl col-span-2">
+                  <div className="text-sm text-on-surface/60 mb-1">פלטפורמות</div>
+                  <PlatformBadges
+                    platforms={plugin.platforms}
+                    showAllLabel
+                    badgeClassName="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-white text-on-surface/70"
+                  />
                 </div>
                 <div className="p-4 bg-surface rounded-xl col-span-2">
                   <div className="text-sm text-on-surface/60 mb-1">חיבור אינטרנט</div>

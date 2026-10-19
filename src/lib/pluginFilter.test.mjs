@@ -89,3 +89,20 @@ test('extractSortedTags מאחד תגיות כפולות וממיין א"ב עב
 test('extractSortedTags מחזיר מערך ריק כשאין תגיות', () => {
   assert.deepEqual(extractSortedTags([plugin(), plugin()]), [])
 })
+
+test('filterPlugins לפי פלטפורמה: תוסף ללא הצהרה תמיד נכלל', () => {
+  const everywhere = plugin({ name: 'כללי' })
+  const desktop = plugin({ name: 'דסקטופ', platforms: ['windows', 'linux', 'macos'] })
+  const mobile = plugin({ name: 'נייד', platforms: ['android', 'ios'] })
+  const list = [everywhere, desktop, mobile]
+  assert.deepEqual(filterPlugins(list, { platformFilter: 'android' }), [everywhere, mobile])
+  assert.deepEqual(filterPlugins(list, { platformFilter: 'linux' }), [everywhere, desktop])
+  assert.deepEqual(filterPlugins(list, { platformFilter: 'all' }), list)
+  assert.deepEqual(filterPlugins(list), list)
+})
+
+test('filterPlugins: פלטפורמה מצטרפת (AND) לסטטוס', () => {
+  const a = plugin({ name: 'א', status: 'beta', platforms: ['windows'] })
+  const b = plugin({ name: 'ב', status: 'stable', platforms: ['windows'] })
+  assert.deepEqual(filterPlugins([a, b], { platformFilter: 'windows', statusFilter: 'beta' }), [a])
+})

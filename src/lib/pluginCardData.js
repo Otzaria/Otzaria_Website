@@ -20,6 +20,8 @@ export const PLUGIN_CARD_FIELDS = [
   'downloadUrl',
   'supportsDirectInstall',
   'tags',
+  // פלטפורמות נתמכות — לתגיות בכרטיס ולסינון בדף "כל התוספים"
+  'platforms',
   'downloadCount',
   'ratingAvg',
   'ratingCount',

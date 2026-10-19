@@ -44,6 +44,11 @@ const PluginSchema = new mongoose.Schema(
     // האם התוסף דורש חיבור אינטרנט (נקרא מ-network.enabled ב-manifest.json)
     requiresNetwork: { type: Boolean, default: false },
 
+    // פלטפורמות נתמכות (מ-"platforms" ב-manifest.json, מנורמל ב-src/lib/pluginPlatforms.js).
+    // [] = התוסף לא הגביל את עצמו — זמין בכל הפלטפורמות. מסמכים ישנים ללא השדה
+    // נקראים כ-[] (ברירת המחדל של מערך ב-Mongoose), כך שאין צורך במיגרציה.
+    platforms: [{ type: String, enum: ['windows', 'linux', 'macos', 'android', 'ios'] }],
+
     // תגיות
     tags: [{ type: String, trim: true }],
 
