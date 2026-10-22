@@ -7,6 +7,7 @@ import { useSession } from 'next-auth/react'
 import { MAIN_NAV_LINKS } from '@/lib/navigation-constants'
 import { FOCUS_RING, FOCUS_RING_INSET } from '@/components/ui/focusRing'
 import { useDisclosureMenu } from '@/hooks/useDisclosureMenu'
+import { useUnreadAdminMessages } from '@/hooks/useUnreadAdminMessages'
 import HeaderLogo from './HeaderLogo'
 import AccountActions from './AccountActions'
 import NavDropdown from './NavDropdown'
@@ -58,14 +59,15 @@ function MobileNavLink({ link, pathname, onNavigate }) {
 
 /**
  * אזור התחברות/חשבון בכותרת — אותו רכיב כמו בכותרת הספרייה (AccountActions); כאן ההתחברות
- * חוזרת לדף הנוכחי וההתנתקות משאירה את המשתמש בו.
+ * חוזרת לדף הנוכחי וההתנתקות משאירה את המשתמש בו. ה-session ומונה ההודעות מגיעים מהכותרת
+ * (פעם אחת לשני המופעים — דסקטופ ונייד — כדי שהמונה לא יישאל פעמיים).
  */
-function AuthActions({ pathname, compact = false, onNavigate }) {
-  const { data: session, status } = useSession()
+function AuthActions({ session, status, unreadMessages, pathname, compact = false, onNavigate }) {
   const actions = (
     <AccountActions
       session={session}
       status={status}
+      unreadMessages={unreadMessages}
       compact={compact}
       onNavigate={onNavigate}
       loginCallbackUrl={pathname}
@@ -85,6 +87,8 @@ function AuthActions({ pathname, compact = false, onNavigate }) {
  * showAuth — אזור החשבון ("התחבר" / כפתור החשבון), רק בחנות התוספים (plugins/layout), כמו
  *   ב-master. כשהוא מוצג — ברוחב קבוע (--account-slot-width) בכל מצב: טוען, אורח, מחובר.
  *   בלעדיו (דף הבית ודפי השיווק) אין מקום שמור — לא נשאר רווח ריק ליד כפתור התרומות.
+ *   עם אזור החשבון — גם מונה ההודעות שלא נקראו למנהלים (useUnreadAdminMessages, כמו בספרייה),
+ *   נמשך בדפדפן בלבד; בלעדיו — לא נשאלת שום בקשה.
  * התפריט הנייד — useDisclosureMenu (כמו בכותרת הספרייה): Esc ולחיצה בחוץ סוגרים, Esc מחזיר את
  *   הפוקוס לכפתור, aria-controls, ונסגר גם במעבר נתיב שלא עבר דרכו (חזרה בדפדפן בחנות, שם
  *   הכותרת חיה ב-layout ולא נטענת מחדש).
@@ -95,6 +99,10 @@ export default function OtzariaSoftwareHeader({ showAuth = false, wordmarkHandof
   const pathname = usePathname()
   const menu = useDisclosureMenu(pathname)
   const navId = useId()
+  const { data: session, status } = useSession()
+  // רק כשאזור החשבון מוצג; אורח / משתמש רגיל / בלי showAuth — role לא של מנהל, ואין בקשה
+  const unreadMessages = useUnreadAdminMessages(showAuth ? session?.user?.role : undefined)
+  const authProps = { session, status, unreadMessages, pathname }
   const donationLink = MAIN_NAV_LINKS.find(link => link.emphasis === 'donation')
   const navLinks = MAIN_NAV_LINKS.filter(link => link.emphasis !== 'donation')
 
@@ -136,7 +144,7 @@ export default function OtzariaSoftwareHeader({ showAuth = false, wordmarkHandof
           {donationLink && <DonationButton link={donationLink} />}
           {showAuth && (
             <div className="hidden lg:block">
-              <AuthActions pathname={pathname} />
+              <AuthActions {...authProps} />
             </div>
           )}
 
@@ -176,7 +184,7 @@ export default function OtzariaSoftwareHeader({ showAuth = false, wordmarkHandof
             <MobileNavLink key={link.label} link={link} pathname={pathname} onNavigate={menu.close} />
           ))}
           {donationLink && <DonationNote link={donationLink} onNavigate={menu.close} />}
-          {showAuth && <AuthActions pathname={pathname} compact onNavigate={menu.close} />}
+          {showAuth && <AuthActions {...authProps} compact onNavigate={menu.close} />}
         </div>
       </nav>
     </header>
