@@ -28,6 +28,19 @@ export function filterPlugins(plugins, { searchQuery = '', statusFilter = 'all',
   return filtered
 }
 
+// מיון הרשימה: 'recommended' — הסדר שהשרת החזיר (הנבחרים ואחריהם מהחדש לישן); 'newest' — לפי
+// מועד הפרסום הראשון; 'updated' — לפי החלפת קובץ התוסף האחרונה. תוסף בלי תאריך — בסוף.
+export const SORT_MODES = ['recommended', 'newest', 'updated']
+
+const SORT_DATE_FIELD = { newest: 'publishedAt', updated: 'fileUpdatedAt' }
+
+export function sortPlugins(plugins, sortMode = 'recommended') {
+  const field = SORT_DATE_FIELD[sortMode]
+  if (!field) return plugins
+  // השוואת מחרוזות: גם ISO מלא וגם YYYY-MM-DD ממוינים נכון כטקסט. sort יציב — שוויון שומר על סדר השרת.
+  return [...plugins].sort((a, b) => (b[field] || '').localeCompare(a[field] || ''))
+}
+
 // כמה תוספים משויכים לכל תגית — Map של תגית → מספר. תגית כפולה באותו תוסף נספרת פעם אחת.
 export function countTags(plugins) {
   const counts = new Map()

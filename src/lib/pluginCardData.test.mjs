@@ -22,6 +22,7 @@ function publicPlugin(overrides = {}) {
     updatedAt: '2026-01-02',
     originalDate: '2026-01-01',
     fileUpdatedAt: '2026-01-03',
+    publishedAt: '2025-12-31T00:00:00.000Z',
     compatibleWith: '0.9.89',
     maxAppVersion: null,
     requiresNetwork: false,

@@ -19,6 +19,8 @@ export interface Plugin {
   originalDate?: string
   // מועד השינוי האחרון של קובץ התוסף בפועל (לא אישורים/עריכות מטא-דאטה)
   fileUpdatedAt?: string
+  // מועד הפרסום הראשון (ISO) — למיון "החדשים ביותר"; null כשאין תאריך ידוע
+  publishedAt?: string | null
   compatibleWith: string
   tags: string[]
   image: string
@@ -57,6 +59,7 @@ export type PluginCardData = Pick<
   | 'ratingAvg'
   | 'ratingCount'
   | 'fileUpdatedAt'
+  | 'publishedAt'
   | 'originalDate'
   | 'updatedAt'
 > & { description?: string }

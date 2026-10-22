@@ -24,6 +24,7 @@ export const PLUGIN_CARD_FIELDS = [
   'ratingAvg',
   'ratingCount',
   'fileUpdatedAt',
+  'publishedAt',
   'originalDate',
   'updatedAt'
 ]

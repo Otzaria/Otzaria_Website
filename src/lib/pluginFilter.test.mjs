@@ -4,7 +4,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { filterPlugins, countTags, rankTags, popularTags, searchTags, isCompatibilityTag } from './pluginFilter.js'
+import { filterPlugins, sortPlugins, countTags, rankTags, popularTags, searchTags, isCompatibilityTag } from './pluginFilter.js'
 
 function plugin(overrides = {}) {
   return {
@@ -124,4 +124,22 @@ test('rankTags: תגיות התאמה בסוף; popularTags לא כולל אות
   assert.deepEqual(ranked.map(t => t.tag), ['כלי עזר', 'לימוד', 'מראה תואם לאוצריא', 'תואם אוצריא'])
   assert.deepEqual(popularTags(ranked).map(t => t.tag), ['כלי עזר', 'לימוד'])
   assert.deepEqual(popularTags(ranked, 'מראה תואם לאוצריא').map(t => t.tag), ['מראה תואם לאוצריא', 'כלי עזר', 'לימוד'])
+})
+
+test('sortPlugins: newest לפי publishedAt, updated לפי fileUpdatedAt; בלי תאריך — בסוף', () => {
+  const plugins = [
+    plugin({ id: 'featured', publishedAt: '2026-01-01T00:00:00.000Z', fileUpdatedAt: '2026-01-02' }),
+    plugin({ id: 'new', publishedAt: '2026-05-01T00:00:00.000Z', fileUpdatedAt: '2026-05-01' }),
+    plugin({ id: 'old', publishedAt: '2025-03-01T00:00:00.000Z', fileUpdatedAt: '2026-09-01' }),
+    plugin({ id: 'none', publishedAt: null })
+  ]
+  assert.deepEqual(sortPlugins(plugins, 'newest').map(p => p.id), ['new', 'featured', 'old', 'none'])
+  assert.deepEqual(sortPlugins(plugins, 'updated').map(p => p.id), ['old', 'new', 'featured', 'none'])
+})
+
+test('sortPlugins: recommended (וערך לא מוכר) שומר על סדר השרת; שוויון שומר על הסדר', () => {
+  const plugins = [plugin({ id: 'a', fileUpdatedAt: '2026-01-01' }), plugin({ id: 'b', fileUpdatedAt: '2026-01-01' })]
+  assert.equal(sortPlugins(plugins, 'recommended'), plugins)
+  assert.equal(sortPlugins(plugins, 'bogus'), plugins)
+  assert.deepEqual(sortPlugins(plugins, 'updated').map(p => p.id), ['a', 'b'])
 })
