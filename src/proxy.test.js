@@ -67,3 +67,27 @@ describe('proxy — מפתח-גישה של תוכנת-הספר', () => {
     expect(await res.json()).toMatchObject({ error: 'shabbat' })
   })
 })
+
+describe('proxy — /api/worker (עובד OCR מקומי)', () => {
+  const paths = ['/api/worker/v1/jobs', '/api/worker/v1/jobs/64b7f0c2a1b2c3d4e5f60001/input']
+
+  it('בימי חול — עובר לראוט כמו שהוא (בלי redirect להתחברות, גם בלי Bearer)', async () => {
+    for (const path of paths) {
+      expect(passed(await call(path)), path).toBe(true)
+      expect(passed(await call(path, 'Bearer abc')), path).toBe(true)
+    }
+  })
+
+  it('בשבת/יו"ט — לא מוחרג: 503 JSON עם Retry-After ו-no-store (לא HTML ולא redirect)', async () => {
+    isAssurBemlacha.mockResolvedValue(true)
+    for (const path of paths) {
+      const res = await call(path, 'Bearer abc')
+      expect(res.status, path).toBe(503)
+      expect(res.headers.get('content-type')).toMatch(/application\/json/)
+      expect(res.headers.get('retry-after')).toBe('3600')
+      expect(res.headers.get('cache-control')).toMatch(/no-store/)
+      expect(res.headers.get('location')).toBeNull()
+      expect(await res.json()).toMatchObject({ error: 'shabbat' })
+    }
+  })
+})

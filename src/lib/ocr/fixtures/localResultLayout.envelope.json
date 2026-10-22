@@ -1,0 +1,42 @@
+{
+ "schemaVersion": 1,
+ "jobId": "65f0c0ffee0000000000abcd",
+ "taskType": "ocr",
+ "workerId": "local-1",
+ "createdAt": "2026-10-21T08:00:00.000Z",
+ "inputSha256": "7fa94a067e39e631c52f6e498ac8b3dd4f89ea45e26aefbfc72c9ace2b902567",
+ "options": {
+  "lm": "rabbinic",
+  "defaultScript": "square"
+ },
+ "pageMap": [
+  {
+   "pdfPageIndex": 1,
+   "pageId": "65f0c0ffee00000000000011",
+   "pageNumber": 11,
+   "expectedUpdatedAt": "2026-10-20T10:00:00.000Z",
+   "imageSha256": "aa761291ff9d068556f2d1d6f63c53a4d22e44d65f882c1c252a04372123add3"
+  },
+  {
+   "pdfPageIndex": 2,
+   "pageId": "65f0c0ffee00000000000012",
+   "pageNumber": 12,
+   "expectedUpdatedAt": "2026-10-20T10:00:01.000Z",
+   "imageSha256": "24971043777af01f9d0bd95d450faa525f4771cd443b95b96c48e5e855406104"
+  },
+  {
+   "pdfPageIndex": 3,
+   "pageId": "65f0c0ffee00000000000013",
+   "pageNumber": 13,
+   "expectedUpdatedAt": "2026-10-20T10:00:02.000Z",
+   "imageSha256": "e9414f81ea811d90d732a6d5165162f52af2c7f23b64b7972ac35e6692989fa9"
+  },
+  {
+   "pdfPageIndex": 4,
+   "pageId": "65f0c0ffee00000000000014",
+   "pageNumber": 14,
+   "expectedUpdatedAt": "2026-10-20T10:00:03.000Z",
+   "imageSha256": "dc8c8f3105bb632ac4f605c0fda927e32cf630b1c3b6d0ca9f0386a6495c65c2"
+  }
+ ]
+}

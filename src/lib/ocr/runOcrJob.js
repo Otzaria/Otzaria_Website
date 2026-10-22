@@ -53,10 +53,11 @@ async function recordPageResult(jobId, pageNumber, ok, message) {
   await OcrJob.updateOne({ _id: jobId }, update);
 }
 
+// כל מסלולי הסיום (completed/failed/cancelled) עוברים כאן — ומשחררים את הספר (active:false)
 async function finishJob(jobId, status, error) {
   await OcrJob.updateOne(
     { _id: jobId },
-    { $set: { status, error: error || '', finishedAt: new Date() } }
+    { $set: { status, active: false, error: error || '', finishedAt: new Date() } }
   );
 }
 

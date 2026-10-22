@@ -25,6 +25,12 @@ const PageSchema = new mongoose.Schema({
   claimedAt: { type: Date },
   completedAt: { type: Date },
   lastAutoReminderAt: { type: Date },
+
+  // מעקב אחרי החלת OCR מקומי (ספק local): איזו עבודה ואיזו תוצאה כתבו לעמוד לאחרונה.
+  // ההחלה מותנית ב-lastOcrJobId — שליחה חוזרת של אותה תוצאה לא כותבת פעמיים.
+  lastOcrJobId: { type: mongoose.Schema.Types.ObjectId, ref: 'OcrJob' },
+  lastOcrResultSha256: { type: String },
+  lastOcrAt: { type: Date },
   
   // נתיב התמונה (יחסי, למשל: /uploads/books/mybook/page.1.jpg)
   imagePath: { type: String, required: true } 

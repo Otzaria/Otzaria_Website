@@ -62,6 +62,8 @@ scripts/*
 # תיקוני טקסט — מופעלים בייצור לפי docs/text-corrections/OPERATIONS.md
 !scripts/corrections-worker.mjs
 !scripts/migrate-corrections.mjs
+!scripts/migrate-ocr-local.mjs
+!scripts/ocr-local-fake-worker.mjs
 !scripts/mock-verify-server.mjs
 !scripts/page-proof-link-import.mjs
 !scripts/patch-plugin-validator.cjs

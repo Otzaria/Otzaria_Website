@@ -67,3 +67,67 @@ describe("POST /api/admin/books/ocr/start - auth", () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe("POST /api/admin/books/ocr/start - active", () => {
+  const BOOK_ID = "507f1f77bcf86cd799439011";
+
+  beforeEach(async () => {
+    getServerSessionMock.mockReset();
+    getServerSessionMock.mockResolvedValue({ user: { role: "admin_books", id: "u1", name: "מנהל" } });
+    const Book = (await import("@/models/Book")).default as unknown as { findById: ReturnType<typeof vi.fn> };
+    const Page = (await import("@/models/Page")).default as unknown as { countDocuments: ReturnType<typeof vi.fn> };
+    const OcrJob = (await import("@/models/OcrJob")).default as unknown as {
+      findOne: ReturnType<typeof vi.fn>;
+      create: ReturnType<typeof vi.fn>;
+    };
+    Book.findById.mockResolvedValue({ _id: BOOK_ID, name: "ספר", slug: "sefer" });
+    // עמודים עם תמונה: 5, ערוכים: 0
+    Page.countDocuments.mockReset();
+    Page.countDocuments.mockResolvedValueOnce(5).mockResolvedValueOnce(0);
+    OcrJob.findOne.mockReset();
+    OcrJob.create.mockReset();
+    OcrJob.findOne.mockResolvedValue(null);
+    OcrJob.create.mockResolvedValue({ _id: { toString: () => "job1" } });
+  });
+
+  it("יוצר את העבודה עם active:true ובודק עבודה פעילה לפי activeFilter", async () => {
+    const OcrJob = (await import("@/models/OcrJob")).default as unknown as {
+      findOne: ReturnType<typeof vi.fn>;
+      create: ReturnType<typeof vi.fn>;
+    };
+
+    const res = await POST(makeRequest({ bookId: BOOK_ID, method: "ocrwin", existingTextMode: "overwrite" }));
+
+    expect(res.status).toBe(200);
+    expect(OcrJob.create).toHaveBeenCalledTimes(1);
+    expect(OcrJob.create.mock.calls[0][0]).toMatchObject({ status: "running", active: true, method: "ocrwin" });
+    expect(OcrJob.findOne).toHaveBeenCalledWith({
+      book: BOOK_ID,
+      $or: [{ active: true }, { active: { $exists: false }, status: "running" }],
+    });
+  });
+
+  it("עבודה פעילה קיימת → 409 בלי create", async () => {
+    const OcrJob = (await import("@/models/OcrJob")).default as unknown as {
+      findOne: ReturnType<typeof vi.fn>;
+      create: ReturnType<typeof vi.fn>;
+    };
+    OcrJob.findOne.mockResolvedValue({ _id: { toString: () => "old" } });
+
+    const res = await POST(makeRequest({ bookId: BOOK_ID, method: "ocrwin", existingTextMode: "overwrite" }));
+
+    expect(res.status).toBe(409);
+    expect(OcrJob.create).not.toHaveBeenCalled();
+  });
+
+  it("11000 מהאינדקס הייחודי (race) → 409", async () => {
+    const OcrJob = (await import("@/models/OcrJob")).default as unknown as {
+      create: ReturnType<typeof vi.fn>;
+    };
+    OcrJob.create.mockRejectedValue(Object.assign(new Error("dup"), { code: 11000 }));
+
+    const res = await POST(makeRequest({ bookId: BOOK_ID, method: "ocrwin", existingTextMode: "overwrite" }));
+
+    expect(res.status).toBe(409);
+  });
+});

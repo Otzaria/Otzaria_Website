@@ -51,3 +51,13 @@ npm install "github:Otzaria/otzaria-plugin-validator#v1" --legacy-peer-deps --no
   התוספים דברים שהם דרישת חנות ואינם קיימים באפליקציה.
 - שינוי בנתוני המשטח (API/הרשאה חדשים) → בריפו של אוצריא, שממנו `spec.json`
   מחולל. לא כאן ולא בוולידטור.
+
+## OCR מקומי (ספק `local`)
+
+ספק OCR שלישי בדיאלוג "OCR לספר שלם": האתר מכין PDF מתמונות העמודים, ושירות Windows ייעודי
+(`OtzariaTaskAgent`, ריפו נפרד) מושך את העבודה דרך `/api/worker/v1`, מעבד אותה ומחזיר תוצאה
+שנקלטת לעמודים בלי לדרוס עריכה אנושית. הנתיבים נצרכים ע"י השירות, ולכן אסור לשנות בהם סטטוס או
+מבנה JSON בלי לבדוק מול החוזה.
+
+- תפעול (env, מיגרציה, nginx, cron, גיבוי, התנגשויות, מגבלות): [`docs/ocr-local-worker/OPERATIONS.md`](docs/ocr-local-worker/OPERATIONS.md)
+- החוזה מול השירות וקודי השגיאה: [`docs/ocr-local-worker/CONTRACT.md`](docs/ocr-local-worker/CONTRACT.md)

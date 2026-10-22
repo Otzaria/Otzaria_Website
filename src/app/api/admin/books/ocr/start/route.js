@@ -9,14 +9,21 @@ import OcrJob from '@/models/OcrJob';
 import { hasBookLibraryAccess } from '@/lib/roles';
 import { runOcrJob } from '@/lib/ocr/runOcrJob';
 import { reapStaleOcrJobs } from '@/lib/ocr/staleJobs';
+import { activeFilter } from '@/lib/ocr/localJobState';
+import { readWorkerConfig } from '@/lib/ocr/workerAuth';
+import { closeAbandonedPreparation, createOrResumeLocalJob } from '@/lib/ocr/localJobCreate';
+import { normalizeLocalRequest } from '@/lib/ocr/localJobCreate.pure';
 import { badRequest, notFound, requireAccess, serverError } from '@/lib/apiResponse';
 
-const ALLOWED_METHODS = ['gemini', 'ocrwin'];
+const ALLOWED_METHODS = ['gemini', 'ocrwin', 'local'];
 const ALLOWED_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-3-pro-preview'];
 const ALLOWED_MODES = ['overwrite', 'skip'];
 
 // השבתה זמנית של OCR לספר שלם דרך Gemini (צד שרת). OCRWin נשאר פעיל.
 const GEMINI_ENABLED = false;
+
+// ספק local בונה כאן את PDF הקלט (עד 2,000 עמודים, ראו localPdf.js) לפני תשובת 202
+export const maxDuration = 300;
 
 export async function POST(request) {
   try {
@@ -49,6 +56,24 @@ export async function POST(request) {
       return badRequest('בחירת טיפול בעמודים ערוכים לא חוקית');
     }
 
+    // ספק local (מחשב מקומי): ולידציה משלו (requestId, options), ובלי runOcrJob
+    let localReq = null;
+    let workerConfig = null;
+    if (method === 'local') {
+      const normalized = normalizeLocalRequest(body);
+      if (!normalized.ok) {
+        return NextResponse.json({ error: normalized.error, code: normalized.code }, { status: 400 });
+      }
+      workerConfig = readWorkerConfig();
+      if (!workerConfig.ok) {
+        return NextResponse.json(
+          { error: 'ספק המחשב המקומי אינו מוגדר בשרת', code: 'local_not_configured' },
+          { status: 503 }
+        );
+      }
+      localReq = normalized.value;
+    }
+
     await connectDB();
 
     const book = await Book.findById(bookId);
@@ -59,8 +84,24 @@ export async function POST(request) {
     // שחרור עבודה תקועה (שרת שהופעל מחדש באמצע) לפני הבדיקה, כדי לא לחסום לשווא
     await reapStaleOcrJobs(book._id);
 
-    // מניעת שתי עבודות במקביל על אותו ספר
-    const existing = await OcrJob.findOne({ book: book._id, status: 'running' });
+    if (method === 'local') {
+      // 202 רק אחרי שה-PDF נשמר עמיד והעבודה ב-queued; ניסיון חוזר באותו requestId — אידמפוטנטי.
+      // בדיקת "עבודה פעילה לספר" נעשית שם (עבודת ה-requestId הזה עצמה אינה חסימה).
+      const { status, body: resBody } = await createOrResumeLocalJob({
+        book,
+        req: localReq,
+        session,
+        config: workerConfig,
+      });
+      return NextResponse.json(resBody, { status, headers: { 'Cache-Control': 'private, no-store' } });
+    }
+
+    // מניעת שתי עבודות פעילות במקביל על אותו ספר (בכל הספקים, כולל local)
+    let existing = await OcrJob.findOne({ book: book._id, ...activeFilter() });
+    // הכנת local נטושה (נקטעה לפני queued) אינה חוסמת לעד — נסגרת כמו בבקשת local חדשה
+    if (existing && (await closeAbandonedPreparation(existing))) {
+      existing = await OcrJob.findOne({ book: book._id, ...activeFilter() });
+    }
     if (existing) {
       return NextResponse.json(
         { error: 'כבר רצה עבודת OCR על הספר הזה', jobId: existing._id.toString() },
@@ -100,6 +141,7 @@ export async function POST(request) {
         existingTextMode,
         splitColumns: !!splitColumns,
         status: 'running',
+        active: true,
         totalPages: totalToProcess,
         editedPagesCount,
         startedBy: session.user?._id || session.user?.id,

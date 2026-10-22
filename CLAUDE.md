@@ -85,6 +85,11 @@ Middleware שחוסם את כל האתר (מלבד `/api/cron`, `/api/auth`, ו�
 `plugins/[id]/install-token`, `plugin-reports`, `reportingerrors` — צנרת ההתקנה הישירה של
 תוספים ודיווחי שגיאה, מאומתת שדה-מול-שדה מול קוד ה-Dart.
 
+גם `src/app/api/worker/v1/**` חיצוני ורגיש: נצרך ע"י שירות ה-OCR המקומי (`OtzariaTaskAgent`, C#,
+ריפו נפרד), שמסווג תשובות לפי קוד הסטטוס (401/403 = תצורה, 408/429/5xx = זמני, שאר 4xx = עצירת העבודה).
+החוזה וקודי השגיאה: `docs/ocr-local-worker/CONTRACT.md`; תפעול: `docs/ocr-local-worker/OPERATIONS.md`.
+על `OcrJob` — רק עדכונים מותנים (`updateOne`/`findOneAndUpdate`/`lean`), אף פעם `doc.save()`.
+
 ### חנות התוספים (Plugin Store) — מקור האמת למפרט ה-SDK אינו בריפו הזה
 
 ראו README.md לטבלה המלאה. בקצרה: מפרט ה-SDK (מתודות/הרשאות/גרסאות) חי בחבילה החיצונית
