@@ -23,12 +23,6 @@ const WIKI_URL = 'https://github.com/Otzaria/otzaria/wiki';
 // מדריכים נוספים (תוכן ייחודי שאינו בוויקי)
 const MORE_GUIDES = [
   {
-    href: '/docs/dicta',
-    icon: 'edit',
-    title: 'מדריך לטיפול בספרי דיקטה',
-    description: 'יצירת כותרות וניווט בספרים — כולל כלים אוטומטיים',
-  },
-  {
     href: '/docs/development',
     icon: 'code',
     title: 'מדריך פיתוח — עריכת אוצריא',

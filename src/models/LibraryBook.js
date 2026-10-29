@@ -7,8 +7,6 @@ import mongoose from 'mongoose';
  *  - content     = "שלנו" (הגרסה החיה באתר, מקור האמת)
  *  - baseContent = האב המשותף — מה שנמשך לאחרונה מגיטהאב (בסיס למיזוג 3-way)
  *  - baseSha     = blob sha של baseContent בריפו המשיכה
- *
- * נפרד לחלוטין מ-DictaBook (זרימת ה-claim על "לא ערוך").
  */
 const LibraryBookSchema = new mongoose.Schema({
   // נתיב יחסי לתיקיית הבסיס בגיטהאב — מזהה ייחודי, למשל "הלכה/אחרונים/דרך החיים.txt"

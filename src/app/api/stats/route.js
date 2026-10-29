@@ -3,7 +3,6 @@ import connectDB from '@/lib/db';
 import Book from '@/models/Book';
 import Page from '@/models/Page';
 import User from '@/models/User';
-import DictaBook from '@/models/DictaBook';
 import { cached } from '@/lib/api-cache';
 import { serverError } from '@/lib/apiResponse';
 
@@ -13,7 +12,7 @@ const CACHE_TTL_MS = 5 * 60_000;
 async function computeStats() {
     await connectDB();
 
-    const [usersCount, booksCount, pagesStats, dictaBooksCount] = await Promise.all([
+    const [usersCount, booksCount, pagesStats] = await Promise.all([
         User.countDocuments(),
 
         Book.countDocuments({
@@ -52,9 +51,7 @@ async function computeStats() {
                     completedPages: { $sum: 1 }
                 }
             }
-        ]),
-
-        DictaBook.countDocuments({ status: 'completed' })
+        ])
     ]);
 
     // המדידה נשארת כשהייתה: נספרים דפים שהושלמו בספרים שאינם מוסתרים. מכיוון
@@ -71,8 +68,7 @@ async function computeStats() {
             totalPages: completedPages,
             completedPages,
             inProgressPages: 0,
-            completionRate: completedPages > 0 ? 100 : 0,
-            dictaBooks: { completed: dictaBooksCount }
+            completionRate: completedPages > 0 ? 100 : 0
         }
     };
 }

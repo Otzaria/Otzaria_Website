@@ -3,7 +3,7 @@ export const ROLES = {
   ADMIN_PLUGINS: 'admin_plugins',
   ADMIN_BOOKS: 'admin_books',
   // מנהל ספרים-בלבד: גישה מלאה לספריית הספרים (/library/books) ולניהול המקביל
-  // (/library/admin/books) בלבד — ללא דיקטה, העלאות, עמודים או כל מודול אחר.
+  // (/library/admin/books) בלבד — ללא העלאות, עמודים או כל מודול אחר.
   ADMIN_BOOKS_ONLY: 'admin_books_only',
   // מנהל OCR: גישה לניהול שלושת אזורי ה-OCR בלבד — מאגר אימון, תמלול שורות
   // ותיוג מבנה עמוד (/library/admin/ocr-*) — ללא שאר מודולי הניהול.
@@ -37,8 +37,8 @@ export function hasPluginsAccess(role) {
   return role === ROLES.ADMIN || role === ROLES.ADMIN_PLUGINS
 }
 
-/** גישה לניהול ספרים הרחב (הכל חוץ ממשתמשים ותוספים) — כולל דיקטה, העלאות, עמודים וכו'.
- *  שים לב: מנהל-ספרים-בלבד אינו נכלל כאן בכוונה, כדי שלא יקבל גישה לדיקטה/העלאות/עמודים. */
+/** גישה לניהול ספרים הרחב (הכל חוץ ממשתמשים ותוספים) — כולל העלאות, עמודים וכו'.
+ *  שים לב: מנהל-ספרים-בלבד אינו נכלל כאן בכוונה, כדי שלא יקבל גישה להעלאות/עמודים. */
 export function hasBooksAccess(role) {
   return role === ROLES.ADMIN || role === ROLES.ADMIN_BOOKS
 }

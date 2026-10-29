@@ -34,7 +34,6 @@ const UserSchema = new mongoose.Schema({
   // הגדרות התראות על העלאות
   uploadNotifications: {
     enabled: { type: Boolean, default: false },
-    dicta: { type: Boolean, default: false },
     fullBook: { type: Boolean, default: false },
     singlePage: { type: Boolean, default: false }
   },

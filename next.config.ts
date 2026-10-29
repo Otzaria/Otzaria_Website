@@ -81,6 +81,33 @@ const nextConfig = {
         destination: '/library/editingtools',
         permanent: true,
       },
+      {
+        source: '/library/dicta-books/edit/offline',
+        destination: '/library/editingtools',
+        permanent: true,
+      },
+      // עותקי עריכה של העלאות נפתחו בעורך של ספרי דיקטה (סימניות של מנהלים)
+      {
+        source: '/library/dicta-books/edit/:id',
+        destination: '/library/admin/uploads/edit/:id',
+        permanent: true,
+      },
+      // ספרי דיקטה הוסרו; קישורים ממיילים שכבר נשלחו ומגוגל
+      {
+        source: '/library/dicta-books/:path*',
+        destination: '/library/dicta-edit',
+        permanent: true,
+      },
+      {
+        source: '/library/admin/dicta-books',
+        destination: '/library/admin',
+        permanent: true,
+      },
+      {
+        source: '/docs/dicta',
+        destination: '/docs',
+        permanent: true,
+      },
       // המדריך הישן הוחלף במדריך הדינמי מהוויקי
       {
         source: '/docs/installation',
@@ -200,7 +227,7 @@ const nextConfig = {
       // עמודי שיווק סטטיים-בפועל, ללא תלות ב-session/DB. TTL קצר-בינוני עם
       // stale-while-revalidate כדי לצמצם את חלון "הדליפה" מול שער השבת ב-src/proxy.js
       // (המידלוור עדיין רץ בכל בקשה; זו רק פשרת caching בצד דפדפן/CDN).
-      // /docs/:slug — דפי המדריך (docs/[slug], docs/dicta, docs/development): ציבוריים
+      // /docs/:slug — דפי המדריך (docs/[slug], docs/development): ציבוריים
       // וללא session, כמו /docs עצמו. בלי זה קיבלו רק s-maxage של ISR, והדפדפן
       // אימת מחדש כל טעינה.
       ...['/', '/about', '/faq', '/donate', '/privacy', '/license', '/offline', '/docs', '/docs/:slug'].map((source) => ({
