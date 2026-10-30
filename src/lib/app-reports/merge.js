@@ -45,7 +45,12 @@ export function planPublication(related, appVersion, signature) {
   if (last?.issueStateReason && version && !isGenericHangSignature(signature)) {
     const linked = sorted.filter((r) => r.issueNumber === last.issueNumber);
     const highest = linked.map((r) => parseAppVersion(r.appVersion)).filter(Boolean)
-      .reduce((max, v) => (!max || compareAppVersions(v, max) > 0 ? v : max), null);
+      .reduce((max, v) => {
+        if (!max) return v;
+        const comparison = compareAppVersions(v, max);
+        // בשוויון ליבות שומרים בנייה ידועה; דיווח בלי בנייה לא מוחק את המידע הזה.
+        return comparison > 0 || (comparison === 0 && max.build === null && v.build !== null) ? v : max;
+      }, null);
     if (highest && compareAppVersions(version, highest) <= 0) {
       const withUrl = linked.find((r) => r.issueUrl);
       return { action: 'suppress', issueNumber: last.issueNumber, issueUrl: withUrl?.issueUrl || null, issueStateReason: last.issueStateReason };

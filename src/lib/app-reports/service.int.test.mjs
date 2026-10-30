@@ -223,6 +223,93 @@ test('issue סגור: גרסה זהה או ישנה → צירוף שקט בלי
   assert.equal(gh.comments.at(-1).issue, newer.body.issueNumber);
 });
 
+test('issue סגור: דיווח בלי בנייה לא משתיק דיווח מבנייה חדשה יותר', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const a = await post(crash({ appVersion: '0.9.98+99802' }));
+  gh.setState(a.body.issueNumber, 'closed', 'completed');
+  await runAppReportsSync(syncDeps());
+
+  const withoutBuild = await post(crash({ appVersion: '0.9.98', description: 'בלי מספר בנייה' }));
+  assert.equal(withoutBuild.body.issueNumber, a.body.issueNumber);
+  assert.equal(withoutBuild.body.merged, true);
+  const newer = await post(crash({ appVersion: '0.9.98+99803', description: 'בנייה חדשה' }));
+  assert.equal(newer.body.issuePending, false);
+  assert.equal(newer.body.merged, false);
+  assert.notEqual(newer.body.issueNumber, a.body.issueNumber);
+  assert.match(gh.issues.get(newer.body.issueNumber).body, new RegExp(`קודם: #${a.body.issueNumber}`));
+});
+
+test('issue שנסגר ואז נמחק: 404/410 לפני או אחרי cron → issue חדש, בלי צירוף ליעד חסר', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  for (const status of [404, 410]) {
+    for (const syncBeforeReport of [false, true]) {
+      await t.test(`${status}, cron before report: ${syncBeforeReport}`, async () => {
+        const a = await post(crash({ appVersion: '0.9.98+99802' }));
+        gh.setState(a.body.issueNumber, 'closed', 'completed');
+        await runAppReportsSync(syncDeps());
+        gh.issues.delete(a.body.issueNumber);
+        const fetchImpl = async (url, init = {}) => {
+          if ((!init.method || init.method === 'GET') && new URL(url).pathname.endsWith(`/issues/${a.body.issueNumber}`)) {
+            return new Response(JSON.stringify({ message: 'Gone' }), { status });
+          }
+          return gh.fetch(url, init);
+        };
+        const deps = { ...syncDeps(), fetchImpl };
+        if (syncBeforeReport) {
+          await runAppReportsSync(deps);
+          const old = await AppReport.findOne({ reportId: a.body.reportId }).lean();
+          assert.equal(old.issueStateReason, null);
+        }
+        const b = await post(crash({ appVersion: '0.9.98+99802', description: 'אחרי מחיקת ה-issue' }), { deps: { fetchImpl } });
+        assert.equal(b.status, 200);
+        assert.equal(b.body.issuePending, false);
+        assert.equal(b.body.merged, false);
+        assert.notEqual(b.body.issueNumber, a.body.issueNumber);
+        assert.match(gh.issues.get(b.body.issueNumber).body, new RegExp(`קודם: #${a.body.issueNumber}`));
+        await runAppReportsSync(deps);
+        const doc = await AppReport.findOne({ reportId: b.body.reportId }).lean();
+        assert.equal(doc.suppressedAfterClose, false);
+        assert.equal(doc.issueState, 'open');
+      });
+    }
+  }
+});
+
+test('אימות לפני צירוף שקט: כשל זמני משאיר ממתין; ניסיון חוזר לא יוצר issue כפול', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const a = await post(crash());
+  gh.setState(a.body.issueNumber, 'closed', 'completed');
+  await runAppReportsSync(syncDeps());
+  gh.failNext = 1;
+  const b = await post(crash({ description: 'כשל באימות' }));
+  assert.equal(b.body.issuePending, true);
+  assert.equal(b.body.issueNumber, null);
+  await runAppReportsSync(syncDeps());
+  const doc = await AppReport.findOne({ reportId: b.body.reportId }).lean();
+  assert.equal(doc.issuePending, false);
+  assert.equal(doc.suppressedAfterClose, true);
+  assert.equal(doc.issueNumber, a.body.issueNumber);
+  assert.equal(gh.issues.size, 1);
+  assert.equal(gh.comments.length, 0);
+});
+
+test('אימות לפני צירוף שקט: issue שנפתח מחדש מקבל תגובה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const a = await post(crash({ reporterEmail: 'reopened@example.com' }));
+  gh.setState(a.body.issueNumber, 'closed', 'completed');
+  await runAppReportsSync(syncDeps());
+  gh.setState(a.body.issueNumber, 'open', 'reopened');
+  const b = await post(crash({ description: 'אחרי פתיחה מחדש' }));
+  assert.equal(b.body.issuePending, false);
+  assert.equal(b.body.issueNumber, a.body.issueNumber);
+  assert.equal(gh.comments.at(-1).issue, a.body.issueNumber);
+  const doc = await AppReport.findOne({ reportId: b.body.reportId }).lean();
+  assert.equal(doc.suppressedAfterClose, false);
+  assert.equal(doc.issueState, 'open');
+  const original = await AppReport.findOne({ reportId: a.body.reportId }).lean();
+  assert.equal(original.notifiedClosedAt, null);
+});
+
 test('issue סגור של תקיעה עם פריימי מנוע בלבד → issue חדש עם "קודם" גם בגרסה זהה', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const hang = (over) => crash({ title: 'תקיעה', signature: { exceptionType: 'AppHang', frames: ['flutter_windows.dll+0x1a2b flutter_windows.dll+0x3c4d'] }, ...over });
