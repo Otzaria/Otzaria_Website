@@ -156,7 +156,7 @@ export async function ingestAppReport(raw, deps) {
 }
 
 /**
- * יצירת issue או תגובה על issue פתוח עם אותה חתימה. כשל משאיר issuePending ל-cron.
+ * יצירת issue, תגובה על issue פתוח עם אותה חתימה, או צירוף שקט ל-issue שנסגר. כשל משאיר issuePending ל-cron.
  * @returns {Promise<object>} מסמך הדיווח העדכני
  */
 export async function publishReport(reportId, deps) {
@@ -188,9 +188,9 @@ export async function publishReport(reportId, deps) {
 
     const related = leased.signatureHash
       ? await AppReport.find({ ...scope, signatureHash: leased.signatureHash, issueNumber: { $ne: null }, reportId: { $ne: reportId } })
-        .select('issueNumber issueState issueUrl createdAt').lean()
+        .select('issueNumber issueState issueStateReason issueUrl appVersion createdAt').lean()
       : [];
-    plan = planPublication(related);
+    plan = planPublication(related, leased.appVersion);
     if (racing && plan.action === 'create') {
       return await AppReport.findOneAndUpdate({ reportId }, { $set: { issueLeaseUntil: null } }, { returnDocument: 'after' }).lean();
     }
@@ -201,6 +201,16 @@ export async function publishReport(reportId, deps) {
       set = {
         issueNumber: plan.issueNumber, issueUrl: plan.issueUrl || issueHtmlUrl(github.repo, plan.issueNumber),
         issueState: 'open', mergedIntoExisting: true,
+      };
+    } else if (plan.action === 'suppress') {
+      // מייל הסגירה יישלח בבדיקת המצב הבאה של ה-issue — אלא אם הכתובת כבר קיבלה אותו עליו
+      const alreadyNotified = leased.reporterEmail && await AppReport.exists({
+        ...scope, issueNumber: plan.issueNumber, reporterEmail: leased.reporterEmail, notifiedClosedAt: { $ne: null },
+      });
+      set = {
+        issueNumber: plan.issueNumber, issueUrl: plan.issueUrl || issueHtmlUrl(github.repo, plan.issueNumber),
+        issueState: 'closed', issueStateReason: plan.issueStateReason, mergedIntoExisting: true, suppressedAfterClose: true,
+        ...(alreadyNotified ? { notifiedClosedAt: now } : {}),
       };
     } else {
       const { previousIssueNumber } = plan;
