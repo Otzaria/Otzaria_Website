@@ -255,6 +255,26 @@ test('החלטת איחוד: issue סגור — גרסה שאינה חדשה מ�
     { action: 'comment', issueNumber: 11, issueUrl: 'u11' });
 });
 
+test('גרסה מרבית: דיווח בלי בנייה אינו מסתיר את הבנייה המרבית הידועה, בלי תלות בסדר', () => {
+  for (const versions of [
+    ['0.9.98', '0.9.98+99802', '0.9.98+99801'],
+    ['0.9.98+99802', '0.9.98', '0.9.98+99801'],
+    ['0.9.98+99801', '0.9.98', '0.9.98+99802'],
+  ]) {
+    const related = versions.map((appVersion, i) => ({
+      issueNumber: 9, issueState: 'closed', issueStateReason: 'completed', appVersion,
+      createdAt: new Date(2026, 8, 10 - i),
+    }));
+    assert.deepEqual(planPublication(related, '0.9.98+99803'), { action: 'create', previousIssueNumber: 9 });
+    for (const version of ['0.9.98', '0.9.98+99801', '0.9.98+99802']) {
+      assert.equal(planPublication(related, version).action, 'suppress');
+    }
+    // ליבת גרסה חדשה גוברת גם בלי בנייה, על פני בנייה גבוהה של ליבה ישנה.
+    related.push({ ...related[0], appVersion: '0.9.99', createdAt: new Date(2026, 8, 1) });
+    assert.equal(planPublication(related, '0.9.99+1').action, 'suppress');
+  }
+});
+
 // ---------------------------------------------------------------- state change
 
 test('מיילי סגירה: רק עם מייל, לא הוסר, לא קיבל; מייל אחד לכל כתובת', () => {
