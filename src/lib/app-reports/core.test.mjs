@@ -10,7 +10,7 @@ import { validateAppReport, MAX_DIAGNOSTICS_BYTES, MAX_IMAGES, MAX_IMAGE_BYTES, 
 import { computeContentHash, computeSignatureHash } from './hashes.js';
 import { redactEmails } from './redact.js';
 import { buildIssueTitle, buildIssueBody, buildMergeComment, issueLabels } from './issue-text.js';
-import { planPublication, parseAppVersion, compareAppVersions } from './merge.js';
+import { planPublication, parseAppVersion, compareAppVersions, isGenericHangSignature } from './merge.js';
 import { planClosureNotifications, closureKind, CLOSURE_TEXT_HE, pickClosingComment, CLOSING_COMMENT_MAX_CHARS } from './state-change.js';
 import { createUnsubscribeToken, verifyUnsubscribeToken, buildUnsubscribeUrl } from './unsubscribe.js';
 import { getAppReportsConfig } from './config.js';
@@ -242,6 +242,14 @@ test('החלטת איחוד: issue סגור — גרסה שאינה חדשה מ�
   assert.deepEqual(planPublication(related.map((r) => ({ ...r, appVersion: 'unknown' })), '0.9.90'), { action: 'create', previousIssueNumber: 9 });
   // סגור בלי סיבת סגירה (נמחק/ננעל) → חדש
   assert.deepEqual(planPublication(related.map((r) => ({ ...r, issueStateReason: null })), '0.9.90'), { action: 'create', previousIssueNumber: 9 });
+  // תקיעה עם פריימי מנוע בלבד (גם חבילה מופרדת ברווחים) → חדש; פריים של app.so → צירוף שקט
+  const engine = { exceptionType: 'AppHang', frames: ['flutter_windows.dll+0x1a2b', 'FLUTTER_WINDOWS.DLL+0x10 flutter_windows.dll+0x20'] };
+  assert.equal(isGenericHangSignature(engine), true);
+  assert.deepEqual(planPublication(related, '0.9.90', engine), { action: 'create', previousIssueNumber: 9 });
+  const precise = { exceptionType: 'AppHang', frames: ['flutter_windows.dll+0x10 app.so+0x99'] };
+  assert.equal(isGenericHangSignature(precise), false);
+  assert.deepEqual(planPublication(related, '0.9.90', precise), suppress);
+  assert.equal(isGenericHangSignature({ exceptionType: 'StateError', frames: ['flutter_windows.dll+0x1'] }), false);
   // issue פתוח קודם לכל השוואת גרסאות
   assert.deepEqual(planPublication([...related, { issueNumber: 11, issueState: 'open', appVersion: '1.0.0', createdAt: d('02'), issueUrl: 'u11' }], '0.9.90'),
     { action: 'comment', issueNumber: 11, issueUrl: 'u11' });

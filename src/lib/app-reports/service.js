@@ -190,7 +190,7 @@ export async function publishReport(reportId, deps) {
       ? await AppReport.find({ ...scope, signatureHash: leased.signatureHash, issueNumber: { $ne: null }, reportId: { $ne: reportId } })
         .select('issueNumber issueState issueStateReason issueUrl appVersion createdAt').lean()
       : [];
-    plan = planPublication(related, leased.appVersion);
+    plan = planPublication(related, leased.appVersion, leased.signature);
     if (racing && plan.action === 'create') {
       return await AppReport.findOneAndUpdate({ reportId }, { $set: { issueLeaseUntil: null } }, { returnDocument: 'after' }).lean();
     }

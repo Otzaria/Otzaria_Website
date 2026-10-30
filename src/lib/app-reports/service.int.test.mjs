@@ -223,6 +223,18 @@ test('issue סגור: גרסה זהה או ישנה → צירוף שקט בלי
   assert.equal(gh.comments.at(-1).issue, newer.body.issueNumber);
 });
 
+test('issue סגור של תקיעה עם פריימי מנוע בלבד → issue חדש עם "קודם" גם בגרסה זהה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const hang = (over) => crash({ title: 'תקיעה', signature: { exceptionType: 'AppHang', frames: ['flutter_windows.dll+0x1a2b flutter_windows.dll+0x3c4d'] }, ...over });
+  const a = await post(hang({ appVersion: '0.9.98+99802' }));
+  gh.setState(a.body.issueNumber, 'closed', 'completed');
+  await runAppReportsSync(syncDeps());
+  const b = await post(hang({ appVersion: '0.9.98+99802', description: 'תקיעה אחרת' }));
+  assert.equal(b.body.merged, false);
+  assert.notEqual(b.body.issueNumber, a.body.issueNumber);
+  assert.match(gh.issues.get(b.body.issueNumber).body, new RegExp(`קודם: #${a.body.issueNumber}`));
+});
+
 test('שני דיווחים במקביל עם אותה חתימה → issue אחד ותגובה אחת', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const [a, b] = await Promise.all([post(crash()), post(crash({ description: 'גם אצלי' }))]);
