@@ -156,7 +156,7 @@ export async function ingestAppReport(raw, deps) {
 }
 
 /**
- * יצירת issue או תגובה על issue פתוח עם אותה חתימה. כשל משאיר issuePending ל-cron.
+ * יצירת issue, תגובה על issue פתוח עם אותה חתימה, או צירוף שקט ל-issue שנסגר. כשל משאיר issuePending ל-cron.
  * @returns {Promise<object>} מסמך הדיווח העדכני
  */
 export async function publishReport(reportId, deps) {
@@ -188,9 +188,29 @@ export async function publishReport(reportId, deps) {
 
     const related = leased.signatureHash
       ? await AppReport.find({ ...scope, signatureHash: leased.signatureHash, issueNumber: { $ne: null }, reportId: { $ne: reportId } })
-        .select('issueNumber issueState issueUrl createdAt').lean()
+        .select('issueNumber issueState issueStateReason issueUrl appVersion createdAt').lean()
       : [];
-    plan = planPublication(related);
+    plan = planPublication(related, leased.appVersion, leased.signature);
+    if (plan.action === 'suppress') {
+      // מצב סגור ב-DB אינו מבטיח שה-issue עדיין קיים או שלא נפתח מחדש.
+      let issue;
+      try {
+        issue = await github.getIssue(plan.issueNumber);
+      } catch (err) {
+        if (err?.status !== 404 && err?.status !== 410) throw err;
+      }
+      if (!issue || (issue.state === 'closed' && !issue.state_reason)) {
+        await AppReport.updateMany({ ...scope, issueNumber: plan.issueNumber }, {
+          $set: { issueState: 'closed', issueStateReason: null, issueCheckedAt: now },
+        });
+        plan = { action: 'create', previousIssueNumber: plan.issueNumber };
+      } else if (issue.state !== 'closed') {
+        await handleIssueStateChange(issue, { ...deps, product, now });
+        plan = { action: 'comment', issueNumber: plan.issueNumber, issueUrl: issue.url || plan.issueUrl };
+      } else {
+        plan = { ...plan, issueStateReason: issue.state_reason, issueUrl: issue.url || plan.issueUrl };
+      }
+    }
     if (racing && plan.action === 'create') {
       return await AppReport.findOneAndUpdate({ reportId }, { $set: { issueLeaseUntil: null } }, { returnDocument: 'after' }).lean();
     }
@@ -201,6 +221,16 @@ export async function publishReport(reportId, deps) {
       set = {
         issueNumber: plan.issueNumber, issueUrl: plan.issueUrl || issueHtmlUrl(github.repo, plan.issueNumber),
         issueState: 'open', mergedIntoExisting: true,
+      };
+    } else if (plan.action === 'suppress') {
+      // מייל הסגירה יישלח בבדיקת המצב הבאה של ה-issue — אלא אם הכתובת כבר קיבלה אותו עליו
+      const alreadyNotified = leased.reporterEmail && await AppReport.exists({
+        ...scope, issueNumber: plan.issueNumber, reporterEmail: leased.reporterEmail, notifiedClosedAt: { $ne: null },
+      });
+      set = {
+        issueNumber: plan.issueNumber, issueUrl: plan.issueUrl || issueHtmlUrl(github.repo, plan.issueNumber),
+        issueState: 'closed', issueStateReason: plan.issueStateReason, mergedIntoExisting: true, suppressedAfterClose: true,
+        ...(alreadyNotified ? { notifiedClosedAt: now } : {}),
       };
     } else {
       const { previousIssueNumber } = plan;
@@ -223,7 +253,7 @@ export async function publishReport(reportId, deps) {
     console.error('App report: GitHub publish failed:', err?.message);
     // ה-issue נמחק או ננעל: בלי סימונו כסגור כל דיווח נוסף עם אותה חתימה יישאר ממתין לנצח
     if (plan?.action === 'comment' && (err?.status === 404 || err?.status === 410 || (err?.status === 403 && /locked/i.test(String(err?.message))))) {
-      await AppReport.updateMany({ ...scope, issueNumber: plan.issueNumber }, { $set: { issueState: 'closed' } });
+      await AppReport.updateMany({ ...scope, issueNumber: plan.issueNumber }, { $set: { issueState: 'closed', issueStateReason: null } });
     }
     return AppReport.findOneAndUpdate(
       { reportId },
@@ -298,7 +328,9 @@ async function syncProduct(product, github, d, summary) {
       console.error(`App report sync: ${product} issue #${number} failed:`, err?.message);
       // issue שנמחק/הועבר לא יחסום את התור
       if (err?.status === 404 || err?.status === 410) {
-        await AppReport.updateMany({ ...scope, issueNumber: number }, { $set: { issueCheckedAt: now } });
+        await AppReport.updateMany({ ...scope, issueNumber: number }, {
+          $set: { issueState: 'closed', issueStateReason: null, issueCheckedAt: now },
+        });
       }
     }
   }

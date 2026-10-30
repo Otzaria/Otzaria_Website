@@ -10,7 +10,7 @@ import { validateAppReport, MAX_DIAGNOSTICS_BYTES, MAX_IMAGES, MAX_IMAGE_BYTES, 
 import { computeContentHash, computeSignatureHash } from './hashes.js';
 import { redactEmails } from './redact.js';
 import { buildIssueTitle, buildIssueBody, buildMergeComment, issueLabels } from './issue-text.js';
-import { planPublication } from './merge.js';
+import { planPublication, parseAppVersion, compareAppVersions, isGenericHangSignature } from './merge.js';
 import { planClosureNotifications, closureKind, CLOSURE_TEXT_HE, pickClosingComment, CLOSING_COMMENT_MAX_CHARS } from './state-change.js';
 import { createUnsubscribeToken, verifyUnsubscribeToken, buildUnsubscribeUrl } from './unsubscribe.js';
 import { getAppReportsConfig } from './config.js';
@@ -213,6 +213,66 @@ test('החלטת איחוד: issue פתוח → תגובה; רק סגורים �
     { issueNumber: 9, issueState: 'closed', createdAt: d('12') },
   ]), { action: 'create', previousIssueNumber: 9 });
   assert.deepEqual(planPublication([]), { action: 'create', previousIssueNumber: null });
+});
+
+test('גרסת התוכנה: semver עם רכיב רביעי ומספר בנייה; פורמט אחר → null', () => {
+  const cmp = (a, b) => compareAppVersions(parseAppVersion(a), parseAppVersion(b));
+  assert.equal(cmp('0.9.98.3+99803', '0.9.98+99802'), 1);
+  assert.equal(cmp('0.9.98+99802', '0.9.98.0+99802'), 0);
+  assert.equal(cmp('0.9.98+99801', '0.9.98+99802'), -1);
+  assert.equal(cmp('0.9.98', '0.9.98+99802'), 0);
+  assert.equal(cmp('0.10.0+1', '0.9.99+99999'), 1);
+  for (const bad of ['unknown', '', null, '0.9.98-beta', 'v0.9.98']) assert.equal(parseAppVersion(bad), null);
+});
+
+test('החלטת איחוד: issue סגור — גרסה שאינה חדשה מהמקושרות → צירוף שקט; חדשה או לא ידועה → חדש עם "קודם"', () => {
+  const d = (s) => new Date(`2026-09-${s}T00:00:00Z`);
+  const related = [
+    { issueNumber: 5, issueState: 'closed', issueStateReason: 'completed', appVersion: '0.9.90+99000', createdAt: d('01') },
+    { issueNumber: 9, issueState: 'closed', issueStateReason: 'not_planned', appVersion: '0.9.98+99802', createdAt: d('10'), issueUrl: 'u9' },
+    { issueNumber: 9, issueState: 'closed', issueStateReason: 'not_planned', appVersion: '0.9.98.3+99803', createdAt: d('12') },
+  ];
+  const suppress = { action: 'suppress', issueNumber: 9, issueUrl: 'u9', issueStateReason: 'not_planned' };
+  assert.deepEqual(planPublication(related, '0.9.98.3+99803'), suppress);
+  assert.deepEqual(planPublication(related, '0.9.97+99700'), suppress);
+  assert.deepEqual(planPublication(related, '0.9.98.4+99804'), { action: 'create', previousIssueNumber: 9 });
+  assert.deepEqual(planPublication(related, 'unknown'), { action: 'create', previousIssueNumber: 9 });
+  assert.deepEqual(planPublication(related), { action: 'create', previousIssueNumber: 9 });
+  // גרסאות המקושרים לא ידועות → אין למה להשוות
+  assert.deepEqual(planPublication(related.map((r) => ({ ...r, appVersion: 'unknown' })), '0.9.90'), { action: 'create', previousIssueNumber: 9 });
+  // סגור בלי סיבת סגירה (נמחק/ננעל) → חדש
+  assert.deepEqual(planPublication(related.map((r) => ({ ...r, issueStateReason: null })), '0.9.90'), { action: 'create', previousIssueNumber: 9 });
+  // תקיעה עם פריימי מנוע בלבד (גם חבילה מופרדת ברווחים) → חדש; פריים של app.so → צירוף שקט
+  const engine = { exceptionType: 'AppHang', frames: ['flutter_windows.dll+0x1a2b', 'FLUTTER_WINDOWS.DLL+0x10 flutter_windows.dll+0x20'] };
+  assert.equal(isGenericHangSignature(engine), true);
+  assert.deepEqual(planPublication(related, '0.9.90', engine), { action: 'create', previousIssueNumber: 9 });
+  const precise = { exceptionType: 'AppHang', frames: ['flutter_windows.dll+0x10 app.so+0x99'] };
+  assert.equal(isGenericHangSignature(precise), false);
+  assert.deepEqual(planPublication(related, '0.9.90', precise), suppress);
+  assert.equal(isGenericHangSignature({ exceptionType: 'StateError', frames: ['flutter_windows.dll+0x1'] }), false);
+  // issue פתוח קודם לכל השוואת גרסאות
+  assert.deepEqual(planPublication([...related, { issueNumber: 11, issueState: 'open', appVersion: '1.0.0', createdAt: d('02'), issueUrl: 'u11' }], '0.9.90'),
+    { action: 'comment', issueNumber: 11, issueUrl: 'u11' });
+});
+
+test('גרסה מרבית: דיווח בלי בנייה אינו מסתיר את הבנייה המרבית הידועה, בלי תלות בסדר', () => {
+  for (const versions of [
+    ['0.9.98', '0.9.98+99802', '0.9.98+99801'],
+    ['0.9.98+99802', '0.9.98', '0.9.98+99801'],
+    ['0.9.98+99801', '0.9.98', '0.9.98+99802'],
+  ]) {
+    const related = versions.map((appVersion, i) => ({
+      issueNumber: 9, issueState: 'closed', issueStateReason: 'completed', appVersion,
+      createdAt: new Date(2026, 8, 10 - i),
+    }));
+    assert.deepEqual(planPublication(related, '0.9.98+99803'), { action: 'create', previousIssueNumber: 9 });
+    for (const version of ['0.9.98', '0.9.98+99801', '0.9.98+99802']) {
+      assert.equal(planPublication(related, version).action, 'suppress');
+    }
+    // ליבת גרסה חדשה גוברת גם בלי בנייה, על פני בנייה גבוהה של ליבה ישנה.
+    related.push({ ...related[0], appVersion: '0.9.99', createdAt: new Date(2026, 8, 1) });
+    assert.equal(planPublication(related, '0.9.99+1').action, 'suppress');
+  }
 });
 
 // ---------------------------------------------------------------- state change
