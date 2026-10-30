@@ -173,10 +173,54 @@ test('קריסה עם אותה חתימה על issue פתוח → תגובה (me
 
   gh.setState(a.body.issueNumber, 'closed', 'completed');
   await runAppReportsSync(syncDeps());
-  const c = await post(crash({ description: 'שוב אחרי התיקון' }));
+  const c = await post(crash({ description: 'שוב אחרי התיקון', appVersion: '0.9.99' }));
   assert.equal(c.body.merged, false);
   assert.notEqual(c.body.issueNumber, a.body.issueNumber);
   assert.match(gh.issues.get(c.body.issueNumber).body, new RegExp(`קודם: #${a.body.issueNumber}`));
+});
+
+test('issue סגור: גרסה זהה או ישנה → צירוף שקט בלי issue, תגובה או פתיחה מחדש; גרסה חדשה → issue עם "קודם"', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const prompt = (over) => crash({ trigger: 'crash_prompt', ...over });
+  const a = await post(prompt({ appVersion: '0.9.98+99802', reporterEmail: 'x@example.com' }));
+  const b = await post(prompt({ appVersion: '0.9.98.3+99803', reporterEmail: 'y@example.com', description: 'גם אצלי' }));
+  assert.equal(b.body.merged, true);
+  gh.setState(a.body.issueNumber, 'closed', 'completed');
+  await runAppReportsSync(syncDeps());
+  assert.deepEqual(mails.map((m) => m.to).sort(), ['x@example.com', 'y@example.com']);
+  const callsBefore = gh.calls.filter((c) => c.method === 'POST').length;
+
+  const same = await post(prompt({ appVersion: '0.9.98.3+99803', reporterEmail: 'x@example.com', description: 'שוב' }));
+  const older = await post(prompt({ appVersion: '0.9.97+99700', reporterEmail: 'z@example.com', description: 'בגרסה ישנה' }));
+  for (const r of [same, older]) {
+    assert.equal(r.status, 200);
+    assert.equal(r.body.merged, true);
+    assert.equal(r.body.issuePending, false);
+    assert.equal(r.body.issueNumber, a.body.issueNumber);
+    assert.equal(r.body.issueUrl, a.body.issueUrl);
+  }
+  assert.equal(gh.calls.filter((c) => c.method === 'POST').length, callsBefore);
+  assert.equal(gh.issues.get(a.body.issueNumber).state, 'closed');
+  const sameDoc = await AppReport.findOne({ reportId: same.body.reportId }).lean();
+  assert.equal(sameDoc.suppressedAfterClose, true);
+  assert.equal(sameDoc.issueState, 'closed');
+  assert.equal(sameDoc.issueStateReason, 'completed');
+  // x כבר קיבל מייל סגירה על ה-issue הזה; z יקבל אחד בבדיקת המצב הבאה, ורק פעם אחת
+  assert.ok(sameDoc.notifiedClosedAt);
+  await runAppReportsSync(syncDeps());
+  await runAppReportsSync(syncDeps());
+  assert.deepEqual(mails.slice(2).map((m) => m.to), ['z@example.com']);
+
+  const newer = await post(prompt({ appVersion: '0.9.99+99900', reporterEmail: '', description: 'עדיין קורס' }));
+  assert.equal(newer.body.merged, false);
+  assert.notEqual(newer.body.issueNumber, a.body.issueNumber);
+  assert.match(gh.issues.get(newer.body.issueNumber).body, new RegExp(`קודם: #${a.body.issueNumber}`));
+  assert.equal((await AppReport.findOne({ reportId: newer.body.reportId }).lean()).suppressedAfterClose, false);
+
+  const onOpen = await post(prompt({ appVersion: '0.9.97+99700', reporterEmail: '', description: 'ישן על הפתוח' }));
+  assert.equal(onOpen.body.merged, true);
+  assert.equal(onOpen.body.issueNumber, newer.body.issueNumber);
+  assert.equal(gh.comments.at(-1).issue, newer.body.issueNumber);
 });
 
 test('שני דיווחים במקביל עם אותה חתימה → issue אחד ותגובה אחת', async (t) => {
@@ -1146,7 +1190,7 @@ test('מוצרים: אותה חתימה בשני מוצרים → issue נפרד
   // רק ה-issue של אוצריא נסגר → דיווח חדש באוצריא פותח issue חדש, בעדכונים ממשיך להתאחד
   otz.setState(100, 'closed', 'completed');
   await syncVia(hub);
-  const e = await postVia(hub, crash({ description: 'אחרי הסגירה' }));
+  const e = await postVia(hub, crash({ description: 'אחרי הסגירה', appVersion: '0.9.99' }));
   assert.equal(e.body.merged, false);
   assert.equal(e.body.issueUrl, `https://github.com/${OTZ_REPO}/issues/101`);
   assert.match(otz.issues.get(101).body, /קודם: #100/);
