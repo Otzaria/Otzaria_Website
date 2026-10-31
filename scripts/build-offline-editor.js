@@ -15,14 +15,27 @@ const COMPONENT_PATHS = [
   'src/lib/editorUtils.js',
   'src/lib/hebrewWordUtils.js',
   'src/lib/shortcuts.js',
+  'src/lib/reducedMotion.js',
+  'src/components/editor/v2/editorShellLogic.js',
+  'src/components/ui/cx.ts',
+  'src/components/ui/focusRing.ts',
+  'src/components/ui/fieldStyles.ts',
+  'src/components/ui/buttonStyles.ts',
+  'src/components/ui/AppIcon.jsx',
+  'src/components/ui/portalContainer.ts',
+  'src/components/ui/TitleOrnament.tsx',
+  'src/components/ui/floatingPanelGeometry.js',
   // DialogContext משתמש ב-useDialogA11y (לכידת פוקוס בחלון האישור) — חייב להופיע לפניו
   'src/components/ui/useDialogA11y.ts',
   'src/components/providers/DialogContext.jsx',
   'src/components/ui/Modal.jsx',
   'src/components/ui/FormInput.jsx',
-  'src/components/ui/cx.ts',
   'src/components/ui/Loader.tsx',
   'src/components/ui/legacy/LegacyButton.jsx',
+  'src/components/ui/Button.tsx',
+  'src/components/ui/Dialog.tsx',
+  'src/components/ui/FloatingPanel.jsx',
+  'src/components/ui/Kbd.jsx',
   'src/components/ui/LoadingSpinner.jsx',
   'src/components/providers/LoadingContext.jsx',
   'src/components/dicta-tools/CreateHeadersModal.jsx',
@@ -35,6 +48,7 @@ const COMPONENT_PATHS = [
   'src/components/dicta-tools/TextCleanerModal.jsx',
   'src/components/dicta-tools/AddPageNumberModal.jsx',
   'src/components/dicta-tools/EmbedImageModal.jsx',
+  'src/components/editor/modals/UnboundShortcutsNotice.jsx',
   'src/components/editor/modals/ShortcutsDialog.jsx',
   'src/components/editor/modals/FindReplaceDialog.jsx',
   'src/components/editor/modals/SpellcheckDialog.jsx',
@@ -82,6 +96,7 @@ function stripImportsAndExports(source) {
     .replace(/^\s*[\'\"]use client[\'\"];?\s*/gm, '')
     .replace(/^\s*import[\s\S]*?from\s+[\'\"].*?[\'\"];?\s*$/gm, '')
     .replace(/^\s*import\s+[\'\"].*?[\'\"];?\s*$/gm, '')
+    .replace(/^\s*export\s+type\s*\{[^}]*\}\s*from\s*['"][^'"]+['"];?\s*$/gm, '')
     .replace(/export default function\s+/g, 'function ')
     .replace(/export default\s+([A-Za-z0-9_$]+);?/g, '')
     .replace(/^\s*export\s+(type|interface)\s+/gm, '$1 ') // TS: נמחקים ע"י preset-typescript
@@ -129,6 +144,15 @@ function createRenameCollisionsPlugin(claimedNames, filename, renamed) {
 }
 
 function transpileComponent(source, filename, claimedNames, renamed) {
+  // שני הכפתורים מייצאים בשם Button, אבל המודאלים החדשים חייבים לקבל את הרכיב
+  // החדש. בלי גשר מפורש מחיקת ה-import הייתה מפנה אותם בשקט לכפתור הישן.
+  if (filename === 'src/components/ui/Button.tsx') {
+    source = source.replace(/export default function Button\b/, 'export default function ModernButton');
+  }
+  source = source.replace(
+    /^\s*import Button from ['"](?:@\/components\/ui\/Button|\.\/Button)['"];?\s*$/gm,
+    "import { ModernButton as Button } from 'offline-ui';"
+  );
   const aliases = collectImportAliases(source);
   const cleaned = [stripImportsAndExports(source), ...aliases].join('\n');
   const result = Babel.transformSync(cleaned, {
@@ -974,7 +998,9 @@ async function buildOfflineEditor() {
   await fs.writeFile(OUTPUT_PATH, html, 'utf8');
 }
 
-buildOfflineEditor()
+module.exports = { buildBundledComponents, buildAppSource, validateBundleReferences };
+
+if (require.main === module) buildOfflineEditor()
   .then(() => {
     console.log(`Offline editor generated at ${OUTPUT_PATH}`);
   })
