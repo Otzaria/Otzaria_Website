@@ -87,6 +87,10 @@ if [[ "$TEST_MODE" == recovery_unhealthy && "$(readlink -f "$TEST_LIVE")" == *ot
 printf '%s' "$version"
 `)
   command('sleep', ':\n')
+  command('systemctl', `
+echo "systemctl $*" >> "$TEST_ROOT/trace"
+[[ "$TEST_MODE" != broker_restart ]] || exit 1
+`)
 
   const deploy = (sha, validator = 'a'.repeat(40), currentMode = mode, extraEnv = {}) => spawnSync(
     'bash', [deployScript, sha, validator, live], {
@@ -94,6 +98,7 @@ printf '%s' "$version"
         ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}`,
         TEST_ROOT: root, TEST_LIVE: live, TEST_MODE: currentMode,
         TEST_VALIDATOR: validator, TEST_PM2_APP: pm2App, PM2_APP: pm2App,
+        BROKER_DIR: path.join(root, 'broker'),
         ...extraEnv,
       },
       encoding: 'utf8', timeout: 30000,
@@ -105,8 +110,9 @@ printf '%s' "$version"
     run('git', ['push', '-q', 'origin', 'HEAD:master'])
     return run('git', ['rev-parse', 'HEAD'])
   }
+  const cloneBroker = () => run('git', ['clone', '-q', remote, path.join(root, 'broker')], root)
   return {
-    root, live, first, deploy, addCommit,
+    root, live, first, deploy, addCommit, cloneBroker,
     trace: () => fs.existsSync(path.join(root, 'trace')) ? fs.readFileSync(path.join(root, 'trace'), 'utf8') : '',
     releases: () => fs.existsSync(path.join(root, 'otzaria-releases')) ? fs.readdirSync(path.join(root, 'otzaria-releases')) : [],
     readLive: relative => fs.readFileSync(path.join(live, relative), 'utf8').trim(),
@@ -327,5 +333,32 @@ test('an unhealthy release after interrupted link swap rolls back to legacy', ()
     assert.equal(f.readLive('public/version.json'), '{"version":"legacy"}')
     assert.equal(fs.existsSync(failedRelease), false)
     assert.match(result.stderr, /Legacy checkout restored/)
+  } finally { f.remove() }
+})
+
+test('a successful deployment moves the broker checkout and restarts it only if running', () => {
+  const f = fixture()
+  try {
+    assert.equal(f.deploy(f.first).status, 0)
+    assert.doesNotMatch(f.trace(), /systemctl/)
+    f.cloneBroker()
+    const second = f.addCommit('two')
+    const result = f.deploy(second, 'b'.repeat(40))
+    assert.equal(result.status, 0, result.stdout + result.stderr)
+    assert.equal(fs.readFileSync(path.join(f.root, 'broker', 'app.js'), 'utf8').trim(), 'two')
+    assert.match(f.trace(), /systemctl try-restart otzaria-service-broker/)
+  } finally { f.remove() }
+})
+
+test('a broker update failure warns without failing the live deployment', () => {
+  const f = fixture()
+  try {
+    assert.equal(f.deploy(f.first).status, 0)
+    f.cloneBroker()
+    const second = f.addCommit('two')
+    const result = f.deploy(second, 'b'.repeat(40), 'broker_restart')
+    assert.equal(result.status, 0, result.stdout + result.stderr)
+    assert.equal(f.readLive('public/version.json'), '{"version":"two"}')
+    assert.match(result.stderr, /broker was not updated/)
   } finally { f.remove() }
 })

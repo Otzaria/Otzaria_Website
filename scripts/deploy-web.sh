@@ -9,6 +9,8 @@ BUILD_DIR=${BUILD_DIR:-$ROOT_DIR/otzaria-build}
 RELEASES_DIR=${RELEASES_DIR:-$ROOT_DIR/otzaria-releases}
 SHARED_DIR=${SHARED_DIR:-$ROOT_DIR/otzaria-shared}
 PM2_APP=${PM2_APP:-otzaria}
+BROKER_DIR=${BROKER_DIR:-/opt/otzaria-website}
+BROKER_UNIT=${BROKER_UNIT:-otzaria-service-broker}
 
 [[ "$DEPLOY_REF" =~ ^[a-f0-9]{40}$ && "$VALIDATOR_REF" =~ ^[a-f0-9]{40}$ ]] || {
   echo 'Deployment requires immutable commit SHAs' >&2
@@ -341,3 +343,19 @@ fi
 COMPLETE=true
 if [[ -n "$LEGACY_PATH" ]]; then rm -rf "$LEGACY_PATH"; fi
 echo "Deployment healthy: $NEW_RELEASE"
+
+# The service-plugin broker (workers/service-plugin-broker) runs from its own
+# checkout under systemd. Move it to the deployed commit and restart it only if
+# it is running. The website is already live, so a failure here only warns.
+update_broker() {
+  git -C "$BROKER_DIR" fetch --depth 1 origin "$DEPLOY_REF" &&
+    git -C "$BROKER_DIR" reset --hard "$DEPLOY_REF" &&
+    systemctl try-restart "$BROKER_UNIT"
+}
+if git -C "$BROKER_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+  if update_broker; then
+    echo "Service-plugin broker checkout updated: $BROKER_DIR"
+  else
+    echo "Warning: the service-plugin broker was not updated ($BROKER_DIR)" >&2
+  fi
+fi

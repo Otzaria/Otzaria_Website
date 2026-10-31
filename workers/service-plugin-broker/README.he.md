@@ -29,7 +29,7 @@ sudo apt install gh
 sudo -u otzaria-broker -H bash -c 'curl -fsSL https://claude.ai/install.sh | bash'
 ```
 
-עותק המאגר: `/opt/otzaria-website` (קריאה בלבד למשתמש `otzaria-broker`). יחידת systemd לדוגמה: [`deploy/service-plugin-broker.service`](deploy/service-plugin-broker.service). הסודות (`SERVICE_PLUGIN_WORKER_SECRET`, `GH_TOKEN`, `ANTHROPIC_API_KEY`, `VT_API_KEY`) נשמרים כקובץ לכל סוד ב־`/etc/otzaria/credentials/` (בעלות root, `0600`) ונטענים ב־`LoadCredential=`: systemd חושף אותם רק לתהליך המתווך תחת `$CREDENTIALS_DIRECTORY`, לא בסביבה. שאר ההגדרות בקובץ `/etc/otzaria/service-broker.env`.
+עותק המאגר: `/opt/otzaria-website` (קריאה בלבד למשתמש `otzaria-broker`). כל פריסה של האתר (`scripts/deploy-web.sh`) מעבירה את העותק הזה לקומיט שנפרס ומפעילה מחדש את `otzaria-service-broker` אם הוא רץ; כשל בשלב הזה מוצג כאזהרה ואינו מכשיל את הפריסה. יחידת systemd לדוגמה: [`deploy/service-plugin-broker.service`](deploy/service-plugin-broker.service). הסודות (`SERVICE_PLUGIN_WORKER_SECRET`, `GH_TOKEN`, `ANTHROPIC_API_KEY`, `VT_API_KEY`) נשמרים כקובץ לכל סוד ב־`/etc/otzaria/credentials/` (בעלות root, `0600`) ונטענים ב־`LoadCredential=`: systemd חושף אותם רק לתהליך המתווך תחת `$CREDENTIALS_DIRECTORY`, לא בסביבה. שאר ההגדרות בקובץ `/etc/otzaria/service-broker.env`.
 
 ```bash
 sudo install -d -m 0700 /etc/otzaria/credentials
