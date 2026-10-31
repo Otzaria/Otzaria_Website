@@ -441,6 +441,33 @@ export async function closeManualReport({ user, id, generation, note, now = new 
   return ok({ generation: updated.workflowGeneration });
 }
 
+// דיווח שפורסם אינו נפתח מחדש: התיקון כבר במקור, ואישור חוזר היה יוצר שינוי כפול.
+const REOPENABLE_STATES = ['closed_rejected', 'closed_manual', 'closed_already_fixed'];
+
+/** פתיחה מחדש של דיווח סגור: חוזר לתור הידני (לא משויך), בלי אישור ובלי פרסום ממתין. */
+export async function reopenReport({ user, id, generation, now = new Date() }) {
+  if (!canHandleCorrections(user)) return err(403, 'Forbidden');
+  if (!isId(id) || !Number.isSafeInteger(generation)) return err(400, 'invalid_request');
+  const r = await ErrorReport.findById(id).select('state workflowGeneration').lean();
+  if (!r) return err(404, 'not_found');
+  if (!REOPENABLE_STATES.includes(r.state)) return err(409, 'not_reopenable');
+  const updated = await ErrorReport.findOneAndUpdate(
+    { _id: id, workflowGeneration: generation, state: { $in: REOPENABLE_STATES } },
+    {
+      $set: {
+        ...manualQueueSet('reopened', now), state: 'open', closedAt: null, resolvedAt: null, closeReason: null,
+        'approval.authority': 'none', 'approval.scope': 'none', 'approval.changeId': null,
+        'publish.status': 'not_ready', 'publish.changeId': null, 'dispatch.publish': false,
+      },
+      $inc: { workflowGeneration: 1 },
+    },
+    { returnDocument: 'after' },
+  ).lean();
+  if (!updated) return err(409, 'stale_view');
+  await logEvent(updated._id, 'reopened', userActor(user), updated.workflowGeneration, { from: r.state });
+  return ok({ generation: updated.workflowGeneration });
+}
+
 /** שליחה מחודשת לשירות — רק כפעולה מפורשת. */
 export async function resubmitToService({ user, id, generation, config, now = new Date() }) {
   const { r, error } = await loadForAction({ user, id, generation, now });
