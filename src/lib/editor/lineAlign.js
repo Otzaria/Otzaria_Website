@@ -13,6 +13,7 @@ export const LINE_JOIN_PENALTY = 0.3;
 
 /**
  * @typedef {string | { text?: string|null, bbox?: number[]|null }} ScanLineLike
+ * @typedef {{ text: string, grams: Map<string, number> }} PreparedLine
  * @typedef {{ scanIndex: number|null, scanIndexes: number[], cost: number, kind: 'match'|'merge'|'split'|'insert'|'identity' }} LineMatch
  */
 
@@ -43,10 +44,13 @@ function bigrams(s) {
  */
 export function lineCost(a, b) {
   if (a === b) return 0;
+  return preparedCost(a, b, bigrams(a), bigrams(b));
+}
+
+function preparedCost(a, b, A, B) {
+  if (a === b) return 0;
   if (!a.length || !b.length) return 1;
   if (a.length < 2 || b.length < 2) return 1;
-  const A = bigrams(a);
-  const B = bigrams(b);
   let common = 0;
   for (const [g, c] of A) common += Math.min(c, B.get(g) || 0);
   return 1 - (2 * common) / (a.length - 1 + (b.length - 1));
@@ -80,16 +84,26 @@ export function alignLines(textLines, scanLines, { gap = LINE_GAP, force = false
     return T.map((_, i) => (i < m ? { scanIndex: i, scanIndexes: [i], cost: 0, kind: 'identity' } : { scanIndex: null, scanIndexes: [], cost: 1, kind: 'insert' }));
   }
 
-  /** @type {(a: string|number, b: string|number) => number} */
+  /** @type {(a: PreparedLine|number, b: PreparedLine|number) => number} */
   let cost;
-  /** @type {(string|number)[]} */
+  /** @type {(a: PreparedLine|number, b: PreparedLine|number) => PreparedLine|number} */
+  let join;
+  /** @type {(PreparedLine|number)[]} */
   let A;
-  /** @type {(string|number)[]} */
+  /** @type {(PreparedLine|number)[]} */
   let B;
   if (withText) {
-    A = T.map(normalizeLine);
-    B = S.map((l) => normalizeLine(textOf(l)));
-    cost = (a, b) => lineCost(/** @type {string} */ (a), /** @type {string} */ (b));
+    // כל שורה (כולל זוג שורות מחוברות) מופיעה במאות תאי DP. בונים את זוגות
+    // האותיות פעם אחת לכל טקסט, במקום שוב בכל השוואה. המטמון מוגבל לריצה הזו.
+    const preparedLines = new Map();
+    const prepared = (s) => {
+      if (!preparedLines.has(s)) preparedLines.set(s, { text: s, grams: bigrams(s) });
+      return preparedLines.get(s);
+    };
+    A = T.map((s) => prepared(normalizeLine(s)));
+    B = S.map((l) => prepared(normalizeLine(textOf(l))));
+    cost = (a, b) => a === b ? 0 : preparedCost(a.text, b.text, a.grams, b.grams);
+    join = (a, b) => prepared(a.text + b.text);
   } else {
     // אורך יחסי: תווים מול רוחב, כל אחד ביחס לחציון שלו
     const lens = T.map((s) => Array.from(normalizeLine(s)).length);
@@ -98,13 +112,18 @@ export function alignLines(textLines, scanLines, { gap = LINE_GAP, force = false
     A = lens.map((x) => x / tm);
     B = widths.map((x) => x / wm);
     cost = (a, b) => Math.min(1, Math.abs(/** @type {number} */ (a) - /** @type {number} */ (b)));
+    join = (a, b) => /** @type {number} */ (a) + /** @type {number} */ (b);
   }
-  const join = (x, y) => (typeof x === 'number' ? x + /** @type {number} */ (y) : x + y);
 
   // אותו מספר שורות — שורה i מול שורה i, אלא אם יישור אחר (למשל שורת כותרת בצילום שאין לה
   // שורה בטקסט, ושורה בטקסט שנוספה בסוף) זול ממנה בבירור: עדיף בפער של יותר מדילוג אחד
   const idCost = n === m && !force ? A.reduce((acc, a, i) => acc + cost(a, B[i]), 0) : Infinity;
-  if (idCost === 0) return identity();
+  // כל עלויות ה-DP אי-שליליות. כשהזהות זולה מדילוג אחד, שום מסלול אינו יכול
+  // לנצח אותה בפער הנדרש למטה — גם אחרי הקלדת אות אין צורך במטריצה שלמה.
+  if (idCost === 0 || idCost < gap) return identity();
+
+  const joinedA = A.map((a, i) => i ? join(A[i - 1], a) : null);
+  const joinedB = B.map((b, i) => i ? join(B[i - 1], b) : null);
 
   const D = [];
   const P = [];
@@ -123,11 +142,11 @@ export function alignLines(textLines, scanLines, { gap = LINE_GAP, force = false
       let best = D[i - 1][j - 1] + cost(A[i - 1], B[j - 1]);
       let mv = 0;
       if (i > 1) {
-        const v = D[i - 2][j - 1] + cost(join(A[i - 2], A[i - 1]), B[j - 1]) + LINE_JOIN_PENALTY;
+        const v = D[i - 2][j - 1] + cost(joinedA[i - 1], B[j - 1]) + LINE_JOIN_PENALTY;
         if (v < best) [best, mv] = [v, 3];
       }
       if (j > 1) {
-        const v = D[i - 1][j - 2] + cost(A[i - 1], join(B[j - 2], B[j - 1])) + LINE_JOIN_PENALTY;
+        const v = D[i - 1][j - 2] + cost(A[i - 1], joinedB[j - 1]) + LINE_JOIN_PENALTY;
         if (v < best) [best, mv] = [v, 4];
       }
       if (D[i - 1][j] + gap < best) [best, mv] = [D[i - 1][j] + gap, 1];
@@ -148,13 +167,13 @@ export function alignLines(textLines, scanLines, { gap = LINE_GAP, force = false
       i--;
       j--;
     } else if (mv === 3) {
-      const c = cost(join(A[i - 2], A[i - 1]), B[j - 1]);
+      const c = cost(joinedA[i - 1], B[j - 1]);
       res[i - 2] = { scanIndex: j - 1, scanIndexes: [j - 1], cost: c, kind: 'merge' };
       res[i - 1] = { scanIndex: j - 1, scanIndexes: [j - 1], cost: c, kind: 'merge' };
       i -= 2;
       j--;
     } else if (mv === 4) {
-      res[i - 1] = { scanIndex: j - 2, scanIndexes: [j - 2, j - 1], cost: cost(A[i - 1], join(B[j - 2], B[j - 1])), kind: 'split' };
+      res[i - 1] = { scanIndex: j - 2, scanIndexes: [j - 2, j - 1], cost: cost(A[i - 1], joinedB[j - 1]), kind: 'split' };
       i--;
       j -= 2;
     } else if (mv === 1) {
