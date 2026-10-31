@@ -24,7 +24,10 @@
  */
 
 import { createHash } from 'node:crypto'
-import { readFile, writeFile, readdir, unlink } from 'node:fs/promises'
+import { readFile, writeFile, readdir, unlink, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -56,6 +59,23 @@ const MODERN_UA =
 
 /** subset תקין שוקל עשרות KB; מעל זה — Google החזיר את הגופן המלא (ראו build). */
 const MAX_SUBSET_BYTES = 150 * 1024
+
+// ה-API עשוי להחזיר את כל ציר 100–700 למרות הבקשה לטווח צר. מצמצמים מקומית
+// באמצעות fonttools[woff] (נדרש רק ב-build:icons), ושומרים גם על משקל 300 של כלי העורך.
+async function subsetWeights(woff2) {
+  const dir = await mkdtemp(path.join(tmpdir(), 'otzaria-icon-font-'))
+  try {
+    const source = path.join(dir, 'source.woff2')
+    const target = path.join(dir, 'subset.woff2')
+    await writeFile(source, woff2)
+    await promisify(execFile)('python3', [
+      path.join(ROOT, 'scripts', 'subset-icon-weight.py'), source, target, String(WGHT_MIN), String(WGHT_MAX)
+    ], { timeout: 30_000 })
+    return await readFile(target)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+}
 
 // אייקונים מוצגים רק מקוד JS/TS (אין שימוש ב-CSS content/Markdown). קובצי טסט אינם מרונדרים.
 const CODE_EXTENSIONS = new Set(['.js', '.jsx', '.mjs', '.ts', '.tsx'])
@@ -189,14 +209,15 @@ async function build() {
     )
   }
 
-  const woff2 = await fetchSubset(names)
+  const downloaded = await fetchSubset(names)
   // רשת ביטחון: subset תקין שוקל עשרות KB. גופן גדול מזה הוא כנראה הגופן המלא.
-  if (woff2.length > MAX_SUBSET_BYTES) {
+  if (downloaded.length > MAX_SUBSET_BYTES) {
     throw new Error(
-      `הגופן שהתקבל שוקל ${(woff2.length / 1024).toFixed(1)}KB (${names.length} שמות, ${paramLength} תווים) — ` +
+      `הגופן שהתקבל שוקל ${(downloaded.length / 1024).toFixed(1)}KB (${names.length} שמות, ${paramLength} תווים) — ` +
         'כנראה Google התעלם מה-subset.'
     )
   }
+  const woff2 = await subsetWeights(downloaded)
   const missing = missingFromFont(names, woff2)
   if (missing.length) {
     throw new Error(`אייקונים שבשימוש חסרים בגופן שהתקבל: ${missing.join(', ')}`)

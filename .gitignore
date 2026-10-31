@@ -53,6 +53,7 @@ scripts/*
 !scripts/build-offline-editor.js
 # סקריפטי build אמיתיים — נדרשים ל-npm run build ולכן נשמרים
 !scripts/build-icon-font.mjs
+!scripts/subset-icon-weight.py
 !scripts/icon-font.manifest.json
 !scripts/material-symbols-names.txt
 !scripts/optimize-assets.mjs
