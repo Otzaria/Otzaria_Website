@@ -18,7 +18,6 @@ export const PROTECTED_PREFIXES = [
   '/library/users',
   '/library/info',
   '/library/acronyms',
-  '/library/dicta-books',
   '/library/ocr-training',
   '/library/ocr-lines',
   '/library/page-proof',

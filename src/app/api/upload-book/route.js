@@ -14,7 +14,7 @@ import { unauthorized, badRequest, forbidden, apiError, serverError } from '@/li
 // סכמת אימות להעלאת קבצים
 const uploadFileSchema = z.object({
   bookName: z.string().min(1, 'שם הספר נדרש').max(200, 'שם הספר ארוך מדי'),
-  uploadType: z.enum(['full_book', 'single_page', 'dicta']).optional(),
+  uploadType: z.enum(['full_book', 'single_page']).optional(),
   authorName: z.string().max(100, 'שם המחבר ארוך מדי').optional(),
   bookCategory: z.string().max(100, 'קטגוריית הספר ארוכה מדי').optional(),
   authorCategory: z.string().max(100, 'קטגוריית המחבר ארוכה מדי').optional(),
@@ -248,8 +248,8 @@ export async function POST(request) {
         // בדיקה אם צריך לשלוח מייל
         let shouldSendEmail = false;
         
-        if (uploadType === 'dicta' || uploadType === 'full_book') {
-            // דיקטה וספר שלם - תמיד שולחים מייל
+        if (uploadType === 'full_book') {
+            // ספר שלם - תמיד שולחים מייל
             shouldSendEmail = true;
         } else if (uploadType === 'single_page') {
             // עמוד בודד - רק אם זה העמוד האחרון

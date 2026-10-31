@@ -110,7 +110,7 @@ export default function AdminUsersClient({ initialUsers }) {
     let aValue = a[sortConfig.key] || ''
     let bValue = b[sortConfig.key] || ''
 
-    if (sortConfig.key === 'points' || sortConfig.key === 'completedPages' || sortConfig.key === 'dictaBooks') {
+    if (sortConfig.key === 'points' || sortConfig.key === 'completedPages') {
         aValue = Number(aValue) || 0
         bValue = Number(bValue) || 0
     }
@@ -170,15 +170,9 @@ export default function AdminUsersClient({ initialUsers }) {
               >
                 עמודים שהושלמו {getSortIcon('completedPages')}
               </th>
-              <th
-                onClick={() => handleSort('dictaBooks')}
-                className="text-right p-4 font-bold text-neutral-700 cursor-pointer hover:bg-neutral-200 select-none"
-              >
-                ספרי דיקטה {getSortIcon('dictaBooks')}
-              </th>
               <th className="text-right p-4 font-bold text-neutral-700">
                 מרחב תיקון ספרים
-                <div className="text-[10px] font-normal text-neutral-400">הרשאות לעריכת ספרי דיקטה הערוכים</div>
+                <div className="text-[10px] font-normal text-neutral-400">הרשאות לתיקון הספרים הערוכים</div>
               </th>
               <th className="text-right p-4 font-bold text-neutral-700 sticky left-0 bg-neutral-50 z-10 shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.1)]">פעולות</th>
             </tr>
@@ -261,11 +255,6 @@ export default function AdminUsersClient({ initialUsers }) {
                   <td className="p-4 text-center">
                     <span className="bg-info-50 text-info-700 px-3 py-1 rounded-full text-sm font-bold">
                         {user.completedPages || 0}
-                    </span>
-                  </td>
-                  <td className="p-4 text-center">
-                    <span className="bg-success-50 text-success-700 px-3 py-1 rounded-full text-sm font-bold">
-                        {user.dictaBooks || 0}
                     </span>
                   </td>
                   <td className="p-4">

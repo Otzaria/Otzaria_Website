@@ -3,7 +3,6 @@ import {
   normalizeId,
   formatTimeAgo,
   computeRegularRecipients,
-  computeDictaRecipients,
   generateEmailHtml,
 } from './reminderUtils'
 
@@ -94,72 +93,12 @@ describe('computeRegularRecipients', () => {
   })
 })
 
-describe('computeDictaRecipients', () => {
-  const allUsers = [
-    { _id: 'u1', email: 'a@example.com', name: 'אלכס', acceptReminders: true, isVerified: true },
-    { _id: 'u2', email: 'b@example.com', name: 'בני', acceptReminders: true, isVerified: true },
-  ]
-  const now = new Date('2025-01-10T00:00:00Z')
-
-  it('כולל רק ספרים in-progress שעברו את סף הימים', () => {
-    const dictaBooks = [
-      { title: 'ספר א', status: 'in-progress', claimedBy: 'u1', claimedAt: '2025-01-01T00:00:00Z' }, // 9 ימים
-      { title: 'ספר ב', status: 'in-progress', claimedBy: 'u2', claimedAt: '2025-01-08T00:00:00Z' }, // 2 ימים
-    ]
-    const result = computeDictaRecipients(dictaBooks, allUsers, 5, now)
-    expect(result).toHaveLength(1)
-    expect(result[0].email).toBe('a@example.com')
-    expect(result[0].books).toEqual([{ title: 'ספר א', daysSinceClaim: 9 }])
-    expect(result[0].maxDays).toBe(9)
-  })
-
-  it('daysThreshold=0 כולל את כל הספרים בטיפול', () => {
-    const dictaBooks = [
-      { title: 'ספר א', status: 'in-progress', claimedBy: 'u1', claimedAt: '2025-01-09T00:00:00Z' },
-    ]
-    expect(computeDictaRecipients(dictaBooks, allUsers, 0, now)).toHaveLength(1)
-  })
-
-  it('כולל ספר שמגיע בדיוק לסף הימים (>=, לא >)', () => {
-    const dictaBooks = [
-      { title: 'ספר א', status: 'in-progress', claimedBy: 'u1', claimedAt: '2025-01-05T00:00:00Z' }, // בדיוק 5 ימים
-    ]
-    expect(computeDictaRecipients(dictaBooks, allUsers, 5, now)).toHaveLength(1)
-  })
-
-  it('מצרף כמה ספרים לאותו משתמש ומעדכן maxDays', () => {
-    const dictaBooks = [
-      { title: 'ספר א', status: 'in-progress', claimedBy: { _id: 'u1' }, claimedAt: '2025-01-01T00:00:00Z' },
-      { title: 'ספר ב', status: 'in-progress', claimedBy: { _id: 'u1' }, claimedAt: '2025-01-05T00:00:00Z' },
-    ]
-    const result = computeDictaRecipients(dictaBooks, allUsers, 0, now)
-    expect(result).toHaveLength(1)
-    expect(result[0].books).toHaveLength(2)
-    expect(result[0].maxDays).toBe(9)
-  })
-
-  it('מתעלם מספרים ללא claimedAt או שאינם in-progress', () => {
-    const dictaBooks = [
-      { title: 'ספר א', status: 'in-progress', claimedBy: 'u1' }, // אין claimedAt
-      { title: 'ספר ב', status: 'completed', claimedBy: 'u1', claimedAt: '2025-01-01T00:00:00Z' },
-    ]
-    expect(computeDictaRecipients(dictaBooks, allUsers, 0, now)).toEqual([])
-  })
-})
-
 describe('generateEmailHtml', () => {
   it('בונה קישור לספר רגיל וכפתור "כנס לספרייה"', () => {
-    const html = generateEmailHtml('שם ספר', 'שלום\nעולם', false)
+    const html = generateEmailHtml('שם ספר', 'שלום\nעולם')
     expect(html).toContain('/library/books/שם ספר')
     expect(html).toContain('כנס לספרייה')
     expect(html).toContain('שלום<br/>עולם')
     expect(html).toContain('הודעה בנוגע לספר: שם ספר')
-  })
-
-  it('בונה קישור לספרי דיקטה וכפתור "כנס לספרי הדיקטה שלי"', () => {
-    const html = generateEmailHtml('ספרי דיקטה', 'תוכן', true)
-    expect(html).toContain('/library/dicta-books?status=my-books')
-    expect(html).toContain('כנס לספרי הדיקטה שלי')
-    expect(html).toContain('הודעה בנוגע לספר דיקטה: ספרי דיקטה')
   })
 })

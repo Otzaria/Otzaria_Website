@@ -97,14 +97,6 @@ export default function ContributeSection() {
                     <span className="material-symbols-outlined">library_books</span>
                     <span>ערוך בספרייה</span>
                   </Link>
-                                  <Link
-                    href="/library/dicta-books"
-                    prefetch={false}
-                    className="flex items-center justify-center gap-2 px-8 py-4 bg-surface text-on-surface rounded-lg text-lg font-medium hover:bg-surface-variant transition-all duration-200 border border-outline hover:scale-105 hover:-translate-y-0.5 active:scale-95 w-full sm:w-auto"
-                  >
-                    <span className="material-symbols-outlined">edit_note</span>
-                    <span>ערוך ספרי דיקטה</span>
-                  </Link>
               </div>
 
               {/* שורה שנייה - לחצנים חדשים */}

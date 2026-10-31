@@ -123,7 +123,7 @@ function LibraryEditSpaceContent() {
             <div>
               <h1 className="text-4xl font-bold font-frank text-neutral-cool-900 mb-2">מרחב תיקון ספרים</h1>
               <p className="text-neutral-cool-600 text-lg">
-                {loading ? 'טוען...' : `${filtered.length} ספרים`} · תיקון שיבושים בספרי דיקטה הערוכים
+                {loading ? 'טוען...' : `${filtered.length} ספרים`} · תיקון שיבושים בספרים הערוכים
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3 md:justify-end">

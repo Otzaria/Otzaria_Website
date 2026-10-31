@@ -4,7 +4,7 @@ import Link from 'next/link'
 import Loader from '@/components/ui/Loader'
 
 // מיושן — הכפתור הישן (label + variant primary/secondary/outline/ghost/danger), שנשמר כמו שהוא
-// עבור העורכים ודיקטה (DictaEditorCore, SpellcheckDialog, dicta-edit, dicta-books/edit), כדי
+// עבור העורכים (DictaEditorCore, SpellcheckDialog, dicta-edit, admin/uploads/edit), כדי
 // שהמראה שם לא ישתנה בלי בדיקה בדפדפן. קוד חדש — ui/Button. מיפוי בהעברה:
 // primary→filled, outline→outlined, ghost→text, secondary→tonal, danger→danger.
 // שימו לב: variant="secondary" כאן משתמש ב-text-on-secondary שאינו מוגדר.
