@@ -562,13 +562,18 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
               const newLeft = replaceOutsideTags(leftColumn, regex, '').value;
               if (newRight !== rightColumn) updateTextWithHistory(newRight, 'right');
               if (newLeft !== leftColumn) updateTextWithHistory(newLeft, 'left');
+              // שתי קריאות onChange באותו render רואות את הטור השני הישן. שומרים בסוף
+              // תמונה מלאה של שני הטורים, אחרי עדכון השדות והיסטוריית הביטול שלהם.
+              if (newRight !== rightColumn || newLeft !== leftColumn) {
+                handleAutoSaveWrapper(content, newLeft, newRight, twoColumns);
+              }
             } else {
               const newContent = replaceOutsideTags(content, regex, '').value;
               if (newContent !== content) updateTextWithHistory(newContent, null);
             }
         }
     )
-  }, [showConfirm, twoColumns, rightColumn, leftColumn, content, updateTextWithHistory]);
+  }, [showConfirm, twoColumns, rightColumn, leftColumn, content, updateTextWithHistory, handleAutoSaveWrapper]);
 
   const handleFinishClick = useCallback(async () => {
     if (!session) return showAlert('שגיאה', 'אינך מחובר למערכת');
