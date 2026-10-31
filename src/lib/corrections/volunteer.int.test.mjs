@@ -131,6 +131,33 @@ test('[T28] דיווח חופשי: לקיחה וסגירה ידנית; דחיי�
   assert.equal(r.decisions.at(-1).message, 'אין טעות');
 });
 
+test('פתיחה מחדש: דיווח שנסגר/נדחה חוזר לתור הידני; תצוגה ישנה ודיווח פתוח נדחים', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const id = await ingest('reopen', { report_kind: 'free_text', correction: null });
+  await ErrorReport.updateOne({ _id: id }, { $set: { state: 'open', 'manual.status': 'queued', 'manual.handoffReason': 'free_text' } });
+  const c = await act(users.a, id, { action: 'claim' });
+  assert.equal((await act(users.a, id, { action: 'reopen', generation: c.body.generation })).body.error, 'not_reopenable', 'דיווח פתוח');
+  const closed = await act(users.a, id, { action: 'close_manual', generation: c.body.generation, note: 'טופל' });
+  assert.equal((await act(users.b, id, { action: 'reopen', generation: c.body.generation })).body.error, 'stale_view');
+  const re = await act(users.b, id, { action: 'reopen', generation: closed.body.generation });
+  assert.equal(re.status, 200);
+  let r = await ErrorReport.findById(id).lean();
+  assert.equal(r.state, 'open');
+  assert.equal(r.status, 'pending');
+  assert.equal(r.closedAt, null);
+  assert.equal(r.manual.status, 'queued');
+  assert.equal(r.manual.handoffReason, 'reopened');
+  assert.ok((await CorrectionEvent.find({ report: id, type: 'reopened' }).lean()).length === 1);
+  // אחרי פתיחה מחדש — אפשר לטפל שוב (כאן: דחייה ושוב פתיחה)
+  const c2 = await act(users.b, id, { action: 'claim' });
+  const rej = await act(users.b, id, { action: 'reject', generation: c2.body.generation, reason: 'אין טעות' });
+  assert.equal((await act(users.a, id, { action: 'reopen', generation: rej.body.generation })).status, 200);
+  r = await ErrorReport.findById(id).lean();
+  assert.equal(r.state, 'open');
+  await ErrorReport.updateOne({ _id: id }, { $set: { state: 'closed_published' } });
+  assert.equal((await act(users.a, id, { action: 'reopen', generation: r.workflowGeneration })).body.error, 'not_reopenable', 'פורסם');
+});
+
 test('[T17] שני מתנדבים: לקיחה אטומית אחת; אישור כפול מקביל → אחד מצליח, בלי חבילה יתומה', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const id = await ingest('t17');

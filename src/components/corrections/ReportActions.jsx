@@ -9,6 +9,22 @@ const PUBLISHING = new Set(['ready', 'in_progress', 'unknown_needs_reconcile', '
 // הערות סגירה נפוצות — בלחיצה, בלי להקליד כל פעם
 const CLOSE_NOTES = ['טופל מחוץ למערכת', 'כבר תוקן במקור', 'כפילות של דיווח אחר']
 
+// מצבים סגורים שאפשר לפתוח מחדש (תואם REOPENABLE_STATES בשרת); דיווח שפורסם — לא.
+const REOPENABLE = new Set(['closed_rejected', 'closed_manual', 'closed_already_fixed'])
+
+/** דיווח סגור: פתיחה מחדש מחזירה אותו לתור הידני. */
+function ReopenPanel({ report, busy, run }) {
+  if (!REOPENABLE.has(report.state)) return null
+  return (
+    <div className="glass rounded-xl p-4 flex flex-wrap items-center justify-between gap-2">
+      <span className="text-sm">הדיווח סגור. פתיחה מחדש תחזיר אותו לתור הטיפול.</span>
+      <button disabled={busy} onClick={() => run({ action: 'reopen', generation: report.generation })} className={`${btn} glass`}>
+        <span className="material-symbols-outlined text-base">undo</span> פתיחה מחדש
+      </button>
+    </div>
+  )
+}
+
 /**
  * פעולות המתנדב על דיווח. כל שליחה נושאת את ה-generation שהוצג; השרת דוחה תצוגה ישנה.
  * @param {{detail:object, meId:string, busy:boolean, run:(body:object, opts?:object)=>Promise<any>,
@@ -50,7 +66,8 @@ export default function ReportActions({ detail, meId, busy, run, probe, sourcePi
     if (sourcePick) box.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }, [sourcePick])
 
-  if (report.state !== 'open') return null
+  if (report.state !== 'open') return <ReopenPanel report={report} busy={busy} run={run} />
+
   const usable = source && (source.status === 'exact' || source.status === 'relocated')
   const baseLine = preview?.line ?? source?.currentLine ?? rev?.originalLine ?? ''
   // ה-diff של מה שיישמר בפועל: הקשר רק מיעד שנטען בוודאות (בחירה ידנית או מקור שאותר בדיוק).
