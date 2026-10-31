@@ -69,8 +69,9 @@ export function sendOnLeave(data) {
 export function useAutoSave() {
   const timeoutRef = useRef(null)
   const pendingRef = useRef(null)
-  const inFlightRef = useRef(null) // הנתונים של השמירה שכרגע בדרך
   const failedRef = useRef(null) // הנתונים של השמירה האחרונה שנכשלה (עד שמירה מוצלחת אחריה)
+  const latestRef = useRef(null) // הגרסה העדכנית שטרם אושרה, גם כשהיא בתור מאחורי בקשה אחרת
+  const queuedRef = useRef(null) // השמירה האחרונה שהוכנסה לתור, לפני שהבקשה התחילה
   const chainRef = useRef(Promise.resolve(true))
   // סטטוסים אפשריים: 'saved', 'unsaved', 'saving', 'error'
   const [status, setStatus] = useState('saved')
@@ -83,23 +84,28 @@ export function useAutoSave() {
   }
 
   const saveContent = useCallback((data) => {
+    queuedRef.current = data
     const run = async () => {
-      inFlightRef.current = data
       setStatus('saving')
       try {
         await apiPost(SAVE_URL, toSaveBody(data))
         // השמירות בטור — הצלחה כאן מחליפה כל כישלון קודם (התוכן הזה חדש ממנו)
-        failedRef.current = null
+        if (latestRef.current === data) {
+          latestRef.current = null
+          failedRef.current = null
+        }
         // אם בינתיים הגיע שינוי חדש — הוא עדיין לא נשמר
-        setStatus(pendingRef.current ? 'unsaved' : 'saved')
+        setStatus(latestRef.current ? (pendingRef.current ? 'unsaved' : 'saving') : 'saved')
         return true
       } catch (error) {
         console.error('Auto-save error:', error)
-        failedRef.current = data
-        setStatus('error')
+        if (latestRef.current === data) {
+          failedRef.current = data
+          setStatus('error')
+        }
         return false
       } finally {
-        if (inFlightRef.current === data) inFlightRef.current = null
+        if (queuedRef.current === data) queuedRef.current = null
       }
     }
     const next = chainRef.current.then(run, run)
@@ -110,7 +116,7 @@ export function useAutoSave() {
   // יציאה מהדף (סגירה/רענון/ניווט חיצוני): שולחים את הגרסה העדכנית ביותר שעוד לא אושרה
   useEffect(() => {
     if (typeof window === 'undefined') return undefined
-    const latestUnconfirmed = () => pendingRef.current ?? inFlightRef.current ?? failedRef.current
+    const latestUnconfirmed = () => latestRef.current
     const onPageHide = () => {
       const data = latestUnconfirmed()
       if (!data) return
@@ -126,7 +132,7 @@ export function useAutoSave() {
       // יש מה לשלוח (ממתין/בדרך) — pagehide ישלח אותו, לא מטרידים את המשתמש; אלא אם הוא גדול
       // ממגבלת sendBeacon ולכן כמעט בוודאות לא יישלח. כשהשמירה האחרונה נכשלה ואין גרסה חדשה
       // בדרך — מבקשים אישור.
-      const toSend = pendingRef.current ?? inFlightRef.current
+      const toSend = latestRef.current === failedRef.current ? null : latestRef.current
       if (toSend) {
         if (!likelyTooLargeToSendOnLeave(byteLength(leaveBody(toSend)))) return
       } else if (!failedRef.current) return
@@ -151,8 +157,11 @@ export function useAutoSave() {
   }, [saveContent])
 
   const debouncedSave = useCallback((data) => {
+    data = toSaveBody(data)
     // עדכון מיידי שהתוכן לא שמור
     setStatus('unsaved')
+    latestRef.current = data
+    failedRef.current = null
     pendingRef.current = data
     clearTimer()
     timeoutRef.current = setTimeout(() => {
@@ -165,9 +174,11 @@ export function useAutoSave() {
 
   const saveNow = useCallback(async (data) => {
     clearTimer()
-    const toSave = data ?? pendingRef.current ?? failedRef.current
+    const toSave = data != null ? toSaveBody(data) : pendingRef.current ?? (latestRef.current === queuedRef.current ? null : latestRef.current)
     pendingRef.current = null
     if (!toSave) return chainRef.current
+    latestRef.current = toSave
+    failedRef.current = null
     return saveContent(toSave)
   }, [saveContent])
 
