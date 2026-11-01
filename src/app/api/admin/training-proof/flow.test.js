@@ -27,6 +27,7 @@ import TrainingProofBook from '@/models/TrainingProofBook'
 import TrainingProofExportLog from '@/models/TrainingProofExportLog'
 import TrainingProofExportLock from '@/models/TrainingProofExportLock'
 import TrainingProofCorrection from '@/models/TrainingProofCorrection'
+import TrainingProofArchive from '@/models/TrainingProofArchive'
 import PageProofBook from '@/models/PageProofBook'
 import { startMongo } from '@/lib/corrections/testing/mongo.js'
 import { sampleEntries, ocrItem, routerItem } from '@/lib/trainingProof/testFixtures'
@@ -404,8 +405,19 @@ describe('הורדה לתחנה', () => {
     const delta = new Map([[String(vol._id), { ocr: { approved: 2, unchanged: 1, rejected: 0 } }]])
     await applyArchive(delta, 'tpx-20261028-aabbcc')
     await applyArchive(delta, 'tpx-20261028-aabbcc')
-    const saved = await TrainingProofVolunteer.findOne({ userId: vol._id }).lean()
-    expect(saved.stats.archived.ocr).toMatchObject({ approved: 2, unchanged: 1 })
+    const saved = await TrainingProofArchive.findOne({ userId: vol._id }).lean()
+    expect(saved.stats.ocr).toMatchObject({ approved: 2, unchanged: 1 })
+    expect((await volunteerStats(String(vol._id))).ocr).toMatchObject({ approved: 2, unchanged: 1 })
+  })
+
+  it('מונים שנשמרו קודם ברשומת-המגיה נספרים, והורדה שכבר נספרה שם לא נספרת שוב', async () => {
+    await TrainingProofVolunteer.updateOne(
+      { userId: vol._id },
+      { $set: { 'stats.archived.ocr': { approved: 3, unchanged: 3, rejected: 1 } }, $addToSet: { archivedExports: 'tpx-20261028-aabbcc' } }
+    )
+    await applyArchive(new Map([[String(vol._id), { ocr: { approved: 3, unchanged: 3, rejected: 1 } }]]), 'tpx-20261028-aabbcc')
+    await applyArchive(new Map([[String(vol._id), { ocr: { approved: 1, unchanged: 0, rejected: 0 } }]]), 'tpx-20261029-ddeeff')
+    expect((await volunteerStats(String(vol._id))).ocr).toMatchObject({ approved: 4, unchanged: 3, rejected: 1, saved: 5 })
   })
 
   it('נעילת ייצוא במסד חוסמת גם מופע שרת אחר', async () => {
@@ -471,6 +483,34 @@ describe('הורדה לתחנה', () => {
     const sum1 = await J(await exportGET())
     expect(sum1.sections.ocr.count).toBe(0)
     expect(sum1.log[0]).toMatchObject({ exportId, count: 2, by: 'מנהלת' })
+  })
+
+  it('מנהל OCR שהגיה בעצמו (בלי רשומת-מגיה) — המונים שלו שורדים את ההורדה', async () => {
+    const s = await upload('ocr', sampleEntries('ocr', { n: 3 }))
+    await ingest(s.token)
+    const r = await takeRound(String(admin._id), 'ocr')
+    for (const it of r.items.slice(0, 2)) expect((await markItem(String(admin._id), it._id, { action: 'ok' })).ok).toBe(true)
+    await decidePOST(jreq('POST', { section: 'ocr', ids: r.items.slice(0, 2).map((d) => String(d._id)), decision: 'approve' }))
+    expect((await volunteerStats(String(admin._id))).ocr).toMatchObject({ approved: 2, saved: 2 })
+    const res = await exportPOST(jreq('POST'), P({ section: 'ocr' }))
+    await res.arrayBuffer()
+    await purges.get('ocr')
+    expect(await TrainingProofItem.countDocuments({ status: 'approved' })).toBe(0)
+    expect((await volunteerStats(String(admin._id))).ocr).toMatchObject({ approved: 2, unchanged: 2, saved: 2 })
+    // לא נוצרה לו בקשת-גישה ולא שורה של מגיה רגיל
+    const vols = await J(await volsGET())
+    expect(vols.requests).toHaveLength(0)
+  })
+
+  it('מחיקת חבילה: דחיות של מתנדב בשורות שנמחקו נשמרות במונים', async () => {
+    const s = await upload('ocr', sampleEntries('ocr', { n: 2 }))
+    await ingest(s.token)
+    const marked = await volunteerMarks('ocr', [{ action: 'ok' }])
+    await decidePOST(jreq('POST', { section: 'ocr', ids: [String(marked[0]._id)], decision: 'reject' }))
+    expect((await volunteerStats(String(vol._id))).ocr).toMatchObject({ rejected: 1, saved: 1 })
+    await packageDELETE(jreq('DELETE'), P({ packageId: 'tp-20261027-1f3a9c2e', part: '1' }))
+    expect(await TrainingProofItem.countDocuments()).toBe(0)
+    expect((await volunteerStats(String(vol._id))).ocr).toMatchObject({ rejected: 1, saved: 1 })
   })
 
   it('כשהכול ירד — החבילה ותיקיית התמונות נמחקות; דפדפן שניתק באמצע — שום דבר לא נמחק', async () => {

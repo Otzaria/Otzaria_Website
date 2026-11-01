@@ -3,12 +3,14 @@ import TrainingProofItem from '@/models/TrainingProofItem';
 import { PACKAGE_ID_RE } from '@/lib/trainingProof/vocab';
 import { adminGate, ok, fail, jsonBody, crash } from '../../../_lib/http';
 import { deleteMatchingItems, dropEmptyPackages, dropEmptyBooks } from '../../../_lib/files';
+import { archiveDelta, applyArchive } from '@/lib/trainingProof/stats';
 
 // חבילה אחת (package_id + part) בטבלת החבילות.
 // PATCH {open} — השהה/פתח למתנדבים. פריטים שכבר בידי מתנדב נשארים אצלו.
 // DELETE — מחיקה: הפריטים שעוד לא הוגו (פנויים, וגם אלה שבסבב פתוח של מתנדב) נמחקים
 //   עם התמונות שלהם. מה שכבר הוגה (ממתין לאישור או אושר) נשאר לסקירה ולהורדה, והחבילה
-//   נשארת מושהית; חבילה שלא נשאר בה דבר נמחקת כולה. ← {deleted, kept, dropped}
+//   נשארת מושהית; חבילה שלא נשאר בה דבר נמחקת כולה. דחיות של מתנדבים בשורות שנמחקו
+//   נשמרות במונים שלהם (lib/trainingProof/stats). ← {deleted, kept, dropped}
 
 async function keyOf(params) {
   const { packageId, part } = await params;
@@ -42,7 +44,11 @@ export async function DELETE(_request, { params }) {
   try {
     if (!(await TrainingProofPackage.exists(key))) return fail(404, 'החבילה לא נמצאה');
     const gone = { ...key, status: { $in: ['available', 'held'] } };
-    const { deleted: docs } = await deleteMatchingItems(gone, { imagePath: 1, ctxPath: 1, book: 1, section: 1 });
+    const { deleted: docs } = await deleteMatchingItems(gone, {
+      imagePath: 1, ctxPath: 1, book: 1, section: 1, status: 1, vol: 1, adminFixed: 1, rejectedFor: 1,
+    });
+    // שורה פנויה יכולה לשאת דחייה של מתנדב קודם — היא נשמרת במונים שלו
+    await applyArchive(archiveDelta(docs));
     const kept = await TrainingProofItem.countDocuments(key);
     if (kept) await TrainingProofPackage.updateOne(key, { $set: { open: false } });
     const dropped = await dropEmptyPackages([key]);
