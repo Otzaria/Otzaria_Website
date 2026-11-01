@@ -37,6 +37,7 @@ describe('useTrackingSource', () => {
     const { result } = renderHook(() => useTrackingSource({ bookPath: 'ספר א', pageNumber: 3, imageUrl: '/p.jpg' }))
     await waitFor(() => expect(result.current.level).toBe('word'))
     expect(result.current.source.source).toBe('layout')
+    expect(result.current.hasOfficialWordLayout).toBe(true)
     expect(result.current.lines).toHaveLength(2)
     expect(result.current.status).toBe('ready')
     expect(fetchMock.mock.calls[0][0]).toBe('/api/page-content/ocr-data?bookPath=%D7%A1%D7%A4%D7%A8%20%D7%90&pageNumber=3')
@@ -52,6 +53,7 @@ describe('useTrackingSource', () => {
     rerender()
     expect(result.current.source.source).toBe('profile')
     expect(result.current.level).toBe('line')
+    expect(result.current.hasOfficialWordLayout).toBe(false)
 
     vi.stubGlobal('fetch', respond(200, { success: true, data: { layoutStatus: 'ok', layout: LAYOUT, image: { matches: false } } }))
     const replaced = renderHook(() => useTrackingSource({ bookPath: 'b', pageNumber: 2, imageUrl: '/p.jpg' }))

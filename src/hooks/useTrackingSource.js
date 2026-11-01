@@ -71,5 +71,5 @@ export function useTrackingSource({ bookPath = null, pageNumber = null, imageUrl
 
   const source = useMemo(() => (enabled ? choosePrimary([layoutSrc, proofSrc, extra], profileSrc) : OFF), [enabled, layoutSrc, proofSrc, extra, profileSrc])
   const status = !enabled || !key ? 'idle' : !current.done || (needProfile && scan.status === 'loading') ? 'loading' : 'ready'
-  return { source, level: source.level, lines: source.lines, imageSize: scan.size, status }
+  return { source, level: source.level, lines: source.lines, imageSize: scan.size, status, hasOfficialWordLayout: layoutSrc.level === 'word' }
 }

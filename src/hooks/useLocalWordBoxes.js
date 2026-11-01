@@ -72,7 +72,13 @@ export function detectionScale(width) {
 async function defaultLoadImage(url, { signal } = {}) {
   const res = await fetch(url, { signal, credentials: 'same-origin' })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  const bitmap = await createImageBitmap(await res.blob(), { imageOrientation: 'from-image' })
+  const blob = await res.blob()
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+  const bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' })
+  if (signal?.aborted) {
+    bitmap.close?.()
+    throw new DOMException('Aborted', 'AbortError')
+  }
   const size = [bitmap.width, bitmap.height]
   const scale = detectionScale(bitmap.width)
   const canvas = document.createElement('canvas')
@@ -90,7 +96,7 @@ const defaultLoadTesseract = () => import('tesseract.js')
  *   loadImage?: (url: string, o: { signal?: AbortSignal }) => Promise<{ image: any, size: [number, number], scale: number }>,
  *   loadTesseract?: () => Promise<any> }} opts  loadImage/loadTesseract — להזרקה בטסטים
  */
-export function useLocalWordBoxes({ pageId, imageUrl, canSave = true, loadImage = defaultLoadImage, loadTesseract = defaultLoadTesseract } = {}) {
+export function useLocalWordBoxes({ pageId, imageUrl, canSave = true, autoCheck = true, checkDelayMs = 0, loadImage = defaultLoadImage, loadTesseract = defaultLoadTesseract } = {}) {
   const initial = (id) => ({ status: id ? 'checking' : 'idle', progress: 0, source: null, error: null, notice: null })
   const [state, setState] = useState(() => initial(pageId))
   // מעבר עמוד: איפוס המצב בזמן הרינדור (לא ב-effect) — הדפוס שמומלץ ב-React לאיפוס לפי prop
@@ -106,6 +112,7 @@ export function useLocalWordBoxes({ pageId, imageUrl, canSave = true, loadImage 
   const runRef = useRef(0) // מונה ריצות — תוצאה של עמוד קודם לא תדרוס את הנוכחי
   const localOnlyRef = useRef(/** @type {object|null} */ (null)) // זיהוי שנשמר רק מקומית (עמוד לא נתפס)
   const workerRef = useRef(/** @type {any} */ (null)) // worker של tesseract שרץ עכשיו (לעצירה)
+  const detectAbortRef = useRef(/** @type {AbortController|null} */ (null))
 
   // עצירת זיהוי שרץ: יציאה מהעורך / מעבר עמוד / זיהוי חדש — ה-worker (WASM כבד) לא ממשיך ברקע
   const stopWorker = useCallback(() => {
@@ -113,18 +120,30 @@ export function useLocalWordBoxes({ pageId, imageUrl, canSave = true, loadImage 
     workerRef.current = null
     if (w) Promise.resolve().then(() => w.terminate()).catch(() => {})
   }, [])
-  useEffect(() => () => {
-    runRef.current++
+
+  const stopDetection = useCallback(() => {
+    detectAbortRef.current?.abort()
+    detectAbortRef.current = null
     stopWorker()
   }, [stopWorker])
+  useEffect(() => () => {
+    runRef.current++
+    stopDetection()
+  }, [stopDetection])
 
   useEffect(() => {
     const run = ++runRef.current
-    stopWorker()
+    stopDetection()
     versionRef.current = { pageId, version: 0 }
     imageShaRef.current = null
     localOnlyRef.current = null
     if (!pageId) return undefined
+    if (!autoCheck) {
+      const skippedTimer = setTimeout(() => {
+        setState((s) => s.source ? s : { status: 'none', progress: 0, source: null, error: null, notice: null })
+      }, 0)
+      return () => clearTimeout(skippedTimer)
+    }
     // אין פריסה בשרת — אולי זוהה כאן קודם בלי שמירה (עמוד שלא נתפס): מהמטמון של הלשונית
     const localOr = (fallback) => {
       const stored = readLocalWords(pageId, imageUrl)
@@ -134,7 +153,7 @@ export function useLocalWordBoxes({ pageId, imageUrl, canSave = true, loadImage 
       return { status: 'ready', progress: 0, source: src, error: null, notice: LOCAL_ONLY_NOTICE }
     }
     const ctrl = new AbortController()
-    ;(async () => {
+    const checkStored = async () => {
       try {
         const res = await fetch(`${API}?pageId=${encodeURIComponent(pageId)}`, { signal: ctrl.signal, cache: 'no-store' })
         const body = await res.json().catch(() => null)
@@ -153,9 +172,13 @@ export function useLocalWordBoxes({ pageId, imageUrl, canSave = true, loadImage 
         if (e?.name === 'AbortError' || run !== runRef.current) return
         setState(localOr({ status: 'none', progress: 0, source: null, error: MSG.load, notice: null }))
       }
-    })()
-    return () => ctrl.abort()
-  }, [pageId, imageUrl, stopWorker])
+    }
+    const timer = setTimeout(checkStored, Math.max(0, checkDelayMs))
+    return () => {
+      clearTimeout(timer)
+      ctrl.abort()
+    }
+  }, [pageId, imageUrl, autoCheck, checkDelayMs, stopDetection])
 
   // שמירה בשרת: null = הצליח, אחרת הודעת השגיאה
   const putLayout = useCallback(async (payload) => {
@@ -196,8 +219,10 @@ export function useLocalWordBoxes({ pageId, imageUrl, canSave = true, loadImage 
   const detect = useCallback(async () => {
     if (!pageId || !imageUrl) return null
     const run = ++runRef.current
-    stopWorker()
-    const live = () => run === runRef.current
+    stopDetection()
+    const ctrl = new AbortController()
+    detectAbortRef.current = ctrl
+    const live = () => run === runRef.current && !ctrl.signal.aborted
     const patch = (p) => live() && setState((s) => ({ ...s, ...p }))
     patch({ status: 'detecting', progress: 0, error: null, notice: null })
 
@@ -207,7 +232,7 @@ export function useLocalWordBoxes({ pageId, imageUrl, canSave = true, loadImage 
     // אם GET קודם כבר החזיר hash (למשל layout קיים שנמצא stale), אין צורך לגבב שוב.
     if (!imageShaRef.current) {
       try {
-        const res = await fetch(`${API}?pageId=${encodeURIComponent(pageId)}&inspectImage=1`, { cache: 'no-store' })
+        const res = await fetch(`${API}?pageId=${encodeURIComponent(pageId)}&inspectImage=1`, { signal: ctrl.signal, cache: 'no-store' })
         const body = await res.json().catch(() => null)
         if (!live()) return null
         if (!res.ok || !body?.success) {
@@ -221,7 +246,8 @@ export function useLocalWordBoxes({ pageId, imageUrl, canSave = true, loadImage 
           patch({ status: 'ready', progress: 0, source: existing, error: null, notice: null })
           return existing
         }
-      } catch {
+      } catch (e) {
+        if (e?.name === 'AbortError') return null
         if (!live()) return null
         patch({ status: 'none', progress: 0, error: MSG.load })
         return null
@@ -230,8 +256,10 @@ export function useLocalWordBoxes({ pageId, imageUrl, canSave = true, loadImage 
 
     let loaded
     try {
-      loaded = await loadImage(imageUrl, {})
-    } catch {
+      loaded = await loadImage(imageUrl, { signal: ctrl.signal })
+      if (!live()) return null
+    } catch (e) {
+      if (e?.name === 'AbortError' || !live()) return null
       patch({ status: 'none', progress: 0, error: MSG.image })
       return null
     }
@@ -240,6 +268,7 @@ export function useLocalWordBoxes({ pageId, imageUrl, canSave = true, loadImage 
     let worker
     try {
       const mod = await loadTesseract()
+      if (!live()) return null
       const T = mod?.createWorker ? mod : mod?.default
       const urls = tesseractAssetUrls(tesseractPkg.version, window.location.origin)
       worker = await T.createWorker('heb', T.OEM?.LSTM_ONLY ?? 1, {
@@ -262,6 +291,7 @@ export function useLocalWordBoxes({ pageId, imageUrl, canSave = true, loadImage 
         if (workerRef.current === worker) workerRef.current = null
         Promise.resolve().then(() => worker.terminate()).catch(() => {})
       }
+      if (detectAbortRef.current === ctrl) detectAbortRef.current = null
     }
     if (!live()) return null
 
@@ -285,7 +315,7 @@ export function useLocalWordBoxes({ pageId, imageUrl, canSave = true, loadImage 
     if (!error) writeLocalWords(pageId, imageUrl, null)
     patch({ status: 'ready', progress: 0, source: track, error })
     return track
-  }, [pageId, imageUrl, canSave, loadImage, loadTesseract, stopWorker, putLayout])
+  }, [pageId, imageUrl, canSave, loadImage, loadTesseract, stopDetection, putLayout])
 
   return { ...state, detect }
 }

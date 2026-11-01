@@ -101,7 +101,7 @@ export function usePageTracking({
   followScroll = true,
   highlight = 'strong'
 }) {
-  const { source, imageSize, status } = useTrackingSource({ bookPath, pageNumber, imageUrl, proofDoc, extraSource, enabled })
+  const { source, imageSize, status, hasOfficialWordLayout } = useTrackingSource({ bookPath, pageNumber, imageUrl, proofDoc, extraSource, enabled })
   const column = twoColumns ? (activeTextarea === 'left' ? 'left' : 'right') : 'content'
   const { lines, wordLevel } = useMemo(() => linesForColumn(source, { twoColumns, column }), [source, twoColumns, column])
   // שמירה מפני מסגרות בטוחות שגויות (פרופיל מהתמונה בלבד): פריסה לא סבירה / טקסט שלא מתאים
@@ -175,6 +175,8 @@ export function usePageTracking({
     reasons: guard.reasons,
     // מעקב שאפשר לשפר בזיהוי מילים מקומי: כבוי / שורה / מילה משוערת מניתוח התמונה
     canImprove: enabled && (level === 'line' || level === 'off' || profiled),
+    // מאפשר לדף לבטל את בקשת PageLayout הספקולטיבית: layout רשמי ברמת מילה תמיד עדיף עליה.
+    hasOfficialWordLayout,
     status,
     line: track ? track.line + 1 : null,
     word: track && track.word >= 0 ? track.word + 1 : null,
@@ -182,7 +184,7 @@ export function usePageTracking({
     scanLineCount: lines.length,
     wordCount: counts.words,
     suspectCount: showSuspects ? counts.suspects : 0
-  }), [on, level, source.source, estimated, enabled, guard, profiled, status, track, text, lines.length, counts, showSuspects])
+  }), [on, level, source.source, estimated, enabled, guard, profiled, hasOfficialWordLayout, status, track, text, lines.length, counts, showSuspects])
 
   const mirror = useMemo(() => (enabled
     ? { column, line: on ? track?.line : -1, word: on ? track?.word : -1, estimated, lineNumbers, showSuspects, strength: highlight }

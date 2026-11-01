@@ -1219,7 +1219,22 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
   // "זהה מילים בעמוד" — תיבות מילים מקומיות (tesseract בדפדפן) לעמוד בלי פריסת OCR
   // שמירת התיבות בשרת — רק למי שתפס את העמוד או למנהל ספרים (כמו canWritePageLayout); אחרת רק מקומית
   const canSaveWords = pageClaimState(pageData, session?.user?._id || session?.user?.id).state === 'mine' || hasBooksAccess(session?.user?.role)
-  const localWords = useLocalWordBoxes({ pageId: pageData?.id || pageData?._id, imageUrl: pageData?.thumbnail, canSave: canSaveWords })
+  const trackingPageKey = `${bookPath}\u0000${pageNumber}`
+  const [officialLayoutFor, setOfficialLayoutFor] = useState({ key: trackingPageKey, has: false })
+  // איפוס state לפי זהות העמוד בזמן render, כדי שהעמוד החדש לא יירש החלטה מהקודם.
+  if (officialLayoutFor.key !== trackingPageKey) {
+    setOfficialLayoutFor({ key: trackingPageKey, has: false })
+  }
+  const hasOfficialWordLayout = officialLayoutFor.key === trackingPageKey && officialLayoutFor.has
+  // PageLayout הוא fallback בלבד. נותנים ל-ocr-data חלון קצר לחזור; אם יש layout רשמי
+  // ברמת מילה מבטלים את הטיימר/הבקשה. כך אין waterfall בעמודים בלי OCR ואין payload כפול ברוב העמודים.
+  const localWords = useLocalWordBoxes({
+    pageId: pageData?.id || pageData?._id,
+    imageUrl: pageData?.thumbnail,
+    canSave: canSaveWords,
+    autoCheck: !hasOfficialWordLayout,
+    checkDelayMs: 150,
+  })
   const scanTracking = usePageTracking({
     bookPath, pageNumber, imageUrl: pageData?.thumbnail,
     twoColumns, activeTextarea, textContainerRef: textEditorContainerRef, imageZoom,
@@ -1233,6 +1248,9 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
     showFrame: prefs.trackingFrame,
     followScroll: prefs.followScroll
   })
+  if (scanTracking.tracking.hasOfficialWordLayout && !hasOfficialWordLayout) {
+    setOfficialLayoutFor({ key: trackingPageKey, has: true })
+  }
   const wordDetecting = localWords.status === 'detecting' || localWords.status === 'saving'
   const canDetectWords = Boolean(pageData?.thumbnail) && Boolean(pageData?.id || pageData?._id) && canStartLocalWordDetection(localWords.status)
   const detectWords = canDetectWords ? localWords.detect : undefined

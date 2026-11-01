@@ -82,7 +82,7 @@ describe('useLocalWordBoxes', () => {
     })
     expect(result.current.status).toBe('ready')
     expect(result.current.error).toBe(null)
-    expect(loadImage).toHaveBeenCalledWith('/img.jpg', {})
+    expect(loadImage).toHaveBeenCalledWith('/img.jpg', { signal: expect.any(AbortSignal) })
 
     const [lang, oem, opts] = createWorker.mock.calls[0]
     expect([lang, oem]).toEqual(['heb', 1])
@@ -209,6 +209,47 @@ describe('useLocalWordBoxes', () => {
     release(TESS)
     await pending
     expect(global.fetch).toHaveBeenCalledTimes(2) // GET רגיל + snapshot לפני זיהוי
+  })
+
+  test('מעבר עמוד בזמן הורדת התמונה מבטל את ההורדה ולא טוען Tesseract', async () => {
+    let imageSignal
+    const pendingImage = vi.fn((_url, { signal }) => {
+      imageSignal = signal
+      return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true }))
+    })
+    const loadTesseract = vi.fn()
+    global.fetch = vi.fn((url) => Promise.resolve(json(200, {
+      success: true,
+      data: { version: 0, layout: null, ...(url.includes('inspectImage=1') ? { image: { sha256: 'a'.repeat(64) } } : {}) },
+    })))
+    const { result, rerender } = renderHook((p) => useLocalWordBoxes(p), {
+      initialProps: { pageId: 'p1', imageUrl: '/one.jpg', loadImage: pendingImage, loadTesseract },
+    })
+    await waitFor(() => expect(result.current.status).toBe('none'))
+    let detection
+    act(() => { detection = result.current.detect() })
+    await waitFor(() => expect(pendingImage).toHaveBeenCalled())
+
+    rerender({ pageId: 'p2', imageUrl: '/two.jpg', loadImage: pendingImage, loadTesseract })
+    expect(imageSignal.aborted).toBe(true)
+    await detection
+    expect(loadTesseract).not.toHaveBeenCalled()
+  })
+
+  test('בדיקת PageLayout מושהית וניתנת לביטול כש-layout רשמי כבר נמצא', async () => {
+    vi.useFakeTimers()
+    global.fetch = vi.fn().mockResolvedValue(json(200, { success: true, data: { version: 0, layout: null } }))
+    const { result, rerender } = renderHook((p) => useLocalWordBoxes(p), {
+      initialProps: { pageId: 'p1', imageUrl: '/img.jpg', autoCheck: true, checkDelayMs: 150 },
+    })
+    expect(result.current.status).toBe('checking')
+    await act(async () => { await vi.advanceTimersByTimeAsync(100) })
+    expect(global.fetch).not.toHaveBeenCalled()
+    rerender({ pageId: 'p1', imageUrl: '/img.jpg', autoCheck: false, checkDelayMs: 150 })
+    await act(async () => { await vi.advanceTimersByTimeAsync(100) })
+    expect(global.fetch).not.toHaveBeenCalled()
+    expect(result.current.status).toBe('none')
+    vi.useRealTimers()
   })
 
   test('קובץ שפה חסר / אין מילים / תמונה לא נטענה — none עם שגיאה, בלי PUT', async () => {
