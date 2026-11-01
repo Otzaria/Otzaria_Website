@@ -5,8 +5,10 @@
  * רכיב אחד לשלושה מצבים, כדי שמסך הסקירה של המנהל (סשן ד') ישתמש באותו עורך בדיוק:
  *
  *   mode="edit"     — המתנדב: ציור בגרירה על מקום ריק, הזזה, הגדלה/הקטנה מכל קצה ופינה, הצמדה לדיו,
- *                     תפקיד/זרם/ממשיך/סדר-קריאה/מחיקה, ו-Enter = onConfirm. הצעת המודל (src:'auto') שעוד
+ *                     זרם/תפקיד/ממשיך/סדר-קריאה/מחיקה, ו-Enter = onConfirm. הצעת המודל (src:'auto') שעוד
  *                     לא נגעו בה נצמדת לדיו בטעינה (בלי שמירה — רק כשמשנים משהו או מאשרים).
+ *                     הסוג של מסגרת-טקסט בזרם נקבע לפי הזרם (streamRoles.js); סדר-הקריאה משתנה גם מלוח-הצד
+ *                     ("מוקדם יותר"/"מאוחר יותר", Alt+↑/↓) בלי לעבור למצב "סדר הקריאה" (O).
  *   mode="review"   — המנהל: אותה עריכה ("תקן ואשר"), בלי הצמדה בטעינה; compare מוצג כרקע אפור מקווקו.
  *   mode="readOnly" — רק תצוגה: בחירת מסגרת מציגה את פרטיה, אין שינוי.
  *
@@ -45,8 +47,12 @@ import {
   nextOrd,
   renumber,
   applyOrder,
+  moveInOrder,
+  moveToPlace,
+  moveInStream,
   NO_STREAM_ROLES,
 } from './geometry'
+import { applyRole, applyStream, syncRoles } from './streamRoles'
 import { snapBox, snapProposal, gridsFromRGBA, analyzeSize } from './inkSnap'
 
 const HIT_PX = 8 // מרחק-התפיסה של קצה, בפיקסלי-מסך
@@ -95,7 +101,8 @@ export default function FramesEditor({
   const W = page.w
   const H = page.h
   const editable = mode === 'edit' || mode === 'review'
-  const [frames, setFrames] = useState(() => page.frames || [])
+  // מסגרות-טקסט בזרם — בתפקיד שהזרם קובע (רק תצוגה; נשמר כשמשנים משהו או מאשרים, והשרת קובע אותו שוב)
+  const [frames, setFrames] = useState(() => (editable ? syncRoles(page.frames || [], streams) : page.frames || []))
   // העותק העדכני — כל setFrames מעדכן גם אותו, כדי שהאירועים (עכבר, מקלדת) יראו את המצב בלי לחכות לרינדור
   const framesRef = useRef(frames)
   const [sel, setSel] = useState(null)
@@ -156,6 +163,16 @@ export default function FramesEditor({
     onChange?.(next, { save: false, reason: 'snap-load' })
   }, [grid, snap, wantLoadSnap, W, H, onChange])
 
+  // הסוג של זרם השתנה (או זרם נוסף): המסגרות שלו מקבלות את הסוג החדש. השרת כבר שמר — כאן רק התצוגה
+  useEffect(() => {
+    if (!editable) return
+    const next = syncRoles(framesRef.current, streams)
+    if (next === framesRef.current) return
+    framesRef.current = next
+    setFrames(next)
+    onChange?.(next, { save: false, reason: 'roles' })
+  }, [streams, editable, onChange])
+
   const fit = useCallback(
     (box, isObj, sides) => clampBox(snap && grid ? snapBox(grid, box, { isObj, pageH: H, sides }) : box.map((v) => Math.round(v)), W, H),
     [snap, grid, W, H]
@@ -165,27 +182,47 @@ export default function FramesEditor({
   const patchSel = useCallback(
     (patch, reason = 'patch') => {
       if (!editable || !sel) return
-      const next = framesRef.current.map((f) => (f.fid === sel ? { ...f, ...patch, src: 'human' } : f))
+      const next = framesRef.current.map((f) =>
+        f.fid !== sel ? f : 'stream' in patch ? applyStream({ ...f, ...patch }, patch.stream, streams) : { ...f, ...patch, src: 'human' }
+      )
       commit(next, reason)
       const f = next.find((x) => x.fid === sel)
-      if (f && 'stream' in patch && patch.stream) pick.current.stream = patch.stream
+      if (f && 'stream' in patch && patch.stream) {
+        pick.current.stream = patch.stream
+        pick.current.role = f.role
+      }
     },
-    [editable, sel, commit]
+    [editable, sel, commit, streams]
   )
   const setRole = useCallback(
     (role, opts) => {
       if (!editable || !sel) return
-      const next = framesRef.current.map((f) => (f.fid === sel ? withRole(f, role, opts) : f))
+      const next = framesRef.current.map((f) => (f.fid === sel ? applyRole(f, role, streams, opts) : f))
       commit(next, 'role')
+      const f = next.find((x) => x.fid === sel)
       pick.current.role = role
+      if (f?.stream) pick.current.stream = f.stream
     },
-    [editable, sel, commit]
+    [editable, sel, commit, streams]
   )
   const deleteSel = useCallback(() => {
     if (!editable || !sel) return
     commit(renumber(framesRef.current.filter((f) => f.fid !== sel)), 'delete')
     setSel(null)
   }, [editable, sel, commit])
+
+  // ---------------------------------------------------------------- סדר הקריאה תוך כדי עבודה (לוח-הצד, Alt+↑/↓)
+  const reorder = useCallback(
+    (fn, reason = 'order') => {
+      if (!editable || !sel) return
+      const next = fn(framesRef.current, sel)
+      if (next !== framesRef.current) commit(next, reason)
+    },
+    [editable, sel, commit]
+  )
+  const moveSel = useCallback((d) => reorder((fr, fid) => moveInOrder(fr, fid, d)), [reorder])
+  const placeSel = useCallback((k) => reorder((fr, fid) => moveToPlace(fr, fid, k)), [reorder])
+  const streamMoveSel = useCallback((d) => reorder((fr, fid) => moveInStream(fr, fid, d)), [reorder])
 
   // ---------------------------------------------------------------- סדר הקריאה (O)
   const endOrder = useCallback(
@@ -291,7 +328,10 @@ export default function FramesEditor({
         src: 'human',
       }
       let f = withRole(base, role)
-      if (!NO_STREAM_ROLES.includes(f.role)) f.stream = streams.some((s) => s.id === pick.current.stream) ? pick.current.stream : null
+      if (!NO_STREAM_ROLES.includes(f.role)) {
+        const st = streams.some((s) => s.id === pick.current.stream) ? pick.current.stream : null
+        f = { ...applyStream(f, st, streams), src: 'human' }
+      }
       f = { ...f, box: fit(r, f.kind === 'object') }
       commit([...framesRef.current, f], 'draw')
       setSel(f.fid)
@@ -362,6 +402,11 @@ export default function FramesEditor({
         return
       }
       if (!sel || tool === 'order') return
+      if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        e.preventDefault()
+        moveSel(e.key === 'ArrowUp' ? -1 : 1)
+        return
+      }
       const dm = /^(?:Digit|Numpad)([1-9])$/.exec(e.code)
       if (dm && e.altKey) {
         const s = streams[+dm[1] - 1]
@@ -399,7 +444,7 @@ export default function FramesEditor({
     tool === 'order'
       ? `לחצו על המסגרות לפי סדר הקריאה — הבאה: ${clicked.length + 1}. Esc או Enter מסיימים (מה שלא נלחץ — אחרי, בסדר הקודם).`
       : editable
-        ? 'גרירה על מקום ריק מציירת מסגרת · גרירת מסגרת מזיזה אותה · בקצה או בפינה — הגדלה והקטנה'
+        ? 'גרירה על מקום ריק מציירת מסגרת · גרירת מסגרת מזיזה אותה · בקצה או בפינה — הגדלה והקטנה · הסדר — בלוח שבצד'
         : 'לחיצה על מסגרת מציגה את פרטיה'
 
   const label = (f) => {
@@ -566,6 +611,10 @@ export default function FramesEditor({
             onPatch={(p) => patchSel(p, 'stream' in p ? 'stream' : 'patch')}
             onSetRole={setRole}
             onDelete={deleteSel}
+            onSelect={tool === 'order' ? undefined : setSel}
+            onMove={moveSel}
+            onPlace={placeSel}
+            onStreamMove={streamMoveSel}
             onAddStream={mode === 'edit' ? onAddStream : undefined}
           />
         </div>

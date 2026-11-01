@@ -67,6 +67,13 @@ test('frames: כל המסגרות, status, streams_added, book/page מה-payload
   assert.equal(l.page, p.page);
   assert.equal(l.scale, 1);
   assert.equal(checkReturnLine('frames', l), null);
+  assert.equal('streams_changed' in l, false);
+  // סוג חדש לזרם מהתחנה (שדה רשות, 2026-11-01) — רק כשיש
+  const ch = [{ id: 's2', role: 'notes', from: 'commentary' }];
+  const lc = resultLine(approved('frames', p, { status: 'marked', frames: p.frames, streams_added: [], streams_changed: ch }));
+  assert.deepEqual(lc.streams_changed, ch);
+  assert.equal(checkReturnLine('frames', lc), null);
+  assert.match(checkReturnLine('frames', { ...lc, streams_changed: [{ id: 's2' }] }), /streams_changed/);
   // בגלאי admin_fixed הוא רשות (§5.3), בזיהוי ובנתב — חובה
   const { admin_fixed: _drop, ...noFlag } = l;
   assert.equal(checkReturnLine('frames', noFlag), null);

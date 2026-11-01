@@ -15,7 +15,9 @@ import {
   claimDecision,
   claimActive,
   isDoneState,
+  resyncResult,
 } from '../../../../../components/trainingProof/frames/rules.js';
+import { checkStreamKind } from '../../../../../components/trainingProof/frames/streamRoles.js';
 
 // גלאי האזורים באתר — המסד (docs/76 §4.3, §8.1–§8.2; docs/75 ה-8…ה-10). ההרשאה נבדקת בנתיבים
 // (requireTrainingProofSession); כאן — רק מה שמותר לפי מצב הספר והעמוד. הכללים הטהורים — rules.js.
@@ -163,8 +165,15 @@ export async function releaseBook(userId, bookKey) {
   return { ok: true };
 }
 
-// הזרמים לדפדפן — בלי מי הוסיף ומתי
-const publicStreams = (list) => (list || []).map((s) => ({ id: s.id, name: s.name, role: s.role || null, ...(s.added ? { added: true } : {}) }));
+// הזרמים לדפדפן — בלי מי הוסיף ומתי. stationRole — רק לזרם מהתחנה שהסוג שלו שונה באתר
+const publicStreams = (list) =>
+  (list || []).map((s) => ({
+    id: s.id,
+    name: s.name,
+    role: s.role || null,
+    ...(s.added ? { added: true } : {}),
+    ...(!s.added && s.stationRole && s.stationRole !== s.role ? { stationRole: s.stationRole } : {}),
+  }));
 
 const mineNow = (book, userId, now) => claimActive(book, now) && String(book.claimedBy) === String(userId);
 
@@ -262,6 +271,43 @@ export async function addStream(userId, bookKey, body, now = new Date()) {
   );
   if (!doc) return fail(409, 'הרשימה השתנתה בינתיים — נסו שוב');
   return { ok: true, stream, streams: publicStreams(doc.streams) };
+}
+
+// שינוי הסוג של זרם (body = {role}): הסוג משתנה ברשימת-הזרמים של הספר, ובכל העמודים שעוד לא אושרו — התפקיד של
+// כל מסגרות הזרם, streams_added (זרם שנוסף באתר) ו-streams_changed (זרם מהתחנה; stationRole = הסוג שהגיע ממנה,
+// נשמר בשינוי הראשון) — כמו frames_streams בתחנה. עמוד שהמתנדב עוד לא נגע בו מקבל את הסוג כשהוא נפתח, ובשמירה
+// (checkFramesPage). רק מי שמחזיק את הספר. אם יש עמוד שכבר אושר עם הזרם — לא משנים: העמוד הזה כבר יוצא לתחנה
+// בסוג הישן.
+// מחזיר {ok, stream, streams, pages (כמה עמודים השתנו)}
+export async function setStreamKind(userId, bookKey, streamId, body, now = new Date()) {
+  const book = await TrainingProofBook.findOne({ book: bookKey }).lean();
+  if (!book) return fail(404, 'הספר לא נמצא');
+  if (!mineNow(book, userId, now)) return fail(409, 'הספר כבר לא אצלך');
+  const { stream, from, error } = checkStreamKind(book.streams, streamId, body);
+  if (error) return fail(400, error);
+  if (from === stream.role) return { ok: true, stream: publicStreams([stream])[0], streams: publicStreams(book.streams), pages: 0 };
+  const approved = await TrainingProofItem.countDocuments({ section: SECTION, book: bookKey, status: 'approved', 'result.frames.stream': streamId });
+  if (approved) {
+    return fail(409, `${approved === 1 ? 'עמוד אחד' : `${approved} עמודים`} עם הזרם הזה כבר ${approved === 1 ? 'אושר' : 'אושרו'} — אי-אפשר לשנות את הסוג שלו. אפשר להוסיף זרם חדש מהסוג הנכון`);
+  }
+  const doc = await TrainingProofBook.findOneAndUpdate(
+    { book: bookKey, claimedBy: oid(userId), claimedUntil: { $gt: now }, streams: { $elemMatch: { id: streamId, role: from } } },
+    { $set: { 'streams.$.role': stream.role, ...(!stream.added && !stream.stationRole ? { 'streams.$.stationRole': from } : {}) } },
+    { returnDocument: 'after', lean: true }
+  );
+  if (!doc) return fail(409, 'הרשימה השתנתה בינתיים — נסו שוב');
+  const items = await TrainingProofItem.find(
+    { section: SECTION, book: bookKey, status: { $in: ['held', 'submitted'] }, reviewedAt: null, 'result.frames.stream': streamId },
+    { status: 1, result: 1 }
+  ).lean();
+  let pages = 0;
+  for (const it of items) {
+    const result = resyncResult(it.result, doc.streams);
+    if (result === it.result) continue;
+    const r = await TrainingProofItem.updateOne({ _id: it._id, status: it.status, reviewedAt: null }, { $set: { result } });
+    pages += r.modifiedCount;
+  }
+  return { ok: true, stream: publicStreams([{ ...stream }])[0], streams: publicStreams(doc.streams), pages };
 }
 
 // התמונה של עמוד: למי שמחזיק את הספר, או למנהל. מחזיר {ok, imagePath}

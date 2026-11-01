@@ -12,6 +12,10 @@ import {
   normRect,
   clampBox,
   roundBox,
+  readingOrder,
+  moveInOrder,
+  moveToPlace,
+  moveInStream,
 } from './geometry'
 
 // בדיקת-הקצוות (ה-8) ושאר הגיאומטריה של העורך — טהור
@@ -122,5 +126,47 @@ describe('תפקיד, זרם וסדר', () => {
     const r = applyOrder(fr, ['c', 'a'])
     expect(Object.fromEntries(r.map((f) => [f.fid, f.ord]))).toEqual({ c: 1, a: 2, b: 3, d: 4 })
     expect(applyOrder(fr, [])).toBe(fr)
+  })
+})
+
+// סדר-הקריאה תוך כדי עבודה על מסגרת — בלי מצב "סדר הקריאה" (כמו "סדר: הקודם/הבא" בתחנה ובתוכנת-הספר)
+describe('moveInOrder / moveToPlace / moveInStream', () => {
+  const fr = [
+    F('a', [0, 0, 10, 10], { ord: 1, role: 'furniture', stream: null }),
+    F('b', [0, 20, 10, 30], { ord: 2, stream: 's1' }),
+    F('c', [0, 40, 10, 50], { ord: 3, stream: 's2' }),
+    F('d', [0, 60, 10, 70], { ord: 4, stream: 's1' }),
+  ]
+  const ords = (r) => Object.fromEntries(r.map((f) => [f.fid, f.ord]))
+
+  it('מוקדם/מאוחר יותר — החלפה עם השכנה; רק מה שזז מסומן "ביד"', () => {
+    const r = moveInOrder(fr, 'c', -1)
+    expect(ords(r)).toEqual({ a: 1, b: 3, c: 2, d: 4 })
+    expect(r.find((f) => f.fid === 'a')).toBe(fr[0])
+    expect(r.find((f) => f.fid === 'c').src).toBe('human')
+    expect(ords(moveInOrder(fr, 'c', 1))).toEqual({ a: 1, b: 2, c: 4, d: 3 })
+  })
+
+  it('בקצה — לא זז ולא משתנה דבר', () => {
+    expect(moveInOrder(fr, 'a', -1)).toEqual(fr)
+    expect(moveInOrder(fr, 'd', 1)).toEqual(fr)
+    expect(moveInOrder(fr, 'zz', 1)).toBe(fr)
+  })
+
+  it('להעביר למקום — השאר זזות מקום אחד', () => {
+    expect(ords(moveToPlace(fr, 'd', 1))).toEqual({ a: 2, b: 3, c: 4, d: 1 })
+    expect(ords(moveToPlace(fr, 'a', 9))).toEqual({ a: 4, b: 1, c: 2, d: 3 })
+  })
+
+  it('בתוך הזרם — החלפה עם המסגרת הקודמת/הבאה של אותו זרם, גם כשיש ביניהן אחרת', () => {
+    expect(ords(moveInStream(fr, 'd', -1))).toEqual({ a: 1, b: 4, c: 3, d: 2 })
+    expect(moveInStream(fr, 'b', -1)).toBe(fr)
+    expect(moveInStream(fr, 'a', 1)).toBe(fr)
+  })
+
+  it('מסגרות בלי מספר — בסוף, מלמעלה למטה, ומקבלות מספר בהזזה', () => {
+    const mixed = [F('x', [0, 50, 9, 60]), F('y', [0, 10, 9, 20], { ord: 1 }), F('z', [0, 5, 9, 9])]
+    expect(readingOrder(mixed).map((f) => f.fid)).toEqual(['y', 'z', 'x'])
+    expect(ords(moveInOrder(mixed, 'x', -1))).toEqual({ y: 1, x: 2, z: 3 })
   })
 })
