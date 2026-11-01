@@ -8,7 +8,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { HANDOFF_REASON_LABELS } from '@/lib/corrections/states'
 
 const VIEWS = [
-  { id: 'queued', label: 'ממתינים לטיפול' },
+  { id: 'queued', label: 'פנויים ובטיפולי' },
   { id: 'mine', label: 'בטיפולי' },
   { id: 'claimed', label: 'בטיפול מתנדבים' },
   { id: 'auto', label: 'בבדיקה אוטומטית' },

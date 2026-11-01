@@ -343,6 +343,28 @@ test('תפוגת שיוך: מתנדב אחר יכול לקחת אחרי שפג; 
   assert.equal((await act(users.a, id, { action: 'approve', generation: c.body.generation, revision: 1 }, later)).status, 409);
 });
 
+test('התור מציג פנויים ואת דיווחי המשתמש, ומסתיר שיוך בתוקף של משתמש אחר', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const free = await ingest('queue-free');
+  const mine = await ingest('queue-mine');
+  const other = await ingest('queue-other');
+  const publishing = await ingest('queue-publishing');
+  await act(users.a, mine, { action: 'claim' }, T0);
+  await act(users.b, other, { action: 'claim' }, T0);
+  await act(users.a, publishing, { action: 'claim' }, T0);
+  // הגנה גם מפני נתון לא עקבי/ישן: משויך אליי אך כבר בשלב פרסום לא שייך לתור הראשי.
+  await ErrorReport.updateOne({ _id: publishing }, { $set: { 'publish.status': 'ready' } });
+
+  const forA = await listReports({ user: users.a, query: { view: 'queued' }, now: T0 });
+  assert.deepEqual(new Set(forA.body.items.map((i) => i.id)), new Set([free, mine]));
+  const forB = await listReports({ user: users.b, query: { view: 'queued' }, now: T0 });
+  assert.deepEqual(new Set(forB.body.items.map((i) => i.id)), new Set([free, other]));
+
+  const afterExpiry = at(CONFIG.manual.claimMinutes * 60 + 1);
+  const expired = await listReports({ user: users.a, query: { view: 'queued' }, now: afterExpiry });
+  assert.deepEqual(new Set(expired.body.items.map((i) => i.id)), new Set([free, mine, other]));
+});
+
 test('דיווח ישן נסתר עד ה-migration ומתריע בבריאות; אחריה בתור הידני וניתן לסגירה', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const { migrateLegacyReports } = await import('./migrate.js');

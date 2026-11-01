@@ -45,13 +45,21 @@ const PUBLISHING_STATUSES = ['ready', 'in_progress', 'unknown_needs_reconcile', 
 
 const LIST_FILTERS = {
   mine: (user) => ({ 'manual.status': 'claimed', 'manual.assignee': user._id }),
-  // שיוך שפג זמין שוב ללקיחה, ולכן מוצג בתור.
+  // תור העבודה של המשתמש: כל מה שפנוי, יחד עם מה שכבר משויך אליו.
+  // שיוך של משתמש אחר מוסתר כל עוד הוא בתוקף; אחרי שפג הוא זמין שוב ללקיחה.
   queued: (user, now) => ({
     $and: [
       OPEN_FILTER,
-      { $or: [{ 'manual.status': { $in: ['queued', 'released'] } }, { 'manual.status': 'claimed', 'manual.leaseExpiresAt': { $lte: now } }] },
-      // פרסום שנכשל מוצג רק בלשונית "אושרו / בפרסום", לא בתור הראשי
-      { 'publish.status': { $ne: 'failed' } },
+      {
+        $or: [
+          { 'manual.status': { $in: ['queued', 'released'] } },
+          { 'manual.status': 'claimed', 'manual.assignee': user._id },
+          { 'manual.status': 'claimed', 'manual.leaseExpiresAt': { $lte: now } },
+        ],
+      },
+      // כל שלבי הפרסום (כולל כשל) מוצגים רק בלשונית "אושרו / בפרסום".
+      // זה גם מגן על התור אם נתון ישן/חריג נשאר בטעות עם manual.status=claimed.
+      { 'publish.status': { $nin: [...PUBLISHING_STATUSES, 'failed'] } },
     ],
   }),
   claimed: () => ({ 'manual.status': 'claimed', state: 'open' }),
