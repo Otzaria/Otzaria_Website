@@ -110,7 +110,10 @@ export default function Button(props: ButtonProps) {
   } = props
 
   const inactive = disabled || loading
-  const classes = buttonClasses({ variant, size, fullWidth, iconOnly, disabled: inactive, className })
+  // מצב לחוץ — נגזר מ-aria-pressed (מקור אמת אחד למראה ולקורא המסך)
+  const ariaPressed = (rest as { 'aria-pressed'?: unknown })['aria-pressed']
+  const pressed = ariaPressed === true || ariaPressed === 'true'
+  const classes = buttonClasses({ variant, size, fullWidth, iconOnly, disabled: inactive, pressed, className })
   const iconClasses = cx(buttonIconClasses({ variant, size, iconSize }), iconClassName)
   const content = (
     <>

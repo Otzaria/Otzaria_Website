@@ -73,6 +73,14 @@ const ASSET_BUDGETS = [
   // כותרות הדפים הישנים (font-frank, בלי preload) — נטען רק בעמוד שמבקש אותו, ורק המשקל שבשימוש.
   { file: 'src/app/fonts/FrankRuehlCLM-Medium.woff2', maxKB: 20, hint: HINT_FONT },
   { file: 'src/app/fonts/FrankRuehlCLM-Bold.woff2', maxKB: 20, hint: HINT_FONT },
+  // גופן הקלדה בלי תגים בעורך העמוד (Noto Sans Hebrew, משתנה 400–700, בלי preload) — נטען רק למי שבחר בו.
+  { file: 'src/app/fonts/NotoSansHebrew-Variable.woff2', maxKB: 32, hint: HINT_FONT },
+  // עוד גופני הקלדה בלי תגים בעורך (בלי preload, רק למי שבחר): IBM Plex — הקבצים הרשמיים בלי חיתוך;
+  // Google Sans ו-Open Sans — משתנים 400–700, חיתוך לעברית+לטינית.
+  { file: 'src/app/fonts/IBMPlexSansHebrew-Regular.woff2', maxKB: 34, hint: HINT_FONT },
+  { file: 'src/app/fonts/IBMPlexSansHebrew-Bold.woff2', maxKB: 34, hint: HINT_FONT },
+  { file: 'src/app/fonts/GoogleSans-Variable.woff2', maxKB: 54, hint: HINT_FONT },
+  { file: 'src/app/fonts/OpenSans-Variable.woff2', maxKB: 42, hint: HINT_FONT },
 ]
 
 // הנכסים שדף הבית מוריד בביקור קר רגיל (AVIF, DPR1): ספר סגור + פתוח ב-320w + הרצועה. מעבר לסכום
@@ -97,8 +105,8 @@ const CSS_BUDGETS = [
 ]
 
 // גופן האייקונים: שמו כולל hash, ולכן מאותר לפי התחילית.
-// (מידה בפועל ~21KB; התקציב ~15% מעל)
-const ICON_FONT_MAX_KB = 24
+// (מידה בפועל ~32KB — ציר wght בטווח 300–400 לאייקונים הדקים של כלי העורך; התקציב ~15% מעל)
+const ICON_FONT_MAX_KB = 37
 
 const failures = []
 const notes = []

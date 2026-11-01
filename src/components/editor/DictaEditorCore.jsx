@@ -970,7 +970,7 @@ export default function DictaEditorCore({
     const headings = container.querySelectorAll('h1, h2, h3, h4, h5, h6');
     if (headings[index]) {
       headings[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
-      headings[index].style.backgroundColor = '#fff3cd';
+      headings[index].style.backgroundColor = 'var(--color-warning-container)';
       setTimeout(() => {
         headings[index].style.backgroundColor = '';
       }, 2000);
@@ -990,31 +990,31 @@ export default function DictaEditorCore({
   // memoization של אזורים שאינם תלויים בתוכן - מונע reconciliation שלהם בכל הקלדה
   // סרגל תוכן העניינים ניתן לכיווץ בדיוק כמו סרגל הכלים מנגד, כדי לפנות רוחב לטקסט
   const tocSidebar = useMemo(() => (
-    <aside className={`${tocExpanded ? 'w-64 p-4' : 'w-12 py-4'} bg-white border-r overflow-y-auto shadow-sm transition-all duration-300 shrink-0`}>
+    <aside className={`${tocExpanded ? 'w-64 p-4' : 'w-12 py-4'} bg-surface border-r overflow-y-auto shadow-sm transition-all duration-300 shrink-0`}>
       {tocExpanded ? (
         <>
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-lg text-neutral-800">תוכן עניינים</h3>
+            <h3 className="font-bold text-lg text-on-surface">תוכן עניינים</h3>
             <button
               onClick={() => setTocExpanded(false)}
-              className="p-1 hover:bg-neutral-100 rounded transition-colors"
+              className="p-1 hover:bg-surface-container rounded transition-colors"
               title="כווץ תוכן עניינים"
             >
-              <span className="material-symbols-outlined text-neutral-600">chevron_left</span>
+              <span className="material-symbols-outlined text-on-surface-variant">chevron_left</span>
             </button>
           </div>
           {toc.length === 0 ? (
-            <p className="text-sm text-neutral-500">אין כותרות בספר</p>
+            <p className="text-sm text-on-surface-variant">אין כותרות בספר</p>
           ) : (
             <ul className="space-y-2">
               {toc.map((item, index) => (
                 <li
                   key={item.id}
-                  className="cursor-pointer hover:bg-neutral-100 p-2 rounded transition-colors"
+                  className="cursor-pointer hover:bg-surface-container p-2 rounded transition-colors"
                   style={{ paddingRight: `${(item.level - 1) * 12}px` }}
                   onClick={() => scrollToHeading(index)}
                 >
-                  <span className="text-sm text-neutral-700">{item.text}</span>
+                  <span className="text-sm text-on-surface">{item.text}</span>
                 </li>
               ))}
             </ul>
@@ -1023,11 +1023,11 @@ export default function DictaEditorCore({
       ) : (
         <button
           onClick={() => setTocExpanded(true)}
-          className="w-full flex flex-col items-center gap-2 p-2 hover:bg-neutral-100 rounded transition-colors"
+          className="w-full flex flex-col items-center gap-2 p-2 hover:bg-surface-container rounded transition-colors"
           title="הרחב תוכן עניינים"
         >
-          <span className="material-symbols-outlined text-neutral-600">chevron_right</span>
-          <span className="material-symbols-outlined text-neutral-600">list</span>
+          <span className="material-symbols-outlined text-on-surface-variant">chevron_right</span>
+          <span className="material-symbols-outlined text-on-surface-variant">list</span>
         </button>
       )}
     </aside>
@@ -1038,19 +1038,19 @@ export default function DictaEditorCore({
     const toolButton = (tool, icon, label, title = label) => (
       <button
         onClick={() => setActiveTool(tool)}
-        className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2`}
+        className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-surface-container rounded-lg transition-colors mx-2`}
         title={tip(title, tool)}
       >
-        <span className="material-symbols-outlined text-neutral-700">{icon}</span>
-        {toolbarExpanded && <span className="text-sm text-neutral-700">{label}</span>}
+        <span className="material-symbols-outlined text-on-surface">{icon}</span>
+        {toolbarExpanded && <span className="text-sm text-on-surface">{label}</span>}
       </button>
     )
 
     return (
-      <aside className={`${toolbarExpanded ? 'w-56' : 'w-20'} bg-white border-l flex flex-col py-4 gap-2 overflow-y-auto shadow-sm transition-all duration-300`}>
+      <aside className={`${toolbarExpanded ? 'w-56' : 'w-20'} bg-surface border-l flex flex-col py-4 gap-2 overflow-y-auto shadow-sm transition-all duration-300`}>
         {toolbarExpanded && (
           <div className="px-4 mb-2">
-            <span className="text-sm font-medium text-neutral-700">כלי עריכה</span>
+            <span className="text-sm font-medium text-on-surface">כלי עריכה</span>
           </div>
         )}
         {toolButton('createHeaders', 'title', 'יצירת כותרות')}
@@ -1067,13 +1067,13 @@ export default function DictaEditorCore({
         <div className="border-t pt-2 mt-2">
           <button
             onClick={() => setToolbarExpanded(!toolbarExpanded)}
-            className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-neutral-100 rounded-lg transition-colors mx-2 w-full`}
+            className={`${toolbarExpanded ? 'flex items-center gap-3 px-4 py-3' : 'p-3'} hover:bg-surface-container rounded-lg transition-colors mx-2 w-full`}
             title={toolbarExpanded ? 'כווץ סרגל' : 'הרחב סרגל'}
           >
-            <span className="material-symbols-outlined text-neutral-600">
+            <span className="material-symbols-outlined text-on-surface-variant">
               {toolbarExpanded ? 'chevron_right' : 'chevron_left'}
             </span>
-            {toolbarExpanded && <span className="text-sm text-neutral-600">{toolbarExpanded ? 'כווץ' : 'הרחב'}</span>}
+            {toolbarExpanded && <span className="text-sm text-on-surface-variant">{toolbarExpanded ? 'כווץ' : 'הרחב'}</span>}
           </button>
         </div>
       </aside>
@@ -1137,7 +1137,7 @@ export default function DictaEditorCore({
                     </>
                   )}
 
-                  <div className="flex items-center bg-neutral-100 rounded-lg p-0.5 gap-0.5 border border-neutral-200">
+                  <div className="flex items-center bg-surface-container rounded-lg p-0.5 gap-0.5 border border-outline-variant">
                     <Button
                       icon="format_align_right"
                       variant={textAlign === 'right' ? 'primary' : 'ghost'}
@@ -1188,7 +1188,7 @@ export default function DictaEditorCore({
                     <select 
                       value={selectedFont} 
                       onChange={(e) => setSelectedFont(e.target.value)} 
-                      className="appearance-none pl-1 pr-5 h-7 bg-white border border-neutral-200 rounded-md text-xs font-medium focus:outline-none hover:bg-neutral-50 cursor-pointer"
+                      className="appearance-none pl-1 pr-5 h-7 bg-surface border border-outline-variant rounded-md text-xs font-medium focus:outline-none hover:bg-surface-container-low cursor-pointer"
                     >
                       <option value="'Times New Roman'">Times</option>
                       <option value="monospace">Mono</option>
@@ -1197,7 +1197,7 @@ export default function DictaEditorCore({
                       <option value="Georgia">Georgia</option>
                       <option value="Verdana">Verdana</option>
                     </select>
-                    <span className="material-symbols-outlined text-sm absolute left-0.5 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-500">expand_more</span>
+                    <span className="material-symbols-outlined text-sm absolute left-0.5 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant">expand_more</span>
                   </div>
                   
                   {canEdit && !isCompleted && (
@@ -1284,7 +1284,7 @@ export default function DictaEditorCore({
                     </>
                   )}
 
-                  <div className="flex items-center bg-neutral-100 rounded-lg p-1 gap-1 border border-neutral-200 mx-2">
+                  <div className="flex items-center bg-surface-container rounded-lg p-1 gap-1 border border-outline-variant mx-2">
                     <Button
                       icon="format_align_right"
                       variant={textAlign === 'right' ? 'primary' : 'ghost'}
@@ -1331,13 +1331,13 @@ export default function DictaEditorCore({
                     title={tip("הגדל גופן", 'fontIncrease')}
                   />
 
-                  <div className="w-px h-6 bg-neutral-300 mx-2"></div>
+                  <div className="w-px h-6 bg-outline-variant mx-2"></div>
 
                   <div className="relative">
                     <select 
                       value={selectedFont} 
                       onChange={(e) => setSelectedFont(e.target.value)} 
-                      className="appearance-none pl-2 pr-6 h-8 bg-white border border-neutral-200 rounded-md text-xs font-medium focus:outline-none hover:bg-neutral-50 cursor-pointer"
+                      className="appearance-none pl-2 pr-6 h-8 bg-surface border border-outline-variant rounded-md text-xs font-medium focus:outline-none hover:bg-surface-container-low cursor-pointer"
                     >
                       <option value="'Times New Roman'">Times New Roman</option>
                       <option value="monospace">Monospace</option>
@@ -1346,7 +1346,7 @@ export default function DictaEditorCore({
                       <option value="Georgia">Georgia</option>
                       <option value="Verdana">Verdana</option>
                     </select>
-                    <span className="material-symbols-outlined text-sm absolute left-1 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-500">expand_more</span>
+                    <span className="material-symbols-outlined text-sm absolute left-1 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant">expand_more</span>
                   </div>
                   
                   {canEdit && !isCompleted && (
@@ -1360,7 +1360,7 @@ export default function DictaEditorCore({
                         title={tip(saveLabel, 'save')}
                       />
                       {hasUnsavedChangesOuter && (
-                        <span className="text-danger-600 text-sm font-medium mr-2">ישנם שינויים לא שמורים</span>
+                        <span className="text-error text-sm font-medium mr-2">ישנם שינויים לא שמורים</span>
                       )}
                     </div>
                   )}
@@ -1431,7 +1431,7 @@ export default function DictaEditorCore({
                     </>
                   )}
 
-                  <div className="flex items-center bg-neutral-100 rounded-lg p-1 gap-1 border border-neutral-200 mx-2">
+                  <div className="flex items-center bg-surface-container rounded-lg p-1 gap-1 border border-outline-variant mx-2">
                     <Button
                       icon="format_align_right"
                       variant={textAlign === 'right' ? 'primary' : 'ghost'}
@@ -1478,13 +1478,13 @@ export default function DictaEditorCore({
                     title={tip("הגדל גופן", 'fontIncrease')}
                   />
 
-                  <div className="w-px h-6 bg-neutral-300 mx-2"></div>
+                  <div className="w-px h-6 bg-outline-variant mx-2"></div>
 
                   <div className="relative">
                     <select 
                       value={selectedFont} 
                       onChange={(e) => setSelectedFont(e.target.value)} 
-                      className="appearance-none pl-2 pr-6 h-8 bg-white border border-neutral-200 rounded-md text-xs font-medium focus:outline-none hover:bg-neutral-50 cursor-pointer"
+                      className="appearance-none pl-2 pr-6 h-8 bg-surface border border-outline-variant rounded-md text-xs font-medium focus:outline-none hover:bg-surface-container-low cursor-pointer"
                     >
                       <option value="'Times New Roman'">Times New Roman</option>
                       <option value="monospace">Monospace</option>
@@ -1493,7 +1493,7 @@ export default function DictaEditorCore({
                       <option value="Georgia">Georgia</option>
                       <option value="Verdana">Verdana</option>
                     </select>
-                    <span className="material-symbols-outlined text-sm absolute left-1 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-500">expand_more</span>
+                    <span className="material-symbols-outlined text-sm absolute left-1 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant">expand_more</span>
                   </div>
                   
                   {canEdit && !isCompleted && (
@@ -1507,7 +1507,7 @@ export default function DictaEditorCore({
                         title={tip(saveLabel, 'save')}
                       />
                       {hasUnsavedChangesOuter && (
-                        <span className="text-danger-600 text-sm font-medium mr-2">ישנם שינויים לא שמורים</span>
+                        <span className="text-error text-sm font-medium mr-2">ישנם שינויים לא שמורים</span>
                       )}
                     </div>
                   )}
@@ -1520,13 +1520,13 @@ export default function DictaEditorCore({
   ), [singleLineHeader, headerCompact, headerStartElement, headerEndElement, title, canEdit, enableSpellcheck, isCompleted, editMode, textAlign, fontSize, selectedFont, hasUnsavedChangesOuter, saving, saveLabel, handleToggleEditMode, handleSaveClick, tip])
 
   return (
-    <div className="flex flex-col h-screen bg-neutral-50" dir="rtl">
+    <div className="flex flex-col h-screen bg-surface-container-low" dir="rtl">
       {headerNode}
 
       <div className="flex flex-1 overflow-hidden">
         {toolsSidebar}
 
-        <main ref={mainRef} className="flex-1 overflow-auto bg-white flex">
+        <main ref={mainRef} className="flex-1 overflow-auto bg-surface flex">
           {isPending ? (
             <div className="flex-1 flex items-center justify-center">
               <LoadingSpinner message="טוען..." />
@@ -1534,7 +1534,7 @@ export default function DictaEditorCore({
           ) : editMode && canEdit ? (
             <>
               <div className={`${showPreview ? 'flex-1' : 'w-full'} flex flex-col h-full border-l`}>
-                <div className="bg-neutral-50 border-b px-4 py-2 flex items-center justify-between gap-2 flex-wrap">
+                <div className="bg-surface-container-low border-b px-4 py-2 flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2 flex-wrap">
                   <Button
                     icon="format_bold"
@@ -1561,7 +1561,7 @@ export default function DictaEditorCore({
                     title={tip("קו תחתון", 'underline')}
                   />
                   
-                  <div className="w-px h-6 bg-neutral-300 mx-1"></div>
+                  <div className="w-px h-6 bg-outline-variant mx-1"></div>
                   
                   <Button variant="ghost" size="sm" onClick={() => insertTag('h1')} label="H1" title={tip("כותרת H1", 'h1')} />
                   <Button variant="ghost" size="sm" onClick={() => insertTag('h2')} label="H2" title={tip("כותרת H2", 'h2')} />
@@ -1570,7 +1570,7 @@ export default function DictaEditorCore({
                   <Button variant="ghost" size="sm" onClick={() => insertTag('h5')} label="H5" title={tip("כותרת H5", 'h5')} />
                   <Button variant="ghost" size="sm" onClick={() => insertTag('h6')} label="H6" title={tip("כותרת H6", 'h6')} />
                   
-                  <div className="w-px h-6 bg-neutral-300 mx-1"></div>
+                  <div className="w-px h-6 bg-outline-variant mx-1"></div>
                   
                   <Button
                     icon="text_increase"
@@ -1589,7 +1589,7 @@ export default function DictaEditorCore({
                     title={tip("הקטן גופן טקסט", 'smaller')}
                   />
                   
-                  <div className="w-px h-6 bg-neutral-300 mx-1"></div>
+                  <div className="w-px h-6 bg-outline-variant mx-1"></div>
                   
                   <Button
                     icon="format_clear"
@@ -1604,7 +1604,7 @@ export default function DictaEditorCore({
                   {!showPreview && (
                     <button
                       onClick={() => handleTogglePreview(true)}
-                      className="flex items-center gap-1 text-xs text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 px-2 py-1 rounded transition-colors"
+                      className="flex items-center gap-1 text-xs text-on-surface-variant hover:text-on-surface hover:bg-surface-container px-2 py-1 rounded transition-colors"
                       title="הצג תצוגה מקדימה"
                     >
                       <span className="material-symbols-outlined text-sm">visibility</span>
@@ -1625,12 +1625,12 @@ export default function DictaEditorCore({
               </div>
               
               {showPreview && (
-              <div className="w-1/2 flex flex-col bg-neutral-50">
-                <div className="px-6 pt-6 pb-2 bg-neutral-50 sticky top-0 z-10 border-b border-neutral-200 flex items-center justify-between">
-                  <span className="text-xs text-neutral-500 font-medium">תצוגה מקדימה</span>
+              <div className="w-1/2 flex flex-col bg-surface-container-low">
+                <div className="px-6 pt-6 pb-2 bg-surface-container-low sticky top-0 z-10 border-b border-outline-variant flex items-center justify-between">
+                  <span className="text-xs text-on-surface-variant font-medium">תצוגה מקדימה</span>
                   <button
                     onClick={() => handleTogglePreview(false)}
-                    className="flex items-center gap-1 text-xs text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 px-2 py-1 rounded transition-colors"
+                    className="flex items-center gap-1 text-xs text-on-surface-variant hover:text-on-surface hover:bg-surface-container px-2 py-1 rounded transition-colors"
                     title="הסתר תצוגה מקדימה"
                   >
                     <span className="material-symbols-outlined text-sm">visibility_off</span>
@@ -1643,7 +1643,7 @@ export default function DictaEditorCore({
                   onScroll={handlePreviewScroll}
                 >
                   <div
-                    className="max-w-4xl mx-auto prose prose-lg [&_h1]:font-bold [&_h2]:font-bold [&_h3]:font-bold [&_h4]:font-bold [&_h5]:font-bold [&_h6]:font-bold bg-white p-6 rounded-lg shadow-sm"
+                    className="max-w-4xl mx-auto prose prose-lg [&_h1]:font-bold [&_h2]:font-bold [&_h3]:font-bold [&_h4]:font-bold [&_h5]:font-bold [&_h6]:font-bold bg-surface p-6 rounded-lg shadow-sm"
                     style={{ fontSize: `${fontSize}px`, fontFamily: selectedFont, textAlign: textAlign, whiteSpace: 'pre-wrap' }}
                     dangerouslySetInnerHTML={{ __html: sanitizedContent }}
                   />

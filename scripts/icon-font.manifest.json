@@ -1,8 +1,8 @@
 {
   "family": "Material Symbols Outlined",
-  "axes": "opsz,wght,FILL,GRAD@24,400,0,0",
-  "file": "/fonts/material-symbols-outlined.2d7863ce.woff2",
-  "bytes": 21244,
+  "axes": "opsz,wght,FILL,GRAD@24,300..400,0,0",
+  "file": "/fonts/material-symbols-outlined.62f1bea7.woff2",
+  "bytes": 30696,
   "icons": [
     "account_tree",
     "add",
@@ -94,6 +94,7 @@
     "filter_list",
     "find_in_page",
     "find_replace",
+    "fit_page_width",
     "flag",
     "flutter",
     "folder",
@@ -129,7 +130,6 @@
     "hourglass_top",
     "hub",
     "image",
-    "image_search",
     "inbox",
     "info",
     "install_desktop",

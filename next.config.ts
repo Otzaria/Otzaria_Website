@@ -191,6 +191,15 @@ const nextConfig = {
       // כל הקבצים כאן נושאים גרסה בשם (golden-book.v2-560.webp, donate-mask.v2.png), ולכן
       // אפשר immutable לשנה. שינוי תוכן = שם חדש (scripts/optimize-assets.mjs, HOME_ASSET_VERSION);
       // check-perf-budget.mjs נכשל אם קובץ בתיקיות האלה נטול גרסה בשם.
+      // tesseract.js המאוחסן אצלנו (scripts/copy-tesseract-assets.mjs): worker, core (~4MB לקובץ)
+      // ומודל העברית. כל נתיב כולל גרסה (v<tesseract.js>/, lang/heb-<מודל>/) — immutable לשנה.
+      // ה-CSP הקיים מספיק: worker-src 'self', script-src 'self' 'wasm-unsafe-eval', connect-src 'self'.
+      {
+        source: '/vendor/tesseract/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
       ...['/home/:path*', '/icons/:path*'].map((source) => ({
         source,
         headers: [

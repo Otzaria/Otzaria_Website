@@ -56,3 +56,52 @@ export function withShortcut(base, shortcuts, actionId) {
   const formatted = formatShortcut(combo);
   return base ? `${base} (${formatted})` : formatted;
 }
+
+// הפעולה האחרת (לא actionId) שכבר משתמשת ב-combo, או null — לבדיקת כפילות בחלון הקיצורים
+export function findShortcutConflict(shortcuts, actionId, combo) {
+  if (!combo) return null
+  return Object.keys(shortcuts || {}).find((id) => id !== actionId && shortcuts[id] === combo) ?? null
+}
+
+// צירופים שמוגדרים ליותר מפעולה אחת: [{ combo, actionIds }] (ריק — אין כפילויות)
+export function findDuplicateShortcuts(shortcuts) {
+  const byCombo = new Map()
+  for (const [actionId, combo] of Object.entries(shortcuts || {})) {
+    if (!combo) continue
+    if (!byCombo.has(combo)) byCombo.set(combo, [])
+    byCombo.get(combo).push(actionId)
+  }
+  return [...byCombo].filter(([, ids]) => ids.length > 1).map(([combo, actionIds]) => ({ combo, actionIds }))
+}
+
+// צירופים שמורים — לא ניתנים להקלטה בחלון הקיצורים: עריכה בסיסית (ביטול, העתקה, הדבקה, בחירת
+// הכול) ומקשי ניווט ועריכה בלי מקש שינוי. קיצור עליהם היה "בולע" את הפעולה הרגילה בעורך.
+// הקומבינציה בפורמט של buildShortcutCombination: מקשי שינוי בסדר Ctrl, Alt, Shift, Meta ואז event.code.
+const RESERVED_PLAIN_KEYS = new Set([
+  'Backspace', 'Delete', 'Tab', 'Enter', 'NumpadEnter', 'Escape',
+  'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+])
+const RESERVED_EDIT_KEYS = new Set(['KeyZ', 'KeyY', 'KeyC', 'KeyV', 'KeyX', 'KeyA'])
+
+// האם הצירוף שמור. Ctrl ו-Cmd (Meta) שקולים לפעולות העריכה (⌘Z במק).
+export function isReservedShortcut(combo) {
+  if (!combo) return false
+  const parts = String(combo).split('+')
+  const code = parts.pop()
+  const mods = new Set(parts)
+  if (mods.size === 0) return RESERVED_PLAIN_KEYS.has(code)
+  // Shift+Tab — מעבר פוקוס אחורה
+  if (code === 'Tab' && mods.size === 1 && mods.has('Shift')) return true
+  if (!RESERVED_EDIT_KEYS.has(code) || mods.has('Alt')) return false
+  const primary = mods.has('Ctrl') !== mods.has('Meta') // בדיוק אחד מהם
+  if (!primary) return false
+  const shift = mods.has('Shift')
+  // Ctrl+Shift+Z — ביצוע מחדש; שאר האותיות עם Shift — פנויות
+  return !shift || code === 'KeyZ'
+}
+
+// הודעת השגיאה לצירוף שמור (או null) — לתיבת השגיאה של חלון הקיצורים
+export function reservedShortcutMessage(combo) {
+  if (!isReservedShortcut(combo)) return null
+  return `הצירוף ${formatShortcut(combo)} שמור לפעולות עריכה בסיסיות. בחר צירוף אחר.`
+}

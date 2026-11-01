@@ -1,6 +1,14 @@
-import { useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
+import Button from '@/components/ui/Button'
+import Dialog from '@/components/ui/Dialog'
+import { cx } from '@/components/ui/cx'
+import { FIELD_LABEL, fieldClasses } from '@/components/ui/fieldStyles'
 
+const MODES = [
+  { value: 'content', title: 'פיצול תוכן', hint: 'העמוד מכיל שני חלקים שונים של טקסט (למשל גמרא ורש"י).' },
+  { value: 'visual', title: 'חלוקה חזותית', hint: 'רק לנוחות העריכה (למשל שני טורים של אותו טקסט).' },
+]
+
+/** "פיצול לשני טורים" — בחירת סוג הפיצול ושמות הטורים. ui/Dialog: פוקוס, Esc, לכידת Tab. */
 export default function SplitDialog({
   isOpen,
   onClose,
@@ -12,72 +20,59 @@ export default function SplitDialog({
   setLeftColumnName,
   confirmSplit
 }) {
-  const [mounted, setMounted] = useState(false)
+  if (!isOpen) return null
 
-  useEffect(() => {
-    // mount guard לרינדור פורטל בצד הלקוח בלבד (מניעת hydration mismatch)
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMounted(true)
-  }, [])
+  return (
+    <Dialog
+      title="פיצול לשני טורים"
+      subtitle="בחר את סוג הפיצול לעמוד זה"
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="outlined" onClick={onClose}>ביטול</Button>
+          <Button variant="filled" icon="call_split" onClick={confirmSplit}>פיצול לשני טורים</Button>
+        </>
+      }
+    >
+      <fieldset className="space-y-3">
+        <legend className="sr-only">סוג הפיצול</legend>
+        {MODES.map((mode) => (
+          <label
+            key={mode.value}
+            className={cx(
+              'flex cursor-pointer items-start gap-3 rounded-(--radius-card) border p-4 transition-colors',
+              'has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-focus-ring',
+              splitMode === mode.value ? 'border-primary bg-surface-selected' : 'border-outline-variant hover:bg-surface-container'
+            )}
+          >
+            <input
+              type="radio"
+              name="splitMode"
+              value={mode.value}
+              checked={splitMode === mode.value}
+              onChange={(e) => setSplitMode(e.target.value)}
+              className="mt-1 size-4 shrink-0 accent-primary"
+            />
+            <span>
+              <span className="block text-label-lg text-on-surface">{mode.title}</span>
+              <span className="text-body-sm text-on-surface-variant">{mode.hint}</span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
 
-  if (!isOpen || !mounted) return null
-
-  return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="flex flex-col bg-white glass-strong rounded-2xl w-full max-w-md shadow-2xl border-2 border-primary animate-in zoom-in-95 duration-200">
-        
-        <div className="p-6 pb-2">
-          <h3 className="text-2xl font-bold text-on-surface mb-2">פיצול עמוד</h3>
-          <p className="text-on-surface/60 text-sm">בחר את סוג הפיצול הרצוי לעמוד זה</p>
-        </div>
-        
-        <div className="p-6 pt-4 space-y-6">
-          <div className="space-y-3">
-            <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all ${
-              splitMode === 'content' ? 'border-primary bg-primary/5' : 'border-surface-variant hover:bg-surface-variant/50'
-            }`}>
-              <div className="mt-0.5">
-                <input type="radio" name="splitMode" value="content" checked={splitMode === 'content'} onChange={(e) => setSplitMode(e.target.value)} className="accent-primary w-4 h-4" />
-              </div>
-              <div>
-                <span className="font-bold block text-on-surface">פיצול תוכן</span>
-                <span className="text-xs text-on-surface/70">העמוד מכיל שני חלקים שונים של טקסט (למשל גמרא ורש"י).</span>
-              </div>
-            </label>
-            
-            <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all ${
-              splitMode === 'visual' ? 'border-primary bg-primary/5' : 'border-surface-variant hover:bg-surface-variant/50'
-            }`}>
-              <div className="mt-0.5">
-                <input type="radio" name="splitMode" value="visual" checked={splitMode === 'visual'} onChange={(e) => setSplitMode(e.target.value)} className="accent-primary w-4 h-4" />
-              </div>
-              <div>
-                <span className="font-bold block text-on-surface">חלוקה ויזואלית</span>
-                <span className="text-xs text-on-surface/70">רק לנוחות העריכה (למשל שני טורים של אותו טקסט).</span>
-              </div>
-            </label>
+      {splitMode === 'content' && (
+        <div className="mt-5 space-y-4">
+          <div>
+            <label htmlFor="split-right-name" className={FIELD_LABEL}>כותרת הטור הימני</label>
+            <input id="split-right-name" type="text" value={rightColumnName} onChange={(e) => setRightColumnName(e.target.value)} className={fieldClasses()} placeholder="חלק 1" />
           </div>
-
-          {splitMode === 'content' && (
-            <div className="space-y-3 pt-2 animate-in fade-in slide-in-from-top-2">
-              <div>
-                <label className="block text-xs font-bold mb-1 text-on-surface/70">כותרת עמודה ימנית</label>
-                <input type="text" value={rightColumnName} onChange={(e) => setRightColumnName(e.target.value)} className="w-full px-4 py-2 border border-surface-variant rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" placeholder="חלק 1" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold mb-1 text-on-surface/70">כותרת עמודה שמאלית</label>
-                <input type="text" value={leftColumnName} onChange={(e) => setLeftColumnName(e.target.value)} className="w-full px-4 py-2 border border-surface-variant rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" placeholder="חלק 2" />
-              </div>
-            </div>
-          )}
+          <div>
+            <label htmlFor="split-left-name" className={FIELD_LABEL}>כותרת הטור השמאלי</label>
+            <input id="split-left-name" type="text" value={leftColumnName} onChange={(e) => setLeftColumnName(e.target.value)} className={fieldClasses()} placeholder="חלק 2" />
+          </div>
         </div>
-
-        <div className="flex gap-3 p-6 pt-0">
-          <button onClick={confirmSplit} className="flex-1 px-4 py-3 bg-primary text-on-primary rounded-lg font-bold hover:bg-accent transition-colors shadow-md">פצל עמוד</button>
-          <button onClick={onClose} className="flex-1 px-4 py-3 border border-surface-variant text-on-surface rounded-lg hover:bg-surface-variant transition-colors font-medium">ביטול</button>
-        </div>
-      </div>
-    </div>,
-    document.body
+      )}
+    </Dialog>
   )
 }

@@ -115,3 +115,50 @@ describe('DialogContext — showMessage', () => {
     expect(screen.getByRole('button', { name: 'שלח' })).toHaveFocus()
   })
 })
+
+function ToastHarness({ onKey }) {
+  const { showAlert } = useDialog()
+  return (
+    <>
+      <textarea aria-label="עורך" onKeyDown={e => onKey(e.defaultPrevented)} />
+      <button type="button" onClick={() => showAlert('נשמר', 'הדף נתפס')}>הצג</button>
+    </>
+  )
+}
+
+describe('DialogContext — הודעה חולפת (toast) אינה בולעת Enter', () => {
+  it('Enter בשדה עריכה בזמן שה-toast מוצג — עובר כרגיל (בלי preventDefault)', async () => {
+    const user = userEvent.setup()
+    const seen = []
+    // מאזין חלון שרץ אחרי ה-handler של הספק — בודק אם Enter נבלע
+    const winListener = (e) => { if (e.key === 'Enter') seen.push(e.defaultPrevented) }
+    render(<DialogProvider><ToastHarness onKey={vi.fn()} /></DialogProvider>)
+    window.addEventListener('keydown', winListener)
+    try {
+      await user.click(screen.getByRole('button', { name: 'הצג' }))
+      await screen.findByRole('status')
+      const ta = screen.getByRole('textbox', { name: 'עורך' })
+      await user.click(ta)
+      await user.keyboard('א{Enter}ב')
+      expect(seen).toEqual([false])
+      expect(ta.value).toBe('א\nב')
+      expect(screen.getByRole('status')).toBeInTheDocument()
+    } finally {
+      window.removeEventListener('keydown', winListener)
+    }
+  })
+
+  it('Enter מחוץ לחלון אישור מודאלי אינו מאשר אותו', async () => {
+    const onConfirm = vi.fn()
+    function H() {
+      const { showConfirm } = useDialog()
+      return <button type="button" onClick={() => showConfirm('בטוח?', 'x', onConfirm)}>פתח</button>
+    }
+    const user = userEvent.setup()
+    render(<DialogProvider><H /></DialogProvider>)
+    await user.click(screen.getByRole('button', { name: 'פתח' }))
+    await screen.findByRole('alertdialog')
+    act(() => { document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
+    expect(onConfirm).not.toHaveBeenCalled()
+  })
+})

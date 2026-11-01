@@ -41,6 +41,8 @@ const eslintConfig = defineConfig([
     "scripts/**",
     // worktrees של סוכנים (.claude/worktrees) — עותקים מלאים של הריפו, לא קוד לבדיקה.
     ".claude/**",
+    // ספריות צד שלישי מוקטנות שמוגשות כנכסים סטטיים (למשל tesseract) — לא קוד שלנו.
+    "public/vendor/**",
   ]),
 ]);
 

@@ -15,19 +15,19 @@ export default function DictaResetDialog({ bookTitle, onConfirm, onCancel, loadi
   }, [onCancel])
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onCancel}>
+    <div className="fixed inset-0 bg-scrim/70 flex items-center justify-center z-50 p-4" onClick={onCancel}>
       <div className="glass-strong rounded-2xl p-8 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
         <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-danger-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="material-symbols-outlined text-4xl text-danger-600">warning</span>
+          <div className="w-16 h-16 bg-error-container rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="material-symbols-outlined text-4xl text-error">warning</span>
           </div>
           <h2 className="text-2xl font-bold text-on-surface mb-2">אפס עריכת ספר</h2>
           <p className="text-on-surface/70 font-bold">{bookTitle}</p>
         </div>
-        <div className="bg-danger-50 border-2 border-danger-200 rounded-xl p-4 mb-6">
+        <div className="bg-error-container border-2 border-error-container rounded-xl p-4 mb-6">
           <div className="flex items-start gap-3">
-            <span className="material-symbols-outlined text-danger-600 mt-0.5">error</span>
-            <div className="text-sm text-danger-800">
+            <span className="material-symbols-outlined text-error mt-0.5">error</span>
+            <div className="text-sm text-on-error-container">
               <p className="font-bold mb-2">אזהרה: פעולה בלתי הפיכה!</p>
               <ul className="space-y-1">
                 <li>• כל העריכות שביצעת יימחקו לצמיתות</li>
@@ -46,7 +46,7 @@ export default function DictaResetDialog({ bookTitle, onConfirm, onCancel, loadi
           <button
             onClick={onConfirm}
             disabled={loading}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-danger-600 text-white rounded-lg hover:bg-danger-700 transition-colors font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-error text-on-error rounded-lg hover:bg-error/90 transition-colors font-bold disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
               <>

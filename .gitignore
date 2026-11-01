@@ -53,11 +53,13 @@ scripts/*
 !scripts/build-offline-editor.js
 # סקריפטי build אמיתיים — נדרשים ל-npm run build ולכן נשמרים
 !scripts/build-icon-font.mjs
+!scripts/subset-icon-weight.py
 !scripts/icon-font.manifest.json
 !scripts/material-symbols-names.txt
 !scripts/optimize-assets.mjs
 !scripts/offline-editor-icons.json
 !scripts/check-perf-budget.mjs
+!scripts/copy-tesseract-assets.mjs
 !scripts/check-prefetch.mjs
 # תיקוני טקסט — מופעלים בייצור לפי docs/text-corrections/OPERATIONS.md
 !scripts/corrections-worker.mjs
@@ -81,6 +83,8 @@ sample.json
 Otzaria_Website.xml
 .env.local
 public/tessdata/*
+# tesseract.js מאוחסן אצלנו — מועתק/מורד ב-build (scripts/copy-tesseract-assets.mjs)
+/public/vendor/tesseract/
 public/version.json
 public/export-editor/dicta-editor-offline.html
 .vscode/settings.json

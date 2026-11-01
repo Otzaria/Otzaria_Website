@@ -2,11 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import EditorHeader from '@/components/editor/EditorHeader'
-import EditorToolbar from '@/components/editor/EditorToolbar'
 import ImagePanel from '@/components/editor/ImagePanel'
 import TextEditor from '@/components/editor/TextEditor'
-import SettingsSidebar from '@/components/editor/SettingsSidebar'
 import FindReplaceDialog from '@/components/editor/modals/FindReplaceDialog'
 import EmbedImageModal from '@/components/dicta-tools/EmbedImageModal'
 import SplitDialog from '@/components/editor/modals/SplitDialog'
@@ -15,33 +12,71 @@ import ShortcutsDialog from '@/components/editor/modals/ShortcutsDialog'
 import SpellcheckDialog from '@/components/editor/modals/SpellcheckDialog'
 import { useDialog } from '@/components/providers/DialogContext'
 import { useLoading } from '@/components/providers/LoadingContext'
-import { useAutoSave } from '@/hooks/useAutoSave'
-import { useOCR } from '@/hooks/useOCR'
+import { useAutoSave, UNSAVED_LEAVE_MESSAGE } from '@/hooks/useAutoSave'
+import { mergeColumns } from '@/lib/editor/columnMerge'
 import { getTextareaCaretTop } from '@/lib/editorUtils'
+import { isEditorField, queryEditorField } from '@/lib/editor/editorField'
 import { findNextWholeWordInTextarea as findNextWholeWordInTextareaUtil } from '@/lib/hebrewWordUtils'
-import { hasBookLibraryAccess } from '@/lib/roles'
+import { buildSearchRegex, findNextOutsideTags, processSearchPattern, rangeInText, replaceOutsideTags } from '@/lib/editor/textOnlyReplace'
+import { hasBookLibraryAccess, hasBooksAccess } from '@/lib/roles'
 import { useRequireAuth } from '@/hooks/useRequireAuth'
-import { computeImagePanelWidth, computeColumnWidth, computeOcrCropParams } from './panelResizeGeometry'
-import { buildShortcutCombination, findMatchingActionId } from './keyboardShortcutMatching'
+import { useUndoAvailability } from '@/hooks/useUndoAvailability'
+import { shortcutAllowed, shortcutContext } from './shortcutScope'
+import { editorFieldHistory } from '@/components/editor/v2/textareaHistory'
+import { pushStructuralUndo, resetFieldHistories } from '@/components/editor/v2/fieldHistoryStore'
+import { usePageTracking } from '@/components/editor/v2/usePageTracking'
+import { canStartLocalWordDetection, useLocalWordBoxes } from '@/hooks/useLocalWordBoxes'
+import { useEditorPrefs } from '@/hooks/useEditorPrefs'
+import { useTextViewToggle } from '@/hooks/useTextViewToggle'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
+import { useRestReminder } from '@/hooks/useRestReminder'
+import { useCaretPosition } from '@/hooks/useCaretPosition'
+import { useActiveFormats } from '@/hooks/useActiveFormats'
+import { toggleFormat, clearFormatting } from '@/lib/editor/formatToggle'
+import { applyFieldEdit, insertBlockAt, replaceFieldSelection, replaceFieldValue } from '@/lib/editor/applyFieldEdit'
+import { PREF_RANGES, migrateLegacyEditorPrefs } from '@/hooks/editorPrefs'
+import Button from '@/components/ui/Button'
+import CommandPalette from '@/components/ui/CommandPalette'
+import EditorShell from '@/components/editor/v2/EditorShell'
+import EditorTopBar from '@/components/editor/v2/EditorTopBar'
+import EditorStatusBar from '@/components/editor/v2/EditorStatusBar'
+import EditorAccountButton from '@/components/editor/v2/EditorAccountButton'
+import ScanToolbar from '@/components/editor/v2/ScanToolbar'
+import TextToolbar from '@/components/editor/v2/TextToolbar'
+import MobileActionBar from '@/components/editor/v2/MobileActionBar'
+import { pageClaimState, canFinishPage } from '@/components/editor/v2/pageClaim'
+import DisplaySettingsSheet from '@/components/editor/v2/DisplaySettingsSheet'
+import FinishPageDialog from '@/components/editor/v2/FinishPageDialog'
+import RestReminder from '@/components/editor/v2/RestReminder'
+import { buildEditorCommands } from '@/components/editor/v2/editorCommands'
+import {
+  caretLineJump,
+  clampZoom,
+  countLines,
+  countWords,
+  editorFontFamily,
+  editorStyleVars,
+  fitZoomPercent,
+  IMAGE_ZOOM,
+  scanFilterCss,
+  shortcutKeys,
+  toggledEditorFont,
+  toUiSaveStatus,
+} from '@/components/editor/v2/editorShellLogic'
+import '@/app/styles/editor-themes.css'
+import { computeImagePanelWidth, computeColumnWidth } from './panelResizeGeometry'
+import {
+  buildShortcutCombination,
+  findMatchingActionId,
+  DEFAULT_SHORTCUTS,
+  SHORTCUTS_VERSION,
+  migrateUserShortcuts,
+} from './keyboardShortcutMatching'
 
-// הגדרת ברירת מחדל המבוססת על מקשים פיזיים (Codes)
-const DEFAULT_SHORTCUTS = {
-  'save': 'Ctrl+KeyS',
-  'ocr': 'Alt+KeyO',
-  'bold': 'Ctrl+KeyB',
-  'italic': 'Ctrl+KeyI',
-  'underline': 'Ctrl+KeyU',
-  'zoomIn': 'Ctrl+Equal',
-  'zoomOut': 'Ctrl+Minus',
-  'split': 'Alt+KeyS',
-  'rotateR': 'Alt+KeyR',
-  'togglePanel': 'Alt+KeyP',
-  'fullScreen': 'F11',
-  'shortcuts': 'Alt+KeyK',
-  'selectionMode': 'Alt+KeyV',
-  'finish': 'Ctrl+Enter',
-  'imageToText': 'Ctrl+Shift+KeyI',
-};
+const SHORTCUTS_STORAGE_KEY = 'user_shortcuts'
+const SHORTCUTS_VERSION_KEY = 'user_shortcuts_version'
+// פעולות שהקיצור שלהן הוסר בהעברת גרסה (התנגשות) — מוצג בחלון הקיצורים עד "הבנתי"
+const SHORTCUTS_UNBOUND_KEY = 'user_shortcuts_unbound'
 
 export default function EditPage() {
   const { session, status } = useRequireAuth()
@@ -63,11 +98,13 @@ export default function EditPage() {
   const [rightColumn, setRightColumn] = useState('')
   const [twoColumns, setTwoColumns] = useState(false)
   const [activeTextarea, setActiveTextarea] = useState(null)
-  const [textAlign, setTextAlign] = useState('right');
-  const [selectedFont, setSelectedFont] = useState('Times New Roman')
-  
-  const [textZoom, setTextZoom] = useState(17)
   const [settingsLoaded, setSettingsLoaded] = useState(false)
+
+  // העדפות התצוגה (ערכה, גופן, גודל, ריווח, בהירות הצילום, תזכורת מנוחה) — useEditorPrefs
+  const { prefs, setPrefs, resetPrefs, ready: prefsReady } = useEditorPrefs()
+  const isMobile = useMediaQuery('(max-width: 767px)')
+  // טאבלט לאורך (768–1023): שני פאנלים זה לצד זה צרים מדי — הצילום מעל הטקסט, כמו בנייד
+  const isPortraitTablet = useMediaQuery('(min-width: 768px) and (max-width: 1023px) and (orientation: portrait)')
 
   const allInstructions = useMemo(() => {
       const globalRawSections = globalInstructions?.sections || [];
@@ -91,26 +128,27 @@ export default function EditPage() {
   }, [bookData, globalInstructions]); 
    
   const [imageZoom, setImageZoom] = useState(100)
-  const [rotation, setRotation] = useState(0)
+  // בלי זום שמור (כניסה ראשונה) — התאמה לרוחב הפאנל כשהצילום נטען, במקום 100% שרירותי
+  const fitZoomOnLoadRef = useRef(false)
   const [layoutOrientation, setLayoutOrientation] = useState('vertical')
-  const [imagePanelWidth, setImagePanelWidth] = useState(50)
-  const [isResizing, setIsResizing] = useState(false)
+  const [imagePanelWidth, setImagePanelWidth] = useState(52)
+  // בנייד הצילום תמיד למעלה; הגודל נפרד מזה של המחשב (34% כברירת מחדל)
+  const [mobileScanSize, setMobileScanSize] = useState(34)
   const [columnWidth, setColumnWidth] = useState(50)
   const [isColumnResizing, setIsColumnResizing] = useState(false)
   
   const splitContainerRef = useRef(null)
   const textEditorContainerRef = useRef(null)
-  
-  const imagePanelWidthRef = useRef(imagePanelWidth)
+
   const columnWidthRef = useRef(columnWidth)
 
-  useEffect(() => { imagePanelWidthRef.current = imagePanelWidth }, [imagePanelWidth])
   useEffect(() => { columnWidthRef.current = columnWidth }, [columnWidth])
 
   const [swapPanels, setSwapPanels] = useState(false)
   
   const [isFullScreen, setIsFullScreen] = useState(false)
-  const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false)
+  const [showPalette, setShowPalette] = useState(false)
+  const [showDisplay, setShowDisplay] = useState(false)
 
   const [showSplitDialog, setShowSplitDialog] = useState(false)
   const [rightColumnName, setRightColumnName] = useState('חלק 1')
@@ -126,59 +164,58 @@ export default function EditPage() {
   const [useRegex, setUseRegex] = useState(false)
   const [savedSearches, setSavedSearches] = useState([])
 
-  const [isSelectionMode, setIsSelectionMode] = useState(false)
-  const [selectionStart, setSelectionStart] = useState(null)
-  const [selectionEnd, setSelectionEnd] = useState(null)
-  const [selectionRect, setSelectionRect] = useState(null)
-  const [ocrMethod, setOcrMethod] = useState('ocrwin')
-  const { isProcessing: isOcrProcessing, performGeminiOCR, performTesseractOCR, performOCRWin } = useOCR()
-
-  const [showSettings, setShowSettings] = useState(false)
   const [showInfoDialog, setShowInfoDialog] = useState(false)
-  const [userApiKey, setUserApiKey] = useState('')
-  const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash')
-  const [customPrompt, setCustomPrompt] = useState('The text is in Hebrew, written in Rashi script...') 
-  const [showUploadDialog, setShowUploadDialog] = useState(false)
+  const [showFinishDialog, setShowFinishDialog] = useState(false)
 
   // Shortcuts State
   const [showShortcutsDialog, setShowShortcutsDialog] = useState(false);
-  const [userShortcuts, setUserShortcuts] = useState(DEFAULT_SHORTCUTS);
+  const [userShortcuts, setUserShortcuts] = useState(() => ({ ...DEFAULT_SHORTCUTS }));
+  const [unboundShortcuts, setUnboundShortcuts] = useState([]);
   const [showImageToText, setShowImageToText] = useState(false);
 
-  const { save: debouncedSave, status: saveStatus } = useAutoSave()
+  const {
+    save: debouncedSave,
+    saveNow,
+    flush: flushAutoSave,
+    status: saveStatus,
+  } = useAutoSave()
 
   useEffect(() => {
-    const savedAlign = localStorage.getItem('textAlign');
-    const savedApiKey = localStorage.getItem('gemini_api_key')
-    const savedPrompt = localStorage.getItem('gemini_prompt')
-    const savedModel = localStorage.getItem('gemini_model')
     const savedPanelWidth = localStorage.getItem('imagePanelWidth')
     const savedColumnWidth = localStorage.getItem('columnWidth')
     const savedOrientation = localStorage.getItem('layoutOrientation')
     const savedSwap = localStorage.getItem('swapPanels')
-    const savedFont = localStorage.getItem('selectedFont')
-    const savedTextZoom = localStorage.getItem('textZoom')
     const savedImageZoom = localStorage.getItem('imageZoom')
-    const savedShortcuts = localStorage.getItem('user_shortcuts')
+    const savedShortcuts = localStorage.getItem(SHORTCUTS_STORAGE_KEY)
+    const savedShortcutsVersion = parseInt(localStorage.getItem(SHORTCUTS_VERSION_KEY), 10)
 
-    if (savedAlign) setTextAlign(savedAlign);
-    if (savedFont) setSelectedFont(savedFont)
-    if (savedApiKey) setUserApiKey(savedApiKey)
-    if (savedPrompt) setCustomPrompt(savedPrompt)
-    if (savedModel) setSelectedModel(savedModel)
     if (savedPanelWidth) setImagePanelWidth(parseFloat(savedPanelWidth))
     if (savedColumnWidth) setColumnWidth(parseFloat(savedColumnWidth))
     if (savedOrientation) setLayoutOrientation(savedOrientation)
     if (savedSwap) setSwapPanels(savedSwap === 'true')
-    if (savedTextZoom) setTextZoom(parseInt(savedTextZoom))
-    if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
+if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
+    else fitZoomOnLoadRef.current = true
     
     if (savedShortcuts) {
+      let parsed = null;
       try {
-        const parsed = JSON.parse(savedShortcuts);
-        setUserShortcuts(parsed);
+        parsed = JSON.parse(savedShortcuts);
       } catch (e) { console.error('Error loading shortcuts', e); }
+      // קיצורים שהמשתמש התאים נשמרים; פעולות חדשות מקבלות קיצור רק אם הוא פנוי
+      const { shortcuts: migrated, changed, unbound } = migrateUserShortcuts(
+        parsed, Number.isInteger(savedShortcutsVersion) ? savedShortcutsVersion : null
+      );
+      setUserShortcuts(migrated);
+      if (changed) {
+        localStorage.setItem(SHORTCUTS_STORAGE_KEY, JSON.stringify(migrated));
+        localStorage.setItem(SHORTCUTS_VERSION_KEY, String(SHORTCUTS_VERSION));
+      }
+      if (unbound.length) localStorage.setItem(SHORTCUTS_UNBOUND_KEY, JSON.stringify(unbound));
     }
+    try {
+      const unboundSaved = JSON.parse(localStorage.getItem(SHORTCUTS_UNBOUND_KEY) || '[]');
+      if (Array.isArray(unboundSaved) && unboundSaved.length) setUnboundShortcuts(unboundSaved);
+    } catch { /* ערך פגום — מתעלמים */ }
 
     setSettingsLoaded(true);
   }, []);
@@ -217,32 +254,42 @@ export default function EditPage() {
     }
   }, [status, bookPath])
 
+  // העברה מהעורך הישן (selectedFont, textZoom, textAlign) — רק כשאין עדיין רשומת העדפות; המפתחות
+  // הישנים נמחקים תמיד (migrateLegacyEditorPrefs), כך שבחירה חדשה לא נדרסת משאריות
   useEffect(() => {
-    if (settingsLoaded) localStorage.setItem('textAlign', textAlign);
-  }, [textAlign, settingsLoaded]);
-
-  useEffect(() => {
-    if (selectedFont && settingsLoaded) {
-      localStorage.setItem('selectedFont', selectedFont)
+    if (!prefsReady) return
+    try {
+      const patch = migrateLegacyEditorPrefs(localStorage)
+      if (Object.keys(patch).length > 0) setPrefs(patch)
+    } catch {
+      // אחסון חסום — נשארים עם ההעדפות
     }
-  }, [selectedFont, settingsLoaded])
+  }, [prefsReady, setPrefs])
 
-  useEffect(() => {
-    if (settingsLoaded) localStorage.setItem('textZoom', textZoom.toString())
-  }, [textZoom, settingsLoaded])
+  // יישור הטקסט — בהעדפות (prefs.textAlign), מקור אחד ל-textarea, לשכבת ה-mirror ולתצוגה העשירה
+  const textAlign = prefs.textAlign
+  const setTextAlign = useCallback((value) => setPrefs({ textAlign: value }), [setPrefs])
+
+  // גודל הטקסט (גלגלת+Ctrl, קיצורי הגדלה) — נשמר בהעדפות; מקבל ערך או פונקציה, כמו setState
+  const setTextZoom = useCallback((value) => {
+    setPrefs((p) => ({ fontSize: typeof value === 'function' ? value(p.fontSize) : value }))
+  }, [setPrefs])
 
   useEffect(() => {
     if (settingsLoaded) localStorage.setItem('imageZoom', imageZoom.toString())
   }, [imageZoom, settingsLoaded])
 
+  // נשמר גם כשהפריסה מתחלפת בקיצור מקלדת, לא רק מהכפתור בסרגל
+  useEffect(() => {
+    if (settingsLoaded) localStorage.setItem('layoutOrientation', layoutOrientation)
+  }, [layoutOrientation, settingsLoaded])
+
   const toggleFullScreen = useCallback(async () => {
     try {
       if (!document.fullscreenElement) {
         await document.documentElement.requestFullscreen()
-        setIsToolbarCollapsed(true)
-      } else {
-        if (document.exitFullscreen) await document.exitFullscreen()
-        setIsToolbarCollapsed(false)
+      } else if (document.exitFullscreen) {
+        await document.exitFullscreen()
       }
     } catch (err) {
       console.error(err)
@@ -392,39 +439,36 @@ export default function EditPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content, leftColumn, rightColumn, twoColumns]); // handleAutoSaveWrapper added below
 
-  const handleAutoSaveWrapper = useCallback((newContent, left = leftColumn, right = rightColumn, two = twoColumns) => {
+  // split — כשהקורא כבר יודע את הערך החדש (פיצול: ה-state עוד לא התעדכן בסגירה הזו)
+  const handleAutoSaveWrapper = useCallback((newContent, left = leftColumn, right = rightColumn, two = twoColumns, split = isContentSplit) => {
     debouncedSave({
       bookPath, pageNumber, content: newContent, leftColumn: left, rightColumn: right,
-      twoColumns: two, isContentSplit, rightColumnName, leftColumnName
+      twoColumns: two, isContentSplit: split, rightColumnName, leftColumnName
     })
   }, [debouncedSave, bookPath, pageNumber, leftColumn, rightColumn, twoColumns, isContentSplit, rightColumnName, leftColumnName]);
 
+  // שמירה מיידית של המצב הנוכחי (Ctrl+S, לפני סיום עמוד) — בלי לחכות ל-debounce
+  const saveCurrentNow = useCallback(() => saveNow({
+    bookPath, pageNumber, content, leftColumn, rightColumn,
+    twoColumns, isContentSplit, rightColumnName, leftColumnName
+  }), [saveNow, bookPath, pageNumber, content, leftColumn, rightColumn, twoColumns, isContentSplit, rightColumnName, leftColumnName]);
+
   const updateTextWithHistory = useCallback((newText, column) => {
     let el;
-    if (column === 'right') el = document.querySelector('textarea[data-column="right"]');
-    else if (column === 'left') el = document.querySelector('textarea[data-column="left"]');
-    else el = document.querySelector('.editor-container textarea');
+    if (column === 'right' || column === 'left') el = queryEditorField(document, column);
+    else el = queryEditorField(document.querySelector('.editor-container'));
 
-    if (el) {
-        const scrollTop = el.scrollTop;
-        
-        el.focus();
-        el.select();
-        const success = document.execCommand('insertText', false, newText);
-        
-        el.setSelectionRange(el.value.length, el.value.length);
-        el.scrollTop = scrollTop;
+    const applyToState = (text) => {
+        if (column === 'right') handleColumnChange('right', text);
+        else if (column === 'left') handleColumnChange('left', text);
+        else { setContent(text); handleAutoSaveWrapper(text); }
+    };
 
-        if (!success) {
-            if (column === 'right') handleColumnChange('right', newText);
-            else if (column === 'left') handleColumnChange('left', newText);
-            else { setContent(newText); handleAutoSaveWrapper(newText); }
-        }
-    } else {
-        if (column === 'right') handleColumnChange('right', newText);
-        else if (column === 'left') handleColumnChange('left', newText);
-        else { setContent(newText); handleAutoSaveWrapper(newText); }
-    }
+    // מסלול אחד לכל שינוי תוכנתי של הטקסט (החלף הכול, בדיקת איות, חיפושים קבועים, ניקוי ספרות,
+    // הטמעת תמונה): רק הטווח שהשתנה מוחלף, בצעד ביטול אחד, ובתצוגה המעוצבת — replaceRange של
+    // השדה ולא execCommand על ה-contenteditable (שם התגים היו נקראים מחדש כטקסט ומשוכפלים)
+    if (el) replaceFieldValue(el, newText, applyToState);
+    else applyToState(newText);
   }, [handleColumnChange, handleAutoSaveWrapper]);
 
   const openSpellcheck = useCallback(() => {
@@ -449,48 +493,30 @@ export default function EditPage() {
   const runAllSavedReplacements = useCallback(() => {
     if (savedSearches.length === 0) return;
     
-    const processPattern = (str) => str.replaceAll('^13', '\n');
-    
     let tempRight = rightColumn;
     let tempLeft = leftColumn;
     let tempContent = content;
 
+    // רק בטקסט — לא בתוך תגים (<h2>, base64 של תמונות) ולא בישויות
+    const apply = (regex, r) => {
+      if (twoColumns) {
+        tempRight = replaceOutsideTags(tempRight, regex, r).value;
+        tempLeft = replaceOutsideTags(tempLeft, regex, r).value;
+      } else {
+        tempContent = replaceOutsideTags(tempContent, regex, r).value;
+      }
+    };
+
     savedSearches.forEach(search => {
       if (search.isRemoveDigits) {
-         const digitRegex = /[0-9]/g;
-         if (twoColumns) {
-            tempRight = tempRight.replace(digitRegex, '');
-            tempLeft = tempLeft.replace(digitRegex, '');
-         } else {
-            tempContent = tempContent.replace(digitRegex, '');
-         }
+         apply(/[0-9]/g, '');
          return; 
       }
 
-      const f = processPattern(search.findText);
-      const r = processPattern(search.replaceText);
-      
-      if (!f) return;
-
-      let regex;
-      try {
-          if (search.isRegex) {
-              regex = new RegExp(f, 'g');
-          } else {
-              const escaped = f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-              regex = new RegExp(escaped, 'g');
-          }
-      } catch (e) {
-          console.error('Invalid Regex in saved search', e);
-          return;
-      }
-
-      if (twoColumns) {
-        tempRight = tempRight.replace(regex, r);
-        tempLeft = tempLeft.replace(regex, r);
-      } else {
-        tempContent = tempContent.replace(regex, r);
-      }
+      const r = processSearchPattern(search.replaceText);
+      const regex = buildSearchRegex(search.findText, !!search.isRegex);
+      if (!regex) return;
+      apply(regex, r);
     });
     
     let changesMade = false;
@@ -504,6 +530,9 @@ export default function EditPage() {
           updateTextWithHistory(tempLeft, 'left');
           changesMade = true;
       }
+      // שתי קריאות ה-onChange נוצרות מאותו render וכל אחת רואה את הטור האחר
+      // בערכו הישן. snapshot מלאה בסוף מונעת מה-debounce לשמור שילוב חלקי.
+      if (changesMade) handleAutoSaveWrapper(content, tempLeft, tempRight, true)
     } else {
       if (tempContent !== content) {
           updateTextWithHistory(tempContent, null);
@@ -516,7 +545,7 @@ export default function EditPage() {
     } else {
       showAlert('לידיעתך', 'לא נמצאו שינויים לביצוע');
     }
-  }, [savedSearches, rightColumn, leftColumn, content, twoColumns, updateTextWithHistory, showAlert]);
+  }, [savedSearches, rightColumn, leftColumn, content, twoColumns, updateTextWithHistory, handleAutoSaveWrapper, showAlert]);
 
   const togglePanelOrder = useCallback(() => {
     const newState = !swapPanels
@@ -530,26 +559,41 @@ export default function EditPage() {
         'האם אתה בטוח שברצונך למחוק את כל הספרות (0-9) מהטקסט?',
         () => {
             const regex = /[0-9]/g; 
+            // דרך השדה (ביטול בצעד אחד, בטוח בתצוגה המעוצבת) — לא עדכון state ישיר
             if (twoColumns) {
-              const newRight = rightColumn.replace(regex, '');
-              const newLeft = leftColumn.replace(regex, '');
-              setRightColumn(newRight);
-              setLeftColumn(newLeft);
-              handleAutoSaveWrapper(content, newLeft, newRight, true);
+              const newRight = replaceOutsideTags(rightColumn, regex, '').value;
+              const newLeft = replaceOutsideTags(leftColumn, regex, '').value;
+              if (newRight !== rightColumn) updateTextWithHistory(newRight, 'right');
+              if (newLeft !== leftColumn) updateTextWithHistory(newLeft, 'left');
+              // שתי קריאות onChange באותו render רואות את הטור השני הישן. שומרים בסוף
+              // תמונה מלאה של שני הטורים, אחרי עדכון השדות והיסטוריית הביטול שלהם.
+              if (newRight !== rightColumn || newLeft !== leftColumn) {
+                handleAutoSaveWrapper(content, newLeft, newRight, twoColumns);
+              }
             } else {
-              const newContent = content.replace(regex, '');
-              setContent(newContent);
-              handleAutoSaveWrapper(newContent, leftColumn, rightColumn, false);
+              const newContent = replaceOutsideTags(content, regex, '').value;
+              if (newContent !== content) updateTextWithHistory(newContent, null);
             }
         }
     )
-  }, [showConfirm, twoColumns, rightColumn, leftColumn, content, handleAutoSaveWrapper]);
+  }, [showConfirm, twoColumns, rightColumn, leftColumn, content, updateTextWithHistory, handleAutoSaveWrapper]);
 
-  const handleFinishClick = useCallback(() => {
+  const handleFinishClick = useCallback(async () => {
     if (!session) return showAlert('שגיאה', 'אינך מחובר למערכת');
-    handleAutoSaveWrapper(content, leftColumn, rightColumn, twoColumns);
-    setShowUploadDialog(true);
-  }, [session, content, leftColumn, rightColumn, twoColumns, handleAutoSaveWrapper, showAlert]);
+    // סיום (כפתור, Ctrl+Enter, חלון הפקודות) — רק כשהעמוד תפוס על ידי המשתמש
+    const claim = pageClaimState(pageData, session.user?._id || session.user?.id);
+    if (!canFinishPage(claim)) {
+      if (claim.state === 'available') showAlert('העמוד עוד לא נתפס', 'כדי לסיים את העמוד, תפוס אותו קודם (הכפתור "תפוס עמוד" בכותרת).');
+      return;
+    }
+    // סיום רק אחרי שהתוכן הנוכחי נשמר בפועל — אחרת ההעלאה/הסימון כהושלם עלולים לצאת בלי השינויים האחרונים
+    const saved = await saveCurrentNow();
+    if (!saved) {
+      showAlert('השמירה נכשלה', 'לא הצלחנו לשמור את השינויים האחרונים, ולכן אי אפשר לסיים את העמוד כרגע. בדקו את החיבור ונסו שוב.');
+      return;
+    }
+    setShowFinishDialog(true);
+  }, [session, pageData, saveCurrentNow, showAlert]);
 
   const handleClaim = async () => {
     if (!session) return showAlert('שגיאה', 'אינך מחובר למערכת');
@@ -676,39 +720,27 @@ export default function EditPage() {
     await uploadFile();
   };
 
-  const handleResizeStart = (e) => {
-    e.preventDefault()
-    setIsResizing(true)
-  }
-
   const handleColumnResizeStart = (e) => {
     e.preventDefault()
     setIsColumnResizing(true)
   }
 
+  // גרירת המפריד בין שני טורי הטקסט (בתוך TextEditor). המפריד בין הצילום לטקסט — PanelSplitter
   const handleMouseMove = useCallback((e) => {
-    if (isResizing) {
-      const container = splitContainerRef.current
-      if (!container) return
-      const rect = container.getBoundingClientRect()
-      setImagePanelWidth(computeImagePanelWidth(rect, e.clientX, e.clientY, layoutOrientation, swapPanels))
-    } else if (isColumnResizing) {
-      const editorContainer = textEditorContainerRef.current
-      if (!editorContainer) return
-      const rect = editorContainer.getBoundingClientRect()
-      setColumnWidth(computeColumnWidth(rect, e.clientX))
-    }
-  }, [isResizing, isColumnResizing, layoutOrientation, swapPanels])
+    if (!isColumnResizing) return
+    const editorContainer = textEditorContainerRef.current
+    if (!editorContainer) return
+    const rect = editorContainer.getBoundingClientRect()
+    setColumnWidth(computeColumnWidth(rect, e.clientX))
+  }, [isColumnResizing])
 
   const handleMouseUp = useCallback(() => {
-    setIsResizing(false)
     setIsColumnResizing(false)
-    localStorage.setItem('imagePanelWidth', imagePanelWidthRef.current.toString())
     localStorage.setItem('columnWidth', columnWidthRef.current.toString())
   }, [])
 
   useEffect(() => {
-    if (isResizing || isColumnResizing) {
+    if (isColumnResizing) {
       document.addEventListener('mousemove', handleMouseMove)
       document.addEventListener('mouseup', handleMouseUp)
     }
@@ -716,17 +748,49 @@ export default function EditPage() {
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [isResizing, isColumnResizing, handleMouseMove, handleMouseUp])
+  }, [isColumnResizing, handleMouseMove, handleMouseUp])
 
-  const toggleColumns = useCallback(() => {
-    if (!twoColumns) setShowSplitDialog(true)
-    else {
-      const combined = rightColumn + leftColumn
-      setContent(combined)
-      setTwoColumns(false)
-      handleAutoSaveWrapper(combined, leftColumn, rightColumn, false)
+  // החזרת הפוקוס לעורך אחרי שינוי מבנה (איחוד טורים): הטור הממוקד הוסר מה-DOM והפוקוס נפל ל-BODY
+  const focusEditorSoon = useCallback(() => {
+    setTimeout(() => {
+      const el = queryEditorField(document.querySelector('.editor-container'))
+      if (el && !el.contains(document.activeElement)) el.focus({ preventScroll: true })
+    }, 50)
+  }, []);
+
+  const toggleColumns = useCallback(async () => {
+    if (!twoColumns) {
+      setShowSplitDialog(true)
+      return
     }
-  }, [twoColumns, rightColumn, leftColumn, handleAutoSaveWrapper]);
+    const right = rightColumn
+    const left = leftColumn
+    const ok = await showConfirm(
+      'איחוד הטורים',
+      'לאחד את שני הטורים לטור אחד? הטקסט של הטור השמאלי יצורף אחרי הטור הימני.',
+    )
+    if (!ok) {
+      focusEditorSoon()
+      return
+    }
+    const combined = mergeColumns(right, left)
+    const prevContent = content
+    const split = isContentSplit
+    // הביטול הראשון בטור המאוחד מחזיר את שני הטורים עם התוכן שלהם (ההיסטוריה של כל טור נשמרה —
+    // fieldHistoryStore — כי הערך שלו לא השתנה)
+    pushStructuralUndo('content', combined, () => {
+      setRightColumn(right)
+      setLeftColumn(left)
+      setContent(prevContent)
+      setTwoColumns(true)
+      handleAutoSaveWrapper(prevContent, left, right, true, split)
+      focusEditorSoon()
+    })
+    setContent(combined)
+    setTwoColumns(false)
+    handleAutoSaveWrapper(combined, left, right, false)
+    focusEditorSoon()
+  }, [twoColumns, rightColumn, leftColumn, content, isContentSplit, handleAutoSaveWrapper, showConfirm, focusEditorSoon]);
 
   const handleDownloadImage = async () => {
     if (!pageData?.thumbnail) return showAlert('שגיאה', 'אין תמונה להורדה');
@@ -751,20 +815,20 @@ export default function EditPage() {
     setRightColumn(content)
     setLeftColumn('')
     setTwoColumns(true)
-    setIsContentSplit(splitMode === 'content')
+    const split = splitMode === 'content'
+    setIsContentSplit(split)
     setShowSplitDialog(false)
-    handleAutoSaveWrapper(content, '', content, true)
+    handleAutoSaveWrapper(content, '', content, true, split)
   }
   
   const getActiveTextarea = () => {
     let activeEl = null;
-    if (activeTextarea === 'left') activeEl = document.querySelector('textarea[data-column="left"]');
-    else if (activeTextarea === 'right') activeEl = document.querySelector('textarea[data-column="right"]');
-    else activeEl = document.querySelector('.editor-container textarea');
+    if (activeTextarea === 'left' || activeTextarea === 'right') activeEl = queryEditorField(document, activeTextarea);
+    else activeEl = queryEditorField(document.querySelector('.editor-container'));
 
     if (!activeEl) {
-        if (twoColumns) activeEl = document.querySelector('textarea[data-column="right"]');
-        else activeEl = document.querySelector('.editor-container textarea');
+        if (twoColumns) activeEl = queryEditorField(document, 'right');
+        else activeEl = queryEditorField(document.querySelector('.editor-container'));
     }
     return activeEl;
   }
@@ -782,46 +846,20 @@ export default function EditPage() {
 
     if (!activeEl) return false;
 
-    const processPattern = (str) => str.replaceAll('^13', '\n');
-    const patternStr = processPattern(textToFind);
     const text = activeEl.value;
     const startPos = activeEl.selectionEnd;
 
-    let matchIndex = -1;
-    let matchLength = 0;
-
-    if (isRegexMode) {
-      try {
-        const regex = new RegExp(patternStr, 'g');
-        regex.lastIndex = startPos;
-        const match = regex.exec(text);
-        if (match) {
-          matchIndex = match.index;
-          matchLength = match[0].length;
-        } else {
-          regex.lastIndex = 0;
-          const matchFromStart = regex.exec(text);
-          if (matchFromStart) {
-            matchIndex = matchFromStart.index;
-            matchLength = matchFromStart[0].length;
-            if (!suppressAlerts) {
-              showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.');
-            }
-          }
-        }
-      } catch (e) {
-        if (!suppressAlerts) showAlert('שגיאה', 'ביטוי רגולרי לא תקין');
-        return false;
-      }
-    } else {
-      matchIndex = text.indexOf(patternStr, startPos);
-      if (matchIndex === -1) {
-        matchIndex = text.indexOf(patternStr, 0);
-        if (matchIndex !== -1 && !suppressAlerts) {
-          showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.');
-        }
-      }
-      matchLength = patternStr.length;
+    // רק בטקסט — לא בתוך תגים/ישויות (חפש הבא לא נעצר בתוך <big> או ב-base64 של תמונה)
+    const regex = buildSearchRegex(textToFind, isRegexMode);
+    if (!regex) {
+      if (!suppressAlerts) showAlert('שגיאה', 'ביטוי רגולרי לא תקין');
+      return false;
+    }
+    const hit = findNextOutsideTags(text, regex, startPos);
+    const matchIndex = hit ? hit.index : -1;
+    const matchLength = hit ? hit.length : 0;
+    if (hit?.wrapped && !suppressAlerts) {
+      showAlert('חיפוש', 'הגענו לסוף הקובץ, ממשיכים מההתחלה.');
     }
 
     if (matchIndex !== -1) {
@@ -906,9 +944,19 @@ export default function EditPage() {
         return;
     }
 
-    const processPattern = (str) => str.replaceAll('^13', '\n');
-    const patternStr = processPattern(textToFind);
-    const replacement = processPattern(textToReplace || '');
+    const patternStr = processSearchPattern(textToFind);
+    const replacement = processSearchPattern(textToReplace || '');
+    // בחירה שנוגעת בתג (או שאינה ההתאמה) — לא מחליפים בתוך קוד; עוברים להתאמה הבאה בטקסט
+    const selStart = activeEl.selectionStart;
+    const selEnd = activeEl.selectionEnd;
+    const selRegex = buildSearchRegex(textToFind, isRegexMode);
+    const selHit = selRegex && rangeInText(activeEl.value, selStart, selEnd)
+      ? findNextOutsideTags(activeEl.value, selRegex, selStart)
+      : null;
+    if (!selHit || selHit.wrapped || selHit.index !== selStart || selHit.length !== selEnd - selStart) {
+        handleFindNext(textToFind, isRegexMode);
+        return;
+    }
 
     let finalReplacement = replacement;
 
@@ -924,15 +972,8 @@ export default function EditPage() {
         }
     }
 
-    activeEl.focus();
-    const success = document.execCommand('insertText', false, finalReplacement);
-    
-    if (!success) {
-        const text = activeEl.value;
-        const before = text.substring(0, activeEl.selectionStart);
-        const after = text.substring(activeEl.selectionEnd);
-        const newText = before + finalReplacement + after;
-        
+    // אותו מסלול בטוח לשתי התצוגות (ראו updateTextWithHistory)
+    replaceFieldSelection(activeEl, finalReplacement, (newText) => {
         const col = activeEl.getAttribute('data-column');
         if (col === 'right') handleColumnChange('right', newText);
         else if (col === 'left') handleColumnChange('left', newText);
@@ -940,7 +981,7 @@ export default function EditPage() {
             setContent(newText);
             handleAutoSaveWrapper(newText);
         }
-    }
+    });
     
     handleFindNext(textToFind, isRegexMode);
   };
@@ -952,42 +993,19 @@ export default function EditPage() {
 
     if (!textToFind) return showAlert('שגיאה', 'הזן טקסט לחיפוש');
     
-    const processPattern = (str) => str.replaceAll('^13', '\n');
-    
-    const patternStr = processPattern(textToFind);
-    const replacement = processPattern(textToReplace || ''); 
+    const replacement = processSearchPattern(textToReplace || '');
 
-    const createRegex = (global) => {
-        try {
-            if (isRegexMode) {
-                return new RegExp(patternStr, global ? 'g' : '');
-            } else {
-                const escaped = patternStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                return new RegExp(escaped, global ? 'g' : '');
-            }
-        } catch (e) {
-            return null;
-        }
-    };
-
-    const regex = createRegex(true);
+    const regex = buildSearchRegex(textToFind, isRegexMode);
     if (!regex) return showAlert('שגיאה', 'ביטוי רגולרי לא תקין');
-
-    const checkRegex = createRegex(true);
-    if (!checkRegex) return showAlert('שגיאה', 'ביטוי רגולרי לא תקין');
 
     let totalOccurrences = 0;
 
+    // רק בטקסט — לא בתוך תגים (<i> לא הופך ל-<X>) ולא בישויות
     const executeReplace = (text) => {
       if (!text) return text;
-      
-      const matches = text.match(checkRegex);
-      const count = matches ? matches.length : 0;
-      
-      if (count === 0) return text;
-
+      const { value, count } = replaceOutsideTags(text, regex, replacement);
       totalOccurrences += count;
-      return text.replace(regex, replacement);
+      return value;
     };
 
     if (twoColumns) {
@@ -1012,41 +1030,17 @@ export default function EditPage() {
     else showAlert('לידיעתך', 'לא נמצאו תוצאות התואמות לחיפוש.');
   };
 
-  const insertTag = useCallback((tag) => {
+  // עריכת עיצוב (formatToggle.js — לוגיקה טהורה, אותה לשתי התצוגות), מוחלת כהחלפה אחת
+  // (applyFieldEdit) — ביטול (Ctrl+Z) מחזיר את כל הפעולה בצעד אחד, גם ב-textarea וגם בתצוגה המעוצבת.
+  const applyFormatEdit = useCallback((compute) => {
     let activeEl = document.activeElement;
-    if (!activeEl || activeEl.tagName !== 'TEXTAREA') {
-        if (activeTextarea === 'left') activeEl = document.querySelector('textarea[data-column="left"]');
-        else if (activeTextarea === 'right') activeEl = document.querySelector('textarea[data-column="right"]');
-        else activeEl = document.querySelector('.editor-container textarea');
+    if (!isEditorField(activeEl)) {
+        if (activeTextarea === 'left' || activeTextarea === 'right') activeEl = queryEditorField(document, activeTextarea);
+        else activeEl = queryEditorField(document.querySelector('.editor-container'));
     }
-    if (!activeEl || activeEl.tagName !== 'TEXTAREA') return;
-    
-    const start = activeEl.selectionStart;
-    const end = activeEl.selectionEnd;
-    const selected = activeEl.value.substring(start, end);
-    
-    const match = selected.match(/^(\s*)([\s\S]*?)(\s*)$/);
-    const preSpace = match[1] || '';
-    const content = match[2] || '';
-    const postSpace = match[3] || '';
+    if (!isEditorField(activeEl)) return;
 
-    let taggedContent = `<${tag}>${content}</${tag}>`;
-    
-    if (['h1', 'h2', 'h3'].includes(tag)) {
-        taggedContent = `\n<${tag}>${content}</${tag}>\n`;
-    }
-
-    const insertion = preSpace + taggedContent + postSpace;
-    
-    activeEl.focus();
-    const success = document.execCommand('insertText', false, insertion);
-    
-    if (!success) {
-      const text = activeEl.value;
-      const before = text.substring(0, start);
-      const after = text.substring(end);
-      const newText = before + insertion + after;
-      
+    applyFieldEdit(activeEl, compute, (newText) => {
       const col = activeEl.getAttribute('data-column');
       if (col === 'right') handleColumnChange('right', newText);
       else if (col === 'left') handleColumnChange('left', newText);
@@ -1054,13 +1048,13 @@ export default function EditPage() {
           setContent(newText);
           handleAutoSaveWrapper(newText);
       }
-      
-      setTimeout(() => {
-        const newCursorPos = start + insertion.length;
-        activeEl.setSelectionRange(newCursorPos, newCursorPos);
-      }, 0);
-    }
+    });
   }, [activeTextarea, handleColumnChange, handleAutoSaveWrapper]);
+
+  // כפתור עיצוב: לחיצה שנייה מסירה (A+ על <small> — חזרה לרגיל)
+  const insertTag = useCallback((tag) => applyFormatEdit((v, s, e) => toggleFormat(v, s, e, tag)), [applyFormatEdit]);
+  // "נקה עיצוב" (Ctrl+\)
+  const clearFormat = useCallback(() => applyFormatEdit(clearFormatting), [applyFormatEdit]);
 
   const handlersRef = useRef({ insertTag, handleFinishClick });
 
@@ -1085,141 +1079,22 @@ export default function EditPage() {
     handlersRef.current = { insertTag, handleFinishClick };
   }, [insertTag, handleFinishClick]);
 
-  const handleOCR = useCallback(async () => {
-    if (!selectionRect) return showAlert('שגיאה', 'בחר אזור')
-    
-    let isCancelled = false;
-
-    startLoading('מזהה טקסט...', () => {
-        isCancelled = true;
-    }) 
-
-    try {
-        const response = await fetch(pageData.thumbnail)
-        if (isCancelled) return;
-
-        const blob = await response.blob()
-        const img = await createImageBitmap(blob)
-        
-        const cropParams = computeOcrCropParams(selectionRect, rotation)
-
-        const canvas = document.createElement('canvas')
-        canvas.width = cropParams.canvasWidth
-        canvas.height = cropParams.canvasHeight
-        const ctx = canvas.getContext('2d')
-
-        ctx.translate(canvas.width / 2, canvas.height / 2)
-
-        ctx.rotate(cropParams.rotationRadians)
-
-        ctx.drawImage(img, cropParams.drawX, cropParams.drawY)
-
-        const croppedBlob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.95))
-        
-        if (isCancelled) return;
-
-        let text = ''
-        if (ocrMethod === 'gemini') text = await performGeminiOCR(croppedBlob, userApiKey, selectedModel, customPrompt)
-        else if (ocrMethod === 'ocrwin') text = await performOCRWin(croppedBlob)
-        else text = await performTesseractOCR(croppedBlob)
-        
-        if (isCancelled) return;
-
-        if (!text) {
-             stopLoading() 
-             return showAlert('שגיאה', 'לא זוהה טקסט')
-        }
-        
-        if (twoColumns) {
-            const newRight = rightColumn + '\n' + text
-            setRightColumn(newRight)
-            handleAutoSaveWrapper(content, leftColumn, newRight, true)
-        } else {
-            const newContent = content + '\n' + text
-            setContent(newContent)
-            handleAutoSaveWrapper(newContent)
-        }
-        setSelectionRect(null)
-        setIsSelectionMode(false)
-        stopLoading() 
-    } catch (e) {
-        if (!isCancelled) {
-            console.error(e)
-            stopLoading() 
-            showAlert('שגיאה', 'שגיאה ב-OCR: ' + e.message)
-        }
-    }
-  }, [selectionRect, pageData, rotation, ocrMethod, userApiKey, selectedModel, customPrompt, performGeminiOCR, performOCRWin, performTesseractOCR, rightColumn, content, leftColumn, twoColumns, handleAutoSaveWrapper, startLoading, stopLoading, showAlert]);
-
-  // OCR לעמוד שלם בעזרת ה-Gemini batch API.
-  // שולח את העמוד הנוכחי, וגם דוגמא (examples='X' + customExamples) אם הוגדר examplePage לספר.
-  const handleGeminiFullPage = useCallback(async () => {
-    if (!bookPath || !Number.isInteger(pageNumber)) return;
-
-    let isCancelled = false;
-    startLoading("שולח לג'מיני (עמוד שלם)...", () => { isCancelled = true; });
-
-    try {
-      const requestBody = { bookPath, pages: [pageNumber] };
-
-      if (bookData?.examplePage && Number.isInteger(bookData.examplePage)) {
-        requestBody.examples = 'X';
-        requestBody.customExamples = [
-          {
-            bookSlug: bookData.slug || bookData.path || bookPath,
-            pageNumber: bookData.examplePage,
-          },
-        ];
-      }
-
-      const res = await fetch('/api/gemini-ocr-batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-      });
-      const result = await res.json();
-      if (isCancelled) return;
-
-      const pageResult = result?.results?.[0];
-      if (!result?.success || !pageResult?.success) {
-        const err = pageResult?.error || result?.error || 'OCR נכשל';
-        throw new Error(err);
-      }
-
-      // ה-API כבר שמר ל-DB (עם הוספה ב-\n\n במידת הצורך). נטען מחדש כדי לסנכרן UI.
-      const contentRes = await fetch(
-        `/api/page-content?bookPath=${encodeURIComponent(bookPath)}&pageNumber=${pageNumber}`
-      );
-      const contentResult = await contentRes.json();
-      if (isCancelled) return;
-
-      if (contentResult?.success && contentResult.data) {
-        const d = contentResult.data;
-        setContent(d.content || '');
-        setRightColumn(d.rightColumn || '');
-        setLeftColumn(d.leftColumn || '');
-        setRightColumnName(d.rightColumnName || 'חלק 1');
-        setLeftColumnName(d.leftColumnName || 'חלק 2');
-        setTwoColumns(d.twoColumns || false);
-      }
-      stopLoading();
-    } catch (e) {
-      if (!isCancelled) {
-        console.error(e);
-        stopLoading();
-        showAlert('שגיאה', "שגיאה ב-OCR (Gemini): " + e.message);
-      }
-    }
-  }, [bookPath, pageNumber, bookData, startLoading, stopLoading, showAlert]);
+  const persistUserShortcuts = (newShortcuts) => {
+    setUserShortcuts(newShortcuts);
+    localStorage.setItem(SHORTCUTS_STORAGE_KEY, JSON.stringify(newShortcuts));
+    localStorage.setItem(SHORTCUTS_VERSION_KEY, String(SHORTCUTS_VERSION));
+  };
 
   const saveUserShortcuts = (newShortcuts) => {
-    setUserShortcuts(newShortcuts);
-    localStorage.setItem('user_shortcuts', JSON.stringify(newShortcuts));
+    persistUserShortcuts(newShortcuts);
     showAlert('הצלחה', 'קיצורי המקלדת עודכנו בהצלחה');
   };
 
+  // תצוגה מעוצבת ↔ קוד (Alt+Shift+M, חלון הפקודות, גיליון התצוגה) — הסמן נשאר במקומו
+  const toggleTextView = useTextViewToggle({ setPrefs, activeColumn: twoColumns ? (activeTextarea === 'left' ? 'left' : 'right') : null })
+
   const actionsMap = useMemo(() => ({
-    'save': { label: 'שמירה אוטומטית/ידנית', action: handleFinishClick },
+    'save': { label: 'שמור עכשיו', action: saveCurrentNow },
     'bold': { label: 'מודגש (B)', action: () => insertTag('b') },
     'italic': { label: 'נטוי (I)', action: () => insertTag('i') },
     'underline': { label: 'קו תחתון (U)', action: () => insertTag('u') },
@@ -1228,35 +1103,36 @@ export default function EditPage() {
     'h3': { label: 'כותרת H3', action: () => insertTag('h3') },
     'bigger': { label: 'הגדל גופן טקסט', action: () => insertTag('big') },
     'smaller': { label: 'הקטן גופן טקסט', action: () => insertTag('small') },
+    'clearFormatting': { label: 'נקה עיצוב', action: () => clearFormat() },
     'finish': { label: 'סיים והעלה (פתח חלונית)', action: handleFinishClick },
     
-    'ocr': { label: 'בצע OCR על בחירה', action: handleOCR },
     'zoomIn': { label: 'זום אין תמונה', action: () => setImageZoom(z => Math.min(300, z + 10)) },
     'zoomOut': { label: 'זום אאוט תמונה', action: () => setImageZoom(z => Math.max(25, z - 10)) },
-    'rotateR': { label: 'סובב תמונה ימינה', action: () => setRotation(r => r + 90) },
-    'rotateL': { label: 'סובב תמונה שמאלה', action: () => setRotation(r => r - 90) },
-    'selectionMode': { label: 'מצב בחירת אזור', action: () => setIsSelectionMode(prev => !prev) },
 
-    'split': { label: 'פיצול ל-2 טורים', action: toggleColumns },
+    'split': { label: 'פיצול לשני טורים', action: toggleColumns },
     'layout': { label: 'שנה כיוון פריסה', action: () => setLayoutOrientation(prev => prev === 'vertical' ? 'horizontal' : 'vertical') },
     'togglePanel': { label: 'החלף צדדים (תמונה/טקסט)', action: togglePanelOrder },
     'fullScreen': { label: 'מסך מלא', action: toggleFullScreen },
     'findReplace': { label: 'פתח חיפוש והחלפה', action: () => setShowFindReplace(true) },
     'imageToText': { label: 'המרת תמונה לטקסט', action: () => setShowImageToText(true) },
-    'settings': { label: 'פתח הגדרות', action: () => setShowSettings(true) },
     'shortcuts': { label: 'ערוך קיצורי מקלדת', action: () => setShowShortcutsDialog(true) },
     
     'removeDigits': { label: 'ניקוי ספרות', action: handleRemoveDigits },
     'runSavedSearches': { label: 'בצע חיפושים קבועים', action: runAllSavedReplacements },
 
-    'textZoomIn': { 
-      label: 'הגדל תצוגת טקסט', 
-      action: () => setTextZoom(z => Math.min(60, z + 2)) 
+    'textZoomIn': {
+      label: 'הגדל תצוגת טקסט',
+      action: () => setTextZoom(z => z + 2)
     },
-    'textZoomOut': { 
-      label: 'הקטן תצוגת טקסט', 
-      action: () => setTextZoom(z => Math.max(10, z - 2)) 
+    'textZoomOut': {
+      label: 'הקטן תצוגת טקסט',
+      action: () => setTextZoom(z => z - 2)
     },
+    'commandPalette': {
+      label: 'חלון הפקודות',
+      action: () => setShowPalette(open => !open)
+    },
+    'toggleTextView': { label: 'תצוגה מעוצבת / קוד', action: toggleTextView },
     'alignRight': { 
       label: 'יישור טקסט לימין', 
       action: () => setTextAlign('right') 
@@ -1274,7 +1150,7 @@ export default function EditPage() {
       action: () => setTextAlign('justify') 
     },
 
-  }), [handleFinishClick, insertTag, handleOCR, toggleColumns, togglePanelOrder, toggleFullScreen, handleRemoveDigits, runAllSavedReplacements, setTextZoom, setTextAlign]); 
+  }), [handleFinishClick, saveCurrentNow, insertTag, clearFormat, toggleColumns, togglePanelOrder, toggleFullScreen, handleRemoveDigits, runAllSavedReplacements, setTextZoom, setTextAlign, toggleTextView]);
 
   const availableActions = useMemo(() => {
     return Object.entries(actionsMap).map(([id, def]) => ({
@@ -1285,24 +1161,36 @@ export default function EditPage() {
 
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
-      // אם אנחנו בתוך הדיאלוג של הקיצורים, אל תפעיל אותם
-      if (showShortcutsDialog) return;
+      // בתוך חלון הקיצורים, חלון הפקודות או חלון הסיום — הקיצורים הגלובליים לא פועלים
+      // (חלון הסיום מטפל ב-Ctrl+Enter בעצמו; חלון הפקודות — בחצים וב-Enter). Ctrl+K סוגר את חלון הפקודות.
+      if (showShortcutsDialog || showFinishDialog) return;
+      if (showPalette) {
+        if (buildShortcutCombination(e) === userShortcuts.commandPalette) {
+          e.preventDefault();
+          setShowPalette(false);
+        }
+        return;
+      }
 
       if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
 
       const combination = buildShortcutCombination(e);
       const foundActionId = findMatchingActionId(userShortcuts, combination);
 
-      if (foundActionId && actionsMap[foundActionId]) {
+      // עיצוב — רק מתוך שדה הטקסט; שאר הקיצורים — לא מתוך חלון או שדה קלט אחר (shortcutScope.js)
+      if (foundActionId && actionsMap[foundActionId] && shortcutAllowed(foundActionId, shortcutContext(e.target))) {
         e.preventDefault();
         e.stopPropagation();
         actionsMap[foundActionId].action();
+      } else if (foundActionId === 'save') {
+        // שמירה חסומה כאן (חלון/שדה אחר) — לפחות לא לפתוח את "שמירת הדף" של הדפדפן
+        e.preventDefault();
       }
     };
 
     window.addEventListener('keydown', handleGlobalKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', handleGlobalKeyDown, { capture: true });
-  }, [userShortcuts, actionsMap, showShortcutsDialog]);
+  }, [userShortcuts, actionsMap, showShortcutsDialog, showFinishDialog, showPalette]);
 
   const handleCloseInfoDialog = async (doNotShowAgain) => {
     setShowInfoDialog(false);
@@ -1325,127 +1213,421 @@ export default function EditPage() {
     }
   };
 
-  // גובה מלא כמו העורך עצמו (h-[100vh]) — אחרת הפוטר של הספרייה מופיע מתחת
+  // ===== מעקב שורה/מילה בצילום (עורך העמוד החדש, שלבים 2–3) — בלוק אחד =====
+  // scanTracking.imagePanelProps → <ImagePanel>, scanTracking.textEditorProps → <TextEditor>,
+  // scanTracking.tracking → שורת המצב ({ level, source, line, word, lineCount, wordCount, ... })
+  // "זהה מילים בעמוד" — תיבות מילים מקומיות (tesseract בדפדפן) לעמוד בלי פריסת OCR
+  // שמירת התיבות בשרת — רק למי שתפס את העמוד או למנהל ספרים (כמו canWritePageLayout); אחרת רק מקומית
+  const canSaveWords = pageClaimState(pageData, session?.user?._id || session?.user?.id).state === 'mine' || hasBooksAccess(session?.user?.role)
+  const trackingPageKey = `${bookPath}\u0000${pageNumber}`
+  const [officialLayoutFor, setOfficialLayoutFor] = useState({ key: trackingPageKey, has: false })
+  // איפוס state לפי זהות העמוד בזמן render, כדי שהעמוד החדש לא יירש החלטה מהקודם.
+  if (officialLayoutFor.key !== trackingPageKey) {
+    setOfficialLayoutFor({ key: trackingPageKey, has: false })
+  }
+  const hasOfficialWordLayout = officialLayoutFor.key === trackingPageKey && officialLayoutFor.has
+  // PageLayout הוא fallback בלבד. נותנים ל-ocr-data חלון קצר לחזור; אם יש layout רשמי
+  // ברמת מילה מבטלים את הטיימר/הבקשה. כך אין waterfall בעמודים בלי OCR ואין payload כפול ברוב העמודים.
+  const localWords = useLocalWordBoxes({
+    pageId: pageData?.id || pageData?._id,
+    imageUrl: pageData?.thumbnail,
+    canSave: canSaveWords,
+    autoCheck: !hasOfficialWordLayout,
+    checkDelayMs: 150,
+  })
+  const scanTracking = usePageTracking({
+    bookPath, pageNumber, imageUrl: pageData?.thumbnail,
+    twoColumns, activeTextarea, textContainerRef: textEditorContainerRef, imageZoom,
+    text: twoColumns ? (activeTextarea === 'left' ? leftColumn : rightColumn) : content,
+    enabled: !loading && !error,
+    extraSource: localWords.source,
+    // העדפות התצוגה: "מול הסריקה" → שורה מול שורה (בלי גלישה) — רק כשהטקסט באמת מחולק
+    // לשורות כמו הצילום; טקסט שמגיע כגוש גולש תמיד (effectiveWrap ב-usePageTracking)
+    wrap: prefs.lineSpacing === 'facing' ? 'off' : 'soft',
+    highlight: prefs.highlightStrength,
+    showFrame: prefs.trackingFrame,
+    followScroll: prefs.followScroll
+  })
+  if (scanTracking.tracking.hasOfficialWordLayout && !hasOfficialWordLayout) {
+    setOfficialLayoutFor({ key: trackingPageKey, has: true })
+  }
+  const wordDetecting = localWords.status === 'detecting' || localWords.status === 'saving'
+  const canDetectWords = Boolean(pageData?.thumbnail) && Boolean(pageData?.id || pageData?._id) && canStartLocalWordDetection(localWords.status)
+  const detectWords = canDetectWords ? localWords.detect : undefined
+  const trackingNote = localWords.status === 'detecting'
+    ? `מזהה מילים… ${Math.round(localWords.progress * 100)}%`
+    : localWords.status === 'saving' ? 'שומר את המילים שזוהו…' : (localWords.error || localWords.notice)
+  // ===== סוף בלוק המעקב =====
+
+  // ================= מעטפת העורך החדש (שלב 1) =================
+
+  // מצב השמירה לתצוגה + מתי הסתיימה השמירה האחרונה ("נשמר לפני רגע")
+  const uiSaveStatus = toUiSaveStatus(saveStatus)
+  const [lastSavedAt, setLastSavedAt] = useState(null)
+  const prevSaveStatusRef = useRef(saveStatus)
+  useEffect(() => {
+    if (prevSaveStatusRef.current === 'saving' && saveStatus === 'saved') {
+      setLastSavedAt(Date.now())
+    }
+    prevSaveStatusRef.current = saveStatus
+  }, [saveStatus])
+
+  const bookHref = `/library/books/${encodeURIComponent(bookPath)}`
+
+  // חזרה לספר: קודם שומרים את מה שממתין (ומחכים לשמירה שבדרך); אם נכשלה — שואלים לפני יציאה
+  const leaveToBook = useCallback(async () => {
+    const saved = await flushAutoSave()
+    if (saved) router.push(bookHref)
+    else showConfirm('השמירה נכשלה', UNSAVED_LEAVE_MESSAGE, () => router.push(bookHref))
+  }, [flushAutoSave, router, bookHref, showConfirm])
+  const totalPages = Number.isInteger(bookData?.totalPages) ? bookData.totalPages : undefined
+
+  // תפיסה / שחרור
+  const currentUserId = session?.user?._id || session?.user?.id
+  const isPageAvailable = pageData?.status === 'available'
+  const canReleasePage = pageData?.status === 'in-progress' && Boolean(currentUserId) && pageData?.claimedById === currentUserId
+  const claim = pageClaimState(pageData, currentUserId)
+
+  const handleRelease = useCallback(() => {
+    const pageId = pageData?.id || pageData?._id
+    if (!pageId) return showAlert('שגיאה', 'מזהה העמוד חסר')
+    showConfirm(
+      'שחרור העמוד',
+      'לשחרר את העמוד? הוא יחזור להיות פנוי למתנדבים אחרים.',
+      async () => {
+        startLoading('משחרר את העמוד...')
+        try {
+          // לא משחררים עמוד עם שינויים שלא נשמרו — אחרי השחרור כבר אין הרשאה לשמור אותם
+          const saved = await flushAutoSave()
+          if (!saved) {
+            stopLoading()
+            showAlert('השמירה נכשלה', 'לא הצלחנו לשמור את השינויים האחרונים, ולכן העמוד לא שוחרר. בדקו את החיבור ונסו שוב.')
+            return
+          }
+          const response = await fetch('/api/book/release-page', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pageId })
+          })
+          const result = await response.json()
+          stopLoading()
+          if (result.success) {
+            setPageData(prev => ({ ...prev, status: 'available', claimedBy: null, claimedById: null }))
+            showAlert('בוצע', 'העמוד שוחרר')
+          } else {
+            showAlert('שגיאה', result.error || 'שגיאה בשחרור העמוד')
+          }
+        } catch (err) {
+          stopLoading()
+          console.error('Error releasing page:', err)
+          showAlert('שגיאה', 'שגיאה בשחרור העמוד')
+        }
+      }
+    )
+  }, [pageData, showAlert, showConfirm, startLoading, stopLoading, flushAutoSave])
+
+  // היסטוריית הביטול שייכת לשדה הלוגי ושורדת מעבר תצוגה (fieldHistoryStore) — אבל לא מעבר עמוד
+  useEffect(() => {
+    resetFieldHistories()
+    return resetFieldHistories
+  }, [bookPath, pageNumber])
+
+  // האם יש מה לבטל/לבצע מחדש — מתאפס בטעינת העמוד ובהחלפת ה-textarea-ים (פיצול/איחוד טורים)
+  const undoState = useUndoAvailability(textEditorContainerRef, `${bookPath}#${pageNumber}#${loading}#${twoColumns}#${prefs.textView}`)
+
+  // פעולות על ה-textarea הפעיל (ביטול/ביצוע מחדש; מעבר שורה בנייד)
+  const runTextCommand = (command) => {
+    const el = getActiveTextarea()
+    if (!el) return
+    el.focus()
+    // שתי התצוגות מנהלות היסטוריה משלהן (richHistory / textareaHistory) — לא של הדפדפן
+    const history = editorFieldHistory(el)
+    if (history) {
+      if (command === 'undo') history.undo()
+      else if (command === 'redo') history.redo()
+      return
+    }
+    document.execCommand(command)
+  }
+
+  const jumpLine = (direction) => {
+    const el = getActiveTextarea()
+    if (!el) return
+    const next = caretLineJump(el.value, el.selectionStart, direction)
+    el.focus()
+    el.setSelectionRange(next, next)
+    const computedLineHeight = Number.parseFloat(window.getComputedStyle(el).lineHeight)
+    const lineHeight = Number.isFinite(computedLineHeight) ? computedLineHeight : 24
+    const caretTop = getTextareaCaretTop(el, next)
+    if (caretTop < el.scrollTop || caretTop > el.scrollTop + el.clientHeight - lineHeight) {
+      el.scrollTop = Math.max(0, caretTop - el.clientHeight / 2)
+    }
+  }
+
+  // זום הצילום
+  const zoomBy = (delta) => setImageZoom(z => clampZoom(z + delta))
+  const handleFitZoom = () => {
+    // לפי מאפיין ולא ref: הפונקציה עוברת גם לחלון הפקודות (נבנה בזמן render)
+    const host = document.querySelector('[data-editor-shell] [data-scan-host]')
+    const img = host?.querySelector('img')
+    // 48 — הריפוד של ImagePanel (p-4 משני הצדדים) ופס הגלילה
+    const zoom = fitZoomPercent({
+      containerWidth: host?.clientWidth ?? 0,
+      imageWidth: img?.naturalWidth ?? 0,
+      padding: 48
+    })
+    if (zoom) setImageZoom(zoom)
+  }
+
+  // הפריסה: בנייד הצילום תמיד מעל הטקסט
+  const effectiveOrientation = isMobile || isPortraitTablet ? 'horizontal' : layoutOrientation
+  const effectiveSwap = isMobile ? false : swapPanels
+  const scanSize = isMobile ? mobileScanSize : imagePanelWidth
+  const handleScanSizeChange = (size) => (isMobile ? setMobileScanSize(size) : setImagePanelWidth(size))
+  const handleSplitterPointer = (clientX, clientY) => {
+    const rect = splitContainerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    handleScanSizeChange(computeImagePanelWidth(rect, clientX, clientY, effectiveOrientation, effectiveSwap))
+  }
+  const handleScanSizeCommit = (size) => {
+    if (isMobile) return
+    try { localStorage.setItem('imagePanelWidth', String(size)) } catch { /* אחסון חסום */ }
+  }
+
+  // שורת המצב: מיקום הסמן, ספירת מילים, תזכורת מנוחה
+  // (מתעדכן ב-rAF, לא בתוך אירוע ה-input — אחרת Enter נבלע; ראו useCaretPosition)
+  const caretPos = useCaretPosition('.editor-container')
+  // העיצוב שתחת הסמן — מצב "לחוץ" של B/I/U, הכותרות ו-big/small בשורת הכלים
+  const activeFormatState = useActiveFormats('.editor-container')
+
+  const editedText = twoColumns ? `${rightColumn}\n${leftColumn}` : content
+  const wordCount = useMemo(() => countWords(editedText), [editedText])
+  const textLineCount = useMemo(() => countLines(editedText), [editedText])
+
+  const rest = useRestReminder({ enabled: prefs.restReminder, intervalMin: prefs.restIntervalMin })
+
+  // מצב המעקב לשורת המצב — מבלוק המעקב (usePageTracking) למעלה
+  const tracking = scanTracking.tracking
+
+  const statusShortcuts = [
+    { keys: shortcutKeys(userShortcuts.commandPalette), label: 'פקודות' },
+    { keys: shortcutKeys(userShortcuts.save), label: 'שמירה' },
+    { keys: shortcutKeys(userShortcuts.finish), label: 'סיום' },
+  ].filter(s => s.keys)
+
+  const paletteCommands = showPalette ? buildEditorCommands({
+    shortcuts: userShortcuts,
+    state: {
+      twoColumns,
+      hasImage: Boolean(pageData?.thumbnail),
+      canUndo: undoState.canUndo,
+      canRedo: undoState.canRedo,
+      isFullScreen,
+      layoutOrientation,
+      fontFamily: prefs.fontFamily,
+      lineHeight: prefs.lineHeight,
+      paraSpacing: prefs.paraSpacing,
+      textView: prefs.textView,
+      canDetectWords,
+      wordDetecting,
+      canClaim: isPageAvailable,
+      canRelease: canReleasePage,
+      canFinish: canFinishPage(claim),
+    },
+    run: {
+      findReplace: () => setShowFindReplace(true),
+      runSavedSearches: runAllSavedReplacements,
+      spellcheck: openSpellcheck,
+      undo: () => runTextCommand('undo'),
+      redo: () => runTextCommand('redo'),
+      insertTag,
+      clearFormatting: clearFormat,
+      imageToText: () => setShowImageToText(true),
+      removeDigits: handleRemoveDigits,
+      split: toggleColumns,
+      align: setTextAlign,
+      detectWords: () => detectWords?.(),
+      zoomIn: () => zoomBy(IMAGE_ZOOM.step),
+      zoomOut: () => zoomBy(-IMAGE_ZOOM.step),
+      zoomFit: handleFitZoom,
+      zoomReset: () => setImageZoom(100),
+      downloadImage: handleDownloadImage,
+      display: () => setShowDisplay(true),
+      layout: () => setLayoutOrientation(prev => (prev === 'vertical' ? 'horizontal' : 'vertical')),
+      swapPanels: togglePanelOrder,
+      fullScreen: toggleFullScreen,
+      setFont: (fontFamily) => setPrefs({ fontFamily }),
+      setLineHeight: (lineHeight) => setPrefs({ lineHeight }),
+      setParaSpacing: (paraSpacing) => setPrefs({ paraSpacing }),
+      toggleFontSerif: () => setPrefs({ fontFamily: toggledEditorFont(prefs.fontFamily) }),
+      toggleTextView,
+      textZoomIn: () => setTextZoom(z => z + 2),
+      textZoomOut: () => setTextZoom(z => z - 2),
+      shortcuts: () => setShowShortcutsDialog(true),
+      save: saveCurrentNow,
+      finish: handleFinishClick,
+      claim: handleClaim,
+      release: handleRelease,
+      guidelines: () => setShowInfoDialog(true),
+      backToBook: leaveToBook,
+    },
+  }) : []
+
+  // גובה מלא כמו העורך עצמו (h-dvh) — אחרת הפוטר של הספרייה מופיע מתחת
   // ל"טוען..." ונדחף בבת אחת מסך שלם למטה כשהעורך נטען (layout shift)
-  if (loading) return <main id="main-content" className="h-screen text-center p-20">טוען...</main>
-  if (error) return <main id="main-content" className="text-center p-20 text-danger-500">{error}</main>
+  if (loading) return <main id="main-content" className="h-dvh text-center p-20">טוען...</main>
+  if (error) return <main id="main-content" className="text-center p-20 text-error">{error}</main>
 
   return (
-    <main
-      id="main-content"
-      className={`bg-background flex flex-col overflow-hidden transition-all duration-300 ${
-        isFullScreen ? 'fixed inset-0 z-[100] h-screen w-screen' : 'h-[calc(100vh-0px)]' 
-      }`}
-      style={{ cursor: isResizing || isColumnResizing ? 'col-resize' : 'default' }}
-    >
-      {!isFullScreen && (
-        <EditorHeader 
-          bookName={bookData?.name} 
-          pageNumber={pageNumber} 
-          bookPath={bookPath} 
-          session={session} 
-          saveStatus={saveStatus}
-          onToggleFullScreen={toggleFullScreen}
+    <EditorShell
+      theme={prefs.theme}
+      styleVars={editorStyleVars(prefs)}
+      fullScreen={isFullScreen}
+      isMobile={isMobile}
+      orientation={effectiveOrientation}
+      swap={effectiveSwap}
+      scanSize={scanSize}
+      onScanSizeChange={handleScanSizeChange}
+      onScanSizeCommit={handleScanSizeCommit}
+      onSplitterPointer={handleSplitterPointer}
+      splitContainerRef={splitContainerRef}
+      scanFilter={scanFilterCss(prefs)}
+      topBar={
+        <EditorTopBar
+          bookTitle={bookData?.name || bookPath}
+          bookHref={bookHref}
+          onBack={leaveToBook}
+          pageNumber={pageNumber}
+          totalPages={totalPages}
+          saveStatus={uiSaveStatus}
+          lastSavedAt={lastSavedAt}
+          onRetrySave={saveCurrentNow}
+          onOpenCommands={() => setShowPalette(true)}
+          onOpenDisplay={() => setShowDisplay(open => !open)}
+          displayOpen={showDisplay}
+          onOpenGuidelines={() => setShowInfoDialog(true)}
+          onFinish={handleFinishClick}
+          claimState={claim.state}
+          holderName={claim.holderName}
+          onClaim={handleClaim}
+          accountSlot={<EditorAccountButton name={session?.user?.name} />}
+          mobileCompact
+          shortcuts={userShortcuts}
+        />
+      }
+      scanToolbar={isMobile ? null : (
+        <ScanToolbar
+          zoom={imageZoom}
+          onZoomIn={() => zoomBy(IMAGE_ZOOM.step)}
+          onZoomOut={() => zoomBy(-IMAGE_ZOOM.step)}
+          onZoomReset={() => setImageZoom(100)}
+          onFit={handleFitZoom}
+          onDownload={handleDownloadImage}
+          onMore={() => setShowPalette(true)}
+          hasImage={Boolean(pageData?.thumbnail)}
+          shortcuts={userShortcuts}
         />
       )}
-      <EditorToolbar
-        pageNumber={pageNumber} totalPages={bookData?.totalPages}
-        imageZoom={imageZoom} setImageZoom={setImageZoom}
-        ocrMethod={ocrMethod} setOcrMethod={setOcrMethod}
-        isSelectionMode={isSelectionMode} toggleSelectionMode={() => setIsSelectionMode(!isSelectionMode)}
-        isOcrProcessing={isOcrProcessing} selectionRect={selectionRect}
-        handleOCRSelection={handleOCR} setSelectionRect={setSelectionRect}
-        handleGeminiFullPage={handleGeminiFullPage}
-        setIsSelectionMode={setIsSelectionMode} insertTag={insertTag}
-        setShowFindReplace={setShowFindReplace}
-        onOpenSpellcheck={openSpellcheck}
-        selectedFont={selectedFont} setSelectedFont={setSelectedFont}
-        twoColumns={twoColumns} toggleColumns={toggleColumns}
-        layoutOrientation={layoutOrientation} setLayoutOrientation={setLayoutOrientation}
-        swapPanels={swapPanels}
-        textAlign={textAlign}
-        setTextAlign={setTextAlign}
-        handleDownloadImage={handleDownloadImage}
-        togglePanelOrder={togglePanelOrder}
-        handleRemoveDigits={handleRemoveDigits}
-        handleFinish={handleFinishClick}
-        isPageAvailable={pageData?.status === 'available'}
-        onClaim={handleClaim}
-        setShowInfoDialog={setShowInfoDialog} setShowSettings={setShowSettings}
-        thumbnailUrl={pageData?.thumbnail}
-        isCollapsed={isToolbarCollapsed}
-        setIsCollapsed={setIsToolbarCollapsed}
-        isFullScreen={isFullScreen}
-        onToggleFullScreen={toggleFullScreen}
-        openShortcuts={() => setShowShortcutsDialog(true)}
-        onOpenImageToText={() => setShowImageToText(true)}
-        userShortcuts={userShortcuts}
-      />
+      scan={
+        <ImagePanel
+          thumbnailUrl={pageData?.thumbnail} pageNumber={pageNumber}
+          imageZoom={imageZoom}
+          setImageZoom={setImageZoom}
+          // הגודל והמפריד — של EditorShell; כאן הפאנל ממלא את המכל שלו
+          layoutOrientation="vertical" imagePanelWidth={100} showSplitter={false}
+          onImageLoad={() => { if (fitZoomOnLoadRef.current) { fitZoomOnLoadRef.current = false; handleFitZoom() } }}
+          {...scanTracking.imagePanelProps}
+        />
+      }
+      textToolbar={isMobile ? null : (
+        <TextToolbar
+          onUndo={() => runTextCommand('undo')}
+          onRedo={() => runTextCommand('redo')}
+          canUndo={undoState.canUndo}
+          canRedo={undoState.canRedo}
+          onInsertTag={insertTag}
+          onClearFormatting={clearFormat}
+          activeFormats={activeFormatState}
+          textView={prefs.textView}
+          onToggleTextView={toggleTextView}
+          onFind={() => setShowFindReplace(true)}
+          onSpellcheck={openSpellcheck}
+          onImageToText={() => setShowImageToText(true)}
+          onSplit={toggleColumns}
+          twoColumns={twoColumns}
+          onMore={() => setShowPalette(true)}
+          fontSize={prefs.fontSize}
+          onFontSizeChange={setTextZoom}
+          fontSizeRange={PREF_RANGES.fontSize}
+          textAlign={textAlign}
+          onTextAlignChange={setTextAlign}
+          shortcuts={userShortcuts}
+        />
+      )}
+      text={
+        <TextEditor
+          ref={textEditorContainerRef}
+          content={content} leftColumn={leftColumn} rightColumn={rightColumn}
+          twoColumns={twoColumns} rightColumnName={rightColumnName} leftColumnName={leftColumnName}
+          handleAutoSave={(txt) => { setContent(txt); handleAutoSaveWrapper(txt); }}
+          handleColumnChange={handleColumnChange}
+          setActiveTextarea={setActiveTextarea}
+          selectedFont={editorFontFamily(prefs.fontFamily)}
+          columnWidth={columnWidth} onColumnResizeStart={handleColumnResizeStart}
+          textAlign={textAlign}
+          textZoom={prefs.fontSize}
+          setTextZoom={setTextZoom}
+          textView={prefs.textView}
+          paraWindow={prefs.paraWindow}
+          paraFunnel={prefs.paraFunnel}
+          {...scanTracking.textEditorProps}
+        />
+      }
+      statusBar={
+        <EditorStatusBar
+          tracking={tracking}
+          onTrackingClick={(tracking.canImprove || tracking.level === 'line' || tracking.level === 'off') ? detectWords : undefined}
+          trackingNote={trackingNote}
+          trackingClickLabel="זהה מילים בעמוד"
+          position={caretPos ?? undefined}
+          wordCount={wordCount}
+          suspectCount={0}
+          restRemainingMs={rest.remainingMs}
+          shortcuts={statusShortcuts}
+        />
+      }
+      mobileBar={
+        <MobileActionBar
+          onPrevLine={() => jumpLine(-1)}
+          onNextLine={() => jumpLine(1)}
+          onZoom={() => zoomBy(IMAGE_ZOOM.step)}
+          onTools={() => setShowPalette(true)}
+          onFinish={handleFinishClick}
+          claimState={claim.state}
+          onClaim={handleClaim}
+        />
+      }
+    >
+      {showDisplay && (
+        <DisplaySettingsSheet
+          value={prefs}
+          onChange={setPrefs}
+          onReset={resetPrefs}
+          onClose={() => setShowDisplay(false)}
+        />
+      )}
 
-      <div className={`flex-1 flex flex-col overflow-hidden ${isFullScreen ? 'p-0' : 'p-6'}`}>
-        <div className={`flex-1 flex flex-col overflow-hidden ${isFullScreen ? '' : 'glass-strong rounded-xl border border-surface-variant'}`}>
-          <div 
-            ref={splitContainerRef}
-            className="flex-1 flex overflow-hidden split-container" 
-            style={{ 
-                flexDirection: layoutOrientation === 'horizontal' 
-                  ? (swapPanels ? 'column-reverse' : 'column') 
-                  : (swapPanels ? 'row-reverse' : 'row') 
-            }}
-          >
-            <ImagePanel 
-              thumbnailUrl={pageData?.thumbnail} pageNumber={pageNumber}
-              imageZoom={imageZoom} 
-              setImageZoom={setImageZoom} 
-              isSelectionMode={isSelectionMode}
-              selectionStart={selectionStart} selectionEnd={selectionEnd}
-              selectionRect={selectionRect}
-              setSelectionStart={setSelectionStart} setSelectionEnd={setSelectionEnd}
-              setSelectionRect={setSelectionRect}
-              layoutOrientation={layoutOrientation} imagePanelWidth={imagePanelWidth}
-              isResizing={isResizing} handleResizeStart={handleResizeStart}
-              rotation={rotation} setRotation={setRotation}
-              handleOCRSelection={handleOCR}
-              isOcrProcessing={isOcrProcessing}
-            />
-            <TextEditor 
-              ref={textEditorContainerRef}
-              content={content} leftColumn={leftColumn} rightColumn={rightColumn}
-              twoColumns={twoColumns} rightColumnName={rightColumnName} leftColumnName={leftColumnName}
-              handleAutoSave={(txt) => { setContent(txt); handleAutoSaveWrapper(txt); }}
-              handleColumnChange={handleColumnChange}
-              setActiveTextarea={setActiveTextarea} selectedFont={selectedFont}
-              columnWidth={columnWidth} onColumnResizeStart={handleColumnResizeStart}
-              textAlign={textAlign}
-              setTextAlign={setTextAlign}
-              textZoom={textZoom}
-              setTextZoom={setTextZoom}
-            />
-          </div>
-          
-          <div className="px-4 py-3 border-t border-surface-variant bg-surface/50 text-sm flex justify-between items-center h-12 flex-shrink-0">
-             <div className="flex gap-4">
-                {twoColumns ? <span>ימין: {rightColumn.length}, שמאל: {leftColumn.length}</span> : <span>תווים: {content.length}</span>}
-             </div>
-             <div>
-                {saveStatus === 'saved' && <span className="text-success-600 font-medium">נשמר אוטומטית</span>}
-                {saveStatus === 'saving' && <span className="text-info-600 font-medium">שומר...</span>}
-                {saveStatus === 'error' && <span className="text-danger-600 font-medium">שגיאה בשמירה</span>}
-             </div>
+      {rest.due && (
+        <div className="pointer-events-none fixed bottom-12 end-4 z-(--z-sticky) max-md:inset-x-4 max-md:bottom-20">
+          <div className="pointer-events-auto">
+            <RestReminder onSnooze={rest.snooze} onDone={rest.done} intervalMin={prefs.restIntervalMin} />
           </div>
         </div>
-      </div>
+      )}
 
-      <SettingsSidebar
-        show={showSettings} onClose={() => setShowSettings(false)}
-        userApiKey={userApiKey} setUserApiKey={setUserApiKey}
-        selectedModel={selectedModel} setSelectedModel={setSelectedModel}
-        customPrompt={customPrompt} setCustomPrompt={setCustomPrompt}
-        saveSettings={() => { localStorage.setItem('gemini_api_key', userApiKey); localStorage.setItem('gemini_prompt', customPrompt); localStorage.setItem('gemini_model', selectedModel); showAlert('הצלחה', 'נשמר'); }}
-        resetPrompt={() => setCustomPrompt('The text is in Hebrew, written in Rashi script...')}
-      />
-      
-      <FindReplaceDialog 
+      <CommandPalette open={showPalette} onClose={() => setShowPalette(false)} commands={paletteCommands} />
+
+      <FindReplaceDialog
         isOpen={showFindReplace} onClose={() => setShowFindReplace(false)}
         findText={findText} setFindText={setFindText}
         replaceText={replaceText} setReplaceText={setReplaceText}
@@ -1461,33 +1643,38 @@ export default function EditPage() {
         onAddRemoveDigitsToSaved={addRemoveDigitsToSaved}
         useRegex={useRegex}
         setUseRegex={setUseRegex}
-        />
+        returnFocus={getActiveTextarea}
+      />
 
-        <SpellcheckDialog
-          isOpen={showSpellcheck}
-          onClose={() => setShowSpellcheck(false)}
-          text={spellcheckText}
-          onApplyText={handleSpellcheckApply}
-          onSelectWord={handleSpellcheckSelect}
-          title="בדיקת איות"
-        />
+      <SpellcheckDialog
+        isOpen={showSpellcheck}
+        onClose={() => setShowSpellcheck(false)}
+        text={spellcheckText}
+        onApplyText={handleSpellcheckApply}
+        onSelectWord={handleSpellcheckSelect}
+        title="בדיקת איות"
+        returnFocus={getActiveTextarea}
+      />
 
       <EmbedImageModal
         isOpen={showImageToText}
         onClose={() => setShowImageToText(false)}
-        content={twoColumns ? rightColumn : content}
-        onContentChange={(newContent) => {
-          if (twoColumns) {
-            setRightColumn(newContent)
-            handleAutoSaveWrapper(content, leftColumn, newContent, true)
-          } else {
-            setContent(newContent)
-            handleAutoSaveWrapper(newContent)
-          }
+        // בשני טורים — הטור הפעיל (האחרון שהיה בו הסמן), לא תמיד הימני
+        content={twoColumns ? (activeTextarea === 'left' ? leftColumn : rightColumn) : content}
+        onContentChange={(newContent) => updateTextWithHistory(newContent, twoColumns ? (activeTextarea === 'left' ? 'left' : 'right') : null)}
+        // במקום הסמן בשדה הפעיל (בשני טורים — הטור שבו עבדו), באותו מסלול בטוח: ביטול בצעד אחד
+        onInsert={(html) => {
+          const column = twoColumns ? (activeTextarea === 'left' ? 'left' : 'right') : null
+          const el = column ? queryEditorField(document, column) : queryEditorField(document.querySelector('.editor-container'))
+          if (!el) return updateTextWithHistory(`${twoColumns ? (column === 'left' ? leftColumn : rightColumn) : content}\n${html}`, column)
+          applyFieldEdit(el, (v, s, e) => insertBlockAt(v, s, e, html), (newText) => {
+            if (column) handleColumnChange(column, newText)
+            else { setContent(newText); handleAutoSaveWrapper(newText) }
+          })
         }}
       />
 
-      <SplitDialog 
+      <SplitDialog
         isOpen={showSplitDialog} onClose={() => setShowSplitDialog(false)}
         splitMode={splitMode} setSplitMode={setSplitMode}
         rightColumnName={rightColumnName} setRightColumnName={setRightColumnName}
@@ -1495,113 +1682,63 @@ export default function EditPage() {
         confirmSplit={confirmSplit}
       />
 
-      <InfoDialog 
+      <InfoDialog
         isOpen={showInfoDialog} onClose={handleCloseInfoDialog}
         bookInstructions={allInstructions.bookInstructions}
         globalInstructions={allInstructions.globalInstructions}
         examplePage={bookData?.examplePage}
         bookPath={bookPath}
       />
-      
-      <ShortcutsDialog 
+
+      <ShortcutsDialog
         isOpen={showShortcutsDialog}
         onClose={() => setShowShortcutsDialog(false)}
         availableActions={availableActions}
         shortcuts={userShortcuts}
         saveShortcuts={saveUserShortcuts}
-        resetToDefaults={() => setUserShortcuts(DEFAULT_SHORTCUTS)}
+        resetToDefaults={() => persistUserShortcuts({ ...DEFAULT_SHORTCUTS })}
+        unbound={unboundShortcuts}
+        onDismissUnbound={() => {
+          setUnboundShortcuts([]);
+          try { localStorage.removeItem(SHORTCUTS_UNBOUND_KEY); } catch { /* חסום */ }
+        }}
       />
 
-      {showUploadDialog && (
-        <UploadDialog
+      {showFinishDialog && (
+        <FinishPageDialog
+          bookTitle={bookData?.name || bookPath}
           pageNumber={pageNumber}
-          onConfirm={handleUploadConfirm}
-          onCancel={() => setShowUploadDialog(false)}
-        />
+          suspectCount={0}
+          textLineCount={textLineCount}
+          scanLineCount={null}
+          saveStatus={uiSaveStatus}
+          lastSavedAt={lastSavedAt}
+          showNote={false}
+          submitLabel="סיים והעלה"
+          // החלון נסגר לפני ההעלאה: אישור דריסה, הודעות והטעינה מגיעים מהחלונות הגלובליים
+          onSubmit={() => { setShowFinishDialog(false); handleUploadConfirm() }}
+          onClose={() => setShowFinishDialog(false)}
+        >
+          <FinishUploadInfo onOpenSpellcheck={() => { setShowFinishDialog(false); openSpellcheck() }} />
+        </FinishPageDialog>
       )}
-    </main>
+    </EditorShell>
   )
 }
 
-function UploadDialog({ pageNumber, onConfirm, onCancel }) {
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        onConfirm();
-      }
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onCancel();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onConfirm, onCancel]);
-
+/** "מה יקרה" בסיום — הזרימה הקיימת: הטקסט עולה כקובץ לאישור מנהל, והעמוד מסומן כהושלם */
+function FinishUploadInfo({ onOpenSpellcheck }) {
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onCancel}>
-      <div className="glass-strong rounded-2xl p-8 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-        <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-success-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="material-symbols-outlined text-4xl text-success-600">upload_file</span>
-          </div>
-          <h2 className="text-2xl font-bold text-on-surface mb-2">סיום עבודה על עמוד {pageNumber}</h2>
-        </div>
-        <div className="flex justify-center mb-6">
-          <div className="bg-warning-50 border-2 border-warning-200 rounded-xl p-3 max-w-xs">
-            <div className="flex items-start gap-2">
-              <span className="material-symbols-outlined text-warning-600 text-lg flex-shrink-0">warning</span>
-              <div className="text-xs text-warning-800">
-                <p className="font-bold mb-1">תזכורת חשובה!</p>
-                <ul className="space-y-0.5">
-                  <li>לפני הסיום יש לבצע בדיקת איות</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-        <p className="text-on-surface/70 text-center mb-6">האם ברצונך להעלות את הטקסט שערכת למערכת?</p>
-        <div className="bg-info-50 border-2 border-info-200 rounded-xl p-4 mb-6">
-          <div className="flex items-start gap-3">
-            <span className="material-symbols-outlined text-info-600 mt-0.5">info</span>
-            <div className="text-sm text-info-800">
-              <p className="font-bold mb-1">מה יקרה?</p>
-              <ul className="space-y-1">
-                <li>• הטקסט שערכת יועלה כקובץ חדש</li>
-                <li>• הקובץ יישלח לאישור מנהל</li>
-                <li>• העמוד יסומן כהושלם</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-col gap-3">
-          <button onClick={onConfirm} className="flex items-center justify-center gap-2 px-6 py-3 bg-success-600 text-white rounded-lg hover:bg-success-700 transition-colors font-bold">
-            <span className="material-symbols-outlined">upload</span>
-            <span>כן, העלה את הטקסט</span>
-          </button>
-          <button
-            onClick={onCancel}
-            className="px-6 py-3 border-2 border-surface-variant text-on-surface rounded-lg hover:bg-surface transition-colors"
-          >
-            ביטול
-          </button>
-        </div>
+    <div className="mt-4 rounded-(--radius-card) bg-surface p-3 text-body-sm text-on-surface-variant">
+      <p className="text-title-sm text-on-surface">מה יקרה</p>
+      <ul className="mt-1 list-disc space-y-0.5 ps-5">
+        <li>הטקסט יועלה כקובץ חדש ויישלח לאישור מנהל.</li>
+        <li>העמוד יסומן כהושלם.</li>
+      </ul>
+      <div className="mt-2 flex flex-wrap items-center gap-x-2">
+        <span>לפני הסיום כדאי לעבור על בדיקת האיות.</span>
+        <Button variant="text" size="sm" icon="spellcheck" onClick={onOpenSpellcheck}>לבדיקת איות</Button>
       </div>
     </div>
   )
 }
-
-
-
-
-
-
-
-
-
-
-
-
