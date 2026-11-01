@@ -10,10 +10,12 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { useDialog } from '@/components/providers/DialogContext'
 import FramesEditor from './FramesEditor'
 import FramesGuide from './FramesGuide'
+import StreamsPanel from './StreamsPanel'
 import GuideBox from '../common/GuideBox'
 import { framesApi, formatUntil } from './api'
 import { checkFramesPage, isDoneState } from './rules'
-import { PAGE_STATE_LABELS } from './look'
+import { PAGE_STATE_LABELS, ROLE_LABELS } from './look'
+import { syncRoles, streamUsage } from './streamRoles'
 
 // עבודת המתנדב על ספר אחד בגלאי האזורים: עמודים ממוזערים עם מצב לכל עמוד, העורך (FramesEditor) לעמוד
 // הנוכחי, ו"העמוד נכון"/דלג/הבא/הקודם. כל שינוי נשמר מיד בשרת (ה-4): טיוטה אחרי כל שינוי, ו-Enter שומר
@@ -170,6 +172,38 @@ export default function BookWorkspace({ bookKey }) {
     [bookKey]
   )
 
+  // הסוג של זרם שנוסף באתר — בכל המסגרות שלו בספר. מחזיר true כשנשמר
+  const setStreamKind = useCallback(
+    (s, role) =>
+      new Promise((resolve) => {
+        const all = pages.map((p) => ({ frames: live.current[p.id] || p.frames }))
+        const u = streamUsage(all, s.id)
+        const where = !u.frames
+          ? ''
+          : u.frames === 1
+            ? ' הסוג ישתנה גם במסגרת היחידה שלו.'
+            : ` הסוג ישתנה בכל ${u.frames} המסגרות שלו, ${u.pages === 1 ? 'בעמוד אחד' : `ב-${u.pages} עמודים`}.`
+        showConfirm(
+          'לשנות את הסוג של הזרם?',
+          `הזרם "${s.name}" יהיה "${ROLE_LABELS[role]}" במקום "${ROLE_LABELS[s.role] || ''}".${where}${s.added ? '' : ' השינוי יחזור לתחנה עם העמודים.'}`,
+          async () => {
+            const r = await framesApi.setStreamKind(bookKey, s.id, role)
+            if (!r.ok) {
+              showAlert('הסוג לא השתנה', r.data.error || 'נסו שוב')
+              return resolve(false)
+            }
+            const next = r.data.streams
+            for (const id of Object.keys(live.current)) live.current[id] = syncRoles(live.current[id], next)
+            setData((d) => ({ ...d, book: { ...d.book, streams: next }, pages: d.pages.map((p) => ({ ...p, frames: syncRoles(p.frames, next) })) }))
+            resolve(true)
+          },
+          'שנה',
+          'ביטול'
+        )
+      }),
+    [pages, bookKey, showAlert, showConfirm]
+  )
+
   const release = useCallback(() => {
     showConfirm(
       'לשחרר את הספר?',
@@ -277,6 +311,12 @@ export default function BookWorkspace({ bookKey }) {
       <div className="text-label-md">{saveLine}</div>
     </div>
   )
+  const sideAll = (
+    <>
+      {side}
+      <StreamsPanel streams={streams} pages={pages} readOnly={lost} onSetKind={setStreamKind} />
+    </>
+  )
 
   return (
     <div className="flex flex-col gap-4" data-testid="book-workspace">
@@ -326,7 +366,7 @@ export default function BookWorkspace({ bookKey }) {
             onAddStream={addStream}
             snap={snap}
             onSnapChange={setSnap}
-            sideExtra={side}
+            sideExtra={sideAll}
           />
           <GuideBox section="frames" />
           <FramesGuide />

@@ -24,8 +24,7 @@ export const ROLE_LABELS = { ...FRAME_ROLE_LABELS };
 export const ROLE_BY_KEY = Object.fromEntries(FRAME_ROLES.map((r, i) => [String(i + 1), r]));
 export const KEY_OF_ROLE = Object.fromEntries(FRAME_ROLES.map((r, i) => [r, String(i + 1)]));
 
-// תפקידים שזרם חדש יכול לקבל (לא ריהוט ולא אובייקט)
-export const STREAM_ROLES = FRAME_ROLES.filter((r) => r !== 'furniture' && r !== 'object');
+// הסוגים שזרם יכול לקבל — STREAM_KINDS ב-streamRoles.js
 
 export const OBJECT_LABELS = {
   figure: 'איור',
@@ -53,9 +52,10 @@ export const KEY_HELP = [
   ['גרירת מסגרת', 'הזזה'],
   ['קצה או פינה', 'הגדלה והקטנה'],
   ['1–9', 'תפקיד'],
-  ['Alt+1…9', 'זרם'],
+  ['Alt+1…9', 'זרם (והסוג שלו)'],
+  ['Alt+↑ / Alt+↓', 'מוקדם / מאוחר יותר בסדר הקריאה'],
   ['C', 'ממשיך בעמוד הבא'],
-  ['O', 'סדר הקריאה'],
+  ['O', 'סדר הקריאה בלחיצות (כל העמוד)'],
   ['S', 'הצמדה לדיו'],
   ['Delete', 'מחיקת מסגרת'],
   ['Ctrl+Z', 'ביטול השינוי האחרון'],

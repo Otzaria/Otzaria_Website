@@ -114,6 +114,90 @@ describe('FramesEditor — edit', () => {
   })
 })
 
+describe('FramesEditor — הסוג לפי הזרם', () => {
+  const S3 = [...STREAMS, { id: 'x1', name: 'הגהות', role: 'notes', added: true }]
+  const pickF1 = () => {
+    fireEvent.pointerDown(surface(), at(300, 400))
+    fireEvent.pointerUp(surface(), at(300, 400))
+  }
+
+  it('בחירת זרם בלוח — המסגרת מקבלת את הסוג שלו', () => {
+    const onChange = vi.fn()
+    render(<FramesEditor page={page([F1])} streams={S3} onChange={onChange} snap={false} />)
+    pickF1()
+    fireEvent.click(screen.getAllByTestId('stream-button').find((b) => b.textContent.includes('הגהות')))
+    expect(lastFrames(onChange)[0]).toMatchObject({ stream: 'x1', role: 'notes', src: 'human' })
+    expect(screen.getByTestId('kind-note').textContent).toMatch(/נקבע לפי הזרם/)
+  })
+
+  it('מקש של סוג (2 = פירוש) מעביר לזרם מהסוג הזה; 5 = כותרת בתוך אותו זרם', () => {
+    const onChange = vi.fn()
+    render(<FramesEditor page={page([F1])} streams={S3} onChange={onChange} snap={false} />)
+    pickF1()
+    key('Digit2')
+    expect(lastFrames(onChange)[0]).toMatchObject({ role: 'commentary', stream: 's2' })
+    key('Digit5')
+    expect(lastFrames(onChange)[0]).toMatchObject({ role: 'heading', stream: 's2' })
+  })
+
+  it('מסגרת בתפקיד שלא מתאים לזרם — מוצגת בסוג של הזרם בטעינה, בלי שמירה', () => {
+    const onChange = vi.fn()
+    render(<FramesEditor page={page([{ ...F1, role: 'notes' }])} streams={S3} onChange={onChange} snap={false} />)
+    expect(screen.getAllByTestId('frame')[0].style.getPropertyValue('--c')).toBe('#2a5bd7')
+    expect(onChange.mock.calls.filter((c) => c[1].save)).toHaveLength(0)
+  })
+
+  it('הסוג של זרם השתנה (streams חדש) — המסגרות שלו מתעדכנות, בלי שמירה', () => {
+    const onChange = vi.fn()
+    const F3 = { ...F1, fid: 'f3', stream: 'x1', role: 'notes', ord: 2 }
+    const { rerender } = render(<FramesEditor page={page([F1, F3])} streams={S3} onChange={onChange} snap={false} />)
+    const next = S3.map((s) => (s.id === 'x1' ? { ...s, role: 'commentary' } : s))
+    rerender(<FramesEditor page={page([F1, F3])} streams={next} onChange={onChange} snap={false} />)
+    const last = onChange.mock.calls.at(-1)
+    expect(last[1]).toMatchObject({ save: false, reason: 'roles' })
+    expect(last[0].map((f) => f.role)).toEqual(['body', 'commentary'])
+  })
+})
+
+describe('FramesEditor — סדר הקריאה תוך כדי עבודה', () => {
+  const F3 = { fid: 'f3', kind: 'text', role: 'body', box: [100, 800, 500, 1300], stream: 's1', ord: 3, cont: false, src: 'auto' }
+  const ords = (fr) => Object.fromEntries(fr.map((f) => [f.fid, f.ord]))
+
+  it('בלי מצב "סדר": "מוקדם יותר"/"מאוחר יותר" בלוח, ו-Alt+↑/↓', () => {
+    const onChange = vi.fn()
+    render(<FramesEditor page={page([F1, F2, F3])} streams={STREAMS} onChange={onChange} snap={false} />)
+    fireEvent.pointerDown(surface(), at(750, 400))
+    fireEvent.pointerUp(surface(), at(750, 400))
+    fireEvent.click(screen.getByTestId('order-earlier'))
+    expect(ords(lastFrames(onChange))).toEqual({ f1: 2, f2: 1, f3: 3 })
+    expect(screen.getByTestId('editor-hint').textContent).not.toMatch(/לחצו על המסגרות/)
+    key('ArrowDown', { key: 'ArrowDown', altKey: true })
+    key('ArrowDown', { key: 'ArrowDown', altKey: true })
+    expect(ords(lastFrames(onChange))).toEqual({ f1: 1, f2: 3, f3: 2 })
+    expect(screen.getByTestId('order-later').disabled).toBe(true)
+  })
+
+  it('להעביר למקום, ובתוך הזרם — לפני הקודמת בזרם', () => {
+    const onChange = vi.fn()
+    render(<FramesEditor page={page([F1, F2, F3])} streams={STREAMS} onChange={onChange} snap={false} />)
+    fireEvent.pointerDown(surface(), at(300, 1000))
+    fireEvent.pointerUp(surface(), at(300, 1000))
+    fireEvent.change(screen.getByTestId('order-place'), { target: { value: '1' } })
+    expect(ords(lastFrames(onChange))).toEqual({ f1: 2, f2: 3, f3: 1 })
+    fireEvent.click(screen.getByTestId('stream-later'))
+    expect(ords(lastFrames(onChange))).toEqual({ f1: 1, f2: 3, f3: 2 })
+  })
+
+  it('רשימת הסדר בעמוד — לפי הסדר, ולחיצה על שורה בוחרת את המסגרת', () => {
+    render(<FramesEditor page={page([F2, F1])} streams={STREAMS} snap={false} />)
+    const rows = screen.getAllByTestId('order-row')
+    expect(rows.map((r) => r.textContent)).toEqual(['1פנים 1', '2רש"י 1'])
+    fireEvent.click(rows[1])
+    expect(screen.getByTestId('frame-panel')).toBeTruthy()
+    expect(screen.getAllByTestId('order-row')[1].getAttribute('aria-current')).toBe('true')
+  })
+})
+
 describe('FramesEditor — readOnly / review', () => {
   it('קריאה בלבד: אין ציור, אין מקשים, אבל אפשר לבחור ולראות', () => {
     const onChange = vi.fn()

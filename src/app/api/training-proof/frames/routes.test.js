@@ -13,6 +13,7 @@ const { gateMock, db, readImage } = vi.hoisted(() => ({
     claimBook: vi.fn(),
     releaseBook: vi.fn(),
     addStream: vi.fn(),
+    setStreamKind: vi.fn(),
     savePage: vi.fn(),
     pageImagePath: vi.fn(),
   },
@@ -27,6 +28,7 @@ import { GET as bookGET } from './books/[book]/route'
 import { POST as claimPOST } from './books/[book]/claim/route'
 import { POST as releasePOST } from './books/[book]/release/route'
 import { POST as streamsPOST } from './books/[book]/streams/route'
+import { PATCH as streamPATCH } from './books/[book]/streams/[stream]/route'
 import { PUT as pagePUT } from './pages/[id]/route'
 import { GET as imageGET } from './pages/[id]/image/route'
 
@@ -46,6 +48,7 @@ describe('השער', () => {
     ['list', () => listGET()],
     ['book', () => bookGET(req(), params({ book: BOOK }))],
     ['claim', () => claimPOST(req(), params({ book: BOOK }))],
+    ['stream kind', () => streamPATCH(req({ role: 'notes' }), params({ book: BOOK, stream: 'x1' }))],
     ['page', () => pagePUT(req({}), params({ id: PAGE }))],
     ['image', () => imageGET(req(null), params({ id: PAGE }))],
   ])('%s — בלי גישה: 403 כמו שהשער החזיר, בלי לגעת במסד', async (_, call) => {
@@ -95,6 +98,21 @@ describe('ספרים', () => {
     const r = await streamsPOST(req({ name: 'הגהות', role: 'notes' }), params({ book: BOOK }))
     expect(r.status).toBe(200)
     expect(db.addStream).toHaveBeenCalledWith(U, BOOK, { name: 'הגהות', role: 'notes' })
+  })
+
+  it('שינוי סוג של זרם: מזהה לא תקין — 400 לפני המסד; תוצאה — כמו שהיא (409 עם ההסבר)', async () => {
+    expect((await streamPATCH(req({ role: 'notes' }), params({ book: BOOK, stream: '../x' }))).status).toBe(400)
+    expect((await streamPATCH(req('not json'), params({ book: BOOK, stream: 'x1' }))).status).toBe(400)
+    expect(db.setStreamKind).not.toHaveBeenCalled()
+    db.setStreamKind.mockResolvedValue({ ok: true, stream: { id: 'x1', role: 'commentary' }, streams: [], pages: 2 })
+    const r = await streamPATCH(req({ role: 'commentary' }), params({ book: BOOK, stream: 'x1' }))
+    expect(r.status).toBe(200)
+    expect((await r.json()).pages).toBe(2)
+    expect(db.setStreamKind).toHaveBeenCalledWith(U, BOOK, 'x1', { role: 'commentary' })
+    db.setStreamKind.mockResolvedValue({ ok: false, status: 409, error: 'עמוד אחד עם הזרם הזה כבר אושר' })
+    const bad = await streamPATCH(req({ role: 'commentary' }), params({ book: BOOK, stream: 'x1' }))
+    expect(bad.status).toBe(409)
+    expect((await bad.json()).error).toMatch(/אושר/)
   })
 
   it('שחרור', async () => {

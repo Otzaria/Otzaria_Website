@@ -67,6 +67,8 @@ export function resultLine(item) {
       scale: typeof p.scale === 'number' ? p.scale : 1.0,
       frames: r.frames || [],
       streams_added: r.streams_added || [],
+      // שדה רשות (2026-11-01): סוג חדש לזרם שהגיע מהתחנה — {id, role, from}. רק כשיש
+      ...(r.streams_changed?.length ? { streams_changed: r.streams_changed } : {}),
       admin_fixed: !!item.adminFixed,
       ...tail,
     };
@@ -138,6 +140,10 @@ export function checkReturnLine(section, l) {
   } else if (section === 'frames') {
     if (!FRAMES_PAGE_STATUS_OUT.includes(l.status)) return 'status לא תקין';
     if (!Array.isArray(l.frames)) return 'frames חסר';
+    if (l.streams_changed !== undefined) {
+      const ok = (c) => c && typeof c.id === 'string' && c.id && typeof c.role === 'string' && (c.from === undefined || typeof c.from === 'string');
+      if (!Array.isArray(l.streams_changed) || !l.streams_changed.every(ok)) return 'streams_changed לא תקין';
+    }
   }
   return null;
 }

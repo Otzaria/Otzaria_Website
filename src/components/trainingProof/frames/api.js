@@ -31,6 +31,7 @@ export const framesApi = {
   claim: (book) => call(`${BASE}/books/${enc(book)}/claim`, { method: 'POST', body: {} }),
   release: (book) => call(`${BASE}/books/${enc(book)}/release`, { method: 'POST', body: {} }),
   addStream: (book, name, role) => call(`${BASE}/books/${enc(book)}/streams`, { method: 'POST', body: { name, role } }),
+  setStreamKind: (book, id, role) => call(`${BASE}/books/${enc(book)}/streams/${enc(id)}`, { method: 'PATCH', body: { role } }),
   savePage: (id, status, frames) => call(`${BASE}/pages/${enc(id)}`, { method: 'PUT', body: { status, frames } }),
 };
 
