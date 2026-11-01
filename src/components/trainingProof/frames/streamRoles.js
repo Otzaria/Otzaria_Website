@@ -3,7 +3,8 @@
 // כמו בתחנת-המסגרות (src/station/frames.js setStream/setRole; frames/desk.py frames_streams — docs/69 §8.3):
 // * לכל זרם יש סוג אחד (role ברשימת-הזרמים של הספר, books.json — docs/76 §4.3). מסגרת-טקסט בזרם מקבלת
 //   את הסוג שלו, ושינוי הסוג של הזרם משנה את כל המסגרות שלו.
-// * "כותרת" ו"כיתוב" הם תפקיד של המסגרת בתוך הזרם (כותרת-פרק בזרם הפנים) — נשארים גם כשהזרם מסוג אחר.
+// * "כיתוב" הוא תפקיד של המסגרת בתוך הזרם — נשאר גם כשהזרם מסוג אחר. "כותרת" כבר לא תפקיד (2026-11-01,
+//   docs/69 §8.15): כותרת היא חלק ממסגרת הזרם שהיא פותחת, ולכן מסגרת "כותרת" ישנה בזרם מקבלת את הסוג שלו.
 // * ריהוט ואובייקט — בלי זרם. מסגרת-טקסט בלי זרם שומרת את התפקיד שלה.
 // * זרם שנוסף באתר יוצא לתחנה ב-streams_added עם הסוג העדכני. זרם שהגיע מהתחנה ושהסוג שלו שונה באתר — יוצא
 //   ב-streams_changed ({id, role, from}; docs/76 §5.3, שדה רשות מ-2026-11-01). from = הסוג שהגיע מהתחנה (stationRole
@@ -14,7 +15,7 @@ import { withRole, NO_STREAM_ROLES } from './geometry.js';
 // הסוגים שזרם יכול להיות (כמו STREAM_ROLES בתחנה, frames.js)
 export const STREAM_KINDS = ['body', 'commentary', 'notes', 'margin', 'box', 'caption'];
 // תפקידים של מסגרת בתוך הזרם שלה — לא נדרסים בסוג הזרם
-export const IN_STREAM_ROLES = ['heading', 'caption'];
+export const IN_STREAM_ROLES = ['caption'];
 
 const byIdOf = (streams) => new Map((streams || []).map((s) => [s.id, s]));
 
@@ -46,7 +47,7 @@ export function syncRoles(frames, streams) {
 }
 
 // מקש/כפתור של תפקיד (1–9) על מסגרת. סוג של זרם (גוף, פירוש…) = "תעבור לזרם מהסוג הזה": אם הזרם שלה
-// כבר מהסוג — רק התפקיד; אחרת הזרם הראשון בספר מהסוג הזה, ובלעדיו — בלי זרם. כותרת/כיתוב — הזרם נשאר.
+// כבר מהסוג — רק התפקיד; אחרת הזרם הראשון בספר מהסוג הזה, ובלעדיו — בלי זרם. כיתוב — הזרם נשאר.
 export function applyRole(f, role, streams, opts) {
   const g = withRole(f, role, opts);
   if (g === f || g.kind === 'object' || NO_STREAM_ROLES.includes(g.role) || IN_STREAM_ROLES.includes(g.role)) return g;
@@ -56,7 +57,7 @@ export function applyRole(f, role, streams, opts) {
   return { ...g, stream: st ? st.id : null };
 }
 
-// בחירת זרם למסגרת: היא מקבלת ממנו את הסוג (חוץ מכותרת/כיתוב). id = null — בלי זרם, התפקיד נשאר
+// בחירת זרם למסגרת: היא מקבלת ממנו את הסוג (חוץ מכיתוב). id = null — בלי זרם, התפקיד נשאר
 export function applyStream(f, id, streams) {
   const g = { ...f, stream: id ?? null, src: 'human' };
   return { ...g, role: frameRoleFor(g, byIdOf(streams)) };

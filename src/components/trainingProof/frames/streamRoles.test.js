@@ -10,9 +10,10 @@ import {
   kindChanged,
   changedStreams,
 } from './streamRoles'
+import { PICK_ROLES, ROLE_BY_KEY, KEY_OF_ROLE } from './look'
 
-// הסוג שייך לזרם (כמו setStream/frames_streams בתחנה): מסגרת-טקסט בזרם מקבלת את הסוג שלו, כותרת וכיתוב
-// נשארים בתוך הזרם, ריהוט/אובייקט/בלי-זרם — בלי שינוי. הסוג של זרם מהתחנה לא משתנה באתר — טהור
+// הסוג שייך לזרם (כמו setStream/frames_streams בתחנה): מסגרת-טקסט בזרם מקבלת את הסוג שלו — גם "כותרת" ישנה —, כיתוב
+// נשאר בתוך הזרם, ריהוט/אובייקט/בלי-זרם — בלי שינוי. הסוג של זרם מהתחנה לא משתנה באתר — טהור
 
 const STREAMS = [
   { id: 's1', name: 'פנים', role: 'body' },
@@ -23,9 +24,10 @@ const byId = new Map(STREAMS.map((s) => [s.id, s]))
 const T = (fid, role, stream, extra = {}) => ({ fid, kind: 'text', role, box: [0, 0, 10, 10], stream, ord: 1, cont: false, src: 'auto', ...extra })
 
 describe('frameRoleFor / syncRoles', () => {
-  it('מסגרת בזרם — הסוג של הזרם; כותרת/כיתוב נשארים; ריהוט, אובייקט ובלי-זרם — כמו שהם', () => {
+  it('מסגרת בזרם — הסוג של הזרם, גם כותרת ישנה; כיתוב נשאר; ריהוט, אובייקט ובלי-זרם — כמו שהם', () => {
     expect(frameRoleFor(T('a', 'notes', 's2'), byId)).toBe('commentary')
-    expect(frameRoleFor(T('a', 'heading', 's2'), byId)).toBe('heading')
+    expect(frameRoleFor(T('a', 'heading', 's2'), byId)).toBe('commentary')
+    expect(frameRoleFor(T('a', 'heading', null), byId)).toBe('heading')
     expect(frameRoleFor(T('a', 'caption', 's1'), byId)).toBe('caption')
     expect(frameRoleFor(T('a', 'furniture', null), byId)).toBe('furniture')
     expect(frameRoleFor({ fid: 'o', kind: 'object', role: 'object', stream: null }, byId)).toBe('object')
@@ -34,7 +36,7 @@ describe('frameRoleFor / syncRoles', () => {
   })
 
   it('syncRoles מחזיר את אותו מערך כשאין שינוי, ומערך חדש כשיש', () => {
-    const ok = [T('a', 'body', 's1'), T('b', 'heading', 's2')]
+    const ok = [T('a', 'body', 's1'), T('b', 'caption', 's2')]
     expect(syncRoles(ok, STREAMS)).toBe(ok)
     const bad = [T('a', 'commentary', 's1'), T('b', 'body', 'x1')]
     const out = syncRoles(bad, STREAMS)
@@ -44,9 +46,9 @@ describe('frameRoleFor / syncRoles', () => {
   })
 
   it('זרם ששינה סוג — כל המסגרות שלו מקבלות את הסוג החדש', () => {
-    const fr = [T('a', 'notes', 'x1'), T('b', 'notes', 'x1'), T('c', 'heading', 'x1'), T('d', 'body', 's1')]
+    const fr = [T('a', 'notes', 'x1'), T('b', 'notes', 'x1'), T('c', 'caption', 'x1'), T('d', 'body', 's1')]
     const next = STREAMS.map((s) => (s.id === 'x1' ? { ...s, role: 'commentary' } : s))
-    expect(syncRoles(fr, next).map((f) => f.role)).toEqual(['commentary', 'commentary', 'heading', 'body'])
+    expect(syncRoles(fr, next).map((f) => f.role)).toEqual(['commentary', 'commentary', 'caption', 'body'])
   })
 })
 
@@ -57,8 +59,8 @@ describe('applyRole / applyStream', () => {
     expect(applyRole(T('a', 'body', 's1'), 'body', STREAMS)).toMatchObject({ role: 'body', stream: 's1' })
   })
 
-  it('כותרת/כיתוב — הזרם נשאר; ריהוט ואובייקט — בלי זרם', () => {
-    expect(applyRole(T('a', 'body', 's2'), 'heading', STREAMS)).toMatchObject({ role: 'heading', stream: 's2' })
+  it('כיתוב — הזרם נשאר; ריהוט ואובייקט — בלי זרם', () => {
+    expect(applyRole(T('a', 'body', 's2'), 'caption', STREAMS)).toMatchObject({ role: 'caption', stream: 's2' })
     expect(applyRole(T('a', 'body', 's1'), 'furniture', STREAMS)).toMatchObject({ role: 'furniture', stream: null, cont: false })
     expect(applyRole(T('a', 'body', 's1'), 'object', STREAMS, { obj: 'table' })).toMatchObject({ kind: 'object', obj: 'table', stream: null })
   })
@@ -67,9 +69,10 @@ describe('applyRole / applyStream', () => {
     expect(applyRole(T('a', 'furniture', null), 'body', STREAMS)).toMatchObject({ role: 'body', stream: 's1' })
   })
 
-  it('בחירת זרם נותנת את הסוג שלו; כותרת נשארת כותרת; "בלי זרם" שומר את הסוג', () => {
+  it('בחירת זרם נותנת את הסוג שלו — גם לכותרת ישנה; כיתוב נשאר; "בלי זרם" שומר את הסוג', () => {
     expect(applyStream(T('a', 'body', 's1'), 'x1', STREAMS)).toMatchObject({ role: 'notes', stream: 'x1', src: 'human' })
-    expect(applyStream(T('a', 'heading', 's1'), 's2', STREAMS)).toMatchObject({ role: 'heading', stream: 's2' })
+    expect(applyStream(T('a', 'heading', 's1'), 's2', STREAMS)).toMatchObject({ role: 'commentary', stream: 's2' })
+    expect(applyStream(T('a', 'caption', 's1'), 's2', STREAMS)).toMatchObject({ role: 'caption', stream: 's2' })
     expect(applyStream(T('a', 'commentary', 's2'), null, STREAMS)).toMatchObject({ role: 'commentary', stream: null })
   })
 })
@@ -102,5 +105,14 @@ describe('רשימת-הזרמים של הספר', () => {
     ]
     expect(list.map(kindChanged)).toEqual([false, true, false, false])
     expect(changedStreams(list)).toEqual([{ id: 's2', role: 'notes', from: 'commentary' }])
+  })
+})
+
+describe('התפקידים שבוחרים בעורך', () => {
+  it('בלי "כותרת" (docs/69 §8.15); המקשים 1–8 באותו סדר כמו בתחנה', () => {
+    expect(PICK_ROLES).toEqual(['body', 'commentary', 'notes', 'margin', 'caption', 'box', 'furniture', 'object'])
+    expect(ROLE_BY_KEY['5']).toBe('caption')
+    expect(ROLE_BY_KEY['9']).toBeUndefined()
+    expect(KEY_OF_ROLE.heading).toBeUndefined()
   })
 })

@@ -69,17 +69,19 @@ describe('checkFramesPage', () => {
 })
 
 describe('הסוג נקבע לפי הזרם', () => {
-  it('מסגרת בזרם נשמרת בסוג של הזרם, גם אם הדפדפן שלח אחר; כותרת נשארת', () => {
+  it('מסגרת בזרם נשמרת בסוג של הזרם, גם אם הדפדפן שלח אחר — גם "כותרת" ישנה; כיתוב נשאר', () => {
     const fr = [
       { ...payload.frames[1], role: 'notes' },
       { fid: 'n1', kind: 'text', role: 'heading', box: [100, 300, 800, 340], stream: 's2', ord: 9, cont: false },
       { fid: 'n2', kind: 'text', role: 'margin', box: [100, 400, 800, 500], stream: null, ord: 10, cont: false },
+      { fid: 'n3', kind: 'text', role: 'caption', box: [100, 600, 800, 640], stream: 's2', ord: 11, cont: false },
     ]
     const { result } = draft(fr, 'marked')
     expect(result.frames.map((f) => [f.fid, f.role])).toEqual([
       ['f2', 'body'],
-      ['n1', 'heading'],
+      ['n1', 'commentary'],
       ['n2', 'margin'],
+      ['n3', 'caption'],
     ])
   })
 

@@ -3,8 +3,7 @@
 import { useState } from 'react'
 import Button from '@/components/ui/Button'
 import AppIcon from '@/components/ui/AppIcon'
-import { FRAME_ROLES } from '@/lib/trainingProof/vocab'
-import { ROLE_COLORS, ROLE_LABELS, KEY_OF_ROLE, OBJECT_LABELS, OBJECT_ORDER } from './look'
+import { ROLE_COLORS, ROLE_LABELS, KEY_OF_ROLE, PICK_ROLES, OBJECT_LABELS, OBJECT_ORDER } from './look'
 import { NO_STREAM_ROLES, readingOrder, streamSeq } from './geometry'
 import { STREAM_KINDS, IN_STREAM_ROLES } from './streamRoles'
 
@@ -301,12 +300,12 @@ export default function FramePanel({
       <div className="flex flex-col gap-1.5">
         <h3 className="text-title-sm font-bold">תפקיד המסגרת</h3>
         <div className="grid grid-cols-2 gap-1.5">
-          {FRAME_ROLES.map((r) => (
+          {PICK_ROLES.map((r) => (
             <RoleButton key={r} role={r} on={frame.role === r} disabled={readOnly} onClick={() => onSetRole(r)} />
           ))}
         </div>
         {!readOnly && !noStream && (
-          <p className="text-label-sm text-on-surface-variant">פנים, פירוש, הערות… — מעבירים לזרם מהסוג הזה. כותרת וכיתוב — בתוך אותו זרם.</p>
+          <p className="text-label-sm text-on-surface-variant">פנים, פירוש, הערות… — מעבירים לזרם מהסוג הזה. כיתוב — בתוך אותו זרם. כותרת היא חלק ממסגרת הזרם.</p>
         )}
       </div>
 

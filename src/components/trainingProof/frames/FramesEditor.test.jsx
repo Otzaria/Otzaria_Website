@@ -60,7 +60,7 @@ describe('FramesEditor — edit', () => {
     expect(lastFrames(onChange)[0].src).toBe('human')
   })
 
-  it('המקשים: 3 = הערות, Alt+2 = זרם שני, C = ממשיך, 8 = ריהוט (בלי זרם), Delete', () => {
+  it('המקשים: 3 = הערות, Alt+2 = זרם שני, C = ממשיך, 7 = ריהוט (בלי זרם), Delete', () => {
     const onChange = vi.fn()
     render(<FramesEditor page={page([F1, F2])} streams={STREAMS} onChange={onChange} snap={false} />)
     fireEvent.pointerDown(surface(), at(300, 400))
@@ -71,7 +71,7 @@ describe('FramesEditor — edit', () => {
     expect(lastFrames(onChange)[0].stream).toBe('s2')
     key('KeyC')
     expect(lastFrames(onChange)[0].cont).toBe(true)
-    key('Digit8')
+    key('Digit7')
     expect(lastFrames(onChange)[0]).toMatchObject({ role: 'furniture', stream: null, cont: false })
     key('Delete', { key: 'Delete' })
     expect(lastFrames(onChange).map((f) => f.fid)).toEqual(['f2'])
@@ -130,14 +130,15 @@ describe('FramesEditor — הסוג לפי הזרם', () => {
     expect(screen.getByTestId('kind-note').textContent).toMatch(/נקבע לפי הזרם/)
   })
 
-  it('מקש של סוג (2 = פירוש) מעביר לזרם מהסוג הזה; 5 = כותרת בתוך אותו זרם', () => {
+  it('מקש של סוג (2 = פירוש) מעביר לזרם מהסוג הזה; 5 = כיתוב בתוך אותו זרם; אין מקש לכותרת', () => {
     const onChange = vi.fn()
     render(<FramesEditor page={page([F1])} streams={S3} onChange={onChange} snap={false} />)
     pickF1()
     key('Digit2')
     expect(lastFrames(onChange)[0]).toMatchObject({ role: 'commentary', stream: 's2' })
     key('Digit5')
-    expect(lastFrames(onChange)[0]).toMatchObject({ role: 'heading', stream: 's2' })
+    expect(lastFrames(onChange)[0]).toMatchObject({ role: 'caption', stream: 's2' })
+    expect(screen.queryByRole('button', { name: /^כותרת/ })).toBeNull()
   })
 
   it('מסגרת בתפקיד שלא מתאים לזרם — מוצגת בסוג של הזרם בטעינה, בלי שמירה', () => {
