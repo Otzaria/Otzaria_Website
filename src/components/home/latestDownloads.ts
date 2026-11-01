@@ -1,4 +1,4 @@
-// נתוני ה-release היציב של האפליקציה (קישורי הורדה + גרסה), למסך הפתיחה ולאזור ההורדה.
+// נתוני ה-release העדכני של האפליקציה (קישורי הורדה + גרסה), למסך הפתיחה ולאזור ההורדה.
 //
 // cache של React: בתוך רינדור אחד של הדף (HeroStatsLoader ו-DownloadSection) השליפה רצה פעם
 // אחת בלבד, גם בלי לסמוך על ה-memoization של fetch. מעבר לרינדור — ה-Data Cache של
@@ -17,11 +17,11 @@ export type Downloads = {
   macos?: PlatformLinks
 }
 
-export const getStableDownloads = cache(async (): Promise<Downloads | null> => {
+export const getLatestDownloads = cache(async (): Promise<Downloads | null> => {
   try {
-    return await getAppDownloads('stable')
+    return await getAppDownloads()
   } catch (error) {
-    console.error('Failed to load stable downloads:', error)
+    console.error('Failed to load latest downloads:', error)
     return null
   }
 })

@@ -10,8 +10,8 @@ import Section from '@/components/ui/Section'
 import SectionHeading from '@/components/ui/SectionHeading'
 import { detectPlatform } from '@/lib/detectOs'
 import DownloadOptionCard from './DownloadOptionCard'
-// ייבוא טיפוס בלבד (נמחק בקומפילציה) — הקוד של stableDownloads.ts נשאר בשרת
-import type { Downloads } from './stableDownloads'
+// ייבוא טיפוס בלבד (נמחק בקומפילציה) — הקוד של latestDownloads.ts נשאר בשרת
+import type { Downloads } from './latestDownloads'
 
 type PlatformLinks = Record<string, string | undefined>
 
@@ -40,9 +40,9 @@ type DownloadOption = {
 // כפתור המעבר בין "המערכת שזוהתה" ל"כל המערכות" (שני הכיוונים)
 const TOGGLE_BUTTON = 'flex min-h-12 items-center gap-1 rounded-lg px-3 text-sm font-medium text-primary hover:bg-card-selected'
 
-// stableDownloads מגיע כבר טעון מהשרת (ראו DownloadSection.tsx, ה-Server Component
+// latestDownloads מגיע כבר טעון מהשרת (ראו DownloadSection.tsx, ה-Server Component
 // שעוטף את הרכיב הזה) — כאן נשארת רק האינטראקטיביות (זיהוי פלטפורמה, מודלים).
-export default function DownloadSectionClient({ stableDownloads }: { stableDownloads: Downloads | null }) {
+export default function DownloadSectionClient({ latestDownloads }: { latestDownloads: Downloads | null }) {
   // חלון ההורדה הפתוח (מפתח פלטפורמה: windows / linux / ...), או null
   const [openPlatform, setOpenPlatform] = useState<string | null>(null)
 
@@ -85,7 +85,7 @@ export default function DownloadSectionClient({ stableDownloads }: { stableDownl
   const renderPlatformButton = (platform: string, large: boolean = false) => {
     const config = PLATFORM_CONFIG[platform]
     if (!config) return null
-    const assistantLinks = stableDownloads?.[platform as keyof Downloads]
+    const assistantLinks = latestDownloads?.[platform as keyof Downloads]
     const subtitle = hasDownloadAssistant(config.title, (assistantLinks as PlatformLinks | undefined) || {})
       ? `${config.subtitle} · באמצעות מסייע ההורדה`
       : config.subtitle
@@ -191,7 +191,7 @@ export default function DownloadSectionClient({ stableDownloads }: { stableDownl
           onClose={() => setOpenPlatform(null)}
         >
           <div className="grid gap-3">
-            {renderDownloadOptions(getPlatformName(openPlatform), getDialogLinks(openPlatform, stableDownloads))}
+            {renderDownloadOptions(getPlatformName(openPlatform), getDialogLinks(openPlatform, latestDownloads))}
           </div>
         </Dialog>
       )}

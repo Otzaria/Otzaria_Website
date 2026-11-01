@@ -1,9 +1,9 @@
 // Shared GitHub loader preserves the 600s cache without calling the live website.
-// השליפה עצמה משותפת לשורת המספרים שבמסך הפתיחה (HeroStatsLoader) — ראו stableDownloads.ts.
+// השליפה עצמה משותפת לשורת המספרים שבמסך הפתיחה (HeroStatsLoader) — ראו latestDownloads.ts.
 import DownloadSectionClient from './DownloadSectionClient'
-import { getStableDownloads } from './stableDownloads'
+import { getLatestDownloads } from './latestDownloads'
 
 export default async function DownloadSection() {
-  const stableDownloads = await getStableDownloads()
-  return <DownloadSectionClient stableDownloads={stableDownloads} />
+  const latestDownloads = await getLatestDownloads()
+  return <DownloadSectionClient latestDownloads={latestDownloads} />
 }

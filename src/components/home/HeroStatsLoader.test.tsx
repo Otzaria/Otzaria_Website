@@ -17,7 +17,7 @@ describe('HeroStatsLoader', () => {
     const element = await HeroStatsLoader({})
     expect(element.props.items.map((item: { key: string }) => item.key)).toEqual(['books', 'downloads'])
     expect(element.props.version).toBe('0.9.98')
-    expect(release).toHaveBeenCalledWith('stable')
+    expect(release).toHaveBeenCalledWith()
   })
 
   it('release לא זמין — בלי גרסה, שאר הנתונים נשארים', async () => {
