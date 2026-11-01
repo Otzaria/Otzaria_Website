@@ -33,6 +33,10 @@ const MSG = {
 /** הודעה עדינה (לא שגיאה): זוהה בעמוד שלא נתפס — שמור רק בזיכרון ובמטמון הלשונית */
 export const LOCAL_ONLY_NOTICE = 'נשמר רק אצלך עד שתתפוס את העמוד'
 
+// detect() מבטל את ריצת ה-GET הנוכחית. לכן בזמן בדיקת פריסה שמורה אין להתחיל
+// OCR חדש: זו עבודה כבדה שעלולה גם להישמר עם expectedVersion מיושן.
+export const canStartLocalWordDetection = (status) => !['checking', 'detecting', 'saving'].includes(status)
+
 // מטמון הלשונית (sessionStorage) לזיהוי שלא נשמר בשרת — שורד רענון, לא עובר למשתמש/לשונית אחרים
 const LOCAL_KEY = (pageId) => `local-word-boxes:${pageId}`
 
@@ -196,6 +200,33 @@ export function useLocalWordBoxes({ pageId, imageUrl, canSave = true, loadImage 
     const live = () => run === runRef.current
     const patch = (p) => live() && setState((s) => ({ ...s, ...p }))
     patch({ status: 'detecting', progress: 0, error: null, notice: null })
+
+    // בעמוד בלי layout ה-GET הרגיל אינו קורא ומגבב את קובץ המלא. רק עכשיו, כשהמשתמש
+    // ביקש זיהוי, קבע snapshot של התמונה. אם משתמש אחר שמר layout בינתיים, השתמש בו
+    // במקום להריץ OCR כבד ולהיכשל אחר כך ב-409.
+    // אם GET קודם כבר החזיר hash (למשל layout קיים שנמצא stale), אין צורך לגבב שוב.
+    if (!imageShaRef.current) {
+      try {
+        const res = await fetch(`${API}?pageId=${encodeURIComponent(pageId)}&inspectImage=1`, { cache: 'no-store' })
+        const body = await res.json().catch(() => null)
+        if (!live()) return null
+        if (!res.ok || !body?.success) {
+          patch({ status: 'none', progress: 0, error: body?.error || MSG.load })
+          return null
+        }
+        versionRef.current = { pageId, version: body.data?.version ?? 0 }
+        imageShaRef.current = typeof body.data?.image?.sha256 === 'string' ? body.data.image.sha256 : null
+        const existing = body.data?.layout ? storedToTrack(body.data.layout) : null
+        if (existing && existing.level !== 'off') {
+          patch({ status: 'ready', progress: 0, source: existing, error: null, notice: null })
+          return existing
+        }
+      } catch {
+        if (!live()) return null
+        patch({ status: 'none', progress: 0, error: MSG.load })
+        return null
+      }
+    }
 
     let loaded
     try {

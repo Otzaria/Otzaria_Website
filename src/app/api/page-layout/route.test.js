@@ -97,12 +97,16 @@ describe('/api/page-layout', () => {
     expect((await put('{bad')).body.error).toBe('גוף הבקשה אינו JSON תקין')
   })
 
-  it('GET בלי רשומה → layout:null, version 0, ממדי התמונה; PUT שומר; GET מחזיר', async () => {
+  it('GET בלי רשומה אינו קורא את התמונה; inspectImage טוען snapshot רק לפני זיהוי', async () => {
     const { page, slug } = await setup()
     const empty = await get({ pageId: String(page._id) })
     expect(empty.status).toBe(200)
     expect(empty.cache).toBe('private, no-store')
-    expect(empty.body.data).toMatchObject({ pageId: String(page._id), pageNumber: 1, version: 0, stale: false, layout: null, image: { width: 60, height: 80, matches: null } })
+    expect(empty.body.data).toMatchObject({ pageId: String(page._id), pageNumber: 1, version: 0, stale: false, layout: null, image: { sha256: null, width: null, height: null, matches: null } })
+
+    const snapshot = await get({ pageId: String(page._id), inspectImage: '1' })
+    expect(snapshot.body.data.image).toMatchObject({ width: 60, height: 80, matches: null })
+    expect(snapshot.body.data.image.sha256).toMatch(/^[0-9a-f]{64}$/)
 
     const saved = await put({ pageId: String(page._id), ...layout() })
     expect([saved.status, saved.cache]).toEqual([200, 'private, no-store'])
@@ -188,7 +192,7 @@ describe('/api/page-layout', () => {
   it('imageSha256 מהלקוח: תמונה שהוחלפה מאז ה-GET → 409; hash תואם → נשמר; hash פגום → 400 (QA P2-12)', async () => {
     const { page, imageFile } = await setup()
     const pageId = String(page._id)
-    const first = await get({ pageId })
+    const first = await get({ pageId, inspectImage: '1' })
     const sha = first.body.data.image.sha256
     expect(sha).toMatch(/^[0-9a-f]{64}$/)
     expect((await put({ pageId, expectedVersion: 0, imageSha256: sha, ...layout() })).status).toBe(200)
@@ -223,5 +227,28 @@ describe('/api/page-layout', () => {
     getServerSessionMock.mockResolvedValue(ADMIN)
     expect((await get({ pageId })).status).toBe(200)
     expect((await put({ pageId, ...layout() })).body.data.version).toBe(2)
+  })
+
+  it('מאמת בעלות שוב לאחר בדיקת התמונה — העברה באמצע PUT מבטלת את הכתיבה', async () => {
+    const { page } = await setup()
+    const originalFindById = Page.findById.bind(Page)
+    let reads = 0
+    const spy = vi.spyOn(Page, 'findById').mockImplementation((...args) => {
+      reads++
+      if (reads !== 2) return originalFindById(...args)
+      const transferred = { ...page.toObject(), claimedBy: new mongoose.Types.ObjectId(OTHER.user.id) }
+      return {
+        select() { return this },
+        lean: async () => transferred,
+      }
+    })
+    try {
+      const r = await put({ pageId: String(page._id), ...layout() })
+      expect([r.status, r.body.error]).toEqual([403, 'הדף נמצא בטיפול על ידי משתמש אחר'])
+      expect(await PageLayout.countDocuments()).toBe(0)
+      expect(reads).toBe(2)
+    } finally {
+      spy.mockRestore()
+    }
   })
 })

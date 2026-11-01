@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { renderHook, waitFor } from '@testing-library/react'
-import { useScanLines, clearScanLinesCache } from './useScanLines'
+import { act, renderHook, waitFor } from '@testing-library/react'
+import {
+  useScanLines,
+  clearScanLinesCache,
+  scanLinesMemoryCacheKeys,
+  SCAN_ANALYSIS_DELAY_MS,
+  SCAN_LINES_MEMORY_LIMIT,
+} from './useScanLines'
 
 // עמוד 200×120 עם שלוש שורות של שלוש "מילים". הרווחים בין המילים לא מיושרים אנכית — אחרת
 // הם נראים כתעלה בין שני טורים (scanProfile.findGutter)
@@ -139,5 +145,68 @@ describe('useScanLines', () => {
     expect(posted[0].opts).toEqual({ type: 'module' })
     expect(posted[0].transfer).toEqual([posted[0].msg.bitmap])
     expect(getContext).not.toHaveBeenCalled()
+  })
+
+  it('ניווט מהיר לפני ההשהיה אינו מנתח עמוד מעבר', async () => {
+    vi.useFakeTimers()
+    const posted = []
+    class FakeWorker {
+      postMessage(msg) { posted.push(msg) }
+      terminate() {}
+    }
+    vi.stubGlobal('Worker', FakeWorker)
+    vi.stubGlobal('OffscreenCanvas', class {})
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => ({ width: 200, height: 120, close() {} })))
+    const hook = renderHook(({ url }) => useScanLines(url), { initialProps: { url: '/uploads/transit.jpg' } })
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(1) }) // טעינת תמונת עמוד המעבר
+    hook.rerender({ url: '/uploads/final.jpg' })
+    await act(async () => { await vi.advanceTimersByTimeAsync(1 + SCAN_ANALYSIS_DELAY_MS) })
+
+    expect(posted).toHaveLength(1)
+    expect(images.at(-1)._src).toBe('/uploads/final.jpg')
+    hook.unmount()
+    vi.useRealTimers()
+  })
+
+  it('מעבר עמוד מבטל worker פעיל כדי שהעמוד החדש לא ימתין בתור', async () => {
+    vi.useFakeTimers()
+    const workers = []
+    class FakeWorker {
+      constructor() { this.terminated = false; this.posted = []; workers.push(this) }
+      postMessage(msg) { this.posted.push(msg) }
+      terminate() { this.terminated = true }
+    }
+    vi.stubGlobal('Worker', FakeWorker)
+    vi.stubGlobal('OffscreenCanvas', class {})
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => ({ width: 200, height: 120, close() {} })))
+    const hook = renderHook(({ url }) => useScanLines(url), { initialProps: { url: '/uploads/slow.jpg' } })
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(1 + SCAN_ANALYSIS_DELAY_MS) })
+    expect(workers[0].posted).toHaveLength(1)
+    hook.rerender({ url: '/uploads/current.jpg' })
+    expect(workers[0].terminated).toBe(true)
+    await act(async () => { await vi.advanceTimersByTimeAsync(1 + SCAN_ANALYSIS_DELAY_MS) })
+
+    expect(workers).toHaveLength(2)
+    expect(workers[1].posted).toHaveLength(1)
+    hook.unmount()
+    vi.useRealTimers()
+  })
+
+  it('מטמון הזיכרון הוא LRU מוגבל; sessionStorage ממשיך להחזיק עמודים ישנים', () => {
+    for (let i = 0; i <= SCAN_LINES_MEMORY_LIMIT; i++) {
+      const url = `/uploads/cached-${i}.jpg`
+      window.sessionStorage.setItem(`scanProfile:v3:${url}`, JSON.stringify({ size: [200, 120], lines: [] }))
+      const hook = renderHook(() => useScanLines(url))
+      expect(hook.result.current.status).toBe('ready')
+      hook.unmount()
+    }
+
+    const keys = scanLinesMemoryCacheKeys()
+    expect(keys).toHaveLength(SCAN_LINES_MEMORY_LIMIT)
+    expect(keys).not.toContain('/uploads/cached-0.jpg')
+    expect(keys.at(-1)).toBe(`/uploads/cached-${SCAN_LINES_MEMORY_LIMIT}.jpg`)
+    expect(window.sessionStorage.getItem('scanProfile:v3:/uploads/cached-0.jpg')).not.toBeNull()
   })
 })

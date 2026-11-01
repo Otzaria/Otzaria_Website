@@ -13,16 +13,30 @@ import { FP_SIZE, analysisScale, grayFingerprint, profileFitsImage, profileFromR
 
 // v3: הפרופיל שמור עם טביעת האצבע של התמונה (fp)
 const STORAGE_PREFIX = 'scanProfile:v3:'
+export const SCAN_LINES_MEMORY_LIMIT = 24
+export const SCAN_ANALYSIS_DELAY_MS = 120
 const memory = new Map()
 
+// מטמון קטן ומהיר לעמודים האחרונים בלבד. sessionStorage נשאר מטמון הלשונית הארוך יותר;
+// ה-Map אינו רשאי לגדול לאורך יום הגהה שלם.
+function remember(url, profile) {
+  memory.delete(url)
+  memory.set(url, profile)
+  while (memory.size > SCAN_LINES_MEMORY_LIMIT) memory.delete(memory.keys().next().value)
+}
+
 function readStored(url) {
-  if (memory.has(url)) return memory.get(url)
+  if (memory.has(url)) {
+    const profile = memory.get(url)
+    remember(url, profile) // נגיעה = האחרון בשימוש (LRU)
+    return profile
+  }
   try {
     const raw = window.sessionStorage.getItem(STORAGE_PREFIX + url)
     if (!raw) return null
     const p = JSON.parse(raw)
     if (!p || !Array.isArray(p.size) || !Array.isArray(p.lines)) return null
-    memory.set(url, p)
+    remember(url, p)
     return p
   } catch {
     return null
@@ -30,7 +44,7 @@ function readStored(url) {
 }
 
 function store(url, profile) {
-  memory.set(url, profile)
+  remember(url, profile)
   try {
     window.sessionStorage.setItem(STORAGE_PREFIX + url, JSON.stringify(profile))
   } catch {
@@ -50,6 +64,13 @@ function dropStored(url) {
 /** לטסטים: ניקוי המטמון שבזיכרון */
 export function clearScanLinesCache() {
   memory.clear()
+  resetWorker()
+  workerBroken = false
+}
+
+/** לטסטים: סדר ה-LRU, מהישן לחדש. */
+export function scanLinesMemoryCacheKeys() {
+  return [...memory.keys()]
 }
 
 // ---- Web Worker (אחד משותף לכל הדף; נכשל פעם אחת → main thread מכאן והלאה) ----
@@ -57,6 +78,13 @@ let worker = null
 let workerBroken = false
 let seq = 0
 const pending = new Map()
+
+function resetWorker() {
+  worker?.terminate()
+  worker = null
+  for (const done of pending.values()) done(null)
+  pending.clear()
+}
 
 function getWorker() {
   if (workerBroken || typeof window === 'undefined') return null
@@ -76,10 +104,7 @@ function getWorker() {
   }
   worker.onerror = () => {
     workerBroken = true
-    worker?.terminate()
-    worker = null
-    for (const done of pending.values()) done(null)
-    pending.clear()
+    resetWorker()
   }
   return worker
 }
@@ -92,7 +117,8 @@ function getWorker() {
  * @param {number} h
  * @returns {Promise<import('@/lib/editor/scanProfile').ScanProfile|null>}
  */
-export async function analyzeOffThread(img, w, h) {
+export async function analyzeOffThread(img, w, h, { signal } = {}) {
+  if (signal?.aborted) return null
   const wk = getWorker()
   if (!wk) return null
   const scale = analysisScale(w, h)
@@ -104,13 +130,29 @@ export async function analyzeOffThread(img, w, h) {
   } catch {
     return null
   }
+  if (signal?.aborted) {
+    bitmap.close?.()
+    return null
+  }
   return new Promise((resolve) => {
     const id = ++seq
-    pending.set(id, resolve)
+    const finish = (profile) => {
+      signal?.removeEventListener('abort', abort)
+      resolve(profile)
+    }
+    const abort = () => {
+      // profileFromRgba הוא חישוב סינכרוני, ולכן אי אפשר לבטל job בתוך worker עסוק.
+      // terminate מבטיח שעמוד מעבר לא יחסום את העמוד הנוכחי; הקריאה הבאה תיצור worker חדש.
+      resetWorker()
+    }
+    pending.set(id, finish)
+    signal?.addEventListener('abort', abort, { once: true })
     try {
       wk.postMessage({ id, bitmap, w, h }, [bitmap])
     } catch {
       pending.delete(id)
+      signal?.removeEventListener('abort', abort)
+      bitmap.close?.()
       resolve(null)
     }
   })
@@ -188,6 +230,8 @@ export function useScanLines(url, { analyze = true } = {}) {
     if (!url || typeof window === 'undefined') return undefined
     let cancelled = false
     let cancelIdle = null
+    let analysisTimer = null
+    const analysisController = new AbortController()
     const img = new Image()
     img.decoding = 'async'
     img.onload = () => {
@@ -223,11 +267,16 @@ export function useScanLines(url, { analyze = true } = {}) {
           }
         })
       }
-      analyzeOffThread(img, w, h).then((profile) => {
+      // המתנה קצרה מונעת ניתוח של עמודים שהם רק תחנות מעבר בניווט מהיר.
+      analysisTimer = setTimeout(() => {
+        analysisTimer = null
         if (cancelled) return
-        if (profile) done(profile)
-        else onMain()
-      }, onMain)
+        analyzeOffThread(img, w, h, { signal: analysisController.signal }).then((profile) => {
+          if (cancelled) return
+          if (profile) done(profile)
+          else onMain()
+        }, onMain)
+      }, SCAN_ANALYSIS_DELAY_MS)
     }
     img.onerror = () => {
       if (!cancelled && !cached) setState({ url, size: null, profile: null, failed: true })
@@ -235,6 +284,8 @@ export function useScanLines(url, { analyze = true } = {}) {
     img.src = url
     return () => {
       cancelled = true
+      if (analysisTimer != null) clearTimeout(analysisTimer)
+      analysisController.abort()
       cancelIdle?.()
       img.onload = null
       img.onerror = null

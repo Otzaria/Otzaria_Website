@@ -10,7 +10,7 @@ export const UNSAVED_LEAVE_MESSAGE = 'השינויים האחרונים לא נ�
 
 // גוף הבקשה ל-/api/page-content — אותו מבנה בשמירה רגילה ובשליחה ביציאה מהדף
 export function toSaveBody(data) {
-  return {
+  const body = {
     bookPath: data.bookPath,
     pageNumber: data.pageNumber,
     content: data.content,
@@ -21,6 +21,9 @@ export function toSaveBody(data) {
     rightColumnName: data.rightColumnName,
     leftColumnName: data.leftColumnName
   }
+  // לקוחות ישנים אינם שולחים revision; לא מוסיפים undefined לגוף.
+  if (Number.isSafeInteger(data.saveRevision) && data.saveRevision > 0) body.saveRevision = data.saveRevision
+  return body
 }
 
 const leaveBody = (data) => JSON.stringify(toSaveBody(data))
@@ -73,6 +76,10 @@ export function useAutoSave() {
   const latestRef = useRef(null) // הגרסה העדכנית שטרם אושרה, גם כשהיא בתור מאחורי בקשה אחרת
   const queuedRef = useRef(null) // השמירה האחרונה שהוכנסה לתור, לפני שהבקשה התחילה
   const chainRef = useRef(Promise.resolve(true))
+  // milliseconds * 1000 משאיר 999 שינויים באותה millisecond ונשאר בטווח Number הבטוח.
+  // Math.max מבטיח מונוטוניות גם אם שעון המערכת זז לאחור.
+  // מאותחל רק באירוע השמירה הראשון; Date.now בזמן render מפר את טוהר ה-hook.
+  const revisionRef = useRef(0)
   // סטטוסים אפשריים: 'saved', 'unsaved', 'saving', 'error'
   const [status, setStatus] = useState('saved')
 
@@ -82,6 +89,14 @@ export function useAutoSave() {
       timeoutRef.current = null
     }
   }
+
+  const snapshot = useCallback((data) => {
+    const existing = Number.isSafeInteger(data?.saveRevision) && data.saveRevision > 0
+      ? data.saveRevision
+      : Math.max(revisionRef.current + 1, Date.now() * 1000)
+    revisionRef.current = Math.max(revisionRef.current, existing)
+    return { ...toSaveBody(data), saveRevision: existing }
+  }, [])
 
   const saveContent = useCallback((data) => {
     queuedRef.current = data
@@ -157,7 +172,7 @@ export function useAutoSave() {
   }, [saveContent])
 
   const debouncedSave = useCallback((data) => {
-    data = toSaveBody(data)
+    data = snapshot(data)
     // עדכון מיידי שהתוכן לא שמור
     setStatus('unsaved')
     latestRef.current = data
@@ -170,17 +185,17 @@ export function useAutoSave() {
       pendingRef.current = null
       if (pending) saveContent(pending)
     }, DEBOUNCE_MS)
-  }, [saveContent])
+  }, [saveContent, snapshot])
 
   const saveNow = useCallback(async (data) => {
     clearTimer()
-    const toSave = data != null ? toSaveBody(data) : pendingRef.current ?? (latestRef.current === queuedRef.current ? null : latestRef.current)
+    const toSave = data != null ? snapshot(data) : pendingRef.current ?? (latestRef.current === queuedRef.current ? null : latestRef.current)
     pendingRef.current = null
     if (!toSave) return chainRef.current
     latestRef.current = toSave
     failedRef.current = null
     return saveContent(toSave)
-  }, [saveContent])
+  }, [saveContent, snapshot])
 
   const flush = useCallback(() => saveNow(), [saveNow])
 

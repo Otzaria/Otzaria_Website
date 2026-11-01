@@ -2,13 +2,21 @@
 // (נתיבי הנכסים המאוחסנים אצלנו, תיבות מוקטנות לפי scale), PUT עם expectedVersion, ושגיאות בעברית.
 import { describe, expect, test, vi, beforeEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
-import { useLocalWordBoxes, detectionScale, LOCAL_ONLY_NOTICE, readLocalWords } from './useLocalWordBoxes'
+import { useLocalWordBoxes, detectionScale, LOCAL_ONLY_NOTICE, readLocalWords, canStartLocalWordDetection } from './useLocalWordBoxes'
 
 const json = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body })
 const STORED = {
   source: 'local-tesseract', size: [100, 200], version: 3,
   lines: [{ bbox: [0, 0, 90, 20], stream: 'main', words: [{ bbox: [0, 0, 40, 20] }, { bbox: [50, 0, 90, 20], text: 'א' }] }],
 }
+
+test('זיהוי מקומי חסום עד שבדיקת הפריסה השמורה מסתיימת', () => {
+  expect(canStartLocalWordDetection('checking')).toBe(false)
+  expect(canStartLocalWordDetection('detecting')).toBe(false)
+  expect(canStartLocalWordDetection('saving')).toBe(false)
+  expect(canStartLocalWordDetection('none')).toBe(true)
+  expect(canStartLocalWordDetection('ready')).toBe(true)
+})
 
 // תוצאת tesseract v7 (blocks) בתמונה מוגדלת פי 2
 const TESS = {
@@ -63,6 +71,7 @@ describe('useLocalWordBoxes', () => {
     const { mod, createWorker, worker } = tesseractMock()
     global.fetch = vi.fn()
       .mockResolvedValueOnce(json(200, { success: true, data: { version: 0, layout: null } }))
+      .mockResolvedValueOnce(json(200, { success: true, data: { version: 0, layout: null, image: { sha256: 'a'.repeat(64) } } }))
       .mockResolvedValueOnce(json(200, { success: true, data: { version: 1, wordCount: 2 } }))
     const { result } = renderHook(() => useLocalWordBoxes({ pageId: 'p1', imageUrl: '/img.jpg', loadImage, loadTesseract: async () => mod }))
     await waitFor(() => expect(result.current.status).toBe('none'))
@@ -88,7 +97,8 @@ describe('useLocalWordBoxes', () => {
 
     expect(track.lines[0].bbox).toEqual([10, 10, 90, 30])
     expect(result.current.source).toBe(track)
-    const [url, init] = global.fetch.mock.calls[1]
+    expect(global.fetch.mock.calls[1][0]).toContain('inspectImage=1')
+    const [url, init] = global.fetch.mock.calls[2]
     expect([url, init.method]).toEqual(['/api/page-layout', 'PUT'])
     const sent = JSON.parse(init.body)
     expect(sent).toMatchObject({ pageId: 'p1', expectedVersion: 0, source: 'local-tesseract', size: [100, 200] })
@@ -98,17 +108,34 @@ describe('useLocalWordBoxes', () => {
     ])
   })
 
+  test('layout שנשמר בין הבדיקה הראשונה ללחיצה — נטען במקום OCR', async () => {
+    const { mod, createWorker } = tesseractMock()
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce(json(200, { success: true, data: { version: 0, layout: null } }))
+      .mockResolvedValueOnce(json(200, { success: true, data: { version: 3, layout: STORED, image: { sha256: 'c'.repeat(64) } } }))
+    const { result } = renderHook(() => useLocalWordBoxes({ pageId: 'p1', imageUrl: '/img.jpg', loadImage, loadTesseract: async () => mod }))
+    await waitFor(() => expect(result.current.status).toBe('none'))
+    let track
+    await act(async () => { track = await result.current.detect() })
+    expect(track).toMatchObject({ level: 'word', source: 'local' })
+    expect(result.current.status).toBe('ready')
+    expect(loadImage).not.toHaveBeenCalled()
+    expect(createWorker).not.toHaveBeenCalled()
+    expect(global.fetch).toHaveBeenCalledTimes(2)
+  })
+
   test('שמירה נכשלת (409) — התיבות נשארות, הודעה בעברית', async () => {
     const { mod } = tesseractMock()
     global.fetch = vi.fn()
       .mockResolvedValueOnce(json(200, { success: true, data: { version: 2, layout: null } }))
+      .mockResolvedValueOnce(json(200, { success: true, data: { version: 2, layout: null, image: { sha256: 'b'.repeat(64) } } }))
       .mockResolvedValueOnce(json(409, { error: 'x' }))
     const { result } = renderHook(() => useLocalWordBoxes({ pageId: 'p1', imageUrl: '/img.jpg', loadImage, loadTesseract: async () => mod }))
     await waitFor(() => expect(result.current.status).toBe('none'))
     await act(async () => {
       await result.current.detect()
     })
-    expect(JSON.parse(global.fetch.mock.calls[1][1].body).expectedVersion).toBe(2)
+    expect(JSON.parse(global.fetch.mock.calls[2][1].body).expectedVersion).toBe(2)
     expect(result.current.status).toBe('ready')
     expect(result.current.source?.level).toBe('word')
     expect(result.current.error).toBe('התיבות של העמוד עודכנו בינתיים על ידי משתמש אחר')
@@ -181,7 +208,7 @@ describe('useLocalWordBoxes', () => {
     await waitFor(() => expect(worker.terminate).toHaveBeenCalled())
     release(TESS)
     await pending
-    expect(global.fetch).toHaveBeenCalledTimes(1) // רק ה-GET
+    expect(global.fetch).toHaveBeenCalledTimes(2) // GET רגיל + snapshot לפני זיהוי
   })
 
   test('קובץ שפה חסר / אין מילים / תמונה לא נטענה — none עם שגיאה, בלי PUT', async () => {
@@ -234,13 +261,13 @@ describe('useLocalWordBoxes — עמוד שלא נתפס (canSave=false)', () =>
 
   test('זיהוי לא נשלח לשרת (בלי 403) — נשמר בזיכרון ובמטמון הלשונית, עם הודעה עדינה', async () => {
     const { mod } = tesseractMock()
-    global.fetch = vi.fn().mockResolvedValueOnce(json(200, { success: true, data: { version: 0, layout: null } }))
+    global.fetch = vi.fn().mockResolvedValue(json(200, { success: true, data: { version: 0, layout: null } }))
     const { result } = renderHook(() => useLocalWordBoxes({ pageId: 'p1', imageUrl: '/img.jpg', canSave: false, loadImage, loadTesseract: async () => mod }))
     await waitFor(() => expect(result.current.status).toBe('none'))
     await act(async () => {
       await result.current.detect()
     })
-    expect(global.fetch).toHaveBeenCalledTimes(1)
+    expect(global.fetch).toHaveBeenCalledTimes(2)
     expect(result.current.status).toBe('ready')
     expect(result.current.error).toBe(null)
     expect(result.current.notice).toBe(LOCAL_ONLY_NOTICE)

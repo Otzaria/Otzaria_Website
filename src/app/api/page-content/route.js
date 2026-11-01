@@ -24,6 +24,13 @@ export async function POST(request) {
         leftColumnName 
     } = body;
 
+    // נוצר בזמן העריכה, ולא בזמן סיום הבקשה: מונע משמירה ישנה ואיטית
+    // לדרוס keepalive/sendBeacon חדש. השדה אופציונלי לתאימות ללקוחות ישנים.
+    const hasSaveRevision = body.saveRevision != null;
+    if (hasSaveRevision && (!Number.isSafeInteger(body.saveRevision) || body.saveRevision < 1)) {
+      return badRequest('גרסת השמירה אינה תקינה');
+    }
+
     const userId = session.user._id || session.user.id;
     const isAdmin = hasBooksAccess(session.user.role);
 
@@ -62,6 +69,7 @@ export async function POST(request) {
         rightColumnName,
         leftColumnName,
     };
+    if (hasSaveRevision) updateFields.contentSaveRevision = body.saveRevision;
 
     // 1. אם הדף פנוי - המשתמש "תופס" אותו אוטומטית מעצם השמירה
     if (currentPage.status !== 'available') {
@@ -74,13 +82,29 @@ export async function POST(request) {
     }
 
     // ביצוע העדכון
+    const guardedQuery = hasSaveRevision
+      ? {
+          ...query,
+          $or: [
+            { contentSaveRevision: { $exists: false } },
+            // שוויון הוא retry של אותה תמונת מצב (או התנגשות נדירה בין לשוניות), ולכן אידמפוטנטי
+            // ואינו כותב שוב. אם הכתיבה הראשונה לא הגיעה ל-DB, הערך השמור עדיין קטן יותר.
+            { contentSaveRevision: { $lt: body.saveRevision } },
+          ],
+        }
+      : query;
     const updatedPage = await Page.findOneAndUpdate(
-      query,
+      guardedQuery,
       updateFields,
       { returnDocument: 'after' }
     );
 
     if (!updatedPage) {
+      // העמוד כבר נטען ונבדק לעיל; כישלון העדכון המותנה פירושו ששמירה חדשה
+      // יותר כבר הגיעה. מחזירים success אידמפוטנטי כדי שהלקוח לא יציג שגיאת שמירה.
+      if (hasSaveRevision) {
+        return NextResponse.json({ success: true, message: 'כבר נשמרה גרסה חדשה יותר', stale: true, pageStatus: currentPage.status });
+      }
       return notFound('העמוד לא נמצא');
     }
 

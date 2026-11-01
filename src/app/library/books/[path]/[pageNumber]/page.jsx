@@ -25,7 +25,7 @@ import { shortcutAllowed, shortcutContext } from './shortcutScope'
 import { editorFieldHistory } from '@/components/editor/v2/textareaHistory'
 import { pushStructuralUndo, resetFieldHistories } from '@/components/editor/v2/fieldHistoryStore'
 import { usePageTracking } from '@/components/editor/v2/usePageTracking'
-import { useLocalWordBoxes } from '@/hooks/useLocalWordBoxes'
+import { canStartLocalWordDetection, useLocalWordBoxes } from '@/hooks/useLocalWordBoxes'
 import { useEditorPrefs } from '@/hooks/useEditorPrefs'
 import { useTextViewToggle } from '@/hooks/useTextViewToggle'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
@@ -530,6 +530,9 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
           updateTextWithHistory(tempLeft, 'left');
           changesMade = true;
       }
+      // שתי קריאות ה-onChange נוצרות מאותו render וכל אחת רואה את הטור האחר
+      // בערכו הישן. snapshot מלאה בסוף מונעת מה-debounce לשמור שילוב חלקי.
+      if (changesMade) handleAutoSaveWrapper(content, tempLeft, tempRight, true)
     } else {
       if (tempContent !== content) {
           updateTextWithHistory(tempContent, null);
@@ -542,7 +545,7 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
     } else {
       showAlert('לידיעתך', 'לא נמצאו שינויים לביצוע');
     }
-  }, [savedSearches, rightColumn, leftColumn, content, twoColumns, updateTextWithHistory, showAlert]);
+  }, [savedSearches, rightColumn, leftColumn, content, twoColumns, updateTextWithHistory, handleAutoSaveWrapper, showAlert]);
 
   const togglePanelOrder = useCallback(() => {
     const newState = !swapPanels
@@ -1231,7 +1234,7 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
     followScroll: prefs.followScroll
   })
   const wordDetecting = localWords.status === 'detecting' || localWords.status === 'saving'
-  const canDetectWords = Boolean(pageData?.thumbnail) && Boolean(pageData?.id || pageData?._id) && !wordDetecting
+  const canDetectWords = Boolean(pageData?.thumbnail) && Boolean(pageData?.id || pageData?._id) && canStartLocalWordDetection(localWords.status)
   const detectWords = canDetectWords ? localWords.detect : undefined
   const trackingNote = localWords.status === 'detecting'
     ? `מזהה מילים… ${Math.round(localWords.progress * 100)}%`

@@ -109,7 +109,12 @@ export async function GET(request) {
     const { page, response } = await loadAccessiblePage(ids, session.user);
     if (response) return noStore(response);
 
-    const [stored, image] = await Promise.all([PageLayout.findOne({ page: page._id }).lean(), inspectPageImage(page.imagePath)]);
+    const stored = await PageLayout.findOne({ page: page._id }).lean();
+    // בעמוד שעדיין אין לו layout אין מה לאמת: אל תקרא ותגבב את קובץ הסריקה בכל
+    // כניסה לעורך. inspectImage=1 נשלח רק כשהמשתמש מתחיל זיהוי, כדי לקבע hash סמוך
+    // לטעינת התמונה ולשמור על ההגנה מפני החלפתה באמצע.
+    const inspectImage = searchParams.get('inspectImage') === '1';
+    const image = stored || inspectImage ? await inspectPageImage(page.imagePath) : null;
     const size = displaySize(image);
     const stale = stored ? isStale(stored, page, image) : false;
     return ok({
@@ -178,9 +183,19 @@ export async function PUT(request) {
     if (!parsed.ok) return noStore(badRequest(parsed.error));
     const { source, size, lines, wordCount } = parsed.value;
 
+    // inspectPageImage עשוי לקרוא ולגבב קובץ גדול. בדוק את הרשאת הכתיבה שוב מיד לפני
+    // העדכון, כדי שהעברת העמוד למשתמש אחר בזמן החישוב תבטל את הבקשה הישנה.
+    const currentPage = await Page.findById(page._id).select(PAGE_FIELDS).lean();
+    if (!currentPage) return noStore(notFound('העמוד לא נמצא'));
+    const currentWrite = canWritePageLayout(currentPage, session.user);
+    if (!currentWrite.ok) return noStore(forbidden(currentWrite.error));
+    if (currentPage.imagePath !== page.imagePath) {
+      return noStore(NextResponse.json({ error: IMAGE_CHANGED, code: 'image-changed' }, { status: 409 }));
+    }
+
     const rawUserId = session.user._id || session.user.id;
     const userId = rawUserId && mongoose.isValidObjectId(rawUserId) ? new mongoose.Types.ObjectId(String(rawUserId)) : undefined;
-    const fields = { book: page.book, imagePath: page.imagePath, imageSha256: image?.sha256 ?? null, source, size, lines, wordCount, updatedBy: userId };
+    const fields = { book: currentPage.book, imagePath: currentPage.imagePath, imageSha256: image?.sha256 ?? null, source, size, lines, wordCount, updatedBy: userId };
     const update = { $set: fields, $inc: { version: 1 }, $setOnInsert: { createdBy: userId } };
     const opts = { returnDocument: 'after', runValidators: true, lean: true, projection: { version: 1, wordCount: 1, updatedAt: 1 } };
 

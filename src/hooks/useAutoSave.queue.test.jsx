@@ -38,9 +38,23 @@ test.each(['immediate', 'debounced'])('pagehide שולח את הגרסה האח�
   expect(fetchMock).toHaveBeenCalledTimes(1)
   act(() => window.dispatchEvent(new Event('pagehide')))
   expect(body(fetchMock).content).toBe('חדש')
+  const newerRevision = body(fetchMock).saveRevision
+  expect(newerRevision).toBeGreaterThan(JSON.parse(fetchMock.mock.calls[0][1].body).saveRevision)
   expect(fetchMock.mock.calls.at(-1)[1].keepalive).toBe(true)
   await act(async () => { first.resolve(ok()); await result.current.flush() })
   unmount()
+})
+
+test('retry שומר את אותו revision ואינו הופך שינוי ישן לחדש', async () => {
+  const fetchMock = vi.fn().mockResolvedValueOnce(failed()).mockResolvedValue(ok())
+  vi.stubGlobal('fetch', fetchMock)
+  const { result } = renderHook(() => useAutoSave())
+
+  await act(async () => { expect(await result.current.saveNow(snapshot('תוכן'))).toBe(false) })
+  const firstRevision = body(fetchMock).saveRevision
+  await act(async () => { expect(await result.current.flush()).toBe(true) })
+
+  expect(body(fetchMock).saveRevision).toBe(firstRevision)
 })
 
 test('flush מחכה לשמירה החדשה בלי להכניס כישלון ישן אחריה לתור', async () => {

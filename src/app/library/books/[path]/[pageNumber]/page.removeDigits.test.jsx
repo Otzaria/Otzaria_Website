@@ -12,7 +12,12 @@ vi.mock('@/hooks/useAutoSave', () => ({ UNSAVED_LEAVE_MESSAGE: '', useAutoSave: 
 vi.mock('@/components/editor/v2/usePageTracking', () => ({ usePageTracking: () => ({ tracking: {}, textEditorProps: {}, imagePanelProps: {} }) }))
 vi.mock('@/hooks/useLocalWordBoxes', () => ({ useLocalWordBoxes: () => ({}) }))
 vi.mock('@/components/editor/v2/EditorShell', () => ({ default: ({ text, children }) => <div>{text}{children}</div> }))
-vi.mock('@/components/editor/modals/FindReplaceDialog', () => ({ default: ({ handleRemoveDigits }) => <button onClick={handleRemoveDigits}>ניקוי ספרות</button> }))
+vi.mock('@/components/editor/modals/FindReplaceDialog', () => ({
+  default: ({ handleRemoveDigits, runAllSavedReplacements }) => <>
+    <button onClick={handleRemoveDigits}>ניקוי ספרות</button>
+    <button onClick={runAllSavedReplacements}>הרץ החלפות שמורות</button>
+  </>
+}))
 vi.mock('@/components/editor/modals/SpellcheckDialog', () => ({ default: () => null }))
 vi.mock('@/components/editor/modals/InfoDialog', () => ({ default: () => null }))
 vi.mock('@/components/editor/modals/ShortcutsDialog', () => ({ default: () => null }))
@@ -55,4 +60,27 @@ test.each(cases)('ניקוי ספרות שומר את שני הטורים העד
   expect(document.querySelector('[data-column="right"]').value).toBe(expectedRight)
   expect(document.querySelector('[data-column="left"]').value).toBe(expectedLeft)
   expect(save.mock.calls.at(-1)[0]).toMatchObject({ rightColumn: expectedRight, leftColumn: expectedLeft, twoColumns: true })
+})
+
+test('הרצת החלפות שמורות שומרת snapshot מלאה כששני הטורים השתנו', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (url) => ({
+    ok: true,
+    json: async () => url.startsWith('/api/book/')
+      ? { success: true, book: { name: 'ספר' }, pages: [{ number: 1, status: 'available' }] }
+      : url.startsWith('/api/page-content?')
+        ? { success: true, data: { id: 'p', twoColumns: true, rightColumn: 'ימין1', leftColumn: 'שמאל1', status: 'available' } }
+        : url === '/api/user/saved-searches'
+          ? { success: true, savedSearches: [{ id: '1', findText: '1', replaceText: '2', isRegex: false }] }
+          : { success: true, data: {}, hiddenBooks: ['book'] }
+  })))
+
+  render(<EditPage />)
+  const run = await screen.findByRole('button', { name: 'הרץ החלפות שמורות' })
+  await waitFor(() => expect(document.querySelector('[data-column="right"]')?.textContent).toContain('ימין1'))
+  fireEvent.click(run)
+
+  await waitFor(() => expect(save).toHaveBeenCalled())
+  expect(document.querySelector('[data-column="right"]').value).toBe('ימין2')
+  expect(document.querySelector('[data-column="left"]').value).toBe('שמאל2')
+  expect(save.mock.calls.at(-1)[0]).toMatchObject({ rightColumn: 'ימין2', leftColumn: 'שמאל2', twoColumns: true })
 })
