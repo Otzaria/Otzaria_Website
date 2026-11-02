@@ -48,7 +48,7 @@ describe('DownloadSectionClient — מסייע ההורדה', () => {
   })
 
   it('Windows: מציג רק את המסייע, עם שורת הסבר שאינו תוכנת ההתקנה', () => {
-    render(<DownloadSectionClient stableDownloads={WITH_ASSISTANT} />)
+    render(<DownloadSectionClient latestDownloads={WITH_ASSISTANT} />)
     const modal = openPlatform('Windows')
     expect(hrefs(modal)).toEqual(['https://example.com/Otzaria-Download-Assistant-windows.exe'])
     expect(within(modal).getByRole('note')).toHaveTextContent('זה מסייע ההורדה, לא תוכנת ההתקנה')
@@ -57,7 +57,7 @@ describe('DownloadSectionClient — מסייע ההורדה', () => {
   })
 
   it('Linux: שתי אפשרויות לפי ארכיטקטורה והסבר איך לדעת', () => {
-    render(<DownloadSectionClient stableDownloads={WITH_ASSISTANT} />)
+    render(<DownloadSectionClient latestDownloads={WITH_ASSISTANT} />)
     const modal = openPlatform('Linux')
     expect(hrefs(modal)).toEqual([
       'https://example.com/Otzaria-Download-Assistant-linux-x64.tar.gz',
@@ -67,20 +67,20 @@ describe('DownloadSectionClient — מסייע ההורדה', () => {
   })
 
   it('macOS: מציג רק את המסייע, עם הערת Gatekeeper', () => {
-    render(<DownloadSectionClient stableDownloads={WITH_ASSISTANT} />)
+    render(<DownloadSectionClient latestDownloads={WITH_ASSISTANT} />)
     const modal = openPlatform('macOS')
     expect(hrefs(modal)).toEqual(['https://example.com/Otzaria-Download-Assistant-macos.zip'])
     expect(within(modal).getByText(/פתח בכל זאת/)).toBeInTheDocument()
   })
 
   it('כפתור הפלטפורמה מציין שההורדה היא דרך המסייע רק כשיש מסייע', () => {
-    render(<DownloadSectionClient stableDownloads={WITH_ASSISTANT} />)
+    render(<DownloadSectionClient latestDownloads={WITH_ASSISTANT} />)
     expect(screen.getByRole('button', { name: /Windows/ })).toHaveTextContent('באמצעות מסייע ההורדה')
     expect(screen.getByRole('button', { name: /Android/ })).not.toHaveTextContent('מסייע')
   })
 
   it('release בלי מסייע: האפשרויות הקיימות ובלי ההודעה', () => {
-    render(<DownloadSectionClient stableDownloads={WITHOUT_ASSISTANT} />)
+    render(<DownloadSectionClient latestDownloads={WITHOUT_ASSISTANT} />)
     const modal = openPlatform('Windows')
     expect(hrefs(modal)).toEqual(['https://example.com/otzaria-0.9.97-windows.exe', 'https://example.com/otzaria-0.9.97-windows-full.exe'])
     expect(within(modal).queryByRole('note')).not.toBeInTheDocument()
@@ -88,7 +88,7 @@ describe('DownloadSectionClient — מסייע ההורדה', () => {
   })
 
   it('Android: Google Play ו-APK נשארים, ומתחתם הודעה עם קישור למסייע ה-Windows', () => {
-    render(<DownloadSectionClient stableDownloads={WITH_ASSISTANT} />)
+    render(<DownloadSectionClient latestDownloads={WITH_ASSISTANT} />)
     const modal = openPlatform('Android')
     expect(hrefs(modal)).toEqual([
       'https://play.google.com/store/apps/details?id=org.otzaria.otzaria',
@@ -102,7 +102,7 @@ describe('DownloadSectionClient — מסייע ההורדה', () => {
   })
 
   it('Android בלי מסייע Windows ב-release: בלי ההודעה', () => {
-    render(<DownloadSectionClient stableDownloads={{ ...WITHOUT_ASSISTANT, android: { apk: 'https://example.com/app-release.apk' } }} />)
+    render(<DownloadSectionClient latestDownloads={{ ...WITHOUT_ASSISTANT, android: { apk: 'https://example.com/app-release.apk' } }} />)
     const modal = openPlatform('Android')
     expect(hrefs(modal)).toEqual([
       'https://play.google.com/store/apps/details?id=org.otzaria.otzaria',
@@ -112,7 +112,7 @@ describe('DownloadSectionClient — מסייע ההורדה', () => {
   })
 
   it('Linux: בלי הוראת glib-networking (המסייע מציג אותה בעצמו)', () => {
-    render(<DownloadSectionClient stableDownloads={WITH_ASSISTANT} />)
+    render(<DownloadSectionClient latestDownloads={WITH_ASSISTANT} />)
     expect(within(openPlatform('Linux')).queryByText(/glib-networking/)).not.toBeInTheDocument()
   })
 })
@@ -126,7 +126,7 @@ describe('DownloadSectionClient — נגישות חלון ההורדה', () => {
   })
 
   it('dialog מודאלי עם כותרת, פוקוס בפנים ונעילת גלילה', () => {
-    render(<DownloadSectionClient stableDownloads={WITH_ASSISTANT} />)
+    render(<DownloadSectionClient latestDownloads={WITH_ASSISTANT} />)
     const dialog = openPlatform('Windows')
     expect(dialog).toHaveAttribute('aria-modal', 'true')
     expect(dialog).toHaveFocus()
@@ -135,7 +135,7 @@ describe('DownloadSectionClient — נגישות חלון ההורדה', () => {
   })
 
   it('Esc סוגר ומחזיר את הפוקוס לכפתור שפתח', () => {
-    render(<DownloadSectionClient stableDownloads={WITH_ASSISTANT} />)
+    render(<DownloadSectionClient latestDownloads={WITH_ASSISTANT} />)
     const opener = screen.getByRole('button', { name: /Linux/ })
     opener.focus()
     fireEvent.click(opener)
@@ -147,14 +147,14 @@ describe('DownloadSectionClient — נגישות חלון ההורדה', () => {
   })
 
   it('כפתור הסגירה סוגר', () => {
-    render(<DownloadSectionClient stableDownloads={WITH_ASSISTANT} />)
+    render(<DownloadSectionClient latestDownloads={WITH_ASSISTANT} />)
     const dialog = openPlatform('macOS')
     fireEvent.click(within(dialog).getByRole('button', { name: 'סגירה' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('Tab מהפקד האחרון חוזר לראשון (מלכודת פוקוס)', () => {
-    render(<DownloadSectionClient stableDownloads={WITH_ASSISTANT} />)
+    render(<DownloadSectionClient latestDownloads={WITH_ASSISTANT} />)
     const dialog = openPlatform('Linux')
     const close = within(dialog).getByRole('button', { name: 'סגירה' })
     const links = within(dialog).getAllByRole('link')
@@ -175,14 +175,14 @@ describe('DownloadSectionClient — נוסח החלונות', () => {
   })
 
   it.each(['Windows', 'macOS', 'Linux'])('%s: שורת ההסבר — רווח לא-נשבר אמיתי לפני הקו, בלי "00a0" גלוי', (name) => {
-    render(<DownloadSectionClient stableDownloads={WITH_ASSISTANT} />)
+    render(<DownloadSectionClient latestDownloads={WITH_ASSISTANT} />)
     const text = within(openPlatform(name)).getByRole('note').textContent ?? ''
     expect(text).not.toMatch(/00a0|\\u/i)
     expect(text).toContain('\u00a0—')
   })
 
   it.each(['Windows', 'macOS', 'Linux', 'Android', 'iOS'])('%s: בלי שורת גרסה בחלון (הגרסה במסך הפתיחה)', (name) => {
-    render(<DownloadSectionClient stableDownloads={WITH_ASSISTANT} />)
+    render(<DownloadSectionClient latestDownloads={WITH_ASSISTANT} />)
     const dialog = openPlatform(name)
     expect(dialog.textContent).not.toMatch(/גרסה|0\.9\.98|00a0/)
   })
@@ -194,7 +194,7 @@ describe('DownloadSectionClient — זיהוי המערכת (QA-04) ותקינו
   })
 
   it('ה-HTML מהשרת (לפני הזיהוי): טקסט ניטרלי ושומר מקום שקוף בגובה כרטיס המערכת — בלי "לא הצלחנו"', () => {
-    const html = renderToString(<DownloadSectionClient stableDownloads={WITH_ASSISTANT} />)
+    const html = renderToString(<DownloadSectionClient latestDownloads={WITH_ASSISTANT} />)
     expect(html).toContain('הורדה למחשב ולנייד')
     expect(html).not.toContain('לא הצלחנו')
     const host = document.createElement('div')
@@ -206,7 +206,7 @@ describe('DownloadSectionClient — זיהוי המערכת (QA-04) ותקינו
 
   it('אחרי הזיהוי: כרטיס המערכת שזוהתה במקום שומר המקום', () => {
     vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0 (Windows NT 10.0; Win64; x64)')
-    render(<DownloadSectionClient stableDownloads={WITH_ASSISTANT} />)
+    render(<DownloadSectionClient latestDownloads={WITH_ASSISTANT} />)
     expect(screen.getByText('זיהינו שאתה משתמש ב-Windows')).toBeInTheDocument()
     expect(screen.queryByTestId('detected-platform-placeholder')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Windows/ })).toBeInTheDocument()
@@ -214,14 +214,14 @@ describe('DownloadSectionClient — זיהוי המערכת (QA-04) ותקינו
 
   it('מערכת לא מזוהה: רק אחרי הבדיקה — "לא הצלחנו לזהות" וכל המערכות', () => {
     vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('test-agent')
-    render(<DownloadSectionClient stableDownloads={WITH_ASSISTANT} />)
+    render(<DownloadSectionClient latestDownloads={WITH_ASSISTANT} />)
     expect(screen.getByText(/לא הצלחנו לזהות/)).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /Windows|Linux|Android|iOS|macOS/ })).toHaveLength(5)
   })
 
   it('בתוך כפתורי המערכות אין כותרות, והאייקונים מוסתרים מקוראי מסך', () => {
     vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('test-agent')
-    const { container } = render(<DownloadSectionClient stableDownloads={WITH_ASSISTANT} />)
+    const { container } = render(<DownloadSectionClient latestDownloads={WITH_ASSISTANT} />)
     expect(container.querySelector('button h1, button h2, button h3, button h4')).toBeNull()
     for (const icon of container.querySelectorAll('button .material-symbols-outlined')) {
       expect(icon).toHaveAttribute('aria-hidden', 'true')
@@ -231,13 +231,13 @@ describe('DownloadSectionClient — זיהוי המערכת (QA-04) ותקינו
 
   it('בתוך כפתורי המערכות אין div ו-p (HTML תקין)', () => {
     vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('test-agent')
-    const { container } = render(<DownloadSectionClient stableDownloads={WITH_ASSISTANT} />)
+    const { container } = render(<DownloadSectionClient latestDownloads={WITH_ASSISTANT} />)
     expect(container.querySelector('button div, button p')).toBeNull()
   })
 
   it('הפוקוס עובר לתוצאה החדשה אחרי "הורדה למערכת אחרת" ואחרי "חזור"', () => {
     vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0 (Windows NT 10.0; Win64; x64)')
-    render(<DownloadSectionClient stableDownloads={WITH_ASSISTANT} />)
+    render(<DownloadSectionClient latestDownloads={WITH_ASSISTANT} />)
     fireEvent.click(screen.getByRole('button', { name: 'הורדה למערכת אחרת' }))
     expect(screen.getByRole('button', { name: /^Windows/ })).toHaveFocus()
     fireEvent.click(screen.getByRole('button', { name: /חזור להורדה ל-Windows/ }))
