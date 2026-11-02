@@ -11,6 +11,11 @@ const TrainingProofBookSchema = new mongoose.Schema(
     kind: { type: String, default: null }, // scan / digital
     // [{id, name, role}] — כולל זרמים שמתנדב הוסיף
     streams: { type: mongoose.Schema.Types.Mixed, default: [] },
+    // פעולת שינוי סוג זרם שנמצאת בתהליך. הפעולה ניתנת לחזרה ומושלמת בבקשה
+    // הבאה אם התהליך נעצר באמצע; ראו framesDb.settleStreamChange.
+    streamChange: { type: mongoose.Schema.Types.Mixed, default: null },
+    // מזהה פעולה שכבר בוצעה בספר אך נותר לנקות את סמניה מהעמודים.
+    streamChangeCleanup: { type: String, default: null },
     pagesTotal: { type: Number, default: 0 },
     claimedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     claimedUntil: { type: Date, default: null },

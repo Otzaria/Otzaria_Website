@@ -141,7 +141,14 @@ export function checkReturnLine(section, l) {
     if (!FRAMES_PAGE_STATUS_OUT.includes(l.status)) return 'status לא תקין';
     if (!Array.isArray(l.frames)) return 'frames חסר';
     if (l.streams_changed !== undefined) {
-      const ok = (c) => c && typeof c.id === 'string' && c.id && typeof c.role === 'string' && (c.from === undefined || typeof c.from === 'string');
+      const streamKinds = new Set(['body', 'commentary', 'notes', 'margin', 'box', 'caption']);
+      const ok = (c) =>
+        c &&
+        typeof c.id === 'string' &&
+        /^[A-Za-z0-9_-]{1,32}$/.test(c.id) &&
+        streamKinds.has(c.role) &&
+        streamKinds.has(c.from) &&
+        c.role !== c.from;
       if (!Array.isArray(l.streams_changed) || !l.streams_changed.every(ok)) return 'streams_changed לא תקין';
     }
   }

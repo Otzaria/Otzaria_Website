@@ -84,6 +84,24 @@ test('frames: כל המסגרות, status, streams_added, book/page מה-payload
   assert.equal(checkReturnManifest({ contract: 'tp/1', direction: 'to-station', section: 'frames', export_id: 'tpx-sample-frames', station_ids: ['st-b863b68a'], packages: [], counts: { items: 0 } }), null);
 });
 
+test('frames: streams_changed דורש מזהה ושני סוגים חוקיים ושונים', () => {
+  const base = resultLine(approved('frames', framesItem(0), {
+    status: 'marked',
+    frames: [],
+    streams_added: [],
+    streams_changed: [{ id: 's1', role: 'notes', from: 'body' }],
+  }));
+  assert.equal(checkReturnLine('frames', base), null);
+  for (const bad of [
+    [{ id: '../s1', role: 'notes', from: 'body' }],
+    [{ id: 's1', role: 'evil', from: 'body' }],
+    [{ id: 's1', role: 'notes' }],
+    [{ id: 's1', role: 'notes', from: 'notes' }],
+  ]) {
+    assert.equal(checkReturnLine('frames', { ...base, streams_changed: bad }), 'streams_changed לא תקין');
+  }
+});
+
 test('buildReturnZip: manifest + results.jsonl בלבד, נפתח ונבדק', () => {
   const items = [
     approved('ocr', ocrItem(0), { action: 'ok' }),

@@ -416,8 +416,10 @@ export default function FramesEditor({
         return
       }
       if (dm) {
+        const role = ROLE_BY_KEY[dm[1]]
+        if (!role) return
         e.preventDefault()
-        setRole(ROLE_BY_KEY[dm[1]])
+        setRole(role)
         return
       }
       if (e.code === 'KeyC') {

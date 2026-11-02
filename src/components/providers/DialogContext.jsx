@@ -80,6 +80,11 @@ export function DialogProvider({ children }) {
     
     // תמיכה ב-Promise - אם לא נשלח callback, מחזירים Promise
     if (typeof onConfirmAction !== 'function') {
+      // במצב Promise אפשר לשלוח את כיתוב האישור כארגומנט השלישי, או להשאיר אותו
+      // undefined ולשלוח את שני הכיתובים בארגומנטים הרביעי והחמישי.
+      const hasInlineLabels = typeof onConfirmAction === 'string'
+      const promiseConfirmText = hasInlineLabels ? onConfirmAction : confirmText
+      const promiseCancelText = hasInlineLabels ? confirmText : cancelText
       return new Promise((resolve) => {
         setIsVisible(true)
         setDialogConfig({
@@ -89,8 +94,8 @@ export function DialogProvider({ children }) {
           message,
           onConfirm: () => resolve(true),
           onCancel: () => resolve(false),
-          confirmText: onConfirmAction || 'אישור', // אם onConfirmAction הוא string, זה confirmText
-          cancelText: typeof message === 'string' && typeof onConfirmAction === 'string' ? onConfirmAction : 'ביטול',
+          confirmText: promiseConfirmText || 'אישור',
+          cancelText: promiseCancelText,
           timestamp: Date.now()
         })
       })

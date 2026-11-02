@@ -78,6 +78,17 @@ describe('FramesEditor — edit', () => {
     expect(lastFrames(onChange)[0].ord).toBe(1)
   })
 
+  it('מקש 9 שהוסר מרשימת התפקידים — לא משנה, לא שומר ולא מונע את ברירת המחדל', () => {
+    const onChange = vi.fn()
+    render(<FramesEditor page={page([F1])} streams={STREAMS} onChange={onChange} snap={false} />)
+    fireEvent.pointerDown(surface(), at(300, 400))
+    fireEvent.pointerUp(surface(), at(300, 400))
+    const event = new KeyboardEvent('keydown', { code: 'Digit9', key: '9', bubbles: true, cancelable: true })
+    window.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
   it('Ctrl+Z מבטל את השינוי האחרון', () => {
     const onChange = vi.fn()
     render(<FramesEditor page={page([F1])} streams={STREAMS} onChange={onChange} snap={false} />)

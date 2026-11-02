@@ -177,6 +177,84 @@ const publicStreams = (list) =>
 
 const mineNow = (book, userId, now) => claimActive(book, now) && String(book.claimedBy) === String(userId);
 
+// שינוי סוג זרם נוגע בספר ובכמה עמודים, ובייצור MongoDB רץ כ-standalone ללא transaction.
+// לכן הפעולה היא journaled וניתנת לחזרה: הספר נושא את רשימת-היעד, העמודים ננעלים
+// בסמן זהה, מסונכרנים ב-bulk, ורק אז הספר עובר לרשימת-היעד. שמירה ואישור דורשים
+// streamChange:null, כך שמי שניצח לפני הנעילה נכלל בסנכרון ומי שבא אחריה ממתין.
+async function syncMarkedPages(bookKey, changeId, streams) {
+  const items = await TrainingProofItem.find(
+    { section: SECTION, book: bookKey, 'streamChange.id': changeId },
+    { result: 1 }
+  ).lean();
+  const ops = [];
+  for (const it of items) {
+    const result = resyncResult(it.result, streams);
+    if (result !== it.result) {
+      ops.push({ updateOne: { filter: { _id: it._id, 'streamChange.id': changeId }, update: { $set: { result } } } });
+    }
+  }
+  if (ops.length) await TrainingProofItem.bulkWrite(ops, { ordered: false });
+  return ops.length;
+}
+
+async function settleStreamChange(bookKey) {
+  const book = await TrainingProofBook.findOne({ book: bookKey }).lean();
+  if (!book?.streamChange?.id) {
+    // ייתכן שהתהליך נעצר אחרי commit הספר ולפני ניקוי סמני העמודים.
+    if (book?.streamChangeCleanup) {
+      await TrainingProofItem.updateMany(
+        { section: SECTION, book: bookKey, 'streamChange.id': book.streamChangeCleanup },
+        { $set: { streamChange: null } }
+      );
+      await TrainingProofBook.updateOne(
+        { book: bookKey, streamChange: null, streamChangeCleanup: book.streamChangeCleanup },
+        { $set: { streamChangeCleanup: null } }
+      );
+    }
+    return { ok: true, book };
+  }
+  const change = book.streamChange;
+  await TrainingProofItem.updateMany(
+    {
+      section: SECTION,
+      book: bookKey,
+      status: { $in: ['held', 'submitted'] },
+      reviewedAt: null,
+      'result.frames.stream': change.streamId,
+    },
+    { $set: { streamChange: { id: change.id } } }
+  );
+  const approved = await TrainingProofItem.countDocuments({
+    section: SECTION,
+    book: bookKey,
+    status: 'approved',
+    'result.frames.stream': change.streamId,
+  });
+  if (approved) {
+    // אישור שניצח לפני נעילת העמודים מבטל את הפעולה כולה ומחזיר כל עמוד שכבר
+    // סונכרן לסוג המקורי. גם מסלול זה idempotent ולכן בטוח לאחר כשל ביניים.
+    await syncMarkedPages(bookKey, change.id, book.streams || []);
+    await TrainingProofItem.updateMany({ section: SECTION, book: bookKey, 'streamChange.id': change.id }, { $set: { streamChange: null } });
+    await TrainingProofBook.updateOne({ book: bookKey, 'streamChange.id': change.id }, { $set: { streamChange: null } });
+    return { ok: false, status: 409, error: 'עמוד עם הזרם הזה אושר בינתיים — הסוג לא השתנה' };
+  }
+  const pages = await syncMarkedPages(bookKey, change.id, change.streams || []);
+  const committed = await TrainingProofBook.findOneAndUpdate(
+    { book: bookKey, 'streamChange.id': change.id },
+    { $set: { streams: change.streams || [], streamChange: null, streamChangeCleanup: change.id } },
+    { returnDocument: 'after', lean: true }
+  );
+  // אם בקשה קודמת כבר ביצעה commit, הספר העדכני הוא מקור-האמת; בכל מקרה הסמן יתום.
+  await TrainingProofItem.updateMany({ section: SECTION, book: bookKey, 'streamChange.id': change.id }, { $set: { streamChange: null } });
+  await TrainingProofBook.updateOne(
+    { book: bookKey, streamChange: null, streamChangeCleanup: change.id },
+    { $set: { streamChangeCleanup: null } }
+  );
+  const done = committed || (await TrainingProofBook.findOne({ book: bookKey }).lean());
+  if (done) done.streamChangeCleanup = null;
+  return { ok: true, book: done, pages };
+}
+
 // עמוד לדפדפן. בלי מפתח-הספר, בלי sig ובלי מזהי-תחנה — רק מה שהעורך צריך
 export function pageView(item, names = {}, userId = null) {
   const p = item.payload || {};
@@ -201,6 +279,7 @@ export function pageView(item, names = {}, userId = null) {
 // ספר אחד עם כל עמודיו. מתנדב — רק כשהספר אצלו; מנהל (סקירה) — תמיד
 export async function bookDetail(userId, bookKey, { isAdmin = false, now = new Date() } = {}) {
   await sweepBooks(now);
+  await settleStreamChange(bookKey);
   const book = await TrainingProofBook.findOne({ book: bookKey }).lean();
   if (!book) return fail(404, 'הספר לא נמצא');
   const mine = mineNow(book, userId, now);
@@ -233,7 +312,9 @@ export async function savePage(userId, itemId, body, { now = new Date(), names =
   const item = await TrainingProofItem.findOne({ _id: oid(itemId), section: SECTION }).lean();
   if (!item) return fail(404, 'העמוד לא נמצא');
   if (item.status === 'approved') return fail(409, 'המנהל כבר אישר את העמוד — אי-אפשר לשנות אותו');
-  const book = await TrainingProofBook.findOne({ book: item.book }).lean();
+  const settled = await settleStreamChange(item.book);
+  if (!settled.ok) return settled;
+  const book = settled.book;
   if (!book || !mineNow(book, userId, now)) return fail(409, 'הספר כבר לא אצלך — חזרו לרשימת הספרים וקחו אותו שוב');
   const { result, error } = checkFramesPage(item.payload, body, { streams: book.streams });
   if (error) return fail(400, error);
@@ -243,7 +324,7 @@ export async function savePage(userId, itemId, body, { now = new Date(), names =
       ? { status: 'held', heldBy: uid, heldUntil: null, heldAt: now, result, vol: null, submittedAt: null }
       : { status: 'submitted', heldBy: uid, heldUntil: null, heldAt: now, result, vol: uid, submittedAt: now };
   const doc = await TrainingProofItem.findOneAndUpdate(
-    { _id: item._id, status: { $in: ['available', 'held', 'submitted', 'rejected'] }, reviewedAt: null },
+    { _id: item._id, status: { $in: ['available', 'held', 'submitted', 'rejected'] }, reviewedAt: null, streamChange: null },
     { $set: set },
     { returnDocument: 'after', lean: true }
   );
@@ -259,13 +340,15 @@ export async function savePage(userId, itemId, body, { now = new Date(), names =
 
 // זרם חדש לספר (נכנס ל-streams_added של כל עמוד שמשתמש בו). רק מי שמחזיק את הספר
 export async function addStream(userId, bookKey, body, now = new Date()) {
-  const book = await TrainingProofBook.findOne({ book: bookKey }).lean();
+  const settled = await settleStreamChange(bookKey);
+  if (!settled.ok) return settled;
+  const book = settled.book;
   if (!book) return fail(404, 'הספר לא נמצא');
   if (!mineNow(book, userId, now)) return fail(409, 'הספר כבר לא אצלך');
   const { stream, error } = checkNewStream(book.streams, body);
   if (error) return fail(400, error);
   const doc = await TrainingProofBook.findOneAndUpdate(
-    { book: bookKey, claimedBy: oid(userId), 'streams.id': { $ne: stream.id }, 'streams.name': { $ne: stream.name } },
+    { book: bookKey, claimedBy: oid(userId), streamChange: null, 'streams.id': { $ne: stream.id }, 'streams.name': { $ne: stream.name } },
     { $push: { streams: { ...stream, by: oid(userId), at: now } } },
     { returnDocument: 'after', lean: true }
   );
@@ -280,34 +363,31 @@ export async function addStream(userId, bookKey, body, now = new Date()) {
 // בסוג הישן.
 // מחזיר {ok, stream, streams, pages (כמה עמודים השתנו)}
 export async function setStreamKind(userId, bookKey, streamId, body, now = new Date()) {
-  const book = await TrainingProofBook.findOne({ book: bookKey }).lean();
+  const settled = await settleStreamChange(bookKey);
+  if (!settled.ok) return settled;
+  const book = settled.book;
   if (!book) return fail(404, 'הספר לא נמצא');
   if (!mineNow(book, userId, now)) return fail(409, 'הספר כבר לא אצלך');
-  const { stream, from, error } = checkStreamKind(book.streams, streamId, body);
+  const { streams: checkedStreams, stream, from, error } = checkStreamKind(book.streams, streamId, body);
   if (error) return fail(400, error);
   if (from === stream.role) return { ok: true, stream: publicStreams([stream])[0], streams: publicStreams(book.streams), pages: 0 };
   const approved = await TrainingProofItem.countDocuments({ section: SECTION, book: bookKey, status: 'approved', 'result.frames.stream': streamId });
   if (approved) {
     return fail(409, `${approved === 1 ? 'עמוד אחד' : `${approved} עמודים`} עם הזרם הזה כבר ${approved === 1 ? 'אושר' : 'אושרו'} — אי-אפשר לשנות את הסוג שלו. אפשר להוסיף זרם חדש מהסוג הנכון`);
   }
+  const targetStreams = checkedStreams.map((s) =>
+    s.id === streamId && !s.added && !s.stationRole ? { ...s, stationRole: from } : s
+  );
+  const changeId = new mongoose.Types.ObjectId().toString();
   const doc = await TrainingProofBook.findOneAndUpdate(
-    { book: bookKey, claimedBy: oid(userId), claimedUntil: { $gt: now }, streams: { $elemMatch: { id: streamId, role: from } } },
-    { $set: { 'streams.$.role': stream.role, ...(!stream.added && !stream.stationRole ? { 'streams.$.stationRole': from } : {}) } },
+    { book: bookKey, claimedBy: oid(userId), claimedUntil: { $gt: now }, streamChange: null, streams: { $elemMatch: { id: streamId, role: from } } },
+    { $set: { streamChange: { id: changeId, streamId, from, role: stream.role, streams: targetStreams, startedAt: now } } },
     { returnDocument: 'after', lean: true }
   );
   if (!doc) return fail(409, 'הרשימה השתנתה בינתיים — נסו שוב');
-  const items = await TrainingProofItem.find(
-    { section: SECTION, book: bookKey, status: { $in: ['held', 'submitted'] }, reviewedAt: null, 'result.frames.stream': streamId },
-    { status: 1, result: 1 }
-  ).lean();
-  let pages = 0;
-  for (const it of items) {
-    const result = resyncResult(it.result, doc.streams);
-    if (result === it.result) continue;
-    const r = await TrainingProofItem.updateOne({ _id: it._id, status: it.status, reviewedAt: null }, { $set: { result } });
-    pages += r.modifiedCount;
-  }
-  return { ok: true, stream: publicStreams([{ ...stream }])[0], streams: publicStreams(doc.streams), pages };
+  const done = await settleStreamChange(bookKey);
+  if (!done.ok) return done;
+  return { ok: true, stream: publicStreams([{ ...stream }])[0], streams: publicStreams(done.book.streams), pages: done.pages || 0 };
 }
 
 // התמונה של עמוד: למי שמחזיק את הספר, או למנהל. מחזיר {ok, imagePath}

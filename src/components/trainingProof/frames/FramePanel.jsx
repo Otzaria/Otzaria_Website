@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import Button from '@/components/ui/Button'
 import AppIcon from '@/components/ui/AppIcon'
 import { ROLE_COLORS, ROLE_LABELS, KEY_OF_ROLE, PICK_ROLES, OBJECT_LABELS, OBJECT_ORDER } from './look'
@@ -85,8 +85,32 @@ function NewStreamForm({ onAdd, onDone }) {
 const small =
   'rounded-control border border-outline px-2 py-1 text-label-md font-bold text-on-surface hover:bg-surface-container disabled:opacity-40 disabled:hover:bg-transparent'
 
+// בזמן גרירה רק התיבה משתנה; אין צורך למיין ולרנדר מחדש את כל לוח הסדר. כאשר יש
+// מספרי-סדר ייחודיים, המיקום הגאומטרי אינו משפיע על הסדר.
+function sameOrderData(a, b) {
+  if (a === b) return true
+  if (!a || !b || a.length !== b.length) return false
+  const uniqueOrd = (list) => list.every((f) => Number.isInteger(f.ord)) && new Set(list.map((f) => f.ord)).size === list.length
+  const orderIsExplicit = uniqueOrd(a) && uniqueOrd(b)
+  return a.every((f, i) => {
+    const g = b[i]
+    return f.fid === g.fid && f.ord === g.ord && f.stream === g.stream && f.role === g.role && (orderIsExplicit || f.box?.[1] === g.box?.[1])
+  })
+}
+
+const sameOrderProps = (a, b) =>
+  a.streams === b.streams &&
+  a.readOnly === b.readOnly &&
+  a.onMove === b.onMove &&
+  a.onPlace === b.onPlace &&
+  a.onStreamMove === b.onStreamMove &&
+  a.onSelect === b.onSelect &&
+  a.sel === b.sel &&
+  a.frame?.fid === b.frame?.fid &&
+  sameOrderData(a.frames, b.frames)
+
 // סדר-הקריאה של המסגרת הנבחרת — בלי לעבור למצב "סדר הקריאה"
-function OrderControls({ frame, frames, streams, readOnly, onMove, onPlace, onStreamMove }) {
+const OrderControls = memo(function OrderControls({ frame, frames, streams, readOnly, onMove, onPlace, onStreamMove }) {
   const list = readingOrder(frames)
   const i = list.findIndex((f) => f.fid === frame.fid)
   const n = list.length
@@ -147,10 +171,10 @@ function OrderControls({ frame, frames, streams, readOnly, onMove, onPlace, onSt
       )}
     </div>
   )
-}
+}, sameOrderProps)
 
 // כל מסגרות העמוד לפי סדר-הקריאה. לחיצה על שורה בוחרת את המסגרת
-function OrderList({ frames, streams, sel, onSelect }) {
+const OrderList = memo(function OrderList({ frames, streams, sel, onSelect }) {
   const list = readingOrder(frames)
   const seq = streamSeq(frames)
   const name = Object.fromEntries(streams.map((s) => [s.id, s.name]))
@@ -190,7 +214,7 @@ function OrderList({ frames, streams, sel, onSelect }) {
       </ol>
     </div>
   )
-}
+}, sameOrderProps)
 
 export default function FramePanel({
   frame,

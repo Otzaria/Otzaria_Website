@@ -174,33 +174,31 @@ export default function BookWorkspace({ bookKey }) {
 
   // הסוג של זרם שנוסף באתר — בכל המסגרות שלו בספר. מחזיר true כשנשמר
   const setStreamKind = useCallback(
-    (s, role) =>
-      new Promise((resolve) => {
-        const all = pages.map((p) => ({ frames: live.current[p.id] || p.frames }))
-        const u = streamUsage(all, s.id)
-        const where = !u.frames
-          ? ''
-          : u.frames === 1
-            ? ' הסוג ישתנה גם במסגרת היחידה שלו.'
-            : ` הסוג ישתנה בכל ${u.frames} המסגרות שלו, ${u.pages === 1 ? 'בעמוד אחד' : `ב-${u.pages} עמודים`}.`
-        showConfirm(
+    async (s, role) => {
+      const all = pages.map((p) => ({ frames: live.current[p.id] || p.frames }))
+      const u = streamUsage(all, s.id)
+      const where = !u.frames
+        ? ''
+        : u.frames === 1
+          ? ' הסוג ישתנה גם במסגרת היחידה שלו.'
+          : ` הסוג ישתנה בכל ${u.frames} המסגרות שלו, ${u.pages === 1 ? 'בעמוד אחד' : `ב-${u.pages} עמודים`}.`
+      const confirmed = await showConfirm(
           'לשנות את הסוג של הזרם?',
           `הזרם "${s.name}" יהיה "${ROLE_LABELS[role]}" במקום "${ROLE_LABELS[s.role] || ''}".${where}${s.added ? '' : ' השינוי יחזור לתחנה עם העמודים.'}`,
-          async () => {
-            const r = await framesApi.setStreamKind(bookKey, s.id, role)
-            if (!r.ok) {
-              showAlert('הסוג לא השתנה', r.data.error || 'נסו שוב')
-              return resolve(false)
-            }
-            const next = r.data.streams
-            for (const id of Object.keys(live.current)) live.current[id] = syncRoles(live.current[id], next)
-            setData((d) => ({ ...d, book: { ...d.book, streams: next }, pages: d.pages.map((p) => ({ ...p, frames: syncRoles(p.frames, next) })) }))
-            resolve(true)
-          },
           'שנה',
           'ביטול'
-        )
-      }),
+      )
+      if (!confirmed) return false
+      const r = await framesApi.setStreamKind(bookKey, s.id, role)
+      if (!r.ok) {
+        showAlert('הסוג לא השתנה', r.data.error || 'נסו שוב')
+        return false
+      }
+      const next = r.data.streams
+      for (const id of Object.keys(live.current)) live.current[id] = syncRoles(live.current[id], next)
+      setData((d) => ({ ...d, book: { ...d.book, streams: next }, pages: d.pages.map((p) => ({ ...p, frames: syncRoles(p.frames, next) })) }))
+      return true
+    },
     [pages, bookKey, showAlert, showConfirm]
   )
 

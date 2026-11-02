@@ -37,6 +37,9 @@ const TrainingProofItemSchema = new mongoose.Schema(
     rejectedFor: { type: [mongoose.Schema.Types.ObjectId], default: [] },
 
     result: { type: mongoose.Schema.Types.Mixed, default: null },
+    // נעילה קצרת-חיים בזמן שינוי סוג זרם בספר. מונעת משמירה/אישור מקבילים
+    // לדרוס את הסנכרון הרב-מסמכי (MongoDB בייצור הוא standalone, ללא transactions).
+    streamChange: { type: mongoose.Schema.Types.Mixed, default: null },
     vol: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     submittedAt: { type: Date, default: null },
     reviewedAt: { type: Date, default: null },

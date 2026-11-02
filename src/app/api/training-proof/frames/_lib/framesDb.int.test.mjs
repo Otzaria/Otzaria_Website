@@ -288,6 +288,80 @@ test('סוג של זרם מהתחנה משתנה — stationRole נשמר, ו-st
   assert.equal('streams_changed' in (await TrainingProofItem.findById(pages[0].id).lean()).result, false);
 });
 
+test('שינוי סוג שנקטע באמצע מושלם בבקשה הבאה בלי להשאיר עמודים חלקיים', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  await seed({ n: 2 });
+  await claimBook(A, KEY, T0);
+  const pages = (await bookDetail(A, KEY, { now: T0 })).pages;
+  await savePage(A, pages[0].id, marked(pages[0].frames), { now: T0 });
+  const book = await TrainingProofBook.findOne({ book: KEY }).lean();
+  const target = book.streams.map((s) => (s.id === 's1' ? { ...s, role: 'notes', stationRole: s.role } : s));
+  // מדמה קריסה אחרי רישום הפעולה ונעילת עמוד, אך לפני סנכרון ו-commit הספר.
+  await TrainingProofBook.updateOne(
+    { book: KEY },
+    { $set: { streamChange: { id: 'recover-1', streamId: 's1', from: 'body', role: 'notes', streams: target, startedAt: T0 } } }
+  );
+  await TrainingProofItem.updateOne({ _id: pages[0].id }, { $set: { streamChange: { id: 'recover-1' } } });
+  const detail = await bookDetail(A, KEY, { now: T0 });
+  assert.equal(detail.book.streams.find((s) => s.id === 's1').role, 'notes');
+  const item = await TrainingProofItem.findById(pages[0].id).lean();
+  assert.equal(item.result.frames.find((f) => f.stream === 's1').role, 'notes');
+  assert.equal(item.streamChange, null);
+  assert.equal((await TrainingProofBook.findOne({ book: KEY }).lean()).streamChange, null);
+});
+
+test('הוספת זרם בזמן שינוי שנקטע משלימה אותו ואינה נדרסת ב-commit', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  await seed({ n: 1 });
+  await claimBook(A, KEY, T0);
+  const book = await TrainingProofBook.findOne({ book: KEY }).lean();
+  const target = book.streams.map((s) => (s.id === 's1' ? { ...s, role: 'notes', stationRole: s.role } : s));
+  await TrainingProofBook.updateOne(
+    { book: KEY },
+    { $set: { streamChange: { id: 'recover-add', streamId: 's1', from: 'body', role: 'notes', streams: target, startedAt: T0 } } }
+  );
+  const added = await addStream(A, KEY, { name: 'הגהות', role: 'commentary' }, T0);
+  assert.equal(added.ok, true);
+  assert.equal(added.stream.id, 'x1');
+  const after = await TrainingProofBook.findOne({ book: KEY }).lean();
+  assert.equal(after.streams.find((s) => s.id === 's1').role, 'notes');
+  assert.equal(after.streams.find((s) => s.id === 'x1').role, 'commentary');
+  assert.equal(after.streamChange, null);
+});
+
+test('אישור שניצח את נעילת שינוי הסוג מבטל ומחזיר שינוי חלקי', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  await seed({ n: 2 });
+  await claimBook(A, KEY, T0);
+  const pages = (await bookDetail(A, KEY, { now: T0 })).pages;
+  await savePage(A, pages[0].id, marked(pages[0].frames), { now: T0 });
+  await savePage(A, pages[1].id, marked(pages[1].frames), { now: T0 });
+  const book = await TrainingProofBook.findOne({ book: KEY }).lean();
+  const target = book.streams.map((s) => (s.id === 's1' ? { ...s, role: 'notes', stationRole: s.role } : s));
+  await TrainingProofBook.updateOne(
+    { book: KEY },
+    { $set: { streamChange: { id: 'recover-2', streamId: 's1', from: 'body', role: 'notes', streams: target, startedAt: T0 } } }
+  );
+  // עמוד אחד כבר סונכרן חלקית; האחר אושר לפני שהסמן הגיע אליו.
+  const partial = await TrainingProofItem.findById(pages[0].id).lean();
+  partial.result.frames = partial.result.frames.map((f) => (f.stream === 's1' ? { ...f, role: 'notes' } : f));
+  await TrainingProofItem.updateOne(
+    { _id: pages[0].id },
+    { $set: { result: partial.result, streamChange: { id: 'recover-2' } } }
+  );
+  await TrainingProofItem.updateOne(
+    { _id: pages[1].id },
+    { $set: { status: 'approved', reviewedAt: T0 } }
+  );
+  await bookDetail(A, KEY, { now: T0 });
+  const afterBook = await TrainingProofBook.findOne({ book: KEY }).lean();
+  const afterPage = await TrainingProofItem.findById(pages[0].id).lean();
+  assert.equal(afterBook.streams.find((s) => s.id === 's1').role, 'body');
+  assert.equal(afterBook.streamChange, null);
+  assert.equal(afterPage.result.frames.find((f) => f.stream === 's1').role, 'body');
+  assert.equal(afterPage.streamChange, null);
+});
+
 test('כל העמודים סומנו — הספר "הושלם" ו-doneBy', async (t) => {
   if (db.skip) return t.skip(db.skip);
   await seed({ n: 2 });
