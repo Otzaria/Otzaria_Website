@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import UnifiedDiff from '@/components/corrections/UnifiedDiff'
 import ManualSourcePicker from '@/components/corrections/ManualSourcePicker'
+import { rebaseLineChange } from '@/lib/corrections/rebase-change'
 
 const btn = 'px-3 py-2 rounded-lg font-medium text-sm disabled:opacity-50 flex items-center gap-1'
 const PUBLISHING = new Set(['ready', 'in_progress', 'unknown_needs_reconcile', 'pr_opened'])
@@ -43,6 +44,7 @@ export default function ReportActions({ detail, meId, busy, run, probe, sourcePi
   const [target, setTarget] = useState('')
   const [handlers, setHandlers] = useState([])
   const [preview, setPreview] = useState(null)
+  const [rebaseInfo, setRebaseInfo] = useState(null)
   const [activePick, setActivePick] = useState(null)
   const [seenPick, setSeenPick] = useState(null)
   const box = useRef(null)
@@ -143,7 +145,15 @@ export default function ReportActions({ detail, meId, busy, run, probe, sourcePi
   }
 
   const openEdit = () => {
-    setNewLine(rev ? (rev.newLine ?? baseLine) : baseLine)
+    // רק מה שהמשתמש דיווח מוחל על השורה העדכנית בגיטהאב; תיקונים שנעשו שם בינתיים נשמרים.
+    if (rev && typeof rev.newLine === 'string' && baseLine && baseLine !== rev.originalLine) {
+      const m = rebaseLineChange(rev.originalLine, rev.newLine, baseLine)
+      setNewLine(m.line)
+      setRebaseInfo(m)
+    } else {
+      setNewLine(rev ? (rev.newLine ?? baseLine) : baseLine)
+      setRebaseInfo(null)
+    }
     setMode('edit')
   }
 
@@ -183,6 +193,15 @@ export default function ReportActions({ detail, meId, busy, run, probe, sourcePi
       {mode === 'edit' && (
         <div className="space-y-2">
           <p className="text-xs text-on-surface/60">עורכים את השורה המלאה כפי שתיכתב במקור. נוצרת גרסת הצעה חדשה; ההצעה המקורית נשמרת.</p>
+          {rebaseInfo && (
+            <p className={`text-xs ${!rebaseInfo.clean || rebaseInfo.conflicts ? 'text-danger-700' : 'text-on-surface/70'}`}>
+              {!rebaseInfo.clean
+                ? 'השורה בגיטהאב השתנתה מאז הדיווח ואי אפשר היה למזג אוטומטית — מוצגת השורה העדכנית; יש להחיל את התיקון ידנית.'
+                : <>השורה בגיטהאב השתנתה מאז הדיווח, ולכן הוחלו עליה רק התיקונים שדווחו ({rebaseInfo.applied}) והשאר נשאר כבגיטהאב.
+                  {rebaseInfo.skipped > 0 && <> {rebaseInfo.skipped} תיקונים כבר מתוקנים שם.</>}
+                  {rebaseInfo.conflicts > 0 && <> {rebaseInfo.conflicts} תיקונים לא נמצא להם מקום (המילה שונתה בגיטהאב) — יש לבדוק ידנית.</>}</>}
+            </p>
+          )}
           <textarea value={newLine} onChange={(e) => setNewLine(e.target.value)} rows={4} dir="rtl" className="w-full border rounded-lg p-2 font-mono text-base bg-white" />
           <div className="flex gap-2">
             <button
