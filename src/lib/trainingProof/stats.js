@@ -68,7 +68,8 @@ export async function applyArchive(delta, exportId = null) {
     ops.map((o) => ({ updateOne: { filter: { userId: o.updateOne.filter.userId }, update: { $setOnInsert: { stats: {} } }, upsert: true } })),
     { ordered: false }
   ).catch((e) => {
-    if (!(e?.writeErrors || []).every((w) => (w.code ?? w.err?.code) === 11000)) throw e;
+    const errors = e?.writeErrors;
+    if (!errors?.length || !errors.every((w) => (w.code ?? w.err?.code) === 11000)) throw e;
   });
   await TrainingProofArchive.bulkWrite(ops);
   return ops.length;

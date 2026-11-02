@@ -28,6 +28,7 @@ import TrainingProofExportLog from '@/models/TrainingProofExportLog'
 import TrainingProofExportLock from '@/models/TrainingProofExportLock'
 import TrainingProofCorrection from '@/models/TrainingProofCorrection'
 import TrainingProofArchive from '@/models/TrainingProofArchive'
+import TrainingProofPackagePurge from '@/models/TrainingProofPackagePurge'
 import PageProofBook from '@/models/PageProofBook'
 import { startMongo } from '@/lib/corrections/testing/mongo.js'
 import { sampleEntries, ocrItem, routerItem } from '@/lib/trainingProof/testFixtures'
@@ -510,6 +511,24 @@ describe('הורדה לתחנה', () => {
     expect((await volunteerStats(String(vol._id))).ocr).toMatchObject({ rejected: 1, saved: 1 })
     await packageDELETE(jreq('DELETE'), P({ packageId: 'tp-20261027-1f3a9c2e', part: '1' }))
     expect(await TrainingProofItem.countDocuments()).toBe(0)
+    expect((await volunteerStats(String(vol._id))).ocr).toMatchObject({ rejected: 1, saved: 1 })
+  })
+
+  it('מחיקת חבילה: כשל בארכוב אחרי המחיקה מושלם ב-retry בלי לאבד או להכפיל מונים', async () => {
+    const s = await upload('ocr', sampleEntries('ocr', { n: 2 }))
+    await ingest(s.token)
+    const marked = await volunteerMarks('ocr', [{ action: 'ok' }])
+    await decidePOST(jreq('POST', { section: 'ocr', ids: [String(marked[0]._id)], decision: 'reject' }))
+    const bulk = vi.spyOn(TrainingProofArchive, 'bulkWrite')
+    bulk.mockRejectedValueOnce(new Error('archive unavailable'))
+    const key = P({ packageId: 'tp-20261027-1f3a9c2e', part: '1' })
+    expect((await packageDELETE(jreq('DELETE'), key)).status).toBe(500)
+    expect(await TrainingProofItem.countDocuments()).toBe(0)
+    expect((await TrainingProofPackagePurge.findOne({ packageId: 'tp-20261027-1f3a9c2e', part: 1 }).lean()).status).toBe('purging')
+    bulk.mockRestore()
+    expect((await packageDELETE(jreq('DELETE'), key)).status).toBe(200)
+    expect((await volunteerStats(String(vol._id))).ocr).toMatchObject({ rejected: 1, saved: 1 })
+    expect((await packageDELETE(jreq('DELETE'), key)).status).toBe(200)
     expect((await volunteerStats(String(vol._id))).ocr).toMatchObject({ rejected: 1, saved: 1 })
   })
 
