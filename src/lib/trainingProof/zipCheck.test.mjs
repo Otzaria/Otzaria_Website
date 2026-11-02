@@ -165,6 +165,42 @@ test('frames: ptype הוא מילה קצרה כלשהי מהתחנה (scan, cols
   assert.match(checkToSiteZip(sampleEntries('frames', { items: [framesItem(0, { ptype: 'שני טורים' })] })).errors.join(), /ptype/);
 });
 
+test('frames: מסגרת שגלשה מעבר לקצה התמונה — מקוצרת, אזהרה לעמוד, לא דחיית הקובץ', () => {
+  // כמו בקובץ של בעל הפרויקט (2026-11-01): כמה פיקסלים מתחת לתחתית, ומעל הקצה העליון
+  const below = framesItem(1, { h: 2600 });
+  below.frames[1].box = [5, 2525, 300.4, 2606.6];
+  const above = framesItem(3);
+  above.frames[0].box = [7.2, -1.5, 1148.5, 62.1];
+  const items = [framesItem(0), below, framesItem(2), above];
+  const r = checkToSiteZip(unzipSync(zipSync(sampleEntries('frames', { items }))));
+  assert.deepEqual(r.errors, []);
+  assert.equal(r.ok, true);
+  assert.equal(r.items.length, 4);
+  assert.deepEqual(r.frameBoxLines, [2, 4]);
+  assert.deepEqual(r.warnings, ['2 עמודים: מסגרות שגלשו מעבר לקצה התמונה — קוצרו לגבולות העמוד (שורות 2, 4 בקובץ)']);
+  const byUid = new Map(r.items.map((it) => [it.uid, it]));
+  assert.deepEqual(byUid.get(below.uid).frames[1].box, [5, 2525, 300.4, 2600]);
+  assert.deepEqual(byUid.get(above.uid).frames[0].box, [7.2, 0, 1148.5, 62.1]);
+  assert.deepEqual(byUid.get(framesItem(0).uid).frames, framesItem(0).frames); // עמוד תקין — כמות-שהוא
+  // מסמך-המסד — עם המסגרת המקוצרת
+  assert.deepEqual(itemDoc(r.manifest, byUid.get(below.uid)).payload.frames[1].box, [5, 2525, 300.4, 2600]);
+});
+
+test('frames: מסגרת שכולה מחוץ לתמונה, או תיבה הפוכה — עדיין דוחה את הקובץ', () => {
+  const out = framesItem(0);
+  out.frames[0].box = [100, 2500, 300, 2550];
+  const r = checkToSiteZip(sampleEntries('frames', { items: [out] }));
+  assert.equal(r.ok, false);
+  assert.match(r.errors.join(), /תיבת המסגרת f1/);
+  assert.deepEqual(r.frameBoxLines, []);
+  const flipped = framesItem(0);
+  flipped.frames[0].box = [300, -5, 100, 50];
+  assert.match(checkToSiteZip(sampleEntries('frames', { items: [flipped] })).errors.join(), /תיבת המסגרת f1/);
+  const one = framesItem(0);
+  one.frames[2].box = [100, 300, 1705, 700];
+  assert.match(checkToSiteZip(sampleEntries('frames', { items: [one] })).warnings[0], /^עמוד אחד: .* \(שורה 1 בקובץ\)$/);
+});
+
 test('frames: עד 40 עמודים בקובץ', () => {
   const items = Array.from({ length: 41 }, (_, i) => framesItem(i));
   assert.match(checkToSiteZip(sampleEntries('frames', { items })).errors.join(), /40/);
