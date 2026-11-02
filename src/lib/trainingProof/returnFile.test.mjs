@@ -67,6 +67,13 @@ test('frames: כל המסגרות, status, streams_added, book/page מה-payload
   assert.equal(l.page, p.page);
   assert.equal(l.scale, 1);
   assert.equal(checkReturnLine('frames', l), null);
+  assert.equal('streams_changed' in l, false);
+  // סוג חדש לזרם מהתחנה (שדה רשות, 2026-11-01) — רק כשיש
+  const ch = [{ id: 's2', role: 'notes', from: 'commentary' }];
+  const lc = resultLine(approved('frames', p, { status: 'marked', frames: p.frames, streams_added: [], streams_changed: ch }));
+  assert.deepEqual(lc.streams_changed, ch);
+  assert.equal(checkReturnLine('frames', lc), null);
+  assert.match(checkReturnLine('frames', { ...lc, streams_changed: [{ id: 's2' }] }), /streams_changed/);
   // בגלאי admin_fixed הוא רשות (§5.3), בזיהוי ובנתב — חובה
   const { admin_fixed: _drop, ...noFlag } = l;
   assert.equal(checkReturnLine('frames', noFlag), null);
@@ -75,6 +82,24 @@ test('frames: כל המסגרות, status, streams_added, book/page מה-payload
   assert.match(checkReturnLine('ocr', ocrLine), /admin_fixed/);
   // export_id של האתר הוא tpx-YYYYMMDD-xxxxxx; הבדיקה מקבלת כל tpx- (גם קובצי-הדוגמה של התחנה)
   assert.equal(checkReturnManifest({ contract: 'tp/1', direction: 'to-station', section: 'frames', export_id: 'tpx-sample-frames', station_ids: ['st-b863b68a'], packages: [], counts: { items: 0 } }), null);
+});
+
+test('frames: streams_changed דורש מזהה ושני סוגים חוקיים ושונים', () => {
+  const base = resultLine(approved('frames', framesItem(0), {
+    status: 'marked',
+    frames: [],
+    streams_added: [],
+    streams_changed: [{ id: 's1', role: 'notes', from: 'body' }],
+  }));
+  assert.equal(checkReturnLine('frames', base), null);
+  for (const bad of [
+    [{ id: '../s1', role: 'notes', from: 'body' }],
+    [{ id: 's1', role: 'evil', from: 'body' }],
+    [{ id: 's1', role: 'notes' }],
+    [{ id: 's1', role: 'notes', from: 'notes' }],
+  ]) {
+    assert.equal(checkReturnLine('frames', { ...base, streams_changed: bad }), 'streams_changed לא תקין');
+  }
 });
 
 test('buildReturnZip: manifest + results.jsonl בלבד, נפתח ונבדק', () => {

@@ -5,13 +5,13 @@ import { useState } from 'react'
 import { DialogProvider, useDialog } from './DialogContext'
 import Dialog from '@/components/ui/Dialog'
 
-function Harness({ onResult }) {
+function Harness({ onResult, labels = false }) {
   const { showConfirm } = useDialog()
   const [open, setOpen] = useState(true)
   return open ? (
     <Dialog title="עריכה" onClose={() => setOpen(false)}>
       <input aria-label="שדה בחלון" />
-      <button type="button" onClick={async () => onResult(await showConfirm('למחוק?', 'פעולה בלתי הפיכה'))}>
+      <button type="button" onClick={async () => onResult(await showConfirm('למחוק?', 'פעולה בלתי הפיכה', ...(labels ? ['מחק', 'חזרה'] : [])))}>
         מחק
       </button>
     </Dialog>
@@ -19,6 +19,15 @@ function Harness({ onResult }) {
 }
 
 describe('DialogContext — חלון אישור', () => {
+  it('מצב Promise תומך בכיתובים מותאמים ומחזיר false בביטול', async () => {
+    const user = userEvent.setup()
+    const onResult = vi.fn()
+    render(<DialogProvider><Harness onResult={onResult} labels /></DialogProvider>)
+    await user.click(screen.getByRole('button', { name: 'מחק' }))
+    await user.click(await screen.findByRole('button', { name: 'חזרה' }))
+    expect(onResult).toHaveBeenCalledWith(false)
+  })
+
   it('נפתח כ-alertdialog מודאלי עם שם ותיאור, והפוקוס עובר אליו', async () => {
     const user = userEvent.setup()
     render(<DialogProvider><Harness onResult={vi.fn()} /></DialogProvider>)

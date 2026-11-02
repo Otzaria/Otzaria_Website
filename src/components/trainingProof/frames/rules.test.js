@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { checkFramesPage, checkNewStream, pageState, effectiveFrames, pageBy, bookState, claimDecision, claimActive } from './rules'
+import { checkFramesPage, checkNewStream, resyncResult, pageState, effectiveFrames, pageBy, bookState, claimDecision, claimActive } from './rules'
 import { framesItem, BOOKS } from '@/lib/trainingProof/testFixtures'
 import { BOOK_CLAIM_MS } from '@/lib/trainingProof/vocab'
 
@@ -68,6 +68,49 @@ describe('checkFramesPage', () => {
   })
 })
 
+describe('הסוג נקבע לפי הזרם', () => {
+  it('מסגרת בזרם נשמרת בסוג של הזרם, גם אם הדפדפן שלח אחר — גם "כותרת" ישנה; כיתוב נשאר', () => {
+    const fr = [
+      { ...payload.frames[1], role: 'notes' },
+      { fid: 'n1', kind: 'text', role: 'heading', box: [100, 300, 800, 340], stream: 's2', ord: 9, cont: false },
+      { fid: 'n2', kind: 'text', role: 'margin', box: [100, 400, 800, 500], stream: null, ord: 10, cont: false },
+      { fid: 'n3', kind: 'text', role: 'caption', box: [100, 600, 800, 640], stream: 's2', ord: 11, cont: false },
+    ]
+    const { result } = draft(fr, 'marked')
+    expect(result.frames.map((f) => [f.fid, f.role])).toEqual([
+      ['f2', 'body'],
+      ['n1', 'commentary'],
+      ['n2', 'margin'],
+      ['n3', 'caption'],
+    ])
+  })
+
+  it('resyncResult: סוג חדש לזרם שנוסף — במסגרות וב-streams_added; בלי שינוי — אותו אובייקט', () => {
+    const fr = [{ fid: 'n1', kind: 'text', role: 'notes', box: [100, 2300, 900, 2400], stream: 'x1', ord: 1, cont: false }]
+    const { result } = draft(fr, 'marked')
+    expect(resyncResult(result, STREAMS)).toBe(result)
+    const next = STREAMS.map((s) => (s.id === 'x1' ? { ...s, role: 'commentary' } : s))
+    const r = resyncResult(result, next)
+    expect(r.frames[0].role).toBe('commentary')
+    expect(r.streams_added).toEqual([{ id: 'x1', name: 'הגהות', role: 'commentary' }])
+    expect(r.status).toBe('marked')
+  })
+
+  it('זרם מהתחנה שהסוג שלו שונה — streams_changed בעמוד שמשתמש בו בלבד, והתפקיד לפי הסוג החדש', () => {
+    const changed = STREAMS.map((s) => (s.id === 's2' ? { ...s, role: 'notes', stationRole: 'commentary' } : s))
+    const fr = [{ fid: 'n1', kind: 'text', role: 'commentary', box: [100, 300, 800, 340], stream: 's2', ord: 1, cont: false }]
+    const { result } = checkFramesPage(payload, { status: 'marked', frames: fr }, { streams: changed })
+    expect(result.frames[0].role).toBe('notes')
+    expect(result.streams_changed).toEqual([{ id: 's2', role: 'notes', from: 'commentary' }])
+    const other = checkFramesPage(payload, { status: 'marked', frames: [payload.frames[1]] }, { streams: changed }).result
+    expect('streams_changed' in other).toBe(false)
+    // חזרה לסוג של התחנה — השדה יורד
+    const back = resyncResult(result, STREAMS)
+    expect(back.frames[0].role).toBe('commentary')
+    expect('streams_changed' in back).toBe(false)
+  })
+})
+
 describe('checkNewStream', () => {
   it('זרם חדש מקבל x1, x2…', () => {
     expect(checkNewStream(BOOKS[0].streams, { name: ' הגהות  ', role: 'notes' }).stream).toEqual({ id: 'x1', name: 'הגהות', role: 'notes', added: true })
@@ -77,6 +120,7 @@ describe('checkNewStream', () => {
     expect(checkNewStream(STREAMS, { name: '', role: 'body' }).error).toBeTruthy()
     expect(checkNewStream(STREAMS, { name: 'פנים', role: 'body' }).error).toMatch(/כבר/)
     expect(checkNewStream(STREAMS, { name: 'א', role: 'furniture' }).error).toBeTruthy()
+    expect(checkNewStream(STREAMS, { name: 'א', role: 'heading' }).error).toMatch(/סוג/)
   })
 })
 

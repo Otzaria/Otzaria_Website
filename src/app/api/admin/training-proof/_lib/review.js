@@ -97,7 +97,7 @@ export async function summaryCounts() {
 // אישור לפי מזהים (רק מה שממתין). מחזיר כמה אושרו
 export async function approveIds(section, ids, by, now = new Date()) {
   const res = await TrainingProofItem.updateMany(
-    { _id: { $in: ids.map(oid) }, section, status: 'submitted' },
+    { _id: { $in: ids.map(oid) }, section, status: 'submitted', streamChange: null },
     { $set: approveSet(oid(by), now) }
   );
   return res.modifiedCount;
@@ -144,7 +144,7 @@ export async function unapproveIds(section, ids) {
 //   book (גלאי) — כל העמודים שסומנו בספר (opts.book)
 // מחזיר {count} או {error}
 export async function bulkApprove(section, kind, { vol = null, book = null, dry = false } = {}, by, now = new Date()) {
-  const base = { section, status: 'submitted' };
+  const base = { section, status: 'submitted', streamChange: null };
   let filter;
   if (kind === 'ok-unchanged' && section === 'ocr') filter = { ...base, 'result.action': 'ok' };
   else if (kind === 'volunteer' && vol) filter = { ...base, vol: oid(vol) };
@@ -170,7 +170,7 @@ async function framesFixCheck(item) {
 // check — בדיקה לחלק (frames: מהגלאי, כשתהיה); ברירת-מחדל MARK_CHECKS.
 // מחזיר {ok, item, fixed} או {ok:false,status,error}
 export async function fixAndApprove(id, mark, by, now = new Date(), check = null) {
-  const item = await TrainingProofItem.findOne({ _id: oid(id), status: 'submitted' }).lean();
+  const item = await TrainingProofItem.findOne({ _id: oid(id), status: 'submitted', streamChange: null }).lean();
   if (!item) return { ok: false, status: 409, error: 'הפריט כבר לא ממתין לאישור' };
   const checker = check || MARK_CHECKS[item.section] || (item.section === 'frames' ? await framesFixCheck(item) : null);
   if (!checker) return { ok: false, status: 400, error: 'תיקון בחלק הזה נעשה בעורך המסגרות' };
@@ -182,7 +182,7 @@ export async function fixAndApprove(id, mark, by, now = new Date(), check = null
     ? approveSet(oid(by), now)
     : { ...approveSet(oid(by), now), result, adminFixed: true, volResult: item.result, correctionLoggedAt: null };
   const doc = await TrainingProofItem.findOneAndUpdate(
-    { _id: item._id, status: 'submitted', submittedAt: item.submittedAt },
+    { _id: item._id, status: 'submitted', submittedAt: item.submittedAt, streamChange: null },
     { $set: set },
     { returnDocument: 'after', lean: true }
   );
