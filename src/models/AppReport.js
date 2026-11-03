@@ -87,6 +87,8 @@ const AppReportSchema = new mongoose.Schema({
   issueAttemptAt: { type: Date, default: null },
   issueCheckedAt: { type: Date, default: null },
   mergedIntoExisting: { type: Boolean, default: false },
+  // צורף בשקט ל-issue סגור (גרסה שאינה חדשה מהמקושרות אליו), בלי issue חדש ובלי תגובה
+  suppressedAfterClose: { type: Boolean, default: false },
   previousIssueNumber: { type: Number, default: null },
 
   fileIds: {
