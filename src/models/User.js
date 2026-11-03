@@ -58,9 +58,7 @@ const UserSchema = new mongoose.Schema({
   // מתנדב תיקוני טקסט: רשאי לטפל ולאשר תיקונים (נפרד מהרשאות ניהול המערכת)
   isCorrectionsVolunteer: { type: Boolean, default: false },
 
-  // צורת הדף (docs/tzurat-hadaf/CONTRACT.md): המתנדב סימן "אני קורא כתב רש"י" — מקבל שאלות רש"י ותוספות;
-  // וסיים את התרגול של המסלול המהיר
-  tzuratRashi: { type: Boolean, default: false },
+  // צורת הדף (docs/tzurat-hadaf/CONTRACT.md): המתנדב סיים את התרגול של המסלול המהיר
   tzuratPracticeDone: { type: Boolean, default: false },
 }, { timestamps: true });
 

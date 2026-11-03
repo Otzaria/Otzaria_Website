@@ -72,6 +72,25 @@ describe('RouterRow', () => {
     expect(h.onFix).toHaveBeenCalledWith(expect.anything(), { bad: true })
   })
 
+  it('"הצג בעמוד המלא" — רק כשיש עמוד; פותח את העמוד עם השורה מסומנת', () => {
+    window.matchMedia = vi.fn().mockReturnValue({ matches: true })
+    const { unmount } = render(<RouterRow item={item()} selected={false} {...handlers()} />)
+    expect(screen.queryByRole('button', { name: /הצג בעמוד המלא/ })).toBeNull()
+    unmount()
+    const ctx = { img: '/api/admin/training-proof/items/r1/ctx', bbox: [10, 20, 110, 70] }
+    render(<RouterRow item={item({ ctx })} selected={false} {...handlers()} />)
+    fireEvent.click(screen.getByRole('button', { name: /הצג בעמוד המלא/ }))
+    const dialog = screen.getByRole('dialog', { name: 'השורה בעמוד המלא' })
+    expect(dialog).toHaveAccessibleDescription('ספר 388 · עמוד 3')
+    const img = screen.getByRole('img', { name: 'העמוד המלא' })
+    expect(img).toHaveAttribute('src', ctx.img)
+    Object.defineProperty(img, 'naturalWidth', { value: 200 })
+    Object.defineProperty(img, 'naturalHeight', { value: 100 })
+    Element.prototype.scrollIntoView = vi.fn()
+    fireEvent.load(img)
+    expect(screen.getByTestId('tp-fullpage-mark').style.left).toBe('5%')
+  })
+
   it('markOf', () => {
     expect(markOf({ label: 'latin' })).toEqual({ label: 'latin' })
     expect(markOf({ label: 'bad' })).toEqual({ bad: true })

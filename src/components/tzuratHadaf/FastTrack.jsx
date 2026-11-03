@@ -31,12 +31,11 @@ function readKind() {
 
 export default function FastTrack() {
   const { showAlert } = useDialog()
-  const [me, setMe] = useState(null)
   const [kind, setKind] = useState('any')
   const [item, setItem] = useState(null)
   const [value, setValue] = useState(null)
   const [stats, setStats] = useState(null)
-  const [flags, setFlags] = useState({ needPractice: false, needRashi: false })
+  const [flags, setFlags] = useState({ needPractice: false })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [flash, setFlash] = useState('')
@@ -60,35 +59,16 @@ export default function FastTrack() {
     setItem(r.data.item || null)
     setValue(null)
     if (r.data.stats) setStats(r.data.stats)
-    setFlags({ needPractice: !!r.data.needPractice, needRashi: !!r.data.needRashi })
-    // הדגלים העדכניים מהשרת (rashi, practiceDone) — גוברים על מה שנטען ב-overview
-    if (typeof r.data.rashi === 'boolean' || typeof r.data.practiceDone === 'boolean') {
-      setMe((m) => ({
-        ...(m || {}),
-        ...(typeof r.data.rashi === 'boolean' ? { rashi: r.data.rashi } : {}),
-        ...(typeof r.data.practiceDone === 'boolean' ? { practiceDone: r.data.practiceDone } : {}),
-      }))
-    }
+    setFlags({ needPractice: !!r.data.needPractice })
   }, [])
 
   useEffect(() => {
-    let alive = true
-    ;(async () => {
-      const saved = readKind()
-      const o = await api.overview()
-      if (!alive) return
-      const meNow = o.ok ? o.data.me || null : null
-      setMe(meNow)
-      // רש"י ותוספות רק למי שסימן — אחרת חוזרים ל"הכל"
-      const k = (saved === 'r' || saved === 't') && meNow && !meNow.rashi ? 'any' : saved
-      kindRef.current = k
-      setKind(k)
-      load(k, true)
-    })()
-    return () => {
-      alive = false
-      clearTimeout(flashTimer.current)
-    }
+    const saved = readKind()
+    kindRef.current = saved
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setKind(saved)
+    load(saved, true)
+    return () => clearTimeout(flashTimer.current)
   }, [load])
 
   const changeKind = useCallback(
@@ -172,14 +152,13 @@ export default function FastTrack() {
     return () => window.removeEventListener('keydown', onKey)
   }, [item, value, helpOpen, skip, submit])
 
-  const rashi = !!me?.rashi
   // התרגול חוסם רק כשיש פריטי תרגול — וזה ידוע רק לשרת (needPractice ב-fast)
   const needPractice = flags.needPractice
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <KindFilter value={kind} onChange={changeKind} rashi={rashi} disabled={loading || saving} />
+        <KindFilter value={kind} onChange={changeKind} disabled={loading || saving} />
         <div className="flex items-center gap-2">
           <StatsStrip stats={stats} />
           <HelpButton onClick={() => setHelpOpen(true)} />
@@ -205,18 +184,6 @@ export default function FastTrack() {
           <Button href={PRACTICE_PATH} prefetch={false} icon="school">
             לתרגול
           </Button>
-        </div>
-      ) : flags.needRashi && !item ? (
-        <div className="glass-strong flex flex-col items-center gap-3 rounded-xl p-8 text-center">
-          <p className="font-bold text-on-surface">שאלות רש&quot;י ותוספות פתוחות רק למי שסימן שהוא קורא כתב רש&quot;י.</p>
-          <div className="flex flex-wrap justify-center gap-2">
-            <Button variant="tonal" onClick={() => changeKind('g')}>
-              לשאלות בגמרא
-            </Button>
-            <Button variant="text" href={BASE_PATH} prefetch={false}>
-              לסימון בדף הכניסה
-            </Button>
-          </div>
         </div>
       ) : loading && !item ? (
         <div className="glass-strong rounded-xl p-10 text-center text-on-surface/60" role="status">

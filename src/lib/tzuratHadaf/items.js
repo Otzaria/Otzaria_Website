@@ -13,7 +13,7 @@ import User from '../../models/User.js';
 import { consensus, normalizeText, isVerdict } from './consensus.js';
 import { choiceToVerdict, verdictToChoice, CHOICES } from './questions.js';
 import { fastItemShape } from './shapes.js';
-import { whoOf, isObjectId, isRashiKind, cleanText } from './common.js';
+import { whoOf, isObjectId, cleanText } from './common.js';
 
 export const ITEM_LEASE_MS = 10 * 60 * 1000;
 export const TOP_N = 20;
@@ -29,7 +29,6 @@ const MSG = {
   notFound: 'השאלה לא נמצאה',
   closed: 'השאלה כבר הוכרעה — עוברים לבאה',
   answered: 'כבר עניתם על השאלה הזו',
-  rashi: 'שאלות רש"י ותוספות — רק למי שסימן שהוא קורא כתב רש"י',
   paused: 'המסכת מושהית כרגע',
   flagged: 'כבר סימנתם את השאלה הזו',
   practiceShort: 'יש לענות על כל שאלות התרגול',
@@ -46,11 +45,10 @@ export function parseExclude(raw) {
   return out;
 }
 
-/** kind מהכתובת ← מסנן Mongo, או null (מבקש רש"י/תוספות בלי הרשאה) */
-export function kindFilter(kind, canRashi) {
-  if (kind === 'g') return { kind: 'g' };
-  if (kind === 'r' || kind === 't') return canRashi ? { kind } : null;
-  return canRashi ? {} : { kind: { $nin: ['r', 't'] } };
+/** kind מהכתובת ← מסנן Mongo */
+export function kindFilter(kind) {
+  if (kind === 'g' || kind === 'r' || kind === 't') return { kind };
+  return {};
 }
 
 export async function pausedSlugs() {
@@ -85,10 +83,9 @@ function shuffled(arr) {
  * פריט אחד למשתמש: פתוח, לא ענה עליו, לא מוחזק אצל אחר (החזקה רכה של 10 דקות), לפי kind המותר.
  * גמרא קודם (כש-kind=any), אחר כך score יורד — בחירה אקראית מבין TOP_N הראשונים. ← מסמך הפריט או null.
  */
-export async function sampleFastItem(userId, { exclude = [], kind = 'any', canRashi = false, now = new Date() } = {}) {
+export async function sampleFastItem(userId, { exclude = [], kind = 'any', now = new Date() } = {}) {
   const uid = oid(userId);
-  const kf = kindFilter(kind, canRashi);
-  if (!kf) return null;
+  const kf = kindFilter(kind);
   const paused = await pausedSlugs();
   const base = queueFilter(uid, { exclude, kf, paused });
   const free = { $or: [{ leasedUntil: null }, { leasedUntil: { $lt: now } }, { leasedBy: uid }] };
@@ -191,7 +188,7 @@ export async function settle(itemId, doc, now = new Date()) {
  * תשובה של משתמש. answer: {verdict, text} (כבר מתורגם), via: 'fast'|'page'.
  * ← {ok:true, status, points} או fail(404/409/403).
  */
-export async function addAnswer(itemId, user, { verdict, text = null, via = 'fast', revision, submission = null }, { canRashi = true, now = new Date() } = {}) {
+export async function addAnswer(itemId, user, { verdict, text = null, via = 'fast', revision, submission = null }, { now = new Date() } = {}) {
   if (!isObjectId(String(itemId))) return fail(404, MSG.notFound);
   if (!isVerdict(verdict)) return fail(400, 'תשובה לא מוכרת');
   const uid = oid(user.id);
@@ -202,7 +199,6 @@ export async function addAnswer(itemId, user, { verdict, text = null, via = 'fas
     return { ok: true, status: 'recorded', points: 0 };
   }
   if (revision !== undefined && revision !== (item.revision ?? 0)) return fail(409, 'השאלה עודכנה — טענו אותה מחדש', 'stale');
-  if (isRashiKind(item.kind) && !canRashi) return fail(403, MSG.rashi);
   if (await TzuratBatch.exists({ slug: item.slug, status: 'paused' })) return fail(409, MSG.paused, 'paused');
   if ((item.answers || []).some((a) => String(a.user) === String(uid))) return fail(409, MSG.answered, 'answered');
   if (item.status !== 'open') return fail(409, MSG.closed, 'closed');
@@ -251,12 +247,11 @@ export const FLAGS_TO_CLOSE = 2;
  * "החיתוך לא מראה את המקום". רך: הסימון נרשם (משתמש אחד פעם אחת, והשאלה לא תוצע לו שוב), והפריט עובר
  * לבדיקת מנהל (flagged) רק אחרי FLAGS_TO_CLOSE משתמשים שונים. ← {ok:true, flagged}
  */
-export async function flagItem(itemId, userId, reason, { canRashi = true, now = new Date() } = {}) {
+export async function flagItem(itemId, userId, reason, { now = new Date() } = {}) {
   if (!isObjectId(String(itemId))) return fail(404, MSG.notFound);
   const uid = oid(userId);
   const item = await TzuratItem.findById(itemId, { kind: 1, slug: 1, status: 1, practice: 1, 'flags.user': 1 }).lean();
   if (!item || item.practice) return fail(404, MSG.notFound);
-  if (isRashiKind(item.kind) && !canRashi) return fail(403, MSG.rashi);
   if (await TzuratBatch.exists({ slug: item.slug, status: 'paused' })) return fail(409, MSG.paused, 'paused');
   const entry = { user: uid, reason: cleanText(reason, 200), at: now };
   const doc = await TzuratItem.findOneAndUpdate(
@@ -281,11 +276,10 @@ export async function flagItem(itemId, userId, reason, { canRashi = true, now = 
 // ---------- תרגול ----------
 
 /** עד PRACTICE_SIZE פריטי תרגול (FastItem + explain) */
-const practiceMatch = (canRashi) => ({ practice: true, ...(canRashi ? {} : { kind: { $nin: ['r', 't'] } }) });
+const PRACTICE_MATCH = Object.freeze({ practice: true });
 
-export async function practiceItems(userId, { canRashi = false } = {}) {
-  const match = practiceMatch(canRashi);
-  const rows = await TzuratItem.aggregate([{ $match: match }, { $sample: { size: PRACTICE_SIZE } }]);
+export async function practiceItems(userId) {
+  const rows = await TzuratItem.aggregate([{ $match: PRACTICE_MATCH }, { $sample: { size: PRACTICE_SIZE } }]);
   const out = [];
   for (const it of rows) out.push({ ...(await fastItemFor(it, userId)), explain: it.explain || '' });
   return out;
@@ -295,7 +289,7 @@ export async function practiceItems(userId, { canRashi = false } = {}) {
  * answers: [{id, choice, text?}] ← {ok, score, total, results:[{id, correct, expected, explain}]}; מסמן practiceDone.
  * נדרשות תשובות ל-min(PRACTICE_SIZE, הזמינות) שאלות תרגול שונות — אחרת 400 בלי לסמן.
  */
-export async function gradePractice(userId, answers, { canRashi = false } = {}) {
+export async function gradePractice(userId, answers) {
   const list = (Array.isArray(answers) ? answers : []).filter((a) => a && isObjectId(String(a.id))).slice(0, 50);
   const ids = list.map((a) => oid(a.id));
   const items = await TzuratItem.find({ _id: { $in: ids }, practice: true }).lean();
@@ -308,7 +302,7 @@ export async function gradePractice(userId, answers, { canRashi = false } = {}) 
     const correct = !v.error && v.verdict === it.expected && (it.expected !== 'other' || normalizeText(v.text) === normalizeText(it.expectedText));
     results.push({ id: String(it._id), correct, expected: verdictToChoice(it, userId, it.expected), explain: it.explain || '' });
   }
-  const need = Math.min(PRACTICE_SIZE, await TzuratItem.countDocuments(practiceMatch(canRashi)));
+  const need = Math.min(PRACTICE_SIZE, await TzuratItem.countDocuments(PRACTICE_MATCH));
   if (new Set(results.map((r) => r.id)).size < need) return fail(400, MSG.practiceShort, 'practice_short');
   await User.updateOne({ _id: oid(userId) }, { $set: { tzuratPracticeDone: true } });
   return { ok: true, score: results.filter((r) => r.correct).length, total: results.length, results };

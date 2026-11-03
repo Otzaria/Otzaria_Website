@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import Dialog from '@/components/ui/Dialog'
+import FullPageDialog from '../../common/FullPageDialog'
 
 // תמונת-שורה מהאתר (נתיב מוגן של הניהול). רוחב מלא עד הגודל המקורי, בלי מתיחה.
 export function LineImage({ src, w, h, alt = 'תמונת השורה', className = '' }) {
@@ -17,41 +17,18 @@ export function LineImage({ src, w, h, alt = 'תמונת השורה', className 
   )
 }
 
-// "הצג בעמוד המלא": תמונת העמוד עם מסגרת סביב השורה (ctx.bbox בפיקסלים של תמונת-העמוד)
-export function ContextButton({ ctx }) {
+// "הצג בעמוד המלא" בשורת-סקירה (זיהוי ונתב): אותו חלון כמו אצל המתנדב — העמוד, והשורה
+// מסומנת בו (ctx.bbox בפיקסלים של תמונת-העמוד). בלי ctx — כלום.
+export function ContextButton({ ctx, alias, page }) {
   const [open, setOpen] = useState(false)
-  const [size, setSize] = useState(null)
   if (!ctx) return null
-  const [x0, y0, x1, y1] = ctx.bbox
   return (
     <>
-      <button type="button" className="text-xs text-info-700 hover:underline" onClick={() => setOpen(true)}>
+      <button type="button" className="inline-flex items-center gap-0.5 text-xs text-info-700 hover:underline" onClick={() => setOpen(true)}>
+        <span className="material-symbols-outlined text-sm">pageview</span>
         הצג בעמוד המלא
       </button>
-      {open && (
-        <Dialog title="השורה בעמוד" onClose={() => setOpen(false)} className="sm:max-w-3xl">
-          <div className="relative inline-block">
-            <img
-              src={ctx.img}
-              alt="העמוד המלא"
-              className="block h-auto max-w-full"
-              onLoad={(e) => setSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
-            />
-            {size && (
-              <div
-                aria-hidden
-                className="pointer-events-none absolute rounded-sm border-2 border-danger-500 bg-danger-500/10"
-                style={{
-                  left: `${(x0 / size.w) * 100}%`,
-                  top: `${(y0 / size.h) * 100}%`,
-                  width: `${((x1 - x0) / size.w) * 100}%`,
-                  height: `${((y1 - y0) / size.h) * 100}%`,
-                }}
-              />
-            )}
-          </div>
-        </Dialog>
-      )}
+      {open && <FullPageDialog ctx={ctx} alias={alias} page={page} onClose={() => setOpen(false)} />}
     </>
   )
 }

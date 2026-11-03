@@ -35,9 +35,6 @@ export const KIND_LABELS = Object.freeze({
 });
 export const kindLabel = (kind) => KIND_LABELS[kind] || 'שוליים';
 
-// רש"י ותוספות — רק למי שקורא כתב רש"י (או מנהל)
-export const RASHI_KINDS = Object.freeze(['r', 't']);
-export const isRashiKind = (kind) => RASHI_KINDS.includes(kind);
 
 // מערך מחרוזות נקי (מילים): רק מחרוזות לא ריקות, עד max
 export function words(v, max = 200) {

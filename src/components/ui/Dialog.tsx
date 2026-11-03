@@ -7,6 +7,7 @@ import TitleOrnament from './TitleOrnament'
 import { cx } from './cx'
 import { FOCUS_RING_INSET } from './focusRing'
 import { useDialogA11y } from './useDialogA11y'
+import { usePortalContainer } from './portalContainer'
 
 // היציאה (--motion-duration-fast) קצרה מעט מהכניסה (--motion-duration-standard) — כמו במתקין.
 // החלון מוסר ב-animationend של אנימציית היציאה, כך שהמשך נקבע רק בטוקן שב-CSS. זו רשת ביטחון
@@ -25,13 +26,14 @@ const EXIT_PANEL = 'animate-[enter-up_var(--motion-duration-fast)_var(--ease-exi
  *
  * נגישות (useDialogA11y): role="dialog" + aria-modal + aria-labelledby (ו-aria-describedby
  * לשורת המשנה), פוקוס נכנס לחלון ונלכד בו, Esc ולחיצה על הרקע סוגרים, גלילת הדף ננעלת,
- * והפוקוס חוזר למי שפתח. בפורטל ל-body — מעל כל הקשר ערמה (גם הכותרת הדביקה).
+ * והפוקוס חוזר למי שפתח. בפורטל ל-body — מעל כל הקשר ערמה (גם הכותרת הדביקה); בתוך עורך העמוד —
+ * לשורש העורך (portalContainer), כדי לקבל את ערכת התצוגה שלו.
  *
  * שימוש: ההורה מרנדר את הרכיב רק כשהחלון פתוח, ומסיר אותו ב-onClose. היציאה המונפשת
  * מתבצעת כאן: הסגירה מריצה את אנימציית היציאה ורק אחריה קוראת ל-onClose.
  * (ui/Modal הישן — isOpen + buttons — נשאר לצרכנים הקיימים בעורכים ובניהול; ראו design-system.md.)
  */
-export default function Dialog({ title, subtitle, onClose, children, footer, dismissible = true, className, bodyClassName }: {
+type DialogProps = {
   title: ReactNode
   subtitle?: ReactNode
   onClose: () => void
@@ -41,6 +43,27 @@ export default function Dialog({ title, subtitle, onClose, children, footer, dis
   dismissible?: boolean
   className?: string
   bodyClassName?: string
+}
+
+export default function Dialog(props: DialogProps) {
+  // החלון עצמו (וה-hooks שלו — useDialogA11y רץ פעם אחת ב-mount) נוצר רק כשיש לאן לצייר:
+  // בתוך עורך העמוד השורש עולה רינדור אחד אחרי הילדים (portalContainer).
+  const container = usePortalContainer()
+  if (!container) return null
+  return <DialogPanel {...props} container={container} />
+}
+
+function DialogPanel({ title, subtitle, onClose, children, footer, dismissible = true, className, bodyClassName, container }: {
+  title: ReactNode
+  subtitle?: ReactNode
+  onClose: () => void
+  children: ReactNode
+  footer?: ReactNode
+  /** false — רק פעולה מפורשת סוגרת (בלי Esc, בלי לחיצה על הרקע ובלי כפתור הסגירה) */
+  dismissible?: boolean
+  className?: string
+  bodyClassName?: string
+  container: HTMLElement
 }) {
   const titleId = useId()
   const subtitleId = useId()
@@ -90,8 +113,6 @@ export default function Dialog({ title, subtitle, onClose, children, footer, dis
   const dismiss = useCallback(() => { if (dismissible) requestClose() }, [dismissible, requestClose])
   useDialogA11y(panelRef, dismiss, dismissible)
 
-  if (typeof document === 'undefined') return null
-
   return createPortal(
     <div className="fixed inset-0 z-(--dialog-z) flex items-end justify-center sm:items-center sm:p-6">
       <div
@@ -127,7 +148,7 @@ export default function Dialog({ title, subtitle, onClose, children, footer, dis
         )}
       </div>
     </div>,
-    document.body
+    container
   )
 }
 

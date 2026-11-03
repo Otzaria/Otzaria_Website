@@ -14,7 +14,6 @@ export default function ExamplePageViewer() {
   const [data, setData] = useState(null)
   
   const [imageZoom, setImageZoom] = useState(100)
-  const [rotation, setRotation] = useState(0)
   const [imagePanelWidth, setImagePanelWidth] = useState(50)
   const [isResizing, setIsResizing] = useState(false)
   const splitContainerRef = useRef(null)
@@ -135,11 +134,6 @@ export default function ExamplePageViewer() {
                 imagePanelWidth={imagePanelWidth}
                 isResizing={isResizing}
                 handleResizeStart={handleResizeStart}
-                rotation={rotation}
-                setRotation={setRotation}
-                isSelectionMode={false} 
-                selectionRect={null}
-                isOcrProcessing={false}
             />
 
             <div 

@@ -37,6 +37,9 @@ const TrainingProofItemSchema = new mongoose.Schema(
     rejectedFor: { type: [mongoose.Schema.Types.ObjectId], default: [] },
 
     result: { type: mongoose.Schema.Types.Mixed, default: null },
+    // נעילה קצרת-חיים בזמן שינוי סוג זרם בספר. מונעת משמירה/אישור מקבילים
+    // לדרוס את הסנכרון הרב-מסמכי (MongoDB בייצור הוא standalone, ללא transactions).
+    streamChange: { type: mongoose.Schema.Types.Mixed, default: null },
     vol: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     submittedAt: { type: Date, default: null },
     reviewedAt: { type: Date, default: null },
@@ -45,6 +48,9 @@ const TrainingProofItemSchema = new mongoose.Schema(
     adminFixed: { type: Boolean, default: false },
     // התוצאה המקורית של המתנדב כשהמנהל תיקן — ל"שיעור ההתאמה"
     volResult: { type: mongoose.Schema.Types.Mixed, default: null },
+    // outbox: null עד שרשומת TrainingProofCorrection נשמרה. מאפשר להשלים כשל
+    // בלי להחזיר רשומות ישנות שנגזמו בכוונה ממגבלת היומן.
+    correctionLoggedAt: { type: Date, default: null },
   },
   { timestamps: false }
 );
@@ -57,5 +63,7 @@ TrainingProofItemSchema.index({ heldBy: 1, section: 1, status: 1 });
 // "ההגהות שלי" והסקירה בניהול
 TrainingProofItemSchema.index({ vol: 1, section: 1, status: 1 });
 TrainingProofItemSchema.index({ packageId: 1, part: 1 });
+// ספירת עמודי ספר בגלאי בלי לסרוק את כל עמודי החלק
+TrainingProofItemSchema.index({ section: 1, book: 1 });
 
 export default mongoose.models.TrainingProofItem || mongoose.model('TrainingProofItem', TrainingProofItemSchema);

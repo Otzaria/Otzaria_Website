@@ -73,6 +73,10 @@ test('publicItem: בלי book ובלי conf; תמונה דרך נתיב מוגן
   const r = publicItem({ _id: 'r1', section: 'router', status: 'submitted', result: { label: 'rashi' }, payload: routerItem(0) });
   assert.equal(r.words.length, 4);
   assert.deepEqual(r.result, { label: 'rashi' });
+  assert.equal(r.ctx, null);
+  // נתב עם עמוד מלא (§4.2) — אותה צורה ואותו נתיב מוגן כמו בזיהוי
+  const rc = publicItem({ _id: 'r2', section: 'router', status: 'held', ctxPath: '/y', payload: routerItem(0, { ctx: { img: 'img/c.jpg', bbox: [5, 6, 7, 8] } }) });
+  assert.deepEqual(rc.ctx, { img: '/api/training-proof/items/r2/ctx', bbox: [5, 6, 7, 8] });
 });
 
 test('accessOf: מנהל OCR, מגיה מאושר, ממתין, נדחה, בלי רשומה', () => {

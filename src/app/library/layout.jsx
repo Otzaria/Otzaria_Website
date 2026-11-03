@@ -1,4 +1,5 @@
 import Footer from '@/components/layout/Footer'
+import LibraryChrome from '@/components/layout/LibraryChrome'
 
 // בלי noindex כאן: תחת /library יש גם דפים ציבוריים (ראו STATIC_PATHS ב-sitemapEntries.js).
 export const metadata = {
@@ -12,13 +13,6 @@ export const metadata = {
  * ומכניס את הכותרת לתוך התוכן הראשי (ואז היא לא מזוהה כ-banner).
  */
 export default function LibraryLayout({ children }) {
-  return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <div className="flex-1">
-        {children}
-      </div>
-
-      <Footer />
-    </div>
-  )
+  // בעורך העמוד — בלי הפוטר (LibraryChrome)
+  return <LibraryChrome footer={<Footer />}>{children}</LibraryChrome>
 }

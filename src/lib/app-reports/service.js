@@ -5,7 +5,7 @@
 import crypto from 'node:crypto';
 import AppReport from '../../models/AppReport.js';
 import { validateAppReport, IMAGE_TYPES } from './validation.js';
-import { computeContentHash, computeSignatureHash } from './hashes.js';
+import { computeContentHash, computeResendHash, computeSignatureHash } from './hashes.js';
 import { buildIssueTitle, buildIssueBody, buildMergeComment, issueLabels } from './issue-text.js';
 import { createGithubClient, issueHtmlUrl } from './github.js';
 import { handleIssueStateChange } from './state-change.js';
@@ -19,6 +19,7 @@ import { PRODUCT_KEYS, getProduct, isProductKey, productFilter, productOf } from
 export { hasAppReportsAccess } from '../roles.js';
 
 const LEASE_MS = 2 * 60 * 1000;
+export const RESEND_WINDOW_MS = 60 * 60 * 1000;
 export const PENDING_BATCH = 20;
 export const STATE_BATCH = 30;
 export const INBOUND_BATCH = 20;
@@ -106,14 +107,22 @@ export async function ingestAppReport(raw, deps) {
   const value = v.value;
   const contentHash = computeContentHash(value);
   const signatureHash = computeSignatureHash(value.signature);
+  const resendHash = computeResendHash(contentHash, value);
 
   const doc = {
     reportId: value.reportId, schema: 1, product: value.product, type: value.type, trigger: value.trigger, title: value.title,
     description: value.description, stepsToReproduce: value.stepsToReproduce, reporterEmail: value.reporterEmail || null,
     appVersion: value.appVersion, platform: value.platform, osVersion: value.osVersion, arch: value.arch,
     signature: value.signature, sentryEventId: value.sentryEventId, clientCreatedAt: value.clientCreatedAt,
-    contentHash, signatureHash, issuePending: true,
+    contentHash, signatureHash, resendHash, issuePending: true,
   };
+
+  // אותו דיווח שנשלח שוב בלחיצה נוספת מקבל reportId חדש; מפנים לדיווח הקודם במקום תגובה נוספת
+  const resent = !(await AppReport.exists({ reportId: value.reportId })) && await AppReport.findOne({
+    ...productFilter(value.product), resendHash,
+    createdAt: { $gte: new Date((deps.now || new Date()).getTime() - RESEND_WINDOW_MS) },
+  }).sort({ createdAt: 1 }).lean();
+  if (resent) return { status: 200, body: replyFor(resent, { reportId: value.reportId, duplicate: true }) };
 
   const before = await AppReport.findOneAndUpdate(
     { reportId: value.reportId },
@@ -299,7 +308,7 @@ async function syncProduct(product, github, d, summary) {
 export function serializeReport(doc, role) {
   if (!doc) return null;
   // replyToken הוא הרשאה לכתוב לדיווח (מי שמחזיק בו יכול לשלוח "תשובה") — לא יוצא מהשרת
-  const { reporterEmail, issueLeaseUntil, contentHash, replyToken, __v, ...rest } = doc;
+  const { reporterEmail, issueLeaseUntil, contentHash, resendHash, replyToken, __v, ...rest } = doc;
   return {
     ...rest,
     product: productOf(doc),

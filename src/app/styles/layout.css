@@ -79,12 +79,14 @@
      overlay  — דיאלוג/גיליון וה-scrim שלו (מעל הכותרת)
      legacy-modal — ui/Modal הישן (z-[9999]); לא לשימוש חדש. מה שחייב לשבת ממש מתחתיו —
                     calc(var(--z-legacy-modal) - 1)
+     tooltip  — כרטיס-רמז (ui/Tooltip, position: fixed): מעל סרגלים דביקים, דיאלוגים וגיליונות
      skip     — "דלג לתוכן" (layout/SkipLink): מעל הכל, גם מעל מסך הטעינה (z-[10000]) והעורך במסך מלא
      שימוש: z-(--z-overlay). */
   --z-raised: 10;
   --z-below-header: 40;
   --z-sticky: 50;
   --z-overlay: 100;
+  --z-tooltip: 110;
   --z-legacy-modal: 9999;
   --z-skip: 10001;
 

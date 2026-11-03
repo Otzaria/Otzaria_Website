@@ -24,8 +24,7 @@
 ## הרשאות
 
 - **מתנדב:** משתמש מחובר ומאומת (`isVerified`) או מנהל המודול. בלי session ה-proxy של האתר מחזיר 307 לדף ההתחברות (כמו בשאר הנתיבים המוגנים; 401 רק אם הבקשה עקפה את ה-proxy, למשל בבדיקות); 403 בלי אימות.
-  רש"י ותוספות (`kind` r/t): רק למי שסימן `tzuratRashi: true` (שדה ב-User, מסומן מהמתנדב בדף הכניסה:
-  "אני קורא כתב רש"י") או מנהל. גמרא (g) וגיליון (mg ושאר) לכולם.
+  כל סוגי הטקסט (גמרא, רש"י, תוספות, גיליון) לכל המתנדבים.
 - **מנהל המודול:** `hasTzuratAdminAccess(role)` ב-`roles.js` = `admin` או `admin_books`. ב-proxy אין צורך
   בשינוי (admin_books מוגבל ברשימת חסימה, שאר תפקידי המשנה ברשימת היתר), חוץ מהעברת Bearer.
 - **אסימון API:** קידומת `tht_`, היקפים `read` / `import` / `review` (כמו `ppt_` בהגהת עמודים, מודל נפרד
@@ -62,7 +61,6 @@
   `sha256`, `status` (`uploading` / `queued` / `processing` / `done` / `failed`), `progress` {pages, items,
   images}, `summary`, `errors` [≤20], `by`, `startedAt`, `finishedAt`, `heartbeatAt`.
 - `TzuratToken` — כמו `PageProofToken`.
-- `User.tzuratRashi` (Bool) — נוסף ל-User.
 
 ## כללי עבודה
 
@@ -119,8 +117,7 @@
 ### מתנדב
 - `GET /api/tzurat-hadaf/overview` →
   `{books:[{slug, masechet, order, pages, pagesOpen, pagesDone, items, itemsOpen, itemsAgreed, itemsDisputed}],
-    me:{rashi, practiceDone, decisions, agreed, pages, pagesApproved, reports, points}, canAdmin}`
-- `POST /api/tzurat-hadaf/me` `{rashi?: bool}` → `{rashi, practiceDone}`
+    me:{practiceDone, decisions, agreed, pages, pagesApproved, reports, points}, canAdmin}`
 - `GET /api/tzurat-hadaf/practice` → `{items:[FastItem + {explain}]}` (עד 10, מהחבילות: `practice.jsonl`)
 - `POST /api/tzurat-hadaf/practice` `{answers:[{id, choice, text?}]}` (חובה תשובות ל-min(10, הזמינות); אחרת 400
   `{code:'practice_short'}` בלי לסמן) → `{score, total, results:[{id, correct,
@@ -131,10 +128,10 @@
   "לא ברור" (`unclear`) ו"משהו אחר" (`other` + `text`) תמיד אפשריים בשליחה, גם אם אינם ב-`options`.
   `box` — שברים בתוך תמונת החיתוך (`imageUrl`), למסגרת. `fullBox` — אותה תיבה כשברים מהסריקה המלאה (`fullImageUrl`), או null. `focus` — המילים שבשאלה (`print_only`/`otz_only`).
 - `GET /api/tzurat-hadaf/fast?exclude=id,id&kind=any|g|r|t&stats=1` → `{item: FastItem|null, stats:{open, mine,
-  mineAgreed}|null, needPractice: bool, needRashi: bool, rashi: bool, practiceDone: bool}`. אם `needPractice` — `item: null`. המונים מחושבים רק עם `stats=1` (בפתיחת המסלול); בבקשת השאלה הבאה `stats:null`.
+  mineAgreed}|null, needPractice: bool, practiceDone: bool}`. אם `needPractice` — `item: null`. המונים מחושבים רק עם `stats=1` (בפתיחת המסלול); בבקשת השאלה הבאה `stats:null`.
 - `POST /api/tzurat-hadaf/items/[id]/answer` `{choice, revision, text?, via: 'fast'|'page'}` → `{status:
   'recorded'|'agreed'|'disputed', points: 0|1}`. 409 `{code:'closed'|'answered'|'paused'|'stale'}`; 403 `{code:'practice'}` (לא סיים
-  תרגול, כשיש תרגול) או בלי קוד (רש"י בלי הדגל). `answers[].text`/`decision.text` נשמרים כפי שנכתבו; הנרמול רק להשוואה.
+  תרגול, כשיש תרגול). `answers[].text`/`decision.text` נשמרים כפי שנכתבו; הנרמול רק להשוואה.
 - `POST /api/tzurat-hadaf/items/[id]/flag` `{reason}` → `{ok:true, flagged}` — רך: נרשם לסימון של המשתמש (השאלה לא תוצע לו
   שוב), והפריט `flagged` רק אחרי שני משתמשים שונים. 409 `{code:'flagged'|'closed'|'paused'}`, 429 (10 לדקה).
 - `GET /api/tzurat-hadaf/items/[id]/image[?full=1]` → PNG/WebP.

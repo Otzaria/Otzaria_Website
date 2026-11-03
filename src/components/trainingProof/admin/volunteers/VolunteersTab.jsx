@@ -5,17 +5,28 @@ import { useAsk } from '../useAsk'
 import { getJson, sendJson, fmt, fmtDate } from '../api'
 import { BTN, Card, Empty, Tag } from '../bits'
 import { matchTone } from '../review/VolunteerPicker'
+import { SECTIONS, SECTION_LABELS } from '@/lib/trainingProof/vocab'
+import CorrectionsDialog from './CorrectionsDialog'
 
 // לשונית "מתנדבים" (docs/75 ה-1, ה-17): בקשות ממתינות (אישור/דחייה), מגיהים עם גישה
 // (מונים, שיעור-התאמה, ביטול גישה שמחזיר למאגר את מה שתפסו), והוספה ישירה של משתמש רשום.
 
 const STATUS = { denied: 'נדחתה', revoked: 'הגישה בוטלה' }
 
+// "תיקנת": כמה סימונים של המתנדב המנהל אישר אחרי תיקון, לפי חלק (רק חלקים שיש בהם)
+export function correctedText(stats) {
+  if (!stats?.corrected) return '0'
+  return SECTIONS.filter((s) => stats.bySection?.[s]?.corrected)
+    .map((s) => `${SECTION_LABELS[s]} ${fmt(stats.bySection[s].corrected)}`)
+    .join(' · ')
+}
+
 export default function VolunteersTab({ onChanged }) {
   const { showAlert, ask } = useAsk()
   const [data, setData] = useState(null)
   const [busy, setBusy] = useState(false)
   const [q, setQ] = useState('')
+  const [show, setShow] = useState(null) // "הצג תיקונים" — המתנדב שהיומן שלו פתוח
   const load = useCallback(async () => {
     try {
       setData(await getJson('/volunteers'))
@@ -86,7 +97,10 @@ export default function VolunteersTab({ onChanged }) {
       </Card>
 
       <Card title="מגיהים עם גישה" icon="group">
-        <p className="text-sm text-on-surface/60">"התאמה" = כמה מההגשות שלו אושרו בלי שינוי (מתוך כל מה שנסקר — אושר או נדחה). עוזר להחליט על מי לסמוך באישור גורף.</p>
+        <p className="text-sm text-on-surface/60">
+          "התאמה" = כמה מההגשות שלו אושרו בלי שינוי (מתוך כל מה שנסקר — אושר או נדחה). עוזר להחליט על מי לסמוך באישור גורף. "תיקנת" =
+          כמה מהסימונים שלו אישרת אחרי "תקן ואשר", לפי חלק — נשמר גם אחרי ההורדה לתחנה.
+        </p>
         {!data.approved.length ? (
           <Empty>אין עדיין מגיהים</Empty>
         ) : (
@@ -100,6 +114,7 @@ export default function VolunteersTab({ onChanged }) {
                   <th className="p-2">עמודי גלאי</th>
                   <th className="p-2">ממתינות</th>
                   <th className="p-2">התאמה</th>
+                  <th className="p-2">תיקנת</th>
                   <th className="p-2">פעיל לאחרונה</th>
                   <th className="p-2" />
                 </tr>
@@ -117,6 +132,16 @@ export default function VolunteersTab({ onChanged }) {
                     <td className="p-2 tabular-nums">{fmt(v.stats?.pending)}</td>
                     <td className="p-2">
                       <Tag tone={matchTone(v.stats?.match)}>{v.stats?.match == null ? '—' : `${v.stats.match}%`}</Tag>
+                    </td>
+                    <td className="p-2" data-testid={`corrected-${v.userId}`}>
+                      <div className="flex flex-col items-start gap-1">
+                        <span className="text-xs">{correctedText(v.stats)}</span>
+                        {v.stats?.corrected > 0 && (
+                          <button className="text-xs text-info-700 hover:underline" onClick={() => setShow(v)}>
+                            הצג תיקונים
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td className="p-2 text-xs">{fmtDate(v.last)}</td>
                     <td className="p-2">
@@ -146,6 +171,8 @@ export default function VolunteersTab({ onChanged }) {
           </button>
         </form>
       </Card>
+
+      {show && <CorrectionsDialog vol={show} onClose={() => setShow(null)} />}
 
       {data.others.length > 0 && (
         <Card title="בקשות שנדחו וגישות שבוטלו" icon="block">

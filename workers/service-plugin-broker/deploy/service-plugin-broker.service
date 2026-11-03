@@ -23,6 +23,7 @@ Environment=HOME=/var/lib/otzaria-broker/home
 # בפרודקשן המתווך מסרב לעלות בלי SANDBOX_WRAPPER (ב-service-broker.env; ראו README.he.md).
 Environment=NODE_ENV=production
 ExecStart=/usr/bin/node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/main.js
+# קוד 75: הקוד בדיסק התעדכן בפריסה והמתווך סיים את משימתו — systemd מעלה אותו מחדש עם הקוד החדש.
 Restart=on-failure
 RestartSec=30
 # הגדרות חסרות (קוד 78) — אין טעם לנסות שוב בלולאה.

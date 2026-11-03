@@ -26,6 +26,9 @@ import TrainingProofVolunteer from '@/models/TrainingProofVolunteer'
 import TrainingProofBook from '@/models/TrainingProofBook'
 import TrainingProofExportLog from '@/models/TrainingProofExportLog'
 import TrainingProofExportLock from '@/models/TrainingProofExportLock'
+import TrainingProofCorrection from '@/models/TrainingProofCorrection'
+import TrainingProofArchive from '@/models/TrainingProofArchive'
+import TrainingProofPackagePurge from '@/models/TrainingProofPackagePurge'
 import PageProofBook from '@/models/PageProofBook'
 import { startMongo } from '@/lib/corrections/testing/mongo.js'
 import { sampleEntries, ocrItem, routerItem } from '@/lib/trainingProof/testFixtures'
@@ -45,12 +48,15 @@ import { POST as bulkPOST } from './review/bulk/route'
 import { GET as framesGET } from './review/frames/route'
 import { GET as summaryGET } from './summary/route'
 import { GET as imageGET } from './items/[id]/image/route'
+import { GET as ctxGET } from './items/[id]/ctx/route'
 import { GET as exportGET } from './export/route'
 import { POST as exportPOST } from './export/[section]/route'
 import { purges, purgeExported } from './_lib/exporter'
 import { GET as volsGET, POST as volsPOST } from './volunteers/route'
 import { POST as volPOST } from './volunteers/[userId]/route'
 import { GET as guideGET, PUT as guidePUT } from './guide/route'
+import { GET as correctionsGET } from './volunteers/[userId]/corrections/route'
+import { trimCorrections } from '@/lib/trainingProof/corrections'
 import { GET as legacyGET, POST as legacyPOST } from './legacy/route'
 
 vi.setConfig({ testTimeout: 60000 })
@@ -311,6 +317,29 @@ describe('סקירה — נתב הכתב', () => {
     expect(b.count).toBe(1)
     expect(await TrainingProofItem.countDocuments({ section: 'router', status: 'approved' })).toBe(2)
   })
+
+  it('תיבת-מילה פגומה (x0 == x1) — הקובץ נקלט עם אזהרה, השורה בלי מילים ומתחלקת באתר; עמוד מלא לנתב', async () => {
+    const ctx = { img: 'img/ctx-b-a7f3310c6e-p3.jpg', bbox: [100, 400, 640, 454] }
+    const bad = routerItem(1, { words: [{ k: 0, box: [450, 0, 540, 54] }, { k: 1, box: [335, 15, 335, 50] }], ctx })
+    const s = await upload('router', sampleEntries('router', { items: [routerItem(0, { ctx }), bad, routerItem(2)] }))
+    expect(s.success).toBe(true)
+    expect(s.warnings).toEqual(['שורה אחת: תיבות-המילים לא תקינות — יחולקו לפי הדיו (שורה 2 בקובץ)'])
+    expect((await ingest(s.token)).inserted).toBe(3)
+    const doc = await TrainingProofItem.findOne({ uid: bad.uid }).lean()
+    expect(doc.payload.words).toBeUndefined()
+    expect(doc.ctxPath).toMatch(/ctx-b-a7f3310c6e-p3\.jpg$/)
+    expect(fs.existsSync(path.join(TMP, doc.ctxPath.replace('/uploads/', '')))).toBe(true)
+
+    // סקירה: לנתב יש עמוד (אותו נתיב מוגן של הניהול)
+    const res = await ctxGET(new Request(`${URL0}/items/${doc._id}/ctx`), P({ id: String(doc._id) }))
+    expect(res.status).toBe(200)
+    // המתנדב מסמן "מעורבת" עם חלוקה משלו — words_src: "site"
+    await takeRound(String(vol._id), 'router')
+    const words = [{ k: 0, box: [300, 0, 540, 54], label: 'square' }, { k: 1, box: [0, 0, 290, 54], label: 'rashi' }]
+    const m = await markItem(String(vol._id), doc._id, { label: 'mixed', words })
+    expect(m.error).toBeUndefined()
+    expect((await TrainingProofItem.findById(doc._id).lean()).result.words_src).toBe('site')
+  })
 })
 
 describe('סקירה — גלאי האזורים', () => {
@@ -377,8 +406,19 @@ describe('הורדה לתחנה', () => {
     const delta = new Map([[String(vol._id), { ocr: { approved: 2, unchanged: 1, rejected: 0 } }]])
     await applyArchive(delta, 'tpx-20261028-aabbcc')
     await applyArchive(delta, 'tpx-20261028-aabbcc')
-    const saved = await TrainingProofVolunteer.findOne({ userId: vol._id }).lean()
-    expect(saved.stats.archived.ocr).toMatchObject({ approved: 2, unchanged: 1 })
+    const saved = await TrainingProofArchive.findOne({ userId: vol._id }).lean()
+    expect(saved.stats.ocr).toMatchObject({ approved: 2, unchanged: 1 })
+    expect((await volunteerStats(String(vol._id))).ocr).toMatchObject({ approved: 2, unchanged: 1 })
+  })
+
+  it('מונים שנשמרו קודם ברשומת-המגיה נספרים, והורדה שכבר נספרה שם לא נספרת שוב', async () => {
+    await TrainingProofVolunteer.updateOne(
+      { userId: vol._id },
+      { $set: { 'stats.archived.ocr': { approved: 3, unchanged: 3, rejected: 1 } }, $addToSet: { archivedExports: 'tpx-20261028-aabbcc' } }
+    )
+    await applyArchive(new Map([[String(vol._id), { ocr: { approved: 3, unchanged: 3, rejected: 1 } }]]), 'tpx-20261028-aabbcc')
+    await applyArchive(new Map([[String(vol._id), { ocr: { approved: 1, unchanged: 0, rejected: 0 } }]]), 'tpx-20261029-ddeeff')
+    expect((await volunteerStats(String(vol._id))).ocr).toMatchObject({ approved: 4, unchanged: 3, rejected: 1, saved: 5 })
   })
 
   it('נעילת ייצוא במסד חוסמת גם מופע שרת אחר', async () => {
@@ -444,6 +484,52 @@ describe('הורדה לתחנה', () => {
     const sum1 = await J(await exportGET())
     expect(sum1.sections.ocr.count).toBe(0)
     expect(sum1.log[0]).toMatchObject({ exportId, count: 2, by: 'מנהלת' })
+  })
+
+  it('מנהל OCR שהגיה בעצמו (בלי רשומת-מגיה) — המונים שלו שורדים את ההורדה', async () => {
+    const s = await upload('ocr', sampleEntries('ocr', { n: 3 }))
+    await ingest(s.token)
+    const r = await takeRound(String(admin._id), 'ocr')
+    for (const it of r.items.slice(0, 2)) expect((await markItem(String(admin._id), it._id, { action: 'ok' })).ok).toBe(true)
+    await decidePOST(jreq('POST', { section: 'ocr', ids: r.items.slice(0, 2).map((d) => String(d._id)), decision: 'approve' }))
+    expect((await volunteerStats(String(admin._id))).ocr).toMatchObject({ approved: 2, saved: 2 })
+    const res = await exportPOST(jreq('POST'), P({ section: 'ocr' }))
+    await res.arrayBuffer()
+    await purges.get('ocr')
+    expect(await TrainingProofItem.countDocuments({ status: 'approved' })).toBe(0)
+    expect((await volunteerStats(String(admin._id))).ocr).toMatchObject({ approved: 2, unchanged: 2, saved: 2 })
+    // לא נוצרה לו בקשת-גישה ולא שורה של מגיה רגיל
+    const vols = await J(await volsGET())
+    expect(vols.requests).toHaveLength(0)
+  })
+
+  it('מחיקת חבילה: דחיות של מתנדב בשורות שנמחקו נשמרות במונים', async () => {
+    const s = await upload('ocr', sampleEntries('ocr', { n: 2 }))
+    await ingest(s.token)
+    const marked = await volunteerMarks('ocr', [{ action: 'ok' }])
+    await decidePOST(jreq('POST', { section: 'ocr', ids: [String(marked[0]._id)], decision: 'reject' }))
+    expect((await volunteerStats(String(vol._id))).ocr).toMatchObject({ rejected: 1, saved: 1 })
+    await packageDELETE(jreq('DELETE'), P({ packageId: 'tp-20261027-1f3a9c2e', part: '1' }))
+    expect(await TrainingProofItem.countDocuments()).toBe(0)
+    expect((await volunteerStats(String(vol._id))).ocr).toMatchObject({ rejected: 1, saved: 1 })
+  })
+
+  it('מחיקת חבילה: כשל בארכוב אחרי המחיקה מושלם ב-retry בלי לאבד או להכפיל מונים', async () => {
+    const s = await upload('ocr', sampleEntries('ocr', { n: 2 }))
+    await ingest(s.token)
+    const marked = await volunteerMarks('ocr', [{ action: 'ok' }])
+    await decidePOST(jreq('POST', { section: 'ocr', ids: [String(marked[0]._id)], decision: 'reject' }))
+    const bulk = vi.spyOn(TrainingProofArchive, 'bulkWrite')
+    bulk.mockRejectedValueOnce(new Error('archive unavailable'))
+    const key = P({ packageId: 'tp-20261027-1f3a9c2e', part: '1' })
+    expect((await packageDELETE(jreq('DELETE'), key)).status).toBe(500)
+    expect(await TrainingProofItem.countDocuments()).toBe(0)
+    expect((await TrainingProofPackagePurge.findOne({ packageId: 'tp-20261027-1f3a9c2e', part: 1 }).lean()).status).toBe('purging')
+    bulk.mockRestore()
+    expect((await packageDELETE(jreq('DELETE'), key)).status).toBe(200)
+    expect((await volunteerStats(String(vol._id))).ocr).toMatchObject({ rejected: 1, saved: 1 })
+    expect((await packageDELETE(jreq('DELETE'), key)).status).toBe(200)
+    expect((await volunteerStats(String(vol._id))).ocr).toMatchObject({ rejected: 1, saved: 1 })
   })
 
   it('כשהכול ירד — החבילה ותיקיית התמונות נמחקות; דפדפן שניתק באמצע — שום דבר לא נמחק', async () => {
@@ -523,5 +609,129 @@ describe('הוראות ההגהה והדף הישן', () => {
     expect(d).toMatchObject({ deleted: { books: 1 }, files: 1 })
     expect(fs.existsSync(path.join(TMP, 'page-proof'))).toBe(false)
     expect(fs.existsSync(path.join(TMP, 'books', 's', 'page.1.jpg'))).toBe(true)
+  })
+})
+
+describe('התיקונים של המנהל, לפי מתנדב', () => {
+  const corrections = async (sec = '') =>
+    J(await correctionsGET(new Request(`${URL0}/volunteers/${vol._id}/corrections${sec ? `?section=${sec}` : ''}`), P({ userId: String(vol._id) })))
+  const volRow = async () => (await J(await volsGET())).approved.find((v) => v.userId === String(vol._id))
+
+  it('"לא קריא" / "לנתב" מהמנהל במקום מה שהמתנדב סימן: מאושר, נרשם כתיקון, והמתנדב נשמר', async () => {
+    const s = await upload('ocr', sampleEntries('ocr', { n: 3 }))
+    await ingest(s.token)
+    const marked = await volunteerMarks('ocr', [{ action: 'bad' }, { action: 'fixed', text: 'נוסח המתנדב' }, { action: 'router' }])
+    const [a, b, c] = marked.map((x) => String(x._id))
+    expect((await J(await fixPOST(jreq('POST', { id: a, mark: { action: 'ok' } })))).fixed).toBe(true)
+    expect((await J(await fixPOST(jreq('POST', { id: b, mark: { action: 'router' } })))).fixed).toBe(true)
+    expect((await J(await fixPOST(jreq('POST', { id: c, mark: { action: 'router' } })))).fixed).toBe(false)
+    const [ia, ib, ic] = await Promise.all([a, b, c].map((id) => TrainingProofItem.findById(id).lean()))
+    expect(ia).toMatchObject({ status: 'approved', adminFixed: true, result: { action: 'ok' }, volResult: { action: 'bad' } })
+    expect(ib).toMatchObject({ status: 'approved', adminFixed: true, result: { action: 'router' }, volResult: { action: 'fixed', text: 'נוסח המתנדב' } })
+    expect(ic.adminFixed).toBeFalsy()
+  })
+
+  it('"תקן ואשר" נרשם למתנדב; תיקון זהה — לא; "החזר לממתינות" מוחק; המונה והיומן שורדים את ההורדה; קובץ-ההחזרה לא משתנה', async () => {
+    const s = await upload('ocr', sampleEntries('ocr', { n: 4 }))
+    await ingest(s.token)
+    const marked = await volunteerMarks('ocr', [{ action: 'ok' }, { action: 'fixed', text: 'נוסח המתנדב' }, { action: 'ok' }, { action: 'ok' }])
+    const [a, b, c, d] = marked.map((x) => String(x._id))
+    // a: המנהל תיקן טקסט · b: "תיקן" לאותו נוסח = אישור רגיל · c: תיקון שבוטל אחר-כך · d: אישור רגיל
+    expect((await J(await fixPOST(jreq('POST', { id: a, mark: { action: 'fixed', text: 'נוסח המנהל' } })))).fixed).toBe(true)
+    expect((await J(await fixPOST(jreq('POST', { id: b, mark: { action: 'fixed', text: 'נוסח המתנדב' } })))).fixed).toBe(false)
+    expect((await J(await fixPOST(jreq('POST', { id: c, mark: { action: 'bad' } })))).fixed).toBe(true)
+    await decidePOST(jreq('POST', { section: 'ocr', ids: [d], decision: 'approve' }))
+    expect((await corrections()).items).toHaveLength(2)
+    await decidePOST(jreq('POST', { section: 'ocr', ids: [c], decision: 'unapprove' }))
+
+    let log = await corrections()
+    expect(log.items).toHaveLength(1)
+    const it0 = await TrainingProofItem.findById(a).lean()
+    expect(log.items[0]).toMatchObject({
+      section: 'ocr',
+      alias: it0.payload.alias,
+      before: { action: 'ok', text: it0.payload.text },
+      after: { action: 'fixed', text: 'נוסח המנהל' },
+    })
+    expect(JSON.stringify(log.items[0])).not.toMatch(/img|png|jpg|webp/)
+    let row = await volRow()
+    expect(row.stats.corrected).toBe(1)
+    expect(row.stats.bySection.ocr).toMatchObject({ approved: 3, unchanged: 2, corrected: 1 })
+
+    // ההורדה לתחנה: הפריטים נמחקים — המונה והיומן נשארים; קובץ-ההחזרה כמו קודם
+    const res = await exportPOST(jreq('POST'), P({ section: 'ocr' }))
+    const files = unzipSync(new Uint8Array(await res.arrayBuffer()))
+    await purges.get('ocr')
+    expect(Object.keys(files).sort()).toEqual(['manifest.json', 'results.jsonl'])
+    const lines = strFromU8(files['results.jsonl']).trim().split('\n').map((l) => JSON.parse(l))
+    expect(lines.map((l) => checkReturnLine('ocr', l))).toEqual([null, null, null])
+    expect(lines.find((l) => l.admin_fixed)).toMatchObject({ action: 'fixed', text: 'נוסח המנהל' })
+    expect(await TrainingProofItem.countDocuments({ _id: a })).toBe(0)
+    log = await corrections()
+    expect(log.items).toHaveLength(1)
+    row = await volRow()
+    expect(row.stats.bySection.ocr).toMatchObject({ approved: 3, unchanged: 2, corrected: 1 })
+    expect((await corrections('router')).items).toEqual([])
+  })
+
+  it('נתב: הגרסה של המתנדב ← של המנהל; החדשים קודם; רק האחרונים נשמרים', async () => {
+    const s = await upload('router', sampleEntries('router', { items: Array.from({ length: 3 }, (_, i) => routerItem(i)) }))
+    await ingest(s.token)
+    const marked = await volunteerMarks('router', [{ label: 'square' }, { label: 'rashi' }, { label: 'latin' }])
+    await fixPOST(jreq('POST', { id: String(marked[0]._id), mark: { label: 'rashi' } }))
+    await fixPOST(jreq('POST', { id: String(marked[1]._id), mark: { bad: true } }))
+    const log = await corrections()
+    expect(log.items.map((x) => [x.before, x.after])).toEqual([
+      [{ label: 'rashi', words: null }, { bad: true }],
+      [{ label: 'square', words: null }, { label: 'rashi', words: null }],
+    ])
+    expect((await volRow()).stats.bySection.router.corrected).toBe(2)
+    expect(await trimCorrections(String(vol._id), 1)).toBe(1)
+    expect((await corrections()).items.map((x) => x.after)).toEqual([{ bad: true }])
+    expect((await J(await correctionsGET(new Request('http://x'), P({ userId: 'nope' })))).status).toBe(400)
+    as(vol)
+    expect((await J(await correctionsGET(new Request('http://x'), P({ userId: String(vol._id) })))).status).toBe(403)
+  })
+
+  it('כשל זמני בכתיבת היומן אינו הופך אישור מוצלח ל-500, והקריאה הבאה משלימה אותו בלי כפילות', async () => {
+    const s = await upload('ocr', sampleEntries('ocr', { n: 1 }))
+    await ingest(s.token)
+    const [marked] = await volunteerMarks('ocr', [{ action: 'ok' }])
+    const write = vi.spyOn(TrainingProofCorrection, 'findOneAndUpdate').mockRejectedValueOnce(new Error('temporary log failure'))
+    const res = await J(await fixPOST(jreq('POST', { id: String(marked._id), mark: { action: 'fixed', text: 'תיקון' } })))
+    expect(res.status).toBe(200)
+    expect(res.fixed).toBe(true)
+    expect((await TrainingProofItem.findById(marked._id).lean()).status).toBe('approved')
+    expect(await TrainingProofCorrection.countDocuments()).toBe(0)
+    write.mockRestore()
+
+    expect((await corrections()).items).toHaveLength(1)
+    expect((await corrections()).items).toHaveLength(1)
+    expect(await TrainingProofCorrection.countDocuments({ item: marked._id })).toBe(1)
+  })
+
+  it('החזר לממתינות מוחק יומן רק לפריט שהעדכון המותנה שלו הצליח', async () => {
+    const s = await upload('ocr', sampleEntries('ocr', { n: 2 }))
+    await ingest(s.token)
+    const marked = await volunteerMarks('ocr', [{ action: 'ok' }, { action: 'ok' }])
+    for (const d of marked) await fixPOST(jreq('POST', { id: String(d._id), mark: { action: 'bad' } }))
+    expect((await corrections()).items).toHaveLength(2)
+
+    const original = TrainingProofItem.findOneAndUpdate.bind(TrainingProofItem)
+    const raced = String(marked[1]._id)
+    const update = vi.spyOn(TrainingProofItem, 'findOneAndUpdate').mockImplementation((filter, ...args) => {
+      if (filter.status === 'approved' && String(filter._id) === raced) return Promise.resolve(null)
+      return original(filter, ...args)
+    })
+    const res = await J(await decidePOST(jreq('POST', {
+      section: 'ocr', ids: marked.map((d) => String(d._id)), decision: 'unapprove',
+    })))
+    update.mockRestore()
+
+    expect(res.count).toBe(1)
+    expect((await TrainingProofItem.findById(marked[0]._id).lean()).status).toBe('submitted')
+    expect((await TrainingProofItem.findById(marked[1]._id).lean()).status).toBe('approved')
+    expect((await corrections()).items).toHaveLength(1)
+    expect(await TrainingProofCorrection.exists({ item: marked[1]._id })).toBeTruthy()
   })
 })

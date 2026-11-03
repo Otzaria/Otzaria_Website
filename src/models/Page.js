@@ -11,6 +11,11 @@ const PageSchema = new mongoose.Schema({
   leftColumn: { type: String, default: '' },
   rightColumnName: { type: String, default: 'חלק 1' },
   leftColumnName: { type: String, default: 'חלק 2' },
+
+  // סדר לוגי של שמירות העורך. הלקוח מקצה revision כשהשינוי נוצר (לא
+  // כשהבקשה מסתיימת). כך keepalive/sendBeacon חדש לא נדרס בידי בקשה ישנה
+  // שסיימה מאוחר יותר. השדה אינו required כדי לשמור תאימות ללקוחות ישנים.
+  contentSaveRevision: { type: Number, min: 1 },
   
   // סטטוס עריכה
   status: { 

@@ -39,7 +39,6 @@ export async function apiJson(url, { method = 'GET', body, keepalive = false, si
 
 export const api = {
   overview: () => apiJson(`${API}/overview`),
-  setMe: (patch) => apiJson(`${API}/me`, { method: 'POST', body: patch }),
   practice: () => apiJson(`${API}/practice`),
   submitPractice: (answers) => apiJson(`${API}/practice`, { method: 'POST', body: { answers } }),
   fast: ({ exclude = [], kind = 'any', stats = false } = {}) => {

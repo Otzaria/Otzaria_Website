@@ -25,7 +25,7 @@ const item = (extra = {}) => ({
   ...extra,
 })
 
-const handlers = () => ({ onToggle: vi.fn(), onApprove: vi.fn(), onReject: vi.fn(), onFix: vi.fn(), onUnapprove: vi.fn() })
+const handlers = () => ({ onToggle: vi.fn(), onApprove: vi.fn(), onReject: vi.fn(), onFix: vi.fn(), onMark: vi.fn(), onUnapprove: vi.fn() })
 
 describe('OcrRow', () => {
   it('ההבדלים ברמת מילה: מה שנמחק ומה שנוסף מסומנים', () => {
@@ -72,5 +72,18 @@ describe('OcrRow', () => {
     fireEvent.click(screen.getByRole('button', { name: /החזר לממתינות/ }))
     expect(h.onUnapprove).toHaveBeenCalled()
     expect(screen.getByText('תיקנת')).toBeInTheDocument()
+  })
+
+  it('"לא קריא" / "לנתב": המנהל קובע במקום המתנדב; מה שהמתנדב כבר סימן — אין כפתור', () => {
+    const h = handlers()
+    const { rerender } = render(<OcrRow item={item()} selected={false} {...h} />)
+    fireEvent.click(screen.getByRole('button', { name: /לא קריא/ }))
+    fireEvent.click(screen.getByRole('button', { name: /לנתב/ }))
+    expect(h.onMark.mock.calls.map((c) => c[1])).toEqual(['bad', 'router'])
+    rerender(<OcrRow item={item({ result: { action: 'bad' } })} selected={false} {...h} />)
+    expect(screen.queryByRole('button', { name: /לא קריא/ })).toBeNull()
+    expect(screen.getByRole('button', { name: /לנתב/ })).toBeInTheDocument()
+    rerender(<OcrRow item={item({ status: 'approved' })} selected={false} {...h} />)
+    expect(screen.queryByRole('button', { name: /לנתב/ })).toBeNull()
   })
 })

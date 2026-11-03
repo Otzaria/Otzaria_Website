@@ -1,13 +1,19 @@
 /* ============================================================
  * tooltip.css — כרטיס-רמז (ui/Tooltip)
  * ------------------------------------------------------------
- * כרטיס קטן ובהיר מתחת לרכיב — בשפת הכרטיסים של האתר (משטח surface, מסגרת outline-variant
- * דקה, צל חם ורך), לא בועת מערכת כהה. ממורכז מתחת לרכיב והחוד במרכזו; ה-JS (ui/Tooltip) רק
- * מזיז את הכרטיס פנימה (--tooltip-shift) אם הוא חורג מקצה המסך — החוד נשאר מול הרכיב.
+ * כרטיס קטן ובהיר ליד הרכיב — בשפת הכרטיסים של האתר (משטח surface, מסגרת outline-variant
+ * דקה, צל חם ורך), לא בועת מערכת כהה. ממורכז מתחת לרכיב והחוד במרכזו; כשאין מקום מתחת
+ * הוא מתהפך למעלה (data-tip-side="top").
  *
- * מופיע בריחוף (בהשהיה --tooltip-delay, כדי שמעבר מקרי לא יקפיץ אותו) ובפוקוס מקלדת; דהייה
- * והחלקה של 4px (reduced-motion — דהייה בלבד). ניתן לריחוף (גשר שקוף בין הרכיב לכרטיס), ונסגר
- * ב-Esc (data-tip-dismissed) — WCAG 1.4.13. במגע אין ריחוף: מידע חיוני לא יכול לחיות רק ברמז.
+ * position: fixed + z-index --z-tooltip: מכל עם overflow (פאנל, שורת כלים) לא חותך אותו, וסרגל
+ * דביק לא מסתיר אותו. הקואורדינטות (--tooltip-x/y/w) והזזה פנימה מקצה המסך (--tooltip-shift)
+ * מחושבות ב-JS (ui/Tooltip, place()) בריחוף/פוקוס.
+ *
+ * מופיע בריחוף (בהשהיה --tooltip-delay, כדי שמעבר מקרי לא יקפיץ אותו; מעבר לרכיב שכן מיד אחרי
+ * שרמז נסגר — בלי השהיה, data-tip-instant) ובפוקוס מקלדת; דהייה והחלקה של 4px (reduced-motion
+ * — דהייה בלבד). ניתן לריחוף (גשר שקוף בין הרכיב לכרטיס), ונסגר ב-Esc (data-tip-dismissed) —
+ * WCAG 1.4.13. במגע אין ריחוף: מידע חיוני לא יכול לחיות רק ברמז.
+ * .tooltip-compact — רמז קטן לשורות הכלים של העורך (ריפוד 4×8, label-md).
  * הצבעים, הרדיוס, הצל, הרוחב וההשהיה — מ-component-tokens.css (--tooltip-*).
  * ============================================================ */
 
@@ -17,16 +23,22 @@
     --tooltip-slide: 0.25rem;
     --tooltip-caret: 0.4375rem;
     --tooltip-shift: 0px;
+    --tooltip-wait: var(--tooltip-delay);
     position: relative;
     display: inline-flex;
   }
 
-  /* ברוחב הרכיב (inset-inline: 0) — כך מרכזו הוא מרכז הרכיב; גובהו הוא הגשר השקוף */
+  .tooltip-host[data-tip-instant] {
+    --tooltip-wait: 0ms;
+  }
+
+  /* ברוחב הרכיב ובמיקומו (fixed, מ-place()) — כך מרכזו הוא מרכז הרכיב; גובהו הוא הגשר השקוף */
   .tooltip {
-    position: absolute;
-    top: 100%;
-    inset-inline: 0;
-    z-index: var(--z-raised);
+    position: fixed;
+    top: var(--tooltip-y, 0px);
+    left: var(--tooltip-x, 0px);
+    width: var(--tooltip-w, 0px);
+    z-index: var(--z-tooltip);
     height: var(--tooltip-bridge);
     opacity: 0;
     visibility: hidden;
@@ -56,6 +68,36 @@
     font-size: var(--text-sm);
     line-height: var(--leading-snug);
     white-space: normal;
+  }
+
+  /* מעל הרכיב: הכרטיס בתחתית הגשר, החוד בתחתית הכרטיס, וההחלקה מלמטה */
+  .tooltip-host[data-tip-side='top'] .tooltip {
+    translate: 0 var(--tooltip-slide);
+  }
+
+  .tooltip-host[data-tip-side='top'] .tooltip-bubble {
+    top: auto;
+    bottom: var(--tooltip-bridge);
+  }
+
+  .tooltip-host[data-tip-side='top'] .tooltip-bubble::before {
+    top: auto;
+    bottom: calc(var(--tooltip-caret) / -2);
+    box-shadow: 1px 1px 0 0 var(--color-outline-variant);
+  }
+
+  /* רמז קומפקטי (שורות הכלים של העורך) */
+  .tooltip-compact {
+    --tooltip-bridge: calc(var(--spacing) * 1.5);
+    --tooltip-caret: 0.375rem;
+  }
+
+  .tooltip-compact .tooltip-bubble {
+    gap: calc(var(--spacing) * 1.5);
+    padding: 0.25rem 0.5rem;
+    font-size: var(--text-label-md);
+    line-height: var(--text-label-md--line-height);
+    font-weight: var(--text-label-md--font-weight);
   }
 
   /* החוד: ריבוע מסובב עם אותה מסגרת, ממורכז מול הרכיב, מעל הכרטיס (חצי ממנו נבלע בו) */
@@ -89,9 +131,9 @@
       translate: 0 0;
       pointer-events: auto;
       transition:
-        opacity var(--motion-duration-standard) var(--ease-enter) var(--tooltip-delay),
-        translate var(--motion-duration-standard) var(--ease-enter) var(--tooltip-delay),
-        visibility 0s linear var(--tooltip-delay);
+        opacity var(--motion-duration-standard) var(--ease-enter) var(--tooltip-wait),
+        translate var(--motion-duration-standard) var(--ease-enter) var(--tooltip-wait),
+        visibility 0s linear var(--tooltip-wait);
     }
   }
 

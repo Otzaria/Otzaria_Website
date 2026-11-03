@@ -156,4 +156,90 @@ describe('RouterScreen', () => {
       })
     )
   })
+
+  it('"קח 30 שורות נוספות": הסבב החדש — לראש הרשימה בגלילה חלקה, השורה הראשונה בפוקוס והמקשים עובדים', async () => {
+    window.matchMedia = vi.fn().mockReturnValue({ matches: false })
+    const first = [routerPublic(0)]
+    const next = [routerPublic(5), routerPublic(6)]
+    const { calls } = fakeApi({
+      'GET /api/training-proof/round?section=router': () => ({ status: 200, data: { round: 'r1', items: first, open: 1, done: false } }),
+      'POST /api/training-proof/round': () => ({ status: 200, data: { round: 'r2', items: next, open: 2, done: false } }),
+      'POST /api/training-proof/items/*': (body, path) => {
+        const id = path.split('/')[4]
+        const base = [...first, ...next].find((i) => i.id === id)
+        return { status: 200, data: { item: { ...base, status: 'submitted', result: { ...body, bad: false } }, skipped: false } }
+      },
+      'POST /api/training-proof/round/heartbeat': () => ({ status: 200, data: { open: 1 } }),
+    })
+    const user = userEvent.setup()
+    render(<RouterScreen />)
+    await screen.findByText('שורה 1 מתוך 1')
+    await user.keyboard('1')
+    const more = await screen.findByRole('button', { name: /קח 30 שורות נוספות/ })
+    await waitFor(() => expect(more).toBeEnabled())
+    Element.prototype.scrollIntoView.mockClear()
+    await user.click(more)
+    await screen.findByText('שורה 1 מתוך 2')
+    const top = document.getElementById('tp-line-r5')
+    await waitFor(() => expect(top).toHaveFocus())
+    const scrolled = Element.prototype.scrollIntoView.mock.contexts
+    expect(scrolled).toContain(top)
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'smooth' })
+    expect(top).toHaveAttribute('aria-current', 'true')
+    await user.keyboard('2')
+    await waitFor(() => expect(marks(calls, 'r5')).toEqual([{ label: 'rashi' }]))
+  })
+
+  it('"קח 30 שורות נוספות" עם "פחות תנועה" — בלי גלילה חלקה', async () => {
+    window.matchMedia = vi.fn().mockReturnValue({ matches: true })
+    fakeApi({
+      'GET /api/training-proof/round?section=router': () => ({ status: 200, data: { round: 'r1', items: [routerPublic(0)], open: 1, done: false } }),
+      'POST /api/training-proof/round': () => ({ status: 200, data: { round: 'r2', items: [routerPublic(7)], open: 1, done: false } }),
+      'POST /api/training-proof/items/*': (body) => ({ status: 200, data: { item: { ...routerPublic(0), status: 'submitted', result: { ...body, bad: false } }, skipped: false } }),
+      'POST /api/training-proof/round/heartbeat': () => ({ status: 200, data: { open: 1 } }),
+    })
+    const user = userEvent.setup()
+    render(<RouterScreen />)
+    await screen.findByText('שורה 1 מתוך 1')
+    await user.keyboard('1')
+    const more = await screen.findByRole('button', { name: /קח 30 שורות נוספות/ })
+    await waitFor(() => expect(more).toBeEnabled())
+    await user.click(more)
+    await waitFor(() => expect(document.getElementById('tp-line-r7')).toHaveFocus())
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'auto' })
+  })
+
+  it('"הצג בעמוד המלא": העמוד נפתח והשורה מסומנת בו; כל עוד החלון פתוח המקשים לא מסמנים', async () => {
+    window.matchMedia = vi.fn().mockReturnValue({ matches: true }) // reduced-motion: הסגירה מיידית
+    const ctx = { img: '/api/training-proof/items/r1/ctx', bbox: [100, 400, 640, 454] }
+    const { calls } = api([routerPublic(0), routerPublic(1, { ctx })])
+    const user = userEvent.setup()
+    render(<RouterScreen />)
+    await screen.findByText('שורה 1 מתוך 2')
+    // רק לשורה שיש לה עמוד
+    expect(within(document.getElementById('tp-line-r0')).queryByRole('button', { name: 'הצג בעמוד המלא' })).toBeNull()
+    await user.click(within(document.getElementById('tp-line-r1')).getByRole('button', { name: 'הצג בעמוד המלא' }))
+    const dialog = await screen.findByRole('dialog', { name: 'השורה בעמוד המלא' })
+    expect(dialog).toHaveAccessibleDescription('ספר 7 · עמוד 1')
+    const img = within(dialog).getByRole('img', { name: 'העמוד המלא' })
+    expect(img).toHaveAttribute('src', ctx.img)
+    Object.defineProperty(img, 'naturalWidth', { value: 1000 })
+    Object.defineProperty(img, 'naturalHeight', { value: 2000 })
+    img.dispatchEvent(new Event('load'))
+    const mark = await within(dialog).findByTestId('tp-fullpage-mark')
+    expect(mark.style.left).toBe('10%')
+    expect(mark.style.top).toBe('20%')
+    expect(mark.style.width).toBe('54%')
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
+    // השורה של העמוד נבחרה, והמקשים לא מסמנים מאחורי החלון
+    expect(document.getElementById('tp-line-r1')).toHaveAttribute('aria-current', 'true')
+    await user.keyboard('1')
+    expect(marks(calls, 'r1')).toEqual([])
+    await user.click(within(dialog).getByRole('button', { name: 'הגדל (הגודל המקורי)' }))
+    expect(img.className).toMatch(/max-w-none/)
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await user.keyboard('1')
+    await waitFor(() => expect(marks(calls, 'r1')).toEqual([{ label: 'square' }]))
+  })
 })

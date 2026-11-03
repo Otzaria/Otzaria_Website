@@ -11,8 +11,8 @@ import { getTzuratSession } from './tokenAuth';
 // צורת הדף — השערים של הראוטים.
 //
 // requireTzuratSession() — מתנדב: 401 בלי session, 403 בלי אימות (isVerified) אלא אם הוא מנהל המודול.
-// הדגלים (tzuratRashi, tzuratPracticeDone) נקראים מהמסד בכל בקשה — הם משתנים בלי התחברות מחדש.
-// ← {session, userId, user: {id, name}, rashi, canRashi, isAdmin, practiceDone} או {error}
+// הדגל tzuratPracticeDone נקרא מהמסד בכל בקשה — הוא משתנה בלי התחברות מחדש.
+// ← {session, userId, user: {id, name}, isAdmin, practiceDone} או {error}
 //
 // adminGate(request, scope) — מנהל המודול: session, או מפתח-גישה tht_ עם ההרשאה (read/review/import).
 // ← {session, admin: {id, name}} או {denied}
@@ -26,15 +26,13 @@ export async function requireTzuratSession() {
   const userId = String(u.id || u._id || '');
   if (!mongoose.Types.ObjectId.isValid(userId)) return { error: errorJson(401, 'מזהה משתמש לא תקין') };
   await connectDB();
-  const flags = await User.findById(userId, { tzuratRashi: 1, tzuratPracticeDone: 1 }).lean();
+  const flags = await User.findById(userId, { tzuratPracticeDone: 1 }).lean();
   if (!flags) return { error: errorJson(401, 'המשתמש לא נמצא') };
   return {
     session,
     userId,
     user: { id: userId, name: u.name || '' },
     isAdmin,
-    rashi: !!flags.tzuratRashi,
-    canRashi: isAdmin || !!flags.tzuratRashi,
     practiceDone: !!flags.tzuratPracticeDone,
   };
 }

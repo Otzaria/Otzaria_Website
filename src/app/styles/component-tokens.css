@@ -32,6 +32,46 @@
   --button-icon-size-lg: 1.375rem;
   --button-icon-size-header: 1.15rem;
 
+  /* ---------- כלי עורך (Button size="tool"; editor/v2) ----------
+   * סגנון "אוורירי וקל" + קבוצות: שטוח, בלי קווי הפרדה; כפתור כלי 38px חזותית (אייקון 21px,
+   * משקל 300 — --tool-icon-weight), בצבע on-surface-variant הרך, ומטרת המגע נשארת 44px דרך
+   * ::before (TOUCH_TARGET_OVERLAY, אנכית). במגע (pointer: coarse) — 44px מלאים.
+   * כלים קשורים מקובצים בכרטיס צף (--tool-group-bg + --tool-group-shadow) עם מרווח נדיב בין הקבוצות (--tool-group-gap).
+   * מצבים: ריחוף surface-selected (בתוך כרטיס קבוצה — --tool-group-bg-hover, גוון כהה מהכרטיס),
+   * לחוץ/פעיל secondary-container, מושבת — --button-disabled-opacity.
+   * גובהי שורות העורך: כותרת 56px, שורת כלים 52px, שורת מצב 30px. */
+  --button-height-tool: 2.375rem;
+  --button-icon-size-tool: 1.3125rem;
+  --button-radius-tool: var(--radius-pill);
+  --tool-fg: var(--color-on-surface-variant);
+  --tool-bg-hover: var(--color-surface-selected);
+  --tool-bg-pressed: var(--color-secondary-container);
+  --tool-bg-pressed-hover: var(--color-secondary-container-hover);
+  --tool-fg-pressed: var(--color-on-secondary-container);
+  --tool-icon-weight: 300;
+  /* גליף טקסט של כלי (H1–H3, B — GlyphButton): גובה האותיות כגובה האייקון */
+  --tool-glyph-size: 1rem;
+  /* קבוצות ככרטיסים צפים: הפס (--tool-strip-bg) כהה במעט, וכל קבוצה כרטיס לבן-חם עם טבעת 1px
+     בגוון primary שקוף וצל חם רך — כך כל קבוצה נקראת כיחידה נפרדת. מרווח 12px בין הקבוצות
+     (יותר מזה דוחק את קבוצת "הוספה" ל"עוד" גם ב-1920).
+     בעורך הטוקנים מוגדרים מחדש על שורש העורך (editor-themes.css), כולל ערכת ערב. */
+  --tool-strip-bg: var(--color-surface-container);
+  --tool-group-bg: var(--ref-card-99);
+  --tool-group-bg-hover: var(--color-surface-container-high);
+  --tool-group-ring: color-mix(in srgb, var(--color-primary) 11%, transparent);
+  --tool-group-shadow: 0 0 0 1px var(--tool-group-ring),
+    0 1px 2px color-mix(in srgb, var(--color-shadow) 7%, transparent),
+    0 3px 8px -3px color-mix(in srgb, var(--color-shadow) 10%, transparent);
+  --tool-group-shadow-hover: 0 0 0 1px color-mix(in srgb, var(--color-primary) 16%, transparent),
+    0 1px 2px color-mix(in srgb, var(--color-shadow) 8%, transparent),
+    0 5px 12px -4px color-mix(in srgb, var(--color-shadow) 14%, transparent);
+  --tool-group-padding: 0.125rem;
+  --tool-gap: 0.125rem;
+  --tool-group-gap: 0.75rem;
+  --editor-topbar-height: 3.5rem;
+  --editor-toolbar-height: 3.25rem;
+  --editor-statusbar-height: 1.875rem;
+
   /* ---------- אזור החשבון בכותרת (layout/AccountActions) ----------
    * רוחב אחד לשלושת המצבים — טוען (skeleton), אורח ("התחבר", טקסט בלבד), מחובר (עיגול האות +
    * חץ, בלי שם) — וכל אחד ממלא אותו: אין קפיצה כשה-session נטען, ואין רווח ריק ליד "תרומות".
@@ -102,7 +142,7 @@
   --tooltip-radius: var(--radius-shape);
   --tooltip-shadow: var(--shadow-tooltip);
   --tooltip-max-width: 15rem;
-  --tooltip-delay: 280ms;
+  --tooltip-delay: 500ms;
 
   /* ---------- שדה טקסט (plugins/PluginSearchBox; בעתיד ui/TextField) ----------
    * מסגרת outline (4.3:1 — שדה חייב גבול מזוהה, WCAG 1.4.11), ריחוף on-surface-variant, ובפוקוס
@@ -159,4 +199,13 @@
   --badge-radius: var(--radius-pill);
   --badge-height-sm: 1.5rem;
   --badge-height-md: 1.875rem;
+}
+
+/* מגע: כפתורי הכלים ושורות העורך חוזרים למטרת המגע המלאה (44px) */
+@media (pointer: coarse) {
+  :root {
+    --button-height-tool: var(--touch-target);
+    --editor-toolbar-height: 3.5rem;
+    --editor-statusbar-height: var(--touch-target);
+  }
 }

@@ -24,6 +24,7 @@ export const MAIN_NAV_LINKS = [
     highlight: true,
     children: [
       { href: '/donate', label: 'תרום לאוצריא', customIcon: 'donate' },
+      { href: '/library/books', label: 'השתתף בעריכת ספרים', icon: 'edit_note' },
       { href: '/library/upload', label: 'העלה ספר חדש', icon: 'upload_file' },
       { href: '/library/acronyms', label: 'הוסף כינויים וראשי תיבות', icon: 'short_text' },
       { href: '/library/info', label: 'הוסף מידע על ספרים', icon: 'info' },

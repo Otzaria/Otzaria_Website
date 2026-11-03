@@ -16,7 +16,7 @@ test('CI has a healthy isolated Mongo service and bounded selection deadline', (
   const job = workflow.jobs['build-check']
   assert.equal(job.env.MONGODB_URI, 'mongodb://127.0.0.1:27017/otzaria_ci')
   assert.equal(job.env.MONGODB_SERVER_SELECTION_TIMEOUT_MS, '5000')
-  assert.equal(job.services.mongodb.image, 'mongo:8.0')
+  assert.equal(job.services.mongodb.image, 'mongo:7.0')
   assert.deepEqual(job.services.mongodb.ports, ['27017:27017'])
   assert.match(job.services.mongodb.options, /mongosh.*ping:1/)
   assert.equal(workflow.jobs.deploy.env, undefined)

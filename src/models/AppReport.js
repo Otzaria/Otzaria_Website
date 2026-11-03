@@ -74,6 +74,7 @@ const AppReportSchema = new mongoose.Schema({
 
   contentHash: { type: String, required: true },
   signatureHash: { type: String, default: null },
+  resendHash: { type: String, default: null },
 
   issueNumber: { type: Number, default: null },
   issueUrl: { type: String, default: null },
@@ -107,6 +108,7 @@ AppReportSchema.index({ product: 1, signatureHash: 1 });
 AppReportSchema.index({ product: 1, issueNumber: 1 });
 AppReportSchema.index({ issuePending: 1, issueAttemptAt: 1, createdAt: 1 });
 AppReportSchema.index({ createdAt: -1 });
+AppReportSchema.index({ resendHash: 1, createdAt: -1 });
 AppReportSchema.index({ 'fileIds.images.publicToken': 1 }, { sparse: true });
 AppReportSchema.index({ 'contactLog.images.publicToken': 1 }, { sparse: true });
 AppReportSchema.index({ replyToken: 1 }, { unique: true, partialFilterExpression: { replyToken: { $type: 'string' } } });

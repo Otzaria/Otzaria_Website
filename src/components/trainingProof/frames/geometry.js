@@ -8,6 +8,7 @@
 // * moveBox / resizeBox — הגרירה עצמה, בתוך גבולות העמוד.
 // * applyOrder — מצב "סדר הקריאה" (O): המסגרות שנלחצו מקבלות 1…k, והשאר אחריהן בסדר הקודם שלהן
 //   (כמו endOrder בתחנה).
+// * moveInOrder / moveToPlace / moveInStream — סדר-הקריאה תוך כדי עבודה על מסגרת, בלי מצב נפרד.
 // * withRole — תפקיד חדש למסגרת, עם הכללים: אובייקט = kind "object"; ריהוט ואובייקט — בלי זרם ובלי "ממשיך".
 
 import { FRAME_ROLES } from '../../../lib/trainingProof/vocab.js';
@@ -106,11 +107,14 @@ export function withRole(f, role, { obj = null } = {}) {
   return g;
 }
 
+// המסגרות לפי סדר-הקריאה: לפי המספר, ומסגרת בלי מספר — בסוף, מלמעלה למטה
+export const readingOrder = (frames) => [...frames].sort((a, b) => (a.ord ?? 1e9) - (b.ord ?? 1e9) || a.box[1] - b.box[1]);
+
 // המספר במסגרת בתוך הזרם שלה ("פנים 2"), לפי סדר-הקריאה. Map(fid → מספר)
 export function streamSeq(frames) {
   const out = new Map();
   const n = {};
-  const byOrd = [...frames].sort((a, b) => (a.ord ?? 1e9) - (b.ord ?? 1e9) || a.box[1] - b.box[1]);
+  const byOrd = readingOrder(frames);
   for (const f of byOrd) {
     if (!f.stream) continue;
     n[f.stream] = (n[f.stream] || 0) + 1;
@@ -153,6 +157,45 @@ export function applyOrder(frames, clicked) {
     const o = pos.get(f.fid) ?? restOrd.get(f.fid);
     return o === f.ord ? f : { ...f, ord: o, src: 'human' };
   });
+}
+
+// סדר-הקריאה תוך כדי עבודה על המסגרת — בלי לעבור למצב "סדר הקריאה" (כמו בתחנה ובתוכנת-הספר: "סדר: הקודם/הבא"
+// ו"מספר בזרם −/+" בחלונית של המסגרת). אחרי כל הזזה כל המסגרות ממוספרות 1…n לפי הסדר החדש; מסגרת שהמספר
+// שלה השתנה — "שונה ביד".
+function withOrder(frames, list) {
+  const pos = new Map(list.map((f, i) => [f.fid, i + 1]));
+  return frames.map((f) => (pos.get(f.fid) === f.ord ? f : { ...f, ord: pos.get(f.fid), src: 'human' }));
+}
+
+// המסגרת fid למקום place (1…n) בסדר-הקריאה של העמוד; השאר זזות מקום אחד
+export function moveToPlace(frames, fid, place) {
+  const list = readingOrder(frames);
+  const i = list.findIndex((f) => f.fid === fid);
+  if (i < 0) return frames;
+  const k = Math.max(0, Math.min(list.length - 1, Math.round(place) - 1));
+  const [f] = list.splice(i, 1);
+  list.splice(k, 0, f);
+  return withOrder(frames, list);
+}
+
+// מוקדם יותר (d = -1) / מאוחר יותר (d = 1) בסדר-הקריאה של העמוד — החלפה עם השכנה
+export function moveInOrder(frames, fid, d) {
+  const i = readingOrder(frames).findIndex((f) => f.fid === fid);
+  return i < 0 ? frames : moveToPlace(frames, fid, i + 1 + d);
+}
+
+// הקודמת / הבאה בתוך הזרם ("פנים 2" ← "פנים 1"): החלפת מקום בסדר-הקריאה עם המסגרת הקודמת/הבאה של אותו זרם
+export function moveInStream(frames, fid, d) {
+  const list = readingOrder(frames);
+  const f = list.find((z) => z.fid === fid);
+  if (!f?.stream) return frames;
+  const same = list.filter((z) => z.stream === f.stream);
+  const o = same[same.indexOf(f) + d];
+  if (!o) return frames;
+  const a = list.indexOf(f);
+  const b = list.indexOf(o);
+  [list[a], list[b]] = [list[b], list[a]];
+  return withOrder(frames, list);
 }
 
 // "שונה ביד": מסגרת שהמתנדב נגע בה עוברת מקווקו לרציף

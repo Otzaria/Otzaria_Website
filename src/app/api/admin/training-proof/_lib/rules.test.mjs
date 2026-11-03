@@ -104,6 +104,9 @@ test('adminItem: נתב — מילים לפי הסדר והסכמה; גלאי �
   const r = adminItem({ _id: 'a'.repeat(24), section: 'router', status: 'submitted', payload: routerItem(0), result: { label: 'square', bad: false } });
   assert.deepEqual(r.words.map((w) => w.k), [0, 1, 2, 3]);
   assert.equal(r.agrees, true);
+  assert.equal(r.ctx, null);
+  const rc = adminItem({ _id: 'a'.repeat(24), section: 'router', status: 'submitted', ctxPath: '/c', payload: routerItem(0, { ctx: { img: 'img/c.jpg', bbox: [1, 2, 3, 4] } }) });
+  assert.deepEqual(rc.ctx, { img: `/api/admin/training-proof/items/${'a'.repeat(24)}/ctx`, bbox: [1, 2, 3, 4] });
   const p = framesItem(0);
   const f = adminItem({ _id: 'a'.repeat(24), section: 'frames', status: 'submitted', payload: p, result: { status: 'marked', frames: p.frames.slice(1) } });
   assert.equal(f.changes, 1);

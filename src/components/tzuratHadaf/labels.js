@@ -29,10 +29,9 @@ export const guideHref = (section) => (section ? `${GUIDE_PATH}#${section}` : GU
 export const KIND_FILTERS = [
   { id: 'any', label: 'הכל' },
   { id: 'g', label: 'גמרא' },
-  { id: 'r', label: 'רש"י', rashi: true },
-  { id: 't', label: 'תוספות', rashi: true },
+  { id: 'r', label: 'רש"י' },
+  { id: 't', label: 'תוספות' },
 ]
-export const RASHI_NOTE = 'רש"י ותוספות נדפסו בכתב רש"י. כדי לקבל שאלות מהם, סמנו בדף הכניסה "אני קורא כתב רש"י".'
 
 // הסבר קצר לכל סוג שאלה (על הכרטיס)
 export const QUESTION_HINT = {

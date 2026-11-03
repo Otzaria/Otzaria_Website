@@ -66,6 +66,52 @@ const assistant = localFont({
   display: "optional",
 });
 
+// Noto Sans Hebrew — גופן הקלדה "בלי תגים" לבחירה בעורך הגהת העמודים (editorShellLogic.js →
+// editorFontFamily). נבחר כי הוא היחיד מבין גופני ה-sans העבריים החופשיים (Heebo, Rubik, Assistant)
+// שמכסה את כל הטעמים (U+0591–05AF) ואת כל סימני הניקוד, עם מיקום סימנים (mark). קובץ מקומי,
+// OFL — fonts/NotoSansHebrew-README.md. preload: false — רק מי שבחר בו מוריד אותו (כ-29KB).
+const notoHebrew = localFont({
+  src: "./fonts/NotoSansHebrew-Variable.woff2",
+  weight: "400 700",
+  variable: "--font-noto-hebrew",
+  display: "swap",
+  preload: false,
+});
+
+// עוד גופני הקלדה "בלי תגים" בעורך העמוד — מקומיים, OFL, preload: false (רק מי שבחר מוריד):
+// IBM Plex Sans Hebrew (קובצי ה-woff2 הרשמיים של IBM, בלי שינוי — "Plex" שם שמור), Google Sans
+// ו-Open Sans (חיתוך לעברית+לטינית). adjustFontFallback: false — כדי שהגיבוי הבא בשרשרת יהיה נוטו
+// (editorShellLogic.js) ולא Arial מותאם-מידות: ב-IBM Plex וב-Open Sans אין טעמים, והם נופלים לנוטו.
+// פרטים ב-fonts/IBMPlexSansHebrew-README.md, GoogleSans-README.md, OpenSans-README.md.
+const ibmPlexHebrew = localFont({
+  src: [
+    { path: "./fonts/IBMPlexSansHebrew-Regular.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/IBMPlexSansHebrew-Bold.woff2", weight: "700", style: "normal" },
+  ],
+  variable: "--font-ibm-plex-hebrew",
+  display: "swap",
+  preload: false,
+  adjustFontFallback: false,
+});
+
+const googleSans = localFont({
+  src: "./fonts/GoogleSans-Variable.woff2",
+  weight: "400 700",
+  variable: "--font-google-sans",
+  display: "swap",
+  preload: false,
+  adjustFontFallback: false,
+});
+
+const openSans = localFont({
+  src: "./fonts/OpenSans-Variable.woff2",
+  weight: "400 700",
+  variable: "--font-open-sans",
+  display: "swap",
+  preload: false,
+  adjustFontFallback: false,
+});
+
 export const metadata: Metadata = {
   // metadataBase: בסיס לכתובות יחסיות (canonical, Open Graph, תמונות שיתוף) — הדומיין הרשמי.
   metadataBase: new URL(SITE_URL),
@@ -87,7 +133,7 @@ export default function RootLayout({
   // (--font-frank משמש גם כ-var() ישיר, למשל בבורר הגופן של עורך הגהת העמודים, ולכן לא די ב-inline.)
   // suppressHydrationWarning — רק בשביל data-os, שהסקריפט שלמטה מוסיף ל-<html> לפני ה-hydration
   return (
-    <html lang="he" dir="rtl" className={`${assistant.variable} ${frankRuehl.variable}`} suppressHydrationWarning>
+    <html lang="he" dir="rtl" className={`${assistant.variable} ${frankRuehl.variable} ${notoHebrew.variable} ${ibmPlexHebrew.variable} ${googleSans.variable} ${openSans.variable}`} suppressHydrationWarning>
       <head>
         {/* זיהוי מערכת ההפעלה → <html data-os="windows|macos|mobile|other"> (lib/detectOs.js).
             ראשון ב-head ו-inline: רץ לפני הציור הראשון, ולכן CSS (למשל in-data-[os=macos]:...)

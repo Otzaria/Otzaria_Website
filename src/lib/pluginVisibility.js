@@ -19,6 +19,12 @@ export function isPluginSuspended(plugin) {
   return plugin?.isSuspended === true
 }
 
+// השוואת בעלות חייבת להיכשל כשאחד המזהים חסר. אחרת תוסף ותיק ללא authorId
+// ומשתמש אנונימי (או session פגום ללא id) משווים undefined === undefined.
+export function isPluginOwner(plugin, userId) {
+  return plugin?.authorId != null && userId != null && plugin.authorId.toString() === String(userId)
+}
+
 // האם המשתמש רשאי לראות/להוריד תוסף מושהה בקישור ישיר
 export function canAccessSuspended({ isAdmin, isOwner }) {
   return isAdmin === true || isOwner === true

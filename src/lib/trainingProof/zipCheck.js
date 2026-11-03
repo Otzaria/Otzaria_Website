@@ -106,6 +106,16 @@ function checkCommon(it, section, entries, base) {
   return null;
 }
 
+// העמוד המלא לשורה ("הצג בעמוד המלא"): ocr (§4.1) ו-router (§4.2), אותה צורה
+function checkCtx(it, entries, base) {
+  if (it.ctx === undefined || it.ctx === null) return null;
+  if (!isObj(it.ctx)) return 'ctx לא תקין';
+  if (!safeZipPath(it.ctx.img) || !IMAGE_EXT_RE.test(it.ctx.img)) return 'נתיב תמונת-ההקשר לא תקין';
+  if (!entries[base + it.ctx.img]) return `תמונת-ההקשר חסרה בקובץ: ${it.ctx.img}`;
+  if (!validBox(it.ctx.bbox)) return 'תיבת השורה בעמוד (ctx.bbox) לא תקינה';
+  return null;
+}
+
 function checkOcr(it, entries, base) {
   if (!LINE_SCRIPTS.includes(it.track)) return `כתב (track) לא מוכר: ${it.track ?? 'חסר'}`;
   if (!OCR_SOURCES.includes(it.source)) return `מקור (source) לא מוכר: ${it.source ?? 'חסר'}`;
@@ -113,16 +123,30 @@ function checkOcr(it, entries, base) {
   if (it.conf !== undefined && it.conf !== null && !(typeof it.conf === 'number' && it.conf >= 0 && it.conf <= 100))
     return 'ביטחון (conf) מחוץ לטווח 0–100';
   if (it.line_no !== undefined && it.line_no !== null && !isInt(it.line_no)) return 'מספר שורה (line_no) לא תקין';
-  if (it.ctx !== undefined && it.ctx !== null) {
-    if (!isObj(it.ctx)) return 'ctx לא תקין';
-    if (!safeZipPath(it.ctx.img) || !IMAGE_EXT_RE.test(it.ctx.img)) return 'נתיב תמונת-ההקשר לא תקין';
-    if (!entries[base + it.ctx.img]) return `תמונת-ההקשר חסרה בקובץ: ${it.ctx.img}`;
-    if (!validBox(it.ctx.bbox)) return 'תיבת השורה בעמוד (ctx.bbox) לא תקינה';
-  }
-  return null;
+  return checkCtx(it, entries, base);
 }
 
-function checkRouter(it) {
+// שורת-נתב שאחת מתיבות-המילים שלה לא תקינה (למשל מילה בלי רוחב, x0 == x1). זו לא סיבה לדחות
+// קובץ שלם: השורה נקלטת בלי words, ומי שמסמן "מעורבת" מקבל חלוקה לפי הדיו — בדיוק כמו
+// שורה שהגיעה בלי מילים (§4.2). התוצאה חוזרת עם words_src: "site". רק התיבה — מספר-סדר
+// כפול או כתב-מילה לא מוכר הם עדיין שגיאה בקובץ.
+export function badWordBoxes(it) {
+  return Array.isArray(it.words) && it.words.some((w) => isObj(w) && !validBox(w.box, it.w, it.h));
+}
+
+function withoutWords(it) {
+  const { words: _drop, ...rest } = it;
+  return rest;
+}
+
+// "6 שורות: תיבות-המילים לא תקינות — יחולקו לפי הדיו (שורות 225, 474, …)"
+export function wordBoxWarning(lineNos) {
+  const n = lineNos.length;
+  const shown = lineNos.slice(0, 10).join(', ') + (n > 10 ? ', …' : '');
+  return `${n === 1 ? 'שורה אחת' : `${n} שורות`}: תיבות-המילים לא תקינות — יחולקו לפי הדיו (${n === 1 ? 'שורה' : 'שורות'} ${shown} בקובץ)`;
+}
+
+function checkRouter(it, entries, base) {
   if (it.pred !== undefined && it.pred !== null && !LINE_SCRIPTS.includes(it.pred)) return `הצעת-כתב (pred) לא מוכרת: ${it.pred}`;
   if (it.pred_p !== undefined && it.pred_p !== null && !(typeof it.pred_p === 'number' && it.pred_p >= 0 && it.pred_p <= 1))
     return 'pred_p מחוץ לטווח 0–1';
@@ -138,7 +162,34 @@ function checkRouter(it) {
       if (!optStr(w.text, 200)) return `הטקסט של המילה ${w.k} לא תקין`;
     }
   }
-  return null;
+  return checkCtx(it, entries, base);
+}
+
+// עמוד-גלאי שאחת המסגרות שלו גולשת מעבר לקצה התמונה (הצעת-הגלאי בתחנה, כמה פיקסלים —
+// קובץ 2026-11-01). זו לא סיבה לדחות קובץ שלם: המסגרת מקוצרת לגבולות התמונה, והקובץ מקבל
+// אזהרה. רק תיבה תקינה בעצמה (x1 > x0, y1 > y0) שנשארת תקינה אחרי הקיצור — תיבה פגומה, או
+// מסגרת שכולה מחוץ לתמונה, הן עדיין שגיאה בקובץ. מחזיר כמה מסגרות קוצרו (ומשנה את it במקומו).
+export function trimFrameBoxes(it) {
+  if (!Array.isArray(it.frames) || !(it.w > 0) || !(it.h > 0)) return 0;
+  let n = 0;
+  for (const f of it.frames) {
+    if (!isObj(f) || validBox(f.box, it.w, it.h)) continue;
+    if (!Array.isArray(f.box) || f.box.length !== 4 || !f.box.every((v) => typeof v === 'number' && Number.isFinite(v))) continue;
+    const [x0, y0, x1, y1] = f.box;
+    if (x1 <= x0 || y1 <= y0) continue;
+    const box = [Math.max(0, x0), Math.max(0, y0), Math.min(it.w, x1), Math.min(it.h, y1)];
+    if (!validBox(box, it.w, it.h)) continue;
+    f.box = box;
+    n++;
+  }
+  return n;
+}
+
+// "3 עמודים: מסגרות שגלשו מעבר לקצה התמונה — קוצרו לגבולות העמוד (שורות 2, 4, 5 בקובץ)"
+export function frameBoxWarning(lineNos) {
+  const n = lineNos.length;
+  const shown = lineNos.slice(0, 10).join(', ') + (n > 10 ? ', …' : '');
+  return `${n === 1 ? 'עמוד אחד' : `${n} עמודים`}: מסגרות שגלשו מעבר לקצה התמונה — קוצרו לגבולות העמוד (${n === 1 ? 'שורה' : 'שורות'} ${shown} בקובץ)`;
 }
 
 function checkFrames(it, books) {
@@ -200,9 +251,11 @@ export function trackOf(section, it) {
 }
 
 // הבדיקה המלאה. entries — מפת fflate. מחזיר:
-//   {ok, errors[], warnings[], base, manifest, section, items[], books(Map|null), images:Set}
-// items[] = הפריטים כפי שהגיעו (payload). images = כל נתיבי התמונות שבשימוש (יחסיים ל-base),
-// כולל תמונות-הקשר — הכותב מעתיק רק אותן.
+//   {ok, errors[], warnings[], base, manifest, section, items[], books(Map|null), images:Set, wordBoxLines[], frameBoxLines[]}
+// items[] = הפריטים כפי שהגיעו (payload) — חוץ משורת-נתב עם תיבת-מילה פגומה, שנקלטת בלי words
+// (wordBoxLines = מספרי-השורות שלהן ב-items.jsonl, ואזהרה אחת עליהן), ועמוד-גלאי שמסגרת שלו גלשה
+// מעבר לתמונה, שנקלט עם המסגרת מקוצרת (frameBoxLines, ואזהרה אחת). images = כל נתיבי
+// התמונות שבשימוש (יחסיים ל-base), כולל תמונות-הקשר — הכותב מעתיק רק אותן.
 export function checkToSiteZip(entries, { expectSection = null, decoder = new TextDecoder('utf-8') } = {}) {
   const errors = [];
   const warnings = [];
@@ -250,6 +303,8 @@ export function checkToSiteZip(entries, { expectSection = null, decoder = new Te
   const lines = decode(raw, decoder).split(/\r?\n/);
   const seen = new Set();
   const byTrack = {};
+  const wordBoxLines = [];
+  const frameBoxLines = [];
   let extraErrors = 0;
   const fail = (msg) => {
     if (errors.length < MAX_ERRORS) errors.push(msg);
@@ -268,9 +323,13 @@ export function checkToSiteZip(entries, { expectSection = null, decoder = new Te
       fail(`שורה ${i + 1} ב-items.jsonl אינה פריט`);
       return;
     }
-    const err =
-      checkCommon(it, section, entries, base) ||
-      (section === 'ocr' ? checkOcr(it, entries, base) : section === 'router' ? checkRouter(it) : checkFrames(it, books));
+    let err = checkCommon(it, section, entries, base);
+    const dropWords = !err && section === 'router' && badWordBoxes(it);
+    if (dropWords) it = withoutWords(it);
+    const trimmed = !err && section === 'frames' ? trimFrameBoxes(it) : 0;
+    err =
+      err ||
+      (section === 'ocr' ? checkOcr(it, entries, base) : section === 'router' ? checkRouter(it, entries, base) : checkFrames(it, books));
     if (err) {
       fail(`שורה ${i + 1}: ${err}`);
       return;
@@ -280,6 +339,8 @@ export function checkToSiteZip(entries, { expectSection = null, decoder = new Te
       return;
     }
     seen.add(it.uid);
+    if (dropWords) wordBoxLines.push(i + 1);
+    if (trimmed) frameBoxLines.push(i + 1);
     out.items.push(it);
     out.images.add(it.img);
     if (it.ctx?.img) out.images.add(it.ctx.img);
@@ -287,6 +348,10 @@ export function checkToSiteZip(entries, { expectSection = null, decoder = new Te
     byTrack[t] = (byTrack[t] || 0) + 1;
   });
   if (extraErrors) errors.push(`ועוד ${extraErrors} שגיאות`);
+  if (wordBoxLines.length) warnings.push(wordBoxWarning(wordBoxLines));
+  if (frameBoxLines.length) warnings.push(frameBoxWarning(frameBoxLines));
+  out.wordBoxLines = wordBoxLines;
+  out.frameBoxLines = frameBoxLines;
 
   const limit = section === 'frames' ? MAX_FRAMES_PAGES : MAX_ITEMS_PER_FILE;
   if (out.items.length > limit)

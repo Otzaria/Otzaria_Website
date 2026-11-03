@@ -7,6 +7,7 @@ import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import { sendPluginUploadNotification } from '@/lib/emailService'
 import { hasPluginsAccess } from '@/lib/roles'
+import { isPluginOwner } from '@/lib/pluginVisibility'
 import {
   PLUGIN_VERSION_RE,
   assertPluginTextLimits,
@@ -67,7 +68,7 @@ async function getAuthorizedPlugin(id, session, { asOwner = false } = {}) {
     return { error: bad('Plugin not found', 404) }
   }
 
-  const isOwner = plugin.authorId?.toString() === session.user?.id
+  const isOwner = isPluginOwner(plugin, session.user?.id)
   const isAdmin = asOwner ? false : hasPluginsAccess(session.user?.role)
   if (!isAdmin && !isOwner) {
     return {

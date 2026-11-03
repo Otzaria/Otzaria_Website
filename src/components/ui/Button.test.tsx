@@ -58,6 +58,12 @@ describe('Button', () => {
     expect(event.defaultPrevented).toBe(true)
   })
 
+  it('aria-pressed — גם המראה הלחוץ (מקור אמת אחד)', () => {
+    render(<><Button variant="text" size="tool" iconOnly icon="format_bold" aria-label="הדגשה" aria-pressed /><Button variant="text" size="tool" iconOnly icon="format_italic" aria-label="נטוי" aria-pressed={false} /></>)
+    expect(screen.getByRole('button', { name: 'הדגשה' }).className).toContain('bg-(--tool-bg-pressed)')
+    expect(screen.getByRole('button', { name: 'נטוי' }).className).not.toContain('bg-(--tool-bg-pressed)')
+  })
+
   it('iconOnly — השם הנגיש מ-aria-label', () => {
     render(<Button icon="close" iconOnly variant="text" aria-label="סגירה" />)
     expect(screen.getByRole('button', { name: 'סגירה' })).toBeInTheDocument()

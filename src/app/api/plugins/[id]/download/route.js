@@ -9,7 +9,7 @@ import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags'
 import { invalidatePluginSearchIndex } from '@/lib/pluginSearchIndex'
 import { parsePluginRef } from '@/lib/pluginRef'
 import { hasPluginsAccess } from '@/lib/roles'
-import { canAccessSuspended, isPluginSuspended } from '@/lib/pluginVisibility'
+import { canAccessSuspended, isPluginOwner, isPluginSuspended } from '@/lib/pluginVisibility'
 import { APP_VERSION_PARAM, isValidAppVersion, resolveCompatibleVersion, lowestSupportedAppVersion } from '@/lib/pluginCompatibility'
 import { isServicePlugin, resolveServicePluginFile } from '@/lib/servicePlugins/existingPaths'
 import { openReviewAssetStream } from '@/lib/servicePlugins/storage'
@@ -86,7 +86,7 @@ export async function GET(request, { params }) {
 
     const session = await getServerSession(authOptions)
     const isAdmin = hasPluginsAccess(session?.user?.role)
-    const isOwner = plugin.authorId?.toString() === session?.user?.id
+    const isOwner = isPluginOwner(plugin, session?.user?.id)
 
     // תוסף מושהה — גם בקישור ישיר ההורדה פתוחה רק למעלה ולמנהלי התוספים
     if (isPluginSuspended(plugin) && !canAccessSuspended({ isAdmin, isOwner })) {

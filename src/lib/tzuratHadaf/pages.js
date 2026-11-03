@@ -197,7 +197,7 @@ export async function renewLease(pageId, userId, now = new Date()) {
 // ---------- העמוד לבדיקה ----------
 
 /** CONTRACT GET pages/[id] ← {ok, page, items, draft, prev, next} */
-export async function pageDetail(pageId, userId, { canRashi = false, now = new Date() } = {}) {
+export async function pageDetail(pageId, userId, { now = new Date() } = {}) {
   if (!isObjectId(String(pageId))) return fail(404, MSG.notFound);
   const uid = oid(userId);
   let page = await TzuratPage.findById(pageId).lean();
@@ -211,7 +211,6 @@ export async function pageDetail(pageId, userId, { canRashi = false, now = new D
       status: 'open',
       practice: { $ne: true },
       'answers.user': { $ne: uid },
-      ...(canRashi ? {} : { kind: { $nin: ['r', 't'] } }),
     })
       .sort({ score: -1, _id: 1 })
       .limit(500)

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import TzuratLanding from './TzuratLanding'
 import PracticeRunner from './PracticeRunner'
 import HelpDialog, { HELP_KEYS } from './HelpDialog'
@@ -13,7 +13,7 @@ afterEach(() => {
 const overview = (me, canAdmin = false) =>
   res(200, {
     books: [{ slug: 'berakhot', masechet: 'ברכות', order: 1, pages: 10, pagesOpen: 8, pagesDone: 2, items: 100, itemsOpen: 50, itemsAgreed: 25, itemsDisputed: 3 }],
-    me: { rashi: false, practiceDone: false, decisions: 12, agreed: 5, pages: 1, pagesApproved: 0, reports: 2, points: 7, ...me },
+    me: { practiceDone: false, decisions: 12, agreed: 5, pages: 1, pagesApproved: 0, reports: 2, points: 7, ...me },
     canAdmin,
   })
 
@@ -30,16 +30,12 @@ describe('TzuratLanding', () => {
     expect(screen.queryByRole('link', { name: /ניהול צורת הדף/ })).toBeNull()
   })
 
-  it('"אני קורא כתב רש"י" נשלח ל-POST /me; מנהל רואה קישור לניהול; אחרי תרגול — בלי ההזמנה', async () => {
-    const fn = vi.fn(async (url, init = {}) => (init.method === 'POST' ? res(200, { rashi: true, practiceDone: true }) : overview({ practiceDone: true }, true)))
-    vi.stubGlobal('fetch', fn)
+  it('בלי סימון "אני קורא כתב רש"י"; מנהל רואה קישור לניהול; אחרי תרגול — בלי ההזמנה', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => overview({ practiceDone: true }, true)))
     render(<TzuratLanding />)
-    const box = await screen.findByRole('checkbox', { name: /אני קורא כתב רש"י/ })
+    expect(await screen.findByRole('link', { name: /ניהול צורת הדף/ })).toHaveAttribute('href', '/library/admin/tzurat-hadaf')
     expect(screen.queryByTestId('practice-cta')).toBeNull()
-    expect(screen.getByRole('link', { name: /ניהול צורת הדף/ })).toHaveAttribute('href', '/library/admin/tzurat-hadaf')
-    fireEvent.click(box)
-    await waitFor(() => expect(fn).toHaveBeenCalledWith('/api/tzurat-hadaf/me', expect.objectContaining({ method: 'POST', body: JSON.stringify({ rashi: true }) })))
-    await waitFor(() => expect(box).toBeChecked())
+    expect(screen.queryByRole('checkbox')).toBeNull()
   })
 })
 

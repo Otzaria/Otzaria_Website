@@ -1,4 +1,4 @@
-// צורת הדף — המתנדב: דף הכניסה (overview), "התרומות שלי", דיווח חופשי, והדגל "אני קורא כתב רש"י".
+// צורת הדף — המתנדב: דף הכניסה (overview), "התרומות שלי" ודיווח חופשי.
 // ייבוא יחסי (node:test).
 
 import mongoose from 'mongoose';
@@ -17,13 +17,8 @@ const fail = (status, error, code) => ({ ok: false, status, error, ...(code ? { 
 const LIST_LIMIT = 100;
 
 export async function userFlags(userId) {
-  const u = await User.findById(userId, { tzuratRashi: 1, tzuratPracticeDone: 1, points: 1 }).lean();
-  return { rashi: !!u?.tzuratRashi, practiceDone: !!u?.tzuratPracticeDone, points: u?.points || 0 };
-}
-
-export async function setRashi(userId, rashi) {
-  const u = await User.findOneAndUpdate({ _id: oid(userId) }, { $set: { tzuratRashi: !!rashi } }, { returnDocument: 'after', lean: true, projection: { tzuratRashi: 1, tzuratPracticeDone: 1 } });
-  return { rashi: !!u?.tzuratRashi, practiceDone: !!u?.tzuratPracticeDone };
+  const u = await User.findById(userId, { tzuratPracticeDone: 1, points: 1 }).lean();
+  return { practiceDone: !!u?.tzuratPracticeDone, points: u?.points || 0 };
 }
 
 /** CONTRACT GET overview ← {books, me, canAdmin} */
@@ -40,7 +35,6 @@ export async function overview(userId, { canAdmin = false } = {}) {
   return {
     books,
     me: {
-      rashi: flags.rashi,
       practiceDone: flags.practiceDone,
       decisions: stats.mine,
       agreed: stats.mineAgreed,

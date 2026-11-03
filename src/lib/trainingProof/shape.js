@@ -5,6 +5,9 @@
 export const itemImageUrl = (id) => `/api/training-proof/items/${id}/image`;
 export const itemCtxUrl = (id) => `/api/training-proof/items/${id}/ctx`;
 
+// העמוד המלא לכפתור "הצג בעמוד המלא" (ocr — §4.1, router — §4.2), דרך הנתיב המוגן
+const ctxOf = (d) => (d.ctxPath && d.payload?.ctx?.bbox ? { img: itemCtxUrl(String(d._id)), bbox: d.payload.ctx.bbox } : null);
+
 function common(d) {
   const p = d.payload || {};
   return {
@@ -28,7 +31,7 @@ export function publicOcrItem(d) {
     source: p.source,
     text: p.text || '',
     lineNo: Number.isInteger(p.line_no) ? p.line_no : null,
-    ctx: d.ctxPath && p.ctx?.bbox ? { img: itemCtxUrl(String(d._id)), bbox: p.ctx.bbox } : null,
+    ctx: ctxOf(d),
   };
 }
 
@@ -42,6 +45,7 @@ export function publicRouterItem(d) {
     words: Array.isArray(p.words)
       ? p.words.map((w) => ({ k: w.k, box: w.box, pred: w.pred || null, text: w.text || '' })).sort((a, b) => a.k - b.k)
       : null,
+    ctx: ctxOf(d),
   };
 }
 

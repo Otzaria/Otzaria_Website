@@ -43,7 +43,8 @@ export async function pruneDataDir(dataDir, keep, activeReviewId = null) {
 }
 
 export class Broker {
-  constructor({ config, api, log = () => {}, stages, fetchImpl, heartbeatOptions = {}, idlePollMs = IDLE_POLL_MS, backoffBaseMs = 5000 }) {
+  constructor({ config, api, log = () => {}, stages, fetchImpl, heartbeatOptions = {}, idlePollMs = IDLE_POLL_MS, backoffBaseMs = 5000,
+    codeFingerprint = null }) {
     this.config = config
     this.api = api
     this.log = log
@@ -55,6 +56,9 @@ export class Broker {
     this.stopController = new AbortController()
     this.jobController = null
     this.lastMaintenance = 0
+    this.codeFingerprint = codeFingerprint
+    this.loadedCode = null
+    this.restartRequested = false
   }
 
   stop(reason = 'shutdown') {
@@ -68,8 +72,14 @@ export class Broker {
   async run() {
     const stopSignal = this.stopController.signal
     let failures = 0
+    this.loadedCode = await this.readCodeFingerprint()
     while (!stopSignal.aborted) {
       try {
+        if (await this.codeChanged()) {
+          this.restartRequested = true
+          this.log('code_changed', { action: 'restart' })
+          break
+        }
         await this.maybeMaintenance()
         const { job, retryAfterMs } = await this.api.claim(stopSignal)
         failures = 0
@@ -87,6 +97,23 @@ export class Broker {
       }
     }
     this.log('stopped')
+  }
+
+  async readCodeFingerprint() {
+    if (!this.codeFingerprint) return null
+    try {
+      return await this.codeFingerprint()
+    } catch (err) {
+      this.log('code_fingerprint_failed', { error: err?.message })
+      return null
+    }
+  }
+
+  /** הפריסה מעדכנת את העותק בדיסק; בודקים רק בין משימות, כדי שעדכון לא יקטע בדיקה פעילה. */
+  async codeChanged() {
+    if (!this.loadedCode) return false
+    const current = await this.readCodeFingerprint()
+    return current !== null && current !== this.loadedCode
   }
 
   async maybeMaintenance(now = Date.now()) {

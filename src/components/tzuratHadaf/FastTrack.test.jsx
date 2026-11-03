@@ -4,13 +4,12 @@ import FastTrack from './FastTrack'
 import { HELP_KEYS } from './HelpDialog'
 import { fixtureItem, res } from './testFixtures'
 
-// המסלול המהיר מול שרת מדומה: overview, fast (תור של תשובות), answer, flag.
-function mockServer({ me = { rashi: false, practiceDone: true }, fast = [], answer = [] } = {}) {
+// המסלול המהיר מול שרת מדומה: fast (תור של תשובות), answer, flag.
+function mockServer({ fast = [], answer = [] } = {}) {
   const calls = []
   const fn = vi.fn(async (url, init = {}) => {
     calls.push({ url, method: init.method || 'GET', body: init.body ? JSON.parse(init.body) : null })
-    if (url.startsWith('/api/tzurat-hadaf/overview')) return res(200, { books: [], me, canAdmin: false })
-    if (url.startsWith('/api/tzurat-hadaf/fast')) return fast.shift() || res(200, { item: null, stats: { open: 0, mine: 0, mineAgreed: 0 }, needPractice: false, needRashi: false })
+    if (url.startsWith('/api/tzurat-hadaf/fast')) return fast.shift() || res(200, { item: null, stats: { open: 0, mine: 0, mineAgreed: 0 }, needPractice: false })
     if (/\/items\/[^/]+\/answer$/.test(url)) return answer.shift() || res(200, { status: 'recorded', points: 0 })
     if (/\/items\/[^/]+\/flag$/.test(url)) return res(200, { ok: true })
     throw new Error(`fetch לא צפוי: ${url}`)
@@ -19,7 +18,7 @@ function mockServer({ me = { rashi: false, practiceDone: true }, fast = [], answ
   return calls
 }
 
-const fastRes = (item, extra = {}) => res(200, { item, stats: { open: 10, mine: 2, mineAgreed: 1 }, needPractice: false, needRashi: false, ...extra })
+const fastRes = (item, extra = {}) => res(200, { item, stats: { open: 10, mine: 2, mineAgreed: 1 }, needPractice: false, ...extra })
 
 beforeEach(() => {
   window.localStorage.setItem(HELP_KEYS.fast, '1')
@@ -91,7 +90,7 @@ describe('FastTrack', () => {
   })
 
   it('needPractice — הזמנה לתרגול; אין שאלות — הודעת סיום', async () => {
-    mockServer({ me: { rashi: false, practiceDone: false }, fast: [fastRes(null, { needPractice: true })] })
+    mockServer({ fast: [fastRes(null, { needPractice: true })] })
     const { unmount } = render(<FastTrack />)
     expect(await screen.findByRole('link', { name: /לתרגול/ })).toHaveAttribute('href', '/library/tzurat-hadaf/practice')
     unmount()
@@ -100,13 +99,14 @@ describe('FastTrack', () => {
     expect(await screen.findByTestId('empty')).toHaveTextContent(/אין כרגע שאלות/)
   })
 
-  it('בלי סימון רש"י — רש"י ותוספות מושבתים', async () => {
+  it('רש"י ותוספות פתוחים לכולם', async () => {
     mockServer({ fast: [fastRes(fixtureItem())] })
     render(<FastTrack />)
     await screen.findByText('אמר רבי')
-    expect(screen.getByRole('radio', { name: 'רש"י' })).toBeDisabled()
-    expect(screen.getByRole('radio', { name: 'תוספות' })).toBeDisabled()
+    expect(screen.getByRole('radio', { name: 'רש"י' })).toBeEnabled()
+    expect(screen.getByRole('radio', { name: 'תוספות' })).toBeEnabled()
     expect(screen.getByRole('radio', { name: 'גמרא' })).toBeEnabled()
+    expect(screen.queryByText(/אני קורא כתב רש"י/)).toBeNull()
   })
 
   it('403 — הודעה על אימות האימייל', async () => {

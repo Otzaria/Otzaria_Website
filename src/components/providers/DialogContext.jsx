@@ -80,6 +80,11 @@ export function DialogProvider({ children }) {
     
     // תמיכה ב-Promise - אם לא נשלח callback, מחזירים Promise
     if (typeof onConfirmAction !== 'function') {
+      // במצב Promise אפשר לשלוח את כיתוב האישור כארגומנט השלישי, או להשאיר אותו
+      // undefined ולשלוח את שני הכיתובים בארגומנטים הרביעי והחמישי.
+      const hasInlineLabels = typeof onConfirmAction === 'string'
+      const promiseConfirmText = hasInlineLabels ? onConfirmAction : confirmText
+      const promiseCancelText = hasInlineLabels ? confirmText : cancelText
       return new Promise((resolve) => {
         setIsVisible(true)
         setDialogConfig({
@@ -89,8 +94,8 @@ export function DialogProvider({ children }) {
           message,
           onConfirm: () => resolve(true),
           onCancel: () => resolve(false),
-          confirmText: onConfirmAction || 'אישור', // אם onConfirmAction הוא string, זה confirmText
-          cancelText: typeof message === 'string' && typeof onConfirmAction === 'string' ? onConfirmAction : 'ביטול',
+          confirmText: promiseConfirmText || 'אישור',
+          cancelText: promiseCancelText,
           timestamp: Date.now()
         })
       })
@@ -137,23 +142,23 @@ export function DialogProvider({ children }) {
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (!dialogConfig.isOpen) return
-      if (event.key === 'Enter') {
-        // Enter על כפתור/קישור ממוקד (למשל "ביטול") — הפעולה הרגילה שלו, לא "אישור"
-        const target = event.target
-        if (target instanceof HTMLElement && target.closest('button, a[href]') && target.closest('[data-dialog-context]')) return
-        event.preventDefault()
-        if (dialogConfig.type === 'confirm' || dialogConfig.type === 'message') {
-          handleConfirm()
-        } else {
-          closeDialog()
-        }
-      }
+      if (event.key !== 'Enter') return
+      // רק חלון מודאלי (confirm/message) מגיב ל-Enter. הודעה חולפת (alert/toast) אינה מודאלית —
+      // Enter בעורך או בשדה אחר בזמן שהיא מוצגת חייב לעבור כרגיל.
+      if (dialogConfig.type !== 'confirm' && dialogConfig.type !== 'message') return
+      const target = event.target
+      // ורק כשהאירוע נולד בתוך החלון עצמו
+      if (!(target instanceof Element) || !target.closest('[data-dialog-context][aria-modal="true"]')) return
+      // Enter על כפתור/קישור ממוקד (למשל "ביטול") — הפעולה הרגילה שלו, לא "אישור"
+      if (target.closest('button, a[href]')) return
+      event.preventDefault()
+      handleConfirm()
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [dialogConfig.isOpen, dialogConfig.type, handleConfirm, closeDialog])
+  }, [dialogConfig.isOpen, dialogConfig.type, handleConfirm])
 
   useEffect(() => {
     if (dialogConfig.isOpen) {

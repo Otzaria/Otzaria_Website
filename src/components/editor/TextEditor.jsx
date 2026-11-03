@@ -1,19 +1,6 @@
-import { forwardRef } from 'react'
-
-// רכיב כפתור קטן לשימוש חוזר
-const MiniBtn = ({ onClick, active, icon, title, rotate }) => (
-  <button
-    onClick={onClick}
-    className={`w-6 h-6 rounded flex items-center justify-center transition-colors ${
-      active ? 'bg-info-50 text-info-600' : 'text-neutral-500 hover:bg-white hover:text-neutral-900'
-    }`}
-    title={title}
-  >
-    <span className="material-symbols-outlined text-[16px]" style={{ transform: rotate ? 'rotate(90deg)' : 'none' }}>
-      {icon}
-    </span>
-  </button>
-);
+import { forwardRef, useState } from 'react'
+import TextMirror, { MIRROR_GUTTER_PX } from './v2/TextMirror'
+import { richFieldFor } from './v2/richField'
 
 const TextEditor = forwardRef(({
   content,
@@ -28,11 +15,66 @@ const TextEditor = forwardRef(({
   selectedFont,
   columnWidth,
   onColumnResizeStart,
+  // יישור וגודל — מהעדפות העורך; הכפתורים בשורת הכלים (TextToolbar), לא בתוך הרכיב
   textAlign,
-  setTextAlign, // קבלת הפונקציה לשינוי יישור
   textZoom,
-  setTextZoom
+  setTextZoom,
+  // רשות (עורך העמוד החדש): שכבת mirror מאחורי ה-textarea — { column, line, word, estimated,
+  // lineNumbers, showSuspects, strength }; column = הטור שבו הסמן ('content' / 'right' / 'left').
+  // wrap — 'off' לשורה-מול-שורה (מצב "מול הסריקה"). בלי שניהם — בדיוק כמו קודם.
+  mirror,
+  wrap,
+  // 'rich' — התצוגה המעוצבת (RichTextArea, richField.jsx) במקום ה-textarea; 'code' / חסר — textarea
+  textView,
+  // עימוד ספר בתצוגה המעוצבת בלבד: "חלון" בתחילת פסקה וסיום משולש (תצוגה, המחרוזת לא משתנה)
+  paraWindow = false,
+  paraFunnel = false
 }, ref) => {
+  // ה-textarea עצמם (callback ref → state) — שכבת ה-mirror מסנכרנת אליהם את הגלילה
+  const [contentTa, setContentTa] = useState(null)
+  const [rightTa, setRightTa] = useState(null)
+  const [leftTa, setLeftTa] = useState(null)
+
+  // textarea עם mirror מאחוריו — רק כש-mirror הועבר; אחרת ה-textarea המקורי כמות שהוא
+  const withMirror = (textarea, { taEl, text, column, wrapperClass }) => {
+    if (textView === 'rich') return richFieldFor(textarea, { mirror, column, wrapperClass, paraWindow, paraFunnel })
+    if (!mirror) return textarea
+    const gutter = mirror.lineNumbers ? { paddingInlineStart: `${MIRROR_GUTTER_PX + 16}px` } : null
+    const active = (mirror.column || 'content') === column
+    return (
+      <div className={wrapperClass}>
+        <TextMirror
+          text={text}
+          textarea={taEl}
+          column={column}
+          currentLine={active && Number.isInteger(mirror.line) ? mirror.line : -1}
+          currentWord={active && Number.isInteger(mirror.word) ? mirror.word : -1}
+          estimated={!!mirror.estimated}
+          lineNumbers={!!mirror.lineNumbers}
+          showSuspects={!!mirror.showSuspects}
+          wrap={wrap === 'off' ? 'off' : 'soft'}
+          strength={mirror.strength}
+          className="px-6 py-5 bg-[var(--editor-text-bg,var(--color-surface))] border-2 border-transparent rounded-lg leading-relaxed"
+          style={{ fontFamily: selectedFont, textAlign, fontSize: `${textZoom}px`, ...gutter }}
+        />
+        {textarea}
+      </div>
+    )
+  }
+  const mirrorTaProps = (setTa) => mirror
+    ? {
+        ref: setTa,
+        style: {
+          fontFamily: selectedFont,
+          textAlign: textAlign,
+          fontSize: `${textZoom}px`,
+          scrollbarGutter: 'stable',
+          ...(wrap === 'off' ? { whiteSpace: 'pre' } : null),
+          ...(mirror.lineNumbers ? { paddingInlineStart: `${MIRROR_GUTTER_PX + 16}px` } : null)
+        }
+      }
+    : {}
+  const surface = mirror ? 'relative z-[1] bg-transparent' : 'bg-[var(--editor-text-bg,var(--color-surface))]'
 
   const handleWheel = (e) => {
     if (e.ctrlKey) {
@@ -50,27 +92,6 @@ const TextEditor = forwardRef(({
       style={{ flex: 1 }}
       onWheel={handleWheel}
     >
-      {/* סרגל כלים צף וממורכז - גודל ויישור */}
-      <div className="flex items-center gap-2 mb-3 bg-neutral-50/80 backdrop-blur-sm border border-neutral-200 rounded-md p-1 px-2 w-fit mx-auto shadow-sm sticky top-0 z-10">
-        
-        {/* שליטה בגודל */}
-        <div className="flex items-center gap-0.5">
-           <MiniBtn onClick={() => setTextZoom(Math.max(10, textZoom - 1))} icon="remove" title="הקטן גופן" />
-           <span className="text-[10px] font-medium w-6 text-center select-none text-neutral-600">{textZoom}</span>
-           <MiniBtn onClick={() => setTextZoom(Math.min(60, textZoom + 1))} icon="add" title="הגדל גופן" />
-        </div>
-
-        <div className="w-px h-3 bg-neutral-300 mx-1"></div>
-
-        {/* שליטה ביישור */}
-        <div className="flex items-center gap-0.5">
-           <MiniBtn onClick={() => setTextAlign('right')} active={textAlign === 'right'} icon="format_align_right" title="יישור לימין" />
-           <MiniBtn onClick={() => setTextAlign('center')} active={textAlign === 'center'} icon="format_align_center" title="מרכז" />
-           <MiniBtn onClick={() => setTextAlign('left')} active={textAlign === 'left'} icon="format_align_left" title="יישור לשמאל" />
-           <MiniBtn onClick={() => setTextAlign('justify')} active={textAlign === 'justify'} icon="format_align_justify" title="יישור לשני הצדדים" />
-        </div>
-      </div>
-
       {twoColumns ? (
         <div className="flex flex-row h-full gap-0">
           <div 
@@ -81,7 +102,7 @@ const TextEditor = forwardRef(({
               <span className="material-symbols-outlined text-primary text-sm">article</span>
               <span className="text-sm font-bold text-on-surface">{rightColumnName}</span>
             </div>
-            <textarea
+            {withMirror(<textarea
               data-column="right"
               value={rightColumn}
               onChange={(e) => handleColumnChange('right', e.target.value)}
@@ -92,10 +113,12 @@ const TextEditor = forwardRef(({
                 textAlign: textAlign,
                 fontSize: `${textZoom}px`
               }}
-              className="flex-1 p-4 bg-white border-2 border-surface-variant rounded-lg resize-none focus:outline-none focus:border-primary transition-colors leading-relaxed"
+              className={`flex-1 px-6 py-5 ${surface} border-2 border-surface-variant rounded-lg resize-none focus:outline-none focus:border-primary transition-colors leading-relaxed`}
               dir="rtl"
               spellCheck={false}
-            />
+              wrap={wrap}
+              {...mirrorTaProps(setRightTa)}
+            />, { taEl: rightTa, text: rightColumn, column: 'right', wrapperClass: 'relative flex-1 flex flex-col min-h-0' })}
           </div>
 
           <div
@@ -108,7 +131,7 @@ const TextEditor = forwardRef(({
               <span className="material-symbols-outlined text-primary text-sm">article</span>
               <span className="text-sm font-bold text-on-surface">{leftColumnName}</span>
             </div>
-            <textarea
+            {withMirror(<textarea
               data-column="left"
               value={leftColumn}
               onChange={(e) => handleColumnChange('left', e.target.value)}
@@ -119,14 +142,16 @@ const TextEditor = forwardRef(({
                 textAlign: textAlign,
                 fontSize: `${textZoom}px`
               }}
-              className="flex-1 p-4 bg-white border-2 border-surface-variant rounded-lg resize-none focus:outline-none focus:border-primary transition-colors leading-relaxed"
+              className={`flex-1 px-6 py-5 ${surface} border-2 border-surface-variant rounded-lg resize-none focus:outline-none focus:border-primary transition-colors leading-relaxed`}
               dir="rtl"
               spellCheck={false}
-            />
+              wrap={wrap}
+              {...mirrorTaProps(setLeftTa)}
+            />, { taEl: leftTa, text: leftColumn, column: 'left', wrapperClass: 'relative flex-1 flex flex-col min-h-0' })}
           </div>
         </div>
       ) : (
-        <textarea
+        withMirror(<textarea
           value={content}
           onChange={(e) => handleAutoSave(e.target.value)}
           onFocus={() => setActiveTextarea(null)}
@@ -136,10 +161,12 @@ const TextEditor = forwardRef(({
             textAlign: textAlign,
             fontSize: `${textZoom}px`
           }}
-          className="w-full h-full p-4 bg-white border-2 border-surface-variant rounded-lg resize-none focus:outline-none focus:border-primary transition-colors leading-relaxed"
+          className={`w-full h-full px-6 py-5 ${surface} border-2 border-surface-variant rounded-lg resize-none focus:outline-none focus:border-primary transition-colors leading-relaxed`}
           dir="rtl"
               spellCheck={false}
-        />
+          wrap={wrap}
+          {...mirrorTaProps(setContentTa)}
+        />, { taEl: contentTa, text: content, column: 'content', wrapperClass: 'relative w-full h-full' })
       )}
     </div>
   )

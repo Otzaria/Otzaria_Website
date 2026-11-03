@@ -6,6 +6,7 @@ import { getJson, sendJson, fmt } from '../api'
 import { BTN, Empty, Muted, Tag } from '../bits'
 import FramesPagePreview from './FramesPagePreview'
 import { FramesEditor } from './framesEditorSlot'
+import KeyHint, { Kbd } from './KeyHint'
 
 // סקירת גלאי-האזורים — לפי ספר (docs/75 §2): טבלה של הספרים שיש בהם עמודים שסומנו;
 // "פתח לבדיקה" — העמודים של הספר, ועמוד שנבחר נפתח בעורך-המסגרות של סשן ג' במצב review
@@ -84,6 +85,11 @@ function BookReview({ book, onBack, onChanged }) {
           </button>
         ))}
       </div>
+      {page?.status === 'submitted' && FramesEditor && (
+        <KeyHint>
+          <Kbd>Enter</Kbd> אשר את העמוד (ואם שיניתם מסגרות — תקן ואשר). שאר המקשים — של עורך-המסגרות
+        </KeyHint>
+      )}
       {page && (
         <div className="glass-strong flex flex-col gap-3 rounded-xl p-3">
           <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -115,6 +121,7 @@ function BookReview({ book, onBack, onChanged }) {
               page={page}
               streams={data.book?.streams || []}
               onSave={(result) => act(() => sendJson('/review/fix', { id: page.id, mark: result }))}
+              onApprove={() => !busy && decide(page, 'approve')}
             />
           ) : (
             <>

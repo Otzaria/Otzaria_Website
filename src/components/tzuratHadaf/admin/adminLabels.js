@@ -31,8 +31,8 @@ export const VERDICT_LABEL = Object.freeze({
 
 export const VIA_LABEL = Object.freeze({ fast: 'מסלול מהיר', page: 'בדיקת עמוד' })
 
-// רמזים מהעדים בצורת הדף (למנהל בלבד): te — תורת אמת, oh — ה-OCR של אוצר החכמה, bx — ה-OCR של הסריקה
-export const HINT_LABEL = Object.freeze({ te: 'תורת אמת', oh: 'אוצה"ח', bx: 'OCR', rule: 'כלל' })
+// רמזים מהעדים בצורת הדף (למנהל בלבד): te — תורת אמת, oh — עד נוסף, bx — ה-OCR של הסריקה
+export const HINT_LABEL = Object.freeze({ te: 'תורת אמת', oh: 'עד נוסף', bx: 'OCR', rule: 'כלל' })
 
 /** רמזי הפריט כרשימת תגיות קצרות: [{key, text}] (בלי ערכים ריקים). */
 export function hintBadges(hints) {

@@ -1,16 +1,15 @@
 'use client'
 
-import { useCallback, useEffect, useId, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import Button from '@/components/ui/Button'
-import { useDialog } from '@/components/providers/DialogContext'
 import BookProgressList from './BookProgressList'
 import { AccessNotice } from './TzuratShell'
 import { api } from './api'
 import { ADMIN_PATH, BASE_PATH, FAST_PATH, GUIDE_PATH, MINE_PATH, PRACTICE_PATH, num } from './labels'
 
-// דף הכניסה של צורת הדף: מה זה, שני המסלולים, ההתקדמות לכל מסכת, התרומות שלי, וסימון "אני קורא כתב רש"י".
-// הנתונים: GET /api/tzurat-hadaf/overview; הסימון: POST /api/tzurat-hadaf/me.
+// דף הכניסה של צורת הדף: מה זה, שני המסלולים, ההתקדמות לכל מסכת והתרומות שלי.
+// הנתונים: GET /api/tzurat-hadaf/overview.
 
 function TrackCard({ href, icon, title, text }) {
   return (
@@ -48,11 +47,8 @@ function MySummary({ me }) {
 }
 
 export default function TzuratLanding() {
-  const { showAlert } = useDialog()
   const [data, setData] = useState(null)
   const [fail, setFail] = useState(null)
-  const [savingRashi, setSavingRashi] = useState(false)
-  const rashiId = useId()
 
   const load = useCallback(async () => {
     const r = await api.overview()
@@ -66,19 +62,6 @@ export default function TzuratLanding() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load()
   }, [load])
-
-  const toggleRashi = async (on) => {
-    if (!data) return
-    setSavingRashi(true)
-    setData((d) => ({ ...d, me: { ...d.me, rashi: on } }))
-    const r = await api.setMe({ rashi: on })
-    setSavingRashi(false)
-    if (r.ok) setData((d) => ({ ...d, me: { ...d.me, rashi: !!r.data.rashi, practiceDone: r.data.practiceDone ?? d.me.practiceDone } }))
-    else {
-      setData((d) => ({ ...d, me: { ...d.me, rashi: !on } }))
-      showAlert('שגיאה', r.error)
-    }
-  }
 
   const me = data?.me
 
@@ -134,20 +117,6 @@ export default function TzuratLanding() {
             </Link>
           </div>
           <MySummary me={me} />
-          <div className="flex items-start gap-2">
-            <input
-              id={rashiId}
-              type="checkbox"
-              checked={!!me.rashi}
-              disabled={savingRashi}
-              onChange={(e) => toggleRashi(e.target.checked)}
-              className="mt-1 h-5 w-5 accent-primary"
-            />
-            <label htmlFor={rashiId} className="text-on-surface">
-              <span className="font-bold">אני קורא כתב רש&quot;י</span>
-              <span className="block text-sm text-on-surface/60">כך תקבלו גם שאלות מרש&quot;י ומתוספות, שנדפסו בכתב רש&quot;י.</span>
-            </label>
-          </div>
         </section>
       )}
 

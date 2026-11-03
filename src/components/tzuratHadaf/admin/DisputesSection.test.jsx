@@ -68,7 +68,7 @@ describe('DisputesSection', () => {
     expect(card.textContent).toContain('ראובן')
     expect(card.textContent).toContain('«אמרי»')
     const hints = within(card).getAllByTestId('item-hint').map((h) => h.textContent)
-    expect(hints).toEqual(['תורת אמת: כמו הדפוס', 'אוצה"ח: כמו אוצריא', 'כלל: abbr'])
+    expect(hints).toEqual(['תורת אמת: כמו הדפוס', 'עד נוסף: כמו אוצריא', 'כלל: abbr'])
     expect(within(card).getByRole('img').getAttribute('src')).toBe('/api/tzurat-hadaf/items/i1/image?ctx=1')
     // replace — בלי elsewhere
     expect(within(card).queryByRole('button', { name: /elsewhere/ })).toBeNull()

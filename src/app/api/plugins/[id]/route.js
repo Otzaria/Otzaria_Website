@@ -5,7 +5,7 @@ import dbConnect from '@/lib/db'
 import { findPluginForDetail, buildPluginDetailPayload } from '@/lib/pluginDetail'
 import { parsePluginRef } from '@/lib/pluginRef'
 import { hasPluginsAccess } from '@/lib/roles'
-import { canAccessSuspended, isPluginSuspended } from '@/lib/pluginVisibility'
+import { canAccessSuspended, isPluginOwner, isPluginSuspended } from '@/lib/pluginVisibility'
 import { notFound, serverError } from '@/lib/apiResponse'
 
 // תומך גם בגרסה ארכיונית ספציפית דרך /api/plugins/<id>@<version>.
@@ -29,7 +29,7 @@ export async function GET(request, { params }) {
     if (isPluginSuspended(plugin)) {
       const session = await getServerSession(authOptions)
       const isAdmin = hasPluginsAccess(session?.user?.role)
-      const isOwner = plugin.authorId?.toString() === session?.user?.id
+      const isOwner = isPluginOwner(plugin, session?.user?.id)
       if (!canAccessSuspended({ isAdmin, isOwner })) {
         return notFound('Plugin not found')
       }

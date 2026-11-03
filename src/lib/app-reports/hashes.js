@@ -1,6 +1,7 @@
 /**
  * טביעות אצבע של דיווח: contentHash ל-idempotency ו-signatureHash לאיחוד קריסות זהות.
  */
+import crypto from 'node:crypto';
 import { canonicalJson, sha256Hex } from '../corrections/ocj1.js';
 import { DEFAULT_PRODUCT } from './products.js';
 
@@ -29,4 +30,19 @@ export function computeContentHash(report) {
 export function computeSignatureHash(signature) {
   if (!signature || !signature.exceptionType) return null;
   return sha256Hex(`${signature.exceptionType}\n${(signature.frames || []).join('\n')}`);
+}
+
+const bufferHash = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
+
+/**
+ * טביעה של שליחה חוזרת: אותו תוכן עם אותו לוג וקבצים מצורפים, תחת reportId חדש.
+ * בלי האבחון — הוא כולל את זמן האיסוף ומשתנה בכל שליחה.
+ */
+export function computeResendHash(contentHash, report) {
+  return sha256Hex(canonicalJson({
+    contentHash,
+    errorLog: report.errorLog || '',
+    minidump: report.minidump ? bufferHash(report.minidump.buffer) : null,
+    images: (report.images || []).map((image) => bufferHash(image.buffer)),
+  }));
 }

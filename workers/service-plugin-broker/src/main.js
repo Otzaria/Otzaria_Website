@@ -1,9 +1,13 @@
 import { WorkerApi } from './api.js'
 import { Broker } from './broker.js'
+import { codeFingerprint } from './codeVersion.js'
 import { ConfigError, checkClaudeUserSettings, loadConfig } from './config.js'
 import { ensureDir, findAncestorClaudeConfig } from './util.js'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
+
+// יציאה לא-אפסית ש-systemd (Restart=on-failure) מפעיל אחריה מחדש, עם הקוד החדש.
+const RESTART_EXIT_CODE = 75
 
 function log(event, data = {}) {
   process.stdout.write(JSON.stringify({ at: new Date().toISOString(), event, ...data }) + '\n')
@@ -38,11 +42,12 @@ async function main() {
   }
 
   const api = new WorkerApi({ siteUrl: config.siteUrl, workerSecret: config.workerSecret, workerId: config.brokerId })
-  const broker = new Broker({ config, api, log })
+  const broker = new Broker({ config, api, log, codeFingerprint })
   for (const sig of ['SIGTERM', 'SIGINT']) process.once(sig, () => broker.stop(sig))
   log('started', { brokerId: config.brokerId, authMode: config.claudeAuthMode, sandbox: Boolean(config.sandboxWrapper),
     virusTotal: Boolean(config.vtApiKey) })
   await broker.run()
+  if (broker.restartRequested) process.exit(RESTART_EXIT_CODE)
 }
 
 main().catch((err) => {

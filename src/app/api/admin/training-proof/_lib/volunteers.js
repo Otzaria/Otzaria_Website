@@ -28,6 +28,7 @@ export function rowStats(stats) {
     pages: sum('saved', ['frames']),
     pending: sum('pending', SECTIONS),
     approved: sum('approved', SECTIONS),
+    corrected: sum('corrected', SECTIONS),
     rejected: sum('rejected', SECTIONS),
     match: judged ? matchPct(sum('unchanged', SECTIONS) / judged) : null,
     bySection: Object.fromEntries(SECTIONS.map((s) => [s, { ...stats[s], match: matchPct(stats[s]?.match) }])),

@@ -16,7 +16,7 @@ import { manifestOf, framesItem, BOOKS } from '../../../../../lib/trainingProof/
 import { BOOK_CLAIM_MS } from '../../../../../lib/trainingProof/vocab.js';
 import { buildReturnZip, checkReturnLine } from '../../../../../lib/trainingProof/returnFile.js';
 import { startMongo } from '../../../../../lib/corrections/testing/mongo.js';
-import { listBooks, claimBook, releaseBook, bookDetail, savePage, addStream, pageImagePath, sweepBooks } from './framesDb.js';
+import { listBooks, claimBook, releaseBook, bookDetail, savePage, addStream, setStreamKind, pageImagePath, sweepBooks } from './framesDb.js';
 
 let db;
 before(async () => {
@@ -222,6 +222,146 @@ test('זרם שנוסף לספר — נכנס ל-streams_added של עמוד ש�
   assert.deepEqual(doc.result.streams_added, [{ id: 'x1', name: 'הגהות', role: 'notes' }]);
 });
 
+test('סוג של זרם שנוסף משתנה בכל העמודים שלו; זרם מהתחנה ועמוד שאושר — לא', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  await seed({ n: 3 });
+  await claimBook(A, KEY, T0);
+  await addStream(A, KEY, { name: 'הגהות', role: 'notes' }, T0);
+  const pages = (await bookDetail(A, KEY, { now: T0 })).pages;
+  const add = (p, k) => [...p.frames, { fid: 'n1', kind: 'text', role: 'notes', box: [100, 2300 + k, 900, 2400], stream: 'x1', ord: 9, cont: false }];
+  await savePage(A, pages[0].id, marked(add(pages[0], 0)), { now: T0 });
+  await savePage(A, pages[1].id, { status: 'draft', frames: add(pages[1], 1) }, { now: T0 });
+  assert.equal((await setStreamKind(A, KEY, 's1', { role: 'heading' }, T0)).status, 400);
+  assert.equal((await setStreamKind(B, KEY, 'x1', { role: 'commentary' }, T0)).status, 409);
+  const r = await setStreamKind(A, KEY, 'x1', { role: 'commentary' }, T0);
+  assert.equal(r.ok, true);
+  assert.equal(r.pages, 2);
+  assert.equal(r.streams.find((s) => s.id === 'x1').role, 'commentary');
+  const d0 = await TrainingProofItem.findById(pages[0].id).lean();
+  assert.equal(d0.status, 'submitted');
+  assert.equal(d0.result.frames.find((f) => f.fid === 'n1').role, 'commentary');
+  assert.deepEqual(d0.result.streams_added, [{ id: 'x1', name: 'הגהות', role: 'commentary' }]);
+  const d1 = await TrainingProofItem.findById(pages[1].id).lean();
+  assert.equal(d1.result.frames.find((f) => f.fid === 'n1').role, 'commentary');
+  // שמירה עם הסוג הישן מהדפדפן — השרת קובע לפי הזרם
+  const again = await savePage(A, pages[1].id, { status: 'draft', frames: add(pages[1], 1) }, { now: T0 });
+  assert.equal(again.page.frames.find((f) => f.fid === 'n1').role, 'commentary');
+  // עמוד שאושר עם הזרם — אי-אפשר לשנות עוד
+  await TrainingProofItem.updateOne({ _id: d0._id }, { $set: { status: 'approved', reviewedAt: T0 } });
+  const no = await setStreamKind(A, KEY, 'x1', { role: 'notes' }, T0);
+  assert.equal(no.status, 409);
+  assert.match(no.error, /אושר/);
+  assert.equal((await TrainingProofBook.findOne({ book: KEY }).lean()).streams.find((s) => s.id === 'x1').role, 'commentary');
+});
+
+test('סוג של זרם מהתחנה משתנה — stationRole נשמר, ו-streams_changed יוצא בקובץ-ההחזרה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  await seed({ n: 2 });
+  await claimBook(A, KEY, T0);
+  const pages = (await bookDetail(A, KEY, { now: T0 })).pages;
+  await savePage(A, pages[0].id, marked(pages[0].frames), { now: T0 });
+  const r = await setStreamKind(A, KEY, 's1', { role: 'commentary' }, T0);
+  assert.equal(r.ok, true);
+  assert.equal(r.pages, 1);
+  assert.deepEqual(r.streams.find((s) => s.id === 's1'), { id: 's1', name: 'פנים', role: 'commentary', stationRole: 'body' });
+  const d0 = await TrainingProofItem.findById(pages[0].id).lean();
+  assert.equal(d0.result.frames.find((f) => f.stream === 's1').role, 'commentary');
+  assert.deepEqual(d0.result.streams_changed, [{ id: 's1', role: 'commentary', from: 'body' }]);
+  // שינוי נוסף — from נשאר הסוג של התחנה
+  await setStreamKind(A, KEY, 's1', { role: 'notes' }, T0);
+  const d1 = await TrainingProofItem.findById(pages[0].id).lean();
+  assert.deepEqual(d1.result.streams_changed, [{ id: 's1', role: 'notes', from: 'body' }]);
+  // עמוד שני נשמר אחר-כך — נושא גם הוא את השינוי
+  await savePage(A, pages[1].id, marked(pages[1].frames), { now: T0 });
+  await TrainingProofItem.updateMany({}, { $set: { status: 'approved', reviewedAt: T0 } });
+  const items = await TrainingProofItem.find({}).lean();
+  const zip = buildReturnZip('frames', items, { stationOf: () => 'st-6b1e0d5a', now: T0 });
+  assert.equal(zip.lines.length, 2);
+  for (const l of zip.lines) {
+    assert.equal(checkReturnLine('frames', l), null);
+    assert.deepEqual(l.streams_changed, [{ id: 's1', role: 'notes', from: 'body' }]);
+    assert.equal(l.frames.find((f) => f.stream === 's1').role, 'notes');
+  }
+  // חזרה לסוג של התחנה — השדה יורד
+  await TrainingProofItem.updateMany({}, { $set: { status: 'submitted', reviewedAt: null } });
+  await setStreamKind(A, KEY, 's1', { role: 'body' }, T0);
+  assert.equal('streams_changed' in (await TrainingProofItem.findById(pages[0].id).lean()).result, false);
+});
+
+test('שינוי סוג שנקטע באמצע מושלם בבקשה הבאה בלי להשאיר עמודים חלקיים', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  await seed({ n: 2 });
+  await claimBook(A, KEY, T0);
+  const pages = (await bookDetail(A, KEY, { now: T0 })).pages;
+  await savePage(A, pages[0].id, marked(pages[0].frames), { now: T0 });
+  const book = await TrainingProofBook.findOne({ book: KEY }).lean();
+  const target = book.streams.map((s) => (s.id === 's1' ? { ...s, role: 'notes', stationRole: s.role } : s));
+  // מדמה קריסה אחרי רישום הפעולה ונעילת עמוד, אך לפני סנכרון ו-commit הספר.
+  await TrainingProofBook.updateOne(
+    { book: KEY },
+    { $set: { streamChange: { id: 'recover-1', streamId: 's1', from: 'body', role: 'notes', streams: target, startedAt: T0 } } }
+  );
+  await TrainingProofItem.updateOne({ _id: pages[0].id }, { $set: { streamChange: { id: 'recover-1' } } });
+  const detail = await bookDetail(A, KEY, { now: T0 });
+  assert.equal(detail.book.streams.find((s) => s.id === 's1').role, 'notes');
+  const item = await TrainingProofItem.findById(pages[0].id).lean();
+  assert.equal(item.result.frames.find((f) => f.stream === 's1').role, 'notes');
+  assert.equal(item.streamChange, null);
+  assert.equal((await TrainingProofBook.findOne({ book: KEY }).lean()).streamChange, null);
+});
+
+test('הוספת זרם בזמן שינוי שנקטע משלימה אותו ואינה נדרסת ב-commit', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  await seed({ n: 1 });
+  await claimBook(A, KEY, T0);
+  const book = await TrainingProofBook.findOne({ book: KEY }).lean();
+  const target = book.streams.map((s) => (s.id === 's1' ? { ...s, role: 'notes', stationRole: s.role } : s));
+  await TrainingProofBook.updateOne(
+    { book: KEY },
+    { $set: { streamChange: { id: 'recover-add', streamId: 's1', from: 'body', role: 'notes', streams: target, startedAt: T0 } } }
+  );
+  const added = await addStream(A, KEY, { name: 'הגהות', role: 'commentary' }, T0);
+  assert.equal(added.ok, true);
+  assert.equal(added.stream.id, 'x1');
+  const after = await TrainingProofBook.findOne({ book: KEY }).lean();
+  assert.equal(after.streams.find((s) => s.id === 's1').role, 'notes');
+  assert.equal(after.streams.find((s) => s.id === 'x1').role, 'commentary');
+  assert.equal(after.streamChange, null);
+});
+
+test('אישור שניצח את נעילת שינוי הסוג מבטל ומחזיר שינוי חלקי', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  await seed({ n: 2 });
+  await claimBook(A, KEY, T0);
+  const pages = (await bookDetail(A, KEY, { now: T0 })).pages;
+  await savePage(A, pages[0].id, marked(pages[0].frames), { now: T0 });
+  await savePage(A, pages[1].id, marked(pages[1].frames), { now: T0 });
+  const book = await TrainingProofBook.findOne({ book: KEY }).lean();
+  const target = book.streams.map((s) => (s.id === 's1' ? { ...s, role: 'notes', stationRole: s.role } : s));
+  await TrainingProofBook.updateOne(
+    { book: KEY },
+    { $set: { streamChange: { id: 'recover-2', streamId: 's1', from: 'body', role: 'notes', streams: target, startedAt: T0 } } }
+  );
+  // עמוד אחד כבר סונכרן חלקית; האחר אושר לפני שהסמן הגיע אליו.
+  const partial = await TrainingProofItem.findById(pages[0].id).lean();
+  partial.result.frames = partial.result.frames.map((f) => (f.stream === 's1' ? { ...f, role: 'notes' } : f));
+  await TrainingProofItem.updateOne(
+    { _id: pages[0].id },
+    { $set: { result: partial.result, streamChange: { id: 'recover-2' } } }
+  );
+  await TrainingProofItem.updateOne(
+    { _id: pages[1].id },
+    { $set: { status: 'approved', reviewedAt: T0 } }
+  );
+  await bookDetail(A, KEY, { now: T0 });
+  const afterBook = await TrainingProofBook.findOne({ book: KEY }).lean();
+  const afterPage = await TrainingProofItem.findById(pages[0].id).lean();
+  assert.equal(afterBook.streams.find((s) => s.id === 's1').role, 'body');
+  assert.equal(afterBook.streamChange, null);
+  assert.equal(afterPage.result.frames.find((f) => f.stream === 's1').role, 'body');
+  assert.equal(afterPage.streamChange, null);
+});
+
 test('כל העמודים סומנו — הספר "הושלם" ו-doneBy', async (t) => {
   if (db.skip) return t.skip(db.skip);
   await seed({ n: 2 });
@@ -232,6 +372,48 @@ test('כל העמודים סומנו — הספר "הושלם" ו-doneBy', async
   assert.equal(String((await TrainingProofBook.findOne({ book: KEY }).lean()).doneBy), A);
   assert.equal((await stateOf(B)).state, 'done');
   assert.equal((await claimBook(B, KEY, T0)).status, 409);
+});
+
+test('ספר שהוגש כולו וממתין לאישור — לא חוסם לקיחת ספר נוסף', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  await seed({ n: 2 });
+  await TrainingProofBook.create({ book: 'b-0000000001', alias: 'ספר 12', streams: [] });
+  const m = manifestOf('frames', { package_id: 'tp-20261027-00000001' });
+  await TrainingProofItem.create(itemDoc(m, framesItem(9, { uid: 'frames:fpages:999', book: 'b-0000000001' })));
+  await claimBook(A, KEY, T0);
+  const pages = (await bookDetail(A, KEY, { now: T0 })).pages;
+  await savePage(A, pages[0].id, marked(pages[0].frames), { now: T0 });
+  // עמוד אחד עוד פתוח — הספר בעבודה וחוסם
+  assert.equal((await claimBook(A, 'b-0000000001', T0)).status, 409);
+  assert.equal((await savePage(A, pages[1].id, marked(pages[1].frames), { now: T0 })).bookDone, true);
+  assert.equal((await listBooks(A, T0)).books.find((b) => b.book === KEY).state, 'done');
+  const aggregate = TrainingProofItem.aggregate;
+  const calls = t.mock.method(TrainingProofItem, 'aggregate', function (...args) {
+    return aggregate.apply(this, args);
+  });
+  const r = await claimBook(A, 'b-0000000001', T0);
+  assert.equal(r.ok, true, r.error);
+  assert.equal(calls.mock.callCount(), 1, 'מוני הספר המבוקש והספר הקודם נקראים יחד');
+  calls.mock.restore();
+
+  // אם המנהל דוחה עמוד בספר הקודם, הוא שוב חוסם גם אחרי שהספר החדש שוחרר.
+  await TrainingProofItem.updateOne({ _id: pages[0].id }, { $set: { status: 'available', result: null, vol: null } });
+  assert.equal((await releaseBook(A, 'b-0000000001')).ok, true);
+  assert.equal((await claimBook(A, 'b-0000000001', T0)).status, 409);
+});
+
+test('ספירת ספר משתמשת באינדקס ולא קוראת עמודים מספרים אחרים', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  await seed({ n: 2 });
+  await TrainingProofItem.collection.insertMany(Array.from({ length: 500 }, (_, i) => ({
+    section: 'frames', book: `other-${i}`, status: 'available', packageId: 'other-package', uid: `other-${i}`,
+  })));
+  const plan = await TrainingProofItem.aggregate([
+    { $match: { section: 'frames', book: { $in: [KEY] } } },
+    { $group: { _id: '$book', total: { $sum: 1 }, done: { $sum: { $cond: [{ $in: ['$status', ['submitted', 'approved']] }, 1, 0] } } } },
+  ]).explain('executionStats');
+  const stats = plan.stages?.[0]?.$cursor?.executionStats || plan.executionStats;
+  assert.equal(stats.totalDocsExamined, 2, 'רק שני עמודי הספר המבוקש נקראים');
 });
 
 test('חבילה מושהית — הספר לא מופיע למתנדבים', async (t) => {

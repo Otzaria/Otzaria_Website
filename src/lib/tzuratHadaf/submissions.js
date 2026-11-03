@@ -202,7 +202,7 @@ async function addManualItem(page, m, user, now, submission) {
   );
   const current = await TzuratItem.findById(item._id).lean();
   const v = verdictForExisting(current, m.text);
-  const result = await addAnswer(item._id, user, { ...v, via: 'page', submission, revision: current.revision ?? 0 }, { canRashi: true, now });
+  const result = await addAnswer(item._id, user, { ...v, via: 'page', submission, revision: current.revision ?? 0 }, { now });
   return { id: item._id, result };
 }
 
@@ -211,13 +211,13 @@ async function addManualItem(page, m, user, now, submission) {
 /**
  * הגשת עמוד. user: {id, name}. ← {ok, submission: id, points: 0} או fail.
  */
-export async function submitPage(pageId, user, body, { canRashi = false, now = new Date() } = {}) {
+export async function submitPage(pageId, user, body, { now = new Date() } = {}) {
   if (!isObjectId(String(pageId))) return fail(404, 'העמוד לא נמצא');
   const uid = oid(user.id);
   const page = await TzuratPage.findById(pageId).lean();
   if (!page) return fail(404, 'העמוד לא נמצא');
   const pending = await TzuratSubmission.findOne({ page: page._id, user: uid, status: 'processing' }).lean();
-  if (pending) return finishSubmission(pending, user, { canRashi, now });
+  if (pending) return finishSubmission(pending, user, { now });
   const v = normalizeSubmission(body, page.model);
   if (v.error) return fail(400, v.error);
   const input = v.value;
@@ -267,7 +267,7 @@ export async function submitPage(pageId, user, body, { canRashi = false, now = n
   } catch (e) {
     if (e?.code === 11000) {
       const existing = await TzuratSubmission.findOne({ page: page._id, user: uid, round: page.round || 1, status: 'processing' }).lean();
-      if (existing) return finishSubmission(existing, user, { canRashi, now });
+      if (existing) return finishSubmission(existing, user, { now });
     }
     throw e;
   }
@@ -300,13 +300,13 @@ export async function submitPage(pageId, user, body, { canRashi = false, now = n
   if (!marked.matchedCount) throw new Error('Submission disappeared after reservation');
   sub.reservationClaimed = true;
 
-  return finishSubmission(sub.toObject(), user, { canRashi, now });
+  return finishSubmission(sub.toObject(), user, { now });
 }
 
 // The submission is invisible to review/export until every write has succeeded. Each effect is
 // idempotent (answers carry the submission ID; report IDs are allocated in the saved input).
 const PROCESSING_MS = 10 * 60 * 1000;
-async function finishSubmission(sub, user, { canRashi, now }) {
+async function finishSubmission(sub, user, { now }) {
   if (!sub.reservationClaimed) {
     const uid = oid(user.id);
     const page = sub.input?.page;
@@ -358,7 +358,7 @@ async function finishSubmission(sub, user, { canRashi, now }) {
   try {
     for (const a of input.itemAnswers) {
       await beat();
-      const r = await addAnswer(a.item, user, { verdict: a.verdict, text: a.text, revision: a.revision, via: 'page', submission: sub._id }, { canRashi, now });
+      const r = await addAnswer(a.item, user, { verdict: a.verdict, text: a.text, revision: a.revision, via: 'page', submission: sub._id }, { now });
       if (r.ok) itemAnswers.push({ item: oid(a.item), verdict: a.verdict, text: a.text ?? null });
       else {
         const proposed = a.verdict === 'print' ? a.print.join(' ') : a.verdict === 'otz' ? a.otz.join(' ') : a.text || (a.verdict === 'unclear' ? 'לא ברור' : 'נמצא במקום אחר');

@@ -9,7 +9,7 @@ import { parsePluginRef } from '@/lib/pluginRef'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { getClientIp } from '@/lib/client-ip'
 import { hasPluginsAccess } from '@/lib/roles'
-import { canAccessSuspended, isPluginSuspended } from '@/lib/pluginVisibility'
+import { canAccessSuspended, isPluginOwner, isPluginSuspended } from '@/lib/pluginVisibility'
 import { readInstallAnonId, generateInstallAnonId, setInstallAnonCookie } from '@/lib/installAnonId'
 import { isServicePlugin, SERVICE_BLOCK_MESSAGES } from '@/lib/servicePlugins/existingPaths'
 
@@ -48,7 +48,7 @@ export async function POST(request, { params }) {
     // תוסף מושהה — התקנה ישירה זמינה רק למעלה ולמנהלי התוספים, כמו ההורדה עצמה
     if (isPluginSuspended(plugin)) {
       const isAdmin = hasPluginsAccess(session?.user?.role)
-      const isOwner = plugin.authorId?.toString() === session?.user?.id
+      const isOwner = isPluginOwner(plugin, session?.user?.id)
       if (!canAccessSuspended({ isAdmin, isOwner })) {
         return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
       }

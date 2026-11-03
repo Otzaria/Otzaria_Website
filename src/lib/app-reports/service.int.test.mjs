@@ -119,6 +119,39 @@ test('idempotency: אותו reportId ותוכן זהה → duplicate בלי קר
   assert.equal(await AppReport.countDocuments(), 1);
 });
 
+test('שליחה חוזרת של אותו דיווח עם reportId חדש → duplicate שמפנה לראשון, בלי issue, תגובה או קבצים', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const first = await post(crash({ trigger: 'crash_prompt' }));
+  const calls = gh.calls.length;
+  const filesBefore = files.size;
+  const resentId = newId();
+  const again = await post(crash({
+    trigger: 'crash_prompt', reportId: resentId, createdAt: '2026-09-17T10:00:13.000Z',
+    attachments: { diagnostics: { settings: { theme: 'light' } }, errorLog: 'Exception: boom\n#0 main' },
+  }));
+  assert.equal(again.status, 200);
+  assert.deepEqual(again.body, { ...first.body, reportId: resentId, duplicate: true });
+  assert.equal(gh.calls.length, calls);
+  assert.equal(files.size, filesBefore);
+  assert.equal(await AppReport.countDocuments(), 1);
+});
+
+test('שליחה חוזרת: לוג שונה, צילום שונה או חלון זמן שעבר → דיווח נפרד', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const base = crash({ trigger: 'crash_prompt' });
+  await post(base);
+  const otherLog = await post({ ...base, reportId: newId(), attachments: { ...base.attachments, errorLog: 'Exception: boom\n#0 main\n#1 other hang' } });
+  assert.equal(otherLog.body.duplicate, false);
+  assert.equal(otherLog.body.merged, true);
+
+  const withImage = await post({ ...base, reportId: newId(), attachments: { ...base.attachments, images: [{ mimeType: 'image/gif', data: GIF87A.toString('base64') }] } });
+  assert.equal(withImage.body.duplicate, false);
+
+  const later = await post({ ...base, reportId: newId() }, { deps: { now: new Date(Date.now() + 61 * 60 * 1000) } });
+  assert.equal(later.body.duplicate, false);
+  assert.equal(await AppReport.countDocuments(), 4);
+});
+
 test('קריסה עם אותה חתימה על issue פתוח → תגובה (merged); אחרי סגירה → issue חדש עם "קודם"', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const a = await post(crash());
@@ -140,7 +173,7 @@ test('קריסה עם אותה חתימה על issue פתוח → תגובה (me
 
   gh.setState(a.body.issueNumber, 'closed', 'completed');
   await runAppReportsSync(syncDeps());
-  const c = await post(crash());
+  const c = await post(crash({ description: 'שוב אחרי התיקון' }));
   assert.equal(c.body.merged, false);
   assert.notEqual(c.body.issueNumber, a.body.issueNumber);
   assert.match(gh.issues.get(c.body.issueNumber).body, new RegExp(`קודם: #${a.body.issueNumber}`));
@@ -190,7 +223,7 @@ test('GitHub נכשל → issuePending, והסנכרון יוצר את ה-issue;
   assert.equal(doc.issueNumber, 100);
 
   const noToken = getAppReportsConfig({});
-  const r2 = await post(manual(), { deps: { config: noToken } });
+  const r2 = await post(manual({ description: 'דיווח שני' }), { deps: { config: noToken } });
   assert.equal(r2.body.issuePending, true);
   assert.equal((await runAppReportsSync({ config: noToken, sendClosedMail })).githubConfigured, false);
 });
@@ -1335,7 +1368,7 @@ test('מוצרים: פנייה יוצאת נשלחת ונשמרת פעם אחת,
   const { hub, otz, upd } = twoRepos();
   const legacy = await postVia(hub, manual());
   await AppReport.updateOne({ reportId: legacy.body.reportId }, { $unset: { product: 1 } });
-  const current = await postVia(hub, manual());
+  const current = await postVia(hub, manual({ description: 'דיווח נוכחי' }));
   const offline = await postVia(hub, updater(manual));
   const sent = [];
   const deps = { config: replyConfig, fetchImpl: hub.fetch, sendContactMail: async (mail) => {

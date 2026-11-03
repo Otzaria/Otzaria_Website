@@ -15,7 +15,9 @@
 import { createElement as h, useState } from 'react'
 import FramesEditorBase from '@/components/trainingProof/frames/FramesEditor'
 
-export function FramesEditor({ page, streams, onSave }) {
+// onApprove — Enter בעורך (כשהעורך לא תופס את המקש, למשל בסדר-קריאה): "אשר את העמוד";
+// ואם שיניתם משהו — "תקן ואשר" עם המסגרות שבעורך
+export function FramesEditor({ page, streams, onSave, onApprove }) {
   const start = page.result?.frames || page.frames || []
   const [frames, setFrames] = useState(start)
   const [dirty, setDirty] = useState(false)
@@ -45,5 +47,6 @@ export function FramesEditor({ page, streams, onSave }) {
       if (save !== false) setDirty(true)
     },
     sideExtra: fixBtn,
+    onConfirm: editable && onApprove ? (next) => (dirty ? onSave({ status: 'marked', frames: next }) : onApprove()) : undefined,
   })
 }

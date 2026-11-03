@@ -20,12 +20,15 @@ export const ROLE_COLORS = {
 // התוויות בעורך (כמו בתחנה; "פנים" ב-vocab = "גוף הטקסט" בדוגמה)
 export const ROLE_LABELS = { ...FRAME_ROLE_LABELS };
 
-// מקשי-התפקיד 1–9, לפי הסדר של FRAME_ROLES (כמו ROLE_KEYS בתחנה)
-export const ROLE_BY_KEY = Object.fromEntries(FRAME_ROLES.map((r, i) => [String(i + 1), r]));
-export const KEY_OF_ROLE = Object.fromEntries(FRAME_ROLES.map((r, i) => [r, String(i + 1)]));
+// התפקידים שבוחרים בעורך — בלי "כותרת" (בעל הפרויקט, 2026-11-01; docs/69 §8.15): כותרת היא חלק ממסגרת הזרם
+// שהיא פותחת. heading נשאר ב-FRAME_ROLES כערך תקין בחוזה, לחבילות ולעמודים ישנים.
+export const PICK_ROLES = FRAME_ROLES.filter((r) => r !== 'heading');
 
-// תפקידים שזרם חדש יכול לקבל (לא ריהוט ולא אובייקט)
-export const STREAM_ROLES = FRAME_ROLES.filter((r) => r !== 'furniture' && r !== 'object');
+// מקשי-התפקיד 1–8, לפי הסדר של PICK_ROLES (כמו ROLE_KEYS בתחנה)
+export const ROLE_BY_KEY = Object.fromEntries(PICK_ROLES.map((r, i) => [String(i + 1), r]));
+export const KEY_OF_ROLE = Object.fromEntries(PICK_ROLES.map((r, i) => [r, String(i + 1)]));
+
+// הסוגים שזרם יכול לקבל — STREAM_KINDS ב-streamRoles.js
 
 export const OBJECT_LABELS = {
   figure: 'איור',
@@ -52,10 +55,11 @@ export const KEY_HELP = [
   ['גרירה על מקום ריק', 'מסגרת חדשה'],
   ['גרירת מסגרת', 'הזזה'],
   ['קצה או פינה', 'הגדלה והקטנה'],
-  ['1–9', 'תפקיד'],
-  ['Alt+1…9', 'זרם'],
+  ['1–8', 'תפקיד'],
+  ['Alt+1…9', 'זרם (והסוג שלו)'],
+  ['Alt+↑ / Alt+↓', 'מוקדם / מאוחר יותר בסדר הקריאה'],
   ['C', 'ממשיך בעמוד הבא'],
-  ['O', 'סדר הקריאה'],
+  ['O', 'סדר הקריאה בלחיצות (כל העמוד)'],
   ['S', 'הצמדה לדיו'],
   ['Delete', 'מחיקת מסגרת'],
   ['Ctrl+Z', 'ביטול השינוי האחרון'],

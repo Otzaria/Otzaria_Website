@@ -5,6 +5,7 @@ import TrainingProofBook from '@/models/TrainingProofBook';
 import TrainingProofExportLock from '@/models/TrainingProofExportLock';
 import { buildReturnZip, newExportId } from '@/lib/trainingProof/returnFile';
 import { archiveDelta, applyArchive } from '@/lib/trainingProof/stats';
+import { syncCorrections } from '@/lib/trainingProof/corrections';
 import { oid } from './http';
 import { deleteMatchingItems, removeItemFiles, dropEmptyPackages, dropEmptyBooks } from './files';
 
@@ -68,6 +69,12 @@ export async function pendingSummary(section) {
 // אחרי שהקובץ נשלח: נשמר snapshot בר-שחזור ביומן, הפריטים נמחקים בתנאי שהם עדיין
 // מאושרים, ואז המונים והקבצים מנוקים באופן idempotent. כשל באמצע מושלם לפני הייצוא הבא.
 export async function purgeExported({ section, exportId, ids, packages, by }) {
+  // הפריט הוא ה-outbox של יומן התיקונים. אסור למחוק אותו לפני שהרשומה העצמאית
+  // נשמרה; אם Mongo נכשל כאן, מנגנון שחזור ה-purge ינסה שוב בפעם הבאה.
+  const corrections = await TrainingProofItem.find({
+    _id: { $in: ids }, section, status: 'approved', adminFixed: true,
+  }).lean();
+  await syncCorrections(corrections);
   const projection = { section: 1, status: 1, vol: 1, adminFixed: 1, rejectedFor: 1, imagePath: 1, ctxPath: 1, packageId: 1, part: 1, book: 1 };
   let log = await TrainingProofExportLog.findOne({ exportId }).select('+cleanup').lean();
   if (!log) {

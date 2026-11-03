@@ -72,17 +72,16 @@ test('דגימה: גמרא קודם, kind, מושהה, בלי תיבה, תרגו
   await mkItem('3', { box: null, score: 50 });
   await mkItem('4', { slug: 'shabbat', score: 60 });
   await mkItem('5', { practice: true, score: 70 });
-  const a = await sampleFastItem(String(u1._id), { canRashi: true });
+  const a = await sampleFastItem(String(u1._id));
   assert.equal(String(a._id), String(g._id));
-  // בלי רש"י — רק הגמרא; רק r — null
-  assert.equal(String((await sampleFastItem(String(u2._id), { canRashi: false }))._id), String(g._id));
-  assert.equal(await sampleFastItem(String(u2._id), { kind: 'r', canRashi: false }), null);
-  assert.equal(String((await sampleFastItem(String(u2._id), { kind: 'r', canRashi: true }))._id), String(rashi._id));
+  // kind=r — רק רש"י (לכל מתנדב)
+  assert.equal(String((await sampleFastItem(String(u2._id), { kind: 'r' }))._id), String(rashi._id));
   // exclude, ואחרי תשובה — לא שוב
-  const b = await sampleFastItem(String(u1._id), { canRashi: true, exclude: [g._id] });
+  const b = await sampleFastItem(String(u1._id), { exclude: [g._id] });
   assert.equal(String(b._id), String(rashi._id));
   await answerChoice(g._id, user(u1), { choice: 'unclear' });
-  const c = await sampleFastItem(String(u1._id), { canRashi: false });
+  await answerChoice(rashi._id, user(u1), { choice: 'unclear' });
+  const c = await sampleFastItem(String(u1._id));
   assert.equal(c, null);
 });
 
@@ -143,12 +142,10 @@ test('מחלוקת ו-unclear', async (t) => {
   assert.equal(rc.status, 'agreed');
 });
 
-test('רש"י בלי הרשאה — 403; flag', async (t) => {
+test('תוספות — לכל מתנדב; flag', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const r = await mkItem('1', { kind: 't' });
-  const res = await addAnswer(r._id, user(u1), { verdict: 'print' }, { canRashi: false });
-  assert.equal(res.status, 403);
-  assert.equal((await flagItem(r._id, String(u1._id), 'crop', { canRashi: false })).status, 403);
+  assert.equal((await addAnswer(r._id, user(u1), { verdict: 'print' })).ok, true);
   // סימון רך: אחד — נרשם, השאלה לא מוצעת לו שוב; שני משתמשים — flagged
   const g = await mkItem('2');
   assert.deepEqual(await flagItem(g._id, String(u1._id), 'crop'), { ok: true, flagged: false });

@@ -5,7 +5,7 @@ import { promises as fsp } from 'fs'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import { readPluginAsset, IMAGE_BASENAME, optimizeImageBuffer, getOptCachePath } from '@/lib/pluginStorage'
-import { canAccessSuspended, isPluginSuspended } from '@/lib/pluginVisibility'
+import { canAccessSuspended, isPluginOwner, isPluginSuspended } from '@/lib/pluginVisibility'
 import { notFound, serverError } from '@/lib/apiResponse'
 
 // GET /api/plugins/[id]/image - הגשת תמונת התוסף מהדיסק
@@ -22,7 +22,7 @@ export async function GET(request, { params }) {
 
     const session = await getServerSession(authOptions)
     const isAdmin = session?.user?.role === 'admin'
-    const isOwner = plugin.authorId?.toString() === session?.user?.id
+    const isOwner = isPluginOwner(plugin, session?.user?.id)
 
     if (includePending) {
       if (!plugin.pendingUpdate || (!isAdmin && !isOwner)) {

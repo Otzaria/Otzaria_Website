@@ -8,6 +8,8 @@ import { useReview } from './useReview'
 import { BulkBar, Pager } from './BulkBar'
 import RouterRow from './RouterRow'
 import VolunteerPicker from './VolunteerPicker'
+import { useHandles, useRowKeys } from './rowKeys'
+import KeyHint, { Kbd } from './KeyHint'
 
 const select = 'rounded-md border border-surface-variant bg-surface px-2 py-1 text-sm'
 
@@ -21,6 +23,18 @@ export default function RouterReview({ onChanged }) {
   const items = R.data?.items || []
   const stats = R.data?.stats
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }))
+  const H = useHandles()
+  // 1–4 כתב-השורה (תיקון) · 0 פסול · Enter אשר (עם התיקון, אם יש) · Delete דחה
+  const K = useRowKeys(items, (key, it) => {
+    if (it.status !== 'submitted' || R.busy) return false
+    const h = H.get(it.id)
+    if (/^[1-4]$/.test(key)) h?.setLabel(LINE_SCRIPTS[+key - 1])
+    else if (key === '0') h?.setLabel('bad')
+    else if (key === 'Enter') h?.confirm()
+    else if (key === 'Delete') R.decide([it.id], 'reject')
+    else return false
+    return true
+  })
 
   return (
     <div className="flex flex-col gap-3">
@@ -90,6 +104,11 @@ export default function RouterReview({ onChanged }) {
         </div>
       )}
 
+      <KeyHint>
+        <Kbd>1</Kbd> מרובע · <Kbd>2</Kbd> רש&quot;י · <Kbd>3</Kbd> לועזית · <Kbd>4</Kbd> מעורבת · <Kbd>0</Kbd> פסול (אלה תיקון) · <Kbd>Enter</Kbd> אשר
+        (עם התיקון, אם יש) · <Kbd>Delete</Kbd> דחה · <Kbd>↓</Kbd>/<Kbd>↑</Kbd> שורה אחרת
+      </KeyHint>
+
       <BulkBar
         items={items}
         sel={R.sel}
@@ -104,10 +123,13 @@ export default function RouterReview({ onChanged }) {
         {R.data?.error && <Empty>{R.data.error}</Empty>}
         {R.data && !items.length && !R.data.error && <Empty>אין שורות בתצוגה הזו</Empty>}
         {!R.data && <Empty>טוען…</Empty>}
-        {items.map((it) => (
+        {items.map((it, i) => (
           <RouterRow
             key={`${it.id}-${it.status}-${it.adminFixed}`}
             item={it}
+            current={i === K.cur}
+            onPick={() => K.setCur(i)}
+            handle={H.ref(it.id)}
             busy={R.busy}
             selected={R.sel.has(it.id)}
             onToggle={R.toggle}

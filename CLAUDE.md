@@ -26,8 +26,10 @@ node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/lib/foo.test.mjs
 
 פריסה: דחיפה ל-`master` מפעילה `.github/workflows/deploy.yml` (גם cron כל 5 דק' בודק אם תגית
 `v1` של `otzaria-plugin-validator` זזה ופורס אוטומטית — ראו README.md). הפריסה עצמה **אינה
-משתמשת בדוקר** — היא SSH ישיר ל-VPS: `git pull` + `npm install` + `npm run build` +
-`pm2 reload`. אין בפרויקט תמיכת Docker (הוסרה — לא הייתה בשימוש בפרודקשן ולא תוחזקה).
+משתמשת בדוקר** — היא SSH ישיר ל-VPS. הבנייה מתבצעת ב-`/var/www/otzaria-build` הקבועה עם
+מטמון `.next/cache`; גרסאות בלתי-משתנות נשמרות תחת `otzaria-releases` (פעילה + קודמת בלבד),
+ו-`/var/www/otzaria-web` הוא symlink שמוחלף אטומית לפני `pm2 restart`. נתוני runtime וקובצי env
+מקושרים מ-`otzaria-shared`. אין בפרויקט תמיכת Docker (הוסרה — לא הייתה בשימוש בפרודקשן ולא תוחזקה).
 
 ## ארכיטקטורה
 

@@ -29,7 +29,7 @@ sudo apt install gh
 sudo -u otzaria-broker -H bash -c 'curl -fsSL https://claude.ai/install.sh | bash'
 ```
 
-עותק המאגר: `/opt/otzaria-website` (קריאה בלבד למשתמש `otzaria-broker`). יחידת systemd לדוגמה: [`deploy/service-plugin-broker.service`](deploy/service-plugin-broker.service). הסודות (`SERVICE_PLUGIN_WORKER_SECRET`, `GH_TOKEN`, `ANTHROPIC_API_KEY`, `VT_API_KEY`) נשמרים כקובץ לכל סוד ב־`/etc/otzaria/credentials/` (בעלות root, `0600`) ונטענים ב־`LoadCredential=`: systemd חושף אותם רק לתהליך המתווך תחת `$CREDENTIALS_DIRECTORY`, לא בסביבה. שאר ההגדרות בקובץ `/etc/otzaria/service-broker.env`.
+עותק המאגר: `/opt/otzaria-website` (קריאה בלבד למשתמש `otzaria-broker`). כל פריסה של האתר (`scripts/deploy-web.sh`) מעבירה את העותק הזה לקומיט שנפרס, גם כשהגרסה כבר פעילה, כך שפריסה חוזרת מתקנת עדכון שנכשל; כשל בשלב הזה מוצג כאזהרה ואינו מכשיל את הפריסה. הפריסה אינה מפעילה את המתווך מחדש: בין משימה למשימה הוא משווה את הקוד שהוא טוען (`src/`, `policy/`, `package.json` וקובצי האתר שהוא מייבא) לזה שבדיסק, ואם השתנה הוא יוצא בקוד 75 ו־systemd מעלה אותו מחדש. כך עדכון לעולם אינו קוטע בדיקה פעילה, ופריסה שלא נגעה בקוד המתווך אינה מאתחלת אותו. **מעבר חד־פעמי:** מתווך שהופעל מגרסה שקדמה למנגנון הזה אינו מכיר אותו, ולכן לא יאתחל את עצמו גם אחרי שהפריסה עדכנה את הקבצים. יש להפעיל אותו מחדש ידנית פעם אחת, כשהוא פנוי: לוודא ב־`journalctl -u otzaria-service-broker -n 50` שאחרי ה־`job_start` האחרון כבר הופיע `job_result`, `job_failure` או `job_aborted`, ואז `sudo systemctl restart otzaria-service-broker`. מכאן והלאה העדכונים נטענים מעצמם. יחידת systemd לדוגמה: [`deploy/service-plugin-broker.service`](deploy/service-plugin-broker.service). הסודות (`SERVICE_PLUGIN_WORKER_SECRET`, `GH_TOKEN`, `ANTHROPIC_API_KEY`, `VT_API_KEY`) נשמרים כקובץ לכל סוד ב־`/etc/otzaria/credentials/` (בעלות root, `0600`) ונטענים ב־`LoadCredential=`: systemd חושף אותם רק לתהליך המתווך תחת `$CREDENTIALS_DIRECTORY`, לא בסביבה. שאר ההגדרות בקובץ `/etc/otzaria/service-broker.env`.
 
 ```bash
 sudo install -d -m 0700 /etc/otzaria/credentials
@@ -65,10 +65,12 @@ journalctl -u otzaria-service-broker -f
 
 | מצב | מה קורה | הערות |
 |---|---|---|
-| `api_key` | `claude --bare` עם `ANTHROPIC_API_KEY`. `--bare` מדלג על הגדרות, hooks, CLAUDE.md ו־OAuth | המצב המתאים לשירות שפועל עבור אחרים |
+| `api_key` | `claude --bare` עם `ANTHROPIC_API_KEY`. `--bare` מדלג על הגדרות, hooks, CLAUDE.md ו־OAuth | חיוב לפי שימוש ב־API |
 | `subscription` | בלי `--bare`, עם `--setting-sources user` ו־`--settings '{"disableAllHooks":true}'`; ההתחברות היא OAuth שנשמר ב־HOME של המשתמש הייעודי (`claude` → `/login` פעם אחת) | `~/.claude/settings.json` של המשתמש הייעודי חייב להיות מינימלי: בלי hooks, בלי `permissions.allow`, בלי `additionalDirectories` ובלי שרתי MCP (נבדק בעלייה) |
 
-**לפני בחירת `subscription`:** לפי [עמוד המשפט והציות של Anthropic](https://code.claude.com/docs/en/legal-and-compliance.md), התחברות OAuth של מנוי Pro/Max מיועדת לשימוש אישי רגיל, ושירותים שפועלים עבור אחרים צריכים להשתמש במפתחות API. הבודק סורק הגשות של מפתחים חיצוניים, ולכן יש לוודא שהשימוש המתוכנן תואם את תנאי המנוי לפני הפעלה. אין ברירת מחדל כדי שההחלטה תתקבל במודע.
+אין ברירת מחדל: `api_key` מחויב לפי שימוש, ו־`subscription` (Pro/Max/Team) צורך ממכסת המנוי, המשותפת לכל שימוש אחר באותו חשבון. כשנגמרת המכסה, ההגשות ממתינות עד מועד האיפוס שמדווח (`waiting_quota`).
+
+אם ההתחברות מועתקת ממשתמש אחר בשרת (`~/.claude/.credentials.json`), יש לסנכרן את שני העותקים: טוקן הרענון מתחלף בכל רענון, ועותק שלא קיבל את הטוקן החדש מתנתק.
 
 ## בידוד (`SANDBOX_WRAPPER`)
 

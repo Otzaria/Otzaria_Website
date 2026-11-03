@@ -121,6 +121,7 @@ export function adminItem(d, names = new Map()) {
       words: Array.isArray(p.words)
         ? p.words.map((w) => ({ k: w.k, box: w.box, pred: w.pred || null, text: w.text || '' })).sort((a, b) => a.k - b.k)
         : null,
+      ctx: d.ctxPath && p.ctx?.bbox ? { img: adminCtxUrl(id), bbox: p.ctx.bbox } : null,
       agrees: routerAgrees(p, d.result),
     };
   }
@@ -161,7 +162,7 @@ export function rejectUpdate(vol) {
 
 // "החזר לממתינות": מאושר ← ממתין. אם המנהל תיקן — חוזרת התוצאה של המתנדב
 export function unapproveUpdate(item) {
-  const set = { status: 'submitted', reviewedAt: null, reviewedBy: null, adminFixed: false, volResult: null };
+  const set = { status: 'submitted', reviewedAt: null, reviewedBy: null, adminFixed: false, volResult: null, correctionLoggedAt: null };
   if (item.adminFixed && item.volResult) set.result = item.volResult;
   return { $set: set };
 }

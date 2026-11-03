@@ -31,6 +31,9 @@ jobs:
   # שלב 0: האם יש מה לפרוס. push והפעלה ידנית רצים תמיד; ב-cron משווים
   # את ה-SHA של תגית v1 לזה שכבר נפרס, וזהות = אין מה לעשות.
   gate:
+    # רק במאגר הראשי: בפורקים אין סודות SSH, והפריסה נכשלת ב-"missing server
+    # host". כישלון כזה גם לא רושם סמן, כך שכל cron היה מנסה ונכשל שוב.
+    if: github.repository == 'Otzaria/Otzaria_Website'
     runs-on: ubuntu-latest
     outputs:
       deploy: ${{ steps.decide.outputs.deploy }}
@@ -91,7 +94,8 @@ jobs:
       MONGODB_SERVER_SELECTION_TIMEOUT_MS: '5000'
     services:
       mongodb:
-        image: mongo:8.0
+        # mongo:8.0 קורס על קרנל 6.19+ של ה-runner (SERVER-121912) — מוצמד ל-7.0.
+        image: mongo:7.0
         ports:
           - 27017:27017
         options: >-
@@ -153,10 +157,17 @@ jobs:
           command_timeout: 30m
           script: |
             set -eu
-            cd /var/www/otzaria-web
-            git fetch --depth 1 origin "${{ github.sha }}"
+            # TODO(one-time atomic-release migration): after production has
+            # deployed this version successfully and /var/www/otzaria-web is
+            # a symlink, remove the fallback and assign repo directly to
+            # /var/www/otzaria-build.
+            repo=/var/www/otzaria-build
+            if ! git -C "$repo" rev-parse --git-dir >/dev/null 2>&1; then
+              repo=/var/www/otzaria-web
+            fi
+            git -C "$repo" fetch --depth 1 origin "${{ github.sha }}"
             # Execute the incoming script without replacing live code/dependencies.
-            deploy_script="$(git show "${{ github.sha }}:scripts/deploy-web.sh")"
+            deploy_script="$(git -C "$repo" show "${{ github.sha }}:scripts/deploy-web.sh")"
             printf '%s\n' "$deploy_script" | bash -s -- "${{ github.sha }}" "${{ needs.gate.outputs.sha }}"
 
       # Record only after successful activation, in this job to avoid another

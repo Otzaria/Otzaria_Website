@@ -89,15 +89,58 @@ test('ocr: track/source חובה, conf בטווח, ctx עם תמונה ותיב�
   assert.match(badCtx.errors.join(), /ctx\.bbox/);
 });
 
-test('router: מילים — k ייחודי, תיבה בתוך התמונה, כתב-מילה מוכר', () => {
+test('router: מילים — k ייחודי וכתב-מילה מוכר (שגיאה לקובץ)', () => {
   const dupK = routerItem(0, { words: [{ k: 0, box: [1, 0, 50, 54] }, { k: 0, box: [60, 0, 90, 54] }] });
   assert.match(checkToSiteZip(sampleEntries('router', { items: [dupK] })).errors.join(), /k/);
-  const outside = routerItem(0, { words: [{ k: 0, box: [500, 0, 900, 54] }] });
-  assert.match(checkToSiteZip(sampleEntries('router', { items: [outside] })).errors.join(), /מחוץ לתמונה/);
   const badPred = routerItem(0, { words: [{ k: 0, box: [1, 0, 50, 54], pred: 'mixed' }] });
   assert.match(checkToSiteZip(sampleEntries('router', { items: [badPred] })).errors.join(), /לא מוכרת/);
   const noWords = routerItem(2);
   assert.equal(checkToSiteZip(sampleEntries('router', { items: [noWords] })).ok, true);
+});
+
+test('router: תיבת-מילה פגומה — אזהרה לשורה, לא דחיית הקובץ; השורה נקלטת בלי words', () => {
+  // כמו בקובץ של בעל הפרויקט (2026-10-28): מילה בלי רוחב, x0 == x1
+  const zero = (i) => routerItem(i, { words: [{ k: 0, box: [450, 0, 540, 54] }, { k: 1, box: [335, 15, 335, 50], pred: 'rashi' }] });
+  const outside = routerItem(3, { words: [{ k: 0, box: [500, 0, 900, 54] }] });
+  const items = [routerItem(0), zero(1), routerItem(2), outside, zero(4)];
+  const r = checkToSiteZip(unzipSync(zipSync(sampleEntries('router', { items }))));
+  assert.deepEqual(r.errors, []);
+  assert.equal(r.ok, true);
+  assert.equal(r.items.length, 5);
+  assert.deepEqual(r.wordBoxLines, [2, 4, 5]);
+  assert.deepEqual(r.warnings, ['3 שורות: תיבות-המילים לא תקינות — יחולקו לפי הדיו (שורות 2, 4, 5 בקובץ)']);
+  const byUid = new Map(r.items.map((it) => [it.uid, it]));
+  assert.equal(byUid.get(zero(1).uid).words, undefined);
+  assert.equal(byUid.get(outside.uid).words, undefined);
+  assert.equal(byUid.get(routerItem(0).uid).words.length, 4); // שורה תקינה — כמות-שהיא
+  assert.equal(byUid.get(zero(1).uid).pred, zero(1).pred); // שאר השדות נשמרים
+  // מסמך-המסד: גם בו אין words — המתנדב מקבל חלוקה לפי הדיו
+  assert.equal(itemDoc(r.manifest, byUid.get(zero(4).uid)).payload.words, undefined);
+});
+
+test('router: שורה אחת עם תיבה פגומה — "שורה אחת"; ושגיאה אמיתית באותה שורה עדיין דוחה', () => {
+  const one = routerItem(0, { words: [{ k: 0, box: [10, 0, 10, 54] }] });
+  const r = checkToSiteZip(sampleEntries('router', { items: [one] }));
+  assert.equal(r.ok, true);
+  assert.match(r.warnings[0], /^שורה אחת: תיבות-המילים לא תקינות — יחולקו לפי הדיו \(שורה 1 בקובץ\)$/);
+  const alsoBadSig = routerItem(0, { sig: 'nope', words: [{ k: 0, box: [10, 0, 10, 54] }] });
+  const r2 = checkToSiteZip(sampleEntries('router', { items: [alsoBadSig] }));
+  assert.equal(r2.ok, false);
+  assert.deepEqual(r2.wordBoxLines, []);
+});
+
+test('router: ctx — אותה צורה כמו ב-ocr (§4.2); תמונת-ההקשר נכתבת ונשמרת במסמך', () => {
+  const ctx = { img: 'img/ctx-b-a7f3310c6e-p3.jpg', bbox: [118.5, 880, 1265.5, 994] };
+  const r = checkToSiteZip(sampleEntries('router', { items: [routerItem(0, { ctx }), routerItem(1, { ctx })] }));
+  assert.equal(r.ok, true);
+  assert.equal(r.images.size, 3);
+  const doc = itemDoc(r.manifest, r.items[0]);
+  assert.equal(doc.ctxPath, storageRel(r.manifest.package_id, ctx.img));
+  const missing = sampleEntries('router', { items: [routerItem(0, { ctx })] });
+  delete missing[ctx.img];
+  assert.match(checkToSiteZip(missing).errors.join(), /תמונת-ההקשר חסרה/);
+  const bad = checkToSiteZip(sampleEntries('router', { items: [routerItem(0, { ctx: { img: ctx.img, bbox: [5, 5, 1, 1] } })] }));
+  assert.match(bad.errors.join(), /ctx\.bbox/);
 });
 
 test('frames: ספר שאינו ב-books.json, זרם לא מוכר, אובייקט בלי סוג, books.json חסר', () => {
@@ -120,6 +163,42 @@ test('frames: ספר שאינו ב-books.json, זרם לא מוכר, אוביי�
 test('frames: ptype הוא מילה קצרה כלשהי מהתחנה (scan, cols…) — רק לתצוגה', () => {
   assert.equal(checkToSiteZip(sampleEntries('frames', { items: [framesItem(0, { ptype: 'cols' })] })).ok, true);
   assert.match(checkToSiteZip(sampleEntries('frames', { items: [framesItem(0, { ptype: 'שני טורים' })] })).errors.join(), /ptype/);
+});
+
+test('frames: מסגרת שגלשה מעבר לקצה התמונה — מקוצרת, אזהרה לעמוד, לא דחיית הקובץ', () => {
+  // כמו בקובץ של בעל הפרויקט (2026-11-01): כמה פיקסלים מתחת לתחתית, ומעל הקצה העליון
+  const below = framesItem(1, { h: 2600 });
+  below.frames[1].box = [5, 2525, 300.4, 2606.6];
+  const above = framesItem(3);
+  above.frames[0].box = [7.2, -1.5, 1148.5, 62.1];
+  const items = [framesItem(0), below, framesItem(2), above];
+  const r = checkToSiteZip(unzipSync(zipSync(sampleEntries('frames', { items }))));
+  assert.deepEqual(r.errors, []);
+  assert.equal(r.ok, true);
+  assert.equal(r.items.length, 4);
+  assert.deepEqual(r.frameBoxLines, [2, 4]);
+  assert.deepEqual(r.warnings, ['2 עמודים: מסגרות שגלשו מעבר לקצה התמונה — קוצרו לגבולות העמוד (שורות 2, 4 בקובץ)']);
+  const byUid = new Map(r.items.map((it) => [it.uid, it]));
+  assert.deepEqual(byUid.get(below.uid).frames[1].box, [5, 2525, 300.4, 2600]);
+  assert.deepEqual(byUid.get(above.uid).frames[0].box, [7.2, 0, 1148.5, 62.1]);
+  assert.deepEqual(byUid.get(framesItem(0).uid).frames, framesItem(0).frames); // עמוד תקין — כמות-שהוא
+  // מסמך-המסד — עם המסגרת המקוצרת
+  assert.deepEqual(itemDoc(r.manifest, byUid.get(below.uid)).payload.frames[1].box, [5, 2525, 300.4, 2600]);
+});
+
+test('frames: מסגרת שכולה מחוץ לתמונה, או תיבה הפוכה — עדיין דוחה את הקובץ', () => {
+  const out = framesItem(0);
+  out.frames[0].box = [100, 2500, 300, 2550];
+  const r = checkToSiteZip(sampleEntries('frames', { items: [out] }));
+  assert.equal(r.ok, false);
+  assert.match(r.errors.join(), /תיבת המסגרת f1/);
+  assert.deepEqual(r.frameBoxLines, []);
+  const flipped = framesItem(0);
+  flipped.frames[0].box = [300, -5, 100, 50];
+  assert.match(checkToSiteZip(sampleEntries('frames', { items: [flipped] })).errors.join(), /תיבת המסגרת f1/);
+  const one = framesItem(0);
+  one.frames[2].box = [100, 300, 1705, 700];
+  assert.match(checkToSiteZip(sampleEntries('frames', { items: [one] })).warnings[0], /^עמוד אחד: .* \(שורה 1 בקובץ\)$/);
 });
 
 test('frames: עד 40 עמודים בקובץ', () => {
