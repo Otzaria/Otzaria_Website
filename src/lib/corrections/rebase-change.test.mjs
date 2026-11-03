@@ -39,3 +39,19 @@ test('כמה תיקונים באותה שורה, חלקם מוחלים וחלק�
   assert.equal(r.line, 'a2 b2 c1 d2');
   assert.equal(r.applied, 2);
 });
+
+test('טקסט חלופי שמופיע במקום אחר בשורה אינו מסומן בטעות ככבר תוקן', () => {
+  const r = rebaseLineChange('תחילה שגוי ולבסוף נכון', 'תחילה נכון ולבסוף נכון', 'תחילה אחר ולבסוף נכון');
+  assert.equal(r.line, 'תחילה אחר ולבסוף נכון');
+  assert.equal(r.skipped, 0);
+  assert.equal(r.conflicts, 1);
+});
+
+test('שורה בעלת diff גדול מדי חוזרת בבטחה למיזוג ידני', () => {
+  const original = Array.from({ length: 1100 }, (_, i) => `א${i}`).join(' ');
+  const proposed = Array.from({ length: 1100 }, (_, i) => `ב${i}`).join(' ');
+  const current = Array.from({ length: 1100 }, (_, i) => `ג${i}`).join(' ');
+  const r = rebaseLineChange(original, proposed, current);
+  assert.equal(r.line, current);
+  assert.equal(r.clean, false);
+});

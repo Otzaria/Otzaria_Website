@@ -6,7 +6,9 @@
  */
 
 const TOKEN_RE = /[\p{L}\p{N}\p{M}]+|\s+|[^\p{L}\p{N}\p{M}\s]/gu;
-const MAX_CELLS = 30_000_000;
+// שתי מטריצות נבנות בכל מיזוג. תקרה שמרנית מונעת הקצאה/לולאה שעלולות להקפיא את לשונית המתנדב.
+// מעליה מחזירים את שורת GitHub ללא שינוי ומבקשים מיזוג ידני.
+const MAX_CELLS = 1_000_000;
 
 export function tokenize(s) {
   return String(s ?? '').match(TOKEN_RE) || [];
@@ -72,13 +74,20 @@ export function rebaseLineChange(reportedOriginal, reportedNew, current) {
     pj = j + 1;
   }
 
-  const curText = current;
   const edits = [];
   let applied = 0;
   let skipped = 0;
   let conflicts = 0;
+  const alreadyAppliedBetweenAnchors = (h) => {
+    // בודקים רק בין עוגני base הסמוכים לשינוי. חיפוש בכל השורה עלול למצוא מופע זהה ולא קשור.
+    const left = h.s === 0 ? -1 : toCur[h.s - 1];
+    const right = h.e === base.length ? cur.length : toCur[h.e];
+    if (left === -1 || right === -1 || left >= right) return false;
+    const candidate = cur.slice(left + 1, right);
+    if (candidate.length !== h.repl.length) return false;
+    return candidate.every((token, i) => token === h.repl[i]);
+  };
   for (const h of hunks) {
-    const replText = h.repl.join('');
     let range = null;
     if (h.e > h.s) {
       let ok = true;
@@ -93,7 +102,7 @@ export function rebaseLineChange(reportedOriginal, reportedNew, current) {
       else if (left !== null || right !== null) range = [left ?? right, left ?? right];
     }
     if (range) { edits.push({ from: range[0], to: range[1], repl: h.repl }); applied++; }
-    else if (replText && curText.includes(replText)) skipped++;
+    else if (h.repl.length && alreadyAppliedBetweenAnchors(h)) skipped++;
     else conflicts++;
   }
 

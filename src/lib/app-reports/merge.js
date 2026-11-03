@@ -1,22 +1,29 @@
 /**
  * גרסת התוכנה כפי שהאפליקציה שולחת ("0.9.98+99802", "0.9.98.3+99803"). null כשאינה בפורמט הזה.
- * @returns {{core:number[], build:number|null}|null}
+ * הרכיבים נשמרים כמחרוזות מספריות מנורמלות כדי לא לאבד דיוק מעל Number.MAX_SAFE_INTEGER.
+ * @returns {{core:string[], build:string|null}|null}
  */
 export function parseAppVersion(version) {
   const [core, build, ...rest] = String(version ?? '').trim().split('+');
   const parts = core.split('.');
   const digits = (x) => /^\d+$/.test(x);
   if (rest.length || !parts.every(digits) || (build !== undefined && !digits(build))) return null;
-  return { core: parts.map(Number), build: build === undefined ? null : Number(build) };
+  const normalize = (x) => x.replace(/^0+(?=\d)/, '');
+  return { core: parts.map(normalize), build: build === undefined ? null : normalize(build) };
+}
+
+function compareNumericStrings(a, b) {
+  if (a.length !== b.length) return a.length > b.length ? 1 : -1;
+  return a === b ? 0 : a > b ? 1 : -1;
 }
 
 /** 1/0/-1. מספר הבנייה מכריע רק כשהגרסה שווה ולשתיהן יש מספר בנייה. */
 export function compareAppVersions(a, b) {
   for (let i = 0; i < Math.max(a.core.length, b.core.length); i++) {
-    const d = (a.core[i] ?? 0) - (b.core[i] ?? 0);
-    if (d) return Math.sign(d);
+    const d = compareNumericStrings(a.core[i] ?? '0', b.core[i] ?? '0');
+    if (d) return d;
   }
-  return a.build === null || b.build === null ? 0 : Math.sign(a.build - b.build);
+  return a.build === null || b.build === null ? 0 : compareNumericStrings(a.build, b.build);
 }
 
 /** חתימת תקיעה מגרסאות ישנות: רק פריימי מנוע, משותפת לתקיעות שאינן קשורות זו לזו. */

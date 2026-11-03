@@ -225,6 +225,13 @@ test('גרסת התוכנה: semver עם רכיב רביעי ומספר בניי
   for (const bad of ['unknown', '', null, '0.9.98-beta', 'v0.9.98']) assert.equal(parseAppVersion(bad), null);
 });
 
+test('גרסת התוכנה: רכיבים ומספרי בנייה גדולים מושווים ללא אובדן דיוק', () => {
+  const cmp = (a, b) => compareAppVersions(parseAppVersion(a), parseAppVersion(b));
+  assert.equal(cmp('1.0.0+9007199254740993', '1.0.0+9007199254740992'), 1);
+  assert.equal(cmp('9007199254740993.0', '9007199254740992.99999999999999999999'), 1);
+  assert.equal(cmp('01.000.2+0003', '1.0.2+3'), 0);
+});
+
 test('החלטת איחוד: issue סגור — גרסה שאינה חדשה מהמקושרות → צירוף שקט; חדשה או לא ידועה → חדש עם "קודם"', () => {
   const d = (s) => new Date(`2026-09-${s}T00:00:00Z`);
   const related = [
