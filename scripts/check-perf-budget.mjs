@@ -37,7 +37,6 @@ const PAGE_BUDGETS = [
   { page: 'about', label: '/about', gzipKB: 236, allowFramerMotion: false },
   { page: 'privacy', label: '/privacy', gzipKB: 236, allowFramerMotion: false },
   { page: 'offline', label: '/offline', gzipKB: 237, allowFramerMotion: false },
-  { page: 'docs/dicta', label: '/docs/dicta', gzipKB: 236, allowFramerMotion: false },
   // חנות התוספים: ייבוא אחד של pluginSubmission/pluginManifest מקוד לקוח מחזיר
   // polyfills של node (zlib/stream/buffer, כ-60KB gzip) לכל דפי החנות.
   { page: 'plugins', label: '/plugins', gzipKB: 248, allowFramerMotion: false },

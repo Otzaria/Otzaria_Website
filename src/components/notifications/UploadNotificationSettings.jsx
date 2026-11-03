@@ -11,7 +11,6 @@ export default function UploadNotificationSettings({ onClose }) {
   const [mounted, setMounted] = useState(false)
   const [settings, setSettings] = useState({
     enabled: false,
-    dicta: false,
     fullBook: false,
     singlePage: false
   })
@@ -103,23 +102,6 @@ export default function UploadNotificationSettings({ onClose }) {
             <div className="space-y-3 pr-4 border-r-4 border-info-300">
               <p className="text-sm font-bold text-neutral-700 mb-3">בחר סוגי העלאות:</p>
               
-              {/* דיקטה */}
-              <label className="flex items-center justify-between p-3 bg-feature-50 rounded-lg border border-feature-200 cursor-pointer hover:bg-feature-100 transition-colors">
-                <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-feature-600">mic</span>
-                  <div>
-                    <h4 className="font-semibold text-neutral-800">דיקטה</h4>
-                    <p className="text-xs text-neutral-600">המרת ספרי דיקטה לאוצריא</p>
-                  </div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={settings.dicta}
-                  onChange={(e) => setSettings({ ...settings, dicta: e.target.checked })}
-                  className="w-5 h-5 text-feature-600 rounded focus:ring-feature-500"
-                />
-              </label>
-
               {/* ספר שלם */}
               <label className="flex items-center justify-between p-3 bg-success-50 rounded-lg border border-success-200 cursor-pointer hover:bg-success-100 transition-colors">
                 <div className="flex items-center gap-3">

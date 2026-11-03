@@ -9,6 +9,7 @@ const UploadSchema = new mongoose.Schema({
   fileStorageId: { type: mongoose.Schema.Types.ObjectId, ref: 'FileStorage' }, // רפרנס לקובץ ב-GridFS
   fileSize: { type: Number }, // גודל הקובץ בבתים
   lineCount: { type: Number }, // מספר שורות
+  // 'dicta' נשאר רק לרשומות ישנות (save() מאמת גם שדות שנטענו); העלאות חדשות לא מקבלות אותו.
   uploadType: { type: String, enum: ['full_book', 'single_page', 'dicta'], default: 'single_page' }, // סוג ההעלאה
   status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
   bookStatus: { type: String, default: 'not_checked' }, // סטטוס הספר: not_checked, needs_attention, ready, added_to_library

@@ -394,18 +394,6 @@ export default function AdminUploadsClient({ initialUploads }) {
       {/* כפתורי סינון לפי סוג */}
       <div className="flex gap-2 mb-6">
         <button
-          onClick={() => setFilterTypes(filterTypes.includes('dicta') ? filterTypes.filter(t => t !== 'dicta') : [...filterTypes, 'dicta'])}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors shadow-sm ${
-            filterTypes.includes('dicta')
-              ? 'bg-feature-600 text-white'
-              : 'bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-50'
-          }`}
-        >
-          <span className="material-symbols-outlined text-sm">mic</span>
-          דיקטה
-        </button>
-        
-        <button
           onClick={() => setFilterTypes(filterTypes.includes('full_book') ? filterTypes.filter(t => t !== 'full_book') : [...filterTypes, 'full_book'])}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors shadow-sm ${
             filterTypes.includes('full_book')
@@ -544,7 +532,7 @@ export default function AdminUploadsClient({ initialUploads }) {
                                           <button 
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                router.push(`/library/dicta-books/edit/${firstUpload.editCopy}`);
+                                                router.push(`/library/admin/uploads/edit/${firstUpload.editCopy}`);
                                             }}
                                             className="flex items-center gap-1 px-3 py-1.5 text-success-600 hover:bg-success-50 rounded-lg text-sm transition-colors"
                                           >
@@ -560,7 +548,7 @@ export default function AdminUploadsClient({ initialUploads }) {
                                                 e.stopPropagation();
                                                 showConfirm(
                                                     'יצירת עותק עריכה',
-                                                    `האם ליצור עותק עריכה של "${bookName}"?\n\nשים לב: העותק לא יתעדכן אוטומטית אם יתווספו העלאות נוספות לספר זה. העותק יישמר במערכת ויהיה ניתן לעריכה כמו ספרי דיקטה.`,
+                                                    `האם ליצור עותק עריכה של "${bookName}"?\n\nשים לב: העותק לא יתעדכן אוטומטית אם יתווספו העלאות נוספות לספר זה. העותק יישמר במערכת ויהיה ניתן לעריכה בעורך.`,
                                                     async () => {
                                                         try {
                                                             setLoading(true);

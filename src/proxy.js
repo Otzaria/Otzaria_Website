@@ -118,7 +118,7 @@ const PLUGINS_ADMIN_ALLOWED_API = [
 
 // ===== מנהל ספרים-בלבד =====
 // גישה אך ורק לעמוד ניהול הספרים (/library/admin/books) ולדשבורד, ולנתיבי ה-API
-// המשרתים אותם. כל שאר נתיבי /library/admin ו-/api/admin חסומים (דיקטה, העלאות,
+// המשרתים אותם. כל שאר נתיבי /library/admin ו-/api/admin חסומים (העלאות,
 // עמודים, מילון, מידע/כינויים, משתמשים, תוספים וכו').
 const BOOKS_ONLY_ADMIN_ALLOWED_PAGES = [
   '/library/admin/books',

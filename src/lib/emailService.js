@@ -42,7 +42,6 @@ export async function sendUploadNotification(uploadData) {
         
         const subscribedAdmins = admins.filter(admin => {
             const prefs = admin.uploadNotifications;
-            if (uploadType === 'dicta') return prefs.dicta;
             if (uploadType === 'full_book') return prefs.fullBook;
             if (uploadType === 'single_page') return prefs.singlePage;
             return false;
@@ -55,7 +54,6 @@ export async function sendUploadNotification(uploadData) {
         const transporter = createTransporter();
 
         const uploadTypeLabels = {
-            dicta: 'דיקטה',
             full_book: 'ספר שלם',
             single_page: 'עמוד אחרון בספר'
         };
@@ -394,64 +392,6 @@ export async function sendStalePageReminder({ user, book, pages }) {
         return { sent: true };
     } catch (error) {
         console.error(`Stale page reminder failed for ${user.email}:`, error.message);
-        return { sent: false, error: error.message };
-    }
-}
-
-// תזכורת אוטומטית על ספרי דיקטה תקועים. books הוא מערך עם { title, daysSinceEdit }
-export async function sendStaleDictaReminder({ user, books }) {
-    if (!user?.email) return { sent: false, reason: 'missing_data' };
-    if (!books?.length) return { sent: false, reason: 'no_books' };
-
-    const transporter = createTransporter();
-    const siteUrl = process.env.NEXTAUTH_URL || '';
-    const ctaUrl = `${siteUrl}/library/dicta-books?status=my-books`;
-    const secureToken = encryptToken(user.email);
-    const unsubUrl = `${siteUrl}/api/user/unsubscribe?t=${secureToken}&action=reminder`;
-
-    const bookListText = books
-        .map(b => `• ${b.title} (לא נערך כבר ${b.daysSinceEdit} ימים)`)
-        .join('\n');
-    const bookListHtml = books
-        .map(b => `• ${escapeHtml(b.title || '')} (לא נערך כבר ${b.daysSinceEdit} ימים)`)
-        .join('<br/>');
-
-    const introHtml = 'שמנו לב שיש ספרי דיקטה שתפסת לעריכה ולא נגעת בהם כשבוע ויותר:';
-    const closingHtml =
-        'אנא היכנס למערכת והשלם את העריכה, או שחרר את הספר כדי שאחרים יוכלו להמשיך.<br/>' +
-        'שים לב — ספר שלא ייערך במהלך השבוע הקרוב ישוחרר אוטומטית.';
-
-    const bodyHtml = `${introHtml}<br/><br/>${bookListHtml}<br/><br/>${closingHtml}`;
-
-    const bodyText =
-        `שמנו לב שיש ספרי דיקטה שתפסת לעריכה ולא נגעת בהם כשבוע ויותר:\n\n` +
-        `${bookListText}\n\n` +
-        `אנא היכנס למערכת והשלם את העריכה, או שחרר את הספר כדי שאחרים יוכלו להמשיך.\n` +
-        `שים לב — ספר שלא ייערך במהלך השבוע הקרוב ישוחרר אוטומטית.`;
-
-    const html = buildStaleReminderHtml({
-        headingTitle: 'תזכורת: ספרי דיקטה תקועים בעריכה',
-        bodyHtml,
-        ctaUrl,
-        ctaLabel: 'כנס לספרי הדיקטה שלי',
-        unsubUrl,
-    });
-
-    try {
-        await transporter.sendMail({
-            from: process.env.SMTP_FROM || process.env.SMTP_USER,
-            to: user.email,
-            subject: 'תזכורת אוטומטית: ספרי דיקטה שלא נערכו',
-            headers: {
-                'List-Unsubscribe': `<${unsubUrl}>`,
-                'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
-            },
-            html,
-            text: `${bodyText}\n\nלהסרה: ${unsubUrl}`,
-        });
-        return { sent: true };
-    } catch (error) {
-        console.error(`Stale dicta reminder failed for ${user.email}:`, error.message);
         return { sent: false, error: error.message };
     }
 }

@@ -39,22 +39,12 @@ export default function ReminderHistoryList({ loading, history, onDelete }) {
             <div>
               <div className="font-bold text-neutral-800 flex items-center gap-2">
                 {item.bookName}
-                {item.bookType === 'dicta' && (
-                  <span className="text-xs bg-feature-100 text-feature-700 px-2 py-0.5 rounded-full">
-                    דיקטה
-                  </span>
-                )}
               </div>
               <div className="text-sm text-neutral-500 flex items-center gap-2 flex-wrap">
                 <span>נשלח על ידי: {item.adminName}</span>
                 {item.isPartial && (
                   <span className="text-xs bg-warning-strong-100 text-warning-strong-700 px-2 py-0.5 rounded-full">
                     נשלח לחלק מהמשתמשים
-                  </span>
-                )}
-                {item.bookType === 'dicta' && item.daysThreshold !== undefined && (
-                  <span className="text-xs bg-info-100 text-info-700 px-2 py-0.5 rounded-full">
-                    {item.daysThreshold === 0 ? 'כל הספרים' : `${item.daysThreshold}+ ימים`}
                   </span>
                 )}
               </div>

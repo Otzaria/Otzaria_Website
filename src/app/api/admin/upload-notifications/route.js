@@ -24,7 +24,6 @@ export async function GET() {
       success: true,
       notifications: user.uploadNotifications || {
         enabled: false,
-        dicta: false,
         fullBook: false,
         singlePage: false
       }
@@ -45,7 +44,7 @@ export async function PUT(request) {
 
     await connectDB();
     
-    const { enabled, dicta, fullBook, singlePage } = await request.json();
+    const { enabled, fullBook, singlePage } = await request.json();
     
     const user = await User.findOneAndUpdate(
       { email: session.user.email },
@@ -53,7 +52,6 @@ export async function PUT(request) {
         $set: {
           uploadNotifications: {
             enabled,
-            dicta,
             fullBook,
             singlePage
           }

@@ -5,7 +5,7 @@ import ReminderUserSelectionModal from './ReminderUserSelectionModal'
 
 const users = [
   { email: 'a@example.com', name: 'אלכס' },
-  { email: 'b@example.com', name: 'בני', books: [{ title: 'ספר א', daysSinceClaim: 10 }] },
+  { email: 'b@example.com', name: 'בני' },
 ]
 
 describe('ReminderUserSelectionModal', () => {
@@ -14,7 +14,6 @@ describe('ReminderUserSelectionModal', () => {
       <ReminderUserSelectionModal
         users={users}
         selected={['a@example.com']}
-        bookType="regular"
         onToggle={vi.fn()}
         onSelectAll={vi.fn()}
         onSelectNone={vi.fn()}
@@ -26,41 +25,12 @@ describe('ReminderUserSelectionModal', () => {
     expect(screen.getByRole('button', { name: 'אישור (1)' })).toBeInTheDocument()
   })
 
-  it('מציג רשימת ספרים לכל משתמש רק כש-bookType הוא dicta', () => {
-    const { rerender } = render(
-      <ReminderUserSelectionModal
-        users={users}
-        selected={[]}
-        bookType="regular"
-        onToggle={vi.fn()}
-        onSelectAll={vi.fn()}
-        onSelectNone={vi.fn()}
-        onClose={vi.fn()}
-      />
-    )
-    expect(screen.queryByText('ספר א (10 ימים)')).not.toBeInTheDocument()
-
-    rerender(
-      <ReminderUserSelectionModal
-        users={users}
-        selected={[]}
-        bookType="dicta"
-        onToggle={vi.fn()}
-        onSelectAll={vi.fn()}
-        onSelectNone={vi.fn()}
-        onClose={vi.fn()}
-      />
-    )
-    expect(screen.getByText('ספר א (10 ימים)')).toBeInTheDocument()
-  })
-
   it('קורא ל-onToggle עם האימייל הנכון', async () => {
     const onToggle = vi.fn()
     render(
       <ReminderUserSelectionModal
         users={users}
         selected={[]}
-        bookType="regular"
         onToggle={onToggle}
         onSelectAll={vi.fn()}
         onSelectNone={vi.fn()}
@@ -80,7 +50,6 @@ describe('ReminderUserSelectionModal', () => {
       <ReminderUserSelectionModal
         users={users}
         selected={[]}
-        bookType="regular"
         onToggle={vi.fn()}
         onSelectAll={onSelectAll}
         onSelectNone={onSelectNone}

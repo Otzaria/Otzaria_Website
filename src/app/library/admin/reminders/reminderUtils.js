@@ -73,64 +73,11 @@ export function computeRegularRecipients(pages, allUsers) {
   return Array.from(uniqueUsers.values());
 }
 
-/**
- * איתור נמעני תזכורת עבור ספרי דיקטה: כל המשתמשים שתפסו ספרי דיקטה
- * בסטטוס in-progress לפני daysThreshold ימים או יותר, שהם רשומים,
- * מאמתים ומאשרים קבלת תזכורות. עבור כל משתמש נאספת רשימת הספרים
- * שבטיפולו (עם מספר הימים מאז התפיסה לכל ספר) ומספר הימים המקסימלי.
- *
- * @param {Array} dictaBooks - ספרי דיקטה בסטטוס in-progress עם claimedBy
- * @param {Array} allUsers - כל המשתמשים (מ-/api/admin/users)
- * @param {number} daysThreshold - סף ימים מינימלי מאז התפיסה
- * @param {Date} [now] - "עכשיו" (ניתן להזרקה לצורך בדיקות; ברירת מחדל new Date())
- * @returns {Array<{email:string,name:string,id:string,books:Array,maxDays:number}>}
- */
-export function computeDictaRecipients(dictaBooks, allUsers, daysThreshold, now = new Date()) {
-  const userMap = buildUserMap(allUsers);
-  const usersWithBooks = new Map();
-
-  dictaBooks.forEach((book) => {
-    if (book.status === 'in-progress' && book.claimedBy && book.claimedAt) {
-      const claimedAt = new Date(book.claimedAt);
-      const daysSinceClaim = Math.floor((now - claimedAt) / (1000 * 60 * 60 * 24));
-
-      if (daysSinceClaim >= daysThreshold) {
-        const claimedById = book.claimedBy._id || book.claimedBy;
-        const userId = normalizeId(claimedById);
-        const userDetails = userMap.get(userId);
-
-        if (userDetails && userDetails.email && userDetails.acceptReminders && userDetails.isVerified) {
-          if (!usersWithBooks.has(userId)) {
-            usersWithBooks.set(userId, {
-              email: userDetails.email,
-              name: userDetails.name || 'משתמש ללא שם',
-              id: userId,
-              books: [],
-              maxDays: daysSinceClaim,
-            });
-          }
-
-          const userInfo = usersWithBooks.get(userId);
-          userInfo.books.push({
-            title: book.title,
-            daysSinceClaim,
-          });
-          userInfo.maxDays = Math.max(userInfo.maxDays, daysSinceClaim);
-        }
-      }
-    }
-  });
-
-  return Array.from(usersWithBooks.values());
-}
-
 /** בניית ה-HTML של מייל התזכורת */
-export function generateEmailHtml(bookName, messageBody, isDicta = false) {
+export function generateEmailHtml(bookName, messageBody) {
   const siteUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const formattedBody = messageBody.replace(/\n/g, '<br/>');
-  const bookLink = isDicta
-    ? `${siteUrl}/library/dicta-books?status=my-books`
-    : `${siteUrl}/library/books/${bookName}`;
+  const bookLink = `${siteUrl}/library/books/${bookName}`;
 
   return `
         <div dir="rtl" style="font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 40px; text-align: center;">
@@ -140,13 +87,13 @@ export function generateEmailHtml(bookName, messageBody, isDicta = false) {
                     <h2 style="color: #d4a373; margin: 5px 0 0 0; font-size: 20px; font-weight: bold;">ספריית אוצריא</h2>
                 </div>
                 <div style="padding: 30px; color: #333333;">
-                    <h1 style="color: #2c3e50; font-size: 24px; margin-bottom: 10px;">הודעה בנוגע לספר${isDicta ? ' דיקטה' : ''}: ${bookName}</h1>
+                    <h1 style="color: #2c3e50; font-size: 24px; margin-bottom: 10px;">הודעה בנוגע לספר: ${bookName}</h1>
                     <div style="font-size: 18px; line-height: 1.6; text-align: right; margin-bottom: 30px;">
                         ${formattedBody}
                     </div>
                     <div style="margin: 30px 0; text-align: center;">
                         <a href="${bookLink}" style="background-color: #d4a373; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
-                            ${isDicta ? 'כנס לספרי הדיקטה שלי' : 'כנס לספרייה'}
+                            כנס לספרייה
                         </a>
                     </div>
                 </div>

@@ -41,15 +41,13 @@ Next.js 16 App Router, JS+TS מעורב (`allowJs: true`, `checkJs` כבוי), M
 תפקידים מוגדרים ב-`src/lib/roles.js`: `admin` (כל-יכול), ועוד ארבעה תפקידי-משנה מוגבלי-תחום
 (`admin_plugins`, `admin_books`, `admin_books_only`, `admin_ocr`) — כל אחד עם פונקציית `hasXAccess`
 משלו. **אל תניחו** ש"מנהל" אחד שווה לאחר — `admin_books_only` למשל *כן* רואה את ספריית הספרים אבל
-*לא* דיקטה/העלאות/עמודים, בכוונה. כשמוסיפים בדיקת הרשאה חדשה — לבדוק קודם אם יש כבר `hasXAccess`
+*לא* העלאות/עמודים, בכוונה. כשמוסיפים בדיקת הרשאה חדשה — לבדוק קודם אם יש כבר `hasXAccess`
 מתאים ב-`roles.js` לפני שכותבים תנאי חדש.
 
 בראוטי API: `requireAccess(session, hasAccessFn)` מ-`src/lib/apiResponse.ts` הוא הדפוס המועדף
 לשער הרשאה (מחזיר 401/403 אוטומטית, `null` אם עבר). **ההבחנה 401/403 היא מכוונת ולא מקרית**: 401 =
 אין session בכלל, 403 = יש session אך אין הרשאה — הפרונט מבחין ביניהם במקומות מסוימים (הפניה
-להתחברות מול הודעת "אין הרשאה"). משפחת `dicta/*` (`src/app/api/dicta/_auth.ts`) משתמשת בצורת
-תגובה שונה (`{detail: ...}`) במכוון — **אל תאחדו** אותה עם `apiResponse.ts` בלי לבדוק
-`refactor-notes/audit/external-api-consumers.md` קודם (ראו סעיף למטה).
+להתחברות מול הודעת "אין הרשאה").
 
 ### מטמון: Data Cache פנימי (`src/lib/cacheTags.js`) + HTTP (CDN/דפדפן)
 
@@ -108,7 +106,8 @@ Middleware שחוסם את כל האתר (מלבד `/api/cron`, `/api/auth`, ו�
   שורש (`about`, `faq`, `donate`...), `plugins/**` (חנות תוספים, ברובה Server Components +
   מטמון תגית), `api/**` (route handlers).
 - `lib/` — לוגיקה טהורה + תשתית שרת (db, cache, auth helpers, ולידציה, פורמט). תת-תיקיות
-  `lib/dicta/` ו-`lib/ocr/` ללוגיקת דומיין ספציפית.
+  `lib/dicta/` (מרחב תיקוני הספרים, `/library/dicta-edit` — השם הפנימי נשמר) ו-`lib/ocr/`
+  ללוגיקת דומיין ספציפית.
 - `components/` — מחולק לפי דומיין (`admin/`, `dashboard/`, `editor/`, `ocr/`, `plugins/`,
   `ui/` לרכיבים גנריים).
 - `models/` — סכמות Mongoose (Book, Upload, Plugin, OcrJob/OcrLine/OcrTrainingPage, User וכו').

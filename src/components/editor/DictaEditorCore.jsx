@@ -1381,7 +1381,7 @@ export default function DictaEditorCore({
                       <h1 className="text-lg font-bold text-on-surface truncate" title={title}>{title}</h1>
                     </div>
                     <div className="flex items-center gap-2">
-                      <p className="text-xs text-on-surface/60">עריכת דיקטה</p>
+                      <p className="text-xs text-on-surface/60">עריכת ספר</p>
                     </div>
                   </div>
                 </div>

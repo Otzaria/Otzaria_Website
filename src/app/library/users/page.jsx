@@ -238,17 +238,6 @@ export default function UsersPage() {
                                     </span>
                                     <span className="text-[10px] text-on-surface/60">דפים</span>
                                 </div>
-                                {user.dictaBooks > 0 && (
-                                  <>
-                                    <div className="w-px h-6 bg-surface-variant"></div>
-                                    <div className="text-center">
-                                        <span className="block text-lg font-bold text-success-600 leading-none">
-                                            {user.dictaBooks?.toLocaleString() || 0}
-                                        </span>
-                                        <span className="text-[10px] text-on-surface/60">ספרי דיקטה</span>
-                                    </div>
-                                  </>
-                                )}
                             </div>
                           </div>
                         </div>

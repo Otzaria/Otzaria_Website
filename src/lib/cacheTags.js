@@ -68,9 +68,6 @@ export const CACHE_TAGS = {
   // רשימת ההעלאות בממשק ניהול העלאות (/library/admin/uploads) — כל ההעלאות
   // שאינן באשפה (isDeleted: false), זהה לכל מנהל
   UPLOADS_ADMIN_LIST: 'uploads-admin-list',
-  // רשימת ספרי הדיקטה בממשק ניהול (/library/admin/dicta-books) — כל הספרים,
-  // זהה לכל מנהל
-  DICTA_BOOKS_ADMIN_LIST: 'dicta-books-admin-list',
   // דף ההנחיות להגהת עמודים (/docs/page-proof) — ציבורי, זהה לכל צופה; נערך בדף הניהול (lib/pageProof/guideStore)
   PAGE_PROOF_GUIDE: 'page-proof-guide',
   // דף ההנחיות של צורת הדף (/docs/tzurat-hadaf) — ציבורי, זהה לכל צופה; נערך בדף הניהול (lib/tzuratHadaf/guideStore)
@@ -128,10 +125,4 @@ export const REVALIDATE_SECONDS = {
   // כלומר העלאה חדשה שממתינה לטיפול תופיע ברשימת הניהול רק בתוך חלון
   // ה-revalidate, לא מיידית — לכן משאירים קצר.
   UPLOADS_ADMIN_LIST: 30,
-  // לא הוארך: cron/check-stale-pages (שחרור אוטומטי של ספרי דיקטה תקועים,
-  // status→'available'/claimedBy→null) מעדכן DictaBook ישירות עם
-  // DictaBook.updateOne/updateMany בלי revalidateNow(DICTA_BOOKS_ADMIN_LIST)
-  // — בניגוד לכל שאר ראוטי dicta/books/* שכן מתייגים. חלון קצר נשאר נחוץ
-  // כרשת ביטחון אמיתית לשינוי הזה.
-  DICTA_BOOKS_ADMIN_LIST: 30,
 }

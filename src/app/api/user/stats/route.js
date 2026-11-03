@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Page from '@/models/Page';
 import User from '@/models/User';
-import DictaBook from '@/models/DictaBook';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { unauthorized, notFound, serverError } from '@/lib/apiResponse';
@@ -93,47 +92,14 @@ export async function GET() {
       };
     });
 
-    // סטטיסטיקות ספרי דיקטה
-    const dictaStats = await DictaBook.aggregate([
-      { $match: { claimedBy: user._id } },
-      {
-        $group: {
-          _id: null,
-          totalMyDictaBooks: { $sum: 1 },
-          completedDictaBooks: { $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] } },
-          inProgressDictaBooks: { $sum: { $cond: [{ $eq: ["$status", "in-progress"] }, 1, 0] } }
-        }
-      }
-    ]);
-
-    const userDictaStats = dictaStats[0] || { totalMyDictaBooks: 0, completedDictaBooks: 0, inProgressDictaBooks: 0 };
-
-    // רשימת ספרי דיקטה שלי - ממוינים לפי סטטוס (לא הושלם קודם)
-    const recentDictaBooksRaw = await DictaBook.find({ claimedBy: user._id })
-      .sort({ status: -1, updatedAt: -1 })
-      .select('_id title status updatedAt')
-      .lean();
-
-    const recentDictaBooks = recentDictaBooksRaw.map(book => ({
-      id: book._id.toString(),
-      bookId: book._id.toString(),
-      bookName: book.title,
-      status: book.status,
-      date: book.updatedAt ? new Date(book.updatedAt).toLocaleDateString('he-IL') : '-'
-    }));
-
     return NextResponse.json({
       success: true,
       stats: {
         myPages: userStats.totalMyPages,
         completedPages: userStats.completed,
         inProgressPages: userStats.inProgress,
-        myDictaBooks: userDictaStats.totalMyDictaBooks,
-        completedDictaBooks: userDictaStats.completedDictaBooks,
-        inProgressDictaBooks: userDictaStats.inProgressDictaBooks,
         points: user.points || 0,
-        recentActivity,
-        recentDictaBooks
+        recentActivity
       }
     });
 

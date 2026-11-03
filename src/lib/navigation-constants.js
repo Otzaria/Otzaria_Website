@@ -5,8 +5,7 @@
 export const LIBRARY_NAV_LINKS = [
   { href: '/', label: 'בית', icon: 'home' },
   { href: '/library/books', label: 'ספרים', icon: 'library_books' },
-  { href: '/library/dicta-books', label: 'ספרי דיקטה', icon: 'edit_document' },
-  { href: '/library/dicta-edit', label: 'תיקוני ספרי דיקטה', icon: 'rule' },
+  { href: '/library/dicta-edit', label: 'תיקוני ספרים', icon: 'rule' },
   { href: '/library/acronyms', label: 'כינויים וראשי תיבות', icon: 'short_text' },
   { href: '/library/info', label: 'מידע על ספרים', icon: 'info' },
   { href: '/library/users', label: 'משתמשים', icon: 'people' },

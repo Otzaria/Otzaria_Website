@@ -5,7 +5,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import UploadNotificationSettings from './UploadNotificationSettings'
 
-const initialSettings = { enabled: true, dicta: true, fullBook: false, singlePage: false }
+const initialSettings = { enabled: true, fullBook: true, singlePage: false }
 
 beforeEach(() => {
   document.body.innerHTML = ''
@@ -45,7 +45,7 @@ describe('UploadNotificationSettings', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ({ success: true, notifications: { ...initialSettings, fullBook: true } })
+        json: async () => ({ success: true, notifications: { ...initialSettings, singlePage: true } })
       })
 
     render(<UploadNotificationSettings onClose={onClose} />)
