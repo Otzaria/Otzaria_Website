@@ -35,6 +35,15 @@ vi.mock("@/models/Page", () => ({
   default: { countDocuments: vi.fn().mockResolvedValue(0) },
 }));
 
+vi.mock("@/lib/ocr/bookOcrCounts", () => ({
+  countBookOcrPages: vi.fn().mockResolvedValue({
+    pagesWithImage: 5,
+    editedPagesCount: 3,
+    humanEditedPagesCount: 1,
+    toProcess: { overwrite: 5, skip: 2, skip_edited: 4 },
+  }),
+}));
+
 vi.mock("@/models/OcrJob", () => ({
   default: { findOne: vi.fn(), create: vi.fn() },
 }));
@@ -105,6 +114,24 @@ describe("POST /api/admin/books/ocr/start - active", () => {
       book: BOOK_ID,
       $or: [{ active: true }, { active: { $exists: false }, status: "running" }],
     });
+  });
+
+  it("skip_edited: totalPages לפי ספירת המצב; אין מה לעבד → 400 עם הודעת המצב", async () => {
+    const OcrJob = (await import("@/models/OcrJob")).default as unknown as { create: ReturnType<typeof vi.fn> };
+    const { countBookOcrPages } = (await import("@/lib/ocr/bookOcrCounts")) as unknown as {
+      countBookOcrPages: ReturnType<typeof vi.fn>;
+    };
+
+    const res = await POST(makeRequest({ bookId: BOOK_ID, method: "ocrwin", existingTextMode: "skip_edited" }));
+    expect(res.status).toBe(200);
+    expect(OcrJob.create.mock.calls[0][0]).toMatchObject({ existingTextMode: "skip_edited", totalPages: 4, editedPagesCount: 3 });
+
+    countBookOcrPages.mockResolvedValueOnce({
+      pagesWithImage: 5, editedPagesCount: 5, humanEditedPagesCount: 5, toProcess: { overwrite: 5, skip: 0, skip_edited: 0 },
+    });
+    const none = await POST(makeRequest({ bookId: BOOK_ID, method: "ocrwin", existingTextMode: "skip_edited" }));
+    expect(none.status).toBe(400);
+    expect((await none.json()).error).toMatch(/נערכו או נתפסו/);
   });
 
   it("עבודה פעילה קיימת → 409 בלי create", async () => {

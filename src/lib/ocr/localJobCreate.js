@@ -21,7 +21,7 @@ import OcrJob from '../../models/OcrJob.js';
 import Page from '../../models/Page.js';
 import { buildJobInput } from './localPdf.js';
 import { LocalInputError, selectPagesForLocal } from './localPdf.pure.js';
-import { pageHasText } from './runOcrJob.pure.js';
+import { pageHasText, selectionView } from './runOcrJob.pure.js';
 import { activeFilter } from './localJobState.js';
 import { relToAbs, removeQuiet } from './localStorage.js';
 import {
@@ -215,21 +215,21 @@ async function prepare(job, lease, req) {
   const mode = job.existingTextMode || req.existingTextMode;
 
   // סורקים בסמן ושומרים לכל עמוד רק את מה שצריך: ה-PDF משתמש ב-_id/pageNumber/imagePath/updatedAt,
-  // והבחירה/הספירה רק ב-pageHasText. את הטקסט עצמו (עשוי להיות גדול) לא מחזיקים בזיכרון —
-  // content מוחלף בסמן '1'/'' שנותן ל-pageHasText בדיוק את אותה תשובה (אותה trim של JS).
+  // והבחירה/הספירה רק ב-pageHasText/pageEditedByHuman. את הטקסט עצמו (עשוי להיות גדול) לא מחזיקים
+  // בזיכרון — selectionView מחליף אותו בסמן שנותן לשתיהן בדיוק את אותה תשובה.
   const pages = [];
   const cursor = Page.find({ book: job.book })
     .sort({ pageNumber: 1 })
-    .select('_id pageNumber imagePath content rightColumn leftColumn updatedAt')
+    .select('_id pageNumber imagePath content rightColumn leftColumn status lastOcrTextSha256 lastOcrAt updatedAt')
     .lean()
     .cursor();
   for await (const p of cursor) {
     pages.push({
+      ...selectionView(p),
       _id: p._id,
       pageNumber: p.pageNumber,
       imagePath: p.imagePath,
       updatedAt: p.updatedAt,
-      content: pageHasText(p) ? '1' : '',
     });
   }
   const editedPagesCount = pages.filter(pageHasText).length;

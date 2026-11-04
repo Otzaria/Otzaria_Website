@@ -13,7 +13,7 @@ import {
   callGemini,
   matchGeminiResults,
 } from '@/lib/ocr/gemini';
-import { pageHasText, buildPageUpdate } from '@/lib/ocr/runOcrJob.pure';
+import { pageSkippedInMode, buildPageUpdate } from '@/lib/ocr/runOcrJob.pure';
 
 const GEMINI_BATCH_SIZE = 5;
 
@@ -51,6 +51,17 @@ async function recordPageResult(jobId, pageNumber, ok, message) {
     update.$push = { pageErrors: { pageNumber, message: String(message).slice(0, 500) } };
   }
   await OcrJob.updateOne({ _id: jobId }, update);
+}
+
+// כתיבת טקסט ה-OCR לעמוד. במצבי הדילוג — רק אם העמוד לא השתנה מאז שנבחר לעבודה (updatedAt):
+// עמוד שמתנדב תפס או ערך בזמן שהעבודה רצה לא נדרס, ונרשם ככשל של העמוד.
+async function writePageText(job, page, text) {
+  if (job.existingTextMode === 'overwrite') {
+    await Page.findByIdAndUpdate(page._id, buildPageUpdate(text));
+    return;
+  }
+  const res = await Page.updateOne({ _id: page._id, updatedAt: page.updatedAt }, { $set: buildPageUpdate(text) });
+  if (res.matchedCount === 0) throw new Error('העמוד נערך או נתפס בזמן העבודה — הטקסט שבו לא נדרס');
 }
 
 // כל מסלולי הסיום (completed/failed/cancelled) עוברים כאן — ומשחררים את הספר (active:false)
@@ -166,7 +177,7 @@ async function runGemini(job, book, pages) {
           continue;
         }
         try {
-          await Page.findByIdAndUpdate(u.page._id, buildPageUpdate(mergeSegmentTexts(segTexts)));
+          await writePageText(job, u.page, mergeSegmentTexts(segTexts));
           await recordPageResult(job._id, u.page.pageNumber, true);
         } catch (e) {
           await recordPageResult(job._id, u.page.pageNumber, false, 'שגיאה בשמירה: ' + e.message);
@@ -196,7 +207,7 @@ async function runOcrwin(job, pages) {
         const blob = new Blob([seg.buffer], { type: seg.mimeType });
         texts.push(await ocrwinRecognize(blob, seg.displayName));
       }
-      await Page.findByIdAndUpdate(p._id, buildPageUpdate(mergeSegmentTexts(texts)));
+      await writePageText(job, p, mergeSegmentTexts(texts));
       await recordPageResult(job._id, p.pageNumber, true);
     } catch (e) {
       await recordPageResult(job._id, p.pageNumber, false, e.message);
@@ -223,7 +234,7 @@ export async function runOcrJob(jobId) {
     const allPages = await Page.find({ book: book._id }).sort({ pageNumber: 1 });
     const pages = allPages.filter((p) => {
       if (!p.imagePath) return false;
-      if (job.existingTextMode === 'skip' && pageHasText(p)) return false;
+      if (pageSkippedInMode(p, job.existingTextMode)) return false;
       return true;
     });
 

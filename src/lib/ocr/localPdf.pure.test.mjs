@@ -17,6 +17,7 @@ import {
   HARD_MAX_INPUT_BYTES,
   DEFAULT_MAX_INPUT_BYTES,
 } from './localPdf.pure.js';
+import { ocrTextSha256 } from './runOcrJob.pure.js';
 
 const SHA = 'a'.repeat(64);
 const T = new Date('2026-10-19T08:00:00.123Z');
@@ -39,6 +40,19 @@ test('selectPagesForLocal: overwrite — כל העמודים עם תמונה, מ
 test('selectPagesForLocal: skip — רק עמודים בלי טקסט (גם לא בטורים)', () => {
   assert.deepEqual(selectPagesForLocal(pages, 'skip').map((p) => p.pageNumber), [3, 10]);
   assert.deepEqual(selectPagesForLocal(null, 'skip'), []);
+});
+
+test('selectPagesForLocal: skip_edited — מדלג רק על עמודים שנערכו בידי אדם', () => {
+  const sha = ocrTextSha256('פלט');
+  const img = (n) => '/uploads/books/b/page.' + n + '.jpg';
+  const list = [
+    { _id: 'a', pageNumber: 2, imagePath: img(2), status: 'available', content: 'פלט', lastOcrTextSha256: sha },
+    { _id: 'b', pageNumber: 1, imagePath: img(1), status: 'completed', content: 'פלט', lastOcrTextSha256: sha },
+    { _id: 'c', pageNumber: 3, imagePath: img(3), status: 'available', content: 'פלט מתוקן', lastOcrTextSha256: sha },
+    { _id: 'd', pageNumber: 4, imagePath: img(4), status: 'available', content: '' },
+  ];
+  assert.deepEqual(selectPagesForLocal(list, 'skip_edited').map((p) => p._id), ['a', 'd']);
+  assert.deepEqual(selectPagesForLocal(list, 'skip').map((p) => p._id), ['d']);
 });
 
 test('checkLimits', () => {
