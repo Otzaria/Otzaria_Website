@@ -5,6 +5,7 @@ import {
   REPORTING_ERRORS_RECIPIENT,
   SEFARIA_ERRORS_RECIPIENT,
   buildCorrectionSnippets,
+  buildEmailBodies,
   buildHtml,
   buildSefariaLink,
   buildText,
@@ -394,6 +395,21 @@ describe('buildCorrectionSnippets', () => {
     expect(buildCorrectionSnippets(correction(null))).toBeNull();
     expect(buildCorrectionSnippets({ originalLine: 'א <b>ב</b>', originalSelection: null, proposedText: 'א ב' })).toBeNull();
   });
+
+  it.each([
+    ['א <B title="x">ב</B> ג', 'א ב ג'],
+    ['א <span title="a < b">ב</span> ג', 'א ב ג'],
+    ['א <a<b>ב</b> ג', 'א ב ג'],
+    ['א <1> ב < ג', 'א <1> ב < ג'],
+    ['א <b>ב</b> <c <d סוף', 'א ב <c <d סוף'],
+    ['א<BR />ב<Br/>ג<BR>ד', 'א ב ג ד'],
+    ['א &lt;b&gt;ב&lt;/b&gt; ג', 'א <b>ב</b> ג'],
+  ])('preserves display-tag behavior for %s', (originalLine, displayed) => {
+    expect(buildCorrectionSnippets({ originalLine, originalSelection: null, proposedText: 'תוקן' })).toEqual({
+      wrong: displayed,
+      fixed: '*תוקן*',
+    });
+  });
 });
 
 describe('buildHtml / buildText', () => {
@@ -465,5 +481,51 @@ describe('buildHtml / buildText', () => {
     const text = buildText(payload, ['cc@x.com']);
     expect(text).toContain('** עותק מדיווח זה נשלח גם ל: cc@x.com **');
     expect(text).toContain('ספר: Book <b>'); // plain text is not escaped
+  });
+
+  it.each(['א ג', 'א <b>ב</b>'])('prepares snippets once for both bodies, including an invisible change: %s', (proposedText) => {
+    let originalReads = 0;
+    const report = {
+      ...payload,
+      source_folder: 'sefariaToOtzaria',
+      correction: {
+        get originalLine() { originalReads++; return 'א ב'; },
+        originalSelection: null,
+        proposedText,
+      },
+    };
+    const bodies = buildEmailBodies(report, ['cc@example.com']);
+    expect(originalReads).toBe(1);
+    expect(bodies).toEqual({
+      html: buildHtml(report, ['cc@example.com']),
+      text: buildText(report, ['cc@example.com']),
+    });
+    expect(bodies.text.includes('הטקסט השגוי:')).toBe(proposedText === 'א ג');
+  });
+
+  it('does not prepare correction snippets for another source', () => {
+    const report = {
+      ...payload,
+      correction: {
+        get originalLine() { throw new Error('A non-Sefaria correction must not be parsed'); },
+        originalSelection: null,
+        proposedText: 'תיקון',
+      },
+    };
+    expect(buildEmailBodies(report)).toEqual({ html: buildHtml(report), text: buildText(report) });
+  });
+
+  it('does not reuse stale snippets when a later report changes the proposal', () => {
+    const report = {
+      ...payload,
+      source_folder: 'sefariaToOtzaria',
+      correction: { originalLine: 'א ב', originalSelection: null, proposedText: 'א ג' },
+    };
+    expect(buildEmailBodies(report).text).toContain('א *ג*');
+    report.correction.proposedText = 'א ד';
+    const updated = buildEmailBodies(report);
+    expect(updated.text).toContain('א *ד*');
+    expect(updated.html).toContain('א *ד*');
+    expect(updated.text).not.toContain('א *ג*');
   });
 });
