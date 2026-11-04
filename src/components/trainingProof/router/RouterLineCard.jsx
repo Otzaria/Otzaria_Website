@@ -7,6 +7,7 @@ import { LINE_SCRIPTS, WORD_SCRIPTS, SCRIPT_LABELS } from '@/lib/trainingProof/v
 import { scriptStyle } from '../common/scripts'
 import { boxStyle } from '../common/boxStyle'
 import Kbd from '../common/Kbd'
+import ScriptTag from '../common/ScriptTag'
 import { isMixed, missingWords } from './routerDraft'
 import { useInkWords } from './useInkWords'
 
@@ -115,8 +116,13 @@ export default function RouterLineCard({
           <>
             <span className="rounded-md bg-surface-container-highest px-2">ממתינה</span>
             {item.pred ? (
-              <span>
-                הצעת הנתב: <b>{SCRIPT_LABELS[item.pred]}</b>
+              <span className="inline-flex items-center gap-1.5">
+                הצעת הנתב:{' '}
+                {LINE_SCRIPTS.includes(item.pred) ? (
+                  <ScriptTag script={item.pred} data-testid="router-pred" />
+                ) : (
+                  <b>{SCRIPT_LABELS[item.pred]}</b>
+                )}
               </span>
             ) : (
               <span>אין הצעה מהנתב</span>
