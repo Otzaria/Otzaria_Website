@@ -4,6 +4,7 @@ import {
   FIELD_CAPS,
   REPORTING_ERRORS_RECIPIENT,
   SEFARIA_ERRORS_RECIPIENT,
+  buildCorrectionSnippets,
   buildHtml,
   buildSefariaLink,
   buildText,
@@ -335,12 +336,63 @@ describe('buildSefariaLink', () => {
 
   it('builds a URL and strips a duplicated leading book title from the ref', () => {
     expect(buildSefariaLink('Genesis', 'Genesis, 1:1')).toBe(
-      'https://www.sefaria.org/Genesis, 1%3A1'
+      `https://www.sefaria.org/${encodeURIComponent('Genesis, 1:1')}`
     );
   });
 
   it('keeps the ref as-is when it does not start with the book title', () => {
-    expect(buildSefariaLink('Genesis', '1:1')).toBe('https://www.sefaria.org/Genesis, 1%3A1');
+    expect(buildSefariaLink('Genesis', '1:1')).toBe(`https://www.sefaria.org/${encodeURIComponent('Genesis, 1:1')}`);
+  });
+
+  it('drops TOC labels that Sefaria does not parse', () => {
+    expect(decodeURIComponent(buildSefariaLink('בית יוסף', 'בית יוסף, אורח חיים, סימן שיח, סעיף קטן טו'))).toBe(
+      'https://www.sefaria.org/בית יוסף, אורח חיים, שיח, טו'
+    );
+  });
+
+  it('prefers the exact Sefaria ref (he_ref) and collapses its spacing', () => {
+    expect(decodeURIComponent(buildSefariaLink('בית יוסף', 'בית יוסף, אורח חיים, סימן שיח', 'בית יוסף, אורח חיים,  שיח, טו, א'))).toBe(
+      'https://www.sefaria.org/בית יוסף, אורח חיים, שיח, טו, א'
+    );
+  });
+});
+
+describe('buildCorrectionSnippets', () => {
+  const line = '<b>ומ"ש</b> בכרמלית הסמוך לו וכתב כרא"ש הרמב"ם בפי"ז השוה יחד ועוד שתי מילים';
+  const selection = 'כרא"ש';
+  const start = line.indexOf(selection);
+  const correction = (proposedText) => ({
+    originalLine: line,
+    originalSelection: selection,
+    contextBefore: line.slice(0, start),
+    contextAfter: line.slice(start + selection.length),
+    proposedText,
+  });
+
+  it('returns four words around the change, before and after, with the change marked', () => {
+    expect(buildCorrectionSnippets(correction('הרא"ש'))).toEqual({
+      wrong: 'בכרמלית הסמוך לו וכתב כרא"ש הרמב"ם בפי"ז השוה יחד',
+      fixed: 'בכרמלית הסמוך לו וכתב *הרא"ש* הרמב"ם בפי"ז השוה יחד',
+    });
+  });
+
+  it('marks a deletion with the deleted words', () => {
+    expect(buildCorrectionSnippets(correction('')).fixed).toBe('בכרמלית הסמוך לו וכתב *(נמחק: כרא"ש)* הרמב"ם בפי"ז השוה יחד');
+  });
+
+  it('shows the text as displayed: <br> separates words and entities are decoded', () => {
+    const wholeLine = (originalLine, proposedText) => ({ originalLine, originalSelection: null, proposedText });
+    expect(buildCorrectionSnippets(wholeLine('מילה<br>אחרת שגוי', 'מילה<br/>אחרת נכון'))).toEqual({
+      wrong: 'מילה אחרת שגוי',
+      fixed: 'מילה אחרת *נכון*',
+    });
+    expect(buildCorrectionSnippets(wholeLine('אמר &quot;שלום&#x5D0; a<b c', 'אמר &quot;שלום&#x5D0; a<b d')).wrong).toBe('אמר "שלוםא a<b c');
+  });
+
+  it('returns null without a proposal or without a visible change', () => {
+    expect(buildCorrectionSnippets(null)).toBeNull();
+    expect(buildCorrectionSnippets(correction(null))).toBeNull();
+    expect(buildCorrectionSnippets({ originalLine: 'א <b>ב</b>', originalSelection: null, proposedText: 'א ב' })).toBeNull();
   });
 });
 
@@ -380,6 +432,33 @@ describe('buildHtml / buildText', () => {
     const sefariaPayload = { ...payload, source_folder: 'sefariaToOtzaria' };
     const sefariaHtml = buildHtml(sefariaPayload, []);
     expect(sefariaHtml).toContain('קישור ישיר');
+  });
+
+  it('escapes the correction snippets in the HTML output', () => {
+    const html = buildHtml({
+      ...payload,
+      source_folder: 'sefariaToOtzaria',
+      correction: { originalLine: 'א ב', originalSelection: null, proposedText: 'א <script>x</script>&lt;i&gt;' },
+    }, []);
+    expect(html).toContain('הטקסט המתוקן');
+    expect(html).toContain('*x&lt;i&gt;*');
+    expect(html).not.toContain('<script>');
+    expect(html).not.toContain('<i>');
+  });
+
+  it('shows wrong and corrected text instead of the raw fields for a correction', () => {
+    const text = buildText({
+      ...payload,
+      source_folder: 'sefariaToOtzaria',
+      error_details: 'הערה\n\n--- הצעת תיקון ---\nמקור: ב\nמוצע: ג',
+      correction: { originalLine: 'א ב', originalSelection: 'ב', contextBefore: 'א ', contextAfter: '', proposedText: 'ג' },
+    }, []);
+    expect(text).toContain('הטקסט השגוי:\nא ב\n\nהטקסט המתוקן:\nא *ג*\n\nהערת המדווח:\nהערה\n');
+    expect(text).not.toContain('הטקסט המסומן');
+    expect(text).not.toContain('--- הצעת תיקון ---');
+    const otherSource = buildText({ ...payload, correction: { originalLine: 'א ב', originalSelection: null, proposedText: 'א ג' } }, []);
+    expect(otherSource).toContain('פירוט הטעות:');
+    expect(otherSource).not.toContain('הטקסט השגוי');
   });
 
   it('buildText produces plain-text with the same conditional sections', () => {

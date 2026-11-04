@@ -237,6 +237,9 @@ test('ספריא (המייל לא מגיע לאוצריא) → email_only: נש�
   assert.equal(sent.length, 1);
   assert.equal(sent[0].to, 'corrections@sefaria.org');
   assert.deepEqual(sent[0].cc, ['jewishoffice@gmail.com']);
+  assert.ok(sent[0].text.includes(`קישור ישיר: https://www.sefaria.org/${encodeURIComponent('בראשית א')}`), 'הקישור לפי he_ref');
+  assert.ok(sent[0].text.includes('הטקסט השגוי:\n(א) בְּרֵאשִׁ֖ית בָּרָ֣א אֱלֹהִ֑ים\n'));
+  assert.ok(sent[0].text.includes('הטקסט המתוקן:\n(א) בְּרֵאשִׁ֖ית בָּרָ֣א *אֱלֹקִ֑ים*\n'));
   const legacySefaria = await post({ ...oldClient('sef-old'), source_folder: 'my-SEFARIA-x' }, { notify });
   assert.equal(legacySefaria.status, 200);
   assert.equal((await ErrorReport.findOne({ reportId: 'sef-old' }).lean()).state, 'email_only');
