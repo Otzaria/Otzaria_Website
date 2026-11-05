@@ -110,3 +110,78 @@ test('HTTP + GridFS: אבחון ולוג ב10MiB כל אחד נשמרים בשל
   assert.equal((await getFileFromGridFS(saved.fileIds.diagnostics.gridfsId)).toString('utf8'), JSON.stringify(diagnostics));
   assert.equal((await getFileFromGridFS(saved.fileIds.errors.gridfsId)).toString('utf8'), errorLog);
 });
+
+
+test('HTTP + GridFS: schema2 diagnostics-only changes are stored under a new report ID', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const base = report({});
+  assert.equal((await post(base)).status, 200);
+
+  const diagnostics = { collectedAt: '2026-11-05T12:00:00Z', memoryMiB: 12.5, details: 'אבחון חדש' };
+  const added = { ...base, reportId: 'diagnostics-added', attachments: { diagnostics } };
+  const first = await post(added);
+  assert.equal(first.status, 200);
+  assert.equal((await first.json()).duplicate, false);
+  const firstDoc = await AppReport.findOne({ reportId: added.reportId }).lean();
+  assert.equal((await getFileFromGridFS(firstDoc.fileIds.diagnostics.gridfsId)).toString('utf8'), JSON.stringify(diagnostics));
+
+  const changed = {
+    ...added, reportId: 'diagnostics-changed',
+    attachments: { diagnostics: { ...diagnostics, memoryMiB: 25.25, details: 'אבחון אחר' } },
+  };
+  const second = await post(changed);
+  assert.equal(second.status, 200);
+  assert.equal((await second.json()).duplicate, false);
+  const secondDoc = await AppReport.findOne({ reportId: changed.reportId }).lean();
+  assert.equal((await getFileFromGridFS(secondDoc.fileIds.diagnostics.gridfsId)).toString('utf8'), JSON.stringify(changed.attachments.diagnostics));
+  assert.equal(await AppReport.countDocuments(), 3);
+  assert.equal(await mongoose.connection.db.collection('uploads.files').countDocuments(), 2);
+
+  const calls = github.calls.length;
+  const retry = await post(changed);
+  assert.equal(retry.status, 200);
+  assert.equal((await retry.json()).duplicate, true);
+  const resent = await post({ ...changed, reportId: 'diagnostics-unchanged-resend' });
+  assert.equal(resent.status, 200);
+  assert.equal((await resent.json()).duplicate, true);
+  assert.equal(await AppReport.countDocuments(), 3);
+  assert.equal(await mongoose.connection.db.collection('uploads.files').countDocuments(), 2);
+  assert.equal(github.calls.length, calls);
+});
+
+test('HTTP + GridFS: schema2 same-ID diagnostics changes are conflicts; schema1 retries stay compatible', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const diagnostics = { value: 'original exact attachment' };
+  const base = report({ diagnostics });
+  assert.equal((await post(base)).status, 200);
+  const before = await AppReport.findOne({ reportId: base.reportId }).lean();
+  const originalFileId = String(before.fileIds.diagnostics.gridfsId);
+  const calls = github.calls.length;
+
+  for (const attachments of [{}, { diagnostics: { value: 'different attachment' } }]) {
+    const response = await post({ ...base, attachments });
+    assert.equal(response.status, 409);
+    assert.deepEqual(await response.json(), { error: 'reportId conflict' });
+    const kept = await AppReport.findOne({ reportId: base.reportId }).lean();
+    assert.equal(String(kept.fileIds.diagnostics.gridfsId), originalFileId);
+    assert.equal((await getFileFromGridFS(kept.fileIds.diagnostics.gridfsId)).toString('utf8'), JSON.stringify(diagnostics));
+  }
+  assert.equal(await AppReport.countDocuments(), 1);
+  assert.equal(await mongoose.connection.db.collection('uploads.files').countDocuments(), 1);
+  assert.equal(github.calls.length, calls);
+  assert.equal((await (await post(base)).json()).duplicate, true);
+
+  const legacy = { ...base, schema: 1, reportId: 'legacy-diagnostics' };
+  const firstLegacy = await post(legacy);
+  assert.equal(firstLegacy.status, 200);
+  assert.equal((await firstLegacy.json()).duplicate, false);
+  for (const reportId of [legacy.reportId, 'legacy-diagnostics-resend']) {
+    const retry = await post({ ...legacy, reportId, attachments: { diagnostics: { value: 'legacy recollected diagnostics' } } });
+    assert.equal(retry.status, 200);
+    assert.equal((await retry.json()).duplicate, true);
+  }
+  const legacyDoc = await AppReport.findOne({ reportId: legacy.reportId }).lean();
+  assert.deepEqual(JSON.parse((await getFileFromGridFS(legacyDoc.fileIds.diagnostics.gridfsId)).toString('utf8')), diagnostics);
+  assert.equal(await AppReport.countDocuments(), 2);
+  assert.equal(await mongoose.connection.db.collection('uploads.files').countDocuments(), 2);
+});
