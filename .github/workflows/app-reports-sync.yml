@@ -1,0 +1,33 @@
+name: Sync reports and clean closed report attachments
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-reports-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository == 'Otzaria/Otzaria_Website'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Run the deployed report scheduler
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.PORT }}
+          timeout: 1m
+          command_timeout: 13m
+          script: |
+            set -eu
+            cd /var/www/otzaria-web
+            node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/sync-app-reports.mjs

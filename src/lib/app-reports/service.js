@@ -8,7 +8,8 @@ import { validateAppReport, IMAGE_TYPES } from './validation.js';
 import { computeContentHash, computeResendHash, computeSignatureHash } from './hashes.js';
 import { buildIssueTitle, buildIssueBody, buildMergeComment, issueLabels } from './issue-text.js';
 import { createGithubClient, issueHtmlUrl } from './github.js';
-import { handleIssueStateChange } from './state-change.js';
+import { handleIssueStateChange, trustedIssueClosedAt } from './state-change.js';
+import { cleanupClosedReportPayloads } from './retention.js';
 import { planPublication } from './merge.js';
 import { verifyUnsubscribeToken } from './unsubscribe.js';
 import { suggestEmailDomain } from '../emailTypo.js';
@@ -201,14 +202,14 @@ export async function publishReport(reportId, deps) {
       }
       if (!issue || (issue.state === 'closed' && !issue.state_reason)) {
         await AppReport.updateMany({ ...scope, issueNumber: plan.issueNumber }, {
-          $set: { issueState: 'closed', issueStateReason: null, issueCheckedAt: now },
+          $set: { issueState: 'closed', issueStateReason: null, issueClosedAt: null, issueCheckedAt: now },
         });
         plan = { action: 'create', previousIssueNumber: plan.issueNumber };
       } else if (issue.state !== 'closed') {
         await handleIssueStateChange(issue, { ...deps, product, now });
         plan = { action: 'comment', issueNumber: plan.issueNumber, issueUrl: issue.url || plan.issueUrl };
       } else {
-        plan = { ...plan, issueStateReason: issue.state_reason, issueUrl: issue.url || plan.issueUrl };
+        plan = { ...plan, issueStateReason: issue.state_reason, issueClosedAt: trustedIssueClosedAt(issue), issueUrl: issue.url || plan.issueUrl };
       }
     }
     if (racing && plan.action === 'create') {
@@ -220,7 +221,7 @@ export async function publishReport(reportId, deps) {
       await github.createComment(plan.issueNumber, buildMergeComment(leased));
       set = {
         issueNumber: plan.issueNumber, issueUrl: plan.issueUrl || issueHtmlUrl(github.repo, plan.issueNumber),
-        issueState: 'open', mergedIntoExisting: true,
+        issueState: 'open', issueClosedAt: null, mergedIntoExisting: true,
       };
     } else if (plan.action === 'suppress') {
       // מייל הסגירה יישלח בבדיקת המצב הבאה של ה-issue — אלא אם הכתובת כבר קיבלה אותו עליו
@@ -230,6 +231,7 @@ export async function publishReport(reportId, deps) {
       set = {
         issueNumber: plan.issueNumber, issueUrl: plan.issueUrl || issueHtmlUrl(github.repo, plan.issueNumber),
         issueState: 'closed', issueStateReason: plan.issueStateReason, mergedIntoExisting: true, suppressedAfterClose: true,
+        issueClosedAt: plan.issueClosedAt,
         ...(alreadyNotified ? { notifiedClosedAt: now } : {}),
       };
     } else {
@@ -241,7 +243,7 @@ export async function publishReport(reportId, deps) {
       });
       set = {
         issueNumber: created.number, issueUrl: created.url || issueHtmlUrl(github.repo, created.number),
-        issueState: created.state === 'closed' ? 'closed' : 'open', mergedIntoExisting: false, previousIssueNumber,
+        issueState: created.state === 'closed' ? 'closed' : 'open', issueClosedAt: trustedIssueClosedAt(created), mergedIntoExisting: false, previousIssueNumber,
       };
     }
     return await AppReport.findOneAndUpdate(
@@ -253,7 +255,7 @@ export async function publishReport(reportId, deps) {
     console.error('App report: GitHub publish failed:', err?.message);
     // ה-issue נמחק או ננעל: בלי סימונו כסגור כל דיווח נוסף עם אותה חתימה יישאר ממתין לנצח
     if (plan?.action === 'comment' && (err?.status === 404 || err?.status === 410 || (err?.status === 403 && /locked/i.test(String(err?.message))))) {
-      await AppReport.updateMany({ ...scope, issueNumber: plan.issueNumber }, { $set: { issueState: 'closed', issueStateReason: null } });
+      await AppReport.updateMany({ ...scope, issueNumber: plan.issueNumber }, { $set: { issueState: 'closed', issueStateReason: null, issueClosedAt: null } });
     }
     return AppReport.findOneAndUpdate(
       { reportId },
@@ -281,6 +283,7 @@ export async function runAppReportsSync(deps) {
   for (const [product, github] of clients) {
     if (github) await syncProduct(product, github, d, summary);
   }
+  summary.cleanup = await cleanupClosedReportPayloads(d);
   return summary;
 }
 
@@ -329,7 +332,7 @@ async function syncProduct(product, github, d, summary) {
       // issue שנמחק/הועבר לא יחסום את התור
       if (err?.status === 404 || err?.status === 410) {
         await AppReport.updateMany({ ...scope, issueNumber: number }, {
-          $set: { issueState: 'closed', issueStateReason: null, issueCheckedAt: now },
+          $set: { issueState: 'closed', issueStateReason: null, issueClosedAt: null, issueCheckedAt: now },
         });
       }
     }
@@ -340,9 +343,15 @@ async function syncProduct(product, github, d, summary) {
 export function serializeReport(doc, role) {
   if (!doc) return null;
   // replyToken הוא הרשאה לכתוב לדיווח (מי שמחזיק בו יכול לשלוח "תשובה") — לא יוצא מהשרת
-  const { reporterEmail, issueLeaseUntil, contentHash, resendHash, replyToken, __v, ...rest } = doc;
+  const { reporterEmail, issueLeaseUntil, contentHash, resendHash, replyToken, payloadCleanup, __v, ...rest } = doc;
   return {
     ...rest,
+    ...(payloadCleanup ? { payloadCleanup: {
+      purgedAt: payloadCleanup.purgedAt, closedAt: payloadCleanup.closedAt,
+      removedFiles: payloadCleanup.removedFiles, removedBytes: payloadCleanup.removedBytes,
+      sharedFiles: payloadCleanup.sharedFiles, missingFiles: payloadCleanup.missingFiles,
+      kinds: payloadCleanup.kinds,
+    } } : {}),
     product: productOf(doc),
     _id: String(doc._id),
     hasEmail: Boolean(reporterEmail),
@@ -565,7 +574,10 @@ export async function ingestInboundReply(raw, deps) {
   const filter = { reportId: doc.reportId, ...(messageId ? { 'contactLog.messageId': { $ne: messageId } } : {}) };
   let upd;
   try {
-    upd = await AppReport.updateOne(filter, { $push: { contactLog: entry }, $set: { lastInboundAt: now } });
+    upd = await AppReport.updateOne(filter, {
+      $push: { contactLog: entry },
+      $set: { lastInboundAt: now, ...(imageRefs.length ? { 'payloadCleanup.purgedAt': null } : {}) },
+    });
   } catch (error) {
     if (tracker.saved.length) {
       try {
