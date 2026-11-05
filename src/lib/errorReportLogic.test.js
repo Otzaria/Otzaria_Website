@@ -257,6 +257,99 @@ describe('computeContentHash', () => {
   });
 });
 
+describe('computeContentHash compatibility and structured corrections', () => {
+  const legacy = {
+    book_title: 'A', current_ref: 'B', line_number: 1,
+    selected_text: 'C', error_details: 'D', context_text: 'E', source_folder: 'F',
+  };
+  const correction = {
+    originalLine: 'לפני שגוי אחרי', originalSelection: 'שגוי',
+    selectionOffset: { unit: 'utf16_code_units', start: 5, end: 9 },
+    proposedText: 'מתוקן', contextBefore: 'לפני ', contextAfter: ' אחרי',
+  };
+  const structured = { ...legacy, correction, he_ref: 'בראשית א:א' };
+
+  it.each([
+    [legacy, '3b78da21e6ebaa4a23db58a58f1a927c5a5938c4cbd0e574a4f0b160cf5fa460'],
+    [{
+      book_title: '  ספר ', current_ref: '\nסימן א\t', line_number: 0,
+      selected_text: ' טקסט ', error_details: 'פירוט', context_text: 'הקשר', source_folder: 'sefaria',
+    }, 'bfd44bcb73980bcf57ba221941d62076a5eaf29d77af329abc076910e0c614f5'],
+    [{}, '7d28d4f40bc444020b37bc9540a3654da81ef5b5f6952ab7df6748d5d894f2ed'],
+  ])('retains exact legacy hash bytes for %j', (payload, hash) => {
+    expect(computeContentHash(payload)).toBe(hash);
+    expect(computeContentHash({ ...payload, correction: null, he_ref: 'another ref' })).toBe(hash);
+  });
+
+  it('separates structured corrections from the legacy hash domain', () => {
+    expect(computeContentHash(structured)).not.toBe(computeContentHash(legacy));
+  });
+
+  it.each([
+    ['originalLine', 'לפני שגוי אחר'],
+    ['originalSelection', 'שגוי אחר'],
+    ['selectionOffset', { unit: 'utf16_code_units', start: 6, end: 10 }],
+    ['proposedText', 'הצעה אחרת'],
+    ['proposedText', null],
+    ['proposedText', ''],
+    ['contextBefore', 'פתיחה אחרת '],
+    ['contextAfter', ' סיום אחר'],
+  ])('includes the full canonical %s field (%j)', (field, value) => {
+    expect(computeContentHash({ ...structured, correction: { ...correction, [field]: value } }))
+      .not.toBe(computeContentHash(structured));
+  });
+
+  it.each(['originalLine', 'proposedText', 'contextBefore', 'contextAfter'])('includes late changes in %s beyond the display cap', (field) => {
+    const prefix = 'א'.repeat(12_502);
+    const a = { ...structured, correction: { ...correction, [field]: prefix + 'ב' } };
+    const b = { ...structured, correction: { ...correction, [field]: prefix + 'ג' } };
+    expect(computeContentHash(a)).not.toBe(computeContentHash(b));
+  });
+
+  it.each(['בראשית א:ב', null])('includes the validated he_ref (%j)', (he_ref) => {
+    expect(computeContentHash({ ...structured, he_ref })).not.toBe(computeContentHash(structured));
+  });
+
+  it('still includes the legacy content fields for structured corrections', () => {
+    expect(computeContentHash({ ...structured, error_details: 'different reporter note' }))
+      .not.toBe(computeContentHash(structured));
+  });
+
+  it('ignores reporter, report ID, timestamps and client digest', () => {
+    expect(computeContentHash({
+      ...structured, report_id: 'other-id', sender_email: 'another@example.com',
+      created_at: '2026-11-05T00:00:00.000Z', content_digest: 'f'.repeat(64),
+    })).toBe(computeContentHash(structured));
+  });
+
+  it('is independent of canonical correction property order', () => {
+    const reordered = Object.fromEntries(Object.entries(correction).reverse());
+    reordered.selectionOffset = { end: 9, start: 5, unit: 'utf16_code_units' };
+    expect(computeContentHash({ ...structured, correction: reordered })).toBe(computeContentHash(structured));
+  });
+
+  it('preserves accepted lone surrogate code units in he_ref', () => {
+    const hash = computeContentHash({ ...structured, he_ref: '\ud800' });
+    expect(hash).not.toBe(computeContentHash({ ...structured, he_ref: '\ud801' }));
+    expect(hash).not.toBe(computeContentHash({ ...structured, he_ref: '\ufffd' }));
+  });
+
+  it('preserves an accepted empty selection inside a surrogate pair', () => {
+    const line = 'א😀ב';
+    const split = { ...structured, correction: {
+      originalLine: line, originalSelection: '',
+      selectionOffset: { unit: 'utf16_code_units', start: 2, end: 2 },
+      proposedText: 'תיקון', contextBefore: line.slice(0, 2), contextAfter: line.slice(2),
+    } };
+    const hash = computeContentHash(split);
+    for (const field of ['contextBefore', 'contextAfter']) {
+      expect(hash).not.toBe(computeContentHash({ ...split, correction: {
+        ...split.correction, [field]: split.correction[field].toWellFormed(),
+      } }));
+    }
+  });
+});
+
 describe('getDedupCutoff', () => {
   it('subtracts DEDUP_WINDOW_MONTHS from the reference date', () => {
     const reference = new Date('2024-07-15T00:00:00.000Z');
