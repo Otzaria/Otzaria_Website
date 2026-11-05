@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { GridFSBucket } from 'mongodb';
-import FileStorage from '@/models/FileStorage';
+import FileStorage from '../models/FileStorage.js';
 
 let bucket;
 

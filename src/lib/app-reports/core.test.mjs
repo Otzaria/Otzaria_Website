@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import zlib from 'node:zlib';
 import { randomBytes } from 'node:crypto';
-import { validateAppReport, MAX_DIAGNOSTICS_BYTES, MAX_IMAGES, MAX_IMAGE_BYTES, MAX_IMAGES_TOTAL_BYTES, MAX_MINIDUMP_BYTES, MAX_MINIDUMP_INPUT_BYTES, MAX_BODY_BYTES, sniffImageType } from './validation.js';
+import { validateAppReport, LEGACY_MAX_DIAGNOSTICS_BYTES as MAX_DIAGNOSTICS_BYTES, MAX_IMAGES, LEGACY_MAX_IMAGE_BYTES as MAX_IMAGE_BYTES, LEGACY_MAX_IMAGES_TOTAL_BYTES as MAX_IMAGES_TOTAL_BYTES, LEGACY_MAX_MINIDUMP_BYTES as MAX_MINIDUMP_BYTES, LEGACY_MAX_MINIDUMP_INPUT_BYTES as MAX_MINIDUMP_INPUT_BYTES, MAX_BODY_BYTES, sniffImageType } from './validation.js';
 import { computeContentHash, computeSignatureHash } from './hashes.js';
 import { redactEmails } from './redact.js';
 import { buildIssueTitle, buildIssueBody, buildMergeComment, issueLabels } from './issue-text.js';
@@ -71,7 +71,7 @@ test('ולידציה: ערכים לא מוכרים ושדות חסרים → 422
   const cases = [
     [{ type: 'other' }, 'type'], [{ trigger: 'x' }, 'trigger'], [{ platform: 'beos' }, 'platform'],
     [{ title: '' }, 'title'], [{ title: 'א'.repeat(201) }, 'title'], [{ appVersion: '' }, 'appVersion'],
-    [{ reportId: '' }, 'reportId'], [{ reportId: 'x'.repeat(101) }, 'reportId'], [{ schema: 2 }, 'schema'],
+    [{ reportId: '' }, 'reportId'], [{ reportId: 'x'.repeat(101) }, 'reportId'], [{ schema: 3 }, 'schema'],
     [{ description: 'א'.repeat(10001) }, 'description'], [{ stepsToReproduce: 'א'.repeat(5001) }, 'stepsToReproduce'],
     [{ osVersion: 'x'.repeat(201) }, 'osVersion'], [{ arch: 'x'.repeat(21) }, 'arch'], [{ sentryEventId: 'x'.repeat(65) }, 'sentryEventId'],
     [{ createdAt: '2026-09-17 10:00' }, 'createdAt'], [{ createdAt: '2026-09-17T10:00:00+02:00' }, 'createdAt'],

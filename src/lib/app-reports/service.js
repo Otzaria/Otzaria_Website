@@ -71,7 +71,7 @@ function trackingSaver(saveFile) {
 async function storeAttachments(report, value, saveFile) {
   const fileIds = { diagnostics: null, errors: null, minidump: null, images: [] };
   if (value.diagnostics) {
-    const buf = Buffer.from(JSON.stringify(value.diagnostics, null, 2), 'utf8');
+    const buf = Buffer.from(JSON.stringify(value.diagnostics, null, value.schema === 1 ? 2 : undefined), 'utf8');
     const saved = await saveFile(buf, `app-report-${report.reportId}-diagnostics.json`, 'application/json', { appReportId: report.reportId });
     fileIds.diagnostics = { gridfsId: saved.gridfsId, size: buf.length };
   }
@@ -110,7 +110,7 @@ export async function ingestAppReport(raw, deps) {
   const resendHash = computeResendHash(contentHash, value);
 
   const doc = {
-    reportId: value.reportId, schema: 1, product: value.product, type: value.type, trigger: value.trigger, title: value.title,
+    reportId: value.reportId, schema: value.schema, product: value.product, type: value.type, trigger: value.trigger, title: value.title,
     description: value.description, stepsToReproduce: value.stepsToReproduce, reporterEmail: value.reporterEmail || null,
     appVersion: value.appVersion, platform: value.platform, osVersion: value.osVersion, arch: value.arch,
     signature: value.signature, sentryEventId: value.sentryEventId, clientCreatedAt: value.clientCreatedAt,

@@ -10,7 +10,8 @@
 import PostalMime from 'postal-mime';
 import { CID_IMAGE_RE, bareContentId, decodeCidReference } from '../../../src/lib/app-reports/content-id.js';
 
-const MAX_RAW_BYTES = 10 * 1024 * 1024;
+const MAX_RAW_BYTES = 25 * 1024 * 1024;
+const MAX_KV_VALUE_BYTES = 25 * 1024 * 1024;
 const MAX_TEXT_CHARS = 200000;
 const PENDING_TTL_SECONDS = 14 * 24 * 60 * 60;
 const RETRY_BATCH = 50;
@@ -19,19 +20,19 @@ const REPLY_RE = /^reply\+[0-9a-f]{40}@/i;
 const HEADERS = ['auto-submitted', 'precedence', 'x-autoreply', 'x-autorespond', 'x-auto-response-suppress'];
 // אותן תקרות כמו בצילומי המסך של הדיווח (src/lib/app-reports/validation.js באתר)
 const MAX_IMAGES = 5;
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-const MAX_IMAGES_TOTAL_BYTES = 15 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_IMAGES_TOTAL_BYTES = 20 * 1024 * 1024;
 const IMAGE_MAGIC = [[0x89, 0x50, 0x4e, 0x47], [0xff, 0xd8, 0xff], [0x47, 0x49, 0x46, 0x38]];
 
 async function forwardToHuman(message, env, reason) {
   if (!env.FALLBACK_TO) {
-    console.error(`No FALLBACK_TO; dropping (${reason})`);
-    return;
+    throw new Error(`No FALLBACK_TO; email was not stored (${reason})`);
   }
   try {
     await message.forward(env.FALLBACK_TO);
   } catch (err) {
     console.error(`Forward failed (${reason}):`, err?.message);
+    throw err;
   }
 }
 
@@ -161,7 +162,19 @@ const worker = {
     }
     const result = await deliver(payload, env);
     if (result === 'retry') {
-      await env.PENDING.put(pendingKey(payload), JSON.stringify(payload), { expirationTtl: PENDING_TTL_SECONDS });
+      const serialized = JSON.stringify(payload);
+      // MIME בינארי תקין יכול להפוך ל-JSON/base64 גדול מתקרת הערך של KV.
+      if (serialized.length > MAX_KV_VALUE_BYTES || new TextEncoder().encode(serialized).byteLength > MAX_KV_VALUE_BYTES) {
+        console.error('Retry payload exceeds KV limit; forwarding original email to human');
+        await forwardToHuman(message, env, 'retry payload exceeds KV limit');
+        return;
+      }
+      try {
+        await env.PENDING.put(pendingKey(payload), serialized, { expirationTtl: PENDING_TTL_SECONDS });
+      } catch (error) {
+        console.error('Retry storage failed; forwarding original email to human:', error?.message);
+        await forwardToHuman(message, env, 'retry storage failed');
+      }
     } else if (result === 'permanent') {
       await forwardToHuman(message, env, 'rejected by site');
     }

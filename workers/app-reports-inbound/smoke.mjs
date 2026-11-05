@@ -33,7 +33,10 @@ function kv() {
   const map = new Map();
   return {
     map,
-    put: async (k, v) => { map.set(k, v); },
+    put: async (k, v) => {
+      if (Buffer.byteLength(v) > 25 * 1024 * 1024) throw new Error('KV value exceeds 25 MiB');
+      map.set(k, v);
+    },
     get: async (k, type) => (type === 'json' ? JSON.parse(map.get(k)) : map.get(k)),
     delete: async (k) => { map.delete(k); },
     list: async ({ prefix }) => ({ keys: [...map.keys()].filter((k) => k.startsWith(prefix)).map((name) => ({ name })) }),
@@ -196,5 +199,61 @@ for (const { src, id, expected = 1 } of [
   assert.equal(validated.value.images.length, expected, src);
   if (expected) assert.deepEqual(validated.value.images[0].buffer, png, src);
 }
+
+// קובץ של10MiB חורג ממכסת ה־MIME הישנה של ה־Worker, אך נתמך בחוזה החדש.
+const largeImage = Buffer.concat([png, Buffer.alloc(10 * 1024 * 1024 - png.length)]);
+const largeMail = [
+  'MIME-Version: 1.0', 'From: reporter@example.com', `To: reply+${TOKEN}@reply.otzaria.org`,
+  'Subject: Large screenshot', 'Message-ID: <large@example.com>',
+  'Content-Type: multipart/mixed; boundary="large"', '',
+  '--large', 'Content-Type: text/plain; charset=utf-8', '', 'Screenshot',
+  '--large', 'Content-Type: image/png; name="large.png"',
+  'Content-Disposition: attachment; filename="large.png"', 'Content-Transfer-Encoding: base64', '',
+  wrap(largeImage), '--large--', '',
+].join('\r\n');
+const largeMessage = message(undefined, largeMail);
+assert.ok(largeMessage.rawSize > 10 * 1024 * 1024);
+await worker.email(largeMessage, env());
+assert.deepEqual(largeMessage.forwarded, []);
+const largePayload = calls.at(-1).body;
+assert.equal(largePayload.images.length, 1);
+assert.deepEqual(validateInboundPayload(largePayload).value.images[0].buffer, largeImage);
+
+const overTransport = message();
+overTransport.rawSize = 25 * 1024 * 1024 + 1;
+const beforeOverTransport = calls.length;
+await worker.email(overTransport, env());
+assert.equal(calls.length, beforeOverTransport);
+assert.deepEqual(overTransport.forwarded, ['human@otzaria.org']);
+
+// MIME בינארי יכול להיכנס ל-Email Routing, אף שה-base64 שלו גדול מ-KV.
+const binaryImage = 'GIF89a' + 'A'.repeat(10 * 1024 * 1024 - 6);
+const binaryMail = [
+  'MIME-Version: 1.0', 'From: reporter@example.com', `To: reply+${TOKEN}@reply.otzaria.org`,
+  'Subject: two recordings', 'Content-Type: multipart/mixed; boundary="binary"', '',
+  '--binary', 'Content-Type: text/plain; charset=utf-8', '', 'Recordings',
+  ...[1, 2].flatMap((i) => ['--binary', `Content-Type: image/gif; name="${i}.gif"`,
+    `Content-Disposition: attachment; filename="${i}.gif"`, 'Content-Transfer-Encoding: binary', '', binaryImage]),
+  '--binary--', '',
+].join('\r\n');
+siteStatus = 503; e = env();
+const binaryMessage = message(undefined, binaryMail);
+assert.ok(binaryMessage.rawSize < 25 * 1024 * 1024);
+await worker.email(binaryMessage, e);
+assert.equal(calls.at(-1).body.images.length, 2);
+assert.equal(calls.at(-1).body.images[0].data, Buffer.from(binaryImage).toString('base64'));
+assert.ok(Buffer.byteLength(calls.at(-1).init.body) > 25 * 1024 * 1024);
+assert.equal(e.PENDING.map.size, 0);
+assert.deepEqual(binaryMessage.forwarded, ['human@otzaria.org']);
+
+const kvFailure = env();
+kvFailure.PENDING.put = async () => { throw new Error('KV unavailable'); };
+const failedStore = message();
+await worker.email(failedStore, kvFailure);
+assert.deepEqual(failedStore.forwarded, ['human@otzaria.org']);
+const failedForward = message();
+failedForward.forward = async () => { throw new Error('Forward unavailable'); };
+await assert.rejects(worker.email(failedForward, kvFailure), /Forward unavailable/);
+await assert.rejects(worker.email(message(), { ...kvFailure, FALLBACK_TO: '' }), /email was not stored/);
 
 console.log('smoke ok');
