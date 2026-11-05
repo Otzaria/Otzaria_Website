@@ -33,7 +33,6 @@ jobs:
     env:
       CI: 'true'
       MONGOMS_VERSION: '7.0.24'
-      MONGOMS_DOWNLOAD_DIR: ${{ runner.temp }}/app-reports-mongodb
     steps:
       - name: Check out the reviewed commit
         uses: actions/checkout@v7.0.1
@@ -62,6 +61,8 @@ jobs:
           npm ci --legacy-peer-deps 2>&1 | tee build/app-reports-qa/npm-ci.log
 
       - name: Run all app-report tests against real MongoDB
+        env:
+          MONGOMS_DOWNLOAD_DIR: ${{ runner.temp }}/app-reports-mongodb
         run: |
           set -euo pipefail
           node --version > build/app-reports-qa/node-version.txt
