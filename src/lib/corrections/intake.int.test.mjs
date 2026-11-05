@@ -368,6 +368,7 @@ test('wikiSource: הצעת תיקון נכנסת למערכת ונשלחת במ�
   assert.equal(sent.length, 1);
   assert.equal(sent[0].to, 'novartza@gmail.com', 'המקור מקבל את הצעת התיקון');
   assert.equal(sent[0].cc, undefined, 'בלי עותק לאוצריא');
+  assert.ok(sent[0].text.includes('הטקסט המתוקן:\n(א) בְּרֵאשִׁ֖ית בָּרָ֣א *אֱלֹקִ֑ים*\n'), 'גם מקור שאינו ספריא מקבל טקסט שגוי ומתוקן');
   // שידור חוזר אינו שולח שוב
   await post(newClient('wiki-1', {}, { source_folder: 'wikiSource' }), { config: onConfig, notify });
   assert.equal(sent.length, 1);

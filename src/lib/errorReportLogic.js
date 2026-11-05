@@ -294,7 +294,7 @@ function stripDisplayTags(text) {
   return parts.join('');
 }
 
-// \u05D4\u05D8\u05E7\u05E1\u05D8 \u05DB\u05E4\u05D9 \u05E9\u05D4\u05D5\u05D0 \u05DE\u05D5\u05E6\u05D2 \u05D1\u05D0\u05EA\u05E8 \u05D4\u05DE\u05E7\u05D5\u05E8, \u05DB\u05D3\u05D9 \u05E9\u05D4\u05E7\u05D8\u05E2 \u05D9\u05D9\u05DE\u05E6\u05D0 \u05D1\u05D7\u05D9\u05E4\u05D5\u05E9 \u05E9\u05DD. <br> \u05DE\u05E4\u05E8\u05D9\u05D3 \u05D1\u05D9\u05DF \u05DE\u05D9\u05DC\u05D9\u05DD.
+// הטקסט כפי שהוא מוצג באתר המקור, כדי שהקטע יימצא בחיפוש שם. <br> מפריד בין מילים.
 function toDisplayWords(line) {
   return stripDisplayTags(String(line ?? '').replace(/<br\s*\/?>/gi, ' '))
     .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (entity, name) => {
@@ -363,7 +363,9 @@ function emailView(payload) {
   return {
     isSefariaSource,
     sefariaLink: isSefariaSource ? buildSefariaLink(payload.book_title, payload.current_ref, payload.he_ref) : '',
-    snippets: isSefariaSource ? buildCorrectionSnippets(payload.correction) : null,
+    // הצעת תיקון נשלחת במייל רק למקור החיצוני (לאוצריא היא נכנסת למערכת התיקונים),
+    // וכל מקור צריך לאתר את המקום בחיפוש בטקסט שלו.
+    snippets: buildCorrectionSnippets(payload.correction),
   };
 }
 

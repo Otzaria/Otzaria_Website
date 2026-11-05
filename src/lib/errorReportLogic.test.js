@@ -566,8 +566,8 @@ describe('buildHtml / buildText', () => {
     expect(text).not.toContain('הטקסט המסומן');
     expect(text).not.toContain('--- הצעת תיקון ---');
     const otherSource = buildText({ ...payload, correction: { originalLine: 'א ב', originalSelection: null, proposedText: 'א ג' } }, []);
-    expect(otherSource).toContain('פירוט הטעות:');
-    expect(otherSource).not.toContain('הטקסט השגוי');
+    expect(otherSource).toContain('הטקסט המתוקן:\nא *ג*\n');
+    expect(otherSource).not.toContain('קישור ישיר');
   });
 
   it('buildText produces plain-text with the same conditional sections', () => {
@@ -596,16 +596,15 @@ describe('buildHtml / buildText', () => {
     expect(bodies.text.includes('הטקסט השגוי:')).toBe(proposedText === 'א ג');
   });
 
-  it('does not prepare correction snippets for another source', () => {
+  it('prepares correction snippets for another source too, without a Sefaria link', () => {
     const report = {
       ...payload,
-      correction: {
-        get originalLine() { throw new Error('A non-Sefaria correction must not be parsed'); },
-        originalSelection: null,
-        proposedText: 'תיקון',
-      },
+      correction: { originalLine: 'א ב', originalSelection: null, proposedText: 'א תיקון' },
     };
-    expect(buildEmailBodies(report)).toEqual({ html: buildHtml(report), text: buildText(report) });
+    const bodies = buildEmailBodies(report);
+    expect(bodies).toEqual({ html: buildHtml(report), text: buildText(report) });
+    expect(bodies.text).toContain('א *תיקון*');
+    expect(bodies.text).not.toContain('קישור ישיר');
   });
 
   it('does not reuse stale snippets when a later report changes the proposal', () => {
