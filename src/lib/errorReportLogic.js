@@ -180,7 +180,19 @@ export function computeContentHash(payload) {
     payload.source_folder,
   ].map((value) => String(value ?? '').trim());
 
-  return crypto.createHash('sha256').update(parts.join('\\u0000')).digest('hex');
+  const legacyHash = crypto.createHash('sha256').update(parts.join('\\u0000')).digest('hex');
+  if (payload.correction == null) return legacyHash;
+
+  // Display fields are capped; hash the full correction in a fixed field order.
+  // JSON preserves accepted UTF-16 code units, including split surrogate contexts.
+  const c = payload.correction;
+  const offset = c.selectionOffset;
+  return crypto.createHash('sha256').update(JSON.stringify([
+    'otzaria-report-email', 2, legacyHash,
+    c.originalLine, c.originalSelection,
+    offset == null ? null : [offset.unit, offset.start, offset.end],
+    c.proposedText, c.contextBefore, c.contextAfter, payload.he_ref ?? null,
+  ])).digest('hex');
 }
 
 // מועד הסף - תוכן שנשלח לפניו נחשב "ישן" וניתן לשלוח שוב.
