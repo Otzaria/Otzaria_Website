@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { fakeApi, routerPublic } from '../testing/fakeApi'
 
@@ -26,6 +26,8 @@ function api(items) {
     'POST /api/training-proof/items/*': (body, path) => {
       const id = path.split('/')[4]
       const base = items.find((i) => i.id === id)
+      // "דלג" — כמו בשרת: השורה חוזרת למאגר, בלי תוצאה
+      if (body.skip) return { status: 200, data: { item: { ...base, status: 'available', result: null }, skipped: true } }
       return {
         status: 200,
         data: { item: { ...base, status: 'submitted', result: body.bad ? { label: '', bad: true } : { ...body, bad: false } }, skipped: false },
@@ -241,5 +243,31 @@ describe('RouterScreen', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     await user.keyboard('1')
     await waitFor(() => expect(marks(calls, 'r1')).toEqual([{ label: 'square' }]))
+  })
+
+  it('"דלג" (S או הכפתור): בלי כתב, השורה חוזרת למאגר ועוברים לבאה; נספר ב-N מתוך, והמקשים לא חלים עליה', async () => {
+    const { calls } = api([routerPublic(0, { pred: 'rashi' }), routerPublic(1), routerPublic(2)])
+    const user = userEvent.setup()
+    render(<RouterScreen />)
+    await screen.findByText('שורה 1 מתוך 3')
+    await user.keyboard('s')
+    await waitFor(() => expect(marks(calls, 'r0')).toEqual([{ skip: true }]))
+    await waitFor(() => expect(document.getElementById('tp-line-r1')).toHaveAttribute('aria-current', 'true'))
+    const card0 = document.getElementById('tp-line-r0')
+    expect(within(card0).getByText('דילגתם — השורה חזרה למאגר')).toBeInTheDocument()
+    expect(within(card0).getByRole('button', { name: /דלג/ })).toBeDisabled()
+    expect(within(card0).getByRole('button', { name: /ההצעה נכונה/ })).toBeDisabled()
+    // מקלדת עברית: אותו מקש פיזי ("ד") — וגם הכפתור
+    fireEvent.keyDown(window, { key: 'ד', code: 'KeyS' })
+    await waitFor(() => expect(marks(calls, 'r1')).toEqual([{ skip: true }]))
+    await user.click(within(document.getElementById('tp-line-r2')).getByRole('button', { name: /דלג/ }))
+    await waitFor(() => expect(marks(calls, 'r2')).toEqual([{ skip: true }]))
+    // כל השורות "טופלו" — אפשר לקחת סבב נוסף
+    expect(await screen.findByRole('button', { name: /קח 30 שורות נוספות/ })).toBeEnabled()
+    // ↑ חוזר לשורה שדולגה; 1 לא שולח עליה כלום
+    await user.keyboard('{ArrowUp}{ArrowUp}')
+    await waitFor(() => expect(document.getElementById('tp-line-r0')).toHaveAttribute('aria-current', 'true'))
+    await user.keyboard('1')
+    expect(marks(calls, 'r0')).toEqual([{ skip: true }])
   })
 })

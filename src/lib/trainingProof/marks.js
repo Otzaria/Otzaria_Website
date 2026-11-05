@@ -32,9 +32,11 @@ export function checkOcrMark(payload, body) {
 
 const sameBox = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === 4 && a.every((v, i) => Math.abs(v - b[i]) < 0.5);
 
-// router: {label, bad?, words?}. bad → פסול (label ריק). words — רק ב-mixed: כל המילים לפי הסדר.
+// router: {label, bad?, words?} או {skip: true}. bad → פסול (label ריק). words — רק ב-mixed: כל המילים לפי הסדר.
 // words_src: "station" כשהתיבות זהות לאלה שהגיעו מהתחנה (אותם k ואותן תיבות), אחרת "site".
+// skip = "דלג", כמו בזיהוי: markItem משחרר את השורה למאגר (notFor), ושום דבר לא נשמר ולא יוצא לתחנה (docs/76 §5.1)
 export function checkRouterMark(payload, body) {
+  if (body?.skip === true) return { result: { action: 'skip' } };
   if (body?.bad === true) return { result: { label: '', bad: true } };
   const label = body?.label;
   if (!LINE_SCRIPTS.includes(label)) return { error: 'כתב לא מוכר' };
