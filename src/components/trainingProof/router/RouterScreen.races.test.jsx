@@ -102,9 +102,11 @@ describe('RouterScreen — דילוג מול כתיבה מושהית', () => {
     expect(api.marks()).toHaveLength(2)
     await api.finish(0)
     // useRound יכול כבר להסיר saving אחרי תשובה אחת; נעילת הדילוג עדיין חלה.
+    expect(card('r0').getByRole('button', { name: /דלג/ })).toBeDisabled()
     press('s', { code: 'KeyS' })
     expect(api.marks()).toHaveLength(2)
     await api.finish(1)
+    expect(card('r0').getByRole('button', { name: /דלג/ })).toBeEnabled()
     expect(card('r0').getByRole('button', { name: /^רש/ })).toHaveAttribute('aria-pressed', 'true')
     press('s', { code: 'KeyS' })
     expect(api.marks().at(-1).body).toEqual({ skip: true })

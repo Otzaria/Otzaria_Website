@@ -64,6 +64,7 @@ function RouterRound({ round, take, jumpTopRef }) {
   const [wsel, setWsel] = useState(0)
   // "הצג בעמוד המלא" — הפריט שהעמוד שלו פתוח; כל עוד החלון פתוח, המקשים לא מסמנים
   const [ctxOf, setCtxOf] = useState(null)
+  const [pendingRows, setPendingRows] = useState({})
   const scrollNext = useRef(false)
   // נעילה מיידית לדילוג (גם לפני רינדור saving), וספירת הכתיבות בכל שורה.
   // עריכות נוספות נשמרות כרגיל; דילוג לא יכול לעקוף כתיבה או להישלח פעמיים.
@@ -77,12 +78,20 @@ function RouterRound({ round, take, jumpTopRef }) {
     const operation = rowWrites.current.get(id) || { pending: 0, skip: body.skip === true }
     operation.pending++
     rowWrites.current.set(id, operation)
+    setPendingRows((rows) => ({ ...rows, [id]: true }))
     let result
     try {
       result = await mark(id, body)
       return result
     } finally {
       operation.pending--
+      if (!operation.pending) {
+        setPendingRows((rows) => {
+          const next = { ...rows }
+          delete next[id]
+          return next
+        })
+      }
       // דילוג מוצלח משחרר את השורה: נועלים גם עד שהמצב החדש רונדר.
       if (!operation.pending && !(operation.skip && result?.ok)) rowWrites.current.delete(id)
     }
@@ -268,7 +277,7 @@ function RouterRound({ round, take, jumpTopRef }) {
             current={i === cur}
             focus={focus}
             wsel={i === cur ? wsel : 0}
-            saving={!!round.saving[it.id]}
+            saving={!!round.saving[it.id] || !!pendingRows[it.id]}
             onSelect={() => i !== cur && goTo(i, { scroll: false })}
             onLine={(label) => {
               if (i !== cur) goTo(i, { scroll: false })
