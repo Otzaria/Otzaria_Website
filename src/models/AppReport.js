@@ -50,6 +50,34 @@ const ContactEntrySchema = new mongoose.Schema({
   issueCommentUrl: { type: String, default: undefined },
 }, { _id: false });
 
+// קובץ שכבר נותק אטומית מהדיווח וממתין למחיקה פיזית. הרשומה מאפשרת להשלים
+// ניקוי אחרי קריסה/כשל אחסון בלי להשאיר הפניה חיה לקובץ שנמחק.
+const PendingPayloadDeleteSchema = new mongoose.Schema({
+  gridfsId: { type: mongoose.Schema.Types.ObjectId, required: true },
+  ownerReportId: { type: String, required: true },
+  size: { type: Number, default: 0 },
+  kinds: { type: [String], default: [] },
+  detachedAt: { type: Date, required: true },
+  leaseToken: { type: String, default: null },
+  leaseUntil: { type: Date, default: null },
+}, { _id: false });
+
+const PayloadCleanupSchema = new mongoose.Schema({
+  leaseToken: { type: String, default: null },
+  leaseUntil: { type: Date, default: null },
+  nextAttemptAt: { type: Date, default: null },
+  lastAttemptAt: { type: Date, default: null },
+  lastError: { type: String, default: null },
+  purgedAt: { type: Date, default: null },
+  closedAt: { type: Date, default: null },
+  removedFiles: { type: Number, default: 0 },
+  removedBytes: { type: Number, default: 0 },
+  sharedFiles: { type: Number, default: 0 },
+  missingFiles: { type: Number, default: 0 },
+  kinds: { type: [String], default: [] },
+  pendingDeletes: { type: [PendingPayloadDeleteSchema], default: [] },
+}, { _id: false });
+
 const AppReportSchema = new mongoose.Schema({
   reportId: { type: String, required: true, unique: true },
   schema: { type: Number, default: 1 },
@@ -80,6 +108,9 @@ const AppReportSchema = new mongoose.Schema({
   issueUrl: { type: String, default: null },
   issueState: { type: String, enum: ['open', 'closed', null], default: null },
   issueStateReason: { type: String, default: null },
+  issueClosedAt: { type: Date, default: null },
+  // מונה מעברי מצב: גם reopen+close באותו tick מבטלים תשובת GET ישנה של ניקוי.
+  issueStateRevision: { type: Number, default: 0 },
   issuePending: { type: Boolean, default: true },
   // נעילה קצרה כדי שה-cron והקליטה לא ייצרו issue כפול לאותו דיווח
   issueLeaseUntil: { type: Date, default: null },
@@ -103,6 +134,7 @@ const AppReportSchema = new mongoose.Schema({
   lastInboundAt: { type: Date, default: null },
   notifiedClosedAt: { type: Date, default: null },
   unsubscribed: { type: Boolean, default: false },
+  payloadCleanup: { type: PayloadCleanupSchema, default: () => ({}) },
 }, { timestamps: true });
 
 // מספרי issue וחתימות אינם ייחודיים בין מוצרים (ריפו נפרד לכל מוצר)
@@ -111,8 +143,16 @@ AppReportSchema.index({ product: 1, issueNumber: 1 });
 AppReportSchema.index({ issuePending: 1, issueAttemptAt: 1, createdAt: 1 });
 AppReportSchema.index({ createdAt: -1 });
 AppReportSchema.index({ resendHash: 1, createdAt: -1 });
+// בדיקת בעלות לפני ניקוי צרופות זמניות: כל ענפי ה-$or חייבים אינדקס,
+// אחרת כל קובץ שנשמר במרוץ גורר סריקה של כל הדיווחים.
+for (const path of ['fileIds.diagnostics.gridfsId', 'fileIds.errors.gridfsId', 'fileIds.minidump.gridfsId', 'fileIds.images.gridfsId', 'contactLog.images.gridfsId']) {
+  AppReportSchema.index({ [path]: 1 }, { sparse: true });
+}
 AppReportSchema.index({ 'fileIds.images.publicToken': 1 }, { sparse: true });
 AppReportSchema.index({ 'contactLog.images.publicToken': 1 }, { sparse: true });
 AppReportSchema.index({ replyToken: 1 }, { unique: true, partialFilterExpression: { replyToken: { $type: 'string' } } });
+
+AppReportSchema.index({ issueState: 1, issuePending: 1, 'payloadCleanup.purgedAt': 1, 'payloadCleanup.nextAttemptAt': 1, issueClosedAt: 1 });
+AppReportSchema.index({ 'payloadCleanup.pendingDeletes.gridfsId': 1 }, { sparse: true });
 
 export default mongoose.models.AppReport || mongoose.model('AppReport', AppReportSchema);
