@@ -1,3 +1,4 @@
+import { SCRIPT_COLOR } from '../common/scripts'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -54,6 +55,15 @@ describe('RouterScreen', () => {
     await user.keyboard('0')
     await waitFor(() => expect(marks(calls, 'r1')).toEqual([{ bad: true }]))
     expect(await screen.findByText('נפסלה — לא תיכנס לאימון')).toBeInTheDocument()
+  })
+
+  it('הצעת הנתב מוצגת כתגית בצבע הכפתור של אותו כתב', async () => {
+    const scripts = ['square', 'rashi', 'latin', 'mixed']
+    api(scripts.map((pred, i) => routerPublic(i, { pred })))
+    render(<RouterScreen />)
+    await screen.findByText('שורה 1 מתוך 4')
+    const tags = screen.getAllByTestId('router-pred')
+    expect(tags.map((t) => t.style.getPropertyValue('--tp-c'))).toEqual(scripts.map((k) => SCRIPT_COLOR[k]))
   })
 
   it('Enter = ההצעה של הנתב; בלי הצעה — הודעה ולא נשמר', async () => {
