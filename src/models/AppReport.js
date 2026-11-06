@@ -111,6 +111,11 @@ AppReportSchema.index({ product: 1, issueNumber: 1 });
 AppReportSchema.index({ issuePending: 1, issueAttemptAt: 1, createdAt: 1 });
 AppReportSchema.index({ createdAt: -1 });
 AppReportSchema.index({ resendHash: 1, createdAt: -1 });
+// בדיקת בעלות לפני ניקוי צרופות זמניות: כל ענפי ה-$or חייבים אינדקס,
+// אחרת כל קובץ שנשמר במרוץ גורר סריקה של כל הדיווחים.
+for (const path of ['fileIds.diagnostics.gridfsId', 'fileIds.errors.gridfsId', 'fileIds.minidump.gridfsId', 'fileIds.images.gridfsId', 'contactLog.images.gridfsId']) {
+  AppReportSchema.index({ [path]: 1 }, { sparse: true });
+}
 AppReportSchema.index({ 'fileIds.images.publicToken': 1 }, { sparse: true });
 AppReportSchema.index({ 'contactLog.images.publicToken': 1 }, { sparse: true });
 AppReportSchema.index({ replyToken: 1 }, { unique: true, partialFilterExpression: { replyToken: { $type: 'string' } } });
