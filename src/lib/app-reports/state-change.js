@@ -8,6 +8,29 @@ import { DEFAULT_PRODUCT, getProduct, productFilter } from './products.js';
 
 export const CLOSURE_KINDS = Object.freeze(['completed', 'not_planned', 'duplicate', 'other']);
 
+export function trustedIssueClosedAt(issue) {
+  if (issue?.state !== 'closed' || typeof issue.closed_at !== 'string') return null;
+  const seconds = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
+  const milliseconds = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{1,3}Z$/;
+  if (!seconds.test(issue.closed_at) && !milliseconds.test(issue.closed_at)) return null;
+  const ms = Date.parse(issue.closed_at);
+  if (!Number.isFinite(ms)) return null;
+  const date = new Date(ms);
+  return date.toISOString().slice(0, 19) === issue.closed_at.slice(0, 19) ? date : null;
+}
+
+export function issueStateFields(issue, now) {
+  if (issue.state === 'open') return {
+    issueState: 'open', issueStateReason: null, issueClosedAt: null, issueCheckedAt: now,
+    notifiedClosedAt: null, 'payloadCleanup.leaseToken': null, 'payloadCleanup.leaseUntil': null,
+    'payloadCleanup.nextAttemptAt': null,
+  };
+  return {
+    issueState: 'closed', issueStateReason: issue.state_reason ?? null,
+    issueClosedAt: trustedIssueClosedAt(issue), issueCheckedAt: now,
+  };
+}
+
 export function closureKind(stateReason) {
   return ['completed', 'not_planned', 'duplicate'].includes(stateReason) ? stateReason : 'other';
 }
@@ -94,14 +117,16 @@ export async function handleIssueStateChange(issue, deps) {
   const product = deps.product || DEFAULT_PRODUCT;
   const filter = { ...productFilter(product), issueNumber: issue.number };
 
+  if (issue.state !== 'open' && issue.state !== 'closed') {
+    throw new Error('GitHub returned an unknown issue state');
+  }
+  await Model.updateMany(filter, { $set: issueStateFields(issue, now), $inc: { issueStateRevision: 1 } });
+
   if (issue.state !== 'closed') {
-    await Model.updateMany(filter, { $set: { issueState: 'open', issueStateReason: null, notifiedClosedAt: null, issueCheckedAt: now } });
     return { transition: 'open', notified: 0, failed: 0 };
   }
 
   const reason = issue.state_reason ?? null;
-  await Model.updateMany(filter, { $set: { issueState: 'closed', issueStateReason: reason, issueCheckedAt: now } });
-
   const reports = await Model.find({ ...filter, notifiedClosedAt: null, unsubscribed: { $ne: true }, reporterEmail: { $nin: [null, ''] } })
     .select('_id reportId title reporterEmail unsubscribed notifiedClosedAt issueUrl')
     .sort({ createdAt: 1 })

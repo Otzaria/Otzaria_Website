@@ -35,5 +35,6 @@ const UploadSchema = new mongoose.Schema({
 // בלי אינדקסים אלה כל שאילתא כזו היא סריקת קולקציה מלאה.
 UploadSchema.index({ isDeleted: 1, createdAt: -1 });
 UploadSchema.index({ uploader: 1 });
+UploadSchema.index({ fileStorageId: 1 }, { sparse: true });
 
 export default mongoose.models.Upload || mongoose.model('Upload', UploadSchema);
