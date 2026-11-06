@@ -8,6 +8,8 @@ on:
       - 'package-lock.json'
       - 'scripts/patch-plugin-validator.cjs'
       - 'src/lib/app-reports/**'
+      - 'src/lib/errorReportLogic.js'
+      - 'src/lib/errorReportLogic.test.js'
       - 'src/app/api/app-reports/**'
       - 'src/lib/corrections/**'
       - 'src/lib/gridfs-service.js'
@@ -82,6 +84,13 @@ jobs:
           counts = re.findall(r'^# tests (\d+)$', log, re.MULTILINE)
           assert counts and all(int(count) > 0 for count in counts), 'No tests ran'
           PY_CHECK
+
+      - name: Verify the merged book-report mail context
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          npx vitest run src/lib/errorReportLogic.test.js \
+            2>&1 | tee build/app-reports-qa/book-report-mail.log
 
       - name: Install locked inbound Worker dependencies
         id: worker_dependencies
