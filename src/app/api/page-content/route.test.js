@@ -12,6 +12,8 @@ import Book from '@/models/Book'
 import Page from '@/models/Page'
 import { startMongo } from '@/lib/corrections/testing/mongo.js'
 import { POST } from './route'
+import { countBookOcrPages } from '@/lib/ocr/bookOcrCounts.js'
+import { ocrTextSha256 } from '@/lib/ocr/runOcrJob.pure.js'
 
 vi.setConfig({ testTimeout: 60000 })
 
@@ -58,6 +60,26 @@ async function save(slug, content, saveRevision) {
 }
 
 describe('POST /api/page-content save ordering', () => {
+  it.each([
+    { content: '', revision: undefined, hash: true },
+    { content: '', revision: 1, hash: true },
+    { content: 'תיקון מהיר', revision: 1, hash: false },
+    { content: '', revision: 1, hash: false },
+  ])('שמירה אנושית בעמוד פנוי מוגנת מ-skip_edited: %j', async ({ content, revision, hash }) => {
+    const { slug, page } = await setup()
+    await Page.updateOne({ _id: page._id }, { $set: {
+      status: 'available', lastOcrAt: new Date(Date.now() - 10000),
+      ...(hash ? { lastOcrTextSha256: ocrTextSha256('מקורי') } : {}),
+    } })
+    expect(await save(slug, content, revision)).toMatchObject({ status: 200, body: { success: true } })
+    const stored = await Page.findById(page._id).lean()
+    expect(stored).toMatchObject({ content, status: 'available' })
+    const counts = await countBookOcrPages(page.book)
+    expect(counts.humanEditedPagesCount).toBe(1)
+    expect(counts.toProcess.skip_edited).toBe(0)
+    expect(counts.toProcess.overwrite).toBe(1)
+  })
+
   it('בקשה ישנה שמסתיימת אחרי שמירה חדשה אינה דורסת את התוכן החדש', async () => {
     const { slug, page } = await setup()
     const newer = await save(slug, 'חדש', 1_800_000_000_002)

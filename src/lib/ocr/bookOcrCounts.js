@@ -5,7 +5,7 @@ import { countOcrPages, selectionView } from './runOcrJob.pure.js';
 export async function countBookOcrPages(bookId) {
   const pages = [];
   const cursor = Page.find({ book: bookId })
-    .select('imagePath content rightColumn leftColumn status lastOcrTextSha256 lastOcrAt updatedAt')
+    .select('imagePath content rightColumn leftColumn status contentSaveRevision lastOcrTextSha256 lastOcrAt updatedAt')
     .lean()
     .cursor();
   // הטקסט עצמו לא נשמר בזיכרון — selectionView נותן אותן תשובות

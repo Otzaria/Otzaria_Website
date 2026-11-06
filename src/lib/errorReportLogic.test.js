@@ -489,9 +489,58 @@ describe('buildCorrectionSnippets', () => {
     expect(buildCorrectionSnippets({ originalLine: 'א <b>ב</b>', originalSelection: null, proposedText: 'א ב' })).toBeNull();
   });
 
+  it.each([false, true])('distinguishes repeated excerpts in both mail formats (whole line: %s)', (wholeLine) => {
+    const originalLine = 'פתיחה ' + 'לפני אחד שני שלוש טעות אחרי אחת שתיים שלוש '.repeat(3) + 'סיום';
+    const starts = [...originalLine.matchAll(/טעות/g)].map((match) => match.index);
+    const bodies = starts.map((start, index) => {
+      const corrected = originalLine.slice(0, start) + 'תיקון' + originalLine.slice(start + 4);
+      const c = wholeLine ? { originalLine, originalSelection: null, proposedText: corrected } : {
+        originalLine, originalSelection: 'טעות', proposedText: 'תיקון',
+        selectionOffset: { unit: 'utf16_code_units', start, end: start + 4 },
+        contextBefore: originalLine.slice(0, start), contextAfter: originalLine.slice(start + 4),
+      };
+      const snapshot = structuredClone(c);
+      const snippets = buildCorrectionSnippets(c);
+      expect(snippets.wrong).toBe('לפני אחד שני שלוש טעות אחרי אחת שתיים שלוש');
+      expect(snippets.context).toEqual({
+        wordStart: index * 9 + 2, wordEnd: index * 9 + 10, wordCount: 29,
+        original: originalLine, corrected,
+      });
+      const mail = buildEmailBodies({ book_title: 'ספר בדיקה', source_folder: 'pninim', correction: c });
+      expect(mail.text).toContain(`מילים ${index * 9 + 2}–${index * 9 + 10} מתוך 29`);
+      expect(mail.text).toContain(`השורה המקורית המלאה:\n${originalLine}`);
+      expect(mail.text).toContain(`השורה המתוקנת המלאה:\n${corrected}`);
+      expect(mail.html).toContain(corrected);
+      expect(c).toEqual(snapshot);
+      return mail;
+    });
+    expect(new Set(bodies.map((body) => body.text)).size).toBe(3);
+    expect(new Set(bodies.map((body) => body.html)).size).toBe(3);
+  });
+
+  it('escapes full repeated context, including decoded entities, while preserving exact input', () => {
+    const part = '&lt;img src=x onerror=alert(1)&gt; אחד שני שלוש שגוי אחרי אחת שתיים שלוש ';
+    const originalLine = part.repeat(3).trim();
+    const start = originalLine.indexOf('שגוי', originalLine.indexOf('שגוי') + 1);
+    const correction = {
+      originalLine, originalSelection: 'שגוי', proposedText: 'נכון',
+      contextBefore: originalLine.slice(0, start), contextAfter: originalLine.slice(start + 4),
+    };
+    const mail = buildEmailBodies({ source_folder: 'pninim', correction });
+    expect(mail.html).toContain('השורה המקורית המלאה');
+    expect(mail.html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(mail.html).not.toContain('<img');
+    expect(correction.originalLine).toBe(originalLine);
+  });
+
   it.each([
     ['א <B title="x">ב</B> ג', 'א ב ג'],
     ['א <span title="a < b">ב</span> ג', 'א ב ג'],
+    ['א <span title="a > b">ב</span> ג', 'א ב ג'],
+    ["א <span title='a > b'><b>ב</b></span> ג", 'א ב ג'],
+    ['א<!-- תגובה <b>טקסט</b> > --> <i>ב</i> ג', 'א ב ג'],
+    ['א ב ג<!-- הערה פתוחה', 'א ב ג'],
+    ['<b title="a > b">שָׁלוֹם&nbsp;<i>&quot;אָב&#x5D0;</i></b><br>סוף', 'שָׁלוֹם "אָבא סוף'],
     ['א <a<b>ב</b> ג', 'א ב ג'],
     ['א <1> ב < ג', 'א <1> ב < ג'],
     ['א <b>ב</b> <c <d סוף', 'א ב <c <d סוף'],
@@ -502,6 +551,17 @@ describe('buildCorrectionSnippets', () => {
       wrong: displayed,
       fixed: '*תוקן*',
     });
+  });
+
+  it('does not expose quoted attributes around an actual proposed correction', () => {
+    const correction = {
+      originalLine: '<span title="a > b">שגוי</span> אחד שתיים',
+      originalSelection: null,
+      proposedText: '<span title="a > b">נכון</span> אחד שתיים',
+    };
+    expect(buildCorrectionSnippets(correction)).toEqual({ wrong: 'שגוי אחד שתיים', fixed: '*נכון* אחד שתיים' });
+    expect(correction.originalLine).toContain('title="a > b"');
+    expect(correction.proposedText).toContain('title="a > b"');
   });
 });
 

@@ -93,6 +93,11 @@ describe("runOcrJob — skip_edited (OCRWin)", () => {
     { _id: "p3", pageNumber: 3, imagePath: "/uploads/3.jpg", status: "in-progress", content: OCR, lastOcrTextSha256: ocrTextSha256(OCR), updatedAt: T },
     // ריק — מעובד
     { _id: "p4", pageNumber: 4, imagePath: "/uploads/4.jpg", status: "available", content: "", updatedAt: T },
+    // פלט OCR שנמחק ביד — מדולג, גם בלי revision של לקוח חדש
+    { _id: "p5", pageNumber: 5, imagePath: "/uploads/5.jpg", status: "available", content: "", lastOcrTextSha256: ocrTextSha256(OCR), updatedAt: T },
+    // legacy שנשמר ביד בתוך חלון 30 השניות — מדולג
+    { _id: "p6", pageNumber: 6, imagePath: "/uploads/6.jpg", status: "available", content: "מתוקן", contentSaveRevision: 1, lastOcrAt: T, updatedAt: new Date(T.getTime() + 10000) },
+    { _id: "p7", pageNumber: 7, imagePath: "/uploads/7.jpg", status: "available", content: "", contentSaveRevision: 1, lastOcrAt: T, updatedAt: new Date(T.getTime() + 10000) },
   ];
 
   beforeEach(() => {

@@ -220,7 +220,7 @@ async function prepare(job, lease, req) {
   const pages = [];
   const cursor = Page.find({ book: job.book })
     .sort({ pageNumber: 1 })
-    .select('_id pageNumber imagePath content rightColumn leftColumn status lastOcrTextSha256 lastOcrAt updatedAt')
+    .select('_id pageNumber imagePath content rightColumn leftColumn status contentSaveRevision lastOcrTextSha256 lastOcrAt updatedAt')
     .lean()
     .cursor();
   for await (const p of cursor) {

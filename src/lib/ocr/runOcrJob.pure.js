@@ -29,18 +29,20 @@ const time = (d) => (d ? new Date(d).getTime() : NaN);
 /**
  * האם העמוד נערך בידי אדם (ולכן מוגן במצב skip_edited). שמרני: כשאין דרך לדעת — נחשב ערוך.
  * - עמוד שמתנדב תפס או סיים (status ≠ available) — ערוך, גם אם הטקסט עוד זהה לפלט ה-OCR.
- * - עמוד ריק — לא ערוך.
  * - טקסט בטורים — ערוך (OCR כותב רק ל-content ומאפס את הטורים).
- * - יש lastOcrTextSha256 — ערוך אם content שונה ממה ש-OCR כתב.
+ * - יש lastOcrTextSha256 — ערוך אם content שונה ממה ש-OCR כתב, גם אם נמחק כולו.
+ * - בלי טביעה, contentSaveRevision הוא עדות לשמירה אנושית, גם אם העמוד ריק.
+ * - עמוד ריק בלי עדות לעריכה — לא ערוך.
  * - אחרת (עמוד ישן): לא ערוך רק אם השתנה לאחרונה באותה כתיבה של OCR מקומי (lastOcrAt).
  * @param {{status?:string, content?:string, rightColumn?:string, leftColumn?:string,
- *   lastOcrTextSha256?:string, lastOcrAt?:Date|string, updatedAt?:Date|string}} p
+ *   contentSaveRevision?:number, lastOcrTextSha256?:string, lastOcrAt?:Date|string, updatedAt?:Date|string}} p
  */
 export function pageEditedByHuman(p) {
   if (p.status && p.status !== 'available') return true;
-  if (!pageHasText(p)) return false;
   if (p.rightColumn?.trim() || p.leftColumn?.trim()) return true;
   if (p.lastOcrTextSha256) return ocrTextSha256(p.content ?? '') !== p.lastOcrTextSha256;
+  if (p.contentSaveRevision > 0) return true;
+  if (!pageHasText(p)) return false;
   const gap = time(p.updatedAt) - time(p.lastOcrAt);
   return !(gap >= 0 && gap <= LEGACY_OCR_WRITE_SLACK_MS);
 }
@@ -54,6 +56,7 @@ export function pageSkippedInMode(p, mode) {
 
 // עותק קל של עמוד לבחירה (בלי הטקסט עצמו, שעשוי להיות גדול) שנותן ל-pageHasText ול-pageEditedByHuman
 // בדיוק את אותן תשובות כמו העמוד המלא: content מוחלף בסמן '1'/'', והטביעה נקבעת לפי הסמן.
+// revision חיובי מסמן כאן עריכה גם בעמוד ריק; עותק הבחירה אינו נכתב חזרה למסד.
 export function selectionView(p) {
   const hasText = pageHasText(p);
   const edited = pageEditedByHuman(p);
@@ -61,6 +64,7 @@ export function selectionView(p) {
     status: p.status,
     content: hasText ? '1' : '',
     lastOcrTextSha256: hasText && !edited ? ocrTextSha256('1') : undefined,
+    ...(edited ? { contentSaveRevision: 1 } : {}),
   };
 }
 

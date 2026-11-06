@@ -269,9 +269,8 @@ const CORRECTION_BLOCK_MARKER = '--- הצעת תיקון ---';
 
 const HTML_ENTITIES = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', nbsp: ' ', thinsp: ' ', ensp: ' ', emsp: ' ' };
 
-// Same display-tag rule as /<\/?[a-z][^>]*>/gi, without retrying the entire
-// remaining suffix at every '<' when a closing '>' is missing. Each search
-// advances past the previous match; an unterminated suffix is preserved once.
+// סריקה קדימה בלבד: '>' בתוך מאפיין מצוטט אינו סוגר תגית, והערות אינן טקסט.
+// סיומת תגית פגומה נשמרת פעם אחת, בלי סריקה חוזרת בכל '<' בתוכה.
 function stripDisplayTags(text) {
   const parts = [];
   let keptFrom = 0;
@@ -279,13 +278,28 @@ function stripDisplayTags(text) {
   while (searchFrom < text.length) {
     const start = text.indexOf('<', searchFrom);
     if (start === -1) break;
+    if (text.startsWith('<!--', start)) {
+      const close = text.indexOf('-->', start + 4);
+      parts.push(text.slice(keptFrom, start));
+      keptFrom = close === -1 ? text.length : close + 3;
+      searchFrom = keptFrom;
+      continue;
+    }
     const nameStart = start + (text[start + 1] === '/' ? 2 : 1);
     if (!/[a-z]/i.test(text[nameStart] ?? '')) {
       searchFrom = start + 1;
       continue;
     }
-    const end = text.indexOf('>', nameStart + 1);
-    if (end === -1) break;
+    let end = nameStart + 1;
+    let quote = null;
+    for (; end < text.length; end += 1) {
+      const character = text[end];
+      if (quote) {
+        if (character === quote) quote = null;
+      } else if (character === '"' || character === "'") quote = character;
+      else if (character === '>') break;
+    }
+    if (end === text.length) break;
     parts.push(text.slice(keptFrom, start));
     keptFrom = end + 1;
     searchFrom = keptFrom;
@@ -326,15 +340,28 @@ export function buildCorrectionSnippets(correction) {
   if (prefix === oldWords.length && prefix === newWords.length) return null;
 
   const from = Math.max(0, prefix - WORDS_AROUND_CHANGE);
+  const until = Math.min(oldWords.length, oldWords.length - suffix + WORDS_AROUND_CHANGE);
   const changed = newWords.slice(prefix, newWords.length - suffix);
   const deleted = oldWords.slice(prefix, oldWords.length - suffix);
+  const wrong = oldWords.slice(from, until).join(' ');
+  const original = oldWords.join(' ');
+  const needle = ` ${wrong} `;
+  const searchable = ` ${original} `;
+  const first = searchable.indexOf(needle);
+  const ambiguous = first >= 0 && searchable.indexOf(needle, first + 1) >= 0;
   return {
-    wrong: oldWords.slice(from, Math.min(oldWords.length, oldWords.length - suffix + WORDS_AROUND_CHANGE)).join(' '),
+    wrong,
     fixed: [
       ...newWords.slice(from, prefix),
       changed.length ? `*${changed.join(' ')}*` : `*(נמחק: ${deleted.join(' ')})*`,
       ...newWords.slice(newWords.length - suffix, Math.min(newWords.length, newWords.length - suffix + WORDS_AROUND_CHANGE)),
     ].join(' '),
+    // שורה יכולה להכיל את אותו קטע כמה פעמים. המיקום והנוסחים המלאים מגיעים
+    // גם למטפל בדוא״ל; השדות המדויקים וההיסטים בחוזה נשארים ללא שינוי.
+    ...(ambiguous ? { context: {
+      wordStart: from + 1, wordEnd: until, wordCount: oldWords.length,
+      original, corrected: newWords.join(' '),
+    } } : {}),
   };
 }
 
@@ -354,8 +381,18 @@ function correctionSectionsHtml(snippets, note) {
           ${htmlBox(escapeHtml(snippets.wrong))}
           <h2 style="font-size: 18px; margin: 20px 0 8px;">הטקסט המתוקן</h2>
           ${htmlBox(escapeHtml(snippets.fixed))}
+          ${snippets.context ? `
+          <p>${escapeHtml(correctionContextLabel(snippets.context))}</p>
+          <h2 style="font-size: 18px; margin: 20px 0 8px;">השורה המקורית המלאה</h2>
+          ${htmlBox(escapeHtml(snippets.context.original))}
+          <h2 style="font-size: 18px; margin: 20px 0 8px;">השורה המתוקנת המלאה</h2>
+          ${htmlBox(escapeHtml(snippets.context.corrected))}` : ''}
           ${note ? `<h2 style="font-size: 18px; margin: 20px 0 8px;">הערת המדווח</h2>
           ${htmlBox(escapeHtml(note))}` : ''}`;
+}
+
+function correctionContextLabel(context) {
+  return `הקטע מופיע יותר מפעם אחת בשורה. מיקום הקטע: מילים ${context.wordStart}–${context.wordEnd} מתוך ${context.wordCount}.`;
 }
 
 function emailView(payload) {
@@ -458,6 +495,11 @@ function renderText(payload, ccRecipients, { isSefariaSource, sefariaLink, snipp
   if (snippets) {
     const note = reporterNote(payload.error_details);
     lines.push('הטקסט השגוי:', snippets.wrong, '', 'הטקסט המתוקן:', snippets.fixed, '');
+    if (snippets.context) {
+      lines.push(correctionContextLabel(snippets.context), '',
+        'השורה המקורית המלאה:', snippets.context.original, '',
+        'השורה המתוקנת המלאה:', snippets.context.corrected, '');
+    }
     if (note) lines.push('הערת המדווח:', note, '');
   } else {
     lines.push('הטקסט המסומן:', payload.selected_text, '', 'פירוט הטעות:', payload.error_details, '', 'הקשר:', payload.context_text, '');

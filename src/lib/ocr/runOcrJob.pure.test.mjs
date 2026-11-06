@@ -92,6 +92,27 @@ test('pageEditedByHuman: טקסט שונה מהטביעה / טורים — ער�
   assert.equal(pageEditedByHuman({ status: 'available', content: '', leftColumn: 'שמאל' }), true);
 });
 
+test('skip_edited: מחיקה אנושית מלאה נשמרת, גם בלי revision של לקוח חדש', () => {
+  for (const content of ['', '   ']) {
+    const deleted = { ...fresh, content };
+    assert.equal(pageEditedByHuman(deleted), true);
+    assert.equal(pageSkippedInMode(selectionView(deleted), 'skip_edited'), true);
+    assert.equal(pageSkippedInMode(selectionView(deleted), 'skip'), false);
+  }
+  assert.equal(pageEditedByHuman({ ...fresh, content: '', lastOcrTextSha256: ocrTextSha256('') }), false);
+});
+
+test('skip_edited: שמירת עורך מפורשת מגינה על legacy גם בתוך חלון כתיבת OCR', () => {
+  for (const content of ['תיקון אנושי', '']) {
+    const edited = { status: 'available', content, contentSaveRevision: 1, lastOcrAt: T0, updatedAt: at(10000) };
+    assert.equal(pageEditedByHuman(edited), true);
+    assert.equal(pageSkippedInMode(selectionView(edited), 'skip_edited'), true);
+  }
+  // דריסה מפורשת ב-OCR חדש משאירה את revision לסדר שמירות העורך;
+  // הטביעה החדשה מוכיחה שהתוכן הנוכחי שוב פלט OCR שלא השתנה.
+  assert.equal(pageEditedByHuman({ ...fresh, contentSaveRevision: 1 }), false);
+});
+
 test('pageEditedByHuman: עמוד ישן בלי טביעה — לפי פער updatedAt מ-lastOcrAt (OCR מקומי)', () => {
   const legacy = { status: 'available', content: OCR, lastOcrAt: T0 };
   assert.equal(pageEditedByHuman({ ...legacy, updatedAt: at(1265) }), false);
@@ -117,6 +138,9 @@ test('selectionView: בלי הטקסט עצמו, ואותן תשובות כמו 
     fresh,
     { ...fresh, status: 'completed' },
     { ...fresh, content: 'נערך' },
+    { ...fresh, content: '' },
+    { status: 'available', content: '', contentSaveRevision: 1 },
+    { status: 'available', content: OCR, contentSaveRevision: 1, lastOcrAt: T0, updatedAt: at(500) },
     { status: 'available', content: '' },
     { status: 'in-progress', content: '' },
     { status: 'available', content: big, lastOcrTextSha256: ocrTextSha256(big) },
