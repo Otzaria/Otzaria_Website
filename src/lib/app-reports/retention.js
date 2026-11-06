@@ -119,8 +119,8 @@ function detachUpdate(ref, outcome, now, closedAt) {
   };
 }
 
-// קודם מנתקים את ההפניה בעדכון המותנה ומכניסים אותה לתור עמיד. רק לאחר שהעדכון
-// הצליח מותר למחוק את הבתים; reopen שמנצח את העדכון משאיר גם הפניה וגם קובץ.
+// ניתוק ההפניה והרישום בתור אטומיים גם לקובץ משותף: כשל בהעברת בעלות
+// חייב להישאר ניתן לניסיון חוזר, בלי לאבד את ההפניה לפעולת האחסון.
 function stageDeleteUpdate(ref, reportId, now, closedAt) {
   const update = detachUpdate(ref, { bytes: 0, shared: false, missing: false }, now, closedAt);
   delete update.$inc;
@@ -297,22 +297,16 @@ export async function cleanupClosedReportPayloads(deps = {}) {
           summary.deferred += 1;
           break;
         }
-        // קובץ משותף אינו נמחק, ולכן אפשר לנתק ולמנות אותו בעדכון יחיד. קובץ פרטי
-        // עובר קודם לתור עמיד ורק אז נמחק פיזית.
-        const updated = await AppReport.updateOne(guard, shared
-          ? detachUpdate(ref, { shared: true, bytes: 0, missing: false }, at, closedAt)
-          : stageDeleteUpdate(ref, doc.reportId, at, closedAt));
+        const updated = await AppReport.updateOne(guard, stageDeleteUpdate(ref, doc.reportId, at, closedAt));
         if (!updated.modifiedCount) { cancelled = true; summary.deferred += 1; break; }
-        if (shared) await transferPayloadOwner(ref.id, doc.reportId, sharing.nextOwnerReportId);
         remaining -= 1;
-        const outcome = shared ? { shared: true, bytes: 0, missing: false }
-          : await drainPendingDelete(doc, {
-            gridfsId: ref.id, ownerReportId: doc.reportId, size: ref.size || 0, kinds: [...ref.kinds],
-          }, deps, at);
+        const outcome = await drainPendingDelete(doc, {
+          gridfsId: ref.id, ownerReportId: doc.reportId, size: ref.size || 0, kinds: [...ref.kinds],
+        }, deps, at);
         if (!outcome) { cancelled = true; summary.deferred += 1; break; }
         summary.files += 1;
         summary.bytes += outcome.bytes;
-        summary.shared += shared ? 1 : 0;
+        summary.shared += outcome.shared ? 1 : 0;
         summary.missing += outcome.missing ? 1 : 0;
       }
       if (!cancelled) {
