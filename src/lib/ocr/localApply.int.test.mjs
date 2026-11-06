@@ -414,6 +414,22 @@ test('skip מול overwrite: skip לא דורס טקסט קיים (גם בלי �
   assert.equal((await load(o.job._id)).successPages, 2);
 });
 
+test('skip_edited: עמוד עם פלט OCR קודם מוחל, עם טביעת הטקסט; עמוד שנערך/נתפס אחרי היצירה — התנגשות, לא נדרס', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { job, pages } = await makeJob({ n: 3, mode: 'skip_edited', texts: ['פלט ישן', 'פלט ישן', ''] });
+  // אחרי יצירת העבודה: עמוד 2 נתפס בידי מתנדב (updatedAt משתנה)
+  await Page.updateOne({ _id: pages[1]._id }, { $set: { status: 'in-progress' } });
+  const doc = resultDoc(job);
+  expectAck(await send(job._id, doc), 'accepted', job, sha256(Buffer.from(JSON.stringify(doc))), 'success');
+  const ps = await pageSnap(pages);
+  assert.deepEqual(ps.map((p) => p.content), ['טקסט 1', 'פלט ישן', 'טקסט 3']);
+  const p1 = await Page.findById(pages[0]._id).lean();
+  assert.equal(p1.lastOcrTextSha256, sha256(Buffer.from('טקסט 1', 'utf8')));
+  const j = await load(job._id);
+  assert.equal(j.successPages, 2);
+  assert.equal(j.conflictPages, 1);
+});
+
 test('skip: עמוד שתוכנו רק NBSP/BOM/רווח Unicode (ריק לפי pageHasText, נכנס ל-PDF) מוחל — לא התנגשות שווא', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const blanks = ['\u00a0', '\ufeff\n', '\u3000 \u2003'];

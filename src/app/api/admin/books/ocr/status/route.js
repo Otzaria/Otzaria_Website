@@ -16,6 +16,7 @@ import { reapStaleOcrJobs } from '@/lib/ocr/staleJobs';
 import { badRequest, notFound, requireAccess, serverError } from '@/lib/apiResponse';
 import { OLDER_RESULT_CONFLICTS_MAX, PENDING_CONFLICT_STATUSES, pendingResultConflicts } from '@/lib/ocr/ocrConflictView';
 import { resultMetadataView } from '@/lib/ocr/localResultLayout.pure';
+import { countBookOcrPages } from '@/lib/ocr/bookOcrCounts';
 
 // GET /api/admin/books/ocr/status?bookId=...
 // מחזיר את ספירות העמודים (לקדם-בחירה), את העבודה האחרונה/הפעילה של הספר, ולספק local
@@ -156,26 +157,25 @@ export async function GET(request) {
     // סימון עבודות תקועות (שרת שהופעל מחדש באמצע) ככשל לפני הקריאה
     await reapStaleOcrJobs(book._id);
 
-    const editedFilter = {
-      book: book._id,
-      $or: [{ content: { $gt: '' } }, { rightColumn: { $gt: '' } }, { leftColumn: { $gt: '' } }],
-    };
-    const [pagesWithImage, editedPagesCount, job] = await Promise.all([
-      Page.countDocuments({ book: book._id, imagePath: { $gt: '' } }),
-      Page.countDocuments(editedFilter),
-      // בלי pageMap (עד 2,000 רשומות), בלי נתיבי קבצים פנימיים, ועד 50 שגיאות עמוד
-      OcrJob.findOne({ book: book._id })
-        .sort({ createdAt: -1 })
-        .select({
-          pageMap: 0,
-          inputPath: 0,
-          resultPath: 0,
-          'resultConflicts.path': 0,
-          'resultRejections.path': 0,
-          pageErrors: { $slice: MAX_PAGE_ERRORS },
-        })
-        .lean(),
-    ]);
+    // בלי pageMap (עד 2,000 רשומות), בלי נתיבי קבצים פנימיים, ועד 50 שגיאות עמוד
+    const job = await OcrJob.findOne({ book: book._id })
+      .sort({ createdAt: -1 })
+      .select({
+        pageMap: 0,
+        inputPath: 0,
+        resultPath: 0,
+        'resultConflicts.path': 0,
+        'resultRejections.path': 0,
+        pageErrors: { $slice: MAX_PAGE_ERRORS },
+      })
+      .lean();
+
+    // הספירות משמשות את טופס ההפעלה בלבד. בזמן עבודה פעילה (polling כל כמה שניות) לא סורקים את
+    // טקסט כל העמודים — רק ספירה זולה של עמודים עם תמונה; אחרי הסיום הממשק טוען שוב ומקבל הכול.
+    const jobActive = job?.active ?? job?.status === 'running';
+    const counts = jobActive
+      ? { pagesWithImage: await Page.countDocuments({ book: book._id, imagePath: { $gt: '' } }) }
+      : await countBookOcrPages(book._id);
 
     const now = new Date();
     const olderJobsFilter = {
@@ -205,7 +205,7 @@ export async function GET(request) {
 
     return NextResponse.json({
       success: true,
-      counts: { pagesWithImage, editedPagesCount },
+      counts,
       job: job ? serializeJob(job, now) : null,
       worker,
       conflictsOpen,

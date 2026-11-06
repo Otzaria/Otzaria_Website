@@ -51,6 +51,7 @@ test('normalizeLocalRequest: splitColumns נדחה, mode חובה', () => {
   assert.equal(normalizeLocalRequest({ requestId: RID, existingTextMode: 'skip', splitColumns: false }).ok, true);
   assert.equal(normalizeLocalRequest({ requestId: RID, existingTextMode: 'skip', splitColumns: 'yes' }).code, 'invalid_split_columns');
   assert.equal(normalizeLocalRequest({ requestId: RID, existingTextMode: 'all' }).code, 'invalid_mode');
+  assert.equal(normalizeLocalRequest({ requestId: RID, existingTextMode: 'skip_edited' }).value.existingTextMode, 'skip_edited');
 });
 
 test('requestFingerprint: קנוני ויציב, רגיש לכל פרמטר', () => {
@@ -74,6 +75,7 @@ test('httpStatusForPrepError: קודי שגיאת קלט קבועה', () => {
   assert.equal(httpStatusForPrepError('prep_abandoned'), 409);
   assert.match(noPagesMessage('skip'), /לא-ערוכים/);
   assert.match(noPagesMessage('overwrite'), /עם תמונה/);
+  assert.match(noPagesMessage('skip_edited'), /נערכו או נתפסו/);
 });
 
 test('replayExistingJob: 202 רק לעבודה שהקלט שלה הוכן', () => {

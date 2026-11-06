@@ -36,6 +36,9 @@ const PageSchema = new mongoose.Schema({
   lastOcrJobId: { type: mongoose.Schema.Types.ObjectId, ref: 'OcrJob' },
   lastOcrResultSha256: { type: String },
   lastOcrAt: { type: Date },
+  // sha256 של הטקסט שנכתב ל-content בכתיבת ה-OCR האחרונה (כל הספקים) — content שונה ממנו = נערך
+  // אחרי ה-OCR (pageEditedByHuman, מצב "דלג רק על עמודים שנערכו")
+  lastOcrTextSha256: { type: String },
   
   // נתיב התמונה (יחסי, למשל: /uploads/books/mybook/page.1.jpg)
   imagePath: { type: String, required: true } 

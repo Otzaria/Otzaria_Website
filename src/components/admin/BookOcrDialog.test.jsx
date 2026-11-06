@@ -154,6 +154,27 @@ describe('BookOcrDialog — ספק מחשב מקומי', () => {
     expect(calls.start[2].requestId).not.toBe(calls.start[0].requestId)
   })
 
+  it('"דלג רק על עמודים שנערכו": מספר העמודים מהשרת, והמצב נשלח בבקשה', async () => {
+    const counts = {
+      pagesWithImage: 10, editedPagesCount: 9, humanEditedPagesCount: 3,
+      toProcess: { overwrite: 10, skip: 1, skip_edited: 7 },
+    }
+    const calls = mockApi({
+      status: () => statusBody({ counts }),
+      start: () => reply(202, { success: true, jobId: 'j1', status: 'queued', totalPages: 7 }),
+    })
+    const user = userEvent.setup()
+    renderDialog()
+
+    expect(await screen.findByText(/נערכו או נתפסו בידי מתנדבים/)).toBeInTheDocument()
+    await user.click(screen.getByLabelText(/דלג רק על עמודים שנערכו/))
+    expect(screen.getByText(/יעובדו/)).toHaveTextContent('יעובדו 7 עמודים')
+    await user.click(await screen.findByRole('button', { name: /מחשב מקומי/ }))
+    await user.click(screen.getByRole('button', { name: /שלח לתור/ }))
+    await waitFor(() => expect(calls.start).toHaveLength(1))
+    expect(calls.start[0].existingTextMode).toBe('skip_edited')
+  })
+
   it('202 עם status:failed אינו "התחיל" — הודעה, והטופס נשאר', async () => {
     mockApi({ start: () => reply(202, { success: true, jobId: 'j1', status: 'failed', totalPages: 0 }) })
     const user = userEvent.setup()

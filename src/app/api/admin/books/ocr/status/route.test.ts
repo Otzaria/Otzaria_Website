@@ -31,6 +31,15 @@ vi.mock("@/models/Page", () => ({
   default: { countDocuments: vi.fn().mockResolvedValue(0) },
 }));
 
+vi.mock("@/lib/ocr/bookOcrCounts", () => ({
+  countBookOcrPages: vi.fn().mockResolvedValue({
+    pagesWithImage: 5,
+    editedPagesCount: 3,
+    humanEditedPagesCount: 1,
+    toProcess: { overwrite: 5, skip: 2, skip_edited: 4 },
+  }),
+}));
+
 vi.mock("@/models/OcrJob", () => ({
   default: { findOne: vi.fn(), find: vi.fn() },
 }));
@@ -290,5 +299,20 @@ describe("GET /api/admin/books/ocr/status - ספק local", () => {
     OcrWorkerState.findOne.mockReturnValue(chain(null));
     const body = await (await GET(makeRequest(BOOK_ID))).json();
     expect(body.job).toMatchObject({ pipelineVersion: null, resultError: null, layoutSummary: null, resultMetadata: null });
+  });
+
+  it("ספירות: בלי עבודה פעילה — הספירה המלאה (כולל toProcess); בזמן עבודה פעילה — רק עמודים עם תמונה", async () => {
+    OcrWorkerState.findOne.mockReturnValue(chain(null));
+    OcrJob.findOne.mockReturnValue(chain({ _id: { toString: () => JOB_ID }, status: "completed", active: false, method: "ocrwin", totalPages: 2 }));
+    const done = await (await GET(makeRequest(BOOK_ID))).json();
+    expect(done.counts).toEqual({
+      pagesWithImage: 5, editedPagesCount: 3, humanEditedPagesCount: 1, toProcess: { overwrite: 5, skip: 2, skip_edited: 4 },
+    });
+
+    Page.countDocuments.mockReset();
+    Page.countDocuments.mockResolvedValue(10);
+    OcrJob.findOne.mockReturnValue(chain({ _id: { toString: () => JOB_ID }, status: "running", active: true, method: "ocrwin", totalPages: 2 }));
+    const running = await (await GET(makeRequest(BOOK_ID))).json();
+    expect(running.counts).toEqual({ pagesWithImage: 10 });
   });
 });

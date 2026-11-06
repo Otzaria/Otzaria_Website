@@ -62,7 +62,7 @@ const OcrJobSchema = new mongoose.Schema({
 
   method: { type: String, enum: ['gemini', 'ocrwin', 'local'], required: true },
   model: { type: String, default: '' },            // ל-gemini בלבד
-  existingTextMode: { type: String, enum: ['overwrite', 'skip'], default: 'skip' },
+  existingTextMode: { type: String, enum: ['overwrite', 'skip', 'skip_edited'], default: 'skip' },
   splitColumns: { type: Boolean, default: false }, // חיתוך כל עמוד ל-2 טורים (ימין/שמאל) לפני OCR
 
   status: {

@@ -341,3 +341,22 @@ export const LOCAL_SCRIPT_OPTIONS = Object.freeze([
   { value: 'square', label: 'מרובע' },
   { value: 'rashi', label: 'רש"י' },
 ])
+
+// אפשרויות הטיפול בעמודים שכבר יש בהם טקסט (existingTextMode — ראו EXISTING_TEXT_MODES ב-runOcrJob.pure)
+export const EXISTING_TEXT_OPTIONS = Object.freeze([
+  { id: 'skip', label: 'דלג על כל עמוד שיש בו טקסט', desc: 'עיבוד רק עמודים ריקים' },
+  {
+    id: 'skip_edited',
+    label: 'דלג רק על עמודים שנערכו',
+    desc: 'OCR מחדש לעמודים שיש בהם רק זיהוי קודם שלא נגעו בו; עמודים שמתנדב ערך, תפס או סיים נשמרים',
+  },
+  { id: 'overwrite', label: 'דרוס אותם', desc: 'OCR מחדש לכל העמודים, התוכן הקיים יוחלף' },
+])
+
+// כמה עמודים יעובדו במצב הנבחר — לפי ספירת השרת (toProcess); שרת ישן בלי toProcess: החישוב הישן
+export function willProcessCount(counts, mode) {
+  const exact = counts?.toProcess?.[mode]
+  if (Number.isFinite(exact)) return exact
+  const withImage = Number(counts?.pagesWithImage) || 0
+  return mode === 'overwrite' ? withImage : Math.max(0, withImage - (Number(counts?.editedPagesCount) || 0))
+}

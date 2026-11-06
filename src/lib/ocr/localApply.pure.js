@@ -54,7 +54,8 @@ const SKIP_EMPTY = { $not: { $regex: NON_TRIM_CHAR_PCRE } };
 
 // פילטר העדכון המותנה של עמוד אחד (מפרט סעיף 4ב): העמוד שייך לספר, לא השתנה מאז יצירת
 // העבודה (updatedAt = expectedUpdatedAt מה-pageMap), ולא נכתב כבר ע"י העבודה הזו. במצב skip —
-// גם ריק מטקסט (כמו pageHasText ב-runOcrJob, שהיה ריק בעת היצירה).
+// גם ריק מטקסט (כמו pageHasText ב-runOcrJob, שהיה ריק בעת היצירה). במצב skip_edited העמוד לא
+// נערך בעת היצירה, ו-updatedAt מבטיח שגם לא נערך/נתפס מאז — אין צורך בתנאי נוסף.
 export function pageApplyFilter(job, entry) {
   const filter = {
     _id: entry.page,
@@ -62,7 +63,7 @@ export function pageApplyFilter(job, entry) {
     updatedAt: entry.expectedUpdatedAt ?? null,
     lastOcrJobId: { $ne: job._id },
   };
-  if (job.existingTextMode !== 'overwrite') {
+  if (job.existingTextMode !== 'overwrite' && job.existingTextMode !== 'skip_edited') {
     filter.content = SKIP_EMPTY;
     filter.rightColumn = SKIP_EMPTY;
     filter.leftColumn = SKIP_EMPTY;

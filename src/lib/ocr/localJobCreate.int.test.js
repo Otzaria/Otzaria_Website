@@ -27,6 +27,8 @@ import Page from '../../models/Page.js'
 import OcrJob from '../../models/OcrJob.js'
 import { startMongo } from '../corrections/testing/mongo.js'
 import { createOrResumeLocalJob } from './localJobCreate.js'
+import { countBookOcrPages } from './bookOcrCounts.js'
+import { ocrTextSha256 } from './runOcrJob.pure.js'
 import { LocalInputError } from './localPdf.pure.js'
 import { PREP_LEASE_MS } from './localJobCreate.pure.js'
 import { jobDir, relToAbs, writeJobFileDurable } from './localStorage.js'
@@ -87,6 +89,33 @@ async function staleAndTakeover() {
 }
 
 describe('בעלות על הכנת local (W04)', () => {
+  it('skip_edited: הספירה וה-PDF מגינים על מחיקה ועל שמירת legacy מהירה, ומשאירים פלט OCR גולמי לעיבוד', async () => {
+    const lastOcrAt = new Date(Date.now() - 10000)
+    await Page.updateOne({ book: book._id, pageNumber: 1 }, {
+      $set: { content: '', lastOcrTextSha256: ocrTextSha256('פלט שנמחק') },
+    })
+    await Page.create([
+      { book: book._id, pageNumber: 2, imagePath: '/uploads/2.jpg', content: 'תיקון ידני', contentSaveRevision: 1, lastOcrAt },
+      { book: book._id, pageNumber: 3, imagePath: '/uploads/3.jpg', content: '', contentSaveRevision: 2, lastOcrAt },
+      { book: book._id, pageNumber: 4, imagePath: '/uploads/4.jpg', content: 'גולמי', lastOcrTextSha256: ocrTextSha256('גולמי') },
+      { book: book._id, pageNumber: 5, imagePath: '/uploads/5.jpg', content: '' },
+    ])
+    expect(await countBookOcrPages(book._id)).toEqual({
+      pagesWithImage: 5, editedPagesCount: 2, humanEditedPagesCount: 3,
+      toProcess: { overwrite: 5, skip: 3, skip_edited: 2 },
+    })
+    const attempt = createOrResumeLocalJob({
+      book, req: { ...REQ, existingTextMode: 'skip_edited' },
+      session: { user: { name: 'מנהל' } }, config: { workerId: 'worker-1' }, now: new Date(),
+    })
+    await vi.waitFor(() => expect(builds).toHaveLength(1))
+    expect(builds[0].args.pages.map((p) => p.pageNumber)).toEqual([4, 5])
+    await finishBuild(0, 'only-unedited-pages')
+    expect((await attempt).status).toBe(202)
+    const stored = await OcrJob.findOne({ requestId: REQ.requestId }).lean()
+    expect(stored.pageMap.map((p) => p.pageNumber)).toEqual([4, 5])
+  })
+
   it('ניסיון ישן שאיבד את ה-lease לא מעביר ל-queued; החדש מפרסם את ה-PDF שלו', async () => {
     const { oldAttempt, newAttempt, jobId } = await staleAndTakeover()
 

@@ -9,12 +9,14 @@ import OcrConflictsPanel from '@/components/admin/ocr/OcrConflictsPanel'
 import LocalResultIssues from '@/components/admin/ocr/LocalResultIssues'
 import OlderResultConflicts from '@/components/admin/ocr/OlderResultConflicts'
 import {
+  EXISTING_TEXT_OPTIONS,
   LOCAL_DEFAULT_OPTIONS,
   canResumePreparation,
   isJobActive,
   isLocalJob,
   pollIntervalMs,
   resumePreparationPayload,
+  willProcessCount,
 } from '@/components/admin/ocr/ocrJobView'
 import {
   START_RETRY_DELAY_MS,
@@ -267,9 +269,7 @@ export default function BookOcrDialog({ book, onClose, localRetryDelayMs = START
     ? Math.round((job.processedPages / job.totalPages) * 100)
     : 0
 
-  const willProcess = existingTextMode === 'skip'
-    ? Math.max(0, counts.pagesWithImage - counts.editedPagesCount)
-    : counts.pagesWithImage
+  const willProcess = willProcessCount(counts, existingTextMode)
 
   const lastLocalJob = job && isLocalJob(job) ? job : null
   // פאנל ברמת הספר: גם אחרי עבודה חדשה (OCRWin או local) ההתנגשויות הקודמות נשארות נגישות
@@ -474,13 +474,15 @@ export default function BookOcrDialog({ book, onClose, localRetryDelayMs = START
                   <>
                     <div className="text-sm text-neutral-600 bg-warning-50 border border-warning-100 rounded-lg p-3 mb-3 flex items-center gap-2">
                       <span className="material-symbols-outlined text-warning-600 text-base">info</span>
-                      יש <strong>{counts.editedPagesCount}</strong> עמודים שכבר יש בהם טקסט (מתוך {counts.pagesWithImage}).
+                      <span>
+                        יש <strong>{counts.editedPagesCount}</strong> עמודים שכבר יש בהם טקסט (מתוך {counts.pagesWithImage})
+                        {Number.isFinite(counts.humanEditedPagesCount) && (
+                          <>; מתוכם <strong>{counts.humanEditedPagesCount}</strong> נערכו או נתפסו בידי מתנדבים</>
+                        )}.
+                      </span>
                     </div>
                     <div className="space-y-2">
-                      {[
-                        { id: 'skip', label: 'דלג עליהם', desc: 'עיבוד רק עמודים ריקים' },
-                        { id: 'overwrite', label: 'דרוס אותם', desc: 'OCR מחדש לכל העמודים, התוכן הקיים יוחלף' },
-                      ].map(opt => (
+                      {EXISTING_TEXT_OPTIONS.map(opt => (
                         <label
                           key={opt.id}
                           className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${

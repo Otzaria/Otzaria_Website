@@ -4,7 +4,6 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
 import Book from '@/models/Book';
-import Page from '@/models/Page';
 import OcrJob from '@/models/OcrJob';
 import { hasBookLibraryAccess } from '@/lib/roles';
 import { runOcrJob } from '@/lib/ocr/runOcrJob';
@@ -12,12 +11,13 @@ import { reapStaleOcrJobs } from '@/lib/ocr/staleJobs';
 import { activeFilter } from '@/lib/ocr/localJobState';
 import { readWorkerConfig } from '@/lib/ocr/workerAuth';
 import { closeAbandonedPreparation, createOrResumeLocalJob } from '@/lib/ocr/localJobCreate';
-import { normalizeLocalRequest } from '@/lib/ocr/localJobCreate.pure';
+import { noPagesMessage, normalizeLocalRequest } from '@/lib/ocr/localJobCreate.pure';
+import { EXISTING_TEXT_MODES } from '@/lib/ocr/runOcrJob.pure';
+import { countBookOcrPages } from '@/lib/ocr/bookOcrCounts';
 import { badRequest, notFound, requireAccess, serverError } from '@/lib/apiResponse';
 
 const ALLOWED_METHODS = ['gemini', 'ocrwin', 'local'];
 const ALLOWED_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-3-pro-preview'];
-const ALLOWED_MODES = ['overwrite', 'skip'];
 
 // השבתה זמנית של OCR לספר שלם דרך Gemini (צד שרת). OCRWin נשאר פעיל.
 const GEMINI_ENABLED = false;
@@ -52,7 +52,7 @@ export async function POST(request) {
     if (method === 'gemini' && !ALLOWED_MODELS.includes(model)) {
       return badRequest('מודל Gemini לא חוקי');
     }
-    if (!ALLOWED_MODES.includes(existingTextMode)) {
+    if (!EXISTING_TEXT_MODES.includes(existingTextMode)) {
       return badRequest('בחירת טיפול בעמודים ערוכים לא חוקית');
     }
 
@@ -109,25 +109,12 @@ export async function POST(request) {
       );
     }
 
-    // ספירת עמודים: עם תמונה, וכמה כבר ערוכים
-    const editedFilter = {
-      book: book._id,
-      $or: [{ content: { $gt: '' } }, { rightColumn: { $gt: '' } }, { leftColumn: { $gt: '' } }],
-    };
-    const [pagesWithImage, editedPagesCount] = await Promise.all([
-      Page.countDocuments({ book: book._id, imagePath: { $gt: '' } }),
-      Page.countDocuments(editedFilter),
-    ]);
-
-    const totalToProcess =
-      existingTextMode === 'skip' ? Math.max(0, pagesWithImage - editedPagesCount) : pagesWithImage;
+    // ספירת עמודים: כמה כבר ערוכים, וכמה יעובדו במצב שנבחר (אותה בחירה כמו ב-runOcrJob)
+    const { editedPagesCount, toProcess } = await countBookOcrPages(book._id);
+    const totalToProcess = toProcess[existingTextMode];
 
     if (totalToProcess === 0) {
-      return badRequest(
-        existingTextMode === 'skip'
-          ? 'אין עמודים לא-ערוכים לעיבוד (כל העמודים כבר ערוכים)'
-          : 'אין עמודים עם תמונה לעיבוד'
-      );
+      return badRequest(noPagesMessage(existingTextMode));
     }
 
     let job;

@@ -99,6 +99,9 @@ test('pageApplyFilter: updatedAt + ספר + לא נכתב ע"י העבודה; sk
   assert.deepEqual(skip.leftColumn, skip.content);
   const over = pageApplyFilter({ ...job, existingTextMode: 'overwrite' }, entry);
   assert.deepEqual(Object.keys(over), ['_id', 'book', 'updatedAt', 'lastOcrJobId']);
+  // skip_edited: העמוד נבחר כשלא נערך, ו-updatedAt מגן מעריכה/תפיסה מאז — בלי תנאי "ריק"
+  const edited = pageApplyFilter({ ...job, existingTextMode: 'skip_edited' }, entry);
+  assert.deepEqual(Object.keys(edited), ['_id', 'book', 'updatedAt', 'lastOcrJobId']);
   assert.equal(pageApplyFilter(job, { page: 'P' }).updatedAt, null);
 });
 

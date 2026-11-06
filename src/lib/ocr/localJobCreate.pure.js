@@ -1,6 +1,7 @@
 // לוגיקה טהורה ליצירת עבודת OCR מקומית (method=local) — ולידציה של הבקשה, fingerprint,
 // ומיפוי שגיאות קלט לתגובות HTTP. בלי DB/fs/network; imports יחסיים בלבד (node:test).
 import { createHash } from 'node:crypto';
+import { EXISTING_TEXT_MODES } from './runOcrJob.pure.js';
 
 // הלקוח שולח crypto.randomUUID() — אבל כל מזהה בטוח באורך סביר מתקבל
 export const REQUEST_ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
@@ -11,8 +12,6 @@ export const LOCAL_OPTION_VALUES = Object.freeze({
   defaultScript: Object.freeze(['square', 'rashi']),
 });
 export const DEFAULT_LOCAL_OPTIONS = Object.freeze({ lm: 'rabbinic', defaultScript: 'square' });
-
-const MODES = ['overwrite', 'skip'];
 
 // משך ה-lease של הכנת הקלט (בקשה שמחזיקה אותו בונה את ה-PDF), ומתי הכנה שה-lease שלה פג
 // נחשבת נטושה ומפנה את הספר לבקשה חדשה (החלטה פתוחה 14 בתוכנית).
@@ -36,7 +35,7 @@ export function normalizeLocalRequest(body) {
   if (typeof requestId !== 'string' || !REQUEST_ID_RE.test(requestId)) {
     return { ok: false, code: 'invalid_request_id', error: 'מזהה הבקשה אינו תקין' };
   }
-  if (!MODES.includes(existingTextMode)) {
+  if (!EXISTING_TEXT_MODES.includes(existingTextMode)) {
     return { ok: false, code: 'invalid_mode', error: 'בחירת טיפול בעמודים ערוכים לא חוקית' };
   }
   if (splitColumns === true) {
@@ -101,9 +100,9 @@ export function httpStatusForPrepError(code) {
 
 // הודעה כש-selectPagesForLocal לא החזיר אף עמוד (זהה לנוסח של gemini/ocrwin)
 export function noPagesMessage(mode) {
-  return mode === 'skip'
-    ? 'אין עמודים לא-ערוכים לעיבוד (כל העמודים כבר ערוכים)'
-    : 'אין עמודים עם תמונה לעיבוד';
+  if (mode === 'skip') return 'אין עמודים לא-ערוכים לעיבוד (כל העמודים כבר ערוכים)';
+  if (mode === 'skip_edited') return 'אין עמודים לעיבוד (כל העמודים נערכו או נתפסו בידי מתנדבים)';
+  return 'אין עמודים עם תמונה לעיבוד';
 }
 
 // הכנה שה-lease שלה פג לפני יותר מ-PREP_ABANDONED_AFTER_MS — נטושה

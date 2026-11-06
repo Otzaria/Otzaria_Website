@@ -30,7 +30,10 @@ import {
   statusLabel,
   statusTone,
   summaryParts,
+  EXISTING_TEXT_OPTIONS,
+  willProcessCount,
 } from './ocrJobView'
+import { EXISTING_TEXT_MODES } from '@/lib/ocr/runOcrJob.pure'
 
 describe('statusLabel / statusTone / statusIcon', () => {
   it('לכל מצב תווית עברית, גוון ואייקון', () => {
@@ -317,5 +320,25 @@ describe('warningLabel / salvageLabel (נתוני פריסה ועזר מהעוב
     expect(salvageLabel({ resultMetadata: { salvage: { reason: 'failed', pages: 1 } } })).toBe('נשמר עמוד אחד שזוהה לפני הכשל')
     expect(salvageLabel({ resultMetadata: {} })).toBe(null)
     expect(salvageLabel({})).toBe(null)
+  })
+})
+
+describe('EXISTING_TEXT_OPTIONS / willProcessCount', () => {
+  it('אפשרות לכל מצב של השרת', () => {
+    expect(EXISTING_TEXT_OPTIONS.map((o) => o.id).sort()).toEqual([...EXISTING_TEXT_MODES].sort())
+  })
+
+  it('לפי toProcess של השרת כשיש', () => {
+    const counts = { pagesWithImage: 10, editedPagesCount: 8, toProcess: { overwrite: 10, skip: 2, skip_edited: 7 } }
+    expect(willProcessCount(counts, 'skip_edited')).toBe(7)
+    expect(willProcessCount(counts, 'skip')).toBe(2)
+    expect(willProcessCount(counts, 'overwrite')).toBe(10)
+  })
+
+  it('שרת ישן בלי toProcess — החישוב הקודם', () => {
+    const counts = { pagesWithImage: 10, editedPagesCount: 4 }
+    expect(willProcessCount(counts, 'skip')).toBe(6)
+    expect(willProcessCount(counts, 'overwrite')).toBe(10)
+    expect(willProcessCount({}, 'skip')).toBe(0)
   })
 })

@@ -4,6 +4,7 @@
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import ErrorReport from '../../models/ErrorReport.js';
+import SentEmailLog from '../../models/SentEmailLog.js';
 import CorrectionEvent from '../../models/CorrectionEvent.js';
 import { handleReportingErrorsPost } from './reporting-handler.js';
 import { getCorrectionsConfig } from './config.js';
@@ -11,6 +12,7 @@ import { setRuntimeFlags } from './runtime.js';
 import { startMongo } from './testing/mongo.js';
 import { notifyReportByEmail } from './report-email.js';
 import { OPEN_FILTER } from './store.js';
+import { computeContentDigest } from './ocj1.js';
 
 let db;
 before(async () => { db = await startMongo(); });
@@ -237,6 +239,9 @@ test('ספריא (המייל לא מגיע לאוצריא) → email_only: נש�
   assert.equal(sent.length, 1);
   assert.equal(sent[0].to, 'corrections@sefaria.org');
   assert.deepEqual(sent[0].cc, ['jewishoffice@gmail.com']);
+  assert.ok(sent[0].text.includes(`קישור ישיר: https://www.sefaria.org/${encodeURIComponent('בראשית א')}`), 'הקישור לפי he_ref');
+  assert.ok(sent[0].text.includes('הטקסט השגוי:\n(א) בְּרֵאשִׁ֖ית בָּרָ֣א אֱלֹהִ֑ים\n'));
+  assert.ok(sent[0].text.includes('הטקסט המתוקן:\n(א) בְּרֵאשִׁ֖ית בָּרָ֣א *אֱלֹקִ֑ים*\n'));
   const legacySefaria = await post({ ...oldClient('sef-old'), source_folder: 'my-SEFARIA-x' }, { notify });
   assert.equal(legacySefaria.status, 200);
   assert.equal((await ErrorReport.findOne({ reportId: 'sef-old' }).lean()).state, 'email_only');
@@ -245,6 +250,110 @@ test('ספריא (המייל לא מגיע לאוצריא) → email_only: נש�
   assert.equal(replay.body.idempotent_replay, true);
   assert.equal(sent.length, 2, 'רק דיווח sef-old נוסף');
 });
+
+test('distinct corrections to a synthetic 12503-unit Sefaria line both reach email; duplicates and replays do not', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { sent, notify } = captureMail(t);
+  const prefix = '<b>אמר החכם</b> ';
+  const original = prefix + 'אבגד '.repeat(2500).slice(0, 12_503 - prefix.length);
+  assert.equal(original.length, 12_503);
+  const proposals = [original.replace('החכם', 'הרב'), original.replace('החכם', 'המורה')];
+  const bodies = proposals.map((proposed, index) => {
+    const body = newClient(`long-sefaria-${index}`, {
+      original_line: original, original_selection: null, selection_offset: null,
+      proposed_text: proposed, context_before: '', context_after: '',
+    }, {
+      source_folder: 'sefaria', selected_text: '', context_text: '',
+      error_details: `--- הצעת תיקון ---\nמקור: ${original}\nמוצע: ${proposed}`,
+      source_hint: { source_folder: 'sefaria', library_relative_path: '', repo_path: null },
+    });
+    body.content_digest = computeContentDigest(body);
+    return body;
+  });
+  assert.notEqual(bodies[0].content_digest, bodies[1].content_digest);
+
+  const stored = [];
+  for (const [index, body] of bodies.entries()) {
+    const res = await post(body, { config: onConfig, notify });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(res.body.accepted, true);
+    assert.equal(res.body.savedToDatabase, true);
+    assert.equal(res.body.email_sent, true, `proposal ${index} must reach the recipient`);
+    assert.equal(res.body.duplicate, false);
+    const report = await ErrorReport.findOne({ reportId: body.report_id }).lean();
+    stored.push(report);
+    assert.equal(report.state, 'email_only');
+    assert.equal(report.emailSent, true);
+    assert.equal(report.proposals[0].originalLine, original);
+    assert.equal(report.proposals[0].proposedText, proposals[index]);
+    assert.deepEqual(await pipelineCounts(body.report_id), { queue: 0, outbox: 0 });
+  }
+  assert.equal(stored[0].errorDetails.length, 10_000);
+  assert.equal(stored[0].errorDetails, stored[1].errorDetails);
+  assert.equal(sent.length, 2);
+  assert.ok(sent[0].text.includes('*הרב*'));
+  assert.ok(sent[1].text.includes('*המורה*'));
+  for (const mail of sent) {
+    assert.equal(mail.to, 'corrections@sefaria.org');
+    assert.deepEqual(mail.cc, ['jewishoffice@gmail.com']);
+    assert.ok(mail.text.includes(`קישור ישיר: https://www.sefaria.org/${encodeURIComponent('בראשית א')}`));
+  }
+  const claims = await SentEmailLog.find({}).lean();
+  assert.equal(claims.length, 4);
+  assert.equal(new Set(claims.map((claim) => claim.contentHash)).size, 2);
+
+  const duplicate = await post({
+    ...bodies[0], report_id: 'long-sefaria-other-id', sender_email: 'another@example.com',
+    created_at: '2026-11-05T00:00:00.000Z',
+  }, { config: onConfig, notify });
+  assert.equal(duplicate.status, 200);
+  assert.equal(duplicate.body.accepted, true);
+  assert.equal(duplicate.body.email_sent, false);
+  assert.equal(duplicate.body.duplicate, true);
+  assert.equal(await ErrorReport.countDocuments({}), 3);
+
+  for (const body of bodies) {
+    const replay = await post(body, { config: onConfig, notify });
+    assert.equal(replay.status, 200);
+    assert.equal(replay.body.idempotent_replay, true);
+    assert.equal(replay.body.email_sent, false);
+    assert.equal(replay.body.duplicate, true);
+    assert.equal(await ErrorReport.countDocuments({ reportId: body.report_id }), 1);
+    assert.equal((await ErrorReport.findOne({ reportId: body.report_id }).lean()).emailSent, true);
+  }
+  assert.equal(sent.length, 2);
+  assert.equal(await SentEmailLog.countDocuments({}), 4);
+});
+
+for (const edge of ['lone surrogate in he_ref', 'empty selection inside a surrogate pair']) {
+  test(`accepted UTF-16 edge case reaches email: ${edge}`, async (t) => {
+    if (db.skip) return t.skip(db.skip);
+    const { sent, notify } = captureMail(t);
+    const line = 'א😀ב';
+    const body = newClient('utf16-edge', edge.startsWith('empty') ? {
+      original_line: line, original_selection: '',
+      selection_offset: { unit: 'utf16_code_units', start: 2, end: 2 },
+      proposed_text: 'תיקון', context_before: line.slice(0, 2), context_after: line.slice(2),
+    } : {}, { source_folder: 'wikiSource' });
+    if (edge.startsWith('lone')) body.location.he_ref = '\ud800';
+    body.content_digest = computeContentDigest(body);
+
+    const res = await post(body, { notify });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(res.body.accepted, true);
+    assert.equal(res.body.savedToDatabase, true);
+    assert.equal(res.body.email_sent, true, 'an accepted correction must not fail email hashing');
+    assert.equal(res.body.duplicate, false);
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].to, 'novartza@gmail.com');
+
+    const duplicate = await post({ ...body, report_id: 'utf16-edge-another-id' }, { notify });
+    assert.equal(duplicate.status, 200);
+    assert.equal(duplicate.body.email_sent, false);
+    assert.equal(duplicate.body.duplicate, true);
+    assert.equal(sent.length, 1);
+  });
+}
 
 test('wikiSource: הצעת תיקון נכנסת למערכת ונשלחת במייל למקור בלבד (לא לאוצריא); דיווח חופשי — לאוצריא + עותק למקור', async (t) => {
   if (db.skip) return t.skip(db.skip);
@@ -259,6 +368,7 @@ test('wikiSource: הצעת תיקון נכנסת למערכת ונשלחת במ�
   assert.equal(sent.length, 1);
   assert.equal(sent[0].to, 'novartza@gmail.com', 'המקור מקבל את הצעת התיקון');
   assert.equal(sent[0].cc, undefined, 'בלי עותק לאוצריא');
+  assert.ok(sent[0].text.includes('הטקסט המתוקן:\n(א) בְּרֵאשִׁ֖ית בָּרָ֣א *אֱלֹקִ֑ים*\n'), 'גם מקור שאינו ספריא מקבל טקסט שגוי ומתוקן');
   // שידור חוזר אינו שולח שוב
   await post(newClient('wiki-1', {}, { source_folder: 'wikiSource' }), { config: onConfig, notify });
   assert.equal(sent.length, 1);
