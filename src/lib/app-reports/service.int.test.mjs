@@ -61,8 +61,11 @@ const crash = (over = {}) => manual({
 });
 
 async function post(body, { raw = false, deps = {} } = {}) {
+  const serialized = raw ? body : JSON.stringify(body);
   const req = new Request('http://localhost/api/app-reports', {
-    method: 'POST', headers: { 'content-type': 'application/json; charset=utf-8' }, body: raw ? body : JSON.stringify(body),
+    method: 'POST', headers: {
+      'content-type': 'application/json; charset=utf-8', 'content-length': String(Buffer.byteLength(serialized)),
+    }, body: serialized,
   });
   const res = await handleAppReportPost(req, { saveFile, deleteFile, config, fetchImpl: gh.fetch, connectDB: async () => {}, rateLimit: () => true, ...deps });
   return { status: res.status, body: await res.json() };

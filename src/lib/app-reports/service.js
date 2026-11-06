@@ -116,7 +116,11 @@ async function discardStagedFiles(gridfsIds, deleteFile) {
 }
 
 function duplicateReply(before, doc) {
-  if (before.contentHash !== doc.contentHash || (doc.schema === 2 && before.resendHash !== doc.resendHash)) {
+  // reportId identifies one contract version as well as one payload. In particular,
+  // a legacy retry must not bypass schema 2's attachment identity guarantees.
+  const beforeSchema = before.schema ?? 1;
+  if (beforeSchema !== doc.schema || before.contentHash !== doc.contentHash
+    || (doc.schema === 2 && before.resendHash !== doc.resendHash)) {
     return { status: 409, body: { error: 'reportId conflict' } };
   }
   return { status: 200, body: replyFor(before, { duplicate: true }) };

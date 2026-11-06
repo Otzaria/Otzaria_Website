@@ -35,8 +35,11 @@ const report = (over = {}) => ({
 });
 const syncDeps = () => ({ config, fetchImpl: github.fetch, sendClosedMail: async () => ({ sent: true }) });
 async function post(body, deps = {}) {
+  const serialized = JSON.stringify(body);
   const request = new Request('http://localhost/api/app-reports', {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+    method: 'POST', headers: {
+      'content-type': 'application/json', 'content-length': String(Buffer.byteLength(serialized)),
+    }, body: serialized,
   });
   const response = await handleAppReportPost(request, {
     saveFile, deleteFile, config, fetchImpl: github.fetch,

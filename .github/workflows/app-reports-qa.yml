@@ -83,12 +83,12 @@ jobs:
           assert counts and all(int(count) > 0 for count in counts), 'No tests ran'
           PY_CHECK
 
-      - name: Install only the inbound Worker's runtime dependency
+      - name: Install locked inbound Worker dependencies
         id: worker_dependencies
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: |
           set -euo pipefail
-          npm ci --prefix workers/app-reports-inbound --omit=dev --no-audit --no-fund \
+          npm ci --prefix workers/app-reports-inbound --no-audit --no-fund \
             2>&1 | tee build/app-reports-qa/worker-npm-ci.log
 
       - name: Run inbound Worker smoke tests
@@ -98,6 +98,35 @@ jobs:
           node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON \
             workers/app-reports-inbound/smoke.mjs \
             2>&1 | tee build/app-reports-qa/worker-smoke.log
+
+      - name: Validate production and isolated Preview bundles
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && steps.worker_dependencies.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY_CONFIG'
+          from pathlib import Path
+          import tomllib
+
+          source = Path('workers/app-reports-inbound/wrangler.toml')
+          config = tomllib.loads(source.read_text())
+          preview_vars = config.get('previews', {}).get('vars', {})
+          assert preview_vars == {'PREVIEW_MODE': 'true'}, f'Unexpected Preview vars: {preview_vars}'
+          isolated = Path('build/app-reports-qa/wrangler-preview.toml')
+          isolated.write_text(
+              'name = "otzaria-app-reports-inbound-qa-preview"\n'
+              'main = "../../workers/app-reports-inbound/src/index.js"\n'
+              f'compatibility_date = "{config["compatibility_date"]}"\n\n'
+              '[vars]\nPREVIEW_MODE = "true"\n'
+          )
+          PY_CONFIG
+          npx --prefix workers/app-reports-inbound wrangler deploy --dry-run \
+            --config workers/app-reports-inbound/wrangler.toml \
+            --outdir "$GITHUB_WORKSPACE/build/app-reports-qa/worker-production" \
+            2>&1 | tee build/app-reports-qa/worker-production-build.log
+          npx --prefix workers/app-reports-inbound wrangler deploy --dry-run \
+            --config build/app-reports-qa/wrangler-preview.toml \
+            --outdir "$GITHUB_WORKSPACE/build/app-reports-qa/worker-preview" \
+            2>&1 | tee build/app-reports-qa/worker-preview-build.log
 
       - name: Upload reviewed SHA and logs
         if: always()

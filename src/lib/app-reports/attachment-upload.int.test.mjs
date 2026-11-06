@@ -171,6 +171,16 @@ test('HTTP + GridFS: schema2 same-ID diagnostics changes are conflicts; schema1 
   assert.equal(github.calls.length, calls);
   assert.equal((await (await post(base)).json()).duplicate, true);
 
+  // A legacy client cannot reuse a schema 2 identity and receive a false
+  // acknowledgement, even when its visible content or diagnostics happen to match.
+  for (const attachments of [{ diagnostics }, {}, { diagnostics: { value: 'legacy replacement' } }]) {
+    const downgrade = await post({ ...base, schema: 1, attachments });
+    assert.equal(downgrade.status, 409);
+    assert.deepEqual(await downgrade.json(), { error: 'reportId conflict' });
+  }
+  assert.equal(await AppReport.countDocuments(), 1);
+  assert.equal(await mongoose.connection.db.collection('uploads.files').countDocuments(), 1);
+
   const legacy = { ...base, schema: 1, reportId: 'legacy-diagnostics' };
   const firstLegacy = await post(legacy);
   assert.equal(firstLegacy.status, 200);
