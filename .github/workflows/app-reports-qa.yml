@@ -1,0 +1,109 @@
+name: App reports QA
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/app-reports-qa.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/patch-plugin-validator.cjs'
+      - 'src/lib/app-reports/**'
+      - 'src/app/api/app-reports/**'
+      - 'src/lib/corrections/**'
+      - 'src/lib/gridfs-service.js'
+      - 'src/lib/attachment-storage.js'
+      - 'src/lib/validation-utils.js'
+      - 'src/lib/roles.js'
+      - 'src/models/**'
+      - 'workers/app-reports-inbound/**'
+      - 'docs/app-reports/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-reports-qa-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reports:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      MONGOMS_VERSION: '7.0.24'
+    steps:
+      - name: Check out the reviewed commit
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: 43e89079e089adc6ff97bbba6734eba2d5fb7931
+          persist-credentials: false
+
+      - name: Prepare evidence
+        run: |
+          mkdir -p build/app-reports-qa
+          git rev-parse HEAD > build/app-reports-qa/reviewed-head.txt
+
+      - name: Set up the repository's Node version
+        uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            workers/app-reports-inbound/package-lock.json
+
+      - name: Install locked website dependencies
+        id: dependencies
+        run: |
+          set -euo pipefail
+          npm ci --legacy-peer-deps 2>&1 | tee build/app-reports-qa/npm-ci.log
+
+      - name: Run all app-report tests against real MongoDB
+        env:
+          MONGOMS_DOWNLOAD_DIR: ${{ runner.temp }}/app-reports-mongodb
+        run: |
+          set -euo pipefail
+          node --version > build/app-reports-qa/node-version.txt
+          node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \
+            --test-concurrency=1 --test-reporter=tap \
+            src/lib/app-reports/*.test.mjs \
+            2>&1 | tee build/app-reports-qa/reports.tap
+          # The shared Mongo helper supports local skips. CI must reject them:
+          # a missing binary or failed database startup is not a passing test.
+          python3 - <<'PY_CHECK'
+          from pathlib import Path
+          import re
+          log = Path('build/app-reports-qa/reports.tap').read_text()
+          for key in ('fail', 'cancelled', 'skipped', 'todo'):
+              values = re.findall(r'^# ' + key + r' (\d+)$', log, re.MULTILINE)
+              assert values and all(int(value) == 0 for value in values), f'{key}: {values}'
+          counts = re.findall(r'^# tests (\d+)$', log, re.MULTILINE)
+          assert counts and all(int(count) > 0 for count in counts), 'No tests ran'
+          PY_CHECK
+
+      - name: Install only the inbound Worker's runtime dependency
+        id: worker_dependencies
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          npm ci --prefix workers/app-reports-inbound --omit=dev --no-audit --no-fund \
+            2>&1 | tee build/app-reports-qa/worker-npm-ci.log
+
+      - name: Run inbound Worker smoke tests
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && steps.worker_dependencies.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON \
+            workers/app-reports-inbound/smoke.mjs \
+            2>&1 | tee build/app-reports-qa/worker-smoke.log
+
+      - name: Upload reviewed SHA and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-reports-qa-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/app-reports-qa/
+          if-no-files-found: error
+          retention-days: 14
