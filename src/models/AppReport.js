@@ -50,6 +50,18 @@ const ContactEntrySchema = new mongoose.Schema({
   issueCommentUrl: { type: String, default: undefined },
 }, { _id: false });
 
+// קובץ שכבר נותק אטומית מהדיווח וממתין למחיקה פיזית. הרשומה מאפשרת להשלים
+// ניקוי אחרי קריסה/כשל אחסון בלי להשאיר הפניה חיה לקובץ שנמחק.
+const PendingPayloadDeleteSchema = new mongoose.Schema({
+  gridfsId: { type: mongoose.Schema.Types.ObjectId, required: true },
+  ownerReportId: { type: String, required: true },
+  size: { type: Number, default: 0 },
+  kinds: { type: [String], default: [] },
+  detachedAt: { type: Date, required: true },
+  leaseToken: { type: String, default: null },
+  leaseUntil: { type: Date, default: null },
+}, { _id: false });
+
 const PayloadCleanupSchema = new mongoose.Schema({
   leaseToken: { type: String, default: null },
   leaseUntil: { type: Date, default: null },
@@ -63,6 +75,7 @@ const PayloadCleanupSchema = new mongoose.Schema({
   sharedFiles: { type: Number, default: 0 },
   missingFiles: { type: Number, default: 0 },
   kinds: { type: [String], default: [] },
+  pendingDeletes: { type: [PendingPayloadDeleteSchema], default: [] },
 }, { _id: false });
 
 const AppReportSchema = new mongoose.Schema({
@@ -140,5 +153,6 @@ AppReportSchema.index({ 'contactLog.images.publicToken': 1 }, { sparse: true });
 AppReportSchema.index({ replyToken: 1 }, { unique: true, partialFilterExpression: { replyToken: { $type: 'string' } } });
 
 AppReportSchema.index({ issueState: 1, issuePending: 1, 'payloadCleanup.purgedAt': 1, 'payloadCleanup.nextAttemptAt': 1, issueClosedAt: 1 });
+AppReportSchema.index({ 'payloadCleanup.pendingDeletes.gridfsId': 1 }, { sparse: true });
 
 export default mongoose.models.AppReport || mongoose.model('AppReport', AppReportSchema);

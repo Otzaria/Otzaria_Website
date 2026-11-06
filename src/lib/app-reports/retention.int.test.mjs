@@ -175,9 +175,9 @@ test('כשל חלקי, פתיחה מחדש וסגירה נוספת בין שני
   if (db.skip) return t.skip(db.skip);
   const doc = await report();
   const second = await extraFile(doc);
-  const first = await cleanupClosedReportPayloads(deps({ deletePayloadFile: async (id) => {
+  const first = await cleanupClosedReportPayloads(deps({ deletePayloadFile: async (id, owner) => {
     if (String(id) === String(second.gridfsId)) throw new Error('כשל זמני במחסן');
-    return deleteReportPayloadFile(id);
+    return deleteReportPayloadFile(id, owner);
   } }));
   assert.equal(first.files, 1);
   assert.equal(first.errors, 1);
@@ -186,20 +186,24 @@ test('כשל חלקי, פתיחה מחדש וסגירה נוספת בין שני
   assert.equal(partial.payloadCleanup.removedFiles, 1);
   assert.deepEqual(partial.payloadCleanup.nextAttemptAt, new Date(now.getTime() + CLEANUP_RETRY_MS));
   assert.equal(partial.fileIds.diagnostics, null);
-  assert.ok(partial.fileIds.errors);
+  assert.equal(partial.fileIds.errors, null);
+  assert.equal(partial.payloadCleanup.pendingDeletes.length, 1);
+  assert.ok(await files().findOne({ _id: second.gridfsId }));
 
   now = new Date(now.getTime() + CLEANUP_RETRY_MS);
   const opened = { number: doc.issueNumber, state: 'open', closed_at: null };
   issues.set(doc.issueNumber, opened);
   await handleIssueStateChange(opened, { now });
-  assert.equal((await cleanupClosedReportPayloads(deps())).files, 0);
+  // הניתוק כבר committed לפני ה-reopen; התור העמיד משלים רק את המחיקה הפיזית.
+  assert.equal((await cleanupClosedReportPayloads(deps())).files, 1);
+  assert.equal((await get(doc)).payloadCleanup.pendingDeletes.length, 0);
   const closedAgain = new Date(now);
   const closed = { number: doc.issueNumber, state: 'closed', closed_at: closedAgain.toISOString() };
   issues.set(doc.issueNumber, closed);
   await handleIssueStateChange(closed, { now });
   now = new Date(closedAgain.getTime() + PAYLOAD_RETENTION_MS - 1);
   assert.equal((await cleanupClosedReportPayloads(deps())).files, 0);
-  assert.ok(await files().findOne({ _id: second.gridfsId }));
+  assert.equal(await files().findOne({ _id: second.gridfsId }), null);
   now = new Date(closedAgain.getTime() + PAYLOAD_RETENTION_MS);
   assert.equal((await cleanupClosedReportPayloads(deps())).purged, 1);
   assert.equal((await get(doc)).payloadCleanup.removedFiles, 2);
@@ -276,11 +280,46 @@ test('תג בעלות זר נדחה ונשמר לניסיון נוסף במקו�
   assert.equal((await get(doc)).payloadCleanup.purgedAt, null);
 });
 
+test('תג בעלות של דיווח אחר נדחה לפני ניתוק ההפניה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const doc = await report();
+  await files().updateOne(
+    { _id: doc.fileIds.diagnostics.gridfsId },
+    { $set: { 'metadata.appReportId': 'retention-someone-else' } },
+  );
+  assert.equal((await cleanupClosedReportPayloads(deps())).errors, 1);
+  const saved = await get(doc);
+  assert.ok(saved.fileIds.diagnostics);
+  assert.equal(saved.payloadCleanup.pendingDeletes.length, 0);
+  await keep(doc);
+});
+
+test('שינוי בעלות אחרי הניתוק אינו מוחק קובץ זר, וה-pending נשמר לניסיון בטוח', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const doc = await report();
+  const gridfsId = doc.fileIds.diagnostics.gridfsId;
+  const first = await cleanupClosedReportPayloads(deps({ deletePayloadFile: async (id, owner) => {
+    await files().updateOne({ _id: id }, { $set: { 'metadata.appReportId': 'retention-someone-else' } });
+    return deleteReportPayloadFile(id, owner);
+  } }));
+  assert.equal(first.errors, 1);
+  const pending = await get(doc);
+  assert.equal(pending.fileIds.diagnostics, null);
+  assert.equal(pending.payloadCleanup.pendingDeletes.length, 1);
+  assert.ok(await files().findOne({ _id: gridfsId }));
+
+  await files().updateOne({ _id: gridfsId }, { $set: { 'metadata.appReportId': doc.reportId } });
+  now = new Date(now.getTime() + CLEANUP_RETRY_MS);
+  assert.equal((await cleanupClosedReportPayloads(deps())).files, 1);
+  assert.equal((await get(doc)).payloadCleanup.pendingDeletes.length, 0);
+  assert.equal(await files().findOne({ _id: gridfsId }), null);
+});
+
 test('ריצות מקבילות אינן מוחקות או מונות קובץ פעמיים', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const doc = await report();
   let deletes = 0;
-  const input = deps({ deletePayloadFile: async (id) => { deletes += 1; return deleteReportPayloadFile(id); } });
+  const input = deps({ deletePayloadFile: async (id, owner) => { deletes += 1; return deleteReportPayloadFile(id, owner); } });
   const results = await Promise.all([cleanupClosedReportPayloads(input), cleanupClosedReportPayloads(input)]);
   assert.equal(deletes, 1);
   assert.equal(results.reduce((n, r) => n + r.files, 0), 1);
@@ -313,16 +352,19 @@ test('פתיחה מחדש במהלך הריצה מבטלת את מחיקת ית�
   const doc = await report();
   const second = await extraFile(doc);
   let count = 0;
-  await cleanupClosedReportPayloads(deps({ deletePayloadFile: async (id) => {
+  await cleanupClosedReportPayloads(deps({ deletePayloadFile: async (id, owner) => {
     count += 1;
-    const result = await deleteReportPayloadFile(id);
+    const result = await deleteReportPayloadFile(id, owner);
     await handleIssueStateChange({ number: doc.issueNumber, state: 'open' }, { now });
     return result;
   } }));
   assert.equal(count, 1);
   assert.ok(await files().findOne({ _id: second.gridfsId }));
-  assert.equal((await get(doc)).issueState, 'open');
-  assert.equal((await get(doc)).payloadCleanup.purgedAt, null);
+  const saved = await get(doc);
+  assert.equal(saved.issueState, 'open');
+  assert.equal(saved.payloadCleanup.purgedAt, null);
+  assert.equal(saved.fileIds.diagnostics, null);
+  assert.equal(saved.payloadCleanup.pendingDeletes.length, 0);
 });
 
 test('ה־cron הקיים משלים מועד אמין לדיווח ישן ומפעיל ניקוי; תוצאת הניהול אינה חושפת נעילה', async (t) => {

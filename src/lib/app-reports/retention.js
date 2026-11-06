@@ -42,19 +42,34 @@ function payloadRefs(doc) {
 
 /** אין במערכת מסלול שמשתף מזהה קיים בכתיבה: כל קליטה מקצה GridFS חדש.
  * בכל זאת שומרים קבצים שמשותפים לרשומה אחרת (לרבות נתונים ישנים או ייבוא). */
-async function isReferencedElsewhere(report, id) {
-  if (await AppReport.exists({ _id: { $ne: report._id }, $or: REF_PATHS.map((path) => ({ [path]: id })) })) return true;
+async function sharedReference(report, id) {
+  const other = await AppReport.findOne({
+    _id: { $ne: report._id }, $or: REF_PATHS.map((path) => ({ [path]: id })),
+  }).select('reportId').sort({ _id: 1 }).lean();
+  if (other) return { shared: true, nextOwnerReportId: other.reportId };
   const files = await FileStorage.find({ gridfsId: id }).select('_id').lean();
-  return files.length > 0 && Boolean(await Upload.exists({ fileStorageId: { $in: files.map((f) => f._id) }, isDeleted: { $ne: true } }));
+  const upload = files.length > 0 && Boolean(await Upload.exists({
+    fileStorageId: { $in: files.map((f) => f._id) }, isDeleted: { $ne: true },
+  }));
+  return { shared: upload, nextOwnerReportId: null };
+}
+
+async function transferPayloadOwner(id, fromReportId, toReportId) {
+  if (!toReportId || String(fromReportId) === String(toReportId)) return;
+  await mongoose.connection.db.collection('uploads.files').updateOne({
+    _id: new mongoose.Types.ObjectId(id), 'metadata.appReportId': fromReportId,
+  }, { $set: { 'metadata.appReportId': toReportId } });
 }
 
 /** מחיקה חוזרת משלימה גם chunks שנשארו אחרי כשל בין מחיקת המטא־דטה למחיקת התוכן. */
-export async function deleteReportPayloadFile(id) {
+export async function deleteReportPayloadFile(id, expectedReportId) {
   const db = mongoose.connection.db;
   const objectId = new mongoose.Types.ObjectId(id);
   const file = await db.collection('uploads.files').findOne({ _id: objectId }, { projection: { length: 1, 'metadata.appReportId': 1 } });
   // אין למחוק קובץ זר רק מפני שמזהה שלו הופיע ברשומה פגומה.
-  if (file && !file.metadata?.appReportId) throw new Error('הקובץ אינו מזוהה כצרופת דיווח');
+  if (file && String(file.metadata?.appReportId ?? '') !== String(expectedReportId ?? '')) {
+    throw new Error('הקובץ אינו שייך לדיווח');
+  }
   try {
     await new GridFSBucket(db, { bucketName: 'uploads' }).delete(objectId);
   } catch (err) {
@@ -63,6 +78,15 @@ export async function deleteReportPayloadFile(id) {
   }
   await FileStorage.updateMany({ gridfsId: objectId }, { $set: { isDeleted: true } });
   return { missing: !file, bytes: file?.length || 0 };
+}
+
+async function assertPayloadOwner(id, expectedReportId) {
+  const file = await mongoose.connection.db.collection('uploads.files').findOne(
+    { _id: new mongoose.Types.ObjectId(id) }, { projection: { 'metadata.appReportId': 1 } },
+  );
+  if (file && String(file.metadata?.appReportId ?? '') !== String(expectedReportId ?? '')) {
+    throw new Error('הקובץ אינו שייך לדיווח');
+  }
 }
 
 function guardFor(doc, token) {
@@ -95,12 +119,111 @@ function detachUpdate(ref, outcome, now, closedAt) {
   };
 }
 
+// קודם מנתקים את ההפניה בעדכון המותנה ומכניסים אותה לתור עמיד. רק לאחר שהעדכון
+// הצליח מותר למחוק את הבתים; reopen שמנצח את העדכון משאיר גם הפניה וגם קובץ.
+function stageDeleteUpdate(ref, reportId, now, closedAt) {
+  const update = detachUpdate(ref, { bytes: 0, shared: false, missing: false }, now, closedAt);
+  delete update.$inc;
+  update.$push = { 'payloadCleanup.pendingDeletes': {
+    gridfsId: ref.id, ownerReportId: reportId, size: ref.size || 0,
+    kinds: [...ref.kinds], detachedAt: now,
+  } };
+  return update;
+}
+
+async function claimPendingDelete(report, pending, now) {
+  const token = randomUUID();
+  const leaseUntil = new Date(now.getTime() + LEASE_MS);
+  const claimed = await AppReport.findOneAndUpdate({
+    _id: report._id,
+    'payloadCleanup.pendingDeletes': { $elemMatch: {
+      gridfsId: pending.gridfsId,
+      $or: [{ leaseUntil: null }, { leaseUntil: { $lte: now } }],
+    } },
+  }, {
+    $set: {
+      'payloadCleanup.pendingDeletes.$.leaseToken': token,
+      'payloadCleanup.pendingDeletes.$.leaseUntil': leaseUntil,
+    },
+  }, { returnDocument: 'after' }).select('payloadCleanup.pendingDeletes').lean();
+  if (!claimed) return null;
+  const item = claimed.payloadCleanup.pendingDeletes.find((entry) =>
+    String(entry.gridfsId) === String(pending.gridfsId) && entry.leaseToken === token);
+  return item ? { ...item, token } : null;
+}
+
+async function finalizePendingDelete(report, pending, outcome, now) {
+  const result = await AppReport.updateOne({
+    _id: report._id, 'payloadCleanup.pendingDeletes': { $elemMatch: {
+      gridfsId: pending.gridfsId, leaseToken: pending.token,
+    } },
+  }, {
+    $pull: { 'payloadCleanup.pendingDeletes': { gridfsId: pending.gridfsId } },
+    $set: {
+      'payloadCleanup.lastAttemptAt': now, 'payloadCleanup.lastError': null,
+      'payloadCleanup.nextAttemptAt': null,
+    },
+    $inc: {
+      'payloadCleanup.removedFiles': 1,
+      'payloadCleanup.removedBytes': outcome.bytes,
+      'payloadCleanup.sharedFiles': outcome.shared ? 1 : 0,
+      'payloadCleanup.missingFiles': outcome.missing ? 1 : 0,
+    },
+    $addToSet: { 'payloadCleanup.kinds': { $each: pending.kinds || [] } },
+  });
+  return result.modifiedCount > 0;
+}
+
+async function drainPendingDelete(report, pending, deps, now) {
+  const claimed = await claimPendingDelete(report, pending, now);
+  if (!claimed) return null;
+  // הגנה נוספת לנתונים מיובאים/פגומים שנוספה בהם הפניה לאחר הניתוק.
+  const sharing = await sharedReference(report, claimed.gridfsId);
+  const outcome = sharing.shared ? { shared: true, bytes: 0, missing: false }
+    : await (deps.deletePayloadFile || deleteReportPayloadFile)(claimed.gridfsId, claimed.ownerReportId);
+  if (sharing.shared) await transferPayloadOwner(claimed.gridfsId, claimed.ownerReportId, sharing.nextOwnerReportId);
+  const finalized = await finalizePendingDelete(report, { ...claimed, token: claimed.token }, outcome, now);
+  return finalized ? outcome : null;
+}
+
 /** clock/deps.now מאפשרים בדיקת גבול מדויק ללא sleep. אין סריקת קבצים או קריאת התוכן. */
 export async function cleanupClosedReportPayloads(deps = {}) {
   const clock = deps.clock || (() => deps.now || new Date());
   const now = clock();
   const cutoff = new Date(now.getTime() - PAYLOAD_RETENTION_MS);
   const summary = { checked: 0, purged: 0, files: 0, bytes: 0, shared: 0, missing: 0, deferred: 0, errors: 0 };
+  let remaining = CLEANUP_FILE_BATCH;
+  // ניתוקים שכבר committed מושלמים ללא תלות במצב ה-issue הנוכחי. הם אינם עוד
+  // חלק מהדיווח, וזו רשת ההתאוששות מקריסה בין עדכון Mongo למחיקת GridFS.
+  const pendingReports = await AppReport.find({
+    'payloadCleanup.pendingDeletes.0': { $exists: true },
+    $or: [{ 'payloadCleanup.nextAttemptAt': null }, { 'payloadCleanup.nextAttemptAt': { $lte: now } }],
+  }).select('_id reportId fileIds contactLog.images payloadCleanup.pendingDeletes').limit(CLEANUP_REPORT_BATCH).lean();
+  for (const report of pendingReports) {
+    for (const pending of report.payloadCleanup?.pendingDeletes || []) {
+      if (!remaining) break;
+      remaining -= 1;
+      try {
+        const outcome = await drainPendingDelete(report, pending, deps, clock());
+        if (!outcome) continue;
+        summary.files += 1;
+        summary.bytes += outcome.bytes;
+        summary.shared += outcome.shared ? 1 : 0;
+        summary.missing += outcome.missing ? 1 : 0;
+      } catch (err) {
+        summary.errors += 1;
+        const at = clock();
+        await AppReport.updateOne({ _id: report._id }, { $set: {
+          'payloadCleanup.lastAttemptAt': at,
+          'payloadCleanup.nextAttemptAt': new Date(at.getTime() + CLEANUP_RETRY_MS),
+          'payloadCleanup.lastError': String(err?.message || err).slice(0, 500),
+        } });
+        console.error(`App report pending payload cleanup: ${report.reportId}:`, err?.message);
+        break;
+      }
+    }
+    if (!remaining) break;
+  }
   const eligible = {
     issueState: 'closed', issuePending: false, issueNumber: { $ne: null },
     issueClosedAt: { $type: 'date', $lte: cutoff }, contactLog: readyReplies,
@@ -110,9 +233,11 @@ export async function cleanupClosedReportPayloads(deps = {}) {
       { $or: [{ 'payloadCleanup.leaseUntil': null }, { 'payloadCleanup.leaseUntil': { $lte: now } }] },
     ],
   };
-  const candidates = await AppReport.find(eligible).select('_id reportId product issueNumber issueClosedAt issueCheckedAt issueStateRevision')
-    .sort({ 'payloadCleanup.nextAttemptAt': 1, issueClosedAt: 1, _id: 1 }).limit(CLEANUP_REPORT_BATCH).lean();
-  let remaining = CLEANUP_FILE_BATCH;
+  const reportBudget = Math.max(0, CLEANUP_REPORT_BATCH - pendingReports.length);
+  const candidates = reportBudget ? await AppReport.find({
+    ...eligible, _id: { $nin: pendingReports.map((report) => report._id) },
+  }).select('_id reportId product issueNumber issueClosedAt issueCheckedAt issueStateRevision')
+    .sort({ 'payloadCleanup.nextAttemptAt': 1, issueClosedAt: 1, _id: 1 }).limit(reportBudget).lean() : [];
   for (const candidate of candidates) {
     if (!remaining) break;
     summary.checked += 1;
@@ -164,18 +289,27 @@ export async function cleanupClosedReportPayloads(deps = {}) {
           summary.deferred += 1;
           break;
         }
-        const shared = await isReferencedElsewhere(doc, ref.id);
+        const sharing = await sharedReference(doc, ref.id);
+        const shared = sharing.shared;
+        if (!shared) await assertPayloadOwner(ref.id, doc.reportId);
         if (!await AppReport.exists({ ...guard, 'payloadCleanup.leaseUntil': { $gt: clock() } })) {
           cancelled = true;
           summary.deferred += 1;
           break;
         }
+        // קובץ משותף אינו נמחק, ולכן אפשר לנתק ולמנות אותו בעדכון יחיד. קובץ פרטי
+        // עובר קודם לתור עמיד ורק אז נמחק פיזית.
+        const updated = await AppReport.updateOne(guard, shared
+          ? detachUpdate(ref, { shared: true, bytes: 0, missing: false }, at, closedAt)
+          : stageDeleteUpdate(ref, doc.reportId, at, closedAt));
+        if (!updated.modifiedCount) { cancelled = true; summary.deferred += 1; break; }
+        if (shared) await transferPayloadOwner(ref.id, doc.reportId, sharing.nextOwnerReportId);
         remaining -= 1;
         const outcome = shared ? { shared: true, bytes: 0, missing: false }
-          : await (deps.deletePayloadFile || deleteReportPayloadFile)(ref.id);
-        // עדכון מותנה גם אחרי I/O: ריצה ישנה לא תסמן סגירה חדשה כנקייה.
-        const updated = await AppReport.updateOne(guard, detachUpdate(ref, outcome, at, closedAt));
-        if (!updated.modifiedCount) { cancelled = true; summary.deferred += 1; break; }
+          : await drainPendingDelete(doc, {
+            gridfsId: ref.id, ownerReportId: doc.reportId, size: ref.size || 0, kinds: [...ref.kinds],
+          }, deps, at);
+        if (!outcome) { cancelled = true; summary.deferred += 1; break; }
         summary.files += 1;
         summary.bytes += outcome.bytes;
         summary.shared += shared ? 1 : 0;
@@ -184,7 +318,9 @@ export async function cleanupClosedReportPayloads(deps = {}) {
       if (!cancelled) {
         // The emptiness check and completion marker must be one Mongo write:
         // an inbound image can arrive after the last detach, without changing issue state.
-        const finished = await AppReport.updateOne({ ...guard, $nor: payloadPresent }, { $set: {
+        const finished = await AppReport.updateOne({
+          ...guard, $nor: payloadPresent, 'payloadCleanup.pendingDeletes.0': { $exists: false },
+        }, { $set: {
           'payloadCleanup.leaseToken': null, 'payloadCleanup.leaseUntil': null,
           'payloadCleanup.nextAttemptAt': null, 'payloadCleanup.purgedAt': clock(),
           'payloadCleanup.closedAt': closedAt,
