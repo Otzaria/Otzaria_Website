@@ -65,10 +65,28 @@ function RouterRound({ round, take, jumpTopRef }) {
   // "הצג בעמוד המלא" — הפריט שהעמוד שלו פתוח; כל עוד החלון פתוח, המקשים לא מסמנים
   const [ctxOf, setCtxOf] = useState(null)
   const scrollNext = useRef(false)
-  const { items } = round
+  // נעילה מיידית לדילוג (גם לפני רינדור saving), וספירת הכתיבות בכל שורה.
+  // עריכות נוספות נשמרות כרגיל; דילוג לא יכול לעקוף כתיבה או להישלח פעמיים.
+  const rowWrites = useRef(new Map())
+  const { items, mark } = round
   const { done, total } = progress(items)
 
   const draftOf = useCallback((it) => drafts[it.id] || initDraft(it), [drafts])
+
+  const writeRow = useCallback(async (id, body) => {
+    const operation = rowWrites.current.get(id) || { pending: 0, skip: body.skip === true }
+    operation.pending++
+    rowWrites.current.set(id, operation)
+    let result
+    try {
+      result = await mark(id, body)
+      return result
+    } finally {
+      operation.pending--
+      // דילוג מוצלח משחרר את השורה: נועלים גם עד שהמצב החדש רונדר.
+      if (!operation.pending && !(operation.skip && result?.ok)) rowWrites.current.delete(id)
+    }
+  }, [mark])
 
   useEffect(() => {
     if (!scrollNext.current) return
@@ -109,19 +127,20 @@ function RouterRound({ round, take, jumpTopRef }) {
   const update = useCallback(
     async (i, next, { advance = false } = {}) => {
       const it = items[i]
-      if (!it || it.skipped) return
+      if (!it || it.skipped || rowWrites.current.get(it.id)?.skip) return
       setDrafts((m) => ({ ...m, [it.id]: next }))
       if (!isComplete(next)) return
-      const r = await round.mark(it.id, toMarkBody(next))
+      const r = await writeRow(it.id, toMarkBody(next))
       if (!r.ok) return showAlert('השמירה נכשלה', r.error)
       if (advance) goTo(nextIndex(items, i))
     },
-    [items, round, goTo, showAlert]
+    [items, writeRow, goTo, showAlert]
   )
 
   const lineLabel = useCallback(
     (i, label) => {
       const it = items[i]
+      if (!it || it.skipped || rowWrites.current.get(it.id)?.skip) return
       const d = setLine(draftOf(it), label)
       if (label === 'mixed') {
         setFocus('words')
@@ -138,6 +157,7 @@ function RouterRound({ round, take, jumpTopRef }) {
   const wordLabel = useCallback(
     (i, label, k = wsel) => {
       const it = items[i]
+      if (!it || it.skipped || rowWrites.current.get(it.id)?.skip) return
       const d = setWord(draftOf(it), k, label)
       setWsel(nextOpenWord(d, k))
       update(i, d)
@@ -148,6 +168,7 @@ function RouterRound({ round, take, jumpTopRef }) {
   const accept = useCallback(
     (i) => {
       const it = items[i]
+      if (!it || it.skipped || rowWrites.current.get(it.id)?.skip) return
       const d = acceptSuggestion(draftOf(it), it)
       if (!isComplete(d)) {
         setDrafts((m) => ({ ...m, [it.id]: d }))
@@ -164,8 +185,8 @@ function RouterRound({ round, take, jumpTopRef }) {
   const skip = useCallback(
     async (i) => {
       const it = items[i]
-      if (!it || it.skipped) return
-      const r = await round.mark(it.id, { skip: true })
+      if (!it || it.skipped || rowWrites.current.has(it.id)) return
+      const r = await writeRow(it.id, { skip: true })
       if (!r.ok) return showAlert('הדילוג נכשל', r.error)
       setDrafts((m) => {
         const n = { ...m }
@@ -174,7 +195,7 @@ function RouterRound({ round, take, jumpTopRef }) {
       })
       goTo(nextIndex(items, i))
     },
-    [items, round, goTo, showAlert]
+    [items, writeRow, goTo, showAlert]
   )
 
   useEffect(() => {
@@ -192,7 +213,8 @@ function RouterRound({ round, take, jumpTopRef }) {
       // S — גם במקלדת עברית (אותו מקש פיזי, "ד")
       if (e.code === 'KeyS' || e.key === 's' || e.key === 'S') {
         e.preventDefault()
-        return skip(cur)
+        if (!e.repeat) skip(cur)
+        return
       }
       if (e.key === 'Tab' && mixed) {
         e.preventDefault()
