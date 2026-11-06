@@ -9,10 +9,12 @@
 //      שבטקסט היא שורה נפרדת ובדפוס בתחילת הפסקה — 2:1; עוגן שאין לו מקבילה — מצורף לשכנו.
 //   4. בתוך קבוצה: יישור מילים לפי רוחב (alignWordWidths) — אורך כל מילה בטקסט מול רוחב
 //      המילים שזוהו בצילום. בלי מילים מזוהות — המקום היחסי בתווים = המקום היחסי ברוחב השורות.
-// התוצאה תמיד משוערת (מסגרת מקווקווה). הצד שמחבר: caretTrack.js.
+// כשיש טקסט למילות ה-OCR — מיישרים אליו ישירות, בלי תלות בחלוקת הפסקאות.
+// בלי טקסט מזוהה התוצאה משוערת (מסגרת מקווקווה). הצד שמחבר: caretTrack.js.
 
 import { caretInfo, lineCount, lineWords, splitLines, lineStarts } from './caretWord.js';
 import { paragraphEnds } from './scanProfile.js';
+import { buildFlowTextMap, textMappedCaret } from './flowTextMap.js';
 
 const isBox = (b) => Array.isArray(b) && b.length === 4 && b.every(Number.isFinite);
 const TAG = /<[^>]*>/g;
@@ -233,6 +235,7 @@ export function buildFlow(text, scanLines) {
   const groups = g.map((x) => ({ t0: x.t0, t1: x.t1, s0: x.s0 < sp.length ? sp[x.s0].a : S.length, s1: x.s1 > 0 ? sp[x.s1 - 1].b : 0 }))
     .map((x, k) => (g[k].s0 === g[k].s1 ? { ...x, s0: x.s1, s1: x.s1 } : x));
   const model = { paras, groups, widths };
+  Object.defineProperty(model, 'textMap', { value: buildFlowTextMap(text, S), enumerable: false });
   // מטמון יישורי-המילים לפי קבוצה (נבנה בעצלות ב-flowCaret); לא-ספיר
   Object.defineProperty(model, 'wordMaps', { value: new Map(), enumerable: false });
   return model;
@@ -471,6 +474,15 @@ function groupWordMap(model, g, sw, lines) {
 export function flowLineAgreement(lines, model) {
   let agree = 0;
   let total = 0;
+  if (model?.textMap) {
+    const hits = new Map();
+    for (const t of model.textMap.targets) if (t.si != null && t.confident) hits.set(t.si, (hits.get(t.si) || 0) + 1);
+    lines.forEach((l, si) => {
+      const n = (l.words || []).filter((w) => isBox(w?.bbox)).length;
+      if (n) { total++; if (countsAgree(hits.get(si) || 0, n)) agree++; }
+    });
+    return { agree, total };
+  }
   for (const g of model?.groups || []) {
     if (!(g.s1 > g.s0)) continue;
     const sw = groupScanWords(lines, g);
@@ -501,7 +513,7 @@ function nearestScanWord(sw, si, x) {
 }
 
 /**
- * מה לסמן בצילום לסמן במיקום pos (מבנה זהה ל-CaretTrack של caretTrack.js; kind תמיד משוער).
+ * מה לסמן בצילום לסמן במיקום pos (מבנה זהה ל-CaretTrack של caretTrack.js; התאמה טקסטואלית קודמת להערכה).
  * @param {string} text
  * @param {number} pos
  * @param {{ bbox: number[], words?: { bbox: number[] }[] }[]} lines
@@ -511,6 +523,7 @@ export function flowCaret(text, pos, lines, model) {
   const c = caretInfo(text, pos);
   const out = { line: c.line, word: c.word, lineWords: c.words.length, lineCount: lineCount(text), scanIndex: null, lineEstimated: false, lineBox: null, wordBox: null, kind: null, confident: false };
   if (!model) return out;
+  if (model.textMap) return textMappedCaret(out, c, model.textMap, lines);
   const { vis } = visibleMap(c.lineText);
   const w = c.word >= 0 ? c.words[c.word] : null;
   const startVis = vis[Math.min(w ? w.start : c.col, vis.length - 1)];
@@ -667,6 +680,10 @@ function groupTargets(s, lines, model, g) {
  */
 export function flowOffsetFromScan(text, lines, model, scanIndex, x) {
   if (!model || !lines?.[scanIndex]) return -1;
+  if (model.textMap) {
+    const px = Number.isFinite(x) ? x : lines[scanIndex].bbox[2];
+    return pickTarget(model.textMap.targets, scanIndex, px)?.off ?? -1;
+  }
   const g = model.groups.find((q) => q.s0 <= scanIndex && scanIndex < q.s1 && q.t1 > q.t0);
   if (!g) {
     // שורת צילום בלי מקבילה בטקסט — תחילת פסקת הטקסט הבאה (או סוף הקודמת)
