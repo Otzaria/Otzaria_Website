@@ -37,7 +37,7 @@ export const SOURCE_EMAIL_MAPPING = {
   'Tashma': 'jewishoffice@gmail.com',
   'Dicta': 'jewishoffice@gmail.com',
   'Ben-Yehuda': 'editor@benyehuda.org',
-  'yam-HaHachma': 'y025837086@gmail.com',
+  'yam-HaHachma': 'y46254625@gmail.com',
 };
 
 export function toSafeString(value, fallback = '') {

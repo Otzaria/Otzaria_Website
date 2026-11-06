@@ -305,7 +305,7 @@ describe('getEmailRecipients', () => {
   it('routes yam-HaHachma books to Otzaria with a cc to the source repository', () => {
     expect(getEmailRecipients('yam-HaHachmaToOtzaria')).toEqual({
       primary: REPORTING_ERRORS_RECIPIENT,
-      cc: 'y025837086@gmail.com',
+      cc: 'y46254625@gmail.com',
       isSefariaOnly: false,
     });
   });
