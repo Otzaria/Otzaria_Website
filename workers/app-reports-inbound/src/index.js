@@ -147,7 +147,19 @@ async function deliver(payload, env) {
 const pendingKey = (payload) => `pending:${payload.receivedAt}:${crypto.randomUUID()}`;
 
 const worker = {
+  // Preview בודק שה-bundle עולה, בלי אתר, תיבת מייל או KV של הייצור.
+  async fetch(request, env) {
+    if (env.PREVIEW_MODE === 'true' && request.method === 'GET' && new URL(request.url).pathname === '/health') {
+      return Response.json({ mode: 'preview', emailDelivery: 'disabled' });
+    }
+    return new Response('Not found', { status: 404 });
+  },
+
   async email(message, env) {
+    if (env.PREVIEW_MODE === 'true') {
+      message.setReject('Email delivery is disabled in this health-only Preview');
+      return;
+    }
     if (!REPLY_RE.test(message.to) || message.rawSize > MAX_RAW_BYTES) {
       await forwardToHuman(message, env, 'not a reply address or too large');
       return;
@@ -182,6 +194,7 @@ const worker = {
 
   // ניסיון חוזר לתשובות שהאתר לא קיבל (שבת, תקלה). כפילות לא מזיקה — האתר מסנן לפי Message-ID.
   async scheduled(_event, env) {
+    if (env.PREVIEW_MODE === 'true') return;
     const { keys } = await env.PENDING.list({ prefix: 'pending:', limit: RETRY_BATCH });
     for (const { name } of keys) {
       const payload = await env.PENDING.get(name, 'json');

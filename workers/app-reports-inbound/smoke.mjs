@@ -256,4 +256,27 @@ failedForward.forward = async () => { throw new Error('Forward unavailable'); };
 await assert.rejects(worker.email(failedForward, kvFailure), /Forward unavailable/);
 await assert.rejects(worker.email(message(), { ...kvFailure, FALLBACK_TO: '' }), /email was not stored/);
 
+// Preview בודק בריאות בלבד. גם אם הוגדרו בטעות משאבי ייצור, אין אליהם I/O.
+const previewEnv = { PREVIEW_MODE: 'true' };
+for (const key of ['PENDING', 'SITE_URL', 'INBOUND_SECRET', 'FALLBACK_TO']) {
+  Object.defineProperty(previewEnv, key, { get() { throw new Error(`Preview accessed ${key}`); } });
+}
+const previewCalls = calls.length;
+let rejected;
+await worker.email({
+  get raw() { throw new Error('Preview read email content'); },
+  get to() { throw new Error('Preview read email recipient'); },
+  forward() { throw new Error('Preview forwarded email'); },
+  setReject(reason) { rejected = reason; },
+}, previewEnv);
+assert.match(rejected, /Email delivery is disabled/);
+await worker.scheduled({}, previewEnv);
+assert.equal(calls.length, previewCalls);
+const health = await worker.fetch(new Request('https://preview.example/health'), previewEnv);
+assert.equal(health.status, 200);
+assert.deepEqual(await health.json(), { mode: 'preview', emailDelivery: 'disabled' });
+assert.equal((await worker.fetch(new Request('https://preview.example/'), previewEnv)).status, 404);
+assert.equal((await worker.fetch(new Request('https://preview.example/health', { method: 'POST' }), previewEnv)).status, 404);
+assert.equal((await worker.fetch(new Request('https://otzaria.org/health'), env())).status, 404);
+
 console.log('smoke ok');
