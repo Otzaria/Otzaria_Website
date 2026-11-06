@@ -122,9 +122,9 @@ test('validateInboundPayload: בלי images (Worker ישן) — רשימה רי�
   const big = Buffer.concat([PNG, Buffer.alloc(MAX_IMAGE_BYTES)]);
   const nearCap = Buffer.concat([PNG, Buffer.alloc(MAX_IMAGE_BYTES - PNG.length)]);
   const tooBig = validateInboundPayload({ to: `reply+${TOKEN}@x.org`, images: [img(big), img(nearCap), img(nearCap), img(nearCap), img(PNG)] });
-  assert.equal(tooBig.value.images.length, 3);
-  assert.ok(tooBig.value.images.reduce((n, i) => n + i.buffer.length, 0) <= MAX_IMAGES_TOTAL_BYTES);
-  assert.equal(tooBig.value.attachments, 2);
+  assert.equal(tooBig.value.images.length, 2);
+  assert.equal(tooBig.value.images.reduce((n, i) => n + i.buffer.length, 0), MAX_IMAGES_TOTAL_BYTES);
+  assert.equal(tooBig.value.attachments, 3);
 });
 
 test('buildInboundComment: תמונות עם טוקן מוטמעות, בלי טוקן לא; שאר הקבצים בשורת מספר', () => {

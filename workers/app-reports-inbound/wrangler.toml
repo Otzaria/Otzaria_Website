@@ -17,3 +17,7 @@ SITE_URL = "https://otzaria.org"
 FALLBACK_TO = "otzaria.1@gmail.com"
 
 # סוד (לא כאן): wrangler secret put INBOUND_SECRET — אותו ערך כמו APP_REPORTS_INBOUND_SECRET באתר
+
+# בדיקת bundle ובריאות בלבד: אין קליטת מייל, תור או חיבור לייצור ב-Preview.
+[previews.vars]
+PREVIEW_MODE = "true"

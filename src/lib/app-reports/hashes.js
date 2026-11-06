@@ -36,13 +36,20 @@ const bufferHash = (buf) => crypto.createHash('sha256').update(buf).digest('hex'
 
 /**
  * טביעה של שליחה חוזרת: אותו תוכן עם אותו לוג וקבצים מצורפים, תחת reportId חדש.
- * בלי האבחון — הוא כולל את זמן האיסוף ומשתנה בכל שליחה.
+ * בגרסה 1 האבחון נשאר מחוץ לטביעה לצורך תאימות. בגרסה 2 כל שינוי
+ * באבחון הוא שינוי בצרופה, גם כשהטקסט שהמשתמש כתב נשאר זהה.
  */
 export function computeResendHash(contentHash, report) {
-  return sha256Hex(canonicalJson({
+  const fields = {
     contentHash,
     errorLog: report.errorLog || '',
     minidump: report.minidump ? bufferHash(report.minidump.buffer) : null,
     images: (report.images || []).map((image) => bufferHash(image.buffer)),
-  }));
+  };
+  if (report.schema === 2) {
+    // אותם בתים של JSON קומפקטי שנשמרים ב-GridFS. אבחון יכול לכלול שברים
+    // ולכן אין להעביר את האובייקט עצמו ל-OCJ-1 שמאפשר רק מספרים שלמים.
+    fields.diagnostics = report.diagnostics ? sha256Hex(JSON.stringify(report.diagnostics)) : null;
+  }
+  return sha256Hex(canonicalJson(fields));
 }

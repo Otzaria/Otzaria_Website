@@ -61,3 +61,7 @@ npm install "github:Otzaria/otzaria-plugin-validator#v1" --legacy-peer-deps --no
 
 - תפעול (env, מיגרציה, nginx, cron, גיבוי, התנגשויות, מגבלות): [`docs/ocr-local-worker/OPERATIONS.md`](docs/ocr-local-worker/OPERATIONS.md)
 - החוזה מול השירות וקודי השגיאה: [`docs/ocr-local-worker/CONTRACT.md`](docs/ocr-local-worker/CONTRACT.md)
+
+## דיווחי תוכנה
+
+מגבלות צרופות, גרסאות החוזה וסדר הפריסה של האתר, התוכנה והעדכון אופליין: [חוזה הצרופות](docs/app-reports/CONTRACT.md).

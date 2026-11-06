@@ -11,7 +11,7 @@ import AppReport from '../../models/AppReport.js';
 import { startMongo } from '../corrections/testing/mongo.js';
 import { FakeIssuesGitHub, FakeGitHubRepos } from './testing/fake-github.js';
 import { handleAppReportPost } from './handler.js';
-import { MAX_BODY_BYTES, MAX_MINIDUMP_BYTES } from './validation.js';
+import { MAX_BODY_BYTES, LEGACY_MAX_MINIDUMP_BYTES as MAX_MINIDUMP_BYTES } from './validation.js';
 import { githubFor, runAppReportsSync, contactReporter, listReports, getReportDetail, loadReportFile, loadReportImage, loadContactImage, loadPublicImage, unsubscribeByToken, ingestInboundReply } from './service.js';
 import { handleInboundEmailPost } from './inbound-handler.js';
 import { parseReplyAddress } from './inbound.js';
@@ -61,8 +61,11 @@ const crash = (over = {}) => manual({
 });
 
 async function post(body, { raw = false, deps = {} } = {}) {
+  const serialized = raw ? body : JSON.stringify(body);
   const req = new Request('http://localhost/api/app-reports', {
-    method: 'POST', headers: { 'content-type': 'application/json; charset=utf-8' }, body: raw ? body : JSON.stringify(body),
+    method: 'POST', headers: {
+      'content-type': 'application/json; charset=utf-8', 'content-length': String(Buffer.byteLength(serialized)),
+    }, body: serialized,
   });
   const res = await handleAppReportPost(req, { saveFile, deleteFile, config, fetchImpl: gh.fetch, connectDB: async () => {}, rateLimit: () => true, ...deps });
   return { status: res.status, body: await res.json() };

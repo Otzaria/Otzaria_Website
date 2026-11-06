@@ -4,6 +4,8 @@
  */
 import crypto from 'node:crypto';
 import AppReport from '../../models/AppReport.js';
+import FileStorage from '../../models/FileStorage.js';
+import Upload from '../../models/Upload.js';
 import { validateAppReport, IMAGE_TYPES } from './validation.js';
 import { computeContentHash, computeResendHash, computeSignatureHash } from './hashes.js';
 import { buildIssueTitle, buildIssueBody, buildMergeComment, issueLabels } from './issue-text.js';
@@ -72,7 +74,7 @@ function trackingSaver(saveFile) {
 async function storeAttachments(report, value, saveFile) {
   const fileIds = { diagnostics: null, errors: null, minidump: null, images: [] };
   if (value.diagnostics) {
-    const buf = Buffer.from(JSON.stringify(value.diagnostics, null, 2), 'utf8');
+    const buf = Buffer.from(JSON.stringify(value.diagnostics, null, value.schema === 1 ? 2 : undefined), 'utf8');
     const saved = await saveFile(buf, `app-report-${report.reportId}-diagnostics.json`, 'application/json', { appReportId: report.reportId });
     fileIds.diagnostics = { gridfsId: saved.gridfsId, size: buf.length };
   }
@@ -97,6 +99,76 @@ async function storeAttachments(report, value, saveFile) {
   return fileIds;
 }
 
+const FILE_REF_PATHS = ['fileIds.diagnostics.gridfsId', 'fileIds.errors.gridfsId', 'fileIds.minidump.gridfsId', 'fileIds.images.gridfsId', 'contactLog.images.gridfsId'];
+
+/** קבצים זמניים בלבד: תוצאת insert לא ודאית או שיתוף קיים מחייבים בדיקת הפניות לפני מחיקה. */
+async function discardStagedFiles(gridfsIds, deleteFile) {
+  for (const gridfsId of gridfsIds) {
+    try {
+      if (await AppReport.exists({ $or: FILE_REF_PATHS.map((path) => ({ [path]: gridfsId })) })) continue;
+      const files = await FileStorage.find({ gridfsId }).select('_id').lean();
+      if (files.length && await Upload.exists({ fileStorageId: { $in: files.map((file) => file._id) }, isDeleted: { $ne: true } })) continue;
+      await deleteFile(String(gridfsId));
+    } catch (err) {
+      // גם כשל בבדיקת הבעלות הוא סיבה לשמור: ייתכן שה-insert הצליח ורק תשובתו אבדה.
+      console.error('App report: staged attachment retained after cleanup failure:', gridfsId, err?.message);
+    }
+  }
+}
+
+function duplicateReply(before, doc) {
+  // reportId identifies one contract version as well as one payload. In particular,
+  // a legacy retry must not bypass schema 2's attachment identity guarantees.
+  const beforeSchema = before.schema ?? 1;
+  if (beforeSchema !== doc.schema || before.contentHash !== doc.contentHash
+    || (doc.schema === 2 && before.resendHash !== doc.resendHash)) {
+    return { status: 409, body: { error: 'reportId conflict' } };
+  }
+  return { status: 200, body: replyFor(before, { duplicate: true }) };
+}
+
+/** רק גרסה 2: כל רשומה כזאת מוכנסת יחד עם כל הפניות הקבצים, אחרי שמירת הבתים. */
+async function findCompleteReceipt(doc, deps) {
+  const before = await AppReport.findOne({ reportId: doc.reportId }).lean();
+  if (before) return duplicateReply(before, doc);
+  const resent = await AppReport.findOne({
+    ...productFilter(doc.product), schema: 2, resendHash: doc.resendHash,
+    createdAt: { $gte: new Date((deps.now || new Date()).getTime() - RESEND_WINDOW_MS) },
+  }).sort({ createdAt: 1 }).lean();
+  return resent ? { status: 200, body: replyFor(resent, { reportId: doc.reportId, duplicate: true }) } : null;
+}
+
+async function ingestCompleteReport(value, doc, deps) {
+  const tracker = trackingSaver(deps.saveFile);
+  try {
+    const fileIds = await storeAttachments(doc, value, tracker.save);
+    // בקשה מקבילה יכולה לסיים בזמן ההעלאה. הבדיקה החוזרת מצמצמת כפילויות
+    // בין מזהים שונים; האינדקס הייחודי על reportId מכריע מרוץ של אותה זהות.
+    const receipt = await findCompleteReceipt(doc, deps);
+    if (receipt) {
+      await discardStagedFiles(tracker.saved, deps.deleteFile);
+      return receipt;
+    }
+    const before = await AppReport.findOneAndUpdate(
+      { reportId: doc.reportId },
+      { $setOnInsert: { ...doc, fileIds } },
+      { upsert: true, returnDocument: 'before' },
+    ).lean();
+    if (before) {
+      await discardStagedFiles(tracker.saved, deps.deleteFile);
+      return duplicateReply(before, doc);
+    }
+  } catch (err) {
+    console.error('App report: complete report storage failed:', err?.message);
+    await discardStagedFiles(tracker.saved, deps.deleteFile);
+    return { status: 500, body: { error: 'Failed to save complete report' } };
+  }
+  // רשומת cron נוצרת רק אחרי שמירת כל הצרופות, באותה כתיבה של fileIds.
+  const published = await publishReport(doc.reportId, deps);
+  if (!published) return { status: 500, body: { error: 'Report disappeared before publishing' } };
+  return { status: 200, body: replyFor(published) };
+}
+
 /**
  * קליטת דיווח מאומת. מחזיר {status, body}.
  * @param {unknown} raw
@@ -111,12 +183,17 @@ export async function ingestAppReport(raw, deps) {
   const resendHash = computeResendHash(contentHash, value);
 
   const doc = {
-    reportId: value.reportId, schema: 1, product: value.product, type: value.type, trigger: value.trigger, title: value.title,
+    reportId: value.reportId, schema: value.schema, product: value.product, type: value.type, trigger: value.trigger, title: value.title,
     description: value.description, stepsToReproduce: value.stepsToReproduce, reporterEmail: value.reporterEmail || null,
     appVersion: value.appVersion, platform: value.platform, osVersion: value.osVersion, arch: value.arch,
     signature: value.signature, sentryEventId: value.sentryEventId, clientCreatedAt: value.clientCreatedAt,
     contentHash, signatureHash, resendHash, issuePending: true,
   };
+
+  if (value.schema === 2) {
+    const receipt = await findCompleteReceipt(doc, deps);
+    return receipt || ingestCompleteReport(value, doc, deps);
+  }
 
   // אותו דיווח שנשלח שוב בלחיצה נוספת מקבל reportId חדש; מפנים לדיווח הקודם במקום תגובה נוספת
   const resent = !(await AppReport.exists({ reportId: value.reportId })) && await AppReport.findOne({
@@ -132,8 +209,7 @@ export async function ingestAppReport(raw, deps) {
   ).lean();
 
   if (before) {
-    if (before.contentHash !== contentHash) return { status: 409, body: { error: 'reportId conflict' } };
-    return { status: 200, body: replyFor(before, { duplicate: true }) };
+    return duplicateReply(before, doc);
   }
 
   const tracker = trackingSaver(deps.saveFile);
