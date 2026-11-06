@@ -359,3 +359,94 @@ test('תמונת מייל חדשה אחרי ניקוי נשמרת, מבטלת ס
   assert.equal(final.contactLog[0].images.length, 0);
   assert.equal(final.payloadCleanup.removedFiles, 2);
 });
+
+async function inboundImage(doc) {
+  const token = await ensureReplyToken(doc.reportId);
+  return ingestInboundReply({
+    to: buildReplyAddress(token, 'reply.otzaria.org'), from: 'other@example.com',
+    subject: 'תמונה במקביל לניקוי', text: 'פרטים נוספים', messageId: `<${doc.reportId}-race@example.com>`,
+    attachments: 1, images: [{ fileName: 'new.gif', mimeType: 'image/gif', data: ANIMATED_GIF.toString('base64') }],
+  }, deps({ saveFile: saveFileToGridFS, deleteFile: deleteReportPayloadFile, config: {} }));
+}
+
+for (const legacy of [false, true]) {
+  test(`תמונה שנקלטת לפני כתיבת סיום הניקוי אינה מסומנת כנקייה; legacy=${legacy}`, async (t) => {
+    if (db.skip) return t.skip(db.skip);
+    const doc = await report();
+    if (legacy) await AppReport.collection.updateOne({ _id: doc._id }, { $unset: { issueStateRevision: '', payloadCleanup: '' } });
+    const originalExec = mongoose.Query.prototype.exec;
+    let delivered = false;
+    const mock = t.mock.method(mongoose.Query.prototype, 'exec', async function (...args) {
+      if (!delivered && this.model === AppReport && this.op === 'updateOne' && this.getUpdate()?.$set?.['payloadCleanup.purgedAt'] instanceof Date) {
+        delivered = true;
+        assert.equal((await inboundImage(doc)).status, 200);
+      }
+      return originalExec.apply(this, args);
+    });
+    const summary = await cleanupClosedReportPayloads(deps());
+    mock.mock.restore();
+    assert.equal(delivered, true);
+    assert.equal(summary.purged, 0);
+    const saved = await get(doc);
+    assert.equal(saved.payloadCleanup.purgedAt, null);
+    assert.equal(saved.payloadCleanup.leaseToken, null);
+    assert.equal(saved.contactLog[0].issueComment, 'held');
+    assert.deepEqual(await getFileFromGridFS(saved.contactLog[0].images[0].gridfsId), ANIMATED_GIF);
+    assert.equal((await cleanupClosedReportPayloads(deps())).purged, 1);
+    assert.equal((await get(doc)).contactLog[0].images.length, 0);
+  });
+}
+
+test('תמונה שנקלטת אחרי כתיבת ההשלמה מבטלת אותה גם אם אישור הכתיבה אבד', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const doc = await report();
+  const originalExec = mongoose.Query.prototype.exec;
+  let delivered = false;
+  const mock = t.mock.method(mongoose.Query.prototype, 'exec', async function (...args) {
+    const result = await originalExec.apply(this, args);
+    if (!delivered && this.model === AppReport && this.op === 'updateOne' && this.getUpdate()?.$set?.['payloadCleanup.purgedAt'] instanceof Date) {
+      delivered = true;
+      assert.equal((await inboundImage(doc)).status, 200);
+      throw new Error('completion write acknowledgement lost');
+    }
+    return result;
+  });
+  const summary = await cleanupClosedReportPayloads(deps());
+  mock.mock.restore();
+  assert.equal(delivered, true);
+  assert.equal(summary.errors, 1);
+  const saved = await get(doc);
+  assert.equal(saved.payloadCleanup.purgedAt, null);
+  assert.equal(saved.payloadCleanup.leaseToken, null);
+  assert.deepEqual(await getFileFromGridFS(saved.contactLog[0].images[0].gridfsId), ANIMATED_GIF);
+  assert.equal((await cleanupClosedReportPayloads(deps())).purged, 1);
+});
+
+test('מייל שהכתיבה שלו נשמרה אך אישורה אבד אינו נדרס בכתיבת סיום הניקוי', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const doc = await report();
+  const originalExec = mongoose.Query.prototype.exec;
+  let delivered = false;
+  let lostReplyAck = false;
+  const mock = t.mock.method(mongoose.Query.prototype, 'exec', async function (...args) {
+    if (!delivered && this.model === AppReport && this.op === 'updateOne' && this.getUpdate()?.$set?.['payloadCleanup.purgedAt'] instanceof Date) {
+      delivered = true;
+      await assert.rejects(inboundImage(doc), /reply write acknowledgement lost/);
+    }
+    const result = await originalExec.apply(this, args);
+    if (!lostReplyAck && this.model === AppReport && this.op === 'updateOne' && this.getUpdate()?.$push?.contactLog?.images?.length) {
+      lostReplyAck = true;
+      throw new Error('reply write acknowledgement lost');
+    }
+    return result;
+  });
+  const summary = await cleanupClosedReportPayloads(deps());
+  mock.mock.restore();
+  assert.equal(delivered, true);
+  assert.equal(lostReplyAck, true);
+  assert.equal(summary.purged, 0);
+  const saved = await get(doc);
+  assert.equal(saved.payloadCleanup.purgedAt, null);
+  assert.deepEqual(await getFileFromGridFS(saved.contactLog[0].images[0].gridfsId), ANIMATED_GIF);
+  assert.equal((await cleanupClosedReportPayloads(deps())).purged, 1);
+});

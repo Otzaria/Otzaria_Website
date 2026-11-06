@@ -16,6 +16,12 @@ export const CLEANUP_RETRY_MS = 60 * 60 * 1000;
 const LEASE_MS = 5 * 60 * 1000;
 const REF_PATHS = ['fileIds.diagnostics.gridfsId', 'fileIds.errors.gridfsId', 'fileIds.minidump.gridfsId', 'fileIds.images.gridfsId', 'contactLog.images.gridfsId'];
 const readyReplies = { $not: { $elemMatch: { issueComment: { $in: ['pending', 'posting'] } } } };
+// $elemMatch checks every image, including a nonempty entry beside a null/legacy entry.
+const payloadPresent = [
+  ...['diagnostics', 'errors', 'minidump'].map((kind) => ({ [`fileIds.${kind}.gridfsId`]: { $ne: null } })),
+  { 'fileIds.images': { $elemMatch: { gridfsId: { $ne: null } } } },
+  { contactLog: { $elemMatch: { images: { $elemMatch: { gridfsId: { $ne: null } } } } } },
+];
 
 function payloadRefs(doc) {
   const refs = new Map();
@@ -176,15 +182,18 @@ export async function cleanupClosedReportPayloads(deps = {}) {
         summary.missing += outcome.missing ? 1 : 0;
       }
       if (!cancelled) {
-        const current = await AppReport.findOne(guard).select('fileIds contactLog.images').lean();
-        const complete = current && payloadRefs(current).length === 0;
-        const finished = await AppReport.updateOne(guard, { $set: {
+        // The emptiness check and completion marker must be one Mongo write:
+        // an inbound image can arrive after the last detach, without changing issue state.
+        const finished = await AppReport.updateOne({ ...guard, $nor: payloadPresent }, { $set: {
           'payloadCleanup.leaseToken': null, 'payloadCleanup.leaseUntil': null,
-          'payloadCleanup.nextAttemptAt': complete ? null : clock(),
-          'payloadCleanup.purgedAt': complete ? clock() : null,
+          'payloadCleanup.nextAttemptAt': null, 'payloadCleanup.purgedAt': clock(),
           'payloadCleanup.closedAt': closedAt,
         } });
-        if (complete && finished.modifiedCount) summary.purged += 1;
+        if (finished.modifiedCount) summary.purged += 1;
+        else await AppReport.updateOne(guard, { $set: {
+          'payloadCleanup.leaseToken': null, 'payloadCleanup.leaseUntil': null,
+          'payloadCleanup.nextAttemptAt': clock(), 'payloadCleanup.purgedAt': null,
+        } });
       }
     } catch (err) {
       summary.errors += 1;
