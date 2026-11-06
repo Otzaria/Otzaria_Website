@@ -68,6 +68,18 @@
 
 ## בדיקה ומעקב
 
+### Cloudflare Preview
+
+ב־6.11.2026 נבדק יומן הבנייה שנכשל ב־#247: הפקודה הייתה `npx wrangler preview`, והכשל היה `Your Wrangler configuration is missing a previews block`. בלוק ה־Preview המפורש שלהלן מתקן את שגיאת התצורה הזאת. אזהרת Cron שבאותו יומן מתייחסת למגבלת הפלטפורמה המתועדת, ואינה סיבת הכשל.
+
+`npx wrangler preview` משתמש בבלוק `previews` המפורש שב־`wrangler.toml`. ה־Preview כאן הוא **בדיקת bundle ובריאות בלבד**, ולא סביבת קליטת מייל: `GET /health` מחזיר `{"mode":"preview","emailDelivery":"disabled"}`, כל נתיב אחר מחזיר 404, ואירוע מייל נדחה במפורש לפני קריאת התוכן או ביצוע I/O. גם הפעלה ידנית של `scheduled` אינה פונה ל־KV ב־Preview. בייצור `/health` מחזיר 404 ומסלולי המייל והניסיון החוזר נשארים פעילים.
+
+לא מוגדרים ב־Preview כתובת אתר, תיבת גיבוי, סוד או KV. אין להעתיק לשם את משאבי הייצור או לכוון אליו ניתוב מייל אמיתי. אזהרות Wrangler על היעדר bindings של הייצור צפויות בהגדרה זו. [Cloudflare דורשת בלוק `previews` ואינה מורישה אליו משתני ייצור](https://developers.cloudflare.com/workers/previews/configuration/); [Cron Triggers וניתובי ייצור אינם מופעלים ב־Preview](https://developers.cloudflare.com/workers/previews/resources/#cron-triggers). בדיקת קליטה וניסיון חוזר מקומית נעשית ב־`npm test`. בדיקת מייל מקצה לקצה בסביבה מרוחקת דורשת סביבת בדיקה נפרדת, עם אתר, KV, סוד ותיבת יעד ייעודיים; ה־Preview הזה אינו מבצע אותה.
+
+ל־Wrangler 4.148.0 אין `preview --dry-run`. אפשר לבדוק את bundle הייצור ללא פריסה באמצעות `npx wrangler deploy --dry-run`; `npm test` מאמת גם את חסימת ה־I/O והדחייה המפורשת במצב Preview. פרסום Preview מרוחק נעשה דרך Workers Builds או `npx wrangler preview`, לאחר בדיקות אלה.
+
+התיקון אומת מקומית באמצעות smoke, בדיקת התצורה בקורא של Wrangler 4.148.0, ובניית bundle גם בהגדרות ייצור וגם בהגדרות Preview מבודדות. ה־bundle של ה־Preview הורץ ב־workerd ללא KV או משתני קליטה, והחזיר את תשובת הבריאות ואת 404 לנתיב אחר. בדיקות אלה אינן אישור לפרסום מרוחק או לבדיקת מייל אמיתי.
+
 - `npm run tail` מציג את הלוג החי של ה-Worker.
 - בדיקה מקצה לקצה: שולחים מייל מדף דיווח לכתובת שלכם, עונים עליו, ומרעננים את הדף.
   התשובה מופיעה בצבע אחר, עם קישור לתגובה ב-issue.
