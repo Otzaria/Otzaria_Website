@@ -179,6 +179,20 @@ test('"דלג": הפריט חוזר למאגר, ואותו מתנדב לא יק�
   assert.equal((await takeRound(B, 'ocr')).items.length, 1);
 });
 
+test('נתב, "דלג": השורה חוזרת למאגר בלי תוצאה, ואותו מתנדב לא יקבל אותה שוב', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  await seed('router', 1);
+  const r = await takeRound(A, 'router');
+  const s = await markItem(A, r.items[0]._id, { skip: true });
+  assert.equal(s.skipped, true);
+  const d = await TrainingProofItem.findById(r.items[0]._id).lean();
+  assert.equal(d.status, 'available');
+  assert.equal(d.heldBy, null);
+  assert.equal(d.result, null);
+  assert.equal((await takeRound(A, 'router')).items.length, 0);
+  assert.equal((await takeRound(B, 'router')).items.length, 1);
+});
+
 test('נתב: סימון מעורבת עם מילים', async (t) => {
   if (db.skip) return t.skip(db.skip);
   await seed('router', 2);

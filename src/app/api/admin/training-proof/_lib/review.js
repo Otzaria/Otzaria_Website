@@ -176,7 +176,7 @@ export async function fixAndApprove(id, mark, by, now = new Date(), check = null
   if (!checker) return { ok: false, status: 400, error: 'תיקון בחלק הזה נעשה בעורך המסגרות' };
   const { result, error } = checker(item.payload, mark);
   if (error) return { ok: false, status: 400, error };
-  if (item.section === 'ocr' && result.action === 'skip') return { ok: false, status: 400, error: '"דלג" אינו תיקון — אפשר לדחות את השורה' };
+  if (result.action === 'skip') return { ok: false, status: 400, error: '"דלג" אינו תיקון — אפשר לדחות את השורה' };
   const same = sameResult(item.section, item.result, result);
   const set = same
     ? approveSet(oid(by), now)

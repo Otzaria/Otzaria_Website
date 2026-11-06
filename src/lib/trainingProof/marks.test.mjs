@@ -27,6 +27,9 @@ test('router: כתב לשורה, פסול, מעורבת עם מילים; words_s
   assert.deepEqual(checkRouterMark(R, { bad: true, label: 'square' }), { result: { label: '', bad: true } });
   assert.match(checkRouterMark(R, { label: 'mixed' }).error, /לכל מילה/);
   assert.match(checkRouterMark(R, { label: 'x' }).error, /לא מוכר/);
+  // "דלג" — כמו בזיהוי; גובר על כל שדה אחר, ורק true מפורש
+  assert.deepEqual(checkRouterMark(R, { skip: true, label: 'square' }), { result: { action: 'skip' } });
+  assert.match(checkRouterMark(R, { skip: 'yes' }).error, /לא מוכר/);
 
   const same = R.words.map((w) => ({ k: w.k, box: w.box, label: w.k === 2 ? 'rashi' : 'square' }));
   const r1 = checkRouterMark(R, { label: 'mixed', words: same });

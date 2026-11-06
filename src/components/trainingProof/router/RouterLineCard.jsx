@@ -12,14 +12,15 @@ import { isMixed, missingWords } from './routerDraft'
 import { useInkWords } from './useInkWords'
 
 // כפתור-כתב בצבע הכתב: מלא כשנבחר
-function ScriptButton({ script, on, keyHint, onClick }) {
+function ScriptButton({ script, on, keyHint, onClick, disabled = false }) {
   return (
     <button
       type="button"
       style={scriptStyle(script)}
       onClick={onClick}
+      disabled={disabled}
       aria-pressed={on}
-      className={`inline-flex items-center gap-1.5 rounded-full border-[1.5px] border-(--tp-c) px-3 py-1 text-label-md font-bold ${
+      className={`inline-flex items-center gap-1.5 rounded-full border-[1.5px] border-(--tp-c) px-3 py-1 text-label-md font-bold disabled:opacity-50 ${
         on ? 'bg-(--tp-c) text-white' : 'text-(--tp-c)'
       }`}
     >
@@ -66,6 +67,7 @@ export default function RouterLineCard({
   onSelect,
   onLine,
   onBad,
+  onSkip,
   onAccept,
   onWord,
   onPickWord,
@@ -84,7 +86,9 @@ export default function RouterLineCard({
   const wordsFocus = current && mixed && focus === 'words'
   const lineScript = draft.bad ? null : draft.label || null
   const missing = mixed ? missingWords(draft) : 0
-  const edge = saved ? (saved.bad ? 'border-s-error' : 'border-s-success') : 'border-s-outline-variant'
+  // "דלג" — כמו בזיהוי: השורה חזרה למאגר, הכרטיס נשאר מעומעם ובלי כפתורים פעילים
+  const skipped = !!item.skipped
+  const edge = skipped ? 'border-s-outline-variant opacity-70' : saved ? (saved.bad ? 'border-s-error' : 'border-s-success') : 'border-s-outline-variant'
 
   return (
     <article
@@ -102,7 +106,9 @@ export default function RouterLineCard({
         <span>
           שורה {index + 1} מתוך {total}
         </span>
-        {saving ? (
+        {skipped ? (
+          <span className="rounded-md bg-surface-container-highest px-2">דילגתם — השורה חזרה למאגר</span>
+        ) : saving ? (
           <span>שומר…</span>
         ) : saved?.bad ? (
           <span className="rounded-md bg-error-container px-2 text-on-error-container">נפסלה — לא תיכנס לאימון</span>
@@ -129,7 +135,7 @@ export default function RouterLineCard({
             )}
           </>
         )}
-        {mixed && missing && !draft.bad ? <span className="text-warning">עוד לא נשמר — חסר כתב ל-{missing} מילים</span> : null}
+        {mixed && missing && !draft.bad && !skipped ? <span className="text-warning">עוד לא נשמר — חסר כתב ל-{missing} מילים</span> : null}
         {item.ctx ? (
           <button type="button" className="text-primary underline-offset-2 hover:underline" onClick={onShowCtx}>
             הצג בעמוד המלא
@@ -150,13 +156,23 @@ export default function RouterLineCard({
       <div className="mt-1 flex flex-wrap items-center gap-1.5">
         <b className="text-label-md">השורה:</b>
         {LINE_SCRIPTS.map((s, d) => (
-          <ScriptButton key={s} script={s} on={lineScript === s} keyHint={current && !wordsFocus ? String(d + 1) : null} onClick={() => onLine(s)} />
+          <ScriptButton
+            key={s}
+            script={s}
+            on={lineScript === s}
+            keyHint={current && !wordsFocus ? String(d + 1) : null}
+            onClick={() => onLine(s)}
+            disabled={skipped}
+          />
         ))}
-        <Button size="sm" variant="tonal" onClick={onAccept} disabled={!item.pred && !mixed}>
+        <Button size="sm" variant="tonal" onClick={onAccept} disabled={skipped || (!item.pred && !mixed)}>
           {mixed ? 'כל המילים נכונות' : 'ההצעה נכונה'} <Kbd>Enter</Kbd>
         </Button>
-        <Button size="sm" variant={draft.bad ? 'danger' : 'text'} onClick={onBad}>
+        <Button size="sm" variant={draft.bad ? 'danger' : 'text'} onClick={onBad} disabled={skipped}>
           פסול <Kbd>0</Kbd>
+        </Button>
+        <Button size="sm" variant="text" icon="redo" onClick={onSkip} disabled={skipped || saving}>
+          דלג <Kbd>S</Kbd>
         </Button>
         {mixed ? (
           <span className="inline-flex overflow-hidden rounded-full border border-outline text-label-md" role="group" aria-label="על מה המקשים חלים">
@@ -182,6 +198,7 @@ export default function RouterLineCard({
               on={current && draft.words[wsel]?.label === s}
               keyHint={wordsFocus ? String(d + 1) : null}
               onClick={() => onWord(s)}
+              disabled={skipped}
             />
           ))}
           <span className="text-label-sm text-on-surface-variant">לחיצה על מסגרת בוחרת מילה</span>
