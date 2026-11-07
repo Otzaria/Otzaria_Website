@@ -120,17 +120,17 @@ export function restCountdownText(msRemaining) {
  * @param {{ suspectCount?: number, textLineCount?: number, scanLineCount?: number | null,
  *   saveStatus?: string, lastSavedAt?: Date | number | string | null, now?: number }} input
  */
-export function buildFinishChecks({ suspectCount = 0, textLineCount = 0, scanLineCount = null, saveStatus = 'saved', lastSavedAt = null, now = Date.now() } = {}) {
+export function buildFinishChecks({ suspectCount = 0, reviewStatus = 'ready', textLineCount = 0, scanLineCount = null, saveStatus = 'saved', lastSavedAt = null, now = Date.now() } = {}) {
   const checks = []
 
   checks.push({
     id: 'suspects',
-    ok: suspectCount === 0,
+    ok: suspectCount === 0 && reviewStatus === 'ready',
     icon: suspectCount === 0 ? 'check' : 'spellcheck',
     title: suspectCount === 0
-      ? 'כל המילים החשודות נבדקו'
-      : suspectCount === 1 ? 'מילה חשודה אחת לא נבדקה' : `${formatCount(suspectCount)} מילים חשודות לא נבדקו`,
-    detail: 'מילים שזיהוי הטקסט לא היה בטוח בהן.',
+      ? reviewStatus === 'loading' ? 'נתוני החשד מהזיהוי נטענים…' : reviewStatus === 'unavailable' ? 'אין נתוני חשד מהזיהוי לעמוד' : 'לא נמצאו מילים חשודות'
+      : suspectCount === 1 ? 'מילה חשודה אחת לבדיקה' : `${formatCount(suspectCount)} מילים חשודות לבדיקה`,
+    detail: reviewStatus === 'ready' ? 'סימוני הזיהוי, הצעות מודל השפה ובדיקות צורת מילים. יש לבדוק מול הצילום.' : 'בדיקת צורת מילים בלבד; נתוני החשד מהזיהוי אינם זמינים כרגע.',
     action: suspectCount > 0 ? 'suspects' : undefined
   })
 

@@ -2,7 +2,8 @@
 
 import { memo, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { lineWords, splitLines } from '@/lib/editor/caretWord'
-import { suspectWords } from '@/lib/editor/suspectWords'
+import { wordReviewForText } from '@/lib/editor/ocrWordReview'
+import { lineStarts } from '@/lib/editor/caretWord'
 
 /** רוחב שולי מספרי השורות (בצד ההתחלה — ימין ב-RTL) */
 export const MIRROR_GUTTER_PX = 44
@@ -169,7 +170,7 @@ const Line = memo(MirrorLine, (a, b) =>
  *
  * @param {{ text: string, textarea: HTMLTextAreaElement|null, column?: string,
  *   currentLine?: number, currentWord?: number, estimated?: boolean, lineNumbers?: boolean,
- *   showSuspects?: boolean, wrap?: 'soft'|'off', strength?: 'normal'|'strong',
+ *   showSuspects?: boolean, review?: object|null, wrap?: 'soft'|'off', strength?: 'normal'|'strong',
  *   className?: string, style?: object }} props
  *
  * בגלישה (wrap='soft') שורה לוגית אחת יכולה לתפוס כמה שורות מסך (טקסט שמגיע כגוש): אז כל
@@ -184,6 +185,7 @@ export default function TextMirror({
   estimated = false,
   lineNumbers = false,
   showSuspects = false,
+  review = null,
   wrap = 'soft',
   strength = 'strong',
   className,
@@ -194,8 +196,21 @@ export default function TextMirror({
   const lines = useMemo(() => splitLines(text ?? ''), [text])
   // המילים החשודות בכל שורה כמחרוזת אינדקסים ("1,4") — השוואה לפי ערך ב-memo של השורה
   const suspectKeys = useMemo(
-    () => lines.map((l) => (showSuspects ? suspectWords(l).map((x) => x.index).join(',') : '')),
-    [lines, showSuspects]
+    () => {
+      const suspects = showSuspects ? wordReviewForText(text ?? '', review) : []
+      const starts = lineStarts(text ?? '')
+      let cursor = 0
+      return lines.map((l, i) => {
+        const marked = []
+        for (const w of lineWords(l)) {
+          const start = starts[i] + w.start, end = starts[i] + w.end
+          while (cursor < suspects.length && suspects[cursor].end <= start) cursor++
+          if (cursor < suspects.length && suspects[cursor].start < end) marked.push(w.i)
+        }
+        return marked.join(',')
+      })
+    },
+    [lines, text, review, showSuspects]
   )
 
   useEffect(() => {

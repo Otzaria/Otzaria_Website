@@ -21,7 +21,7 @@ function Sep({ className }) {
 
 /**
  * שורת המצב הקבועה בתחתית העורך — מידע שקט שלא צריך לחפש:
- * רמת המעקב (TrackingStatus), שורה/מילה, ספירת מילים, מילים לבדיקה (לחיץ → המילה הבאה),
+ * רמת המעקב (TrackingStatus), שורה/מילה, ספירת מילים, מילים לבדיקה (לחיץ → רשימת המילים וההצעות),
  * ספירה לאחור להפסקת עיניים, וקיצורי מקלדת (מוסתרים מתחת ל-xl).
  * שורה אחת תמיד (flex-nowrap, --editor-statusbar-height: 30px; במגע 44px): טקסט המעקב נחתך
  * (truncate) לפני שהשורה נשברת; הכפתורים בה בגובה השורה, ומטרת המגע (44px) דרך ::before.
@@ -73,11 +73,11 @@ export default function EditorStatusBar({
         <>
           <Sep />
           {onSuspectsClick ? (
-            <Tooltip content="מעבר למילה הבאה לבדיקה" compact className="shrink-0">
+            <Tooltip content="הצגת המילים לבדיקה" compact className="shrink-0">
               <button
                 type="button"
                 onClick={onSuspectsClick}
-                aria-label={`${suspectCountText(suspectCount)}. מעבר למילה הבאה`}
+                aria-label={`${suspectCountText(suspectCount)}. הצגת המילים לבדיקה`}
                 className={cx('inline-flex min-h-(--editor-statusbar-height) items-center gap-1 rounded-(--radius-pill) px-2 text-primary hover:bg-surface-selected', TOUCH_TARGET_OVERLAY, FOCUS_RING)}
               >
                 <AppIcon name="spellcheck" className="text-lg" />

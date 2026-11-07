@@ -14,7 +14,7 @@ import { clearBookLine, layoutBookLine } from './bookLayout'
 import { highlightName } from './richStyles'
 import { MIRROR_HIGHLIGHT } from './TextMirror'
 import { lineWords } from '@/lib/editor/caretWord'
-import { suspectWords } from '@/lib/editor/suspectWords'
+import { wordReviewForText } from '@/lib/editor/ocrWordReview'
 
 const SINGLE_GRAPHEME = /^.\p{M}*$/su
 
@@ -50,7 +50,7 @@ export function redoCaret(before, after) {
 
 /**
  * @typedef {{ line: number, word: number, estimated?: boolean, lineNumbers?: boolean,
- *   showSuspects?: boolean, strength?: 'strong'|'normal' }} RichTracking
+ *   showSuspects?: boolean, review?: object|null, strength?: 'strong'|'normal' }} RichTracking
  */
 
 /**
@@ -157,14 +157,9 @@ export function createRichController(host, layer, { column, getProps }) {
     if (!t) return
     if (t.showSuspects && hasHl) {
       const ranges = []
-      ix.lines.forEach((l) => {
-        const text = ix.raw.slice(l.rawStart, l.rawEnd)
-        const words = lineWords(text)
-        for (const s of suspectWords(text)) {
-          const w = words[s.index]
-          if (w) ranges.push(domRangeFromRaw(host, ix, l.rawStart + w.start, l.rawStart + w.end))
-        }
-      })
+      for (const s of wordReviewForText(ix.raw, t.review)) {
+        for (const part of s.segments) ranges.push(domRangeFromRaw(host, ix, part.start, part.end))
+      }
       if (ranges.length) CSS.highlights.set(names.sus, new Highlight(...ranges))
     }
     const lineEl = Number.isInteger(t.line) && t.line >= 0 ? lines[t.line] : null

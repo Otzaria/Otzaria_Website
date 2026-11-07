@@ -50,6 +50,7 @@ export function buildEditorCommands({ shortcuts = {}, state = {}, run = {} } = {
     // ---------- עריכה ----------
     cmd('edit', 'findReplace', 'חיפוש והחלפה', { icon: 'find_replace', run: fn('findReplace'), actionId: 'findReplace', keywords: ['חפש', 'החלף'] }),
     cmd('edit', 'runSavedSearches', 'הרצת החיפושים הקבועים', { icon: 'playlist_play', run: fn('runSavedSearches'), actionId: 'runSavedSearches' }),
+    cmd('edit', 'ocrReview', 'מילים חשודות מהזיהוי', { icon: 'spellcheck', run: fn('ocrReview'), keywords: ['חלופות', 'הצעות', 'חשודות'] }),
     cmd('edit', 'spellcheck', 'בדיקת איות', { icon: 'spellcheck', run: fn('spellcheck'), keywords: ['שגיאות'] }),
     cmd('edit', 'undo', 'ביטול', { icon: 'undo', run: fn('undo'), keywords: ['undo'], disabled: state.canUndo === false }),
     cmd('edit', 'redo', 'ביצוע מחדש', { icon: 'redo', run: fn('redo'), keywords: ['redo'], disabled: state.canRedo === false }),

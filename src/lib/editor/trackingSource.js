@@ -8,6 +8,7 @@
 //     lines: [{ id, stream, bbox, text?, words?: [{ text?, bbox, conf? }] }] }
 // מילים בכל שורה ממוינות מימין לשמאל (x יורד) — סדר הקריאה בעברית.
 
+import { reviewWordsOfLine } from './ocrWordReview.js';
 import { boxToSourceEnvelope, wordBox } from '../ocr/ocrLayoutGeometry.js';
 
 /** סדר העדיפות של המקורות */
@@ -16,7 +17,7 @@ export const SOURCE_PRIORITY = Object.freeze(['layout', 'proof', 'local', 'profi
 /**
  * @typedef {[number, number, number, number]} Box
  * @typedef {{ text?: string, bbox: Box, conf?: number }} TrackWord
- * @typedef {{ id: string|number, stream: string, bbox: Box, text?: string, words?: TrackWord[] }} TrackLine
+ * @typedef {{ id: string|number, stream: string, bbox: Box, text?: string, words?: TrackWord[], inText?: boolean, reviewWords?: object[] }} TrackLine
  * @typedef {{ id: string, stream: string, bbox: Box }} TrackRegion
  * @typedef {'word'|'line'|'ruler'|'off'} TrackLevel
  * @typedef {'layout'|'proof'|'local'|'profile'|'manual'} SourceKind
@@ -87,7 +88,8 @@ export function fromLayout(layout) {
     if (l.fid && !streamOfFrame.has(l.fid)) streamOfFrame.set(l.fid, stream);
     const text = typeof l.corrected === 'string' ? l.corrected : typeof l.text === 'string' ? l.text : '';
     /** @type {TrackLine} */
-    const out = { id: Number.isInteger(l.k) ? l.k : idx, stream, bbox: env(l.bbox), text };
+    const out = { id: Number.isInteger(l.k) ? l.k : idx, stream, bbox: env(l.bbox), text,
+      inText: l.inText, reviewWords: reviewWordsOfLine(l) };
     const ws = Array.isArray(l.words) ? l.words.filter((w) => Array.isArray(w) && Number.isFinite(w[0]) && Number.isFinite(w[1]) && w[1] >= w[0]) : [];
     if (ws.length) {
       const texts = wordTexts(l.wordTexts, text, ws.length);
@@ -124,7 +126,8 @@ export function fromProof(doc, { imageSize = null } = {}) {
     .map((l) => {
       const text = typeof l.text === 'string' ? l.text : '';
       /** @type {TrackLine} */
-      const out = { id: l.id, stream: typeof l.stream === 'string' && l.stream ? l.stream : 'main', bbox: sc(l.bbox), text };
+      const out = { id: l.id, stream: typeof l.stream === 'string' && l.stream ? l.stream : 'main', bbox: sc(l.bbox), text,
+        inText: l.inText, reviewWords: reviewWordsOfLine(l, { proof: true }) };
       const raw = Array.isArray(l.words) ? l.words : [];
       const tokens = splitWords(text);
       const ws = [];
@@ -188,7 +191,8 @@ export function fromTesseract(result, { size = null, scale = 1, stream = 'main' 
         })
         .filter(Boolean);
       /** @type {TrackLine} */
-      const out = { id: `t${i}`, stream, bbox: sc(lb), text: String(l.text ?? '').trim() };
+      const out = { id: `t${i}`, stream, bbox: sc(lb), text: String(l.text ?? '').trim(),
+        reviewWords: reviewWordsOfLine({ text: String(l.text ?? '').trim(), words: [...words].sort(byXDesc) }, { proof: true }) };
       if (words.length) out.words = /** @type {TrackWord[]} */ (words);
       return out;
     })

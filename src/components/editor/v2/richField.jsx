@@ -8,7 +8,7 @@ import RichTextArea from './RichTextArea'
  *
  * @param {import('react').ReactElement<any>} textarea
  * @param {{ mirror?: { column?: string, line?: number, word?: number, estimated?: boolean,
- *   lineNumbers?: boolean, showSuspects?: boolean, strength?: 'strong'|'normal' } | null,
+ *   lineNumbers?: boolean, showSuspects?: boolean, reviews?: Record<string, object>, strength?: 'strong'|'normal' } | null,
  *   column: string, wrapperClass?: string, paraWindow?: boolean, paraFunnel?: boolean }} opts
  *   paraWindow / paraFunnel — עימוד ספר (חלון בתחילת פסקה, סיום משולש), RichTextArea
  */
@@ -21,6 +21,7 @@ export function richFieldFor(textarea, { mirror, column, wrapperClass, paraWindo
         estimated: !!mirror.estimated,
         lineNumbers: !!mirror.lineNumbers,
         showSuspects: !!mirror.showSuspects,
+        review: mirror.reviews?.[column],
         strength: mirror.strength
       }
     : null

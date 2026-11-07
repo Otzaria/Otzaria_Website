@@ -46,6 +46,7 @@ import TextToolbar from '@/components/editor/v2/TextToolbar'
 import MobileActionBar from '@/components/editor/v2/MobileActionBar'
 import { pageClaimState, canFinishPage } from '@/components/editor/v2/pageClaim'
 import DisplaySettingsSheet from '@/components/editor/v2/DisplaySettingsSheet'
+import OcrWordReviewPanel from '@/components/editor/v2/OcrWordReviewPanel'
 import FinishPageDialog from '@/components/editor/v2/FinishPageDialog'
 import RestReminder from '@/components/editor/v2/RestReminder'
 import { buildEditorCommands } from '@/components/editor/v2/editorCommands'
@@ -166,6 +167,7 @@ export default function EditPage() {
 
   const [showInfoDialog, setShowInfoDialog] = useState(false)
   const [showFinishDialog, setShowFinishDialog] = useState(false)
+  const [showOcrReview, setShowOcrReview] = useState(false)
 
   // Shortcuts State
   const [showShortcutsDialog, setShowShortcutsDialog] = useState(false);
@@ -1235,12 +1237,14 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
     autoCheck: !hasOfficialWordLayout,
     checkDelayMs: 150,
   })
+  const reviewTextFields = useMemo(() => twoColumns ? { right: rightColumn, left: leftColumn } : { content }, [twoColumns, rightColumn, leftColumn, content])
   const scanTracking = usePageTracking({
     bookPath, pageNumber, imageUrl: pageData?.thumbnail,
     twoColumns, activeTextarea, textContainerRef: textEditorContainerRef, imageZoom,
     text: twoColumns ? (activeTextarea === 'left' ? leftColumn : rightColumn) : content,
     enabled: !loading && !error,
     extraSource: localWords.source,
+    textFields: reviewTextFields,
     // העדפות התצוגה: "מול הסריקה" → שורה מול שורה (בלי גלישה) — רק כשהטקסט באמת מחולק
     // לשורות כמו הצילום; טקסט שמגיע כגוש גולש תמיד (effectiveWrap ב-usePageTracking)
     wrap: prefs.lineSpacing === 'facing' ? 'off' : 'soft',
@@ -1438,6 +1442,7 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
       findReplace: () => setShowFindReplace(true),
       runSavedSearches: runAllSavedReplacements,
       spellcheck: openSpellcheck,
+      ocrReview: () => setShowOcrReview(true),
       undo: () => runTextCommand('undo'),
       redo: () => runTextCommand('redo'),
       insertTag,
@@ -1591,7 +1596,8 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
           trackingClickLabel="זהה מילים בעמוד"
           position={caretPos ?? undefined}
           wordCount={wordCount}
-          suspectCount={0}
+          suspectCount={scanTracking.review?.count ?? 0}
+          onSuspectsClick={() => setShowOcrReview(true)}
           restRemainingMs={rest.remainingMs}
           shortcuts={statusShortcuts}
         />
@@ -1704,11 +1710,22 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
         }}
       />
 
+      {showOcrReview && (
+        <OcrWordReviewPanel key={`${bookPath}:${pageNumber}`} review={scanTracking.review} textContainerRef={textEditorContainerRef}
+          onApplyText={(column, value) => {
+            if (column === 'right' || column === 'left') handleColumnChange(column, value)
+            else { setContent(value); handleAutoSaveWrapper(value) }
+          }}
+          onClose={() => setShowOcrReview(false)} />
+      )}
+
       {showFinishDialog && (
         <FinishPageDialog
           bookTitle={bookData?.name || bookPath}
           pageNumber={pageNumber}
-          suspectCount={0}
+          suspectCount={scanTracking.review?.count ?? 0}
+          reviewStatus={scanTracking.review?.status ?? 'unavailable'}
+          onGoToSuspects={() => { setShowFinishDialog(false); setShowOcrReview(true) }}
           textLineCount={textLineCount}
           scanLineCount={null}
           saveStatus={uiSaveStatus}

@@ -41,7 +41,7 @@ describe('EditorStatusBar', () => {
     const button = screen.getByRole('button', { name: /2 מילים לבדיקה/ })
     // אין קיצור ממומש למעבר למילה הבאה — בלי aria-keyshortcuts; יש רמז
     expect(button).not.toHaveAttribute('aria-keyshortcuts')
-    expect(screen.getAllByRole('tooltip', { hidden: true }).some((t) => t.textContent === 'מעבר למילה הבאה לבדיקה')).toBe(true)
+    expect(screen.getAllByRole('tooltip', { hidden: true }).some((t) => t.textContent === 'הצגת המילים לבדיקה')).toBe(true)
     fireEvent.click(button)
     expect(onSuspectsClick).toHaveBeenCalled()
   })
