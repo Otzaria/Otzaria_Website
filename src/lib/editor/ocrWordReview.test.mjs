@@ -70,6 +70,47 @@ test('no transfer from an ambiguous deleted repeated word or a different text', 
   assert.equal(buildPageWordReview({ content: 'אחר לגמרי מילים אחרות' }, source()).count, 0);
 });
 
+test('moving a repeated word drops ambiguous model suggestions, including across columns; undo restores them', () => {
+  const l = { ...line, text: 'פתיחה אמר רב אמר רב סיום', words: null,
+    lm: [{ i: 3, word: 'אמר', alts: [{ text: 'אומר', gain: 5 }] }] };
+  const S = source([l]);
+  const before = buildPageWordReview({ content: l.text }, S);
+  assert.equal(before.count, 1);
+  assert.equal(before.suspects[0].start, l.text.lastIndexOf('אמר'));
+  assert.equal(before.suspects[0].suggestions[0].text, 'אומר');
+
+  // Cut the last רב and paste it before the first אמר. Both אמר words remain,
+  // but equal repeat counts do not identify which LCS pairing is correct.
+  for (const texts of [
+    { content: 'פתיחה רב אמר רב אמר סיום' },
+    { right: 'פתיחה רב אמר', left: 'רב אמר סיום' }
+  ]) assert.deepEqual(buildPageWordReview(texts, S).suspects, []);
+
+  const restored = buildPageWordReview({ right: 'פתיחה אמר רב', left: 'אמר רב סיום' }, S);
+  assert.equal(restored.count, 1);
+  assert.equal(restored.suspects[0].column, 'left');
+  assert.equal(restored.suspects[0].start, 0);
+  assert.equal(restored.suspects[0].suggestions[0].text, 'אומר');
+});
+
+test('common prefix and suffix are not greedy anchors when repeated-word LCS pairings are ambiguous', () => {
+  const text = 'א ב א ב';
+  const l = { ...line, text, words: null,
+    lm: text.split(' ').map((word, i) => ({ i, word, alts: [{ text: 'חלופה', gain: 1 }] })) };
+  assert.equal(buildPageWordReview({ content: text }, source([l])).count, 4);
+  // A common first א and last ב exist, but neither pair is in every optimal LCS.
+  assert.deepEqual(buildPageWordReview({ content: 'א א ב ב' }, source([l])).suspects, []);
+});
+
+test('a repeated word retains a flag when context makes its pair mandatory despite changed counts', () => {
+  const l = { ...line, text: 'אמר רב', words: null,
+    lm: [{ i: 0, word: 'אמר', alts: [{ text: 'אומר', gain: 1 }] }] };
+  const r = buildPageWordReview({ content: 'אמר רב רב אמר' }, source([l]));
+  assert.equal(r.count, 1);
+  assert.equal(r.suspects[0].start, 0);
+  assert.equal(r.suspects[0].suggestions[0].text, 'אומר');
+});
+
 test('no word is reused across columns; furniture and inText:false do not contribute', () => {
   const only = { ...line, text: 'פוסרת', words: null, lm: [{ i: 0, word: 'פוסרת', alts: [] }] };
   assert.equal(buildPageWordReview({ right: 'פוסרת', left: 'פוסרת' }, source([only])).count, 0); // ambiguous duplication
@@ -112,6 +153,34 @@ test('large repetitive pages stay bounded, without positional attribution', () =
   const text = Array.from({ length: 5000 }, (_, i) => i === 2500 ? 'פוסרת' : 'שלום').join(' ');
   const l = { ...line, text, words: null, lm: [{ i: 2500, word: 'פוסרת', alts: [] }] };
   assert.equal(buildPageWordReview({ content: text.replace('פוסרת', 'פוטרת') }, source([l])).count, 0);
+});
+
+test('large identical repetitive pages retain flags without an LCS matrix; ambiguous duplication drops them', () => {
+  const tokens = Array(1500).fill('אמר');
+  const text = tokens.join(' ');
+  const l = { ...line, text, words: null, lm: [{ i: 1200, word: 'אמר', alts: [{ text: 'אומר', gain: 1 }] }] };
+  const S = source([l]);
+  const unchanged = buildPageWordReview({ content: text }, S);
+  assert.equal(unchanged.count, 1);
+  assert.equal(unchanged.suspects[0].start, tokens.slice(0, 1200).join(' ').length + 1);
+  assert.deepEqual(buildPageWordReview({ content: text + ' אמר' }, S).suspects, []);
+});
+
+test('a long repetitive page preserves other unchanged flags after an unrelated correction', () => {
+  const tokens = Array.from({ length: 1500 }, (_, i) => i === 500 ? 'ישן' : i % 2 ? 'רב' : 'אמר');
+  const l = { ...line, text: tokens.join(' '), words: null, lm: [
+    { i: 500, word: 'ישן', alts: [{ text: 'מתוקן', gain: 1 }] },
+    { i: 1200, word: 'אמר', alts: [{ text: 'אומר', gain: 1 }] }
+  ] };
+  const S = source([l]);
+  assert.equal(buildPageWordReview({ content: l.text }, S).count, 2);
+  const corrected = [...tokens];
+  corrected[500] = 'מתוקן';
+  const r = buildPageWordReview({ content: corrected.join(' ') }, S);
+  assert.equal(r.count, 1);
+  assert.equal(r.suspects[0].text, 'אמר');
+  assert.equal(r.suspects[0].start, corrected.slice(0, 1200).join(' ').length + 1);
+  assert.equal(r.suspects[0].suggestions[0].text, 'אומר');
 });
 
 

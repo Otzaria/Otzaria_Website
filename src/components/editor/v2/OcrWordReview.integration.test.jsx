@@ -15,9 +15,9 @@ const LAYOUT = { layoutVersion: 1, image: { width: 500, height: 700 }, toSource:
     lm: [{ i: 2, word: 'פוסרת', alts: [{ text: 'פוטרת', gain: 35.094 }] }] }
 ] }
 
-function Page({ view = 'code', split = false }) {
+function Page({ view = 'code', split = false, initialContent = 'והנה היא <b>פוסרת</b> את הצרה' }) {
   const ref = useRef(null)
-  const [fields, setFields] = useState(split ? { right: 'והנה היא', left: '<b>פוסרת</b> את הצרה' } : { content: 'והנה היא <b>פוסרת</b> את הצרה' })
+  const [fields, setFields] = useState(split ? { right: 'והנה היא', left: '<b>פוסרת</b> את הצרה' } : { content: initialContent })
   const [active, setActive] = useState(null)
   const [panel, setPanel] = useState(false)
   const [finish, setFinish] = useState(false)
@@ -105,4 +105,58 @@ it('a suggestion from a stale render cannot overwrite a changed live field', asy
   fireEvent.click(screen.getByRole('button', { name: 'החלף בפוטרת' }))
   expect(field.value).toBe('טקסט שהשתנה לפני הרינדור')
   expect(screen.getByText('הטקסט השתנה. בחרו שוב מילה מהרשימה המעודכנת.')).toBeInTheDocument()
+})
+
+it.each(['code', 'rich'])('Escape closes review after navigating to the other column and preserves editor focus (%s)', async (view) => {
+  const { container } = render(<Page view={view} split />)
+  const opener = await screen.findByRole('button', { name: /מילה אחת לבדיקה/ })
+  act(() => opener.focus())
+  fireEvent.click(opener)
+  const panel = screen.getByRole('dialog', { name: 'מילים חשודות' })
+  expect(panel).toContainElement(document.activeElement)
+
+  fireEvent.click(within(panel).getByRole('button', { name: /פוסרת — טור שמאל/ }))
+  const left = container.querySelector('[data-column="left"][role="textbox"], textarea[data-column="left"]')
+  expect(left).toHaveFocus()
+  expect(left.value.slice(left.selectionStart, left.selectionEnd)).toBe('פוסרת')
+  fireEvent.keyDown(left, { key: 'Escape', code: 'Escape' })
+  expect(screen.queryByRole('dialog', { name: 'מילים חשודות' })).toBeNull()
+  expect(left).toHaveFocus()
+  expect(left.value.slice(left.selectionStart, left.selectionEnd)).toBe('פוסרת')
+
+  // Closing from inside the panel still returns focus to its original opener.
+  act(() => opener.focus())
+  fireEvent.click(opener)
+  expect(screen.getByRole('dialog', { name: 'מילים חשודות' })).toContainElement(document.activeElement)
+  fireEvent.keyDown(document.activeElement, { key: 'Escape', code: 'Escape' })
+  expect(screen.queryByRole('dialog', { name: 'מילים חשודות' })).toBeNull()
+  expect(opener).toHaveFocus()
+})
+
+it.each(['code', 'rich'])('reordering repeated words removes an ambiguous model suggestion from the live panel (%s)', async (view) => {
+  const original = 'פתיחה אמר רב אמר רב סיום'
+  const edited = 'פתיחה רב אמר רב אמר סיום'
+  const layout = { ...LAYOUT, lines: [{ ...LAYOUT.lines[0], text: original, words: null,
+    lm: [{ i: 3, word: 'אמר', alts: [{ text: 'אמרו', gain: 4 }] }] }] }
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ success: true, data: { layoutStatus: 'ok', layout, image: { matches: true } } }) })))
+  const { container } = render(<Page view={view} initialContent={original} />)
+  fireEvent.click(await screen.findByRole('button', { name: /מילה אחת לבדיקה/ }))
+  const panel = screen.getByRole('dialog', { name: 'מילים חשודות' })
+  expect(within(panel).getByRole('button', { name: 'החלף באמרו' })).toBeInTheDocument()
+  fireEvent.click(within(panel).getByRole('button', { name: /אמר — טקסט/ }))
+  const field = container.querySelector('textarea, [data-rich-textarea]')
+  expect(field.selectionStart).toBe('פתיחה אמר רב '.length)
+
+  // A normal full-text paste changes the order without changing occurrence counts.
+  if (view === 'rich') {
+    act(() => field.setSelectionRange(0, field.value.length))
+    fireEvent(field, new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertFromPaste', data: edited }))
+  } else fireEvent.change(field, { target: { value: edited } })
+
+  expect(field.value).toBe(edited)
+  await waitFor(() => expect(within(panel).queryByRole('button', { name: 'החלף באמרו' })).toBeNull())
+  expect(panel).toHaveTextContent('אין כרגע מילים מסומנות לבדיקה')
+  expect(screen.queryByRole('button', { name: /מילה אחת לבדיקה/ })).toBeNull()
+  if (view === 'code') expect(container.querySelector('[data-suspect]')).toBeNull()
+  else await waitFor(() => expect([...CSS.highlights.keys()].some((k) => k.includes('sus'))).toBe(false))
 })

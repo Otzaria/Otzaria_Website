@@ -74,7 +74,6 @@ export function reviewWordsOfLine(line, { proof = false } = {}) {
 }
 
 const MAX_CELLS = 40_000;
-const counts = (xs) => { const m = new Map(); xs.forEach((s) => m.set(s, (m.get(s) || 0) + 1)); return m; };
 function orderedAnchors(A, B) {
   const unique = (xs) => {
     const map = new Map();
@@ -96,32 +95,79 @@ function orderedAnchors(A, B) {
   return out.reverse();
 }
 
+// If the shorter sequence is a subsequence, every optimal alignment uses all of
+// it. A pair is mandatory exactly when the earliest and latest embeddings agree.
+// This also handles large identical/repetitive pages in linear time and space.
+function matchSubsequence(shorter, longer, match) {
+  const earliest = new Int32Array(shorter.length);
+  let j = 0;
+  for (let i = 0; i < shorter.length; i++) {
+    while (j < longer.length && shorter[i] !== longer[j]) j++;
+    if (j === longer.length) return false;
+    earliest[i] = j++;
+  }
+  j = longer.length - 1;
+  for (let i = shorter.length - 1; i >= 0; i--) {
+    while (shorter[i] !== longer[j]) j--;
+    if (earliest[i] === j) match(i, j);
+    j--;
+  }
+  return true;
+}
+
+// Emit only pairs present in EVERY optimal LCS. A viable pair (i,j) satisfies
+// prefix(i,j) + 1 + suffix(i+1,j+1) === L, and always has rank prefix(i,j)+1.
+// Every optimal alignment has one pair at each rank, so a sole viable pair at a
+// rank is mandatory; multiple candidates mean none of them is safe to annotate.
+function matchMandatoryLcs(A, B, match) {
+  const n = A.length, m = B.length, width = m + 1;
+  if ((n + 1) * width > MAX_CELLS) return;
+  const suffix = new Uint16Array((n + 1) * width);
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) {
+    suffix[i * width + j] = A[i] === B[j] ? 1 + suffix[(i + 1) * width + j + 1]
+      : Math.max(suffix[(i + 1) * width + j], suffix[i * width + j + 1]);
+  }
+  const length = suffix[0];
+  const candidates = new Uint8Array(length + 1);
+  const oldAt = new Int32Array(length + 1), newAt = new Int32Array(length + 1);
+  const prefix = new Uint16Array(width);
+  for (let i = 0; i < n; i++) {
+    let diagonal = 0;
+    for (let j = 0; j < m; j++) {
+      const above = prefix[j + 1];
+      if (A[i] === B[j]) {
+        const rank = diagonal + 1;
+        if (rank + suffix[(i + 1) * width + j + 1] === length) {
+          if (candidates[rank] === 0) { oldAt[rank] = i; newAt[rank] = j; }
+          candidates[rank] = Math.min(2, candidates[rank] + 1);
+        }
+        prefix[j + 1] = rank;
+      } else prefix[j + 1] = Math.max(above, prefix[j]);
+      diagonal = above;
+    }
+  }
+  for (let rank = 1; rank <= length; rank++) if (candidates[rank] === 1) match(oldAt[rank], newAt[rank]);
+}
+
 // Returns new-index -> old-index. There is no fuzzy, positional or nearest-word
 // fallback: a corrected/deleted/split/joined word must lose its old annotations.
 function unchangedWords(A, B) {
   const out = new Map();
   const gap = (a, ae, b, be) => {
-    const ac = counts(A.slice(a, ae)), bc = counts(B.slice(b, be));
-    const match = (i, j) => {
-      // Between reliable anchors, deleting/duplicating an identical word makes
-      // its occurrence ambiguous. Never move its annotation to a neighbour.
-      if (Math.max(ac.get(A[i]) || 0, bc.get(A[i]) || 0) <= 1 || ac.get(A[i]) === bc.get(A[i])) out.set(j, i);
-    };
-    while (a < ae && b < be && A[a] === B[b]) match(a++, b++);
-    while (a < ae && b < be && A[ae - 1] === B[be - 1]) match(--ae, --be);
-    const n = ae - a, m = be - b;
-    if (!n || !m || (n + 1) * (m + 1) > MAX_CELLS) return;
-    const width = m + 1;
-    const dp = new Uint16Array((n + 1) * width);
-    for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) {
-      dp[i * width + j] = A[a + i] === B[b + j] ? 1 + dp[(i + 1) * width + j + 1] : Math.max(dp[(i + 1) * width + j], dp[i * width + j + 1]);
-    }
-    let i = 0, j = 0;
-    while (i < n && j < m) {
-      if (A[a + i] === B[b + j]) { match(a + i, b + j); i++; j++; }
-      else if (dp[(i + 1) * width + j] >= dp[i * width + j + 1]) i++;
-      else j++;
-    }
+    if (a === ae || b === be) return;
+    // Tokens absent from the opposite gap cannot occur in any LCS. Removing
+    // them preserves all alignments and often turns a long correction into the
+    // linear subsequence case. Keep explicit indexes into the original arrays.
+    const oldKeys = new Set(A.slice(a, ae)), newKeys = new Set(B.slice(b, be));
+    const oldIndexes = [], newIndexes = [], oldWords = [], newWords = [];
+    for (let i = a; i < ae; i++) if (newKeys.has(A[i])) { oldIndexes.push(i); oldWords.push(A[i]); }
+    for (let j = b; j < be; j++) if (oldKeys.has(B[j])) { newIndexes.push(j); newWords.push(B[j]); }
+    if (!oldWords.length || !newWords.length) return;
+    const match = (i, j) => out.set(newIndexes[j], oldIndexes[i]);
+    const subsequence = oldWords.length <= newWords.length
+      ? matchSubsequence(oldWords, newWords, match)
+      : matchSubsequence(newWords, oldWords, (j, i) => match(i, j));
+    if (!subsequence) matchMandatoryLcs(oldWords, newWords, match);
   };
   let a = 0, b = 0;
   for (const [i, j] of orderedAnchors(A, B)) { gap(a, i, b, j); out.set(j, i); a = i + 1; b = j + 1; }

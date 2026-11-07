@@ -52,6 +52,7 @@ export default function OcrWordReviewPanel({ review, textContainerRef, onApplyTe
   return (
     <FloatingPanel title="מילים חשודות" icon="spellcheck" width={440} defaultPosition={defaultPosition}
       storageKey="ocrWordReviewPosition" onClose={onClose}
+      escapeWithin=".editor-container"
       returnFocus={() => queryEditorField(textContainerRef.current)}>
       <p className="mb-3 text-body-sm text-on-surface-variant">הצעות לבדיקה מול הצילום. לחצו על מילה כדי לעבור אליה; החלפה נעשית רק בבחירת הצעה.</p>
       {review?.status === 'loading' && <p role="status">נתוני החשד מהזיהוי נטענים…</p>}

@@ -102,7 +102,10 @@ export function usePageTracking({
 }) {
   const { source, imageSize, status, hasOfficialWordLayout, reviewSource } = useTrackingSource({ bookPath, pageNumber, imageUrl, proofDoc, extraSource, enabled })
   const column = twoColumns ? (activeTextarea === 'left' ? 'left' : 'right') : 'content'
-  const wordReview = useMemo(() => buildPageWordReview(textFields || { [column]: text }, enabled ? reviewSource : null), [textFields, column, text, enabled, reviewSource])
+  // Moving the caret between columns does not change the full-page text input.
+  // Keep that input stable so a focus change does not repeat sequence matching.
+  const reviewTexts = useMemo(() => textFields || { [column]: text }, [textFields, column, text])
+  const wordReview = useMemo(() => buildPageWordReview(reviewTexts, enabled ? reviewSource : null), [reviewTexts, enabled, reviewSource])
   const review = useMemo(() => ({ ...wordReview, status: status === 'loading' ? 'loading' : wordReview.available ? 'ready' : 'unavailable' }), [wordReview, status])
   const { lines, wordLevel } = useMemo(() => linesForColumn(source, { twoColumns, column }), [source, twoColumns, column])
   // שמירה מפני מסגרות בטוחות שגויות (פרופיל מהתמונה בלבד): פריסה לא סבירה / טקסט שלא מתאים
