@@ -87,12 +87,13 @@ export default function RichTextArea({
   const line = tracking?.line
   const word = tracking?.word
   const estimated = tracking?.estimated
+  const review = tracking?.review
   const showSuspects = tracking?.showSuspects
   const trackStrength = tracking?.strength
   const hasTracking = tracking != null
   useEffect(() => {
     ctlRef.current?.scheduleDecorations()
-  }, [line, word, estimated, showSuspects, trackStrength, hasTracking, value])
+  }, [line, word, estimated, showSuspects, review, trackStrength, hasTracking, value])
 
   const hostCallbackRef = useCallback((el) => {
     hostRef.current = el

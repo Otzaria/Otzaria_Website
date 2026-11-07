@@ -31,7 +31,7 @@ describe('FinishPageDialog', () => {
     expect(dialog).toHaveAccessibleDescription(/משנה ברכות · עמוד 3/)
     const items = within(screen.getByRole('list', { name: 'בדיקות לפני הסיום' })).getAllByRole('listitem')
     expect(items).toHaveLength(3)
-    expect(items[0]).toHaveTextContent('6 מילים חשודות לא נבדקו')
+    expect(items[0]).toHaveTextContent('6 מילים חשודות לבדיקה')
     expect(items[1]).toHaveTextContent('כל 20 השורות שבצילום הוקלדו')
     expect(items[2]).toHaveTextContent('הכול נשמר')
   })

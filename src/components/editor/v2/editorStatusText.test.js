@@ -78,14 +78,21 @@ describe('buildFinishChecks', () => {
 
   it('התרעות: חשודות (עם פעולה), שורות שונות, שמירה שנכשלה', () => {
     const [suspects, lines, save] = buildFinishChecks({ suspectCount: 6, textLineCount: 19, scanLineCount: 20, saveStatus: 'error' })
-    expect(suspects).toMatchObject({ ok: false, title: '6 מילים חשודות לא נבדקו', action: 'suspects' })
+    expect(suspects).toMatchObject({ ok: false, title: '6 מילים חשודות לבדיקה', action: 'suspects' })
     expect(lines).toMatchObject({ ok: false, title: '19 שורות בטקסט, 20 בצילום' })
     expect(save).toMatchObject({ ok: false, title: 'השמירה האחרונה נכשלה' })
   })
 
   it('יחיד, ומספר שורות בצילום לא ידוע', () => {
     const [suspects, lines] = buildFinishChecks({ suspectCount: 1, textLineCount: 7, scanLineCount: null })
-    expect(suspects.title).toBe('מילה חשודה אחת לא נבדקה')
+    expect(suspects.title).toBe('מילה חשודה אחת לבדיקה')
     expect(lines).toMatchObject({ ok: true, title: '7 שורות בטקסט', detail: 'מספר השורות בצילום לא ידוע.' })
   })
+})
+
+
+it('zero suspects is not a claim of review; loading and missing model data remain explicit', () => {
+  expect(buildFinishChecks({ suspectCount: 0 })[0]).toMatchObject({ ok: true, title: 'לא נמצאו מילים חשודות' })
+  expect(buildFinishChecks({ suspectCount: 0, reviewStatus: 'loading' })[0]).toMatchObject({ ok: false, title: 'נתוני החשד מהזיהוי נטענים…' })
+  expect(buildFinishChecks({ suspectCount: 0, reviewStatus: 'unavailable' })[0]).toMatchObject({ ok: false, title: 'אין נתוני חשד מהזיהוי לעמוד' })
 })

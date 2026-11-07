@@ -9,7 +9,7 @@ describe('buildEditorCommands', () => {
   it('כל הפעולות הנדירות של הסרגל הישן נמצאות בחלון', () => {
     const ids = buildEditorCommands({ state: { canClaim: true } }).map((c) => c.id)
     for (const id of [
-      'findReplace', 'spellcheck', 'split', 'imageToText', 'removeDigits', 'runSavedSearches',
+      'findReplace', 'spellcheck', 'ocrReview', 'split', 'imageToText', 'removeDigits', 'runSavedSearches',
       'detectWords', 'downloadImage', 'layout', 'togglePanel', 'fullScreen', 'toggleFontSerif', 'fontAssistant', 'fontFrank', 'fontNoto', 'fontSans', 'fontIbmPlex', 'fontGoogleSans', 'fontOpenSans',
       'shortcuts', 'guidelines', 'claim', 'finish', 'save'
     ]) {
@@ -17,7 +17,7 @@ describe('buildEditorCommands', () => {
     }
     expect(new Set(ids).size).toBe(ids.length)
     // זיהוי הטקסט (OCR) הוסר מהעורך
-    expect(ids.filter((id) => /ocr|gemini|selectionMode/i.test(id))).toEqual([])
+    expect(ids.filter((id) => id !== 'ocrReview' && /ocr|gemini|selectionMode/i.test(id))).toEqual([])
   })
 
   it('ארבע קבוצות, וכל אייקון קיים בגופן', () => {

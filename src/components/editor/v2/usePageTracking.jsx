@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { alignmentAgreement, lineAlignmentFor, linesForColumn } from '@/lib/editor/caretTrack'
 import { lineWords, splitLines } from '@/lib/editor/caretWord'
-import { suspectWords } from '@/lib/editor/suspectWords'
+import { buildPageWordReview } from '@/lib/editor/ocrWordReview'
 import { effectiveWrap } from '@/lib/editor/wrapMode'
 import { assessAlignment, assessProfile, assessText, combineAssessments, PENDING_ALIGNMENT } from '@/lib/editor/trackingPlausibility'
 import { useTrackingSource } from '@/hooks/useTrackingSource'
@@ -21,12 +21,10 @@ import ScanWordOverlay from './ScanWordOverlay'
 
 function countWords(text) {
   let words = 0
-  let suspects = 0
   for (const l of splitLines(text || '')) {
     words += lineWords(l).length
-    suspects += suspectWords(l).length
   }
-  return { words, suspects }
+  return { words }
 }
 
 // requestIdleCallback כשיש (דפדפן), אחרת setTimeout
@@ -73,7 +71,7 @@ function useAlignmentCheck({ enabled, text, lines }) {
 /**
  * @param {{ bookPath?: string, pageNumber?: number, imageUrl?: string|null, twoColumns?: boolean,
  *   activeTextarea?: 'right'|'left'|null, textContainerRef: { current: HTMLElement|null },
- *   imageZoom?: number, text?: string, enabled?: boolean, extraSource?: any, proofDoc?: any,
+ *   imageZoom?: number, text?: string, textFields?: Record<string, string>|null, enabled?: boolean, extraSource?: any, proofDoc?: any,
  *   lineNumbers?: boolean, showSuspects?: boolean, wrap?: 'soft'|'off',
  *   showFrame?: boolean, followScroll?: boolean, highlight?: 'normal'|'strong' }} p
  *   imageZoom — באחוזים, כמו ב-ImagePanel; text — הטקסט של הטור הפעיל (לספירה)
@@ -91,6 +89,7 @@ export function usePageTracking({
   textContainerRef,
   imageZoom = 100,
   text = '',
+  textFields = null,
   enabled = true,
   extraSource = null,
   proofDoc = null,
@@ -101,8 +100,13 @@ export function usePageTracking({
   followScroll = true,
   highlight = 'strong'
 }) {
-  const { source, imageSize, status, hasOfficialWordLayout } = useTrackingSource({ bookPath, pageNumber, imageUrl, proofDoc, extraSource, enabled })
+  const { source, imageSize, status, hasOfficialWordLayout, reviewSource } = useTrackingSource({ bookPath, pageNumber, imageUrl, proofDoc, extraSource, enabled })
   const column = twoColumns ? (activeTextarea === 'left' ? 'left' : 'right') : 'content'
+  // Moving the caret between columns does not change the full-page text input.
+  // Keep that input stable so a focus change does not repeat sequence matching.
+  const reviewTexts = useMemo(() => textFields || { [column]: text }, [textFields, column, text])
+  const wordReview = useMemo(() => buildPageWordReview(reviewTexts, enabled ? reviewSource : null), [reviewTexts, enabled, reviewSource])
+  const review = useMemo(() => ({ ...wordReview, status: status === 'loading' ? 'loading' : wordReview.available ? 'ready' : 'unavailable' }), [wordReview, status])
   const { lines, wordLevel } = useMemo(() => linesForColumn(source, { twoColumns, column }), [source, twoColumns, column])
   // שמירה מפני מסגרות בטוחות שגויות (פרופיל מהתמונה בלבד): פריסה לא סבירה / טקסט שלא מתאים
   // לצילום → 'line' (פס בלי מסגרת מילה) או 'off'. בדיקת התמונה — פעם למקור; הטקסט — בכל שינוי.
@@ -183,18 +187,19 @@ export function usePageTracking({
     lineCount: track ? track.lineCount : splitLines(text || '').length,
     scanLineCount: lines.length,
     wordCount: counts.words,
-    suspectCount: showSuspects ? counts.suspects : 0
-  }), [on, level, source.source, estimated, enabled, guard, profiled, hasOfficialWordLayout, status, track, text, lines.length, counts, showSuspects])
+    suspectCount: wordReview.count
+  }), [on, level, source.source, estimated, enabled, guard, profiled, hasOfficialWordLayout, status, track, text, lines.length, counts, wordReview.count])
 
   const mirror = useMemo(() => (enabled
-    ? { column, line: on ? track?.line : -1, word: on ? track?.word : -1, estimated, lineNumbers, showSuspects, strength: highlight }
-    : undefined), [enabled, on, column, track, estimated, lineNumbers, showSuspects, highlight])
+    ? { column, line: on ? track?.line : -1, word: on ? track?.word : -1, estimated, lineNumbers, showSuspects, reviews: wordReview.fields, strength: highlight }
+    : undefined), [enabled, on, column, track, estimated, lineNumbers, showSuspects, wordReview.fields, highlight])
 
   // טקסט שמגיע כגוש (עמוד/פסקה בשורה אחת) תמיד גולש — גם כשההעדפה "מול הסריקה"
   const wrapMode = useMemo(() => effectiveWrap(wrap, text, lines), [wrap, text, lines])
 
   return {
     tracking,
+    review,
     imagePanelProps: on && showFrame ? { renderOverlay, scrollRef } : { scrollRef },
     textEditorProps: { mirror, wrap: wrapMode },
     caretFromScan

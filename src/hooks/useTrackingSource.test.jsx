@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { renderHook, waitFor } from '@testing-library/react'
+import { renderHook, waitFor, act } from '@testing-library/react'
 
 const scan = vi.hoisted(() => ({ args: [], value: { size: [600, 800], profile: null, status: 'idle' } }))
 vi.mock('./useScanLines', () => ({
@@ -59,6 +59,7 @@ describe('useTrackingSource', () => {
     const replaced = renderHook(() => useTrackingSource({ bookPath: 'b', pageNumber: 2, imageUrl: '/p.jpg' }))
     await waitFor(() => expect(replaced.result.current.status).toBe('ready'))
     expect(replaced.result.current.source.source).toBe('profile')
+    expect(replaced.result.current.reviewSource.level).toBe('off')
   })
 
   it('extraSource במבנה האחיד עם מילים עוקף layout ברמת שורה', async () => {
@@ -67,6 +68,7 @@ describe('useTrackingSource', () => {
     const extra = { level: 'word', source: 'local', size: [600, 800], lines: [{ id: 't0', stream: 'main', bbox: [100, 50, 500, 80], words: [{ text: 'בראשית', bbox: [400, 50, 500, 80] }] }] }
     const { result } = renderHook(() => useTrackingSource({ bookPath: 'b', pageNumber: 1, imageUrl: '/p.jpg', extraSource: extra }))
     await waitFor(() => expect(result.current.source.source).toBe('local'))
+    await waitFor(() => expect(result.current.reviewSource.source).toBe('layout')) // official model flags survive a geometry fallback
   })
 
   it('כבוי / בלי מזהה עמוד — בלי בקשה', () => {
@@ -88,4 +90,15 @@ describe('useTrackingSource', () => {
     expect(choosePrimary([off, null], prof)).toBe(prof)
     expect(choosePrimary([off], off).level).toBe('off')
   })
+})
+
+
+it('a late response for the previous page cannot restore its model annotations', async () => {
+  const replies = new Map()
+  vi.stubGlobal('fetch', vi.fn((url) => new Promise((resolve) => replies.set(url, resolve))))
+  const { result, rerender } = renderHook(({ pageNumber }) => useTrackingSource({ bookPath: 'b', pageNumber, imageUrl: '/p.jpg' }), { initialProps: { pageNumber: 1 } })
+  rerender({ pageNumber: 2 })
+  await act(async () => replies.get('/api/page-content/ocr-data?bookPath=b&pageNumber=2')({ ok: false }))
+  await act(async () => replies.get('/api/page-content/ocr-data?bookPath=b&pageNumber=1')({ ok: true, json: async () => ({ success: true, data: { layoutStatus: 'ok', layout: LAYOUT } }) }))
+  expect(result.current.reviewSource.level).toBe('off')
 })

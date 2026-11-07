@@ -52,6 +52,7 @@ const TextEditor = forwardRef(({
           estimated={!!mirror.estimated}
           lineNumbers={!!mirror.lineNumbers}
           showSuspects={!!mirror.showSuspects}
+          review={mirror.reviews?.[column]}
           wrap={wrap === 'off' ? 'off' : 'soft'}
           strength={mirror.strength}
           className="px-6 py-5 bg-[var(--editor-text-bg,var(--color-surface))] border-2 border-transparent rounded-lg leading-relaxed"
