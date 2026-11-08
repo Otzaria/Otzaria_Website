@@ -51,7 +51,11 @@ for (let round = 0; round < rounds; round++) {
   try {
     const outputs = await convertPdfToImages(input, dir, { width, height, scale });
     const elapsedMs = performance.now() - start;
+    // All performance metrics cover conversion only, not output verification.
+    delay.disable();
+    clearInterval(sampler);
     peakRss = Math.max(peakRss, process.memoryUsage().rss);
+    const eventLoopDelayP99Ms = Number((delay.percentile(99) / 1e6).toFixed(2));
     const images = [];
     for (const output of outputs) {
       const [bytes, meta] = await Promise.all([readFile(output.path), sharp(output.path).metadata()]);
@@ -62,7 +66,7 @@ for (let round = 0; round < rounds; round++) {
     }
     results.push({
       round: round + 1, elapsedMs: Math.round(elapsedMs),
-      eventLoopDelayP99Ms: Number((delay.percentile(99) / 1e6).toFixed(2)),
+      eventLoopDelayP99Ms,
       rssBeforeMiB: Number((before / 1048576).toFixed(1)),
       peakRssMiB: Number((peakRss / 1048576).toFixed(1)),
       outputBytes: images.reduce((sum, x) => sum + x.bytes, 0),
