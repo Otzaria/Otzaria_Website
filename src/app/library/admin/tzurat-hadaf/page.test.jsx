@@ -1,34 +1,32 @@
+// דף הניהול של צורת הדף: מנהל כללי ומנהל ספרים — המסך; כל תפקיד אחר (ומי שלא מחובר, אם ה-proxy לא עצר אותו) —
+// "אין הרשאה". אותה קבוצת תפקידים כמו קודם (hasTzuratAdminAccess) — רק במקום הפניה ללוח הניהול, הסבר.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
+
+const session = vi.hoisted(() => ({ current: null }))
+vi.mock('next-auth', () => ({ getServerSession: async () => session.current }))
+vi.mock('@/app/api/auth/[...nextauth]/route', () => ({ authOptions: {} }))
+vi.mock('@/components/admin/tzurat/TzuratScreen', () => ({ default: () => <div data-testid="tzurat-admin" /> }))
+
 import Page from './page'
 
-// דף הניהול של צורת הדף: מנהל ומנהל ספרים — המסך; תפקיד אחר — חזרה ללוח הניהול; לא מחובר — להתחברות.
+const renderPage = async () => render(await Page())
 
-const { useSession, push } = vi.hoisted(() => ({ useSession: vi.fn(), push: vi.fn() }))
-vi.mock('next-auth/react', () => ({ useSession }))
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }))
-vi.mock('@/components/tzuratHadaf/admin/TzuratAdmin', () => ({ default: () => <div data-testid="tzurat-admin" /> }))
-
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  session.current = null
+})
 
 describe('/library/admin/tzurat-hadaf', () => {
-  it.each(['admin', 'admin_books'])('%s — רואה את המסך', (role) => {
-    useSession.mockReturnValue({ status: 'authenticated', data: { user: { role } } })
-    render(<Page />)
+  it.each(['admin', 'admin_books'])('%s — רואה את המסך', async (role) => {
+    session.current = { user: { role } }
+    await renderPage()
     expect(screen.getByTestId('tzurat-admin')).toBeInTheDocument()
-    expect(push).not.toHaveBeenCalled()
   })
 
-  it.each(['admin_ocr', 'user', 'admin_books_only'])('%s — מופנה ללוח הניהול', (role) => {
-    useSession.mockReturnValue({ status: 'authenticated', data: { user: { role } } })
-    render(<Page />)
+  it.each(['admin_ocr', 'user', 'admin_books_only', 'admin_plugins', undefined])('%s — "אין הרשאה"', async (role) => {
+    session.current = role ? { user: { role } } : null
+    await renderPage()
     expect(screen.queryByTestId('tzurat-admin')).toBeNull()
-    expect(push).toHaveBeenCalledWith('/library/admin')
-  })
-
-  it('לא מחובר — להתחברות עם חזרה', () => {
-    useSession.mockReturnValue({ status: 'unauthenticated', data: null })
-    render(<Page />)
-    expect(push).toHaveBeenCalledWith('/auth/login?callbackUrl=/library/admin/tzurat-hadaf')
+    expect(screen.getByText(/המסך פתוח למנהל כללי ולמנהל ספרים/)).toBeInTheDocument()
   })
 })
