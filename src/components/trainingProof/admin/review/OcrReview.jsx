@@ -1,21 +1,25 @@
 'use client'
 
 import { useState } from 'react'
+import Button from '@/components/ui/Button'
+import CheckRow from '@/components/ui/CheckRow'
 import { LINE_SCRIPTS, SCRIPT_LABELS, OCR_RETURN_ACTIONS } from '@/lib/trainingProof/vocab'
 import { fmt } from '../api'
-import { BTN, Empty, Muted } from '../bits'
+import { Muted } from '../bits'
 import { useReview } from './useReview'
 import { BulkBar, Pager } from './BulkBar'
 import OcrRow, { ADMIN_MARKS } from './OcrRow'
 import VolunteerPicker from './VolunteerPicker'
+import ReviewFilters from './ReviewFilters'
+import ReviewList, { QuickApprove } from './ReviewList'
+import { STATUS_OPTIONS, clearedKeepStatus, emptyView } from './filterState'
 import { useHandles, useRowKeys } from './rowKeys'
 import KeyHint, { Kbd } from './KeyHint'
 
 const MARK_KEYS = Object.fromEntries(ADMIN_MARKS.map((m) => [m.key, m.action]))
 const ACTION_FILTER = { ok: 'סימן: נכון', fixed: 'תיקן', seg: 'חיתוך גרוע', bad: 'לא קריא', router: 'הכתב שגוי' }
-const select = 'rounded-md border border-surface-variant bg-surface px-2 py-1 text-sm'
 
-// סקירת זיהוי-הטקסט: מסננים (מצב, מסלול, מה המתנדב עשה, מתנדב, ביטחון נמוך קודם),
+// סקירת זיהוי-הטקסט: מסננים (מצב, מסלול, מה המתנדב עשה, מתנדב; ביטחון נמוך קודם),
 // השוואה מודל↔מתנדב, אישור בודד / "תקן ואשר" / דחייה, סימון ואישור/דחייה גורפים,
 // ואישור מהיר על כל התור.
 export default function OcrReview({ onChanged }) {
@@ -25,13 +29,12 @@ export default function OcrReview({ onChanged }) {
   const R = useReview(query, onChanged)
   const items = R.data?.items || []
   const stats = R.data?.stats
-  const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }))
   const okInView = items.filter((x) => x.status === 'submitted' && x.result?.action === 'ok').length
   const H = useHandles()
   // 1 אשר · 2 תקן ואשר (עריכה במקום; Enter שומר, Esc מבטל) · 3 / Delete דחה · 4 לא קריא · 5 לנתב
   const K = useRowKeys(items, (key, it) => {
     if (it.status !== 'submitted' || R.busy) return false
-    if (key === '1') R.decide([it.id], 'approve')
+    if (key === '1') H.get(it.id)?.approve() // דרך השורה: לא כשהתמונה לא נטענה
     else if (key === '2') H.get(it.id)?.edit()
     else if (key === '3' || key === 'Delete') R.decide([it.id], 'reject')
     else if (MARK_KEYS[key]) H.get(it.id)?.mark(MARK_KEYS[key])
@@ -39,63 +42,29 @@ export default function OcrReview({ onChanged }) {
     return true
   })
 
+  const defs = [
+    { key: 'status', label: 'מצב', options: STATUS_OPTIONS, empty: 'submitted' },
+    { key: 'track', label: 'כתב', allLabel: 'כל הכתבים', options: LINE_SCRIPTS.map((s) => ({ value: s, label: SCRIPT_LABELS[s] })) },
+    { key: 'action', label: 'מה המתנדב עשה', allLabel: 'הכול', options: OCR_RETURN_ACTIONS.map((a) => ({ value: a, label: ACTION_FILTER[a] })) },
+    { key: 'vol', label: 'מתנדב', allLabel: 'כולם', options: (stats?.vols || []).map((v) => ({ value: v.id, label: v.name })) },
+  ]
+
   return (
-    <div className="flex flex-col gap-3">
-      <div className="glass-strong flex flex-col gap-2 rounded-xl p-3">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-          <label className="flex items-center gap-1.5">
-            מצב
-            <select className={select} value={f.status} onChange={set('status')}>
-              <option value="submitted">ממתינות לאישור</option>
-              <option value="approved">אושרו (עוד לא הורדו)</option>
-            </select>
-          </label>
-          <label className="flex items-center gap-1.5">
-            מסלול
-            <select className={select} value={f.track} onChange={set('track')}>
-              <option value="">כל הכתבים</option>
-              {LINE_SCRIPTS.map((s) => (
-                <option key={s} value={s}>
-                  {SCRIPT_LABELS[s]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex items-center gap-1.5">
-            מה המתנדב עשה
-            <select className={select} value={f.action} onChange={set('action')}>
-              <option value="">הכול</option>
-              {OCR_RETURN_ACTIONS.map((a) => (
-                <option key={a} value={a}>
-                  {ACTION_FILTER[a]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex items-center gap-1.5">
-            מתנדב
-            <select className={select} value={f.vol} onChange={set('vol')}>
-              <option value="">כולם</option>
-              {(stats?.vols || []).map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex items-center gap-1.5">
-            <input type="checkbox" checked={f.lowConf} onChange={set('lowConf')} />
-            ביטחון נמוך קודם
-          </label>
-        </div>
-        <Muted>השורות מעורבבות מכל הספרים. "הכתב שגוי" לא נכנס לאימון הקריאה — באישור הוא חוזר בתחנה לתור של נתב הכתב.</Muted>
+    <div className="flex flex-col gap-4">
+      <ReviewFilters filters={f} defs={defs} onChange={setF} />
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+        <Muted className="min-w-0 flex-1 basis-80">השורות מעורבבות מכל הספרים. &quot;הכתב שגוי&quot; לא נכנס לאימון הקריאה — באישור השורה חוזרת לבדיקת סוג הכתב במחשב האימון.</Muted>
+        <CheckRow checked={f.lowConf} onChange={(lowConf) => setF((x) => ({ ...x, lowConf }))} className="text-body-sm">
+          קודם מה שהמודל פחות בטוח בו
+        </CheckRow>
       </div>
 
       {f.status === 'submitted' && (
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-on-surface/60">אישור מהיר:</span>
-          <button
-            className={BTN.tonal}
+        <QuickApprove>
+          <Button
+            variant="tonal"
+            size="sm"
+            icon="done_all"
             disabled={R.busy || !stats?.okUnchanged}
             onClick={() =>
               R.bulk('ok-unchanged', {}, {
@@ -104,12 +73,12 @@ export default function OcrReview({ onChanged }) {
               })
             }
           >
-            כל ה"נכון" שלא שונו ({fmt(okInView)} בתצוגה, {fmt(stats?.okUnchanged)} בכל התור)
-          </button>
-          <button className={BTN.tonal} disabled={R.busy || !stats?.vols?.length} onClick={() => setPicker(true)}>
+            כל ה&quot;נכון&quot; שלא שונו ({fmt(okInView)} בתצוגה, {fmt(stats?.okUnchanged)} בכל התור)
+          </Button>
+          <Button variant="text" size="sm" icon="person" disabled={R.busy || !stats?.vols?.length} onClick={() => setPicker(true)}>
             הכול ממתנדב מסוים…
-          </button>
-        </div>
+          </Button>
+        </QuickApprove>
       )}
 
       <KeyHint>
@@ -127,10 +96,7 @@ export default function OcrReview({ onChanged }) {
         onReject={() => R.decideSelected('reject')}
       />
 
-      <div className="glass-strong overflow-hidden rounded-xl" aria-busy={!R.data}>
-        {R.data?.error && <Empty>{R.data.error}</Empty>}
-        {R.data && !items.length && !R.data.error && <Empty>אין שורות בתצוגה הזו</Empty>}
-        {!R.data && <Empty>טוען…</Empty>}
+      <ReviewList data={R.data} count={items.length} empty={emptyView(f, defs)} onClear={() => setF(clearedKeepStatus(f, defs))}>
         {items.map((it, i) => (
           <OcrRow
             key={it.id}
@@ -148,7 +114,7 @@ export default function OcrReview({ onChanged }) {
             onMark={(x, action) => R.fix(x, { action })}
           />
         ))}
-      </div>
+      </ReviewList>
       <Pager data={R.data} setPage={R.setPage} />
 
       {picker && (

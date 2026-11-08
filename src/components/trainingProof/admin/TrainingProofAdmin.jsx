@@ -1,8 +1,14 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
+import MenuButton from '@/components/ui/MenuButton'
+import Tabs, { tabPanelProps } from '@/components/ui/Tabs'
+import AdminScreenHeader from '@/components/admin/list/AdminScreenHeader'
+import TrainingCounters from '@/components/admin/training/TrainingCounters'
 import { SECTION_LABELS } from '@/lib/trainingProof/vocab'
-import { getJson, fmt } from './api'
+import { PROOF_SECTIONS, PROOF_TABS, approvedTotal, legacyTotal, proofTabItems } from '@/lib/adminTrainingScreen/proofTabs'
+import { getJson } from './api'
 import ReviewTab from './review/ReviewTab'
 import UploadTab from './upload/UploadTab'
 import ExportTab from './export/ExportTab'
@@ -10,37 +16,34 @@ import VolunteersTab from './volunteers/VolunteersTab'
 import GuideTab from './guide/GuideTab'
 import LegacyTab from './legacy/LegacyTab'
 
-// מסך הניהול של "הגהה לאימון המודלים" (docs/75 §2; docs/76 §8.3 סשן ד'): מונים בראש,
-// ושש לשוניות — סקירה ואישור · העלאת חומר · הורדה לתחנה · מתנדבים · הוראות ההגהה · הדף הישן.
-// הלשונית והחלק נשמרים בכתובת (?tab=…&sec=…), כדי שרענון לא יחזיר להתחלה.
+// מסך הניהול של "הגהה" (לשעבר "הגהה לאימון המודלים"; docs/75 §2; docs/76 §8.3 סשן ד'): מונים בראש,
+// ושש לשוניות — לאישור · העלאה · הורדות · מתנדבים · הנחיות · ניקוי נתונים ישנים (השמות ב-lib/adminTrainingScreen/proofTabs).
+// הלשונית והחלק נשמרים בכתובת (?tab=…&sec=…), כדי שרענון לא יחזיר להתחלה. "ניקוי נתונים ישנים" מוסתרת כשאין נתונים
+// ישנים (GET /legacy הקיים). בטלפון "הנחיות" ו"ניקוי נתונים ישנים" בתפריט ⋮ של הכותרת, כדי שהשאר ייכנסו בשורה.
 
-export const TABS = [
-  { id: 'review', icon: 'fact_check', label: 'סקירה ואישור' },
-  { id: 'upload', icon: 'upload', label: 'העלאת חומר' },
-  { id: 'export', icon: 'download', label: 'הורדה לתחנה' },
-  { id: 'volunteers', icon: 'group', label: 'מתנדבים' },
-  { id: 'guide', icon: 'menu_book', label: 'הוראות ההגהה' },
-  { id: 'legacy', icon: 'delete_forever', label: 'הדף הישן' },
-]
-const SECTIONS = ['ocr', 'router', 'frames']
+export const TABS = PROOF_TABS
+const SECTIONS = PROOF_SECTIONS
 
+// המונים — שורה קטנה (לא כרטיסים): כמה ממתינים לאישור בכל חלק, וכמה אושרו ועוד לא הורדו למחשב האימון ("התחנה"). עד שנטענו — אותה
+// שורה עם מקפים (תופסת את המקום, כדי שהלשוניות לא יזוזו)
+const NO_SECTIONS = { ocr: {}, router: {}, frames: {} }
 function Counters({ summary }) {
-  if (!summary) return null
-  const s = summary.sections
-  const approved = SECTIONS.reduce((n, k) => n + s[k].approved, 0)
-  const cell = (n, label, tone = '') => (
-    <div className="glass-strong flex flex-col rounded-xl px-4 py-3">
-      <b className={`text-2xl tabular-nums ${tone}`}>{fmt(n)}</b>
-      <span className="text-xs text-on-surface/70">{label}</span>
-    </div>
-  )
+  const s = summary?.sections || NO_SECTIONS
   return (
-    <div className="grid grid-cols-2 gap-2 md:grid-cols-4" aria-label="מונים">
-      {cell(s.ocr.submitted, `${SECTION_LABELS.ocr} — ממתינות לאישור`)}
-      {cell(s.router.submitted, `${SECTION_LABELS.router} — ממתינות לאישור`)}
-      {cell(s.frames.submitted, `${SECTION_LABELS.frames} — עמודים ממתינים`)}
-      {cell(approved, 'אושרו ועוד לא הורדו לתחנה', 'text-success-700')}
-    </div>
+    <TrainingCounters
+      label="מונים"
+      groups={[
+        {
+          title: 'ממתינים לאישור',
+          items: [
+            { label: SECTION_LABELS.ocr, value: s.ocr?.submitted ?? null },
+            { label: SECTION_LABELS.router, value: s.router?.submitted ?? null },
+            { label: `${SECTION_LABELS.frames} (עמודים)`, value: s.frames?.submitted ?? null },
+          ],
+        },
+        { items: [{ label: 'אושרו ועוד לא הורדו', value: summary ? approvedTotal(summary) : null }] },
+      ]}
+    />
   )
 }
 
@@ -49,6 +52,7 @@ export default function TrainingProofAdmin() {
   const [sec, setSec] = useState('ocr')
   const [summary, setSummary] = useState(null)
   const [ready, setReady] = useState(false)
+  const [legacyEmpty, setLegacyEmpty] = useState(false)
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search)
@@ -78,46 +82,42 @@ export default function TrainingProofAdmin() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- טעינה מהשרת; ה-setState קורה אחרי await
     loadSummary()
   }, [loadSummary])
+  // יש עוד נתונים מהדף הישן? (אותה בקשה שהלשונית עצמה שולחת). שגיאה — הלשונית נשארת
+  useEffect(() => {
+    getJson('/legacy').then((data) => setLegacyEmpty(legacyTotal(data) === 0)).catch(() => {})
+  }, [])
+
+  const tabs = proofTabItems(summary, { hideLegacy: legacyEmpty, active: tab })
+  const phoneMenu = tabs.filter((t) => t.hideOnPhone).map((t) => ({ id: t.id, icon: t.icon, label: t.label, onSelect: () => setTab(t.id) }))
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="glass-strong rounded-xl p-4">
-        <h2 className="flex items-center gap-2 text-2xl font-bold text-on-surface">
-          <span className="material-symbols-outlined text-primary">model_training</span>
-          ניהול — הגהה לאימון המודלים
-        </h2>
-        <p className="mt-1 text-sm text-on-surface/60">
-          רק מנהלי OCR רואים את הדף הזה. שום דבר שמתנדב שומר לא יוצא לתחנה בלי שאושר כאן. דף המתנדבים: <span dir="ltr">/library/page-proof</span>
-        </p>
-      </div>
+    <div className="flex flex-col gap-5">
+      <AdminScreenHeader
+        title="הגהה"
+        description={(
+          <>
+            מתנדבים מגיהים את מה שהמודלים זיהו, ושום דבר לא חוזר למחשב האימון בלי שאושר כאן. שלושה מודלים: זיהוי טקסט
+            (קורא את המילים), נתב הכתב (מזהה אם השורה בכתב מרובע או רש״י) וגלאי אזורים (מסמן את חלקי העמוד).{' '}
+            <Link href="/library/page-proof" prefetch={false} className="text-primary underline underline-offset-2">הדף של המתנדבים</Link>
+          </>
+        )}
+        action={<MenuButton label="עוד לשוניות" items={phoneMenu} className="sm:hidden" />}
+      />
       <Counters summary={summary} />
-      <div role="tablist" aria-label="מסכי הניהול" className="flex flex-wrap gap-1 border-b border-surface-variant">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            role="tab"
-            aria-selected={tab === t.id}
-            onClick={() => setTab(t.id)}
-            className={`-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${tab === t.id ? 'border-primary text-primary' : 'border-transparent text-on-surface/70 hover:text-on-surface'}`}
-          >
-            <span className="material-symbols-outlined text-base">{t.icon}</span>
-            {t.label}
-            {t.id === 'volunteers' && summary?.requests > 0 && (
-              <span className="rounded-full bg-warning-alt-100 px-1.5 text-xs text-warning-alt-800" title="בקשות גישה ממתינות">
-                {summary.requests}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      <Tabs label="מסכי ההגהה" idPrefix="proof" items={tabs} value={tab} onChange={setTab} className="border-b border-outline-variant" />
       {ready && (
-        <div role="tabpanel">
+        <div {...tabPanelProps('proof', tab)} className="min-w-0 outline-none">
           {tab === 'review' && <ReviewTab section={sec} setSection={setSec} summary={summary} onChanged={loadSummary} />}
           {tab === 'upload' && <UploadTab onChanged={loadSummary} />}
           {tab === 'export' && <ExportTab onChanged={loadSummary} />}
           {tab === 'volunteers' && <VolunteersTab onChanged={loadSummary} />}
           {tab === 'guide' && <GuideTab />}
-          {tab === 'legacy' && <LegacyTab />}
+          {tab === 'legacy' && (
+            <>
+              <p className="mb-4 text-body-md text-on-surface-variant">כאן מוחקים לצמיתות את הנתונים של הדף הישן של ההגהה — ספרים, עמודים, הגשות ותמונות. אחרי המחיקה אי אפשר לשחזר אותם.</p>
+              <LegacyTab />
+            </>
+          )}
         </div>
       )}
     </div>

@@ -3,7 +3,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { SECTION_LABELS, SCRIPT_LABELS, MAX_FILE_BYTES } from '@/lib/trainingProof/vocab'
 import { sendForm, sendJson, fmt } from '../api'
-import { BTN, Card, SECTION_ICONS } from '../bits'
+import AppIcon from '@/components/ui/AppIcon'
+import Button from '@/components/ui/Button'
+import ProgressBar from '@/components/ui/ProgressBar'
+import { cx } from '@/components/ui/cx'
+import { Card, Muted, SECTION_ICONS } from '../bits'
 
 // כרטיס העלאה לחלק אחד: גרירת קובצי ZIP (או בחירה) — אפשר כמה יחד, כי התחנה מפצלת חבילה
 // גדולה לכמה קבצים; הם נקלטים בזה אחר זה לפי סדר השמות (חלק 1, 2, …), וכל קובץ מקבל שורת
@@ -124,7 +128,7 @@ export default function UploadCard({ section, onDone }) {
   }, { inserted: 0, skipped: 0 })
   return (
     <Card title={SECTION_LABELS[section]} icon={SECTION_ICONS[section]} className="min-w-0 flex-1 basis-72">
-      <p className="text-sm text-on-surface/60">{HINTS[section]}</p>
+      <Muted>{HINTS[section]}</Muted>
       <label
         data-drop={section}
         onDragOver={(e) => {
@@ -137,13 +141,17 @@ export default function UploadCard({ section, onDone }) {
           setHot(false)
           take(e.dataTransfer.files)
         }}
-        className={`flex cursor-pointer flex-col items-center gap-1 rounded-xl border-2 border-dashed p-5 text-center text-sm transition-colors ${hot ? 'border-primary bg-info-100/50' : 'border-surface-variant hover:bg-surface-variant/40'} ${busy ? 'pointer-events-none opacity-60' : ''}`}
+        className={cx(
+          'flex cursor-pointer flex-col items-center gap-1 rounded-(--radius-control) border-2 border-dashed p-5 text-center text-body-sm text-on-surface transition-colors',
+          hot ? 'border-primary bg-surface-selected' : 'border-outline-variant bg-surface-container-low hover:bg-surface-container',
+          busy && 'pointer-events-none opacity-(--button-disabled-opacity)'
+        )}
       >
-        <span className="material-symbols-outlined text-4xl text-on-surface/50">upload_file</span>
+        <AppIcon name="upload_file" className="text-icon-xl text-on-surface-variant" />
         <span>
-          <b>גררו לכאן קובצי ZIP</b> או לחצו לבחירה
+          <span className="text-label-lg">גררו לכאן קובצי ZIP</span> או לחצו לבחירה
         </span>
-        <span className="text-xs text-on-surface/50">מתחנת-האימון: "ייצוא לאתר — הגהה לאימון". חבילה בכמה חלקים — גררו את כולם יחד.</span>
+        <span className="text-body-sm text-on-surface-variant">מתחנת-האימון: "ייצוא לאתר — הגהה לאימון". חבילה בכמה חלקים — גררו את כולם יחד.</span>
         <input
           ref={input}
           type="file"
@@ -159,15 +167,15 @@ export default function UploadCard({ section, onDone }) {
       </label>
 
       {list.length > 1 && (
-        <div className="text-sm" role="status" aria-live="polite">
+        <div className="text-body-sm text-on-surface" role="status" aria-live="polite">
           {busy ? (
             <>
               מעלה {fmt(list.length)} קבצים בזה אחר זה — {fmt(list.filter((s) => !['wait', 'check', 'ingest'].includes(s.phase)).length)} הסתיימו.
             </>
           ) : (
-            <b>
+            <span className="text-label-lg">
               {fmt(finished.length)} מתוך {fmt(list.length)} קבצים נקלטו: {fmt(totals.inserted)} חדשים{totals.skipped ? `, ${fmt(totals.skipped)} כבר היו באתר` : ''}{partial ? ' (כולל קליטה חלקית)' : ''}.
-            </b>
+            </span>
           )}
         </div>
       )}
@@ -180,26 +188,25 @@ export default function UploadCard({ section, onDone }) {
 
 // שורת המצב של קובץ אחד
 function FileStatus({ section, st, onStop }) {
-  const pct = st.progress?.total ? Math.round((100 * st.progress.done) / st.progress.total) : 0
   return (
-    <div className="flex flex-col gap-1.5 text-sm" role="status" aria-live="polite">
-      <div className="truncate text-xs text-on-surface/60" dir="ltr">
+    <div className="flex flex-col gap-1.5 text-body-sm text-on-surface" role="status" aria-live="polite">
+      <div className="truncate text-body-sm text-on-surface-variant" dir="ltr">
         {st.name}
       </div>
-      {st.phase === 'wait' && <div className="text-on-surface/60">ממתין בתור…</div>}
-      {st.phase === 'cancelled' && <div className="text-warning-alt-800">לא הועלה (נעצר).</div>}
+      {st.phase === 'wait' && <div className="text-on-surface-variant">ממתין בתור…</div>}
+      {st.phase === 'cancelled' && <div className="text-on-warning-container">לא הועלה (נעצר).</div>}
       {st.phase === 'check' && <div>בודק את הקובץ…</div>}
       {st.staged && (
         <div>
-          <b>נקרא מהקובץ:</b> {readText(section, st.staged.read)}
-          {st.staged.manifest.label && <div className="text-xs text-on-surface/60">"{st.staged.manifest.label}" · חלק {st.staged.manifest.part} מתוך {st.staged.manifest.parts}</div>}
+          <span className="text-label-md">נקרא מהקובץ:</span> {readText(section, st.staged.read)}
+          {st.staged.manifest.label && <div className="text-on-surface-variant">"{st.staged.manifest.label}" · חלק {st.staged.manifest.part} מתוך {st.staged.manifest.parts}</div>}
           {st.staged.existing > 0 && (
-            <div className="text-xs text-warning-alt-800">
+            <div className="mt-1 rounded-(--radius-control) bg-warning-container px-2 py-1 text-on-warning-container">
               החבילה הזו כבר הועלתה: {fmt(st.staged.existing)} פריטים כבר באתר{st.staged.proofed ? ` (${fmt(st.staged.proofed)} כבר הוגו)` : ''} — הם לא ישוכפלו ולא יידרסו.
             </div>
           )}
           {st.staged.warnings?.map((w) => (
-            <div key={w} className="text-xs text-warning-alt-800">
+            <div key={w} className="mt-1 rounded-(--radius-control) bg-warning-container px-2 py-1 text-on-warning-container">
               {w}
             </div>
           ))}
@@ -207,36 +214,34 @@ function FileStatus({ section, st, onStop }) {
       )}
       {st.progress && (
         <div className="flex items-center gap-2">
-          <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-variant">
-            <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
-          </div>
-          <span className="tabular-nums text-xs">
+          <ProgressBar value={st.progress.done} max={st.progress.total} label={`הקליטה של ${st.name}`} valueText={`${fmt(st.progress.done)} מתוך ${fmt(st.progress.total)}`} className="flex-1" />
+          <span className="tabular-nums text-on-surface-variant">
             {fmt(st.progress.done)} / {fmt(st.progress.total)}
           </span>
         </div>
       )}
       {st.phase === 'ingest' && (
-        <button className={`${BTN.quiet} self-start`} onClick={onStop}>
+        <Button variant="text" size="sm" icon="stop_circle" onClick={onStop} className="self-start">
           עצור (מה שנקלט נשאר)
-        </button>
+        </Button>
       )}
       {st.phase === 'done' && (
-        <div className="font-semibold text-success-800">
+        <div className="text-label-md text-on-success-container">
           נקלט: {fmt(st.progress.inserted)} חדשים{st.progress.skipped ? `, ${fmt(st.progress.skipped)} כבר היו באתר` : ''}.
         </div>
       )}
-      {st.phase === 'stopped' && <div className="text-warning-alt-800">נעצר. מה שנקלט נשאר; החבילה מושהית עד שתעלו את הקובץ שוב.</div>}
+      {st.phase === 'stopped' && <div className="text-on-warning-container">נעצר. מה שנקלט נשאר; החבילה מושהית עד שתעלו את הקובץ שוב.</div>}
       {st.phase === 'error' && (
-        <div className="rounded-md bg-danger-100 p-2 text-danger-700">
+        <div className="rounded-(--radius-control) bg-error-container px-3 py-2 text-on-error-container">
           {st.wrong ? (
             <>
-              <b>הקובץ הזה שייך ל"{SECTION_LABELS[st.wrong]}", לא ל"{SECTION_LABELS[section]}".</b> העלו אותו בכרטיס של {SECTION_LABELS[st.wrong]}.
+              <span className="text-label-md">הקובץ הזה שייך ל"{SECTION_LABELS[st.wrong]}", לא ל"{SECTION_LABELS[section]}".</span> העלו אותו בכרטיס של {SECTION_LABELS[st.wrong]}.
             </>
           ) : (
-            <b>{st.error}</b>
+            <span className="text-label-md">{st.error}</span>
           )}
           {st.errors?.length > 1 && (
-            <ul className="mt-1 list-disc ps-5 text-xs">
+            <ul className="mt-1 list-disc ps-5">
               {st.errors.slice(1, 10).map((e) => (
                 <li key={e}>{e}</li>
               ))}

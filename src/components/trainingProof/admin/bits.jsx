@@ -1,93 +1,65 @@
 'use client'
 
-// חלקים קטנים שחוזרים בכל לשוניות הניהול: כרטיס, תגית, תגית-כתב, שורת-בחירה בין החלקים.
+// חלקים קטנים שחוזרים בכל לשוניות הניהול של ההגהה, מעל רכיבי ui: אזור (CardSection), תג (Badge), תג-כתב,
+// בורר בין שלושת החלקים (SegmentedControl), טקסט שקט ו"אין מה להציג" (EmptyText).
+import AppIcon from '@/components/ui/AppIcon'
+import Badge from '@/components/ui/Badge'
+import CardSection from '@/components/ui/CardSection'
+import EmptyText from '@/components/ui/EmptyText'
+import SegmentedControl from '@/components/ui/SegmentedControl'
+import { cx } from '@/components/ui/cx'
 import { SECTION_LABELS, SCRIPT_LABELS } from '@/lib/trainingProof/vocab'
 
 export const SECTION_ICONS = { ocr: 'text_fields', router: 'fork_right', frames: 'dashboard' }
 
-const TONES = {
-  ok: 'bg-success-100 text-success-800',
-  err: 'bg-danger-100 text-danger-700',
-  warn: 'bg-warning-alt-100 text-warning-alt-800',
-  info: 'bg-info-100 text-info-800',
-  muted: 'bg-surface-variant text-on-surface/70',
-}
+// הגוונים הישנים (ok/err/…) → הגוונים של ui/Badge
+const TONES = { ok: 'success', err: 'error', warn: 'warning', info: 'info', muted: 'neutral' }
 
 export function Tag({ tone = 'muted', children, title }) {
-  return (
-    <span title={title} className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${TONES[tone] || TONES.muted}`}>
-      {children}
-    </span>
-  )
+  const badge = <Badge tone={TONES[tone] || 'neutral'}>{children}</Badge>
+  return title ? <span title={title} className="inline-flex">{badge}</span> : badge
 }
 
-// צבע לכל כתב — זהה בכל המסכים
-const SCRIPT_TONES = {
-  square: 'bg-info-100 text-info-800',
-  rashi: 'bg-warning-100 text-warning-800',
-  latin: 'bg-success-100 text-success-800',
-  mixed: 'bg-danger-100 text-danger-700',
-  neutral: 'bg-surface-variant text-on-surface/70',
-}
+// גוון קבוע לכל כתב — זהה בכל המסכים
+const SCRIPT_TONES = { square: 'info', rashi: 'warning', latin: 'success', mixed: 'error', neutral: 'neutral' }
 
 export function ScriptTag({ script }) {
   if (!script) return null
-  return <span className={`rounded px-1.5 py-0.5 text-xs font-bold ${SCRIPT_TONES[script] || SCRIPT_TONES.neutral}`}>{SCRIPT_LABELS[script] || script}</span>
+  return <Badge tone={SCRIPT_TONES[script] || 'neutral'}>{SCRIPT_LABELS[script] || script}</Badge>
 }
 
+// אזור בלשונית: כרטיס בלי צל ומסגרת, כותרת (עם אייקון) ופעולות בקצה
 export function Card({ title, icon, actions, children, className = '' }) {
+  const heading = title && (
+    <span className="flex items-center gap-2">
+      {icon && <AppIcon name={icon} className="text-icon-md text-primary" />}
+      {title}
+    </span>
+  )
   return (
-    <section className={`glass-strong flex flex-col gap-3 rounded-xl p-4 ${className}`}>
-      {(title || actions) && (
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          {title && (
-            <h2 className="flex items-center gap-2 text-lg font-bold text-on-surface">
-              {icon && <span className="material-symbols-outlined text-primary">{icon}</span>}
-              {title}
-            </h2>
-          )}
-          {actions}
-        </div>
-      )}
+    <CardSection title={heading} actions={actions} className={className}>
       {children}
-    </section>
+    </CardSection>
   )
 }
 
-// בורר בין שלושת החלקים (או חלק מהם)
+// בורר בין שלושת החלקים (או חלק מהם), עם מספר הממתינים ליד כל חלק
 export function SectionSwitch({ value, onChange, sections = ['ocr', 'router', 'frames'], counts = null }) {
-  return (
-    <div role="tablist" aria-label="חלק" className="inline-flex self-start overflow-hidden rounded-full border border-surface-variant">
-      {sections.map((s) => (
-        <button
-          key={s}
-          role="tab"
-          aria-selected={value === s}
-          onClick={() => onChange(s)}
-          className={`flex items-center gap-1 px-4 py-1.5 text-sm font-semibold transition-colors ${value === s ? 'bg-primary text-on-primary' : 'hover:bg-surface-variant'}`}
-        >
-          <span className="material-symbols-outlined text-base">{SECTION_ICONS[s]}</span>
-          {SECTION_LABELS[s]}
-          {counts?.[s] ? <span className="rounded-full bg-black/10 px-1.5 text-xs tabular-nums">{counts[s].toLocaleString('he-IL')}</span> : null}
-        </button>
-      ))}
-    </div>
-  )
+  const options = sections.map((s) => ({
+    value: s,
+    label: (
+      <span className="flex items-center justify-center gap-1.5">
+        <AppIcon name={SECTION_ICONS[s]} className="text-icon-sm max-sm:hidden" />
+        {SECTION_LABELS[s]}
+        {counts?.[s] ? <span className="tabular-nums text-on-surface-variant">{counts[s].toLocaleString('he-IL')}</span> : null}
+      </span>
+    ),
+  }))
+  return <SegmentedControl label="חלק" options={options} value={value} onChange={onChange} className="self-start max-sm:w-full max-sm:*:flex-1 max-sm:*:px-2" />
 }
 
-export const Muted = ({ children, className = '' }) => <p className={`text-sm text-on-surface/60 ${className}`}>{children}</p>
+export const Muted = ({ children, className = '' }) => <p className={cx('text-body-sm text-on-surface-variant', className)}>{children}</p>
 
 export function Empty({ children }) {
-  return <div className="p-6 text-center text-on-surface/60">{children}</div>
-}
-
-// כפתור קטן ושקט (בתוך שורות וטבלאות)
-export const smallBtn =
-  'inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold transition-colors disabled:pointer-events-none disabled:opacity-40'
-export const BTN = {
-  primary: `${smallBtn} bg-primary text-on-primary hover:opacity-90`,
-  outline: `${smallBtn} border border-surface-variant hover:bg-surface-variant`,
-  quiet: `${smallBtn} hover:bg-surface-variant`,
-  danger: `${smallBtn} text-danger-700 hover:bg-danger-100`,
-  tonal: `${smallBtn} bg-info-100 text-info-800 hover:opacity-90`,
+  return <EmptyText>{children}</EmptyText>
 }

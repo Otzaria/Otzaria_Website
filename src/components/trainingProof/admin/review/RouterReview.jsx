@@ -1,17 +1,24 @@
 'use client'
 
 import { useState } from 'react'
+import Button from '@/components/ui/Button'
 import { LINE_SCRIPTS, SCRIPT_LABELS } from '@/lib/trainingProof/vocab'
 import { fmt } from '../api'
-import { BTN, Empty, Muted } from '../bits'
+import { Muted } from '../bits'
 import { useReview } from './useReview'
 import { BulkBar, Pager } from './BulkBar'
 import RouterRow from './RouterRow'
 import VolunteerPicker from './VolunteerPicker'
+import ReviewFilters from './ReviewFilters'
+import ReviewList, { QuickApprove } from './ReviewList'
+import { STATUS_OPTIONS, clearedKeepStatus, emptyView } from './filterState'
 import { useHandles, useRowKeys } from './rowKeys'
 import KeyHint, { Kbd } from './KeyHint'
 
-const select = 'rounded-md border border-surface-variant bg-surface px-2 py-1 text-sm'
+const AGREE_OPTIONS = [
+  { value: '1', label: 'הסכים עם ההצעה' },
+  { value: '0', label: 'שונה מההצעה' },
+]
 
 // סקירת נתב-הכתב. כל סימון נכנס לשלושת הנתבים (שורה · מילה · רצועה), ולכן אין כאן
 // "מסלול" מהקובץ — המסנן הוא מה שהמתנדב סימן, והאם הסכים עם הנתב.
@@ -22,7 +29,6 @@ export default function RouterReview({ onChanged }) {
   const R = useReview(query, onChanged)
   const items = R.data?.items || []
   const stats = R.data?.stats
-  const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }))
   const H = useHandles()
   // 1–4 כתב-השורה (תיקון) · 0 פסול · Enter אשר (עם התיקון, אם יש) · Delete דחה
   const K = useRowKeys(items, (key, it) => {
@@ -36,58 +42,27 @@ export default function RouterReview({ onChanged }) {
     return true
   })
 
+  // "מול הנתב" — רק בממתינות (במאושרות אין לו משמעות)
+  const defs = [
+    { key: 'status', label: 'מצב', options: STATUS_OPTIONS, empty: 'submitted' },
+    { key: 'track', label: 'המתנדב סימן', allLabel: 'הכול', options: LINE_SCRIPTS.map((s) => ({ value: s, label: SCRIPT_LABELS[s] })) },
+    ...(f.status === 'submitted' ? [{ key: 'agree', label: 'מול הנתב', allLabel: 'הכול', options: AGREE_OPTIONS }] : []),
+    { key: 'vol', label: 'מתנדב', allLabel: 'כולם', options: (stats?.vols || []).map((v) => ({ value: v.id, label: v.name })) },
+  ]
+  // מעבר ל"אושרו" מנקה את "מול הנתב" (הבורר נעלם, והסינון לא יישאר מוסתר)
+  const onFilters = (next) => setF(next.status === 'submitted' ? next : { ...next, agree: '' })
+
   return (
-    <div className="flex flex-col gap-3">
-      <div className="glass-strong flex flex-col gap-2 rounded-xl p-3">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-          <label className="flex items-center gap-1.5">
-            מצב
-            <select className={select} value={f.status} onChange={set('status')}>
-              <option value="submitted">ממתינות לאישור</option>
-              <option value="approved">אושרו (עוד לא הורדו)</option>
-            </select>
-          </label>
-          <label className="flex items-center gap-1.5">
-            המתנדב סימן
-            <select className={select} value={f.track} onChange={set('track')}>
-              <option value="">הכול</option>
-              {LINE_SCRIPTS.map((s) => (
-                <option key={s} value={s}>
-                  {SCRIPT_LABELS[s]}
-                </option>
-              ))}
-            </select>
-          </label>
-          {f.status === 'submitted' && (
-            <label className="flex items-center gap-1.5">
-              מול הנתב
-              <select className={select} value={f.agree} onChange={set('agree')}>
-                <option value="">הכול</option>
-                <option value="1">הסכים עם ההצעה</option>
-                <option value="0">שונה מההצעה</option>
-              </select>
-            </label>
-          )}
-          <label className="flex items-center gap-1.5">
-            מתנדב
-            <select className={select} value={f.vol} onChange={set('vol')}>
-              <option value="">כולם</option>
-              {(stats?.vols || []).map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <Muted>כל סימון נכנס לשלושת הנתבים: כתב-השורה לנתב-השורה, הכתב של כל מילה לנתב-המילה ולנתב-הרצועה.</Muted>
-      </div>
+    <div className="flex flex-col gap-4">
+      <ReviewFilters filters={f} defs={defs} onChange={onFilters} />
+      <Muted>כל סימון נכנס לשלושת הנתבים: כתב-השורה לנתב-השורה, הכתב של כל מילה לנתב-המילה ולנתב-הרצועה.</Muted>
 
       {f.status === 'submitted' && (
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-on-surface/60">אישור מהיר:</span>
-          <button
-            className={BTN.tonal}
+        <QuickApprove>
+          <Button
+            variant="tonal"
+            size="sm"
+            icon="done_all"
             disabled={R.busy || !stats?.agree}
             onClick={() =>
               R.bulk('router-agree', {}, {
@@ -96,12 +71,12 @@ export default function RouterReview({ onChanged }) {
               })
             }
           >
-            אשר את כל מה שהמתנדב הסכים בו עם הנתב ({fmt(stats?.agree)})
-          </button>
-          <button className={BTN.tonal} disabled={R.busy || !stats?.vols?.length} onClick={() => setPicker(true)}>
+            כל מה שהמתנדב הסכים בו עם הנתב ({fmt(stats?.agree)})
+          </Button>
+          <Button variant="text" size="sm" icon="person" disabled={R.busy || !stats?.vols?.length} onClick={() => setPicker(true)}>
             הכול ממתנדב מסוים…
-          </button>
-        </div>
+          </Button>
+        </QuickApprove>
       )}
 
       <KeyHint>
@@ -119,10 +94,7 @@ export default function RouterReview({ onChanged }) {
         onReject={() => R.decideSelected('reject')}
       />
 
-      <div className="glass-strong overflow-hidden rounded-xl" aria-busy={!R.data}>
-        {R.data?.error && <Empty>{R.data.error}</Empty>}
-        {R.data && !items.length && !R.data.error && <Empty>אין שורות בתצוגה הזו</Empty>}
-        {!R.data && <Empty>טוען…</Empty>}
+      <ReviewList data={R.data} count={items.length} empty={emptyView(f, defs)} onClear={() => setF(clearedKeepStatus(f, defs))}>
         {items.map((it, i) => (
           <RouterRow
             key={`${it.id}-${it.status}-${it.adminFixed}`}
@@ -139,7 +111,7 @@ export default function RouterReview({ onChanged }) {
             onFix={(x, mark) => R.fix(x, mark)}
           />
         ))}
-      </div>
+      </ReviewList>
       <Pager data={R.data} setPage={R.setPage} />
 
       {picker && (

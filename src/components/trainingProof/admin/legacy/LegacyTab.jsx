@@ -5,7 +5,10 @@ import Dialog from '@/components/ui/Dialog'
 import Button from '@/components/ui/Button'
 import { useAsk } from '../useAsk'
 import { getJson, sendJson, fmt } from '../api'
-import { Card, Empty } from '../bits'
+import ErrorNotice from '@/components/ui/ErrorNotice'
+import ListLoading from '@/components/ui/ListLoading'
+import { fieldClasses } from '@/components/ui/fieldStyles'
+import { Card, Muted } from '../bits'
 
 // לשונית "הדף הישן" (docs/75 ה-15): כלי מחיקה **חד-פעמי** לנתונים של הגהת-העמודים הקודמת —
 // ספרים, עמודים, הגשות, טיוטות ותמונות-העמודים. לא אוטומטי: כפתור ← חלון-אישור ראשון ←
@@ -29,8 +32,8 @@ export default function LegacyTab() {
     load()
   }, [load])
 
-  if (!data) return <Empty>טוען…</Empty>
-  if (data.error) return <Empty>{data.error}</Empty>
+  if (!data) return <ListLoading rows={2} label="טוען…" />
+  if (data.error) return <ErrorNotice text={data.error} />
   const c = data.counts
   const total = c.books + c.pages + c.submissions + c.drafts + data.files
 
@@ -61,28 +64,24 @@ export default function LegacyTab() {
 
   return (
     <Card title="הדף הישן — הגהת עמודים" icon="delete_forever">
-      <p className="text-sm">
-        הדף הזה החליף את הגהת-העמודים הקודמת. הנתונים שלה עדיין במסד ובתיקיית התמונות, והוחלט שאין בהם צורך כרגע (ה-15). כאן אפשר למחוק אותם — <b>פעם אחת, רק בלחיצה שלכם</b>, אחרי
+      <p className="text-body-md text-on-surface">
+        הדף הזה החליף את הגהת-העמודים הקודמת. הנתונים שלה עדיין במסד ובתיקיית התמונות, והוחלט שאין בהם צורך כרגע (ה-15). כאן אפשר למחוק אותם — פעם אחת, רק בלחיצה שלכם, אחרי
         שני אישורים.
       </p>
-      <ul className="list-disc ps-5 text-sm">
+      <ul className="list-disc ps-5 text-body-md text-on-surface">
         <li>ספרים: {fmt(c.books)}</li>
         <li>עמודים: {fmt(c.pages)}</li>
         <li>הגשות: {fmt(c.submissions)}</li>
         <li>טיוטות: {fmt(c.drafts)}</li>
         <li>קובצי תמונות: {fmt(data.files)}</li>
       </ul>
-      <p className="text-xs text-on-surface/60">
+      <Muted>
         לא נמחקים: הקוד הישן (ההחלטה על הסרתו מהמאגר תיסגר מול פלמוני), מפתחות-הגישה של תוכנת-הספר, ההגדרות, ותמונות הספרים של האתר עצמו.
-      </p>
+      </Muted>
       <div>
-        <button
-          className="inline-flex items-center gap-1 rounded-full bg-danger-100 px-4 py-2 text-sm font-semibold text-danger-700 disabled:opacity-40"
-          disabled={!total || busy}
-          onClick={first}
-        >
-          <span className="material-symbols-outlined text-base">delete_forever</span> {total ? 'מחק את הנתונים של הדף הישן…' : 'אין מה למחוק'}
-        </button>
+        <Button variant="danger" size="sm" icon="delete_forever" disabled={!total} softDisabled={busy} onClick={first}>
+          {total ? 'מחק את הנתונים של הדף הישן…' : 'אין מה למחוק'}
+        </Button>
       </div>
       {step2 && (
         <Dialog
@@ -99,11 +98,11 @@ export default function LegacyTab() {
             </div>
           }
         >
-          <label className="flex flex-col gap-2 text-sm">
+          <label className="flex flex-col gap-2 text-body-md text-on-surface">
             <span>
-              כדי למחוק, הקלידו: <b>{data.confirm}</b>
+              כדי למחוק, הקלידו: <span className="text-label-lg">{data.confirm}</span>
             </span>
-            <input value={typed} onChange={(e) => setTyped(e.target.value)} className="rounded-md border border-surface-variant bg-surface px-2 py-1" autoComplete="off" />
+            <input value={typed} onChange={(e) => setTyped(e.target.value)} className={fieldClasses()} autoComplete="off" />
           </label>
         </Dialog>
       )}

@@ -6,7 +6,10 @@ import remarkGfm from 'remark-gfm'
 import { useDialog } from '@/components/providers/DialogContext'
 import { SECTION_LABELS } from '@/lib/trainingProof/vocab'
 import { getJson, sendJson, fmtDate } from '../api'
-import { Card, Empty, SectionSwitch } from '../bits'
+import Button from '@/components/ui/Button'
+import ListLoading from '@/components/ui/ListLoading'
+import { fieldClasses } from '@/components/ui/fieldStyles'
+import { Card, SectionSwitch } from '../bits'
 
 // לשונית "הוראות ההגהה": עורך לכל חלק (Markdown), תצוגה מקדימה כפי שהמגיה יראה,
 // ושמירה ל-TrainingProofGuide. בלי HTML גולמי — רק Markdown.
@@ -19,13 +22,13 @@ export const STARTER = {
 }
 
 const md = {
-  h2: (p) => <h2 className="mt-3 text-lg font-bold" {...p} />,
-  h3: (p) => <h3 className="mt-2 font-bold" {...p} />,
+  h2: (p) => <h2 className="mt-3 text-title-md text-on-surface" {...p} />,
+  h3: (p) => <h3 className="mt-2 text-title-sm text-on-surface" {...p} />,
   ul: (p) => <ul className="list-disc ps-5" {...p} />,
   ol: (p) => <ol className="list-decimal ps-5" {...p} />,
   p: (p) => <p className="my-1.5" {...p} />,
   a: ({ href, children }) => (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="text-info-700 underline">
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">
       {children}
     </a>
   ),
@@ -33,7 +36,7 @@ const md = {
 
 export function GuidePreview({ markdown }) {
   return (
-    <div className="text-sm leading-7">
+    <div className="text-body-md leading-7 text-on-surface">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={md} skipHtml>
         {markdown}
       </ReactMarkdown>
@@ -60,7 +63,7 @@ export default function GuideTab() {
     load()
   }, [load])
 
-  if (!saved) return <Empty>טוען…</Empty>
+  if (!saved) return <ListLoading rows={2} label="טוען את ההנחיות…" />
   const cur = saved[section]
   const text = drafts[section] ?? cur?.markdown ?? STARTER[section]
   const dirty = drafts[section] !== undefined && drafts[section] !== (cur?.markdown ?? '')
@@ -88,7 +91,7 @@ export default function GuideTab() {
       <SectionSwitch value={section} onChange={setSection} />
       <div className="grid gap-3 lg:grid-cols-2">
         <Card title={`עריכה — ${SECTION_LABELS[section]}`} icon="edit_note">
-          <p className="text-xs text-on-surface/60">
+          <p className="text-body-sm text-on-surface-variant">
             <code dir="ltr">##</code> בתחילת שורה = כותרת · <code dir="ltr">-</code> = סעיף ברשימה · <code dir="ltr">**…**</code> = מודגש
           </p>
           <textarea
@@ -96,13 +99,13 @@ export default function GuideTab() {
             dir="rtl"
             value={text}
             onChange={(e) => setDrafts((d) => ({ ...d, [section]: e.target.value }))}
-            className="min-h-80 w-full rounded-md border border-surface-variant bg-surface p-2 font-mono text-sm leading-6"
+            className={fieldClasses({ kind: 'textarea', className: 'min-h-80 font-mono' })}
           />
           <div className="flex flex-wrap items-center gap-2">
-            <button className="inline-flex items-center gap-1 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-on-primary disabled:opacity-40" disabled={busy || (!dirty && !!cur)} onClick={save}>
-              <span className="material-symbols-outlined text-base">save</span> שמור ופרסם למגיהים
-            </button>
-            <span className="text-xs text-on-surface/60">
+            <Button variant="filled" size="sm" icon="save" disabled={!dirty && !!cur} loading={busy} softDisabled={busy} onClick={() => !busy && save()}>
+              שמור ופרסם למגיהים
+            </Button>
+            <span className="text-body-sm text-on-surface-variant">
               {cur ? `עודכן לאחרונה: ${fmtDate(cur.updatedAt)}${cur.by ? ` · ${cur.by}` : ''}` : 'עוד לא נשמרו הוראות לחלק הזה — זו נקודת-פתיחה'}
               {dirty && ' · יש שינויים שלא נשמרו'}
             </span>

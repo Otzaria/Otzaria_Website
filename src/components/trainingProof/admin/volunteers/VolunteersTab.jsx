@@ -1,9 +1,16 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import MenuButton from '@/components/ui/MenuButton'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useAsk } from '../useAsk'
 import { getJson, sendJson, fmt, fmtDate } from '../api'
-import { BTN, Card, Empty, Tag } from '../bits'
+import Button from '@/components/ui/Button'
+import ErrorNotice from '@/components/ui/ErrorNotice'
+import ListLoading from '@/components/ui/ListLoading'
+import { fieldClasses, FIELD_LABEL_COMPACT } from '@/components/ui/fieldStyles'
+import { Card, Empty, Muted, Tag } from '../bits'
+import { TD, TH } from '../proofStyles'
 import { matchTone } from '../review/VolunteerPicker'
 import { SECTIONS, SECTION_LABELS } from '@/lib/trainingProof/vocab'
 import CorrectionsDialog from './CorrectionsDialog'
@@ -22,7 +29,8 @@ export function correctedText(stats) {
 }
 
 export default function VolunteersTab({ onChanged }) {
-  const { showAlert, ask } = useAsk()
+  const { showAlert } = useAsk()
+  const [confirm, confirmElement] = useConfirm()
   const [data, setData] = useState(null)
   const [busy, setBusy] = useState(false)
   const [q, setQ] = useState('')
@@ -56,98 +64,104 @@ export default function VolunteersTab({ onChanged }) {
   }
   const decide = (u, action, done) => run(() => sendJson(`/volunteers/${u.userId}`, { action }), done)
   const revoke = async (v) => {
-    const yes = await ask(
-      `לבטל את הגישה של ${v.name}?`,
-      'ההגשות שלו שעוד ממתינות נשארות לסקירה שלכם. השורות שתפס, וספר-גלאי שבידיו, חוזרים למאגר.',
-      'בטל גישה'
-    )
-    if (yes) decide(v, 'revoke', (r) => `הגישה בוטלה. חזרו למאגר: ${fmt(r.released?.items)} פריטים${r.released?.books ? `, ${fmt(r.released.books)} ספרים` : ''}.`)
+    const yes = await confirm({
+      title: `להסיר את ${v.name || 'המגיה'} מהצוות?`,
+      body: 'הוא לא יוכל להמשיך להגיה. ההגשות שלו שעוד ממתינות נשארות לאישור שלך, ומה שהוא עובד עליו עכשיו חוזר להיות פנוי.',
+      confirmLabel: 'הסר מהצוות',
+      tone: 'danger',
+    })
+    if (yes) decide(v, 'revoke', (r) => `הוסר מהצוות. משימות שחזרו להיות פנויות: ${fmt(r.released?.items)}${r.released?.books ? `, ${fmt(r.released.books)} ספרים` : ''}.`)
   }
   const add = (e) => {
     e.preventDefault()
-    if (!q.trim()) return
+    if (!q.trim() || busy) return
     run(() => sendJson('/volunteers', { query: q.trim() }), (r) => `${r.name || r.email} קיבל גישה`).then((ok) => ok && setQ(''))
   }
 
-  if (!data) return <Empty>טוען…</Empty>
+  if (!data) return <ListLoading rows={3} label="טוען את המתנדבים…" />
   return (
     <div className="flex flex-col gap-4">
-      {data.error && <Empty>{data.error}</Empty>}
-      <Card title="בקשות גישה ממתינות" icon="person_add">
+      <ErrorNotice text={data.error} />
+      <Card title="בקשות גישה" icon="person_add">
         {!data.requests.length ? (
           <Empty>אין בקשות ממתינות</Empty>
         ) : (
-          data.requests.map((r) => (
-            <div key={r.userId} className="flex flex-wrap items-center justify-between gap-2 border-b border-surface-variant py-2 last:border-0">
-              <div className="min-w-0 flex-1">
-                <b>{r.name || '—'}</b> <span className="text-sm text-on-surface/60">{r.email} · {fmtDate(r.requestedAt)}</span>
-                <div className="text-sm">{r.message || <span className="text-on-surface/50">לא כתב כלום</span>}</div>
-              </div>
-              <div className="flex gap-1">
-                <button className={BTN.primary} disabled={busy} onClick={() => decide(r, 'approve', () => `${r.name} קיבל גישה`)}>
-                  <span className="material-symbols-outlined text-sm">check</span> אשר גישה
-                </button>
-                <button className={BTN.outline} disabled={busy} onClick={() => decide(r, 'deny', () => 'הבקשה נדחתה')}>
-                  דחה
-                </button>
-              </div>
-            </div>
-          ))
+          <ul aria-label="בקשות גישה" className="flex flex-col">
+            {data.requests.map((r) => (
+              <li key={r.userId} className="flex flex-wrap items-center justify-between gap-2 border-b border-outline-variant py-3 last:border-0">
+                <div className="min-w-0 flex-1">
+                  <span className="text-label-lg text-on-surface">{r.name || '—'}</span>{' '}
+                  <span className="text-body-sm text-on-surface-variant">{r.email} · {fmtDate(r.requestedAt)}</span>
+                  <p className="text-body-md text-on-surface">{r.message || <span className="text-on-surface-variant">לא כתב כלום</span>}</p>
+                </div>
+                <div className="flex gap-1">
+                  <Button variant="tonal" size="sm" icon="check" softDisabled={busy} onClick={() => decide(r, 'approve', () => `${r.name} קיבל גישה`)}>
+                    אשר
+                  </Button>
+                  <Button variant="text" size="sm" softDisabled={busy} onClick={() => decide(r, 'deny', () => 'הבקשה נדחתה')} className="text-error">
+                    דחה
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
       </Card>
 
-      <Card title="מגיהים עם גישה" icon="group">
-        <p className="text-sm text-on-surface/60">
-          "התאמה" = כמה מההגשות שלו אושרו בלי שינוי (מתוך כל מה שנסקר — אושר או נדחה). עוזר להחליט על מי לסמוך באישור גורף. "תיקנת" =
-          כמה מהסימונים שלו אישרת אחרי "תקן ואשר", לפי חלק — נשמר גם אחרי ההורדה לתחנה.
-        </p>
+      <Card title="מגיהים" icon="group">
+        <Muted>
+          &quot;התאמה&quot; — כמה מההגשות שלו אושרו בלי שינוי (מתוך כל מה שנסקר — אושר או נדחה). עוזר להחליט על מי לסמוך באישור גורף.
+          &quot;תיקנת&quot; — כמה מהסימונים שלו אישרת אחרי &quot;תקן ואשר&quot;, לפי חלק — נשמר גם אחרי ההורדה.
+        </Muted>
         {!data.approved.length ? (
           <Empty>אין עדיין מגיהים</Empty>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-variant/50 text-right">
+          <div className="relative overflow-x-auto">
+            <table className="w-full min-w-3xl text-body-md">
+              <caption className="sr-only">המגיהים</caption>
+              <thead className="border-b border-outline-variant">
                 <tr>
-                  <th className="p-2">שם</th>
-                  <th className="p-2">מאז</th>
-                  <th className="p-2">שורות</th>
-                  <th className="p-2">עמודי גלאי</th>
-                  <th className="p-2">ממתינות</th>
-                  <th className="p-2">התאמה</th>
-                  <th className="p-2">תיקנת</th>
-                  <th className="p-2">פעיל לאחרונה</th>
-                  <th className="p-2" />
+                  <th scope="col" className={TH}>שם</th>
+                  <th scope="col" className={TH}>מאז</th>
+                  <th scope="col" className={TH}>שורות</th>
+                  <th scope="col" className={TH}>עמודי גלאי</th>
+                  <th scope="col" className={TH}>ממתינות</th>
+                  <th scope="col" className={TH}>התאמה</th>
+                  <th scope="col" className={TH}>תיקנת</th>
+                  <th scope="col" className={TH}>פעיל לאחרונה</th>
+                  <th scope="col" className={TH}><span className="sr-only">פעולות</span></th>
                 </tr>
               </thead>
               <tbody>
                 {data.approved.map((v) => (
-                  <tr key={v.userId} className="border-t border-surface-variant">
-                    <td className="p-2">
-                      <b>{v.name || '—'}</b>
-                      <div className="text-xs text-on-surface/50">{v.email}</div>
+                  <tr key={v.userId} className="border-b border-outline-variant last:border-0">
+                    <td className={`${TD} max-w-64 [overflow-wrap:anywhere]`}>
+                      <span className="text-label-lg text-on-surface">{v.name || '—'}</span>
+                      <div className="text-body-sm text-on-surface-variant">{v.email}</div>
                     </td>
-                    <td className="p-2 text-xs">{fmtDate(v.since)}</td>
-                    <td className="p-2 tabular-nums">{fmt(v.stats?.lines)}</td>
-                    <td className="p-2 tabular-nums">{fmt(v.stats?.pages)}</td>
-                    <td className="p-2 tabular-nums">{fmt(v.stats?.pending)}</td>
-                    <td className="p-2">
+                    <td className={`${TD} whitespace-nowrap text-body-sm`}>{fmtDate(v.since)}</td>
+                    <td className={`${TD} tabular-nums`}>{fmt(v.stats?.lines)}</td>
+                    <td className={`${TD} tabular-nums`}>{fmt(v.stats?.pages)}</td>
+                    <td className={`${TD} tabular-nums`}>{fmt(v.stats?.pending)}</td>
+                    <td className={TD}>
                       <Tag tone={matchTone(v.stats?.match)}>{v.stats?.match == null ? '—' : `${v.stats.match}%`}</Tag>
                     </td>
-                    <td className="p-2" data-testid={`corrected-${v.userId}`}>
+                    <td className={TD} data-testid={`corrected-${v.userId}`}>
                       <div className="flex flex-col items-start gap-1">
-                        <span className="text-xs">{correctedText(v.stats)}</span>
+                        <span className="text-body-sm">{correctedText(v.stats)}</span>
                         {v.stats?.corrected > 0 && (
-                          <button className="text-xs text-info-700 hover:underline" onClick={() => setShow(v)}>
+                          <Button variant="text" size="sm" onClick={() => setShow(v)} className="-ms-3 whitespace-nowrap">
                             הצג תיקונים
-                          </button>
+                          </Button>
                         )}
                       </div>
                     </td>
-                    <td className="p-2 text-xs">{fmtDate(v.last)}</td>
-                    <td className="p-2">
-                      <button className={BTN.danger} disabled={busy} onClick={() => revoke(v)}>
-                        בטל גישה
-                      </button>
+                    <td className={`${TD} whitespace-nowrap text-body-sm`}>{fmtDate(v.last)}</td>
+                    <td className={`${TD} w-px text-end`}>
+                      <MenuButton
+                        label={`עוד פעולות: ${v.name || v.email}`}
+                        items={[{ id: 'revoke', icon: 'block', label: 'הסר מהצוות', danger: true, disabled: busy, onSelect: () => revoke(v) }]}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -155,37 +169,43 @@ export default function VolunteersTab({ onChanged }) {
             </table>
           </div>
         )}
-        <form onSubmit={add} className="flex flex-wrap items-center gap-2 border-t border-surface-variant pt-3">
-          <label htmlFor="tp-add-user" className="text-sm">
+        <form onSubmit={add} className="flex flex-col gap-2 border-t border-outline-variant pt-4">
+          <label htmlFor="tp-add-user" className={FIELD_LABEL_COMPACT}>
             הוספה ישירה (משתמש רשום באתר)
           </label>
-          <input
-            id="tp-add-user"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="אימייל או שם-משתמש"
-            className="min-w-56 rounded-md border border-surface-variant bg-surface px-2 py-1 text-sm"
-          />
-          <button type="submit" className={BTN.outline} disabled={busy || !q.trim()}>
-            תן גישה
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              id="tp-add-user"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="אימייל או שם-משתמש"
+              className={fieldClasses({ className: 'min-w-0 flex-1 basis-64 sm:max-w-sm' })}
+            />
+            <Button type="submit" variant="tonal" size="sm" icon="person_add" softDisabled={busy || !q.trim()}>
+              תן גישה
+            </Button>
+          </div>
         </form>
       </Card>
 
       {show && <CorrectionsDialog vol={show} onClose={() => setShow(null)} />}
+      {confirmElement}
 
       {data.others.length > 0 && (
         <Card title="בקשות שנדחו וגישות שבוטלו" icon="block">
-          {data.others.map((o) => (
-            <div key={o.userId} className="flex flex-wrap items-center justify-between gap-2 border-b border-surface-variant py-1.5 text-sm last:border-0">
-              <span>
-                <b>{o.name || '—'}</b> <span className="text-on-surface/60">{o.email} · {STATUS[o.status]} {fmtDate(o.decidedAt)}</span>
-              </span>
-              <button className={BTN.outline} disabled={busy} onClick={() => decide(o, 'approve', () => `${o.name} קיבל גישה`)}>
-                תן גישה
-              </button>
-            </div>
-          ))}
+          <ul aria-label="בקשות שנדחו וגישות שבוטלו" className="flex flex-col">
+            {data.others.map((o) => (
+              <li key={o.userId} className="flex flex-wrap items-center justify-between gap-2 border-b border-outline-variant py-2 last:border-0">
+                <span className="min-w-0">
+                  <span className="text-label-lg text-on-surface">{o.name || '—'}</span>{' '}
+                  <span className="text-body-sm text-on-surface-variant">{o.email} · {STATUS[o.status]} {fmtDate(o.decidedAt)}</span>
+                </span>
+                <Button variant="text" size="sm" softDisabled={busy} onClick={() => decide(o, 'approve', () => `${o.name} קיבל גישה`)}>
+                  תן גישה
+                </Button>
+              </li>
+            ))}
+          </ul>
         </Card>
       )}
     </div>
