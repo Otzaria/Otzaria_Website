@@ -1,23 +1,9 @@
-export const EVENT_TYPE_LABELS = {
-  search: 'חיפוש',
-  results_shown: 'הצגת תוצאות',
-  open: 'פתיחת תוצאה',
-  dwell: 'זמן קריאה',
-  vote: 'הצבעה',
-}
+// השמות והתוויות — מהלוגיקה הטהורה של המסך (lib/adminSearchFeedbackScreen). נתיב יחסי: הקובץ נטען גם מ-node:test (lib/search-feedback/core.test.mjs)
+import { EVENT_TYPE_LABELS, modelLabel } from '../../../lib/adminSearchFeedbackScreen/searchFeedbackTerms.js'
+
+export { EVENT_TYPE_LABELS, modelLabel }
 
 export const EMPTY_FILTERS = Object.freeze({ from: '', to: '', type: '', model: '' })
-
-export function formatDateTime(value) {
-  if (!value) return ''
-  return new Date(value).toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' })
-}
-
-/** תווית תצוגה למודל (משפחה + קוונטיזציה). */
-export function modelLabel({ modelFamilyId, modelQuantization }) {
-  if (!modelFamilyId) return 'לא ידוע'
-  return modelQuantization ? `${modelFamilyId} (${modelQuantization})` : `${modelFamilyId} (ללא קוונטיזציה)`
-}
 
 /** רק מודלים עם משפחה ידועה ניתנים לסינון. */
 export const selectableModels = (models) => models.filter((m) => m.modelFamilyId)

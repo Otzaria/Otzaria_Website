@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render as rtlRender, screen } from '@testing-library/react'
+
+const render = (ui) => rtlRender(<ul>{ui}</ul>)
 import userEvent from '@testing-library/user-event'
 import { FileTypeBadge, BookRow, SetRow } from './SourceRows'
 
@@ -11,13 +13,13 @@ const options = {
 
 describe('FileTypeBadge', () => {
   it('מציג את סוג הקובץ', () => {
-    render(<FileTypeBadge fileType="txt" />)
+    rtlRender(<FileTypeBadge fileType="txt" />)
     expect(screen.getByText('txt')).toBeInTheDocument()
   })
 })
 
 describe('BookRow', () => {
-  it('מציג כותרת, נתיב, וכפתור עריכה שמפעיל onEdit', async () => {
+  it('מציג כותרת ונתיב; לחיצה על השם פותחת (onEdit)', async () => {
     const onEdit = vi.fn()
     const item = {
       bookTitle: 'ספר לדוגמה',
@@ -29,9 +31,9 @@ describe('BookRow', () => {
 
     expect(screen.getByText('ספר לדוגמה')).toBeInTheDocument()
     expect(screen.getByText('ספרים/הלכה/ספר.txt')).toBeInTheDocument()
-    expect(screen.getByText('ללא רשומה')).toBeInTheDocument()
+    expect(screen.getByText('לא תועד')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: /עריכה/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'ספר לדוגמה' }))
     expect(onEdit).toHaveBeenCalledTimes(1)
   })
 
@@ -73,11 +75,11 @@ describe('SetRow', () => {
     expect(screen.getByText('ידני')).toBeInTheDocument()
     expect(screen.queryByText('ספר א')).not.toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: /סט לדוגמה/ }))
+    await userEvent.click(screen.getByRole('button', { name: /סט לדוגמה/, expanded: false }))
     expect(onToggle).toHaveBeenCalledTimes(1)
   })
 
-  it('כשמורחב מציג את חברי הסט, כולל כפתור "קיימת רשומה נפרדת"', async () => {
+  it('כשמורחב מציג את חברי הסט, כולל כפתור "יש לו פרטי מקור משלו"', async () => {
     const onEditMember = vi.fn()
     const expandedItem = {
       ...setItem,
@@ -94,7 +96,7 @@ describe('SetRow', () => {
       />
     )
     expect(screen.getByText('ספר א')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: /קיימת רשומה נפרדת/ }))
+    await userEvent.click(screen.getByRole('button', { name: /יש לו פרטי מקור משלו/ }))
     expect(onEditMember).toHaveBeenCalledWith(expandedItem.books[0])
   })
 

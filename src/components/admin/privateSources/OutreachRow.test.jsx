@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render as rtlRender, screen } from '@testing-library/react'
+
+const render = (ui) => rtlRender(<ul>{ui}</ul>)
 import userEvent from '@testing-library/user-event'
 import OutreachRow from './OutreachRow'
 
@@ -30,10 +32,10 @@ describe('OutreachRow', () => {
     expect(screen.queryByText('פנייה כפולה')).not.toBeInTheDocument()
   })
 
-  it('כפתור עריכה מפעיל onEdit', async () => {
+  it('לחיצה על שם הנמען פותחת (onEdit)', async () => {
     const onEdit = vi.fn()
     render(<OutreachRow item={baseItem} statuses={statuses} channels={channels} duplicates={[]} onEdit={onEdit} />)
-    await userEvent.click(screen.getByRole('button', { name: /עריכה/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'ישראל ישראלי' }))
     expect(onEdit).toHaveBeenCalledTimes(1)
   })
 
