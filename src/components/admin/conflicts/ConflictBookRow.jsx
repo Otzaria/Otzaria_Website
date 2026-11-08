@@ -22,7 +22,7 @@ export const conflictRowId = (id) => `conflict-${id}`
  * ⋮: פתח בעורך, ואחרי מפריד, באדום — אותן שתי פעולות על כל הספר (עם חלון אישור, אצל ההורה).
  *
  * @param {{ book: any, busy: boolean, onResolved: (bookId: string, data: any) => void, onError: (error: any) => void,
- *   onResolveBook: (book: any, strategy: 'ours' | 'theirs') => void }} props
+ *   onResolveBook: (book: any, strategy: 'ours' | 'theirs', prepare: () => Promise<void>) => void }} props
  */
 function ConflictBookRow({ book, busy, onResolved, onError, onResolveBook }) {
   const router = useRouter()
@@ -38,10 +38,9 @@ function ConflictBookRow({ book, busy, onResolved, onError, onResolveBook }) {
     if (next && !parts.loaded && !parts.loading) parts.load()
   }
 
-  // פעולה על כל הספר: בחירות בחלקים שעוד לא יצאו — מתבטלות (הן היו נדרסות ממילא)
+  // רק אחרי אישור הפעולה: מבטלים המתנות ומחכים לכתיבות החלקים שכבר יצאו
   const resolveBook = (strategy) => {
-    parts.cancelWaiting()
-    onResolveBook(book, strategy)
+    onResolveBook(book, strategy, parts.prepareResolveBook)
   }
 
   const menuItems = [
@@ -92,7 +91,7 @@ function ConflictBookRow({ book, busy, onResolved, onError, onResolveBook }) {
             </div>
           )}
           {!parts.loading && !parts.error && parts.loaded && (
-            <DiffPreview changes={parts.changes} total={parts.changeCount} onResolve={parts.resolvePart} decisions={parts.decisions} onCancel={parts.cancelPart} />
+            <DiffPreview changes={parts.changes} total={parts.changeCount} onResolve={parts.resolvePart} decisions={parts.decisions} onCancel={parts.cancelPart} disabled={busy} />
           )}
         </div>
       )}

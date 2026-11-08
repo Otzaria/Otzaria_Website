@@ -160,3 +160,104 @@ describe('התנגשויות בסנכרון', () => {
     expect(await screen.findByText('אין ספרים שמחכים להחלטה')).toBeInTheDocument()
   })
 })
+
+describe('הכרעות ממתינות — יציאה והכרעה על כל הספר', () => {
+  async function choosePart(user) {
+    await user.click(within(row('בראשית')).getByRole('button', { name: 'השאר את הנוסח שבאתר: חלק 1 מתוך 2' }))
+  }
+  async function wholeBookDialog(user) {
+    await user.click(within(row('בראשית')).getByRole('button', { name: /פעולות/ }))
+    await user.click(await screen.findByRole('menuitem', { name: 'השאר את הנוסח שבמאגר בכל הספר' }))
+    return screen.findByRole('dialog', { name: 'להשאיר בכל הספר את הנוסח שבמאגר?' })
+  }
+  function warnsBeforeUnload() {
+    const event = new Event('beforeunload', { cancelable: true })
+    act(() => { window.dispatchEvent(event) })
+    return event.defaultPrevented
+  }
+
+  test('ביטול ההכרעה על כל הספר משאיר את בחירת החלק לשליחה בזמן המקורי', async () => {
+    const user = setup()
+    renderScreen()
+    await openBook(user)
+    await choosePart(user)
+    const dialog = await wholeBookDialog(user)
+    await user.click(within(dialog).getByRole('button', { name: 'ביטול' }))
+    expect(within(row('בראשית')).getByText('נבחר: הנוסח שבאתר')).toBeInTheDocument()
+    await wait(6000)
+    expect(posts()).toEqual([
+      { key: 'POST /api/library/books/c1/resolve-conflict-hunk', body: '{"before":"ויאמר יהי אור","after":"ויאמר יהי אור,","strategy":"ours"}' },
+    ])
+    expect(within(row('בראשית')).getByText('נשמר: נשאר הנוסח שבאתר')).toBeInTheDocument()
+  })
+
+  test('ביטול חלון הספר מאפשר עדיין לבטל את בחירת החלק', async () => {
+    const user = setup()
+    renderScreen()
+    await openBook(user)
+    await choosePart(user)
+    const dialog = await wholeBookDialog(user)
+    await user.click(within(dialog).getByRole('button', { name: 'ביטול' }))
+    await user.click(within(row('בראשית')).getByRole('button', { name: 'בטל את הבחירה: חלק 1 מתוך 2' }))
+    await wait(7000)
+    expect(posts()).toEqual([])
+    expect(warnsBeforeUnload()).toBe(false)
+    expect(within(row('בראשית')).getByRole('button', { name: 'השאר את הנוסח שבאתר: חלק 1 מתוך 2' })).toBeEnabled()
+  })
+
+  test('אישור פעולה מלאה שנכשל מנקה את בחירות ההמתנה ומאפשר לבחור מחדש', async () => {
+    routes['POST /api/library/books/c1/resolve-conflict'] = () => json({ error: 'תקלה בשרת' }, { status: 500 })
+    const user = setup()
+    renderScreen()
+    await openBook(user)
+    await choosePart(user)
+    const dialog = await wholeBookDialog(user)
+    await user.click(within(dialog).getByRole('button', { name: 'השאר את הנוסח שבמאגר' }))
+    await screen.findByText('תקלה בשרת')
+    expect(within(row('בראשית')).getByRole('button', { name: 'השאר את הנוסח שבאתר: חלק 1 מתוך 2' })).toBeEnabled()
+    expect(warnsBeforeUnload()).toBe(false)
+    await wait(7000)
+    expect(posts()).toHaveLength(1)
+    await choosePart(user)
+    await wait(6000)
+    expect(posts().at(-1).key).toBe('POST /api/library/books/c1/resolve-conflict-hunk')
+  })
+
+  test('רענון וסגירה מזהירים גם בזמן ההמתנה וגם בזמן כתיבה; אחרי שמירה האזהרה מוסרת', async () => {
+    let finish
+    routes['POST /api/library/books/c1/resolve-conflict-hunk'] = () => new Promise((resolve) => { finish = resolve })
+    const user = setup()
+    renderScreen()
+    await openBook(user)
+    expect(warnsBeforeUnload()).toBe(false)
+    await choosePart(user)
+    expect(warnsBeforeUnload()).toBe(true)
+    await wait(6000)
+    expect(warnsBeforeUnload()).toBe(true)
+    await act(async () => { finish(json({ success: true, resolved: false, conflictCount: 1 })) })
+    expect(warnsBeforeUnload()).toBe(false)
+  })
+
+  test('הכרעת הספר מחכה לכל תור החלקים שכבר יצא, גם כשהטיימר פג בתוך חלון האישור', async () => {
+    const finishes = []
+    routes['POST /api/library/books/c1/resolve-conflict-hunk'] = () => new Promise((resolve) => { finishes.push(resolve) })
+    routes['POST /api/library/books/c1/resolve-conflict'] = () => json({ error: 'תקלה בשרת' }, { status: 500 })
+    const user = setup()
+    renderScreen()
+    await openBook(user)
+    await choosePart(user)
+    await user.click(within(row('בראשית')).getByRole('button', { name: 'השאר את הנוסח שבאתר: חלק 2 מתוך 2' }))
+    const dialog = await wholeBookDialog(user)
+    await wait(6000)
+    expect(posts()).toHaveLength(1)
+    await user.click(within(dialog).getByRole('button', { name: 'השאר את הנוסח שבמאגר' }))
+    expect(posts()).toHaveLength(1)
+    await act(async () => { finishes[0](json({ success: true, resolved: false, conflictCount: 1 })) })
+    expect(posts()).toHaveLength(2)
+    expect(posts().every((p) => p.key.endsWith('resolve-conflict-hunk'))).toBe(true)
+    await act(async () => { finishes[1](json({ success: true, resolved: false, conflictCount: 1 })) })
+    await screen.findByText('תקלה בשרת')
+    expect(posts()).toHaveLength(3)
+    expect(posts()[2].key).toBe('POST /api/library/books/c1/resolve-conflict')
+  })
+})

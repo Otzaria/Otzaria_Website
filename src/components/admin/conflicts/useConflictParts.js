@@ -28,7 +28,7 @@ export function useConflictParts(book, { onResolved, onError }) {
   const [state, setState] = useState({ loading: false, changes: null, changeCount: 0, error: null, loaded: false })
   const [decisions, setDecisions] = useState(() => new Map())
   const queueRef = useRef([])      // תור הכרעות שהזמן ל"בטל" שלהן נגמר {change, strategy}
-  const drainingRef = useRef(false) // האם מעבד התור פעיל (סריאלי)
+  const drainPromise = useRef(null) // הכתיבות הפעילות; גם הכרעה על כל הספר מחכה להן
   const latestRef = useRef({ changes: null, decisions: new Map() }) // מראה ל-state עבור drain
   const toastIds = useRef(new Map())
   const bookRef = useRef(book)
@@ -48,14 +48,28 @@ export function useConflictParts(book, { onResolved, onError }) {
     return next
   }), [])
 
+  // סגירה או רענון אינם מריצים את ניקוי ה-unmount של React. כל עוד נשארה הכרעה שלא נשמרה — מזהירים.
+  // לא שולחים כאן keepalive במקביל: השרת דורש כתיבה סדרתית של החלקים באותו ספר.
+  const unsaved = [...decisions.values()].some((d) => d.state !== 'saved')
+  useEffect(() => {
+    if (!unsaved) return undefined
+    const warn = (event) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [unsaved])
+
   /** ביטול כל הבחירות שעוד לא יצאו (כשל, טעינה מחדש, פעולה על כל הספר) */
   const cancelWaiting = useCallback(() => {
     for (const [change, id] of toastIds.current) {
       deferred.cancel(change)
       toast.dismiss(id)
+      setDecision(change, null)
     }
     toastIds.current.clear()
-  }, [deferred, toast])
+  }, [deferred, toast, setDecision])
 
   const loadDiff = useCallback(() => {
     setState((s) => ({ ...s, loading: true, error: null }))
@@ -73,36 +87,44 @@ export function useConflictParts(book, { onResolved, onError }) {
       })
   }, [bookId])
 
-  const drain = useCallback(async () => {
-    if (drainingRef.current) return
-    drainingRef.current = true
-    let lastData = null
-    try {
-      while (queueRef.current.length) {
-        const { change, strategy } = queueRef.current.shift()
-        try {
-          const data = await resolveConflictPart(bookId, change, strategy)
-          lastData = data
-          setDecision(change, { strategy, state: 'saved' })
-          onResolvedRef.current?.(bookId, data) // עדכון המונה בהורה / הסרת הספר כשנפתר
-        } catch (e) {
-          // כשל — מבטלים את התור (וגם מה שעוד מחכה ל"בטל"), מסנכרנים מחדש ועוצרים
-          queueRef.current = []
-          cancelWaiting()
-          const data = await loadDiff()
-          if (data) onResolvedRef.current?.(bookId, { resolved: false, conflictCount: data.changeCount })
-          onErrorRef.current?.(e)
-          return // ה-finally יאפס drainingRef; דילוג על טעינת המנה הבאה
+  const drain = useCallback(() => {
+    if (drainPromise.current) return drainPromise.current
+    drainPromise.current = (async () => {
+      let lastData = null
+      try {
+        while (queueRef.current.length) {
+          const { change, strategy } = queueRef.current.shift()
+          try {
+            const data = await resolveConflictPart(bookId, change, strategy)
+            lastData = data
+            setDecision(change, { strategy, state: 'saved' })
+            onResolvedRef.current?.(bookId, data) // עדכון המונה בהורה / הסרת הספר כשנפתר
+          } catch (e) {
+            // כשל — מבטלים את התור (וגם מה שעוד מחכה ל"בטל"), מסנכרנים מחדש ועוצרים
+            queueRef.current = []
+            cancelWaiting()
+            const data = await loadDiff()
+            if (data) onResolvedRef.current?.(bookId, { resolved: false, conflictCount: data.changeCount })
+            onErrorRef.current?.(e)
+            return // דילוג על טעינת המנה הבאה
+          }
         }
+        // מנה הבאה: כל החלקים המוצגים נשמרו, אבל בשרת נשארו עוד (יותר מ-30 חלקים)
+        const { changes, decisions: current } = latestRef.current
+        const allSaved = (changes || []).every((c) => current.get(c)?.state === 'saved')
+        if (lastData && !lastData.resolved && allSaved) await loadDiff()
+      } finally {
+        drainPromise.current = null
       }
-      // מנה הבאה: כל החלקים המוצגים נשמרו, אבל בשרת נשארו עוד (יותר מ-30 חלקים)
-      const { changes, decisions: current } = latestRef.current
-      const allSaved = (changes || []).every((c) => current.get(c)?.state === 'saved')
-      if (lastData && !lastData.resolved && allSaved) await loadDiff()
-    } finally {
-      drainingRef.current = false
-    }
+    })()
+    return drainPromise.current
   }, [bookId, loadDiff, setDecision, cancelWaiting])
+
+  const prepareResolveBook = useCallback(async () => {
+    cancelWaiting()
+    // הכרעות שהטיימר שלהן כבר הסתיים ממשיכות בזו אחר זו, ורק אחריהן אפשר לכתוב את הספר כולו.
+    await drainPromise.current
+  }, [cancelWaiting])
 
   const cancelPart = useCallback((change) => {
     if (!deferred.cancel(change)) return
@@ -131,5 +153,5 @@ export function useConflictParts(book, { onResolved, onError }) {
     })
   }, [deferred, toast, setDecision, cancelPart, drain])
 
-  return { ...state, decisions, load: loadDiff, resolvePart, cancelPart, cancelWaiting }
+  return { ...state, decisions, load: loadDiff, resolvePart, cancelPart, prepareResolveBook }
 }

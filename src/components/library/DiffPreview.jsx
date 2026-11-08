@@ -61,7 +61,7 @@ function DiffPreview({ changes, total, selectable = false, selected, onToggle, p
         const idx = c.idx ?? i
         const common = { change: c, segs, title: titled ? partTitle(onResolve ? i + 1 : idx + 1, count) : null }
         return onResolve
-          ? <ConflictPart key={idx} {...common} decision={decisions?.get(c)} onResolve={onResolve} onCancel={onCancel} />
+          ? <ConflictPart key={idx} {...common} decision={decisions?.get(c)} onResolve={onResolve} onCancel={onCancel} disabled={disabled} />
           : (
             <SuggestionPart
               key={idx}
@@ -127,7 +127,7 @@ function SuggestionPart({ change: c, segs, layout, title, selectable, selected, 
 }
 
 /** חלק בהתנגשות: שני הנוסחים, תמיד (גם ריק — הוא בחירה לגיטימית), ולכל אחד הכפתור שלו */
-function ConflictPart({ change: c, segs, title, decision, onResolve, onCancel }) {
+function ConflictPart({ change: c, segs, title, decision, onResolve, onCancel, disabled }) {
   const chosen = decision?.strategy
   const headerText = decision ? decisionText(chosen, decision.state) : null
   const ref = useRef(null)
@@ -154,7 +154,7 @@ function ConflictPart({ change: c, segs, title, decision, onResolve, onCancel })
           </span>
         )}
         {decision?.state === 'waiting' && (
-          <Button data-cancel-part="" variant="text" size="sm" icon="undo" className="ms-auto" onClick={() => onCancel?.(c)} aria-label={`בטל את הבחירה: ${title}`}>
+          <Button data-cancel-part="" variant="text" size="sm" icon="undo" className="ms-auto" disabled={disabled} onClick={() => onCancel?.(c)} aria-label={`בטל את הבחירה: ${title}`}>
             בטל
           </Button>
         )}
@@ -170,7 +170,7 @@ function ConflictPart({ change: c, segs, title, decision, onResolve, onCancel })
             dimmed={Boolean(chosen) && chosen !== side}
             selected={chosen === side}
             action={chosen ? (chosen === side && <Badge tone="primary" icon="check">נבחר</Badge>) : (
-              <Button type="button" variant="outlined" size="sm" className="bg-surface" onClick={() => onResolve(c, side)} aria-label={`${keepLabel(side, empty)}: ${title}`}>
+              <Button type="button" variant="outlined" size="sm" className="bg-surface" disabled={disabled} onClick={() => onResolve(c, side)} aria-label={`${keepLabel(side, empty)}: ${title}`}>
                 {keepLabel(side, empty)}
               </Button>
             )}

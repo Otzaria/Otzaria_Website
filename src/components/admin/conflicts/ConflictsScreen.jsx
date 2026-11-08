@@ -57,10 +57,11 @@ export default function ConflictsScreen() {
 
   const onError = useCallback((error) => toast.show(errorToast(error, 'לא הצלחנו לשמור את הבחירה.')), [toast])
 
-  const onResolveBook = useCallback(async (book, strategy) => {
+  const onResolveBook = useCallback(async (book, strategy, prepare) => {
     if (!(await confirm(resolveBookConfirm(book, strategy)))) return
     setBusy((s) => new Set([...s, book._id]))
     try {
+      await prepare()
       await resolveConflictBook(book._id, strategy)
       moveFocusFrom(book._id)
       setItems((list) => list.filter((b) => b._id !== book._id))
