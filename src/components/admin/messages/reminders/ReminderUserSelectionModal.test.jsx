@@ -49,7 +49,7 @@ describe('ReminderUserSelectionModal', () => {
     render(
       <ReminderUserSelectionModal
         users={users}
-        selected={[]}
+        selected={['a@example.com']}
         onToggle={vi.fn()}
         onSelectAll={onSelectAll}
         onSelectNone={onSelectNone}
@@ -57,11 +57,17 @@ describe('ReminderUserSelectionModal', () => {
       />
     )
     const user = userEvent.setup()
-    await user.click(screen.getByRole('button', { name: 'בחר הכל' }))
+    await user.click(screen.getByRole('button', { name: 'בחר הכול' }))
     expect(onSelectAll).toHaveBeenCalledTimes(1)
-    await user.click(screen.getByRole('button', { name: 'נקה הכל' }))
+    await user.click(screen.getByRole('button', { name: 'נקה' }))
     expect(onSelectNone).toHaveBeenCalledTimes(1)
     await user.click(screen.getByRole('button', { name: /אישור/ }))
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('כל שורה היא תווית: השם הנגיש של התיבה — השם והדואר', () => {
+    render(<ReminderUserSelectionModal users={users} selected={[]} onToggle={vi.fn()} onSelectAll={vi.fn()} onSelectNone={vi.fn()} onClose={vi.fn()} />)
+    expect(screen.getByRole('checkbox', { name: /אלכס.*a@example\.com/ })).not.toBeChecked()
+    expect(screen.getByRole('dialog', { name: 'בחר עורכים' })).toBeInTheDocument()
   })
 })

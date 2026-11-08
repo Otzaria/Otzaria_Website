@@ -2,8 +2,17 @@
 // המשותף לניהול (?allMessages=true) נשלף ישירות מה-DB בזמן הרינדור (אותה
 // שאילתה בדיוק כמו GET /api/messages בענף הניהול, ראו
 // src/lib/adminMessages.js:getAdminMessagesList, המשותפת לשני המקומות).
-// האינטראקטיביות (תגובה, סימון-כנקרא, מחיקה, שליחת הודעה חדשה) ב-Client
-// Component (AdminMessagesClient) שמקבל את הרשימה כ-prop.
+// האינטראקטיביות (לשוניות נכנסות / נשלחו / תזכורות, מגירת שיחה, סימון-כנקרא, מחיקה, הודעה חדשה)
+// ב-MessagesScreen (src/components/admin/messages), שמקבל את הרשימה כ-prop.
+//
+// תזכורות: הלשונית ?view=reminders (/library/admin/reminders מפנה אליה). מוצגת רק למי ש-hasBooksAccess
+// (מנהל כללי ומנהל ספרים — בדיוק מי שהיה מורשה לדף התזכורות; ה-API שלהן אוכף אותה בדיקה). מנהל תוספים רואה
+// הודעות בלי תזכורות, כמו קודם.
+//
+// exactAudience — מנהל כללי יכול לספור במדויק כמה יקבלו הודעה "לכל המשתמשים" (/api/admin/users, שרק לו מותר);
+// לאחרים — הערכה מרשימת המשתמשים הרגילים (ראו ComposeDrawer).
+//
+// כשל בטעינה — initialError: המסך מציג "לא הצלחנו לטעון" ו"נסה שוב" (קודם — רשימה ריקה, כאילו אין הודעות).
 //
 // ניתוח "משותף לכל הצופים" מול "תיבת דואר אישית" (נדרש לפני שממטמנים משהו
 // admin-facing, ראו src/lib/cacheTags.js): קראנו את GET /api/messages —
@@ -27,11 +36,14 @@
 import { getServerSession } from 'next-auth'
 import { unstable_cache as nextCache } from 'next/cache'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
-import { hasAnyAdminAccess } from '@/lib/roles'
+import { Suspense } from 'react'
+import { hasAnyAdminAccess, hasBooksAccess, isAdmin } from '@/lib/roles'
 import { getAdminMessagesList } from '@/lib/adminMessages'
 import { toAdminMessageListItem } from '@/lib/adminMessagesView'
 import { CACHE_TAGS, REVALIDATE_SECONDS } from '@/lib/cacheTags'
-import AdminMessagesClient from './AdminMessagesClient'
+import { viewFromParams } from '@/lib/adminMessagesScreen/messagesQuery'
+import MessagesScreen from '@/components/admin/messages/MessagesScreen'
+import { MessagesScreenSkeleton } from '@/components/admin/messages/MessagesSkeleton'
 
 // ליטרל מספרי בכוונה (לא REVALIDATE_SECONDS.MESSAGES_ADMIN_LIST) — ה-segment
 // config של Next נחלץ ע"י ניתוח AST סטטי שלא תומך ב-property access על אובייקט
@@ -43,18 +55,34 @@ const loadAdminMessages = nextCache(getAdminMessagesList, ['admin-messages-list'
   revalidate: REVALIDATE_SECONDS.MESSAGES_ADMIN_LIST
 })
 
-export default async function AdminMessagesPage() {
+export default async function AdminMessagesPage({ searchParams }) {
   const session = await getServerSession(authOptions)
+  const role = session?.user?.role
+  const canRemind = hasBooksAccess(role)
+  const view = viewFromParams(await searchParams)
 
   let messages = []
-  if (hasAnyAdminAccess(session?.user?.role)) {
+  let error = false
+  if (hasAnyAdminAccess(role)) {
     try {
       // רק השדות שהדף מציג — הרשימה נכנסת כולה ל-HTML (ראו adminMessagesView.js)
       messages = (await loadAdminMessages()).map(toAdminMessageListItem)
-    } catch (error) {
-      console.error('Error loading admin messages:', error)
+    } catch (e) {
+      console.error('Error loading admin messages:', e)
+      error = true
     }
   }
 
-  return <AdminMessagesClient initialMessages={messages} />
+  // Suspense — MessagesScreen קורא את הכתובת (useSearchParams)
+  return (
+    <Suspense fallback={<MessagesScreenSkeleton view={view} canRemind={canRemind} />}>
+      <MessagesScreen
+        initialMessages={messages}
+        initialError={error}
+        canRemind={canRemind}
+        viewerName={session?.user?.name || ''}
+        exactAudience={isAdmin(role)}
+      />
+    </Suspense>
+  )
 }
