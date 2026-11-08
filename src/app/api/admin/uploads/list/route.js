@@ -15,6 +15,8 @@ export async function GET() {
   
   // מציג רק העלאות שלא באשפה
   const uploads = await Upload.find({ isDeleted: false })
+    // בלי content (הקובץ עצמו בהעלאות ישנות, כ-300MB לכל הרשימה) — לא חלק מהתשובה
+    .select('-content')
     .populate('uploader', 'name email')
     .sort({ createdAt: -1 });
 
