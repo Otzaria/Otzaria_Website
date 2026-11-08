@@ -61,12 +61,12 @@ describe('LocalOcrJobProgress — מצבים מהעובד', () => {
 
   it('queued שדווח מהעובד (חזרה לתור) — הסבר "חזרה לתור", לא "ממתינה שהמחשב יאסוף"', () => {
     render(<LocalOcrJobProgress job={job({ workerState: 'queued' })} worker={null} onCancel={noop} />)
-    expect(screen.getByText(/העבודה חזרה לתור במחשב המקומי/)).toBeInTheDocument()
-    expect(screen.queryByText(/ממתינה שהמחשב המקומי יאסוף אותה/)).toBeNull()
+    expect(screen.getByText(/העבודה חזרה להמתנה במחשב המקומי/)).toBeInTheDocument()
+    expect(screen.queryByText(/ממתין להתחלה — המחשב המקומי יתחיל כשיתפנה/)).toBeNull()
   })
 
   it('queued שטרם נאספה — ההסבר הרגיל', () => {
     render(<LocalOcrJobProgress job={job()} worker={null} onCancel={noop} />)
-    expect(screen.getByText(/ממתינה שהמחשב המקומי יאסוף אותה/)).toBeInTheDocument()
+    expect(screen.getByText(/ממתין להתחלה — המחשב המקומי יתחיל כשיתפנה/)).toBeInTheDocument()
   })
 })

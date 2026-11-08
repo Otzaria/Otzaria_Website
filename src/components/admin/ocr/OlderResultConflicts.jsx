@@ -14,8 +14,8 @@ export default function OlderResultConflicts({ items, onChanged }) {
 
   return (
     <section aria-label="תוצאות מתנגשות מעבודות קודמות" className="space-y-2 rounded-control border border-outline-variant p-3">
-      <h4 className="text-sm font-bold text-on-surface">תוצאות מתנגשות מעבודות קודמות ({items.length})</h4>
-      <p className="text-xs text-on-surface-variant">
+      <h4 className="text-title-sm text-on-surface">תוצאות מתנגשות מעבודות קודמות ({items.length})</h4>
+      <p className="text-label-sm font-normal text-on-surface-variant">
         בעבודות מקומיות קודמות של הספר התקבלה תוצאה נוספת ושונה אחרי שהתוצאה הראשונה כבר התקבלה. היא
         לא הוחלה, והקובץ נשמר בשרת לבדיקה עד סימון &quot;נבדק&quot;.
       </p>

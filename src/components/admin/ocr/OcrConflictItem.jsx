@@ -4,20 +4,21 @@ import { useState } from 'react'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import Ltr from '@/components/ui/Ltr'
-import { formatDateTime, jobShortId } from './ocrJobView'
+import { jobShortId } from './ocrJobView'
+import { fullDateText } from '@/lib/adminTerms'
 import { conflictReasonLabel } from '@/lib/ocr/ocrConflictView'
 
 const STATUS = {
   open: { label: 'ממתינה להחלטה', tone: 'warning' },
-  applying: { label: 'אימוץ ה-OCR בתהליך', tone: 'info' },
-  applied: { label: 'אומץ טקסט ה-OCR', tone: 'success' },
+  applying: { label: 'אימוץ הטקסט שזוהה בתהליך', tone: 'info' },
+  applied: { label: 'אומץ הטקסט שזוהה', tone: 'success' },
   dismissed: { label: 'נשמר הטקסט הקיים', tone: 'neutral' },
 }
 
 /**
  * התנגשות אחת: טקסט OCR שלא נכתב לעמוד — העמוד נערך אחרי יצירת העבודה (page_changed), או שהעבודה
  * בוטלה והעמוד זוהה לפני הביטול (job_cancelled); הסיבה מוצגת כתווית. מציג את הטקסט
- * הנוכחי (האנושי) מול טקסט ה-OCR — שניהם כטקסט רגיל — ומאפשר לאמץ את ה-OCR (באישור) או
+ * הנוכחי (האנושי) מול הטקסט שזוהה — שניהם כטקסט רגיל — ומאפשר לאמץ את ה-OCR (באישור) או
  * לשמור את הקיים. האימוץ נשלח עם updatedAt של העמוד כפי שהוצג כאן; השרת דוחה אותו אם
  * העמוד נערך שוב בינתיים. showJob — מציג גם מאיזו עבודה ההתנגשות (ברשימה ברמת הספר).
  *
@@ -41,13 +42,13 @@ export default function OcrConflictItem({ conflict, busy = false, error = '', sh
     <li className="rounded-control border border-outline-variant">
       <div className="flex flex-wrap items-center justify-between gap-2 p-2.5">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-bold text-on-surface">עמוד {conflict.pageNumber ?? '—'}</span>
+          <span className="text-body-sm leading-snug text-on-surface">עמוד {conflict.pageNumber ?? '—'}</span>
           <Badge tone={status.tone}>{status.label}</Badge>
-          <span className="text-xs text-on-surface-variant">{conflictReasonLabel(conflict.reason)}</span>
+          <span className="text-label-sm font-normal text-on-surface-variant">{conflictReasonLabel(conflict.reason)}</span>
           {showJob && conflict.jobId && (
-            <span className="text-xs text-on-surface-variant">
+            <span className="text-label-sm font-normal text-on-surface-variant">
               מעבודה <Ltr className="font-mono">{jobShortId(conflict.jobId)}</Ltr>
-              {conflict.jobCreatedAt ? ` מ-${formatDateTime(conflict.jobCreatedAt)}` : ''}
+              {conflict.jobCreatedAt ? ` מ-${fullDateText(conflict.jobCreatedAt)}` : ''}
             </span>
           )}
         </div>
@@ -68,21 +69,21 @@ export default function OcrConflictItem({ conflict, busy = false, error = '', sh
           {conflict.pageExists ? (
             <TextBlock
               title="הטקסט הנוכחי בעמוד"
-              meta={conflict.pageUpdatedAt ? `עודכן ${formatDateTime(conflict.pageUpdatedAt)}` : ''}
+              meta={conflict.pageUpdatedAt ? `עודכן ${fullDateText(conflict.pageUpdatedAt)}` : ''}
             >
               {conflict.pageIsTwoColumns
                 ? `${conflict.pageRightColumn}\n\n— טור שמאלי —\n\n${conflict.pageLeftColumn}`
                 : conflict.pageContent}
             </TextBlock>
           ) : (
-            <p className="text-sm text-on-surface-variant">העמוד נמחק מהספר — אין מה לאמץ.</p>
+            <p className="text-body-sm leading-snug text-on-surface-variant">העמוד נמחק מהספר — אין מה לאמץ.</p>
           )}
-          <TextBlock title="טקסט ה-OCR">{conflict.ocrText}</TextBlock>
+          <TextBlock title="הטקסט שזוהה">{conflict.ocrText}</TextBlock>
 
           {isOpen && (
             confirming ? (
               <div className="space-y-2 rounded-control bg-surface-container p-2.5">
-                <p className="text-sm text-on-surface">הטקסט הנוכחי בעמוד יוחלף בטקסט ה-OCR. להמשיך?</p>
+                <p className="text-body-sm leading-snug text-on-surface">הטקסט הנוכחי בעמוד יוחלף בהטקסט שזוהה. להמשיך?</p>
                 <div className="flex flex-wrap gap-2">
                   <Button
                     variant="filled"
@@ -104,7 +105,7 @@ export default function OcrConflictItem({ conflict, busy = false, error = '', sh
               <div className="flex flex-wrap gap-2">
                 {conflict.pageExists && (
                   <Button variant="tonal" size="sm" icon="done" disabled={busy} onClick={() => setConfirming(true)}>
-                    אמץ את טקסט ה-OCR
+                    אמץ את הטקסט שזוהה
                   </Button>
                 )}
                 <Button variant="outlined" size="sm" icon="undo" loading={busy} onClick={() => onDismiss(conflict)}>
@@ -115,16 +116,16 @@ export default function OcrConflictItem({ conflict, busy = false, error = '', sh
           )}
 
           {!isOpen && conflict.resolvedByName && (
-            <p className="text-xs text-on-surface-variant">
+            <p className="text-label-sm font-normal text-on-surface-variant">
               טופל בידי {conflict.resolvedByName}
-              {conflict.resolvedAt ? ` · ${formatDateTime(conflict.resolvedAt)}` : ''}
+              {conflict.resolvedAt ? ` · ${fullDateText(conflict.resolvedAt)}` : ''}
             </p>
           )}
         </div>
       )}
 
       {error && (
-        <p role="alert" className="px-2.5 pb-2.5 text-sm text-error">{error}</p>
+        <p role="alert" className="px-2.5 pb-2.5 text-body-sm leading-snug text-error">{error}</p>
       )}
     </li>
   )
@@ -134,10 +135,10 @@ function TextBlock({ title, meta, children }) {
   return (
     <div>
       <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
-        <span className="text-xs font-bold text-on-surface">{title}</span>
-        {meta && <span className="text-xs text-on-surface-variant">{meta}</span>}
+        <span className="text-label-sm font-normal text-on-surface">{title}</span>
+        {meta && <span className="text-label-sm font-normal text-on-surface-variant">{meta}</span>}
       </div>
-      <pre dir="rtl" className="scrollbar-thin max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-control bg-surface-container p-2 font-sans text-sm text-on-surface">
+      <pre dir="rtl" className="scrollbar-thin max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-control bg-surface-container p-2 font-sans text-body-sm leading-snug text-on-surface">
         {children || '(ריק)'}
       </pre>
     </div>

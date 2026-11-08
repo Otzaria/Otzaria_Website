@@ -21,17 +21,17 @@ import {
 // הסבר קצר לכל מצב פעיל של עבודת local (מתחת לתג המצב)
 const STATUS_HINTS = {
   preparing: 'השרת מכין את קובץ העמודים לעיבוד. בספר גדול זה עשוי להימשך כמה דקות.',
-  queued: 'העבודה בתור, וממתינה שהמחשב המקומי יאסוף אותה.',
+  queued: 'ממתין להתחלה — המחשב המקומי יתחיל כשיתפנה.',
   running: 'המחשב המקומי מעבד את העמודים.',
   pausing: 'המחשב המקומי עוצר את העיבוד באופן מסודר.',
-  paused_runner: 'המחשב המקומי עסוק כרגע במשימת GitHub Runner. העיבוד יימשך מאותה נקודה כשתסתיים.',
+  paused_runner: 'המחשב המקומי עסוק כרגע במשימה אחרת. העיבוד יימשך מאותה נקודה כשתסתיים.',
   delivery_pending: 'העיבוד במחשב המקומי הסתיים, והתוצאה ממתינה למסירה לשרת.',
   applying: 'השרת קולט את התוצאות לעמודי הספר. בשלב זה כבר לא ניתן לבטל.',
   needs_attention: 'העיבוד נעצר וממתין לטיפול ידני במחשב המעבד.',
 }
 
 // queued שדווח מהעובד: העבודה כבר התחילה וחזרה לתור במחשב המקומי (isRequeued ב-ocrJobView.js)
-const REQUEUED_HINT = 'העבודה חזרה לתור במחשב המקומי (ניסיון חוזר אחרי תקלה, או החזרה ידנית לתור) ותמשיך מעצמה.'
+const REQUEUED_HINT = 'העבודה חזרה להמתנה במחשב המקומי (ניסיון חוזר אחרי תקלה, או החזרה ידנית) ותמשיך מעצמה.'
 
 /**
  * תצוגת עבודת OCR מקומי פעילה: מצב, התקדמות, זמינות המחשב המעבד, הודעת העובד וביטול.
@@ -77,23 +77,23 @@ export default function LocalOcrJobProgress({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-sm text-on-surface-variant">עיבוד במחשב מקומי</span>
+        <span className="text-body-sm leading-snug text-on-surface-variant">עיבוד במחשב מקומי</span>
         <OcrStatusBadge status={job.status} />
       </div>
 
       {canResume && onResume ? (
         <ResumePreparationNotice onResume={onResume} resuming={resuming} note={resumeNote} />
       ) : hint ? (
-        <p className="text-sm text-on-surface-variant">{hint}</p>
+        <p className="text-body-sm leading-snug text-on-surface-variant">{hint}</p>
       ) : null}
 
       {job.status === 'needs_attention' && <WorkerAttentionNotice message={job.workerMessage} />}
 
       {resume && (
-        <div role="alert" className="flex items-start gap-2 rounded-control bg-error-container p-3 text-sm text-on-error-container">
-          <AppIcon name="warning" className="text-base" />
+        <div role="alert" className="flex items-start gap-2 rounded-control bg-error-container p-3 text-body-sm leading-snug text-on-error-container">
+          <AppIcon name="warning" className="text-icon-sm" />
           <div>
-            <p className="font-bold">השלמת הקליטה מהקובץ השמור נכשלה</p>
+            <p className="text-on-error-container">השלמת הקליטה מהקובץ השמור נכשלה</p>
             <p className="mt-1 break-words">
               {resume.label}
               {resume.failedAt ? ` (${resume.failedAt})` : ''}.
@@ -113,19 +113,19 @@ export default function LocalOcrJobProgress({
       {isWorkerUnavailable(job, worker) ? (
         <WorkerOfflineNotice worker={worker} now={now} />
       ) : worker?.availability === 'online' ? (
-        <p className="flex items-center gap-1.5 text-xs text-on-surface-variant">
-          <AppIcon name="computer" className="text-sm" />
+        <p className="flex items-center gap-1.5 text-label-sm font-normal text-on-surface-variant">
+          <AppIcon name="computer" className="text-icon-xs" />
           המחשב המעבד מחובר (נראה לאחרונה: {formatLastSeen(worker.lastSeenAt, now)})
         </p>
       ) : null}
 
-      <p className="text-xs text-on-surface-variant">
-        אפשר לסגור את החלון ולחזור מאוחר יותר — העבודה שמורה בשרת.
+      <p className="text-label-sm font-normal text-on-surface-variant">
+        אפשר לסגור את המגירה ולחזור מאוחר יותר — העבודה שמורה בשרת.
       </p>
 
       {confirming ? (
         <div className="space-y-3 rounded-control border border-outline-variant p-3">
-          <p className="text-sm text-on-surface">
+          <p className="text-body-sm leading-snug text-on-surface">
             לבטל את העבודה? העיבוד במחשב המקומי ייעצר, ותוצאה שתגיע אחר כך לא תיקלט לעמודים.
           </p>
           <div className="flex flex-wrap gap-2">

@@ -97,7 +97,7 @@ export function activeFilter() {
   return { $or: [{ active: true }, { active: { $exists: false }, status: 'running' }] };
 }
 
-// תוויות לתצוגה בממשק הניהול (BookOcrDialog, src/components/admin/ocr/ocrJobView.js)
+// תוויות לתצוגה בממשק הניהול (BookOcrPanel, src/components/admin/ocr/ocrJobView.js)
 export const STATUS_LABELS_HE = Object.freeze({
   preparing: 'מכין קובץ לעיבוד',
   queued: 'ממתין למחשב המקומי',

@@ -1,8 +1,10 @@
-// לוגיקת תצוגה טהורה לעבודות OCR בממשק הניהול (BookOcrDialog ורכיבי src/components/admin/ocr).
+// לוגיקת תצוגה טהורה לעבודות OCR בממשק הניהול (BookOcrPanel ורכיבי src/components/admin/ocr).
 // בלי React/DOM — מיפוי מצב → תווית/גוון/אייקון, התקדמות, זמינות המחשב המקומי, אפשרות ביטול
 // ונוסחי סיכום. מקור המצבים והתוויות: src/lib/ocr/localJobState.js.
 import { STATUS_LABELS_HE, isActiveStatus } from '@/lib/ocr/localJobState'
 import { OCR_WARNING_LABELS, ocrWarningLabel } from '@/lib/ocr/ocrWarningLabels'
+import { fileSizeText } from '@/lib/adminList/fileSize'
+import { fullDateText } from '@/lib/adminTerms'
 
 // גוון (ui/Badge tone) ואייקון לכל מצב — הצבע מחזק בלבד, המשמעות בטקסט
 const STATUS_TONES = Object.freeze({
@@ -112,9 +114,9 @@ export function resumePreparationPayload(job, bookId) {
 
 export function methodLabel(job) {
   if (!job) return ''
-  if (job.method === 'gemini') return `Gemini · ${job.model || ''}`.trim()
+  if (job.method === 'gemini') return 'בינה מלאכותית'
   if (job.method === 'local') return 'מחשב מקומי'
-  return 'OCRWin'
+  return 'מנוע זיהוי ייעודי'
 }
 
 const MINUTE = 60 * 1000
@@ -234,8 +236,8 @@ const ATTENTION_REASONS = Object.freeze({
     action: 'בטלו את העבודה כאן והתחילו עבודה חדשה.',
   },
   device_missing: { label: 'כרטיס המסך (AMD GPU) הנדרש אינו זמין במחשב המעבד' },
-  pipeline_misconfigured: { label: 'צנרת ה-OCR במחשב המעבד אינה מותקנת או מוגדרת כראוי' },
-  process_tree_alive: { label: 'תהליך OCR קודם במחשב המעבד לא הסתיים' },
+  pipeline_misconfigured: { label: 'תוכנת הזיהוי במחשב המעבד אינה מותקנת או מוגדרת כראוי' },
+  process_tree_alive: { label: 'תהליך זיהוי קודם במחשב המעבד לא הסתיים' },
   crash_loop: { label: 'שירות העיבוד נקטע יותר מדי פעמים במהלך העבודה' },
   input_hash_mismatch: { label: 'קובץ ה-PDF שהורד אינו תואם ל-hash הרשום בעבודה' },
   input_unavailable: { label: 'האתר סירב להורדת קובץ ה-PDF' },
@@ -297,27 +299,14 @@ export function resumeIssue(job) {
   if (!code || job.ackAt) return null
   return {
     label: RESUME_ERROR_LABELS[code] || `שגיאה (${code})`,
-    failedAt: formatDateTime(job.resumeFailedAt),
-    retryAt: formatDateTime(job.resumeRetryAt),
+    failedAt: fullDateText(job.resumeFailedAt),
+    retryAt: fullDateText(job.resumeRetryAt),
     failures: Number(job.resumeFailures) || 0,
   }
 }
 
-export function formatBytes(bytes) {
-  if (bytes == null) return ''
-  const n = Number(bytes)
-  if (!Number.isFinite(n) || n < 0) return ''
-  if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`
-}
-
-export function formatDateTime(value) {
-  if (!value) return ''
-  const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleString('he-IL', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
-}
+/** גודל קובץ — בנוסח האחיד של הניהול (adminList/fileSize.js); ערך חסר / לא תקין — ריק */
+export const formatBytes = fileSizeText
 
 /** קיצור hash של תוצאה לתצוגה (12 תווים ראשונים) */
 export function shortSha(sha) {
@@ -348,9 +337,9 @@ export const EXISTING_TEXT_OPTIONS = Object.freeze([
   {
     id: 'skip_edited',
     label: 'דלג רק על עמודים שנערכו',
-    desc: 'OCR מחדש לעמודים שיש בהם רק זיהוי קודם שלא נגעו בו; עמודים שמתנדב ערך, תפס או סיים נשמרים',
+    desc: 'זיהוי מחדש לעמודים שיש בהם רק זיהוי קודם שלא נגעו בו; עמודים שמתנדב ערך, תפס או סיים נשמרים',
   },
-  { id: 'overwrite', label: 'דרוס אותם', desc: 'OCR מחדש לכל העמודים, התוכן הקיים יוחלף' },
+  { id: 'overwrite', label: 'דרוס אותם', desc: 'זיהוי מחדש לכל העמודים, התוכן הקיים יוחלף' },
 ])
 
 // כמה עמודים יעובדו במצב הנבחר — לפי ספירת השרת (toProcess); שרת ישן בלי toProcess: החישוב הישן

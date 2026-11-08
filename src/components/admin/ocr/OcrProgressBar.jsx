@@ -6,9 +6,9 @@ export default function OcrProgressBar({ percent, caption, label = 'התקדמו
   const value = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)))
   return (
     <div>
-      <div className="mb-1 flex justify-between text-sm text-on-surface-variant">
+      <div className="mb-1 flex justify-between text-body-sm leading-snug text-on-surface-variant">
         <span>{label}</span>
-        <span className="font-bold text-on-surface">{value}%</span>
+        <span className="tabular-nums text-on-surface">{value}%</span>
       </div>
       <div
         role="progressbar"
@@ -20,7 +20,7 @@ export default function OcrProgressBar({ percent, caption, label = 'התקדמו
       >
         <div className="h-3 rounded-pill bg-success transition-[width] duration-500 motion-reduce:transition-none" style={{ width: `${value}%` }} />
       </div>
-      {caption && <p className="mt-2 text-center text-xs text-on-surface-variant">{caption}</p>}
+      {caption && <p className="mt-2 text-center text-label-sm font-normal text-on-surface-variant">{caption}</p>}
     </div>
   )
 }

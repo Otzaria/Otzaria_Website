@@ -15,7 +15,7 @@ export default function LocalOcrOptions({ value, onChange, disabled = false }) {
   return (
     <div className="space-y-4">
       <fieldset disabled={disabled}>
-        <legend className="mb-2 text-sm font-bold text-on-surface">מודל שפה</legend>
+        <legend className="mb-2 text-title-sm text-on-surface">מודל שפה</legend>
         <div className="grid grid-cols-3 gap-2">
           {LOCAL_LM_OPTIONS.map((opt) => (
             <OptionCard
@@ -31,7 +31,7 @@ export default function LocalOcrOptions({ value, onChange, disabled = false }) {
       </fieldset>
 
       <fieldset disabled={disabled}>
-        <legend className="mb-2 text-sm font-bold text-on-surface">כתב ברירת מחדל</legend>
+        <legend className="mb-2 text-title-sm text-on-surface">כתב ברירת מחדל</legend>
         <div className="grid grid-cols-2 gap-2">
           {LOCAL_SCRIPT_OPTIONS.map((opt) => (
             <OptionCard
@@ -58,8 +58,8 @@ function OptionCard({ name, checked, onSelect, label, desc }) {
     >
       <input type="radio" name={name} checked={checked} onChange={onSelect} className="mt-0.5 size-4 accent-primary" />
       <span>
-        <span className="block text-sm font-medium text-on-surface">{label}</span>
-        {desc && <span className="block text-xs text-on-surface-variant">{desc}</span>}
+        <span className="block text-label-md font-medium text-on-surface">{label}</span>
+        {desc && <span className="block text-label-sm font-normal text-on-surface-variant">{desc}</span>}
       </span>
     </label>
   )

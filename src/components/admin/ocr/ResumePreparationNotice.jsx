@@ -13,8 +13,8 @@ import AppIcon from '@/components/ui/AppIcon'
 export default function ResumePreparationNotice({ onResume, resuming = false, note = '' }) {
   return (
     <div className="space-y-3 rounded-control border border-outline-variant p-3">
-      <p className="flex items-start gap-2 text-sm text-on-surface">
-        <AppIcon name="info" className="text-base" />
+      <p className="flex items-start gap-2 text-body-sm leading-snug text-on-surface">
+        <AppIcon name="info" className="text-icon-sm" />
         <span>
           הכנת קובץ העמודים נעצרה (תקלה זמנית בשרת או בקשה שנקטעה). אפשר להמשיך את אותה בקשה —
           לא תיווצר עבודה כפולה.
@@ -24,7 +24,7 @@ export default function ResumePreparationNotice({ onResume, resuming = false, no
         המשך הכנה
       </Button>
       {resuming && note && (
-        <p role="status" className="text-xs text-center text-on-surface-variant">{note}</p>
+        <p role="status" className="text-label-sm font-normal text-center text-on-surface-variant">{note}</p>
       )}
     </div>
   )

@@ -10,15 +10,15 @@ import { formatLastSeen } from './ocrJobView'
 export default function WorkerOfflineNotice({ worker, now }) {
   const notConfigured = worker?.configured === false
   return (
-    <div role="status" className="flex items-start gap-2 rounded-control bg-warning-container p-3 text-sm text-on-warning-container">
-      <AppIcon name="wifi_off" className="text-base" />
+    <div role="status" className="flex items-start gap-2 rounded-control bg-warning-container p-3 text-body-sm leading-snug text-on-warning-container">
+      <AppIcon name="wifi_off" className="text-icon-sm" />
       <p>
         {notConfigured ? (
-          <>ספק המחשב המקומי אינו מוגדר בשרת כרגע. העבודה שמורה בתור ותמשיך כשההגדרה תוחזר.</>
+          <>ספק המחשב המקומי אינו מוגדר בשרת כרגע. העבודה שמורה ותמשיך כשההגדרה תוחזר.</>
         ) : (
           <>
             המחשב המעבד לא זמין (נראה לאחרונה: {formatLastSeen(worker?.lastSeenAt, now)}).
-            העבודה שמורה בתור ותמשיך כשיחזור.
+            העבודה שמורה ותמשיך כשיחזור.
           </>
         )}
       </p>
