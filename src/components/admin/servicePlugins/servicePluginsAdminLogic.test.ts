@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { adminActionsFor, groupAdminReviews, needsException, quotaPause, rollbackReviewIds, type AdminReview } from './servicePluginsAdminLogic'
+import { adminActionsFor, defaultServiceTab, groupAdminReviews, needsException, quotaPause, rollbackReviewIds, serviceAttentionCount, SERVICE_TABS, type AdminReview } from './servicePluginsAdminLogic'
 
 function review(overrides: Partial<AdminReview>): AdminReview {
   return {
@@ -61,5 +61,21 @@ describe('servicePluginsAdminLogic', () => {
     expect(quotaPause({ quotaPausedUntil: '2026-10-24T06:00:00Z', lock: null }, now)).toBeNull()
     expect(quotaPause({ quotaPausedUntil: null, lock: null }, now)).toBeNull()
     expect(quotaPause(null, now)).toBeNull()
+  })
+})
+
+describe('לשוניות תוספי השירות', () => {
+  const r = (status: string) => ({ id: status, pluginId: 'p', pluginName: 'x', kind: 'plugin', status } as unknown as AdminReview)
+  it('חמש לשוניות בסדר; תקלה אצלנו — "נעצר בתקלה", לא "נכשל" (שנשמע כמו דחייה)', () => {
+    expect(SERVICE_TABS.map((t) => t.label)).toEqual(['ממתין לאישור', 'נעצר בתקלה', 'בבדיקה', 'טיוטה', 'סגור'])
+  })
+  it('מונה: ממתינות לבחירה ותקועות בתקלה', () => {
+    expect(serviceAttentionCount([r('pending_admin'), r('needs_operator'), r('running'), r('approved')])).toBe(2)
+    expect(serviceAttentionCount(null)).toBe(0)
+  })
+  it('הלשונית הראשונה שיש בה משהו', () => {
+    expect(defaultServiceTab(groupAdminReviews([r('running')]))).toBe('inProgress')
+    expect(defaultServiceTab(groupAdminReviews([r('needs_operator'), r('pending_admin')]))).toBe('pending')
+    expect(defaultServiceTab(groupAdminReviews([]))).toBe('pending')
   })
 })

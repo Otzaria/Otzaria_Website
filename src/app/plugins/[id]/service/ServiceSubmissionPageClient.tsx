@@ -98,7 +98,7 @@ export default function ServiceSubmissionPageClient({ pluginId }: { pluginId: st
             {!isOwner && (
               <p className="rounded-(--card-radius) bg-surface-variant p-4 text-body-md text-on-surface-variant">
                 צפייה בלבד: הגשה, ביטול וחזרה לגרסה הקודמת זמינים לבעלי התוסף. כמנהל — פעלו מהלשונית
-                {' '}<Link href="/library/admin/plugins" className="text-primary underline">״תוספי שירות״ בניהול התוספים</Link>.
+                {' '}<Link href="/library/admin/plugins?view=service" className="text-primary underline">״תוספי שירות״ בניהול התוספים</Link>.
               </p>
             )}
 

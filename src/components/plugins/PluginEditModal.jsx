@@ -29,7 +29,7 @@ async function readPluginManifest(file) {
   const bytes = new Uint8Array(await file.arrayBuffer())
   const unzipped = unzipSync(bytes, { filter: (info) => info.name === 'manifest.json' })
   const manifestBytes = unzipped['manifest.json']
-  if (!manifestBytes) throw new Error('manifest.json not found in plugin file')
+  if (!manifestBytes) throw new Error('missing manifest')
   return JSON.parse(new TextDecoder().decode(manifestBytes))
 }
 
@@ -83,7 +83,7 @@ function buildManifestDiff(manifest, current) {
     author: 'מפתח',
     version: 'גרסה',
     shortDescription: 'תיאור קצר',
-    status: 'סטטוס',
+    status: 'רמת יציבות',
     compatibleWith: 'גרסת מינימום',
     homepage: 'אתר בית',
     requiresNetwork: 'חיבור אינטרנט'
@@ -171,7 +171,7 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
     try {
       manifest = await readPluginManifest(file)
     } catch (err) {
-      showAlert('שגיאה', `לא ניתן לקרוא את manifest.json מקובץ התוסף: ${err?.message || err}`)
+      showAlert('שגיאה', 'קובץ התוסף פגום: לא הצלחנו לקרוא ממנו את פרטי התוסף. בדוק שזה הקובץ הנכון.')
       input.value = ''
       return
     }
@@ -184,19 +184,19 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
     const minAppVersion = (typeof manifest.minAppVersion === 'string' ? manifest.minAppVersion : '').trim()
     const manifestHomepage = (typeof manifest.homepage === 'string' ? manifest.homepage : '').trim()
     if (!manifestVersion) {
-      showAlert('שגיאה', 'חסר שדה גרסה ב-manifest.json של קובץ התוסף')
+      showAlert('שגיאה', 'קובץ התוסף פגום: חסר בו מספר גרסה.')
       input.value = ''
       return
     }
     // המזהה (id) חייב להופיע ולהישאר זהה למזהה הקיים של התוסף.
     if (!manifestId) {
-      showAlert('שגיאה', 'חסר שדה id ב-manifest.json של קובץ התוסף')
+      showAlert('שגיאה', 'קובץ התוסף פגום: חסר בו המזהה של התוסף.')
       input.value = ''
       return
     }
     const existingUid = (plugin.pluginUid || '').trim()
     if (existingUid && manifestId !== existingUid) {
-      showAlert('שגיאה', `המזהה (id) בקובץ (${manifestId}) חייב להיות זהה למזהה הקיים של התוסף (${existingUid})`)
+      showAlert('שגיאה', `זה קובץ של תוסף אחר: המזהה בו (${manifestId}) שונה מהמזהה של התוסף הזה (${existingUid}).`)
       input.value = ''
       return
     }
@@ -213,12 +213,12 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
       return
     }
     if (!isAdmin && (!stability || !['stable', 'beta', 'experimental'].includes(stability))) {
-      showAlert('שגיאה', 'חסר שדה stability תקין ב-manifest.json (ערכים מותרים: stable, beta, experimental)')
+      showAlert('שגיאה', 'קובץ התוסף פגום: חסרה בו רמת היציבות (יציב, בטא או ניסיוני).')
       input.value = ''
       return
     }
     if (!isAdmin && !minAppVersion) {
-      showAlert('שגיאה', 'חסר שדה minAppVersion ב-manifest.json של קובץ התוסף')
+      showAlert('שגיאה', 'קובץ התוסף פגום: חסרה בו גרסת אוצריא המינימלית.')
       input.value = ''
       return
     }
@@ -397,7 +397,7 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
                 {field('edit-compatible', 'גרסת מינימום', 'compatibleWith', { ltr: true })}
                 {field('edit-short-description', 'תיאור קצר', 'shortDescription', { className: 'md:col-span-2' })}
                 {field('edit-homepage', 'אתר בית (אופציונלי)', 'homepage', { required: false, ltr: true, className: 'md:col-span-2' })}
-                <FormField id="edit-status" label="סטטוס">
+                <FormField id="edit-status" label="רמת יציבות">
                   <select
                     id="edit-status"
                     value={formData.status}
@@ -415,7 +415,7 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
                 checked={formData.requiresNetwork}
                 onChange={(checked) => handleChange('requiresNetwork', checked)}
                 icon={<AppIcon name={formData.requiresNetwork ? 'wifi' : 'wifi_off'} className="mt-0.5 text-[1.25rem] text-primary" />}
-                label={<span className="font-semibold">התוסף דורש חיבור אינטרנט</span>}
+                label="התוסף דורש חיבור אינטרנט"
               />
             </>
           ) : (
@@ -424,7 +424,7 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
               <div className="flex items-start gap-3 rounded-(--radius-control) border border-outline-variant px-4 py-3 text-body-sm text-on-surface-variant">
                 <AppIcon name={formData.requiresNetwork ? 'wifi' : 'wifi_off'} className="mt-0.5 text-[1.25rem] text-primary" />
                 <span>
-                  חיבור אינטרנט: <strong className="font-semibold text-on-surface">{formData.requiresNetwork ? 'נדרש' : 'לא נדרש'}</strong>
+                  חיבור אינטרנט: <strong className="font-normal text-on-surface">{formData.requiresNetwork ? 'נדרש' : 'לא נדרש'}</strong>
                   {' '}(נקבע אוטומטית מ-<code dir="ltr">network.enabled</code> ב-<code dir="ltr">manifest.json</code>)
                 </span>
               </div>

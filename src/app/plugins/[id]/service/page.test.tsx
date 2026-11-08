@@ -186,7 +186,7 @@ describe('/plugins/[id]/service', () => {
     }))
     render(<ServiceSubmissionPageClient pluginId="p1" />)
     expect(await screen.findByText(/צפייה בלבד/)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /תוספי שירות/ })).toHaveAttribute('href', '/library/admin/plugins')
+    expect(screen.getByRole('link', { name: /תוספי שירות/ })).toHaveAttribute('href', '/library/admin/plugins?view=service')
     expect(screen.getByRole('heading', { name: 'ההגשות' })).toBeInTheDocument()
     expect(screen.getByText('ממתין לבחירת מנהל')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /ביטול ההגשה/ })).toBeNull()

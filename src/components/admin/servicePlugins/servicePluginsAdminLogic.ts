@@ -89,6 +89,39 @@ export function quotaPause(control: AdminResponse['control'] | null | undefined,
 export const ERROR_CLASS_LABELS: Record<string, string> = {
   transient: 'תקלה זמנית',
   quota: 'מכסה',
-  operator: 'תקלה תפעולית',
+  operator: 'תקלה בשרת הבדיקה',
   validation: 'נתונים לא תקינים'
+}
+
+// ---------- לשוניות (מסך התוספים בניהול, תצוגה "תוספי שירות") ----------
+
+export type ServiceTab = 'pending' | 'failed' | 'inProgress' | 'draft' | 'closed'
+
+/**
+ * הלשוניות בסדר: מה שמחכה לך קודם. "נעצר בתקלה" — תקלה אצלנו (צריך לפעול); "נדחה" — הבדיקה דחתה את
+ * ההגשה (לא צריך לעשות כלום). שני מצבים הפוכים, ולכן שני שמות שונים, ולא "נכשל" לשניהם.
+ */
+export const SERVICE_TABS: { id: ServiceTab; label: string; shortLabel?: string; group: keyof AdminGroups }[] = [
+  { id: 'pending', label: 'ממתין לאישור', shortLabel: 'לאישור', group: 'pending' },
+  { id: 'failed', label: 'נעצר בתקלה', shortLabel: 'תקלה', group: 'operator' },
+  { id: 'inProgress', label: 'בבדיקה', group: 'inProgress' },
+  { id: 'draft', label: 'טיוטה', group: 'notSubmitted' },
+  { id: 'closed', label: 'סגור', group: 'finished' }
+]
+
+/** שם המצב בניהול, כשהוא שונה מהשם בדף של המפתח (statusMeta) — לפי מילון השמות של הניהול */
+export const ADMIN_STATUS_LABELS: Record<string, string> = {
+  pending_admin: 'ממתין לאישור',
+  needs_operator: 'נעצר בתקלה'
+}
+
+/** כמה הגשות מחכות למנהל: ממתינות לבחירה ותקועות בתקלה — המונה של התצוגה בסרגל ובלשונית */
+export function serviceAttentionCount(reviews: AdminReview[] | null | undefined): number {
+  if (!reviews) return 0
+  return reviews.filter((r) => r.status === 'pending_admin' || r.status === 'needs_operator').length
+}
+
+/** הלשונית שנפתחת: הראשונה שיש בה משהו (לפי הסדר), ואם הכול ריק — "ממתין לאישור" */
+export function defaultServiceTab(groups: AdminGroups): ServiceTab {
+  return SERVICE_TABS.find((t) => groups[t.group].length > 0)?.id ?? 'pending'
 }
