@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import MenuButton from './MenuButton'
 
 function setup() {
@@ -132,5 +133,23 @@ describe('MenuButton — חזרה לעורך אחרי בחירה במקלדת', 
     fireEvent.keyDown(editor, { key: 'ArrowDown' })
     fireEvent.keyDown(screen.getByRole('menuitem', { name: 'מרכז' }), { key: 'Escape' })
     expect(editor).toHaveFocus()
+  })
+})
+
+describe('MenuButton — Tab', () => {
+  it('Tab בתוך התפריט סוגר וממשיך מהכפתור לפקד הבא (ולא לראש הדף)', async () => {
+    const user = userEvent.setup()
+    render(
+      <>
+        <MenuButton label="פעולות" items={[{ id: 'a', label: 'אחת', onSelect() {} }]} />
+        <button type="button">אחרי</button>
+      </>
+    )
+    screen.getByRole('button', { name: 'פעולות' }).focus()
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(screen.getByRole('menuitem', { name: 'אחת' })).toHaveFocus())
+    await user.tab()
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'אחרי' })).toHaveFocus()
   })
 })

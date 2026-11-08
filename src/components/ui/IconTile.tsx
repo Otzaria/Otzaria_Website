@@ -9,10 +9,14 @@ const SIZES = {
   lg: 'size-14 text-(length:--icon-size-lg)'
 } as const
 
-/** tone — secondary: האריח הטונלי של האפליקציה (ברירת מחדל); primary: מלא, להדגשה נדירה */
+/**
+ * tone — secondary: האריח הטונלי של האפליקציה (ברירת מחדל); primary: מלא, להדגשה נדירה;
+ * error: תקלה שמחכה לטיפול (מכל המצבים — רק לסימון, המשמעות תמיד גם בטקסט שלצדו)
+ */
 const TONES = {
   secondary: 'bg-(--icon-tile-bg) text-(--icon-tile-fg)',
-  primary: 'bg-primary text-on-primary'
+  primary: 'bg-primary text-on-primary',
+  error: 'bg-error-container text-on-error-container'
 } as const
 
 export type IconTileSize = keyof typeof SIZES

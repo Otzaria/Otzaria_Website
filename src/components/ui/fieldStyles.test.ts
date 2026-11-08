@@ -24,6 +24,15 @@ describe('fieldClasses', () => {
     expect(invalid).toContain('min-h-40')
     expect(fieldClasses({ kind: 'select' })).toContain('cursor-pointer')
   })
+
+  it('quiet — בלי מסגרת ורקע במנוחה, מסגרת בריחוף ובפוקוס; שגיאה גוברת', () => {
+    const quiet = fieldClasses({ quiet: true })
+    expect(quiet).toContain('border-transparent')
+    expect(quiet).toContain('hover:border-(--field-border)')
+    expect(quiet).toContain('focus:border-(--field-border-focus)')
+    expect(quiet).not.toContain(' bg-(--field-bg)')
+    expect(fieldClasses({ quiet: true, invalid: true })).toContain('border-error')
+  })
 })
 
 describe('fieldAdornmentClasses', () => {

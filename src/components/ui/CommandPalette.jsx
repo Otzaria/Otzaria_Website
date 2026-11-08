@@ -98,7 +98,7 @@ function PalettePanel({
       >
         {/* טבעת הפוקוס של השדה: קו תחתון עבה בצבע הפוקוס (השדה עצמו בלי מסגרת) */}
         <div className="flex items-center gap-3 border-b-2 border-outline-variant px-4 focus-within:border-focus-ring">
-          <AppIcon name="search" className="text-2xl text-on-surface-variant" />
+          <AppIcon name="search" className="text-icon-xl text-on-surface-variant" />
           <input
             // הפוקוס נכנס ישר לשדה החיפוש — זו כל המטרה של החלון
             autoFocus
@@ -174,7 +174,7 @@ function PaletteOption({ id, command, active, onHover, onRun }) {
       )}
     >
       <span className="flex w-6 shrink-0 justify-center text-on-surface-variant">
-        {hasIconGlyph(command.icon) && <AppIcon name={command.icon} className="text-xl" />}
+        {hasIconGlyph(command.icon) && <AppIcon name={command.icon} className="text-icon-lg" />}
       </span>
       <span className="min-w-0 flex-1 truncate">{command.label}</span>
       {command.shortcut?.length > 0 && (

@@ -56,7 +56,7 @@ export type ChipProps = LinkChip | ButtonChip
 function content({ icon, count, children }: CommonProps) {
   return (
     <>
-      {icon && <AppIcon name={icon} className="text-[1.15rem]" />}
+      {icon && <AppIcon name={icon} className="text-(length:--chip-icon-size)" />}
       <span className="truncate">{children}</span>
       {typeof count === 'number' && (
         <>
