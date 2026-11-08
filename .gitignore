@@ -61,6 +61,8 @@ scripts/*
 !scripts/check-perf-budget.mjs
 !scripts/copy-tesseract-assets.mjs
 !scripts/check-prefetch.mjs
+# סריקת ערכי עיצוב קשיחים בניהול (npm run check:admin-tokens; הלוגיקה — src/lib/tokenAudit.js)
+!scripts/check-admin-tokens.mjs
 # תיקוני טקסט — מופעלים בייצור לפי docs/text-corrections/OPERATIONS.md
 !scripts/corrections-worker.mjs
 !scripts/migrate-corrections.mjs
