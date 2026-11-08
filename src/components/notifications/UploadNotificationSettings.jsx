@@ -1,38 +1,36 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createPortal } from 'react-dom'
 import { apiGet, apiPut } from '@/lib/api-utils'
+import Button from '@/components/ui/Button'
+import Dialog from '@/components/ui/Dialog'
 import Loader from '@/components/ui/Loader'
+import Switch from '@/components/ui/Switch'
+import { CHECKBOX } from '@/components/ui/fieldStyles'
 
+/**
+ * הגדרות ההתראות על העלאות (מתפריט ⋮ במסך ההעלאות): מייל כשמשתמש מעלה ספר שלם / עמוד.
+ * הלוגיקה כמו קודם — טעינה מ-/api/admin/upload-notifications, שמירה ב-PUT וסגירה רק בהצלחה;
+ * רק המעטפת עברה ל-ui/Dialog (גיליון תחתון בטלפון, לכידת פוקוס, Esc).
+ */
 export default function UploadNotificationSettings({ onClose }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [mounted, setMounted] = useState(false)
   const [settings, setSettings] = useState({
     enabled: false,
     fullBook: false,
     singlePage: false
   })
 
+  // טעינה פעם אחת בפתיחה (ההורה מרכיב את הרכיב בכל פתיחה); loading מתחיל ב-true
   useEffect(() => {
-    setMounted(true)
-    loadSettings()
+    let cancelled = false
+    apiGet('/api/admin/upload-notifications')
+      .then((data) => { if (!cancelled && data.success) setSettings(data.notifications) })
+      .catch((error) => console.error('Error loading notification settings:', error))
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
   }, [])
-
-  const loadSettings = async () => {
-    try {
-      setLoading(true)
-      const data = await apiGet('/api/admin/upload-notifications')
-      if (data.success) {
-        setSettings(data.notifications)
-      }
-    } catch (error) {
-      console.error('Error loading notification settings:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const handleSave = async () => {
     try {
@@ -48,117 +46,67 @@ export default function UploadNotificationSettings({ onClose }) {
     }
   }
 
-  if (loading) {
-    const loadingContent = (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
-        <div className="bg-white rounded-xl p-8 max-w-md w-full mx-4">
-          <div className="flex justify-center">
-            <Loader size="md" />
-          </div>
+  return (
+    <Dialog
+      title="הגדרות התראות"
+      subtitle="מייל אליך כשמשתמשים שולחים קבצים"
+      onClose={onClose}
+      footer={!loading && (
+        <>
+          <Button variant="text" size="sm" onClick={onClose}>ביטול</Button>
+          <Button variant="filled" size="sm" onClick={handleSave} loading={saving}>
+            {saving ? 'שומר…' : 'שמור'}
+          </Button>
+        </>
+      )}
+    >
+      {loading ? (
+        <div className="flex justify-center py-8">
+          <Loader size="md" />
         </div>
-      </div>
-    )
-    return mounted ? createPortal(loadingContent, document.body) : null
-  }
-
-  const modalContent = (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }} onClick={onClose}>
-      <div className="bg-white rounded-xl p-8 max-w-md w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-neutral-800 flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary">notifications</span>
-            התראות על העלאות
-          </h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-neutral-100 rounded-lg transition-colors"
-          >
-            <span className="material-symbols-outlined">close</span>
-          </button>
-        </div>
-
-        <div className="space-y-6">
-          {/* הפעלה כללית */}
-          <div className="flex items-center justify-between p-4 bg-info-50 rounded-lg border border-info-200">
-            <div>
-              <h3 className="font-bold text-neutral-800">קבלת התראות במייל</h3>
-              <p className="text-sm text-neutral-600 mt-1">
-                קבל התראה כאשר משתמשים מעלים תוכן חדש
-              </p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings.enabled}
-                onChange={(e) => setSettings({ ...settings, enabled: e.target.checked })}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-neutral-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-info-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-info-600"></div>
-            </label>
+      ) : (
+        <div className="flex flex-col gap-4">
+          <div className="rounded-(--radius-control) bg-surface px-4 py-2">
+            <Switch
+              checked={settings.enabled}
+              onChange={(enabled) => setSettings({ ...settings, enabled })}
+              label="קבלת התראות במייל"
+              description="מייל כשמשתמש שולח ספר או עמוד"
+            />
           </div>
 
-          {/* סוגי העלאות */}
           {settings.enabled && (
-            <div className="space-y-3 pr-4 border-r-4 border-info-300">
-              <p className="text-sm font-bold text-neutral-700 mb-3">בחר סוגי העלאות:</p>
-              
-              {/* ספר שלם */}
-              <label className="flex items-center justify-between p-3 bg-success-50 rounded-lg border border-success-200 cursor-pointer hover:bg-success-100 transition-colors">
-                <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-success-600">menu_book</span>
-                  <div>
-                    <h4 className="font-semibold text-neutral-800">ספר שלם</h4>
-                    <p className="text-xs text-neutral-600">העלאת ספר מלא</p>
-                  </div>
-                </div>
+            <fieldset className="flex flex-col gap-1 rounded-(--radius-control) bg-surface px-4 py-3">
+              <legend className="sr-only">על אילו העלאות</legend>
+              <p aria-hidden="true" className="mb-1 text-label-lg text-on-surface">על אילו העלאות</p>
+              <label className="flex min-h-(--touch-target) cursor-pointer items-start gap-3 py-1.5">
                 <input
                   type="checkbox"
                   checked={settings.fullBook}
                   onChange={(e) => setSettings({ ...settings, fullBook: e.target.checked })}
-                  className="w-5 h-5 text-success-600 rounded focus:ring-success-500"
+                  className={CHECKBOX}
                 />
+                <span>
+                  <span className="block text-body-md text-on-surface">ספר שלם</span>
+                  <span className="block text-body-sm text-on-surface-variant">משתמש העלה ספר מלא</span>
+                </span>
               </label>
-
-              {/* עמוד בודד */}
-              <label className="flex items-center justify-between p-3 bg-warning-50 rounded-lg border border-warning-200 cursor-pointer hover:bg-warning-100 transition-colors">
-                <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-warning-600">description</span>
-                  <div>
-                    <h4 className="font-semibold text-neutral-800" >עמוד אחרון בספר</h4>
-                    <p className="text-xs text-neutral-600">עריכת עמוד אחרון בספר קיים</p>
-                  </div>
-                </div>
+              <label className="flex min-h-(--touch-target) cursor-pointer items-start gap-3 py-1.5">
                 <input
                   type="checkbox"
                   checked={settings.singlePage}
                   onChange={(e) => setSettings({ ...settings, singlePage: e.target.checked })}
-                  className="w-5 h-5 text-warning-600 rounded focus:ring-warning-500"
+                  className={CHECKBOX}
                 />
+                <span>
+                  <span className="block text-body-md text-on-surface">עמוד אחרון בספר</span>
+                  <span className="block text-body-sm text-on-surface-variant">משתמש סיים לערוך את העמוד האחרון בספר קיים</span>
+                </span>
               </label>
-            </div>
+            </fieldset>
           )}
         </div>
-
-        {/* כפתורי פעולה */}
-        <div className="flex gap-3 mt-8">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex-1 py-3 bg-primary text-white rounded-lg font-bold hover:bg-accent transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {saving && <Loader size="inline" decorative />}
-            {saving ? 'שומר...' : 'שמור'}
-          </button>
-          <button
-            onClick={onClose}
-            className="flex-1 py-3 bg-neutral-200 text-neutral-700 rounded-lg font-bold hover:bg-neutral-300 transition-colors"
-          >
-            ביטול
-          </button>
-        </div>
-      </div>
-    </div>
+      )}
+    </Dialog>
   )
-  
-  return mounted ? createPortal(modalContent, document.body) : null
 }
