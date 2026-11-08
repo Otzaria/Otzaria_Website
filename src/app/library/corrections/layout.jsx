@@ -1,50 +1,30 @@
-'use client'
+// דיווחי טעויות (/library/corrections/**) — Server Component, בתוך מעטפת הניהול (AdminFrame).
+//
+// הכתובות וההרשאות לא השתנו: ה-proxy דורש רק התחברות, ו-API התיקונים הוא שאוכף
+// canHandleCorrections (מנהל כללי, מנהל ספרים, או משתמש עם דגל מתנדב תיקונים).
+// הסרגל מסונן לפי אותה בדיקה (adminNav.js, נבדק ב-adminNav.test.mjs):
+// - מנהל — הסרגל המלא שלו, ו"דיווחי טעויות" פעיל בו.
+// - מתנדב שאינו מנהל — סרגל מצומצם: "דיווחי טעויות" וחזרה לאזור האישי, בלי שום קישור ל-/library/admin.
+// - מי שאינו רשאי (משתמש רגיל, מפקח בלי דגל מתנדב) — אין לו אף פריט, ולכן אין סרגל: הכותרת
+//   והלשונית בלבד, והעמוד מציג את הודעת "אין הרשאה" שמגיעה מה-API (403), בדיוק כמו קודם.
+// הכותרת "דיווחי טעויות" — ה-h1 של העמוד, בתוך התוכן (המעטפת בלי כותרת משלה), והלשוניות מתחתיה.
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import AdminFrame from '@/components/admin/shell/AdminFrame'
+import AdminScreenHeader from '@/components/admin/list/AdminScreenHeader'
+import CorrectionsTabs from '@/components/corrections/CorrectionsTabs'
+import { correctionsTabs } from '@/lib/corrections/tabs'
+import { adminScreenTitle } from '@/lib/adminNav'
 
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { useSession } from 'next-auth/react'
-import Header from '@/components/layout/Header'
-import { FOCUS_RING } from '@/components/ui/focusRing'
-import { canManageCorrections } from '@/lib/roles'
-
-export default function CorrectionsLayout({ children }) {
-  const pathname = usePathname()
-  const { data: session } = useSession()
-  const tabs = [
-    { href: '/library/corrections', label: 'תור הדיווחים', icon: 'checklist' },
-    ...(canManageCorrections(session?.user) ? [{ href: '/library/corrections/admin', label: 'ניהול ובריאות', icon: 'analytics' }] : []),
-  ]
+export default async function CorrectionsLayout({ children }) {
+  const session = await getServerSession(authOptions)
   return (
-    <div className="flex min-h-screen flex-col bg-background" dir="rtl">
-      <Header />
-      <main id="main-content" className="flex-1">
-        <div className="w-full px-4 md:px-6 py-8">
-          <div className="w-full max-w-7xl mx-auto">
-            <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-              <h1 className="text-3xl font-bold text-on-surface flex items-center gap-3">
-                <span className="material-symbols-outlined text-4xl text-accent">spellcheck</span>
-                תיקוני טקסט
-              </h1>
-              {/* w-full במסך צר: הלשונית השנייה (ניהול) מופיעה רק אחרי שה-session נטען, ובלי
-                  שורה משלה היא גלשה לשורה חדשה ודחפה את כל התוכן 56px למטה (CLS) */}
-              <nav className="flex gap-2 w-full sm:w-auto">
-                {tabs.map((t) => (
-                  <Link
-                    key={t.href}
-                    href={t.href}
-                    aria-current={pathname === t.href ? 'page' : undefined}
-                    className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${FOCUS_RING} ${pathname === t.href ? 'bg-primary text-on-primary' : 'glass text-on-surface hover:bg-surface-variant'}`}
-                  >
-                    <span className="material-symbols-outlined">{t.icon}</span>
-                    {t.label}
-                  </Link>
-                ))}
-              </nav>
-            </div>
-            {children}
-          </div>
-        </div>
-      </main>
-    </div>
+    <AdminFrame session={session}>
+      <div className="mb-5">
+        <AdminScreenHeader title={adminScreenTitle('corrections')} />
+      </div>
+      <CorrectionsTabs tabs={correctionsTabs(session?.user)} className="mb-6" />
+      {children}
+    </AdminFrame>
   )
 }

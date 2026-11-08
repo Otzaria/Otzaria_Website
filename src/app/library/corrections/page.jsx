@@ -57,7 +57,7 @@ export default function CorrectionsListPage() {
   const restore = useRef(null)
   const latestQuery = useRef(null)
 
-  // הסינון נשמר ב-sessionStorage כדי ש"חזרה לתור" מדף דיווח לא תאפס אותו.
+  // הסינון נשמר ב-sessionStorage כדי ש"חזרה לדיווחים" מדף דיווח לא תאפס אותו.
   useEffect(() => {
     try {
       const f = JSON.parse(sessionStorage.getItem(FILTERS_KEY) || 'null')
@@ -108,7 +108,7 @@ export default function CorrectionsListPage() {
   const fetchPage = useCallback(async (skip, limit = PAGE_SIZE) => {
     const res = await fetch(`/api/corrections/reports?${queryKey}&limit=${limit}&skip=${skip}`, { cache: 'no-store' })
     const body = await res.json()
-    if (!res.ok) throw new Error(res.status === 403 ? 'אין לך הרשאה לטפל בתיקוני טקסט' : body.error || 'שגיאה בטעינה')
+    if (!res.ok) throw new Error(res.status === 403 ? 'אין לך הרשאה לטפל בדיווחי טעויות' : body.error || 'שגיאה בטעינה')
     return body
   }, [queryKey])
 
