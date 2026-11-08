@@ -175,3 +175,24 @@ describe('Header — משתמש מחובר', () => {
     hidden.mockRestore()
   })
 })
+
+describe('Header — כפתור הניהול (adminMenu)', () => {
+  test('בלי adminMenu: שורת הניווט מתקפלת מתחת ל-md, כמו תמיד', () => {
+    render(<Header />)
+    expect(screen.getByRole('navigation', { name: 'ניווט הספרייה', hidden: true }).className).toContain('md:flex')
+    expect(getMenuButton().className).toContain('md:hidden')
+  })
+
+  test('עם adminMenu: הכפתור בשורה העליונה ליד "תפריט", והניווט מתקפל מתחת ל-xl', () => {
+    render(<Header adminMenu={<button type="button">ניהול</button>} />)
+    const admin = screen.getByRole('button', { name: 'ניהול' })
+    expect(screen.getByRole('banner')).toContainElement(admin)
+    expect(admin.parentElement).toBe(getMenuButton().parentElement)
+    expect(admin.parentElement.className).toContain('xl:hidden')
+    expect(getMenuButton().className).toContain('xl:hidden')
+    const nav = screen.getAllByRole('navigation', { name: 'ניווט הספרייה', hidden: true })
+    expect(nav[0].className).toContain('xl:flex')
+    expect(nav[0].className).not.toContain('md:flex')
+    expect(document.getElementById(getMenuButton().getAttribute('aria-controls')).className).toContain('xl:hidden')
+  })
+})

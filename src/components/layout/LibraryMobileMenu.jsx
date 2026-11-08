@@ -5,16 +5,21 @@ import { LIBRARY_NAV_LINKS } from '@/lib/navigation-constants'
 import { FOCUS_RING, FOCUS_RING_INSET } from '@/components/ui/focusRing'
 import AccountActions from './AccountActions'
 
+// מתחת לאיזה רוחב שורת הניווט מתקפלת לתפריט: md — ברירת המחדל; xl — בעמודי הניהול (Header adminMenu),
+// שם ליד הכפתור יושב גם כפתור "ניהול" ואין מקום לשורת הניווט המלאה מתחת ל-xl.
+// מחרוזות מלאות — כדי ש-Tailwind ימצא אותן בסריקה.
+export const COLLAPSED_ONLY = { md: 'md:hidden', xl: 'xl:hidden' }
+
 /**
- * כפתור התפריט בנייד (md:hidden). buttonProps מ-useDisclosureMenu: aria-expanded, aria-controls, onClick.
+ * כפתור התפריט בנייד (md:hidden, או xl:hidden — collapseAt). buttonProps מ-useDisclosureMenu: aria-expanded, aria-controls, onClick.
  */
-export function LibraryMenuButton({ isOpen, buttonProps }) {
+export function LibraryMenuButton({ isOpen, buttonProps, collapseAt = 'md' }) {
   return (
     <button
       type="button"
       {...buttonProps}
       aria-label="תפריט"
-      className={`md:hidden flex h-12 w-12 items-center justify-center rounded-lg text-on-surface hover:bg-card-selected ${FOCUS_RING}`}
+      className={`${COLLAPSED_ONLY[collapseAt]} flex h-12 w-12 items-center justify-center rounded-lg text-on-surface hover:bg-card-selected ${FOCUS_RING}`}
     >
       <span aria-hidden="true" className="material-symbols-outlined text-3xl">{isOpen ? 'close' : 'menu'}</span>
     </button>
@@ -26,13 +31,13 @@ export function LibraryMenuButton({ isOpen, buttonProps }) {
  * נשאר ב-DOM כשהוא סגור (hidden), כדי ש-aria-controls של הכפתור יצביע תמיד על אלמנט קיים.
  * בנייד נמוך הוא גבוה מהמסך — נגלל בתוך עצמו (max-h + overflow), לא דרך הדף.
  */
-export default function LibraryMobileMenu({ isOpen, panelProps, pathname, session, status, unreadMessages, onNavigate }) {
+export default function LibraryMobileMenu({ isOpen, panelProps, pathname, session, status, unreadMessages, onNavigate, collapseAt = 'md' }) {
   return (
     <nav
       {...panelProps}
       aria-label="ניווט הספרייה"
       hidden={!isOpen}
-      className="md:hidden absolute top-(--site-header-height) inset-x-0 max-h-[calc(100svh-var(--site-header-height))] overflow-y-auto overscroll-contain border-b border-neutral-200 bg-background p-3 shadow-overlay"
+      className={`${COLLAPSED_ONLY[collapseAt]} absolute top-(--site-header-height) inset-x-0 max-h-[calc(100svh-var(--site-header-height))] overflow-y-auto overscroll-contain border-b border-neutral-200 bg-background p-3 shadow-overlay`}
     >
       <ul className="flex flex-col gap-0.5">
         {LIBRARY_NAV_LINKS.map(link => {
