@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { validateRequired, validateFile } from '@/lib/validation-utils'
 import Modal from '@/components/ui/Modal'
+import { parseJsonResponse } from '@/lib/parseJsonResponse.mjs'
 
 export default function AddBookDialog({ isOpen, onClose, onBookAdded, categories }) {
     const [bookName, setBookName] = useState('')
@@ -46,7 +47,7 @@ export default function AddBookDialog({ isOpen, onClose, onBookAdded, categories
                 body: formData
             });
             
-            const result = await response.json();
+            const result = await parseJsonResponse(response);
 
             if (!response.ok || !result.success) {
                 throw new Error(result.error || 'שגיאה בהעלאה')
