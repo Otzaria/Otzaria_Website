@@ -68,6 +68,8 @@
     font-size: var(--text-sm);
     line-height: var(--leading-snug);
     white-space: normal;
+    /* מילה ארוכה בלי רווחים (קישור שהודבק כנושא, למשל "פעולות נוספות: https://…") — נשברת ולא מרחיבה את הדף */
+    overflow-wrap: anywhere;
   }
 
   /* מעל הרכיב: הכרטיס בתחתית הגשר, החוד בתחתית הכרטיס, וההחלקה מלמטה */

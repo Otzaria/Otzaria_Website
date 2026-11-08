@@ -47,6 +47,16 @@
     from { opacity: 0; }
   }
 
+  /* מגירה שנכנסת מצד ההתחלה — ימין, כי האתר כולו RTL (מגירת הניהול, admin/shell/AdminDrawer) */
+  @keyframes enter-drawer-start {
+    from { transform: translateX(100%); }
+  }
+
+  /* מגירה שנכנסת מצד הסוף — שמאל ב-RTL (מגירת פרטים של פריט ברשימה, ui/Drawer) */
+  @keyframes enter-drawer-end {
+    from { transform: translateX(-100%); }
+  }
+
   /* עיגולי רקע מטושטשים — "נשימה" איטית ואינסופית */
   @keyframes ambient-pulse {
     0%, 100% { transform: scale(1); opacity: 0.3; }

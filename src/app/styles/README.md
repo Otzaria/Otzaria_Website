@@ -15,7 +15,7 @@
 
 | קובץ | סולם (קיים) | תפקידים (לקוד חדש) |
 |------|-------------|---------------------|
-| `typography.css` | `text-xs … text-9xl`, `font-display`, `font-frank` | `text-display-*`, `text-headline-*`, `text-title-*`, `text-body-*`, `text-label-*` |
+| `typography.css` | `text-xs … text-9xl`, `font-display`, `font-frank` | `text-display-*`, `text-headline-*`, `text-title-*`, `text-body-*`, `text-label-*`, `text-icon-*` (גודל גליף אייקון) |
 | `shape.css` | `rounded-sm … rounded-4xl` | `rounded-control`, `rounded-card`, `rounded-dialog`, `rounded-container`, `rounded-sheet`, `rounded-pill` — כולם מ-`--radius-shape` |
 | `elevation.css` | `shadow-sm … shadow-2xl` | `shadow-raised`, `shadow-menu`, `shadow-tooltip`, `shadow-dialog`, `shadow-sheet`, `shadow-overlay` |
 | `motion.css` | `ease-in/out/in-out` | `ease-standard/enter/exit`, `--motion-duration-*` (**לא** מתאפסים גלובלית ב-reduced-motion — כל רכיב מבטל את התזוזה שלו במפורש; ראו ההערה בראש `motion.css`) |
