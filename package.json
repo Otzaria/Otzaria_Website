@@ -23,7 +23,8 @@
     "test:vitest": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint",
-    "test:deployment-regressions": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/lib/deploymentRegressions.test.mjs src/lib/pdfConverter.test.mjs && vitest run src/lib/githubReleases.test.js src/lib/db.test.js src/components/home/DownloadSection.test.tsx src/components/offline/OfflineUpdateDownload.test.jsx src/app/api/github-releases/route.test.js src/app/api/offline-update-releases/route.test.js"
+    "test:deployment-regressions": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/lib/deploymentRegressions.test.mjs src/lib/pdfConverter.test.mjs && vitest run src/lib/githubReleases.test.js src/lib/db.test.js src/components/home/DownloadSection.test.tsx src/components/offline/OfflineUpdateDownload.test.jsx src/app/api/github-releases/route.test.js src/app/api/offline-update-releases/route.test.js",
+    "bench:pdf": "node scripts/benchmark-pdf-conversion.mjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.0",
