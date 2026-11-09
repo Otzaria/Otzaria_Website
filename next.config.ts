@@ -196,6 +196,10 @@ const nextConfig = {
           { key: 'Cache-Control', value: 'no-store, must-revalidate' },
         ],
       },
+      {
+        source: '/library/books/offline-worker.js',
+        headers: [{ key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' }],
+      },
       // אייקוני האתר. Next מגיש אותם כברירת מחדל עם max-age=0, must-revalidate,
       // כלומר סבב אימות בכל טעינת דף — למרות שה-URL כולל hash של התוכן.
       ...['/icon.png', '/apple-icon.png'].map((source) => ({

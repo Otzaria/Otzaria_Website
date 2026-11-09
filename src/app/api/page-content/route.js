@@ -6,6 +6,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBooksAccess } from '@/lib/roles';
 import { unauthorized, badRequest, notFound, forbidden, serverError } from '@/lib/apiResponse';
+import { pageVersion, pageVersionGuard, sameSavedText } from '@/lib/offlineBooks/version';
 import { ocrReviewRevision, validOcrReviewState } from '@/lib/editor/ocrReviewState';
 
 // שמירת תוכן (Auto-save)
@@ -31,6 +32,12 @@ export async function POST(request) {
     if (hasSaveRevision && (!Number.isSafeInteger(body.saveRevision) || body.saveRevision < 1)) {
       return badRequest('גרסת השמירה אינה תקינה');
     }
+    const offline = body.baseVersion !== undefined;
+    if (offline && (!/^[a-f0-9]{64}$/.test(body.baseVersion) ||
+        typeof body.offlineSaveId !== 'string' || !/^[a-f0-9-]{36}$/.test(body.offlineSaveId) ||
+        !hasSaveRevision || typeof body.expectedUserId !== 'string' ||
+        !['content', 'leftColumn', 'rightColumn', 'rightColumnName', 'leftColumnName'].every(k => typeof body[k] === 'string') ||
+        typeof twoColumns !== 'boolean')) return badRequest('בקשת סנכרון לא תקינה');
     const hasWordReview = body.ocrWordReview !== undefined;
     if (hasWordReview && body.ocrWordReview !== null && !validOcrReviewState(body.ocrWordReview)) {
       return badRequest('סימון המילים התקינות אינו תקין');
@@ -38,6 +45,9 @@ export async function POST(request) {
 
     const userId = session.user._id || session.user.id;
     const isAdmin = hasBooksAccess(session.user.role);
+    if (body.expectedUserId !== undefined && String(userId) !== body.expectedUserId) {
+      return NextResponse.json({ error: 'יש להתחבר לחשבון שבו נערך העמוד', code: 'OFFLINE_ACCOUNT' }, { status: 403 });
+    }
 
     await connectDB();
 
@@ -64,6 +74,8 @@ export async function POST(request) {
     // שליפת העמוד הנוכחי לבדיקת הרשאות לפני עדכון
     const currentPage = await Page.findOne(query);
     if (!currentPage) return notFound('Page not found');
+    const sourceBook = await Book.findById(currentPage.book);
+    if (!sourceBook || ((sourceBook.isHidden || sourceBook.isPrivate) && !isAdmin && String(sourceBook.ownerId) !== String(userId))) return forbidden('אין הרשאות לצפייה בספר זה');
 
     // לוגיקת הרשאות ועדכון סטטוס:
     let updateFields = {
@@ -84,6 +96,18 @@ export async function POST(request) {
         }
         // אם הדף Completed, אנחנו מאפשרים עריכה (תיקון טעויות) מבלי לשנות סטטוס, אלא אם נרצה אחרת.
         // הבקשה הייתה לאפשר עריכה "בלי להגדיר את הדף חזרה למצב עריכה", ולכן לא משנים את הסטטוס כאן.
+    }
+
+    const conflict = () => NextResponse.json({
+      error: 'העמוד השתנה בשרת. הגרסה המקומית נשמרה במכשיר ולא הוחלפה.', code: 'OFFLINE_CONFLICT',
+    }, { status: 409 });
+    if (offline) {
+      // Lost response: an exact retry of an acknowledged write is safe. A later edit is not.
+      if (currentPage.lastOfflineSaveId === body.offlineSaveId && currentPage.lastOfflineSaveVersion === pageVersion(currentPage) && sameSavedText(currentPage, body)) {
+        return NextResponse.json({ success: true, contentVersion: pageVersion(currentPage), pageStatus: currentPage.status });
+      }
+      if (pageVersion(currentPage) !== body.baseVersion) return conflict();
+      updateFields.lastOfflineSaveId = body.offlineSaveId;
     }
 
     // החלטות "המילה תקינה": null מנקה אותן בכוונה (ניקוי מפורש). החלטות שאינן null נכתבות רק אם הן
@@ -110,10 +134,15 @@ export async function POST(request) {
       }
     }
 
+    if (offline) updateFields.lastOfflineSaveVersion = pageVersion({ ...currentPage.toObject(), ...updateFields });
+
     // ביצוע העדכון
-    const guardedQuery = hasSaveRevision
+    const ownershipGuard = { status: currentPage.status, claimedBy: currentPage.claimedBy ?? null };
+    const guardedQuery = offline
+      ? { ...query, ...pageVersionGuard(currentPage) }
+      : hasSaveRevision
       ? {
-          ...query,
+          ...query, ...ownershipGuard,
           $or: [
             { contentSaveRevision: { $exists: false } },
             // שוויון הוא retry של אותה תמונת מצב (או התנגשות נדירה בין לשוניות), ולכן אידמפוטנטי
@@ -121,7 +150,7 @@ export async function POST(request) {
             { contentSaveRevision: { $lt: body.saveRevision } },
           ],
         }
-      : query;
+      : { ...query, ...ownershipGuard };
     let updatedPage = await Page.findOneAndUpdate(
       reviewGuard ? { ...guardedQuery, ...reviewGuard } : guardedQuery,
       updateFields,
@@ -140,13 +169,16 @@ export async function POST(request) {
     if (!updatedPage) {
       // העמוד כבר נטען ונבדק לעיל; כישלון העדכון המותנה פירושו ששמירה חדשה
       // יותר כבר הגיעה. מחזירים success אידמפוטנטי כדי שהלקוח לא יציג שגיאת שמירה.
+      if (offline) return conflict();
       if (hasSaveRevision) {
+        const latest = await Page.findOne(query);
+        if (!latest || latest.status !== currentPage.status || String(latest.claimedBy ?? '') !== String(currentPage.claimedBy ?? '')) return conflict();
         return NextResponse.json({ success: true, message: 'כבר נשמרה גרסה חדשה יותר', stale: true, pageStatus: currentPage.status, ...(ocrWordReviewDropped ? { ocrWordReviewDropped: true } : {}) });
       }
       return notFound('העמוד לא נמצא');
     }
 
-    return NextResponse.json({ success: true, message: 'נשמר בהצלחה', pageStatus: updatedPage.status, ...(ocrWordReviewDropped ? { ocrWordReviewDropped: true } : {}) });
+    return NextResponse.json({ success: true, contentVersion: pageVersion(updatedPage), message: 'נשמר בהצלחה', pageStatus: updatedPage.status, ...(ocrWordReviewDropped ? { ocrWordReviewDropped: true } : {}) });
   } catch (error) {
     console.error('Save Content Error:', error);
     return serverError();
@@ -192,6 +224,8 @@ export async function GET(request) {
             return notFound('Page not found');
         }
 
+        if ((book.isHidden || book.isPrivate) && !isAdmin && String(book.ownerId) !== String(userId)) return forbidden('אין הרשאות לצפייה בספר זה');
+
         // --- בדיקת הרשאות צפייה/עריכה ---
 
         // 1. דף פנוי (Available) - כולם יכולים להיכנס
@@ -217,6 +251,9 @@ export async function GET(request) {
         return NextResponse.json({ 
             success: true, 
             data: {
+                contentVersion: pageVersion(page),
+                saveRevision: page.contentSaveRevision || 0,
+                thumbnail: page.imagePath,
                 id: page._id, // חשוב להחזיר ID לשימוש ב-Update
                 content: page.content || '',
                 isTwoColumns: page.isTwoColumns || false,
