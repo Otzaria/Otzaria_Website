@@ -8,6 +8,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBookLibraryAccess } from '@/lib/roles';
 import { unauthorized, badRequest, serverError } from '@/lib/apiResponse';
+import { checkClaimLimit, claimLimitBody } from '@/lib/bookPageClaims';
 
 export async function POST(request) {
   await connectDB();
@@ -20,6 +21,16 @@ export async function POST(request) {
 
     const { pageId } = await request.json();
     const isAdmin = hasBookLibraryAccess(session.user.role);
+
+    // ביטול סיום מחזיר את העמוד ל"בטיפול" — נספר במכסת 5 העמודים של המתנדב
+    if (!isAdmin) {
+      const target = await Page.findOne({ _id: pageId }).select('book').lean();
+      const targetBook = target ? await Book.findById(target.book).select('isPrivate ownerId').lean() : null;
+      if (targetBook) {
+        const limit = await checkClaimLimit({ userId: session.user._id, isAdmin, book: targetBook });
+        if (!limit.ok) return NextResponse.json(claimLimitBody(limit.activeClaims), { status: 409 });
+      }
+    }
 
     dbSession.startTransaction();
 
