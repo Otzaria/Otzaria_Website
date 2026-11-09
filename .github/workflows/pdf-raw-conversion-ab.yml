@@ -83,3 +83,31 @@ jobs:
         run: node --test src/lib/pdfConverter.test.mjs src/lib/pdfRendererRaw.test.mjs src/lib/pdfConversionGate.test.mjs
       - name: ESLint of new PDF converter modules
         run: npx eslint src/lib/pdfConverter.js src/lib/pdfRendererRaw.js src/lib/pdfConversionGate.js src/lib/pdfRendererRaw.test.mjs src/lib/pdfConversionGate.test.mjs
+
+  production-bundle-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      MONGODB_URI: mongodb://127.0.0.1:27017/otzaria_pdf_ci
+      MONGODB_SERVER_SELECTION_TIMEOUT_MS: '5000'
+    services:
+      mongodb:
+        image: mongo:7.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - name: Verify Next.js production server bundle with native canvas
+        run: npm run build
