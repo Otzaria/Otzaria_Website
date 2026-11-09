@@ -5,6 +5,7 @@ import ChachmeiLevHero from '@/components/chachmei-lev/ChachmeiLevHero'
 import CompaniesSection from '@/components/chachmei-lev/CompaniesSection'
 import ContributorsSection from '@/components/chachmei-lev/ContributorsSection'
 import DevelopersSection from '@/components/chachmei-lev/DevelopersSection'
+import DonateCallout from '@/components/home/DonateCallout'
 import LibrarySection from '@/components/chachmei-lev/LibrarySection'
 import MemorialSection from '@/components/chachmei-lev/MemorialSection'
 import ZayitCredit from '@/components/chachmei-lev/ZayitCredit'
@@ -18,6 +19,8 @@ export const metadata = pageMetadata({
 
 // העתק של מסך "חכמי לב" שבתוכנה, בעיצוב האתר (כמו /about, /offline ו-/donate): כותרת + ציטוט +
 // ניווט מהיר, ואזורים בקצב אנכי אחיד (Section spacing="top"). תוכן סטטי — Server Component.
+// הסדר: לוח ההנצחה ראשון (לב הדף), אחריו התורמים (חברות ואנשים), הסיוע, המפתחים והספרייה,
+// ובסוף הקריאה לתרומה (DonateCallout, כמו בדף הבית וב-/offline) וקרדיט זית.
 // הנתונים: src/lib/chachmei-lev-data.js.
 export default function ChachmeiLevPage() {
   return (
@@ -26,12 +29,13 @@ export default function ChachmeiLevPage() {
 
       <main id="main-content" className="flex-1">
         <ChachmeiLevHero />
-        <AidSection />
         <MemorialSection />
         <CompaniesSection />
         <ContributorsSection />
+        <AidSection />
         <DevelopersSection />
         <LibrarySection />
+        <DonateCallout />
         <ZayitCredit />
       </main>
 
