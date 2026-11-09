@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fromLayout, fromProof } from './trackingSource.js';
-import { buildPageWordReview, reviewTextWords, reviewWordsOfLine, replaceReviewedWord, wordReviewForText } from './ocrWordReview.js';
+import { buildPageWordReview, reviewTextWords, reviewWordsOfLine, replaceReviewedWord, wordReviewForText, setWordReviewAccepted } from './ocrWordReview.js';
+import { ocrReviewRevision, validOcrReviewState } from './ocrReviewState.js';
 import { serializeOcrPageData } from '../ocr/ocrPageDataView.js';
 
 // Production shape: the OCR reads a perfectly plausible Hebrew word; only the
@@ -11,6 +12,79 @@ const line = { k: 28, order: 1, inText: true, stream: 'main', bbox: [0, 0, 500, 
   lm: [{ i: 2, word: 'פוסרת', alts: [{ text: 'פוטרת', gain: 35.094 }] }] };
 const layout = { layoutVersion: 1, image: { width: 500, height: 700 }, toSource: [1, 0, 0, 0, 1, 0], lines: [line] };
 const source = (lines = [line]) => fromLayout({ ...layout, lines });
+
+test('approval suppresses exactly one occurrence, including shape-only flags, and can be reversed', () => {
+  const texts = { right: 'פתיחה שלומ3', left: 'סיום שלומ3' };
+  const before = buildPageWordReview(texts, null);
+  assert.equal(before.count, 2);
+  const decisions = setWordReviewAccepted(texts, null, before.suspects[1], 'r1');
+  assert.equal(validOcrReviewState(decisions), true);
+  const after = buildPageWordReview(texts, null, JSON.parse(JSON.stringify(decisions)));
+  assert.equal(after.count, 1);
+  assert.equal(after.suspects[0].column, 'right');
+  assert.equal(after.accepted[0].column, 'left');
+  assert.equal(after.fields.left.suspects.length, 0);
+  const restored = setWordReviewAccepted(texts, decisions, after.accepted[0], 'r1', false);
+  assert.equal(buildPageWordReview(texts, null, restored).count, 2);
+});
+
+test('approval follows unchanged model words through formatting/reflow/column moves but not changed text', () => {
+  const texts = { content: line.text };
+  const before = buildPageWordReview(texts, source());
+  const decisions = setWordReviewAccepted(texts, null, before.suspects[0], 'r1');
+  for (const fields of [texts, { right: 'חדש והנה היא', left: 'פו<b>סר</b>ת\nאת הצרה' }]) {
+    const review = buildPageWordReview(fields, source(), decisions);
+    assert.equal(review.count, 0);
+    assert.equal(review.accepted.length, 1);
+  }
+  const edited = buildPageWordReview({ content: line.text.replace('פוסרת', 'שלומ3') }, source(), decisions);
+  assert.equal(edited.count, 1);
+  assert.equal(edited.accepted.length, 0);
+  assert.equal(buildPageWordReview(texts, source(), decisions).count, 0); // Undo restores the approved text.
+  assert.equal(setWordReviewAccepted({ content: 'חדש ' + line.text }, null, before.suspects[0], 'r1'), null);
+});
+
+test('ambiguous repeated-word edits never transfer an approval to another occurrence', () => {
+  const texts = { content: 'ראש שלומ3 שלומ3 סוף' };
+  const before = buildPageWordReview(texts, null);
+  const decisions = setWordReviewAccepted(texts, null, before.suspects[0], 'r1');
+  assert.equal(buildPageWordReview(texts, null, decisions).count, 1);
+  const edited = buildPageWordReview({ content: 'ראש שלומ3 סוף' }, null, decisions);
+  assert.equal(edited.count, 1);
+  assert.equal(edited.accepted.length, 0);
+});
+
+test('subsequent approvals preserve earlier decisions; changed OCR identity starts a new review', () => {
+  const texts = { content: 'שלומ3 שלומ4' };
+  const before = buildPageWordReview(texts, null);
+  const first = setWordReviewAccepted(texts, null, before.suspects[0], 'r1');
+  const both = setWordReviewAccepted(texts, first, before.suspects[1], 'r1');
+  assert.equal(buildPageWordReview(texts, null, both).count, 0);
+  const changed = setWordReviewAccepted(texts, both, before.suspects[1], 'r2');
+  assert.deepEqual(changed.accepted, [1]);
+  const page = { imagePath: '/p.jpg', lastOcrResultSha256: 'old' };
+  assert.notEqual(ocrReviewRevision(page), ocrReviewRevision({ ...page, lastOcrResultSha256: 'new' }));
+  assert.notEqual(ocrReviewRevision(page), ocrReviewRevision({ ...page, imagePath: '/new.jpg' }));
+});
+
+test('malformed or oversized decisions are ignored instead of hiding words', () => {
+  const texts = { content: 'שלומ3' };
+  for (const value of [null, {}, { version: 1, revision: 'r1', words: ['שלומ3'], accepted: [4] },
+    { version: 1, revision: 'r1', words: ['שלומ3'], accepted: [0, 0] },
+    { version: 1, revision: 'r1', words: [null], accepted: [0] },
+    { version: 1, revision: 'r1', words: Array(50_001).fill('שלומ3'), accepted: [0] }]) {
+    assert.ok(!validOcrReviewState(value));
+    assert.equal(buildPageWordReview(texts, null, value).count, 1);
+  }
+});
+
+test('standalone Hebrew bidi controls do not prevent approving another word', () => {
+  const texts = { content: '\u200f שלומ3' };
+  const word = buildPageWordReview(texts, null).suspects[0];
+  const decisions = setWordReviewAccepted(texts, null, word, 'r1');
+  assert.equal(validOcrReviewState(decisions), true);
+  assert.equal(buildPageWordReview(texts, null, decisions).count, 0);
+});
 
 test('saved API layout → normalized source → model-only word, suggestion and count', () => {
   const data = serializeOcrPageData({ page: { _id: 'p' }, record: { job: 'j', layoutStatus: 'ok', layoutJson: JSON.stringify(layout) }, state: 'current', image: null, contentSha256: null });

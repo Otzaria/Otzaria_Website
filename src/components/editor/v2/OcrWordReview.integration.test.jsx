@@ -8,6 +8,7 @@ import FinishPageDialog from './FinishPageDialog'
 import OcrWordReviewPanel from './OcrWordReviewPanel'
 import { richFieldApi } from '@/lib/editor/editorField'
 import { resetFieldHistories } from './fieldHistoryStore'
+import { setWordReviewAccepted } from '@/lib/editor/ocrWordReview'
 
 vi.mock('@/hooks/useScanLines', () => ({ useScanLines: () => ({ size: [500, 700], profile: null, status: 'idle' }) }))
 const LAYOUT = { layoutVersion: 1, image: { width: 500, height: 700 }, toSource: [1, 0, 0, 0, 1, 0], lines: [
@@ -21,17 +22,19 @@ function Page({ view = 'code', split = false, initialContent = 'והנה היא 
   const [active, setActive] = useState(null)
   const [panel, setPanel] = useState(false)
   const [finish, setFinish] = useState(false)
+  const [decisions, setDecisions] = useState(null)
   const setText = (column, value) => setFields((f) => ({ ...f, [column]: value }))
   const t = usePageTracking({ bookPath: 'b', pageNumber: 3, imageUrl: '/p.jpg', twoColumns: split, activeTextarea: active,
-    textContainerRef: ref, text: fields[active || (split ? 'right' : 'content')], textFields: fields })
+    textContainerRef: ref, text: fields[active || (split ? 'right' : 'content')], textFields: fields, reviewDecisions: decisions })
   return <>
     <TextEditor ref={ref} content={fields.content || ''} rightColumn={fields.right || ''} leftColumn={fields.left || ''} twoColumns={split}
       rightColumnName="ימין" leftColumnName="שמאל" handleAutoSave={(v) => setText('content', v)} handleColumnChange={setText} setActiveTextarea={setActive}
       selectedFont="Arial" textZoom={18} columnWidth={50} onColumnResizeStart={() => {}} setTextZoom={() => {}} textAlign="right" textView={view} {...t.textEditorProps} />
-    <EditorStatusBar tracking={t.tracking} suspectCount={t.review.count} onSuspectsClick={() => setPanel(true)} />
+    <EditorStatusBar tracking={t.tracking} suspectCount={t.review.count} acceptedCount={t.review.accepted.length} onSuspectsClick={() => setPanel(true)} />
     <button onClick={() => setFinish(true)}>סיום</button>
-    {panel && <OcrWordReviewPanel review={t.review} textContainerRef={ref} onApplyText={setText} onClose={() => setPanel(false)} />}
-    {finish && <FinishPageDialog bookTitle="ספר" pageNumber={3} suspectCount={t.review.count} reviewStatus={t.review.status} textLineCount={1} saveStatus="saved"
+    {panel && <OcrWordReviewPanel review={t.review} textContainerRef={ref} onApplyText={setText}
+      onSetAccepted={(s, accept) => setDecisions(setWordReviewAccepted(fields, decisions, s, 'r1', accept))} onClose={() => setPanel(false)} />}
+    {finish && <FinishPageDialog bookTitle="ספר" pageNumber={3} suspectCount={t.review.count} acceptedCount={t.review.accepted.length} reviewStatus={t.review.status} textLineCount={1} saveStatus="saved"
       onClose={() => setFinish(false)} onSubmit={() => {}} onGoToSuspects={() => { setFinish(false); setPanel(true) }} />}
   </>
 }
@@ -47,6 +50,25 @@ beforeEach(() => {
   Object.defineProperty(document, 'execCommand', { configurable: true, value: vi.fn(() => false) })
 })
 afterEach(() => { vi.unstubAllGlobals(); delete document.execCommand; localStorage.clear() })
+
+it.each(['code', 'rich'])('approving removes highlights in either mode, updates finish, and keeps a route to undo (%s)', async (view) => {
+  const { container } = render(<Page view={view} split />)
+  fireEvent.click(await screen.findByRole('button', { name: /מילה אחת לבדיקה/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'המילה תקינה' }))
+  await screen.findByRole('button', { name: /מילים שסומנו כתקינות: 1/ })
+  if (view === 'code') expect(container.querySelector('[data-suspect]')).toBeNull()
+  else await waitFor(() => expect([...CSS.highlights.keys()].some((k) => k.includes('sus'))).toBe(false))
+  fireEvent.keyDown(screen.getByRole('dialog', { name: 'מילים חשודות' }), { key: 'Escape' })
+  fireEvent.click(screen.getByRole('button', { name: 'סיום' }))
+  expect(screen.getByRole('dialog', { name: 'סיום עמוד' })).toHaveTextContent('לא נותרו מילים חשודות לבדיקה')
+  fireEvent.click(screen.getByRole('button', { name: 'חזור לעריכה' }))
+  fireEvent.click(screen.getByRole('button', { name: /מילים שסומנו כתקינות: 1/ }))
+  fireEvent.click(screen.getByText('מילים שסומנו כתקינות (1)'))
+  fireEvent.click(screen.getByRole('button', { name: 'החזר לבדיקה: פוסרת, מופע 1' }))
+  await screen.findByRole('button', { name: /מילה אחת לבדיקה/ })
+  if (view === 'code') expect(container.querySelector('[data-text-mirror="left"] [data-suspect]')).toHaveTextContent('פוסרת')
+  else await waitFor(() => expect([...CSS.highlights.entries()].some(([k, v]) => k.includes('sus') && v.ranges.some((r) => r.toString() === 'פוסרת'))).toBe(true))
+})
 
 it.each(['code', 'rich'])('model-only suspicion reaches both display modes, live counts, suggestions and undo (%s)', async (view) => {
   const { container } = render(<Page view={view} />)
