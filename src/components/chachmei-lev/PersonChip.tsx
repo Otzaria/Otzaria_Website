@@ -18,7 +18,7 @@ function Content({ person, linked }: { person: Person; linked: boolean }) {
       {/* bdi: שם לועזי ("Y.PL.") או תיאור שמסתיים במילה לועזית לא יהפכו את סדר הנקודות והסוגריים */}
       <bdi className={cx('min-w-0', linked && 'text-on-surface')}>{person.name}</bdi>
       {person.description && (
-        <span className="min-w-0 font-normal opacity-80">(<bdi>{person.description}</bdi>)</span>
+        <span className="min-w-0 font-normal text-on-surface-variant">(<bdi>{person.description}</bdi>)</span>
       )}
     </>
   )
