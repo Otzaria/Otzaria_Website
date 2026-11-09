@@ -92,7 +92,7 @@ export const faqs = [
     id: 11,
     category: 'installation',
     question: 'כיצד מתקינים על macOS?',
-    answer: 'מסייע ההורדה ל-macOS נמצא {link}. בפתיחה הראשונה macOS יחסום את המסייע, כי הוא אינו חתום אצל Apple. במקרה כזה לחץ על "פתח בכל זאת" בהגדרות המערכת.',
+    answer: 'אוצריא דורשת macOS 12 (Monterey) ומעלה, ואינה רצה על macOS 11 ומטה. מסייע ההורדה ל-macOS נמצא {link}. בפתיחה הראשונה macOS יחסום את המסייע, כי הוא אינו חתום אצל Apple. במקרה כזה לחץ על "פתח בכל זאת" בהגדרות המערכת.',
     link: downloadLink('בדף ההורדה')
   },
   {

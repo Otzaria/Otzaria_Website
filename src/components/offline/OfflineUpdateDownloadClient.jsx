@@ -25,7 +25,7 @@ const PLATFORMS = {
     icon: 'laptop_mac',
     title: 'macOS',
     question: 'Mac',
-    requirement: <><Ltr>macOS 10.15</Ltr> ומעלה</>,
+    requirement: <><Ltr>macOS 12</Ltr> ומעלה</>,
     kind: <>קובץ <Ltr>zip</Ltr></>
   }
 }
