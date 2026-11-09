@@ -1,0 +1,78 @@
+name: PDF raw bitmap A/B experiment
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/benchmark-pdf-raw-experiment.mjs'
+      - 'src/lib/pdfConverter.js'
+      - 'src/lib/pdfConverter.test.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/pdf-raw-conversion-ab.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  comparative-measurement:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Confirm runtime PDF and canvas versions
+        run: npm ls pdf-to-img pdfjs-dist @napi-rs/canvas sharp
+      - name: Baseline and raw/direct-size A/B (isolated child processes)
+        run: node scripts/benchmark-pdf-raw-experiment.mjs | tee pdf-ab.json
+      - name: Independently check report completeness and shape parity
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const report = JSON.parse(fs.readFileSync('pdf-ab.json', 'utf8'));
+          if (report.scenarios.length !== 3) throw new Error('missing fixture scenario');
+          for (const scenario of report.scenarios) {
+            for (const variant of ['baseline', 'raw', 'fit']) {
+              const r = scenario.runs[variant];
+              if (r.rounds.length !== 2 || r.elapsedMs.some(n => n <= 0) ||
+                  r.peakRssMiB.some(n => n <= 0) ||
+                  r.rounds.some(x => x.imageCount !== scenario.fixture.pages)) {
+                throw new Error('invalid run ' + scenario.fixture.name + ':' + variant);
+              }
+            }
+            for (const variant of ['raw', 'fit']) {
+              if (scenario.quality[variant].pagesChecked !== scenario.fixture.pages ||
+                  !Number.isFinite(scenario.quality[variant].maxMeanAbsError)) {
+                throw new Error('missing quality comparison for ' + variant);
+              }
+            }
+          }
+          console.log('Compared every JPEG page, shape-parity gated; speed/quality differences retained.');
+          JS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdf-raw-ab-comparison
+          path: pdf-ab.json
+          if-no-files-found: error
+          retention-days: 30
+
+  independent-existing-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Converter correctness and resource cleanup
+        run: node --test src/lib/pdfConverter.test.mjs
