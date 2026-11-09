@@ -88,6 +88,25 @@ test('timeout cancels conversion and allows a later conversion', { timeout: 3000
   });
 });
 
+
+test('aborting an in-flight render releases resources, removes partial files and recovers', { timeout: 30000 }, async () => {
+  await work(async (dir) => {
+    const source = await fixture();
+    const abort = new AbortController();
+    const pending = convertPdfToImages(source, dir, { signal: abort.signal });
+    const timer = setTimeout(() => abort.abort(), 10);
+    try {
+      await assert.rejects(pending, { name: 'AbortError' });
+      assert.deepEqual(await readdir(dir), []);
+      const recovered = path.join(dir, 'recovered');
+      await mkdir(recovered);
+      assert.equal((await convertPdfToImages(source, recovered)).length, 3);
+    } finally {
+      clearTimeout(timer);
+    }
+  });
+});
+
 test('excessively large raster pages are rejected before native canvas allocation', { timeout: 20000 }, async () => {
   await work(async (dir) => {
     const doc = await PDFDocument.create();
