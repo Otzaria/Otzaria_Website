@@ -111,3 +111,46 @@ jobs:
       - run: npm ci --legacy-peer-deps
       - name: Verify Next.js production server bundle with native canvas
         run: npm run build
+
+  baseline-build-control:
+    # Compare the plugin page-data failure against unchanged master.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      MONGODB_URI: mongodb://127.0.0.1:27017/otzaria_pdf_ci
+      MONGODB_SERVER_SELECTION_TIMEOUT_MS: '5000'
+    services:
+      mongodb:
+        image: mongo:7.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dfa6d62028099a8de59e6be63e23b98c4163900f
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - name: Check whether baseline also fails at plugin schemaVersion
+        shell: bash
+        run: |
+          set -o pipefail
+          set +e
+          npm run build 2>&1 | tee control-build.log
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo "Base build passed; candidate build failure is not an existing master issue." >&2
+            exit 1
+          fi
+          grep -q 'src/lib/pluginValidation.js' control-build.log
+          grep -q 'schemaVersion' control-build.log
+          echo 'Confirmed: plugin validator failure already occurs at unchanged master.'
