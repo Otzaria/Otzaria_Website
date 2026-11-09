@@ -3,14 +3,13 @@
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { createCanvas } from '@napi-rs/canvas';
 import sharp from 'sharp';
-import { createRequire } from 'node:module';
 import { readFile, rm } from 'node:fs/promises';
 import { arrayBuffer } from 'node:stream/consumers';
 import path from 'node:path';
 import { pdfConversionGate } from './pdfConversionGate.js';
 
-const require = createRequire(import.meta.url);
-const pdfjsDir = path.dirname(require.resolve('pdfjs-dist/package.json'));
+// Not require.resolve: webpack replaces it with a numeric module id in route bundles.
+const pdfjsDir = path.join(process.cwd(), 'node_modules', 'pdfjs-dist');
 const DATA_URL_PREFIX = 'data:application/pdf;base64:';
 const DATA_URL = 'data:application/pdf;base64,';
 const MAX_PAGE_PIXELS = 40_000_000;
