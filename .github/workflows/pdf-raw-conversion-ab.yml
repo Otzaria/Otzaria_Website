@@ -109,6 +109,9 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci --legacy-peer-deps
+      # Same as deploy.yml: the lockfile's validator SHA predates the SPEC export.
+      - name: Install the plugin validator v1 tag
+        run: npm install "github:Otzaria/otzaria-plugin-validator#v1" --legacy-peer-deps --no-save
       - name: Verify Next.js production server bundle with native canvas
         run: npm run build
 
