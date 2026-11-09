@@ -4,9 +4,8 @@ import { SUBMITTED_WAITING } from './helpTexts.js';
 import { STAGE_TEXT } from './stages.js';
 import { GUIDE_FIGURES } from './guideFigures.js';
 
-// דף ההנחיות להגהת עמודים (/docs/page-proof) — התוכן נערך מדף הניהול (בעל הפרויקט, 2026-10-06: "להגיה את הדף בדף הניהול,
-// בלי לשלוח בקשת-שינוי על כל הגהה"). לוגיקה טהורה (בלי מסד ובלי DOM): הנוסח המקורי, הניקוי, והקודים. הצד שכותב למסד —
-// guideStore.js; הדף — app/docs/page-proof; העורך — components/pageProof/admin/GuideEditorCard.
+// דף ההנחיות להגהת עמודים (/docs/page-proof) — התוכן ניתן לעריכה בלי בקשת-שינוי (בעל הפרויקט, 2026-10-06) — כרגע רק דרך api/admin/page-proof/guide, כי עורך הניהול הישן הוסר. לוגיקה טהורה (בלי מסד ובלי DOM): הנוסח המקורי, הניקוי, והקודים. הצד שכותב למסד —
+// guideStore.js; הדף — app/docs/page-proof.
 //
 // הפורמט: HTML פשוט. כל פרק — <section id="…"><h2><span class="material-symbols-outlined">אייקון</span>כותרת</h2>…</section>
 // (מהכותרות נבנה תוכן-הדף). מותר: כותרות h2/h3, פסקאות (class "note" = מסגרת-הדגשה, "muted" = משני, "lead" = פתיחה),
