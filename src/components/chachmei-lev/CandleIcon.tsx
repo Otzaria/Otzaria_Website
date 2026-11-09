@@ -4,10 +4,11 @@ import { cx } from '@/components/ui/cx'
  * נר הנצחה (בתוכנה: אייקון להבה): גוף נר דק, פתיל, ולהבה בזהב הקישוט (--color-glow) עם הילה
  * רכה (מטושטשת) שנושמת לאט (animate-ambient-pulse הקיים). ב-reduced-motion — ההילה נייחת.
  * דקורטיבי בלבד (aria-hidden): המשמעות בטקסט ההקדשה.
+ * overflow-visible: הטשטוש של ההילה חורג מגבולות ה-viewBox — בלעדיו הוא נחתך למלבן.
  */
 export default function CandleIcon({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 48 72" aria-hidden="true" focusable="false" className={cx('h-16 w-auto', className)}>
+    <svg viewBox="0 0 48 72" aria-hidden="true" focusable="false" className={cx('h-16 w-auto overflow-visible', className)}>
       <circle
         cx="24"
         cy="20"
