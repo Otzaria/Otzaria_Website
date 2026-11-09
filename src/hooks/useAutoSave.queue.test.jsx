@@ -32,6 +32,20 @@ test('approvals travel with text through debounce, pagehide, retry and explicit 
   expect(body(fetchMock).ocrWordReview.accepted).toEqual([])
 })
 
+test('לשונית בלי החלטות לא שולחת את השדה, ו-ocrWordReviewDropped מפעיל את ה-callback', async () => {
+  const fetchMock = vi.fn().mockResolvedValue(ok())
+  vi.stubGlobal('fetch', fetchMock)
+  const onReviewDropped = vi.fn()
+  const { result } = renderHook(() => useAutoSave({ onReviewDropped }))
+  await act(async () => { await result.current.saveNow({ ...snapshot('תוכן'), ocrWordReview: null }) })
+  expect('ocrWordReview' in body(fetchMock)).toBe(false)
+  expect(onReviewDropped).not.toHaveBeenCalled()
+  fetchMock.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ success: true, ocrWordReviewDropped: true }) })
+  const decisions = { version: 1, revision: 'old', words: ['תוכן'], accepted: [0] }
+  await act(async () => { await result.current.saveNow({ ...snapshot('תוכן 2'), ocrWordReview: decisions }) })
+  expect(onReviewDropped).toHaveBeenCalledTimes(1)
+})
+
 beforeEach(() => {
   vi.useFakeTimers()
   vi.spyOn(console, 'error').mockImplementation(() => {})

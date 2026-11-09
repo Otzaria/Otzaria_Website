@@ -129,8 +129,37 @@ describe('persisted OCR word approvals', () => {
     await save(slug, 'מקורי', 1, { ocrWordReview: state })
     await Page.updateOne({ _id: page._id }, { $set: { lastOcrResultSha256: 'new-result' } })
     expect((await read(slug)).data.ocrWordReview).toBeNull()
-    expect(await save(slug, 'מקורי', 2, { ocrWordReview: state })).toMatchObject({ status: 400 })
-    expect((await Page.findById(page._id).lean()).contentSaveRevision).toBe(1)
+    // לשונית ישנה: הטקסט החדש נשמר, ההחלטות הישנות נזרקות והתשובה מסמנת זאת (בלי 400 ובלי איבוד עריכות)
+    expect(await save(slug, 'עריכה חדשה', 2, { ocrWordReview: state })).toMatchObject({ status: 200, body: { success: true, ocrWordReviewDropped: true } })
+    const after = await Page.findById(page._id).lean()
+    expect(after).toMatchObject({ content: 'עריכה חדשה', contentSaveRevision: 2 })
+    expect(after.ocrWordReview).toMatchObject(state) // לא נכתבו מחדש; ה-GET מסנן אותן לפי הגרסה
+    expect((await read(slug)).data.ocrWordReview).toBeNull()
+  })
+
+  it('הזיהוי הוחלף בין הקריאה לכתיבה: העדכון המותנה נכשל, הטקסט נשמר וההחלטות נזרקות', async () => {
+    const { slug, page } = await setup()
+    const staleSnapshot = await Page.findOne({ _id: page._id })
+    const state = decision(ocrReviewRevision(staleSnapshot))
+    await Page.updateOne({ _id: page._id }, { $set: { lastOcrResultSha256: 'replaced-during-save' } })
+    const spy = vi.spyOn(Page, 'findOne').mockResolvedValueOnce(staleSnapshot)
+    try {
+      expect(await save(slug, 'עריכה', 5, { ocrWordReview: state })).toMatchObject({ status: 200, body: { ocrWordReviewDropped: true } })
+    } finally {
+      spy.mockRestore()
+    }
+    const after = await Page.findById(page._id).lean()
+    expect(after).toMatchObject({ content: 'עריכה', contentSaveRevision: 5 })
+    expect(after.ocrWordReview ?? null).toBeNull()
+  })
+
+  it('הזיהוי תואם: ההחלטות נכתבות ואין סימון ocrWordReviewDropped', async () => {
+    const { slug, page } = await setup()
+    const state = decision(ocrReviewRevision(page))
+    const res = await save(slug, 'מקורי', 1, { ocrWordReview: state })
+    expect(res.status).toBe(200)
+    expect(res.body.ocrWordReviewDropped).toBeUndefined()
+    expect((await Page.findById(page._id).lean()).ocrWordReview).toMatchObject(state)
   })
 
   it('rejects malformed/out-of-range approvals and enforces existing page ownership', async () => {

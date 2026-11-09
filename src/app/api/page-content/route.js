@@ -86,11 +86,28 @@ export async function POST(request) {
         // הבקשה הייתה לאפשר עריכה "בלי להגדיר את הדף חזרה למצב עריכה", ולכן לא משנים את הסטטוס כאן.
     }
 
+    // החלטות "המילה תקינה": null מנקה אותן בכוונה (ניקוי מפורש). החלטות שאינן null נכתבות רק אם הן
+    // מתאימות לגרסת הזיהוי הנוכחית; אחרת הן נזרקות — אבל תוכן העמוד נשמר תמיד (אסור לאבד עריכות
+    // בגלל לשונית ישנה), והתשובה מסומנת ב-ocrWordReviewDropped כדי שהלקוח ינקה אותן.
+    let ocrWordReviewDropped = false;
+    let reviewGuard = null;
     if (hasWordReview) {
-      if (body.ocrWordReview !== null && body.ocrWordReview.revision !== ocrReviewRevision(currentPage)) {
-        return badRequest('נתוני הזיהוי השתנו. יש לרענן את העמוד לפני שמירה');
+      if (body.ocrWordReview === null) {
+        updateFields.ocrWordReview = null;
+      } else if (body.ocrWordReview.revision !== ocrReviewRevision(currentPage)) {
+        ocrWordReviewDropped = true;
+      } else {
+        updateFields.ocrWordReview = body.ocrWordReview;
+        // אטומיות: אם הזיהוי/התמונה הוחלפו בין הקריאה לכתיבה, העדכון המותנה לא יתאים
+        // (ערך חסר מתאים ל-null). ראו הניסיון החוזר בלי ההחלטות למטה.
+        reviewGuard = {
+          imagePath: currentPage.imagePath ?? null,
+          lastOcrJobId: currentPage.lastOcrJobId ?? null,
+          lastOcrResultSha256: currentPage.lastOcrResultSha256 ?? null,
+          lastOcrAt: currentPage.lastOcrAt ?? null,
+          lastOcrTextSha256: currentPage.lastOcrTextSha256 ?? null,
+        };
       }
-      updateFields.ocrWordReview = body.ocrWordReview;
     }
 
     // ביצוע העדכון
@@ -105,22 +122,31 @@ export async function POST(request) {
           ],
         }
       : query;
-    const updatedPage = await Page.findOneAndUpdate(
-      guardedQuery,
+    let updatedPage = await Page.findOneAndUpdate(
+      reviewGuard ? { ...guardedQuery, ...reviewGuard } : guardedQuery,
       updateFields,
       { returnDocument: 'after' }
     );
+
+    if (!updatedPage && reviewGuard) {
+      // ההתאמה נכשלה: שמירה חדשה יותר (saveRevision) או שהזיהוי הוחלף בינתיים. מנסים שוב בלי
+      // ההחלטות — אם הכשל היה בגלל saveRevision, גם הניסיון הזה יחזיר null והמסלול האידמפוטנטי למטה
+      // יטפל בו; אם בגלל הזיהוי, התוכן נשמר וההחלטות נזרקות.
+      const { ocrWordReview: _dropped, ...contentOnly } = updateFields;
+      updatedPage = await Page.findOneAndUpdate(guardedQuery, contentOnly, { returnDocument: 'after' });
+      if (updatedPage) ocrWordReviewDropped = true;
+    }
 
     if (!updatedPage) {
       // העמוד כבר נטען ונבדק לעיל; כישלון העדכון המותנה פירושו ששמירה חדשה
       // יותר כבר הגיעה. מחזירים success אידמפוטנטי כדי שהלקוח לא יציג שגיאת שמירה.
       if (hasSaveRevision) {
-        return NextResponse.json({ success: true, message: 'כבר נשמרה גרסה חדשה יותר', stale: true, pageStatus: currentPage.status });
+        return NextResponse.json({ success: true, message: 'כבר נשמרה גרסה חדשה יותר', stale: true, pageStatus: currentPage.status, ...(ocrWordReviewDropped ? { ocrWordReviewDropped: true } : {}) });
       }
       return notFound('העמוד לא נמצא');
     }
 
-    return NextResponse.json({ success: true, message: 'נשמר בהצלחה', pageStatus: updatedPage.status });
+    return NextResponse.json({ success: true, message: 'נשמר בהצלחה', pageStatus: updatedPage.status, ...(ocrWordReviewDropped ? { ocrWordReviewDropped: true } : {}) });
   } catch (error) {
     console.error('Save Content Error:', error);
     return serverError();

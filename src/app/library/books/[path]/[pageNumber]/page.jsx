@@ -185,7 +185,10 @@ export default function EditPage() {
     saveNow,
     flush: flushAutoSave,
     status: saveStatus,
-  } = useAutoSave()
+  } = useAutoSave({
+    // השרת זרק החלטות שמקושרות לזיהוי שהוחלף: מנקים אותן מקומית כדי שלא יישלחו שוב
+    onReviewDropped: () => setWordReviewState((prev) => (prev ? { ...prev, value: null } : prev)),
+  })
 
   useEffect(() => {
     const savedPanelWidth = localStorage.getItem('imagePanelWidth')
