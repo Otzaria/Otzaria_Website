@@ -66,4 +66,8 @@ export function createPdfConversionGate({ maxActive = 2, maxQueued = 4 } = {}) {
   };
 }
 
-export const pdfConversionGate = createPdfConversionGate();
+// Default to one heavy raster conversion at a time: raw RGBA can temporarily
+// increase RSS on very large pages. Operators with sufficient RAM may opt in
+// to two active conversions; never permit an unbounded active count.
+const maxActive = process.env.PDF_CONVERSION_PARALLELISM === '2' ? 2 : 1;
+export const pdfConversionGate = createPdfConversionGate({ maxActive, maxQueued: 4 });
