@@ -71,9 +71,16 @@ async function convertRaw(input, outputDir, options, mode) {
       const ctx = canvas.getContext('2d');
       try {
         await page.render({ canvasContext: ctx, viewport, background: 'rgb(255,255,255)' }).promise;
-        const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        // data() reads native premultiplied RGBA, avoiding ImageData readback.
+        // The opaque white PDF render background should make premultiplication a no-op.
+        const pixels = mode === 'data'
+          ? canvas.data()
+          : ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        if (pixels.byteLength !== canvas.width * canvas.height * 4) {
+          throw new Error('unexpected native canvas pixel layout');
+        }
         const jpegPath = path.join(outputDir, 'page.' + n + '.jpg');
-        await sharp(Buffer.from(pixels.data.buffer, pixels.data.byteOffset, pixels.data.byteLength), {
+        await sharp(Buffer.from(pixels.buffer, pixels.byteOffset, pixels.byteLength), {
           raw: { width: canvas.width, height: canvas.height, channels: 4 },
         }).resize(options.width, options.height, {
           fit: 'inside', withoutEnlargement: true,
@@ -173,14 +180,14 @@ async function main() {
       const file = path.join(root, fixture.name + '.pdf');
       const identity = await createFixture(file, fixture);
       const runs = {};
-      for (const variant of ['baseline', 'raw', 'fit']) {
+      for (const variant of ['baseline', 'raw', 'data', 'fit']) {
         const dir = path.join(root, fixture.name + '-' + variant);
         await mkdir(dir);
         runs[variant] = childProcess(variant, file, dir);
         runs[variant].outputFolder = dir;
       }
       const quality = {};
-      for (const variant of ['raw', 'fit']) {
+      for (const variant of ['raw', 'data', 'fit']) {
         let maxMae = 0;
         let minPsnr = Infinity;
         let exactCount = 0;
@@ -204,7 +211,7 @@ async function main() {
       reports.push({ fixture, source: identity, runs, quality });
     }
     console.log(JSON.stringify({
-      experiment: 'pdf-to-img-png-vs-raw-and-fit',
+      experiment: 'pdf-to-img-png-vs-raw-data-and-fit',
       baselineSource: 'src/lib/pdfConverter.js@dfa6d620',
       node: process.version,
       platform: process.platform,
