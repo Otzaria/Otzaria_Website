@@ -7,7 +7,8 @@ import { cx } from '@/components/ui/cx'
 
 /**
  * משבצת פנויה בסוף רשת (לוח ההנצחה, החברות): כל הכרטיס קישור לדף התרומה, עם מסגרת מקווקוות
- * שמבדילה אותו מהכרטיסים המלאים. ה"כפתור" שבתחתית הוא מראה בלבד (span) — אסור כפתור בתוך קישור.
+ * שמבדילה אותו מהכרטיסים המלאים. ה"כפתור" שבתחתית הוא כפתור התרומה של האתר (variant="donation",
+ * כמו בכותרת וב-DonateCallout) — מראה בלבד (span): אסור כפתור בתוך קישור.
  */
 export default function OpenSlotCard({ title, cta, icon = 'volunteer_activism', href = '/donate', className, style }: {
   title: string
@@ -26,7 +27,7 @@ export default function OpenSlotCard({ title, cta, icon = 'volunteer_activism', 
       >
         <IconTile icon={icon} size="md" />
         <span className="text-balance text-center text-title-sm text-on-surface sm:text-title-md">{title}</span>
-        <span className={buttonClasses({ variant: 'tonal', size: 'sm', className: 'pointer-events-none' })}>
+        <span className={buttonClasses({ variant: 'donation' })}>
           {cta}
           <AppIcon
             name="chevron_left"
