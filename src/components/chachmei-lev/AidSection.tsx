@@ -18,7 +18,7 @@ function OrgGroup({ id, title, orgs, emergency = false }: {
   return (
     <section aria-labelledby={id}>
       <h3 id={id} className={cx('mb-3 flex items-center gap-2 text-title-md', emergency ? 'text-error' : 'text-on-surface')}>
-        <AppIcon name={emergency ? 'notifications_active' : 'groups'} className="text-xl" />
+        <AppIcon name={emergency ? 'phone_in_talk' : 'groups'} className="text-xl" />
         {title}
       </h3>
       <ul className="grid gap-3 sm:grid-cols-2">

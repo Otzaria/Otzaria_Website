@@ -8,7 +8,7 @@ import { ZAYIT_CREDIT } from '@/lib/chachmei-lev-data'
 export default function ZayitCredit() {
   return (
     <Section spacing="top" container="narrow">
-      <p dir="ltr" lang="en" className="text-balance text-center text-body-sm text-on-surface-variant">
+      <p dir="ltr" lang="en" className="mx-auto max-w-measure text-balance text-center text-body-sm text-on-surface-variant">
         {ZAYIT_CREDIT.before}
         <a
           href={ZAYIT_CREDIT.url}

@@ -9,11 +9,12 @@ import { cx } from '@/components/ui/cx'
  * משבצת פנויה בסוף רשת (לוח ההנצחה, החברות): כל הכרטיס קישור לדף התרומה, עם מסגרת מקווקוות
  * שמבדילה אותו מהכרטיסים המלאים. ה"כפתור" שבתחתית הוא כפתור התרומה של האתר (variant="donation",
  * כמו בכותרת וב-DonateCallout) — מראה בלבד (span): אסור כפתור בתוך קישור.
+ * icon — חובה, לפי ההקשר: נר בלוח ההנצחה, פלוס במשבצת החברות.
  */
-export default function OpenSlotCard({ title, cta, icon = 'volunteer_activism', href = '/donate', className, style }: {
+export default function OpenSlotCard({ title, cta, icon, href = '/donate', className, style }: {
   title: string
   cta: string
-  icon?: string
+  icon: string
   href?: string
   className?: string
   style?: CSSProperties
