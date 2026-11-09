@@ -40,7 +40,7 @@ jobs:
           const report = JSON.parse(fs.readFileSync('pdf-ab.json', 'utf8'));
           if (report.scenarios.length !== 3) throw new Error('missing fixture scenario');
           for (const scenario of report.scenarios) {
-            for (const variant of ['baseline', 'raw', 'fit']) {
+            for (const variant of ['baseline', 'raw', 'data', 'fit']) {
               const r = scenario.runs[variant];
               if (r.rounds.length !== 2 || r.elapsedMs.some(n => n <= 0) ||
                   r.peakRssMiB.some(n => n <= 0) ||
@@ -48,7 +48,7 @@ jobs:
                 throw new Error('invalid run ' + scenario.fixture.name + ':' + variant);
               }
             }
-            for (const variant of ['raw', 'fit']) {
+            for (const variant of ['raw', 'data', 'fit']) {
               if (scenario.quality[variant].pagesChecked !== scenario.fixture.pages ||
                   !Number.isFinite(scenario.quality[variant].maxMeanAbsError)) {
                 throw new Error('missing quality comparison for ' + variant);
