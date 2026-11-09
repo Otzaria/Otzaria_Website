@@ -33,7 +33,7 @@ function Sep({ className }) {
  *   onTrackingClick?: () => void,
  *   trackingNote?: string | null, trackingClickLabel?: string,
  *   position?: { line?: number, totalLines?: number, word?: number, pageWord?: number, totalWords?: number },
- *   wordCount?: number, suspectCount?: number, onSuspectsClick?: () => void,
+ *   wordCount?: number, suspectCount?: number, acceptedCount?: number, onSuspectsClick?: () => void,
  *   restRemainingMs?: number | null, shortcuts?: { keys: string[], label: string }[], className?: string
  * }} props
  */
@@ -49,6 +49,7 @@ export default function EditorStatusBar({
   position,
   wordCount,
   suspectCount = 0,
+  acceptedCount = 0,
   onSuspectsClick,
   restRemainingMs = null,
   shortcuts = DEFAULT_SHORTCUT_HINTS,
@@ -69,7 +70,7 @@ export default function EditorStatusBar({
       {/* ספירת המילים כבר מופיעה ב"מילה X מתוך Y" כשהיא זהה — לא לכפול (בשני טורים היא שונה ונשארת) */}
       {wordCount != null && wordCount !== position?.totalWords && (<><Sep /><span className="shrink-0 whitespace-nowrap tabular-nums max-sm:hidden">{wordCountText(wordCount)}</span></>)}
 
-      {suspectCount > 0 && (
+      {(suspectCount > 0 || acceptedCount > 0) && (
         <>
           <Sep />
           {onSuspectsClick ? (
@@ -77,11 +78,11 @@ export default function EditorStatusBar({
               <button
                 type="button"
                 onClick={onSuspectsClick}
-                aria-label={`${suspectCountText(suspectCount)}. הצגת המילים לבדיקה`}
+                aria-label={`${suspectCount > 0 ? suspectCountText(suspectCount) : `מילים שסומנו כתקינות: ${acceptedCount}`}. הצגת המילים לבדיקה`}
                 className={cx('inline-flex min-h-(--editor-statusbar-height) items-center gap-1 rounded-(--radius-pill) px-2 text-primary hover:bg-surface-selected', TOUCH_TARGET_OVERLAY, FOCUS_RING)}
               >
                 <AppIcon name="spellcheck" className="text-lg" />
-                <span className="whitespace-nowrap tabular-nums">{suspectCountText(suspectCount)}</span>
+                <span className="whitespace-nowrap tabular-nums">{suspectCount > 0 ? suspectCountText(suspectCount) : `${acceptedCount} סומנו כתקינות`}</span>
               </button>
             </Tooltip>
           ) : (

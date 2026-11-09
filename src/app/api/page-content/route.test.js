@@ -11,7 +11,8 @@ import mongoose from 'mongoose'
 import Book from '@/models/Book'
 import Page from '@/models/Page'
 import { startMongo } from '@/lib/corrections/testing/mongo.js'
-import { POST } from './route'
+import { GET, POST } from './route'
+import { ocrReviewRevision } from '@/lib/editor/ocrReviewState'
 import { countBookOcrPages } from '@/lib/ocr/bookOcrCounts.js'
 import { ocrTextSha256 } from '@/lib/ocr/runOcrJob.pure.js'
 
@@ -49,8 +50,8 @@ async function setup() {
   return { slug, page }
 }
 
-async function save(slug, content, saveRevision) {
-  const body = { bookPath: slug, pageNumber: 1, content, twoColumns: false, ...(saveRevision == null ? {} : { saveRevision }) }
+async function save(slug, content, saveRevision, extra = {}) {
+  const body = { bookPath: slug, pageNumber: 1, content, twoColumns: false, ...(saveRevision == null ? {} : { saveRevision }), ...extra }
   const response = await POST(new Request('http://localhost/api/page-content', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -100,5 +101,46 @@ describe('POST /api/page-content save ordering', () => {
     const legacy = await save(slug, 'לקוח ישן')
     expect(legacy).toMatchObject({ status: 200, body: { success: true } })
     expect((await Page.findById(page._id).lean()).content).toBe('לקוח ישן')
+  })
+})
+
+describe('persisted OCR word approvals', () => {
+  const read = async (slug) => (await GET(new Request(`http://localhost/api/page-content?bookPath=${slug}&pageNumber=1`))).json()
+  const decision = (revision) => ({ version: 1, revision, words: ['מקורי'], accepted: [0] })
+
+  it('round-trips approvals without changing text; ordered saves and legacy clients preserve them', async () => {
+    const { slug, page } = await setup()
+    const loaded = await read(slug)
+    expect(loaded.data.ocrWordReview).toBeNull()
+    const state = decision(loaded.data.ocrReviewRevision)
+    expect(await save(slug, 'מקורי', 20, { ocrWordReview: state })).toMatchObject({ status: 200 })
+    expect((await read(slug)).data).toMatchObject({ content: 'מקורי', ocrWordReview: state })
+    expect(await save(slug, 'מקורי', 19, { ocrWordReview: null })).toMatchObject({ body: { stale: true } })
+    expect((await read(slug)).data.ocrWordReview).toMatchObject(state)
+    await save(slug, 'תוספת מקורי') // An older client omits the optional field.
+    expect((await Page.findById(page._id).lean()).ocrWordReview).toMatchObject(state)
+    await save(slug, 'תוספת מקורי', 21, { ocrWordReview: { ...state, accepted: [] } })
+    expect((await read(slug)).data.ocrWordReview.accepted).toEqual([])
+  })
+
+  it('new OCR invalidates old approvals and rejects their reintroduction by an old tab', async () => {
+    const { slug, page } = await setup()
+    const state = decision(ocrReviewRevision(page))
+    await save(slug, 'מקורי', 1, { ocrWordReview: state })
+    await Page.updateOne({ _id: page._id }, { $set: { lastOcrResultSha256: 'new-result' } })
+    expect((await read(slug)).data.ocrWordReview).toBeNull()
+    expect(await save(slug, 'מקורי', 2, { ocrWordReview: state })).toMatchObject({ status: 400 })
+    expect((await Page.findById(page._id).lean()).contentSaveRevision).toBe(1)
+  })
+
+  it('rejects malformed/out-of-range approvals and enforces existing page ownership', async () => {
+    const { slug, page } = await setup()
+    const state = decision(ocrReviewRevision(page))
+    for (const invalid of [{ ...state, accepted: [4] }, { ...state, words: [null] }, { ...state, version: 2 }]) {
+      expect(await save(slug, 'מקורי', 1, { ocrWordReview: invalid })).toMatchObject({ status: 400 })
+    }
+    getServerSessionMock.mockResolvedValue({ user: { id: '507f1f77bcf86cd799439012', role: 'user' } })
+    expect(await save(slug, 'מקורי', 1, { ocrWordReview: state })).toMatchObject({ status: 403 })
+    expect((await Page.findById(page._id).lean()).ocrWordReview).toBeNull()
   })
 })

@@ -23,6 +23,7 @@ export function toSaveBody(data) {
   }
   // לקוחות ישנים אינם שולחים revision; לא מוסיפים undefined לגוף.
   if (Number.isSafeInteger(data.saveRevision) && data.saveRevision > 0) body.saveRevision = data.saveRevision
+  if (data.ocrWordReview !== undefined) body.ocrWordReview = data.ocrWordReview
   return body
 }
 

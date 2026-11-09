@@ -3,6 +3,7 @@
 // UTF-16 ranges for both editing surfaces and use bounded, exact sequence matching.
 import { tokenize } from '../../components/editor/v2/richMap.js';
 import { LOW_CONF, shapeReasons } from './suspectWords.js';
+import { validOcrReviewState } from './ocrReviewState.js';
 
 const list = (x) => Array.isArray(x) ? x : [];
 const probability = (x) => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 1 ? x : null;
@@ -177,7 +178,7 @@ function unchangedWords(A, B) {
 
 /** One review result for the whole page (right then left in a split editor).
  * Each occurrence is consumed once, including repeated words across columns. */
-export function buildPageWordReview(texts, source) {
+export function buildPageWordReview(texts, source, decisions = null) {
   const fields = {};
   const target = [];
   for (const [column, raw] of Object.entries(texts)) {
@@ -190,13 +191,39 @@ export function buildPageWordReview(texts, source) {
   const A = original.map((w) => keyOf(w.text));
   const B = target.map((w) => keyOf(w.text));
   const aligned = unchangedWords(A, B);
+  const approved = acceptedWordIndexes(B, decisions);
+  const accepted = [];
   target.forEach((w, j) => {
     const model = original[aligned.get(j)];
     const reasons = [...new Set([...(model?.reasons || []), ...shapeReasons(w.text)])];
-    if (reasons.length) fields[w.column].suspects.push({ ...w, reasons, suggestions: model?.suggestions || [], conf: model?.conf ?? null, p: model?.p ?? null });
+    if (reasons.length) {
+      const suspect = { ...w, reasons, suggestions: model?.suggestions || [], conf: model?.conf ?? null, p: model?.p ?? null };
+      if (approved.has(j)) accepted.push(suspect);
+      else fields[w.column].suspects.push(suspect);
+    }
   });
   const suspects = Object.values(fields).flatMap((f) => f.suspects);
-  return { fields, suspects, count: suspects.length, available: original.length > 0 };
+  return { fields, suspects, accepted, count: suspects.length, available: original.length > 0 };
+}
+
+function acceptedWordIndexes(words, decisions) {
+  if (!validOcrReviewState(decisions)) return new Set();
+  const approved = new Set(decisions.accepted);
+  return new Set([...unchangedWords(decisions.words, words)].filter(([, old]) => approved.has(old)).map(([now]) => now));
+}
+
+/** Rebase previous approvals onto the current text, then change exactly one
+ * live occurrence. Returning null means the action's text/range is stale. */
+export function setWordReviewAccepted(texts, decisions, suspect, revision, accept = true) {
+  const target = Object.entries(texts).flatMap(([column, text]) => reviewTextWords(text).map((w) => ({ ...w, column })));
+  const index = target.findIndex((w) => w.column === suspect.column && w.start === suspect.start && w.end === suspect.end && w.text === suspect.text);
+  if (index < 0 || typeof revision !== 'string') return null;
+  const words = target.map((w) => keyOf(w.text));
+  const accepted = acceptedWordIndexes(words, decisions?.revision === revision ? decisions : null);
+  if (accept) accepted.add(index);
+  else accepted.delete(index);
+  const next = { version: 1, revision, words, accepted: [...accepted].sort((a, b) => a - b) };
+  return validOcrReviewState(next) ? next : null;
 }
 
 /** Consumers must never decorate old offsets between an input event and React's

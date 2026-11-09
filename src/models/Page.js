@@ -16,6 +16,15 @@ const PageSchema = new mongoose.Schema({
   // כשהבקשה מסתיימת). כך keepalive/sendBeacon חדש לא נדרס בידי בקשה ישנה
   // שסיימה מאוחר יותר. השדה אינו required כדי לשמור תאימות ללקוחות ישנים.
   contentSaveRevision: { type: Number, min: 1 },
+
+  // Per-occurrence approvals share the text's revision-ordered autosave. The
+  // snapshot is aligned conservatively after edits; revision binds it to OCR.
+  ocrWordReview: { type: new mongoose.Schema({
+    version: { type: Number, required: true },
+    revision: { type: String, required: true },
+    words: [String],
+    accepted: [Number],
+  }, { _id: false }), default: null },
   
   // סטטוס עריכה
   status: { 

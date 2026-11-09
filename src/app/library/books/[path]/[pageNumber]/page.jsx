@@ -47,6 +47,7 @@ import MobileActionBar from '@/components/editor/v2/MobileActionBar'
 import { pageClaimState, canFinishPage } from '@/components/editor/v2/pageClaim'
 import DisplaySettingsSheet from '@/components/editor/v2/DisplaySettingsSheet'
 import OcrWordReviewPanel from '@/components/editor/v2/OcrWordReviewPanel'
+import { setWordReviewAccepted } from '@/lib/editor/ocrWordReview'
 import FinishPageDialog from '@/components/editor/v2/FinishPageDialog'
 import RestReminder from '@/components/editor/v2/RestReminder'
 import { buildEditorCommands } from '@/components/editor/v2/editorCommands'
@@ -98,6 +99,10 @@ export default function EditPage() {
   const [leftColumn, setLeftColumn] = useState('')
   const [rightColumn, setRightColumn] = useState('')
   const [twoColumns, setTwoColumns] = useState(false)
+  const [wordReviewState, setWordReviewState] = useState(null)
+  const wordReviewPageKey = `${bookPath}:${pageNumber}`
+  const ocrWordReview = wordReviewState?.pageKey === wordReviewPageKey ? wordReviewState.value : null
+  const ocrReviewRevision = wordReviewState?.pageKey === wordReviewPageKey ? wordReviewState.revision : null
   const [activeTextarea, setActiveTextarea] = useState(null)
   const [settingsLoaded, setSettingsLoaded] = useState(false)
 
@@ -370,6 +375,7 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
         setRightColumnName(data.rightColumnName || 'חלק 1')
         setLeftColumnName(data.leftColumnName || 'חלק 2')
         setTwoColumns(data.twoColumns || false)
+        setWordReviewState({ pageKey: `${bookPath}:${pageNumber}`, revision: data.ocrReviewRevision, value: data.ocrWordReview || null })
       }
     } catch (err) {
       console.error(err);
@@ -439,21 +445,21 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
     }
   // handleAutoSaveWrapper מוגדר בהמשך; מכוון
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [content, leftColumn, rightColumn, twoColumns]); // handleAutoSaveWrapper added below
+  }, [content, leftColumn, rightColumn, twoColumns, ocrWordReview]); // handleAutoSaveWrapper added below
 
   // split — כשהקורא כבר יודע את הערך החדש (פיצול: ה-state עוד לא התעדכן בסגירה הזו)
-  const handleAutoSaveWrapper = useCallback((newContent, left = leftColumn, right = rightColumn, two = twoColumns, split = isContentSplit) => {
+  const handleAutoSaveWrapper = useCallback((newContent, left = leftColumn, right = rightColumn, two = twoColumns, split = isContentSplit, decisions = ocrWordReview) => {
     debouncedSave({
       bookPath, pageNumber, content: newContent, leftColumn: left, rightColumn: right,
-      twoColumns: two, isContentSplit: split, rightColumnName, leftColumnName
+      twoColumns: two, isContentSplit: split, rightColumnName, leftColumnName, ocrWordReview: decisions
     })
-  }, [debouncedSave, bookPath, pageNumber, leftColumn, rightColumn, twoColumns, isContentSplit, rightColumnName, leftColumnName]);
+  }, [debouncedSave, bookPath, pageNumber, leftColumn, rightColumn, twoColumns, isContentSplit, rightColumnName, leftColumnName, ocrWordReview]);
 
   // שמירה מיידית של המצב הנוכחי (Ctrl+S, לפני סיום עמוד) — בלי לחכות ל-debounce
   const saveCurrentNow = useCallback(() => saveNow({
     bookPath, pageNumber, content, leftColumn, rightColumn,
-    twoColumns, isContentSplit, rightColumnName, leftColumnName
-  }), [saveNow, bookPath, pageNumber, content, leftColumn, rightColumn, twoColumns, isContentSplit, rightColumnName, leftColumnName]);
+    twoColumns, isContentSplit, rightColumnName, leftColumnName, ocrWordReview
+  }), [saveNow, bookPath, pageNumber, content, leftColumn, rightColumn, twoColumns, isContentSplit, rightColumnName, leftColumnName, ocrWordReview]);
 
   const updateTextWithHistory = useCallback((newText, column) => {
     let el;
@@ -1245,6 +1251,7 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
     enabled: !loading && !error,
     extraSource: localWords.source,
     textFields: reviewTextFields,
+    reviewDecisions: ocrWordReview,
     // העדפות התצוגה: "מול הסריקה" → שורה מול שורה (בלי גלישה) — רק כשהטקסט באמת מחולק
     // לשורות כמו הצילום; טקסט שמגיע כגוש גולש תמיד (effectiveWrap ב-usePageTracking)
     wrap: prefs.lineSpacing === 'facing' ? 'off' : 'soft',
@@ -1597,6 +1604,7 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
           position={caretPos ?? undefined}
           wordCount={wordCount}
           suspectCount={scanTracking.review?.count ?? 0}
+          acceptedCount={scanTracking.review?.accepted?.length ?? 0}
           onSuspectsClick={() => setShowOcrReview(true)}
           restRemainingMs={rest.remainingMs}
           shortcuts={statusShortcuts}
@@ -1712,6 +1720,13 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
 
       {showOcrReview && (
         <OcrWordReviewPanel key={`${bookPath}:${pageNumber}`} review={scanTracking.review} textContainerRef={textEditorContainerRef}
+          onSetAccepted={(word, accept) => {
+            const next = setWordReviewAccepted(reviewTextFields, ocrWordReview, word, ocrReviewRevision, accept)
+            if (!next) return false
+            setWordReviewState({ pageKey: wordReviewPageKey, revision: ocrReviewRevision, value: next })
+            handleAutoSaveWrapper(content, leftColumn, rightColumn, twoColumns, isContentSplit, next)
+            return true
+          }}
           onApplyText={(column, value) => {
             if (column === 'right' || column === 'left') handleColumnChange(column, value)
             else { setContent(value); handleAutoSaveWrapper(value) }
@@ -1724,6 +1739,7 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
           bookTitle={bookData?.name || bookPath}
           pageNumber={pageNumber}
           suspectCount={scanTracking.review?.count ?? 0}
+          acceptedCount={scanTracking.review?.accepted?.length ?? 0}
           reviewStatus={scanTracking.review?.status ?? 'unavailable'}
           onGoToSuspects={() => { setShowFinishDialog(false); setShowOcrReview(true) }}
           textLineCount={textLineCount}

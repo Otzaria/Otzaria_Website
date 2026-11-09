@@ -72,7 +72,7 @@ function useAlignmentCheck({ enabled, text, lines }) {
  * @param {{ bookPath?: string, pageNumber?: number, imageUrl?: string|null, twoColumns?: boolean,
  *   activeTextarea?: 'right'|'left'|null, textContainerRef: { current: HTMLElement|null },
  *   imageZoom?: number, text?: string, textFields?: Record<string, string>|null, enabled?: boolean, extraSource?: any, proofDoc?: any,
- *   lineNumbers?: boolean, showSuspects?: boolean, wrap?: 'soft'|'off',
+ *   lineNumbers?: boolean, showSuspects?: boolean, reviewDecisions?: any, wrap?: 'soft'|'off',
  *   showFrame?: boolean, followScroll?: boolean, highlight?: 'normal'|'strong' }} p
  *   imageZoom — באחוזים, כמו ב-ImagePanel; text — הטקסט של הטור הפעיל (לספירה)
  *   showFrame — false: בלי שכבת המסגרת על הצילום (המעקב עצמו ממשיך לשורת המצב ולטקסט)
@@ -90,6 +90,7 @@ export function usePageTracking({
   imageZoom = 100,
   text = '',
   textFields = null,
+  reviewDecisions = null,
   enabled = true,
   extraSource = null,
   proofDoc = null,
@@ -105,7 +106,7 @@ export function usePageTracking({
   // Moving the caret between columns does not change the full-page text input.
   // Keep that input stable so a focus change does not repeat sequence matching.
   const reviewTexts = useMemo(() => textFields || { [column]: text }, [textFields, column, text])
-  const wordReview = useMemo(() => buildPageWordReview(reviewTexts, enabled ? reviewSource : null), [reviewTexts, enabled, reviewSource])
+  const wordReview = useMemo(() => buildPageWordReview(reviewTexts, enabled ? reviewSource : null, reviewDecisions), [reviewTexts, enabled, reviewSource, reviewDecisions])
   const review = useMemo(() => ({ ...wordReview, status: status === 'loading' ? 'loading' : wordReview.available ? 'ready' : 'unavailable' }), [wordReview, status])
   const { lines, wordLevel } = useMemo(() => linesForColumn(source, { twoColumns, column }), [source, twoColumns, column])
   // שמירה מפני מסגרות בטוחות שגויות (פרופיל מהתמונה בלבד): פריסה לא סבירה / טקסט שלא מתאים

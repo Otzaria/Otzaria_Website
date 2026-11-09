@@ -12,6 +12,26 @@ const deferred = () => {
 }
 const body = (fetchMock, index = -1) => JSON.parse(fetchMock.mock.calls.at(index)[1].body)
 
+test('approvals travel with text through debounce, pagehide, retry and explicit saves', async () => {
+  const fetchMock = vi.fn().mockResolvedValue(ok())
+  vi.stubGlobal('fetch', fetchMock)
+  const { result } = renderHook(() => useAutoSave())
+  const decisions = { version: 1, revision: 'r', words: ['תוכן'], accepted: [0] }
+  const data = { ...snapshot('תוכן'), ocrWordReview: decisions }
+  act(() => result.current.save(data))
+  act(() => window.dispatchEvent(new Event('pagehide')))
+  expect(body(fetchMock).ocrWordReview).toEqual(decisions)
+  expect(fetchMock.mock.calls.at(-1)[1].keepalive).toBe(true)
+  fetchMock.mockResolvedValueOnce(failed())
+  await act(async () => { expect(await result.current.saveNow(data)).toBe(false) })
+  const revision = body(fetchMock).saveRevision
+  await act(async () => { expect(await result.current.flush()).toBe(true) })
+  expect(body(fetchMock)).toMatchObject({ ocrWordReview: decisions, saveRevision: revision })
+  act(() => result.current.save({ ...data, ocrWordReview: { ...decisions, accepted: [] } }))
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+  expect(body(fetchMock).ocrWordReview.accepted).toEqual([])
+})
+
 beforeEach(() => {
   vi.useFakeTimers()
   vi.spyOn(console, 'error').mockImplementation(() => {})

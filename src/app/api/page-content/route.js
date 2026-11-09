@@ -6,6 +6,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBooksAccess } from '@/lib/roles';
 import { unauthorized, badRequest, notFound, forbidden, serverError } from '@/lib/apiResponse';
+import { ocrReviewRevision, validOcrReviewState } from '@/lib/editor/ocrReviewState';
 
 // שמירת תוכן (Auto-save)
 export async function POST(request) {
@@ -29,6 +30,10 @@ export async function POST(request) {
     const hasSaveRevision = body.saveRevision != null;
     if (hasSaveRevision && (!Number.isSafeInteger(body.saveRevision) || body.saveRevision < 1)) {
       return badRequest('גרסת השמירה אינה תקינה');
+    }
+    const hasWordReview = body.ocrWordReview !== undefined;
+    if (hasWordReview && body.ocrWordReview !== null && !validOcrReviewState(body.ocrWordReview)) {
+      return badRequest('סימון המילים התקינות אינו תקין');
     }
 
     const userId = session.user._id || session.user.id;
@@ -79,6 +84,13 @@ export async function POST(request) {
         }
         // אם הדף Completed, אנחנו מאפשרים עריכה (תיקון טעויות) מבלי לשנות סטטוס, אלא אם נרצה אחרת.
         // הבקשה הייתה לאפשר עריכה "בלי להגדיר את הדף חזרה למצב עריכה", ולכן לא משנים את הסטטוס כאן.
+    }
+
+    if (hasWordReview) {
+      if (body.ocrWordReview !== null && body.ocrWordReview.revision !== ocrReviewRevision(currentPage)) {
+        return badRequest('נתוני הזיהוי השתנו. יש לרענן את העמוד לפני שמירה');
+      }
+      updateFields.ocrWordReview = body.ocrWordReview;
     }
 
     // ביצוע העדכון
@@ -188,7 +200,9 @@ export async function GET(request) {
                 rightColumnName: page.rightColumnName || 'חלק 1',
                 leftColumnName: page.leftColumnName || 'חלק 2',
                 status: page.status,
-                claimedBy: page.claimedBy
+                claimedBy: page.claimedBy,
+                ocrReviewRevision: ocrReviewRevision(page),
+                ocrWordReview: page.ocrWordReview?.revision === ocrReviewRevision(page) ? page.ocrWordReview : null,
             }
         });
 
