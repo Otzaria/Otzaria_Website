@@ -108,7 +108,7 @@ async function runChild(variant, input, outputBase) {
     histogram.enable();
     try {
       const images = variant === 'baseline'
-        ? await convertPdfToImages(input, output, defaults)
+        ? await convertPdfToImages(input, output, { ...defaults, renderer: 'legacy' })
         : await convertRaw(input, output, defaults, variant);
       elapsed.push(Math.round(performance.now() - started));
       peakRss.push(Number((Math.max(peak, process.memoryUsage().rss) / 1048576).toFixed(1)));
