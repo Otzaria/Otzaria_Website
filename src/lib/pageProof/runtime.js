@@ -1,7 +1,7 @@
 // מתגי הגהת-העמודים בזמן ריצה (SystemConfig 'pageProof.runtime'; הדפוס — lib/corrections/runtime.js):
 // היום מתג אחד — האם מתנדבים יכולים לשלוח לזיהוי-מחדש (on / off / auto). הכללים הטהורים —
-// recutRules.js (normalizeProofRuntime, recutEffective); המסך — admin/RecutSwitchCard; ה-API —
-// api/admin/page-proof/settings. נתיבים יחסיים (לא '@/') — כדי שטסט-האינטגרציה ירוץ ב-node:test.
+// recutRules.js (normalizeProofRuntime, recutEffective); ה-API — api/admin/page-proof/settings
+// (המסך הישן, RecutSwitchCard, הוסר — כרגע אין ממשק למתג). נתיבים יחסיים (לא '@/') — כדי שטסט-האינטגרציה ירוץ ב-node:test.
 import mongoose from 'mongoose';
 import SystemConfig from '../../models/SystemConfig.js';
 import PageProofToken from '../../models/PageProofToken.js';
