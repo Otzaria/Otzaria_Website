@@ -21,9 +21,9 @@ export const QUOTE = {
  * בנייד — בלי שבב בודד בשורה.
  */
 export const PAGE_SECTIONS = [
-  { id: 'memorial', label: 'הנצחה', icon: 'history_edu' },
-  { id: 'companies', label: 'חברות', icon: 'workspace_premium' },
-  { id: 'contributors', label: 'תורמים', icon: 'volunteer_activism' },
+  { id: 'memorial', label: 'הנצחה', icon: 'candle' }, // כמו הנר שבכרטיסי ההנצחה
+  { id: 'companies', label: 'חברות', icon: 'business' },
+  { id: 'contributors', label: 'תורמים', icon: 'group' },
   { id: 'aid', label: 'סיוע', icon: 'shield' },
   { id: 'developers', label: 'מפתחים', icon: 'code' },
   { id: 'library', label: 'הספרייה', icon: 'library_books' }
@@ -487,9 +487,10 @@ export const MAIN_SOURCES = [
   {
     name: 'ספריא',
     url: 'https://www.sefaria.org/texts',
-    logo: '/sources/sefaria.svg',
-    ratio: 462 / 240,
-    logoAsText: true // מסגרת "Powered by" סביב הלוגו
+    // הסמל והכיתוב בלבד, בלי מסגרת "Powered by" שבקובץ המקור (safria logo.svg), עם שוליים
+    // אנכיים — כדי שגובה הכיתוב ישתווה ל-DICTA שלצדו
+    logo: '/sources/sefaria-mark.png',
+    ratio: 431 / 160
   },
   {
     name: 'דיקטה',

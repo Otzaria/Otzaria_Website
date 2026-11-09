@@ -18,13 +18,14 @@ export type SupportOrg = {
  * כרטיס ארגון סיוע (בתוכנה: _ExpandableOrgCard): לוגו, שם וטלפון לחיוג, ו"אפשרויות הקו" במקפל
  * שטוח — קו מפריד דק בלבד, בלי משטח משלו (כרטיס בתוך כרטיס בתוך כרטיס הסיוע היה עמוס מדי)
  * (details/summary — בלי JavaScript; Ctrl+F מוצא גם תוכן סגור). הטלפון מחוץ ל-summary — קישור
- * בתוך summary הוא אלמנט אינטראקטיבי מקונן. emergency — קו חירום: הטלפון וההדגשות בצבע השגיאה.
+ * בתוך summary הוא אלמנט אינטראקטיבי מקונן. משטח טונלי בלי מסגרת וצל — הכרטיס יושב בתוך כרטיס
+ * הסיוע, ומסגרת נוספת לכל ארגון יצרה רשת של קווים. emergency — קו חירום: הטלפון וההדגשות בצבע השגיאה.
  */
 export default function SupportOrgCard({ org, emergency = false }: { org: SupportOrg; emergency?: boolean }) {
   const lines = orgDetailLines(org)
   const accent = emergency ? 'text-error' : 'text-primary'
   return (
-    <Card as="li" tone="raised" padding="sm" className="flex flex-col gap-2">
+    <Card as="li" tone="tonal" padding="sm" className="flex flex-col gap-2">
       <div className="flex items-center gap-3">
         {/* משטח בהיר קבוע — רוב הלוגואים על רקע לבן */}
         <span className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-control bg-surface-container-low dark:bg-on-surface">

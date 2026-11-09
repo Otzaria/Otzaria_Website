@@ -913,7 +913,10 @@ contract
 contract_delete
 contract_edit
 contrast
+contrast_auto
 contrast_circle
+contrast_inverse
+contrast_inverse_auto
 contrast_rtl_off
 contrast_square
 control_camera
@@ -1079,6 +1082,7 @@ device_swoosh_star
 device_thermostat
 device_unknown
 devices
+devices_2
 devices_fold
 devices_fold_2
 devices_off
@@ -1161,6 +1165,7 @@ docs_apps_script
 document_scanner
 document_search
 document_share
+document_share_stack
 domain
 domain_add
 domain_disabled
@@ -1965,6 +1970,7 @@ ink_selection
 inpatient
 input
 input_circle
+input_search
 insert_chart
 insert_chart_outlined
 insert_comment
@@ -2239,6 +2245,7 @@ mail_asterisk
 mail_lock
 mail_off
 mail_outline
+mail_person
 mail_shield
 male
 man
@@ -2325,6 +2332,7 @@ mindfulness
 minimize
 minor_crash
 mintmark
+mirror_stack
 miscellaneous_services
 missed_video_call
 missing_controller
@@ -2792,6 +2800,7 @@ person_cancel
 person_celebrate
 person_check
 person_edit
+person_eye
 person_heart
 person_off
 person_outline
@@ -2972,6 +2981,7 @@ public
 public_off
 publish
 published_with_changes
+pull_request
 pulmonology
 pulse_alert
 punch_clock
@@ -3515,6 +3525,7 @@ speed_2
 speed_2x
 speed_3
 speed_4
+speed_4_progress
 speed_camera
 spellcheck
 split_scene

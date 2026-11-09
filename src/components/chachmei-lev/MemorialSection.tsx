@@ -26,6 +26,7 @@ export default function MemorialSection() {
         <OpenSlotCard
           title={MEMORIAL_OPEN_SLOT}
           cta="להנצחה בתרומה"
+          icon="candle"
           className="animate-enter-up md:col-span-2 lg:col-span-1"
           style={{ animationDelay: `${MEMORIALS.length * 0.08}s` }}
         />
