@@ -1,10 +1,18 @@
-import { pageKey, rememberOwner, writeRecord } from './store'
+import { pageKey, readRecord, rememberOwner, writeRecord } from './store'
 
 export const CACHE_PREFIX = 'otzaria-book-offline-v1-'
 export function offlineSupported() {
   return window.isSecureContext && 'serviceWorker' in navigator && 'caches' in window && Boolean(navigator.locks) && Boolean(crypto.randomUUID)
 }
-export async function preparePage({ user, bookPath, pageNumber, book, data }) {
+export async function preparePage(args) {
+  if (!offlineSupported()) throw new Error('הדפדפן אינו תומך בעריכה אופליין. נסו דפדפן מעודכן בחיבור HTTPS.')
+  const key = pageKey(args.user.id, args.bookPath, args.pageNumber)
+  return navigator.locks.request(`prepare:${key}`, { ifAvailable: true }, async lock => {
+    if (!lock || readRecord(key)) throw new Error('העמוד כבר הוכן או נמצא בהכנה בלשונית אחרת. רעננו כדי לפתוח את העותק הקיים.')
+    return preparePageContents(args)
+  })
+}
+async function preparePageContents({ user, bookPath, pageNumber, book, data }) {
   if (!offlineSupported()) throw new Error('הדפדפן אינו תומך בעריכה אופליין. נסו דפדפן מעודכן בחיבור HTTPS.')
   if (!data.contentVersion) throw new Error('יש לרענן את העמוד לפני הכנת עותק אופליין.')
   const registration = await navigator.serviceWorker.register('/library/books/offline-worker.js', {

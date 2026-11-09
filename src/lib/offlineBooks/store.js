@@ -51,12 +51,21 @@ export function saveDraft(key, data) {
   if (!record) throw new Error('עותק האופליין חסר. השינויים לא נשמרו במכשיר; הורידו גיבוי.')
   return writeRecord({ ...record, draft: { ...data, offlineSaveId: crypto.randomUUID(), saveRevision: Math.max(Date.now() * 1000, (record.draft?.saveRevision || 0) + 1, (record.data?.saveRevision || 0) + 1) }, problem: record.problem?.code === 'OFFLINE_CONFLICT' ? record.problem : null })
 }
-export async function removeRecord(key) {
-  const record = readRecord(key)
-  if (record?.draft || record?.inFlight) throw new Error('יש שינויים שטרם סונכרנו. סנכרנו או הורידו גיבוי ובחרו למחוק במפורש.')
-  localStorage.removeItem(key)
-  window.dispatchEvent(new Event(CHANGED))
-  if (record?.cacheName) await caches.delete(record.cacheName)
+export async function removeRecord(key, { ownsEditLock = false } = {}) {
+  const remove = async () => {
+    const record = readRecord(key)
+    if (record?.draft || record?.inFlight) throw new Error('יש שינויים שטרם סונכרנו. סנכרנו או הורידו גיבוי לפני ההסרה.')
+    localStorage.removeItem(key)
+    window.dispatchEvent(new Event(CHANGED))
+    if (record?.cacheName) await caches.delete(record.cacheName)
+  }
+  // The owning editor may remove its own clean copy; other pages must acquire its edit lock.
+  if (ownsEditLock) return remove()
+  if (!navigator.locks) throw new Error('הדפדפן אינו מאפשר נעילה להסרה בטוחה')
+  return navigator.locks.request(`edit:${key}`, { ifAvailable: true }, async lock => {
+    if (!lock) throw new Error('העמוד פתוח בלשונית אחרת. סגרו אותה לפני הסרת העותק.')
+    return remove()
+  })
 }
 export function downloadBackup(record) {
   const blob = new Blob([JSON.stringify(record, null, 2)], { type: 'application/json;charset=utf-8' })

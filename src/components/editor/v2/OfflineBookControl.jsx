@@ -74,7 +74,7 @@ export default function OfflineBookControl({ offline, user, bookPath, pageNumber
       }
     }))
   const remove = record => showConfirm('הסרת עותק מהמכשיר', 'להסיר את העמוד והצילום מהאחסון המקומי? העותק בשרת יישאר זמין.', () => run(async () => {
-    await removeRecord(record.key)
+    await removeRecord(record.key, { ownsEditLock: record.key === offline.record?.key && offline.holdsEditLock() })
     offline.refresh()
   }))
   const importBackup = event => {

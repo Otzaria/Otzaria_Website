@@ -52,3 +52,12 @@ test('a full disk keeps the live text, warns before closing, and never claims th
   act(() => window.dispatchEvent(event))
   expect(event.defaultPrevented).toBe(true)
 })
+
+test('keyboard saves in a blocked second tab cannot mutate the shared journal', async () => {
+  navigator.locks.request.mockImplementation(async (_key, _options, callback) => callback(null))
+  const previous = readRecord(key).draft.offlineSaveId
+  render(<EditPage />)
+  await screen.findByText(/עמוד זה פתוח לעריכה בלשונית אחרת/)
+  fireEvent.keyDown(window, { key: 's', code: 'KeyS', ctrlKey: true })
+  expect(readRecord(key).draft.offlineSaveId).toBe(previous)
+})

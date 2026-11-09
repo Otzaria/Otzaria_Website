@@ -13,6 +13,7 @@ export function useOfflineBook({ userId, bookPath, pageNumber }) {
   const [syncing, setSyncing] = useState(false)
   const timer = useRef(null)
   const latestMemory = useRef(null)
+  const editHeld = useRef(false)
   const refresh = useCallback(() => {
     try { setRecord(userId ? readRecord(key) : null) }
     catch (error) { setProblem(error.message) }
@@ -38,10 +39,11 @@ export function useOfflineBook({ userId, bookPath, pageNumber }) {
     const held = new Promise(resolve => { release = resolve })
     void navigator.locks.request(`edit:${key}`, { ifAvailable: true }, async acquired => {
       if (cancelled) return
+      editHeld.current = Boolean(acquired)
       setLock(acquired ? 'owned' : 'blocked')
       if (acquired) await held
     }).catch(error => { setProblem(error.message); setLock('blocked') })
-    return () => { cancelled = true; release() }
+    return () => { cancelled = true; editHeld.current = false; release() }
   }, [enabled, key])
   const retry = useCallback(async () => {
     clearTimeout(timer.current)
@@ -55,6 +57,7 @@ export function useOfflineBook({ userId, bookPath, pageNumber }) {
     finally { setSyncing(false); refresh() }
   }, [key, refresh])
   const save = useCallback(data => {
+    if (!editHeld.current) { setProblem('העותק אינו נעול לעריכה בלשונית הזו. סגרו לשוניות נוספות ורעננו.'); return false }
     latestMemory.current = data
     try { saveDraft(key, data); latestMemory.current = null; setProblem(null) }
     catch { setProblem('האחסון המקומי מלא או חסום. השינויים האחרונים לא נשמרו במכשיר. הורידו גיבוי כעת.'); return false }
@@ -102,7 +105,7 @@ export function useOfflineBook({ userId, bookPath, pageNumber }) {
     return () => { window.removeEventListener('beforeunload', warn); clearTimeout(timer.current) }
   }, [])
   return {
-    record, enabled, connected, lock, syncing, problem: problem || record?.problem?.message,
+    record, enabled, connected, lock, syncing, holdsEditLock: () => editHeld.current, problem: problem || record?.problem?.message,
     save, saveNow, flush: retry, refresh,
     locallySafe: () => { try { return !latestMemory.current && Boolean(readRecord(key)) } catch { return false } },
     backupRecord: () => latestMemory.current ? { ...record, draft: latestMemory.current } : record || readRecord(key),

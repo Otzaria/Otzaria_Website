@@ -10,7 +10,7 @@ const ok = version => ({ ok: true, json: async () => ({ success: true, contentVe
 let fetchMock
 beforeEach(() => {
   localStorage.clear()
-  Object.defineProperty(navigator, 'locks', { configurable: true, value: { request: vi.fn(async (_key, fn) => fn()) } })
+  Object.defineProperty(navigator, 'locks', { configurable: true, value: { request: vi.fn(async (_key, options, callback) => callback ? callback({ name: _key }) : options()) } })
   Object.defineProperty(navigator, 'onLine', { configurable: true, value: true })
   fetchMock = vi.fn().mockResolvedValue(ok('next'))
   vi.stubGlobal('fetch', fetchMock)
@@ -99,4 +99,10 @@ test('opening any editor synchronizes pending drafts from all prepared pages of 
   await syncAll('u')
   expect(fetchMock).toHaveBeenCalledTimes(2)
   expect(listRecords('u').every(record => record.draft === null)).toBe(true)
+})
+
+test('a different editor cannot remove a copy while its edit lock is held', async () => {
+  navigator.locks.request.mockImplementationOnce(async (_key, _options, callback) => callback(null))
+  await expect(removeRecord(key)).rejects.toThrow('פתוח בלשונית אחרת')
+  expect(readRecord(key)).not.toBeNull()
 })
