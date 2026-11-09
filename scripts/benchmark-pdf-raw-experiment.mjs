@@ -109,7 +109,9 @@ async function runChild(variant, input, outputBase) {
     try {
       const images = variant === 'baseline'
         ? await convertPdfToImages(input, output, { ...defaults, renderer: 'legacy' })
-        : await convertRaw(input, output, defaults, variant);
+        : variant === 'raw'
+          ? await convertPdfToImages(input, output, { ...defaults, renderer: 'raw' })
+          : await convertRaw(input, output, defaults, variant);
       elapsed.push(Math.round(performance.now() - started));
       peakRss.push(Number((Math.max(peak, process.memoryUsage().rss) / 1048576).toFixed(1)));
       eventP99.push(Number((histogram.percentile(99) / 1e6).toFixed(2)));
