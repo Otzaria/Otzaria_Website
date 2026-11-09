@@ -54,6 +54,9 @@ jobs:
                 throw new Error('missing quality comparison for ' + variant);
               }
             }
+            if (scenario.quality.raw.pixelExactCount !== scenario.fixture.pages) {
+              throw new Error('production raw JPEG differs pixel-for-pixel from legacy');
+            }
           }
           console.log('Compared every JPEG page, shape-parity gated; speed/quality differences retained.');
           JS
@@ -77,4 +80,6 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Converter correctness and resource cleanup
-        run: node --test src/lib/pdfConverter.test.mjs
+        run: node --test src/lib/pdfConverter.test.mjs src/lib/pdfRendererRaw.test.mjs src/lib/pdfConversionGate.test.mjs
+      - name: ESLint of new PDF converter modules
+        run: npx eslint src/lib/pdfConverter.js src/lib/pdfRendererRaw.js src/lib/pdfConversionGate.js src/lib/pdfRendererRaw.test.mjs src/lib/pdfConversionGate.test.mjs
