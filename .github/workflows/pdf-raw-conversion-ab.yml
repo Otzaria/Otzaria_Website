@@ -30,7 +30,9 @@ jobs:
       - name: Confirm runtime PDF and canvas versions
         run: npm ls pdf-to-img pdfjs-dist @napi-rs/canvas sharp
       - name: Baseline and raw/direct-size A/B (isolated child processes)
-        run: node scripts/benchmark-pdf-raw-experiment.mjs | tee pdf-ab.json
+        run: |
+          set -o pipefail
+          node scripts/benchmark-pdf-raw-experiment.mjs | tee pdf-ab.json
       - name: Independently check report completeness and shape parity
         run: |
           node --input-type=module <<'JS'
