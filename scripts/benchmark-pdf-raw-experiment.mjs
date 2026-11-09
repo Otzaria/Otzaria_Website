@@ -24,6 +24,10 @@ const sha = (buffer) => createHash('sha256').update(buffer).digest('hex');
 
 async function createFixture(file, spec) {
   const doc = await PDFDocument.create();
+  // Pin PDF metadata timestamps so source SHA stays stable across CI runs.
+  const epoch = new Date('2001-01-01T00:00:00.000Z');
+  doc.setCreationDate(epoch);
+  doc.setModificationDate(epoch);
   for (let i = 0; i < spec.pages; i++) {
     const page = doc.addPage([spec.pageWidth, spec.pageHeight]);
     page.drawRectangle({
