@@ -208,7 +208,7 @@ async function main() {
       platform: process.platform,
       pdfjsVersion: require('pdfjs-dist/package.json').version,
       canvasVersion: require('@napi-rs/canvas/package.json').version,
-      sharpVersion: require('sharp/package.json').version,
+      sharpLibvipsVersion: sharp.versions.vips,
       options: defaults,
       scenarios: reports,
     }, null, 2));
