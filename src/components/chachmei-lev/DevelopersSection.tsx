@@ -11,7 +11,7 @@ export default function DevelopersSection() {
   return (
     <Section id="developers" labelledBy="developers-heading" anchor spacing="top" container="narrow">
       <SectionHeading id="developers-heading" title="אודות פיתוח התוכנה" subtitle="מפתחי התוכנה" />
-      <PeopleList people={DEVELOPERS} icon="code" />
+      <PeopleList people={DEVELOPERS} />
     </Section>
   )
 }

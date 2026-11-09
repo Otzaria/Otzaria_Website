@@ -73,6 +73,12 @@ describe('CompaniesSection', () => {
 })
 
 describe('AidSection', () => {
+  it('המשבצת הפנויה בלוח ההנצחה — כפתור התרומה של האתר', () => {
+    render(<MemorialSection />)
+    const slot = screen.getByRole('link', { name: /מקום זה יכול להיות מונצח/ })
+    expect(slot.querySelector('.donation-button')).not.toBeNull()
+  })
+
   it('מקפל עם הכותרת מהתוכנה, וכל קווי החירום וארגוני הסיוע בתוכו', () => {
     const { container } = render(<AidSection />)
     expect(screen.getByRole('region', { name: 'סיוע ללומדי תורה' })).toBeInTheDocument()
@@ -99,7 +105,7 @@ describe('SupportOrgCard', () => {
 })
 
 describe('PersonChip', () => {
-  it('עם קישור — קישור חיצוני בטוח עם רמז לקורא המסך; בלי קישור — לא קישור', () => {
+  it('עם קישור — שבב-קישור חיצוני בטוח עם רמז לקורא המסך; בלי קישור — שם שטוח; בלי אייקון', () => {
     const { rerender } = render(<PersonChip person={{ name: 'sivan22', url: 'https://github.com/Sivan22', description: 'תיאור' }} />)
     const link = screen.getByRole('link')
     expect(link).toHaveAttribute('target', '_blank')
@@ -107,19 +113,26 @@ describe('PersonChip', () => {
     expect(link).toHaveTextContent('sivan22')
     expect(link).toHaveTextContent('(תיאור)')
     expect(link).toHaveTextContent('(נפתח בחלון חדש)')
+    expect(link.querySelector('.material-symbols-outlined')).toBeNull()
     rerender(<PersonChip person={{ name: 'דוד אריאל' }} />)
     expect(screen.queryByRole('link')).toBeNull()
-    expect(screen.getByText('דוד אריאל')).toBeInTheDocument()
+    const flat = screen.getByText('דוד אריאל').parentElement as HTMLElement
+    expect(flat.className).not.toMatch(/border/)
+    expect(flat.querySelector('.material-symbols-outlined')).toBeNull()
   })
 })
 
 describe('SourceCard', () => {
-  it('לוגו מונוכרומטי כמסכה בצבע הטקסט; לוגו בצבע מקורי כתמונה; בלי קישור — לא קישור', () => {
+  it('כל לוגו כמסכה בצבע הטקסט (גם originalColor); logoAsText — השם בלבד; בלי קישור — לא קישור', () => {
     const { container, rerender } = render(<ul><SourceCard source={{ name: 'א', url: 'https://a.org', logo: '/a.svg', ratio: 2 }} /></ul>)
     expect(screen.getByRole('link')).toHaveAttribute('href', 'https://a.org')
     expect((container.querySelector('[style*="mask-image"]') as HTMLElement).style.maskImage).toContain('/a.svg')
     rerender(<ul><SourceCard source={{ name: 'ב', url: 'https://b.org', logo: '/b.png', ratio: 1, originalColor: true }} /></ul>)
-    expect(container.querySelector('img')).toHaveAttribute('src', '/b.png')
+    expect(container.querySelector('img')).toBeNull()
+    expect((container.querySelector('[style*="mask-image"]') as HTMLElement).style.maskImage).toContain('/b.png')
+    rerender(<ul><SourceCard source={{ name: 'ד', url: 'https://d.org', logo: '/d.svg', ratio: 1, logoAsText: true }} /></ul>)
+    expect(container.querySelector('[style*="mask-image"]')).toBeNull()
+    expect(screen.getByRole('link')).toHaveTextContent('ד')
     rerender(<ul><SourceCard source={{ name: 'ג' }} /></ul>)
     expect(screen.queryByRole('link')).toBeNull()
   })
@@ -137,7 +150,8 @@ describe('אזורי האנשים והספרייה', () => {
   it('ספריית אוצריא: כל המקורות, שתי דרגות המהדירים וההערה עם מייל', () => {
     render(<LibrarySection />)
     const region = screen.getByRole('region', { name: 'אודות ספריית אוצריא' })
-    for (const source of ADDITIONAL_SOURCES) expect(within(region).getByText(source.name)).toBeInTheDocument()
+    // כל מקור פעמיים: שבב לנייד וכרטיס לוגו מ-sm (העותק שאינו מוצג מוסתר ב-CSS)
+    for (const source of ADDITIONAL_SOURCES) expect(within(region).getAllByText(source.name)).toHaveLength(2)
     for (const group of EDITOR_GROUPS) expect(within(region).getByText(group.label)).toBeInTheDocument()
     expect(within(region).getByRole('link', { name: /@gmail\.com/ }).getAttribute('href')).toMatch(/^mailto:/)
   })

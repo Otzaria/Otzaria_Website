@@ -16,6 +16,7 @@ export type SupportOrg = {
 
 /**
  * כרטיס ארגון סיוע (בתוכנה: _ExpandableOrgCard): לוגו, שם וטלפון לחיוג, ו"אפשרויות הקו" במקפל
+ * שטוח — קו מפריד דק בלבד, בלי משטח משלו (כרטיס בתוך כרטיס בתוך כרטיס הסיוע היה עמוס מדי)
  * (details/summary — בלי JavaScript; Ctrl+F מוצא גם תוכן סגור). הטלפון מחוץ ל-summary — קישור
  * בתוך summary הוא אלמנט אינטראקטיבי מקונן. emergency — קו חירום: הטלפון וההדגשות בצבע השגיאה.
  */
@@ -43,10 +44,10 @@ export default function SupportOrgCard({ org, emergency = false }: { org: Suppor
       </div>
 
       {(lines.length > 0 || (org.phones?.length ?? 0) > 0) && (
-        <details className="group/org rounded-control bg-surface-container-low">
+        <details className="group/org border-t border-outline-variant">
           <summary
             className={cx(
-              'flex min-h-(--touch-target) cursor-pointer list-none items-center gap-2 rounded-control px-3 text-label-md text-on-surface-variant transition-colors hover:bg-surface-container [&::-webkit-details-marker]:hidden',
+              'flex min-h-(--touch-target) cursor-pointer list-none items-center gap-2 rounded-control px-1 text-label-md text-on-surface-variant transition-colors hover:text-on-surface [&::-webkit-details-marker]:hidden',
               FOCUS_RING
             )}
           >
@@ -56,7 +57,7 @@ export default function SupportOrgCard({ org, emergency = false }: { org: Suppor
               className="text-xl transition-transform ease-standard group-open/org:rotate-180 motion-reduce:transition-none"
             />
           </summary>
-          <div className="px-3 pb-3 text-body-sm text-on-surface-variant">
+          <div className="px-1 pb-1 text-body-sm text-on-surface-variant">
             {org.phones && org.phones.length > 0 && (
               <ul className="mb-2">
                 {org.phones.map((phone) => (
