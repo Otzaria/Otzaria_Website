@@ -100,8 +100,11 @@ test('שמות לא כפולים בתוך כל רשימה', () => {
   }
 })
 
-test('ניווט מהיר: מזהים ייחודיים ואייקונים שקיימים בגופן', () => {
+test('ניווט מהיר: לפי סדר הדף (לוח ההנצחה ראשון), מזהים ייחודיים ואייקונים שקיימים בגופן', () => {
   const ids = PAGE_SECTIONS.map((s) => s.id)
+  assert.deepEqual(ids, ['memorial', 'companies', 'contributors', 'aid', 'developers', 'library'])
+  // שישה שבבים: שורה אחת במחשב, שתי שורות של שלושה בנייד — בלי שבב בודד
+  assert.equal(PAGE_SECTIONS.length % 3, 0)
   assert.equal(new Set(ids).size, ids.length)
   for (const section of PAGE_SECTIONS) assert.ok(ICONS.has(section.icon), section.icon)
 })

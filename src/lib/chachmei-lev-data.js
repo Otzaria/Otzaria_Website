@@ -15,14 +15,18 @@ export const QUOTE = {
   explanationSource: '(כתובות נ.)'
 }
 
-/** הניווט המהיר שבראש הדף — id של כל אזור, תווית ואייקון (חייב להיות בגופן המוקטן) */
+/**
+ * הניווט המהיר שבראש הדף — לפי סדר האזורים בדף: id של כל אזור, תווית קצרה ואייקון (חייב להיות
+ * בגופן המוקטן). התוויות קצרות בכוונה: שישה שבבים נכנסים בשורה אחת במחשב ובשתי שורות של שלושה
+ * בנייד — בלי שבב בודד בשורה.
+ */
 export const PAGE_SECTIONS = [
-  { id: 'aid', label: 'סיוע ללומדי תורה', icon: 'shield' },
-  { id: 'memorial', label: 'לוח הנצחה', icon: 'history_edu' },
-  { id: 'companies', label: 'חברות שתרמו', icon: 'workspace_premium' },
-  { id: 'contributors', label: 'תרמו מהונם ומזמנם', icon: 'volunteer_activism' },
-  { id: 'developers', label: 'פיתוח התוכנה', icon: 'code' },
-  { id: 'library', label: 'ספריית אוצריא', icon: 'library_books' }
+  { id: 'memorial', label: 'הנצחה', icon: 'history_edu' },
+  { id: 'companies', label: 'חברות', icon: 'workspace_premium' },
+  { id: 'contributors', label: 'תורמים', icon: 'volunteer_activism' },
+  { id: 'aid', label: 'סיוע', icon: 'shield' },
+  { id: 'developers', label: 'מפתחים', icon: 'code' },
+  { id: 'library', label: 'הספרייה', icon: 'library_books' }
 ]
 
 // ── סיוע ללומדי תורה ────────────────────────────────────────────────────────
@@ -464,21 +468,29 @@ export const DEVELOPERS = [
 
 // ── ספריית אוצריא: מקור הספרים ──────────────────────────────────────────────
 
+/**
+ * פסקת הפתיחה של "מקור הספרים" — שני המשפטים שבתוכנה (על ספריא ודיקטה, ועל ההתאמה לאוצריא
+ * והמהדירים) בפסקה אחת, בלי תארי שבח.
+ */
 export const LIBRARY_INTRO =
-  'הספרים הותאמו במיוחד עבור אוצריא, וכן נוספו ספרים רבים נוספים בזכות עבודתם המסורה של מהדירי הספרים.'
-
-export const MAIN_SOURCES_LABEL =
-  'מקור חלק גדול מהספרים בספריית אוצריא נלקח מהפרויקט המדהים של ספריא ושל עמותת דיקטה, שבאמצעותו נוספו חלק ניכר מהספרים.'
+  'חלק ניכר מהספרים בספריית אוצריא נלקח מהפרויקטים של ספריא ושל עמותת דיקטה. הספרים הותאמו במיוחד עבור אוצריא, וספרים רבים נוספו בזכות עבודתם המסורה של מהדירי הספרים.'
 
 export const ADDITIONAL_SOURCES_LABEL = 'כמו כן נוספו ספרים חשובים רבים מהפרויקטים הבאים:'
 
 /**
  * מקור: name, url?, logo? (public/sources), ratio — רוחב/גובה של הלוגו,
- * originalColor — הלוגו בצבעיו המקוריים (בתוכנה: logoOriginalColor; מעומעם מעט).
- * בלי originalColor הלוגו נצבע בצבע הטקסט: primary כשיש קישור, ואחרת הצבע השקט — כמו בתוכנה.
+ * originalColor — בתוכנה הלוגו בצבעיו המקוריים (logoOriginalColor). באתר נשמר לתיעוד בלבד: כל
+ *   הלוגואים נצבעים בצבע אחד (primary כשיש קישור, ואחרת הצבע השקט), כדי שהקיר ייראה אחיד.
+ * logoAsText — הלוגו לא נראה נקי כשהוא נצבע בצבע אחד (מלבן מלא, כתם, מסגרת), ולכן מוצג השם בלבד.
  */
 export const MAIN_SOURCES = [
-  { name: 'ספריא', url: 'https://www.sefaria.org/texts', logo: '/sources/sefaria.svg', ratio: 462 / 240 },
+  {
+    name: 'ספריא',
+    url: 'https://www.sefaria.org/texts',
+    logo: '/sources/sefaria.svg',
+    ratio: 462 / 240,
+    logoAsText: true // מסגרת "Powered by" סביב הלוגו
+  },
   {
     name: 'דיקטה',
     url: 'https://github.com/Dicta-Israel-Center-for-Text-Analysis/Dicta-Library-Download',
@@ -502,7 +514,8 @@ export const ADDITIONAL_SOURCES = [
     url: 'https://github.com/MosheWagner/Orayta-Books',
     logo: '/sources/orayta.svg',
     ratio: 720 / 288.87,
-    originalColor: true
+    originalColor: true,
+    logoAsText: true // לוגו על רקע מלא — בצבע אחד נראה כמלבן
   },
   { name: 'ובלכתך בדרך', url: 'http://mobile.tora.ws', logo: '/sources/on-your-way.svg', ratio: 284.1 / 409.13 },
   { name: 'פנינים', url: 'https://pninim.org/', logo: '/sources/pninim.svg', ratio: 243 / 79 },
@@ -511,7 +524,8 @@ export const ADDITIONAL_SOURCES = [
     url: 'https://he.wikisource.org/wiki',
     logo: '/sources/wikisource.svg',
     ratio: 410 / 430,
-    originalColor: true
+    originalColor: true,
+    logoAsText: true // הגלובוס בצבע אחד נראה ככתם עגול
   },
   {
     name: 'אוצר הספרים היהודי',

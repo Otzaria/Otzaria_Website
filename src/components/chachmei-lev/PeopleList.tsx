@@ -2,13 +2,12 @@ import { cx } from '@/components/ui/cx'
 import PersonChip, { type Person } from './PersonChip'
 
 /**
- * רשימת אנשים כשבבים ממורכזים — לסריקה מהירה במקום קיר טקסט. label — שורה שקטה מעל
- * (למשל דרגת המהדירים). gap-y-2.5 — מטרות המגע של השבבים לא חופפות.
+ * רשימת אנשים ממורכזת — לסריקה מהירה במקום קיר טקסט: שבב לכל מי שיש לו קישור, ושם שטוח למי
+ * שאין. label — שורה שקטה מעל (למשל דרגת המהדירים). gap-y-2.5 — מטרות המגע של השבבים לא חופפות.
  */
-export default function PeopleList({ people, label, icon, className }: {
+export default function PeopleList({ people, label, className }: {
   people: Person[]
   label?: string
-  icon?: string
   className?: string
 }) {
   return (
@@ -17,7 +16,7 @@ export default function PeopleList({ people, label, icon, className }: {
       <ul className="flex flex-wrap justify-center gap-x-2 gap-y-2.5">
         {people.map((person) => (
           <li key={`${person.name}-${person.url ?? ''}`} className="max-w-full">
-            <PersonChip person={person} icon={icon} />
+            <PersonChip person={person} />
           </li>
         ))}
       </ul>
