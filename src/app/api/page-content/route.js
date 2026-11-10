@@ -111,9 +111,15 @@ export async function POST(request) {
     }
 
     // ביצוע העדכון
+    // שחרור אוטומטי/תפיסה חדשה בין הקריאה לשמירה חייבים לעצור את הכותב הישן.
+    // claimedAt מבחין גם בין שחרור ותפיסה מחודשת של אותו משתמש.
+    const ownershipGuard = {
+      status: currentPage.status, claimedBy: currentPage.claimedBy ?? null,
+      claimedAt: currentPage.claimedAt ?? null,
+    };
     const guardedQuery = hasSaveRevision
       ? {
-          ...query,
+          ...query, ...ownershipGuard,
           $or: [
             { contentSaveRevision: { $exists: false } },
             // שוויון הוא retry של אותה תמונת מצב (או התנגשות נדירה בין לשוניות), ולכן אידמפוטנטי
@@ -121,7 +127,7 @@ export async function POST(request) {
             { contentSaveRevision: { $lt: body.saveRevision } },
           ],
         }
-      : query;
+      : { ...query, ...ownershipGuard };
     let updatedPage = await Page.findOneAndUpdate(
       reviewGuard ? { ...guardedQuery, ...reviewGuard } : guardedQuery,
       updateFields,
@@ -138,6 +144,12 @@ export async function POST(request) {
     }
 
     if (!updatedPage) {
+      const latest = await Page.findOne(query);
+      if (!latest || latest.status !== currentPage.status ||
+          String(latest.claimedBy ?? '') !== String(currentPage.claimedBy ?? '') ||
+          Number(latest.claimedAt ?? 0) !== Number(currentPage.claimedAt ?? 0)) {
+        return NextResponse.json({ error: 'תפיסת העמוד השתנתה. יש לרענן את העמוד לפני שמירה נוספת.' }, { status: 409 });
+      }
       // העמוד כבר נטען ונבדק לעיל; כישלון העדכון המותנה פירושו ששמירה חדשה
       // יותר כבר הגיעה. מחזירים success אידמפוטנטי כדי שהלקוח לא יציג שגיאת שמירה.
       if (hasSaveRevision) {

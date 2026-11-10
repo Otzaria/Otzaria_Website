@@ -1,75 +1,38 @@
 import { NextResponse } from 'next/server';
-import mongoose from 'mongoose';
 import connectDB from '@/lib/db';
-import Page from '@/models/Page';
 import Book from '@/models/Book';
 import User from '@/models/User';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBookLibraryAccess } from '@/lib/roles';
-import { unauthorized, badRequest, serverError } from '@/lib/apiResponse';
-import { checkClaimLimit, claimLimitBody } from '@/lib/bookPageClaims';
+import { unauthorized, serverError } from '@/lib/apiResponse';
+import { uncompleteBookPage } from '@/lib/bookPageClaims';
 
 export async function POST(request) {
-  await connectDB();
-
-  const dbSession = await mongoose.startSession();
-
   try {
     const session = await getServerSession(authOptions);
     if (!session) return unauthorized('Unauthorized');
-
     const { pageId } = await request.json();
+    const userId = session.user._id || session.user.id;
     const isAdmin = hasBookLibraryAccess(session.user.role);
-
-    // ביטול סיום מחזיר את העמוד ל"בטיפול" — נספר במכסת 5 העמודים של המתנדב
-    if (!isAdmin) {
-      const target = await Page.findOne({ _id: pageId }).select('book').lean();
-      const targetBook = target ? await Book.findById(target.book).select('isPrivate ownerId').lean() : null;
-      if (targetBook) {
-        const limit = await checkClaimLimit({ userId: session.user._id, isAdmin, book: targetBook });
-        if (!limit.ok) return NextResponse.json(claimLimitBody(limit.activeClaims), { status: 409 });
-      }
-    }
-
-    dbSession.startTransaction();
-
-    // שלב א: עדכון העמוד — אדמין/admin_books יכול גם על עמוד של אחר
-    const pageQuery = isAdmin
-      ? { _id: pageId, status: 'completed' }
-      : { _id: pageId, claimedBy: session.user._id, status: 'completed' };
-
-    const page = await Page.findOneAndUpdate(
-      pageQuery,
-      { 
-        $set: { status: 'in-progress' }, 
-        $unset: { completedAt: 1 }  
-      },
-      { returnDocument: 'after', session: dbSession }
-    ).populate('claimedBy', 'name email');
-
-    if (!page) {
-      // אם העמוד לא נמצא, מבטלים הכל
-      await dbSession.abortTransaction();
-      return badRequest('Page update failed or page not found');
-    }
+    await connectDB();
+    const result = await uncompleteBookPage({ userId, isAdmin, pageId });
+    if (result.status !== 200) return NextResponse.json(result.body, { status: result.status });
+    const page = result.page;
+    await page.populate('claimedBy', 'name email');
 
     // שלב ב: עדכון הספר (הפחתת מונה)
     await Book.findByIdAndUpdate(
         page.book, 
-        { $inc: { completedPages: -1 } }, 
-        { session: dbSession }
+        { $inc: { completedPages: -1 } }
     );
 
     // שלב ג: הפחתת ניקוד מהתופס המקורי (לא מהאדמין אם הוא לא התופס)
     const pointsTargetUserId = page.claimedBy?._id || page.claimedBy || session.user._id;
     await User.findByIdAndUpdate(
         pointsTargetUserId, 
-        { $inc: { points: -10 } }, 
-        { session: dbSession }
+        { $inc: { points: -10 } }
     );
-
-    await dbSession.commitTransaction();
 
     return NextResponse.json({ 
         success: true, 
@@ -87,12 +50,7 @@ export async function POST(request) {
     });
 
   } catch (error) {
-    if (dbSession.inTransaction()) {
-      await dbSession.abortTransaction();
-    }
     console.error('Error uncompleting page:', error);
     return serverError('Internal Server Error');
-  } finally {
-    await dbSession.endSession();
   }
 }

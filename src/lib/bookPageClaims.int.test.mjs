@@ -14,6 +14,7 @@ import {
   countActiveClaims,
   releaseExpiredPageClaims,
   checkClaimLimit,
+  uncompleteBookPage,
 } from './bookPageClaims.js';
 import { DAY_MS, CLAIM_LIMIT_ERROR_CODE } from './pageClaimPolicy.js';
 
@@ -170,4 +171,98 @@ t('checkClaimLimit (ביטול סיום) — חוסם רק כשהמכסה מלא
   assert.equal((await checkClaimLimit({ userId: me, isAdmin: false, book: shared })).ok, false);
   assert.equal((await checkClaimLimit({ userId: me, isAdmin: false, book: personal })).ok, true);
   assert.equal((await checkClaimLimit({ userId: me, isAdmin: true, book: shared })).ok, true);
+});
+
+
+t('תפיסות ותיקות מקבלות מקומות לפני תפיסות מקבילות חדשות', async () => {
+  for (const n of [1, 2, 3, 4]) await hold(shared, n, me);
+  const results = await Promise.all([1, 2, 3, 4].map((n) => claim(shared2, n)));
+  assert.equal(results.filter((result) => result.status === 200).length, 1);
+  const held = await Page.find({ claimedBy: me, status: 'in-progress' }).lean();
+  assert.equal(held.length, 5);
+  assert.equal(new Set(held.map((page) => page.quotaSlot)).size, 5);
+  assert.ok(held.every((page) => String(page.quotaUserId) === String(me)));
+});
+
+t('משתמש ותיק מעל המכסה יכול להמשיך בעמודיו אך לא להוסיף עמוד', async () => {
+  for (const n of [1, 2, 3, 4, 5, 6]) await hold(shared, n, me);
+  assert.equal((await claim(shared, 1)).status, 200);
+  assert.equal((await claim(shared2, 1)).status, 409);
+  await Page.updateMany({ book: shared._id, pageNumber: { $in: [5, 6] } }, { status: 'completed' });
+  assert.equal((await claim(shared2, 1)).status, 200);
+  assert.equal(await countActiveClaims(me), 5);
+});
+
+t('שחרור תפיסות ישנות בכל הספרים קודם להקצאה חדשה; שמירה אינה מחייה סטטוס', async () => {
+  for (const n of [1, 2, 3, 4, 5]) await hold(shared, n, me, 6);
+  for (const n of [1, 2, 3, 4, 5]) assert.equal((await claim(shared2, n)).status, 200);
+  const stale = await Page.findOne({ book: shared._id, pageNumber: 1 }).lean();
+  assert.equal(stale.status, 'available');
+  assert.equal(stale.claimedBy, undefined);
+  // זהו סוג הכתיבה שמבצע מסלול שמירת התוכן: הוא אינו משנה סטטוס.
+  await Page.updateOne({ _id: stale._id }, { content: 'שמירה מאוחרת' });
+  assert.equal(await countActiveClaims(me), 5);
+});
+
+t('חידוש תפיסה שלי שפג תוקפה אינו מעניק נקודות חדשות', async () => {
+  await hold(shared, 1, me, 6);
+  const result = await claim(shared, 1);
+  assert.equal(result.status, 200);
+  assert.equal(result.isNewClaim, false);
+});
+
+t('ביטול סיום ותפיסה מקבילים משתמשים באותה מכסה אטומית', async () => {
+  for (const n of [1, 2, 3, 4]) await claim(shared, n);
+  const completed = await Page.findOneAndUpdate({ book: shared2._id, pageNumber: 1 },
+    { status: 'completed', claimedBy: me }, { returnDocument: 'after' });
+  const results = await Promise.all([
+    claim(shared, 5),
+    uncompleteBookPage({ userId: me, isAdmin: false, pageId: completed._id }),
+  ]);
+  assert.deepEqual(results.map((result) => result.status).sort(), [200, 409]);
+  assert.equal(await countActiveClaims(me), 5);
+});
+
+t('ביטולי סיום מקבילים אינם חורגים מהמכסה', async () => {
+  for (const n of [1, 2, 3, 4]) await hold(shared, n, me);
+  await Page.updateMany({ book: shared2._id }, { status: 'completed', claimedBy: me });
+  const pages = await Page.find({ book: shared2._id }).lean();
+  const results = await Promise.all(pages.map((page) => uncompleteBookPage({ userId: me, isAdmin: false, pageId: page._id })));
+  assert.equal(results.filter((result) => result.status === 200).length, 1);
+  assert.equal(await countActiveClaims(me), 5);
+});
+
+t('תפיסה שנדחתה אינה נכתבת זמנית ולכן אינה יכולה לדרוס סיום', async () => {
+  for (const n of [1, 2, 3, 4, 5]) await claim(shared, n);
+  const completed = await Page.findOneAndUpdate({ book: shared2._id, pageNumber: 1 },
+    { status: 'completed', claimedBy: me, completedAt: new Date() }, { returnDocument: 'after' });
+  const rejected = await uncompleteBookPage({ userId: me, isAdmin: false, pageId: completed._id });
+  assert.equal(rejected.status, 409);
+  const unchanged = await Page.findById(completed._id).lean();
+  assert.equal(unchanged.status, 'completed');
+  assert.equal(+unchanged.completedAt, +completed.completedAt);
+});
+
+t('סיום ושחרור מפנים מקום באינדקס ללא עדכון מסמך משתמש', async () => {
+  for (const n of [1, 2, 3, 4, 5]) await claim(shared, n);
+  await Page.updateOne({ book: shared._id, pageNumber: 1 }, { status: 'completed' });
+  assert.equal((await claim(shared2, 1)).status, 200);
+  await Page.updateOne({ book: shared._id, pageNumber: 2 }, { status: 'available', $unset: { claimedBy: '' } });
+  assert.equal((await claim(shared2, 2)).status, 200);
+  assert.equal(await countActiveClaims(me), 5);
+});
+
+t('האינדקס עצמו דוחה שני עמודים באותו מקום במכסה', async () => {
+  const first = await claim(shared, 1);
+  await assert.rejects(Page.updateOne({ book: shared._id, pageNumber: 2 }, {
+    status: 'in-progress', claimedBy: me, quotaUserId: me, quotaSlot: first.body.page.quotaSlot,
+  }), { code: 11000 });
+});
+
+t('מקומות ישנים של ספר שהפך לאישי אינם חוסמים תפיסות ציבוריות', async () => {
+  for (const n of [1, 2, 3, 4, 5]) await claim(shared, n);
+  await Book.updateOne({ _id: shared._id }, { isPrivate: true, ownerId: me });
+  for (const n of [1, 2, 3, 4, 5]) assert.equal((await claim(shared2, n)).status, 200);
+  assert.equal(await countActiveClaims(me), 5);
+  assert.equal(await Page.countDocuments({ book: shared._id, quotaUserId: me }), 0);
 });
