@@ -36,9 +36,6 @@ jobs:
     env:
       CI: 'true'
       MONGOMS_VERSION: '7.0.24'
-      MONGOMS_DOWNLOAD_DIR: ${{ runner.temp }}/book-offline-mongodb
-      OTZARIA_BOOK_OFFLINE_ARTIFACTS: ${{ github.workspace }}/build/book-offline-qa/browser
-      OTZARIA_PLAYWRIGHT_MODULE: ${{ runner.temp }}/book-offline-browser/node_modules/playwright
     steps:
       - name: Check out the reviewed commit
         uses: actions/checkout@v4
@@ -54,6 +51,10 @@ jobs:
           set -euo pipefail
           mkdir -p build/book-offline-qa
           git rev-parse HEAD > build/book-offline-qa/reviewed-head.txt
+          printf '%s\n' \
+            "MONGOMS_DOWNLOAD_DIR=$RUNNER_TEMP/book-offline-mongodb" \
+            "OTZARIA_BOOK_OFFLINE_ARTIFACTS=$GITHUB_WORKSPACE/build/book-offline-qa/browser" \
+            "OTZARIA_PLAYWRIGHT_MODULE=$RUNNER_TEMP/book-offline-browser/node_modules/playwright" >> "$GITHUB_ENV"
           npm ci --no-audit --no-fund
       - name: Run offline and page-content tests with real MongoDB
         run: |
