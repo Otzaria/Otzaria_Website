@@ -4,7 +4,7 @@ import Page from '@/models/Page';
 import Book from '@/models/Book';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { hasBooksAccess } from '@/lib/roles';
+import { hasBookLibraryAccess } from '@/lib/roles';
 import { unauthorized, badRequest, notFound, forbidden, serverError } from '@/lib/apiResponse';
 import { pageVersion, pageVersionGuard, sameSavedText } from '@/lib/offlineBooks/version';
 import { ocrReviewRevision, validOcrReviewState } from '@/lib/editor/ocrReviewState';
@@ -44,7 +44,7 @@ export async function POST(request) {
     }
 
     const userId = session.user._id || session.user.id;
-    const isAdmin = hasBooksAccess(session.user.role);
+    const isAdmin = hasBookLibraryAccess(session.user.role);
     if (body.expectedUserId !== undefined && String(userId) !== body.expectedUserId) {
       return NextResponse.json({ error: 'יש להתחבר לחשבון שבו נערך העמוד', code: 'OFFLINE_ACCOUNT' }, { status: 403 });
     }
@@ -193,7 +193,7 @@ export async function GET(request) {
         if (!session) return unauthorized();
 
         const userId = session.user._id || session.user.id;
-        const isAdmin = hasBooksAccess(session.user.role);
+        const isAdmin = hasBookLibraryAccess(session.user.role);
 
         const { searchParams } = new URL(request.url);
         const bookPath = searchParams.get('bookPath');

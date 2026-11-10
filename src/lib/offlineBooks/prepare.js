@@ -104,3 +104,30 @@ export async function refreshPreparedScan(record, server) {
     return cacheName
   } catch (error) { await caches.delete(cacheName); throw error }
 }
+
+// A GET may finish after a different tab saved a newer version. Only the editor
+// holding the edit lock may refresh a clean copy, and the sync lock keeps a
+// receipt from arriving between the snapshot check and publication. Recheck
+// after downloading the scan: edits, removal or unmount may happen meanwhile.
+export async function refreshPreparedPage(previous, server, { ownsEditLock }) {
+  const current = () => readRecord(previous.key)
+  if (!navigator.locks || !ownsEditLock()) return current()
+  const snapshot = JSON.stringify(previous)
+  const unchanged = () => ownsEditLock() && !previous.draft && !previous.inFlight &&
+    JSON.stringify(current()) === snapshot
+  return navigator.locks.request(`sync:${previous.key}`, async () => {
+    if (!unchanged()) return current()
+    const cacheName = await refreshPreparedScan(previous, server)
+    let published = false
+    try {
+      if (!unchanged()) return current()
+      const next = { ...previous, cacheName, data: { ...previous.data, ...server }, baseVersion: server.contentVersion }
+      writeRecord(next)
+      published = true
+      if (cacheName !== previous.cacheName) await caches.delete(previous.cacheName).catch(() => {})
+      return next
+    } finally {
+      if (!published && cacheName !== previous.cacheName) await caches.delete(cacheName).catch(() => {})
+    }
+  })
+}

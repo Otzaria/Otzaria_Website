@@ -14,7 +14,8 @@ import { useDialog } from '@/components/providers/DialogContext'
 import { useLoading } from '@/components/providers/LoadingContext'
 import { useOfflineBook } from '@/hooks/useOfflineBook'
 import OfflineBookControl from '@/components/editor/v2/OfflineBookControl'
-import { CHANGED, downloadRawCopies, localSession, patchPreparedPage, pageKey, readRecord, writeRecord } from '@/lib/offlineBooks/store'
+import { CHANGED, downloadRawCopies, localSession, patchPreparedPage, pageKey, readRecord } from '@/lib/offlineBooks/store'
+import { refreshPreparedPage } from '@/lib/offlineBooks/prepare'
 import { useAutoSave, UNSAVED_LEAVE_MESSAGE } from '@/hooks/useAutoSave'
 import { mergeColumns } from '@/lib/editor/columnMerge'
 import { getTextareaCaretTop } from '@/lib/editorUtils'
@@ -353,7 +354,7 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
     
       const stored = offlineUserId && readRecord(pageKey(offlineUserId, bookPath, pageNumber))
       const applyContent = data => {
-        setPageData(data)
+        setPageData(previous => ({ ...previous, ...data }))
         setContent(data.content || '')
         setLeftColumn(data.leftColumn || '')
         setRightColumn(data.rightColumn || '')
@@ -363,7 +364,7 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
         setIsContentSplit(data.twoColumns || false)
         setWordReviewState({ pageKey: `${bookPath}:${pageNumber}`, revision: data.ocrReviewRevision, value: data.ocrWordReview || null })
       }
-      if (stored && (stored.draft || session.offline || navigator.onLine === false || window.__OTZARIA_OFFLINE_BOOK__)) {
+      if (stored && (!offline.holdsEditLock() || stored.draft || stored.inFlight || session.offline || navigator.onLine === false || window.__OTZARIA_OFFLINE_BOOK__)) {
         setBookData(stored.book)
         applyContent({ ...stored.data, ...stored.draft })
         return
@@ -411,20 +412,15 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
       const contentResult = await contentRes.json()
 
       if (contentResult.success && contentResult.data) {
-        const { data } = contentResult
-        setPageData(prev => ({...prev, ...data}));
-        setContent(data.content || '')
-        setLeftColumn(data.leftColumn || '')
-        setRightColumn(data.rightColumn || '')
-        setRightColumnName(data.rightColumnName || 'חלק 1')
-        setLeftColumnName(data.leftColumnName || 'חלק 2')
-        setTwoColumns(data.twoColumns || false)
-        setIsContentSplit(data.twoColumns || false)
-        setWordReviewState({ pageKey: `${bookPath}:${pageNumber}`, revision: data.ocrReviewRevision, value: data.ocrWordReview || null })
+        let data = contentResult.data
         if (stored) {
-          const latest = readRecord(stored.key)
-          if (latest && !latest.draft) writeRecord({ ...latest, data: { ...latest.data, ...data }, baseVersion: data.contentVersion })
+          let latest
+          try { latest = await refreshPreparedPage(stored, data, { ownsEditLock: offline.holdsEditLock }) }
+          catch { throw new Error('לא ניתן לעדכן את עותק האופליין. העותק הקודם נשמר; בדקו את החיבור והאחסון ורעננו.') }
+          if (!latest) throw new Error('עותק האופליין הוסר במהלך הטעינה. רעננו את העמוד.')
+          data = { ...latest.data, ...latest.draft }
         }
+        applyContent(data)
       } else throw new Error(contentResult.error || 'טעינת תוכן העמוד נכשלה')
     } catch (err) {
       console.error(err);
@@ -438,7 +434,7 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
     if (status === 'authenticated') queueMicrotask(loadPageData)
   // טעינה מותנית-נתיב; loadPageData מוחרג למניעת לולאה
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, bookPath, pageNumber, offlineUserId])
+  }, [status, bookPath, pageNumber, offlineUserId, session?.offline, offline.lock])
 
   const saveSearchesToServer = async (updatedList) => {
       setSavedSearches(updatedList); 

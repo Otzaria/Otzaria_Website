@@ -180,6 +180,16 @@ describe('offline compare-and-swap and receipts', () => {
     leftColumn: '', rightColumn: '', rightColumnName: 'חלק 1', leftColumnName: 'חלק 2',
     baseVersion, expectedUserId: USER_ID, offlineSaveId: '11111111-1111-4111-8111-111111111111', ...extra,
   })
+  it.each(['isHidden', 'isPrivate'])('book-library-only admins can load and sync a %s book they do not own', async restriction => {
+    const { slug, page } = await setup()
+    await Book.updateOne({ _id: page.book }, { $set: { [restriction]: true, ownerId: USER_ID } })
+    const adminId = '507f1f77bcf86cd799439012'
+    getServerSessionMock.mockResolvedValue({ user: { id: adminId, role: 'admin_books_only' } })
+    const loaded = await read(slug)
+    expect(loaded.contentVersion).toMatch(/^[a-f0-9]{64}$/)
+    expect(await offlineSave(slug, 'תיקון מנהל ספרייה', loaded.contentVersion, { expectedUserId: adminId })).toMatchObject({ status: 200, body: { success: true } })
+    expect((await Page.findById(page._id)).content).toBe('תיקון מנהל ספרייה')
+  })
   it('round trips a version and safely retries after the successful response was lost', async () => {
     const { slug } = await setup()
     const loaded = await read(slug)

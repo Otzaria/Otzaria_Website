@@ -8,7 +8,8 @@ const mongoose = req('mongoose');
 const { encode } = req('next-auth/jwt');
 const { chromium } = require(process.env.OTZARIA_PLAYWRIGHT_MODULE || 'playwright');
 const assert = require('node:assert/strict');
-const artifacts = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'otzaria-book-offline-'));
+const artifacts = process.env.OTZARIA_BOOK_OFFLINE_ARTIFACTS || fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'otzaria-book-offline-'));
+fs.mkdirSync(artifacts, {recursive:true});
 const log = fs.openSync(path.join(artifacts, 'build.log'), 'w');
 const imageDirectory = 'public/uploads/offline-book-qa-' + process.pid;
 const imagePath = '/uploads/offline-book-qa-' + process.pid + '/scan.png';
@@ -58,13 +59,50 @@ let mongod, app, browser;
   const recordKey=await page.evaluate(()=>Object.keys(localStorage).find(k=>k.startsWith('otzaria:offline-book:v1:')));
   assert(recordKey);
   const other=await context.newPage();
+  const blockedReads=[];
+  other.on('request', request=>{if(request.url().includes('/api/page-content?'))blockedReads.push(request.url())});
   await other.goto(page.url());
   await other.getByText('עמוד זה פתוח לעריכה בלשונית אחרת.',{exact:false}).waitFor();
+  assert.deepEqual(blockedReads,[],'A blocked tab must not refresh another editor’s journal');
   await other.close();
+
+  // A new edit after a clean mount must recover without a focus or online event.
+  let failedSaves=0;
+  let resolveFailure;
+  const firstFailure=new Promise(resolve=>{resolveFailure=resolve});
+  await page.route('**/api/page-content',async route=>{
+    if(route.request().method()==='POST' && failedSaves===0){
+      failedSaves++;
+      await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'temporary QA failure'})});
+      resolveFailure();
+    } else await route.continue();
+  });
+  await page.locator('textarea[data-column="content"], [data-rich-textarea][contenteditable="true"]').first().fill('עריכה שהתאוששה מכשל זמני');
+  await Promise.race([firstFailure,new Promise((_,reject)=>setTimeout(()=>reject(new Error('Expected transient save failure')),15000))]);
+  await page.waitForFunction(k=>JSON.parse(localStorage.getItem(k)).draft===null,recordKey,{timeout:20000});
+  assert.equal((await Page.findOne({book:book._id,pageNumber:1})).content,'עריכה שהתאוששה מכשל זמני');
+  await page.unroute('**/api/page-content');
+  console.log('A new edit retried a 503 automatically without another browser event.');
+
+  // Disable the incidental HTTP cache so it cannot mask a missing prepared scan.
+  await sharp({create:{width:620,height:920,channels:3,background:'#f0f8ff'}}).png().toFile(path.join(imageDirectory,'refreshed.png'));
+  const refreshedImagePath=imagePath.replace('scan.png','refreshed.png');
+  await Page.updateOne({book:book._id,pageNumber:1},{$set:{imagePath:refreshedImagePath}});
+  await page.reload();
+  await page.locator('[data-editor-shell]').waitFor();
+  await page.waitForFunction(k=>JSON.parse(localStorage.getItem(k)).data.thumbnail.endsWith('/refreshed.png'),recordKey);
+  assert.equal(await page.evaluate(async k=>{
+    const record=JSON.parse(localStorage.getItem(k));
+    return Boolean(await (await caches.open(record.cacheName)).match(record.data.thumbnail));
+  },recordKey),true);
+  const devtools=await context.newCDPSession(page);
+  await devtools.send('Network.enable');
+  await devtools.send('Network.setCacheDisabled',{cacheDisabled:true});
   await context.setOffline(true);
   await page.reload();
   await page.locator('[data-editor-shell]').waitFor({timeout:20000});
   assert.equal(await page.locator('img[alt]').evaluateAll(els=>els.some(e=>e.naturalWidth>0)),true);
+  await page.waitForFunction(()=>Array.from(document.images).some(img=>img.naturalWidth===620));
   // Switch to code view via the persisted preference; plain textarea is easier to assert.
   const rich = page.locator('[data-rich-textarea][contenteditable="true"]');
   const textarea=page.locator('textarea[data-column="content"]');

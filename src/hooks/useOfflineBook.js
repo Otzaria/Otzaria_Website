@@ -12,6 +12,7 @@ export function useOfflineBook({ userId, bookPath, pageNumber }) {
   const [lock, setLock] = useState('checking')
   const [syncing, setSyncing] = useState(false)
   const timer = useRef(null)
+  const scheduleRetry = useRef(null)
   const latestMemory = useRef(null)
   const editHeld = useRef(false)
   const refresh = useCallback(() => {
@@ -54,7 +55,7 @@ export function useOfflineBook({ userId, bookPath, pageNumber }) {
     setSyncing(true)
     try { return await syncRecord(key) }
     catch (error) { setProblem(error.message); return false }
-    finally { setSyncing(false); refresh() }
+    finally { setSyncing(false); refresh(); scheduleRetry.current?.() }
   }, [key, refresh])
   const save = useCallback(data => {
     if (!editHeld.current) { setProblem('העותק אינו נעול לעריכה בלשונית הזו. סגרו לשוניות נוספות ורעננו.'); return false }
@@ -72,28 +73,38 @@ export function useOfflineBook({ userId, bookPath, pageNumber }) {
   }, [save, retry])
   useEffect(() => {
     if (!userId || !navigator.locks) return
-    let cancelled = false, retryTimer, delay = 5000
+    let cancelled = false, running = false, retryTimer = null, delay = 5000
     queueMicrotask(() => {
       if (cancelled) return
       try { rememberOwner(userId) } catch (error) { setProblem(error.message) }
     })
-    const sync = async () => {
-      clearTimeout(retryTimer)
-      try { await syncAll(userId) } catch (error) { setProblem(error.message) }
-      if (cancelled) return
+    const schedule = () => {
+      if (cancelled || running || retryTimer !== null) return
       let pending = false
       try { pending = listRecords(userId).some(r => r.draft && (!r.problem || /^5/.test(r.problem.code))) } catch (error) { setProblem(error.message) }
       if (pending && navigator.onLine !== false) {
-        retryTimer = setTimeout(sync, delay)
+        retryTimer = setTimeout(() => { retryTimer = null; void sync() }, delay)
         delay = Math.min(delay * 2, 60000)
       } else delay = 5000
     }
+    const sync = async () => {
+      if (cancelled || running) return
+      clearTimeout(retryTimer); retryTimer = null
+      running = true
+      try { await syncAll(userId) } catch (error) { setProblem(error.message) }
+      finally { running = false; schedule() }
+    }
+    // A new edit can fail after the initial clean-page pass has already stopped.
+    // Resume the same bounded backoff after that one-shot attempt, without
+    // waiting for a focus/online event or polling clean pages indefinitely.
+    scheduleRetry.current = schedule
     const wake = () => { delay = 5000; void sync() }
     void sync()
     window.addEventListener('online', wake)
     window.addEventListener('focus', wake)
     return () => {
       cancelled = true; clearTimeout(retryTimer)
+      if (scheduleRetry.current === schedule) scheduleRetry.current = null
       window.removeEventListener('online', wake); window.removeEventListener('focus', wake)
     }
   }, [userId])
