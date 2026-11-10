@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, rm, stat, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import { PassThrough, Readable } from 'node:stream';
 import sharp from 'sharp';
 import { PDFDocument, rgb, degrees } from 'pdf-lib';
 import { convertPdfToImages } from './pdfConverter.js';
+import { pdfConversionGate } from './pdfConversionGate.js';
 
 async function fixture() {
   const doc = await PDFDocument.create();
@@ -33,6 +35,16 @@ async function work(fn) {
   finally { await rm(dir, { force: true, recursive: true }); }
 }
 
+async function within(promise, ms = 2000) {
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('operation did not settle')), ms); }),
+    ]);
+  } finally { clearTimeout(timer); }
+}
+
 test('new renderer is byte-identical to the previous converter for text, raster, landscape and rotated pages', { timeout: 60000 }, async () => {
   await work(async (dir) => {
     const legacyDir = path.join(dir, 'legacy');
@@ -54,6 +66,132 @@ test('new renderer is byte-identical to the previous converter for text, raster,
       assert.equal(image.format, 'jpeg');
       assert.ok(image.width <= 1200 && image.height <= 1600);
     }
+  });
+});
+
+test('fractional PDF dimensions and scales preserve legacy image dimensions and JPEG bytes', { timeout: 60000 }, async () => {
+  await work(async dir => {
+    const doc = await PDFDocument.create();
+    for (const { size, rotation } of [
+      { size: [595.28, 841.89], rotation: 0 },
+      { size: [595.28, 841.89], rotation: 90 },
+      { size: [300.25, 400.25], rotation: 0 },
+      { size: [0.25, 100], rotation: 0 },
+      { size: [100, 0.25], rotation: 0 },
+    ]) {
+      const page = doc.addPage(size);
+      page.setRotation(degrees(rotation));
+      page.drawRectangle({ x: 0, y: 0, width: size[0], height: size[1], color: rgb(.2, .4, .6) });
+      page.drawText('Fractional page and raster dimensions', { x: 20, y: 100, size: 12 });
+    }
+    const data = Buffer.from(await doc.save());
+    for (const scale of [2, 1.37]) {
+      const legacyDir = path.join(dir, 'legacy-' + scale);
+      const rawDir = path.join(dir, 'raw-' + scale);
+      await Promise.all([mkdir(legacyDir), mkdir(rawDir)]);
+      const baseline = await convertPdfToImages(data, legacyDir, { scale, renderer: 'legacy' });
+      const candidate = await convertPdfToImages(data, rawDir, { scale });
+      for (const [index, page] of candidate.entries()) {
+        const previous = await readFile(baseline[index].path);
+        const actual = await readFile(page.path);
+        const before = await sharp(previous).metadata();
+        const after = await sharp(actual).metadata();
+        assert.deepEqual([after.width, after.height], [before.width, before.height]);
+        assert.ok(actual.equals(previous), `JPEG differs at scale ${scale}, page ${index + 1}`);
+      }
+      if (scale === 2) {
+        const a4 = await sharp(candidate[0].path).metadata();
+        const small = await sharp(candidate[2].path).metadata();
+        assert.deepEqual([a4.width, a4.height], [1131, 1600]);
+        assert.deepEqual([small.width, small.height], [600, 800]);
+      }
+    }
+  });
+});
+
+test('timeout destroys a stalled Node stream, releases the gate and admits the next PDF', { timeout: 20000 }, async () => {
+  await work(async dir => {
+    const stream = new PassThrough();
+    stream.write('%PDF-1.7\n');
+    try {
+      await within(assert.rejects(convertPdfToImages(stream, dir, { timeoutMs: 25 }), { name: 'TimeoutError' }));
+      assert.equal(stream.destroyed, true);
+      assert.equal(pdfConversionGate.active, 0);
+      assert.equal(pdfConversionGate.queued, 0);
+      assert.deepEqual(await readdir(dir), []);
+      assert.equal((await convertPdfToImages(await fixture(), dir)).length, 3);
+    } finally { stream.destroy(); }
+  });
+});
+
+test('external abort cancels a stalled Web stream and keeps the original abort reason', { timeout: 20000 }, async () => {
+  await work(async dir => {
+    let started, cancelled = false;
+    const reading = new Promise(resolve => { started = resolve; });
+    const stream = new ReadableStream({
+      pull() { started(); },
+      cancel() { cancelled = true; },
+    }, { highWaterMark: 0 });
+    const controller = new AbortController();
+    const reason = new Error('caller stopped reading');
+    const pending = convertPdfToImages(stream, dir, { signal: controller.signal });
+    const rejection = assert.rejects(pending, error => error === reason);
+    await within(reading);
+    controller.abort(reason);
+    await within(rejection);
+    assert.equal(cancelled, true);
+    assert.equal(stream.locked, false);
+    assert.equal(pdfConversionGate.active, 0);
+    assert.deepEqual(await readdir(dir), []);
+  });
+});
+
+test('abort does not wait for a stalled iterator return or resume reading after a late rejection', { timeout: 20000 }, async () => {
+  await work(async dir => {
+    let rejectRead, started, reads = 0, returns = 0;
+    const reading = new Promise(resolve => { started = resolve; });
+    const stream = {
+      [Symbol.asyncIterator]() { return this; },
+      next() { reads++; started(); return new Promise((_, reject) => { rejectRead = reject; }); },
+      return() { returns++; return new Promise(() => {}); },
+    };
+    const controller = new AbortController();
+    const pending = convertPdfToImages(stream, dir, { signal: controller.signal });
+    const rejection = assert.rejects(pending, { name: 'AbortError' });
+    await within(reading);
+    controller.abort();
+    await within(rejection);
+    assert.equal(returns, 1);
+    assert.equal(pdfConversionGate.active, 0);
+    // The abandoned next() still has a rejection handler and cannot start another read.
+    rejectRead(new Error('late source failure'));
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(reads, 1);
+    assert.equal((await convertPdfToImages(await fixture(), dir)).length, 3);
+  });
+});
+
+test('normally completing Node and Web streams keep the same JPEG bytes', { timeout: 60000 }, async () => {
+  await work(async dir => {
+    const data = await fixture();
+    const bytes = Buffer.from(data.split(',')[1], 'base64');
+    const chunks = [bytes.subarray(0, 100), bytes.subarray(100)];
+    const baselineDir = path.join(dir, 'baseline');
+    await mkdir(baselineDir);
+    const baseline = await convertPdfToImages(data, baselineDir, { renderer: 'legacy' });
+    for (const [i, stream] of [
+      Readable.from(chunks),
+      new ReadableStream({ start(controller) { chunks.forEach(chunk => controller.enqueue(chunk)); controller.close(); } }),
+    ].entries()) {
+      const out = path.join(dir, 'stream-' + i);
+      await mkdir(out);
+      const pages = await convertPdfToImages(stream, out);
+      assert.equal(pages.length, baseline.length);
+      for (const [index, page] of pages.entries()) {
+        assert.ok((await readFile(page.path)).equals(await readFile(baseline[index].path)));
+      }
+    }
+    assert.equal(pdfConversionGate.active, 0);
   });
 });
 
@@ -109,9 +247,11 @@ test('aborting an in-flight render releases resources, removes partial files and
 
 test('excessively large raster pages are rejected before native canvas allocation', { timeout: 20000 }, async () => {
   await work(async (dir) => {
-    const doc = await PDFDocument.create();
-    doc.addPage([5000, 5000]).drawText('Huge page');
-    const data = Buffer.from(await doc.save());
-    await assert.rejects(convertPdfToImages(data, dir), { code: 'PDF_PAGE_TOO_LARGE' });
+    for (const size of [[5000, 5000], [0.25, 100000]]) {
+      const doc = await PDFDocument.create();
+      doc.addPage(size).drawText('Huge page');
+      const data = Buffer.from(await doc.save());
+      await assert.rejects(convertPdfToImages(data, dir), { code: 'PDF_PAGE_TOO_LARGE' });
+    }
   });
 });

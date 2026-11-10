@@ -22,6 +22,48 @@ function abortReason(signal) {
   return error;
 }
 
+async function* abortablePdfChunks(input, signal) {
+  // A Web stream iterator queues return() behind pending next(); its reader can
+  // cancel the pending read directly, including when the underlying source stalls.
+  const reader = typeof input.getReader === 'function' ? input.getReader() : null;
+  const iterator = reader ? { next: () => reader.read() } : input[Symbol.asyncIterator]();
+  let finished = false;
+  try {
+    for (;;) {
+      const step = await new Promise((resolve, reject) => {
+        const finish = (settle, value) => {
+          signal.removeEventListener('abort', onAbort);
+          settle(value);
+        };
+        const onAbort = () => finish(reject, abortReason(signal));
+        signal.addEventListener('abort', onAbort, { once: true });
+        if (signal.aborted) return onAbort();
+        try {
+          // Keep both handlers attached: a pending next() can reject after abort.
+          Promise.resolve(iterator.next()).then(
+            value => finish(resolve, value), error => finish(reject, error),
+          );
+        } catch (error) { finish(reject, error); }
+      });
+      if (step.done) { finished = true; return; }
+      yield step.value;
+    }
+  } finally {
+    if (reader) {
+      if (!finished) {
+        try { void reader.cancel().catch(() => {}); } catch { /* Preserve the read/abort error. */ }
+      }
+      reader.releaseLock();
+    } else if (!finished) {
+      // Stop native streams and ask generic iterators to release resources.
+      // Never await return(): an async generator can queue it behind a stuck next().
+      try { input.destroy?.(); } catch { /* Preserve the read/abort error. */ }
+      try { void Promise.resolve(iterator.return?.()).catch(() => {}); }
+      catch { /* A synchronous cleanup failure must not retain the conversion slot. */ }
+    }
+  }
+}
+
 async function getPdfBytes(input, signal) {
   if (Buffer.isBuffer(input)) return Uint8Array.from(input);
   if (input instanceof Uint8Array) return input;
@@ -35,7 +77,7 @@ async function getPdfBytes(input, signal) {
     return Uint8Array.from(await readFile(input, { signal }));
   }
   if (input && typeof input === 'object' && Symbol.asyncIterator in input) {
-    return new Uint8Array(await arrayBuffer(input));
+    return new Uint8Array(await arrayBuffer(abortablePdfChunks(input, signal)));
   }
   throw new TypeError('PDF source must be a file path, PDF data URL, bytes or async stream');
 }
@@ -113,8 +155,20 @@ export async function convertPdfToImagesRaw(pdfSource, outputFolder, {
       throwIfAborted();
       const page = await doc.getPage(pageNumber);
       const viewport = page.getViewport({ scale });
-      const canvasWidth = Math.ceil(viewport.width);
-      const canvasHeight = Math.ceil(viewport.height);
+      // pdf-to-img passes fractional dimensions to native canvas, which truncates.
+      // Round the same way before the allocation guard to preserve JPEG pixels/size.
+      let canvasWidth = Math.trunc(viewport.width);
+      let canvasHeight = Math.trunc(viewport.height);
+      if (canvasWidth === 0 || canvasHeight === 0) {
+        // Native canvas substitutes its default size for a dimension below one
+        // pixel. Read those defaults from a small canvas before checking the real
+        // allocation, rather than rejecting a PDF the legacy renderer accepts.
+        const defaults = createCanvas(0, 0);
+        if (canvasWidth === 0) canvasWidth = defaults.width;
+        if (canvasHeight === 0) canvasHeight = defaults.height;
+        defaults.width = 0;
+        defaults.height = 0;
+      }
       if (!Number.isSafeInteger(canvasWidth) || !Number.isSafeInteger(canvasHeight) ||
           canvasWidth < 1 || canvasHeight < 1 ||
           canvasWidth * canvasHeight > MAX_PAGE_PIXELS) {
