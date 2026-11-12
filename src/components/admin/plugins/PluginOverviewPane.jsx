@@ -3,7 +3,7 @@
 import { useId, useState } from 'react'
 import ActionList from '@/components/ui/ActionList'
 import AppIcon from '@/components/ui/AppIcon'
-import Button from '@/components/ui/Button'
+import Button, { safeHref } from '@/components/ui/Button'
 import { cx } from '@/components/ui/cx'
 import RelativeTime from '@/components/ui/RelativeTime'
 import { reviewSource, submissionKind, submittedAt } from '@/lib/adminPlugins/pluginsQuery'
@@ -211,7 +211,11 @@ export default function PluginOverviewPane({ plugin, mode, actions, busy, onAssi
             <>
               <dt className={DT}>אתר</dt>
               <dd className={DD}>
-                <a href={source.homepage} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2"><LtrValue>{source.homepage}</LtrValue></a>
+                {safeHref(String(source.homepage)) ? (
+                  <a href={safeHref(String(source.homepage))} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2"><LtrValue>{source.homepage}</LtrValue></a>
+                ) : (
+                  <LtrValue>{source.homepage}</LtrValue>
+                )}
               </dd>
             </>
           )}
