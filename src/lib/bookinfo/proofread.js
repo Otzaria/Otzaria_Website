@@ -19,14 +19,14 @@ export function bookNameFromPath(value) {
 
 /**
  * שמות הספרים שעברו הגהה או עריכה באוצריא.
- * @param {{correctionTitles?: string[], editedPaths?: string[], completedBooks?: string[], pageProofTitles?: string[]}} sources
- * correctionTitles - ספרים עם תיקון טעות שפורסם; editedPaths - נתיבי ספרים עם עריכה שאושרה;
+ * @param {{editedPaths?: string[], completedBooks?: string[], pageProofTitles?: string[]}} sources
+ * editedPaths - נתיבי ספרים עם עריכה שאושרה;
  * completedBooks - ספרי הקלדה שכל עמודיהם הושלמו; pageProofTitles - ספרי הגהת עמודים שהסתיימו.
  * @returns {Set<string>}
  */
-export function proofreadBookNames({ correctionTitles = [], editedPaths = [], completedBooks = [], pageProofTitles = [] } = {}) {
+export function proofreadBookNames({ editedPaths = [], completedBooks = [], pageProofTitles = [] } = {}) {
   const names = new Set()
-  for (const value of [...correctionTitles, ...editedPaths, ...completedBooks, ...pageProofTitles]) {
+  for (const value of [...editedPaths, ...completedBooks, ...pageProofTitles]) {
     const name = bookNameFromPath(value)
     if (name) names.add(name)
   }

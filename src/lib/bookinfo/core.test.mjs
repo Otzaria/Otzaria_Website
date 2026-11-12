@@ -305,14 +305,14 @@ test('PR summary labels the extension fields and renders multi-line text in one 
   assert.match(proof.text, /\| עבר הגהה באוצריא \| — \| `1` \|/)
 })
 
-test('proofreadBookNames joins every source by book name', () => {
+test('proofreadBookNames joins whole-book sources by name and ignores single corrections', () => {
   const names = proofreadBookNames({
-    correctionTitles: ['אבן עזרא', ' '],
-    editedPaths: ['הלכה/אחרונים/שולחן ערוך.txt', 'מוסר\\מסילת ישרים.TXT'],
+    correctionTitles: ['אבן עזרא'],
+    editedPaths: ['הלכה/אחרונים/שולחן ערוך.txt', 'מוסר\\מסילת ישרים.TXT', ' '],
     completedBooks: ['ספר חדש'],
     pageProofTitles: ['ספר סרוק'],
   })
-  assert.deepEqual([...names].sort(), ['אבן עזרא', 'מסילת ישרים', 'ספר חדש', 'ספר סרוק', 'שולחן ערוך'].sort())
+  assert.deepEqual([...names].sort(), ['מסילת ישרים', 'ספר חדש', 'ספר סרוק', 'שולחן ערוך'].sort())
   assert.equal(bookNameFromPath(null), '')
   assert.equal(proofreadBookNames().size, 0)
 })

@@ -71,7 +71,7 @@ for review. Publication does not mutate Mongo's old approved `BookInfo` record.
 ## Proofread marking
 
 The page shows "עבר הגהה באוצריא" when the CSV has `proofread=1` or the site
-computes it from its own records: a published text correction (`ErrorReport`),
+computes it from work on the whole book (single text corrections do not count):
 an approved edit in the edited-books space (`BookEdit`), a typing project whose
 pages are all completed (`Book`), or a page-proofing book with no open pages
 (`PageProofBook`). Matching is by book name.
