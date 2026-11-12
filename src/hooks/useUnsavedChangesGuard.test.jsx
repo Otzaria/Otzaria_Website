@@ -63,6 +63,30 @@ describe('useUnsavedChangesGuard', () => {
     expect(window.location.pathname).toBe('/list/categories')
   })
 
+  test('שינוי סינון (replaceState עם ה-state) בזמן ההגנה: נשמר בלי לצאת — הרשומה הכפולה מוסרת והסינון נשאר', async () => {
+    window.history.replaceState(null, '', '/list')
+    window.history.pushState(null, '', '/list/categories')
+    const length = window.history.length
+    const { rerender } = render(<Probe dirty confirmLeave={vi.fn()} />)
+    expect(window.history.length).toBe(length + 1)
+    window.history.replaceState(window.history.state, '', '/list/categories?q=abc')
+    expect(window.history.state?.__unsavedGuard).toBe(true)
+    act(() => { rerender(<Probe dirty={false} confirmLeave={vi.fn()} />) })
+    await act(async () => { await wait(200) })
+    expect(window.history.state?.__unsavedGuard).toBeUndefined()
+    expect(window.location.pathname + window.location.search).toBe('/list/categories?q=abc')
+  })
+
+  test('שינוי סינון בזמן ההגנה: "אחורה" עדיין שואל', async () => {
+    window.history.replaceState(null, '', '/list')
+    window.history.pushState(null, '', '/list/categories')
+    const confirmLeave = vi.fn(async () => false)
+    render(<Probe dirty confirmLeave={confirmLeave} />)
+    window.history.replaceState(window.history.state, '', '/list/categories?q=abc')
+    await act(async () => { window.history.back(); await wait(50) })
+    expect(confirmLeave).toHaveBeenCalledTimes(1)
+  })
+
   test('trapBack=false — רק beforeunload, בלי רשומה כפולה', () => {
     window.history.replaceState(null, '', '/list')
     const before = window.history.length

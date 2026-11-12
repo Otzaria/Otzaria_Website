@@ -52,4 +52,13 @@ describe('useUrlQuery', () => {
     rerender()
     expect(result.current[1]).toBe(setQuery)
   })
+
+  test('replace שומר את ה-state של הרשומה (הסימון של ההגנה על שינויים), ו-push לא מעתיק אותו', () => {
+    window.history.replaceState({ __unsavedGuard: true }, '', '/library/admin/x')
+    const { result } = renderHook(() => useUrlQuery(parse, serialize))
+    act(() => result.current[1]({ q: 'a', page: 1 }))
+    expect(window.history.state).toEqual({ __unsavedGuard: true })
+    act(() => result.current[1]({ q: 'a', page: 2 }, { push: true }))
+    expect(window.history.state).toBeNull()
+  })
 })

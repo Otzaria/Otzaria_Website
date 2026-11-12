@@ -22,7 +22,8 @@ export function useUrlQuery(parse, serialize) {
   const setQuery = useCallback((next, { push = false } = {}) => {
     const url = `${pathname}${serialize(next)}`
     if (push) window.history.pushState(null, '', url)
-    else window.history.replaceState(null, '', url)
+    // ה-state נשמר: Next שומר בו את מצב הנתב, וההגנה על שינויים שלא נשמרו (useUnsavedChangesGuard) מסמנת בו את הרשומה הכפולה
+    else window.history.replaceState(window.history.state, '', url)
   }, [pathname, serialize])
   return [query, setQuery]
 }
