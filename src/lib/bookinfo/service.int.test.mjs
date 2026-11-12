@@ -613,3 +613,20 @@ test('the proofread cron keeps one daily system request that skips books with us
   assert.equal((await BookInfoChangeSet.findById(system._id).lean()).status, 'merged')
   assert.deepEqual(done.proofread, { action: 'none', books: 0 })
 })
+
+test('a book the CI removed is dropped from the system request instead of blocking it', async () => {
+  useFile(MULTI)
+  const options = { mutationDelayMs: 0, proofreadSync: true, loadProofread: async () => new Set(['אבן עזרא', 'שולחן ערוך']) }
+  const t0 = Date.now()
+  await syncEdits(client, t0, options)
+  const system = await BookInfoChangeSet.findOne({ bookKey: PROOFREAD_CHANGE_SET_KEY }).lean()
+  const ledger = { schemaVersion: 1, events: [{ id: 1, kind: 'remove', old: { bookName: 'אבן עזרא', authorName: EZRA.author }, reason: 'orphan', commit: gh.headSha(BOOK_INFO_BRANCH) }] }
+  gh.pushExternal(BOOK_INFO_BRANCH, { [BOOK_INFO_PATH]: MULTI.split('\n').filter((line) => !line.startsWith('"אבן עזרא"')).join('\n'), [identityPath]: JSON.stringify(ledger) })
+
+  const next = await syncEdits(client, t0 + DAY + 1, { ...options, loadProofread: async () => new Set(['שולחן ערוך']) })
+  assert.deepEqual([next.proofread.action, next.proofread.books], ['updated', 1])
+  const updated = await BookInfoChangeSet.findById(system._id).lean()
+  assert.equal(updated.status, 'open')
+  assert.deepEqual(updated.ops.map((op) => op.book), ['שולחן ערוך'])
+  assert.ok(rowsOn(updated.branch, 'שולחן ערוך').every((row) => row.proofread === '1'))
+})
