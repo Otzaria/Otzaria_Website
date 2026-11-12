@@ -1,19 +1,25 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { isAccessLost, isFatal } from '@/lib/adminList/requestErrors'
+import { isFatal } from '@/lib/adminList/requestErrors'
 import { runLimited } from '@/lib/runLimited'
 import { useBusyIds } from '@/components/admin/list/useBusyIds'
 import { errorToast, saveBlob } from '@/components/admin/list/adminRequest'
 import { useDeferredActions } from '@/components/admin/list/useDeferredActions'
 import {
-  RELEASE_CANCELLED_MESSAGE, WHOLE_BOOK_FROM, bulkReleaseConfirm, bulkResultText, checkUnchanged, combinedFilename, combinedText,
-  releasedMessage, shouldAnnounce, skippedMessage, splitCombinedText, statusChangedMessage,
+  PAGE_DOWNLOAD_BATCH_SIZE, RELEASE_CANCELLED_MESSAGE, bulkReleaseConfirm, bulkResultText, combinedFilename, combinedText,
+  releasedMessage, shouldAnnounce, skippedMessage, statusChangedMessage,
 } from '@/lib/adminPagesScreen/pageTerms'
 import * as api from './pagesApi'
 
-/** העמוד אחרי שחרור — כמו שהשרת שומר אותו. updatedAt לא משתנה כאן, כדי שהשורה לא תזוז במיון לפי "עודכן". */
-const released = (page) => ({ ...page, status: 'available', claimedBy: null, claimedById: null, releasedHere: true, changedHere: true })
+const released = (page, result) => ({
+  ...page, status: 'available', claimedBy: null, claimedById: null, claimedAt: null, completedAt: null,
+  updatedAt: result.updatedAt, releasedHere: true, changedHere: true,
+})
+
+const skippedPage = (page, result) => result.page
+  ? { ...result.page, changedHere: true }
+  : { ...page, outdated: true }
 
 /** "בטל" מיד אחרי "שחרר" (לחיצה כפולה — הכפתור מתחלף במקום) — לא נחשב */
 const DOUBLE_CLICK_MS = 600
@@ -38,19 +44,7 @@ function keepFocus(id, hadFocus) {
 }
 
 /**
- * הפעולות על עמודים — אחת לכל המסך (שורה ופעולות מרובות):
- *   שחרר — עם "בטל": הבקשה יוצאת רק אחרי כמה שניות (useDeferredActions), בלי חלון אישור. עד אז בשורה "בטל"
- *     (ו-Ctrl+Z). יציאה מהמסך שולחת מיד את מה שממתין; סגירת הדף / רענון — בבקשה ששורדת אותם (keepalive).
- *   שנה מצב — אחרי חלון האישור (ChangeStatusDialog).
- *   הורד טקסט — הטקסט של העמוד כקובץ.
- *   שחרר נבחרים — חלון אישור עם המספר, בדיקה, ואז עמוד אחר עמוד עם "X מתוך Y" ו"עצור", ובסוף הודעה אחת.
- *   הורד טקסט (נבחרים) — קובץ אחד; עמודים רבים מאותו ספר — בבקשה אחת לכל הספר (download-batch).
- * לפני כל שחרור ושינוי מצב — בדיקה טרייה בשרת (loadCurrent, לפי ספר): נשלח רק עמוד שעדיין במצב ובשיוך שהיו
- * ברשימה. השרת מעדכן בלי תנאי, ולכן בלי הבדיקה רשימה ישנה הייתה מחזירה ל"פנוי" עמוד שכבר הושלם או נלקח מחדש.
- * מה שלא הצליח (או לא נשלח בגלל "עצור") — נשאר מסומן, לניסיון נוסף.
- *
  * @param {{ onChanged: (pages: any[]) => void, toast: any, confirm: Function }} options
- *   onChanged — עדכון מקומי של עמודים ברשימה (אחרי שחרור / שינוי / בדיקה שמצאה שינוי); הם נשארים במקומם
  */
 export function usePageActions({ onChanged, toast, confirm }) {
   const { busy, track } = useBusyIds()
@@ -74,52 +68,23 @@ export function usePageActions({ onChanged, toast, confirm }) {
     }
   }, [])
 
-  /**
-   * הבדיקה לפני שליחה: מה שעדיין כמו ברשימה — ok; מה שהשתנה — skipped (עם המצב העדכני, אם ידוע).
-   * @param {any[]} pages @param {string} status
-   */
-  const check = useCallback(async (pages, status = '') => {
-    const current = await api.loadCurrent({ books: pages.map((p) => p.bookName), status })
-    const ok = []
-    const skipped = []
-    for (const page of pages) {
-      const fresh = current.get(page.id)
-      // בבדיקה לפי מצב: עמוד שלא חזר — כבר לא במצב הזה (לא בהכרח נמחק)
-      const result = checkUnchanged(page, fresh) === 'gone' && status ? 'changed' : checkUnchanged(page, fresh)
-      if (result === 'ok') ok.push(page)
-      else skipped.push({ page, result, fresh })
-    }
-    return { ok, skipped }
-  }, [])
-
-  /** מה שהבדיקה מצאה שהשתנה — מוצג כמו שהוא עכשיו (או "השתנה" כשלא ידוע), במקום */
-  const showSkipped = useCallback((skipped) => {
-    onChanged(skipped.map(({ page, fresh }) => (fresh ? { ...fresh, changedHere: true } : { ...page, outdated: true })))
-  }, [onChanged])
-
-  /** השחרור עצמו — כשנגמר הזמן ל"בטל": בדיקה, ואז שליחה */
   const sendRelease = useCallback(async (page) => {
     pendingPages.current.delete(page.id)
     const hadFocus = Boolean(rowOf(page.id)?.contains(document.activeElement))
     try {
-      const outcome = await track([page.id], async () => {
-        const { skipped } = await check([page])
-        if (skipped.length > 0) return skipped[0]
-        await api.releasePage(page)
-        return null
-      })
-      if (outcome) {
-        showSkipped([outcome])
-        toast.show({ tone: 'error', message: skippedMessage('release', page, outcome.result) })
-      } else {
-        onChanged([released(page)])
+      const result = await track([page.id], () => api.releasePage(page))
+      if (result.outcome === 'updated') {
+        onChanged([released(page, result)])
         toast.show({ message: releasedMessage(page) })
+      } else {
+        onChanged([skippedPage(page, result)])
+        toast.show({ tone: 'error', message: skippedMessage('release', page, result.outcome) })
       }
     } catch (error) {
       toast.show(errorToast(error, 'לא הצלחנו לשחרר את העמוד.'))
     }
     keepFocus(page.id, hadFocus)
-  }, [track, check, showSkipped, onChanged, toast])
+  }, [track, onChanged, toast])
 
   const cancelRelease = useCallback((page) => {
     const entry = pendingPages.current.get(page.id)
@@ -138,7 +103,7 @@ export function usePageActions({ onChanged, toast, confirm }) {
     deferred.schedule(page.id, () => sendRelease(page), {
       onExit: () => {
         pendingPages.current.delete(page.id)
-        api.releaseOnExit([page])
+        return api.releasePage(page, { keepalive: true })
       },
     })
     // "שחרר" מתחלף ב"בטל" באותה שורה — הפוקוס עובר אליו (וקורא המסך מכריז עליו)
@@ -169,34 +134,28 @@ export function usePageActions({ onChanged, toast, confirm }) {
     }
   }, [track, toast])
 
-  /** "שנה מצב" — אחרי חלון האישור: בדיקה, ואז אותו גוף כמו "ערוך סטטוס" במסך הקודם */
   const changeStatus = useCallback(async (page, to) => {
     const hadFocus = Boolean(rowOf(page.id)?.contains(document.activeElement))
     try {
-      const outcome = await track([page.id], async () => {
-        const { skipped } = await check([page])
-        if (skipped.length > 0) return skipped[0]
-        await api.setPageStatus(page, to)
-        return null
-      })
-      if (outcome) {
-        showSkipped([outcome])
-        toast.show({ tone: 'error', message: skippedMessage('status', page, outcome.result) })
-      } else {
-        onChanged([{ ...page, status: to, changedHere: true, releasedHere: false }])
+      const result = await track([page.id], () => api.setPageStatus(page, to))
+      if (result.outcome === 'updated') {
+        onChanged([{ ...page, status: to, updatedAt: result.updatedAt, changedHere: true, releasedHere: false }])
         toast.show({ message: statusChangedMessage(page, to) })
+      } else {
+        onChanged([skippedPage(page, result)])
+        toast.show({ tone: 'error', message: skippedMessage('status', page, result.outcome) })
       }
     } catch (error) {
       toast.show(errorToast(error, 'לא הצלחנו לשנות את המצב.'))
     }
     keepFocus(page.id, hadFocus)
-  }, [track, check, showSkipped, onChanged, toast])
+  }, [track, onChanged, toast])
 
   /** ההתקדמות, עם הכרזה רק מדי פעם (shouldAnnounce) */
   const announced = useRef(-1)
-  const progress = useCallback((action, done, total, phase = 'run') => {
-    if (phase === 'run' && shouldAnnounce(announced.current, done, total)) announced.current = done
-    setBulkProgress({ action, phase, done, total, announced: Math.max(0, announced.current) })
+  const progress = useCallback((action, done, total) => {
+    if (shouldAnnounce(announced.current, done, total)) announced.current = done
+    setBulkProgress({ action, done, total, announced: Math.max(0, announced.current) })
   }, [])
 
   const bulkRelease = useCallback(async (list) => {
@@ -207,57 +166,43 @@ export function usePageActions({ onChanged, toast, confirm }) {
     stopRef.current = false
     announced.current = -1
     setStopping(false)
-    progress('release', 0, candidates.length, 'check')
+    if (!mountedRef.current) return all
+    progress('release', 0, candidates.length)
+    const changed = []
+    let releasedCount = 0
+    let skipped = 0
     let run
-    let skipped = []
     try {
-      let ok
-      try {
-        // עד 8 ספרים — כל העמודים של כל ספר (המצב המדויק של מה שהשתנה); יותר — רק העמודים בעבודה (פחות בקשות)
-        const manyBooks = new Set(candidates.map((p) => p.bookName)).size > 8
-        ;({ ok, skipped } = await track(candidates.map((p) => p.id), () => check(candidates, manyBooks ? 'in-progress' : '')))
-      } catch (error) {
-        toast.show(errorToast(error, 'לא הצלחנו לבדוק את המצב העדכני של העמודים. לא שוחרר דבר.'))
-        return all
-      }
-      showSkipped(skipped)
-      if (stopRef.current) {
-        toast.show(bulkResultText('release', { done: 0, stopped: ok.length, skipped: skipped.length }))
-        return ok.map((p) => p.id)
-      }
-      progress('release', 0, ok.length)
-      run = await track(ok.map((p) => p.id), () => runLimited(ok, (page) => api.releasePage(page), {
+      run = await track(candidates.map((p) => p.id), () => runLimited(candidates, async (page) => {
+        const result = await api.releasePage(page)
+        if (result.outcome === 'updated') {
+          releasedCount++
+          changed.push(released(page, result))
+        } else {
+          skipped++
+          changed.push(skippedPage(page, result))
+        }
+      }, {
         limit: 4,
         shouldStop: () => stopRef.current,
         isFatal,
-        onProgress: ({ done, failed }) => progress('release', done + failed, ok.length),
+        onProgress: ({ done, failed }) => progress('release', done + failed, candidates.length),
       }))
     } finally {
       setBulkProgress(null)
       setStopping(false)
     }
-    onChanged(run.done.map(released))
+    onChanged(changed)
     toast.show(bulkResultText('release', {
-      done: run.done.length, failed: run.failed.length, stopped: run.notAttempted.length, skipped: skipped.length, fatal: run.fatal?.message,
+      done: releasedCount, failed: run.failed.length, stopped: run.notAttempted.length, skipped, fatal: run.fatal?.message,
     }))
-    // שוחררו / דולגו — יוצאים מהבחירה. מה שנכשל או לא נשלח — נשאר. מי שלא היה בעבודה — יוצא.
     return [...run.failed.map((f) => f.item.id), ...run.notAttempted.map((p) => p.id)]
-  }, [confirm, track, check, showSkipped, onChanged, toast, progress])
+  }, [confirm, track, onChanged, toast, progress])
 
-  /**
-   * הורדה: עמודים רבים מאותו ספר (WHOLE_BOOK_FROM ומעלה) — הספר כולו בבקשה אחת, ומתוכו רק הנבחרים; השאר —
-   * עמוד-עמוד. סדר העמודים בקובץ — כמו במסך.
-   */
-  const bulkDownload = useCallback(async (list, query) => {
-    const byBook = new Map()
-    for (const p of list) {
-      if (!byBook.has(p.bookName)) byBook.set(p.bookName, [])
-      byBook.get(p.bookName).push(p)
-    }
+  const bulkDownload = useCallback(async (list) => {
     const jobs = []
-    for (const [bookName, pages] of byBook) {
-      if (pages.length >= WHOLE_BOOK_FROM) jobs.push({ bookName, pages })
-      else for (const page of pages) jobs.push({ pages: [page] })
+    for (let offset = 0; offset < list.length; offset += PAGE_DOWNLOAD_BATCH_SIZE) {
+      jobs.push(list.slice(offset, offset + PAGE_DOWNLOAD_BATCH_SIZE))
     }
     stopRef.current = false
     announced.current = -1
@@ -265,41 +210,13 @@ export function usePageActions({ onChanged, toast, confirm }) {
     const texts = new Map()
     let done = 0
     progress('download', 0, list.length)
-    const fetchOne = async (page) => {
-      try {
-        texts.set(page.id, await api.pageText(page))
-      } catch (error) {
-        // עמוד שנכשל — לא בקובץ, ונשאר מסומן (נספר בסוף לפי מה שאין לו טקסט)
-        if (isFatal(error)) throw error
-      }
-    }
     let run
     try {
       run = await track(list.map((p) => p.id), () => runLimited(jobs, async (job) => {
         try {
-          if (job.bookName) {
-            let map = new Map()
-            try {
-              map = splitCombinedText(await api.bookText(job.bookName, query))
-            } catch (error) {
-              // הקובץ של הספר נכשל — ממשיכים עמוד-עמוד (חוץ מהתחברות שפגה / אין הרשאה). גם בתקלת שרת: קובץ של
-              // ספר שלם כבד בהרבה מעמוד אחד, ולכן מנסים עמוד-עמוד לפני שעוצרים
-              if (isAccessLost(error)) throw error
-            }
-            const missing = []
-            for (const page of job.pages) {
-              if (map.has(page.number)) texts.set(page.id, map.get(page.number))
-              else missing.push(page)
-            }
-            for (const page of missing) {
-              if (stopRef.current) break
-              await fetchOne(page)
-            }
-          } else {
-            await fetchOne(job.pages[0])
-          }
+          for (const { id, text } of await api.selectedPageTexts(job)) texts.set(id, text)
         } finally {
-          done += job.pages.length
+          done += job.length
           progress('download', done, list.length)
         }
       }, { limit: 4, shouldStop: () => stopRef.current, isFatal }))
@@ -307,7 +224,7 @@ export function usePageActions({ onChanged, toast, confirm }) {
       setBulkProgress(null)
       setStopping(false)
     }
-    const notSent = new Set(run.notAttempted.flatMap((job) => job.pages.map((p) => p.id)))
+    const notSent = new Set(run.notAttempted.flat().map((page) => page.id))
     const entries = list.filter((p) => texts.has(p.id)).map((p) => ({ bookName: p.bookName, number: p.number, text: texts.get(p.id) }))
     const failed = list.filter((p) => !texts.has(p.id) && !notSent.has(p.id))
     const partialFile = entries.length > 0 && entries.length < list.length
@@ -323,10 +240,10 @@ export function usePageActions({ onChanged, toast, confirm }) {
   }, [track, toast, progress])
 
   /**
-   * @param {'release' | 'download'} action @param {any[]} list הנבחרים, בסדר שבמסך @param {any} query הסינון (להורדת ספר שלם)
+   * @param {'release' | 'download'} action @param {any[]} list הנבחרים, בסדר שבמסך
    * @returns {Promise<string[]>} מזהי העמודים שנשארים מסומנים
    */
-  const bulk = useCallback((action, list, query) => (action === 'release' ? bulkRelease(list) : bulkDownload(list, query)), [bulkRelease, bulkDownload])
+  const bulk = useCallback((action, list) => (action === 'release' ? bulkRelease(list) : bulkDownload(list)), [bulkRelease, bulkDownload])
 
   const actions = useMemo(() => ({ release, cancelRelease, download, changeStatus, bulk }), [release, cancelRelease, download, changeStatus, bulk])
   return { actions, busy, releasing: deferred.pending, bulkProgress, stopping, stopBulk }

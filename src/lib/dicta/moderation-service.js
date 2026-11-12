@@ -402,29 +402,33 @@ export async function batchModerate({ action, ids, patternFilter, moderatorDoc }
  */
 export async function resolveConflict({ bookId, strategy }) {
   await connectDB();
-  const book = await LibraryBook.findById(bookId);
-  if (!book) throw Object.assign(new Error('הספר לא נמצא'), { code: 'NOT_FOUND' });
-  if (book.syncStatus !== 'conflict') return { status: 'not-conflict' };
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const book = await LibraryBook.findById(bookId).select('version baseContent baseSha syncStatus conflict').lean();
+    if (!book) throw Object.assign(new Error('הספר לא נמצא'), { code: 'NOT_FOUND' });
+    if (book.syncStatus !== 'conflict') return { status: 'not-conflict' };
 
-  const theirsContent = book.conflict?.theirsContent ?? book.baseContent ?? '';
-  const theirsSha = book.conflict?.theirsSha ?? book.baseSha ?? null;
-  const clear = { theirsContent: null, theirsSha: null, detectedAt: null, conflictCount: 0 };
-
-  if (strategy === 'theirs') {
-    book.content = theirsContent;
-    book.baseContent = theirsContent;
-    book.baseSha = theirsSha;
-    book.version = (book.version || 1) + 1;
-    book.syncStatus = 'clean';
-  } else {
-    // 'ours' (ברירת מחדל): שומרים את התוכן הנוכחי, מעדכנים את הבסיס ל-upstream
-    book.baseContent = theirsContent;
-    book.baseSha = theirsSha;
-    book.syncStatus = 'dirty';
+    const theirsSha = book.conflict?.theirsSha ?? book.baseSha ?? null;
+    // Partial resolutions may have changed the comparison text. baseContent holds
+    // the upstream text once a partial resolution has promoted its SHA.
+    const theirsContent = book.conflict?.theirsSha != null && book.baseSha === book.conflict.theirsSha
+      ? book.baseContent ?? book.conflict.theirsContent ?? ''
+      : book.conflict?.theirsContent ?? book.baseContent ?? '';
+    const keepUpstream = strategy === 'theirs';
+    const set = {
+      baseContent: theirsContent,
+      baseSha: theirsSha,
+      syncStatus: keepUpstream ? 'clean' : 'dirty',
+      conflict: { theirsContent: null, theirsSha: null, detectedAt: null, conflictCount: 0 },
+      ...(keepUpstream && { content: theirsContent }),
+    };
+    const updated = await LibraryBook.findOneAndUpdate(
+      { _id: bookId, version: book.version, syncStatus: 'conflict' },
+      { $set: set, $inc: { version: 1 } },
+      { projection: '_id' },
+    );
+    if (updated) return { status: 'resolved', strategy: keepUpstream ? 'theirs' : 'ours' };
   }
-  book.conflict = clear;
-  await book.save();
-  return { status: 'resolved', strategy: strategy === 'theirs' ? 'theirs' : 'ours' };
+  throw Object.assign(new Error('עומס עדכונים מקבילים על הספר, נסו שוב'), { code: 'CONFLICT_RETRY' });
 }
 
 /**

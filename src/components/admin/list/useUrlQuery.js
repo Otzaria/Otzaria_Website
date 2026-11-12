@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
+import { SENTINEL } from '@/hooks/useUnsavedChangesGuard'
 
 /**
  * מצב של מסך ניהול (סינון, מיון, עמוד, מגירה…) — מהכתובת ואליה. משותף לכל מסכי הרשימות (ספרים, עמודים, תוספים,
@@ -22,8 +23,8 @@ export function useUrlQuery(parse, serialize) {
   const setQuery = useCallback((next, { push = false } = {}) => {
     const url = `${pathname}${serialize(next)}`
     if (push) window.history.pushState(null, '', url)
-    // ה-state נשמר: Next שומר בו את מצב הנתב, וההגנה על שינויים שלא נשמרו (useUnsavedChangesGuard) מסמנת בו את הרשומה הכפולה
-    else window.history.replaceState(window.history.state, '', url)
+    // Next copies its own state and synchronizes useSearchParams for external writes.
+    else window.history.replaceState(window.history.state?.[SENTINEL] ? { [SENTINEL]: true } : null, '', url)
   }, [pathname, serialize])
   return [query, setQuery]
 }

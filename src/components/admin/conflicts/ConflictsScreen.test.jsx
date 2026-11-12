@@ -261,3 +261,22 @@ describe('הכרעות ממתינות — יציאה והכרעה על כל הס
     expect(posts()[2].key).toBe('POST /api/library/books/c1/resolve-conflict')
   })
 })
+
+test('הכרעה על כל הספר מדווחת כשהחלק האחרון כבר סגר את ההתנגשות', async () => {
+  let finish
+  routes['POST /api/library/books/c1/resolve-conflict-hunk'] = () => new Promise((resolve) => { finish = resolve })
+  routes['POST /api/library/books/c1/resolve-conflict'] = () => json({ success: true, status: 'not-conflict' })
+  const user = setup()
+  renderScreen()
+  await openBook(user)
+  const book = within(row('בראשית'))
+  await user.click(book.getByRole('button', { name: 'השאר את הנוסח שבאתר: חלק 1 מתוך 2' }))
+  await user.click(book.getByRole('button', { name: /פעולות/ }))
+  await user.click(await screen.findByRole('menuitem', { name: 'השאר את הנוסח שבמאגר בכל הספר' }))
+  const dialog = await screen.findByRole('dialog', { name: 'להשאיר בכל הספר את הנוסח שבמאגר?' })
+  await wait(6000)
+  await user.click(within(dialog).getByRole('button', { name: 'השאר את הנוסח שבמאגר' }))
+  await act(async () => { finish(json({ success: true, status: 'resolved', resolved: true, conflictCount: 0 })) })
+  expect(screen.getByText('ההתנגשות כבר הוכרעה. הבחירה לכל הספר לא הוחלה.')).toBeInTheDocument()
+  expect(screen.queryByText('ב"בראשית" נשאר הנוסח שבמאגר')).not.toBeInTheDocument()
+})

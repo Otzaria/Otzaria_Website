@@ -5,6 +5,9 @@ import Book from '@/models/Book';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBooksAccess } from '@/lib/roles';
+import { isUserId } from '@/lib/adminPagesScreen/pagesQuery';
+import { PAGE_DOWNLOAD_BATCH_SIZE } from '@/lib/adminPagesScreen/pageTerms';
+import { formatPageText, PAGE_TEXT_FIELDS } from '@/lib/adminPagesScreen/pageRecords';
 
 export async function GET(request) {
     const session = await getServerSession(authOptions);
@@ -66,6 +69,26 @@ export async function GET(request) {
 
     } catch (error) {
         console.error('Batch download error:', error);
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    }
+}
+// Selected-page export uses IDs and returns structured text, including embedded
+// separators and trailing whitespace, for both single-column and two-column pages.
+export async function POST(request) {
+    const session = await getServerSession(authOptions);
+    if (!hasBooksAccess(session?.user?.role)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    try {
+        const { ids } = await request.json().catch(() => ({})) ?? {};
+        if (!Array.isArray(ids) || ids.length < 1 || ids.length > PAGE_DOWNLOAD_BATCH_SIZE || !ids.every((id) => typeof id === 'string' && isUserId(id))) {
+            return NextResponse.json({ error: 'Invalid page IDs' }, { status: 400 });
+        }
+        await connectDB();
+        const pages = await Page.find({ _id: { $in: ids } }).select(PAGE_TEXT_FIELDS).lean();
+        return NextResponse.json({ pages: pages.map((page) => ({ id: String(page._id), text: formatPageText(page) })) });
+    } catch (error) {
+        console.error('Selected page download error:', error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }

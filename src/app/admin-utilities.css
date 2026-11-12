@@ -1,0 +1,14 @@
+/* Utilities used by administration routes, loaded by AdminFrame. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+@import "./styles/colors.css";
+@import "./styles/typography.css";
+@import "./styles/layout.css";
+@import "./styles/shape.css";
+@import "./styles/elevation.css";
+@import "./styles/motion.css";
+
+@source "./library/admin";
+@source "../components/admin";
+@source "../components/trainingProof/admin";

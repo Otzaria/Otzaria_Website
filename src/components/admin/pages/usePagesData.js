@@ -2,34 +2,19 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useLoadedData } from '@/components/admin/list/useListData'
-import { serverKey } from '@/lib/adminPagesScreen/pagesQuery'
+import { parsePagesQuery, PAGES_PER_PAGE, serializePagesQuery } from '@/lib/adminPagesScreen/pagesQuery'
 import { listPages, loadFilterOptions } from './pagesApi'
 
-const EMPTY = { pages: [], total: 0, checked: 0 }
+const EMPTY = { key: null, pages: [], total: 0, page: 1 }
 const NO_OPTIONS = { books: [], users: [] }
 
-/**
- * הנתונים של "עמודים": הרשימה — לפי מה שהשרת מסנן (מצב, ספר, משתמש); כשאחד מהם משתנה, נטענת מחדש (עם שלד).
- * כשבשרת יותר מ-5,000 — ההמשך נטען בבקשות נוספות (listPages), ובינתיים loadProgress: { loaded, total } ("טוען…
- * 10,000 מתוך 14,617"). "בלי שינוי יותר מ-", המיון והעמוד — לא נוגעים בבקשה. patch — שינוי מקומי אחרי פעולה.
- * רשימות הבוררים (ספרים, משתמשים) — בקשה נפרדת, פעם אחת; optionsReady — כשהגיעו (אם נכשלה — הבוררים ריקים).
- *
- * @param {import('@/lib/adminPagesScreen/pagesQuery').PagesQuery} query
- * @param {{ onRefreshError?: (error: any, retry: () => Promise<boolean>) => void }} [options]
- */
 export function usePagesData(query, { onRefreshError } = {}) {
-  const key = serverKey(query)
-  const [loadProgress, setLoadProgress] = useState(null)
-  // הבקשה תלויה רק במפתח של השרת — לא במיון / בעמוד / ב"בלי שינוי יותר מ-"
+  const key = serializePagesQuery(query)
   const loader = useCallback(async () => {
-    try {
-      return await listPages(query, { onProgress: setLoadProgress })
-    } finally {
-      setLoadProgress(null)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    const { pages, pagination } = await listPages(parsePagesQuery(new URLSearchParams(key)))
+    return { key, pages, total: pagination.total, page: pagination.page }
   }, [key])
-  const { data, setData, ...rest } = useLoadedData(loader, { initial: EMPTY, merge: (_, loaded) => loaded || EMPTY, onRefreshError })
+  const { data, setData, ...rest } = useLoadedData(loader, { initial: EMPTY, onRefreshError })
 
   const patch = useCallback((changed) => {
     if (changed.length === 0) return
@@ -40,9 +25,19 @@ export function usePagesData(query, { onRefreshError } = {}) {
   const [options, setOptions] = useState({ ...NO_OPTIONS, ready: false })
   useEffect(() => {
     let alive = true
-    loadFilterOptions().then((o) => { if (alive) setOptions({ ...o, ready: true }) }, () => { if (alive) setOptions({ ...NO_OPTIONS, ready: false }) })
+    loadFilterOptions().then((o) => { if (alive) setOptions({ ...o, ready: true }) }, () => {})
     return () => { alive = false }
   }, [])
 
-  return { ...rest, pages: data.pages, total: data.total, checked: data.checked, loadProgress, key, patch, options }
+  const pageCount = Math.max(1, Math.ceil(data.total / PAGES_PER_PAGE))
+  const offset = (data.page - 1) * PAGES_PER_PAGE
+  const page = {
+    items: data.pages,
+    total: data.total,
+    page: Math.min(data.page, pageCount),
+    pageCount,
+    from: data.pages.length ? offset + 1 : 0,
+    to: data.pages.length ? offset + data.pages.length : 0,
+  }
+  return { ...rest, status: rest.status === 'ready' && data.key !== key ? 'loading' : rest.status, page, patch, options }
 }

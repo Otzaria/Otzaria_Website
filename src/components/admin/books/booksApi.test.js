@@ -34,4 +34,10 @@ describe('uploadBook — הודעות שגיאה', () => {
     mockXhr({ status: 503, responseText: '<html>busy</html>' })
     await expect(uploadBook(new FormData())).rejects.toMatchObject({ message: 'השרת עמוס כרגע. נסה שוב בעוד רגע.' })
   })
+  test.each([413, 504])('HTML %s שומר על הודעת השגיאה המפורטת', async (status) => {
+    const { describeNonJsonStatus } = await import('@/lib/parseJsonResponse.mjs')
+    mockXhr({ status, responseText: '<html>upstream error</html>' })
+    await expect(uploadBook(new FormData())).rejects.toMatchObject({ status, message: describeNonJsonStatus(status) })
+  })
+
 })

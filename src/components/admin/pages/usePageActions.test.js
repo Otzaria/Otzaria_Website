@@ -3,9 +3,7 @@ import { describe, expect, test, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
 
 vi.mock('./pagesApi', () => ({
-  loadCurrent: vi.fn(),
   releasePage: vi.fn(),
-  releaseOnExit: vi.fn(),
 }))
 
 const api = await import('./pagesApi')
@@ -13,7 +11,6 @@ const { usePageActions } = await import('./usePageActions')
 
 const pages = Array.from({ length: 6 }, (_, i) => ({ id: `p${i}`, bookName: 'ספר', number: i + 1, status: 'in-progress', claimedById: 'u1' }))
 const setup = () => {
-  api.loadCurrent.mockImplementation(async () => new Map(pages.map((p) => [p.id, p])))
   const toast = { show: vi.fn() }
   const hook = renderHook(() => usePageActions({ onChanged: vi.fn(), toast, confirm: vi.fn(async () => true) }))
   return { ...hook, toast }
@@ -38,10 +35,10 @@ describe('usePageActions', () => {
     const { result, unmount } = setup()
     let run
     act(() => { run = result.current.actions.bulk('release', pages) })
-    await act(async () => { for (let i = 0; i < 5; i++) await Promise.resolve() })
+    await act(async () => { for (let i = 0; i < 5; i++) await Promise.resolve({ outcome: 'updated' }) })
     expect(api.releasePage).toHaveBeenCalledTimes(4)
     unmount()
-    for (const resolve of pending) resolve()
+    for (const resolve of pending) resolve({ outcome: 'updated' })
     await run
     expect(api.releasePage).toHaveBeenCalledTimes(4)
   })
