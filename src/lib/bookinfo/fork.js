@@ -9,6 +9,7 @@ import { resolveSignoff } from '../acronyms/fork.js'
 import { exportBookInfoCsv, parseBookInfoCsv } from './csv.js'
 import { BOOK_INFO_IDENTITY_PATH, assertIdentityPrefix, identityPrefixHash, emptyIdentity, parseIdentity, rebaseIdentities } from './identity.js'
 import { applyChangeSet, summarizeChangeSet } from './changes.js'
+import { isProofreadChangeSet } from './proofread.js'
 
 export const BOOK_INFO_REPO = 'Otzaria/otzaria-library'
 export const BOOK_INFO_BRANCH = 'main'
@@ -60,6 +61,7 @@ export async function loadBookInfoState(client, commitSha = null) {
 }
 
 function titleFor(changeSet) {
+  if (isProofreadChangeSet(changeSet)) return `סימון ספרים שעברו הגהה באוצריא: ${changeSet.ops.length} ספרים`
   const op = changeSet.ops[0]
   const who = op.author ? `${op.book} (${op.author})` : op.book
   return changeSet.ops.length === 1 ? `מידע על ספרים מהאתר: ${who}` : `מידע על ספרים מהאתר: ${changeSet.ops.length} ספרים`
@@ -67,7 +69,9 @@ function titleFor(changeSet) {
 
 function bodyFor(changeSet, summary) {
   const intro = [
-    'נפתח אוטומטית מדף "מידע על ספרים" באתר אוצריא.',
+    isProofreadChangeSet(changeSet)
+      ? 'נפתח אוטומטית על ידי האתר: סימון ספרים שעברו הגהה או עריכה באוצריא (העמודה proofread, לכל שורות הספר).'
+      : 'נפתח אוטומטית מדף "מידע על ספרים" באתר אוצריא.',
     '',
     '> [!NOTE]',
     '> האתר מעדכן את הענף כשמידע הספרים משתנה ב-`main`, בקומיט fast-forward השומר על ההיסטוריה.',
@@ -129,17 +133,20 @@ export async function openPullForBranch(client, changeSet, base) {
 
 /**
  * מצב PR פתוח, ובנייה מחדש שלו מעל main כשהוא התקדם. PR שכל שינוייו כבר ב-main נסגר.
+ * ops מחליף את פעולות ה-PR ובונה אותו מחדש גם כש-main לא השתנה (בקשת ההגהה המערכתית).
  * @returns {Promise<{status:'merged'|'closed'|'open'|'rebuilt'|'modified', headSha?:string, baseSha?:string, summary?:object}>}
  */
-export async function refreshChangeSet(client, changeSet, base) {
+export async function refreshChangeSet(client, changeSet, base, { ops: replacementOps } = {}) {
   const pr = await client.getPull(changeSet.prNumber)
   if (pr.merged) return { status: 'merged' }
   if (pr.state === 'closed') return { status: 'closed' }
-  if (changeSet.baseBlobSha === base.blobSha && (changeSet.baseIdentitySha || null) === base.identitySha) return { status: 'open' }
-  if (!changeSet.baseBlobSha && changeSet.baseSha === base.headSha) return { status: 'open' }
+  if (!replacementOps) {
+    if (changeSet.baseBlobSha === base.blobSha && (changeSet.baseIdentitySha || null) === base.identitySha) return { status: 'open' }
+    if (!changeSet.baseBlobSha && changeSet.baseSha === base.headSha) return { status: 'open' }
+  }
   const ref = await client.getRef(changeSet.branch)
   if (!ref || ref.sha !== changeSet.headSha) return { status: 'modified' }
-  const ops = rebaseIdentities(changeSet.ops, base)
+  const ops = rebaseIdentities(replacementOps || changeSet.ops, base)
   const { commitSha, summary } = await commitChangeSet(client, base, { ...changeSet, ops })
   if (!commitSha) {
     await client.commentOnIssue(changeSet.prNumber, 'כל השינויים ב-PR הזה כבר נמצאים ב-`main`, ולכן הוא נסגר.')
