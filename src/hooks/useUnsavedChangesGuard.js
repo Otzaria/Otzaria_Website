@@ -67,18 +67,11 @@ export function useUnsavedChangesGuard(dirty, confirmLeave, { trapBack = true, g
   const dropSentinel = useCallback(() => {
     if (backRef.current) return backRef.current
     if (!window.history.state?.[SENTINEL]) return Promise.resolve()
-    // שינוי סינון / עמוד (replaceState) בזמן שההגנה פעילה משנה את הכתובת של הרשומה הכפולה בלבד; "אחורה" מחזיר
-    // לכתובת הקודמת — מחזירים אותה אחר כך, כדי שהסינון לא יאבד
-    const target = new URL(window.location.href)
     backRef.current = new Promise((resolve) => {
       const done = () => {
         window.removeEventListener('popstate', done)
         clearTimeout(timer)
         backRef.current = null
-        // רק באותו נתיב ובאותה רשומה (לא אחרי ניווט למקום אחר, ולא כש-popstate הגיע מ"אחורה" אחר)
-        if (window.location.pathname === target.pathname && window.location.search !== target.search && !window.history.state?.[SENTINEL]) {
-          window.history.replaceState(window.history.state, '', target.href)
-        }
         resolve()
       }
       const timer = setTimeout(done, 1000)
@@ -127,9 +120,15 @@ export function useUnsavedChangesGuard(dirty, confirmLeave, { trapBack = true, g
       window.removeEventListener('beforeunload', onBeforeUnload)
       window.removeEventListener('popstate', onPopState)
       // נשמר / בוטל בלי לצאת — מורידים את הרשומה הכפולה
-      // לא בודקים כתובת: שינוי סינון בזמן ההגנה שינה אותה, והרשומה הכפולה (state) עדיין שם. אחרי ניווט ל-state
-      // אחר dropSentinel לא עושה כלום
-      if (!leaving) dropSentinel()
+      if (leaving) return
+      if (window.location.href === href) {
+        dropSentinel()
+      } else if (window.history.state?.[SENTINEL]) {
+        // הכתובת השתנתה בזמן ההגנה (סינון / עמוד / # דרך replaceState — ה-state נשמר, והרשומה הכפולה היא זו שהכתובת שלה
+        // השתנתה). "אחורה" כאן היה מחזיר את הסינון הישן, ולכן רק מסירים את הסימון: אחרת הרשומה נשארת "מוגנת" בלי מאזין
+        const { [SENTINEL]: _marker, ...rest } = window.history.state
+        window.history.replaceState(rest, '', window.location.href)
+      }
     }
   }, [dirty, trapBack, dropSentinel])
 

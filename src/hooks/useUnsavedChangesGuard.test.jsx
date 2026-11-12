@@ -63,7 +63,7 @@ describe('useUnsavedChangesGuard', () => {
     expect(window.location.pathname).toBe('/list/categories')
   })
 
-  test('שינוי סינון (replaceState עם ה-state) בזמן ההגנה: נשמר בלי לצאת — הרשומה הכפולה מוסרת והסינון נשאר', async () => {
+  test('שינוי סינון (replaceState עם ה-state) בזמן ההגנה: נשמר בלי לצאת — הסימון מוסר (בלי "אחורה") והסינון נשאר', async () => {
     window.history.replaceState(null, '', '/list')
     window.history.pushState(null, '', '/list/categories')
     const length = window.history.length
@@ -74,6 +74,7 @@ describe('useUnsavedChangesGuard', () => {
     act(() => { rerender(<Probe dirty={false} confirmLeave={vi.fn()} />) })
     await act(async () => { await wait(200) })
     expect(window.history.state?.__unsavedGuard).toBeUndefined()
+    expect(window.history.length).toBe(length + 1)
     expect(window.location.pathname + window.location.search).toBe('/list/categories?q=abc')
   })
 
