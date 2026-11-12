@@ -51,6 +51,21 @@ describe('useDeferredActions', () => {
     expect(run).toHaveBeenCalledTimes(1)
   })
 
+  test('יציאה מהמסך — פעולה שנכשלה (סינכרונית או אסינכרונית) לא עוצרת את השאר', async () => {
+    const first = vi.fn(() => { throw new Error('נכשל') })
+    const second = vi.fn(() => Promise.reject(new Error('נכשל')))
+    const third = vi.fn()
+    const { result, unmount } = renderHook(() => useDeferredActions({ delay: 1000 }))
+    act(() => {
+      result.current.schedule('a', first)
+      result.current.schedule('b', second)
+      result.current.schedule('c', third)
+    })
+    expect(() => unmount()).not.toThrow()
+    await Promise.resolve()
+    expect([first, second, third].map((f) => f.mock.calls.length)).toEqual([1, 1, 1])
+  })
+
   test('flush — שולח עכשיו, פעם אחת, ולא שוב כשהטיימר היה אמור לפוג', () => {
     const run = vi.fn()
     const { result } = renderHook(() => useDeferredActions({ delay: 1000 }))

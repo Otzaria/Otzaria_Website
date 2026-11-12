@@ -84,11 +84,19 @@ export function useDeferredActions({ delay = UNDO_DELAY_MS } = {}) {
     const map = timers.current
     return () => {
       // יציאה מהמסך: מה שעוד לא יצא — יוצא עכשיו
-      for (const { timer, run } of map.values()) {
-        clearTimeout(timer)
-        run()
+      // פעולה שנכשלה (גם אסינכרונית) לא עוצרת את השאר ולא מדלגת על map.clear()
+      try {
+        for (const { timer, run } of map.values()) {
+          clearTimeout(timer)
+          try {
+            Promise.resolve(run()).catch(() => {})
+          } catch {
+            // ממשיכים לפעולה הבאה
+          }
+        }
+      } finally {
+        map.clear()
       }
-      map.clear()
     }
   }, [])
 
