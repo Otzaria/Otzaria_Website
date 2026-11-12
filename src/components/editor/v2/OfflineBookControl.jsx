@@ -86,7 +86,7 @@ export default function OfflineBookControl({ offline, user, bookPath, pageNumber
       const imported = parseBackup(await file.text(), { userId: user.id, bookPath, pageNumber })
       showConfirm('שחזור גיבוי לעמוד', 'להחליף את הטיוטה הנוכחית בגיבוי? הטיוטה הנוכחית תורד תחילה כגיבוי נוסף. הסנכרון יבדוק אם גרסת השרת השתנתה.', () => run(async () => {
         downloadBackup(offline.backupRecord())
-        restoreBackup(offline.record.key, imported)
+        await restoreBackup(offline.record.key, imported) // ממתינים לשחזור בטוח לפני הרענון.
         location.reload()
       }))
     })
