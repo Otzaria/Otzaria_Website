@@ -18,6 +18,7 @@ import GuideEditorCard from './GuideEditorCard'
 import TokensCard from './TokensCard'
 import useAdminData from './useAdminData'
 import { adminScreenTitle } from '@/lib/adminNav'
+import { withoutNextMarkers } from '@/components/admin/list/useUrlQuery'
 
 // מסך "צורת הדף" (/library/admin/tzurat-hadaf): כותרת, ושמונה לשוניות ברכיב Tabs המשותף — מצב · חבילות · מחלוקות ·
 // הגשות · דיווחים · הורדות · הנחיות · מפתחות גישה (השמות והמונים ב-lib/adminTzuratScreen/tzuratTabs).
@@ -43,7 +44,7 @@ function writeTabToUrl(id) {
     const q = new URLSearchParams(window.location.search)
     q.delete('tab')
     const qs = q.toString()
-    window.history.replaceState(window.history.state, '', `${window.location.pathname}${qs ? `?${qs}` : ''}#${id}`)
+    window.history.replaceState(withoutNextMarkers(window.history.state), '', `${window.location.pathname}${qs ? `?${qs}` : ''}#${id}`)
   } catch {
     // סביבה בלי history — רק המצב המקומי
   }

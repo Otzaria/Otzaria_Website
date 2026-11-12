@@ -61,4 +61,16 @@ describe('useUrlQuery', () => {
     act(() => result.current[1]({ q: 'a', page: 2 }, { push: true }))
     expect(window.history.state).toBeNull()
   })
+
+  test('replace מוריד את הסימונים הפנימיים של Next (__NA / _N) — אחרת Next לא מעדכן את useSearchParams והסינון לא עובד', () => {
+    window.history.replaceState({ __NA: true, _N: 1, __PRIVATE_NEXTJS_INTERNALS_TREE: {}, __unsavedGuard: true }, '', '/library/admin/x')
+    const spy = vi.spyOn(window.history, 'replaceState')
+    const { result } = renderHook(() => useUrlQuery(parse, serialize))
+    act(() => result.current[1]({ q: 'a', page: 1 }))
+    const passed = spy.mock.calls.at(-1)[0]
+    expect(passed.__NA).toBeUndefined()
+    expect(passed._N).toBeUndefined()
+    expect(passed.__unsavedGuard).toBe(true)
+    spy.mockRestore()
+  })
 })
