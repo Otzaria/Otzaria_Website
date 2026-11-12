@@ -3,6 +3,8 @@
 import { normalizeBook } from '@/lib/adminBooks/bookTerms'
 import { AdminApiError, SESSION_EXPIRED_MESSAGE, errorMessage, requestBlob, requestJson, saveBlob, serverError } from '@/components/admin/list/adminRequest'
 
+const BUSY_UPLOAD_MESSAGE = 'השרת עמוס כרגע. נסה שוב בעוד רגע.'
+
 /** כל הספרים — אותו נתון כמו בעמוד (Server Component), לרענון אחרי פעולה */
 export async function fetchBooks() {
   const data = await requestJson('/api/library/list', { fallback: 'השרת לא החזיר את רשימת הספרים. נסה שוב בעוד רגע.' })
@@ -107,7 +109,9 @@ export function uploadBook(formData, { onProgress } = {}) {
         data = null
       }
       if (xhr.status < 200 || xhr.status >= 300 || !data || data.success === false) {
-        reject(new AdminApiError(errorMessage(xhr.status, fallback, serverError(data)), xhr.status))
+        // 503 בלי הודעה בעברית מהשרת (עומס / שבת) — הסבר, לא "נכשל" כללי
+        const fallbackFor = xhr.status === 503 ? BUSY_UPLOAD_MESSAGE : fallback
+        reject(new AdminApiError(errorMessage(xhr.status, fallbackFor, serverError(data)), xhr.status))
         return
       }
       resolve(data)

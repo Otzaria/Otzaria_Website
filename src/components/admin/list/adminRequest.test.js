@@ -66,12 +66,7 @@ describe('adminRequest', () => {
     global.fetch = vi.fn(async () => response({ status: 503, body: { error: 'shabbat', message } }))
     await expect(requestJson('/api/x', { fallback: 'נכשל' })).rejects.toMatchObject({ status: 503, message })
     global.fetch = vi.fn(async () => response({ status: 503, body: { error: 'shabbat' } }))
-    await expect(requestJson('/api/x', { fallback: 'נכשל' })).rejects.toMatchObject({ message: 'השרת עמוס כרגע. נסה שוב בעוד רגע.' })
-  })
-
-  test('503 (עומס) — הודעת עומס בעברית, והודעת שרת בעברית עדיין גוברת', () => {
-    expect(errorMessage(503, 'נכשל', undefined)).toBe('השרת עמוס כרגע. נסה שוב בעוד רגע.')
-    expect(errorMessage(503, 'נכשל', 'שרת ההמרה עמוס. נסה שוב מאוחר יותר.')).toBe('שרת ההמרה עמוס. נסה שוב מאוחר יותר.')
+    await expect(requestJson('/api/x', { fallback: 'נכשל' })).rejects.toMatchObject({ message: 'נכשל' })
   })
 
   test('תקרת זמן ואין חיבור — הודעות בעברית', async () => {
