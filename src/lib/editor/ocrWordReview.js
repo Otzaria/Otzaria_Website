@@ -34,22 +34,44 @@ export function reviewTextWords(text) {
   return out;
 }
 
+function byWordIndex(items) {
+  const byIndex = new Map();
+  for (const item of list(items)) {
+    if (!Number.isInteger(item?.i)) continue;
+    if (!byIndex.has(item.i)) byIndex.set(item.i, []);
+    byIndex.get(item.i).push(item);
+  }
+  return byIndex;
+}
+
+const splitWords = (text) => String(text ?? '').split(/\s+/u).filter(Boolean);
+const validMarkText = (text) => typeof text === 'string' && text.length <= 200 && text.trim() && !/[<>\r\n]/u.test(text);
+
 /** Convert one layout-v1 or PageProof line, independently of missing/filtered or
  * reordered word boxes. Annotation indexes refer to logical, original line text. */
 export function reviewWordsOfLine(line, { proof = false } = {}) {
-  const tokens = String(line.text ?? '').split(/\s+/u).filter(Boolean);
+  const original = splitWords(line.text);
+  const tokens = typeof line.corrected === 'string' ? splitWords(line.corrected) : original;
   const words = list(line.words);
+  const wordTexts = list(line.wordTexts);
   const low = new Set(list(line.flags?.low_words));
+  const alternativeIndex = byWordIndex(line.alternatives);
+  const lmIndex = byWordIndex(line.lm);
+  const legacyIndex = byWordIndex(line.lm_flags);
+  const markIndex = byWordIndex(list(line.marks).slice(0, 120));
   return tokens.map((text, i) => {
     const reasons = [];
-    const raw = words.length === tokens.length ? words[i] : null;
-    const label = proof ? raw?.text : list(line.wordTexts)[i];
-    const conf = label == null || keyOf(label) === keyOf(text) ? probability(proof ? raw?.conf : raw?.[2]) : null;
-    if (low.has(i) || (conf !== null && conf < LOW_CONF)) reasons.push('low_conf');
-    const markers = (xs) => list(xs).filter((a) => a?.i === i && (a.word == null || keyOf(a.word) === keyOf(text)));
-    const alternatives = markers(line.alternatives);
-    const lm = markers(line.lm);
-    const legacy = markers(line.lm_flags);
+    const key = keyOf(text);
+    const sameOriginal = tokens === original || keyOf(original[i]) === key;
+    const raw = sameOriginal && words.length === original.length ? words[i] : null;
+    const label = proof ? raw?.text : wordTexts[i];
+    const conf = label == null || keyOf(label) === key ? probability(proof ? raw?.conf : raw?.[2]) : null;
+    if ((sameOriginal && low.has(i)) || (conf !== null && conf < LOW_CONF)) reasons.push('low_conf');
+    const markers = (index) => list(index.get(i)).filter((a) => a.word == null ? sameOriginal : keyOf(a.word) === key);
+    const alternatives = markers(alternativeIndex);
+    const lm = markers(lmIndex);
+    const legacy = markers(legacyIndex);
+    const mark = markIndex.get(i)?.find((m) => m.word === text && (m.level === 'fix' || m.level === 'check'));
     if (alternatives.length) reasons.push('alternatives');
     if (lm.length || legacy.length) reasons.push('language_model');
     const suggestions = new Map();
@@ -67,10 +89,19 @@ export function reviewWordsOfLine(line, { proof = false } = {}) {
         } else suggestions.set(k, { text: value, sources: [kind], p });
       }
     };
+    if (mark) {
+      if (mark.level === 'fix') add(list(mark.sugg).slice(0, 3).filter(validMarkText).map((text) => ({ text })), 'proofreading');
+      reasons.unshift(suggestions.size ? 'proofreading_fix' : 'proofreading_check');
+    }
+    const proofreading = mark ? {
+      p: probability(mark.p),
+      why: [...new Set(list(mark.why).slice(0, 4).filter(validMarkText).map((text) => text.trim()))],
+    } : null;
     alternatives.forEach((a) => add(a.alts, 'recognition'));
     lm.forEach((a) => add(a.alts, 'language'));
     legacy.forEach((a) => { add(a.rec, 'context'); add(a.lm, 'language'); });
-    return { text, conf, reasons, suggestions: [...suggestions.values()], p: probability(alternatives[0]?.p) };
+    return { text, conf, reasons, suggestions: [...suggestions.values()], p: probability(alternatives[0]?.p),
+      ...(proofreading ? { proofreading } : {}) };
   });
 }
 
@@ -197,7 +228,8 @@ export function buildPageWordReview(texts, source, decisions = null) {
     const model = original[aligned.get(j)];
     const reasons = [...new Set([...(model?.reasons || []), ...shapeReasons(w.text)])];
     if (reasons.length) {
-      const suspect = { ...w, reasons, suggestions: model?.suggestions || [], conf: model?.conf ?? null, p: model?.p ?? null };
+      const suspect = { ...w, reasons, suggestions: model?.suggestions || [], conf: model?.conf ?? null,
+        p: model?.p ?? null, ...(model?.proofreading ? { proofreading: model.proofreading } : {}) };
       if (approved.has(j)) accepted.push(suspect);
       else fields[w.column].suspects.push(suspect);
     }

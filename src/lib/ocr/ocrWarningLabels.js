@@ -3,6 +3,7 @@
 // /api/page-content/ocr-data) וגם בדפדפן (ocrJobView.js). קוד שאינו מוכר מוצג כקוד חשוף.
 
 export const OCR_WARNING_LABELS = Object.freeze({
+  layout_marks_trimmed: 'סימוני ההגהה הושמטו כדי לשמור על פריסת העמוד במסגרת מגבלת הגודל',
   layout_alts_trimmed: 'הצעות החלופות של העמוד הושמטו כדי לעמוד במגבלת הגודל',
   layout_too_large: 'נתוני הפריסה של העמוד גדולים מהמותר ולא נשמרו; הטקסט נקלט כרגיל',
   layout_dropped_result_size: 'נתוני הפריסה הושמטו כדי שהתוצאה כולה תעמוד במגבלת הגודל (100MB)',

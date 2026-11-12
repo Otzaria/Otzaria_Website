@@ -182,3 +182,20 @@ it.each(['code', 'rich'])('reordering repeated words removes an ambiguous model 
   if (view === 'code') expect(container.querySelector('[data-suspect]')).toBeNull()
   else await waitFor(() => expect([...CSS.highlights.keys()].some((k) => k.includes('sus'))).toBe(false))
 })
+
+it('shows the proofreading reason and applies its suggestion through the book editor', async () => {
+  const layout = { ...LAYOUT, lines: [{ ...LAYOUT.lines[0], lm: [], marks: [
+    { i: 2, word: 'פוסרת', level: 'fix', p: .96, sugg: ['פוטרת'], why: ['חשד לפי ההקשר'] },
+  ] }] }
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({
+    success: true, data: { layoutStatus: 'ok', layout, image: { matches: true } },
+  }) })))
+  const { container } = render(<Page />)
+  fireEvent.click(await screen.findByRole('button', { name: /מילה אחת לבדיקה/ }))
+  const panel = screen.getByRole('dialog', { name: 'מילים חשודות' })
+  expect(panel).toHaveTextContent('חשד לפי ההקשר')
+  expect(panel).toHaveTextContent('96%')
+  fireEvent.click(within(panel).getByRole('button', { name: 'החלף בפוטרת' }))
+  await waitFor(() => expect(container.querySelector('textarea').value).toContain('<b>פוטרת</b>'))
+  expect(panel).toHaveTextContent('אין כרגע מילים מסומנות לבדיקה')
+})
