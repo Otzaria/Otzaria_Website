@@ -21,8 +21,12 @@ export function toSaveBody(data) {
     rightColumnName: data.rightColumnName,
     leftColumnName: data.leftColumnName
   }
+  if (data.expectedUserId != null) body.expectedUserId = data.expectedUserId
   // לקוחות ישנים אינם שולחים revision; לא מוסיפים undefined לגוף.
   if (Number.isSafeInteger(data.saveRevision) && data.saveRevision > 0) body.saveRevision = data.saveRevision
+  // null/undefined = אין ללשונית הזו החלטות משלה (לא נטענו, או שסוננו כי הזיהוי הוחלף): לא שולחים את
+  // השדה, כדי שלשונית כזו לא תמחק החלטות שנשמרו מלשונית אחרת. ניקוי מפורש נעשה במצב עם accepted: [].
+  if (data.ocrWordReview != null) body.ocrWordReview = data.ocrWordReview
   return body
 }
 
@@ -69,7 +73,10 @@ export function sendOnLeave(data) {
 // יציאה מהעורך לא מאבדת טקסט: ב-unmount (ניווט פנימי, כפתור "אחורה") שמירה שממתינה נשלחת מיד
 // במקום להתבטל; ב-pagehide (סגירת לשונית, רענון, ניווט חיצוני) נשלח מה שממתין/בדרך/נכשל עם
 // keepalive; ו-beforeunload מבקש אישור רק כשהשמירה האחרונה נכשלה ואין מה לשלוח במקומה.
-export function useAutoSave() {
+export function useAutoSave({ onReviewDropped } = {}) {
+  // ref כדי שהחלפת callback לא תשנה את זהות saveContent (ותפעיל מחדש את אפקט ה-unmount)
+  const onReviewDroppedRef = useRef(onReviewDropped)
+  useEffect(() => { onReviewDroppedRef.current = onReviewDropped }, [onReviewDropped])
   const timeoutRef = useRef(null)
   const pendingRef = useRef(null)
   const failedRef = useRef(null) // הנתונים של השמירה האחרונה שנכשלה (עד שמירה מוצלחת אחריה)
@@ -103,7 +110,9 @@ export function useAutoSave() {
     const run = async () => {
       setStatus('saving')
       try {
-        await apiPost(SAVE_URL, toSaveBody(data))
+        const result = await apiPost(SAVE_URL, toSaveBody(data))
+        // השרת שמר את הטקסט אך זרק החלטות "המילה תקינה" שמקושרות לזיהוי ישן — מפסיקים לשלוח אותן
+        if (result?.ocrWordReviewDropped) onReviewDroppedRef.current?.()
         // השמירות בטור — הצלחה כאן מחליפה כל כישלון קודם (התוכן הזה חדש ממנו)
         if (latestRef.current === data) {
           latestRef.current = null

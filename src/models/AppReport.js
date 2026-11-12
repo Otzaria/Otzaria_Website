@@ -50,8 +50,8 @@ const ContactEntrySchema = new mongoose.Schema({
   issueCommentUrl: { type: String, default: undefined },
 }, { _id: false });
 
-// קובץ שכבר נותק אטומית מהדיווח וממתין למחיקה פיזית. הרשומה מאפשרת להשלים
-// ניקוי אחרי קריסה/כשל אחסון בלי להשאיר הפניה חיה לקובץ שנמחק.
+// קובץ שכבר נותק אטומית וממתין למחיקה או להעברת בעלות לדיווח שמשתף אותו.
+// הרשומה מאפשרת להשלים את פעולת האחסון אחרי קריסה או כשל זמני.
 const PendingPayloadDeleteSchema = new mongoose.Schema({
   gridfsId: { type: mongoose.Schema.Types.ObjectId, required: true },
   ownerReportId: { type: String, required: true },
@@ -154,5 +154,8 @@ AppReportSchema.index({ replyToken: 1 }, { unique: true, partialFilterExpression
 
 AppReportSchema.index({ issueState: 1, issuePending: 1, 'payloadCleanup.purgedAt': 1, 'payloadCleanup.nextAttemptAt': 1, issueClosedAt: 1 });
 AppReportSchema.index({ 'payloadCleanup.pendingDeletes.gridfsId': 1 }, { sparse: true });
+AppReportSchema.index({ 'payloadCleanup.nextAttemptAt': 1 }, {
+  partialFilterExpression: { 'payloadCleanup.pendingDeletes.0': { $exists: true } },
+});
 
 export default mongoose.models.AppReport || mongoose.model('AppReport', AppReportSchema);

@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
-import Page from '@/models/Page';
 import Book from '@/models/Book';
 import User from '@/models/User';
-import mongoose from 'mongoose';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBookLibraryAccess } from '@/lib/roles';
 import { unauthorized, notFound, serverError } from '@/lib/apiResponse';
+import { claimBookPage } from '@/lib/bookPageClaims';
 
 export async function POST(request) {
     try {
@@ -38,42 +37,29 @@ export async function POST(request) {
             }, { status: 403 });
         }
 
-        // 5. מציאת הספר והעמוד
+        // 5. מציאת הספר
         const book = await Book.findOne({ slug: decodeURIComponent(bookPath) });
         if (!book) return notFound('Book not found');
 
-        const page = await Page.findOne({ book: book._id, pageNumber });
-        if (!page) return notFound('Page not found');
-
-        // 6. בדיקות בעלות (האם תפוס/הושלם ע"י אחר) — אדמין/admin_books עוקף
+        // 6. תפיסה: בעלות, מכסת 5 עמודים, ושחרור עצלן של תפיסה שפג תוקפה
+        //    (bookPageClaims.js). אדמין/admin_books עוקף בעלות ומכסה.
         const isAdmin = hasBookLibraryAccess(session.user.role);
-        const isClaimedByOther = page.claimedBy && page.claimedBy.toString() !== userId.toString();
-        
-        if ((page.status === 'in-progress' || page.status === 'completed') && isClaimedByOther && !isAdmin) {
-             return NextResponse.json({ 
-                success: false, 
-                error: `העמוד כבר ${page.status === 'completed' ? 'הושלם' : 'בטיפול'} ע"י משתמש אחר` 
-            }, { status: 409 });
+        const result = await claimBookPage({ userId, isAdmin, book, pageNumber: Number(pageNumber) });
+        if (result.status !== 200) {
+            return NextResponse.json(result.body, { status: result.status });
         }
 
-        // 7. לוגיקת עדכון
-        const wasCompleted = page.status === 'completed';
-
-        page.status = 'in-progress';
-        page.claimedBy = new mongoose.Types.ObjectId(userId);
-        page.claimedAt = new Date();
-        page.completedAt = undefined; 
-        await page.save();
-
-        // 8. עדכונים רוחביים (מונה ספר ונקודות משתמש)
-        if (wasCompleted) {
+        // 7. עדכונים רוחביים (מונה ספר ונקודות משתמש)
+        if (result.wasCompleted) {
             await Book.findByIdAndUpdate(book._id, { $inc: { completedPages: -1 } });
         }
 
-        // הוספת נקודות למשתמש
-        await User.findByIdAndUpdate(userId, { $inc: { points: 5 } });
+        // נקודות רק על תפיסה חדשה — לא על תפיסה חוזרת של עמוד שכבר שלך
+        if (result.isNewClaim) {
+            await User.findByIdAndUpdate(userId, { $inc: { points: 5 } });
+        }
 
-        return NextResponse.json({ success: true, page });
+        return NextResponse.json(result.body);
 
     } catch (error) {
         console.error("Claim Page Error:", error);

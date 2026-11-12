@@ -1,7 +1,7 @@
 // הקריאות של מסך הספרים לשרת — לנקודות הקצה הקיימות, בלי שינוי בהן (נתיבים, קלט ותשובות).
 // כשל נזרק כ-AdminApiError עם הודעה בעברית; התחברות שפגה מזוהה גם כשה-proxy מפנה לדף ההתחברות.
 import { normalizeBook } from '@/lib/adminBooks/bookTerms'
-import { AdminApiError, SESSION_EXPIRED_MESSAGE, errorMessage, requestBlob, requestJson, saveBlob } from '@/components/admin/list/adminRequest'
+import { AdminApiError, SESSION_EXPIRED_MESSAGE, errorMessage, requestBlob, requestJson, saveBlob, serverError } from '@/components/admin/list/adminRequest'
 
 /** כל הספרים — אותו נתון כמו בעמוד (Server Component), לרענון אחרי פעולה */
 export async function fetchBooks() {
@@ -107,7 +107,7 @@ export function uploadBook(formData, { onProgress } = {}) {
         data = null
       }
       if (xhr.status < 200 || xhr.status >= 300 || !data || data.success === false) {
-        reject(new AdminApiError(errorMessage(xhr.status, fallback, data?.error), xhr.status))
+        reject(new AdminApiError(errorMessage(xhr.status, fallback, serverError(data)), xhr.status))
         return
       }
       resolve(data)

@@ -1,0 +1,65 @@
+name: PDF conversion performance baseline
+
+on:
+  pull_request:
+    paths:
+      - 'src/lib/pdfConverter.js'
+      - 'src/lib/pdfConverter.test.mjs'
+      - 'scripts/benchmark-pdf-conversion.mjs'
+      - 'docs/PDF_CONVERSION_BENCHMARK.md'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/pdf-conversion-benchmark.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Converter correctness and resource cleanup
+        run: node --test src/lib/pdfConverter.test.mjs
+      - name: Measure released PDF conversion path
+        env:
+          PDF_BENCH_PAGES: '6'
+          PDF_BENCH_ROUNDS: '3'
+          PDF_BENCH_WIDTH: '1200'
+          PDF_BENCH_HEIGHT: '1600'
+          PDF_BENCH_SCALE: '2'
+        run: npm run --silent bench:pdf | tee pdf-benchmark.json
+      - name: Validate measurement and output parity across rounds
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs'
+          const report = JSON.parse(fs.readFileSync('pdf-benchmark.json','utf8'))
+          if (report.results.length !== 3) throw new Error('missing benchmark rounds')
+          const signatures = report.results.map(r => r.images.map(i => i.sha256).join('|'))
+          if (!signatures.every(x => x === signatures[0])) {
+            throw new Error('JPEG hashes differ across identical benchmark rounds')
+          }
+          for (const round of report.results) {
+            if (round.images.length !== 6 || !(round.elapsedMs > 0) ||
+                !(round.peakRssMiB > 0) || !(round.outputBytes > 0)) {
+              throw new Error('invalid performance measurement')
+            }
+          }
+          console.log('rounds=3, pages=6, output hashes identical; raw timing retained')
+          JS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdf-conversion-baseline
+          path: pdf-benchmark.json
+          if-no-files-found: error
+          retention-days: 30

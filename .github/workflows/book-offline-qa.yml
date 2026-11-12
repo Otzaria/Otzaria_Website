@@ -1,0 +1,107 @@
+name: Book editor offline QA
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/book-offline-qa.yml'
+      - 'src/lib/offlineBooks/**'
+      - 'src/hooks/useOfflineBook*'
+      - 'src/hooks/useAutoSave*'
+      - 'src/hooks/useRequireAuth*'
+      - 'src/app/api/page-content/**'
+      - 'src/app/library/books/**'
+      - 'src/components/editor/**'
+      - 'src/lib/roles.js'
+      - 'src/models/Page.js'
+      - 'src/models/Book.js'
+      - 'public/library/books/offline-worker.js'
+      - 'scripts/test-book-offline.cjs'
+      - 'scripts/patch-plugin-validator.cjs'
+      - 'next.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: book-offline-qa-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  offline-editor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CI: 'true'
+      MONGOMS_VERSION: '7.0.24'
+    steps:
+      - name: Check out the reviewed commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked dependencies and record the reviewed SHA
+        run: |
+          set -euo pipefail
+          mkdir -p build/book-offline-qa
+          git rev-parse HEAD > build/book-offline-qa/reviewed-head.txt
+          printf '%s\n' \
+            "MONGOMS_DOWNLOAD_DIR=$RUNNER_TEMP/book-offline-mongodb" \
+            "OTZARIA_BOOK_OFFLINE_ARTIFACTS=$GITHUB_WORKSPACE/build/book-offline-qa/browser" \
+            "OTZARIA_PLAYWRIGHT_MODULE=$RUNNER_TEMP/book-offline-browser/node_modules/playwright" >> "$GITHUB_ENV"
+          npm ci --no-audit --no-fund
+      - name: Run offline and page-content tests with real MongoDB
+        run: |
+          set -euo pipefail
+          node node_modules/vitest/vitest.mjs run \
+            src/lib/offlineBooks src/hooks/useOfflineBook.test.jsx \
+            src/hooks/useRequireAuth.test.tsx src/hooks/useAutoSave \
+            src/app/api/page-content \
+            'src/app/library/books/[path]/[pageNumber]/page.offline.test.jsx' \
+            'src/app/library/books/[path]/[pageNumber]/page.refresh.test.jsx' \
+            src/components/editor/v2/editorStatusText.test.js \
+            --reporter=default --reporter=json --outputFile.json=build/book-offline-qa/tests.json \
+            2>&1 | tee build/book-offline-qa/tests.log
+          node --input-type=module <<'JS'
+          import { readFileSync } from 'node:fs'
+          import assert from 'node:assert/strict'
+          const results = JSON.parse(readFileSync('build/book-offline-qa/tests.json', 'utf8'))
+          assert.equal(results.success, true)
+          assert.ok(results.numTotalTests > 0)
+          assert.equal(results.numPassedTests, results.numTotalTests, 'Skipped, pending or failed tests are not a passing MongoDB gate')
+          for (const suite of results.testResults) {
+            for (const test of suite.assertionResults) assert.equal(test.status, 'passed', test.fullName)
+          }
+          JS
+      - name: Check offline code and types
+        run: |
+          node node_modules/eslint/bin/eslint.js src/lib/offlineBooks src/hooks/useOfflineBook* \
+            src/app/api/page-content 'src/app/library/books/[path]/[pageNumber]/page.jsx' \
+            'src/app/library/books/[path]/[pageNumber]/page.refresh.test.jsx'
+          node node_modules/typescript/bin/tsc --noEmit
+      - name: Prepare production validator and Chromium
+        run: |
+          set -euo pipefail
+          # The deployed build refreshes the moving v1 tag; keep repository manifests unchanged.
+          npm install 'github:Otzaria/otzaria-plugin-validator#v1' --legacy-peer-deps --no-save
+          git diff --exit-code -- package.json package-lock.json
+          npm install --prefix "$RUNNER_TEMP/book-offline-browser" --no-save --package-lock=false playwright@1.62.1
+          node "$RUNNER_TEMP/book-offline-browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Build production and exercise the real offline editor in Chromium
+        run: |
+          set -euo pipefail
+          node scripts/test-book-offline.cjs 2>&1 | tee build/book-offline-qa/browser.log
+      - name: Preserve reviewed SHA, test results and browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: book-offline-qa-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/book-offline-qa/
+          if-no-files-found: error
+          retention-days: 14

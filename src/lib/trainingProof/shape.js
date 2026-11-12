@@ -1,6 +1,7 @@
 // הצורה של פריט שנשלחת לדפדפן של המתנדב — טהור. בלי מפתח-הספר (book), בלי
 // ביטחון המודל (conf — "לא מוצג למתנדב", docs/76 §4.1) ובלי מזהי-תחנה. התמונה
 // מוגשת דרך נתיב מוגן (ההרשאה נבדקת בכל בקשה), לא כנכס סטטי.
+import { cleanMarks } from './wordMarks.js';
 
 export const itemImageUrl = (id) => `/api/training-proof/items/${id}/image`;
 export const itemCtxUrl = (id) => `/api/training-proof/items/${id}/ctx`;
@@ -32,6 +33,8 @@ export function publicOcrItem(d) {
     text: p.text || '',
     lineNo: Number.isInteger(p.line_no) ? p.line_no : null,
     ctx: ctxOf(d),
+    // מילים חשודות ("המגיה", שדה-רשות): מקום, רמה ועד 3 חלופות — בלי הסתברות ובלי "למה"; חבילה ישנה — null
+    marks: cleanMarks(p.marks, p.text),
   };
 }
 

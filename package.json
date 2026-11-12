@@ -24,10 +24,12 @@
     "test:vitest": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint",
-    "test:deployment-regressions": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/lib/deploymentRegressions.test.mjs src/lib/pdfConverter.test.mjs && vitest run src/lib/githubReleases.test.js src/lib/db.test.js src/components/home/DownloadSection.test.tsx src/components/offline/OfflineUpdateDownload.test.jsx src/app/api/github-releases/route.test.js src/app/api/offline-update-releases/route.test.js"
+    "test:deployment-regressions": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/lib/deploymentRegressions.test.mjs src/lib/pdfConverter.test.mjs && vitest run src/lib/githubReleases.test.js src/lib/db.test.js src/components/home/DownloadSection.test.tsx src/components/offline/OfflineUpdateDownload.test.jsx src/app/api/github-releases/route.test.js src/app/api/offline-update-releases/route.test.js",
+    "bench:pdf": "node scripts/benchmark-pdf-conversion.mjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.0",
+    "@napi-rs/canvas": "1.0.10",
     "bcryptjs": "^3.0.3",
     "cheerio": "^1.2.0",
     "dompurify": "^3.4.16",
@@ -46,6 +48,7 @@
     "otzaria-plugin-validator": "github:Otzaria/otzaria-plugin-validator#v1",
     "pdf-lib": "^1.17.1",
     "pdf-to-img": "^7.0.0",
+    "pdfjs-dist": "6.2.108",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-is": "^19.2.5",

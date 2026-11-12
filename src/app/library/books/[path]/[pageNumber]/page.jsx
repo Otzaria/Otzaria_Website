@@ -12,6 +12,10 @@ import ShortcutsDialog from '@/components/editor/modals/ShortcutsDialog'
 import SpellcheckDialog from '@/components/editor/modals/SpellcheckDialog'
 import { useDialog } from '@/components/providers/DialogContext'
 import { useLoading } from '@/components/providers/LoadingContext'
+import { useOfflineBook } from '@/hooks/useOfflineBook'
+import OfflineBookControl from '@/components/editor/v2/OfflineBookControl'
+import { CHANGED, downloadRawCopies, localSession, patchPreparedPage, pageKey, readRecord } from '@/lib/offlineBooks/store'
+import { refreshPreparedPage } from '@/lib/offlineBooks/prepare'
 import { useAutoSave, UNSAVED_LEAVE_MESSAGE } from '@/hooks/useAutoSave'
 import { mergeColumns } from '@/lib/editor/columnMerge'
 import { getTextareaCaretTop } from '@/lib/editorUtils'
@@ -19,6 +23,7 @@ import { isEditorField, queryEditorField } from '@/lib/editor/editorField'
 import { findNextWholeWordInTextarea as findNextWholeWordInTextareaUtil } from '@/lib/hebrewWordUtils'
 import { buildSearchRegex, findNextOutsideTags, processSearchPattern, rangeInText, replaceOutsideTags } from '@/lib/editor/textOnlyReplace'
 import { hasBookLibraryAccess, hasBooksAccess } from '@/lib/roles'
+import { claimLimitMessage, claimRulesText, CLAIM_LIMIT_ERROR_CODE } from '@/lib/pageClaimPolicy'
 import { useRequireAuth } from '@/hooks/useRequireAuth'
 import { useUndoAvailability } from '@/hooks/useUndoAvailability'
 import { shortcutAllowed, shortcutContext } from './shortcutScope'
@@ -47,6 +52,7 @@ import MobileActionBar from '@/components/editor/v2/MobileActionBar'
 import { pageClaimState, canFinishPage } from '@/components/editor/v2/pageClaim'
 import DisplaySettingsSheet from '@/components/editor/v2/DisplaySettingsSheet'
 import OcrWordReviewPanel from '@/components/editor/v2/OcrWordReviewPanel'
+import { setWordReviewAccepted } from '@/lib/editor/ocrWordReview'
 import FinishPageDialog from '@/components/editor/v2/FinishPageDialog'
 import RestReminder from '@/components/editor/v2/RestReminder'
 import { buildEditorCommands } from '@/components/editor/v2/editorCommands'
@@ -80,12 +86,31 @@ const SHORTCUTS_VERSION_KEY = 'user_shortcuts_version'
 const SHORTCUTS_UNBOUND_KEY = 'user_shortcuts_unbound'
 
 export default function EditPage() {
-  const { session, status } = useRequireAuth()
-  const router = useRouter()
   const params = useParams()
   const bookPath = decodeURIComponent(params.path)
   const pageNumber = parseInt(params.pageNumber)
-  const { showAlert, showConfirm } = useDialog()
+  const [fallback, setFallback] = useState(() => localSession(bookPath, pageNumber))
+  useEffect(() => {
+    const refresh = () => {
+      const next = localSession(bookPath, pageNumber)
+      setFallback(previous => previous?.user.id === next?.user.id && previous?.user.name === next?.user.name ? previous : next)
+    }
+    queueMicrotask(refresh)
+    window.addEventListener(CHANGED, refresh)
+    window.addEventListener('storage', refresh)
+    return () => { window.removeEventListener(CHANGED, refresh); window.removeEventListener('storage', refresh) }
+  }, [bookPath, pageNumber])
+  const { session, status } = useRequireAuth({ localFallback: fallback })
+  const userId = session?.user?._id || session?.user?.id
+  // Account and route changes get independent text state, locks and save queues.
+  return <BookPageEditor key={`${userId}:${bookPath}:${pageNumber}`} session={session} status={status} bookPath={bookPath} pageNumber={pageNumber} />
+}
+
+function BookPageEditor({ session, status, bookPath, pageNumber }) {
+  const router = useRouter()
+  const offlineUserId = session?.user?._id || session?.user?.id
+  const offline = useOfflineBook({ userId: offlineUserId, bookPath, pageNumber })
+  const { showAlert, showConfirm, showMessage } = useDialog()
   const { startLoading, stopLoading } = useLoading()
 
   const [bookData, setBookData] = useState(null)
@@ -98,6 +123,10 @@ export default function EditPage() {
   const [leftColumn, setLeftColumn] = useState('')
   const [rightColumn, setRightColumn] = useState('')
   const [twoColumns, setTwoColumns] = useState(false)
+  const [wordReviewState, setWordReviewState] = useState(null)
+  const wordReviewPageKey = `${bookPath}:${pageNumber}`
+  const ocrWordReview = wordReviewState?.pageKey === wordReviewPageKey ? wordReviewState.value : null
+  const ocrReviewRevision = wordReviewState?.pageKey === wordReviewPageKey ? wordReviewState.revision : null
   const [activeTextarea, setActiveTextarea] = useState(null)
   const [settingsLoaded, setSettingsLoaded] = useState(false)
 
@@ -176,11 +205,19 @@ export default function EditPage() {
   const [showImageToText, setShowImageToText] = useState(false);
 
   const {
-    save: debouncedSave,
-    saveNow,
-    flush: flushAutoSave,
-    status: saveStatus,
-  } = useAutoSave()
+    save: onlineSave,
+    saveNow: onlineSaveNow,
+    flush: onlineFlush,
+    status: onlineSaveStatus,
+  } = useAutoSave({
+    // השרת זרק החלטות שמקושרות לזיהוי שהוחלף: מנקים אותן מקומית כדי שלא יישלחו שוב
+    onReviewDropped: () => setWordReviewState((prev) => (prev ? { ...prev, value: null } : prev)),
+  })
+
+  const debouncedSave = offline.enabled ? offline.save : onlineSave
+  const saveNow = offline.enabled ? offline.saveNow : onlineSaveNow
+  const flushAutoSave = offline.enabled ? offline.flush : onlineFlush
+  const saveStatus = offline.enabled ? offline.status : onlineSaveStatus
 
   useEffect(() => {
     const savedPanelWidth = localStorage.getItem('imagePanelWidth')
@@ -191,6 +228,7 @@ export default function EditPage() {
     const savedShortcuts = localStorage.getItem(SHORTCUTS_STORAGE_KEY)
     const savedShortcutsVersion = parseInt(localStorage.getItem(SHORTCUTS_VERSION_KEY), 10)
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Hydrate browser-only preferences once.
     if (savedPanelWidth) setImagePanelWidth(parseFloat(savedPanelWidth))
     if (savedColumnWidth) setColumnWidth(parseFloat(savedColumnWidth))
     if (savedOrientation) setLayoutOrientation(savedOrientation)
@@ -307,12 +345,6 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
   }, [])
 
   useEffect(() => {
-    if (status === 'authenticated') loadPageData()
-  // טעינה מותנית-נתיב; loadPageData מוחרג למניעת לולאה
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, bookPath, pageNumber])
-
-  useEffect(() => {
     if (bookData?.name) document.title = `עריכה: ${bookData.name} - עמוד ${pageNumber}`
   }, [bookData, pageNumber])
 
@@ -321,11 +353,30 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
       setLoading(true)
       setError(null)
     
+      const stored = offlineUserId && readRecord(pageKey(offlineUserId, bookPath, pageNumber))
+      const applyContent = data => {
+        setPageData(previous => ({ ...previous, ...data }))
+        setContent(data.content || '')
+        setLeftColumn(data.leftColumn || '')
+        setRightColumn(data.rightColumn || '')
+        setRightColumnName(data.rightColumnName || 'חלק 1')
+        setLeftColumnName(data.leftColumnName || 'חלק 2')
+        setTwoColumns(data.twoColumns || false)
+        setIsContentSplit(data.twoColumns || false)
+        setWordReviewState({ pageKey: `${bookPath}:${pageNumber}`, revision: data.ocrReviewRevision, value: data.ocrWordReview || null })
+      }
+      if (stored && (!offline.holdsEditLock() || stored.draft || stored.inFlight || session.offline || navigator.onLine === false || window.__OTZARIA_OFFLINE_BOOK__)) {
+        setBookData(stored.book)
+        applyContent({ ...stored.data, ...stored.draft })
+        return
+      }
+
       // מהספר רק העמוד הנוכחי (?page=) במקום כל עמודי הספר. תוכן העמוד נשלף רק
       // אחרי שבדיקת ההרשאה שלמטה עברה (ולא במקביל): כך תוכן של ספר מוסתר או של
       // עמוד נעול לא נשלח לדפדפן של מי שאינו מורשה, ואין בקשת 403 מיותרת.
       const bookRes = await fetch(`/api/book/${encodeURIComponent(bookPath)}?page=${pageNumber}`)
       const bookResult = await bookRes.json()
+      if (!bookRes.ok) throw new Error(bookResult.error || 'טעינת הספר נכשלה')
 
       if (bookResult.success) {
         setBookData(bookResult.book)
@@ -362,15 +413,16 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
       const contentResult = await contentRes.json()
 
       if (contentResult.success && contentResult.data) {
-        const { data } = contentResult
-        setPageData(prev => ({...prev, ...data}));
-        setContent(data.content || '')
-        setLeftColumn(data.leftColumn || '')
-        setRightColumn(data.rightColumn || '')
-        setRightColumnName(data.rightColumnName || 'חלק 1')
-        setLeftColumnName(data.leftColumnName || 'חלק 2')
-        setTwoColumns(data.twoColumns || false)
-      }
+        let data = contentResult.data
+        if (stored) {
+          let latest
+          try { latest = await refreshPreparedPage(stored, data, { ownsEditLock: offline.holdsEditLock }) }
+          catch { throw new Error('לא ניתן לעדכן את עותק האופליין. העותק הקודם נשמר; בדקו את החיבור והאחסון ורעננו.') }
+          if (!latest) throw new Error('עותק האופליין הוסר במהלך הטעינה. רעננו את העמוד.')
+          data = { ...latest.data, ...latest.draft }
+        }
+        applyContent(data)
+      } else throw new Error(contentResult.error || 'טעינת תוכן העמוד נכשלה')
     } catch (err) {
       console.error(err);
       setError(err.message || 'שגיאה בטעינה')
@@ -378,6 +430,12 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (status === 'authenticated') queueMicrotask(loadPageData)
+  // טעינה מותנית-נתיב; loadPageData מוחרג למניעת לולאה
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, bookPath, pageNumber, offlineUserId, session?.offline, offline.lock])
 
   const saveSearchesToServer = async (updatedList) => {
       setSavedSearches(updatedList); 
@@ -429,6 +487,14 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
     saveSearchesToServer(savedSearches.filter(s => s.id !== id));
   };
 
+  // split — כשהקורא כבר יודע את הערך החדש (פיצול: ה-state עוד לא התעדכן בסגירה הזו)
+  const handleAutoSaveWrapper = useCallback((newContent, left = leftColumn, right = rightColumn, two = twoColumns, split = isContentSplit, decisions = ocrWordReview) => {
+    debouncedSave({
+      bookPath, pageNumber, expectedUserId: String(offlineUserId), content: newContent, leftColumn: left, rightColumn: right,
+      twoColumns: two, isContentSplit: split, rightColumnName, leftColumnName, ocrWordReview: decisions
+    })
+  }, [debouncedSave, offlineUserId, bookPath, pageNumber, leftColumn, rightColumn, twoColumns, isContentSplit, rightColumnName, leftColumnName, ocrWordReview]);
+
   const handleColumnChange = useCallback((column, newText) => {
     if (column === 'left') {
       setLeftColumn(newText)
@@ -437,23 +503,13 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
       setRightColumn(newText)
       handleAutoSaveWrapper(content, leftColumn, newText, twoColumns)
     }
-  // handleAutoSaveWrapper מוגדר בהמשך; מכוון
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [content, leftColumn, rightColumn, twoColumns]); // handleAutoSaveWrapper added below
-
-  // split — כשהקורא כבר יודע את הערך החדש (פיצול: ה-state עוד לא התעדכן בסגירה הזו)
-  const handleAutoSaveWrapper = useCallback((newContent, left = leftColumn, right = rightColumn, two = twoColumns, split = isContentSplit) => {
-    debouncedSave({
-      bookPath, pageNumber, content: newContent, leftColumn: left, rightColumn: right,
-      twoColumns: two, isContentSplit: split, rightColumnName, leftColumnName
-    })
-  }, [debouncedSave, bookPath, pageNumber, leftColumn, rightColumn, twoColumns, isContentSplit, rightColumnName, leftColumnName]);
+  }, [content, leftColumn, rightColumn, twoColumns, handleAutoSaveWrapper]);
 
   // שמירה מיידית של המצב הנוכחי (Ctrl+S, לפני סיום עמוד) — בלי לחכות ל-debounce
   const saveCurrentNow = useCallback(() => saveNow({
-    bookPath, pageNumber, content, leftColumn, rightColumn,
-    twoColumns, isContentSplit, rightColumnName, leftColumnName
-  }), [saveNow, bookPath, pageNumber, content, leftColumn, rightColumn, twoColumns, isContentSplit, rightColumnName, leftColumnName]);
+    bookPath, pageNumber, expectedUserId: String(offlineUserId), content, leftColumn, rightColumn,
+    twoColumns, isContentSplit, rightColumnName, leftColumnName, ocrWordReview
+  }), [saveNow, offlineUserId, bookPath, pageNumber, content, leftColumn, rightColumn, twoColumns, isContentSplit, rightColumnName, leftColumnName, ocrWordReview]);
 
   const updateTextWithHistory = useCallback((newText, column) => {
     let el;
@@ -581,7 +637,7 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
   }, [showConfirm, twoColumns, rightColumn, leftColumn, content, updateTextWithHistory, handleAutoSaveWrapper]);
 
   const handleFinishClick = useCallback(async () => {
-    if (!session) return showAlert('שגיאה', 'אינך מחובר למערכת');
+    if (!session || session.offline || navigator.onLine === false) return showAlert('נדרש חיבור', 'פעולה זו דורשת חיבור לרשת והתחברות לחשבון. השינויים המקומיים נשמרים במכשיר.');
     // סיום (כפתור, Ctrl+Enter, חלון הפקודות) — רק כשהעמוד תפוס על ידי המשתמש
     const claim = pageClaimState(pageData, session.user?._id || session.user?.id);
     if (!canFinishPage(claim)) {
@@ -598,11 +654,13 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
   }, [session, pageData, saveCurrentNow, showAlert]);
 
   const handleClaim = async () => {
-    if (!session) return showAlert('שגיאה', 'אינך מחובר למערכת');
+    if (!session || session.offline || navigator.onLine === false) return showAlert('נדרש חיבור', 'פעולה זו דורשת חיבור לרשת והתחברות לחשבון. השינויים המקומיים נשמרים במכשיר.');
     
     showConfirm(
       `עבודה על עמוד ${pageNumber}`,
-      `האם אתה מעוניין לעבוד על עמוד זה?\nהעמוד יסומן כ"בטיפול" ויוצמד אליך.`,
+      `האם אתה מעוניין לעבוד על עמוד זה?\nהעמוד יסומן כ"בטיפול" ויוצמד אליך.
+
+${claimRulesText()}`,
       async () => {
           startLoading('תופס עמוד...');
           try {
@@ -622,6 +680,7 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
               stopLoading(); 
 
               if (result.success) {
+                  patchPreparedPage(offlineUserId, bookPath, pageNumber, { status: 'in-progress', claimedById: userId, claimedBy: session.user.name })
                   setPageData(prev => ({
                       ...prev, 
                       status: 'in-progress', 
@@ -629,6 +688,8 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
                       claimedById: userId
                   }));
                   showAlert('הצלחה', 'העמוד נתפס על ידך בהצלחה! כעת ניתן לערוך ולשמור.');
+              } else if (result.code === CLAIM_LIMIT_ERROR_CODE) {
+                  showMessage('הגעת למכסת העמודים', result.error || claimLimitMessage(), 'הבנתי');
               } else {
                   showAlert('שגיאה', result.error || 'שגיאה בתפיסת העמוד');
               }
@@ -657,7 +718,10 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
       
       stopLoading(); 
 
-      if (result.success) router.push(`/library/books/${encodeURIComponent(bookPath)}`);
+      if (result.success) {
+        patchPreparedPage(offlineUserId, bookPath, pageNumber, { status: 'completed' })
+        router.push(`/library/books/${encodeURIComponent(bookPath)}`);
+      }
       else showAlert('שגיאה', `שגיאה מהשרת: ${result.error}`);
     } catch (error) {
       stopLoading(); 
@@ -1245,6 +1309,7 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
     enabled: !loading && !error,
     extraSource: localWords.source,
     textFields: reviewTextFields,
+    reviewDecisions: ocrWordReview,
     // העדפות התצוגה: "מול הסריקה" → שורה מול שורה (בלי גלישה) — רק כשהטקסט באמת מחולק
     // לשורות כמו הצילום; טקסט שמגיע כגוש גולש תמיד (effectiveWrap ב-usePageTracking)
     wrap: prefs.lineSpacing === 'facing' ? 'off' : 'soft',
@@ -1266,7 +1331,7 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
   // ================= מעטפת העורך החדש (שלב 1) =================
 
   // מצב השמירה לתצוגה + מתי הסתיימה השמירה האחרונה ("נשמר לפני רגע")
-  const uiSaveStatus = toUiSaveStatus(saveStatus)
+  const uiSaveStatus = saveStatus === 'local' ? 'local' : toUiSaveStatus(saveStatus)
   const [lastSavedAt, setLastSavedAt] = useState(null)
   const prevSaveStatusRef = useRef(saveStatus)
   useEffect(() => {
@@ -1280,10 +1345,14 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
 
   // חזרה לספר: קודם שומרים את מה שממתין (ומחכים לשמירה שבדרך); אם נכשלה — שואלים לפני יציאה
   const leaveToBook = useCallback(async () => {
+    if (offline.enabled && navigator.onLine === false) {
+      showAlert('הספר אינו זמין אופליין', 'אפשר להמשיך לערוך עמוד זה או לעבור לעמוד שהוכן מראש דרך הכפתור "ניהול עמודים אופליין".')
+      return
+    }
     const saved = await flushAutoSave()
-    if (saved) router.push(bookHref)
+    if (saved || (offline.enabled && offline.locallySafe())) router.push(bookHref)
     else showConfirm('השמירה נכשלה', UNSAVED_LEAVE_MESSAGE, () => router.push(bookHref))
-  }, [flushAutoSave, router, bookHref, showConfirm])
+  }, [flushAutoSave, router, bookHref, showConfirm, showAlert, offline])
   const totalPages = Number.isInteger(bookData?.totalPages) ? bookData.totalPages : undefined
 
   // תפיסה / שחרור
@@ -1293,6 +1362,7 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
   const claim = pageClaimState(pageData, currentUserId)
 
   const handleRelease = useCallback(() => {
+    if (session?.offline || navigator.onLine === false) return showAlert('נדרש חיבור', 'שחרור עמוד דורש חיבור לרשת והתחברות לחשבון.');
     const pageId = pageData?.id || pageData?._id
     if (!pageId) return showAlert('שגיאה', 'מזהה העמוד חסר')
     showConfirm(
@@ -1316,6 +1386,7 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
           const result = await response.json()
           stopLoading()
           if (result.success) {
+            patchPreparedPage(offlineUserId, bookPath, pageNumber, { status: 'available', claimedBy: null, claimedById: null })
             setPageData(prev => ({ ...prev, status: 'available', claimedBy: null, claimedById: null }))
             showAlert('בוצע', 'העמוד שוחרר')
           } else {
@@ -1328,7 +1399,7 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
         }
       }
     )
-  }, [pageData, showAlert, showConfirm, startLoading, stopLoading, flushAutoSave])
+  }, [pageData, showAlert, showConfirm, startLoading, stopLoading, flushAutoSave, session, offlineUserId, bookPath, pageNumber])
 
   // היסטוריית הביטול שייכת לשדה הלוגי ושורדת מעבר תצוגה (fieldHistoryStore) — אבל לא מעבר עמוד
   useEffect(() => {
@@ -1481,7 +1552,19 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
   // גובה מלא כמו העורך עצמו (h-dvh) — אחרת הפוטר של הספרייה מופיע מתחת
   // ל"טוען..." ונדחף בבת אחת מסך שלם למטה כשהעורך נטען (layout shift)
   if (loading) return <main id="main-content" className="h-dvh text-center p-20">טוען...</main>
-  if (error) return <main id="main-content" className="text-center p-20 text-error">{error}</main>
+  if (offline.enabled && !navigator.locks) return <main id="main-content" className="p-8 text-center">
+    <p>הדפדפן אינו מאפשר לנעול את העותק לעריכה בטוחה. הורידו גיבוי ונסו שוב בדפדפן תומך.</p>
+    <Button onClick={() => downloadRawCopies(offlineUserId)}>גיבוי העותקים המקומיים</Button>
+  </main>
+  if (offline.enabled && offline.lock !== 'owned') return <main id="main-content" className="p-8 text-center">
+    {offline.lock === 'blocked' ? 'עמוד זה פתוח לעריכה בלשונית אחרת. סגרו אותה ורעננו כאן כדי למנוע דריסת שינויים.' : 'פותח את עותק האופליין…'}
+    <Button onClick={() => location.reload()}>רענון</Button>
+  </main>
+  if (error) return <main id="main-content" className="text-center p-20 text-error">
+    <p>{error}</p>
+    <Button variant="outlined" onClick={() => downloadRawCopies(offlineUserId)}>גיבוי העותקים המקומיים</Button>
+    <a className="block underline" href={`/auth/login?callbackUrl=${encodeURIComponent(`/library/books/${encodeURIComponent(bookPath)}/${pageNumber}`)}`}>התחברות מחדש</a>
+  </main>
 
   return (
     <EditorShell
@@ -1497,7 +1580,7 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
       onSplitterPointer={handleSplitterPointer}
       splitContainerRef={splitContainerRef}
       scanFilter={scanFilterCss(prefs)}
-      topBar={
+      topBar={<>
         <EditorTopBar
           bookTitle={bookData?.name || bookPath}
           bookHref={bookHref}
@@ -1512,14 +1595,26 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
           displayOpen={showDisplay}
           onOpenGuidelines={() => setShowInfoDialog(true)}
           onFinish={handleFinishClick}
+          finishDisabled={session?.offline || !offline.connected}
           claimState={claim.state}
           holderName={claim.holderName}
           onClaim={handleClaim}
+          offlineSlot={<OfflineBookControl
+            offline={offline} user={{ id: offlineUserId, name: session?.user?.name }} bookPath={bookPath} pageNumber={pageNumber}
+            book={bookData} pageData={pageData}
+            snapshot={() => ({ bookPath, pageNumber, content, leftColumn, rightColumn, twoColumns, isContentSplit, rightColumnName, leftColumnName, ocrWordReview })}
+            flushOnline={onlineFlush} showAlert={showAlert} showConfirm={showConfirm}
+          />}
           accountSlot={<EditorAccountButton name={session?.user?.name} />}
           mobileCompact
           shortcuts={userShortcuts}
         />
-      }
+        {offline.enabled && (offline.record.draft || offline.problem || !offline.connected || session?.offline) &&
+          <div role="status" className="shrink-0 border-b border-outline-subtle bg-surface-container px-3 py-2 text-center text-body-sm">
+            {offline.problem || (offline.record.draft ? 'נשמר במכשיר · ממתין לסנכרון עם השרת' : 'עותק מקומי זמין לעריכה')}
+            {' · אפשר לנהל עמודים, להתחבר מחדש ולהוריד גיבוי בכפתור האופליין בכותרת.'}
+          </div>}
+      </>}
       scanToolbar={isMobile ? null : (
         <ScanToolbar
           zoom={imageZoom}
@@ -1597,6 +1692,7 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
           position={caretPos ?? undefined}
           wordCount={wordCount}
           suspectCount={scanTracking.review?.count ?? 0}
+          acceptedCount={scanTracking.review?.accepted?.length ?? 0}
           onSuspectsClick={() => setShowOcrReview(true)}
           restRemainingMs={rest.remainingMs}
           shortcuts={statusShortcuts}
@@ -1712,6 +1808,13 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
 
       {showOcrReview && (
         <OcrWordReviewPanel key={`${bookPath}:${pageNumber}`} review={scanTracking.review} textContainerRef={textEditorContainerRef}
+          onSetAccepted={(word, accept) => {
+            const next = setWordReviewAccepted(reviewTextFields, ocrWordReview, word, ocrReviewRevision, accept)
+            if (!next) return false
+            setWordReviewState({ pageKey: wordReviewPageKey, revision: ocrReviewRevision, value: next })
+            handleAutoSaveWrapper(content, leftColumn, rightColumn, twoColumns, isContentSplit, next)
+            return true
+          }}
           onApplyText={(column, value) => {
             if (column === 'right' || column === 'left') handleColumnChange(column, value)
             else { setContent(value); handleAutoSaveWrapper(value) }
@@ -1724,6 +1827,7 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
           bookTitle={bookData?.name || bookPath}
           pageNumber={pageNumber}
           suspectCount={scanTracking.review?.count ?? 0}
+          acceptedCount={scanTracking.review?.accepted?.length ?? 0}
           reviewStatus={scanTracking.review?.status ?? 'unavailable'}
           onGoToSuspects={() => { setShowFinishDialog(false); setShowOcrReview(true) }}
           textLineCount={textLineCount}

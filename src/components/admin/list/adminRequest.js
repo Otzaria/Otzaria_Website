@@ -46,13 +46,15 @@ export class AdminApiError extends Error {
 const HEBREW = /[֐-׿]/
 
 export const TOO_MANY_MESSAGE = 'יותר מדי פעולות ברצף. חכה רגע ונסה שוב.'
+export const BUSY_MESSAGE = 'השרת עמוס כרגע. נסה שוב בעוד רגע.'
 
-/** ההודעה למשתמש: 401 — ההתחברות פגה; 403 — אין הרשאה; 429 — יותר מדי ברצף; הודעת שרת בעברית; אחרת — fallback */
+/** ההודעה למשתמש: 401 — ההתחברות פגה; 403 — אין הרשאה; 429 — יותר מדי ברצף; 503 — השרת עמוס; הודעת שרת בעברית; אחרת — fallback */
 export function errorMessage(status, fallback, serverMessage) {
   if (status === 401) return SESSION_EXPIRED_MESSAGE
   if (status === 403) return 'אין לך הרשאה לפעולה הזו.'
   if (typeof serverMessage === 'string' && HEBREW.test(serverMessage) && serverMessage.length <= 300) return serverMessage
   if (status === 429) return TOO_MANY_MESSAGE
+  if (status === 503) return BUSY_MESSAGE
   return fallback
 }
 

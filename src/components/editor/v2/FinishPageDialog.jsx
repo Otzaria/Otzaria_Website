@@ -31,7 +31,7 @@ export function isFreshSubmitChord(event, mountedAt) {
  *
  * @param {{
  *   bookTitle: string, pageNumber: number,
- *   suspectCount?: number, reviewStatus?: 'ready'|'loading'|'unavailable', onGoToSuspects?: () => void,
+ *   suspectCount?: number, acceptedCount?: number, reviewStatus?: 'ready'|'loading'|'unavailable', onGoToSuspects?: () => void,
  *   textLineCount: number, scanLineCount?: number | null,
  *   saveStatus: 'saved'|'saving'|'dirty'|'error', lastSavedAt?: Date|number|string|null,
  *   initialNote?: string, onSubmit: (result: { note: string }) => void, submitting?: boolean,
@@ -44,6 +44,7 @@ export default function FinishPageDialog({
   bookTitle,
   pageNumber,
   suspectCount = 0,
+  acceptedCount = 0,
   reviewStatus = 'ready',
   onGoToSuspects,
   textLineCount,
@@ -61,7 +62,7 @@ export default function FinishPageDialog({
   const noteId = useId()
   const [note, setNote] = useState(initialNote)
   const [mountedAt] = useState(() => (typeof performance !== 'undefined' ? performance.now() : 0))
-  const checks = buildFinishChecks({ suspectCount, reviewStatus, textLineCount, scanLineCount, saveStatus, lastSavedAt })
+  const checks = buildFinishChecks({ suspectCount, acceptedCount, reviewStatus, textLineCount, scanLineCount, saveStatus, lastSavedAt })
 
   const submitRef = useRef(() => {})
   useEffect(() => {

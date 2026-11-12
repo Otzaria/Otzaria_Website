@@ -26,7 +26,7 @@ const nextConfig = {
   env: {
     DEPLOY_VERSION: readDeployVersion(),
   },
-  serverExternalPackages: ['pdf-to-img', 'pdfjs-dist'],
+  serverExternalPackages: ['pdf-to-img', 'pdfjs-dist', '@napi-rs/canvas'],
   // Workers execute these source files directly, outside the route bundles.
   // Keep them explicitly after excluding mutable uploads/storage from tracing.
   outputFileTracingIncludes: {
@@ -195,6 +195,10 @@ const nextConfig = {
         headers: [
           { key: 'Cache-Control', value: 'no-store, must-revalidate' },
         ],
+      },
+      {
+        source: '/library/books/offline-worker.js',
+        headers: [{ key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' }],
       },
       // אייקוני האתר. Next מגיש אותם כברירת מחדל עם max-age=0, must-revalidate,
       // כלומר סבב אימות בכל טעינת דף — למרות שה-URL כולל hash של התוכן.

@@ -21,7 +21,7 @@ export function savedAgoText(lastSavedAt, now = Date.now()) {
   return `נשמר בשעה ${time}`
 }
 
-export const SAVE_STATUSES = ['saved', 'saving', 'dirty', 'error']
+export const SAVE_STATUSES = ['saved', 'saving', 'dirty', 'local', 'error']
 
 /**
  * מצב השמירה לתצוגה: טקסט, אייקון וגוון.
@@ -29,6 +29,8 @@ export const SAVE_STATUSES = ['saved', 'saving', 'dirty', 'error']
  */
 export function saveStatusInfo(status, lastSavedAt, now = Date.now()) {
   switch (status) {
+    case 'local':
+      return { text: 'נשמר במכשיר · ממתין לסנכרון', icon: 'download', tone: 'neutral' }
     case 'saving':
       return { text: 'שומר…', icon: 'cloud_sync', tone: 'neutral' }
     case 'dirty':
@@ -117,10 +119,10 @@ export function restCountdownText(msRemaining) {
  * הבדיקות בחלון "סיום עמוד". כל בדיקה: { id, ok, icon, title, detail, action? }.
  * ok=false אינו חוסם את הסיום — רק מתריע.
  *
- * @param {{ suspectCount?: number, textLineCount?: number, scanLineCount?: number | null,
+ * @param {{ suspectCount?: number, acceptedCount?: number, reviewStatus?: string, textLineCount?: number, scanLineCount?: number | null,
  *   saveStatus?: string, lastSavedAt?: Date | number | string | null, now?: number }} input
  */
-export function buildFinishChecks({ suspectCount = 0, reviewStatus = 'ready', textLineCount = 0, scanLineCount = null, saveStatus = 'saved', lastSavedAt = null, now = Date.now() } = {}) {
+export function buildFinishChecks({ suspectCount = 0, acceptedCount = 0, reviewStatus = 'ready', textLineCount = 0, scanLineCount = null, saveStatus = 'saved', lastSavedAt = null, now = Date.now() } = {}) {
   const checks = []
 
   checks.push({
@@ -128,7 +130,7 @@ export function buildFinishChecks({ suspectCount = 0, reviewStatus = 'ready', te
     ok: suspectCount === 0 && reviewStatus === 'ready',
     icon: suspectCount === 0 ? 'check' : 'spellcheck',
     title: suspectCount === 0
-      ? reviewStatus === 'loading' ? 'נתוני החשד מהזיהוי נטענים…' : reviewStatus === 'unavailable' ? 'אין נתוני חשד מהזיהוי לעמוד' : 'לא נמצאו מילים חשודות'
+      ? reviewStatus === 'loading' ? 'נתוני החשד מהזיהוי נטענים…' : reviewStatus === 'unavailable' ? 'אין נתוני חשד מהזיהוי לעמוד' : acceptedCount > 0 ? 'לא נותרו מילים חשודות לבדיקה' : 'לא נמצאו מילים חשודות'
       : suspectCount === 1 ? 'מילה חשודה אחת לבדיקה' : `${formatCount(suspectCount)} מילים חשודות לבדיקה`,
     detail: reviewStatus === 'ready' ? 'סימוני הזיהוי, הצעות מודל השפה ובדיקות צורת מילים. יש לבדוק מול הצילום.' : 'בדיקת צורת מילים בלבד; נתוני החשד מהזיהוי אינם זמינים כרגע.',
     action: suspectCount > 0 ? 'suspects' : undefined
@@ -148,6 +150,7 @@ export function buildFinishChecks({ suspectCount = 0, reviewStatus = 'ready', te
   })
 
   const save = {
+    local: { ok: false, icon: 'download', title: 'נשמר במכשיר בלבד', detail: 'יש לסנכרן עם השרת לפני סיום העמוד.' },
     saved: { ok: true, icon: 'check_circle', title: 'הכול נשמר', detail: lastSavedAt == null ? '' : savedAgoText(lastSavedAt, now).replace(/^נשמר/, 'השמירה האחרונה') + '.' },
     saving: { ok: true, icon: 'cloud_sync', title: 'שומר…', detail: 'השמירה תסתיים לפני המעבר לעמוד הבא.' },
     dirty: { ok: false, icon: 'edit_note', title: 'יש שינויים שלא נשמרו', detail: 'הם יישמרו עם סיום העמוד.' },

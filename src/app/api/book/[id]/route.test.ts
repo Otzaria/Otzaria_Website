@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { bookFindOneMock, pageFindMock } = vi.hoisted(() => ({
+const { bookFindOneMock, pageFindMock, releaseMock, countMock } = vi.hoisted(() => ({
   bookFindOneMock: vi.fn(),
   pageFindMock: vi.fn(),
+  releaseMock: vi.fn(),
+  countMock: vi.fn(),
 }));
 
 vi.mock("@/lib/db", () => ({ default: vi.fn().mockResolvedValue(undefined) }));
@@ -10,6 +12,10 @@ vi.mock("next-auth", () => ({ getServerSession: vi.fn() }));
 vi.mock("@/app/api/auth/[...nextauth]/route", () => ({ authOptions: {} }));
 vi.mock("@/models/Book", () => ({ default: { findOne: bookFindOneMock } }));
 vi.mock("@/models/Page", () => ({ default: { find: pageFindMock } }));
+vi.mock("@/lib/bookPageClaims", () => ({
+  releaseExpiredPageClaims: releaseMock,
+  countActiveClaims: countMock,
+}));
 
 import { getServerSession } from "next-auth";
 import { GET } from "./route";
@@ -43,6 +49,8 @@ describe("GET /api/book/[id]", () => {
     pageFindMock.mockReset();
     sessionMock.mockResolvedValue({ user: { id: "u1", role: "user" } });
     bookFindOneMock.mockReturnValue({ lean: async () => book });
+    releaseMock.mockReset().mockResolvedValue(0);
+    countMock.mockReset().mockResolvedValue(2);
   });
 
   it("returns every page of the book without ?page", async () => {
@@ -79,5 +87,22 @@ describe("GET /api/book/[id]", () => {
     const res = await call("http://x/api/book/sefer?page=2");
     expect(res.status).toBe(401);
     expect(pageFindMock).not.toHaveBeenCalled();
+  });
+
+  it("releases expired claims of a shared book and reports the claim policy", async () => {
+    pageFindMock.mockReturnValue(chain([{ ...rawPages[0], status: "in-progress" }]));
+    const res = await call("http://x/api/book/sefer");
+    const body = await res.json();
+    expect(releaseMock).toHaveBeenCalledWith(expect.objectContaining({ bookId: "b1" }));
+    expect(body.claimPolicy).toEqual({ maxActivePages: 5, releaseAfterDays: 5, myActivePages: 2, exempt: false });
+  });
+
+  it("personal books: no auto-release, exempt from the limit", async () => {
+    bookFindOneMock.mockReturnValue({ lean: async () => ({ ...book, isPrivate: true, ownerId: "u1" }) });
+    pageFindMock.mockReturnValue(chain([{ ...rawPages[0], status: "in-progress" }]));
+    const body = await (await call("http://x/api/book/sefer")).json();
+    expect(releaseMock).not.toHaveBeenCalled();
+    expect(countMock).not.toHaveBeenCalled();
+    expect(body.claimPolicy.exempt).toBe(true);
   });
 });

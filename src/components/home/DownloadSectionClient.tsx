@@ -26,7 +26,7 @@ const PLATFORM_CONFIG: Record<string, PlatformButtonConfig> = {
   linux: { icon: 'computer', title: 'Linux', subtitle: 'כל ההפצות' },
   android: { icon: 'phone_android', title: 'Android', subtitle: 'Google Play / APK' },
   ios: { icon: 'phone_iphone', title: 'iOS', subtitle: 'App Store' },
-  macos: { icon: 'laptop_mac', title: 'macOS', subtitle: 'Intel / Apple Silicon' }
+  macos: { icon: 'laptop_mac', title: 'macOS', subtitle: '12 ומעלה · Intel / Apple Silicon' }
 }
 
 type DownloadOption = {
