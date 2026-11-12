@@ -90,29 +90,33 @@ export function useConflictParts(book, { onResolved, onError }) {
   const drain = useCallback(() => {
     if (drainPromise.current) return drainPromise.current
     drainPromise.current = (async () => {
-      let lastData = null
       try {
-        while (queueRef.current.length) {
-          const { change, strategy } = queueRef.current.shift()
-          try {
-            const data = await resolveConflictPart(bookId, change, strategy)
-            lastData = data
-            setDecision(change, { strategy, state: 'saved' })
-            onResolvedRef.current?.(bookId, data) // עדכון המונה בהורה / הסרת הספר כשנפתר
-          } catch (e) {
-            // כשל — מבטלים את התור (וגם מה שעוד מחכה ל"בטל"), מסנכרנים מחדש ועוצרים
-            queueRef.current = []
-            cancelWaiting()
-            const data = await loadDiff()
-            if (data) onResolvedRef.current?.(bookId, { resolved: false, conflictCount: data.changeCount })
-            onErrorRef.current?.(e)
-            return // דילוג על טעינת המנה הבאה
+        // הכרעה שהגיעה בזמן שהסבב חיכה לטעינה מחדש (drain החזיר אז את ההבטחה הקיימת ולא עשה כלום) — נאספת בסבב נוסף
+        do {
+          let lastData = null
+          while (queueRef.current.length) {
+            const { change, strategy } = queueRef.current.shift()
+            try {
+              const data = await resolveConflictPart(bookId, change, strategy)
+              lastData = data
+              setDecision(change, { strategy, state: 'saved' })
+              onResolvedRef.current?.(bookId, data) // עדכון המונה בהורה / הסרת הספר כשנפתר
+            } catch (e) {
+              // כשל — מבטלים את התור (וגם מה שעוד מחכה ל"בטל"), מסנכרנים מחדש ועוצרים
+              queueRef.current = []
+              cancelWaiting()
+              const data = await loadDiff()
+              queueRef.current = [] // גם מה שנוסף בזמן הטעינה: ההכרעות אופסו עם הטעינה מחדש
+              if (data) onResolvedRef.current?.(bookId, { resolved: false, conflictCount: data.changeCount })
+              onErrorRef.current?.(e)
+              return // דילוג על טעינת המנה הבאה
+            }
           }
-        }
-        // מנה הבאה: כל החלקים המוצגים נשמרו, אבל בשרת נשארו עוד (יותר מ-30 חלקים)
-        const { changes, decisions: current } = latestRef.current
-        const allSaved = (changes || []).every((c) => current.get(c)?.state === 'saved')
-        if (lastData && !lastData.resolved && allSaved) await loadDiff()
+          // מנה הבאה: כל החלקים המוצגים נשמרו, אבל בשרת נשארו עוד (יותר מ-30 חלקים)
+          const { changes, decisions: current } = latestRef.current
+          const allSaved = (changes || []).every((c) => current.get(c)?.state === 'saved')
+          if (lastData && !lastData.resolved && allSaved) await loadDiff()
+        } while (queueRef.current.length)
       } finally {
         drainPromise.current = null
       }
