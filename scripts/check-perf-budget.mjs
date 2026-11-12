@@ -96,14 +96,10 @@ const HERO_IMAGES = [
 const IMMUTABLE_PUBLIC_DIRS = ['public/home', 'public/icons']
 const VERSIONED_NAME = /[.-]v\d+(?:[.-]|$)/
 
-// CSS גלובלי (gzip, סך כל ה-stylesheets שה-HTML של הדף טוען). Tailwind סורק את כל src, ולכן כולל גם
-// מחלקות של מסכי הניהול. נמדד 34.4KB בכתיבה הראשונית, 39.1KB ב-master לפני עיצוב מחדש של פאנל הניהול
-// (תקציב 40KB), ו-42.6KB אחריו: עשרות רכיבי ui/admin חדשים (Tabs, SelectMenu, Toast, Drawer, DiffPreview...)
-// הוסיפו מחלקות שימוש אמיתיות (~22KB לא דחוס) — בלי טוקנים מתים או כפילויות שאפשר לגזור בבטחה.
-// התקציב הוגדר ל-45KB (~5% מעל המדידה). אותו CSS גלובלי לכל הדפים, לכן שני נציגים מספיקים.
+// CSS delivered by public pages (gzip). Admin-only utilities load with AdminFrame.
 const CSS_BUDGETS = [
-  { page: 'index', label: '/', gzipKB: 45 },
-  { page: 'library/books', label: '/library/books', gzipKB: 45 },
+  { page: 'index', label: '/', gzipKB: 40 },
+  { page: 'library/books', label: '/library/books', gzipKB: 40 },
 ]
 
 // גופן האייקונים: שמו כולל hash, ולכן מאותר לפי התחילית.

@@ -62,10 +62,14 @@ export default function ConflictsScreen() {
     setBusy((s) => new Set([...s, book._id]))
     try {
       await prepare()
-      await resolveConflictBook(book._id, strategy)
+      const result = await resolveConflictBook(book._id, strategy)
       moveFocusFrom(book._id)
       setItems((list) => list.filter((b) => b._id !== book._id))
-      toast.show({ message: resolvedBookMessage(book, strategy) })
+      if (result.status === 'not-conflict') {
+        toast.show({ tone: 'info', message: 'ההתנגשות כבר הוכרעה. הבחירה לכל הספר לא הוחלה.' })
+      } else {
+        toast.show({ message: resolvedBookMessage(book, strategy) })
+      }
       refresh()
     } catch (error) {
       toast.show(errorToast(error, 'לא הצלחנו לעדכן את הספר.'))

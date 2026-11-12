@@ -2,8 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   updatedAgoText, isStale, pageLabel, pagesCountText, pageFilename, combinedFilename, editorHref, combinedText, workerText, statusLabel,
-  releasedMessage, bulkReleaseConfirm, bulkProgressText, bulkResultText, partialLoadNote, loadProgressText, splitCombinedText,
-  checkUnchanged, skippedMessage, statusChangeBlocked, statusChangeConfirm, shouldAnnounce, STALE_DAYS, STATUS_TONES, RELEASE_PENDING_LINE,
+  releasedMessage, bulkReleaseConfirm, bulkProgressText, bulkResultText,
+  skippedMessage, statusChangeBlocked, statusChangeConfirm, shouldAnnounce, STALE_DAYS, STATUS_TONES, RELEASE_PENDING_LINE,
 } from './pageTerms.js'
 
 const DAY = 86400000
@@ -56,21 +56,6 @@ test('combinedText: כמו קובץ "הורד הכול" של השרת', () => {
   assert.equal(combinedText(null), '')
 })
 
-test('splitCombinedText: קובץ השרת (download-batch) בחזרה לעמודים — אותו טקסט כמו download/:id', () => {
-  // כמו api/admin/pages/download-batch: טור אחד — content + "\n" + "\n\n"; שני טורים — "--- R ---\n…\n\n--- L ---\n…\n" + "\n\n"
-  const RULE = '='.repeat(40)
-  const server = `${RULE}\nספר: א | עמוד: 1\n${RULE}\n\nשלום\nעולם\n\n\n`
-    + `${RULE}\nספר: א | עמוד: 2\n${RULE}\n\n--- חלק 1 ---\nימין\n\n--- חלק 2 ---\nשמאל\n\n\n`
-    + `${RULE}\nספר: א | עמוד: 3\n${RULE}\n\n\n\n\n`
-  const map = splitCombinedText(server)
-  assert.deepEqual([...map.keys()], [1, 2, 3])
-  assert.equal(map.get(1), 'שלום\nעולם')
-  assert.equal(map.get(2), '--- חלק 1 ---\nימין\n\n--- חלק 2 ---\nשמאל')
-  assert.equal(map.get(3), '')
-  // הלוך-חזור: מה שהקובץ המאוחד כותב — חוזר כמו שהוא
-  assert.equal(splitCombinedText(combinedText([{ bookName: 'ב', number: 9, text: 'x' }])).get(9), 'x')
-  assert.equal(splitCombinedText('').size, 0)
-})
 
 test('"בלי שינוי יותר מ-": 3 / 7 / 14; "בעבודה" בצבע הראשי', () => {
   assert.deepEqual(STALE_DAYS, [3, 7, 14])
@@ -92,15 +77,9 @@ test('הודעות שחרור: ניסוח אחד ל"בעוד כמה שניות";
   assert.match(bulkReleaseConfirm(2, 1).body, /עמוד אחד מהנבחרים אינו בעבודה/)
 })
 
-test('checkUnchanged / skippedMessage: הבדיקה לפני שליחה', () => {
-  const was = { status: 'in-progress', claimedById: 'u1' }
-  assert.equal(checkUnchanged(was, { status: 'in-progress', claimedById: 'u1' }), 'ok')
-  assert.equal(checkUnchanged(was, undefined), 'gone')
-  assert.equal(checkUnchanged(was, { status: 'completed', claimedById: 'u1' }), 'changed')
-  assert.equal(checkUnchanged(was, { status: 'in-progress', claimedById: 'u2' }), 'changed')
-  assert.equal(checkUnchanged({ status: 'available', claimedById: null }, { status: 'available' }), 'ok')
+test('skippedMessage reports a missing or changed page', () => {
   const page = { bookName: 'א', number: 2 }
-  assert.equal(skippedMessage('release', page, 'changed'), '"א", עמוד 2 כבר לא בעבודה אצל אותו משתמש — לא שוחרר.')
+  assert.equal(skippedMessage('release', page, 'changed'), '"א", עמוד 2 השתנה מאז הטעינה — לא שוחרר.')
   assert.match(skippedMessage('release', page, 'gone'), /לא נמצא יותר — לא שוחרר/)
   assert.match(skippedMessage('status', page, 'changed'), /השתנה בינתיים — לא שונה/)
 })
@@ -135,7 +114,7 @@ test('התקדמות וסיכום של פעולה מרובה', () => {
     { message: 'עמוד אחד שוחרר. 2 נכשלו. 4 לא נשלחו (עצרת). מה שלא הושלם נשאר מסומן.', tone: 'error' })
   assert.equal(bulkResultText('download', { done: 0, stopped: 1 }).message, 'לא ירד אף עמוד. עמוד אחד לא נשלח (עצרת). מה שלא הושלם נשאר מסומן.')
   assert.equal(bulkResultText('download', { done: 1 }).message, 'הטקסט של עמוד אחד ירד.')
-  assert.equal(bulkResultText('release', { done: 4, skipped: 3 }).message, '4 עמודים שוחררו. 3 כבר לא בעבודה אצל אותו משתמש ולא שוחררו.')
+  assert.equal(bulkResultText('release', { done: 4, skipped: 3 }).message, '4 עמודים שוחררו. 3 השתנו מאז הטעינה ולא שוחררו.')
   // 403 באמצע: אומרים גם כמה כבר שוחררו
   assert.deepEqual(bulkResultText('release', { done: 7, failed: 1, stopped: 42, fatal: 'אין לך הרשאה לפעולה הזו.' }),
     { message: '7 עמודים שוחררו. 43 לא הושלמו: אין לך הרשאה לפעולה הזו. מה שלא הושלם נשאר מסומן.', tone: 'error' })
@@ -151,14 +130,4 @@ test('shouldAnnounce: בהתחלה, כל 10% ובסוף', () => {
   assert.equal(shouldAnnounce(200, 350, 2000), false)
   assert.equal(shouldAnnounce(1800, 2000, 2000), true)
   assert.equal(shouldAnnounce(0, 1, 3), true)
-})
-
-test('טעינה: התקדמות, והסבר רק כשעדיין חסר', () => {
-  assert.equal(loadProgressText(10000, 14617), 'טוען… 10,000 מתוך 14,617')
-  assert.equal(partialLoadNote(14617, 15000), null)
-  assert.equal(partialLoadNote(2193, 5000), null)
-  assert.equal(partialLoadNote(undefined, 5000), null)
-  const note = partialLoadNote(41000, 30000)
-  assert.equal(note.text, 'נבדקו 30,000 מתוך 41,000')
-  assert.match(note.title, /סדר ההוספה של הספרים/)
 })

@@ -4,6 +4,7 @@ import Page from '@/models/Page';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBooksAccess } from '@/lib/roles';
+import { formatPageText, PAGE_TEXT_FIELDS } from '@/lib/adminPagesScreen/pageRecords';
 
 export async function GET(request, { params }) {
     const session = await getServerSession(authOptions);
@@ -14,18 +15,13 @@ export async function GET(request, { params }) {
         const { id } = await params;
         await connectDB();
 
-        const page = await Page.findById(id).populate('book');
+        const page = await Page.findById(id).select(`book pageNumber ${PAGE_TEXT_FIELDS}`).populate('book', 'name title');
 
         if (!page) {
             return NextResponse.json({ error: 'Page not found' }, { status: 404 });
         }
 
-        let textContent = '';
-        if (page.isTwoColumns) {
-            textContent = `--- ${page.rightColumnName} ---\n${page.rightColumn || ''}\n\n--- ${page.leftColumnName} ---\n${page.leftColumn || ''}`;
-        } else {
-            textContent = page.content || '';
-        }
+        const textContent = formatPageText(page);
 
         const bookName = page.book ? (page.book.name || page.book.title || 'book') : 'unknown';
 

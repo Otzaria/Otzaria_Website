@@ -3,6 +3,8 @@
 import { normalizeBook } from '@/lib/adminBooks/bookTerms'
 import { AdminApiError, SESSION_EXPIRED_MESSAGE, errorMessage, requestBlob, requestJson, saveBlob, serverError } from '@/components/admin/list/adminRequest'
 
+import { describeNonJsonStatus } from '@/lib/parseJsonResponse.mjs'
+
 const BUSY_UPLOAD_MESSAGE = 'השרת עמוס כרגע. נסה שוב בעוד רגע.'
 
 /** כל הספרים — אותו נתון כמו בעמוד (Server Component), לרענון אחרי פעולה */
@@ -110,7 +112,7 @@ export function uploadBook(formData, { onProgress } = {}) {
       }
       if (xhr.status < 200 || xhr.status >= 300 || !data || data.success === false) {
         // 503 בלי הודעה בעברית מהשרת (עומס / שבת) — הסבר, לא "נכשל" כללי
-        const fallbackFor = xhr.status === 503 ? BUSY_UPLOAD_MESSAGE : fallback
+        const fallbackFor = xhr.status === 503 ? BUSY_UPLOAD_MESSAGE : data === null ? describeNonJsonStatus(xhr.status) : fallback
         reject(new AdminApiError(errorMessage(xhr.status, fallbackFor, serverError(data)), xhr.status))
         return
       }
