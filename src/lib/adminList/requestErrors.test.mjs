@@ -14,12 +14,21 @@ test('isAccessLost: התחברות שפגה, 401, 403', () => {
 })
 
 test('isFatal: ההרשאה אבדה או תקלה בשרת (5xx)', () => {
-  for (const status of [401, 403, 500, 502, 503]) assert.equal(isFatal(err(status)), true, String(status))
+  for (const status of [401, 403, 500, 502, 503, 0, 429]) assert.equal(isFatal(err(status)), true, String(status))
   assert.equal(isFatal(err(0, { sessionExpired: true })), true)
 })
 
-test('isFatal: כשל של פריט אחד, זמן או רשת — לא עוצר', () => {
-  for (const status of [0, 400, 404, 408, 409, 429]) assert.equal(isFatal(err(status)), false, String(status))
+test('isFatal: כשל של פריט אחד או זמן — לא עוצר', () => {
+  for (const status of [400, 404, 408, 409]) assert.equal(isFatal(err(status)), false, String(status))
   assert.equal(isFatal(new Error('x')), false)
   assert.equal(isFatal(undefined), false)
+})
+
+test('ריצה מרובה: נפילת רשת (0) או 429 עוצרות את כל הריצה', async () => {
+  const { runLimited } = await import('../runLimited.js')
+  for (const status of [0, 429]) {
+    const result = await runLimited([1, 2, 3, 4], async (n) => { if (n === 2) throw err(status) }, { limit: 1, isFatal })
+    assert.equal(result.fatal?.status, status)
+    assert.deepEqual(result.notAttempted, [3, 4])
+  }
 })
