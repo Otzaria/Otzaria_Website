@@ -14,6 +14,7 @@ import { convertPdfToImages } from '@/lib/pdfConverter';
 const UPLOAD_ROOT = process.env.UPLOAD_DIR || path.join(process.cwd(), 'public', 'uploads');
 
 export async function uploadBookAction(formData) {
+  let ownedFolder; // נשמור תיקייה שנוצרה בלעדית כדי לנקות אותה אם ההמרה נדחית.
   try {
     // 1. אבטחה - בדיקת סשן
     const session = await getServerSession(authOptions);
@@ -47,6 +48,7 @@ export async function uploadBookAction(formData) {
 
     let slug = baseSlug;
     let counter = 1;
+    await fs.ensureDir(path.join(UPLOAD_ROOT, 'books')); // נכין את תיקיית האב לפני יצירה בלעדית.
 
     // לולאה למציאת שם פנוי (כמו בווינדוס: name, name-1, name-2)
     while (true) {
@@ -55,7 +57,13 @@ export async function uploadBookAction(formData) {
         const folderExists = await fs.pathExists(path.join(UPLOAD_ROOT, 'books', slug));
 
         if (!existingBook && !folderExists) {
-            break; // השם פנוי!
+            try { // יצירה אטומית מונעת ניקוי של תיקייה ששייכת להעלאה אחרת.
+                await fs.mkdir(path.join(UPLOAD_ROOT, 'books', slug)); // נשריין את השם שנבדק.
+                ownedFolder = path.join(UPLOAD_ROOT, 'books', slug); // נתעד בעלות רק אחרי יצירה מוצלחת.
+                break; // השם פנוי והתיקייה נוצרה.
+            } catch (error) { // ננסה שם נוסף רק אם בקשה אחרת תפסה את השם.
+                if (error.code !== 'EEXIST') throw error; // שגיאות אחרות חייבות לעבור לטיפול הרגיל.
+            } // סוף הטיפול בהתנגשות.
         }
 
         // אם תפוס, נסה את המספר הבא
@@ -66,7 +74,7 @@ export async function uploadBookAction(formData) {
     const bookFolder = path.join(UPLOAD_ROOT, 'books', slug);
     
     // יצירת התיקייה הפיזית
-    await fs.ensureDir(bookFolder);
+    // התיקייה כבר נוצרה בלעדית בעת בחירת השם.
 
     // 3. שמירת ה-PDF זמנית
     // ב-Server Action אנו מקבלים File object, צריך להמיר ל-Buffer
@@ -78,6 +86,7 @@ export async function uploadBookAction(formData) {
 
     // 4. המרת PDF לתמונות
     const result = await convertPdfToImages(tempPdfPath, bookFolder);
+    ownedFolder = undefined; // ננקה תיקייה זו רק אם ההמרה עצמה נכשלה באחד המקרים החדשים.
 
     if (!result || result.length === 0) {
       throw new Error('Conversion failed');
@@ -115,6 +124,10 @@ export async function uploadBookAction(formData) {
     };
 
   } catch (error) {
+    if (ownedFolder && (error.code === 'PDF_CONVERSION_BUSY' || error.code === 'PDF_PAGE_TOO_LARGE' || error.name === 'TimeoutError')) { // ננקה רק כשלי המרה חדשים שהוגדרו ב־PR.
+      try { await fs.remove(ownedFolder); } // נסיר את הקובץ הזמני והתיקייה שבבעלות ההעלאה.
+      catch (cleanupError) { console.error('Upload cleanup failed:', cleanupError); } // נשמר את שגיאת ההמרה המקורית.
+    } // סוף הניקוי הממוקד.
     console.error('Upload Error:', error);
     return { success: false, error: error.message };
   }

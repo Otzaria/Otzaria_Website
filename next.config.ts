@@ -26,7 +26,7 @@ const nextConfig = {
   env: {
     DEPLOY_VERSION: readDeployVersion(),
   },
-  serverExternalPackages: ['pdf-to-img', 'pdfjs-dist'],
+  serverExternalPackages: ['pdf-to-img', 'pdfjs-dist', '@napi-rs/canvas'],
   // Workers execute these source files directly, outside the route bundles.
   // Keep them explicitly after excluding mutable uploads/storage from tracing.
   outputFileTracingIncludes: {
