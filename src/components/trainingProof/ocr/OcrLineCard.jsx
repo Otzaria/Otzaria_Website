@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import AppIcon from '@/components/ui/AppIcon'
 import Button from '@/components/ui/Button'
 import { OCR_ACTION_LABELS } from '@/lib/trainingProof/vocab'
@@ -8,7 +8,9 @@ import ScriptTag from '../common/ScriptTag'
 import Kbd from '../common/Kbd'
 import { boxStyle } from '../common/boxStyle'
 import { useInkWords } from '../router/useInkWords'
-import OcrTextEditor, { TEXT_CLASS, TEXT_STYLE } from './OcrTextEditor'
+import { marksForText, replaceWord } from '@/lib/trainingProof/wordMarks'
+import OcrTextEditor from './OcrTextEditor'
+import OcrMarkedText from './OcrMarkedText'
 import { inkBoxFor } from './caretWord'
 import { SCREEN_ACTIONS, keyOf } from './screenKeys'
 
@@ -49,9 +51,22 @@ function OcrLineCard({ item, index, total, current, saving, editing, onSelect, o
   // המילים בתמונה לפי הדיו (כמו בנתב) — מחושבות בפתיחה הראשונה של העריכה ונשמרות
   const ink = useInkWords(item.img, editing)
   const inkBox = editing && caretWord && item.w && item.h ? inkBoxFor({ ...caretWord, boxes: ink, ltr }) : null
+  // המילים החשודות ("המגיה") על הטקסט שמוצג; חלופה שנבחרה פותחת את העורך עם החלופה במקום המילה
+  const shown = shownText(item)
+  const marks = useMemo(() => marksForText(item.marks, shown), [item.marks, shown])
+  const [draft, setDraft] = useState(null)
+  // העריכה נסגרה (בכל דרך) — החלופה שנבחרה לא נשארת לפתיחה הבאה
+  if (!editing && draft) setDraft(null)
+  const pick = (i, alt) => {
+    const r = replaceWord(shown, i, alt)
+    if (!r) return
+    setDraft(r)
+    onEdit()
+  }
 
   // סיום העריכה: ריק או בלי שינוי בשורה שכבר סומנה — ביטול; אחרת "תוקן" (השרת הופך זהה ל"נכון")
   const commit = (v) => {
+    setDraft(null)
     if (!v || (v === shownText(item) && action)) return onCancelEdit()
     onMark('fixed', v)
   }
@@ -118,11 +133,20 @@ function OcrLineCard({ item, index, total, current, saving, editing, onSelect, o
       </div>
 
       {editing ? (
-        <OcrTextEditor initial={shownText(item)} ltr={ltr} onCommit={commit} onCancel={onCancelEdit} onCaret={setCaretWord} />
+        <OcrTextEditor
+          initial={draft?.text ?? shown}
+          caret={draft?.caret ?? 0}
+          ltr={ltr}
+          marks={marks}
+          onCommit={commit}
+          onCancel={() => {
+            setDraft(null)
+            onCancelEdit()
+          }}
+          onCaret={setCaretWord}
+        />
       ) : (
-        <p dir={ltr ? 'ltr' : 'rtl'} className={`min-h-[1.5em] cursor-text ${TEXT_CLASS} ${ltr ? 'text-left' : ''}`} style={TEXT_STYLE} onDoubleClick={() => !item.skipped && onEdit()}>
-          {shownText(item)}
-        </p>
+        <OcrMarkedText text={shown} marks={marks} ltr={ltr} disabled={item.skipped || saving} onPick={pick} onDoubleClick={() => !item.skipped && onEdit()} />
       )}
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
