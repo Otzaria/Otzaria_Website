@@ -288,3 +288,16 @@ test('proofreading attaches to the exact current word, preserves split suggestio
   assert.deepEqual(check.suggestions, []);
   assert.equal(replaceReviewedWord(review.fields.content.text, fix, fix.suggestions[0].text).value, 'והנה היא <b>פו סרת</b> את הצרה');
 });
+
+test('a corrected OCR line keeps legacy hints only on unambiguously aligned original words', () => {
+  const annotated = {
+    text: 'ראש אמר אמר סוף',
+    corrected: 'ראש אמר סוף',
+    lm: [{ i: 1, word: 'אמר', alts: [{ text: 'אמור' }] }, { i: 3, word: 'סוף', alts: [{ text: 'סף' }] }],
+    marks: [{ i: 1, word: 'אמר', level: 'check' }],
+  };
+  const [, repeated, shifted] = reviewWordsOfLine(annotated);
+  assert.deepEqual(repeated.reasons, ['proofreading_check']);
+  assert.deepEqual(repeated.suggestions, []);
+  assert.deepEqual(shifted.suggestions.map((s) => s.text), ['סף']);
+});
