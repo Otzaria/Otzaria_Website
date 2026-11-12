@@ -155,6 +155,7 @@ export default function LibraryInfoPage() {
           baseRow: editRow.approved,
           updates: Object.fromEntries(Object.entries(formData).filter(([field, value]) => {
             const current = editRow.approved?.[field]
+            if (BOOK_INFO_EXTENSION_EDITABLE_FIELDS.includes(field)) return normalizeFormValue(field, value) !== normalizeFormValue(field, current)
             return normalizeFormValue(field, value) !== (current === '' || current === undefined ? null : current)
           }))
         })

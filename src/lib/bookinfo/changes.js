@@ -51,7 +51,11 @@ export function validateChangeSet(rawOps, state) {
 
     // מאמתים את השורה כולה אחרי העדכון, כדי שדור ותת-דור יבדקו זה מול זה גם כשרק אחד מהם נשלח
     const merged = {}
-    for (const field of BOOK_INFO_EDITABLE_FIELDS) merged[field] = field in (raw.updates || {}) ? raw.updates[field] : current[field]
+    // שדה ספר שלא נשלח לא נכנס, אחרת נרמול של ערך ידני בקובץ ייכנס לבקשה כשינוי שלא התבקש
+    for (const field of BOOK_INFO_EDITABLE_FIELDS) {
+      if (field in (raw.updates || {})) merged[field] = raw.updates[field]
+      else if (!BOOK_INFO_BOOK_LEVEL_FIELDS.includes(field)) merged[field] = current[field]
+    }
     for (const field of ['startYear', 'endYear']) {
       const value = merged[field]
       if (value != null && value !== '' && !((typeof value === 'number' && Number.isInteger(value)) || (typeof value === 'string' && /^-?\d+$/.test(value.trim())))) return { error: `${where} (${book}): ${field} חייב להיות מספר שלם` }

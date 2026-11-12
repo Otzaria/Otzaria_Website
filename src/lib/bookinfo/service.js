@@ -363,10 +363,11 @@ async function syncProofread(client, base, { now, owner, renew, loadProofread })
     const res = await publishDoc(client, doc, base, writer(doc, renew))
     return { action: 'created', books: fresh.length, prNumber: res.prNumber }
   }
-  if (system.status !== 'open' || system.pendingHeadSha) return { action: 'skipped' }
-  const existing = rebaseIdentities(system.ops, base)
+  if (!['open', 'conflict'].includes(system.status) || system.pendingHeadSha) return { action: 'skipped' }
+  // ספר שה-CI הסיר מהקובץ נשמט מהבקשה, אחרת היא נתקעת בהתנגשות וחוסמת את הסימון
+  const existing = system.ops.flatMap((op) => { try { return rebaseIdentities([op], base) } catch { return [] } }).filter((op) => base.state.rows.has(rowKey(op.book, op.author)))
   const ops = mergeProofreadOps(existing, fresh)
-  if (proofreadOpsKey(ops) === proofreadOpsKey(existing)) return { action: 'unchanged', books: existing.length }
+  if (system.status === 'open' && existing.length === system.ops.length && proofreadOpsKey(ops) === proofreadOpsKey(existing)) return { action: 'unchanged', books: existing.length }
   const save = writer(system, renew)
   const res = await refreshChangeSet(client, { ...system, id: String(system._id), persistIntent: save }, base, { ops })
   const patch = { status: res.status === 'rebuilt' ? 'open' : res.status, lastError: null, checkedAt: new Date(now) }

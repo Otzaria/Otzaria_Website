@@ -259,6 +259,14 @@ test('validateChangeSet normalizes the extension fields', () => {
   assert.match(edit({ topics: ' ; ' }).error, /אין שינוי/)
 })
 
+test('a base-field edit leaves hand-written extension values in the file untouched', () => {
+  const header = BOOK_INFO_ALL_COLUMNS.join(',')
+  const state = parseBookInfoCsv(`${header}\n"אבן עזרא","","","","","","הלכה ; שבת"," 1925","","רקע \n",""\n`)
+  const { ops } = validateChangeSet([{ book: 'אבן עזרא', author: '', updates: { startYear: 1500 } }], state)
+  assert.deepEqual(ops[0].changes, { startYear: 1500 })
+  assert.equal(listBookInfo(applyChangeSet(state, ops).state)[0].topics, 'הלכה ; שבת')
+})
+
 test('an extension edit on one author row is written to every row of the book', () => {
   const state = parseBookInfoCsv(EXTENDED)
   const { ops } = validateChangeSet([{ book: 'שולחן ערוך', author: 'רמ"א', updates: { topics: 'הלכה; פסקים', description: 'רקע' } }], state)
