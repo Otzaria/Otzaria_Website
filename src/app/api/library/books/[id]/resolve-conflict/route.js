@@ -15,6 +15,7 @@ export async function POST(req, { params }) {
     const result = await resolveConflict({ bookId: id, strategy });
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
+    if (error.code === 'CONFLICT_RETRY') return apiError(409, error.message);
     if (error.code === 'NOT_FOUND') return notFound(error.message);
     console.error('Resolve conflict failed:', error);
     return serverError();

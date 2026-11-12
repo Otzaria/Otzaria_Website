@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  parsePagesQuery, serializePagesQuery, updatePagesQuery, activeFilterCount, clearFilters, listUrl, batchDownloadUrl, serverKey,
-  filterPages, paginate, filterOptions, filterSummary, PAGES_PER_PAGE, moreParts, mergeParts, isUserId, MAX_LOADED, jumpTarget,
+  parsePagesQuery, serializePagesQuery, updatePagesQuery, activeFilterCount, clearFilters, batchDownloadUrl,
+  filterPages, paginate, filterOptions, filterSummary, PAGES_PER_PAGE, isUserId, jumpTarget,
 } from './pagesQuery.js'
 
 const U1 = '64b7f0c2a1d3e4f5a6b7c8d9'
@@ -74,33 +74,8 @@ test('activeFilterCount / clearFilters', () => {
   assert.deepEqual(clearFilters(q), { ...Q, sort: 'oldest' })
 })
 
-test('listUrl: בדיוק כמו במסך הקודם — אותם פרמטרים, אותו סדר, ו-"?" גם בלי סינון', () => {
-  assert.equal(listUrl(Q), '/api/admin/pages/list?')
-  assert.equal(listUrl({ ...Q, status: 'in-progress', book: 'מסילת ישרים', user: 'u1', stale: 14, sort: 'oldest', page: 2 }),
-    `/api/admin/pages/list?status=in-progress&book=${new URLSearchParams({ b: 'מסילת ישרים' }).toString().slice(2)}&userId=u1`)
+test('batchDownloadUrl keeps the legacy export filters', () => {
   assert.equal(batchDownloadUrl({ ...Q, user: 'u1' }), '/api/admin/pages/download-batch?userId=u1')
-  // מיון, עמוד ו-stale לא נוגעים בבקשה
-  assert.equal(serverKey({ ...Q, sort: 'newest', page: 4 }), serverKey(Q))
-  // ההמשך: אותה בקשה עם &page= (הראשונה — בלי)
-  assert.equal(listUrl(Q, 1), '/api/admin/pages/list?')
-  assert.equal(listUrl(Q, 2), '/api/admin/pages/list?page=2')
-  assert.equal(listUrl({ ...Q, status: 'in-progress' }, 3), '/api/admin/pages/list?status=in-progress&page=3')
-})
-
-test('moreParts: כמה המשכים לבקש — לפי total ו-limit, עד התקרה', () => {
-  assert.deepEqual(moreParts(2193, 5000), [])
-  assert.deepEqual(moreParts(5000, 5000), [])
-  assert.deepEqual(moreParts(14617, 5000), [2, 3])
-  assert.deepEqual(moreParts(20758, 5000), [2, 3, 4, 5])
-  assert.equal(MAX_LOADED, 30000)
-  assert.deepEqual(moreParts(100000, 5000), [2, 3, 4, 5, 6])
-  assert.deepEqual(moreParts(12, 5, 10), [2])
-  assert.deepEqual(moreParts(NaN, 5000), [])
-  assert.deepEqual(moreParts(10, 0), [])
-})
-
-test('mergeParts: חיבור בלי כפילות (עמוד שזז בין בקשה לבקשה)', () => {
-  assert.deepEqual(mergeParts([[{ id: 'a' }, { id: 'b' }], [{ id: 'b' }, { id: 'c' }], null]).map((p) => p.id), ['a', 'b', 'c'])
 })
 
 test('filterPages: מצב, "בעבודה יותר מ-" (בלי תאריך — ותיק) ומיון', () => {

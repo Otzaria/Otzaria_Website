@@ -120,26 +120,6 @@ export function combinedText(entries) {
     .join('')
 }
 
-const HEADER = /^={40}\nספר: (.*) \| עמוד: (\d+)\n={40}\n\n/gm
-
-/**
- * הקובץ של השרת (download-batch — כל העמודים של ספר בקובץ אחד) בחזרה לעמודים: מספר העמוד ← הטקסט שלו. כך
- * "הורד טקסט" לעמודים רבים מאותו ספר הוא בקשה אחת, והקובץ שיורד בנוי מאותן חתיכות.
- * @param {string} text @returns {Map<number, string>}
- */
-export function splitCombinedText(text) {
-  const out = new Map()
-  const source = String(text || '')
-  const heads = [...source.matchAll(HEADER)]
-  heads.forEach((m, i) => {
-    const start = m.index + m[0].length
-    const end = i + 1 < heads.length ? heads[i + 1].index : source.length
-    // השרת מוסיף אחרי כל עמוד "\n" ועוד שתי שורות ריקות — בלעדיהן הטקסט זהה ל-download/:id (גם בשני טורים)
-    out.set(Number(m[2]), source.slice(start, end).replace(/\n\n\n$/, ''))
-  })
-  return out
-}
-
 /** מי עובד על העמוד: השם; עמוד בעבודה בלי משתמש (המשתמש נמחק) — "משתמש שנמחק"; אחרת — "" */
 export function workerText(page) {
   if (page?.claimedBy) return page.claimedBy
@@ -187,32 +167,18 @@ export function bulkReleaseConfirm(count, skipped = 0) {
   }
 }
 
-/**
- * הבדיקה לפני שליחה: העמוד עדיין במצב ובשיוך שהיו כשהמשתמש בחר בו? השרת מעדכן לפי שם הספר ומספר העמוד בלבד, בלי
- * תנאי — לכן הבדיקה כאן, מול טעינה טרייה של הספר.
- * @param {{ status: string, claimedById?: any }} expected מה שהיה ברשימה
- * @param {{ status: string, claimedById?: any } | undefined} fresh מה שיש עכשיו בשרת (undefined — העמוד לא נמצא)
- * @returns {'ok' | 'gone' | 'changed'}
- */
-export function checkUnchanged(expected, fresh) {
-  if (!fresh) return 'gone'
-  if (fresh.status !== expected.status) return 'changed'
-  if (String(fresh.claimedById ?? '') !== String(expected.claimedById ?? '')) return 'changed'
-  return 'ok'
-}
-
 /** שחרור / שינוי בודד שלא נשלח, כי העמוד השתנה מאז שהרשימה נטענה */
 export function skippedMessage(action, page, result) {
   if (result === 'gone') return `${quoted(page)} לא נמצא יותר — ${action === 'status' ? 'לא שונה' : 'לא שוחרר'}. רענן את הרשימה.`
   return action === 'status'
     ? `${quoted(page)} השתנה בינתיים — לא שונה. בדוק את המצב החדש ונסה שוב.`
-    : `${quoted(page)} כבר לא בעבודה אצל אותו משתמש — לא שוחרר.`
+    : `${quoted(page)} השתנה מאז הטעינה — לא שוחרר.`
 }
 
 /** בסיכום של פעולה מרובה: כמה דולגו כי השתנו */
 export function skippedText(n) {
   if (!(n > 0)) return ''
-  return n === 1 ? 'עמוד אחד כבר לא בעבודה אצל אותו משתמש ולא שוחרר' : `${formatNumber(n)} כבר לא בעבודה אצל אותו משתמש ולא שוחררו`
+  return n === 1 ? 'עמוד אחד השתנה מאז הטעינה ולא שוחרר' : `${formatNumber(n)} השתנו מאז הטעינה ולא שוחררו`
 }
 
 // ----- שינוי מצב -----
@@ -272,9 +238,6 @@ export function bulkProgressText(action, { done, total }) {
   return bulkProgressLine(VERBS[action] || 'מעדכן', { done, total })
 }
 
-/** בזמן שבודקים את המצב העדכני לפני שליחה */
-export const CHECKING_TEXT = 'בודק את המצב העדכני…'
-
 /**
  * מתי להכריז על ההתקדמות לקורא מסך: בהתחלה, כל 10% ובסוף — לא על כל עמוד (באלפי עמודים זה מציף).
  * @param {number} lastAnnounced כמה היו בהכרזה הקודמת (-1 — עוד לא הוכרז) @param {number} done @param {number} total
@@ -312,30 +275,9 @@ export function bulkResultText(action, { done, failed = 0, stopped = 0, skipped 
   return { message: `${parts.join('. ')}.${tail}`, tone: failed > 0 || fatal ? 'error' : 'success' }
 }
 
-// ----- טעינה -----
-
-/** כמה עמודים השרת מחזיר בבקשה אחת (api/admin/pages/list, ברירת המחדל של limit) */
-export const SERVER_LIMIT = 5000
-
-/** בזמן הטעינה, כשיש יותר מבקשה אחת: "טוען… 10,000 מתוך 14,617" */
-export function loadProgressText(loaded, total) {
-  return `טוען… ${formatNumber(loaded)} מתוך ${formatNumber(total)}`
-}
-
-/**
- * אחרי שכל ההמשכים נטענו ועדיין חסר (מעל התקרה MAX_LOADED) — שורה שקטה ליד המונה; אחרת null. total סופר גם
- * עמודים של ספר שנמחק, שהשרת לא מחזיר — לכן ההשוואה מול מה שנבדק (בקשות × 5,000), לא מול מה שהגיע.
- * @param {number} total כמה יש בשרת לסינון הזה @param {number} checked כמה נבדקו
- */
-export function partialLoadNote(total, checked) {
-  if (!(total > checked)) return null
-  return {
-    text: `נבדקו ${formatNumber(checked)} מתוך ${formatNumber(total)}`,
-    title: `השרת שולח את העמודים לפי סדר ההוספה של הספרים, ונטענו רק ${formatNumber(checked)} הראשונים. עמודים בספרים שנוספו מאוחר לא מופיעים כאן. כדי לבדוק ספר מסוים, בחר אותו.`,
-  }
-}
-
 // ----- הורדה -----
+
+export const PAGE_DOWNLOAD_BATCH_SIZE = 50
 
 /** מעל זה "הורד טקסט של כל N" שואל קודם — הקובץ נבנה בשרת, ויכול לקחת זמן */
 export const DOWNLOAD_ALL_CONFIRM_ABOVE = 1000
@@ -348,6 +290,3 @@ export function downloadAllConfirm(total) {
     tone: 'default',
   }
 }
-
-/** מכמה עמודים מאותו ספר "הורד טקסט" מבקש את כל הספר בקובץ אחד (במקום בקשה לכל עמוד) */
-export const WHOLE_BOOK_FROM = 10

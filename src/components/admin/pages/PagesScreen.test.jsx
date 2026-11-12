@@ -1,7 +1,3 @@
-// "עמודים" מקצה לקצה, מול שרת מדומה עם מצב (fetch מדומה שמסנן, מחלק ל-limit ומעדכן כמו השרת האמיתי): שורות,
-// אותן בקשות כמו המסך הקודם (כתובת, method וגוף), טעינת ההמשך מעל 5,000, סינון מהכתובת ותיקונה, "בלי שינוי יותר
-// מ-", שחרור עם "בטל" ו-Ctrl+Z, בדיקה טרייה לפני שליחה, שגיאות שחרור, שינוי מצב, מעבר עמוד, "בחר את כל N", פעולות
-// מרובות (חלון אישור, דילוג, עצור, 403 באמצע, יציאה מהמסך), והורדת טקסט (ספר שלם בבקשה אחת, קובץ חלקי).
 import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -32,6 +28,7 @@ for (const name of ['replaceState', 'pushState']) {
 }
 
 import PagesScreen from './PagesScreen'
+import { filterPages, jumpTarget, parsePagesQuery, PAGES_PER_PAGE } from '@/lib/adminPagesScreen/pagesQuery'
 
 const DAY = 86400000
 const ago = (d) => new Date(Date.now() - d * DAY).toISOString()
@@ -60,43 +57,47 @@ const text = (body) => ({
 
 // ----- השרת המדומה: db — מה שיש "בשרת" עכשיו (אפשר לשנות אותו אחרי שהרשימה נטענה) -----
 let db
-let limit
 let totalOverride
 let calls
 let routes
 let saved
 
-function matching(params) {
-  const status = params.get('status')
-  const book = params.get('book')
-  const userId = params.get('userId')
-  return db.filter((p) => (!status || p.status === status) && (!book || p.bookName === book) && (!userId || p.claimedById === userId))
-}
 function listHandler(url) {
   const params = new URL(url, 'http://x').searchParams
-  const rows = matching(params)
-  const part = Number(params.get('page')) || 1
+  const query = parsePagesQuery(params)
+  const matching = db.filter((p) => (!query.book || p.bookName === query.book) && (!query.user || p.claimedById === query.user))
+  const rows = filterPages(matching, query)
+  if (params.get('view') === 'selection') return json({ pages: rows, next: null })
+  if (params.has('number')) return json({ target: jumpTarget(rows, params.get('number')) })
+  const limit = PAGES_PER_PAGE
+  const page = query.page
   const total = totalOverride ?? rows.length
-  return json({ success: true, pages: rows.slice((part - 1) * limit, part * limit), pagination: { total, page: part, limit, totalPages: Math.ceil(total / limit) } })
+  return json({ pages: rows.slice((page - 1) * limit, page * limit), pagination: { total, page, limit } })
 }
+const snapshot = (page) => ({
+  status: page.status, claimedById: page.claimedById ?? null, claimedAt: page.claimedAt ?? null, updatedAt: page.updatedAt ?? null,
+})
 function updateHandler(init) {
-  const { bookName, pageNumber, updates } = JSON.parse(init.body)
-  if (!db.some((p) => p.bookName === bookName)) return json({ error: 'Book not found' }, { status: 404 })
-  const index = db.findIndex((p) => p.bookName === bookName && p.number === pageNumber)
-  if (index < 0) return json({ success: true, page: null })
-  const next = { ...db[index], ...updates }
-  if ('claimedBy' in updates) next.claimedById = updates.claimedBy
-  db[index] = next
-  return json({ success: true, page: { _id: next.id } })
+  const { id, expected, status, release } = JSON.parse(init.body)
+  const index = db.findIndex((p) => p.id === id)
+  if (index < 0) return json({ success: true, outcome: 'gone' })
+  const current = db[index]
+  if (Object.entries(snapshot(current)).some(([key, value]) => value !== expected[key])) {
+    return json({ success: true, outcome: 'changed', page: current })
+  }
+  const updatedAt = new Date().toISOString()
+  db[index] = release
+    ? { ...current, status: 'available', claimedBy: null, claimedById: null, claimedAt: null, updatedAt }
+    : { ...current, status, updatedAt }
+  return json({ success: true, outcome: 'updated', updatedAt })
 }
-function batchHandler(url) {
-  const rows = matching(new URL(url, 'http://x').searchParams)
-  return text(rows.map((p) => `${RULE}\nספר: ${p.bookName} | עמוד: ${p.number}\n${RULE}\n\nטקסט של ${p.id}\n\n\n`).join(''))
+function batchHandler(init) {
+  const { ids } = JSON.parse(init.body)
+  return json({ pages: db.filter((p) => ids.includes(p.id)).map((p) => ({ id: p.id, text: p.content ?? `טקסט של ${p.id}` })) })
 }
 
 beforeEach(() => {
   db = PAGES.map((p) => ({ ...p }))
-  limit = 5000
   totalOverride = undefined
   calls = []
   saved = []
@@ -110,7 +111,7 @@ beforeEach(() => {
     if (routes[key]) return routes[key](init)
     if (key.startsWith('GET /api/admin/pages/list?')) return listHandler(url)
     if (key === 'PUT /api/admin/pages/update') return updateHandler(init)
-    if (key.startsWith('GET /api/admin/pages/download-batch?')) return batchHandler(url)
+    if (key === 'POST /api/admin/pages/download-batch') return batchHandler(init)
     const one = key.match(/^GET \/api\/admin\/pages\/download\/(.+)$/)
     if (one) return text(`טקסט של ${decodeURIComponent(one[1])}`)
     return json({ error: 'Not found' }, { status: 404 })
@@ -142,7 +143,8 @@ const enc = (s) => new URLSearchParams({ b: s }).toString().slice(2)
 const row = (name) => screen.getByRole('heading', { name }).closest('li')
 const puts = () => calls.filter((c) => c.key.startsWith('PUT'))
 const gets = () => calls.filter((c) => c.key.startsWith('GET')).map((c) => c.key)
-const releaseBody = (bookName, pageNumber) => JSON.stringify({ bookName, pageNumber, updates: { status: 'available', claimedBy: null, claimedAt: null } })
+const updateBody = (index, action) => JSON.stringify({ id: PAGES[index].id, expected: snapshot(PAGES[index]), ...action })
+const releaseBody = (index) => updateBody(index, { release: true })
 const rows = async () => {
   const ul = await screen.findByRole('list', { name: /העמודים/ })
   return within(ul).getAllByRole('listitem')
@@ -153,7 +155,7 @@ describe('עמודים', () => {
   test('שורות: אותן בקשות כמו קודם; "שחרר" רק בעמוד בעבודה (עם הסבר); משתמש שנמחק', async () => {
     renderAt(BASE)
     expect(await rows()).toHaveLength(5)
-    expect(gets()).toEqual(expect.arrayContaining(['GET /api/admin/pages/list?', 'GET /api/admin/pages/filter-options']))
+    expect(gets()).toEqual(expect.arrayContaining(['GET /api/admin/pages/list?view=management', 'GET /api/admin/pages/filter-options']))
     const release = within(row('מסילת ישרים, עמוד 1')).getByRole('button', { name: 'שחרר: מסילת ישרים, עמוד 1' })
     expect(release).toHaveAttribute('title', expect.stringMatching(/לא מקבל הודעה ולא מאבד נקודות/))
     expect(within(row('מסילת ישרים, עמוד 3')).queryByRole('button', { name: /^שחרר/ })).toBeNull()
@@ -166,7 +168,7 @@ describe('עמודים', () => {
   test('סינון מהכתובת — לשרת אותם פרמטרים כמו קודם (status, book, userId)', async () => {
     renderAt(`${BASE}?status=completed&book=${encodeURIComponent('אורחות צדיקים')}&user=${U1}`)
     expect(await rows()).toHaveLength(1)
-    expect(gets()).toContain(`GET /api/admin/pages/list?status=completed&book=${enc('אורחות צדיקים')}&userId=${U1}`)
+    expect(gets()).toContain(`GET /api/admin/pages/list?status=completed&book=${enc('אורחות צדיקים')}&user=${U1}&view=management`)
   })
 
   test('?user= לא תקין — לא נשלח לשרת, יורד מהכתובת, והודעה', async () => {
@@ -186,7 +188,7 @@ describe('עמודים', () => {
   test('"בלי שינוי יותר מ-14": השרת מתבקש רק "בעבודה", ומוצגים רק מי שלא עודכן 14 יום', async () => {
     renderAt(`${BASE}?stale=14`)
     expect(await rows()).toHaveLength(2)
-    expect(gets()).toContain('GET /api/admin/pages/list?status=in-progress')
+    expect(gets().some((key) => key.includes('stale=14') && key.includes('view=management'))).toBe(true)
     expect(screen.queryByRole('heading', { name: 'מסילת ישרים, עמוד 2' })).toBeNull()
   })
 
@@ -198,7 +200,7 @@ describe('עמודים', () => {
     await user.click(screen.getByRole('button', { name: /בלי שינוי יותר מ-/ }))
     await user.click(await screen.findByRole('option', { name: /^14 ימים/ }))
     await waitFor(() => expect(window.location.search).toBe('?stale=14&sort=oldest'))
-    await waitFor(() => expect(gets()).toContain('GET /api/admin/pages/list?status=in-progress'))
+    await waitFor(() => expect(gets().some((key) => key.includes('stale=14') && key.includes('view=management'))).toBe(true))
     await waitFor(async () => expect(await rows()).toHaveLength(2))
     // הוותיק ביותר ראשון
     expect(within((await rows())[0]).getByRole('heading').textContent).toMatch(/אורחות צדיקים/)
@@ -216,36 +218,22 @@ describe('עמודים', () => {
   })
 
   test('שגיאה בטעינה — "לא הצלחנו לטעון" ו"נסה שוב"; 403 — אין הרשאה', async () => {
-    routes['GET /api/admin/pages/list?'] = () => json({ success: false, error: 'Internal Server Error' }, { status: 500 })
+    routes['GET /api/admin/pages/list?view=management'] = () => json({ success: false, error: 'Internal Server Error' }, { status: 500 })
     const { unmount } = renderAt(BASE)
     expect(await screen.findByText('לא הצלחנו לטעון את העמודים')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /נסה שוב/ })).toBeInTheDocument()
     unmount()
-    routes['GET /api/admin/pages/list?'] = () => json({ error: 'Forbidden' }, { status: 403 })
+    routes['GET /api/admin/pages/list?view=management'] = () => json({ error: 'Forbidden' }, { status: 403 })
     renderAt(BASE)
     expect(await screen.findByText('אין לך הרשאה לראות את המסך הזה')).toBeInTheDocument()
   })
 
-  test('מעל 5,000: ההמשך נטען באותה בקשה עם &page=, ומוצג הכול — בלי הסבר', async () => {
-    limit = 4
-    db = many(10, (i) => ({ id: `m${i}`, bookName: 'ספר', number: i + 1, status: 'in-progress', claimedBy: 'משה', claimedById: U1, updatedAt: ago(1) }))
-    renderAt(`${BASE}?status=in-progress`)
-    expect(await rows()).toHaveLength(10)
-    expect(gets().filter((k) => k.startsWith('GET /api/admin/pages/list'))).toEqual([
-      'GET /api/admin/pages/list?status=in-progress',
-      'GET /api/admin/pages/list?status=in-progress&page=2',
-      'GET /api/admin/pages/list?status=in-progress&page=3',
-    ])
-    expect(screen.queryByText(/נבדקו/)).toBeNull()
-  })
-
-  test('מעל התקרה (30,000): שורה שקטה ליד המונה — בלי קופסה', async () => {
-    limit = 5000
+  test('40000 תוצאות — הרשימה הראשונה שולפת רק עמוד אחד', async () => {
     totalOverride = 40000
     renderAt(BASE)
     await rows()
-    expect(gets().filter((k) => k.startsWith('GET /api/admin/pages/list'))).toHaveLength(6)
-    expect(screen.getByText(/נבדקו 30,000 מתוך 40,000/)).toBeInTheDocument()
+    expect(gets().filter((k) => k.startsWith('GET /api/admin/pages/list'))).toEqual(['GET /api/admin/pages/list?view=management'])
+    expect(screen.getByText(/40,000 עמודים/)).toBeInTheDocument()
   })
 
   test('מעבר עמוד: 51 עמודים — "הבא" עובר ל-?page=2; ?page=99 מתוקן לעמוד האחרון', async () => {
@@ -271,8 +259,9 @@ describe('עמודים', () => {
     await user.type(field, '87{Enter}')
     await waitFor(() => expect(window.location.search).toContain('page=2'))
     await waitFor(() => expect(within(row('ספר, עמוד 87')).getByRole('checkbox')).toHaveFocus())
-    await user.clear(field)
-    await user.type(field, '500{Enter}')
+    const currentField = screen.getByRole('textbox', { name: /קפוץ לעמוד/ })
+    await user.clear(currentField)
+    await user.type(currentField, '500{Enter}')
     expect(await screen.findByText('אין ברשימה עמוד 500 ב"ספר".')).toBeInTheDocument()
   })
 
@@ -283,10 +272,10 @@ describe('עמודים', () => {
     await rows()
     await user.click(screen.getByRole('checkbox', { name: 'בחר את כל העמודים בעמוד הזה' }))
     await user.click(screen.getByRole('button', { name: 'בחר את כל 60 העמודים' }))
-    expect(screen.getAllByText('60 נבחרו (בכל העמודים)').length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('60 נבחרו (בכל העמודים)')).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: 'שחרר 55 עמודים' })).toHaveTextContent('שחרר 55')
     await user.click(screen.getByRole('button', { name: /הבא/ }))
-    expect(screen.getAllByText('60 נבחרו (בכל העמודים)').length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('60 נבחרו (בכל העמודים)')).length).toBeGreaterThan(0)
   })
 
   test('אין בנבחרים עמוד בעבודה — "שחרר נבחרים" (לא "שחרר 0"), לא פעיל', async () => {
@@ -371,15 +360,15 @@ describe('שחרור — "בטל" לפני שהבקשה יוצאת, ובדיקה
     expect(puts()).toEqual([])
   })
 
-  test('בלי "בטל" — בדיקה של הספר, אותו גוף כמו קודם; השורה נשארת במקומה עם "שוחרר", והפוקוס נשאר בשורה', async () => {
+  test('בלי "בטל" — עדכון מותנה לפי המזהה; השורה נשארת במקומה עם "שוחרר", והפוקוס נשאר בשורה', async () => {
     const user = setup()
     renderAt(`${BASE}?status=in-progress`)
     const before = (await rows()).map((li) => li.getAttribute('data-row'))
     await user.click(screen.getByRole('button', { name: 'שחרר: מסילת ישרים, עמוד 1' }))
     expect(puts()).toEqual([])
     await act(async () => { vi.advanceTimersByTime(6000) })
-    await waitFor(() => expect(puts()).toEqual([{ key: 'PUT /api/admin/pages/update', body: releaseBody('מסילת ישרים', 1) }]))
-    expect(gets()).toContain(`GET /api/admin/pages/list?book=${enc('מסילת ישרים')}`)
+    await waitFor(() => expect(puts()).toEqual([{ key: 'PUT /api/admin/pages/update', body: releaseBody(0) }]))
+    expect(gets().filter((key) => key.includes('/pages/list?'))).toHaveLength(1)
     expect(await screen.findByText('"מסילת ישרים", עמוד 1 שוחרר. עכשיו הוא פנוי לכל המתנדבים.')).toBeInTheDocument()
     // "פנוי" כבר לא מתאים לסינון "בעבודה" — ובכל זאת נשאר באותו מקום
     expect((await rows()).map((li) => li.getAttribute('data-row'))).toEqual(before)
@@ -389,27 +378,27 @@ describe('שחרור — "בטל" לפני שהבקשה יוצאת, ובדיקה
     await waitFor(() => expect(within(released).getByRole('button', { name: /פעולות נוספות/ })).toHaveFocus())
   })
 
-  test('העמוד השתנה מאז הטעינה (הושלם) — לא נשלח, הודעה, והשורה מראה את המצב החדש', async () => {
+  test('העמוד השתנה מאז הטעינה (הושלם) — העדכון נדחה, והשורה מראה את המצב החדש', async () => {
     const user = setup()
     renderAt(BASE)
     await rows()
     db[0] = { ...db[0], status: 'completed' }
     await user.click(screen.getByRole('button', { name: 'שחרר: מסילת ישרים, עמוד 1' }))
     await act(async () => { vi.advanceTimersByTime(6000) })
-    expect(await screen.findByText('"מסילת ישרים", עמוד 1 כבר לא בעבודה אצל אותו משתמש — לא שוחרר.')).toBeInTheDocument()
-    expect(puts()).toEqual([])
+    expect(await screen.findByText('"מסילת ישרים", עמוד 1 השתנה מאז הטעינה — לא שוחרר.')).toBeInTheDocument()
+    expect(puts()).toHaveLength(1)
     expect(within(row('מסילת ישרים, עמוד 1')).getAllByText('הושלם').length).toBeGreaterThan(0)
   })
 
-  test('נלקח בינתיים ע"י משתמש אחר — לא נשלח', async () => {
+  test('נלקח בינתיים ע"י משתמש אחר — העדכון נדחה', async () => {
     const user = setup()
     renderAt(BASE)
     await rows()
     db[0] = { ...db[0], claimedBy: 'דוד לוי', claimedById: U2 }
     await user.click(screen.getByRole('button', { name: 'שחרר: מסילת ישרים, עמוד 1' }))
     await act(async () => { vi.advanceTimersByTime(6000) })
-    expect(await screen.findByText(/כבר לא בעבודה אצל אותו משתמש/)).toBeInTheDocument()
-    expect(puts()).toEqual([])
+    expect(await screen.findByText(/השתנה מאז הטעינה/)).toBeInTheDocument()
+    expect(puts()).toHaveLength(1)
   })
 
   test('"רענן" בזמן ש"בטל" עוד פתוח — השחרור לא הולך לאיבוד', async () => {
@@ -433,9 +422,21 @@ describe('שחרור — "בטל" לפני שהבקשה יוצאת, ובדיקה
     const sent = fetch.mock.calls.filter(([, init]) => init?.method === 'PUT')
     expect(sent).toHaveLength(1)
     expect(sent[0][1].keepalive).toBe(true)
-    expect(sent[0][1].body).toBe(releaseBody('מסילת ישרים', 1))
+    expect(sent[0][1].body).toBe(releaseBody(0))
     await act(async () => { vi.advanceTimersByTime(10000) })
     expect(fetch.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(1)
+  })
+
+  test('רענון בזמן ההמתנה שומר על עמוד שהושלם בינתיים', async () => {
+    const user = setup()
+    renderAt(BASE)
+    await rows()
+    await user.click(screen.getByRole('button', { name: 'שחרר: מסילת ישרים, עמוד 1' }))
+    db[0] = { ...db[0], status: 'completed' }
+    await act(async () => { window.dispatchEvent(new Event('pagehide')) })
+    expect(puts()).toHaveLength(1)
+    expect(db[0].status).toBe('completed')
+    expect(db[0].claimedById).toBe(U1)
   })
 })
 
@@ -451,16 +452,10 @@ describe('שגיאות שחרור — הודעה מדויקת', () => {
     await act(async () => { vi.advanceTimersByTime(6000) })
   }
 
-  test('הספר לא נמצא בשם הזה (שמו שונה) — 404', async () => {
-    routes['PUT /api/admin/pages/update'] = () => json({ error: 'Book not found' }, { status: 404 })
+  test('עמוד שנמחק מחזיר הודעה', async () => {
+    routes['PUT /api/admin/pages/update'] = () => json({ success: true, outcome: 'gone' })
     await releaseFirst()
-    expect(await screen.findByText('לא מצאנו ספר בשם "מסילת ישרים". אולי שמו שונה או שהוא נמחק. רענן את הרשימה.')).toBeInTheDocument()
-  })
-
-  test('העמוד נמחק — השרת מחזיר page: null', async () => {
-    routes['PUT /api/admin/pages/update'] = () => json({ success: true, page: null })
-    await releaseFirst()
-    expect(await screen.findByText('העמוד כבר לא קיים בספר (אולי נמחק). רענן את הרשימה.')).toBeInTheDocument()
+    expect(await screen.findByText(/לא נמצא יותר — לא שוחרר/)).toBeInTheDocument()
   })
 
   test('שגיאת שרת — הודעה כללית', async () => {
@@ -486,7 +481,7 @@ describe('שנה מצב', () => {
     await user.click(within(dialog).getByRole('radio', { name: /^הושלם/ }))
     expect(within(dialog).getByText(/לא מוסיף נקודות/)).toBeInTheDocument()
     await user.click(within(dialog).getByRole('button', { name: 'שנה ל"הושלם"' }))
-    await waitFor(() => expect(puts()).toEqual([{ key: 'PUT /api/admin/pages/update', body: JSON.stringify({ bookName: 'מסילת ישרים', pageNumber: 3, updates: { status: 'completed' } }) }]))
+    await waitFor(() => expect(puts()).toEqual([{ key: 'PUT /api/admin/pages/update', body: updateBody(2, { status: 'completed' }) }]))
     expect(await screen.findByText('"מסילת ישרים", עמוד 3 עכשיו "הושלם".')).toBeInTheDocument()
     expect(within(row('מסילת ישרים, עמוד 3')).getAllByText('הושלם').length).toBeGreaterThan(0)
   })
@@ -501,7 +496,7 @@ describe('שנה מצב', () => {
     await user.click(within(dialog).getByRole('radio', { name: /^פנוי/ }))
     expect(within(dialog).getByText(/כבר לא ייחשב כהושלם/)).toBeInTheDocument()
     await user.click(within(dialog).getByRole('button', { name: 'שנה ל"פנוי"' }))
-    await waitFor(() => expect(puts().map((c) => c.body)).toEqual([JSON.stringify({ bookName: 'אורחות צדיקים', pageNumber: 7, updates: { status: 'available' } })]))
+    await waitFor(() => expect(puts().map((c) => c.body)).toEqual([updateBody(3, { status: 'available' })]))
   })
 
   test('השתנה בינתיים — לא נשלח', async () => {
@@ -515,7 +510,7 @@ describe('שנה מצב', () => {
     await user.click(within(dialog).getByRole('radio', { name: /^פנוי/ }))
     await user.click(within(dialog).getByRole('button', { name: /^שנה ל/ }))
     expect(await screen.findByText(/השתנה בינתיים — לא שונה/)).toBeInTheDocument()
-    expect(puts()).toEqual([])
+    expect(puts()).toHaveLength(1)
   })
 })
 
@@ -536,8 +531,8 @@ describe('פעולות מרובות', () => {
     expect(ok.className).not.toMatch(/bg-error/)
     await user.click(ok)
     expect(await screen.findByText('2 עמודים שוחררו.')).toBeInTheDocument()
-    expect(puts().map((c) => c.body).sort()).toEqual([releaseBody('מסילת ישרים', 1), releaseBody('מסילת ישרים', 2)].sort())
-    expect(gets()).toContain(`GET /api/admin/pages/list?book=${enc('מסילת ישרים')}`)
+    expect(puts().map((c) => c.body).sort()).toEqual([releaseBody(0), releaseBody(1)].sort())
+    expect(gets().filter((key) => key.includes('/pages/list?'))).toHaveLength(1)
     expect(screen.queryByText(/נבחרו|נבחר$/)).toBeNull()
   })
 
@@ -550,13 +545,13 @@ describe('פעולות מרובות', () => {
     await user.click(screen.getByRole('checkbox', { name: 'בחר את כל העמודים בעמוד הזה' }))
     await user.click(screen.getByRole('button', { name: 'שחרר את הנבחרים' }))
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'שחרר 3' }))
-    expect(await screen.findByText('עמוד אחד שוחרר. 2 כבר לא בעבודה אצל אותו משתמש ולא שוחררו.')).toBeInTheDocument()
-    expect(puts().map((c) => c.body)).toEqual([releaseBody('אורחות צדיקים', 8)])
+    expect(await screen.findByText('עמוד אחד שוחרר. 2 השתנו מאז הטעינה ולא שוחררו.')).toBeInTheDocument()
+    expect(puts().map((c) => c.body).sort()).toEqual([releaseBody(0), releaseBody(1), releaseBody(4)].sort())
     // כל השורות נשארו במקומן
     expect(await rows()).toHaveLength(3)
   })
 
-  test('יותר מ-8 ספרים: בדיקה אחת לכל העמודים בעבודה; מה שכבר לא בעבודה — "השתנה — רענן", בלי "שחרר"', async () => {
+  test('שחרור מעשרה ספרים לפי מזהי עמודים, בלי טעינה חוזרת של הרשימה', async () => {
     db = many(10, (i) => ({ id: `k${i}`, bookName: `ספר ${i}`, number: 1, status: 'in-progress', claimedBy: 'משה כהן', claimedById: U1, updatedAt: ago(30) }))
     const user = userEvent.setup()
     renderAt(`${BASE}?status=in-progress`)
@@ -565,10 +560,10 @@ describe('פעולות מרובות', () => {
     await user.click(screen.getByRole('checkbox', { name: 'בחר את כל העמודים בעמוד הזה' }))
     await user.click(screen.getByRole('button', { name: 'שחרר את הנבחרים' }))
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'שחרר 10' }))
-    expect(await screen.findByText('9 עמודים שוחררו. עמוד אחד כבר לא בעבודה אצל אותו משתמש ולא שוחרר.')).toBeInTheDocument()
-    expect(gets().filter((k) => k.startsWith('GET /api/admin/pages/list'))).toEqual(['GET /api/admin/pages/list?status=in-progress', 'GET /api/admin/pages/list?status=in-progress'])
+    expect(await screen.findByText('9 עמודים שוחררו. עמוד אחד השתנה מאז הטעינה ולא שוחרר.')).toBeInTheDocument()
+    expect(gets().filter((k) => k.startsWith('GET /api/admin/pages/list'))).toEqual(['GET /api/admin/pages/list?status=in-progress&view=management'])
     const changed = row('ספר 0, עמוד 1')
-    expect(within(changed).getAllByText('השתנה — רענן').length).toBeGreaterThan(0)
+    expect(within(changed).getAllByText('הושלם').length).toBeGreaterThan(0)
     expect(within(changed).queryByRole('button', { name: /^שחרר/ })).toBeNull()
   })
 
@@ -583,14 +578,14 @@ describe('פעולות מרובות', () => {
     expect(screen.getAllByText('עמוד אחד נבחר').length).toBeGreaterThan(0)
   })
 
-  test('הורד טקסט לנבחרים — עמוד-עמוד, וקובץ אחד בסוף', async () => {
+  test('הורד טקסט לנבחרים — בקשה לפי מזהים וקובץ אחד בסוף', async () => {
     const user = userEvent.setup()
     renderAt(BASE)
     await rows()
     await user.click(screen.getByRole('checkbox', { name: 'בחר את כל העמודים בעמוד הזה' }))
     await user.click(screen.getByRole('button', { name: 'הורד את הטקסט של הנבחרים' }))
     expect(await screen.findByText('הטקסט של 5 עמודים ירד.')).toBeInTheDocument()
-    expect(gets().filter((k) => k.includes('/download/'))).toHaveLength(5)
+    expect(calls.filter((c) => c.key === 'POST /api/admin/pages/download-batch')).toHaveLength(1)
     expect(saved).toHaveLength(1)
     const body = await saved[0].text()
     expect(body).toContain('ספר: מסילת ישרים | עמוד: 1')
@@ -598,16 +593,23 @@ describe('פעולות מרובות', () => {
     expect(savedNames.at(-1).download).toBe('עמודים-5.txt')
   })
 
-  test('הורד טקסט — 10 עמודים ומעלה מאותו ספר: בקשה אחת לכל הספר (download-batch)', async () => {
+  test('הורדה מרובה שומרת על כותרות שמופיעות בתוך תוכן העמוד', async () => {
     db = many(12, (i) => ({ id: `b${i}`, bookName: 'שערי תשובה', number: i + 1, status: 'in-progress', claimedBy: 'משה', claimedById: U1, updatedAt: ago(1) }))
+    db[0].content = `תחילה
+${RULE}
+ספר: כותרת בתוך הטקסט | עמוד: 12
+${RULE}
+
+סוף`
     const user = userEvent.setup()
     renderAt(`${BASE}?status=in-progress`)
     await rows()
     await user.click(screen.getByRole('checkbox', { name: 'בחר את כל העמודים בעמוד הזה' }))
     await user.click(screen.getByRole('button', { name: 'הורד את הטקסט של הנבחרים' }))
     expect(await screen.findByText('הטקסט של 12 עמודים ירד.')).toBeInTheDocument()
-    expect(gets().filter((k) => k.includes('/download'))).toEqual([`GET /api/admin/pages/download-batch?status=in-progress&book=${enc('שערי תשובה')}`])
+    expect(calls.filter((c) => c.key === 'POST /api/admin/pages/download-batch')).toHaveLength(1)
     const body = await saved[0].text()
+    expect(body).toContain(db[0].content)
     expect(body).toContain('ספר: שערי תשובה | עמוד: 12\n========================================\n\nטקסט של b11\n\n\n')
   })
 
@@ -633,21 +635,15 @@ describe('פעולות מרובות', () => {
     expect(screen.getAllByText('2 נבחרו').length).toBeGreaterThan(0)
   })
 
-  test('הורדה שנעצרה — שם הקובץ אומר שהוא חלקי', async () => {
-    db = many(6, (i) => ({ id: `d${i + 1}`, bookName: `ספר ${i}`, number: 1, status: 'available', claimedBy: null, claimedById: null, updatedAt: ago(3) }))
-    const pending = []
-    for (const p of db) routes[`GET /api/admin/pages/download/${p.id}`] = () => new Promise((r) => { pending.push(() => r(text(`טקסט של ${p.id}`))) })
+  test('הורדה חלקית — עמוד שחסר בשרת נשאר מסומן ושם הקובץ מציין זאת', async () => {
     const user = userEvent.setup()
     renderAt(BASE)
     await rows()
     await user.click(screen.getByRole('checkbox', { name: 'בחר את כל העמודים בעמוד הזה' }))
+    db.pop()
     await user.click(screen.getByRole('button', { name: 'הורד את הטקסט של הנבחרים' }))
-    const stop = await screen.findByRole('button', { name: 'עצור' })
-    await waitFor(() => expect(pending).toHaveLength(4))
-    await user.click(stop)
-    await act(async () => { pending.forEach((resolve) => resolve()) })
     expect(await screen.findByText(/הטקסט של 4 עמודים ירד \(קובץ חלקי\)/)).toBeInTheDocument()
-    expect(savedNames.at(-1).download).toBe('עמודים-4-מתוך-6-חלקי.txt')
+    expect(savedNames.at(-1).download).toBe('עמודים-4-מתוך-5-חלקי.txt')
   })
 
   test('403 באמצע — הסיכום אומר גם כמה כבר שוחררו', async () => {
