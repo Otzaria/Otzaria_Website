@@ -1,0 +1,88 @@
+name: Book claims QA
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/book-claims-qa.yml'
+      - 'package*.json'
+      - 'src/lib/bookPageClaims*'
+      - 'src/lib/pageClaimPolicy*'
+      - 'src/lib/corrections/testing/mongo.js'
+      - 'src/models/Page.js'
+      - 'src/models/Book.js'
+      - 'src/models/User.js'
+      - 'src/app/api/book/**'
+      - 'src/app/api/page-content/**'
+      - 'src/app/api/cron/check-stale-pages/**'
+      - 'src/components/library/ClaimQuotaBadge*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: book-claims-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  standalone-mongodb:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      MONGOMS_VERSION: '7.0.24'
+      MONGOMS_DOWNLOAD_DIR: ${{ github.workspace }}/.mongodb-binaries
+      REQUIRE_MONGODB_TESTS: '1'
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+      - name: התקנת התלויות הנעולות
+        run: npm ci --no-audit --no-fund
+      - name: מכסה ומקביליות מול MongoDB standalone אמיתי
+        run: |
+          node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \
+            src/lib/pageClaimPolicy.test.mjs src/lib/bookPageClaims.int.test.mjs
+      - name: שמירה, ביטול סיום וממשק המכסה
+        run: |
+          node node_modules/vitest/vitest.mjs run --reporter=json --outputFile=build/book-claims-qa/vitest.json \
+            'src/app/api/book/[id]/route.test.ts' \
+            src/app/api/book/uncomplete-page/route.test.js \
+            src/app/api/page-content/route.test.js \
+            src/app/api/page-content/claim-quota.test.js \
+            src/components/library/ClaimQuotaBadge.test.jsx
+      - name: אימות שכל בדיקות Vitest בוצעו ללא דילוגים
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          import { resolve } from 'node:path';
+          const report = JSON.parse(readFileSync('build/book-claims-qa/vitest.json', 'utf8'));
+          const expected = [
+            'src/app/api/book/[id]/route.test.ts',
+            'src/app/api/book/uncomplete-page/route.test.js',
+            'src/app/api/page-content/route.test.js',
+            'src/app/api/page-content/claim-quota.test.js',
+            'src/components/library/ClaimQuotaBadge.test.jsx',
+          ];
+          assert.equal(report.success, true);
+          assert.ok(report.numTotalTests >= 29, 'Missing focused tests');
+          assert.equal(report.numPassedTests, report.numTotalTests, 'Some tests did not pass');
+          for (const key of ['numFailedTests', 'numPendingTests', 'numTodoTests']) assert.equal(report[key], 0, key);
+          assert.equal(report.testResults.length, expected.length, 'Missing focused test files');
+          for (const file of expected) {
+            const result = report.testResults.find(item => item.name === resolve(file));
+            assert.ok(result && result.status === 'passed' && result.assertionResults.length > 0 &&
+              result.assertionResults.every(test => test.status === 'passed'), `Incomplete test file: ${file}`);
+          }
+          JS
+      - name: בדיקת הקוד ששונה
+        run: |
+          node node_modules/eslint/bin/eslint.js \
+            src/lib/bookPageClaims.js src/lib/bookPageClaims.int.test.mjs src/models/Page.js \
+            src/app/api/book/uncomplete-page/route.js src/app/api/book/uncomplete-page/route.test.js \
+            src/app/api/page-content/route.js src/app/api/page-content/claim-quota.test.js

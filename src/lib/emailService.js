@@ -13,6 +13,7 @@ import {
     isWebPluginReport,
 } from '@/lib/email-templates';
 import { REPLY_ABOVE_MARKER } from '@/lib/app-reports/inbound';
+import { hebrewDays, PAGE_RELEASE_AFTER_DAYS, PAGE_REMIND_AFTER_DAYS } from '@/lib/pageClaimPolicy';
 import { appReportMailBranding } from '@/lib/app-reports/mail-text';
 
 // Transporter מרכזי — הגדרות TLS/timeouts מאוחדות ב-src/lib/smtp-transport.js
@@ -356,18 +357,22 @@ export async function sendStalePageReminder({ user, book, pages }) {
         .map(p => `• עמוד ${p.pageNumber} (לא נערך כבר ${p.daysSinceEdit} ימים)`)
         .join('<br/>');
 
-    const introHtml = `שמנו לב שיש עמודים שתפסת לעריכה בספר "${safeBookName}" שלא נערכו כשבוע ויותר:`;
+    // עמוד שלא נערך PAGE_RELEASE_AFTER_DAYS ימים משתחרר; התזכורת נשלחת PAGE_REMIND_AFTER_DAYS
+    // ימים אחרי העריכה האחרונה — כלומר נותרו עוד (ההפרש) ימים (pageClaimPolicy.js)
+    const graceText = hebrewDays(PAGE_RELEASE_AFTER_DAYS - PAGE_REMIND_AFTER_DAYS);
+    const releaseRule = `עמוד שלא נערך ${hebrewDays(PAGE_RELEASE_AFTER_DAYS)} משתחרר אוטומטית, כך שעמודים שלא ייערכו ב${graceText} הקרובים ישוחררו.`;
+    const introHtml = `שמנו לב שיש עמודים שתפסת לעריכה בספר "${safeBookName}" שלא נערכו כמה ימים:`;
     const closingHtml =
         'אנא היכנס למערכת והשלם את העריכה, או שחרר את העמודים כדי שאחרים יוכלו להמשיך.<br/>' +
-        'שים לב — עמודים שלא ייערכו במהלך השבוע הקרוב ישוחררו אוטומטית.';
+        `שים לב — ${releaseRule}`;
 
     const bodyHtml = `${introHtml}<br/><br/>${pageListHtml}<br/><br/>${closingHtml}`;
 
     const bodyText =
-        `שמנו לב שיש עמודים שתפסת לעריכה בספר "${book.name}" שלא נערכו כשבוע ויותר:\n\n` +
+        `שמנו לב שיש עמודים שתפסת לעריכה בספר "${book.name}" שלא נערכו כמה ימים:\n\n` +
         `${pageListText}\n\n` +
         `אנא היכנס למערכת והשלם את העריכה, או שחרר את העמודים כדי שאחרים יוכלו להמשיך.\n` +
-        `שים לב — עמודים שלא ייערכו במהלך השבוע הקרוב ישוחררו אוטומטית.`;
+        `שים לב — ${releaseRule}`;
 
     const html = buildStaleReminderHtml({
         headingTitle: `תזכורת: עמודים תקועים בספר "${book.name}"`,

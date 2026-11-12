@@ -1,4 +1,11 @@
 import mongoose from 'mongoose';
+import { MAX_ACTIVE_PAGE_CLAIMS } from '../lib/pageClaimPolicy.js';
+
+export const PAGE_CLAIM_QUOTA_INDEX = {
+  name: 'page_claim_quota_slot',
+  unique: true,
+  partialFilterExpression: { status: 'in-progress', quotaUserId: { $type: 'objectId' } },
+};
 
 const PageSchema = new mongoose.Schema({
   book: { type: mongoose.Schema.Types.ObjectId, ref: 'Book', required: true },
@@ -41,6 +48,11 @@ const PageSchema = new mongoose.Schema({
   claimedAt: { type: Date },
   completedAt: { type: Date },
   lastAutoReminderAt: { type: Date },
+  // מקומות במכסה: האינדקס הייחודי מקצה לכל מתנדב לכל היותר חמישה עמודים,
+  // בעדכון אטומי של העמוד עצמו. עובד גם ב-MongoDB standalone, ללא טרנזקציות.
+  // אופציונלי: תפיסות ישנות מקבלות מקום לפני שמאשרים למשתמש תפיסה חדשה.
+  quotaUserId: { type: mongoose.Schema.Types.ObjectId },
+  quotaSlot: { type: Number, min: 0, max: MAX_ACTIVE_PAGE_CLAIMS - 1 },
 
   // מעקב אחרי החלת OCR מקומי (ספק local): איזו עבודה ואיזו תוצאה כתבו לעמוד לאחרונה.
   // ההחלה מותנית ב-lastOcrJobId — שליחה חוזרת של אותה תוצאה לא כותבת פעמיים.
@@ -60,6 +72,7 @@ PageSchema.index({ book: 1, pageNumber: 1 }, { unique: true });
 
 // אינדקס לסריקות ה-cron של תזכורות/שחרור אוטומטי על עמודים תקועים
 PageSchema.index({ status: 1, claimedBy: 1, updatedAt: 1 });
+PageSchema.index({ quotaUserId: 1, quotaSlot: 1 }, PAGE_CLAIM_QUOTA_INDEX);
 
 // אינדקס לסטטיסטיקת ההספק — /api/stats/weekly-progress מסנן status+completedAt.
 // בלעדיו completedAt לא היה ממופתח בכלל והשאילתה סרקה עמודים לפי סטטוס בלבד.

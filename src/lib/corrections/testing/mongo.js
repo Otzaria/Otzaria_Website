@@ -18,6 +18,7 @@ export async function startMongo() {
     const { MongoMemoryServer } = await import('mongodb-memory-server-core');
     server = await MongoMemoryServer.create();
   } catch (err) {
+    if (process.env.REQUIRE_MONGODB_TESTS === '1') throw err;
     return { skip: `MongoDB לא זמין לבדיקות: ${err?.message}` };
   }
   await mongoose.connect(server.getUri(), { dbName: 'corrections_test' });

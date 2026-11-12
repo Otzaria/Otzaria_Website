@@ -261,3 +261,17 @@ describe('offline compare-and-swap and receipts', () => {
    } finally { spy.mockRestore() }
    expect((await Page.findById(page._id)).content).toBe('מקורי')
  })
+
+
+it('offline CAS rejects a renewed claim by the same user', async () => {
+  const { slug, page } = await setup()
+  const old = await Page.findById(page._id)
+  const { pageVersion } = await import('@/lib/offlineBooks/version')
+  await Page.updateOne({ _id: page._id }, { $set: { claimedAt: new Date() } })
+  const spy = vi.spyOn(Page, 'findOne').mockResolvedValueOnce(old)
+  try {
+    expect(await save(slug, 'אופליין', 100, { baseVersion: pageVersion(old), expectedUserId: USER_ID,
+      offlineSaveId: '11111111-1111-4111-8111-111111111111', leftColumn: '', rightColumn: '', rightColumnName: 'חלק 1', leftColumnName: 'חלק 2' })).toMatchObject({ status: 409, body: { code: 'OFFLINE_CONFLICT' } })
+  } finally { spy.mockRestore() }
+  expect((await Page.findById(page._id)).content).toBe('מקורי')
+})

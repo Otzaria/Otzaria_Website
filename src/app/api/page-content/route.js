@@ -137,9 +137,13 @@ export async function POST(request) {
     if (offline) updateFields.lastOfflineSaveVersion = pageVersion({ ...currentPage.toObject(), ...updateFields });
 
     // ביצוע העדכון
-    const ownershipGuard = { status: currentPage.status, claimedBy: currentPage.claimedBy ?? null };
+    // שומרים על בדיקות הבעלות גם בסנכרון לא מקוון.
+    const ownershipGuard = {
+      status: currentPage.status, claimedBy: currentPage.claimedBy ?? null,
+      claimedAt: currentPage.claimedAt ?? null,
+    };
     const guardedQuery = offline
-      ? { ...query, ...pageVersionGuard(currentPage) }
+      ? { ...query, ...pageVersionGuard(currentPage), ...ownershipGuard }
       : hasSaveRevision
       ? {
           ...query, ...ownershipGuard,
@@ -167,12 +171,17 @@ export async function POST(request) {
     }
 
     if (!updatedPage) {
+      const latest = await Page.findOne(query);
+      if (!latest || latest.status !== currentPage.status ||
+          String(latest.claimedBy ?? '') !== String(currentPage.claimedBy ?? '') ||
+          Number(latest.claimedAt ?? 0) !== Number(currentPage.claimedAt ?? 0)) {
+        if (offline) return conflict();
+        return NextResponse.json({ error: 'תפיסת העמוד השתנתה. יש לרענן את העמוד לפני שמירה נוספת.' }, { status: 409 });
+      }
       // העמוד כבר נטען ונבדק לעיל; כישלון העדכון המותנה פירושו ששמירה חדשה
       // יותר כבר הגיעה. מחזירים success אידמפוטנטי כדי שהלקוח לא יציג שגיאת שמירה.
       if (offline) return conflict();
       if (hasSaveRevision) {
-        const latest = await Page.findOne(query);
-        if (!latest || latest.status !== currentPage.status || String(latest.claimedBy ?? '') !== String(currentPage.claimedBy ?? '')) return conflict();
         return NextResponse.json({ success: true, message: 'כבר נשמרה גרסה חדשה יותר', stale: true, pageStatus: currentPage.status, ...(ocrWordReviewDropped ? { ocrWordReviewDropped: true } : {}) });
       }
       return notFound('העמוד לא נמצא');

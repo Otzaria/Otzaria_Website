@@ -23,6 +23,7 @@ import { isEditorField, queryEditorField } from '@/lib/editor/editorField'
 import { findNextWholeWordInTextarea as findNextWholeWordInTextareaUtil } from '@/lib/hebrewWordUtils'
 import { buildSearchRegex, findNextOutsideTags, processSearchPattern, rangeInText, replaceOutsideTags } from '@/lib/editor/textOnlyReplace'
 import { hasBookLibraryAccess, hasBooksAccess } from '@/lib/roles'
+import { claimLimitMessage, claimRulesText, CLAIM_LIMIT_ERROR_CODE } from '@/lib/pageClaimPolicy'
 import { useRequireAuth } from '@/hooks/useRequireAuth'
 import { useUndoAvailability } from '@/hooks/useUndoAvailability'
 import { shortcutAllowed, shortcutContext } from './shortcutScope'
@@ -109,7 +110,7 @@ function BookPageEditor({ session, status, bookPath, pageNumber }) {
   const router = useRouter()
   const offlineUserId = session?.user?._id || session?.user?.id
   const offline = useOfflineBook({ userId: offlineUserId, bookPath, pageNumber })
-  const { showAlert, showConfirm } = useDialog()
+  const { showAlert, showConfirm, showMessage } = useDialog()
   const { startLoading, stopLoading } = useLoading()
 
   const [bookData, setBookData] = useState(null)
@@ -657,7 +658,9 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
     
     showConfirm(
       `עבודה על עמוד ${pageNumber}`,
-      `האם אתה מעוניין לעבוד על עמוד זה?\nהעמוד יסומן כ"בטיפול" ויוצמד אליך.`,
+      `האם אתה מעוניין לעבוד על עמוד זה?\nהעמוד יסומן כ"בטיפול" ויוצמד אליך.
+
+${claimRulesText()}`,
       async () => {
           startLoading('תופס עמוד...');
           try {
@@ -685,6 +688,8 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
                       claimedById: userId
                   }));
                   showAlert('הצלחה', 'העמוד נתפס על ידך בהצלחה! כעת ניתן לערוך ולשמור.');
+              } else if (result.code === CLAIM_LIMIT_ERROR_CODE) {
+                  showMessage('הגעת למכסת העמודים', result.error || claimLimitMessage(), 'הבנתי');
               } else {
                   showAlert('שגיאה', result.error || 'שגיאה בתפיסת העמוד');
               }
