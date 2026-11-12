@@ -4,9 +4,14 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAsk } from '../useAsk'
 import { SECTION_LABELS, SCRIPT_LABELS, OCR_ACTION_LABELS } from '@/lib/trainingProof/vocab'
 import { API, getJson, fmt, fmtDate } from '../api'
-import { Card, Empty, SECTION_ICONS, Tag } from '../bits'
+import Button from '@/components/ui/Button'
+import ErrorNotice from '@/components/ui/ErrorNotice'
+import ListLoading from '@/components/ui/ListLoading'
+import Notice from '@/components/ui/Notice'
+import { Card, Empty, Muted, SECTION_ICONS, Tag } from '../bits'
+import { TD, TH } from '../proofStyles'
 
-// לשונית "הורדה לתחנה" (docs/75 ה-13; docs/76 §5): ZIP לכל חלק — רק מה שאושר, בלי תמונות.
+// לשונית "הורדות" (docs/75 ה-13; docs/76 §5): ZIP לכל חלק — רק מה שאושר, בלי תמונות.
 // אחרי שהשרת סיים לשלוח את הקובץ, החומר נמחק מהאתר; נשאר רק יומן של כמה הורד ומתי.
 
 function what(section, s) {
@@ -73,63 +78,63 @@ export default function ExportTab({ onChanged }) {
     }
   }
 
-  if (!data) return <Empty>טוען…</Empty>
+  if (!data) return <ListLoading rows={3} label="טוען…" />
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex gap-2 rounded-xl bg-success-100 p-3 text-sm text-success-800">
-        <span className="material-symbols-outlined">verified</span>
-        <div>
-          יורד <b>רק מה שאישרתם</b>, ו<b>אחרי ההורדה הוא נמחק מהאתר</b> (התמונות והטקסט) — באתר נשאר רק יומן של כמה הורד ומתי. בתחנה: "ייבוא מהאתר" — כל פריט חוזר <b>לאותו ספר ולאותו מסלול שממנו יצא</b>,
-          כמאושר-אדם. שורות שסומנו "הכתב שגוי" נכנסות לתור של נתב הכתב בתחנה.
-        </div>
-      </div>
-      {data.error && <Empty>{data.error}</Empty>}
-      {['ocr', 'router', 'frames'].map((s) => {
-        const x = data.sections[s] || { count: 0 }
-        return (
-          <Card
-            key={s}
-            title={SECTION_LABELS[s]}
-            icon={SECTION_ICONS[s]}
-            actions={<Tag tone={x.count ? 'ok' : 'muted'}>{fmt(x.count)} מאושרים, ממתינים להורדה</Tag>}
-          >
-            <p className="text-sm text-on-surface/70">{what(s, x)}</p>
-            <div>
-              <button
-                className="inline-flex items-center gap-1 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-on-primary disabled:opacity-40"
-                disabled={!x.count || !!busy || x.busy}
-                onClick={() => download(s)}
+      <Notice tone="info" role={null}>
+        יורד רק מה שאישרתם, ואחרי ההורדה הוא נמחק מהאתר (התמונות והטקסט) — באתר נשאר רק יומן של כמה הורד ומתי. במחשב האימון:
+        &quot;ייבוא מהאתר&quot; — כל פריט חוזר לאותו ספר ולאותו מסלול שממנו יצא, כמאושר. שורות שסומנו &quot;הכתב שגוי&quot; נכנסות
+        לתור של נתב הכתב.
+      </Notice>
+      <ErrorNotice text={data.error} />
+      <div className="grid gap-4 lg:grid-cols-3">
+        {['ocr', 'router', 'frames'].map((s) => {
+          const x = data.sections[s] || { count: 0 }
+          return (
+            <Card key={s} title={SECTION_LABELS[s]} icon={SECTION_ICONS[s]}>
+              <div className="flex">
+                <Tag tone={x.count ? 'ok' : 'muted'}>{fmt(x.count)} מאושרים, ממתינים להורדה</Tag>
+              </div>
+              <Muted className="flex-1">{what(s, x)}</Muted>
+              <Button
+                variant="tonal"
+                size="sm"
+                icon="download"
+                className="self-start"
+                disabled={!x.count || x.busy || (!!busy && busy !== s)}
+                loading={busy === s}
+                onClick={() => !busy && download(s)}
               >
-                <span className="material-symbols-outlined text-base">download</span>
-                {busy === s ? 'מוריד…' : x.busy ? 'הורדה אחרת רצה' : 'הורד ZIP לתחנה'}
-              </button>
-            </div>
-          </Card>
-        )
-      })}
+                {busy === s ? 'מוריד…' : x.busy ? 'הורדה אחרת רצה' : 'הורד ZIP'}
+              </Button>
+            </Card>
+          )
+        })}
+      </div>
       <Card title="יומן ההורדות" icon="history">
         {!data.log.length ? (
           <Empty>עוד לא הורד דבר</Empty>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-variant/50 text-right">
+          <div className="relative overflow-x-auto">
+            <table className="w-full text-body-md">
+              <caption className="sr-only">יומן ההורדות</caption>
+              <thead className="border-b border-outline-variant">
                 <tr>
-                  <th className="p-2">מתי</th>
-                  <th className="p-2">חלק</th>
-                  <th className="p-2">כמה</th>
-                  <th className="p-2">מי</th>
-                  <th className="p-2">מזהה</th>
+                  <th scope="col" className={TH}>מתי</th>
+                  <th scope="col" className={TH}>חלק</th>
+                  <th scope="col" className={TH}>כמה</th>
+                  <th scope="col" className={TH}>מי</th>
+                  <th scope="col" className={TH}>מזהה</th>
                 </tr>
               </thead>
               <tbody>
                 {data.log.map((l) => (
-                  <tr key={l.exportId} className="border-t border-surface-variant">
-                    <td className="p-2">{fmtDate(l.at)}</td>
-                    <td className="p-2">{SECTION_LABELS[l.section]}</td>
-                    <td className="p-2 tabular-nums">{fmt(l.count)}</td>
-                    <td className="p-2">{l.by || '—'}</td>
-                    <td className="p-2 text-xs text-on-surface/50" dir="ltr">
+                  <tr key={l.exportId} className="border-b border-outline-variant last:border-0">
+                    <td className={`${TD} whitespace-nowrap`}>{fmtDate(l.at)}</td>
+                    <td className={TD}>{SECTION_LABELS[l.section]}</td>
+                    <td className={`${TD} tabular-nums`}>{fmt(l.count)}</td>
+                    <td className={TD}>{l.by || '—'}</td>
+                    <td className={`${TD} text-body-sm text-on-surface-variant`} dir="ltr">
                       {l.exportId}
                     </td>
                   </tr>

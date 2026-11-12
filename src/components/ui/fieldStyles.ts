@@ -10,19 +10,22 @@ import { cx } from './cx'
  * size     — md (48px, ברירת מחדל) / lg (56px, שדה חיפוש ראשי).
  * kind     — input / select (סמן יד) / textarea (גבוה, ריפוד אנכי).
  * withIcon — ריפוד ההתחלה גדל לאייקון בצד ההתחלה (חיפוש). trailing — ריפוד הסוף גדל (חץ של select).
+ * quiet    — שדה בתוך רשימה שנקראת כמידע (למשל שמות הקטגוריות): בלי מסגרת ובלי רקע במצב רגיל, והמסגרת
+ *            מופיעה בריחוף ובפוקוס (ושגיאה — תמיד במסגרת). כך עמוד של שדות לא נראה כמו טופס.
  */
 export type FieldSize = 'md' | 'lg'
 export type FieldKind = 'input' | 'textarea' | 'select'
 
 const BASE = cx(
-  'block w-full rounded-(--field-radius) border bg-(--field-bg) text-(--field-fg)',
+  'block w-full rounded-(--field-radius) border text-(--field-fg)',
   'placeholder:text-(--field-placeholder) transition-colors',
   'focus:border-(--field-border-focus) focus:outline-1 focus:-outline-offset-2 focus:outline-(--field-border-focus)',
   'disabled:cursor-not-allowed disabled:opacity-(--button-disabled-opacity) motion-reduce:transition-none'
 )
 
-const IDLE = 'border-(--field-border) hover:border-(--field-border-hover)'
-const INVALID = 'border-error'
+const IDLE = 'border-(--field-border) bg-(--field-bg) hover:border-(--field-border-hover)'
+const QUIET = 'border-transparent bg-transparent hover:border-(--field-border) focus:bg-(--field-bg)'
+const INVALID = 'border-error bg-(--field-bg)'
 
 const SIZE: Record<FieldSize, { height: string; text: string; plain: string; icon: string; end: string; trailing: string }> = {
   md: { height: 'min-h-(--field-height-md)', text: 'text-body-md', plain: 'ps-4', icon: 'ps-11', end: 'pe-4', trailing: 'pe-11' },
@@ -35,6 +38,7 @@ export function fieldClasses({
   invalid = false,
   withIcon = false,
   trailing = false,
+  quiet = false,
   className
 }: {
   size?: FieldSize
@@ -42,11 +46,12 @@ export function fieldClasses({
   invalid?: boolean
   withIcon?: boolean
   trailing?: boolean
+  quiet?: boolean
   className?: string
 } = {}): string {
   const s = SIZE[size]
   const box = kind === 'textarea' ? 'min-h-40 py-3 leading-relaxed' : cx(s.height, kind === 'select' && 'cursor-pointer')
-  return cx(BASE, box, s.text, withIcon ? s.icon : s.plain, trailing ? s.trailing : s.end, invalid ? INVALID : IDLE, className)
+  return cx(BASE, box, s.text, withIcon ? s.icon : s.plain, trailing ? s.trailing : s.end, invalid ? INVALID : quiet ? QUIET : IDLE, className)
 }
 
 /**
@@ -58,8 +63,8 @@ export function fieldClasses({
  */
 export function fieldAdornmentClasses(size: FieldSize = 'md', side: 'start' | 'end' = 'start') {
   const pos = size === 'lg'
-    ? (side === 'start' ? 'start-4 text-[1.5rem]' : 'end-4 text-[1.5rem]')
-    : (side === 'start' ? 'start-3.5 text-[1.25rem]' : 'end-3.5 text-[1.25rem]')
+    ? (side === 'start' ? 'start-4 text-(length:--field-icon-size-lg)' : 'end-4 text-(length:--field-icon-size-lg)')
+    : (side === 'start' ? 'start-3.5 text-(length:--field-icon-size-md)' : 'end-3.5 text-(length:--field-icon-size-md)')
   return cx('pointer-events-none absolute top-1/2 flex -translate-y-1/2 text-on-surface-variant', pos)
 }
 

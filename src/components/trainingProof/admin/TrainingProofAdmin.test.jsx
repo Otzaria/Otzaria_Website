@@ -49,10 +49,30 @@ describe('TrainingProofAdmin', () => {
     expect(await screen.findByText('סקירה:router')).toBeInTheDocument()
     await waitFor(() => expect(screen.getByText('12')).toBeInTheDocument())
     // אושרו ועוד לא הורדו: 3+1+0
-    expect(screen.getByText('אושרו ועוד לא הורדו לתחנה').previousSibling).toHaveTextContent('4')
-    expect(screen.getByTitle('בקשות גישה ממתינות')).toHaveTextContent('2')
-    fireEvent.click(screen.getByRole('tab', { name: /הוראות ההגהה/ }))
+    expect(screen.getByText('אושרו ועוד לא הורדו').previousSibling).toHaveTextContent('4')
+    // מונים בלשוניות: לאישור — 12+4+2, מתנדבים — בקשות הגישה
+    expect(screen.getByRole('tab', { name: /^לאישור.*18 ממתינים לאישור/ })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /^מתנדבים.*2 בקשות גישה/ })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'הגהה' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: 'הנחיות' }))
     expect(screen.getByText('הוראות-פנים')).toBeInTheDocument()
     expect(window.location.search).toBe('?tab=guide')
+  })
+
+  it('"ניקוי נתונים ישנים": מוצגת כשיש נתונים ישנים, עם הסבר; כשאין — מוסתרת', async () => {
+    const legacy = { success: true, counts: { books: 0, pages: 0, submissions: 0, drafts: 0 }, files: 3 }
+    globalThis.fetch.mockImplementation((url) => Promise.resolve(new Response(JSON.stringify(String(url).endsWith('/legacy') ? legacy : SUMMARY))))
+    window.history.replaceState(null, '', '/library/admin/page-proof?tab=legacy')
+    const { unmount } = render(<TrainingProofAdmin />)
+    expect(await screen.findByText('ישן')).toBeInTheDocument()
+    expect(screen.getByText(/מוחקים לצמיתות את הנתונים של הדף הישן/)).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'ניקוי נתונים ישנים' })).toBeInTheDocument()
+    unmount()
+    legacy.files = 0
+    window.history.replaceState(null, '', '/library/admin/page-proof')
+    render(<TrainingProofAdmin />)
+    await screen.findByText(/^סקירה:/)
+    await waitFor(() => expect(screen.queryByRole('tab', { name: 'ניקוי נתונים ישנים' })).toBeNull())
+    expect(screen.getAllByRole('tab')).toHaveLength(5)
   })
 })

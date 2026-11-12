@@ -67,7 +67,7 @@ export default function PluginApproveModal({ plugin, onClose, onConfirm }) {
 
   return (
     <Dialog
-      title="אישור תוסף"
+      title="לאשר את התוסף?"
       onClose={onClose}
       dismissible={!submitting}
       footer={
@@ -80,7 +80,7 @@ export default function PluginApproveModal({ plugin, onClose, onConfirm }) {
             loading={submitting}
             className="flex-1 sm:flex-none"
           >
-            {submitting ? 'מאשר...' : 'אישור'}
+            {submitting ? 'מאשר…' : 'אשר'}
           </Button>
           <Button type="button" variant="outlined" onClick={onClose} disabled={submitting} className="flex-1 sm:flex-none">
             ביטול
@@ -90,26 +90,26 @@ export default function PluginApproveModal({ plugin, onClose, onConfirm }) {
     >
       <div className="space-y-6">
         <p className="text-body-md text-on-surface">
-          אישור התוסף <strong className="font-semibold">&quot;{plugin.name}&quot;</strong> יהפוך אותו לזמין לכל המשתמשים.
+          ״{plugin.name}״ יוצג בחנות לכל המשתמשים. המפתח יקבל הודעה במייל.
         </p>
 
         <section aria-labelledby="approve-categories-title" className="space-y-3">
           <h3 id="approve-categories-title" className="text-title-sm text-on-surface">
-            שיכון בקטגוריות — אופציונלי, ניתן לשינוי גם אחר-כך
+            שיבוץ בקטגוריות (לא חובה, אפשר לשנות אחר כך)
           </h3>
           <p className="text-body-sm text-on-surface-variant">
-            אין חובה לשבץ: תוסף שלא ישובץ יהיה זמין בחיפוש ובדף &quot;כל התוספים&quot;, אך לא יופיע בדף הבית של החנות.
+            תוסף שלא ישובץ יהיה זמין בחיפוש ובדף &quot;כל התוספים&quot;, אבל לא יופיע בדף הבית של החנות.
             אפשר לסמן כמה קטגוריות.
           </p>
           {loadingCategories ? (
             <div role="status" className="flex items-center gap-2 text-body-sm text-on-surface-variant">
               <Loader size="inline" decorative className="text-base" />
-              <span>טוען קטגוריות...</span>
+              <span>טוען קטגוריות…</span>
             </div>
           ) : categoriesError ? (
-            <p role="alert" className="flex items-start gap-1.5 text-body-sm font-semibold text-error">
+            <p role="alert" className="flex items-start gap-1.5 text-body-sm text-error">
               <AppIcon name="error" className="mt-0.5 text-[1.1rem]" />
-              <span>לא הצלחנו לטעון את הקטגוריות — ניתן לאשר ולשבץ מאוחר יותר.</span>
+              <span>לא הצלחנו לטעון את הקטגוריות. אפשר לאשר עכשיו ולשבץ אחר כך.</span>
             </p>
           ) : categories.length === 0 ? (
             <p className="text-body-sm text-on-surface-variant">אין עדיין קטגוריות גלויות בחנות.</p>
@@ -126,7 +126,7 @@ export default function PluginApproveModal({ plugin, onClose, onConfirm }) {
                     icon={showIcons ? <AppIcon name={categoryIcon(category)} className="mt-0.5 text-[1.15rem] text-on-surface-variant" /> : undefined}
                     label={
                       <>
-                        <span className="font-semibold">{category.name}</span>
+                        <span>{category.name}</span>
                         <span className="ms-2 text-body-sm text-on-surface-variant tabular-nums">({category.plugins.length} משובצים)</span>
                       </>
                     }
@@ -142,7 +142,7 @@ export default function PluginApproveModal({ plugin, onClose, onConfirm }) {
           checked={addToFeatured}
           onChange={setAddToFeatured}
           icon={<AppIcon name="star" className="mt-0.5 text-[1.25rem] text-rating" />}
-          label={<span className="font-semibold">הוסף לנבחרים בדף הבית</span>}
+          label="הוסף לנבחרים בדף הבית"
         />
       </div>
     </Dialog>

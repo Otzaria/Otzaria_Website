@@ -163,9 +163,9 @@ function DialogHeader({ titleId, subtitleId, title, subtitle, onClose }: {
     <div className="relative shrink-0 px-14 pb-4 pt-3 text-center sm:pt-6">
       {/* ידית הגיליון — רמז חזותי בלבד בנייד */}
       <span aria-hidden="true" className="mx-auto mb-3 block h-1 w-10 rounded-(--radius-pill) bg-outline-variant sm:hidden" />
-      <h2 id={titleId} className="text-xl font-bold text-on-surface sm:text-2xl">{title}</h2>
+      <h2 id={titleId} className="text-title-lg text-on-surface sm:text-2xl">{title}</h2>
       <TitleOrnament className="mt-3" ratio="45%" min="96px" />
-      {subtitle && <p id={subtitleId} className="mt-3 text-sm text-on-surface-variant">{subtitle}</p>}
+      {subtitle && <p id={subtitleId} className="mt-3 text-body-sm leading-snug text-on-surface-variant">{subtitle}</p>}
       {onClose && (
         <button
           type="button"
@@ -176,7 +176,7 @@ function DialogHeader({ titleId, subtitleId, title, subtitle, onClose }: {
             FOCUS_RING_INSET
           )}
         >
-          <span aria-hidden="true" className="material-symbols-outlined text-2xl">close</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-icon-xl">close</span>
         </button>
       )}
     </div>

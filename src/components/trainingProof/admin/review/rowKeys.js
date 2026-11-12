@@ -6,13 +6,17 @@ import { useEffect, useRef, useState } from 'react'
 // onKey(key, item) של המסך (מחזיר true כשטיפל). אחרי פעולה הרשימה נטענת מחדש והשורה
 // שאושרה יוצאת ממנה — השורה הבאה תופסת את מקומה, ולכן "השורה הנוכחית" נשמרת לפי
 // המקום ברשימה ולא לפי המזהה: אין קפיצה, רק גלילה רכה עד שהשורה כולה נראית.
-// לא פועל בזמן הקלדה בשדה (חוץ מתיבת-סימון), כשחלון פתוח, או עם Ctrl/Alt.
+// לא פועל בזמן הקלדה בשדה (חוץ מתיבת-סימון), בבורר, כשחלון פתוח, או עם Ctrl/Alt.
 
 const smooth = () => (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth')
+
+// גם בורר (ui/SelectMenu): הכפתור שלו או הרשימה הפתוחה — 1/2/3/Delete שם לא נוגעים בשורה
+const MENU = '[role="listbox"],[role="combobox"],[aria-haspopup="listbox"]'
 
 export function isTyping(el) {
   if (!el) return false
   if (el.isContentEditable) return true
+  if (el.closest?.(MENU)) return true
   if (el.tagName === 'INPUT') return !['checkbox', 'radio', 'button', 'submit'].includes(el.type)
   return el.tagName === 'TEXTAREA' || el.tagName === 'SELECT'
 }

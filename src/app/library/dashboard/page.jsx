@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { canHandleCorrections } from '@/lib/roles'
 import Header from '@/components/layout/Header'
 import { useDialog } from '@/components/providers/DialogContext'
-import Pagination from '@/components/ui/Pagination'
+import Pagination from '@/components/ui/legacy/Pagination'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import PasswordChangeModal from '@/components/dashboard/PasswordChangeModal'
 import EmailChangeModal from '@/components/dashboard/EmailChangeModal'
@@ -416,14 +416,14 @@ export default function DashboardPage() {
               {canHandleCorrections(session?.user) && (
                 <Link href="/library/corrections" className="flex flex-col items-center gap-3 p-6 bg-primary-container rounded-xl hover:bg-primary/20 transition-all">
                   <span className="material-symbols-outlined text-4xl text-primary">spellcheck</span>
-                  <span className="font-medium text-on-surface">תיקוני טקסט</span>
+                  <span className="font-medium text-on-surface">דיווחי טעויות</span>
                 </Link>
               )}
 
               {isAdmin && (
                 <Link href="/library/admin" className="flex flex-col items-center gap-3 p-6 bg-accent/20 rounded-xl hover:bg-accent/30 transition-all">
                   <span className="material-symbols-outlined text-4xl text-accent">admin_panel_settings</span>
-                  <span className="font-medium text-on-surface">פאנל ניהול</span>
+                  <span className="font-medium text-on-surface">ניהול</span>
                 </Link>
               )}
             </div>

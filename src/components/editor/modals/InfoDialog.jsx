@@ -90,7 +90,7 @@ export default function InfoDialog({ isOpen, onClose, bookInstructions, globalIn
           </a>
         )}
 
-        {hasGlobal && <InstructionGroup group={globalInstructions} fallbackTitle="הנחיות מערכת" />}
+        {hasGlobal && <InstructionGroup group={globalInstructions} fallbackTitle="הנחיות כלליות" />}
 
         {!hasBook && !hasGlobal && !hasExample && (
           <div className="flex flex-col items-center py-8 text-center">

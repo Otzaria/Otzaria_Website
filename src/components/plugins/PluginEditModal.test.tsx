@@ -41,7 +41,7 @@ describe('PluginEditModal (עמוד התוסף + /library/admin/plugins)', () =>
     expect(screen.getByRole('textbox', { name: 'שם התוסף' })).toHaveValue('מילון')
     expect(screen.getByRole('textbox', { name: 'גרסה' })).toHaveAttribute('dir', 'ltr')
     expect(screen.getByRole('textbox', { name: 'אתר בית (אופציונלי)' })).not.toBeRequired()
-    expect(screen.getByRole('combobox', { name: 'סטטוס' })).toHaveValue('beta')
+    expect(screen.getByRole('combobox', { name: 'רמת יציבות' })).toHaveValue('beta')
     expect(screen.getByRole('checkbox', { name: 'התוסף דורש חיבור אינטרנט' })).not.toBeChecked()
   })
 

@@ -11,6 +11,7 @@ import {
   ZonesFullCard,
 } from '@/components/ocr/layout/LayoutTaskCards'
 import { validateAnswer } from '@/lib/ocr/layoutValidation'
+import { layoutShortcut, ownedElsewhere } from '@/lib/ocr/layoutShortcuts'
 import { hasBookLibraryAccess } from '@/lib/roles'
 import { useRequireAuth } from '@/hooks/useRequireAuth'
 
@@ -140,15 +141,13 @@ export default function OcrLayoutPage() {
   // קיצורי מקלדת: Enter=אישור/שמירה, N=הבא
   useEffect(() => {
     const onKey = (e) => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return
-      if (e.key === 'Enter') {
-        e.preventDefault()
-        if (allValid) handleSave()
-        else if (untouched) handleAllCorrect()
-      } else if (e.key === 'n' || e.key === 'N') {
-        e.preventDefault()
-        handleSkip()
-      }
+      // לא כשהמקש שייך לשדה, לבורר (הכפתור או הרשימה הפתוחה) או לחלון — layoutShortcuts.js
+      if (ownedElsewhere(e)) return
+      const action = layoutShortcut(e, { allValid, untouched })
+      if (e.key === 'Enter' || action === 'skip') e.preventDefault()
+      if (action === 'save') handleSave()
+      else if (action === 'allCorrect') handleAllCorrect()
+      else if (action === 'skip') handleSkip()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

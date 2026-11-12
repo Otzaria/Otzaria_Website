@@ -1,117 +1,111 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import FormNote from '@/components/plugins/form/FormNote'
-import { useDialog } from '@/components/providers/DialogContext'
-import Button from '@/components/ui/Button'
-import Loader from '@/components/ui/Loader'
-import Ltr from '@/components/ui/Ltr'
+import { useState } from 'react'
+import LoadError from '@/components/admin/list/LoadError'
+import { AdminApiError, errorToast, send } from '@/components/admin/list/adminRequest'
+import AppIcon from '@/components/ui/AppIcon'
+import EmptyState from '@/components/ui/EmptyState'
+import Skeleton from '@/components/ui/Skeleton'
+import Tabs, { tabPanelProps } from '@/components/ui/Tabs'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { useToast } from '@/components/ui/Toast'
 import { apiErrorMessages } from '@/components/plugins/service/serviceSubmissionLogic'
 import { formatDateWithTime } from '@/lib/formatDate'
 import EmergencyExceptionDialog from './EmergencyExceptionDialog'
 import ServiceReviewAdminCard from './ServiceReviewAdminCard'
 import {
+  SERVICE_TABS,
   adminActionsFor,
+  defaultServiceTab,
   groupAdminReviews,
   quotaPause,
   rollbackReviewIds,
   type AdminAction,
-  type AdminResponse,
-  type AdminReview
+  type AdminReview,
+  type ServiceTab
 } from './servicePluginsAdminLogic'
+import { useServiceAdminData, type ServiceAdminSource } from './useServiceAdminData'
 
-type Load = { phase: 'loading' } | { phase: 'ready'; data: AdminResponse } | { phase: 'error'; message: string }
+const TAB_PREFIX = 'service-plugins'
 
-async function fetchAdmin(): Promise<Load> {
-  try {
-    const response = await fetch('/api/service-plugins/admin', { cache: 'no-store' })
-    if (response.status === 404) return { phase: 'error', message: 'תוספי השירות כבויים באתר (SERVICE_PLUGINS_ENABLED).' }
-    if (!response.ok) return { phase: 'error', message: 'לא הצלחנו לטעון את רשימת תוספי השירות' }
-    return { phase: 'ready', data: (await response.json()) as AdminResponse }
-  } catch {
-    return { phase: 'error', message: 'לא הצלחנו לטעון את רשימת תוספי השירות' }
-  }
-}
-
-const CONFIRMS: Partial<Record<AdminAction, { title: string; message: string; confirmText: string }>> = {
+const CONFIRMS: Partial<Record<AdminAction, { title: string; body: string; details?: string[]; confirmLabel: string; tone?: 'danger' }>> = {
   start: {
-    title: 'בחירה והתחלת בדיקה',
-    message:
-      'הבחירה היא אישור פרסום מותנה: אם כל הבדיקות יעברו, ההגשה הזו תפורסם אוטומטית — בלי לחיצה נוספת ובלי צורך לקרוא קוד. ' +
-      'דחייה תשלח דוח למפתח ואינה דורשת החלטה שלך. בדיקת שירות מתחילה את מחזור 21 הימים, גם אם תידחה או תבוטל.',
-    confirmText: 'בחר והתחל בדיקה'
+    title: 'לאשר ולהתחיל בדיקה?',
+    body: 'זה האישור לפרסום: אם כל הבדיקות יעברו, ההגשה תתפרסם לבד — בלי לחיצה נוספת.',
+    details: [
+      'אם הבדיקה תדחה את ההגשה — המפתח יקבל דוח. לא צריך לעשות כלום.',
+      'בדיקת שירות מתחילה תקופה של 21 יום עד הבדיקה הבאה — גם אם תידחה או תבוטל.'
+    ],
+    confirmLabel: 'אשר והתחל בדיקה'
   },
   cancel: {
-    title: 'ביטול ההגשה',
-    message: 'לבטל את ההגשה? המפתח יצטרך להגיש מחדש. ביטול אחרי תחילת בדיקת שירות אינו מאפס את 21 הימים.',
-    confirmText: 'בטל הגשה'
+    title: 'לבטל את ההגשה?',
+    body: 'המפתח יצטרך להגיש שוב.',
+    details: ['ביטול אחרי שבדיקת השירות התחילה לא מאפס את 21 הימים.'],
+    confirmLabel: 'בטל הגשה',
+    tone: 'danger'
   },
   retry: {
-    title: 'ניסיון חוזר',
-    message: 'להחזיר את ההגשה לתור? יש לוודא קודם שאחראי השרת טיפל בתקלה התפעולית. אין בכך מחזור 21 יום חדש.',
-    confirmText: 'החזר לתור'
+    title: 'לנסות שוב?',
+    body: 'ההגשה תחזור לבדיקה. ודא קודם שאחראי השרת תיקן את התקלה.',
+    details: ['אין בזה תקופת 21 יום חדשה.'],
+    confirmLabel: 'נסה שוב'
   },
   rollback: {
-    title: 'חזרה לגרסה הקודמת',
-    message: 'להחזיר בחנות את השירות ואת התוסף הכלול בו לגרסה הקודמת? אינו משנה התקנות קיימות ואינו מאפס את 21 הימים.',
-    confirmText: 'חזור לגרסה הקודמת'
+    title: 'לחזור לגרסה הקודמת?',
+    body: 'השירות והתוסף שבחנות יחזרו לגרסה הקודמת.',
+    details: ['מי שכבר התקין — לא מושפע.', 'לא מאפס את 21 הימים.'],
+    confirmLabel: 'חזור לגרסה הקודמת'
   }
 }
 
-function ReviewGroup({ title, description, reviews, rollbackIds, busy, onAction }: {
-  title: string
-  description?: string
-  reviews: AdminReview[]
-  rollbackIds: Set<string>
-  busy: { id: string; action: AdminAction } | null
-  onAction: (review: AdminReview, action: AdminAction) => void
-}) {
-  if (reviews.length === 0) return null
+const EMPTY: Record<ServiceTab, { title: string; description?: string; icon: string }> = {
+  pending: { icon: 'task_alt', title: 'אין הגשות שממתינות לאישור' },
+  failed: { icon: 'task_alt', title: 'אין הגשות שנעצרו בתקלה', description: 'כל הבדיקות האחרונות רצו בלי תקלה.' },
+  inProgress: { icon: 'hourglass_top', title: 'אין הגשות בבדיקה' },
+  draft: { icon: 'edit_note', title: 'אין טיוטות' },
+  closed: { icon: 'done_all', title: 'אין הגשות שהסתיימו לאחרונה' }
+}
+
+const TAB_NOTES: Partial<Record<ServiceTab, string>> = {
+  failed: 'אלה לא דחיות: הבדיקה נעצרה בגלל תקלה אצלנו, בשרת הבדיקה. העבר את הפרטים לאחראי השרת, ואחרי התיקון — "נסה שוב".',
+  draft: 'המפתח עדיין מעלה קבצים. טיוטה שלא הושלמה מתבטלת לבד אחרי 24 שעות.'
+}
+
+function ServiceSkeleton() {
   return (
-    <section className="space-y-3">
-      <h2 className="text-title-lg text-on-surface">{title} ({reviews.length})</h2>
-      {description && <p className="text-body-sm text-on-surface-variant">{description}</p>}
-      <ul className="flex flex-col gap-3">
-        {reviews.map((review) => (
-          <ServiceReviewAdminCard
-            key={review.id}
-            review={review}
-            actions={adminActionsFor(review, rollbackIds)}
-            busyAction={busy?.id === review.id ? busy.action : null}
-            onAction={onAction}
-          />
-        ))}
-      </ul>
-    </section>
+    <div aria-busy="true" className="flex flex-col gap-4">
+      <p role="status" className="sr-only">טוען את תוספי השירות…</p>
+      <div aria-hidden="true" className="flex flex-col gap-3">
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-11 w-full" />
+        {[0, 1, 2].map((i) => <Skeleton key={i} className="h-28 w-full" />)}
+      </div>
+    </div>
   )
 }
 
-/** לשונית "תוספי שירות" בניהול התוספים: בחירה והתחלת בדיקה, תקלות תפעוליות, חריגות וחזרה לאחור */
-export default function ServicePluginsAdmin() {
-  const { showAlert, showConfirm } = useDialog() as {
-    showAlert: (title: string, message: string) => void
-    showConfirm: (title: string, message: string, confirmText?: string) => Promise<boolean>
-  }
-  const [load, setLoad] = useState<Load>({ phase: 'loading' })
+/**
+ * תצוגת "תוספי שירות" במסך התוספים: ההגשות בלשוניות (ממתין לאישור · נעצר בתקלה · בבדיקה · טיוטה · סגור), עם
+ * הפעולות שמותרות לכל הגשה. ממשק בלבד — אותן נקודות קצה ואותם גופים כמו קודם (POST
+ * /api/service-plugins/admin/[pluginId]); השרת מעדכן את ההגשות בעדכונים מותנים בלבד.
+ * source — הנתונים מהמסך (שטוען אותם גם בשביל המונה); בלעדיו הרכיב טוען בעצמו.
+ * הלשונית נקבעת בכניסה (הראשונה שיש בה משהו) ולא זזה לבד אחרי פעולה, גם כשהיא מתרוקנת.
+ */
+export default function ServicePluginsAdmin({ source }: { source?: ServiceAdminSource }) {
+  const own = useServiceAdminData(!source)
+  const { load, reload } = source ?? own
+  const toast = useToast() as { show: (t: { message: string; tone?: 'error' | 'success' | 'info'; action?: { label: string; href?: string } }) => void }
+  const [confirm, confirmElement] = useConfirm() as unknown as [(o: object) => Promise<boolean>, React.ReactNode]
   const [busy, setBusy] = useState<{ id: string; action: AdminAction } | null>(null)
   const [exceptionFor, setExceptionFor] = useState<AdminReview | null>(null)
-
-  const reload = useCallback(async () => setLoad(await fetchAdmin()), [])
-
-  useEffect(() => {
-    let cancelled = false
-    fetchAdmin().then((next) => {
-      if (!cancelled) setLoad(next)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  const [tab, setTab] = useState<ServiceTab | null>(null)
 
   const post = async (review: AdminReview, action: AdminAction, reason?: string): Promise<boolean> => {
     setBusy({ id: review.id, action })
     try {
-      const response = await fetch(`/api/service-plugins/admin/${encodeURIComponent(review.pluginId)}`, {
+      // send של adminRequest: התחברות שפגה (הפניה או 401), אין חיבור או השרת לא עונה — AdminApiError
+      const response = await send(`/api/service-plugins/admin/${encodeURIComponent(review.pluginId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, jobId: review.id, ...(reason ? { reason } : {}) })
@@ -119,12 +113,15 @@ export default function ServicePluginsAdmin() {
       if (!response.ok) {
         let body: unknown = null
         try { body = await response.json() } catch { /* גוף לא JSON */ }
-        showAlert('הפעולה נכשלה', apiErrorMessages(body, 'הפעולה נכשלה').join('\n'))
+        const message = apiErrorMessages(body, 'הפעולה לא הצליחה.').join(' ')
+        toast.show({ tone: 'error', message })
         return false
       }
       return true
-    } catch {
-      showAlert('הפעולה נכשלה', 'שגיאת רשת — נסו שוב')
+    } catch (error) {
+      toast.show(error instanceof AdminApiError
+        ? { ...errorToast(error, 'הפעולה לא הצליחה.'), tone: 'error' }
+        : { tone: 'error', message: 'אין חיבור לשרת. בדוק את החיבור ונסה שוב.' })
       return false
     } finally {
       setBusy(null)
@@ -137,65 +134,94 @@ export default function ServicePluginsAdmin() {
       setExceptionFor(review)
       return
     }
-    const confirm = CONFIRMS[action]
-    if (confirm && !(await showConfirm(confirm.title, `${review.pluginName ?? ''}\n\n${confirm.message}`, confirm.confirmText))) return
-    await post(review, action)
+    const options = CONFIRMS[action]
+    if (options && !(await confirm({ ...options, body: `״${review.pluginName ?? ''}״ — ${options.body}` }))) return
+    if (await post(review, action)) {
+      const done: Partial<Record<AdminAction, string>> = { start: 'הבדיקה התחילה', cancel: 'ההגשה בוטלה', retry: 'ההגשה חזרה לבדיקה', rollback: 'החנות חזרה לגרסה הקודמת' }
+      if (done[action]) toast.show({ tone: 'success', message: `״${review.pluginName ?? ''}״: ${done[action]}` })
+    }
   }
 
-  if (load.phase === 'loading') return <Loader size="md" label="טוען תוספי שירות…" className="mx-auto my-12" />
+  if (load.phase === 'loading') return <ServiceSkeleton />
+  if (load.phase === 'disabled') {
+    return <EmptyState icon="block" title="תוספי השירות כבויים באתר" description="כשיופעלו, ההגשות שלהם יופיעו כאן." />
+  }
   if (load.phase === 'error') {
-    return (
-      <div className="space-y-3 rounded-(--card-radius) bg-surface-container p-6 text-center">
-        <p className="text-body-md text-on-surface">{load.message}</p>
-        <Button variant="outlined" size="sm" icon="refresh" onClick={() => void reload()}>נסה שוב</Button>
-      </div>
-    )
+    return <LoadError error={load.error} title="לא הצלחנו לטעון את תוספי השירות" sessionText="התחבר מחדש כדי לראות את תוספי השירות. אחרי ההתחברות תחזור לכאן." onRetry={() => void reload()} />
   }
 
   const { data } = load
   const groups = groupAdminReviews(data.reviews)
   const rollbackIds = rollbackReviewIds(data.reviews)
   const pausedUntil = quotaPause(data.control)
+  if (tab === null) setTab(defaultServiceTab(groups))
+  const current = tab ?? defaultServiceTab(groups)
+  const currentTab = SERVICE_TABS.find((t) => t.id === current)!
+  const reviews = groups[currentTab.group]
 
   return (
-    <div className="space-y-8">
-      <FormNote icon="shield">
-        <p>
-          ההגנה העיקרית היא זהות הקבצים (התאמה ל-Release ולתוסף שבתוך המתקין), אישור הבנייה של GitHub Actions וסורקי
-          {' '}הנוזקות. סקירת המקור בידי AI חלקית מטבעה — היא מכוונת לנקודות סיכון, אך אינה ערובה.
+    <div className="flex flex-col gap-5">
+      <details className="group rounded-(--radius-control) bg-surface px-4 py-3 text-body-sm text-on-surface-variant">
+        <summary className="flex min-h-(--touch-target) cursor-pointer list-none items-center gap-2 text-label-lg text-on-surface [&::-webkit-details-marker]:hidden">
+          <AppIcon name="shield" className="text-icon-lg text-primary" />
+          <span className="flex-1">איך נבדקת הגשה</span>
+          <AppIcon name="expand_more" className="text-icon-lg group-open:hidden" />
+          <AppIcon name="expand_less" className="hidden text-icon-lg group-open:inline" />
+        </summary>
+        <p className="mt-1">
+          לפני פרסום, כל הגשה נבדקת אוטומטית: שהקבצים זהים למה שנבנה בפועל, שהבנייה הצליחה, ושאין בהם תוכנה מזיקה.
+          {' '}יש גם קריאה אוטומטית של הקוד, שמחפשת מקומות מסוכנים — היא עוזרת, אבל לא מבטיחה שאין בעיה.
         </p>
         <p className="mt-1.5">
-          "בחר בתוסף והתחל בדיקה" הוא אישור הפרסום היחיד: אם הבדיקות עוברות — ההגשה מתפרסמת אוטומטית. אין עקיפה של ממצא אבטחה.
+          ״אשר והתחל בדיקה״ הוא האישור היחיד לפרסום: אם הבדיקות עוברות — ההגשה מתפרסמת לבד. אין דרך לעקוף ממצא אבטחה.
         </p>
-      </FormNote>
+      </details>
 
       {pausedUntil && (
-        <div role="status" className="rounded-(--card-radius) bg-warning-container p-4 text-body-sm text-on-warning-container">
-          תור הסקירה מושהה עד <Ltr>{formatDateWithTime(pausedUntil)}</Ltr> בגלל מכסת הסקירה. הבדיקות ימשיכו אוטומטית — אין צורך בפעולה.
-        </div>
+        <p role="status" className="rounded-(--radius-control) bg-warning-container px-4 py-3 text-body-sm text-on-warning-container">
+          הבדיקות מושהות עד {formatDateWithTime(pausedUntil)}, כי נגמרה המכסה שלהן לעכשיו. הן ימשיכו לבד — אין צורך לעשות כלום.
+        </p>
       )}
 
-      {data.reviews.length === 0 && <p className="text-body-md text-on-surface-variant">אין הגשות של תוספי שירות.</p>}
+      {data.reviews.length === 0 ? (
+        <EmptyState icon="hub" title="אין הגשות של תוספי שירות" description="כשמפתח יגיש תוסף שירות או עדכון שלו, ההגשה תופיע כאן, ותצטרך לאשר אותה לפני שהבדיקה מתחילה." />
+      ) : (
+        <>
+        <Tabs
+          label="ההגשות של תוספי השירות"
+          idPrefix={TAB_PREFIX}
+          items={SERVICE_TABS.map((t) => {
+            const n = groups[t.group].length
+            const count = n > 0 ? ` (${n})` : ''
+            return { id: t.id, label: `${t.label}${count}`, shortLabel: t.shortLabel ? `${t.shortLabel}${count}` : undefined }
+          })}
+          value={current}
+          onChange={(id: string) => setTab(id as ServiceTab)}
+        />
 
-      <ReviewGroup title="ממתינים לבחירה" reviews={groups.pending} rollbackIds={rollbackIds} busy={busy} onAction={handleAction} />
-      <ReviewGroup
-        title="תקלות תפעוליות"
-        description="אלה אינן דחיות: הבדיקה נעצרה בגלל תקלה בשרת הבדיקה. יש להעביר לאחראי השרת, ואחרי הטיפול — ניסיון חוזר."
-        reviews={groups.operator}
-        rollbackIds={rollbackIds}
-        busy={busy}
-        onAction={handleAction}
-      />
-      <ReviewGroup title="בבדיקה" reviews={groups.inProgress} rollbackIds={rollbackIds} busy={busy} onAction={handleAction} />
-      <ReviewGroup
-        title="טיוטות שטרם הוגשו"
-        description="המפתח עדיין מעלה קבצים. טיוטה לא גמורה מתבטלת אוטומטית אחרי 24 שעות."
-        reviews={groups.notSubmitted}
-        rollbackIds={rollbackIds}
-        busy={busy}
-        onAction={handleAction}
-      />
-      <ReviewGroup title="הסתיימו לאחרונה" reviews={groups.finished} rollbackIds={rollbackIds} busy={busy} onAction={handleAction} />
+        <div {...tabPanelProps(TAB_PREFIX, current)} className="flex flex-col gap-3 outline-none">
+          {TAB_NOTES[current] && reviews.length > 0 && <p className="text-body-sm text-on-surface-variant">{TAB_NOTES[current]}</p>}
+          {reviews.length === 0 ? (
+            <EmptyState icon={EMPTY[current].icon} title={EMPTY[current].title} description={EMPTY[current].description} as="h3" />
+          ) : (
+            <ul className="flex flex-col gap-3">
+              {reviews.map((review) => (
+                <ServiceReviewAdminCard
+                  key={review.id}
+                  review={review}
+                  actions={adminActionsFor(review, rollbackIds)}
+                  busyAction={busy?.id === review.id ? busy.action : null}
+                  onAction={handleAction}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
+
+        </>
+      )}
+
+      {confirmElement}
 
       {exceptionFor && (
         <EmergencyExceptionDialog
@@ -206,7 +232,7 @@ export default function ServicePluginsAdmin() {
             const ok = await post(exceptionFor, 'emergency', reason)
             if (ok) {
               setExceptionFor(null)
-              showAlert('החריגה אושרה', 'כעת אפשר ללחוץ "בחר בתוסף והתחל בדיקה". החריגה תיצרך בהתחלת הבדיקה.')
+              toast.show({ tone: 'success', message: 'החריגה אושרה. עכשיו אפשר ללחוץ "אשר והתחל בדיקה" — החריגה תנוצל בתחילת הבדיקה.' })
             }
           }}
         />

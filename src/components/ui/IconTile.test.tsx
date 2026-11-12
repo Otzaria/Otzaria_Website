@@ -12,6 +12,11 @@ describe('IconTile', () => {
     expect(tile).toHaveTextContent('search')
   })
 
+  it('tone=error — צבעי התקלה מהטוקנים (error-container)', () => {
+    const { container } = render(<IconTile icon="sync_problem" tone="error" />)
+    expect((container.firstElementChild as HTMLElement).className).toContain('bg-error-container text-on-error-container')
+  })
+
   it('custom — אייקון מותאם (מסכה) במקום גליף', () => {
     const { container } = render(<IconTile custom="donate" />)
     expect(container.querySelector('.app-icon-donate')).not.toBeNull()

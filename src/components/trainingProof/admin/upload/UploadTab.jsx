@@ -1,16 +1,55 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import Button from '@/components/ui/Button'
+import ListLoading from '@/components/ui/ListLoading'
+import Notice from '@/components/ui/Notice'
+import ProgressBar from '@/components/ui/ProgressBar'
 import { useAsk } from '../useAsk'
 import { SECTION_LABELS } from '@/lib/trainingProof/vocab'
 import { getJson, sendJson, fmt, fmtDate } from '../api'
-import { BTN, Card, Empty, Tag } from '../bits'
+import { Card, Empty, Tag } from '../bits'
 import UploadCard, { readText } from './UploadCard'
 
-// לשונית "העלאת חומר": שלושה כרטיסים (חלק לכל כרטיס) וטבלת החבילות באתר —
+// לשונית "העלאה": שלושה כרטיסים (חלק לכל כרטיס) ורשימת החבילות באתר —
 // מה נקרא מכל קובץ, כמה כבר הוגה, השהה/פתח, ומחיקה (עם אזהרה).
 
-function PackagesTable({ packages, onChanged }) {
+// חבילה אחת: שם ומזהה, החלק, מה נקרא מהקובץ, כמה הוגה (פס), מצב — ו"השהה/פתח" · "מחק" (אדום, אחרון)
+function PackageRow({ p, busy, onToggle, onRemove }) {
+  const done = p.counts.submitted + p.counts.approved
+  return (
+    <li className="flex flex-col gap-3 border-b border-outline-variant py-3 last:border-0 lg:flex-row lg:items-center">
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-title-sm text-on-surface">{p.label || '—'}</span>
+          <Tag>{SECTION_LABELS[p.section]}</Tag>
+          {p.open ? <Tag tone="ok">פתוח למתנדבים</Tag> : <Tag>מושהה</Tag>}
+        </div>
+        <span className="text-body-sm text-on-surface-variant">
+          <bdi dir="ltr">{p.packageId} · {p.part}/{p.parts}</bdi> · הועלה {fmtDate(p.uploadedAt)}
+        </span>
+        <span className="text-body-sm text-on-surface">{readText(p.section, p.read)}</span>
+      </div>
+      <div className="flex min-w-0 flex-col gap-1 lg:w-48">
+        <ProgressBar value={done} max={p.counts.total || 1} label={`כמה הוגה ב${p.label || p.packageId}`} valueText={`${fmt(done)} מתוך ${fmt(p.counts.total)}`} tone="success" />
+        <span className="text-body-sm tabular-nums text-on-surface-variant">
+          הוגהו {fmt(done)} מתוך {fmt(p.counts.total)}
+          {p.counts.held ? ` · ${fmt(p.counts.held)} בעבודה` : ''}
+        </span>
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        <Button variant="text" size="sm" icon={p.open ? 'pause_circle' : 'play_circle'} softDisabled={busy} onClick={onToggle}>
+          {p.open ? 'השהה' : 'פתח'}
+        </Button>
+        <Button variant="text" size="sm" icon="delete" softDisabled={busy} onClick={onRemove} className="text-error">
+          מחק
+        </Button>
+      </div>
+    </li>
+  )
+}
+
+function PackagesList({ packages, onChanged }) {
   const { showAlert, ask } = useAsk()
   const [busy, setBusy] = useState(null)
   const path = (p) => `/packages/${p.packageId}/${p.part}`
@@ -49,60 +88,11 @@ function PackagesTable({ packages, onChanged }) {
 
   if (!packages.length) return <Empty>עוד לא הועלו חבילות</Empty>
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="bg-surface-variant/50 text-right">
-          <tr>
-            <th className="p-2">חבילה</th>
-            <th className="p-2">חלק</th>
-            <th className="p-2">מה בקובץ (נקרא ממנו)</th>
-            <th className="p-2">הוגהו</th>
-            <th className="p-2">מצב</th>
-            <th className="p-2" />
-          </tr>
-        </thead>
-        <tbody>
-          {packages.map((p) => {
-            const done = p.counts.submitted + p.counts.approved
-            const total = p.counts.total || 1
-            return (
-              <tr key={`${p.packageId}#${p.part}`} className="border-t border-surface-variant align-top">
-                <td className="p-2">
-                  <b>{p.label || '—'}</b>
-                  <div className="text-xs text-on-surface/50" dir="ltr">
-                    {p.packageId} · {p.part}/{p.parts}
-                  </div>
-                  <div className="text-xs text-on-surface/50">הועלה {fmtDate(p.uploadedAt)}</div>
-                </td>
-                <td className="p-2">{SECTION_LABELS[p.section]}</td>
-                <td className="p-2 text-xs">{readText(p.section, p.read)}</td>
-                <td className="min-w-36 p-2">
-                  <div className="h-2 overflow-hidden rounded-full bg-surface-variant">
-                    <div className="h-full bg-success-600" style={{ width: `${(100 * done) / total}%` }} />
-                  </div>
-                  <div className="text-xs tabular-nums">
-                    {fmt(done)} / {fmt(p.counts.total)}
-                    {p.counts.held ? ` · ${fmt(p.counts.held)} בעבודה` : ''}
-                  </div>
-                </td>
-                <td className="p-2">{p.open ? <Tag tone="ok">פתוח למתנדבים</Tag> : <Tag>מושהה</Tag>}</td>
-                <td className="p-2">
-                  <div className="flex flex-nowrap gap-1">
-                    <button className={BTN.outline} disabled={busy === p} onClick={() => toggle(p)}>
-                      <span className="material-symbols-outlined text-sm">{p.open ? 'pause_circle' : 'play_circle'}</span>
-                      {p.open ? 'השהה' : 'פתח'}
-                    </button>
-                    <button className={BTN.danger} disabled={busy === p} onClick={() => remove(p)}>
-                      <span className="material-symbols-outlined text-sm">delete</span> מחק
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
+    <ul aria-label="החבילות" className="flex flex-col">
+      {packages.map((p) => (
+        <PackageRow key={`${p.packageId}#${p.part}`} p={p} busy={busy === p} onToggle={() => toggle(p)} onRemove={() => remove(p)} />
+      ))}
+    </ul>
   )
 }
 
@@ -126,20 +116,17 @@ export default function UploadTab({ onChanged }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex gap-2 rounded-xl bg-info-100 p-3 text-sm text-info-800">
-        <span className="material-symbols-outlined">info</span>
-        <div>
-          בתחנת-האימון בוחרים מה לייצא ולאיזה צורך, והתחנה בונה קובץ ZIP. <b>אין מה לבחור כאן:</b> כל פריט בקובץ נושא איתו מאיזה ספר ומאיזה מסלול הוא בא, וכך גם יחזור לתחנה. קובץ
-          שהועלה לחלק הלא-נכון — האתר מזהה ומודיע. העלאה חוזרת של אותו קובץ לא משכפלת דבר.
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-3">
+      <Notice tone="info" role={null}>
+        במחשב האימון בוחרים מה לייצא ולאיזה צורך, והוא בונה קובץ ZIP. אין מה לבחור כאן: כל פריט בקובץ נושא איתו מאיזה ספר ומאיזה
+        מסלול הוא בא, וכך גם יחזור. קובץ שהועלה לחלק הלא-נכון — האתר מזהה ומודיע. העלאה חוזרת של אותו קובץ לא משכפלת דבר.
+      </Notice>
+      <div className="grid gap-4 lg:grid-cols-3">
         {['ocr', 'router', 'frames'].map((s) => (
           <UploadCard key={s} section={s} onDone={changed} />
         ))}
       </div>
       <Card title="החבילות באתר" icon="inventory">
-        {packages === null ? <Empty>טוען…</Empty> : <PackagesTable packages={packages} onChanged={changed} />}
+        {packages === null ? <ListLoading rows={2} label="טוען את החבילות…" /> : <PackagesList packages={packages} onChanged={changed} />}
       </Card>
     </div>
   )

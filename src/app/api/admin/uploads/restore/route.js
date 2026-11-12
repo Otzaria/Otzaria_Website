@@ -23,8 +23,14 @@ export async function PUT(request) {
     
     const result = await Upload.findByIdAndUpdate(
       uploadId,
-      { 
-        $unset: { isDeleted: '', deletedAt: '' }
+      // isDeleted: false ולא $unset: הרשימה (/api/admin/uploads/list, עמוד ההעלאות והמונים)
+      // מסננת לפי isDeleted: false, ומסמך בלי השדה לא מתאים לתנאי הזה — העלאה ששוחזרה
+      // נעלמה גם מהרשימה וגם מהאשפה. deletedAt נמחק כמו קודם.
+      // העלאות שכבר שוחזרו כך לפני התיקון (בלי השדה) — לא מתוקנות כאן; ראו
+      // https://github.com/Otzaria/Otzaria_Website/issues/241
+      {
+        $set: { isDeleted: false },
+        $unset: { deletedAt: '' }
       },
       { returnDocument: 'after' }
     );

@@ -22,19 +22,19 @@ export default function VolunteerPicker({ vols, onPick, onClose, unit = 'שור�
           <Button variant="text" size="sm" onClick={onClose}>
             ביטול
           </Button>
-          <Button variant="filled" size="sm" disabled={!pick} onClick={() => onPick(pick)}>
+          <Button variant="filled" size="sm" softDisabled={!pick} onClick={() => pick && onPick(pick)}>
             המשך
           </Button>
         </div>
       }
     >
       {vols.length ? (
-        <div role="radiogroup" className="flex flex-col gap-1">
+        <div role="radiogroup" aria-label="מתנדב" className="flex flex-col gap-1">
           {vols.map((v) => (
-            <label key={v.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-surface-variant">
-              <input type="radio" name="tp-vol" value={v.id} checked={pick?.id === v.id} onChange={() => setPick(v)} />
-              <b>{v.name}</b>
-              <span className="text-sm text-on-surface/60">
+            <label key={v.id} className="flex min-h-11 cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 rounded-(--radius-control) px-2 py-1.5 hover:bg-surface-selected">
+              <input type="radio" name="tp-vol" value={v.id} checked={pick?.id === v.id} onChange={() => setPick(v)} className="size-5 shrink-0 cursor-pointer accent-primary" />
+              <span className="text-label-lg text-on-surface">{v.name}</span>
+              <span className="text-body-sm text-on-surface-variant">
                 {fmt(v.pending)} {unit} ממתינות
               </span>
               <Tag tone={matchTone(v.match)} title={v.judged ? `מתוך ${fmt(v.judged)} שנסקרו` : 'עוד לא נסקרה אף הגשה שלו'}>
@@ -44,7 +44,7 @@ export default function VolunteerPicker({ vols, onPick, onClose, unit = 'שור�
           ))}
         </div>
       ) : (
-        <p className="text-on-surface/60">אין הגשות ממתינות</p>
+        <p className="text-body-md text-on-surface-variant">אין הגשות ממתינות</p>
       )}
     </Dialog>
   )

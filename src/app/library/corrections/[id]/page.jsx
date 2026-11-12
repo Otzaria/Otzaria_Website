@@ -153,7 +153,7 @@ export default function CorrectionReportPage() {
       {/* נשאר גלוי בגלילה, מתחת לכותרת האתר (sticky top-0, h-16) — כולל הודעת התוצאה/השגיאה של הפעולה האחרונה */}
       <div className="sticky top-16 z-40 -mx-1 px-1 py-2 bg-background/95 backdrop-blur-sm space-y-2">
         <Link href="/library/corrections" className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
-          <span className="material-symbols-outlined text-base">arrow_forward</span> חזרה לתור
+          <span className="material-symbols-outlined text-base">arrow_forward</span> חזרה לדיווחים
         </Link>
         {notice && (
           <div role="status" className={`rounded-lg p-3 border flex items-start justify-between gap-2 ${notice.tone === 'success' ? 'bg-success-50 border-success-200 text-success-800' : 'bg-danger-50 border-danger-200 text-danger-700'}`}>

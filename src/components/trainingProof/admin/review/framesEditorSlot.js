@@ -14,6 +14,7 @@
 
 import { createElement as h, useState } from 'react'
 import FramesEditorBase from '@/components/trainingProof/frames/FramesEditor'
+import { buttonClasses } from '@/components/ui/buttonStyles'
 
 // onApprove — Enter בעורך (כשהעורך לא תופס את המקש, למשל בסדר-קריאה): "אשר את העמוד";
 // ואם שיניתם משהו — "תקן ואשר" עם המסגרות שבעורך
@@ -27,7 +28,7 @@ export function FramesEditor({ page, streams, onSave, onApprove }) {
         'button',
         {
           type: 'button',
-          className: 'mt-2 w-full rounded-lg bg-primary px-3 py-2 text-sm font-bold text-on-primary disabled:opacity-50',
+          className: buttonClasses({ variant: 'tonal', size: 'sm', fullWidth: true, disabled: !dirty, className: 'mt-2' }),
           disabled: !dirty,
           onClick: () => onSave({ status: 'marked', frames }),
           title: dirty ? '' : 'עוד לא שיניתם דבר — אפשר לאשר את העמוד כמו שהוא',

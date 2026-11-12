@@ -16,16 +16,17 @@ import { usePortalContainer } from './portalContainer'
  *
  * מקלדת: Enter/רווח/↓ על הכפתור פותחים ומעבירים פוקוס לפריט הראשון (אחרי שמיקום התפריט חושב —
  * לא כשהוא עוד visibility:hidden); ↑↓ Home End בתוך התפריט — וגם כשנפתח בעכבר והפוקוס מחוצה לו
- * (המקש הראשון נכנס לתפריט); Esc סוגר תמיד (מאזין capture במסמך כל עוד התפריט פתוח, כך שגם
+ * (המקש הראשון נכנס לתפריט); Tab סוגר וממשיך מהכפתור לפקד הבא; Esc סוגר תמיד (מאזין capture במסמך כל עוד התפריט פתוח, כך שגם
  * כשהפוקוס נשאר בעורך — keepFocus — Esc לא מגיע לעורך) ומחזיר את הפוקוס לכפתור אם הוא היה
  * בתפריט או בכפתור; Tab ולחיצה מחוץ לתפריט סוגרים. הרמז של הכפתור מוסתר כל עוד התפריט פתוח.
  * keepFocus — לחיצת עכבר לא לוקחת את הפוקוס מהעורך (הסמן והבחירה ב-textarea נשמרים).
  * size — גודל הכפתור (Button); בשורות הכלים של העורך "tool" (וגם רמז קומפקטי).
  *
  * @typedef {{ id: string, label: string, icon?: string, glyph?: string, shortcut?: string[],
- *   disabled?: boolean, pressed?: boolean, radio?: boolean, mirror?: boolean, glyphClassName?: string, onSelect: () => void } | { separator: true, id?: string }} MenuItem
+ *   disabled?: boolean, pressed?: boolean, radio?: boolean, mirror?: boolean, danger?: boolean, glyphClassName?: string, onSelect: () => void } | { separator: true, id?: string }} MenuItem
  *   pressed — פריט מצב (menuitemcheckbox, aria-checked); radio — בחירה אחת מקבוצה (menuitemradio);
- *   mirror — אייקון כיווני שמתהפך ב-RTL (ביטול/ביצוע מחדש).
+ *   mirror — אייקון כיווני שמתהפך ב-RTL (ביטול/ביצוע מחדש); danger — פעולה הרסנית (מחק): טקסט
+ *   ואייקון בצבע השגיאה. מקומה בסוף התפריט, אחרי מפריד.
  *
  * @param {{ icon?: string, label: string, tip?: string, items: MenuItem[], keepFocus?: boolean,
  *   className?: string, menuLabel?: string, size?: 'sm'|'tool', keyshortcuts?: string }} props
@@ -135,7 +136,9 @@ export default function MenuButton({ icon = 'more_vert', label, tip, items, keep
     else if (event.key === 'ArrowUp') move(index < 0 ? list.length - 1 : index - 1)
     else if (event.key === 'Home') move(0)
     else if (event.key === 'End') move(list.length - 1)
-    else if (event.key === 'Tab') close(false)
+    // Tab: סוגר והפוקוס חוזר לכפתור — וה-Tab עצמו (בלי preventDefault) ממשיך משם לפקד הבא בדף,
+    // ולא קופץ מסוף הפורטל לתחילת הדף
+    else if (event.key === 'Tab') close(true)
   }
 
   const choose = (item) => {
@@ -205,12 +208,13 @@ function MenuRow({ item, keepFocus, onChoose }) {
         'flex min-h-(--touch-target) w-full items-center gap-3 rounded-(--radius-control) px-3 text-start text-body-sm',
         item.disabled ? 'cursor-not-allowed opacity-40' : 'hover:bg-surface-selected focus-visible:bg-surface-selected',
         item.pressed && 'bg-surface-selected',
+        item.danger && 'text-error',
         FOCUS_RING_INSET
       )}
     >
-      <span aria-hidden="true" className="flex w-6 shrink-0 justify-center text-on-surface-variant">
+      <span aria-hidden="true" className={cx('flex w-6 shrink-0 justify-center', item.danger ? 'text-error' : 'text-on-surface-variant')}>
         {item.icon
-          ? <AppIcon name={item.icon} className={cx('text-xl', item.mirror && 'rtl:-scale-x-100')} />
+          ? <AppIcon name={item.icon} className={cx('text-icon-lg', item.mirror && 'rtl:-scale-x-100')} />
           : <span dir="ltr" className={cx('text-label-md [unicode-bidi:isolate]', item.glyphClassName || 'font-light')}>{item.glyph}</span>}
       </span>
       <span className="min-w-0 flex-1">{item.label}</span>

@@ -4,8 +4,10 @@ import { useEffect, useState } from 'react'
 import Dialog from '@/components/ui/Dialog'
 import { SECTION_LABELS, SCRIPT_LABELS, OCR_ACTION_LABELS } from '@/lib/trainingProof/vocab'
 import { getJson, fmtDate } from '../api'
+import ErrorNotice from '@/components/ui/ErrorNotice'
+import ListLoading from '@/components/ui/ListLoading'
 import { Empty, Tag } from '../bits'
-import { wordDiff } from '../wordDiff'
+import DiffText from '../DiffText'
 
 // "הצג תיקונים": מה שהמנהל שינה בסימונים של מתנדב אחד — הגרסה של המתנדב ← הגרסה של המנהל,
 // החלק והתאריך, החדשים קודם. היומן נשמר גם אחרי שהפריטים ירדו לתחנה ונמחקו מהאתר.
@@ -14,7 +16,7 @@ const scriptName = (s) => SCRIPT_LABELS[s] || s || '—'
 
 // גרסה אחת (של המתנדב או של המנהל) כטקסט קצר
 function Version({ section, v, track }) {
-  if (!v) return <span className="text-on-surface/50">—</span>
+  if (!v) return <span className="text-on-surface-variant">—</span>
   if (section === 'ocr') {
     if (v.action === 'ok' || v.action === 'fixed')
       return (
@@ -39,17 +41,7 @@ function Version({ section, v, track }) {
 
 // בזיהוי, כששני הצדדים טקסט — ההבדל ברמת מילה
 function OcrDiff({ before, after, track }) {
-  const dir = track === 'latin' ? 'ltr' : 'rtl'
-  return (
-    <span dir={dir} className="leading-7">
-      {wordDiff(before.text, after.text).map((d, i) => (
-        <span key={i}>
-          {i > 0 && ' '}
-          {d.op === 'same' ? d.t : d.op === 'del' ? <del className="rounded bg-danger-100 px-0.5 text-danger-700">{d.t}</del> : <ins className="rounded bg-success-100 px-0.5 text-success-800 no-underline">{d.t}</ins>}
-        </span>
-      ))}
-    </span>
-  )
+  return <DiffText from={before.text} to={after.text} dir={track === 'latin' ? 'ltr' : 'rtl'} />
 }
 
 export default function CorrectionsDialog({ vol, onClose }) {
@@ -67,9 +59,9 @@ export default function CorrectionsDialog({ vol, onClose }) {
   return (
     <Dialog title={`התיקונים שלך בסימונים של ${vol.name || 'המתנדב'}`} subtitle="החדשים קודם · נשמרים גם אחרי ההורדה לתחנה" onClose={onClose} className="sm:max-w-3xl">
       {!data ? (
-        <Empty>טוען…</Empty>
+        <ListLoading rows={3} label="טוען את התיקונים…" />
       ) : data.error ? (
-        <Empty>{data.error}</Empty>
+        <ErrorNotice text={data.error} />
       ) : !data.items.length ? (
         <Empty>עוד לא תיקנת אף סימון שלו</Empty>
       ) : (
@@ -77,8 +69,8 @@ export default function CorrectionsDialog({ vol, onClose }) {
           {data.items.map((c) => {
             const text = c.section === 'ocr' && c.before?.text && c.after?.text
             return (
-              <li key={c.id} className="flex flex-col gap-1 border-b border-surface-variant py-2 text-sm last:border-0">
-                <div className="flex flex-wrap items-center gap-1.5 text-xs text-on-surface/60">
+              <li key={c.id} className="flex flex-col gap-1.5 border-b border-outline-variant py-3 text-body-md text-on-surface last:border-0">
+                <div className="flex flex-wrap items-center gap-1.5 text-body-sm text-on-surface-variant">
                   <Tag tone="info">{SECTION_LABELS[c.section]}</Tag>
                   <span>{fmtDate(c.at)}</span>
                   <span>
@@ -87,9 +79,9 @@ export default function CorrectionsDialog({ vol, onClose }) {
                   {c.changes != null && <span>· {c.changes} מסגרות שונו</span>}
                 </div>
                 <div className="grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-0.5">
-                  <span className="text-xs text-on-surface/60">המתנדב:</span>
+                  <span className="text-label-md text-on-surface-variant">המתנדב:</span>
                   <Version section={c.section} v={c.before} track={c.track} />
-                  <span className="text-xs text-on-surface/60">אתה:</span>
+                  <span className="text-label-md text-on-surface-variant">אתה:</span>
                   {text ? <OcrDiff before={c.before} after={c.after} track={c.track} /> : <Version section={c.section} v={c.after} track={c.track} />}
                 </div>
               </li>
@@ -97,7 +89,7 @@ export default function CorrectionsDialog({ vol, onClose }) {
           })}
         </ol>
       )}
-      {data?.items?.length >= (data?.keep || Infinity) && <p className="pt-2 text-xs text-on-surface/60">מוצגים {data.keep} התיקונים האחרונים — הישנים יותר לא נשמרים.</p>}
+      {data?.items?.length >= (data?.keep || Infinity) && <p className="pt-2 text-body-sm text-on-surface-variant">מוצגים {data.keep} התיקונים האחרונים — הישנים יותר לא נשמרים.</p>}
     </Dialog>
   )
 }

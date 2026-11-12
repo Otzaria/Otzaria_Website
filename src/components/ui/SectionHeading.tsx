@@ -56,7 +56,7 @@ export default function SectionHeading({
         {ornament && <TitleOrnament className={cx('mt-4', !center && 'ms-0')} />}
       </div>
       {subtitle && (
-        <p className="mt-4 max-w-measure text-balance text-base text-on-surface-variant md:text-lg">{subtitle}</p>
+        <p className="mt-4 max-w-measure text-balance text-body-md leading-normal text-on-surface-variant md:text-body-lg">{subtitle}</p>
       )}
     </div>
   )

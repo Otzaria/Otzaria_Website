@@ -4,15 +4,17 @@ import { useCallback, useEffect, useState } from 'react'
 import Button from '@/components/ui/Button'
 import Loader from '@/components/ui/Loader'
 import { PENDING_CONFLICT_STATUSES } from '@/lib/ocr/ocrConflictView'
+import { AdminApiError, send } from '@/components/admin/list/adminRequest'
 import OcrConflictItem from './OcrConflictItem'
 
 const PAGE_SIZE = 50
 const LIST_URL = '/api/admin/books/ocr/conflicts'
 
 /**
- * פאנל ההתנגשויות של עבודת OCR מקומי: עמודים שנערכו אחרי יצירת העבודה, שטקסט ה-OCR שלהם
+ * פאנל ההתנגשויות של עבודת OCR מקומי: עמודים שנערכו אחרי יצירת העבודה, שהטקסט שזוהה שלהם
  * נשמר להחלטת מנהל ולא נדרס. טוען את הרשימה מ-/api/admin/books/ocr/conflicts (בעמודים של 50),
- * ומבצע אימוץ/שמירת הקיים מול /api/admin/books/ocr/conflicts/:id.
+ * ומבצע אימוץ/שמירת הקיים מול /api/admin/books/ocr/conflicts/:id. הבקשות דרך send של list/adminRequest: התחברות
+ * שפגה (הפניה לדף ההתחברות) — שגיאה עם הסבר ולא "הצלחה" ריקה, ולכל בקשה תקרת זמן.
  *
  * שני מצבים: jobId — כל ההתנגשויות של עבודה אחת; bookId — ההתנגשויות הפתוחות בספר מכל
  * העבודות (כדי שעבודה חדשה לא תסתיר התנגשויות ישנות), כל אחת עם העבודה שממנה הגיעה.
@@ -43,7 +45,7 @@ function ConflictsPanelBody({ jobId, bookId, onChanged }) {
   const load = useCallback(async (offset, cursor = null) => {
     const scope = bookId ? `bookId=${encodeURIComponent(bookId)}&status=open` : `jobId=${encodeURIComponent(jobId)}`
     const paging = cursor ? `after=${encodeURIComponent(cursor)}` : `offset=${offset}`
-    const res = await fetch(`${LIST_URL}?${scope}&limit=${PAGE_SIZE}&${paging}`)
+    const res = await send(`${LIST_URL}?${scope}&limit=${PAGE_SIZE}&${paging}`)
     const data = await res.json().catch(() => ({}))
     if (!res.ok || !data.success) throw new Error(data.error || 'טעינת ההתנגשויות נכשלה')
     return data
@@ -109,7 +111,7 @@ function ConflictsPanelBody({ jobId, bookId, onChanged }) {
       const body = action === 'apply'
         ? { action, expectedPageUpdatedAt: conflict.pageUpdatedAt }
         : { action }
-      const res = await fetch(`${LIST_URL}/${encodeURIComponent(conflict.id)}`, {
+      const res = await send(`${LIST_URL}/${encodeURIComponent(conflict.id)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -128,8 +130,9 @@ function ConflictsPanelBody({ jobId, bookId, onChanged }) {
       // העמוד נערך שוב / ההתנגשות טופלה בידי אחר — טוענים מחדש כדי להציג את המצב העדכני
       if (res.status === 409) await reload()
       setErrors((prev) => ({ ...prev, [conflict.id]: message }))
-    } catch {
-      setErrors((prev) => ({ ...prev, [conflict.id]: 'תקלה בתקשורת' }))
+    } catch (e) {
+      // התחברות שפגה / אין חיבור / השרת לא עונה — ההסבר של list/adminRequest
+      setErrors((prev) => ({ ...prev, [conflict.id]: e instanceof AdminApiError ? e.message : 'תקלה בתקשורת' }))
     } finally {
       setBusyId(null)
     }
@@ -138,16 +141,16 @@ function ConflictsPanelBody({ jobId, bookId, onChanged }) {
   return (
     <section aria-label="התנגשויות בקליטה" className="space-y-3 rounded-control border border-outline-variant p-3">
       <div>
-        <h4 className="text-sm font-bold text-on-surface">
+        <h4 className="text-title-sm text-on-surface">
           {bookMode
             ? `התנגשויות בקליטה בספר${!loading ? ` (${openCount} ממתינות)` : ''}`
             : `התנגשויות בקליטה${!loading && total > 0 ? ` (${openCount} ממתינות מתוך ${total})` : ''}`}
         </h4>
-        <p className="mt-1 text-xs text-on-surface-variant">
+        <p className="mt-1 text-label-sm font-normal text-on-surface-variant">
           {bookMode
-            ? 'עמודים שנערכו אחרי שעבודת ה-OCR המקומי נוצרה, מכל העבודות של הספר — טקסט ה-OCR שלהם לא נכתב, כדי לא לדרוס את העריכה.'
-            : 'עמודים שנערכו אחרי שהעבודה נוצרה — טקסט ה-OCR שלהם לא נכתב, כדי לא לדרוס את העריכה.'}
-          {' '}אפשר לאמץ את טקסט ה-OCR או לשמור את הטקסט הקיים.
+            ? 'עמודים שנערכו אחרי שעבודת הזיהוי במחשב המקומי נוצרה, מכל העבודות של הספר — הטקסט שזוהה שלהם לא נכתב, כדי לא לדרוס את העריכה.'
+            : 'עמודים שנערכו אחרי שהעבודה נוצרה — הטקסט שזוהה שלהם לא נכתב, כדי לא לדרוס את העריכה.'}
+          {' '}אפשר לאמץ את הטקסט שזוהה או לשמור את הטקסט הקיים.
         </p>
       </div>
 
@@ -155,9 +158,9 @@ function ConflictsPanelBody({ jobId, bookId, onChanged }) {
         <div className="flex justify-center py-4"><Loader size="sm" /></div>
       ) : (
         <>
-          {listError && <p role="alert" className="text-sm text-error">{listError}</p>}
+          {listError && <p role="alert" className="text-body-sm leading-snug text-error">{listError}</p>}
           {items.length === 0 && !listError && (
-            <p className="text-sm text-on-surface-variant">{bookMode ? 'אין התנגשויות ממתינות.' : 'אין התנגשויות.'}</p>
+            <p className="text-body-sm leading-snug text-on-surface-variant">{bookMode ? 'אין התנגשויות ממתינות.' : 'אין התנגשויות.'}</p>
           )}
           {items.length > 0 && (
             <ul className="space-y-2">

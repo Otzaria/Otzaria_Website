@@ -77,6 +77,7 @@
                     לחנות, סרגל כלים דביק בעורך)
      sticky   — הכותרת העליונה הדביקה
      overlay  — דיאלוג/גיליון וה-scrim שלו (מעל הכותרת)
+     toast    — הודעה קופצת (ui/Toast): מעל דיאלוג — שגיאה בזמן שדיאלוג פתוח לא נבלעת מאחורי ה-scrim
      legacy-modal — ui/Modal הישן (z-[9999]); לא לשימוש חדש. מה שחייב לשבת ממש מתחתיו —
                     calc(var(--z-legacy-modal) - 1)
      tooltip  — כרטיס-רמז (ui/Tooltip, position: fixed): מעל סרגלים דביקים, דיאלוגים וגיליונות
@@ -86,6 +87,7 @@
   --z-below-header: 40;
   --z-sticky: 50;
   --z-overlay: 100;
+  --z-toast: 105;
   --z-tooltip: 110;
   --z-legacy-modal: 9999;
   --z-skip: 10001;

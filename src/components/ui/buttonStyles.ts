@@ -69,20 +69,20 @@ export const TOUCH_TARGET_OVERLAY =
 
 /** גובה (מטרת מגע ≥44px בכל הגדלים — ב-header וב-tool, כפתור כלי העורך, דרך ::before), ריפוד וגודל טקסט */
 const SIZE: Record<ButtonSize, string> = {
-  sm: 'min-h-(--button-height-sm) px-4 text-sm',
-  md: 'min-h-(--button-height-md) px-6 text-base',
-  lg: 'min-h-(--button-height-lg) px-8 text-base',
-  header: `min-h-(--button-height-header) px-3.5 text-sm whitespace-nowrap ${TOUCH_TARGET_OVERLAY}`,
-  tool: `min-h-(--button-height-tool) px-4 text-sm whitespace-nowrap ${TOUCH_TARGET_OVERLAY}`
+  sm: 'min-h-(--button-height-sm) px-4 text-label-md',
+  md: 'min-h-(--button-height-md) px-6 text-label-lg',
+  lg: 'min-h-(--button-height-lg) px-8 text-label-lg',
+  header: `min-h-(--button-height-header) px-3.5 text-label-md whitespace-nowrap ${TOUCH_TARGET_OVERLAY}`,
+  tool: `min-h-(--button-height-tool) px-4 text-label-md whitespace-nowrap ${TOUCH_TARGET_OVERLAY}`
 }
 
 /** כפתור אייקון בלבד — ריבוע ברוחב הגובה */
 const ICON_ONLY: Record<ButtonSize, string> = {
-  sm: 'min-h-(--button-height-sm) min-w-(--button-height-sm) text-sm',
-  md: 'min-h-(--button-height-md) min-w-(--button-height-md) text-base',
-  lg: 'min-h-(--button-height-lg) min-w-(--button-height-lg) text-base',
-  header: `min-h-(--button-height-header) min-w-(--button-height-header) text-sm ${TOUCH_TARGET_OVERLAY}`,
-  tool: `min-h-(--button-height-tool) min-w-(--button-height-tool) text-sm ${TOUCH_TARGET_OVERLAY}`
+  sm: 'min-h-(--button-height-sm) min-w-(--button-height-sm) text-label-md',
+  md: 'min-h-(--button-height-md) min-w-(--button-height-md) text-label-lg',
+  lg: 'min-h-(--button-height-lg) min-w-(--button-height-lg) text-label-lg',
+  header: `min-h-(--button-height-header) min-w-(--button-height-header) text-label-md ${TOUCH_TARGET_OVERLAY}`,
+  tool: `min-h-(--button-height-tool) min-w-(--button-height-tool) text-label-md ${TOUCH_TARGET_OVERLAY}`
 }
 
 /** גודל הגליף — ברירת המחדל לפי גודל הכפתור */

@@ -2,7 +2,8 @@
 
 import Ltr from '@/components/ui/Ltr'
 import ResultConflictRow from './ResultConflictRow'
-import { formatBytes, formatDateTime, rejectionReasonLabel, shortSha } from './ocrJobView'
+import { formatBytes, rejectionReasonLabel, shortSha } from './ocrJobView'
+import { fullDateText } from '@/lib/adminTerms'
 
 /**
  * תוצאות של עבודת OCR מקומי שלא הוחלו:
@@ -22,8 +23,8 @@ export default function LocalResultIssues({ job, onChanged }) {
     <section aria-label="תוצאות שלא הוחלו" className="space-y-3 rounded-control border border-outline-variant p-3">
       {conflicts.length > 0 && (
         <div className="space-y-2">
-          <h4 className="text-sm font-bold text-on-surface">תוצאות מתנגשות ({conflicts.length})</h4>
-          <p className="text-xs text-on-surface-variant">
+          <h4 className="text-title-sm text-on-surface">תוצאות מתנגשות ({conflicts.length})</h4>
+          <p className="text-label-sm font-normal text-on-surface-variant">
             המחשב המקומי שלח תוצאה נוספת ושונה אחרי שהתוצאה הראשונה כבר התקבלה. היא לא הוחלה, והקובץ
             נשמר בשרת לבדיקה. אחרי סימון &quot;נבדק&quot; הקובץ יימחק בניקוי האוטומטי.
           </p>
@@ -37,19 +38,19 @@ export default function LocalResultIssues({ job, onChanged }) {
 
       {rejections.length > 0 && (
         <div className="space-y-2">
-          <h4 className="text-sm font-bold text-on-surface">תוצאות שנדחו ({rejections.length})</h4>
+          <h4 className="text-title-sm text-on-surface">תוצאות שנדחו ({rejections.length})</h4>
           <ul className="space-y-2">
             {rejections.map((r, i) => (
-              <li key={`${r.sha256}-${i}`} className="rounded-control bg-surface-container p-2 text-sm">
+              <li key={`${r.sha256}-${i}`} className="rounded-control bg-surface-container p-2 text-body-sm leading-snug">
                 <p className="text-on-surface">{rejectionReasonLabel(r.reason)}</p>
-                <p className="text-xs text-on-surface-variant">
-                  התקבלה {formatDateTime(r.receivedAt)}
+                <p className="text-label-sm font-normal text-on-surface-variant">
+                  התקבלה {fullDateText(r.receivedAt)}
                   {r.bytes != null && <> · <Ltr>{formatBytes(r.bytes)}</Ltr></>}
                   {' · '}
                   <Ltr className="font-mono">{shortSha(r.sha256)}</Ltr>
                 </p>
                 {r.details && (
-                  <p dir="ltr" className="mt-1 whitespace-pre-wrap break-words text-start font-mono text-xs text-on-surface-variant">
+                  <p dir="ltr" className="mt-1 whitespace-pre-wrap break-words text-start font-mono text-label-sm font-normal text-on-surface-variant">
                     {r.details}
                   </p>
                 )}

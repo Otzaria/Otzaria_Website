@@ -55,10 +55,13 @@ describe('RouterRow', () => {
   it('כתב-השורה בכפתורים; חזרה לסימון של המתנדב = "אשר" רגיל', () => {
     const h = handlers()
     render(<RouterRow item={item({ result: { label: 'square', bad: false } , pred: 'square', agrees: true })} selected={false} {...h} />)
+    // בלי תיקון: התג והביטול שומרים מקום אבל מוסתרים
+    expect(screen.getByText('תיקון שלך — עוד לא נשמר').closest('[aria-hidden="true"]')).not.toBeNull()
+    expect(screen.queryByRole('button', { name: 'בטל את התיקון' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'רש"י' }))
-    expect(screen.getByText('תיקון שלך — עוד לא נשמר')).toBeInTheDocument()
+    expect(screen.getByText('תיקון שלך — עוד לא נשמר').closest('[aria-hidden="true"]')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'בטל את התיקון' }))
-    fireEvent.click(screen.getByRole('button', { name: /^check אשר$/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'אשר' }))
     expect(h.onApprove).toHaveBeenCalled()
     expect(h.onFix).not.toHaveBeenCalled()
   })
@@ -66,7 +69,11 @@ describe('RouterRow', () => {
   it('שורה בלי מילים — אי אפשר להפוך למעורבת; פסול', () => {
     const h = handlers()
     render(<RouterRow item={item({ words: null, pred: 'rashi', result: { label: 'rashi', bad: false } })} selected={false} {...h} />)
-    expect(screen.getByRole('button', { name: 'מעורבת' })).toBeDisabled()
+    const mixed = screen.getByRole('button', { name: 'מעורבת' })
+    expect(mixed).toHaveAttribute('aria-disabled', 'true')
+    expect(mixed).toHaveAccessibleDescription(/רק כשהשורה מחולקת למילים/)
+    fireEvent.click(mixed)
+    expect(mixed).toHaveAttribute('aria-pressed', 'false')
     fireEvent.click(screen.getByRole('button', { name: 'פסול' }))
     fireEvent.click(screen.getByRole('button', { name: /אשר עם התיקון/ }))
     expect(h.onFix).toHaveBeenCalledWith(expect.anything(), { bad: true })
@@ -94,5 +101,19 @@ describe('RouterRow', () => {
   it('markOf', () => {
     expect(markOf({ label: 'latin' })).toEqual({ label: 'latin' })
     expect(markOf({ label: 'bad' })).toEqual({ bad: true })
+  })
+
+  it('תמונה שלא נטענה: הודעה במקומה, "אשר" מושבת, "דחה" פועל', () => {
+    const h = handlers()
+    render(<RouterRow item={item()} selected={false} {...h} />)
+    fireEvent.error(screen.getByAltText('תמונת השורה'))
+    expect(screen.getByRole('status')).toHaveTextContent('תמונת השורה לא נטענה')
+    const approve = screen.getByRole('button', { name: 'אשר' })
+    expect(approve).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.click(approve)
+    expect(h.onApprove).not.toHaveBeenCalled()
+    expect(h.onFix).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'דחה' }))
+    expect(h.onReject).toHaveBeenCalled()
   })
 })

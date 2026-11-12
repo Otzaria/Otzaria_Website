@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 npm run dev              # שרת פיתוח (next dev)
-npm run build             # generate-version → check:icons → next build → build:offline-editor → check:perf
+npm run build             # generate-version → check:icons → check:admin-tokens → next build → build:offline-editor → check:perf
 npm run lint               # eslint
 npx tsc --noEmit            # type-check (checkJs כבוי — קבצי .js לא נבדקים, ראו "מלכודות" למטה)
 

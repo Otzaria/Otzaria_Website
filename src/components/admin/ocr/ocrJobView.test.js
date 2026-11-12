@@ -33,6 +33,7 @@ import {
   EXISTING_TEXT_OPTIONS,
   willProcessCount,
 } from './ocrJobView'
+import { LRI, PDI } from '@/lib/adminList/fileSize'
 import { EXISTING_TEXT_MODES } from '@/lib/ocr/runOcrJob.pure'
 
 describe('statusLabel / statusTone / statusIcon', () => {
@@ -103,8 +104,8 @@ describe('pollIntervalMs', () => {
 
 describe('methodLabel', () => {
   it('שלושת הספקים', () => {
-    expect(methodLabel({ method: 'gemini', model: 'gemini-2.5-pro' })).toBe('Gemini · gemini-2.5-pro')
-    expect(methodLabel({ method: 'ocrwin' })).toBe('OCRWin')
+    expect(methodLabel({ method: 'gemini', model: 'gemini-2.5-pro' })).toBe('בינה מלאכותית')
+    expect(methodLabel({ method: 'ocrwin' })).toBe('מנוע זיהוי ייעודי')
     expect(methodLabel({ method: 'local' })).toBe('מחשב מקומי')
   })
 })
@@ -164,9 +165,9 @@ describe('נוסחי סיכום', () => {
   it('סיבת דחייה וגודל', () => {
     expect(rejectionReasonLabel('validation_failed')).toBe('התוצאה לא עברה בדיקת תקינות')
     expect(rejectionReasonLabel('x')).toBe('התוצאה נדחתה')
-    expect(formatBytes(512)).toBe('512 B')
-    expect(formatBytes(2048)).toBe('2.0 KB')
-    expect(formatBytes(3 * 1024 * 1024)).toBe('3.0 MB')
+    expect(formatBytes(512)).toBe(`${LRI}512 B${PDI}`)
+    expect(formatBytes(2048)).toBe(`${LRI}2 KB${PDI}`)
+    expect(formatBytes(3 * 1024 * 1024)).toBe(`${LRI}3 MB${PDI}`)
     expect(formatBytes(null)).toBe('')
     expect(formatBytes('x')).toBe('')
   })

@@ -1,8 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { createPortal } from 'react-dom'
-import { useDialog } from '@/components/providers/DialogContext'
+import { useState } from 'react'
+import Badge from '@/components/ui/Badge'
+import Button from '@/components/ui/Button'
+import Dialog from '@/components/ui/Dialog'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { FIELD_ERROR, fieldClasses } from '@/components/ui/fieldStyles'
 
 /**
  * מודאל ניהול רשימת ערכים מסוג { key: { label, color } }.
@@ -11,6 +14,10 @@ import { useDialog } from '@/components/providers/DialogContext'
  * להחליף אותן כדי לנהל רשימות דינמיות אחרות (למשל אופני קבלת אישור).
  *
  * @param {object[]} uploads פריטים לספירת שימוש — נספרים לפי השדה `bookStatus`
+ *
+ * המעטפת — ui/Dialog (גיליון תחתון בטלפון, לכידת פוקוס, Esc). אישור המחיקה — ui/ConfirmDialog
+ * (useConfirm), מעל המודאל ובאותה שפה; שדה חסר או מפתח כפול — שגיאה מתחת לשורת ההוספה.
+ * ההורה מרכיב את הרכיב בכל פתיחה, ולכן ההגדרות נקראות פעם אחת, במצב ההתחלתי.
  */
 export default function StatusConfigModal({
   statuses,
@@ -29,22 +36,26 @@ export default function StatusConfigModal({
   deleteConfirmBody = 'אם תמחק את הסטטוס, ההעלאות האלה יישארו עם סטטוס לא תקין.\n\nמומלץ לשנות את הסטטוס של ההעלאות האלה לפני המחיקה.',
   deleteConfirmQuestion = 'האם אתה בטוח שברצונך למחוק את הסטטוס?',
 }) {
-  const [mounted, setMounted] = useState(false)
-  const { showConfirm, showAlert } = useDialog()
-  
-  useEffect(() => {
-    setMounted(true)
-    return () => setMounted(false)
-  }, [])
-  const [editedStatuses, setEditedStatuses] = useState({})
+  const [confirm, confirmElement] = useConfirm()
+  // שמירה באוויר: "שומר…" ב-softDisabled (הפוקוס נשאר), ולחיצה נוספת לא שולחת שוב. onSave יכול להחזיר Promise.
+  const [saving, setSaving] = useState(false)
+  const save = async () => {
+    if (saving) return
+    setSaving(true)
+    try {
+      await onSave(editedStatuses)
+    } catch {
+      // ההודעה על הכישלון — אצל ההורה (טוסט); כאן רק משחררים את הכפתור לניסיון נוסף
+    } finally {
+      setSaving(false)
+    }
+  }
+  const [editedStatuses, setEditedStatuses] = useState(() => JSON.parse(JSON.stringify(statuses || {})))
   const [newStatusKey, setNewStatusKey] = useState('')
   const [newStatusLabel, setNewStatusLabel] = useState('')
   const [newStatusColor, setNewStatusColor] = useState('#94a3b8')
-  
-  useEffect(() => {
-    setEditedStatuses(JSON.parse(JSON.stringify(statuses)))
-  }, [statuses])
-  
+  const [addError, setAddError] = useState('')
+
   const handleUpdateStatus = (key, field, value) => {
     setEditedStatuses(prev => ({
       ...prev,
@@ -54,18 +65,19 @@ export default function StatusConfigModal({
       }
     }))
   }
-  
+
   const handleAddStatus = () => {
     if (!newStatusKey || !newStatusLabel) {
-      showAlert('שדות חסרים', 'נא למלא שם מפתח ותווית')
+      setAddError('צריך למלא מפתח ותווית.')
       return
     }
-    
+
     if (editedStatuses[newStatusKey]) {
-      showAlert('שגיאה', `${itemNoun} עם מפתח זה כבר קיים`)
+      setAddError(`כבר יש ${itemNoun} עם המפתח הזה.`)
       return
     }
-    
+
+    setAddError('')
     setEditedStatuses(prev => ({
       ...prev,
       [newStatusKey]: {
@@ -73,205 +85,161 @@ export default function StatusConfigModal({
         color: newStatusColor
       }
     }))
-    
+
     setNewStatusKey('')
     setNewStatusLabel('')
     setNewStatusColor('#94a3b8')
   }
-  
-  const handleDeleteStatus = (key) => {
-    // בדיקה כמה ספרים משתמשים בסטטוס הזה
-    const booksWithStatus = uploads.filter(upload =>
-      (upload.bookStatus || defaultKey) === key
-    )
 
+  const handleDeleteStatus = async (key) => {
+    // כמה פריטים משתמשים בערך הזה
+    const used = uploads.filter(upload =>
+      (upload.bookStatus || defaultKey) === key
+    ).length
     const statusLabel = editedStatuses[key].label
 
-    if (booksWithStatus.length > 0) {
-      const confirmMessage = `${itemNoun} "${statusLabel}" ${assignedText} ל-${booksWithStatus.length} ${usageNoun}.\n\n${deleteConfirmBody}\n\n${deleteConfirmQuestion}`
-
-      showConfirm(
-        `מחיקת ${itemNoun}`,
-        confirmMessage,
-        () => {
-          const { [key]: _, ...rest } = editedStatuses
-          setEditedStatuses(rest)
-        },
-        'מחק בכל זאת',
-        'ביטול'
-      )
-    } else {
-      showConfirm(
-        `מחיקת ${itemNoun}`,
-        `האם למחוק את "${statusLabel}"?`,
-        () => {
-          const { [key]: _, ...rest } = editedStatuses
-          setEditedStatuses(rest)
-        },
-        'מחק',
-        'ביטול'
-      )
-    }
+    const ok = await confirm(used > 0
+      ? {
+          title: deleteConfirmQuestion,
+          body: (
+            <div className="flex flex-col gap-2 whitespace-pre-line">
+              <p>{itemNoun} <strong className="text-on-surface">"{statusLabel}"</strong> {assignedText} ל-{used.toLocaleString('he-IL')} {usageNoun}.</p>
+              <p>{deleteConfirmBody}</p>
+            </div>
+          ),
+          confirmLabel: 'מחק בכל זאת',
+          tone: 'danger',
+        }
+      : { title: `למחוק את "${statusLabel}"?`, confirmLabel: 'מחק', tone: 'danger' })
+    if (!ok) return
+    setEditedStatuses((prev) => {
+      const { [key]: _, ...rest } = prev
+      return rest
+    })
   }
-  
-  if (!mounted) return null
-  
-  const modalContent = (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-        {/* כותרת */}
-        <div className="flex justify-between items-center p-6 border-b">
-          <h2 className="text-2xl font-bold text-neutral-800 flex items-center gap-2">
-            <span className="material-symbols-outlined text-feature-600">settings</span>
-            {title}
-          </h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-neutral-100 rounded-lg transition-colors"
-          >
-            <span className="material-symbols-outlined">close</span>
-          </button>
-        </div>
-        
-        {/* תוכן */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* רשימת סטטוסים קיימים */}
-          <div>
-            <h3 className="text-lg font-bold mb-4 text-neutral-700">{existingTitle}</h3>
-            <div className="space-y-3">
-              {Object.entries(editedStatuses).map(([key, config]) => {
-                const booksWithStatus = uploads.filter(upload =>
-                  (upload.bookStatus || defaultKey) === key
-                ).length
-                
-                return (
-                <div key={key} className="flex items-center gap-3 p-4 bg-neutral-50 rounded-lg border border-neutral-200">
-                  <div className="flex-1 grid grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-xs text-neutral-600 mb-1 flex items-center gap-2">
-                        מפתח
-                        {booksWithStatus > 0 && (
-                          <span className="px-2 py-0.5 bg-info-100 text-info-700 text-xs rounded-full">
-                            {booksWithStatus} {usageNoun}
-                          </span>
-                        )}
-                      </label>
-                      <input
-                        type="text"
-                        value={key}
-                        disabled
-                        className="w-full px-3 py-2 bg-neutral-200 border border-neutral-300 rounded text-sm"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-xs text-neutral-600 mb-1">תווית</label>
-                      <input
-                        type="text"
-                        value={config.label}
-                        onChange={(e) => handleUpdateStatus(key, 'label', e.target.value)}
-                        className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-feature-500"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-xs text-neutral-600 mb-1">צבע רקע</label>
-                      <div className="flex gap-2">
-                        <input
-                          type="color"
-                          value={config.color}
-                          onChange={(e) => handleUpdateStatus(key, 'color', e.target.value)}
-                          className="w-12 h-10 border border-neutral-300 rounded cursor-pointer"
-                        />
-                        <input
-                          type="text"
-                          value={config.color}
-                          onChange={(e) => handleUpdateStatus(key, 'color', e.target.value)}
-                          className="flex-1 px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-feature-500"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <button
-                    onClick={() => handleDeleteStatus(key)}
-                    className="p-2 text-danger-600 hover:bg-danger-50 rounded transition-colors"
-                    title={`מחיקת ${itemNoun}`}
-                  >
-                    <span className="material-symbols-outlined">delete</span>
-                  </button>
-                </div>
-              )})}
-            </div>
-          </div>
-          
-          {/* הוספת סטטוס חדש */}
-          <div className="border-t pt-6">
-            <h3 className="text-lg font-bold mb-4 text-neutral-700">{addTitle}</h3>
-            <div className="flex items-end gap-3">
-              <div className="flex-1">
-                <label className="block text-xs text-neutral-600 mb-1">מפתח (באנגלית, ללא רווחים)</label>
-                <input
-                  type="text"
-                  value={newStatusKey}
-                  onChange={(e) => setNewStatusKey(e.target.value.replace(/\s/g, '_'))}
-                  placeholder="new_status"
-                  className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-feature-500"
-                />
-              </div>
-              
-              <div className="flex-1">
-                <label className="block text-xs text-neutral-600 mb-1">תווית</label>
-                <input
-                  type="text"
-                  value={newStatusLabel}
-                  onChange={(e) => setNewStatusLabel(e.target.value)}
-                  placeholder="סטטוס חדש"
-                  className="w-full px-3 py-2 border border-neutral-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-feature-500"
-                />
-              </div>
-              
-              <div className="w-32">
-                <label className="block text-xs text-neutral-600 mb-1">צבע</label>
-                <input
-                  type="color"
-                  value={newStatusColor}
-                  onChange={(e) => setNewStatusColor(e.target.value)}
-                  className="w-full h-10 border border-neutral-300 rounded cursor-pointer"
-                />
-              </div>
-              
-              <button
-                onClick={handleAddStatus}
-                className="px-4 py-2 bg-success-600 text-white rounded hover:bg-success-700 transition-colors flex items-center gap-1"
-              >
-                <span className="material-symbols-outlined text-sm">add</span>
-                הוסף
-              </button>
-            </div>
-          </div>
-        </div>
-        
-        {/* כפתורי פעולה */}
-        <div className="flex justify-end gap-3 p-6 border-t bg-neutral-50">
-          <button
-            onClick={onClose}
-            className="px-6 py-2 bg-neutral-300 text-neutral-700 rounded-lg hover:bg-neutral-400 transition-colors"
-          >
-            ביטול
-          </button>
-          <button
-            onClick={() => onSave(editedStatuses)}
-            className="px-6 py-2 bg-feature-600 text-white rounded-lg hover:bg-feature-700 transition-colors flex items-center gap-2"
-          >
-            <span className="material-symbols-outlined text-sm">save</span>
-            שמור שינויים
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-  
-  return createPortal(modalContent, document.body)
-}
 
+  return (
+    <Dialog
+      title={title}
+      onClose={onClose}
+      dismissible={!saving}
+      className="sm:max-w-3xl"
+      footer={(
+        <>
+          <Button variant="text" size="sm" onClick={onClose} softDisabled={saving}>ביטול</Button>
+          <Button variant="filled" size="sm" icon="save" onClick={save} softDisabled={saving}>{saving ? 'שומר…' : 'שמור שינויים'}</Button>
+        </>
+      )}
+    >
+      <div className="flex flex-col gap-6">
+        {/* רשימת הקיימים */}
+        <section aria-labelledby="status-config-existing">
+          <h3 id="status-config-existing" className="mb-3 text-title-sm text-on-surface">{existingTitle}</h3>
+          <ul className="flex flex-col gap-2">
+            {Object.entries(editedStatuses).map(([key, config]) => {
+              const booksWithStatus = uploads.filter(upload =>
+                (upload.bookStatus || defaultKey) === key
+              ).length
+
+              return (
+                <li key={key} className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 rounded-(--radius-control) bg-surface p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_auto_auto]">
+                  <div className="min-w-0">
+                    <span className="mb-1 flex items-center gap-2 text-label-md text-on-surface-variant">
+                      מפתח
+                      {booksWithStatus > 0 && <Badge>{booksWithStatus} {usageNoun}</Badge>}
+                    </span>
+                    <bdi dir="ltr" className="block truncate rounded-(--radius-control) bg-surface-container px-3 py-3 text-body-sm text-on-surface-variant">{key}</bdi>
+                  </div>
+
+                  <label className="col-span-2 min-w-0 sm:col-span-1">
+                    <span className="mb-1 block text-label-md text-on-surface-variant">תווית</span>
+                    <input
+                      type="text"
+                      value={config.label}
+                      onChange={(e) => handleUpdateStatus(key, 'label', e.target.value)}
+                      className={fieldClasses()}
+                    />
+                  </label>
+
+                  <label className="min-w-0">
+                    <span className="mb-1 block text-label-md text-on-surface-variant">צבע</span>
+                    <span className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={config.color}
+                        onChange={(e) => handleUpdateStatus(key, 'color', e.target.value)}
+                        aria-label={`צבע של ${config.label}`}
+                        className="h-12 w-12 shrink-0 cursor-pointer rounded-(--radius-control) border border-outline bg-surface p-1"
+                      />
+                      <input
+                        type="text"
+                        dir="ltr"
+                        value={config.color}
+                        onChange={(e) => handleUpdateStatus(key, 'color', e.target.value)}
+                        aria-label={`קוד הצבע של ${config.label}`}
+                        className={fieldClasses({ className: 'w-28' })}
+                      />
+                    </span>
+                  </label>
+
+                  <Button
+                    variant="text"
+                    size="sm"
+                    iconOnly
+                    icon="delete"
+                    aria-label={`מחק את ${config.label}`}
+                    onClick={() => handleDeleteStatus(key)}
+                    className="self-end"
+                  />
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+
+        {/* הוספה */}
+        <section aria-labelledby="status-config-add" className="border-t border-outline-variant pt-5">
+          <h3 id="status-config-add" className="mb-3 text-title-sm text-on-surface">{addTitle}</h3>
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] sm:items-end">
+            <label className="min-w-0">
+              <span className="mb-1 block text-label-md text-on-surface-variant">מפתח (באנגלית, בלי רווחים)</span>
+              <input
+                type="text"
+                dir="ltr"
+                value={newStatusKey}
+                onChange={(e) => setNewStatusKey(e.target.value.replace(/\s/g, '_'))}
+                placeholder="new_status"
+                className={fieldClasses()}
+              />
+            </label>
+
+            <label className="min-w-0">
+              <span className="mb-1 block text-label-md text-on-surface-variant">תווית</span>
+              <input
+                type="text"
+                value={newStatusLabel}
+                onChange={(e) => setNewStatusLabel(e.target.value)}
+                placeholder={`${itemNoun} חדש`}
+                className={fieldClasses()}
+              />
+            </label>
+
+            <label>
+              <span className="mb-1 block text-label-md text-on-surface-variant">צבע</span>
+              <input
+                type="color"
+                value={newStatusColor}
+                onChange={(e) => setNewStatusColor(e.target.value)}
+                className="h-12 w-16 cursor-pointer rounded-(--radius-control) border border-outline bg-surface p-1"
+              />
+            </label>
+
+            <Button variant="tonal" size="sm" icon="add" onClick={handleAddStatus} className="self-end">הוסף</Button>
+          </div>
+          {addError && <p role="alert" className={FIELD_ERROR}>{addError}</p>}
+        </section>
+      </div>
+      {confirmElement}
+    </Dialog>
+  )
+}

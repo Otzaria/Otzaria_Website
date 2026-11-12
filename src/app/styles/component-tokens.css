@@ -157,6 +157,9 @@
   --field-border-focus: var(--color-primary);
   --field-height-md: var(--button-height-lg);
   --field-height-lg: 3.5rem;
+  /* גליף בתוך השדה (חיפוש, חץ) — fieldAdornmentClasses */
+  --field-icon-size-md: 1.25rem;
+  --field-icon-size-lg: 1.5rem;
 
   /* ---------- שבב (ui/Chip): תגית לחיצה — מסנן, קישור לקטגוריה ----------
    * גובה חזותי 36px; מטרת המגע (44px) דרך ::before, כמו כפתור header. נבדל מ-Badge (לא לחיץ)
@@ -165,6 +168,9 @@
    * ניגודיות המסגרת: בהיר — 5.8:1 מול רקע הדף, 6.1:1 מול surface, 3.8:1 מול מסגרת שבב רגיל;
    * כהה — 10.9:1 / 10.1:1 / 5.5:1. */
   --chip-height: 2.25rem;
+  --chip-icon-size: 1.15rem;
+  /* עובי סמן הבחירה — הקו של לשונית פעילה (ui/tabStyles) ושל פריט פעיל בסרגל הניהול (AdminNavItem) */
+  --indicator-thickness: 3px;
   --chip-radius: var(--radius-pill);
   --chip-bg: var(--color-surface);
   --chip-bg-hover: var(--color-surface-selected);
@@ -199,6 +205,20 @@
   --badge-radius: var(--radius-pill);
   --badge-height-sm: 1.5rem;
   --badge-height-md: 1.875rem;
+
+  /* ---------- מעטפת פאנל הניהול (admin/shell) ----------
+   * סרגל צד דביק במחשב (מ-xl), מגירה מתחת לזה. רוחב התוכן נשאר עד 80rem — כמו max-w-7xl של
+   * הפריסה הקודמת — כך שעמודי הניהול עצמם לא מתרחבים; המעטפת כולה = סרגל + רווח + תוכן + ריפוד.
+   * sidebar-top: המרחק שבו הסרגל נעצר בגלילה — מתחת לכותרת העליונה הדביקה של /library (h-16 + גבול),
+   * ברווח קטן מהריפוד העליון של העמוד: הסרגל עולה מעט עם הדף ואז נעצר, בלי תלות בגובה המדויק של הכותרת. */
+  --admin-sidebar-width: 16rem;
+  --admin-shell-gap: calc(var(--spacing) * 8);
+  --admin-content-max: 80rem;
+  --admin-shell-max: calc(var(--admin-content-max) + var(--admin-sidebar-width) + var(--admin-shell-gap) + var(--page-gutter-md) * 2);
+  --admin-sidebar-top: calc(var(--site-header-height) + var(--spacing) * 5);
+  --admin-drawer-width: min(20rem, 88vw);
+  /* גובה מינימלי לאזור התוכן — הכותרת התחתונה לא קופצת למעלה בזמן טעינת מסך */
+  --admin-content-min-height: 500px;
 }
 
 /* מגע: כפתורי הכלים ושורות העורך חוזרים למטרת המגע המלאה (44px) */

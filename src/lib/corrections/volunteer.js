@@ -19,8 +19,9 @@ import { extractLineContext, committedNewLine, clampContextLines } from './unifi
 import { deriveLabels } from './labels.js';
 import { HANDOFF_REASON_LABELS } from './states.js';
 import { escapeRegExp } from '../hebrewWordUtils.js';
-import { newId, logEvent, userActor, currentRevisionOf, manualQueueSet, OPEN_FILTER } from './store.js';
+import { newId, logEvent, userActor, currentRevisionOf, manualQueueSet } from './store.js';
 import { cancelActiveJobs } from './worker.js';
+import { LIST_FILTERS, PUBLISHING_STATUSES } from './listFilters.js';
 
 const MAX_LINE = 20_000;
 const ok = (body) => ({ status: 200, body });
@@ -41,34 +42,7 @@ function overrideFor(rev) {
 
 // ---------------------------------------------------------------- list / detail
 
-const PUBLISHING_STATUSES = ['ready', 'in_progress', 'unknown_needs_reconcile', 'pr_opened'];
-
-const LIST_FILTERS = {
-  mine: (user) => ({ 'manual.status': 'claimed', 'manual.assignee': user._id }),
-  // תור העבודה של המשתמש: כל מה שפנוי, יחד עם מה שכבר משויך אליו.
-  // שיוך של משתמש אחר מוסתר כל עוד הוא בתוקף; אחרי שפג הוא זמין שוב ללקיחה.
-  queued: (user, now) => ({
-    $and: [
-      OPEN_FILTER,
-      {
-        $or: [
-          { 'manual.status': { $in: ['queued', 'released'] } },
-          { 'manual.status': 'claimed', 'manual.assignee': user._id },
-          { 'manual.status': 'claimed', 'manual.leaseExpiresAt': { $lte: now } },
-        ],
-      },
-      // כל שלבי הפרסום (כולל כשל) מוצגים רק בלשונית "אושרו / בפרסום".
-      // זה גם מגן על התור אם נתון ישן/חריג נשאר בטעות עם manual.status=claimed.
-      { 'publish.status': { $nin: [...PUBLISHING_STATUSES, 'failed'] } },
-    ],
-  }),
-  claimed: () => ({ 'manual.status': 'claimed', state: 'open' }),
-  auto: () => ({ state: 'open', 'verification.status': { $in: ['queued', 'in_progress'] } }),
-  publishing: () => ({ state: 'open', 'publish.status': { $in: [...PUBLISHING_STATUSES, 'failed'] } }),
-  closed: () => ({ state: { $regex: '^closed_' } }),
-  // בלי מייל-בלבד (לא נכנסו למערכת) ובלי מה שאושר וממתין לפרסום/מיזוג — אלה בלשונית "אושרו / בפרסום".
-  all: () => ({ state: { $ne: 'email_only' }, 'publish.status': { $nin: PUBLISHING_STATUSES } }),
-};
+// תנאי הלשוניות — ב-listFilters.js (משותפים לדשבורד הניהול).
 
 const MAX_HIDDEN_BOOKS = 50;
 

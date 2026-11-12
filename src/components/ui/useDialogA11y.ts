@@ -78,8 +78,11 @@ export function useDialogA11y(
     }
 
     openPanels.push(panel)
-    // ילד שכבר ממוקד (autoFocus) לא נדרס
-    if (!panel.contains(document.activeElement)) panel.focus({ preventScroll: true })
+    // יעד פוקוס מפורש (data-autofocus — למשל "ביטול" בדיאלוג הרסני) קודם לכול: autoFocus של React
+    // בתוך פורטל לא תמיד תופס בדפדפן. אחרת — ילד שכבר ממוקד (autoFocus) לא נדרס, ובלעדיו החלון.
+    const preferred = panel.querySelector<HTMLElement>('[data-autofocus]')
+    if (preferred) preferred.focus({ preventScroll: true })
+    else if (!panel.contains(document.activeElement)) panel.focus({ preventScroll: true })
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (!isTopDialog(panel)) return

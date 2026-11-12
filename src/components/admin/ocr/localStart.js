@@ -101,12 +101,12 @@ export function classifyStartResponse(status, body) {
     case 400:
       return error(serverMsg || 'הבקשה אינה תקינה', { refresh: false })
     case 401:
-      return error('יש להתחבר מחדש כדי להפעיל OCR', { refresh: false })
+      return error('יש להתחבר מחדש כדי להפעיל זיהוי טקסט', { refresh: false })
     case 403:
-      return error('אין לך הרשאה להפעיל OCR', { refresh: false })
+      return error('אין לך הרשאה להפעיל זיהוי טקסט', { refresh: false })
     case 409:
       if (b.code === 'preparing') return retry(serverMsg || 'הבקשה עדיין בהכנה')
-      return error(serverMsg || 'כבר קיימת עבודת OCR פעילה לספר הזה')
+      return error(serverMsg || 'כבר קיימת עבודת זיהוי פעילה לספר הזה')
     case 413:
       return error(serverMsg || 'הספר גדול מדי לעיבוד במחשב המקומי')
     case 422:

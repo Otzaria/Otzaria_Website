@@ -10,7 +10,7 @@ import { cx } from './cx'
  */
 const SHAPES = {
   block: 'rounded-(--radius-shape)',
-  text: 'h-[1em] rounded-sm',
+  text: 'h-[1em] rounded-(--radius-sm)',
   pill: 'rounded-(--radius-pill)',
   circle: 'rounded-full'
 } as const

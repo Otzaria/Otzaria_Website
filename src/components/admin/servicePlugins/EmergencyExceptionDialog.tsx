@@ -34,7 +34,7 @@ export default function EmergencyExceptionDialog({ pluginName, busy, onSubmit, o
       <div className="space-y-4">
         <p className="text-body-md text-on-surface">
           החריגה מאפשרת להתחיל בדיקת שירות אחת לפני תום 21 הימים. היא נצרכת בהתחלת הבדיקה, נרשמת עם הסיבה,
-          {' '}ואינה עוקפת שום שלב בדיקה. אחרי האישור יש ללחוץ "בחר בתוסף והתחל בדיקה".
+          {' '}ואינה עוקפת שום שלב בדיקה. אחרי האישור יש ללחוץ "אשר והתחל בדיקה".
         </p>
         <FormField id="service-emergency-reason" label="סיבה" required hint={`עד ${REASON_MAX} תווים`}>
           <textarea

@@ -7,4 +7,4 @@ export const FOCUS_RING =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring'
 
 export const FOCUS_RING_INSET =
-  'focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring'
+  'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus-ring'

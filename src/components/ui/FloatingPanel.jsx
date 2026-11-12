@@ -146,7 +146,7 @@ function Panel({ title, icon, onClose, storageKey, width = 400, defaultPosition,
         onPointerCancel={onPointerUp}
         className="flex shrink-0 cursor-move touch-none select-none items-center gap-2 border-b border-outline-variant py-1 ps-4 pe-1"
       >
-        {icon && <AppIcon name={icon} className="text-xl text-primary" />}
+        {icon && <AppIcon name={icon} className="text-icon-lg text-primary" />}
         <h2 id={titleId} className="min-w-0 flex-1 truncate text-title-md text-on-surface">{title}</h2>
         {headerActions}
         <Button variant="text" size="sm" iconOnly icon="close" aria-label="סגירה" onClick={onClose} />

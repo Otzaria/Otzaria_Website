@@ -16,7 +16,7 @@ const conflict = (over = {}) => ({
   id: 'c1',
   pageNumber: 4,
   status: 'open',
-  ocrText: 'טקסט מה-OCR',
+  ocrText: 'טקסט מהזיהוי',
   pageContent: 'טקסט שנערך בידי אדם',
   pageExists: true,
   pageIsTwoColumns: false,
@@ -57,10 +57,10 @@ describe('OcrConflictsPanel', () => {
     fetchMock.mockResolvedValueOnce(reply(200, listBody([conflict({ status: 'applying' })], { openCount: 1 })))
     const user = userEvent.setup()
     render(<OcrConflictsPanel jobId="job1" />)
-    expect(await screen.findByText('אימוץ ה-OCR בתהליך')).toBeInTheDocument()
+    expect(await screen.findByText('אימוץ הטקסט שזוהה בתהליך')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'הצג טקסטים' }))
     expect(screen.queryByRole('button', { name: 'שמור את הטקסט הקיים' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'אמץ את טקסט ה-OCR' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'אמץ את הטקסט שזוהה' })).toBeNull()
   })
 
   it('מציג את הרשימה ואת שני הטקסטים כטקסט רגיל', async () => {
@@ -76,7 +76,7 @@ describe('OcrConflictsPanel', () => {
     const [first, second] = screen.getAllByRole('button', { name: 'הצג טקסטים' })
     await user.click(first)
     expect(screen.getByText('טקסט שנערך בידי אדם')).toBeInTheDocument()
-    expect(screen.getByText('טקסט מה-OCR')).toBeInTheDocument()
+    expect(screen.getByText('טקסט מהזיהוי')).toBeInTheDocument()
     await user.click(second)
     expect(screen.getByText('<i>x</i>')).toBeInTheDocument()
     expect(container.querySelector('i')).toBeNull()
@@ -108,12 +108,12 @@ describe('OcrConflictsPanel', () => {
     render(<OcrConflictsPanel jobId="job1" />)
 
     await user.click(await screen.findByRole('button', { name: 'הצג טקסטים' }))
-    await user.click(screen.getByRole('button', { name: 'אמץ את טקסט ה-OCR' }))
+    await user.click(screen.getByRole('button', { name: 'אמץ את הטקסט שזוהה' }))
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(screen.getByText('הטקסט הנוכחי בעמוד יוחלף בטקסט ה-OCR. להמשיך?')).toBeInTheDocument()
+    expect(screen.getByText('הטקסט הנוכחי בעמוד יוחלף בהטקסט שזוהה. להמשיך?')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'כן, לאמץ את ה-OCR' }))
 
-    expect(await screen.findByText('אומץ טקסט ה-OCR')).toBeInTheDocument()
+    expect(await screen.findByText('אומץ הטקסט שזוהה')).toBeInTheDocument()
     expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ action: 'apply', expectedPageUpdatedAt: UPDATED })
   })
 
@@ -126,7 +126,7 @@ describe('OcrConflictsPanel', () => {
     render(<OcrConflictsPanel jobId="job1" />)
 
     await user.click(await screen.findByRole('button', { name: 'הצג טקסטים' }))
-    await user.click(screen.getByRole('button', { name: 'אמץ את טקסט ה-OCR' }))
+    await user.click(screen.getByRole('button', { name: 'אמץ את הטקסט שזוהה' }))
     await user.click(screen.getByRole('button', { name: 'כן, לאמץ את ה-OCR' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('העמוד השתנה שוב — רעננו')
@@ -140,7 +140,7 @@ describe('OcrConflictsPanel', () => {
     render(<OcrConflictsPanel jobId="job1" />)
     await user.click(await screen.findByRole('button', { name: 'הצג טקסטים' }))
     expect(screen.getByText(/העמוד נמחק מהספר/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'אמץ את טקסט ה-OCR' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'אמץ את הטקסט שזוהה' })).not.toBeInTheDocument()
   })
 
   it('דפדוף — "טען עוד" מבקש את ההמשך', async () => {
@@ -249,5 +249,13 @@ describe('OcrConflictsPanel', () => {
     await act(async () => { pending.resolve(reply(200, listBody([conflict()]))) })
     expect(errSpy).not.toHaveBeenCalled()
     errSpy.mockRestore()
+  })
+
+  it('התחברות שפגה (הפניה לדף ההתחברות) — שגיאה עם הסבר, לא רשימה ריקה', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 0, type: 'opaqueredirect', json: async () => { throw new Error('x') } })
+    render(<OcrConflictsPanel jobId="job1" />)
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('פג תוקף ההתחברות')
+    expect(fetchMock.mock.calls[0][1]).toEqual(expect.objectContaining({ redirect: 'manual' }))
   })
 })
