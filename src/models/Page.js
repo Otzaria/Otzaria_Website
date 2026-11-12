@@ -22,6 +22,8 @@ const PageSchema = new mongoose.Schema({
   // סדר לוגי של שמירות העורך. הלקוח מקצה revision כשהשינוי נוצר (לא
   // כשהבקשה מסתיימת). כך keepalive/sendBeacon חדש לא נדרס בידי בקשה ישנה
   // שסיימה מאוחר יותר. השדה אינו required כדי לשמור תאימות ללקוחות ישנים.
+  lastOfflineSaveVersion: { type: String },
+  lastOfflineSaveId: { type: String },
   contentSaveRevision: { type: Number, min: 1 },
 
   // Per-occurrence approvals share the text's revision-ordered autosave. The

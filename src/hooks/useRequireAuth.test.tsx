@@ -53,3 +53,11 @@ describe('useRequireAuth', () => {
     )
   })
 })
+
+test('a prepared local copy stays accessible after session expiry without granting server authentication', () => {
+  mockStatus = 'unauthenticated'
+  const fallback = { user: { id: 'local-user', name: 'משתמש' }, offline: true }
+  const { result } = renderHook(() => useRequireAuth({ localFallback: fallback }))
+  expect(pushMock).not.toHaveBeenCalled()
+  expect(result.current.session).toMatchObject({ offline: true, user: { id: 'local-user' } })
+})

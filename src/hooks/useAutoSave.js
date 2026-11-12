@@ -21,6 +21,7 @@ export function toSaveBody(data) {
     rightColumnName: data.rightColumnName,
     leftColumnName: data.leftColumnName
   }
+  if (data.expectedUserId != null) body.expectedUserId = data.expectedUserId
   // לקוחות ישנים אינם שולחים revision; לא מוסיפים undefined לגוף.
   if (Number.isSafeInteger(data.saveRevision) && data.saveRevision > 0) body.saveRevision = data.saveRevision
   // null/undefined = אין ללשונית הזו החלטות משלה (לא נטענו, או שסוננו כי הזיהוי הוחלף): לא שולחים את

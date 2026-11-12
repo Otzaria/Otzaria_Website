@@ -96,3 +96,8 @@ it('zero suspects is not a claim of review; loading and missing model data remai
   expect(buildFinishChecks({ suspectCount: 0, reviewStatus: 'loading' })[0]).toMatchObject({ ok: false, title: 'נתוני החשד מהזיהוי נטענים…' })
   expect(buildFinishChecks({ suspectCount: 0, reviewStatus: 'unavailable' })[0]).toMatchObject({ ok: false, title: 'אין נתוני חשד מהזיהוי לעמוד' })
 })
+
+ it('local storage is visibly distinct from server acknowledgement and cannot finish a page', () => {
+   expect(saveStatusInfo('local').text).toContain('נשמר במכשיר')
+   expect(buildFinishChecks({ saveStatus: 'local' }).find(check => check.id === 'save')).toMatchObject({ ok: false, title: 'נשמר במכשיר בלבד' })
+ })

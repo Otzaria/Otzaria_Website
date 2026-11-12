@@ -173,3 +173,105 @@ describe('persisted OCR word approvals', () => {
     expect((await Page.findById(page._id).lean()).ocrWordReview).toBeNull()
   })
 })
+
+describe('offline compare-and-swap and receipts', () => {
+  const read = async slug => (await (await GET(new Request(`http://localhost/api/page-content?bookPath=${slug}&pageNumber=1`))).json()).data
+  const offlineSave = async (slug, content, baseVersion, extra = {}) => save(slug, content, 100, {
+    leftColumn: '', rightColumn: '', rightColumnName: 'חלק 1', leftColumnName: 'חלק 2',
+    baseVersion, expectedUserId: USER_ID, offlineSaveId: '11111111-1111-4111-8111-111111111111', ...extra,
+  })
+  it.each(['isHidden', 'isPrivate'])('book-library-only admins can load and sync a %s book they do not own', async restriction => {
+    const { slug, page } = await setup()
+    await Book.updateOne({ _id: page.book }, { $set: { [restriction]: true, ownerId: USER_ID } })
+    const adminId = '507f1f77bcf86cd799439012'
+    getServerSessionMock.mockResolvedValue({ user: { id: adminId, role: 'admin_books_only' } })
+    const loaded = await read(slug)
+    expect(loaded.contentVersion).toMatch(/^[a-f0-9]{64}$/)
+    expect(await offlineSave(slug, 'תיקון מנהל ספרייה', loaded.contentVersion, { expectedUserId: adminId })).toMatchObject({ status: 200, body: { success: true } })
+    expect((await Page.findById(page._id)).content).toBe('תיקון מנהל ספרייה')
+  })
+  it('round trips a version and safely retries after the successful response was lost', async () => {
+    const { slug } = await setup()
+    const loaded = await read(slug)
+    expect(loaded.contentVersion).toMatch(/^[a-f0-9]{64}$/)
+    const result = await offlineSave(slug, 'אופליין', loaded.contentVersion)
+    expect(result).toMatchObject({ status: 200, body: { success: true } })
+    expect(result.body.contentVersion).not.toBe(loaded.contentVersion)
+    const retry = await offlineSave(slug, 'אופליין', loaded.contentVersion)
+    expect(retry).toMatchObject({ status: 200, body: { contentVersion: result.body.contentVersion } })
+  })
+  it.each(['content', 'rightColumn', 'imagePath', 'ocrWordReview'])('rejects a stale baseline when %s changed, including unversioned writers', async field => {
+    const { slug, page } = await setup()
+    const loaded = await read(slug)
+    const value = field === 'ocrWordReview'
+      ? { version: 1, revision: 'new', words: ['מילה'], accepted: [0] } : 'חדש'
+    await Page.updateOne({ _id: page._id }, { $set: { [field]: value } })
+    expect(await offlineSave(slug, 'אופליין', loaded.contentVersion)).toMatchObject({ status: 409, body: { code: 'OFFLINE_CONFLICT' } })
+    expect((await Page.findById(page._id)).content).not.toBe('אופליין')
+  })
+  it('guards the atomic update against a write between read and commit', async () => {
+    const { slug, page } = await setup()
+    const loaded = await read(slug)
+    const old = await Page.findById(page._id)
+    await Page.updateOne({ _id: page._id }, { $set: { content: 'במקביל' } })
+    const spy = vi.spyOn(Page, 'findOne').mockResolvedValueOnce(old)
+    try { expect(await offlineSave(slug, 'אופליין', loaded.contentVersion)).toMatchObject({ status: 409 }) }
+    finally { spy.mockRestore() }
+    expect((await Page.findById(page._id)).content).toBe('במקביל')
+  })
+  it('does not mistake a later external edit for a lost-response receipt', async () => {
+    const { slug, page } = await setup()
+    const loaded = await read(slug)
+    await offlineSave(slug, 'אופליין', loaded.contentVersion)
+    await Page.updateOne({ _id: page._id }, { $set: { imagePath: '/new.jpg' } })
+    expect(await offlineSave(slug, 'אופליין', loaded.contentVersion)).toMatchObject({ status: 409 })
+  })
+  it('refuses account switching, expired sessions, reassigned pages, and hidden books', async () => {
+    const { slug, page } = await setup()
+    const loaded = await read(slug)
+    expect(await offlineSave(slug, 'אופליין', loaded.contentVersion, { expectedUserId: 'other' })).toMatchObject({ status: 403, body: { code: 'OFFLINE_ACCOUNT' } })
+    getServerSessionMock.mockResolvedValueOnce(null)
+    expect(await offlineSave(slug, 'אופליין', loaded.contentVersion)).toMatchObject({ status: 401 })
+    await Page.updateOne({ _id: page._id }, { $set: { claimedBy: '507f1f77bcf86cd799439012' } })
+    expect(await offlineSave(slug, 'אופליין', loaded.contentVersion)).toMatchObject({ status: 403 })
+    await Page.updateOne({ _id: page._id }, { $set: { claimedBy: USER_ID } })
+    await Book.updateOne({ _id: page.book }, { $set: { isHidden: true } })
+    expect(await offlineSave(slug, 'אופליין', loaded.contentVersion)).toMatchObject({ status: 403 })
+  })
+  it('two writers with the same baseline cannot both succeed', async () => {
+    const { slug } = await setup()
+    const loaded = await read(slug)
+    const results = await Promise.all([
+      offlineSave(slug, 'לשונית א', loaded.contentVersion),
+      offlineSave(slug, 'לשונית ב', loaded.contentVersion, { offlineSaveId: '22222222-2222-4222-8222-222222222222' }),
+    ])
+    expect(results.map(r => r.status).sort()).toEqual([200, 409])
+  })
+})
+
+ it('offline CAS rechecks ownership atomically even when the text is unchanged', async () => {
+   const { slug, page } = await setup()
+   const old = await Page.findById(page._id)
+   const { pageVersion } = await import('@/lib/offlineBooks/version')
+   await Page.updateOne({ _id: page._id }, { $set: { claimedBy: '507f1f77bcf86cd799439012' } })
+   const spy = vi.spyOn(Page, 'findOne').mockResolvedValueOnce(old)
+   try {
+     expect(await save(slug, 'אופליין', 100, { baseVersion: pageVersion(old), expectedUserId: USER_ID,
+       offlineSaveId: '11111111-1111-4111-8111-111111111111', leftColumn: '', rightColumn: '', rightColumnName: 'חלק 1', leftColumnName: 'חלק 2' })).toMatchObject({ status: 409 })
+   } finally { spy.mockRestore() }
+   expect((await Page.findById(page._id)).content).toBe('מקורי')
+ })
+
+
+it('offline CAS rejects a renewed claim by the same user', async () => {
+  const { slug, page } = await setup()
+  const old = await Page.findById(page._id)
+  const { pageVersion } = await import('@/lib/offlineBooks/version')
+  await Page.updateOne({ _id: page._id }, { $set: { claimedAt: new Date() } })
+  const spy = vi.spyOn(Page, 'findOne').mockResolvedValueOnce(old)
+  try {
+    expect(await save(slug, 'אופליין', 100, { baseVersion: pageVersion(old), expectedUserId: USER_ID,
+      offlineSaveId: '11111111-1111-4111-8111-111111111111', leftColumn: '', rightColumn: '', rightColumnName: 'חלק 1', leftColumnName: 'חלק 2' })).toMatchObject({ status: 409, body: { code: 'OFFLINE_CONFLICT' } })
+  } finally { spy.mockRestore() }
+  expect((await Page.findById(page._id)).content).toBe('מקורי')
+})
