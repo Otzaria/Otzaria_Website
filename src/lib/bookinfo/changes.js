@@ -4,7 +4,7 @@
  * עריכה מזוהה לפי מפתח טבעי (שם הספר ושם המחבר כפי שהם ב-book_info.csv) ולא לפי id, ונושאת רק
  * את השדות ששונו, ערכי המקור וגרסת הזהות. שינויי CI מתועדים נעקבים, וערכים מתנגשים נשמרים לבדיקה.
  */
-import { BOOK_INFO_EDITABLE_FIELDS } from '../book-info-constants.js'
+import { BOOK_INFO_BOOK_LEVEL_FIELDS, BOOK_INFO_EDITABLE_FIELDS, BOOK_INFO_FIELDS } from '../book-info-constants.js'
 import { buildDiff, normalizeBookInfoUpdates } from '../book-info-utils.js'
 import { assertStorageRow, cloneBookInfoState, rowKey } from './csv.js'
 
@@ -17,9 +17,16 @@ const FIELD_LABELS = {
   subGenerationName: 'תת-דור',
   startYear: 'משנה',
   endYear: 'עד שנה',
+  topics: 'נושאים',
+  pubDate: 'שנת הדפסה',
+  pubPlace: 'מקום הדפסה',
+  description: 'רקע על הספר',
+  proofread: 'עבר הגהה באוצריא',
 }
 
 const same = (a, b) => (a ?? null) === (b ?? null) || (a === '' && b == null) || (a == null && b === '')
+
+const siblingRows = (state, row) => [...state.rows.values()].filter((other) => other !== row && other.bookName === row.bookName)
 
 /**
  * מאמת סל שהגיע מהדפדפן מול מצב הקובץ, ומחזיר אותו מנורמל.
@@ -40,6 +47,7 @@ export function validateChangeSet(rawOps, state) {
     if (!current) return { error: `${where}: הספר "${book}" אינו ברשימה` }
     if (seen.has(key)) return { error: `${where}: הספר "${book}" מופיע בסל יותר מפעם אחת` }
     seen.add(key)
+    if (raw.updates && 'proofread' in raw.updates) return { error: `${where} (${book}): סימון ההגהה מחושב אוטומטית ואינו נערך ידנית` }
 
     // מאמתים את השורה כולה אחרי העדכון, כדי שדור ותת-דור יבדקו זה מול זה גם כשרק אחד מהם נשלח
     const merged = {}
@@ -57,6 +65,10 @@ export function validateChangeSet(rawOps, state) {
       if (touched.some((field) => !same(current[field], raw.baseRow[field]) && !same(current[field], updates[field]))) return { error: `${where} (${book}): הנתון בקובץ השתנה מאז פתיחת הטופס; יש לרענן ולבדוק את השינוי` }
     }
     const changes = buildDiff(current, updates)
+    const siblings = siblingRows(state, current)
+    for (const field of BOOK_INFO_BOOK_LEVEL_FIELDS) {
+      if (field in (raw.updates || {}) && !(field in changes) && siblings.some((row) => !same(row[field], updates[field]))) changes[field] = updates[field]
+    }
     // שם הספר הוא book.title בספרייה (המפתח שבו SeforimLibrary מקשר את הדור לספר); שורה ששמה שונה
     // כאן כבר לא מתאימה לאף ספר, וה-CI של ריפו הספרייה מוחק אותה כיתומה
     if ('bookName' in changes) return { error: `${where} (${book}): לא ניתן לשנות את שם הספר, כי הוא חייב להיות זהה לשם הספר בספרייה` }
@@ -81,13 +93,18 @@ export function applyChangeSet(baseState, ops) {
       results.push({ op, status: 'conflict', reason: 'הספר אינו בקובץ; יש לבדוק מחיקה או שינוי זהות' })
       continue
     }
+    // שדות ברמת הספר נכתבים לכל שורות הספר, גם כשבשורה של העריכה הם כבר מעודכנים
+    const siblings = siblingRows(state, row)
     const effective = {}
-    for (const [field, value] of Object.entries(op.changes)) if (!same(row[field], value)) effective[field] = value
+    for (const [field, value] of Object.entries(op.changes)) {
+      const targets = BOOK_INFO_BOOK_LEVEL_FIELDS.includes(field) ? [row, ...siblings] : [row]
+      if (targets.some((target) => !same(target[field], value))) effective[field] = value
+    }
     if (Object.keys(effective).length === 0) {
       results.push({ op, status: 'noop', reason: 'כבר קיים' })
       continue
     }
-    const conflicts = Object.keys(effective).filter((field) => op.baseRow && !same(row[field], op.baseRow[field]))
+    const conflicts = Object.keys(effective).filter((field) => op.baseRow && !same(row[field], op.baseRow[field]) && !same(row[field], effective[field]))
     if (conflicts.length) {
       results.push({ op, status: 'conflict', reason: `הנתון בקובץ השתנה מאז ההצעה: ${conflicts.join(', ')}` })
       continue
@@ -107,6 +124,8 @@ export function applyChangeSet(baseState, ops) {
     const before = Object.fromEntries(Object.keys(effective).map((f) => [f, row[f]]))
     state.rows.delete(key)
     state.rows.set(nextKey, next)
+    const bookLevel = Object.fromEntries(BOOK_INFO_BOOK_LEVEL_FIELDS.filter((f) => f in effective).map((f) => [f, next[f]]))
+    for (const sibling of siblings) state.rows.set(rowKey(sibling.bookName, sibling.authorName), { ...sibling, ...bookLevel })
     results.push({ op, status: 'applied', before, after: effective })
   }
   return { state, results }
@@ -128,7 +147,7 @@ const bookLabel = (op) => `**${markdownText(op.book)}**${op.author ? ` _(${markd
 
 function rowsFor(r) {
   const changed = r.status === 'applied' ? r.after : r.op.changes
-  const fields = BOOK_INFO_EDITABLE_FIELDS.filter((field) => field in changed)
+  const fields = BOOK_INFO_FIELDS.filter((field) => field in changed)
   return fields.map((field, i) => {
     const before = r.status === 'applied' ? cell(r.before[field]) : ''
     const after = cell(r.status === 'applied' ? r.after[field] : r.op.changes[field])

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mergeBookInfoWithPending, normalizeBookInfoUpdates } from './book-info-utils'
+import { buildDiff, getChangedFields, mergeBookInfoWithPending, normalizeBookInfoUpdates, normalizeExtensionField, splitTopics } from './book-info-utils'
 
 describe('mergeBookInfoWithPending', () => {
   const book = { bookName: 'ספר', authorName: 'מחבר', startYear: 100 }
@@ -126,5 +126,39 @@ describe('normalizeBookInfoUpdates', () => {
       startYear: 'abc'
     })
     expect(errors).toHaveLength(3)
+  })
+})
+
+describe('שדות ההרחבה', () => {
+  it('נושאים: רווחים מנוקים, כפילויות וערכים ריקים מוסרים', () => {
+    expect(splitTopics(' הלכה ;שבת;; הלכה; ')).toEqual(['הלכה', 'שבת'])
+    expect(splitTopics(null)).toEqual([])
+    expect(normalizeExtensionField('topics', ' הלכה ;שבת;; הלכה; ')).toEqual({ value: 'הלכה;שבת' })
+    expect(normalizeExtensionField('topics', ' ; ')).toEqual({ value: null })
+  })
+
+  it('רקע: CRLF ו-CR הופכים ל-LF, ושדות שורה-אחת דוחים ירידת שורה', () => {
+    expect(normalizeExtensionField('description', 'א\r\nב\rג')).toEqual({ value: 'א\nב\nג' })
+    expect(normalizeExtensionField('pubDate', 'תרפ"ה\n1925').error).toMatch(/שורה אחת/)
+    expect(normalizeExtensionField('pubPlace', '  ורשה  ')).toEqual({ value: 'ורשה' })
+  })
+
+  it('אורך נמדד בתווים ולא ביחידות UTF-16', () => {
+    expect(normalizeExtensionField('pubPlace', '😀'.repeat(100)).error).toBeUndefined()
+    expect(normalizeExtensionField('pubPlace', '😀'.repeat(101)).error).toMatch(/100 תווים/)
+  })
+
+  it('proofread מקבל רק 1 או ריק', () => {
+    expect(normalizeExtensionField('proofread', '1')).toEqual({ value: '1' })
+    expect(normalizeExtensionField('proofread', '')).toEqual({ value: null })
+    expect(normalizeExtensionField('proofread', 'כן').error).toBeTruthy()
+  })
+
+  it('normalizeBookInfoUpdates, buildDiff ו-getChangedFields מכירים את השדות החדשים', () => {
+    const { updates, errors } = normalizeBookInfoUpdates({ topics: 'א; ב', description: 'ג\r\n', pubDate: 12 })
+    expect(errors).toEqual(['ערך לא תקין בשדה שנת הדפסה'])
+    expect(updates).toEqual({ topics: 'א;ב', description: 'ג' })
+    expect(buildDiff({ topics: null, description: 'ג' }, updates)).toEqual({ topics: 'א;ב' })
+    expect(getChangedFields({ pubPlace: 'ורשה', proofread: '1' })).toEqual(['pubPlace', 'proofread'])
   })
 })
