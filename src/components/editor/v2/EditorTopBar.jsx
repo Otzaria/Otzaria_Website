@@ -56,6 +56,7 @@ export default function EditorTopBar({
   holderName = null,
   onClaim,
   accountSlot,
+  offlineSlot,
   displayOpen,
   titleAs: Title = 'h1',
   className,
@@ -130,6 +131,8 @@ export default function EditorTopBar({
           </span>
         )}
       </div>
+
+      {offlineSlot}
 
       {accountSlot && <span className={cx('inline-flex', hideOnMobile)}>{accountSlot}</span>}
 

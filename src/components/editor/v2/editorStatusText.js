@@ -21,7 +21,7 @@ export function savedAgoText(lastSavedAt, now = Date.now()) {
   return `נשמר בשעה ${time}`
 }
 
-export const SAVE_STATUSES = ['saved', 'saving', 'dirty', 'error']
+export const SAVE_STATUSES = ['saved', 'saving', 'dirty', 'local', 'error']
 
 /**
  * מצב השמירה לתצוגה: טקסט, אייקון וגוון.
@@ -29,6 +29,8 @@ export const SAVE_STATUSES = ['saved', 'saving', 'dirty', 'error']
  */
 export function saveStatusInfo(status, lastSavedAt, now = Date.now()) {
   switch (status) {
+    case 'local':
+      return { text: 'נשמר במכשיר · ממתין לסנכרון', icon: 'download', tone: 'neutral' }
     case 'saving':
       return { text: 'שומר…', icon: 'cloud_sync', tone: 'neutral' }
     case 'dirty':
@@ -148,6 +150,7 @@ export function buildFinishChecks({ suspectCount = 0, acceptedCount = 0, reviewS
   })
 
   const save = {
+    local: { ok: false, icon: 'download', title: 'נשמר במכשיר בלבד', detail: 'יש לסנכרן עם השרת לפני סיום העמוד.' },
     saved: { ok: true, icon: 'check_circle', title: 'הכול נשמר', detail: lastSavedAt == null ? '' : savedAgoText(lastSavedAt, now).replace(/^נשמר/, 'השמירה האחרונה') + '.' },
     saving: { ok: true, icon: 'cloud_sync', title: 'שומר…', detail: 'השמירה תסתיים לפני המעבר לעמוד הבא.' },
     dirty: { ok: false, icon: 'edit_note', title: 'יש שינויים שלא נשמרו', detail: 'הם יישמרו עם סיום העמוד.' },
