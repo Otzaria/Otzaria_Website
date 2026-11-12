@@ -51,7 +51,8 @@ const validMarkText = (text) => typeof text === 'string' && text.length <= 200 &
  * reordered word boxes. Annotation indexes refer to logical, original line text. */
 export function reviewWordsOfLine(line, { proof = false } = {}) {
   const original = splitWords(line.text);
-  const tokens = typeof line.corrected === 'string' ? splitWords(line.corrected) : original;
+  const tokens = typeof line.corrected === 'string' && line.corrected !== line.text ? splitWords(line.corrected) : original;
+  const oldByNew = tokens === original ? null : unchangedWords(original.map(keyOf), tokens.map(keyOf));
   const words = list(line.words);
   const wordTexts = list(line.wordTexts);
   const low = new Set(list(line.flags?.low_words));
@@ -62,12 +63,12 @@ export function reviewWordsOfLine(line, { proof = false } = {}) {
   return tokens.map((text, i) => {
     const reasons = [];
     const key = keyOf(text);
-    const sameOriginal = tokens === original || keyOf(original[i]) === key;
-    const raw = sameOriginal && words.length === original.length ? words[i] : null;
-    const label = proof ? raw?.text : wordTexts[i];
+    const oldIndex = oldByNew ? oldByNew.get(i) : i;
+    const raw = words.length === original.length ? words[oldIndex] : null;
+    const label = proof ? raw?.text : wordTexts[oldIndex];
     const conf = label == null || keyOf(label) === key ? probability(proof ? raw?.conf : raw?.[2]) : null;
-    if ((sameOriginal && low.has(i)) || (conf !== null && conf < LOW_CONF)) reasons.push('low_conf');
-    const markers = (index) => list(index.get(i)).filter((a) => a.word == null ? sameOriginal : keyOf(a.word) === key);
+    if (low.has(oldIndex) || (conf !== null && conf < LOW_CONF)) reasons.push('low_conf');
+    const markers = (index) => list(index.get(oldIndex)).filter((a) => a.word == null || keyOf(a.word) === key);
     const alternatives = markers(alternativeIndex);
     const lm = markers(lmIndex);
     const legacy = markers(legacyIndex);
