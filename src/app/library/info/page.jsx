@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import Header from '@/components/layout/Header'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import { BOOK_INFO_EXTENSION_EDITABLE_FIELDS, BOOK_INFO_LIMITS } from '@/lib/book-info-constants'
+import { normalizeExtensionField, splitTopics } from '@/lib/book-info-utils'
+
+const MAX_TOPIC_SUGGESTIONS = 200
 
 export default function LibraryInfoPage() {
   const [sourceRevision, setSourceRevision] = useState(0)
@@ -57,7 +61,8 @@ export default function LibraryInfoPage() {
             row.effective?.bookName,
             row.effective?.authorName,
             row.effective?.generationName,
-            row.effective?.subGenerationName
+            row.effective?.subGenerationName,
+            row.effective?.topics
           ]
           return values.some((value) => (value || '').includes(term))
         })
@@ -72,15 +77,34 @@ export default function LibraryInfoPage() {
     })
   }, [rows, search])
 
+  const knownTopics = useMemo(() => {
+    const topics = new Set()
+    for (const row of rows) for (const topic of splitTopics(row.effective?.topics)) topics.add(topic)
+    return [...topics].sort((a, b) => a.localeCompare(b, 'he'))
+  }, [rows])
+
+  // ההצעות משלימות את הנושא האחרון ברשימה, ולכן כל הצעה כוללת את הנושאים שכבר נכתבו לפניו
+  const topicSuggestions = useMemo(() => {
+    if (!formData) return []
+    const typed = formData.topics || ''
+    const prefix = typed.includes(';') ? typed.slice(0, typed.lastIndexOf(';') + 1) + ' ' : ''
+    const chosen = new Set(splitTopics(prefix))
+    return knownTopics.filter((topic) => !chosen.has(topic)).slice(0, MAX_TOPIC_SUGGESTIONS).map((topic) => prefix + topic)
+  }, [formData, knownTopics])
+
   const openEdit = (row) => {
-    setEditRow({ ...row, identityRevision: sourceRevision })
+    setEditRow({ ...row, identityRevision: sourceRevision, bookRowCount: rows.filter((other) => other.effective?.bookName === row.effective?.bookName).length })
     setFormData({
       bookName: row.effective?.bookName || '',
       authorName: row.effective?.authorName || '',
       generationName: row.effective?.generationName || '',
       subGenerationName: row.effective?.subGenerationName || '',
       startYear: row.effective?.startYear ?? '',
-      endYear: row.effective?.endYear ?? ''
+      endYear: row.effective?.endYear ?? '',
+      topics: (row.effective?.topics || '').split(';').join('; '),
+      pubDate: row.effective?.pubDate || '',
+      pubPlace: row.effective?.pubPlace || '',
+      description: row.effective?.description || ''
     })
   }
 
@@ -112,9 +136,15 @@ export default function LibraryInfoPage() {
   const handleSubmit = async (event) => {
     event.preventDefault()
     if (!editRow || !formData) return
+    const extensionError = BOOK_INFO_EXTENSION_EDITABLE_FIELDS.map((field) => normalizeExtensionField(field, formData[field]).error).find(Boolean)
+    if (extensionError) {
+      setError(extensionError)
+      return
+    }
 
     try {
       setSaving(true)
+      setError('')
       const response = await fetch('/api/library/book-info', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -124,8 +154,8 @@ export default function LibraryInfoPage() {
           identityRevision: editRow.identityRevision,
           baseRow: editRow.approved,
           updates: Object.fromEntries(Object.entries(formData).filter(([field, value]) => {
-            const normalized = ['startYear', 'endYear'].includes(field) ? (value === '' ? null : Number(value)) : (value || null)
-            return normalized !== (editRow.approved?.[field] || null)
+            const current = editRow.approved?.[field]
+            return normalizeFormValue(field, value) !== (current === '' || current === undefined ? null : current)
           }))
         })
       })
@@ -134,15 +164,19 @@ export default function LibraryInfoPage() {
         throw new Error(data.error || 'שגיאה בשמירה')
       }
       setLastPr({ url: data.prUrl, number: data.prNumber })
+      const bookLevel = Object.fromEntries(BOOK_INFO_EXTENSION_EDITABLE_FIELDS.map((field) => [field, normalizeFormValue(field, formData[field])]))
       setRows((prev) =>
         prev.map((row) => {
-          if (row.id !== editRow.id) return row
+          if (row.id !== editRow.id) {
+            return row.effective?.bookName === editRow.effective?.bookName ? { ...row, effective: { ...row.effective, ...bookLevel } } : row
+          }
 
           const normalizedEffective = {
             ...row.effective,
             ...formData,
             startYear: formData.startYear === '' ? null : Number(formData.startYear),
-            endYear: formData.endYear === '' ? null : Number(formData.endYear)
+            endYear: formData.endYear === '' ? null : Number(formData.endYear),
+            ...bookLevel
           }
 
           return {
@@ -215,7 +249,7 @@ export default function LibraryInfoPage() {
             <LoadingSpinner message="טוען נתוני ספרים..." />
           ) : (
             <div className="overflow-x-auto lg:overflow-visible rounded-xl border border-surface-variant bg-white">
-              <table className="w-full min-w-[1080px]">
+              <table className="w-full min-w-[1400px]">
                 <thead className="bg-surface">
                   <tr className="text-right text-sm text-on-surface/70">
                     <th className="sticky top-16 z-20 bg-surface px-3 py-3 shadow-sm">שם הספר</th>
@@ -223,18 +257,35 @@ export default function LibraryInfoPage() {
                     <th className="sticky top-16 z-20 bg-surface px-3 py-3 shadow-sm">דור</th>
                     <th className="sticky top-16 z-20 bg-surface px-3 py-3 shadow-sm">דור משנה</th>
                     <th className="sticky top-16 z-20 bg-surface px-3 py-3 shadow-sm">שנים</th>
+                    <th className="sticky top-16 z-20 bg-surface px-3 py-3 shadow-sm">נושאים</th>
+                    <th className="sticky top-16 z-20 bg-surface px-3 py-3 shadow-sm">הדפסה</th>
+                    <th className="sticky top-16 z-20 bg-surface px-3 py-3 shadow-sm">רקע</th>
                     <th className="sticky top-16 z-20 bg-surface px-3 py-3 shadow-sm">פעולה</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pageRows.map((row) => (
                     <tr key={row.id} className="border-t border-surface-variant/70">
-                      <td className="px-3 py-3 font-medium">{row.effective?.bookName || '-'}</td>
+                      <td className="px-3 py-3 font-medium">
+                        {row.effective?.bookName || '-'}
+                        {row.proofread && <ProofreadTag className="ms-2" />}
+                      </td>
                       <td className="px-3 py-3">{row.effective?.authorName || '-'}</td>
                       <td className="px-3 py-3">{row.effective?.generationName || '-'}</td>
                       <td className="px-3 py-3">{row.effective?.subGenerationName || '-'}</td>
                       <td className="px-3 py-3">
                         {row.effective?.startYear ?? '-'} - {row.effective?.endYear ?? '-'}
+                      </td>
+                      <td className="px-3 py-3 max-w-48 truncate text-sm" title={splitTopics(row.effective?.topics).join(', ')}>
+                        {splitTopics(row.effective?.topics).join(', ') || '-'}
+                      </td>
+                      <td className="px-3 py-3 max-w-40 truncate text-sm" title={[row.effective?.pubPlace, row.effective?.pubDate].filter(Boolean).join(', ')}>
+                        {[row.effective?.pubPlace, row.effective?.pubDate].filter(Boolean).join(', ') || '-'}
+                      </td>
+                      <td className="px-3 py-3 text-sm">
+                        {row.effective?.description ? (
+                          <span className="text-on-surface/70 cursor-help" title={excerpt(row.effective.description)}>יש</span>
+                        ) : '-'}
                       </td>
                       <td className="px-3 py-3">
                         {row.pending ? (
@@ -272,7 +323,10 @@ export default function LibraryInfoPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <form onSubmit={handleSubmit} className="p-5 space-y-4">
-              <h2 className="text-xl font-bold">עריכת מידע ספר</h2>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-xl font-bold">עריכת מידע ספר</h2>
+                {editRow.proofread && <ProofreadTag />}
+              </div>
 
               {/* שם הספר הוא שם הקובץ בספרייה, שלפיו הדור מקושר לספר; לכן אינו נערך כאן */}
               <Field label="שם הספר">
@@ -343,6 +397,68 @@ export default function LibraryInfoPage() {
                 />
               </Field>
 
+              <div className="border-t border-surface-variant pt-4 space-y-4">
+                <div>
+                  <h3 className="font-bold">פרטי הספר</h3>
+                  <p className="text-xs text-on-surface/60 mt-1">
+                    {editRow.bookRowCount > 1
+                      ? `השדות האלה שייכים לספר ולא למחבר, ויתעדכנו בכל ${editRow.bookRowCount} השורות של הספר.`
+                      : 'השדות האלה שייכים לספר ולא למחבר.'}
+                  </p>
+                </div>
+
+                <Field label="נושאים">
+                  <input
+                    type="text"
+                    list="book-info-topics"
+                    value={formData.topics}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, topics: e.target.value }))}
+                    placeholder="לדוגמה: הלכה; שבת"
+                    className="w-full border rounded-lg px-3 py-2"
+                  />
+                  <datalist id="book-info-topics">
+                    {topicSuggestions.map((option) => <option key={option} value={option} />)}
+                  </datalist>
+                  <p className="text-xs text-on-surface/60 mt-1">
+                    מפרידים בין נושאים בנקודה-פסיק (;). עד {BOOK_INFO_LIMITS.topicCount} נושאים, ועד {BOOK_INFO_LIMITS.topicLength} תווים לכל נושא.
+                  </p>
+                </Field>
+
+                <Field label="שנת הדפסה">
+                  <input
+                    type="text"
+                    value={formData.pubDate}
+                    maxLength={BOOK_INFO_LIMITS.pubDate}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, pubDate: e.target.value }))}
+                    placeholder='לדוגמה: תרפ"ה או 1925'
+                    className="w-full border rounded-lg px-3 py-2"
+                  />
+                </Field>
+
+                <Field label="מקום הדפסה">
+                  <input
+                    type="text"
+                    value={formData.pubPlace}
+                    maxLength={BOOK_INFO_LIMITS.pubPlace}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, pubPlace: e.target.value }))}
+                    className="w-full border rounded-lg px-3 py-2"
+                  />
+                </Field>
+
+                <Field label="רקע על הספר">
+                  <textarea
+                    rows={5}
+                    value={formData.description}
+                    maxLength={BOOK_INFO_LIMITS.description}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                    className="w-full border rounded-lg px-3 py-2 resize-y"
+                  />
+                  <p className="text-xs text-on-surface/60 mt-1">
+                    {formData.description.length} / {BOOK_INFO_LIMITS.description} תווים
+                  </p>
+                </Field>
+              </div>
+
               <div className="flex justify-end gap-2 pt-3">
                 <button
                   type="button"
@@ -384,6 +500,28 @@ function PendingLink({ pending }) {
       <span className="material-symbols-outlined text-base">open_in_new</span>
     </a>
   )
+}
+
+// מחושב בשרת מהגהות ועריכות שנעשו באתר, ולכן מוצג בלבד ואינו נערך
+function ProofreadTag({ className = '' }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border border-success-200 bg-success-50 px-2 py-0.5 text-xs font-normal text-success-800 whitespace-nowrap ${className}`}
+      title="הספר עבר הגהה או עריכה באוצריא. הסימון מחושב אוטומטית."
+    >
+      עבר הגהה באוצריא
+    </span>
+  )
+}
+
+function normalizeFormValue(field, value) {
+  if (field === 'startYear' || field === 'endYear') return value === '' ? null : Number(value)
+  if (BOOK_INFO_EXTENSION_EDITABLE_FIELDS.includes(field)) return normalizeExtensionField(field, value).value
+  return value || null
+}
+
+function excerpt(text, max = 300) {
+  return text.length > max ? `${text.slice(0, max)}…` : text
 }
 
 function Field({ label, children }) {

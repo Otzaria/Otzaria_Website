@@ -4,6 +4,7 @@ import connectDB from '@/lib/db'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import mongoose from 'mongoose'
 import { ACTIVE_STATUSES } from '@/lib/bookinfo/service'
+import { isProofreadChangeSet } from '@/lib/bookinfo/proofread'
 import BookInfoChangeSet from '@/models/BookInfoChangeSet'
 import { hasBooksAccess } from '@/lib/roles'
 import { requireAccess, serverError } from '@/lib/apiResponse'
@@ -37,16 +38,17 @@ export async function GET(request) {
     const nextCursor = docs.length > LIMIT ? Buffer.from(JSON.stringify({ at: last.createdAt.toISOString(), id: String(last._id) })).toString('base64url') : null
     const rows = page.map((doc) => {
       const op = doc.ops?.[0] || {}
+      const system = isProofreadChangeSet(doc)
       return {
         id: String(doc._id),
-        book: op.book || '',
-        author: op.author || '',
+        book: system ? `סימון הגהה אוטומטי (${doc.ops?.length || 0} ספרים)` : op.book || '',
+        author: system ? '' : op.author || '',
         changes: op.changes || {},
         status: doc.status,
         prNumber: doc.prNumber,
         prUrl: doc.prUrl,
         lastError: doc.lastError,
-        submittedBy: doc.submittedBy?.name || null,
+        submittedBy: system ? 'מערכת' : doc.submittedBy?.name || null,
         createdAt: doc.createdAt
       }
     })

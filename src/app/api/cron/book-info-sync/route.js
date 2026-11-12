@@ -10,6 +10,7 @@ export const dynamic = 'force-dynamic'
  * מעדכן עריכות מידע-על-ספרים שמוזגו/נסגרו, ובונה מחדש מעל main PR-ים ש-main התקדם תחתם.
  * נקרא מ-cron עם CRON_SECRET (כמו שאר ה-cron-ים). אימות OIDC של GitHub, כמו בכינויים, מקודד שם
  * לריפו הכינויים בלבד, ולכן לא נתמך כאן.
+ * עם BOOK_INFO_PROOFREAD_SYNC=1 גם מעדכן פעם ביום את בקשת סימון ההגהה המערכתית (docs/BOOK_INFO_GITHUB.md).
  */
 async function run(request) {
   if (!authorizeCron(request).ok) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

@@ -68,11 +68,39 @@ and previous transferred change-set ID. A remaining year field follows an
 approved author transition; a conflicting selected author proposal is retained
 for review. Publication does not mutate Mongo's old approved `BookInfo` record.
 
+## Proofread marking
+
+The page shows "עבר הגהה באוצריא" when the CSV has `proofread=1` or the site
+computes it from its own records: a published text correction (`ErrorReport`),
+an approved edit in the edited-books space (`BookEdit`), a typing project whose
+pages are all completed (`Book`), or a page-proofing book with no open pages
+(`PageProofBook`). Matching is by book name.
+
+With `BOOK_INFO_PROOFREAD_SYNC=1`, the book-info cron also keeps one system
+request (`bookKey` `system:proofread`, no submitter) that sets `proofread=1` for
+computed books, at most once a day. It only adds the mark, skips books with an
+active user request until a later run, and extends its own open PR in place.
+The flag is off by default: setting `proofread` upgrades the CSV to eleven
+columns, so enable it only after every consumer accepts the extended format.
+
 ## Storage contract and verification
 
-CSV is six columns, LF UTF-8 without BOM/CR/NUL or malformed quoting. Years are
-empty or signed Int32 integers; start must not exceed end. Generation and
-subgeneration must use the shared supported pair. Quoted LF and ordinary astral
+The header is either the six base columns
+(`bookName,authorName,generationName,subGenerationName,startYear,endYear`) or
+those followed by the five extension columns
+(`topics,pubDate,pubPlace,description,proofread`); any other header is refused,
+and every record must have exactly the header's column count. Export keeps the
+format that was read, and switches a six-column file to eleven only when a
+non-empty extension value is saved. LF UTF-8 without BOM/CR/NUL or malformed
+quoting. Years are empty or signed Int32 integers; start must not exceed end.
+Generation and subgeneration must use the shared supported pair.
+
+Extension values belong to the book, not to the author row: an edit writes the
+same value to every row with that `bookName`, and only one active request per
+book may change them. `topics` is `;`-separated (trimmed, deduplicated, up to 10
+values of up to 60 characters); `pubDate` and `pubPlace` are single lines of up
+to 100 characters; `description` is multi-line (CRLF becomes LF) up to 4,000
+characters. `proofread` is empty or `1` and is never edited in the form. Quoted LF and ordinary astral
 characters are supported; lone UTF16 surrogates are refused before UTF8 encoding.
 Export round-trips through the reader and sorts Unicode code points to match
 Python producers.
