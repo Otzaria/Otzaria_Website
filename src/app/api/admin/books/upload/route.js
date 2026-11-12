@@ -185,6 +185,10 @@ export async function POST(request) {
         console.error('Rollback failed! System may have orphan files.', cleanupError);
     }
 
+    if (error.code === 'PDF_CONVERSION_BUSY') { // נזהה עומס זמני בתור ההמרות החדש.
+      return NextResponse.json({ error: 'שרת ההמרה עמוס. נסה שוב מאוחר יותר.' }, { status: 503, headers: { 'Retry-After': '30' } }); // נודיע שאפשר לנסות שוב לאחר המתנה.
+    } // סוף הטיפול בעומס.
+
     return serverError('שגיאה בשרת. נסה שוב מאוחר יותר.');
   }
 }
