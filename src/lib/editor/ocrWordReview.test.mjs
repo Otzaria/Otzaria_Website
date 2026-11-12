@@ -271,3 +271,20 @@ test('stored local word confidence is usable without a fresh detection', () => {
   assert.equal(r.available, true);
   assert.deepEqual(r.suspects.map((w) => [w.text, w.reasons]), [['עולם', ['low_conf']]]);
 });
+
+test('proofreading attaches to the exact current word, preserves split suggestions and ignores stale marks', () => {
+  const marked = { ...line, corrected: 'והנה היא פוסרת את הצרה', lm: [], marks: [
+    { i: 2, word: 'פוסרת', level: 'fix', sugg: ['פו סרת', '<b>', 'פוסרת'], p: .96, why: ['חשד לפי ההקשר'] },
+    { i: 4, word: 'הצרה', level: 'check', sugg: ['מיותר'] },
+    { i: 0, word: 'אחרת', level: 'fix', sugg: ['שגוי'] },
+  ] };
+  const review = buildPageWordReview({ content: 'והנה היא <b>פוסרת</b> את הצרה' }, source([marked]));
+  assert.deepEqual(review.suspects.map((s) => s.text), ['פוסרת', 'הצרה']);
+  const [fix, check] = review.suspects;
+  assert.equal(fix.reasons[0], 'proofreading_fix');
+  assert.deepEqual(fix.proofreading, { p: .96, why: ['חשד לפי ההקשר'] });
+  assert.deepEqual(fix.suggestions, [{ text: 'פו סרת', p: null, sources: ['proofreading'] }]);
+  assert.equal(check.reasons[0], 'proofreading_check');
+  assert.deepEqual(check.suggestions, []);
+  assert.equal(replaceReviewedWord(review.fields.content.text, fix, fix.suggestions[0].text).value, 'והנה היא <b>פו סרת</b> את הצרה');
+});

@@ -10,11 +10,12 @@ import { formatPct } from '@/lib/pageProof/wordPopup'
 import { revealCaret } from '@/hooks/useWordTracking'
 
 const REASONS = {
+  proofreading_fix: 'הצעת תיקון מההגהה', proofreading_check: 'ההגהה סימנה לבדיקה',
   low_conf: 'ביטחון זיהוי נמוך', alternatives: 'חלופות זיהוי', language_model: 'הצעת מודל השפה',
   mixed_script: 'כתבים מעורבים', digit_in_word: 'ספרה בתוך מילה', final_mid: 'אות סופית באמצע מילה',
   non_final_end: 'אות רגילה בסוף מילה', repeated_char: 'אות חוזרת', inner_punct: 'פיסוק בתוך מילה'
 }
-const SOURCES = { recognition: 'זיהוי', language: 'מודל השפה', context: 'מתאימה להקשר' }
+const SOURCES = { recognition: 'זיהוי', language: 'מודל השפה', context: 'מתאימה להקשר', proofreading: 'הגהת OCR' }
 const idOf = (s) => `${s.column}:${s.start}:${s.text}`
 const defaultPosition = (vp) => ({ x: Math.max(16, vp.width - 440 - 24), y: 96 })
 
@@ -88,6 +89,10 @@ export default function OcrWordReviewPanel({ review, textContainerRef, onApplyTe
           {onSetAccepted && <Button variant="tonal" icon="check" onClick={() => setAccepted(current, true)}>המילה תקינה</Button>}
           <p className="mb-2 text-body-sm text-on-surface-variant">{current.reasons.map((r) => REASONS[r] || r).join(' · ')}</p>
           {current.p !== null && current.p !== undefined && <p className="text-body-sm">סבירות המילה המקורית לפי הזיהוי: {formatPct(current.p)}</p>}
+          {current.proofreading?.p != null && <p className="text-body-sm">סבירות לשגיאת זיהוי לפי ההגהה: {formatPct(current.proofreading.p)}</p>}
+          {current.proofreading?.why.length > 0 && <ul className="my-2 list-disc ps-5 text-body-sm text-on-surface-variant">
+            {current.proofreading.why.map((reason) => <li key={reason}>{reason}</li>)}
+          </ul>}
           {current.suggestions.length ? <ul aria-label="הצעות להחלפה" className="mt-2 space-y-2">
             {current.suggestions.map((s) => <li key={s.text} className="flex items-center justify-between gap-3">
               <span>{s.text}<small className="ms-2 text-on-surface-variant">{s.sources.map((k) => SOURCES[k]).join(' · ')}{s.p !== null ? ` · ${formatPct(s.p)}` : ''}</small></span>
