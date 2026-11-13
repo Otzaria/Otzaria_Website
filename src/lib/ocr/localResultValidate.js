@@ -16,6 +16,8 @@
 // 422 ולא מוצגות למשתמש באתר.
 // imports: אין (נבדק ב-node:test).
 
+import { trainingResultProblem } from './modelTraining.pure.js';
+
 export const MAX_RESULT_BYTES = 100 * 1024 * 1024; // = Site:MaxResultBytes בשירות
 export const MAX_PAGE_TEXT_CHARS = 2_000_000; // = ResultValidator.MaxPageTextUnits בשירות (1.0.141+): יחידות UTF-16 (String.length), בדיוק הגבול מתקבל
 export const RESULT_OUTCOMES = Object.freeze(['success', 'partial', 'failed', 'cancelled']);
@@ -103,6 +105,10 @@ export function validateResult(doc, job, byteLength, maxBytes = MAX_RESULT_BYTES
   if (shape.length > 0) return { ok: false, errors: shape };
 
   const errors = [];
+  if (job.taskType === 'training') {
+    const problem = trainingResultProblem(doc, job);
+    if (problem) errors.push(problem);
+  }
   if (doc.schemaVersion !== 1) errors.push('schemaVersion must be 1');
   const outcomeValid = RESULT_OUTCOMES.includes(doc.outcome);
   if (!outcomeValid) errors.push('outcome invalid');

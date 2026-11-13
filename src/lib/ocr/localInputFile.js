@@ -86,7 +86,7 @@ export async function openJobInput(job, env = process.env) {
   // קשור ל-hash, כך שרשומה שמפנה לקובץ של תוכן אחר נתפסת לפני ההגשה.
   let abs;
   try {
-    const expected = `${String(job._id)}/${jobFileName('input', job.inputSha256)}`;
+    const expected = `${String(job._id)}/${jobFileName(job.taskType === 'training' ? 'training' : 'input', job.inputSha256)}`;
     if (job.inputPath !== expected) throw new Error('input_path_mismatch');
     abs = relToAbs(job.inputPath, env);
   } catch {

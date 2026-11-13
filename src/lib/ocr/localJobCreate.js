@@ -122,7 +122,7 @@ export async function createOrResumeLocalJob({ book, req, session, config, now =
         taskType: 'ocr',
         existingTextMode: req.existingTextMode,
         splitColumns: false,
-        options: req.options,
+        options: { ...req.options, ...(process.env.OCR_TRAINING_ENABLED === 'true' ? { bookId: String(book._id) } : {}) },
         ...(req.pageRange ? { pageRange: req.pageRange } : {}),
         status: 'preparing',
         active: true,

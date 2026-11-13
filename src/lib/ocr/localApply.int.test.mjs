@@ -854,3 +854,20 @@ test('מרוץ hash_mismatch: בקשה עם כותרת שגויה במקביל �
     assert.equal(j.resultPath, `${job._id}/result-${sha}.json`);
   }
 });
+
+test('תוצאת אימון וסבב מסירה חוזר אינם כותבים טקסט, פריסה או התנגשות בעמודי הספר', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { job, pages } = await makeJob({ texts: ['טקסט שהוגה', 'נשמר', 'מקור'], extra: { taskType: 'training' } });
+  const release = { repo: 'owner/models', tag: 'trained-abc', sha256: A, archiveSha256: A,
+    url: 'https://github.com/owner/models/releases/tag/trained-abc' };
+  const doc = resultDoc(job, 'success', { pages: job.pageMap.map(e => ({ pdfPageIndex: e.pdfPageIndex, text: '' })),
+    metadata: { training: { stage: 'completed', activated: true, before: release, after: release,
+      metrics: { baselineAccuracy: 98, candidateAccuracy: 99 } } } });
+  const before = await pageSnap(pages);
+  const result = await send(job._id, doc);
+  assert.equal(result.status, 200, JSON.stringify(result));
+  assert.equal((await load(job._id)).status, 'completed');
+  assert.equal((await send(job._id, doc)).body.ack, 'already_received');
+  assert.deepEqual(await pageSnap(pages), before);
+  assert.equal(await OcrConflict.countDocuments({ job: job._id }), 0);
+});

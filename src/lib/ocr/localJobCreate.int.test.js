@@ -213,3 +213,20 @@ describe('בעלות על הכנת local (W04)', () => {
     expect(done).toMatchObject({ status: 'failed', active: false, errorCode: 'missing_image', prepLeaseUntil: null })
   })
 })
+
+it.each([false, true])('book scope is server-derived only after rollout, and an existing envelope stays immutable (enabled=%s)', async enabled => {
+  vi.stubEnv('OCR_TRAINING_ENABLED', String(enabled))
+  try {
+    const attempt = begin(new Date())
+    await vi.waitFor(() => expect(builds).toHaveLength(1))
+    await finishBuild(0, 'book-scoped-input')
+    expect((await attempt).status).toBe(202)
+    const original = await OcrJob.findOne({ requestId: REQ.requestId }).lean()
+    expect(original.options.bookId).toBe(enabled ? String(book._id) : undefined)
+    vi.stubEnv('OCR_TRAINING_ENABLED', String(!enabled))
+    await begin(new Date())
+    const replay = await OcrJob.findById(original._id).lean()
+    expect(replay.options).toEqual(original.options)
+    expect(builds).toHaveLength(1)
+  } finally { vi.unstubAllEnvs() }
+})

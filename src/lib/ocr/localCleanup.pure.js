@@ -25,8 +25,8 @@ export const RECHECK_MS = DAY_MS;
 // רשת ביטחון: גם עבודה שנוקתה נבדקת שוב פעם בחודש (תיקייה שנוצרה מחדש בלי שינוי שנרשם ב-DB)
 export const PURGED_RECHECK_MS = 30 * DAY_MS;
 
-const FILE_RE = /^(input|result|rejected)-([0-9a-f]{64})\.(pdf|json)$/;
-const EXT_OF = Object.freeze({ input: 'pdf', result: 'json', rejected: 'json' });
+const FILE_RE = /^(input|training|result|rejected)-([0-9a-f]{64})\.(pdf|zip|json)$/;
+const EXT_OF = Object.freeze({ input: 'pdf', training: 'zip', result: 'json', rejected: 'json' });
 
 const time = (d) => (d == null ? NaN : new Date(d).getTime());
 const hasAck = (job) => typeof job?.ack?.ack === 'string';
@@ -36,7 +36,7 @@ const lockedSha = (job) => (typeof job?.resultSha256 === 'string' ? job.resultSh
 export function parseJobFileName(name) {
   const m = FILE_RE.exec(String(name));
   if (!m || EXT_OF[m[1]] !== m[3]) return null;
-  return { kind: m[1], sha: m[2] };
+  return { kind: m[1] === 'training' ? 'input' : m[1], sha: m[2] };
 }
 
 /**
