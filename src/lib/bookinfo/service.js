@@ -143,7 +143,7 @@ export async function submitEdit({ edit, userId = null }, client = createBookInf
     const [op] = checked.ops
     // שדות ברמת הספר נכתבים לכל שורות הספר, ולכן בקשה אחת בלבד יכולה לשנות אותם
     const touchesBook = (changes) => BOOK_INFO_EXTENSION_EDITABLE_FIELDS.some((field) => field in (changes || {}))
-    if (touchesBook(op.changes) && active.some((item) => !isProofreadChangeSet(item) && ACTIVE_STATUSES.includes(item.status) && item.ops.some((other) => other.book === op.book && touchesBook(other.changes)))) {
+    if (touchesBook(currentEdit.updates) && active.some((item) => !isProofreadChangeSet(item) && ACTIVE_STATUSES.includes(item.status) && item.ops.some((other) => other.book === op.book && touchesBook(other.changes)))) {
       throw new BookInfoInputError('יש כבר בקשה פתוחה לנושאים, לפרטי ההדפסה או לרקע של ספר זה; נא להמתין למיזוגה או לסגירתה')
     }
     op.identityRevision = base.identity.events.length

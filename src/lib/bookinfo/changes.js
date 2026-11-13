@@ -26,7 +26,17 @@ const FIELD_LABELS = {
 
 const same = (a, b) => (a ?? null) === (b ?? null) || (a === '' && b == null) || (a == null && b === '')
 
-const siblingRows = (state, row) => [...state.rows.values()].filter((other) => other !== row && other.bookName === row.bookName)
+const indexBookRows = (state) => {
+  const keysByBook = new Map()
+  for (const [key, row] of state.rows) {
+    if (!keysByBook.has(row.bookName)) keysByBook.set(row.bookName, new Set())
+    keysByBook.get(row.bookName).add(key)
+  }
+  return keysByBook
+}
+const siblingRows = (state, row, keysByBook) => [...keysByBook.get(row.bookName)]
+  .filter((key) => key !== rowKey(row.bookName, row.authorName))
+  .map((key) => state.rows.get(key))
 
 /**
  * מאמת סל שהגיע מהדפדפן מול מצב הקובץ, ומחזיר אותו מנורמל.
@@ -38,6 +48,7 @@ export function validateChangeSet(rawOps, state) {
   if (rawOps.length > MAX_OPS_PER_CHANGE_SET) return { error: `בסל יותר מ-${MAX_OPS_PER_CHANGE_SET} שינויים` }
   const ops = []
   const seen = new Set()
+  const keysByBook = indexBookRows(state)
   for (const [i, raw] of rawOps.entries()) {
     const where = `שינוי ${i + 1}`
     const book = String(raw?.book ?? '')
@@ -47,7 +58,7 @@ export function validateChangeSet(rawOps, state) {
     if (!current) return { error: `${where}: הספר "${book}" אינו ברשימה` }
     if (seen.has(key)) return { error: `${where}: הספר "${book}" מופיע בסל יותר מפעם אחת` }
     seen.add(key)
-    if (raw.updates && 'proofread' in raw.updates) return { error: `${where} (${book}): סימון ההגהה מחושב אוטומטית ואינו נערך ידנית` }
+    if (raw.updates && 'proofread' in raw.updates) return { error: `${where} (${book}): סימון ההגהה אינו נערך בטופס` }
 
     // מאמתים את השורה כולה אחרי העדכון, כדי שדור ותת-דור יבדקו זה מול זה גם כשרק אחד מהם נשלח
     const merged = {}
@@ -69,7 +80,7 @@ export function validateChangeSet(rawOps, state) {
       if (touched.some((field) => !same(current[field], raw.baseRow[field]) && !same(current[field], updates[field]))) return { error: `${where} (${book}): הנתון בקובץ השתנה מאז פתיחת הטופס; יש לרענן ולבדוק את השינוי` }
     }
     const changes = buildDiff(current, updates)
-    const siblings = siblingRows(state, current)
+    const siblings = siblingRows(state, current, keysByBook)
     for (const field of BOOK_INFO_BOOK_LEVEL_FIELDS) {
       if (field in (raw.updates || {}) && !(field in changes) && siblings.some((row) => !same(row[field], updates[field]))) changes[field] = updates[field]
     }
@@ -90,11 +101,7 @@ export function validateChangeSet(rawOps, state) {
 export function applyChangeSet(baseState, ops) {
   const state = cloneBookInfoState(baseState)
   const results = []
-  const keysByBook = new Map()
-  for (const [key, row] of state.rows) {
-    if (!keysByBook.has(row.bookName)) keysByBook.set(row.bookName, new Set())
-    keysByBook.get(row.bookName).add(key)
-  }
+  const keysByBook = indexBookRows(state)
   for (const op of ops) {
     const key = rowKey(op.book, op.author)
     const row = state.rows.get(key)
@@ -103,7 +110,7 @@ export function applyChangeSet(baseState, ops) {
       continue
     }
     // שדות ברמת הספר נכתבים לכל שורות הספר, גם כשבשורה של העריכה הם כבר מעודכנים
-    const siblings = [...keysByBook.get(row.bookName)].filter((otherKey) => otherKey !== key).map((otherKey) => state.rows.get(otherKey))
+    const siblings = siblingRows(state, row, keysByBook)
     const effective = {}
     for (const [field, value] of Object.entries(op.changes)) {
       const targets = BOOK_INFO_BOOK_LEVEL_FIELDS.includes(field) ? [row, ...siblings] : [row]

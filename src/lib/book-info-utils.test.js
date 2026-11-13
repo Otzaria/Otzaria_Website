@@ -168,4 +168,5 @@ it('book info form sends only book fields changed from the displayed pending val
   const effective = { ...approved, topics: 'הלכה;שבת' }
   expect(bookInfoFormUpdates({ ...effective, topics: 'הלכה; שבת', startYear: '1500' }, approved, effective)).toEqual({ startYear: '1500' })
   expect(bookInfoFormUpdates({ ...effective, topics: 'הלכה;מוסר' }, approved, effective)).toEqual({ topics: 'הלכה;מוסר' })
+  expect(bookInfoFormUpdates({ pubDate: 'שגוי\nערך' }, { pubDate: null }, { pubDate: null })).toEqual({ pubDate: 'שגוי\nערך' })
 })

@@ -9,6 +9,7 @@ import { startMongo } from '../corrections/testing/mongo.js'
 import { FakeGitHub } from '../corrections/testing/fake-github.js'
 import { createRepoClient } from '../dicta/github-api.js'
 import BookInfoChangeSet from '../../models/BookInfoChangeSet.js'
+import { bookInfoFormUpdates } from '../book-info-utils.js'
 import { BOOK_INFO_ALL_COLUMNS, BOOK_INFO_COLUMNS, listBookInfo, parseBookInfoCsv } from './csv.js'
 import { BOOK_INFO_BRANCH, BOOK_INFO_PATH, BOOK_INFO_REPO, branchName, resetBookInfoCaches } from './fork.js'
 import { isProofreadChangeSet } from './proofread.js'
@@ -549,7 +550,14 @@ test('an extension edit upgrades the file and is written to every author row of 
 
   // שדות הספר נעולים לבקשה אחת; שדה בסיס בשורת מחבר אחר פתוח
   await assert.rejects(submitEdit({ edit: { ...KARO, updates: { description: 'רקע אחר' } } }, client), /לנושאים, לפרטי ההדפסה או לרקע/)
-  const other = await submitEdit({ edit: { ...KARO, updates: { startYear: 1488 } } }, client)
+  // An attempted revert to the approved value is still a book-level edit.
+  await assert.rejects(submitEdit({ edit: { ...KARO, updates: { topics: null, startYear: 1488 } } }, client), /לנושאים, לפרטי ההדפסה או לרקע/)
+  const approved = listBookInfo(parseBookInfoCsv(MULTI)).find((row) => row.bookName === KARO.book && row.authorName === KARO.author)
+  const effective = { ...approved, topics: 'הלכה;פסקים', pubPlace: 'ונציה', description: 'שורה\nשנייה' }
+  const form = { ...effective, topics: 'הלכה; פסקים', startYear: '1488' }
+  const updates = bookInfoFormUpdates(form, approved, effective)
+  assert.deepEqual(updates, { startYear: '1488' })
+  const other = await submitEdit({ edit: { ...KARO, baseRow: approved, updates } }, client)
   assert.equal(headerOn(branchName(other.id)), BOOK_INFO_COLUMNS.join(','))
 
   // אחרי המיזוג, הבקשה השנייה נבנית מחדש מעל הקובץ המורחב ושומרת את ערכי הספר
@@ -569,4 +577,15 @@ test('extended field publication is disabled until explicitly enabled', async ()
   const result = await submitEdit({ edit: { ...EZRA, updates: { endYear: 1167 } } }, client)
   assert.equal(result.prNumber, 1)
   assert.equal(headerOn(branchName(result.id)), BOOK_INFO_COLUMNS.join(','))
+})
+
+test('disabled extended fields prevent an older request upgrading the file during a rebuild', async () => {
+  const result = await submitEdit({ edit: { ...EZRA, updates: { topics: 'הלכה' } } }, client)
+  const before = await BookInfoChangeSet.findById(result.id).lean()
+  delete process.env.BOOK_INFO_EXTENDED_FIELDS
+  gh.pushExternal(BOOK_INFO_BRANCH, { [BOOK_INFO_PATH]: CSV.replace('"300"', '"301"') })
+  await syncEdits(client, Date.now(), { mutationDelayMs: 0 })
+  const after = await BookInfoChangeSet.findById(result.id).lean()
+  assert.equal(after.headSha, before.headSha)
+  assert.match(after.lastError, /אינה זמינה/)
 })
