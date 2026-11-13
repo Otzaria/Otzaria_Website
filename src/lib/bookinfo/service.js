@@ -6,7 +6,7 @@ import { bookInfoStateFromRows, listBookInfo, rowKey } from './csv.js'
 import { applyChangeSet, validateChangeSet } from './changes.js'
 import { BOOK_INFO_REPO, branchName, createBookInfoClient, loadBookInfoState, openPullForBranch, publishChangeSet, refreshChangeSet } from './fork.js'
 import { assertIdentityPrefix, identityPrefixHash, followIdentity, rebaseIdentities } from './identity.js'
-import { PROOFREAD_CHANGE_SET_KEY, PROOFREAD_SYNC_INTERVAL_MS, isProofreadChangeSet, mergeProofreadOps, proofreadOps, proofreadOpsKey } from './proofread.js'
+import { PROOFREAD_CHANGE_SET_KEY, isProofreadChangeSet } from './proofread.js'
 import { BOOK_INFO_EXTENSION_EDITABLE_FIELDS } from '../book-info-constants.js'
 
 const SNAPSHOT_TTL_MS = 60_000
@@ -81,6 +81,9 @@ function writer(doc, before = async () => {}) {
 }
 
 export async function submitEdit({ edit, userId = null }, client = createBookInfoClient()) {
+  if (process.env.BOOK_INFO_EXTENDED_FIELDS !== '1' && BOOK_INFO_EXTENSION_EDITABLE_FIELDS.some((field) => Object.hasOwn(edit.updates || {}, field))) {
+    throw new BookInfoInputError('עריכת פרטי הספר הנוספים אינה זמינה עדיין')
+  }
   await ensureActiveReservationIndex()
   let reservationOwner
   for (let attempt = 0; attempt < 20 && !reservationOwner; attempt++) {
@@ -238,7 +241,7 @@ async function acquireLease() {
 }
 
 /** Fair bounded queue and paced writes avoid unbounded GitHub fanout. Options remove delay only in tests. */
-export async function syncEdits(rawClient = createBookInfoClient(), now = Date.now(), { mutationDelayMs = 1500, batchSize = SYNC_BATCH_SIZE, maxRunMs = 60_000, proofreadSync = process.env.BOOK_INFO_PROOFREAD_SYNC === '1', loadProofread = loadProofreadNames } = {}) {
+export async function syncEdits(rawClient = createBookInfoClient(), now = Date.now(), { mutationDelayMs = 1500, batchSize = SYNC_BATCH_SIZE, maxRunMs = 60_000 } = {}) {
   const summary = { checked: 0, rebuilt: 0, merged: 0, closed: 0, modified: 0, conflict: 0, failed: 0, deferred: 0, locked: 0 }
   const owner = await acquireLease()
   if (!owner) return { ...summary, locked: 1 }
@@ -271,7 +274,6 @@ export async function syncEdits(rawClient = createBookInfoClient(), now = Date.n
     const filter = { $or: [{ status: { $in: ['open', 'modified', 'conflict'] } }, { status: 'publishing', updatedAt: { $lt: new Date(now - STALE_PUBLISHING_MS) } }] }
     const docs = await BookInfoChangeSet.find(filter).sort({ checkedAt: 1, createdAt: 1, _id: 1 }).limit(batchSize).lean()
     let processed = 0
-    let rateLimited = false
     for (const doc of docs) {
       if (Date.now() - start >= maxRunMs) break
       const save = writer(doc, renew)
@@ -313,18 +315,8 @@ export async function syncEdits(rawClient = createBookInfoClient(), now = Date.n
         if (err.status === 429 || err.status === 403) {
           const seconds = Number(err.retryAfter)
           await BookInfoSyncState.updateOne({ _id: 'book-info', owner }, { $set: { retryAt: new Date(Date.now() + Math.max(60, Number.isFinite(seconds) ? seconds : 60) * 1000) } })
-          rateLimited = true
           break
         }
-      }
-    }
-    if (proofreadSync && !rateLimited) {
-      try {
-        summary.proofread = await syncProofread(client, base, { now, owner, renew, loadProofread })
-      } catch (err) {
-        if (['LEASE_LOST', 'STALE_STATE'].includes(err.code)) throw err
-        console.error('Book info proofread sync failed:', err)
-        summary.proofread = 'failed'
       }
     }
     summary.deferred = Math.max(0, await BookInfoChangeSet.countDocuments(filter) - processed)
@@ -332,48 +324,6 @@ export async function syncEdits(rawClient = createBookInfoClient(), now = Date.n
   } finally {
     await BookInfoSyncState.updateOne({ _id: 'book-info', owner }, { $unset: { owner: 1 }, $set: { expiresAt: new Date(0) } })
   }
-}
-
-const loadProofreadNames = async () => (await import('./proofread-sources.js')).getProofreadBookNames({ fresh: true })
-
-/**
- * Daily system request that sets proofread=1 for books the site computed as proofread.
- * Books with an active user request are skipped until a later run; an open system PR is extended in place.
- */
-async function syncProofread(client, base, { now, owner, renew, loadProofread }) {
-  const state = await BookInfoSyncState.findById('book-info').lean()
-  if (state?.proofreadCheckedAt && now - new Date(state.proofreadCheckedAt).getTime() < PROOFREAD_SYNC_INTERVAL_MS) return { action: 'skipped' }
-  await renew()
-  await BookInfoSyncState.updateOne({ _id: 'book-info', owner }, { $set: { proofreadCheckedAt: new Date(now) } })
-  const names = await loadProofread()
-  const active = await BookInfoChangeSet.find({ status: { $in: ACTIVE_STATUSES } }).lean()
-  const system = active.find(isProofreadChangeSet)
-  const skipBooks = new Set(active.filter((doc) => !isProofreadChangeSet(doc)).flatMap((doc) => doc.ops.map((op) => op.book)))
-  const fresh = proofreadOps(base.state, names, { skipBooks, identityRevision: base.identity.events.length })
-  if (!system) {
-    if (!fresh.length) return { action: 'none', books: 0 }
-    await renew()
-    let doc
-    try {
-      doc = (await BookInfoChangeSet.create({ ops: fresh, bookKey: PROOFREAD_CHANGE_SET_KEY, submittedBy: null, status: 'publishing' })).toObject()
-    } catch (err) {
-      if (err.code === 11000) return { action: 'skipped' }
-      throw err
-    }
-    const res = await publishDoc(client, doc, base, writer(doc, renew))
-    return { action: 'created', books: fresh.length, prNumber: res.prNumber }
-  }
-  if (!['open', 'conflict'].includes(system.status) || system.pendingHeadSha) return { action: 'skipped' }
-  // ספר שה-CI הסיר מהקובץ נשמט מהבקשה, אחרת היא נתקעת בהתנגשות וחוסמת את הסימון
-  const existing = system.ops.flatMap((op) => { try { return rebaseIdentities([op], base) } catch { return [] } }).filter((op) => base.state.rows.has(rowKey(op.book, op.author)))
-  const ops = mergeProofreadOps(existing, fresh)
-  if (system.status === 'open' && existing.length === system.ops.length && proofreadOpsKey(ops) === proofreadOpsKey(existing)) return { action: 'unchanged', books: existing.length }
-  const save = writer(system, renew)
-  const res = await refreshChangeSet(client, { ...system, id: String(system._id), persistIntent: save }, base, { ops })
-  const patch = { status: res.status === 'rebuilt' ? 'open' : res.status, lastError: null, checkedAt: new Date(now) }
-  if (res.status === 'rebuilt') Object.assign(patch, { headSha: res.headSha, baseSha: res.baseSha, baseBlobSha: res.baseBlobSha, baseIdentitySha: res.baseIdentitySha, ops: res.ops, ...clearedIntent })
-  await save(patch)
-  return { action: res.status === 'rebuilt' ? 'updated' : res.status, books: ops.length }
 }
 
 /** Resolve legacy identity using persisted transfer provenance, without guessing an author from title. */

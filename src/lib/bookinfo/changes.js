@@ -90,6 +90,11 @@ export function validateChangeSet(rawOps, state) {
 export function applyChangeSet(baseState, ops) {
   const state = cloneBookInfoState(baseState)
   const results = []
+  const keysByBook = new Map()
+  for (const [key, row] of state.rows) {
+    if (!keysByBook.has(row.bookName)) keysByBook.set(row.bookName, new Set())
+    keysByBook.get(row.bookName).add(key)
+  }
   for (const op of ops) {
     const key = rowKey(op.book, op.author)
     const row = state.rows.get(key)
@@ -98,7 +103,7 @@ export function applyChangeSet(baseState, ops) {
       continue
     }
     // שדות ברמת הספר נכתבים לכל שורות הספר, גם כשבשורה של העריכה הם כבר מעודכנים
-    const siblings = siblingRows(state, row)
+    const siblings = [...keysByBook.get(row.bookName)].filter((otherKey) => otherKey !== key).map((otherKey) => state.rows.get(otherKey))
     const effective = {}
     for (const [field, value] of Object.entries(op.changes)) {
       const targets = BOOK_INFO_BOOK_LEVEL_FIELDS.includes(field) ? [row, ...siblings] : [row]
@@ -128,6 +133,9 @@ export function applyChangeSet(baseState, ops) {
     const before = Object.fromEntries(Object.keys(effective).map((f) => [f, row[f]]))
     state.rows.delete(key)
     state.rows.set(nextKey, next)
+    keysByBook.get(row.bookName).delete(key)
+    if (!keysByBook.has(next.bookName)) keysByBook.set(next.bookName, new Set())
+    keysByBook.get(next.bookName).add(nextKey)
     const bookLevel = Object.fromEntries(BOOK_INFO_BOOK_LEVEL_FIELDS.filter((f) => f in effective).map((f) => [f, next[f]]))
     for (const sibling of siblings) state.rows.set(rowKey(sibling.bookName, sibling.authorName), { ...sibling, ...bookLevel })
     results.push({ op, status: 'applied', before, after: effective })

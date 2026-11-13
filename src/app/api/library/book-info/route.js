@@ -6,7 +6,6 @@ import BookInfoChangeSet from '@/models/BookInfoChangeSet'
 import { BOOK_INFO_EXTENSION_EDITABLE_FIELDS, BOOK_INFO_GENERATION_OPTIONS, BOOK_INFO_SUB_GENERATION_OPTIONS_BY_GENERATION } from '@/lib/book-info-constants'
 import { rowKey } from '@/lib/bookinfo/csv'
 import { BookInfoInputError, getBookInfoSnapshot, listOpenEdits, submitEdit } from '@/lib/bookinfo/service'
-import { getProofreadBookNames } from '@/lib/bookinfo/proofread-sources'
 import { unauthorized, badRequest, serverError } from '@/lib/apiResponse'
 
 export const maxDuration = 120
@@ -34,11 +33,6 @@ export async function GET() {
       const bookLevel = Object.fromEntries(Object.entries(pending.changes).filter(([field]) => BOOK_INFO_EXTENSION_EDITABLE_FIELDS.includes(field)))
       if (Object.keys(bookLevel).length) pendingByBook.set(pending.book, { ...pendingByBook.get(pending.book), ...bookLevel })
     }
-    // הסימון הוא תוספת לתצוגה; תקלה במקורות לא תמנע את טעינת הדף
-    const proofreadNames = await getProofreadBookNames().catch((error) => {
-      console.error('Book info proofread sources failed:', error)
-      return new Set()
-    })
 
     const rows = snapshot.rows.map((approved) => {
       const key = rowKey(approved.bookName, approved.authorName)
@@ -47,7 +41,7 @@ export async function GET() {
         id: key,
         approved,
         effective: { ...approved, ...pendingByBook.get(approved.bookName), ...(isShown(pending) ? pending.changes : {}) },
-        proofread: approved.proofread === '1' || proofreadNames.has(approved.bookName),
+        proofread: approved.proofread === '1',
         pending: pending ? { id: pending.id, changedFields: Object.keys(pending.changes), prNumber: pending.prNumber, prUrl: pending.prUrl, status: pending.status, lastError: pending.lastError } : null,
       }
     })
@@ -63,6 +57,7 @@ export async function GET() {
         rows,
         unresolvedEdits,
         identityRevision: snapshot.identity.events.length,
+        extendedFieldsEnabled: process.env.BOOK_INFO_EXTENDED_FIELDS === '1',
         generationOptions: BOOK_INFO_GENERATION_OPTIONS,
         subGenerationOptionsByGeneration: BOOK_INFO_SUB_GENERATION_OPTIONS_BY_GENERATION,
       },

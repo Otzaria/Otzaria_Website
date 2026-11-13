@@ -1,5 +1,6 @@
 import {
   BOOK_INFO_BOOK_LEVEL_FIELDS,
+  BOOK_INFO_EXTENSION_EDITABLE_FIELDS,
   BOOK_INFO_FIELDS,
   BOOK_INFO_GENERATION_OPTIONS,
   BOOK_INFO_LIMITS,
@@ -219,4 +220,16 @@ export function escapeCsvValue(value) {
     return `"${stringValue.replace(/"/g, '""')}"`
   }
   return stringValue
+}
+
+/** Compare book fields to the displayed values, which may include another author's pending request. */
+export function bookInfoFormUpdates(formData, approved, effective) {
+  return Object.fromEntries(Object.entries(formData).filter(([field, value]) => {
+    if (BOOK_INFO_EXTENSION_EDITABLE_FIELDS.includes(field)) {
+      return normalizeExtensionField(field, value).value !== normalizeExtensionField(field, effective?.[field]).value
+    }
+    const current = approved?.[field]
+    const normalized = ['startYear', 'endYear'].includes(field) ? (value == null || value === '' ? null : Number(value)) : (value || null)
+    return normalized !== (current === '' || current === undefined ? null : current)
+  }))
 }

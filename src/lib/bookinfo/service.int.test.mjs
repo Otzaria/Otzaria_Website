@@ -11,7 +11,7 @@ import { createRepoClient } from '../dicta/github-api.js'
 import BookInfoChangeSet from '../../models/BookInfoChangeSet.js'
 import { BOOK_INFO_ALL_COLUMNS, BOOK_INFO_COLUMNS, listBookInfo, parseBookInfoCsv } from './csv.js'
 import { BOOK_INFO_BRANCH, BOOK_INFO_PATH, BOOK_INFO_REPO, branchName, resetBookInfoCaches } from './fork.js'
-import { PROOFREAD_CHANGE_SET_KEY } from './proofread.js'
+import { isProofreadChangeSet } from './proofread.js'
 import { BookInfoInputError, getBookInfoSnapshot, listOpenEdits, submitEdit, syncEdits } from './service.js'
 
 const CSV = [
@@ -39,6 +39,7 @@ beforeEach(async (t) => {
   await mongo.reset()
   resetBookInfoCaches()
   globalThis.__bookInfoSnapshot.snapshot = null
+  process.env.BOOK_INFO_EXTENDED_FIELDS = '1'
   process.env.ACRONYMS_SIGNOFF = 'Test Bot <1+bot@users.noreply.github.com>'
   gh = new FakeGitHub({ repo: BOOK_INFO_REPO, branch: BOOK_INFO_BRANCH, files: { [BOOK_INFO_PATH]: CSV } })
   client = createRepoClient({ repo: BOOK_INFO_REPO, token: 't', fetchImpl: gh.fetch })
@@ -320,7 +321,7 @@ test('admin active filtering precedes history limit and cursor pages retain ever
   const mongoose = (await import('mongoose')).default
   const { ACTIVE_STATUSES } = await import('./service.js')
   const source = fs.readFileSync(new URL('../../app/api/admin/book-info/change-sets/route.js', import.meta.url), 'utf8').replace(/^import .*\n/gm, '').replace('export async function GET', 'async function GET')
-  const get = vm.compileFunction(source + '\nreturn GET', ['NextResponse', 'getServerSession', 'authOptions', 'connectDB', 'BookInfoChangeSet', 'mongoose', 'ACTIVE_STATUSES', 'hasBooksAccess', 'requireAccess', 'serverError'])({ json: (body, opts) => ({ ...body, httpStatus: opts?.status || 200 }) }, async () => ({ user: { role: 'admin' } }), {}, async () => {}, BookInfoChangeSet, mongoose, ACTIVE_STATUSES, () => true, () => null, () => { throw new Error('unexpected route error') })
+  const get = vm.compileFunction(source + '\nreturn GET', ['NextResponse', 'getServerSession', 'authOptions', 'connectDB', 'BookInfoChangeSet', 'mongoose', 'ACTIVE_STATUSES', 'isProofreadChangeSet', 'hasBooksAccess', 'requireAccess', 'serverError'])({ json: (body, opts) => ({ ...body, httpStatus: opts?.status || 200 }) }, async () => ({ user: { role: 'admin' } }), {}, async () => {}, BookInfoChangeSet, mongoose, ACTIVE_STATUSES, isProofreadChangeSet, () => true, () => null, () => { throw new Error('unexpected route error') })
   await BookInfoChangeSet.create([
     { bookKey: 'old', status: 'open', ops: [{ book: 'old active' }], createdAt: new Date(0) },
     ...Array.from({ length: 200 }, (_, i) => ({ bookKey: `history-${i}`, status: 'merged', ops: [{ book: `merged-${i}` }], createdAt: new Date(i + 1) })),
@@ -523,7 +524,6 @@ const MULTI = [
 ].join('\n')
 const KARO = { book: 'שולחן ערוך', author: 'רבי יוסף קארו' }
 const RAMA = { book: 'שולחן ערוך', author: 'רמ"א' }
-const DAY = 24 * 60 * 60 * 1000
 
 function useFile(csv) {
   gh = new FakeGitHub({ repo: BOOK_INFO_REPO, branch: BOOK_INFO_BRANCH, files: { [BOOK_INFO_PATH]: csv } })
@@ -561,72 +561,12 @@ test('an extension edit upgrades the file and is written to every author row of 
   assert.equal(rebuilt.find((row) => row.authorName === KARO.author).startYear, 1488)
 })
 
-test('the proofread cron is off by default and never loads its sources', async () => {
-  delete process.env.BOOK_INFO_PROOFREAD_SYNC
-  let loaded = 0
-  const summary = await syncEdits(client, Date.now(), { mutationDelayMs: 0, loadProofread: async () => { loaded++; return new Set(['אבן עזרא']) } })
-  assert.equal(loaded, 0)
-  assert.equal(summary.proofread, undefined)
+
+test('extended field publication is disabled until explicitly enabled', async () => {
+  delete process.env.BOOK_INFO_EXTENDED_FIELDS
+  await assert.rejects(submitEdit({ edit: { ...EZRA, updates: { topics: 'הלכה' } } }, client), /אינה זמינה/)
   assert.equal(gh.pulls.length, 0)
-  assert.equal(await BookInfoChangeSet.countDocuments(), 0)
-})
-
-test('the proofread cron keeps one daily system request that skips books with user requests', async () => {
-  useFile(MULTI)
-  const user = await submitEdit({ edit: { ...RABBA, updates: { startYear: 301 } } }, client)
-  const loadProofread = async () => new Set(['אבן עזרא', 'בראשית רבה', 'שולחן ערוך'])
-  const options = { mutationDelayMs: 0, proofreadSync: true, loadProofread }
-  const t0 = Date.now()
-
-  const first = await syncEdits(client, t0, options)
-  assert.deepEqual([first.proofread.action, first.proofread.books], ['created', 2])
-  const system = await BookInfoChangeSet.findOne({ bookKey: PROOFREAD_CHANGE_SET_KEY }).lean()
-  assert.equal(system.status, 'open')
-  assert.equal(system.submittedBy, null)
-  assert.match(gh.pulls[system.prNumber - 1].title, /עברו הגהה באוצריא: 2 ספרים/)
-  assert.equal(headerOn(system.branch), BOOK_INFO_ALL_COLUMNS.join(','))
-  assert.ok(rowsOn(system.branch, 'שולחן ערוך').every((row) => row.proofread === '1'))
-  assert.equal(rowsOn(system.branch, 'אבן עזרא')[0].proofread, '1')
-  assert.equal(rowsOn(system.branch, 'בראשית רבה')[0].proofread, null)
-
-  // אינה נראית כבקשת משתמש ואינה חוסמת עריכה בספרים שבה
-  assert.deepEqual((await listOpenEdits()).map((edit) => edit.book), ['בראשית רבה'])
-  await submitEdit({ edit: { ...EZRA, updates: { endYear: 1167 } } }, client)
-
-  const sameDay = await syncEdits(client, t0 + 1000, options)
-  assert.equal(sameDay.proofread.action, 'skipped')
-
-  gh.mergePull(user.prNumber)
-  const nextDay = await syncEdits(client, t0 + DAY + 1, options)
-  assert.deepEqual([nextDay.proofread.action, nextDay.proofread.books], ['updated', 3])
-  const updated = await BookInfoChangeSet.findById(system._id).lean()
-  assert.equal(updated.bookKey, PROOFREAD_CHANGE_SET_KEY)
-  assert.equal(updated.prNumber, system.prNumber)
-  assert.equal(await BookInfoChangeSet.countDocuments({ bookKey: PROOFREAD_CHANGE_SET_KEY }), 1)
-  assert.equal(rowsOn(updated.branch, 'בראשית רבה')[0].proofread, '1')
-  assert.equal(rowsOn(updated.branch, 'בראשית רבה')[0].startYear, 301)
-  assert.match(gh.pulls[system.prNumber - 1].title, /3 ספרים/)
-
-  // אחרי מיזוג אין פער, ולכן אין בקשה חדשה
-  gh.mergePull(system.prNumber)
-  const done = await syncEdits(client, t0 + 2 * DAY + 2, options)
-  assert.equal((await BookInfoChangeSet.findById(system._id).lean()).status, 'merged')
-  assert.deepEqual(done.proofread, { action: 'none', books: 0 })
-})
-
-test('a book the CI removed is dropped from the system request instead of blocking it', async () => {
-  useFile(MULTI)
-  const options = { mutationDelayMs: 0, proofreadSync: true, loadProofread: async () => new Set(['אבן עזרא', 'שולחן ערוך']) }
-  const t0 = Date.now()
-  await syncEdits(client, t0, options)
-  const system = await BookInfoChangeSet.findOne({ bookKey: PROOFREAD_CHANGE_SET_KEY }).lean()
-  const ledger = { schemaVersion: 1, events: [{ id: 1, kind: 'remove', old: { bookName: 'אבן עזרא', authorName: EZRA.author }, reason: 'orphan', commit: gh.headSha(BOOK_INFO_BRANCH) }] }
-  gh.pushExternal(BOOK_INFO_BRANCH, { [BOOK_INFO_PATH]: MULTI.split('\n').filter((line) => !line.startsWith('"אבן עזרא"')).join('\n'), [identityPath]: JSON.stringify(ledger) })
-
-  const next = await syncEdits(client, t0 + DAY + 1, { ...options, loadProofread: async () => new Set(['שולחן ערוך']) })
-  assert.deepEqual([next.proofread.action, next.proofread.books], ['updated', 1])
-  const updated = await BookInfoChangeSet.findById(system._id).lean()
-  assert.equal(updated.status, 'open')
-  assert.deepEqual(updated.ops.map((op) => op.book), ['שולחן ערוך'])
-  assert.ok(rowsOn(updated.branch, 'שולחן ערוך').every((row) => row.proofread === '1'))
+  const result = await submitEdit({ edit: { ...EZRA, updates: { endYear: 1167 } } }, client)
+  assert.equal(result.prNumber, 1)
+  assert.equal(headerOn(branchName(result.id)), BOOK_INFO_COLUMNS.join(','))
 })
