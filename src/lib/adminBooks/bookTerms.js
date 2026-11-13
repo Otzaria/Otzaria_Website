@@ -280,15 +280,46 @@ export function fileSizeText(bytes) {
 }
 
 /**
+ * הגודל המרבי של קובץ מקור שממנו מעלים רק חלק מהעמודים. החיתוך נעשה בדפדפן (pdf-lib טוען את כל הקובץ
+ * לזיכרון), ולשרת נשלח רק החלק — שעליו חלה המגבלה של MAX_PDF_BYTES. מעבר לזה הדפדפן עלול לקרוס.
+ */
+export const MAX_SOURCE_PDF_BYTES = 500 * 1024 * 1024
+
+/**
  * בדיקת טופס "הוספת ספר" לפני ההעלאה — אותם כללים כמו בשרת, כדי לא להעלות 50MB ואז לקבל שגיאה.
- * @param {{ name: string, file: { name: string, size: number, type?: string } | null }} form
+ * partial — נבחר טווח עמודים: הקובץ עצמו לא נשלח (רק החלק שנחתך ממנו — ר' slicedSizeError), ולכן
+ * המגבלה על המקור היא MAX_SOURCE_PDF_BYTES. בלי טווח — הקובץ נשלח כמו שהוא, עד 50MB, ואם הוא גדול
+ * יותר ההודעה מציעה לבחור טווח — אלא אם canSlice: false (קובץ מוצפן / שהדפדפן לא הצליח לקרוא).
+ * @param {{ name: string, file: { name: string, size: number, type?: string } | null, partial?: boolean, canSlice?: boolean }} form
  * @returns {{ name?: string, file?: string }}
  */
-export function newBookErrors({ name, file }) {
+export function newBookErrors({ name, file, partial = false, canSlice = true }) {
   const errors = {}
   if (!String(name || '').trim()) errors.name = 'כתוב שם לספר.'
   if (!file) errors.file = 'בחר קובץ PDF.'
   else if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name || '')) errors.file = 'הקובץ צריך להיות PDF.'
-  else if (file.size > MAX_PDF_BYTES) errors.file = `הקובץ גדול מדי (${fileSizeText(file.size)}). אפשר עד 50MB.`
+  else if (file.size > MAX_SOURCE_PDF_BYTES) errors.file = `הקובץ גדול מדי (${fileSizeText(file.size)}). אפשר עד 500MB, ומזה להעלות עד 50MB.`
+  else if (!partial && !canSlice && file.size > MAX_PDF_BYTES) errors.file = `הקובץ גדול מדי (${fileSizeText(file.size)}). אפשר עד 50MB.`
+  else if (!partial && file.size > MAX_PDF_BYTES) errors.file = `הקובץ גדול מדי להעלאה שלמה (${fileSizeText(file.size)}; אפשר עד 50MB). בחר טווח עמודים כדי להעלות רק חלק ממנו.`
   return errors
+}
+
+/** החלק שנחתך מהקובץ (בבחירת טווח) גדול מהמותר בשרת → הודעה; אחרת null */
+export function slicedSizeError(bytes) {
+  if (!(Number(bytes) > MAX_PDF_BYTES)) return null
+  return `העמודים שנבחרו שוקלים ${fileSizeText(bytes)}, ואפשר להעלות עד 50MB. בחר פחות עמודים.`
+}
+
+/**
+ * שורת הסיכום מתחת לטווח בחלון "הוספת ספר". העמודים בספר החדש ממוספרים מ-1 — אומרים את זה כשהטווח
+ * לא מתחיל ב-1, כדי שלא יופתעו שעמוד 40 בקובץ הוא עמוד 1 בספר.
+ * @param {{ from: number, to: number } | null} range null = כל הקובץ
+ * @param {number} pageCount מספר העמודים בקובץ
+ */
+export function uploadRangeSummary(range, pageCount) {
+  if (!range) return pageCount === 1 ? 'יועלה עמוד אחד — כל הקובץ.' : `יועלו כל ${pageCount} העמודים.`
+  const count = range.to - range.from + 1
+  const what = count === 1 ? `יועלה עמוד ${range.from} בלבד` : `יועלו ${count} עמודים (${range.from}–${range.to}) מתוך ${pageCount}`
+  if (range.from === 1) return `${what}.`
+  return count === 1 ? `${what}; בספר הוא יהיה עמוד 1.` : `${what}; בספר הם ימוספרו 1–${count}.`
 }
