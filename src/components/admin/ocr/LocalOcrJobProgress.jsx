@@ -13,6 +13,7 @@ import {
   formatLastSeen,
   isRequeued,
   isWorkerUnavailable,
+  jobRangeText,
   progressCounts,
   progressPercent,
   resumeIssue,
@@ -68,6 +69,7 @@ export default function LocalOcrJobProgress({
   const applying = job.status === 'applying' || job.decision === 'apply'
   const hint = isRequeued(job) ? REQUEUED_HINT : STATUS_HINTS[job.status]
   const resume = resumeIssue(job)
+  const rangeText = jobRangeText(job)
 
   const confirmCancel = async () => {
     setConfirming(false)
@@ -77,7 +79,9 @@ export default function LocalOcrJobProgress({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-body-sm leading-snug text-on-surface-variant">עיבוד במחשב מקומי</span>
+        <span className="text-body-sm leading-snug text-on-surface-variant">
+          עיבוד במחשב מקומי{rangeText ? ` · ${rangeText}` : ''}
+        </span>
         <OcrStatusBadge status={job.status} />
       </div>
 

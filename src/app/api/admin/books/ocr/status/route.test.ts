@@ -315,4 +315,23 @@ describe("GET /api/admin/books/ocr/status - ספק local", () => {
     const running = await (await GET(makeRequest(BOOK_ID))).json();
     expect(running.counts).toEqual({ pagesWithImage: 10 });
   });
+
+  it("טווח עמודים: job.pageRange מהעבודה (null בלעדיו), והספירה המלאה מתבקשת עם רצפי העמודים", async () => {
+    OcrWorkerState.findOne.mockReturnValue(chain(null));
+    const { countBookOcrPages } = (await import("@/lib/ocr/bookOcrCounts")) as unknown as {
+      countBookOcrPages: ReturnType<typeof vi.fn>;
+    };
+    countBookOcrPages.mockClear();
+    OcrJob.findOne.mockReturnValue(chain({
+      _id: { toString: () => JOB_ID }, status: "completed", active: false, method: "ocrwin", totalPages: 2, pageRange: { from: 4, to: 9 },
+    }));
+    const withRange = await (await GET(makeRequest(BOOK_ID))).json();
+    expect(withRange.job.pageRange).toEqual({ from: 4, to: 9 });
+    expect(countBookOcrPages).toHaveBeenCalledWith(BOOK_ID, { withRuns: true });
+
+    OcrJob.findOne.mockReturnValue(chain({ _id: { toString: () => JOB_ID }, status: "completed", active: false, method: "local", totalPages: 2 }));
+    const noRange = await (await GET(makeRequest(BOOK_ID))).json();
+    expect(noRange.job.pageRange).toBeNull();
+  });
 });
+

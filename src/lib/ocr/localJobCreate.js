@@ -21,7 +21,7 @@ import OcrJob from '../../models/OcrJob.js';
 import Page from '../../models/Page.js';
 import { buildJobInput } from './localPdf.js';
 import { LocalInputError, selectPagesForLocal } from './localPdf.pure.js';
-import { pageHasText, selectionView } from './runOcrJob.pure.js';
+import { jobPageRange, pageHasText, selectionView } from './runOcrJob.pure.js';
 import { activeFilter } from './localJobState.js';
 import { relToAbs, removeQuiet } from './localStorage.js';
 import {
@@ -51,8 +51,9 @@ const isPermanentInputError = (err) => err instanceof LocalInputError || (err?.n
 /**
  * @param {object} args
  * @param {{_id:any,name?:string,slug?:string}} args.book
- * @param {{requestId:string,existingTextMode:string,options:{lm:string,defaultScript:string}}} args.req
- *   הבקשה אחרי normalizeLocalRequest
+ * @param {{requestId:string,existingTextMode:string,options:{lm:string,defaultScript:string},
+ *   pageRange?:{from:number,to:number}}} args.req
+ *   הבקשה אחרי normalizeLocalRequest (pageRange — רק כשנבחר טווח; נשמר ב-OcrJob.pageRange, לא ב-options)
  * @param {object} args.session session של NextAuth (לשם ולמזהה המתחיל)
  * @param {{workerId:string}} args.config readWorkerConfig() תקין
  * @param {Date} [args.now]
@@ -63,6 +64,7 @@ export async function createOrResumeLocalJob({ book, req, session, config, now =
     bookId: book._id,
     existingTextMode: req.existingTextMode,
     options: req.options,
+    pageRange: req.pageRange ?? null,
   });
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
@@ -121,6 +123,7 @@ export async function createOrResumeLocalJob({ book, req, session, config, now =
         existingTextMode: req.existingTextMode,
         splitColumns: false,
         options: req.options,
+        ...(req.pageRange ? { pageRange: req.pageRange } : {}),
         status: 'preparing',
         active: true,
         requestId: req.requestId,
@@ -213,6 +216,8 @@ async function replayCurrent(jobId) {
 async function prepare(job, lease, req) {
   const jobId = String(job._id);
   const mode = job.existingTextMode || req.existingTextMode;
+  // הטווח השמור בעבודה הוא מקור האמת (כמו המצב); ה-fingerprint כבר הבטיח שהבקשה זהה
+  const range = jobPageRange(job) ?? req.pageRange ?? null;
 
   // סורקים בסמן ושומרים לכל עמוד רק את מה שצריך: ה-PDF משתמש ב-_id/pageNumber/imagePath/updatedAt,
   // והבחירה/הספירה רק ב-pageHasText/pageEditedByHuman. את הטקסט עצמו (עשוי להיות גדול) לא מחזיקים
@@ -233,11 +238,11 @@ async function prepare(job, lease, req) {
     });
   }
   const editedPagesCount = pages.filter(pageHasText).length;
-  const selected = selectPagesForLocal(pages, mode);
+  const selected = selectPagesForLocal(pages, mode, range);
 
   let input;
   try {
-    if (selected.length === 0) throw new LocalInputError('no_pages', { messageHe: noPagesMessage(mode) });
+    if (selected.length === 0) throw new LocalInputError('no_pages', { messageHe: noPagesMessage(mode, range) });
     input = await buildJobInput({ jobId, pages: selected });
   } catch (err) {
     if (isPermanentInputError(err)) {

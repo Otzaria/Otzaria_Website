@@ -6,6 +6,7 @@ import Button from '@/components/ui/Button'
 import ErrorState from '@/components/ui/ErrorState'
 import ProgressBar from '@/components/ui/ProgressBar'
 import SelectMenu from '@/components/ui/SelectMenu'
+import PageRangeFields from '@/components/ui/PageRangeFields'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { CHECKBOX, FIELD_LABEL } from '@/components/ui/fieldStyles'
 import { FOCUS_RING } from '@/components/ui/focusRing'
@@ -16,12 +17,14 @@ import OcrJobSummary from '@/components/admin/ocr/OcrJobSummary'
 import OcrConflictsPanel from '@/components/admin/ocr/OcrConflictsPanel'
 import LocalResultIssues from '@/components/admin/ocr/LocalResultIssues'
 import OlderResultConflicts from '@/components/admin/ocr/OlderResultConflicts'
+import { pageRangeText, parsePageRangeInput } from '@/lib/pageRange'
 import {
   EXISTING_TEXT_OPTIONS,
   LOCAL_DEFAULT_OPTIONS,
   canResumePreparation,
   isJobActive,
   isLocalJob,
+  jobRangeText,
   methodLabel,
   pollIntervalMs,
   resumePreparationPayload,
@@ -70,6 +73,10 @@ function sessionStore() {
  * לוגיקת התצוגה הטהורה — src/components/admin/ocr/ocrJobView.js; התחלת local עם requestId
  * וניסיונות חוזרים — src/components/admin/ocr/localStart.js.
  *
+ * טווח עמודים ("מעמוד / עד עמוד", לכל הספקים): ריק = כל הספר, ואז הבקשות זהות לגמרי למה שהיו
+ * (בלי pageRange). "יעובדו N עמודים" לטווח נספר מרצפי העמודים שהשרת מחזיר (counts.toProcessRuns),
+ * ו"עד עמוד" נבדק מול מספר העמוד הגבוה בספר (counts.maxPageNumber; בגיבוי book.totalPages).
+ *
  * localRetryDelayMs — ההמתנה בין ניסיונות חוזרים של בקשת local (ניתן לשינוי לטסטים).
  */
 export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DELAY_MS }) {
@@ -91,6 +98,8 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
   const [existingTextMode, setExistingTextMode] = useState('skip')
   const [splitColumns, setSplitColumns] = useState(false)
   const [localOptions, setLocalOptions] = useState({ ...LOCAL_DEFAULT_OPTIONS })
+  // טווח העמודים כמו שהוקלד (מחרוזות); הפירוש — parsePageRangeInput למטה
+  const [rangeInput, setRangeInput] = useState({ from: '', to: '' })
   const [starting, setStarting] = useState(false)
   const [startNote, setStartNote] = useState('')
   const [cancelling, setCancelling] = useState(false)
@@ -142,11 +151,18 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
   const isLocal = method === 'local'
   const localUnavailableInServer = worker?.configured === false
 
-  // ה-requestId קשור לפרמטרים (paramsKey: ספר + טיפול בעמודים ערוכים + אפשרויות): פרמטרים אחרים →
+  // טווח העמודים: null = כל הספר; טווח לא תקין חוסם את ההתחלה (וההודעה מוצגת מתחת לשדות)
+  const pageTotal = Number(counts.maxPageNumber) || Number(book.totalPages) || undefined
+  const parsedRange = parsePageRangeInput(rangeInput, { total: pageTotal })
+  const pageRange = parsedRange.ok ? parsedRange.range : null
+  const rangeInvalid = !parsedRange.ok
+  const rangeBody = pageRange ? { pageRange } : {}
+
+  // ה-requestId קשור לפרמטרים (paramsKey: ספר + טיפול בעמודים ערוכים + אפשרויות + טווח): פרמטרים אחרים →
   // requestId חדש (ה-ref וה-sessionStorage נבדקים מול paramsKey). לא מוחקים את השמור בשינוי ספק או
   // פרמטרים: הדיאלוג נפתח תמיד על OCRWin, ומחיקה בבחירת "מחשב מקומי" הייתה מאבדת את ה-requestId
   // של בקשה שנקטעה (timeout / סגירת הדיאלוג) — ולחיצה חוזרת לא הייתה ממשיכה את אותה בקשה.
-  const paramsKey = localParamsKey({ bookId: book.id, existingTextMode, options: localOptions })
+  const paramsKey = localParamsKey({ bookId: book.id, existingTextMode, options: localOptions, pageRange })
 
   const getRequestId = () => {
     if (requestRef.current?.paramsKey === paramsKey) return requestRef.current.id
@@ -176,7 +192,7 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
     const controller = new AbortController()
     startAbortRef.current = controller
     const result = await postLocalStart({
-      payload: { bookId: book.id, method: 'local', requestId, existingTextMode, options: localOptions },
+      payload: { bookId: book.id, method: 'local', requestId, existingTextMode, options: localOptions, ...rangeBody },
       delayMs: localRetryDelayMs,
       onRetry: (n, total) => setStartNote(`השרת עדיין לא השיב — מנסה שוב (${n}/${total}) עם אותה בקשה…`),
       signal: controller.signal,
@@ -231,6 +247,7 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
   }
 
   const handleStart = async () => {
+    if (rangeInvalid) return
     setStarting(true)
     setError('')
     try {
@@ -240,7 +257,7 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
       }
       await requestJson('/api/admin/books/ocr/start', {
         method: 'POST',
-        body: { bookId: book.id, method, model, existingTextMode, splitColumns },
+        body: { bookId: book.id, method, model, existingTextMode, splitColumns, ...rangeBody },
         fallback: 'לא הצלחנו להתחיל את הזיהוי.',
       })
       await fetchStatus()
@@ -291,7 +308,8 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
     : 0
   const progressId = `ocr-progress-${book.id}`
 
-  const willProcess = willProcessCount(counts, existingTextMode)
+  const willProcess = willProcessCount(counts, existingTextMode, pageRange)
+  const runningRange = jobRangeText(job)
 
   const lastLocalJob = job && isLocalJob(job) ? job : null
   // פאנל ברמת הספר: גם אחרי עבודה חדשה (OCRWin או local) ההתנגשויות הקודמות נשארות נגישות
@@ -348,7 +366,7 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
 
           <div>
             <div className="mb-1 flex justify-between text-body-sm text-on-surface-variant">
-              <span id={progressId}>התקדמות ({job.method === 'gemini' ? 'בינה מלאכותית' : methodLabel(job)}{job.splitColumns ? ' · שני טורים' : ''})</span>
+              <span id={progressId}>התקדמות ({job.method === 'gemini' ? 'בינה מלאכותית' : methodLabel(job)}{job.splitColumns ? ' · שני טורים' : ''}{runningRange ? ` · ${runningRange}` : ''})</span>
               <span className="tabular-nums text-on-surface">{progress}%</span>
             </div>
             <ProgressBar
@@ -399,6 +417,7 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
                 {job.status === 'completed' && `העבודה האחרונה הסתיימה: ${job.successPages} הצליחו, ${job.failedPages} נכשלו.`}
                 {job.status === 'cancelled' && `העבודה האחרונה בוטלה לאחר ${job.processedPages} עמודים.`}
                 {job.status === 'failed' && `העבודה האחרונה נכשלה: ${job.error || 'שגיאה לא ידועה'}`}
+                {runningRange && ` (${runningRange})`}
               </span>
             </div>
           )}
@@ -507,13 +526,27 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
               </>
             ) : (
               <p className="rounded-(--radius-control) bg-surface-container-low p-3 text-body-sm text-on-surface-variant">
-                אין עמודים ערוכים — כל {counts.pagesWithImage} העמודים יעובדו.
+                {pageRange ? 'אין עמודים ערוכים בספר.' : <>אין עמודים ערוכים — כל {counts.pagesWithImage} העמודים יעובדו.</>}
               </p>
             )}
           </div>
 
+          <PageRangeFields
+            legend="אילו עמודים לזהות"
+            value={rangeInput}
+            onChange={setRangeInput}
+            total={pageTotal}
+            disabled={starting}
+            error={rangeInvalid ? parsedRange.error : undefined}
+            errorField={rangeInvalid ? parsedRange.field : undefined}
+            hint={pageRange && willProcess === 0
+              ? 'אין בטווח הזה עמודים לעיבוד במצב שנבחר.'
+              : 'ריק = כל הספר.'}
+          />
+
           <div className="rounded-(--radius-control) bg-surface-container-low py-2 text-center text-body-sm text-on-surface-variant">
             יעובדו <span className="text-on-surface tabular-nums">{willProcess}</span> עמודים
+            {pageRange && <> ({pageRangeText(pageRange)})</>}
           </div>
 
           {error && (
@@ -530,7 +563,7 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
             fullWidth
             onClick={handleStart}
             loading={starting}
-            disabled={willProcess === 0 || (isLocal && localUnavailableInServer)}
+            disabled={willProcess === 0 || rangeInvalid || (isLocal && localUnavailableInServer)}
           >
             {isLocal ? `שלח ${willProcess} עמודים לזיהוי` : `התחל זיהוי ב-${willProcess} עמודים`}
           </Button>

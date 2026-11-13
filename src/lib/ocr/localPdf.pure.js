@@ -1,6 +1,7 @@
 // פונקציות טהורות לייצוא PDF הקלט של עבודת OCR מקומית — בלי DB/fs/network.
 // imports יחסיים בלבד (נבדק ב-node:test).
 import { pageSkippedInMode } from './runOcrJob.pure.js';
+import { pageInRange } from '../pageRange.js';
 
 const MiB = 1024 * 1024;
 // תקרות החוזה בצד השירות (מפרט: PDF עד 1GiB ו-2,000 עמודים) — ה-env יכול רק להנמיך.
@@ -25,12 +26,14 @@ export function readLocalLimits(env = process.env) {
 const byPageNumber = (a, b) => a.pageNumber - b.pageNumber || String(a._id).localeCompare(String(b._id));
 
 // העמודים שנכנסים ל-PDF: רק עמודים עם תמונה; במצב skip רק עמודים בלי טקסט ברגע היצירה,
-// במצב skip_edited רק עמודים שלא נערכו בידי אדם (pageSkippedInMode).
+// במצב skip_edited רק עמודים שלא נערכו בידי אדם (pageSkippedInMode); ועם range ({from,to},
+// "מעמוד / עד עמוד") רק עמודים שה-pageNumber שלהם בטווח (null = הכל).
 // ממוינים לפי pageNumber (pdfPageIndex = המיקום ברשימה + 1). לא משנה את המערך המקורי.
-export function selectPagesForLocal(pages, mode) {
+export function selectPagesForLocal(pages, mode, range = null) {
   return (pages || [])
     .filter((p) => typeof p?.imagePath === 'string' && p.imagePath.trim() !== '')
     .filter((p) => !pageSkippedInMode(p, mode))
+    .filter((p) => pageInRange(p.pageNumber, range))
     .sort(byPageNumber);
 }
 
