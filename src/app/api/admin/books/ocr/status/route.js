@@ -17,6 +17,7 @@ import { badRequest, notFound, requireAccess, serverError } from '@/lib/apiRespo
 import { OLDER_RESULT_CONFLICTS_MAX, PENDING_CONFLICT_STATUSES, pendingResultConflicts } from '@/lib/ocr/ocrConflictView';
 import { resultMetadataView } from '@/lib/ocr/localResultLayout.pure';
 import { countBookOcrPages } from '@/lib/ocr/bookOcrCounts';
+import { jobPageRange } from '@/lib/ocr/runOcrJob.pure';
 
 // GET /api/admin/books/ocr/status?bookId=...
 // מחזיר את ספירות העמודים (לקדם-בחירה), את העבודה האחרונה/הפעילה של הספר, ולספק local
@@ -25,6 +26,9 @@ import { countBookOcrPages } from '@/lib/ocr/bookOcrCounts';
 // ברמת הספר, בלי תלות בעבודה האחרונה או בספק שלה: bookConflictsOpen — כל ההתנגשויות הפתוחות
 // בספר (גם מעבודות local קודמות), ו-olderResultConflicts — תוצאות מתנגשות שלא סומנו "נבדק"
 // מעבודות local שאינן העבודה המוחזרת ב-job. conflictsOpen נשאר כמקודם: של העבודה המוחזרת בלבד.
+// טווח עמודים ("מעמוד / עד עמוד"): job.pageRange ({from,to} או null = כל הספר), ובספירות (בלי עבודה
+// פעילה) גם counts.toProcessRuns — רצפי העמודים שיעובדו בכל מצב — ו-counts.maxPageNumber; הטופס
+// סופר מהם את "יעובדו N עמודים" לטווח שנבחר בלי בקשה נוספת (countPagesInRuns ב-lib/ocr/pageRuns.js).
 
 const MAX_PAGE_ERRORS = 50;
 
@@ -63,6 +67,7 @@ function serializeJob(job, now) {
     model: job.model,
     existingTextMode: job.existingTextMode,
     splitColumns: job.splitColumns,
+    pageRange: jobPageRange(job),
     totalPages: job.totalPages,
     processedPages: job.processedPages,
     successPages: job.successPages,
@@ -175,7 +180,7 @@ export async function GET(request) {
     const jobActive = job?.active ?? job?.status === 'running';
     const counts = jobActive
       ? { pagesWithImage: await Page.countDocuments({ book: book._id, imagePath: { $gt: '' } }) }
-      : await countBookOcrPages(book._id);
+      : await countBookOcrPages(book._id, { withRuns: true });
 
     const now = new Date();
     const olderJobsFilter = {

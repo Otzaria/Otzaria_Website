@@ -1,7 +1,7 @@
 // התחלת עבודת OCR מקומי (method=local) מהדיאלוג — לוגיקה בלי React/DOM:
 // - requestId: מזהה אידמפוטנטיות ללחיצה. נשמר (ref + sessionStorage) לניסיונות החוזרים של אותה
 //   בקשה — גם לחיצה חוזרת אחרי תקלת רשת/timeout שולחת אותו מזהה, כך שהשרת ממשיך את אותה עבודה
-//   ולא יוצר כפילות. מתחדש כשמשנים פרמטרים (ספק/טיפול בעמודים ערוכים/אפשרויות), אחרי הצלחה,
+//   ולא יוצר כפילות. מתחדש כשמשנים פרמטרים (ספק/טיפול בעמודים ערוכים/אפשרויות/טווח עמודים), אחרי הצלחה,
 //   ואחרי תשובה סופית שאין טעם לחזור עליה (400/409/413/422 וכו').
 // - classifyStartResponse: תשובת השרת → started / retry / error (עם הודעה בעברית).
 // - postLocalStart: שליחה עם ניסיון חוזר אוטומטי (רשת, 502/503/504, 409 preparing), ניתנת לביטול
@@ -22,9 +22,18 @@ export function newRequestId(cryptoImpl = globalThis.crypto) {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-/** מפתח הפרמטרים שה-requestId קשור אליהם (אותו requestId לפרמטרים אחרים → 409 בשרת) */
-export function localParamsKey({ bookId, existingTextMode, options }) {
-  return JSON.stringify([String(bookId), existingTextMode || '', options?.lm || '', options?.defaultScript || ''])
+/**
+ * מפתח הפרמטרים שה-requestId קשור אליהם (אותו requestId לפרמטרים אחרים → 409 בשרת).
+ * טווח עמודים ({from,to}) נוסף רק כשיש — בלי טווח המפתח זהה לנוסח הקודם.
+ */
+export function localParamsKey({ bookId, existingTextMode, options, pageRange = null }) {
+  return JSON.stringify([
+    String(bookId),
+    existingTextMode || '',
+    options?.lm || '',
+    options?.defaultScript || '',
+    ...(pageRange ? [pageRange.from, pageRange.to] : []),
+  ])
 }
 
 // sessionStorage עלול להיות חסום/לזרוק (חלון פרטי, הגדרות) — אז נשענים על ה-ref בלבד

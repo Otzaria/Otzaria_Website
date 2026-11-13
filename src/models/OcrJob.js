@@ -64,6 +64,13 @@ const OcrJobSchema = new mongoose.Schema({
   model: { type: String, default: '' },            // ל-gemini בלבד
   existingTextMode: { type: String, enum: ['overwrite', 'skip', 'skip_edited'], default: 'skip' },
   splitColumns: { type: Boolean, default: false }, // חיתוך כל עמוד ל-2 טורים (ימין/שמאל) לפני OCR
+  // טווח עמודים ("מעמוד / עד עמוד", לפי pageNumber, כולל הקצוות) — חסר = כל הספר. בכל הספקים.
+  // ב-local הוא קובע רק אילו עמודים נכנסים ל-PDF/pageMap, ובכוונה אינו חלק מ-options: options
+  // נחשף במעטפת העובד (ENVELOPE_PROJECTION / toEnvelope) ושינוי שם היה שובר את החוזה. קריאה: jobPageRange.
+  pageRange: {
+    type: new mongoose.Schema({ from: { type: Number }, to: { type: Number } }, { _id: false }),
+    default: undefined,
+  },
 
   status: {
     type: String,

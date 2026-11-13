@@ -2,6 +2,7 @@
 // ומיפוי שגיאות קלט לתגובות HTTP. בלי DB/fs/network; imports יחסיים בלבד (node:test).
 import { createHash } from 'node:crypto';
 import { EXISTING_TEXT_MODES } from './runOcrJob.pure.js';
+import { normalizePageRange, pageRangeText } from '../pageRange.js';
 
 // הלקוח שולח crypto.randomUUID() — אבל כל מזהה בטוח באורך סביר מתקבל
 export const REQUEST_ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
@@ -22,7 +23,10 @@ const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArr
 
 /**
  * ולידציה ונרמול של שדות ה-local בבקשת start.
- * @returns {{ok:true, value:{requestId:string, existingTextMode:string, options:{lm:string, defaultScript:string}}}
+ * pageRange ({from,to} מספרים שלמים, "מעמוד / עד עמוד") — אופציונלי; חסר/null = כל הספר, ואז
+ * value.pageRange לא קיים כלל. אינו חלק מ-options (options הוא חלק ממעטפת העובד).
+ * @returns {{ok:true, value:{requestId:string, existingTextMode:string, options:{lm:string, defaultScript:string},
+ *   pageRange?:{from:number, to:number}}}
  *   | {ok:false, error:string, code:string}} הודעות בעברית
  */
 export function normalizeLocalRequest(body) {
@@ -65,20 +69,31 @@ export function normalizeLocalRequest(body) {
     }
   }
 
-  return { ok: true, value: { requestId, existingTextMode, options: normalized } };
+  const range = normalizePageRange(b.pageRange);
+  if (!range.ok) {
+    return { ok: false, code: 'invalid_page_range', error: range.error };
+  }
+
+  return {
+    ok: true,
+    value: { requestId, existingTextMode, options: normalized, ...(range.range ? { pageRange: range.range } : {}) },
+  };
 }
 
 /**
  * sha256 (hex) של JSON קנוני של פרמטרי הבקשה הבלתי-משתנים. אותו requestId עם fingerprint
  * אחר = בקשה אחרת → 409. הסדר קבוע במפורש (לא תלוי בסדר המפתחות בגוף הבקשה).
+ * טווח עמודים נוסף לסוף רק כשיש — בלי טווח ה-fingerprint זהה לזה שלפני התמיכה בטווח (עבודות
+ * שנשארו בהכנה בזמן העדכון ממשיכות באותו requestId).
  */
-export function requestFingerprint({ bookId, existingTextMode, options }) {
+export function requestFingerprint({ bookId, existingTextMode, options, pageRange = null }) {
   const canonical = JSON.stringify([
     'ocr-local-v1',
     String(bookId),
     String(existingTextMode),
     String(options?.lm ?? ''),
     String(options?.defaultScript ?? ''),
+    ...(pageRange ? ['pages', Number(pageRange.from), Number(pageRange.to)] : []),
   ]);
   return createHash('sha256').update(canonical, 'utf8').digest('hex');
 }
@@ -98,8 +113,15 @@ export function httpStatusForPrepError(code) {
   }
 }
 
-// הודעה כש-selectPagesForLocal לא החזיר אף עמוד (זהה לנוסח של gemini/ocrwin)
-export function noPagesMessage(mode) {
+// הודעה כש-selectPagesForLocal לא החזיר אף עמוד (זהה לנוסח של gemini/ocrwin).
+// עם טווח עמודים — הודעה שאומרת שהבעיה בטווח שנבחר (ולא בספר כולו).
+export function noPagesMessage(mode, range = null) {
+  if (range) {
+    const where = `אין עמודים לעיבוד בטווח שנבחר (${pageRangeText(range)})`;
+    if (mode === 'skip') return `${where}: כל העמודים בטווח כבר ערוכים, או שאין בו עמודים עם תמונה`;
+    if (mode === 'skip_edited') return `${where}: כל העמודים בטווח נערכו או נתפסו בידי מתנדבים, או שאין בו עמודים עם תמונה`;
+    return `${where}: אין בטווח עמודים עם תמונה`;
+  }
   if (mode === 'skip') return 'אין עמודים לא-ערוכים לעיבוד (כל העמודים כבר ערוכים)';
   if (mode === 'skip_edited') return 'אין עמודים לעיבוד (כל העמודים נערכו או נתפסו בידי מתנדבים)';
   return 'אין עמודים עם תמונה לעיבוד';

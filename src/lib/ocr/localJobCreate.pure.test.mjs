@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import {
   normalizeLocalRequest,
   requestFingerprint,
@@ -64,6 +65,49 @@ test('requestFingerprint: קנוני ויציב, רגיש לכל פרמטר', ()
   assert.notEqual(requestFingerprint({ ...base, bookId: '507f1f77bcf86cd799439012' }), fp);
   assert.notEqual(requestFingerprint({ ...base, options: { lm: 'off', defaultScript: 'square' } }), fp);
   assert.notEqual(requestFingerprint({ ...base, options: { lm: 'rabbinic', defaultScript: 'rashi' } }), fp);
+});
+
+test('normalizeLocalRequest: טווח עמודים — אופציונלי, נבדק, ולא נכנס ל-options', () => {
+  const base = { requestId: RID, existingTextMode: 'skip' };
+  // בלי טווח / null — אין pageRange בערך כלל (הגוף הישן נשאר זהה)
+  assert.equal(Object.hasOwn(normalizeLocalRequest(base).value, 'pageRange'), false);
+  assert.equal(Object.hasOwn(normalizeLocalRequest({ ...base, pageRange: null }).value, 'pageRange'), false);
+  const ok = normalizeLocalRequest({ ...base, pageRange: { from: 5, to: 20 } });
+  assert.deepEqual(ok.value.pageRange, { from: 5, to: 20 });
+  assert.deepEqual(ok.value.options, DEFAULT_LOCAL_OPTIONS);
+  for (const pageRange of [{ from: 0, to: 3 }, { from: 5, to: 2 }, { from: '1', to: '3' }, { from: 1.5, to: 3 }, [1, 3], 'x', { from: 1 }]) {
+    const bad = normalizeLocalRequest({ ...base, pageRange });
+    assert.equal(bad.ok, false, JSON.stringify(pageRange));
+    assert.equal(bad.code, 'invalid_page_range');
+    assert.match(bad.error, /[א-ת]/);
+  }
+});
+
+test('requestFingerprint: טווח עמודים — בלי טווח זהה לנוסח הקודם, טווח שונה → fingerprint שונה', () => {
+  const base = { bookId: '507f1f77bcf86cd799439011', existingTextMode: 'skip', options: { lm: 'rabbinic', defaultScript: 'square' } };
+  const fp = requestFingerprint(base);
+  // הנוסח הקנוני הקודם (לפני הטווח) — עבודות בהכנה מלפני העדכון ממשיכות באותו requestId
+  const legacy = createHash('sha256')
+    .update(JSON.stringify(['ocr-local-v1', base.bookId, 'skip', 'rabbinic', 'square']), 'utf8')
+    .digest('hex');
+  assert.equal(fp, legacy);
+  assert.equal(requestFingerprint({ ...base, pageRange: null }), fp);
+  const r1 = requestFingerprint({ ...base, pageRange: { from: 1, to: 10 } });
+  assert.notEqual(r1, fp);
+  assert.notEqual(requestFingerprint({ ...base, pageRange: { from: 1, to: 11 } }), r1);
+  assert.notEqual(requestFingerprint({ ...base, pageRange: { from: 2, to: 10 } }), r1);
+  assert.equal(requestFingerprint({ ...base, pageRange: { to: 10, from: 1 } }), r1);
+});
+
+test('noPagesMessage: עם טווח — הודעה על הטווח שנבחר, לכל מצב', () => {
+  const range = { from: 5, to: 20 };
+  for (const mode of ['skip', 'skip_edited', 'overwrite']) {
+    assert.match(noPagesMessage(mode, range), /בטווח שנבחר \(עמודים 5–20\)/);
+  }
+  assert.match(noPagesMessage('skip', range), /כבר ערוכים/);
+  assert.match(noPagesMessage('skip_edited', range), /נערכו או נתפסו/);
+  assert.match(noPagesMessage('overwrite', { from: 3, to: 3 }), /\(עמוד 3\).*עם תמונה/);
+  assert.equal(noPagesMessage('skip', null), noPagesMessage('skip'));
 });
 
 test('httpStatusForPrepError: קודי שגיאת קלט קבועה', () => {
