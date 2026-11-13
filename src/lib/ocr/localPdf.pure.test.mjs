@@ -55,6 +55,13 @@ test('selectPagesForLocal: skip_edited — מדלג רק על עמודים שנ�
   assert.deepEqual(selectPagesForLocal(list, 'skip').map((p) => p._id), ['d']);
 });
 
+test('selectPagesForLocal: טווח עמודים — רק pageNumber בטווח (כולל הקצוות), יחד עם המצב', () => {
+  assert.deepEqual(selectPagesForLocal(pages, 'overwrite', { from: 2, to: 3 }).map((p) => p.pageNumber), [2, 3]);
+  assert.deepEqual(selectPagesForLocal(pages, 'skip', { from: 2, to: 10 }).map((p) => p.pageNumber), [3, 10]);
+  assert.deepEqual(selectPagesForLocal(pages, 'skip', { from: 1, to: 2 }), []);
+  assert.deepEqual(selectPagesForLocal(pages, 'overwrite', null).map((p) => p.pageNumber), [1, 2, 3, 10]);
+});
+
 test('checkLimits', () => {
   const lim = { maxPages: 3, maxBytes: 1000 };
   assert.equal(checkLimits({ count: 3, totalBytes: 1000 }, lim), null);

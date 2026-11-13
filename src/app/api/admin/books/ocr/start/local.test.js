@@ -67,6 +67,8 @@ import { relToAbs } from '@/lib/ocr/localStorage'
 import { POST } from './route'
 import { POST as cancelPOST } from '../cancel/route'
 import { DELETE as deleteBook } from '../../delete/route'
+import { GET as statusGET } from '../status/route'
+import { GET as listWorkerJobs } from '@/app/api/worker/v1/jobs/route'
 
 vi.setConfig({ testTimeout: 30000 })
 
@@ -554,5 +556,114 @@ describe('שלב 5: ביטול, נעילת החלטה ומחיקת ספר (רא�
     expect(await Book.findById(book._id).lean()).not.toBeNull()
     expect(await Page.countDocuments({ book: book._id })).toBe(3)
     expect((await OcrJob.findById(first.body.jobId).lean()).status).toBe('applying')
+  })
+})
+
+describe('טווח עמודים (מעמוד / עד עמוד)', () => {
+  // צורת המעטפה בחוזה העובד — לא משתנה בגלל הטווח
+  const ENVELOPE_KEYS = ['schemaVersion', 'jobId', 'taskType', 'workerId', 'createdAt', 'inputSha256', 'options', 'pageMap', 'cancelRequested', 'siteState']
+  const workerList = async () => {
+    const res = await listWorkerJobs(
+      new Request('http://localhost/api/worker/v1/jobs?limit=100', { headers: { authorization: `Bearer ${SECRET}` } }),
+      { params: Promise.resolve({}) }
+    )
+    expect(res.status).toBe(200)
+    return res.json()
+  }
+  const status = async () => (await statusGET(new Request(`http://localhost/api/admin/books/ocr/status?bookId=${book._id}`))).json()
+
+  it('local עם טווח: רק עמודים בטווח ב-PDF וב-pageMap; הטווח נשמר בעבודה ולא נחשף במעטפת העובד', async () => {
+    const { res, body } = await start({ requestId: rid(), pageRange: { from: 2, to: 3 } })
+    expect(res.status).toBe(202)
+    expect(body).toEqual({ success: true, jobId: expect.any(String), status: 'queued', totalPages: 2 })
+
+    const job = await OcrJob.findById(body.jobId).lean()
+    expect(job.pageRange).toEqual({ from: 2, to: 3 })
+    expect(job.options).toEqual({ lm: 'rabbinic', defaultScript: 'square' })
+    expect(job.pageMap.map((e) => [e.pdfPageIndex, e.pageNumber])).toEqual([[1, 2], [2, 3]])
+    expect((await PDFDocument.load(await fs.readFile(relToAbs(job.inputPath)))).getPageCount()).toBe(2)
+
+    const { items } = await workerList()
+    expect(items).toHaveLength(1)
+    const envelope = items[0]
+    expect(Object.keys(envelope)).toEqual(ENVELOPE_KEYS)
+    expect(envelope.options).toEqual({ lm: 'rabbinic', defaultScript: 'square' })
+    expect(envelope.pageMap.map((e) => [e.pdfPageIndex, e.pageNumber])).toEqual([[1, 2], [2, 3]])
+    expect(JSON.stringify(envelope)).not.toMatch(/pageRange/)
+
+    // ממשק הניהול רואה את הטווח של העבודה
+    expect((await status()).job.pageRange).toEqual({ from: 2, to: 3 })
+  })
+
+  it('בלי טווח — העבודה בלי pageRange (null במצב), כמו קודם', async () => {
+    const { body } = await start({ requestId: rid() })
+    const job = await OcrJob.findById(body.jobId).lean()
+    expect(job).not.toHaveProperty('pageRange')
+    expect((await status()).job.pageRange).toBeNull()
+  })
+
+  it('טווח יחד עם skip — רק עמודים בלי טקסט בתוך הטווח', async () => {
+    const { res, body } = await start({ requestId: rid(), existingTextMode: 'skip', pageRange: { from: 1, to: 2 } })
+    expect(res.status).toBe(202)
+    const job = await OcrJob.findById(body.jobId).lean()
+    expect(job.pageMap.map((e) => e.pageNumber)).toEqual([1])
+  })
+
+  it('אותו requestId עם טווח אחר (או בלי טווח) → 409 request_conflict; אותו טווח → אותה עבודה', async () => {
+    const requestId = rid()
+    const first = await start({ requestId, pageRange: { from: 1, to: 2 } })
+    expect(first.res.status).toBe(202)
+    for (const extra of [{ pageRange: { from: 1, to: 3 } }, {}]) {
+      const { res, body } = await start({ requestId, ...extra })
+      expect(res.status, JSON.stringify(extra)).toBe(409)
+      expect(body.code).toBe('request_conflict')
+    }
+    const again = await start({ requestId, pageRange: { from: 1, to: 2 } })
+    expect(again.res.status).toBe(202)
+    expect(again.body.jobId).toBe(first.body.jobId)
+    expect(await OcrJob.countDocuments({})).toBe(1)
+  })
+
+  it('אין בטווח עמודים לעיבוד → 400 עם הודעה על הטווח, העבודה failed והספר פנוי', async () => {
+    const { res, body } = await start({ requestId: rid(), pageRange: { from: 5, to: 9 } })
+    expect(res.status).toBe(400)
+    expect(body.code).toBe('no_pages')
+    expect(body.error).toMatch(/בטווח שנבחר \(עמודים 5–9\)/)
+    expect(await OcrJob.countDocuments({ active: true })).toBe(0)
+  })
+
+  it('טווח לא תקין → 400 invalid_page_range בעברית, בלי ליצור רשומה (local ו-OCRWin)', async () => {
+    for (const pageRange of [{ from: 3, to: 1 }, { from: '1', to: '2' }, { from: 0, to: 2 }]) {
+      const { res, body } = await start({ requestId: rid(), pageRange })
+      expect(res.status, JSON.stringify(pageRange)).toBe(400)
+      expect(body.code).toBe('invalid_page_range')
+      expect(body.error).toMatch(/[א-ת]/)
+    }
+    const ocrwin = await POST(post({ bookId: String(book._id), method: 'ocrwin', existingTextMode: 'overwrite', pageRange: { from: 3, to: 1 } }))
+    expect(ocrwin.status).toBe(400)
+    expect((await ocrwin.json()).error).toMatch(/טווח העמודים/)
+    expect(await OcrJob.countDocuments({})).toBe(0)
+  })
+
+  it('status: רצפי העמודים לכל מצב ו-maxPageNumber (לספירה בטופס)', async () => {
+    const { counts } = await status()
+    expect(counts.maxPageNumber).toBe(3)
+    expect(counts.toProcessRuns).toEqual({ overwrite: [[1, 3]], skip: [[1, 1], [3, 3]], skip_edited: [[1, 1], [3, 3]] })
+    expect(counts.toProcess).toEqual({ overwrite: 3, skip: 2, skip_edited: 2 })
+  })
+
+  it('OCRWin עם טווח: totalPages לפי הטווח והמצב, הטווח נשמר; אין מה לעבד בטווח → 400', async () => {
+    const res = await POST(post({ bookId: String(book._id), method: 'ocrwin', existingTextMode: 'skip', pageRange: { from: 2, to: 3 } }))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.totalPages).toBe(1)
+    const job = await OcrJob.findById(body.jobId).lean()
+    expect(job).toMatchObject({ method: 'ocrwin', totalPages: 1, pageRange: { from: 2, to: 3 } })
+    expect(runOcrJob).toHaveBeenCalledWith(body.jobId)
+
+    await OcrJob.updateOne({ _id: job._id }, { $set: { status: 'completed', active: false } })
+    const none = await POST(post({ bookId: String(book._id), method: 'ocrwin', existingTextMode: 'skip', pageRange: { from: 2, to: 2 } }))
+    expect(none.status).toBe(400)
+    expect((await none.json()).error).toMatch(/בטווח שנבחר \(עמוד 2\)/)
   })
 })

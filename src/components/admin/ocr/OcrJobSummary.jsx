@@ -1,11 +1,11 @@
 import Badge from '@/components/ui/Badge'
 import OcrStatusBadge from './OcrStatusBadge'
-import { cancelReasonLabel, jobErrorText, salvageLabel, summaryParts } from './ocrJobView'
+import { cancelReasonLabel, jobErrorText, jobRangeText, salvageLabel, summaryParts } from './ocrJobView'
 import { fullDateText } from '@/lib/adminTerms'
 
 /**
  * סיכום עבודת OCR מקומי שהסתיימה (completed / failed / cancelled): מצב, ספירות הקליטה
- * (הוחלו · נכשלו · התנגשויות · עמודים שנמחקו), סיבת ביטול/כשל ושגיאות עמוד.
+ * (הוחלו · נכשלו · התנגשויות · עמודים שנמחקו), סיבת ביטול/כשל, שגיאות עמוד וטווח העמודים (אם נבחר).
  * "בוטל" נקבע רק לפי status — לא לפי cancelReason.
  *
  * @param {{ job: any }} props
@@ -16,6 +16,7 @@ export default function OcrJobSummary({ job }) {
   const pageErrors = Array.isArray(job.pageErrors) ? job.pageErrors : []
   const finished = fullDateText(job.finishedAt)
   const salvage = salvageLabel(job)
+  const rangeText = jobRangeText(job)
 
   return (
     <section aria-label="סיכום העבודה האחרונה" className="space-y-3 rounded-control bg-surface p-3">
@@ -65,6 +66,7 @@ export default function OcrJobSummary({ job }) {
         </details>
       )}
 
+      {rangeText && <p className="text-label-sm font-normal text-on-surface-variant">טווח: {rangeText}</p>}
       {finished && <p className="text-label-sm font-normal text-on-surface-variant">הסתיימה ב-{finished}</p>}
       {job.pipelineVersion && (
         <p className="break-words text-label-sm font-normal text-on-surface-variant">

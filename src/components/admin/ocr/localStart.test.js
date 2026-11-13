@@ -29,6 +29,16 @@ describe('אחסון requestId', () => {
   }
   const key = localParamsKey({ bookId: 'b1', existingTextMode: 'skip', options: { lm: 'rabbinic', defaultScript: 'square' } })
 
+  it('טווח עמודים — חלק מהמפתח; בלי טווח המפתח זהה לנוסח הקודם', () => {
+    const base = { bookId: 'b1', existingTextMode: 'skip', options: { lm: 'rabbinic', defaultScript: 'square' } }
+    expect(localParamsKey({ ...base, pageRange: null })).toBe(key)
+    expect(key).toBe(JSON.stringify(['b1', 'skip', 'rabbinic', 'square']))
+    const r1 = localParamsKey({ ...base, pageRange: { from: 1, to: 5 } })
+    expect(r1).not.toBe(key)
+    expect(localParamsKey({ ...base, pageRange: { from: 1, to: 6 } })).not.toBe(r1)
+    expect(localParamsKey({ ...base, pageRange: { from: 1, to: 5 } })).toBe(r1)
+  })
+
   it('נטען רק לאותם פרמטרים', () => {
     const store = memStore()
     saveRequestId(store, 'b1', key, 'req-1-abcdef')
