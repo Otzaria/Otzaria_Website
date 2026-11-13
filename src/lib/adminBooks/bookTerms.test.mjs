@@ -166,3 +166,20 @@ test('הוספת ספר: שם מהקובץ, גודל קריא, ובדיקות כ
   assert.match(newBookErrors({ name: 'א', file: { name: 'a.pdf', size: MAX_PDF_BYTES + 1, type: 'application/pdf' } }).file, /גדול מדי/)
   assert.deepEqual(newBookErrors({ name: 'א', file: { name: 'a.pdf', size: 10, type: 'application/pdf' } }), {})
 })
+
+test('הוספת ספר מטווח עמודים: קובץ גדול מ-50MB מותר כשנבחר טווח; החלק שנחתך — עד 50MB', async () => {
+  const { newBookErrors, slicedSizeError, uploadRangeSummary, fileSizeText, MAX_PDF_BYTES, MAX_SOURCE_PDF_BYTES } = await import('./bookTerms.js')
+  const big = { name: 'a.pdf', size: MAX_PDF_BYTES * 3, type: 'application/pdf' }
+  assert.match(newBookErrors({ name: 'א', file: big }).file, /בחר טווח עמודים/)
+  assert.deepEqual(newBookErrors({ name: 'א', file: big, partial: true }), {})
+  assert.equal(newBookErrors({ name: 'א', file: big, canSlice: false }).file, `הקובץ גדול מדי (${fileSizeText(big.size)}). אפשר עד 50MB.`)
+  const huge = { ...big, size: MAX_SOURCE_PDF_BYTES + 1 }
+  assert.match(newBookErrors({ name: 'א', file: huge, partial: true }).file, /אפשר עד 500MB/)
+  assert.equal(slicedSizeError(MAX_PDF_BYTES), null)
+  assert.match(slicedSizeError(MAX_PDF_BYTES + 1), /בחר פחות עמודים/)
+  assert.equal(uploadRangeSummary(null, 300), 'יועלו כל 300 העמודים.')
+  assert.equal(uploadRangeSummary(null, 1), 'יועלה עמוד אחד — כל הקובץ.')
+  assert.equal(uploadRangeSummary({ from: 1, to: 20 }, 300), 'יועלו 20 עמודים (1–20) מתוך 300.')
+  assert.equal(uploadRangeSummary({ from: 41, to: 60 }, 300), 'יועלו 20 עמודים (41–60) מתוך 300; בספר הם ימוספרו 1–20.')
+  assert.equal(uploadRangeSummary({ from: 7, to: 7 }, 300), 'יועלה עמוד 7 בלבד; בספר הוא יהיה עמוד 1.')
+})
