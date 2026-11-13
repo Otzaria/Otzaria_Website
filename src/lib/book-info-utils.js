@@ -226,7 +226,8 @@ export function escapeCsvValue(value) {
 export function bookInfoFormUpdates(formData, approved, effective) {
   return Object.fromEntries(Object.entries(formData).filter(([field, value]) => {
     if (BOOK_INFO_EXTENSION_EDITABLE_FIELDS.includes(field)) {
-      return normalizeExtensionField(field, value).value !== normalizeExtensionField(field, effective?.[field]).value
+      const next = normalizeExtensionField(field, value)
+      return Boolean(next.error) || next.value !== normalizeExtensionField(field, effective?.[field]).value
     }
     const current = approved?.[field]
     const normalized = ['startYear', 'endYear'].includes(field) ? (value == null || value === '' ? null : Number(value)) : (value || null)

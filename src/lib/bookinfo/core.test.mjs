@@ -254,7 +254,7 @@ test('validateChangeSet normalizes the extension fields', () => {
   assert.match(edit({ pubDate: 'x'.repeat(101) }).error, /100 תווים/)
   assert.match(edit({ pubPlace: 'א\nב' }).error, /שורה אחת/)
   assert.match(edit({ description: 'ד'.repeat(4001) }).error, /4000 תווים/)
-  assert.match(edit({ proofread: '1' }).error, /מחושב אוטומטית/)
+  assert.match(edit({ proofread: '1' }).error, /אינו נערך בטופס/)
   assert.match(edit({ topics: ' ; ' }).error, /אין שינוי/)
 })
 

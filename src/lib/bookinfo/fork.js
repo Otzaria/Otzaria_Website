@@ -6,7 +6,7 @@
  */
 import { createRepoClient } from '../dicta/github-api.js'
 import { resolveSignoff } from '../acronyms/fork.js'
-import { exportBookInfoCsv, parseBookInfoCsv } from './csv.js'
+import { exportBookInfoCsv, exportColumns, parseBookInfoCsv } from './csv.js'
 import { BOOK_INFO_IDENTITY_PATH, assertIdentityPrefix, identityPrefixHash, emptyIdentity, parseIdentity, rebaseIdentities } from './identity.js'
 import { applyChangeSet, summarizeChangeSet } from './changes.js'
 import { isProofreadChangeSet } from './proofread.js'
@@ -90,6 +90,9 @@ async function commitChangeSet(client, base, changeSet) {
   if (conflicts.length) throw Object.assign(new Error(conflicts.map((r) => r.reason).join('; ')), { code: 'CONFLICT' })
   const summary = summarize(results)
   if (!results.some((r) => r.status === 'applied')) return { commitSha: null, summary }
+  if (process.env.BOOK_INFO_EXTENDED_FIELDS !== '1' && base.state.columns === 6 && exportColumns(state).length > 6) {
+    throw new Error('עריכת פרטי הספר הנוספים אינה זמינה עדיין')
+  }
   const csv = exportBookInfoCsv(state)
   if (exportBookInfoCsv(parseBookInfoCsv(csv)) !== csv) throw new Error('CSV round-trip failed')
   const blob = await client.createBlob(Buffer.from(csv, 'utf8'), { utf8: true })
