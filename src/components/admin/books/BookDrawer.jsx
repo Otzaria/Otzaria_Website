@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Badge from '@/components/ui/Badge'
 import Drawer from '@/components/ui/Drawer'
 import Tabs, { tabPanelProps } from '@/components/ui/Tabs'
+import ModelTrainingPanel from '@/components/admin/training/ModelTrainingPanel'
 import BookOcrPanel from '@/components/admin/ocr/BookOcrPanel'
 import { unsavedConfirm, useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard'
 import { bookOwnership, bookProgress, displayCategory } from '@/lib/adminBooks/bookTerms'
@@ -18,6 +19,7 @@ export const DRAWER_TABS = [
   { id: 'details', label: 'פרטים' },
   { id: 'pages', label: 'עמודים' },
   { id: 'instructions', label: 'הנחיות עריכה', shortLabel: 'הנחיות' },
+  { id: 'training', label: 'אימון מודלים', shortLabel: 'אימון' },
   { id: 'ocr', label: 'זיהוי טקסט אוטומטי', shortLabel: 'זיהוי טקסט' },
 ]
 
@@ -87,6 +89,7 @@ export default function BookDrawer({ book, view, onView, onClose, colorOf, actio
             onDirtyChange={onDirtyChange}
           />
         )}
+        {view === 'training' && <ModelTrainingPanel book={book} />}
         {view === 'ocr' && <BookOcrPanel book={book} />}
       </div>
     </Drawer>

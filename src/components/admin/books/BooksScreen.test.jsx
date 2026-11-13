@@ -387,8 +387,8 @@ describe('BooksScreen — מגירת הספר', () => {
     const drawer = screen.getByRole('dialog', { name: 'חוות דעת' })
     expect(window.location.search).toBe('?book=1')
     // השם הנגיש — תמיד המלא (בטלפון מוצג שם קצר)
-    expect(within(drawer).getAllByRole('tab')).toHaveLength(4)
-    for (const name of ['פרטים', 'עמודים', 'הנחיות עריכה', 'זיהוי טקסט אוטומטי']) expect(within(drawer).getByRole('tab', { name })).toBeInTheDocument()
+    expect(within(drawer).getAllByRole('tab')).toHaveLength(5)
+    for (const name of ['פרטים', 'עמודים', 'הנחיות עריכה', 'זיהוי טקסט אוטומטי', 'אימון מודלים']) expect(within(drawer).getByRole('tab', { name })).toBeInTheDocument()
     expect(within(drawer).getByRole('progressbar', { name: 'התקדמות' })).toHaveAttribute('aria-valuetext', '4 מתוך 10 הושלמו')
     // הפעולות: ראשית אחת בולטת, ושאר הפעולות ברשימה שקטה — כולל "שנה קטגוריה"; "מחק לצמיתות" אחרון
     expect(within(drawer).getByRole('link', { name: /פתח בספרייה/ })).toBeInTheDocument()

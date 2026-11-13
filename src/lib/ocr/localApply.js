@@ -279,7 +279,7 @@ async function salvageCancelled(job, sha, doc, now, hooks) {
 
 // ביטול גובר: קודם הצלת העמודים (התנגשויות job_cancelled), אחר כך ack=cancelled
 async function cancelWithSalvage(job, sha, doc, now, hooks) {
-  await salvageCancelled(job, sha, doc, now, hooks);
+  if (job.taskType !== 'training') await salvageCancelled(job, sha, doc, now, hooks);
   return storeCancelAck(job, sha, now);
 }
 
@@ -290,7 +290,7 @@ async function applyPages(job, doc, sha, now, hooks) {
   const pageMap = sortedPageMap(job);
   const byIndex = pagesByIndex(doc);
   if (doc.outcome === 'cancelled') {
-    await salvageCancelled(job, sha, doc, now, hooks);
+    if (job.taskType !== 'training') await salvageCancelled(job, sha, doc, now, hooks);
     return [];
   }
   if (doc.outcome === 'failed') {
@@ -339,15 +339,17 @@ async function runApply(job, sha, doc, now, hooks) {
   }
 
   try {
-    const classes = await applyPages(job, doc, sha, now, hooks);
-    const counters = summarizeApply(doc, job.pageMap, classes);
+    const classes = job.taskType === 'training' ? [] : await applyPages(job, doc, sha, now, hooks);
+    const counters = job.taskType === 'training'
+      ? { processedPages: job.totalPages, successPages: 0, failedPages: 0, conflictPages: 0, missingPages: 0 }
+      : summarizeApply(doc, job.pageMap, classes);
     const ack = ackBody('accepted', job._id, sha, doc.outcome);
     const close = await OcrJob.updateOne(
       { _id: job._id, resultSha256: sha, status: 'applying', ack: null },
       {
         $set: {
           ...counters,
-          ...closingStatusFields(doc.outcome, counters),
+          ...(job.taskType === 'training' ? { status: doc.outcome === 'success' ? 'completed' : doc.outcome === 'cancelled' ? 'cancelled' : 'failed' } : closingStatusFields(doc.outcome, counters)),
           active: false,
           finishedAt: now,
           ack,

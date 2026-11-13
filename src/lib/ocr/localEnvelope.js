@@ -19,6 +19,7 @@ export const ENVELOPE_PROJECTION = Object.freeze({
   createdAt: 1,
   inputSha256: 1,
   options: 1,
+  trainingOptions: 1,
   pageMap: 1,
   cancelRequested: 1,
   status: 1,
@@ -49,6 +50,7 @@ function optionsOf(options) {
   const out = {};
   if (typeof options?.lm === 'string') out.lm = options.lm;
   if (typeof options?.defaultScript === 'string') out.defaultScript = options.defaultScript;
+  if (typeof options?.bookId === 'string') out.bookId = options.bookId;
   return out;
 }
 
@@ -61,7 +63,7 @@ export function toEnvelope(job) {
     workerId: job.workerId,
     createdAt: iso(job.createdAt),
     inputSha256: job.inputSha256,
-    options: optionsOf(job.options),
+    options: job.taskType === 'training' ? { script: job.trainingOptions.script, epochs: job.trainingOptions.epochs, ...(job.trainingOptions.bookId ? { bookId: job.trainingOptions.bookId } : {}) } : optionsOf(job.options),
     pageMap: (job.pageMap || []).map(pageMapEntryToContract),
   };
 }

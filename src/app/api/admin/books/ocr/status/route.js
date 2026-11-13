@@ -158,7 +158,7 @@ export async function GET(request) {
     await reapStaleOcrJobs(book._id);
 
     // בלי pageMap (עד 2,000 רשומות), בלי נתיבי קבצים פנימיים, ועד 50 שגיאות עמוד
-    const job = await OcrJob.findOne({ book: book._id })
+    const job = await OcrJob.findOne({ book: book._id, taskType: { $ne: 'training' } })
       .sort({ createdAt: -1 })
       .select({
         pageMap: 0,
