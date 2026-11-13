@@ -12,6 +12,5 @@ const schema = new mongoose.Schema({
   sourceHeadSha: String,
   sourceBlobSha: String,
   sourceIdentitySha: String,
-  proofreadCheckedAt: Date,
 }, { timestamps: true })
 export default mongoose.models.BookInfoSyncState || mongoose.model('BookInfoSyncState', schema)

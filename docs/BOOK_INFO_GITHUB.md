@@ -70,18 +70,16 @@ for review. Publication does not mutate Mongo's old approved `BookInfo` record.
 
 ## Proofread marking
 
-The page shows "עבר הגהה באוצריא" when the CSV has `proofread=1` or the site
-computes it from work on the whole book (single text corrections do not count):
-an approved edit in the edited-books space (`BookEdit`), a typing project whose
-pages are all completed (`Book`), or a page-proofing book with no open pages
-(`PageProofBook`). Matching is by book name.
+The page shows "עבר הגהה באוצריא" only for an explicit `proofread=1` in the
+CSV. Automatic inference and publication are disabled: editing a passage does
+not prove whole-book proofreading, and matching a project to the library by title
+can select the wrong edition. Page-proof completion also requires approved
+submissions for every page, not just a `done` status. A reliable identity and
+completion contract is needed before automatic marking can be introduced.
 
-With `BOOK_INFO_PROOFREAD_SYNC=1`, the book-info cron also keeps one system
-request (`bookKey` `system:proofread`, no submitter) that sets `proofread=1` for
-computed books, at most once a day. It only adds the mark, skips books with an
-active user request until a later run, and extends its own open PR in place.
-The flag is off by default: setting `proofread` upgrades the CSV to eleven
-columns, so enable it only after every consumer accepts the extended format.
+The new editable fields are disabled by default. Set `BOOK_INFO_EXTENDED_FIELDS=1`
+only after both otzaria-library and SeforimLibrary support the eleven-column
+format; the server enforces the same restriction as the form.
 
 ## Storage contract and verification
 

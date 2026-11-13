@@ -4,12 +4,13 @@ import { useEffect, useMemo, useState } from 'react'
 import Header from '@/components/layout/Header'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { BOOK_INFO_EXTENSION_EDITABLE_FIELDS, BOOK_INFO_LIMITS } from '@/lib/book-info-constants'
-import { normalizeExtensionField, splitTopics } from '@/lib/book-info-utils'
+import { bookInfoFormUpdates, normalizeExtensionField, splitTopics } from '@/lib/book-info-utils'
 
 const MAX_TOPIC_SUGGESTIONS = 200
 
 export default function LibraryInfoPage() {
   const [sourceRevision, setSourceRevision] = useState(0)
+  const [extendedFieldsEnabled, setExtendedFieldsEnabled] = useState(false)
   const [page, setPage] = useState(0)
   const [unresolvedEdits, setUnresolvedEdits] = useState([])
   const [rows, setRows] = useState([])
@@ -35,6 +36,7 @@ export default function LibraryInfoPage() {
       setRows(data.rows || [])
       setUnresolvedEdits(data.unresolvedEdits || [])
       setSourceRevision(data.identityRevision || 0)
+      setExtendedFieldsEnabled(data.extendedFieldsEnabled === true)
       setGenerationOptions(data.generationOptions || [])
       setSubGenerationOptionsByGeneration(data.subGenerationOptionsByGeneration || {})
     } catch (loadError) {
@@ -145,6 +147,7 @@ export default function LibraryInfoPage() {
     try {
       setSaving(true)
       setError('')
+      const updates = bookInfoFormUpdates(formData, editRow.approved, editRow.effective)
       const response = await fetch('/api/library/book-info', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -153,11 +156,7 @@ export default function LibraryInfoPage() {
           author: editRow.approved?.authorName || '',
           identityRevision: editRow.identityRevision,
           baseRow: editRow.approved,
-          updates: Object.fromEntries(Object.entries(formData).filter(([field, value]) => {
-            const current = editRow.approved?.[field]
-            if (BOOK_INFO_EXTENSION_EDITABLE_FIELDS.includes(field)) return normalizeFormValue(field, value) !== normalizeFormValue(field, current)
-            return normalizeFormValue(field, value) !== (current === '' || current === undefined ? null : current)
-          }))
+          updates
         })
       })
       const data = await response.json()
@@ -165,7 +164,7 @@ export default function LibraryInfoPage() {
         throw new Error(data.error || 'שגיאה בשמירה')
       }
       setLastPr({ url: data.prUrl, number: data.prNumber })
-      const bookLevel = Object.fromEntries(BOOK_INFO_EXTENSION_EDITABLE_FIELDS.map((field) => [field, normalizeFormValue(field, formData[field])]))
+      const bookLevel = Object.fromEntries(BOOK_INFO_EXTENSION_EDITABLE_FIELDS.filter((field) => field in updates).map((field) => [field, normalizeFormValue(field, formData[field])]))
       setRows((prev) =>
         prev.map((row) => {
           if (row.id !== editRow.id) {
@@ -174,9 +173,7 @@ export default function LibraryInfoPage() {
 
           const normalizedEffective = {
             ...row.effective,
-            ...formData,
-            startYear: formData.startYear === '' ? null : Number(formData.startYear),
-            endYear: formData.endYear === '' ? null : Number(formData.endYear),
+            ...Object.fromEntries(Object.entries(updates).map(([field, value]) => [field, normalizeFormValue(field, value)])),
             ...bookLevel
           }
 
@@ -187,7 +184,7 @@ export default function LibraryInfoPage() {
               id: data.id,
               prNumber: data.prNumber,
               prUrl: data.prUrl,
-              changedFields: Object.keys(formData).filter((field) => normalizedEffective[field] !== row.approved?.[field])
+              changedFields: Object.keys(updates)
             }
           }
         })
@@ -408,6 +405,8 @@ export default function LibraryInfoPage() {
                   </p>
                 </div>
 
+                {!extendedFieldsEnabled && <p className="text-sm text-on-surface/70">עריכת פרטי הספר הנוספים תהיה זמינה בהמשך.</p>}
+                <fieldset disabled={!extendedFieldsEnabled} className="space-y-4 disabled:opacity-60">
                 <Field label="נושאים">
                   <input
                     type="text"
@@ -458,6 +457,7 @@ export default function LibraryInfoPage() {
                     {formData.description.length} / {BOOK_INFO_LIMITS.description} תווים
                   </p>
                 </Field>
+                </fieldset>
               </div>
 
               <div className="flex justify-end gap-2 pt-3">

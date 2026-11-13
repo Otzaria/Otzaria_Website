@@ -5,7 +5,6 @@ import remarkParse from 'remark-parse'
 import remarkGfm from 'remark-gfm'
 import { BOOK_INFO_ALL_COLUMNS, BOOK_INFO_COLUMNS, bookInfoStateFromRows, exportBookInfoCsv, listBookInfo, parseBookInfoCsv } from './csv.js'
 import { applyChangeSet, summarizeChangeSet, validateChangeSet } from './changes.js'
-import { bookNameFromPath, mergeProofreadOps, proofreadBookNames, proofreadOps } from './proofread.js'
 
 const NO_EXTENSION = { topics: null, pubDate: null, pubPlace: null, description: null, proofread: null }
 
@@ -305,33 +304,15 @@ test('PR summary labels the extension fields and renders multi-line text in one 
   assert.match(proof.text, /\| עבר הגהה באוצריא \| — \| `1` \|/)
 })
 
-test('proofreadBookNames joins whole-book sources by name and ignores single corrections', () => {
-  const names = proofreadBookNames({
-    correctionTitles: ['אבן עזרא'],
-    editedPaths: ['הלכה/אחרונים/שולחן ערוך.txt', 'מוסר\\מסילת ישרים.TXT', ' '],
-    completedBooks: ['ספר חדש'],
-    pageProofTitles: ['ספר סרוק'],
-  })
-  assert.deepEqual([...names].sort(), ['מסילת ישרים', 'ספר חדש', 'ספר סרוק', 'שולחן ערוך'].sort())
-  assert.equal(bookNameFromPath(null), '')
-  assert.equal(proofreadBookNames().size, 0)
-})
-
-test('proofreadOps adds one op per unmarked book, skips blocked and marked books, and never removes a mark', () => {
+test('multi-operation changes use current sibling rows after author renames', () => {
   const state = parseBookInfoCsv(EXTENDED)
-  const names = new Set(['אבן עזרא', 'שולחן ערוך', 'אין כזה'])
-  const ops = proofreadOps(state, names, { identityRevision: 3 })
-  assert.deepEqual(ops.map((op) => [op.book, op.author, op.changes, op.identityRevision]), [['אבן עזרא', 'אברהם אבן עזרא', { proofread: '1' }, 3]])
-  assert.equal(proofreadOps(state, names, { skipBooks: new Set(['אבן עזרא']) }).length, 0)
-  assert.equal(proofreadOps(state, new Set()).length, 0)
-  // ספר שסומן רק בחלק משורותיו מקבל פעולה, וההחלה משלימה את כל השורות
-  const partial = parseBookInfoCsv(EXTENDED.replace('"הלכה","","","","1"\n"שולחן ערוך","רמ""א"', '"הלכה","","","",""\n"שולחן ערוך","רמ""א"'))
-  const [op] = proofreadOps(partial, new Set(['שולחן ערוך']))
-  const applied = applyChangeSet(partial, [op])
-  assert.equal(applied.results[0].status, 'applied')
-  assert.ok(listBookInfo(applied.state).filter((r) => r.bookName === 'שולחן ערוך').every((r) => r.proofread === '1'))
-  // שדרוג מקובץ של 6 עמודות
-  const upgraded = exportBookInfoCsv(applyChangeSet(parseBookInfoCsv(FIXTURE), proofreadOps(parseBookInfoCsv(FIXTURE), new Set(['אבן עזרא']))).state)
-  assert.equal(upgraded.split('\n')[0], BOOK_INFO_ALL_COLUMNS.join(','))
-  assert.deepEqual(mergeProofreadOps([{ book: 'א', author: '' }], [{ book: 'א', author: 'x' }, { book: 'ב', author: '' }]).map((o) => o.book), ['א', 'ב'])
+  const { state: next, results } = applyChangeSet(state, [
+    { book: 'שולחן ערוך', author: 'רמ"א', changes: { authorName: 'רבי משה איסרליש' } },
+    { book: 'שולחן ערוך', author: 'רבי יוסף קארו', changes: { topics: 'הלכה;פסקים' } },
+  ])
+  assert.deepEqual(results.map((result) => result.status), ['applied', 'applied'])
+  const rows = listBookInfo(next).filter((row) => row.bookName === 'שולחן ערוך')
+  assert.equal(rows.length, 2)
+  assert.ok(rows.some((row) => row.authorName === 'רבי משה איסרליש'))
+  assert.ok(rows.every((row) => row.topics === 'הלכה;פסקים'))
 })

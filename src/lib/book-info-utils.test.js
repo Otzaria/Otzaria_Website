@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildDiff, getChangedFields, mergeBookInfoWithPending, normalizeBookInfoUpdates, normalizeExtensionField, splitTopics } from './book-info-utils'
+import { bookInfoFormUpdates, buildDiff, getChangedFields, mergeBookInfoWithPending, normalizeBookInfoUpdates, normalizeExtensionField, splitTopics } from './book-info-utils'
 
 describe('mergeBookInfoWithPending', () => {
   const book = { bookName: 'ספר', authorName: 'מחבר', startYear: 100 }
@@ -161,4 +161,11 @@ describe('שדות ההרחבה', () => {
     expect(buildDiff({ topics: null, description: 'ג' }, updates)).toEqual({ topics: 'א;ב' })
     expect(getChangedFields({ pubPlace: 'ורשה', proofread: '1' })).toEqual(['pubPlace', 'proofread'])
   })
+})
+
+it('book info form sends only book fields changed from the displayed pending values', () => {
+  const approved = { bookName: 'ספר', authorName: 'מחבר ב', topics: null, startYear: null }
+  const effective = { ...approved, topics: 'הלכה;שבת' }
+  expect(bookInfoFormUpdates({ ...effective, topics: 'הלכה; שבת', startYear: '1500' }, approved, effective)).toEqual({ startYear: '1500' })
+  expect(bookInfoFormUpdates({ ...effective, topics: 'הלכה;מוסר' }, approved, effective)).toEqual({ topics: 'הלכה;מוסר' })
 })
