@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import FloatingPanel from '@/components/ui/FloatingPanel'
 import Button from '@/components/ui/Button'
 import { queryEditorField } from '@/lib/editor/editorField'
@@ -17,6 +17,7 @@ const REASONS = {
 }
 const SOURCES = { recognition: 'זיהוי', language: 'מודל השפה', context: 'מתאימה להקשר', proofreading: 'הגהת OCR' }
 const idOf = (s) => `${s.column}:${s.start}:${s.text}`
+const EMPTY_SUSPECTS = []
 const defaultPosition = (vp) => ({ x: Math.max(16, vp.width - 440 - 24), y: 96 })
 
 /** Non-modal: volunteers can inspect the scan and type while reviewing. The same
@@ -24,20 +25,32 @@ const defaultPosition = (vp) => ({ x: Math.max(16, vp.width - 440 - 24), y: 96 }
 export default function OcrWordReviewPanel({ review, textContainerRef, onApplyText, onSetAccepted, onClose }) {
   const [selected, setSelected] = useState(null)
   const [stale, setStale] = useState(false)
-  const suspects = review?.suspects || []
+  const pendingNext = useRef(null)
+  const suspects = review?.suspects || EMPTY_SUSPECTS
   const index = Math.max(0, suspects.findIndex((s) => idOf(s) === selected))
   const current = suspects[index]
   const fieldFor = (s) => queryEditorField(textContainerRef.current, s?.column || 'content')
-  const select = (s) => {
+  const select = useCallback((s) => {
     setSelected(idOf(s))
-    const field = fieldFor(s)
+    const field = queryEditorField(textContainerRef.current, s?.column || 'content')
     if (!field || field.value !== review.fields[s.column].text) { setStale(true); return }
     setStale(false)
     field.focus()
     field.setSelectionRange(s.start, s.end)
     field.dispatchEvent(new Event('select', { bubbles: true }))
     revealCaret(field, s.start)
-  }
+  }, [review, textContainerRef])
+  useEffect(() => {
+    const pending = pendingNext.current
+    if (!pending || review?.fields[pending.editedColumn]?.text !== pending.value) return
+    pendingNext.current = null
+    const target = suspects.find((s) => s.column === pending.column && s.start === pending.start && s.text === pending.text)
+    if (!target) return
+    // The textarea fallback also restores its caret on a timer; select after it.
+    const timer = setTimeout(() => select(target), 0)
+    return () => clearTimeout(timer)
+  }, [review, suspects, select])
+
   const replace = (suggestion) => {
     if (!current) return
     const field = fieldFor(current)
@@ -47,7 +60,12 @@ export default function OcrWordReviewPanel({ review, textContainerRef, onApplyTe
       ? replaceReviewedWord(field.value, current, suggestion.text) : null
     if (!next) { setStale(true); return }
     setStale(false)
-    applyFieldEdit(field, () => next, (value) => onApplyText(current.column, value))
+    const following = suspects.length > 1 ? suspects[(index + 1) % suspects.length] : null
+    pendingNext.current = following && {
+      editedColumn: current.column, value: next.value, column: following.column, text: following.text,
+      start: following.start + (following.column === current.column && following.start > current.start ? next.value.length - field.value.length : 0),
+    }
+    if (!applyFieldEdit(field, () => next, (value) => onApplyText(current.column, value))) pendingNext.current = null
   }
   const setAccepted = (word, accept) => {
     const field = fieldFor(word)

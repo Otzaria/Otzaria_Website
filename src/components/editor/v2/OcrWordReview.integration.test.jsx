@@ -16,9 +16,9 @@ const LAYOUT = { layoutVersion: 1, image: { width: 500, height: 700 }, toSource:
     lm: [{ i: 2, word: 'פוסרת', alts: [{ text: 'פוטרת', gain: 35.094 }] }] }
 ] }
 
-function Page({ view = 'code', split = false, initialContent = 'והנה היא <b>פוסרת</b> את הצרה' }) {
+function Page({ view = 'code', split = false, initialContent = 'והנה היא <b>פוסרת</b> את הצרה', initialFields }) {
   const ref = useRef(null)
-  const [fields, setFields] = useState(split ? { right: 'והנה היא', left: '<b>פוסרת</b> את הצרה' } : { content: initialContent })
+  const [fields, setFields] = useState(initialFields || (split ? { right: 'והנה היא', left: '<b>פוסרת</b> את הצרה' } : { content: initialContent }))
   const [active, setActive] = useState(null)
   const [panel, setPanel] = useState(false)
   const [finish, setFinish] = useState(false)
@@ -198,4 +198,37 @@ it('shows the proofreading reason and applies its suggestion through the book ed
   fireEvent.click(within(panel).getByRole('button', { name: 'החלף בפוטרת' }))
   await waitFor(() => expect(container.querySelector('textarea').value).toContain('<b>פוטרת</b>'))
   expect(panel).toHaveTextContent('אין כרגע מילים מסומנות לבדיקה')
+})
+
+it.each(['code', 'rich'])('replacing a suggestion selects the next suspect after offsets change (%s)', async (view) => {
+  const original = 'פוסרת שלום שלlם'
+  const layout = { ...LAYOUT, lines: [{ ...LAYOUT.lines[0], text: original, words: null,
+    lm: [{ i: 0, word: 'פוסרת', alts: [{ text: 'פוטרות', gain: 4 }] }] }] }
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ success: true, data: { layoutStatus: 'ok', layout, image: { matches: true } } }) })))
+  const { container } = render(<Page view={view} initialContent={original} />)
+  fireEvent.click(await screen.findByRole('button', { name: /2 מילים לבדיקה/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'החלף בפוטרות' }))
+  const field = container.querySelector('textarea, [data-rich-textarea]')
+  await waitFor(() => {
+    expect(field.value).toBe('פוטרות שלום שלlם')
+    expect(field.value.slice(field.selectionStart, field.selectionEnd)).toBe('שלlם')
+    expect(screen.getByRole('button', { name: /שלlם — טקסט/ })).toHaveAttribute('aria-pressed', 'true')
+  })
+})
+
+
+it.each(['code', 'rich'])('replacing the last suspect wraps to the first in another column (%s)', async (view) => {
+  const layout = { ...LAYOUT, lines: [{ ...LAYOUT.lines[0], text: 'שלlם פוסרת', words: null,
+    lm: [{ i: 1, word: 'פוסרת', alts: [{ text: 'פוטרת', gain: 4 }] }] }] }
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ success: true, data: { layoutStatus: 'ok', layout, image: { matches: true } } }) })))
+  const { container } = render(<Page view={view} split initialFields={{ right: 'שלlם', left: 'פוסרת' }} />)
+  fireEvent.click(await screen.findByRole('button', { name: /2 מילים לבדיקה/ }))
+  fireEvent.click(screen.getByRole('button', { name: /פוסרת — טור שמאל/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'החלף בפוטרת' }))
+  const right = container.querySelector('[data-column="right"][role="textbox"], textarea[data-column="right"]')
+  await waitFor(() => {
+    expect(right).toHaveFocus()
+    expect(right.value.slice(right.selectionStart, right.selectionEnd)).toBe('שלlם')
+    expect(screen.getByRole('button', { name: /שלlם — טור ימין/ })).toHaveAttribute('aria-pressed', 'true')
+  })
 })
