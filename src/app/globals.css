@@ -40,3 +40,8 @@
 @import "./styles/tooltip.css";
 @import "./styles/nav.css";
 @import "./styles/animations.css";
+
+/* Administration utilities are compiled by admin-utilities.css. */
+@source not "./library/admin";
+@source not "../components/admin";
+@source not "../components/trainingProof/admin";

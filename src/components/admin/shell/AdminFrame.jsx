@@ -7,6 +7,7 @@ import { EMPTY_ADMIN_BADGE_COUNTS } from '@/lib/adminBadgeScope'
 import { toAdminViewer } from '@/lib/adminNav'
 import { canDownloadBackup } from '@/lib/adminBackup'
 import AdminShell from './AdminShell'
+import '@/app/admin-utilities.css'
 
 /**
  * @param {{ session: any, children: import('react').ReactNode }} props

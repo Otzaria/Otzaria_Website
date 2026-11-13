@@ -1,11 +1,4 @@
-// "עמודים" (/library/admin/pages-management) — הסינון, המיון והעמוד: מהכתובת ואליה; הבקשה לשרת; והעמודים
-// שמוצגים. לוגיקה טהורה, בלי React ובלי DOM (נבדק ב-pagesQuery.test.mjs).
-//
-// מצב, ספר ומשתמש — מסוננים בשרת (הבקשה הראשונה בדיוק כמו במסך הקודם: /api/admin/pages/list?status=&book=&userId=).
-// השרת מחזיר עד 5,000 עמודים בבקשה (limit) — כשיש יותר, ההמשך נטען באותה בקשה עם &page=2, 3… (פרמטר שהשרת
-// כבר מקבל; בלי שינוי ב-API) עד תקרה (MAX_LOADED). "בלי שינוי יותר מ-", המיון והעמוד — בצד הלקוח, על מה שהגיע.
-// "בלי שינוי יותר מ-" הוא תמיד על עמודים בעבודה, ולכן בחירה בו בוחרת גם מצב "בעבודה" — כך גם השרת מחזיר רק
-// עמודים בעבודה (ופחות בקשות), ומחליפה את המיון ל"הוותיקים קודם".
+// הסינון והמיון במסך ניהול העמודים.
 
 import { paginate as paginateList } from '../adminList/paginate.js'
 import { PAGE_STATUSES, STALE_DAYS, STALE_HINTS, STALE_LABEL, STATUS_LABELS, isStale } from './pageTerms.js'
@@ -48,7 +41,7 @@ export function parsePagesQuery(params) {
     user: isUserId(get('user')) ? get('user') : '',
     stale: staleDays,
     sort: PAGE_SORTS.includes(sort) ? sort : DEFAULT_SORT,
-    page: Number.isInteger(page) && page > 1 ? page : 1,
+    page: Number.isSafeInteger(page) && page > 1 ? page : 1,
   }
 }
 
@@ -91,46 +84,6 @@ export function clearFilters(query) {
   return { ...query, status: '', book: '', user: '', stale: 0, page: 1 }
 }
 
-/**
- * הבקשה לשרת — בדיוק כמו במסך הקודם: אותם פרמטרים, באותו סדר, ו-"?" גם כשאין סינון. part — ההמשך (2, 3…),
- * כשבשרת יש יותר ממה שחזר בבקשה אחת: אותה בקשה עם &page= (השרת כבר מקבל אותו: skip = (page-1) * limit).
- * @param {Pick<PagesQuery, 'status' | 'book' | 'user'>} query @param {number} [part]
- */
-export function listUrl(query, part = 1) {
-  const params = serverParams(query)
-  if (!(part > 1)) return `/api/admin/pages/list?${params}`
-  return `/api/admin/pages/list?${params}${params ? '&' : ''}page=${part}`
-}
-
-/** כמה עמודים לכל היותר נטענים לסינון אחד (6 בקשות של 5,000). מעבר לזה — הסבר שקט ליד המונה. */
-export const MAX_LOADED = 30000
-
-/**
- * אילו המשכים לבקש אחרי הבקשה הראשונה. השרת מחזיר limit (5,000) עמודים לכל בקשה, ו-total — כמה יש בסך הכול
- * לסינון. (השרת מסנן מהתשובה עמודים של ספר שנמחק, אחרי ה-limit — לכן החישוב לפי total ו-limit, לא לפי מה שהגיע.)
- * @param {number} total @param {number} limit @param {number} [max]
- * @returns {number[]} מספרי ההמשכים: [2, 3, …]
- */
-export function moreParts(total, limit, max = MAX_LOADED) {
-  if (!(limit > 0) || !(total > limit)) return []
-  const parts = Math.min(Math.ceil(total / limit), Math.max(1, Math.floor(max / limit)))
-  return Array.from({ length: Math.max(0, parts - 1) }, (_, i) => i + 2)
-}
-
-/** חיבור התשובות: בלי כפילות (עמוד שזז בין בקשה לבקשה — כשנוסף או נמחק עמוד בינתיים — מופיע פעם אחת) */
-export function mergeParts(parts) {
-  const seen = new Set()
-  const out = []
-  for (const list of parts) {
-    for (const p of list || []) {
-      if (seen.has(p.id)) continue
-      seen.add(p.id)
-      out.push(p)
-    }
-  }
-  return out
-}
-
 /** "הורד את כל המסוננים" — כמו "הכל" במסך הקודם (api/admin/pages/download-batch) */
 export function batchDownloadUrl(query) {
   return `/api/admin/pages/download-batch?${serverParams(query)}`
@@ -142,11 +95,6 @@ function serverParams(query) {
   if (query.book) params.append('book', query.book)
   if (query.user) params.append('userId', query.user)
   return params.toString()
-}
-
-/** המפתח של מה שהשרת מסנן — כשהוא משתנה, טוענים מחדש */
-export function serverKey(query) {
-  return serverParams(query)
 }
 
 const time = (value) => {
