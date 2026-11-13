@@ -1,5 +1,7 @@
 'use client'
 
+import ModelTrainingPanel from './ModelTrainingPanel'
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import Button from '@/components/ui/Button'
@@ -338,6 +340,7 @@ export default function OcrLinesScreen() {
   return (
     <div className="flex flex-col gap-5">
       <AdminScreenHeader id={TITLE_ID} title={SCREEN_TEXT.lines.title} description={SCREEN_TEXT.lines.description} menuItems={menuItems} />
+      <ModelTrainingPanel />
       {data.status === 'error' ? (
         <LoadError error={data.error} title="לא הצלחנו לטעון את השורות" sessionText="התחבר מחדש כדי לראות את השורות. אחרי ההתחברות תחזור לכאן." onRetry={data.retry} />
       ) : (

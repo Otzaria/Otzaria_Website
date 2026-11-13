@@ -18,7 +18,7 @@ import { createHash, randomBytes } from 'node:crypto';
 
 export const JOB_ID_RE = /^[a-f0-9]{24}$/;
 export const SHA256_RE = /^[0-9a-f]{64}$/;
-const FILE_KINDS = Object.freeze({ input: '.pdf', result: '.json', rejected: '.json' });
+const FILE_KINDS = Object.freeze({ input: '.pdf', training: '.zip', result: '.json', rejected: '.json' });
 // סימון קובץ זמני: "<שם>.tmp-<hex>". sweepTmpFiles מוחק רק שמות שתואמים לזה.
 const TMP_RE = /\.tmp-[0-9a-f]{8,}$/;
 const FILE_MODE = 0o640;

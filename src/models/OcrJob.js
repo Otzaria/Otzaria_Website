@@ -17,6 +17,7 @@ const OptionsSchema = new mongoose.Schema({
   alts: { type: String, enum: ['on', 'off'] },
   lexicons: { type: [String], default: undefined },
   sensitivity: { type: String, enum: ['normal', 'more'] },
+  bookId: { type: String },
 }, { _id: false });
 
 // רשומה אחת לכל עמוד ב-PDF הקלט (pdfPageIndex מ-1). expectedUpdatedAt — updatedAt של
@@ -108,6 +109,8 @@ const OcrJobSchema = new mongoose.Schema({
 
   // ---- ספק local (עובד מקומי) ----
   taskType: { type: String, default: 'ocr' },
+  trainingSelection: { type: new mongoose.Schema({ pageNumbers: [Number], approved: Boolean }, { _id: false }) },
+  trainingOptions: { type: new mongoose.Schema({ script: { type: String, enum: ['square', 'rashi'] }, epochs: Number, bookId: String }, { _id: false }) },
   requestId: { type: String },                      // מזהה בקשת היצירה מהלקוח (אידמפוטנטיות)
   requestFingerprint: { type: String },             // sha256 של פרמטרי הבקשה — אותו requestId לבקשה אחרת → 409
   workerId: { type: String },

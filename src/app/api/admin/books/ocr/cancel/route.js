@@ -35,8 +35,9 @@ export async function POST(request) {
     await connectDB();
 
     const query = jobId ? { _id: jobId } : { book: bookId };
-    const job = await OcrJob.findOne({ ...query, ...activeFilter() }).select('_id method').lean();
+    const job = await OcrJob.findOne({ ...query, ...activeFilter() }).select('_id method taskType').lean();
     if (!job) return notFound(NOT_FOUND_HE);
+    if (job.taskType === 'training') return NextResponse.json({ error: 'עצירת אימון מחייבת עצירה מבוקרת בתחנת האימון' }, { status: 409 });
 
     const opts = { reason: 'admin', byName: session.user?.name || '' };
     if (job.method === 'local') {
