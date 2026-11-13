@@ -3,6 +3,13 @@
 import { useCallback, useMemo } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 
+/** ה-state של הרשומה בלי הסימונים הפנימיים של הנתב של Next (שגורמים לו להתעלם מהעדכון) */
+export function withoutNextMarkers(state) {
+  if (!state || typeof state !== 'object') return state
+  const { __NA, _N, ...rest } = state
+  return rest
+}
+
 /**
  * מצב של מסך ניהול (סינון, מיון, עמוד, מגירה…) — מהכתובת ואליה. משותף לכל מסכי הרשימות (ספרים, עמודים, תוספים,
  * הצעות, העלאות, משתמשים — כל אחד עם parse / serialize משלו).
@@ -22,8 +29,10 @@ export function useUrlQuery(parse, serialize) {
   const setQuery = useCallback((next, { push = false } = {}) => {
     const url = `${pathname}${serialize(next)}`
     if (push) window.history.pushState(null, '', url)
-    // ה-state נשמר: Next שומר בו את מצב הנתב, וההגנה על שינויים שלא נשמרו (useUnsavedChangesGuard) מסמנת בו את הרשומה הכפולה
-    else window.history.replaceState(window.history.state, '', url)
+    // ה-state נשמר (ההגנה על שינויים שלא נשמרו — useUnsavedChangesGuard — מסמנת בו את הרשומה הכפולה), אבל בלי
+    // הסימונים הפנימיים של Next (__NA / _N): replaceState עם אחד מהם נחשב אצל Next לקריאה פנימית שלו, והוא לא מעדכן
+    // את useSearchParams — הכתובת משתנה והמסך לא (כך נשבר הסינון בכל מסכי הניהול). Next מוסיף אותם בעצמו בחזרה.
+    else window.history.replaceState(withoutNextMarkers(window.history.state), '', url)
   }, [pathname, serialize])
   return [query, setQuery]
 }

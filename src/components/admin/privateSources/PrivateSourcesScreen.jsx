@@ -19,6 +19,7 @@ import SourcesSection from './SourcesSection'
 import useOutreach from './useOutreach'
 import usePrivateSources from './usePrivateSources'
 import { adminScreenTitle } from '@/lib/adminNav'
+import { withoutNextMarkers } from '@/components/admin/list/useUrlQuery'
 
 const EMPTY = Object.freeze({})
 
@@ -53,7 +54,7 @@ export default function PrivateSourcesScreen() {
       if (id === DEFAULT_TAB) q.delete('tab')
       else q.set('tab', id)
       const qs = q.toString()
-      window.history.replaceState(window.history.state, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`)
+      window.history.replaceState(withoutNextMarkers(window.history.state), '', `${window.location.pathname}${qs ? `?${qs}` : ''}`)
     } catch {
       // סביבה בלי history — רק המצב המקומי
     }
