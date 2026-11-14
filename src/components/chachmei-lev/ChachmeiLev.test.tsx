@@ -2,9 +2,11 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import {
   ADDITIONAL_SOURCES,
+  COMPANY_MAILTO,
   DEVELOPERS,
   EDITOR_GROUPS,
   EMERGENCY_LINES,
+  MEMORIAL_MAILTO,
   MEMORIALS,
   PAGE_SECTIONS,
   SPONSOR_COMPANIES,
@@ -42,21 +44,23 @@ describe('ChachmeiLevHero', () => {
 })
 
 describe('MemorialSection', () => {
-  it('ההקדשות בנוסח המדויק, ומשבצת פנויה שמקשרת לדף התרומה', () => {
+  it('ההקדשות בנוסח המדויק, ומשבצת פנויה ששולחת מייל להנצחה', () => {
     const { container } = render(<MemorialSection />)
     const region = screen.getByRole('region', { name: 'לוח הנצחה' })
     for (const memorial of MEMORIALS) {
       expect(within(region).getByRole('heading', { level: 3, name: memorial.title })).toBeInTheDocument()
     }
     const slot = within(region).getByRole('link', { name: /מקום זה יכול להיות מונצח לע"נ יקירך/ })
-    expect(slot).toHaveAttribute('href', '/donate')
+    expect(slot.getAttribute('href')).toBe(MEMORIAL_MAILTO)
+    expect(MEMORIAL_MAILTO).toMatch(/^mailto:otzaria\.1@gmail\.com\?subject=/)
+    expect(slot).toHaveTextContent('otzaria.1@gmail.com')
     // הנר דקורטיבי
     container.querySelectorAll('svg').forEach((svg) => expect(svg).toHaveAttribute('aria-hidden', 'true'))
   })
 })
 
 describe('CompaniesSection', () => {
-  it('כל חברה קישור חיצוני בטוח עם שמה, ובסוף משבצת "מקום זה יכול להיות שלך" לדף התרומה', () => {
+  it('כל חברה קישור חיצוני בטוח עם שמה, ובסוף משבצת "מקום זה יכול להיות שלך" ששולחת מייל', () => {
     render(<CompaniesSection />)
     const region = screen.getByRole('region', { name: 'חברות שתרמו' })
     const items = within(region).getAllByRole('listitem')
@@ -67,13 +71,13 @@ describe('CompaniesSection', () => {
     expect(kesher).toHaveAttribute('rel', 'noopener noreferrer')
     expect(kesher).toHaveTextContent('(נפתח בחלון חדש)')
     expect(kesher.querySelector('img')).toHaveAttribute('alt', '')
-    expect(within(items.at(-1) as HTMLElement).getByRole('link')).toHaveAttribute('href', '/donate')
+    expect(within(items.at(-1) as HTMLElement).getByRole('link').getAttribute('href')).toBe(COMPANY_MAILTO)
     expect(items.at(-1)).toHaveTextContent('מקום זה יכול להיות שלך')
   })
 })
 
 describe('AidSection', () => {
-  it('המשבצת הפנויה בלוח ההנצחה — כפתור התרומה של האתר', () => {
+  it('המשבצת הפנויה בלוח ההנצחה — בסגנון כפתור התרומה של האתר', () => {
     render(<MemorialSection />)
     const slot = screen.getByRole('link', { name: /מקום זה יכול להיות מונצח/ })
     expect(slot.querySelector('.donation-button')).not.toBeNull()
