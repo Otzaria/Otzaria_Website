@@ -6,7 +6,7 @@ import Plugin from '@/models/Plugin'
 import User from '@/models/User'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { getClientIp } from '@/lib/client-ip'
-import { validateEmail } from '@/lib/validation-utils'
+import { normalizeEmailInput, validateEmail } from '@/lib/validation-utils'
 import { parsePluginRef } from '@/lib/pluginRef'
 import { sendPluginReportNotification } from '@/lib/emailService'
 
@@ -79,7 +79,7 @@ export async function POST(request) {
     const platform = typeof body.platform === 'string' ? body.platform.slice(0, 30).trim() : ''
 
     // כתובת מענה פגומה אינה פוסלת את הדיווח — היא פשוט אינה נשמרת
-    const rawReporterEmail = typeof body.reporterEmail === 'string' ? body.reporterEmail.trim().slice(0, 254) : ''
+    const rawReporterEmail = normalizeEmailInput(body.reporterEmail).slice(0, 254)
     const reporterEmail = rawReporterEmail && validateEmail(rawReporterEmail).isValid ? rawReporterEmail : null
 
     await connectDB()

@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
 import { apiError, unauthorized, badRequest, notFound, serverError } from '@/lib/apiResponse';
+import { normalizeEmailInput } from '@/lib/validation-utils';
 
 export async function POST(request) {
   try {
@@ -13,7 +14,8 @@ export async function POST(request) {
       return unauthorized('לא מחובר');
     }
 
-    const { email: newEmail } = await request.json();
+    const { email } = await request.json();
+    const newEmail = normalizeEmailInput(email);
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     // codeql[js/polynomial-redos]: bound input length before testing.

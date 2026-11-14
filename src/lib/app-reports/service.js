@@ -15,6 +15,7 @@ import { cleanupClosedReportPayloads } from './retention.js';
 import { planPublication } from './merge.js';
 import { verifyUnsubscribeToken } from './unsubscribe.js';
 import { suggestEmailDomain } from '../emailTypo.js';
+import { normalizeEmailInput } from '../validation-utils.js';
 import {
   buildReplyAddress, validateInboundPayload, isAutoReply, inboundMessageBody, buildInboundComment, buildOutboundComment,
 } from './inbound.js';
@@ -623,7 +624,7 @@ export async function contactReporter({ reportId, subject, message, user }, deps
   const replyDomain = deps.config?.replyDomain;
   const replyTo = replyDomain ? buildReplyAddress(doc.replyToken || await ensureReplyToken(reportId), replyDomain) : null;
   const result = await deps.sendContactMail({
-    to: doc.reporterEmail, subject: s, message: m, reportTitle: doc.title, issueUrl: doc.issueUrl || null, replyTo, product: productOf(doc),
+    to: normalizeEmailInput(doc.reporterEmail), subject: s, message: m, reportTitle: doc.title, issueUrl: doc.issueUrl || null, replyTo, product: productOf(doc),
   });
   if (!result?.sent) {
     const suggestion = suggestEmailDomain(doc.reporterEmail);
@@ -662,7 +663,7 @@ export async function ingestInboundReply(raw, deps) {
 
   const now = deps.now || new Date();
   // כתובת אחרת מזו שבדיווח: נשמר לצוות, אבל לא מתפרסם ב-issue הציבורי בלי בדיקה
-  const fromReporter = Boolean(from && doc.reporterEmail && from === doc.reporterEmail.toLowerCase());
+  const fromReporter = Boolean(from && doc.reporterEmail && from === normalizeEmailInput(doc.reporterEmail).toLowerCase());
   // דיווח שלא נפתח (או שעוד בבדיקה): התשובה עוברת לבדיקה, ומתפרסמת רק אם ה-issue ייפתח
   const forTriage = ['pending', 'held'].includes(doc.triage?.state);
   const duplicate = { status: 200, body: { ok: true, status: 'duplicate', reportId: doc.reportId } };

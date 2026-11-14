@@ -21,3 +21,9 @@ test('suggestEmailDomain: דומיין תקין או לא מוכר — בלי ה
     assert.equal(suggestEmailDomain(email), null, String(email));
   }
 });
+
+test('suggestEmailDomain: סימוני כיוון סביב כתובת תקינה אינם הופכים אותה לשגיאת הקלדה', () => {
+  const wrapped = `${String.fromCodePoint(0x202b)}user@gmail.com${String.fromCodePoint(0x202c)}`;
+  assert.equal(suggestEmailDomain(wrapped), null);
+  assert.equal(suggestEmailDomain(`user@gmail.cim${String.fromCodePoint(0x200f)}`), 'gmail.com');
+});

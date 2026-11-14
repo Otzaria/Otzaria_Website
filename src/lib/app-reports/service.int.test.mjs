@@ -560,6 +560,26 @@ test('יצירת קשר: כתובת עם שגיאת הקלדה — התרעה ל
   assert.match(down.body.error, /@gmail\.com/);
 });
 
+test('יצירת קשר: כתובת שמורה עם סימוני כיוון נשלחת נקייה, בלי הצעת דומיין מטעה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const created = await post(manual({ reporterEmail: 'someone@gmail.com' }));
+  assert.equal(created.status, 200);
+  // רשומה ישנה שנשמרה לפני הנרמול
+  const stored = `${String.fromCodePoint(0x202b)}someone@gmail.com${String.fromCodePoint(0x202c)}`;
+  await AppReport.updateOne({ reportId: created.body.reportId }, { $set: { reporterEmail: stored } });
+  assert.equal((await getReportDetail(created.body.reportId, 'developer')).report.emailDomainSuggestion, null);
+
+  const sent = [];
+  const args = { reportId: created.body.reportId, subject: 'ש', message: 'ה', user: user() };
+  const ok = await contactReporter(args, { sendContactMail: async (m) => { sent.push(m); return { sent: true }; } });
+  assert.equal(ok.status, 200);
+  assert.equal(sent[0].to, 'someone@gmail.com');
+
+  const rejected = await contactReporter(args, { sendContactMail: async () => ({ sent: false, reason: 'recipient_rejected' }) });
+  assert.equal(rejected.status, 422);
+  assert.doesNotMatch(rejected.body.error, /@gmail\.com/);
+});
+
 const replyConfig = { ...config, replyDomain: 'reply.otzaria.org', inboundSecret: 'inbound-secret' };
 const user = () => ({ id: String(new mongoose.Types.ObjectId()), name: 'מפתח' });
 
