@@ -18,10 +18,10 @@ export class GithubError extends Error {
 export function createGithubClient({ token, repo, fetchImpl = fetch }) {
   if (!token) throw new Error('GitHub token missing');
 
-  async function call(method, path, body) {
+  async function call(method, path, body, url = `${API}/repos/${repo}${path}`) {
     let res;
     try {
-      res = await fetchImpl(`${API}/repos/${repo}${path}`, {
+      res = await fetchImpl(url, {
         method,
         headers: {
           Accept: 'application/vnd.github+json',
@@ -40,6 +40,7 @@ export function createGithubClient({ token, repo, fetchImpl = fetch }) {
     let data = null;
     try { data = text ? JSON.parse(text) : null; } catch { /* גוף שאינו JSON */ }
     if (!res.ok) throw new GithubError(`GitHub ${method} ${path} → ${res.status}: ${data?.message || ''}`, res.status);
+    if (data?.errors?.length) throw new GithubError(`GitHub ${path}: ${data.errors[0]?.message || ''}`, 422);
     return data;
   }
 
@@ -60,11 +61,34 @@ export function createGithubClient({ token, repo, fetchImpl = fetch }) {
         closed_at: d.closed_at ?? null, closed_by: d.closed_by?.login ?? null,
       };
     },
-    /** תגובות שעודכנו מאז `since` (ISO), בסדר כרונולוגי. */
+    /** דורש הרשאת triage לחשבון הבוט במאגר. */
+    async addAssignees(issueNumber, assignees) {
+      await call('POST', `/issues/${issueNumber}/assignees`, { assignees });
+    },
+    /** reason: completed | not_planned */
+    async closeIssue(issueNumber, reason) {
+      await call('PATCH', `/issues/${issueNumber}`, { state: 'closed', state_reason: reason });
+    },
+    /** סגירה ככפול, עם הקישור ל-issue המקורי (כמו "Close as duplicate" באתר GitHub). */
+    async closeAsDuplicate(issueNumber, duplicateOf) {
+      const [issue, original] = await Promise.all([call('GET', `/issues/${issueNumber}`), call('GET', `/issues/${duplicateOf}`)]);
+      await call('POST', '/graphql', {
+        query: 'mutation($id:ID!,$dup:ID!){closeIssue(input:{issueId:$id,stateReason:DUPLICATE,duplicateIssueId:$dup}){issue{number}}}',
+        variables: { id: issue.node_id, dup: original.node_id },
+      }, `${API}/graphql`);
+    },
+    /** כל התגובות שעודכנו מאז `since` (ISO), בסדר כרונולוגי, כולל עמודי ההמשך. */
     async listComments(issueNumber, since) {
       const qs = new URLSearchParams({ per_page: '100', ...(since ? { since } : {}) });
-      const d = await call('GET', `/issues/${issueNumber}/comments?${qs}`);
-      return (Array.isArray(d) ? d : []).map((c) => ({ body: c.body || '', author: c.user?.login ?? null, created_at: c.created_at }));
+      const comments = [];
+      for (let page = 1; ; page += 1) {
+        if (page > 1) qs.set('page', String(page));
+        const batch = await call('GET', `/issues/${issueNumber}/comments?${qs}`);
+        // כשל בעמוד המשך חייב להיכשל כולו: רשימה חלקית עלולה להסתיר תגובה שכבר פורסמה.
+        if (!Array.isArray(batch)) throw new GithubError('GitHub comments response is not an array', 0);
+        comments.push(...batch.map((c) => ({ body: c.body || '', author: c.user?.login ?? null, created_at: c.created_at })));
+        if (batch.length < 100) return comments;
+      }
     },
   };
 }

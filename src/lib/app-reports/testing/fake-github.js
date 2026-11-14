@@ -33,6 +33,14 @@ export class FakeIssuesGitHub {
       this.failNext -= 1;
       return json(502, { message: 'Bad Gateway' });
     }
+    if (method === 'POST' && u.pathname === '/graphql') {
+      const { id, dup } = body.variables;
+      const issue = [...this.issues.values()].find((i) => i.node_id === id);
+      const original = [...this.issues.values()].find((i) => i.node_id === dup);
+      if (!issue || !original) return json(200, { errors: [{ message: 'Could not resolve to a node' }] });
+      Object.assign(issue, { state: 'closed', state_reason: 'duplicate', duplicate_of: original.number, closed_at: new Date().toISOString() });
+      return json(200, { data: { closeIssue: { issue: { number: issue.number } } } });
+    }
     const prefix = `/repos/${this.repo}`;
     if (!u.pathname.startsWith(prefix)) return json(404, { message: 'Not Found' });
     const rest = u.pathname.slice(prefix.length);
@@ -40,7 +48,10 @@ export class FakeIssuesGitHub {
     if (method === 'POST' && rest === '/issues') {
       const number = this.nextNumber++;
       // טוקן בלי triage: GitHub מתעלם מהתוויות בשקט
-      const issue = { number, title: body.title, body: body.body, labels: [], state: 'open', state_reason: null, html_url: `https://github.com/${this.repo}/issues/${number}` };
+      const issue = {
+        number, node_id: `I_${number}`, title: body.title, body: body.body, labels: [], assignees: [], state: 'open', state_reason: null,
+        html_url: `https://github.com/${this.repo}/issues/${number}`,
+      };
       this.issues.set(number, issue);
       return json(201, issue);
     }
@@ -55,7 +66,21 @@ export class FakeIssuesGitHub {
       const number = Number(m[1]);
       if (!this.issues.has(number)) return json(404, { message: 'Not Found' });
       const since = u.searchParams.get('since');
-      return json(200, this.comments.filter((c) => c.issue === number && (!since || c.created_at >= since)));
+      const page = Math.max(1, Number(u.searchParams.get('page')) || 1);
+      const size = Math.max(1, Number(u.searchParams.get('per_page')) || 30);
+      return json(200, this.comments.filter((c) => c.issue === number && (!since || c.created_at >= since)).slice((page - 1) * size, page * size));
+    }
+    if (method === 'POST' && (m = rest.match(/^\/issues\/(\d+)\/assignees$/))) {
+      const issue = this.issues.get(Number(m[1]));
+      if (!issue) return json(404, { message: 'Not Found' });
+      issue.assignees = [...new Set([...(issue.assignees || []), ...body.assignees])];
+      return json(201, issue);
+    }
+    if (method === 'PATCH' && (m = rest.match(/^\/issues\/(\d+)$/))) {
+      const issue = this.issues.get(Number(m[1]));
+      if (!issue) return json(404, { message: 'Not Found' });
+      Object.assign(issue, { state: body.state, state_reason: body.state_reason, closed_at: new Date().toISOString() });
+      return json(200, issue);
     }
     if (method === 'GET' && (m = rest.match(/^\/issues\/(\d+)$/))) {
       const issue = this.issues.get(Number(m[1]));

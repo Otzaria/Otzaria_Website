@@ -16,7 +16,7 @@ export const MAX_INBOUND_BODY_BYTES = 2 * 1024 * 1024 + Math.ceil(MAX_IMAGES_TOT
 
 const json = (body, status = 200) => Response.json(body, { status, headers: { 'cache-control': 'no-store' } });
 
-function bearerMatches(request, secret) {
+export function bearerMatches(request, secret) {
   const header = request.headers.get('authorization') || '';
   const a = Buffer.from(header.startsWith('Bearer ') ? header.slice(7) : '');
   const b = Buffer.from(secret);

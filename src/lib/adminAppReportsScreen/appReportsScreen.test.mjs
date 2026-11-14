@@ -18,7 +18,7 @@ describe('דיווחי תקלות — שמות', () => {
     assert.equal(unsavedAttachmentsText(1), 'קובץ מצורף אחד לא נשמר באתר')
     assert.equal(unsavedAttachmentsText(3, true), '3 קבצים מצורפים נוספים לא נשמרו באתר')
     assert.equal(unsavedAttachmentsText(0), '')
-    assert.deepEqual(optionsOf(ISSUE_STATE_LABELS).map((o) => o.value), ['open', 'closed', 'pending'])
+    assert.deepEqual(optionsOf(ISSUE_STATE_LABELS).map((o) => o.value), ['open', 'closed', 'pending', 'triage', 'held'])
   })
   it('הכרטיס ב-GitHub', () => {
     assert.equal(issueBadge({}), null)
@@ -27,6 +27,16 @@ describe('דיווחי תקלות — שמות', () => {
     assert.equal(issueBadge({ issueNumber: 7, issueState: 'closed', issueStateReason: 'duplicate' }).label, 'סגור (כפול)')
     assert.equal(issueBadge({ issueNumber: 7, issueState: 'closed' }).label, 'סגור')
     assert.equal(issueBadge({ issuePending: true, issueNumber: 3 }).state, 'open')
+  })
+  it('הבדיקה האוטומטית', () => {
+    assert.deepEqual(issueBadge({ issuePending: true, triage: { state: 'pending' } }), { state: 'triage', label: 'בבדיקה אוטומטית', tone: 'info' })
+    assert.deepEqual(issueBadge({ issuePending: false, triage: { state: 'held' } }), { state: 'held', label: 'לא נפתח', tone: 'neutral' })
+    assert.deepEqual(
+      issueBadge({ issueNumber: 9, issueUrl: 'u', issueState: 'open', triage: { state: 'held', linkedIssue: 9 } }),
+      { state: 'held', label: 'לא נפתח', tone: 'neutral', number: 9, url: 'u' },
+    )
+    // אחרי deadline ה-cron כבר פתח: מצב הכרטיס הרגיל
+    assert.equal(issueBadge({ issueNumber: 4, issueState: 'open', triage: { state: 'timeout' } }).state, 'open')
   })
 })
 
