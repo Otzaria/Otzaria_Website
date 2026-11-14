@@ -46,7 +46,9 @@ export function validateEmail(email) {
 }
 
 // סימוני כיוון ותווים ברוחב אפס נדבקים להעתקה מטקסט RTL, ושרת הדואר דוחה כתובת שמכילה אותם
-const INVISIBLE_EMAIL_CHARS = /[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g
+// \u05DE\u05D7\u05E8\u05D5\u05D6\u05EA \u05D5\u05DC\u05D0 regex: \u05D4-\u \u05E0\u05E4\u05EA\u05E8 \u05DB\u05D0\u05DF \u05DC\u05EA\u05D5\u05D5\u05D9\u05DD \u05E2\u05E6\u05DE\u05DD, \u05DB\u05D9 MongoDB (PCRE) \u05DC\u05D0 \u05DE\u05DB\u05D9\u05E8 \uXXXX
+const INVISIBLE_CLASS = '[\u061C\u200B-\u200F\u202A-\u202E\u2060\u2066-\u2069\uFEFF]'
+const INVISIBLE_EMAIL_CHARS = new RegExp(INVISIBLE_CLASS, 'g')
 
 /**
  * Strips invisible bidi/zero-width characters and surrounding whitespace from an email
@@ -55,6 +57,17 @@ const INVISIBLE_EMAIL_CHARS = /[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g
  */
 export function normalizeEmailInput(email) {
   return typeof email === 'string' ? email.replace(INVISIBLE_EMAIL_CHARS, '').trim() : ''
+}
+
+/**
+ * Case-insensitive match for a stored email, also when an older record kept it wrapped in invisible marks
+ * @param {unknown} email - Email to match
+ * @returns {RegExp}
+ */
+export function storedEmailPattern(email) {
+  const escaped = normalizeEmailInput(email).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const marks = `${INVISIBLE_CLASS}*`
+  return new RegExp(`^${marks}${escaped}${marks}$`, 'i')
 }
 
 /**

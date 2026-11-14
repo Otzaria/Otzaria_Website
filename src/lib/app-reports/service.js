@@ -15,7 +15,7 @@ import { cleanupClosedReportPayloads } from './retention.js';
 import { planPublication } from './merge.js';
 import { verifyUnsubscribeToken } from './unsubscribe.js';
 import { suggestEmailDomain } from '../emailTypo.js';
-import { normalizeEmailInput } from '../validation-utils.js';
+import { normalizeEmailInput, storedEmailPattern } from '../validation-utils.js';
 import {
   buildReplyAddress, validateInboundPayload, isAutoReply, inboundMessageBody, buildInboundComment, buildOutboundComment,
 } from './inbound.js';
@@ -335,7 +335,7 @@ export async function publishReport(reportId, deps) {
     } else if (plan.action === 'suppress') {
       // מייל הסגירה יישלח בבדיקת המצב הבאה של ה-issue — אלא אם הכתובת כבר קיבלה אותו עליו
       const alreadyNotified = leased.reporterEmail && await AppReport.exists({
-        ...scope, issueNumber: plan.issueNumber, reporterEmail: leased.reporterEmail, notifiedClosedAt: { $ne: null },
+        ...scope, issueNumber: plan.issueNumber, reporterEmail: storedEmailPattern(leased.reporterEmail), notifiedClosedAt: { $ne: null },
       });
       set = {
         issueNumber: plan.issueNumber, issueUrl: plan.issueUrl || issueHtmlUrl(github.repo, plan.issueNumber),
@@ -771,7 +771,7 @@ export async function unsubscribeByToken(token, config) {
   if (!reportId) return { ok: false, reason: 'invalid_token' };
   const doc = await AppReport.findOne({ reportId }).select('reporterEmail').lean();
   if (!doc) return { ok: false, reason: 'not_found' };
-  if (doc.reporterEmail) await AppReport.updateMany({ reporterEmail: doc.reporterEmail }, { $set: { unsubscribed: true } });
+  if (doc.reporterEmail) await AppReport.updateMany({ reporterEmail: storedEmailPattern(doc.reporterEmail) }, { $set: { unsubscribed: true } });
   else await AppReport.updateOne({ reportId }, { $set: { unsubscribed: true } });
   return { ok: true };
 }
