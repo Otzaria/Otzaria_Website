@@ -91,6 +91,8 @@ const TriageSchema = new mongoose.Schema({
   summary: { type: String, default: '', maxlength: 20000 },
   questions: { type: [String], default: undefined },
   questionsSentAt: { type: Date, default: null },
+  questionsPending: { type: Boolean, default: false },
+  questionsLeaseUntil: { type: Date, default: null },
   awaitingReply: { type: Boolean, default: false },
   linkedIssue: { type: Number, default: null },
   note: { type: String, default: '', maxlength: 500 },
@@ -177,6 +179,7 @@ AppReportSchema.index({ issuePending: 1, issueAttemptAt: 1, createdAt: 1 });
 AppReportSchema.index({ createdAt: -1 });
 AppReportSchema.index({ 'triage.state': 1, 'triage.requestedAt': 1 }, { sparse: true });
 AppReportSchema.index({ 'triage.followUp.status': 1 }, { sparse: true });
+AppReportSchema.index({ 'triage.questionsPending': 1, 'triage.questionsLeaseUntil': 1 }, { sparse: true });
 AppReportSchema.index({ resendHash: 1, createdAt: -1 });
 // בדיקת בעלות לפני ניקוי צרופות זמניות: כל ענפי ה-$or חייבים אינדקס,
 // אחרת כל קובץ שנשמר במרוץ גורר סריקה של כל הדיווחים.

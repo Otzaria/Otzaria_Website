@@ -4,7 +4,7 @@
  */
 import AppReport from '../../models/AppReport.js';
 import { isCrashReport, isHangReport } from './issue-text.js';
-import { DEFAULT_PRODUCT, productOf } from './products.js';
+import { DEFAULT_PRODUCT, productFilter, productOf } from './products.js';
 
 const DISPATCH_TIMEOUT_MS = 5000;
 export const MAX_TRIAGE_RUNS = 5;
@@ -27,7 +27,7 @@ export function needsTriage(report, config) {
 export function pendingTriage(now, config, runs = 1) {
   return {
     state: 'pending', requestedAt: now, deadline: new Date(now.getTime() + config.triageWaitMs),
-    decidedAt: null, runs, awaitingReply: false,
+    decidedAt: null, runs, awaitingReply: false, questionsPending: false, questionsLeaseUntil: null, questionsSentAt: null,
   };
 }
 
@@ -77,6 +77,14 @@ export function triageComment(reportId, t) {
   return `${TRIAGE_MARKER}\n${summary}\n\n---\n<sub>${footer}</sub>\n\n${reportMarker(reportId)}`;
 }
 
+/** הבעלים המקורי נשאר merged=false גם אחרי שדיווחים אחרים צורפו לכרטיס שלו. */
+export async function isSharedTriageIssue(doc) {
+  return doc.triage?.state === 'forced' || Boolean(doc.mergedIntoExisting)
+    || Boolean(await AppReport.exists({
+      ...productFilter(productOf(doc)), issueNumber: doc.issueNumber, reportId: { $ne: doc.reportId },
+    }));
+}
+
 /**
  * ההמשך ב-GitHub אחרי החלטה על דיווח שיש לו issue: תגובת פענוח (פעם אחת), שיוך או סגירה.
  * נקרא מיד אחרי ההחלטה, וה-cron משלים מה שנכשל.
@@ -100,8 +108,11 @@ export async function runTriageFollowUp(reportId, github, deps) {
       await github.createComment(doc.issueNumber, triageComment(reportId, doc.triage));
     }
     if (f.assign) await github.addAssignees(doc.issueNumber, [deps.config.triageAssignee]);
-    if (f.close === 'duplicate' && f.duplicateOf) await github.closeAsDuplicate(doc.issueNumber, f.duplicateOf);
-    else if (f.close === 'completed' || f.close === 'not_planned') await github.closeIssue(doc.issueNumber, f.close);
+    // בודקים שוב בזמן הביצוע: דיווח נוסף יכול להצטרף בין ההחלטה לניסיון החוזר ב-cron.
+    if (f.close && !await isSharedTriageIssue(doc)) {
+      if (f.close === 'duplicate' && f.duplicateOf) await github.closeAsDuplicate(doc.issueNumber, f.duplicateOf);
+      else if (f.close === 'completed' || f.close === 'not_planned') await github.closeIssue(doc.issueNumber, f.close);
+    }
     await AppReport.updateOne({ reportId }, { $set: { 'triage.followUp.status': 'done', 'triage.followUp.error': null } });
     return 'done';
   } catch (err) {
@@ -117,7 +128,8 @@ export async function runTriageFollowUp(reportId, github, deps) {
  */
 export function validateTriageDecision(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return fail('body', 'object expected');
-  const { action, verdict, confidence, summary, questions = [], linkIssue = null, awaitingReply = false, note = '' } = raw;
+  const { action, verdict, confidence, summary, questions = [], linkIssue = null, awaitingReply = false, note = '', runs = null } = raw;
+  if (runs !== null && !(Number.isSafeInteger(runs) && runs > 0)) return fail('runs', 'positive integer');
   if (action !== 'open' && action !== 'hold') return fail('action', 'open|hold');
   if (!TRIAGE_VERDICTS.includes(verdict)) return fail('verdict', 'unknown');
   if (!CONFIDENCE.includes(confidence)) return fail('confidence', 'high|medium|low');
@@ -133,7 +145,7 @@ export function validateTriageDecision(raw) {
   if (awaitingReply && !questions.length) return fail('awaitingReply', 'requires questions');
   return {
     ok: true,
-    value: { action, verdict, confidence, summary: summary.trim(), questions: questions.map((q) => q.trim()), linkIssue, awaitingReply, note: note.trim() },
+    value: { action, verdict, confidence, summary: summary.trim(), questions: questions.map((q) => q.trim()), linkIssue, awaitingReply, note: note.trim(), runs },
   };
 }
 
@@ -167,7 +179,7 @@ export async function requestRetriage(reportId, deps) {
   const runs = (doc.triage.runs || 0) + 1;
   const next = pendingTriage(now, deps.config, runs);
   // המדווח השיב שוב ושוב: לא בודקים בלי סוף — נפתח ב-cron הבא
-  if (runs > MAX_TRIAGE_RUNS) next.deadline = now;
+  if (runs > MAX_TRIAGE_RUNS) Object.assign(next, { state: 'opened', deadline: now, decidedAt: now, followUp: null });
   const upd = await AppReport.updateOne(
     { reportId, 'triage.state': 'held', 'triage.decidedAt': doc.triage.decidedAt },
     { $set: { ...UNLINKED, issuePending: true, issueError: null, triage: { ...doc.triage, ...next } } },

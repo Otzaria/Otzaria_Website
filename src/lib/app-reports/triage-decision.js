@@ -3,18 +3,19 @@
  */
 import AppReport from '../../models/AppReport.js';
 import { issueHtmlUrl } from './github.js';
-import { buildOutboundComment, buildReplyAddress } from './inbound.js';
+import { buildOutboundComment } from './inbound.js';
 import { getProduct, productFilter, productOf } from './products.js';
-import { ensureReplyToken, githubFor, loadReportFile, loadReportImage, publishReport } from './service.js';
-import { UNLINKED, requestRetriage, runTriageFollowUp, triageQuestionsMail, validateTriageDecision } from './triage.js';
+import { githubFor, loadReportFile, loadReportImage, publishReport } from './service.js';
+import { MAX_TRIAGE_RUNS, UNLINKED, isSharedTriageIssue, requestRetriage, runTriageFollowUp, validateTriageDecision } from './triage.js';
+
+import { canAskTriageReporter, deliverTriageQuestions } from './triage-questions.js';
 
 export const TRIAGE_QUEUE_LIMIT = 50;
 const LATE_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
-const AUTOMATED_SENDER = 'בדיקה אוטומטית';
 
 /** הדיווחים שממתינים לבדיקה, מהוותיק לחדש. */
 export async function listTriageQueue(now = new Date()) {
-  const items = await AppReport.find({ 'triage.state': 'pending' })
+  const items = await AppReport.find({ 'triage.state': 'pending', 'triage.runs': { $lte: MAX_TRIAGE_RUNS } })
     .select('reportId triage.requestedAt triage.deadline triage.runs')
     .sort({ 'triage.requestedAt': 1 }).limit(TRIAGE_QUEUE_LIMIT).lean();
   // נפתחו בלי החלטה (השירות לא ענה בזמן, או ידנית): ההחלטה שתגיע תוסיף פענוח ל-issue
@@ -80,33 +81,6 @@ export async function getTriageStatus(reportId) {
   return doc ? statusOf(doc) : null;
 }
 
-const canAsk = (doc, deps) => Boolean(doc.reporterEmail && !doc.unsubscribed && deps.config?.replyDomain && deps.sendContactMail);
-
-async function sendQuestions(doc, questions, deps) {
-  if (!questions.length || !canAsk(doc, deps)) return { sent: false };
-  const { subject, message } = triageQuestionsMail(questions);
-  const replyDomain = deps.config?.replyDomain;
-  const replyTo = replyDomain ? buildReplyAddress(doc.replyToken || await ensureReplyToken(doc.reportId), replyDomain) : null;
-  let result;
-  try {
-    result = await deps.sendContactMail({
-      to: doc.reporterEmail, subject, message, reportTitle: doc.title, issueUrl: doc.issueUrl || null, replyTo, product: productOf(doc),
-    });
-  } catch (err) {
-    result = { sent: false, reason: err?.message };
-  }
-  if (!result?.sent) {
-    console.error(`App report ${doc.reportId}: triage questions mail failed:`, result?.reason);
-    return { sent: false };
-  }
-  const now = deps.now || new Date();
-  await AppReport.updateOne({ reportId: doc.reportId }, {
-    $push: { contactLog: { direction: 'out', byUserId: null, byName: AUTOMATED_SENDER, subject, message, sentAt: now } },
-    $set: { 'triage.questionsSentAt': now },
-  });
-  return { sent: true, subject, message };
-}
-
 /**
  * מחיל החלטה אחת של השירות. מחזיר {status, body}.
  * 409 = הדיווח כבר לא ממתין (נפתח אחרי deadline, נפתח ידנית או הוחלט) — השירות מטפל אז ב-issue עצמו.
@@ -120,6 +94,12 @@ export async function applyTriageDecision(reportId, raw, deps) {
 
   const doc = await AppReport.findOne({ reportId }).lean();
   if (!doc) return { status: 404, body: { error: 'Report not found' } };
+  const runs = doc.triage?.runs || 1;
+  // לקוח ישן מותר רק בסבב הראשון. בסבב חוזר חייבים להחזיר את runs מחומר הבדיקה.
+  if ((d.runs === null && runs > 1) || (d.runs !== null && d.runs !== runs)) {
+    return { status: 409, body: { error: 'stale_run', ...statusOf(doc) } };
+  }
+  if (runs > MAX_TRIAGE_RUNS) return { status: 409, body: { error: 'max_runs', ...statusOf(doc) } };
   if (['timeout', 'forced'].includes(doc.triage?.state) && doc.issueNumber && !doc.triage.lateDecidedAt) {
     return applyLateDecision(doc, d, deps);
   }
@@ -127,24 +107,25 @@ export async function applyTriageDecision(reportId, raw, deps) {
     return { status: 409, body: { error: 'not_pending', ...statusOf(doc) } };
   }
   // ממתינים לתשובה רק כשאפשר באמת לשאול ולקבל תשובה; אחרת — בספק פותחים
-  if (d.awaitingReply && !canAsk(doc, deps)) Object.assign(d, { action: 'open', awaitingReply: false });
+  if (d.awaitingReply && !canAskTriageReporter(doc, deps)) Object.assign(d, { action: 'open', awaitingReply: false });
 
   const decided = {
     ...doc.triage, state: d.action === 'open' ? 'opened' : 'held', decidedAt: now, verdict: d.verdict, confidence: d.confidence,
     summary: d.summary, questions: d.questions.length ? d.questions : undefined, awaitingReply: d.awaitingReply,
     linkedIssue: d.linkIssue, questionsSentAt: null, note: d.note,
+    questionsPending: Boolean(d.questions.length), questionsLeaseUntil: null,
     // נפתח: פענוח ושיוך ב-issue, אחרי הפרסום
     followUp: d.action === 'open' ? OPEN_FOLLOW_UP : null,
   };
   // ה-cron אולי כבר התחיל לפרסם (deadline עבר): לא נוגעים בדיווח שבנעילה
-  const claim = { reportId, 'triage.state': 'pending', issuePending: true, $or: [{ issueLeaseUntil: null }, { issueLeaseUntil: { $lt: new Date() } }] };
+  const claim = { reportId, 'triage.state': 'pending', 'triage.runs': doc.triage.runs, 'triage.requestedAt': doc.triage.requestedAt, issuePending: true, $or: [{ issueLeaseUntil: null }, { issueLeaseUntil: { $lt: new Date() } }] };
 
   if (d.action === 'open') {
     const claimed = await AppReport.updateOne(claim, { $set: { triage: decided } });
     if (!claimed.modifiedCount) return { status: 409, body: { error: 'not_pending', ...statusOf(await AppReport.findOne({ reportId }).lean()) } };
     const published = await publishReport(reportId, deps);
     await followUp(published, deps);
-    const mail = await sendQuestions(published, d.questions, deps);
+    const mail = await deliverTriageQuestions(reportId, deps);
     await commentQuestions(published, mail, deps);
     return { status: 200, body: { ok: true, ...statusOf(published), questionsSent: mail.sent } };
   }
@@ -164,12 +145,9 @@ export async function applyTriageDecision(reportId, raw, deps) {
     $set: { ...UNLINKED, ...link, ...(notified ? { notifiedClosedAt: now } : {}), issuePending: false, issueError: null, triage: decided },
   });
   if (!claimed.modifiedCount) return { status: 409, body: { error: 'not_pending', ...statusOf(await AppReport.findOne({ reportId }).lean()) } };
-  const mail = await sendQuestions(doc, d.questions, deps);
+  const mail = await deliverTriageQuestions(reportId, deps);
   if (d.awaitingReply && !mail.sent) {
     // לא הצלחנו לשאול: אין ממה להמתין, ולכן נפתח
-    await AppReport.updateOne({ reportId, 'triage.state': 'held' }, {
-      $set: { ...UNLINKED, issuePending: true, 'triage.state': 'opened', 'triage.awaitingReply': false, 'triage.followUp': OPEN_FOLLOW_UP },
-    });
     const published = await publishReport(reportId, deps);
     await followUp(published, deps);
     return { status: 200, body: { ok: true, ...statusOf(published), questionsSent: false } };
@@ -207,7 +185,7 @@ const LATE_CLOSE = { fixed: 'completed', external: 'not_planned', no_info: 'not_
  */
 async function applyLateDecision(doc, d, deps) {
   const now = deps.now || new Date();
-  const shared = doc.triage.state === 'forced' || doc.mergedIntoExisting;
+  const shared = await isSharedTriageIssue(doc);
   const close = shared || d.action === 'open' ? null : LATE_CLOSE[d.verdict] || null;
   const plan = {
     status: 'pending',
@@ -216,16 +194,17 @@ async function applyLateDecision(doc, d, deps) {
     duplicateOf: close === 'duplicate' ? d.linkIssue : null,
   };
   const claimed = await AppReport.updateOne(
-    { reportId: doc.reportId, 'triage.state': doc.triage.state, 'triage.lateDecidedAt': null },
+    { reportId: doc.reportId, 'triage.state': doc.triage.state, 'triage.runs': doc.triage.runs, 'triage.lateDecidedAt': null },
     { $set: {
       'triage.lateDecidedAt': now, 'triage.verdict': d.verdict, 'triage.confidence': d.confidence, 'triage.summary': d.summary,
       'triage.note': d.note, 'triage.questions': d.questions.length ? d.questions : undefined, 'triage.followUp': plan,
+      'triage.questionsPending': d.action === 'open' && Boolean(d.questions.length), 'triage.questionsLeaseUntil': null,
     } },
   );
   if (!claimed.modifiedCount) return { status: 409, body: { error: 'not_pending', ...statusOf(await AppReport.findOne({ reportId: doc.reportId }).lean()) } };
   const current = await AppReport.findOne({ reportId: doc.reportId }).lean();
   await followUp(current, deps);
-  const mail = d.action === 'open' ? await sendQuestions(current, d.questions, deps) : { sent: false };
+  const mail = d.action === 'open' ? await deliverTriageQuestions(doc.reportId, deps) : { sent: false };
   await commentQuestions(current, mail, deps);
   return { status: 200, body: { ok: true, ...statusOf(await AppReport.findOne({ reportId: doc.reportId }).lean()), late: true, questionsSent: mail.sent } };
 }
