@@ -55,5 +55,6 @@ export async function deliverTriageQuestions(reportId, deps) {
       'triage.followUp': { status: 'pending', assign: true, close: null, duplicateOf: null },
     } : {}),
   } });
-  return { sent, subject, message, issueNumber: doc.issueNumber };
+  // דיווח שלא נפתח מקושר לכרטיס של דיווח אחר (כפילות): תגובה על הפנייה לא שייכת לשם
+  return { sent, subject, message, issueNumber: doc.triage.state === 'held' ? null : doc.issueNumber };
 }
