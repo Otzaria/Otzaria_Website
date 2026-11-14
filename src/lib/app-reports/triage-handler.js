@@ -6,7 +6,7 @@ import connectDBDefault from '../db.js';
 import { readJsonBodyLimited } from '../corrections/report-email.js';
 import { getAppReportsConfig } from './config.js';
 import { bearerMatches } from './inbound-handler.js';
-import { applyTriageDecision, getTriageStatus, listTriageQueue } from './triage-decision.js';
+import { applyTriageDecision, getTriageMaterial, getTriageStatus, listTriageQueue, loadTriageFile } from './triage-decision.js';
 
 const MAX_DECISION_BYTES = 64 * 1024;
 const json = (body, status = 200) => Response.json(body, { status, headers: { 'cache-control': 'no-store' } });
@@ -41,6 +41,36 @@ export async function handleTriageStatusGet(request, reportId, deps = {}) {
   } catch (error) {
     console.error('Triage status failed:', error?.message);
     return json({ error: 'Failed to load status' }, 500);
+  }
+}
+
+/** GET /api/app-reports/triage/[reportId]/report — חומר הבדיקה. */
+export async function handleTriageMaterialGet(request, reportId, deps = {}) {
+  const auth = await authorize(request, deps);
+  if (auth.response) return auth.response;
+  try {
+    const material = await getTriageMaterial(String(reportId));
+    return material ? json(material) : json({ error: 'Report not found' }, 404);
+  } catch (error) {
+    console.error('Triage material failed:', error?.message);
+    return json({ error: 'Failed to load report' }, 500);
+  }
+}
+
+/** GET /api/app-reports/triage/[reportId]/files/[kind] — קובץ מהדיווח. deps.readFile קורא מ-GridFS. */
+export async function handleTriageFileGet(request, reportId, kind, deps = {}) {
+  const auth = await authorize(request, deps);
+  if (auth.response) return auth.response;
+  try {
+    const file = await loadTriageFile(String(reportId), String(kind), deps.readFile);
+    if (!file) return json({ error: 'File not found' }, 404);
+    return new Response(file.buffer, {
+      status: 200,
+      headers: { 'content-type': file.contentType, 'x-content-type-options': 'nosniff', 'cache-control': 'no-store' },
+    });
+  } catch (error) {
+    console.error('Triage file failed:', error?.message);
+    return json({ error: 'Failed to load file' }, 500);
   }
 }
 

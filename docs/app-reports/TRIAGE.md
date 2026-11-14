@@ -17,7 +17,7 @@
 
 1. **קליטה:** `triage = {state: 'pending', deadline: now + APP_REPORTS_TRIAGE_WAIT_MINUTES}`. האתר שולח `repository_dispatch` (`event_type: app-report`,
    `client_payload.report`) כדי להעיר את השירות. כשל ב-dispatch לא מעכב את הקליטה, כי השירות מושך את התור גם בעצמו.
-2. **ההחלטה:** השירות קורא את הדיווח מ-Mongo, מפענח ובודק, ושולח `POST /api/app-reports/triage/{reportId}`.
+2. **ההחלטה:** השירות מקבל את הדיווח וקבציו מהאתר (`/report`, `/files/{kind}`), מפענח ובודק, ושולח `POST /api/app-reports/triage/{reportId}`. אין לו גישה למסד הנתונים.
    - `open`: האתר מפרסם מיד. הוא פותח issue חדש, או מגיב על issue פתוח עם אותה חתימה. אחר כך הוא כותב בו את
      הפענוח (`summary`) ומשייך אותו ל-`APP_REPORTS_TRIAGE_ASSIGNEE`.
    - `hold`: לא נפתח. ההחלטה והפענוח נשמרים בדיווח ומוצגים בדף הניהול. עם `linkIssue` הדיווח מקושר
@@ -60,6 +60,8 @@
 |---|---|
 | `GET /api/app-reports/triage` | `{items: [{reportId, requestedAt, deadline, runs}], late: [{reportId, issueNumber, merged}]}`. `items` הם עד 50 הדיווחים הממתינים, מהוותיק לחדש. `late` הם דיווחים שנפתחו בלי החלטה (`timeout` או `forced`) בשלושת הימים האחרונים ועוד לא קיבלו החלטה מאוחרת. |
 | `GET /api/app-reports/triage/{reportId}` | `{reportId, state, issuePending, issueNumber, issueUrl, merged}`. בדיווח `held` הערכים `issueNumber` ו-`issueUrl` הם `null`, גם כשהוא מקושר לכפילות. `404` אם הדיווח לא קיים. |
+| `GET /api/app-reports/triage/{reportId}/report` | חומר הבדיקה: `{reportId, type, trigger, title, description, stepsToReproduce, appVersion, platform, osVersion, arch, signature, createdAt, canContact, triage: {state, runs, lateDecidedAt}, issueNumber, contactLog: [{direction, sentAt, subject, message}], files: {errors, diagnostics, images}}`. בלי כתובת המייל: `canContact` אומר רק אם אפשר לשאול. ב-`contactLog` יש רק תשובות מכתובת המדווח. |
+| `GET /api/app-reports/triage/{reportId}/files/{kind}` | `errors`, `diagnostics` או `image-{n}` (מ-0), כגוף הקובץ. ה-dump של הקריסה לא מוגש, כי הוא מכיל את זיכרון התהליך. `404` אם אין קובץ כזה. |
 | `POST /api/app-reports/triage/{reportId}` | גוף ההחלטה (טבלה למטה). `200`: המצב אחרי ההחלטה, ועוד `questionsSent`. ב-`hold` מוחזר גם `retriage`. בהחלטה על דיווח שכבר נפתח מוחזר `late: true`. `409`: כבר הוחלט, והתשובה כוללת את המצב. `422`: גוף לא תקין (`field`). `404`: הדיווח לא קיים. |
 
 | שדה | |
@@ -88,8 +90,7 @@
 ## העברת השירות לשרת האתר
 
 השירות לא תלוי במחשב שעליו הוא רץ. הוא צריך:
-- גישה ל-Mongo, לקריאה בלבד;
-- את הסוד;
+- את הסוד (כל החומר מגיע דרך הנתיבים האלה, בלי גישה למסד הנתונים);
 - גישת קריאה ל-GitHub (קוד, issues ו-releases), לניתוח.
 
 יש שתי דרכים:
