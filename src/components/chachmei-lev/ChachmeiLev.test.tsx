@@ -53,7 +53,8 @@ describe('MemorialSection', () => {
     const slot = within(region).getByRole('link', { name: /מקום זה יכול להיות מונצח לע"נ יקירך/ })
     expect(slot.getAttribute('href')).toBe(MEMORIAL_MAILTO)
     expect(MEMORIAL_MAILTO).toMatch(/^mailto:otzaria\.1@gmail\.com\?subject=/)
-    expect(slot).toHaveTextContent('otzaria.1@gmail.com')
+    expect(slot).toHaveTextContent('שלח מייל')
+    expect(slot).not.toHaveTextContent('@')
     // הנר דקורטיבי
     container.querySelectorAll('svg').forEach((svg) => expect(svg).toHaveAttribute('aria-hidden', 'true'))
   })
