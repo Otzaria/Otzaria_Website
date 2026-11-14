@@ -3,8 +3,10 @@
 // מבחינתו זה PDF רגיל, והעמודים בספר ממוספרים 1..N כמו תמיד.
 //
 // pdf-lib נטען רק כשצריך (import דינמי) — לא נכנס לחבילת ה-JS של מסך הספרים. pdf-lib הוא JS טהור
-// (בלי worker), ו-copyPages מעתיק את המשאבים המשותפים (גופנים, תמונות) פעם אחת לכל הקובץ החדש.
+// (בלי worker). מחלצים רק משאבי תמונה/Form שבשימוש העמודים שנבחרו, בלי לשנות את מסמך המקור.
 // טסטים: pdfSlice.test.js (על PDF אמיתי שנוצר ב-pdf-lib).
+
+import { copySelectedPdfPages } from './pdfResources'
 
 async function loadPdfLib() {
   return import('pdf-lib')
@@ -39,11 +41,10 @@ export async function slicePdf(doc, range, fileName) {
   if (!range || !Number.isSafeInteger(range.from) || !Number.isSafeInteger(range.to) || range.from < 1 || range.to > total || range.from > range.to) {
     throw new RangeError(`invalid page range ${JSON.stringify(range)} for ${total} pages`)
   }
-  const { PDFDocument } = await loadPdfLib()
-  const out = await PDFDocument.create()
+  const lib = await loadPdfLib()
+  const out = await lib.PDFDocument.create()
   const indices = Array.from({ length: range.to - range.from + 1 }, (_, i) => range.from - 1 + i)
-  const pages = await out.copyPages(doc, indices)
-  for (const page of pages) out.addPage(page)
+  await copySelectedPdfPages(doc, out, indices, lib)
   const bytes = await out.save()
   return new File([bytes], fileName, { type: 'application/pdf' })
 }
