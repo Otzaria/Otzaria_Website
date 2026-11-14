@@ -6,14 +6,14 @@ import OpenSlotCard from './OpenSlotCard'
 
 /**
  * לוח ההנצחה: ההקדשות ומשבצת פנויה שמובילה לדף התרומה. טור אחד בנייד, שלושה מ-lg.
- * האזור הראשון אחרי הפתיחה, במרווח עליון קצר מהרגיל — כדי שתחילתו תיראה במחשב בלי גלילה.
+ * האזור הראשון אחרי הפתיחה, במרווח העליון הרגיל של הדף (spacing="top") — רווח נשימה מהניווט המהיר.
  * כניסה מדורגת עדינה ב-CSS (animate-enter-up; מבוטלת ב-reduced-motion ב-animations.css).
  */
 export default function MemorialSection() {
   return (
-    <Section id="memorial" labelledBy="memorial-heading" anchor spacing="none" className="pt-10 md:pt-12">
+    <Section id="memorial" labelledBy="memorial-heading" anchor spacing="top">
       <SectionHeading id="memorial-heading" title="לוח הנצחה" spacing="none" className="mb-6 md:mb-8" />
-      <ul className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <ul className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
         {MEMORIALS.map((memorial, index) => (
           <MemorialCard
             key={memorial.title}

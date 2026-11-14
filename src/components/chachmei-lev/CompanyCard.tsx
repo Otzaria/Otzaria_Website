@@ -19,8 +19,8 @@ export type SponsorCompany = {
 export default function CompanyCard({ company }: { company: SponsorCompany }) {
   return (
     <li className="flex">
-      <Card href={company.url} external padding="sm" className="flex w-full flex-col gap-3">
-        <span className="flex aspect-[3/2] w-full items-center justify-center rounded-control bg-surface-container-low p-4 dark:bg-on-surface">
+      <Card href={company.url} external padding="sm" className="flex w-full flex-col gap-2">
+        <span className="flex aspect-[3/2] w-full items-center justify-center rounded-control bg-surface-container-low p-3 dark:bg-on-surface">
           <Image
             src={company.logo}
             alt=""
@@ -29,7 +29,7 @@ export default function CompanyCard({ company }: { company: SponsorCompany }) {
             className="h-full w-auto max-w-full object-contain transition-transform duration-300 ease-standard group-hover:scale-[1.03] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
           />
         </span>
-        <span className="flex items-center justify-center gap-1.5 text-center text-title-sm text-on-surface">
+        <span className="flex items-center justify-center gap-1.5 text-center text-label-md text-on-surface">
           {company.name}
           <NewWindowHint />
           <AppIcon name="open_in_new" className="shrink-0 text-base text-on-surface-variant" />

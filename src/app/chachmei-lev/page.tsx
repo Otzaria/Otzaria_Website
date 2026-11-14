@@ -19,8 +19,8 @@ export const metadata = pageMetadata({
 
 // העתק של מסך "חכמי לב" שבתוכנה, בעיצוב האתר (כמו /about, /offline ו-/donate): כותרת + ציטוט +
 // ניווט מהיר, ואזורים בקצב אנכי אחיד (Section spacing="top"). תוכן סטטי — Server Component.
-// הסדר: לוח ההנצחה ראשון (לב הדף), אחריו התורמים (חברות ואנשים), הסיוע, המפתחים והספרייה,
-// ובסוף הקריאה לתרומה (DonateCallout, כמו בדף הבית וב-/offline) וקרדיט זית.
+// הסדר: לוח ההנצחה ראשון (לב הדף), אחריו התורמים (חברות ואנשים), המפתחים והספרייה, הסיוע
+// ללומדי תורה, ובסוף הקריאה לתרומה (DonateCallout, כמו בדף הבית וב-/offline) וקרדיט זית.
 // הנתונים: src/lib/chachmei-lev-data.js.
 export default function ChachmeiLevPage() {
   return (
@@ -32,9 +32,9 @@ export default function ChachmeiLevPage() {
         <MemorialSection />
         <CompaniesSection />
         <ContributorsSection />
-        <AidSection />
         <DevelopersSection />
         <LibrarySection />
+        <AidSection />
         <DonateCallout />
         <ZayitCredit />
       </main>
