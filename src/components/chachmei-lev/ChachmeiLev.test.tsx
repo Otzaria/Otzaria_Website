@@ -105,20 +105,27 @@ describe('SupportOrgCard', () => {
 })
 
 describe('PersonChip', () => {
-  it('עם קישור — שבב-קישור חיצוני בטוח עם רמז לקורא המסך; בלי קישור — שם שטוח; בלי אייקון', () => {
-    const { rerender } = render(<PersonChip person={{ name: 'sivan22', url: 'https://github.com/Sivan22', description: 'תיאור' }} />)
+  it('עם קישור — שבב-קישור חיצוני בטוח עם רמז לקורא המסך, והתיאור בשורה שנייה מתחת לשם; בלי אייקון', () => {
+    render(<PersonChip twoLine person={{ name: 'sivan22', url: 'https://github.com/Sivan22', description: 'תיאור' }} />)
     const link = screen.getByRole('link')
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
     expect(link).toHaveTextContent('sivan22')
-    expect(link).toHaveTextContent('(תיאור)')
     expect(link).toHaveTextContent('(נפתח בחלון חדש)')
+    const description = screen.getByText('תיאור')
+    expect(description).toHaveAttribute('title', 'תיאור')
+    expect(description.className).toMatch(/line-clamp-2/)
     expect(link.querySelector('.material-symbols-outlined')).toBeNull()
-    rerender(<PersonChip person={{ name: 'דוד אריאל' }} />)
+  })
+
+  it('בלי קישור — אותו שבב מעוגל עם מסגרת (לא שם שטוח); twoLine — אותו גובה קבוע לכולם', () => {
+    const { rerender } = render(<PersonChip twoLine person={{ name: 'דוד אריאל' }} />)
     expect(screen.queryByRole('link')).toBeNull()
     const flat = screen.getByText('דוד אריאל').parentElement as HTMLElement
-    expect(flat.className).not.toMatch(/border/)
-    expect(flat.querySelector('.material-symbols-outlined')).toBeNull()
+    expect(flat.className).toMatch(/border/)
+    expect(flat.className).toMatch(/h-\[4\.25rem\]/)
+    rerender(<PersonChip twoLine person={{ name: 'ר. נבון', url: 'https://github.com/x', description: 'השקעה' }} />)
+    expect(screen.getByRole('link').className).toMatch(/h-\[4\.25rem\]/)
   })
 })
 

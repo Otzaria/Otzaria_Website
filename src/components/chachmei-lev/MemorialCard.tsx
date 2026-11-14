@@ -20,7 +20,7 @@ export default function MemorialCard({ title, description, className, style }: {
     <Card
       as="li"
       tone="raised"
-      padding="md"
+      padding="sm"
       style={style}
       className={cx(
         'relative flex flex-col items-center overflow-hidden text-center',
@@ -28,13 +28,13 @@ export default function MemorialCard({ title, description, className, style }: {
         className
       )}
     >
-      <CandleIcon className="mb-3 h-11" />
+      <CandleIcon className="mb-2 h-8" />
       <div className="flex w-fit max-w-full flex-col">
-        <h3 className="text-balance font-display text-title-lg text-on-surface">{title}</h3>
-        <TitleOrnament className="mt-3" ratio="50%" min="96px" ringColor="var(--card-bg)" />
+        <h3 className="text-balance font-display text-title-md text-on-surface">{title}</h3>
+        <TitleOrnament className="mt-2" ratio="50%" min="96px" ringColor="var(--card-bg)" />
       </div>
       {description && (
-        <p className="mt-3 whitespace-pre-line text-balance text-body-sm text-on-surface-variant">{description}</p>
+        <p className="mt-2 whitespace-pre-line text-balance text-body-sm text-on-surface-variant">{description}</p>
       )}
     </Card>
   )

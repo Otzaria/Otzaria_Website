@@ -40,7 +40,7 @@ export default function LibrarySection() {
 
       <section aria-labelledby="editors-heading" className="mt-14 md:mt-20">
         <SectionHeading id="editors-heading" as="h3" size="md" title="מהדירי ספרים" className="mb-6 md:mb-8" />
-        <Card padding="none" className="mx-auto flex max-w-narrow flex-col gap-8 p-4 sm:p-8">
+        <Card padding="none" className="mx-auto flex max-w-narrow flex-col gap-8 p-4 sm:px-4 sm:py-8">
           {EDITOR_GROUPS.map((group) => (
             <PeopleList key={group.label} label={group.label} people={group.editors} />
           ))}
