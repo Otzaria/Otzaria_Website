@@ -6,6 +6,12 @@ import { PRODUCTS, DEFAULT_PRODUCT } from './products.js';
 export const DEFAULT_REPO = PRODUCTS[DEFAULT_PRODUCT].repo;
 export const PUBLIC_SITE_URL = 'https://otzaria.org';
 
+function dispatchToken(env) {
+  const own = (env.APP_REPORTS_TRIAGE_DISPATCH_TOKEN || '').trim();
+  if (own.toLowerCase() === 'off') return null;
+  return own || (env.DICTA_LIBRARY_GITHUB_TOKEN || '').trim() || null;
+}
+
 function positiveMinutes(raw, fallback) {
   const n = Number.parseInt(String(raw ?? ''), 10);
   return Number.isFinite(n) && n > 0 ? n : fallback;
@@ -26,8 +32,9 @@ export function getAppReportsConfig(env = process.env) {
     inboundSecret: (env.APP_REPORTS_INBOUND_SECRET || '').trim() || null,
     // בדיקה אוטומטית של תקיעות וקריסות לפני הפתיחה (docs/app-reports/TRIAGE.md). בלי הסוד — נפתחות מיד כמו קודם.
     triageSecret: (env.APP_REPORTS_TRIAGE_SECRET || '').trim() || null,
-    // אופציונלי: repository_dispatch שמעיר את השירות מיד. בלעדיו השירות מושך את התור בעצמו.
-    triageDispatchToken: (env.APP_REPORTS_TRIAGE_DISPATCH_TOKEN || '').trim() || null,
+    // repository_dispatch שמעיר את השירות מיד: כברירת מחדל מפתח הספרייה (יש לו הרשאה על מאגר השירות).
+    // off — בלי הערה, והשירות מושך את התור בעצמו (למשל cron על שרת האתר).
+    triageDispatchToken: dispatchToken(env),
     triageDispatchRepo: (env.APP_REPORTS_TRIAGE_DISPATCH_REPO || '').trim() || 'Otzaria/app-report-triage',
     triageWaitMs: positiveMinutes(env.APP_REPORTS_TRIAGE_WAIT_MINUTES, 60) * 60 * 1000,
   };
