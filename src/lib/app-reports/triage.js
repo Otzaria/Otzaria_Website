@@ -60,13 +60,64 @@ export async function dispatchTriage(reportId, { config, fetchImpl = fetch }) {
 
 const fail = (field, error) => ({ ok: false, field, error });
 
+export const TRIAGE_MARKER = '<!-- app-report-triage -->';
+const reportMarker = (reportId) => `<!-- app-report-triage-report: ${reportId} -->`;
+const VERDICT_HE = {
+  fixed: 'תוקן ב-dev', fix_pending: 'תיקון ב-PR פתוח', duplicate: 'כפול', external: 'סיבה חיצונית',
+  no_info: 'אין מידע לפעול לפיו', ask_reporter: 'נדרש מידע מהמדווח', needs_human: 'דורש בדיקה',
+  needs_instrumentation: 'צריך להוסיף מידע לדוחות',
+};
+const CONFIDENCE_HE = { high: 'גבוהה', medium: 'בינונית', low: 'נמוכה' };
+
+/** תגובת הפענוח ב-issue. בלי תיוג משתמשים ובלי סימונים שמתחזים למרקרים. */
+export function triageComment(reportId, t) {
+  const summary = String(t.summary || '').replace(/<!--/g, '&lt;!--').replace(/@(?=[A-Za-z0-9])/g, '@\u200b');
+  const footer = [`בדיקה אוטומטית · ${VERDICT_HE[t.verdict] || t.verdict} · ודאות ${CONFIDENCE_HE[t.confidence] || t.confidence}`,
+    t.note ? String(t.note).replace(/<|>/g, '') : ''].filter(Boolean).join(' · ');
+  return `${TRIAGE_MARKER}\n${summary}\n\n---\n<sub>${footer}</sub>\n\n${reportMarker(reportId)}`;
+}
+
+/**
+ * ההמשך ב-GitHub אחרי החלטה על דיווח שיש לו issue: תגובת פענוח (פעם אחת), שיוך או סגירה.
+ * נקרא מיד אחרי ההחלטה, וה-cron משלים מה שנכשל.
+ * @returns {Promise<'done'|'failed'|'skipped'>}
+ */
+export async function runTriageFollowUp(reportId, github, deps) {
+  const now = new Date();
+  const doc = await AppReport.findOneAndUpdate(
+    {
+      reportId, issueNumber: { $ne: null },
+      $or: [{ 'triage.followUp.status': 'pending' }, { 'triage.followUp.status': 'running', 'triage.followUp.attemptAt': { $lt: new Date(now.getTime() - 10 * 60 * 1000) } }],
+    },
+    { $set: { 'triage.followUp.status': 'running', 'triage.followUp.attemptAt': now } },
+    { returnDocument: 'after' },
+  ).lean();
+  if (!doc) return 'skipped';
+  const f = doc.triage.followUp;
+  try {
+    const comments = await github.listComments(doc.issueNumber);
+    if (!comments.some((c) => c.body.includes(reportMarker(reportId)))) {
+      await github.createComment(doc.issueNumber, triageComment(reportId, doc.triage));
+    }
+    if (f.assign) await github.addAssignees(doc.issueNumber, [deps.config.triageAssignee]);
+    if (f.close === 'duplicate' && f.duplicateOf) await github.closeAsDuplicate(doc.issueNumber, f.duplicateOf);
+    else if (f.close === 'completed' || f.close === 'not_planned') await github.closeIssue(doc.issueNumber, f.close);
+    await AppReport.updateOne({ reportId }, { $set: { 'triage.followUp.status': 'done', 'triage.followUp.error': null } });
+    return 'done';
+  } catch (err) {
+    console.error(`App report ${reportId}: triage follow-up failed:`, err?.message);
+    await AppReport.updateOne({ reportId }, { $set: { 'triage.followUp.status': 'pending', 'triage.followUp.error': String(err?.message || err).slice(0, 500) } });
+    return 'failed';
+  }
+}
+
 /**
  * ההחלטה של השירות. open = לפתוח (או לצרף ל-issue פתוח עם אותה חתימה); hold = לא לפתוח.
  * @returns {{ok:true, value:{action:string, verdict:string, confidence:string, summary:string, questions:string[], linkIssue:number|null, awaitingReply:boolean}}|{ok:false, field:string, error:string}}
  */
 export function validateTriageDecision(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return fail('body', 'object expected');
-  const { action, verdict, confidence, summary, questions = [], linkIssue = null, awaitingReply = false } = raw;
+  const { action, verdict, confidence, summary, questions = [], linkIssue = null, awaitingReply = false, note = '' } = raw;
   if (action !== 'open' && action !== 'hold') return fail('action', 'open|hold');
   if (!TRIAGE_VERDICTS.includes(verdict)) return fail('verdict', 'unknown');
   if (!CONFIDENCE.includes(confidence)) return fail('confidence', 'high|medium|low');
@@ -77,11 +128,12 @@ export function validateTriageDecision(raw) {
   }
   if (linkIssue !== null && !(Number.isSafeInteger(linkIssue) && linkIssue > 0)) return fail('linkIssue', 'positive integer');
   if (typeof awaitingReply !== 'boolean') return fail('awaitingReply', 'boolean');
+  if (typeof note !== 'string' || note.length > 500) return fail('note', 'up to 500 chars');
   if (action === 'open' && (linkIssue !== null || awaitingReply)) return fail('action', 'linkIssue/awaitingReply only with hold');
   if (awaitingReply && !questions.length) return fail('awaitingReply', 'requires questions');
   return {
     ok: true,
-    value: { action, verdict, confidence, summary: summary.trim(), questions: questions.map((q) => q.trim()), linkIssue, awaitingReply },
+    value: { action, verdict, confidence, summary: summary.trim(), questions: questions.map((q) => q.trim()), linkIssue, awaitingReply, note: note.trim() },
   };
 }
 

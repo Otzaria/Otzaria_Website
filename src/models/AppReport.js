@@ -93,6 +93,21 @@ const TriageSchema = new mongoose.Schema({
   questionsSentAt: { type: Date, default: null },
   awaitingReply: { type: Boolean, default: false },
   linkedIssue: { type: Number, default: null },
+  note: { type: String, default: '', maxlength: 500 },
+  // החלטה שהגיעה אחרי שהדיווח כבר נפתח (timeout / ידני): פעם אחת
+  lateDecidedAt: { type: Date, default: null },
+  // מה שנשאר לעשות ב-GitHub אחרי ההחלטה (תגובת פענוח, שיוך, סגירה). ה-cron משלים כשל.
+  followUp: {
+    type: new mongoose.Schema({
+      status: { type: String, enum: ['pending', 'running', 'done'], required: true },
+      assign: { type: Boolean, default: false },
+      close: { type: String, enum: ['completed', 'not_planned', 'duplicate', null], default: null },
+      duplicateOf: { type: Number, default: null },
+      attemptAt: { type: Date, default: null },
+      error: { type: String, default: null },
+    }, { _id: false }),
+    default: null,
+  },
 }, { _id: false });
 
 const AppReportSchema = new mongoose.Schema({
@@ -161,6 +176,7 @@ AppReportSchema.index({ product: 1, issueNumber: 1 });
 AppReportSchema.index({ issuePending: 1, issueAttemptAt: 1, createdAt: 1 });
 AppReportSchema.index({ createdAt: -1 });
 AppReportSchema.index({ 'triage.state': 1, 'triage.requestedAt': 1 }, { sparse: true });
+AppReportSchema.index({ 'triage.followUp.status': 1 }, { sparse: true });
 AppReportSchema.index({ resendHash: 1, createdAt: -1 });
 // בדיקת בעלות לפני ניקוי צרופות זמניות: כל ענפי ה-$or חייבים אינדקס,
 // אחרת כל קובץ שנשמר במרוץ גורר סריקה של כל הדיווחים.

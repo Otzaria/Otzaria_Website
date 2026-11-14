@@ -18,10 +18,10 @@ export class GithubError extends Error {
 export function createGithubClient({ token, repo, fetchImpl = fetch }) {
   if (!token) throw new Error('GitHub token missing');
 
-  async function call(method, path, body) {
+  async function call(method, path, body, url = `${API}/repos/${repo}${path}`) {
     let res;
     try {
-      res = await fetchImpl(`${API}/repos/${repo}${path}`, {
+      res = await fetchImpl(url, {
         method,
         headers: {
           Accept: 'application/vnd.github+json',
@@ -40,6 +40,7 @@ export function createGithubClient({ token, repo, fetchImpl = fetch }) {
     let data = null;
     try { data = text ? JSON.parse(text) : null; } catch { /* גוף שאינו JSON */ }
     if (!res.ok) throw new GithubError(`GitHub ${method} ${path} → ${res.status}: ${data?.message || ''}`, res.status);
+    if (data?.errors?.length) throw new GithubError(`GitHub ${path}: ${data.errors[0]?.message || ''}`, 422);
     return data;
   }
 
@@ -59,6 +60,22 @@ export function createGithubClient({ token, repo, fetchImpl = fetch }) {
         number: d.number, state: d.state, state_reason: d.state_reason ?? null, url: d.html_url,
         closed_at: d.closed_at ?? null, closed_by: d.closed_by?.login ?? null,
       };
+    },
+    /** דורש הרשאת triage לחשבון הבוט במאגר. */
+    async addAssignees(issueNumber, assignees) {
+      await call('POST', `/issues/${issueNumber}/assignees`, { assignees });
+    },
+    /** reason: completed | not_planned */
+    async closeIssue(issueNumber, reason) {
+      await call('PATCH', `/issues/${issueNumber}`, { state: 'closed', state_reason: reason });
+    },
+    /** סגירה ככפול, עם הקישור ל-issue המקורי (כמו "Close as duplicate" באתר GitHub). */
+    async closeAsDuplicate(issueNumber, duplicateOf) {
+      const [issue, original] = await Promise.all([call('GET', `/issues/${issueNumber}`), call('GET', `/issues/${duplicateOf}`)]);
+      await call('POST', '/graphql', {
+        query: 'mutation($id:ID!,$dup:ID!){closeIssue(input:{issueId:$id,stateReason:DUPLICATE,duplicateIssueId:$dup}){issue{number}}}',
+        variables: { id: issue.node_id, dup: original.node_id },
+      }, `${API}/graphql`);
     },
     /** תגובות שעודכנו מאז `since` (ISO), בסדר כרונולוגי. */
     async listComments(issueNumber, since) {

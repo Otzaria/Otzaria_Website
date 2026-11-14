@@ -120,6 +120,13 @@ test('open: האתר פותח את ה-issue ומחזיר את מספרו; החל
   assert.equal(doc.issuePending, false);
   assert.equal(doc.triage.verdict, 'needs_human');
   assert.ok(doc.triage.summary.includes('לחץ זיכרון'));
+  // האתר כותב את הפענוח ומשייך — השירות לא צריך הרשאת כתיבה ב-GitHub
+  const decode = gh.comments.filter((c) => c.issue === 100 && c.body.includes('<!-- app-report-triage -->'));
+  assert.equal(decode.length, 1);
+  assert.match(decode[0].body, /לחץ זיכרון/);
+  assert.match(decode[0].body, /בדיקה אוטומטית · דורש בדיקה · ודאות בינונית/);
+  assert.deepEqual(gh.issues.get(100).assignees, ['palmoni5']);
+  assert.equal(doc.triage.followUp.status, 'done');
 
   const again = await applyTriageDecision(body.reportId, decision(), deps());
   assert.equal(again.status, 409);
@@ -164,7 +171,7 @@ test('hold עם קישור לכפילות שנסגרה כמתוקנת: מייל 
   assert.equal((await listReports({ issueState: 'closed' }, 'admin')).total, 1);
 });
 
-test('השירות לא ענה עד ה-deadline: ה-cron פותח (timeout), והחלטה מאוחרת מקבלת 409 עם ה-issue', async (t) => {
+test('השירות לא ענה עד ה-deadline: ה-cron פותח (timeout); החלטה מאוחרת מפענחת וסוגרת, פעם אחת', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const { body } = await post(report());
   // הנעילה בפרסום נמדדת בשעון אמיתי, ולכן מקדימים את ה-deadline עצמו
@@ -174,8 +181,45 @@ test('השירות לא ענה עד ה-deadline: ה-cron פותח (timeout), ו�
   const status = await getTriageStatus(body.reportId);
   assert.equal(status.state, 'timeout');
   const late = await applyTriageDecision(body.reportId, decision(), deps());
-  assert.equal(late.status, 409);
-  assert.equal(late.body.issueNumber, status.issueNumber);
+  assert.equal(late.status, 200);
+  assert.equal(late.body.late, true);
+  const issue = gh.issues.get(status.issueNumber);
+  assert.deepEqual([issue.state, issue.state_reason], ['closed', 'not_planned']);
+  assert.equal(gh.comments.filter((c) => c.body.includes('<!-- app-report-triage -->')).length, 1);
+  assert.equal((await applyTriageDecision(body.reportId, decision(), deps())).status, 409);
+});
+
+test('החלטה מאוחרת: כפול נסגר ככפול; issue שנפתח ידנית — פענוח בלבד, בלי סגירה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const orig = await post(report({ signature: { exceptionType: 'AppHang', frames: ['app.so+0x60'] } }), { config: { ...config, triageSecret: null } });
+  const a = await post(report());
+  await AppReport.updateOne({ reportId: a.body.reportId }, { $set: { 'triage.deadline': new Date(Date.now() - 1000) } });
+  await sync(new Date());
+  const aIssue = (await getTriageStatus(a.body.reportId)).issueNumber;
+  await applyTriageDecision(a.body.reportId, decision({ verdict: 'duplicate', linkIssue: orig.body.issueNumber }), deps());
+  assert.deepEqual([gh.issues.get(aIssue).state_reason, gh.issues.get(aIssue).duplicate_of], ['duplicate', orig.body.issueNumber]);
+
+  const b = await post(report({ description: 'אחר', signature: { exceptionType: 'AppHang', frames: ['app.so+0x70'] } }));
+  await forcePublishReport(b.body.reportId, deps());
+  const bIssue = (await getTriageStatus(b.body.reportId)).issueNumber;
+  const r = await applyTriageDecision(b.body.reportId, decision(), deps());
+  assert.equal(r.status, 200);
+  assert.equal(gh.issues.get(bIssue).state, 'open');
+  assert.deepEqual(gh.issues.get(bIssue).assignees, []);
+  assert.ok(gh.comments.some((c) => c.issue === bIssue && c.body.includes('<!-- app-report-triage -->')));
+});
+
+test('GitHub נכשל בפענוח אחרי הפתיחה: ה-cron משלים, בלי תגובה כפולה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { body } = await post(report());
+  const failing = async (url, init = {}) => (String(url).includes('/assignees') ? new Response('{}', { status: 502 }) : fetchImpl(url, init));
+  const r = await applyTriageDecision(body.reportId, decision({ action: 'open', verdict: 'needs_human', confidence: 'medium' }), deps({ fetchImpl: failing }));
+  assert.equal(r.body.issueNumber, 100);
+  assert.equal((await AppReport.findOne({ reportId: body.reportId }).lean()).triage.followUp.status, 'pending');
+  await sync(new Date());
+  assert.equal((await AppReport.findOne({ reportId: body.reportId }).lean()).triage.followUp.status, 'done');
+  assert.deepEqual(gh.issues.get(100).assignees, ['palmoni5']);
+  assert.equal(gh.comments.filter((c) => c.body.includes('<!-- app-report-triage -->')).length, 1);
 });
 
 test('שאלות למדווח: מייל עם כתובת מענה; התשובה מפעילה בדיקה חוזרת ומתפרסמת רק כשנפתח', async (t) => {

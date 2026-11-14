@@ -37,5 +37,7 @@ export function getAppReportsConfig(env = process.env) {
     triageDispatchToken: dispatchToken(env),
     triageDispatchRepo: (env.APP_REPORTS_TRIAGE_DISPATCH_REPO || '').trim() || 'Otzaria/app-report-triage',
     triageWaitMs: positiveMinutes(env.APP_REPORTS_TRIAGE_WAIT_MINUTES, 60) * 60 * 1000,
+    // מי משויך ל-issue שהבדיקה פתחה (דורש הרשאת triage לבוט במאגר)
+    triageAssignee: (env.APP_REPORTS_TRIAGE_ASSIGNEE || '').trim() || 'palmoni5',
   };
 }
