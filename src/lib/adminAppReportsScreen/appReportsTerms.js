@@ -12,7 +12,15 @@ export const TYPE_LABELS = { bug: 'תקלה', crash: 'קריסה', performance: 
 /** איך הדיווח נשלח: המשתמש שלח בעצמו / אחרי קריסה (התוכנה הציעה, המשתמש אישר) / התוכנה שלחה לבד */
 export const TRIGGER_LABELS = { manual: 'נשלח בידי המשתמש', crash_prompt: 'אחרי קריסה', auto_crash: 'נשלח אוטומטית' }
 /** מצב הכרטיס ב-GitHub — ערכי הסינון (issueState) כמו קודם */
-export const ISSUE_STATE_LABELS = { open: 'פתוח', closed: 'סגור', pending: 'ממתין לפתיחה' }
+export const ISSUE_STATE_LABELS = { open: 'פתוח', closed: 'סגור', pending: 'ממתין לפתיחה', triage: 'בבדיקה אוטומטית', held: 'לא נפתח' }
+/** החלטת הבדיקה האוטומטית (src/lib/app-reports/triage.js) */
+export const TRIAGE_VERDICT_LABELS = {
+  fixed: 'כבר תוקן', fix_pending: 'יש PR פתוח', duplicate: 'כפול', external: 'סיבה חיצונית', no_info: 'אין מספיק מידע',
+  ask_reporter: 'נדרש מידע מהמדווח', needs_human: 'דורש טיפול', needs_instrumentation: 'צריך להוסיף מידע לדוחות',
+}
+export const TRIAGE_STATE_LABELS = {
+  pending: 'ממתין לבדיקה', opened: 'נפתח אחרי בדיקה', held: 'לא נפתח', timeout: 'נפתח בלי בדיקה (השירות לא ענה)', forced: 'נפתח ידנית',
+}
 const CLOSE_REASON_LABELS = { completed: 'טופל', not_planned: 'לא יטופל', duplicate: 'כפול' }
 
 /**
@@ -45,10 +53,17 @@ export function triggerLabel(report) {
 
 /**
  * הכרטיס ב-GitHub: ממתין לפתיחה (pending, עוד בלי מספר) / פתוח / סגור (עם הסיבה) / בלי כרטיס (null).
- * @returns {{ state: 'pending'|'open'|'closed', label: string, tone: 'warning'|'success'|'neutral', number?: number, url?: string } | null}
+ * בדיקה אוטומטית: "בבדיקה אוטומטית" (עוד בלי החלטה) / "לא נפתח" (עם הכפילות, אם קושר אליה).
+ * @returns {{ state: 'pending'|'triage'|'held'|'open'|'closed', label: string, tone: 'warning'|'info'|'success'|'neutral', number?: number, url?: string } | null}
  */
 export function issueBadge(report) {
   if (!report) return null
+  if (report.triage?.state === 'held') {
+    const linked = report.triage.linkedIssue && report.issueNumber === report.triage.linkedIssue
+    return { state: 'held', label: 'לא נפתח', tone: 'neutral', ...(linked ? { number: report.issueNumber, url: report.issueUrl } : {}) }
+  }
+  const waiting = report.triage?.state === 'pending' && !(report.triage.deadline && new Date(report.triage.deadline) <= new Date())
+  if (waiting && report.issuePending && !report.issueNumber) return { state: 'triage', label: 'בבדיקה אוטומטית', tone: 'info' }
   if (report.issuePending && !report.issueNumber) return { state: 'pending', label: 'ממתין לפתיחה', tone: 'warning' }
   if (!report.issueNumber) return null
   if (report.issueState === 'closed') {

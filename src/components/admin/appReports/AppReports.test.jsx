@@ -76,6 +76,29 @@ describe('רשימת דיווחי התקלות', () => {
 describe('עמוד דיווח תקלה', () => {
   const detail = (extra = {}) => ({ success: true, canSeeEmail: true, related: [], report: { ...REPORT, reporterEmail: 'a@b.c', description: 'נפל', contactLog: [], ...extra } });
 
+  it('בדיקה אוטומטית: דיווח שלא נפתח מציג את ההחלטה, ו"פתח כרטיס בכל זאת" שולח POST וטוען מחדש', async () => {
+    const calls = [];
+    const held = detail({
+      issueNumber: null, issueUrl: null, issueState: null, issuePending: false,
+      triage: { state: 'held', verdict: 'external', confidence: 'high', decidedAt: '2026-11-02T10:00:00.000Z', summary: 'לחץ זיכרון במחשב המדווח', questions: ['מה עשית?'], questionsSentAt: '2026-11-02T10:00:00.000Z' },
+    });
+    const opened = detail({ triage: { ...held.report.triage, state: 'forced' } });
+    vi.stubGlobal('fetch', vi.fn((url, init = {}) => {
+      calls.push({ url, method: init.method || 'GET' });
+      if (init.method === 'POST') return Promise.resolve(ok({ ok: true, state: 'forced', issueNumber: 42 }));
+      return Promise.resolve(ok(calls.some((c) => c.method === 'POST') ? opened : held));
+    }));
+    render(<ToastProvider><AppReportScreen reportId="r1" /></ToastProvider>);
+    expect(await screen.findByText('לחץ זיכרון במחשב המדווח')).toBeInTheDocument();
+    expect(screen.getAllByText('לא נפתח').length).toBeGreaterThan(0);
+    expect(screen.getByText('סיבה חיצונית')).toBeInTheDocument();
+    expect(screen.getByText('שאלות שנשלחו למדווח')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'פתח כרטיס בכל זאת' }));
+    await waitFor(() => expect(calls.some((c) => c.url === '/api/app-reports/admin/r1/publish' && c.method === 'POST')).toBe(true));
+    expect(await screen.findByText('נפתח ידנית')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'פתח כרטיס בכל זאת' })).not.toBeInTheDocument();
+  });
+
   it('מציג פרטים, קבצים וכרטיס ב-GitHub; שולח הודעה למדווח באותה בקשה כמו קודם', async () => {
     const calls = [];
     vi.stubGlobal('fetch', vi.fn((url, options) => {

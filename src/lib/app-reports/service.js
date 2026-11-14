@@ -19,6 +19,7 @@ import {
   newReplyToken, buildReplyAddress, validateInboundPayload, isAutoReply, inboundMessageBody, buildInboundComment, buildOutboundComment,
 } from './inbound.js';
 import { PRODUCT_KEYS, getProduct, isProductKey, productFilter, productOf } from './products.js';
+import { needsTriage, pendingTriage, dispatchTriage, requestRetriage } from './triage.js';
 export { hasAppReportsAccess } from '../roles.js';
 import { isAdmin } from '../roles.js';
 
@@ -165,10 +166,30 @@ async function ingestCompleteReport(value, doc, deps) {
     return { status: 500, body: { error: 'Failed to save complete report' } };
   }
   // רשומת cron נוצרת רק אחרי שמירת כל הצרופות, באותה כתיבה של fileIds.
-  const published = await publishReport(doc.reportId, deps);
+  const published = await publishOrRequestTriage(doc.reportId, deps);
   if (!published) return { status: 500, body: { error: 'Report disappeared before publishing' } };
   return { status: 200, body: replyFor(published) };
 }
+
+/** פרסום מיד, או — לדיווח שממתין לבדיקה — הערת השירות. */
+async function publishOrRequestTriage(reportId, deps) {
+  const doc = await publishReport(reportId, deps);
+  // בלי await: התוכנה לא ממתינה ל-GitHub. כשל נרשם בלוג, והשירות מושך את התור גם בעצמו
+  if (doc?.triage?.state === 'pending' && doc.issuePending) dispatchTriage(reportId, deps);
+  return doc;
+}
+
+/** תשובות שחיכו לבדיקה (issueComment: triage) → pending, כשהדיווח כבר לא ממתין ולא "לא נפתח". */
+export function releaseTriageReplies(reportId) {
+  return AppReport.findOneAndUpdate(
+    { reportId, 'triage.state': { $nin: ['pending', 'held'] } },
+    { $set: { 'contactLog.$[r].issueComment': 'pending' } },
+    { arrayFilters: [{ 'r.issueComment': 'triage' }], returnDocument: 'after' },
+  ).lean().then((doc) => doc || AppReport.findOne({ reportId }).lean());
+}
+
+// ממתין לבדיקה האוטומטית — לא מתפרסם עד ההחלטה, או עד שעבר ה-deadline (השירות לא ענה)
+const triageAllowsPublish = (now) => ({ $or: [{ 'triage.state': { $ne: 'pending' } }, { 'triage.deadline': { $lte: now } }] });
 
 /**
  * קליטת דיווח מאומת. מחזיר {status, body}.
@@ -190,6 +211,8 @@ export async function ingestAppReport(raw, deps) {
     signature: value.signature, sentryEventId: value.sentryEventId, clientCreatedAt: value.clientCreatedAt,
     contentHash, signatureHash, resendHash, issuePending: true,
   };
+  // תקיעה או קריסה: הפרסום ממתין להחלטת הבדיקה האוטומטית (או ל-deadline, אם השירות לא ענה)
+  if (needsTriage(doc, deps.config)) doc.triage = pendingTriage(deps.now || new Date(), deps.config);
 
   if (value.schema === 2) {
     const receipt = await findCompleteReceipt(doc, deps);
@@ -227,7 +250,7 @@ export async function ingestAppReport(raw, deps) {
     return { status: 500, body: { error: 'Failed to store attachments' } };
   }
 
-  const published = await publishReport(value.reportId, deps);
+  const published = await publishOrRequestTriage(value.reportId, deps);
   // הדיווח נמחק במקביל בין השמירה לפרסום — 5xx כדי שהלקוח ישלח שוב (כמו בכשל הקבצים)
   if (!published) return { status: 500, body: { error: 'Report disappeared before publishing' } };
   return { status: 200, body: replyFor(published) };
@@ -251,7 +274,7 @@ export async function publishReport(reportId, deps) {
   // הנעילה נמדדת בשעון אמיתי: ריצת cron ארוכה מחזיקה now ישן, ונעילה שחושבה ממנו כבר פגה
   const leaseNow = new Date();
   const leased = await AppReport.findOneAndUpdate(
-    { reportId, issuePending: true, $or: [{ issueLeaseUntil: null }, { issueLeaseUntil: { $lt: leaseNow } }] },
+    { reportId, issuePending: true, $and: [{ $or: [{ issueLeaseUntil: null }, { issueLeaseUntil: { $lt: leaseNow } }] }, triageAllowsPublish(leaseNow)] },
     { $set: { issueLeaseUntil: new Date(leaseNow.getTime() + LEASE_MS), issueAttemptAt: leaseNow } },
     { returnDocument: 'after' },
   ).lean();
@@ -265,7 +288,9 @@ export async function publishReport(reportId, deps) {
       : null;
 
     const related = leased.signatureHash
-      ? await AppReport.find({ ...scope, signatureHash: leased.signatureHash, issueNumber: { $ne: null }, reportId: { $ne: reportId } })
+      ? await AppReport.find({
+        ...scope, signatureHash: leased.signatureHash, issueNumber: { $ne: null }, reportId: { $ne: reportId }, 'triage.state': { $ne: 'held' },
+      })
         .select('issueNumber issueState issueStateReason issueUrl appVersion createdAt').lean()
       : [];
     plan = planPublication(related, leased.appVersion, leased.signature);
@@ -323,11 +348,14 @@ export async function publishReport(reportId, deps) {
         issueState: created.state === 'closed' ? 'closed' : 'open', issueClosedAt: trustedIssueClosedAt(created), mergedIntoExisting: false, previousIssueNumber,
       };
     }
-    return await AppReport.findOneAndUpdate(
+    // השירות לא החליט עד ה-deadline: נפתח כרגיל, ותשובה מאוחרת שלו תטפל ב-issue עצמו
+    if (leased.triage?.state === 'pending') Object.assign(set, { 'triage.state': 'timeout', 'triage.decidedAt': now });
+    await AppReport.updateOne(
       { reportId },
       { $set: { ...set, issuePending: false, issueLeaseUntil: null, issueError: null, issueCheckedAt: now } },
-      { returnDocument: 'after' },
-    ).lean();
+    );
+    // תשובות המדווח שחיכו לבדיקה מתפרסמות ב-issue שנפתח (כאן או ב-cron)
+    return await releaseTriageReplies(reportId);
   } catch (err) {
     console.error('App report: GitHub publish failed:', err?.message);
     // ה-issue נמחק או ננעל: בלי סימונו כסגור כל דיווח נוסף עם אותה חתימה יישאר ממתין לנצח
@@ -367,7 +395,9 @@ export async function runAppReportsSync(deps) {
 async function syncProduct(product, github, d, summary) {
   const { now } = d;
   const scope = productFilter(product);
-  const pending = await AppReport.find({ ...scope, issuePending: true, $or: [{ issueLeaseUntil: null }, { issueLeaseUntil: { $lt: now } }] })
+  const pending = await AppReport.find({
+    ...scope, issuePending: true, $and: [{ $or: [{ issueLeaseUntil: null }, { issueLeaseUntil: { $lt: now } }] }, triageAllowsPublish(now)],
+  })
     // לפי מועד הניסיון האחרון: דיווח שנכשל תמיד (כותרת פסולה, issue חסום) לא יחסום את התור
     .select('reportId').sort({ issueAttemptAt: 1, createdAt: 1 }).limit(PENDING_BATCH).lean();
   for (const p of pending) {
@@ -456,15 +486,18 @@ export const LIST_FILTERS = Object.freeze({
   product: PRODUCT_KEYS,
   type: ['bug', 'crash', 'performance', 'suggestion'],
   trigger: ['manual', 'crash_prompt', 'auto_crash'],
-  issueState: ['open', 'closed', 'pending'],
+  issueState: ['open', 'closed', 'pending', 'triage', 'held'],
 });
 
 export async function listReports({ product, type, trigger, issueState, page = 1, limit = 50 }, role) {
   const q = LIST_FILTERS.product.includes(product) ? productFilter(product) : {};
   if (LIST_FILTERS.type.includes(type)) q.type = type;
   if (LIST_FILTERS.trigger.includes(trigger)) q.trigger = trigger;
-  if (issueState === 'pending') q.issuePending = true;
-  else if (LIST_FILTERS.issueState.includes(issueState)) q.issueState = issueState;
+  if (issueState === 'pending') Object.assign(q, { issuePending: true, ...triageAllowsPublish(new Date()) });
+  else if (issueState === 'triage') Object.assign(q, { 'triage.state': 'pending', 'triage.deadline': { $gt: new Date() } });
+  else if (issueState === 'held') q['triage.state'] = 'held';
+  // דיווח שלא נפתח ומקושר לכפילות אינו "בכרטיס" הזה
+  else if (LIST_FILTERS.issueState.includes(issueState)) Object.assign(q, { issueState, 'triage.state': { $ne: 'held' } });
   const pageNum = Math.max(1, Number.parseInt(page, 10) || 1);
   const size = Math.min(100, Math.max(1, Number.parseInt(limit, 10) || 50));
   const [items, total] = await Promise.all([
@@ -615,13 +648,15 @@ export async function ingestInboundReply(raw, deps) {
   if (!v.ok) return { status: 422, body: { error: v.error, field: v.field } };
   const { token, from, subject, messageId, text, html, headers, attachments, images } = v.value;
 
-  const doc = await AppReport.findOne({ replyToken: token }).select('reportId reporterEmail issueNumber').lean();
+  const doc = await AppReport.findOne({ replyToken: token }).select('reportId reporterEmail issueNumber triage').lean();
   if (!doc) return { status: 404, body: { error: 'unknown_token' } };
   if (isAutoReply(headers)) return { status: 200, body: { ok: true, status: 'ignored_auto', reportId: doc.reportId } };
 
   const now = deps.now || new Date();
   // כתובת אחרת מזו שבדיווח: נשמר לצוות, אבל לא מתפרסם ב-issue הציבורי בלי בדיקה
   const fromReporter = Boolean(from && doc.reporterEmail && from === doc.reporterEmail.toLowerCase());
+  // דיווח שלא נפתח (או שעוד בבדיקה): התשובה עוברת לבדיקה, ומתפרסמת רק אם ה-issue ייפתח
+  const forTriage = ['pending', 'held'].includes(doc.triage?.state);
   const duplicate = { status: 200, body: { ok: true, status: 'duplicate', reportId: doc.reportId } };
   // ה-Worker שולח שוב אחרי כל כשל: בודקים כפילות לפני שמירת התמונות
   if (messageId && images.length && await AppReport.exists({ reportId: doc.reportId, 'contactLog.messageId': messageId })) return duplicate;
@@ -645,7 +680,7 @@ export async function ingestInboundReply(raw, deps) {
 
   const entry = {
     direction: 'in', byName: '', subject, message: inboundMessageBody({ text, html }), sentAt: now,
-    fromEmail: from || null, messageId, attachments, issueComment: fromReporter ? 'pending' : 'held',
+    fromEmail: from || null, messageId, attachments, issueComment: fromReporter ? (forTriage ? 'triage' : 'pending') : 'held',
     ...(imageRefs.length ? { images: imageRefs } : {}),
   };
   const filter = { reportId: doc.reportId, ...(messageId ? { 'contactLog.messageId': { $ne: messageId } } : {}) };
@@ -677,7 +712,16 @@ export async function ingestInboundReply(raw, deps) {
     return duplicate;
   }
 
-  if (fromReporter && doc.issueNumber) {
+  if (fromReporter && forTriage) {
+    // המצב אולי השתנה בזמן השמירה (החלטה, פתיחה): קובעים לפי מה שיש עכשיו.
+    // בדיקה שעוד רצה לא ראתה את התשובה; אם תחליט לא לפתוח — applyTriageDecision יבקש בדיקה חוזרת
+    const now2 = await AppReport.findOne({ reportId: doc.reportId }).select('triage issueNumber').lean();
+    if (now2?.triage?.state === 'held') await requestRetriage(doc.reportId, deps);
+    else if (now2?.triage?.state !== 'pending' && now2?.issueNumber) {
+      await releaseTriageReplies(doc.reportId);
+      await postInboundComments(doc.reportId, deps).catch((err) => console.error('Inbound reply comment failed:', err?.message));
+    }
+  } else if (fromReporter && doc.issueNumber) {
     // GitHub לא זמין? התשובה כבר שמורה, וה-cron יפרסם אותה
     await postInboundComments(doc.reportId, deps).catch((err) => console.error('Inbound reply comment failed:', err?.message));
   }

@@ -2,7 +2,8 @@ import Badge from '@/components/ui/Badge'
 import { issueBadge } from '@/lib/adminAppReportsScreen/appReportsTerms'
 
 /**
- * הכרטיס ב-GitHub של הדיווח: "ממתין לפתיחה" (עם השגיאה האחרונה בריחוף), או מספר הכרטיס (קישור, בלשונית חדשה) ומצבו.
+ * הכרטיס ב-GitHub של הדיווח: "ממתין לפתיחה" (עם השגיאה האחרונה בריחוף), מצב הבדיקה האוטומטית,
+ * או מספר הכרטיס (קישור, בלשונית חדשה) ומצבו. "לא נפתח" עם מספר — הכפילות שהדיווח קושר אליה.
  * בלי כרטיס — כלום. linked=false — בלי קישור (כשהשורה כולה כבר לחיצה).
  */
 export default function IssueBadge({ report, linked = true }) {
@@ -11,6 +12,7 @@ export default function IssueBadge({ report, linked = true }) {
   if (issue.state === 'pending') {
     return <Badge tone="warning"><span title={report.issueError || undefined}>{issue.label}</span></Badge>
   }
+  if (!issue.number) return <Badge tone={issue.tone}>{issue.label}</Badge>
   // "כרטיס #1400" — ברור שזה הכרטיס ב-GitHub (והמצב שלידו הוא שלו), לא מצב הדיווח אצלנו
   const number = <>כרטיס <bdi dir="ltr">#{issue.number}</bdi></>
   return (
