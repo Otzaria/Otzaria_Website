@@ -53,6 +53,20 @@ describe('useUrlQuery', () => {
     expect(result.current[1]).toBe(setQuery)
   })
 
+  test('replace בלי הסימון הפנימי של Next (__NA) — אחרת Next מתעלם מהקריאה ו-useSearchParams לא מתעדכן', () => {
+    // כמו ב-Next: כל רשומה שהנתב יצר מכילה __NA, ו-replaceState עם __NA ב-state לא מסנכרן את הנתב
+    window.history.replaceState({ __NA: true, __PRIVATE_NEXTJS_INTERNALS_TREE: ['t'], __unsavedGuard: true }, '', '/library/admin/x')
+    const spy = vi.spyOn(window.history, 'replaceState')
+    const { result } = renderHook(() => useUrlQuery(parse, serialize))
+    act(() => result.current[1]({ q: 'סתם', page: 1 }))
+    const [state, , url] = spy.mock.calls.at(-1)
+    spy.mockRestore()
+    expect(url).toBe('/library/admin/x?q=%D7%A1%D7%AA%D7%9D')
+    expect(state?.__NA).toBeUndefined()
+    expect(state?._N).toBeUndefined()
+    expect(state?.__unsavedGuard).toBe(true)
+  })
+
   test('replace שומר את ה-state של הרשומה (הסימון של ההגנה על שינויים), ו-push לא מעתיק אותו', () => {
     window.history.replaceState({ __unsavedGuard: true }, '', '/library/admin/x')
     const { result } = renderHook(() => useUrlQuery(parse, serialize))

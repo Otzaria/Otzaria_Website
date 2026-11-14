@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
+import { stateForUrlReplace } from '@/lib/historyState'
 
 /**
  * מצב של מסך ניהול (סינון, מיון, עמוד, מגירה…) — מהכתובת ואליה. משותף לכל מסכי הרשימות (ספרים, עמודים, תוספים,
@@ -22,8 +23,9 @@ export function useUrlQuery(parse, serialize) {
   const setQuery = useCallback((next, { push = false } = {}) => {
     const url = `${pathname}${serialize(next)}`
     if (push) window.history.pushState(null, '', url)
-    // ה-state נשמר: Next שומר בו את מצב הנתב, וההגנה על שינויים שלא נשמרו (useUnsavedChangesGuard) מסמנת בו את הרשומה הכפולה
-    else window.history.replaceState(window.history.state, '', url)
+    // ה-state נשמר (ההגנה על שינויים שלא נשמרו — useUnsavedChangesGuard — מסמנת בו את הרשומה הכפולה), אבל בלי
+    // הסימונים של Next (__NA): איתם Next מתעלם מהקריאה, useSearchParams לא מתעדכן והסינון לא חל (lib/historyState)
+    else window.history.replaceState(stateForUrlReplace(window.history.state), '', url)
   }, [pathname, serialize])
   return [query, setQuery]
 }

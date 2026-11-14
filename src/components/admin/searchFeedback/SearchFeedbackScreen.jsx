@@ -18,6 +18,7 @@ import ExportDialog from './ExportDialog'
 import KeysTable from './KeysTable'
 import PurgeDialog from './PurgeDialog'
 import { adminScreenTitle } from '@/lib/adminNav'
+import { stateForUrlReplace } from '@/lib/historyState'
 
 const STATS_URL = '/api/search-feedback/admin/stats'
 const LOAD_FAILED = 'לא הצלחנו לטעון את נתוני המשוב.'
@@ -67,7 +68,7 @@ export default function SearchFeedbackScreen() {
       if (id === DEFAULT_TAB) q.delete('tab')
       else q.set('tab', id)
       const qs = q.toString()
-      window.history.replaceState(window.history.state, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`)
+      window.history.replaceState(stateForUrlReplace(window.history.state), '', `${window.location.pathname}${qs ? `?${qs}` : ''}`)
     } catch {
       // סביבה בלי history — רק המצב המקומי
     }
