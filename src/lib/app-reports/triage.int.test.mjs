@@ -562,3 +562,17 @@ test('פתיחה מפורשת מצטרפת לכרטיס שנפתח מחדש ב-G
   assert.equal(gh.issues.size, 1);
   assert.equal(gh.issues.get(r.body.issueNumber).state, 'open');
 });
+
+test('משלוח שאלות שחודש ב-cron לדיווח שלא נפתח ומקושר לכפילות: בלי תגובה בכרטיס של הכפילות', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const orig = await post(report({ signature: { exceptionType: 'AppHang', frames: ['app.so+0xa0'] } }), { config: { ...config, triageSecret: null } });
+  const { body } = await post(report());
+  // ההחלטה נשמרה, אבל המשלוח נקטע לפני שהתחיל
+  await applyTriageDecision(body.reportId, decision({ verdict: 'duplicate', linkIssue: orig.body.issueNumber }), deps({ sendContactMail: undefined }));
+  await AppReport.updateOne({ reportId: body.reportId }, { $set: {
+    'triage.questions': ['מתי?'], 'triage.questionsPending': true, 'triage.questionsLeaseUntil': null, 'triage.questionsSentAt': null,
+  } });
+  await sync(new Date());
+  assert.equal(contactMails.length, 1);
+  assert.equal(gh.comments.filter((c) => c.issue === orig.body.issueNumber).length, 0);
+});
