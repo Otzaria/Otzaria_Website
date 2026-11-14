@@ -5,7 +5,7 @@ import AppReport from '../../models/AppReport.js';
 import { issueHtmlUrl } from './github.js';
 import { buildOutboundComment, buildReplyAddress } from './inbound.js';
 import { getProduct, productFilter, productOf } from './products.js';
-import { ensureReplyToken, githubFor, publishReport } from './service.js';
+import { ensureReplyToken, githubFor, loadReportFile, loadReportImage, publishReport } from './service.js';
 import { UNLINKED, requestRetriage, runTriageFollowUp, triageQuestionsMail, validateTriageDecision } from './triage.js';
 
 export const TRIAGE_QUEUE_LIMIT = 50;
@@ -39,6 +39,39 @@ function statusOf(doc) {
     issueUrl: doc.triage?.state === 'held' ? null : doc.issueUrl ?? null,
     merged: Boolean(doc.mergedIntoExisting),
   };
+}
+
+/**
+ * חומר הבדיקה של דיווח אחד: השדות, ההתכתבות עם המדווח (תשובות רק מכתובתו) ורשימת הקבצים.
+ * בלי כתובת המייל: רק אם אפשר לפנות אליו. השירות לא ניגש למסד הנתונים.
+ */
+export async function getTriageMaterial(reportId) {
+  const doc = await AppReport.findOne({ reportId }).lean();
+  if (!doc) return null;
+  const t = doc.triage || {};
+  return {
+    reportId: doc.reportId, product: productOf(doc), type: doc.type, trigger: doc.trigger, title: doc.title,
+    description: doc.description || '', stepsToReproduce: doc.stepsToReproduce || '', appVersion: doc.appVersion,
+    platform: doc.platform, osVersion: doc.osVersion, arch: doc.arch, signature: doc.signature || null,
+    createdAt: doc.createdAt, canContact: Boolean(doc.reporterEmail && !doc.unsubscribed),
+    triage: { state: t.state ?? null, runs: t.runs || 1, lateDecidedAt: t.lateDecidedAt ?? null },
+    issueNumber: t.state === 'held' ? null : doc.issueNumber ?? null,
+    contactLog: (doc.contactLog || [])
+      .filter((c) => c.direction === 'out' || c.issueComment !== 'held')
+      .map((c) => ({ direction: c.direction || 'out', sentAt: c.sentAt, subject: c.subject || '', message: c.message || '' })),
+    files: {
+      errors: Boolean(doc.fileIds?.errors?.gridfsId),
+      diagnostics: Boolean(doc.fileIds?.diagnostics?.gridfsId),
+      images: (doc.fileIds?.images || []).length,
+    },
+  };
+}
+
+/** קובץ לבדיקה: errors | diagnostics | image-<n> (מ-0). בלי ה-dump (זיכרון התהליך). */
+export async function loadTriageFile(reportId, kind, readFile) {
+  if (kind === 'errors' || kind === 'diagnostics') return loadReportFile(reportId, kind, readFile);
+  const m = /^image-(\d{1,2})$/.exec(String(kind));
+  return m ? loadReportImage(reportId, Number(m[1]), readFile) : null;
 }
 
 /** מצב הדיווח מבחינת השירות: issue שנפתח (גם בלי החלטתו, אחרי deadline) או "לא נפתח". */
