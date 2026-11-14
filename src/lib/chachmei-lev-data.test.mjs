@@ -117,3 +117,11 @@ test('ארגוני הסיוע: שם, טלפון ולוגו לכל ארגון', (
     assert.ok(Array.isArray(org.details))
   }
 })
+
+test('slotMailto: המייל של אוצריא עם נושא מקודד', async () => {
+  const { slotMailto, SLOT_EMAIL } = await import('./chachmei-lev-data.js')
+  assert.equal(SLOT_EMAIL, 'otzaria.1@gmail.com')
+  const href = slotMailto('הנצחה & תרומה')
+  assert.ok(href.startsWith('mailto:otzaria.1@gmail.com?subject='))
+  assert.equal(decodeURIComponent(href.split('subject=')[1]), 'הנצחה & תרומה')
+})
