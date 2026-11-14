@@ -20,7 +20,7 @@ export default function CompanyCard({ company }: { company: SponsorCompany }) {
   return (
     <li className="flex">
       <Card href={company.url} external padding="sm" className="flex w-full flex-col gap-2">
-        <span className="flex aspect-[3/2] w-full items-center justify-center rounded-control bg-surface-container-low p-3 dark:bg-on-surface">
+        <span className="flex min-h-0 w-full flex-1 items-center justify-center rounded-control bg-surface-container-low p-3 dark:bg-on-surface">
           <Image
             src={company.logo}
             alt=""

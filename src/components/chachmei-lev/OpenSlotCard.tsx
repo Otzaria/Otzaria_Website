@@ -11,11 +11,12 @@ import { cx } from '@/components/ui/cx'
  * כמו בכותרת וב-DonateCallout) — מראה בלבד (span): אסור כפתור בתוך קישור.
  * icon — חובה, לפי ההקשר: נר בלוח ההנצחה, פלוס במשבצת החברות.
  */
-export default function OpenSlotCard({ title, cta, icon, href = '/donate', className, style }: {
+export default function OpenSlotCard({ title, cta, icon, href = '/donate', padding = 'md', className, style }: {
   title: string
   cta: string
   icon: string
   href?: string
+  padding?: 'sm' | 'md'
   className?: string
   style?: CSSProperties
 }) {
@@ -23,8 +24,8 @@ export default function OpenSlotCard({ title, cta, icon, href = '/donate', class
     <li className={cx('flex', className)} style={style}>
       <Card
         href={href}
-        padding="md"
-        className="flex w-full flex-col items-center justify-center gap-3 border border-dashed border-outline-variant text-center"
+        padding={padding}
+        className="flex w-full flex-col items-center justify-center gap-2 border border-dashed border-outline-variant text-center"
       >
         <IconTile icon={icon} size="sm" />
         <span className="text-balance text-center text-title-sm text-on-surface">{title}</span>
