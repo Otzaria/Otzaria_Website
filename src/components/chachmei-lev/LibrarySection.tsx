@@ -31,9 +31,10 @@ export default function LibrarySection() {
         </ul>
         <p className="mx-auto mb-4 mt-8 max-w-measure text-balance text-center text-body-md text-on-surface-variant md:mt-10">{ADDITIONAL_SOURCES_LABEL}</p>
         {/* בנייד — רשימת שבבים (קיר של 15 כרטיסים היה מאריך את הדף מאוד); מ-sm — קיר הלוגואים.
-            display:none מסתיר את העותק שאינו מוצג גם מקורא המסך. */}
+            display:none מסתיר את העותק שאינו מוצג גם מקורא המסך. auto-rows-fr — כל השורות בגובה
+            אחד, גם כששם ארוך נשבר לשתי שורות באחת מהן (ב-lg צר, ~1024px). */}
         <PeopleList people={ADDITIONAL_SOURCES} wide className="sm:hidden" />
-        <ul className="hidden gap-3 sm:grid sm:grid-cols-3 lg:grid-cols-5">
+        <ul className="hidden auto-rows-fr gap-3 sm:grid sm:grid-cols-3 lg:grid-cols-5">
           {ADDITIONAL_SOURCES.map((source) => <SourceCard key={source.name} source={source} />)}
         </ul>
       </section>
