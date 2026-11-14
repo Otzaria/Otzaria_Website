@@ -1,6 +1,8 @@
 // פונקציות טהורות של runOcrJob.js — ללא DB/fs/network — מופרדות כדי שניתן
 // יהיה לבדוק אותן ביחידה.
 import { createHash } from 'node:crypto';
+import { normalizePageRange, pageInRange } from '../pageRange.js';
+import { pageRunsOf } from './pageRuns.js';
 
 // טיפול בעמודים שכבר יש בהם טקסט, בעבודת OCR לספר שלם:
 //   skip        — דילוג על כל עמוד שיש בו טקסט כלשהו (גם פלט OCR גולמי)
@@ -81,21 +83,54 @@ export function buildPageUpdate(text) {
   };
 }
 
+// טווח העמודים ("מעמוד / עד עמוד") השמור בעבודה (OcrJob.pageRange) → { from, to } או null (כל הספר).
+// ערך שמור פגום — כל הספר, כמו עבודה בלי טווח. נפרד בכוונה מ-job.options (שהוא חלק ממעטפת
+// העובד המקומי — הטווח אינו נחשף לעובד; ה-PDF וה-pageMap פשוט מכילים רק עמודים בטווח).
+export function jobPageRange(job) {
+  const r = job?.pageRange;
+  if (!r) return null;
+  const n = normalizePageRange({ from: r.from, to: r.to });
+  return n.ok ? n.range : null;
+}
+
+// העמודים שעבודת שרת (gemini/ocrwin) מעבדת: עם תמונה, לא מדולגים במצב, ובטווח (null = הכל).
+// שומר על הסדר המקורי (runOcrJob ממיין לפי pageNumber בשאילתה).
+export function selectServerJobPages(pages, mode, range = null) {
+  return (pages || []).filter(
+    (p) => !!p.imagePath && !pageSkippedInMode(p, mode) && pageInRange(p.pageNumber, range)
+  );
+}
+
 // ספירות לחלון "OCR לספר שלם": עמודים עם תמונה, עמודים עם טקסט, עמודים שנערכו בידי אדם, וכמה
 // עמודים יעובדו בכל מצב (בדיוק לפי pageSkippedInMode — אותה בחירה כמו בעבודה עצמה).
-export function countOcrPages(pages) {
+// range — toProcess נספר רק בטווח (שאר הספירות לכל הספר, לתצוגה). withRuns — מוסיף
+// toProcessRuns (רצפי מספרי העמודים שיעובדו בכל מצב, לכל הספר — הטופס סופר מהם לפי הטווח שנבחר)
+// ו-maxPageNumber (מספר העמוד הגבוה בספר, לשדה "עד עמוד"). שניהם דורשים pageNumber בעמודים.
+export function countOcrPages(pages, { range = null, withRuns = false } = {}) {
   const counts = {
     pagesWithImage: 0,
     editedPagesCount: 0,
     humanEditedPagesCount: 0,
     toProcess: Object.fromEntries(EXISTING_TEXT_MODES.map((m) => [m, 0])),
   };
+  const numbers = withRuns ? Object.fromEntries(EXISTING_TEXT_MODES.map((m) => [m, []])) : null;
+  let maxPageNumber = 0;
   for (const p of pages || []) {
+    if (withRuns && Number.isSafeInteger(p.pageNumber) && p.pageNumber > maxPageNumber) maxPageNumber = p.pageNumber;
     if (pageHasText(p)) counts.editedPagesCount += 1;
     if (pageEditedByHuman(p)) counts.humanEditedPagesCount += 1;
     if (!(typeof p.imagePath === 'string' && p.imagePath.trim() !== '')) continue;
     counts.pagesWithImage += 1;
-    for (const m of EXISTING_TEXT_MODES) if (!pageSkippedInMode(p, m)) counts.toProcess[m] += 1;
+    const inRange = pageInRange(p.pageNumber, range);
+    for (const m of EXISTING_TEXT_MODES) {
+      if (pageSkippedInMode(p, m)) continue;
+      if (inRange) counts.toProcess[m] += 1;
+      if (numbers) numbers[m].push(p.pageNumber);
+    }
+  }
+  if (withRuns) {
+    counts.toProcessRuns = Object.fromEntries(EXISTING_TEXT_MODES.map((m) => [m, pageRunsOf(numbers[m])]));
+    counts.maxPageNumber = maxPageNumber;
   }
   return counts;
 }

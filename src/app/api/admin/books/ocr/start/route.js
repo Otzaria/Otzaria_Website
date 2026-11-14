@@ -14,6 +14,7 @@ import { closeAbandonedPreparation, createOrResumeLocalJob } from '@/lib/ocr/loc
 import { noPagesMessage, normalizeLocalRequest } from '@/lib/ocr/localJobCreate.pure';
 import { EXISTING_TEXT_MODES } from '@/lib/ocr/runOcrJob.pure';
 import { countBookOcrPages } from '@/lib/ocr/bookOcrCounts';
+import { normalizePageRange } from '@/lib/pageRange';
 import { badRequest, notFound, requireAccess, serverError } from '@/lib/apiResponse';
 
 const ALLOWED_METHODS = ['gemini', 'ocrwin', 'local'];
@@ -32,6 +33,7 @@ export async function POST(request) {
     if (denied) return denied;
 
     const body = await request.json();
+    // pageRange ({from,to} — "מעמוד / עד עמוד", לפי pageNumber): אופציונלי, חסר = כל הספר
     const { bookId, method, model, existingTextMode, splitColumns } = body || {};
 
     if (!bookId) {
@@ -74,6 +76,13 @@ export async function POST(request) {
       localReq = normalized.value;
     }
 
+    // טווח העמודים (gemini/ocrwin; ב-local נבדק כבר ב-normalizeLocalRequest, עם code — אותה הודעה)
+    const range = normalizePageRange(body?.pageRange);
+    if (!range.ok) {
+      return badRequest(range.error);
+    }
+    const pageRange = range.range;
+
     await connectDB();
 
     const book = await Book.findById(bookId);
@@ -109,12 +118,12 @@ export async function POST(request) {
       );
     }
 
-    // ספירת עמודים: כמה כבר ערוכים, וכמה יעובדו במצב שנבחר (אותה בחירה כמו ב-runOcrJob)
-    const { editedPagesCount, toProcess } = await countBookOcrPages(book._id);
+    // ספירת עמודים: כמה כבר ערוכים, וכמה יעובדו במצב שנבחר ובטווח (אותה בחירה כמו ב-runOcrJob)
+    const { editedPagesCount, toProcess } = await countBookOcrPages(book._id, { range: pageRange });
     const totalToProcess = toProcess[existingTextMode];
 
     if (totalToProcess === 0) {
-      return badRequest(noPagesMessage(existingTextMode));
+      return badRequest(noPagesMessage(existingTextMode, pageRange));
     }
 
     let job;
@@ -127,6 +136,7 @@ export async function POST(request) {
         model: method === 'gemini' ? model : '',
         existingTextMode,
         splitColumns: !!splitColumns,
+        ...(pageRange ? { pageRange } : {}),
         status: 'running',
         active: true,
         totalPages: totalToProcess,

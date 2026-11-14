@@ -141,3 +141,40 @@ describe("runOcrJob — skip_edited (OCRWin)", () => {
     expect(finishCall()).toMatchObject({ status: "completed", active: false });
   });
 });
+
+describe("runOcrJob — טווח עמודים של העבודה (OCRWin)", () => {
+  const pages = [1, 2, 3, 4, 5].map((n) => ({ _id: `p${n}`, pageNumber: n, imagePath: `/uploads/${n}.jpg`, status: "available", content: "" }));
+  const jobWith = (extra) => () => {
+    // skip (העמודים ריקים, כך שכולם נבחרים) — הכתיבה המותנית דרך Page.updateOne
+    const doc = { _id: JOB_ID, status: "running", method: "ocrwin", book: "b1", existingTextMode: "skip", ...extra };
+    const p = Promise.resolve(doc);
+    p.select = () => ({ lean: () => Promise.resolve({ cancelRequested: false }) });
+    return p;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    ocrJob.updateOne.mockResolvedValue({ matchedCount: 1 });
+    book.findById.mockResolvedValue({ _id: "b1" });
+    page.find.mockReturnValue({ sort: vi.fn().mockResolvedValue(pages) });
+    page.updateOne.mockResolvedValue({ matchedCount: 1 });
+    readPageImage.mockResolvedValue({ buffer: Buffer.from("x"), mimeType: "image/jpeg", ext: ".jpg" });
+    ocrwinRecognize.mockResolvedValue("טקסט");
+  });
+
+  it("מעבד רק עמודים בטווח, ו-totalPages לפי הטווח", async () => {
+    ocrJob.findById.mockImplementation(jobWith({ pageRange: { from: 2, to: 4 } }));
+    await runOcrJob(JOB_ID);
+    const total = ocrJob.updateOne.mock.calls.find(([, u]) => u?.$set && "totalPages" in u.$set);
+    expect(total[1].$set.totalPages).toBe(3);
+    expect(page.updateOne.mock.calls.map(([f]) => f._id)).toEqual(["p2", "p3", "p4"]);
+    expect(finishCall()).toMatchObject({ status: "completed", active: false });
+  });
+
+  it("בלי טווח — כל העמודים (כמו קודם)", async () => {
+    ocrJob.findById.mockImplementation(jobWith({}));
+    await runOcrJob(JOB_ID);
+    expect(page.updateOne.mock.calls.map(([f]) => f._id)).toEqual(["p1", "p2", "p3", "p4", "p5"]);
+  });
+});
+

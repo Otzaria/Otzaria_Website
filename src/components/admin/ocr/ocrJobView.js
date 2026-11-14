@@ -5,6 +5,8 @@ import { STATUS_LABELS_HE, isActiveStatus } from '@/lib/ocr/localJobState'
 import { OCR_WARNING_LABELS, ocrWarningLabel } from '@/lib/ocr/ocrWarningLabels'
 import { fileSizeText } from '@/lib/adminList/fileSize'
 import { fullDateText } from '@/lib/adminTerms'
+import { normalizePageRange, pageRangeText } from '@/lib/pageRange'
+import { countPagesInRuns } from '@/lib/ocr/pageRuns'
 
 // גוון (ui/Badge tone) ואייקון לכל מצב — הצבע מחזק בלבד, המשמעות בטקסט
 const STATUS_TONES = Object.freeze({
@@ -98,18 +100,32 @@ export function canResumePreparation(job, { lastStartNeedsResume = false } = {})
 }
 
 // גוף בקשת ה-start להמשך ההכנה — אותו requestId ואותם פרמטרים שהעבודה נוצרה איתם (השרת משווה
-// fingerprint; פרמטרים אחרים היו נדחים ב-409 request_conflict)
+// fingerprint; פרמטרים אחרים היו נדחים ב-409 request_conflict). טווח עמודים — רק אם לעבודה היה.
 export function resumePreparationPayload(job, bookId) {
   const options = {}
   if (job?.options?.lm) options.lm = job.options.lm
   if (job?.options?.defaultScript) options.defaultScript = job.options.defaultScript
+  const range = jobRange(job)
   return {
     bookId,
     method: 'local',
     requestId: job?.requestId,
     existingTextMode: job?.existingTextMode,
     options,
+    ...(range ? { pageRange: range } : {}),
   }
+}
+
+// טווח העמודים של עבודה (job.pageRange מנתיב ה-status) → {from,to} או null (כל הספר / שרת ישן)
+export function jobRange(job) {
+  const n = normalizePageRange(job?.pageRange ?? null)
+  return n.ok ? n.range : null
+}
+
+// "עמודים 5–20" לעבודה עם טווח; '' לעבודה על כל הספר (אז לא מציגים דבר)
+export function jobRangeText(job) {
+  const range = jobRange(job)
+  return range ? pageRangeText(range) : ''
 }
 
 export function methodLabel(job) {
@@ -342,8 +358,12 @@ export const EXISTING_TEXT_OPTIONS = Object.freeze([
   { id: 'overwrite', label: 'דרוס אותם', desc: 'זיהוי מחדש לכל העמודים, התוכן הקיים יוחלף' },
 ])
 
-// כמה עמודים יעובדו במצב הנבחר — לפי ספירת השרת (toProcess); שרת ישן בלי toProcess: החישוב הישן
-export function willProcessCount(counts, mode) {
+// כמה עמודים יעובדו במצב הנבחר — לפי ספירת השרת (toProcess); שרת ישן בלי toProcess: החישוב הישן.
+// עם טווח עמודים — לפי רצפי העמודים מהשרת (toProcessRuns); בלעדיהם אין דרך לדעת, ונופלים לספירה
+// לכל הספר (השרת בודק שוב ומחזיר הודעה אם אין בטווח מה לעבד).
+export function willProcessCount(counts, mode, range = null) {
+  const runs = counts?.toProcessRuns?.[mode]
+  if (range && Array.isArray(runs)) return countPagesInRuns(runs, range)
   const exact = counts?.toProcess?.[mode]
   if (Number.isFinite(exact)) return exact
   const withImage = Number(counts?.pagesWithImage) || 0

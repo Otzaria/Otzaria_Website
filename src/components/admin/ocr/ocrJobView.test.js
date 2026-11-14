@@ -32,6 +32,8 @@ import {
   summaryParts,
   EXISTING_TEXT_OPTIONS,
   willProcessCount,
+  jobRange,
+  jobRangeText,
 } from './ocrJobView'
 import { LRI, PDI } from '@/lib/adminList/fileSize'
 import { EXISTING_TEXT_MODES } from '@/lib/ocr/runOcrJob.pure'
@@ -343,3 +345,40 @@ describe('EXISTING_TEXT_OPTIONS / willProcessCount', () => {
     expect(willProcessCount({}, 'skip')).toBe(0)
   })
 })
+
+describe('טווח עמודים: willProcessCount / resumePreparationPayload / jobRangeText', () => {
+  const counts = {
+    pagesWithImage: 10, editedPagesCount: 2,
+    toProcess: { overwrite: 10, skip: 8, skip_edited: 9 },
+    toProcessRuns: { overwrite: [[1, 10]], skip: [[1, 4], [7, 10]], skip_edited: [[1, 5], [7, 10]] },
+    maxPageNumber: 10,
+  }
+  it('עם טווח — ספירה מרצפי השרת; בלי טווח — toProcess כמו קודם', () => {
+    expect(willProcessCount(counts, 'skip', { from: 3, to: 8 })).toBe(4) // 3,4,7,8
+    expect(willProcessCount(counts, 'overwrite', { from: 3, to: 8 })).toBe(6)
+    expect(willProcessCount(counts, 'skip', { from: 5, to: 6 })).toBe(0)
+    expect(willProcessCount(counts, 'skip', null)).toBe(8)
+    expect(willProcessCount(counts, 'skip')).toBe(8)
+  })
+  it('שרת בלי רצפים — נופל לספירה לכל הספר', () => {
+    const { toProcessRuns: _r, ...old } = counts
+    expect(willProcessCount(old, 'skip', { from: 3, to: 8 })).toBe(8)
+  })
+  it('המשך הכנה — הטווח של העבודה נשלח שוב (רק אם היה)', () => {
+    const prep = { method: 'local', status: 'preparing', requestId: 'req-12345678', existingTextMode: 'skip', options: { lm: 'rabbinic', defaultScript: 'square' } }
+    expect(resumePreparationPayload({ ...prep, pageRange: { from: 2, to: 9 } }, 'b1')).toEqual({
+      bookId: 'b1', method: 'local', requestId: 'req-12345678', existingTextMode: 'skip',
+      options: { lm: 'rabbinic', defaultScript: 'square' }, pageRange: { from: 2, to: 9 },
+    })
+    expect(resumePreparationPayload({ ...prep, pageRange: null }, 'b1')).not.toHaveProperty('pageRange')
+  })
+  it('jobRange / jobRangeText', () => {
+    expect(jobRange({ pageRange: { from: 2, to: 9 } })).toEqual({ from: 2, to: 9 })
+    expect(jobRange({ pageRange: { from: 9, to: 2 } })).toBeNull()
+    expect(jobRange(null)).toBeNull()
+    expect(jobRangeText({ pageRange: { from: 2, to: 9 } })).toBe('עמודים 2–9')
+    expect(jobRangeText({ pageRange: { from: 4, to: 4 } })).toBe('עמוד 4')
+    expect(jobRangeText({})).toBe('')
+  })
+})
+

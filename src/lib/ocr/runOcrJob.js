@@ -13,7 +13,7 @@ import {
   callGemini,
   matchGeminiResults,
 } from '@/lib/ocr/gemini';
-import { pageSkippedInMode, buildPageUpdate } from '@/lib/ocr/runOcrJob.pure';
+import { buildPageUpdate, jobPageRange, selectServerJobPages } from '@/lib/ocr/runOcrJob.pure';
 
 const GEMINI_BATCH_SIZE = 5;
 
@@ -230,13 +230,10 @@ export async function runOcrJob(jobId) {
       return;
     }
 
-    // בניית רשימת העמודים לעיבוד (מקור האמת), ממוינת לפי מספר עמוד.
+    // בניית רשימת העמודים לעיבוד (מקור האמת), ממוינת לפי מספר עמוד: עם תמונה, לא מדולגים
+    // במצב שנבחר, ובטווח העמודים של העבודה (אם נבחר).
     const allPages = await Page.find({ book: book._id }).sort({ pageNumber: 1 });
-    const pages = allPages.filter((p) => {
-      if (!p.imagePath) return false;
-      if (pageSkippedInMode(p, job.existingTextMode)) return false;
-      return true;
-    });
+    const pages = selectServerJobPages(allPages, job.existingTextMode, jobPageRange(job));
 
     await OcrJob.updateOne({ _id: jobId }, { $set: { totalPages: pages.length } });
 

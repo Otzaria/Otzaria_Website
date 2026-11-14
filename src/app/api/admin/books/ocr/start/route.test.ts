@@ -153,4 +153,49 @@ describe("POST /api/admin/books/ocr/start - active", () => {
 
     expect(res.status).toBe(409);
   });
+
+  it("טווח עמודים לא תקין → 400 בעברית בלי create (בכל הספקים)", async () => {
+    const OcrJob = (await import("@/models/OcrJob")).default as unknown as { create: ReturnType<typeof vi.fn> };
+    for (const pageRange of [{ from: 5, to: 2 }, { from: "1", to: "3" }, [1, 3], "1-3"]) {
+      const res = await POST(makeRequest({ bookId: BOOK_ID, method: "ocrwin", existingTextMode: "overwrite", pageRange }));
+      expect(res.status, JSON.stringify(pageRange)).toBe(400);
+      expect((await res.json()).error).toMatch(/טווח העמודים/);
+    }
+    expect(OcrJob.create).not.toHaveBeenCalled();
+  });
+
+  it("OCRWin עם טווח: הספירה בטווח, totalPages לפיה והטווח נשמר; בלי טווח — הגוף והספירה כמו קודם", async () => {
+    const OcrJob = (await import("@/models/OcrJob")).default as unknown as { create: ReturnType<typeof vi.fn> };
+    const { countBookOcrPages } = (await import("@/lib/ocr/bookOcrCounts")) as unknown as {
+      countBookOcrPages: ReturnType<typeof vi.fn>;
+    };
+    countBookOcrPages.mockClear();
+    countBookOcrPages.mockResolvedValueOnce({
+      pagesWithImage: 5, editedPagesCount: 3, humanEditedPagesCount: 1, toProcess: { overwrite: 3, skip: 1, skip_edited: 2 },
+    });
+    const res = await POST(makeRequest({ bookId: BOOK_ID, method: "ocrwin", existingTextMode: "overwrite", pageRange: { from: 2, to: 4 } }));
+    expect(res.status).toBe(200);
+    expect((await res.json()).totalPages).toBe(3);
+    expect(countBookOcrPages).toHaveBeenLastCalledWith(BOOK_ID, { range: { from: 2, to: 4 } });
+    expect(OcrJob.create.mock.calls[0][0]).toMatchObject({ totalPages: 3, pageRange: { from: 2, to: 4 } });
+
+    OcrJob.create.mockClear();
+    await POST(makeRequest({ bookId: BOOK_ID, method: "ocrwin", existingTextMode: "overwrite" }));
+    expect(countBookOcrPages).toHaveBeenLastCalledWith(BOOK_ID, { range: null });
+    expect(OcrJob.create.mock.calls[0][0]).not.toHaveProperty("pageRange");
+    expect(OcrJob.create.mock.calls[0][0].totalPages).toBe(5);
+  });
+
+  it("OCRWin: אין בטווח עמודים לעיבוד → 400 עם הודעה על הטווח", async () => {
+    const { countBookOcrPages } = (await import("@/lib/ocr/bookOcrCounts")) as unknown as {
+      countBookOcrPages: ReturnType<typeof vi.fn>;
+    };
+    countBookOcrPages.mockResolvedValueOnce({
+      pagesWithImage: 5, editedPagesCount: 5, humanEditedPagesCount: 5, toProcess: { overwrite: 2, skip: 0, skip_edited: 0 },
+    });
+    const res = await POST(makeRequest({ bookId: BOOK_ID, method: "ocrwin", existingTextMode: "skip", pageRange: { from: 7, to: 7 } }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/בטווח שנבחר \(עמוד 7\).*כבר ערוכים/);
+  });
 });
+

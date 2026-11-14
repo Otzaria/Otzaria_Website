@@ -657,3 +657,142 @@ describe('BookOcrPanel — המשך הכנה של עבודת local שנתקעה'
     expect(screen.queryByRole('button', { name: /המשך הכנה/ })).not.toBeInTheDocument()
   })
 })
+
+describe('BookOcrPanel — טווח עמודים', () => {
+  const counts = {
+    pagesWithImage: 10, editedPagesCount: 0, humanEditedPagesCount: 0,
+    toProcess: { overwrite: 10, skip: 10, skip_edited: 10 },
+    toProcessRuns: { overwrite: [[1, 10]], skip: [[1, 10]], skip_edited: [[1, 10]] },
+    maxPageNumber: 10,
+  }
+  const typeRange = async (user, from, to) => {
+    const fromInput = screen.getByLabelText('מעמוד')
+    const toInput = screen.getByLabelText('עד עמוד')
+    await user.clear(fromInput)
+    if (from) await user.type(fromInput, from)
+    await user.clear(toInput)
+    if (to) await user.type(toInput, to)
+  }
+
+  it('OCRWin: הטווח נשלח בגוף, המספר מתעדכן; ניקוי השדות — הגוף הקיים בלי pageRange', async () => {
+    const calls = mockApi({
+      status: () => statusBody({ counts }),
+      start: () => reply(200, { success: true, jobId: 'j', totalPages: 4 }),
+    })
+    const user = userEvent.setup()
+    renderDialog()
+
+    await screen.findByRole('button', { name: /התחל זיהוי ב-10 עמודים/ })
+    await typeRange(user, '3', '6')
+    expect(screen.getByText(/יעובדו/)).toHaveTextContent('יעובדו 4 עמודים (עמודים 3–6)')
+    await user.click(screen.getByRole('button', { name: /התחל זיהוי ב-4 עמודים/ }))
+    await waitFor(() => expect(calls.start).toHaveLength(1))
+    expect(calls.start[0]).toEqual({
+      bookId: book.id, method: 'ocrwin', model: 'gemini-2.5-pro', existingTextMode: 'skip', splitColumns: false,
+      pageRange: { from: 3, to: 6 },
+    })
+
+    await typeRange(user, '', '')
+    await user.click(screen.getByRole('button', { name: /התחל זיהוי ב-10 עמודים/ }))
+    await waitFor(() => expect(calls.start).toHaveLength(2))
+    expect(calls.start[1]).toEqual({ bookId: book.id, method: 'ocrwin', model: 'gemini-2.5-pro', existingTextMode: 'skip', splitColumns: false })
+  })
+
+  it('"מעמוד" בלבד — עד סוף הספר; טווח שמכסה את כל הספר — בלי pageRange', async () => {
+    const calls = mockApi({
+      status: () => statusBody({ counts }),
+      start: () => reply(200, { success: true, jobId: 'j', totalPages: 3 }),
+    })
+    const user = userEvent.setup()
+    renderDialog()
+    await screen.findByRole('button', { name: /התחל זיהוי ב-10 עמודים/ })
+
+    await typeRange(user, '8', '')
+    await user.click(screen.getByRole('button', { name: /התחל זיהוי ב-3 עמודים/ }))
+    await waitFor(() => expect(calls.start).toHaveLength(1))
+    expect(calls.start[0].pageRange).toEqual({ from: 8, to: 10 })
+
+    await typeRange(user, '1', '10')
+    await user.click(screen.getByRole('button', { name: /התחל זיהוי ב-10 עמודים/ }))
+    await waitFor(() => expect(calls.start).toHaveLength(2))
+    expect(calls.start[1]).not.toHaveProperty('pageRange')
+  })
+
+  it('local: הטווח נשלח עם requestId; שינוי הטווח יוצר requestId חדש', async () => {
+    const calls = mockApi({
+      status: () => statusBody({ counts }),
+      start: () => reply(500, { error: 'הכנת קובץ הקלט נכשלה בשל תקלה זמנית. אפשר לנסות שוב', code: 'preparation_retry' }),
+    })
+    const user = userEvent.setup()
+    renderDialog()
+
+    await user.click(await screen.findByRole('button', { name: /מחשב מקומי/ }))
+    await typeRange(user, '2', '5')
+    await user.click(screen.getByRole('button', { name: /שלח 4 עמודים לזיהוי/ }))
+    await waitFor(() => expect(calls.start).toHaveLength(1))
+    expect(calls.start[0]).toMatchObject({ method: 'local', existingTextMode: 'skip', pageRange: { from: 2, to: 5 } })
+
+    // אותו טווח — אותה בקשה (500 שומר את ה-requestId)
+    await user.click(screen.getByRole('button', { name: /לזיהוי$/ }))
+    await waitFor(() => expect(calls.start).toHaveLength(2))
+    expect(calls.start[1].requestId).toBe(calls.start[0].requestId)
+
+    await typeRange(user, '2', '6')
+    await user.click(screen.getByRole('button', { name: /שלח 5 עמודים לזיהוי/ }))
+    await waitFor(() => expect(calls.start).toHaveLength(3))
+    expect(calls.start[2].pageRange).toEqual({ from: 2, to: 6 })
+    expect(calls.start[2].requestId).not.toBe(calls.start[0].requestId)
+
+    // בלי טווח — שוב requestId אחר, ובלי pageRange בגוף
+    await typeRange(user, '', '')
+    await user.click(screen.getByRole('button', { name: /שלח 10 עמודים לזיהוי/ }))
+    await waitFor(() => expect(calls.start).toHaveLength(4))
+    expect(calls.start[3]).not.toHaveProperty('pageRange')
+    expect(new Set(calls.start.map((b) => b.requestId)).size).toBe(3)
+  })
+
+  it('טווח לא תקין — הודעה, והכפתור חסום בלי בקשה', async () => {
+    const calls = mockApi({ status: () => statusBody({ counts }), start: () => reply(200, { success: true }) })
+    const user = userEvent.setup()
+    renderDialog()
+    await screen.findByRole('button', { name: /התחל זיהוי/ })
+
+    await typeRange(user, '7', '3')
+    expect(screen.getByRole('alert')).toHaveTextContent('עמוד הסוף לפני עמוד ההתחלה')
+    expect(screen.getByLabelText('עד עמוד')).toHaveAttribute('aria-invalid', 'true')
+    const btn = screen.getByRole('button', { name: /התחל זיהוי/ })
+    expect(btn).toBeDisabled()
+    await user.click(btn)
+
+    await typeRange(user, '3', '12')
+    expect(screen.getByRole('alert')).toHaveTextContent('יש רק 10 עמודים')
+    expect(screen.getByRole('button', { name: /התחל זיהוי/ })).toBeDisabled()
+    expect(calls.start).toHaveLength(0)
+  })
+
+  it('טווח בלי עמודים לעיבוד במצב שנבחר — 0 עמודים, הסבר, והכפתור חסום', async () => {
+    const partial = { ...counts, toProcess: { ...counts.toProcess, skip: 5 }, toProcessRuns: { ...counts.toProcessRuns, skip: [[6, 10]] }, editedPagesCount: 5 }
+    mockApi({ status: () => statusBody({ counts: partial }) })
+    const user = userEvent.setup()
+    renderDialog()
+    await screen.findByRole('button', { name: /התחל זיהוי ב-5 עמודים/ })
+    await typeRange(user, '1', '5')
+    expect(screen.getByText(/יעובדו/)).toHaveTextContent('יעובדו 0 עמודים')
+    expect(screen.getByText('אין בטווח הזה עמודים לעיבוד במצב שנבחר.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /התחל זיהוי ב-0 עמודים/ })).toBeDisabled()
+  })
+
+  it('הטווח מוצג בעבודה: OCRWin רצה, וסיכום עבודה מקומית', async () => {
+    mockApi({
+      status: () => statusBody({ job: { id: 'j', method: 'ocrwin', status: 'running', totalPages: 4, processedPages: 1, successPages: 1, failedPages: 0, currentPageNumber: 2, pageRange: { from: 3, to: 6 } } }),
+    })
+    const { unmount } = renderDialog()
+    expect(await screen.findByText(/התקדמות \(מנוע זיהוי ייעודי · עמודים 3–6\)/)).toBeInTheDocument()
+    unmount()
+
+    mockApi({ status: () => statusBody({ job: localJob({ status: 'completed', pageRange: { from: 5, to: 5 } }) }) })
+    renderDialog()
+    expect(await screen.findByText('טווח: עמוד 5')).toBeInTheDocument()
+  })
+})
+
