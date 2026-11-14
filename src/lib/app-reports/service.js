@@ -16,10 +16,12 @@ import { planPublication } from './merge.js';
 import { verifyUnsubscribeToken } from './unsubscribe.js';
 import { suggestEmailDomain } from '../emailTypo.js';
 import {
-  newReplyToken, buildReplyAddress, validateInboundPayload, isAutoReply, inboundMessageBody, buildInboundComment, buildOutboundComment,
+  buildReplyAddress, validateInboundPayload, isAutoReply, inboundMessageBody, buildInboundComment, buildOutboundComment,
 } from './inbound.js';
 import { PRODUCT_KEYS, getProduct, isProductKey, productFilter, productOf } from './products.js';
 import { needsTriage, pendingTriage, dispatchTriage, requestRetriage, runTriageFollowUp } from './triage.js';
+import { deliverTriageQuestions, ensureReplyToken } from './triage-questions.js';
+export { ensureReplyToken };
 export { hasAppReportsAccess } from '../roles.js';
 import { isAdmin } from '../roles.js';
 
@@ -314,6 +316,10 @@ export async function publishReport(reportId, deps) {
         plan = { ...plan, issueStateReason: issue.state_reason, issueClosedAt: trustedIssueClosedAt(issue), issueUrl: issue.url || plan.issueUrl };
       }
     }
+    // אחרי אימות המצב ב-GitHub: פתיחה מפורשת גוברת על צירוף שקט לכרטיס שבאמת סגור.
+    if (plan.action === 'suppress' && ['opened', 'forced'].includes(leased.triage?.state)) {
+      plan = { action: 'create', previousIssueNumber: plan.issueNumber };
+    }
     if (racing && plan.action === 'create') {
       return await AppReport.findOneAndUpdate({ reportId }, { $set: { issueLeaseUntil: null } }, { returnDocument: 'after' }).lean();
     }
@@ -395,6 +401,15 @@ export async function runAppReportsSync(deps) {
 async function syncProduct(product, github, d, summary) {
   const { now } = d;
   const scope = productFilter(product);
+  // ההחלטה והמשלוח נשמרים יחד: גם קריסה לפני SMTP אינה משאירה held בלי שאלות לנצח.
+  const questions = await AppReport.find({ ...scope, 'triage.questionsPending': true,
+    $or: [{ 'triage.questionsLeaseUntil': null }, { 'triage.questionsLeaseUntil': { $lt: new Date() } }],
+  }).select('reportId').sort({ 'triage.decidedAt': 1 }).limit(INBOUND_BATCH).lean();
+  for (const { reportId } of questions) {
+    const mail = await deliverTriageQuestions(reportId, d);
+    if (mail.sent && mail.issueNumber) await github.createComment(mail.issueNumber, buildOutboundComment({ reportId, subject: mail.subject, message: mail.message }))
+      .catch((err) => console.error(`App report ${reportId}: triage contact comment failed:`, err?.message));
+  }
   const pending = await AppReport.find({
     ...scope, issuePending: true, $and: [{ $or: [{ issueLeaseUntil: null }, { issueLeaseUntil: { $lt: now } }] }, triageAllowsPublish(now)],
   })
@@ -628,18 +643,6 @@ export async function contactReporter({ reportId, subject, message, user }, deps
       .catch((err) => console.error(`App report ${reportId}: contact comment failed:`, err?.message));
   }
   return { status: 200, body: { success: true, entry: { ...entry, byUserId: entry.byUserId ? String(entry.byUserId) : null } } };
-}
-
-/** הטוקן של כתובת המענה; נוצר פעם אחת לדיווח, גם כששתי פניות רצות במקביל. */
-export async function ensureReplyToken(reportId) {
-  const created = await AppReport.findOneAndUpdate(
-    { reportId, replyToken: { $exists: false } },
-    { $set: { replyToken: newReplyToken() } },
-    { returnDocument: 'after' },
-  ).select('replyToken').lean();
-  if (created?.replyToken) return created.replyToken;
-  const doc = await AppReport.findOne({ reportId }).select('replyToken').lean();
-  return doc?.replyToken ?? null;
 }
 
 /**
