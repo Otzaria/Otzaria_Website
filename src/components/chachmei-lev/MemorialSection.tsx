@@ -1,7 +1,7 @@
 import Section from '@/components/ui/Section'
 import SectionHeading from '@/components/ui/SectionHeading'
 import { cx } from '@/components/ui/cx'
-import { MEMORIAL_OPEN_SLOT, MEMORIALS } from '@/lib/chachmei-lev-data'
+import { MEMORIAL_MAILTO, MEMORIAL_OPEN_SLOT, MEMORIALS } from '@/lib/chachmei-lev-data'
 import MemorialCard from './MemorialCard'
 import OpenSlotCard from './OpenSlotCard'
 
@@ -30,7 +30,8 @@ export default function MemorialSection() {
         ))}
         <OpenSlotCard
           title={MEMORIAL_OPEN_SLOT}
-          cta="להנצחה בתרומה"
+          cta="להנצחה — שליחת מייל"
+          href={MEMORIAL_MAILTO}
           icon="candle"
           padding="sm"
           className={cx(SQUARE, 'animate-enter-up md:col-span-2 md:w-[calc(50%-0.375rem)] lg:col-span-1 lg:w-full')}

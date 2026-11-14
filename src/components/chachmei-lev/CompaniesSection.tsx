@@ -1,6 +1,6 @@
 import Section from '@/components/ui/Section'
 import SectionHeading from '@/components/ui/SectionHeading'
-import { COMPANY_OPEN_SLOT, SPONSOR_COMPANIES } from '@/lib/chachmei-lev-data'
+import { COMPANY_MAILTO, COMPANY_OPEN_SLOT, SPONSOR_COMPANIES } from '@/lib/chachmei-lev-data'
 import CompanyCard from './CompanyCard'
 import OpenSlotCard from './OpenSlotCard'
 
@@ -15,7 +15,7 @@ export default function CompaniesSection() {
       {/* flex ממורכז ולא grid: כשיש מעט חברות הרשת לא נצמדת לצד אחד */}
       <ul className="flex flex-wrap justify-center gap-3 sm:gap-4 [&>li]:aspect-square [&>li]:w-40 sm:[&>li]:w-44">
         {SPONSOR_COMPANIES.map((company) => <CompanyCard key={company.url} company={company} />)}
-        <OpenSlotCard title={COMPANY_OPEN_SLOT} cta="לתרומה" icon="add" padding="sm" />
+        <OpenSlotCard title={COMPANY_OPEN_SLOT} cta="שליחת מייל" href={COMPANY_MAILTO} icon="add" padding="sm" compact />
       </ul>
     </Section>
   )

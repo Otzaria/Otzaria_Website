@@ -438,6 +438,19 @@ export const SPONSOR_COMPANIES = [
 
 export const COMPANY_OPEN_SLOT = 'מקום זה יכול להיות שלך'
 
+// ── משבצות פנויות: פנייה במייל ──────────────────────────────────────────────
+
+/** הנצחה ותרומת חברה — בתיאום אישי במייל, ולא דרך דף התרומה. */
+export const SLOT_EMAIL = 'otzaria.1@gmail.com'
+
+/** קישור mailto עם נושא מוכן מראש (מקודד). */
+export function slotMailto(subject) {
+  return `mailto:${SLOT_EMAIL}?subject=${encodeURIComponent(subject)}`
+}
+
+export const MEMORIAL_MAILTO = slotMailto('הנצחה בלוח ההנצחה של אוצריא')
+export const COMPANY_MAILTO = slotMailto('חברה תורמת לאוצריא')
+
 // ── תרמו מהונם ומזמנם ───────────────────────────────────────────────────────
 
 export const ESSENTIAL_PEOPLE = [
