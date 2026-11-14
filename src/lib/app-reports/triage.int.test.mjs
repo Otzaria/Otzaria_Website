@@ -10,7 +10,7 @@ import { FakeIssuesGitHub } from './testing/fake-github.js';
 import { handleAppReportPost } from './handler.js';
 import { runAppReportsSync, ingestInboundReply, listReports } from './service.js';
 import { applyTriageDecision, forcePublishReport, getTriageStatus, listTriageQueue } from './triage-decision.js';
-import { handleTriageDecisionPost, handleTriageQueueGet } from './triage-handler.js';
+import { handleTriageDecisionPost, handleTriageFileGet, handleTriageMaterialGet, handleTriageQueueGet } from './triage-handler.js';
 import { getAppReportsConfig } from './config.js';
 
 let db;
@@ -340,4 +340,26 @@ test('מפתח ההערה: ברירת מחדל מפתח הספרייה; מפתח
   assert.equal(getAppReportsConfig(base).triageDispatchToken, 'library');
   assert.equal(getAppReportsConfig({ ...base, APP_REPORTS_TRIAGE_DISPATCH_TOKEN: 'own' }).triageDispatchToken, 'own');
   assert.equal(getAppReportsConfig({ ...base, APP_REPORTS_TRIAGE_DISPATCH_TOKEN: 'off' }).triageDispatchToken, null);
+});
+
+test('חומר הבדיקה: שדות, התכתבות וקבצים דרך הנתיב — בלי מייל ובלי dump', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { body } = await post(report({ description: 'נתקע בגלילה' }));
+  const auth = (url) => new Request(url, { headers: { authorization: 'Bearer triage-secret' } });
+  const hdeps = { config, connectDB: async () => {}, readFile: async (id) => files.get(String(id)) };
+  const res = await handleTriageMaterialGet(auth('http://localhost/x'), body.reportId, hdeps);
+  assert.equal(res.status, 200);
+  const m = await res.json();
+  assert.equal(m.description, 'נתקע בגלילה');
+  assert.equal(m.canContact, true);
+  assert.deepEqual(m.triage, { state: 'pending', runs: 1, lateDecidedAt: null });
+  assert.deepEqual(m.files, { errors: true, diagnostics: true, images: 0 });
+  assert.equal(JSON.stringify(m).includes('reporter@example.com'), false);
+
+  const errors = await handleTriageFileGet(auth('http://localhost/x'), body.reportId, 'errors', hdeps);
+  assert.equal(errors.status, 200);
+  assert.equal(await errors.text(), '=== App hang');
+  assert.equal((await handleTriageFileGet(auth('http://localhost/x'), body.reportId, 'minidump', hdeps)).status, 404);
+  assert.equal((await handleTriageFileGet(new Request('http://localhost/x'), body.reportId, 'errors', hdeps)).status, 401);
+  assert.equal((await handleTriageMaterialGet(auth('http://localhost/x'), 'missing', hdeps)).status, 404);
 });
