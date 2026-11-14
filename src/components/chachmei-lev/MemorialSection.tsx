@@ -1,11 +1,16 @@
 import Section from '@/components/ui/Section'
 import SectionHeading from '@/components/ui/SectionHeading'
+import { cx } from '@/components/ui/cx'
 import { MEMORIAL_OPEN_SLOT, MEMORIALS } from '@/lib/chachmei-lev-data'
 import MemorialCard from './MemorialCard'
 import OpenSlotCard from './OpenSlotCard'
 
+const SQUARE = 'aspect-square w-full max-w-80 justify-self-center md:max-w-none'
+
 /**
  * לוח ההנצחה: ההקדשות ומשבצת פנויה שמובילה לדף התרומה. טור אחד בנייד, שלושה מ-lg.
+ * כל השלושה ריבועים זהים (SQUARE). בטור יחיד ריבוע ברוחב המסך גבוה מדי — לכן רוחב מרבי וממורכז;
+ * ב-md המשבצת הפנויה בשורה משלה ברוחב טור אחד (חצי שורה פחות חצי מרווח gap-3), ממורכזת.
  * האזור הראשון אחרי הפתיחה, במרווח העליון הרגיל של הדף ועוד תוספת (mt) — רווח נשימה ברור מהפתיחה ומהניווט המהיר.
  * כניסה מדורגת עדינה ב-CSS (animate-enter-up; מבוטלת ב-reduced-motion ב-animations.css).
  */
@@ -19,7 +24,7 @@ export default function MemorialSection() {
             key={memorial.title}
             title={memorial.title}
             description={memorial.description}
-            className="animate-enter-up"
+            className={cx(SQUARE, 'animate-enter-up')}
             style={{ animationDelay: `${index * 0.08}s` }}
           />
         ))}
@@ -28,7 +33,7 @@ export default function MemorialSection() {
           cta="להנצחה בתרומה"
           icon="candle"
           padding="sm"
-          className="animate-enter-up md:col-span-2 lg:col-span-1"
+          className={cx(SQUARE, 'animate-enter-up md:col-span-2 md:w-[calc(50%-0.375rem)] lg:col-span-1 lg:w-full')}
           style={{ animationDelay: `${MEMORIALS.length * 0.08}s` }}
         />
       </ul>

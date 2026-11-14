@@ -8,7 +8,7 @@ import CandleIcon from './CandleIcon'
  * כרטיס הנצחה (בתוכנה: _MemorialCard.donor): נר, ההקדשה בגופן התצוגה (Regular בלבד), קישוט
  * דק, ושורות התיאור (מופרדות ב-\n). כרטיס מורם (raised) — לב הדף, נבדל מהרקע בשקט, ובראשו
  * קו דק בזהב הקישוט (--color-glow, כמו הלהבה ונקודת הקישוט) שמייחד את ההקדשות משאר הכרטיסים.
- * overflow-hidden: הקו עוקב אחרי הפינות המעוגלות.
+ * overflow-hidden: הקו עוקב אחרי הפינות המעוגלות. התוכן ממורכז אנכית — בלוח ההנצחה הכרטיס ריבועי.
  */
 export default function MemorialCard({ title, description, className, style }: {
   title: string
@@ -23,7 +23,7 @@ export default function MemorialCard({ title, description, className, style }: {
       padding="sm"
       style={style}
       className={cx(
-        'relative flex flex-col items-center overflow-hidden text-center',
+        'relative flex flex-col items-center justify-center overflow-hidden text-center',
         "before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-glow before:content-['']",
         className
       )}
