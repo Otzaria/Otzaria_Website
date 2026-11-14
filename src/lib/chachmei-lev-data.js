@@ -24,9 +24,9 @@ export const PAGE_SECTIONS = [
   { id: 'memorial', label: 'הנצחה', icon: 'candle' }, // כמו הנר שבכרטיסי ההנצחה
   { id: 'companies', label: 'חברות', icon: 'business' },
   { id: 'contributors', label: 'תורמים', icon: 'group' },
-  { id: 'aid', label: 'סיוע', icon: 'shield' },
   { id: 'developers', label: 'מפתחים', icon: 'code' },
-  { id: 'library', label: 'הספרייה', icon: 'library_books' }
+  { id: 'library', label: 'הספרייה', icon: 'library_books' },
+  { id: 'aid', label: 'סיוע', icon: 'shield' }
 ]
 
 // ── סיוע ללומדי תורה ────────────────────────────────────────────────────────
