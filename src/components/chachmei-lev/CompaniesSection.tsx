@@ -5,7 +5,7 @@ import CompanyCard from './CompanyCard'
 import OpenSlotCard from './OpenSlotCard'
 
 /**
- * חברות שתרמו: רשת לוגואים ממורכזת (שניים בשורה בנייד, ברוחב קבוע מ-sm) ובסופה משבצת פנויה לדף התרומה.
+ * חברות שתרמו: רשת לוגואים ממורכזת (כרטיסים קטנים ברוחב קבוע) ובסופה משבצת פנויה לדף התרומה.
  * חברה חדשה = שורה ב-SPONSOR_COMPANIES (src/lib/chachmei-lev-data.js) + קובץ לוגו ב-public/sponsors.
  */
 export default function CompaniesSection() {
@@ -13,7 +13,7 @@ export default function CompaniesSection() {
     <Section id="companies" labelledBy="companies-heading" anchor spacing="top">
       <SectionHeading id="companies-heading" title="חברות שתרמו" />
       {/* flex ממורכז ולא grid: כשיש מעט חברות הרשת לא נצמדת לצד אחד */}
-      <ul className="flex flex-wrap justify-center gap-3 sm:gap-4 [&>li]:w-[calc(50%-0.375rem)] sm:[&>li]:w-60">
+      <ul className="flex flex-wrap justify-center gap-3 sm:gap-4 [&>li]:w-40 sm:[&>li]:w-44">
         {SPONSOR_COMPANIES.map((company) => <CompanyCard key={company.url} company={company} />)}
         <OpenSlotCard title={COMPANY_OPEN_SLOT} cta="לתרומה" icon="add" />
       </ul>

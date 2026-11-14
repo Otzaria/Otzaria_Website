@@ -102,7 +102,7 @@ test('שמות לא כפולים בתוך כל רשימה', () => {
 
 test('ניווט מהיר: לפי סדר הדף (לוח ההנצחה ראשון), מזהים ייחודיים ואייקונים שקיימים בגופן', () => {
   const ids = PAGE_SECTIONS.map((s) => s.id)
-  assert.deepEqual(ids, ['memorial', 'companies', 'contributors', 'aid', 'developers', 'library'])
+  assert.deepEqual(ids, ['memorial', 'companies', 'contributors', 'developers', 'library', 'aid'])
   // שישה שבבים: שורה אחת במחשב, שתי שורות של שלושה בנייד — בלי שבב בודד
   assert.equal(PAGE_SECTIONS.length % 3, 0)
   assert.equal(new Set(ids).size, ids.length)

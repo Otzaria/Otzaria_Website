@@ -23,12 +23,12 @@ export default function OpenSlotCard({ title, cta, icon, href = '/donate', class
     <li className={cx('flex', className)} style={style}>
       <Card
         href={href}
-        padding="lg"
-        className="flex w-full flex-col items-center justify-center gap-4 border border-dashed border-outline-variant text-center"
+        padding="md"
+        className="flex w-full flex-col items-center justify-center gap-3 border border-dashed border-outline-variant text-center"
       >
-        <IconTile icon={icon} size="md" />
-        <span className="text-balance text-center text-title-sm text-on-surface sm:text-title-md">{title}</span>
-        <span className={buttonClasses({ variant: 'donation' })}>
+        <IconTile icon={icon} size="sm" />
+        <span className="text-balance text-center text-title-sm text-on-surface">{title}</span>
+        <span className={buttonClasses({ variant: 'donation', size: 'sm' })}>
           {cta}
           <AppIcon
             name="chevron_left"
