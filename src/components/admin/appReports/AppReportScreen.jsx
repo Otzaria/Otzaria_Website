@@ -15,6 +15,7 @@ import { productLabel, systemText, triggerLabel, typeLabel } from '@/lib/adminAp
 import ContactSection from './ContactSection'
 import IssueBadge from './IssueBadge'
 import ReportFiles from './ReportFiles'
+import TriageSection from './TriageSection'
 import { reportHref } from './ReportRow'
 
 const LIST_HREF = '/library/admin/app-reports'
@@ -141,6 +142,7 @@ export default function AppReportScreen({ reportId }) {
               </>
             )}
           </Section>
+          {r.triage && <Section title="בדיקה אוטומטית"><TriageSection report={r} onChanged={retry} /></Section>}
           <Section title="קבצים"><ReportFiles report={r} /></Section>
           {data.related.length > 0 && (
             <Section title={`דיווחים נוספים באותו כרטיס (${data.related.length})`}>

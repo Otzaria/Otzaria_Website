@@ -20,6 +20,7 @@ function InboundIssueStatus({ entry: c }) {
       </a>
     )
   }
+  if (c.issueComment === 'triage') return <p className="text-body-sm text-on-surface-variant">הדיווח לא נפתח: התשובה הועברה לבדיקה האוטומטית, ותתווסף לכרטיס אם ייפתח.</p>
   if (c.issueComment === 'held') return <p className="text-body-sm text-on-surface-variant">נשלח מכתובת אחרת מזו שבדיווח — לא פורסם בכרטיס.</p>
   return <p className="text-body-sm text-on-surface-variant">התשובה תתווסף לכרטיס ב-GitHub בסנכרון הבא</p>
 }

@@ -92,7 +92,7 @@ async function assertPayloadOwner(id, expectedReportId) {
 function guardFor(doc, token) {
   return {
     _id: doc._id, issueNumber: doc.issueNumber, issueState: 'closed', issuePending: false,
-    issueClosedAt: doc.issueClosedAt, contactLog: readyReplies, 'payloadCleanup.leaseToken': token,
+    issueClosedAt: doc.issueClosedAt, contactLog: readyReplies, 'payloadCleanup.leaseToken': token, 'triage.state': { $ne: 'held' },
     issueStateRevision: doc.issueStateRevision,
   };
 }
@@ -227,7 +227,8 @@ export async function cleanupClosedReportPayloads(deps = {}) {
   const eligible = {
     issueState: 'closed', issuePending: false, issueNumber: { $ne: null },
     issueClosedAt: { $type: 'date', $lte: cutoff }, contactLog: readyReplies,
-    'payloadCleanup.purgedAt': null,
+    // דיווח שלא נפתח ומקושר לכפילות סגורה: הקבצים נדרשים לבדיקה חוזרת או ל"פתח בכל זאת"
+    'payloadCleanup.purgedAt': null, 'triage.state': { $ne: 'held' },
     $and: [
       { $or: [{ 'payloadCleanup.nextAttemptAt': null }, { 'payloadCleanup.nextAttemptAt': { $lte: now } }] },
       { $or: [{ 'payloadCleanup.leaseUntil': null }, { 'payloadCleanup.leaseUntil': { $lte: now } }] },
