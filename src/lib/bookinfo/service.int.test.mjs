@@ -9,9 +9,11 @@ import { startMongo } from '../corrections/testing/mongo.js'
 import { FakeGitHub } from '../corrections/testing/fake-github.js'
 import { createRepoClient } from '../dicta/github-api.js'
 import BookInfoChangeSet from '../../models/BookInfoChangeSet.js'
-import { listBookInfo, parseBookInfoCsv } from './csv.js'
+import { bookInfoFormUpdates } from '../book-info-utils.js'
+import { BOOK_INFO_ALL_COLUMNS, BOOK_INFO_COLUMNS, listBookInfo, parseBookInfoCsv } from './csv.js'
 import { BOOK_INFO_BRANCH, BOOK_INFO_PATH, BOOK_INFO_REPO, branchName, resetBookInfoCaches } from './fork.js'
-import { BookInfoInputError, getBookInfoSnapshot, submitEdit, syncEdits } from './service.js'
+import { isProofreadChangeSet } from './proofread.js'
+import { BookInfoInputError, getBookInfoSnapshot, listOpenEdits, submitEdit, syncEdits } from './service.js'
 
 const CSV = [
   'bookName,authorName,generationName,subGenerationName,startYear,endYear',
@@ -38,6 +40,7 @@ beforeEach(async (t) => {
   await mongo.reset()
   resetBookInfoCaches()
   globalThis.__bookInfoSnapshot.snapshot = null
+  process.env.BOOK_INFO_EXTENDED_FIELDS = '1'
   process.env.ACRONYMS_SIGNOFF = 'Test Bot <1+bot@users.noreply.github.com>'
   gh = new FakeGitHub({ repo: BOOK_INFO_REPO, branch: BOOK_INFO_BRANCH, files: { [BOOK_INFO_PATH]: CSV } })
   client = createRepoClient({ repo: BOOK_INFO_REPO, token: 't', fetchImpl: gh.fetch })
@@ -319,7 +322,7 @@ test('admin active filtering precedes history limit and cursor pages retain ever
   const mongoose = (await import('mongoose')).default
   const { ACTIVE_STATUSES } = await import('./service.js')
   const source = fs.readFileSync(new URL('../../app/api/admin/book-info/change-sets/route.js', import.meta.url), 'utf8').replace(/^import .*\n/gm, '').replace('export async function GET', 'async function GET')
-  const get = vm.compileFunction(source + '\nreturn GET', ['NextResponse', 'getServerSession', 'authOptions', 'connectDB', 'BookInfoChangeSet', 'mongoose', 'ACTIVE_STATUSES', 'hasBooksAccess', 'requireAccess', 'serverError'])({ json: (body, opts) => ({ ...body, httpStatus: opts?.status || 200 }) }, async () => ({ user: { role: 'admin' } }), {}, async () => {}, BookInfoChangeSet, mongoose, ACTIVE_STATUSES, () => true, () => null, () => { throw new Error('unexpected route error') })
+  const get = vm.compileFunction(source + '\nreturn GET', ['NextResponse', 'getServerSession', 'authOptions', 'connectDB', 'BookInfoChangeSet', 'mongoose', 'ACTIVE_STATUSES', 'isProofreadChangeSet', 'hasBooksAccess', 'requireAccess', 'serverError'])({ json: (body, opts) => ({ ...body, httpStatus: opts?.status || 200 }) }, async () => ({ user: { role: 'admin' } }), {}, async () => {}, BookInfoChangeSet, mongoose, ACTIVE_STATUSES, isProofreadChangeSet, () => true, () => null, () => { throw new Error('unexpected route error') })
   await BookInfoChangeSet.create([
     { bookKey: 'old', status: 'open', ops: [{ book: 'old active' }], createdAt: new Date(0) },
     ...Array.from({ length: 200 }, (_, i) => ({ bookKey: `history-${i}`, status: 'merged', ops: [{ book: `merged-${i}` }], createdAt: new Date(i + 1) })),
@@ -508,4 +511,81 @@ test('stale terminal records filling the same user quota are reconciled only whe
   const next = await submitEdit({ edit: { ...RABBA, updates: { endYear: 501 } }, userId: owner }, client)
   assert.ok(next.prNumber)
   assert.equal(await BookInfoChangeSet.countDocuments({ status: { $in: ['publishing', 'open', 'modified', 'conflict'] }, submittedBy: owner }), 1)
+})
+
+// ---- עמודות ההרחבה ובקשת סימון ההגהה המערכתית ----
+
+const MULTI = [
+  'bookName,authorName,generationName,subGenerationName,startYear,endYear',
+  '"אבן עזרא","אברהם אבן עזרא","ראשונים","אחרוני הראשונים","1089",""',
+  '"בראשית רבה","","חז""ל","אמוראים","300","500"',
+  '"שולחן ערוך","רבי יוסף קארו","","","",""',
+  '"שולחן ערוך","רמ""א","","","",""',
+  '',
+].join('\n')
+const KARO = { book: 'שולחן ערוך', author: 'רבי יוסף קארו' }
+const RAMA = { book: 'שולחן ערוך', author: 'רמ"א' }
+
+function useFile(csv) {
+  gh = new FakeGitHub({ repo: BOOK_INFO_REPO, branch: BOOK_INFO_BRANCH, files: { [BOOK_INFO_PATH]: csv } })
+  client = createRepoClient({ repo: BOOK_INFO_REPO, token: 't', fetchImpl: gh.fetch })
+}
+const headerOn = (branch) => gh.readFile(branch, BOOK_INFO_PATH).split('\n')[0]
+const rowsOn = (branch, book) => listBookInfo(parseBookInfoCsv(gh.readFile(branch, BOOK_INFO_PATH))).filter((r) => r.bookName === book)
+
+test('a base-field edit keeps a 6-column file at 6 columns', async () => {
+  const res = await submitEdit({ edit: { ...EZRA, updates: { endYear: 1167 } } }, client)
+  assert.equal(headerOn(branchName(res.id)), BOOK_INFO_COLUMNS.join(','))
+})
+
+test('an extension edit upgrades the file and is written to every author row of the book', async () => {
+  useFile(MULTI)
+  const res = await submitEdit({ edit: { ...RAMA, updates: { topics: 'הלכה; פסקים', pubPlace: 'ונציה', description: 'שורה\r\nשנייה' } } }, client)
+  const branch = branchName(res.id)
+  assert.equal(headerOn(branch), BOOK_INFO_ALL_COLUMNS.join(','))
+  const rows = rowsOn(branch, 'שולחן ערוך')
+  assert.equal(rows.length, 2)
+  for (const row of rows) assert.deepEqual([row.topics, row.pubPlace, row.description], ['הלכה;פסקים', 'ונציה', 'שורה\nשנייה'])
+  assert.equal(rowsOn(branch, 'אבן עזרא')[0].topics, null)
+
+  // שדות הספר נעולים לבקשה אחת; שדה בסיס בשורת מחבר אחר פתוח
+  await assert.rejects(submitEdit({ edit: { ...KARO, updates: { description: 'רקע אחר' } } }, client), /לנושאים, לפרטי ההדפסה או לרקע/)
+  // An attempted revert to the approved value is still a book-level edit.
+  await assert.rejects(submitEdit({ edit: { ...KARO, updates: { topics: null, startYear: 1488 } } }, client), /לנושאים, לפרטי ההדפסה או לרקע/)
+  const approved = listBookInfo(parseBookInfoCsv(MULTI)).find((row) => row.bookName === KARO.book && row.authorName === KARO.author)
+  const effective = { ...approved, topics: 'הלכה;פסקים', pubPlace: 'ונציה', description: 'שורה\nשנייה' }
+  const form = { ...effective, topics: 'הלכה; פסקים', startYear: '1488' }
+  const updates = bookInfoFormUpdates(form, approved, effective)
+  assert.deepEqual(updates, { startYear: '1488' })
+  const other = await submitEdit({ edit: { ...KARO, baseRow: approved, updates } }, client)
+  assert.equal(headerOn(branchName(other.id)), BOOK_INFO_COLUMNS.join(','))
+
+  // אחרי המיזוג, הבקשה השנייה נבנית מחדש מעל הקובץ המורחב ושומרת את ערכי הספר
+  gh.mergePull(res.prNumber)
+  await syncEdits(client, Date.now(), { mutationDelayMs: 0 })
+  const rebuilt = rowsOn(branchName(other.id), 'שולחן ערוך')
+  assert.equal(headerOn(branchName(other.id)), BOOK_INFO_ALL_COLUMNS.join(','))
+  assert.ok(rebuilt.every((row) => row.topics === 'הלכה;פסקים'))
+  assert.equal(rebuilt.find((row) => row.authorName === KARO.author).startYear, 1488)
+})
+
+
+test('extended field publication is disabled until explicitly enabled', async () => {
+  delete process.env.BOOK_INFO_EXTENDED_FIELDS
+  await assert.rejects(submitEdit({ edit: { ...EZRA, updates: { topics: 'הלכה' } } }, client), /אינה זמינה/)
+  assert.equal(gh.pulls.length, 0)
+  const result = await submitEdit({ edit: { ...EZRA, updates: { endYear: 1167 } } }, client)
+  assert.equal(result.prNumber, 1)
+  assert.equal(headerOn(branchName(result.id)), BOOK_INFO_COLUMNS.join(','))
+})
+
+test('disabled extended fields prevent an older request upgrading the file during a rebuild', async () => {
+  const result = await submitEdit({ edit: { ...EZRA, updates: { topics: 'הלכה' } } }, client)
+  const before = await BookInfoChangeSet.findById(result.id).lean()
+  delete process.env.BOOK_INFO_EXTENDED_FIELDS
+  gh.pushExternal(BOOK_INFO_BRANCH, { [BOOK_INFO_PATH]: CSV.replace('"300"', '"301"') })
+  await syncEdits(client, Date.now(), { mutationDelayMs: 0 })
+  const after = await BookInfoChangeSet.findById(result.id).lean()
+  assert.equal(after.headSha, before.headSha)
+  assert.match(after.lastError, /אינה זמינה/)
 })

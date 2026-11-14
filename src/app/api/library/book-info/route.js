@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import connectDB from '@/lib/db'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import BookInfoChangeSet from '@/models/BookInfoChangeSet'
-import { BOOK_INFO_GENERATION_OPTIONS, BOOK_INFO_SUB_GENERATION_OPTIONS_BY_GENERATION } from '@/lib/book-info-constants'
+import { BOOK_INFO_EXTENSION_EDITABLE_FIELDS, BOOK_INFO_GENERATION_OPTIONS, BOOK_INFO_SUB_GENERATION_OPTIONS_BY_GENERATION } from '@/lib/book-info-constants'
 import { rowKey } from '@/lib/bookinfo/csv'
 import { BookInfoInputError, getBookInfoSnapshot, listOpenEdits, submitEdit } from '@/lib/bookinfo/service'
 import { unauthorized, badRequest, serverError } from '@/lib/apiResponse'
@@ -26,6 +26,13 @@ export async function GET() {
     const snapshot = await getBookInfoSnapshot()
     const pendingEdits = await listOpenEdits(snapshot)
     const pendingByKey = new Map(pendingEdits.map((p) => [p.bookKey, p]))
+    const isShown = (pending) => pending && !['conflict', 'modified'].includes(pending.status)
+    // שדות ברמת הספר מעריכה פתוחה מוצגים בכל שורות הספר
+    const pendingByBook = new Map()
+    for (const pending of pendingEdits.filter(isShown)) {
+      const bookLevel = Object.fromEntries(Object.entries(pending.changes).filter(([field]) => BOOK_INFO_EXTENSION_EDITABLE_FIELDS.includes(field)))
+      if (Object.keys(bookLevel).length) pendingByBook.set(pending.book, { ...pendingByBook.get(pending.book), ...bookLevel })
+    }
 
     const rows = snapshot.rows.map((approved) => {
       const key = rowKey(approved.bookName, approved.authorName)
@@ -33,7 +40,8 @@ export async function GET() {
       return {
         id: key,
         approved,
-        effective: pending && !['conflict', 'modified'].includes(pending.status) ? { ...approved, ...pending.changes } : approved,
+        effective: { ...approved, ...pendingByBook.get(approved.bookName), ...(isShown(pending) ? pending.changes : {}) },
+        proofread: approved.proofread === '1',
         pending: pending ? { id: pending.id, changedFields: Object.keys(pending.changes), prNumber: pending.prNumber, prUrl: pending.prUrl, status: pending.status, lastError: pending.lastError } : null,
       }
     })
@@ -49,6 +57,7 @@ export async function GET() {
         rows,
         unresolvedEdits,
         identityRevision: snapshot.identity.events.length,
+        extendedFieldsEnabled: process.env.BOOK_INFO_EXTENDED_FIELDS === '1',
         generationOptions: BOOK_INFO_GENERATION_OPTIONS,
         subGenerationOptionsByGeneration: BOOK_INFO_SUB_GENERATION_OPTIONS_BY_GENERATION,
       },

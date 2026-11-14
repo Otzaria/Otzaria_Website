@@ -6,6 +6,8 @@ import { bookInfoStateFromRows, listBookInfo, rowKey } from './csv.js'
 import { applyChangeSet, validateChangeSet } from './changes.js'
 import { BOOK_INFO_REPO, branchName, createBookInfoClient, loadBookInfoState, openPullForBranch, publishChangeSet, refreshChangeSet } from './fork.js'
 import { assertIdentityPrefix, identityPrefixHash, followIdentity, rebaseIdentities } from './identity.js'
+import { PROOFREAD_CHANGE_SET_KEY, isProofreadChangeSet } from './proofread.js'
+import { BOOK_INFO_EXTENSION_EDITABLE_FIELDS } from '../book-info-constants.js'
 
 const SNAPSHOT_TTL_MS = 60_000
 const STALE_PUBLISHING_MS = 10 * 60_000
@@ -33,7 +35,7 @@ export async function getBookInfoSnapshot(client = createBookInfoClient()) {
   return cache.inflight
 }
 function rememberSnapshot(base, expectedGeneration) {
-  const snapshot = { at: Date.now(), headSha: base.headSha, blobSha: base.blobSha, identitySha: base.identitySha, identity: base.identity, rows: listBookInfo(base.state) }
+  const snapshot = { at: Date.now(), headSha: base.headSha, blobSha: base.blobSha, identitySha: base.identitySha, identity: base.identity, columns: base.state.columns, rows: listBookInfo(base.state) }
   if (expectedGeneration === undefined || expectedGeneration === (cache.generation || 0)) {
     cache.snapshot = snapshot
     cache.generation = (cache.generation || 0) + 1
@@ -41,8 +43,8 @@ function rememberSnapshot(base, expectedGeneration) {
   return snapshot
 }
 export async function listOpenEdits(snapshot) {
-  const docs = await BookInfoChangeSet.find({ status: { $in: ACTIVE_STATUSES } }).select('ops bookKey prNumber prUrl status createdAt lastError').sort({ createdAt: 1 }).lean()
-  const snapshotState = snapshot ? bookInfoStateFromRows(snapshot.rows) : null
+  const docs = await BookInfoChangeSet.find({ status: { $in: ACTIVE_STATUSES }, bookKey: { $ne: PROOFREAD_CHANGE_SET_KEY } }).select('ops bookKey prNumber prUrl status createdAt lastError').sort({ createdAt: 1 }).lean()
+  const snapshotState = snapshot ? bookInfoStateFromRows(snapshot.rows, { columns: snapshot.columns }) : null
   return docs.map((d) => {
     let op = d.ops[0]
     let error = d.lastError
@@ -79,6 +81,9 @@ function writer(doc, before = async () => {}) {
 }
 
 export async function submitEdit({ edit, userId = null }, client = createBookInfoClient()) {
+  if (process.env.BOOK_INFO_EXTENDED_FIELDS !== '1' && BOOK_INFO_EXTENSION_EDITABLE_FIELDS.some((field) => Object.hasOwn(edit.updates || {}, field))) {
+    throw new BookInfoInputError('עריכת פרטי הספר הנוספים אינה זמינה עדיין')
+  }
   await ensureActiveReservationIndex()
   let reservationOwner
   for (let attempt = 0; attempt < 20 && !reservationOwner; attempt++) {
@@ -106,7 +111,7 @@ export async function submitEdit({ edit, userId = null }, client = createBookInf
         if (['LEASE_LOST', 'STALE_STATE'].includes(err.code)) throw err
         continue
       }
-      const key = rowKey(ops[0].book, ops[0].author)
+      const key = keyFor(existing, ops)
       if (key !== existing.bookKey) {
         try { await writer(existing, () => renewLease(reservationOwner))({ bookKey: key }) } catch (err) {
           if (err.code === 11000) throw new BookInfoInputError('קיימות בקשות עם זהויות מתנגשות אחרי שינוי בספרייה; נדרשת בדיקת מנהל')
@@ -136,6 +141,11 @@ export async function submitEdit({ edit, userId = null }, client = createBookInf
     checked = validateChangeSet([currentEdit], base.state)
     if (checked.error) throw new BookInfoInputError(checked.error)
     const [op] = checked.ops
+    // שדות ברמת הספר נכתבים לכל שורות הספר, ולכן בקשה אחת בלבד יכולה לשנות אותם
+    const touchesBook = (changes) => BOOK_INFO_EXTENSION_EDITABLE_FIELDS.some((field) => field in (changes || {}))
+    if (touchesBook(currentEdit.updates) && active.some((item) => !isProofreadChangeSet(item) && ACTIVE_STATUSES.includes(item.status) && item.ops.some((other) => other.book === op.book && touchesBook(other.changes)))) {
+      throw new BookInfoInputError('יש כבר בקשה פתוחה לנושאים, לפרטי ההדפסה או לרקע של ספר זה; נא להמתין למיזוגה או לסגירתה')
+    }
     op.identityRevision = base.identity.events.length
     try {
       await renewLease(reservationOwner)
@@ -147,21 +157,28 @@ export async function submitEdit({ edit, userId = null }, client = createBookInf
   } finally {
     await BookInfoSyncState.updateOne({ _id: 'book-info', owner: reservationOwner }, { $unset: { owner: 1 }, $set: { expiresAt: new Date(0) } })
   }
-  const [op] = checked.ops
-  const id = String(doc._id)
-  const save = writer(doc)
   try {
-    const res = await publishChangeSet(client, { id, ops: [op], persistIntent: save }, base)
+    return await publishDoc(client, doc, base)
+  } catch (err) {
+    if (err?.code === 'NO_EFFECT') throw new BookInfoInputError('השינוי כבר קיים בקובץ')
+    throw err
+  }
+}
+
+/** The bookKey of a renamed request follows its first row; the system request keeps its fixed key. */
+const keyFor = (doc, ops) => isProofreadChangeSet(doc) ? doc.bookKey : rowKey(ops[0].book, ops[0].author)
+
+async function publishDoc(client, doc, base, save = writer(doc)) {
+  const id = String(doc._id)
+  try {
+    const res = await publishChangeSet(client, { id, ops: doc.ops, bookKey: doc.bookKey, persistIntent: save }, base)
     await save({ status: 'open', branch: res.branch, prNumber: res.prNumber, prUrl: res.prUrl, baseSha: res.baseSha, baseBlobSha: res.baseBlobSha, baseIdentitySha: res.baseIdentitySha, headSha: res.headSha, ...clearedIntent })
     return { id, prUrl: res.prUrl, prNumber: res.prNumber }
   } catch (err) {
     const patch = await reconcilePublishing(client, doc, base).catch(() => null)
     await save({ ...(patch || {}), lastError: String(err?.message || err).slice(0, 500) })
     if (patch?.status === 'open') return { id, prUrl: patch.prUrl, prNumber: patch.prNumber }
-    if (err?.code === 'NO_EFFECT') {
-      await save({ status: 'failed' })
-      throw new BookInfoInputError('השינוי כבר קיים בקובץ')
-    }
+    if (err?.code === 'NO_EFFECT') await save({ status: 'failed' })
     throw err
   }
 }
@@ -178,7 +195,7 @@ async function reconcilePublishing(client, doc, base) {
   if (found?.merged) return { ...link, status: 'merged' }
   if (found?.state === 'closed') return { ...link, status: 'closed' }
   if (!doc.pendingHeadSha || ref?.sha !== doc.pendingHeadSha) return { ...link, status: 'modified', lastError: 'הענף אינו תואם לקומיט שנוצר; נדרשת בדיקה ידנית' }
-  const pr = found ? { prNumber: found.number, prUrl: found.url } : await openPullForBranch(client, { id, ops: doc.ops, pendingTitle: doc.pendingTitle, pendingBody: doc.pendingBody }, base)
+  const pr = found ? { prNumber: found.number, prUrl: found.url } : await openPullForBranch(client, { id, ops: doc.ops, bookKey: doc.bookKey, pendingTitle: doc.pendingTitle, pendingBody: doc.pendingBody }, base)
   return { ...pr, branch, status: 'open', headSha: doc.pendingHeadSha, baseSha: doc.pendingBaseSha, baseBlobSha: doc.pendingBlobSha, baseIdentitySha: doc.pendingIdentitySha, ...clearedIntent }
 }
 
@@ -270,7 +287,7 @@ export async function syncEdits(rawClient = createBookInfoClient(), now = Date.n
           const ref = await client.getRef(doc.branch)
           if (ref?.sha === doc.pendingHeadSha) {
             if (doc.pendingTitle && doc.pendingBody) await client.updatePull(doc.prNumber, { title: doc.pendingTitle, body: doc.pendingBody })
-            await save({ headSha: doc.pendingHeadSha, baseSha: doc.pendingBaseSha, baseBlobSha: doc.pendingBlobSha, baseIdentitySha: doc.pendingIdentitySha, ...(doc.pendingOps?.length ? { ops: doc.pendingOps, bookKey: rowKey(doc.pendingOps[0].book, doc.pendingOps[0].author) } : {}), ...clearedIntent })
+            await save({ headSha: doc.pendingHeadSha, baseSha: doc.pendingBaseSha, baseBlobSha: doc.pendingBlobSha, baseIdentitySha: doc.pendingIdentitySha, ...(doc.pendingOps?.length ? { ops: doc.pendingOps, bookKey: keyFor(doc, doc.pendingOps) } : {}), ...clearedIntent })
           } else if (ref?.sha !== doc.headSha) await save({ status: 'modified', lastError: 'הענף השתנה בזמן הפרסום; ההצעה נשמרה' })
         }
         let patch
@@ -281,7 +298,7 @@ export async function syncEdits(rawClient = createBookInfoClient(), now = Date.n
         } else {
           const res = await refreshChangeSet(client, { ...doc, id: String(doc._id), persistIntent: async (intent) => {
             // Reserve a renamed identity atomically before publishing its generated branch.
-            const key = intent.pendingOps?.[0] ? rowKey(intent.pendingOps[0].book, intent.pendingOps[0].author) : doc.bookKey
+            const key = intent.pendingOps?.[0] ? keyFor(doc, intent.pendingOps) : doc.bookKey
             await save({ ...intent, bookKey: key })
           } }, base)
           patch = { status: res.status === 'rebuilt' ? 'open' : res.status, lastError: null }
