@@ -19,7 +19,7 @@ import {
   newReplyToken, buildReplyAddress, validateInboundPayload, isAutoReply, inboundMessageBody, buildInboundComment, buildOutboundComment,
 } from './inbound.js';
 import { PRODUCT_KEYS, getProduct, isProductKey, productFilter, productOf } from './products.js';
-import { needsTriage, pendingTriage, dispatchTriage, requestRetriage } from './triage.js';
+import { needsTriage, pendingTriage, dispatchTriage, requestRetriage, runTriageFollowUp } from './triage.js';
 export { hasAppReportsAccess } from '../roles.js';
 import { isAdmin } from '../roles.js';
 
@@ -405,6 +405,11 @@ async function syncProduct(product, github, d, summary) {
     const r = await publishReport(p.reportId, d);
     if (r && !r.issuePending) summary.pending.published += 1;
   }
+
+  // פענוח, שיוך או סגירה של הבדיקה האוטומטית שעוד לא בוצעו (ה-issue נפתח מאוחר יותר, או ש-GitHub נכשל)
+  const followUps = await AppReport.find({ ...scope, issueNumber: { $ne: null }, 'triage.followUp.status': { $in: ['pending', 'running'] } })
+    .select('reportId').limit(INBOUND_BATCH).lean();
+  for (const { reportId } of followUps) await runTriageFollowUp(reportId, github, d);
 
   // תשובות במייל שעוד לא פורסמו ב-issue (ה-issue נוצר מאוחר יותר, או ש-GitHub נכשל בקליטה)
   const withReplies = await AppReport.find({
