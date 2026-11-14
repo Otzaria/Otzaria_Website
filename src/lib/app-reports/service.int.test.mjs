@@ -580,6 +580,23 @@ test('יצירת קשר: כתובת שמורה עם סימוני כיוון נש
   assert.doesNotMatch(rejected.body.error, /@gmail\.com/);
 });
 
+test('הסרה ממייל: כתובת שמורה עם סימוני כיוון והכתובת הנקייה נחשבות אותה כתובת', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const wrapped = await post(manual({ reporterEmail: 'bidi@example.com' }));
+  const clean = await post(manual({ reporterEmail: 'bidi@example.com', description: 'שני' }));
+  const other = await post(manual({ reporterEmail: 'xbidi@example.com', description: 'שלישי' }));
+  const stored = `${String.fromCodePoint(0x202b)}bidi@example.com${String.fromCodePoint(0x202c)}`;
+  await AppReport.updateOne({ reportId: wrapped.body.reportId }, { $set: { reporterEmail: stored } });
+  const flags = async (id) => (await AppReport.findOne({ reportId: id }).lean()).unsubscribed;
+
+  assert.equal((await unsubscribeByToken(createUnsubscribeToken(clean.body.reportId, config.unsubscribeSecret), config)).ok, true);
+  assert.equal(await flags(wrapped.body.reportId), true);
+  assert.equal(await flags(other.body.reportId), false);
+  await AppReport.updateMany({ reportId: { $in: [wrapped.body.reportId, clean.body.reportId] } }, { $set: { unsubscribed: false } });
+  assert.equal((await unsubscribeByToken(createUnsubscribeToken(wrapped.body.reportId, config.unsubscribeSecret), config)).ok, true);
+  assert.equal(await flags(clean.body.reportId), true);
+});
+
 const replyConfig = { ...config, replyDomain: 'reply.otzaria.org', inboundSecret: 'inbound-secret' };
 const user = () => ({ id: String(new mongoose.Types.ObjectId()), name: 'מפתח' });
 

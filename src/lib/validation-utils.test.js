@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validatePassword, validateEmail, normalizeEmailInput } from './validation-utils'
+import { validatePassword, validateEmail, normalizeEmailInput, storedEmailPattern } from './validation-utils'
 
 describe('validatePassword', () => {
   it('דוחה סיסמה ריקה/falsy', () => {
@@ -78,10 +78,18 @@ describe('normalizeEmailInput', () => {
 
   it('מסירה סימוני כיוון ותווים ברוחב אפס שנדבקו בהעתקה מטקסט RTL', () => {
     expect(normalizeEmailInput(rtlWrapped('user@gmail.com'))).toBe('user@gmail.com')
-    for (const cp of [0x200b, 0x200c, 0x200d, 0x200e, 0x200f, 0x202a, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069, 0xfeff]) {
+    for (const cp of [0x061c, 0x2060, 0x200b, 0x200c, 0x200d, 0x200e, 0x200f, 0x202a, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069, 0xfeff]) {
       const ch = String.fromCodePoint(cp)
       expect(normalizeEmailInput(`${ch} us${ch}er@example.com${ch} `), cp.toString(16)).toBe('user@example.com')
     }
+  })
+
+  it('storedEmailPattern: תואמת כתובת שמורה עטופה בסימונים, בלי תווים מיוחדים של regex', () => {
+    const pattern = storedEmailPattern(rtlWrapped('a.b+c@example.com'))
+    expect(pattern.test('a.b+c@example.com')).toBe(true)
+    expect(pattern.test(rtlWrapped('A.B+C@Example.com'))).toBe(true)
+    expect(pattern.test('axb+c@example.com')).toBe(false)
+    expect(pattern.test('za.b+c@example.com')).toBe(false)
   })
 
   it('שומרת רישיות ומחזירה מחרוזת ריקה לקלט שאינו מחרוזת', () => {
