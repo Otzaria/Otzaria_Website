@@ -31,13 +31,14 @@ async function pages() {
 it('freezes the actual five completed book pages and their corrected text, without separate line annotations', async () => {
   const source = await pages();
   await Page.updateOne({ _id: source[1]._id }, { $set: { isTwoColumns: true, rightColumn: 'גוף הספר', leftColumn: 'פירוש מוגה' } });
-  const before = await Page.find({ book: book._id }).lean();
   const result = await createTraining(req(), actor, 'worker-1');
   expect(result.status).toBe(202);
   const job = await OcrJob.findById(result.body.job.id).lean();
   expect(job.taskType).toBe('training'); expect(job.status).toBe('queued'); expect(job.totalPages).toBe(5);
   expect(job.trainingOptions.bookId).toBe(String(book._id));
-  const zip = unzipSync(await fs.readFile(path.join(state.root, job.inputPath)));
+  const packagePath = path.join(state.root, job.inputPath);
+  const frozenPackage = await fs.readFile(packagePath);
+  const zip = unzipSync(frozenPackage);
   const dataset = JSON.parse(strFromU8(zip['dataset.json']));
   expect(dataset.kind).toBe('corrected-pages'); expect(dataset.pages).toHaveLength(5);
   expect(dataset.pages[0].text).toBe('טקסט מוגה על ידי הקהילה');
@@ -46,7 +47,9 @@ it('freezes the actual five completed book pages and their corrected text, witho
   await Page.updateOne({ _id: source[0]._id }, { $set: { content: 'changed later' } });
   expect((await createTraining(req(), actor, 'worker-1')).body.job.id).toBe(String(job._id));
   expect(await OcrJob.countDocuments()).toBe(1);
-  expect(dataset.pages[0].text).toBe(before[0].content.replace(/<[^>]*>/g, ''));
+  expect((await Page.findById(source[0]._id)).content).toBe('changed later');
+  expect(await fs.readFile(packagePath)).toEqual(frozenPackage);
+  expect((await OcrJob.findById(job._id)).inputSha256).toBe(job.inputSha256);
   expect((await createTraining({ ...req(), epochs: 4 }, actor, 'worker-1')).status).toBe(409);
 });
 it('refuses incomplete pages and never falls back to OCR output or old line-training pools', async () => {
