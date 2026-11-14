@@ -11,6 +11,7 @@ import { handleAppReportPost } from './handler.js';
 import { runAppReportsSync, ingestInboundReply, listReports } from './service.js';
 import { applyTriageDecision, forcePublishReport, getTriageStatus, listTriageQueue } from './triage-decision.js';
 import { handleTriageDecisionPost, handleTriageFileGet, handleTriageMaterialGet, handleTriageQueueGet } from './triage-handler.js';
+import { requestRetriage } from './triage.js';
 import { getAppReportsConfig } from './config.js';
 
 let db;
@@ -78,7 +79,7 @@ async function post(body, over = {}) {
 }
 
 const decision = (over = {}) => ({ action: 'hold', verdict: 'external', confidence: 'high', summary: '**מה קרה:** לחץ זיכרון.', ...over });
-const sync = (now) => runAppReportsSync({ config, fetchImpl, sendClosedMail, now });
+const sync = (now) => runAppReportsSync({ config, fetchImpl, sendClosedMail, sendContactMail, now });
 const later = (ms) => new Date(Date.now() + ms);
 
 test('תקיעה ממתינה לבדיקה: בלי issue, התוכנה מקבלת "נקלט", השירות מתעורר; דיווח רגיל נפתח מיד', async (t) => {
@@ -246,7 +247,7 @@ test('שאלות למדווח: מייל עם כתובת מענה; התשובה �
   assert.equal(dispatches.length, 2);
   assert.equal(gh.comments.length, 0);
 
-  const open = await applyTriageDecision(body.reportId, decision({ action: 'open', verdict: 'needs_human', confidence: 'medium' }), deps());
+  const open = await applyTriageDecision(body.reportId, decision({ action: 'open', verdict: 'needs_human', confidence: 'medium', runs: 2 }), deps());
   assert.equal(open.body.issueNumber, 100);
   await sync(new Date());
   doc = await AppReport.findOne({ reportId: body.reportId }).lean();
@@ -265,7 +266,7 @@ test('תשובה שהגיעה בזמן הבדיקה: hold מבקש בדיקה ח
   await new Promise((r) => setTimeout(r, 5));
   await ingestInboundReply({ to, from: 'reporter@example.com', subject: 'Re', messageId: '<2@x>', text: 'ושוב היום', headers: {}, attachments: 0 },
     { ...deps(), saveFile, deleteFile });
-  const r = await applyTriageDecision(body.reportId, decision({ verdict: 'no_info' }), deps());
+  const r = await applyTriageDecision(body.reportId, decision({ verdict: 'no_info', runs: 2 }), deps());
   assert.equal(r.body.retriage, true);
   assert.equal((await getTriageStatus(body.reportId)).state, 'pending');
 });
@@ -362,4 +363,202 @@ test('חומר הבדיקה: שדות, התכתבות וקבצים דרך הנת
   assert.equal((await handleTriageFileGet(auth('http://localhost/x'), body.reportId, 'minidump', hdeps)).status, 404);
   assert.equal((await handleTriageFileGet(new Request('http://localhost/x'), body.reportId, 'errors', hdeps)).status, 401);
   assert.equal((await handleTriageMaterialGet(auth('http://localhost/x'), 'missing', hdeps)).status, 404);
+});
+
+test('החלטה מאוחרת על יוצר הכרטיס אינה סוגרת כרטיס שדיווח נוסף צורף אליו', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const a = await post(report());
+  await AppReport.updateOne({ reportId: a.body.reportId }, { $set: { 'triage.deadline': new Date(Date.now() - 1000) } });
+  await sync(new Date());
+  const issue = (await getTriageStatus(a.body.reportId)).issueNumber;
+  const b = await post(report({ description: 'דיווח נוסף עם מידע מועיל' }));
+  await applyTriageDecision(b.body.reportId, decision({ action: 'open', verdict: 'needs_human' }), deps());
+  assert.equal((await getTriageStatus(b.body.reportId)).issueNumber, issue);
+  await applyTriageDecision(a.body.reportId, decision(), deps());
+  assert.equal(gh.issues.get(issue).state, 'open');
+});
+
+test('סגירה שנכשלה נבדקת שוב מול דיווחים שהצטרפו לפני ניסיון ה-cron', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const a = await post(report());
+  await AppReport.updateOne({ reportId: a.body.reportId }, { $set: { 'triage.deadline': new Date(Date.now() - 1000) } });
+  await sync(new Date());
+  const issue = (await getTriageStatus(a.body.reportId)).issueNumber;
+  const failClose = (url, init = {}) => init.method === 'PATCH'
+    ? Promise.resolve(new Response('{}', { status: 502 })) : fetchImpl(url, init);
+  await applyTriageDecision(a.body.reportId, decision(), deps({ fetchImpl: failClose }));
+  assert.equal((await AppReport.findOne({ reportId: a.body.reportId }).lean()).triage.followUp.status, 'pending');
+  const b = await post(report({ description: 'הצטרף אחרי ההחלטה' }));
+  await applyTriageDecision(b.body.reportId, decision({ action: 'open', verdict: 'needs_human' }), deps());
+  await sync(new Date());
+  assert.equal(gh.issues.get(issue).state, 'open');
+  assert.equal((await AppReport.findOne({ reportId: a.body.reportId }).lean()).triage.followUp.status, 'done');
+});
+
+test('סבב החלטה: ניסיון חוזר מהסבב הקודם נדחה; החלטה עם runs עדכני מתקבלת', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { body } = await post(report());
+  const old = decision({ questions: ['מתי?'], awaitingReply: true });
+  await applyTriageDecision(body.reportId, old, deps());
+  await ingestInboundReply({ to: contactMails[0].replyTo, from: 'reporter@example.com', subject: 'Re', messageId: '<round@x>', text: 'מידע חדש', headers: {}, attachments: 0 }, { ...deps(), saveFile, deleteFile });
+  for (const stale of [old, { ...old, runs: 1 }]) {
+    const r = await applyTriageDecision(body.reportId, stale, deps());
+    assert.equal(r.status, 409);
+    assert.equal(r.body.error, 'stale_run');
+  }
+  assert.equal(contactMails.length, 1);
+  assert.equal((await getTriageStatus(body.reportId)).state, 'pending');
+  const current = await applyTriageDecision(body.reportId, decision({ action: 'open', runs: 2, verdict: 'needs_human' }), deps());
+  assert.equal(current.status, 200);
+  assert.ok(current.body.issueNumber);
+  assert.equal((await applyTriageDecision(body.reportId, decision({ runs: 0 }), deps())).status, 422);
+});
+
+test('תנאי העדכון מונע מהחלטה שכבר קראה סבב ישן לדרוס סבב חדש', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { body } = await post(report());
+  const original = AppReport.updateOne;
+  let resume;
+  let claimed;
+  const paused = new Promise((resolve) => { claimed = resolve; });
+  const release = new Promise((resolve) => { resume = resolve; });
+  let intercepted = false;
+  AppReport.updateOne = function (filter, ...args) {
+    if (!intercepted && filter.reportId === body.reportId && filter['triage.state'] === 'pending') {
+      intercepted = true;
+      claimed();
+      return release.then(() => original.call(this, filter, ...args));
+    }
+    return original.call(this, filter, ...args);
+  };
+  let slow;
+  try {
+    slow = applyTriageDecision(body.reportId, decision({ runs: 1 }), deps());
+    await paused;
+    await applyTriageDecision(body.reportId, decision({ runs: 1 }), deps());
+    await requestRetriage(body.reportId, deps());
+    resume();
+    assert.equal((await slow).status, 409);
+    assert.equal((await getTriageStatus(body.reportId)).state, 'pending');
+    assert.equal((await AppReport.findOne({ reportId: body.reportId }).lean()).triage.runs, 2);
+  } finally {
+    resume();
+    if (slow) await slow;
+    AppReport.updateOne = original;
+  }
+});
+
+test('כשל זמני ביצירת טוקן המענה פותח במקום להשאיר held בלי מייל', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { body } = await post(report());
+  const original = AppReport.findOneAndUpdate;
+  AppReport.findOneAndUpdate = function (filter, ...args) {
+    if (filter.replyToken) throw new Error('כשל DB זמני ביצירת טוקן');
+    return original.call(this, filter, ...args);
+  };
+  try {
+    const r = await applyTriageDecision(body.reportId, decision({ questions: ['מתי?'], awaitingReply: true }), deps());
+    assert.equal(r.status, 200);
+    assert.equal(r.body.state, 'opened');
+    assert.ok(r.body.issueNumber);
+    assert.equal(r.body.questionsSent, false);
+  } finally { AppReport.findOneAndUpdate = original; }
+  assert.equal(contactMails.length, 0);
+  const doc = await AppReport.findOne({ reportId: body.reportId }).lean();
+  assert.equal(doc.triage.questionsPending, false);
+  assert.equal(doc.triage.awaitingReply, false);
+});
+
+test('משלוח שנקטע אחרי שמירת ההחלטה מתחדש ב-cron אחרי תפוגת הנעילה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { body } = await post(report());
+  await AppReport.updateOne({ reportId: body.reportId }, { $set: {
+    issuePending: false, 'triage.state': 'held', 'triage.decidedAt': new Date(),
+    'triage.questions': ['מתי?'], 'triage.awaitingReply': true, 'triage.questionsPending': true,
+    'triage.questionsLeaseUntil': later(10 * 60 * 1000),
+  } });
+  await sync(new Date());
+  assert.equal(contactMails.length, 0);
+  await AppReport.updateOne({ reportId: body.reportId }, { $set: { 'triage.questionsLeaseUntil': new Date(Date.now() - 1000) } });
+  await sync(new Date());
+  assert.equal(contactMails.length, 1);
+  const doc = await AppReport.findOne({ reportId: body.reportId }).lean();
+  assert.equal(doc.triage.state, 'held');
+  assert.equal(doc.triage.questionsPending, false);
+  assert.ok(doc.triage.questionsSentAt);
+  await sync(new Date());
+  assert.equal(contactMails.length, 1);
+});
+
+test('אחרי חמש בדיקות הדיווח יוצא מהתור ונפתח; hold נוסף אינו מתקבל', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { body } = await post(report());
+  await applyTriageDecision(body.reportId, decision(), deps());
+  await AppReport.updateOne({ reportId: body.reportId }, { $set: { 'triage.runs': 5 } });
+  await requestRetriage(body.reportId, deps());
+  assert.equal((await AppReport.findOne({ reportId: body.reportId }).lean()).triage.state, 'opened');
+  assert.equal((await listTriageQueue()).items.length, 0);
+  assert.equal((await applyTriageDecision(body.reportId, decision({ runs: 6 }), deps())).status, 409);
+  await sync(new Date());
+  assert.equal(gh.issues.size, 1);
+});
+
+test('החלטת open ופתיחה ידנית גוברות על צירוף שקט לכרטיס סגור', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  for (const manual of [false, true]) {
+    const signature = { exceptionType: 'AppHang', frames: [manual ? 'app.so+0x91' : 'app.so+0x90'] };
+    const first = await post(report({ signature }), { config: { ...config, triageSecret: null } });
+    gh.setState(first.body.issueNumber, 'closed', 'completed');
+    await sync(new Date());
+    const next = await post(report({ signature, description: 'מידע שמחייב פתיחה' }));
+    const opened = manual ? await forcePublishReport(next.body.reportId, deps())
+      : await applyTriageDecision(next.body.reportId, decision({ action: 'open', verdict: 'needs_human' }), deps());
+    assert.notEqual(opened.body.issueNumber, first.body.issueNumber);
+    assert.equal(gh.issues.get(opened.body.issueNumber).state, 'open');
+    assert.equal((await AppReport.findOne({ reportId: next.body.reportId }).lean()).suppressedAfterClose, false);
+  }
+});
+
+test('פענוח בתגובה ה-101 אינו מוכפל בניסיון חוזר אחרי כשל שיוך', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { body } = await post(report());
+  await AppReport.updateOne({ reportId: body.reportId }, { $set: { 'triage.deadline': new Date(Date.now() - 1000) } });
+  await sync(new Date());
+  const issue = (await getTriageStatus(body.reportId)).issueNumber;
+  for (let i = 0; i < 100; i++) gh.comments.push({ id: i + 1, issue, body: `תגובה ${i}`, created_at: new Date().toISOString() });
+  const failAssign = (url, init = {}) => String(url).includes('/assignees')
+    ? Promise.resolve(new Response('{}', { status: 502 })) : fetchImpl(url, init);
+  await applyTriageDecision(body.reportId, decision({ action: 'open', verdict: 'needs_human' }), deps({ fetchImpl: failAssign }));
+  assert.equal(gh.comments.length, 101);
+  await sync(new Date());
+  assert.equal(gh.comments.length, 101);
+  assert.equal((await AppReport.findOne({ reportId: body.reportId }).lean()).triage.followUp.status, 'done');
+});
+
+test('חידוש משלוח שכבר נרשם בהיסטוריה אינו שולח את המייל שוב', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { body } = await post(report());
+  await applyTriageDecision(body.reportId, decision({ questions: ['מתי?'], awaitingReply: true }), deps());
+  await AppReport.updateOne({ reportId: body.reportId }, { $set: { 'triage.questionsPending': true } });
+  await sync(new Date());
+  assert.equal(contactMails.length, 1);
+  assert.equal((await AppReport.findOne({ reportId: body.reportId }).lean()).contactLog.length, 1);
+  await requestRetriage(body.reportId, deps());
+  const doc = await AppReport.findOne({ reportId: body.reportId }).lean();
+  assert.equal(doc.triage.questionsPending, false);
+  assert.equal(doc.triage.questionsSentAt, null);
+  assert.equal(doc.triage.questionsLeaseUntil, null);
+});
+
+test('פתיחה מפורשת מצטרפת לכרטיס שנפתח מחדש ב-GitHub גם אם המטמון עדיין סגור', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const first = await post(report(), { config: { ...config, triageSecret: null } });
+  gh.setState(first.body.issueNumber, 'closed', 'completed');
+  await sync(new Date());
+  gh.setState(first.body.issueNumber, 'open');
+  const next = await post(report({ description: 'אחרי פתיחה מחדש' }));
+  const r = await applyTriageDecision(next.body.reportId, decision({ action: 'open', verdict: 'needs_human' }), deps());
+  assert.equal(r.body.issueNumber, first.body.issueNumber);
+  assert.equal(gh.issues.size, 1);
+  assert.equal(gh.issues.get(r.body.issueNumber).state, 'open');
 });

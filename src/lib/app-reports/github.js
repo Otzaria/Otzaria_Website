@@ -77,11 +77,18 @@ export function createGithubClient({ token, repo, fetchImpl = fetch }) {
         variables: { id: issue.node_id, dup: original.node_id },
       }, `${API}/graphql`);
     },
-    /** תגובות שעודכנו מאז `since` (ISO), בסדר כרונולוגי. */
+    /** כל התגובות שעודכנו מאז `since` (ISO), בסדר כרונולוגי, כולל עמודי ההמשך. */
     async listComments(issueNumber, since) {
       const qs = new URLSearchParams({ per_page: '100', ...(since ? { since } : {}) });
-      const d = await call('GET', `/issues/${issueNumber}/comments?${qs}`);
-      return (Array.isArray(d) ? d : []).map((c) => ({ body: c.body || '', author: c.user?.login ?? null, created_at: c.created_at }));
+      const comments = [];
+      for (let page = 1; ; page += 1) {
+        if (page > 1) qs.set('page', String(page));
+        const batch = await call('GET', `/issues/${issueNumber}/comments?${qs}`);
+        // כשל בעמוד המשך חייב להיכשל כולו: רשימה חלקית עלולה להסתיר תגובה שכבר פורסמה.
+        if (!Array.isArray(batch)) throw new GithubError('GitHub comments response is not an array', 0);
+        comments.push(...batch.map((c) => ({ body: c.body || '', author: c.user?.login ?? null, created_at: c.created_at })));
+        if (batch.length < 100) return comments;
+      }
     },
   };
 }

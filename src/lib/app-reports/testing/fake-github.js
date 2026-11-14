@@ -66,7 +66,9 @@ export class FakeIssuesGitHub {
       const number = Number(m[1]);
       if (!this.issues.has(number)) return json(404, { message: 'Not Found' });
       const since = u.searchParams.get('since');
-      return json(200, this.comments.filter((c) => c.issue === number && (!since || c.created_at >= since)));
+      const page = Math.max(1, Number(u.searchParams.get('page')) || 1);
+      const size = Math.max(1, Number(u.searchParams.get('per_page')) || 30);
+      return json(200, this.comments.filter((c) => c.issue === number && (!since || c.created_at >= since)).slice((page - 1) * size, page * size));
     }
     if (method === 'POST' && (m = rest.match(/^\/issues\/(\d+)\/assignees$/))) {
       const issue = this.issues.get(Number(m[1]));

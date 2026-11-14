@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import { runAppReportsSync } from '@/lib/app-reports/service';
 import { getAppReportsConfig } from '@/lib/app-reports/config';
-import { sendAppReportClosedNotification } from '@/lib/emailService';
+import { sendAppReportClosedNotification, sendAppReportContactEmail } from '@/lib/emailService';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +22,7 @@ async function run(request) {
   try {
     await connectDB();
     const now = new Date();
-    const summary = await runAppReportsSync({ config: getAppReportsConfig(), sendClosedMail: sendAppReportClosedNotification, now, clock: () => new Date() });
+    const summary = await runAppReportsSync({ config: getAppReportsConfig(), sendClosedMail: sendAppReportClosedNotification, sendContactMail: sendAppReportContactEmail, now, clock: () => new Date() });
     return NextResponse.json({ success: true, ranAt: now.toISOString(), ...summary });
   } catch (error) {
     console.error('App reports sync cron error:', error);
