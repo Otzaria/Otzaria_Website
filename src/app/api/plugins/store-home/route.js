@@ -96,7 +96,7 @@ async function countPublicPlugins(appVersion) {
   if (!appVersion) return Plugin.countDocuments(PUBLIC_PLUGIN_FILTER)
 
   const docs = await Plugin.find(PUBLIC_PLUGIN_FILTER)
-    .select('version compatibleWith maxAppVersion versions.version versions.compatibleWith versions.maxAppVersion')
+    .select('version compatibleWith maxAppVersion hasService versions.version versions.compatibleWith versions.maxAppVersion')
     .lean()
   return docs.filter((doc) => hasCompatibleVersion(doc, appVersion)).length
 }

@@ -1,6 +1,7 @@
 import OtzariaSoftwareHeader from '@/components/layout/OtzariaSoftwareHeader'
 import OtzariaSoftwareFooter from '@/components/layout/OtzariaSoftwareFooter'
 import DonateCurrencyNote from '@/components/donate/DonateCurrencyNote'
+import DonateDollarOption from '@/components/donate/DonateDollarOption'
 import DonateWidget from '@/components/donate/DonateWidget'
 import IconTile from '@/components/ui/IconTile'
 import PageHeader from '@/components/ui/PageHeader'
@@ -15,6 +16,7 @@ export const metadata = pageMetadata({
 
 // עיצוב כיוון א' (כמו /offline ואזור התרומה בדף הבית): אריח אייקון התרומה, כותרת + קישוט ושורת
 // המשנה, הערת המטבע — לפני הטופס, כדי שתיקרא לפני התשלום — ומתחתיה טופס נדרים פלוס בכרטיס.
+// אחרי ההערה — אפשרות התרומה בדולרים (נדבות), למי שתורם במטבע חוץ.
 // הנוסח כמו שהיה; ה-iframe (כתובת, גובה, CSP) לא השתנה — רק המסגרת שסביבו (components/donate).
 export default function DonatePage() {
   return (
@@ -31,7 +33,8 @@ export default function DonatePage() {
             title="תרומה לאוצריא"
             subtitle="הפרויקט מתוחזק בהתנדבות. תרומתך עוזרת לנו לשלם על שרתים ולהמשיך לפתח את התוכנה."
           />
-          <DonateCurrencyNote className="mb-6 md:mb-8" />
+          <DonateCurrencyNote className="mb-4" />
+          <DonateDollarOption className="mb-6 md:mb-8" />
           <DonateWidget title="התרומה באמצעות נדרים פלוס" />
         </Section>
       </main>

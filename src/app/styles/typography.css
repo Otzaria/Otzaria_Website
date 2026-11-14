@@ -136,6 +136,24 @@
   --text-label-sm: var(--text-xs);
   --text-label-sm--line-height: var(--text-xs--line-height);
   --text-label-sm--font-weight: 600;
+
+  /* --- גודל גליף אייקון (AppIcon / material-symbols) ---
+   * אייקון מקבל את גודלו מ-font-size, ועד עכשיו נכתב בסולם הטקסט (text-xl על אייקון). התפקיד הזה
+   * נותן לו שם משלו בלי לשנות דבר: כל ערך = בדיוק גודל הסולם וגובה השורה שלו (גובה השורה קובע את
+   * גובה ה-inline-block של הגליף, ולכן גם את גובה השורה שמכילה אותו).
+   *   xs 13.4px · sm 15.4px · md 17.3px · lg 19.2px (ברירת המחדל בשורות, בתפריטים ובניווט) · xl 23px · 2xl 28.8px */
+  --text-icon-xs: var(--text-sm);
+  --text-icon-xs--line-height: var(--text-sm--line-height);
+  --text-icon-sm: var(--text-base);
+  --text-icon-sm--line-height: var(--text-base--line-height);
+  --text-icon-md: var(--text-lg);
+  --text-icon-md--line-height: var(--text-lg--line-height);
+  --text-icon-lg: var(--text-xl);
+  --text-icon-lg--line-height: var(--text-xl--line-height);
+  --text-icon-xl: var(--text-2xl);
+  --text-icon-xl--line-height: var(--text-2xl--line-height);
+  --text-icon-2xl: var(--text-3xl);
+  --text-icon-2xl--line-height: var(--text-3xl--line-height);
 }
 
 /* ------------------------------------------------------------

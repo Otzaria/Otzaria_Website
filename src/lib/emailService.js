@@ -13,6 +13,7 @@ import {
     isWebPluginReport,
 } from '@/lib/email-templates';
 import { REPLY_ABOVE_MARKER } from '@/lib/app-reports/inbound';
+import { hebrewDays, PAGE_RELEASE_AFTER_DAYS, PAGE_REMIND_AFTER_DAYS } from '@/lib/pageClaimPolicy';
 import { appReportMailBranding } from '@/lib/app-reports/mail-text';
 
 // Transporter מרכזי — הגדרות TLS/timeouts מאוחדות ב-src/lib/smtp-transport.js
@@ -42,7 +43,6 @@ export async function sendUploadNotification(uploadData) {
         
         const subscribedAdmins = admins.filter(admin => {
             const prefs = admin.uploadNotifications;
-            if (uploadType === 'dicta') return prefs.dicta;
             if (uploadType === 'full_book') return prefs.fullBook;
             if (uploadType === 'single_page') return prefs.singlePage;
             return false;
@@ -55,7 +55,6 @@ export async function sendUploadNotification(uploadData) {
         const transporter = createTransporter();
 
         const uploadTypeLabels = {
-            dicta: 'דיקטה',
             full_book: 'ספר שלם',
             single_page: 'עמוד אחרון בספר'
         };
@@ -358,18 +357,22 @@ export async function sendStalePageReminder({ user, book, pages }) {
         .map(p => `• עמוד ${p.pageNumber} (לא נערך כבר ${p.daysSinceEdit} ימים)`)
         .join('<br/>');
 
-    const introHtml = `שמנו לב שיש עמודים שתפסת לעריכה בספר "${safeBookName}" שלא נערכו כשבוע ויותר:`;
+    // עמוד שלא נערך PAGE_RELEASE_AFTER_DAYS ימים משתחרר; התזכורת נשלחת PAGE_REMIND_AFTER_DAYS
+    // ימים אחרי העריכה האחרונה — כלומר נותרו עוד (ההפרש) ימים (pageClaimPolicy.js)
+    const graceText = hebrewDays(PAGE_RELEASE_AFTER_DAYS - PAGE_REMIND_AFTER_DAYS);
+    const releaseRule = `עמוד שלא נערך ${hebrewDays(PAGE_RELEASE_AFTER_DAYS)} משתחרר אוטומטית, כך שעמודים שלא ייערכו ב${graceText} הקרובים ישוחררו.`;
+    const introHtml = `שמנו לב שיש עמודים שתפסת לעריכה בספר "${safeBookName}" שלא נערכו כמה ימים:`;
     const closingHtml =
         'אנא היכנס למערכת והשלם את העריכה, או שחרר את העמודים כדי שאחרים יוכלו להמשיך.<br/>' +
-        'שים לב — עמודים שלא ייערכו במהלך השבוע הקרוב ישוחררו אוטומטית.';
+        `שים לב — ${releaseRule}`;
 
     const bodyHtml = `${introHtml}<br/><br/>${pageListHtml}<br/><br/>${closingHtml}`;
 
     const bodyText =
-        `שמנו לב שיש עמודים שתפסת לעריכה בספר "${book.name}" שלא נערכו כשבוע ויותר:\n\n` +
+        `שמנו לב שיש עמודים שתפסת לעריכה בספר "${book.name}" שלא נערכו כמה ימים:\n\n` +
         `${pageListText}\n\n` +
         `אנא היכנס למערכת והשלם את העריכה, או שחרר את העמודים כדי שאחרים יוכלו להמשיך.\n` +
-        `שים לב — עמודים שלא ייערכו במהלך השבוע הקרוב ישוחררו אוטומטית.`;
+        `שים לב — ${releaseRule}`;
 
     const html = buildStaleReminderHtml({
         headingTitle: `תזכורת: עמודים תקועים בספר "${book.name}"`,
@@ -394,64 +397,6 @@ export async function sendStalePageReminder({ user, book, pages }) {
         return { sent: true };
     } catch (error) {
         console.error(`Stale page reminder failed for ${user.email}:`, error.message);
-        return { sent: false, error: error.message };
-    }
-}
-
-// תזכורת אוטומטית על ספרי דיקטה תקועים. books הוא מערך עם { title, daysSinceEdit }
-export async function sendStaleDictaReminder({ user, books }) {
-    if (!user?.email) return { sent: false, reason: 'missing_data' };
-    if (!books?.length) return { sent: false, reason: 'no_books' };
-
-    const transporter = createTransporter();
-    const siteUrl = process.env.NEXTAUTH_URL || '';
-    const ctaUrl = `${siteUrl}/library/dicta-books?status=my-books`;
-    const secureToken = encryptToken(user.email);
-    const unsubUrl = `${siteUrl}/api/user/unsubscribe?t=${secureToken}&action=reminder`;
-
-    const bookListText = books
-        .map(b => `• ${b.title} (לא נערך כבר ${b.daysSinceEdit} ימים)`)
-        .join('\n');
-    const bookListHtml = books
-        .map(b => `• ${escapeHtml(b.title || '')} (לא נערך כבר ${b.daysSinceEdit} ימים)`)
-        .join('<br/>');
-
-    const introHtml = 'שמנו לב שיש ספרי דיקטה שתפסת לעריכה ולא נגעת בהם כשבוע ויותר:';
-    const closingHtml =
-        'אנא היכנס למערכת והשלם את העריכה, או שחרר את הספר כדי שאחרים יוכלו להמשיך.<br/>' +
-        'שים לב — ספר שלא ייערך במהלך השבוע הקרוב ישוחרר אוטומטית.';
-
-    const bodyHtml = `${introHtml}<br/><br/>${bookListHtml}<br/><br/>${closingHtml}`;
-
-    const bodyText =
-        `שמנו לב שיש ספרי דיקטה שתפסת לעריכה ולא נגעת בהם כשבוע ויותר:\n\n` +
-        `${bookListText}\n\n` +
-        `אנא היכנס למערכת והשלם את העריכה, או שחרר את הספר כדי שאחרים יוכלו להמשיך.\n` +
-        `שים לב — ספר שלא ייערך במהלך השבוע הקרוב ישוחרר אוטומטית.`;
-
-    const html = buildStaleReminderHtml({
-        headingTitle: 'תזכורת: ספרי דיקטה תקועים בעריכה',
-        bodyHtml,
-        ctaUrl,
-        ctaLabel: 'כנס לספרי הדיקטה שלי',
-        unsubUrl,
-    });
-
-    try {
-        await transporter.sendMail({
-            from: process.env.SMTP_FROM || process.env.SMTP_USER,
-            to: user.email,
-            subject: 'תזכורת אוטומטית: ספרי דיקטה שלא נערכו',
-            headers: {
-                'List-Unsubscribe': `<${unsubUrl}>`,
-                'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
-            },
-            html,
-            text: `${bodyText}\n\nלהסרה: ${unsubUrl}`,
-        });
-        return { sent: true };
-    } catch (error) {
-        console.error(`Stale dicta reminder failed for ${user.email}:`, error.message);
         return { sent: false, error: error.message };
     }
 }
@@ -685,7 +630,8 @@ function buildAppReportMailHtml({ heading, bodyHtml, ctaUrl, ctaLabel, unsubscri
 }
 
 // עדכון למדווח שה-issue של הדיווח שלו על התוכנה נסגר
-export async function sendAppReportClosedNotification({ to, product, reportTitle, issueUrl, reasonText, unsubscribeUrl }) {
+// closingComment — התגובה שאיתה נסגר ה-issue (אם יש), מוצגת למדווח כלשונה
+export async function sendAppReportClosedNotification({ to, product, reportTitle, issueUrl, reasonText, closingComment, unsubscribeUrl }) {
     try {
         if (!to) return { sent: false, reason: 'missing_recipient_email' };
         const brand = appReportMailBranding(product);
@@ -694,7 +640,11 @@ export async function sendAppReportClosedNotification({ to, product, reportTitle
             heading: 'עדכון על הדיווח ששלחת',
             bodyHtml: `
                 <p style="font-size: 16px; line-height: 1.8;">שלום,</p>
-                <p style="font-size: 16px; line-height: 1.8;">${escapeHtml(reasonText)}</p>
+                <p style="font-size: 16px; line-height: 1.8;">${escapeHtml(reasonText)}</p>${closingComment ? `
+                <div style="border-right: 4px solid #d4a373; background-color: #fbf6f0; padding: 12px 16px; border-radius: 8px; margin: 20px 0;">
+                    <p style="margin: 0 0 8px 0; font-weight: bold;">תגובת הצוות בסגירת הדיווח:</p>
+                    <p style="margin: 0; font-size: 15px; line-height: 1.7; white-space: pre-wrap;">${escapeHtml(closingComment)}</p>
+                </div>` : ''}
                 <div style="background-color: #f0f0f0; padding: 16px; border-radius: 8px; margin: 20px 0;">
                     <p style="margin: 0;"><strong>הדיווח:</strong> ${escapeHtml(reportTitle || '')}</p>
                 </div>
@@ -746,7 +696,9 @@ export async function sendAppReportContactEmail({ to, product, subject, message,
         return { sent: true };
     } catch (error) {
         console.error('App Report Contact Email Error:', error);
-        return { sent: false, error: error.message };
+        // שרת ה-SMTP דחה את הנמען עצמו (דומיין לא קיים וכו') — לא תקלה זמנית
+        const recipientRejected = error.code === 'EENVELOPE' && (error.command === 'RCPT TO' || error.rejected?.length > 0);
+        return { sent: false, error: error.message, ...(recipientRejected ? { reason: 'recipient_rejected' } : {}) };
     }
 }
 

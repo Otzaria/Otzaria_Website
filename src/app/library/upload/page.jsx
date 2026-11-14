@@ -53,7 +53,8 @@ export default function UploadPage() {
     copyrightHolder: '',
     sourceUrl: '',
     isOcr: false,
-    ocrDescription: ''
+    ocrDescription: '',
+    allowOtherPlatforms: null
   })
   
   const [contemporaryAuthorConfirmed, setContemporaryAuthorConfirmed] = useState(false)
@@ -123,6 +124,11 @@ export default function UploadPage() {
       }
     }
     
+    if (formData.allowOtherPlatforms === null) {
+      showAlert('שדה חסר', "יש לציין האם אתה מאשר גם לתוכנת 'זית' ולפלטפורמות נוספות")
+      return false
+    }
+
     if (formData.isOcr && !formData.ocrDescription) {
       showAlert('שדה חסר', 'יש לתאר את שיטת ה-OCR')
       return false
@@ -158,6 +164,7 @@ export default function UploadPage() {
     uploadFormData.append('sourceUrl', formData.sourceUrl)
     uploadFormData.append('isOcr', formData.isOcr)
     uploadFormData.append('ocrDescription', formData.ocrDescription)
+    uploadFormData.append('allowOtherPlatforms', formData.allowOtherPlatforms)
     uploadFormData.append('uploadType', 'full_book')
     if (confirmOverwrite) {
       uploadFormData.append('confirmOverwrite', 'true')
@@ -197,7 +204,8 @@ export default function UploadPage() {
           copyrightHolder: '',
           sourceUrl: '',
           isOcr: false,
-          ocrDescription: ''
+          ocrDescription: '',
+          allowOtherPlatforms: null
         })
         setContemporaryAuthorConfirmed(false)
         if (fileInputRef.current) {
@@ -422,6 +430,36 @@ export default function UploadPage() {
                   />
                 </div>
               )}
+
+              {/* אישור לזית ולפלטפורמות נוספות */}
+              <div>
+                <label className="block text-sm font-bold mb-2">
+                  האם אתה מאשר שהספר יועבר גם לתוכנת 'זית' ולפלטפורמות נוספות שיקבלו אישור מאוצריא? <span className="text-danger-500">*</span>
+                </label>
+                <div className="flex gap-6">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="allowOtherPlatforms"
+                      checked={formData.allowOtherPlatforms === true}
+                      onChange={() => setFormData(prev => ({ ...prev, allowOtherPlatforms: true }))}
+                      className="w-4 h-4"
+                      required
+                    />
+                    <span>כן, אני מאשר</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="allowOtherPlatforms"
+                      checked={formData.allowOtherPlatforms === false}
+                      onChange={() => setFormData(prev => ({ ...prev, allowOtherPlatforms: false }))}
+                      className="w-4 h-4"
+                    />
+                    <span>לא, לאוצריא בלבד</span>
+                  </label>
+                </div>
+              </div>
 
               {/* העלאת קובץ (טקסט או וורד) */}
               <div>

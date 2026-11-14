@@ -50,3 +50,11 @@ describe('PluginSecondaryActions', () => {
     expect(screen.getByRole('button', { name: /מעדכן/ })).toBeDisabled()
   })
 })
+
+describe('PluginSecondaryActions — תוסף שירות', () => {
+  it('"הגשות השירות" במקום "ערוך"', () => {
+    render(<PluginSecondaryActions {...props} canEdit={false} serviceUrl="/plugins/p1/service" />)
+    expect(screen.getByRole('link', { name: /הגשות השירות/ })).toHaveAttribute('href', '/plugins/p1/service')
+    expect(screen.queryByRole('button', { name: /ערוך/ })).toBeNull()
+  })
+})

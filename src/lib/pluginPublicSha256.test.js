@@ -49,3 +49,19 @@ describe('sha256 in the public plugin API', () => {
     expect(formatVersionForPublic(live, p, p.versions[1]).sha256).toBeNull()
   })
 })
+
+describe('publishedAt in the public plugin API', () => {
+  it('is createdAt for a plugin uploaded to the site', () => {
+    const pub = formatPluginForPublic(plugin({ createdAt: new Date('2026-07-01T10:00:00Z') }))
+    expect(pub.publishedAt).toBe('2026-07-01T10:00:00.000Z')
+  })
+
+  it('a plugin migrated from the old store keeps its earlier original date', () => {
+    const pub = formatPluginForPublic(plugin({ createdAt: new Date('2026-04-30T19:47:00Z'), originalDate: '2025-11-02' }))
+    expect(pub.publishedAt).toBe('2025-11-02T00:00:00.000Z')
+  })
+
+  it('is null without any known date', () => {
+    expect(formatPluginForPublic(plugin({ originalDate: 'garbage' })).publishedAt).toBeNull()
+  })
+})

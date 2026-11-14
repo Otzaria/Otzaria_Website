@@ -199,7 +199,7 @@ export default function OcrLinesPage() {
   const [rulesOpen, setRulesOpen] = useState(true)
 
   // זהה לתנאי בצד השרת (requireVerifiedSession): מאומת או מנהל ספרייה
-  const canWork = session?.user?.isVerified || hasBookLibraryAccess(session?.user?.role)
+  const canWork = session?.user?.isVerified || hasBookLibraryAccess(session?.user)
 
   const load = useCallback(async () => {
     try {
@@ -221,7 +221,7 @@ export default function OcrLinesPage() {
 
   useEffect(() => {
     if (status === 'authenticated') {
-      if (session?.user?.isVerified || hasBookLibraryAccess(session?.user?.role)) load()
+      if (session?.user?.isVerified || hasBookLibraryAccess(session?.user)) load()
       else setLoading(false)
     }
   }, [status, session, load])

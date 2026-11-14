@@ -1,6 +1,6 @@
 // רשת-העמודים של ספר בניהול הגהת-העמודים (/library/admin/page-proof): המצב של
 // כל עמוד בעיני המנהל, מונים, טווח-עמודים ונוסחי האזהרה. לוגיקה טהורה (בלי מסד
-// ובלי DOM); צד-השרת — adminPages.js, הרכיב — components/pageProof/admin/AdminBookPages.
+// ובלי DOM); צד-השרת — adminPages.js. (הרכיב הישן שהציג אותו הוסר; ה-API — api/admin/page-proof/books/[gid]/pages — נשאר לתוכנת-הספר.)
 
 import { STATE_UI, CLAIM_HOURS } from './gridState.js';
 

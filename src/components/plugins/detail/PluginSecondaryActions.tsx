@@ -7,6 +7,7 @@ import { cx } from '@/components/ui/cx'
  *   "דיווח למפתח" — לכל צופה, גלוי בלי גלילה (המשתמשים לא גוללים עד סוף העמוד כדי למצוא איך מדווחים).
  *     כפתור טקסט קטן — לא מתחרה בהורדה/ההתקנה. החלון — PluginReportModal בעמוד.
  *   "ערוך" ו"השהה מהחנות"/"החזר לחנות" — למעלה התוסף בלבד (ההחלטה — ownerPermissions).
+ *   "הגשות השירות" (serviceUrl) — במקום "ערוך" בתוסף שירות, שהעריכה הישירה שלו חסומה.
  * הנוסח והכותרות (title) — כפי שהיו. הלוגיקה (fetch, אישור) נשארת בעמוד; כאן רק המראה.
  */
 export default function PluginSecondaryActions({
@@ -19,6 +20,7 @@ export default function PluginSecondaryActions({
   isSuspended,
   suspending,
   onToggleSuspend,
+  serviceUrl,
   className
 }: {
   homepage?: string
@@ -30,6 +32,7 @@ export default function PluginSecondaryActions({
   isSuspended: boolean
   suspending: boolean
   onToggleSuspend: () => void
+  serviceUrl?: string | null
   className?: string
 }) {
   return (
@@ -45,6 +48,11 @@ export default function PluginSecondaryActions({
       {canEdit && (
         <Button variant="tonal" size="sm" icon="edit" onClick={onEdit} loading={loadingEdit}>
           {loadingEdit ? 'טוען...' : 'ערוך'}
+        </Button>
+      )}
+      {serviceUrl && (
+        <Button href={serviceUrl} variant="tonal" size="sm" icon="package_2">
+          הגשות השירות
         </Button>
       )}
       {showSuspendToggle && (

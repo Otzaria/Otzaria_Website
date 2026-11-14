@@ -11,6 +11,7 @@ import {
   ZonesFullCard,
 } from '@/components/ocr/layout/LayoutTaskCards'
 import { validateAnswer } from '@/lib/ocr/layoutValidation'
+import { layoutShortcut, ownedElsewhere } from '@/lib/ocr/layoutShortcuts'
 import { hasBookLibraryAccess } from '@/lib/roles'
 import { useRequireAuth } from '@/hooks/useRequireAuth'
 
@@ -45,7 +46,7 @@ export default function OcrLayoutPage() {
   const skippedRef = useRef([])
 
   // זהה לתנאי בצד השרת (requireVerifiedSession): מאומת או מנהל ספרייה
-  const canWork = session?.user?.isVerified || hasBookLibraryAccess(session?.user?.role)
+  const canWork = session?.user?.isVerified || hasBookLibraryAccess(session?.user)
 
   const load = useCallback(async (extraExclude = []) => {
     try {
@@ -70,7 +71,7 @@ export default function OcrLayoutPage() {
 
   useEffect(() => {
     if (status === 'authenticated') {
-      if (session?.user?.isVerified || hasBookLibraryAccess(session?.user?.role)) load()
+      if (session?.user?.isVerified || hasBookLibraryAccess(session?.user)) load()
       else setLoading(false)
     }
   }, [status, session, load])
@@ -140,15 +141,13 @@ export default function OcrLayoutPage() {
   // קיצורי מקלדת: Enter=אישור/שמירה, N=הבא
   useEffect(() => {
     const onKey = (e) => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return
-      if (e.key === 'Enter') {
-        e.preventDefault()
-        if (allValid) handleSave()
-        else if (untouched) handleAllCorrect()
-      } else if (e.key === 'n' || e.key === 'N') {
-        e.preventDefault()
-        handleSkip()
-      }
+      // לא כשהמקש שייך לשדה, לבורר (הכפתור או הרשימה הפתוחה) או לחלון — layoutShortcuts.js
+      if (ownedElsewhere(e)) return
+      const action = layoutShortcut(e, { allValid, untouched })
+      if (e.key === 'Enter' || action === 'skip') e.preventDefault()
+      if (action === 'save') handleSave()
+      else if (action === 'allCorrect') handleAllCorrect()
+      else if (action === 'skip') handleSkip()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

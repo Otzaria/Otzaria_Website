@@ -19,6 +19,7 @@ vi.mock("@/lib/db", () => ({
 vi.mock("@/lib/roles", () => ({
   hasAnyAdminAccess: hasAnyAdminAccessMock,
   ALL_ADMIN_ROLES: ["admin"],
+  notRoleQuery: (roles: string[]) => ({ role: { $nin: roles }, roles: { $nin: roles } }),
 }));
 
 vi.mock("next-auth", () => ({

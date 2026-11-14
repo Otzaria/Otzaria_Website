@@ -4,20 +4,26 @@
  */
 import crypto from 'node:crypto';
 import AppReport from '../../models/AppReport.js';
+import FileStorage from '../../models/FileStorage.js';
+import Upload from '../../models/Upload.js';
 import { validateAppReport, IMAGE_TYPES } from './validation.js';
-import { computeContentHash, computeSignatureHash } from './hashes.js';
+import { computeContentHash, computeResendHash, computeSignatureHash } from './hashes.js';
 import { buildIssueTitle, buildIssueBody, buildMergeComment, issueLabels } from './issue-text.js';
 import { createGithubClient, issueHtmlUrl } from './github.js';
-import { handleIssueStateChange } from './state-change.js';
+import { handleIssueStateChange, trustedIssueClosedAt } from './state-change.js';
+import { cleanupClosedReportPayloads } from './retention.js';
 import { planPublication } from './merge.js';
 import { verifyUnsubscribeToken } from './unsubscribe.js';
+import { suggestEmailDomain } from '../emailTypo.js';
 import {
   newReplyToken, buildReplyAddress, validateInboundPayload, isAutoReply, inboundMessageBody, buildInboundComment, buildOutboundComment,
 } from './inbound.js';
 import { PRODUCT_KEYS, getProduct, isProductKey, productFilter, productOf } from './products.js';
 export { hasAppReportsAccess } from '../roles.js';
+import { isAdmin } from '../roles.js';
 
 const LEASE_MS = 2 * 60 * 1000;
+export const RESEND_WINDOW_MS = 60 * 60 * 1000;
 export const PENDING_BATCH = 20;
 export const STATE_BATCH = 30;
 export const INBOUND_BATCH = 20;
@@ -69,7 +75,7 @@ function trackingSaver(saveFile) {
 async function storeAttachments(report, value, saveFile) {
   const fileIds = { diagnostics: null, errors: null, minidump: null, images: [] };
   if (value.diagnostics) {
-    const buf = Buffer.from(JSON.stringify(value.diagnostics, null, 2), 'utf8');
+    const buf = Buffer.from(JSON.stringify(value.diagnostics, null, value.schema === 1 ? 2 : undefined), 'utf8');
     const saved = await saveFile(buf, `app-report-${report.reportId}-diagnostics.json`, 'application/json', { appReportId: report.reportId });
     fileIds.diagnostics = { gridfsId: saved.gridfsId, size: buf.length };
   }
@@ -94,6 +100,76 @@ async function storeAttachments(report, value, saveFile) {
   return fileIds;
 }
 
+const FILE_REF_PATHS = ['fileIds.diagnostics.gridfsId', 'fileIds.errors.gridfsId', 'fileIds.minidump.gridfsId', 'fileIds.images.gridfsId', 'contactLog.images.gridfsId'];
+
+/** קבצים זמניים בלבד: תוצאת insert לא ודאית או שיתוף קיים מחייבים בדיקת הפניות לפני מחיקה. */
+async function discardStagedFiles(gridfsIds, deleteFile) {
+  for (const gridfsId of gridfsIds) {
+    try {
+      if (await AppReport.exists({ $or: FILE_REF_PATHS.map((path) => ({ [path]: gridfsId })) })) continue;
+      const files = await FileStorage.find({ gridfsId }).select('_id').lean();
+      if (files.length && await Upload.exists({ fileStorageId: { $in: files.map((file) => file._id) }, isDeleted: { $ne: true } })) continue;
+      await deleteFile(String(gridfsId));
+    } catch (err) {
+      // גם כשל בבדיקת הבעלות הוא סיבה לשמור: ייתכן שה-insert הצליח ורק תשובתו אבדה.
+      console.error('App report: staged attachment retained after cleanup failure:', gridfsId, err?.message);
+    }
+  }
+}
+
+function duplicateReply(before, doc) {
+  // reportId identifies one contract version as well as one payload. In particular,
+  // a legacy retry must not bypass schema 2's attachment identity guarantees.
+  const beforeSchema = before.schema ?? 1;
+  if (beforeSchema !== doc.schema || before.contentHash !== doc.contentHash
+    || (doc.schema === 2 && before.resendHash !== doc.resendHash)) {
+    return { status: 409, body: { error: 'reportId conflict' } };
+  }
+  return { status: 200, body: replyFor(before, { duplicate: true }) };
+}
+
+/** רק גרסה 2: כל רשומה כזאת מוכנסת יחד עם כל הפניות הקבצים, אחרי שמירת הבתים. */
+async function findCompleteReceipt(doc, deps) {
+  const before = await AppReport.findOne({ reportId: doc.reportId }).lean();
+  if (before) return duplicateReply(before, doc);
+  const resent = await AppReport.findOne({
+    ...productFilter(doc.product), schema: 2, resendHash: doc.resendHash,
+    createdAt: { $gte: new Date((deps.now || new Date()).getTime() - RESEND_WINDOW_MS) },
+  }).sort({ createdAt: 1 }).lean();
+  return resent ? { status: 200, body: replyFor(resent, { reportId: doc.reportId, duplicate: true }) } : null;
+}
+
+async function ingestCompleteReport(value, doc, deps) {
+  const tracker = trackingSaver(deps.saveFile);
+  try {
+    const fileIds = await storeAttachments(doc, value, tracker.save);
+    // בקשה מקבילה יכולה לסיים בזמן ההעלאה. הבדיקה החוזרת מצמצמת כפילויות
+    // בין מזהים שונים; האינדקס הייחודי על reportId מכריע מרוץ של אותה זהות.
+    const receipt = await findCompleteReceipt(doc, deps);
+    if (receipt) {
+      await discardStagedFiles(tracker.saved, deps.deleteFile);
+      return receipt;
+    }
+    const before = await AppReport.findOneAndUpdate(
+      { reportId: doc.reportId },
+      { $setOnInsert: { ...doc, fileIds } },
+      { upsert: true, returnDocument: 'before' },
+    ).lean();
+    if (before) {
+      await discardStagedFiles(tracker.saved, deps.deleteFile);
+      return duplicateReply(before, doc);
+    }
+  } catch (err) {
+    console.error('App report: complete report storage failed:', err?.message);
+    await discardStagedFiles(tracker.saved, deps.deleteFile);
+    return { status: 500, body: { error: 'Failed to save complete report' } };
+  }
+  // רשומת cron נוצרת רק אחרי שמירת כל הצרופות, באותה כתיבה של fileIds.
+  const published = await publishReport(doc.reportId, deps);
+  if (!published) return { status: 500, body: { error: 'Report disappeared before publishing' } };
+  return { status: 200, body: replyFor(published) };
+}
+
 /**
  * קליטת דיווח מאומת. מחזיר {status, body}.
  * @param {unknown} raw
@@ -105,14 +181,27 @@ export async function ingestAppReport(raw, deps) {
   const value = v.value;
   const contentHash = computeContentHash(value);
   const signatureHash = computeSignatureHash(value.signature);
+  const resendHash = computeResendHash(contentHash, value);
 
   const doc = {
-    reportId: value.reportId, schema: 1, product: value.product, type: value.type, trigger: value.trigger, title: value.title,
+    reportId: value.reportId, schema: value.schema, product: value.product, type: value.type, trigger: value.trigger, title: value.title,
     description: value.description, stepsToReproduce: value.stepsToReproduce, reporterEmail: value.reporterEmail || null,
     appVersion: value.appVersion, platform: value.platform, osVersion: value.osVersion, arch: value.arch,
     signature: value.signature, sentryEventId: value.sentryEventId, clientCreatedAt: value.clientCreatedAt,
-    contentHash, signatureHash, issuePending: true,
+    contentHash, signatureHash, resendHash, issuePending: true,
   };
+
+  if (value.schema === 2) {
+    const receipt = await findCompleteReceipt(doc, deps);
+    return receipt || ingestCompleteReport(value, doc, deps);
+  }
+
+  // אותו דיווח שנשלח שוב בלחיצה נוספת מקבל reportId חדש; מפנים לדיווח הקודם במקום תגובה נוספת
+  const resent = !(await AppReport.exists({ reportId: value.reportId })) && await AppReport.findOne({
+    ...productFilter(value.product), resendHash,
+    createdAt: { $gte: new Date((deps.now || new Date()).getTime() - RESEND_WINDOW_MS) },
+  }).sort({ createdAt: 1 }).lean();
+  if (resent) return { status: 200, body: replyFor(resent, { reportId: value.reportId, duplicate: true }) };
 
   const before = await AppReport.findOneAndUpdate(
     { reportId: value.reportId },
@@ -121,8 +210,7 @@ export async function ingestAppReport(raw, deps) {
   ).lean();
 
   if (before) {
-    if (before.contentHash !== contentHash) return { status: 409, body: { error: 'reportId conflict' } };
-    return { status: 200, body: replyFor(before, { duplicate: true }) };
+    return duplicateReply(before, doc);
   }
 
   const tracker = trackingSaver(deps.saveFile);
@@ -146,7 +234,7 @@ export async function ingestAppReport(raw, deps) {
 }
 
 /**
- * יצירת issue או תגובה על issue פתוח עם אותה חתימה. כשל משאיר issuePending ל-cron.
+ * יצירת issue, תגובה על issue פתוח עם אותה חתימה, או צירוף שקט ל-issue שנסגר. כשל משאיר issuePending ל-cron.
  * @returns {Promise<object>} מסמך הדיווח העדכני
  */
 export async function publishReport(reportId, deps) {
@@ -178,9 +266,29 @@ export async function publishReport(reportId, deps) {
 
     const related = leased.signatureHash
       ? await AppReport.find({ ...scope, signatureHash: leased.signatureHash, issueNumber: { $ne: null }, reportId: { $ne: reportId } })
-        .select('issueNumber issueState issueUrl createdAt').lean()
+        .select('issueNumber issueState issueStateReason issueUrl appVersion createdAt').lean()
       : [];
-    plan = planPublication(related);
+    plan = planPublication(related, leased.appVersion, leased.signature);
+    if (plan.action === 'suppress') {
+      // מצב סגור ב-DB אינו מבטיח שה-issue עדיין קיים או שלא נפתח מחדש.
+      let issue;
+      try {
+        issue = await github.getIssue(plan.issueNumber);
+      } catch (err) {
+        if (err?.status !== 404 && err?.status !== 410) throw err;
+      }
+      if (!issue || (issue.state === 'closed' && !issue.state_reason)) {
+        await AppReport.updateMany({ ...scope, issueNumber: plan.issueNumber }, {
+          $set: { issueState: 'closed', issueStateReason: null, issueClosedAt: null, issueCheckedAt: now },
+        });
+        plan = { action: 'create', previousIssueNumber: plan.issueNumber };
+      } else if (issue.state !== 'closed') {
+        await handleIssueStateChange(issue, { ...deps, product, now });
+        plan = { action: 'comment', issueNumber: plan.issueNumber, issueUrl: issue.url || plan.issueUrl };
+      } else {
+        plan = { ...plan, issueStateReason: issue.state_reason, issueClosedAt: trustedIssueClosedAt(issue), issueUrl: issue.url || plan.issueUrl };
+      }
+    }
     if (racing && plan.action === 'create') {
       return await AppReport.findOneAndUpdate({ reportId }, { $set: { issueLeaseUntil: null } }, { returnDocument: 'after' }).lean();
     }
@@ -190,7 +298,18 @@ export async function publishReport(reportId, deps) {
       await github.createComment(plan.issueNumber, buildMergeComment(leased));
       set = {
         issueNumber: plan.issueNumber, issueUrl: plan.issueUrl || issueHtmlUrl(github.repo, plan.issueNumber),
-        issueState: 'open', mergedIntoExisting: true,
+        issueState: 'open', issueClosedAt: null, mergedIntoExisting: true,
+      };
+    } else if (plan.action === 'suppress') {
+      // מייל הסגירה יישלח בבדיקת המצב הבאה של ה-issue — אלא אם הכתובת כבר קיבלה אותו עליו
+      const alreadyNotified = leased.reporterEmail && await AppReport.exists({
+        ...scope, issueNumber: plan.issueNumber, reporterEmail: leased.reporterEmail, notifiedClosedAt: { $ne: null },
+      });
+      set = {
+        issueNumber: plan.issueNumber, issueUrl: plan.issueUrl || issueHtmlUrl(github.repo, plan.issueNumber),
+        issueState: 'closed', issueStateReason: plan.issueStateReason, mergedIntoExisting: true, suppressedAfterClose: true,
+        issueClosedAt: plan.issueClosedAt,
+        ...(alreadyNotified ? { notifiedClosedAt: now } : {}),
       };
     } else {
       const { previousIssueNumber } = plan;
@@ -201,7 +320,7 @@ export async function publishReport(reportId, deps) {
       });
       set = {
         issueNumber: created.number, issueUrl: created.url || issueHtmlUrl(github.repo, created.number),
-        issueState: created.state === 'closed' ? 'closed' : 'open', mergedIntoExisting: false, previousIssueNumber,
+        issueState: created.state === 'closed' ? 'closed' : 'open', issueClosedAt: trustedIssueClosedAt(created), mergedIntoExisting: false, previousIssueNumber,
       };
     }
     return await AppReport.findOneAndUpdate(
@@ -213,7 +332,7 @@ export async function publishReport(reportId, deps) {
     console.error('App report: GitHub publish failed:', err?.message);
     // ה-issue נמחק או ננעל: בלי סימונו כסגור כל דיווח נוסף עם אותה חתימה יישאר ממתין לנצח
     if (plan?.action === 'comment' && (err?.status === 404 || err?.status === 410 || (err?.status === 403 && /locked/i.test(String(err?.message))))) {
-      await AppReport.updateMany({ ...scope, issueNumber: plan.issueNumber }, { $set: { issueState: 'closed' } });
+      await AppReport.updateMany({ ...scope, issueNumber: plan.issueNumber }, { $set: { issueState: 'closed', issueStateReason: null, issueClosedAt: null } });
     }
     return AppReport.findOneAndUpdate(
       { reportId },
@@ -241,6 +360,7 @@ export async function runAppReportsSync(deps) {
   for (const [product, github] of clients) {
     if (github) await syncProduct(product, github, d, summary);
   }
+  summary.cleanup = await cleanupClosedReportPayloads(d);
   return summary;
 }
 
@@ -278,7 +398,7 @@ async function syncProduct(product, github, d, summary) {
   for (const { _id: number } of issues) {
     try {
       const issue = await github.getIssue(number);
-      const r = await handleIssueStateChange(issue, { ...d, product });
+      const r = await handleIssueStateChange(issue, { ...d, product, github });
       summary.states.checked += 1;
       if (r.transition === 'closed') summary.states.closed += 1;
       summary.states.notified += r.notified;
@@ -288,7 +408,9 @@ async function syncProduct(product, github, d, summary) {
       console.error(`App report sync: ${product} issue #${number} failed:`, err?.message);
       // issue שנמחק/הועבר לא יחסום את התור
       if (err?.status === 404 || err?.status === 410) {
-        await AppReport.updateMany({ ...scope, issueNumber: number }, { $set: { issueCheckedAt: now } });
+        await AppReport.updateMany({ ...scope, issueNumber: number }, {
+          $set: { issueState: 'closed', issueStateReason: null, issueClosedAt: null, issueCheckedAt: now },
+        });
       }
     }
   }
@@ -298,13 +420,21 @@ async function syncProduct(product, github, d, summary) {
 export function serializeReport(doc, role) {
   if (!doc) return null;
   // replyToken הוא הרשאה לכתוב לדיווח (מי שמחזיק בו יכול לשלוח "תשובה") — לא יוצא מהשרת
-  const { reporterEmail, issueLeaseUntil, contentHash, replyToken, __v, ...rest } = doc;
+  const { reporterEmail, issueLeaseUntil, contentHash, resendHash, replyToken, payloadCleanup, __v, ...rest } = doc;
   return {
     ...rest,
+    ...(payloadCleanup ? { payloadCleanup: {
+      purgedAt: payloadCleanup.purgedAt, closedAt: payloadCleanup.closedAt,
+      removedFiles: payloadCleanup.removedFiles, removedBytes: payloadCleanup.removedBytes,
+      sharedFiles: payloadCleanup.sharedFiles, missingFiles: payloadCleanup.missingFiles,
+      kinds: payloadCleanup.kinds,
+    } } : {}),
     product: productOf(doc),
     _id: String(doc._id),
     hasEmail: Boolean(reporterEmail),
-    ...(role === 'admin' ? { reporterEmail: reporterEmail || null } : {}),
+    // רק הדומיין המוצע — הכתובת עצמה חשופה למנהל כללי בלבד
+    emailDomainSuggestion: reporterEmail ? suggestEmailDomain(reporterEmail) : null,
+    ...(isAdmin(role) ? { reporterEmail: reporterEmail || null } : {}),
     fileIds: undefined,
     files: {
       diagnostics: doc.fileIds?.diagnostics ? { size: doc.fileIds.diagnostics.size } : null,
@@ -317,7 +447,7 @@ export function serializeReport(doc, role) {
       ...(images?.length ? { images: images.map(({ size, mimeType, fileName }) => ({ size, mimeType, fileName })) } : {}),
       direction: c.direction || 'out',
       byUserId: c.byUserId ? String(c.byUserId) : null,
-      ...(role === 'admin' && fromEmail ? { fromEmail } : {}),
+      ...(isAdmin(role) && fromEmail ? { fromEmail } : {}),
     })),
   };
 }
@@ -442,7 +572,14 @@ export async function contactReporter({ reportId, subject, message, user }, deps
   const result = await deps.sendContactMail({
     to: doc.reporterEmail, subject: s, message: m, reportTitle: doc.title, issueUrl: doc.issueUrl || null, replyTo, product: productOf(doc),
   });
-  if (!result?.sent) return { status: 502, body: { error: 'Failed to send email' } };
+  if (!result?.sent) {
+    const suggestion = suggestEmailDomain(doc.reporterEmail);
+    const hint = suggestion ? ` כנראה יש שגיאת הקלדה בכתובת (אולי התכוון ל-@${suggestion}?)` : '';
+    if (result?.reason === 'recipient_rejected') {
+      return { status: 422, body: { error: `שרת הדואר דחה את כתובת המייל של המדווח.${hint}`, field: 'reporterEmail' } };
+    }
+    return { status: 502, body: { error: `שליחת המייל נכשלה.${hint}` } };
+  }
 
   const entry = { direction: 'out', byUserId: user.id || null, byName: user.name || '', subject: s, message: m, sentAt: deps.now || new Date() };
   await AppReport.updateOne({ reportId }, { $push: { contactLog: entry } });
@@ -514,7 +651,10 @@ export async function ingestInboundReply(raw, deps) {
   const filter = { reportId: doc.reportId, ...(messageId ? { 'contactLog.messageId': { $ne: messageId } } : {}) };
   let upd;
   try {
-    upd = await AppReport.updateOne(filter, { $push: { contactLog: entry }, $set: { lastInboundAt: now } });
+    upd = await AppReport.updateOne(filter, {
+      $push: { contactLog: entry },
+      $set: { lastInboundAt: now, ...(imageRefs.length ? { 'payloadCleanup.purgedAt': null } : {}) },
+    });
   } catch (error) {
     if (tracker.saved.length) {
       try {

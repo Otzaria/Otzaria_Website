@@ -24,8 +24,10 @@ export const PLUGIN_CARD_FIELDS = [
   'ratingAvg',
   'ratingCount',
   'fileUpdatedAt',
+  'publishedAt',
   'originalDate',
-  'updatedAt'
+  'updatedAt',
+  'hasService'
 ]
 
 // includeDescription: לדף "כל התוספים", שהחיפוש המקומי שלו (pluginFilter.js)

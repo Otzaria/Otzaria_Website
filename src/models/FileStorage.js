@@ -12,4 +12,6 @@ const FileStorageSchema = new mongoose.Schema({
   isDeleted: { type: Boolean, default: false }
 }, { timestamps: true });
 
+FileStorageSchema.index({ gridfsId: 1 });
+
 export default mongoose.models.FileStorage || mongoose.model('FileStorage', FileStorageSchema);

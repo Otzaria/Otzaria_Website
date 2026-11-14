@@ -1,0 +1,516 @@
+{
+ "schemaVersion": 1,
+ "jobId": "65f0c0ffee0000000000abcd",
+ "inputSha256": "7fa94a067e39e631c52f6e498ac8b3dd4f89ea45e26aefbfc72c9ace2b902567",
+ "outcome": "partial",
+ "pipelineVersion": "ocr-torani 0.1.0+f9f3454abcde; models 0123456789ab",
+ "pages": [
+  {
+   "pdfPageIndex": 1,
+   "text": "<h2>פרק א</h2>\nבראשית ברא אלהים",
+   "metadata": {
+    "lines": 3,
+    "frames": 3,
+    "flat": false,
+    "review": false,
+    "scripts": {
+     "square": 3,
+     "rashi": 0,
+     "mixed": 0
+    },
+    "suspectLines": 1,
+    "prep": {
+     "ops": [
+      "deskew",
+      "denoise"
+     ],
+     "skewDeg": 1.25
+    },
+    "issueCount": 0,
+    "issues": []
+   },
+   "layout": {
+    "layoutVersion": 1,
+    "pipelineSchema": 2,
+    "coordSpace": "aligned",
+    "toSource": [
+     0.999762,
+     -0.021815,
+     27.269,
+     0.021815,
+     0.999762,
+     -18.771
+    ],
+    "rotationDeg": 1.25,
+    "image": {
+     "width": 1748,
+     "height": 2481,
+     "imageSha256": "aa761291ff9d068556f2d1d6f63c53a4d22e44d65f882c1c252a04372123add3"
+    },
+    "alignedSize": [
+     1748,
+     2481
+    ],
+    "dewarped": false,
+    "geometry": "exact",
+    "prepOps": [
+     "deskew",
+     "denoise"
+    ],
+    "review": false,
+    "sanity": {
+     "nSuspect": 1,
+     "foreignRows": 0,
+     "uncovered": 0
+    },
+    "gutters": null,
+    "orderFrames": [
+     "m2",
+     "m1",
+     "m3"
+    ],
+    "lines": [
+     {
+      "k": 0,
+      "order": 2,
+      "inText": true,
+      "text": "בראשית ברא אלהים",
+      "bbox": [
+       208,
+       299,
+       1607,
+       347
+      ],
+      "conf": 98.4,
+      "script": "square",
+      "stream": "main",
+      "fid": "m1",
+      "frameRole": "body",
+      "status": "auto",
+      "words": [
+       [
+        1300,
+        1607,
+        0.998
+       ],
+       [
+        900,
+        1100,
+        0.974
+       ],
+       [
+        208,
+        420,
+        0.993
+       ]
+      ],
+      "streamSrc": "model",
+      "streamConf": 0.981,
+      "alternatives": [
+       {
+        "i": 1,
+        "word": "ברא",
+        "p": 0.41,
+        "alts": [
+         {
+          "text": "כרא",
+          "p": 0.3
+         }
+        ],
+        "other_p": 0.29
+       }
+      ],
+      "candidates": [
+       [
+        1,
+        "ברא",
+        [
+         "כרא",
+         "גרא",
+         "ברה"
+        ],
+        0.41
+       ]
+      ],
+      "lm": [
+       {
+        "i": 1,
+        "word": "ברא",
+        "alts": [
+         {
+          "text": "כרא",
+          "gain": 2.1
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "k": 1,
+      "order": 1,
+      "inText": true,
+      "text": "פרק א",
+      "bbox": [
+       700,
+       180,
+       1150,
+       240
+      ],
+      "conf": 99.1,
+      "script": "square",
+      "stream": "main_heading",
+      "fid": "m2",
+      "frameRole": "heading",
+      "status": "auto",
+      "words": [
+       [
+        950,
+        1150,
+        0.99
+       ],
+       [
+        700,
+        760,
+        0.98
+       ]
+      ],
+      "streamSrc": "detector",
+      "streamConf": 0.912,
+      "streamAlt": {
+       "role": "body",
+       "conf": 0.31
+      },
+      "suspect": [
+       "frag"
+      ]
+     },
+     {
+      "k": 2,
+      "order": 3,
+      "inText": false,
+      "text": "ה",
+      "bbox": [
+       840,
+       2380,
+       910,
+       2420
+      ],
+      "conf": 88.0,
+      "script": "square",
+      "stream": "footer",
+      "fid": "m3",
+      "frameRole": "furniture",
+      "status": "auto",
+      "words": [
+       [
+        840,
+        910,
+        0.88
+       ]
+      ],
+      "streamSrc": "text",
+      "streamConf": 0.77,
+      "furniture": "page_number"
+     }
+    ],
+    "frames": [
+     {
+      "fid": "m1",
+      "bbox": [
+       200,
+       290,
+       1615,
+       2301
+      ],
+      "role": "body",
+      "kind": "text",
+      "conf": 0.981,
+      "order": 2
+     },
+     {
+      "fid": "m2",
+      "bbox": [
+       690,
+       171,
+       1160,
+       250
+      ],
+      "role": "heading",
+      "kind": "text",
+      "conf": 0.912,
+      "order": 1,
+      "alt": {
+       "role": "body",
+       "conf": 0.31
+      }
+     },
+     {
+      "fid": "m3",
+      "bbox": [
+       830,
+       2370,
+       920,
+       2430
+      ],
+      "role": "furniture",
+      "kind": "text",
+      "conf": 0.77,
+      "order": 3,
+      "stream": "footer"
+     }
+    ]
+   }
+  },
+  {
+   "pdfPageIndex": 2,
+   "text": "שלום עולם כתב מרובע",
+   "metadata": {
+    "lines": 2,
+    "frames": 1,
+    "flat": true,
+    "review": true,
+    "scripts": {
+     "square": 1,
+     "rashi": 0,
+     "mixed": 1
+    },
+    "suspectLines": 0,
+    "prep": {
+     "ops": [
+      "background_flatten",
+      "dewarp"
+     ],
+     "skewDeg": 0.0
+    },
+    "issueCount": 0,
+    "issues": []
+   },
+   "layout": {
+    "layoutVersion": 1,
+    "pipelineSchema": 2,
+    "coordSpace": "aligned",
+    "toSource": [
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    "rotationDeg": 0.0,
+    "image": {
+     "width": 1748,
+     "height": 2481,
+     "imageSha256": "24971043777af01f9d0bd95d450faa525f4771cd443b95b96c48e5e855406104"
+    },
+    "alignedSize": [
+     1748,
+     2481
+    ],
+    "dewarped": true,
+    "geometry": "approx",
+    "prepOps": [
+     "background_flatten",
+     "dewarp"
+    ],
+    "review": true,
+    "sanity": {
+     "nSuspect": 0,
+     "foreignRows": 0,
+     "uncovered": 1
+    },
+    "gutters": [
+     [
+      860,
+      906
+     ]
+    ],
+    "orderFrames": [
+     "m1"
+    ],
+    "lines": [
+     {
+      "k": 0,
+      "order": 1,
+      "inText": true,
+      "text": "שלום עולם",
+      "bbox": [
+       300,
+       512,
+       1500,
+       572
+      ],
+      "conf": 85.5,
+      "script": "square",
+      "stream": "main",
+      "fid": "m1",
+      "frameRole": "body",
+      "status": "auto",
+      "words": [
+       [
+        1200,
+        1500,
+        0.91
+       ],
+       [
+        300,
+        600,
+        0.8
+       ]
+      ],
+      "streamSrc": "model",
+      "streamConf": 0.95,
+      "wordTexts": [
+       "שלום",
+       "עולם״"
+      ]
+     },
+     {
+      "k": 1,
+      "order": 2,
+      "inText": true,
+      "text": "כתב מרובע",
+      "bbox": [
+       400,
+       612,
+       1400,
+       672
+      ],
+      "conf": 77.0,
+      "script": "mixed",
+      "stream": "main",
+      "fid": "m1",
+      "frameRole": "body",
+      "status": "auto",
+      "words": [
+       [
+        1000,
+        1400,
+        null
+       ],
+       [
+        400,
+        900,
+        null
+       ]
+      ],
+      "wordScript": [
+       "rashi",
+       "square"
+      ],
+      "streamSrc": "model",
+      "streamConf": 0.95
+     }
+    ],
+    "frames": [
+     {
+      "fid": "m1",
+      "bbox": [
+       290,
+       502,
+       1510,
+       712
+      ],
+      "role": "body",
+      "kind": "text",
+      "conf": 0.95,
+      "order": 1
+     }
+    ]
+   }
+  },
+  {
+   "pdfPageIndex": 3,
+   "text": "דף שלישי\nשורה שניה",
+   "metadata": {
+    "lines": 2,
+    "frames": 1,
+    "flat": false,
+    "review": false,
+    "scripts": {
+     "square": 2,
+     "rashi": 0,
+     "mixed": 0
+    },
+    "suspectLines": 0,
+    "prep": {
+     "ops": [
+      "deskew"
+     ],
+     "skewDeg": -0.6
+    },
+    "issueCount": 1,
+    "issues": [
+     "שורה 2: תגית מחוץ לחוזה — <u>"
+    ]
+   },
+   "warnings": [
+    {
+     "code": "layout_too_large",
+     "message": "page layout is 1310720 bytes after removing alternatives, above 1048576; layout omitted"
+    }
+   ]
+  },
+  {
+   "pdfPageIndex": 4,
+   "text": "",
+   "error": {
+    "code": "not_processed",
+    "message": "page not processed (stage layout)"
+   }
+  }
+ ],
+ "metadata": {
+  "hardware": {
+   "device": "cuda:0",
+   "gpu": "AMD Radeon RX 9060 XT",
+   "gpu_kind": "amd",
+   "gpu_mem_gb": 15.9,
+   "cpu_logical": 16,
+   "page_workers": 6,
+   "threads_per_worker": 2,
+   "rec_batch": 1,
+   "seg_on_gpu": true
+  },
+  "models": {
+   "detector": "models/detector/frames-v7-medium",
+   "reading": {
+    "square": "models/square-v2",
+    "rashi": "models/rashi-v6"
+   }
+  },
+  "seconds": {
+   "layout": 20.1,
+   "recognize": 30.4,
+   "finish": 6.0
+  },
+  "per_page": 18.9,
+  "lm": {
+   "model": "rabbinic",
+   "checked": 4,
+   "flagged": 1,
+   "seconds": 0.7
+  },
+  "otzaria_issues": 1,
+  "otzaria_issue_list": [
+   "שורה 9: תגית מחוץ לחוזה — <u>"
+  ],
+  "gpu": {
+   "name": "AMD Radeon RX 9060 XT",
+   "vram_peak_allocated_gb": 0.9,
+   "vram_peak_reserved_gb": 1.2
+  },
+  "pages_processed_this_run": 3,
+  "resumed": false,
+  "run_seconds": 61.2,
+  "bridge_version": 2,
+  "layout": {
+   "version": 1,
+   "pages": 2,
+   "trimmed": 0,
+   "dropped": 1,
+   "bytes": 3066
+  },
+  "service_version": "1.0.143"
+ }
+}

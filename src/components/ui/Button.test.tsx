@@ -13,6 +13,18 @@ describe('Button', () => {
     expect(onClick).toHaveBeenCalledTimes(1)
   })
 
+  it('softDisabled — aria-disabled בלי disabled: הפוקוס נשאר, והלחיצה לא מגיעה', () => {
+    const onClick = vi.fn()
+    render(<Button softDisabled onClick={onClick}>אשר</Button>)
+    const button = screen.getByRole('button', { name: 'אשר' })
+    expect(button).not.toBeDisabled()
+    expect(button).toHaveAttribute('aria-disabled', 'true')
+    button.focus()
+    expect(button).toHaveFocus()
+    fireEvent.click(button)
+    expect(onClick).not.toHaveBeenCalled()
+  })
+
   it('type="submit" נשמר', () => {
     render(<Button type="submit">שליחה</Button>)
     expect(screen.getByRole('button', { name: 'שליחה' })).toHaveAttribute('type', 'submit')
@@ -23,6 +35,13 @@ describe('Button', () => {
     const link = screen.getByRole('link', { name: 'אודות' })
     expect(link).toHaveAttribute('href', '/about')
     expect(link.className).toContain('--button-tonal-bg')
+  })
+
+  it('נתיב /api/ — <a> רגיל, בלי ניווט Next (אחרת ההורדה מתבקשת פעמיים)', () => {
+    render(<Button href="/api/plugins/p1/download">הורד</Button>)
+    expect(screen.getByRole('link', { name: 'הורד' })).toHaveAttribute('href', '/api/plugins/p1/download')
+    expect(isPlainAnchor('/api/plugins/p1/download')).toBe(true)
+    expect(isPlainAnchor('/apiary')).toBe(false)
   })
 
   it('עוגן באותו דף — <a> רגיל (לא ניווט Next)', () => {
@@ -48,6 +67,19 @@ describe('Button', () => {
     expect(button).not.toHaveTextContent('save')
   })
 
+  it('loading עם softDisabled — לא disabled (הפוקוס נשאר), והלחיצה לא מגיעה', () => {
+    const onClick = vi.fn()
+    render(<Button loading softDisabled onClick={onClick}>אשר</Button>)
+    const button = screen.getByRole('button', { name: /אשר/ })
+    expect(button).not.toBeDisabled()
+    expect(button).toHaveAttribute('aria-busy', 'true')
+    expect(button).toHaveAttribute('aria-disabled', 'true')
+    button.focus()
+    fireEvent.click(button)
+    expect(document.activeElement).toBe(button)
+    expect(onClick).not.toHaveBeenCalled()
+  })
+
   it('קישור מושבת — aria-disabled, מחוץ לסדר הטאב, והלחיצה לא מנווטת', () => {
     render(<Button href="/donate" disabled>תרומה</Button>)
     const link = screen.getByRole('link', { name: 'תרומה' })
@@ -56,6 +88,12 @@ describe('Button', () => {
     const event = new MouseEvent('click', { bubbles: true, cancelable: true })
     link.dispatchEvent(event)
     expect(event.defaultPrevented).toBe(true)
+  })
+
+  it('aria-pressed — גם המראה הלחוץ (מקור אמת אחד)', () => {
+    render(<><Button variant="text" size="tool" iconOnly icon="format_bold" aria-label="הדגשה" aria-pressed /><Button variant="text" size="tool" iconOnly icon="format_italic" aria-label="נטוי" aria-pressed={false} /></>)
+    expect(screen.getByRole('button', { name: 'הדגשה' }).className).toContain('bg-(--tool-bg-pressed)')
+    expect(screen.getByRole('button', { name: 'נטוי' }).className).not.toContain('bg-(--tool-bg-pressed)')
   })
 
   it('iconOnly — השם הנגיש מ-aria-label', () => {

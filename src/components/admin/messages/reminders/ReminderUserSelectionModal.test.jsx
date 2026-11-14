@@ -1,0 +1,73 @@
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import ReminderUserSelectionModal from './ReminderUserSelectionModal'
+
+const users = [
+  { email: 'a@example.com', name: 'אלכס' },
+  { email: 'b@example.com', name: 'בני' },
+]
+
+describe('ReminderUserSelectionModal', () => {
+  it('מציג את רשימת המשתמשים ואת ספירת הנבחרים', () => {
+    render(
+      <ReminderUserSelectionModal
+        users={users}
+        selected={['a@example.com']}
+        onToggle={vi.fn()}
+        onSelectAll={vi.fn()}
+        onSelectNone={vi.fn()}
+        onClose={vi.fn()}
+      />
+    )
+    expect(screen.getByText('אלכס')).toBeInTheDocument()
+    expect(screen.getByText('בני')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'אישור (1)' })).toBeInTheDocument()
+  })
+
+  it('קורא ל-onToggle עם האימייל הנכון', async () => {
+    const onToggle = vi.fn()
+    render(
+      <ReminderUserSelectionModal
+        users={users}
+        selected={[]}
+        onToggle={onToggle}
+        onSelectAll={vi.fn()}
+        onSelectNone={vi.fn()}
+        onClose={vi.fn()}
+      />
+    )
+    const checkboxes = screen.getAllByRole('checkbox')
+    await userEvent.setup().click(checkboxes[0])
+    expect(onToggle).toHaveBeenCalledWith('a@example.com')
+  })
+
+  it('קורא ל-onSelectAll/onSelectNone/onClose בהתאם', async () => {
+    const onSelectAll = vi.fn()
+    const onSelectNone = vi.fn()
+    const onClose = vi.fn()
+    render(
+      <ReminderUserSelectionModal
+        users={users}
+        selected={['a@example.com']}
+        onToggle={vi.fn()}
+        onSelectAll={onSelectAll}
+        onSelectNone={onSelectNone}
+        onClose={onClose}
+      />
+    )
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'בחר הכול' }))
+    expect(onSelectAll).toHaveBeenCalledTimes(1)
+    await user.click(screen.getByRole('button', { name: 'נקה' }))
+    expect(onSelectNone).toHaveBeenCalledTimes(1)
+    await user.click(screen.getByRole('button', { name: /אישור/ }))
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('כל שורה היא תווית: השם הנגיש של התיבה — השם והדואר', () => {
+    render(<ReminderUserSelectionModal users={users} selected={[]} onToggle={vi.fn()} onSelectAll={vi.fn()} onSelectNone={vi.fn()} onClose={vi.fn()} />)
+    expect(screen.getByRole('checkbox', { name: /אלכס.*a@example\.com/ })).not.toBeChecked()
+    expect(screen.getByRole('dialog', { name: 'בחר עורכים' })).toBeInTheDocument()
+  })
+})

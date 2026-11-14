@@ -12,7 +12,9 @@ import {
   isCompatibleWithApp,
   buildVersionEntries,
   resolveCompatibleVersion,
-  lowestSupportedAppVersion
+  lowestSupportedAppVersion,
+  resolveForAppVersion,
+  hasCompatibleVersion
 } from './pluginCompatibility.js'
 
 /** תוסף מדומה: הגרסה החיה + היסטוריית גרסאות, כמו במסמך ה-DB */
@@ -152,4 +154,27 @@ test('ולידציה של גרסת אוצריא נשלחת', () => {
   assert.equal(isValidAppVersion('latest'), false)
   assert.equal(isValidAppVersion('0.9.94; rm -rf'), false)
   assert.equal(isValidAppVersion('../../etc'), false)
+})
+
+test('תוסף שירות: בחירה אוטומטית לא תבחר גרסה היסטורית', () => {
+  const service = { ...SAMPLE, hasService: true }
+  assert.equal(resolveCompatibleVersion(service, '0.9.97').version, '2.0.0')
+  // לתוסף רגיל 0.9.95 בוחר את 1.5.0; לתוסף שירות — אין גרסה תואמת
+  assert.equal(resolveCompatibleVersion(SAMPLE, '0.9.95').version, '1.5.0')
+  assert.equal(resolveCompatibleVersion(service, '0.9.95'), null)
+  assert.equal(hasCompatibleVersion(service, '0.9.95'), false)
+  // הרצפה מחושבת מהגרסה הנוכחית בלבד
+  assert.equal(lowestSupportedAppVersion(service), '0.9.96')
+  // רשימת הגרסאות הציבורית נשארת מלאה (הורדה מפורשת עם אזהרת תאימות)
+  assert.equal(buildVersionEntries(service).length, 4)
+})
+
+test('תוסף שירות: resolveForAppVersion על הייצוג הציבורי בוחר רק את הנוכחית', () => {
+  const versions = buildVersionEntries(SAMPLE)
+  const pub = { id: 'x', version: '2.0.0', versions }
+  assert.equal(resolveForAppVersion(pub, '0.9.95').version, '1.5.0')
+  assert.equal(resolveForAppVersion({ ...pub, hasService: true }, '0.9.95'), null)
+  const current = resolveForAppVersion({ ...pub, hasService: true }, '0.9.97')
+  assert.equal(current.version, '2.0.0')
+  assert.equal(current.isLatestVersion, true)
 })

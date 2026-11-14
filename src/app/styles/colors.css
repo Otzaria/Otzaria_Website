@@ -96,6 +96,11 @@
    * לגוונים הרמוניים (למשל tertiary לזית) — שאלה פתוחה, שינוי שורה.
    * מוגדרים רק התפקידים שבשימוש: תפקיד M3 שאין לו צרכן (inverse-*, surface-container-lowest,
    * on-warning, info...) נמחק, ומוסיפים אותו (כאן וב-theme-dark.css) יחד עם הרכיב שצריך אותו. */
+  /* inverse — משטח הפוך (כהה בערכה הבהירה): הודעה קופצת (ui/Toast), כדי שתיבדל מהרשימה שמתחתיה.
+     inverse-primary — פעולה על המשטח ההפוך ("בטל"). */
+  --color-inverse-surface: var(--ref-neutral-20);
+  --color-inverse-on-surface: var(--ref-neutral-95);
+  --color-inverse-primary: var(--ref-primary-80);
   --color-error: var(--ref-error-40);
   --color-on-error: var(--ref-neutral-100);
   --color-error-container: var(--ref-error-90);
@@ -107,6 +112,28 @@
   --color-on-warning-container: var(--color-warning-900);
   --color-info-container: var(--color-info-100);
   --color-on-info-container: var(--color-info-900);
+  /* סימון אזור על תמונת עמוד (admin/tzurat/RegionImage): מסגרת + מילוי שקוף. על תמונה — ולכן אותו
+     גוון בשתי הערכות (theme-dark.css חוזר על הערכים). report — אזור שדווח; line — שורה שהשתנתה. */
+  --color-region-report: var(--color-danger-600);
+  --color-region-report-fill: color-mix(in srgb, var(--color-danger-500) 15%, transparent);
+  --color-region-line: var(--color-info-600);
+  --color-region-line-fill: color-mix(in srgb, var(--color-info-500) 10%, transparent);
+
+  /* ---------------- הבדלים בטקסט (ui: library/DiffPreview) ----------------
+   * "הצעות עריכה" ו"התנגשויות בסנכרון". השורה — גוון רך (מעורבב עם המשטח, כדי שכרטיס עם כמה חלקים
+   * לא ייראה כמו שגיאה); המילים שהשתנו — גוון חזק בהרבה (ובנוסף קו חוצה / קו תחתון — לא רק צבע).
+   * הטקסט עליהם — on-surface (ניגוד ≥ 7:1 בשתי הערכות).
+   * remove / add — מה שיוסר מהספר / מה שיתווסף (הצעת עריכה).
+   * repo / site — שני הנוסחים בהתנגשות: שבמאגר (כחול שקט) ושבאתר (ניטרלי). אף אחד מהם אינו "נבחר" —
+   * secondary-container (חול) שמור למצב נבחר / פעיל. */
+  --color-diff-remove: color-mix(in srgb, var(--color-error-container) 60%, var(--color-surface));
+  --color-diff-remove-mark: color-mix(in srgb, var(--color-error) 28%, var(--color-surface));
+  --color-diff-add: color-mix(in srgb, var(--color-success-container) 60%, var(--color-surface));
+  --color-diff-add-mark: color-mix(in srgb, var(--color-success) 30%, var(--color-surface));
+  --color-diff-repo: color-mix(in srgb, var(--color-info-container) 70%, var(--color-surface));
+  --color-diff-repo-mark: color-mix(in srgb, var(--color-on-info-container) 22%, var(--color-diff-repo));
+  --color-diff-site: var(--color-surface-container-high);
+  --color-diff-site-mark: color-mix(in srgb, var(--color-on-surface) 18%, var(--color-diff-site));
 
   /* ---------------- תשתית אינטראקציה ----------------
    * focus-ring — טבעת הפוקוס של כל רכיב (outline 2px, offset 2px; ראו component-tokens.css).

@@ -85,3 +85,10 @@ describe('PluginDetailSkeleton', () => {
     expect(screen.getByRole('status')).toHaveTextContent('טוען פרטי תוסף…')
   })
 })
+
+describe('PluginHero — תוסף שירות', () => {
+  it('תג "דורש שירות חיצוני" ליד השם', () => {
+    render(<PluginHero plugin={{ ...plugin, hasService: true }} titleId="t" actions={null} />)
+    expect(screen.getByText('דורש שירות חיצוני')).toBeInTheDocument()
+  })
+})

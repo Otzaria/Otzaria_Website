@@ -9,6 +9,7 @@ const UploadSchema = new mongoose.Schema({
   fileStorageId: { type: mongoose.Schema.Types.ObjectId, ref: 'FileStorage' }, // רפרנס לקובץ ב-GridFS
   fileSize: { type: Number }, // גודל הקובץ בבתים
   lineCount: { type: Number }, // מספר שורות
+  // 'dicta' נשאר רק לרשומות ישנות (save() מאמת גם שדות שנטענו); העלאות חדשות לא מקבלות אותו.
   uploadType: { type: String, enum: ['full_book', 'single_page', 'dicta'], default: 'single_page' }, // סוג ההעלאה
   status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
   bookStatus: { type: String, default: 'not_checked' }, // סטטוס הספר: not_checked, needs_attention, ready, added_to_library
@@ -27,11 +28,13 @@ const UploadSchema = new mongoose.Schema({
   sourceUrl: { type: String }, // מקור הספר (קישור לPDF ציבורי)
   isOcr: { type: Boolean, default: false }, // האם הטקסט הוא ע"י OCR
   ocrDescription: { type: String }, // תיאור שיטת ה-OCR
+  allowOtherPlatforms: { type: Boolean }, // האם המעלה מאשר גם ל'זית' ולפלטפורמות נוספות שיקבלו אישור מאוצריא (חסר בהעלאות ישנות)
 }, { timestamps: true });
 
 // שאילתות תכופות מסננות לפי isDeleted (+ מיון לפי תאריך יצירה) ולפי uploader —
 // בלי אינדקסים אלה כל שאילתא כזו היא סריקת קולקציה מלאה.
 UploadSchema.index({ isDeleted: 1, createdAt: -1 });
 UploadSchema.index({ uploader: 1 });
+UploadSchema.index({ fileStorageId: 1 }, { sparse: true });
 
 export default mongoose.models.Upload || mongoose.model('Upload', UploadSchema);

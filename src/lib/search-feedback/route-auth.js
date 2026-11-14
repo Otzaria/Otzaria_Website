@@ -15,7 +15,7 @@ export async function requireSearchFeedbackAccess() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return { ok: false, response: jsonNoStore({ error: 'נדרשת התחברות' }, 401) };
   await connectDB();
-  const user = await User.findById(session.user.id).select('role').lean();
-  if (!user || !hasSearchFeedbackAccess(user.role)) return { ok: false, response: jsonNoStore({ error: 'אין הרשאה לצפות במשוב החיפוש' }, 403) };
+  const user = await User.findById(session.user.id).select('role roles').lean();
+  if (!user || !hasSearchFeedbackAccess(user)) return { ok: false, response: jsonNoStore({ error: 'אין הרשאה לצפות במשוב החיפוש' }, 403) };
   return { ok: true };
 }

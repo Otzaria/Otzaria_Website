@@ -18,7 +18,7 @@ export async function PUT(request, { params }) {
     const { id } = await params;
     const { lines, rotation } = await request.json();
     const userId = session.user.id || session.user._id;
-    const isAdmin = hasBookLibraryAccess(session.user.role);
+    const isAdmin = hasBookLibraryAccess(session.user);
 
     await connectDB();
     const page = await OcrTrainingPage.findById(id);

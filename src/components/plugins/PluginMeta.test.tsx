@@ -26,3 +26,12 @@ describe('PluginMeta', () => {
     expect(showsStatusBadge(undefined)).toBe(false)
   })
 })
+
+describe('PluginMeta — תוסף שירות', () => {
+  it('תג "דורש שירות חיצוני" רק כש-hasService', () => {
+    const { rerender } = render(<PluginMeta plugin={{ version: '1.0.0', hasService: true }} />)
+    expect(screen.getByText('דורש שירות חיצוני')).toBeInTheDocument()
+    rerender(<PluginMeta plugin={{ version: '1.0.0' }} />)
+    expect(screen.queryByText('דורש שירות חיצוני')).toBeNull()
+  })
+})

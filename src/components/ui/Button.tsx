@@ -33,6 +33,11 @@ type CommonProps = {
   fullWidth?: boolean
   loading?: boolean
   disabled?: boolean
+  /**
+   * מושבת בלי לאבד פוקוס: aria-disabled והלחיצה נבלעת, אבל הכפתור נשאר בסדר הטאב. לכפתור שבפוקוס
+   * שמושבת לרגע (בקשה באוויר, חלון אישור פתוח) — disabled אמיתי היה מפיל את הפוקוס לתחילת הדף.
+   */
+  softDisabled?: boolean
   className?: string
 }
 
@@ -58,9 +63,13 @@ type IconOnlyName =
 
 export type ButtonProps = (AsButton | AsLink) & IconOnlyName
 
-/** עוגן באותו דף, כתובת מלאה, mailto: וכו' — <a> רגיל ולא ניווט של Next */
+/**
+ * עוגן באותו דף, כתובת מלאה, mailto: וכו' — <a> רגיל ולא ניווט של Next.
+ * כך גם נתיב /api/: נקודת קצה אינה עמוד. next/link היה מבקש אותה פעמיים (בקשת RSC ואז הניווט), וכל בקשה
+ * כזו נספרת, למשל הורדה של תוסף (download מעלה את המונה).
+ */
 export function isPlainAnchor(href: string): boolean {
-  return href.startsWith('#') || href.startsWith('//') || /^[a-z][a-z\d+.-]*:/i.test(href)
+  return href.startsWith('#') || href.startsWith('//') || href.startsWith('/api/') || /^[a-z][a-z\d+.-]*:/i.test(href)
 }
 
 const SAFE_ANCHOR_SCHEMES = new Set(['http:', 'https:', 'mailto:', 'tel:'])
@@ -89,7 +98,8 @@ function renderIcon(icon: ButtonIcon, className: string) {
  * לעוגן/כתובת חיצונית — לפי href. מבוסס טוקנים (component-tokens.css → --button-*), ומטרת
  * המגע לפחות 44px בכל הגדלים. Server Component (בלי hooks) — אפשר להשתמש בו גם בדפי שרת.
  *
- * נגישות: loading → aria-busy ו-disabled, ובמקום האייקון מחוון הטעינה (ui/Loader, דקורטיבי); קישור מושבת → aria-disabled ומחוץ לסדר הטאב
+ * נגישות: loading → aria-busy ו-disabled (עם softDisabled — בלי disabled, הפוקוס נשאר), ובמקום האייקון מחוון הטעינה (ui/Loader, דקורטיבי); softDisabled →
+ * aria-disabled בלי disabled (הפוקוס נשאר); קישור מושבת → aria-disabled ומחוץ לסדר הטאב
  * (קישור אין לו disabled אמיתי); iconOnly דורש aria-label.
  */
 export default function Button(props: ButtonProps) {
@@ -105,12 +115,16 @@ export default function Button(props: ButtonProps) {
     fullWidth = false,
     loading = false,
     disabled = false,
+    softDisabled = false,
     className,
     ...rest
   } = props
 
-  const inactive = disabled || loading
-  const classes = buttonClasses({ variant, size, fullWidth, iconOnly, disabled: inactive, className })
+  const inactive = disabled || loading || softDisabled
+  // מצב לחוץ — נגזר מ-aria-pressed (מקור אמת אחד למראה ולקורא המסך)
+  const ariaPressed = (rest as { 'aria-pressed'?: unknown })['aria-pressed']
+  const pressed = ariaPressed === true || ariaPressed === 'true'
+  const classes = buttonClasses({ variant, size, fullWidth, iconOnly, disabled: inactive, pressed, className })
   const iconClasses = cx(buttonIconClasses({ variant, size, iconSize }), iconClassName)
   const content = (
     <>
@@ -146,13 +160,16 @@ export default function Button(props: ButtonProps) {
     return <Link href={safe} prefetch={prefetch} {...linkProps}>{content}</Link>
   }
 
-  const { type = 'button', ...buttonRest } = rest as Omit<AsButton, keyof CommonProps>
+  const { type = 'button', onClick, ...buttonRest } = rest as Omit<AsButton, keyof CommonProps>
   return (
     <button
       {...buttonRest}
       type={type}
-      disabled={inactive}
+      // loading יחד עם softDisabled — הפוקוס נשאר על הכפתור (בחלון/מגירה הוא לא נופל לגוף הדף)
+      disabled={disabled || (loading && !softDisabled)}
+      aria-disabled={softDisabled || buttonRest['aria-disabled'] || undefined}
       aria-busy={loading || undefined}
+      onClick={softDisabled ? (event) => event.preventDefault() : onClick}
       className={classes}
     >
       {content}

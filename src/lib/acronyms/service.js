@@ -37,10 +37,10 @@ function rememberSnapshot(base) {
 /** סלים פתוחים, לתצוגת "ממתין ב-PR" ליד כל ספר. */
 export async function listOpenChangeSets() {
   const docs = await AcronymChangeSet.find({ status: { $in: ['open', 'modified'] } })
-    .select('ops prNumber prUrl status label kind createdAt')
+    .select('ops excluded prNumber prUrl status label kind createdAt')
     .sort({ createdAt: 1 })
     .lean()
-  return docs.map((d) => ({ id: String(d._id), ops: d.ops, prNumber: d.prNumber, prUrl: d.prUrl, status: d.status, label: d.label, kind: d.kind }))
+  return docs.map((d) => ({ id: String(d._id), ops: d.ops.filter((_, i) => !d.excluded?.includes(i)), prNumber: d.prNumber, prUrl: d.prUrl, status: d.status, label: d.label, kind: d.kind }))
 }
 
 /**
@@ -145,9 +145,9 @@ export async function syncChangeSets(client = createAcronymsClient(), now = Date
   for (const doc of open) {
     summary.checked++
     try {
-      const res = await refreshChangeSet(client, { id: String(doc._id), ops: doc.ops, label: doc.label, prNumber: doc.prNumber, branch: doc.branch, baseSha: doc.baseSha, headSha: doc.headSha }, base)
+      const res = await refreshChangeSet(client, { id: String(doc._id), ops: doc.ops, excluded: doc.excluded, label: doc.label, prNumber: doc.prNumber, branch: doc.branch, baseSha: doc.baseSha, headSha: doc.headSha }, base)
       if (res.status === 'open') continue
-      const patch = { status: res.status === 'rebuilt' ? 'open' : res.status, lastError: null }
+      const patch = { status: res.status === 'rebuilt' ? 'open' : res.status, lastError: null, ...(res.excluded ? { excluded: res.excluded } : {}) }
       if (res.status === 'rebuilt') Object.assign(patch, { headSha: res.headSha, baseSha: res.baseSha, counts: res.summary.counts, books: res.summary.books })
       await AcronymChangeSet.updateOne({ _id: doc._id }, { $set: patch })
       summary[res.status]++

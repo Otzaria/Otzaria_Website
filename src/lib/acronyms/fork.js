@@ -7,7 +7,7 @@
  */
 import { createRepoClient, ghFetch } from '../dicta/github-api.js'
 import { parseDump, exportDump } from './dump.js'
-import { applyChangeSet, summarizeChangeSet } from './changes.js'
+import { applyChangeSet, parseExcluded, summarizeChangeSet } from './changes.js'
 
 export const ACRONYMS_REPO = 'Otzaria/SeforimAcronymizer'
 export const ACRONYMS_BRANCH = 'master'
@@ -69,6 +69,7 @@ function bodyFor(changeSet, summary) {
     '',
     '> [!NOTE]',
     '> האתר בונה את הענף הזה מחדש מעל `master` אחרי כל מיזוג, כדי שה-PR לא יתנגש עם PR-ים אחרים של האתר.',
+    '> כדי להוציא שינוי מה-PR, הסירו את הסימון שלידו: האתר יבנה את הענף מחדש בלעדיו. סימון חוזר מחזיר אותו.',
     '> דחיפה ידנית לענף עוצרת את הבנייה מחדש; לתיקון עדיף לבקש שינוי ולסגור.',
     '',
   ]
@@ -93,7 +94,7 @@ async function uploadDump(client, text) {
 
 /** סל שכל פעולותיו כבר חלו על master אינו מייצר קומיט; מחזיר commitSha: null. */
 async function commitChangeSet(client, base, changeSet) {
-  const { state, results } = applyChangeSet(base.state, changeSet.ops)
+  const { state, results } = applyChangeSet(base.state, changeSet.ops, changeSet.excluded)
   const summary = summarize(results)
   if (!results.some((r) => r.status === 'applied')) return { commitSha: null, summary }
   const blob = await uploadDump(client, exportDump(state))
@@ -130,26 +131,34 @@ export async function openPullForBranch(client, changeSet, base) {
 }
 
 /**
- * מצב PR פתוח של סל, ובנייה מחדש שלו מעל master כשהוא התקדם. PR שכל שינוייו כבר ב-master נסגר.
- * @returns {Promise<{status:'merged'|'closed'|'open'|'rebuilt'|'modified', headSha?:string, baseSha?:string, summary?:object}>}
+ * מצב PR פתוח של סל, ובנייה מחדש שלו מעל master כשהוא התקדם או כשסימון בגוף ה-PR השתנה.
+ * PR שלא נשאר בו שינוי נסגר.
+ * @returns {Promise<{status:'merged'|'closed'|'open'|'rebuilt'|'modified', excluded?:number[], headSha?:string, baseSha?:string, summary?:object}>}
  */
 export async function refreshChangeSet(client, changeSet, base) {
   const pr = await client.getPull(changeSet.prNumber)
   if (pr.merged) return { status: 'merged' }
   if (pr.state === 'closed') return { status: 'closed' }
-  if (changeSet.baseSha === base.headSha) return { status: 'open' }
+  const previous = changeSet.excluded || []
+  const excluded = parseExcluded(pr.body, previous)
+  const toggled = excluded.join() !== [...previous].sort((a, b) => a - b).join()
+  if (changeSet.baseSha === base.headSha && !toggled) return { status: 'open' }
   const ref = await client.getRef(changeSet.branch)
-  if (!ref || ref.sha !== changeSet.headSha) return { status: 'modified' }
-  const { commitSha, summary } = await commitChangeSet(client, base, changeSet)
+  if (!ref || ref.sha !== changeSet.headSha) return { status: 'modified', excluded }
+  const { commitSha, summary } = await commitChangeSet(client, base, { ...changeSet, excluded })
   if (!commitSha) {
-    await client.commentOnIssue(changeSet.prNumber, 'כל השינויים ב-PR הזה כבר נמצאים ב-`master`, ולכן הוא נסגר.')
+    const why = excluded.length ? 'כל השינויים ב-PR הזה כבר נמצאים ב-`master` או שהסימון שלהם הוסר' : 'כל השינויים ב-PR הזה כבר נמצאים ב-`master`'
+    await client.commentOnIssue(changeSet.prNumber, `${why}, ולכן הוא נסגר.`)
     await client.updatePull(changeSet.prNumber, { state: 'closed' })
-    return { status: 'closed' }
+    return { status: 'closed', excluded }
   }
   await client.updateRef(changeSet.branch, commitSha, { force: true })
-  // מול master חדש חלק מהשינויים עשויים להפוך ל"ללא השפעה"; הכותרת והטבלה מתעדכנות בהתאם
+  // סימון ששונה בזמן הבנייה היה נדרס בגוף החדש, ועדכון הגוף בידי האתר אינו מפעיל סנכרון נוסף
+  const latest = parseExcluded((await client.getPull(changeSet.prNumber)).body, excluded)
+  if (latest.join() !== excluded.join()) return refreshChangeSet(client, { ...changeSet, excluded, headSha: commitSha, baseSha: base.headSha }, base)
+  // מול master חדש חלק מהשינויים עשויים להפוך ל"ללא השפעה"; הכותרת והרשימה מתעדכנות בהתאם
   await client.updatePull(changeSet.prNumber, { title: titleFor(changeSet, summary), body: bodyFor(changeSet, summary) })
-  return { status: 'rebuilt', headSha: commitSha, baseSha: base.headSha, summary }
+  return { status: 'rebuilt', excluded, headSha: commitSha, baseSha: base.headSha, summary }
 }
 
 /** לבדיקות בלבד. */

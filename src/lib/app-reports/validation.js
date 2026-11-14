@@ -1,5 +1,5 @@
 /**
- * אימות ונרמול של דיווח מהתוכנה (חוזה app-reports, schema 1).
+ * אימות ונרמול של דיווח מהתוכנה (חוזה app-reports, schema 1/2).
  * שגיאה מחזירה 422 עם שם השדה — הלקוח מתייחס לזה כדחייה סופית.
  */
 import zlib from 'node:zlib';
@@ -9,25 +9,30 @@ import { DEFAULT_PRODUCT, isProductKey } from './products.js';
 
 const gunzip = promisify(zlib.gunzip);
 
-export const MAX_DIAGNOSTICS_BYTES = 300 * 1024;
-export const MAX_ERROR_LOG_BYTES = 250 * 1024;
-
 // צילומי מסך: base64 בתוך ה-JSON, ולכן תקרת הגוף כוללת את הקידוד שלהם (4/3).
 export const MAX_IMAGES = 5;
-export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-export const MAX_IMAGES_TOTAL_BYTES = 15 * 1024 * 1024;
+export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+export const MAX_ATTACHMENTS_TOTAL_BYTES = 20 * 1024 * 1024;
+export const MAX_DIAGNOSTICS_BYTES = MAX_ATTACHMENT_BYTES;
+export const MAX_ERROR_LOG_BYTES = MAX_ATTACHMENT_BYTES;
+export const LEGACY_MAX_DIAGNOSTICS_BYTES = 300 * 1024;
+export const LEGACY_MAX_ERROR_LOG_BYTES = 250 * 1024;
+export const MAX_IMAGE_BYTES = MAX_ATTACHMENT_BYTES;
+export const MAX_IMAGES_TOTAL_BYTES = MAX_ATTACHMENTS_TOTAL_BYTES;
 export const MAX_IMAGE_NAME_CHARS = 200;
 // minidump של sentry-native (קריסה נייטיבית): גולמי או gzip. נשמר באתר בלבד — מכיל זיכרון של התהליך.
-export const MAX_MINIDUMP_BYTES = 16 * 1024 * 1024;
+export const MAX_MINIDUMP_BYTES = MAX_ATTACHMENT_BYTES;
 // gzip עשוי להגדיל מידע שאינו דחיס; תקרת הקלט נפרדת מתקרת הפלט.
 export const MAX_MINIDUMP_INPUT_BYTES = MAX_MINIDUMP_BYTES + 64 * 1024;
+export const LEGACY_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+export const LEGACY_MAX_IMAGES_TOTAL_BYTES = 15 * 1024 * 1024;
+export const LEGACY_MAX_MINIDUMP_BYTES = 16 * 1024 * 1024;
+export const LEGACY_MAX_MINIDUMP_INPUT_BYTES = LEGACY_MAX_MINIDUMP_BYTES + 64 * 1024;
 const MINIDUMP_MAGIC = Buffer.from('MDMP', 'latin1');
 const GZIP_MAGIC = Buffer.from([0x1f, 0x8b]);
-const MAX_TEXT_BODY_BYTES = 700 * 1024;
-export const MAX_BODY_BYTES = MAX_TEXT_BODY_BYTES
-  + Math.ceil(MAX_IMAGES_TOTAL_BYTES / 3) * 4
-  + Math.ceil(MAX_MINIDUMP_INPUT_BYTES / 3) * 4
-  + 64 * 1024;
+// תו בקרה בלוג עשוי לתפוס שישה בתים ב-JSON. 128 MiB מכסים 6×20 MiB
+// ועוד מעטפת, וגם את מטעני schema 1 הישנים. זו תקרת תעבורה, לא מכסת צרופות.
+export const MAX_BODY_BYTES = 128 * 1024 * 1024;
 
 export const IMAGE_TYPES = Object.freeze({
   'image/png': { ext: 'png', magic: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] },
@@ -73,29 +78,31 @@ export function cleanImageName(raw, index, ext) {
 }
 
 /** תמונה אחת ({data: base64}) → {buffer, mimeType}, או {error}. */
-export function decodeImage(item) {
+export function decodeImage(item, maxBytes = MAX_IMAGE_BYTES) {
   if (!isPlainObject(item) || typeof item.data !== 'string') return { error: 'data must be a base64 string' };
-  if (item.data.length > Math.ceil(MAX_IMAGE_BYTES / 3) * 4) return { error: 'too large' };
+  if (item.data.length > Math.ceil(maxBytes / 3) * 4) return { error: 'too large' };
   const buffer = Buffer.from(item.data, 'base64');
   // Buffer.from מדלג בשקט על תווים לא חוקיים; השוואה חוזרת תופסת קלט פגום.
   if (buffer.toString('base64') !== item.data) return { error: 'invalid base64' };
-  if (buffer.length > MAX_IMAGE_BYTES) return { error: 'too large' };
+  if (buffer.length > maxBytes) return { error: 'too large' };
   const mimeType = sniffImageType(buffer);
   if (!mimeType) return { error: 'not a PNG/JPEG/GIF image' };
   return { buffer, mimeType };
 }
 
-function validateImages(raw) {
+function validateImages(raw, schema) {
   if (raw === undefined || raw === null) return { value: [] };
   if (!Array.isArray(raw)) return { error: fail('attachments.images', 'must be an array') };
   if (raw.length > MAX_IMAGES) return { error: fail('attachments.images', `max ${MAX_IMAGES} items`) };
   const images = [];
   let total = 0;
   for (const [i, item] of raw.entries()) {
-    const { buffer, mimeType, error } = decodeImage(item);
+    const { buffer, mimeType, error } = decodeImage(item, schema === 1 ? LEGACY_MAX_IMAGE_BYTES : MAX_IMAGE_BYTES);
     if (error) return { error: fail(`attachments.images[${i}]`, error) };
     total += buffer.length;
-    if (total > MAX_IMAGES_TOTAL_BYTES) return { error: fail('attachments.images', 'total too large') };
+    if (total > (schema === 1 ? LEGACY_MAX_IMAGES_TOTAL_BYTES : MAX_IMAGES_TOTAL_BYTES)) {
+      return { error: fail('attachments.images', 'total too large') };
+    }
     images.push({ buffer, mimeType, fileName: cleanImageName(item.fileName, i, IMAGE_TYPES[mimeType].ext) });
   }
   return { value: images };
@@ -104,23 +111,25 @@ function validateImages(raw) {
 const startsWith = (buffer, magic) => buffer.length >= magic.length && magic.every((b, i) => buffer[i] === b);
 
 /** {fileName, data: base64} — data הוא ה-dump עצמו או gzip שלו; נשמר תמיד פתוח, כדי שייפתח ישירות בכלי ניפוי. */
-async function validateMinidump(raw) {
+async function validateMinidump(raw, schema) {
   if (raw === undefined || raw === null) return { value: null };
   const field = 'attachments.minidump';
+  const maxRawBytes = schema === 1 ? LEGACY_MAX_MINIDUMP_BYTES : MAX_MINIDUMP_BYTES;
+  const maxInputBytes = schema === 1 ? LEGACY_MAX_MINIDUMP_INPUT_BYTES : MAX_MINIDUMP_INPUT_BYTES;
   if (!isPlainObject(raw) || typeof raw.data !== 'string') return { error: fail(field, 'data must be a base64 string') };
   // בדיקת אורך לפני הפענוח: base64 של יותר מהתקרה לא מפוענח בכלל
-  if (raw.data.length > Math.ceil(MAX_MINIDUMP_INPUT_BYTES / 3) * 4) return { error: fail(field, 'too large') };
+  if (raw.data.length > Math.ceil(maxInputBytes / 3) * 4) return { error: fail(field, 'too large') };
   let buffer = Buffer.from(raw.data, 'base64');
   if (buffer.toString('base64') !== raw.data) return { error: fail(field, 'invalid base64') };
-  if (buffer.length > MAX_MINIDUMP_INPUT_BYTES) return { error: fail(field, 'too large') };
+  if (buffer.length > maxInputBytes) return { error: fail(field, 'too large') };
   if (startsWith(buffer, GZIP_MAGIC)) {
     try {
-      buffer = await gunzip(buffer, { maxOutputLength: MAX_MINIDUMP_BYTES });
+      buffer = await gunzip(buffer, { maxOutputLength: maxRawBytes });
     } catch (err) {
       return { error: fail(field, err?.code === 'ERR_BUFFER_TOO_LARGE' ? 'too large' : 'invalid gzip') };
     }
   }
-  if (buffer.length > MAX_MINIDUMP_BYTES) return { error: fail(field, 'too large') };
+  if (buffer.length > maxRawBytes) return { error: fail(field, 'too large') };
   if (!startsWith(buffer, MINIDUMP_MAGIC)) return { error: fail(field, 'not a minidump') };
   const name = cleanFileName(raw.fileName).replace(/\.gz$/i, '');
   return { value: { buffer, fileName: name || 'crash.dmp' } };
@@ -141,7 +150,7 @@ function optionalString(raw, field, max) {
  */
 export async function validateAppReport(raw) {
   if (!isPlainObject(raw)) return fail('body', 'must be an object');
-  if (raw.schema !== 1) return fail('schema', 'unsupported');
+  if (raw.schema !== 1 && raw.schema !== 2) return fail('schema', 'unsupported');
 
   if (typeof raw.reportId !== 'string' || !REPORT_ID_RE.test(raw.reportId.trim())) return fail('reportId');
   const reportId = raw.reportId.trim();
@@ -198,32 +207,44 @@ export async function validateAppReport(raw) {
   let errorLog = '';
   let images = [];
   let minidump = null;
+  let textAttachmentBytes = 0;
   if (raw.attachments !== undefined && raw.attachments !== null) {
     if (!isPlainObject(raw.attachments)) return fail('attachments', 'must be an object');
     const d = raw.attachments.diagnostics;
     if (d !== undefined && d !== null) {
       if (!isPlainObject(d)) return fail('attachments.diagnostics', 'must be an object');
-      if (byteLength(JSON.stringify(d)) > MAX_DIAGNOSTICS_BYTES) return fail('attachments.diagnostics', 'too large');
+      const size = byteLength(JSON.stringify(d));
+      const limit = raw.schema === 1 ? LEGACY_MAX_DIAGNOSTICS_BYTES : MAX_DIAGNOSTICS_BYTES;
+      if (size > limit) return fail('attachments.diagnostics', 'too large');
+      textAttachmentBytes += size;
       diagnostics = d;
     }
     const log = raw.attachments.errorLog;
     if (log !== undefined && log !== null) {
       if (typeof log !== 'string') return fail('attachments.errorLog', 'must be a string');
-      if (byteLength(log) > MAX_ERROR_LOG_BYTES) return fail('attachments.errorLog', 'too large');
+      const size = byteLength(log);
+      const limit = raw.schema === 1 ? LEGACY_MAX_ERROR_LOG_BYTES : MAX_ERROR_LOG_BYTES;
+      if (size > limit) return fail('attachments.errorLog', 'too large');
+      textAttachmentBytes += size;
       errorLog = log;
     }
-    const imgs = validateImages(raw.attachments.images);
+    const imgs = validateImages(raw.attachments.images, raw.schema);
     if (imgs.error) return imgs.error;
     images = imgs.value;
-    const dump = await validateMinidump(raw.attachments.minidump);
+    const dump = await validateMinidump(raw.attachments.minidump, raw.schema);
     if (dump.error) return dump.error;
     minidump = dump.value;
+    const attachmentBytes = images.reduce((n, image) => n + image.buffer.length, 0)
+      + (minidump?.buffer.length || 0) + textAttachmentBytes;
+    if (raw.schema === 2 && attachmentBytes > MAX_ATTACHMENTS_TOTAL_BYTES) {
+      return fail('attachments', 'total too large');
+    }
   }
 
   return {
     ok: true,
     value: {
-      schema: 1,
+      schema: raw.schema,
       reportId,
       product,
       type: raw.type,

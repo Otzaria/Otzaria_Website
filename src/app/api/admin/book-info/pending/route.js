@@ -13,7 +13,7 @@ import { BookInfoInputError, resolveLegacyEdit, submitEdit } from '@/lib/bookinf
 export const maxDuration = 120
 
 function isAdmin(session) {
-  return hasBooksAccess(session?.user?.role)
+  return hasBooksAccess(session?.user)
 }
 
 function normalizeFieldSelection(changeDoc, fields) {

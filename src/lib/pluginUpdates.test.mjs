@@ -153,3 +153,19 @@ test('העדכון המוצע נושא את sha256 של הגרסה שנבחרה 
   const [legacy] = resolvePluginUpdates([SAMPLE], [{ uid: 'org.example.sample', installedVersion: '1.5.0' }], '0.9.97')
   assert.equal(legacy.sha256, null)
 })
+
+test('תוסף שירות: אין הצעת עדכון ישירה — רק הפניה לחנות', () => {
+  const service = { ...SAMPLE, hasService: true }
+  const [r] = resolvePluginUpdates([service], [{ uid: 'org.example.sample', installedVersion: '1.0.0' }], '0.9.97')
+  assert.deepEqual(r, {
+    uid: 'org.example.sample',
+    id: '6a3b41de42427e3be09afcba',
+    hasUpdate: false,
+    requiresServiceCheck: true,
+    storeUrl: '/plugins/6a3b41de42427e3be09afcba'
+  })
+  // גם כשאין גרסה תואמת — לא נחשף בלוק incompatible שמזמין התקנה היסטורית
+  const [old] = resolvePluginUpdates([service], [{ uid: 'org.example.sample', installedVersion: '1.0.0' }], '0.9.80')
+  assert.equal(old.requiresServiceCheck, true)
+  assert.equal(old.incompatible, undefined)
+})

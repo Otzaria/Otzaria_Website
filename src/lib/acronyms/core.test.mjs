@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { parseDump, exportDump, listBooks } from './dump.js'
 import { aliasKey, aliasProblem, conflictingTitle, duplicateAlias, hasQuotes, matchesLibraryTitle, normalizeAlias, suggestLibraryTitles } from './normalize.js'
-import { applyChangeSet, planAddAliases, summarizeChangeSet, validateChangeSet } from './changes.js'
+import { applyChangeSet, parseExcluded, planAddAliases, summarizeChangeSet, validateChangeSet } from './changes.js'
 
 const HEADER = 'PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\nCREATE TABLE IF NOT EXISTS Books (id INTEGER);\n'
 const dump = (books, acronyms, links) =>
@@ -203,7 +203,7 @@ test('planAddAliases flags a variant that already exists in the book', () => {
   assert.equal(planAddAliases(books, 'עקיבא', 'עקיבה')[0].problem, 'הכינוי כבר קיים בספר')
 })
 
-test('summarizeChangeSet: a before/after table per book, strike-through for removals, no-ops folded', () => {
+test('summarizeChangeSet: a checkbox per change grouped by book, strike-through for removals, no-ops folded', () => {
   const { results } = applyChangeSet(parseDump(FIXTURE), [
     { type: 'add', book: 'בראשית', alias: 'בר' },
     { type: 'add', book: 'בראשית', alias: 'ברא' },
@@ -211,23 +211,44 @@ test('summarizeChangeSet: a before/after table per book, strike-through for remo
     { type: 'rename', book: "ספר קנאת ה' צבאות", from: 'קנאת ה צבאות', to: 'קנאת ה|צבאות' },
   ])
   const s = summarizeChangeSet(results)
-  assert.deepEqual(s.counts, { add: 1, remove: 1, rename: 1, noop: 1 })
+  assert.deepEqual(s.counts, { add: 1, remove: 1, rename: 1, noop: 1, excluded: 0 })
   const lines = s.text.split('\n')
   assert.equal(lines[0], '**3 שינויים ב-2 ספרים**: 1 הוספות, 1 מחיקות, 1 עריכות; ועוד 1 ללא השפעה.')
-  assert.deepEqual(lines.slice(2, 7), [
-    '| ספר | פעולה | לפני | אחרי |',
-    '|---|---|---|---|',
-    '| **בראשית** | ➕ הוספה |  | `ברא` |',
-    '|  | ➖ מחיקה | ~~`ספר בראשית`~~ |  |',
-    "| **ספר קנאת ה' צבאות** | ✏️ עריכה | `קנאת ה צבאות` | `קנאת ה\\|צבאות` |",
+  assert.deepEqual(lines.slice(1, 8), [
+    '',
+    '**בראשית**',
+    '- [x] ➕ הוספה: `ברא` <!-- op:1 -->',
+    '- [x] ➖ מחיקה: ~~`ספר בראשית`~~ <!-- op:2 -->',
+    '',
+    "**ספר קנאת ה' צבאות**",
+    '- [x] ✏️ עריכה: `קנאת ה צבאות` ← `קנאת ה|צבאות` <!-- op:3 -->',
   ])
-  assert.match(s.text, /<details><summary>1 שינויים שכבר היו במצב המבוקש<\/summary>[\s\S]*\| \*\*בראשית\*\* \| ➕ הוספה \|  \| `בר` _\(כבר קיים\)_ \|[\s\S]*<\/details>$/)
+  assert.match(s.text, /<details><summary>1 שינויים שכבר היו במצב המבוקש<\/summary>\n\n\*\*בראשית\*\*\n- ➕ הוספה: `בר` _\(כבר קיים\)_\n\n<\/details>$/)
 })
 
 test('summarizeChangeSet truncates on whole rows and says so', () => {
   const ops = Array.from({ length: 50 }, (_, i) => ({ type: 'add', book: 'בראשית', alias: `כינוי ${i}` }))
   const s = summarizeChangeSet(applyChangeSet(parseDump(FIXTURE), ops).results, { maxLength: 800 })
   assert.ok(s.text.length <= 800)
-  assert.match(s.text, /\| `כינוי \d+` \|\n\n… הרשימה קוצרה\./)
+  assert.match(s.text, /`כינוי \d+` <!-- op:\d+ -->\n\n… הרשימה קוצרה\./)
   assert.equal(s.counts.add, 50)
+})
+
+test('an excluded change is skipped and listed unchecked, so it can be checked back', () => {
+  const ops = [{ type: 'add', book: 'בראשית', alias: 'ברא' }, { type: 'add', book: 'בראשית', alias: 'בראש' }]
+  const { state, results } = applyChangeSet(parseDump(FIXTURE), ops, [0])
+  assert.deepEqual(results.map((r) => r.status), ['excluded', 'applied'])
+  const aliases = listBooks(state).find((b) => b.title === 'בראשית').aliases
+  assert.ok(aliases.includes('בראש') && !aliases.includes('ברא'))
+  const s = summarizeChangeSet(results)
+  assert.equal(s.counts.excluded, 1)
+  assert.match(s.text, /^\*\*1 שינויים ב-1 ספרים\*\*: 1 הוספות, 0 מחיקות, 0 עריכות; 1 שהסימון שלהם הוסר\./)
+  assert.ok(s.text.includes('- [ ] ➕ הוספה: `ברא` <!-- op:0 -->'))
+})
+
+test('parseExcluded reads unchecked boxes, and keeps the state of changes the body no longer lists', () => {
+  const body = ['- [x] ➕ הוספה: `א` <!-- op:0 -->', '- [ ] ➕ הוספה: `ב` <!-- op:1 -->', '  * [X] ➖ מחיקה: ~~`ג`~~ <!-- op:2 -->', '- [ ] בלי סימן'].join('\n')
+  assert.deepEqual(parseExcluded(body), [1])
+  assert.deepEqual(parseExcluded(body, [2, 7]), [1, 7])
+  assert.deepEqual(parseExcluded(null, [3]), [3])
 })

@@ -9,8 +9,7 @@ import { validateEmail } from '../validation-utils.js';
 import {
   DEDUP_WINDOW_MONTHS,
   REPORTING_ERRORS_RECIPIENT,
-  buildHtml,
-  buildText,
+  buildEmailBodies,
   computeContentHash,
   ensureSmtpConfig,
   getDedupCutoff,
@@ -205,8 +204,7 @@ export async function notifyReportByEmail(payload, { transportFactory = createSm
       to: toRecipient,
       replyTo,
       subject: payload.subject,
-      html: buildHtml(payload, ccRecipients),
-      text: buildText(payload, ccRecipients),
+      ...buildEmailBodies(payload, ccRecipients),
       headers: {
         'X-Otzaria-Report-Id': payload.report_id,
         'X-Otzaria-Book-Title': payload.book_title,

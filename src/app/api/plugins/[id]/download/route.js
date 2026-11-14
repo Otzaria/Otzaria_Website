@@ -9,8 +9,10 @@ import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags'
 import { invalidatePluginSearchIndex } from '@/lib/pluginSearchIndex'
 import { parsePluginRef } from '@/lib/pluginRef'
 import { hasPluginsAccess } from '@/lib/roles'
-import { canAccessSuspended, isPluginSuspended } from '@/lib/pluginVisibility'
+import { canAccessSuspended, isPluginOwner, isPluginSuspended } from '@/lib/pluginVisibility'
 import { APP_VERSION_PARAM, isValidAppVersion, resolveCompatibleVersion, lowestSupportedAppVersion } from '@/lib/pluginCompatibility'
+import { isServicePlugin, resolveServicePluginFile } from '@/lib/servicePlugins/existingPaths'
+import { openReviewAssetStream } from '@/lib/servicePlugins/storage'
 
 // GET /api/plugins/[id]/download - הורדת קובץ התוסף.
 // תומך גם בהורדת גרסה ספציפית דרך /api/plugins/<id>@<version>/download או ?version=<version>,
@@ -83,8 +85,8 @@ export async function GET(request, { params }) {
     }
 
     const session = await getServerSession(authOptions)
-    const isAdmin = hasPluginsAccess(session?.user?.role)
-    const isOwner = plugin.authorId?.toString() === session?.user?.id
+    const isAdmin = hasPluginsAccess(session?.user)
+    const isOwner = isPluginOwner(plugin, session?.user?.id)
 
     // תוסף מושהה — גם בקישור ישיר ההורדה פתוחה רק למעלה ולמנהלי התוספים
     if (isPluginSuspended(plugin) && !canAccessSuspended({ isAdmin, isOwner })) {
@@ -115,6 +117,10 @@ export async function GET(request, { params }) {
         )
       }
       resolvedVersion = match.isLatest ? null : match.version
+    }
+
+    if (isServicePlugin(plugin)) {
+      return serviceFileResponse(plugin, { version: resolvedVersion, includePending, canPreview: isAdmin || isOwner })
     }
 
     // בקשה לגרסה ארכיונית ספציפית (שאינה הגרסה החיה הנוכחית).
@@ -196,6 +202,23 @@ export async function GET(request, { params }) {
   }
 }
 
+// תוסף שירות: הקובץ מוגש רק מאחסון הבדיקות — אין pending, וגרסה היסטורית רק עם reviewId.
+async function serviceFileResponse(plugin, { version, includePending, canPreview }) {
+  if (includePending || (!plugin.isApproved && !canPreview)) {
+    return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
+  }
+  const historical = Boolean(version && version !== plugin.version)
+  const file = resolveServicePluginFile(plugin, { version })
+  const asset = file ? await openReviewAssetStream(file.reviewId, 'plugin') : null
+  if (!asset) {
+    return NextResponse.json({ error: historical ? 'Plugin version not found' : 'Plugin not found' }, { status: 404 })
+  }
+  if (plugin.isApproved) {
+    plugin.incrementDownload(historical ? file.version : undefined).catch(e => console.error('Failed to increment download count:', e))
+  }
+  return pluginFileResponse(asset.stream, file.fileName, '.otzplugin', file.version, asset.size)
+}
+
 // קובץ ישן בלי טביעה: נשמרת בהורדה הראשונה. העלאה חדשה כבר שומרת טביעה, ולכן התנאי null
 // מונע דריסה של קובץ שהוחלף בינתיים.
 async function rememberFileSha256(filter, set) {
@@ -215,7 +238,7 @@ async function rememberFileSha256(filter, set) {
 // encodeURIComponent לא מקודד את ! ' ( ) * - מקודדים ידנית כדי לעמוד ב-RFC 3986.
 // X-Plugin-Version מציין איזו גרסה הוגשה בפועל — נחוץ למי שהוריד דרך ?appVersion=
 // ולא ידע מראש איזו גרסה ייבחר עבורו.
-function pluginFileResponse(buf, fileName, fileExt, servedVersion) {
+function pluginFileResponse(buf, fileName, fileExt, servedVersion, size = buf.length) {
   const rawName = fileName || `plugin${fileExt}`
   const asciiFallback = rawName.replace(/[^\x20-\x7E]/g, '_').replace(/["\\\r\n]/g, '_')
   const encodedName = encodeURIComponent(rawName)
@@ -225,7 +248,7 @@ function pluginFileResponse(buf, fileName, fileExt, servedVersion) {
     headers: {
       'Content-Type': 'application/octet-stream',
       'Content-Disposition': `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodedName}`,
-      'Content-Length': buf.length.toString(),
+      'Content-Length': size.toString(),
       'X-Content-Type-Options': 'nosniff',
       ...(servedVersion ? { 'X-Plugin-Version': servedVersion } : {})
     }

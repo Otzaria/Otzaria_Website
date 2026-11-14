@@ -47,3 +47,32 @@ describe("GET /api/plugins/[id]/latest sha256", () => {
     expect(body.sha256).toBeNull();
   });
 });
+
+describe("GET /api/plugins/[id]/latest for a service plugin", () => {
+  beforeEach(() => {
+    m.select.mockReturnValue({ lean: async () => ({ ...plugin, hasService: true }) });
+  });
+
+  it("selects hasService and flags the store-only install", async () => {
+    const res = await get();
+    const body = await res.json();
+    expect(m.select.mock.calls[0][0]).toContain("hasService");
+    expect(res.status).toBe(200);
+    expect(body).toMatchObject({ version: "2.0.0", requiresServiceCheck: true, storeUrl: `/plugins/${ID}` });
+  });
+
+  it("never picks a historical version by appVersion", async () => {
+    const res = await get("?appVersion=0.9.95");
+    const body = await res.json();
+    expect(res.status).toBe(404);
+    expect(body.version).toBeUndefined();
+    expect(body).toMatchObject({ latestVersion: "2.0.0", minSupportedAppVersion: "0.9.96", requiresServiceCheck: true });
+  });
+
+  it("regular plugins get no service fields", async () => {
+    m.select.mockReturnValue({ lean: async () => plugin });
+    const body = await (await get()).json();
+    expect(body).not.toHaveProperty("requiresServiceCheck");
+    expect(body).not.toHaveProperty("storeUrl");
+  });
+});

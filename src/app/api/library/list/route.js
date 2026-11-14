@@ -19,7 +19,7 @@ export async function GET(request) {
     const catalogView = new URL(request.url).searchParams.get('view') === 'catalog';
 
     const session = await getServerSession(authOptions);
-    const isAdmin = hasBookLibraryAccess(session?.user?.role);
+    const isAdmin = hasBookLibraryAccess(session?.user);
 
     await connectDB();
 

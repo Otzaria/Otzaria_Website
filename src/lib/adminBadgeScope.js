@@ -8,13 +8,14 @@
 //   לא ביצעו אותו כלל).
 // - העלאות ממתינות: hasBooksAccess (admin / admin_books), כמו /api/admin/uploads/list.
 // - תוספים ממתינים: hasPluginsAccess (admin / admin_plugins), כמו /api/admin/plugins.
-import { ROLES, hasBooksAccess, hasPluginsAccess } from './roles.js'
+import { ROLES, hasBooksAccess, hasPluginsAccess, hasRole } from './roles.js'
 
 const MESSAGE_BADGE_ROLES = [ROLES.ADMIN, ROLES.ADMIN_PLUGINS, ROLES.ADMIN_BOOKS]
 
+// role — נושא בכל צורה שמקבלות פונקציות roles.js (מחרוזת, מערך תפקידים, או session.user)
 export function adminBadgeScope(role) {
   return {
-    messages: MESSAGE_BADGE_ROLES.includes(role),
+    messages: hasRole(role, ...MESSAGE_BADGE_ROLES),
     uploads: hasBooksAccess(role),
     plugins: hasPluginsAccess(role),
   }

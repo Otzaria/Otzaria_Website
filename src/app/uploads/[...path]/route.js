@@ -20,22 +20,24 @@ const MIME_MAP = {
 
 // תיקיות שאינן מוגשות כנכס סטטי: תמונות תיוג מבנה-עמוד שייכות לקורפוס
 // ה-OCR (לא "ספרים" באתר) ומוגשות רק דרך /api/ocr-layout/[id]/image
-// למשתמשים מאומתים. כך גם סריקות הגהת-העמודים (/api/page-proof/pages/[id]/image).
-const BLOCKED_PREFIXES = ['ocr-layout/', 'page-proof/'];
+// למשתמשים מאומתים. כך גם סריקות הגהת-העמודים (/api/page-proof/pages/[id]/image)
+// ותמונות צורת הדף (/api/tzurat-hadaf/items/[id]/image, /api/tzurat-hadaf/pages/[id]/image).
+const BLOCKED_PREFIXES = ['ocr-layout/', 'page-proof/', 'tzurat-hadaf/'];
 
 export async function GET(request, { params }) {
   const segments = (await params).path;
-  const relative = segments.join('/');
-
-  // נרמול לפני הבדיקה: לוכסן-הפוך ורישיות אינם עוקפים את החסימה
-  // (מערכת קבצים לא רגישת-רישיות תגיש OCR-Layout/... כאילו הייתה ocr-layout/)
-  const normalized = relative.replace(/\\/g, '/').toLowerCase();
-  if (BLOCKED_PREFIXES.some((p) => normalized === p.slice(0, -1) || normalized.startsWith(p))) {
-    return new Response(null, { status: 403 });
-  }
+  const relative = segments.join('/').replace(/\\/g, '/');
 
   const resolved = path.resolve(UPLOAD_ROOT, relative);
   if (!resolved.startsWith(UPLOAD_ROOT + path.sep) && resolved !== UPLOAD_ROOT) {
+    return new Response(null, { status: 403 });
+  }
+
+  // החסימה נבדקת על הנתיב אחרי resolve (יחסית לשורש), לא על המחרוזת הגולמית: מקטע מקודד כמו
+  // x%2F..%2Fpage-proof מגיע מפוענח ועוקף בדיקת קידומת לפני resolve. לוכסן-הפוך ורישיות אינם עוקפים
+  // (מערכת קבצים לא רגישת-רישיות תגיש OCR-Layout/... כאילו הייתה ocr-layout/)
+  const normalized = path.relative(UPLOAD_ROOT, resolved).replace(/\\/g, '/').toLowerCase();
+  if (BLOCKED_PREFIXES.some((p) => normalized === p.slice(0, -1) || normalized.startsWith(p))) {
     return new Response(null, { status: 403 });
   }
 

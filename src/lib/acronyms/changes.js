@@ -117,51 +117,58 @@ export function validateChangeSet(rawOps, state) {
 
 /**
  * מחיל סל על עותק של המצב. פעולה שכבר אינה רלוונטית (הכינוי כבר נוסף, כבר נמחק) היא no-op,
- * כדי שהחלה חוזרת אחרי שינוי ב-master לא תיכשל.
- * @returns {{state:object, results:Array<{op:object, status:'applied'|'noop', reason?:string}>}}
+ * כדי שהחלה חוזרת אחרי שינוי ב-master לא תיכשל. פעולות שמספרן ב-excluded מדולגות.
+ * @param {Iterable<number>} [excluded] אינדקסים ב-ops שהסימון שלהם הוסר ב-PR
+ * @returns {{state:object, results:Array<{op:object, index:number, status:'applied'|'noop'|'excluded', reason?:string}>}}
  */
-export function applyChangeSet(baseState, ops) {
+export function applyChangeSet(baseState, ops, excluded = []) {
   const state = cloneState(baseState)
   const index = createIndex(state)
   const touchedAcronyms = new Set()
+  const skip = new Set(excluded)
   const results = []
   const hasKey = (bookId, text, exceptLinkId) =>
     index.linksOf(bookId).some((l) => l.id !== exceptLinkId && aliasKey(l.text) === aliasKey(text))
 
-  for (const op of ops) {
+  for (const [i, op] of ops.entries()) {
+    if (skip.has(i)) {
+      results.push({ op, index: i, status: 'excluded' })
+      continue
+    }
+    const push = (r) => results.push({ op, index: i, ...r })
     let bookId = index.bookIdByTitle.get(op.book)
     if (op.type === 'add') {
       if (bookId === undefined) bookId = index.addBook(op.book)
       if (hasKey(bookId, op.alias)) {
-        results.push({ op, status: 'noop', reason: 'כבר קיים' })
+        push({ status: 'noop', reason: 'כבר קיים' })
         continue
       }
       index.addLink(bookId, index.acronymIdFor(op.alias))
-      results.push({ op, status: 'applied' })
+      push({ status: 'applied' })
     } else if (op.type === 'remove') {
       const link = bookId === undefined ? null : index.linksOf(bookId).find((l) => l.text === op.alias)
       if (!link) {
-        results.push({ op, status: 'noop', reason: 'כבר נמחק' })
+        push({ status: 'noop', reason: 'כבר נמחק' })
         continue
       }
       index.deleteLink(link.id)
       touchedAcronyms.add(link.acronymId)
-      results.push({ op, status: 'applied' })
+      push({ status: 'applied' })
     } else if (op.type === 'rename') {
       const link = bookId === undefined ? null : index.linksOf(bookId).find((l) => l.text === op.from)
       if (!link) {
-        results.push({ op, status: 'noop', reason: 'הכינוי הישן כבר אינו קיים' })
+        push({ status: 'noop', reason: 'הכינוי הישן כבר אינו קיים' })
         continue
       }
       touchedAcronyms.add(link.acronymId)
       if (hasKey(bookId, op.to, link.id)) {
         // השם החדש כבר קיים בספר — נשאר עותק אחד
         index.deleteLink(link.id)
-        results.push({ op, status: 'applied', reason: 'אוחד עם כינוי קיים' })
+        push({ status: 'applied', reason: 'אוחד עם כינוי קיים' })
       } else {
         // אותו id של קישור: ב-diff בפורק זו החלפת שורה ולא מחיקה והוספה
         index.setLink(link.id, bookId, index.acronymIdFor(op.to))
-        results.push({ op, status: 'applied' })
+        push({ status: 'applied' })
       }
     }
   }
@@ -203,35 +210,32 @@ export function planAddAliases(books, find, replace) {
   return out
 }
 
-// תא בטבלת markdown: כינוי כקוד, בלי ש-| או ` ישברו את הטבלה
-function cell(text) {
-  const safe = String(text).replace(/\|/g, '\\|')
-  return safe.includes('`') ? safe : `\`${safe}\``
-}
+// כינוי כקוד; טקסט שיש בו ` נשאר כמות שהוא כדי לא לשבור את הסימון
+const code = (text) => (String(text).includes('`') ? String(text) : `\`${text}\``)
 
 const ACTION = { add: '➕ הוספה', remove: '➖ מחיקה', rename: '✏️ עריכה' }
 
-function row(r, bookCell) {
-  const { op } = r
-  const before = op.type === 'add' ? '' : op.type === 'remove' ? `~~${cell(op.alias)}~~` : cell(op.from)
-  const after = op.type === 'remove' ? '' : cell(op.type === 'add' ? op.alias : op.to)
-  const note = r.reason ? ` _(${r.reason})_` : ''
-  return `| ${bookCell} | ${ACTION[op.type]} | ${before} | ${after}${note} |`
+function describe({ op, reason }) {
+  const what = op.type === 'add' ? code(op.alias) : op.type === 'remove' ? `~~${code(op.alias)}~~` : `${code(op.from)} ← ${code(op.to)}`
+  return `${ACTION[op.type]}: ${what}${reason ? ` _(${reason})_` : ''}`
 }
 
-function bookRows(byBook, keep) {
-  const rows = []
+// הסימן בסוף השורה מזהה את הפעולה כשמישהו מסמן או מסיר סימון ב-GitHub (parseExcluded)
+const item = (r) => `- [${r.status === 'excluded' ? ' ' : 'x'}] ${describe(r)} <!-- op:${r.index} -->`
+
+function bookLines(byBook, keep, line) {
+  const lines = []
   for (const [book, list] of byBook) {
     const mine = list.filter(keep)
-    const label = `**${book.replace(/\|/g, '\\|')}**${mine.some((r) => r.op.newBook) ? ' _(ספר חדש)_' : ''}`
-    mine.forEach((r, i) => rows.push(row(r, i === 0 ? label : '')))
+    if (mine.length === 0) continue
+    lines.push('', `**${book}**${mine.some((r) => r.op.newBook) ? ' _(ספר חדש)_' : ''}`, ...mine.map(line))
   }
-  return rows
+  return lines
 }
 
 /**
- * גוף PR בעברית: טבלת לפני/אחרי לפי ספר, מחיקה בקו חוצה, ופעולות בלי השפעה מקופלות בסוף.
- * maxLength מקצר בשורות שלמות, כדי שהטבלה לא תישבר באמצע.
+ * גוף PR בעברית: רשימת תיבות סימון לפי ספר, שבה הסרת סימון מוציאה את הפעולה מה-PR, ופעולות בלי
+ * השפעה מקופלות בסוף. maxLength מקצר בשורות שלמות, כדי שאף פעולה לא תוצג חלקית.
  */
 export function summarizeChangeSet(results, { maxLength = Infinity } = {}) {
   const byBook = new Map()
@@ -240,16 +244,16 @@ export function summarizeChangeSet(results, { maxLength = Infinity } = {}) {
     list.push(r)
     byBook.set(r.op.book, list)
   }
-  const counts = { add: 0, remove: 0, rename: 0, noop: 0 }
-  for (const r of results) counts[r.status === 'applied' ? r.op.type : 'noop']++
+  const counts = { add: 0, remove: 0, rename: 0, noop: 0, excluded: 0 }
+  for (const r of results) counts[r.status === 'applied' ? r.op.type : r.status]++
   const applied = counts.add + counts.remove + counts.rename
   const books = new Set(results.filter((r) => r.status === 'applied').map((r) => r.op.book)).size
   const head = `**${applied} שינויים ב-${books} ספרים**: ${counts.add} הוספות, ${counts.remove} מחיקות, ${counts.rename} עריכות` +
+    (counts.excluded ? `; ${counts.excluded} שהסימון שלהם הוסר` : '') +
     (counts.noop ? `; ועוד ${counts.noop} ללא השפעה.` : '.')
-  const TABLE = ['| ספר | פעולה | לפני | אחרי |', '|---|---|---|---|']
   const NOTE = '\n\n… הרשימה קוצרה. הפירוט המלא נמצא ב-diff ובתגובת ההבדלים.'
 
-  const lines = [head, '']
+  const lines = [head]
   let length = head.length
   const push = (rows) => {
     for (const line of rows) {
@@ -259,10 +263,28 @@ export function summarizeChangeSet(results, { maxLength = Infinity } = {}) {
     }
     return true
   }
-  let complete = applied === 0 || push([...TABLE, ...bookRows(byBook, (r) => r.status === 'applied')])
+  let complete = push(bookLines(byBook, (r) => r.status !== 'noop', item))
   if (complete && counts.noop) {
-    complete = push(['', `<details><summary>${counts.noop} שינויים שכבר היו במצב המבוקש</summary>`, '', ...TABLE, ...bookRows(byBook, (r) => r.status !== 'applied'), '', '</details>'])
+    complete = push(['', `<details><summary>${counts.noop} שינויים שכבר היו במצב המבוקש</summary>`, ...bookLines(byBook, (r) => r.status === 'noop', (r) => `- ${describe(r)}`), '', '</details>'])
     if (!complete) lines.push('', '</details>')
   }
   return { text: lines.join('\n') + (complete ? '' : NOTE), counts, books }
+}
+
+/**
+ * הפעולות שהסימון שלהן הוסר בגוף ה-PR. פעולה שאינה מופיעה בגוף (הרשימה קוצרה) שומרת על מצבה הקודם.
+ * @param {string} body
+ * @param {Iterable<number>} previous
+ * @returns {number[]} ממוין
+ */
+export function parseExcluded(body, previous = []) {
+  const unchecked = new Set()
+  const seen = new Set()
+  for (const m of String(body || '').matchAll(/^\s*[-*] \[([ xX])\] .*<!-- op:(\d+) -->\s*$/gm)) {
+    const index = Number(m[2])
+    seen.add(index)
+    if (m[1] === ' ') unchecked.add(index)
+  }
+  for (const index of previous) if (!seen.has(index)) unchecked.add(index)
+  return [...unchecked].sort((a, b) => a - b)
 }

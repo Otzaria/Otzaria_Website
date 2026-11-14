@@ -15,14 +15,14 @@ function authorize(request) {
   return { ok: true };
 }
 
-// ניסיון חוזר לדיווחים ממתינים + בדיקת מצב ה-issues ומיילי סגירה
+// ניסיון חוזר, מצב issues ומיילי סגירה, וניקוי צרופות אחרי 168 שעות מסגירה מאומתת
 async function run(request) {
   const auth = authorize(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
   try {
     await connectDB();
     const now = new Date();
-    const summary = await runAppReportsSync({ config: getAppReportsConfig(), sendClosedMail: sendAppReportClosedNotification, now });
+    const summary = await runAppReportsSync({ config: getAppReportsConfig(), sendClosedMail: sendAppReportClosedNotification, now, clock: () => new Date() });
     return NextResponse.json({ success: true, ranAt: now.toISOString(), ...summary });
   } catch (error) {
     console.error('App reports sync cron error:', error);

@@ -23,9 +23,11 @@ export async function GET(request) {
 
     await dbConnect()
 
+    // תוסף שירות ממתין בתור תוספי השירות, לא באישור הידני
     const query = status === 'pending'
       ? {
           isHidden: false,
+          hasService: { $ne: true },
           $or: [
             { isApproved: false },
             { pendingUpdate: { $ne: null } }

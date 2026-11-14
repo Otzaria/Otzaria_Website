@@ -2,7 +2,7 @@
 
 // חלק הלקוח של דף "כל התוספים" — מקבל את הרשימה המלאה כ-prop מה-Server
 // Component (page.tsx) במקום לשלוף אותה בעצמו ב-fetch, אבל שומר על כל
-// האינטראקטיביות: סינון מקומי (חיפוש/סטטוס/תגית, עם שימור מצב ב-URL),
+// האינטראקטיביות: סינון ומיון מקומיים (חיפוש/סטטוס/תגית/מיון, עם שימור מצב ב-URL),
 // התקנה ישירה (useDirectInstall) + דיאלוגים.
 //
 // לוגיקת הסינון עצמה חולצה ל-src/lib/pluginFilter.js כדי שתהיה ניתנת
@@ -22,7 +22,7 @@
 //   useLayoutEffect, שרץ לפני הצביעה.
 //
 // מבנה העמוד (מפרט החנות, סעיף 6 / סוכן 2), לסריקה מהירה:
-//   StorePageHeader (פירורי לחם, h1, "העלה תוסף חדש") ובתוכו לוח מסננים אחד — חיפוש וסטטוס בשורה,
+//   StorePageHeader (פירורי לחם, h1, "העלה תוסף חדש") ובתוכו לוח מסננים אחד — חיפוש, סטטוס ומיון בשורה,
 //   ומתחת שורת תגיות: "כל התגיות" (חלונית עם חיפוש) + התגיות הנפוצות, עם מונה (TagFilterChips).
 //   → אזור התוצאות: h2 ובקצה השורה מונה התוצאות + "נקה סינון" כשיש סינון פעיל.
 //   → רשת הכרטיסים (h3). → אזור הסבר "תוספים לאוצריא".
@@ -42,10 +42,11 @@ import PluginGrid from '@/components/plugins/PluginGrid'
 import PluginSearchBox from '@/components/plugins/PluginSearchBox'
 import StorePageHeader from '@/components/plugins/StorePageHeader'
 import ResultsHeading from '@/components/plugins/listing/ResultsHeading'
+import SortSelect from '@/components/plugins/listing/SortSelect'
 import StatusSelect from '@/components/plugins/listing/StatusSelect'
 import TagFilterChips from '@/components/plugins/listing/TagFilterChips'
 import { FIELD_LABEL_COMPACT } from '@/components/ui/fieldStyles'
-import { filterPlugins, countTags, rankTags } from '@/lib/pluginFilter'
+import { filterPlugins, sortPlugins, countTags, rankTags, SORT_MODES } from '@/lib/pluginFilter'
 import type { PluginCardData } from '@/components/plugins/types'
 import Loader from '@/components/ui/Loader'
 
@@ -55,7 +56,7 @@ import Loader from '@/components/ui/Loader'
 const FILTER_PENDING_STYLE_ID = 'plugins-filter-pending'
 
 const FILTER_PENDING_SCRIPT =
-  `if(/[?&](q|tag|status)=/.test(location.search)){` +
+  `if(/[?&](q|tag|status|sort)=/.test(location.search)){` +
   `var s=document.createElement('style');s.id='${FILTER_PENDING_STYLE_ID}';` +
   `s.textContent='#all-plugins-content{display:none}#all-plugins-pending{display:flex}';` +
   `document.head.appendChild(s)}`
@@ -81,6 +82,7 @@ export default function AllPluginsClient({ plugins }: AllPluginsClientProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [activeTag, setActiveTag] = useState('all')
+  const [sortMode, setSortMode] = useState('recommended')
   // האם מצב הסינון כבר אותחל מה-URL (רק בצד הלקוח, אחרי hydration)
   const [urlStateReady, setUrlStateReady] = useState(false)
   // מונה איפוסים — חלק מה-key של תיבת החיפוש, כדי ש"נקה סינון" ירוקן גם אותה (השדה לא נשלט)
@@ -100,12 +102,12 @@ export default function AllPluginsClient({ plugins }: AllPluginsClientProps) {
     [rankedTags, tagCounts]
   )
   const filteredPlugins: PluginCardData[] = useMemo(
-    () => filterPlugins(plugins, { searchQuery, statusFilter, activeTag }),
-    [plugins, searchQuery, statusFilter, activeTag]
+    () => sortPlugins(filterPlugins(plugins, { searchQuery, statusFilter, activeTag }), sortMode),
+    [plugins, searchQuery, statusFilter, activeTag, sortMode]
   )
   const isFiltered = Boolean(searchQuery) || statusFilter !== 'all' || activeTag !== 'all'
 
-  // אתחול מצב הסינון מה-URL — קישורים שיתופיים (?q=&tag=&status=).
+  // אתחול מצב הסינון מה-URL — קישורים שיתופיים (?q=&tag=&status=&sort=).
   // useLayoutEffect: העדכון והרינדור המסונן קורים לפני הצביעה, כך שבניווט בתוך
   // האתר לא נצבעת קודם הרשימה המלאה.
   useLayoutEffect(() => {
@@ -117,24 +119,27 @@ export default function AllPluginsClient({ plugins }: AllPluginsClientProps) {
     setSearchQuery(params.get('q') || '')
     setStatusFilter(params.get('status') || 'all')
     setActiveTag(params.get('tag') || 'all')
+    const sort = params.get('sort') || ''
+    setSortMode((SORT_MODES as readonly string[]).includes(sort) ? sort : 'recommended')
     setUrlStateReady(true)
     document.getElementById(FILTER_PENDING_STYLE_ID)?.remove()
   }, [])
 
-  // שימור מצב הסינון ב-URL — קישורים שיתופיים (?q=&tag=&status=)
+  // שימור מצב הסינון ב-URL — קישורים שיתופיים (?q=&tag=&status=&sort=)
   useEffect(() => {
     if (!urlStateReady) return
     const params = new URLSearchParams()
     if (searchQuery) params.set('q', searchQuery)
     if (activeTag !== 'all') params.set('tag', activeTag)
     if (statusFilter !== 'all') params.set('status', statusFilter)
+    if (sortMode !== 'recommended') params.set('sort', sortMode)
     const next = params.toString()
     const current = new URLSearchParams(window.location.search).toString()
     if (next !== current) {
       router.replace(next ? `/plugins/all?${next}` : '/plugins/all', { scroll: false })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlStateReady, searchQuery, activeTag, statusFilter])
+  }, [urlStateReady, searchQuery, activeTag, statusFilter, sortMode])
 
   const clearFilters = () => {
     setSearchQuery('')
@@ -184,9 +189,9 @@ export default function AllPluginsClient({ plugins }: AllPluginsClientProps) {
             </Button>
           }
         >
-          {/* לוח המסננים — כל הכלים במשטח אחד, בסדר קבוע: חיפוש · סטטוס, ומתחת תגיות */}
+          {/* לוח המסננים — כל הכלים במשטח אחד, בסדר קבוע: חיפוש · סטטוס · מיון, ומתחת תגיות */}
           <Card padding="md" className="flex flex-col gap-5">
-            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_14rem]">
+            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem_12rem]">
               <div>
                 <label htmlFor={SEARCH_INPUT_ID} className={FIELD_LABEL_COMPACT}>חיפוש</label>
                 {/* key: הרכבה מחדש אחרי קריאת ה-URL (כדי שתיבת החיפוש תציג את ?q=), ואחרי "נקה סינון" */}
@@ -199,6 +204,7 @@ export default function AllPluginsClient({ plugins }: AllPluginsClientProps) {
                 />
               </div>
               <StatusSelect value={statusFilter} onChange={setStatusFilter} />
+              <SortSelect value={sortMode} onChange={setSortMode} />
             </div>
 
             <TagFilterChips tags={tagOptions} activeTag={activeTag} onSelect={setActiveTag} />

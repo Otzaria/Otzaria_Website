@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import IconTile from '@/components/ui/IconTile'
 
 /**
- * אזור בתוך מדריך קבוע (דיקטה, פיתוח): h2 עם אריח אייקון ועוגן (id — יעד תוכן העניינים).
+ * אזור בתוך מדריך קבוע (פיתוח): h2 עם אריח אייקון ועוגן (id — יעד תוכן העניינים).
  * אזור ראשון — בלי קו ההפרדה העליון.
  */
 export default function DocsSection({ id, icon, title, children }: {

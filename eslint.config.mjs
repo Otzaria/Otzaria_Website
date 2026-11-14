@@ -31,6 +31,15 @@ const eslintConfig = defineConfig([
     },
   },
 
+  // מסכי הניהול: בלי alert/confirm/prompt של הדפדפן — חוסמים, לא מעוצבים ולא נגישים.
+  // במקומם ConfirmDialog (useConfirm) ו-Toast הקיימים. confirm מקומי (מ-useConfirm) לא נתפס.
+  {
+    files: ["src/components/admin/**", "src/app/library/admin/**"],
+    rules: {
+      "no-alert": "error",
+    },
+  },
+
   // Override default ignores of eslint-config-next.
   globalIgnores([
     ".next/**",
@@ -41,6 +50,8 @@ const eslintConfig = defineConfig([
     "scripts/**",
     // worktrees של סוכנים (.claude/worktrees) — עותקים מלאים של הריפו, לא קוד לבדיקה.
     ".claude/**",
+    // ספריות צד שלישי מוקטנות שמוגשות כנכסים סטטיים (למשל tesseract) — לא קוד שלנו.
+    "public/vendor/**",
   ]),
 ]);
 

@@ -1,7 +1,13 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import AppIcon from '@/components/ui/AppIcon'
+import Button from '@/components/ui/Button'
+import SelectMenu from '@/components/ui/SelectMenu'
+import { cx } from '@/components/ui/cx'
+import { fieldClasses } from '@/components/ui/fieldStyles'
 import PageCanvas, { streamColor } from './PageCanvas'
+import { bandInk } from './bandInk'
 import { parsePageNumber } from '@/lib/ocr/gematria'
 import {
   splitBandAt,
@@ -17,23 +23,59 @@ import {
 // ("המכונה צדקה") | { confirmed:false, answer:{...} } (הכרעה מתוקנת).
 // האב שומר value לכל משימה ושולח אותם יחד בשמירה.
 
-function ChoiceButton({ active, onClick, icon, children, tone = 'success' }) {
-  const activeCls =
-    tone === 'success'
-      ? 'bg-success-600 text-white border-success-600'
-      : 'bg-neutral-700 text-white border-neutral-700'
+// כפתור בחירה (aria-pressed): ui/Button שקט, והבחירה הנוכחית במילוי רך — המשמעות בטקסט, לא בצבע
+function ChoiceButton({ active, onClick, icon, children }) {
   return (
-    <button
-      onClick={onClick}
-      className={`px-3 py-1.5 rounded-lg text-sm font-bold border transition-all flex items-center gap-1 ${
-        active ? activeCls : 'bg-white text-neutral-600 border-neutral-300 hover:border-neutral-500'
-      }`}
-    >
-      {icon && <span className="material-symbols-outlined text-sm">{icon}</span>}
+    <Button variant="text" size="sm" icon={icon} aria-pressed={!!active} onClick={onClick}>
       {children}
-    </button>
+    </Button>
   )
 }
+
+// כותרת של משימה: אייקון וטקסט
+function TaskTitle({ icon, children, small = false }) {
+  return (
+    <div className={cx('flex items-center gap-2 text-on-surface', small ? 'text-title-sm' : 'text-title-md')}>
+      <AppIcon name={icon} className={cx('text-primary', small ? 'text-icon-sm' : 'text-icon-md')} />
+      {children}
+    </div>
+  )
+}
+
+// מספר הרצועה על צבע הזרם (צבע נתונים מ-PageCanvas, זהה לרצועה בתמונה — ולכן גם הספרה קבועה בשתי
+// הערכות: לבן או שחור, לפי הניגודיות — bandInk.js)
+function BandNumber({ n, stream, small = false }) {
+  const bg = streamColor(stream)
+  return (
+    <span
+      className={cx('flex shrink-0 items-center justify-center rounded-full text-label-sm', small ? 'size-5' : 'size-6')}
+      style={{ backgroundColor: bg, color: bandInk(bg).color }}
+    >
+      {n}
+    </span>
+  )
+}
+
+// בורר זהות הזרם לרצועה (ui/SelectMenu); '' = לא משויך
+function StreamSelect({ index, value, legend, onChange }) {
+  return (
+    <SelectMenu
+      label={`הזרם של רצועה ${index + 1}`}
+      hideLabel
+      options={legend.map((s) => ({ value: String(s.id), label: s.label }))}
+      value={value === null || value === undefined ? '' : String(value)}
+      allLabel="לא משויך"
+      placeholder="לא משויך"
+      searchable={legend.length > 8}
+      highlight={false}
+      onChange={(v) => onChange(v === '' || v == null ? null : parseInt(v, 10))}
+      className="min-w-28 flex-1"
+    />
+  )
+}
+
+const HINT = 'text-body-sm text-on-surface-variant'
+const SUBCARD = 'flex flex-col gap-2 rounded-(--radius-control) bg-surface-container-low p-3'
 
 // ===== מספר עמוד =====
 // מוצג: חיתוך מוגדל של רצועת המספר + הערך הצפוי. המתנדב: "נכון" / הקלדה /
@@ -46,19 +88,16 @@ export function PagenumTaskCard({ prefill, imgSrc, value, onChange }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2 text-on-surface font-bold">
-        <span className="material-symbols-outlined text-info-600">tag</span>
-        מה מספר העמוד?
-      </div>
+      <TaskTitle icon="tag">מה מספר העמוד?</TaskTitle>
 
       {imgSrc && (
-        <div className="bg-white border border-neutral-200 rounded-lg p-2 flex items-center justify-center">
+        <div className="flex items-center justify-center rounded-(--radius-control) bg-surface-container-low p-2">
           <img src={imgSrc} alt="רצועת מספר העמוד" className="max-h-32 w-full object-contain" draggable={false} />
         </div>
       )}
 
-      <div className="text-sm text-on-surface/70">
-        הערך הצפוי מהרצף: <span className="font-bold text-lg text-on-surface">{prefill.hebrew || prefill.expected}</span>
+      <div className="text-body-md text-on-surface-variant">
+        המספר הצפוי לפי העמודים הקודמים: <span className="text-title-md text-on-surface">{prefill.hebrew || prefill.expected}</span>
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -70,7 +109,7 @@ export function PagenumTaskCard({ prefill, imgSrc, value, onChange }) {
           נכון — זה מה שכתוב
         </ChoiceButton>
 
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <input
             dir="rtl"
             value={typed}
@@ -79,13 +118,14 @@ export function PagenumTaskCard({ prefill, imgSrc, value, onChange }) {
               onChange(v.trim() ? { confirmed: false, answer: { value: v.trim() } } : null)
             }}
             placeholder="הערך הנכון (גימטריה או ספרות)"
-            className={`border rounded-lg px-3 py-1.5 text-sm w-56 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40 ${
-              typed && parsed === null ? 'border-danger-400' : 'border-neutral-300'
-            }`}
+            aria-label="הערך הנכון"
+            aria-invalid={typed && parsed === null ? true : undefined}
+            className={fieldClasses({ invalid: !!typed && parsed === null, className: 'w-56 max-w-full' })}
           />
           {typed && (
-            <span className={`text-xs font-bold ${parsed === null ? 'text-danger-600' : 'text-success-700'}`}>
-              {parsed === null ? 'לא תקין' : `= ${parsed}`}
+            <span className={cx('text-label-md', parsed === null ? 'text-error' : 'text-success')}>
+              {/* מה שהוקלד, כמספר — כך רואים שהגימטריה נקראה נכון ("קכג" ← 123) */}
+              {parsed === null ? 'לא מספר עמוד תקין' : `המספר: ${parsed}`}
             </span>
           )}
         </div>
@@ -94,7 +134,6 @@ export function PagenumTaskCard({ prefill, imgSrc, value, onChange }) {
           active={noneChosen}
           onClick={() => onChange({ confirmed: false, answer: { value: null } })}
           icon="block"
-          tone="neutral"
         >
           אין מספר עמוד
         </ChoiceButton>
@@ -103,13 +142,12 @@ export function PagenumTaskCard({ prefill, imgSrc, value, onChange }) {
           active={cwChosen}
           onClick={() => onChange({ confirmed: false, answer: { value: null, catchword: true } })}
           icon="skip_next"
-          tone="neutral"
         >
           זו מילה — שומר-דף
         </ChoiceButton>
       </div>
 
-      <div className="text-xs text-on-surface/50">
+      <div className={HINT}>
         אם בתמונה מופיעה <b>מילה</b> ולא מספר — זהו &quot;שומר-דף&quot;: המילה הראשונה של
         העמוד הבא, שהודפסה בתחתית העמוד. סמנו &quot;זו מילה — שומר-דף&quot;.
       </div>
@@ -141,14 +179,11 @@ export function HeaderTaskCard({ prefill, imageUrl, imageWidth, imageHeight, val
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2 text-on-surface font-bold">
-        <span className="material-symbols-outlined text-warning-alt-600">title</span>
-        האם זו הכותרת הרצה?
-      </div>
+      <TaskTitle icon="title">האם זו הכותרת הרצה?</TaskTitle>
 
       {prefill.texts?.length > 0 && (
-        <div className="text-sm text-on-surface/70">
-          נוסח הכותרת בספר: <span className="font-bold text-on-surface">{prefill.texts[0]}</span>
+        <div className="text-body-md text-on-surface-variant">
+          נוסח הכותרת בספר: <span className="text-label-lg text-on-surface">{prefill.texts[0]}</span>
         </div>
       )}
 
@@ -161,7 +196,7 @@ export function HeaderTaskCard({ prefill, imageUrl, imageWidth, imageHeight, val
         headerDrawable
         onHeaderBoxChange={(box) => onChange({ confirmed: false, answer: { box } })}
       />
-      <div className="text-xs text-on-surface/50">
+      <div className={HINT}>
         {shownBox && !noneChosen
           ? 'אפשר לגרור את התיבה למקום הנכון, ולשנות את גודלה מהפינה'
           : 'אין תיבה — גררו על התמונה כדי לצייר את תיבת הכותרת'}
@@ -181,17 +216,13 @@ export function HeaderTaskCard({ prefill, imageUrl, imageWidth, imageHeight, val
           active={noneChosen}
           onClick={() => onChange({ confirmed: false, answer: { box: null } })}
           icon="block"
-          tone="neutral"
         >
           אין כותרת בעמוד
         </ChoiceButton>
         {value && !value.confirmed && value.answer.box && (
-          <button
-            onClick={() => onChange(null)}
-            className="text-xs text-info-600 hover:bg-info-50 px-2 py-1 rounded-lg transition-colors"
-          >
-            אתחול לזיהוי המכונה
-          </button>
+          <Button variant="text" size="sm" icon="undo" onClick={() => onChange(null)}>
+            חזרה להצעה המקורית
+          </Button>
         )}
       </div>
     </div>
@@ -229,10 +260,7 @@ export function StreamsTaskCard({ prefill, imageUrl, imageWidth, imageHeight, va
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2 text-on-surface font-bold">
-        <span className="material-symbols-outlined text-success-600">view_agenda</span>
-        חלוקת הזרמים בעמוד
-      </div>
+      <TaskTitle icon="view_agenda">חלוקת הזרמים בעמוד</TaskTitle>
 
       <div className="flex flex-col lg:flex-row gap-4">
         <div className="lg:w-2/3">
@@ -247,58 +275,23 @@ export function StreamsTaskCard({ prefill, imageUrl, imageWidth, imageHeight, va
 
         {/* מקרא ופעולות לכל רצועה */}
         <div className="lg:w-1/3 flex flex-col gap-2">
-          <div className="text-xs text-on-surface/50">
+          <div className={HINT}>
             גררו את הגבולות האופקיים על העמוד; לכל רצועה בחרו את זהות הזרם מהמקרא.
           </div>
           {bands.map((b, i) => (
-            <div key={i} className="bg-white border border-neutral-200 rounded-lg p-2 flex items-center gap-2 flex-wrap">
-              <span
-                className="w-6 h-6 rounded-full text-white text-xs font-bold flex items-center justify-center shrink-0"
-                style={{ backgroundColor: streamColor(b.book_stream) }}
-              >
-                {i + 1}
-              </span>
-              <select
-                dir="rtl"
-                value={b.book_stream === null || b.book_stream === undefined ? '' : String(b.book_stream)}
-                onChange={(e) => setIdentity(i, e.target.value === '' ? null : parseInt(e.target.value, 10))}
-                className="border border-neutral-300 rounded-lg px-2 py-1 text-sm bg-white flex-1 min-w-28"
-              >
-                <option value="">לא משויך</option>
-                {prefill.legend.map((s) => (
-                  <option key={s.id} value={String(s.id)}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-              <span className="flex gap-1">
-                <button
-                  onClick={() => splitBand(i)}
-                  className="text-info-600 hover:bg-info-50 p-1 rounded-lg transition-colors"
-                  title="פיצול הרצועה לשתיים (הוספת גבול)"
-                >
-                  <span className="material-symbols-outlined text-sm">splitscreen</span>
-                </button>
-                <button
-                  onClick={() => removeBand(i)}
-                  disabled={bands.length <= 1}
-                  className="text-danger-600 hover:bg-danger-50 p-1 rounded-lg transition-colors disabled:opacity-30"
-                  title="הסרת הרצועה (הסרת גבול)"
-                >
-                  <span className="material-symbols-outlined text-sm">delete</span>
-                </button>
+            <div key={i} className="flex flex-wrap items-center gap-2 rounded-(--radius-control) bg-surface-container-low p-2">
+              <BandNumber n={i + 1} stream={b.book_stream} />
+              <StreamSelect index={i} value={b.book_stream} legend={prefill.legend} onChange={(id) => setIdentity(i, id)} />
+              <span className="flex">
+                <Button variant="text" size="sm" icon="splitscreen" iconOnly aria-label={`פיצול רצועה ${i + 1} לשתיים`} title="פיצול הרצועה לשתיים (הוספת גבול)" onClick={() => splitBand(i)} />
+                <Button variant="text" size="sm" icon="delete" iconOnly aria-label={`הסרת רצועה ${i + 1}`} title="הסרת הרצועה (הסרת גבול)" disabled={bands.length <= 1} onClick={() => removeBand(i)} className="text-error" />
               </span>
             </div>
           ))}
 
-          <button
-            onClick={addBand}
-            className="border border-dashed border-info-400 text-info-700 hover:bg-info-50 rounded-lg px-2 py-1.5 text-sm font-bold flex items-center justify-center gap-1 transition-colors"
-            title="מוסיף גבול חדש (מפצל את הרצועה הגדולה) — גררו אותו למקום הנכון"
-          >
-            <span className="material-symbols-outlined text-sm">add</span>
+          <Button variant="outlined" size="sm" icon="add" fullWidth onClick={addBand} title="מוסיף גבול חדש (מפצל את הרצועה הגדולה) — גררו אותו למקום הנכון">
             הוסף רצועה — יש עוד זרם בעמוד
-          </button>
+          </Button>
 
           <div className="flex items-center gap-2 flex-wrap mt-1">
             <ChoiceButton
@@ -309,12 +302,9 @@ export function StreamsTaskCard({ prefill, imageUrl, imageWidth, imageHeight, va
               נכון — החלוקה טובה
             </ChoiceButton>
             {value && !value.confirmed && (
-              <button
-                onClick={() => onChange(null)}
-                className="text-xs text-info-600 hover:bg-info-50 px-2 py-1 rounded-lg transition-colors"
-              >
-                אתחול לחלוקת המכונה
-              </button>
+              <Button variant="text" size="sm" icon="undo" onClick={() => onChange(null)}>
+                חזרה להצעה המקורית
+              </Button>
             )}
           </div>
         </div>
@@ -355,10 +345,7 @@ export function ZonesFullCard({ prefill, imageUrl, pagenumImgSrc, imageWidth, im
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-2 text-on-surface font-bold">
-        <span className="material-symbols-outlined text-primary">grid_view</span>
-        עמוד מלא — כותרת, מספר וזרמים על אותו קנבס
-      </div>
+      <TaskTitle icon="grid_view">עמוד מלא — כותרת, מספר וזרמים באותה תמונה</TaskTitle>
 
       <div className="flex flex-col lg:flex-row gap-4">
         <div className="lg:w-2/3">
@@ -385,7 +372,7 @@ export function ZonesFullCard({ prefill, imageUrl, pagenumImgSrc, imageWidth, im
 
         <div className="lg:w-1/3 flex flex-col gap-4">
           {prefill.pagenum && (
-            <div className="glass rounded-xl p-3">
+            <div className={SUBCARD}>
               <PagenumTaskCard
                 prefill={prefill.pagenum}
                 imgSrc={pagenumImgSrc}
@@ -396,13 +383,10 @@ export function ZonesFullCard({ prefill, imageUrl, pagenumImgSrc, imageWidth, im
           )}
 
           {prefill.header && (
-            <div className="glass rounded-xl p-3 flex flex-col gap-2">
-              <div className="font-bold text-sm text-on-surface flex items-center gap-1">
-                <span className="material-symbols-outlined text-sm text-warning-alt-600">title</span>
-                כותרת רצה (התיבה הכתומה)
-              </div>
+            <div className={SUBCARD}>
+              <TaskTitle icon="title" small>כותרת רצה (התיבה הכתומה)</TaskTitle>
               {prefill.header.texts?.length > 0 && (
-                <div className="text-xs text-on-surface/70">נוסח: {prefill.header.texts[0]}</div>
+                <div className={HINT}>נוסח: {prefill.header.texts[0]}</div>
               )}
               <div className="flex items-center gap-2 flex-wrap">
                 {prefill.header.box && (
@@ -418,7 +402,6 @@ export function ZonesFullCard({ prefill, imageUrl, pagenumImgSrc, imageWidth, im
                   active={headerNone}
                   onClick={() => setPart('header', { confirmed: false, answer: { box: null } })}
                   icon="block"
-                  tone="neutral"
                 >
                   אין כותרת
                 </ChoiceButton>
@@ -427,70 +410,61 @@ export function ZonesFullCard({ prefill, imageUrl, pagenumImgSrc, imageWidth, im
           )}
 
           {prefill.streams && (
-            <div className="glass rounded-xl p-3 flex flex-col gap-2">
-              <div className="font-bold text-sm text-on-surface flex items-center gap-1">
-                <span className="material-symbols-outlined text-sm text-success-600">view_agenda</span>
-                זרמים (הרצועות הצבעוניות)
-              </div>
+            <div className={SUBCARD}>
+              <TaskTitle icon="view_agenda" small>זרמים (הרצועות הצבעוניות)</TaskTitle>
               {(shownBands || []).map((b, i) => (
                 <div key={i} className="flex items-center gap-2">
-                  <span
-                    className="w-5 h-5 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0"
-                    style={{ backgroundColor: streamColor(b.book_stream) }}
-                  >
-                    {i + 1}
-                  </span>
-                  <select
-                    dir="rtl"
-                    value={b.book_stream === null || b.book_stream === undefined ? '' : String(b.book_stream)}
-                    onChange={(e) => {
-                      const id = e.target.value === '' ? null : parseInt(e.target.value, 10)
+                  <BandNumber n={i + 1} stream={b.book_stream} small />
+                  <StreamSelect
+                    index={i}
+                    value={b.book_stream}
+                    legend={prefill.streams.legend}
+                    onChange={(id) => {
                       const next = setBandIdentity(shownBands || [], i, id)
                       setPart('streams', { confirmed: false, answer: { bands: next } })
                     }}
-                    className="border border-neutral-300 rounded-lg px-2 py-0.5 text-xs bg-white flex-1"
-                  >
-                    <option value="">לא משויך</option>
-                    {prefill.streams.legend.map((s) => (
-                      <option key={s.id} value={String(s.id)}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
-                  <button
+                  />
+                  <Button
+                    variant="text"
+                    size="sm"
+                    icon="splitscreen"
+                    iconOnly
+                    aria-label={`פיצול רצועה ${i + 1} לשתיים`}
+                    title="פיצול הרצועה לשתיים"
                     onClick={() => {
                       const next = splitBandAt(shownBands, i)
                       if (next) setPart('streams', { confirmed: false, answer: { bands: next } })
                     }}
-                    className="text-info-600 hover:bg-info-50 p-0.5 rounded transition-colors"
-                    title="פיצול הרצועה לשתיים"
-                  >
-                    <span className="material-symbols-outlined text-sm">splitscreen</span>
-                  </button>
-                  <button
+                  />
+                  <Button
+                    variant="text"
+                    size="sm"
+                    icon="delete"
+                    iconOnly
+                    aria-label={`הסרת רצועה ${i + 1}`}
+                    title="הסרת הרצועה"
+                    disabled={(shownBands || []).length <= 1}
+                    className="text-error"
                     onClick={() => {
                       const next = removeBandAt(shownBands, i)
                       if (next) setPart('streams', { confirmed: false, answer: { bands: next } })
                     }}
-                    disabled={(shownBands || []).length <= 1}
-                    className="text-danger-600 hover:bg-danger-50 p-0.5 rounded transition-colors disabled:opacity-30"
-                    title="הסרת הרצועה"
-                  >
-                    <span className="material-symbols-outlined text-sm">delete</span>
-                  </button>
+                  />
                 </div>
               ))}
-              <button
+              <Button
+                variant="outlined"
+                size="sm"
+                icon="add"
+                fullWidth
+                title="מוסיף גבול חדש (מפצל את הרצועה הגדולה) — גררו אותו למקום הנכון"
                 onClick={() => {
                   const next = splitTallestBand(shownBands)
                   if (next) setPart('streams', { confirmed: false, answer: { bands: next } })
                 }}
-                className="border border-dashed border-info-400 text-info-700 hover:bg-info-50 rounded-lg px-2 py-1 text-xs font-bold flex items-center justify-center gap-1 transition-colors"
-                title="מוסיף גבול חדש (מפצל את הרצועה הגדולה) — גררו אותו למקום הנכון"
               >
-                <span className="material-symbols-outlined text-sm">add</span>
                 הוסף רצועה — יש עוד זרם בעמוד
-              </button>
+              </Button>
               <ChoiceButton
                 active={!!parts.streams?.confirmed}
                 onClick={() => setPart('streams', { confirmed: true, answer: null })}

@@ -3,10 +3,12 @@ import AppIcon from '@/components/ui/AppIcon'
 import Button from '@/components/ui/Button'
 import { cx } from '@/components/ui/cx'
 import Ltr from '@/components/ui/Ltr'
+import { SERVICE_WARNING_TEXT } from '@/components/plugins/service/ServiceWarning'
 import type { Plugin } from './types'
 
 /**
- * הודעות מצב מעל כותרת התוסף: צפייה בגרסה ישנה (warning) ותוסף מושהה (error) — הנוסח הקיים.
+ * הודעות מצב מעל כותרת התוסף: צפייה בגרסה ישנה (warning), תוסף מושהה (error) — הנוסח הקיים — ותוסף
+ * שדורש שירות חיצוני (warning, האזהרה הקבועה של המפרט).
  * role="note": מידע משלים שאינו התראה דחופה. הצבע — משטח המצב (container) מהפלטה, כך שגם בערכה
  * הכהה הוא נשאר קריא; המשמעות תמיד בכותרת הטקסטואלית.
  */
@@ -44,12 +46,12 @@ function Banner({ tone, icon, title, children, action }: {
 }
 
 export default function PluginStateBanners({ plugin, canEdit, suspendedByAdmin, className }: {
-  plugin: Pick<Plugin, 'id' | 'version' | 'latestVersion' | 'isHistoricalVersion' | 'isSuspended'>
+  plugin: Pick<Plugin, 'id' | 'version' | 'latestVersion' | 'isHistoricalVersion' | 'isSuspended' | 'hasService'>
   canEdit: boolean
   suspendedByAdmin: boolean
   className?: string
 }) {
-  if (!plugin.isHistoricalVersion && !plugin.isSuspended) return null
+  if (!plugin.isHistoricalVersion && !plugin.isSuspended && !plugin.hasService) return null
   return (
     <div className={cx('flex flex-col gap-3', className)}>
       {plugin.isHistoricalVersion && (
@@ -81,6 +83,12 @@ export default function PluginStateBanners({ plugin, canEdit, suspendedByAdmin, 
           {canEdit && (suspendedByAdmin
             ? ' להחזרת התוסף לחנות יש לפנות למנהל.'
             : ' ניתן להחזירו לחנות בכל עת בכפתור "החזר לחנות".')}
+        </Banner>
+      )}
+
+      {plugin.hasService && (
+        <Banner tone="warning" icon="warning" title="התוסף דורש שירות חיצוני">
+          {SERVICE_WARNING_TEXT}
         </Banner>
       )}
     </div>

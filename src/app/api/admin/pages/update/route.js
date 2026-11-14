@@ -8,7 +8,7 @@ import { hasBooksAccess } from '@/lib/roles';
 
 export async function PUT(request) {
   const session = await getServerSession(authOptions);
-  if (!hasBooksAccess(session?.user?.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!hasBooksAccess(session?.user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const { bookName, pageNumber, updates } = await request.json();
   

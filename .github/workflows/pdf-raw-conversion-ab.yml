@@ -1,0 +1,162 @@
+name: PDF raw bitmap A/B experiment
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/benchmark-pdf-raw-experiment.mjs'
+      - 'src/lib/pdfConverter.js'
+      - 'src/lib/pdfConverter.test.mjs'
+      - 'src/lib/pdfRendererRaw*'
+      - 'src/lib/pdfConversionGate*'
+      - 'next.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/pdf-raw-conversion-ab.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  comparative-measurement:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Confirm runtime PDF and canvas versions
+        run: npm ls pdf-to-img pdfjs-dist @napi-rs/canvas sharp
+      - name: Baseline and raw/direct-size A/B (isolated child processes)
+        run: |
+          set -o pipefail
+          node scripts/benchmark-pdf-raw-experiment.mjs | tee pdf-ab.json
+      - name: Independently check report completeness and shape parity
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const report = JSON.parse(fs.readFileSync('pdf-ab.json', 'utf8'));
+          if (report.scenarios.length !== 3) throw new Error('missing fixture scenario');
+          for (const scenario of report.scenarios) {
+            for (const variant of ['baseline', 'raw', 'data', 'fit']) {
+              const r = scenario.runs[variant];
+              if (r.rounds.length !== 2 || r.elapsedMs.some(n => n <= 0) ||
+                  r.peakRssMiB.some(n => n <= 0) ||
+                  r.rounds.some(x => x.imageCount !== scenario.fixture.pages)) {
+                throw new Error('invalid run ' + scenario.fixture.name + ':' + variant);
+              }
+            }
+            for (const variant of ['raw', 'data', 'fit']) {
+              if (scenario.quality[variant].pagesChecked !== scenario.fixture.pages ||
+                  !Number.isFinite(scenario.quality[variant].maxMeanAbsError)) {
+                throw new Error('missing quality comparison for ' + variant);
+              }
+            }
+            if (scenario.quality.raw.pixelExactCount !== scenario.fixture.pages) {
+              throw new Error('production raw JPEG differs pixel-for-pixel from legacy');
+            }
+          }
+          console.log('Compared every JPEG page, shape-parity gated; speed/quality differences retained.');
+          JS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdf-raw-ab-comparison
+          path: pdf-ab.json
+          if-no-files-found: error
+          retention-days: 30
+
+  independent-existing-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Converter correctness and resource cleanup
+        run: node --test src/lib/pdfConverter.test.mjs src/lib/pdfRendererRaw.test.mjs src/lib/pdfConversionGate.test.mjs
+      - name: ESLint of new PDF converter modules
+        run: npx eslint src/lib/pdfConverter.js src/lib/pdfRendererRaw.js src/lib/pdfConversionGate.js src/lib/pdfRendererRaw.test.mjs src/lib/pdfConversionGate.test.mjs
+
+  production-bundle-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      MONGODB_URI: mongodb://127.0.0.1:27017/otzaria_pdf_ci
+      MONGODB_SERVER_SELECTION_TIMEOUT_MS: '5000'
+    services:
+      mongodb:
+        image: mongo:7.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      # Same as deploy.yml: the lockfile's validator SHA predates the SPEC export.
+      - name: Install the plugin validator v1 tag
+        run: npm install "github:Otzaria/otzaria-plugin-validator#v1" --legacy-peer-deps --no-save
+      - name: Verify Next.js production server bundle with native canvas
+        run: npm run build
+
+  baseline-build-control:
+    # Compare the plugin page-data failure against unchanged master.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      MONGODB_URI: mongodb://127.0.0.1:27017/otzaria_pdf_ci
+      MONGODB_SERVER_SELECTION_TIMEOUT_MS: '5000'
+    services:
+      mongodb:
+        image: mongo:7.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dfa6d62028099a8de59e6be63e23b98c4163900f
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - name: Check whether baseline also fails at plugin schemaVersion
+        shell: bash
+        run: |
+          set -o pipefail
+          set +e
+          npm run build 2>&1 | tee control-build.log
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo "Base build passed; candidate build failure is not an existing master issue." >&2
+            exit 1
+          fi
+          grep -q 'src/lib/pluginValidation.js' control-build.log
+          grep -q 'schemaVersion' control-build.log
+          echo 'Confirmed: plugin validator failure already occurs at unchanged master.'

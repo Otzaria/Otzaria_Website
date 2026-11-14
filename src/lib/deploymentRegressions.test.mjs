@@ -16,7 +16,7 @@ test('CI has a healthy isolated Mongo service and bounded selection deadline', (
   const job = workflow.jobs['build-check']
   assert.equal(job.env.MONGODB_URI, 'mongodb://127.0.0.1:27017/otzaria_ci')
   assert.equal(job.env.MONGODB_SERVER_SELECTION_TIMEOUT_MS, '5000')
-  assert.equal(job.services.mongodb.image, 'mongo:8.0')
+  assert.equal(job.services.mongodb.image, 'mongo:7.0')
   assert.deepEqual(job.services.mongodb.ports, ['27017:27017'])
   assert.match(job.services.mongodb.options, /mongosh.*ping:1/)
   assert.equal(workflow.jobs.deploy.env, undefined)
@@ -42,12 +42,13 @@ test('migration parses without running data writes and restores the async functi
   assert.equal(books?.async, true)
   assert.ok(books.body.body.some(n => n.type === 'VariableDeclaration'))
 })
-test('OCR keeps exactly one book index with the running-only unique constraint', () => {
+test('OCR keeps exactly one book index with the active-only unique constraint', () => {
   const indexes = OcrJob.schema.indexes()
   const book = indexes.filter(([keys]) => JSON.stringify(keys) === JSON.stringify({ book: 1 }))
   assert.equal(book.length, 1)
   assert.equal(book[0][1].unique, true)
-  assert.deepEqual(book[0][1].partialFilterExpression, { status: 'running' })
+  assert.equal(book[0][1].name, 'book_active_unique')
+  assert.deepEqual(book[0][1].partialFilterExpression, { active: true })
   assert.ok(indexes.some(([keys]) => keys.book === 1 && keys.createdAt === -1))
 })
 test('malformed ZIP64 no longer freezes fflate admin/browser extraction', () => {

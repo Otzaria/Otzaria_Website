@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import PluginImage from '@/components/plugins/PluginImage'
 import StatusBadge, { PluginStateBadge } from '@/components/plugins/StatusBadge'
+import ServiceBadge from '@/components/plugins/service/ServiceBadge'
 import SectionHeading from '@/components/ui/SectionHeading'
 import { cx } from '@/components/ui/cx'
 import PluginKeyFacts from './PluginKeyFacts'
@@ -62,6 +63,7 @@ export default function PluginHero({ plugin, titleId, actions, secondaryActions,
               <StatusBadge status={plugin.status} size="md" />
               {plugin.isSuspended && <PluginStateBadge state="suspended" size="md" />}
               {plugin.isHistoricalVersion && <PluginStateBadge state="historical" size="md" />}
+              {plugin.hasService && <ServiceBadge size="md" />}
             </div>
           </div>
         </div>

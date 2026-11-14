@@ -12,6 +12,7 @@ import PluginModel from '@/models/Plugin'
 import { PUBLIC_PLUGIN_FILTER } from '@/lib/pluginStore'
 import { buildTagSuggestionPool } from '@/lib/pluginTags'
 import { CACHE_TAGS, REVALIDATE_SECONDS } from '@/lib/cacheTags'
+import { getServicePluginConfig } from '@/lib/servicePlugins/config'
 import type { TagCount } from '@/components/plugins/listing/TagFilterChips'
 import UploadPluginPageClient from './UploadPluginPageClient'
 
@@ -38,5 +39,6 @@ export default async function UploadPluginPage() {
   } catch (error) {
     console.error('Error loading plugin tag pool:', error)
   }
-  return <UploadPluginPageClient tagPool={tagPool} />
+  // הדגל נקרא מ-env של השרת (זהה בבנייה ובריצה בפריסה); כבוי — התיבה לא מוצגת והשרת מתעלם מהשדה
+  return <UploadPluginPageClient tagPool={tagPool} serviceEnabled={getServicePluginConfig().enabled} />
 }

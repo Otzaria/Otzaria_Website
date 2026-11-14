@@ -7,6 +7,8 @@ import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import { sendPluginUploadNotification } from '@/lib/emailService'
 import { sendPluginReportNoticeIfNeeded } from '@/lib/systemMessages'
+import { getServicePluginConfig } from '@/lib/servicePlugins/config'
+import { serviceManageUrl } from '@/lib/servicePlugins/existingPaths'
 import {
   ALLOWED_PLUGIN_STATUSES,
   MIN_SUPPORTED_APP_VERSION,
@@ -86,6 +88,9 @@ export async function POST(request) {
     if (reportsConsent !== 'true' && reportsConsent !== '1' && reportsConsent !== 'on') {
       return badRequest('יש לאשר קבלת דיווחים ממשתמשים למייל שלך כדי להעלות תוסף חדש')
     }
+    // תוסף שירות: נקבע רק כאן, בהעלאה הראשונה, ואינו מתבטל
+    const hasService = getServicePluginConfig().enabled &&
+      (formData.get('requiresService') || '').toString().trim() === 'true'
 
     if (typeof pluginFile.name !== 'string' || !pluginFile.name.toLowerCase().endsWith(PLUGIN_FILE_EXT)) {
       return badRequest(`Plugin file must be ${PLUGIN_FILE_EXT} format`)
@@ -266,6 +271,7 @@ export async function POST(request) {
           screenshots: screenshotMeta,
           homepage: homepageFromManifest,
           isApproved: false,
+          hasService,
           submissionType: 'new',
           lastSubmittedBy: session.user.id,
           lastSubmittedAt: new Date()
@@ -327,8 +333,10 @@ export async function POST(request) {
       plugin: {
         id: plugin._id,
         name: plugin.name,
-        slug: plugin.slug
-      }
+        slug: plugin.slug,
+        ...(hasService ? { hasService: true } : {})
+      },
+      ...(hasService ? { serviceSubmissionUrl: serviceManageUrl(createdPluginId) } : {})
     }, { status: 201 })
   } catch (error) {
     console.error('Error uploading plugin:', error)

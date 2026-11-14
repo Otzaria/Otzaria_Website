@@ -55,7 +55,16 @@ export function createGithubClient({ token, repo, fetchImpl = fetch }) {
     },
     async getIssue(issueNumber) {
       const d = await call('GET', `/issues/${issueNumber}`);
-      return { number: d.number, state: d.state, state_reason: d.state_reason ?? null, url: d.html_url };
+      return {
+        number: d.number, state: d.state, state_reason: d.state_reason ?? null, url: d.html_url,
+        closed_at: d.closed_at ?? null, closed_by: d.closed_by?.login ?? null,
+      };
+    },
+    /** תגובות שעודכנו מאז `since` (ISO), בסדר כרונולוגי. */
+    async listComments(issueNumber, since) {
+      const qs = new URLSearchParams({ per_page: '100', ...(since ? { since } : {}) });
+      const d = await call('GET', `/issues/${issueNumber}/comments?${qs}`);
+      return (Array.isArray(d) ? d : []).map((c) => ({ body: c.body || '', author: c.user?.login ?? null, created_at: c.created_at }));
     },
   };
 }

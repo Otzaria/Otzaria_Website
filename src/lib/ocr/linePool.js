@@ -109,7 +109,7 @@ export async function requireVerifiedSession() {
   if (!session) {
     return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   }
-  if (!session.user.isVerified && !hasBookLibraryAccess(session.user.role)) {
+  if (!session.user.isVerified && !hasBookLibraryAccess(session.user)) {
     return {
       error: NextResponse.json(
         { success: false, error: 'רק משתמשים מאומתים יכולים לתמלל שורות' },

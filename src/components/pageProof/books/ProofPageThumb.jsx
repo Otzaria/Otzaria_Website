@@ -3,8 +3,7 @@
 import { useState } from 'react'
 import { thumbUrl } from '@/lib/pageProof/gridState'
 
-// התמונה הממוזערת בכרטיס-עמוד — ברשת-העמודים של המתנדב (ProofPageCard) ושל
-// המנהל (admin/AdminPageCard): בגובה 3:4, מספר העמוד בפינה, לחיצה ← הגדלה
+// התמונה הממוזערת בכרטיס-עמוד — ברשת-העמודים של המתנדב (ProofPageCard): בגובה 3:4, מספר העמוד בפינה, לחיצה ← הגדלה
 // (onPreview). children — כפתורים שמעל התמונה (למשל שחרור).
 // page: {id, page, revision}
 

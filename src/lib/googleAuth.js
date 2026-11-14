@@ -1,6 +1,8 @@
 // לוגיקה טהורה להתחברות עם Google למשתמשים רשומים (לפי המייל המשויך).
 // ההתחברות עם Google אינה יוצרת חשבון — רק מזהה חשבון קיים לפי כתובת המייל.
 
+import { getRoles, primaryRole } from './roles.js';
+
 // קודי שגיאה שמוחזרים לדף השגיאה של ההתחברות (/library/auth/error?error=...)
 export const GOOGLE_AUTH_ERRORS = {
   NO_ACCOUNT: 'GoogleNoAccount',
@@ -49,7 +51,9 @@ export function toTokenUserFields(user) {
     id: user._id.toString(),
     email: user.email,
     name: user.name,
-    role: user.role,
+    // roles — כל התפקידים (מקור האמת להרשאות); role — התפקיד הראשי, לתאימות (roles.js)
+    role: primaryRole(user),
+    roles: getRoles(user),
     acceptReminders: user.acceptReminders,
     isVerified: user.isVerified,
     // חשבון שנוצר דרך Google אין לו סיסמה — הממשק מציע לו "קביעת סיסמה"

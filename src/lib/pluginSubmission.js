@@ -162,6 +162,16 @@ function resolveFileUpdatedDate(plugin) {
   return iso(plugin.createdAt || plugin.updatedAt)
 }
 
+// מועד הפרסום הראשון — למיון "החדשים ביותר". בתוספים שהועברו מהחנות הקודמת createdAt הוא מועד
+// ההעברה, ו-originalDate (תאריך העדכון שם) מוקדם ממנו ומשקף טוב יותר את גילם.
+function resolvePublishedAt(plugin) {
+  const dates = [plugin.createdAt, plugin.originalDate]
+    .map((d) => (d ? new Date(d) : null))
+    .filter((d) => d && !Number.isNaN(d.getTime()))
+  if (dates.length === 0) return null
+  return new Date(Math.min(...dates.map((d) => d.getTime()))).toISOString()
+}
+
 export function formatPluginForPublic(plugin, options = {}) {
   const pluginId = plugin._id.toString()
   const source = options.usePending ? getEditableSource(plugin) : getLivePluginData(plugin)
@@ -169,6 +179,8 @@ export function formatPluginForPublic(plugin, options = {}) {
     id: pluginId,
     // מזהה ה-manifest — משמש את טופס הדיווח באתר (אותו מזהה שהאפליקציה שולחת)
     pluginUid: plugin.pluginUid || null,
+    // תוסף שירות: התקנה ועדכון דרך דף השירות (ראו src/lib/servicePlugins/existingPaths.js)
+    hasService: plugin.hasService === true,
     authorId: plugin.authorId?.toString?.() || plugin.authorId || null,
     name: source.name,
     slug: plugin.slug,
@@ -181,6 +193,7 @@ export function formatPluginForPublic(plugin, options = {}) {
     originalDate: plugin.originalDate || plugin.updatedAt.toISOString().split('T')[0],
     // מועד השינוי האחרון של קובץ התוסף בפועל — זה התאריך שמוצג בחנות כ"עודכן"
     fileUpdatedAt: resolveFileUpdatedDate(plugin),
+    publishedAt: resolvePublishedAt(plugin),
     compatibleWith: source.compatibleWith,
     maxAppVersion: source.maxAppVersion || null,
     requiresNetwork: source.requiresNetwork === true,

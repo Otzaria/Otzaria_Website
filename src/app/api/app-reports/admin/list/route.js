@@ -13,7 +13,7 @@ export async function GET(request) {
     const sp = new URL(request.url).searchParams;
     const result = await listReports({
       product: sp.get('product'), type: sp.get('type'), trigger: sp.get('trigger'), issueState: sp.get('issueState'), page: sp.get('page'), limit: sp.get('limit'),
-    }, auth.user.role);
+    }, auth.user);
     const config = getAppReportsConfig();
     return jsonNoStore({
       success: true,

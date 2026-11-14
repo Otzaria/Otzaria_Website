@@ -78,7 +78,7 @@ export function readPluginZipDirectory(input) {
   return { buffer, entries }
 }
 
-function inflateEntry({ buffer }, entry) {
+export function readPluginZipEntry({ buffer }, entry) {
   const compressed = buffer.subarray(entry.dataStart, entry.dataStart + entry.compressed)
   const data = entry.method === 0 ? compressed
     : inflateRawSync(compressed, { maxOutputLength: Math.max(1, entry.original) })
@@ -91,7 +91,7 @@ export function extractZipFiles(input, predicate, directory = readPluginZipDirec
   const files = new Map()
   for (const entry of directory.entries.values()) {
     if (!entry.name.endsWith('/') && (!predicate || predicate(entry.name))) {
-      files.set(entry.name, inflateEntry(directory, entry))
+      files.set(entry.name, readPluginZipEntry(directory, entry))
     }
   }
   return files
@@ -109,5 +109,5 @@ export function readPluginManifest(input) {
   const directory = readPluginZipDirectory(input)
   const entry = directory.entries.get('manifest.json')
   if (!entry) throw new Error('manifest.json not found in plugin file')
-  return parsePluginManifest(inflateEntry(directory, entry))
+  return parsePluginManifest(readPluginZipEntry(directory, entry))
 }

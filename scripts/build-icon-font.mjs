@@ -4,8 +4,8 @@
  *
  * למה: הבקשה המקורית ל-Google Fonts ביקשה את הגופן המשתנה עם כל טווחי האיכסים
  * (opsz/wght/FILL/GRAD) — קובץ WOFF2 של ~3.96MB שנטען בכל ביקור קר, ממקור חיצוני
- * (DNS/TLS נוספים) ומחזיק stylesheet חוסם-רינדור. האתר משתמש בפועל רק במופע
- * הסטטי (24/400/0/0) ובכמה מאות אייקונים, ולכן subset מקומי שוקל עשרות KB.
+ * (DNS/TLS נוספים) ומחזיק stylesheet חוסם-רינדור. האתר משתמש בפועל רק ב-opsz 24,
+ * FILL 0, GRAD 0, במשקל 300–400 ובכמה מאות אייקונים, ולכן subset מקומי שוקל עשרות KB.
  *
  * שימוש:
  *   node scripts/build-icon-font.mjs           # בונה מחדש (דורש רשת) ומעדכן את הפלטים
@@ -24,7 +24,10 @@
  */
 
 import { createHash } from 'node:crypto'
-import { readFile, writeFile, readdir, unlink } from 'node:fs/promises'
+import { readFile, writeFile, readdir, unlink, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -42,8 +45,12 @@ const UNIVERSE_OUT = path.join(ROOT, 'scripts', 'material-symbols-names.txt')
 
 const FONT_BASENAME = 'material-symbols-outlined'
 const FAMILY = 'Material Symbols Outlined'
-// מופע סטטי: opsz=24, wght=400, FILL=0, GRAD=0 — האתר אינו משתמש באיכסים משתנים.
-const AXES = 'opsz,wght,FILL,GRAD@24,400,0,0'
+// opsz=24, FILL=0, GRAD=0 קבועים; wght משתנה בטווח 300–400: האתר כולו במשקל 400 (font-weight:
+// normal ב-base.css), וכלי העורך (Button size="tool", --tool-icon-weight) — 300, אייקון דק.
+// ציר אחד בטווח צר מוסיף כ-40% לגודל ה-subset (עדיין עשרות KB).
+const WGHT_MIN = 300
+const WGHT_MAX = 400
+const AXES = `opsz,wght,FILL,GRAD@24,${WGHT_MIN}..${WGHT_MAX},0,0`
 const METADATA_URL = 'https://fonts.google.com/metadata/icons?incomplete=true&key=material_symbols'
 const CSS_API = 'https://fonts.googleapis.com/css2'
 // Google מחזיר WOFF2 רק ל-User-Agent מודרני; בלעדיו נקבל TTF ענק.
@@ -52,6 +59,23 @@ const MODERN_UA =
 
 /** subset תקין שוקל עשרות KB; מעל זה — Google החזיר את הגופן המלא (ראו build). */
 const MAX_SUBSET_BYTES = 150 * 1024
+
+// ה-API עשוי להחזיר את כל ציר 100–700 למרות הבקשה לטווח צר. מצמצמים מקומית
+// באמצעות fonttools[woff] (נדרש רק ב-build:icons), ושומרים גם על משקל 300 של כלי העורך.
+async function subsetWeights(woff2) {
+  const dir = await mkdtemp(path.join(tmpdir(), 'otzaria-icon-font-'))
+  try {
+    const source = path.join(dir, 'source.woff2')
+    const target = path.join(dir, 'subset.woff2')
+    await writeFile(source, woff2)
+    await promisify(execFile)('python3', [
+      path.join(ROOT, 'scripts', 'subset-icon-weight.py'), source, target, String(WGHT_MIN), String(WGHT_MAX)
+    ], { timeout: 30_000 })
+    return await readFile(target)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+}
 
 // אייקונים מוצגים רק מקוד JS/TS (אין שימוש ב-CSS content/Markdown). קובצי טסט אינם מרונדרים.
 const CODE_EXTENSIONS = new Set(['.js', '.jsx', '.mjs', '.ts', '.tsx'])
@@ -185,14 +209,15 @@ async function build() {
     )
   }
 
-  const woff2 = await fetchSubset(names)
+  const downloaded = await fetchSubset(names)
   // רשת ביטחון: subset תקין שוקל עשרות KB. גופן גדול מזה הוא כנראה הגופן המלא.
-  if (woff2.length > MAX_SUBSET_BYTES) {
+  if (downloaded.length > MAX_SUBSET_BYTES) {
     throw new Error(
-      `הגופן שהתקבל שוקל ${(woff2.length / 1024).toFixed(1)}KB (${names.length} שמות, ${paramLength} תווים) — ` +
+      `הגופן שהתקבל שוקל ${(downloaded.length / 1024).toFixed(1)}KB (${names.length} שמות, ${paramLength} תווים) — ` +
         'כנראה Google התעלם מה-subset.'
     )
   }
+  const woff2 = await subsetWeights(downloaded)
   const missing = missingFromFont(names, woff2)
   if (missing.length) {
     throw new Error(`אייקונים שבשימוש חסרים בגופן שהתקבל: ${missing.join(', ')}`)
@@ -213,13 +238,13 @@ async function build() {
     CSS_OUT,
     `/* ============================================================
  * icon-font.css — נוצר אוטומטית על ידי scripts/build-icon-font.mjs. אין לערוך.
- * subset מקומי של ${FAMILY} (${names.length} אייקונים, מופע סטטי ${AXES}).
+ * subset מקומי של ${FAMILY} (${names.length} אייקונים, ${AXES}).
  * ============================================================ */
 
 @font-face {
   font-family: '${FAMILY}';
   font-style: normal;
-  font-weight: 400;
+  font-weight: ${WGHT_MIN} ${WGHT_MAX};
   /* block ולא swap — אחרת שם האייקון מוצג כטקסט עד שהגופן עולה */
   font-display: block;
   src: url('${publicUrl}') format('woff2');

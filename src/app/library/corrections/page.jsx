@@ -1,13 +1,14 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import LabelChips from '@/components/corrections/LabelChips'
+import HiddenBooksFilter from '@/components/corrections/HiddenBooksFilter'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { HANDOFF_REASON_LABELS } from '@/lib/corrections/states'
 
 const VIEWS = [
-  { id: 'queued', label: 'ממתינים לטיפול' },
+  { id: 'queued', label: 'פנויים ובטיפולי' },
   { id: 'mine', label: 'בטיפולי' },
   { id: 'claimed', label: 'בטיפול מתנדבים' },
   { id: 'auto', label: 'בבדיקה אוטומטית' },
@@ -18,7 +19,12 @@ const VIEWS = [
 
 // תקרת השרת ל-limit היא 100.
 const PAGE_SIZE = 50
+const MAX_PAGE_SIZE = 100
 const FILTERS_KEY = 'corrections:listFilters'
+// ספרים מוסתרים נשמרים לאורך זמן (localStorage); תמונת הרשימה + מיקום הגלילה — לחזרה מדף דיווח (sessionStorage).
+const HIDDEN_KEY = 'corrections:hiddenBooks'
+const SNAPSHOT_KEY = 'corrections:listSnapshot'
+const SNAPSHOT_MAX_AGE_MS = 30 * 60_000
 
 const STATE_LABELS = {
   open: 'פתוח',
@@ -39,6 +45,7 @@ export default function CorrectionsListPage() {
   const [options, setOptions] = useState({ sourceFolders: [], books: [] })
   const [reason, setReason] = useState('')
   const [assignee, setAssignee] = useState('')
+  const [hidden, setHidden] = useState([])
   const [handlers, setHandlers] = useState([])
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
@@ -46,8 +53,11 @@ export default function CorrectionsListPage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [ready, setReady] = useState(false)
   const sentinel = useRef(null)
+  // תמונת הרשימה שנשמרה לפני כניסה לדיווח — משוחזרת פעם אחת בטעינה הראשונה
+  const restore = useRef(null)
+  const latestQuery = useRef(null)
 
-  // הסינון נשמר ב-sessionStorage כדי ש"חזרה לתור" מדף דיווח לא תאפס אותו.
+  // הסינון נשמר ב-sessionStorage כדי ש"חזרה לדיווחים" מדף דיווח לא תאפס אותו.
   useEffect(() => {
     try {
       const f = JSON.parse(sessionStorage.getItem(FILTERS_KEY) || 'null')
@@ -60,7 +70,14 @@ export default function CorrectionsListPage() {
         setReason(f.reason || '')
         setAssignee(f.assignee || '')
       }
+      const snap = JSON.parse(sessionStorage.getItem(SNAPSHOT_KEY) || 'null')
+      sessionStorage.removeItem(SNAPSHOT_KEY)
+      if (snap && Date.now() - snap.at < SNAPSHOT_MAX_AGE_MS) restore.current = snap
     } catch { /* אחסון חסום — ברירות מחדל */ }
+    try {
+      const h = JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]')
+      if (Array.isArray(h)) setHidden(h.filter((b) => typeof b === 'string'))
+    } catch { /* אחסון חסום */ }
     setReady(true)
   }, [])
 
@@ -71,18 +88,41 @@ export default function CorrectionsListPage() {
     } catch { /* אחסון חסום */ }
   }, [ready, view, kind, source, book, reason, assignee])
 
-  const fetchPage = useCallback(async (skip) => {
-    const q = new URLSearchParams({ view, limit: String(PAGE_SIZE), skip: String(skip) })
+  const changeHidden = (next) => {
+    setHidden(next)
+    try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(next)) } catch { /* אחסון חסום */ }
+  }
+
+  // מפתח השאילתה (בלי עימוד) — גם לזיהוי תמונת רשימה שנשמרה לאותו סינון
+  const queryKey = useMemo(() => {
+    const q = new URLSearchParams({ view })
     if (kind) q.set('kind', kind)
     if (source) q.set('source', source)
     if (bookQuery) q.set('book', bookQuery)
     if (reason) q.set('reason', reason)
     if (assignee) q.set('assignee', assignee)
-    const res = await fetch(`/api/corrections/reports?${q}`, { cache: 'no-store' })
+    if (hidden.length) q.set('hideBooks', JSON.stringify(hidden))
+    return q.toString()
+  }, [view, kind, source, bookQuery, reason, assignee, hidden])
+
+  const fetchPage = useCallback(async (skip, limit = PAGE_SIZE) => {
+    const res = await fetch(`/api/corrections/reports?${queryKey}&limit=${limit}&skip=${skip}`, { cache: 'no-store' })
     const body = await res.json()
-    if (!res.ok) throw new Error(res.status === 403 ? 'אין לך הרשאה לטפל בתיקוני טקסט' : body.error || 'שגיאה בטעינה')
+    if (!res.ok) throw new Error(res.status === 403 ? 'אין לך הרשאה לטפל בדיווחי טעויות' : body.error || 'שגיאה בטעינה')
     return body
-  }, [view, kind, source, bookQuery, reason, assignee])
+  }, [queryKey])
+
+  // רענון של כל מה שהיה טעון (גם מעבר לעמוד הראשון), כדי שהגלילה המשוחזרת תישאר במקומה
+  const fetchUpTo = useCallback(async (count) => {
+    let body = await fetchPage(0, Math.min(MAX_PAGE_SIZE, Math.max(PAGE_SIZE, count)))
+    while (body.items.length < Math.min(count, body.total)) {
+      const next = await fetchPage(body.items.length, MAX_PAGE_SIZE)
+      if (!next.items.length) break
+      const seen = new Set(body.items.map((r) => r.id))
+      body = { ...next, items: [...body.items, ...next.items.filter((r) => !seen.has(r.id))] }
+    }
+    return body
+  }, [fetchPage])
 
   useEffect(() => {
     const t = setTimeout(() => setBookQuery(book.trim()), 300)
@@ -90,6 +130,23 @@ export default function CorrectionsListPage() {
   }, [book])
 
   const load = useCallback(async () => {
+    latestQuery.current = queryKey
+    const snap = restore.current
+    restore.current = null
+    if (snap?.query === queryKey && snap.data?.items) {
+      // חזרה מדף דיווח: מציגים מיד את מה שהיה, גוללים למקום, ומרעננים ברקע את אותו טווח
+      setData(snap.data)
+      setLoading(false)
+      requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, snap.scrollY)))
+      try {
+        const fresh = await fetchUpTo(snap.data.items.length)
+        // אם הסינון השתנה בינתיים, טעינה חדשה כבר החליפה את הרשימה
+        if (latestQuery.current === snap.query) setData(fresh)
+      } catch (e) {
+        setError(e.message)
+      }
+      return
+    }
     setLoading(true)
     setError(null)
     try {
@@ -99,7 +156,15 @@ export default function CorrectionsListPage() {
     } finally {
       setLoading(false)
     }
-  }, [fetchPage])
+  }, [fetchPage, fetchUpTo, queryKey])
+
+  // לפני כניסה לדיווח: שומרים את הרשימה הטעונה ואת מיקום הגלילה (גם לחץ "חזרה" של הדפדפן)
+  const rememberPosition = (e) => {
+    if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return // נפתח בלשונית אחרת — הדף הזה נשאר
+    try {
+      sessionStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ query: queryKey, data, scrollY: window.scrollY, at: Date.now() }))
+    } catch { /* אחסון חסום או מלא — חזרה לראש הרשימה */ }
+  }
 
   const hasMore = Boolean(data && data.items.length < data.total)
 
@@ -180,6 +245,7 @@ export default function CorrectionsListPage() {
             {options.books.map((b) => <option key={b} value={b} />)}
           </datalist>
         </label>
+        <HiddenBooksFilter books={options.books} hidden={hidden} onChange={changeHidden} />
         <label className="text-sm">
           סיבת העברה לידני
           <select value={reason} onChange={(e) => setReason(e.target.value)} className="block mt-1 border rounded-lg px-2 py-1 bg-white">
@@ -206,7 +272,7 @@ export default function CorrectionsListPage() {
           <p className="text-sm text-on-surface/60">{data.total} דיווחים</p>
           <div className="space-y-2">
             {data.items.map((r) => (
-              <Link key={r.id} href={`/library/corrections/${r.id}`} className="block glass rounded-xl p-4 hover:bg-surface-variant transition-colors">
+              <Link key={r.id} href={`/library/corrections/${r.id}`} onClick={rememberPosition} className="block glass rounded-xl p-4 hover:bg-surface-variant transition-colors">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="min-w-0">
                     <div className="font-bold text-on-surface truncate">{r.bookTitle} <span className="font-normal text-on-surface/60">— {r.currentRef}</span></div>

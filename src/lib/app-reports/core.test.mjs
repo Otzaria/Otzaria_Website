@@ -6,12 +6,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import zlib from 'node:zlib';
 import { randomBytes } from 'node:crypto';
-import { validateAppReport, MAX_DIAGNOSTICS_BYTES, MAX_IMAGES, MAX_IMAGE_BYTES, MAX_IMAGES_TOTAL_BYTES, MAX_MINIDUMP_BYTES, MAX_MINIDUMP_INPUT_BYTES, MAX_BODY_BYTES, sniffImageType } from './validation.js';
+import { validateAppReport, LEGACY_MAX_DIAGNOSTICS_BYTES as MAX_DIAGNOSTICS_BYTES, MAX_IMAGES, LEGACY_MAX_IMAGE_BYTES as MAX_IMAGE_BYTES, LEGACY_MAX_IMAGES_TOTAL_BYTES as MAX_IMAGES_TOTAL_BYTES, LEGACY_MAX_MINIDUMP_BYTES as MAX_MINIDUMP_BYTES, LEGACY_MAX_MINIDUMP_INPUT_BYTES as MAX_MINIDUMP_INPUT_BYTES, MAX_BODY_BYTES, sniffImageType } from './validation.js';
 import { computeContentHash, computeSignatureHash } from './hashes.js';
 import { redactEmails } from './redact.js';
 import { buildIssueTitle, buildIssueBody, buildMergeComment, issueLabels } from './issue-text.js';
-import { planPublication } from './merge.js';
-import { planClosureNotifications, closureKind, CLOSURE_TEXT_HE } from './state-change.js';
+import { planPublication, parseAppVersion, compareAppVersions, isGenericHangSignature } from './merge.js';
+import { planClosureNotifications, closureKind, CLOSURE_TEXT_HE, pickClosingComment, CLOSING_COMMENT_MAX_CHARS } from './state-change.js';
 import { createUnsubscribeToken, verifyUnsubscribeToken, buildUnsubscribeUrl } from './unsubscribe.js';
 import { getAppReportsConfig } from './config.js';
 import { verifyGithubSignature } from './webhook.js';
@@ -71,7 +71,7 @@ test('ולידציה: ערכים לא מוכרים ושדות חסרים → 422
   const cases = [
     [{ type: 'other' }, 'type'], [{ trigger: 'x' }, 'trigger'], [{ platform: 'beos' }, 'platform'],
     [{ title: '' }, 'title'], [{ title: 'א'.repeat(201) }, 'title'], [{ appVersion: '' }, 'appVersion'],
-    [{ reportId: '' }, 'reportId'], [{ reportId: 'x'.repeat(101) }, 'reportId'], [{ schema: 2 }, 'schema'],
+    [{ reportId: '' }, 'reportId'], [{ reportId: 'x'.repeat(101) }, 'reportId'], [{ schema: 3 }, 'schema'],
     [{ description: 'א'.repeat(10001) }, 'description'], [{ stepsToReproduce: 'א'.repeat(5001) }, 'stepsToReproduce'],
     [{ osVersion: 'x'.repeat(201) }, 'osVersion'], [{ arch: 'x'.repeat(21) }, 'arch'], [{ sentryEventId: 'x'.repeat(65) }, 'sentryEventId'],
     [{ createdAt: '2026-09-17 10:00' }, 'createdAt'], [{ createdAt: '2026-09-17T10:00:00+02:00' }, 'createdAt'],
@@ -215,6 +215,73 @@ test('החלטת איחוד: issue פתוח → תגובה; רק סגורים �
   assert.deepEqual(planPublication([]), { action: 'create', previousIssueNumber: null });
 });
 
+test('גרסת התוכנה: semver עם רכיב רביעי ומספר בנייה; פורמט אחר → null', () => {
+  const cmp = (a, b) => compareAppVersions(parseAppVersion(a), parseAppVersion(b));
+  assert.equal(cmp('0.9.98.3+99803', '0.9.98+99802'), 1);
+  assert.equal(cmp('0.9.98+99802', '0.9.98.0+99802'), 0);
+  assert.equal(cmp('0.9.98+99801', '0.9.98+99802'), -1);
+  assert.equal(cmp('0.9.98', '0.9.98+99802'), 0);
+  assert.equal(cmp('0.10.0+1', '0.9.99+99999'), 1);
+  for (const bad of ['unknown', '', null, '0.9.98-beta', 'v0.9.98']) assert.equal(parseAppVersion(bad), null);
+});
+
+test('גרסת התוכנה: רכיבים ומספרי בנייה גדולים מושווים ללא אובדן דיוק', () => {
+  const cmp = (a, b) => compareAppVersions(parseAppVersion(a), parseAppVersion(b));
+  assert.equal(cmp('1.0.0+9007199254740993', '1.0.0+9007199254740992'), 1);
+  assert.equal(cmp('9007199254740993.0', '9007199254740992.99999999999999999999'), 1);
+  assert.equal(cmp('01.000.2+0003', '1.0.2+3'), 0);
+});
+
+test('החלטת איחוד: issue סגור — גרסה שאינה חדשה מהמקושרות → צירוף שקט; חדשה או לא ידועה → חדש עם "קודם"', () => {
+  const d = (s) => new Date(`2026-09-${s}T00:00:00Z`);
+  const related = [
+    { issueNumber: 5, issueState: 'closed', issueStateReason: 'completed', appVersion: '0.9.90+99000', createdAt: d('01') },
+    { issueNumber: 9, issueState: 'closed', issueStateReason: 'not_planned', appVersion: '0.9.98+99802', createdAt: d('10'), issueUrl: 'u9' },
+    { issueNumber: 9, issueState: 'closed', issueStateReason: 'not_planned', appVersion: '0.9.98.3+99803', createdAt: d('12') },
+  ];
+  const suppress = { action: 'suppress', issueNumber: 9, issueUrl: 'u9', issueStateReason: 'not_planned' };
+  assert.deepEqual(planPublication(related, '0.9.98.3+99803'), suppress);
+  assert.deepEqual(planPublication(related, '0.9.97+99700'), suppress);
+  assert.deepEqual(planPublication(related, '0.9.98.4+99804'), { action: 'create', previousIssueNumber: 9 });
+  assert.deepEqual(planPublication(related, 'unknown'), { action: 'create', previousIssueNumber: 9 });
+  assert.deepEqual(planPublication(related), { action: 'create', previousIssueNumber: 9 });
+  // גרסאות המקושרים לא ידועות → אין למה להשוות
+  assert.deepEqual(planPublication(related.map((r) => ({ ...r, appVersion: 'unknown' })), '0.9.90'), { action: 'create', previousIssueNumber: 9 });
+  // סגור בלי סיבת סגירה (נמחק/ננעל) → חדש
+  assert.deepEqual(planPublication(related.map((r) => ({ ...r, issueStateReason: null })), '0.9.90'), { action: 'create', previousIssueNumber: 9 });
+  // תקיעה עם פריימי מנוע בלבד (גם חבילה מופרדת ברווחים) → חדש; פריים של app.so → צירוף שקט
+  const engine = { exceptionType: 'AppHang', frames: ['flutter_windows.dll+0x1a2b', 'FLUTTER_WINDOWS.DLL+0x10 flutter_windows.dll+0x20'] };
+  assert.equal(isGenericHangSignature(engine), true);
+  assert.deepEqual(planPublication(related, '0.9.90', engine), { action: 'create', previousIssueNumber: 9 });
+  const precise = { exceptionType: 'AppHang', frames: ['flutter_windows.dll+0x10 app.so+0x99'] };
+  assert.equal(isGenericHangSignature(precise), false);
+  assert.deepEqual(planPublication(related, '0.9.90', precise), suppress);
+  assert.equal(isGenericHangSignature({ exceptionType: 'StateError', frames: ['flutter_windows.dll+0x1'] }), false);
+  // issue פתוח קודם לכל השוואת גרסאות
+  assert.deepEqual(planPublication([...related, { issueNumber: 11, issueState: 'open', appVersion: '1.0.0', createdAt: d('02'), issueUrl: 'u11' }], '0.9.90'),
+    { action: 'comment', issueNumber: 11, issueUrl: 'u11' });
+});
+
+test('גרסה מרבית: דיווח בלי בנייה אינו מסתיר את הבנייה המרבית הידועה, בלי תלות בסדר', () => {
+  for (const versions of [
+    ['0.9.98', '0.9.98+99802', '0.9.98+99801'],
+    ['0.9.98+99802', '0.9.98', '0.9.98+99801'],
+    ['0.9.98+99801', '0.9.98', '0.9.98+99802'],
+  ]) {
+    const related = versions.map((appVersion, i) => ({
+      issueNumber: 9, issueState: 'closed', issueStateReason: 'completed', appVersion,
+      createdAt: new Date(2026, 8, 10 - i),
+    }));
+    assert.deepEqual(planPublication(related, '0.9.98+99803'), { action: 'create', previousIssueNumber: 9 });
+    for (const version of ['0.9.98', '0.9.98+99801', '0.9.98+99802']) {
+      assert.equal(planPublication(related, version).action, 'suppress');
+    }
+    // ליבת גרסה חדשה גוברת גם בלי בנייה, על פני בנייה גבוהה של ליבה ישנה.
+    related.push({ ...related[0], appVersion: '0.9.99', createdAt: new Date(2026, 8, 1) });
+    assert.equal(planPublication(related, '0.9.99+1').action, 'suppress');
+  }
+});
+
 // ---------------------------------------------------------------- state change
 
 test('מיילי סגירה: רק עם מייל, לא הוסר, לא קיבל; מייל אחד לכל כתובת', () => {
@@ -227,6 +294,25 @@ test('מיילי סגירה: רק עם מייל, לא הוסר, לא קיבל; �
     { reportId: 'f', reporterEmail: 'v@y.com' },
   ]);
   assert.deepEqual(plan.map((g) => [g.email, g.reports.map((r) => r.reportId)]), [['x@y.com', ['a', 'b']], ['v@y.com', ['f']]]);
+});
+
+test('תגובת הסגירה: האחרונה של מי שסגר, בחלון שלפני הסגירה, בלי הערות HTML', () => {
+  const close = { closedAt: '2026-10-20T12:00:00Z', closedBy: 'maint' };
+  const c = (author, created_at, body) => ({ author, created_at, body });
+  assert.equal(pickClosingComment([
+    c('maint', '2026-10-20T11:30:00Z', 'ישנה מדי'),
+    c('maint', '2026-10-20T11:58:00Z', 'קודמת'),
+    c('maint', '2026-10-20T11:59:59Z', 'תוקן בגרסה 2.5 <!-- app-signature: abc -->'),
+    c('otzaria-bot', '2026-10-20T12:00:00Z', 'תגובת בוט'),
+    c('maint', '2026-10-20T12:05:00Z', 'אחרי הסגירה'),
+  ], close), 'תוקן בגרסה 2.5');
+  assert.equal(pickClosingComment([c('other', '2026-10-20T11:59:59Z', 'לא של הסוגר')], close), null);
+  assert.equal(pickClosingComment([c('maint', '2026-10-20T11:59:59Z', '<!-- רק הערה -->')], close), null);
+  assert.equal(pickClosingComment([c('maint', '2026-10-20T11:59:59Z', 'x')], { closedAt: null, closedBy: 'maint' }), null);
+  assert.equal(pickClosingComment([c('maint', '2026-10-20T11:59:59Z', 'x')], { ...close, closedBy: null }), null);
+  const long = pickClosingComment([c('maint', '2026-10-20T11:59:59Z', 'א'.repeat(CLOSING_COMMENT_MAX_CHARS + 50))], close);
+  assert.equal(long.length, CLOSING_COMMENT_MAX_CHARS + 1);
+  assert.ok(long.endsWith('…'));
 });
 
 test('סיבת סגירה → סוג טקסט', () => {

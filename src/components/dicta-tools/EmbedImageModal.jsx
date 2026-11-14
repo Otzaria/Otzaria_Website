@@ -1,9 +1,15 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useDialog } from '@/components/providers/DialogContext'
+import AppIcon from '@/components/ui/AppIcon'
+import Button from '@/components/ui/Button'
+import Dialog from '@/components/ui/Dialog'
+import { cx } from '@/components/ui/cx'
+import { FOCUS_RING } from '@/components/ui/focusRing'
 
-export default function EmbedImageModal({ isOpen, onClose, content, onContentChange }) {
+// onInsert(html) — אם ניתן, ההכנסה בידי המארח (למשל במקום הסמן בשדה הפעיל); אחרת — בסוף content
+export default function EmbedImageModal({ isOpen, onClose, content, onContentChange, onInsert }) {
   const { showAlert } = useDialog()
   const [imageData, setImageData] = useState(null)
   const [htmlCode, setHtmlCode] = useState('')
@@ -175,147 +181,99 @@ export default function EmbedImageModal({ isOpen, onClose, content, onContentCha
   const handleInsertToEditor = useCallback(() => {
     if (!htmlCode) return
 
-    const newContent = content + '\n' + htmlCode
-    onContentChange(newContent)
+    if (onInsert) onInsert(htmlCode)
+    else onContentChange(content + '\n' + htmlCode)
     showAlert('הצלחה', 'התמונה הוכנסה לעורך!')
     handleClose()
-  }, [htmlCode, content, onContentChange, showAlert, handleClose])
+  }, [htmlCode, content, onContentChange, onInsert, showAlert, handleClose])
+
+  // הדבקת תמונה (Ctrl+V) כשהחלון פתוח — מאזין על המסמך: הפוקוס יכול להיות על החלון עצמו או על כל פקד בו
+  useEffect(() => {
+    if (!isOpen) return undefined
+    document.addEventListener('paste', handlePaste)
+    return () => document.removeEventListener('paste', handlePaste)
+  }, [isOpen, handlePaste])
 
   if (!isOpen) return null
 
   return (
-    <div 
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      onClick={handleClose}
+    <Dialog
+      title="המרת תמונה לקוד HTML"
+      subtitle={isConverted ? undefined : 'גרור קובץ, לחץ לבחירה, או הדבק תמונה (Ctrl+V)'}
+      onClose={handleClose}
+      className="sm:max-w-2xl"
     >
-      <div 
-        className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-        onPaste={handlePaste}
-        tabIndex={0}
-      >
-        <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between z-10">
-          <h2 className="text-xl font-bold text-neutral-800">המרת תמונה לטקסט HTML</h2>
-          <button
-            onClick={handleClose}
-            className="text-neutral-500 hover:text-neutral-700 transition-colors"
-          >
-            <span className="material-symbols-outlined">close</span>
-          </button>
-        </div>
-
-        <div className="p-6 space-y-4">
-          {!isConverted ? (
-            <>
-              <div className="text-center mb-4">
-                <p className="text-neutral-600 text-lg">בחר תמונה להמרה</p>
-                <p className="text-neutral-500 text-sm mt-1">גרור קובץ, לחץ לבחירה, או הדבק תמונה (Ctrl+V)</p>
-              </div>
-
-              {/* אזור גרירה וקליק */}
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                onDragEnter={handleDragEnter}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                className={`border-2 border-dashed rounded-lg p-16 text-center transition-all cursor-pointer ${
-                  isDragging 
-                    ? 'border-info-500 bg-info-50 scale-105' 
-                    : imageData 
-                    ? 'border-success-500 bg-success-50' 
-                    : 'border-neutral-300 bg-neutral-50 hover:border-info-400 hover:bg-info-50/50'
-                }`}
-              >
-                <span className="material-symbols-outlined text-6xl text-neutral-400 mb-3 block">
-                  {imageData ? 'check_circle' : 'cloud_upload'}
-                </span>
-                <p className="text-xl text-neutral-700 font-medium mb-1">
-                  {imageData ? 'התמונה נטענה בהצלחה!' : 'לחץ לבחירת קובץ'}
-                </p>
-                <p className="text-sm text-neutral-500">
-                  {!imageData && 'או גרור ושחרר קובץ תמונה כאן'}
-                </p>
-              </div>
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".png,.jpg,.jpeg,.svg,.tif,.tiff,.heic,.heif,.ico,.webp,.gif,.bmp"
-                onChange={(e) => handleFileSelect(e.target.files)}
-                className="hidden"
-              />
-
-              {/* כפתור המרה */}
-              <button
-                onClick={handleConvert}
-                disabled={!imageData}
-                className="w-full px-6 py-4 bg-info-600 hover:bg-info-700 disabled:bg-neutral-300 disabled:cursor-not-allowed text-white rounded-lg transition-colors text-xl font-bold"
-              >
-                המר
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="text-center mb-4">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-success-100 rounded-full mb-3">
-                  <span className="material-symbols-outlined text-4xl text-success-600">check_circle</span>
-                </div>
-                <p className="text-xl font-bold text-neutral-800">ההמרה בוצעה בהצלחה!</p>
-              </div>
-
-              {/* תצוגה מקדימה של התמונה */}
-              {imageData && (
-                <div className="border rounded-lg p-4 bg-neutral-50">
-                  <div className="flex justify-between items-center mb-2">
-                    <p className="text-sm text-neutral-600">תצוגה מקדימה:</p>
-                    {imageData.compressedSize && (
-                      <span className="text-xs bg-success-100 text-success-700 px-2 py-1 rounded">
-                        {imageData.compressedSize} KB
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex justify-center">
-                    <img 
-                      src={imageData.data} 
-                      alt="Preview" 
-                      className="max-w-full max-h-64 object-contain rounded"
-                    />
-                  </div>
-                </div>
+      <div className="space-y-4">
+        {!isConverted ? (
+          <>
+            {/* אזור גרירה ובחירה */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              onDragEnter={handleDragEnter}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={cx(
+                'flex w-full flex-col items-center rounded-(--radius-card) border-2 border-dashed px-6 py-12 text-center transition-colors',
+                FOCUS_RING,
+                isDragging
+                  ? 'border-primary bg-surface-selected'
+                  : imageData
+                    ? 'border-primary bg-surface'
+                    : 'border-outline bg-surface hover:bg-surface-container'
               )}
+            >
+              <AppIcon name={imageData ? 'check_circle' : 'cloud_upload'} className="mb-3 text-5xl text-primary" />
+              <span className="text-title-md text-on-surface">
+                {imageData ? 'התמונה נטענה' : 'לחץ לבחירת קובץ'}
+              </span>
+              {!imageData && <span className="mt-1 text-body-sm text-on-surface-variant">או גרור ושחרר קובץ תמונה לכאן</span>}
+            </button>
 
-              {/* כפתורים */}
-              <div className="space-y-3">
-                <button
-                  onClick={handleInsertToEditor}
-                  className="w-full px-6 py-3 bg-success-600 hover:bg-success-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
-                >
-                  <span className="material-symbols-outlined">add_circle</span>
-                  <span>הוסף לעורך</span>
-                </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".png,.jpg,.jpeg,.svg,.tif,.tiff,.heic,.heif,.ico,.webp,.gif,.bmp"
+              onChange={(e) => handleFileSelect(e.target.files)}
+              className="hidden"
+            />
 
-                <button
-                  onClick={handleCopyToClipboard}
-                  className="w-full px-6 py-3 bg-info-600 hover:bg-info-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
-                >
-                  <span className="material-symbols-outlined">content_copy</span>
-                  <span>העתק קוד HTML</span>
-                </button>
+            <Button variant="filled" size="lg" fullWidth onClick={handleConvert} disabled={!imageData}>
+              המרה
+            </Button>
+          </>
+        ) : (
+          <>
+            <div className="flex flex-col items-center text-center">
+              <AppIcon name="check_circle" className="text-5xl text-primary" />
+              <p className="mt-2 text-title-md text-on-surface">ההמרה בוצעה</p>
+            </div>
 
-                <button
-                  onClick={resetState}
-                  className="w-full px-6 py-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-lg transition-colors flex items-center justify-center gap-2"
-                >
-                  <span className="material-symbols-outlined">refresh</span>
-                  <span>המרת תמונה נוספת</span>
-                </button>
+            {imageData && (
+              <div className="rounded-(--radius-card) border border-outline-variant bg-surface p-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-body-sm text-on-surface-variant">תצוגה מקדימה</p>
+                  {imageData.compressedSize && (
+                    <span className="rounded-(--radius-pill) bg-surface-container-high px-2 py-0.5 text-label-md text-on-surface-variant">
+                      <bdi dir="ltr">{imageData.compressedSize} KB</bdi>
+                    </span>
+                  )}
+                </div>
+                <div className="flex justify-center">
+                  <img src={imageData.data} alt="תצוגה מקדימה של התמונה" className="max-h-64 max-w-full rounded-(--radius-control) object-contain" />
+                </div>
               </div>
-            </>
-          )}
-        </div>
+            )}
+
+            <div className="grid gap-3">
+              <Button variant="filled" icon="add_circle" fullWidth onClick={handleInsertToEditor}>הוספה לעורך</Button>
+              <Button variant="tonal" icon="content_copy" fullWidth onClick={handleCopyToClipboard}>העתקת קוד ה-HTML</Button>
+              <Button variant="outlined" icon="refresh" fullWidth onClick={resetState}>המרת תמונה נוספת</Button>
+            </div>
+          </>
+        )}
       </div>
-    </div>
+    </Dialog>
   )
 }
-

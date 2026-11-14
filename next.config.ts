@@ -26,7 +26,7 @@ const nextConfig = {
   env: {
     DEPLOY_VERSION: readDeployVersion(),
   },
-  serverExternalPackages: ['pdf-to-img', 'pdfjs-dist'],
+  serverExternalPackages: ['pdf-to-img', 'pdfjs-dist', '@napi-rs/canvas'],
   // Workers execute these source files directly, outside the route bundles.
   // Keep them explicitly after excluding mutable uploads/storage from tracing.
   outputFileTracingIncludes: {
@@ -81,10 +81,31 @@ const nextConfig = {
         destination: '/library/editingtools',
         permanent: true,
       },
-      // המדריך הישן הוחלף במדריך הדינמי מהוויקי
       {
-        source: '/docs/installation',
-        destination: '/docs/getting-started',
+        source: '/library/dicta-books/edit/offline',
+        destination: '/library/editingtools',
+        permanent: true,
+      },
+      // עותקי עריכה של העלאות נפתחו בעורך של ספרי דיקטה (סימניות של מנהלים)
+      {
+        source: '/library/dicta-books/edit/:id',
+        destination: '/library/admin/uploads/edit/:id',
+        permanent: true,
+      },
+      // ספרי דיקטה הוסרו; קישורים ממיילים שכבר נשלחו ומגוגל
+      {
+        source: '/library/dicta-books/:path*',
+        destination: '/library/dicta-edit',
+        permanent: true,
+      },
+      {
+        source: '/library/admin/dicta-books',
+        destination: '/library/admin',
+        permanent: true,
+      },
+      {
+        source: '/docs/dicta',
+        destination: '/docs',
         permanent: true,
       },
       // דף ההתחברות עבר מהספרייה לנתיב כללי (פרמטרי ה-query, כולל callbackUrl, נשמרים אוטומטית)
@@ -104,6 +125,26 @@ const nextConfig = {
     const scriptSrc = isDev
       ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
       : "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'";
+    // connectExtra — מקורות נוספים ל-connect-src (רק בנתיבים שצריכים אותם)
+    const contentSecurityPolicy = (connectExtra: string[] = []) => [
+      "default-src 'self'",
+      scriptSrc,
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' https://fonts.gstatic.com data:",
+      "img-src 'self' data: blob: https:",
+      "media-src 'self' blob: https:",
+      // connect-src מצומצם למקורות בשימוש מוכח בצד הלקוח: GitHub API
+      // (github-releases/editingtools/Link-Notes). הוסר התו הכללי https:
+      // שאפשר ל-XSS להדליף נתוני משתמשים לכל שרת שהוא.
+      ["connect-src 'self' blob: https://api.github.com https://raw.githubusercontent.com ws: wss:", ...connectExtra].join(' '),
+      // דף התרומות מטמיע את הווידג'ט של נדרים פלוס ב-iframe
+      "frame-src 'self' https://nedar.im https://www.matara.pro",
+      "worker-src 'self' blob:",
+      "frame-ancestors 'self'",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+    ].join('; ');
     return [
       {
         source: '/:path*',
@@ -130,28 +171,7 @@ const nextConfig = {
           //  • connect: מצומצם ל-self + GitHub API (releases/תוספים) + ws:/wss: ל-HMR
           //  • frame: ווידג'ט התרומות של נדרים פלוס (הקישור הקצר מפנה ל-matara.pro)
           //  • frame-ancestors 'self': anti-clickjacking
-          {
-            key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              scriptSrc,
-              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "font-src 'self' https://fonts.gstatic.com data:",
-              "img-src 'self' data: blob: https:",
-              "media-src 'self' blob: https:",
-              // connect-src מצומצם למקורות בשימוש מוכח בצד הלקוח: GitHub API
-              // (github-releases/editingtools/Link-Notes). הוסר התו הכללי https:
-              // שאפשר ל-XSS להדליף נתוני משתמשים לכל שרת שהוא.
-              "connect-src 'self' blob: https://api.github.com https://raw.githubusercontent.com ws: wss:",
-              // דף התרומות מטמיע את הווידג'ט של נדרים פלוס ב-iframe
-              "frame-src 'self' https://nedar.im https://www.matara.pro",
-              "worker-src 'self' blob:",
-              "frame-ancestors 'self'",
-              "object-src 'none'",
-              "base-uri 'self'",
-              "form-action 'self'",
-            ].join('; '),
-          },
+          { key: 'Content-Security-Policy', value: contentSecurityPolicy() },
         ],
       },
       {
@@ -169,6 +189,10 @@ const nextConfig = {
         headers: [
           { key: 'Cache-Control', value: 'no-store, must-revalidate' },
         ],
+      },
+      {
+        source: '/library/books/offline-worker.js',
+        headers: [{ key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' }],
       },
       // אייקוני האתר. Next מגיש אותם כברירת מחדל עם max-age=0, must-revalidate,
       // כלומר סבב אימות בכל טעינת דף — למרות שה-URL כולל hash של התוכן.
@@ -192,6 +216,15 @@ const nextConfig = {
       // כל הקבצים כאן נושאים גרסה בשם (golden-book.v2-560.webp, donate-mask.v2.png), ולכן
       // אפשר immutable לשנה. שינוי תוכן = שם חדש (scripts/optimize-assets.mjs, HOME_ASSET_VERSION);
       // check-perf-budget.mjs נכשל אם קובץ בתיקיות האלה נטול גרסה בשם.
+      // tesseract.js המאוחסן אצלנו (scripts/copy-tesseract-assets.mjs): worker, core (~4MB לקובץ)
+      // ומודל העברית. כל נתיב כולל גרסה (v<tesseract.js>/, lang/heb-<מודל>/) — immutable לשנה.
+      // ה-CSP הקיים מספיק: worker-src 'self', script-src 'self' 'wasm-unsafe-eval', connect-src 'self'.
+      {
+        source: '/vendor/tesseract/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
       ...['/home/:path*', '/icons/:path*'].map((source) => ({
         source,
         headers: [
@@ -201,7 +234,7 @@ const nextConfig = {
       // עמודי שיווק סטטיים-בפועל, ללא תלות ב-session/DB. TTL קצר-בינוני עם
       // stale-while-revalidate כדי לצמצם את חלון "הדליפה" מול שער השבת ב-src/proxy.js
       // (המידלוור עדיין רץ בכל בקשה; זו רק פשרת caching בצד דפדפן/CDN).
-      // /docs/:slug — דפי המדריך (docs/[slug], docs/dicta, docs/development): ציבוריים
+      // /docs/:slug — דפי המדריך (docs/[slug], docs/development): ציבוריים
       // וללא session, כמו /docs עצמו. בלי זה קיבלו רק s-maxage של ISR, והדפדפן
       // אימת מחדש כל טעינה.
       ...['/', '/about', '/faq', '/donate', '/privacy', '/license', '/offline', '/docs', '/docs/:slug'].map((source) => ({
@@ -225,6 +258,16 @@ const nextConfig = {
           { key: 'Cache-Control', value: 'public, max-age=60, stale-while-revalidate=300' },
         ],
       })),
+      {
+        // חנות התוספים: חלון "אפשרויות הורדה" של תוסף שירות בודק אם השירות מותקן מקומית
+        // (http://127.0.0.1:<port>/.well-known/otzaria-service). רק כאן — שאר האתר בלי גישה ל-loopback.
+        // נמצא אחרי הכלל הכללי '/:path*' בכוונה: לפי Next, כותרת באותו שם מכלל מאוחר דורסת את המוקדם,
+        // כך שנשלחת כותרת CSP אחת בלבד.
+        source: '/plugins/:path*',
+        headers: [
+          { key: 'Content-Security-Policy', value: contentSecurityPolicy(['http://127.0.0.1:*', 'http://localhost:*']) },
+        ],
+      },
     ];
   },
 };

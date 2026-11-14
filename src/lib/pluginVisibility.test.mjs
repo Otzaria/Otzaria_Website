@@ -10,6 +10,7 @@ import assert from 'node:assert/strict'
 import {
   applySuspension,
   canAccessSuspended,
+  isPluginOwner,
   isPluginSuspended,
   suspensionError,
   suspensionFields
@@ -83,4 +84,11 @@ test('גישה לתוסף מושהה — למעלה ולמנהל בלבד', () =
   assert.equal(canAccessSuspended({ isAdmin: false, isOwner: true }), true)
   assert.equal(canAccessSuspended({ isAdmin: true, isOwner: false }), true)
   assert.equal(canAccessSuspended({ isAdmin: false, isOwner: false }), false)
+})
+
+test('בעלות דורשת שני מזהים קיימים ושווים', () => {
+  assert.equal(isPluginOwner({ authorId: 'u1' }, 'u1'), true)
+  assert.equal(isPluginOwner({ authorId: 'u1' }, undefined), false)
+  assert.equal(isPluginOwner({}, 'u1'), false)
+  assert.equal(isPluginOwner({}, undefined), false)
 })

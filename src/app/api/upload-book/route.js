@@ -10,11 +10,12 @@ import { getClientIp } from '@/lib/client-ip';
 import { saveFileToGridFS } from '@/lib/gridfs-service';
 import { z } from 'zod';
 import { unauthorized, badRequest, forbidden, apiError, serverError } from '@/lib/apiResponse';
+import { isAdmin } from '@/lib/roles';
 
 // סכמת אימות להעלאת קבצים
 const uploadFileSchema = z.object({
   bookName: z.string().min(1, 'שם הספר נדרש').max(200, 'שם הספר ארוך מדי'),
-  uploadType: z.enum(['full_book', 'single_page', 'dicta']).optional(),
+  uploadType: z.enum(['full_book', 'single_page']).optional(),
   authorName: z.string().max(100, 'שם המחבר ארוך מדי').optional(),
   bookCategory: z.string().max(100, 'קטגוריית הספר ארוכה מדי').optional(),
   authorCategory: z.string().max(100, 'קטגוריית המחבר ארוכה מדי').optional(),
@@ -23,7 +24,8 @@ const uploadFileSchema = z.object({
   copyrightHolder: z.string().max(200, 'בעל הזכויות ארוך מדי').optional(),
   sourceUrl: z.string().url('כתובת לא תקינה').optional().or(z.literal('')),
   isOcr: z.boolean().optional(),
-  ocrDescription: z.string().max(500, 'תיאור OCR ארוך מדי').optional()
+  ocrDescription: z.string().max(500, 'תיאור OCR ארוך מדי').optional(),
+  allowOtherPlatforms: z.boolean().optional()
 });
 
 function normalizeOptionalText(value) {
@@ -47,6 +49,9 @@ function createMetadataHeader(metadata) {
         `בעל הזכויות: ${metadata.copyrightHolder}`,
         ...(metadata.sourceUrl ? [`מקור: ${metadata.sourceUrl}`] : []),
         `OCR: ${metadata.isOcr ? `כן - ${metadata.ocrDescription}` : 'לא'}`,
+        ...(typeof metadata.allowOtherPlatforms === 'boolean'
+            ? [`אישור ל'זית' ולפלטפורמות נוספות באישור אוצריא: ${metadata.allowOtherPlatforms ? 'כן' : 'לא'}`]
+            : []),
         '═══════════════════════════════════════════════════════════',
         '',
         '',
@@ -104,6 +109,8 @@ export async function POST(request) {
         const sourceUrl = normalizeOptionalText(formData.get('sourceUrl'));
         const isOcr = formData.get('isOcr') === 'true';
         const ocrDescription = normalizeOptionalText(formData.get('ocrDescription'));
+        const allowOtherPlatformsRaw = formData.get('allowOtherPlatforms');
+        const allowOtherPlatforms = allowOtherPlatformsRaw === 'true' ? true : allowOtherPlatformsRaw === 'false' ? false : undefined;
         const uploadType = normalizeOptionalText(formData.get('uploadType')) || 'single_page';
 
         // 3. אימות קלט עם Zod
@@ -118,12 +125,17 @@ export async function POST(request) {
           copyrightHolder,
           sourceUrl,
           isOcr,
-          ocrDescription
+          ocrDescription,
+          allowOtherPlatforms
         });
 
         if (!validationResult.success) {
           const errors = validationResult.error.issues.map(err => err.message).join(', ');
           return badRequest(errors);
+        }
+
+        if (uploadType === 'full_book' && allowOtherPlatforms === undefined) {
+          return badRequest("יש לציין האם אתה מאשר גם ל'זית' ולפלטפורמות נוספות");
         }
 
         // 4. בדיקת קובץ
@@ -149,7 +161,8 @@ export async function POST(request) {
                 copyrightHolder,
                 sourceUrl,
                 isOcr,
-                ocrDescription
+                ocrDescription,
+                allowOtherPlatforms
             };
             
             if (isTextFile(file.name)) {
@@ -228,6 +241,7 @@ export async function POST(request) {
             uploadData.sourceUrl = sourceUrl;
             uploadData.isOcr = isOcr;
             uploadData.ocrDescription = ocrDescription;
+            uploadData.allowOtherPlatforms = allowOtherPlatforms;
         }
 
         const upload = await Upload.create(uploadData);
@@ -235,8 +249,8 @@ export async function POST(request) {
         // בדיקה אם צריך לשלוח מייל
         let shouldSendEmail = false;
         
-        if (uploadType === 'dicta' || uploadType === 'full_book') {
-            // דיקטה וספר שלם - תמיד שולחים מייל
+        if (uploadType === 'full_book') {
+            // ספר שלם - תמיד שולחים מייל
             shouldSendEmail = true;
         } else if (uploadType === 'single_page') {
             // עמוד בודד - רק אם זה העמוד האחרון
@@ -276,7 +290,7 @@ export async function GET(request) {
         const { searchParams } = new URL(request.url);
         const userId = searchParams.get('userId');
 
-        if (userId && userId !== session.user._id && session.user.role !== 'admin') {
+        if (userId && userId !== session.user._id && !isAdmin(session.user)) {
              return forbidden();
         }
 

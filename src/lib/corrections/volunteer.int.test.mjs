@@ -131,6 +131,33 @@ test('[T28] דיווח חופשי: לקיחה וסגירה ידנית; דחיי�
   assert.equal(r.decisions.at(-1).message, 'אין טעות');
 });
 
+test('פתיחה מחדש: דיווח שנסגר/נדחה חוזר לתור הידני; תצוגה ישנה ודיווח פתוח נדחים', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const id = await ingest('reopen', { report_kind: 'free_text', correction: null });
+  await ErrorReport.updateOne({ _id: id }, { $set: { state: 'open', 'manual.status': 'queued', 'manual.handoffReason': 'free_text' } });
+  const c = await act(users.a, id, { action: 'claim' });
+  assert.equal((await act(users.a, id, { action: 'reopen', generation: c.body.generation })).body.error, 'not_reopenable', 'דיווח פתוח');
+  const closed = await act(users.a, id, { action: 'close_manual', generation: c.body.generation, note: 'טופל' });
+  assert.equal((await act(users.b, id, { action: 'reopen', generation: c.body.generation })).body.error, 'stale_view');
+  const re = await act(users.b, id, { action: 'reopen', generation: closed.body.generation });
+  assert.equal(re.status, 200);
+  let r = await ErrorReport.findById(id).lean();
+  assert.equal(r.state, 'open');
+  assert.equal(r.status, 'pending');
+  assert.equal(r.closedAt, null);
+  assert.equal(r.manual.status, 'queued');
+  assert.equal(r.manual.handoffReason, 'reopened');
+  assert.ok((await CorrectionEvent.find({ report: id, type: 'reopened' }).lean()).length === 1);
+  // אחרי פתיחה מחדש — אפשר לטפל שוב (כאן: דחייה ושוב פתיחה)
+  const c2 = await act(users.b, id, { action: 'claim' });
+  const rej = await act(users.b, id, { action: 'reject', generation: c2.body.generation, reason: 'אין טעות' });
+  assert.equal((await act(users.a, id, { action: 'reopen', generation: rej.body.generation })).status, 200);
+  r = await ErrorReport.findById(id).lean();
+  assert.equal(r.state, 'open');
+  await ErrorReport.updateOne({ _id: id }, { $set: { state: 'closed_published' } });
+  assert.equal((await act(users.a, id, { action: 'reopen', generation: r.workflowGeneration })).body.error, 'not_reopenable', 'פורסם');
+});
+
 test('[T17] שני מתנדבים: לקיחה אטומית אחת; אישור כפול מקביל → אחד מצליח, בלי חבילה יתומה', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const id = await ingest('t17');
@@ -236,6 +263,30 @@ test('[T22] טקסט חוזר: רק השורה באינדקס; מקור חסר/�
   assert.equal(gh.readFile(r.publish.branch, renamed), FILE.replace(LINE, NEW));
 });
 
+test('בחירת מקור ידנית: בדיקת הנתיב לפני מספר השורה, ושגיאת שורה עם מספר השורות בקובץ', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const id = await ingest('t22c');
+  const ok = await act(users.a, id, { action: 'check_source_path', path: PATH });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.lineCount, 4);
+  const missing = await act(users.a, id, { action: 'check_source_path', path: PATH.replace('בראשית.txt', 'בראשיתת.txt') });
+  assert.equal(missing.status, 404);
+  assert.equal(missing.body.error, 'file_not_found');
+  assert.equal((await act(users.a, id, { action: 'check_source_path', path: '.github/workflows/deploy.yml' })).body.error, 'path_not_allowed');
+  assert.equal((await act(users.plain, id, { action: 'check_source_path', path: PATH })).status, 403);
+  const far = await act(users.a, id, { action: 'preview_source', path: PATH, lineIndex: 99 });
+  assert.equal(far.body.error, 'line_out_of_range');
+  assert.equal(far.body.lineCount, 4);
+});
+
+test('פרסום שנכשל אינו בתור הראשי — רק בלשונית "אושרו / בפרסום"', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const id = await ingest('t22d');
+  await ErrorReport.updateOne({ _id: id }, { $set: { state: 'open', 'manual.status': 'queued', 'publish.status': 'failed' } });
+  assert.equal((await listReports({ user: users.a, query: { view: 'queued' } })).body.items.some((r) => r.id === id), false);
+  assert.equal((await listReports({ user: users.a, query: { view: 'publishing' } })).body.items.some((r) => r.id === id), true);
+});
+
 test('[T23] תיקון שכבר הוחל: מתנדב מאשר → נסגר "כבר תוקן" בלי שום כתיבה ל-GitHub', async (t) => {
   if (db.skip) return t.skip(db.skip);
   gh = new FakeGitHub({ repo: REPO, files: { [PATH]: FILE.replace(LINE, NEW) } });
@@ -317,6 +368,28 @@ test('תפוגת שיוך: מתנדב אחר יכול לקחת אחרי שפג; 
   const later = at(CONFIG.manual.claimMinutes * 60 + 1);
   assert.equal((await act(users.b, id, { action: 'claim' }, later)).status, 200);
   assert.equal((await act(users.a, id, { action: 'approve', generation: c.body.generation, revision: 1 }, later)).status, 409);
+});
+
+test('התור מציג פנויים ואת דיווחי המשתמש, ומסתיר שיוך בתוקף של משתמש אחר', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const free = await ingest('queue-free');
+  const mine = await ingest('queue-mine');
+  const other = await ingest('queue-other');
+  const publishing = await ingest('queue-publishing');
+  await act(users.a, mine, { action: 'claim' }, T0);
+  await act(users.b, other, { action: 'claim' }, T0);
+  await act(users.a, publishing, { action: 'claim' }, T0);
+  // הגנה גם מפני נתון לא עקבי/ישן: משויך אליי אך כבר בשלב פרסום לא שייך לתור הראשי.
+  await ErrorReport.updateOne({ _id: publishing }, { $set: { 'publish.status': 'ready' } });
+
+  const forA = await listReports({ user: users.a, query: { view: 'queued' }, now: T0 });
+  assert.deepEqual(new Set(forA.body.items.map((i) => i.id)), new Set([free, mine]));
+  const forB = await listReports({ user: users.b, query: { view: 'queued' }, now: T0 });
+  assert.deepEqual(new Set(forB.body.items.map((i) => i.id)), new Set([free, other]));
+
+  const afterExpiry = at(CONFIG.manual.claimMinutes * 60 + 1);
+  const expired = await listReports({ user: users.a, query: { view: 'queued' }, now: afterExpiry });
+  assert.deepEqual(new Set(expired.body.items.map((i) => i.id)), new Set([free, mine, other]));
 });
 
 test('דיווח ישן נסתר עד ה-migration ומתריע בבריאות; אחריה בתור הידני וניתן לסגירה', async (t) => {
@@ -509,6 +582,10 @@ test('סינון לפי ספר (חלק מהשם, בלי פרשנות regex) וא
   assert.deepEqual(await byBook('כתר'), ['כתר ראש (גר"א)']);
   assert.deepEqual(await byBook('(גר"א)'), ['כתר ראש (גר"א)'], 'סוגריים כטקסט ולא כ-regex');
   assert.deepEqual(await byBook('.*'), []);
+  const hiding = (hideBooks, book) => listReports({ user: users.a, query: { view: 'queued', hideBooks, book } }).then((r) => r.body.items.map((i) => i.bookTitle).sort());
+  assert.deepEqual(await hiding(JSON.stringify(['בראשית'])), ['כתר ראש (גר"א)'], 'ספר מוסתר אינו ברשימה');
+  assert.deepEqual(await hiding(JSON.stringify(['כתר ראש (גר"א)']), 'כתר'), [], 'הסתרה משולבת עם סינון לפי שם');
+  assert.deepEqual(await hiding('not-json'), ['בראשית', 'כתר ראש (גר"א)'], 'קלט פגום — בלי הסתרה');
   const opts = await listFilterOptions({ user: users.a });
   assert.deepEqual(opts.body.sourceFolders, ['ToratEmetToOtzaria']);
   assert.deepEqual(opts.body.books, ['בראשית', 'כתר ראש (גר"א)']);

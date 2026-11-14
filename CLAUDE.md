@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 npm run dev              # שרת פיתוח (next dev)
-npm run build             # generate-version → check:icons → next build → build:offline-editor → check:perf
+npm run build             # generate-version → check:icons → check:admin-tokens → next build → build:offline-editor → check:perf
 npm run lint               # eslint
 npx tsc --noEmit            # type-check (checkJs כבוי — קבצי .js לא נבדקים, ראו "מלכודות" למטה)
 
@@ -26,8 +26,10 @@ node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/lib/foo.test.mjs
 
 פריסה: דחיפה ל-`master` מפעילה `.github/workflows/deploy.yml` (גם cron כל 5 דק' בודק אם תגית
 `v1` של `otzaria-plugin-validator` זזה ופורס אוטומטית — ראו README.md). הפריסה עצמה **אינה
-משתמשת בדוקר** — היא SSH ישיר ל-VPS: `git pull` + `npm install` + `npm run build` +
-`pm2 reload`. אין בפרויקט תמיכת Docker (הוסרה — לא הייתה בשימוש בפרודקשן ולא תוחזקה).
+משתמשת בדוקר** — היא SSH ישיר ל-VPS. הבנייה מתבצעת ב-`/var/www/otzaria-build` הקבועה עם
+מטמון `.next/cache`; גרסאות בלתי-משתנות נשמרות תחת `otzaria-releases` (פעילה + קודמת בלבד),
+ו-`/var/www/otzaria-web` הוא symlink שמוחלף אטומית לפני `pm2 restart`. נתוני runtime וקובצי env
+מקושרים מ-`otzaria-shared`. אין בפרויקט תמיכת Docker (הוסרה — לא הייתה בשימוש בפרודקשן ולא תוחזקה).
 
 ## ארכיטקטורה
 
@@ -39,15 +41,13 @@ Next.js 16 App Router, JS+TS מעורב (`allowJs: true`, `checkJs` כבוי), M
 תפקידים מוגדרים ב-`src/lib/roles.js`: `admin` (כל-יכול), ועוד ארבעה תפקידי-משנה מוגבלי-תחום
 (`admin_plugins`, `admin_books`, `admin_books_only`, `admin_ocr`) — כל אחד עם פונקציית `hasXAccess`
 משלו. **אל תניחו** ש"מנהל" אחד שווה לאחר — `admin_books_only` למשל *כן* רואה את ספריית הספרים אבל
-*לא* דיקטה/העלאות/עמודים, בכוונה. כשמוסיפים בדיקת הרשאה חדשה — לבדוק קודם אם יש כבר `hasXAccess`
+*לא* העלאות/עמודים, בכוונה. כשמוסיפים בדיקת הרשאה חדשה — לבדוק קודם אם יש כבר `hasXAccess`
 מתאים ב-`roles.js` לפני שכותבים תנאי חדש.
 
 בראוטי API: `requireAccess(session, hasAccessFn)` מ-`src/lib/apiResponse.ts` הוא הדפוס המועדף
 לשער הרשאה (מחזיר 401/403 אוטומטית, `null` אם עבר). **ההבחנה 401/403 היא מכוונת ולא מקרית**: 401 =
 אין session בכלל, 403 = יש session אך אין הרשאה — הפרונט מבחין ביניהם במקומות מסוימים (הפניה
-להתחברות מול הודעת "אין הרשאה"). משפחת `dicta/*` (`src/app/api/dicta/_auth.ts`) משתמשת בצורת
-תגובה שונה (`{detail: ...}`) במכוון — **אל תאחדו** אותה עם `apiResponse.ts` בלי לבדוק
-`refactor-notes/audit/external-api-consumers.md` קודם (ראו סעיף למטה).
+להתחברות מול הודעת "אין הרשאה").
 
 ### מטמון: Data Cache פנימי (`src/lib/cacheTags.js`) + HTTP (CDN/דפדפן)
 
@@ -84,6 +84,13 @@ Middleware שחוסם את כל האתר (מלבד `/api/cron`, `/api/auth`, ו�
 במיוחד רגישים: `plugins/[id]/download`, `plugins/updates`, `plugins/install-result`,
 `plugins/[id]/install-token`, `plugin-reports`, `reportingerrors` — צנרת ההתקנה הישירה של
 תוספים ודיווחי שגיאה, מאומתת שדה-מול-שדה מול קוד ה-Dart.
+`service-plugins/worker/**` נצרך בידי המתווך שב-`workers/service-plugin-broker/` (תוספי שירות,
+`docs/service-plugins/`); על `ServicePluginReview` מותרים רק עדכונים מותנים, אף פעם `doc.save()`.
+
+גם `src/app/api/worker/v1/**` חיצוני ורגיש: נצרך ע"י שירות ה-OCR המקומי (`OtzariaTaskAgent`, C#,
+ריפו נפרד), שמסווג תשובות לפי קוד הסטטוס (401/403 = תצורה, 408/429/5xx = זמני, שאר 4xx = עצירת העבודה).
+החוזה וקודי השגיאה: `docs/ocr-local-worker/CONTRACT.md`; תפעול: `docs/ocr-local-worker/OPERATIONS.md`.
+על `OcrJob` — רק עדכונים מותנים (`updateOne`/`findOneAndUpdate`/`lean`), אף פעם `doc.save()`.
 
 ### חנות התוספים (Plugin Store) — מקור האמת למפרט ה-SDK אינו בריפו הזה
 
@@ -99,7 +106,8 @@ Middleware שחוסם את כל האתר (מלבד `/api/cron`, `/api/auth`, ו�
   שורש (`about`, `faq`, `donate`...), `plugins/**` (חנות תוספים, ברובה Server Components +
   מטמון תגית), `api/**` (route handlers).
 - `lib/` — לוגיקה טהורה + תשתית שרת (db, cache, auth helpers, ולידציה, פורמט). תת-תיקיות
-  `lib/dicta/` ו-`lib/ocr/` ללוגיקת דומיין ספציפית.
+  `lib/dicta/` (מרחב תיקוני הספרים, `/library/dicta-edit` — השם הפנימי נשמר) ו-`lib/ocr/`
+  ללוגיקת דומיין ספציפית.
 - `components/` — מחולק לפי דומיין (`admin/`, `dashboard/`, `editor/`, `ocr/`, `plugins/`,
   `ui/` לרכיבים גנריים).
 - `models/` — סכמות Mongoose (Book, Upload, Plugin, OcrJob/OcrLine/OcrTrainingPage, User וכו').

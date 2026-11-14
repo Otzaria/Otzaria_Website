@@ -3,10 +3,9 @@ import { getAppDownloads, ReleaseNotFoundError, RELEASE_CACHE_CONTROL } from '@/
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(request) {
+export async function GET() {
   try {
-    const type = new URL(request.url).searchParams.get('type') || 'stable'
-    const downloads = await getAppDownloads(type)
+    const downloads = await getAppDownloads()
     // Public release data may use short CDN/browser caching (including the
     // existing Shabbat-gate tradeoff documented in CLAUDE.md).
     return NextResponse.json(downloads, { headers: { 'Cache-Control': RELEASE_CACHE_CONTROL } })

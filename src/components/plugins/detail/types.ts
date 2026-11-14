@@ -55,4 +55,6 @@ export interface Plugin {
   categories?: CategoryRef[]
   // כל הגרסאות הזמינות, מהגבוהה לנמוכה
   versions?: PluginVersionEntry[]
+  // תוסף שפועל מול שירות מקומי (מתקין נפרד) — אזהרה, הוראות הסרה וחלון "אפשרויות הורדה"
+  hasService?: boolean
 }

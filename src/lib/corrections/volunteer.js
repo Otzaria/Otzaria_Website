@@ -19,8 +19,9 @@ import { extractLineContext, committedNewLine, clampContextLines } from './unifi
 import { deriveLabels } from './labels.js';
 import { HANDOFF_REASON_LABELS } from './states.js';
 import { escapeRegExp } from '../hebrewWordUtils.js';
-import { newId, logEvent, userActor, currentRevisionOf, manualQueueSet, OPEN_FILTER } from './store.js';
+import { newId, logEvent, userActor, currentRevisionOf, manualQueueSet } from './store.js';
 import { cancelActiveJobs } from './worker.js';
+import { LIST_FILTERS, PUBLISHING_STATUSES } from './listFilters.js';
 
 const MAX_LINE = 20_000;
 const ok = (body) => ({ status: 200, body });
@@ -41,21 +42,18 @@ function overrideFor(rev) {
 
 // ---------------------------------------------------------------- list / detail
 
-const PUBLISHING_STATUSES = ['ready', 'in_progress', 'unknown_needs_reconcile', 'pr_opened'];
+// תנאי הלשוניות — ב-listFilters.js (משותפים לדשבורד הניהול).
 
-const LIST_FILTERS = {
-  mine: (user) => ({ 'manual.status': 'claimed', 'manual.assignee': user._id }),
-  // שיוך שפג זמין שוב ללקיחה, ולכן מוצג בתור.
-  queued: (user, now) => ({
-    $and: [OPEN_FILTER, { $or: [{ 'manual.status': { $in: ['queued', 'released'] } }, { 'manual.status': 'claimed', 'manual.leaseExpiresAt': { $lte: now } }] }],
-  }),
-  claimed: () => ({ 'manual.status': 'claimed', state: 'open' }),
-  auto: () => ({ state: 'open', 'verification.status': { $in: ['queued', 'in_progress'] } }),
-  publishing: () => ({ state: 'open', 'publish.status': { $in: [...PUBLISHING_STATUSES, 'failed'] } }),
-  closed: () => ({ state: { $regex: '^closed_' } }),
-  // בלי מייל-בלבד (לא נכנסו למערכת) ובלי מה שאושר וממתין לפרסום/מיזוג — אלה בלשונית "אושרו / בפרסום".
-  all: () => ({ state: { $ne: 'email_only' }, 'publish.status': { $nin: PUBLISHING_STATUSES } }),
-};
+const MAX_HIDDEN_BOOKS = 50;
+
+/** ספרים שהמתנדב בחר להסתיר מהרשימה (למשל ספר משובש עם הרבה דיווחים): מערך JSON של שמות מדויקים. */
+export function parseHiddenBooks(raw) {
+  if (typeof raw !== 'string' || !raw) return [];
+  let arr;
+  try { arr = JSON.parse(raw); } catch { return []; }
+  if (!Array.isArray(arr)) return [];
+  return [...new Set(arr.filter((b) => typeof b === 'string' && b.trim() && b.length <= 200))].slice(0, MAX_HIDDEN_BOOKS);
+}
 
 export async function listReports({ user, query = {}, now = new Date() }) {
   if (!canHandleCorrections(user)) return err(403, 'Forbidden');
@@ -67,6 +65,8 @@ export async function listReports({ user, query = {}, now = new Date() }) {
   if (isId(query.assignee)) filter['manual.assignee'] = new mongoose.Types.ObjectId(query.assignee);
   const book = typeof query.book === 'string' ? query.book.trim().slice(0, 200) : '';
   if (book) filter.bookTitle = { $regex: escapeRegExp(book) };
+  const hidden = parseHiddenBooks(query.hideBooks);
+  if (hidden.length) filter.bookTitle = { ...filter.bookTitle, $nin: hidden };
   const limit = Math.min(100, Math.max(1, Number.parseInt(query.limit, 10) || 50));
   const skip = Math.max(0, Number.parseInt(query.skip, 10) || 0);
   const rows = await ErrorReport.find(filter)
@@ -219,7 +219,7 @@ export async function releaseReport({ user, id, generation, now = new Date() }) 
 export async function reassignReport({ user, id, generation, targetUserId, config, now = new Date() }) {
   if (!canHandleCorrections(user)) return err(403, 'Forbidden');
   if (!isId(id) || !isId(targetUserId)) return err(400, 'invalid_request');
-  const target = await User.findById(targetUserId).select('name role isCorrectionsVolunteer').lean();
+  const target = await User.findById(targetUserId).select('name role roles isCorrectionsVolunteer').lean();
   if (!target || !canHandleCorrections(target)) return err(400, 'target_not_authorized');
   // אישור שממתין לפרסום/בפרסום לא משויך מחדש — אחרת הוא מתפרסם בזמן שמטפל עובד עליו.
   const filter = { _id: id, workflowGeneration: generation, state: 'open', 'publish.status': { $nin: ['ready', 'in_progress', 'unknown_needs_reconcile', 'pr_opened'] } };
@@ -423,6 +423,33 @@ export async function closeManualReport({ user, id, generation, note, now = new 
   return ok({ generation: updated.workflowGeneration });
 }
 
+// דיווח שפורסם אינו נפתח מחדש: התיקון כבר במקור, ואישור חוזר היה יוצר שינוי כפול.
+const REOPENABLE_STATES = ['closed_rejected', 'closed_manual', 'closed_already_fixed'];
+
+/** פתיחה מחדש של דיווח סגור: חוזר לתור הידני (לא משויך), בלי אישור ובלי פרסום ממתין. */
+export async function reopenReport({ user, id, generation, now = new Date() }) {
+  if (!canHandleCorrections(user)) return err(403, 'Forbidden');
+  if (!isId(id) || !Number.isSafeInteger(generation)) return err(400, 'invalid_request');
+  const r = await ErrorReport.findById(id).select('state workflowGeneration').lean();
+  if (!r) return err(404, 'not_found');
+  if (!REOPENABLE_STATES.includes(r.state)) return err(409, 'not_reopenable');
+  const updated = await ErrorReport.findOneAndUpdate(
+    { _id: id, workflowGeneration: generation, state: { $in: REOPENABLE_STATES } },
+    {
+      $set: {
+        ...manualQueueSet('reopened', now), state: 'open', closedAt: null, resolvedAt: null, closeReason: null,
+        'approval.authority': 'none', 'approval.scope': 'none', 'approval.changeId': null,
+        'publish.status': 'not_ready', 'publish.changeId': null, 'dispatch.publish': false,
+      },
+      $inc: { workflowGeneration: 1 },
+    },
+    { returnDocument: 'after' },
+  ).lean();
+  if (!updated) return err(409, 'stale_view');
+  await logEvent(updated._id, 'reopened', userActor(user), updated.workflowGeneration, { from: r.state });
+  return ok({ generation: updated.workflowGeneration });
+}
+
 /** שליחה מחודשת לשירות — רק כפעולה מפורשת. */
 export async function resubmitToService({ user, id, generation, config, now = new Date() }) {
   const { r, error } = await loadForAction({ user, id, generation, now });
@@ -449,6 +476,23 @@ export async function resubmitToService({ user, id, generation, config, now = ne
   return ok({ generation: updated.workflowGeneration });
 }
 
+/** בחירת מקור ידנית, לפני הקלדת מספר שורה: האם הקובץ קיים וקריא, וכמה שורות יש בו. */
+export async function checkSourcePath({ user, id, path, config, deps }) {
+  if (!canHandleCorrections(user)) return err(403, 'Forbidden');
+  if (!isId(id)) return err(404, 'not_found');
+  if (!isAllowedRepoPath(path)) return err(400, 'path_not_allowed');
+  try {
+    const git = gitSourceFor(config, deps);
+    const head = await git.getHead();
+    const f = await git.getFile(path, head.commitSha);
+    if (!f) return err(404, 'file_not_found');
+    if (f.lossy) return err(409, 'non_utf8_source');
+    return ok({ path, lineCount: splitSourceLines(f.content).lines.length });
+  } catch (e) {
+    return err(503, 'source_unavailable', { detail: e.status ? `github_${e.status}` : 'network' });
+  }
+}
+
 /** בחירת מקור ידנית: מחזיר את השורה העדכנית ביעד שנבחר (לתצוגת diff לפני אישור). */
 export async function previewSourceChoice({ user, id, path, lineIndex, config, deps }) {
   if (!canHandleCorrections(user)) return err(403, 'Forbidden');
@@ -465,7 +509,7 @@ export async function previewSourceChoice({ user, id, path, lineIndex, config, d
     if (f.lossy) return err(409, 'non_utf8_source');
     const parsed = splitSourceLines(f.content);
     const { lines } = parsed;
-    if (lineIndex >= lines.length) return err(400, 'line_out_of_range');
+    if (lineIndex >= lines.length) return err(400, 'line_out_of_range', { lineCount: lines.length });
     const from = Math.max(0, lineIndex - 2);
     await logEvent(r._id, 'source_chosen_preview', userActor(user), r.workflowGeneration, { path, lineIndex, blobSha: f.blobSha });
     return ok({

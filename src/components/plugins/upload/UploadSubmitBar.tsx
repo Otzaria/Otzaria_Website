@@ -3,7 +3,7 @@
 import Button from '@/components/ui/Button'
 import CheckboxField from '@/components/plugins/form/CheckboxField'
 import FormNote from '@/components/plugins/form/FormNote'
-import { UPLOAD_FIELD_IDS, type UploadPluginForm } from './useUploadPluginForm'
+import { UPLOAD_FIELD_IDS, UPLOAD_REQUIRES_SERVICE_ID, type UploadPluginForm } from './useUploadPluginForm'
 
 /**
  * סוף הטופס: אישור קבלת דיווחים (חובה), הערת "שים לב", ופעולה ראשית אחת — "העלה תוסף"
@@ -12,6 +12,16 @@ import { UPLOAD_FIELD_IDS, type UploadPluginForm } from './useUploadPluginForm'
 export default function UploadSubmitBar({ form }: { form: UploadPluginForm }) {
   return (
     <div className="space-y-5">
+      {form.serviceEnabled && (
+        <CheckboxField
+          id={UPLOAD_REQUIRES_SERVICE_ID}
+          checked={form.requiresService}
+          onChange={form.setRequiresService}
+          label="דורש שירות חיצוני"
+          description="התוסף פועל מול תוכנה שמותקנת במחשב בנפרד. אחרי ההעלאה תועברו לדף הגשת השירות — מקור, מתקינים ופרטי זיהוי והסרה — והתוסף יפורסם רק יחד עם השירות, אחרי בחירת מנהל ובדיקות אבטחה."
+        />
+      )}
+
       <CheckboxField
         id={UPLOAD_FIELD_IDS.reportsConsent}
         checked={form.reportsConsent}

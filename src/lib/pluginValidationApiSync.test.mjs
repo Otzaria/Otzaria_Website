@@ -86,6 +86,30 @@ test('host מקומי חשוף ב-network.allowlist נחשב תקין (כמו ב
   assert.deepEqual(noise, [], noise.join(' | '))
 })
 
+test('host מקומי חשוף בטווח 127.0.0.0–127.0.0.255 נחשב תקין', async () => {
+  const result = await validatePluginArchive(buildArchive({
+    permissions: ['network.localhost'],
+    network: { enabled: true, allowlist: ['127.0.0.0', '127.0.0.9', '127.0.0.255', '::1'] }
+  }))
+
+  const noise = result.errors.filter((m) => m.includes('network.allowlist'))
+  assert.deepEqual(noise, [], noise.join(' | '))
+})
+
+test('כתובות 127.x מחוץ לטווח או בכתיבה לא קנונית נשארות שגיאה (אינטרנט באוצריא)', async () => {
+  for (const host of ['127.0.1.1', '127.10.10.1', '127.1', '127.0.0.01', '127.0.0.256']) {
+    const result = await validatePluginArchive(buildArchive({
+      permissions: ['network.localhost'],
+      network: { enabled: true, allowlist: [host] }
+    }))
+
+    assert.ok(
+      result.errors.some((m) => m.includes('network.allowlist') && m.includes(host)),
+      `ציפינו לשגיאה על ${host}, קיבלנו: ${result.errors.join(' | ')}`
+    )
+  }
+})
+
 test('כתובת בלי סכימה שאינה loopback נשארת שגיאה', async () => {
   const result = await validatePluginArchive(buildArchive({
     permissions: ['network.access'],

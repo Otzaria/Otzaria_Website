@@ -1,17 +1,17 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Page from '@/models/Page';
-import DictaBook from '@/models/DictaBook';
 // רישום מודל Book ב-Mongoose עבור populate (ללא binding שמייצר אזהרת unused-import)
 import '@/models/Book';
 import User from '@/models/User';
-import { sendStalePageReminder, sendStaleDictaReminder } from '@/lib/emailService';
+import { sendStalePageReminder } from '@/lib/emailService';
+import { releaseExpiredPageClaims } from '@/lib/bookPageClaims';
+import { isPersonalBook, pageReleaseCutoff, pageRemindCutoff } from '@/lib/pageClaimPolicy';
 
 export const dynamic = 'force-dynamic';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const REMIND_AFTER_DAYS = 7;
-const RELEASE_AFTER_DAYS = 14;
+// הזמנים (שחרור אחרי 5 ימים בלי עריכה, תזכורת אחרי 3) — ב-pageClaimPolicy.js
 
 function authorize(request) {
     const secret = process.env.CRON_SECRET;
@@ -25,38 +25,16 @@ function authorize(request) {
     return { ok: true };
 }
 
-function isPersonalBook(book) {
-    return !!(book && (book.isPrivate || book.ownerId));
-}
-
 async function processStalePages(now) {
-    const remindCutoff = new Date(now.getTime() - REMIND_AFTER_DAYS * DAY_MS);
-    const releaseCutoff = new Date(now.getTime() - RELEASE_AFTER_DAYS * DAY_MS);
+    const remindCutoff = pageRemindCutoff(now);
+    const releaseCutoff = pageReleaseCutoff(now);
 
     let remindersSent = 0;
-    let pagesReleased = 0;
 
-    // 14 ימים – שחרור אוטומטי (קודם, כדי שלא נשלח גם תזכורת על אותו עמוד)
-    const veryStalePages = await Page.find({
-        status: 'in-progress',
-        claimedBy: { $ne: null },
-        updatedAt: { $lte: releaseCutoff },
-    }).populate('book', 'name slug isPrivate ownerId');
+    // שחרור אוטומטי (קודם, כדי שלא נשלח גם תזכורת על אותו עמוד). ספרים אישיים לא משתחררים.
+    const pagesReleased = await releaseExpiredPageClaims({ now });
 
-    for (const page of veryStalePages) {
-        if (isPersonalBook(page.book)) continue;
-        await Page.updateOne(
-            { _id: page._id },
-            {
-                $set: { status: 'available' },
-                $unset: { claimedBy: '', claimedAt: '', completedAt: '', lastAutoReminderAt: '' },
-            },
-            { timestamps: false }
-        );
-        pagesReleased += 1;
-    }
-
-    // 7 ימים – תזכורת לעורך (אגרגציה לפי משתמש+ספר, מייל אחד פר משלוח)
+    // תזכורת לעורך (אגרגציה לפי משתמש+ספר, מייל אחד פר משלוח)
     const stalePages = await Page.find({
         status: 'in-progress',
         claimedBy: { $ne: null },
@@ -116,82 +94,6 @@ async function processStalePages(now) {
     return { remindersSent, pagesReleased };
 }
 
-async function processStaleDicta(now) {
-    const remindCutoff = new Date(now.getTime() - REMIND_AFTER_DAYS * DAY_MS);
-    const releaseCutoff = new Date(now.getTime() - RELEASE_AFTER_DAYS * DAY_MS);
-
-    let remindersSent = 0;
-    let booksReleased = 0;
-
-    // 14 ימים – שחרור (קודם)
-    const veryStaleBooks = await DictaBook.find({
-        status: 'in-progress',
-        claimedBy: { $ne: null },
-        updatedAt: { $lte: releaseCutoff },
-    });
-
-    for (const book of veryStaleBooks) {
-        await DictaBook.updateOne(
-            { _id: book._id },
-            {
-                $set: {
-                    status: 'available',
-                    claimedBy: null,
-                    claimedAt: null,
-                    completedAt: null,
-                    lastAutoReminderAt: null,
-                },
-            },
-            { timestamps: false }
-        );
-        booksReleased += 1;
-    }
-
-    // 7 ימים – תזכורת
-    const staleBooks = await DictaBook.find({
-        status: 'in-progress',
-        claimedBy: { $ne: null },
-        updatedAt: { $lte: remindCutoff, $gt: releaseCutoff },
-        $or: [
-            { lastAutoReminderAt: null },
-            { lastAutoReminderAt: { $exists: false } },
-            { $expr: { $lt: ['$lastAutoReminderAt', '$updatedAt'] } },
-        ],
-    });
-
-    // אגרגציה לפי משתמש: מייל אחד עם רשימת כל הספרים שלו
-    const userGroups = new Map();
-    for (const book of staleBooks) {
-        if (!book.claimedBy) continue;
-        const userKey = String(book.claimedBy);
-        if (!userGroups.has(userKey)) {
-            userGroups.set(userKey, { userId: book.claimedBy, books: [], bookIds: [] });
-        }
-        const daysSinceEdit = Math.floor((now - new Date(book.updatedAt)) / DAY_MS);
-        const group = userGroups.get(userKey);
-        group.books.push({ title: book.title, daysSinceEdit });
-        group.bookIds.push(book._id);
-    }
-
-    for (const group of userGroups.values()) {
-        const user = await User.findById(group.userId).select('email name acceptReminders isVerified');
-        if (!user || !user.email || !user.acceptReminders || !user.isVerified) continue;
-
-        const result = await sendStaleDictaReminder({ user, books: group.books });
-
-        if (result.sent) {
-            remindersSent += 1;
-            await DictaBook.updateMany(
-                { _id: { $in: group.bookIds } },
-                { $set: { lastAutoReminderAt: now } },
-                { timestamps: false }
-            );
-        }
-    }
-
-    return { remindersSent, booksReleased };
-}
-
 async function runCheck(request) {
     const auth = authorize(request);
     if (!auth.ok) {
@@ -203,13 +105,11 @@ async function runCheck(request) {
         const now = new Date();
 
         const pagesResult = await processStalePages(now);
-        const dictaResult = await processStaleDicta(now);
 
         return NextResponse.json({
             success: true,
             ranAt: now.toISOString(),
             pages: pagesResult,
-            dicta: dictaResult,
         });
     } catch (error) {
         console.error('Stale-pages cron error:', error);

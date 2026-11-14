@@ -12,6 +12,7 @@ import {
   buildUploadFormData,
   manifestToFormValues,
   readManifestFields,
+  uploadRedirectTarget,
   uploadSuccessMessage,
   validateUploadManifest,
   validateUploadSubmission,
@@ -28,8 +29,10 @@ export const UPLOAD_FIELD_IDS: Record<UploadFieldKey, string> = {
   reportsConsent: 'upload-reports-consent'
 }
 
+export const UPLOAD_REQUIRES_SERVICE_ID = 'upload-requires-service'
+
 // Reads manifest.json from an .otzplugin (ZIP) file using fflate
-async function readPluginManifest(file: File): Promise<Record<string, unknown>> {
+export async function readPluginManifest(file: File): Promise<Record<string, unknown>> {
   const { unzipSync } = await import('fflate')
   const bytes = new Uint8Array(await file.arrayBuffer())
   const unzipped = unzipSync(bytes, { filter: (info) => info.name === 'manifest.json' })
@@ -43,7 +46,7 @@ async function readPluginManifest(file: File): Promise<Record<string, unknown>> 
  * בדיקות הקבצים, השליחה ל-/api/plugins/upload, ההודעות בחלון). מה שנוסף: fieldErrors —
  * אותה הודעה מוצגת גם ליד השדה, ואחרי שגיאת שליחה הפוקוס עובר לשדה.
  */
-export function useUploadPluginForm() {
+export function useUploadPluginForm({ serviceEnabled = false }: { serviceEnabled?: boolean } = {}) {
   const router = useRouter()
   const { showAlert, showMessage } = useDialog() as {
     showAlert: (title: string, message: string) => void
@@ -51,6 +54,7 @@ export function useUploadPluginForm() {
   }
   const [loading, setLoading] = useState(false)
   const [reportsConsent, setReportsConsentState] = useState(false)
+  const [requiresService, setRequiresService] = useState(false)
   const [formData, setFormData] = useState<UploadFormFields>(EMPTY_UPLOAD_FORM)
 
   const [pluginFile, setPluginFile] = useState<File | null>(null)
@@ -234,7 +238,13 @@ export function useUploadPluginForm() {
         throw new Error(invalid.message)
       }
 
-      const data = buildUploadFormData({ formData, pluginFile: pluginFile as File, imageFile, screenshotFiles })
+      const data = buildUploadFormData({
+        formData,
+        pluginFile: pluginFile as File,
+        imageFile,
+        screenshotFiles,
+        requiresService: serviceEnabled && requiresService
+      })
 
       // שליחה לשרת
       const response = await fetch('/api/plugins/upload', {
@@ -249,7 +259,7 @@ export function useUploadPluginForm() {
       }
 
       await showAlert('הצלחה', uploadSuccessMessage(result))
-      router.push('/plugins')
+      router.push(uploadRedirectTarget(result))
     } catch (error: unknown) {
       // showMessage: דיאלוג מודאלי חוסם, נשאר על המסך עד שהמשתמש לוחץ אישור,
       // כך שהודעות שגיאה רב-שורתיות (למשל פירוט ולידציה מול ה-SDK) ייקראו במלואן.
@@ -271,6 +281,9 @@ export function useUploadPluginForm() {
     handleChange,
     reportsConsent,
     setReportsConsent,
+    serviceEnabled,
+    requiresService,
+    setRequiresService,
     setTags,
     pluginFile,
     handlePluginFile,

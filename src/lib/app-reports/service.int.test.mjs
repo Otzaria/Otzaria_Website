@@ -11,7 +11,7 @@ import AppReport from '../../models/AppReport.js';
 import { startMongo } from '../corrections/testing/mongo.js';
 import { FakeIssuesGitHub, FakeGitHubRepos } from './testing/fake-github.js';
 import { handleAppReportPost } from './handler.js';
-import { MAX_BODY_BYTES, MAX_MINIDUMP_BYTES } from './validation.js';
+import { MAX_BODY_BYTES, LEGACY_MAX_MINIDUMP_BYTES as MAX_MINIDUMP_BYTES } from './validation.js';
 import { githubFor, runAppReportsSync, contactReporter, listReports, getReportDetail, loadReportFile, loadReportImage, loadContactImage, loadPublicImage, unsubscribeByToken, ingestInboundReply } from './service.js';
 import { handleInboundEmailPost } from './inbound-handler.js';
 import { parseReplyAddress } from './inbound.js';
@@ -61,8 +61,11 @@ const crash = (over = {}) => manual({
 });
 
 async function post(body, { raw = false, deps = {} } = {}) {
+  const serialized = raw ? body : JSON.stringify(body);
   const req = new Request('http://localhost/api/app-reports', {
-    method: 'POST', headers: { 'content-type': 'application/json; charset=utf-8' }, body: raw ? body : JSON.stringify(body),
+    method: 'POST', headers: {
+      'content-type': 'application/json; charset=utf-8', 'content-length': String(Buffer.byteLength(serialized)),
+    }, body: serialized,
   });
   const res = await handleAppReportPost(req, { saveFile, deleteFile, config, fetchImpl: gh.fetch, connectDB: async () => {}, rateLimit: () => true, ...deps });
   return { status: res.status, body: await res.json() };
@@ -119,6 +122,39 @@ test('idempotency: אותו reportId ותוכן זהה → duplicate בלי קר
   assert.equal(await AppReport.countDocuments(), 1);
 });
 
+test('שליחה חוזרת של אותו דיווח עם reportId חדש → duplicate שמפנה לראשון, בלי issue, תגובה או קבצים', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const first = await post(crash({ trigger: 'crash_prompt' }));
+  const calls = gh.calls.length;
+  const filesBefore = files.size;
+  const resentId = newId();
+  const again = await post(crash({
+    trigger: 'crash_prompt', reportId: resentId, createdAt: '2026-09-17T10:00:13.000Z',
+    attachments: { diagnostics: { settings: { theme: 'light' } }, errorLog: 'Exception: boom\n#0 main' },
+  }));
+  assert.equal(again.status, 200);
+  assert.deepEqual(again.body, { ...first.body, reportId: resentId, duplicate: true });
+  assert.equal(gh.calls.length, calls);
+  assert.equal(files.size, filesBefore);
+  assert.equal(await AppReport.countDocuments(), 1);
+});
+
+test('שליחה חוזרת: לוג שונה, צילום שונה או חלון זמן שעבר → דיווח נפרד', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const base = crash({ trigger: 'crash_prompt' });
+  await post(base);
+  const otherLog = await post({ ...base, reportId: newId(), attachments: { ...base.attachments, errorLog: 'Exception: boom\n#0 main\n#1 other hang' } });
+  assert.equal(otherLog.body.duplicate, false);
+  assert.equal(otherLog.body.merged, true);
+
+  const withImage = await post({ ...base, reportId: newId(), attachments: { ...base.attachments, images: [{ mimeType: 'image/gif', data: GIF87A.toString('base64') }] } });
+  assert.equal(withImage.body.duplicate, false);
+
+  const later = await post({ ...base, reportId: newId() }, { deps: { now: new Date(Date.now() + 61 * 60 * 1000) } });
+  assert.equal(later.body.duplicate, false);
+  assert.equal(await AppReport.countDocuments(), 4);
+});
+
 test('קריסה עם אותה חתימה על issue פתוח → תגובה (merged); אחרי סגירה → issue חדש עם "קודם"', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const a = await post(crash());
@@ -140,10 +176,153 @@ test('קריסה עם אותה חתימה על issue פתוח → תגובה (me
 
   gh.setState(a.body.issueNumber, 'closed', 'completed');
   await runAppReportsSync(syncDeps());
-  const c = await post(crash());
+  const c = await post(crash({ description: 'שוב אחרי התיקון', appVersion: '0.9.99' }));
   assert.equal(c.body.merged, false);
   assert.notEqual(c.body.issueNumber, a.body.issueNumber);
   assert.match(gh.issues.get(c.body.issueNumber).body, new RegExp(`קודם: #${a.body.issueNumber}`));
+});
+
+test('issue סגור: גרסה זהה או ישנה → צירוף שקט בלי issue, תגובה או פתיחה מחדש; גרסה חדשה → issue עם "קודם"', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const prompt = (over) => crash({ trigger: 'crash_prompt', ...over });
+  const a = await post(prompt({ appVersion: '0.9.98+99802', reporterEmail: 'x@example.com' }));
+  const b = await post(prompt({ appVersion: '0.9.98.3+99803', reporterEmail: 'y@example.com', description: 'גם אצלי' }));
+  assert.equal(b.body.merged, true);
+  gh.setState(a.body.issueNumber, 'closed', 'completed');
+  await runAppReportsSync(syncDeps());
+  assert.deepEqual(mails.map((m) => m.to).sort(), ['x@example.com', 'y@example.com']);
+  const callsBefore = gh.calls.filter((c) => c.method === 'POST').length;
+
+  const same = await post(prompt({ appVersion: '0.9.98.3+99803', reporterEmail: 'x@example.com', description: 'שוב' }));
+  const older = await post(prompt({ appVersion: '0.9.97+99700', reporterEmail: 'z@example.com', description: 'בגרסה ישנה' }));
+  for (const r of [same, older]) {
+    assert.equal(r.status, 200);
+    assert.equal(r.body.merged, true);
+    assert.equal(r.body.issuePending, false);
+    assert.equal(r.body.issueNumber, a.body.issueNumber);
+    assert.equal(r.body.issueUrl, a.body.issueUrl);
+  }
+  assert.equal(gh.calls.filter((c) => c.method === 'POST').length, callsBefore);
+  assert.equal(gh.issues.get(a.body.issueNumber).state, 'closed');
+  const sameDoc = await AppReport.findOne({ reportId: same.body.reportId }).lean();
+  assert.equal(sameDoc.suppressedAfterClose, true);
+  assert.equal(sameDoc.issueState, 'closed');
+  assert.equal(sameDoc.issueStateReason, 'completed');
+  // x כבר קיבל מייל סגירה על ה-issue הזה; z יקבל אחד בבדיקת המצב הבאה, ורק פעם אחת
+  assert.ok(sameDoc.notifiedClosedAt);
+  await runAppReportsSync(syncDeps());
+  await runAppReportsSync(syncDeps());
+  assert.deepEqual(mails.slice(2).map((m) => m.to), ['z@example.com']);
+
+  const newer = await post(prompt({ appVersion: '0.9.99+99900', reporterEmail: '', description: 'עדיין קורס' }));
+  assert.equal(newer.body.merged, false);
+  assert.notEqual(newer.body.issueNumber, a.body.issueNumber);
+  assert.match(gh.issues.get(newer.body.issueNumber).body, new RegExp(`קודם: #${a.body.issueNumber}`));
+  assert.equal((await AppReport.findOne({ reportId: newer.body.reportId }).lean()).suppressedAfterClose, false);
+
+  const onOpen = await post(prompt({ appVersion: '0.9.97+99700', reporterEmail: '', description: 'ישן על הפתוח' }));
+  assert.equal(onOpen.body.merged, true);
+  assert.equal(onOpen.body.issueNumber, newer.body.issueNumber);
+  assert.equal(gh.comments.at(-1).issue, newer.body.issueNumber);
+});
+
+test('issue סגור: דיווח בלי בנייה לא משתיק דיווח מבנייה חדשה יותר', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const a = await post(crash({ appVersion: '0.9.98+99802' }));
+  gh.setState(a.body.issueNumber, 'closed', 'completed');
+  await runAppReportsSync(syncDeps());
+
+  const withoutBuild = await post(crash({ appVersion: '0.9.98', description: 'בלי מספר בנייה' }));
+  assert.equal(withoutBuild.body.issueNumber, a.body.issueNumber);
+  assert.equal(withoutBuild.body.merged, true);
+  const newer = await post(crash({ appVersion: '0.9.98+99803', description: 'בנייה חדשה' }));
+  assert.equal(newer.body.issuePending, false);
+  assert.equal(newer.body.merged, false);
+  assert.notEqual(newer.body.issueNumber, a.body.issueNumber);
+  assert.match(gh.issues.get(newer.body.issueNumber).body, new RegExp(`קודם: #${a.body.issueNumber}`));
+});
+
+test('issue שנסגר ואז נמחק: 404/410 לפני או אחרי cron → issue חדש, בלי צירוף ליעד חסר', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  for (const status of [404, 410]) {
+    for (const syncBeforeReport of [false, true]) {
+      await t.test(`${status}, cron before report: ${syncBeforeReport}`, async () => {
+        const a = await post(crash({ appVersion: '0.9.98+99802' }));
+        gh.setState(a.body.issueNumber, 'closed', 'completed');
+        await runAppReportsSync(syncDeps());
+        gh.issues.delete(a.body.issueNumber);
+        const fetchImpl = async (url, init = {}) => {
+          if ((!init.method || init.method === 'GET') && new URL(url).pathname.endsWith(`/issues/${a.body.issueNumber}`)) {
+            return new Response(JSON.stringify({ message: 'Gone' }), { status });
+          }
+          return gh.fetch(url, init);
+        };
+        const deps = { ...syncDeps(), fetchImpl };
+        if (syncBeforeReport) {
+          await runAppReportsSync(deps);
+          const old = await AppReport.findOne({ reportId: a.body.reportId }).lean();
+          assert.equal(old.issueStateReason, null);
+        }
+        const b = await post(crash({ appVersion: '0.9.98+99802', description: 'אחרי מחיקת ה-issue' }), { deps: { fetchImpl } });
+        assert.equal(b.status, 200);
+        assert.equal(b.body.issuePending, false);
+        assert.equal(b.body.merged, false);
+        assert.notEqual(b.body.issueNumber, a.body.issueNumber);
+        assert.match(gh.issues.get(b.body.issueNumber).body, new RegExp(`קודם: #${a.body.issueNumber}`));
+        await runAppReportsSync(deps);
+        const doc = await AppReport.findOne({ reportId: b.body.reportId }).lean();
+        assert.equal(doc.suppressedAfterClose, false);
+        assert.equal(doc.issueState, 'open');
+      });
+    }
+  }
+});
+
+test('אימות לפני צירוף שקט: כשל זמני משאיר ממתין; ניסיון חוזר לא יוצר issue כפול', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const a = await post(crash());
+  gh.setState(a.body.issueNumber, 'closed', 'completed');
+  await runAppReportsSync(syncDeps());
+  gh.failNext = 1;
+  const b = await post(crash({ description: 'כשל באימות' }));
+  assert.equal(b.body.issuePending, true);
+  assert.equal(b.body.issueNumber, null);
+  await runAppReportsSync(syncDeps());
+  const doc = await AppReport.findOne({ reportId: b.body.reportId }).lean();
+  assert.equal(doc.issuePending, false);
+  assert.equal(doc.suppressedAfterClose, true);
+  assert.equal(doc.issueNumber, a.body.issueNumber);
+  assert.equal(gh.issues.size, 1);
+  assert.equal(gh.comments.length, 0);
+});
+
+test('אימות לפני צירוף שקט: issue שנפתח מחדש מקבל תגובה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const a = await post(crash({ reporterEmail: 'reopened@example.com' }));
+  gh.setState(a.body.issueNumber, 'closed', 'completed');
+  await runAppReportsSync(syncDeps());
+  gh.setState(a.body.issueNumber, 'open', 'reopened');
+  const b = await post(crash({ description: 'אחרי פתיחה מחדש' }));
+  assert.equal(b.body.issuePending, false);
+  assert.equal(b.body.issueNumber, a.body.issueNumber);
+  assert.equal(gh.comments.at(-1).issue, a.body.issueNumber);
+  const doc = await AppReport.findOne({ reportId: b.body.reportId }).lean();
+  assert.equal(doc.suppressedAfterClose, false);
+  assert.equal(doc.issueState, 'open');
+  const original = await AppReport.findOne({ reportId: a.body.reportId }).lean();
+  assert.equal(original.notifiedClosedAt, null);
+});
+
+test('issue סגור של תקיעה עם פריימי מנוע בלבד → issue חדש עם "קודם" גם בגרסה זהה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const hang = (over) => crash({ title: 'תקיעה', signature: { exceptionType: 'AppHang', frames: ['flutter_windows.dll+0x1a2b flutter_windows.dll+0x3c4d'] }, ...over });
+  const a = await post(hang({ appVersion: '0.9.98+99802' }));
+  gh.setState(a.body.issueNumber, 'closed', 'completed');
+  await runAppReportsSync(syncDeps());
+  const b = await post(hang({ appVersion: '0.9.98+99802', description: 'תקיעה אחרת' }));
+  assert.equal(b.body.merged, false);
+  assert.notEqual(b.body.issueNumber, a.body.issueNumber);
+  assert.match(gh.issues.get(b.body.issueNumber).body, new RegExp(`קודם: #${a.body.issueNumber}`));
 });
 
 test('שני דיווחים במקביל עם אותה חתימה → issue אחד ותגובה אחת', async (t) => {
@@ -190,7 +369,7 @@ test('GitHub נכשל → issuePending, והסנכרון יוצר את ה-issue;
   assert.equal(doc.issueNumber, 100);
 
   const noToken = getAppReportsConfig({});
-  const r2 = await post(manual(), { deps: { config: noToken } });
+  const r2 = await post(manual({ description: 'דיווח שני' }), { deps: { config: noToken } });
   assert.equal(r2.body.issuePending, true);
   assert.equal((await runAppReportsSync({ config: noToken, sendClosedMail })).githubConfigured, false);
 });
@@ -359,6 +538,26 @@ test('יצירת קשר: 404 לדיווח חסר, 422 בלי מייל, שליח�
 
   const failing = await contactReporter({ reportId: withMail.body.reportId, subject: 'ש', message: 'ה', user }, { sendContactMail: async () => ({ sent: false }) });
   assert.equal(failing.status, 502);
+});
+
+test('יצירת קשר: כתובת עם שגיאת הקלדה — התרעה למנהל והודעה ברורה כששרת הדואר דוחה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const typo = await post(manual({ reporterEmail: 'someone@gmail.cim' }));
+  assert.equal(typo.status, 200, 'הדיווח מתקבל — לא נדחה בגלל החשד');
+  const detail = await getReportDetail(typo.body.reportId, 'developer');
+  assert.equal(detail.report.emailDomainSuggestion, 'gmail.com');
+  assert.equal(JSON.stringify(detail).includes('someone@gmail.cim'), false);
+
+  const args = { reportId: typo.body.reportId, subject: 'ש', message: 'ה', user: user() };
+  const rejected = await contactReporter(args, { sendContactMail: async () => ({ sent: false, reason: 'recipient_rejected' }) });
+  assert.equal(rejected.status, 422);
+  assert.equal(rejected.body.field, 'reporterEmail');
+  assert.match(rejected.body.error, /דחה את כתובת המייל/);
+  assert.match(rejected.body.error, /@gmail\.com/);
+
+  const down = await contactReporter(args, { sendContactMail: async () => ({ sent: false }) });
+  assert.equal(down.status, 502);
+  assert.match(down.body.error, /@gmail\.com/);
 });
 
 const replyConfig = { ...config, replyDomain: 'reply.otzaria.org', inboundSecret: 'inbound-secret' };
@@ -728,6 +927,21 @@ const closedEvent = (number, over = {}) => ({
   ...over,
 });
 
+test('מייל הסגירה כולל את התגובה שאיתה נסגר ה-issue (ולא תגובות בוט או של אחרים)', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const a = await post(manual());
+  const n = a.body.issueNumber;
+  const closedAt = new Date();
+  gh.addComment(n, 'אולי זה קשור?', { author: 'someone', createdAt: new Date(closedAt - 30_000) });
+  gh.addComment(n, 'תוקן בגרסה 2.5,\nתודה על הדיווח!', { author: 'maint', createdAt: new Date(closedAt - 1000) });
+  gh.setState(n, 'closed', 'completed', { closedBy: 'maint', closedAt });
+
+  await runAppReportsSync(syncDeps());
+  assert.equal(mails.length, 1);
+  assert.equal(mails[0].closingComment, 'תוקן בגרסה 2.5,\nתודה על הדיווח!');
+  assert.ok(gh.calls.some((c) => c.method === 'GET' && c.path.endsWith(`/issues/${n}/comments`)));
+});
+
 test('webhook: סגירה אמיתית שולחת מייל אחרי קריאה מחדש מ-GitHub, וה-cron לא שולח שוב', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const a = await post(manual());
@@ -1078,7 +1292,7 @@ test('מוצרים: אותה חתימה בשני מוצרים → issue נפרד
   // רק ה-issue של אוצריא נסגר → דיווח חדש באוצריא פותח issue חדש, בעדכונים ממשיך להתאחד
   otz.setState(100, 'closed', 'completed');
   await syncVia(hub);
-  const e = await postVia(hub, crash({ description: 'אחרי הסגירה' }));
+  const e = await postVia(hub, crash({ description: 'אחרי הסגירה', appVersion: '0.9.99' }));
   assert.equal(e.body.merged, false);
   assert.equal(e.body.issueUrl, `https://github.com/${OTZ_REPO}/issues/101`);
   assert.match(otz.issues.get(101).body, /קודם: #100/);
@@ -1130,7 +1344,7 @@ test('מוצרים: webhook מריפו העדכונים (רישיות שונה) 
   assert.equal(hub.calls.length, before);
 
   assert.equal(await hookVia(hub, closedEvent(100, { repository: { full_name: 'otzaria/otzaria_offline_update' } })), 202);
-  assert.deepEqual(upd.calls.filter((c) => c.method === 'GET').map((c) => c.path), [`/repos/${UPD_REPO}/issues/100`]);
+  assert.deepEqual(upd.calls.filter((c) => c.method === 'GET').map((c) => c.path), [`/repos/${UPD_REPO}/issues/100`, `/repos/${UPD_REPO}/issues/100/comments`]);
   assert.equal(otz.calls.filter((c) => c.method === 'GET').length, 0);
   assert.deepEqual(mails.map((m) => [m.to, m.reasonKind, m.product]), [['upd@example.com', 'not_planned', 'offline-update']]);
   assert.equal((await AppReport.findOne({ reportId: a.body.reportId }).lean()).issueState, 'open');
@@ -1138,7 +1352,7 @@ test('מוצרים: webhook מריפו העדכונים (רישיות שונה) 
 
   // issue של העדכונים שאין לו דיווח אצלנו — בלי קריאה ל-GitHub
   assert.equal(await hookVia(hub, closedEvent(555, { repository: { full_name: UPD_REPO } })), 202);
-  assert.equal(upd.calls.filter((c) => c.method === 'GET').length, 1);
+  assert.equal(upd.calls.filter((c) => c.method === 'GET').length, 2);
 
   assert.equal(await hookVia(hub, closedEvent(100)), 202);
   assert.deepEqual(mails.map((m) => m.to), ['upd@example.com', 'otz@example.com']);
@@ -1300,7 +1514,7 @@ test('מוצרים: פנייה יוצאת נשלחת ונשמרת פעם אחת,
   const { hub, otz, upd } = twoRepos();
   const legacy = await postVia(hub, manual());
   await AppReport.updateOne({ reportId: legacy.body.reportId }, { $unset: { product: 1 } });
-  const current = await postVia(hub, manual());
+  const current = await postVia(hub, manual({ description: 'דיווח נוכחי' }));
   const offline = await postVia(hub, updater(manual));
   const sent = [];
   const deps = { config: replyConfig, fetchImpl: hub.fetch, sendContactMail: async (mail) => {

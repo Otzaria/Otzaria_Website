@@ -63,6 +63,18 @@ test('pickUserForEmail: כמה מועמדים — מעדיף התאמה מדוי
   });
 });
 
+test('toTokenUserFields: כמה תפקידים — כולם ב-roles, והראשי ב-role', () => {
+  const fields = toTokenUserFields({ _id: { toString: () => 'm1' }, role: 'admin_ocr', roles: ['admin_ocr', 'admin_books'] });
+  assert.deepEqual(fields.roles, ['admin_books', 'admin_ocr']);
+  assert.equal(fields.role, 'admin_books');
+});
+
+test('toTokenUserFields: רשומה ישנה בלי roles — התפקיד מ-role', () => {
+  const fields = toTokenUserFields({ _id: { toString: () => 'o1' }, role: 'admin_ocr' });
+  assert.deepEqual(fields.roles, ['admin_ocr']);
+  assert.equal(fields.role, 'admin_ocr');
+});
+
 test('toTokenUserFields: חשבון Google מסומן כחסר סיסמה', () => {
   const fields = toTokenUserFields({ _id: { toString: () => 'g1' }, email: 'g@x.com', name: 'גוגל' });
   assert.equal(fields.hasPassword, false);
@@ -83,6 +95,7 @@ test('toTokenUserFields: ממיר מזהה למחרוזת ומנרמל דגלי�
     email: 'a@x.com',
     name: 'יוסף',
     role: 'user',
+    roles: [],
     acceptReminders: true,
     isVerified: false,
     hasPassword: true,

@@ -104,7 +104,7 @@ describe('Bearer — מפתח תקף', () => {
     const out = await getPageProofSession(bearer(secret), 'read')
     expect(out.denied).toBeNull()
     expect(out.session).toEqual({
-      user: { id: String(admin._id), _id: String(admin._id), name: `מנהל${VIA_SUFFIX}`, role: 'admin_ocr' },
+      user: { id: String(admin._id), _id: String(admin._id), name: `מנהל${VIA_SUFFIX}`, role: 'admin_ocr', roles: ['admin_ocr'] },
       via: 'token',
       tokenId: String(doc._id),
       scopes: ['read', 'review'],

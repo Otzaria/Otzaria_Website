@@ -60,6 +60,9 @@
 
   --color-rating: var(--ref-primary-80);
 
+  --color-inverse-surface: var(--ref-neutral-90);
+  --color-inverse-on-surface: var(--ref-neutral-20);
+  --color-inverse-primary: var(--ref-primary-40);
   --color-error: var(--ref-error-80);
   --color-on-error: var(--ref-error-20);
   --color-error-container: var(--ref-error-30);
@@ -71,6 +74,21 @@
   --color-on-warning-container: var(--color-warning-100);
   --color-info-container: var(--color-info-950);
   --color-on-info-container: var(--color-info-100);
+  /* סימון אזור על תמונת עמוד — התמונה לא מתחלפת, ולכן אותו גוון כמו בבהירה */
+  --color-region-report: var(--color-danger-600);
+  --color-region-report-fill: color-mix(in srgb, var(--color-danger-500) 15%, transparent);
+  --color-region-line: var(--color-info-600);
+  --color-region-line-fill: color-mix(in srgb, var(--color-info-500) 10%, transparent);
+
+  /* הבדלים בטקסט — בכהה הגוונים מעורבבים עם המשטח הרבה יותר (container כהה מלא הוא אדום / ירוק רווי) */
+  --color-diff-remove: color-mix(in srgb, var(--color-error-container) 18%, var(--color-surface));
+  --color-diff-remove-mark: color-mix(in srgb, var(--color-error) 35%, var(--color-surface));
+  --color-diff-add: color-mix(in srgb, var(--color-success-container) 35%, var(--color-surface));
+  --color-diff-add-mark: color-mix(in srgb, var(--color-success) 30%, var(--color-surface));
+  --color-diff-repo: color-mix(in srgb, var(--color-info-container) 30%, var(--color-surface));
+  --color-diff-repo-mark: color-mix(in srgb, var(--color-on-info-container) 22%, var(--color-diff-repo));
+  --color-diff-site: var(--color-surface-container-high);
+  --color-diff-site-mark: color-mix(in srgb, var(--color-on-surface) 20%, var(--color-diff-site));
 
   --color-top-bar: var(--ref-neutral-17);
   --color-scrim: var(--ref-neutral-0);

@@ -13,7 +13,7 @@ export async function POST(request, { params }) {
   const session = await getServerSession(authOptions);
   if (!session) return unauthorized();
 
-  const isAdmin = hasBookLibraryAccess(session.user.role);
+  const isAdmin = hasBookLibraryAccess(session.user);
   if (!session.user.isVerified && !isAdmin) {
     return forbidden('רק משתמשים מאומתים יכולים לתפוס עמודי אימון');
   }

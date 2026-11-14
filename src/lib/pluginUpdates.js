@@ -5,6 +5,7 @@ import {
   resolveCompatibleVersion,
   lowestSupportedAppVersion
 } from './pluginCompatibility.js'
+import { isServicePlugin, pluginStoreUrl } from './servicePlugins/existingPaths.js'
 
 // בדיקת עדכונים ב-batch עבור אפליקציית אוצריא: הלקוח שולח את התוספים המותקנים
 // אצלו (מזוהים לפי pluginUid מה-manifest, לא לפי _id) עם הגרסה המותקנת של כל
@@ -50,6 +51,7 @@ export function parseUpdateRequestList(raw) {
 //   version/downloadUrl — הגרסה התואמת; ה-URL מוצמד לגרסה (@version) כך שמה
 //     שהוצג למשתמש הוא בדיוק מה שיותקן, גם אם תפורסם גרסה חדשה בינתיים
 //   incompatible — קיים רק כשאין אף גרסה תואמת ל-appVersion, עם פרטי הסבר
+//   requiresServiceCheck — תוסף שירות: העדכון רק מהחנות, אחרי בדיקת השירות המותקן
 export function resolvePluginUpdates(plugins, requests, appVersion) {
   const byUid = new Map()
   for (const plugin of plugins || []) {
@@ -60,6 +62,12 @@ export function resolvePluginUpdates(plugins, requests, appVersion) {
   for (const { uid, installedVersion } of requests) {
     const plugin = byUid.get(uid)
     if (!plugin) continue
+
+    if (isServicePlugin(plugin)) {
+      const id = plugin._id.toString()
+      results.push({ uid, id, hasUpdate: false, requiresServiceCheck: true, storeUrl: pluginStoreUrl(id) })
+      continue
+    }
 
     const selected = resolveCompatibleVersion(plugin, appVersion)
     if (!selected) {

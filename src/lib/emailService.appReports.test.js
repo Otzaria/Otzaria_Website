@@ -46,6 +46,15 @@ describe('מיילי דיווחי התוכנה לפי מוצר', () => {
     }
   })
 
+  it('תגובת הסגירה מוצגת במייל (מוברחת), ובלעדיה המייל ללא שינוי', async () => {
+    await sendAppReportClosedNotification(closed({ closingComment: 'תוקן <b>בגרסה</b> 2.5\nתודה!' }))
+    const html = sent[0].html
+    expect(html).toContain('תגובת הצוות בסגירת הדיווח:')
+    expect(html).toContain('תוקן &lt;b&gt;בגרסה&lt;/b&gt; 2.5\nתודה!')
+    await sendAppReportClosedNotification(closed({ closingComment: null }))
+    expect(fingerprint(sent[1])).toBe(GOLDEN_CLOSED)
+  })
+
   it('עדכוני אוצריא: שם המוצר בשולח, בכותרת ובשורת התודה', async () => {
     await sendAppReportClosedNotification(closed({ product: 'offline-update' }))
     await sendAppReportContactEmail(contact({ product: 'offline-update' }))

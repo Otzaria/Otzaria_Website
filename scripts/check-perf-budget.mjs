@@ -37,7 +37,6 @@ const PAGE_BUDGETS = [
   { page: 'about', label: '/about', gzipKB: 236, allowFramerMotion: false },
   { page: 'privacy', label: '/privacy', gzipKB: 236, allowFramerMotion: false },
   { page: 'offline', label: '/offline', gzipKB: 237, allowFramerMotion: false },
-  { page: 'docs/dicta', label: '/docs/dicta', gzipKB: 236, allowFramerMotion: false },
   // חנות התוספים: ייבוא אחד של pluginSubmission/pluginManifest מקוד לקוח מחזיר
   // polyfills של node (zlib/stream/buffer, כ-60KB gzip) לכל דפי החנות.
   { page: 'plugins', label: '/plugins', gzipKB: 248, allowFramerMotion: false },
@@ -73,6 +72,14 @@ const ASSET_BUDGETS = [
   // כותרות הדפים הישנים (font-frank, בלי preload) — נטען רק בעמוד שמבקש אותו, ורק המשקל שבשימוש.
   { file: 'src/app/fonts/FrankRuehlCLM-Medium.woff2', maxKB: 20, hint: HINT_FONT },
   { file: 'src/app/fonts/FrankRuehlCLM-Bold.woff2', maxKB: 20, hint: HINT_FONT },
+  // גופן הקלדה בלי תגים בעורך העמוד (Noto Sans Hebrew, משתנה 400–700, בלי preload) — נטען רק למי שבחר בו.
+  { file: 'src/app/fonts/NotoSansHebrew-Variable.woff2', maxKB: 32, hint: HINT_FONT },
+  // עוד גופני הקלדה בלי תגים בעורך (בלי preload, רק למי שבחר): IBM Plex — הקבצים הרשמיים בלי חיתוך;
+  // Google Sans ו-Open Sans — משתנים 400–700, חיתוך לעברית+לטינית.
+  { file: 'src/app/fonts/IBMPlexSansHebrew-Regular.woff2', maxKB: 34, hint: HINT_FONT },
+  { file: 'src/app/fonts/IBMPlexSansHebrew-Bold.woff2', maxKB: 34, hint: HINT_FONT },
+  { file: 'src/app/fonts/GoogleSans-Variable.woff2', maxKB: 54, hint: HINT_FONT },
+  { file: 'src/app/fonts/OpenSans-Variable.woff2', maxKB: 42, hint: HINT_FONT },
 ]
 
 // הנכסים שדף הבית מוריד בביקור קר רגיל (AVIF, DPR1): ספר סגור + פתוח ב-320w + הרצועה. מעבר לסכום
@@ -89,16 +96,19 @@ const HERO_IMAGES = [
 const IMMUTABLE_PUBLIC_DIRS = ['public/home', 'public/icons']
 const VERSIONED_NAME = /[.-]v\d+(?:[.-]|$)/
 
-// CSS גלובלי (gzip, סך כל ה-stylesheets שה-HTML של הדף טוען). נמדד 34.4KB (Tailwind: כל המחלקות שבשימוש
-// באתר); התקציב ~15% מעל. אותו CSS גלובלי לכל הדפים, לכן שני נציגים מספיקים.
+// CSS גלובלי (gzip, סך כל ה-stylesheets שה-HTML של הדף טוען). Tailwind סורק את כל src, ולכן כולל גם
+// מחלקות של מסכי הניהול. נמדד 34.4KB בכתיבה הראשונית, 39.1KB ב-master לפני עיצוב מחדש של פאנל הניהול
+// (תקציב 40KB), ו-42.6KB אחריו: עשרות רכיבי ui/admin חדשים (Tabs, SelectMenu, Toast, Drawer, DiffPreview...)
+// הוסיפו מחלקות שימוש אמיתיות (~22KB לא דחוס) — בלי טוקנים מתים או כפילויות שאפשר לגזור בבטחה.
+// התקציב הוגדר ל-45KB (~5% מעל המדידה). אותו CSS גלובלי לכל הדפים, לכן שני נציגים מספיקים.
 const CSS_BUDGETS = [
-  { page: 'index', label: '/', gzipKB: 40 },
-  { page: 'library/books', label: '/library/books', gzipKB: 40 },
+  { page: 'index', label: '/', gzipKB: 45 },
+  { page: 'library/books', label: '/library/books', gzipKB: 45 },
 ]
 
 // גופן האייקונים: שמו כולל hash, ולכן מאותר לפי התחילית.
-// (מידה בפועל ~21KB; התקציב ~15% מעל)
-const ICON_FONT_MAX_KB = 24
+// (מידה בפועל ~32KB — ציר wght בטווח 300–400 לאייקונים הדקים של כלי העורך; התקציב ~15% מעל)
+const ICON_FONT_MAX_KB = 37
 
 const failures = []
 const notes = []

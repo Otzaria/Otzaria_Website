@@ -62,7 +62,7 @@ export default function HeroSection() {
 
           <p className="mt-5 text-balance text-xl font-medium leading-snug text-on-surface sm:text-2xl lg:text-[1.75rem] 2xl:text-[2.125rem] short:mt-3 short:lg:text-2xl tall:text-[calc(2.125*var(--hero-tall-rem))]">
             {/* רווח לא-שביר לפני המקף — "– אצלך." לא נשבר לשורה משלו */}
-            ארון הספרים היהודי{'\u00A0'}– אצלך.
+            ארון ספרי הקודש{'\u00A0'}– אצלך.
           </p>
 
           <p className="mt-4 max-w-xl text-base md:text-justify leading-relaxed text-on-surface-variant lg:text-lg 2xl:max-w-2xl 2xl:text-xl short:mt-3 short:lg:text-base tall:max-w-[calc(42*var(--hero-tall-rem))] tall:text-[calc(1.25*var(--hero-tall-rem))]">

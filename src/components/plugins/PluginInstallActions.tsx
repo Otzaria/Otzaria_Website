@@ -1,10 +1,19 @@
 'use client'
 
+import { useState } from 'react'
+import dynamic from 'next/dynamic'
 import Button from '@/components/ui/Button'
 import { buttonClasses, type ButtonSize, type ButtonVariant } from '@/components/ui/buttonStyles'
 import { cx } from '@/components/ui/cx'
 import DirectInstallButton from '@/components/plugins/DirectInstallButton'
 import type { DirectInstallState } from '@/components/plugins/useDirectInstall'
+import { reloadOnChunkError } from '@/lib/chunkLoadRecovery'
+
+// נטען רק בלחיצה על "אפשרויות הורדה" — לא מכביד על כרטיסי הקטלוג
+const ServiceDownloadDialog = dynamic(
+  () => import('@/components/plugins/service/ServiceDownloadDialog').catch(reloadOnChunkError),
+  { ssr: false }
+)
 
 /**
  * צמד הפעולות של תוסף — "הורדה" (קישור לקובץ, בלשונית חדשה) ו"התקנה ישירה" (otzaria:// דרך
@@ -20,6 +29,7 @@ import type { DirectInstallState } from '@/components/plugins/useDirectInstall'
  *   page   — עמוד התוסף: ההורדה filled (הפעולה הראשית של העמוד), ההתקנה outlined.
  * layout — row: זה לצד זה, כל אחד גדל (כרטיס, עמוד); stack: אחד מעל השני (עמודת פעולות בשורת חיפוש
  *   מ-sm).
+ * תוסף שירות (hasService) — במקום שני הכפתורים: "אפשרויות הורדה", שפותח את חלון המתקין / התוסף.
  */
 type Emphasis = 'card' | 'page'
 
@@ -32,6 +42,8 @@ export interface InstallablePlugin {
   id: string
   downloadUrl: string
   supportsDirectInstall?: boolean
+  name?: string
+  hasService?: boolean
 }
 
 export function canDirectInstall(plugin: InstallablePlugin): boolean {
@@ -49,7 +61,7 @@ export default function PluginInstallActions({
 }: {
   plugin: InstallablePlugin
   installState: DirectInstallState
-  onInstall: () => void
+  onInstall: (downloadUrl?: string) => void
   emphasis?: Emphasis
   layout?: 'row' | 'stack'
   /** הטקסט של כפתור ההתקנה במצב רגיל (עמוד התוסף: "התקנה ישירה לאוצריא") */
@@ -58,6 +70,26 @@ export default function PluginInstallActions({
 }) {
   const { download, install, size } = VARIANTS[emphasis]
   const grow = layout === 'row' ? 'flex-[1_1_auto] min-w-fit' : 'w-full'
+  const [serviceDialogOpen, setServiceDialogOpen] = useState(false)
+
+  if (plugin.hasService) {
+    return (
+      <div className={cx('flex gap-2', layout === 'row' ? 'flex-wrap' : 'flex-col', className)}>
+        <Button variant={download} size={size} icon="install_desktop" className={grow} onClick={() => setServiceDialogOpen(true)} aria-haspopup="dialog">
+          אפשרויות הורדה
+        </Button>
+        {serviceDialogOpen && (
+          <ServiceDownloadDialog
+            plugin={plugin}
+            installState={installState}
+            onInstall={onInstall}
+            canInstall={canDirectInstall(plugin)}
+            onClose={() => setServiceDialogOpen(false)}
+          />
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className={cx('flex gap-2', layout === 'row' ? 'flex-wrap' : 'flex-col', className)}>
@@ -68,7 +100,7 @@ export default function PluginInstallActions({
         <DirectInstallButton
           pluginId={plugin.id}
           installState={installState}
-          onInstall={onInstall}
+          onInstall={() => onInstall()}
           showIcons
           idleLabel={installLabel}
           // הגליפים ש-DirectInstallButton מרנדר (span של material-symbols) — בגודל אייקון הכפתור;

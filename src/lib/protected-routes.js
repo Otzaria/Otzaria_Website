@@ -18,15 +18,17 @@ export const PROTECTED_PREFIXES = [
   '/library/users',
   '/library/info',
   '/library/acronyms',
-  '/library/dicta-books',
   '/library/ocr-training',
   '/library/ocr-lines',
   '/library/page-proof',
+  '/library/tzurat-hadaf',
   '/library/corrections',
   '/api/admin',
   '/api/ocr-training',
   '/api/ocr-lines',
   '/api/page-proof',
+  '/api/training-proof',
+  '/api/tzurat-hadaf',
   '/api/library/book-info',
   '/api/library/book-acronyms',
   '/api/upload-text',
@@ -35,5 +37,9 @@ export const PROTECTED_PREFIXES = [
   '/api/search-feedback/admin',
 ]
 
+// דף ניהול השירות של תוסף (/plugins/<id>/service). [id] — תבנית הדף עצמו, ל-check-prefetch.
+const PLUGIN_SERVICE_PAGE_RE = /^\/plugins\/(?:[a-f0-9]{24}|\[id\])\/service(?:\/|$)/i
+
 export const isProtectedPath = (path) =>
-  PROTECTED_PREFIXES.some((p) => path === p || path.startsWith(p + '/'))
+  PROTECTED_PREFIXES.some((p) => path === p || path.startsWith(p + '/')) ||
+  PLUGIN_SERVICE_PAGE_RE.test(path)

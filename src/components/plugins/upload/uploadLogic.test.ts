@@ -4,6 +4,8 @@ import {
   buildUploadFormData,
   manifestToFormValues,
   readManifestFields,
+  isServiceUpload,
+  uploadRedirectTarget,
   uploadSuccessMessage,
   validateUploadManifest,
   validateUploadSubmission,
@@ -121,5 +123,28 @@ describe('uploadSuccessMessage', () => {
   it('מוסיף את ההערה על התגית רק כש-designCompliant === false', () => {
     expect(uploadSuccessMessage({})).toBe('התוסף הועלה בהצלחה ונשלח לאישור מנהל. לאחר האישור הוא יופיע בחנות התוספים.')
     expect(uploadSuccessMessage({ designCompliant: false })).toContain('(התגית "מראה תואם לאוצריא" לא נוספה')
+  })
+})
+
+describe('תוסף שירות בהעלאה', () => {
+  it('requiresService נשלח רק כשסומן', () => {
+    const args = { formData: FILLED, pluginFile: new File(['x'], 'a.otzplugin'), imageFile: null, screenshotFiles: [] }
+    expect(buildUploadFormData(args).has('requiresService')).toBe(false)
+    expect(buildUploadFormData({ ...args, requiresService: false }).has('requiresService')).toBe(false)
+    expect(buildUploadFormData({ ...args, requiresService: true }).get('requiresService')).toBe('true')
+  })
+
+  it('uploadRedirectTarget — לדף הגשת השירות רק כשהשרת קלט תוסף שירות', () => {
+    expect(uploadRedirectTarget({ serviceSubmissionUrl: '/plugins/abc/service', plugin: { id: 'abc', hasService: true } })).toBe('/plugins/abc/service')
+    expect(uploadRedirectTarget({ plugin: { id: 'abc', hasService: true } })).toBe('/plugins/abc/service')
+    expect(uploadRedirectTarget({ plugin: { id: 'abc', hasService: false } })).toBe('/plugins')
+    expect(uploadRedirectTarget({ serviceSubmissionUrl: 'https://evil.example/x' })).toBe('/plugins')
+    expect(uploadRedirectTarget(null)).toBe('/plugins')
+  })
+
+  it('הודעת הצלחה לתוסף שירות מפנה להשלמת ההגשה', () => {
+    expect(isServiceUpload({ plugin: { hasService: true } })).toBe(true)
+    expect(isServiceUpload({})).toBe(false)
+    expect(uploadSuccessMessage({ plugin: { hasService: true } })).toMatch(/להשלים את הגשת השירות/)
   })
 })

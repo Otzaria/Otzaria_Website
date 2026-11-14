@@ -9,6 +9,7 @@ import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags'
 import { parsePluginRef } from '@/lib/pluginRef'
 import { hasPluginsAccess } from '@/lib/roles'
 import { requireAccess, badRequest, notFound, serverError } from '@/lib/apiResponse'
+import { isServicePlugin, serviceBlockedBody } from '@/lib/servicePlugins/existingPaths'
 
 // DELETE /api/admin/plugins/[id]/versions/[version]
 // מחיקת גרסה ארכיונית ספציפית (קובץ + רשומת מטא-דאטה). לא ניתן למחוק את הגרסה
@@ -31,6 +32,9 @@ export async function DELETE(request, { params }) {
     const plugin = await Plugin.findById(id)
     if (!plugin) {
       return notFound('Plugin not found')
+    }
+    if (isServicePlugin(plugin)) {
+      return NextResponse.json(serviceBlockedBody('deleteVersion', id), { status: 409 })
     }
 
     if (version === plugin.version) {

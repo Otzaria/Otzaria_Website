@@ -23,12 +23,6 @@ const WIKI_URL = 'https://github.com/Otzaria/otzaria/wiki';
 // מדריכים נוספים (תוכן ייחודי שאינו בוויקי)
 const MORE_GUIDES = [
   {
-    href: '/docs/dicta',
-    icon: 'edit',
-    title: 'מדריך לטיפול בספרי דיקטה',
-    description: 'יצירת כותרות וניווט בספרים — כולל כלים אוטומטיים',
-  },
-  {
     href: '/docs/development',
     icon: 'code',
     title: 'מדריך פיתוח — עריכת אוצריא',
@@ -39,6 +33,12 @@ const MORE_GUIDES = [
     icon: 'fact_check',
     title: 'הנחיות להגהת עמודים',
     description: 'דף אחד קצר למתנדבים: מבנה, טקסט, קישורים וזמנים — עם תמונות',
+  },
+  {
+    href: '/docs/tzurat-hadaf',
+    icon: 'auto_stories',
+    title: 'הנחיות לצורת הדף',
+    description: 'השוואת עמודי הגמרא שלנו לדפוס וילנא: החלטות נוסח, שבירת שורות ודיווחים',
   },
 ];
 

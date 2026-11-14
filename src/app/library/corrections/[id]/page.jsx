@@ -12,24 +12,9 @@ import ChangeDiff from '@/components/corrections/ChangeDiff'
 import ReportActions from '@/components/corrections/ReportActions'
 import HistoryPanel from '@/components/corrections/HistoryPanel'
 import { committedNewLine } from '@/lib/corrections/unified-diff'
-
-const ERRORS = {
-  stale_view: 'התצוגה לא עדכנית — הדיווח או המקור השתנו מאז שנטען. רעננו ובדקו שוב.',
-  claim_conflict: 'מתנדב אחר כבר לקח את הדיווח.',
-  approved_locked: 'הדיווח כבר אושר ונמצא בפרסום — אי אפשר לקחת אותו לטיפול. אפשר רק לדחות.',
-  publish_in_progress: 'הפרסום ל-GitHub מתבצע כרגע. נסו שוב בעוד דקה.',
-  not_approved: 'הדיווח אינו ממתין לפרסום.',
-  claim_required: 'יש לקחת את הדיווח לטיפול קודם (או שתוקף השיוך פג).',
-  source_not_resolved: 'המקור לא אותר בוודאות או השתנה — אי אפשר לאשר. אפשר לבחור מקור ידנית ולערוך.',
-  final_state: 'הדיווח כבר סגור.',
-  reason_required: 'חובה לציין סיבה.',
-  service_disabled: 'שירות הבדיקה אינו פעיל.',
-  path_not_allowed: 'הנתיב אינו מותר (רק קבצי txt תחת תיקיות הספרים במאגר).',
-  no_proposal: 'אין הצעת תיקון — השתמשו ב"עריכה ואז אישור".',
-  proposal_identical: 'הנוסח זהה למקור.',
-  source_unavailable: 'לא ניתן לקרוא את המקור מ-GitHub כרגע.',
-  Forbidden: 'אין לך הרשאה לפעולה זו.',
-}
+import { errorText } from '@/lib/corrections/error-text'
+import { githubFileUrl } from '@/lib/corrections/github-link'
+import { reportedLinePick } from '@/lib/corrections/reported-line'
 
 const SOURCE_STATUS = {
   exact: 'אותר בדיוק',
@@ -54,13 +39,14 @@ export default function CorrectionReportPage() {
   const [stale, setStale] = useState(false)
   const [contextLines, setContextLines] = useState(null)
   const [expanding, setExpanding] = useState(false)
+  const [sourcePick, setSourcePick] = useState(null)
   const shown = useRef(null)
 
   const load = useCallback(async () => {
     try {
       const res = await fetch(`/api/corrections/reports/${id}${contextLines === null ? '' : `?context=${contextLines}`}`, { cache: 'no-store' })
       const body = await res.json()
-      if (!res.ok) throw new Error(ERRORS[body.error] || body.error || 'שגיאה בטעינה')
+      if (!res.ok) throw new Error(errorText(body, 'שגיאה בטעינה'))
       setDetail(body)
       setStale(false)
       shown.current = { generation: body.report.generation, blob: body.source?.blobSha ?? null }
@@ -87,6 +73,15 @@ export default function CorrectionReportPage() {
     return () => clearInterval(t)
   }, [id])
 
+  // בקשה שקטה (בלי busy והודעה בראש הדף) — לבדיקות רקע כמו תקינות הנתיב בבחירת מקור ידנית
+  const probe = useCallback(async (body) => {
+    const res = await fetch(`/api/corrections/reports/${id}/action`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    })
+    return { ok: res.ok, data: await res.json() }
+  }, [id])
+
+  // opts.quiet — השגיאה חוזרת למקרא ({errorText}) ומוצגת ליד השדות, לא בראש הדף.
   const run = async (body, opts = {}) => {
     setBusy(true)
     setNotice(null)
@@ -96,7 +91,8 @@ export default function CorrectionReportPage() {
       })
       const data = await res.json()
       if (!res.ok) {
-        setNotice({ tone: 'danger', text: ERRORS[data.error] || data.error || 'הפעולה נכשלה' })
+        if (opts.quiet) return { errorText: errorText(data) }
+        setNotice({ tone: 'danger', text: errorText(data) })
         if (data.error === 'stale_view' || data.error === 'claim_conflict') setStale(true)
         // לקיחה אוטומטית הצליחה והפעולה נכשלה: הגרסה התקדמה — מרעננים כדי שהניסיון הבא לא ייפול על "לא עדכני".
         if (opts.reloadOnFail) await load()
@@ -118,6 +114,7 @@ export default function CorrectionReportPage() {
       await load()
       return true
     } catch {
+      if (opts.quiet) return { errorText: 'שגיאת רשת' }
       setNotice({ tone: 'danger', text: 'שגיאת רשת' })
       return false
     } finally {
@@ -140,6 +137,12 @@ export default function CorrectionReportPage() {
         before: rev?.originalLine ?? '', after: targetLine, context: null, lineIndex: null, path: null,
         contextNote: `הקשר מהקובץ אינו זמין (${source ? SOURCE_STATUS[source.status] || source.status : sourceError ? 'המקור אינו זמין כרגע' : 'המקור לא נטען'}) — מוצגת השורה כפי שנשלחה מהתוכנה.`,
       }
+  // השורה לא אותרה בוודאות אבל הקובץ כן: קישור לספר בגיטהאב, ממוקד בשורה שדווחה (אם ידועה), לחיפוש ידני
+  const githubUrl = source?.path && !fileDiff
+    ? githubFileUrl({ repo: source.repo, ref: source.ref, path: source.path, lineIndex: source.lineIndex ?? report.location?.lineIndex ?? null })
+    : null
+  // מספר השורה שנשלח בדיווח (בתוסף תיקוני ספרים — בדרך כלל מדויק): טעינה ישירה מהמקור, בלי חיפוש בגיטהאב
+  const reportedPick = reportedLinePick({ report, source, located: Boolean(fileDiff) })
   const expandContext = () => {
     setExpanding(true)
     setContextLines((source?.context?.contextLines ?? 3) + 10)
@@ -147,11 +150,17 @@ export default function CorrectionReportPage() {
 
   return (
     <div className="space-y-4">
-      {/* נשאר גלוי בגלילה, מתחת לכותרת האתר (sticky top-0, h-16) */}
-      <div className="sticky top-16 z-40 -mx-1 px-1 py-2 bg-background/95 backdrop-blur-sm">
+      {/* נשאר גלוי בגלילה, מתחת לכותרת האתר (sticky top-0, h-16) — כולל הודעת התוצאה/השגיאה של הפעולה האחרונה */}
+      <div className="sticky top-16 z-40 -mx-1 px-1 py-2 bg-background/95 backdrop-blur-sm space-y-2">
         <Link href="/library/corrections" className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
-          <span className="material-symbols-outlined text-base">arrow_forward</span> חזרה לתור
+          <span className="material-symbols-outlined text-base">arrow_forward</span> חזרה לדיווחים
         </Link>
+        {notice && (
+          <div role="status" className={`rounded-lg p-3 border flex items-start justify-between gap-2 ${notice.tone === 'success' ? 'bg-success-50 border-success-200 text-success-800' : 'bg-danger-50 border-danger-200 text-danger-700'}`}>
+            <span>{notice.text}</span>
+            <button type="button" onClick={() => setNotice(null)} aria-label="סגירת ההודעה" className="material-symbols-outlined text-base opacity-70 hover:opacity-100">close</button>
+          </div>
+        )}
       </div>
 
       {stale && (
@@ -160,7 +169,6 @@ export default function CorrectionReportPage() {
           <button onClick={load} className="px-3 py-1 rounded-lg bg-warning-600 text-white text-sm">רענון</button>
         </div>
       )}
-      {notice && <div className={`rounded-lg p-3 border ${notice.tone === 'success' ? 'bg-success-50 border-success-200 text-success-800' : 'bg-danger-50 border-danger-200 text-danger-700'}`}>{notice.text}</div>}
 
       <header className="glass rounded-xl p-4 space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -170,6 +178,7 @@ export default function CorrectionReportPage() {
         <div className="text-xs text-on-surface/60 flex flex-wrap gap-x-4">
           <span>{report.kind === 'text_correction' ? 'הצעת תיקון' : 'דיווח חופשי'}</span>
           <span dir="ltr">{report.sourceFolder}</span>
+          {Number.isSafeInteger(report.location?.lineIndex) && <span>שורה {report.location.lineIndex + 1} (לפי הדיווח)</span>}
           <span>גרסת ספרייה: {report.location?.libraryBuildId || report.libraryVersion}</span>
           {report.manual?.handoffLabel && <span>סיבת העברה: {report.manual.handoffLabel}</span>}
           <span>נקלט: {new Date(report.createdAt).toLocaleString('he-IL')}</span>
@@ -219,20 +228,55 @@ export default function CorrectionReportPage() {
               </div>
             )}
           />
+          {(reportedPick || githubUrl) && (
+            <div className="glass rounded-xl p-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+              <span>מיקום השורה לא אותר בוודאות.</span>
+              {reportedPick && report.state === 'open' && (
+                <button
+                  type="button"
+                  onClick={() => setSourcePick({ ...reportedPick, key: Date.now() })}
+                  className="px-3 py-1.5 rounded-lg bg-primary text-on-primary font-medium flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-base">find_in_page</span>
+                  הצגת שורה {reportedPick.lineIndex + 1} שדווחה, מהמקור
+                </button>
+              )}
+              {githubUrl && (
+                <a href={githubUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline">
+                  <span className="material-symbols-outlined text-base">open_in_new</span>
+                  פתיחת הספר בגיטהאב{githubUrl.includes('#L') ? ' (סביב השורה שדווחה)' : ''}
+                </a>
+              )}
+            </div>
+          )}
           {source?.candidates?.length > 0 && (
             <section className="glass rounded-xl p-4">
-              <h3 className="font-bold mb-2">מועמדים (התאמה לא ודאית — לבחירה ידנית בלבד)</h3>
+              <h3 className="font-bold">מועמדים (התאמה לא ודאית — לבחירה ידנית בלבד)</h3>
+              <p className="text-xs text-on-surface/60 mb-2">לחיצה על מועמד טוענת אותו ב&quot;בחירת מקור ידנית&quot;.</p>
               <ul className="text-sm space-y-1">
-                {source.candidates.map((c, i) => (
-                  <li key={i} className="whitespace-pre-wrap break-words"><span dir="ltr" className="text-xs text-on-surface/50 ml-2">{c.path}{Number.isInteger(c.lineIndex) ? `:${c.lineIndex + 1}` : ''}</span>{c.line}</li>
-                ))}
+                {source.candidates.map((c, i) => {
+                  const path = c.path || source.path
+                  const lineIndex = Number.isInteger(c.lineIndex) ? c.lineIndex : null
+                  return (
+                    <li key={i}>
+                      <button
+                        type="button"
+                        disabled={!path}
+                        onClick={() => setSourcePick({ path, lineIndex, key: Date.now() })}
+                        className="w-full text-right whitespace-pre-wrap break-words rounded-lg px-2 py-1 hover:bg-info-50 disabled:hover:bg-transparent disabled:cursor-default cursor-pointer"
+                      >
+                        <span dir="ltr" className="text-xs text-on-surface/50 ml-2">{c.path}{lineIndex !== null ? `:${lineIndex + 1}` : ''}</span>{c.line}
+                      </button>
+                    </li>
+                  )
+                })}
               </ul>
             </section>
           )}
         </>
       )}
 
-      <ReportActions detail={detail} meId={session?.user?.id} busy={busy} run={run} />
+      <ReportActions detail={detail} meId={session?.user?.id} busy={busy} run={run} probe={probe} sourcePick={sourcePick} />
       <HistoryPanel detail={detail} />
     </div>
   )

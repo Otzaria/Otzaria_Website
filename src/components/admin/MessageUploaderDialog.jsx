@@ -1,152 +1,118 @@
 'use client'
 
-import { useState } from 'react'
-import { useDialog } from '@/components/providers/DialogContext'
-import Loader from '@/components/ui/Loader'
+import { useId, useState } from 'react'
+import Button from '@/components/ui/Button'
+import Dialog from '@/components/ui/Dialog'
+import { useToast } from '@/components/ui/Toast'
+import { FIELD_ERROR, FIELD_LABEL, fieldClasses } from '@/components/ui/fieldStyles'
+import { requestJson } from '@/components/admin/list/adminRequest'
+
+const SEND_FAILED = 'לא הצלחנו לשלוח את ההודעה. נסה שוב.'
 
 /**
- * MessageUploaderDialog - חלון שליחת הודעה למשתמש שהעלה ספר/עמוד
- * (מדף ניהול ההעלאות).
+ * חלון שליחת הודעה למשתמש — משותף למסך ההעלאות (למי שהעלה ספר/עמוד) ולמסך "משתמשים" (מהשורה ומהמגירה).
+ * ההודעה נשמרת באתר (POST /api/messages/send-admin) ומופיעה אצלו שם; היא לא נשלחת בדואר — וזה נאמר בחלון,
+ * כי הצגת הכתובת לבדה רומזת לדואר.
  *
- * עצמאית: מחזיקה את שדות הטופס (נושא/תוכן) ואת מצב השליחה, ומבצעת בעצמה
- * את שרשרת הקריאות ל-API (איתור המשתמש לפי אימייל ואז שליחת ההודעה).
- * ההורה אחראי להרכיב את הקומפוננטה רק כאשר recipient קיים, ולפרק אותה
- * כדי לאפס את הטופס בפתיחה הבאה - בדיוק כמו ההתנהגות המקורית.
+ * הנמען: מזהה המשתמש מגיע עם ההעלאה (recipient.id — מהשרת, בעמוד ההעלאות), וההודעה נשלחת ישר.
+ * רק כשאין מזהה (רשימה שנטענה מחדש מ-/api/admin/uploads/list, שלא מחזיר אותו) — חיפוש לפי הדואר
+ * ברשימת המשתמשים, כמו קודם (איטי: הרשימה גדולה).
+ * "שלח הודעה" מושבת עד שיש נושא ותוכן. הצלחה — הודעה קופצת ("ההודעה נשלחה למשה") והחלון נסגר;
+ * כשל — שגיאה בתוך החלון, והטקסט נשמר. בזמן שליחה אי אפשר לסגור. הבקשות דרך list/adminRequest: התחברות שפגה
+ * (הפניה לדף ההתחברות, תשובת HTML) — שגיאה עם הסבר, לא "הצלחה".
  *
  * Props:
- * - recipient: { email, name } - נמען ההודעה
+ * - recipient: { id?, email, name } - נמען ההודעה
  * - initialSubject: נושא ברירת המחדל של ההודעה
  * - onClose(): סגירת הדיאלוג
  */
 export default function MessageUploaderDialog({ recipient, initialSubject, onClose }) {
-  const { showAlert } = useDialog()
-  const [messageSubject, setMessageSubject] = useState(initialSubject || '')
-  const [messageText, setMessageText] = useState('')
-  const [sendingMessage, setSendingMessage] = useState(false)
+  const toast = useToast()
+  const [subject, setSubject] = useState(initialSubject || '')
+  const [text, setText] = useState('')
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState('')
+  const subjectId = useId()
+  const textId = useId()
+  const errorId = useId()
+  const ready = subject.trim() !== '' && text.trim() !== ''
 
-  const handleSendMessageSubmit = async () => {
-    if (!messageSubject.trim() || !messageText.trim()) {
-      showAlert('שגיאה', 'נא למלא את כל השדות')
-      return
-    }
+  const findRecipientId = async () => {
+    if (recipient.id) return recipient.id
+    const fallback = 'לא הצלחנו למצוא את המשתמש. נסה שוב.'
+    // רשימת המשתמשים המלאה איטית — מגבלת זמן ארוכה מהרגיל
+    const data = await requestJson('/api/admin/users', { fallback, timeoutMs: 120000 })
+    if (!data.success || !Array.isArray(data.users)) throw new Error(fallback)
+    const user = data.users.find((u) => u.email === recipient.email)
+    if (!user) throw new Error('לא נמצא משתמש עם כתובת הדואר הזו.')
+    return user._id
+  }
 
+  const send = async () => {
+    if (!ready || sending) return
+    setSending(true)
+    setError('')
     try {
-      setSendingMessage(true)
-
-      // מציאת המשתמש לפי אימייל
-      const usersResponse = await fetch('/api/admin/users')
-      const usersData = await usersResponse.json()
-
-      if (!usersData.success) {
-        showAlert('שגיאה', 'שגיאה בטעינת רשימת המשתמשים')
-        return
-      }
-
-      const user = usersData.users.find(u => u.email === recipient.email)
-      if (!user) {
-        showAlert('שגיאה', 'לא נמצא משתמש עם כתובת אימייל זו')
-        return
-      }
-
-      const response = await fetch('/api/messages/send-admin', {
+      const recipientId = await findRecipientId()
+      const result = await requestJson('/api/messages/send-admin', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          recipientId: user._id,
-          subject: messageSubject,
-          message: messageText,
-          sendToAll: false
-        })
+        body: { recipientId, subject, message: text, sendToAll: false },
+        fallback: SEND_FAILED,
       })
-
-      const result = await response.json()
-      if (result.success) {
-        showAlert('הצלחה', 'ההודעה נשלחה בהצלחה')
-        onClose()
-      } else {
-        showAlert('שגיאה', result.error || 'שגיאה בשליחת הודעה')
-      }
-    } catch (error) {
-      showAlert('שגיאה', 'שגיאה בשליחת הודעה')
+      if (!result.success) throw new Error(SEND_FAILED)
+      toast.show({ message: `ההודעה נשלחה ל${recipient.name}` })
+      onClose()
+    } catch (e) {
+      setError(e?.message || SEND_FAILED)
     } finally {
-      setSendingMessage(false)
+      setSending(false)
     }
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-      onClick={onClose}
+    <Dialog
+      title="שלח הודעה"
+      subtitle={<>אל {recipient.name} (<bdi dir="ltr">{recipient.email}</bdi>). ההודעה תופיע אצלו באתר, ולא תישלח בדואר.</>}
+      onClose={onClose}
+      dismissible={!sending}
+      footer={(
+        <>
+          <Button variant="text" size="sm" onClick={onClose} disabled={sending}>ביטול</Button>
+          <Button variant="filled" size="sm" icon="send" onClick={send} loading={sending} disabled={!ready}>
+            {sending ? 'שולח…' : 'שלח הודעה'}
+          </Button>
+        </>
+      )}
     >
-      <div
-        className="flex flex-col bg-white rounded-2xl w-full max-w-2xl shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh]"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="p-6 border-b border-neutral-200 flex-shrink-0 bg-white rounded-t-2xl">
-          <h3 className="text-2xl font-bold text-on-surface flex items-center gap-3">
-            <span className="material-symbols-outlined text-3xl text-primary">send</span>
-            שלח הודעה למשתמש
-          </h3>
-          <p className="text-sm text-neutral-600 mt-2">
-            נמען: <span className="font-medium">{recipient.name}</span> ({recipient.email})
-          </p>
+      <form className="flex flex-col gap-5" onSubmit={(e) => { e.preventDefault(); send() }}>
+        <div>
+          <label htmlFor={subjectId} className={FIELD_LABEL}>נושא</label>
+          <input
+            id={subjectId}
+            type="text"
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            className={fieldClasses()}
+            disabled={sending}
+            required
+          />
         </div>
 
-        {/* Content */}
-        <div className="p-6 space-y-5 overflow-y-auto custom-scrollbar flex-1">
-          <div>
-            <label className="block text-sm font-bold text-on-surface mb-2">נושא</label>
-            <input
-              type="text"
-              value={messageSubject}
-              onChange={(e) => setMessageSubject(e.target.value)}
-              placeholder="נושא ההודעה..."
-              className="w-full px-4 py-3 border border-surface-variant rounded-lg focus:outline-none focus:border-primary bg-white text-on-surface shadow-sm"
-              disabled={sendingMessage}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold text-on-surface mb-2">תוכן ההודעה</label>
-            <textarea
-              value={messageText}
-              onChange={(e) => setMessageText(e.target.value)}
-              placeholder="כתוב את ההודעה שלך כאן..."
-              className="w-full px-4 py-3 border border-surface-variant rounded-lg focus:outline-none focus:border-primary bg-white text-on-surface shadow-sm min-h-[150px] resize-none"
-              disabled={sendingMessage}
-            />
-          </div>
+        <div>
+          <label htmlFor={textId} className={FIELD_LABEL}>תוכן ההודעה</label>
+          <textarea
+            id={textId}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="כתוב את ההודעה כאן"
+            aria-describedby={error ? errorId : undefined}
+            className={fieldClasses({ kind: 'textarea', className: 'resize-y' })}
+            disabled={sending}
+            required
+          />
+          {error && <p id={errorId} role="alert" className={FIELD_ERROR}>{error}</p>}
         </div>
-
-        {/* Footer */}
-        <div className="flex gap-3 p-6 border-t border-neutral-200 bg-neutral-50 rounded-b-2xl flex-shrink-0">
-          <button
-            onClick={handleSendMessageSubmit}
-            disabled={sendingMessage}
-            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-primary text-on-primary rounded-lg hover:bg-accent transition-all shadow-md font-bold disabled:opacity-70 disabled:cursor-not-allowed hover:-translate-y-0.5"
-          >
-            {sendingMessage ? (
-              <>
-                <Loader size="inline" decorative />
-                <span>שולח...</span>
-              </>
-            ) : (
-              <>
-                <span className="material-symbols-outlined">send</span>
-                <span>שלח הודעה</span>
-              </>
-            )}
-          </button>
-          <button
-            onClick={onClose}
-            disabled={sendingMessage}
-            className="px-6 py-3 bg-white border border-neutral-300 text-neutral-700 rounded-lg hover:bg-neutral-50 transition-colors font-medium"
-          >
-            ביטול
-          </button>
-        </div>
-      </div>
-    </div>
+      </form>
+    </Dialog>
   )
 }

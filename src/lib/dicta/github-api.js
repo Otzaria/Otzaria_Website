@@ -410,7 +410,7 @@ export function createRepoClient({ repo, token = null, fetchImpl = fetch, timeou
     },
     async getPull(number) {
       const pr = await call(`/pulls/${Number(number)}`);
-      return { number: pr.number, url: pr.html_url, state: pr.state, merged: Boolean(pr.merged), mergeCommitSha: pr.merge_commit_sha || null };
+      return { number: pr.number, url: pr.html_url, state: pr.state, merged: Boolean(pr.merged), mergeCommitSha: pr.merge_commit_sha || null, body: pr.body || '' };
     },
     /** fields: { state?: 'open'|'closed', title?, body? } */
     async updatePull(number, fields) {

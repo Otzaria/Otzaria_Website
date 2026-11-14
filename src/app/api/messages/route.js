@@ -5,7 +5,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import mongoose from 'mongoose';
 import { hasAnyAdminAccess } from '@/lib/roles';
-import { getAdminMessagesList } from '@/lib/adminMessages';
+import { formatMessage, getAdminMessagesList } from '@/lib/adminMessages';
 import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
 import { unauthorized, badRequest, serverError } from '@/lib/apiResponse';
 
@@ -19,7 +19,7 @@ export async function GET(request) {
         const { searchParams } = new URL(request.url);
         const showAll = searchParams.get('allMessages');
 
-        if (hasAnyAdminAccess(session.user.role) && showAll === 'true') {
+        if (hasAnyAdminAccess(session.user) && showAll === 'true') {
              // תור הניהול המשותף — ללא מטמון בכוונה: ה-route הזה משמש גם לרענון
              // מיידי בצד הלקוח אחרי פעולה (ראו admin/messages/page.jsx).
              // השאילתה עצמה זהה לזו שמוזנת ל-unstable_cache בדף
@@ -38,40 +38,13 @@ export async function GET(request) {
         };
 
         const messages = await Message.find(query)
-            .populate('sender', 'name email role')
+            .populate('sender', 'name email role roles')
             .populate('recipient', 'name email')
-            .populate('replies.sender', 'name email role')
+            .populate('replies.sender', 'name email role roles')
             .sort({ createdAt: -1 })
             .lean();
 
-        const formattedMessages = messages.map(msg => ({
-            id: msg._id.toString(),
-            subject: msg.subject,
-            content: msg.content,
-            sender: msg.sender,
-            recipient: msg.recipient,
-            isRead: msg.isRead,
-            readBy: (msg.readBy || []).map(id => id.toString()),
-            messageType: msg.messageType || 'user',
-            allowReplies: msg.allowReplies !== false,
-            // הודעת מערכת מזוהה לפי messageType — populate מחזיר null גם למשתמש שנמחק
-            senderName: msg.sender?.name
-                || (msg.messageType === 'system' ? (msg.senderLabel || 'מערכת אוצריא') : 'משתמש לא ידוע'),
-            senderEmail: msg.sender?.email,
-            recipientName: msg.recipient?.name || null,
-            recipientEmail: msg.recipient?.email || null,
-            status: !msg.isRead ? 'unread' : (msg.replies?.length > 0 ? 'replied' : 'read'),
-            createdAt: msg.createdAt,
-            replies: (msg.replies || []).map(r => ({
-                id: r._id.toString(),
-                sender: r.sender?._id || r.sender,
-                senderName: r.sender?.name,
-                senderEmail: r.sender?.email,
-                senderRole: r.sender?.role,
-                content: r.content,
-                createdAt: r.createdAt
-            }))
-        }));
+        const formattedMessages = messages.map(formatMessage);
 
         return NextResponse.json({ success: true, messages: formattedMessages });
     } catch (error) {

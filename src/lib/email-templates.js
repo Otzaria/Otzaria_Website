@@ -39,7 +39,7 @@ export function renderPluginChanges(changes = []) {
     `;
 }
 
-// תבנית בסיסית למייל תזכורת אוטומטית (עמודי ספר רגיל / ספר דיקטה).
+// תבנית בסיסית למייל תזכורת אוטומטית על עמודי ספר.
 // bodyHtml חייב להיות HTML שכבר עבר escape במקום הקריאה.
 export function buildStaleReminderHtml({ headingTitle, bodyHtml, ctaUrl, ctaLabel, unsubUrl }) {
     const logoUrl = `${process.env.NEXTAUTH_URL}/logo.png`;

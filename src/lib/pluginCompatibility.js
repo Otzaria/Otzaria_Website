@@ -86,9 +86,14 @@ export function isCompatibleWithApp(entry, appVersion) {
   }
 }
 
+// תוסף שירות: בחירה אוטומטית לא תבחר גרסה היסטורית — היא אינה יודעת איזה שירות מותקן.
+function autoSelectableEntries(plugin) {
+  return plugin.hasService === true ? [buildLiveVersionEntry(plugin)] : buildVersionEntries(plugin)
+}
+
 // גרסת התוסף הגבוהה ביותר התואמת לגרסת אוצריא נתונה, או null אם אין כזו.
 export function resolveCompatibleVersion(plugin, appVersion) {
-  return buildVersionEntries(plugin).find((entry) => isCompatibleWithApp(entry, appVersion)) || null
+  return autoSelectableEntries(plugin).find((entry) => isCompatibleWithApp(entry, appVersion)) || null
 }
 
 // גרסת האוצריא הנמוכה ביותר שעדיין מריצה גרסה כלשהי של התוסף — הרצפה הנמוכה
@@ -97,7 +102,7 @@ export function resolveCompatibleVersion(plugin, appVersion) {
 // null כשלגרסה כלשהי אין רצפה כלל (ואז "ישן מדי" אינו ההסבר) או בנתון פגום.
 export function lowestSupportedAppVersion(plugin) {
   try {
-    const entries = buildVersionEntries(plugin)
+    const entries = autoSelectableEntries(plugin)
     if (entries.length === 0) return null
     let lowest = null
     for (const entry of entries) {
@@ -141,7 +146,9 @@ export function invalidAppVersionMessage() {
 // נשען על השדה versions שכבר ממוין מהגבוה לנמוך.
 export function resolveForAppVersion(publicPlugin, appVersion) {
   if (!appVersion) return publicPlugin
-  const versions = publicPlugin.versions || []
+  const versions = publicPlugin.hasService === true
+    ? (publicPlugin.versions || []).filter((v) => v.isLatest)
+    : publicPlugin.versions || []
   const best = versions.find((v) => isCompatibleWithApp(v, appVersion))
   if (!best) return null
 

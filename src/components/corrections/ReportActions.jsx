@@ -1,16 +1,38 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import UnifiedDiff from '@/components/corrections/UnifiedDiff'
+import ManualSourcePicker from '@/components/corrections/ManualSourcePicker'
+import { rebaseLineChange } from '@/lib/corrections/rebase-change'
 
 const btn = 'px-3 py-2 rounded-lg font-medium text-sm disabled:opacity-50 flex items-center gap-1'
 const PUBLISHING = new Set(['ready', 'in_progress', 'unknown_needs_reconcile', 'pr_opened'])
+// הערות סגירה נפוצות — בלחיצה, בלי להקליד כל פעם
+const CLOSE_NOTES = ['טופל מחוץ למערכת', 'כבר תוקן במקור', 'כפילות של דיווח אחר']
+
+// מצבים סגורים שאפשר לפתוח מחדש (תואם REOPENABLE_STATES בשרת); דיווח שפורסם — לא.
+const REOPENABLE = new Set(['closed_rejected', 'closed_manual', 'closed_already_fixed'])
+
+/** דיווח סגור: פתיחה מחדש מחזירה אותו לתור הידני. */
+function ReopenPanel({ report, busy, run }) {
+  if (!REOPENABLE.has(report.state)) return null
+  return (
+    <div className="glass rounded-xl p-4 flex flex-wrap items-center justify-between gap-2">
+      <span className="text-sm">הדיווח סגור. פתיחה מחדש תחזיר אותו לתור הטיפול.</span>
+      <button disabled={busy} onClick={() => run({ action: 'reopen', generation: report.generation })} className={`${btn} glass`}>
+        <span className="material-symbols-outlined text-base">undo</span> פתיחה מחדש
+      </button>
+    </div>
+  )
+}
 
 /**
  * פעולות המתנדב על דיווח. כל שליחה נושאת את ה-generation שהוצג; השרת דוחה תצוגה ישנה.
- * @param {{detail:object, meId:string, busy:boolean, run:(body:object)=>Promise<boolean>}} props
+ * @param {{detail:object, meId:string, busy:boolean, run:(body:object, opts?:object)=>Promise<any>,
+ *          probe?:(body:object)=>Promise<{ok:boolean, data:object}>, sourcePick?:{path:string, lineIndex:(number|null), key:number}|null}} props
+ *   sourcePick — מועמד שנבחר ברשימת המועמדים: פותח את "בחירת מקור ידנית" עם הנתיב והשורה שלו.
  */
-export default function ReportActions({ detail, meId, busy, run }) {
+export default function ReportActions({ detail, meId, busy, run, probe, sourcePick = null }) {
   const { report, source, permissions } = detail
   const g = report.generation
   const rev = report.proposals.find((p) => p.revision === report.currentRevision) || null
@@ -21,16 +43,33 @@ export default function ReportActions({ detail, meId, busy, run }) {
   const [reason, setReason] = useState('')
   const [target, setTarget] = useState('')
   const [handlers, setHandlers] = useState([])
-  const [manualPath, setManualPath] = useState('')
-  const [manualLine, setManualLine] = useState('')
   const [preview, setPreview] = useState(null)
+  const [rebaseInfo, setRebaseInfo] = useState(null)
+  const [activePick, setActivePick] = useState(null)
+  const [seenPick, setSeenPick] = useState(null)
+  const box = useRef(null)
+  const closeNote = useRef(null)
+
+  // מועמד חדש שנבחר בדף פותח את בחירת המקור הידנית (עדכון בזמן רינדור, לא ב-effect)
+  if (sourcePick !== seenPick) {
+    setSeenPick(sourcePick)
+    if (sourcePick) {
+      setActivePick(sourcePick)
+      setMode('source')
+    }
+  }
 
   useEffect(() => {
     if (mode !== 'reassign' || handlers.length) return
     fetch('/api/corrections/handlers').then((r) => r.json()).then((b) => setHandlers(b.users || [])).catch(() => {})
   }, [mode, handlers.length])
 
-  if (report.state !== 'open') return null
+  useEffect(() => {
+    if (sourcePick) box.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [sourcePick])
+
+  if (report.state !== 'open') return <ReopenPanel report={report} busy={busy} run={run} />
+
   const usable = source && (source.status === 'exact' || source.status === 'relocated')
   const baseLine = preview?.line ?? source?.currentLine ?? rev?.originalLine ?? ''
   // ה-diff של מה שיישמר בפועל: הקשר רק מיעד שנטען בוודאות (בחירה ידנית או מקור שאותר בדיוק).
@@ -101,8 +140,20 @@ export default function ReportActions({ detail, meId, busy, run }) {
     return run({ ...body, generation: c.generation }, { reloadOnFail: true })
   }
 
+  const closeManual = async () => {
+    if (await act({ action: 'close_manual', generation: g, note: reason })) setMode(null)
+  }
+
   const openEdit = () => {
-    setNewLine(rev ? (rev.newLine ?? baseLine) : baseLine)
+    // רק מה שהמשתמש דיווח מוחל על השורה העדכנית בגיטהאב; תיקונים שנעשו שם בינתיים נשמרים.
+    if (rev && typeof rev.newLine === 'string' && baseLine && baseLine !== rev.originalLine) {
+      const m = rebaseLineChange(rev.originalLine, rev.newLine, baseLine)
+      setNewLine(m.line)
+      setRebaseInfo(m)
+    } else {
+      setNewLine(rev ? (rev.newLine ?? baseLine) : baseLine)
+      setRebaseInfo(null)
+    }
     setMode('edit')
   }
 
@@ -112,7 +163,7 @@ export default function ReportActions({ detail, meId, busy, run }) {
     : !usable ? 'המקור לא אותר בוודאות — אפשר לבחור אותו ב"בחירת מקור ידנית".' : null
 
   return (
-    <div className="glass rounded-xl p-4 space-y-3">
+    <div ref={box} className="glass rounded-xl p-4 space-y-3">
       <div className="text-sm">
         {claimedByMe
           ? <>בטיפולך עד {leaseText}</>
@@ -130,7 +181,7 @@ export default function ReportActions({ detail, meId, busy, run }) {
         <button disabled={busy} onClick={openEdit} className={`${btn} glass`}><span className="material-symbols-outlined text-base">edit</span> עריכה ואז אישור</button>
         <button disabled={busy} onClick={() => setMode('reject')} className={`${btn} glass text-danger-700`}><span className="material-symbols-outlined text-base">block</span> דחייה</button>
         <button disabled={busy} onClick={() => setMode('reassign')} className={`${btn} glass`}><span className="material-symbols-outlined text-base">swap_horiz</span> העברה למטפל</button>
-        <button disabled={busy} onClick={() => setMode('source')} className={`${btn} glass`}><span className="material-symbols-outlined text-base">find_in_page</span> בחירת מקור ידנית</button>
+        <button disabled={busy} onClick={() => { setActivePick(null); setMode('source') }} className={`${btn} glass`}><span className="material-symbols-outlined text-base">find_in_page</span> בחירת מקור ידנית</button>
         {permissions.canVerify && rev && (
           <button disabled={busy} onClick={() => act({ action: 'resubmit', generation: g })} className={`${btn} glass`}><span className="material-symbols-outlined text-base">send</span> שליחה מחודשת לשירות</button>
         )}
@@ -142,6 +193,15 @@ export default function ReportActions({ detail, meId, busy, run }) {
       {mode === 'edit' && (
         <div className="space-y-2">
           <p className="text-xs text-on-surface/60">עורכים את השורה המלאה כפי שתיכתב במקור. נוצרת גרסת הצעה חדשה; ההצעה המקורית נשמרת.</p>
+          {rebaseInfo && (
+            <p className={`text-xs ${!rebaseInfo.clean || rebaseInfo.conflicts ? 'text-danger-700' : 'text-on-surface/70'}`}>
+              {!rebaseInfo.clean
+                ? 'השורה בגיטהאב השתנתה מאז הדיווח ואי אפשר היה למזג אוטומטית — מוצגת השורה העדכנית; יש להחיל את התיקון ידנית.'
+                : <>השורה בגיטהאב השתנתה מאז הדיווח, ולכן הוחלו עליה רק התיקונים שדווחו ({rebaseInfo.applied}) והשאר נשאר כבגיטהאב.
+                  {rebaseInfo.skipped > 0 && <> {rebaseInfo.skipped} תיקונים כבר מתוקנים שם.</>}
+                  {rebaseInfo.conflicts > 0 && <> {rebaseInfo.conflicts} תיקונים לא נמצא להם מקום (המילה שונתה בגיטהאב) — יש לבדוק ידנית.</>}</>}
+            </p>
+          )}
           <textarea value={newLine} onChange={(e) => setNewLine(e.target.value)} rows={4} dir="rtl" className="w-full border rounded-lg p-2 font-mono text-base bg-white" />
           <div className="flex gap-2">
             <button
@@ -184,8 +244,26 @@ export default function ReportActions({ detail, meId, busy, run }) {
 
       {mode === 'close' && (
         <div className="space-y-2">
-          <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} placeholder="הערה (למשל: טופל מחוץ למערכת)" className="w-full border rounded-lg p-2 bg-white" />
-          <button disabled={busy} onClick={async () => { if (await act({ action: 'close_manual', generation: g, note: reason })) setMode(null) }} className={`${btn} bg-primary text-on-primary`}>סגירה</button>
+          <div className="flex flex-wrap gap-2">
+            {CLOSE_NOTES.map((n) => (
+              <button key={n} type="button" onClick={() => { setReason(n); closeNote.current?.focus() }} aria-pressed={reason === n} className={`px-2 py-1 rounded-full text-xs ${reason === n ? 'bg-primary text-on-primary' : 'glass hover:bg-surface-variant'}`}>{n}</button>
+            ))}
+          </div>
+          {/* אנטר = סגירה; Shift+Enter = שורה חדשה בהערה */}
+          <textarea
+            ref={closeNote}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return
+              e.preventDefault()
+              if (!busy) closeManual()
+            }}
+            rows={2}
+            placeholder="הערה (למשל: טופל מחוץ למערכת)"
+            className="w-full border rounded-lg p-2 bg-white"
+          />
+          <button disabled={busy} onClick={closeManual} className={`${btn} bg-primary text-on-primary`}>סגירה</button>
         </div>
       )}
 
@@ -200,33 +278,7 @@ export default function ReportActions({ detail, meId, busy, run }) {
       )}
 
       {mode === 'source' && (
-        <div className="space-y-2">
-          <p className="text-xs text-on-surface/60">נתיב Git מלא במאגר (תחת &lt;תיקייה&gt;/ספרים/אוצריא/) ומספר שורה (1 = ראשונה). הבחירה מתועדת; האישור עצמו נעשה דרך &quot;עריכה ואז אישור&quot;.</p>
-          <div className="flex flex-wrap gap-2">
-            <input value={manualPath} onChange={(e) => setManualPath(e.target.value)} placeholder="ToratEmetToOtzaria/ספרים/אוצריא/…txt" className="flex-1 min-w-[18rem] border rounded-lg px-2 py-1 bg-white" />
-            <input value={manualLine} onChange={(e) => setManualLine(e.target.value)} placeholder="שורה" inputMode="numeric" className="w-24 border rounded-lg px-2 py-1 bg-white" />
-            <button
-              disabled={busy || !manualPath || !(Number(manualLine) >= 1)}
-              onClick={async () => {
-                const res = await run({ action: 'preview_source', path: manualPath.trim(), lineIndex: Number(manualLine) - 1 }, { keep: true })
-                if (res && res.line !== undefined) setPreview(res)
-              }}
-              className={`${btn} glass`}
-            >
-              טעינת השורה
-            </button>
-          </div>
-          {preview && (
-            <div className="rounded-lg border border-info-200 bg-white p-3 text-sm space-y-1">
-              {preview.neighbors.map((n) => (
-                <div key={n.lineIndex} className={`whitespace-pre-wrap break-words ${n.lineIndex === preview.lineIndex ? 'font-bold bg-info-50' : 'text-on-surface/60'}`}>
-                  <span className="text-xs text-on-surface/40 ml-2">{n.lineIndex + 1}</span>{n.text}
-                </div>
-              ))}
-              <button onClick={openEdit} className={`${btn} bg-primary text-on-primary mt-2`}>עריכת השורה הזו ואישור</button>
-            </div>
-          )}
-        </div>
+        <ManualSourcePicker key={activePick?.key ?? 'manual'} busy={busy} run={run} probe={probe} pick={activePick} knownPath={source?.path ?? null} preview={preview} onPreview={setPreview} onEdit={openEdit} />
       )}
     </div>
   )

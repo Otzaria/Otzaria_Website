@@ -68,6 +68,18 @@ export function ownerPermissions(
 }
 
 /**
+ * תוסף שירות: העריכה הישירה חסומה (גם בשרת) — במקומה המעלה מקבל קישור לדף הגשות השירות.
+ * canEdit — מ-ownerPermissions.
+ */
+export function serviceOwnerActions(plugin: Pick<Plugin, 'id' | 'hasService'>, canEdit: boolean) {
+  const isService = plugin.hasService === true
+  return {
+    showEdit: canEdit && !isService,
+    serviceUrl: canEdit && isService ? `/plugins/${plugin.id}/service` : null
+  }
+}
+
+/**
  * טקסט חופשי של המפתח (תיאור, תיאור קצר) → פסקאות של שורות, לתצוגה של כל שורה כבלוק נפרד.
  * למה לא <p> אחד עם whitespace-pre-line: הנתונים מגיעים עם \r\n ובשורות שמערבבות אנגלית ועברית —
  * בחירה בלחיצה כפולה/משולשת חצתה את גבול השורה, וכיוון השורה (נקודה בסוף שורה אנגלית) נקבע לפי

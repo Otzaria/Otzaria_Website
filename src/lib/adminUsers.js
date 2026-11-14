@@ -1,9 +1,8 @@
 import dbConnect from '@/lib/db'
 import User from '@/models/User'
 import Page from '@/models/Page'
-import DictaBook from '@/models/DictaBook'
 
-// שליפת רשימת כל המשתמשים + סטטיסטיקות עמודים/ספרי-דיקטה, עבור דף ניהול המשתמשים
+// שליפת רשימת כל המשתמשים + סטטיסטיקות עמודים, עבור דף ניהול המשתמשים
 // (/library/admin/users). הרשימה זהה בדיוק לכל מנהל-על (role === 'admin') שצופה
 // בה — אין כאן שום סינון לפי זהות הצופה. פונקציה זו משמשת גם את
 // GET /api/admin/users (ללא מטמון — רענון מיידי אחרי פעולה בצד הלקוח) וגם את
@@ -40,22 +39,6 @@ export async function getAdminUsersWithStats() {
     }
   ])
 
-  // 2.5. חישוב סטטיסטיקות ספרי דיקטה - רק ספרים שהושלמו
-  const dictaBooksStats = await DictaBook.aggregate([
-    {
-      $match: {
-        claimedBy: { $ne: null },
-        status: 'completed' // רק ספרים שהושלמו
-      }
-    },
-    {
-      $group: {
-        _id: '$claimedBy',
-        dictaBooksCount: { $sum: 1 }
-      }
-    }
-  ])
-
   // 3. יצירת מפה לגישה מהירה
   const statsMap = {}
   pagesStats.forEach((stat) => {
@@ -68,24 +51,14 @@ export async function getAdminUsersWithStats() {
     }
   })
 
-  // 3.5. יצירת מפה לספרי דיקטה
-  const dictaBooksMap = {}
-  dictaBooksStats.forEach((stat) => {
-    if (stat._id) {
-      dictaBooksMap[stat._id.toString()] = stat.dictaBooksCount
-    }
-  })
-
   // 4. מיזוג הנתונים למשתמשים
   const usersWithStats = users.map((user) => {
     const stats = statsMap[user._id.toString()] || { completed: 0, inProgress: 0, total: 0 }
-    const dictaBooksCount = dictaBooksMap[user._id.toString()] || 0
     return {
       ...user,
       completedPages: stats.completed, // עמודים גמורים
       inProgressPages: stats.inProgress, // עמודים בטיפול
-      totalPages: stats.total, // סה"כ עמודים משויכים
-      dictaBooks: dictaBooksCount // ספרי דיקטה
+      totalPages: stats.total // סה"כ עמודים משויכים
     }
   })
 

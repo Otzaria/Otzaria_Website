@@ -9,6 +9,7 @@ import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags'
 import {
   SUSPEND_ACTIONS,
   applySuspension,
+  isPluginOwner,
   suspensionError,
   suspensionFields
 } from '@/lib/pluginVisibility'
@@ -47,10 +48,10 @@ export async function PATCH(request, { params }) {
 
     // נתיב המעלה בלבד. מנהל משהה ומחזיר דרך ממשק הניהול
     // (PATCH /api/admin/plugins/[id]) — כמו בעריכת תוסף.
-    const isOwner = plugin.authorId?.toString() === session.user?.id
+    const isOwner = isPluginOwner(plugin, session.user?.id)
     if (!isOwner) {
       return forbidden(
-        hasPluginsAccess(session.user?.role)
+        hasPluginsAccess(session.user)
           ? 'השהיית תוסף כמנהל זמינה רק בממשק הניהול.'
           : 'Forbidden - You do not have permission to suspend this plugin'
       )

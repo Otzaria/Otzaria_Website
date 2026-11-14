@@ -12,8 +12,12 @@ import type { TagCount } from '@/components/plugins/listing/TagFilterChips'
  * הטופס עצמו — ב-components/plugins/upload/.
  * tagPool — התגיות הקיימות בחנות להצעה בשדה התגיות; null — לא נטען בשרת, והשדה טוען בעצמו.
  */
-export default function UploadPluginPageClient({ tagPool = null }: { tagPool?: TagCount[] | null }) {
-  const form = useUploadPluginForm()
+export default function UploadPluginPageClient({ tagPool = null, serviceEnabled = false }: {
+  tagPool?: TagCount[] | null
+  /** תוספי שירות מופעלים בשרת — מציג את "דורש שירות חיצוני" */
+  serviceEnabled?: boolean
+}) {
+  const form = useUploadPluginForm({ serviceEnabled })
 
   return (
     <main id="main-content" className="flex-1">

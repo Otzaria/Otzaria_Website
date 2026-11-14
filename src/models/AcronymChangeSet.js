@@ -7,6 +7,8 @@ import mongoose from 'mongoose'
 const AcronymChangeSetSchema = new mongoose.Schema(
   {
     ops: { type: [mongoose.Schema.Types.Mixed], required: true },
+    // אינדקסים ב-ops שהסימון שלהם הוסר בגוף ה-PR; נשמרים כדי שבנייה מחדש מעל master לא תחזיר אותם
+    excluded: { type: [Number], default: [] },
     kind: { type: String, enum: ['user', 'legacy_pending', 'legacy_approved'], default: 'user' },
     label: { type: String, trim: true, default: '' },
     submittedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },

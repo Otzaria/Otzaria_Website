@@ -7,6 +7,7 @@ import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import { sendPluginUploadNotification } from '@/lib/emailService'
 import { hasPluginsAccess } from '@/lib/roles'
+import { isPluginOwner } from '@/lib/pluginVisibility'
 import {
   PLUGIN_VERSION_RE,
   assertPluginTextLimits,
@@ -29,6 +30,7 @@ import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags'
 import { archiveCurrentVersion } from '@/lib/pluginVersions'
 import { validatePluginArchive, OTZARIA_DESIGN_TAG } from '@/lib/pluginValidation'
 import { sendPluginReportNoticeIfNeeded } from '@/lib/systemMessages'
+import { isServicePlugin, serviceBlockedBody } from '@/lib/servicePlugins/existingPaths'
 import {
   MAX_IMAGE_BYTES,
   MAX_PLUGIN_BYTES,
@@ -66,12 +68,12 @@ async function getAuthorizedPlugin(id, session, { asOwner = false } = {}) {
     return { error: bad('Plugin not found', 404) }
   }
 
-  const isOwner = plugin.authorId?.toString() === session.user?.id
-  const isAdmin = asOwner ? false : hasPluginsAccess(session.user?.role)
+  const isOwner = isPluginOwner(plugin, session.user?.id)
+  const isAdmin = asOwner ? false : hasPluginsAccess(session.user)
   if (!isAdmin && !isOwner) {
     return {
       error: bad(
-        asOwner && hasPluginsAccess(session.user?.role)
+        asOwner && hasPluginsAccess(session.user)
           ? 'עריכת תוספים כמנהל זמינה רק בממשק הניהול.'
           : 'Forbidden - You do not have permission to edit this plugin',
         403
@@ -184,7 +186,8 @@ export async function GET(request, { params }, { asOwner = false } = {}) {
     }
 
     const source = getEditableSource(access.plugin)
-    return NextResponse.json(buildEditResponse(access.plugin, source))
+    const blocked = isServicePlugin(access.plugin) ? { hasService: true, editBlocked: true } : {}
+    return NextResponse.json({ ...buildEditResponse(access.plugin, source), ...blocked })
   } catch (error) {
     console.error('Error loading plugin for edit:', error)
     return bad('Failed to load plugin', 500)
@@ -205,6 +208,10 @@ export async function PUT(request, { params }, { asOwner = false } = {}) {
     }
 
     const { plugin, isAdmin, isOwner } = access
+    // 409 ולא 403: ה-Action של הוולידטור מנסה שוב בנתיב המנהל על 403
+    if (isServicePlugin(plugin)) {
+      return NextResponse.json(serviceBlockedBody('edit', plugin._id.toString()), { status: 409 })
+    }
     const livePlugin = getLivePluginData(plugin)
     const editableSource = getEditableSource(plugin)
     const formData = await request.formData()

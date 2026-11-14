@@ -6,6 +6,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBookLibraryAccess } from '@/lib/roles';
 import { unauthorized, forbidden, notFound, serverError } from '@/lib/apiResponse';
+import { releaseExpiredPageClaims, countActiveClaims } from '@/lib/bookPageClaims';
+import { isPersonalBook, MAX_ACTIVE_PAGE_CLAIMS, PAGE_RELEASE_AFTER_DAYS } from '@/lib/pageClaimPolicy';
 
 export async function GET(request, { params }) {
   try {
@@ -15,7 +17,7 @@ export async function GET(request, { params }) {
     }
     
     const userId = session.user.id || session.user._id;
-    const isAdmin = hasBookLibraryAccess(session?.user?.role);
+    const isAdmin = hasBookLibraryAccess(session?.user);
     
     await connectDB();
     
@@ -47,6 +49,12 @@ export async function GET(request, { params }) {
     const onlyPage = pageParam !== null && /^\d+$/.test(pageParam) ? Number(pageParam) : null;
     const pagesQuery = onlyPage === null ? { book: book._id } : { book: book._id, pageNumber: onlyPage };
 
+    // שחרור אוטומטי של עמודים שלא נערכו 5 ימים — גם כאן ולא רק ב-cron, כדי
+    // שהספר יוצג נכון גם אם ה-cron עוד לא רץ (pageClaimPolicy.js)
+    const personal = isPersonalBook(book);
+    const now = new Date();
+    if (!personal) await releaseExpiredPageClaims({ now, bookId: book._id });
+
     const pages = await Page.find(pagesQuery)
       .sort({ pageNumber: 1 })
       .select('pageNumber status imagePath claimedBy claimedAt completedAt') 
@@ -64,6 +72,8 @@ export async function GET(request, { params }) {
       completedAt: p.completedAt
     }));
 
+    const myActiveClaims = personal ? null : await countActiveClaims(userId, now);
+
     return NextResponse.json({
       success: true,
       book: {
@@ -80,7 +90,13 @@ export async function GET(request, { params }) {
         isPrivate: book.isPrivate || false,
         isOwner: isOwner
       },
-      pages: formattedPages
+      pages: formattedPages,
+      claimPolicy: {
+        maxActivePages: MAX_ACTIVE_PAGE_CLAIMS,
+        releaseAfterDays: PAGE_RELEASE_AFTER_DAYS,
+        myActivePages: myActiveClaims,
+        exempt: personal || isAdmin,
+      }
     });
 
   } catch (error) {

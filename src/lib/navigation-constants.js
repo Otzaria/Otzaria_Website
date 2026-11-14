@@ -5,8 +5,7 @@
 export const LIBRARY_NAV_LINKS = [
   { href: '/', label: 'בית', icon: 'home' },
   { href: '/library/books', label: 'ספרים', icon: 'library_books' },
-  { href: '/library/dicta-books', label: 'ספרי דיקטה', icon: 'edit_document' },
-  { href: '/library/dicta-edit', label: 'תיקוני ספרי דיקטה', icon: 'rule' },
+  { href: '/library/dicta-edit', label: 'תיקוני ספרים', icon: 'rule' },
   { href: '/library/acronyms', label: 'כינויים וראשי תיבות', icon: 'short_text' },
   { href: '/library/info', label: 'מידע על ספרים', icon: 'info' },
   { href: '/library/users', label: 'משתמשים', icon: 'people' },
@@ -25,10 +24,12 @@ export const MAIN_NAV_LINKS = [
     highlight: true,
     children: [
       { href: '/donate', label: 'תרום לאוצריא', customIcon: 'donate' },
+      { href: '/library/books', label: 'השתתף בעריכת ספרים', icon: 'edit_note' },
       { href: '/library/upload', label: 'העלה ספר חדש', icon: 'upload_file' },
       { href: '/library/acronyms', label: 'הוסף כינויים וראשי תיבות', icon: 'short_text' },
       { href: '/library/info', label: 'הוסף מידע על ספרים', icon: 'info' },
-      { href: '/library/page-proof/books', label: 'השתתף בהגהת עמודים', icon: 'fact_check' },
+      { href: '/library/page-proof', label: 'הגהה לאימון המודלים', icon: 'fact_check' },
+      { href: '/library/tzurat-hadaf', label: 'צורת הדף — השוואה לדפוס', icon: 'auto_stories' },
       { href: '/library', label: 'דרכים נוספות לסיוע', more: true }
     ]
   },

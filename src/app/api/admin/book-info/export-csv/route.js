@@ -7,7 +7,7 @@ import { BOOK_INFO_COLUMNS, bookInfoStateFromRows, exportBookInfoCsv } from '@/l
 import { createBookInfoClient, loadBookInfoState } from '@/lib/bookinfo/fork'
 
 function isAdmin(session) {
-  return hasBooksAccess(session?.user?.role)
+  return hasBooksAccess(session?.user)
 }
 
 /**

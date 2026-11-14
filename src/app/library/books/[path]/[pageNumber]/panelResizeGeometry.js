@@ -27,23 +27,3 @@ export function computeColumnWidth(rect, clientX) {
   const newWidth = (relativeX / rect.width) * 100
   return Math.min(Math.max(newWidth, 10), 90)
 }
-
-// חישוב פרמטרי חיתוך התמונה עבור OCR: גודל הקנבס (כגודל אזור הבחירה),
-// זווית הסיבוב ברדיאנים, ומיקום הציור של התמונה המקורית כך שמרכז אזור
-// הבחירה יתיישר עם מרכז הקנבס לאחר הסיבוב. ללא כל תלות ב-canvas/DOM בפועל.
-export function computeOcrCropParams(selectionRect, rotationDegrees) {
-  const canvasWidth = selectionRect.width
-  const canvasHeight = selectionRect.height
-  const rotationRadians = (rotationDegrees * Math.PI) / 180
-
-  const selCenterX = selectionRect.x + selectionRect.width / 2
-  const selCenterY = selectionRect.y + selectionRect.height / 2
-
-  return {
-    canvasWidth,
-    canvasHeight,
-    rotationRadians,
-    drawX: -selCenterX,
-    drawY: -selCenterY,
-  }
-}

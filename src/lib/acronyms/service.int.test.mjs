@@ -129,6 +129,24 @@ test('an open PR whose changes reached master another way is closed, not rebuilt
   assert.deepEqual((await AcronymChangeSet.find().sort({ createdAt: 1 }).lean()).map((d) => d.status), ['merged', 'closed'])
 })
 
+test('a change unchecked in the PR stays out after another PR merges and the branch is rebuilt', async () => {
+  const client = createRepoClient({ repo: ACRONYMS_REPO, token: 't', fetchImpl: gh.fetch })
+  await submitChangeSet({ rawOps: [{ type: 'add', book: 'בראשית', alias: 'ברא' }] }, client)
+  await submitChangeSet({ rawOps: [{ type: 'add', book: 'ברכות', alias: 'ברכ' }, { type: 'add', book: 'ברכות', alias: 'ברכו' }] }, client)
+  gh.pulls[1].body = gh.pulls[1].body.replace('- [x] ➕ הוספה: `ברכ`', '- [ ] ➕ הוספה: `ברכ`')
+
+  await syncChangeSets(client)
+  const doc = await AcronymChangeSet.findOne({ prNumber: 2 }).lean()
+  assert.deepEqual(doc.excluded, [0])
+
+  gh.mergePull(1)
+  resetForkCaches()
+  assert.equal((await syncChangeSets(client)).rebuilt, 1)
+  const text = gh.readFile('site/acronyms-' + doc._id, ACRONYMS_PATH)
+  assert.ok(text.includes("'ברכו'") && !text.includes("'ברכ'"))
+  assert.ok(gh.pulls[1].body.includes('- [ ] ➕ הוספה: `ברכ` <!-- op:0 -->'))
+})
+
 test('syncs never overlap: calls during a run join one more round after it', async () => {
   let active = 0
   let maxActive = 0

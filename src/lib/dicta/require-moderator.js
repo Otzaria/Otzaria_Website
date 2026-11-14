@@ -13,7 +13,7 @@ export async function requireModerator(level = 'moderate') {
   if (!session) return { error: 'Unauthorized', status: 401 };
 
   await connectDB();
-  const userDoc = await User.findById(session.user.id).select('role isSupervisor name');
+  const userDoc = await User.findById(session.user.id).select('role roles isSupervisor name');
   const ok = level === 'sync' ? canManageLibrarySync(userDoc) : canModerateLibrary(userDoc);
   if (!ok) return { error: 'Forbidden', status: 403 };
 

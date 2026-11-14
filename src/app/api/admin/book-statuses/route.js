@@ -28,7 +28,7 @@ const DEFAULT_STATUSES = {
 // GET - קבלת הגדרות סטטוסים
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (!hasBookLibraryAccess(session?.user?.role)) {
+  if (!hasBookLibraryAccess(session?.user)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -50,7 +50,7 @@ export async function GET() {
 // POST - עדכון הגדרות סטטוסים
 export async function POST(request) {
   const session = await getServerSession(authOptions);
-  if (!hasBookLibraryAccess(session?.user?.role)) {
+  if (!hasBookLibraryAccess(session?.user)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

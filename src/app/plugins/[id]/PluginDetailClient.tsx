@@ -30,7 +30,8 @@ import PluginTaxonomy from '@/components/plugins/detail/PluginTaxonomy'
 import PluginVersionHistory from '@/components/plugins/detail/PluginVersionHistory'
 import PluginReportCallout from '@/components/plugins/detail/PluginReportCallout'
 import PluginDetailSkeleton from '@/components/plugins/detail/PluginDetailSkeleton'
-import { buildPluginBreadcrumbs, hasDistinctDescription, ownerPermissions } from '@/components/plugins/detail/pluginDetailModel'
+import ServiceUninstallSection from '@/components/plugins/service/ServiceUninstallSection'
+import { buildPluginBreadcrumbs, hasDistinctDescription, ownerPermissions, serviceOwnerActions } from '@/components/plugins/detail/pluginDetailModel'
 import type { Plugin } from '@/components/plugins/detail/types'
 
 export type { Plugin } from '@/components/plugins/detail/types'
@@ -134,9 +135,9 @@ export default function PluginDetailClient({ initialPlugin }: PluginDetailClient
     loadPlugin()
   }, [params.id, router, initialPlugin])
 
-  const handleDirectInstall = () => {
+  const handleDirectInstall = (downloadUrl?: string) => {
     if (plugin && canDirectInstall(plugin)) {
-      install(plugin)
+      install(downloadUrl ? { ...plugin, downloadUrl } : plugin)
     }
   }
 
@@ -151,6 +152,7 @@ export default function PluginDetailClient({ initialPlugin }: PluginDetailClient
   // עריכה והשהיה מדף התוסף — למעלה התוסף בלבד, ורק על הגרסה החיה. מנהל משהה ומחזיר מממשק
   // הניהול (/library/admin/plugins) ולא מכאן; תוסף שהושהה בניהול — רק מנהל מחזיר.
   const { canEdit, suspendedByAdmin, showSuspendToggle } = ownerPermissions(plugin, currentUser?.id)
+  const { showEdit, serviceUrl } = serviceOwnerActions(plugin, canEdit)
 
   const handleToggleSuspend = async () => {
     const suspend = plugin.isSuspended !== true
@@ -198,6 +200,11 @@ export default function PluginDetailClient({ initialPlugin }: PluginDetailClient
       if (!response.ok) {
         throw new Error(result.error || 'לא ניתן לטעון את חלון העריכה')
       }
+      // תוסף שירות: העריכה הישירה חסומה — שינוי רק דרך הגשה חדשה
+      if (result.editBlocked) {
+        router.push(`/plugins/${plugin.id}/service`)
+        return
+      }
 
       setEditingPlugin({
         ...result,
@@ -235,7 +242,8 @@ export default function PluginDetailClient({ initialPlugin }: PluginDetailClient
             media={screenshots.length > 0 ? <ScreenshotCarousel screenshots={screenshots} /> : undefined}
             actions={
               <PluginInstallActions
-                plugin={plugin}
+                // גרסה ישנה של תוסף שירות: הורדה מפורשת של קובץ התוסף בלבד (עם באנר "גרסה ישנה"), בלי מתקינים
+                plugin={plugin.hasService && plugin.isHistoricalVersion ? { ...plugin, hasService: false, supportsDirectInstall: false } : plugin}
                 installState={installState}
                 onInstall={handleDirectInstall}
                 emphasis="page"
@@ -247,7 +255,8 @@ export default function PluginDetailClient({ initialPlugin }: PluginDetailClient
               <PluginSecondaryActions
                 homepage={plugin.homepage}
                 onReport={() => setReporting(true)}
-                canEdit={canEdit}
+                canEdit={showEdit}
+                serviceUrl={serviceUrl}
                 loadingEdit={loadingEdit}
                 onEdit={handleEdit}
                 showSuspendToggle={showSuspendToggle}
@@ -296,6 +305,8 @@ export default function PluginDetailClient({ initialPlugin }: PluginDetailClient
                 />
               </DetailSection>
             )}
+
+            {plugin.hasService && !plugin.isHistoricalVersion && <ServiceUninstallSection pluginId={plugin.id} />}
 
             {versions.length > 1 && (
               <DetailSection id="plugin-versions" title="היסטוריית גרסאות">

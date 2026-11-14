@@ -13,6 +13,13 @@
     scrollbar-gutter: stable;
   }
 
+  /* עורך העמוד (LibraryChrome → data-editor-route) ממלא את החלון: בלי גלילת דף ובלי מקום שמור לפס
+     גלילה — אחרת נשאר פס בהיר ברוחב 15px לצד העורך (בולט בערכת ערב) */
+  html:has([data-editor-route]) {
+    scrollbar-gutter: auto;
+    overflow: hidden;
+  }
+
   body {
     background-color: transparent;
     color: var(--color-on-background);

@@ -7,6 +7,7 @@ import {
   formatCount,
   displayUpdatedDate,
   ownerPermissions,
+  serviceOwnerActions,
   splitUserText
 } from './pluginDetailModel'
 
@@ -91,5 +92,16 @@ describe('splitUserText', () => {
   it('ריק → אין פסקאות', () => {
     expect(splitUserText('')).toEqual([])
     expect(splitUserText(undefined)).toEqual([])
+  })
+})
+
+describe('serviceOwnerActions', () => {
+  it('תוסף שירות: במקום "ערוך" — קישור להגשות השירות, רק למעלה', () => {
+    expect(serviceOwnerActions({ id: 'p1', hasService: true }, true)).toEqual({ showEdit: false, serviceUrl: '/plugins/p1/service' })
+    expect(serviceOwnerActions({ id: 'p1', hasService: true }, false)).toEqual({ showEdit: false, serviceUrl: null })
+  })
+  it('תוסף רגיל — כמו קודם', () => {
+    expect(serviceOwnerActions({ id: 'p1' }, true)).toEqual({ showEdit: true, serviceUrl: null })
+    expect(serviceOwnerActions({ id: 'p1', hasService: false }, false)).toEqual({ showEdit: false, serviceUrl: null })
   })
 })

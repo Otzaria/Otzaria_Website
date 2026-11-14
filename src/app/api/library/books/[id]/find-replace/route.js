@@ -16,7 +16,7 @@ export async function POST(req, { params }) {
     const { find, replace, isRegex, flags, caseSensitive, editType, note } = await req.json();
 
     await connectDB();
-    const userDoc = await User.findById(session.user.id).select('role isSupervisor dictaEditBlocked name');
+    const userDoc = await User.findById(session.user.id).select('role roles isSupervisor dictaEditBlocked name');
     if (!userDoc) return unauthorized('משתמש לא נמצא');
 
     const result = await submitFindReplaceEdit({

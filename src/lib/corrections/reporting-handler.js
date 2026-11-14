@@ -77,7 +77,10 @@ export async function handleReportingErrorsPost(request, deps = {}) {
   const emailOnly = result.outcome === 'created' ? result.plan?.route === 'email_only' : result.report.state === 'email_only';
   const email = result.outcome === 'replay' && result.report.emailSent
     ? { emailSent: false, duplicate: true }
-    : await notify(payload, emailOnly ? {} : { excludeOtzaria: true });
+    : await notify(
+      { ...payload, he_ref: validated.location?.heRef ?? null, correction: validated.correction },
+      emailOnly ? {} : { excludeOtzaria: true },
+    );
 
   return json({
     success: true,

@@ -113,11 +113,13 @@ export function validateUploadSubmission({ formData, hasPluginFile, screenshotCo
 }
 
 /** גוף הבקשה ל-POST /api/plugins/upload — שמות השדות כפי שהשרת מצפה להם */
-export function buildUploadFormData({ formData, pluginFile, imageFile, screenshotFiles }: {
+export function buildUploadFormData({ formData, pluginFile, imageFile, screenshotFiles, requiresService = false }: {
   formData: UploadFormFields
   pluginFile: File
   imageFile: File | null
   screenshotFiles: File[]
+  /** "דורש שירות חיצוני" — נשלח רק כשסומן (השרת מתעלם ממנו כשהתכונה כבויה) */
+  requiresService?: boolean
 }): FormData {
   const data = new FormData()
   data.append('name', formData.name)
@@ -131,6 +133,7 @@ export function buildUploadFormData({ formData, pluginFile, imageFile, screensho
   data.append('tags', JSON.stringify(normalizeTagList(formData.tags)))
   data.append('homepage', formData.homepage)
   data.append('reportsConsent', 'true')
+  if (requiresService) data.append('requiresService', 'true')
 
   data.append('pluginFile', pluginFile)
   if (imageFile) {
@@ -142,8 +145,29 @@ export function buildUploadFormData({ formData, pluginFile, imageFile, screensho
   return data
 }
 
+export type UploadResult = {
+  designCompliant?: boolean
+  serviceSubmissionUrl?: string
+  plugin?: { id?: string; hasService?: boolean }
+} | null | undefined
+
+/** האם השרת קלט את התוסף כתוסף שירות (ולא התעלם מהסימון כי התכונה כבויה) */
+export function isServiceUpload(result: UploadResult): boolean {
+  return Boolean(result?.serviceSubmissionUrl || result?.plugin?.hasService)
+}
+
+/** לאן עוברים אחרי העלאה: תוסף שירות — לדף הגשת השירות; אחרת — לחנות */
+export function uploadRedirectTarget(result: UploadResult): string {
+  if (result?.serviceSubmissionUrl?.startsWith('/')) return result.serviceSubmissionUrl
+  if (result?.plugin?.hasService && result.plugin.id) return `/plugins/${encodeURIComponent(result.plugin.id)}/service`
+  return '/plugins'
+}
+
 /** הודעת ההצלחה אחרי העלאה (כולל ההערה על התגית "מראה תואם לאוצריא") */
-export function uploadSuccessMessage(result: { designCompliant?: boolean } | null | undefined): string {
+export function uploadSuccessMessage(result: UploadResult): string {
+  if (isServiceUpload(result)) {
+    return 'פרטי התוסף נקלטו. כעת יש להשלים את הגשת השירות: מקור, קובץ התוסף, מתקינים ופרטי זיהוי והסרה. התוסף לא יפורסם לפני שההגשה תיבחר ותעבור את הבדיקות.'
+  }
   const designNote = result?.designCompliant === false
     ? '\n(התגית "מראה תואם לאוצריא" לא נוספה — העיצוב אינו תואם להנחיות.)'
     : ''

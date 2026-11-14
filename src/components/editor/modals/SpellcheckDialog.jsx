@@ -1,48 +1,22 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
-import Button from '@/components/ui/legacy/LegacyButton'
+import Button from '@/components/ui/Button'
+import FloatingPanel from '@/components/ui/FloatingPanel'
+import { cx } from '@/components/ui/cx'
+import { fieldClasses } from '@/components/ui/fieldStyles'
+import { FOCUS_RING_INSET } from '@/components/ui/focusRing'
 import { useLoading } from '@/components/providers/LoadingContext'
 
 const HEBREW_CHARS = "\\u0590-\\u05FF"
 const MISSPELLINGS_LIMIT = 1500
 const DEFAULT_SUGGESTION_LIMIT = 8
-const DIALOG_WIDTH = 520
+const DIALOG_WIDTH = 560
 const POSITION_STORAGE_KEY = 'spellcheckDialogPosition'
 
-function getDefaultPosition() {
-  const x = Math.max(16, window.innerWidth - DIALOG_WIDTH - 24)
-  return { x, y: 96 }
-}
-
-// שמירת המיקום ב-localStorage כדי שיישמר בין דפים, ספרים וטעינות מחדש.
-// המיקום נצמד לגבולות החלון הנוכחי כדי שלא ייפתח מחוץ למסך.
-function loadSavedPosition() {
-  if (typeof window === 'undefined') return null
-  try {
-    const raw = window.localStorage.getItem(POSITION_STORAGE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    if (typeof parsed?.x !== 'number' || typeof parsed?.y !== 'number') return null
-    const maxX = Math.max(16, window.innerWidth - DIALOG_WIDTH - 24)
-    const maxY = Math.max(16, window.innerHeight - 80)
-    return {
-      x: Math.min(Math.max(16, parsed.x), maxX),
-      y: Math.min(Math.max(16, parsed.y), maxY),
-    }
-  } catch {
-    return null
-  }
-}
-
-function savePosition(position) {
-  if (typeof window === 'undefined') return
-  try {
-    window.localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify(position))
-  } catch {
-    // ignore (מצב פרטי / מכסת אחסון)
-  }
+// ברירת המחדל: בצד שמאל של המסך (מעל הטקסט). המיקום עצמו נצמד לחלון ב-FloatingPanel.
+function getDefaultPosition(vp) {
+  return { x: Math.max(16, vp.width - DIALOG_WIDTH - 24), y: 96 }
 }
 
 function normalizeHebrew(text) {
@@ -72,7 +46,8 @@ export default function SpellcheckDialog({
   text,
   onApplyText,
   title = 'בדיקת איות',
-  onSelectWord = () => {}
+  onSelectWord = () => {},
+  returnFocus
 }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -85,9 +60,6 @@ export default function SpellcheckDialog({
   const [personalWords, setPersonalWords] = useState([])
   const [globalWords, setGlobalWords] = useState([])
   const [isReady, setIsReady] = useState(false)
-  const [position, setPosition] = useState({ x: 0, y: 0 })
-  const [isDragging, setIsDragging] = useState(false)
-  const dragStartOffset = useRef({ x: 0, y: 0 })
 
   const isMountedRef = useRef(true)
   const hasLoadedWordsRef = useRef(false)
@@ -100,45 +72,6 @@ export default function SpellcheckDialog({
     isMountedRef.current = true
     return () => { isMountedRef.current = false }
   }, [])
-
-  useEffect(() => {
-    if (isOpen && typeof window !== 'undefined') {
-      if (position.x === 0 && position.y === 0) {
-        setPosition(loadSavedPosition() || getDefaultPosition())
-      }
-    }
-  }, [isOpen, position.x, position.y])
-
-  useEffect(() => {
-    const handleMouseMove = (e) => {
-      if (!isDragging) return
-      setPosition({
-        x: e.clientX - dragStartOffset.current.x,
-        y: e.clientY - dragStartOffset.current.y,
-      })
-    }
-    const handleMouseUp = () => {
-      setIsDragging(false)
-      setPosition(current => {
-        savePosition(current)
-        return current
-      })
-    }
-
-    if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove)
-      window.addEventListener('mouseup', handleMouseUp)
-    }
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
-    }
-  }, [isDragging])
-
-  const handleMouseDown = (e) => {
-    setIsDragging(true)
-    dragStartOffset.current = { x: e.clientX - position.x, y: e.clientY - position.y }
-  }
 
   useEffect(() => { personalWordsRef.current = personalWords }, [personalWords])
   useEffect(() => { globalWordsRef.current = globalWords }, [globalWords])
@@ -321,150 +254,144 @@ export default function SpellcheckDialog({
 
   if (!isOpen) return null
   if (!isReady) return null
-  if (typeof document === 'undefined') return null
-
-  return createPortal(
-    <div className="fixed z-[9999] w-[520px] max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-neutral-200 overflow-hidden flex flex-col" dir="rtl" style={{ left: `${position.x}px`, top: `${position.y}px` }}>
-      <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-200 cursor-move select-none" onMouseDown={handleMouseDown}>
-        <div>
-          <h2 className="text-base font-bold text-neutral-900">{title}</h2>
-        </div>
-        <button onClick={onClose} className="p-2 hover:bg-neutral-100 rounded-lg" onMouseDown={(e) => e.stopPropagation()}>
-          <span className="material-symbols-outlined">close</span>
-        </button>
-      </div>
-
-      <div className="flex flex-col md:flex-row overflow-auto">
-        <div className="md:w-1/3 border-b md:border-b-0 md:border-r border-neutral-200 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-bold text-neutral-800">מילים חשודות</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              icon="refresh"
-              onClick={runSpellcheck}
-              label="בדוק מחדש"
-            />
+  return (
+    <FloatingPanel
+      title={title}
+      icon="spellcheck"
+      onClose={onClose}
+      storageKey={POSITION_STORAGE_KEY}
+      width={DIALOG_WIDTH}
+      defaultPosition={getDefaultPosition}
+      returnFocus={returnFocus}
+      bodyClassName="p-0"
+    >
+      <div className="flex flex-col sm:flex-row">
+        <div className="border-b border-outline-variant p-4 sm:w-2/5 sm:border-b-0 sm:border-e">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h3 className="text-label-lg text-on-surface">מילים חשודות</h3>
+            <Button variant="text" size="sm" iconOnly icon="refresh" aria-label="בדיקה מחדש" title="בדיקה מחדש" onClick={runSpellcheck} />
           </div>
 
-          {loading && (
-            <div className="text-sm text-neutral-500">בודק...</div>
-          )}
-          {error && (
-            <div className="text-sm text-danger-600">{error}</div>
-          )}
-          {!loading && !error && misspellings.length === 0 && (
-            <div className="text-sm text-success-700">לא נמצאו שגיאות</div>
-          )}
-          {misspellingsLimited && (
-            <div className="text-xs text-warning-600 mt-2">מוצגים עד {MISSPELLINGS_LIMIT} שגיאות ראשונות.</div>
-          )}
+          <div role="status" className="text-body-sm">
+            {loading && <p className="text-on-surface-variant">בודק...</p>}
+            {error && <p className="text-error">{error}</p>}
+            {!loading && !error && misspellings.length === 0 && <p className="text-on-surface-variant">לא נמצאו שגיאות</p>}
+            {misspellingsLimited && <p className="mt-2 text-on-surface-variant">מוצגות {MISSPELLINGS_LIMIT} השגיאות הראשונות.</p>}
+          </div>
 
-          <div className="max-h-[360px] overflow-y-auto mt-2 space-y-2">
+          <ul className="custom-scrollbar mt-2 max-h-[min(360px,30dvh)] space-y-1 overflow-y-auto sm:max-h-[360px]">
             {misspellings.map(item => (
-              <button
-                key={item.word}
-                onClick={() => {
-                  setSelectedWord(item.word)
-                  setCustomReplacement('')
-                  onSelectWord(item.word)
-                }}
-                className={`w-full text-right px-3 py-2 rounded-lg border transition-colors ${
-                  selectedWord === item.word
-                    ? 'border-info-200 bg-info-50 text-info-900'
-                    : 'border-neutral-200 hover:bg-neutral-50 text-neutral-800'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">{item.word}</span>
-                  <span className="text-xs text-neutral-500">{item.count}x</span>
-                </div>
-              </button>
+              <li key={item.word}>
+                <button
+                  type="button"
+                  aria-pressed={selectedWord === item.word}
+                  onClick={() => {
+                    setSelectedWord(item.word)
+                    setCustomReplacement('')
+                    onSelectWord(item.word)
+                  }}
+                  className={cx(
+                    'flex min-h-(--touch-target) w-full items-center justify-between gap-2 rounded-(--radius-control) px-3 text-start text-body-md text-on-surface transition-colors',
+                    selectedWord === item.word
+                      ? 'bg-[var(--editor-selection-bg,var(--color-surface-selected))]'
+                      : 'hover:bg-surface-container-high',
+                    FOCUS_RING_INSET
+                  )}
+                >
+                  <span className="truncate">{item.word}</span>
+                  <span className="shrink-0 text-label-md text-on-surface-variant" aria-label={`${item.count} פעמים`}>{item.count}×</span>
+                </button>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
 
-        <div className="flex-1 p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <div className="text-sm text-neutral-500">מילה נבחרת</div>
-              <div className="text-xl font-bold text-neutral-900">{selectedWord || '—'}</div>
+        <div className="min-w-0 flex-1 space-y-4 p-4">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-label-md text-on-surface-variant">מילה נבחרת</p>
+              <p className="truncate text-title-lg text-on-surface">{selectedWord || '—'}</p>
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                icon="bookmark_add"
-                label="הוסף למילון"
-                onClick={() => handleAddPersonal(selectedWord)}
-                disabled={!selectedWord}
-                title="המילה תתווסף למילון האישי שלכם ותישלח לאישור מנהל להוספה למילון הכללי"
+            <Button
+              variant="text"
+              size="sm"
+              icon="bookmark_add"
+              onClick={() => handleAddPersonal(selectedWord)}
+              disabled={!selectedWord}
+              title="המילה תתווסף למילון האישי שלך ותישלח לאישור מנהל להוספה למילון הכללי"
+              className="whitespace-nowrap"
+            >
+              הוסף למילון
+            </Button>
+          </div>
+
+          <div>
+            <label htmlFor="spell-replacement" className="mb-1 block text-label-lg text-on-surface">החלף ב</label>
+            <div className="flex gap-2">
+              <input
+                id="spell-replacement"
+                type="text"
+                value={customReplacement}
+                onChange={(e) => setCustomReplacement(e.target.value)}
+                placeholder="החלפה ידנית..."
+                className={fieldClasses({ className: 'min-w-0 flex-1 text-body-sm' })}
               />
+              <Button
+                variant="tonal"
+                size="sm"
+                onClick={() => handleReplaceAll(selectedWord, customReplacement)}
+                disabled={!selectedWord || !customReplacement}
+                className="shrink-0 whitespace-nowrap"
+              >
+                החלפת הכול
+              </Button>
             </div>
           </div>
 
-          <div className="text-sm font-bold text-neutral-800 mb-2">החלף ב:</div>
-          <div className="flex flex-col sm:flex-row gap-2 mb-3">
-            <input
-              type="text"
-              value={customReplacement}
-              onChange={(e) => setCustomReplacement(e.target.value)}
-              placeholder="החלפה ידנית..."
-              className="flex-1 px-3 py-2 border border-neutral-200 rounded-md text-sm"
-            />
-            <Button
-              variant="ghost"
-              size="sm"
-              icon="swap_horiz"
-              onClick={() => handleReplaceAll(selectedWord, customReplacement)}
-              label="החלף הכל"
-              disabled={!selectedWord || !customReplacement}
-            />
-          </div>
-          <div className="mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm font-bold text-neutral-800">הצעות</div>
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-neutral-500">מספר הצעות</label>
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h3 className="text-label-lg text-on-surface">הצעות</h3>
+              <label className="flex items-center gap-2 whitespace-nowrap text-label-md text-on-surface-variant">
+                מספר הצעות
                 <select
                   value={suggestionLimit}
                   onChange={(e) => setSuggestionLimit(parseInt(e.target.value, 10))}
-                  className="border border-neutral-200 rounded-md text-xs px-2 py-1"
+                  className={fieldClasses({ kind: 'select', className: 'w-auto min-h-(--touch-target) text-body-sm' })}
                 >
                   <option value={0}>0</option>
                   <option value={4}>4</option>
                   <option value={8}>8</option>
                   <option value={12}>12</option>
                 </select>
-              </div>
+              </label>
             </div>
 
             {selectedWord && suggestions.length === 0 && (
-              <div className="text-sm text-neutral-500">אין הצעות זמינות</div>
+              <p className="text-body-sm text-on-surface-variant">אין הצעות זמינות</p>
             )}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <ul className="grid grid-cols-1 gap-1.5">
               {suggestions.map(suggestion => (
-                <div key={suggestion} className="flex items-center gap-2 border border-neutral-200 rounded-lg px-3 py-2">
-                  <span className="flex-1 text-sm text-neutral-800">{suggestion}</span>
+                <li key={suggestion} className="flex items-center gap-2 rounded-(--radius-control) border border-outline-variant py-0.5 ps-3 pe-0.5">
+                  <span className="min-w-0 flex-1 truncate text-body-md text-on-surface">{suggestion}</span>
                   <Button
-                    variant="ghost"
+                    variant="text"
                     size="sm"
-                    icon="swap_horiz"
                     onClick={() => handleReplaceAll(selectedWord, suggestion)}
-                    label="החלף הכל"
-                  />
-                </div>
+                    aria-label={`החלפת הכול ב${suggestion}`}
+                    className="shrink-0 whitespace-nowrap"
+                  >
+                    החלפת הכול
+                  </Button>
+                </li>
               ))}
-            </div>
+            </ul>
           </div>
 
-          <div className="text-xs text-neutral-500">
+          <p className="text-body-sm text-on-surface-variant">
             מומלץ להריץ בדיקה מחדש אחרי החלפות גדולות.
-          </div>
+          </p>
         </div>
       </div>
-    </div>,
-    document.body
+    </FloatingPanel>
   )
 }
-

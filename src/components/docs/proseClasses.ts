@@ -3,7 +3,7 @@ import { cx } from '@/components/ui/cx'
 
 /**
  * הטיפוגרפיה של גוף המדריך — מקור אחד לכל אלמנט שמגיע מהוויקי (wiki/WikiMarkdown) ולתוכן הקבוע
- * של מדריכי דיקטה והפיתוח, כדי ששלושתם ייראו אותו דבר. רק תפקידי צבע (on-surface, primary,
+ * של מדריך הפיתוח, כדי ששניהם ייראו אותו דבר. רק תפקידי צבע (on-surface, primary,
  * outline-variant, surface-container-*) ורדיוס הצורה (rounded-card).
  *
  * כותרת h2 — גופן התצוגה (OT Vilna, משקל 400 מהטוקן); h3/h4 — Assistant מודגש, כמו כותרות הכרטיסים באתר.

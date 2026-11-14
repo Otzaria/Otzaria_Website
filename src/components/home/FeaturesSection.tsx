@@ -8,38 +8,38 @@ import FeatureCard from './FeatureCard'
 const features = [
   {
     icon: 'auto_stories',
-    title: 'מאגר עצום',
-    description: 'אלפי ספרי קודש זמינים לקריאה ולימוד'
+    title: 'אלפי ספרים',
+    description: 'ספרי קודש רבים זמינים לקריאה וללימוד'
   },
   {
     icon: 'verified',
-    title: 'דיוק מקסימלי',
-    description: 'מערכת בקרת איכות מתקדמת לטקסטים מדויקים'
+    title: 'הקפדה על הנוסח',
+    description: 'עבודת הגהה מתמשכת לדיוק נוסח הספרים'
   },
   {
     icon: 'search',
-    title: 'חיפוש מתקדם',
+    title: 'חיפוש מהיר',
     description: 'מצא כל פסוק, מאמר או מושג בקלות'
   },
   {
     icon: 'edit_note',
-    title: 'עריכה משותפת',
-    description: 'ספרים רבים נוספו על ידי הקהילה'
+    title: 'בעזרת מתנדבים',
+    description: 'ספרים רבים נוספו והוגהו בידי מתנדבים'
   },
   {
     icon: 'devices',
-    title: 'פלטפורמות מרובות',
+    title: 'במערכות הפעלה מרובות',
     description: 'עובד על Windows, Linux, Android, iOS ו-macOS'
   },
   {
     icon: 'palette',
-    title: 'ממשק מודרני',
-    description: 'עיצוב נקי ופשוט עם תמיכה במצב כהה ובהתאמה אישית'
+    title: 'תצוגה נוחה',
+    description: 'תצוגה נקייה ופשוטה, עם מצב כהה והתאמה אישית'
   },
   {
     icon: 'description',
-    title: 'פורמטים מגוונים',
-    description: 'תמיכה בקבצי TXT, DOCX ו-PDF'
+    title: 'קבצים נוספים',
+    description: 'אפשר לפתוח גם קבצי TXT, DOCX ו-PDF'
   },
   {
     icon: 'volunteer_activism',
@@ -53,8 +53,8 @@ export default function FeaturesSection() {
     <Section id="features" labelledBy="features-heading" anchor>
       <SectionHeading
         id="features-heading"
-        title="למה לבחור באוצריא?"
-        subtitle="פלטפורמה מתקדמת המשלבת טכנולוגיה חדישה עם כבוד למסורת"
+        title="מה יש באוצריא?"
+        subtitle="ספרי קודש רבים, לימוד נוח וחיפוש מהיר — הכל בחינם"
       />
 
       {/* נייד: עמודה אחת; טבלט: שתיים; דסקטופ רחב: ארבע. הכניסה המדורגת ב-CSS

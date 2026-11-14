@@ -91,7 +91,7 @@ export default function PageCanvas({
     <svg
       ref={svgRef}
       viewBox={`0 0 ${W} ${viewH}`}
-      className="w-full h-auto select-none touch-none bg-white rounded-lg border border-neutral-200"
+      className="h-auto w-full select-none touch-none rounded-(--radius-control) bg-surface-container-low"
       onPointerMove={onPointerMove}
       onPointerUp={endDrag}
       onPointerLeave={endDrag}

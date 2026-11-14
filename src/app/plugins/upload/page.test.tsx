@@ -144,3 +144,65 @@ describe('/plugins/upload (מחובר — ה-proxy מפנה אורח להתחב�
     }
   })
 })
+
+describe('/plugins/upload — "דורש שירות חיצוני"', () => {
+  async function fillValidForm() {
+    const bytes = zipSync({ 'manifest.json': strToU8(JSON.stringify({
+      id: 'com.example.svc', name: 'שירות', author: 'מפתח', version: '1.0.0',
+      description: 'תיאור קצר', stability: 'stable', minAppVersion: '99.0.0'
+    })) })
+    const file = new File([Uint8Array.from(bytes)], 'svc.otzplugin')
+    Object.defineProperty(file, 'arrayBuffer', { value: async () => Uint8Array.from(bytes).buffer })
+    fireEvent.change(screen.getByLabelText(/קובץ תוסף/), { target: { files: [file] } })
+    await screen.findByText('נבחר: svc.otzplugin')
+    fireEvent.change(screen.getByRole('textbox', { name: 'תיאור מלא' }), { target: { value: 'תיאור מלא' } })
+    fireEvent.change(screen.getByLabelText(/צילומי מסך/), {
+      target: { files: [new File(['image'], 'screen.png', { type: 'image/png' })] }
+    })
+    fireEvent.click(screen.getByRole('checkbox', { name: /אני מאשר קבלת דיווחים/ }))
+  }
+
+  it('התכונה כבויה — אין תיבה, והבקשה בלי requiresService; אחרי ההצלחה — לחנות', async () => {
+    fetchSpy.mockResolvedValue({ ok: true, json: async () => ({ plugin: { id: 'p1' } }) })
+    render(<UploadPluginPage />)
+    expect(screen.queryByRole('checkbox', { name: /דורש שירות חיצוני/ })).toBeNull()
+    await fillValidForm()
+    fireEvent.click(screen.getByRole('button', { name: 'העלה תוסף' }))
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/plugins'))
+    expect((fetchSpy.mock.calls[0][1].body as FormData).has('requiresService')).toBe(false)
+  })
+
+  it('סימון התיבה שולח requiresService=true ומעביר לדף הגשת השירות', async () => {
+    fetchSpy.mockResolvedValue({
+      ok: true,
+      json: async () => ({ plugin: { id: 'abc', hasService: true }, serviceSubmissionUrl: '/plugins/abc/service' })
+    })
+    render(<UploadPluginPage serviceEnabled />)
+    await fillValidForm()
+    fireEvent.click(screen.getByRole('checkbox', { name: /דורש שירות חיצוני/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'העלה תוסף' }))
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/plugins/abc/service'))
+    expect((fetchSpy.mock.calls[0][1].body as FormData).get('requiresService')).toBe('true')
+    expect(showAlert).toHaveBeenCalledWith('הצלחה', expect.stringContaining('להשלים את הגשת השירות'))
+  })
+
+  it('תיבה גלויה אך לא סומנה — בלי requiresService', async () => {
+    fetchSpy.mockResolvedValue({ ok: true, json: async () => ({ plugin: { id: 'p1' } }) })
+    render(<UploadPluginPage serviceEnabled />)
+    await fillValidForm()
+    fireEvent.click(screen.getByRole('button', { name: 'העלה תוסף' }))
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/plugins'))
+    expect((fetchSpy.mock.calls[0][1].body as FormData).has('requiresService')).toBe(false)
+  })
+
+  it('דף השרת מעביר את מצב הדגל מ-SERVICE_PLUGINS_ENABLED', async () => {
+    findPlugins.mockResolvedValue([])
+    vi.stubEnv('SERVICE_PLUGINS_ENABLED', 'true')
+    try {
+      render(await UploadPluginServerPage())
+      expect(screen.getByRole('checkbox', { name: /דורש שירות חיצוני/ })).not.toBeChecked()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+})

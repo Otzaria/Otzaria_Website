@@ -19,6 +19,8 @@ export interface Plugin {
   originalDate?: string
   // מועד השינוי האחרון של קובץ התוסף בפועל (לא אישורים/עריכות מטא-דאטה)
   fileUpdatedAt?: string
+  // מועד הפרסום הראשון (ISO) — למיון "החדשים ביותר"; null כשאין תאריך ידוע
+  publishedAt?: string | null
   compatibleWith: string
   tags: string[]
   image: string
@@ -37,6 +39,8 @@ export interface Plugin {
   ratingBreakdown?: number[]
   // מצורף רק בנתיבים שמחשבים קטגוריות (דף תוסף, חיפוש)
   categories?: CategoryRef[]
+  // תוסף שפועל מול שירות מקומי — ההורדה דרך "אפשרויות הורדה" (מתקין / תוסף)
+  hasService?: boolean
 }
 
 // השדות שכרטיס תוסף מציג — מה שדפי החנות מעבירים לרכיבי הלקוח (ולא את
@@ -57,8 +61,10 @@ export type PluginCardData = Pick<
   | 'ratingAvg'
   | 'ratingCount'
   | 'fileUpdatedAt'
+  | 'publishedAt'
   | 'originalDate'
   | 'updatedAt'
+  | 'hasService'
 > & { description?: string }
 
 // תקציר קטגוריה (כפי שמוחזר מ-/api/plugins/categories ומ-store-home)

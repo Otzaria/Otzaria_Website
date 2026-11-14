@@ -11,6 +11,7 @@ import {
   lowestSupportedAppVersion
 } from '@/lib/pluginCompatibility'
 import { badRequest, notFound, serverError } from '@/lib/apiResponse'
+import { isServicePlugin, pluginStoreUrl } from '@/lib/servicePlugins/existingPaths'
 
 // GET /api/plugins/<id>/latest
 //   → הגרסה האחרונה (החיה) של התוסף.
@@ -43,7 +44,7 @@ export async function GET(request, { params }) {
     await dbConnect()
     // תוסף מושהה אינו נחשף בנתיב הציבורי הזה (ראו pluginVisibility)
     const plugin = await Plugin.findOne({ _id: id, ...PUBLIC_PLUGIN_FILTER })
-      .select('name slug version status compatibleWith maxAppVersion requiresNetwork pluginFileExt pluginFileSize pluginFileSha256 versions updatedAt')
+      .select('name slug version status compatibleWith maxAppVersion requiresNetwork pluginFileExt pluginFileSize pluginFileSha256 versions updatedAt hasService')
       .lean()
     if (!plugin) {
       return notFound('Plugin not found')
@@ -55,7 +56,11 @@ export async function GET(request, { params }) {
       slug: plugin.slug,
       // הגרסה האחרונה שפורסמה, בלי קשר לתאימות
       latestVersion: plugin.version,
-      appVersion: appVersionRaw || null
+      appVersion: appVersionRaw || null,
+      // תוסף שירות: הבחירה כאן היא הגרסה הנוכחית בלבד; ההתקנה דרך דף החנות
+      ...(isServicePlugin(plugin)
+        ? { requiresServiceCheck: true, storeUrl: pluginStoreUrl(plugin._id.toString()) }
+        : {})
     }
 
     // ללא appVersion: הגרסה החיה. עם appVersion: הגבוהה ביותר שתומכת בה.

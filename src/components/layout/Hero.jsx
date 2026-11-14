@@ -62,7 +62,7 @@ export default function Hero() {
           </p>
 
           {/* כפתורים.
-              prefetch={false} כי שני היעדים מוגנים ב-proxy: לאורח, prefetch
+              prefetch={false} כי היעד מוגן ב-proxy: לאורח, prefetch
               מייצר בקשת RSC שמסתיימת ב-redirect לדף ההתחברות, ומשם גם את
               חבילות ה-JavaScript שלו — עבודה שלמה על תוכן שלא יוצג. */}
           <div
@@ -76,14 +76,6 @@ export default function Hero() {
             >
               <span className="material-symbols-outlined">library_books</span>
               <span>התחל לערוך</span>
-            </Link>
-            <Link
-              href="/library/dicta-books"
-              prefetch={false}
-              className="flex items-center justify-center gap-2 px-8 py-4 glass border-2 border-primary text-primary rounded-lg text-lg font-medium hover:bg-primary-container transition-all duration-200 hover:scale-105 hover:-translate-y-0.5 active:scale-95"
-            >
-              <span className="material-symbols-outlined">edit_note</span>
-              <span>ערוך ספרי דיקטה</span>
             </Link>
           </div>
         </div>

@@ -93,7 +93,7 @@ export default function PluginCard({
       <PluginInstallActions
         plugin={plugin}
         installState={installState}
-        onInstall={() => onInstall(plugin)}
+        onInstall={(downloadUrl) => onInstall(downloadUrl ? { ...plugin, downloadUrl } : plugin)}
         emphasis="card"
         className="relative z-(--z-raised) mt-auto pt-1"
       />

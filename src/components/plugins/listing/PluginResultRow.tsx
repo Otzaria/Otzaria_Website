@@ -93,7 +93,7 @@ export default function PluginResultRow({
       <PluginInstallActions
         plugin={plugin}
         installState={installState}
-        onInstall={() => onInstall(plugin)}
+        onInstall={(downloadUrl) => onInstall(downloadUrl ? { ...plugin, downloadUrl } : plugin)}
         emphasis="card"
         className={cx('relative z-(--z-raised)', ACTIONS_COLUMN)}
       />

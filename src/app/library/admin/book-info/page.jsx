@@ -1,39 +1,28 @@
-'use client'
+// דף "פרטי ספרים" בניהול (/library/admin/book-info) — בקשות המיזוג ל-book_info.csv שנפתחו משינויים של משתמשים,
+// וההצעות הישנות שעוד לא נפתחו כבקשה. כל המסך ב-BookInfoScreen (src/components/admin/bookInfo), שטוען ושולח לאותן
+// נקודות קצה כמו קודם (/api/admin/book-info/*).
+//
+// הגישה — מנהל כללי ומנהל ספרים (proxy.js; מנהל ספרים-בלבד לא, בכוונה), וה-API בודק שוב (hasBooksAccess). הבדיקה
+// כאן (אותה פונקציה) — הגנת עומק: מי שהגיע בלי הרשאה רואה "אין לך הרשאה" ולא מסך שנכשל בטעינה.
+// Suspense — BookInfoScreen קורא את הכתובת (useSearchParams); עד שהוא מוכן — השלד של התצוגה שבכתובת.
+import { Suspense } from 'react'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { hasBooksAccess } from '@/lib/roles'
+import { parseBookInfoQuery } from '@/lib/adminBookInfoScreen/bookInfoQuery'
+import NoAccess from '@/components/admin/list/NoAccess'
+import BookInfoScreen from '@/components/admin/bookInfo/BookInfoScreen'
+import { BookInfoScreenSkeleton } from '@/components/admin/bookInfo/BookInfoSkeleton'
 
-import { useState } from 'react'
-import BookInfoChangeSetsList from '@/components/admin/bookInfo/BookInfoChangeSetsList'
-import LegacyBookInfoQueue from '@/components/admin/bookInfo/LegacyBookInfoQueue'
-
-const LIBRARY_FILE_URL = 'https://github.com/Otzaria/otzaria-library/blob/main/ForDB/book_info.csv'
-
-export default function AdminBookInfoPage() {
-  const [refreshKey, setRefreshKey] = useState(0)
-
+export default async function AdminBookInfoPage({ searchParams }) {
+  const session = await getServerSession(authOptions)
+  if (!hasBooksAccess(session?.user)) {
+    return <NoAccess description="המסך פתוח למנהל כללי ולמנהל ספרים. אם אתה אמור לראות אותו, פנה למנהל האתר." />
+  }
+  const { view } = parseBookInfoQuery(await searchParams)
   return (
-    <div className="glass-strong p-6 rounded-xl">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-on-surface">מידע על ספרים</h2>
-          <p className="text-on-surface/60">
-            כל עריכה מדף &quot;מידע על ספרים&quot; נפתחת כבקשת מיזוג (PR) לקובץ{' '}
-            <a href={LIBRARY_FILE_URL} target="_blank" rel="noreferrer" className="underline" dir="ltr">
-              ForDB/book_info.csv
-            </a>{' '}
-            בריפו הספרייה. האישור הוא מיזוג הבקשה ב-GitHub.
-          </p>
-        </div>
-        <a
-          href="/api/admin/book-info/export-csv"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-success-alt-600 text-white rounded-lg hover:bg-success-alt-700 shrink-0"
-          download
-        >
-          <span className="material-symbols-outlined">download</span>
-          הורדת book_info.csv
-        </a>
-      </div>
-
-      <BookInfoChangeSetsList refreshKey={refreshKey} />
-      <LegacyBookInfoQueue onPublished={() => setRefreshKey((key) => key + 1)} />
-    </div>
+    <Suspense fallback={<BookInfoScreenSkeleton view={view} />}>
+      <BookInfoScreen />
+    </Suspense>
   )
 }

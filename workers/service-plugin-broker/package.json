@@ -1,0 +1,13 @@
+{
+  "name": "otzaria-service-plugin-broker",
+  "private": true,
+  "type": "module",
+  "description": "מתווך הבדיקות של תוספי שירות: ClamAV, Release, חילוץ 7-Zip, אישור בנייה, VirusTotal, הכנת מקור וסקירת Claude Code",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "start": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/main.js",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"test/*.test.mjs\""
+  }
+}

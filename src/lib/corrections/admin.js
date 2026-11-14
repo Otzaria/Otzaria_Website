@@ -3,7 +3,7 @@
  */
 import mongoose from 'mongoose';
 import User from '../../models/User.js';
-import { canHandleCorrections, canManageCorrections, canConfigureCorrections } from '../roles.js';
+import { canHandleCorrections, canManageCorrections, canConfigureCorrections, getRoles, roleQuery } from '../roles.js';
 import { setRuntimeFlags } from './runtime.js';
 import { PUBLISH_MODES } from './config.js';
 
@@ -13,9 +13,10 @@ const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export async function listHandlers({ user }) {
   if (!canHandleCorrections(user)) return err(403, 'Forbidden');
-  const users = await User.find({ $or: [{ role: { $in: ['admin', 'admin_books'] } }, { isCorrectionsVolunteer: true }] })
-    .select('name role isCorrectionsVolunteer').sort({ name: 1 }).limit(500).lean();
-  return ok({ users: users.map((u) => ({ id: String(u._id), name: u.name, role: u.role, volunteer: u.isCorrectionsVolunteer === true })) });
+  // מנהל כללי / מנהל ספרים — גם כשזה אחד מכמה תפקידים (roles), לא רק הראשי
+  const users = await User.find({ $or: [...roleQuery(['admin', 'admin_books']).$or, { isCorrectionsVolunteer: true }] })
+    .select('name role roles isCorrectionsVolunteer').sort({ name: 1 }).limit(500).lean();
+  return ok({ users: users.map((u) => ({ id: String(u._id), name: u.name, role: u.role, roles: getRoles(u), volunteer: u.isCorrectionsVolunteer === true })) });
 }
 
 export async function searchUsers({ user, q }) {
@@ -24,8 +25,8 @@ export async function searchUsers({ user, q }) {
   const filter = query
     ? { $or: [{ name: { $regex: escapeRe(query), $options: 'i' } }, { email: { $regex: escapeRe(query), $options: 'i' } }] }
     : { isCorrectionsVolunteer: true };
-  const users = await User.find(filter).select('name role isCorrectionsVolunteer').sort({ name: 1 }).limit(30).lean();
-  return ok({ users: users.map((u) => ({ id: String(u._id), name: u.name, role: u.role, volunteer: u.isCorrectionsVolunteer === true, handles: canHandleCorrections(u) })) });
+  const users = await User.find(filter).select('name role roles isCorrectionsVolunteer').sort({ name: 1 }).limit(30).lean();
+  return ok({ users: users.map((u) => ({ id: String(u._id), name: u.name, role: u.role, roles: getRoles(u), volunteer: u.isCorrectionsVolunteer === true, handles: canHandleCorrections(u) })) });
 }
 
 export async function setVolunteer({ user, targetUserId, value }) {

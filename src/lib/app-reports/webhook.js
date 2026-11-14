@@ -104,7 +104,7 @@ export async function syncIssueFromGithub(number, deps) {
       : createGithubClient({ token: deps.config.githubToken, repo: getProduct(product).repo, fetchImpl: deps.fetchImpl });
     if (!github) return;
     const issue = await github.getIssue(number);
-    await handleIssueStateChange(issue, { ...deps, product, now: new Date() });
+    await handleIssueStateChange(issue, { ...deps, product, github, now: new Date() });
   } catch (error) {
     // ה-cron יסנכרן את ה-issue בריצה הבאה.
     console.error(`App reports webhook: ${product} issue #${number} failed:`, error?.message);

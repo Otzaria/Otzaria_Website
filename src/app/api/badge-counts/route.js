@@ -22,7 +22,7 @@ export async function GET() {
     const denied = requireAccess(session, hasAnyAdminAccess)
     if (denied) return denied
 
-    const counts = await getAdminBadgeCounts(session.user.role)
+    const counts = await getAdminBadgeCounts(session.user)
     return NextResponse.json(
       { success: true, ...counts },
       { headers: { 'Cache-Control': 'private, no-store' } }

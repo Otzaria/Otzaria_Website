@@ -8,7 +8,7 @@ import { hasBooksAccess } from '@/lib/roles';
 
 export async function GET(request) {
     const session = await getServerSession(authOptions);
-    if (!hasBooksAccess(session?.user?.role)) {
+    if (!hasBooksAccess(session?.user)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     try {

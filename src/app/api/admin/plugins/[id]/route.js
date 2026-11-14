@@ -29,6 +29,10 @@ import {
   suspensionError
 } from '@/lib/pluginVisibility'
 import { requireAccess, badRequest, notFound, serverError } from '@/lib/apiResponse'
+import ServicePluginReview from '@/models/ServicePluginReview'
+import { ACTIVE_STATUSES } from '@/lib/servicePlugins/policy'
+import { deleteReviewFiles } from '@/lib/servicePlugins/storage'
+import { isServicePlugin, serviceBlockedBody } from '@/lib/servicePlugins/existingPaths'
 
 // PATCH /api/admin/plugins/[id]  body: { action: 'approve' | 'unapprove' | 'suspend' | 'resume' }
 // באישור נתמך גם categoryIds אופציונלי — שיבוץ התוסף לקטגוריות החנות מיד עם האישור.
@@ -75,6 +79,11 @@ export async function PATCH(request, { params }) {
           : 'התוסף הוחזר לחנות',
         plugin
       })
+    }
+
+    // ביטול אישור היה מנתק את isApproved ממצביעי הבדיקה; לתוספי שירות — השהיה בלבד
+    if ((action === 'approve' || action === 'unapprove') && isServicePlugin(plugin)) {
+      return NextResponse.json(serviceBlockedBody(action, plugin._id.toString()), { status: 409 })
     }
 
     if (action === 'approve') {
@@ -274,6 +283,10 @@ export async function DELETE(request, { params }) {
       })
     }
 
+    if (isServicePlugin(plugin) && !(await releaseServiceReviews(plugin._id, session.user.id))) {
+      return NextResponse.json(serviceBlockedBody('deleteWhileReviewing', id), { status: 409 })
+    }
+
     try {
       await deletePluginDir(id)
     } catch (fsErr) {
@@ -302,4 +315,29 @@ export async function DELETE(request, { params }) {
     console.error('Error deleting plugin:', error)
     return serverError('Failed to delete plugin')
   }
+}
+
+const BUSY_REVIEW_STATUSES = ['queued', 'running']
+
+// לפני מחיקת תוסף שירות: false כשבדיקה בתור/בריצה. אחרת מבטלים את ההגשה הפעילה ומוחקים
+// את קובצי כל ההגשות; מסמכי ההגשות והדוחות נשמרים.
+async function releaseServiceReviews(pluginId, userId) {
+  const busy = { pluginId, status: { $in: BUSY_REVIEW_STATUSES } }
+  if (await ServicePluginReview.exists(busy)) return false
+  const now = new Date()
+  await ServicePluginReview.updateMany(
+    { pluginId, status: { $in: ACTIVE_STATUSES.filter((status) => !BUSY_REVIEW_STATUSES.includes(status)) } },
+    {
+      $set: { status: 'cancelled', activeKey: null, cancelledBy: userId, cancelledAt: now, cancelReason: 'התוסף נמחק בידי מנהל' },
+      $inc: { fence: 1 }
+    }
+  )
+  // בודק שתפס הגשה בין שתי השאילתות — קבציה נשארים
+  if (await ServicePluginReview.exists(busy)) return false
+  const reviews = await ServicePluginReview.find({ pluginId }).select('_id').lean()
+  for (const review of reviews) {
+    await deleteReviewFiles(review._id.toString())
+  }
+  await ServicePluginReview.updateMany({ pluginId, filesDeletedAt: null }, { $set: { filesDeletedAt: now } })
+  return true
 }

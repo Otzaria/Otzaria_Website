@@ -6,7 +6,7 @@ import { forbidden } from '@/lib/apiResponse'
 // וידוא הרשאת מנהל תוספים — משותף לכל נתיבי הניהול של חנות התוספים.
 export async function requirePluginsAdmin() {
   const session = await getServerSession(authOptions)
-  if (!session || !hasPluginsAccess(session.user?.role)) {
+  if (!session || !hasPluginsAccess(session.user)) {
     return { ok: false, response: forbidden('Unauthorized') }
   }
   return { ok: true, session }

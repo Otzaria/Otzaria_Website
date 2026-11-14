@@ -11,10 +11,17 @@ export class FakeIssuesGitHub {
     this.nextNumber = 100;
   }
 
-  setState(number, state, stateReason = null) {
+  setState(number, state, stateReason = null, { closedBy = 'maintainer', closedAt = new Date() } = {}) {
     const issue = this.issues.get(number);
     issue.state = state;
     issue.state_reason = stateReason;
+    issue.closed_at = state === 'closed' ? closedAt.toISOString() : null;
+    issue.closed_by = state === 'closed' ? { login: closedBy } : null;
+  }
+
+  /** תגובה של משתמש אנושי (מתחזק) — כמו "סגירה עם תגובה" באתר GitHub. */
+  addComment(number, body, { author = 'maintainer', createdAt = new Date() } = {}) {
+    this.comments.push({ id: this.comments.length + 1, issue: number, body, user: { login: author }, created_at: createdAt.toISOString() });
   }
 
   fetch = async (url, init = {}) => {
@@ -40,9 +47,15 @@ export class FakeIssuesGitHub {
     if (method === 'POST' && (m = rest.match(/^\/issues\/(\d+)\/comments$/))) {
       const number = Number(m[1]);
       if (!this.issues.has(number)) return json(404, { message: 'Not Found' });
-      const comment = { id: this.comments.length + 1, issue: number, body: body.body, html_url: `https://github.com/${this.repo}/issues/${number}#issuecomment-${this.comments.length + 1}` };
+      const comment = { id: this.comments.length + 1, issue: number, body: body.body, user: { login: 'otzaria-bot' }, created_at: new Date().toISOString(), html_url: `https://github.com/${this.repo}/issues/${number}#issuecomment-${this.comments.length + 1}` };
       this.comments.push(comment);
       return json(201, comment);
+    }
+    if (method === 'GET' && (m = rest.match(/^\/issues\/(\d+)\/comments$/))) {
+      const number = Number(m[1]);
+      if (!this.issues.has(number)) return json(404, { message: 'Not Found' });
+      const since = u.searchParams.get('since');
+      return json(200, this.comments.filter((c) => c.issue === number && (!since || c.created_at >= since)));
     }
     if (method === 'GET' && (m = rest.match(/^\/issues\/(\d+)$/))) {
       const issue = this.issues.get(Number(m[1]));

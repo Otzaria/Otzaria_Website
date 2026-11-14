@@ -9,7 +9,6 @@ import { GUIDE_FIGURES } from '@/lib/pageProof/guideFigures'
 // שנשמר בדף הניהול. העיצוב — לפי התגיות (פרק = כרטיס, כותרת עם אייקון, רשימות ממוספרות, kbd, "note"/"muted"/"lead").
 // האיורים: renderGuide משאיר במקום כל [[איור:…]] מקום-שמור (data-guide-figure), והרכיב ממלא אותו באיור עצמו — שורש-React
 // קטן לכל איור (createRoot), כי התוכן סביבו הוא HTML שאינו בידי React (portal לתוכו לא נשאר).
-// משמש גם לתצוגה-המקדימה בדף הניהול (GuideEditorCard).
 
 const BODY = [
   'space-y-8 text-lg leading-relaxed text-on-surface/85',

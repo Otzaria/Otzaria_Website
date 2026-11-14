@@ -4,7 +4,7 @@
  */
 import {
   claimReport, releaseReport, reassignReport, approveReport, editAndApproveReport, rejectReport, rejectApprovedReport,
-  closeManualReport, resubmitToService, previewSourceChoice,
+  closeManualReport, reopenReport, resubmitToService, previewSourceChoice, checkSourcePath,
 } from './volunteer.js';
 import { triggerWorkerBatch } from './run-batch.js';
 import { scheduleApprovalThanks } from './reporter-thanks.js';
@@ -52,8 +52,12 @@ async function dispatchAction({ user, id, body, config, deps, now }) {
       return rejectApprovedReport({ ...common, reason: str(body.reason, 2000) });
     case 'close_manual':
       return closeManualReport({ ...common, note: str(body.note, 2000) });
+    case 'reopen':
+      return reopenReport(common);
     case 'resubmit':
       return resubmitToService(common);
+    case 'check_source_path':
+      return checkSourcePath({ user, id, path: str(body.path, 1000), config, deps });
     case 'preview_source':
       return previewSourceChoice({ user, id, path: str(body.path, 1000), lineIndex: int(body.lineIndex), config, deps });
     default:

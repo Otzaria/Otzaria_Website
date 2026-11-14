@@ -2,6 +2,7 @@ import AppIcon from '@/components/ui/AppIcon'
 import { cx } from '@/components/ui/cx'
 import RatingSummary from '@/components/plugins/RatingSummary'
 import StatusBadge from '@/components/plugins/StatusBadge'
+import ServiceBadge from '@/components/plugins/service/ServiceBadge'
 
 /**
  * שורת המטא של תוסף — משותפת לכרטיס (PluginCard) ולשורת תוצאת החיפוש (listing/PluginResultRow), כדי
@@ -28,6 +29,7 @@ export interface PluginMetaData {
   downloadCount?: number
   ratingAvg?: number
   ratingCount?: number
+  hasService?: boolean
 }
 
 export default function PluginMeta({ plugin, category, className }: {
@@ -56,6 +58,7 @@ export default function PluginMeta({ plugin, category, className }: {
           {showsStatusBadge(plugin.status) && <StatusBadge status={plugin.status as string} />}
         </span>
       )}
+      {plugin.hasService && <ServiceBadge />}
     </p>
   )
 }

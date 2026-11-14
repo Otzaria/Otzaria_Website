@@ -1,0 +1,70 @@
+# מתווך הבדיקות של תוספי שירות — יחידת systemd לדוגמה.
+# התקנה: /etc/systemd/system/otzaria-service-broker.service ; הגדרות ב-/etc/otzaria/service-broker.env,
+# והסודות כקובץ לכל סוד ב-/etc/otzaria/credentials/ (0600, root) — נטענים ב-LoadCredential ולא בסביבה.
+[Unit]
+Description=Otzaria service-plugin review broker
+Documentation=file:///opt/otzaria-website/workers/service-plugin-broker/README.he.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=otzaria-broker
+Group=otzaria-broker
+WorkingDirectory=/opt/otzaria-website/workers/service-plugin-broker
+EnvironmentFile=/etc/otzaria/service-broker.env
+LoadCredential=SERVICE_PLUGIN_WORKER_SECRET:/etc/otzaria/credentials/SERVICE_PLUGIN_WORKER_SECRET
+LoadCredential=GH_TOKEN:/etc/otzaria/credentials/GH_TOKEN
+# קובץ חסר מונע את עליית השירות — להסיר את ההערה רק כשהסוד קיים.
+#LoadCredential=ANTHROPIC_API_KEY:/etc/otzaria/credentials/ANTHROPIC_API_KEY
+#LoadCredential=VT_API_KEY:/etc/otzaria/credentials/VT_API_KEY
+Environment=SERVICE_BROKER_DATA_DIR=/var/lib/otzaria-broker/data
+Environment=HOME=/var/lib/otzaria-broker/home
+# בפרודקשן המתווך מסרב לעלות בלי SANDBOX_WRAPPER (ב-service-broker.env; ראו README.he.md).
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/main.js
+# קוד 75: הקוד בדיסק התעדכן בפריסה והמתווך סיים את משימתו — systemd מעלה אותו מחדש עם הקוד החדש.
+Restart=on-failure
+RestartSec=30
+# הגדרות חסרות (קוד 78) — אין טעם לנסות שוב בלולאה.
+RestartPreventExitStatus=78
+KillMode=control-group
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+StateDirectory=otzaria-broker otzaria-broker/home otzaria-broker/data
+StateDirectoryMode=0750
+UMask=0027
+ReadWritePaths=/var/lib/otzaria-broker
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+SystemCallArchitectures=native
+# @mount נדרש ל-bwrap (mount/pivot_root בתוך מרחב השמות). בלי עטיפת bwrap אפשר להסיר אותו.
+SystemCallFilter=@system-service @mount
+CapabilityBoundingSet=
+AmbientCapabilities=
+# AF_NETLINK נדרש ל-bwrap כדי להעלות loopback בתוך מרחב רשת מבודד.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+# מרחבי שמות נדרשים לעטיפת הבידוד (bwrap / unshare). בלי עטיפה אפשר להחמיר ל-RestrictNamespaces=yes.
+RestrictNamespaces=user net mnt pid ipc uts
+TasksMax=512
+LimitNOFILE=8192
+MemoryMax=8G
+
+[Install]
+WantedBy=multi-user.target

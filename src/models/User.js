@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { ROLE_ENUM, ASSIGNABLE_ROLES } from '../lib/roles.js';
 
 const UserSchema = new mongoose.Schema({
   name: { type: String, required: true, unique: true },
@@ -6,8 +7,14 @@ const UserSchema = new mongoose.Schema({
   // אופציונלי: חשבון שנוצר דרך התחברות עם Google אין לו סיסמה כלל (ההתחברות
   // בסיסמה נדחית עבורו). בהרשמה הרגילה הסיסמה עדיין חובה, ונאכפת בראוט ההרשמה.
   password: { type: String },
-  role: { type: String, enum: ['user', 'admin', 'admin_plugins', 'admin_books', 'admin_books_only', 'admin_ocr', 'model_trainer', 'developer'], default: 'user' },
+  // תפקידים (src/lib/roles.js): roles הוא מקור האמת — משתמש יכול להחזיק כמה תפקידים יחד. role הוא
+  // התפקיד הראשי (primaryRole של roles), נשמר מסונכרן לתאימות לאחור; רשומה ישנה בלי roles — התפקיד
+  // שלה הוא role. לבדוק הרשאות רק דרך העוזרים ב-roles.js (getRoles/hasXAccess), לא בהשוואה ל-role.
+  role: { type: String, enum: ROLE_ENUM, default: 'user' },
+  roles: { type: [{ type: String, enum: ASSIGNABLE_ROLES }], default: undefined },
   points: { type: Number, default: 0 },
+  // מזהי תופעות לוואי של צורת הדף — מאפשרים ניקוד idempotent ללא transaction מרובת מסמכים.
+  tzuratPointEvents: { type: [String], default: [] },
   acceptReminders: { type: Boolean, default: false },
   resetPasswordToken: { type: String },
   resetPasswordExpires: { type: Date },
@@ -32,7 +39,6 @@ const UserSchema = new mongoose.Schema({
   // הגדרות התראות על העלאות
   uploadNotifications: {
     enabled: { type: Boolean, default: false },
-    dicta: { type: Boolean, default: false },
     fullBook: { type: Boolean, default: false },
     singlePage: { type: Boolean, default: false }
   },
@@ -56,6 +62,9 @@ const UserSchema = new mongoose.Schema({
 
   // מתנדב תיקוני טקסט: רשאי לטפל ולאשר תיקונים (נפרד מהרשאות ניהול המערכת)
   isCorrectionsVolunteer: { type: Boolean, default: false },
+
+  // צורת הדף (docs/tzurat-hadaf/CONTRACT.md): המתנדב סיים את התרגול של המסלול המהיר
+  tzuratPracticeDone: { type: Boolean, default: false },
 }, { timestamps: true });
 
 const User = mongoose.models.User || mongoose.model('User', UserSchema);

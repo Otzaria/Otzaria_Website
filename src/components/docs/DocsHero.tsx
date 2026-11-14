@@ -5,7 +5,7 @@ import { cx } from '@/components/ui/cx'
 
 /**
  * כותרת דף מדריך: אריח אייקון + PageHeader (h1 בגופן התצוגה, הקישוט, שורת משנה).
- * center — דף הבית של המדריכים ודפי דיקטה/פיתוח; start — דף ויקי (מעל עמודת הקריאה).
+ * center — דף הבית של המדריכים ודף הפיתוח; start — דף ויקי (מעל עמודת הקריאה).
  */
 export default function DocsHero({ id, icon, title, subtitle, align = 'center', className }: {
   id: string

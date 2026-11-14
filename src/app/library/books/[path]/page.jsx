@@ -13,6 +13,8 @@ import { FOCUS_RING } from '@/components/ui/focusRing'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { hasBookLibraryAccess } from '@/lib/roles'
 import { formatHebrewDate, formatTimeAgo } from './pageCardDates'
+import ClaimQuotaBadge from '@/components/library/ClaimQuotaBadge'
+import { canClaimAnotherPage, claimLimitMessage, claimRulesText, CLAIM_LIMIT_ERROR_CODE } from '@/lib/pageClaimPolicy'
 
 const pageStatusConfig = {
   available: {
@@ -73,13 +75,15 @@ export default function BookPage() {
   const { data: session } = useSession()
   const router = useRouter()
   const params = useParams()
-  const { showAlert, showConfirm } = useDialog()
+  const { showAlert, showConfirm, showMessage } = useDialog()
   
   const rawPath = Array.isArray(params.path) ? params.path.join('/') : params.path
   const bookPath = decodeURIComponent(rawPath)
   
   const [bookData, setBookData] = useState(null)
   const [pages, setPages] = useState([])
+  // מכסת העמודים ושחרור אוטומטי (pageClaimPolicy.js) — מגיע מ-/api/book/[id]
+  const [claimPolicy, setClaimPolicy] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [viewMode, setViewMode] = useState('single') 
@@ -132,6 +136,7 @@ export default function BookPage() {
       if (result.success) {
         setBookData(result.book)
         setPages(result.pages || [])
+        setClaimPolicy(result.claimPolicy || null)
       } else {
         setError(result.error || 'שגיאה בטעינת הספר')
       }
@@ -218,7 +223,10 @@ export default function BookPage() {
                             page.number === pageNumber ? result.page : page
                         )
                     );
+                    setMyActivePages(n => n + 1);
                     showAlert('בוצע', 'העמוד הוחזר לסטטוס בטיפול');
+                } else if (result.code === CLAIM_LIMIT_ERROR_CODE) {
+                    showClaimLimit(result);
                 } else {
                     showAlert('שגיאה', result.error);
                 }
@@ -230,15 +238,34 @@ export default function BookPage() {
     );
   };
 
+  const setMyActivePages = (next) => {
+    setClaimPolicy(prev => {
+      if (!prev || typeof prev.myActivePages !== 'number') return prev
+      const value = typeof next === 'function' ? next(prev.myActivePages) : next
+      return typeof value === 'number' ? { ...prev, myActivePages: Math.max(0, value) } : prev
+    })
+  }
+
+  const showClaimLimit = (result) => {
+    if (typeof result?.activeClaims === 'number') setMyActivePages(result.activeClaims)
+    showMessage('הגעת למכסת העמודים', result?.error || claimLimitMessage(), 'הבנתי')
+  }
+
   const handleClaimPage = async (pageNumber) => {
     if (!session) {
       router.push(`/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
       return
     }
 
+    // בדיקה מוקדמת בלבד, לחוויה; השרת הוא שאוכף את המכסה
+    if (claimPolicy && !claimPolicy.exempt && !canClaimAnotherPage(claimPolicy.myActivePages)) {
+      showClaimLimit(null)
+      return
+    }
+
     showConfirm(
         `עבודה על עמוד ${pageNumber}`,
-        `האם אתה מעוניין לעבוד על עמוד זה?\nהעמוד יסומן כ"בטיפול" ויוצמד אליך.`,
+        `האם אתה מעוניין לעבוד על עמוד זה?\nהעמוד יסומן כ"בטיפול" ויוצמד אליך.${claimPolicy && !claimPolicy.exempt ? `\n\n${claimRulesText()}` : ''}`,
         async () => {
             if (!session.user || (!session.user.id && !session.user._id)) {
                 showAlert('שגיאה', 'שגיאת התחברות: חסר מזהה משתמש. נסה להתחבר מחדש.');
@@ -272,8 +299,13 @@ export default function BookPage() {
                         } : page
                     )
                     )
+                    if (typeof result.activeClaims === 'number') setMyActivePages(result.activeClaims)
                     showAlert('בהצלחה!', 'העמוד נתפס על ידך בהצלחה. כעת תוכל לערוך אותו.');
                 } else {
+                    if (result.code === CLAIM_LIMIT_ERROR_CODE) {
+                        showClaimLimit(result);
+                        return;
+                    }
                     if (result.error === 'TERMS_NOT_ACCEPTED' || result.redirectUrl) {
                         router.push('/library/auth/approve-terms-on-edit');
                         return;
@@ -326,6 +358,7 @@ export default function BookPage() {
             page.number === pageNumber ? result.page : page
           )
         )
+        setMyActivePages(n => n - 1)
       } else {
         showAlert('שגיאה', result.error);
       }
@@ -587,6 +620,12 @@ export default function BookPage() {
             </div>
           </div>
           
+          {session?.user && !bookData.isOwner && (
+            <div className="mb-5">
+              <ClaimQuotaBadge policy={claimPolicy} />
+            </div>
+          )}
+
           <div className={
             viewMode === 'single'
               ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4'
@@ -612,7 +651,7 @@ export default function BookPage() {
                     currentUser={session?.user}
                     isBookOwner={bookData.isOwner}
                     bookPath={bookPath}
-                    isAdmin={hasBookLibraryAccess(session?.user?.role)}
+                    isAdmin={hasBookLibraryAccess(session?.user)}
                   />
               </div>
             ))}

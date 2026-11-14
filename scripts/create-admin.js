@@ -50,6 +50,8 @@ async function createAdmin() {
                     email: email, 
                     password: hashedPassword, 
                     role: 'admin',
+                    // תפקידים מרובים (src/lib/roles.js): roles הוא מקור האמת — מסונכרן עם role
+                    roles: ['admin'],
                     points: 1000,
                     createdAt: new Date(),
                     updatedAt: new Date()

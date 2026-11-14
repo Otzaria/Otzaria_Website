@@ -1,0 +1,258 @@
+/* ============================================================
+ * editor-themes.css — ערכות התצוגה של עורך העמוד (/library/books/[path]/[pageNumber])
+ * ------------------------------------------------------------
+ * הערכה חלה על שורש העורך בלבד (data-editor-theme על ה-<main> של EditorShell), לא על <html>:
+ * שאר האתר עדיין בהיר (theme-dark.css לא מופעל — ראו design-system.md §9).
+ *
+ * למה מוגדרים כאן מחדש גם כינויים וטוקני רכיב: כינוי (--color-card: var(--color-surface)) וטוקן
+ * רכיב (--button-filled-bg: var(--color-primary)) מחושבים על :root ועוברים בירושה כערך סופי.
+ * כשמחליפים תפקיד על תת-עץ, הם היו נשארים בצבע הבהיר — ולכן הם מוגדרים שוב על שורש העורך,
+ * שם ה-var() מחושב מול התפקידים המוחלפים. (אותו עיקרון שמתואר בהערה ב-colors.css ליד focus-ring.)
+ *
+ * חלונות צפים (ui/Dialog, חלון הפקודות, תפריטים, FloatingPanel) מצוירים ב-portal לשורש העורך ולא
+ * ל-<body> (ui/portalContainer) — ולכן גם הטוקנים שלהם (--dialog-*, --shadow-menu...) מוגדרים כאן מחדש.
+ * hex — רק ב-palette.css; כאן רק var(--ref-*) ותפקידים.
+ * ============================================================ */
+
+/* דוגמאות הצבע של הערכות בהגדרות התצוגה (DisplaySettingsSheet): קבועות, לא תלויות בערכה הפעילה —
+   ולכן על :root ולא על שורש העורך. שולחן + דף של כל ערכה. */
+:root {
+  --editor-swatch-light-desk: var(--ref-desk-91);
+  --editor-swatch-light-sheet: var(--ref-sheet-96);
+  --editor-swatch-paper-desk: var(--ref-desk-87);
+  --editor-swatch-paper-sheet: var(--ref-sheet-92);
+  --editor-swatch-evening-desk: var(--ref-neutral-6);
+  --editor-swatch-evening-sheet: var(--ref-sheet-14);
+}
+
+[data-editor-shell] {
+  /* כינויים (colors.css) */
+  --color-focus-ring: var(--color-primary);
+  --color-card: var(--color-surface);
+  --color-card-selected: var(--color-surface-selected);
+  --color-tile: var(--color-secondary-container);
+  --color-on-tile: var(--color-on-secondary-container);
+  --color-on-background: var(--color-on-surface);
+  --color-primary-container: var(--color-surface-selected);
+  --color-accent: var(--color-primary-pressed);
+  --color-surface-variant: var(--color-outline-subtle);
+
+  /* טוקני רכיב (component-tokens.css) שמצביעים על תפקידים */
+  --focus-ring-color: var(--color-focus-ring);
+  --button-filled-bg: var(--color-primary);
+  --button-filled-bg-hover: var(--color-primary-hover);
+  --button-filled-bg-pressed: var(--color-primary-pressed);
+  --button-filled-fg: var(--color-on-primary);
+  --button-tonal-bg: var(--color-secondary-container);
+  --button-tonal-bg-hover: var(--color-secondary-container-hover);
+  --button-tonal-fg: var(--color-on-secondary-container);
+  --button-outlined-border: var(--color-outline);
+  --button-outlined-fg: var(--color-primary);
+  --button-outlined-bg-hover: var(--color-surface-selected);
+  --button-text-fg: var(--color-primary);
+  --button-text-bg-hover: var(--color-surface-selected);
+  --card-bg: var(--color-card);
+  --card-bg-hover: var(--color-card-selected);
+  --scrollbar-thumb: var(--color-outline-variant);
+  --scrollbar-thumb-hover: var(--color-outline);
+  --icon-tile-bg: var(--color-tile);
+  --icon-tile-fg: var(--color-on-tile);
+  --tooltip-bg: var(--color-surface);
+  --tooltip-fg: var(--color-on-surface);
+  --field-bg: var(--color-surface);
+  --field-fg: var(--color-on-surface);
+  --field-placeholder: var(--color-on-surface-variant);
+  --field-border: var(--color-outline);
+  --field-border-hover: var(--color-on-surface-variant);
+  --field-border-focus: var(--color-primary);
+  --button-danger-bg: var(--color-error);
+  --button-danger-bg-hover: color-mix(in srgb, var(--color-on-error) 8%, var(--color-error));
+  --button-danger-fg: var(--color-on-error);
+  --card-bg-tonal: color-mix(in oklab, var(--color-tile) 40%, transparent);
+  --card-bg-tonal-solid: color-mix(in oklab, var(--color-tile) 40%, var(--color-background));
+  --card-raised-ring: color-mix(in oklab, var(--color-outline-variant) 60%, transparent);
+  --chip-bg: var(--color-surface);
+  --chip-bg-hover: var(--color-surface-selected);
+  --chip-border: var(--color-outline-variant);
+  --chip-border-hover: var(--color-outline);
+  --chip-fg: var(--color-on-surface-variant);
+  --chip-fg-hover: var(--color-on-surface);
+  --chip-selected-bg: var(--color-secondary-container);
+  --chip-selected-bg-hover: var(--color-secondary-container-hover);
+  --chip-selected-fg: var(--color-on-secondary-container);
+  --chip-selected-border: var(--color-primary);
+  --skeleton-bg: var(--color-surface-container-high);
+  /* חלונות ותפריטים (ב-portal לשורש העורך) */
+  --dialog-bg: var(--color-background);
+  --dialog-scrim: color-mix(in oklab, var(--color-scrim) 45%, transparent);
+  --shadow-menu: 0 0 0 1px color-mix(in srgb, var(--color-outline-variant) 70%, transparent), var(--shadow-lg);
+  --shadow-overlay: 0 12px 24px -12px color-mix(in srgb, var(--color-shadow) 22%, transparent);
+  /* כלי העורך (שורות הכלים, הכותרת). בלי ההגדרה החוזרת כאן, בערכת ערב האייקונים נשארו חומים
+     כהים והקבוצות בהירות — הערכים חושבו על :root מול התפקידים הבהירים. */
+  --tool-fg: var(--color-on-surface-variant);
+  --tool-bg-hover: var(--color-surface-selected);
+  --tool-bg-pressed: var(--color-secondary-container);
+  --tool-bg-pressed-hover: var(--color-secondary-container-hover);
+  --tool-fg-pressed: var(--color-on-secondary-container);
+  --tool-strip-bg: var(--color-surface-container);
+  --tool-group-bg-hover: var(--color-surface-container-high);
+  --tool-group-ring: color-mix(in srgb, var(--color-primary) 11%, transparent);
+  --tool-group-shadow: 0 0 0 1px var(--tool-group-ring),
+    0 1px 2px color-mix(in srgb, var(--color-shadow) 7%, transparent),
+    0 3px 8px -3px color-mix(in srgb, var(--color-shadow) 10%, transparent);
+  --tool-group-shadow-hover: 0 0 0 1px color-mix(in srgb, var(--color-primary) 16%, transparent),
+    0 1px 2px color-mix(in srgb, var(--color-shadow) 8%, transparent),
+    0 5px 12px -4px color-mix(in srgb, var(--color-shadow) 14%, transparent);
+
+  /* אזור ההקלדה כ"דף על שולחן" (TextEditor + TextMirror). דף לבן-חם עמום במקום לבן בוהק,
+     שולחן כהה במעט סביבו. ניגודיות הטקסט ≥ 11.8:1 בכל הערכות (AAA = 7:1).
+     --editor-text-glow: צבע הסימון בטקסט בלבד (פס שורה/מילה ב-TextMirror). הצילום משתמש
+     בטוקנים --editor-scan-* שלמטה ולא מושפע. */
+  --editor-desk-bg: var(--ref-desk-91);
+  --editor-text-bg: var(--ref-sheet-96);
+  --editor-text-border: var(--color-outline-variant);
+  --editor-text-shadow: color-mix(in srgb, var(--ref-ink-12) 10%, transparent);
+  --editor-text-glow: var(--color-glow);
+  --editor-selection-bg: var(--ref-select-84);
+  /* סימון המילה על הצילום (ScanWordOverlay): מילוי ענבר-זהב (multiply — האותיות נשארות שחורות
+     וחדות) וקו דק בגוון עמוק יותר מאותה משפחה, כך שהקו נבלע במילוי ולא נראה כקו לבד */
+  --editor-scan-mark: var(--ref-primary-70);
+  --editor-scan-mark-edge: var(--ref-primary-50);
+  /* פס השורה הנוכחית על הצילום: הכהיה חומה-חמה (multiply) וקווים דקים בקצותיו — נראה במבט
+     חטוף גם על צילום אפור, והאותיות בתוכו נשארות כהות. זהה בכל הערכות (בערב הצילום כולו מעומעם
+     ב-filter, והפס מתעמעם איתו). העוצמה לפי "עוצמת הסימון": SCAN_HIGHLIGHT ב-ScanWordOverlay. */
+  --editor-scan-band: var(--ref-primary-50);
+  --editor-scan-band-edge: var(--ref-primary-50);
+
+  background-color: var(--color-background);
+  color: var(--color-on-surface);
+}
+
+/* "נייר": שולחן חם ועמוד בגוון נייר — פחות לבן בוהק מהערכה הבהירה */
+[data-editor-shell][data-editor-theme='paper'] {
+  --color-background: var(--ref-neutral-87);
+  --color-surface: var(--ref-parchment-94);
+  --color-surface-container-low: var(--ref-neutral-92);
+  --color-surface-container: var(--ref-neutral-90);
+  --color-surface-container-high: var(--ref-neutral-87);
+  --color-surface-selected: var(--ref-parchment-96);
+
+  --editor-desk-bg: var(--ref-desk-87);
+  /* כרטיסי הקבוצות בגוון הנייר (לא לבן) על פס neutral-90 */
+  --tool-group-bg: var(--color-surface-selected);
+  --editor-text-bg: var(--ref-sheet-92);
+  --editor-selection-bg: var(--ref-select-82);
+}
+
+/* "ערב": התפקידים של theme-dark.css (אותו seed). הצילום מעומעם ב-filter (editorShellLogic.scanFilterCss) */
+[data-editor-shell][data-editor-theme='evening'] {
+  color-scheme: dark;
+
+  --color-background: var(--ref-neutral-6);
+  --color-surface: var(--ref-neutral-10);
+  --color-surface-container-low: var(--ref-neutral-10);
+  --color-surface-container: var(--ref-neutral-12);
+  --color-surface-container-high: var(--ref-neutral-17);
+  --color-surface-container-highest: var(--ref-neutral-22);
+  --color-surface-selected: color-mix(in srgb, var(--ref-secondary-30) 30%, var(--ref-neutral-10));
+
+  --color-on-surface: var(--ref-neutral-90);
+  --color-on-surface-variant: var(--ref-neutral-variant-80);
+
+  --color-outline: var(--ref-neutral-variant-60);
+  --color-outline-variant: var(--ref-neutral-variant-30);
+  --color-outline-subtle: var(--ref-neutral-22);
+
+  --color-primary: var(--ref-primary-80);
+  --color-on-primary: var(--ref-primary-20);
+  --color-primary-hover: color-mix(in srgb, var(--ref-primary-20) 8%, var(--ref-primary-80));
+  --color-primary-pressed: color-mix(in srgb, var(--ref-primary-20) 12%, var(--ref-primary-80));
+
+  --color-secondary: var(--ref-secondary-80);
+  --color-secondary-container: var(--ref-secondary-30);
+  --color-on-secondary-container: var(--ref-secondary-90);
+  --color-secondary-container-hover: color-mix(in srgb, var(--ref-secondary-90) 8%, var(--ref-secondary-30));
+
+  --color-error: var(--ref-error-80);
+  --color-on-error: var(--ref-error-20);
+  --color-error-container: var(--ref-error-30);
+  --color-on-error-container: var(--ref-error-90);
+  --color-success: var(--color-success-400);
+  --color-success-container: var(--color-success-950);
+  --color-on-success-container: var(--color-success-100);
+  --color-warning-container: var(--color-warning-950);
+  --color-on-warning-container: var(--color-warning-100);
+  --color-info-container: var(--color-info-950);
+  --color-on-info-container: var(--color-info-100);
+
+  --color-scrim: var(--ref-neutral-0);
+  --color-shadow: var(--ref-neutral-0);
+
+  /* חלון על עורך כהה: משטח מוגבה מעט מהרקע (neutral-12), כדי שלא ייבלע ברקע הכהה שמאחוריו */
+  --dialog-bg: var(--color-surface-container);
+  --dialog-scrim: color-mix(in oklab, var(--color-scrim) 60%, transparent);
+
+  /* דף מעט בהיר מהשולחן; הטקסט neutral-90 ולא לבן טהור (פחות "הילה" סביב האותיות).
+     זהב מלא (gold-78) מתחת לטקסט בהיר נותן 2.4:1 במילה הנוכחית — כאן זהב כהה (5.4:1). */
+  --editor-desk-bg: var(--ref-neutral-6);
+  --editor-text-bg: var(--ref-sheet-14);
+  --editor-selection-bg: var(--ref-select-30);
+  --editor-text-shadow: color-mix(in srgb, var(--ref-neutral-0) 40%, transparent);
+  --editor-text-glow: var(--ref-state-primary-pressed);
+  /* הצילום בערב הוא דף מעומעם (אפור) — אותו ענבר למילוי, וקו בהיר יותר שבולט מול השולחן הכהה */
+  --editor-scan-mark: var(--ref-primary-70);
+  --editor-scan-mark-edge: var(--ref-primary-60);
+
+  /* שורת הכלים: פס כהה (רקע העורך), כרטיסי קבוצה ב-surface-container-high עם טבעת בהירה שקופה,
+     הברקה עליונה דקה וצל שחור — אייקונים neutral-variant-80 על הכרטיס ≥ 8:1 */
+  --tool-strip-bg: var(--color-background);
+  --tool-group-bg: var(--color-surface-container-high);
+  --tool-group-bg-hover: var(--color-surface-container-highest);
+  --tool-group-ring: color-mix(in srgb, var(--ref-neutral-90) 8%, transparent);
+  --tool-group-shadow: 0 0 0 1px var(--tool-group-ring),
+    inset 0 1px 0 color-mix(in srgb, var(--ref-neutral-90) 5%, transparent),
+    0 1px 2px color-mix(in srgb, var(--color-shadow) 50%, transparent),
+    0 4px 10px -4px color-mix(in srgb, var(--color-shadow) 60%, transparent);
+  --tool-group-shadow-hover: 0 0 0 1px color-mix(in srgb, var(--ref-neutral-90) 13%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--ref-neutral-90) 6%, transparent),
+    0 1px 2px color-mix(in srgb, var(--color-shadow) 50%, transparent),
+    0 5px 12px -4px color-mix(in srgb, var(--color-shadow) 65%, transparent);
+}
+
+/* ריווח השורות של הטקסט — ממשתנה ה-CSS שהמעטפת שמה על השורש (editorShellLogic.editorStyleVars).
+   לא שינוי ב-TextEditor עצמו: הכלל דורס את leading-relaxed (שכבת utilities) מבחוץ.
+   שכבת ה-mirror (TextMirror) חייבת לקבל בדיוק אותו גובה שורה — אחרת הסימון זז מהטקסט. */
+[data-editor-shell] .editor-container textarea,
+[data-editor-shell] .editor-container [data-text-mirror] {
+  line-height: var(--editor-text-line-height, 1.625);
+}
+
+/* "דף על שולחן": השולחן הוא מכל אזור הטקסט, הדף — ה-textarea (או שכבת ה-mirror שמתחתיו).
+   הצל לא משפיע על הפריסה, כך שיישור TextMirror מול ה-textarea נשמר. */
+[data-editor-shell] .text-editor-container {
+  background-color: var(--editor-desk-bg);
+}
+/* קו מתאר דק (outline-variant) + צל רך מעט — הדף נבדל מהשולחן גם בערכה הבהירה, שבה הגוונים קרובים */
+[data-editor-shell] .editor-container textarea {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--editor-text-border) 80%, transparent),
+    0 1px 3px var(--editor-text-shadow),
+    0 6px 16px -10px var(--editor-text-shadow);
+}
+/* בחירת טקסט: קרה ואטומה, מובחנת מהסימון הזהוב. ה-textarea מעל שכבת ה-mirror (z-[1], רקע שקוף),
+   כך שהבחירה נצבעת מעל פס השורה/המילה ולא מתחתיהם. ::selection על textarea נתמך ב-Chrome וב-Firefox. */
+[data-editor-shell] .editor-container textarea::selection {
+  background-color: var(--editor-selection-bg);
+  color: var(--color-on-surface);
+}
+
+/* יישור לשני הצדדים בפאנל צר (פחות מכ-38 תווים בשורה בגופן ברירת המחדל) יוצר "נהרות" רווחים —
+   שם חוזרים ליישור לימין. הכלל חל יחד על ה-textarea ועל שכבת ה-mirror, כדי שהסימון יישאר מול הטקסט.
+   !important — היישור מגיע ב-style של האלמנט (TextEditor). */
+[data-editor-shell] .text-editor-container {
+  container: editor-text / inline-size;
+}
+@container editor-text (max-width: 28rem) {
+  [data-editor-shell] .editor-container [style*='justify'] {
+    text-align: start !important;
+  }
+}

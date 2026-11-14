@@ -7,6 +7,9 @@
  * @returns {number} המיקום האנכי של הסמן בפיקסלים
  */
 export function getTextareaCaretTop(textarea, position) {
+  // השדה המעוצב (RichTextArea) מודד את הסמן בעצמו — אותה משמעות (מראש התוכן, כולל גלילה)
+  const rich = textarea && textarea.__richTextarea
+  if (rich) return rich.caretTop(position) ?? 0
   const computedStyle = window.getComputedStyle(textarea)
   const mirror = document.createElement('div')
   const span = document.createElement('span')

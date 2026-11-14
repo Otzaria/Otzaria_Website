@@ -50,11 +50,11 @@ export async function GET(request, { params }) {
         mode = 'edit';
         leasedUntil = renewed.leasedUntil || null;
       }
-      else if (!hasOcrAccess(session.user.role)) return forbidden('העמוד הזה אינו בטיפולכם — אפשר לתפוס אותו ברשת-העמודים של הספר');
+      else if (!hasOcrAccess(session.user)) return forbidden('העמוד הזה אינו בטיפולכם — אפשר לתפוס אותו ברשת-העמודים של הספר');
     }
 
     const [book, recut] = await Promise.all([PageProofBook.findById(page.book, { title: 1, script: 1 }).lean(), recutStatus()]);
-    const admin = hasOcrAccess(session.user.role);
+    const admin = hasOcrAccess(session.user);
     // canRecut — לבד בלי מנהל; כבוי ← לאישור מנהל (recutRules.recutRoute). "אוטומטי" בלי תוכנת-הספר — לתור הרגיל
     const ctx = await editorContext(page, userId, { edit: mode === 'edit', admin, userName: session.user.name || '', recutOn: recut.settings.recutRequests !== 'off' });
     return NextResponse.json(

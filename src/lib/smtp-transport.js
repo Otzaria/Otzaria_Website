@@ -2,8 +2,8 @@ import nodemailer from 'nodemailer';
 
 /**
  * smtp-transport — יצירת transporter משותף לכל שליחות המייל באתר
- * (reportingerrors, forgot-password, verify/send, send-email,
- * send-dicta-sync-notification ו-emailService), כדי שמדיניות TLS והגדרות
+ * (reportingerrors, forgot-password, verify/send, send-email
+ * ו-emailService), כדי שמדיניות TLS והגדרות
  * החיבור יהיו אחידות ולא נעתקו מקומית בכל route.
  *
  * ⚠️ שינוי אבטחה: בגרסאות קודמות חלק מהroutes שלחו עם

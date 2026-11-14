@@ -4,7 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
 import PageProofToken from '@/models/PageProofToken';
 import User from '@/models/User';
-import { hasOcrAccess } from '@/lib/roles';
+import { hasOcrAccess, getRoles } from '@/lib/roles';
 import { getClientIp } from '@/lib/client-ip';
 import { bearerOf, isTokenFormat, missingScope, shouldTouch, tokenState, TOUCH_MS, VIA_SUFFIX } from './tokenRules';
 import { hashToken } from './tokenSecret';
@@ -72,9 +72,9 @@ export async function getPageProofSession(request, scope) {
   if (state === 'expired') return failed(ip, 'token_expired');
 
   // המשתמש — מהמסד בכל שימוש: מנהל שהורד מתפקידו, המפתחות שלו מפסיקים לפעול מיד
-  const user = await User.findById(doc.user, { name: 1, role: 1 }).lean();
+  const user = await User.findById(doc.user, { name: 1, role: 1, roles: 1 }).lean();
   if (!user) return failed(ip, 'token_invalid');
-  if (!hasOcrAccess(user.role)) return deny(keyError(403, 'token_user'));
+  if (!hasOcrAccess(user)) return deny(keyError(403, 'token_user'));
 
   // בלי הרשאה נדרשת (טעות בראוט) — נדחה, לא "הכול מותר"
   const need = (Array.isArray(scope) ? scope : [scope]).filter(Boolean);
@@ -93,7 +93,7 @@ export async function getPageProofSession(request, scope) {
   const id = String(user._id);
   return {
     session: {
-      user: { id, _id: id, name: `${user.name || ''}${VIA_SUFFIX}`, role: user.role },
+      user: { id, _id: id, name: `${user.name || ''}${VIA_SUFFIX}`, role: user.role, roles: getRoles(user) },
       via: 'token',
       tokenId: String(doc._id),
       scopes: [...(doc.scopes || [])],

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { PROSE, SCROLL_REGION } from './proseClasses'
 
 /**
- * בלוק קוד במדריכים הקבועים (דיקטה, פיתוח) — אותו מראה כמו בלוק קוד מהוויקי. LTR, גלילה פנימית,
+ * בלוק קוד במדריך הקבוע (פיתוח) — אותו מראה כמו בלוק קוד מהוויקי. LTR, גלילה פנימית,
  * ואזור גלילה נגיש במקלדת (tabIndex + שם).
  */
 export default function DocsCodeBlock({ children, className }: { children: ReactNode; className?: string }) {

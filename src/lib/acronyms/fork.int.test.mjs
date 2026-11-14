@@ -36,7 +36,7 @@ test('a change set opens its own PR with a signed-off commit', async () => {
   assert.equal(gh.pulls.length, 1)
   assert.equal(gh.pulls[0].base, 'master')
   assert.match(gh.pulls[0].title, /כינויים מהאתר: 1 שינויים ב-1 ספרים/)
-  assert.ok(gh.pulls[0].body.includes('| **ברכות** | ➕ הוספה |  | `בר"כ` |'))
+  assert.ok(gh.pulls[0].body.includes('**ברכות**\n- [x] ➕ הוספה: `בר"כ` <!-- op:0 -->'))
   assert.match(gh.commits.get(res.headSha).message, /\nSigned-off-by: Test Bot <1\+bot@users\.noreply\.github\.com>$/)
   assert.deepEqual(aliasesOn('site/acronyms-a1', 'ברכות'), ['בר"כ'])
   assert.equal(gh.readFile('master', ACRONYMS_PATH), DUMP)
@@ -67,6 +67,63 @@ test('a rebuild refreshes the PR title and table against the new master', async 
   await refreshChangeSet(client, { ...b, id: 'b', ops }, await loadForkState(client))
   assert.match(gh.pulls[1].title, /1 שינויים ב-1 ספרים/)
   assert.match(gh.pulls[1].body, /<details><summary>1 שינויים שכבר היו במצב המבוקש/)
+})
+
+test('unchecking a change in the PR body rebuilds the branch without it, and checking it again brings it back', async () => {
+  const ops = [{ type: 'add', book: 'ברכות', alias: 'ברכ' }, { type: 'add', book: 'בראשית', alias: 'ברא' }]
+  const a = await publishChangeSet(client, { id: 'a', ops })
+  const pr = gh.pulls[a.prNumber - 1]
+  pr.body = pr.body.replace('- [x] ➕ הוספה: `ברכ`', '- [ ] ➕ הוספה: `ברכ`')
+
+  const base = await loadForkState(client)
+  const res = await refreshChangeSet(client, { ...a, id: 'a', ops }, base)
+  assert.equal(res.status, 'rebuilt')
+  assert.deepEqual(res.excluded, [0])
+  assert.deepEqual(aliasesOn('site/acronyms-a', 'ברכות'), [])
+  assert.deepEqual(aliasesOn('site/acronyms-a', 'בראשית'), ["בר'", 'ברא'])
+  assert.match(pr.title, /1 שינויים ב-1 ספרים/)
+  assert.ok(pr.body.includes('- [ ] ➕ הוספה: `ברכ` <!-- op:0 -->'))
+
+  // הבנייה עצמה מעדכנת את הגוף; קריאה חוזרת בלי שינוי בסימון לא בונה שוב
+  const again = { ...a, id: 'a', ops, excluded: res.excluded, headSha: res.headSha, baseSha: res.baseSha }
+  assert.equal((await refreshChangeSet(client, again, base)).status, 'open')
+
+  pr.body = pr.body.replace('- [ ] ➕ הוספה: `ברכ`', '- [x] ➕ הוספה: `ברכ`')
+  const back = await refreshChangeSet(client, again, base)
+  assert.equal(back.status, 'rebuilt')
+  assert.deepEqual(back.excluded, [])
+  assert.deepEqual(aliasesOn('site/acronyms-a', 'ברכות'), ['ברכ'])
+})
+
+test('a box unchecked while the branch is being rebuilt is not overwritten by the new body', async () => {
+  const ops = [{ type: 'add', book: 'ברכות', alias: 'ברכ' }, { type: 'add', book: 'בראשית', alias: 'ברא' }]
+  const a = await publishChangeSet(client, { id: 'a', ops })
+  const pr = gh.pulls[a.prNumber - 1]
+  gh.pushExternal('master', { 'other.txt': 'x' })
+  let toggled = false
+  gh.hooks.afterRequest = ({ method, path }) => {
+    // אדם מסיר סימון בדיוק כשהענף מתעדכן
+    if (!toggled && method === 'PATCH' && path.includes('/git/refs/heads/site/acronyms-a')) {
+      toggled = true
+      pr.body = pr.body.replace('- [x] ➕ הוספה: `ברכ`', '- [ ] ➕ הוספה: `ברכ`')
+    }
+  }
+  const res = await refreshChangeSet(client, { ...a, id: 'a', ops }, await loadForkState(client))
+  assert.equal(res.status, 'rebuilt')
+  assert.deepEqual(res.excluded, [0])
+  assert.deepEqual(aliasesOn('site/acronyms-a', 'ברכות'), [])
+  assert.ok(pr.body.includes('- [ ] ➕ הוספה: `ברכ` <!-- op:0 -->'))
+})
+
+test('a PR with every change unchecked is closed', async () => {
+  const ops = [{ type: 'add', book: 'ברכות', alias: 'ברכ' }]
+  const a = await publishChangeSet(client, { id: 'a', ops })
+  const pr = gh.pulls[a.prNumber - 1]
+  pr.body = pr.body.replace('- [x]', '- [ ]')
+  const res = await refreshChangeSet(client, { ...a, id: 'a', ops }, await loadForkState(client))
+  assert.equal(res.status, 'closed')
+  assert.equal(pr.state, 'closed')
+  assert.match(gh.issueComments[0].body, /הסימון שלהם הוסר/)
 })
 
 test('an up-to-date PR is left alone', async () => {

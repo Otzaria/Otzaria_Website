@@ -6,9 +6,16 @@ const {
   analyzeApiUsage, checkDesignCompliance, isCodeLikeFile, isStyleLikeFile,
 } = otzariaValidator
 
-// hosts חשופים (ללא סכימה) שמותרים ב-network.allowlist.
-// שיקוף של _loopbackHosts ב-lib/plugins/models/plugin_network_allowlist.dart.
-const LOOPBACK_ALLOWLIST_HOSTS = new Set(['localhost', '127.0.0.1', '::1'])
+// hosts חשופים (ללא סכימה) שמותרים ב-network.allowlist: localhost, ::1 ו-
+// 127.0.0.0 עד 127.0.0.255 בכתיבה עשרונית קנונית (127.1 ו-127.0.0.01 אינם —
+// אוצריא רואה אותם כאינטרנט). שיקוף של isLoopbackHost ב-
+// lib/plugins/models/plugin_network_allowlist.dart.
+const LOOPBACK_ALLOWLIST_NAMES = new Set(['localhost', '::1'])
+const IPV4_LOOPBACK_RE = /^127\.0\.0\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/
+const isLoopbackAllowlistHost = (host) => {
+  const normalized = host.trim().toLowerCase()
+  return LOOPBACK_ALLOWLIST_NAMES.has(normalized) || IPV4_LOOPBACK_RE.test(normalized)
+}
 
 // כללי המניפסט שהחנות חוסמת עליהם. שאר הכללים ב-MANIFEST_RULES (id, version,
 // stability, databaseSources, toolTab.iconName) נאכפים ב-CI של התוסף ובאריזה
@@ -110,7 +117,7 @@ export function validatePluginArchiveCore(buffer, spec) {
       for (const url of allowlist) {
         // host מקומי חשוף הוא ערך שאוצריא עצמה מקבלת (isLoopbackHost ב-
         // plugin_network_allowlist.dart) — דחייה כאן הייתה פוסלת תוסף שמותקן בפועל.
-        if (typeof url === 'string' && LOOPBACK_ALLOWLIST_HOSTS.has(url.trim().toLowerCase())) continue
+        if (typeof url === 'string' && isLoopbackAllowlistHost(url)) continue
         if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
           errors.push(`כתובת לא תקינה ב-network.allowlist: ${JSON.stringify(url)} (חובה http(s) URL מלא, או host מקומי כמו 127.0.0.1)`)
         } else if (url.includes('*')) {
