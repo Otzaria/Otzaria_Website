@@ -52,7 +52,7 @@ export default function EditCopyEditorPage() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [leaveTarget, setLeaveTarget] = useState(null)
 
-  const canEdit = hasBooksAccess(session?.user?.role)
+  const canEdit = hasBooksAccess(session?.user)
   const apiBase = `/api/admin/uploads/edit-copy/${editCopyId}`
 
   useEffect(() => {

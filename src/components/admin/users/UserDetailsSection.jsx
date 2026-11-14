@@ -1,9 +1,9 @@
 'use client'
 
 import { useId } from 'react'
-import SelectMenu from '@/components/ui/SelectMenu'
 import { FIELD_ERROR, FIELD_HINT, FIELD_LABEL, fieldA11yProps, fieldClasses, fieldErrorId, fieldHintId } from '@/components/ui/fieldStyles'
-import { ROLE_HINTS, ROLE_OPTIONS } from '@/lib/adminUsersScreen/userTerms'
+import { ROLE_HINTS, rolesLabel } from '@/lib/adminUsersScreen/userTerms'
+import RoleChecklist from './RoleChecklist'
 import { DRAWER_HEADING, DRAWER_SECTION } from './drawerStyles'
 
 function TextField({ label, value, onChange, error, hint, disabled, type = 'text', dir, inputMode }) {
@@ -28,9 +28,9 @@ function TextField({ label, value, onChange, error, hint, disabled, type = 'text
 }
 
 /**
- * "פרטים" ו"תפקיד" במגירה — הטופס עצמו (הטיוטה והשמירה ב-useUserDetails; "שמור" בתחתית המגירה).
- * שם, כתובת דואר (משמאל לימין), נקודות, ותפקיד בבורר: לכל תפקיד שורת הסבר (מה הוא רואה), והמסגרת
- * מודגשת רק כשהתפקיד שונה מהשמור.
+ * "פרטים" ו"תפקידים" במגירה — הטופס עצמו (הטיוטה והשמירה ב-useUserDetails; "שמור" בתחתית המגירה).
+ * שם, כתובת דואר (משמאל לימין), נקודות, ותפקידים — תיבת סימון לכל תפקיד (אפשר כמה יחד; RoleChecklist), לכל
+ * תפקיד שורת הסבר (מה הוא רואה), והמסגרת מודגשת רק כשהבחירה שונה מהשמורה.
  *
  * @param {{ details: ReturnType<typeof import('./useUserDetails').useUserDetails>, headingIds: { details: string, role: string } }} props
  */
@@ -55,20 +55,18 @@ export default function UserDetailsSection({ details, headingIds }) {
       </section>
 
       <section aria-labelledby={headingIds.role} className={DRAWER_SECTION}>
-        <h3 id={headingIds.role} className={DRAWER_HEADING}>תפקיד</h3>
-        <SelectMenu
-          label="תפקיד"
-          hideLabel
-          options={ROLE_OPTIONS}
-          value={form.role}
-          onChange={(v) => change('role', v || 'user')}
+        <h3 id={headingIds.role} className={DRAWER_HEADING}>תפקידים</h3>
+        <p className="text-body-sm text-on-surface-variant">אפשר לסמן כמה תפקידים — הוא יראה בניהול את כל מה שכל אחד מהם מתיר.</p>
+        <RoleChecklist
+          aria-labelledby={headingIds.role}
+          value={form.roles}
+          onChange={(roles) => change('roles', roles)}
           disabled={saving}
-          searchable={false}
-          highlight={details.changes.role}
+          highlight={details.changes.roles}
         />
         <p className="text-body-sm text-on-surface-variant">
-          {ROLE_HINTS[form.role]}
-          {details.changes.role && ' לפני השמירה יוצג בדיוק מה ישתנה לו.'}
+          {form.roles.length === 0 ? `${rolesLabel(form.roles)} — ${ROLE_HINTS.user}` : `עכשיו: ${rolesLabel(form.roles)}.`}
+          {details.changes.roles && ' לפני השמירה יוצג בדיוק מה ישתנה לו.'}
         </p>
       </section>
     </>

@@ -19,10 +19,7 @@ vi.mock("@/models/Book", () => ({
   default: { findByIdAndUpdate: findByIdAndUpdateMock },
 }));
 
-vi.mock("@/lib/roles", () => ({
-  hasBookLibraryAccess: (role: string) => role === "admin_books" || role === "admin",
-}));
-
+// roles.js — המודול האמיתי (טהור): ה-route מעביר את session.user כולו (תפקידים מרובים)
 import { POST } from "./route";
 
 function makeRequest(body: unknown) {

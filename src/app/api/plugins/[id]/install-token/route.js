@@ -47,7 +47,7 @@ export async function POST(request, { params }) {
 
     // תוסף מושהה — התקנה ישירה זמינה רק למעלה ולמנהלי התוספים, כמו ההורדה עצמה
     if (isPluginSuspended(plugin)) {
-      const isAdmin = hasPluginsAccess(session?.user?.role)
+      const isAdmin = hasPluginsAccess(session?.user)
       const isOwner = isPluginOwner(plugin, session?.user?.id)
       if (!canAccessSuspended({ isAdmin, isOwner })) {
         return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })

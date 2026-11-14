@@ -39,7 +39,7 @@ export async function GET(request) {
 
     // תוסף שירות: עדכון רק בהגשה לבדיקה — ה-Action יקבל 409 מנתיב העריכה
     const hasService = plugin.hasService === true
-    const isAdmin = hasPluginsAccess(session.user?.role)
+    const isAdmin = hasPluginsAccess(session.user)
     const isOwner = isPluginOwner(plugin, session.user?.id)
     if (!isAdmin && !isOwner) {
       return NextResponse.json({ exists: true, owned: false, hasService })

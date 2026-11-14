@@ -10,6 +10,7 @@ import { getClientIp } from '@/lib/client-ip';
 import { saveFileToGridFS } from '@/lib/gridfs-service';
 import { z } from 'zod';
 import { unauthorized, badRequest, forbidden, apiError, serverError } from '@/lib/apiResponse';
+import { isAdmin } from '@/lib/roles';
 
 // סכמת אימות להעלאת קבצים
 const uploadFileSchema = z.object({
@@ -289,7 +290,7 @@ export async function GET(request) {
         const { searchParams } = new URL(request.url);
         const userId = searchParams.get('userId');
 
-        if (userId && userId !== session.user._id && session.user.role !== 'admin') {
+        if (userId && userId !== session.user._id && !isAdmin(session.user)) {
              return forbidden();
         }
 

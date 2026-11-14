@@ -18,7 +18,7 @@ export async function GET() {
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !hasBookLibraryAccess(session.user?.role)) {
+    if (!session || !hasBookLibraryAccess(session.user)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -40,7 +40,7 @@ export async function POST(request) {
 export async function PUT(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !hasBookLibraryAccess(session.user?.role)) {
+    if (!session || !hasBookLibraryAccess(session.user)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 

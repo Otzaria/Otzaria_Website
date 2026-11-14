@@ -14,6 +14,7 @@ import {
   callGemini,
   matchGeminiResults,
 } from '@/lib/ocr/gemini';
+import { isAdmin as isAdminUser } from '@/lib/roles';
 
 // ============================================================
 // הגדרות קבועות לעריכה ידנית
@@ -147,7 +148,7 @@ export async function POST(request) {
     }
 
     const userId = (session?.user?._id || session?.user?.id)?.toString();
-    const isAdmin = session.user?.role === 'admin';
+    const isAdmin = isAdminUser(session.user);
 
     const body = await request.json();
     const { bookPath, pages, customPrompt, examples, customExamples } = body || {};

@@ -6,15 +6,17 @@
 // הרחבה או צמצום של גישה: ה-proxy (src/proxy.js) והראוטים הם שאוכפים בפועל, והסרגל רק
 // מסתיר קישורים שהצופה לא אמור לראות. התאימות בין השניים נבדקת ב-adminNav.proxy.test.js.
 //
-// "צופה" (viewer) = { role, isCorrectionsVolunteer, isSupervisor } מתוך ה-session. חלק מהגישה אינה לפי
-// תפקיד אלא לפי דגל על משתמש רגיל (מתנדב תיקונים, מפקח) — ולכן הפונקציות מקבלות את הצופה כולו.
-// מחרוזת תפקיד לבדה מתקבלת גם היא (צופה בלי דגלים).
+// "צופה" (viewer) = { roles, isCorrectionsVolunteer, isSupervisor } מתוך ה-session. למשתמש יכולים להיות כמה
+// תפקידים (roles.js) — פריט מוצג אם אחד מהם מתיר אותו. חלק מהגישה אינה לפי תפקיד אלא לפי דגל על משתמש
+// רגיל (מתנדב תיקונים, מפקח) — ולכן הפונקציות מקבלות את הצופה כולו. מחרוזת תפקיד לבדה, או מערך
+// תפקידים, מתקבלים גם הם (צופה בלי דגלים).
 
 import { LEGACY_PLUGIN_TABS } from './adminPlugins/pluginsQuery.js'
+import { getRoles, hasRole } from './roles.js'
 
 /** @typedef {'unreadMessages' | 'pendingUploads' | 'pendingPlugins'} AdminBadgeKey */
 /** @typedef {'isCorrectionsVolunteer' | 'isSupervisor'} ViewerFlag */
-/** @typedef {{ role?: string, isCorrectionsVolunteer?: boolean, isSupervisor?: boolean }} AdminViewer */
+/** @typedef {{ role?: string, roles?: string[], isCorrectionsVolunteer?: boolean, isSupervisor?: boolean }} AdminViewer */
 
 /**
  * @typedef {object} AdminNavItem
@@ -105,30 +107,32 @@ export function adminNavGroupLabel(id) {
 }
 
 /**
- * הצופה מתוך מחרוזת תפקיד או מתוך session.user — רק השדות שהסרגל צריך, ודגל רק כשהוא true ממש.
- * @param {string | AdminViewer | null | undefined} viewer
- * @returns {AdminViewer}
+ * הצופה מתוך מחרוזת תפקיד, מערך תפקידים או session.user — רק השדות שהסרגל צריך: כל התפקידים
+ * (getRoles — גם role וגם roles), ודגל רק כשהוא true ממש.
+ * @param {string | string[] | AdminViewer | null | undefined} viewer
+ * @returns {{ roles: string[], isCorrectionsVolunteer: boolean, isSupervisor: boolean }}
  */
 export function toAdminViewer(viewer) {
-  if (!viewer || typeof viewer === 'string') return { role: viewer || undefined, isCorrectionsVolunteer: false, isSupervisor: false }
-  return { role: viewer.role || undefined, isCorrectionsVolunteer: viewer.isCorrectionsVolunteer === true, isSupervisor: viewer.isSupervisor === true }
+  const roles = getRoles(viewer)
+  if (!viewer || typeof viewer === 'string' || Array.isArray(viewer)) return { roles, isCorrectionsVolunteer: false, isSupervisor: false }
+  return { roles, isCorrectionsVolunteer: viewer.isCorrectionsVolunteer === true, isSupervisor: viewer.isSupervisor === true }
 }
 
 /**
  * האם הצופה רשאי לראות את הפריט: לפי תפקיד, או לפי דגל שהפריט מתיר.
  * @param {AdminNavItem} item
- * @param {string | AdminViewer | null | undefined} viewer
+ * @param {string | string[] | AdminViewer | null | undefined} viewer
  */
 export function canSeeNavItem(item, viewer) {
   const v = toAdminViewer(viewer)
-  if (v.role && item.roles.includes(v.role)) return true
+  if (hasRole(v.roles, ...item.roles)) return true
   return (item.flags || []).some((flag) => v[flag] === true)
 }
 
 /**
  * הקבוצות שהצופה רואה: פריטים לא מורשים מוסרים, קבוצה ריקה נעלמת, וקבוצה שנשאר בה
  * פריט אחד בלבד מוצגת בלי כותרת (label: null) — כותרת מעל פריט יחיד היא רעש.
- * @param {string | AdminViewer | null | undefined} viewer
+ * @param {string | string[] | AdminViewer | null | undefined} viewer
  * @returns {{ id: string, label: string | null, items: AdminNavItem[] }[]}
  */
 export function buildAdminNavGroups(viewer) {

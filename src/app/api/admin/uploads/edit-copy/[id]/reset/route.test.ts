@@ -13,10 +13,7 @@ vi.mock("@/models/Upload", () => ({ default: { find: findMock } }));
 vi.mock("@/lib/gridfs-service", () => ({ getUploadText: getUploadTextMock }));
 vi.mock("next-auth", () => ({ getServerSession: getSessionMock }));
 vi.mock("@/app/api/auth/[...nextauth]/route", () => ({ authOptions: {} }));
-vi.mock("@/lib/roles", () => ({
-  hasBooksAccess: (role: string) => role === "admin_books" || role === "admin",
-}));
-
+// roles.js — המודול האמיתי (טהור): ה-route מעביר את session.user כולו (תפקידים מרובים)
 import { POST } from "./route";
 
 const ID = "64b7f0c2a1b2c3d4e5f60718";

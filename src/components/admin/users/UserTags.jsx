@@ -1,6 +1,6 @@
 import Badge from '@/components/ui/Badge'
 import { cx } from '@/components/ui/cx'
-import { RESTRICTIONS, TEAM_FLAGS, roleLabel, roleTone, showsRoleTag } from '@/lib/adminUsersScreen/userTerms'
+import { RESTRICTIONS, TEAM_FLAGS, roleLabel, roleTone, showsRoleTag, userRoles } from '@/lib/adminUsersScreen/userTerms'
 
 /**
  * התפקיד כתג (השם מ-ROLE_LABELS): מנהל כללי בולט, כל תפקיד ניהול אחר — ניטרלי. משתמש רגיל — בלי תג (ברירת
@@ -12,6 +12,29 @@ export function RoleTag({ role, className, fallback = null }) {
 }
 
 const CHIP = 'inline-flex min-h-6 shrink-0 items-center whitespace-nowrap rounded-(--radius-pill) border px-2 text-label-sm'
+
+/**
+ * כל התפקידים של המשתמש (roles.js — יכולים להיות כמה) בשורה אחת שלא נשברת: הראשי כתג (RoleTag), והשאר
+ * "+1" (השמות ב-title ולקורא המסך; ובמגירה הכול). משתמש רגיל — fallback, או כלום.
+ * @param {{ user: any, className?: string, fallback?: import('react').ReactNode }} props
+ */
+export function RoleTags({ user, className, fallback = null }) {
+  const roles = userRoles(user)
+  if (roles.length === 0) return fallback
+  const [first, ...rest] = roles
+  const restNames = rest.map(roleLabel).join(', ')
+  return (
+    <span className={cx('inline-flex min-w-0 max-w-full flex-nowrap items-center gap-1', className)} title={rest.length > 0 ? roles.map(roleLabel).join(', ') : undefined}>
+      <RoleTag role={first} className="min-w-0 truncate" />
+      {rest.length > 0 && (
+        <span className={cx(CHIP, 'border-outline-variant text-on-surface-variant')}>
+          <bdi aria-hidden="true" dir="ltr">+{rest.length}</bdi>
+          <span className="sr-only">{restNames}</span>
+        </span>
+      )}
+    </span>
+  )
+}
 
 /** צ'יפ של צוות (מסגרת שקטה) או של הגבלה (מסגרת וטקסט בצבע השגיאה, בלי רקע מלא — שקט גם בכהה) */
 export function FlagChip({ team, as: Tag = 'span' }) {

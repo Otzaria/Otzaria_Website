@@ -5,7 +5,7 @@
 
 import { paginate as paginateList } from '../adminList/paginate.js'
 import { formatNumber } from '../adminTerms.js'
-import { ROLE_IDS, TEAMS, TEAM_IDS, roleLabel, roleOf as knownRole } from './userTerms.js'
+import { ROLE_IDS, TEAMS, TEAM_IDS, roleLabel, userHasRole } from './userTerms.js'
 
 export const USERS_PER_PAGE = 25
 export const USER_SORTS = ['newest', 'oldest', 'name', 'points', 'pages']
@@ -89,7 +89,7 @@ const COMPARE = {
 
 /**
  * המשתמשים שמתאימים לחיפוש ולסינון, בסדר המיון. החיפוש — כל המילים, בשם או בדואר.
- * תפקיד חסר / לא מוכר נחשב "משתמש" (כמו התג בשורה).
+ * סינון לפי תפקיד — מי שיש לו אותו (גם כאחד מכמה תפקידים); "משתמש" — מי שאין לו אף תפקיד מוכר.
  * @param {any[]} users
  * @param {UsersQuery} query
  */
@@ -97,7 +97,7 @@ export function filterUsers(users, query) {
   const words = String(query.q || '').toLowerCase().split(/\s+/).filter(Boolean)
   const team = query.team ? TEAMS.find((t) => t.id === query.team) : null
   const out = (users || []).filter((u) => {
-    if (query.role && roleOf(u) !== query.role) return false
+    if (query.role && !userHasRole(u, query.role)) return false
     if (team && u[team.field] !== true) return false
     if (words.length) {
       const text = searchText(u)
@@ -110,8 +110,6 @@ export function filterUsers(users, query) {
   return out.sort((a, b) => compare(a, b) || COMPARE.newest(a, b))
 }
 
-const roleOf = (user) => knownRole(user?.role)
-
 /**
  * אפשרויות הבוררים, עם מספר המשתמשים בכל אחת. תפקיד — בסדר הקבוע (ROLE_LABELS); תפקיד בלי אף משתמש
  * נשאר ברשימה (עם 0), כדי שהבורר לא ישתנה מיום ליום.
@@ -119,7 +117,8 @@ const roleOf = (user) => knownRole(user?.role)
  */
 export function filterOptions(users) {
   const list = users || []
-  const roles = ROLE_IDS.map((role) => ({ value: role, label: roleLabel(role), count: list.filter((u) => roleOf(u) === role).length }))
+  // משתמש עם כמה תפקידים נספר בכל אחד מהם
+  const roles = ROLE_IDS.map((role) => ({ value: role, label: roleLabel(role), count: list.filter((u) => userHasRole(u, role)).length }))
   const teams = TEAMS.map((t) => ({ value: t.id, label: t.label, count: list.filter((u) => u[t.field] === true).length }))
   return { roles, teams }
 }

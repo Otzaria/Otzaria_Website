@@ -19,10 +19,12 @@ beforeEach(() => {
   isAssurBemlacha.mockResolvedValue(false)
 })
 
+// role — מחרוזת (JWT ישן: role בלבד), או אובייקט { role, roles } (JWT עם תפקידים מרובים)
 async function call(path, role) {
   const headers = {}
   if (role) {
-    const token = await encode({ token: { sub: 'u1', role }, secret: SECRET })
+    const fields = typeof role === 'string' ? { role } : role
+    const token = await encode({ token: { sub: 'u1', ...fields }, secret: SECRET })
     headers.cookie = `next-auth.session-token=${token}`
   }
   return proxy(new NextRequest(`http://localhost:3000${path}`, { headers }), event)
@@ -103,5 +105,54 @@ describe('proxy — צורת הדף', () => {
       expect(anon.headers.get('location')).toMatch(/\/auth\/login/)
       expect(passed(await call(path, 'user')), path).toBe(true)
     }
+  })
+})
+
+describe('proxy — כמה תפקידים לאותו משתמש (איחוד הרשאות)', () => {
+  const BOOKS_AND_OCR = { role: 'admin_books', roles: ['admin_books', 'admin_ocr'] }
+  const UPLOADS = ['/library/admin/uploads', '/api/admin/uploads/list']
+
+  it('מנהל ספרים + מנהל OCR: גם אזורי ה-OCR וגם ההעלאות', async () => {
+    for (const path of ['/library/admin', ...OCR_PAGES, ...OCR_APIS, ...UPLOADS, '/library/admin/books', '/api/admin/books']) {
+      expect(passed(await call(path, BOOKS_AND_OCR)), path).toBe(true)
+    }
+  })
+
+  it('מנהל ספרים + מנהל OCR: מה ששניהם חוסמים נשאר חסום (משתמשים, תוספים, משוב החיפוש)', async () => {
+    for (const path of ['/library/admin/users', '/api/admin/users', '/library/admin/plugins', '/api/admin/plugins', SEARCH_FEEDBACK_PAGE]) {
+      expect(denied(await call(path, BOOKS_AND_OCR)), path).toBe(true)
+    }
+  })
+
+  it('כל תפקיד לבדו עדיין חסום במה שהשני מתיר', async () => {
+    for (const path of OCR_PAGES) expect(denied(await call(path, 'admin_books')), path).toBe(true)
+    for (const path of UPLOADS) expect(denied(await call(path, 'admin_ocr')), path).toBe(true)
+  })
+
+  it('התפקיד הראשי לבדו (role) לא קובע — roles קובע, בכל סדר', async () => {
+    const ocrFirst = { role: 'admin_ocr', roles: ['admin_ocr', 'admin_books'] }
+    for (const path of [...OCR_PAGES, ...UPLOADS]) expect(passed(await call(path, ocrFirst)), path).toBe(true)
+  })
+
+  it('מפתח + מנהל OCR: הלוח נפתח (לא מפנה לדיווחים), וגם דיווחי התוכנה וגם OCR', async () => {
+    const devOcr = { role: 'admin_ocr', roles: ['admin_ocr', 'developer'] }
+    for (const path of ['/library/admin', '/library/admin/app-reports', ...OCR_PAGES]) {
+      expect(passed(await call(path, devOcr)), path).toBe(true)
+    }
+    expect(denied(await call('/library/admin/uploads', devOcr))).toBe(true)
+  })
+
+  it('מפתח בלבד: הלוח עדיין מפנה לדיווחי התוכנה', async () => {
+    const res = await call('/library/admin', { role: 'developer', roles: ['developer'] })
+    expect(res.status).toBe(307)
+    expect(res.headers.get('location')).toMatch(/\/library\/admin\/app-reports$/)
+  })
+
+  it('מנהל תוספים + מנהל ספרים-בלבד: תוספים וספרים, בלי העלאות', async () => {
+    const pb = { role: 'admin_books_only', roles: ['admin_plugins', 'admin_books_only'] }
+    for (const path of ['/library/admin/plugins', '/api/admin/plugins', '/library/admin/books', '/api/admin/books']) {
+      expect(passed(await call(path, pb)), path).toBe(true)
+    }
+    for (const path of UPLOADS) expect(denied(await call(path, pb)), path).toBe(true)
   })
 })

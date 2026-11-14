@@ -101,7 +101,7 @@ export default function OtzariaSoftwareHeader({ showAuth = false, wordmarkHandof
   const navId = useId()
   const { data: session, status } = useSession()
   // רק כשאזור החשבון מוצג; אורח / משתמש רגיל / בלי showAuth — role לא של מנהל, ואין בקשה
-  const unreadMessages = useUnreadAdminMessages(showAuth ? session?.user?.role : undefined)
+  const unreadMessages = useUnreadAdminMessages(showAuth ? session?.user : undefined)
   const authProps = { session, status, unreadMessages, pathname }
   const donationLink = MAIN_NAV_LINKS.find(link => link.emphasis === 'donation')
   const navLinks = MAIN_NAV_LINKS.filter(link => link.emphasis !== 'donation')

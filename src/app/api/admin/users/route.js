@@ -6,7 +6,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { getAdminUsersWithStats } from '@/lib/adminUsers';
 import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
-import { isAdmin } from '@/lib/roles';
+import { isAdmin, normalizeRoles, primaryRole, ROLE_ENUM } from '@/lib/roles';
 import { requireAccess, badRequest, notFound, serverError, apiError } from '@/lib/apiResponse';
 
 export async function GET() {
@@ -33,7 +33,23 @@ export async function PUT(request) {
         const denied = requireAccess(session, isAdmin);
         if (denied) return denied;
 
-        const { userId, role, points, name, email, isSupervisor, dictaEditBlocked } = await request.json();
+        const { userId, role, roles, points, name, email, isSupervisor, dictaEditBlocked } = await request.json();
+
+        // תפקידים: roles (מערך — אפשר כמה יחד) הוא הצורה הנוכחית; role (מחרוזת אחת) — לקוח ישן.
+        // נשמרים תמיד שניהם יחד: roles מנורמל, ו-role = התפקיד הראשי שלו (roles.js) — כדי שלא יישאר
+        // role ישן שמעניק הרשאה שהוסרה. ערך לא מוכר — נדחה (לא "מסונן בשקט").
+        let roleUpdate = {};
+        if (roles !== undefined) {
+            if (!Array.isArray(roles) || roles.some((r) => !ROLE_ENUM.includes(r))) {
+                return badRequest('תפקיד לא מוכר');
+            }
+            const clean = normalizeRoles(roles);
+            roleUpdate = { roles: clean, role: primaryRole(clean) };
+        } else if (role !== undefined) {
+            if (!ROLE_ENUM.includes(role)) return badRequest('תפקיד לא מוכר');
+            const clean = normalizeRoles([role]);
+            roleUpdate = { roles: clean, role: primaryRole(clean) };
+        }
 
         await connectDB();
 
@@ -58,7 +74,7 @@ export async function PUT(request) {
         }
 
         const updateData = {
-            role,
+            ...roleUpdate,
             points,
             name,
         };

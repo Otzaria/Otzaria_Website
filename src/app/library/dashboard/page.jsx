@@ -4,7 +4,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { canHandleCorrections } from '@/lib/roles'
+import { canHandleCorrections, isAdmin as isAdminUser } from '@/lib/roles'
 import Header from '@/components/layout/Header'
 import { useDialog } from '@/components/providers/DialogContext'
 import Pagination from '@/components/ui/legacy/Pagination'
@@ -282,7 +282,7 @@ export default function DashboardPage() {
     return null
   }
 
-  const isAdmin = session.user.role === 'admin'
+  const isAdmin = isAdminUser(session.user)
 
   return (
     <div className="min-h-screen bg-background">

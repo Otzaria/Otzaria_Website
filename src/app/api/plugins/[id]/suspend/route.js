@@ -51,7 +51,7 @@ export async function PATCH(request, { params }) {
     const isOwner = isPluginOwner(plugin, session.user?.id)
     if (!isOwner) {
       return forbidden(
-        hasPluginsAccess(session.user?.role)
+        hasPluginsAccess(session.user)
           ? 'השהיית תוסף כמנהל זמינה רק בממשק הניהול.'
           : 'Forbidden - You do not have permission to suspend this plugin'
       )

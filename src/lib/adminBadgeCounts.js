@@ -4,6 +4,7 @@ import Message from '@/models/Message'
 import Upload from '@/models/Upload'
 import Plugin from '@/models/Plugin'
 import { adminBadgeScope, EMPTY_ADMIN_BADGE_COUNTS } from '@/lib/adminBadgeScope'
+import { getRoles } from '@/lib/roles'
 import { QUEUE_STATUS } from '@/lib/adminUploads/uploadTerms'
 
 // מוני-התג של פאנל הניהול (הודעות שלא נקראו / העלאות ממתינות / תוספים ממתינים).
@@ -66,4 +67,7 @@ export async function getAdminBadgeCounts(role) {
  * cache של React חי רק בתוך רינדור אחד של Server Components (לא בין בקשות ולא בין משתמשים);
  * מחוץ לרינדור (ראוט API) הוא פשוט מריץ את הפונקציה.
  */
-export const getRequestAdminBadgeCounts = cache(getAdminBadgeCounts)
+// המפתח של cache הוא מחרוזת התפקידים (לא האובייקט/המערך עצמו — cache משווה לפי זהות), כך שה-layout
+// והדשבורד מקבלים אותה רשומה גם כשכל אחד מעביר session.user או מערך תפקידים משלו.
+const countsForRolesKey = cache((rolesKey) => getAdminBadgeCounts(rolesKey ? rolesKey.split(',') : []))
+export const getRequestAdminBadgeCounts = (subject) => countsForRolesKey(getRoles(subject).join(','))

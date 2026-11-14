@@ -41,7 +41,8 @@ describe("apiResponse helpers", () => {
 });
 
 describe("requireAccess", () => {
-  const hasAccess = (role: string | undefined) => role === "admin";
+  const hasAccess = (user: { role?: string | null; roles?: string[] | null }) =>
+    user.role === "admin" || (user.roles ?? []).includes("admin");
 
   it("returns a 401 response when there is no session", async () => {
     const denied = requireAccess(null, hasAccess);
@@ -64,6 +65,11 @@ describe("requireAccess", () => {
 
   it("returns null when access is granted", () => {
     const denied = requireAccess({ user: { role: "admin" } }, hasAccess);
+    expect(denied).toBeNull();
+  });
+
+  it("passes the whole user (with roles) to the access check", () => {
+    const denied = requireAccess({ user: { role: "admin_ocr", roles: ["admin_ocr", "admin"] } }, hasAccess);
     expect(denied).toBeNull();
   });
 });

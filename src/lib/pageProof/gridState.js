@@ -292,7 +292,7 @@ export const claimRefusal = (state) => REFUSAL_HE[state] || 'אי אפשר לת�
 // מי רשאי להגיה עמודים — כמו requireProofSession בשרת (pool.js)
 export function canProof(user) {
   if (!user) return false;
-  return !!user.isVerified || hasBookLibraryAccess(user.role) || hasOcrAccess(user.role);
+  return !!user.isVerified || hasBookLibraryAccess(user) || hasOcrAccess(user);
 }
 
 // כתב-הספר כפי שהגיע בחבילה ← תווית

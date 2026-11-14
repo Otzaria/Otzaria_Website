@@ -14,7 +14,7 @@ export async function POST(request) {
     if (!session) return unauthorized('Unauthorized');
     const { pageId } = await request.json();
     const userId = session.user._id || session.user.id;
-    const isAdmin = hasBookLibraryAccess(session.user.role);
+    const isAdmin = hasBookLibraryAccess(session.user);
     await connectDB();
     const result = await uncompleteBookPage({ userId, isAdmin, pageId });
     if (result.status !== 200) return NextResponse.json(result.body, { status: result.status });

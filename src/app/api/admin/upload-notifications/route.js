@@ -9,7 +9,7 @@ import { hasBooksAccess } from '@/lib/roles';
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !hasBooksAccess(session.user?.role)) {
+    if (!session || !hasBooksAccess(session.user)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -38,7 +38,7 @@ export async function GET() {
 export async function PUT(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !hasBooksAccess(session.user?.role)) {
+    if (!session || !hasBooksAccess(session.user)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 

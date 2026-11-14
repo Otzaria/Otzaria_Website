@@ -14,7 +14,7 @@ export async function PUT(request) {
     const { messageId } = await request.json();
     await connectDB();
     const message = await Message.findOne({ _id: messageId, recipient: session.user._id });
-    if (!message && !hasAnyAdminAccess(session.user.role)) {
+    if (!message && !hasAnyAdminAccess(session.user)) {
         return forbidden();
     }
     await Message.findByIdAndUpdate(messageId, { isRead: true });

@@ -7,8 +7,8 @@ import { cx } from '@/components/ui/cx'
 import OpenChip from '@/components/admin/list/OpenChip'
 import RelativeTime from '@/components/ui/RelativeTime'
 import { formatNumber } from '@/lib/adminTerms'
-import { activityCounts, displayName, hasName, showsRoleTag } from '@/lib/adminUsersScreen/userTerms'
-import { RoleTag, TeamChips } from './UserTags'
+import { activityCounts, displayName, hasName, userRoles } from '@/lib/adminUsersScreen/userTerms'
+import { RoleTags, TeamChips } from './UserTags'
 import {
   AREA_JOINED, AREA_MAIN, AREA_MENU, AREA_PAGES, AREA_POINTS, AREA_PRIMARY, AREA_ROLE, AREA_SUB, AREA_TEAMS, ROW_GRID, ROW_PADDING, TAGS_LINE,
 } from './userRowLayout'
@@ -52,13 +52,13 @@ function UserRow({ user, onOpen, menuItems }) {
 
       {/* ברשימה צרה: שורת תגים (תפקיד וצוותים) ושורת מונים — כל אחת בשורה אחת, כך שגובה השורה קבוע */}
       <div className={AREA_SUB}>
-        <TeamChips user={user} className={TAGS_LINE} lead={showsRoleTag(user.role) ? <RoleTag role={user.role} /> : null} empty={<div aria-hidden="true" className={TAGS_LINE} />} />
+        <TeamChips user={user} className={TAGS_LINE} lead={userRoles(user).length > 0 ? <RoleTags user={user} /> : null} empty={<div aria-hidden="true" className={TAGS_LINE} />} />
         <p className="mt-1 truncate text-body-sm tabular-nums text-on-surface-variant">
           {formatNumber(counts.points)} נקודות · {counts.completed === 1 ? 'עמוד אחד הושלם' : `${formatNumber(counts.completed)} עמודים הושלמו`}
         </p>
       </div>
 
-      <div className={AREA_ROLE}><RoleTag role={user.role} fallback={<span className="text-body-sm text-on-surface-variant">{MUTED}<span className="sr-only">משתמש</span></span>} /></div>
+      <div className={AREA_ROLE}><RoleTags user={user} fallback={<span className="text-body-sm text-on-surface-variant">{MUTED}<span className="sr-only">משתמש</span></span>} /></div>
       <div className={AREA_TEAMS}><TeamChips user={user} empty={MUTED} /></div>
       {/* מספר שלא נכנס נחתך בסוף (dir=ltr — רואים את תחילתו), והמלא ב-title */}
       <p className={cx(AREA_POINTS, 'text-end')} dir="ltr" title={formatNumber(counts.points)}><span className="sr-only">נקודות: </span>{formatNumber(counts.points)}</p>

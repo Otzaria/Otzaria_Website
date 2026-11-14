@@ -45,7 +45,7 @@ export default function OcrTrainingEditor() {
   // מידות ה"בד" לאחר הסיבוב — התיבות חיות במרחב הזה
   const { w: rw, h: rh } = rotatedSize(imgW, imgH, rotation)
 
-  const canEdit = page && (page.mine || hasBookLibraryAccess(session?.user?.role))
+  const canEdit = page && (page.mine || hasBookLibraryAccess(session?.user))
   const isRashi = page?.scriptType === 'rashi'
 
   const load = useCallback(async () => {

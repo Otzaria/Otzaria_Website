@@ -22,7 +22,7 @@ export async function GET(request, { params }) {
     const plugin = await Plugin.findById(pluginId).select('-downloadsByVersion').lean()
     if (!plugin) return notFoundResponse()
     const viewerIsOwner = isPluginOwner(plugin, session.user.id)
-    if (!viewerIsOwner && !hasPluginsAccess(session.user.role)) {
+    if (!viewerIsOwner && !hasPluginsAccess(session.user)) {
       const res = forbidden()
       res.headers.set('cache-control', NO_STORE['cache-control'])
       return res

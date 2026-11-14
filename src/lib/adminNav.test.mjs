@@ -348,11 +348,30 @@ test('מנהל OCR שהוא גם מתנדב: הפריטים שלו ועוד תי
 })
 
 test('toAdminViewer: מחרוזת תפקיד, session.user, ודגל רק כש-true ממש', () => {
-  assert.deepEqual(toAdminViewer('admin'), { role: 'admin', isCorrectionsVolunteer: false, isSupervisor: false })
-  assert.deepEqual(toAdminViewer(null), { role: undefined, isCorrectionsVolunteer: false, isSupervisor: false })
-  assert.deepEqual(toAdminViewer({ role: 'user', isCorrectionsVolunteer: 'true', isSupervisor: 1, name: 'x' }), { role: 'user', isCorrectionsVolunteer: false, isSupervisor: false })
-  assert.deepEqual(toAdminViewer({ role: 'user', isCorrectionsVolunteer: true }), { role: 'user', isCorrectionsVolunteer: true, isSupervisor: false })
-  assert.deepEqual(toAdminViewer({ role: 'user', isSupervisor: true }), { role: 'user', isCorrectionsVolunteer: false, isSupervisor: true })
+  assert.deepEqual(toAdminViewer('admin'), { roles: ['admin'], isCorrectionsVolunteer: false, isSupervisor: false })
+  assert.deepEqual(toAdminViewer(null), { roles: [], isCorrectionsVolunteer: false, isSupervisor: false })
+  assert.deepEqual(toAdminViewer({ role: 'user', isCorrectionsVolunteer: 'true', isSupervisor: 1, name: 'x' }), { roles: [], isCorrectionsVolunteer: false, isSupervisor: false })
+  assert.deepEqual(toAdminViewer({ role: 'user', isCorrectionsVolunteer: true }), { roles: [], isCorrectionsVolunteer: true, isSupervisor: false })
+  assert.deepEqual(toAdminViewer({ role: 'user', isSupervisor: true }), { roles: [], isCorrectionsVolunteer: false, isSupervisor: true })
+})
+
+test('toAdminViewer: כמה תפקידים — מ-roles ומ-role יחד, ממוינים ובלי כפילויות', () => {
+  assert.deepEqual(toAdminViewer({ role: 'admin_books', roles: ['admin_ocr', 'admin_books'] }).roles, ['admin_books', 'admin_ocr'])
+  assert.deepEqual(toAdminViewer(['admin_ocr', 'developer']).roles, ['admin_ocr', 'developer'])
+})
+
+test('כמה תפקידים: הסרגל מציג את איחוד הפריטים של כל התפקידים', () => {
+  const ids = (viewer) => new Set(visibleNavItems(viewer).map((i) => i.id))
+  const combined = ids({ role: 'admin_books', roles: ['admin_books', 'admin_ocr'] })
+  const union = new Set([...ids('admin_books'), ...ids('admin_ocr')])
+  assert.deepEqual([...combined].sort(), [...union].sort())
+  // מנהל ספרים לבד לא רואה OCR, ומנהל OCR לבד לא רואה העלאות — יחד רואים את שניהם
+  assert.ok(!ids('admin_books').has('ocr-lines'))
+  assert.ok(!ids('admin_ocr').has('uploads'))
+  assert.ok(combined.has('ocr-lines') && combined.has('uploads'))
+  // מפתח + מנהל OCR: גם דיווחי התקלות וגם אזורי ה-OCR
+  const devOcr = ids(['developer', 'admin_ocr'])
+  assert.ok(devOcr.has('app-reports') && devOcr.has('ocr-training') && devOcr.has('dashboard'))
 })
 
 test('כותרת המסך — השם שבסרגל; מסך של קבוצה — שם הקבוצה; מזהה לא מוכר — שגיאה', () => {

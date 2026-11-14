@@ -5,7 +5,7 @@ import {
   TEAMS, TEAM_FLAGS, RESTRICTIONS, userTeams, roleLabel, roleTone, showsRoleTag, displayName, hasName, roleAccessLines, roleLostItems,
   roleChangeConfirm, validateDetails, detailsForm, detailsChanges, hasChanges, detailsBody, flagBody, detailsPatch, flagPatch,
   deleteConfirmed, activityCounts, teamToast, teamPendingText, teamDescription, blockReason, ROLE_IDS, ROLE_HINTS, ROLE_OPTIONS,
-  savedToast, deleteImpact,
+  savedToast, deleteImpact, rolesLabel, sameRoles, toggleRole, userHasRole, ASSIGNABLE_ROLE_IDS,
 } from './userTerms.js'
 
 const USER = { _id: 'u1', name: 'משה כהן', email: 'moshe@example.com', role: 'user', points: 12, isSupervisor: true, completedPages: 4, inProgressPages: 2 }
@@ -78,7 +78,7 @@ test('מה ייעלם בשינוי תפקיד', () => {
 })
 
 test('חלון שינוי תפקיד', () => {
-  const c = roleChangeConfirm({ user: USER, role: 'admin_books' })
+  const c = roleChangeConfirm({ user: USER, roles: ['admin_books'] })
   assert.equal(c.title, 'לשנות את התפקיד למנהל ספרים?')
   assert.match(c.body, /יראה:$/)
   assert.ok(c.details.length > 0)
@@ -87,26 +87,66 @@ test('חלון שינוי תפקיד', () => {
   assert.equal(c.lost, '')
   assert.match(c.note, /כשהוא יתחבר מחדש/)
   // מתנדב תיקונים: "דיווחי טעויות" לא מגיע מהתפקיד "מפתח"
-  const dev = roleChangeConfirm({ user: { ...USER, isCorrectionsVolunteer: true }, role: 'developer' })
+  const dev = roleChangeConfirm({ user: { ...USER, isCorrectionsVolunteer: true }, roles: ['developer'] })
   assert.deepEqual(dev.details, ['דיווחי תקלות'])
-  const down = roleChangeConfirm({ user: { name: 'ב', role: 'admin' }, role: 'admin_books' })
+  const down = roleChangeConfirm({ user: { name: 'ב', role: 'admin' }, roles: ['admin_books'] })
   assert.match(down.lost, /^לא יראה יותר: .*משתמשים/)
-  const none = roleChangeConfirm({ user: { name: 'א' }, role: 'user' })
+  const none = roleChangeConfirm({ user: { name: 'א' }, roles: [] })
   assert.match(none.body, /לא יראה את ממשק הניהול/)
-  const self = roleChangeConfirm({ user: { name: 'אני', role: 'admin' }, role: 'admin_books', self: true })
+  const self = roleChangeConfirm({ user: { name: 'אני', role: 'admin' }, roles: ['admin_books'], self: true })
   assert.equal(self.tone, 'danger')
   assert.match(self.warning, /החשבון שלך/)
   assert.equal(self.body, 'אתה תהיה מנהל ספרים. בניהול תראה:')
   assert.match(self.lost, /^לא תראה יותר:/)
   assert.match(self.note, /כשתתחבר מחדש/)
-  assert.equal(roleChangeConfirm({ user: { name: 'אני' }, role: 'admin', self: true }).warning, '')
+  assert.equal(roleChangeConfirm({ user: { name: 'אני' }, roles: ['admin'], self: true }).warning, '')
+})
+
+test('חלון שינוי תפקידים — כמה תפקידים יחד', () => {
+  const c = roleChangeConfirm({ user: { name: 'ב', role: 'admin_books' }, roles: ['admin_ocr', 'admin_books'] })
+  assert.equal(c.title, 'לשנות את התפקידים למנהל ספרים ומנהל OCR?')
+  assert.equal(c.body, 'ב יהיה מנהל ספרים ומנהל OCR. בניהול הוא יראה:')
+  assert.equal(c.confirmLabel, 'שנה תפקידים')
+  // מה יראה — גם ספרים וגם אימון מודלים
+  assert.ok(c.details.some((l) => l.startsWith('ספרים: ') && l.includes('העלאות')))
+  assert.ok(c.details.some((l) => l.includes('תמלול שורות')))
+  // הוספת תפקיד — לא מאבד כלום
+  assert.equal(c.lost, '')
+  // הסרת אחד משניים — מאבד רק את מה שהיה שלו
+  const drop = roleChangeConfirm({ user: { name: 'ב', roles: ['admin_books', 'admin_ocr'] }, roles: ['admin_books'] })
+  assert.match(drop.lost, /תמלול שורות/)
+  assert.doesNotMatch(drop.lost, /העלאות/)
+  // מנהל כללי שמוסיף לעצמו תפקיד — הוא נשאר מנהל כללי, בלי אזהרה
+  assert.equal(roleChangeConfirm({ user: { name: 'אני', role: 'admin' }, roles: ['admin', 'admin_ocr'], self: true }).warning, '')
 })
 
 test('ההודעה אחרי שמירה', () => {
-  const none = { name: false, email: false, points: false, role: false }
-  assert.equal(savedToast('משה', { ...none, role: true }, 'admin_books'), 'התפקיד של משה שונה למנהל ספרים')
-  assert.equal(savedToast('משה', { ...none, role: true, name: true }, 'admin'), 'הפרטים והתפקיד של משה נשמרו')
-  assert.equal(savedToast('משה', { ...none, points: true }, 'user'), 'הפרטים של משה נשמרו')
+  const none = { name: false, email: false, points: false, roles: false }
+  assert.equal(savedToast('משה', { ...none, roles: true }, ['admin_books']), 'התפקיד של משה שונה למנהל ספרים')
+  assert.equal(savedToast('משה', { ...none, roles: true }, ['admin_ocr', 'admin_books']), 'התפקידים של משה שונו למנהל ספרים ומנהל OCR')
+  assert.equal(savedToast('משה', { ...none, roles: true }, []), 'התפקיד של משה שונה למשתמש')
+  assert.equal(savedToast('משה', { ...none, roles: true, name: true }, ['admin']), 'הפרטים והתפקיד של משה נשמרו')
+  assert.equal(savedToast('משה', { ...none, points: true }, []), 'הפרטים של משה נשמרו')
+})
+
+test('תפקידים מרובים: שם, השוואה, סימון, וסינון', () => {
+  assert.equal(rolesLabel([]), 'משתמש')
+  assert.equal(rolesLabel(['admin_ocr']), 'מנהל OCR')
+  assert.equal(rolesLabel(['admin_ocr', 'admin_books']), 'מנהל ספרים ומנהל OCR')
+  assert.equal(rolesLabel(['developer', 'admin_ocr', 'admin_plugins']), 'מנהל תוספים, מנהל OCR ומפתח')
+  assert.equal(sameRoles(['admin_ocr', 'admin_books'], ['admin_books', 'admin_ocr']), true)
+  assert.equal(sameRoles(['admin_ocr'], ['admin_books', 'admin_ocr']), false)
+  assert.deepEqual(toggleRole(['admin_ocr'], 'admin_books', true), ['admin_books', 'admin_ocr'])
+  assert.deepEqual(toggleRole(['admin_books', 'admin_ocr'], 'admin_ocr', false), ['admin_books'])
+  // מנהל כללי — לבדו
+  assert.deepEqual(toggleRole(['admin_books', 'admin_ocr'], 'admin', true), ['admin'])
+  assert.deepEqual(toggleRole(['admin'], 'admin', false), [])
+  assert.equal(ASSIGNABLE_ROLE_IDS.includes('user'), false)
+  const u = { role: 'admin_books', roles: ['admin_books', 'admin_ocr'] }
+  assert.equal(userHasRole(u, 'admin_ocr'), true)
+  assert.equal(userHasRole(u, 'admin_books'), true)
+  assert.equal(userHasRole(u, 'user'), false)
+  assert.equal(userHasRole({ role: 'weird' }, 'user'), true)
 })
 
 test('בדיקת הפרטים', () => {
@@ -115,7 +155,7 @@ test('בדיקת הפרטים', () => {
   assert.equal(validateDetails({ name: 'א', email: '', points: '0' }).email, 'כתוב כתובת דואר.')
   assert.equal(validateDetails({ name: 'א', email: 'a@b.co', points: '-3' }).points, undefined)
   // רק מה ששונה נבדק: נקודות ענקיות ישנות ושם חסר לא חוסמים שינוי בשדה אחר
-  const changed = { name: false, email: true, points: false, role: false }
+  const changed = { name: false, email: true, points: false, roles: false }
   assert.deepEqual(validateDetails({ name: '', email: 'a@b.co', points: '12345678901234567890' }, changed), {})
   assert.equal(validateDetails({ name: 'א', email: 'a@b.co', points: '12345678901' }).points, undefined)
   assert.equal(validateDetails({ name: 'א', email: 'a@b.co', points: '99999999999999999999' }).points, 'כתוב מספר שלם.')
@@ -123,35 +163,49 @@ test('בדיקת הפרטים', () => {
 
 test('טופס ושינויים', () => {
   const form = detailsForm(USER)
-  assert.deepEqual(form, { name: 'משה כהן', email: 'moshe@example.com', points: '12', role: 'user' })
-  assert.equal(detailsForm({ role: 'weird' }).role, 'user')
+  assert.deepEqual(form, { name: 'משה כהן', email: 'moshe@example.com', points: '12', roles: [] })
+  assert.deepEqual(detailsForm({ role: 'weird' }).roles, [])
+  assert.deepEqual(detailsForm({ role: 'admin_books', roles: ['admin_ocr', 'admin_books'] }).roles, ['admin_books', 'admin_ocr'])
+  // רשומה ישנה — role בלבד
+  assert.deepEqual(detailsForm({ role: 'admin_ocr' }).roles, ['admin_ocr'])
   assert.equal(detailsForm({ points: 1e21 }).points, '1000000000000000000000')
   assert.equal(hasChanges(detailsChanges(USER, form)), false)
   assert.equal(hasChanges(detailsChanges(USER, { ...form, name: ' משה כהן ' })), false)
-  assert.deepEqual(detailsChanges(USER, { ...form, role: 'admin', points: '13' }), { name: false, email: false, points: true, role: true })
+  assert.deepEqual(detailsChanges(USER, { ...form, roles: ['admin'], points: '13' }), { name: false, email: false, points: true, roles: true })
+  // אותם תפקידים בסדר אחר — אין שינוי
+  const multi = { ...USER, role: 'admin_books', roles: ['admin_books', 'admin_ocr'] }
+  assert.equal(detailsChanges(multi, { ...detailsForm(multi), roles: ['admin_ocr', 'admin_books'] }).roles, false)
+  assert.equal(detailsChanges(multi, { ...detailsForm(multi), roles: ['admin_ocr'] }).roles, true)
 })
 
 test('גוף ה-PUT של מתג: הערכים השמורים כמו שהם, בלי קיצוץ, ועוד הדגל', () => {
-  const odd = { ...USER, name: ' משה ', email: 'Moshe@Example.com ', role: 'weird' }
-  assert.deepEqual(flagBody(odd, 'isSupervisor', false), { userId: 'u1', name: ' משה ', email: 'Moshe@Example.com ', role: 'weird', points: 12, isSupervisor: false })
+  const odd = { ...USER, name: ' משה ', email: 'Moshe@Example.com ', role: 'admin_ocr', roles: ['admin_ocr', 'admin_books'] }
+  assert.deepEqual(flagBody(odd, 'isSupervisor', false), { userId: 'u1', name: ' משה ', email: 'Moshe@Example.com ', roles: ['admin_books', 'admin_ocr'], points: 12, isSupervisor: false })
   assert.equal('isSupervisor' in flagBody(USER, 'dictaEditBlocked', true), false)
   // שדה חסר לא נשלח ב-JSON
-  assert.equal(JSON.stringify(flagBody({ _id: 'x' }, 'dictaEditBlocked', true)), '{"userId":"x","dictaEditBlocked":true}')
+  assert.equal(JSON.stringify(flagBody({ _id: 'x' }, 'dictaEditBlocked', true)), '{"userId":"x","roles":[],"dictaEditBlocked":true}')
 })
 
 test('גוף ה-PUT של "שמור": מה ששונה מהטופס, השאר מהשמור כמו שהוא; בלי דגלים', () => {
-  const form = { name: ' דוד ', email: ' d@e.co ', points: '7', role: 'admin' }
-  const all = { name: true, email: true, points: true, role: true }
-  assert.deepEqual(detailsBody(USER, form, all), { userId: 'u1', name: 'דוד', email: 'd@e.co', role: 'admin', points: 7 })
-  const onlyRole = { name: false, email: false, points: false, role: true }
+  const form = { name: ' דוד ', email: ' d@e.co ', points: '7', roles: ['admin'] }
+  const all = { name: true, email: true, points: true, roles: true }
+  assert.deepEqual(detailsBody(USER, form, all), { userId: 'u1', name: 'דוד', email: 'd@e.co', roles: ['admin'], points: 7 })
+  const onlyRole = { name: false, email: false, points: false, roles: true }
   const saved = { ...USER, name: 'משה ', isSupervisor: false }
-  assert.deepEqual(detailsBody(saved, form, onlyRole), { userId: 'u1', name: 'משה ', email: 'moshe@example.com', role: 'admin', points: 12 })
+  assert.deepEqual(detailsBody(saved, form, onlyRole), { userId: 'u1', name: 'משה ', email: 'moshe@example.com', roles: ['admin'], points: 12 })
+  // כמה תפקידים — מנורמלים
+  const both = detailsBody(USER, { ...form, roles: ['admin_ocr', 'admin_books'] }, onlyRole)
+  assert.deepEqual(both.roles, ['admin_books', 'admin_ocr'])
 })
 
 test('השינוי המקומי אחרי שמירה: רק השדות ששונו, ומה שהשרת קבע', () => {
-  const changes = { name: true, email: false, points: false, role: false }
-  const patch = detailsPatch({ userId: 'u1', name: 'דוד', email: 'x', role: 'user', points: 7 }, changes, { isVerified: false, name: 'X', isSupervisor: false })
+  const changes = { name: true, email: false, points: false, roles: false }
+  const patch = detailsPatch({ userId: 'u1', name: 'דוד', email: 'x', roles: [], points: 7 }, changes, { isVerified: false, name: 'X', isSupervisor: false })
   assert.deepEqual(patch, { _id: 'u1', isVerified: false, name: 'דוד' })
+  // שינוי תפקידים — גם roles וגם role (הראשי), כדי ש-role ישן לא יישאר בתוקף מקומית
+  const rolesPatch = detailsPatch({ userId: 'u1', roles: ['admin_books', 'admin_ocr'] }, { ...changes, name: false, roles: true }, {})
+  assert.deepEqual(rolesPatch, { _id: 'u1', roles: ['admin_books', 'admin_ocr'], role: 'admin_books' })
+  assert.deepEqual(detailsPatch({ userId: 'u1', roles: [] }, { ...changes, name: false, roles: true }, {}), { _id: 'u1', roles: [], role: 'user' })
   assert.deepEqual(flagPatch('u1', TEAMS[0], true, {}), { _id: 'u1', isSupervisor: true })
   const blocked = flagPatch('u1', TEAMS[2], true, { dictaEditBlockedReason: 'נחסם דרך ממשק ניהול המשתמשים', dictaEditBlockedAt: '2026-11-01' })
   assert.deepEqual(blocked, { _id: 'u1', dictaEditBlocked: true, dictaEditBlockedReason: 'נחסם דרך ממשק ניהול המשתמשים', dictaEditBlockedAt: '2026-11-01' })

@@ -651,7 +651,7 @@ export default function BookPage() {
                     currentUser={session?.user}
                     isBookOwner={bookData.isOwner}
                     bookPath={bookPath}
-                    isAdmin={hasBookLibraryAccess(session?.user?.role)}
+                    isAdmin={hasBookLibraryAccess(session?.user)}
                   />
               </div>
             ))}

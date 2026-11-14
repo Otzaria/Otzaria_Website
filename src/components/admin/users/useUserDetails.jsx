@@ -19,7 +19,7 @@ const FAILED = 'לא הצלחנו לשמור את השינויים.'
 /**
  * הטופס של "פרטים" ו"תפקיד" במגירה: הטיוטה, מה השתנה, השגיאות והשמירה (PUT /api/admin/users).
  *
- * לפני שמירה: שינוי תפקיד — חלון שאומר מה התפקיד החדש יראה ומה ייעלם (RoleChangeBody); שינוי דואר — חלון שאומר
+ * לפני שמירה: שינוי תפקידים — חלון שאומר מה הצירוף החדש יראה ומה ייעלם (RoleChangeBody); שינוי דואר — חלון שאומר
  * שהכתובת תסומן כלא מאומתת. רק השדות ששונו נבדקים, ורק הם נלקחים מהטופס: השאר נשלחים כמו שהם שמורים.
  *
  * השמירה עוברת בתור של המסך (writes.run), והגוף נבנה כשהיא יוצאת — מהמשתמש העדכני. סגירת המגירה בזמן
@@ -61,8 +61,8 @@ export function useUserDetails({ user, self, confirm, toast, writes, onSaved, on
       setErrors(found)
       return false
     }
-    if (changes.role) {
-      const c = roleChangeConfirm({ user, role: form.role, self })
+    if (changes.roles) {
+      const c = roleChangeConfirm({ user, roles: form.roles, self })
       if (!(await confirm({ title: c.title, body: <RoleChangeBody confirm={c} />, confirmLabel: c.confirmLabel, tone: c.tone }))) return false
     }
     if (changes.email && !(await confirm(EMAIL_CONFIRM))) return false
@@ -77,7 +77,7 @@ export function useUserDetails({ user, self, confirm, toast, writes, onSaved, on
       const patch = detailsPatch(body, submitted.changes, res?.user)
       onSaved(patch)
       const name = displayName({ ...user, ...patch })
-      toast.show({ message: savedToast(name, submitted.changes, body.role) })
+      toast.show({ message: savedToast(name, submitted.changes, body.roles) })
       if (alive.current) setForm(detailsForm({ ...user, ...patch }))
       return true
     } catch (error) {

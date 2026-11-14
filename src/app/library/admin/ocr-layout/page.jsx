@@ -17,7 +17,7 @@ import { LAYOUT_TABS } from '@/lib/adminTrainingScreen/ocrLayoutQuery'
 
 export default async function AdminOcrLayoutPage() {
   const session = await getServerSession(authOptions)
-  if (!hasOcrAccess(session?.user?.role)) {
+  if (!hasOcrAccess(session?.user)) {
     return <NoAccess description="המסך פתוח למנהל כללי, למנהל OCR ולמאמן מודלים. אם אתה אמור לראות אותו, פנה למנהל האתר." />
   }
   return (

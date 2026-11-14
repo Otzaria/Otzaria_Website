@@ -44,7 +44,7 @@ export async function POST(request) {
     }
 
     const userId = session.user._id || session.user.id;
-    const isAdmin = hasBookLibraryAccess(session.user.role);
+    const isAdmin = hasBookLibraryAccess(session.user);
     if (body.expectedUserId !== undefined && String(userId) !== body.expectedUserId) {
       return NextResponse.json({ error: 'יש להתחבר לחשבון שבו נערך העמוד', code: 'OFFLINE_ACCOUNT' }, { status: 403 });
     }
@@ -202,7 +202,7 @@ export async function GET(request) {
         if (!session) return unauthorized();
 
         const userId = session.user._id || session.user.id;
-        const isAdmin = hasBookLibraryAccess(session.user.role);
+        const isAdmin = hasBookLibraryAccess(session.user);
 
         const { searchParams } = new URL(request.url);
         const bookPath = searchParams.get('bookPath');

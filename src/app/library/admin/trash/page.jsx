@@ -8,6 +8,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import UploadsScreen from '@/components/admin/uploads/UploadsScreen'
 import { loadBookStatuses, loadUploadsCounts } from '../uploads/uploadsPageData'
+import { getRoles } from '@/lib/roles'
 
 export default async function AdminTrashPage() {
   const session = await getServerSession(authOptions)
@@ -17,7 +18,7 @@ export default async function AdminTrashPage() {
       tab="trash"
       initialStatuses={statuses}
       counts={counts || undefined}
-      role={session?.user?.role}
+      role={getRoles(session?.user)}
     />
   )
 }

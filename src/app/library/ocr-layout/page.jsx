@@ -46,7 +46,7 @@ export default function OcrLayoutPage() {
   const skippedRef = useRef([])
 
   // זהה לתנאי בצד השרת (requireVerifiedSession): מאומת או מנהל ספרייה
-  const canWork = session?.user?.isVerified || hasBookLibraryAccess(session?.user?.role)
+  const canWork = session?.user?.isVerified || hasBookLibraryAccess(session?.user)
 
   const load = useCallback(async (extraExclude = []) => {
     try {
@@ -71,7 +71,7 @@ export default function OcrLayoutPage() {
 
   useEffect(() => {
     if (status === 'authenticated') {
-      if (session?.user?.isVerified || hasBookLibraryAccess(session?.user?.role)) load()
+      if (session?.user?.isVerified || hasBookLibraryAccess(session?.user)) load()
       else setLoading(false)
     }
   }, [status, session, load])

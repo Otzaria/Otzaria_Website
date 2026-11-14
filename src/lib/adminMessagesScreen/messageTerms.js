@@ -7,7 +7,7 @@
 
 import { ageText, formatNumber } from '../adminTerms.js'
 import { adminScreenTitle } from '../adminNav.js'
-import { ALL_ADMIN_ROLES } from '../roles.js'
+import { hasAnyAdminAccess } from '../roles.js'
 import { bulkProgressText as bulkProgressLine } from '../adminList/bulkText.js'
 
 export const MESSAGES_TITLE = adminScreenTitle('messages')
@@ -80,11 +80,11 @@ export function deleteSentConfirm(group) {
 }
 
 /**
- * כמה יקבלו הודעה "לכל המשתמשים" — בדיוק כמו השרת (send-admin: role שאינו מאחד מתפקידי הניהול, כולל מפתח ומי
+ * כמה יקבלו הודעה "לכל המשתמשים" — בדיוק כמו השרת (send-admin: אף אחד מהתפקידים (role/roles) אינו תפקיד ניהול, כולל מפתח ומי
  * שאין לו תפקיד). מרשימת כל המשתמשים (/api/admin/users — רק למנהל כללי).
  */
 export function broadcastAudienceCount(users) {
-  return (users || []).filter((u) => !ALL_ADMIN_ROLES.includes(u?.role)).length
+  return (users || []).filter((u) => !hasAnyAdminAccess(u)).length
 }
 
 /** "כל המשתמשים": כמה יקבלו. exact — נספר כמו בשרת (כל מי שאינו מנהל); אחרת — "כ-42" (רק משתמשים רגילים ברשימה) */

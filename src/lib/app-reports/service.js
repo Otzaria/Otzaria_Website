@@ -20,6 +20,7 @@ import {
 } from './inbound.js';
 import { PRODUCT_KEYS, getProduct, isProductKey, productFilter, productOf } from './products.js';
 export { hasAppReportsAccess } from '../roles.js';
+import { isAdmin } from '../roles.js';
 
 const LEASE_MS = 2 * 60 * 1000;
 export const RESEND_WINDOW_MS = 60 * 60 * 1000;
@@ -433,7 +434,7 @@ export function serializeReport(doc, role) {
     hasEmail: Boolean(reporterEmail),
     // רק הדומיין המוצע — הכתובת עצמה חשופה למנהל כללי בלבד
     emailDomainSuggestion: reporterEmail ? suggestEmailDomain(reporterEmail) : null,
-    ...(role === 'admin' ? { reporterEmail: reporterEmail || null } : {}),
+    ...(isAdmin(role) ? { reporterEmail: reporterEmail || null } : {}),
     fileIds: undefined,
     files: {
       diagnostics: doc.fileIds?.diagnostics ? { size: doc.fileIds.diagnostics.size } : null,
@@ -446,7 +447,7 @@ export function serializeReport(doc, role) {
       ...(images?.length ? { images: images.map(({ size, mimeType, fileName }) => ({ size, mimeType, fileName })) } : {}),
       direction: c.direction || 'out',
       byUserId: c.byUserId ? String(c.byUserId) : null,
-      ...(role === 'admin' && fromEmail ? { fromEmail } : {}),
+      ...(isAdmin(role) && fromEmail ? { fromEmail } : {}),
     })),
   };
 }

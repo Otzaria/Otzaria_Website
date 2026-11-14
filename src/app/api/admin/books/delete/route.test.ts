@@ -38,10 +38,7 @@ vi.mock("next-auth", () => ({
 
 vi.mock("@/app/api/auth/[...nextauth]/route", () => ({ authOptions: {} }));
 
-vi.mock("@/lib/roles", () => ({
-  hasBookLibraryAccess: (role: string) => role === "admin_books" || role === "admin",
-}));
-
+// roles.js — המודול האמיתי (טהור): ה-route מעביר את session.user כולו (תפקידים מרובים)
 vi.mock("fs-extra", () => ({
   default: {
     pathExists: pathExistsMock,

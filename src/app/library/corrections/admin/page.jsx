@@ -173,7 +173,7 @@ export default function CorrectionsAdminPage() {
         <ul className="divide-y">
           {users.map((u) => (
             <li key={u.id} className="flex items-center justify-between py-2 text-sm">
-              <span>{u.name} <span className="text-on-surface/50">({u.role})</span></span>
+              <span>{u.name} <span className="text-on-surface/50">({(u.roles?.length ? u.roles : [u.role]).join(', ')})</span></span>
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"

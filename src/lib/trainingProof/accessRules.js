@@ -6,7 +6,7 @@ import { hasOcrAccess } from '../roles.js';
 
 // access: 'admin' | 'approved' | 'pending' | 'denied' | 'revoked' | 'none'
 export function accessOf(user, volunteer) {
-  if (user && hasOcrAccess(user.role)) return 'admin';
+  if (user && hasOcrAccess(user)) return 'admin';
   const s = volunteer?.status;
   if (s === 'approved' || s === 'pending' || s === 'denied' || s === 'revoked') return s;
   return 'none';

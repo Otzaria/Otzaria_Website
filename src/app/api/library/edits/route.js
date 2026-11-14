@@ -15,7 +15,7 @@ export async function GET(req) {
     if (!session) return unauthorized();
 
     await connectDB();
-    const userDoc = await User.findById(session.user.id).select('role isSupervisor').lean();
+    const userDoc = await User.findById(session.user.id).select('role roles isSupervisor').lean();
     if (!canModerateLibrary(userDoc)) return forbidden();
 
     const { searchParams } = new URL(req.url);

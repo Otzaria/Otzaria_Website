@@ -21,7 +21,7 @@ import { sortBookNames, sortFilterUsers } from '@/lib/adminPagesFilterOptions';
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    if (!hasBooksAccess(session?.user?.role)) {
+    if (!hasBooksAccess(session?.user)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

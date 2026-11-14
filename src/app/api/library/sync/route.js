@@ -14,7 +14,7 @@ export async function POST(req) {
     if (!session) return unauthorized();
 
     await connectDB();
-    const userDoc = await User.findById(session.user.id).select('role isSupervisor').lean();
+    const userDoc = await User.findById(session.user.id).select('role roles isSupervisor').lean();
     if (!canManageLibrarySync(userDoc)) {
       return forbidden();
     }

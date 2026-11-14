@@ -387,7 +387,7 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
            if (foundPage) {
              
                const currentUserId = session?.user?._id || session?.user?.id;
-               const isAdmin = hasBookLibraryAccess(session?.user?.role);
+               const isAdmin = hasBookLibraryAccess(session?.user);
 
                const isClaimedByMe = foundPage.claimedById === currentUserId;
              
@@ -1284,7 +1284,7 @@ ${claimRulesText()}`,
   // scanTracking.tracking → שורת המצב ({ level, source, line, word, lineCount, wordCount, ... })
   // "זהה מילים בעמוד" — תיבות מילים מקומיות (tesseract בדפדפן) לעמוד בלי פריסת OCR
   // שמירת התיבות בשרת — רק למי שתפס את העמוד או למנהל ספרים (כמו canWritePageLayout); אחרת רק מקומית
-  const canSaveWords = pageClaimState(pageData, session?.user?._id || session?.user?.id).state === 'mine' || hasBooksAccess(session?.user?.role)
+  const canSaveWords = pageClaimState(pageData, session?.user?._id || session?.user?.id).state === 'mine' || hasBooksAccess(session?.user)
   const trackingPageKey = `${bookPath}\u0000${pageNumber}`
   const [officialLayoutFor, setOfficialLayoutFor] = useState({ key: trackingPageKey, has: false })
   // איפוס state לפי זהות העמוד בזמן render, כדי שהעמוד החדש לא יירש החלטה מהקודם.

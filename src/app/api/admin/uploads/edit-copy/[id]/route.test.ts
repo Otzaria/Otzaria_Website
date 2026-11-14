@@ -16,10 +16,7 @@ vi.mock("@/models/UploadEditCopy", () => ({
 vi.mock("@/models/Upload", () => ({ default: { updateMany: updateManyMock } }));
 vi.mock("next-auth", () => ({ getServerSession: getSessionMock }));
 vi.mock("@/app/api/auth/[...nextauth]/route", () => ({ authOptions: {} }));
-vi.mock("@/lib/roles", () => ({
-  hasBooksAccess: (role: string) => role === "admin_books" || role === "admin",
-}));
-
+// roles.js — המודול האמיתי (טהור): ה-route מעביר את session.user כולו (תפקידים מרובים)
 import { CACHE_TAGS } from "@/lib/cacheTags";
 import { GET, PUT, DELETE } from "./route";
 

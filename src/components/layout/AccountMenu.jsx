@@ -71,7 +71,7 @@ function AccountMenuButton({ name, email, unreadMessages, buttonProps }) {
  * (.nav-dropdown-item ב-styles/nav.css), כדי ששני התפריטים בכותרת ייראו אותו דבר.
  */
 export function AccountMenuItems({ user, unreadMessages = 0, signOutCallbackUrl, onNavigate }) {
-  const links = accountMenuLinks(user?.role, unreadMessages)
+  const links = accountMenuLinks(user, unreadMessages)
   return (
     <>
       {/* ראש התפריט: האות (באותו עמוד כמו אייקוני הפריטים שמתחת — אותו ריפוד, אותו רוחב) ולצדה

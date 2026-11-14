@@ -20,7 +20,7 @@ export async function POST(request, { params }) {
   try {
     const { id } = await params;
     const userId = session.user.id || session.user._id;
-    const isAdmin = hasBookLibraryAccess(session.user.role);
+    const isAdmin = hasBookLibraryAccess(session.user);
 
     await connectDB();
     const page = await OcrTrainingPage.findById(id);

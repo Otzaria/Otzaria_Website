@@ -18,6 +18,7 @@ import {
   pickUserForEmail,
   toTokenUserFields,
 } from '@/lib/googleAuth';
+import { getRoles, primaryRole } from '@/lib/roles';
 
 // סכמת אימות לקלט התחברות
 const loginSchema = z.object({
@@ -136,6 +137,7 @@ export const authOptions = {
       if (user) {
         token.id = user.id;
         token.role = user.role;
+        token.roles = getRoles(user);
         token.acceptReminders = user.acceptReminders;
         token.isVerified = user.isVerified;
         token.hasPassword = user.hasPassword;
@@ -152,7 +154,8 @@ export const authOptions = {
             token.isVerified = freshUser.isVerified;
             token.hasPassword = Boolean(freshUser.password);
             token.acceptReminders = freshUser.acceptReminders;
-            token.role = freshUser.role;
+            token.role = primaryRole(freshUser);
+            token.roles = getRoles(freshUser);
             token.name = freshUser.name;
             token.isSupervisor = freshUser.isSupervisor === true;
             token.isCorrectionsVolunteer = freshUser.isCorrectionsVolunteer === true;
@@ -168,7 +171,9 @@ export const authOptions = {
         session.user.id = token.id;
         session.user._id = token.id;
         session.user.email = token.email;
-        session.user.role = token.role;
+        // roles — כל התפקידים; JWT ישן (מלפני תפקידים מרובים) — בלי roles, ואז נגזר מ-role
+        session.user.roles = getRoles(token);
+        session.user.role = primaryRole(token);
         session.user.name = token.name;
         session.user.acceptReminders = token.acceptReminders;
         session.user.isVerified = token.isVerified;

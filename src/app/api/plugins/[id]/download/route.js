@@ -85,7 +85,7 @@ export async function GET(request, { params }) {
     }
 
     const session = await getServerSession(authOptions)
-    const isAdmin = hasPluginsAccess(session?.user?.role)
+    const isAdmin = hasPluginsAccess(session?.user)
     const isOwner = isPluginOwner(plugin, session?.user?.id)
 
     // תוסף מושהה — גם בקישור ישיר ההורדה פתוחה רק למעלה ולמנהלי התוספים

@@ -4,7 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
 import TzuratToken from '@/models/TzuratToken';
 import User from '@/models/User';
-import { hasTzuratAdminAccess } from '@/lib/roles';
+import { hasTzuratAdminAccess, getRoles } from '@/lib/roles';
 import { getClientIp } from '@/lib/client-ip';
 import { createFailThrottle } from '@/lib/pageProof/tokenThrottle';
 import { bearerOf, isTokenFormat, missingScope, shouldTouch, tokenState, TOUCH_MS, VIA_SUFFIX } from './tokenRules';
@@ -63,9 +63,9 @@ export async function getTzuratSession(request, scope) {
   if (state === 'revoked') return failed(ip, 'token_revoked');
   if (state === 'expired') return failed(ip, 'token_expired');
 
-  const user = await User.findById(doc.user, { name: 1, role: 1 }).lean();
+  const user = await User.findById(doc.user, { name: 1, role: 1, roles: 1 }).lean();
   if (!user) return failed(ip, 'token_invalid');
-  if (!hasTzuratAdminAccess(user.role)) return deny(keyError(403, 'token_user'));
+  if (!hasTzuratAdminAccess(user)) return deny(keyError(403, 'token_user'));
 
   const need = (Array.isArray(scope) ? scope : [scope]).filter(Boolean);
   if (!need.length || missingScope(doc.scopes, need)) {
@@ -82,7 +82,7 @@ export async function getTzuratSession(request, scope) {
   const id = String(user._id);
   return {
     session: {
-      user: { id, _id: id, name: `${user.name || ''}${VIA_SUFFIX}`, role: user.role },
+      user: { id, _id: id, name: `${user.name || ''}${VIA_SUFFIX}`, role: user.role, roles: getRoles(user) },
       via: 'token',
       tokenId: String(doc._id),
       scopes: [...(doc.scopes || [])],

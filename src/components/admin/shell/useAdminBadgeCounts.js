@@ -23,9 +23,11 @@ export function refreshAdminBadgeCounts() {
  */
 export function useAdminBadgeCounts(role, initialCounts) {
   const [counts, setCounts] = useState(initialCounts)
+  // role — תפקיד, מערך תפקידים או session.user; התלות היא בבוליאני, לא בזהות של מערך/אובייקט
+  const enabled = hasAnyAdminBadge(role)
 
   useEffect(() => {
-    if (!hasAnyAdminBadge(role)) return undefined
+    if (!enabled) return undefined
     const fetchCounts = async () => {
       try {
         const res = await fetch('/api/badge-counts')
@@ -46,7 +48,7 @@ export function useAdminBadgeCounts(role, initialCounts) {
       clearInterval(interval)
       window.removeEventListener(REFRESH_EVENT, fetchCounts)
     }
-  }, [role])
+  }, [enabled])
 
   return counts
 }

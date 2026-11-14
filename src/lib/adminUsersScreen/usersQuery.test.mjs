@@ -56,6 +56,17 @@ test('filter: תפקיד (לא מוכר = משתמש) וצוות', () => {
   assert.deepEqual(filterUsers(U, { ...base, team: 'supervisor' }).map((u) => u._id), ['b'])
 })
 
+test('filter + אפשרויות: משתמש עם כמה תפקידים נמצא תחת כל אחד מהם (ולא תחת "משתמש")', () => {
+  const base = { q: '', role: '', team: '', sort: 'newest', page: 1 }
+  const multi = [...U, { _id: 'm', name: 'רב-תפקידי', email: 'm@example.com', role: 'admin_books', roles: ['admin_books', 'admin_ocr'], createdAt: '2025-01-01T00:00:00Z' }]
+  assert.deepEqual(filterUsers(multi, { ...base, role: 'admin_ocr' }).map((u) => u._id), ['m'])
+  assert.deepEqual(filterUsers(multi, { ...base, role: 'admin_books' }).map((u) => u._id), ['c', 'm'])
+  assert.ok(!filterUsers(multi, { ...base, role: 'user' }).some((u) => u._id === 'm'))
+  const { roles } = filterOptions(multi)
+  assert.equal(roles.find((r) => r.value === 'admin_ocr').count, 1)
+  assert.equal(roles.find((r) => r.value === 'admin_books').count, 2)
+})
+
 test('sort: הצטרפות, שם, נקודות, עמודים', () => {
   const base = { q: '', role: '', team: '', page: 1 }
   assert.deepEqual(filterUsers(U, { ...base, sort: 'newest' }).map((u) => u._id), ['b', 'c', 'a', 'd'])

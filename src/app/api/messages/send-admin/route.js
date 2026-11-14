@@ -5,7 +5,7 @@ import User from '@/models/User';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import mongoose from 'mongoose';
-import { hasAnyAdminAccess, ALL_ADMIN_ROLES } from '@/lib/roles';
+import { hasAnyAdminAccess, ALL_ADMIN_ROLES, notRoleQuery } from '@/lib/roles';
 import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
 import { requireAccess, badRequest, serverError } from '@/lib/apiResponse';
 
@@ -23,7 +23,7 @@ export async function POST(request) {
 
     if (sendToAll) {
       // שליפה של כל המשתמשים (למעט האדמין עצמו)
-      const users = await User.find({ role: { $nin: ALL_ADMIN_ROLES } }).select('_id');
+      const users = await User.find(notRoleQuery(ALL_ADMIN_ROLES)).select('_id');
       
       const messages = users.map(user => ({
         sender: adminId,

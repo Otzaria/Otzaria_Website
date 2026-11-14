@@ -43,7 +43,7 @@ export async function POST(request) {
 
         // 6. תפיסה: בעלות, מכסת 5 עמודים, ושחרור עצלן של תפיסה שפג תוקפה
         //    (bookPageClaims.js). אדמין/admin_books עוקף בעלות ומכסה.
-        const isAdmin = hasBookLibraryAccess(session.user.role);
+        const isAdmin = hasBookLibraryAccess(session.user);
         const result = await claimBookPage({ userId, isAdmin, book, pageNumber: Number(pageNumber) });
         if (result.status !== 200) {
             return NextResponse.json(result.body, { status: result.status });

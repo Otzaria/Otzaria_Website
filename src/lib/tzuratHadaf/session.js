@@ -21,7 +21,7 @@ export async function requireTzuratSession() {
   const session = await getServerSession(authOptions);
   if (!session?.user) return { error: errorJson(401, 'יש להתחבר') };
   const u = session.user;
-  const isAdmin = hasTzuratAdminAccess(u.role);
+  const isAdmin = hasTzuratAdminAccess(u);
   if (!u.isVerified && !isAdmin) return { error: errorJson(403, 'רק משתמשים מאומתים יכולים להשתתף בבדיקת צורת הדף') };
   const userId = String(u.id || u._id || '');
   if (!mongoose.Types.ObjectId.isValid(userId)) return { error: errorJson(401, 'מזהה משתמש לא תקין') };

@@ -219,7 +219,7 @@ export async function releaseReport({ user, id, generation, now = new Date() }) 
 export async function reassignReport({ user, id, generation, targetUserId, config, now = new Date() }) {
   if (!canHandleCorrections(user)) return err(403, 'Forbidden');
   if (!isId(id) || !isId(targetUserId)) return err(400, 'invalid_request');
-  const target = await User.findById(targetUserId).select('name role isCorrectionsVolunteer').lean();
+  const target = await User.findById(targetUserId).select('name role roles isCorrectionsVolunteer').lean();
   if (!target || !canHandleCorrections(target)) return err(400, 'target_not_authorized');
   // אישור שממתין לפרסום/בפרסום לא משויך מחדש — אחרת הוא מתפרסם בזמן שמטפל עובד עליו.
   const filter = { _id: id, workflowGeneration: generation, state: 'open', 'publish.status': { $nin: ['ready', 'in_progress', 'unknown_needs_reconcile', 'pr_opened'] } };

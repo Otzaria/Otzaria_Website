@@ -5,11 +5,14 @@
 //   מפקח, חסום מעריכה — PUT /api/admin/users (כמו בטבלה הקודמת במסך הזה)
 //   מתנדב תיקונים     — POST /api/corrections/admin/volunteers (כמו במסך הניהול של דיווחי הטעויות)
 //
-// מתי שינוי נכנס לתוקף (נבדק בקוד ה-auth, api/auth/[...nextauth]/route.js: jwt): התפקיד ודגלי הצוות נשמרים
+// תפקידים: למשתמש יכולים להיות כמה תפקידים יחד (roles.js — roles הוא מקור האמת, role הוא הראשי). הטופס
+// עובד עם מערך (form.roles), ומה שהמשתמש רואה בניהול הוא האיחוד של כל התפקידים שנבחרו.
+//
+// מתי שינוי נכנס לתוקף (נבדק בקוד ה-auth, api/auth/[...nextauth]/route.js: jwt): התפקידים ודגלי הצוות נשמרים
 // בחיבור של המשתמש ומתרעננים רק כשהוא מתחבר מחדש — ולכן הסרגל ומסכי הניהול מתעדכנים אצלו רק אז. מה שנבדק
 // מול המסד בכל בקשה (החסימה, אישור הצעות של מפקח, טיפול בדיווח של מתנדב) — חל מיד.
 
-import { ROLE_LABELS } from '../roles.js'
+import { ASSIGNABLE_ROLES, ROLE_LABELS, ROLES, getRoles, normalizeRoles, primaryRole } from '../roles.js'
 import { buildAdminNavGroups, visibleNavItems } from '../adminNav.js'
 import { formatNumber } from '../adminTerms.js'
 
@@ -68,8 +71,11 @@ export function blockReason(user) {
   return reason === GENERIC_BLOCK_REASON ? '' : reason
 }
 
-/** התפקידים לבורר, בסדר של ROLE_LABELS */
+/** התפקידים לבורר הסינון, בסדר של ROLE_LABELS (כולל "משתמש" — מי שאין לו אף תפקיד) */
 export const ROLE_IDS = Object.keys(ROLE_LABELS)
+
+/** התפקידים שאפשר להעניק במגירה (בלי "משתמש", שהוא היעדר תפקיד), בסדר העדיפות של roles.js */
+export const ASSIGNABLE_ROLE_IDS = ASSIGNABLE_ROLES
 
 /** שם התפקיד; תפקיד לא מוכר (או חסר) — "משתמש", כמו בטבלה הקודמת */
 export function roleLabel(role) {
@@ -78,6 +84,45 @@ export function roleLabel(role) {
 
 /** תפקיד מוכר, או "user" */
 export const roleOf = (role) => (ROLE_LABELS[role] ? role : 'user')
+
+/** כל התפקידים של המשתמש (role + roles; roles.js) — ריק: משתמש רגיל */
+export const userRoles = (user) => getRoles(user)
+
+/** האם למשתמש יש את התפקיד (לסינון). "user" — מי שאין לו אף תפקיד */
+export function userHasRole(user, role) {
+  const roles = getRoles(user)
+  return role === 'user' ? roles.length === 0 : roles.includes(role)
+}
+
+/** רשימה בעברית: "א", "א וב", "א, ב וג" */
+function hebrewList(items) {
+  if (items.length <= 1) return items.join('')
+  return `${items.slice(0, -1).join(', ')} ו${items[items.length - 1]}`
+}
+
+/** שם של כמה תפקידים יחד: "מנהל ספרים ומנהל OCR"; בלי תפקיד — "משתמש" */
+export function rolesLabel(roles) {
+  const list = getRoles(roles)
+  return list.length === 0 ? ROLE_LABELS.user : hebrewList(list.map(roleLabel))
+}
+
+/** אותם תפקידים (בלי תלות בסדר ובכפילויות) */
+export function sameRoles(a, b) {
+  const x = normalizeRoles(a)
+  const y = normalizeRoles(b)
+  return x.length === y.length && x.every((r, i) => r === y[i])
+}
+
+/**
+ * בחירת תפקיד במגירה (סימון / ביטול סימון). מנהל כללי כולל את כל השאר — כשהוא מסומן, הוא לבדו.
+ * @param {string[]} roles  הבחירה הנוכחית
+ * @param {string} role
+ * @param {boolean} on
+ */
+export function toggleRole(roles, role, on) {
+  const rest = getRoles(roles).filter((r) => r !== role)
+  return normalizeRoles(on ? [...rest, role] : rest)
+}
 
 /**
  * שורת ההסבר של כל תפקיד בבורר — מה רואים בניהול (תואם ל-adminNav; נבדק בטסט שלכל תפקיד יש הסבר).
@@ -120,55 +165,61 @@ export function displayName(user) {
 const navLabel = (item) => (item.id === 'dashboard' ? 'לוח הניהול' : item.label)
 
 /**
- * מה התפקיד רואה בניהול — מתוך הסרגל עצמו (buildAdminNavGroups), לפי התפקיד בלבד: צוות (מפקח, מתנדב
- * תיקונים) לא משתנה בשינוי תפקיד, ולכן לא נכנס להסבר. שורה לכל קבוצה: "ספרים: ספרים, העלאות".
- * @param {string} role
+ * מה התפקיד (או צירוף התפקידים) רואה בניהול — מתוך הסרגל עצמו (buildAdminNavGroups), לפי התפקידים בלבד: צוות
+ * (מפקח, מתנדב תיקונים) לא משתנה בשינוי תפקיד, ולכן לא נכנס להסבר. שורה לכל קבוצה: "ספרים: ספרים, העלאות".
+ * @param {string | string[]} roles
  * @returns {string[]} ריק — לא יראה את ממשק הניהול בכלל
  */
-export function roleAccessLines(role) {
-  return buildAdminNavGroups({ role }).map((g) => {
+export function roleAccessLines(roles) {
+  return buildAdminNavGroups(getRoles(roles)).map((g) => {
     const names = g.items.map(navLabel).join(', ')
     return g.label ? `${g.label}: ${names}` : names
   })
 }
 
-/** מה שהתפקיד הקודם ראה והחדש לא יראה — שמות המסכים, בסדר הסרגל */
-export function roleLostItems(fromRole, toRole) {
-  const next = new Set(visibleNavItems({ role: toRole }).map((i) => i.id))
-  return visibleNavItems({ role: fromRole }).filter((i) => !next.has(i.id)).map(navLabel)
+/** מה שהתפקידים הקודמים ראו והחדשים לא יראו — שמות המסכים, בסדר הסרגל (תפקיד או מערך תפקידים) */
+export function roleLostItems(fromRoles, toRoles) {
+  const next = new Set(visibleNavItems(getRoles(toRoles)).map((i) => i.id))
+  return visibleNavItems(getRoles(fromRoles)).filter((i) => !next.has(i.id)).map(navLabel)
 }
 
 /**
- * חלון האישור של שינוי תפקיד: מה יראה, מה ייעלם, ומתי זה נכנס לתוקף.
- * self — המנהל משנה את התפקיד של עצמו: גוף שני, ואזהרה כשהוא מאבד את "משתמשים" (הדרך לחזור).
- * @param {{ user: any, role: string, self?: boolean }} input
+ * חלון האישור של שינוי תפקידים: מה יראה (האיחוד של כל התפקידים שנבחרו), מה ייעלם, ומתי זה נכנס לתוקף.
+ * self — המנהל משנה את התפקידים של עצמו: גוף שני, ואזהרה כשהוא מאבד את "משתמשים" (הדרך לחזור).
+ * roles — הבחירה החדשה (מערך; מחרוזת של תפקיד אחד מתקבלת גם היא).
+ * @param {{ user: any, roles: string[] | string, self?: boolean }} input
  */
-export function roleChangeConfirm({ user, role, self = false }) {
+export function roleChangeConfirm({ user, roles, self = false }) {
+  const next = normalizeRoles(roles)
   const name = displayName(user)
-  const label = roleLabel(role)
-  const lines = roleAccessLines(role)
-  const lost = roleLostItems(roleOf(user?.role), role)
-  const losesUsers = self && role !== 'admin'
+  const label = rolesLabel(next)
+  const many = next.length > 1
+  const lines = roleAccessLines(next)
+  const lost = roleLostItems(getRoles(user), next)
+  const losesUsers = self && !next.includes(ROLES.ADMIN)
   let intro
   if (self) intro = lines.length > 0 ? `אתה תהיה ${label}. בניהול תראה:` : `אתה תהיה ${label}, ולא תראה את ממשק הניהול.`
   else intro = lines.length > 0 ? `${name} יהיה ${label}. בניהול הוא יראה:` : `${name} יהיה ${label}, ולא יראה את ממשק הניהול.`
   return {
-    title: `לשנות את התפקיד ל${label}?`,
+    title: many ? `לשנות את התפקידים ל${label}?` : `לשנות את התפקיד ל${label}?`,
     body: intro,
     details: lines,
     lost: lost.length > 0 ? `${self ? 'לא תראה יותר' : 'לא יראה יותר'}: ${lost.join(', ')}.` : '',
     note: self ? 'השינוי ייכנס לתוקף במלואו כשתתחבר מחדש.' : 'השינוי ייכנס לתוקף במלואו כשהוא יתחבר מחדש.',
     warning: losesUsers ? 'זה החשבון שלך. אחרי שתתחבר מחדש לא תוכל להיכנס למסך הזה ולהחזיר את התפקיד.' : '',
-    confirmLabel: 'שנה תפקיד',
+    confirmLabel: many ? 'שנה תפקידים' : 'שנה תפקיד',
     tone: losesUsers ? 'danger' : 'default',
   }
 }
 
-/** ההודעה אחרי שמירה: שינוי תפקיד — נאמר במפורש */
-export function savedToast(name, changes, role) {
+/** ההודעה אחרי שמירה: שינוי תפקידים — נאמר במפורש. roles — התפקידים החדשים (מערך) */
+export function savedToast(name, changes, roles) {
   const others = changes.name || changes.email || changes.points
-  if (changes.role && !others) return `התפקיד של ${name} שונה ל${roleLabel(role)}`
-  if (changes.role) return `הפרטים והתפקיד של ${name} נשמרו`
+  const next = normalizeRoles(roles)
+  if (changes.roles && !others) {
+    return next.length > 1 ? `התפקידים של ${name} שונו ל${rolesLabel(next)}` : `התפקיד של ${name} שונה ל${rolesLabel(next)}`
+  }
+  if (changes.roles) return `הפרטים והתפקיד של ${name} נשמרו`
   return `הפרטים של ${name} נשמרו`
 }
 
@@ -208,43 +259,43 @@ export function detailsForm(user) {
     name: String(user?.name ?? ''),
     email: String(user?.email ?? ''),
     points: pointsText(user?.points),
-    role: roleOf(user?.role),
+    roles: getRoles(user),
   }
 }
 
-/** מה השתנה בטופס מול השמור: { name, email, points, role } — true לכל שדה ששונה */
+/** מה השתנה בטופס מול השמור: { name, email, points, roles } — true לכל שדה ששונה */
 export function detailsChanges(user, form) {
   const saved = detailsForm(user)
   return {
     name: String(form.name).trim() !== saved.name.trim(),
     email: String(form.email).trim() !== saved.email.trim(),
     points: String(form.points).trim() !== saved.points,
-    role: form.role !== saved.role,
+    roles: !sameRoles(form.roles, saved.roles),
   }
 }
 
 export const hasChanges = (changes) => Object.values(changes).some(Boolean)
 
 /**
- * השדות שהשרת כותב תמיד מהגוף (api/admin/users, PUT: role, points, name — בלי בדיקה), והדואר — כמו
- * שהם שמורים, בלי קיצוץ ובלי "תיקון": בקשה שלא נוגעת בהם לא משנה אותם. שדה חסר (undefined) לא נשלח
- * ב-JSON, ו-Mongoose לא נוגע בו.
+ * השדות שהשרת כותב תמיד מהגוף (api/admin/users, PUT: roles, points, name), והדואר — כמו שהם שמורים, בלי
+ * קיצוץ ובלי "תיקון": בקשה שלא נוגעת בהם לא משנה אותם. שדה חסר (undefined) לא נשלח ב-JSON, ו-Mongoose לא
+ * נוגע בו. התפקידים נשלחים כמערך (roles); השרת גוזר מהם את role (הראשי).
  */
-const savedFields = (user) => ({ userId: user._id, name: user.name, email: user.email, role: user.role, points: user.points })
+const savedFields = (user) => ({ userId: user._id, name: user.name, email: user.email, roles: getRoles(user), points: user.points })
 
 /**
  * גוף ה-PUT של "שמור": השדות ששונו — מהטופס (מקוצצים), והשאר — מהשמור העדכני כמו שהוא.
  * dictaEditBlocked ו-isSupervisor לא נשלחים: שליחת dictaEditBlocked כותבת מחדש את סיבת החסימה ואת מי חסם.
  * @param {any} user  המשתמש השמור, ברגע שהבקשה יוצאת
- * @param {{ name: string, email: string, points: string | number, role: string }} form
- * @param {{ name: boolean, email: boolean, points: boolean, role: boolean }} changes
+ * @param {{ name: string, email: string, points: string | number, roles: string[] }} form
+ * @param {{ name: boolean, email: boolean, points: boolean, roles: boolean }} changes
  */
 export function detailsBody(user, form, changes) {
   const body = savedFields(user)
   if (changes.name) body.name = String(form.name).trim()
   if (changes.email) body.email = String(form.email).trim()
   if (changes.points) body.points = Number(String(form.points).trim())
-  if (changes.role) body.role = form.role
+  if (changes.roles) body.roles = normalizeRoles(form.roles)
   return body
 }
 
@@ -272,7 +323,9 @@ function fromServer(server) {
  */
 export function detailsPatch(body, changes, server) {
   const patch = { _id: body.userId, ...fromServer(server) }
-  for (const field of ['name', 'email', 'points', 'role']) if (changes[field]) patch[field] = body[field]
+  for (const field of ['name', 'email', 'points']) if (changes[field]) patch[field] = body[field]
+  // התפקידים — גם role (הראשי), כמו שהשרת כותב: getRoles מאחד את שניהם, ו-role ישן היה נשאר בתוקף
+  if (changes.roles) Object.assign(patch, { roles: body.roles, role: primaryRole(body.roles) })
   return patch
 }
 

@@ -20,6 +20,7 @@ import Upload from '@/models/Upload'
 import { CACHE_TAGS, REVALIDATE_SECONDS } from '@/lib/cacheTags'
 import UploadsScreen from '@/components/admin/uploads/UploadsScreen'
 import { loadBookStatuses, loadUploadsCounts } from './uploadsPageData'
+import { getRoles } from '@/lib/roles'
 
 // ליטרל מספרי בכוונה (לא REVALIDATE_SECONDS.UPLOADS_ADMIN_LIST) — ה-segment
 // config של Next נחלץ ע"י ניתוח AST סטטי שלא תומך ב-property access על אובייקט
@@ -98,7 +99,7 @@ export default async function AdminUploadsPage() {
       initialError={initialError}
       initialStatuses={statuses}
       counts={{ uploads: initialError ? counts?.uploads : initialUploads.length, trash: counts?.trash }}
-      role={session?.user?.role}
+      role={getRoles(session?.user)}
     />
   )
 }

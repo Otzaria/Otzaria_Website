@@ -97,12 +97,12 @@ export async function addDirect(query, by, now = new Date()) {
   if (!q || q.length > 200) return { error: 'כתבו אימייל או שם-משתמש', status: 400 };
   const esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   let users = q.includes('@')
-    ? await User.find({ email: new RegExp(`^${esc}$`, 'i') }, { name: 1, email: 1, role: 1 }).limit(2).lean()
-    : await User.find({ name: q }, { name: 1, email: 1, role: 1 }).limit(3).lean();
+    ? await User.find({ email: new RegExp(`^${esc}$`, 'i') }, { name: 1, email: 1, role: 1, roles: 1 }).limit(2).lean()
+    : await User.find({ name: q }, { name: 1, email: 1, role: 1, roles: 1 }).limit(3).lean();
   if (!users.length) return { error: 'לא נמצא משתמש רשום כזה באתר', status: 404 };
   if (users.length > 1) return { error: 'יש כמה משתמשים בשם הזה — כתבו את האימייל', status: 409 };
   const u = users[0];
-  if (hasOcrAccess(u.role)) return { error: 'זה מנהל OCR — יש לו גישה ממילא', status: 409 };
+  if (hasOcrAccess(u)) return { error: 'זה מנהל OCR — יש לו גישה ממילא', status: 409 };
   const v = await TrainingProofVolunteer.findOneAndUpdate(
     { userId: u._id },
     {

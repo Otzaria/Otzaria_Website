@@ -21,6 +21,7 @@ import { getAdminUsersWithStats } from '@/lib/adminUsers'
 import { CACHE_TAGS, REVALIDATE_SECONDS } from '@/lib/cacheTags'
 import UsersScreen from '@/components/admin/users/UsersScreen'
 import { UsersScreenSkeleton } from '@/components/admin/users/UsersSkeleton'
+import { isAdmin } from '@/lib/roles'
 
 // ליטרל מספרי בכוונה (לא REVALIDATE_SECONDS.USERS_ADMIN_LIST) — ה-segment
 // config של Next נחלץ ע"י ניתוח AST סטטי שלא תומך ב-property access על אובייקט
@@ -37,7 +38,7 @@ export default async function AdminUsersPage() {
 
   let users = []
   let error = false
-  if (session?.user?.role === 'admin') {
+  if (isAdmin(session?.user)) {
     try {
       users = await loadAdminUsers()
     } catch (e) {

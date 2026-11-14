@@ -28,7 +28,7 @@ export async function GET(request, { params }) {
 
     if (isPluginSuspended(plugin)) {
       const session = await getServerSession(authOptions)
-      const isAdmin = hasPluginsAccess(session?.user?.role)
+      const isAdmin = hasPluginsAccess(session?.user)
       const isOwner = isPluginOwner(plugin, session?.user?.id)
       if (!canAccessSuspended({ isAdmin, isOwner })) {
         return notFound('Plugin not found')

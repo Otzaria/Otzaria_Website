@@ -37,7 +37,7 @@ import { getServerSession } from 'next-auth'
 import { unstable_cache as nextCache } from 'next/cache'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { Suspense } from 'react'
-import { hasAnyAdminAccess, hasBooksAccess, isAdmin } from '@/lib/roles'
+import { hasAnyAdminAccess, hasBooksAccess, isAdmin, getRoles } from '@/lib/roles'
 import { getAdminMessagesList } from '@/lib/adminMessages'
 import { toAdminMessageListItem } from '@/lib/adminMessagesView'
 import { CACHE_TAGS, REVALIDATE_SECONDS } from '@/lib/cacheTags'
@@ -57,7 +57,8 @@ const loadAdminMessages = nextCache(getAdminMessagesList, ['admin-messages-list'
 
 export default async function AdminMessagesPage({ searchParams }) {
   const session = await getServerSession(authOptions)
-  const role = session?.user?.role
+  // כל התפקידים של הצופה (roles.js) — לא רק הראשי
+  const role = getRoles(session?.user)
   const canRemind = hasBooksAccess(role)
   const view = viewFromParams(await searchParams)
 

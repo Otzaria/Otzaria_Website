@@ -21,7 +21,7 @@ export default async function AdminFrame({ session, children }) {
   // והרענון התקופתי (useAdminBadgeCounts) יתקן.
   let initialCounts = EMPTY_ADMIN_BADGE_COUNTS
   try {
-    initialCounts = await getRequestAdminBadgeCounts(viewer.role)
+    initialCounts = await getRequestAdminBadgeCounts(viewer.roles)
   } catch (e) {
     console.error('Error loading admin counts', e)
   }

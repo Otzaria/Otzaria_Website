@@ -100,7 +100,9 @@ test('sentToAllText: המספר מהשרת; 0 — לא נשלחה לאף אחד;
 })
 
 test('broadcastAudienceCount: כמו השרת — כל מי שאינו מתפקידי הניהול (גם מפתח ומי שאין לו תפקיד)', () => {
-  const users = [{ role: 'user' }, { role: 'developer' }, {}, { role: 'admin' }, { role: 'admin_ocr' }, { role: 'model_trainer' }]
+  const users = [{ role: 'user' }, { role: 'developer' }, {}, { role: 'admin' }, { role: 'admin_ocr' }, { role: 'model_trainer' },
+    // כמה תפקידים: מפתח שהוא גם מנהל OCR — מנהל, לא נספר
+    { role: 'admin_ocr', roles: ['developer', 'admin_ocr'] }]
   assert.equal(broadcastAudienceCount(users), 3)
   assert.equal(broadcastAudienceCount(undefined), 0)
 })

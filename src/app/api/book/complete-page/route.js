@@ -16,7 +16,7 @@ export async function POST(request) {
     const { pageId } = await request.json();
     await connectDB();
 
-    const isAdmin = hasBookLibraryAccess(session.user.role);
+    const isAdmin = hasBookLibraryAccess(session.user);
 
     const query = { _id: pageId };
     if (!isAdmin) {

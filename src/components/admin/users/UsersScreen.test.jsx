@@ -37,7 +37,7 @@ import UsersScreen from './UsersScreen'
 
 const USERS = [
   { _id: 'u1', name: 'משה כהן', email: 'moshe@example.com', role: 'admin', points: 10, completedPages: 3, inProgressPages: 1, createdAt: '2026-10-01T10:00:00Z', isVerified: true },
-  { _id: 'u2', name: 'אברהם לוי', email: 'avi@example.com', role: 'user', points: 1200, completedPages: 40, inProgressPages: 2, isSupervisor: true, dictaEditBlocked: true, dictaEditBlockedReason: 'הצעות לא רציניות', createdAt: '2026-11-01T10:00:00Z', isVerified: true },
+  { _id: 'u2', name: 'אברהם לוי', email: 'avi@example.com', roles: [], points: 1200, completedPages: 40, inProgressPages: 2, isSupervisor: true, dictaEditBlocked: true, dictaEditBlockedReason: 'הצעות לא רציניות', createdAt: '2026-11-01T10:00:00Z', isVerified: true },
   { _id: 'u3', name: 'דוד פרץ', email: 'david@example.com', role: 'admin_books', points: 5, completedPages: 0, isCorrectionsVolunteer: true, createdAt: '2026-09-01T10:00:00Z', isVerified: false },
 ]
 
@@ -205,10 +205,10 @@ describe('מגירת משתמש', () => {
   test('שינוי תפקיד: הסבר בבורר, חלון שאומר מה יראה ומתי, PUT באותם שדות, והודעה שהתפקיד שונה', async () => {
     const user = userEvent.setup()
     const drawer = await openDrawerOf('u2', 'אברהם לוי')
-    await user.click(within(drawer).getByRole('button', { name: /^תפקיד/ }))
-    const option = await screen.findByRole('option', { name: /^מנהל ספרים בלבד/ })
-    expect(option).toHaveTextContent(/רשימת הספרים בלבד/)
-    await user.click(screen.getByRole('option', { name: /^מנהל ספרים(?! בלבד)/ }))
+    const roles = within(drawer).getByRole('group', { name: 'תפקידים' })
+    expect(within(roles).getByRole('checkbox', { name: 'מנהל ספרים בלבד' })).toHaveAccessibleDescription(/רשימת הספרים בלבד/)
+    expect(within(roles).getAllByRole('checkbox').filter((c) => c.checked)).toHaveLength(0)
+    await user.click(within(roles).getByRole('checkbox', { name: 'מנהל ספרים' }))
     await user.click(within(drawer).getByRole('button', { name: 'שמור' }))
     const confirm = await screen.findByRole('dialog', { name: 'לשנות את התפקיד למנהל ספרים?' })
     expect(within(confirm).getByText(/ספרים: ספרים, העלאות/)).toBeInTheDocument()
@@ -218,17 +218,53 @@ describe('מגירת משתמש', () => {
     await user.click(within(confirm).getByRole('button', { name: 'שנה תפקיד' }))
     await waitFor(() => expect(writes()).toHaveLength(1))
     // בלי dictaEditBlocked — שליחתו הייתה כותבת מחדש את סיבת החסימה
-    expect(bodies()[0]).toEqual({ userId: 'u2', name: 'אברהם לוי', email: 'avi@example.com', role: 'admin_books', points: 1200 })
+    expect(bodies()[0]).toEqual({ userId: 'u2', name: 'אברהם לוי', email: 'avi@example.com', roles: ['admin_books'], points: 1200 })
     expect(writes()[0].key).toBe('PUT /api/admin/users')
     expect(await screen.findByText('התפקיד של אברהם לוי שונה למנהל ספרים')).toBeInTheDocument()
     await waitFor(() => expect(within(row('אברהם לוי')).getAllByText('מנהל ספרים').length).toBeGreaterThan(0))
   })
 
+  test('כמה תפקידים: מנהל ספרים + מנהל OCR — חלון עם האיחוד, PUT עם שניהם, ובשורה תג ראשי ו-"+1"', async () => {
+    const user = userEvent.setup()
+    const drawer = await openDrawerOf('u2', 'אברהם לוי')
+    const roles = within(drawer).getByRole('group', { name: 'תפקידים' })
+    await user.click(within(roles).getByRole('checkbox', { name: 'מנהל OCR' }))
+    await user.click(within(roles).getByRole('checkbox', { name: 'מנהל ספרים' }))
+    expect(within(roles).getByRole('checkbox', { name: 'מנהל OCR' })).toBeChecked()
+    expect(within(roles).getByRole('checkbox', { name: 'מנהל ספרים' })).toBeChecked()
+    await user.click(within(drawer).getByRole('button', { name: 'שמור' }))
+    const confirm = await screen.findByRole('dialog', { name: 'לשנות את התפקידים למנהל ספרים ומנהל OCR?' })
+    expect(within(confirm).getByText(/ספרים: ספרים, העלאות/)).toBeInTheDocument()
+    expect(within(confirm).getByText(/תמלול שורות/)).toBeInTheDocument()
+    await user.click(within(confirm).getByRole('button', { name: 'שנה תפקידים' }))
+    await waitFor(() => expect(writes()).toHaveLength(1))
+    expect(bodies()[0]).toEqual({ userId: 'u2', name: 'אברהם לוי', email: 'avi@example.com', roles: ['admin_books', 'admin_ocr'], points: 1200 })
+    expect(await screen.findByText('התפקידים של אברהם לוי שונו למנהל ספרים ומנהל OCR')).toBeInTheDocument()
+    await waitFor(() => expect(within(row('אברהם לוי')).getAllByText('מנהל ספרים').length).toBeGreaterThan(0))
+    expect(within(row('אברהם לוי')).getAllByText('מנהל OCR').length).toBeGreaterThan(0) // ה-"+1" לקורא המסך
+  })
+
+  test('משתמש שכבר יש לו כמה תפקידים: מסומנים כולם במגירה, ומסונן תחת כל אחד', async () => {
+    const multi = USERS.map((u) => (u._id === 'u3' ? { ...u, role: 'admin_books', roles: ['admin_books', 'admin_ocr'] } : u))
+    renderAt('/library/admin/users?role=admin_ocr&user=u3', { initialUsers: multi })
+    const drawer = await screen.findByRole('dialog', { name: 'דוד פרץ' })
+    const roles = within(drawer).getByRole('group', { name: 'תפקידים' })
+    expect(within(roles).getAllByRole('checkbox').filter((c) => c.checked)).toHaveLength(2)
+    expect(within(roles).getByRole('checkbox', { name: 'מנהל OCR' })).toBeChecked()
+    expect(within(roles).getByRole('checkbox', { name: 'מנהל ספרים' })).toBeChecked()
+    expect(within(drawer).getByRole('button', { name: 'שמור' })).toBeDisabled()
+    expect(row('דוד פרץ')).toBeTruthy()
+  })
+
   test('מנהל שמוריד את עצמו: גוף שני, מה ייעלם, ואזהרה', async () => {
     const user = userEvent.setup()
     const drawer = await openDrawerOf('u1', 'משה כהן')
-    await user.click(within(drawer).getByRole('button', { name: /^תפקיד/ }))
-    await user.click(await screen.findByRole('option', { name: /^מנהל ספרים(?! בלבד)/ }))
+    const roles = within(drawer).getByRole('group', { name: 'תפקידים' })
+    // מנהל כללי מסומן — שאר התפקידים כלולים בו (כבויים) עד שמבטלים אותו
+    expect(within(roles).getByRole('checkbox', { name: 'מנהל כללי' })).toBeChecked()
+    expect(within(roles).getByRole('checkbox', { name: 'מנהל ספרים' })).toBeDisabled()
+    await user.click(within(roles).getByRole('checkbox', { name: 'מנהל כללי' }))
+    await user.click(within(roles).getByRole('checkbox', { name: 'מנהל ספרים' }))
     await user.click(within(drawer).getByRole('button', { name: 'שמור' }))
     const confirm = await screen.findByRole('dialog', { name: /לשנות את התפקיד/ })
     expect(within(confirm).getByText('אתה תהיה מנהל ספרים. בניהול תראה:')).toBeInTheDocument()
@@ -239,8 +275,7 @@ describe('מגירת משתמש', () => {
   test('ביטול בחלון התפקיד — שום בקשה', async () => {
     const user = userEvent.setup()
     const drawer = await openDrawerOf('u2', 'אברהם לוי')
-    await user.click(within(drawer).getByRole('button', { name: /^תפקיד/ }))
-    await user.click(await screen.findByRole('option', { name: /^מנהל כללי/ }))
+    await user.click(within(within(drawer).getByRole('group', { name: 'תפקידים' })).getByRole('checkbox', { name: 'מנהל כללי' }))
     await user.click(within(drawer).getByRole('button', { name: 'שמור' }))
     await user.click(within(await screen.findByRole('dialog', { name: /לשנות את התפקיד/ })).getByRole('button', { name: 'ביטול' }))
     expect(writes()).toHaveLength(0)
@@ -267,7 +302,7 @@ describe('מגירת משתמש', () => {
     await user.type(field, 'דוד פרץ השני')
     await user.click(within(drawer).getByRole('button', { name: 'שמור' }))
     await waitFor(() => expect(writes()).toHaveLength(1))
-    expect(bodies()[0]).toEqual({ userId: 'u3', name: 'דוד פרץ השני', email: 'david@example.com', role: 'admin_books', points: 12345678901 })
+    expect(bodies()[0]).toEqual({ userId: 'u3', name: 'דוד פרץ השני', email: 'david@example.com', roles: ['admin_books'], points: 12345678901 })
   })
 
   test('409 מהשרת — הודעה בעברית בתוך המגירה, והטיוטה נשמרת', async () => {
@@ -355,8 +390,8 @@ describe('מגירת משתמש — צוותים, הגבלות והתור', () =
     await user.click(within(drawer).getByRole('switch', { name: /חסום מעריכה/ }))
     await later()
     await waitFor(() => expect(writes()).toHaveLength(2))
-    expect(bodies()).toContainEqual({ userId: 'u2', name: 'אברהם לוי', email: 'avi@example.com', role: 'user', points: 1200, isSupervisor: false })
-    expect(bodies()).toContainEqual({ userId: 'u2', name: 'אברהם לוי', email: 'avi@example.com', role: 'user', points: 1200, dictaEditBlocked: false })
+    expect(bodies()).toContainEqual({ userId: 'u2', name: 'אברהם לוי', email: 'avi@example.com', roles: [], points: 1200, isSupervisor: false })
+    expect(bodies()).toContainEqual({ userId: 'u2', name: 'אברהם לוי', email: 'avi@example.com', roles: [], points: 1200, dictaEditBlocked: false })
   })
 
   test('סגירת הלשונית בזמן ההמתנה — אותה בקשה ב-keepalive, פעם אחת', async () => {
@@ -367,7 +402,7 @@ describe('מגירת משתמש — צוותים, הגבלות והתור', () =
     act(() => { window.dispatchEvent(new Event('pagehide')) })
     await later()
     expect(writes()).toHaveLength(1)
-    expect(bodies()).toEqual([{ userId: 'u2', name: 'אברהם לוי', email: 'avi@example.com', role: 'user', points: 1200, isSupervisor: false }])
+    expect(bodies()).toEqual([{ userId: 'u2', name: 'אברהם לוי', email: 'avi@example.com', roles: [], points: 1200, isSupervisor: false }])
     expect(fetch.mock.calls.at(-1)[1].keepalive).toBe(true)
   })
 
@@ -408,8 +443,7 @@ describe('מגירת משתמש — צוותים, הגבלות והתור', () =
     const user = setup()
     const drawer = await openDrawerOf('u2', 'אברהם לוי')
     await user.click(within(drawer).getByRole('switch', { name: /מפקח/ }))
-    await user.click(within(drawer).getByRole('button', { name: /^תפקיד/ }))
-    await user.click(await screen.findByRole('option', { name: /^מנהל ספרים(?! בלבד)/ }))
+    await user.click(within(within(drawer).getByRole('group', { name: 'תפקידים' })).getByRole('checkbox', { name: 'מנהל ספרים' }))
     await user.click(within(drawer).getByRole('button', { name: 'שמור' }))
     await user.click(within(await screen.findByRole('dialog', { name: /לשנות את התפקיד/ })).getByRole('button', { name: 'שנה תפקיד' }))
     await waitFor(() => expect(writes()).toHaveLength(1))
@@ -417,7 +451,7 @@ describe('מגירת משתמש — צוותים, הגבלות והתור', () =
     expect(writes()).toHaveLength(1)
     await act(async () => { gate.release() })
     await waitFor(() => expect(writes()).toHaveLength(2))
-    expect(bodies()[1]).toEqual({ userId: 'u2', name: 'אברהם לוי', email: 'avi@example.com', role: 'admin_books', points: 1200, isSupervisor: false })
+    expect(bodies()[1]).toEqual({ userId: 'u2', name: 'אברהם לוי', email: 'avi@example.com', roles: ['admin_books'], points: 1200, isSupervisor: false })
   })
 
   test('סגירת המגירה כשמתג ממתין — נשלח מיד', async () => {
@@ -497,7 +531,7 @@ describe('מגירת משתמש — צוותים, הגבלות והתור', () =
     await user.click(screen.getByRole('menuitem', { name: 'בטל חסימה' }))
     await later()
     await waitFor(() => expect(writes()).toHaveLength(1))
-    expect(bodies()[0]).toEqual({ userId: 'u2', name: 'אברהם לוי', email: 'avi@example.com', role: 'user', points: 1200, dictaEditBlocked: false })
+    expect(bodies()[0]).toEqual({ userId: 'u2', name: 'אברהם לוי', email: 'avi@example.com', roles: [], points: 1200, dictaEditBlocked: false })
     expect(await screen.findByText('החסימה של אברהם לוי בוטלה')).toBeInTheDocument()
   })
 })

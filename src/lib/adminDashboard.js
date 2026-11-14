@@ -13,7 +13,7 @@
 // בטקסט שהמשתמש רואה או שומע אין את המילה "תור" (משוב המשתמש) — גם לא כאן בתוויות.
 
 import { ADMIN_NAV_ITEMS, UPLOADS_QUEUE_HREF, canSeeNavItem } from './adminNav.js'
-import { hasBookLibraryAccess, isAdmin } from './roles.js'
+import { getRoles, hasBookLibraryAccess, hasRole, isAdmin } from './roles.js'
 import { SECTIONS as PROOF_SECTIONS, SECTION_LABELS as PROOF_SECTION_LABELS } from './trainingProof/vocab.js'
 
 /**
@@ -193,13 +193,14 @@ export function queueRoles(queue) {
   return queue.roles || []
 }
 
+// role — נושא בכל צורה שמקבלות פונקציות roles.js (מחרוזת, מערך תפקידים, או session.user)
 export function canSeeQueue(queue, role) {
-  if (!role) return false
+  if (getRoles(role).length === 0) return false
   if (queue.navItem) {
     const item = ADMIN_NAV_ITEMS[queue.navItem]
     return Boolean(item) && canSeeNavItem(item, role)
   }
-  return queueRoles(queue).includes(role)
+  return hasRole(role, ...queueRoles(queue))
 }
 
 /**

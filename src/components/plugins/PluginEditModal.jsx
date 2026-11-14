@@ -16,6 +16,7 @@ import { fieldA11yProps, fieldClasses } from '@/components/ui/fieldStyles'
 import { useDialog } from '@/components/providers/DialogContext'
 import { MIN_SUPPORTED_APP_VERSION, formatPluginStatus } from '@/lib/pluginStatus'
 import { normalizeTagList } from '@/lib/pluginTags'
+import { isAdmin as isAdminUser } from '@/lib/roles'
 
 const ALLOWED_IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
 const STATUS_OPTIONS = [
@@ -128,7 +129,7 @@ export default function PluginEditModal({ plugin, endpoint, onClose, onSuccess }
   const [loading, setLoading] = useState(false)
   // חלון אישור של DialogContext פתוח מעל החלון הזה — Esc לא יסגור את העריכה מתחתיו
   const [confirming, setConfirming] = useState(false)
-  const isAdmin = session?.user?.role === 'admin'
+  const isAdmin = isAdminUser(session?.user)
   const originalVersion = plugin.version || ''
 
   const [formData, setFormData] = useState({

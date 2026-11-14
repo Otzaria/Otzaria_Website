@@ -21,7 +21,7 @@ export async function GET(req, { params }) {
     const book = await LibraryBook.findById(id).lean();
     if (!book) return notFound('הספר לא נמצא');
 
-    const userDoc = await User.findById(session.user.id).select('role isSupervisor dictaEditBlocked name').lean();
+    const userDoc = await User.findById(session.user.id).select('role roles isSupervisor dictaEditBlocked name').lean();
     const canEditDirect = canEditLibraryDirectly(userDoc);
 
     // הצעה ידנית ממתינה של המשתמש הנוכחי (טיוטה פתוחה)
@@ -66,7 +66,7 @@ export async function PUT(req, { params }) {
     }
 
     await connectDB();
-    const userDoc = await User.findById(session.user.id).select('role isSupervisor dictaEditBlocked name');
+    const userDoc = await User.findById(session.user.id).select('role roles isSupervisor dictaEditBlocked name');
     if (!userDoc) return unauthorized('משתמש לא נמצא');
 
     const result = await submitManualEdit({ bookId: id, userDoc, newContent: content, editType, note, baseVersion });

@@ -21,7 +21,7 @@ export function canViewPageContent(page, user) {
   if (status !== 'in-progress' && status !== 'completed') return { ok: true };
   const userId = user?._id || user?.id;
   const isOwner = userId != null && page?.claimedBy != null && String(page.claimedBy) === String(userId);
-  if (isOwner || hasBooksAccess(user?.role)) return { ok: true };
+  if (isOwner || hasBooksAccess(user)) return { ok: true };
   return { ok: false, error: status === 'in-progress' ? PAGE_IN_PROGRESS_FORBIDDEN : PAGE_COMPLETED_FORBIDDEN };
 }
 
@@ -35,7 +35,7 @@ export const PAGE_NOT_CLAIMED_FORBIDDEN = 'כדי לשמור תיבות לעמו
  * @returns {{ok: true} | {ok: false, error: string}}
  */
 export function canWritePageLayout(page, user) {
-  if (hasBooksAccess(user?.role)) return { ok: true };
+  if (hasBooksAccess(user)) return { ok: true };
   const userId = user?._id || user?.id;
   const isOwner = userId != null && page?.claimedBy != null && String(page.claimedBy) === String(userId);
   if (isOwner) return { ok: true };

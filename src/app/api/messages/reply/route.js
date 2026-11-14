@@ -22,7 +22,7 @@ export async function POST(request) {
         const userId = session?.user?._id || session?.user?.id;
         await connectDB();
 
-        const isSentFromAdminInterface = fromAdminPanel === true && hasAnyAdminAccess(session?.user?.role);
+        const isSentFromAdminInterface = fromAdminPanel === true && hasAnyAdminAccess(session?.user);
 
         const message = await Message.findById(messageId).select('sender recipient allowReplies');
         if (!message) return notFound('ההודעה לא נמצאה');

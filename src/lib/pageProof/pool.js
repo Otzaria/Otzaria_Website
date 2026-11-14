@@ -47,7 +47,7 @@ export async function requireProofSession() {
   const session = await getServerSession(authOptions);
   if (!session) return { error: NextResponse.json({ success: false, error: 'יש להתחבר' }, { status: 401 }) };
   const u = session.user || {};
-  if (!u.isVerified && !hasBookLibraryAccess(u.role) && !hasOcrAccess(u.role)) {
+  if (!u.isVerified && !hasBookLibraryAccess(u) && !hasOcrAccess(u)) {
     return {
       error: NextResponse.json({ success: false, error: 'רק משתמשים מאומתים יכולים להגיה עמודים' }, { status: 403 }),
     };

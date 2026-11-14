@@ -48,11 +48,14 @@ export function serverError(error = 'אירעה שגיאה, נסה שוב מאו
  *   const denied = requireAccess(session, hasBooksAccess)
  *   if (denied) return denied
  */
+export type AccessSubject = { role?: string | null; roles?: string[] | null; [key: string]: unknown }
+
 export function requireAccess(
-  session: { user?: { role?: string } } | null | undefined,
-  hasAccessFn: (role: string | undefined) => boolean
+  session: { user?: AccessSubject } | null | undefined,
+  // מקבלת את session.user כולו (role + roles — תפקידים מרובים, ראו roles.js), לא רק את role
+  hasAccessFn: (user: AccessSubject) => boolean
 ) {
   if (!session?.user) return unauthorized()
-  if (!hasAccessFn(session.user.role)) return forbidden()
+  if (!hasAccessFn(session.user)) return forbidden()
   return null
 }

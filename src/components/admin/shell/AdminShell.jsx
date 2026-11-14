@@ -35,7 +35,7 @@ const SIDEBAR_SCROLL_MARGIN = 8
  * משמשת את /library/admin, את /library/corrections ואת שני מסכי מרחב העריכה (/library/dicta-edit/moderation,
  * conflicts) — דרך AdminFrame.
  *
- * viewer ({ role, isCorrectionsVolunteer, isSupervisor }), initialCounts ו-canBackup מגיעים מה-layout
+ * viewer ({ roles, isCorrectionsVolunteer, isSupervisor }), initialCounts ו-canBackup מגיעים מה-layout
  * (Server Component), כדי שהסרגל והמונים יהיו כבר ב-HTML — בלי קפיצת תוכן אחרי ה-hydration.
  * useSession משמש רק כעדכון אם התפקיד או הדגל השתנו בצד הלקוח.
  * צופה שאין לו אף פריט בסרגל (משתמש רגיל שנכנס לכתובת של דיווחי הטעויות) — רק הכותרת והתוכן,
@@ -52,10 +52,15 @@ export default function AdminShell({ viewer: serverViewer, initialCounts, canBac
   const view = searchParams?.get('view') || ''
   const legacyTab = searchParams?.get('tab') || ''
   const { data: session } = useSession()
-  const { role, isCorrectionsVolunteer, isSupervisor } = toAdminViewer(session?.user ?? serverViewer)
-  const viewer = useMemo(() => ({ role, isCorrectionsVolunteer, isSupervisor }), [role, isCorrectionsVolunteer, isSupervisor])
-  // המונים לפי תפקיד בלבד; תפקיד בלי מונה (למשל מתנדב תיקונים) — בלי בקשות ל-/api/badge-counts
-  const counts = useAdminBadgeCounts(role, initialCounts)
+  const { roles, isCorrectionsVolunteer, isSupervisor } = toAdminViewer(session?.user ?? serverViewer)
+  // מערך התפקידים נבנה מחדש בכל רינדור — התלות היא במחרוזת שלו, כדי שהזיכרון לא יתבטל סתם
+  const rolesKey = roles.join(',')
+  const viewer = useMemo(
+    () => ({ roles: rolesKey ? rolesKey.split(',') : [], isCorrectionsVolunteer, isSupervisor }),
+    [rolesKey, isCorrectionsVolunteer, isSupervisor]
+  )
+  // המונים לפי התפקידים בלבד; בלי מונה (למשל מתנדב תיקונים) — בלי בקשות ל-/api/badge-counts
+  const counts = useAdminBadgeCounts(viewer.roles, initialCounts)
 
   const groups = useMemo(() => buildAdminNavGroups(viewer), [viewer])
   const activeId = useMemo(

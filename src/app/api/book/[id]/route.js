@@ -17,7 +17,7 @@ export async function GET(request, { params }) {
     }
     
     const userId = session.user.id || session.user._id;
-    const isAdmin = hasBookLibraryAccess(session?.user?.role);
+    const isAdmin = hasBookLibraryAccess(session?.user);
     
     await connectDB();
     

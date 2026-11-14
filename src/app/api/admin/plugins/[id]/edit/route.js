@@ -69,11 +69,11 @@ async function getAuthorizedPlugin(id, session, { asOwner = false } = {}) {
   }
 
   const isOwner = isPluginOwner(plugin, session.user?.id)
-  const isAdmin = asOwner ? false : hasPluginsAccess(session.user?.role)
+  const isAdmin = asOwner ? false : hasPluginsAccess(session.user)
   if (!isAdmin && !isOwner) {
     return {
       error: bad(
-        asOwner && hasPluginsAccess(session.user?.role)
+        asOwner && hasPluginsAccess(session.user)
           ? 'עריכת תוספים כמנהל זמינה רק בממשק הניהול.'
           : 'Forbidden - You do not have permission to edit this plugin',
         403

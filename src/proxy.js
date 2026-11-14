@@ -1,6 +1,6 @@
 import { withAuth } from 'next-auth/middleware';
 import { NextResponse } from 'next/server';
-import { hasAnyAdminAccess } from '@/lib/roles';
+import { adminRouteDecision } from '@/lib/adminRouteAccess';
 import { shabbatGate } from '@/lib/shabbat-cache';
 // רשימת הנתיבים המוגנים במקום אחד: src/lib/protected-routes.js
 import { isProtectedPath } from '@/lib/protected-routes';
@@ -95,98 +95,6 @@ function blockResponseJson() {
   );
 }
 
-// ===== הרשאות (לוגיקה קיימת) =====
-
-// נתיבי דפים המותרים לכל מנהל תוספים
-const PLUGINS_ADMIN_ALLOWED_PAGES = [
-  '/library/admin/plugins',
-  '/library/admin/messages',
-];
-const PLUGINS_ADMIN_ALLOWED_PAGE_EXACT = ['/library/admin'];
-
-// נתיבי API המותרים לכל מנהל תוספים
-const PLUGINS_ADMIN_ALLOWED_API = [
-  '/api/admin/plugins',
-  '/api/admin/plugin-notifications',
-  // סידור חנות התוספים: קטגוריות, הגדרות דף הבית (נבחרים) ורשימת הלא-משוכנים
-  '/api/admin/plugin-categories',
-  '/api/admin/store-settings',
-  '/api/admin/plugin-store',
-  '/api/admin/users-basic',
-  '/api/admin/stats',
-];
-
-// ===== מנהל ספרים-בלבד =====
-// גישה אך ורק לעמוד ניהול הספרים (/library/admin/books) ולדשבורד, ולנתיבי ה-API
-// המשרתים אותם. כל שאר נתיבי /library/admin ו-/api/admin חסומים (העלאות,
-// עמודים, מילון, מידע/כינויים, משתמשים, תוספים וכו').
-const BOOKS_ONLY_ADMIN_ALLOWED_PAGES = [
-  '/library/admin/books',
-];
-const BOOKS_ONLY_ADMIN_ALLOWED_PAGE_EXACT = ['/library/admin'];
-const BOOKS_ONLY_ADMIN_ALLOWED_API = [
-  '/api/admin/books',
-  '/api/admin/categories',
-  '/api/admin/mailing-list',
-  '/api/admin/book-statuses',
-  '/api/admin/stats',
-];
-
-// ===== מנהל OCR =====
-// גישה אך ורק לשלושת אזורי הניהול של ה-OCR (מאגר אימון, תמלול שורות, תיוג
-// מבנה עמוד) ולדשבורד, ולנתיבי ה-API המשרתים אותם. כל שאר /library/admin
-// ו-/api/admin חסומים.
-const OCR_ADMIN_ALLOWED_PAGES = [
-  '/library/admin/ocr-training',
-  '/library/admin/ocr-lines',
-  '/library/admin/ocr-layout',
-  '/library/admin/page-proof',
-];
-const OCR_ADMIN_ALLOWED_PAGE_EXACT = ['/library/admin'];
-const OCR_ADMIN_ALLOWED_API = [
-  '/api/admin/ocr-training',
-  '/api/admin/ocr-lines',
-  '/api/admin/ocr-layout',
-  '/api/admin/page-proof',
-  '/api/admin/training-proof',
-  '/api/admin/stats',
-];
-
-// ===== מאמן מודלים =====
-// בדיוק מה שמנהל OCR מקבל, ובנוסף דף משוב החיפוש. ה-API של המשוב אינו תחת /api/admin
-// (/api/search-feedback/admin) ונבדק בראוט עצמו (hasSearchFeedbackAccess).
-const MODEL_TRAINER_ALLOWED_PAGES = [...OCR_ADMIN_ALLOWED_PAGES, '/library/admin/search-feedback'];
-const MODEL_TRAINER_ALLOWED_PAGE_EXACT = ['/library/admin'];
-const MODEL_TRAINER_ALLOWED_API = OCR_ADMIN_ALLOWED_API;
-
-// נתיבי דפים/API החסומים למנהל ספרים (אזורי ה-OCR — למנהל גלובלי ולמנהל OCR בלבד)
-const BOOKS_ADMIN_BLOCKED_PAGES = [
-  '/library/admin/users',
-  '/library/admin/plugins',
-  '/library/admin/ocr-training',
-  '/library/admin/ocr-lines',
-  '/library/admin/ocr-layout',
-  '/library/admin/page-proof',
-  '/library/admin/private-sources',
-  '/library/admin/search-feedback',
-];
-const BOOKS_ADMIN_BLOCKED_API = [
-  '/api/admin/users',
-  '/api/admin/private-sources',
-  '/api/admin/institute-outreach',
-  '/api/admin/plugins',
-  '/api/admin/plugin-notifications',
-  '/api/admin/plugin-categories',
-  '/api/admin/store-settings',
-  '/api/admin/plugin-store',
-  '/api/admin/export-backup',
-  '/api/admin/ocr-training',
-  '/api/admin/ocr-lines',
-  '/api/admin/ocr-layout',
-  '/api/admin/page-proof',
-  '/api/admin/training-proof',
-];
-
 const authProxy = withAuth(
   function middleware(req) {
     const token = req.nextauth.token;
@@ -209,63 +117,16 @@ const authProxy = withAuth(
     if (path.startsWith('/library/admin') || path.startsWith('/api/admin')) {
       if (!token) return NextResponse.next();
 
-      const role = token.role;
       const isApiRoute = path.startsWith('/api/');
 
-      const unauthorized = () =>
-        isApiRoute
+      // הגישה לפי כל התפקידים של הצופה (token.roles, ובטוקן ישן — token.role): מותר אם אחד מהם מתיר.
+      // הרשימות וההחלטה עצמה — src/lib/adminRouteAccess.js
+      const decision = adminRouteDecision(token, path);
+      if (decision.action === 'redirect') return NextResponse.redirect(new URL(decision.to, req.url));
+      if (decision.action === 'deny') {
+        return isApiRoute
           ? NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
           : NextResponse.redirect(new URL('/library/unauthorized', req.url));
-
-      // מפתח - דיווחי התוכנה בלבד; שאר /library/admin ו-/api/admin חסומים
-      if (role === 'developer') {
-        if (path === '/library/admin') return NextResponse.redirect(new URL('/library/admin/app-reports', req.url));
-        const allowed = !isApiRoute && (path === '/library/admin/app-reports' || path.startsWith('/library/admin/app-reports/'));
-        return allowed ? NextResponse.next() : unauthorized();
-      }
-
-      // לא מנהל בכלל
-      if (!hasAnyAdminAccess(role)) return unauthorized();
-
-      // מנהל תוספים - dashboard, plugins ו-messages
-      if (role === 'admin_plugins') {
-        const allowed = isApiRoute
-          ? PLUGINS_ADMIN_ALLOWED_API.some(p => path.startsWith(p))
-          : PLUGINS_ADMIN_ALLOWED_PAGE_EXACT.includes(path) || PLUGINS_ADMIN_ALLOWED_PAGES.some(p => path.startsWith(p));
-        if (!allowed) return unauthorized();
-      }
-
-      // מנהל ספרים-בלבד - דשבורד + ניהול ספרים בלבד (allowlist)
-      if (role === 'admin_books_only') {
-        const allowed = isApiRoute
-          ? BOOKS_ONLY_ADMIN_ALLOWED_API.some(p => path === p || path.startsWith(p + '/'))
-          : BOOKS_ONLY_ADMIN_ALLOWED_PAGE_EXACT.includes(path) || BOOKS_ONLY_ADMIN_ALLOWED_PAGES.some(p => path === p || path.startsWith(p + '/'));
-        if (!allowed) return unauthorized();
-      }
-
-      // מנהל OCR - דשבורד + שלושת אזורי ה-OCR בלבד (allowlist)
-      if (role === 'admin_ocr') {
-        const allowed = isApiRoute
-          ? OCR_ADMIN_ALLOWED_API.some(p => path === p || path.startsWith(p + '/'))
-          : OCR_ADMIN_ALLOWED_PAGE_EXACT.includes(path) || OCR_ADMIN_ALLOWED_PAGES.some(p => path === p || path.startsWith(p + '/'));
-        if (!allowed) return unauthorized();
-      }
-
-      // מאמן מודלים - כמו מנהל OCR, ועוד משוב החיפוש (allowlist)
-      if (role === 'model_trainer') {
-        const allowed = isApiRoute
-          ? MODEL_TRAINER_ALLOWED_API.some(p => path === p || path.startsWith(p + '/'))
-          : MODEL_TRAINER_ALLOWED_PAGE_EXACT.includes(path) || MODEL_TRAINER_ALLOWED_PAGES.some(p => path === p || path.startsWith(p + '/'));
-        if (!allowed) return unauthorized();
-      }
-
-      // מנהל ספרים - הכל חוץ ממשתמשים ותוספים
-      if (role === 'admin_books') {
-        const isBlocked = (list) => list.some(p => path === p || path.startsWith(p + '/'));
-        const blocked = isApiRoute
-          ? isBlocked(BOOKS_ADMIN_BLOCKED_API)
-          : isBlocked(BOOKS_ADMIN_BLOCKED_PAGES);
-        if (blocked) return unauthorized();
       }
     }
 

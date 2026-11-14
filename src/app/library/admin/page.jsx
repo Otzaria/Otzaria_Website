@@ -20,10 +20,12 @@ import AdminScreenHeader from '@/components/admin/list/AdminScreenHeader'
 import BackupCard from '@/components/admin/dashboard/BackupCard'
 import { canDownloadBackup } from '@/lib/adminBackup'
 import { adminScreenTitle } from '@/lib/adminNav'
+import { getRoles } from '@/lib/roles'
 
 export default async function AdminDashboardPage() {
   const session = await getServerSession(authOptions)
-  const role = session?.user?.role
+  // כל התפקידים של הצופה (roles.js) — מנהל עם כמה תפקידים רואה את התורים של כולם
+  const role = getRoles(session?.user)
   // תוספי שירות — רק כשהתכונה פעילה בשרת (אחרת ה-API שלהם מחזיר "disabled" והלשונית ריקה)
   const features = { servicePlugins: isServicePluginsEnabled() }
   const queueCount = visibleQueues(role, features).length

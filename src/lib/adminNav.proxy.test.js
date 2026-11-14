@@ -35,8 +35,13 @@ const ROLES = ['admin', 'admin_books', 'admin_plugins', 'admin_books_only', 'adm
 
 // כל תפקיד (וגם משתמש רגיל), בלי דגלים ועם כל צירוף של דגל מתנדב תיקונים ודגל מפקח
 const FLAGS = [{}, { isCorrectionsVolunteer: true }, { isSupervisor: true }, { isCorrectionsVolunteer: true, isSupervisor: true }]
-const VIEWERS = ['user', ...ROLES].flatMap((role) => FLAGS.map((flags) => ({ role, ...flags })))
-const describeViewer = (v) => [v.role, v.isCorrectionsVolunteer && 'מתנדב תיקונים', v.isSupervisor && 'מפקח'].filter(Boolean).join(' + ')
+// וגם כל זוג תפקידים (תפקידים מרובים — roles ב-JWT, role הוא הראשי): הסרגל מציג איחוד, וה-proxy מתיר איחוד
+const PAIRS = ROLES.flatMap((a, i) => ROLES.slice(i + 1).map((b) => ({ role: a, roles: [a, b] })))
+const VIEWERS = [
+  ...['user', ...ROLES].flatMap((role) => FLAGS.map((flags) => ({ role, ...flags }))),
+  ...PAIRS,
+]
+const describeViewer = (v) => [v.roles ? v.roles.join('+') : v.role, v.isCorrectionsVolunteer && 'מתנדב תיקונים', v.isSupervisor && 'מפקח'].filter(Boolean).join(' + ')
 
 async function blockedItems(viewer) {
   const blocked = []

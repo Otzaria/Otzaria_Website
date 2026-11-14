@@ -16,7 +16,7 @@ import { BookInfoScreenSkeleton } from '@/components/admin/bookInfo/BookInfoSkel
 
 export default async function AdminBookInfoPage({ searchParams }) {
   const session = await getServerSession(authOptions)
-  if (!hasBooksAccess(session?.user?.role)) {
+  if (!hasBooksAccess(session?.user)) {
     return <NoAccess description="המסך פתוח למנהל כללי ולמנהל ספרים. אם אתה אמור לראות אותו, פנה למנהל האתר." />
   }
   const { view } = parseBookInfoQuery(await searchParams)

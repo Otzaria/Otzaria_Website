@@ -6,6 +6,7 @@ import Plugin from '@/models/Plugin'
 import { readPluginAsset } from '@/lib/pluginStorage'
 import { canAccessSuspended, isPluginOwner, isPluginSuspended } from '@/lib/pluginVisibility'
 import { badRequest, notFound, serverError } from '@/lib/apiResponse'
+import { isAdmin as isAdminUser } from '@/lib/roles'
 
 // GET /api/plugins/[id]/screenshots/[index] - הגשת צילום מסך מהדיסק
 export async function GET(request, { params }) {
@@ -25,7 +26,7 @@ export async function GET(request, { params }) {
     }
 
     const session = await getServerSession(authOptions)
-    const isAdmin = session?.user?.role === 'admin'
+    const isAdmin = isAdminUser(session?.user)
     const isOwner = isPluginOwner(plugin, session?.user?.id)
 
     if (includePending) {

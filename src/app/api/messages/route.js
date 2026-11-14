@@ -19,7 +19,7 @@ export async function GET(request) {
         const { searchParams } = new URL(request.url);
         const showAll = searchParams.get('allMessages');
 
-        if (hasAnyAdminAccess(session.user.role) && showAll === 'true') {
+        if (hasAnyAdminAccess(session.user) && showAll === 'true') {
              // תור הניהול המשותף — ללא מטמון בכוונה: ה-route הזה משמש גם לרענון
              // מיידי בצד הלקוח אחרי פעולה (ראו admin/messages/page.jsx).
              // השאילתה עצמה זהה לזו שמוזנת ל-unstable_cache בדף
@@ -38,9 +38,9 @@ export async function GET(request) {
         };
 
         const messages = await Message.find(query)
-            .populate('sender', 'name email role')
+            .populate('sender', 'name email role roles')
             .populate('recipient', 'name email')
-            .populate('replies.sender', 'name email role')
+            .populate('replies.sender', 'name email role roles')
             .sort({ createdAt: -1 })
             .lean();
 

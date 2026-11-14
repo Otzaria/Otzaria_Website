@@ -1,4 +1,4 @@
-import { hasAnyAdminAccess } from './roles.js'
+import { hasAnyAdminAccess, hasAppReportsAccess } from './roles.js'
 
 /**
  * לוגיקה טהורה של אזור החשבון בכותרות (components/layout/AccountActions + AccountMenu):
@@ -10,10 +10,11 @@ export function loginHref(callbackUrl) {
   return callbackUrl ? `/auth/login?callbackUrl=${encodeURIComponent(callbackUrl)}` : '/auth/login'
 }
 
-/** יעד "ניהול": מפתח — דיווחי התוכנה בלבד; מנהל (כל סוג, roles.js) — לוח הניהול; אחר — אין */
+/** יעד "ניהול": מנהל (כל סוג, roles.js) — לוח הניהול; מפתח בלבד — דיווחי התוכנה; אחר — אין.
+ *  role — תפקיד, מערך תפקידים או session.user: מפתח שהוא גם מנהל (למשל + מנהל OCR) — ללוח הניהול. */
 export function adminHref(role) {
-  if (role === 'developer') return '/library/admin/app-reports'
   if (hasAnyAdminAccess(role)) return '/library/admin'
+  if (hasAppReportsAccess(role)) return '/library/admin/app-reports'
   return null
 }
 

@@ -21,8 +21,10 @@ beforeEach(() => {
   isAssurBemlacha.mockResolvedValue(false)
 })
 
+// role — מחרוזת, או מערך תפקידים (JWT עם roles; הראשון הוא הראשי)
 async function call(path, role) {
-  const token = await encode({ token: { sub: 'u1', role }, secret: SECRET })
+  const fields = Array.isArray(role) ? { role: role[0], roles: role } : { role }
+  const token = await encode({ token: { sub: 'u1', ...fields }, secret: SECRET })
   return proxy(new NextRequest(`http://localhost:3000${path}`, { headers: { cookie: `next-auth.session-token=${token}` } }), event)
 }
 
@@ -38,6 +40,20 @@ describe('כרטיסי הדשבורד מול ה-proxy', () => {
       for (const queue of visibleQueues(role)) {
         const href = new URL(queue.href, 'http://localhost').pathname
         if (!passed(await call(href, role))) blocked.push(href)
+      }
+      expect(blocked).toEqual([])
+    })
+  }
+
+  // תפקידים מרובים: הדשבורד מציג את התורים של כל התפקידים — וכל קישור חייב להיפתח
+  const PAIRS = [...ROLES, 'developer'].flatMap((a, i, all) => all.slice(i + 1).map((b) => [a, b]))
+  for (const roles of PAIRS) {
+    it(`${roles.join(' + ')}: הדשבורד וכל קישור של תור נפתחים בלי חסימה`, async () => {
+      expect(passed(await call('/library/admin', roles))).toBe(true)
+      const blocked = []
+      for (const queue of visibleQueues(roles)) {
+        const href = new URL(queue.href, 'http://localhost').pathname
+        if (!passed(await call(href, roles))) blocked.push(href)
       }
       expect(blocked).toEqual([])
     })

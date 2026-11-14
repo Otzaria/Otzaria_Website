@@ -24,7 +24,7 @@ export default function Header({ adminMenu = null }) {
   const menu = useDisclosureMenu(pathname)
 
   // מונה ההודעות שלא נקראו (למנהלים בלבד) — אותו hook כמו בכותרת חנות התוספים
-  const unreadCount = useUnreadAdminMessages(session?.user?.role)
+  const unreadCount = useUnreadAdminMessages(session?.user)
   const collapseAt = adminMenu ? 'xl' : 'md'
 
   // הרקע מגיע מ-glass-strong (--color-background ב-95%, effects.css) — טוקן סמנטי שמתחלף בערכה

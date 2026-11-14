@@ -36,7 +36,7 @@ export async function handleCorrectionsRequest(request, fn, { getSession, connec
   if (!session?.user?.id) return jsonResponse({ error: 'Unauthorized' }, 401);
   try {
     await connect();
-    const user = await User.findById(session.user.id).select('name role isSupervisor isCorrectionsVolunteer').lean();
+    const user = await User.findById(session.user.id).select('name role roles isSupervisor isCorrectionsVolunteer').lean();
     if (!user) return jsonResponse({ error: 'Unauthorized' }, 401);
     const config = await loadCorrectionsConfig();
     const result = await fn({ user, config });

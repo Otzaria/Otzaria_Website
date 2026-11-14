@@ -9,7 +9,7 @@ import TzuratScreen from '@/components/admin/tzurat/TzuratScreen'
 
 export default async function TzuratHadafAdminPage() {
   const session = await getServerSession(authOptions)
-  if (!hasTzuratAdminAccess(session?.user?.role)) {
+  if (!hasTzuratAdminAccess(session?.user)) {
     return <NoAccess description="המסך פתוח למנהל כללי ולמנהל ספרים. אם אתה אמור לראות אותו, פנה למנהל האתר." />
   }
   return <TzuratScreen />

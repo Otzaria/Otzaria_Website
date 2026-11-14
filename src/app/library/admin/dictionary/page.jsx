@@ -15,7 +15,7 @@ import { DictionaryScreenSkeleton } from '@/components/admin/dictionary/Dictiona
 
 export default async function AdminDictionaryPage() {
   const session = await getServerSession(authOptions)
-  if (!hasBooksAccess(session?.user?.role)) {
+  if (!hasBooksAccess(session?.user)) {
     return <NoAccess description="המסך פתוח למנהל כללי ולמנהל ספרים. אם אתה אמור לראות אותו, פנה למנהל האתר." />
   }
   return (

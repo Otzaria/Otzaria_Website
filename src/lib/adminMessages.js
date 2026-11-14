@@ -56,9 +56,9 @@ export async function getAdminMessagesList() {
   await dbConnect()
 
   const messages = await Message.find({ messageType: { $ne: 'system' } })
-    .populate('sender', 'name email role')
+    .populate('sender', 'name email role roles')
     .populate('recipient', 'name email')
-    .populate('replies.sender', 'name email role')
+    .populate('replies.sender', 'name email role roles')
     .sort({ createdAt: -1 })
     .lean()
 
