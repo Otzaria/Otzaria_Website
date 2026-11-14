@@ -15,11 +15,11 @@ export default function AboutHero({ titleId = 'about-title' }: { titleId?: strin
         <Image
           src="/logo.png"
           alt=""
-          width={100}
-          height={100}
+          width={256}
+          height={234}
           loading="eager"
           fetchPriority="high"
-          className="size-20 md:size-24"
+          className="h-20 w-auto md:h-24"
         />
       </div>
       <PageHeader id={titleId} title="אודות ספריית אוצריא" subtitle="פלטפורמה משותפת לעריכה ושיתוף של ספרי קודש" />
