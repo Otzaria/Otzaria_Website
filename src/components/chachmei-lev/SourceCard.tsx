@@ -10,13 +10,11 @@ export type BookSource = {
   url?: string
   logo?: string
   ratio?: number
-  originalColor?: boolean
-  logoAsText?: boolean
 }
 
-/** יש לוגו שאפשר להציג כמסכה חד-צבעית (logoAsText — קובץ שנראה כמלבן/כתם כשהוא נצבע בצבע אחד) */
+/** יש לוגו (עם יחס) שאפשר להציג כמסכה חד-צבעית */
 function hasMaskLogo(source: BookSource): source is BookSource & { logo: string; ratio: number } {
-  return Boolean(source.logo && source.ratio && !source.logoAsText)
+  return Boolean(source.logo && source.ratio)
 }
 
 /**
@@ -26,7 +24,8 @@ function hasMaskLogo(source: BookSource): source is BookSource & { logo: string;
  * (כמו בתוכנה). size="lg" — המקורות הראשיים; md — קיר הלוגואים.
  */
 export default function SourceCard({ source, size = 'md' }: { source: BookSource; size?: 'md' | 'lg' }) {
-  const linked = isLinkable(source.url)
+  const { url } = source
+  const linked = isLinkable(url)
   const lg = size === 'lg'
   const logoTone = linked ? 'text-primary' : 'text-on-surface-variant'
   const hint = linked && (
@@ -61,7 +60,7 @@ export default function SourceCard({ source, size = 'md' }: { source: BookSource
   return (
     <li className="flex">
       {linked
-        ? <Card href={source.url as string} external padding={padding} className={layout}>{body}</Card>
+        ? <Card href={url} external padding={padding} className={layout}>{body}</Card>
         : <Card padding={padding} className={layout}>{body}</Card>}
     </li>
   )
