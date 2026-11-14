@@ -15,7 +15,7 @@ export default function CompaniesSection() {
       {/* flex ממורכז ולא grid: כשיש מעט חברות הרשת לא נצמדת לצד אחד */}
       <ul className="flex flex-wrap justify-center gap-3 sm:gap-4 [&>li]:aspect-square [&>li]:w-40 sm:[&>li]:w-44">
         {SPONSOR_COMPANIES.map((company) => <CompanyCard key={company.url} company={company} />)}
-        <OpenSlotCard title={COMPANY_OPEN_SLOT} cta="שליחת מייל" href={COMPANY_MAILTO} icon="add" padding="sm" compact />
+        <OpenSlotCard title={COMPANY_OPEN_SLOT} cta="שלח מייל" href={COMPANY_MAILTO} icon="add" padding="sm" />
       </ul>
     </Section>
   )

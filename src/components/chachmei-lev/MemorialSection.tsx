@@ -30,7 +30,7 @@ export default function MemorialSection() {
         ))}
         <OpenSlotCard
           title={MEMORIAL_OPEN_SLOT}
-          cta="להנצחה — שליחת מייל"
+          cta="שלח מייל"
           href={MEMORIAL_MAILTO}
           icon="candle"
           padding="sm"
