@@ -92,6 +92,9 @@ Middleware שחוסם את כל האתר (מלבד `/api/cron`, `/api/auth`, ו�
 החוזה וקודי השגיאה: `docs/ocr-local-worker/CONTRACT.md`; תפעול: `docs/ocr-local-worker/OPERATIONS.md`.
 על `OcrJob` — רק עדכונים מותנים (`updateOne`/`findOneAndUpdate`/`lean`), אף פעם `doc.save()`.
 
+גם `src/app/api/app-reports/triage/**` חיצוני: נצרך ע"י שירות הבדיקה האוטומטית של תקיעות וקריסות
+(מאגר פרטי `Otzaria/app-report-triage`). החוזה: `docs/app-reports/TRIAGE.md`.
+
 ### חנות התוספים (Plugin Store) — מקור האמת למפרט ה-SDK אינו בריפו הזה
 
 ראו README.md לטבלה המלאה. בקצרה: מפרט ה-SDK (מתודות/הרשאות/גרסאות) חי בחבילה החיצונית

@@ -45,8 +45,9 @@ const ContactEntrySchema = new mongoose.Schema({
   messageId: { type: String, default: undefined },
   attachments: { type: Number, default: undefined },
   images: { type: [ReplyImageRefSchema], default: undefined },
-  // pending → posting → posted; held = נשלח מכתובת אחרת מזו של המדווח, לא מתפרסם אוטומטית
-  issueComment: { type: String, enum: ['pending', 'posting', 'posted', 'held'], default: undefined },
+  // pending → posting → posted; held = נשלח מכתובת אחרת מזו של המדווח, לא מתפרסם אוטומטית;
+  // triage = תשובה לדיווח שלא נפתח: עוברת לבדיקה, ותתפרסם (pending) רק אם הבדיקה תפתח issue
+  issueComment: { type: String, enum: ['pending', 'posting', 'posted', 'held', 'triage'], default: undefined },
   issueCommentUrl: { type: String, default: undefined },
 }, { _id: false });
 
@@ -76,6 +77,22 @@ const PayloadCleanupSchema = new mongoose.Schema({
   missingFiles: { type: Number, default: 0 },
   kinds: { type: [String], default: [] },
   pendingDeletes: { type: [PendingPayloadDeleteSchema], default: [] },
+}, { _id: false });
+
+// הבדיקה האוטומטית של תקיעות וקריסות (triage.js). pending מעכב את הפרסום עד ההחלטה או עד deadline.
+const TriageSchema = new mongoose.Schema({
+  state: { type: String, enum: ['pending', 'opened', 'held', 'timeout', 'forced'], required: true },
+  requestedAt: { type: Date, default: null },
+  deadline: { type: Date, default: null },
+  decidedAt: { type: Date, default: null },
+  runs: { type: Number, default: 0 },
+  verdict: { type: String, default: null },
+  confidence: { type: String, default: null },
+  summary: { type: String, default: '', maxlength: 20000 },
+  questions: { type: [String], default: undefined },
+  questionsSentAt: { type: Date, default: null },
+  awaitingReply: { type: Boolean, default: false },
+  linkedIssue: { type: Number, default: null },
 }, { _id: false });
 
 const AppReportSchema = new mongoose.Schema({
@@ -121,6 +138,7 @@ const AppReportSchema = new mongoose.Schema({
   // צורף בשקט ל-issue סגור (גרסה שאינה חדשה מהמקושרות אליו), בלי issue חדש ובלי תגובה
   suppressedAfterClose: { type: Boolean, default: false },
   previousIssueNumber: { type: Number, default: null },
+  triage: { type: TriageSchema, default: null },
 
   fileIds: {
     diagnostics: { type: FileRefSchema, default: null },
@@ -142,6 +160,7 @@ AppReportSchema.index({ product: 1, signatureHash: 1 });
 AppReportSchema.index({ product: 1, issueNumber: 1 });
 AppReportSchema.index({ issuePending: 1, issueAttemptAt: 1, createdAt: 1 });
 AppReportSchema.index({ createdAt: -1 });
+AppReportSchema.index({ 'triage.state': 1, 'triage.requestedAt': 1 }, { sparse: true });
 AppReportSchema.index({ resendHash: 1, createdAt: -1 });
 // בדיקת בעלות לפני ניקוי צרופות זמניות: כל ענפי ה-$or חייבים אינדקס,
 // אחרת כל קובץ שנשמר במרוץ גורר סריקה של כל הדיווחים.
