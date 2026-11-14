@@ -9,8 +9,7 @@
 
 ## הזרימה
 
-1. **קליטה:** `triage = {state: 'pending', deadline: now + APP_REPORTS_TRIAGE_WAIT_MINUTES}`. כשמוגדר
-   `APP_REPORTS_TRIAGE_DISPATCH_TOKEN`, האתר שולח `repository_dispatch` (`event_type: app-report`,
+1. **קליטה:** `triage = {state: 'pending', deadline: now + APP_REPORTS_TRIAGE_WAIT_MINUTES}`. האתר שולח `repository_dispatch` (`event_type: app-report`,
    `client_payload.report`) כדי להעיר את השירות. כשל ב-dispatch לא מעכב את הקליטה, כי השירות מושך את התור גם בעצמו.
 2. **ההחלטה:** השירות קורא את הדיווח מ-Mongo, מפענח ובודק, ושולח `POST /api/app-reports/triage/{reportId}`.
    - `open`: האתר מפרסם מיד. הוא פותח issue חדש, או מגיב על issue פתוח עם אותה חתימה, ומחזיר את המספר.
@@ -66,7 +65,7 @@
 | משתנה | |
 |---|---|
 | `APP_REPORTS_TRIAGE_SECRET` | מפעיל את הבדיקה ומאמת את השירות. |
-| `APP_REPORTS_TRIAGE_DISPATCH_TOKEN` | אופציונלי. טוקן fine-grained עם Contents: write על מאגר השירות בלבד. |
+| `APP_REPORTS_TRIAGE_DISPATCH_TOKEN` | אופציונלי. ברירת המחדל היא `DICTA_LIBRARY_GITHUB_TOKEN`, שיש לו הרשאת כתיבה על מאגר השירות. טוקן אחר כאן גובר עליו, ו-`off` מכבה את ההערה. |
 | `APP_REPORTS_TRIAGE_DISPATCH_REPO` | ברירת מחדל `Otzaria/app-report-triage`. |
 | `APP_REPORTS_TRIAGE_WAIT_MINUTES` | כמה זמן לחכות להחלטה לפני פתיחה רגילה. ברירת מחדל 60. |
 
@@ -74,5 +73,5 @@
 
 השירות לא תלוי במחשב שעליו הוא רץ. הוא צריך גישה ל-Mongo (קריאה בלבד), את הסוד, וטוקן GitHub לתגובה ולשיוך.
 - **runner במחשב אחר:** מתקינים אותו שם ומשאירים את ה-dispatch.
-- **על השרת עצמו, בלי runner:** מבטלים את `APP_REPORTS_TRIAGE_DISPATCH_TOKEN` ומריצים את השירות מ-cron במצב
-  משיכה (`--poll`).
+- **על השרת עצמו, בלי runner:** קובעים `APP_REPORTS_TRIAGE_DISPATCH_TOKEN=off` ומריצים את השירות מ-cron במצב
+  משיכה (`poll`).

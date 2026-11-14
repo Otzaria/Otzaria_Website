@@ -290,3 +290,10 @@ test('דיווח שלא נפתח ומקושר לכפילות אינו בסיס �
   assert.equal(r.body.merged, false, JSON.stringify(r));
   assert.notEqual(r.body.issueNumber, first.body.issueNumber);
 });
+
+test('מפתח ההערה: ברירת מחדל מפתח הספרייה; מפתח משלו גובר; off מכבה', () => {
+  const base = { DICTA_LIBRARY_GITHUB_TOKEN: 'library', APP_REPORTS_TRIAGE_SECRET: 's' };
+  assert.equal(getAppReportsConfig(base).triageDispatchToken, 'library');
+  assert.equal(getAppReportsConfig({ ...base, APP_REPORTS_TRIAGE_DISPATCH_TOKEN: 'own' }).triageDispatchToken, 'own');
+  assert.equal(getAppReportsConfig({ ...base, APP_REPORTS_TRIAGE_DISPATCH_TOKEN: 'off' }).triageDispatchToken, null);
+});
