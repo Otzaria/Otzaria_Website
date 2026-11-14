@@ -9,7 +9,6 @@ export type SupportOrg = {
   name: string
   phone: string
   logo: string
-  phones?: string[]
   registeredCount?: number
   details?: string[]
 }
@@ -44,7 +43,7 @@ export default function SupportOrgCard({ org, emergency = false }: { org: Suppor
         </div>
       </div>
 
-      {(lines.length > 0 || (org.phones?.length ?? 0) > 0) && (
+      {lines.length > 0 && (
         <details className="group/org border-t border-outline-variant">
           <summary
             className={cx(
@@ -59,13 +58,6 @@ export default function SupportOrgCard({ org, emergency = false }: { org: Suppor
             />
           </summary>
           <div className="px-1 pb-1 text-body-sm text-on-surface-variant">
-            {org.phones && org.phones.length > 0 && (
-              <ul className="mb-2">
-                {org.phones.map((phone) => (
-                  <li key={phone} dir="ltr" className="text-end tabular-nums">{phone}</li>
-                ))}
-              </ul>
-            )}
             {lines.map((line, index) =>
               line === '' ? (
                 <span key={index} aria-hidden="true" className="block h-2" />

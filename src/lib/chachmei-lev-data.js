@@ -40,7 +40,7 @@ export const AID = {
 }
 
 /**
- * ארגון: name, phone, logo (נתיב ב-public), phones? (טלפונים נוספים), registeredCount?,
+ * ארגון: name, phone, logo (נתיב ב-public), registeredCount?,
  * details — שורות "אפשרויות הקו"; `**טקסט**` מסמן הדגשה, ו-{registered} מוחלף בכמות הנרשמים.
  */
 export const EMERGENCY_LINES = [
@@ -381,8 +381,6 @@ export function orgDetailLines(org) {
 
 /**
  * שורה עם הדגשות `**...**` → מקטעים [{ text, bold }]. כוכבית בודדת (שלוחת "*") נשארת טקסט.
- */
-/**
  * @param {string} line
  * @returns {{ text: string, bold: boolean }[]}
  */
@@ -440,7 +438,11 @@ export const COMPANY_OPEN_SLOT = 'מקום זה יכול להיות שלך'
 
 // ── משבצות פנויות: פנייה במייל ──────────────────────────────────────────────
 
-/** הנצחה ותרומת חברה — בתיאום אישי במייל, ולא דרך דף התרומה. */
+/**
+ * הנצחה ותרומת חברה — בתיאום אישי במייל, ולא דרך דף התרומה. זהה ל-CONTACT_EMAIL
+ * (components/notFound/notFoundLinkData.ts) — עותק כי קובץ זה נטען גם ב-node:test, שאינו טוען TS;
+ * הטסט ב-ChachmeiLev.test.tsx מוודא שהשניים לא נפרדים.
+ */
 export const SLOT_EMAIL = 'otzaria.1@gmail.com'
 
 /** קישור mailto עם נושא מוכן מראש (מקודד). */
@@ -491,10 +493,10 @@ export const LIBRARY_INTRO =
 export const ADDITIONAL_SOURCES_LABEL = 'כמו כן נוספו ספרים חשובים רבים מהפרויקטים הבאים:'
 
 /**
- * מקור: name, url?, logo? (public/sources), ratio — רוחב/גובה של הלוגו,
- * originalColor — בתוכנה הלוגו בצבעיו המקוריים (logoOriginalColor). באתר נשמר לתיעוד בלבד: כל
- *   הלוגואים נצבעים בצבע אחד (primary כשיש קישור, ואחרת הצבע השקט), כדי שהקיר ייראה אחיד.
- * logoAsText — הלוגו לא נראה נקי כשהוא נצבע בצבע אחד (מלבן מלא, כתם, מסגרת), ולכן מוצג השם בלבד.
+ * מקור: name, url?, logo? (public/sources), ratio — רוחב/גובה של הלוגו (חובה כשיש logo).
+ * כל הלוגואים נצבעים בצבע אחד (primary כשיש קישור, ואחרת הצבע השקט), כדי שהקיר ייראה אחיד — גם
+ * אלה שבתוכנה בצבעיהם המקוריים (logoOriginalColor). מקור בלי logo — השם עצמו בתפקיד הלוגו.
+ * אורייתא וויקיטקסט בלי לוגו בכוונה: בצבע אחד הלוגו שלהם נראה כמלבן מלא / ככתם עגול.
  */
 export const MAIN_SOURCES = [
   {
@@ -520,27 +522,12 @@ export const ADDITIONAL_SOURCES = [
     name: 'תורת אמת',
     url: 'http://www.toratemetfreeware.com/index.html?downloads;1;',
     logo: '/sources/torat-emet.svg',
-    ratio: 18.83 / 18.87,
-    originalColor: true
+    ratio: 18.83 / 18.87
   },
-  {
-    name: 'אורייתא',
-    url: 'https://github.com/MosheWagner/Orayta-Books',
-    logo: '/sources/orayta.svg',
-    ratio: 720 / 288.87,
-    originalColor: true,
-    logoAsText: true // לוגו על רקע מלא — בצבע אחד נראה כמלבן
-  },
+  { name: 'אורייתא', url: 'https://github.com/MosheWagner/Orayta-Books' },
   { name: 'ובלכתך בדרך', url: 'http://mobile.tora.ws', logo: '/sources/on-your-way.svg', ratio: 284.1 / 409.13 },
   { name: 'פנינים', url: 'https://pninim.org/', logo: '/sources/pninim.svg', ratio: 243 / 79 },
-  {
-    name: 'ויקיטקסט',
-    url: 'https://he.wikisource.org/wiki',
-    logo: '/sources/wikisource.svg',
-    ratio: 410 / 430,
-    originalColor: true,
-    logoAsText: true // הגלובוס בצבע אחד נראה ככתם עגול
-  },
+  { name: 'ויקיטקסט', url: 'https://he.wikisource.org/wiki' },
   {
     name: 'אוצר הספרים היהודי',
     url: 'https://wiki.jewishbooks.org.il/mediawiki/wiki/%D7%A2%D7%9E%D7%95%D7%93_%D7%A8%D7%90%D7%A9%D7%99',
@@ -556,8 +543,7 @@ export const ADDITIONAL_SOURCES = [
     name: 'ים החכמה',
     url: 'https://github.com/torahtyh/yam-HaHachma',
     logo: '/sources/yam-hahachma.png',
-    ratio: 491 / 512,
-    originalColor: true
+    ratio: 491 / 512
   },
   { name: 'מכון בית אהרן וישראל', url: 'https://machon.co.il/' }
 ]
@@ -613,7 +599,11 @@ export const ZAYIT_CREDIT = {
   after: ' (licensed under GNU AGPL v3).'
 }
 
-/** כתובת שאפשר לקשר אליה: http(s) בלבד */
+/**
+ * כתובת שאפשר לקשר אליה: http(s) בלבד
+ * @param {unknown} url
+ * @returns {url is string}
+ */
 export function isLinkable(url) {
   return typeof url === 'string' && /^https?:\/\//i.test(url)
 }

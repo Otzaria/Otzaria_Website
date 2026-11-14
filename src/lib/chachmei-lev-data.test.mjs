@@ -13,8 +13,10 @@ import {
   MEMORIALS,
   PAGE_SECTIONS,
   SPONSOR_COMPANIES,
+  SLOT_EMAIL,
   SUPPORT_ORGS,
   isLinkable,
+  slotMailto,
   orgDetailLines,
   splitBold,
   telHref,
@@ -118,8 +120,7 @@ test('ארגוני הסיוע: שם, טלפון ולוגו לכל ארגון', (
   }
 })
 
-test('slotMailto: המייל של אוצריא עם נושא מקודד', async () => {
-  const { slotMailto, SLOT_EMAIL } = await import('./chachmei-lev-data.js')
+test('slotMailto: המייל של אוצריא עם נושא מקודד', () => {
   assert.equal(SLOT_EMAIL, 'otzaria.1@gmail.com')
   const href = slotMailto('הנצחה & תרומה')
   assert.ok(href.startsWith('mailto:otzaria.1@gmail.com?subject='))

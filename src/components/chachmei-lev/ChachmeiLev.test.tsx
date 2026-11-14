@@ -9,9 +9,11 @@ import {
   MEMORIAL_MAILTO,
   MEMORIALS,
   PAGE_SECTIONS,
+  SLOT_EMAIL,
   SPONSOR_COMPANIES,
   SUPPORT_ORGS
 } from '@/lib/chachmei-lev-data'
+import { CONTACT_EMAIL } from '@/components/notFound/notFoundLinkData'
 import AidSection from './AidSection'
 import ChachmeiLevHero from './ChachmeiLevHero'
 import CompaniesSection from './CompaniesSection'
@@ -58,6 +60,13 @@ describe('MemorialSection', () => {
     // הנר דקורטיבי
     container.querySelectorAll('svg').forEach((svg) => expect(svg).toHaveAttribute('aria-hidden', 'true'))
   })
+
+  it('המשבצת הפנויה — בסגנון כפתור התרומה של האתר, ולמייל הקשר של האתר', () => {
+    render(<MemorialSection />)
+    const slot = screen.getByRole('link', { name: /מקום זה יכול להיות מונצח/ })
+    expect(slot.querySelector('.donation-button')).not.toBeNull()
+    expect(SLOT_EMAIL).toBe(CONTACT_EMAIL)
+  })
 })
 
 describe('CompaniesSection', () => {
@@ -78,12 +87,6 @@ describe('CompaniesSection', () => {
 })
 
 describe('AidSection', () => {
-  it('המשבצת הפנויה בלוח ההנצחה — בסגנון כפתור התרומה של האתר', () => {
-    render(<MemorialSection />)
-    const slot = screen.getByRole('link', { name: /מקום זה יכול להיות מונצח/ })
-    expect(slot.querySelector('.donation-button')).not.toBeNull()
-  })
-
   it('מקפל עם הכותרת מהתוכנה, וכל קווי החירום וארגוני הסיוע בתוכו', () => {
     const { container } = render(<AidSection />)
     expect(screen.getByRole('region', { name: 'סיוע ללומדי תורה' })).toBeInTheDocument()
@@ -135,14 +138,14 @@ describe('PersonChip', () => {
 })
 
 describe('SourceCard', () => {
-  it('כל לוגו כמסכה בצבע הטקסט (גם originalColor); logoAsText — השם בלבד; בלי קישור — לא קישור', () => {
+  it('כל לוגו כמסכה בצבע הטקסט (לא img); בלי לוגו — השם בלבד; בלי קישור — לא קישור', () => {
     const { container, rerender } = render(<ul><SourceCard source={{ name: 'א', url: 'https://a.org', logo: '/a.svg', ratio: 2 }} /></ul>)
     expect(screen.getByRole('link')).toHaveAttribute('href', 'https://a.org')
     expect((container.querySelector('[style*="mask-image"]') as HTMLElement).style.maskImage).toContain('/a.svg')
-    rerender(<ul><SourceCard source={{ name: 'ב', url: 'https://b.org', logo: '/b.png', ratio: 1, originalColor: true }} /></ul>)
+    rerender(<ul><SourceCard source={{ name: 'ב', url: 'https://b.org', logo: '/b.png', ratio: 1 }} /></ul>)
     expect(container.querySelector('img')).toBeNull()
     expect((container.querySelector('[style*="mask-image"]') as HTMLElement).style.maskImage).toContain('/b.png')
-    rerender(<ul><SourceCard source={{ name: 'ד', url: 'https://d.org', logo: '/d.svg', ratio: 1, logoAsText: true }} /></ul>)
+    rerender(<ul><SourceCard source={{ name: 'ד', url: 'https://d.org' }} /></ul>)
     expect(container.querySelector('[style*="mask-image"]')).toBeNull()
     expect(screen.getByRole('link')).toHaveTextContent('ד')
     rerender(<ul><SourceCard source={{ name: 'ג' }} /></ul>)
@@ -174,5 +177,7 @@ describe('אזורי האנשים והספרייה', () => {
     expect(p).toHaveAttribute('dir', 'ltr')
     expect(p).toHaveAttribute('lang', 'en')
     expect(screen.getByRole('link')).toHaveAttribute('href', 'https://zayitapp.com/')
+    // רמז "נפתח בחלון חדש" בעברית — מסומן כעברית בתוך הפסקה האנגלית
+    expect(screen.getByText(/נפתח בחלון חדש/).closest('[lang="he"]')).not.toBeNull()
   })
 })

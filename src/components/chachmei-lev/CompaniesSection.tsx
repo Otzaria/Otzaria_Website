@@ -5,7 +5,7 @@ import CompanyCard from './CompanyCard'
 import OpenSlotCard from './OpenSlotCard'
 
 /**
- * חברות שתרמו: רשת לוגואים ממורכזת (כרטיסים מרובעים קטנים ברוחב קבוע) ובסופה משבצת פנויה לדף התרומה.
+ * חברות שתרמו: רשת לוגואים ממורכזת (כרטיסים מרובעים קטנים ברוחב קבוע) ובסופה משבצת פנויה ששולחת מייל (COMPANY_MAILTO).
  * חברה חדשה = שורה ב-SPONSOR_COMPANIES (src/lib/chachmei-lev-data.js) + קובץ לוגו ב-public/sponsors.
  */
 export default function CompaniesSection() {

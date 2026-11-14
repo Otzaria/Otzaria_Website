@@ -4,7 +4,10 @@ import { cx } from '@/components/ui/cx'
 import { FOCUS_RING } from '@/components/ui/focusRing'
 import { ZAYIT_CREDIT } from '@/lib/chachmei-lev-data'
 
-/** קרדיט זית — שורה שקטה בסוף הדף, באנגלית ומשמאל לימין כמו בתוכנה (lang="en" לקורא המסך) */
+/**
+ * קרדיט זית — שורה שקטה בסוף הדף, באנגלית ומשמאל לימין כמו בתוכנה (lang="en" לקורא המסך).
+ * רמז "נפתח בחלון חדש" (sr-only) בעברית — עטוף ב-lang="he", כדי שקורא המסך לא יקרא אותו בקול אנגלי.
+ */
 export default function ZayitCredit() {
   return (
     <Section spacing="top" container="narrow">
@@ -17,7 +20,7 @@ export default function ZayitCredit() {
           className={cx('rounded-control text-primary underline underline-offset-4', FOCUS_RING)}
         >
           {ZAYIT_CREDIT.url}
-          <NewWindowHint />
+          <span lang="he" dir="rtl"><NewWindowHint /></span>
         </a>
         {ZAYIT_CREDIT.after}
       </p>
