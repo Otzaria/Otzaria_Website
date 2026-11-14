@@ -3,7 +3,7 @@
  * התראה בלבד — כשל כאן אינו נוגע באישור.
  */
 import ErrorReport from '../../models/ErrorReport.js';
-import { validateEmail } from '../validation-utils.js';
+import { normalizeEmailInput, validateEmail } from '../validation-utils.js';
 import { DEFAULT_SENDER_EMAIL } from '../errorReportLogic.js';
 import { createUnsubscribeToken, verifyUnsubscribeToken } from '../app-reports/unsubscribe.js';
 
@@ -19,7 +19,7 @@ export function getThanksConfig(env = process.env) {
 
 /** כתובת המדווח, או null כשאין למי לשלוח (כתובת ברירת המחדל של דיווח בלי מייל). */
 export function thanksRecipient(report) {
-  const email = typeof report?.senderEmail === 'string' ? report.senderEmail.trim() : '';
+  const email = normalizeEmailInput(report?.senderEmail);
   if (!email || email.toLowerCase() === DEFAULT_SENDER_EMAIL) return null;
   return validateEmail(email).isValid ? email : null;
 }

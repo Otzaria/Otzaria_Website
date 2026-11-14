@@ -1,3 +1,5 @@
+import { normalizeEmailInput } from './validation-utils.js';
+
 /**
  * זיהוי שגיאת הקלדה בדומיין של כתובת מייל (gmail.cim, gmial.com...) — לוגיקה טהורה.
  * משמש להתרעה בלבד, לא לדחייה: כתובת שנראית שגויה עדיין עשויה להיות אמיתית.
@@ -32,10 +34,10 @@ export function editDistance(a, b) {
  * @returns {string|null}
  */
 export function suggestEmailDomain(email) {
-  if (typeof email !== 'string') return null;
-  const at = email.lastIndexOf('@');
+  const clean = normalizeEmailInput(email);
+  const at = clean.lastIndexOf('@');
   if (at < 1) return null;
-  const domain = email.slice(at + 1).trim().toLowerCase();
+  const domain = clean.slice(at + 1).trim().toLowerCase();
   if (!domain || domain.length > 100 || KNOWN.has(domain)) return null;
   let best = null;
   let bestDist = Infinity;

@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { validateEmail } from './validation-utils.js';
+import { normalizeEmailInput, validateEmail } from './validation-utils.js';
 import { computeNewLine } from './corrections/payload.js';
 
 // לוגיקה טהורה עבור src/app/api/reportingerrors/route.js — ולידציה, נירמול,
@@ -97,7 +97,7 @@ export function normalizePayload(payload) {
     ? payload
     : {};
 
-  const senderCandidate = toSafeString(raw.sender_email);
+  const senderCandidate = normalizeEmailInput(raw.sender_email);
   const senderValidation = validateEmail(senderCandidate);
   const senderEmail = senderValidation.isValid
     ? senderCandidate

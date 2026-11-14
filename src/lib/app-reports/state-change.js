@@ -5,6 +5,7 @@
 import AppReport from '../../models/AppReport.js';
 import { buildUnsubscribeUrl } from './unsubscribe.js';
 import { DEFAULT_PRODUCT, getProduct, productFilter } from './products.js';
+import { normalizeEmailInput } from '../validation-utils.js';
 
 export const CLOSURE_KINDS = Object.freeze(['completed', 'not_planned', 'duplicate', 'other']);
 
@@ -97,7 +98,7 @@ export function planClosureNotifications(reports) {
   const byEmail = new Map();
   for (const r of reports) {
     if (!r.reporterEmail || r.unsubscribed || r.notifiedClosedAt) continue;
-    const key = r.reporterEmail.toLowerCase();
+    const key = normalizeEmailInput(r.reporterEmail).toLowerCase();
     if (!byEmail.has(key)) byEmail.set(key, { email: key, reports: [] });
     byEmail.get(key).reports.push(r);
   }

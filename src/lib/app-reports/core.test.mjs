@@ -43,6 +43,16 @@ test('ולידציה: דיווח ידני תקין מנורמל (מייל באו
   assert.deepEqual(r.value.diagnostics, { settings: { a: 1 } });
 });
 
+test('ולידציה: סימוני כיוון מהעתקה מטקסט RTL מוסרים מהמייל', async () => {
+  const email = `${String.fromCodePoint(0x202b)}User@Gmail.com${String.fromCodePoint(0x202c)}`;
+  const r = await validateAppReport(manual({ reporterEmail: email }));
+  assert.equal(r.ok, true);
+  assert.equal(r.value.reporterEmail, 'user@gmail.com');
+  const onlyMarks = await validateAppReport(manual({ reporterEmail: String.fromCodePoint(0x200f, 0x202c) }));
+  assert.equal(onlyMarks.ok, false);
+  assert.equal(onlyMarks.field, 'reporterEmail');
+});
+
 test('ולידציה: מייל חובה רק בדיווח ידני', async () => {
   for (const email of [undefined, '']) {
     const r = await validateAppReport(manual({ reporterEmail: email }));
@@ -294,6 +304,12 @@ test('מיילי סגירה: רק עם מייל, לא הוסר, לא קיבל; �
     { reportId: 'f', reporterEmail: 'v@y.com' },
   ]);
   assert.deepEqual(plan.map((g) => [g.email, g.reports.map((r) => r.reportId)]), [['x@y.com', ['a', 'b']], ['v@y.com', ['f']]]);
+});
+
+test('מיילי סגירה: כתובת שמורה עם סימוני כיוון נשלחת נקייה ומאוחדת עם אותה כתובת', () => {
+  const wrapped = `${String.fromCodePoint(0x202b)}x@y.com${String.fromCodePoint(0x202c)}`;
+  const plan = planClosureNotifications([{ reportId: 'a', reporterEmail: wrapped }, { reportId: 'b', reporterEmail: 'x@y.com' }]);
+  assert.deepEqual(plan.map((g) => [g.email, g.reports.map((r) => r.reportId)]), [['x@y.com', ['a', 'b']]]);
 });
 
 test('תגובת הסגירה: האחרונה של מי שסגר, בחלון שלפני הסגירה, בלי הערות HTML', () => {

@@ -133,6 +133,11 @@ describe('normalizePayload', () => {
     expect(result.created_at).toBe('2024-01-01T00:00:00.000Z');
   });
 
+  it('strips bidi marks pasted from RTL text from the sender email', () => {
+    const wrapped = `${String.fromCodePoint(0x202b)}user@example.com${String.fromCodePoint(0x202c)}`;
+    expect(normalizePayload({ sender_email: wrapped }).sender_email).toBe('user@example.com');
+  });
+
   it('uses DEFAULT_SENDER_EMAIL for an invalid sender email', () => {
     const result = normalizePayload({ sender_email: 'not-an-email' });
     expect(result.sender_email).toBe(DEFAULT_SENDER_EMAIL);

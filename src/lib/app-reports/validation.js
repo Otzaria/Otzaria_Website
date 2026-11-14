@@ -4,7 +4,7 @@
  */
 import zlib from 'node:zlib';
 import { promisify } from 'node:util';
-import { validateEmail } from '../validation-utils.js';
+import { normalizeEmailInput, validateEmail } from '../validation-utils.js';
 import { DEFAULT_PRODUCT, isProductKey } from './products.js';
 
 const gunzip = promisify(zlib.gunzip);
@@ -176,7 +176,7 @@ export async function validateAppReport(raw) {
 
   const emailRaw = optionalString(raw, 'reporterEmail', 254);
   if (emailRaw.error) return emailRaw.error;
-  const reporterEmail = emailRaw.value.toLowerCase();
+  const reporterEmail = normalizeEmailInput(emailRaw.value).toLowerCase();
   if (reporterEmail && !validateEmail(reporterEmail).isValid) return fail('reporterEmail', 'invalid');
   if (manual && !reporterEmail) return fail('reporterEmail', 'required for manual reports');
 

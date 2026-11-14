@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validatePassword, validateEmail } from './validation-utils'
+import { validatePassword, validateEmail, normalizeEmailInput } from './validation-utils'
 
 describe('validatePassword', () => {
   it('דוחה סיסמה ריקה/falsy', () => {
@@ -70,5 +70,23 @@ describe('validateEmail', () => {
     const elapsed = Date.now() - start
     expect(result.isValid).toBe(false)
     expect(elapsed).toBeLessThan(1000)
+  })
+})
+
+describe('normalizeEmailInput', () => {
+  const rtlWrapped = (text) => String.fromCodePoint(0x202b) + text + String.fromCodePoint(0x202c)
+
+  it('מסירה סימוני כיוון ותווים ברוחב אפס שנדבקו בהעתקה מטקסט RTL', () => {
+    expect(normalizeEmailInput(rtlWrapped('user@gmail.com'))).toBe('user@gmail.com')
+    for (const cp of [0x200b, 0x200c, 0x200d, 0x200e, 0x200f, 0x202a, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069, 0xfeff]) {
+      const ch = String.fromCodePoint(cp)
+      expect(normalizeEmailInput(`${ch} us${ch}er@example.com${ch} `), cp.toString(16)).toBe('user@example.com')
+    }
+  })
+
+  it('שומרת רישיות ומחזירה מחרוזת ריקה לקלט שאינו מחרוזת', () => {
+    expect(normalizeEmailInput('  User@Example.com ')).toBe('User@Example.com')
+    expect(normalizeEmailInput(undefined)).toBe('')
+    expect(normalizeEmailInput(42)).toBe('')
   })
 })

@@ -45,6 +45,18 @@ export function validateEmail(email) {
   return { isValid: true, error: '' }
 }
 
+// סימוני כיוון ותווים ברוחב אפס נדבקים להעתקה מטקסט RTL, ושרת הדואר דוחה כתובת שמכילה אותם
+const INVISIBLE_EMAIL_CHARS = /[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g
+
+/**
+ * Strips invisible bidi/zero-width characters and surrounding whitespace from an email
+ * @param {unknown} email - Raw email input
+ * @returns {string} Cleaned email ('' for non-strings); case is preserved
+ */
+export function normalizeEmailInput(email) {
+  return typeof email === 'string' ? email.replace(INVISIBLE_EMAIL_CHARS, '').trim() : ''
+}
+
 /**
  * Validates required field
  * @param {string} value - Value to validate
