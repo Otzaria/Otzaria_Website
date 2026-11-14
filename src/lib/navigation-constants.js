@@ -40,6 +40,7 @@ export const MAIN_NAV_LINKS = [
   { href: '/faq', label: 'שאלות נפוצות', highlight: false },
   // hint — רמז התרומה: בועה בריחוף/פוקוס על הכפתור שבכותרת, ושורה בתפריט הנייד (DonationButton)
   { href: '/donate', label: 'תרומות', customIcon: 'donate', emphasis: 'donation', hint: 'אין לאוצריא גוף מממן: אתה הכוח המניע שלה' },
+  { href: '/chachmei-lev', label: 'תודות', highlight: false },
   { href: '/forum', label: 'פורום', external: true, highlight: false }
 ]
 

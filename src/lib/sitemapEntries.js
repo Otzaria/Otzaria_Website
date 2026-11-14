@@ -8,6 +8,7 @@ export const SITE_URL = 'https://otzaria.org'
 export const STATIC_PATHS = [
   '/',
   '/about',
+  '/chachmei-lev',
   '/faq',
   '/donate',
   '/privacy',

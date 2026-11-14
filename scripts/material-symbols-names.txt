@@ -1082,6 +1082,7 @@ device_swoosh_star
 device_thermostat
 device_unknown
 devices
+devices_2
 devices_fold
 devices_fold_2
 devices_off
@@ -1164,6 +1165,7 @@ docs_apps_script
 document_scanner
 document_search
 document_share
+document_share_off
 document_share_stack
 domain
 domain_add
@@ -1633,6 +1635,7 @@ frame_bug
 frame_exclamation
 frame_inspect
 frame_person
+frame_person_2
 frame_person_mic
 frame_person_off
 frame_reload
@@ -2331,6 +2334,7 @@ mindfulness
 minimize
 minor_crash
 mintmark
+mirror_stack
 miscellaneous_services
 missed_video_call
 missing_controller
@@ -2957,7 +2961,11 @@ print_add
 print_connect
 print_disabled
 print_error
+print_landscape_long
+print_landscape_short
 print_lock
+print_portrait_long
+print_portrait_short
 priority
 priority_high
 privacy
@@ -2979,6 +2987,7 @@ public
 public_off
 publish
 published_with_changes
+pull_request
 pulmonology
 pulse_alert
 punch_clock
@@ -3902,6 +3911,7 @@ total_dissolved_solids
 touch_app
 touch_double
 touch_double_2
+touch_double_2_hold
 touch_long
 touch_triple
 touchpad_mouse
