@@ -50,7 +50,8 @@ import { MessagesScreenSkeleton } from '@/components/admin/messages/MessagesSkel
 // מיובא; לעדכן ידנית יחד עם REVALIDATE_SECONDS.MESSAGES_ADMIN_LIST.
 export const revalidate = 300
 
-const loadAdminMessages = nextCache(getAdminMessagesList, ['admin-messages-list'], {
+// גרסת המבנה: לא להשתמש אחרי פריסה במטמון ישן שבו התגובות הכילו רק senderRole.
+const loadAdminMessages = nextCache(getAdminMessagesList, ['admin-messages-list', 'sender-roles-v2'], {
   tags: [CACHE_TAGS.MESSAGES_ADMIN_LIST],
   revalidate: REVALIDATE_SECONDS.MESSAGES_ADMIN_LIST
 })

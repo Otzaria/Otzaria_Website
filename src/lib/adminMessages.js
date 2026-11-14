@@ -1,10 +1,11 @@
 import dbConnect from '@/lib/db'
 import Message from '@/models/Message'
+import { getRoles } from './roles.js'
 
 // עיצוב מסמך הודעה בודד לפורמט שהלקוח מצפה לו — זהה בדיוק למיפוי שהיה קודם
 // בתוך GET /api/messages, מחולץ לכאן כדי שישמש גם את השאילתה הממוטמנת של
 // דף ניהול ההודעות (page.jsx) וגם את ה-API route (רענון ללא מטמון בצד הלקוח).
-function formatMessage(msg) {
+export function formatMessage(msg) {
   return {
     id: msg._id.toString(),
     subject: msg.subject,
@@ -29,6 +30,7 @@ function formatMessage(msg) {
       senderName: r.sender?.name,
       senderEmail: r.sender?.email,
       senderRole: r.sender?.role,
+      senderRoles: r.sender ? getRoles(r.sender) : null,
       content: r.content,
       createdAt: r.createdAt
     }))

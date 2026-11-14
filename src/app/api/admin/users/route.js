@@ -113,6 +113,8 @@ export async function PUT(request) {
         }
 
         revalidateNow(CACHE_TAGS.USERS_ADMIN_LIST);
+        // ההודעות מציגות שם/דואר ומסווגות לפי תפקידי הכותבים הנוכחיים, כולל בתשובות.
+        revalidateNow(CACHE_TAGS.MESSAGES_ADMIN_LIST);
 
         return NextResponse.json({ success: true, user: updatedUser });
     } catch (error) {
@@ -142,6 +144,7 @@ export async function DELETE(request) {
         );
 
         revalidateNow(CACHE_TAGS.USERS_ADMIN_LIST);
+        revalidateNow(CACHE_TAGS.MESSAGES_ADMIN_LIST);
 
         return NextResponse.json({ success: true });
     } catch (e) {

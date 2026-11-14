@@ -5,6 +5,7 @@
 
 import { paginate as paginateList } from '../adminList/paginate.js'
 import { formatNumber } from '../adminTerms.js'
+import { getRoles } from '../roles.js'
 import { ROLE_IDS, TEAMS, TEAM_IDS, roleLabel, userHasRole } from './userTerms.js'
 
 export const USERS_PER_PAGE = 25
@@ -116,10 +117,19 @@ export function filterUsers(users, query) {
  * @param {any[]} users
  */
 export function filterOptions(users) {
-  const list = users || []
-  // משתמש עם כמה תפקידים נספר בכל אחד מהם
-  const roles = ROLE_IDS.map((role) => ({ value: role, label: roleLabel(role), count: list.filter((u) => userHasRole(u, role)).length }))
-  const teams = TEAMS.map((t) => ({ value: t.id, label: t.label, count: list.filter((u) => u[t.field] === true).length }))
+  const roleCounts = new Map(ROLE_IDS.map((role) => [role, 0]))
+  const teamCounts = new Map(TEAMS.map((team) => [team.id, 0]))
+  // מעבר יחיד: מנרמלים כל משתמש פעם אחת וסופרים אותו בכל תפקידיו, בלי מערכי filter זמניים.
+  for (const user of users || []) {
+    const assigned = getRoles(user)
+    if (assigned.length === 0) roleCounts.set('user', roleCounts.get('user') + 1)
+    for (const role of assigned) roleCounts.set(role, roleCounts.get(role) + 1)
+    for (const team of TEAMS) {
+      if (user[team.field] === true) teamCounts.set(team.id, teamCounts.get(team.id) + 1)
+    }
+  }
+  const roles = ROLE_IDS.map((role) => ({ value: role, label: roleLabel(role), count: roleCounts.get(role) }))
+  const teams = TEAMS.map((t) => ({ value: t.id, label: t.label, count: teamCounts.get(t.id) }))
   return { roles, teams }
 }
 

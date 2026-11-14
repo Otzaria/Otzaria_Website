@@ -15,11 +15,13 @@ vi.mock('@/app/api/auth/[...nextauth]/route', () => ({ authOptions: {} }))
 vi.mock('@/lib/adminUsers', () => ({ getAdminUsersWithStats: vi.fn() }))
 vi.mock('@/models/Page', () => ({ default: { updateMany: vi.fn() } }))
 vi.mock('@/models/User', () => ({
-  default: { findById: findByIdMock, findByIdAndUpdate: findByIdAndUpdateMock, findOne: findOneMock },
+  default: { findById: findByIdMock, findByIdAndUpdate: findByIdAndUpdateMock, findOne: findOneMock, findByIdAndDelete: vi.fn() },
 }))
 
 import { getServerSession } from 'next-auth'
-import { PUT } from './route'
+import { revalidateTag } from 'next/cache'
+import { CACHE_TAGS } from '@/lib/cacheTags'
+import { PUT, DELETE } from './route'
 
 const USER_ID = '507f1f77bcf86cd799439012'
 const put = (body) => PUT({ json: async () => body })
@@ -29,6 +31,7 @@ function setSession(user) {
 }
 
 beforeEach(() => {
+  revalidateTag.mockClear()
   findByIdMock.mockReset().mockReturnValue({ select: async () => ({ email: 'a@example.com' }) })
   findByIdAndUpdateMock.mockReset().mockReturnValue({ select: async () => ({ _id: USER_ID }) })
   findOneMock.mockReset()
@@ -42,6 +45,7 @@ describe('PUT /api/admin/users — תפקידים', () => {
     const res = await put({ userId: USER_ID, name: 'x', points: 1, roles: ['admin_ocr', 'admin_books'] })
     expect(res.status).toBe(200)
     expect(lastUpdate()).toMatchObject({ roles: ['admin_books', 'admin_ocr'], role: 'admin_books' })
+    expect(revalidateTag).toHaveBeenCalledWith(CACHE_TAGS.MESSAGES_ADMIN_LIST, { expire: 0 })
   })
 
   it('מנהל כללי עם עוד תפקידים — נשמר לבדו', async () => {
@@ -73,6 +77,7 @@ describe('PUT /api/admin/users — תפקידים', () => {
       expect(res.status).toBe(400)
     }
     expect(findByIdAndUpdateMock).not.toHaveBeenCalled()
+    expect(revalidateTag).not.toHaveBeenCalled()
   })
 
   it('רק מנהל כללי — גם כשהוא אחד מכמה תפקידים; מנהל ספרים + OCR — 403', async () => {
@@ -81,4 +86,10 @@ describe('PUT /api/admin/users — תפקידים', () => {
     setSession(null)
     expect((await put({ userId: USER_ID, roles: ['admin'] })).status).toBe(401)
   })
+})
+
+it('מחיקת משתמש מבטלת גם את מטמון ההודעות שמאכלס את הכותב', async () => {
+  const res = await DELETE({ json: async () => ({ userId: USER_ID }) })
+  expect(res.status).toBe(200)
+  expect(revalidateTag).toHaveBeenCalledWith(CACHE_TAGS.MESSAGES_ADMIN_LIST, { expire: 0 })
 })

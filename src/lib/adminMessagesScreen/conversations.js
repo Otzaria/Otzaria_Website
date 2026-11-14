@@ -18,17 +18,21 @@
 // הסיווג משתמש בתפקיד הנוכחי של הכותב (השרת לא שומר את התפקיד בזמן הכתיבה) — אבל (1) מבטיח שדבר חדש לא ייעלם.
 
 import { ADMIN_NAV_ITEMS } from '../adminNav.js'
+import { hasRole } from '../roles.js'
 
 /** מי שמטפל בהודעות — מי שרואה את המסך (כמו פריט "הודעות" בסרגל) */
 export const STAFF_ROLES = Object.freeze([...ADMIN_NAV_ITEMS.messages.roles])
 
 /** האם התפקיד הוא של הצוות שמטפל בהודעות */
-export function isStaff(role) {
-  return STAFF_ROLES.includes(role)
+export function isStaff(subject) {
+  return hasRole(subject, ...STAFF_ROLES)
 }
 
 /** תפקיד ידוע שאינו צוות (משתמש, מנהל OCR וכו'). תפקיד חסר (כותב שנמחק) — לא ידוע, לא זה ולא זה */
-const isKnownNonStaff = (role) => typeof role === 'string' && role !== '' && !isStaff(role)
+const isKnownNonStaff = (subject) => (Array.isArray(subject) || (typeof subject === 'string' && subject !== '')) && !isStaff(subject)
+
+// רשומה חדשה: כל התפקידים (כולל [] למשתמש רגיל); רשומה ישנה: התפקיד היחיד. כותב שנמחק — null.
+const senderOf = (item) => item?.senderRoles ?? item?.senderRole
 
 const time = (date) => {
   const ms = new Date(date ?? NaN).getTime()
@@ -58,8 +62,9 @@ const hasRecipient = (message) => Boolean(message?.recipientId || message?.recip
 
 /** השולח הוא "הצד השני" (לא הצוות): תפקיד ידוע שאינו צוות, או שולח שנמחק בלי נמען (פנייה לצוות) */
 function senderIsOtherSide(message) {
-  if (isKnownNonStaff(message?.senderRole)) return true
-  return !isStaff(message?.senderRole) && !hasRecipient(message)
+  const sender = senderOf(message)
+  if (isKnownNonStaff(sender)) return true
+  return !isStaff(sender) && !hasRecipient(message)
 }
 
 /** האם השיחה שייכת ל"נכנסות" — ראו ההגדרה בראש הקובץ */
@@ -67,7 +72,7 @@ export function isIncoming(message) {
   if (!message) return false
   if (isUnread(message)) return true
   if (senderIsOtherSide(message)) return true
-  return (message.replies || []).some((reply) => isKnownNonStaff(reply?.senderRole))
+  return (message.replies || []).some((reply) => isKnownNonStaff(senderOf(reply)))
 }
 
 /**
@@ -126,7 +131,7 @@ export function threadOf(message) {
   const first = {
     id: `${message.id}-0`,
     author: message.senderName || 'משתמש לא ידוע',
-    fromTeam: isStaff(message.senderRole),
+    fromTeam: isStaff(senderOf(message)),
     content: message.content || '',
     createdAt: message.createdAt,
   }
@@ -134,7 +139,7 @@ export function threadOf(message) {
     id: reply.id || `${message.id}-${i + 1}`,
     // כותב שנמחק — לא יודעים אם היה מהצוות או לא
     author: reply.senderName || 'חשבון שנמחק',
-    fromTeam: isStaff(reply.senderRole),
+    fromTeam: isStaff(senderOf(reply)),
     content: reply.content || '',
     createdAt: reply.createdAt,
   }))

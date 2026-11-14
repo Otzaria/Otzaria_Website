@@ -86,6 +86,27 @@ test('אפשרויות: כל התפקידים בסדר קבוע עם מונה, �
   assert.deepEqual(teams.map((t) => [t.value, t.count]), [['supervisor', 1], ['volunteer', 1], ['blocked', 1]])
 })
 
+test('ספירה: תפקידים כפולים, רשומות ישנות, משתמשים רגילים ודגלי צוות חופפים', () => {
+  const users = [
+    { role: 'admin_plugins', roles: ['admin_books_only', 'admin_plugins', 'admin_plugins'], isSupervisor: true, isCorrectionsVolunteer: true },
+    { role: 'admin_books_only', isSupervisor: true },
+    { role: 'user', roles: [], dictaEditBlocked: true },
+    { roles: ['unknown', 'user'], isSupervisor: 'true', isCorrectionsVolunteer: 1 },
+    {},
+  ]
+  const before = structuredClone(users)
+  const { roles, teams } = filterOptions(users)
+  assert.deepEqual(roles.filter((r) => r.count).map((r) => [r.value, r.count]), [
+    ['user', 3], ['admin_plugins', 1], ['admin_books_only', 2],
+  ])
+  assert.deepEqual(teams.map((t) => t.count), [2, 1, 1])
+  assert.deepEqual(users, before)
+  for (const list of [[], undefined]) {
+    const options = filterOptions(list)
+    assert.ok([...options.roles, ...options.teams].every((o) => o.count === 0))
+  }
+})
+
 test('סיכום, עימוד ומספר', () => {
   assert.deepEqual(filterSummary({ q: 'כהן', role: 'admin_books', team: 'blocked' }), ['"כהן"', 'מנהל ספרים', 'חסום מעריכה'])
   const many = Array.from({ length: 60 }, (_, i) => ({ _id: String(i) }))

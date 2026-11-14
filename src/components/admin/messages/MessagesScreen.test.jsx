@@ -36,6 +36,7 @@ for (const name of ['replaceState', 'pushState']) {
 }
 
 import MessagesScreen from './MessagesScreen'
+import { toAdminMessageListItem } from '@/lib/adminMessagesView'
 
 const HOUR = 3600_000
 const ago = (h) => new Date(Date.now() - h * HOUR).toISOString()
@@ -92,6 +93,36 @@ const writes = () => calls.filter((c) => !c.key.startsWith('GET'))
 const openButtons = () => screen.getAllByRole('button', { name: /^פתח את (השיחה|ההודעה)/ })
 
 describe('הודעות — נכנסות', () => {
+  test('תפקיד צוות משני: נשלחו נשאר בנשלחו; אחרי תשובת משתמש מוצג הנמען והצוות מזוהה בשרשור', async () => {
+    const multi = { ...MESSAGES[3], senderRole: 'admin_books_only', senderRoles: ['admin_books_only', 'admin_plugins'] }
+    renderAt('/library/admin/messages', { initialMessages: [toAdminMessageListItem(multi)] })
+    expect(screen.getByText('אין פניות')).toBeInTheDocument()
+    const user = userEvent.setup()
+    // next/link מדומה כאן כעוגן רגיל; מדמים את שינוי הכתובת שהנתב מבצע.
+    act(() => window.history.pushState(null, '', screen.getByRole('link', { name: 'נשלחו' }).getAttribute('href')))
+    expect(within(screen.getByRole('list', { name: 'הודעות שנשלחו' })).getByText('רחל')).toBeInTheDocument()
+
+    routes['GET /api/messages?allMessages=true'] = () => json({ success: true, messages: [{ ...multi,
+      status: 'replied', replies: [
+        { id: 'staff-reply', senderName: 'צוות משולב', senderRole: multi.senderRole, senderRoles: multi.senderRoles, content: 'מטפלים', createdAt: ago(4) },
+        { id: 'user-reply', senderName: 'רחל', senderRole: 'user', senderRoles: [], content: 'תודה', createdAt: ago(3) },
+      ],
+    }] })
+    await user.click(screen.getByRole('button', { name: 'רענן את ההודעות' }))
+    await waitFor(() => expect(calls.some((c) => c.key === 'GET /api/messages?allMessages=true')).toBe(true))
+    act(() => window.history.pushState(null, '', screen.getByRole('link', { name: 'נכנסות' }).getAttribute('href')))
+    const list = await screen.findByRole('list', { name: 'שיחות' })
+    expect(within(list).getByText('רחל')).toBeInTheDocument()
+    await user.click(within(list).getByRole('button', { name: /פתח את השיחה/ }))
+    const drawer = await screen.findByRole('dialog', { name: multi.subject })
+    const thread = within(drawer).getByRole('list', { name: 'השיחה' })
+    expect(within(thread).getAllByText('צוות')).toHaveLength(2)
+    const userReply = within(thread).getAllByRole('listitem').at(-1)
+    expect(userReply).toHaveTextContent('רחל')
+    expect(userReply).toHaveTextContent('תודה')
+    expect(within(userReply).queryByText('צוות')).toBeNull()
+  })
+
   test('נכנסות: פניות ושיחה שמשתמש השיב בה; "חדש" על מה שלא נקרא; המונה בלשונית', () => {
     renderAt('/library/admin/messages')
     const list = screen.getByRole('list', { name: 'שיחות' })
