@@ -18,7 +18,7 @@ export const BOOK_VISIBILITY_FILTERS = ['hidden', 'visible']
 export const BOOK_OWNER_FILTERS = ['public', 'personal']
 export const BOOK_SORTS = ['updated', 'name', 'progress']
 /** הלשוניות של מגירת הספר. הראשונה — ברירת המחדל (לא נכתבת בכתובת) */
-export const DRAWER_VIEWS = ['details', 'pages', 'instructions', 'ocr']
+export const DRAWER_VIEWS = ['details', 'pages', 'instructions', 'ocr', 'training']
 /** כמה ספרים בכל עמוד */
 export const BOOKS_PER_PAGE = 50
 const MAX_VALUES = 50
