@@ -237,7 +237,7 @@ const nextConfig = {
       // /docs/:slug — דפי המדריך (docs/[slug], docs/development): ציבוריים
       // וללא session, כמו /docs עצמו. בלי זה קיבלו רק s-maxage של ISR, והדפדפן
       // אימת מחדש כל טעינה.
-      ...['/', '/about', '/faq', '/donate', '/privacy', '/license', '/offline', '/docs', '/docs/:slug'].map((source) => ({
+      ...['/', '/about', '/faq', '/donate', '/privacy', '/license', '/offline', '/chachmei-lev', '/docs', '/docs/:slug'].map((source) => ({
         source,
         headers: [
           { key: 'Cache-Control', value: 'public, max-age=300, stale-while-revalidate=3600' },
