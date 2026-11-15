@@ -174,11 +174,12 @@ describe('AddBookDialog', () => {
     Object.defineProperty(f, 'size', { value: size })
     return f
   }
-  const setup = async (file, info) => {
+  const setup = async (file, info, { range = true } = {}) => {
     const user = userEvent.setup()
     const { uploadBook } = await import('./booksApi')
-    const { slicePdf } = await import('./pdfSlice')
+    const { slicePdf, openPdf } = await import('./pdfSlice')
     uploadBook.mockClear()
+    openPdf.mockClear()
     slicePdf.mockClear()
     pdfMock.info = info ? { [file.name]: info } : {}
     pdfMock.sliceSize = 1000
@@ -186,6 +187,8 @@ describe('AddBookDialog', () => {
     render(<AddBookDialog categoryOptions={OPTIONS} onAdded={onAdded} onClose={() => {}} />)
     await user.upload(document.querySelector('input[type="file"]'), file)
     const dialog = within(screen.getByRole('dialog'))
+    // קובץ עד 50MB לא נקרא בדפדפן עד שמבקשים טווח
+    if (range && file.size <= 50 * MB) await user.click(dialog.getByRole('button', { name: 'העלה רק חלק מהעמודים' }))
     const submit = () => user.click(dialog.getByRole('button', { name: 'הוסף ספר' }))
     const uploaded = () => uploadBook.mock.calls[0]?.[0]?.get('pdf')
     return { user, dialog, submit, uploaded, uploadBook, slicePdf, onAdded }
@@ -199,6 +202,18 @@ describe('AddBookDialog', () => {
     await submit()
     await waitFor(() => expect(onAdded).toHaveBeenCalledWith('ספר א'))
     expect(slicePdf).not.toHaveBeenCalled()
+    expect(uploaded()).toBe(file)
+  })
+
+  test('העלאה רגילה בלי לבקש טווח — הקובץ לא נקרא בדפדפן בכלל ונשלח כמו שהוא', async () => {
+    const file = pdfFile('גדול_רגיל.pdf', 40 * MB)
+    const { dialog, submit, uploaded, onAdded } = await setup(file, { pageCount: 300 }, { range: false })
+    const { openPdf } = await import('./pdfSlice')
+    expect(openPdf).not.toHaveBeenCalled()
+    expect(dialog.queryByRole('textbox', { name: 'מעמוד' })).toBeNull()
+    await submit()
+    await waitFor(() => expect(onAdded).toHaveBeenCalledWith('גדול רגיל'))
+    expect(openPdf).not.toHaveBeenCalled()
     expect(uploaded()).toBe(file)
   })
 

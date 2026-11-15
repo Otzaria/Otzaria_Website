@@ -10,7 +10,7 @@ import SelectMenu from '@/components/ui/SelectMenu'
 import { cx } from '@/components/ui/cx'
 import { CHECKBOX, FIELD_ERROR, FIELD_HINT, FIELD_LABEL, fieldClasses } from '@/components/ui/fieldStyles'
 import { FOCUS_RING } from '@/components/ui/focusRing'
-import { DEFAULT_CATEGORY, MAX_SOURCE_PDF_BYTES, fileSizeText, nameFromFile, newBookErrors, slicedSizeError, uploadRangeSummary } from '@/lib/adminBooks/bookTerms'
+import { DEFAULT_CATEGORY, MAX_PDF_BYTES, MAX_SOURCE_PDF_BYTES, fileSizeText, nameFromFile, newBookErrors, slicedSizeError, uploadRangeSummary } from '@/lib/adminBooks/bookTerms'
 import { parsePageRangeInput } from '@/lib/pageRange'
 import { uploadBook } from './booksApi'
 import { slicePdf } from './pdfSlice'
@@ -27,7 +27,9 @@ const nextPaint = () => new Promise((resolve) => {
 /**
  * "הוספת ספר" — קובץ PDF, שם (מוצע משם הקובץ), קטגוריה, והאם להסתיר / לשלוח הודעה למנויים.
  *
- * טווח עמודים: כשנבחר קובץ, הדפדפן סופר את העמודים בו (usePdfPages), ואפשר לבחור "מעמוד / עד עמוד".
+ * טווח עמודים: הקובץ לא נקרא בדפדפן ברירת מחדל (קובץ של מאות MB היה תוקע את הלשונית). רק כשהמשתמש
+ * לוחץ "העלה רק חלק מהעמודים", או כשהקובץ מעל 50MB (ואז חובה טווח), הדפדפן סופר את העמודים בו
+ * (usePdfPages) ואפשר לבחור "מעמוד / עד עמוד".
  * בטווח חלקי — בשליחה נבנה בדפדפן PDF רק מהעמודים האלה (pdfSlice), ונשלח הוא במקום הקובץ. כך אפשר
  * להעלות חלק מקובץ גדול מ-50MB (עד 500MB), ומגבלת ה-50MB של השרת חלה על החלק. השרת לא משתנה ולא יודע
  * על הטווח: העמודים בספר ממוספרים 1..N (ושורת הסיכום אומרת את זה). בלי טווח — הקובץ נשלח כמו שהוא.
@@ -46,6 +48,7 @@ export default function AddBookDialog({ categoryOptions, onAdded, onClose }) {
   const [hidden, setHidden] = useState(false)
   const [notify, setNotify] = useState(false)
   const [rangeInput, setRangeInput] = useState(EMPTY_RANGE)
+  const [wantRange, setWantRange] = useState(false) // המשתמש ביקש לבחור טווח — רק אז הקובץ נקרא בדפדפן
   const [errors, setErrors] = useState({})
   const [serverError, setServerError] = useState('')
   const [phase, setPhase] = useState(null) // null | 'slicing' | 'uploading'
@@ -55,7 +58,8 @@ export default function AddBookDialog({ categoryOptions, onAdded, onClose }) {
 
   // לא טוענים לזיכרון קובץ שממילא גדול מדי (newBookErrors יגיד), או שאינו PDF
   const readable = file && file.size <= MAX_SOURCE_PDF_BYTES && !newBookErrors({ name: 'x', file, partial: true }).file
-  const pdf = usePdfPages(readable ? file : null)
+  const parse = readable && (wantRange || file.size > MAX_PDF_BYTES) // מעל 50MB אי אפשר בלי טווח
+  const pdf = usePdfPages(parse ? file : null)
   const canSlice = pdf.status === 'ready' && !pdf.encrypted
   const parsedRange = canSlice ? parsePageRangeInput(rangeInput, { total: pdf.pageCount }) : { ok: true, range: null }
 
@@ -66,6 +70,7 @@ export default function AddBookDialog({ categoryOptions, onAdded, onClose }) {
     if (!picked) return
     setFile(picked)
     setRangeInput(EMPTY_RANGE)
+    setWantRange(false)
     setErrors((e) => ({ ...e, file: undefined, range: undefined, rangeField: undefined }))
     if (!name.trim()) setName(nameFromFile(picked.name))
   }
@@ -194,7 +199,14 @@ export default function AddBookDialog({ categoryOptions, onAdded, onClose }) {
           {errors.file && <p id={ids.fileError} role="alert" className={FIELD_ERROR}>{errors.file}</p>}
         </div>
 
-        {readable && (
+        {readable && !parse && (
+          <div>
+            <Button variant="text" size="sm" icon="content_cut" onClick={() => setWantRange(true)} disabled={busy}>העלה רק חלק מהעמודים</Button>
+            <p className={FIELD_HINT}>ברירת מחדל: כל הקובץ יועלה כמו שהוא.</p>
+          </div>
+        )}
+
+        {readable && parse && (
           <PageRangeFields
             legend="אילו עמודים להעלות"
             value={rangeInput}
