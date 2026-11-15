@@ -135,7 +135,7 @@ export default function AddBookDialog({ categoryOptions, onAdded, onClose }) {
 
   return (
     <Dialog
-      title="הוסף ספר"
+      title="הוספת ספר"
       subtitle="קובץ PDF — כולו (עד 50MB), או רק חלק מהעמודים שבו. אחרי ההעלאה הספר מתחלק לעמודים."
       onClose={onClose}
       dismissible={!busy}
