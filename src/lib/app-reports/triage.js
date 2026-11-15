@@ -107,8 +107,8 @@ export async function runTriageFollowUp(reportId, github, deps) {
   if (!doc) return 'skipped';
   const f = doc.triage.followUp;
   try {
-    const comments = await github.listComments(doc.issueNumber);
-    if (!comments.some((c) => c.body.includes(reportMarker(reportId)))) {
+    const comments = f.summaryPosted ? [] : await github.listComments(doc.issueNumber);
+    if (!f.summaryPosted && !comments.some((c) => c.body.includes(reportMarker(reportId)))) {
       await github.createComment(doc.issueNumber, triageComment(reportId, doc.triage));
     }
     if (f.assign) await github.addAssignees(doc.issueNumber, [deps.config.triageAssignee]);

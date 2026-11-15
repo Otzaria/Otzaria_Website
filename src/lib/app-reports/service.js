@@ -20,7 +20,7 @@ import {
   buildReplyAddress, validateInboundPayload, isAutoReply, inboundMessageBody, buildInboundComment, buildOutboundComment,
 } from './inbound.js';
 import { PRODUCT_KEYS, getProduct, isProductKey, productFilter, productOf } from './products.js';
-import { needsTriage, pendingTriage, dispatchTriage, requestRetriage, runTriageFollowUp } from './triage.js';
+import { needsTriage, pendingTriage, dispatchTriage, requestRetriage, runTriageFollowUp, triageComment } from './triage.js';
 import { deliverTriageQuestions, ensureReplyToken } from './triage-questions.js';
 export { ensureReplyToken };
 export { hasAppReportsAccess } from '../roles.js';
@@ -325,9 +325,13 @@ export async function publishReport(reportId, deps) {
       return await AppReport.findOneAndUpdate({ reportId }, { $set: { issueLeaseUntil: null } }, { returnDocument: 'after' }).lean();
     }
 
+    // פענוח של החלטת open נכתב באותו פוסט עם הדיווח; השיוך נשאר להמשך
+    const decoded = leased.triage?.state === 'opened' && leased.triage.followUp?.status === 'pending' && leased.triage.summary
+      ? triageComment(reportId, leased.triage) : null;
+    const withDecode = (text) => (decoded ? `${text}\n\n${decoded}` : text);
     let set;
     if (plan.action === 'comment') {
-      await github.createComment(plan.issueNumber, buildMergeComment(leased));
+      await github.createComment(plan.issueNumber, withDecode(buildMergeComment(leased)));
       set = {
         issueNumber: plan.issueNumber, issueUrl: plan.issueUrl || issueHtmlUrl(github.repo, plan.issueNumber),
         issueState: 'open', issueClosedAt: null, mergedIntoExisting: true,
@@ -347,7 +351,7 @@ export async function publishReport(reportId, deps) {
       const { previousIssueNumber } = plan;
       const created = await github.createIssue({
         title: buildIssueTitle(leased),
-        body: buildIssueBody(leased, { previousIssueNumber }),
+        body: withDecode(buildIssueBody(leased, { previousIssueNumber })),
         labels: issueLabels(leased),
       });
       set = {
@@ -357,6 +361,7 @@ export async function publishReport(reportId, deps) {
     }
     // השירות לא החליט עד ה-deadline: נפתח כרגיל, ותשובה מאוחרת שלו תטפל ב-issue עצמו
     if (leased.triage?.state === 'pending') Object.assign(set, { 'triage.state': 'timeout', 'triage.decidedAt': now });
+    if (decoded && plan.action !== 'suppress') set['triage.followUp.summaryPosted'] = true;
     await AppReport.updateOne(
       { reportId },
       { $set: { ...set, issuePending: false, issueLeaseUntil: null, issueError: null, issueCheckedAt: now } },

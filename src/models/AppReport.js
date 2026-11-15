@@ -105,6 +105,8 @@ const TriageSchema = new mongoose.Schema({
       assign: { type: Boolean, default: false },
       close: { type: String, enum: ['completed', 'not_planned', 'duplicate', null], default: null },
       duplicateOf: { type: Number, default: null },
+      // הפענוח כבר בגוף ה-issue או בתגובת ההצטרפות
+      summaryPosted: { type: Boolean, default: false },
       attemptAt: { type: Date, default: null },
       error: { type: String, default: null },
     }, { _id: false }),
