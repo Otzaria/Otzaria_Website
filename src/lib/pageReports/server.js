@@ -194,6 +194,10 @@ export async function decidePageReport(admin, id, raw, { now = new Date() } = {}
       ? { finalOriginal: edit.original, finalProposed: edit.proposed, finalBy: userIdOf(admin), finalByName: admin?.name || '', finalAt: now }
       : { finalOriginal: null, finalProposed: null, finalBy: null, finalByName: '', finalAt: null }
   }
+  // דחייה/פתיחה מחדש: הנוסח הסופי של אישור קודם כבר לא תקף — לא להשאיר אותו מוצג כ"הוחלט"
+  if (!finalSet && (action === 'reject' || action === 'reopen')) {
+    finalSet = { finalOriginal: null, finalProposed: null, finalBy: null, finalByName: '', finalAt: null }
+  }
   const set = { status: nextStatus, ...(finalSet || {}) }
   if (action !== 'apply') {
     set.resolution = action === 'reopen'
