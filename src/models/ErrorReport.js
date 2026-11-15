@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { libraryVersionSortFields, VERSION_SORT_INDEX, STATE_VERSION_SORT_INDEX } from '../lib/corrections/listSort.js';
 import {
   VERIFICATION_STATUS, APPROVAL_AUTHORITY, APPROVAL_SCOPE, MANUAL_STATUS, PUBLISH_STATUS, INCLUSION_STATUS, REPORT_STATE,
 } from '../lib/corrections/states.js';
@@ -50,6 +51,9 @@ const ErrorReportSchema = new mongoose.Schema({
   filePath: { type: String, required: true }, // נתיב הקובץ (יחסי לספרייה, לא נתיב Git)
   sourceFolder: { type: String, required: true }, // תיקיית המקור
   libraryVersion: { type: String, default: 'unknown' }, // גרסת ספרייה של המשתמש
+  // No defaults: an absent schema marker identifies reports awaiting the explicit backfill.
+  libraryVersionSortKey: Number,
+  libraryVersionSortSchema: Number,
   status: {
     type: String,
     enum: ['pending', 'in_progress', 'resolved', 'rejected'],
@@ -143,11 +147,19 @@ const ErrorReportSchema = new mongoose.Schema({
   reporterUnsubscribed: { type: Boolean, default: false },
 }, { timestamps: true });
 
+ErrorReportSchema.pre('validate', function () {
+  if (this.isNew || this.isModified('libraryVersion') || this.isModified('location')) {
+    Object.assign(this, libraryVersionSortFields(this));
+  }
+});
+
 // אינדקס לחיפוש מהיר (reportId מקבל אינדקס אוטומטית דרך unique: true בהגדרת השדה)
 ErrorReportSchema.index({ senderEmail: 1 });
 ErrorReportSchema.index({ bookTitle: 1 });
 ErrorReportSchema.index({ status: 1 });
 ErrorReportSchema.index({ createdAt: -1 });
+ErrorReportSchema.index(VERSION_SORT_INDEX);
+ErrorReportSchema.index(STATE_VERSION_SORT_INDEX);
 ErrorReportSchema.index({ state: 1, 'manual.status': 1, createdAt: -1 });
 ErrorReportSchema.index({ 'dispatch.verify': 1 }, { partialFilterExpression: { 'dispatch.verify': true } });
 ErrorReportSchema.index({ 'dispatch.publish': 1 }, { partialFilterExpression: { 'dispatch.publish': true } });

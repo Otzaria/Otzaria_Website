@@ -22,7 +22,7 @@ import { escapeRegExp } from '../hebrewWordUtils.js';
 import { newId, logEvent, userActor, currentRevisionOf, manualQueueSet } from './store.js';
 import { cancelActiveJobs } from './worker.js';
 import { LIST_FILTERS, PUBLISHING_STATUSES } from './listFilters.js';
-import { parseListSort, sortSpec, libraryVersionKeyExpr, reportLibraryVersion } from './listSort.js';
+import { parseListSort, sortSpec, libraryVersionKeyExpr, reportLibraryVersion, LIBRARY_VERSION_SORT_SCHEMA } from './listSort.js';
 
 const MAX_LINE = 20_000;
 const ok = (body) => ({ status: 200, body });
@@ -72,18 +72,21 @@ export async function listReports({ user, query = {}, now = new Date() }) {
   const skip = Math.max(0, Number.parseInt(query.skip, 10) || 0);
   const sort = parseListSort(query.sort);
   const fields = 'reportId bookTitle currentRef sourceFolder reportKind state status manual verification approval publish workflowGeneration createdAt resolvedSource.status inclusion libraryVersion location.libraryBuildId';
-  // מיון לפי גרסה דורש מפתח מחושב (מספר מתוך מחרוזת הגרסה) — לכן aggregate; השאר find רגיל.
-  // aggregate לא מבצע casting: הערכים במסנן כבר בטיפוס הנכון (ObjectId / מחרוזת / regex).
-  const rows = sort === 'version'
+  // Before the explicit migration, preserve correct ordering across mixed old/new reports.
+  // The schema marker is the leading index key: once backfilled this check reads no reports.
+  const needsBackfill = sort === 'version' && await ErrorReport.exists({ libraryVersionSortSchema: { $ne: LIBRARY_VERSION_SORT_SCHEMA } });
+  // aggregate does not cast, but filter values are already ObjectIds / strings / regexes.
+  const rows = needsBackfill
     ? await ErrorReport.aggregate([
       { $match: filter },
       { $project: Object.fromEntries(fields.split(' ').map((f) => [f, 1])) },
-      { $addFields: { _versionKey: libraryVersionKeyExpr() } },
+      { $addFields: { libraryVersionSortKey: libraryVersionKeyExpr() } },
       { $sort: sortSpec(sort) },
       { $skip: skip },
       { $limit: limit },
     ]).allowDiskUse(true)
-    : await ErrorReport.find(filter).select(fields).sort(sortSpec(sort)).skip(skip).limit(limit).lean();
+    : await ErrorReport.find(sort === 'version' ? { ...filter, libraryVersionSortSchema: LIBRARY_VERSION_SORT_SCHEMA } : filter)
+      .select(fields).sort(sortSpec(sort)).skip(skip).limit(limit).lean();
   const total = await ErrorReport.countDocuments(filter);
   return ok({
     view,
