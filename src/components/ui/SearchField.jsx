@@ -85,7 +85,7 @@ export default function SearchField({ label, value, onSearch, placeholder, delay
             submit('')
           }
         }}
-        className={fieldClasses({ withIcon: true, trailing: Boolean(draft), className: '[&::-webkit-search-cancel-button]:appearance-none' })}
+        className={fieldClasses({ withIcon: true, trailing: Boolean(draft), className: '[&::-webkit-search-cancel-button]:hidden' })}
       />
       {draft && (
         <button
