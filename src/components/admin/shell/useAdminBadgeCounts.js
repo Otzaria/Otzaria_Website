@@ -15,7 +15,7 @@ export function refreshAdminBadgeCounts() {
 }
 
 /**
- * מוני התג של הניהול (הודעות שלא נקראו / העלאות ממתינות / תוספים לאישור).
+ * מוני התג של הניהול (הודעות שלא נקראו / העלאות ממתינות / תוספים לאישור / דיווחים על עמודים).
  * הערך ההתחלתי מגיע מהשרת (layout), כך שהמונים כבר ב-HTML; כאן רק הרענון כל 60 שניות
  * מ-/api/badge-counts — בדיוק כמו בשורת הלשוניות הקודמת — ומיד כשמסך מבקש (refreshAdminBadgeCounts).
  * ההרשאה לכל מונה נבדקת בשרת
@@ -37,6 +37,7 @@ export function useAdminBadgeCounts(role, initialCounts) {
           unreadMessages: data.unreadMessages || 0,
           pendingUploads: data.pendingUploads || 0,
           pendingPlugins: data.pendingPlugins || 0,
+          pendingPageReports: data.pendingPageReports || 0,
         })
       } catch (e) {
         console.error('Error loading admin counts', e)

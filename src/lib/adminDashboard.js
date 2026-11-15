@@ -124,6 +124,16 @@ export const DASHBOARD_QUEUES = [
     clear: 'אין הצעות שממתינות לאישור', oldestGender: 'f',
   },
   {
+    // דיווחים של מתנדבים מעורך העמוד (טעות בספר + הודעה) — אותו תנאי כמו מונה הסרגל (pendingPageReports).
+    // אייקון ייעודי: הדגל של פריט הסרגל כבר משמש את כרטיס "דיווחים" של צורת הדף
+    id: 'page-reports', tier: 'decision', navItem: 'page-reports', icon: 'find_in_page', href: '/library/admin/page-reports',
+    label: { one: 'דיווח על עמוד ממתין', many: 'דיווחים על עמודים ממתינים' },
+    clear: 'אין דיווחים על עמודים שממתינים', oldestGender: 'm',
+    detail: ({ book_error: errors = 0, message: messages = 0 } = {}) => (errors > 0 && messages > 0
+      ? `${plural(errors, 'טעות אחת בספר', 'טעויות בספר')} · ${plural(messages, 'הודעה אחת', 'הודעות')}`
+      : null),
+  },
+  {
     id: 'corrections', tier: 'decision', navItem: 'corrections', href: '/library/corrections',
     label: { one: 'דיווח טעות מחכה לבדיקה', many: 'דיווחי טעות מחכים לבדיקה' },
     clear: 'אין דיווחי טעות שמחכים לבדיקה', oldestGender: 'm',

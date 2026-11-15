@@ -3,12 +3,12 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
 import { refreshAdminBadgeCounts, useAdminBadgeCounts } from './useAdminBadgeCounts'
 
-const INITIAL = { unreadMessages: 1, pendingUploads: 2, pendingPlugins: 0 }
+const INITIAL = { unreadMessages: 1, pendingUploads: 2, pendingPlugins: 0, pendingPageReports: 0 }
 
 beforeEach(() => {
   vi.useFakeTimers()
   globalThis.fetch = vi.fn(async () => ({
-    json: async () => ({ success: true, unreadMessages: 5, pendingUploads: 0, pendingPlugins: 4 }),
+    json: async () => ({ success: true, unreadMessages: 5, pendingUploads: 0, pendingPlugins: 4, pendingPageReports: 6 }),
   }))
 })
 afterEach(() => {
@@ -26,7 +26,7 @@ describe('useAdminBadgeCounts', () => {
     const { result } = renderHook(() => useAdminBadgeCounts('admin', INITIAL))
     await act(async () => { await vi.advanceTimersByTimeAsync(60000) })
     expect(fetch).toHaveBeenCalledWith('/api/badge-counts')
-    expect(result.current).toEqual({ unreadMessages: 5, pendingUploads: 0, pendingPlugins: 4 })
+    expect(result.current).toEqual({ unreadMessages: 5, pendingUploads: 0, pendingPlugins: 4, pendingPageReports: 6 })
   })
 
   test('refreshAdminBadgeCounts — רענון מיידי (אחרי פעולה במסך), בלי לחכות לדקה', async () => {
@@ -36,7 +36,7 @@ describe('useAdminBadgeCounts', () => {
       await vi.advanceTimersByTimeAsync(0)
     })
     expect(fetch).toHaveBeenCalledTimes(1)
-    expect(result.current).toEqual({ unreadMessages: 5, pendingUploads: 0, pendingPlugins: 4 })
+    expect(result.current).toEqual({ unreadMessages: 5, pendingUploads: 0, pendingPlugins: 4, pendingPageReports: 6 })
   })
 
   test('תשובה בלי success — הערך הקודם נשמר', async () => {

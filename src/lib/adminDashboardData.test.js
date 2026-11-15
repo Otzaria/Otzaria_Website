@@ -40,6 +40,7 @@ vi.mock('@/models/User', () => m.make('User'))
 vi.mock('@/models/Book', () => m.make('Book'))
 vi.mock('@/models/AppReport', () => m.make('AppReport'))
 vi.mock('@/models/SpellWordSkip', () => m.make('SpellWordSkip'))
+vi.mock('@/models/PageReport', () => m.make('PageReport'))
 vi.mock('@/lib/adminBadgeCounts', async (importOriginal) => ({ ...(await importOriginal()), getRequestAdminBadgeCounts: m.badge }))
 
 import { ADMIN_BADGE_FILTERS } from '@/lib/adminBadgeCounts'
@@ -119,6 +120,16 @@ describe('התנאים — מהמקור של המסך', () => {
     const { 'proof-review': proof } = await loadDashboardQueues('admin_ocr', { now: NOW })
     expect(firstMatch(m.models.TrainingProofItem)).toEqual({ section: { $in: SECTIONS }, status: 'submitted' })
     expect(proof).toEqual({ status: 'ok', count: 86, oldest: new Date('2026-11-01'), parts: { ocr: 26, router: 60, frames: 0 } })
+  })
+
+  test('דיווחים על עמודים: תנאי מונה הסרגל, מפורק לטעויות בספר ולהודעות', async () => {
+    m.models.PageReport.aggregate.mockResolvedValue([
+      { _id: 'book_error', count: 4, oldest: new Date('2026-10-20') },
+      { _id: 'message', count: 1, oldest: new Date('2026-10-25') },
+    ])
+    const { 'page-reports': reports } = await loadDashboardQueues('admin_books', { now: NOW })
+    expect(firstMatch(m.models.PageReport)).toEqual(ADMIN_BADGE_FILTERS.pendingPageReports)
+    expect(reports).toEqual({ status: 'ok', count: 5, oldest: new Date('2026-10-20'), parts: { book_error: 4, message: 1 } })
   })
 
   test('הוותק: $min (מדלג על מסמך בלי תאריך), לא מיון שבו null יוצא ראשון', async () => {

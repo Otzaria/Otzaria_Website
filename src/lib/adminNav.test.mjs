@@ -31,6 +31,8 @@ const PREVIOUS_TABS = {
   'plugins-layout': ['/library/admin/plugins?view=layout', ['admin', 'admin_plugins']],
   'plugins-service': ['/library/admin/plugins?view=service', ['admin', 'admin_plugins']],
   pages: ['/library/admin/pages-management', ['admin', 'admin_books']],
+  // פריט חדש (לא היה בשורת הלשוניות): דיווחים מעורך העמוד — אותן הרשאות כמו "עמודים"
+  'page-reports': ['/library/admin/page-reports', ['admin', 'admin_books']],
   'ocr-training': ['/library/admin/ocr-training', ['admin', 'admin_ocr', 'model_trainer']],
   'ocr-lines': ['/library/admin/ocr-lines', ['admin', 'admin_ocr', 'model_trainer']],
   'ocr-layout': ['/library/admin/ocr-layout', ['admin', 'admin_ocr', 'model_trainer']],
@@ -57,6 +59,7 @@ const NAME_DICTIONARY = {
   books: ['ספרים', 'ספרים', 'ספרים'],
   uploads: ['ספרים', 'העלאות', 'העלאות'],
   pages: ['ספרים', 'עמודים', 'עמודים'],
+  'page-reports': ['ספרים', 'דיווחים על עמודים', 'דיווחים על עמודים'],
   'tzurat-hadaf': ['ספרים', 'צורת הדף', 'צורת הדף'],
   'book-info': ['ספרים', 'מידע על ספרים', 'פרטי ספרים'],
   dictionary: ['ספרים', 'מילון', 'הצעות למילון'],
@@ -140,7 +143,7 @@ test('מנהל כללי: הסדר והקבוצות', () => {
     ['people', 'אנשים'],
     ['system', 'מערכת'],
   ])
-  assert.deepEqual(groups[1].items.map((i) => i.label), ['ספרים', 'העלאות', 'עמודים', 'צורת הדף', 'פרטי ספרים', 'הצעות למילון', 'דיווחי טעויות', 'הצעות עריכה', 'התנגשויות בסנכרון'])
+  assert.deepEqual(groups[1].items.map((i) => i.label), ['ספרים', 'העלאות', 'עמודים', 'דיווחים על עמודים', 'צורת הדף', 'פרטי ספרים', 'הצעות למילון', 'דיווחי טעויות', 'הצעות עריכה', 'התנגשויות בסנכרון'])
   assert.deepEqual(groups[2].items.map((i) => i.label), ['עמודים לאימון', 'תמלול שורות', 'תיוג מבנה', 'הגהה', 'משוב חיפוש'])
   assert.deepEqual(groups[3].items.map((i) => i.label), ['לאישור', 'בחנות', 'סידור החנות', 'תוספי שירות'])
   assert.deepEqual(groups[4].items.map((i) => i.label), ['משתמשים', 'הודעות', 'תזכורות'])
@@ -246,6 +249,8 @@ test('טקסט נגיש למונה, ביחיד וברבים', () => {
   assert.equal(countAccessibleLabel('pendingUploads', 1), 'העלאה אחת שלא נבדקה')
   assert.equal(countAccessibleLabel('pendingPlugins', 2), '2 תוספים לאישור')
   assert.equal(countAccessibleLabel('pendingPlugins', 1), 'תוסף אחד לאישור')
+  assert.equal(countAccessibleLabel('pendingPageReports', 4), '4 דיווחים על עמודים שממתינים')
+  assert.equal(countAccessibleLabel('pendingPageReports', 1), 'דיווח אחד על עמוד שממתין')
 })
 
 test('"ממתין לטיפולך": רק מונים גדולים מ-0, הודעות ראשונות', () => {
@@ -261,6 +266,20 @@ test('"ממתין לטיפולך": רק מונים גדולים מ-0, הודעו
   assert.equal(attentionTotal(admin), 16)
 
   assert.deepEqual(buildAttentionItems('admin', { unreadMessages: 0, pendingUploads: 4, pendingPlugins: 0 }).map((i) => i.id), ['uploads'])
+})
+
+test('"ממתין לטיפולך": דיווחים על עמודים — אחרון, רק למי שרואה את הפריט', () => {
+  const counts = { unreadMessages: 1, pendingUploads: 0, pendingPlugins: 0, pendingPageReports: 5 }
+  const admin = buildAttentionItems('admin', counts)
+  assert.deepEqual(admin.map((i) => [i.id, i.count, i.href]), [
+    ['messages', 1, '/library/admin/messages'],
+    ['page-reports', 5, '/library/admin/page-reports'],
+  ])
+  assert.equal(admin[1].accessibleLabel, '5 דיווחים על עמודים שממתינים')
+  assert.deepEqual(buildAttentionItems('admin_books', counts).map((i) => i.id), ['messages', 'page-reports'])
+  assert.deepEqual(buildAttentionItems('admin_plugins', counts).map((i) => i.id), ['messages'])
+  assert.deepEqual(buildAttentionItems('admin_books_only', counts), [])
+  assert.equal(navItemCount(ADMIN_NAV_ITEMS['page-reports'], counts), 5)
 })
 
 test('"ממתין לטיפולך" ריק כשאין כלום — הקבוצה נעלמת', () => {
