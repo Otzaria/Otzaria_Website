@@ -5,6 +5,7 @@
  * בקומיט fast-forward (refreshChangeSet); דחיפה ידנית מקבילה נדחית אטומית.
  */
 import { createRepoClient } from '../dicta/github-api.js'
+import { getGithubToken } from '../github/botToken.js'
 import { resolveSignoff } from '../acronyms/fork.js'
 import { exportBookInfoCsv, exportColumns, parseBookInfoCsv } from './csv.js'
 import { BOOK_INFO_IDENTITY_PATH, assertIdentityPrefix, identityPrefixHash, emptyIdentity, parseIdentity, rebaseIdentities } from './identity.js'
@@ -18,7 +19,7 @@ const decodeUtf8 = (bytes) => new TextDecoder('utf-8', { fatal: true, ignoreBOM:
 const PR_BODY_LIMIT = 60_000
 
 /** הטוקן המשותף לכל כתיבות ה-GitHub של האתר (כמו הכינויים ותיקוני הספרים). */
-export function createBookInfoClient({ token = (process.env.DICTA_LIBRARY_GITHUB_TOKEN || '').trim(), fetchImpl } = {}) {
+export function createBookInfoClient({ token = getGithubToken(), fetchImpl } = {}) {
   if (!token) throw Object.assign(new Error('DICTA_LIBRARY_GITHUB_TOKEN is not configured'), { code: 'TOKEN_MISSING' })
   return createRepoClient({ repo: BOOK_INFO_REPO, token, ...(fetchImpl ? { fetchImpl } : {}), timeoutMs: 60_000 })
 }

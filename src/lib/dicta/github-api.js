@@ -9,6 +9,7 @@
  */
 
 import { createHash } from "crypto";
+import { getGithubToken, resolveGithubToken } from "../github/botToken.js";
 
 const GITHUB_API = "https://api.github.com";
 
@@ -33,7 +34,7 @@ export function getLibraryGitHubConfig() {
     pushRepo: process.env.DICTA_LIBRARY_PUSH_REPO || DEFAULTS.pushRepo,
     pushBranch: process.env.DICTA_LIBRARY_PUSH_BRANCH || DEFAULTS.pushBranch,
     basePath: process.env.DICTA_LIBRARY_BASE_PATH || DEFAULTS.basePath,
-    token: process.env.DICTA_LIBRARY_GITHUB_TOKEN || null,
+    token: getGithubToken(),
   };
 }
 
@@ -51,7 +52,7 @@ function ghHeaders(token, extra = {}) {
 export async function ghFetch(url, { token, method = "GET", body, fetchImpl = fetch, redirect = "follow", timeoutMs } = {}) {
   const resp = await fetchImpl(url, {
     method,
-    headers: ghHeaders(token, body ? { "Content-Type": "application/json" } : {}),
+    headers: ghHeaders(await resolveGithubToken(token, url), body ? { "Content-Type": "application/json" } : {}),
     body: body ? JSON.stringify(body) : undefined,
     redirect,
     signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined,

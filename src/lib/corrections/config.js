@@ -3,6 +3,7 @@
  * (קליטה, מצב פרסום, פרסום אוטומטי, השהיית השירות) מגיעים מ-SystemConfig דרך מסך הניהול.
  */
 import { DEFAULT_DIFF_CONTEXT_LINES } from './unified-diff.js';
+import { getGithubToken } from '../github/botToken.js';
 
 export const AUTHORITY = Object.freeze({ NONE: 'none', TECHNICAL_ONLY: 'technical_only', FULL: 'technical_and_content' });
 export const PUBLISH_MODES = Object.freeze(['disabled', 'pr', 'direct']);
@@ -92,7 +93,7 @@ export function getCorrectionsConfig(env = process.env, runtime = {}) {
 
   // ---- פרסום ----
   // טוקן יחיד לכל כתיבות ה-GitHub של האתר; היעד קבוע בקוד, המצב נבחר במסך הניהול.
-  const token = (env.DICTA_LIBRARY_GITHUB_TOKEN || '').trim();
+  const token = getGithubToken(env) || '';
   let publishMode = typeof runtime?.publishMode === 'string' ? runtime.publishMode.trim() : 'disabled';
   if (!PUBLISH_MODES.includes(publishMode)) {
     errors.push('publish mode invalid');

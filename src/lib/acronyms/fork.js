@@ -6,6 +6,7 @@
  * (refreshChangeSet), והענף מתעדכן ב-force. ענף שמישהו אחר דחף אליו לא נדרס.
  */
 import { createRepoClient, ghFetch } from '../dicta/github-api.js'
+import { getGithubToken } from '../github/botToken.js'
 import { parseDump, exportDump } from './dump.js'
 import { applyChangeSet, parseExcluded, summarizeChangeSet } from './changes.js'
 
@@ -16,8 +17,7 @@ const PR_BODY_LIMIT = 60_000
 const FALLBACK_SIGNOFF = 'Otzaria Website <noreply@otzaria.org>'
 const DUMP_UPLOAD_TIMEOUT_MS = 120_000
 
-// trim כמו בתיקוני הספרים (corrections/config.js): רווח או שבירת שורה בסוף הערך גורמים ל-401
-const envToken = () => (process.env.DICTA_LIBRARY_GITHUB_TOKEN || '').trim()
+const envToken = () => getGithubToken()
 
 /** הטוקן המשותף לכל כתיבות ה-GitHub של האתר (כמו תיקוני הספרים). */
 export function createAcronymsClient({ token = envToken(), fetchImpl } = {}) {
@@ -45,11 +45,16 @@ export async function loadForkState(client) {
 
 let cachedSignoff = null
 
-/** שורת ה-DCO שהפורק דורש בכל קומיט: המשתמש שהטוקן שייך לו, עם כתובת noreply שלו. */
+/** שורת ה-DCO שהפורק דורש בכל קומיט: הבוט או המשתמש שהטוקן שייך לו, עם כתובת noreply שלו. */
 export async function resolveSignoff(client, token = envToken()) {
   if (process.env.ACRONYMS_SIGNOFF) return process.env.ACRONYMS_SIGNOFF
   if (cachedSignoff) return cachedSignoff
   try {
+    if (token?.isBot) {
+      const bot = await token.identity()
+      cachedSignoff = `${bot.name} <${bot.email}>`
+      return cachedSignoff
+    }
     const me = await ghFetch('https://api.github.com/user', { token, fetchImpl: client.fetchImpl, timeoutMs: 20_000 })
     cachedSignoff = me?.login ? `${me.name || me.login} <${me.id}+${me.login}@users.noreply.github.com>` : FALLBACK_SIGNOFF
   } catch {
