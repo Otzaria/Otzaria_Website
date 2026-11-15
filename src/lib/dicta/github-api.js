@@ -16,8 +16,7 @@ const GITHUB_API = "https://api.github.com";
 const DEFAULTS = {
   pullRepo: "Otzaria/otzaria-library",
   pullBranch: "main",
-  // ברירת מחדל לדחיפה: הפורק של palmoni5 (יוחלף בעתיד לראשי)
-  pushRepo: "palmoni5/otzaria-library",
+  pushRepo: "Otzaria/otzaria-library",
   pushBranch: "main",
   // נתיב הבסיס של הספרים הערוכים בתוך הריפו
   basePath: "DictaToOtzaria/ערוך/ספרים/אוצריא",
