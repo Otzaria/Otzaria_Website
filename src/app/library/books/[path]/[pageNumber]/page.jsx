@@ -1367,7 +1367,7 @@ ${claimRulesText()}`,
   // דיווחים למנהלים (לחיצה ימנית בשדה הטקסט, חלון הפקודות): "טעות בספר" משנה את הטקסט, ולכן רק
   // למי שתפס את העמוד או למנהל ספרים; שני הסוגים דורשים חיבור לשרת
   const reportsOnline = !session?.offline && Boolean(offline.connected)
-  const canReportErrors = canReportBookError({ claimState: claim.state, role: session?.user?.role })
+  const canReportErrors = canReportBookError({ claimState: claim.state, role: session?.user })
   const pageReports = usePageReports({
     containerRef: textEditorContainerRef,
     activeColumn: twoColumns ? (activeTextarea === 'left' ? 'left' : 'right') : null,

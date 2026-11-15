@@ -14,7 +14,7 @@ import { PageReportsScreenSkeleton } from '@/components/admin/pageReports/PageRe
 
 export default async function AdminPageReportsPage() {
   const session = await getServerSession(authOptions)
-  if (!hasBooksAccess(session?.user?.role)) {
+  if (!hasBooksAccess(session?.user)) {
     return <NoAccess description="המסך פתוח למנהל כללי ולמנהל ספרים. אם אתה אמור לראות אותו, פנה למנהל האתר." />
   }
   return (

@@ -43,7 +43,7 @@ async function findBook(bookPath) {
 /** ספר מוסתר/פרטי — רק מנהל ספרייה או הבעלים (כמו GET /api/page-content) */
 function canSeeBook(book, user) {
   if (!book.isHidden && !book.isPrivate) return true
-  if (hasBookLibraryAccess(user?.role)) return true
+  if (hasBookLibraryAccess(user)) return true
   return book.ownerId != null && String(book.ownerId) === String(userIdOf(user))
 }
 
@@ -58,7 +58,7 @@ async function findBookAndPage(bookPath, pageNumber, user) {
 
 /**
  * מתנדב שולח דיווח.
- * @param {{_id?: any, id?: any, role?: string, name?: string}} user session.user
+ * @param {{_id?: any, id?: any, role?: string, roles?: string[], name?: string}} user session.user
  * @param {object} raw גוף הבקשה
  */
 export async function createPageReport(user, raw, { now = new Date() } = {}) {
@@ -75,14 +75,14 @@ export async function createPageReport(user, raw, { now = new Date() } = {}) {
   if (v.kind === 'book_error') {
     // הדיווח משנה את טקסט העמוד (הסימון) — רק מי שתפס את העמוד, או מנהל ספרים
     const isOwner = page.claimedBy != null && String(page.claimedBy) === String(userId)
-    if (!isOwner && !hasBooksAccess(user?.role)) return fail(403, BOOK_ERROR_FORBIDDEN)
+    if (!isOwner && !hasBooksAccess(user)) return fail(403, BOOK_ERROR_FORBIDDEN)
   } else {
     const view = canViewPageContent(page, user)
     if (!view.ok) return fail(403, view.error)
   }
 
   // מגבלת קצב (משותפת לטעויות ולהודעות) — למתנדבים בלבד; מנהלים ומנהלי ספרים פטורים
-  if (!hasBooksAccess(user?.role)) {
+  if (!hasBooksAccess(user)) {
     const recent = await PageReport.countDocuments({ user: userId, createdAt: { $gte: new Date(now.getTime() - HOUR) } })
     if (recent >= REPORTS_PER_HOUR) return fail(429, RATE_LIMIT_MESSAGE)
   }
