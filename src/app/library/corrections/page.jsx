@@ -26,6 +26,12 @@ const HIDDEN_KEY = 'corrections:hiddenBooks'
 const SNAPSHOT_KEY = 'corrections:listSnapshot'
 const SNAPSHOT_MAX_AGE_MS = 30 * 60_000
 
+const SORTS = [
+  { id: 'version', label: 'גרסת ספרייה (חדשה קודם)' },
+  { id: 'newest', label: 'תאריך שליחה (חדש קודם)' },
+  { id: 'oldest', label: 'תאריך שליחה (ישן קודם)' },
+]
+
 const STATE_LABELS = {
   open: 'פתוח',
   email_only: 'מייל בלבד (לא לאוצריא)',
@@ -38,6 +44,7 @@ const STATE_LABELS = {
 export default function CorrectionsListPage() {
   const [view, setView] = useState('queued')
   const [kind, setKind] = useState('')
+  const [sort, setSort] = useState('version')
   const [source, setSource] = useState('')
   const [book, setBook] = useState('')
   // השאילתה יוצאת רק אחרי הפסקה בהקלדה, לא על כל אות.
@@ -64,6 +71,7 @@ export default function CorrectionsListPage() {
       if (f) {
         if (VIEWS.some((v) => v.id === f.view)) setView(f.view)
         setKind(f.kind || '')
+        if (SORTS.some((s) => s.id === f.sort)) setSort(f.sort)
         setSource(f.source || '')
         setBook(f.book || '')
         setBookQuery((f.book || '').trim())
@@ -84,9 +92,9 @@ export default function CorrectionsListPage() {
   useEffect(() => {
     if (!ready) return
     try {
-      sessionStorage.setItem(FILTERS_KEY, JSON.stringify({ view, kind, source, book, reason, assignee }))
+      sessionStorage.setItem(FILTERS_KEY, JSON.stringify({ view, sort, kind, source, book, reason, assignee }))
     } catch { /* אחסון חסום */ }
-  }, [ready, view, kind, source, book, reason, assignee])
+  }, [ready, view, sort, kind, source, book, reason, assignee])
 
   const changeHidden = (next) => {
     setHidden(next)
@@ -95,7 +103,7 @@ export default function CorrectionsListPage() {
 
   // מפתח השאילתה (בלי עימוד) — גם לזיהוי תמונת רשימה שנשמרה לאותו סינון
   const queryKey = useMemo(() => {
-    const q = new URLSearchParams({ view })
+    const q = new URLSearchParams({ view, sort })
     if (kind) q.set('kind', kind)
     if (source) q.set('source', source)
     if (bookQuery) q.set('book', bookQuery)
@@ -103,7 +111,7 @@ export default function CorrectionsListPage() {
     if (assignee) q.set('assignee', assignee)
     if (hidden.length) q.set('hideBooks', JSON.stringify(hidden))
     return q.toString()
-  }, [view, kind, source, bookQuery, reason, assignee, hidden])
+  }, [view, sort, kind, source, bookQuery, reason, assignee, hidden])
 
   const fetchPage = useCallback(async (skip, limit = PAGE_SIZE) => {
     const res = await fetch(`/api/corrections/reports?${queryKey}&limit=${limit}&skip=${skip}`, { cache: 'no-store' })
@@ -216,6 +224,12 @@ export default function CorrectionsListPage() {
 
       <div className="flex flex-wrap gap-3 items-end glass rounded-xl p-3">
         <label className="text-sm">
+          מיון
+          <select value={sort} onChange={(e) => setSort(e.target.value)} className="block mt-1 border rounded-lg px-2 py-1 bg-white">
+            {SORTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </select>
+        </label>
+        <label className="text-sm">
           סוג
           <select value={kind} onChange={(e) => setKind(e.target.value)} className="block mt-1 border rounded-lg px-2 py-1 bg-white">
             <option value="">הכל</option>
@@ -279,6 +293,7 @@ export default function CorrectionsListPage() {
                     <div className="text-xs text-on-surface/60 mt-0.5 flex flex-wrap gap-x-3">
                       <span>{r.kind === 'text_correction' ? 'הצעת תיקון' : 'דיווח חופשי'}</span>
                       <span dir="ltr">{r.sourceFolder}</span>
+                      <span>גרסת ספרייה: {r.libraryVersion || 'לא ידועה'}</span>
                       <span>{STATE_LABELS[r.state] || r.state}</span>
                       {r.manual.handoffReason && <span>סיבה: {HANDOFF_REASON_LABELS[r.manual.handoffReason] || r.manual.handoffReason}</span>}
                       {r.manual.status === 'claimed' && <span>מטפל: {r.manual.assigneeName}</span>}
