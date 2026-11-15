@@ -3,7 +3,7 @@
  * התראה בלבד — כשל כאן אינו נוגע באישור.
  */
 import ErrorReport from '../../models/ErrorReport.js';
-import { normalizeEmailInput, validateEmail } from '../validation-utils.js';
+import { normalizeEmailInput, storedEmailPattern, validateEmail } from '../validation-utils.js';
 import { DEFAULT_SENDER_EMAIL } from '../errorReportLogic.js';
 import { createUnsubscribeToken, verifyUnsubscribeToken } from '../app-reports/unsubscribe.js';
 
@@ -41,7 +41,7 @@ export async function sendApprovalThanks({ id, kind = 'approved', sendMail, conf
   if (report.reporterThanks?.sentAt) return { sent: false, reason: 'already_sent' };
   const to = thanksRecipient(report);
   if (!to) return { sent: false, reason: 'no_recipient' };
-  if (await ErrorReport.exists({ senderEmail: report.senderEmail, reporterUnsubscribed: true })) return { sent: false, reason: 'unsubscribed' };
+  if (await ErrorReport.exists({ senderEmail: storedEmailPattern(report.senderEmail), reporterUnsubscribed: true })) return { sent: false, reason: 'unsubscribed' };
 
   const claimed = await ErrorReport.findOneAndUpdate(
     { _id: report._id, 'reporterThanks.sentAt': null },
@@ -87,6 +87,6 @@ export async function unsubscribeReporterByToken(token, secret) {
   if (!reportId) return { ok: false, reason: 'invalid_token' };
   const doc = await ErrorReport.findOne({ reportId }).select('senderEmail').lean();
   if (!doc) return { ok: false, reason: 'not_found' };
-  await ErrorReport.updateMany({ senderEmail: doc.senderEmail }, { $set: { reporterUnsubscribed: true } });
+  await ErrorReport.updateMany({ senderEmail: storedEmailPattern(doc.senderEmail) }, { $set: { reporterUnsubscribed: true } });
   return { ok: true };
 }
