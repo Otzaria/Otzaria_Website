@@ -1,7 +1,6 @@
 // דיווחים על עמודים — צורות התשובה של ה-API ופענוח פרמטרי הרשימה (טהור: בלי DB/DOM, imports יחסיים —
 // נבדק ב-node:test). הלוגיקה של הסימון עצמו — ב-rules.js.
-import { REPORT_KINDS, ALL_STATUSES, ERROR_STATUSES, MESSAGE_STATUSES, findMarker, pageFieldForColumn, canApplyToPage,
-  currentMarker, finalTexts, markerNeedsUpdate } from './rules.js'
+import { REPORT_KINDS, ALL_STATUSES, ERROR_STATUSES, MESSAGE_STATUSES, finalTexts } from './rules.js'
 import { normalizeCropRect } from './cropRect.js'
 
 export const ADMIN_LIST_DEFAULT_LIMIT = 30
@@ -15,14 +14,6 @@ const id = (v) => (v == null ? null : String(v))
 /** כתובת צילום העמוד — כמו בעורך ובמסך העמודים (thumbnail: page.imagePath, בלי עיבוד) */
 export function pageImageUrl(page) {
   return page?.imagePath || null
-}
-
-/** האם הסימון של דיווח טעות עדיין קיים בטקסט העמוד (בטור שלו) */
-export function markerPresentIn(report, page) {
-  if (report?.kind !== 'book_error' || !page) return false
-  const text = page[pageFieldForColumn(report.column)] || ''
-  const marker = currentMarker(report)
-  return findMarker(text, marker.original, marker.proposed, report.offset ?? null) !== -1
 }
 
 /**
@@ -44,9 +35,7 @@ function finalShape(report, withEditor = true) {
  * @param {object|null} page העמוד הנוכחי (status, imagePath והטקסט) — null אם נמחק
  */
 export function adminReportShape(report, page) {
-  const isError = report.kind === 'book_error'
   const pageStatus = page?.status || null
-  const markerPresent = isError ? markerPresentIn(report, page) : false
   return {
     _id: id(report._id),
     kind: report.kind,
@@ -68,13 +57,9 @@ export function adminReportShape(report, page) {
     appliedToText: report.appliedToText ?? null,
     appliedAt: report.appliedAt ?? null,
     ...finalShape(report),
-    // אושר בנוסח של המנהל, והסימון שבטקסט עוד בנוסח הקודם (העמוד היה בעריכה) — "עדכן את הסימון בטקסט"
-    markerStale: isError && report.status === 'approved' && !report.appliedToText && markerPresent && markerNeedsUpdate(report),
     createdAt: report.createdAt,
     pageStatus,
     imageUrl: pageImageUrl(page),
-    markerPresent,
-    canApply: isError && markerPresent && Boolean(page) && canApplyToPage(pageStatus) && !report.appliedToText,
   }
 }
 
@@ -133,11 +118,4 @@ export function countsFromRows(rows) {
     if (counts[kind] && ALL_STATUSES.includes(status) && status in counts[kind]) counts[kind][status] = row.count || 0
   }
   return counts
-}
-
-/** במה משנים את טקסט העמוד לפי ההכרעה: אושר → התיקון, נדחה → המקור */
-export function applyModeFor(status) {
-  if (status === 'approved') return 'proposed'
-  if (status === 'rejected') return 'original'
-  return null
 }

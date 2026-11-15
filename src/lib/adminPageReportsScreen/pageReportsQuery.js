@@ -1,10 +1,7 @@
 // "דיווחים על עמודים" (/library/admin/page-reports) — מצב המסך בכתובת, בניית הבקשות לשרת, ומה מותר בכל כרטיס.
 // לוגיקה טהורה, בלי React ובלי DOM (נבדק ב-pageReportsQuery.test.mjs).
 //
-// השרת (GET /api/admin/page-reports) מסנן ומעמד בעצמו (skip / limit), ומחזיר גם counts לכל סוג ומצב. ההכרעה —
-// PATCH /api/admin/page-reports/[id] עם { action, applyToText?, note? }, והתשובה — הדיווח המעודכן (באותה צורה כמו
-// ברשימה) ו-applyResult. הכללים עצמם (מתי מותר להחיל על הטקסט) — בשרת; כאן רק מה שהמסך מציג לפי מה שהשרת החזיר
-// (canApply, pageStatus, markerPresent, appliedToText).
+// ההכרעות משנות את הדיווח בלבד; עריכת העמוד מתבצעת ידנית.
 
 export const REPORT_TABS = Object.freeze(['book_error', 'message'])
 export const STATUS_FILTERS = Object.freeze({
@@ -89,14 +86,12 @@ export const decideUrl = (id) => `${LIST_URL}/${encodeURIComponent(String(id))}`
  * @param {'approve' | 'reject' | 'reopen' | 'apply' | 'handled'} action
  * @param {{ applyToText?: boolean, note?: string }} [options]
  */
-export function decisionBody(action, { applyToText = false, note = '', edit = null, applyMode = null } = {}) {
+export function decisionBody(action, { note = '', edit = null } = {}) {
   const body = { action }
-  if ((action === 'approve' || action === 'reject') && applyToText) body.applyToText = true
   if (action === 'approve' && edit) {
     body.original = edit.original
     body.proposed = edit.proposed
   }
-  if (action === 'apply' && applyMode === 'marker') body.applyMode = 'marker'
   const trimmed = str(note).trim()
   if (trimmed && action !== 'reopen' && action !== 'apply') body.note = trimmed
   return body
@@ -153,41 +148,11 @@ export function serverPage(page, total, shown) {
   return { page: current, pageCount, from, to: from === 0 ? 0 : from + shown - 1, total: t }
 }
 
-/**
- * למה אי אפשר להחיל עכשיו את ההכרעה על טקסט העמוד (או null — אפשר, או שכבר הוחל).
- * 'page_busy' — העמוד בעריכה; 'marker_missing' — הסימון כבר לא בטקסט; 'unavailable' — השרת לא מתיר בלי סיבה ידועה.
- */
-export function applyBlockReason(report) {
-  if (!report || report.appliedToText || report.canApply) return null
-  if (report.pageStatus === 'in-progress') return 'page_busy'
-  if (report.markerPresent === false) return 'marker_missing'
-  return 'unavailable'
-}
-
-/**
- * מה מוצג ומה פעיל בכרטיס טעות בספר:
- *   decide        — "אשר" / "דחה" (רק כשממתין)
- *   replaceChoice — "אשר והחלף בתיקון" (רק כשממתין); disabled + blockReason כשאי אפשר לשנות את הטקסט.
- *                   "אשר והשאר בסוגריים" תמיד אפשרי — הוא לא משנה את הטקסט.
- *   applyLater    — "החל על הטקסט" (הוכרע, לא הוחל, ואפשר להחיל עכשיו)
- *   reopen        — "פתח מחדש" (הוכרע ועוד לא הוחל)
- *   markerUpdate  — "עדכן את הסימון בטקסט" (אושר בנוסח המנהל, הסימון בטקסט עוד בנוסח הקודם, ואפשר לשנות עכשיו)
- */
+/** פעולות הכרעה זמינות רק לממתינים; הכרעה שלא הוחלה אפשר לפתוח מחדש. */
 export function errorCardState(report) {
   const pending = report?.status === 'pending'
   const applied = Boolean(report?.appliedToText)
-  const blockReason = applyBlockReason(report)
-  return {
-    pending,
-    decide: pending,
-    replaceChoice: pending ? { disabled: Boolean(blockReason), blockReason } : null,
-    applyLater: !pending && !applied && Boolean(report?.canApply),
-    applyLaterBlockReason: !pending && !applied && !report?.canApply ? blockReason : null,
-    reopen: !pending && !applied,
-    // אושר בנוסח המנהל והסימון שבטקסט עוד בנוסח הקודם — "עדכן את הסימון בטקסט" (כשאפשר לשנות את הטקסט)
-    markerUpdate: !pending && !applied && Boolean(report?.markerStale) && Boolean(report?.canApply),
-    applied,
-  }
+  return { pending, decide: pending, reopen: !pending && !applied, applied }
 }
 
 /** מה מוצג בכרטיס הודעה: "סמן כטופל" כשממתינה, "פתח מחדש" כשטופלה */
@@ -249,24 +214,6 @@ export function trimContext(contextBefore, contextAfter, max = 40) {
     a = `${space > 0 ? cut.slice(0, space) : cut}…`
   }
   return { before: b, after: a }
-}
-
-/**
- * מה ייכתב בטקסט העמוד בכל אחת משתי דרכי האישור — לתצוגה המקדימה ליד הכפתור.
- *   keep    — הסימון נשאר: (הטקסט שבספר)[התיקון] — המוסכמה המקובלת
- *   replace — רק התיקון
- * ההקשר קצר (trimContext), כדי שהשורה תישאר קצרה.
- * @param {{ original?: string, proposed?: string, contextBefore?: string, contextAfter?: string }} report
- * @param {'keep' | 'replace'} mode
- * @returns {{ before: string, middle: string, after: string }}
- */
-export function approvePreview(report, mode) {
-  const original = String(report?.original ?? '')
-  const proposed = String(report?.proposed ?? '')
-  return {
-    ...trimContext(report?.contextBefore, report?.contextAfter, 28),
-    middle: mode === 'replace' ? proposed : `(${original})[${proposed}]`,
-  }
 }
 
 /**

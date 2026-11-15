@@ -10,11 +10,11 @@ import Book from '../../models/Book.js'
 import Page from '../../models/Page.js'
 import PageReport from '../../models/PageReport.js'
 import { startMongo } from '../corrections/testing/mongo.js'
-import { buildErrorMarker, APPLY_BLOCKED_MESSAGE } from './rules.js'
+import { buildErrorMarker } from './rules.js'
 import { REPORTS_PER_HOUR } from './shapes.js'
 import {
   createPageReport, listMyPageReports, listAdminPageReports, decidePageReport,
-  BOOK_ERROR_FORBIDDEN, TEXT_CHANGED_MESSAGE, REPORT_CHANGED_MESSAGE,
+  BOOK_ERROR_FORBIDDEN, REPORT_CHANGED_MESSAGE,
 } from './server.js'
 
 let db
@@ -147,18 +147,12 @@ test('רשימת ניהול: סינון, ספירות, צילום, סימון ק
   assert.equal(r.kind, 'book_error')
   assert.equal(r.pageStatus, 'completed')
   assert.equal(r.imageUrl, '/uploads/books/sefer-test/page.3.jpg')
-  assert.equal(r.markerPresent, true)
-  assert.equal(r.canApply, true)
   assert.deepEqual(list.counts, { book_error: { pending: 1, approved: 0, rejected: 0 }, message: { pending: 1, handled: 0 } })
   const msgs = await listAdminPageReports(new URLSearchParams('kind=message&status=all'))
   assert.equal(msgs.reports.length, 1)
-  assert.equal(msgs.reports[0].canApply, false)
   assert.equal((await listAdminPageReports(new URLSearchParams('book=nope'))).total, 0)
   assert.equal((await listAdminPageReports(new URLSearchParams('book=sefer-test&page=4'))).total, 0)
   assert.equal((await listAdminPageReports(new URLSearchParams('status=handled'))).status, 400)
-  // עמוד בטיפול — אין canApply
-  await Page.updateOne({ _id: page._id }, { $set: { status: 'in-progress' } })
-  assert.equal((await listAdminPageReports(new URLSearchParams())).reports[0].canApply, false)
 })
 
 test('רשימת ניהול: דפדוף', async (t) => {
@@ -182,87 +176,33 @@ test('הכרעה בלי החלה: הסימון נשאר בטקסט', async (t) =
   assert.equal(r.report.status, 'approved')
   assert.equal(r.report.resolution.byName, 'מנהל')
   assert.equal(r.report.appliedToText, null)
-  assert.equal(r.report.canApply, true)
   assert.equal((await Page.findById(page._id).lean()).content, `אמר ${MARK} עליכם`)
 })
 
-test('אושר + הוחל → התיקון; נדחה + הוחל → המקור', async (t) => {
+test('בקשות החלה נדחות בלי לשנות עמוד או דיווח, גם לאחר הכרעה', async (t) => {
   if (db.skip) return t.skip(db.skip)
   const id = await newError()
-  const r = await decidePageReport(who(admin, 'admin'), id, { action: 'approve', applyToText: true })
-  assert.equal(r.applyResult, 'applied')
-  assert.equal(r.report.appliedToText, 'proposed')
-  assert.ok(r.report.appliedAt)
-  assert.equal(r.report.markerPresent, false)
-  assert.equal(r.report.canApply, false)
-  assert.equal((await Page.findById(page._id).lean()).content, 'אמר שלום עליכם')
-
-  await Page.updateOne({ _id: page._id }, { $set: { content: `אמר ${MARK} עליכם` } })
-  const id2 = await newError()
-  const r2 = await decidePageReport(who(admin, 'admin_books'), id2, { action: 'reject', applyToText: true })
-  assert.equal(r2.report.status, 'rejected')
-  assert.equal(r2.report.appliedToText, 'original')
-  assert.equal((await Page.findById(page._id).lean()).content, 'אמר שלמם עליכם')
+  for (const body of [{ action: 'approve', applyToText: true }, { action: 'reject', applyToText: true }, { action: 'apply' }]) {
+    assert.equal((await decidePageReport(who(admin, 'admin'), id, body)).status, 409)
+    assert.equal((await PageReport.findById(id).lean()).status, 'pending')
+    assert.equal((await Page.findById(page._id).lean()).content, `אמר ${MARK} עליכם`)
+  }
+  const decided = await decidePageReport(who(admin, 'admin'), id, { action: 'approve', original: 'שלמם', proposed: 'שלומות' })
+  assert.equal(decided.report.finalProposed, 'שלומות')
+  assert.equal((await decidePageReport(who(admin, 'admin'), id, { action: 'apply', applyMode: 'marker' })).status, 409)
+  assert.equal((await Page.findById(page._id).lean()).content, `אמר ${MARK} עליכם`)
 })
 
-test('החלה בטור ימני/שמאלי משנה את השדה הנכון', async (t) => {
-  if (db.skip) return t.skip(db.skip)
-  await Page.updateOne({ _id: page._id }, { $set: { isTwoColumns: true, rightColumn: `ימין ${MARK}`, leftColumn: 'שמאל' } })
-  const id = await newError({ column: 'right', offset: 5 })
-  const r = await decidePageReport(who(admin, 'admin'), id, { action: 'approve', applyToText: true })
-  assert.equal(r.applyResult, 'applied')
-  const p = await Page.findById(page._id).lean()
-  assert.equal(p.rightColumn, 'ימין שלום')
-  assert.equal(p.content, `אמר ${MARK} עליכם`)
-})
-
-test('עמוד בטיפול: החלה נחסמת (409) בלי שום שינוי; הכרעה בלי החלה עוברת, ואחר כך apply מאוחר', async (t) => {
+test('כשל בעדכון הדיווח לא משנה את העמוד', async (t) => {
   if (db.skip) return t.skip(db.skip)
   const id = await newError()
-  await Page.updateOne({ _id: page._id }, { $set: { status: 'in-progress' } })
-  const blocked = await decidePageReport(who(admin, 'admin'), id, { action: 'approve', applyToText: true })
-  assert.deepEqual(blocked, { ok: false, status: 409, error: APPLY_BLOCKED_MESSAGE })
+  const orig = PageReport.findOneAndUpdate
+  PageReport.findOneAndUpdate = () => ({ lean: async () => { throw new Error('DB failed') } })
+  try {
+    await assert.rejects(decidePageReport(who(admin, 'admin'), id, { action: 'approve', original: 'שלמם', proposed: 'שלומות' }), /DB failed/)
+  } finally { PageReport.findOneAndUpdate = orig }
   assert.equal((await PageReport.findById(id).lean()).status, 'pending')
   assert.equal((await Page.findById(page._id).lean()).content, `אמר ${MARK} עליכם`)
-
-  const decided = await decidePageReport(who(admin, 'admin'), id, { action: 'approve' })
-  assert.equal(decided.report.status, 'approved')
-  assert.equal(decided.report.canApply, false)
-  assert.equal((await decidePageReport(who(admin, 'admin'), id, { action: 'apply' })).status, 409)
-
-  await Page.updateOne({ _id: page._id }, { $set: { status: 'completed' } })
-  const late = await decidePageReport(who(admin, 'admin'), id, { action: 'apply' })
-  assert.equal(late.ok, true)
-  assert.equal(late.applyResult, 'applied')
-  assert.equal(late.report.status, 'approved')
-  assert.equal(late.report.appliedToText, 'proposed')
-  assert.equal(late.report.resolution.byName, 'מנהל') // ההכרעה המקורית נשמרת
-  assert.equal((await Page.findById(page._id).lean()).content, 'אמר שלום עליכם')
-  // פעם שנייה — כבר הוחל
-  assert.equal((await decidePageReport(who(admin, 'admin'), id, { action: 'apply' })).status, 409)
-})
-
-test('apply לפני הכרעה — 409', async (t) => {
-  if (db.skip) return t.skip(db.skip)
-  const id = await newError()
-  assert.equal((await decidePageReport(who(admin, 'admin'), id, { action: 'apply' })).status, 409)
-})
-
-test('הסימון לא נמצא: ההכרעה נשמרת, applyResult=not_found, הטקסט לא משתנה', async (t) => {
-  if (db.skip) return t.skip(db.skip)
-  const id = await newError()
-  await Page.updateOne({ _id: page._id }, { $set: { content: 'המעתיק מחק את הסימון' } })
-  const r = await decidePageReport(who(admin, 'admin'), id, { action: 'reject', applyToText: true })
-  assert.equal(r.ok, true)
-  assert.equal(r.applyResult, 'not_found')
-  assert.equal(r.report.status, 'rejected')
-  assert.equal(r.report.appliedToText, null)
-  assert.equal(r.report.markerPresent, false)
-  assert.equal((await Page.findById(page._id).lean()).content, 'המעתיק מחק את הסימון')
-  // apply מאוחר בלי סימון — not_found, בלי שינוי
-  const late = await decidePageReport(who(admin, 'admin'), id, { action: 'apply' })
-  assert.equal(late.applyResult, 'not_found')
-  assert.equal((await PageReport.findById(id).lean()).appliedToText, null)
 })
 
 test('reopen: מחזיר לממתין ומנקה את ההכרעה; אסור אחרי החלה', async (t) => {
@@ -274,7 +214,7 @@ test('reopen: מחזיר לממתין ומנקה את ההכרעה; אסור א�
   assert.equal(r.report.resolution, null)
   assert.equal((await decidePageReport(who(admin, 'admin'), id, { action: 'reopen' })).status, 409)
 
-  await decidePageReport(who(admin, 'admin'), id, { action: 'approve', applyToText: true })
+  await PageReport.updateOne({ _id: id }, { $set: { status: 'approved', appliedToText: 'proposed' } })
   assert.equal((await decidePageReport(who(admin, 'admin'), id, { action: 'reopen' })).status, 409)
   assert.equal((await decidePageReport(who(admin, 'admin'), id, { action: 'reject' })).status, 409)
 })
@@ -296,86 +236,6 @@ test('הכרעה: מזהה לא תקין / לא קיים — 404', async (t) => 
   if (db.skip) return t.skip(db.skip)
   assert.equal((await decidePageReport(who(admin, 'admin'), 'abc', { action: 'approve' })).status, 404)
   assert.equal((await decidePageReport(who(admin, 'admin'), '0123456789abcdef01234567', { action: 'approve' })).status, 404)
-})
-
-test('הטקסט השתנה בין הקריאה לכתיבה — 409 בלי שינוי בדיווח', async (t) => {
-  if (db.skip) return t.skip(db.skip)
-  const id = await newError()
-  // מדמים כתיבה מקבילה: findOneAndUpdate הראשון על Page "מפספס" כי הטקסט שונה
-  const orig = Page.findOneAndUpdate.bind(Page)
-  Page.findOneAndUpdate = async function (...args) {
-    await Page.collection.updateOne({ _id: page._id }, { $set: { content: `שינוי ${MARK}` } })
-    Page.findOneAndUpdate = orig
-    return orig(...args)
-  }
-  try {
-    const r = await decidePageReport(who(admin, 'admin'), id, { action: 'approve', applyToText: true })
-    assert.deepEqual(r, { ok: false, status: 409, error: TEXT_CHANGED_MESSAGE })
-  } finally {
-    Page.findOneAndUpdate = orig
-  }
-  assert.equal((await PageReport.findById(id).lean()).status, 'pending')
-  assert.equal((await Page.findById(page._id).lean()).content, `שינוי ${MARK}`)
-})
-
-test('נוסח המנהל: "השאר בסוגריים" מעדכן את הסימון לנוסח החדש, והנוסח של המדווח נשמר', async (t) => {
-  if (db.skip) return t.skip(db.skip)
-  const id = await newError()
-  const r = await decidePageReport(who(admin, 'admin'), id, { action: 'approve', original: 'שלמם', proposed: 'שלומם' })
-  assert.equal(r.ok, true, r.error)
-  assert.equal(r.applyResult, 'marker_updated')
-  assert.equal(r.report.proposed, 'שלום') // של המדווח — להיסטוריה
-  assert.equal(r.report.finalProposed, 'שלומם')
-  assert.equal(r.report.finalOriginal, 'שלמם')
-  assert.equal(r.report.finalByName, 'מנהל')
-  assert.equal(r.report.appliedToText, null)
-  assert.equal(r.report.markerPresent, true)
-  assert.equal(r.report.markerStale, false)
-  assert.equal((await Page.findById(page._id).lean()).content, 'אמר (שלמם)[שלומם] עליכם')
-  // אחר כך "החל על הטקסט" — מוצא את הסימון החדש ומחליף בנוסח המנהל
-  const late = await decidePageReport(who(admin, 'admin'), id, { action: 'apply' })
-  assert.equal(late.applyResult, 'applied')
-  assert.equal((await Page.findById(page._id).lean()).content, 'אמר שלומם עליכם')
-  // "הדיווחים שלי" — הנוסח שהוחלט
-  const mine = await listMyPageReports(who(claimer), 'sefer-test', '3')
-  assert.equal(mine.reports[0].finalProposed, 'שלומם')
-})
-
-test('נוסח המנהל: "החלף בתיקון" כותב את התיקון של המנהל', async (t) => {
-  if (db.skip) return t.skip(db.skip)
-  const id = await newError()
-  const r = await decidePageReport(who(admin, 'admin'), id, { action: 'approve', applyToText: true, original: 'שלמם', proposed: 'שלומות' })
-  assert.equal(r.applyResult, 'applied')
-  assert.equal(r.report.appliedToText, 'proposed')
-  assert.equal((await Page.findById(page._id).lean()).content, 'אמר שלומות עליכם')
-})
-
-test('נוסח המנהל, עמוד בטיפול: ההכרעה נשמרת, הסימון מתעדכן אחר כך (applyMode marker) או מוחלף בנוסח המנהל', async (t) => {
-  if (db.skip) return t.skip(db.skip)
-  const id = await newError()
-  await Page.updateOne({ _id: page._id }, { $set: { status: 'in-progress' } })
-  const r = await decidePageReport(who(admin, 'admin'), id, { action: 'approve', original: 'שלמם', proposed: 'שלומם' })
-  assert.equal(r.ok, true, r.error)
-  assert.equal(r.applyResult, null)
-  assert.equal(r.report.markerStale, true)
-  assert.equal((await Page.findById(page._id).lean()).content, `אמר ${MARK} עליכם`)
-  assert.equal((await decidePageReport(who(admin, 'admin'), id, { action: 'apply', applyMode: 'marker' })).status, 409)
-
-  await Page.updateOne({ _id: page._id }, { $set: { status: 'completed' } })
-  const marker = await decidePageReport(who(admin, 'admin'), id, { action: 'apply', applyMode: 'marker' })
-  assert.equal(marker.applyResult, 'marker_updated')
-  assert.equal(marker.report.markerStale, false)
-  assert.equal(marker.report.appliedToText, null)
-  assert.equal((await Page.findById(page._id).lean()).content, 'אמר (שלמם)[שלומם] עליכם')
-
-  // דיווח שני, עמוד בטיפול בזמן ההכרעה — "החל על הטקסט" אחר כך מחליף את הסימון הישן בתיקון של המנהל
-  await Page.updateOne({ _id: page._id }, { $set: { content: `אמר ${MARK} עליכם`, status: 'in-progress' } })
-  const id2 = await newError()
-  await decidePageReport(who(admin, 'admin'), id2, { action: 'approve', original: 'שלמם', proposed: 'שלומות' })
-  await Page.updateOne({ _id: page._id }, { $set: { status: 'completed' } })
-  const late = await decidePageReport(who(admin, 'admin'), id2, { action: 'apply' })
-  assert.equal(late.applyResult, 'applied')
-  assert.equal((await Page.findById(page._id).lean()).content, 'אמר שלומות עליכם')
 })
 
 test('נוסח המנהל: בדיקת קלט (סוגריים, זהה, חלקי) — 400 בלי שינוי; זהה לשל המדווח — בלי נוסח מנהל', async (t) => {

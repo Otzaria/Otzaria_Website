@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  APPLY_BLOCKED_TEXT, PAGE_REPORTS_TITLE, appliedText, applyLaterHint, doneToast, emptyText, failText, pendingCountLabel,
+  PAGE_REPORTS_TITLE, appliedText, doneToast, emptyText, failText, pendingCountLabel,
   reportName, reportsCountText, statusOptionLabel,
 } from './pageReportsTerms.js'
 
@@ -20,26 +20,18 @@ test('ספירות ותוויות', () => {
 })
 
 test('החלה על הטקסט', () => {
-  assert.match(applyLaterHint('approved'), /בתיקון המוצע/)
-  assert.match(applyLaterHint('rejected'), /בטקסט שבספר/)
   assert.equal(appliedText('proposed'), 'התיקון הוחל על טקסט העמוד')
   assert.equal(appliedText('original'), 'בטקסט העמוד הוחזר הטקסט שבספר')
   assert.equal(appliedText(null), '')
-  assert.match(APPLY_BLOCKED_TEXT.page_busy, /בעריכה/)
-  assert.match(APPLY_BLOCKED_TEXT.marker_missing, /הסימון כבר לא נמצא בטקסט/)
 })
 
 test('הודעות אחרי פעולה', () => {
   const r = { bookName: 'ספר', pageNumber: 3 }
-  assert.equal(doneToast('approve', r), 'התיקון אושר, והסימון נשאר בסוגריים — ספר, עמוד 3')
-  assert.equal(doneToast('reject', r), 'התיקון נדחה, והסימון נשאר בטקסט — ספר, עמוד 3')
-  assert.equal(doneToast('approve', r, 'applied'), 'התיקון אושר והוחל על הטקסט — ספר, עמוד 3')
-  assert.equal(doneToast('reject', r, 'applied'), 'התיקון נדחה, והטקסט שבספר הוחזר — ספר, עמוד 3')
-  assert.equal(doneToast('approve', r, 'marker_updated'), 'התיקון אושר, והסימון בטקסט עודכן לנוסח שלך — ספר, עמוד 3')
-  assert.equal(doneToast('apply', r, 'marker_updated'), 'הסימון בטקסט עודכן לנוסח שהוחלט — ספר, עמוד 3')
+  assert.equal(doneToast('approve', r), 'התיקון אושר; טקסט העמוד לא השתנה — ספר, עמוד 3')
+  assert.equal(doneToast('reject', r), 'התיקון נדחה; טקסט העמוד לא השתנה — ספר, עמוד 3')
   assert.equal(doneToast('handled', r), 'ההודעה סומנה כטופלה — ספר, עמוד 3')
   assert.equal(doneToast('reopen', r), 'הדיווח חזר לממתינים — ספר, עמוד 3')
-  for (const action of ['approve', 'reject', 'apply', 'handled', 'reopen', 'other']) assert.match(failText(action), /נסה שוב/)
+  for (const action of ['approve', 'reject', 'handled', 'reopen', 'other']) assert.match(failText(action), /נסה שוב/)
 })
 
 test('ריק — לפי לשונית ומצב, בלי ז\'רגון', () => {
