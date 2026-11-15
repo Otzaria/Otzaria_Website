@@ -13,7 +13,7 @@ import { bookInfoFormUpdates } from '../book-info-utils.js'
 import { BOOK_INFO_ALL_COLUMNS, BOOK_INFO_COLUMNS, listBookInfo, parseBookInfoCsv } from './csv.js'
 import { BOOK_INFO_BRANCH, BOOK_INFO_PATH, BOOK_INFO_REPO, branchName, resetBookInfoCaches } from './fork.js'
 import { isProofreadChangeSet } from './proofread.js'
-import { BookInfoInputError, getBookInfoSnapshot, listOpenEdits, submitEdit, syncEdits } from './service.js'
+import { BookInfoInputError, getBookInfoSnapshot, submitEdit, syncEdits } from './service.js'
 
 const CSV = [
   'bookName,authorName,generationName,subGenerationName,startYear,endYear',
