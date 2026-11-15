@@ -77,11 +77,14 @@ test('כשל בהנפקה לא נשמר במטמון', async () => {
 });
 
 test('זהות הבוט לחתימות: שם ה-App וכתובת noreply של המשתמש [bot]', async () => {
-  const provider = createBotTokenProvider(app, { fetchImpl: fakeGithub().fetchImpl });
+  const gh = fakeGithub();
+  const provider = createBotTokenProvider(app, { fetchImpl: gh.fetchImpl });
   assert.equal(provider.isBot, true);
   assert.deepEqual(await provider.identity(), {
     login: 'otzaria-bot[bot]', name: 'Otzaria Bot', email: '356959704+otzaria-bot[bot]@users.noreply.github.com',
   });
+  // JWT של App נדחה מחוץ ל-/app, ולכן פרופיל המשתמש נקרא בלי הרשאה
+  assert.equal(gh.calls.find((c) => c.url.includes('/users/otzaria-bot')).auth, undefined);
 });
 
 test('getGithubToken: הבוט כשהוגדר, אחרת הטוקן האישי, אחרת null', async () => {

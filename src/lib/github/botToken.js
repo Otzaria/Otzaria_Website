@@ -31,7 +31,7 @@ async function appFetch(path, { jwt, method = 'GET', fetchImpl }) {
     method,
     headers: {
       Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${jwt}`,
+      ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}),
       'X-GitHub-Api-Version': '2022-11-28',
       'User-Agent': 'otzaria-bot',
     },
@@ -87,7 +87,8 @@ export function createBotTokenProvider(app, { fetchImpl = fetch, now = Date.now 
   provider.identity = async () => {
     const appInfo = await appFetch('/app', { jwt: createAppJwt(app, now()), fetchImpl });
     const login = `${appInfo.slug}[bot]`;
-    const user = await appFetch(`/users/${encodeURIComponent(login)}`, { jwt: createAppJwt(app, now()), fetchImpl });
+    // JWT של App תקף רק תחת /app; פרופיל המשתמש ציבורי
+    const user = await appFetch(`/users/${encodeURIComponent(login)}`, { jwt: null, fetchImpl });
     return { login, name: appInfo.name || login, email: `${user.id}+${login}@users.noreply.github.com` };
   };
   return provider;
