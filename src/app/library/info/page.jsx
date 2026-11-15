@@ -231,7 +231,7 @@ export default function LibraryInfoPage() {
             </div>
           )}
 
-          {error && (
+          {error && !(editRow && formData) && (
             <div className="mb-4 rounded-lg border border-danger-200 bg-danger-50 px-4 py-3 text-danger-700">
               {error}
             </div>
@@ -459,6 +459,12 @@ export default function LibraryInfoPage() {
                 </Field>
                 </fieldset>
               </div>
+
+              {error && (
+                <div role="alert" className="rounded-lg border border-danger-200 bg-danger-50 px-4 py-3 text-danger-700">
+                  {error}
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-3">
                 <button

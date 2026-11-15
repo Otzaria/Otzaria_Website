@@ -26,4 +26,18 @@ describe('book info source refresh and bounded rendering', () => {
     // 7,814 שורות: רינדור, מעבר עמוד וסינון. בהרצה המלאה (234 קבצים במקביל) זה חרג מ-5 השניות
     // של ברירת המחדל (נמדד: 7.1 שניות), ולכן מגבלה מפורשת.
   }, 20000)
+  it('shows extended-field validation errors inside the edit modal', async () => {
+    const approved = { bookName: 'ספר א', authorName: '', generationName: null, subGenerationName: null, startYear: null, endYear: null, topics: null }
+    const rows = [{ id: '1', approved, effective: approved, pending: null }]
+    vi.spyOn(global, 'fetch').mockResolvedValue({ ok: true, json: async () => ({ success: true, rows, generationOptions: [], subGenerationOptionsByGeneration: {}, unresolvedEdits: [], extendedFieldsEnabled: true }) })
+    render(<LibraryInfoPage />)
+    fireEvent.click(await screen.findByRole('button', { name: /עריכה/ }))
+    const tooMany = Array.from({ length: 11 }, (_, n) => `נושא${n}`).join(';')
+    fireEvent.change(screen.getByPlaceholderText('לדוגמה: הלכה; שבת'), { target: { value: tooMany } })
+    fireEvent.click(screen.getByRole('button', { name: 'שלח לבדיקה' }))
+    const alerts = await screen.findAllByRole('alert')
+    expect(alerts).toHaveLength(1)
+    expect(alerts[0].closest('form')).not.toBeNull()
+    vi.restoreAllMocks()
+  })
 })
