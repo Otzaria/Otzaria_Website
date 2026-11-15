@@ -191,4 +191,26 @@ describe('pdfSlice', () => {
       if (mode === 'inline' || mode === 'predictor') expect(await renderPage(slice)).toEqual(await renderPage(file))
     }
   })
+
+  test('קישור פנימי לעמוד אחר לא גורר את העמוד ואת משאביו לפלט החתוך', async () => {
+    const source = await PDFDocument.create()
+    const first = source.addPage([100, 100])
+    source.addPage([100, 100])
+    const third = source.addPage([100, 100])
+    third.node.set(PDFName.of('Resources'), source.context.obj({ XObject: { Big: image(source, 1000, 1000, 80) } }))
+    contents(source, third, 'q 100 0 0 100 0 0 cm /Big Do Q')
+    first.node.set(PDFName.of('Annots'), source.context.obj([
+      source.context.register(source.context.obj({ Type: 'Annot', Subtype: 'Link', Rect: [0, 0, 10, 10], Dest: [third.ref, 'Fit'] })),
+      source.context.register(source.context.obj({ Type: 'Annot', Subtype: 'Link', Rect: [0, 0, 10, 10], A: { S: 'GoTo', D: [third.ref, 'Fit'] } })),
+    ]))
+    const { doc } = await openPdf(await pdfFile(source))
+    const slice = await slicePdf(doc, { from: 1, to: 1 }, 'link.pdf')
+    expect(slice.size).toBeLessThan(20000)
+    const result = await PDFDocument.load(await slice.arrayBuffer())
+    expect(result.getPageCount()).toBe(1)
+    expect(images(result)).toHaveLength(0)
+    expect(result.getPage(0).node.Annots().size()).toBe(2)
+    // המקור השמור לא שונה
+    expect(doc.getPage(0).node.Annots().lookup(0).has(PDFName.of('Dest'))).toBe(true)
+  })
 })
