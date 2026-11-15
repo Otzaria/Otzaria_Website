@@ -17,6 +17,7 @@ export default function AboutHero({ titleId = 'about-title' }: { titleId?: strin
           alt=""
           width={256}
           height={234}
+          sizes="(min-width: 48rem) 6.6rem, 5.5rem"
           loading="eager"
           fetchPriority="high"
           className="h-20 w-auto md:h-24"
