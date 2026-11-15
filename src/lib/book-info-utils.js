@@ -1,8 +1,54 @@
 import {
-  BOOK_INFO_EDITABLE_FIELDS,
+  BOOK_INFO_BOOK_LEVEL_FIELDS,
+  BOOK_INFO_EXTENSION_EDITABLE_FIELDS,
+  BOOK_INFO_FIELDS,
   BOOK_INFO_GENERATION_OPTIONS,
+  BOOK_INFO_LIMITS,
   BOOK_INFO_SUB_GENERATION_OPTIONS_BY_GENERATION
 } from './book-info-constants.js'
+
+const EXTENSION_FIELD_NAMES = {
+  topics: 'נושאים',
+  pubDate: 'שנת הדפסה',
+  pubPlace: 'מקום הדפסה',
+  description: 'רקע על הספר',
+  proofread: 'עבר הגהה באוצריא'
+}
+
+const textLength = (value) => [...value].length
+
+/** נושאים מופרדים ב-";": רווחים סביב מנוקים, כפילויות וערכים ריקים מוסרים. */
+export function splitTopics(value) {
+  if (typeof value !== 'string') return []
+  return [...new Set(value.split(';').map((topic) => topic.trim()).filter(Boolean))]
+}
+
+/**
+ * מנרמל ומאמת שדה הרחבה (נושאים, הדפסה, רקע, הגהה). ריק הוא null.
+ * @returns {{value: string|null, error?: string}}
+ */
+export function normalizeExtensionField(field, raw) {
+  if (raw === null || raw === undefined || raw === '') return { value: null }
+  const name = EXTENSION_FIELD_NAMES[field]
+  if (field === 'proofread') {
+    if (raw === false) return { value: null }
+    return raw === '1' || raw === 1 || raw === true ? { value: '1' } : { value: null, error: `ערך לא תקין בשדה ${name}` }
+  }
+  if (typeof raw !== 'string') return { value: null, error: `ערך לא תקין בשדה ${name}` }
+  if (!raw.isWellFormed() || /[\u0000\ufeff]/.test(raw)) return { value: null, error: `השדה ${name} מכיל תווים לא נתמכים` }
+  if (field === 'topics') {
+    if (/[\r\n]/.test(raw)) return { value: null, error: 'הנושאים חייבים להיות בשורה אחת, מופרדים ב-";"' }
+    const topics = splitTopics(raw)
+    if (topics.length > BOOK_INFO_LIMITS.topicCount) return { value: null, error: `אפשר לציין עד ${BOOK_INFO_LIMITS.topicCount} נושאים` }
+    if (topics.some((topic) => textLength(topic) > BOOK_INFO_LIMITS.topicLength)) return { value: null, error: `כל נושא יכול להכיל עד ${BOOK_INFO_LIMITS.topicLength} תווים` }
+    return { value: topics.length ? topics.join(';') : null }
+  }
+  const text = (field === 'description' ? raw.replace(/\r\n?/g, '\n') : raw).trim()
+  if (!text) return { value: null }
+  if (field !== 'description' && /[\r\n]/.test(text)) return { value: null, error: `השדה ${name} חייב להיות בשורה אחת` }
+  if (textLength(text) > BOOK_INFO_LIMITS[field]) return { value: null, error: `השדה ${name} יכול להכיל עד ${BOOK_INFO_LIMITS[field]} תווים` }
+  return { value: text }
+}
 
 function asNullableString(value) {
   if (typeof value !== 'string') {
@@ -37,12 +83,19 @@ export function normalizeBookInfoUpdates(rawUpdates = {}) {
   const updates = {}
   const errors = []
 
-  for (const field of BOOK_INFO_EDITABLE_FIELDS) {
+  for (const field of BOOK_INFO_FIELDS) {
     if (!Object.prototype.hasOwnProperty.call(rawUpdates, field)) {
       continue
     }
 
     const value = rawUpdates[field]
+
+    if (BOOK_INFO_BOOK_LEVEL_FIELDS.includes(field)) {
+      const { value: normalized, error } = normalizeExtensionField(field, value)
+      if (error) errors.push(error)
+      else updates[field] = normalized
+      continue
+    }
 
     if (field === 'bookName' || field === 'authorName') {
       const normalized = asNullableString(value)
@@ -127,7 +180,7 @@ export function normalizeBookInfoUpdates(rawUpdates = {}) {
 
 export function buildDiff(baseDoc, updates) {
   const diff = {}
-  for (const field of BOOK_INFO_EDITABLE_FIELDS) {
+  for (const field of BOOK_INFO_FIELDS) {
     if (!Object.prototype.hasOwnProperty.call(updates, field)) {
       continue
     }
@@ -150,7 +203,7 @@ export function getChangedFields(changes = {}) {
       ? changes.toObject({ minimize: false })
       : changes
 
-  return BOOK_INFO_EDITABLE_FIELDS.filter((field) => source?.[field] !== undefined)
+  return BOOK_INFO_FIELDS.filter((field) => source?.[field] !== undefined)
 }
 
 export function escapeCsvValue(value) {
@@ -167,4 +220,17 @@ export function escapeCsvValue(value) {
     return `"${stringValue.replace(/"/g, '""')}"`
   }
   return stringValue
+}
+
+/** Compare book fields to the displayed values, which may include another author's pending request. */
+export function bookInfoFormUpdates(formData, approved, effective) {
+  return Object.fromEntries(Object.entries(formData).filter(([field, value]) => {
+    if (BOOK_INFO_EXTENSION_EDITABLE_FIELDS.includes(field)) {
+      const next = normalizeExtensionField(field, value)
+      return Boolean(next.error) || next.value !== normalizeExtensionField(field, effective?.[field]).value
+    }
+    const current = approved?.[field]
+    const normalized = ['startYear', 'endYear'].includes(field) ? (value == null || value === '' ? null : Number(value)) : (value || null)
+    return normalized !== (current === '' || current === undefined ? null : current)
+  }))
 }

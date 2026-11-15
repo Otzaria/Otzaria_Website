@@ -68,11 +68,37 @@ and previous transferred change-set ID. A remaining year field follows an
 approved author transition; a conflicting selected author proposal is retained
 for review. Publication does not mutate Mongo's old approved `BookInfo` record.
 
+## Proofread marking
+
+The page shows "עבר הגהה באוצריא" only for an explicit `proofread=1` in the
+CSV. Automatic inference and publication are disabled: editing a passage does
+not prove whole-book proofreading, and matching a project to the library by title
+can select the wrong edition. Page-proof completion also requires approved
+submissions for every page, not just a `done` status. A reliable identity and
+completion contract is needed before automatic marking can be introduced.
+
+The new editable fields are disabled by default. Set `BOOK_INFO_EXTENDED_FIELDS=1`
+only after both otzaria-library and SeforimLibrary support the eleven-column
+format; the server enforces the same restriction as the form.
+
 ## Storage contract and verification
 
-CSV is six columns, LF UTF-8 without BOM/CR/NUL or malformed quoting. Years are
-empty or signed Int32 integers; start must not exceed end. Generation and
-subgeneration must use the shared supported pair. Quoted LF and ordinary astral
+The header is either the six base columns
+(`bookName,authorName,generationName,subGenerationName,startYear,endYear`) or
+those followed by the five extension columns
+(`topics,pubDate,pubPlace,description,proofread`); any other header is refused,
+and every record must have exactly the header's column count. Export keeps the
+format that was read, and switches a six-column file to eleven only when a
+non-empty extension value is saved. LF UTF-8 without BOM/CR/NUL or malformed
+quoting. Years are empty or signed Int32 integers; start must not exceed end.
+Generation and subgeneration must use the shared supported pair.
+
+Extension values belong to the book, not to the author row: an edit writes the
+same value to every row with that `bookName`, and only one active request per
+book may change them. `topics` is `;`-separated (trimmed, deduplicated, up to 10
+values of up to 60 characters); `pubDate` and `pubPlace` are single lines of up
+to 100 characters; `description` is multi-line (CRLF becomes LF) up to 4,000
+characters. `proofread` is empty or `1` and is never edited in the form. Quoted LF and ordinary astral
 characters are supported; lone UTF16 surrogates are refused before UTF8 encoding.
 Export round-trips through the reader and sorts Unicode code points to match
 Python producers.

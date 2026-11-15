@@ -7,7 +7,7 @@ import { adminScreenTitle } from '../adminNav.js'
 export const BOOK_INFO_TITLE = adminScreenTitle('book-info')
 // "ב‑GitHub" — עם מקף שאינו שובר (U+2011), כדי שהשורה לא תישבר באמצע המילה
 export const GH = 'ב‑GitHub'
-export const BOOK_INFO_DESCRIPTION = `שינויים שמשתמשים הציעו בפרטי ספרים — שם, מחבר, דור ותקופה. כל שינוי נפתח כבקשת מיזוג ${GH}, ואתה מאשר אותו שם: מיזוג (Merge) מפרסם את השינוי בקובץ הספרייה, וסגירה (Close) דוחה אותו. המצב כאן מתעדכן לבד.`
+export const BOOK_INFO_DESCRIPTION = `שינויים שמשתמשים הציעו בפרטי ספרים — שם, מחבר, דור, תקופה, נושאים, פרטי הדפסה ורקע. כל שינוי נפתח כבקשת מיזוג ${GH}, ואתה מאשר אותו שם: מיזוג (Merge) מפרסם את השינוי בקובץ הספרייה, וסגירה (Close) דוחה אותו. המצב כאן מתעדכן לבד.`
 
 export const VIEW_LABELS = { open: 'פתוחות', all: 'כל הבקשות', legacy: 'הצעות ישנות' }
 
@@ -23,6 +23,11 @@ export const FIELD_LABELS = {
   subGenerationName: 'דור משנה',
   startYear: 'תחילת התקופה',
   endYear: 'סיום התקופה',
+  topics: 'נושאים',
+  pubDate: 'שנת הדפסה',
+  pubPlace: 'מקום הדפסה',
+  description: 'רקע על הספר',
+  proofread: 'עבר הגהה באוצריא',
 }
 
 export const fieldLabel = (field) => FIELD_LABELS[field] || field
