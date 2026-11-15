@@ -212,7 +212,34 @@ test('החלטה מאוחרת: כפול נסגר ככפול; issue שנפתח י
   assert.ok(gh.comments.some((c) => c.issue === bIssue && c.body.includes('<!-- app-report-triage -->')));
 });
 
-test('GitHub נכשל בפענוח אחרי הפתיחה: ה-cron משלים, בלי תגובה כפולה', async (t) => {
+test('GitHub נכשל בפתיחה: ה-cron פותח עם הפענוח בגוף ה-issue, בלי תגובה נוספת', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { body } = await post(report());
+  const failing = async (url, init = {}) => (init.method === 'POST' && String(url).endsWith('/issues') ? new Response('{}', { status: 502 }) : fetchImpl(url, init));
+  const r = await applyTriageDecision(body.reportId, decision({ action: 'open', verdict: 'needs_human', confidence: 'medium' }), deps({ fetchImpl: failing }));
+  assert.equal(r.body.issueNumber, null);
+  assert.equal(gh.issues.size, 0);
+  await sync(new Date());
+  const doc = await AppReport.findOne({ reportId: body.reportId }).lean();
+  assert.equal(doc.triage.followUp.status, 'done');
+  assert.match(gh.issues.get(doc.issueNumber).body, /<!-- app-report-triage -->[\s\S]*לחץ זיכרון/);
+  assert.deepEqual(gh.issues.get(doc.issueNumber).assignees, ['palmoni5']);
+  assert.equal(gh.comments.length, 0);
+});
+
+test('פוסט שיחרוג ממגבלת האורך של GitHub: הפענוח בתגובה נפרדת', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { body } = await post(report({ description: '-->'.repeat(3333), stepsToReproduce: '-->'.repeat(1666) }));
+  await applyTriageDecision(body.reportId, decision({ action: 'open', verdict: 'needs_human', summary: '<!--'.repeat(5000) }), deps());
+  const doc = await AppReport.findOne({ reportId: body.reportId }).lean();
+  const issueBody = gh.issues.get(doc.issueNumber).body;
+  assert.ok(issueBody.length <= 65536);
+  assert.doesNotMatch(issueBody, /<!-- app-report-triage -->/);
+  assert.equal(gh.comments.filter((c) => c.body.includes('<!-- app-report-triage -->')).length, 1);
+  assert.equal(doc.triage.followUp.status, 'done');
+});
+
+test('GitHub נכשל בשיוך אחרי הפתיחה: ה-cron משלים, בלי פענוח כפול', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const { body } = await post(report());
   const failing = async (url, init = {}) => (String(url).includes('/assignees') ? new Response('{}', { status: 502 }) : fetchImpl(url, init));
