@@ -165,9 +165,28 @@ function resourceReplacements(source, indices, lib) {
   return replacements
 }
 
+// קישורים פנימיים (/Dest, /A, /P) מצביעים לעמודים אחרים במקור, ו-PDFObjectCopier היה גורר אותם
+// ואת כל משאביהם לפלט. בפלט החתוך אין להם יעד, ולכן מסירים אותם רק בעותק של הערות Link.
+function linkReplacements(source, indices, lib) {
+  const { PDFArray, PDFDict, PDFName } = lib
+  const replacements = new Map()
+  for (const index of indices) {
+    const annotations = source.context.lookup(source.getPage(index).node.Annots())
+    if (!(annotations instanceof PDFArray)) continue
+    for (const entry of annotations.asArray()) {
+      const annotation = source.context.lookup(entry)
+      if (!(annotation instanceof PDFDict) || annotation.get(PDFName.of('Subtype')) !== PDFName.of('Link')) continue
+      const reduced = annotation.clone()
+      for (const key of ['Dest', 'A', 'P']) reduced.delete(PDFName.of(key))
+      replacements.set(annotation, reduced)
+    }
+  }
+  return replacements
+}
+
 export async function copySelectedPdfPages(source, destination, indices, lib) {
   await source.flush()
-  const replacements = resourceReplacements(source, indices, lib)
+  const replacements = new Map([...linkReplacements(source, indices, lib), ...resourceReplacements(source, indices, lib)])
   const copier = lib.PDFObjectCopier.for(source.context, destination.context)
   const copy = copier.copy
   // PDFObjectCopier קורא רקורסיבית לפונקציית copy הציבורית שלו. מחליפים מילוני משאבים רק בעותק:
