@@ -3,6 +3,9 @@
  */
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import ReactMarkdown from 'react-markdown';
 import mongoose from 'mongoose';
 import AppReport from '../../models/AppReport.js';
 import { startMongo } from '../corrections/testing/mongo.js';
@@ -81,6 +84,59 @@ async function post(body, over = {}) {
 const decision = (over = {}) => ({ action: 'hold', verdict: 'external', confidence: 'high', summary: '**מה קרה:** לחץ זיכרון.', ...over });
 const sync = (now) => runAppReportsSync({ config, fetchImpl, sendClosedMail, sendContactMail, now });
 const later = (ms) => new Date(Date.now() + ms);
+
+const renderMarkdown = (text) => renderToStaticMarkup(createElement(ReactMarkdown, null, text));
+
+for (const mode of ['issue', 'merge']) {
+  const cases = [
+    ['תג details שלא נסגר', { description: '<details>\n<summary>Log</summary>\n\nSome log' }],
+    ['תג script שלא נסגר', { description: '<script>\nSome log' }],
+    ['גדר backtick שלא נסגרה', { description: 'Log:\n````text\nSome log' }],
+    ['גדר tilde שלא נסגרה', { description: 'Log:\n~~~text\nSome log' }],
+    ['בלוק Markdown מאוזן', { description: '```text\nSome log\n```' }],
+    ['HTML בגרסה', { appVersion: '<details>' }],
+    ['HTML בגרסת מערכת ההפעלה', { osVersion: '<details>' }],
+    ['HTML בארכיטקטורה', { arch: '<details>' }],
+    ...(mode === 'issue' ? [['גדר בשלבי השחזור', { stepsToReproduce: '~~~\nSome log' }]] : []),
+  ];
+  for (const [name, fields] of cases) {
+    test(`${mode}: ${name} — הפענוח נשאר בתגובה נפרדת וקריאה`, async (t) => {
+      if (db.skip) return t.skip(db.skip);
+      if (mode === 'merge') await post(report(), { config: { ...config, triageSecret: null } });
+      const { status, body } = await post(report({ description: 'דיווח נוסף', ...fields }));
+      assert.equal(status, 200);
+      const result = await applyTriageDecision(body.reportId, decision({ action: 'open', verdict: 'needs_human', summary: '**TRIAGE_PROBE**' }), deps());
+      assert.equal(result.status, 200);
+      const doc = await AppReport.findOne({ reportId: body.reportId }).lean();
+      assert.equal(doc.triage.followUp.summaryPosted, false);
+      assert.equal(doc.triage.followUp.status, 'done');
+      const reportPost = mode === 'issue' ? gh.issues.get(doc.issueNumber).body
+        : gh.comments.find((c) => c.body.includes(`<!-- app-report: ${body.reportId} -->`)).body;
+      assert.doesNotMatch(reportPost, /<!-- app-report-triage -->/);
+      const decode = gh.comments.filter((c) => c.body.includes('<!-- app-report-triage -->'));
+      assert.equal(decode.length, 1);
+      assert.match(renderMarkdown(decode[0].body), /<strong>TRIAGE_PROBE<\/strong>/);
+      // ה-cron לא מפרסם שוב גם כשהפענוח לא נכלל בפוסט המקורי.
+      await sync(new Date());
+      assert.equal(gh.comments.filter((c) => c.body.includes('<!-- app-report-triage -->')).length, 1);
+    });
+  }
+
+  test(`${mode}: Markdown רגיל וחתימה עם גדרות — הפענוח נשאר באותו פוסט`, async (t) => {
+    if (db.skip) return t.skip(db.skip);
+    const signature = { exceptionType: 'AppHang', frames: ['```', '<details>', '~~~~'] };
+    if (mode === 'merge') await post(report({ signature }), { config: { ...config, triageSecret: null } });
+    const { body } = await post(report({ signature, description: '## מה קרה\n\n- שלב ראשון\n\n`inline code`',
+      // שלבי השחזור לא מוצגים בתגובת הצטרפות ולכן אינם משנים את גבולות ה-Markdown שלה.
+      stepsToReproduce: mode === 'merge' ? '<details>' : '1. פתח\n2. חפש' }));
+    await applyTriageDecision(body.reportId, decision({ action: 'open', verdict: 'needs_human', summary: '**TRIAGE_PROBE**' }), deps());
+    const doc = await AppReport.findOne({ reportId: body.reportId }).lean();
+    assert.equal(doc.triage.followUp.summaryPosted, true);
+    const reportPost = mode === 'issue' ? gh.issues.get(doc.issueNumber).body : gh.comments[0].body;
+    assert.match(renderMarkdown(reportPost), /<strong>TRIAGE_PROBE<\/strong>/);
+    assert.equal(gh.comments.length, mode === 'issue' ? 0 : 1);
+  });
+}
 
 test('תקיעה ממתינה לבדיקה: בלי issue, התוכנה מקבלת "נקלט", השירות מתעורר; דיווח רגיל נפתח מיד', async (t) => {
   if (db.skip) return t.skip(db.skip);

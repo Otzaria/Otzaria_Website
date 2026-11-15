@@ -25,6 +25,17 @@ export function sanitizeUserText(text) {
     .replace(/@(?=[A-Za-z0-9])/g, '@​');
 }
 
+/**
+ * HTML או גדר קוד בטקסט המדווח עלולים להשאיר הקשר פתוח שיבלע פענוח שמצורף בסוף.
+ * משאירים אותם כפי שנשלחו ומפרסמים את הפענוח בנפרד, גם כשהתחביר נראה מאוזן:
+ * הפרדה בטוחה של Markdown שרירותי מחייבת פענוח מלא, ולא ניחוש של תג סוגר.
+ * החתימה אינה נבדקת כאן: codeBlock כבר תוחם אותה בגדר ארוכה מתוכן החתימה.
+ */
+export function canAppendTriage(report, { isMerge = false } = {}) {
+  return ['description', 'appVersion', 'osVersion', 'arch', ...(isMerge ? [] : ['stepsToReproduce'])]
+    .every((field) => !/<|`{3}|~{3}/.test(sanitizeUserText(report[field])));
+}
+
 const tableCell = (text) => sanitizeUserText(text).replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 
 function codeBlock(lines) {
