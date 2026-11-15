@@ -60,14 +60,14 @@ export function normalizeEmailInput(email) {
 }
 
 /**
- * Case-insensitive match for a stored email, also when an older record kept it wrapped in invisible marks
+ * Case-insensitive match for a stored email, including invisible marks anywhere in older records
  * @param {unknown} email - Email to match
  * @returns {RegExp}
  */
 export function storedEmailPattern(email) {
-  const escaped = normalizeEmailInput(email).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const marks = `${INVISIBLE_CLASS}*`
-  return new RegExp(`^${marks}${escaped}${marks}$`, 'i')
+  const chars = Array.from(normalizeEmailInput(email), (char) => char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  return new RegExp(`^${marks}${chars.join(marks)}${marks}$`, 'i')
 }
 
 /**

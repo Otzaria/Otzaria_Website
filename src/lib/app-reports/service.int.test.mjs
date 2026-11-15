@@ -585,7 +585,7 @@ test('הסרה ממייל: כתובת שמורה עם סימוני כיוון ו
   const wrapped = await post(manual({ reporterEmail: 'bidi@example.com' }));
   const clean = await post(manual({ reporterEmail: 'bidi@example.com', description: 'שני' }));
   const other = await post(manual({ reporterEmail: 'xbidi@example.com', description: 'שלישי' }));
-  const stored = `${String.fromCodePoint(0x202b)}bidi@example.com${String.fromCodePoint(0x202c)}`;
+  const stored = `${String.fromCodePoint(0x202b)}bi\u200fdi@exam\u2066ple.com${String.fromCodePoint(0x202c)}`;
   await AppReport.updateOne({ reportId: wrapped.body.reportId }, { $set: { reporterEmail: stored } });
   const flags = async (id) => (await AppReport.findOne({ reportId: id }).lean()).unsubscribed;
 
@@ -594,6 +594,7 @@ test('הסרה ממייל: כתובת שמורה עם סימוני כיוון ו
   assert.equal(await flags(other.body.reportId), false);
   await AppReport.updateMany({ reportId: { $in: [wrapped.body.reportId, clean.body.reportId] } }, { $set: { unsubscribed: false } });
   assert.equal((await unsubscribeByToken(createUnsubscribeToken(wrapped.body.reportId, config.unsubscribeSecret), config)).ok, true);
+  assert.equal(await flags(wrapped.body.reportId), true);
   assert.equal(await flags(clean.body.reportId), true);
 });
 
