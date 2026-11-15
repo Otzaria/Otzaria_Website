@@ -1,6 +1,8 @@
 /**
  * לקוח GitHub מינימלי ל-issues של דיווחי התוכנה (טוקן בוט בלי הרשאות triage).
  */
+import { resolveGithubToken } from '../github/botToken.js';
+
 const API = 'https://api.github.com';
 const TIMEOUT_MS = 15000;
 
@@ -21,11 +23,12 @@ export function createGithubClient({ token, repo, fetchImpl = fetch }) {
   async function call(method, path, body, url = `${API}/repos/${repo}${path}`) {
     let res;
     try {
+      const auth = await resolveGithubToken(token, repo);
       res = await fetchImpl(url, {
         method,
         headers: {
           Accept: 'application/vnd.github+json',
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${auth}`,
           'X-GitHub-Api-Version': '2022-11-28',
           'User-Agent': 'otzaria-app-reports',
           ...(body ? { 'Content-Type': 'application/json' } : {}),

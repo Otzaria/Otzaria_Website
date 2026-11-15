@@ -4,6 +4,7 @@
  */
 import AppReport from '../../models/AppReport.js';
 import { isCrashReport, isHangReport } from './issue-text.js';
+import { resolveGithubToken } from '../github/botToken.js';
 import { DEFAULT_PRODUCT, productFilter, productOf } from './products.js';
 
 const DISPATCH_TIMEOUT_MS = 5000;
@@ -39,7 +40,7 @@ export async function dispatchTriage(reportId, { config, fetchImpl = fetch }) {
       method: 'POST',
       headers: {
         Accept: 'application/vnd.github+json',
-        Authorization: `Bearer ${config.triageDispatchToken}`,
+        Authorization: `Bearer ${await resolveGithubToken(config.triageDispatchToken, config.triageDispatchRepo)}`,
         'X-GitHub-Api-Version': '2022-11-28',
         'User-Agent': 'otzaria-app-reports',
         'Content-Type': 'application/json',

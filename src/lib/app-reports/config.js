@@ -2,6 +2,7 @@
  * הגדרות דיווחי התוכנה. היעדים קבועים בקוד (products.js); בלי טוקן הדיווחים נשמרים כ-issuePending וה-cron ינסה שוב.
  */
 import { PRODUCTS, DEFAULT_PRODUCT } from './products.js';
+import { getGithubToken } from '../github/botToken.js';
 
 export const DEFAULT_REPO = PRODUCTS[DEFAULT_PRODUCT].repo;
 export const PUBLIC_SITE_URL = 'https://otzaria.org';
@@ -9,7 +10,7 @@ export const PUBLIC_SITE_URL = 'https://otzaria.org';
 function dispatchToken(env) {
   const own = (env.APP_REPORTS_TRIAGE_DISPATCH_TOKEN || '').trim();
   if (own.toLowerCase() === 'off') return null;
-  return own || (env.DICTA_LIBRARY_GITHUB_TOKEN || '').trim() || null;
+  return own || getGithubToken(env);
 }
 
 function positiveMinutes(raw, fallback) {
@@ -19,8 +20,8 @@ function positiveMinutes(raw, fallback) {
 
 export function getAppReportsConfig(env = process.env) {
   return {
-    // אותו טוקן שהאתר כותב בו לספרייה, לכל המוצרים; לבוט יש issues על הריפו של כל מוצר.
-    githubToken: (env.DICTA_LIBRARY_GITHUB_TOKEN || '').trim() || null,
+    // הטוקן של כל כתיבות האתר (github/botToken.js); לבוט יש issues על הריפו של כל מוצר.
+    githubToken: getGithubToken(env),
     // ריפו אוצריא, לתאימות; הריפו של כל מוצר — getProduct(key).repo
     repo: DEFAULT_REPO,
     webhookSecret: (env.APP_REPORTS_WEBHOOK_SECRET || '').trim() || null,
@@ -32,7 +33,7 @@ export function getAppReportsConfig(env = process.env) {
     inboundSecret: (env.APP_REPORTS_INBOUND_SECRET || '').trim() || null,
     // בדיקה אוטומטית של תקיעות וקריסות לפני הפתיחה (docs/app-reports/TRIAGE.md). בלי הסוד — נפתחות מיד כמו קודם.
     triageSecret: (env.APP_REPORTS_TRIAGE_SECRET || '').trim() || null,
-    // repository_dispatch שמעיר את השירות מיד: כברירת מחדל מפתח הספרייה (יש לו הרשאה על מאגר השירות).
+    // repository_dispatch שמעיר את השירות מיד: כברירת מחדל הטוקן של האתר (יש לו הרשאה על מאגר השירות).
     // off — בלי הערה, והשירות מושך את התור בעצמו (למשל cron על שרת האתר).
     triageDispatchToken: dispatchToken(env),
     triageDispatchRepo: (env.APP_REPORTS_TRIAGE_DISPATCH_REPO || '').trim() || 'Otzaria/app-report-triage',
