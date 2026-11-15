@@ -17,7 +17,7 @@ export async function PATCH(request, { params }) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) return fail(401, 'יש להתחבר כדי לבצע פעולה זו')
-    if (!hasBooksAccess(session.user.role)) return fail(403, 'אין הרשאה לבצע פעולה זו')
+    if (!hasBooksAccess(session.user)) return fail(403, 'אין הרשאה לבצע פעולה זו')
     const { id } = await params
     const body = await request.json().catch(() => null)
     if (!body || typeof body !== 'object') return fail(400, 'בקשה לא תקינה')

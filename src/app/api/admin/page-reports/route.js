@@ -17,7 +17,7 @@ export async function GET(request) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) return fail(401, 'יש להתחבר כדי לבצע פעולה זו')
-    if (!hasBooksAccess(session.user.role)) return fail(403, 'אין הרשאה לבצע פעולה זו')
+    if (!hasBooksAccess(session.user)) return fail(403, 'אין הרשאה לבצע פעולה זו')
     const { searchParams } = new URL(request.url)
     await connectDB()
     const result = await listAdminPageReports(searchParams)
