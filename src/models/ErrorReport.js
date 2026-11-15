@@ -147,9 +147,19 @@ const ErrorReportSchema = new mongoose.Schema({
   reporterUnsubscribed: { type: Boolean, default: false },
 }, { timestamps: true });
 
-ErrorReportSchema.pre('validate', function () {
-  if (this.isNew || this.isModified('libraryVersion') || this.isModified('location')) {
-    Object.assign(this, libraryVersionSortFields(this));
+ErrorReportSchema.pre('validate', async function () {
+  if (this.isNew || this.isModified('libraryVersion') || this.isModified('location.libraryBuildId')) {
+    const hasVersion = this.isSelected('libraryVersion') || this.isModified('libraryVersion');
+    const hasBuild = this.isSelected('location.libraryBuildId') || this.isModified('location.libraryBuildId');
+    // A projected edit still needs both version sources. Read omitted values for the
+    // calculation only: assigning them to the document would overwrite unselected data.
+    const stored = !this.isNew && (!hasVersion || !hasBuild)
+      ? await this.constructor.findById(this._id).select('libraryVersion location.libraryBuildId').lean()
+      : null;
+    Object.assign(this, libraryVersionSortFields({
+      libraryVersion: hasVersion ? this.libraryVersion : stored?.libraryVersion,
+      location: { libraryBuildId: hasBuild ? this.location?.libraryBuildId : stored?.location?.libraryBuildId },
+    }));
   }
 });
 

@@ -54,6 +54,32 @@ test('legacy resubmission updates the stored key atomically with the version', a
   assert.equal(doc.libraryVersionSortSchema, LIBRARY_VERSION_SORT_SCHEMA);
 });
 
+test('projected version edits preserve build precedence and omitted source fields', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const original = await ErrorReport.create(report('projected', '27', { location: { libraryBuildId: '100', heRef: 'original' } }));
+  const versionOnly = await ErrorReport.findById(original._id).select('libraryVersion');
+  versionOnly.libraryVersion = '31';
+  await versionOnly.save();
+  let stored = await ErrorReport.findById(original._id).lean();
+  assert.equal(stored.libraryVersionSortKey, 100, 'unselected build still has precedence');
+  assert.equal(stored.location.libraryBuildId, '100');
+  assert.equal(stored.location.heRef, 'original');
+  const buildOnly = await ErrorReport.findById(original._id).select('location.libraryBuildId');
+  buildOnly.location.libraryBuildId = '';
+  await buildOnly.save();
+  stored = await ErrorReport.findById(original._id).lean();
+  assert.equal(stored.libraryVersionSortKey, 31, 'blank build falls back to unselected libraryVersion');
+  assert.equal(stored.libraryVersion, '31');
+  assert.equal(stored.location.heRef, 'original');
+  const refOnly = await ErrorReport.findById(original._id).select('location.heRef');
+  refOnly.location.heRef = 'updated';
+  await refOnly.save();
+  stored = await ErrorReport.findById(original._id).lean();
+  assert.equal(stored.libraryVersionSortKey, 31, 'editing a sibling location field preserves the effective version');
+  assert.equal(stored.location.libraryBuildId, '');
+  assert.equal(stored.libraryVersion, '31');
+});
+
 test('mixed rollout keeps exact ordering and pagination; backfill is read-only in dry-run and idempotent', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const rows = [report('old-27', '27'), report('old-unknown', 'unknown'), report('old-huge', '1'.repeat(400))];
