@@ -151,3 +151,22 @@ test('הסרה מהרשימה חלה על כל הדיווחים של הכתוב�
   assert.equal((await claimAndApprove(id)).status, 200);
   assert.equal(mails.length, 0);
 });
+
+test('הסרה מהרשימה חלה גם בין כתובת שמורה עם סימוני כיוון (U+202B/U+202C) לכתובת נקייה ובין אותיות גדולות וקטנות', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const dirty = `${String.fromCodePoint(0x202b)}Reporter@Example.org${String.fromCodePoint(0x202c)}`;
+  const oldId = await ingest('thx-dirty', 'other@example.org');
+  await ErrorReport.updateOne({ _id: oldId }, { $set: { senderEmail: dirty } });
+  const cleanId = await ingest('thx-clean', 'reporter@example.org');
+
+  // הסרה דרך הדיווח הישן (עם הסימונים) מסמנת גם את הדיווח הנקי
+  const token = createUnsubscribeToken('thx-dirty', SECRET, THANKS_UNSUBSCRIBE_PURPOSE);
+  assert.equal((await unsubscribeReporterByToken(token, SECRET)).ok, true);
+  assert.equal((await ErrorReport.findById(cleanId).lean()).reporterUnsubscribed, true);
+  assert.equal((await ErrorReport.findById(oldId).lean()).reporterUnsubscribed, true);
+
+  // ודיווח נקי חדש אינו מקבל תודה, כי ההסרה נמצאת בדיווח עם הסימונים
+  await ErrorReport.updateOne({ _id: cleanId }, { $set: { reporterUnsubscribed: false } });
+  assert.equal((await claimAndApprove(cleanId)).status, 200);
+  assert.equal(mails.length, 0);
+});
