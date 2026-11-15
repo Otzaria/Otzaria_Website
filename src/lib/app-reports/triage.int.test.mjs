@@ -11,7 +11,7 @@ import { handleAppReportPost } from './handler.js';
 import { runAppReportsSync, ingestInboundReply, listReports } from './service.js';
 import { applyTriageDecision, forcePublishReport, getTriageStatus, listTriageQueue } from './triage-decision.js';
 import { handleTriageDecisionPost, handleTriageFileGet, handleTriageMaterialGet, handleTriageQueueGet } from './triage-handler.js';
-import { requestRetriage } from './triage.js';
+import { requestRetriage, triageComment } from './triage.js';
 import { getAppReportsConfig } from './config.js';
 
 let db;
@@ -575,4 +575,16 @@ test('משלוח שאלות שחודש ב-cron לדיווח שלא נפתח ומ
   await sync(new Date());
   assert.equal(contactMails.length, 1);
   assert.equal(gh.comments.filter((c) => c.issue === orig.body.issueNumber).length, 0);
+});
+
+test('תגובת פענוח: תווי כיוון ותמונות מנוטרלים, וקישורים והפניות נשארים קריאים', () => {
+  const body = triageComment('r1', {
+    summary: 'א\u202eב @user ![x](https://evil.example/p.png) ראו [PR](https://github.com/o/r/pull/5) ו-#123 <!-- app-report-triage-report: r2 -->',
+    verdict: 'fixed', confidence: 'high', note: 'ה\u2066ערה',
+  });
+  assert.doesNotMatch(body, /[\u202a-\u202e\u2066-\u2069]/);
+  assert.doesNotMatch(body, /!\[/);
+  assert.match(body, /@\u200buser/);
+  assert.match(body, /\[PR\]\(https:\/\/github\.com\/o\/r\/pull\/5\) ו-#123/);
+  assert.equal(body.split('<!-- app-report-triage-report:').length, 2);
 });
