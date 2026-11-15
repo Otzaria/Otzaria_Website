@@ -46,7 +46,7 @@ export function validateEmail(email) {
 }
 
 // סימוני כיוון ותווים ברוחב אפס נדבקים להעתקה מטקסט RTL, ושרת הדואר דוחה כתובת שמכילה אותם
-// \u05DE\u05D7\u05E8\u05D5\u05D6\u05EA \u05D5\u05DC\u05D0 regex: \u05D4-\u \u05E0\u05E4\u05EA\u05E8 \u05DB\u05D0\u05DF \u05DC\u05EA\u05D5\u05D5\u05D9\u05DD \u05E2\u05E6\u05DE\u05DD, \u05DB\u05D9 MongoDB (PCRE) \u05DC\u05D0 \u05DE\u05DB\u05D9\u05E8 \uXXXX
+// התבנית נבנית כמחרוזת ולא כליטרל regex כי היא מועברת גם ל-MongoDB (PCRE), שאינו מכיר רצפי \uXXXX, ולכן התווים עצמם מוטמעים בה
 const INVISIBLE_CLASS = '[\u061C\u200B-\u200F\u202A-\u202E\u2060\u2066-\u2069\uFEFF]'
 const INVISIBLE_EMAIL_CHARS = new RegExp(INVISIBLE_CLASS, 'g')
 
@@ -59,6 +59,7 @@ export function normalizeEmailInput(email) {
   return typeof email === 'string' ? email.replace(INVISIBLE_EMAIL_CHARS, '').trim() : ''
 }
 
+// הערה: regex עם ^ ותווים אופציונליים לא יכול להשתמש באינדקס (סריקה מלאה), ולכן מיועד רק לנתיבים שנקראים לעיתים רחוקות
 /**
  * Case-insensitive match for a stored email, including invisible marks anywhere in older records
  * @param {unknown} email - Email to match
