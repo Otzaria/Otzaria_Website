@@ -22,13 +22,13 @@ const RELEASE_ID = 'pages-bulk-release'
  *
  * @param {{ pageIds: string[], selected: Set<string>, onSelect: (ids: string[], checked: boolean) => void,
  *   onSelectAll: () => void, onClear: () => void, clearedText?: string, total: number, sort: string, onSortChange: (sort: string) => void,
- *   releasable: number, working: boolean, selecting?: boolean, onBulk: (action: 'release' | 'download') => void,
+ *   releasable: number, working: boolean, selecting?: boolean, selectingLoaded?: number, onBulk: (action: 'release' | 'download') => void,
  *   progress?: { action: string, done: number, total: number, announced?: number } | null, stopping?: boolean,
  *   onStop?: () => void, onJump?: (number: number) => void }} props
  * onJump — "קפוץ לעמוד" (רק כשנבחר ספר).
  */
 export default function PagesToolbar({
-  pageIds, selected, onSelect, onSelectAll, onClear, clearedText, total, sort, onSortChange, releasable, working, selecting = false, onBulk, progress, stopping = false, onStop, onJump,
+  pageIds, selected, onSelect, onSelectAll, onClear, clearedText, total, sort, onSortChange, releasable, working, selecting = false, selectingLoaded = 0, onBulk, progress, stopping = false, onStop, onJump,
 }) {
   const pageSelected = pageIds.filter((id) => selected.has(id)).length
   const allOnPage = pageIds.length > 0 && pageSelected === pageIds.length
@@ -112,7 +112,9 @@ export default function PagesToolbar({
             requestAnimationFrame(() => document.getElementById(SELECT_ALL_ID)?.focus())
           }}
         >
-          בחר את כל {formatNumber(total)} העמודים
+          {selecting && selectingLoaded > 0
+            ? `נטענו ${formatNumber(selectingLoaded)} מתוך ${formatNumber(total)}…`
+            : `בחר את כל ${formatNumber(total)} העמודים`}
         </Button>
       )}
       onClear={onClear}

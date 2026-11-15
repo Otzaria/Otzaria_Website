@@ -42,4 +42,18 @@ describe('usePageActions', () => {
     await run
     expect(api.releasePage).toHaveBeenCalledTimes(4)
   })
+
+  test('סגירת הדף בזמן המתנה לשחרור שולחת את השחרור מיד בבקשת keepalive', async () => {
+    vi.useFakeTimers()
+    try {
+      api.releasePage.mockReset()
+      api.releasePage.mockResolvedValue({ outcome: 'updated' })
+      const { result } = setup()
+      act(() => result.current.actions.release(pages[0]))
+      expect(api.releasePage).not.toHaveBeenCalled()
+      act(() => { window.dispatchEvent(new Event('pagehide')) })
+      expect(api.releasePage).toHaveBeenCalledTimes(1)
+      expect(api.releasePage).toHaveBeenCalledWith(pages[0], { keepalive: true })
+    } finally { vi.useRealTimers() }
+  })
 })

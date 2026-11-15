@@ -96,7 +96,9 @@ const HERO_IMAGES = [
 const IMMUTABLE_PUBLIC_DIRS = ['public/home', 'public/icons']
 const VERSIONED_NAME = /[.-]v\d+(?:[.-]|$)/
 
-// CSS delivered by public pages (gzip). Admin-only utilities load with AdminFrame.
+// CSS גלובלי (gzip, סך כל ה-stylesheets שה-HTML של הדף טוען) בדפים ציבוריים. מחלקות Tailwind הייחודיות לניהול
+// (library/admin, components/admin, trainingProof/admin) נטענות עם AdminFrame ב-admin-utilities.css ולא כאן.
+// נמדד 38.4KB אחרי הפיצול (42.6KB לפניו, 39.1KB ב-master לפני עיצוב מחדש של פאנל הניהול); התקציב 40KB.
 const CSS_BUDGETS = [
   { page: 'index', label: '/', gzipKB: 40 },
   { page: 'library/books', label: '/library/books', gzipKB: 40 },

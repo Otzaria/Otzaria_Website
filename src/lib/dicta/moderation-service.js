@@ -423,7 +423,8 @@ export async function resolveConflict({ bookId, strategy }) {
     };
     const updated = await LibraryBook.findOneAndUpdate(
       { _id: bookId, version: book.version, syncStatus: 'conflict' },
-      { $set: set, $inc: { version: 1 } },
+      // הגרסה עולה רק כשהתוכן עצמו מוחלף ('theirs'): 'ours' משאיר אותו, ושמירת עורך פתוח לא צריכה להידחות
+      { $set: set, ...(keepUpstream && { $inc: { version: 1 } }) },
       { projection: '_id' },
     );
     if (updated) return { status: 'resolved', strategy: keepUpstream ? 'theirs' : 'ours' };
