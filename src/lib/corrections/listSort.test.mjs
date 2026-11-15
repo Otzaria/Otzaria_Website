@@ -39,7 +39,7 @@ test('compareByVersion: גרסה חדשה קודם, בתוך גרסה החדש �
 });
 
 test('sortSpec ו-libraryVersionKeyExpr', () => {
-  assert.deepEqual(sortSpec('version'), { _versionKey: -1, createdAt: -1, _id: -1 });
+  assert.deepEqual(sortSpec('version'), { libraryVersionSortKey: -1, createdAt: -1, _id: -1 });
   assert.deepEqual(sortSpec('oldest'), { createdAt: 1, _id: 1 });
   assert.deepEqual(sortSpec('newest'), { createdAt: -1, _id: -1 });
   const expr = libraryVersionKeyExpr();

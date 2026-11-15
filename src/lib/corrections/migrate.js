@@ -1,6 +1,7 @@
 /**
  * migration תואמת-לאחור של דיווחים ישנים למודל התיקונים. אידמפוטנטית: נוגעת רק במסמכים
  * בלי state, מוסיפה שדות בלבד, לא מוחקת ולא משנה שדות קיימים (status/emailSent וכו').
+ * בנוסף משלימה/מתקנת את מפתח מיון הגרסה הנגזר בכל הדיווחים, בלי לשנות updatedAt.
  */
 import ErrorReport from '../../models/ErrorReport.js';
 import CorrectionJob from '../../models/CorrectionJob.js';
@@ -9,6 +10,7 @@ import PublishAttempt from '../../models/PublishAttempt.js';
 import WorkerHeartbeat from '../../models/WorkerHeartbeat.js';
 import CorrectionEvent from '../../models/CorrectionEvent.js';
 import { NON_OTZARIA_SOURCE_FOLDER_RE } from './report-email.js';
+import { libraryVersionKeyExpr, LIBRARY_VERSION_SORT_SCHEMA } from './listSort.js';
 
 const COMMON = {
   schemaVersion: { $ifNull: ['$schemaVersion', 1] },
@@ -40,7 +42,18 @@ export async function migrateLegacyReports({ apply = false } = {}) {
     result.matched += n;
     result.modified += modified;
   }
+  // Explicit maintenance only, never startup/request work. Re-check the computed value too:
+  // rerunning after a rollback repairs keys left stale by an older writer.
+  const versionKey = libraryVersionKeyExpr();
+  const versionFilter = { $or: [
+    { libraryVersionSortSchema: { $ne: LIBRARY_VERSION_SORT_SCHEMA } },
+    { $expr: { $ne: ['$libraryVersionSortKey', versionKey] } },
+  ] };
+  result.versionSort = { matched: await col.countDocuments(versionFilter), modified: 0 };
   if (apply) {
+    result.versionSort.modified = (await col.updateMany(versionFilter, [{ $set: {
+      libraryVersionSortKey: versionKey, libraryVersionSortSchema: LIBRARY_VERSION_SORT_SCHEMA,
+    } }])).modifiedCount;
     // createIndexes (לא syncIndexes): לא מוחק אינדקסים קיימים שאינם בסכמה.
     for (const m of [ErrorReport, CorrectionJob, ChangePackage, PublishAttempt, WorkerHeartbeat, CorrectionEvent]) await m.createIndexes();
   }

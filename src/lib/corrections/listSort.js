@@ -14,12 +14,20 @@
 
 export const LIST_SORTS = ['version', 'newest', 'oldest'];
 export const DEFAULT_LIST_SORT = 'version';
+export const LIBRARY_VERSION_SORT_SCHEMA = 1;
+// Schema equality also lets the readiness check find old documents through an index.
+export const VERSION_SORT_INDEX = { libraryVersionSortSchema: 1, libraryVersionSortKey: -1, createdAt: -1, _id: -1 };
+export const STATE_VERSION_SORT_INDEX = { libraryVersionSortSchema: 1, state: 1, libraryVersionSortKey: -1, createdAt: -1, _id: -1 };
 
 export function parseListSort(raw) {
   return LIST_SORTS.includes(raw) ? raw : DEFAULT_LIST_SORT;
 }
 
+// Both repetitions are bounded; the optional fraction cannot cause unbounded backtracking.
+// eslint-disable-next-line security/detect-unsafe-regex
 const VERSION_NUMBER_RE = /\d{1,15}(?:\.\d{1,15})?/;
+// Mongo's default $trim differs from String.trim() (notably NUL and BOM).
+const JS_TRIM_CHARS = ' \t\r\n\v\f\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff';
 
 /** הגרסה המוצגת של דיווח (מחרוזת) או null. */
 export function reportLibraryVersion(r) {
@@ -37,9 +45,14 @@ export function libraryVersionKey(r) {
   return m ? Number(m[0]) : null;
 }
 
+/** Write these together with any change to libraryVersion/location.libraryBuildId. */
+export function libraryVersionSortFields(report) {
+  return { libraryVersionSortKey: libraryVersionKey(report), libraryVersionSortSchema: LIBRARY_VERSION_SORT_SCHEMA };
+}
+
 /** ביטוי aggregation שמחשב את מפתח הגרסה המספרי (או null) — זהה ל-libraryVersionKey. */
 export function libraryVersionKeyExpr() {
-  const build = { $trim: { input: { $toString: { $ifNull: ['$location.libraryBuildId', ''] } } } };
+  const build = { $trim: { input: { $toString: { $ifNull: ['$location.libraryBuildId', ''] } }, chars: JS_TRIM_CHARS } };
   const src = { $cond: [{ $gt: [{ $strLenCP: build }, 0] }, build, { $toString: { $ifNull: ['$libraryVersion', ''] } }] };
   return {
     $let: {
@@ -52,7 +65,7 @@ export function libraryVersionKeyExpr() {
 /** סדר המיון של שלב $sort / של find().sort() לכל אפשרות. */
 export function sortSpec(sort) {
   if (sort === 'oldest') return { createdAt: 1, _id: 1 };
-  if (sort === 'version') return { _versionKey: -1, createdAt: -1, _id: -1 };
+  if (sort === 'version') return { libraryVersionSortKey: -1, createdAt: -1, _id: -1 };
   return { createdAt: -1, _id: -1 };
 }
 

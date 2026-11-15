@@ -6,6 +6,7 @@ import ErrorReport from '../../models/ErrorReport.js';
 import { computeNewLine } from './payload.js';
 import { reachesOtzariaInbox } from './report-email.js';
 import { newId, logEvent } from './store.js';
+import { libraryVersionSortFields } from './listSort.js';
 
 /** מחשב את ניתוב הקליטה (טהור). */
 export function planIntakeRouting({ kind, correction, reachesOtzaria, verifyConfig }) {
@@ -106,7 +107,7 @@ async function compareExisting(existing, validated, legacy) {
   // לקוח ישן מסווג 409 כזמני ונתקע עליו; לכן upsert כמו פעם — ורק על דיווח v1 פתוח, לעולם לא על v2.
   const updated = await ErrorReport.findOneAndUpdate(
     { _id: existing._id, schemaVersion: 1, contentDigest: existing.contentDigest, state: { $in: ['open', 'email_only'] } },
-    { $set: { ...legacyDisplaySet(legacy), contentDigest: validated.contentDigest } },
+    { $set: { ...legacyDisplaySet(legacy), ...libraryVersionSortFields({ ...existing, libraryVersion: legacy.library_version }), contentDigest: validated.contentDigest } },
     { returnDocument: 'after' },
   ).lean();
   if (updated) await logEvent(updated._id, 'report_updated_by_legacy_client', { kind: 'public' }, updated.workflowGeneration);
