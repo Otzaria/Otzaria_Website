@@ -1,5 +1,6 @@
 /** משלוח שאלות שנשמר בתור לפני ההחלטה; ה-cron משחזר גם משלוח שנקטע באמצע. */
 import AppReport from '../../models/AppReport.js';
+import { normalizeEmailInput } from '../validation-utils.js';
 import { buildReplyAddress, newReplyToken } from './inbound.js';
 import { productOf } from './products.js';
 import { UNLINKED, triageQuestionsMail } from './triage.js';
@@ -34,7 +35,7 @@ export async function deliverTriageQuestions(reportId, deps) {
       const replyTo = buildReplyAddress(doc.replyToken || await ensureReplyToken(reportId), deps.config.replyDomain);
       if (!replyTo) throw new Error('כתובת המענה אינה זמינה');
       const result = await deps.sendContactMail({
-        to: doc.reporterEmail, subject, message, reportTitle: doc.title, issueUrl: doc.issueUrl || null, replyTo, product: productOf(doc),
+        to: normalizeEmailInput(doc.reporterEmail), subject, message, reportTitle: doc.title, issueUrl: doc.issueUrl || null, replyTo, product: productOf(doc),
       });
       if (!result?.sent) throw new Error(result?.reason || 'משלוח השאלות נכשל');
       const now = deps.now || new Date();

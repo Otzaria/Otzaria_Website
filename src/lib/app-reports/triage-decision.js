@@ -2,6 +2,7 @@
  * מה שהאתר עושה עם החלטת הבדיקה האוטומטית: התור לשירות, החלת ההחלטה, ו"פתח בכל זאת" מהניהול.
  */
 import AppReport from '../../models/AppReport.js';
+import { storedEmailPattern } from '../validation-utils.js';
 import { issueHtmlUrl } from './github.js';
 import { buildOutboundComment } from './inbound.js';
 import { getProduct, productFilter, productOf } from './products.js';
@@ -139,7 +140,7 @@ export async function applyTriageDecision(reportId, raw, deps) {
     : {};
   // המדווח כבר קיבל מייל סגירה על הכפילות הזו (מדיווח אחר): לא שולחים שוב
   const notified = d.linkIssue && doc.reporterEmail && await AppReport.exists({
-    ...productFilter(productOf(doc)), issueNumber: d.linkIssue, reporterEmail: doc.reporterEmail, notifiedClosedAt: { $ne: null },
+    ...productFilter(productOf(doc)), issueNumber: d.linkIssue, reporterEmail: storedEmailPattern(doc.reporterEmail), notifiedClosedAt: { $ne: null },
   });
   const claimed = await AppReport.updateOne(claim, {
     $set: { ...UNLINKED, ...link, ...(notified ? { notifiedClosedAt: now } : {}), issuePending: false, issueError: null, triage: decided },
