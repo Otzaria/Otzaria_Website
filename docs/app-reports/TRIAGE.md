@@ -70,7 +70,7 @@
 | `action` | `open` או `hold` |
 | `verdict` | `fixed`, `fix_pending`, `duplicate`, `external`, `no_info`, `ask_reporter`, `needs_human`, `needs_instrumentation` |
 | `confidence` | `high`, `medium`, `low` |
-| `summary` | הפענוח ב-Markdown, עד 20,000 תווים. מוצג בדף הניהול, ונכתב בתגובה ב-issue. |
+| `summary` | הפענוח ב-Markdown, עד 20,000 תווים. מוצג בדף הניהול, ונכתב ב-issue: בפוסט של הדיווח, או בתגובה נפרדת כשה-issue כבר נפתח או כשהפוסט יחרוג ממגבלת האורך של GitHub. |
 | `questions` | עד 5 שאלות, כל אחת עד 500 תווים (אופציונלי) |
 | `linkIssue` | מספר issue של הכפילות או התיקון, רק עם `hold` (אופציונלי) |
 | `awaitingReply` | רק עם `hold` ועם שאלות (אופציונלי) |

@@ -27,6 +27,7 @@ export { hasAppReportsAccess } from '../roles.js';
 import { isAdmin } from '../roles.js';
 
 const LEASE_MS = 2 * 60 * 1000;
+const GITHUB_BODY_LIMIT = 65536;
 export const RESEND_WINDOW_MS = 60 * 60 * 1000;
 export const PENDING_BATCH = 20;
 export const STATE_BATCH = 30;
@@ -328,7 +329,13 @@ export async function publishReport(reportId, deps) {
     // פענוח של החלטת open נכתב באותו פוסט עם הדיווח; השיוך נשאר להמשך
     const decoded = leased.triage?.state === 'opened' && leased.triage.followUp?.status === 'pending' && leased.triage.summary
       ? triageComment(reportId, leased.triage) : null;
-    const withDecode = (text) => (decoded ? `${text}\n\n${decoded}` : text);
+    // מעבר למגבלת הגוף של GitHub הפענוח נשאר לתגובה נפרדת, אחרת הפרסום ייכשל תמיד
+    let summaryPosted = false;
+    const withDecode = (text) => {
+      if (!decoded || text.length + decoded.length + 2 > GITHUB_BODY_LIMIT) return text;
+      summaryPosted = true;
+      return `${text}\n\n${decoded}`;
+    };
     let set;
     if (plan.action === 'comment') {
       await github.createComment(plan.issueNumber, withDecode(buildMergeComment(leased)));
@@ -361,7 +368,7 @@ export async function publishReport(reportId, deps) {
     }
     // השירות לא החליט עד ה-deadline: נפתח כרגיל, ותשובה מאוחרת שלו תטפל ב-issue עצמו
     if (leased.triage?.state === 'pending') Object.assign(set, { 'triage.state': 'timeout', 'triage.decidedAt': now });
-    if (decoded && plan.action !== 'suppress') set['triage.followUp.summaryPosted'] = true;
+    if (summaryPosted) set['triage.followUp.summaryPosted'] = true;
     await AppReport.updateOne(
       { reportId },
       { $set: { ...set, issuePending: false, issueLeaseUntil: null, issueError: null, issueCheckedAt: now } },
