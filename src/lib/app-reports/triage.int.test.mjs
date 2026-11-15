@@ -122,10 +122,12 @@ test('open: האתר פותח את ה-issue ומחזיר את מספרו; החל
   assert.equal(doc.triage.verdict, 'needs_human');
   assert.ok(doc.triage.summary.includes('לחץ זיכרון'));
   // האתר כותב את הפענוח ומשייך — השירות לא צריך הרשאת כתיבה ב-GitHub
-  const decode = gh.comments.filter((c) => c.issue === 100 && c.body.includes('<!-- app-report-triage -->'));
-  assert.equal(decode.length, 1);
-  assert.match(decode[0].body, /לחץ זיכרון/);
-  assert.match(decode[0].body, /בדיקה אוטומטית · דורש בדיקה · ודאות בינונית/);
+  // הפענוח בגוף ה-issue, באותו פוסט עם הדיווח — לא בתגובה נפרדת
+  const issueBody = gh.issues.get(100).body;
+  assert.match(issueBody, /<!-- app-report-triage -->/);
+  assert.match(issueBody, /לחץ זיכרון/);
+  assert.match(issueBody, /בדיקה אוטומטית · דורש בדיקה · ודאות בינונית/);
+  assert.equal(gh.comments.filter((c) => c.issue === 100).length, 0);
   assert.deepEqual(gh.issues.get(100).assignees, ['palmoni5']);
   assert.equal(doc.triage.followUp.status, 'done');
 
@@ -220,7 +222,8 @@ test('GitHub נכשל בפענוח אחרי הפתיחה: ה-cron משלים, ב
   await sync(new Date());
   assert.equal((await AppReport.findOne({ reportId: body.reportId }).lean()).triage.followUp.status, 'done');
   assert.deepEqual(gh.issues.get(100).assignees, ['palmoni5']);
-  assert.equal(gh.comments.filter((c) => c.body.includes('<!-- app-report-triage -->')).length, 1);
+  assert.match(gh.issues.get(100).body, /<!-- app-report-triage -->/);
+  assert.equal(gh.comments.filter((c) => c.body.includes('<!-- app-report-triage -->')).length, 0);
 });
 
 test('שאלות למדווח: מייל עם כתובת מענה; התשובה מפעילה בדיקה חוזרת ומתפרסמת רק כשנפתח', async (t) => {
@@ -374,6 +377,10 @@ test('החלטה מאוחרת על יוצר הכרטיס אינה סוגרת כ�
   const b = await post(report({ description: 'דיווח נוסף עם מידע מועיל' }));
   await applyTriageDecision(b.body.reportId, decision({ action: 'open', verdict: 'needs_human' }), deps());
   assert.equal((await getTriageStatus(b.body.reportId)).issueNumber, issue);
+  // ההצטרפות והפענוח באותה תגובה
+  const posts = gh.comments.filter((c) => c.issue === issue && c.body.includes(b.body.reportId));
+  assert.equal(posts.length, 1);
+  assert.match(posts[0].body, /דיווח נוסף עם אותה חתימה[\s\S]*<!-- app-report-triage -->/);
   await applyTriageDecision(a.body.reportId, decision(), deps());
   assert.equal(gh.issues.get(issue).state, 'open');
 });
