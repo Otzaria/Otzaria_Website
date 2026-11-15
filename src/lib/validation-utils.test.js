@@ -88,6 +88,7 @@ describe('normalizeEmailInput', () => {
     const pattern = storedEmailPattern(rtlWrapped('a.b+c@example.com'))
     expect(pattern.test('a.b+c@example.com')).toBe(true)
     expect(pattern.test(rtlWrapped('A.B+C@Example.com'))).toBe(true)
+    expect(pattern.test('a\u200f.\u202bb+c@exam\u2066ple.com')).toBe(true)
     expect(pattern.test('axb+c@example.com')).toBe(false)
     expect(pattern.test('za.b+c@example.com')).toBe(false)
   })
