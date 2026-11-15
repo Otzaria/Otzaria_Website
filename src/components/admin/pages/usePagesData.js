@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLoadedData } from '@/components/admin/list/useListData'
 import { parsePagesQuery, PAGES_PER_PAGE, serializePagesQuery } from '@/lib/adminPagesScreen/pagesQuery'
 import { listPages, loadFilterOptions } from './pagesApi'
@@ -8,7 +8,7 @@ import { listPages, loadFilterOptions } from './pagesApi'
 const EMPTY = { key: null, pages: [], total: 0, page: 1 }
 const NO_OPTIONS = { books: [], users: [] }
 
-export function usePagesData(query, { onRefreshError } = {}) {
+export function usePagesData(query, { onRefreshError, onOptionsError } = {}) {
   const key = serializePagesQuery(query)
   const loader = useCallback(async () => {
     const { pages, pagination } = await listPages(parsePagesQuery(new URLSearchParams(key)))
@@ -22,10 +22,12 @@ export function usePagesData(query, { onRefreshError } = {}) {
     setData((d) => ({ ...d, pages: d.pages.map((p) => byId.get(p.id) || p) }))
   }, [setData])
 
+  const onOptionsErrorRef = useRef(onOptionsError)
+  useEffect(() => { onOptionsErrorRef.current = onOptionsError })
   const [options, setOptions] = useState({ ...NO_OPTIONS, ready: false })
   useEffect(() => {
     let alive = true
-    loadFilterOptions().then((o) => { if (alive) setOptions({ ...o, ready: true }) }, () => {})
+    loadFilterOptions().then((o) => { if (alive) setOptions({ ...o, ready: true }) }, (error) => { if (alive) onOptionsErrorRef.current?.(error) })
     return () => { alive = false }
   }, [])
 

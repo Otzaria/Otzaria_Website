@@ -37,6 +37,7 @@ export default function PagesScreen() {
   const [confirm, confirmElement] = useConfirm()
   const [query, setQuery] = usePagesQuery()
   const data = usePagesData(query, {
+    onOptionsError: (error) => toast.show({ tone: 'error', message: error.message || 'לא הצלחנו לטעון את רשימות הספרים והמשתמשים.' }),
     onRefreshError: (_, retry) => toast.show({ tone: 'error', message: 'לא הצלחנו לרענן את הרשימה. ייתכן שמה שמוצג לא מעודכן.', action: { label: 'נסה שוב', onClick: retry } }),
   })
   const ready = data.status === 'ready'
@@ -72,6 +73,7 @@ export default function PagesScreen() {
   const { page } = data
   const showing = ready && (page.page === query.page || page.total === 0)
   const [selecting, setSelecting] = useState(false)
+  const [selectingLoaded, setSelectingLoaded] = useState(0)
   const busyScreen = running || selecting
   const options = useMemo(() => filterOptions(data.options), [data.options])
 
@@ -152,8 +154,9 @@ export default function PagesScreen() {
   const selectAll = async () => {
     if (busyScreen) return
     setSelecting(true)
+    setSelectingLoaded(0)
     try {
-      const rows = await listMatchingPages(query)
+      const rows = await listMatchingPages(query, { onProgress: setSelectingLoaded })
       setSelection((previous) => {
         if (previous.key !== filterKey) return previous
         const next = new Map(rows.filter((row) => !releasing.has(row.id)).map((row) => [row.id, row]))
@@ -261,6 +264,7 @@ export default function PagesScreen() {
                 releasable={releasable}
                 working={bulkWorking || selecting}
                 selecting={selecting}
+                selectingLoaded={selectingLoaded}
                 onBulk={onBulk}
                 progress={bulkProgress}
                 stopping={stopping}

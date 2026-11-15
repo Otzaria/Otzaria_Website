@@ -22,13 +22,14 @@ export async function locatePage(query, number) {
   return data.target
 }
 
-export async function listMatchingPages(query) {
+export async function listMatchingPages(query, { onProgress } = {}) {
   const pages = []
   let after = null
   do {
     const part = await requestJson(listUrl(query, after ? { view: 'selection', after } : { view: 'selection' }), { fallback: LIST_FALLBACK })
     pages.push(...part.pages)
     after = part.next
+    onProgress?.(pages.length)
   } while (after)
   return pages
 }

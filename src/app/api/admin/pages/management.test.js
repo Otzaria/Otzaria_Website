@@ -2,7 +2,8 @@
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest'
 import { Types } from 'mongoose'
 
-vi.mock('next-auth', () => ({ getServerSession: async () => ({ user: { role: 'admin' } }) }))
+const auth = vi.hoisted(() => ({ user: { role: 'admin' } }))
+vi.mock('next-auth', () => ({ getServerSession: async () => ({ user: auth.user }) }))
 vi.mock('@/app/api/auth/[...nextauth]/route', () => ({ authOptions: {} }))
 vi.mock('@/lib/db', () => ({ default: async () => {} }))
 
@@ -88,5 +89,31 @@ describe('ניהול עמודים והתנגשויות מול MongoDB', () => {
     expect(await resolveConflict({ bookId, strategy: 'theirs' })).toEqual({ status: 'resolved', strategy: 'theirs' })
     expect(await resolveConflict({ bookId, strategy: 'ours' })).toEqual({ status: 'not-conflict' })
     expect(await LibraryBook.findById(bookId).lean()).toMatchObject({ content: 'upstream', syncStatus: 'clean', version: 4 })
+  })
+
+  test("'ours' משאיר את התוכן והגרסה, ו-'theirs' מעלה גרסה", async ({ skip }) => {
+    if (mongo.skip) return skip(mongo.skip)
+    const bookId = id()
+    await LibraryBook.collection.insertOne({
+      _id: bookId, path: 'ours.txt', title: 'ours', version: 7, syncStatus: 'conflict',
+      content: 'local', baseContent: 'old', baseSha: 'a', conflict: { theirsContent: 'upstream', theirsSha: 'b' },
+    })
+    expect(await resolveConflict({ bookId, strategy: 'ours' })).toEqual({ status: 'resolved', strategy: 'ours' })
+    expect(await LibraryBook.findById(bookId).lean()).toMatchObject({ content: 'local', baseContent: 'upstream', syncStatus: 'dirty', version: 7 })
+  })
+
+  test('תפקידים מרובים: מנהל ספרים כתפקיד משני מורשה בכל נקודות הקצה, ומשתמש בלי הרשאה מקבל 403', async ({ skip }) => {
+    if (mongo.skip) return skip(mongo.skip)
+    const previous = auth.user
+    try {
+      auth.user = { role: 'admin_ocr', roles: ['admin_ocr', 'admin_books'] }
+      expect((await list(new Request(origin + 'list?view=management'))).status).toBe(200)
+      expect((await update(send('update', 'PUT', {}))).status).toBe(400)
+      expect((await download(send('download-batch', 'POST', { ids: [String(seeded[0]._id)] }))).status).toBe(200)
+      auth.user = { role: 'admin_ocr', roles: ['admin_ocr'] }
+      expect((await list(new Request(origin + 'list?view=management'))).status).toBe(403)
+      expect((await update(send('update', 'PUT', {}))).status).toBe(403)
+      expect((await download(send('download-batch', 'POST', { ids: [String(seeded[0]._id)] }))).status).toBe(403)
+    } finally { auth.user = previous }
   })
 })
