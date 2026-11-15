@@ -61,6 +61,7 @@ export async function dispatchTriage(reportId, { config, fetchImpl = fetch }) {
 const fail = (field, error) => ({ ok: false, field, error });
 
 export const TRIAGE_MARKER = '<!-- app-report-triage -->';
+const BIDI_CONTROL_RE = /[\u202a-\u202e\u2066-\u2069]/g;
 const reportMarker = (reportId) => `<!-- app-report-triage-report: ${reportId} -->`;
 const VERDICT_HE = {
   fixed: 'תוקן ב-dev', fix_pending: 'תיקון ב-PR פתוח', duplicate: 'כפול', external: 'סיבה חיצונית',
@@ -71,9 +72,12 @@ const CONFIDENCE_HE = { high: 'גבוהה', medium: 'בינונית', low: 'נמ
 
 /** תגובת הפענוח ב-issue. בלי תיוג משתמשים ובלי סימונים שמתחזים למרקרים. */
 export function triageComment(reportId, t) {
-  const summary = String(t.summary || '').replace(/<!--/g, '&lt;!--').replace(/@(?=[A-Za-z0-9])/g, '@\u200b');
+  // הפענוח נגזר גם מטקסט המדווח: בלי תווי כיוון שמסתירים טקסט, ובלי תמונות שנטענות מבחוץ.
+  // קישורים והפניות #123 נשארים בכוונה: הפענוח הוא Markdown שמפנה ל-PR-ים ול-issues.
+  const summary = String(t.summary || '').replace(BIDI_CONTROL_RE, '').replace(/<!--/g, '&lt;!--')
+    .replace(/@(?=[A-Za-z0-9])/g, '@\u200b').replace(/!\[/g, '!\u200b[');
   const footer = [`בדיקה אוטומטית · ${VERDICT_HE[t.verdict] || t.verdict} · ודאות ${CONFIDENCE_HE[t.confidence] || t.confidence}`,
-    t.note ? String(t.note).replace(/<|>/g, '') : ''].filter(Boolean).join(' · ');
+    t.note ? String(t.note).replace(BIDI_CONTROL_RE, '').replace(/<|>/g, '') : ''].filter(Boolean).join(' · ');
   return `${TRIAGE_MARKER}\n${summary}\n\n---\n<sub>${footer}</sub>\n\n${reportMarker(reportId)}`;
 }
 
