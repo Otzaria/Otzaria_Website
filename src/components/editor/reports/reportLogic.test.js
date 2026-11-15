@@ -77,6 +77,11 @@ describe('buildErrorSubmission', () => {
     expect(res.ok && res.body.column).toBe('left')
   })
 
+  it('עריכת "הטקסט שבספר" שונה מהבחירה נדחית, כדי לא לכתוב מחדש את העמוד בשקט', () => {
+    const res = buildErrorSubmission({ ...base, value: 'אבג', start: 0, end: 3, original: 'אבדדד', proposed: 'אבד' })
+    expect(res.ok).toBe(false)
+  })
+
   it('ולידציה בעברית (rules.js)', () => {
     const same = buildErrorSubmission({ ...base, value: 'אבג', start: 0, end: 3, original: 'אבג', proposed: 'אבג' })
     expect(same).toEqual({ ok: false, error: 'התיקון המוצע זהה לטקסט שבספר' })

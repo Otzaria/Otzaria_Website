@@ -91,6 +91,9 @@ export function buildErrorSubmission({ bookPath, pageNumber, column, value, star
   const replaced = v.slice(s, e)
   if (HAS_TAG.test(replaced)) return { ok: false, error: 'אי אפשר לדווח על קטע שכולל תגי עיצוב. סמנו רק את הטקסט עצמו.' }
   if (/[\r\n]/.test(replaced)) return { ok: false, error: 'אפשר לדווח רק על טקסט שבשורה אחת. סמנו קטע קצר יותר.' }
+  // "הטקסט שבספר" ניתן לעריכה בחלון, אבל הסימון מחליף את הבחירה המקורית: אם הוא שונה ממנה, טקסט העמוד
+  // היה נכתב מחדש בשקט והדיווח לא היה תואם למה שהיה בעמוד
+  if (o.trim() !== replaced.trim()) return { ok: false, error: 'הטקסט שבספר חייב להיות זהה לקטע המסומן. ערכו רק את התיקון המוצע, או סמנו מחדש.' }
   const marker = buildErrorMarker(o, p)
   const newValue = v.slice(0, s) + marker + v.slice(e)
   const ctx = contextAround(newValue, s, s + marker.length)

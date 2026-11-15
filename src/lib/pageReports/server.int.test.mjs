@@ -193,6 +193,17 @@ test('בקשות החלה נדחות בלי לשנות עמוד או דיווח,
   assert.equal((await Page.findById(page._id).lean()).content, `אמר ${MARK} עליכם`)
 })
 
+test('דחייה ופתיחה מחדש מאפסות את הנוסח הסופי של אישור קודם', async (t) => {
+  if (db.skip) return t.skip(db.skip)
+  const id = await newError()
+  await decidePageReport(who(admin, 'admin'), id, { action: 'approve', original: 'שלמם', proposed: 'שלומות' })
+  assert.equal((await PageReport.findById(id).lean()).finalProposed, 'שלומות')
+  const rejected = await decidePageReport(who(admin, 'admin'), id, { action: 'reject', note: 'לא' })
+  assert.equal(rejected.report.status, 'rejected')
+  assert.equal(rejected.report.finalProposed, null)
+  assert.equal((await PageReport.findById(id).lean()).finalProposed, null)
+})
+
 test('כשל בעדכון הדיווח לא משנה את העמוד', async (t) => {
   if (db.skip) return t.skip(db.skip)
   const id = await newError()
