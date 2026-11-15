@@ -1,11 +1,4 @@
-// דיווחים על עמודים — לוגיקת השרת (DB): שליחת דיווח, "הדיווחים שלי", רשימת הניהול והכרעה (כולל החלה על
-// טקסט העמוד). imports יחסיים (נבדק ב-node:test מול Mongo בזיכרון — server.int.test.mjs).
-// תוצאות: { ok: true, ... } או { ok: false, status, error } — הראוטים רק מתרגמים ל-HTTP.
-//
-// עדכונים: על PageReport ועל Page — רק עדכונים מותנים (findOneAndUpdate), אף פעם לא doc.save():
-//   - העמוד משתנה רק אם הטקסט בשדה עדיין זהה למה שנקרא, ורק כשהוא לא בטיפול (השמירה האוטומטית תדרוס).
-//   - הדיווח מתעדכן רק אם הסטטוס, ההחלה ו-updatedAt עדיין כמו שנקראו (שני מנהלים במקביל — אחד מנצח, השני מקבל 409).
-//   - סדר: קודם העמוד, אחר כך הדיווח. אם הדיווח נכשל אחרי שהעמוד השתנה — מחזירים את הטקסט (מותנה).
+// שרת הדיווחים: יצירה, רשימות והכרעה בדיווח בלבד. עריכת העמוד נעשית ידנית.
 import mongoose from 'mongoose'
 import PageReport from '../../models/PageReport.js'
 import Page from '../../models/Page.js'
@@ -13,12 +6,10 @@ import Book from '../../models/Book.js'
 import { hasBooksAccess, hasBookLibraryAccess } from '../roles.js'
 import { canViewPageContent } from '../pageEditAccess.js'
 import {
-  normalizeReportInput, normalizeDecision, statusAfter, canApplyToPage, resolveMarker, pageFieldForColumn,
-  currentMarker, finalTexts, markerNeedsUpdate,
-  APPLY_BLOCKED_MESSAGE, REPORT_KINDS,
+  normalizeReportInput, normalizeDecision, statusAfter, REPORT_KINDS,
 } from './rules.js'
 import {
-  adminReportShape, myReportShape, parseAdminListQuery, countsFromRows, applyModeFor, REPORTS_PER_HOUR, MY_REPORTS_LIMIT,
+  adminReportShape, myReportShape, parseAdminListQuery, countsFromRows, REPORTS_PER_HOUR, MY_REPORTS_LIMIT,
 } from './shapes.js'
 
 const HOUR = 60 * 60 * 1000
@@ -169,11 +160,6 @@ function actionConflict(report, action) {
     if (report.status === 'pending') return 'הדיווח כבר ממתין לטיפול'
     return null
   }
-  if (action === 'apply') {
-    if (applied) return 'הדיווח כבר הוחל על הטקסט'
-    if (report.status !== 'approved' && report.status !== 'rejected') return 'יש להכריע בדיווח לפני שמחילים אותו על הטקסט'
-    return null
-  }
   // approve / reject — מותר גם לשנות הכרעה, כל עוד לא הוחלה על הטקסט
   if (applied) return 'הדיווח כבר הוחל על הטקסט — אי אפשר לשנות את ההכרעה'
   return null
@@ -184,7 +170,7 @@ function actionConflict(report, action) {
  * @param {{_id?: any, id?: any, name?: string}} admin session.user (ההרשאה נבדקת בראוט)
  * @param {string} id
  * @param {object} raw { action, applyToText?, note?, original?, proposed?, applyMode? } — ראו normalizeDecision
- * @returns {Promise<{ ok: true, report: object, applyResult: 'applied'|'marker_updated'|'not_found'|null } | { ok: false, status: number, error: string }>}
+ * @returns {Promise<{ ok: true, report: object, applyResult: null } | { ok: false, status: number, error: string }>}
  */
 export async function decidePageReport(admin, id, raw, { now = new Date() } = {}) {
   if (!isObjectId(id)) return fail(404, 'הדיווח לא נמצא')
@@ -192,11 +178,12 @@ export async function decidePageReport(admin, id, raw, { now = new Date() } = {}
   if (!report) return fail(404, 'הדיווח לא נמצא')
   const decision = normalizeDecision(raw, report.kind)
   if (!decision.ok) return fail(400, decision.error)
-  const { action, applyToText, note, edit, applyMode } = decision.value
+  const { action, applyToText, note, edit } = decision.value
+  // Existing clients may still request automatic writes. Reject explicitly, never silently approve.
+  if (action === 'apply' || applyToText) return fail(409, 'יש לערוך את הטקסט ידנית בעורך העמוד. ההכרעה לא נשמרה.')
 
   const conflict = actionConflict(report, action)
   if (conflict) return fail(409, conflict)
-  if (applyMode === 'marker' && report.status !== 'approved') return fail(409, 'אפשר לעדכן את הסימון רק בדיווח שאושר')
 
   const nextStatus = statusAfter(action, report.status)
   // הנוסח שהמנהל קבע (רק באישור). זהה לשל המדווח — מאפסים (אין "נוסח מנהל")
@@ -207,75 +194,12 @@ export async function decidePageReport(admin, id, raw, { now = new Date() } = {}
       ? { finalOriginal: edit.original, finalProposed: edit.proposed, finalBy: userIdOf(admin), finalByName: admin?.name || '', finalAt: now }
       : { finalOriginal: null, finalProposed: null, finalBy: null, finalByName: '', finalAt: null }
   }
-  const next = { ...report, ...(finalSet || {}) }
-  const final = finalTexts(next)
-
-  // מה כותבים בטקסט העמוד:
-  //   applyToText — החלפת הסימון (בתיקון / בטקסט שבספר), או בהחלה מאוחרת 'marker' — סימון בנוסח שהוחלט. חובה: עמוד
-  //   בעריכה → 409.
-  //   אישור בנוסח שונה מהסימון שבטקסט ("השאר בסוגריים") — עדכון הסימון לנוסח החדש, כשאפשר; עמוד בעריכה — ההכרעה
-  //   נשמרת, והסימון מתעדכן אחר כך ("עדכן את הסימון בטקסט", markerStale).
-  let mode = null
-  let required = false
-  if (applyToText) {
-    mode = applyMode === 'marker' ? 'marker' : applyModeFor(nextStatus)
-    required = true
-  } else if (action === 'approve' && markerNeedsUpdate(next)) {
-    mode = 'marker'
-  }
-
-  let applyResult = null
-  let pageWrite = null // { field, before, after } — לשחזור אם עדכון הדיווח נכשל
-  let page = null
-  if (mode) {
-    page = await Page.findById(report.page).select(PAGE_TEXT_FIELDS).lean()
-    if (page && !canApplyToPage(page.status)) {
-      if (required) return fail(409, APPLY_BLOCKED_MESSAGE)
-      mode = null
-    }
-  }
-
-  if (mode) {
-    const field = pageFieldForColumn(report.column)
-    const before = page ? (page[field] ?? '') : ''
-    const marker = { ...currentMarker(report), offset: report.offset ?? null }
-    const resolved = page ? resolveMarker(before, marker, mode, final) : { found: false }
-    if (!resolved.found) {
-      // apply מאוחר בלי סימון — אין מה לעשות, ולא משנים כלום
-      if (action === 'apply') return { ok: true, report: adminReportShape(report, page), applyResult: 'not_found' }
-      if (required) applyResult = 'not_found'
-    } else {
-      const updated = await Page.findOneAndUpdate(
-        { _id: page._id, [field]: before, status: { $ne: 'in-progress' } },
-        { $set: { [field]: resolved.text } },
-        { returnDocument: 'after', projection: { _id: 1 } }
-      )
-      if (!updated) {
-        // ייתכן שהעמוד נתפס בינתיים — אז ההודעה המדויקת היא חסימת ההחלה
-        const fresh = await Page.findById(page._id).select('status').lean()
-        return fail(409, fresh && !canApplyToPage(fresh.status) ? APPLY_BLOCKED_MESSAGE : TEXT_CHANGED_MESSAGE)
-      }
-      applyResult = mode === 'marker' ? 'marker_updated' : 'applied'
-      pageWrite = { id: page._id, field, before, after: resolved.text }
-    }
-  }
-
   const set = { status: nextStatus, ...(finalSet || {}) }
   if (action !== 'apply') {
     set.resolution = action === 'reopen'
       ? null
       : { note, by: userIdOf(admin), byName: admin?.name || '', at: now }
   }
-  if (applyResult === 'applied') {
-    set.appliedToText = applyModeFor(nextStatus)
-    set.appliedAt = now
-  }
-  if (applyResult === 'marker_updated') {
-    const same = final.original === report.original && final.proposed === report.proposed
-    set.markerOriginal = same ? null : final.original
-    set.markerProposed = same ? null : final.proposed
-  }
-
   const saved = await PageReport.findOneAndUpdate(
     // updatedAt — גם שני אישורים מקבילים (approved → approved בנוסחים שונים) לא דורסים זה את זה
     { _id: report._id, status: report.status, appliedToText: report.appliedToText ?? null, updatedAt: report.updatedAt },
@@ -283,13 +207,9 @@ export async function decidePageReport(admin, id, raw, { now = new Date() } = {}
     { returnDocument: 'after' }
   ).lean()
   if (!saved) {
-    if (pageWrite) {
-      // מנהל אחר הקדים — מחזירים את הטקסט, רק אם אף אחד לא נגע בו מאז
-      await Page.updateOne({ _id: pageWrite.id, [pageWrite.field]: pageWrite.after }, { $set: { [pageWrite.field]: pageWrite.before } })
-    }
     return fail(409, REPORT_CHANGED_MESSAGE)
   }
 
   const savedPage = await Page.findById(saved.page).select(PAGE_TEXT_FIELDS).lean()
-  return { ok: true, report: adminReportShape(saved, savedPage), applyResult }
+  return { ok: true, report: adminReportShape(saved, savedPage), applyResult: null }
 }

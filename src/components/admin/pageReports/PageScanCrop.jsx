@@ -55,7 +55,7 @@ export default function PageScanCrop({ imageUrl, cropRect, alt, maxHeightRem = 1
             <span
               aria-hidden="true"
               data-testid="scan-crop-mark"
-              className="pointer-events-none absolute rounded-sm outline-2 outline-offset-2 outline-primary"
+              className="pointer-events-none absolute rounded-(--radius-xs) outline-2 outline-offset-2 outline-primary"
               style={layout.mark}
             />
           )}

@@ -55,7 +55,7 @@ export default function PageReportsScreen() {
     onRefreshError: (_, retry) => toast.show({ tone: 'error', message: 'לא הצלחנו לרענן את הרשימה. ייתכן שמה שמוצג לא מעודכן.', action: { label: 'נסה שוב', onClick: retry } }),
   })
   const { listRef, beforeRemove } = useFocusAfterRemove({ rowAttr: 'data-report-card', fallbackId: LIST_ID })
-  const { decide, busy, errors, notices, clearMessages } = usePageReportActions({ query, data, toast, beforeRemove })
+  const { decide, busy, errors, clearMessages } = usePageReportActions({ query, data, toast, beforeRemove })
 
   const { reports, counts, total, books, loaded } = data.data
   const ready = data.status === 'ready'
@@ -145,7 +145,6 @@ export default function PageReportsScreen() {
                           report={report}
                           busy={busy.has(id)}
                           error={errors.get(id) || null}
-                          notice={notices.get(id) || null}
                           onDecide={decide}
                           onFilterBook={onFilterBook}
                         />

@@ -18,7 +18,7 @@ export default function ReportHeader({ report, titleId, onFilterBook }) {
   return (
     <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
       {/* בסיס 16rem: בנייד הכפתורים יורדים לשורה משלהם, במקום שהכותרת תידחס לעמודה צרה */}
-      <div className="flex min-w-0 flex-[1_1_16rem] flex-col gap-1">
+      <div className="flex min-w-0 flex-1 basis-64 flex-col gap-1">
         <h3 id={titleId} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-title-md text-on-surface">
           <span className="min-w-0 max-w-full [overflow-wrap:anywhere]">{bookName}</span>
           <span className="text-on-surface-variant">·</span>

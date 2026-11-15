@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  buildErrorMarker, normalizeReportInput, findMarker, resolveMarker, normalizeDecision,
-  statusAfter, canApplyToPage, contextAround, pageFieldForColumn, MAX_CONTEXT,
+  buildErrorMarker, normalizeReportInput, normalizeDecision,
+  MAX_CONTEXT,
 } from './rules.js'
 
 const base = { kind: 'book_error', bookPath: 'ספר', pageNumber: 3 }
@@ -40,37 +40,12 @@ test('normalizeReportInput — הודעה חופשית', () => {
   assert.deepEqual(r.value, { kind: 'message', bookPath: 'ספר', pageNumber: 3, message: 'העמוד חתוך' })
 })
 
-test('findMarker — המופע הקרוב ל-hint', () => {
-  const t = '(א)[ב] טקסט (א)[ב]'
-  assert.equal(findMarker(t, 'א', 'ב'), 0)
-  assert.equal(findMarker(t, 'א', 'ב', 15), 12)
-  assert.equal(findMarker(t, 'ג', 'ב'), -1)
-})
-
-test('resolveMarker — אישור ודחייה', () => {
-  const t = 'אמר (שלם)[שלום] לו'
-  assert.deepEqual(resolveMarker(t, { original: 'שלם', proposed: 'שלום' }, 'proposed'), { found: true, text: 'אמר שלום לו', index: 4 })
-  assert.equal(resolveMarker(t, { original: 'שלם', proposed: 'שלום' }, 'original').text, 'אמר שלם לו')
-  assert.deepEqual(resolveMarker('אין', { original: 'שלם', proposed: 'שלום' }, 'proposed'), { found: false, text: 'אין', index: -1 })
-})
-
 test('normalizeDecision', () => {
   assert.equal(normalizeDecision({ action: 'approve' }, 'book_error').value.applyToText, false)
   assert.equal(normalizeDecision({ action: 'approve', applyToText: true }, 'book_error').value.applyToText, true)
   assert.equal(normalizeDecision({ action: 'apply' }, 'book_error').value.applyToText, true)
   assert.equal(normalizeDecision({ action: 'approve' }, 'message').ok, false)
   assert.equal(normalizeDecision({ action: 'handled', applyToText: true }, 'message').value.applyToText, false)
-})
-
-test('statusAfter / canApplyToPage / contextAround / pageFieldForColumn', () => {
-  assert.equal(statusAfter('approve', 'pending'), 'approved')
-  assert.equal(statusAfter('apply', 'rejected'), 'rejected')
-  assert.equal(statusAfter('reopen', 'handled'), 'pending')
-  assert.equal(canApplyToPage('in-progress'), false)
-  assert.equal(canApplyToPage('completed'), true)
-  assert.deepEqual(contextAround('0123456789', 4, 6, 2), { contextBefore: '23', contextAfter: '67' })
-  assert.equal(pageFieldForColumn('left'), 'leftColumn')
-  assert.equal(pageFieldForColumn(undefined), 'content')
 })
 
 test('normalizeReportInput: cropRect תקין נשמר; פגום → null בלי להכשיל את הדיווח', () => {

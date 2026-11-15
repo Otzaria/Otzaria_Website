@@ -40,7 +40,7 @@ function Side({ side, text, segs, context }) {
       <span className="text-label-md text-on-surface-variant">{s.label}</span>
       <p className="text-body-lg leading-loose text-on-surface-variant [overflow-wrap:anywhere]" dir="rtl">
         {context.before}
-        <Tag className={cx('mx-0.5 rounded-(--radius-xs) bg-surface-container-lowest px-1 py-0.5 text-title-md font-bold text-on-surface no-underline ring-1', s.ring)}>
+        <Tag className={cx('mx-0.5 rounded-(--radius-xs) bg-surface-container-lowest px-1 py-0.5 text-title-md font-semibold text-on-surface no-underline ring-1', s.ring)}>
           <span className="sr-only">{s.srLabel}</span>
           {text ? <Changed segs={segs} side={side} /> : <span className="text-body-md font-normal text-on-surface-variant">{s.empty}</span>}
         </Tag>

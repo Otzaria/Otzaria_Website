@@ -2,9 +2,7 @@
 //   book_error: טעות בספר המצולם עצמו (טעות דפוס במקור). בעורך הטקסט הנבחר הופך לסימון
 //               "(הטקסט שבספר)[התיקון המוצע]", והדיווח נשלח למנהלים להכרעה.
 //   message:    הודעה חופשית למנהלים על העמוד (בלי קשר לטעות).
-// הכרעת המנהל: אישור/דחייה. ברירת המחדל — הסימון נשאר בטקסט; המנהל יכול לבחור גם להחיל על הטקסט:
-//   אושר + הוחל  → הסימון מוחלף בתיקון המוצע
-//   נדחה + הוחל  → הסימון מוחלף בטקסט המקורי שבספר
+// הכרעת המנהל נשמרת בדיווח בלבד; שינוי טקסט מתבצע ידנית בעורך.
 import { normalizeCropRect } from './cropRect.js'
 
 export const REPORT_KINDS = Object.freeze(['book_error', 'message'])
@@ -44,21 +42,9 @@ export function errorTextsProblem(original, proposed) {
   return null
 }
 
-/** הסימון שנמצא עכשיו בטקסט העמוד: אחרי שמנהל עדכן אותו — markerOriginal / markerProposed; אחרת — של המדווח */
-export function currentMarker(report) {
-  return { original: report?.markerOriginal ?? report?.original ?? '', proposed: report?.markerProposed ?? report?.proposed ?? '' }
-}
-
 /** הנוסח שהוחלט: מה שהמנהל קבע (finalOriginal / finalProposed), ואם לא שינה — של המדווח */
 export function finalTexts(report) {
   return { original: report?.finalOriginal ?? report?.original ?? '', proposed: report?.finalProposed ?? report?.proposed ?? '' }
-}
-
-/** האם הנוסח שהוחלט שונה מהסימון שבטקסט עכשיו (כלומר — צריך לעדכן את הסימון) */
-export function markerNeedsUpdate(report) {
-  const c = currentMarker(report)
-  const f = finalTexts(report)
-  return c.original !== f.original || c.proposed !== f.proposed
 }
 
 /**
@@ -120,46 +106,6 @@ export function contextAround(text, start, end, size = 60) {
 }
 
 /**
- * מיקום הסימון בטקסט — המופע הקרוב ביותר ל-hint (אם יש), אחרת הראשון. -1 אם לא נמצא.
- */
-export function findMarker(text, original, proposed, hint = null) {
-  const t = str(text)
-  const marker = buildErrorMarker(original, proposed)
-  let best = -1
-  let bestDist = Infinity
-  for (let i = t.indexOf(marker); i !== -1; i = t.indexOf(marker, i + 1)) {
-    if (!Number.isInteger(hint)) return i
-    const d = Math.abs(i - hint)
-    if (d < bestDist) { best = i; bestDist = d }
-  }
-  return best
-}
-
-/**
- * החלפת הסימון בטקסט: mode 'proposed' (אושר) או 'original' (נדחה), או 'marker' — סימון חדש בנוסח שהמנהל קבע.
- * final — הנוסח שנכתב (ברירת מחדל: הסימון שנמצא); הסימון עצמו מחופש לפי original / proposed.
- * @returns {{ found: boolean, text: string, index: number }}
- */
-export function resolveMarker(text, { original, proposed, offset = null }, mode, final = null) {
-  const t = str(text)
-  const index = findMarker(t, original, proposed, offset)
-  if (index === -1) return { found: false, text: t, index }
-  const target = final || { original, proposed }
-  const replacement = mode === 'marker'
-    ? buildErrorMarker(target.original, target.proposed)
-    : mode === 'original' ? target.original : target.proposed
-  const marker = buildErrorMarker(original, proposed)
-  return { found: true, text: t.slice(0, index) + replacement + t.slice(index + marker.length), index }
-}
-
-/** שם השדה ב-Page לפי הטור */
-export function pageFieldForColumn(column) {
-  if (column === 'right') return 'rightColumn'
-  if (column === 'left') return 'leftColumn'
-  return 'content'
-}
-
-/**
  * בדיקת הכרעת מנהל.
  * actions: 'approve' | 'reject' (טעות בספר), 'handled' (הודעה), 'reopen' (שניהם),
  *          'apply' (החלה מאוחרת על הטקסט של דיווח שכבר הוכרע ועוד לא הוחל).
@@ -195,11 +141,3 @@ export function statusAfter(action, currentStatus) {
   if (action === 'reopen') return 'pending'
   return currentStatus // apply — הסטטוס לא משתנה
 }
-
-/** האם מותר להחיל עכשיו את ההכרעה על טקסט העמוד (עמוד בעריכה — השמירה האוטומטית תדרוס) */
-export function canApplyToPage(pageStatus) {
-  return pageStatus !== 'in-progress'
-}
-
-export const APPLY_BLOCKED_MESSAGE =
-  'העמוד נמצא כעת בעריכה — שינוי בטקסט עלול להידרס בשמירה האוטומטית של המעתיק. אפשר להכריע עכשיו ולהחיל על הטקסט אחרי שהעמוד יסומן כגמור.'

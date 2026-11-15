@@ -61,66 +61,10 @@ describe('כרטיס טעות בספר — תצוגה', () => {
 })
 
 describe('כרטיס טעות בספר — הכרעה', () => {
-  test('שתי דרכי אישור מפורשות, כל אחת עם התוצאה בטקסט; "השאר בסוגריים" שולח בלי החלה', async () => {
-    const user = userEvent.setup()
-    const onDecide = renderCard(errorReport())
-    expect(screen.getByRole('region', { name: 'אם התיקון נכון — מה ייכתב בטקסט העמוד?' })).toBeInTheDocument()
-    const keep = screen.getByRole('button', { name: /^אשר והשאר בסוגריים/ })
-    const replace = screen.getByRole('button', { name: /^אשר והחלף בתיקון/ })
-    expect(keep).toHaveAccessibleDescription(/ויאמר \(בראשת\)\[בראשית\] ברא אלהים/)
-    expect(keep).toHaveAccessibleDescription(/המוסכמה המקובלת/)
-    expect(replace).toHaveAccessibleDescription(/ויאמר בראשית ברא אלהים/)
-    // פעיל — כפתור מלא (filled), לא מראה חיוור שנראה מושבת
-    expect(replace).toBeEnabled()
-    expect(replace).not.toHaveAttribute('aria-disabled')
-    expect(replace).toHaveAttribute('data-state', 'enabled')
-    expect(replace.className).toContain('--button-filled-bg')
-    expect(keep.className).toContain('--button-filled-bg')
-    expect(screen.queryByRole('checkbox')).toBeNull()
-    await user.click(keep)
-    expect(onDecide).toHaveBeenCalledWith(expect.objectContaining({ _id: 'r1' }), 'approve', { applyToText: false, note: '', edit: null })
-  })
 
-  test('"אשר והחלף בתיקון" שולח עם החלה', async () => {
-    const user = userEvent.setup()
-    const onDecide = renderCard(errorReport())
-    await user.click(screen.getByRole('button', { name: /^אשר והחלף בתיקון/ }))
-    expect(onDecide).toHaveBeenCalledWith(expect.anything(), 'approve', { applyToText: true, note: '', edit: null })
-  })
 
-  test('דחייה עם הערה — בלי החלה, עם הסבר שהסימון נשאר', async () => {
-    const user = userEvent.setup()
-    const onDecide = renderCard(errorReport())
-    await user.type(screen.getByRole('textbox', { name: /הערה למדווח/ }), 'במקור כך')
-    const reject = screen.getByRole('button', { name: /דחה את התיקון/ })
-    expect(reject).toHaveAccessibleDescription(/הסימון נשאר בטקסט/)
-    await user.click(reject)
-    expect(onDecide).toHaveBeenCalledWith(expect.anything(), 'reject', { applyToText: false, note: 'במקור כך', edit: null })
-  })
 
-  test('העמוד בעריכה — "החלף בתיקון" מושבת עם הסבר, ו"השאר בסוגריים" פעיל', async () => {
-    const user = userEvent.setup()
-    const onDecide = renderCard(errorReport({ pageStatus: 'in-progress', canApply: false }))
-    const replace = screen.getByRole('button', { name: /^אשר והחלף בתיקון/ })
-    // חסום — מראה אחר (מתאר + מנעול, לא filled), נשאר בסדר הטאב (aria-disabled), הסיבה מוקראת ובטולטיפ, והלחיצה לא שולחת
-    expect(replace).toHaveAttribute('aria-disabled', 'true')
-    expect(replace).toHaveAttribute('data-state', 'blocked')
-    expect(replace.className).not.toContain('--button-filled-bg')
-    expect(replace.className).toContain('--button-outlined-border')
-    expect(replace.parentElement).toHaveClass('cursor-not-allowed')
-    expect(replace.parentElement).toHaveAttribute('title', expect.stringMatching(/העמוד בעריכה עכשיו/))
-    expect(replace).toHaveAccessibleDescription(/העמוד בעריכה עכשיו/)
-    fireEvent.click(replace)
-    expect(onDecide).not.toHaveBeenCalled()
-    expect(screen.getByText('בטיפול')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /^אשר והשאר בסוגריים/ }))
-    expect(onDecide).toHaveBeenCalledWith(expect.anything(), 'approve', { applyToText: false, note: '', edit: null })
-  })
 
-  test('הסימון כבר לא בטקסט — "החלף בתיקון" מושבת עם הסבר', () => {
-    renderCard(errorReport({ markerPresent: false, canApply: false }))
-    expect(screen.getByRole('button', { name: /^אשר והחלף בתיקון/ })).toHaveAccessibleDescription(/הסימון כבר לא נמצא בטקסט/)
-  })
 
   test('עריכת הנוסח: תצוגה מקדימה לפי הנוסח החדש, והאישור שולח אותו', async () => {
     const user = userEvent.setup()
@@ -130,8 +74,7 @@ describe('כרטיס טעות בספר — הכרעה', () => {
     expect(fix).toHaveValue('בראשית')
     await user.clear(fix)
     await user.type(fix, 'בראשיתא')
-    const keep = screen.getByRole('button', { name: /^אשר והשאר בסוגריים/ })
-    expect(keep).toHaveAccessibleDescription(/\(בראשת\)\[בראשיתא\]/)
+    const keep = screen.getByRole('button', { name: /^אשר את התיקון/ })
     await user.click(keep)
     expect(onDecide).toHaveBeenCalledWith(expect.anything(), 'approve',
       { applyToText: false, note: '', edit: { original: 'בראשת', proposed: 'בראשיתא' } })
@@ -144,46 +87,18 @@ describe('כרטיס טעות בספר — הכרעה', () => {
     const fix = screen.getByRole('textbox', { name: /^התיקון/ })
     await user.type(fix, ']')
     expect(screen.getByRole('alert')).toHaveTextContent('סוגריים מרובעים')
-    const blockedKeep = screen.getByRole('button', { name: /^אשר והשאר בסוגריים/ })
+    const blockedKeep = screen.getByRole('button', { name: /^אשר את התיקון/ })
     expect(blockedKeep).toHaveAttribute('aria-disabled', 'true')
     await user.click(blockedKeep)
     expect(onDecide).not.toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: 'בטל את העריכה' }))
     expect(screen.queryByRole('textbox', { name: /^התיקון/ })).toBeNull()
-    await user.click(screen.getByRole('button', { name: /^אשר והשאר בסוגריים/ }))
+    await user.click(screen.getByRole('button', { name: /^אשר את התיקון/ }))
     expect(onDecide).toHaveBeenCalledWith(expect.anything(), 'approve', { applyToText: false, note: '', edit: null })
   })
 
-  test('הוכרע בנוסח המנהל: "הוצע · הוחלט", והסימון בנוסח הקודם — "עדכן את הסימון בטקסט"', async () => {
-    const user = userEvent.setup()
-    const onDecide = renderCard(errorReport({
-      status: 'approved', finalOriginal: 'בראשת', finalProposed: 'בראשיתא', finalByName: 'המנהל', markerStale: true,
-    }))
-    expect(screen.getByText('הוצע:').parentElement).toHaveTextContent('(בראשת)[בראשית]')
-    expect(screen.getByText('הוחלט:').parentElement).toHaveTextContent('(בראשת)[בראשיתא]')
-    expect(screen.getByText('הסימון בטקסט עדיין בנוסח של המדווח.')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /עדכן את הסימון בטקסט/ }))
-    expect(onDecide).toHaveBeenLastCalledWith(expect.anything(), 'apply', { applyMode: 'marker' })
-  })
 
-  test('הוכרע ולא הוחל, ואפשר להחיל — "החל על הטקסט" ו"פתח מחדש"', async () => {
-    const user = userEvent.setup()
-    const onDecide = renderCard(errorReport({ status: 'approved', resolution: { note: 'נכון', byName: 'המנהל', at: '2026-11-12T10:00:00Z' } }))
-    expect(screen.queryByRole('button', { name: /אשר והשאר/ })).toBeNull()
-    expect(screen.getByText('הסימון נשאר בטקסט העמוד.')).toBeInTheDocument()
-    expect(screen.getByText(/הערת מנהל:/).parentElement).toHaveTextContent('נכון')
-    await user.click(screen.getByRole('button', { name: /החל על הטקסט/ }))
-    expect(onDecide).toHaveBeenLastCalledWith(expect.anything(), 'apply')
-    await user.click(screen.getByRole('button', { name: /פתח מחדש/ }))
-    expect(onDecide).toHaveBeenLastCalledWith(expect.anything(), 'reopen')
-  })
 
-  test('הוכרע, העמוד בעריכה — בלי "החל על הטקסט", עם הסבר; "פתח מחדש" נשאר', () => {
-    renderCard(errorReport({ status: 'rejected', pageStatus: 'in-progress', canApply: false }))
-    expect(screen.queryByRole('button', { name: /החל על הטקסט/ })).toBeNull()
-    expect(screen.getByText(/העמוד בעריכה עכשיו/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /פתח מחדש/ })).toBeInTheDocument()
-  })
 
   test('הוחל — בלי "פתח מחדש" ובלי "החל"; כתוב מה נעשה', () => {
     renderCard(errorReport({ status: 'approved', appliedToText: 'proposed', canApply: false }))
@@ -192,16 +107,30 @@ describe('כרטיס טעות בספר — הכרעה', () => {
     expect(screen.getByText('התיקון הוחל על טקסט העמוד')).toBeInTheDocument()
   })
 
-  test('הודעת "לא נמצא" ושגיאה מהשרת', () => {
-    renderCard(errorReport({ status: 'approved' }), { notice: 'not_found', error: { text: 'הטקסט השתנה בינתיים, נסו שוב' } })
-    expect(screen.getByText(/הסימון לא נמצא בטקסט העמוד/)).toBeInTheDocument()
-    expect(screen.getByRole('alert')).toHaveTextContent('הטקסט השתנה בינתיים, נסו שוב')
+
+  test('ההכרעה אינה משנה טקסט ופתיחת העמוד לעריכה ידנית זמינה', async () => {
+    const user = userEvent.setup()
+    const onDecide = renderCard(errorReport())
+    expect(screen.getByText(/ההכרעה נשמרת בדיווח בלבד ואינה משנה/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /עמוד 12/ })).toHaveAttribute('href', expect.stringContaining('/library/books/'))
+    expect(screen.queryByRole('button', { name: /החלף בתיקון/ })).toBeNull()
+    await user.click(screen.getByRole('button', { name: /^אשר את התיקון/ }))
+    expect(onDecide).toHaveBeenCalledWith(expect.anything(), 'approve', { applyToText: false, note: '', edit: null })
+  })
+
+  test('דיווח שהוכרע: הסבר לעריכה ידנית ופתיחה מחדש', async () => {
+    const user = userEvent.setup()
+    const onDecide = renderCard(errorReport({ status: 'approved' }))
+    expect(screen.getByText(/ההכרעה לא שינתה את טקסט העמוד/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /החל על הטקסט/ })).toBeNull()
+    await user.click(screen.getByRole('button', { name: /פתח מחדש/ }))
+    expect(onDecide).toHaveBeenCalledWith(expect.anything(), 'reopen')
   })
 
   test('בזמן בקשה — הכפתורים לא שולחים שוב', async () => {
     const user = userEvent.setup()
     const onDecide = renderCard(errorReport(), { busy: true })
-    await user.click(screen.getByRole('button', { name: /^אשר והשאר בסוגריים/ }))
+    await user.click(screen.getByRole('button', { name: /^אשר את התיקון/ }))
     expect(onDecide).not.toHaveBeenCalled()
   })
 })
@@ -231,7 +160,7 @@ describe('כרטיס טעות בספר — פוקוס אחרי הכרעה', () =
     const user = userEvent.setup()
     const onDecide = vi.fn()
     const { rerender } = render(<ul><BookErrorCard report={errorReport()} busy={false} error={null} onDecide={onDecide} /></ul>)
-    await user.click(screen.getByRole('button', { name: /^אשר והשאר בסוגריים/ }))
+    await user.click(screen.getByRole('button', { name: /^אשר את התיקון/ }))
     rerender(<ul><BookErrorCard report={errorReport({ status: 'approved' })} busy={false} error={null} onDecide={onDecide} /></ul>)
     expect(screen.getByRole('listitem')).toHaveFocus()
   })

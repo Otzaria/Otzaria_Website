@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { buildErrorMarker } from './rules.js'
 import {
-  adminReportShape, myReportShape, parseAdminListQuery, countsFromRows, applyModeFor, pageImageUrl, markerPresentIn,
+  adminReportShape, myReportShape, parseAdminListQuery, countsFromRows, pageImageUrl,
   ADMIN_LIST_MAX_LIMIT,
 } from './shapes.js'
 
@@ -17,31 +17,6 @@ const page = (extra = {}) => ({ status: 'completed', imagePath: '/uploads/books/
 test('pageImageUrl — imagePath כמו שהוא (כמו thumbnail בעורך)', () => {
   assert.equal(pageImageUrl(page()), '/uploads/books/sefer/page.2.jpg')
   assert.equal(pageImageUrl(null), null)
-})
-
-test('adminReportShape: סימון קיים ועמוד גמור → canApply', () => {
-  const s = adminReportShape(report, page())
-  assert.equal(s._id, 'r1')
-  assert.equal(s.pageStatus, 'completed')
-  assert.equal(s.markerPresent, true)
-  assert.equal(s.canApply, true)
-  assert.equal('user' in s, false)
-})
-
-test('adminReportShape: בטיפול / הוחל / אין סימון / עמוד נמחק → אין canApply', () => {
-  assert.equal(adminReportShape(report, page({ status: 'in-progress' })).canApply, false)
-  assert.equal(adminReportShape({ ...report, appliedToText: 'proposed' }, page()).canApply, false)
-  assert.equal(adminReportShape(report, page({ content: 'בלי' })).markerPresent, false)
-  const gone = adminReportShape(report, null)
-  assert.equal(gone.canApply, false)
-  assert.equal(gone.pageStatus, null)
-  assert.equal(gone.imageUrl, null)
-})
-
-test('markerPresentIn: לפי הטור; הודעה תמיד false', () => {
-  assert.equal(markerPresentIn({ ...report, column: 'left' }, page({ leftColumn: buildErrorMarker('א', 'ב'), content: '' })), true)
-  assert.equal(markerPresentIn({ ...report, column: 'right' }, page()), false)
-  assert.equal(markerPresentIn({ ...report, kind: 'message' }, page()), false)
 })
 
 test('myReportShape: בלי פרטי המנהל', () => {
@@ -68,15 +43,17 @@ test('countsFromRows: כל הסטטוסים, גם כשאין שורות', () => 
   ]), { book_error: { pending: 3, approved: 0, rejected: 0 }, message: { pending: 0, handled: 2 } })
 })
 
-test('applyModeFor', () => {
-  assert.equal(applyModeFor('approved'), 'proposed')
-  assert.equal(applyModeFor('rejected'), 'original')
-  assert.equal(applyModeFor('pending'), null)
-})
-
 test('adminReportShape: אזור הצילום — תקין עובר, חסר/פגום → null (דיווחים ישנים)', () => {
   assert.equal(adminReportShape(report, page()).cropRect, null)
   const cropRect = { x: 0.1, y: 0.2, w: 0.8, h: 0.05, source: 'layout', level: 'line', mark: null }
   assert.deepEqual(adminReportShape({ ...report, cropRect }, page()).cropRect, cropRect)
   assert.equal(adminReportShape({ ...report, cropRect: { ...cropRect, w: 2 } }, page()).cropRect, null)
+})
+
+test('צורת הדיווח אינה טוענת שסימון נמצא או שההחלטה הוחלה', () => {
+  const s = adminReportShape(report, page())
+  assert.equal(s.pageStatus, 'completed')
+  assert.equal(s.appliedToText, null)
+  assert.equal('markerPresent' in s, false)
+  assert.equal('canApply' in s, false)
 })

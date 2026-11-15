@@ -123,38 +123,16 @@ describe('דיווחים על עמודים — הכרעה', () => {
     // אחרי האישור — הרענון השקט מחזיר רק את מה שנשאר
     const after = { success: true, reports: [SECOND], counts: { ...COUNTS, book_error: { pending: 1, approved: 6, rejected: 1 } }, total: 1 }
     list = () => json(after)
-    await user.click(within(card('בראשית רבה')).getByRole('button', { name: /^אשר והשאר בסוגריים/ }))
+    await user.click(within(card('בראשית רבה')).getByRole('button', { name: /^אשר את התיקון/ }))
     await waitFor(() => expect(cards()).toHaveLength(1))
     expect(patches()[0]).toMatchObject({ url: '/api/admin/page-reports/r1', body: { action: 'approve' } })
     expect(screen.getByRole('link', { name: /טעויות בספר המודפס, אחד ממתין/ })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /^מצב/ }))
     expect(screen.getByRole('option', { name: /אושר/ })).toHaveTextContent('אושר6')
-    expect(await screen.findByText('התיקון אושר, והסימון נשאר בסוגריים — בראשית רבה, עמוד 12')).toBeInTheDocument()
+    expect(await screen.findByText('התיקון אושר; טקסט העמוד לא השתנה — בראשית רבה, עמוד 12')).toBeInTheDocument()
   })
 
-  test('אישור עם החלה והערה', async () => {
-    const user = userEvent.setup()
-    renderAt('/library/admin/page-reports')
-    await screen.findByRole('list', { name: 'טעויות בספר המודפס' })
-    const c = card('בראשית רבה')
-    await user.type(within(c).getByRole('textbox', { name: /הערה למדווח/ }), 'תודה')
-    await user.click(within(c).getByRole('button', { name: /^אשר והחלף בתיקון/ }))
-    await waitFor(() => expect(patches()).toHaveLength(1))
-    expect(patches()[0].body).toEqual({ action: 'approve', applyToText: true, note: 'תודה' })
-    expect(await screen.findByText('התיקון אושר והוחל על הטקסט — בראשית רבה, עמוד 12')).toBeInTheDocument()
-  })
 
-  test('בסינון "הכול" הכרטיס נשאר, מעודכן; applyResult not_found — הודעה בכרטיס', async () => {
-    const user = userEvent.setup()
-    patch = () => json({ success: true, report: { ...errorReport(), status: 'approved', canApply: false, markerPresent: false }, applyResult: 'not_found' })
-    renderAt('/library/admin/page-reports?status=all')
-    await screen.findByRole('list', { name: 'טעויות בספר המודפס' })
-    await user.click(within(card('בראשית רבה')).getByRole('button', { name: /^אשר והחלף בתיקון/ }))
-    expect(await within(card('בראשית רבה')).findByText(/הסימון לא נמצא בטקסט העמוד/)).toBeInTheDocument()
-    expect(cards()).toHaveLength(2)
-    expect(within(card('בראשית רבה')).getByText('אושר')).toBeInTheDocument()
-    expect(within(card('בראשית רבה')).getByRole('button', { name: /פתח מחדש/ })).toBeInTheDocument()
-  })
 
   test('409 — הודעת השרת בכרטיס, והכרטיס נשאר', async () => {
     const user = userEvent.setup()

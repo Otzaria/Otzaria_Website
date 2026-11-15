@@ -1,6 +1,6 @@
 // הבקשות של "דיווחים על עמודים" לשרת (לפי החוזה של הפיצ'ר):
 //   GET   /api/admin/page-reports?kind=&status=&book=&skip=&limit=   → { reports, counts, total, hasMore }
-//   PATCH /api/admin/page-reports/[id]  { action, applyToText?, note?, original?, proposed?, applyMode? } → { report, applyResult }
+//   PATCH /api/admin/page-reports/[id]  { action, note?, original?, proposed? } → { report }
 // העטיפה (adminRequest) מוסיפה: התחברות שפגה מזוהה, תקרת זמן, והודעת השרת בעברית (למשל 409 — "העמוד בעריכה").
 import { requestJson } from '@/components/admin/list/adminRequest'
 import { decideUrl, listUrl, normalizeCounts } from '@/lib/adminPageReportsScreen/pageReportsQuery'
@@ -24,10 +24,10 @@ export async function loadPageReports(query) {
 /**
  * הכרעה על דיווח.
  * @param {string} id
- * @param {{ action: string, applyToText?: boolean, note?: string }} body
- * @returns {Promise<{ report: any, applyResult: 'applied' | 'not_found' | null }>}
+ * @param {{ action: string, note?: string }} body
+ * @returns {Promise<{ report: any }>}
  */
 export async function decidePageReport(id, body) {
   const data = await requestJson(decideUrl(id), { method: 'PATCH', body, fallback: failText(body.action) })
-  return { report: data.report || null, applyResult: data.applyResult ?? null }
+  return { report: data.report || null }
 }

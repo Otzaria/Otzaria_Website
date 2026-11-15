@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  activeFilters, approvePreview, decisionEdit, finalVersionLine, trimContext,
-  PAGE_SIZE, applyBlockReason, bookOptions, cardKeyAction, countsAfter, decideUrl, decisionBody, editorHref, errorCardState,
+  activeFilters, decisionEdit, finalVersionLine, trimContext,
+  PAGE_SIZE, bookOptions, cardKeyAction, countsAfter, decideUrl, decisionBody, editorHref, errorCardState,
   itemsAfterDecision, listUrl, matchesStatus, messageCardState, normalizeCounts, parsePageReportsQuery, serializePageReportsQuery,
   serverPage, statusCount, tabHref, updatePageReportsQuery,
 } from './pageReportsQuery.js'
@@ -42,8 +42,8 @@ test('בקשת הרשימה: סוג, מצב, ספר, skip ו-limit', () => {
 
 test('גוף ההכרעה', () => {
   assert.deepEqual(decisionBody('approve'), { action: 'approve' })
-  assert.deepEqual(decisionBody('approve', { applyToText: true, note: '  טוב ' }), { action: 'approve', applyToText: true, note: 'טוב' })
-  assert.deepEqual(decisionBody('reject', { applyToText: true }), { action: 'reject', applyToText: true })
+  assert.deepEqual(decisionBody('approve', { applyToText: true, note: '  טוב ' }), { action: 'approve', note: 'טוב' })
+  assert.deepEqual(decisionBody('reject', { applyToText: true }), { action: 'reject' })
   assert.deepEqual(decisionBody('apply', { applyToText: true, note: 'x' }), { action: 'apply' })
   assert.deepEqual(decisionBody('reopen', { note: 'x' }), { action: 'reopen' })
   assert.deepEqual(decisionBody('handled', { note: 'טופל', applyToText: true }), { action: 'handled', note: 'טופל' })
@@ -77,43 +77,6 @@ test('עימוד מהשרת', () => {
   assert.equal(serverPage(9, 75, 0).page, 3)
 })
 
-test('למה אי אפשר להחיל', () => {
-  assert.equal(applyBlockReason({ canApply: true }), null)
-  assert.equal(applyBlockReason({ canApply: false, appliedToText: 'proposed' }), null)
-  assert.equal(applyBlockReason({ canApply: false, pageStatus: 'in-progress', markerPresent: true }), 'page_busy')
-  assert.equal(applyBlockReason({ canApply: false, pageStatus: 'completed', markerPresent: false }), 'marker_missing')
-  assert.equal(applyBlockReason({ canApply: false, pageStatus: 'completed', markerPresent: true }), 'unavailable')
-})
-
-test('כרטיס טעות: ממתין — אשר/דחה ושתי דרכי האישור', () => {
-  const s = errorCardState({ status: 'pending', canApply: true })
-  assert.equal(s.decide, true)
-  assert.deepEqual(s.replaceChoice, { disabled: false, blockReason: null })
-  assert.equal(s.applyLater, false)
-  assert.equal(s.reopen, false)
-  const busy = errorCardState({ status: 'pending', canApply: false, pageStatus: 'in-progress', markerPresent: true })
-  assert.deepEqual(busy.replaceChoice, { disabled: true, blockReason: 'page_busy' })
-})
-
-test('כרטיס טעות: הוכרע — "החל על הטקסט" כשאפשר, "פתח מחדש" רק אם לא הוחל', () => {
-  const later = errorCardState({ status: 'approved', canApply: true, appliedToText: null })
-  assert.equal(later.decide, false)
-  assert.equal(later.replaceChoice, null)
-  assert.equal(later.applyLater, true)
-  assert.equal(later.reopen, true)
-
-  const blocked = errorCardState({ status: 'rejected', canApply: false, pageStatus: 'in-progress', markerPresent: true })
-  assert.equal(blocked.applyLater, false)
-  assert.equal(blocked.applyLaterBlockReason, 'page_busy')
-  assert.equal(blocked.reopen, true)
-
-  const applied = errorCardState({ status: 'approved', canApply: false, appliedToText: 'proposed' })
-  assert.equal(applied.applyLater, false)
-  assert.equal(applied.applyLaterBlockReason, null)
-  assert.equal(applied.reopen, false)
-  assert.equal(applied.applied, true)
-})
-
 test('כרטיס הודעה', () => {
   assert.deepEqual(messageCardState({ status: 'pending' }), { handle: true, reopen: false })
   assert.deepEqual(messageCardState({ status: 'handled' }), { handle: false, reopen: true })
@@ -141,16 +104,6 @@ test('מקשים בכרטיס', () => {
   assert.equal(cardKeyAction({ code: 'KeyX' }), null)
 })
 
-test('approvePreview: השאר בסוגריים מול החלף בתיקון, עם הקשר מקוצר', () => {
-  const r = { original: 'בראשת', proposed: 'בראשית', contextBefore: 'ויאמר ', contextAfter: ' ברא' }
-  assert.deepEqual(approvePreview(r, 'keep'), { before: 'ויאמר ', middle: '(בראשת)[בראשית]', after: ' ברא' })
-  assert.deepEqual(approvePreview(r, 'replace'), { before: 'ויאמר ', middle: 'בראשית', after: ' ברא' })
-  const long = approvePreview({ ...r, contextBefore: 'א'.repeat(40), contextAfter: 'ב'.repeat(40) }, 'keep')
-  assert.equal(long.before, `…${'א'.repeat(28)}`)
-  assert.equal(long.after, `${'ב'.repeat(28)}…`)
-  assert.deepEqual(approvePreview({}, 'replace'), { before: '', middle: '', after: '' })
-})
-
 test('trimContext: קיצור מהצד הרחוק, בגבול מילה', () => {
   assert.deepEqual(trimContext('קצר ', ' גם', 10), { before: 'קצר ', after: ' גם' })
   assert.deepEqual(trimContext('אחת שתיים שלוש ארבע ', ' חמש שש שבע שמונה', 12), { before: '…שלוש ארבע ', after: ' חמש שש שבע…' })
@@ -168,7 +121,7 @@ test('decisionBody: נוסח המנהל רק באישור; applyMode marker רק
   const edit = { original: 'א', proposed: 'ב' }
   assert.deepEqual(decisionBody('approve', { edit }), { action: 'approve', original: 'א', proposed: 'ב' })
   assert.deepEqual(decisionBody('reject', { edit }), { action: 'reject' })
-  assert.deepEqual(decisionBody('apply', { applyMode: 'marker' }), { action: 'apply', applyMode: 'marker' })
+  assert.deepEqual(decisionBody('apply', { applyMode: 'marker' }), { action: 'apply' })
 })
 
 test('decisionEdit / finalVersionLine', () => {
@@ -180,8 +133,8 @@ test('decisionEdit / finalVersionLine', () => {
   assert.deepEqual(finalVersionLine({ ...r, finalOriginal: 'בראשת', finalProposed: 'ברשית' }), { reported: '(בראשת)[בראשית]', decided: '(בראשת)[ברשית]' })
 })
 
-test('כרטיס טעות: "עדכן את הסימון בטקסט" כשהסימון בנוסח הקודם ואפשר לשנות', () => {
-  assert.equal(errorCardState({ status: 'approved', markerStale: true, canApply: true }).markerUpdate, true)
-  assert.equal(errorCardState({ status: 'approved', markerStale: true, canApply: false, pageStatus: 'in-progress' }).markerUpdate, false)
-  assert.equal(errorCardState({ status: 'pending', markerStale: true, canApply: true }).markerUpdate, false)
+
+test('כרטיס מאפשר הכרעה או פתיחה מחדש ללא החלה', () => {
+  assert.deepEqual(errorCardState({status:'pending'}), { pending:true, decide:true, reopen:false, applied:false })
+  assert.deepEqual(errorCardState({status:'approved'}), { pending:false, decide:false, reopen:true, applied:false })
 })
