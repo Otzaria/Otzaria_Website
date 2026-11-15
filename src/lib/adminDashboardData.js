@@ -35,6 +35,7 @@ import User from '@/models/User'
 import Book from '@/models/Book'
 import AppReport from '@/models/AppReport'
 import SpellWordSkip from '@/models/SpellWordSkip'
+import PageReport from '@/models/PageReport'
 import { ADMIN_BADGE_FILTERS, getRequestAdminBadgeCounts } from '@/lib/adminBadgeCounts'
 import { failedPublishFilter, queuedFilter } from '@/lib/corrections/listFilters'
 import { ACTIVE_STATUSES as BOOK_INFO_ACTIVE_STATUSES } from '@/lib/bookinfo/service'
@@ -141,6 +142,20 @@ const QUEUE_LOADERS = {
 
   // הצעות עריכה ("תור אישורים") — /api/library/edits?status=pending
   moderation: (ctx) => countAndOldest(BookEdit, { status: 'pending' }, 'createdAt', ctx),
+
+  // דיווחים על עמודים — תנאי מונה הסרגל (ADMIN_BADGE_FILTERS.pendingPageReports), מפורק לטעויות בספר ולהודעות
+  'page-reports': async (ctx) => {
+    const rows = await PageReport.aggregate([
+      { $match: ADMIN_BADGE_FILTERS.pendingPageReports },
+      { $group: { _id: '$kind', count: { $sum: 1 }, oldest: { $min: '$createdAt' } } },
+    ], options(ctx))
+    const of = (kind) => rows.find((r) => r._id === kind)?.count ?? 0
+    return {
+      count: rows.reduce((n, r) => n + r.count, 0),
+      oldest: earliest(...rows.map((r) => r.oldest)),
+      parts: { book_error: of('book_error'), message: of('message') },
+    }
+  },
 
   // תיקוני טקסט — הלשונית "פנויים ובטיפולי" (ברירת המחדל), בלי מה שכבר בידיים של מישהו
   corrections: (ctx) => countAndOldest(ErrorReport, queuedFilter(ctx.now), 'createdAt', ctx),

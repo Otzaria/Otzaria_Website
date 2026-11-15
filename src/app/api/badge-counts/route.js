@@ -7,7 +7,7 @@ import { getAdminBadgeCounts } from '@/lib/adminBadgeCounts'
 
 export const dynamic = 'force-dynamic'
 
-// GET /api/badge-counts — מוני התג של פאנל הניהול בלבד (שלושה מספרים),
+// GET /api/badge-counts — מוני התג של פאנל הניהול בלבד (ארבעה מספרים),
 // לרענון התקופתי של ה-layout ב-/library/admin. מחליף הורדה של שלוש רשימות
 // מלאות רק לצורך ספירה (ראו src/lib/adminBadgeCounts.js).
 // תלוי בתפקיד הצופה — private/no-store, לא משותף בשום מטמון.

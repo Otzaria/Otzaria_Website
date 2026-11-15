@@ -80,6 +80,7 @@ test('תפקידי התורים תואמים לבדיקות ההרשאה של ה
   const expect = {
     messages: (r) => ['admin', 'admin_plugins', 'admin_books'].includes(r),
     uploads: hasBooksAccess,
+    'page-reports': hasBooksAccess,
     'tzurat-submissions': hasTzuratAdminAccess,
     'tzurat-disputes': hasTzuratAdminAccess,
     'tzurat-reports': hasTzuratAdminAccess,

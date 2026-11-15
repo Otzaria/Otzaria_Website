@@ -8,6 +8,7 @@
 //   לא ביצעו אותו כלל).
 // - העלאות ממתינות: hasBooksAccess (admin / admin_books), כמו /api/admin/uploads/list.
 // - תוספים ממתינים: hasPluginsAccess (admin / admin_plugins), כמו /api/admin/plugins.
+// - דיווחים על עמודים ממתינים: hasBooksAccess (admin / admin_books), כמו /api/admin/page-reports.
 import { ROLES, hasBooksAccess, hasPluginsAccess, hasRole } from './roles.js'
 
 const MESSAGE_BADGE_ROLES = [ROLES.ADMIN, ROLES.ADMIN_PLUGINS, ROLES.ADMIN_BOOKS]
@@ -18,17 +19,19 @@ export function adminBadgeScope(role) {
     messages: hasRole(role, ...MESSAGE_BADGE_ROLES),
     uploads: hasBooksAccess(role),
     plugins: hasPluginsAccess(role),
+    pageReports: hasBooksAccess(role),
   }
 }
 
 /** האם לתפקיד יש מונה כלשהו לרענן (אם לא — אין טעם לתשאל כלל) */
 export function hasAnyAdminBadge(role) {
   const scope = adminBadgeScope(role)
-  return scope.messages || scope.uploads || scope.plugins
+  return scope.messages || scope.uploads || scope.plugins || scope.pageReports
 }
 
 export const EMPTY_ADMIN_BADGE_COUNTS = Object.freeze({
   unreadMessages: 0,
   pendingUploads: 0,
   pendingPlugins: 0,
+  pendingPageReports: 0,
 })

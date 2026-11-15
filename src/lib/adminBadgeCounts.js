@@ -3,11 +3,12 @@ import connectDB from '@/lib/db'
 import Message from '@/models/Message'
 import Upload from '@/models/Upload'
 import Plugin from '@/models/Plugin'
+import PageReport from '@/models/PageReport'
 import { adminBadgeScope, EMPTY_ADMIN_BADGE_COUNTS } from '@/lib/adminBadgeScope'
 import { getRoles } from '@/lib/roles'
 import { QUEUE_STATUS } from '@/lib/adminUploads/uploadTerms'
 
-// מוני-התג של פאנל הניהול (הודעות שלא נקראו / העלאות ממתינות / תוספים ממתינים).
+// מוני-התג של פאנל הניהול (הודעות שלא נקראו / העלאות ממתינות / תוספים ממתינים / דיווחים על עמודים).
 //
 // קודם ה-layout של /library/admin הוריד שלוש רשימות מלאות רק כדי לספור אותן:
 // /api/messages?allMessages=true (כ-1.4MB JSON עם כל ההודעות והתגובות),
@@ -22,6 +23,9 @@ import { QUEUE_STATUS } from '@/lib/adminUploads/uploadTerms'
 //   תופס גם שדה חסר. (קודם — status: 'pending', שדה ישן שכל ההעלאות נמצאות בו ושאף מסך כבר לא
 //   משנה, ולכן המונה לא ירד לעולם.)
 // - pendingPlugins: אותה שאילתה בדיוק כמו ענף ה-pending של GET /api/admin/plugins.
+// - pendingPageReports: דיווחים על עמודים שממתינים (טעויות בספר + הודעות) — שתי הלשוניות של
+//   /library/admin/page-reports בברירת המחדל (status=pending). kind ב-$in — כך השאילתה משתמשת באינדקס
+//   { kind, status, createdAt } של PageReport.
 //
 // התנאים עצמם — משותפים גם לדשבורד (adminDashboardData.js), כדי שהמספר בכרטיס התור
 // יהיה זהה תמיד למונה שבסרגל.
@@ -33,6 +37,7 @@ export const ADMIN_BADGE_FILTERS = Object.freeze({
     hasService: { $ne: true },
     $or: [{ isApproved: false }, { pendingUpdate: { $ne: null } }],
   },
+  pendingPageReports: { kind: { $in: ['book_error', 'message'] }, status: 'pending' },
 })
 
 // תקרת זמן בצד השרת: ספירה איטית נעצרת ב-Mongo ולא ממשיכה להחזיק חיבור מה-pool.
@@ -42,11 +47,11 @@ const QUERY_MAX_TIME_MS = 7000
 // משתמשים; הספירות עצמן זולות.
 export async function getAdminBadgeCounts(role) {
   const scope = adminBadgeScope(role)
-  if (!scope.messages && !scope.uploads && !scope.plugins) return { ...EMPTY_ADMIN_BADGE_COUNTS }
+  if (!scope.messages && !scope.uploads && !scope.plugins && !scope.pageReports) return { ...EMPTY_ADMIN_BADGE_COUNTS }
 
   await connectDB()
 
-  const [unreadMessages, pendingUploads, pendingPlugins] = await Promise.all([
+  const [unreadMessages, pendingUploads, pendingPlugins, pendingPageReports] = await Promise.all([
     scope.messages
       ? Message.countDocuments(ADMIN_BADGE_FILTERS.unreadMessages, { maxTimeMS: QUERY_MAX_TIME_MS })
       : 0,
@@ -56,9 +61,12 @@ export async function getAdminBadgeCounts(role) {
     scope.plugins
       ? Plugin.countDocuments(ADMIN_BADGE_FILTERS.pendingPlugins, { maxTimeMS: QUERY_MAX_TIME_MS })
       : 0,
+    scope.pageReports
+      ? PageReport.countDocuments(ADMIN_BADGE_FILTERS.pendingPageReports, { maxTimeMS: QUERY_MAX_TIME_MS })
+      : 0,
   ])
 
-  return { unreadMessages, pendingUploads, pendingPlugins }
+  return { unreadMessages, pendingUploads, pendingPlugins, pendingPageReports }
 }
 
 /**

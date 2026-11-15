@@ -14,7 +14,7 @@
 import { LEGACY_PLUGIN_TABS } from './adminPlugins/pluginsQuery.js'
 import { getRoles, hasRole } from './roles.js'
 
-/** @typedef {'unreadMessages' | 'pendingUploads' | 'pendingPlugins'} AdminBadgeKey */
+/** @typedef {'unreadMessages' | 'pendingUploads' | 'pendingPlugins' | 'pendingPageReports'} AdminBadgeKey */
 /** @typedef {'isCorrectionsVolunteer' | 'isSupervisor'} ViewerFlag */
 /** @typedef {{ role?: string, roles?: string[], isCorrectionsVolunteer?: boolean, isSupervisor?: boolean }} AdminViewer */
 
@@ -47,6 +47,9 @@ export const ADMIN_NAV_ITEMS = {
   'plugins-layout': { id: 'plugins-layout', label: 'סידור החנות', icon: 'view_agenda', href: '/library/admin/plugins?view=layout', view: 'layout', roles: ['admin', 'admin_plugins'] },
   'plugins-service': { id: 'plugins-service', label: 'תוספי שירות', icon: 'hub', href: '/library/admin/plugins?view=service', view: 'service', roles: ['admin', 'admin_plugins'] },
   pages: { id: 'pages', label: 'עמודים', icon: 'description', href: '/library/admin/pages-management', roles: ['admin', 'admin_books'] },
+  // דיווחים של מתנדבים מעורך העמוד: טעות בספר המצולם (עם תיקון מוצע) והודעות למנהלים על עמוד. מונה — הדיווחים
+  // שממתינים (משני הסוגים). אותן הרשאות כמו "עמודים" (hasBooksAccess)
+  'page-reports': { id: 'page-reports', label: 'דיווחים על עמודים', icon: 'flag', href: '/library/admin/page-reports', badge: 'pendingPageReports', roles: ['admin', 'admin_books'] },
   'ocr-training': { id: 'ocr-training', label: 'עמודים לאימון', icon: 'model_training', href: '/library/admin/ocr-training', roles: ['admin', 'admin_ocr', 'model_trainer'] },
   'ocr-lines': { id: 'ocr-lines', label: 'תמלול שורות', icon: 'edit_note', href: '/library/admin/ocr-lines', roles: ['admin', 'admin_ocr', 'model_trainer'] },
   'ocr-layout': { id: 'ocr-layout', label: 'תיוג מבנה', icon: 'space_dashboard', href: '/library/admin/ocr-layout', roles: ['admin', 'admin_ocr', 'model_trainer'] },
@@ -79,7 +82,7 @@ export const ADMIN_NAV_ITEMS = {
  */
 export const ADMIN_NAV_GROUPS = [
   { id: 'home', label: null, items: ['dashboard'] },
-  { id: 'books', label: 'ספרים', items: ['books', 'uploads', 'pages', 'tzurat-hadaf', 'book-info', 'dictionary', 'corrections', 'moderation', 'conflicts'] },
+  { id: 'books', label: 'ספרים', items: ['books', 'uploads', 'pages', 'page-reports', 'tzurat-hadaf', 'book-info', 'dictionary', 'corrections', 'moderation', 'conflicts'] },
   { id: 'training', label: 'אימון מודלים', items: ['ocr-training', 'ocr-lines', 'ocr-layout', 'page-proof', 'search-feedback'] },
   { id: 'plugins', label: 'תוספים', items: ['plugins', 'plugins-store', 'plugins-layout', 'plugins-service'] },
   { id: 'people', label: 'אנשים', items: ['users', 'messages', 'reminders'] },
@@ -228,6 +231,8 @@ export function countAccessibleLabel(badge, count) {
       return one ? 'העלאה אחת שלא נבדקה' : `${count.toLocaleString('he-IL')} העלאות שלא נבדקו`
     case 'pendingPlugins':
       return one ? 'תוסף אחד לאישור' : `${count.toLocaleString('he-IL')} תוספים לאישור`
+    case 'pendingPageReports':
+      return one ? 'דיווח אחד על עמוד שממתין' : `${count.toLocaleString('he-IL')} דיווחים על עמודים שממתינים`
     default:
       return String(count)
   }
@@ -245,6 +250,7 @@ const ATTENTION = [
   { item: 'messages', label: 'הודעות שלא נקראו' },
   { item: 'uploads', label: 'העלאות שלא נבדקו', href: UPLOADS_QUEUE_HREF },
   { item: 'plugins', label: 'תוספים לאישור' },
+  { item: 'page-reports', label: 'דיווחים על עמודים' },
 ]
 
 /**
