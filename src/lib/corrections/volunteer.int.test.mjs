@@ -573,6 +573,25 @@ test('אישור מתנדב מריץ אצווה פעם אחת; לקיחה לא; 
   assert.equal((await ErrorReport.findById(id2).lean()).publish.status, 'ready');
 });
 
+test('מיון לפי גרסת ספרייה (ברירת מחדל): גרסה חדשה קודם, מספרית, בלי גרסה בסוף; מיון לפי תאריך לפי בקשה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  // שם ספר שונה לכל דיווח — שלא ייחשבו כפילות
+  const v = (title, ver, build) => ({ book_title: title, library_version: ver, location: { line_index: 2, library_build_id: build } });
+  await ingest('ver-27', v('ספר א', '27', '27'));
+  await ingest('ver-100', v('ספר ב', '100', '100'));
+  await ingest('ver-none', v('ספר ג', 'unknown', null));
+  await ingest('ver-27b', v('ספר ד', '27', '27'));
+  // גרסה ענקית מקלט ציבורי לא מפילה את המיון ($toDouble היה זורק Out of range)
+  await ingest('ver-huge', v('ספר ה', '1'.repeat(400), null));
+  const order = (sort) => listReports({ user: users.a, query: { view: 'queued', sort } }).then((r) => r.body.items.map((i) => `${i.bookTitle}|${i.libraryVersion}`));
+  const byVersion = await order(undefined);
+  assert.deepEqual(byVersion.map((x) => x.split('|')[1]), ['1'.repeat(400), '100', '27', '27', 'null'], '100 לפני 27 (מספרי, לא מילוני); בלי גרסה בסוף');
+  assert.deepEqual(await order('version'), byVersion);
+  const newest = await order('newest');
+  assert.equal(newest.length, 5);
+  assert.deepEqual(await order('oldest'), [...newest].reverse());
+});
+
 test('סינון לפי ספר (חלק מהשם, בלי פרשנות regex) ואפשרויות לתפריטים בלי מייל-בלבד', async (t) => {
   if (db.skip) return t.skip(db.skip);
   await ingest('b1');

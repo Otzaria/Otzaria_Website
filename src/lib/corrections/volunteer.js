@@ -22,6 +22,7 @@ import { escapeRegExp } from '../hebrewWordUtils.js';
 import { newId, logEvent, userActor, currentRevisionOf, manualQueueSet } from './store.js';
 import { cancelActiveJobs } from './worker.js';
 import { LIST_FILTERS, PUBLISHING_STATUSES } from './listFilters.js';
+import { parseListSort, sortSpec, libraryVersionKeyExpr, reportLibraryVersion } from './listSort.js';
 
 const MAX_LINE = 20_000;
 const ok = (body) => ({ status: 200, body });
@@ -69,12 +70,24 @@ export async function listReports({ user, query = {}, now = new Date() }) {
   if (hidden.length) filter.bookTitle = { ...filter.bookTitle, $nin: hidden };
   const limit = Math.min(100, Math.max(1, Number.parseInt(query.limit, 10) || 50));
   const skip = Math.max(0, Number.parseInt(query.skip, 10) || 0);
-  const rows = await ErrorReport.find(filter)
-    .select('reportId bookTitle currentRef sourceFolder reportKind state status manual verification approval publish workflowGeneration createdAt resolvedSource.status')
-    .sort({ createdAt: -1 }).skip(skip).limit(limit).lean();
+  const sort = parseListSort(query.sort);
+  const fields = 'reportId bookTitle currentRef sourceFolder reportKind state status manual verification approval publish workflowGeneration createdAt resolvedSource.status inclusion libraryVersion location.libraryBuildId';
+  // מיון לפי גרסה דורש מפתח מחושב (מספר מתוך מחרוזת הגרסה) — לכן aggregate; השאר find רגיל.
+  // aggregate לא מבצע casting: הערכים במסנן כבר בטיפוס הנכון (ObjectId / מחרוזת / regex).
+  const rows = sort === 'version'
+    ? await ErrorReport.aggregate([
+      { $match: filter },
+      { $project: Object.fromEntries(fields.split(' ').map((f) => [f, 1])) },
+      { $addFields: { _versionKey: libraryVersionKeyExpr() } },
+      { $sort: sortSpec(sort) },
+      { $skip: skip },
+      { $limit: limit },
+    ]).allowDiskUse(true)
+    : await ErrorReport.find(filter).select(fields).sort(sortSpec(sort)).skip(skip).limit(limit).lean();
   const total = await ErrorReport.countDocuments(filter);
   return ok({
     view,
+    sort,
     total,
     items: rows.map((r) => ({
       id: String(r._id),
@@ -86,6 +99,7 @@ export async function listReports({ user, query = {}, now = new Date() }) {
       manual: { status: r.manual?.status || 'none', handoffReason: r.manual?.handoffReason || null, assigneeName: r.manual?.assigneeName || null, leaseExpiresAt: r.manual?.leaseExpiresAt || null },
       labels: deriveLabels(r),
       generation: r.workflowGeneration ?? 0,
+      libraryVersion: reportLibraryVersion(r),
       createdAt: r.createdAt,
     })),
   });
