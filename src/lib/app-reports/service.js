@@ -8,7 +8,7 @@ import FileStorage from '../../models/FileStorage.js';
 import Upload from '../../models/Upload.js';
 import { validateAppReport, IMAGE_TYPES } from './validation.js';
 import { computeContentHash, computeResendHash, computeSignatureHash } from './hashes.js';
-import { buildIssueTitle, buildIssueBody, buildMergeComment, issueLabels } from './issue-text.js';
+import { buildIssueTitle, buildIssueBody, buildMergeComment, issueLabels, canAppendTriage } from './issue-text.js';
 import { createGithubClient, issueHtmlUrl } from './github.js';
 import { handleIssueStateChange, trustedIssueClosedAt } from './state-change.js';
 import { cleanupClosedReportPayloads } from './retention.js';
@@ -328,6 +328,7 @@ export async function publishReport(reportId, deps) {
 
     // פענוח של החלטת open נכתב באותו פוסט עם הדיווח; השיוך נשאר להמשך
     const decoded = leased.triage?.state === 'opened' && leased.triage.followUp?.status === 'pending' && leased.triage.summary
+      && canAppendTriage(leased, { isMerge: plan.action === 'comment' })
       ? triageComment(reportId, leased.triage) : null;
     // מעבר למגבלת הגוף של GitHub הפענוח נשאר לתגובה נפרדת, אחרת הפרסום ייכשל תמיד
     let summaryPosted = false;
