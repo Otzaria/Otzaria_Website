@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { alignmentAgreement, lineAlignmentFor, linesForColumn } from '@/lib/editor/caretTrack'
+import { reportScanCrop } from '@/lib/editor/reportScanCrop'
 import { lineWords, splitLines } from '@/lib/editor/caretWord'
 import { buildPageWordReview } from '@/lib/editor/ocrWordReview'
 import { effectiveWrap } from '@/lib/editor/wrapMode'
@@ -198,12 +199,20 @@ export function usePageTracking({
   // טקסט שמגיע כגוש (עמוד/פסקה בשורה אחת) תמיד גולש — גם כשההעדפה "מול הסריקה"
   const wrapMode = useMemo(() => effectiveWrap(wrap, text, lines), [wrap, text, lines])
 
+  // דיווח טעות בספר: האזור בצילום של הטקסט המסומן — רק כשהמעקב פעיל, ובמקור שנבדק (פרופיל /
+  // זיהוי מקומי) רק ברמת מילה; reportScanCrop עצמו דורש מיקום לא-משוער ובטוח בשני הקצוות
+  const scanCropFor = useCallback((col, value, start, end) => {
+    if (!on || (guarded && level !== 'word')) return null
+    return reportScanCrop({ text: value, start, end, source, column: col, twoColumns, wordLevel: wordLevel && level === 'word' })
+  }, [on, guarded, level, source, twoColumns, wordLevel])
+
   return {
     tracking,
     review,
     imagePanelProps: on && showFrame ? { renderOverlay, scrollRef } : { scrollRef },
     textEditorProps: { mirror, wrap: wrapMode },
-    caretFromScan
+    caretFromScan,
+    scanCropFor
   }
 }
 

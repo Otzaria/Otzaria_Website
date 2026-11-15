@@ -54,6 +54,9 @@ import DisplaySettingsSheet from '@/components/editor/v2/DisplaySettingsSheet'
 import OcrWordReviewPanel from '@/components/editor/v2/OcrWordReviewPanel'
 import { setWordReviewAccepted } from '@/lib/editor/ocrWordReview'
 import FinishPageDialog from '@/components/editor/v2/FinishPageDialog'
+import PageReportsLayer from '@/components/editor/reports/PageReportsLayer'
+import { usePageReports } from '@/components/editor/reports/usePageReports'
+import { canReportBookError } from '@/components/editor/reports/reportLogic'
 import RestReminder from '@/components/editor/v2/RestReminder'
 import { buildEditorCommands } from '@/components/editor/v2/editorCommands'
 import {
@@ -1361,6 +1364,19 @@ ${claimRulesText()}`,
   const canReleasePage = pageData?.status === 'in-progress' && Boolean(currentUserId) && pageData?.claimedById === currentUserId
   const claim = pageClaimState(pageData, currentUserId)
 
+  // דיווחים למנהלים (לחיצה ימנית בשדה הטקסט, חלון הפקודות): "טעות בספר" משנה את הטקסט, ולכן רק
+  // למי שתפס את העמוד או למנהל ספרים; שני הסוגים דורשים חיבור לשרת
+  const reportsOnline = !session?.offline && Boolean(offline.connected)
+  const canReportErrors = canReportBookError({ claimState: claim.state, role: session?.user?.role })
+  const pageReports = usePageReports({
+    containerRef: textEditorContainerRef,
+    activeColumn: twoColumns ? (activeTextarea === 'left' ? 'left' : 'right') : null,
+  })
+  const applyColumnText = useCallback((column, text) => {
+    if (column === 'right' || column === 'left') handleColumnChange(column, text)
+    else { setContent(text); handleAutoSaveWrapper(text) }
+  }, [handleColumnChange, handleAutoSaveWrapper])
+
   const handleRelease = useCallback(() => {
     if (session?.offline || navigator.onLine === false) return showAlert('נדרש חיבור', 'שחרור עמוד דורש חיבור לרשת והתחברות לחשבון.');
     const pageId = pageData?.id || pageData?._id
@@ -1508,6 +1524,8 @@ ${claimRulesText()}`,
       canClaim: isPageAvailable,
       canRelease: canReleasePage,
       canFinish: canFinishPage(claim),
+      canReportError: canReportErrors,
+      canSendReports: reportsOnline,
     },
     run: {
       findReplace: () => setShowFindReplace(true),
@@ -1545,6 +1563,8 @@ ${claimRulesText()}`,
       claim: handleClaim,
       release: handleRelease,
       guidelines: () => setShowInfoDialog(true),
+      reportError: pageReports.openErrorReport,
+      pageMessage: pageReports.openPageMessage,
       backToBook: leaveToBook,
     },
   }) : []
@@ -1680,6 +1700,7 @@ ${claimRulesText()}`,
           textView={prefs.textView}
           paraWindow={prefs.paraWindow}
           paraFunnel={prefs.paraFunnel}
+          onFieldContextMenu={pageReports.onFieldContextMenu}
           {...scanTracking.textEditorProps}
         />
       }
@@ -1728,6 +1749,18 @@ ${claimRulesText()}`,
       )}
 
       <CommandPalette open={showPalette} onClose={() => setShowPalette(false)} commands={paletteCommands} />
+
+      <PageReportsLayer
+        {...pageReports.layerProps}
+        bookPath={bookPath}
+        pageNumber={pageNumber}
+        canReportErrors={canReportErrors}
+        online={reportsOnline}
+        columnNames={{ right: rightColumnName, left: leftColumnName }}
+        applyColumnText={applyColumnText}
+        flushSave={flushAutoSave}
+        scanCropFor={scanTracking.scanCropFor}
+      />
 
       <FindReplaceDialog
         isOpen={showFindReplace} onClose={() => setShowFindReplace(false)}

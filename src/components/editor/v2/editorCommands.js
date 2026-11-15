@@ -22,6 +22,7 @@ const noop = () => {}
  *     isFullScreen?: boolean, layoutOrientation?: 'vertical'|'horizontal',
  *     fontFamily?: string, lineHeight?: string, paraSpacing?: string, canDetectWords?: boolean, wordDetecting?: boolean, textView?: 'rich'|'code',
  *     canClaim?: boolean, canRelease?: boolean, canFinish?: boolean,
+ *     canReportError?: boolean, canSendReports?: boolean,
  *   },
  *   run?: Record<string, Function>
  * }} input
@@ -131,6 +132,15 @@ export function buildEditorCommands({ shortcuts = {}, state = {}, run = {} } = {
     cmd('page', 'finish', 'סיום עמוד', { icon: 'check', run: fn('finish'), actionId: 'finish', keywords: ['העלאה', 'סיים'], disabled: state.canFinish === false }),
     ...(state.canClaim ? [cmd('page', 'claim', 'תפיסת העמוד לעבודה', { icon: 'lock', run: fn('claim'), keywords: ['תפוס'] })] : []),
     ...(state.canRelease ? [cmd('page', 'release', 'שחרור העמוד', { icon: 'lock_open', run: fn('release'), keywords: ['שחרר'] })] : []),
+    // דיווחים למנהלים — רק כשהעורך מעביר את הפעולות (לא בעורך הלא-מקוון)
+    ...(typeof run.reportError === 'function' ? [cmd('page', 'reportError', 'דיווח על טעות בספר', {
+      icon: 'flag', run: fn('reportError'), keywords: ['טעות', 'דפוס', 'תיקון', 'דווח'],
+      disabled: state.canSendReports === false || state.canReportError === false
+    })] : []),
+    ...(typeof run.pageMessage === 'function' ? [cmd('page', 'pageMessage', 'הודעה למנהלים על העמוד', {
+      icon: 'forum', run: fn('pageMessage'), keywords: ['הודעה', 'מנהלים', 'דווח', 'בעיה'],
+      disabled: state.canSendReports === false
+    })] : []),
     cmd('page', 'guidelines', 'הנחיות העריכה לספר', { icon: 'info', run: fn('guidelines'), keywords: ['מידע', 'הוראות'] }),
     cmd('page', 'backToBook', 'חזרה לדף הספר', { icon: 'menu_book', run: fn('backToBook') })
   ]

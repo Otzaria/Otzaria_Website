@@ -28,7 +28,10 @@ const TextEditor = forwardRef(({
   textView,
   // עימוד ספר בתצוגה המעוצבת בלבד: "חלון" בתחילת פסקה וסיום משולש (תצוגה, המחרוזת לא משתנה)
   paraWindow = false,
-  paraFunnel = false
+  paraFunnel = false,
+  // רשות: לחיצה ימנית בשדה טקסט (textarea או התצוגה המעוצבת) — (event, field). בלי ה-prop (העורך
+  // הלא-מקוון) — התפריט הרגיל של הדפדפן, בלי שום שינוי
+  onFieldContextMenu
 }, ref) => {
   // ה-textarea עצמם (callback ref → state) — שכבת ה-mirror מסנכרנת אליהם את הגלילה
   const [contentTa, setContentTa] = useState(null)
@@ -86,12 +89,20 @@ const TextEditor = forwardRef(({
     e.stopPropagation();
   };
 
+  const handleContextMenu = onFieldContextMenu
+    ? (e) => {
+        const field = e.target?.closest?.('textarea, [data-rich-textarea]')
+        if (field && e.currentTarget.contains(field)) onFieldContextMenu(e, field)
+      }
+    : undefined;
+
   return (
     <div
       ref={ref}
       className="flex flex-col overflow-auto p-4 editor-container text-editor-container"
       style={{ flex: 1 }}
       onWheel={handleWheel}
+      onContextMenu={handleContextMenu}
     >
       {twoColumns ? (
         <div className="flex flex-row h-full gap-0">
