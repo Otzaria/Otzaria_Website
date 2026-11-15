@@ -469,7 +469,7 @@ export const DEVELOPERS = [
   { name: 'ב.ש. כלטוב', url: 'https://github.com/BatshevaRich', description: 'שיפור ושכלול מסד הנתונים' },
   { name: 'Y.PL.', url: 'https://github.com/Y-PLONI' },
   { name: 'palmoni', url: 'https://github.com/palmoni5' },
-  { name: 'YOSEFTT', url: 'https://github.com/YOSEFTT' },
+  { name: 'YOSEFTT' },
   { name: 'zevisvei', url: 'https://github.com/zevisvei' },
   { name: 'evel-avalim', url: 'https://github.com/evel-avalim' },
   { name: 'userbot', url: 'https://github.com/userbot000' },
@@ -541,7 +541,6 @@ export const ADDITIONAL_SOURCES = [
   { name: 'פרויקט בן י.', url: 'https://github.com/projectbenyehuda/public_domain_dump' },
   {
     name: 'ים החכמה',
-    url: 'https://github.com/torahtyh/yam-HaHachma',
     logo: '/sources/yam-hahachma.png',
     ratio: 491 / 512
   },
@@ -564,7 +563,7 @@ export const EDITOR_GROUPS = [
       { name: 'קטנטן', url: 'https://forum.otzaria.org/user/%D7%A7%D7%98%D7%A0%D7%98%D7%9F' },
       { name: 'ד.', url: 'https://forum.otzaria.org/user/%D7%93%D7%90%D7%A0%D7%A6%D7%99%D7%92' },
       { name: 'י. א.' },
-      { name: '333', url: 'https://forum.otzaria.org/user/333' },
+      { name: '333' },
       { name: 'ט. ג.', url: 'https://forum.otzaria.org/user/%D7%98%D7%9B%D7%A0%D7%95%D7%9C%D7%95%D7%92%D7%99-%D7%92%D7%95-%D7%A0%D7%99%D7%95%D7%A8' },
       { name: 'ה. ה.', url: 'https://forum.otzaria.org/user/%D7%94%D7%91%D7%9C-%D7%94%D7%91%D7%9C%D7%99%D7%9D' },
       { name: 'י. א. ח.', url: 'https://otzaria.org/forum/user/u88' },
@@ -580,7 +579,7 @@ export const EDITOR_GROUPS = [
     editors: [
       { name: 'מויטיו', url: 'https://mitmachim.top/user/%D7%9E%D7%95%D7%99%D7%98%D7%99%D7%95' },
       { name: 'ד. מ. א.', url: 'https://forum.otzaria.org/user/%D7%93%D7%95%D7%93-%D7%9E%D7%A9%D7%94-1' },
-      { name: 'שני אנשים', url: 'https://forum.otzaria.org/user/%D7%A9%D7%A0%D7%99-%D7%90%D7%A0%D7%A9%D7%99%D7%9D' },
+      { name: 'שני אנשים' },
       { name: 'י. ד.', url: 'https://forum.otzaria.org/user/%D7%99%D7%90%D7%99%D7%A8-%D7%93%D7%A0%D7%99%D7%90%D7%9C' },
       { name: 'ש. נ.' }
     ]

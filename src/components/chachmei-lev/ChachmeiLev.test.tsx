@@ -158,7 +158,11 @@ describe('אזורי האנשים והספרייה', () => {
     render(<><ContributorsSection /><DevelopersSection /></>)
     expect(screen.getByRole('region', { name: 'תרמו מהונם ומזמנם' })).toHaveTextContent('דוד אריאל')
     const dev = screen.getByRole('region', { name: 'אודות פיתוח התוכנה' })
-    expect(within(dev).getAllByRole('link')).toHaveLength(DEVELOPERS.length)
+    expect(within(dev).getAllByRole('link')).toHaveLength(DEVELOPERS.filter((person) => person.url).length)
+    for (const person of DEVELOPERS) {
+      expect(within(dev).getByText(person.name)).toBeInTheDocument()
+      if (!person.url) expect(within(dev).getByText(person.name).closest('a')).toBeNull()
+    }
     expect(dev).not.toHaveTextContent('פורום')
   })
 
