@@ -119,3 +119,24 @@ export function countsFromRows(rows) {
   }
   return counts
 }
+
+/**
+ * דיווח "טעות בספר" בצורה שהעורך צריך כדי למצוא את הסימון בטקסט (פתיחה מהניהול, ?report=<id>):
+ * הנוסח, הנוסח שהוחלט, הטור, המיקום וההקשר. בלי פרטי משתמשים.
+ */
+export function editorReportShape(report) {
+  return {
+    _id: id(report._id),
+    kind: report.kind,
+    bookPath: report.bookPath,
+    pageNumber: report.pageNumber,
+    column: report.column || 'content',
+    original: report.original || '',
+    proposed: report.proposed || '',
+    offset: Number.isFinite(report.offset) ? report.offset : null,
+    contextBefore: report.contextBefore || '',
+    contextAfter: report.contextAfter || '',
+    status: report.status,
+    ...finalShape(report, false),
+  }
+}

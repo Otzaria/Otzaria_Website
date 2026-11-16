@@ -13,7 +13,7 @@ import { startMongo } from '../corrections/testing/mongo.js'
 import { buildErrorMarker } from './rules.js'
 import { REPORTS_PER_HOUR } from './shapes.js'
 import {
-  createPageReport, listMyPageReports, listAdminPageReports, decidePageReport,
+  createPageReport, listMyPageReports, listAdminPageReports, decidePageReport, getPageReportForEditor,
   BOOK_ERROR_FORBIDDEN, REPORT_CHANGED_MESSAGE,
 } from './server.js'
 
@@ -294,4 +294,24 @@ test('שני אישורים מקבילים (approved → approved): השני מ�
     PageReport.findById = orig
   }
   assert.equal((await PageReport.findById(id).lean()).finalProposed, 'שלומות')
+})
+
+test('דיווח לעורך: מנהל ספרים, המדווח ומי שתפס — כן; אחר — 403; הודעה / מזהה לא תקין — 404', async (t) => {
+  if (db.skip) return t.skip(db.skip)
+  const id = String(await newError())
+  const asAdmin = await getPageReportForEditor(who(admin, 'admin_books'), id)
+  assert.equal(asAdmin.ok, true)
+  assert.equal(asAdmin.report.original, 'שלמם')
+  assert.equal(asAdmin.report.offset, 4)
+  assert.equal('userName' in asAdmin.report, false)
+  assert.equal((await getPageReportForEditor(who(claimer), id)).ok, true)
+  assert.equal((await getPageReportForEditor(who(other), id)).status, 403)
+  // מי שתפס את העמוד עכשיו (לא המדווח)
+  await Page.updateOne({ _id: page._id }, { $set: { claimedBy: other._id } })
+  assert.equal((await getPageReportForEditor(who(other), id)).ok, true)
+  assert.equal((await getPageReportForEditor(who(admin, 'admin_books_only'), id)).status, 403)
+  assert.equal((await getPageReportForEditor(null, id)).status, 401)
+  assert.equal((await getPageReportForEditor(who(admin, 'admin'), 'nope')).status, 404)
+  const msg = await createPageReport(who(admin, 'admin'), messageBody())
+  assert.equal((await getPageReportForEditor(who(admin, 'admin'), String(msg.report._id))).status, 404)
 })
