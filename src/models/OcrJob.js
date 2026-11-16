@@ -16,6 +16,7 @@ const OptionsSchema = new mongoose.Schema({
   lmCheck: { type: String, enum: ['on', 'off'] },
   alts: { type: String, enum: ['on', 'off'] },
   lexicons: { type: [String], default: undefined },
+  sensitivity: { type: String, enum: ['normal', 'more'] },
 }, { _id: false });
 
 // רשומה אחת לכל עמוד ב-PDF הקלט (pdfPageIndex מ-1). expectedUpdatedAt — updatedAt של

@@ -1,4 +1,4 @@
-import { LEXICON_NAME_RE } from './proofreadingOptions.js';
+import { LEXICON_NAME_RE, PROOFREADING_OPTION_KEYS } from './proofreadingOptions.js';
 
 export const CAPABILITIES_MAX_BYTES = 16 * 1024;
 export const CAPABILITIES_FRESH_MS = 15 * 60 * 1000;
@@ -8,6 +8,7 @@ export function normalizeCapabilities(body) {
   const p = body?.proofreading;
   if (!object(body) || body.schemaVersion !== 1 || !object(p) || p.version !== 1
     || ['lmCheck', 'alternatives', 'lexiconAvailable', 'contextAvailable'].some((k) => typeof p[k] !== 'boolean')
+    || (Object.hasOwn(p, 'sensitivity') && typeof p.sensitivity !== 'boolean')
     || !Array.isArray(p.lexicons) || p.lexicons.length > 50) return null;
   const seen = new Set();
   const lexicons = [];
@@ -20,6 +21,8 @@ export function normalizeCapabilities(body) {
   const out = { version: 1, lmCheck: p.lmCheck, alternatives: p.alternatives,
     lexiconAvailable: p.lexiconAvailable, contextAvailable: p.contextAvailable,
     lexicons: lexicons.sort((a, b) => a.name.localeCompare(b.name)) };
+  // Optional: an older service does not report it, and then only the default sensitivity is offered.
+  if (Object.hasOwn(p, 'sensitivity')) out.sensitivity = p.sensitivity;
   if (Object.hasOwn(p, 'defaultLexicons')) {
     if (!Array.isArray(p.defaultLexicons) || p.defaultLexicons.length > 16
       || p.defaultLexicons.some((n) => !seen.has(n)) || new Set(p.defaultLexicons).size !== p.defaultLexicons.length) return null;
@@ -39,9 +42,10 @@ export function proofreadingCapabilitiesView(state, now = new Date()) {
 // Called only for a NEW request. Stored jobs keep their immutable options even
 // when a later capability report changes or the worker temporarily disconnects.
 export function unsupportedProofreadingOptions(options, capabilities) {
-  if (!['lmCheck', 'alts', 'lexicons'].some((k) => Object.hasOwn(options, k))) return null;
+  if (!PROOFREADING_OPTION_KEYS.some((k) => Object.hasOwn(options, k))) return null;
   if (capabilities?.state !== 'available') return 'המחשב המקומי טרם דיווח על תמיכה בהגדרות ההגהה, או שהדיווח התיישן';
   if (Object.hasOwn(options, 'lmCheck') && !capabilities.lmCheck) return 'המחשב המקומי אינו תומך במתג מודל השפה';
+  if (Object.hasOwn(options, 'sensitivity') && !capabilities.sensitivity) return 'המחשב המקומי אינו תומך בבחירת רגישות ההגהה';
   if (Object.hasOwn(options, 'alts') && !capabilities.alternatives) return 'המחשב המקומי אינו תומך בחלופות לפי ההקשר';
   if (options.alts === 'on' && options.lm !== 'modern' && (!capabilities.contextAvailable || !capabilities.lexiconAvailable)) {
     return 'הספרייה המקומית הדרושה לחלופות לפי ההקשר אינה זמינה במחשב';
