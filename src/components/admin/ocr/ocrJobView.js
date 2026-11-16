@@ -6,6 +6,7 @@ import { OCR_WARNING_LABELS, ocrWarningLabel } from '@/lib/ocr/ocrWarningLabels'
 import { fileSizeText } from '@/lib/adminList/fileSize'
 import { fullDateText } from '@/lib/adminTerms'
 import { normalizePageRange, pageRangeText } from '@/lib/pageRange'
+import { normalizeProofreadingOptions } from '@/lib/ocr/proofreadingOptions'
 import { countPagesInRuns } from '@/lib/ocr/pageRuns'
 
 // גוון (ui/Badge tone) ואייקון לכל מצב — הצבע מחזק בלבד, המשמעות בטקסט
@@ -105,6 +106,8 @@ export function resumePreparationPayload(job, bookId) {
   const options = {}
   if (job?.options?.lm) options.lm = job.options.lm
   if (job?.options?.defaultScript) options.defaultScript = job.options.defaultScript
+  const proofreading = normalizeProofreadingOptions(job?.options || {})
+  if (proofreading.ok) Object.assign(options, proofreading.value)
   const range = jobRange(job)
   return {
     bookId,

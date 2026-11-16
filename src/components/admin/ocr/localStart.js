@@ -6,6 +6,7 @@
 // - classifyStartResponse: תשובת השרת → started / retry / error (עם הודעה בעברית).
 // - postLocalStart: שליחה עם ניסיון חוזר אוטומטי (רשת, 502/503/504, 409 preparing), ניתנת לביטול
 //   (AbortSignal) — הדיאלוג מבטל בסגירה, כך שהלולאה לא ממשיכה לשלוח אחרי שנסגר.
+import { proofreadingFingerprint } from '@/lib/ocr/proofreadingOptions'
 import { TERMINAL_STATUSES, isActiveStatus } from '@/lib/ocr/localJobState'
 
 export const START_URL = '/api/admin/books/ocr/start'
@@ -33,6 +34,7 @@ export function localParamsKey({ bookId, existingTextMode, options, pageRange = 
     options?.lm || '',
     options?.defaultScript || '',
     ...(pageRange ? [pageRange.from, pageRange.to] : []),
+    ...proofreadingFingerprint(options),
   ])
 }
 

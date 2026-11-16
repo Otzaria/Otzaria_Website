@@ -301,3 +301,33 @@ test('a corrected OCR line keeps legacy hints only on unambiguously aligned orig
   assert.deepEqual(repeated.suggestions, []);
   assert.deepEqual(shifted.suggestions.map((s) => s.text), ['סף']);
 });
+
+test('context alternatives survive layout mapping, remain check-level, and accept a two-word replacement explicitly', () => {
+  const marked = { ...line, lm: [], marks: [{ i: 2, word: 'פוסרת', level: 'check',
+    alts: [{ text: 'פו סרת', p: .8, why: 'רווח חסר' }, { text: 'פו סרת', p: .7 }, { text: 'פוסרת', p: .1 }] }] };
+  const mapped = fromLayout({ ...layout, lines: [marked] });
+  const fields = { content: 'והנה היא <b>פוסרת</b> את הצרה' };
+  const review = buildPageWordReview(fields, mapped);
+  const suspect = review.suspects[0];
+  assert.equal(suspect.reasons[0], 'proofreading_check');
+  assert.deepEqual(suspect.suggestions, []);
+  assert.deepEqual(suspect.contextAlternatives, [{ text: 'פו סרת', p: .8, why: 'רווח חסר' }]);
+  assert.equal(fields.content, 'והנה היא <b>פוסרת</b> את הצרה');
+  assert.equal(replaceReviewedWord(fields.content, suspect, suspect.contextAlternatives[0].text).value, 'והנה היא <b>פו סרת</b> את הצרה');
+  const decisions = setWordReviewAccepted(fields, null, suspect, 'r1');
+  assert.equal(buildPageWordReview(fields, mapped, decisions).count, 0);
+  assert.equal(buildPageWordReview({ content: 'והנה היא פוטרת את הצרה' }, mapped).count, 0);
+});
+
+test('context duplicates of fix suggestions are removed and repeated-word occurrences remain separate', () => {
+  const repeated = { text: 'אמר אמר', marks: [
+    { i: 0, word: 'אמר', level: 'fix', sugg: ['אמד'], alts: [{ text: 'אמד', p: .5 }, { text: 'אומר', p: .5 }] },
+    { i: 1, word: 'אמר', level: 'check', alts: [{ text: 'אחר', p: 1 }] },
+  ] };
+  const words = reviewWordsOfLine(repeated);
+  assert.deepEqual(words[0].contextAlternatives.map((a) => a.text), ['אומר']);
+  assert.deepEqual(words[1].contextAlternatives.map((a) => a.text), ['אחר']);
+  const review = buildPageWordReview({ content: repeated.text }, { lines: [{ reviewWords: words }] });
+  const approved = setWordReviewAccepted({ content: repeated.text }, null, review.suspects[0], 'r1');
+  assert.equal(buildPageWordReview({ content: repeated.text }, { lines: [{ reviewWords: words }] }, approved).suspects[0].contextAlternatives[0].text, 'אחר');
+});

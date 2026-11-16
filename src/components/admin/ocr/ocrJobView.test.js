@@ -382,3 +382,11 @@ describe('טווח עמודים: willProcessCount / resumePreparationPayload / j
   })
 })
 
+
+
+it('resume preserves new proofreading options independently of live capabilities or form defaults', () => {
+  const options = { lm: 'modern', defaultScript: 'square', lmCheck: 'off', alts: 'off', lexicons: [] }
+  const job = { method: 'local', status: 'preparing', requestId: 'pr6-resume', existingTextMode: 'overwrite', options }
+  expect(resumePreparationPayload(job, 'b1').options).toEqual(options)
+  expect(job.options).toEqual(options)
+})

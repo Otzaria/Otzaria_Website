@@ -650,6 +650,20 @@ describe('BookOcrPanel — המשך הכנה של עבודת local שנתקעה'
     }
   })
 
+  it('resume keeps proofreading options when capability reports expire during preparation', async () => {
+    const options = { lm: 'modern', defaultScript: 'rashi', lmCheck: 'off', alts: 'off', lexicons: [] }
+    const calls = mockApi({
+      status: () => statusBody({ job: prepJob({ options }), worker: { ...ONLINE, proofreading: { state: 'stale' } } }),
+      start: () => reply(202, { success: true, jobId: 'j1', status: 'queued' }),
+    })
+    renderDialog()
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: /המשך הכנה/ }))
+    await waitFor(() => expect(calls.start).toHaveLength(1))
+    expect(calls.start[0].requestId).toBe('server-req-1234')
+    expect(calls.start[0].options).toEqual(options)
+  })
+
   it('הכנה פעילה (lease בתוקף) — אין "המשך הכנה"', async () => {
     mockApi({ status: () => statusBody({ job: prepJob({ preparingStale: false }) }) })
     renderDialog()

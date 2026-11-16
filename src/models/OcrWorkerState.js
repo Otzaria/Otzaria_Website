@@ -6,6 +6,8 @@ const OcrWorkerStateSchema = new mongoose.Schema({
   workerId: { type: String, required: true, unique: true },
   lastSeenAt: { type: Date },
   lastRoute: { type: String },
+  proofreadingCapabilities: { type: mongoose.Schema.Types.Mixed },
+  capabilitiesReceivedAt: { type: Date },
 }, { timestamps: true });
 
 export default mongoose.models.OcrWorkerState || mongoose.model('OcrWorkerState', OcrWorkerStateSchema);

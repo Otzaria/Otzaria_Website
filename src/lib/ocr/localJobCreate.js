@@ -17,6 +17,8 @@
 //
 // על OcrJob: רק lean/updateOne/findOneAndUpdate מותנים — אף פעם doc.save() (ראו OcrJob.js).
 // imports יחסיים בלבד.
+import OcrWorkerState from '../../models/OcrWorkerState.js';
+import { proofreadingCapabilitiesView, unsupportedProofreadingOptions } from './proofreadingCapabilities.js';
 import OcrJob from '../../models/OcrJob.js';
 import Page from '../../models/Page.js';
 import { buildJobInput } from './localPdf.js';
@@ -96,6 +98,12 @@ export async function createOrResumeLocalJob({ book, req, session, config, now =
       );
       if (!taken) continue; // בקשה מקבילה לקחה את ה-lease או סיימה — קוראים שוב
       return prepare(taken, lease, req);
+    }
+
+    if (['lmCheck', 'alts', 'lexicons'].some((key) => Object.hasOwn(req.options, key))) {
+      const worker = await OcrWorkerState.findOne({ workerId: config.workerId }).lean();
+      const error = unsupportedProofreadingOptions(req.options, proofreadingCapabilitiesView(worker, now));
+      if (error) return { status: 409, body: { error, code: 'proofreading_unavailable' } };
     }
 
     // אין עבודה ל-requestId הזה — האם יש עבודה פעילה אחרת לספר?

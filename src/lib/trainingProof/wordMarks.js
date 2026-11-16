@@ -1,3 +1,5 @@
+import { cleanContextAlternatives } from '../ocr/proofreadingMarks.js';
+
 // מילים חשודות בשורת-זיהוי ("המגיה", docs/76 §13 בתחנה) — טהור, בלי DOM.
 // בכל פריט ocr יכול להגיע שדה-רשות marks: [{i, word, level, sugg?}] — i = מקום המילה ב-text.split(),
 // level = 'fix' ("הצעת תיקון", עם עד 3 חלופות ב-sugg) או 'check' ("בדוק מילה זו", בלי חלופות).
@@ -40,7 +42,8 @@ export function cleanMarks(raw, text) {
     }
     if (level === 'fix' && !sugg.length) level = 'check';
     seen.add(i);
-    out.push(level === 'fix' ? { i, word, level, sugg } : { i, word, level });
+    const alts = cleanContextAlternatives(m.alts, word, sugg);
+    out.push({ ...(level === 'fix' ? { i, word, level, sugg } : { i, word, level }), ...(alts.length ? { alts } : {}) });
   }
   out.sort((a, b) => a.i - b.i);
   return out.length ? out : null;

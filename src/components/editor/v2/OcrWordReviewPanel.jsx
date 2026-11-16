@@ -116,7 +116,19 @@ export default function OcrWordReviewPanel({ review, textContainerRef, onApplyTe
               <span>{s.text}<small className="ms-2 text-on-surface-variant">{s.sources.map((k) => SOURCES[k]).join(' · ')}{s.p !== null ? ` · ${formatPct(s.p)}` : ''}</small></span>
               <Button variant="tonal" onClick={() => replace(s)} aria-label={`החלף ב${s.text}`}>החלף</Button>
             </li>)}
-          </ul> : <p className="text-body-sm">אין הצעות חלופיות. אפשר לתקן ישירות בעורך לפי הצילום.</p>}
+          </ul> : !current.contextAlternatives?.length && <p className="text-body-sm">אין הצעות חלופיות. אפשר לתקן ישירות בעורך לפי הצילום.</p>}
+          {!!current.contextAlternatives?.length && <div className="mt-3">
+            <p className="text-body-sm text-on-surface-variant">חלופות לפי ההקשר בספרייה. האחוזים הם משקל יחסי בין החלופות.</p>
+            <ul aria-label="חלופות לפי ההקשר" className="mt-2 space-y-2">
+              {current.contextAlternatives.map((s) => <li key={s.text}>
+                <div className="flex items-center justify-between gap-3">
+                  <span>{s.text}{s.p != null && <small className="ms-2 text-on-surface-variant">משקל יחסי: {formatPct(s.p)}</small>}</span>
+                  <Button variant="tonal" onClick={() => replace(s)} aria-label={`החלף ב${s.text}`}>החלף</Button>
+                </div>
+                {s.why && <p className="text-body-sm text-on-surface-variant">{s.why}</p>}
+              </li>)}
+            </ul>
+          </div>}
         </section>
       </> : review?.status !== 'loading' && <p className="mt-3">אין כרגע מילים מסומנות לבדיקה.</p>}
       {onSetAccepted && review?.accepted?.length > 0 && <details className="mt-4 border-t border-outline-variant pt-3">

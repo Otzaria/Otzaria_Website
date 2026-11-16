@@ -17,6 +17,7 @@ import { badRequest, notFound, requireAccess, serverError } from '@/lib/apiRespo
 import { OLDER_RESULT_CONFLICTS_MAX, PENDING_CONFLICT_STATUSES, pendingResultConflicts } from '@/lib/ocr/ocrConflictView';
 import { resultMetadataView } from '@/lib/ocr/localResultLayout.pure';
 import { countBookOcrPages } from '@/lib/ocr/bookOcrCounts';
+import { proofreadingCapabilitiesView } from '@/lib/ocr/proofreadingCapabilities';
 import { jobPageRange } from '@/lib/ocr/runOcrJob.pure';
 
 // GET /api/admin/books/ocr/status?bookId=...
@@ -36,12 +37,13 @@ const MAX_PAGE_ERRORS = 50;
 async function readWorkerInfo(now) {
   const cfg = readWorkerConfig();
   if (!cfg.ok) return { configured: false, lastSeenAt: null, availability: 'never' };
-  const state = await OcrWorkerState.findOne({ workerId: cfg.workerId }).select('lastSeenAt').lean();
+  const state = await OcrWorkerState.findOne({ workerId: cfg.workerId }).select('lastSeenAt proofreadingCapabilities capabilitiesReceivedAt').lean();
   const lastSeenAt = state?.lastSeenAt ?? null;
   return {
     configured: true,
     lastSeenAt,
     availability: workerAvailability(lastSeenAt, now, WORKER_ONLINE_WINDOW_MS),
+    ...(state?.capabilitiesReceivedAt ? { proofreading: proofreadingCapabilitiesView(state, now) } : {}),
   };
 }
 

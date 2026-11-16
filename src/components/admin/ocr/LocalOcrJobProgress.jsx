@@ -67,7 +67,9 @@ export default function LocalOcrJobProgress({
   const percent = progressPercent(job)
   const cancellable = canCancel(job)
   const applying = job.status === 'applying' || job.decision === 'apply'
-  const hint = isRequeued(job) ? REQUEUED_HINT : STATUS_HINTS[job.status]
+  const hint = job.status === 'running' && job.progress?.phase === 'context'
+    ? 'הזיהוי הסתיים. מחשב חלופות לפי ההקשר בספרייה; חישוב ראשון עשוי להימשך 7–25 דקות. אפשר לבטל.'
+    : isRequeued(job) ? REQUEUED_HINT : STATUS_HINTS[job.status]
   const resume = resumeIssue(job)
   const rangeText = jobRangeText(job)
 

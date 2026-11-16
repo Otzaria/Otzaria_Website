@@ -94,3 +94,18 @@ describe('OcrScreen — המילים החשודות', () => {
     expect(card.querySelector('p')).toHaveTextContent('שורה מספר 0')
   })
 })
+
+
+it('check-level context alternative opens a two-word correction without saving until confirmation', async () => {
+  const marks = [{ i: 0, word: 'שורה', level: 'check', alts: [{ text: 'שתי שורות', p: .8, why: 'רווח חסר' }] }]
+  const { calls } = api([ocrPublic(0, { marks })])
+  const user = userEvent.setup()
+  render(<OcrScreen />)
+  await screen.findByText('שורה 1 מתוך 1')
+  const card = document.getElementById('tp-line-o0')
+  await user.click(card.querySelector('[data-tp-mark="check"]'))
+  expect(card).toHaveTextContent('משקל יחסי')
+  await user.click(within(card).getByRole('button', { name: /שתי שורות/ }))
+  expect(within(card).getByRole('textbox')).toHaveValue('שתי שורות מספר 0')
+  expect(calls.filter((call) => call.method === 'POST' && call.path.startsWith('/api/training-proof/items/'))).toHaveLength(0)
+})
