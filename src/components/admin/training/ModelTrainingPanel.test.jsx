@@ -24,6 +24,14 @@ it('requires explicit acknowledgement and queues training rather than an OCR req
   expect(JSON.parse(options.body)).toMatchObject({ bookId: book.id, pageNumbers: [1,2,3,4,5], script: 'square', epochs: 4, approved: true })
   expect(m.request.mock.calls.some(([u]) => u.includes('/ocr/start'))).toBe(false)
 })
+it('offers the frozen five pages for download only while the archive still exists, even with remote training off', async () => {
+  const job = { id: 'c'.repeat(24), status: 'completed', active: false, script: 'square', bookId: book.id }
+  m.request.mockImplementation(async () => ({ enabled: false, jobs: [{ ...job, downloadable: true }, { ...job, id: 'd'.repeat(24), downloadable: false }] }))
+  render(<ModelTrainingPanel book={book} />)
+  const links = await screen.findAllByRole('link', { name: 'הורד את חמשת העמודים והטקסט המתוקן (ZIP)' })
+  expect(links).toHaveLength(1)
+  expect(links[0]).toHaveAttribute('href', `/api/admin/model-training/${job.id}/download`)
+})
 it('keeps the same id on a network retry and never treats completion of tagging as automatic approval', async () => {
   m.request.mockImplementation(async (url, options) => {
     if (options?.method === 'POST') throw new Error('אין חיבור')

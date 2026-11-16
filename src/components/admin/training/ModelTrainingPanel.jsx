@@ -72,6 +72,7 @@ export default function ModelTrainingPanel({ book = null }) {
       {j.active && phases[j.phase] && <p>{phases[j.phase]}</p>}
       {j.status === 'preparing' && <Button variant="text" onClick={() => post({ bookId: j.bookId, requestId: j.requestId, script: j.script, epochs: j.epochs, ...j.selection })} disabled={busy}>המשך הכנת חומר האימון</Button>}
       {j.message && <p>{j.message}</p>}{j.error && <p>{j.error}</p>}
+      {j.downloadable && <a className="underline me-3" href={`/api/admin/model-training/${j.id}/download`} download>הורד את חמשת העמודים והטקסט המתוקן (ZIP)</a>}
       {j.before && <a className="underline me-3" href={j.before.url} target="_blank" rel="noopener noreferrer">מודל לפני האימון</a>}
       {j.after && <a className="underline me-3" href={j.after.url} target="_blank" rel="noopener noreferrer">מודל אחרי האימון</a>}
       {j.activated && <a className="underline" href={`/library/admin/books?book=${j.bookId}&view=ocr`}>לזיהוי יתר העמודים — בחרו דילוג על עמודים שכבר נערכו</a>}
