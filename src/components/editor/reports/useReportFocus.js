@@ -32,14 +32,21 @@ export function useReportFocus({ containerRef, ready, bookPath, pageNumber, fetc
     return queryAllEditorFields(root).map((el) => ({ el, column: el.getAttribute('data-column'), value: el.value ?? '' }))
   }, [containerRef])
 
-  /** איתור מחדש בטקסט הנוכחי, וסימון. מחזיר את המיקום או null */
-  const highlight = useCallback((report) => {
+  /** איתור בטקסט הנוכחי: השדה, המיקום והסימון כפי שהוא בעמוד — או null */
+  const find = useCallback((report) => {
     const list = fields()
     const hit = locateInEditorFields(list, report)
     if (!hit) return null
     const field = list.find((f) => (f.column === 'right' || f.column === 'left' ? f.column : 'content') === hit.column)
-    const el = /** @type {any} */ (field?.el)
-    if (!el) return null
+    if (!field?.el) return null
+    return { el: /** @type {any} */ (field.el), hit: { ...hit, markerText: field.value.slice(hit.start, hit.end) } }
+  }, [fields])
+
+  /** איתור מחדש בטקסט הנוכחי, וסימון. מחזיר את המיקום או null */
+  const highlight = useCallback((report) => {
+    const found = find(report)
+    if (!found) return null
+    const { el, hit } = found
     el.focus({ preventScroll: true })
     el.setSelectionRange(hit.start, hit.end)
     // גלילה כך שהסימון באמצע השדה (כמו "חפש הבא"); הפס עובר לצד הנגדי לסימון במסך, כדי לא להסתיר אותו
@@ -53,7 +60,7 @@ export function useReportFocus({ containerRef, ready, bookPath, pageNumber, fetc
       setState((s) => (s && s.placement !== placement ? { ...s, placement } : s))
     }, 10)
     return hit
-  }, [fields])
+  }, [find])
 
   useEffect(() => {
     if (!ready || typeof window === 'undefined') return undefined
@@ -79,7 +86,7 @@ export function useReportFocus({ containerRef, ready, bookPath, pageNumber, fetc
           return
         }
         const hit = highlight(report)
-        if (hit) return setState((s) => ({ phase: 'found', report, count: hit.count, placement: s?.placement }))
+        if (hit) return setState((s) => ({ phase: 'found', report, count: hit.count, hit, placement: s?.placement }))
         tries += 1
         if (tries < RETRIES && fields().every((f) => !f.value)) {
           timer = window.setTimeout(attempt, RETRY_MS)
@@ -108,15 +115,21 @@ export function useReportFocus({ containerRef, ready, bookPath, pageNumber, fetc
   const rehighlight = useCallback(() => {
     if (!state?.report) return
     const hit = highlight(state.report)
-    setState((s) => (s ? { ...s, phase: hit ? 'found' : 'missing', count: hit?.count } : s))
+    setState((s) => (s ? { ...s, phase: hit ? 'found' : 'missing', count: hit?.count, hit, done: undefined } : s))
   }, [state, highlight])
 
   const dismiss = useCallback(() => setState(null), [])
 
-  return { state, rehighlight, dismiss }
+  /** פעולה בוצעה בטקסט (ReportMarkerActions) — הודעה בפס; "סמן שוב" מחפש מחדש (למשל אחרי ביטול) */
+  const markDone = useCallback((done) => setState((s) => (s ? { ...s, phase: 'applied', done, hit: null } : s)), [])
+
+  /** הסימון בטקסט הנוכחי (לפני פעולה — הטקסט יכול היה להשתנות מאז שסומן) */
+  const locate = useCallback(() => (state?.report ? find(state.report) : null), [state, find])
+
+  return { state, rehighlight, dismiss, locate, markDone }
 }
 
 /**
- * @typedef {{ phase: 'loading'|'found'|'missing'|'otherPage'|'error', report: object|null, count?: number, error?: string,
- *   placement?: 'top'|'bottom' }} FocusState
+ * @typedef {{ phase: 'loading'|'found'|'missing'|'otherPage'|'error'|'applied', report: object|null, count?: number, error?: string,
+ *   placement?: 'top'|'bottom', hit?: object|null, done?: string }} FocusState
  */

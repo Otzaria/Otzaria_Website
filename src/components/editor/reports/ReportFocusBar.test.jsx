@@ -30,3 +30,10 @@ describe('ReportFocusBar', () => {
     expect(screen.queryByRole('button', { name: 'סמן שוב' })).toBeNull()
   })
 })
+
+describe('ReportFocusBar — הכרעה', () => {
+  it('מציג מה הוחלט', () => {
+    render(<ReportFocusBar state={{ phase: 'found', report: { ...report, status: 'rejected' }, count: 1 }} onRehighlight={() => {}} onDismiss={() => {}} />)
+    expect(screen.getByRole('status')).toHaveTextContent('נדחה. הטקסט שבספר נשאר כמו שהוא.')
+  })
+})
