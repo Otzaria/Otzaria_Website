@@ -45,8 +45,10 @@ export default function ReportHeader({ report, titleId, onFilterBook }) {
             רק הספר הזה
           </Button>
         )}
-        <Button variant="outlined" size="sm" iconEnd="open_in_new" href={editorHref(report.bookPath, report.pageNumber)} external
-          aria-label={`פתח את ${pageLabel(report.pageNumber)} ב${bookName} בעורך (בלשונית חדשה)`}>
+        {/* טעות בספר — העורך נפתח מסומן על הסימון שבטקסט (?report=); קריאה בלבד, בלי שינוי בטקסט */}
+        <Button variant="outlined" size="sm" iconEnd="open_in_new"
+          href={editorHref(report.bookPath, report.pageNumber, report.kind === 'book_error' ? report._id : null)} external
+          aria-label={`פתח את ${pageLabel(report.pageNumber)} ב${bookName} בעורך${report.kind === 'book_error' ? ', על הסימון בטקסט' : ''} (בלשונית חדשה)`}>
           פתח בעורך
         </Button>
       </div>

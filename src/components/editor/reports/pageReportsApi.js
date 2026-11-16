@@ -49,3 +49,19 @@ export async function fetchMyPageReports(bookPath, pageNumber, fetchImpl = fetch
   if (!res.ok || !data?.success) throw new Error(data?.error || 'טעינת הדיווחים נכשלה.')
   return Array.isArray(data.reports) ? data.reports : []
 }
+
+/**
+ * דיווח "טעות בספר" אחד — לסימון שלו בטקסט כשהעורך נפתח מהניהול (?report=<id>). זורק Error עם הודעה בעברית.
+ * @returns {Promise<object>}
+ */
+export async function fetchEditorReport(id, fetchImpl = fetch) {
+  let res
+  try {
+    res = await fetchImpl(`/api/page-reports/${encodeURIComponent(String(id))}`, { cache: 'no-store' })
+  } catch {
+    throw new Error('טעינת הדיווח נכשלה. בדקו את החיבור.')
+  }
+  const data = await readJson(res)
+  if (!res.ok || !data?.success || !data.report) throw new Error(data?.error || 'טעינת הדיווח נכשלה.')
+  return data.report
+}
