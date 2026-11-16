@@ -58,6 +58,8 @@ import FinishPageDialog from '@/components/editor/v2/FinishPageDialog'
 import PageReportsLayer from '@/components/editor/reports/PageReportsLayer'
 import { usePageReports } from '@/components/editor/reports/usePageReports'
 import { canReportBookError } from '@/components/editor/reports/reportLogic'
+import ReportFocusBar from '@/components/editor/reports/ReportFocusBar'
+import { useReportFocus } from '@/components/editor/reports/useReportFocus'
 import RestReminder from '@/components/editor/v2/RestReminder'
 import { buildEditorCommands } from '@/components/editor/v2/editorCommands'
 import {
@@ -1373,6 +1375,8 @@ ${claimRulesText()}`,
     containerRef: textEditorContainerRef,
     activeColumn: twoColumns ? (activeTextarea === 'left' ? 'left' : 'right') : null,
   })
+  // נפתח מתוך מסך הדיווחים (?report=<id>): סימון הסימון של הדיווח בטקסט — קריאה בלבד
+  const reportFocus = useReportFocus({ containerRef: textEditorContainerRef, ready: !loading && Boolean(pageData), bookPath, pageNumber })
   const applyColumnText = useCallback((column, text) => {
     if (column === 'right' || column === 'left') handleColumnChange(column, text)
     else { setContent(text); handleAutoSaveWrapper(text) }
@@ -1775,6 +1779,8 @@ ${claimRulesText()}`,
         flushSave={flushAutoSave}
         scanCropFor={scanTracking.scanCropFor}
       />
+
+      <ReportFocusBar state={reportFocus.state} onRehighlight={reportFocus.rehighlight} onDismiss={reportFocus.dismiss} />
 
       <FindReplaceDialog
         isOpen={showFindReplace} onClose={() => setShowFindReplace(false)}

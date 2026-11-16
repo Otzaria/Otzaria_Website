@@ -84,6 +84,8 @@ test('כרטיס הודעה', () => {
 
 test('קישור לעורך', () => {
   assert.equal(editorHref('בראשית רבה', 12), `/library/books/${encodeURIComponent('בראשית רבה')}/12`)
+  assert.equal(editorHref('sefer', 3, 'abc123'), '/library/books/sefer/3?report=abc123')
+  assert.equal(editorHref('sefer', 3, null), '/library/books/sefer/3')
 })
 
 test('ספרים לבורר: מצטברים, ממוינים, והספר שבכתובת תמיד בפנים', () => {

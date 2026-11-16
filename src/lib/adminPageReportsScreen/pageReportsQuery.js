@@ -162,9 +162,12 @@ export function messageCardState(report) {
   return { handle: report?.status === 'pending', reopen: report?.status === 'handled' }
 }
 
-/** הקישור לעורך העמוד */
-export function editorHref(bookPath, pageNumber) {
-  return `/library/books/${encodeURIComponent(String(bookPath || ''))}/${encodeURIComponent(String(pageNumber ?? ''))}`
+/**
+ * הקישור לעורך העמוד. reportId — דיווח "טעות בספר": העורך מסמן את הסימון שלו בטקסט (?report=<id>).
+ */
+export function editorHref(bookPath, pageNumber, reportId = null) {
+  const base = `/library/books/${encodeURIComponent(String(bookPath || ''))}/${encodeURIComponent(String(pageNumber ?? ''))}`
+  return reportId ? `${base}?report=${encodeURIComponent(String(reportId))}` : base
 }
 
 /**
