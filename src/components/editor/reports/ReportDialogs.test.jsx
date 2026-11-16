@@ -20,7 +20,7 @@ describe('ErrorReportDialog', () => {
     await waitFor(() => expect(proposed).toHaveFocus())
     fireEvent.change(proposed, { target: { value: 'יהודא' } })
     const preview = document.querySelector('[aria-live="polite"]')
-    expect(preview).toHaveTextContent('(יהודה)[יהודא]')
+    expect(preview).toHaveTextContent('(יהודה) [יהודא]')
     expect(preview.querySelector('del')).toHaveTextContent('ה')
     expect(preview.querySelector('ins')).toHaveTextContent('א')
   })

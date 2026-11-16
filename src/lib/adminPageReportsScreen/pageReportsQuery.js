@@ -3,6 +3,8 @@
 //
 // ההכרעות משנות את הדיווח בלבד; עריכת העמוד מתבצעת ידנית.
 
+import { buildErrorMarker } from '../pageReports/rules.js'
+
 export const REPORT_TABS = Object.freeze(['book_error', 'message'])
 export const STATUS_FILTERS = Object.freeze({
   book_error: Object.freeze(['pending', 'approved', 'rejected', 'all']),
@@ -247,5 +249,5 @@ export function finalVersionLine(report) {
   const fo = report.finalOriginal ?? report.original ?? ''
   const fp = report.finalProposed ?? report.proposed ?? ''
   if (fo === report.original && fp === report.proposed) return null
-  return { reported: `(${report.original ?? ''})[${report.proposed ?? ''}]`, decided: `(${fo})[${fp}]` }
+  return { reported: buildErrorMarker(report.original ?? '', report.proposed ?? ''), decided: buildErrorMarker(fo, fp) }
 }

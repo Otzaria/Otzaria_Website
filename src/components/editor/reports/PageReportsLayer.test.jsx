@@ -152,7 +152,7 @@ describe('תפריט הלחיצה הימנית ודיווח על טעות', () =
       original: 'יהודה', proposed: 'יהודא', offset: 8,
       contextBefore: 'אמר רבי ', contextAfter: ' בשם רב',
     })
-    await waitFor(() => expect(field).toHaveValue('אמר רבי (יהודה)[יהודא] בשם רב'))
+    await waitFor(() => expect(field).toHaveValue('אמר רבי (יהודה) [יהודא] בשם רב'))
     expect(flushSave).toHaveBeenCalled()
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(await screen.findByText('הדיווח נשלח למנהלים, והסימון נוסף לטקסט')).toBeInTheDocument()

@@ -57,7 +57,7 @@ export default function ErrorReportDialog({ initialText, columnLabel = null, onS
   return (
     <Dialog
       title="דיווח על טעות בספר"
-      subtitle={`הטקסט שבספר יסומן בעמוד כ־(טקסט)[תיקון], והדיווח יישלח למנהלים${columnLabel ? ` · ${columnLabel}` : ''}.`}
+      subtitle={`הטקסט שבספר יסומן בעמוד כ־(טקסט) [תיקון], והדיווח יישלח למנהלים${columnLabel ? ` · ${columnLabel}` : ''}.`}
       onClose={onClose}
       dismissible={!submitting}
       footer={
