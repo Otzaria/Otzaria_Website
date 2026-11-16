@@ -190,7 +190,6 @@ export function editorMenuModel({ hasSelection, canReport, online }) {
   ]
 }
 
-export const BROWSER_MENU_HINT = 'Shift + לחצן ימני — התפריט הרגיל של הדפדפן'
 export const PASTE_FALLBACK_MESSAGE = 'הדפדפן לא מאפשר להדביק מהתפריט. אפשר להדביק עם Ctrl+V.'
 export const COPY_FALLBACK_MESSAGE = 'הדפדפן לא מאפשר להעתיק מהתפריט. אפשר להעתיק עם Ctrl+C.'
 export const CUT_FALLBACK_MESSAGE = 'הדפדפן לא מאפשר לגזור מהתפריט. אפשר לגזור עם Ctrl+X.'

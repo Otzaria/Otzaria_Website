@@ -57,7 +57,8 @@ describe('תפריט הלחיצה הימנית ודיווח על טעות', () =
     expect(screen.queryByRole('menu')).toBeNull()
     expect(rightClick(field)).toBe(false)
     const menu = screen.getByRole('menu', { name: 'פעולות על הטקסט' })
-    expect(menu).toHaveTextContent('Shift + לחצן ימני — התפריט הרגיל של הדפדפן')
+    // בלי שורת הסבר על Shift בתחתית התפריט (ההתנהגות עצמה נשארת)
+    expect(menu).not.toHaveTextContent('Shift')
     for (const name of ['דווח על טעות בספר המודפס', 'הודעה למנהלים על העמוד', 'גזור', 'העתק', 'הדבק']) {
       expect(screen.getByRole('menuitem', { name })).toBeInTheDocument()
     }
