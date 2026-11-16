@@ -56,7 +56,8 @@
 כשל בהעשרת ההקשר אחרי OCR אינו משליך את הטקסט. השירות מחזיר `metadata.proofreading` עם `requested:true`,
 `status` שהוא `ready`, `unavailable`, `failed` או `skipped_salvage`, וסיבת כשל קבועה לפי החוזה.
 האתר שומר ומציג את המצב גם כאשר metadata גדול קוצץ, ומציג בנפרד שהחלופות לא חושבו.
-קודי אזהרה: `proofreading_alternatives_unavailable`, `proofreading_alternatives_failed`.
+קודי אזהרה: `proofreading_alternatives_unavailable`, `proofreading_alternatives_failed`, `proofreading_dictionary_unavailable`.
+אם מילון נוסף נעלם אחרי זיהוי שמור, המשך/הצלה יכולים לשמור את הטקסט בלי המילון החסר, עם `reason:dictionary_unavailable` ותווית מפורשת שהמילון לא שימש בהגהה. עבודה חדשה עם אותו מילון חסר נדחית לפני OCR.
 
 ## סדר פריסה
 

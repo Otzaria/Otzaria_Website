@@ -58,7 +58,7 @@ export function cleanProofreadingMetadata(value) {
   if (!object(value) || value.requested !== true
     || !['ready', 'unavailable', 'failed', 'skipped_salvage'].includes(value.status)) return null;
   const out = { requested: true, status: value.status };
-  if (['library_unavailable', 'context_unavailable', 'outside_domain', 'context_error', 'context_timeout', 'cancelled'].includes(value.reason)) out.reason = value.reason;
+  if (['library_unavailable', 'dictionary_unavailable', 'context_unavailable', 'outside_domain', 'context_error', 'context_timeout', 'cancelled'].includes(value.reason)) out.reason = value.reason;
   if (['book', 'shared', 'miss'].includes(value.cache)) out.cache = value.cache;
   return out;
 }
@@ -66,6 +66,7 @@ export function cleanProofreadingMetadata(value) {
 export function proofreadingResultLabel(value) {
   const p = cleanProofreadingMetadata(value);
   if (!p) return null;
+  if (p.reason === 'dictionary_unavailable') return 'תוצאות הזיהוי נשמרו; אחד המילונים הנוספים שנבחרו אינו זמין ולא שימש בהגהה.';
   if (p.status === 'ready') return 'חישוב ההקשר הושלם; חלופות זמינות במילים שבהן נמצא הקשר מתאים.';
   const reason = p.status === 'skipped_salvage' ? 'הועברו תוצאות הזיהוי שנשמרו לפני עצירה'
     : p.reason === 'library_unavailable' ? 'ספריית ההקשר אינה זמינה במחשב'

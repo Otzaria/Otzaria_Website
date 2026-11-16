@@ -3,6 +3,7 @@
 // /api/page-content/ocr-data) וגם בדפדפן (ocrJobView.js). קוד שאינו מוכר מוצג כקוד חשוף.
 
 export const OCR_WARNING_LABELS = Object.freeze({
+  proofreading_dictionary_unavailable: 'תוצאות הזיהוי נשמרו; אחד המילונים הנוספים שנבחרו אינו זמין ולא שימש בהגהה',
   proofreading_alternatives_unavailable: 'הזיהוי הושלם; החלופות לפי ההקשר לא חושבו כי הספרייה אינה זמינה',
   proofreading_alternatives_failed: 'הזיהוי הושלם; חישוב החלופות לפי ההקשר לא הושלם',
   layout_marks_trimmed: 'סימוני ההגהה הושמטו כדי לשמור על פריסת העמוד במסגרת מגבלת הגודל',

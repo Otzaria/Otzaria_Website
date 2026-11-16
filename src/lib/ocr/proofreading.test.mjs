@@ -60,4 +60,8 @@ test('partial proofreading outcome remains visible even when book metadata is tr
   assert.deepEqual(view.proofreading, { requested: true, status: 'failed', reason: 'context_timeout' });
   assert.match(proofreadingResultLabel(view.proofreading), /הזיהוי הושלם;.*לא חושבו/);
   assert.match(proofreadingResultLabel(view.proofreading), /מגבלת הזמן/);
+  const fallback = resultMetadataView(JSON.stringify({ proofreading: { requested: true, status: 'unavailable', reason: 'dictionary_unavailable' } }));
+  assert.equal(fallback.proofreading.reason, 'dictionary_unavailable');
+  assert.match(proofreadingResultLabel(fallback.proofreading), /אחד המילונים הנוספים שנבחרו אינו זמין ולא שימש בהגהה/);
+  assert.doesNotMatch(proofreadingResultLabel(fallback.proofreading), /הופעל|הושלם/);
 });
