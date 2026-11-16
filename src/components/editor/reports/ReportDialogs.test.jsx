@@ -12,7 +12,9 @@ describe('ErrorReportDialog', () => {
   it('שני השדות ממולאים בבחירה, הפוקוס על התיקון, ותצוגה מקדימה חיה עם הדגשת ההבדל', async () => {
     render(<ErrorReportDialog initialText="יהודה" onSubmit={vi.fn()} onClose={vi.fn()} />)
     expect(screen.getByRole('dialog', { name: 'דיווח על טעות בספר' })).toBeInTheDocument()
-    expect(screen.getByText(/מיועד לטעות שנמצאת בספר המודפס עצמו/)).toHaveTextContent(/טעות זיהוי \(OCR\)/)
+    // שני רעיונות — שתי שורות נפרדות, והראשונה מתחילה ב"רק"
+    expect(screen.getByText(/^רק לטעות שנמצאת בספר המודפס עצמו/)).not.toHaveTextContent(/טעות זיהוי/)
+    expect(screen.getByText(/^טעות זיהוי \(OCR\) מתקנים ישירות בטקסט/)).toBeInTheDocument()
     const original = screen.getByLabelText('הטקסט שבספר')
     const proposed = screen.getByLabelText('התיקון המוצע')
     expect(original).toHaveValue('יהודה')

@@ -158,6 +158,8 @@ describe('הרשאות ותפריט', () => {
     const report = items.find((i) => i.id === 'reportError')
     expect(report.disabled).toBe(true)
     expect(report.hint).toMatch(/תפס/)
+    const allowed = editorMenuModel({ hasSelection: true, canReport: true, online: true }).find((i) => i.id === 'reportError')
+    expect(allowed.hint).toEqual(['רק לטעות שבספר עצמו, כפי שמופיעה בצילום', 'טעות זיהוי (OCR) מתקנים ישירות בטקסט'])
     expect(items.find((i) => i.id === 'pageMessage').disabled).toBe(false)
   })
 
@@ -166,8 +168,7 @@ describe('הרשאות ותפריט', () => {
     expect(items.find((i) => i.id === 'cut').disabled).toBe(true)
     expect(items.find((i) => i.id === 'copy').disabled).toBe(true)
     expect(items.find((i) => i.id === 'paste').disabled).toBeFalsy()
-    expect(items.find((i) => i.id === 'reportError').hint).toMatch(/המילה/)
-    expect(items.find((i) => i.id === 'reportError').hint).toMatch(/טעות זיהוי/)
+    expect(items.find((i) => i.id === 'reportError').hint).toEqual(['על המילה שתחת הסמן', 'רק לטעות שבספר עצמו, כפי שמופיעה בצילום', 'טעות זיהוי (OCR) מתקנים ישירות בטקסט'])
   })
 
   it('editorMenuModel — בלי רשת: שני הדיווחים מושבתים', () => {
