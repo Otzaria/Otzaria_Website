@@ -58,9 +58,11 @@ export async function getTriageMaterial(reportId) {
     createdAt: doc.createdAt, canContact: Boolean(doc.reporterEmail && !doc.unsubscribed),
     triage: { state: t.state ?? null, runs: t.runs || 1, lateDecidedAt: t.lateDecidedAt ?? null },
     issueNumber: t.state === 'held' ? null : doc.issueNumber ?? null,
-    contactLog: (doc.contactLog || [])
-      .filter((c) => c.direction === 'out' || c.issueComment !== 'held')
-      .map((c) => ({ direction: c.direction || 'out', sentAt: c.sentAt, subject: c.subject || '', message: c.message || '' })),
+    // fromReporter: false = תשובה מכתובת אחרת; השירות רואה אותה, אבל היא לא מתפרסמת
+    contactLog: (doc.contactLog || []).map((c) => ({
+      direction: c.direction || 'out', sentAt: c.sentAt, subject: c.subject || '', message: c.message || '',
+      ...(c.direction === 'in' ? { fromReporter: c.issueComment !== 'held' } : {}),
+    })),
     files: {
       errors: Boolean(doc.fileIds?.errors?.gridfsId),
       diagnostics: Boolean(doc.fileIds?.diagnostics?.gridfsId),
@@ -155,7 +157,7 @@ export async function applyTriageDecision(reportId, raw, deps) {
   }
   // המדווח השיב בזמן שהבדיקה רצה (קריאה טרייה, אחרי ההחלטה): בודקים שוב עם התשובה
   const fresh = await AppReport.findOne({ reportId }).select('contactLog').lean();
-  const answeredMeanwhile = (fresh?.contactLog || []).some((c) => c.direction === 'in' && c.issueComment === 'triage'
+  const answeredMeanwhile = (fresh?.contactLog || []).some((c) => c.direction === 'in' && ['triage', 'held'].includes(c.issueComment)
     && c.sentAt && doc.triage.requestedAt && new Date(c.sentAt) > new Date(doc.triage.requestedAt));
   const retriage = answeredMeanwhile && await requestRetriage(reportId, deps);
   return { status: 200, body: { ok: true, ...statusOf(await AppReport.findOne({ reportId }).lean()), questionsSent: mail.sent, retriage } };

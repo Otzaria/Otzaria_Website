@@ -12,7 +12,7 @@ import { startMongo } from '../corrections/testing/mongo.js';
 import { FakeIssuesGitHub } from './testing/fake-github.js';
 import { handleAppReportPost } from './handler.js';
 import { runAppReportsSync, ingestInboundReply, listReports } from './service.js';
-import { applyTriageDecision, forcePublishReport, getTriageStatus, listTriageQueue } from './triage-decision.js';
+import { applyTriageDecision, forcePublishReport, getTriageMaterial, getTriageStatus, listTriageQueue } from './triage-decision.js';
 import { handleTriageDecisionPost, handleTriageFileGet, handleTriageMaterialGet, handleTriageQueueGet } from './triage-handler.js';
 import { requestRetriage, triageComment } from './triage.js';
 import { getAppReportsConfig } from './config.js';
@@ -339,6 +339,43 @@ test('שאלות למדווח: מייל עם כתובת מענה; התשובה �
   doc = await AppReport.findOne({ reportId: body.reportId }).lean();
   assert.equal(doc.contactLog.at(-1).issueComment, 'posted');
   assert.ok(gh.comments.some((c) => c.body.includes('פתחתי ספר גדול.')));
+});
+
+test('תשובה מכתובת אחרת: מפעילה בדיקה חוזרת ומגיעה לשירות, אבל לא מתפרסמת', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { body } = await post(report());
+  await applyTriageDecision(body.reportId, decision({
+    verdict: 'ask_reporter', confidence: 'medium', questions: ['איפה הספרייה?'], awaitingReply: true,
+  }), deps());
+  await ingestInboundReply({
+    to: contactMails[0].replyTo, from: 'other@example.com', subject: 'Re', messageId: '<o@x>', text: 'כונן חיצוני', headers: {}, attachments: 0,
+  }, { ...deps(), saveFile, deleteFile });
+  let doc = await AppReport.findOne({ reportId: body.reportId }).lean();
+  assert.equal(doc.contactLog.at(-1).issueComment, 'held');
+  assert.deepEqual([doc.triage.state, doc.triage.runs, dispatches.length], ['pending', 2, 2]);
+
+  const m = await getTriageMaterial(body.reportId);
+  assert.deepEqual(m.contactLog.map((c) => [c.direction, c.fromReporter]), [['out', undefined], ['in', false]]);
+  assert.equal(m.contactLog[1].message, 'כונן חיצוני');
+  assert.equal(JSON.stringify(m).includes('other@example.com'), false);
+
+  await applyTriageDecision(body.reportId, decision({ action: 'open', verdict: 'needs_human', confidence: 'medium', runs: 2 }), deps());
+  await sync(new Date());
+  doc = await AppReport.findOne({ reportId: body.reportId }).lean();
+  assert.equal(doc.contactLog.at(-1).issueComment, 'held');
+  assert.equal(gh.comments.some((c) => c.body.includes('כונן חיצוני')), false);
+});
+
+test('תשובה מכתובת אחרת על דיווח שלא ממתין לתשובה: נשמרת בלי בדיקה חוזרת', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { body } = await post(report());
+  // שאלה אגב, בלי המתנה לתשובה
+  await applyTriageDecision(body.reportId, decision({ verdict: 'external', questions: ['איזה כונן?'] }), deps());
+  await ingestInboundReply({
+    to: contactMails[0].replyTo, from: 'other@example.com', subject: 'Re', messageId: '<n@x>', text: 'שלום', headers: {}, attachments: 0,
+  }, { ...deps(), saveFile, deleteFile });
+  const doc = await AppReport.findOne({ reportId: body.reportId }).lean();
+  assert.deepEqual([doc.triage.state, doc.triage.runs, doc.contactLog.at(-1).issueComment], ['held', 1, 'held']);
 });
 
 test('תשובה שהגיעה בזמן הבדיקה: hold מבקש בדיקה חוזרת', async (t) => {

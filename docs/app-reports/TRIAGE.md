@@ -30,6 +30,8 @@
      אין מייל, המדווח הסיר את עצמו, `APP_REPORTS_REPLY_DOMAIN` לא מוגדר, או שהמייל נכשל.
 3. **תשובת המדווח** על דיווח שלא נפתח, או שעוד ממתין, נשמרת עם `issueComment: 'triage'` ולא מתפרסמת.
    - דיווח שלא נפתח חוזר ל-`pending` עם deadline חדש, וקישור הכפילות שלו מתבטל.
+   - תשובה מכתובת אחרת מזו שבדיווח (המדווח ענה מחשבון אחר) מפעילה בדיקה חוזרת רק כשהדיווח ממתין לתשובה
+     (`awaitingReply`), ומגיעה לשירות עם `fromReporter: false`. היא נשמרת כ-`held`, ולא מתפרסמת ב-issue גם אם הוא נפתח.
    - תשובה שהגיעה בזמן שהבדיקה רצה מפעילה בדיקה חוזרת אחרי `hold`.
    - כשהדיווח נפתח בכל דרך, כולל `timeout`, התשובות האלה עוברות ל-`pending` ומתפרסמות ב-issue.
    - אחרי 5 בדיקות לאותו דיווח, תשובה נוספת כבר לא מפעילה בדיקה, והדיווח נפתח בסנכרון הבא.
@@ -62,7 +64,7 @@
 |---|---|
 | `GET /api/app-reports/triage` | `{items: [{reportId, requestedAt, deadline, runs}], late: [{reportId, issueNumber, merged}]}`. `items` הם עד 50 הדיווחים הממתינים, מהוותיק לחדש. `late` הם דיווחים שנפתחו בלי החלטה (`timeout` או `forced`) בשלושת הימים האחרונים ועוד לא קיבלו החלטה מאוחרת. |
 | `GET /api/app-reports/triage/{reportId}` | `{reportId, state, issuePending, issueNumber, issueUrl, merged}`. בדיווח `held` הערכים `issueNumber` ו-`issueUrl` הם `null`, גם כשהוא מקושר לכפילות. `404` אם הדיווח לא קיים. |
-| `GET /api/app-reports/triage/{reportId}/report` | חומר הבדיקה: `{reportId, type, trigger, title, description, stepsToReproduce, appVersion, platform, osVersion, arch, signature, createdAt, canContact, triage: {state, runs, lateDecidedAt}, issueNumber, contactLog: [{direction, sentAt, subject, message}], files: {errors, diagnostics, images}}`. בלי כתובת המייל: `canContact` אומר רק אם אפשר לשאול. ב-`contactLog` יש רק תשובות מכתובת המדווח. |
+| `GET /api/app-reports/triage/{reportId}/report` | חומר הבדיקה: `{reportId, type, trigger, title, description, stepsToReproduce, appVersion, platform, osVersion, arch, signature, createdAt, canContact, triage: {state, runs, lateDecidedAt}, issueNumber, contactLog: [{direction, sentAt, subject, message, fromReporter}], files: {errors, diagnostics, images}}`. בלי כתובות המייל: `canContact` אומר רק אם אפשר לשאול. בתשובה (`direction: 'in'`), `fromReporter: false` אומר שהיא נשלחה מכתובת אחרת, ואין לצטט אותה בפענוח. |
 | `GET /api/app-reports/triage/{reportId}/files/{kind}` | `errors`, `diagnostics` או `image-{n}` (מ-0), כגוף הקובץ. ה-dump של הקריסה לא מוגש, כי הוא מכיל את זיכרון התהליך. `404` אם אין קובץ כזה. |
 | `POST /api/app-reports/triage/{reportId}` | גוף ההחלטה (טבלה למטה). `200`: המצב אחרי ההחלטה, ועוד `questionsSent`. ב-`hold` מוחזר גם `retriage`. בהחלטה על דיווח שכבר נפתח מוחזר `late: true`. `409`: כבר הוחלט, והתשובה כוללת את המצב. `422`: גוף לא תקין (`field`). `404`: הדיווח לא קיים. |
 

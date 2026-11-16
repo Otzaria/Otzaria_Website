@@ -734,12 +734,13 @@ export async function ingestInboundReply(raw, deps) {
     return duplicate;
   }
 
-  if (fromReporter && forTriage) {
+  // תשובה מכתובת אחרת (המדווח ענה מחשבון אחר) מעוררת בדיקה רק כששאלנו וממתינים לתשובה, ולא מתפרסמת
+  if (forTriage && (fromReporter || doc.triage?.awaitingReply)) {
     // המצב אולי השתנה בזמן השמירה (החלטה, פתיחה): קובעים לפי מה שיש עכשיו.
-    // בדיקה שעוד רצה לא ראתה את התשובה; אם תחליט לא לפתוח — applyTriageDecision יבקש בדיקה חוזרת
+    // בדיקה שעוד רצה לא ראתה את התשובה; אם תחליט לא לפתוח — applyTriageDecision יבקש בדיקה חוזרת.
     const now2 = await AppReport.findOne({ reportId: doc.reportId }).select('triage issueNumber').lean();
     if (now2?.triage?.state === 'held') await requestRetriage(doc.reportId, deps);
-    else if (now2?.triage?.state !== 'pending' && now2?.issueNumber) {
+    else if (fromReporter && now2?.triage?.state !== 'pending' && now2?.issueNumber) {
       await releaseTriageReplies(doc.reportId);
       await postInboundComments(doc.reportId, deps).catch((err) => console.error('Inbound reply comment failed:', err?.message));
     }
