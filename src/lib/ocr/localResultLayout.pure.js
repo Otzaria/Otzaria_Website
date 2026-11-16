@@ -10,6 +10,7 @@
 // רשומה כמו הקליטה המקורית. הודעות השגיאה כאן באנגלית — לאבחון בלבד; התווית בעברית נקבעת לפי
 // הקוד (ocrWarningLabels.js). imports יחסיים בלבד (נבדק ב-node:test).
 import { createHash } from 'node:crypto';
+import { cleanProofreadingMetadata } from './proofreadingCapabilities.js';
 import { stripUnsafe } from './localStatusReport.js';
 
 export const LAYOUT_VERSION = 1;
@@ -27,7 +28,7 @@ export const WARNING_CODE_RE = /^[a-z0-9_]{1,64}$/;
 // תת-הקבוצה של metadata הספר שנשמרת כשהמסמך המלא גדול מ-BOOK_METADATA_MAX_BYTES
 export const BOOK_METADATA_SUBSET_KEYS = Object.freeze([
   'hardware', 'models', 'gpu', 'seconds', 'run_seconds', 'resumed', 'bridge_version', 'service_version',
-  'otzaria_issues', 'layout', 'salvage',
+  'otzaria_issues', 'layout', 'salvage', 'proofreading',
 ]);
 
 const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -340,6 +341,8 @@ export function resultMetadataView(json) {
   for (const k of ['models', 'run_seconds', 'otzaria_issues', 'layout', 'salvage', 'service_version', 'bridge_version']) {
     if (Object.hasOwn(meta, k)) out[k] = meta[k];
   }
+  const proofreading = cleanProofreadingMetadata(meta.proofreading);
+  if (proofreading) out.proofreading = proofreading;
   if (Array.isArray(meta.otzaria_issue_list)) out.otzaria_issue_list = meta.otzaria_issue_list.slice(0, RESULT_ISSUE_LIST_VIEW_MAX);
   return out;
 }

@@ -232,3 +232,21 @@ it.each(['code', 'rich'])('replacing the last suspect wraps to the first in anot
     expect(screen.getByRole('button', { name: /שלlם — טור ימין/ })).toHaveAttribute('aria-pressed', 'true')
   })
 })
+
+
+it.each(['code', 'rich'])('check-level context alternative is explicit, describes relative weight and splits safely (%s)', async (view) => {
+  const marked = { ...LAYOUT, lines: [{ ...LAYOUT.lines[0], lm: [], marks: [{ i: 2, word: 'פוסרת', level: 'check',
+    alts: [{ text: 'פו סרת', p: .8, why: 'רווח חסר לפי ההקשר' }] }] }] }
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ success: true, data: { layoutStatus: 'ok', layout: marked, image: { matches: true } } }) })))
+  const { container } = render(<Page view={view} />)
+  fireEvent.click(await screen.findByRole('button', { name: /מילה אחת לבדיקה/ }))
+  const panel = screen.getByRole('dialog', { name: 'מילים חשודות' })
+  expect(panel).toHaveTextContent('ההגהה סימנה לבדיקה')
+  expect(panel).toHaveTextContent('משקל יחסי: 80%')
+  expect(panel).toHaveTextContent('רווח חסר לפי ההקשר')
+  const field = container.querySelector('textarea, [data-rich-textarea]')
+  expect(field.value).toContain('<b>פוסרת</b>')
+  fireEvent.click(within(panel).getByRole('button', { name: 'החלף בפו סרת' }))
+  await waitFor(() => expect(field.value).toContain('<b>פו סרת</b>'))
+  expect(panel).toHaveTextContent('אין כרגע מילים מסומנות לבדיקה')
+})

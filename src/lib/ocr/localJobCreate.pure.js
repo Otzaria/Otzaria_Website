@@ -3,6 +3,7 @@
 import { createHash } from 'node:crypto';
 import { EXISTING_TEXT_MODES } from './runOcrJob.pure.js';
 import { normalizePageRange, pageRangeText } from '../pageRange.js';
+import { normalizeProofreadingOptions, proofreadingFingerprint } from './proofreadingOptions.js';
 
 // הלקוח שולח crypto.randomUUID() — אבל כל מזהה בטוח באורך סביר מתקבל
 export const REQUEST_ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
@@ -53,7 +54,7 @@ export function normalizeLocalRequest(body) {
     return { ok: false, code: 'invalid_options', error: 'הגדרות העיבוד אינן תקינות' };
   }
   const opts = options || {};
-  const unknown = Object.keys(opts).filter((k) => !Object.hasOwn(LOCAL_OPTION_VALUES, k));
+  const unknown = Object.keys(opts).filter((k) => !Object.hasOwn(LOCAL_OPTION_VALUES, k) && !['lmCheck', 'alts', 'lexicons'].includes(k));
   if (unknown.length) {
     return { ok: false, code: 'invalid_options', error: 'הגדרת עיבוד לא מוכרת' };
   }
@@ -68,6 +69,10 @@ export function normalizeLocalRequest(body) {
       return { ok: false, code: 'invalid_options', error: 'ערך לא חוקי בהגדרות העיבוד' };
     }
   }
+
+  const proofreading = normalizeProofreadingOptions(opts);
+  if (!proofreading.ok) return { ok: false, code: 'invalid_options', error: proofreading.error };
+  Object.assign(normalized, proofreading.value);
 
   const range = normalizePageRange(b.pageRange);
   if (!range.ok) {
@@ -94,6 +99,7 @@ export function requestFingerprint({ bookId, existingTextMode, options, pageRang
     String(options?.lm ?? ''),
     String(options?.defaultScript ?? ''),
     ...(pageRange ? ['pages', Number(pageRange.from), Number(pageRange.to)] : []),
+    ...proofreadingFingerprint(options),
   ]);
   return createHash('sha256').update(canonical, 'utf8').digest('hex');
 }

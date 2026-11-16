@@ -25,6 +25,7 @@ import path from 'node:path'
 import mongoose from 'mongoose'
 import Page from '../../models/Page.js'
 import OcrJob from '../../models/OcrJob.js'
+import OcrWorkerState from '../../models/OcrWorkerState.js'
 import { startMongo } from '../corrections/testing/mongo.js'
 import { createOrResumeLocalJob } from './localJobCreate.js'
 import { countBookOcrPages } from './bookOcrCounts.js'
@@ -211,5 +212,38 @@ describe('בעלות על הכנת local (W04)', () => {
     expect(res.status).toBe(422)
     const done = await OcrJob.findOne({ requestId: REQ.requestId }).lean()
     expect(done).toMatchObject({ status: 'failed', active: false, errorCode: 'missing_image', prepLeaseUntil: null })
+  })
+})
+
+
+describe('proofreading capability gate and immutable retries', () => {
+  const capabilities = { version: 1, lmCheck: true, alternatives: true, lexiconAvailable: true, contextAvailable: true,
+    lexicons: [{ name: 'modern', version: 1 }], defaultLexicons: [] }
+  const req = () => ({ ...REQ, options: { lm: 'modern', defaultScript: 'square', lmCheck: 'off', alts: 'off', lexicons: ['modern'] } })
+  const create = (request = req(), now = new Date()) => createOrResumeLocalJob({ book, req: request, config: { workerId: 'worker-1' }, session: {}, now })
+  it('rejects unsupported new work before PDF creation', async () => {
+    const result = await create()
+    expect(result).toMatchObject({ status: 409, body: { code: 'proofreading_unavailable' } })
+    expect(builds).toHaveLength(0)
+    expect(await OcrJob.countDocuments()).toBe(0)
+  })
+  it('stores selected options and replays the same request after capability reports disappear', async () => {
+    await OcrWorkerState.create({ workerId: 'worker-1', proofreadingCapabilities: capabilities, capabilitiesReceivedAt: new Date() })
+    const attempt = create()
+    await vi.waitFor(() => expect(builds).toHaveLength(1))
+    await finishBuild(0, 'pr6-options-pdf')
+    expect((await attempt).status).toBe(202)
+    const saved = await OcrJob.findOne({ requestId: REQ.requestId }).lean()
+    expect(saved.options).toEqual(req().options)
+    await OcrWorkerState.deleteMany({})
+    expect((await create()).status).toBe(202)
+    expect(builds).toHaveLength(1)
+  })
+  it('rejects stale reports and unknown dictionary names for a new request', async () => {
+    await OcrWorkerState.create({ workerId: 'worker-1', proofreadingCapabilities: capabilities, capabilitiesReceivedAt: new Date(Date.now() - 20 * 60_000) })
+    expect((await create()).body.code).toBe('proofreading_unavailable')
+    await OcrWorkerState.updateOne({ workerId: 'worker-1' }, { $set: { capabilitiesReceivedAt: new Date() } })
+    expect((await create({ ...req(), options: { ...req().options, lexicons: ['missing'] } })).body.code).toBe('proofreading_unavailable')
+    expect(builds).toHaveLength(0)
   })
 })

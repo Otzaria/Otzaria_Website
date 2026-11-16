@@ -116,6 +116,19 @@ describe("GET /api/admin/books/ocr/status - ספק local", () => {
     vi.unstubAllEnvs();
   });
 
+  it("exposes sanitized proofreading capabilities and stale state without changing stored jobs", async () => {
+    const p = { version: 1, lmCheck: true, alternatives: true, lexiconAvailable: true, contextAvailable: true,
+      lexicons: [{ name: 'modern', version: 1 }], defaultLexicons: [], privatePath: 'private' };
+    OcrJob.findOne.mockReturnValue(chain(null));
+    OcrWorkerState.findOne.mockReturnValue(chain({ lastSeenAt: new Date(), proofreadingCapabilities: p, capabilitiesReceivedAt: new Date() }));
+    const fresh = await (await GET(makeRequest(BOOK_ID))).json();
+    expect(fresh.worker.proofreading).toMatchObject({ state: 'available', lmCheck: true, lexicons: [{ name: 'modern', version: 1 }] });
+    expect(fresh.worker.proofreading).not.toHaveProperty('privatePath');
+    OcrWorkerState.findOne.mockReturnValue(chain({ proofreadingCapabilities: p, capabilitiesReceivedAt: new Date(Date.now() - 20 * 60_000) }));
+    const stale = await (await GET(makeRequest(BOOK_ID))).json();
+    expect(stale.worker.proofreading.state).toBe('stale');
+  });
+
   it("מחזיר את כל שדות ה-local, את זמינות העובד ואת מספר ההתנגשויות הפתוחות", async () => {
     const seen = new Date(Date.now() - 30_000);
     const pageErrors = Array.from({ length: 60 }, (_, i) => ({ pageNumber: i + 1, message: `שגיאה ${i + 1}` }));

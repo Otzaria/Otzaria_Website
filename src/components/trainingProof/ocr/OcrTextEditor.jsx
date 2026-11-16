@@ -60,7 +60,7 @@ export default function OcrTextEditor({ initial, caret: caret0 = 0, ltr, marks, 
   const word = spans[k]
   const live = useMemo(() => marksForText(marks, value), [marks, value])
   const markAt = new Map(live.map((m) => [m.i, m]))
-  const fixes = live.filter((m) => m.level === 'fix')
+  const fixes = live.filter((m) => m.level === 'fix' || m.alts?.length)
   const pick = (m, alt) => {
     const r = replaceWord(value, m.i, alt)
     const ta = ref.current
@@ -132,7 +132,7 @@ export default function OcrTextEditor({ initial, caret: caret0 = 0, ltr, marks, 
               <span>
                 <b className="text-on-surface">{m.word}</b> ←
               </span>
-              {m.sugg.map((alt) => (
+              {(m.sugg || []).map((alt) => (
                 <Chip
                   key={alt}
                   title="מחליף את המילה בשדה; Enter שומר"
@@ -143,6 +143,10 @@ export default function OcrTextEditor({ initial, caret: caret0 = 0, ltr, marks, 
                   {alt}
                 </Chip>
               ))}
+              {(m.alts || []).map((alt) => <Chip key={alt.text} title={alt.why || 'חלופה לפי ההקשר; האחוז הוא משקל יחסי'}
+                onMouseDown={(e) => e.preventDefault()} onClick={() => pick(m, alt.text)}>
+                {alt.text}{alt.p != null ? ` · משקל יחסי ${Math.round(alt.p * 100)}%` : ''}
+              </Chip>)}
             </span>
           ))}
         </div>

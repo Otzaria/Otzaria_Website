@@ -7,6 +7,7 @@
 // ויעצור את העבודה — לכן הפורמט כאן דטרמיניסטי (תאריכים ב-toISOString, מפתחות בסדר קבוע).
 import { WORKER_VISIBLE_STATUSES, activeFilter, siteStateOf } from './localJobState.js';
 import { pageMapEntryToContract } from './localPdf.pure.js';
+import { normalizeProofreadingOptions } from './proofreadingOptions.js';
 
 export const MAX_LIST_LIMIT = 100;
 const CURSOR_RE = /^[a-f0-9]{24}$/;
@@ -49,6 +50,9 @@ function optionsOf(options) {
   const out = {};
   if (typeof options?.lm === 'string') out.lm = options.lm;
   if (typeof options?.defaultScript === 'string') out.defaultScript = options.defaultScript;
+  const proofreading = normalizeProofreadingOptions(options || {});
+  if (!proofreading.ok) throw new Error('invalid proofreading options');
+  Object.assign(out, proofreading.value);
   return out;
 }
 

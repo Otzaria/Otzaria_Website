@@ -11,6 +11,7 @@ import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { CHECKBOX, FIELD_LABEL } from '@/components/ui/fieldStyles'
 import { FOCUS_RING } from '@/components/ui/focusRing'
 import { loginHref, requestJson } from '@/components/admin/list/adminRequest'
+import { unsupportedProofreadingOptions } from '@/lib/ocr/proofreadingCapabilities'
 import LocalOcrOptions from '@/components/admin/ocr/LocalOcrOptions'
 import LocalOcrJobProgress from '@/components/admin/ocr/LocalOcrJobProgress'
 import OcrJobSummary from '@/components/admin/ocr/OcrJobSummary'
@@ -248,6 +249,10 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
 
   const handleStart = async () => {
     if (rangeInvalid) return
+    if (isLocal) {
+      const unsupported = unsupportedProofreadingOptions(localOptions, worker?.proofreading)
+      if (unsupported) { setError(unsupported); return }
+    }
     setStarting(true)
     setError('')
     try {
@@ -459,7 +464,7 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
 
           {isLocal ? (
             <>
-              <LocalOcrOptions value={localOptions} onChange={setLocalOptions} disabled={starting} />
+              <LocalOcrOptions value={localOptions} onChange={setLocalOptions} disabled={starting} capabilities={worker?.proofreading} />
               {worker && worker.configured !== false && worker.availability !== 'online' && (
                 <p className="text-body-sm text-on-surface-variant">
                   המחשב המקומי לא מחובר כרגע. אפשר להתחיל בכל זאת — העבודה תחכה ותתחיל כשהמחשב יחזור.

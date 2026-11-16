@@ -8,27 +8,75 @@ import { LOCAL_LM_OPTIONS, LOCAL_SCRIPT_OPTIONS } from './ocrJobView'
  *
  * @param {{ value: {lm:string, defaultScript:string}, onChange: (next:{lm:string, defaultScript:string}) => void, disabled?: boolean }} props
  */
-export default function LocalOcrOptions({ value, onChange, disabled = false }) {
+export default function LocalOcrOptions({ value, onChange, disabled = false, capabilities }) {
   const lmName = useId()
   const scriptName = useId()
+  const advanced = capabilities?.state === 'available'
+  const supportsLm = advanced && capabilities.lmCheck
+  const supportsAlts = advanced && capabilities.alternatives
+  const lexicons = advanced && capabilities.lexiconAvailable ? capabilities.lexicons || [] : []
+  const inheritLexicons = () => { const next = { ...value }; delete next.lexicons; onChange(next) }
 
   return (
     <div className="space-y-4">
       <fieldset disabled={disabled}>
-        <legend className="mb-2 text-title-sm text-on-surface">מודל שפה</legend>
+        <legend className="mb-2 text-title-sm text-on-surface">{supportsLm ? 'תחום הספר' : 'מודל שפה'}</legend>
         <div className="grid grid-cols-3 gap-2">
-          {LOCAL_LM_OPTIONS.map((opt) => (
+          {LOCAL_LM_OPTIONS.filter((opt) => !supportsLm || opt.value !== 'off' || value.lm === 'off').map((opt) => (
             <OptionCard
               key={opt.value}
               name={lmName}
               checked={value.lm === opt.value}
-              onSelect={() => onChange({ ...value, lm: opt.value })}
+              onSelect={() => onChange({ ...value, lm: opt.value, ...(opt.value === 'modern' && value.alts === 'on' ? { alts: 'off' } : {}) })}
               label={opt.label}
-              desc={opt.desc}
+              desc={supportsLm && opt.value === 'rabbinic' ? 'ספרות תורנית' : opt.desc}
             />
           ))}
         </div>
       </fieldset>
+
+      {supportsLm && <label className="flex items-start gap-2 text-body-sm text-on-surface">
+        <input type="checkbox" checked={value.lm !== 'off' && value.lmCheck !== 'off'} disabled={disabled}
+          onChange={(e) => onChange({ ...value, lm: value.lm === 'off' ? 'rabbinic' : value.lm, lmCheck: e.target.checked ? 'on' : 'off' })} />
+        בדיקה באמצעות מודל השפה
+      </label>}
+      {supportsAlts && <div>
+        <label className="flex items-start gap-2 text-body-sm text-on-surface">
+          <input type="checkbox" checked={value.alts === 'on'}
+            disabled={disabled || value.lm === 'modern' || !capabilities.contextAvailable || !capabilities.lexiconAvailable}
+            onChange={(e) => onChange({ ...value, alts: e.target.checked ? 'on' : 'off' })} />
+          חלופות למילים חשודות לפי ההקשר בספרייה
+        </label>
+        <p className="mt-1 text-label-sm text-on-surface-variant">{value.lm === 'modern'
+          ? 'ההגהה לפי הספרייה מיועדת לספרות תורנית ואינה מופעלת בתחום המודרני.'
+          : !capabilities.contextAvailable || !capabilities.lexiconAvailable
+            ? 'ספריית ההקשר אינה זמינה כרגע במחשב המקומי.'
+            : 'כבוי כברירת מחדל. חישוב ראשון עשוי להוסיף 7–25 דקות; הטקסט משתנה רק בבחירה שלכם.'}</p>
+      </div>}
+      {advanced && capabilities.lexiconAvailable && <fieldset disabled={disabled}>
+        <legend className="mb-2 text-title-sm text-on-surface">מילונים נוספים לספר</legend>
+        <select aria-label="בחירת מילונים נוספים" value={!Object.hasOwn(value, 'lexicons') ? 'default' : value.lexicons.length ? 'custom' : 'none'}
+          className="rounded-control border border-outline-variant bg-surface px-3 py-2 text-body-sm text-on-surface"
+          onChange={(e) => e.target.value === 'default' ? inheritLexicons() : onChange({ ...value, lexicons: e.target.value === 'none' ? [] : lexicons.slice(0, 1).map((item) => item.name) })}>
+          <option value="default">ברירת המחדל במחשב המקומי</option>
+          <option value="none">ללא מילונים נוספים</option>
+          {!!lexicons.length && <option value="custom">בחירה לספר הזה</option>}
+        </select>
+        {value.lexicons?.length > 0 && <div className="mt-2 flex flex-wrap gap-3">{lexicons.map((item) => <label key={item.name} className="flex items-center gap-2 text-body-sm">
+          <input type="checkbox" checked={value.lexicons.includes(item.name)} disabled={disabled || (!value.lexicons.includes(item.name) && value.lexicons.length >= 16)}
+            onChange={(e) => onChange({ ...value, lexicons: e.target.checked ? [...value.lexicons, item.name].sort() : value.lexicons.filter((n) => n !== item.name) })} />
+          {item.name}
+        </label>)}</div>}
+        <p className="mt-1 text-label-sm text-on-surface-variant">מילון נוסף עשוי להפחית התרעות וגם להסתיר שגיאות; בחרו רק מילון שמתאים לספר.</p>
+      </fieldset>}
+      {!advanced && <p className="text-label-sm text-on-surface-variant">{capabilities?.state === 'stale'
+        ? 'דיווח יכולות ההגהה התיישן. ההגדרות הנוספות יהיו זמינות אחרי חיבור המחשב.'
+        : 'הגדרות הגהה נוספות יופיעו אחרי שהמחשב המקומי ידווח על תמיכה בהן.'}</p>}
+      {!advanced && ['lmCheck', 'alts', 'lexicons'].some((key) => Object.hasOwn(value, key)) && <button type="button"
+        disabled={disabled} className="text-body-sm text-primary underline underline-offset-2"
+        onClick={() => onChange({ lm: value.lmCheck === 'off' ? 'off' : value.lm, defaultScript: value.defaultScript })}>
+        חזור להגדרות הזיהוי הבסיסיות
+      </button>}
 
       <fieldset disabled={disabled}>
         <legend className="mb-2 text-title-sm text-on-surface">כתב ברירת מחדל</legend>

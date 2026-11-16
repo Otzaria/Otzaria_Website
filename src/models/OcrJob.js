@@ -13,6 +13,9 @@ import { ALL_STATUSES } from '../lib/ocr/localJobState.js';
 const OptionsSchema = new mongoose.Schema({
   lm: { type: String, enum: ['rabbinic', 'modern', 'off'] },
   defaultScript: { type: String, enum: ['square', 'rashi'] },
+  lmCheck: { type: String, enum: ['on', 'off'] },
+  alts: { type: String, enum: ['on', 'off'] },
+  lexicons: { type: [String], default: undefined },
 }, { _id: false });
 
 // רשומה אחת לכל עמוד ב-PDF הקלט (pdfPageIndex מ-1). expectedUpdatedAt — updatedAt של

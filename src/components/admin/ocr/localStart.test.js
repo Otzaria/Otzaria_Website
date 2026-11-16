@@ -191,3 +191,11 @@ describe('postLocalStart', () => {
     expect(r.message).toBe('גדול מדי')
   })
 })
+
+
+it('request identity includes explicit proofreading choices without changing legacy keys', () => {
+  const base = { bookId: 'b', existingTextMode: 'skip', options: { lm: 'modern', defaultScript: 'square' } }
+  expect(localParamsKey(base)).toBe(JSON.stringify(['b', 'skip', 'modern', 'square']))
+  expect(localParamsKey({ ...base, options: { ...base.options, lmCheck: 'off' } })).not.toBe(localParamsKey(base))
+  expect(localParamsKey({ ...base, options: { ...base.options, lexicons: [] } })).not.toBe(localParamsKey(base))
+})

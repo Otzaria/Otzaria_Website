@@ -56,6 +56,11 @@ export default function OcrMarkedText({ text, marks, ltr, disabled, onPick, onDo
                 </Chip>
               ))
             : null}
+          {!!cur.alts?.length && <span className="text-label-sm">חלופות לפי ההקשר (משקל יחסי):</span>}
+          {(cur.alts || []).map((alt) => <Chip key={alt.text} disabled={disabled} title={alt.why || 'חלופה לפי ההקשר'}
+            onClick={() => { setOpen(null); onPick(cur.i, alt.text) }}>
+            {alt.text}{alt.p != null ? ` · ${Math.round(alt.p * 100)}%` : ''}
+          </Chip>)}
           <button type="button" className="text-primary underline-offset-2 hover:underline" onClick={() => setOpen(null)}>
             סגור
           </button>

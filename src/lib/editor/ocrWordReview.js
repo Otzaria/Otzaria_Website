@@ -3,6 +3,7 @@
 // UTF-16 ranges for both editing surfaces and use bounded, exact sequence matching.
 import { tokenize } from '../../components/editor/v2/richMap.js';
 import { LOW_CONF, shapeReasons } from './suspectWords.js';
+import { cleanContextAlternatives } from '../ocr/proofreadingMarks.js';
 import { validOcrReviewState } from './ocrReviewState.js';
 
 const list = (x) => Array.isArray(x) ? x : [];
@@ -101,8 +102,9 @@ export function reviewWordsOfLine(line, { proof = false } = {}) {
     alternatives.forEach((a) => add(a.alts, 'recognition'));
     lm.forEach((a) => add(a.alts, 'language'));
     legacy.forEach((a) => { add(a.rec, 'context'); add(a.lm, 'language'); });
+    const contextAlternatives = mark ? cleanContextAlternatives(mark.alts, text, [...suggestions.values()].map((s) => s.text)) : [];
     return { text, conf, reasons, suggestions: [...suggestions.values()], p: probability(alternatives[0]?.p),
-      ...(proofreading ? { proofreading } : {}) };
+      ...(proofreading ? { proofreading } : {}), ...(contextAlternatives.length ? { contextAlternatives } : {}) };
   });
 }
 
@@ -230,7 +232,8 @@ export function buildPageWordReview(texts, source, decisions = null) {
     const reasons = [...new Set([...(model?.reasons || []), ...shapeReasons(w.text)])];
     if (reasons.length) {
       const suspect = { ...w, reasons, suggestions: model?.suggestions || [], conf: model?.conf ?? null,
-        p: model?.p ?? null, ...(model?.proofreading ? { proofreading: model.proofreading } : {}) };
+        p: model?.p ?? null, ...(model?.proofreading ? { proofreading: model.proofreading } : {}),
+        ...(model?.contextAlternatives?.length ? { contextAlternatives: model.contextAlternatives } : {}) };
       if (approved.has(j)) accepted.push(suspect);
       else fields[w.column].suspects.push(suspect);
     }

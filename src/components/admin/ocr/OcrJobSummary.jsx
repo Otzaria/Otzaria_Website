@@ -1,3 +1,4 @@
+import { proofreadingResultLabel } from '@/lib/ocr/proofreadingCapabilities'
 import Badge from '@/components/ui/Badge'
 import OcrStatusBadge from './OcrStatusBadge'
 import { cancelReasonLabel, jobErrorText, jobRangeText, salvageLabel, summaryParts } from './ocrJobView'
@@ -17,6 +18,7 @@ export default function OcrJobSummary({ job }) {
   const finished = fullDateText(job.finishedAt)
   const salvage = salvageLabel(job)
   const rangeText = jobRangeText(job)
+  const proofreading = proofreadingResultLabel(job.resultMetadata?.proofreading)
 
   return (
     <section aria-label="סיכום העבודה האחרונה" className="space-y-3 rounded-control bg-surface p-3">
@@ -38,6 +40,8 @@ export default function OcrJobSummary({ job }) {
       {job.status === 'cancelled' && (
         <p className="text-body-sm leading-snug text-on-surface">{cancelReasonLabel(job)}.</p>
       )}
+
+      {proofreading && <p role="status" className="text-body-sm leading-snug text-on-surface">{proofreading}</p>}
 
       {salvage && <p className="text-body-sm leading-snug text-on-surface">{salvage}.</p>}
 
