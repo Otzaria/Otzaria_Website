@@ -52,6 +52,8 @@ export default function OcrWordPopup({ review, textContainerRef, onApplyText, on
   const clearTimer = (k) => { clearTimeout(timers.current[k]); timers.current[k] = 0 }
   const close = useCallback(() => {
     clearTimer('open'); clearTimer('close')
+    cancelAnimationFrame(timers.current.raf)
+    timers.current.raf = 0
     hoverId.current = null
     focusOnOpen.current = false
     setOpen(null)
@@ -96,15 +98,18 @@ export default function OcrWordPopup({ review, textContainerRef, onApplyText, on
   }, [open, current, reposition])
   useEffect(() => {
     if (!open) return undefined
-    const t = timers.current
+    let frame = 0
     const later = () => {
-      cancelAnimationFrame(t.raf)
-      t.raf = requestAnimationFrame(reposition)
+      if (frame) return
+      frame = requestAnimationFrame(() => {
+        frame = 0
+        reposition()
+      })
     }
     window.addEventListener('scroll', later, true)
     window.addEventListener('resize', later)
     return () => {
-      cancelAnimationFrame(t.raf)
+      cancelAnimationFrame(frame)
       window.removeEventListener('scroll', later, true)
       window.removeEventListener('resize', later)
     }
@@ -212,6 +217,7 @@ export default function OcrWordPopup({ review, textContainerRef, onApplyText, on
       document.removeEventListener('keydown', onKeyDown, true)
       document.removeEventListener('keyup', onKeyUp)
       clearTimeout(t.open); clearTimeout(t.close); cancelAnimationFrame(t.raf)
+      t.raf = 0
     }
   }, [close, openOn]) // eslint-disable-line react-hooks/exhaustive-deps
 

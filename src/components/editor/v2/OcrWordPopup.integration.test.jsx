@@ -69,7 +69,7 @@ beforeEach(() => {
   // בתצוגה המעוצבת כל טווח "נמצא" במקום המילה — rangeRects של הבקר
   Range.prototype.getClientRects = function () { return this.toString() ? [WORD] : [] }
 })
-afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); delete document.execCommand; delete Range.prototype.getClientRects; localStorage.clear() })
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); delete document.execCommand; delete Range.prototype.getClientRects; localStorage.clear() })
 
 const POS = 'והנה היא <b>פו'.length
 
@@ -151,6 +151,78 @@ it('hovering a marked word opens after a short delay and leaving closes it', asy
   expect(field).not.toHaveFocus()
   fireEvent.mouseMove(field, { clientX: 20, clientY: 600 })
   await waitFor(() => expect(popup()).toBeNull(), { timeout: 2000 })
+})
+
+it.each([
+  ['scroll', false], ['scroll', true], ['resize', false], ['resize', true]
+])('hover survives %s and close/reopen (frame completed: %s)', async (event, completed) => {
+  const { container } = await ready('code')
+  const field = fieldOf(container)
+  clickAt(field, POS)
+  expect(popup()).not.toBeNull()
+  vi.useFakeTimers()
+  if (event === 'scroll') fireEvent.scroll(field)
+  else fireEvent(window, new Event('resize'))
+  if (completed) act(() => vi.advanceTimersByTime(1))
+  clickAt(field, 2)
+  expect(popup()).toBeNull()
+  fireEvent.mouseMove(field, { clientX: 320, clientY: 210 })
+  act(() => vi.advanceTimersByTime(400))
+  expect(popup()).not.toBeNull()
+  fireEvent.mouseMove(field, { clientX: 20, clientY: 600 })
+  act(() => vi.advanceTimersByTime(300))
+  expect(popup()).toBeNull()
+})
+
+it('coalesces scroll/resize bursts without cancelling a pending hover check', async () => {
+  const { container } = await ready('code')
+  const field = fieldOf(container)
+  vi.useFakeTimers()
+  fireEvent.mouseMove(field, { clientX: 320, clientY: 210 })
+  act(() => vi.advanceTimersByTime(400))
+  expect(popup()).not.toBeNull()
+  const request = vi.fn((cb) => setTimeout(cb, 0))
+  vi.stubGlobal('requestAnimationFrame', request)
+  fireEvent.mouseMove(field, { clientX: 20, clientY: 600 })
+  for (let i = 0; i < 10; i++) {
+    fireEvent.scroll(field)
+    fireEvent(window, new Event('resize'))
+  }
+  expect(request).toHaveBeenCalledTimes(2)
+  act(() => vi.advanceTimersByTime(300))
+  expect(popup()).toBeNull()
+  fireEvent.mouseMove(field, { clientX: 320, clientY: 210 })
+  act(() => vi.advanceTimersByTime(400))
+  expect(popup()).not.toBeNull()
+})
+
+it('cancels a pending hover check when the popup is closed explicitly', async () => {
+  const { container } = await ready('code')
+  const field = fieldOf(container)
+  clickAt(field, POS)
+  vi.useFakeTimers()
+  fireEvent.mouseMove(field, { clientX: 320, clientY: 210 })
+  fireEvent.click(document.body)
+  act(() => vi.advanceTimersByTime(400))
+  expect(popup()).toBeNull()
+})
+
+it('cancels both pending frame tasks on unmount', async () => {
+  const { container, unmount } = await ready('code')
+  const field = fieldOf(container)
+  clickAt(field, POS)
+  vi.useFakeTimers()
+  const request = vi.fn((cb) => setTimeout(cb, 0))
+  const cancel = vi.fn(clearTimeout)
+  vi.stubGlobal('requestAnimationFrame', request)
+  vi.stubGlobal('cancelAnimationFrame', cancel)
+  fireEvent.scroll(field)
+  fireEvent.mouseMove(field, { clientX: 320, clientY: 210 })
+  expect(request).toHaveBeenCalledTimes(2)
+  unmount()
+  for (const { value } of request.mock.results) expect(cancel).toHaveBeenCalledWith(value)
+  act(() => vi.advanceTimersByTime(400))
+  expect(popup()).toBeNull()
 })
 
 it('works in the inactive left column of a split page', async () => {
