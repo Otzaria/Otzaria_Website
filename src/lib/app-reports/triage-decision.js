@@ -157,7 +157,8 @@ export async function applyTriageDecision(reportId, raw, deps) {
   }
   // המדווח השיב בזמן שהבדיקה רצה (קריאה טרייה, אחרי ההחלטה): בודקים שוב עם התשובה
   const fresh = await AppReport.findOne({ reportId }).select('contactLog').lean();
-  const answeredMeanwhile = (fresh?.contactLog || []).some((c) => c.direction === 'in' && ['triage', 'held'].includes(c.issueComment)
+  const answeredMeanwhile = (fresh?.contactLog || []).some((c) => c.direction === 'in'
+    && (c.issueComment === 'triage' || (d.awaitingReply && c.issueComment === 'held'))
     && c.sentAt && doc.triage.requestedAt && new Date(c.sentAt) > new Date(doc.triage.requestedAt));
   const retriage = answeredMeanwhile && await requestRetriage(reportId, deps);
   return { status: 200, body: { ok: true, ...statusOf(await AppReport.findOne({ reportId }).lean()), questionsSent: mail.sent, retriage } };

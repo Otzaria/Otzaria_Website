@@ -378,6 +378,56 @@ test('תשובה מכתובת אחרת על דיווח שלא ממתין לתש�
   assert.deepEqual([doc.triage.state, doc.triage.runs, doc.contactLog.at(-1).issueComment], ['held', 1, 'held']);
 });
 
+for (const awaitingReply of [false, true]) {
+  test(`תשובה מכתובת אחרת בזמן הבדיקה: החלטת המתנה ${awaitingReply} קובעת בדיקה חוזרת`, async (t) => {
+    if (db.skip) return t.skip(db.skip);
+    const { body } = await post(report());
+    await applyTriageDecision(body.reportId, decision({ questions: ['איזה כונן?'] }), deps());
+    const to = contactMails[0].replyTo;
+    await ingestInboundReply({
+      to, from: 'reporter@example.com', subject: 'Re', messageId: '<first@x>', text: 'כונן חיצוני', headers: {}, attachments: 0,
+    }, { ...deps(), saveFile, deleteFile });
+    const pending = await AppReport.findOne({ reportId: body.reportId }).lean();
+    assert.equal(pending.triage.awaitingReply, false);
+    await ingestInboundReply({
+      to, from: 'other@example.com', subject: 'Re', messageId: '<during@x>', text: 'עוד פרט', headers: {}, attachments: 0,
+    }, { ...deps({ now: new Date(pending.triage.requestedAt.getTime() + 1) }), saveFile, deleteFile });
+    const result = await applyTriageDecision(body.reportId, decision({
+      runs: 2, awaitingReply, ...(awaitingReply ? { questions: ['מתי?'] } : {}),
+    }), deps());
+    const doc = await AppReport.findOne({ reportId: body.reportId }).lean();
+    assert.equal(result.body.retriage, awaitingReply);
+    assert.deepEqual([doc.triage.state, doc.triage.runs], awaitingReply ? ['pending', 3] : ['held', 2]);
+    assert.equal(doc.contactLog.filter((c) => c.direction === 'in').at(-1).issueComment, 'held');
+    assert.equal(gh.comments.length, 0);
+  });
+}
+
+test('תשובה מכתובת אחרת: המתנה שבוטלה בזמן השמירה לא מפעילה בדיקה חוזרת', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { body } = await post(report());
+  await applyTriageDecision(body.reportId, decision({ questions: ['מתי?'], awaitingReply: true }), deps());
+  const original = AppReport.updateOne;
+  let intercepted = false;
+  AppReport.updateOne = async function (filter, update, ...args) {
+    if (!intercepted && update.$push?.contactLog?.issueComment === 'held') {
+      intercepted = true;
+      await requestRetriage(body.reportId, deps());
+      await applyTriageDecision(body.reportId, decision({ runs: 2 }), deps());
+    }
+    return original.call(this, filter, update, ...args);
+  };
+  try {
+    await ingestInboundReply({
+      to: contactMails[0].replyTo, from: 'other@example.com', subject: 'Re', messageId: '<cancelled@x>', text: 'עוד פרט', headers: {}, attachments: 0,
+    }, { ...deps(), saveFile, deleteFile });
+  } finally {
+    AppReport.updateOne = original;
+  }
+  const doc = await AppReport.findOne({ reportId: body.reportId }).lean();
+  assert.deepEqual([doc.triage.state, doc.triage.runs, doc.contactLog.at(-1).issueComment], ['held', 2, 'held']);
+});
+
 test('תשובה שהגיעה בזמן הבדיקה: hold מבקש בדיקה חוזרת', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const { body } = await post(report());

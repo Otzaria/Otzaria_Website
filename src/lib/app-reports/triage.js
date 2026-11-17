@@ -177,16 +177,17 @@ export const UNLINKED = Object.freeze({
  * בדיקה חוזרת של דיווח שלא נפתח (המדווח השיב). ממתין שוב לפרסום, כך שגם אם השירות לא יענה — ייפתח.
  * @returns {Promise<boolean>} האם הבקשה נרשמה
  */
-export async function requestRetriage(reportId, deps) {
+export async function requestRetriage(reportId, deps, { requireAwaitingReply = false } = {}) {
   const now = deps.now || new Date();
-  const doc = await AppReport.findOne({ reportId, 'triage.state': 'held' }).select('triage').lean();
+  const filter = { reportId, 'triage.state': 'held', ...(requireAwaitingReply ? { 'triage.awaitingReply': true } : {}) };
+  const doc = await AppReport.findOne(filter).select('triage').lean();
   if (!doc) return false;
   const runs = (doc.triage.runs || 0) + 1;
   const next = pendingTriage(now, deps.config, runs);
   // המדווח השיב שוב ושוב: לא בודקים בלי סוף — נפתח ב-cron הבא
   if (runs > MAX_TRIAGE_RUNS) Object.assign(next, { state: 'opened', deadline: now, decidedAt: now, followUp: null });
   const upd = await AppReport.updateOne(
-    { reportId, 'triage.state': 'held', 'triage.decidedAt': doc.triage.decidedAt },
+    { ...filter, 'triage.decidedAt': doc.triage.decidedAt },
     { $set: { ...UNLINKED, issuePending: true, issueError: null, triage: { ...doc.triage, ...next } } },
   );
   if (!upd.modifiedCount) return false;

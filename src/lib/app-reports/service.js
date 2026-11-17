@@ -739,7 +739,7 @@ export async function ingestInboundReply(raw, deps) {
     // המצב אולי השתנה בזמן השמירה (החלטה, פתיחה): קובעים לפי מה שיש עכשיו.
     // בדיקה שעוד רצה לא ראתה את התשובה; אם תחליט לא לפתוח — applyTriageDecision יבקש בדיקה חוזרת.
     const now2 = await AppReport.findOne({ reportId: doc.reportId }).select('triage issueNumber').lean();
-    if (now2?.triage?.state === 'held') await requestRetriage(doc.reportId, deps);
+    if (now2?.triage?.state === 'held') await requestRetriage(doc.reportId, deps, { requireAwaitingReply: !fromReporter });
     else if (fromReporter && now2?.triage?.state !== 'pending' && now2?.issueNumber) {
       await releaseTriageReplies(doc.reportId);
       await postInboundComments(doc.reportId, deps).catch((err) => console.error('Inbound reply comment failed:', err?.message));
