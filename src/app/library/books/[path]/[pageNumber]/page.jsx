@@ -92,6 +92,12 @@ const SHORTCUTS_VERSION_KEY = 'user_shortcuts_version'
 // פעולות שהקיצור שלהן הוסר בהעברת גרסה (התנגשות) — מוצג בחלון הקיצורים עד "הבנתי"
 const SHORTCUTS_UNBOUND_KEY = 'user_shortcuts_unbound'
 
+async function readPageResponse(response, fallback) {
+  if (response.ok) return response.json()
+  const result = await response.json().catch(() => null)
+  throw new Error(result?.error || fallback)
+}
+
 export default function EditPage() {
   const params = useParams()
   const bookPath = decodeURIComponent(params.path)
@@ -355,23 +361,25 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
     if (bookData?.name) document.title = `עריכה: ${bookData.name} - עמוד ${pageNumber}`
   }, [bookData, pageNumber])
 
-  const loadPageData = async () => {
+  const loadPageData = async signal => {
+    if (signal.aborted) return
+    const applyContent = data => {
+      setPageData(previous => ({ ...previous, ...data }))
+      setContent(data.content || '')
+      setLeftColumn(data.leftColumn || '')
+      setRightColumn(data.rightColumn || '')
+      setRightColumnName(data.rightColumnName || 'חלק 1')
+      setLeftColumnName(data.leftColumnName || 'חלק 2')
+      setTwoColumns(data.twoColumns || false)
+      setIsContentSplit(data.twoColumns || false)
+      setWordReviewState({ pageKey: `${bookPath}:${pageNumber}`, revision: data.ocrReviewRevision, value: data.ocrWordReview || null })
+    }
     try {
       setLoading(true)
       setError(null)
     
       const stored = offlineUserId && readRecord(pageKey(offlineUserId, bookPath, pageNumber))
-      const applyContent = data => {
-        setPageData(previous => ({ ...previous, ...data }))
-        setContent(data.content || '')
-        setLeftColumn(data.leftColumn || '')
-        setRightColumn(data.rightColumn || '')
-        setRightColumnName(data.rightColumnName || 'חלק 1')
-        setLeftColumnName(data.leftColumnName || 'חלק 2')
-        setTwoColumns(data.twoColumns || false)
-        setIsContentSplit(data.twoColumns || false)
-        setWordReviewState({ pageKey: `${bookPath}:${pageNumber}`, revision: data.ocrReviewRevision, value: data.ocrWordReview || null })
-      }
+
       if (stored && (!offline.holdsEditLock() || stored.draft || stored.inFlight || session.offline || navigator.onLine === false || window.__OTZARIA_OFFLINE_BOOK__)) {
         setBookData(stored.book)
         applyContent({ ...stored.data, ...stored.draft })
@@ -381,9 +389,9 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
       // מהספר רק העמוד הנוכחי (?page=) במקום כל עמודי הספר. תוכן העמוד נשלף רק
       // אחרי שבדיקת ההרשאה שלמטה עברה (ולא במקביל): כך תוכן של ספר מוסתר או של
       // עמוד נעול לא נשלח לדפדפן של מי שאינו מורשה, ואין בקשת 403 מיותרת.
-      const bookRes = await fetch(`/api/book/${encodeURIComponent(bookPath)}?page=${pageNumber}`)
-      const bookResult = await bookRes.json()
-      if (!bookRes.ok) throw new Error(bookResult.error || 'טעינת הספר נכשלה')
+      const bookRes = await fetch(`/api/book/${encodeURIComponent(bookPath)}?page=${pageNumber}`, { signal })
+      const bookResult = await readPageResponse(bookRes, 'טעינת הספר נכשלה')
+      if (signal.aborted) return
 
       if (bookResult.success) {
         setBookData(bookResult.book)
@@ -416,30 +424,46 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
         throw new Error(bookResult.error)
       }
 
-      const contentRes = await fetch(`/api/page-content?bookPath=${encodeURIComponent(bookPath)}&pageNumber=${pageNumber}`)
-      const contentResult = await contentRes.json()
+      const contentRes = await fetch(`/api/page-content?bookPath=${encodeURIComponent(bookPath)}&pageNumber=${pageNumber}`, { signal })
+      const contentResult = await readPageResponse(contentRes, 'טעינת תוכן העמוד נכשלה')
+      if (signal.aborted) return
 
       if (contentResult.success && contentResult.data) {
         let data = contentResult.data
         if (stored) {
           let latest
-          try { latest = await refreshPreparedPage(stored, data, { ownsEditLock: offline.holdsEditLock }) }
-          catch { throw new Error('לא ניתן לעדכן את עותק האופליין. העותק הקודם נשמר; בדקו את החיבור והאחסון ורעננו.') }
+          try { latest = await refreshPreparedPage(stored, data, { ownsEditLock: () => !signal.aborted && offline.holdsEditLock() }) }
+          catch (cause) { throw new Error('לא ניתן לעדכן את עותק האופליין. העותק הקודם נשמר; בדקו את החיבור והאחסון ורעננו.', { cause }) }
+          if (signal.aborted) return
           if (!latest) throw new Error('עותק האופליין הוסר במהלך הטעינה. רעננו את העמוד.')
           data = { ...latest.data, ...latest.draft }
         }
         applyContent(data)
       } else throw new Error(contentResult.error || 'טעינת תוכן העמוד נכשלה')
     } catch (err) {
+      if (signal.aborted) return
+      // ניתוק בזמן רענון מחזיר לעותק המקומי; שגיאת הרשאה אינה כשל רשת.
+      try {
+        if (navigator.onLine === false && (err instanceof TypeError || err.cause instanceof TypeError)) {
+          const local = offlineUserId && readRecord(pageKey(offlineUserId, bookPath, pageNumber))
+          if (local) {
+            setBookData(local.book)
+            applyContent({ ...local.data, ...local.draft })
+            return
+          }
+        }
+      } catch (localError) { err = localError }
       console.error(err);
       setError(err.message || 'שגיאה בטעינה')
     } finally {
-      setLoading(false)
+      if (!signal.aborted) setLoading(false)
     }
   }
 
   useEffect(() => {
-    if (status === 'authenticated') queueMicrotask(loadPageData)
+    const controller = new AbortController()
+    if (status === 'authenticated') queueMicrotask(() => loadPageData(controller.signal))
+    return () => controller.abort()
   // טעינה מותנית-נתיב; loadPageData מוחרג למניעת לולאה
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, bookPath, pageNumber, offlineUserId, session?.offline, offline.lock])
