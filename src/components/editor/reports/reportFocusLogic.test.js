@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { buildErrorMarker } from '@/lib/pageReports/rules'
 import { barPlacement, locateInEditorFields, reportFocusNotice, reportIdFromSearch, reportMarkerLabel, reportMatchesPage } from './reportFocusLogic'
 
 const ID = '0123456789abcdef01234567'
@@ -44,7 +45,7 @@ describe('reportFocusNotice', () => {
     expect(reportFocusNotice({ phase: 'applied', done: 'הסימון הוחלף בתיקון.' }).text).toBe('הסימון הוחלף בתיקון. אפשר לבטל עם Ctrl+Z.')
   })
   it('תווית הסימון', () => {
-    expect(reportMarkerLabel(report)).toBe('(שלמם)[שלום]')
+    expect(reportMarkerLabel(report)).toBe(buildErrorMarker('שלמם', 'שלום'))
   })
 })
 
