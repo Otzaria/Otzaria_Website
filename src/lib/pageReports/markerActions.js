@@ -58,6 +58,28 @@ export function applyMarkerReplacement(value, hit, markerText, replacement) {
   return { value: v.slice(0, hit.start) + r + v.slice(hit.end), start: hit.start, end: hit.start + r.length }
 }
 
+/** אותו מופע אחרי עריכה מחוץ לו; עריכה שנוגעת בו או יכולה להשתייך אליו דורשת סימון מחדש. */
+export function relocateMarkerHit(before, after, hit) {
+  if (!hit || typeof before !== 'string' || typeof after !== 'string') return null
+  if (before.slice(hit.start, hit.end) !== hit.markerText) return null
+  let start = hit.start
+  if (before !== after) {
+    const limit = Math.min(before.length, after.length)
+    let prefix = 0
+    let suffix = 0
+    while (prefix < limit && before[prefix] === after[prefix]) prefix++
+    while (suffix < limit && before[before.length - suffix - 1] === after[after.length - suffix - 1]) suffix++
+    // בטקסט חוזר גם תחילת העריכה וגם סופה יכולות לזוז; לא מנחשים איזה מופע שרד.
+    const from = Math.min(prefix, before.length - suffix, after.length - suffix)
+    const to = before.length - Math.min(suffix, before.length - prefix, after.length - prefix)
+    if (hit.end <= from) start = hit.start
+    else if (hit.start >= to) start += after.length - before.length
+    else return null
+  }
+  const end = start + hit.markerText.length
+  return after.slice(start, end) === hit.markerText ? { ...hit, start, end } : null
+}
+
 /** שורת ההכרעה בפס של העורך: מה הוחלט (ריק — עוד ממתין) */
 export function decisionText(report) {
   if (report?.status === 'approved') {

@@ -1,8 +1,9 @@
 import { beforeEach, afterEach, test, expect, vi } from 'vitest'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import EditPage from './page'
 import { pageKey, readRecord, writeRecord } from '@/lib/offlineBooks/store'
 import { EDITOR_PREFS_STORAGE_KEY, serializeEditorPrefs } from '@/hooks/editorPrefs'
+import { queryEditorField } from '@/lib/editor/editorField'
 
 const authState = vi.hoisted(() => ({ offline: false }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }), useParams: () => ({ path: 'book', pageNumber: '3' }) }))
@@ -18,6 +19,7 @@ const cacheKey = request => new URL(typeof request === 'string' ? request : requ
 const nextData = { id: 'p', content: 'טקסט חדש', thumbnail: '/uploads/new-scan.png', status: 'in-progress', claimedBy: 'u', twoColumns: false, rightColumn: '', leftColumn: '', rightColumnName: 'פנים', leftColumnName: 'פירוש', contentVersion: 'b'.repeat(64), ocrReviewRevision: 'new-scan', ocrWordReview: null }
 beforeEach(() => {
   authState.offline = false
+  history.replaceState(null, '', '/')
   localStorage.clear()
   cacheStores.clear()
   cacheStores.set('prepared-cache', new Map([
@@ -46,7 +48,7 @@ beforeEach(() => {
     book: { name: 'ספר', totalPages: 10 }, data: { ...nextData, content: 'טקסט ישן', thumbnail: '/uploads/old-scan.png', ocrReviewRevision: 'old-scan', claimedById: 'u' }, draft: null })
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
-afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); localStorage.clear(); delete navigator.locks; delete navigator.onLine })
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); localStorage.clear(); history.replaceState(null, '', '/'); delete navigator.locks; delete navigator.onLine })
 
 test('online reload of a clean prepared page must update the cached scan before publishing its new thumbnail', async () => {
   render(<EditPage />)
@@ -68,6 +70,65 @@ test('a clean local fallback refreshes once real authentication finishes loading
   await screen.findByDisplayValue('טקסט חדש')
   expect(readRecord(key).baseVersion).toBe(nextData.contentVersion)
 })
+
+test('report focus survives authentication refreshing the same prepared page', async () => {
+  history.replaceState(null, '', '/library/books/book/3?report=0123456789abcdef01234567')
+  authState.offline = true
+  let resolveReport, resolveContent
+  const pendingReport = new Promise(resolve => { resolveReport = resolve })
+  const pendingContent = new Promise(resolve => { resolveContent = resolve })
+  const normalFetch = fetch.getMockImplementation()
+  fetch.mockImplementation(url => {
+    if (String(url).startsWith('/api/page-reports/')) return pendingReport
+    if (String(url).startsWith('/api/page-content?')) return pendingContent
+    return normalFetch(url)
+  })
+  const marker = '(מקור)[תיקון]'
+  const content = `לפני ${marker} אחרי`
+  writeRecord({ ...readRecord(key), data: { ...readRecord(key).data, content } })
+  const view = render(<EditPage />)
+  await screen.findByDisplayValue(content)
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/page-reports/'))).toBe(true))
+  authState.offline = false
+  view.rerender(<EditPage />)
+  await screen.findByText('טוען...')
+  await act(async () => resolveReport({ ok: true, json: async () => ({ success: true, report: {
+    bookPath: 'book', pageNumber: 3, column: 'content', original: 'מקור', proposed: 'תיקון',
+  } }) }))
+  await act(async () => resolveContent({ ok: true, json: async () => ({ success: true, data: { ...nextData, content } }) }))
+  const field = await screen.findByDisplayValue(content)
+  await screen.findByText('הסימון של הדיווח מסומן בטקסט.')
+  expect(field.value.slice(field.selectionStart, field.selectionEnd)).toBe(marker)
+})
+
+test('report action in the rich left column saves normally and Ctrl+Z restores it in one step', async () => {
+  localStorage.clear()
+  localStorage.setItem(EDITOR_PREFS_STORAGE_KEY, serializeEditorPrefs({ textView: 'rich' }))
+  history.replaceState(null, '', '/library/books/book/3?report=0123456789abcdef01234567')
+  const marker = '(מקור)[תיקון]'
+  const leftColumn = `לפני <b>${marker}</b> אחרי`
+  const updated = 'לפני <b>תיקון</b> אחרי'
+  const data = { ...nextData, twoColumns: true, leftColumn, rightColumn: 'טור שלא משתנה' }
+  const normalFetch = fetch.getMockImplementation()
+  fetch.mockImplementation((url, options) => {
+    if (String(url).startsWith('/api/page-reports/')) return Promise.resolve({ ok: true, json: async () => ({ success: true, report: {
+      bookPath: 'book', pageNumber: 3, column: 'left', status: 'approved', original: 'מקור', proposed: 'תיקון',
+    } }) })
+    if (String(url).startsWith('/api/page-content?')) return Promise.resolve({ ok: true, json: async () => ({ success: true, data }) })
+    if (url === '/api/page-content' && options?.method === 'POST') return Promise.resolve({ ok: true, json: async () => ({ success: true }) })
+    return normalFetch(url, options)
+  })
+  const view = render(<EditPage />)
+  fireEvent.click(await screen.findByRole('button', { name: 'החלף בתיקון' }))
+  const left = queryEditorField(view.container, 'left')
+  expect(left.value).toBe(updated)
+  expect(queryEditorField(view.container, 'right').value).toBe(data.rightColumn)
+  const saved = () => fetch.mock.calls.filter(([url, options]) => url === '/api/page-content' && options?.method === 'POST').map(([, options]) => JSON.parse(options.body))
+  await waitFor(() => expect(saved().at(-1)).toMatchObject({ leftColumn: updated, rightColumn: data.rightColumn }), { timeout: 3000 })
+  fireEvent.keyDown(left, { key: 'z', code: 'KeyZ', ctrlKey: true })
+  expect(left.value).toBe(leftColumn)
+  await waitFor(() => expect(saved().at(-1)).toMatchObject({ leftColumn, rightColumn: data.rightColumn }), { timeout: 3000 })
+}, 10000)
 
 test('a blocked second tab never starts a refresh that could overwrite the owning editor', async () => {
   navigator.locks.request.mockImplementation(async (name, options, callback) => callback ? callback(null) : options({ name }))

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { queryAllEditorFields } from '@/lib/editor/editorField'
 import { getTextareaCaretTop } from '@/lib/editorUtils'
+import { relocateMarkerHit } from '@/lib/pageReports/markerActions'
 import { fetchEditorReport } from './pageReportsApi'
 import { barPlacement, locateInEditorFields, reportIdFromSearch, reportMatchesPage } from './reportFocusLogic'
 
@@ -24,7 +25,8 @@ const modalOpen = () => typeof document !== 'undefined' && Boolean(document.quer
 export function useReportFocus({ containerRef, ready, bookPath, pageNumber, fetchReport = fetchEditorReport }) {
   const pageKey = `${bookPath}\u0000${pageNumber}`
   const [state, setState] = useState(/** @type {null | FocusState} */ (null))
-  const doneFor = useRef(/** @type {string|null} */ (null))
+  const scrollTimer = useRef(0)
+  const cancelFocus = useRef(() => {})
 
   /** השדות שבמסך: [{ el, column, value }] */
   const fields = useCallback(() => {
@@ -39,7 +41,7 @@ export function useReportFocus({ containerRef, ready, bookPath, pageNumber, fetc
     if (!hit) return null
     const field = list.find((f) => (f.column === 'right' || f.column === 'left' ? f.column : 'content') === hit.column)
     if (!field?.el) return null
-    return { el: /** @type {any} */ (field.el), hit: { ...hit, markerText: field.value.slice(hit.start, hit.end) } }
+    return { el: /** @type {any} */ (field.el), hit: { ...hit, markerText: field.value.slice(hit.start, hit.end), sourceText: field.value } }
   }, [fields])
 
   /** איתור מחדש בטקסט הנוכחי, וסימון. מחזיר את המיקום או null */
@@ -50,7 +52,9 @@ export function useReportFocus({ containerRef, ready, bookPath, pageNumber, fetc
     el.focus({ preventScroll: true })
     el.setSelectionRange(hit.start, hit.end)
     // גלילה כך שהסימון באמצע השדה (כמו "חפש הבא"); הפס עובר לצד הנגדי לסימון במסך, כדי לא להסתיר אותו
-    setTimeout(() => {
+    window.clearTimeout(scrollTimer.current)
+    scrollTimer.current = window.setTimeout(() => {
+      scrollTimer.current = 0
       const lh = Number.parseFloat(window.getComputedStyle(el).lineHeight)
       const top = getTextareaCaretTop(el, hit.start)
       el.scrollTop = Math.max(0, top - el.clientHeight / 2 + (Number.isFinite(lh) ? lh : 24))
@@ -65,12 +69,12 @@ export function useReportFocus({ containerRef, ready, bookPath, pageNumber, fetc
   useEffect(() => {
     if (!ready || typeof window === 'undefined') return undefined
     const id = reportIdFromSearch(window.location.search)
-    const key = `${pageKey}\u0000${id}`
-    if (!id || doneFor.current === key) return undefined
-    doneFor.current = key
+    if (!id) return undefined
     let cancelled = false
     let timer = 0
-    setState({ phase: 'loading', report: null })
+    queueMicrotask(() => {
+      if (!cancelled) setState({ phase: 'loading', report: null })
+    })
     fetchReport(id).then((report) => {
       if (cancelled) return
       if (!reportMatchesPage(report, bookPath, pageNumber)) {
@@ -98,10 +102,13 @@ export function useReportFocus({ containerRef, ready, bookPath, pageNumber, fetc
     }).catch((err) => {
       if (!cancelled) setState({ phase: 'error', report: null, error: err?.message })
     })
-    return () => {
+    const cancel = () => {
       cancelled = true
       window.clearTimeout(timer)
+      window.clearTimeout(scrollTimer.current)
     }
+    cancelFocus.current = cancel
+    return cancel
   }, [ready, pageKey, bookPath, pageNumber, fetchReport, highlight, fields])
 
   // מעבר לעמוד אחר — הפס של הדיווח הקודם נסגר
@@ -118,15 +125,25 @@ export function useReportFocus({ containerRef, ready, bookPath, pageNumber, fetc
     setState((s) => (s ? { ...s, phase: hit ? 'found' : 'missing', count: hit?.count, hit, done: undefined } : s))
   }, [state, highlight])
 
-  const dismiss = useCallback(() => setState(null), [])
+  const dismiss = useCallback(() => {
+    cancelFocus.current()
+    setState(null)
+  }, [])
 
   /** פעולה בוצעה בטקסט (ReportMarkerActions) — הודעה בפס; "סמן שוב" מחפש מחדש (למשל אחרי ביטול) */
   const markDone = useCallback((done) => setState((s) => (s ? { ...s, phase: 'applied', done, hit: null } : s)), [])
 
-  /** הסימון בטקסט הנוכחי (לפני פעולה — הטקסט יכול היה להשתנות מאז שסומן) */
-  const locate = useCallback(() => (state?.report ? find(state.report) : null), [state, find])
+  const markMissing = useCallback(() => setState((s) => (s ? { ...s, phase: 'missing', hit: null } : s)), [])
 
-  return { state, rehighlight, dismiss, locate, markDone }
+  /** הסימון בטקסט הנוכחי (לפני פעולה — הטקסט יכול היה להשתנות מאז שסומן) */
+  const locate = useCallback(() => {
+    if (state?.phase !== 'found' || !state.hit) return null
+    const field = fields().find((f) => (f.column === 'right' || f.column === 'left' ? f.column : 'content') === state.hit.column)
+    const hit = relocateMarkerHit(state.hit.sourceText, field?.value, state.hit)
+    return field?.el && hit ? { el: /** @type {any} */ (field.el), hit } : null
+  }, [state, fields])
+
+  return { state, rehighlight, dismiss, locate, markDone, markMissing }
 }
 
 /**

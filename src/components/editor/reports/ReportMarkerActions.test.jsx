@@ -37,7 +37,7 @@ describe('useReportMarkerActions', () => {
       state: { phase: 'found', report: rep, hit },
       locate: vi.fn(() => (el.value.slice(4, 16) === MARK ? { el, hit } : null)),
       markDone: vi.fn(),
-      rehighlight: vi.fn(),
+      markMissing: vi.fn(),
     }
     const applyColumnText = vi.fn()
     const { result } = renderHook(() => useReportMarkerActions({ focus, applyColumnText }))
@@ -59,11 +59,11 @@ describe('useReportMarkerActions', () => {
     expect(applyColumnText).toHaveBeenCalledWith('content', 'אמר שלמם עליכם')
   })
 
-  it('הסימון כבר לא בטקסט — לא נוגעים, ומחפשים מחדש', () => {
+  it('הסימון כבר לא בטקסט — לא נוגעים, ומבקשים סימון מחדש', () => {
     const { run, focus, applyColumnText } = setup('אמר שלום עליכם')
     expect(run({ id: 'replace' })).toBe(false)
     expect(applyColumnText).not.toHaveBeenCalled()
-    expect(focus.rehighlight).toHaveBeenCalled()
+    expect(focus.markMissing).toHaveBeenCalled()
   })
 
   it('פעולה שלא מתאימה להכרעה — לא נוגעים', () => {

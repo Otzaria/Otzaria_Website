@@ -14,11 +14,11 @@ import { applyMarkerReplacement, markerActionsFor } from '@/lib/pageReports/mark
  * @returns {(action: { id: string }) => boolean} האם הטקסט השתנה
  */
 export function useReportMarkerActions({ focus, applyColumnText }) {
-  const { state, locate, markDone, rehighlight } = focus
+  const { state, locate, markDone, markMissing } = focus
   return useCallback((action) => {
     const found = locate()
     if (!found) {
-      rehighlight()
+      markMissing()
       return false
     }
     const { el, hit } = found
@@ -31,5 +31,5 @@ export function useReportMarkerActions({ focus, applyColumnText }) {
     )
     if (changed) markDone(fresh.done)
     return changed
-  }, [state, locate, markDone, rehighlight, applyColumnText])
+  }, [state, locate, markDone, markMissing, applyColumnText])
 }

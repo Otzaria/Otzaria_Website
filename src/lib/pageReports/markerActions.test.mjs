@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { markerLike, markerActionsFor, applyMarkerReplacement, decisionText } from './markerActions.js'
+import { markerLike, markerActionsFor, applyMarkerReplacement, decisionText, relocateMarkerHit } from './markerActions.js'
 
 const hit = { start: 4, end: 16, original: 'שלמם', proposed: 'שלום' }
 const MARK = '(שלמם)[שלום]'
@@ -48,6 +48,30 @@ test('applyMarkerReplacement: מחליף רק את הסימון, הבחירה ע
   // הטקסט השתנה בינתיים — לא נוגעים
   assert.equal(applyMarkerReplacement('אמר שלום עליכם', hit, MARK, 'שלום'), null)
   assert.equal(applyMarkerReplacement(v, null, MARK, 'x'), null)
+})
+
+test('עריכה מחוץ לסימון שומרת על המופע, גם כשההיסט משתנה', () => {
+  const before = `אמר ${MARK} עליכם`
+  const tracked = { ...hit, markerText: MARK }
+  for (const after of [before, `כותרת\n${before}`, before.slice(4), `${before}!`, before.slice(0, -3)]) {
+    const moved = relocateMarkerHit(before, after, tracked)
+    assert.ok(moved)
+    assert.equal(after.slice(moved.start, moved.end), MARK)
+  }
+})
+
+test('סימון שנערך או הוסר אינו עובר למופע זהה במקום אחר', () => {
+  const before = `אמר ${MARK} עליכם\nאחר ${MARK} עוד`
+  const tracked = { ...hit, markerText: MARK }
+  assert.equal(relocateMarkerHit(before, before.replace(MARK, 'שלום'), tracked), null)
+  assert.equal(relocateMarkerHit(before, before.replace('שלמם', 'שלכם'), tracked), null)
+  assert.equal(relocateMarkerHit(before, before.replace(MARK, ''), tracked), null)
+})
+
+test('עריכה דו-משמעית בטקסט חוזר אינה בוחרת מופע אחר', () => {
+  const tracked = { start: 0, end: MARK.length, markerText: MARK }
+  assert.equal(relocateMarkerHit(MARK + MARK, MARK, tracked), null)
+  assert.equal(relocateMarkerHit(MARK, MARK + MARK, tracked), null)
 })
 
 test('decisionText: מה הוחלט', () => {
