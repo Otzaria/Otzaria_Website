@@ -6,6 +6,7 @@ import LabelChips from '@/components/corrections/LabelChips'
 import HiddenBooksFilter from '@/components/corrections/HiddenBooksFilter'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { HANDOFF_REASON_LABELS } from '@/lib/corrections/states'
+import { buildQueueQuery, FILTERS_KEY, HIDDEN_KEY, writeNavList } from '@/lib/corrections/queue-nav'
 
 const VIEWS = [
   { id: 'queued', label: 'פנויים ובטיפולי' },
@@ -20,9 +21,7 @@ const VIEWS = [
 // תקרת השרת ל-limit היא 100.
 const PAGE_SIZE = 50
 const MAX_PAGE_SIZE = 100
-const FILTERS_KEY = 'corrections:listFilters'
 // ספרים מוסתרים נשמרים לאורך זמן (localStorage); תמונת הרשימה + מיקום הגלילה — לחזרה מדף דיווח (sessionStorage).
-const HIDDEN_KEY = 'corrections:hiddenBooks'
 const SNAPSHOT_KEY = 'corrections:listSnapshot'
 const SNAPSHOT_MAX_AGE_MS = 30 * 60_000
 
@@ -102,16 +101,10 @@ export default function CorrectionsListPage() {
   }
 
   // מפתח השאילתה (בלי עימוד) — גם לזיהוי תמונת רשימה שנשמרה לאותו סינון
-  const queryKey = useMemo(() => {
-    const q = new URLSearchParams({ view, sort })
-    if (kind) q.set('kind', kind)
-    if (source) q.set('source', source)
-    if (bookQuery) q.set('book', bookQuery)
-    if (reason) q.set('reason', reason)
-    if (assignee) q.set('assignee', assignee)
-    if (hidden.length) q.set('hideBooks', JSON.stringify(hidden))
-    return q.toString()
-  }, [view, sort, kind, source, bookQuery, reason, assignee, hidden])
+  const queryKey = useMemo(
+    () => buildQueueQuery({ view, sort, kind, source, book: bookQuery, reason, assignee, hidden }),
+    [view, sort, kind, source, bookQuery, reason, assignee, hidden],
+  )
 
   const fetchPage = useCallback(async (skip, limit = PAGE_SIZE) => {
     const res = await fetch(`/api/corrections/reports?${queryKey}&limit=${limit}&skip=${skip}`, { cache: 'no-store' })
@@ -168,6 +161,8 @@ export default function CorrectionsListPage() {
 
   // לפני כניסה לדיווח: שומרים את הרשימה הטעונה ואת מיקום הגלילה (גם לחץ "חזרה" של הדפדפן)
   const rememberPosition = (e) => {
+    // רשימת הניווט (הקודם/הבא בדף הדיווח) — בכל לחיצה, גם לפתיחה בלשונית אחרת
+    if (data) try { writeNavList(sessionStorage, { query: queryKey, ids: data.items.map((r) => r.id), total: data.total, at: Date.now() }) } catch { /* אחסון חסום */ }
     if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return // נפתח בלשונית אחרת — הדף הזה נשאר
     try {
       sessionStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ query: queryKey, data, scrollY: window.scrollY, at: Date.now() }))
@@ -286,7 +281,7 @@ export default function CorrectionsListPage() {
           <p className="text-sm text-on-surface/60">{data.total} דיווחים</p>
           <div className="space-y-2">
             {data.items.map((r) => (
-              <Link key={r.id} href={`/library/corrections/${r.id}`} onClick={rememberPosition} className="block glass rounded-xl p-4 hover:bg-surface-variant transition-colors">
+              <Link key={r.id} href={`/library/corrections/${r.id}`} onClick={rememberPosition} onAuxClick={rememberPosition} className="block glass rounded-xl p-4 hover:bg-surface-variant transition-colors">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="min-w-0">
                     <div className="font-bold text-on-surface truncate">{r.bookTitle} <span className="font-normal text-on-surface/60">— {r.currentRef}</span></div>
