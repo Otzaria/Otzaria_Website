@@ -23,9 +23,8 @@ export async function GET(_request, { params }) {
     await connectDB();
     const result = await buildTrainingDownload(id);
     if (!result.ok) return workerJson(result.status, { error: result.error });
-    return new Response(result.data, { status: 200, headers: {
+    return new Response(result.stream, { status: 200, headers: {
       'Content-Type': 'application/zip',
-      'Content-Length': String(result.data.byteLength),
       'Content-Disposition': `attachment; filename="${downloadFileName(result.jobId)}"`,
       'Cache-Control': 'private, no-store',
       'X-Content-Type-Options': 'nosniff',

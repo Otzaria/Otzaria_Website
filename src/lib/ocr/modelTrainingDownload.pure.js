@@ -6,11 +6,10 @@
 //   - download.json — מה יש בקובץ ומאיפה (עבודה, inputSha256, העמודים, מצב ה-layout לכל עמוד).
 // הארכיון שבדיסק והמעטפה לשירות אינם משתנים; התוספות קיימות רק בקובץ שהמנהל מוריד.
 // imports יחסיים/חבילות בלבד (נבדק ב-node:test).
-import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
+import { strFromU8, strToU8 } from 'fflate';
 
 export const DOWNLOAD_SCHEMA_VERSION = 1;
 const ID_RE = /^[a-f0-9]{24}$/;
-const ADDED = ['download.json'];
 const LAYOUT_DIR = 'layouts/';
 
 /** שם הקובץ להורדה: ASCII בלבד, בלי שם הספר (רק מזהה העבודה). */
@@ -20,21 +19,17 @@ export function downloadFileName(jobId) {
 }
 
 /**
- * פותח את הארכיון הקפוא ובודק שהוא ארכיון אימון של עמודים מוגהים.
- * @param {Uint8Array} frozen
- * @returns {{ files: Record<string, Uint8Array>, dataset: any }}
+ * Parses only the small dataset entry; image contents stay in the file stream.
+ * @param {Uint8Array} raw
  */
-export function readFrozenPackage(frozen) {
-  let files;
-  try { files = unzipSync(frozen); } catch { throw new Error('training_package_invalid'); }
-  const raw = files['dataset.json'];
-  if (!raw) throw new Error('training_package_invalid');
+export function parseFrozenDataset(raw) {
   let dataset;
   try { dataset = JSON.parse(strFromU8(raw)); } catch { throw new Error('training_package_invalid'); }
   if (dataset?.kind !== 'corrected-pages' || !Array.isArray(dataset.pages)) throw new Error('training_package_invalid');
-  if (Object.keys(files).some(n => ADDED.includes(n) || n.startsWith(LAYOUT_DIR))) throw new Error('training_package_invalid');
-  return { files, dataset };
+  return dataset;
 }
+
+export const isDownloadEntry = name => name === 'download.json' || name.startsWith(LAYOUT_DIR);
 
 /** מזהי העמודים שבארכיון (רק מזהים תקינים — הם נכנסים לשמות קבצים). */
 export function frozenPageIds(dataset) {
@@ -64,14 +59,13 @@ export function layoutEntry({ pageId, record, imageSha256Now = null }) {
 }
 
 /**
- * מרכיב את קובץ-ההורדה: רשומות הארכיון הקפוא כמות שהן + layouts + download.json.
- * @param {{ files: Record<string, Uint8Array>, dataset: any, job: { id: string, inputSha256: string, preparedAt?: any },
+ * Builds only the added metadata entries, without loading or copying images.
+ * @param {{ dataset: any, job: { id: string, inputSha256: string, preparedAt?: any },
  *   layouts: Record<string, { status: string, entry: any|null }> }} args
- * @returns {Uint8Array}
+ * @returns {Record<string, Uint8Array>}
  */
-export function composeDownload({ files, dataset, job, layouts }) {
+export function downloadEntries({ dataset, job, layouts }) {
   const out = {};
-  for (const [name, data] of Object.entries(files)) out[name] = [data, { level: name.endsWith('.json') ? 6 : 0 }];
   const pages = dataset.pages.map(p => {
     const id = String(p?.pageId || '');
     const l = ID_RE.test(id) ? layouts[id] : null;
@@ -86,5 +80,5 @@ export function composeDownload({ files, dataset, job, layouts }) {
     bookId: dataset.bookId, script: dataset.script, datasetSchemaVersion: dataset.schemaVersion,
     pages,
   }));
-  return zipSync(out);
+  return out;
 }

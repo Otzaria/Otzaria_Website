@@ -17,12 +17,12 @@ const STORAGE_RETRY_AFTER_SEC = 300;
 
 /**
  * FileHandle → ReadableStream של בדיוק `size` בתים מתחילת הקובץ. קריאה רק ב-pull, handle נסגר
- * בסוף/בשגיאה/בביטול (הלקוח התנתק).
+ * בסוף/בשגיאה/בביטול (הלקוח התנתק). closeOnEnd:false משאיר בעלות לקורא למעבר נוסף.
  * @param {import('node:fs/promises').FileHandle} fh
  * @param {number} size
- * @param {{chunkSize?:number}} [opts]
+ * @param {{chunkSize?:number,closeOnEnd?:boolean}} [opts]
  */
-export function fileHandleStream(fh, size, { chunkSize = STREAM_CHUNK_BYTES } = {}) {
+export function fileHandleStream(fh, size, { chunkSize = STREAM_CHUNK_BYTES, closeOnEnd = true } = {}) {
   let pos = 0;
   let closed = false;
   const close = async () => {
@@ -36,7 +36,7 @@ export function fileHandleStream(fh, size, { chunkSize = STREAM_CHUNK_BYTES } = 
         try {
           const want = Math.min(chunkSize, size - pos);
           if (want <= 0) {
-            await close();
+            if (closeOnEnd) await close();
             controller.close();
             return;
           }
@@ -80,6 +80,14 @@ async function storageRootMissing(env) {
  * חריגת I/O אחרת (EACCES, EIO...) נזרקת — withWorker מחזיר 500 (זמני אצל השירות).
  */
 export async function openJobInput(job, env = process.env) {
+  const input = await openJobInputHandle(job, env);
+  if (!input.ok) return input;
+  const { handle, ...result } = input;
+  return { ...result, stream: fileHandleStream(handle, input.size) };
+}
+
+/** Validates the path and size; the caller owns and must close the handle. */
+export async function openJobInputHandle(job, env = process.env) {
   if (!job?.inputPath || job.inputPurgedAt) return fail(404, 'input_unavailable');
 
   // הנתיב חייב להיות בדיוק <jobId>/input-<inputSha256>.pdf (כך buildJobInput כותב): שם הקובץ
@@ -114,7 +122,7 @@ export async function openJobInput(job, env = process.env) {
       await fh.close();
       return fail(409, 'input_corrupt');
     }
-    return { ok: true, stream: fileHandleStream(fh, st.size), size: st.size, sha256: job.inputSha256 };
+    return { ok: true, handle: fh, size: st.size, sha256: job.inputSha256 };
   } catch (err) {
     await fh.close().catch(() => {});
     throw err;

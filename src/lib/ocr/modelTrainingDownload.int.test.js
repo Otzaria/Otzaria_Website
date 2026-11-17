@@ -50,7 +50,7 @@ it('downloads the frozen archive unchanged plus the saved page layouts, without 
   const frozen = unzipSync(before);
   const result = await buildTrainingDownload(String(job._id));
   expect(result.ok).toBe(true);
-  const out = unzipSync(result.data);
+  const out = unzipSync(new Uint8Array(await new Response(result.stream).arrayBuffer()));
   for (const [name, data] of Object.entries(frozen)) expect(out[name]).toEqual(data);
   const manifest = JSON.parse(strFromU8(out['download.json']));
   expect(manifest.inputSha256).toBe(job.inputSha256); expect(manifest.pages).toHaveLength(5);
@@ -73,4 +73,26 @@ it('refuses OCR jobs, unprepared jobs and purged or tampered archives with a cle
   expect((await buildTrainingDownload(String(job._id))).status).toBe(410);
   await OcrJob.updateOne({ _id: job._id }, { $unset: { inputPath: 1, inputPurgedAt: 1 } });
   expect((await buildTrainingDownload(String(job._id))).status).toBe(409);
+});
+
+it('closes the retained input handle when the download is cancelled', async () => {
+  const { job } = await trainedJob();
+  const open = vi.spyOn(fs, 'open');
+  const result = await buildTrainingDownload(String(job._id));
+  const handle = await open.mock.results.at(-1).value;
+  const close = vi.spyOn(handle, 'close');
+  await result.stream.cancel();
+  expect(close).toHaveBeenCalledOnce();
+  open.mockRestore();
+});
+
+it('closes the input if preparing the added metadata fails after verification', async () => {
+  const { job } = await trainedJob();
+  const open = vi.spyOn(fs, 'open');
+  const find = vi.spyOn(Page, 'find').mockImplementationOnce(() => { throw new Error('database_unavailable'); });
+  try {
+    await expect(buildTrainingDownload(String(job._id))).rejects.toThrow('database_unavailable');
+    const handle = await open.mock.results.at(-1).value;
+    await expect(handle.stat()).rejects.toThrow('closed');
+  } finally { find.mockRestore(); open.mockRestore(); }
 });

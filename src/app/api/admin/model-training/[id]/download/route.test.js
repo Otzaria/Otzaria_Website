@@ -11,7 +11,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.stubEnv('OCR_TRAINING_ENABLED', 'false');
   m.session.mockResolvedValue({ user: { role: 'admin_ocr', id: 'b'.repeat(24) } });
-  m.build.mockResolvedValue({ ok: true, data: new Uint8Array([80, 75, 5, 6]), jobId: id });
+  m.build.mockResolvedValue({ ok: true, stream: new ReadableStream({ start(c) { c.enqueue(new Uint8Array([80, 75, 5, 6])); c.close(); } }), jobId: id });
 });
 describe('admin download of the five corrected training pages', () => {
   it.each([null, { user: { role: 'user' } }, { user: { role: 'admin_books' } }, { user: { role: 'admin_books_only' } }])('denies anyone without OCR access before reading data: %j', async session => {
@@ -28,6 +28,8 @@ describe('admin download of the five corrected training pages', () => {
     expect(res.status).toBe(200);
     expect(m.build).toHaveBeenCalledWith(id);
     expect(res.headers.get('content-type')).toBe('application/zip');
+    expect(res.headers.get('content-length')).toBeNull();
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
     expect(res.headers.get('cache-control')).toBe('private, no-store');
     expect(res.headers.get('content-disposition')).toBe(`attachment; filename="training-pages-${id}.zip"`);
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(new Uint8Array([80, 75, 5, 6]));
