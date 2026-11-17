@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
+import { buildErrorMarker } from '@/lib/pageReports/rules'
 import ReportFocusBar from './ReportFocusBar'
 
 const report = { original: 'שלמם', proposed: 'שלום' }
@@ -15,7 +16,7 @@ describe('ReportFocusBar', () => {
     const onDismiss = vi.fn()
     render(<ReportFocusBar state={{ phase: 'found', report, count: 1 }} onRehighlight={onRehighlight} onDismiss={onDismiss} />)
     expect(screen.getByRole('status')).toHaveTextContent('הסימון של הדיווח מסומן בטקסט.')
-    expect(screen.getByRole('status')).toHaveTextContent('(שלמם)[שלום]')
+    expect(screen.getByText(buildErrorMarker('שלמם', 'שלום'), { exact: true })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'סמן שוב' }))
     fireEvent.click(screen.getByRole('button', { name: 'סגור' }))
     expect(onRehighlight).toHaveBeenCalledOnce()
