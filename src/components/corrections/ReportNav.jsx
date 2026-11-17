@@ -3,12 +3,15 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { FOCUS_RING } from '@/components/ui/focusRing'
-import { appendPage, fallbackQuery, neighbors, nextSkip, readNavList, writeNavList } from '@/lib/corrections/queue-nav'
+import { appendPage, fallbackQuery, neighbors, readNavList, writeNavList } from '@/lib/corrections/queue-nav'
 
 const PAGE = 100 // תקרת השרת
 
-async function fetchQueue(query, skip) {
-  const res = await fetch(`/api/corrections/reports?${query}&limit=${PAGE}&skip=${skip}`, { cache: 'no-store' })
+async function fetchQueue(query, cursor = null) {
+  const params = new URLSearchParams(query)
+  params.set('limit', String(PAGE))
+  if (cursor) params.set('cursor', cursor)
+  const res = await fetch(`/api/corrections/reports?${params}`, { cache: 'no-store' })
   if (!res.ok) throw new Error(String(res.status))
   return res.json()
 }
@@ -39,7 +42,7 @@ export default function ReportNav({ id }) {
     const session = store('sessionStorage')
     // אין רשימה שמורה שכוללת את הדיווח — בונים מהסינון האחרון של התור
     const query = fallbackQuery(session, store('localStorage'))
-    fetchQueue(query, 0).then((page) => {
+    fetchQueue(query).then((page) => {
       if (!alive) return
       const built = appendPage({ query, ids: [], total: 0, at: Date.now() }, page)
       if (!built.ids.includes(id)) return
@@ -55,7 +58,7 @@ export default function ReportNav({ id }) {
   useEffect(() => {
     if (!nav || !pos.needMore) return
     let alive = true
-    fetchQueue(nav.query, nextSkip(nav)).then((page) => {
+    fetchQueue(nav.query, nav.nextCursor).then((page) => {
       if (!alive) return
       const next = appendPage(nav, page)
       const session = store('sessionStorage')

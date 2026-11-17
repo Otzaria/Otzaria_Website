@@ -4,14 +4,14 @@ import ReportNav from './ReportNav'
 import { NAV_KEY, FILTERS_KEY } from '@/lib/corrections/queue-nav'
 
 const saveNav = (ids, total = ids.length, query = 'view=queued') =>
-  sessionStorage.setItem(NAV_KEY, JSON.stringify({ query, ids, total, at: Date.now() }))
+  sessionStorage.setItem(NAV_KEY, JSON.stringify({ query, ids, total, at: Date.now(), hasMore: total > ids.length, nextCursor: ids.at(-1) }))
 const hrefOf = (name) => screen.getByRole('link', { name }).getAttribute('href')
 
 describe('מעבר בין דיווחים', () => {
   beforeEach(() => {
     sessionStorage.clear()
     localStorage.clear()
-    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ items: [], total: 0 }) })))
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ items: [], total: 0, hasMore: false, nextCursor: null }) })))
   })
   afterEach(() => {
     cleanup()
@@ -46,7 +46,8 @@ describe('מעבר בין דיווחים', () => {
     render(<ReportNav id="b" />)
     await waitFor(() => expect(hrefOf(/הבא/)).toBe('/library/corrections/c'))
     expect(fetch.mock.calls[0][0]).toContain('view=mine')
-    expect(fetch.mock.calls[0][0]).toContain('skip=0') // חפיפה: מתחילים חצי עמוד אחורה
+    expect(fetch.mock.calls[0][0]).toContain('cursor=b')
+    expect(fetch.mock.calls[0][0]).not.toContain('skip=')
     expect(JSON.parse(sessionStorage.getItem(NAV_KEY)).ids).toEqual(['a', 'b', 'c', 'd'])
   })
 
@@ -65,5 +66,21 @@ describe('מעבר בין דיווחים', () => {
     const { container } = render(<ReportNav id="zzz" />)
     await waitFor(() => expect(fetch).toHaveBeenCalled())
     expect(container.innerHTML).toBe('')
+  })
+
+  it('continues when live totals shrink and preserves the finished trail on remount', async () => {
+    sessionStorage.setItem(NAV_KEY, JSON.stringify({ query: 'view=queued&sort=oldest', ids: ['a', 'b'], total: 2,
+      at: Date.now(), hasMore: true, nextCursor: 'saved-boundary' }))
+    fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ items: [{ id: 'c' }], total: 1, hasMore: false, nextCursor: 'last' }) })
+    render(<ReportNav id="b" />)
+    await waitFor(() => expect(hrefOf(/הבא/)).toBe('/library/corrections/c'))
+    expect(fetch.mock.calls[0][0]).toContain('cursor=saved-boundary')
+    cleanup()
+    fetch.mockClear()
+    render(<ReportNav id="c" />)
+    expect(hrefOf(/הקודם/)).toBe('/library/corrections/b')
+    expect(screen.getByText('3 מתוך 3')).toBeTruthy()
+    expect(screen.getByRole('link', { name: /הבא/ })).toHaveAttribute('aria-disabled', 'true')
+    expect(fetch).not.toHaveBeenCalled()
   })
 })

@@ -25,10 +25,12 @@ export function parseNavList(raw, now = Date.now()) {
   if (!raw || typeof raw !== 'object') return null
   if (typeof raw.query !== 'string' || !Array.isArray(raw.ids)) return null
   if (!Number.isFinite(raw.at) || now - raw.at > NAV_MAX_AGE_MS) return null
+  if (typeof raw.hasMore !== 'boolean' || (raw.nextCursor !== null && typeof raw.nextCursor !== 'string')) return null
+  if (raw.hasMore && !raw.nextCursor) return null
   const seen = new Set()
   const ids = raw.ids.filter((id) => typeof id === 'string' && id && !seen.has(id) && seen.add(id)).slice(0, NAV_MAX_IDS)
   const total = Number.isSafeInteger(raw.total) && raw.total >= ids.length ? raw.total : ids.length
-  return { query: raw.query, ids, total, at: raw.at }
+  return { query: raw.query, ids, total, at: raw.at, hasMore: raw.hasMore, nextCursor: raw.nextCursor }
 }
 
 /** מיקום הדיווח ברשימה והשכנים שלו. index=-1 כשהדיווח אינו ברשימה. */
@@ -41,27 +43,18 @@ export function neighbors(nav, id) {
     nextId: index + 1 < nav.ids.length ? nav.ids[index + 1] : null,
     total: nav.total,
     // הדיווח האחרון שנטען, ובשרת יש עוד — צריך לטעון את העמוד הבא כדי לדעת מה "הבא"
-    needMore: index === nav.ids.length - 1 && nav.ids.length < nav.total && nav.ids.length < NAV_MAX_IDS,
+    needMore: index === nav.ids.length - 1 && Boolean(nav.hasMore) && nav.ids.length < NAV_MAX_IDS,
   }
 }
 
-// החפיפה בטעינת ההמשך: דיווחים שטופלו בינתיים יוצאים מהתור ומזיזים את ההיסט אחורה.
-// בלי חפיפה, אותם דיווחים היו מדולגים. חפיפה של חצי עמוד מכסה עד כמות כזו של דיווחים שטופלו.
-export const NAV_OVERLAP = 50
-
-/** מאיפה לטעון את ההמשך (עם חפיפה; הכפילויות מסוננות ב-appendPage). */
-export function nextSkip(nav, overlap = NAV_OVERLAP) {
-  return Math.max(0, nav.ids.length - overlap)
-}
-
-/** מצרף עמוד שנטען מהשרת לרשימה הקיימת (בלי כפילויות; דיווח חדש מזיז את ההיסט קדימה). */
+/** מצרף עמוד לרשימת הניווט בלי לשנות את ההיסטוריה או להסיק ממספר הדיווחים החיים שסיימנו. */
 export function appendPage(nav, page) {
   const seen = new Set(nav.ids)
-  const more = (page?.items || []).map((r) => r?.id).filter((x) => typeof x === 'string' && !seen.has(x))
+  const more = (page?.items || []).map((r) => r?.id).filter((x) => typeof x === 'string' && !seen.has(x) && seen.add(x))
   const ids = [...nav.ids, ...more].slice(0, NAV_MAX_IDS)
-  // העמוד חזר ריק — אין באמת עוד; מקבעים את הסך כדי לא לנסות שוב בלי סוף
-  const total = more.length ? Math.max(ids.length, Number.isSafeInteger(page?.total) ? page.total : ids.length) : ids.length
-  return { ...nav, ids, total }
+  const hasMore = page?.hasMore === true
+  const total = hasMore ? Math.max(nav.total, Number.isSafeInteger(page?.total) ? page.total : 0, ids.length + 1) : ids.length
+  return { ...nav, ids, total, hasMore, nextCursor: page?.nextCursor ?? null }
 }
 
 export function readNavList(storage, now = Date.now()) {
@@ -74,7 +67,7 @@ export function readNavList(storage, now = Date.now()) {
 
 export function writeNavList(storage, nav) {
   try {
-    storage.setItem(NAV_KEY, JSON.stringify({ query: nav.query, ids: nav.ids.slice(0, NAV_MAX_IDS), total: nav.total, at: nav.at ?? Date.now() }))
+    storage.setItem(NAV_KEY, JSON.stringify({ query: nav.query, ids: nav.ids.slice(0, NAV_MAX_IDS), total: nav.total, at: nav.at ?? Date.now(), hasMore: nav.hasMore, nextCursor: nav.nextCursor }))
   } catch { /* אחסון חסום או מלא — הניווט ייבנה מחדש מהסינון השמור */ }
 }
 

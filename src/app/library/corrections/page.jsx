@@ -162,7 +162,7 @@ export default function CorrectionsListPage() {
   // לפני כניסה לדיווח: שומרים את הרשימה הטעונה ואת מיקום הגלילה (גם לחץ "חזרה" של הדפדפן)
   const rememberPosition = (e) => {
     // רשימת הניווט (הקודם/הבא בדף הדיווח) — בכל לחיצה, גם לפתיחה בלשונית אחרת
-    if (data) try { writeNavList(sessionStorage, { query: queryKey, ids: data.items.map((r) => r.id), total: data.total, at: Date.now() }) } catch { /* אחסון חסום */ }
+    if (data) try { writeNavList(sessionStorage, { query: queryKey, ids: data.items.map((r) => r.id), total: data.total, at: Date.now(), nextCursor: data.nextCursor, hasMore: data.hasMore }) } catch { /* אחסון חסום */ }
     if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return // נפתח בלשונית אחרת — הדף הזה נשאר
     try {
       sessionStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ query: queryKey, data, scrollY: window.scrollY, at: Date.now() }))
