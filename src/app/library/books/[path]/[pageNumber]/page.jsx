@@ -90,6 +90,12 @@ const SHORTCUTS_VERSION_KEY = 'user_shortcuts_version'
 // פעולות שהקיצור שלהן הוסר בהעברת גרסה (התנגשות) — מוצג בחלון הקיצורים עד "הבנתי"
 const SHORTCUTS_UNBOUND_KEY = 'user_shortcuts_unbound'
 
+async function readPageResponse(response, fallback) {
+  if (response.ok) return response.json()
+  const result = await response.json().catch(() => null)
+  throw new Error(result?.error || fallback)
+}
+
 export default function EditPage() {
   const params = useParams()
   const bookPath = decodeURIComponent(params.path)
@@ -382,9 +388,8 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
       // אחרי שבדיקת ההרשאה שלמטה עברה (ולא במקביל): כך תוכן של ספר מוסתר או של
       // עמוד נעול לא נשלח לדפדפן של מי שאינו מורשה, ואין בקשת 403 מיותרת.
       const bookRes = await fetch(`/api/book/${encodeURIComponent(bookPath)}?page=${pageNumber}`, { signal })
-      const bookResult = await bookRes.json()
+      const bookResult = await readPageResponse(bookRes, 'טעינת הספר נכשלה')
       if (signal.aborted) return
-      if (!bookRes.ok) throw new Error(bookResult.error || 'טעינת הספר נכשלה')
 
       if (bookResult.success) {
         setBookData(bookResult.book)
@@ -418,7 +423,7 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
       }
 
       const contentRes = await fetch(`/api/page-content?bookPath=${encodeURIComponent(bookPath)}&pageNumber=${pageNumber}`, { signal })
-      const contentResult = await contentRes.json()
+      const contentResult = await readPageResponse(contentRes, 'טעינת תוכן העמוד נכשלה')
       if (signal.aborted) return
 
       if (contentResult.success && contentResult.data) {
