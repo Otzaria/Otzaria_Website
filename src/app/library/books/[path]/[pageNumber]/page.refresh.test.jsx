@@ -118,6 +118,35 @@ test.each([401, 403])('a completed HTTP %s denial remains an error even if the c
   expect(screen.queryByDisplayValue('טקסט ישן')).toBeNull()
 })
 
+test.each([['book', 401], ['book', 403], ['content', 401], ['content', 403]])('an HTTP %s/%s denial with a lost body cannot restore the local editor', async (stage, status) => {
+  let resolveRead
+  const pendingRead = new Promise(resolve => { resolveRead = resolve })
+  const endpoint = stage === 'book' ? '/api/book/book?' : '/api/page-content?'
+  const normalFetch = fetch.getMockImplementation()
+  fetch.mockImplementation(url => String(url).startsWith(endpoint) ? pendingRead : normalFetch(url))
+  render(<EditPage />)
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith(endpoint))).toBe(true))
+  Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+  act(() => window.dispatchEvent(new Event('offline')))
+  await act(async () => resolveRead({ ok: false, status, json: async () => { throw new TypeError('Failed to fetch') } }))
+  await screen.findByText(stage === 'book' ? 'טעינת הספר נכשלה' : 'טעינת תוכן העמוד נכשלה')
+  expect(screen.queryByDisplayValue('טקסט ישן')).toBeNull()
+})
+
+test('an HTTP 200 response whose body is lost on disconnect still restores the prepared copy', async () => {
+  let resolveRead
+  const pendingRead = new Promise(resolve => { resolveRead = resolve })
+  const normalFetch = fetch.getMockImplementation()
+  fetch.mockImplementation(url => String(url).startsWith('/api/page-content?') ? pendingRead : normalFetch(url))
+  render(<EditPage />)
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/page-content?'))).toBe(true))
+  Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+  act(() => window.dispatchEvent(new Event('offline')))
+  await act(async () => resolveRead({ ok: true, status: 200, json: async () => { throw new TypeError('Failed to fetch') } }))
+  await screen.findByDisplayValue('טקסט ישן')
+  expect(screen.queryByText('Failed to fetch')).toBeNull()
+})
+
 test('a cancelled refresh cannot replace the local copy loaded by a newer session', async () => {
   let rejectRead
   const pendingRead = new Promise((resolve, reject) => { rejectRead = reject })
