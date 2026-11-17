@@ -268,6 +268,43 @@ test('החלטה מאוחרת: כפול נסגר ככפול; issue שנפתח י
   assert.ok(gh.comments.some((c) => c.issue === bIssue && c.body.includes('<!-- app-report-triage -->')));
 });
 
+test('כפול עם מידע חדש: לא נפתח, והפענוח נכתב פעם אחת כתגובה בכפילות', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const orig = await post(report({ signature: { exceptionType: 'AppHang', frames: ['app.so+0x80'] } }), { config: { ...config, triageSecret: null } });
+  const { body } = await post(report());
+  const comment = (c) => c.issue === orig.body.issueNumber && c.body.includes('<!-- app-report-triage -->');
+  const failing = async (url, init = {}) => (init.method === 'POST' && String(url).endsWith('/comments') ? new Response('{}', { status: 502 }) : fetchImpl(url, init));
+  const r = await applyTriageDecision(body.reportId, decision({ verdict: 'duplicate', linkIssue: orig.body.issueNumber, commentOnLink: true }), deps({ fetchImpl: failing }));
+  assert.equal(r.status, 200);
+  assert.equal(r.body.state, 'held');
+  assert.equal(gh.comments.filter(comment).length, 0);
+
+  // ה-cron משלים את התגובה שנכשלה, ולא כותב אותה שוב
+  await sync(new Date());
+  await sync(new Date());
+  assert.equal(gh.issues.size, 1);
+  const posted = gh.comments.filter(comment);
+  assert.equal(posted.length, 1);
+  assert.match(posted[0].body, /לחץ זיכרון[\s\S]*מידע חדש מדיווח נוסף · כפול/);
+  const doc = await AppReport.findOne({ reportId: body.reportId }).lean();
+  assert.deepEqual([doc.issueNumber, doc.mergedIntoExisting, doc.triage.followUp.status], [orig.body.issueNumber, true, 'done']);
+  assert.deepEqual(gh.issues.get(orig.body.issueNumber).assignees, []);
+
+  // בדיקה חוזרת (למשל אחרי תשובת המדווח) כותבת פענוח חדש; בדיקה חוזרת בלי מידע חדש — לא
+  assert.equal(await requestRetriage(body.reportId, deps()), true);
+  assert.equal((await AppReport.findOne({ reportId: body.reportId }).lean()).triage.commentOnLink, false);
+  await applyTriageDecision(body.reportId, decision({ verdict: 'duplicate', summary: 'המדווח השיב.', linkIssue: orig.body.issueNumber, commentOnLink: true, runs: 2 }), deps());
+  assert.equal(await requestRetriage(body.reportId, deps()), true);
+  await applyTriageDecision(body.reportId, decision({ verdict: 'duplicate', linkIssue: orig.body.issueNumber, runs: 3 }), deps());
+  await sync(new Date());
+  assert.deepEqual(gh.comments.filter(comment).map((c) => /המדווח השיב/.test(c.body)), [false, true]);
+
+  const other = await post(report({ description: 'אחר' }));
+  for (const bad of [{ commentOnLink: true }, { commentOnLink: 'yes', linkIssue: 3 }]) {
+    assert.equal((await applyTriageDecision(other.body.reportId, decision({ verdict: 'duplicate', ...bad }), deps())).status, 422);
+  }
+});
+
 test('GitHub נכשל בפתיחה: ה-cron פותח עם הפענוח בגוף ה-issue, בלי תגובה נוספת', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const { body } = await post(report());

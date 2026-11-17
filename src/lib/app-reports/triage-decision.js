@@ -113,10 +113,10 @@ export async function applyTriageDecision(reportId, raw, deps) {
   const decided = {
     ...doc.triage, state: d.action === 'open' ? 'opened' : 'held', decidedAt: now, verdict: d.verdict, confidence: d.confidence,
     summary: d.summary, questions: d.questions.length ? d.questions : undefined, awaitingReply: d.awaitingReply,
-    linkedIssue: d.linkIssue, questionsSentAt: null, note: d.note,
+    linkedIssue: d.linkIssue, commentOnLink: d.commentOnLink, questionsSentAt: null, note: d.note,
     questionsPending: Boolean(d.questions.length), questionsLeaseUntil: null,
-    // נפתח: פענוח ושיוך ב-issue, אחרי הפרסום
-    followUp: d.action === 'open' ? OPEN_FOLLOW_UP : null,
+    // נפתח: פענוח ושיוך ב-issue, אחרי הפרסום. לא נפתח עם מידע חדש: הפענוח בכפילות
+    followUp: d.action === 'open' ? OPEN_FOLLOW_UP : d.commentOnLink ? LINK_FOLLOW_UP : null,
   };
   // ה-cron אולי כבר התחיל לפרסם (deadline עבר): לא נוגעים בדיווח שבנעילה
   const claim = { reportId, 'triage.state': 'pending', 'triage.runs': doc.triage.runs, 'triage.requestedAt': doc.triage.requestedAt, issuePending: true, $or: [{ issueLeaseUntil: null }, { issueLeaseUntil: { $lt: new Date() } }] };
@@ -146,6 +146,7 @@ export async function applyTriageDecision(reportId, raw, deps) {
     $set: { ...UNLINKED, ...link, ...(notified ? { notifiedClosedAt: now } : {}), issuePending: false, issueError: null, triage: decided },
   });
   if (!claimed.modifiedCount) return { status: 409, body: { error: 'not_pending', ...statusOf(await AppReport.findOne({ reportId }).lean()) } };
+  if (d.commentOnLink) await followUp(await AppReport.findOne({ reportId }).lean(), deps);
   const mail = await deliverTriageQuestions(reportId, deps);
   if (d.awaitingReply && !mail.sent) {
     // לא הצלחנו לשאול: אין ממה להמתין, ולכן נפתח
@@ -162,6 +163,7 @@ export async function applyTriageDecision(reportId, raw, deps) {
 }
 
 const OPEN_FOLLOW_UP = Object.freeze({ status: 'pending', assign: true, close: null, duplicateOf: null });
+const LINK_FOLLOW_UP = Object.freeze({ status: 'pending', assign: false, close: null, duplicateOf: null });
 
 /** הפענוח, השיוך והסגירה ב-GitHub — כשיש כבר issue; אחרת ה-cron ישלים אחרי שייפתח. */
 async function followUp(doc, deps) {
@@ -199,6 +201,7 @@ async function applyLateDecision(doc, d, deps) {
     { $set: {
       'triage.lateDecidedAt': now, 'triage.verdict': d.verdict, 'triage.confidence': d.confidence, 'triage.summary': d.summary,
       'triage.note': d.note, 'triage.questions': d.questions.length ? d.questions : undefined, 'triage.followUp': plan,
+      'triage.commentOnLink': false,
       'triage.questionsPending': d.action === 'open' && Boolean(d.questions.length), 'triage.questionsLeaseUntil': null,
     } },
   );
@@ -218,7 +221,10 @@ export async function forcePublishReport(reportId, deps) {
   if (!['held', 'pending'].includes(doc.triage?.state)) return { status: 409, body: { error: 'not_held' } };
   const upd = await AppReport.updateOne(
     { reportId, 'triage.state': doc.triage.state, $or: [{ issueLeaseUntil: null }, { issueLeaseUntil: { $lt: now } }] },
-    { $set: { ...UNLINKED, issuePending: true, issueError: null, 'triage.state': 'forced', 'triage.decidedAt': now, 'triage.awaitingReply': false } },
+    { $set: {
+      ...UNLINKED, issuePending: true, issueError: null, 'triage.state': 'forced', 'triage.decidedAt': now, 'triage.awaitingReply': false,
+      'triage.commentOnLink': false, 'triage.followUp': null,
+    } },
   );
   if (!upd.modifiedCount) return { status: 409, body: { error: 'not_held' } };
   const published = await publishReport(reportId, deps);
