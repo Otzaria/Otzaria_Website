@@ -22,7 +22,7 @@ import { getTextareaCaretTop } from '@/lib/editorUtils'
 import { isEditorField, queryEditorField } from '@/lib/editor/editorField'
 import { findNextWholeWordInTextarea as findNextWholeWordInTextareaUtil } from '@/lib/hebrewWordUtils'
 import { buildSearchRegex, findNextOutsideTags, processSearchPattern, rangeInText, replaceOutsideTags } from '@/lib/editor/textOnlyReplace'
-import { hasBookLibraryAccess, hasBooksAccess } from '@/lib/roles'
+import { hasBooksAccess } from '@/lib/roles'
 import { claimLimitMessage, claimRulesText, CLAIM_LIMIT_ERROR_CODE } from '@/lib/pageClaimPolicy'
 import { useRequireAuth } from '@/hooks/useRequireAuth'
 import { useUndoAvailability } from '@/hooks/useUndoAvailability'
@@ -351,7 +351,8 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
     if (bookData?.name) document.title = `עריכה: ${bookData.name} - עמוד ${pageNumber}`
   }, [bookData, pageNumber])
 
-  const loadPageData = async () => {
+  const loadPageData = async (signal) => {
+    if (signal.aborted) return
     try {
       setLoading(true)
       setError(null)
@@ -374,68 +375,43 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
         return
       }
 
-      // מהספר רק העמוד הנוכחי (?page=) במקום כל עמודי הספר. תוכן העמוד נשלף רק
-      // אחרי שבדיקת ההרשאה שלמטה עברה (ולא במקביל): כך תוכן של ספר מוסתר או של
-      // עמוד נעול לא נשלח לדפדפן של מי שאינו מורשה, ואין בקשת 403 מיותרת.
-      const bookRes = await fetch(`/api/book/${encodeURIComponent(bookPath)}?page=${pageNumber}`)
-      const bookResult = await bookRes.json()
-      if (!bookRes.ok) throw new Error(bookResult.error || 'טעינת הספר נכשלה')
-
-      if (bookResult.success) {
-        setBookData(bookResult.book)
-      
-        if (bookResult.pages && bookResult.pages.length > 0) {
-           const foundPage = bookResult.pages.find(p => p.number === pageNumber);
-         
-           if (foundPage) {
-             
-               const currentUserId = session?.user?._id || session?.user?.id;
-               const isAdmin = hasBookLibraryAccess(session?.user);
-
-               const isClaimedByMe = foundPage.claimedById === currentUserId;
-             
-               const isAvailable = foundPage.status === 'available';
-
-               const canEnter = isAvailable || isClaimedByMe || isAdmin;
-
-               if (!canEnter) {
-                   const holderName = foundPage.claimedBy || 'משתמש אחר';
-                   setError(`אין לך הרשאה לערוך דף זה. הדף נמצא בטיפול על ידי ${holderName}.`);
-                   setLoading(false);
-                   return;
-               }
-
-               setPageData(foundPage);
-           }
-        }
-      } else {
-        throw new Error(bookResult.error)
+      const response = await fetch(`/api/book/${encodeURIComponent(bookPath)}/editor?page=${pageNumber}`, { signal })
+      const result = await response.json()
+      if (signal.aborted) return
+      if (!response.ok || !result.success || !result.data) {
+        throw new Error(result.error || 'טעינת תוכן העמוד נכשלה')
       }
 
-      const contentRes = await fetch(`/api/page-content?bookPath=${encodeURIComponent(bookPath)}&pageNumber=${pageNumber}`)
-      const contentResult = await contentRes.json()
-
-      if (contentResult.success && contentResult.data) {
-        let data = contentResult.data
-        if (stored) {
-          let latest
-          try { latest = await refreshPreparedPage(stored, data, { ownsEditLock: offline.holdsEditLock }) }
-          catch { throw new Error('לא ניתן לעדכן את עותק האופליין. העותק הקודם נשמר; בדקו את החיבור והאחסון ורעננו.') }
-          if (!latest) throw new Error('עותק האופליין הוסר במהלך הטעינה. רעננו את העמוד.')
-          data = { ...latest.data, ...latest.draft }
+      let data = result.data
+      if (stored) {
+        let latest
+        try {
+          latest = await refreshPreparedPage(stored, data, {
+            ownsEditLock: () => !signal.aborted && offline.holdsEditLock(),
+          })
+        } catch {
+          throw new Error('לא ניתן לעדכן את עותק האופליין. העותק הקודם נשמר; בדקו את החיבור והאחסון ורעננו.')
         }
-        applyContent(data)
-      } else throw new Error(contentResult.error || 'טעינת תוכן העמוד נכשלה')
+        if (signal.aborted) return
+        if (!latest) throw new Error('עותק האופליין הוסר במהלך הטעינה. רעננו את העמוד.')
+        data = { ...latest.data, ...latest.draft }
+      }
+      setBookData(result.book)
+      applyContent(data)
     } catch (err) {
-      console.error(err);
+      if (signal.aborted) return
+      console.error(err)
       setError(err.message || 'שגיאה בטעינה')
     } finally {
-      setLoading(false)
+      if (!signal.aborted) setLoading(false)
     }
   }
 
   useEffect(() => {
-    if (status === 'authenticated') queueMicrotask(loadPageData)
+    if (status !== 'authenticated') return
+    const controller = new AbortController()
+    queueMicrotask(() => { void loadPageData(controller.signal) })
+    return () => controller.abort()
   // טעינה מותנית-נתיב; loadPageData מוחרג למניעת לולאה
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, bookPath, pageNumber, offlineUserId, session?.offline, offline.lock])

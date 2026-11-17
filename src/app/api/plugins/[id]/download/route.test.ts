@@ -1,12 +1,15 @@
 // @vitest-environment node
 import { createHash } from "node:crypto";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { mkdtemp, rename, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const m = vi.hoisted(() => ({
   findById: vi.fn(),
   updateOne: vi.fn(),
-  readPluginAsset: vi.fn(),
-  readVersionAsset: vi.fn(),
+  openPluginAsset: vi.fn(),
+  openVersionAsset: vi.fn(),
   revalidateNow: vi.fn(),
   invalidate: vi.fn(),
 }));
@@ -20,9 +23,8 @@ vi.mock("@/lib/cacheTags", () => ({ CACHE_TAGS: { PLUGINS_PUBLIC: "plugins" }, r
 vi.mock("@/lib/pluginSearchIndex", () => ({ invalidatePluginSearchIndex: m.invalidate }));
 vi.mock("@/lib/pluginStorage", () => ({
   PLUGIN_FILE_BASENAME: "plugin",
-  readPluginAsset: m.readPluginAsset,
-  readVersionAsset: m.readVersionAsset,
-  pluginFileSha256: (buf: Buffer) => createHash("sha256").update(buf).digest("hex"),
+  openPluginAsset: m.openPluginAsset,
+  openVersionAsset: m.openVersionAsset,
 }));
 
 import { GET } from "./route";
@@ -33,14 +35,22 @@ const OLD = Buffer.from("old build");
 const sha = (b: Buffer) => createHash("sha256").update(b).digest("hex");
 
 let plugin: Record<string, unknown>;
+let directory: string;
+const storage = await vi.importActual<typeof import('@/lib/pluginStorage')>('@/lib/pluginStorage');
 
-function get(query = "", id = ID) {
-  return GET(new Request(`https://otzaria.org/api/plugins/${id}/download${query}`), {
+function get(query = "", id = ID, init?: RequestInit) {
+  return GET(new Request(`https://otzaria.org/api/plugins/${id}/download${query}`, init), {
     params: Promise.resolve({ id }),
   });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  directory = await mkdtemp(join(tmpdir(), 'otzaria-plugin-download-'));
+  vi.stubEnv('PLUGIN_STORAGE_DIR', directory);
+  const live = await storage.ensurePluginDir(ID);
+  const old = await storage.ensureVersionDir(ID, "1.0.0");
+  await writeFile(join(live, "plugin.otzplugin"), LIVE);
+  await writeFile(join(old, "plugin.otzplugin"), OLD);
   vi.clearAllMocks();
   plugin = {
     _id: ID,
@@ -54,8 +64,13 @@ beforeEach(() => {
   };
   m.findById.mockResolvedValue(plugin);
   m.updateOne.mockResolvedValue({ modifiedCount: 1 });
-  m.readPluginAsset.mockResolvedValue(LIVE);
-  m.readVersionAsset.mockResolvedValue(OLD);
+  m.openPluginAsset.mockImplementation(storage.openPluginAsset);
+  m.openVersionAsset.mockImplementation(storage.openVersionAsset);
+});
+afterEach(async () => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+  await rm(directory, { force: true, recursive: true });
 });
 
 describe("GET /api/plugins/[id]/download?version=", () => {
@@ -63,7 +78,7 @@ describe("GET /api/plugins/[id]/download?version=", () => {
     const res = await get("?version=1.0.0");
     expect(res.status).toBe(200);
     expect(res.headers.get("X-Plugin-Version")).toBe("1.0.0");
-    expect(m.readVersionAsset).toHaveBeenCalledWith(ID, "1.0.0", "plugin.otzplugin");
+    expect(m.openVersionAsset).toHaveBeenCalledWith(ID, "1.0.0", "plugin.otzplugin");
     expect(Buffer.from(await res.arrayBuffer()).equals(OLD)).toBe(true);
   });
 
@@ -71,14 +86,15 @@ describe("GET /api/plugins/[id]/download?version=", () => {
     const res = await get("?version=2.0.0");
     expect(res.status).toBe(200);
     expect(res.headers.get("X-Plugin-Version")).toBe("2.0.0");
-    expect(m.readVersionAsset).not.toHaveBeenCalled();
+    expect(m.openVersionAsset).not.toHaveBeenCalled();
+    await res.body?.cancel();
   });
 
   it("returns 404 for an unknown or empty version", async () => {
     expect((await get("?version=9.9.9")).status).toBe(404);
     expect((await get("?version=")).status).toBe(404);
-    expect(m.readPluginAsset).not.toHaveBeenCalled();
-    expect(m.readVersionAsset).not.toHaveBeenCalled();
+    expect(m.openPluginAsset).not.toHaveBeenCalled();
+    expect(m.openVersionAsset).not.toHaveBeenCalled();
   });
 
   it("rejects combining version with appVersion, pending or @version", async () => {
@@ -91,18 +107,21 @@ describe("GET /api/plugins/[id]/download?version=", () => {
     const res = await get();
     expect(res.status).toBe(200);
     expect(res.headers.get("X-Plugin-Version")).toBe("2.0.0");
+    await res.body?.cancel();
   });
 });
 
 describe("lazy sha256 for files uploaded before hashing", () => {
   it("does not write when the live file already has a hash", async () => {
-    await get();
+    await (await get()).body?.cancel();
     expect(m.updateOne).not.toHaveBeenCalled();
   });
 
   it("stores the live file hash on first download, only if still missing", async () => {
     plugin.pluginFileSha256 = null;
-    expect((await get()).status).toBe(200);
+    const res = await get();
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe(LIVE.toString());
     expect(m.updateOne).toHaveBeenCalledWith(
       { _id: ID, version: "2.0.0", pluginFileSha256: null },
       { $set: { pluginFileSha256: sha(LIVE) } },
@@ -113,7 +132,9 @@ describe("lazy sha256 for files uploaded before hashing", () => {
 
   it("stores an archived version hash on its first download", async () => {
     (plugin.versions as Record<string, unknown>[])[0].pluginFileSha256 = null;
-    expect((await get("?version=1.0.0")).status).toBe(200);
+    const res = await get("?version=1.0.0");
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe(OLD.toString());
     expect(m.updateOne).toHaveBeenCalledWith(
       { _id: ID, versions: { $elemMatch: { version: "1.0.0", pluginFileSha256: null } } },
       { $set: { "versions.$.pluginFileSha256": sha(OLD) } },
@@ -124,7 +145,53 @@ describe("lazy sha256 for files uploaded before hashing", () => {
     plugin.pluginFileSha256 = null;
     m.updateOne.mockRejectedValue(new Error("db down"));
     vi.spyOn(console, "error").mockImplementation(() => {});
-    expect((await get()).status).toBe(200);
+    const res = await get();
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe(LIVE.toString());
     expect(m.revalidateNow).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('הורדה בחלקים', () => {
+  it('ETag תואם ממשיך מההיסט המבוקש ושומר על מונה הורדות אחד', async () => {
+    const first = await get();
+    const etag = first.headers.get('etag')!;
+    expect(first.headers.get('accept-ranges')).toBe('bytes');
+    await first.body?.cancel();
+    const part = await get('', ID, { headers: { Range: 'bytes=5-', 'If-Range': etag } });
+    expect(part.status).toBe(206);
+    expect(part.headers.get('Content-Range')).toBe(`bytes 5-${LIVE.length - 1}/${LIVE.length}`);
+    expect(part.headers.get('Content-Length')).toBe(String(LIVE.length - 5));
+    expect(await part.text()).toBe(LIVE.subarray(5).toString());
+    expect(plugin.incrementDownload).toHaveBeenCalledTimes(1);
+  });
+
+  it('מוריד מחדש אם החלפת קובץ ביטלה את If-Range', async () => {
+    const first = await get();
+    const etag = first.headers.get('etag')!;
+    const changed = Buffer.from('new  build');
+    const target = join(storage.getPluginDir(ID), 'plugin.otzplugin');
+    await writeFile(target + '.new', changed);
+    await rename(target + '.new', target);
+    expect(await first.text()).toBe(LIVE.toString());
+    const response = await get('', ID, { headers: { Range: 'bytes=5-', 'If-Range': etag } });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('etag')).not.toBe(etag);
+    expect(await response.text()).toBe(changed.toString());
+  });
+
+  it('416 ו-HEAD סוגרים את הקובץ בלי לספור הורדה או לחשב hash', async () => {
+    plugin.pluginFileSha256 = null;
+    const range = await get('', ID, { headers: { Range: 'bytes=100-' } });
+    expect(range.status).toBe(416);
+    expect(range.headers.get('Content-Range')).toBe(`bytes */${LIVE.length}`);
+    const head = await get('', ID, { method: 'HEAD', headers: { Range: 'bytes=1-' } });
+    expect(head.status).toBe(200);
+    expect(head.headers.get('Content-Length')).toBe(String(LIVE.length));
+    expect(head.body).toBeNull();
+    for (const { value } of m.openPluginAsset.mock.results) expect((await value).handle.fd).toBe(-1);
+    expect(plugin.incrementDownload).not.toHaveBeenCalled();
+    expect(m.updateOne).not.toHaveBeenCalled();
   });
 });

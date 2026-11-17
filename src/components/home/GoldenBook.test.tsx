@@ -57,6 +57,10 @@ describe('GoldenBook', () => {
     deferred = new Map()
     pending = new Set()
     vi.stubGlobal('Image', FakeImage)
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      queueMicrotask(() => callback(performance.now()))
+      return 0
+    })
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -78,6 +82,21 @@ describe('GoldenBook', () => {
     expect(book()).toHaveAttribute('src', OPEN)
     expect(loaded).not.toContain(SPRITE)
     expect(onOpened).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([{ effectiveType: '3g' }, { saveData: true, effectiveType: '4g' }])('חיבור מוגבל לא מוריד את הרצועה (%o)', async (connection) => {
+    mockReducedMotion(false)
+    const original = Object.getOwnPropertyDescriptor(navigator, 'connection')
+    Object.defineProperty(navigator, 'connection', { configurable: true, value: connection })
+    try {
+      hydrate(<GoldenBook />)
+      await flushImageLoads()
+      expect(book()).toHaveAttribute('src', OPEN)
+      expect(loaded).not.toContain(SPRITE)
+    } finally {
+      if (original) Object.defineProperty(navigator, 'connection', original)
+      else Reflect.deleteProperty(navigator, 'connection')
+    }
   })
 
   it('ניגון: בזמן הרצועה התמונה ב-opacity-0 (לא invisible), ובסופה — הספר הפתוח', async () => {

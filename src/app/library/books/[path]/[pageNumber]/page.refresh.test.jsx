@@ -15,7 +15,7 @@ vi.mock('@/components/editor/modals/InfoDialog', () => ({ default: () => null })
 const key = pageKey('u', 'book', 3)
 const cacheStores = new Map()
 const cacheKey = request => new URL(typeof request === 'string' ? request : request.url, location.origin).href
-const nextData = { id: 'p', content: 'טקסט חדש', thumbnail: '/uploads/new-scan.png', status: 'in-progress', claimedBy: 'u', twoColumns: false, rightColumn: '', leftColumn: '', rightColumnName: 'פנים', leftColumnName: 'פירוש', contentVersion: 'b'.repeat(64), ocrReviewRevision: 'new-scan', ocrWordReview: null }
+const nextData = { id: 'p', claimedById: 'u', content: 'טקסט חדש', thumbnail: '/uploads/new-scan.png', status: 'in-progress', claimedBy: 'u', twoColumns: false, rightColumn: '', leftColumn: '', rightColumnName: 'פנים', leftColumnName: 'פירוש', contentVersion: 'b'.repeat(64), ocrReviewRevision: 'new-scan', ocrWordReview: null }
 beforeEach(() => {
   authState.offline = false
   localStorage.clear()
@@ -37,8 +37,7 @@ beforeEach(() => {
     delete: vi.fn(async name => cacheStores.delete(name)),
   })
   vi.stubGlobal('fetch', vi.fn(async url => {
-    if (String(url).startsWith('/api/book/book?')) return { ok: true, json: async () => ({ success: true, book: { name: 'ספר', totalPages: 10 }, pages: [{ number: 3, status: 'in-progress', claimedById: 'u', claimedBy: 'משתמש', thumbnail: nextData.thumbnail }] }) }
-    if (String(url).startsWith('/api/page-content?')) return { ok: true, json: async () => ({ success: true, data: nextData }) }
+    if (String(url).startsWith('/api/book/book/editor?')) return { ok: true, json: async () => ({ success: true, book: { name: 'ספר', totalPages: 10 }, data: nextData }) }
     if (String(url).includes('/uploads/new-scan.png')) return new Response('new scan', { headers: { 'content-type': 'image/png' } })
     throw new TypeError('unmocked endpoint')
   }))
@@ -62,7 +61,7 @@ test('a clean local fallback refreshes once real authentication finishes loading
   authState.offline = true
   const view = render(<EditPage />)
   await screen.findByDisplayValue('טקסט ישן')
-  expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/page-content?'))).toBe(false)
+  expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/book/book/editor?'))).toBe(false)
   authState.offline = false
   view.rerender(<EditPage />)
   await screen.findByDisplayValue('טקסט חדש')
@@ -74,7 +73,7 @@ test('a blocked second tab never starts a refresh that could overwrite the ownin
   const previous = readRecord(key)
   render(<EditPage />)
   await screen.findByText(/עמוד זה פתוח לעריכה בלשונית אחרת/)
-  expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/page-content?'))).toBe(false)
+  expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/book/book/editor?'))).toBe(false)
   expect(readRecord(key)).toEqual(previous)
   expect(caches.open).not.toHaveBeenCalled()
 })
@@ -83,12 +82,12 @@ test('a delayed GET cannot revert a newer acknowledged local copy while the owni
   let resolveRead
   const pendingRead = new Promise(resolve => { resolveRead = resolve })
   const normalFetch = fetch.getMockImplementation()
-  fetch.mockImplementation(url => String(url).startsWith('/api/page-content?') ? pendingRead : normalFetch(url))
+  fetch.mockImplementation(url => String(url).startsWith('/api/book/book/editor?') ? pendingRead : normalFetch(url))
   render(<EditPage />)
-  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/page-content?'))).toBe(true))
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/book/book/editor?'))).toBe(true))
   // An already-running synchronization publishes its receipt while the GET is in flight.
   act(() => writeRecord({ ...readRecord(key), data: { ...nextData, content: 'עריכה חדשה שאושרה בשרת' }, baseVersion: 'c'.repeat(64), draft: null, inFlight: null }))
-  await act(async () => resolveRead({ ok: true, json: async () => ({ success: true, data: { ...nextData, content: 'גרסה ישנה', contentVersion: 'a'.repeat(64) } }) }))
+  await act(async () => resolveRead({ ok: true, json: async () => ({ success: true, book: { name: 'ספר', totalPages: 10 }, data: { ...nextData, content: 'גרסה ישנה', contentVersion: 'a'.repeat(64) } }) }))
   await screen.findByDisplayValue('עריכה חדשה שאושרה בשרת')
   expect(readRecord(key).data.content).toBe('עריכה חדשה שאושרה בשרת')
   expect(readRecord(key).baseVersion).toBe('c'.repeat(64))
@@ -99,12 +98,12 @@ test('unmount releases the edit lock and prevents a late GET from publishing to 
   let resolveRead
   const pendingRead = new Promise(resolve => { resolveRead = resolve })
   const normalFetch = fetch.getMockImplementation()
-  fetch.mockImplementation(url => String(url).startsWith('/api/page-content?') ? pendingRead : normalFetch(url))
+  fetch.mockImplementation(url => String(url).startsWith('/api/book/book/editor?') ? pendingRead : normalFetch(url))
   const previous = readRecord(key)
   const view = render(<EditPage />)
-  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/page-content?'))).toBe(true))
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/book/book/editor?'))).toBe(true))
   view.unmount()
-  await act(async () => resolveRead({ ok: true, json: async () => ({ success: true, data: nextData }) }))
+  await act(async () => resolveRead({ ok: true, json: async () => ({ success: true, book: { name: 'ספר', totalPages: 10 }, data: nextData }) }))
   expect(readRecord(key)).toEqual(previous)
   expect(caches.open).not.toHaveBeenCalled()
 })

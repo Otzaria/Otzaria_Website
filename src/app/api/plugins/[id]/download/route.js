@@ -4,7 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import PluginInstallToken from '@/models/PluginInstallToken'
-import { readPluginAsset, readVersionAsset, PLUGIN_FILE_BASENAME, pluginFileSha256 } from '@/lib/pluginStorage'
+import { openPluginAsset, openVersionAsset, PLUGIN_FILE_BASENAME } from '@/lib/pluginStorage'
 import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags'
 import { invalidatePluginSearchIndex } from '@/lib/pluginSearchIndex'
 import { parsePluginRef } from '@/lib/pluginRef'
@@ -12,6 +12,7 @@ import { hasPluginsAccess } from '@/lib/roles'
 import { canAccessSuspended, isPluginOwner, isPluginSuspended } from '@/lib/pluginVisibility'
 import { APP_VERSION_PARAM, isValidAppVersion, resolveCompatibleVersion, lowestSupportedAppVersion } from '@/lib/pluginCompatibility'
 import { isServicePlugin, resolveServicePluginFile } from '@/lib/servicePlugins/existingPaths'
+import { fileHandleStream } from '@/lib/fileHandleStream'
 import { openReviewAssetStream } from '@/lib/servicePlugins/storage'
 
 // GET /api/plugins/[id]/download - הורדת קובץ התוסף.
@@ -76,7 +77,7 @@ export async function GET(request, { params }) {
 
     // it=<token> — סימון על טוקן התקנה ישירה שבקשת ההורדה הגיעה מהאפליקציה.
     // fire-and-forget: לעולם לא מכשיל או מעכב את ההורדה עצמה.
-    const installToken = searchParams.get('it')
+    const installToken = request.method === 'GET' ? searchParams.get('it') : null
     if (installToken && /^[A-Za-z0-9_-]{20,64}$/.test(installToken)) {
       PluginInstallToken.updateOne(
         { token: installToken, downloadedAt: null },
@@ -119,8 +120,11 @@ export async function GET(request, { params }) {
       resolvedVersion = match.isLatest ? null : match.version
     }
 
+    const privateAsset = includePending || !plugin.isApproved || isPluginSuspended(plugin)
     if (isServicePlugin(plugin)) {
-      return serviceFileResponse(plugin, { version: resolvedVersion, includePending, canPreview: isAdmin || isOwner })
+      return serviceFileResponse(request, plugin, {
+        version: resolvedVersion, includePending, canPreview: isAdmin || isOwner, privateAsset,
+      })
     }
 
     // בקשה לגרסה ארכיונית ספציפית (שאינה הגרסה החיה הנוכחית).
@@ -132,30 +136,24 @@ export async function GET(request, { params }) {
       if (!entry) {
         return NextResponse.json({ error: 'Plugin version not found' }, { status: 404 })
       }
-      let archiveBuf
+      let asset
       try {
-        archiveBuf = await readVersionAsset(id, resolvedVersion, `${PLUGIN_FILE_BASENAME}${entry.pluginFileExt || '.otzplugin'}`)
+        asset = await openVersionAsset(id, resolvedVersion, `${PLUGIN_FILE_BASENAME}${entry.pluginFileExt || '.otzplugin'}`)
       } catch (err) {
-        if (err && err.code === 'ENOENT') {
-          return NextResponse.json({ error: 'Plugin version not found' }, { status: 404 })
-        }
+        if (err?.code === 'ENOENT') return NextResponse.json({ error: 'Plugin version not found' }, { status: 404 })
         throw err
       }
-      if (!entry.pluginFileSha256) {
-        await rememberFileSha256(
+      return await localFileResponse(request, asset, {
+        fileName: entry.pluginFileName || plugin.pluginFileName,
+        fileExt: entry.pluginFileExt || plugin.pluginFileExt,
+        version: resolvedVersion,
+        privateAsset,
+        recordDownload: plugin.isApproved ? () => plugin.incrementDownload(resolvedVersion) : null,
+        rememberHash: !entry.pluginFileSha256 && ((sha256) => rememberFileSha256(
           { _id: plugin._id, versions: { $elemMatch: { version: resolvedVersion, pluginFileSha256: null } } },
-          { 'versions.$.pluginFileSha256': pluginFileSha256(archiveBuf) }
-        )
-      }
-      if (plugin.isApproved) {
-        plugin.incrementDownload(resolvedVersion).catch(e => console.error('Failed to increment download count:', e))
-      }
-      return pluginFileResponse(
-        archiveBuf,
-        entry.pluginFileName || plugin.pluginFileName,
-        entry.pluginFileExt || plugin.pluginFileExt,
-        resolvedVersion
-      )
+          { 'versions.$.pluginFileSha256': sha256 }
+        )),
+      })
     }
 
     if (includePending) {
@@ -172,38 +170,84 @@ export async function GET(request, { params }) {
     const fileName = includePending ? (source?.pluginFileName || plugin.pluginFileName) : plugin.pluginFileName
     const filename = `${PLUGIN_FILE_BASENAME}${fileExt}`
 
-    let buf
+    let asset
     try {
-      buf = await readPluginAsset(id, filename, { pending: usePendingAsset })
+      asset = await openPluginAsset(id, filename, { pending: usePendingAsset })
     } catch (err) {
-      if (err && err.code === 'ENOENT') {
-        return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
-      }
+      if (err?.code === 'ENOENT') return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
       throw err
     }
 
-    if (!includePending && !plugin.pluginFileSha256) {
-      await rememberFileSha256(
-        { _id: plugin._id, version: plugin.version, pluginFileSha256: null },
-        { pluginFileSha256: pluginFileSha256(buf) }
-      )
-    }
-
-    if (!includePending && plugin.isApproved) {
-      // עדכון מונה הורדות רק לתוספים פומביים, לא בעת בדיקת מנהל
-      plugin.incrementDownload().catch(e => console.error('Failed to increment download count:', e))
-    }
-
-    const servedVersion = includePending ? (source?.version || plugin.version) : plugin.version
-    return pluginFileResponse(buf, fileName, fileExt, servedVersion)
+    return await localFileResponse(request, asset, {
+      fileName, fileExt, privateAsset,
+      version: includePending ? (source?.version || plugin.version) : plugin.version,
+      recordDownload: !includePending && plugin.isApproved ? () => plugin.incrementDownload() : null,
+      rememberHash: !includePending && !plugin.pluginFileSha256 && ((sha256) => rememberFileSha256(
+        {
+          _id: plugin._id, version: plugin.version, pluginFileSha256: null,
+          ...(plugin.fileUpdatedAt ? { fileUpdatedAt: plugin.fileUpdatedAt } : {}),
+        },
+        { pluginFileSha256: sha256 }
+      )),
+    })
   } catch (error) {
     console.error('Error downloading plugin:', error)
     return NextResponse.json({ error: 'Failed to download plugin' }, { status: 500 })
   }
 }
 
+// טווח אחד מספיק להמשך הורדה. טווחים מרובים וסוגי טווח אחרים מקבלים
+// את הקובץ השלם, וכך גם If-Range ישן לאחר החלפת קובץ.
+function requestedByteRange(request, { size, etag }) {
+  const ifRange = request.headers.get('If-Range')
+  if (ifRange && ifRange !== etag) return null
+  const match = /^bytes=(\d*)-(\d*)$/i.exec(request.headers.get('Range') || '')
+  if (!match || (!match[1] && !match[2])) return null
+  const start = match[1] ? Number(match[1]) : Math.max(0, size - Number(match[2]))
+  const end = match[1] && match[2] ? Math.min(size - 1, Number(match[2])) : size - 1
+  return start >= size || end < start ? false : { start, end }
+}
+
+async function localFileResponse(request, asset, { fileName, fileExt, version, recordDownload, rememberHash, privateAsset }) {
+  let handedOff = false
+  try {
+    const headers = {
+      'Accept-Ranges': 'bytes',
+      ETag: asset.etag,
+      ...(privateAsset ? { 'Cache-Control': 'private, no-store' } : {}),
+    }
+    if (request.method === 'HEAD') {
+      return pluginFileResponse(null, fileName, fileExt, version, asset.size, 200, headers)
+    }
+    const range = requestedByteRange(request, asset)
+    if (range === false) {
+      return new NextResponse(null, {
+        status: 416,
+        headers: { ...headers, 'Content-Range': `bytes */${asset.size}` },
+      })
+    }
+    const start = range?.start ?? 0
+    const size = range ? range.end - start + 1 : asset.size
+    if (range) headers['Content-Range'] = `bytes ${start}-${range.end}/${asset.size}`
+
+    // סופרים העברת קובץ מלאה. גם בדיקת הטווח הזולה bytes=0-0
+    // לא קוראת את כל הקובץ לצורך השלמת hash היסטורי.
+    const fullFile = !range || size === asset.size
+    if (rememberHash && fullFile) await rememberHash(await asset.sha256())
+    if (recordDownload && fullFile) {
+      recordDownload().catch(e => console.error('Failed to increment download count:', e))
+    }
+    const stream = fileHandleStream(asset.handle, size, { start, chunkSize: 64 * 1024 })
+    const response = pluginFileResponse(stream, fileName, fileExt, version, size, range ? 206 : 200, headers)
+    handedOff = true
+    return response
+  } finally {
+    if (!handedOff) await asset.handle.close().catch(() => {})
+  }
+}
+
 // תוסף שירות: הקובץ מוגש רק מאחסון הבדיקות — אין pending, וגרסה היסטורית רק עם reviewId.
-async function serviceFileResponse(plugin, { version, includePending, canPreview }) {
+async function serviceFileResponse(request, plugin, { version, includePending, canPreview, privateAsset }) {
   if (includePending || (!plugin.isApproved && !canPreview)) {
     return NextResponse.json({ error: 'Plugin not found' }, { status: 404 })
   }
@@ -213,10 +257,15 @@ async function serviceFileResponse(plugin, { version, includePending, canPreview
   if (!asset) {
     return NextResponse.json({ error: historical ? 'Plugin version not found' : 'Plugin not found' }, { status: 404 })
   }
+  const headers = privateAsset ? { 'Cache-Control': 'private, no-store' } : {}
+  if (request.method === 'HEAD') {
+    await asset.stream.cancel()
+    return pluginFileResponse(null, file.fileName, '.otzplugin', file.version, asset.size, 200, headers)
+  }
   if (plugin.isApproved) {
     plugin.incrementDownload(historical ? file.version : undefined).catch(e => console.error('Failed to increment download count:', e))
   }
-  return pluginFileResponse(asset.stream, file.fileName, '.otzplugin', file.version, asset.size)
+  return pluginFileResponse(asset.stream, file.fileName, '.otzplugin', file.version, asset.size, 200, headers)
 }
 
 // קובץ ישן בלי טביעה: נשמרת בהורדה הראשונה. העלאה חדשה כבר שומרת טביעה, ולכן התנאי null
@@ -238,14 +287,16 @@ async function rememberFileSha256(filter, set) {
 // encodeURIComponent לא מקודד את ! ' ( ) * - מקודדים ידנית כדי לעמוד ב-RFC 3986.
 // X-Plugin-Version מציין איזו גרסה הוגשה בפועל — נחוץ למי שהוריד דרך ?appVersion=
 // ולא ידע מראש איזו גרסה ייבחר עבורו.
-function pluginFileResponse(buf, fileName, fileExt, servedVersion, size = buf.length) {
+function pluginFileResponse(body, fileName, fileExt, servedVersion, size, status = 200, extraHeaders = {}) {
   const rawName = fileName || `plugin${fileExt}`
   const asciiFallback = rawName.replace(/[^\x20-\x7E]/g, '_').replace(/["\\\r\n]/g, '_')
   const encodedName = encodeURIComponent(rawName)
     .replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
 
-  return new NextResponse(buf, {
+  return new NextResponse(body, {
+    status,
     headers: {
+      ...extraHeaders,
       'Content-Type': 'application/octet-stream',
       'Content-Disposition': `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodedName}`,
       'Content-Length': size.toString(),

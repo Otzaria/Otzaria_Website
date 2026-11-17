@@ -1,10 +1,9 @@
 // @vitest-environment node
-// רינדור השרת של GoldenBook — בלי window, כמו ב-SSR של Next. נבדק כאן ה-preload: הרצועה
-// צריכה להתחיל לרדת מה-HTML עצמו (ולא רק אחרי ה-hydration), ורק למי שלא ביקש פחות תנועה.
+// רינדור השרת של GoldenBook — בלי window, כמו ב-SSR של Next.
 import { describe, it, expect } from 'vitest'
 import { renderToString } from 'react-dom/server'
 import GoldenBook from './GoldenBook'
-import { CLOSED_SRC, OPEN_SRCSET, SPRITE_AVIF_SRC } from './goldenBookAssets'
+import { CLOSED_SRC, OPEN_SRCSET, SPRITE_AVIF_SRC, SPRITE_WEBP_SRC } from './goldenBookAssets'
 
 const html = () => renderToString(
   <html>
@@ -16,29 +15,19 @@ const links = (markup: string) => markup.match(/<link[^>]*rel="preload"[^>]*>/g)
 const attr = (tag: string, name: string) => tag.match(new RegExp(`${name}="([^"]*)"`, 'i'))?.[1]
 
 describe('GoldenBook — HTML מהשרת', () => {
-  it('preload לרצועת ה-AVIF ב-<head>: type=image/avif, בעדיפות נמוכה ומסונן ב-media של reduced-motion', () => {
+  it('הרצועה לא מופיעה ב-HTML הראשוני בשום פורמט', () => {
     const markup = html()
-    const link = links(markup).find((l) => l.includes(`href="${SPRITE_AVIF_SRC}"`))
-    expect(link).toBeDefined()
-    expect(link).toContain('as="image"')
-    expect(link).toContain('type="image/avif"')
-    expect(link).toContain('media="(prefers-reduced-motion: no-preference)"')
-    expect(link).toMatch(/fetchPriority="low"/i)
-    expect(markup.indexOf(link!)).toBeLessThan(markup.indexOf('</head>'))
+    expect(markup).not.toContain(SPRITE_AVIF_SRC)
+    expect(markup).not.toContain(SPRITE_WEBP_SRC)
   })
 
-  it('אין preload ל-WebP של הרצועה (דפדפן עם AVIF לא אמור להוריד אותו)', () => {
-    expect(html()).not.toContain('golden-book-sprite.v2.webp')
-  })
-
-  it('preload לספר הפתוח (נחוץ בכל מסלול) — עם srcset/sizes, בלי media, בעדיפות נמוכה, ולפני הרצועה', () => {
+  it('preload לספר הפתוח (נחוץ בכל מסלול) — עם srcset/sizes ובעדיפות נמוכה', () => {
     const markup = html()
     const link = links(markup).find((l) => attr(l, 'imageSrcSet') === OPEN_SRCSET)
     expect(link).toBeDefined()
     expect(link).not.toContain('media=')
     expect(link).toMatch(/fetchPriority="low"/i)
     expect(attr(link!, 'imageSizes')).toBeTruthy()
-    expect(markup.indexOf(link!)).toBeLessThan(markup.indexOf(`href="${SPRITE_AVIF_SRC}"`))
   })
 
   it('התמונה ב-HTML היא הספר הסגור (LCP): בעדיפות גבוהה, עם srcset ומידות קבועות (בלי CLS)', () => {
