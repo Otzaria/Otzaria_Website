@@ -24,7 +24,8 @@ const modalOpen = () => typeof document !== 'undefined' && Boolean(document.quer
 export function useReportFocus({ containerRef, ready, bookPath, pageNumber, fetchReport = fetchEditorReport }) {
   const pageKey = `${bookPath}\u0000${pageNumber}`
   const [state, setState] = useState(/** @type {null | FocusState} */ (null))
-  const doneFor = useRef(/** @type {string|null} */ (null))
+  const scrollTimer = useRef(0)
+  const cancelFocus = useRef(() => {})
 
   /** השדות שבמסך: [{ el, column, value }] */
   const fields = useCallback(() => {
@@ -43,7 +44,9 @@ export function useReportFocus({ containerRef, ready, bookPath, pageNumber, fetc
     el.focus({ preventScroll: true })
     el.setSelectionRange(hit.start, hit.end)
     // גלילה כך שהסימון באמצע השדה (כמו "חפש הבא"); הפס עובר לצד הנגדי לסימון במסך, כדי לא להסתיר אותו
-    setTimeout(() => {
+    window.clearTimeout(scrollTimer.current)
+    scrollTimer.current = window.setTimeout(() => {
+      scrollTimer.current = 0
       const lh = Number.parseFloat(window.getComputedStyle(el).lineHeight)
       const top = getTextareaCaretTop(el, hit.start)
       el.scrollTop = Math.max(0, top - el.clientHeight / 2 + (Number.isFinite(lh) ? lh : 24))
@@ -58,12 +61,12 @@ export function useReportFocus({ containerRef, ready, bookPath, pageNumber, fetc
   useEffect(() => {
     if (!ready || typeof window === 'undefined') return undefined
     const id = reportIdFromSearch(window.location.search)
-    const key = `${pageKey}\u0000${id}`
-    if (!id || doneFor.current === key) return undefined
-    doneFor.current = key
+    if (!id) return undefined
     let cancelled = false
     let timer = 0
-    setState({ phase: 'loading', report: null })
+    queueMicrotask(() => {
+      if (!cancelled) setState({ phase: 'loading', report: null })
+    })
     fetchReport(id).then((report) => {
       if (cancelled) return
       if (!reportMatchesPage(report, bookPath, pageNumber)) {
@@ -91,10 +94,13 @@ export function useReportFocus({ containerRef, ready, bookPath, pageNumber, fetc
     }).catch((err) => {
       if (!cancelled) setState({ phase: 'error', report: null, error: err?.message })
     })
-    return () => {
+    const cancel = () => {
       cancelled = true
       window.clearTimeout(timer)
+      window.clearTimeout(scrollTimer.current)
     }
+    cancelFocus.current = cancel
+    return cancel
   }, [ready, pageKey, bookPath, pageNumber, fetchReport, highlight, fields])
 
   // מעבר לעמוד אחר — הפס של הדיווח הקודם נסגר
@@ -111,7 +117,10 @@ export function useReportFocus({ containerRef, ready, bookPath, pageNumber, fetc
     setState((s) => (s ? { ...s, phase: hit ? 'found' : 'missing', count: hit?.count } : s))
   }, [state, highlight])
 
-  const dismiss = useCallback(() => setState(null), [])
+  const dismiss = useCallback(() => {
+    cancelFocus.current()
+    setState(null)
+  }, [])
 
   return { state, rehighlight, dismiss }
 }

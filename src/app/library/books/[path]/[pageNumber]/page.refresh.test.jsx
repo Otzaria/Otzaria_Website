@@ -18,6 +18,7 @@ const cacheKey = request => new URL(typeof request === 'string' ? request : requ
 const nextData = { id: 'p', content: 'טקסט חדש', thumbnail: '/uploads/new-scan.png', status: 'in-progress', claimedBy: 'u', twoColumns: false, rightColumn: '', leftColumn: '', rightColumnName: 'פנים', leftColumnName: 'פירוש', contentVersion: 'b'.repeat(64), ocrReviewRevision: 'new-scan', ocrWordReview: null }
 beforeEach(() => {
   authState.offline = false
+  history.replaceState(null, '', '/')
   localStorage.clear()
   cacheStores.clear()
   cacheStores.set('prepared-cache', new Map([
@@ -46,7 +47,7 @@ beforeEach(() => {
     book: { name: 'ספר', totalPages: 10 }, data: { ...nextData, content: 'טקסט ישן', thumbnail: '/uploads/old-scan.png', ocrReviewRevision: 'old-scan', claimedById: 'u' }, draft: null })
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
-afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); localStorage.clear(); delete navigator.locks; delete navigator.onLine })
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); localStorage.clear(); history.replaceState(null, '', '/'); delete navigator.locks; delete navigator.onLine })
 
 test('online reload of a clean prepared page must update the cached scan before publishing its new thumbnail', async () => {
   render(<EditPage />)
@@ -67,6 +68,36 @@ test('a clean local fallback refreshes once real authentication finishes loading
   view.rerender(<EditPage />)
   await screen.findByDisplayValue('טקסט חדש')
   expect(readRecord(key).baseVersion).toBe(nextData.contentVersion)
+})
+
+test('report focus survives authentication refreshing the same prepared page', async () => {
+  history.replaceState(null, '', '/library/books/book/3?report=0123456789abcdef01234567')
+  authState.offline = true
+  let resolveReport, resolveContent
+  const pendingReport = new Promise(resolve => { resolveReport = resolve })
+  const pendingContent = new Promise(resolve => { resolveContent = resolve })
+  const normalFetch = fetch.getMockImplementation()
+  fetch.mockImplementation(url => {
+    if (String(url).startsWith('/api/page-reports/')) return pendingReport
+    if (String(url).startsWith('/api/page-content?')) return pendingContent
+    return normalFetch(url)
+  })
+  const marker = '(מקור)[תיקון]'
+  const content = `לפני ${marker} אחרי`
+  writeRecord({ ...readRecord(key), data: { ...readRecord(key).data, content } })
+  const view = render(<EditPage />)
+  await screen.findByDisplayValue(content)
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/page-reports/'))).toBe(true))
+  authState.offline = false
+  view.rerender(<EditPage />)
+  await screen.findByText('טוען...')
+  await act(async () => resolveReport({ ok: true, json: async () => ({ success: true, report: {
+    bookPath: 'book', pageNumber: 3, column: 'content', original: 'מקור', proposed: 'תיקון',
+  } }) }))
+  await act(async () => resolveContent({ ok: true, json: async () => ({ success: true, data: { ...nextData, content } }) }))
+  const field = await screen.findByDisplayValue(content)
+  await screen.findByText('הסימון של הדיווח מסומן בטקסט.')
+  expect(field.value.slice(field.selectionStart, field.selectionEnd)).toBe(marker)
 })
 
 test('a blocked second tab never starts a refresh that could overwrite the owning editor', async () => {
