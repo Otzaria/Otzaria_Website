@@ -70,6 +70,72 @@ test('a clean local fallback refreshes once real authentication finishes loading
   expect(readRecord(key).baseVersion).toBe(nextData.contentVersion)
 })
 
+test.each(['clean', 'newer draft'])('disconnecting during a prepared page refresh retains the %s local copy', async version => {
+  let rejectRead
+  const pendingRead = new Promise((resolve, reject) => { rejectRead = reject })
+  const normalFetch = fetch.getMockImplementation()
+  fetch.mockImplementation(url => String(url).startsWith('/api/page-content?') ? pendingRead : normalFetch(url))
+  render(<EditPage />)
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/page-content?'))).toBe(true))
+  const expected = version === 'newer draft' ? 'טיוטה עדכנית במכשיר' : 'טקסט ישן'
+  if (version === 'newer draft') act(() => writeRecord({ ...readRecord(key), draft: { content: expected } }))
+  Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+  act(() => window.dispatchEvent(new Event('offline')))
+  await act(async () => rejectRead(new TypeError('Failed to fetch')))
+  await screen.findByDisplayValue(expected)
+  expect(screen.queryByText('Failed to fetch')).toBeNull()
+  expect(readRecord(key).data.thumbnail).toBe('/uploads/old-scan.png')
+  expect(readRecord(key).baseVersion).toBe('a'.repeat(64))
+})
+
+test('disconnecting while downloading a refreshed scan keeps the prepared scan editable', async () => {
+  let rejectScan
+  const pendingScan = new Promise((resolve, reject) => { rejectScan = reject })
+  const normalFetch = fetch.getMockImplementation()
+  fetch.mockImplementation(url => String(url).includes('/uploads/new-scan.png') ? pendingScan : normalFetch(url))
+  render(<EditPage />)
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).includes('/uploads/new-scan.png'))).toBe(true))
+  Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+  act(() => window.dispatchEvent(new Event('offline')))
+  await act(async () => rejectScan(new TypeError('Failed to fetch')))
+  await screen.findByDisplayValue('טקסט ישן')
+  expect(readRecord(key).data.thumbnail).toBe('/uploads/old-scan.png')
+  expect(readRecord(key).baseVersion).toBe('a'.repeat(64))
+  expect([...cacheStores.keys()]).toEqual(['prepared-cache'])
+})
+
+test.each([401, 403])('a completed HTTP %s denial remains an error even if the connection drops', async status => {
+  let resolveRead
+  const pendingRead = new Promise(resolve => { resolveRead = resolve })
+  const normalFetch = fetch.getMockImplementation()
+  fetch.mockImplementation(url => String(url).startsWith('/api/page-content?') ? pendingRead : normalFetch(url))
+  render(<EditPage />)
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/page-content?'))).toBe(true))
+  Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+  act(() => window.dispatchEvent(new Event('offline')))
+  await act(async () => resolveRead({ ok: false, status, json: async () => ({ success: false, error: 'ההרשאה לשרת נדחתה' }) }))
+  await screen.findByText('ההרשאה לשרת נדחתה')
+  expect(screen.queryByDisplayValue('טקסט ישן')).toBeNull()
+})
+
+test('a cancelled refresh cannot replace the local copy loaded by a newer session', async () => {
+  let rejectRead
+  const pendingRead = new Promise((resolve, reject) => { rejectRead = reject })
+  const normalFetch = fetch.getMockImplementation()
+  fetch.mockImplementation(url => String(url).startsWith('/api/page-content?') ? pendingRead : normalFetch(url))
+  const view = render(<EditPage />)
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/page-content?'))).toBe(true))
+  act(() => writeRecord({ ...readRecord(key), data: { ...nextData, content: 'עותק מקומי עדכני' } }))
+  authState.offline = true
+  Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+  view.rerender(<EditPage />)
+  await screen.findByDisplayValue('עותק מקומי עדכני')
+  await act(async () => rejectRead(new TypeError('Failed to fetch')))
+  expect(screen.getByDisplayValue('עותק מקומי עדכני')).toBeInTheDocument()
+  expect(screen.queryByText('Failed to fetch')).toBeNull()
+  expect(readRecord(key).data.content).toBe('עותק מקומי עדכני')
+})
+
 test('report focus survives authentication refreshing the same prepared page', async () => {
   history.replaceState(null, '', '/library/books/book/3?report=0123456789abcdef01234567')
   authState.offline = true
