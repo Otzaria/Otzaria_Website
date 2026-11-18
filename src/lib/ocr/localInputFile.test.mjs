@@ -5,7 +5,7 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import { createHash, randomBytes } from 'node:crypto';
 import { writeJobFileDurable } from './localStorage.js';
-import { fileHandleStream, openJobInput } from './localInputFile.js';
+import { fileHandleStream, openJobInput, openJobInputHandle } from './localInputFile.js';
 
 const JOB = '64b7f0c2a1b2c3d4e5f60002';
 const sha = (b) => createHash('sha256').update(b).digest('hex');
@@ -141,4 +141,25 @@ test('fileHandleStream: קובץ שהתקצר באמצע → שגיאה (לא ק
     }
   }, /input_truncated/);
   assert.equal(fh.closed, 1);
+});
+
+test('a retained input handle supports a verified pass and replay without reopening its path', async () => {
+  const bytes = randomBytes(300 * 1024);
+  const job = await storedJob(bytes, '64b7f0c2a1b2c3d4e5f60004');
+  const input = await openJobInputHandle(job, env);
+  assert.equal(input.ok, true);
+  assert.deepEqual(await readAll(fileHandleStream(input.handle, input.size, { closeOnEnd: false })), bytes);
+  assert.equal((await input.handle.stat()).size, bytes.length);
+  await fs.rename(job.absPath, `${job.absPath}.moved`);
+  assert.deepEqual(await readAll(fileHandleStream(input.handle, input.size)), bytes);
+  await assert.rejects(input.handle.stat(), /closed/);
+});
+
+test('retained streams still close on cancellation and truncation', async () => {
+  const cancelled = fakeHandle(10000);
+  await fileHandleStream(cancelled, 10000, { closeOnEnd: false }).cancel();
+  assert.equal(cancelled.closed, 1);
+  const truncated = fakeHandle(10);
+  await assert.rejects(readAll(fileHandleStream(truncated, 20, { closeOnEnd: false })), /input_truncated/);
+  assert.equal(truncated.closed, 1);
 });

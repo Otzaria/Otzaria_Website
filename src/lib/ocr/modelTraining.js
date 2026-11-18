@@ -23,7 +23,7 @@ export function trainingView(job) {
     bookId: String(job.book), requestId: job.requestId, selection: job.trainingSelection,
     pages: job.totalPages, phase: job.progressPhase, message: job.workerMessage,
     error: job.resultError?.code === 'quality_gate' ? 'המודל החדש לא עבר את בדיקת האיכות. המודל הקודם נשאר פעיל.' : job.error || job.resultError?.message, before: trainingReleaseLink(training?.before), after: trainingReleaseLink(training?.after),
-    activated: training?.activated };
+    activated: training?.activated, downloadable: Boolean(job.inputPath && !job.inputPurgedAt) };
 }
 
 function plainText(value) {
