@@ -177,6 +177,20 @@ export const UNLINKED = Object.freeze({
  * בדיקה חוזרת של דיווח שלא נפתח (המדווח השיב). ממתין שוב לפרסום, כך שגם אם השירות לא יענה — ייפתח.
  * @returns {Promise<boolean>} האם הבקשה נרשמה
  */
+/**
+ * תשובות מכתובת אחרת (`issueComment: 'held'`) שהגיעו אחרי השאלה האחרונה ששלחנו (`out`), לפי סדר ההתכתבות.
+ * `beforeDate`: רק שאלות שנשלחו עד המועד הזה נחשבות "השאלה האחרונה" (לבדיקה שכבר רצה, שהשאלה החדשה שלה לא נחשבת).
+ * בלי שאלה כלל: כל התשובות הזרות (`lastOut: -1`).
+ */
+export function heldRepliesAfterLastQuestion(contactLog, beforeDate = null) {
+  const log = contactLog || [];
+  let lastOut = -1;
+  log.forEach((c, i) => {
+    if ((c.direction || 'out') === 'out' && (!beforeDate || !c.sentAt || new Date(c.sentAt) <= new Date(beforeDate))) lastOut = i;
+  });
+  return { lastOut, held: log.slice(lastOut + 1).filter((c) => c.direction === 'in' && c.issueComment === 'held') };
+}
+
 export async function requestRetriage(reportId, deps, { requireAwaitingReply = false } = {}) {
   const now = deps.now || new Date();
   const filter = { reportId, 'triage.state': 'held', ...(requireAwaitingReply ? { 'triage.awaitingReply': true } : {}) };

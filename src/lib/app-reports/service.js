@@ -20,7 +20,7 @@ import {
   buildReplyAddress, validateInboundPayload, isAutoReply, inboundMessageBody, buildInboundComment, buildOutboundComment,
 } from './inbound.js';
 import { PRODUCT_KEYS, getProduct, isProductKey, productFilter, productOf } from './products.js';
-import { needsTriage, pendingTriage, dispatchTriage, requestRetriage, runTriageFollowUp, triageComment } from './triage.js';
+import { needsTriage, pendingTriage, dispatchTriage, heldRepliesAfterLastQuestion, requestRetriage, runTriageFollowUp, triageComment } from './triage.js';
 import { deliverTriageQuestions, ensureReplyToken } from './triage-questions.js';
 export { ensureReplyToken };
 export { hasAppReportsAccess } from '../roles.js';
@@ -738,9 +738,13 @@ export async function ingestInboundReply(raw, deps) {
   if (forTriage && (fromReporter || doc.triage?.awaitingReply)) {
     // המצב אולי השתנה בזמן השמירה (החלטה, פתיחה): קובעים לפי מה שיש עכשיו.
     // בדיקה שעוד רצה לא ראתה את התשובה; אם תחליט לא לפתוח — applyTriageDecision יבקש בדיקה חוזרת.
-    const now2 = await AppReport.findOne({ reportId: doc.reportId }).select('triage issueNumber').lean();
-    if (now2?.triage?.state === 'held') await requestRetriage(doc.reportId, deps, { requireAwaitingReply: !fromReporter });
-    else if (fromReporter && now2?.triage?.state !== 'pending' && now2?.issueNumber) {
+    const now2 = await AppReport.findOne({ reportId: doc.reportId }).select('triage issueNumber contactLog').lean();
+    // תשובה זרה מפעילה בדיקה רק אם היא הראשונה מאז השאלה האחרונה; הבאות נשמרות בלי להפעיל
+    const firstHeld = fromReporter ? null : heldRepliesAfterLastQuestion(now2?.contactLog).held[0];
+    const firstForeign = Boolean(firstHeld) && (messageId ? firstHeld.messageId === messageId : new Date(firstHeld.sentAt).getTime() === now.getTime());
+    if (now2?.triage?.state === 'held') {
+      if (fromReporter || firstForeign) await requestRetriage(doc.reportId, deps, { requireAwaitingReply: !fromReporter });
+    } else if (fromReporter && now2?.triage?.state !== 'pending' && now2?.issueNumber) {
       await releaseTriageReplies(doc.reportId);
       await postInboundComments(doc.reportId, deps).catch((err) => console.error('Inbound reply comment failed:', err?.message));
     }

@@ -403,6 +403,78 @@ for (const awaitingReply of [false, true]) {
   });
 }
 
+const foreign = (messageId, text) => ({
+  to: contactMails.at(-1).replyTo, from: 'other@example.com', subject: 'Re', messageId, text, headers: {}, attachments: 0,
+});
+
+test('תשובה זרה: לא נחשפת לשירות אם הגיעה לפני השאלה האחרונה או כשאין שאלה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { body } = await post(report());
+  await applyTriageDecision(body.reportId, decision({ questions: ['איפה?'] }), deps());
+  const to = contactMails[0].replyTo;
+  await AppReport.updateOne({ reportId: body.reportId }, { $push: { contactLog: { direction: 'in', message: 'לפני', sentAt: new Date(), issueComment: 'held', fromEmail: 'o@example.com' } } });
+  await AppReport.updateOne({ reportId: body.reportId }, { $push: { contactLog: { direction: 'out', message: 'שאלה חדשה', sentAt: new Date() } } });
+  let m = await getTriageMaterial(body.reportId);
+  assert.deepEqual(m.contactLog.map((c) => c.message).includes('לפני'), false);
+  await ingestInboundReply({ ...foreign('<after@x>', 'אחרי'), to }, { ...deps(), saveFile, deleteFile });
+  m = await getTriageMaterial(body.reportId);
+  assert.deepEqual(m.contactLog.filter((c) => c.direction === 'in').map((c) => c.message), ['אחרי']);
+  // בלי שאלה כלל
+  await AppReport.updateOne({ reportId: body.reportId }, { $set: { contactLog: [{ direction: 'in', message: 'יתומה', sentAt: new Date(), issueComment: 'held' }] } });
+  m = await getTriageMaterial(body.reportId);
+  assert.deepEqual(m.contactLog, []);
+});
+
+test('תשובות זרות בחומר: עד 3 אחרונות והודעה מקוצרת ל-2000 תווים', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { body } = await post(report());
+  await applyTriageDecision(body.reportId, decision({ questions: ['איפה?'] }), deps());
+  const base = Date.now() + 1000;
+  const ins = [1, 2, 3, 4, 5].map((i) => ({
+    direction: 'in', message: i === 5 ? 'x'.repeat(5000) : `זרה ${i}`, sentAt: new Date(base + i), issueComment: 'held',
+  }));
+  await AppReport.updateOne({ reportId: body.reportId }, { $push: { contactLog: { $each: ins } } });
+  const m = await getTriageMaterial(body.reportId);
+  const inbound = m.contactLog.filter((c) => c.direction === 'in');
+  assert.deepEqual(inbound.slice(0, 2).map((c) => c.message), ['זרה 3', 'זרה 4']);
+  assert.equal(inbound.length, 3);
+  assert.equal(inbound[2].message.length, 2000);
+});
+
+test('תשובה זרה שנייה על אותה שאלה: נשמרת בלי בדיקה חוזרת (הראשונה מפעילה)', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { body } = await post(report());
+  await applyTriageDecision(body.reportId, decision({
+    verdict: 'ask_reporter', confidence: 'medium', questions: ['איפה?'], awaitingReply: true,
+  }), deps());
+  await ingestInboundReply(foreign('<f1@x>', 'ראשונה'), { ...deps(), saveFile, deleteFile });
+  let doc = await AppReport.findOne({ reportId: body.reportId }).lean();
+  assert.deepEqual([doc.triage.state, doc.triage.runs], ['pending', 2]);
+  // הבדיקה החוזרת מחליטה להמשיך להמתין בלי לשלוח שאלה חדשה: ההחלטה נשמרת כ-held
+  await AppReport.updateOne({ reportId: body.reportId }, { $set: { 'triage.state': 'held', 'triage.awaitingReply': true } });
+  const dispatched = dispatches.length;
+  await ingestInboundReply(foreign('<f2@x>', 'שנייה'), { ...deps(), saveFile, deleteFile });
+  doc = await AppReport.findOne({ reportId: body.reportId }).lean();
+  assert.deepEqual([doc.triage.state, doc.triage.runs, dispatches.length, doc.contactLog.at(-1).issueComment], ['held', 2, dispatched, 'held']);
+});
+
+test('תשובה זרה שנייה בזמן הבדיקה: answeredMeanwhile לא מפעיל בדיקה חוזרת', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { body } = await post(report());
+  await applyTriageDecision(body.reportId, decision({ questions: ['איזה כונן?'] }), deps());
+  const to = contactMails[0].replyTo;
+  await ingestInboundReply({
+    to, from: 'reporter@example.com', subject: 'Re', messageId: '<r@x>', text: 'כונן', headers: {}, attachments: 0,
+  }, { ...deps(), saveFile, deleteFile });
+  const pending = await AppReport.findOne({ reportId: body.reportId }).lean();
+  const at = pending.triage.requestedAt.getTime();
+  // תשובה זרה ראשונה הגיעה לפני תחילת הבדיקה הנוכחית, ושנייה בזמנה
+  await AppReport.updateOne({ reportId: body.reportId }, { $push: { contactLog: { direction: 'in', message: 'ראשונה', sentAt: new Date(at - 1), issueComment: 'held' } } });
+  await ingestInboundReply({ ...foreign('<second@x>', 'שנייה'), to }, { ...deps({ now: new Date(at + 1) }), saveFile, deleteFile });
+  const result = await applyTriageDecision(body.reportId, decision({ runs: 2, awaitingReply: true, questions: ['מתי?'] }), deps());
+  assert.equal(result.body.retriage, false);
+});
+
 test('תשובה מכתובת אחרת: המתנה שבוטלה בזמן השמירה לא מפעילה בדיקה חוזרת', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const { body } = await post(report());

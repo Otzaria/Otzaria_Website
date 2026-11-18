@@ -7,7 +7,7 @@ import { issueHtmlUrl } from './github.js';
 import { buildOutboundComment } from './inbound.js';
 import { getProduct, productFilter, productOf } from './products.js';
 import { githubFor, loadReportFile, loadReportImage, publishReport } from './service.js';
-import { MAX_TRIAGE_RUNS, UNLINKED, isSharedTriageIssue, requestRetriage, runTriageFollowUp, validateTriageDecision } from './triage.js';
+import { MAX_TRIAGE_RUNS, UNLINKED, isSharedTriageIssue, heldRepliesAfterLastQuestion, requestRetriage, runTriageFollowUp, validateTriageDecision } from './triage.js';
 
 import { canAskTriageReporter, deliverTriageQuestions } from './triage-questions.js';
 
@@ -43,6 +43,17 @@ function statusOf(doc) {
   };
 }
 
+const MAX_HELD_REPLIES = 3;
+const MAX_HELD_REPLY_CHARS = 2000;
+
+/** ההתכתבות כפי שהיא נחשפת לשירות: תשובות זרות (held) רק אחרי השאלה האחרונה, עד 3 אחרונות. */
+function exposedContactLog(contactLog) {
+  const log = contactLog || [];
+  const { lastOut, held } = heldRepliesAfterLastQuestion(log);
+  const keep = new Set(lastOut < 0 ? [] : held.slice(-MAX_HELD_REPLIES));
+  return log.filter((c) => !(c.direction === 'in' && c.issueComment === 'held') || keep.has(c));
+}
+
 /**
  * חומר הבדיקה של דיווח אחד: השדות, ההתכתבות עם המדווח (תשובות רק מכתובתו) ורשימת הקבצים.
  * בלי כתובת המייל: רק אם אפשר לפנות אליו. השירות לא ניגש למסד הנתונים.
@@ -59,8 +70,10 @@ export async function getTriageMaterial(reportId) {
     triage: { state: t.state ?? null, runs: t.runs || 1, lateDecidedAt: t.lateDecidedAt ?? null },
     issueNumber: t.state === 'held' ? null : doc.issueNumber ?? null,
     // fromReporter: false = תשובה מכתובת אחרת; השירות רואה אותה, אבל היא לא מתפרסמת
-    contactLog: (doc.contactLog || []).map((c) => ({
-      direction: c.direction || 'out', sentAt: c.sentAt, subject: c.subject || '', message: c.message || '',
+    // תשובות זרות נחשפות רק אם הגיעו אחרי השאלה האחרונה (בלי שאלה: אף אחת), עד 3 אחרונות ובקיצור
+    contactLog: exposedContactLog(doc.contactLog).map((c) => ({
+      direction: c.direction || 'out', sentAt: c.sentAt, subject: c.subject || '',
+      message: c.issueComment === 'held' ? (c.message || '').slice(0, MAX_HELD_REPLY_CHARS) : c.message || '',
       ...(c.direction === 'in' ? { fromReporter: c.issueComment !== 'held' } : {}),
     })),
     files: {
@@ -157,8 +170,10 @@ export async function applyTriageDecision(reportId, raw, deps) {
   }
   // המדווח השיב בזמן שהבדיקה רצה (קריאה טרייה, אחרי ההחלטה): בודקים שוב עם התשובה
   const fresh = await AppReport.findOne({ reportId }).select('contactLog').lean();
+  // תשובה זרה נחשבת רק אם היא הראשונה מאז השאלה שקדמה לבדיקה הזו (השאלה שנשלחה עכשיו לא נחשבת)
+  const firstHeld = heldRepliesAfterLastQuestion(fresh?.contactLog, doc.triage.requestedAt).held[0];
   const answeredMeanwhile = (fresh?.contactLog || []).some((c) => c.direction === 'in'
-    && (c.issueComment === 'triage' || (d.awaitingReply && c.issueComment === 'held'))
+    && (c.issueComment === 'triage' || (d.awaitingReply && c.issueComment === 'held' && c === firstHeld))
     && c.sentAt && doc.triage.requestedAt && new Date(c.sentAt) > new Date(doc.triage.requestedAt));
   const retriage = answeredMeanwhile && await requestRetriage(reportId, deps);
   return { status: 200, body: { ok: true, ...statusOf(await AppReport.findOne({ reportId }).lean()), questionsSent: mail.sent, retriage } };
