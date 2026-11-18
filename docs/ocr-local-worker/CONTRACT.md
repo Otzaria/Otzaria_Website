@@ -36,7 +36,8 @@
 ### המעטפה
 
 `schemaVersion` (1), `jobId`, `taskType` (`ocr`), `workerId`, `createdAt` (= יצירת העבודה), `inputSha256`,
-`options` (`lm`: `rabbinic`/`modern`/`off`, `defaultScript`: `square`/`rashi`), ו-`pageMap`: לכל עמוד ב-PDF
+`options` (`lm`: `rabbinic`/`modern`/`off`, `defaultScript`: `square`/`rashi`, ושדות ההגהה האופציונליים
+`lmCheck`/`alts`/`lexicons`/`sensitivity` — [PROOFREADING.md](PROOFREADING.md)), ו-`pageMap`: לכל עמוד ב-PDF
 `{pdfPageIndex (1..N), pageId (מזהה ה-Page), pageNumber, expectedUpdatedAt, imageSha256}`. ה-PDF מכיל רק את
 העמודים לעיבוד, לפי סדר `pageNumber`. המעטפה אינה משתנה לאורך חיי העבודה.
 

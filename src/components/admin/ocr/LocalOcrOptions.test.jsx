@@ -40,6 +40,18 @@ it('keeps the exact legacy controls until the worker advertises capabilities', (
   rerender(<Form caps={{ state: 'stale' }} />)
   expect(JSON.parse(screen.getByLabelText('options').textContent)).toEqual({ lm: 'modern', defaultScript: 'square' })
 })
+it('offers the proofreading sensitivity only when the worker supports it, and sends "normal" as an absent key', async () => {
+  const user = userEvent.setup()
+  const { rerender } = render(<Form />)
+  expect(screen.queryByRole('radio', { name: /יותר סימונים/ })).toBeNull()
+  rerender(<Form caps={{ ...capabilities, sensitivity: true }} />)
+  expect(screen.getByRole('radio', { name: /^רגיל/ })).toBeChecked()
+  expect(screen.getByText('פחות סימונים, כמעט כולם שגיאות אמיתיות')).toBeInTheDocument()
+  await user.click(screen.getByRole('radio', { name: /יותר סימונים/ }))
+  expect(JSON.parse(screen.getByLabelText('options').textContent)).toEqual({ lm: 'modern', defaultScript: 'square', sensitivity: 'more' })
+  await user.click(screen.getByRole('radio', { name: /^רגיל/ }))
+  expect(JSON.parse(screen.getByLabelText('options').textContent)).toEqual({ lm: 'modern', defaultScript: 'square' })
+})
 it('tells the administrator when OCR was delivered without the requested alternatives', () => {
   render(<OcrJobSummary job={{ status: 'completed', resultMetadata: { proofreading: { requested: true, status: 'failed', reason: 'context_timeout' } } }} />)
   expect(screen.getByRole('status')).toHaveTextContent('הזיהוי הושלם; חלופות לפי ההקשר לא חושבו')
