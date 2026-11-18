@@ -27,7 +27,7 @@ vi.mock("@/lib/pluginStorage", () => ({
   openVersionAsset: m.openVersionAsset,
 }));
 
-import { GET } from "./route";
+import { GET, HEAD } from "./route";
 
 const ID = "0123456789abcdef01234567";
 const LIVE = Buffer.from("live build");
@@ -191,6 +191,51 @@ describe('הורדה בחלקים', () => {
     expect(head.headers.get('Content-Length')).toBe(String(LIVE.length));
     expect(head.body).toBeNull();
     for (const { value } of m.openPluginAsset.mock.results) expect((await value).handle.fd).toBe(-1);
+    expect(plugin.incrementDownload).not.toHaveBeenCalled();
+    expect(m.updateOne).not.toHaveBeenCalled();
+  });
+
+  it('טווח סיומת bytes=-N מחזיר את N הבתים האחרונים', async () => {
+    const res = await get('', ID, { headers: { Range: 'bytes=-4' } });
+    expect(res.status).toBe(206);
+    expect(res.headers.get('Content-Range')).toBe(`bytes ${LIVE.length - 4}-${LIVE.length - 1}/${LIVE.length}`);
+    expect(res.headers.get('Content-Length')).toBe('4');
+    expect(await res.text()).toBe(LIVE.subarray(-4).toString());
+  });
+
+  it('bytes=-0 מחזיר 416 עם Content-Range של הגודל', async () => {
+    const res = await get('', ID, { headers: { Range: 'bytes=-0' } });
+    expect(res.status).toBe(416);
+    expect(res.headers.get('Content-Range')).toBe(`bytes */${LIVE.length}`);
+  });
+
+  it('טווחים מרובים מקבלים את הקובץ השלם', async () => {
+    const res = await get('', ID, { headers: { Range: 'bytes=0-1,3-4' } });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Range')).toBeNull();
+    expect(await res.text()).toBe(LIVE.toString());
+  });
+
+  it('בקשה בלי Range: 200 עם Content-Length וכותרות רגילות', async () => {
+    const res = await get();
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Length')).toBe(String(LIVE.length));
+    expect(res.headers.get('Accept-Ranges')).toBe('bytes');
+    expect(res.headers.get('Content-Type')).toBe('application/octet-stream');
+    expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff');
+    expect(res.headers.get('Content-Disposition')).toContain('p.otzplugin');
+    expect(res.headers.get('X-Plugin-Version')).toBe('2.0.0');
+    expect(await res.text()).toBe(LIVE.toString());
+  });
+
+  it('ה-HEAD המיוצא רואה method=HEAD: בלי גוף, בלי מונה ובלי hash', async () => {
+    plugin.pluginFileSha256 = null;
+    const res = await HEAD(new Request(`https://otzaria.org/api/plugins/${ID}/download`, { method: 'HEAD' }), {
+      params: Promise.resolve({ id: ID }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Length')).toBe(String(LIVE.length));
+    expect(res.body).toBeNull();
     expect(plugin.incrementDownload).not.toHaveBeenCalled();
     expect(m.updateOne).not.toHaveBeenCalled();
   });

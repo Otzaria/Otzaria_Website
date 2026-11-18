@@ -196,6 +196,12 @@ export async function GET(request, { params }) {
   }
 }
 
+// HEAD מפורש (ולא הסתמכות על מיפוי אוטומטי ל-GET): אותו מטפל, ו-request.method
+// נשאר 'HEAD' — ללא ספירת הורדה, ללא hash וללא גוף.
+export async function HEAD(request, context) {
+  return GET(request, context)
+}
+
 // טווח אחד מספיק להמשך הורדה. טווחים מרובים וסוגי טווח אחרים מקבלים
 // את הקובץ השלם, וכך גם If-Range ישן לאחר החלפת קובץ.
 function requestedByteRange(request, { size, etag }) {
