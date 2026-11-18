@@ -112,7 +112,7 @@ async function main() {
   console.log(`🔌 מתחבר: ${String(process.env.MONGODB_URI).replace(/\/\/[^@]*@/, '//***@')}`)
   await mongoose.connect(process.env.MONGODB_URI)
 
-  const book = await Book.findOne({ slug: o.book }).lean()
+  const book = await Book.findOne({ slug: o.book, isPrivate: { $ne: true }, ownerId: null }).lean()
   if (!book) throw new Error(`הספר לא נמצא באתר (slug=${o.book})`)
   const sitePages = new Map((await Page.find({ book: book._id }, { pageNumber: 1, imagePath: 1 }).lean()).map((p) => [p.pageNumber, p]))
   console.log(`📘 ${book.name}: ${sitePages.size} עמודים באתר · ${pkg.pages.length} עמודים בחבילה`)

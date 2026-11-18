@@ -129,6 +129,7 @@ export function toggleRole(roles, role, on) {
  * @type {Record<string, string>}
  */
 export const ROLE_HINTS = {
+  private_ocr: 'העלאת PDF פרטי, הפעלת OCR והורדת התוצאה בספרים שלו בלבד. בלי ממשק ניהול.',
   user: 'בלי ממשק ניהול.',
   admin: 'הכול, כולל משתמשים ותוספים.',
   admin_plugins: 'תוספים והודעות.',

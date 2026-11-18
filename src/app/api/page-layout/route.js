@@ -1,3 +1,4 @@
+import { canUseBookEditor } from '@/lib/privateBooks';
 import { NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 import { getServerSession } from 'next-auth';
@@ -67,6 +68,8 @@ async function loadAccessiblePage(ids, user) {
   const found = await findPage(ids);
   if (found.error) return { response: found.error };
   if (!found.page) return { response: notFound('העמוד לא נמצא') };
+  const book = await Book.findById(found.page.book).lean();
+  if (!canUseBookEditor(book, user)) return { response: notFound('הספר לא נמצא') };
   const access = canViewPageContent(found.page, user);
   if (!access.ok) return { response: forbidden(access.error) };
   return { page: found.page };

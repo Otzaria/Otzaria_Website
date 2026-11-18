@@ -1,3 +1,4 @@
+import { canUseBookEditor } from '@/lib/privateBooks';
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Book from '@/models/Book';
@@ -39,7 +40,7 @@ export async function POST(request) {
 
         // 5. מציאת הספר
         const book = await Book.findOne({ slug: decodeURIComponent(bookPath) });
-        if (!book) return notFound('Book not found');
+        if (!canUseBookEditor(book, session.user)) return notFound('הספר לא נמצא');
 
         // 6. תפיסה: בעלות, מכסת 5 עמודים, ושחרור עצלן של תפיסה שפג תוקפה
         //    (bookPageClaims.js). אדמין/admin_books עוקף בעלות ומכסה.

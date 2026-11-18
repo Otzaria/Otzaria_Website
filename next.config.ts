@@ -63,15 +63,13 @@ const nextConfig = {
   },
   
   async rewrites() {
-    if (process.env.NODE_ENV === 'development') {
-      return [
-        {
-          source: '/uploads/:path*',
-          destination: 'https://otzaria.org/uploads/:path*',
-        },
-      ];
-    }
-    return [];
+    return {
+      // לפני public: גם קובץ שקיים פיזית עובר בדיקת נראות של הספר.
+      beforeFiles: [{ source: '/uploads/books/:path*', destination: '/api/book-assets/:path*' }],
+      afterFiles: process.env.NODE_ENV === 'development'
+        ? [{ source: '/uploads/:path*', destination: 'https://otzaria.org/uploads/:path*' }]
+        : [],
+    };
   },
 
   async redirects() {

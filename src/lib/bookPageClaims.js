@@ -4,6 +4,7 @@
 import mongoose from 'mongoose';
 import Page, { PAGE_CLAIM_QUOTA_INDEX } from '../models/Page.js';
 import Book from '../models/Book.js';
+import { canUseBookEditor } from './privateBooks.js';
 import {
   MAX_ACTIVE_PAGE_CLAIMS,
   CLAIM_LIMIT_ERROR_CODE,
@@ -224,7 +225,7 @@ export async function uncompleteBookPage({ userId, isAdmin, pageId, now = new Da
   const page = await Page.findOne(query);
   if (!page) return { status: 400, body: { error: 'Page update failed or page not found' } };
   const book = await Book.findById(page.book);
-  if (!book) return { status: 400, body: { error: 'Page update failed or page not found' } };
+  if (!canUseBookEditor(book, { id: userId, role: isAdmin ? 'admin' : 'user' })) return { status: 404, body: { error: 'הספר לא נמצא' } };
   const ownerId = page.claimedBy || userId;
   if (!isAdmin && !isPersonalBook(book)) await releaseExpiredPageClaims({ now, userId: ownerId });
   const written = await writeClaim({ userId: ownerId, isAdmin, book, page, update: {

@@ -1,3 +1,7 @@
+import { PUBLIC_BOOK_FILTER } from '@/lib/privateBooks';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { hasBookLibraryAccess } from '@/lib/roles';
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Book from '@/models/Book';
@@ -6,12 +10,14 @@ import { notFound, serverError } from '@/lib/apiResponse';
 
 export async function GET(request, { params }) {
   try {
+    const session = await getServerSession(authOptions);
     await connectDB();
 
     const { id } = await params;
     const decodedId = decodeURIComponent(id);
 
     const book = await Book.findOne({
+        ...(hasBookLibraryAccess(session?.user) ? {} : PUBLIC_BOOK_FILTER),
         $or: [{ slug: decodedId }, { name: decodedId }]
     }).lean();
 
@@ -47,7 +53,7 @@ export async function GET(request, { params }) {
       pageNumber: book.examplePage,
       image: page.imagePath || page.thumbnail, 
       text: contentData
-    });
+    }, { headers: { 'Cache-Control': 'private, no-store' } });
 
   } catch (error) {
     console.error('Error fetching example page:', error);

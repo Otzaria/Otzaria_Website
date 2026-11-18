@@ -15,12 +15,15 @@ const BookSchema = new mongoose.Schema({
   
   ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   originalOwnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  isPrivate: { type: Boolean, default: false }
+  isPrivate: { type: Boolean, default: false },
+  // ספר שהועלה במסלול OCR פרטי; הסריקות נשמרות מחוץ ל-public.
+  privateOcr: { type: Boolean, default: false }
 }, { timestamps: true });
 
 BookSchema.index({ isHidden: 1 });
 BookSchema.index({ category: 1 });
 BookSchema.index({ name: 'text', description: 'text' });
 BookSchema.index({ ownerId: 1 });
+BookSchema.index({ ownerId: 1, isPrivate: 1, createdAt: -1 });
 
 export default mongoose.models.Book || mongoose.model('Book', BookSchema);

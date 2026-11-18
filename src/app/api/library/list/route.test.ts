@@ -96,6 +96,6 @@ describe("GET /api/library/list", () => {
   it("non-admins still never get hidden books", async () => {
     bookFindMock.mockReturnValue(chain([]));
     await GET(new Request("http://x/api/library/list?view=catalog"));
-    expect(bookFindMock).toHaveBeenCalledWith({ isHidden: { $ne: true } });
+    expect(bookFindMock).toHaveBeenCalledWith({ isHidden: { $ne: true }, isPrivate: { $ne: true }, ownerId: null });
   });
 });

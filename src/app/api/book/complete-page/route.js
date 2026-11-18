@@ -1,3 +1,4 @@
+import { canUseBookEditor } from '@/lib/privateBooks';
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Page from '@/models/Page';
@@ -29,6 +30,9 @@ export async function POST(request) {
         return notFound(isAdmin ? 'Page not found' : 'Page not found or unauthorized');
     }
 
+    const sourceBook = await Book.findById(page.book);
+    if (!canUseBookEditor(sourceBook, session.user)) return notFound('הספר לא נמצא');
+
     if (page.status !== 'in-progress' && page.status !== 'completed') {
          return badRequest('Cannot complete page in current status');
     }
@@ -55,7 +59,7 @@ export async function POST(request) {
 
         const book = await Book.findById(page.book);
         
-        if (book && (book.ownerId || book.isPrivate)) {
+        if (book && !book.isPrivate && book.ownerId) {
 
             if (book.totalPages > 0 && book.totalPages === book.completedPages) {
                 const update = {

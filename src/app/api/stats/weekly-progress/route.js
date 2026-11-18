@@ -1,3 +1,4 @@
+import { publicPagesStages } from '@/lib/privateBooks';
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Page from '@/models/Page';
@@ -27,6 +28,7 @@ async function computeWeeklyProgress() {
                 completedAt: { $gte: start, $lte: end }
             }
         },
+        ...publicPagesStages(),
         {
             $group: {
                 // המרה למחרוזת תאריך YYYY-MM-DD

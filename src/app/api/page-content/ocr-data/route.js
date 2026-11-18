@@ -1,3 +1,4 @@
+import { canUseBookEditor } from '@/lib/privateBooks';
 import { NextResponse } from 'next/server';
 import mongoose from 'mongoose';
 import { getServerSession } from 'next-auth';
@@ -89,6 +90,8 @@ export async function GET(request) {
     const page = found.page;
     if (!page) return noStore(notFound('העמוד לא נמצא'));
 
+    const book = await Book.findById(page.book).lean();
+    if (!canUseBookEditor(book, session.user)) return noStore(notFound('הספר לא נמצא'));
     const access = canViewPageContent(page, session.user);
     if (!access.ok) return noStore(forbidden(access.error));
 

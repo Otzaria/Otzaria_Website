@@ -1,5 +1,11 @@
 // @vitest-environment node
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
+vi.mock('next-auth', () => ({ getServerSession: vi.fn().mockResolvedValue(null) }))
+vi.mock('@/app/api/auth/[...nextauth]/route', () => ({ authOptions: {} }))
+vi.mock('@/lib/db', () => ({ default: vi.fn() }))
+vi.mock('@/models/Book', () => ({ default: { findOne: vi.fn() } }))
+import Book from '@/models/Book'
+import { getServerSession } from 'next-auth'
 import os from 'node:os'
 import path from 'node:path'
 import fs from 'node:fs'
@@ -26,6 +32,18 @@ const call = (segments) => GET(new Request('http://localhost/uploads/x'), { para
 describe('GET /uploads/[...path] — תיקיות חסומות', () => {
   it('קובץ רגיל מוגש', async () => {
     expect((await call(['books', 'a.txt'])).status).toBe(200)
+  })
+
+  it('סריקה של ספר פרטי ישן אינה זמינה לאחר, גם עם כותרת מטמון', async () => {
+    fs.mkdirSync(path.join(root, 'books', 'private'), { recursive: true })
+    fs.writeFileSync(path.join(root, 'books', 'private', 'page.1.jpg'), 'image')
+    Book.findOne.mockReturnValue({ lean: async () => ({ isPrivate: true, ownerId: 'owner' }) })
+    getServerSession.mockResolvedValue({ user: { id: 'other', role: 'private_ocr' } })
+    expect((await call(['books', 'private', 'page.1.jpg'])).status).toBe(404)
+    getServerSession.mockResolvedValue({ user: { role: 'admin' } })
+    const res = await call(['books', 'private', 'page.1.jpg'])
+    expect(res.status).toBe(200)
+    expect(res.headers.get('cache-control')).toBe('private, no-store')
   })
 
   it('חסום ישירות, ברישיות אחרת ובלוכסן-הפוך', async () => {

@@ -1,5 +1,7 @@
+import { PUBLIC_BOOK_FILTER } from '@/lib/privateBooks';
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
+import Book from '@/models/Book';
 import Page from '@/models/Page';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/client-ip';
@@ -22,10 +24,11 @@ export async function GET(request) {
         }
 
         await connectDB();
+        const visibleIds = await Book.find({ ...PUBLIC_BOOK_FILTER, isHidden: { $ne: true } }).distinct('_id');
 
         // חיפוש טקסט מלא במונגו (דורש אינדקס טקסט ב-Schema)
         const pages = await Page.find(
-            { $text: { $search: query } },
+            { $text: { $search: query }, book: { $in: visibleIds } },
             { score: { $meta: "textScore" } }
         )
         .sort({ score: { $meta: "textScore" } })

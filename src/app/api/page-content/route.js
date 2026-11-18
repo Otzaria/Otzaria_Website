@@ -1,3 +1,4 @@
+import { canUseBookEditor } from '@/lib/privateBooks';
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Page from '@/models/Page';
@@ -75,7 +76,8 @@ export async function POST(request) {
     const currentPage = await Page.findOne(query);
     if (!currentPage) return notFound('Page not found');
     const sourceBook = await Book.findById(currentPage.book);
-    if (!sourceBook || ((sourceBook.isHidden || sourceBook.isPrivate) && !isAdmin && String(sourceBook.ownerId) !== String(userId))) return forbidden('אין הרשאות לצפייה בספר זה');
+    if (!canUseBookEditor(sourceBook, session.user)) return !sourceBook || sourceBook.isPrivate
+      ? notFound('הספר לא נמצא') : forbidden('אין הרשאות לצפייה בספר זה');
 
     // לוגיקת הרשאות ועדכון סטטוס:
     let updateFields = {
@@ -233,7 +235,8 @@ export async function GET(request) {
             return notFound('Page not found');
         }
 
-        if ((book.isHidden || book.isPrivate) && !isAdmin && String(book.ownerId) !== String(userId)) return forbidden('אין הרשאות לצפייה בספר זה');
+        if (!canUseBookEditor(book, session.user)) return book.isPrivate
+          ? notFound('הספר לא נמצא') : forbidden('אין הרשאות לצפייה בספר זה');
 
         // --- בדיקת הרשאות צפייה/עריכה ---
 

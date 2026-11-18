@@ -97,7 +97,8 @@ describe("GET /api/book/[id]", () => {
     expect(body.claimPolicy).toEqual({ maxActivePages: 5, releaseAfterDays: 5, myActivePages: 2, exempt: false });
   });
 
-  it("personal books: no auto-release, exempt from the limit", async () => {
+  it("מנהל ספרייה: ספר פרטי אינו משוחרר אוטומטית ופטור ממכסה", async () => {
+    sessionMock.mockResolvedValue({ user: { id: "u1", role: "admin_books" } });
     bookFindOneMock.mockReturnValue({ lean: async () => ({ ...book, isPrivate: true, ownerId: "u1" }) });
     pageFindMock.mockReturnValue(chain([{ ...rawPages[0], status: "in-progress" }]));
     const body = await (await call("http://x/api/book/sefer")).json();

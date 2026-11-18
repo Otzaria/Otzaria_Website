@@ -1,3 +1,5 @@
+import Book from '@/models/Book';
+import { PUBLIC_BOOK_FILTER } from '@/lib/privateBooks';
 import { NextResponse } from 'next/server';
 import path from 'path';
 import fs from 'fs-extra';
@@ -135,6 +137,10 @@ export async function POST(request) {
         if (!/^[a-fA-F0-9]{24}$/.test(String(ref.bookId)) ||
             !Number.isInteger(ref.pageNumber) || ref.pageNumber <= 0) {
           fail(`${edition}/${page}: ref לא תקין (bookId/pageNumber)`);
+          continue;
+        }
+        if (!await Book.exists({ _id: ref.bookId, ...PUBLIC_BOOK_FILTER })) {
+          fail('לא ניתן לייבא ספר פרטי לתיוג');
           continue;
         }
         const src = await Page.findOne({

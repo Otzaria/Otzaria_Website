@@ -53,7 +53,7 @@ export async function PUT(request) {
         return notFound('Book not found');
     }
 
-    if (sendNotification && isHidden === false) {
+    if (sendNotification && !isPersonalBook && isHidden === false) {
         await sendBookNotification(updatedBook.name, updatedBook.slug);
     }
 

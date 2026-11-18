@@ -2,27 +2,28 @@
 import { NextResponse } from 'next/server';
 import path from 'path';
 import fs from 'fs-extra';
-import slugify from 'slugify';
+import { randomUUID } from 'node:crypto';
+import { privateBookRoot } from '@/lib/ocr/privateBookStorage';
+import { hasPrivateOcrAccess } from '@/lib/roles';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/client-ip';
 import connectDB from '@/lib/db';
 import Book from '@/models/Book';
 import Page from '@/models/Page';
-import User from '@/models/User';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { convertPdfToImages } from '@/lib/pdfConverter';
-import { unauthorized, badRequest, apiError, serverError } from '@/lib/apiResponse';
-
-const UPLOAD_ROOT = process.env.UPLOAD_DIR || path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', 'uploads');
-
-export async function POST(request) {
+import { CACHE_TAGS, revalidateNow } from '@/lib/cacheTags';
+import { badRequest, apiError, requireAccess, serverError } from '@/lib/apiResponse';
+async function uploadPrivateBook(request) {
   let createdBookId = null;
   let createdFolderPath = null;
 
   try {
     const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
-        return unauthorized();
-    }
+    const denied = requireAccess(session, hasPrivateOcrAccess);
+    if (denied) return denied;
+    if (!checkRateLimit(getClientIp(request), 'private_ocr_upload', 10, 'hour')) return apiError(429, 'יותר מדי העלאות. נסה שוב מאוחר יותר.');
 
     const userId = session.user.id || session.user._id;
 
@@ -36,27 +37,13 @@ export async function POST(request) {
     const category = `אישי - ${userName}`;
 
     if (!file || !bookName) {
-      return badRequest('Missing data');
+      return badRequest('יש להעלות PDF עד 50MB ושם ספר עד 200 תווים');
     }
 
-    let baseSlug = slugify(bookName, {
-        replacement: '-',  
-        remove: /[*+~.()'"!:@\/\\?]/g, 
-        lower: false,      
-        strict: false      
-    });
-    
-    baseSlug = `u-${userId.toString().slice(-4)}-${baseSlug}`;
-    const slug = baseSlug.replace(/^-+|-+$/g, '') || 'my-book';
-
-    const existingBook = await Book.findOne({ slug: slug });
-    const bookFolder = path.join(/*turbopackIgnore: true*/ UPLOAD_ROOT, 'books', slug);
-    const folderExists = await fs.pathExists(/*turbopackIgnore: true*/ bookFolder);
-
-    if (existingBook || folderExists) {
-        return apiError(409, 'ספר בשם זה כבר קיים במערכת, אנא בחרו שם אחר');
-    }
-    
+    if (typeof bookName !== 'string' || !bookName.trim() || bookName.length > 200) return badRequest('יש להעלות PDF עד 50MB ושם ספר עד 200 תווים');
+    if (file.type !== 'application/pdf' || file.size > 50 * 1024 * 1024) return badRequest('יש להעלות PDF עד 50MB ושם ספר עד 200 תווים');
+    const slug = randomUUID();
+    const bookFolder = path.join(privateBookRoot(), slug);
     createdFolderPath = bookFolder;
     await fs.ensureDir(bookFolder);
 
@@ -75,36 +62,32 @@ export async function POST(request) {
       name: bookName,
       slug: slug,
       category: category,
-      folderPath: `/uploads/books/${slug}`,
+      folderPath: `/private-books/${slug}`,
       totalPages: result.length,
       completedPages: 0,
       isHidden: true,
       isPrivate: true,
+      privateOcr: true,
       ownerId: userId,
       originalOwnerId: userId
     });
     
     createdBookId = newBook._id;
 
-    await User.findByIdAndUpdate(userId, {
-        $addToSet: { hiddenInstructionsBooks: newBook._id.toString() }
-    });
-
     const pagesData = result.map((page, index) => ({
       book: newBook._id,
       pageNumber: index + 1,
-      imagePath: `/uploads/books/${slug}/page.${index + 1}.jpg`,
-      status: 'in-progress',
-      claimedBy: userId,
-      claimedAt: new Date()
+      imagePath: `/private-books/${slug}/page.${index + 1}.jpg`,
+      status: 'available'
     }));
 
     await Page.insertMany(pagesData);
     await fs.remove(tempPdfPath);
+    revalidateNow(CACHE_TAGS.BOOKS_ADMIN_LIST);
 
     return NextResponse.json({ 
       success: true, 
-      message: 'Upload and conversion successful',
+      message: 'הספר הפרטי הועלה בהצלחה',
       bookId: newBook._id,
       slug: slug
     });
@@ -128,6 +111,13 @@ export async function POST(request) {
       return NextResponse.json({ error: 'שרת ההמרה עמוס. נסה שוב מאוחר יותר.' }, { status: 503, headers: { 'Retry-After': '30' } }); // נודיע שאפשר לנסות שוב לאחר המתנה.
     } // סוף הטיפול בעומס.
 
-    return serverError(error.message);
+    return serverError('שגיאה בהעלאת הספר');
   }
+}
+
+
+export async function POST(request) {
+  const response = await uploadPrivateBook(request);
+  response.headers.set('Cache-Control', 'private, no-store');
+  return response;
 }

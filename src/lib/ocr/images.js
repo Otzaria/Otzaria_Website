@@ -1,3 +1,4 @@
+import { resolvePrivateBookPath } from './privateBookStorage.js';
 // Uploads/storage are supplied by the live installation, not bundled build assets.
 import path from 'path';
 import fs from 'fs/promises';
@@ -9,6 +10,7 @@ const UPLOAD_ROOT = path.resolve(/*turbopackIgnore: true*/ process.env.UPLOAD_DI
 // ממיר נתיב תמונה כפי שנשמר ב-DB (למשל /uploads/books/<slug>/page.1.jpg)
 // לנתיב מערכת-קבצים אמיתי תחת UPLOAD_ROOT, עם אימות מפני Path Traversal.
 export function resolveImageFsPath(imagePath) {
+  if (String(imagePath).startsWith('/private-books/')) return resolvePrivateBookPath(imagePath);
   const rel = String(imagePath || '').replace(/^\/?uploads\//, ''); // UPLOAD_ROOT כבר כולל את uploads
   const resolved = path.resolve(UPLOAD_ROOT, rel);
 

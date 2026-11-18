@@ -2,6 +2,11 @@
 import path from 'path';
 import fs from 'fs';
 import { promises as fsp } from 'fs';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import connectDB from '@/lib/db';
+import Book from '@/models/Book';
+import { canReadBook } from '@/lib/privateBooks';
 
 const UPLOAD_ROOT = process.env.UPLOAD_DIR
   ? path.resolve(process.env.UPLOAD_DIR)
@@ -41,6 +46,17 @@ export async function GET(request, { params }) {
     return new Response(null, { status: 403 });
   }
 
+  // הגנה גם על סריקות של ספרים אישיים ישנים שנשמרו תחת uploads.
+  const bookPath = path.relative(UPLOAD_ROOT, resolved).replace(/\\/g, '/').split('/');
+  const isBookAsset = bookPath[0].toLowerCase() === 'books' && bookPath.length >= 3;
+  if (isBookAsset) {
+    await connectDB();
+    const slug = bookPath[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const book = await Book.findOne({ slug: { $regex: `^${slug}$`, $options: 'i' } }).lean();
+    const session = await getServerSession(authOptions);
+    if (!canReadBook(book, session?.user)) return new Response(null, { status: 404, headers: { 'Cache-Control': 'private, no-store' } });
+  }
+
   let stat;
   try {
     stat = await fsp.stat(resolved);
@@ -77,7 +93,7 @@ export async function GET(request, { params }) {
     headers: {
       'Content-Type': contentType,
       'Content-Length': stat.size.toString(),
-      'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800, must-revalidate',
+      'Cache-Control': isBookAsset ? 'private, no-store' : 'public, max-age=86400, stale-while-revalidate=604800, must-revalidate',
       'Last-Modified': lastModified,
       'ETag': etag,
       'X-Content-Type-Options': 'nosniff',

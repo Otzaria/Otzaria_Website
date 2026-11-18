@@ -39,7 +39,7 @@ async function computeStats() {
                     // שקול בדיוק ל-'bookData.isHidden': {$ne: true} המקורי, כולל
                     // ההתנהגות לעמוד שהספר שלו נמחק (נספר גם קודם).
                     pipeline: [
-                        { $match: { isHidden: true } },
+                        { $match: { $or: [{ isHidden: true }, { isPrivate: true }, { ownerId: { $ne: null } }] } },
                         { $project: { _id: 1 } }
                     ]
                 }

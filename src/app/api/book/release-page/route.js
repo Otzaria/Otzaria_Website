@@ -1,3 +1,4 @@
+import { canUseBookEditor } from '@/lib/privateBooks';
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Page from '@/models/Page';
@@ -21,6 +22,8 @@ export async function POST(request) {
     }
 
     const parentBook = await Book.findById(pageBefore.book);
+
+    if (!canUseBookEditor(parentBook, session.user)) return notFound('הספר לא נמצא');
 
     if (parentBook && (parentBook.isPrivate || parentBook.ownerId)) {
         return badRequest('לא ניתן לשחרר עמודים בספר אישי');
