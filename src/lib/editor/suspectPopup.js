@@ -43,6 +43,8 @@ export function adjacentSuspect(suspects, from, dir = 1) {
   return list.find((s) => !before([COLUMN_ORDER[s.column] ?? 0, s.end], [col, at])) || list[0];
 }
 
+const MIN_MAX_HEIGHT = 120;
+
 /**
  * מיקום החלונית (position: fixed) ליד המילה: מתחת, או מעל כשאין מקום מתחת ויש יותר מעל —
  * לעולם לא על המילה. גובה החלונית מוגבל לצד שנבחר (maxHeight; השאר נגלל בתוכה), ולכן גם
@@ -57,7 +59,8 @@ export function placeSuspectPopup(anchor, size, viewport, { gap = 6, margin = 8 
   const above = Math.max(0, top - gap - margin);
   const want = Math.max(0, Number(size?.height) || 0);
   const useAbove = want > below && above > below;
-  const maxHeight = Math.floor(useAbove ? above : below);
+  // כששני הצדדים זעירים — גובה מינימלי סביר (החלונית נגללת בתוכה) במקום חלונית של כמה פיקסלים
+  const maxHeight = Math.max(MIN_MAX_HEIGHT, Math.floor(useAbove ? above : below));
   const height = Math.min(want, maxHeight);
   const p = placePopup(anchor, { width: size?.width, height }, viewport, { gap, margin });
   // placePopup מצמיד לתחום המסך; כאן הגובה כבר חסום בצד שנבחר, אז הצד נשמר

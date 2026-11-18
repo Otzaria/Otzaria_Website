@@ -67,3 +67,9 @@ test('placeSuspectPopup: a tall popup is limited to the chosen side instead of c
   assert.ok(!overlaps(word, p, h));
   assert.ok(p.top >= 8 && p.top + h <= 792);
 });
+
+test('placeSuspectPopup: when both sides are tiny, maxHeight keeps a sensible minimum', () => {
+  const word = { left: 500, right: 560, top: 30, bottom: 50 };
+  const p = placeSuspectPopup(word, { width: 300, height: 400 }, { width: 1000, height: 100 });
+  assert.ok(p.maxHeight >= 120);
+});

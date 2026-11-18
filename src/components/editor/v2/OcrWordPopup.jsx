@@ -34,6 +34,8 @@ export default function OcrWordPopup({ review, textContainerRef, onApplyText, on
   const timers = useRef({ open: 0, close: 0, raf: 0 })
   const hoverId = useRef(null)
   const focusOnOpen = useRef(false)
+  // מילה שנסגרה ב-Esc והעכבר עדיין עליה — בלי פתיחה מחודשת בתזוזה של פיקסל
+  const suppressHover = useRef(null)
   const current = open ? (review?.fields?.[open.column]?.suspects || []).find((s) => suspectId(s) === open.id) || null : null
   const latest = useRef({ review, open, current })
   useLayoutEffect(() => { latest.current = { review, open, current } })
@@ -61,6 +63,7 @@ export default function OcrWordPopup({ review, textContainerRef, onApplyText, on
   }, [])
   const openOn = useCallback((s, via) => {
     clearTimer('open'); clearTimer('close')
+    suppressHover.current = null
     setStale(false)
     // מילה אחרת — המיקום הקודם לא תקף (נמדד מחדש לפני הציור)
     if (latest.current.open?.id !== suspectId(s)) setPlace(null)
@@ -88,6 +91,8 @@ export default function OcrWordPopup({ review, textContainerRef, onApplyText, on
     const pop = popRef.current
     if (!o || !s || !pop) return
     const field = queryEditorField(container(), s.column)
+    // הנתונים נבדקו מול טקסט אחר מהחי — ההיסטים ישנים, לא מעגנים למילה שגויה
+    if (!field || !liveSuspectField(container(), latest.current.review, s)) { close(); return }
     const anchor = unionRect(suspectRects(field, s))
     if (!anchor || !rectVisibleIn(field, anchor)) { close(); return }
     const size = { width: pop.offsetWidth, height: pop.scrollHeight }
@@ -95,7 +100,7 @@ export default function OcrWordPopup({ review, textContainerRef, onApplyText, on
   }, [close]) // eslint-disable-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
     if (open && current) reposition()
-  }, [open, current, reposition])
+  }, [open, current, stale, reposition])
   useEffect(() => {
     if (!open) return undefined
     let frame = 0
@@ -106,11 +111,13 @@ export default function OcrWordPopup({ review, textContainerRef, onApplyText, on
         reposition()
       })
     }
-    window.addEventListener('scroll', later, true)
+    // גלילה בתוך החלונית עצמה אינה מזיזה את המילה
+    const onScroll = (e) => { if (e.target instanceof Node && popRef.current?.contains(e.target)) return; later() }
+    window.addEventListener('scroll', onScroll, true)
     window.addEventListener('resize', later)
     return () => {
       cancelAnimationFrame(frame)
-      window.removeEventListener('scroll', later, true)
+      window.removeEventListener('scroll', onScroll, true)
       window.removeEventListener('resize', later)
     }
   }, [open, reposition])
@@ -151,12 +158,20 @@ export default function OcrWordPopup({ review, textContainerRef, onApplyText, on
       const field = e.buttons ? null : fieldAt(e.target)
       const s = field ? suspectAtPoint(field, liveSuspects(field), e.clientX, e.clientY) : null
       const id = s ? suspectId(s) : null
+      if (suppressHover.current && id !== suppressHover.current) suppressHover.current = null
+      if (id && id === suppressHover.current) { hoverId.current = id; return }
       if (id && o?.id === id) { clearTimer('close'); clearTimer('open'); hoverId.current = id; return }
       if (id !== hoverId.current) {
         clearTimer('open')
         hoverId.current = id
         // חלונית שנפתחה מהמקלדת (הפוקוס בה) לא מוחלפת בעמידה
-        if (s && o?.via !== 'key') t.open = setTimeout(() => openOn(s, 'hover'), HOVER_OPEN_MS)
+        if (s && o?.via !== 'key') t.open = setTimeout(() => {
+          t.open = 0
+          // הטקסט החי השתנה בינתיים (הקלדה/הדבקה/ביטול) — המילה כבר לא במקומה
+          const f = queryEditorField(container(), s.column)
+          const live = f ? liveSuspects(f).find((x) => suspectId(x) === suspectId(s)) : null
+          if (live) openOn(live, 'hover')
+        }, HOVER_OPEN_MS)
       }
       if (!id && o?.via === 'hover' && !t.close) t.close = setTimeout(close, HOVER_CLOSE_MS)
     }
@@ -165,9 +180,18 @@ export default function OcrWordPopup({ review, textContainerRef, onApplyText, on
       if (!t.raf) t.raf = requestAnimationFrame(hoverCheck)
     }
 
-    const onInput = (e) => { if (latest.current.open && fieldAt(e.target)) close() }
+    // כל עריכה מבטלת פתיחה ממתינה (עמידה), וסוגרת חלונית פתוחה
+    const onInput = (e) => {
+      if (!fieldAt(e.target)) return
+      clearTimer('open')
+      hoverId.current = null
+      if (latest.current.open) close()
+    }
 
     const onKeyDown = (e) => {
+      if (e.isComposing || e.keyCode === 229) return
+      const edits = e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Enter'
+      if (edits && fieldAt(e.target) && (!(e.ctrlKey || e.metaKey) || /^[zyxv]$/i.test(e.key))) { clearTimer('open'); hoverId.current = null }
       const { open: o, current: s, review: r } = latest.current
       if (e.key === 'Escape' && o) {
         if (e.defaultPrevented) return
@@ -175,6 +199,7 @@ export default function OcrWordPopup({ review, textContainerRef, onApplyText, on
         e.stopPropagation()
         const back = inPopup(document.activeElement)
         close()
+        suppressHover.current = o.id
         if (back && s) focusField(s, [s.start, s.end])
         return
       }
@@ -191,7 +216,8 @@ export default function OcrWordPopup({ review, textContainerRef, onApplyText, on
       target.focus()
       target.setSelectionRange(next.start, next.end)
       revealCaret(target, next.start, { smooth: false })
-      focusOnOpen.current = true
+      // הפוקוס עובר לחלונית רק כשיש מעבר פתיחה בפועל; אחרת הדגל היה נשאר ונצרך בגלילה מאוחרת
+      focusOnOpen.current = !(o && o.id === suspectId(next) && o.via === 'key')
       openOn(next, 'key')
     }
 
@@ -208,12 +234,16 @@ export default function OcrWordPopup({ review, textContainerRef, onApplyText, on
     document.addEventListener('click', onClick)
     document.addEventListener('mousemove', onMove, { passive: true })
     document.addEventListener('input', onInput, true)
+    document.addEventListener('beforeinput', onInput, true)
+    document.addEventListener('paste', onInput, true)
     document.addEventListener('keydown', onKeyDown, true)
     document.addEventListener('keyup', onKeyUp)
     return () => {
       document.removeEventListener('click', onClick)
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('input', onInput, true)
+    document.removeEventListener('beforeinput', onInput, true)
+    document.removeEventListener('paste', onInput, true)
       document.removeEventListener('keydown', onKeyDown, true)
       document.removeEventListener('keyup', onKeyUp)
       clearTimeout(t.open); clearTimeout(t.close); cancelAnimationFrame(t.raf)
