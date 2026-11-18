@@ -56,13 +56,17 @@ export default function PluginImage({ src, alt = '', size = 'md', responsive, pr
   bleed?: boolean
   className?: string
 }) {
+  const imageSrc = src && (size === 'sm' || size === 'md' || size === 'lg') &&
+    /^\/api\/plugins\/[a-f0-9]{24}\/image(?:\?|$)/i.test(src)
+    ? `${src}${src.includes('?') ? '&' : '?'}size=card`
+    : src
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
-  const broken = !src || failedSrc === src
+  const broken = !imageSrc || failedSrc === imageSrc
   const sizeClasses = cx(SIZES[size], responsive && SM_SIZES[responsive])
   // תמונה שנכשלה עוד לפני ה-hydration (HTML מהשרת): onError כבר לא יירה — בודקים בחיבור ה-ref
   const checkAlreadyFailed = useCallback((img: HTMLImageElement | null) => {
-    if (img && src && img.complete && img.naturalWidth === 0) setFailedSrc(src)
-  }, [src])
+    if (img && imageSrc && img.complete && img.naturalWidth === 0) setFailedSrc(imageSrc)
+  }, [imageSrc])
 
   return (
     <span
@@ -78,14 +82,14 @@ export default function PluginImage({ src, alt = '', size = 'md', responsive, pr
       ) : (
         <img
           ref={checkAlreadyFailed}
-          src={src}
+          src={imageSrc}
           alt={alt}
           width={PIXELS[size]}
           height={PIXELS[size]}
           loading={priority ? 'eager' : 'lazy'}
           fetchPriority={priority ? 'high' : undefined}
           decoding="async"
-          onError={() => setFailedSrc(src)}
+          onError={() => setFailedSrc(imageSrc)}
           className={cx('size-full object-contain', bleed && 'scale-110')}
         />
       )}

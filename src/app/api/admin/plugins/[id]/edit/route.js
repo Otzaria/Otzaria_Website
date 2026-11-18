@@ -48,6 +48,7 @@ import {
   saveFileFromFormData,
   saveOptimizedImage,
   clearImageOptCache,
+  promotePendingPluginImage,
   pluginFileSha256
 } from '@/lib/pluginStorage'
 
@@ -148,9 +149,7 @@ async function saveLiveAssets(pluginId, plugin, editableSource, nextPluginData, 
   } else if (editableSource.assetSources?.image === 'pending' && editableSource.image?.ext) {
     await removeLiveImage(pluginId, plugin)
     await clearImageOptCache(pluginId)
-    const target = path.join(dir, `${IMAGE_BASENAME}${editableSource.image.ext}`)
-    await fs.rm(target, { force: true })
-    await fs.rename(path.join(pendingDir, `${IMAGE_BASENAME}${editableSource.image.ext}`), target)
+    await promotePendingPluginImage(pluginId, editableSource.image.ext)
   }
 
   if (files.removeScreenshots || files.screenshotFiles.length > 0) {

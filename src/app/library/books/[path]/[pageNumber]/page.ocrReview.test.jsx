@@ -34,8 +34,7 @@ beforeEach(() => {
   vi.stubGlobal('requestAnimationFrame', (cb) => setTimeout(cb, 0))
   vi.stubGlobal('cancelAnimationFrame', clearTimeout)
   vi.stubGlobal('fetch', vi.fn(async (url) => ({ ok: true, json: async () => {
-    if (url.startsWith('/api/book/')) return { success: true, book: { name: 'ספר' }, pages: [{ number: 3, status: 'available' }] }
-    if (url.startsWith('/api/page-content?')) return { success: true, data: pageContentData }
+    if (url.startsWith('/api/book/')) return { success: true, book: { name: 'ספר' }, data: pageContentData }
     if (url.startsWith('/api/page-content/ocr-data?')) return { success: true, data: { layoutStatus: 'ok', image: { matches: true }, layout: {
       layoutVersion: 1, image: { width: 500, height: 700 }, toSource: [1, 0, 0, 0, 1, 0], lines: [
         { k: 0, inText: true, order: 1, stream: 'main', bbox: [0, 0, 500, 20], text: 'היא פוסרת את הצרה', words: null, lm: [{ i: 1, word: 'פוסרת', alts: [{ text: 'פוטרת', gain: 35.094 }] }] }

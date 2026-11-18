@@ -16,7 +16,7 @@ vi.mock('@/components/editor/modals/InfoDialog', () => ({ default: () => null })
 const key = pageKey('u', 'book', 3)
 const cacheStores = new Map()
 const cacheKey = request => new URL(typeof request === 'string' ? request : request.url, location.origin).href
-const nextData = { id: 'p', content: 'טקסט חדש', thumbnail: '/uploads/new-scan.png', status: 'in-progress', claimedBy: 'u', twoColumns: false, rightColumn: '', leftColumn: '', rightColumnName: 'פנים', leftColumnName: 'פירוש', contentVersion: 'b'.repeat(64), ocrReviewRevision: 'new-scan', ocrWordReview: null }
+const nextData = { id: 'p', claimedById: 'u', content: 'טקסט חדש', thumbnail: '/uploads/new-scan.png', status: 'in-progress', claimedBy: 'u', twoColumns: false, rightColumn: '', leftColumn: '', rightColumnName: 'פנים', leftColumnName: 'פירוש', contentVersion: 'b'.repeat(64), ocrReviewRevision: 'new-scan', ocrWordReview: null }
 beforeEach(() => {
   authState.offline = false
   history.replaceState(null, '', '/')
@@ -39,8 +39,7 @@ beforeEach(() => {
     delete: vi.fn(async name => cacheStores.delete(name)),
   })
   vi.stubGlobal('fetch', vi.fn(async url => {
-    if (String(url).startsWith('/api/book/book?')) return { ok: true, json: async () => ({ success: true, book: { name: 'ספר', totalPages: 10 }, pages: [{ number: 3, status: 'in-progress', claimedById: 'u', claimedBy: 'משתמש', thumbnail: nextData.thumbnail }] }) }
-    if (String(url).startsWith('/api/page-content?')) return { ok: true, json: async () => ({ success: true, data: nextData }) }
+    if (String(url).startsWith('/api/book/book/editor?')) return { ok: true, json: async () => ({ success: true, book: { name: 'ספר', totalPages: 10 }, data: nextData }) }
     if (String(url).includes('/uploads/new-scan.png')) return new Response('new scan', { headers: { 'content-type': 'image/png' } })
     throw new TypeError('unmocked endpoint')
   }))
@@ -64,7 +63,7 @@ test('a clean local fallback refreshes once real authentication finishes loading
   authState.offline = true
   const view = render(<EditPage />)
   await screen.findByDisplayValue('טקסט ישן')
-  expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/page-content?'))).toBe(false)
+  expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/book/book/editor?'))).toBe(false)
   authState.offline = false
   view.rerender(<EditPage />)
   await screen.findByDisplayValue('טקסט חדש')
@@ -75,9 +74,9 @@ test.each(['clean', 'newer draft'])('disconnecting during a prepared page refres
   let rejectRead
   const pendingRead = new Promise((resolve, reject) => { rejectRead = reject })
   const normalFetch = fetch.getMockImplementation()
-  fetch.mockImplementation(url => String(url).startsWith('/api/page-content?') ? pendingRead : normalFetch(url))
+  fetch.mockImplementation(url => String(url).startsWith('/api/book/book/editor?') ? pendingRead : normalFetch(url))
   render(<EditPage />)
-  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/page-content?'))).toBe(true))
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/book/book/editor?'))).toBe(true))
   const expected = version === 'newer draft' ? 'טיוטה עדכנית במכשיר' : 'טקסט ישן'
   if (version === 'newer draft') act(() => writeRecord({ ...readRecord(key), draft: { content: expected } }))
   Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
@@ -109,9 +108,9 @@ test.each([401, 403])('a completed HTTP %s denial remains an error even if the c
   let resolveRead
   const pendingRead = new Promise(resolve => { resolveRead = resolve })
   const normalFetch = fetch.getMockImplementation()
-  fetch.mockImplementation(url => String(url).startsWith('/api/page-content?') ? pendingRead : normalFetch(url))
+  fetch.mockImplementation(url => String(url).startsWith('/api/book/book/editor?') ? pendingRead : normalFetch(url))
   render(<EditPage />)
-  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/page-content?'))).toBe(true))
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/book/book/editor?'))).toBe(true))
   Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
   act(() => window.dispatchEvent(new Event('offline')))
   await act(async () => resolveRead({ ok: false, status, json: async () => ({ success: false, error: 'ההרשאה לשרת נדחתה' }) }))
@@ -119,10 +118,10 @@ test.each([401, 403])('a completed HTTP %s denial remains an error even if the c
   expect(screen.queryByDisplayValue('טקסט ישן')).toBeNull()
 })
 
-test.each([['book', 401], ['book', 403], ['content', 401], ['content', 403]])('an HTTP %s/%s denial with a lost body cannot restore the local editor', async (stage, status) => {
+test.each([401, 403])('an HTTP %s denial with a lost body cannot restore the local editor', async status => {
   let resolveRead
   const pendingRead = new Promise(resolve => { resolveRead = resolve })
-  const endpoint = stage === 'book' ? '/api/book/book?' : '/api/page-content?'
+  const endpoint = '/api/book/book/editor?'
   const normalFetch = fetch.getMockImplementation()
   fetch.mockImplementation(url => String(url).startsWith(endpoint) ? pendingRead : normalFetch(url))
   render(<EditPage />)
@@ -130,7 +129,7 @@ test.each([['book', 401], ['book', 403], ['content', 401], ['content', 403]])('a
   Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
   act(() => window.dispatchEvent(new Event('offline')))
   await act(async () => resolveRead({ ok: false, status, json: async () => { throw new TypeError('Failed to fetch') } }))
-  await screen.findByText(stage === 'book' ? 'טעינת הספר נכשלה' : 'טעינת תוכן העמוד נכשלה')
+  await screen.findByText('טעינת תוכן העמוד נכשלה')
   expect(screen.queryByDisplayValue('טקסט ישן')).toBeNull()
 })
 
@@ -138,9 +137,9 @@ test('an HTTP 200 response whose body is lost on disconnect still restores the p
   let resolveRead
   const pendingRead = new Promise(resolve => { resolveRead = resolve })
   const normalFetch = fetch.getMockImplementation()
-  fetch.mockImplementation(url => String(url).startsWith('/api/page-content?') ? pendingRead : normalFetch(url))
+  fetch.mockImplementation(url => String(url).startsWith('/api/book/book/editor?') ? pendingRead : normalFetch(url))
   render(<EditPage />)
-  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/page-content?'))).toBe(true))
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/book/book/editor?'))).toBe(true))
   Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
   act(() => window.dispatchEvent(new Event('offline')))
   await act(async () => resolveRead({ ok: true, status: 200, json: async () => { throw new TypeError('Failed to fetch') } }))
@@ -152,9 +151,9 @@ test('a cancelled refresh cannot replace the local copy loaded by a newer sessio
   let rejectRead
   const pendingRead = new Promise((resolve, reject) => { rejectRead = reject })
   const normalFetch = fetch.getMockImplementation()
-  fetch.mockImplementation(url => String(url).startsWith('/api/page-content?') ? pendingRead : normalFetch(url))
+  fetch.mockImplementation(url => String(url).startsWith('/api/book/book/editor?') ? pendingRead : normalFetch(url))
   const view = render(<EditPage />)
-  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/page-content?'))).toBe(true))
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/book/book/editor?'))).toBe(true))
   act(() => writeRecord({ ...readRecord(key), data: { ...nextData, content: 'עותק מקומי עדכני' } }))
   authState.offline = true
   Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
@@ -175,7 +174,7 @@ test('report focus survives authentication refreshing the same prepared page', a
   const normalFetch = fetch.getMockImplementation()
   fetch.mockImplementation(url => {
     if (String(url).startsWith('/api/page-reports/')) return pendingReport
-    if (String(url).startsWith('/api/page-content?')) return pendingContent
+    if (String(url).startsWith('/api/book/book/editor?')) return pendingContent
     return normalFetch(url)
   })
   const marker = '(מקור)[תיקון]'
@@ -190,7 +189,7 @@ test('report focus survives authentication refreshing the same prepared page', a
   await act(async () => resolveReport({ ok: true, json: async () => ({ success: true, report: {
     bookPath: 'book', pageNumber: 3, column: 'content', original: 'מקור', proposed: 'תיקון',
   } }) }))
-  await act(async () => resolveContent({ ok: true, json: async () => ({ success: true, data: { ...nextData, content } }) }))
+  await act(async () => resolveContent({ ok: true, json: async () => ({ success: true, book: { name: 'ספר', totalPages: 10 }, data: { ...nextData, content } }) }))
   const field = await screen.findByDisplayValue(content)
   await screen.findByText('הסימון של הדיווח מסומן בטקסט.')
   expect(field.value.slice(field.selectionStart, field.selectionEnd)).toBe(marker)
@@ -209,7 +208,7 @@ test('report action in the rich left column saves normally and Ctrl+Z restores i
     if (String(url).startsWith('/api/page-reports/')) return Promise.resolve({ ok: true, json: async () => ({ success: true, report: {
       bookPath: 'book', pageNumber: 3, column: 'left', status: 'approved', original: 'מקור', proposed: 'תיקון',
     } }) })
-    if (String(url).startsWith('/api/page-content?')) return Promise.resolve({ ok: true, json: async () => ({ success: true, data }) })
+    if (String(url).startsWith('/api/book/book/editor?')) return Promise.resolve({ ok: true, json: async () => ({ success: true, book: { name: 'ספר', totalPages: 10 }, data }) })
     if (url === '/api/page-content' && options?.method === 'POST') return Promise.resolve({ ok: true, json: async () => ({ success: true }) })
     return normalFetch(url, options)
   })
@@ -230,7 +229,7 @@ test('a blocked second tab never starts a refresh that could overwrite the ownin
   const previous = readRecord(key)
   render(<EditPage />)
   await screen.findByText(/עמוד זה פתוח לעריכה בלשונית אחרת/)
-  expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/page-content?'))).toBe(false)
+  expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/book/book/editor?'))).toBe(false)
   expect(readRecord(key)).toEqual(previous)
   expect(caches.open).not.toHaveBeenCalled()
 })
@@ -239,12 +238,12 @@ test('a delayed GET cannot revert a newer acknowledged local copy while the owni
   let resolveRead
   const pendingRead = new Promise(resolve => { resolveRead = resolve })
   const normalFetch = fetch.getMockImplementation()
-  fetch.mockImplementation(url => String(url).startsWith('/api/page-content?') ? pendingRead : normalFetch(url))
+  fetch.mockImplementation(url => String(url).startsWith('/api/book/book/editor?') ? pendingRead : normalFetch(url))
   render(<EditPage />)
-  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/page-content?'))).toBe(true))
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/book/book/editor?'))).toBe(true))
   // An already-running synchronization publishes its receipt while the GET is in flight.
   act(() => writeRecord({ ...readRecord(key), data: { ...nextData, content: 'עריכה חדשה שאושרה בשרת' }, baseVersion: 'c'.repeat(64), draft: null, inFlight: null }))
-  await act(async () => resolveRead({ ok: true, json: async () => ({ success: true, data: { ...nextData, content: 'גרסה ישנה', contentVersion: 'a'.repeat(64) } }) }))
+  await act(async () => resolveRead({ ok: true, json: async () => ({ success: true, book: { name: 'ספר', totalPages: 10 }, data: { ...nextData, content: 'גרסה ישנה', contentVersion: 'a'.repeat(64) } }) }))
   await screen.findByDisplayValue('עריכה חדשה שאושרה בשרת')
   expect(readRecord(key).data.content).toBe('עריכה חדשה שאושרה בשרת')
   expect(readRecord(key).baseVersion).toBe('c'.repeat(64))
@@ -255,12 +254,12 @@ test('unmount releases the edit lock and prevents a late GET from publishing to 
   let resolveRead
   const pendingRead = new Promise(resolve => { resolveRead = resolve })
   const normalFetch = fetch.getMockImplementation()
-  fetch.mockImplementation(url => String(url).startsWith('/api/page-content?') ? pendingRead : normalFetch(url))
+  fetch.mockImplementation(url => String(url).startsWith('/api/book/book/editor?') ? pendingRead : normalFetch(url))
   const previous = readRecord(key)
   const view = render(<EditPage />)
-  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/page-content?'))).toBe(true))
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/book/book/editor?'))).toBe(true))
   view.unmount()
-  await act(async () => resolveRead({ ok: true, json: async () => ({ success: true, data: nextData }) }))
+  await act(async () => resolveRead({ ok: true, json: async () => ({ success: true, book: { name: 'ספר', totalPages: 10 }, data: nextData }) }))
   expect(readRecord(key)).toEqual(previous)
   expect(caches.open).not.toHaveBeenCalled()
 })
