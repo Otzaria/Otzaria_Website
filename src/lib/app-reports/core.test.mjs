@@ -267,6 +267,15 @@ test('החלטת איחוד: issue סגור — גרסה שאינה חדשה מ�
   assert.equal(isGenericHangSignature(precise), false);
   assert.deepEqual(planPublication(related, '0.9.90', precise), suppress);
   assert.equal(isGenericHangSignature({ exceptionType: 'StateError', frames: ['flutter_windows.dll+0x1'] }), false);
+  // לולאת ההודעות של קובץ ההפעלה בלבד → גנרית; גם issue פתוח עם אותה חתימה לא מקבל אותה כתגובה
+  const idle = { exceptionType: 'AppHang', frames: ['otzaria.exe+0x17cb6', 'otzaria.exe+0x26539'] };
+  assert.equal(isGenericHangSignature(idle), true);
+  const withOpen = [...related, { issueNumber: 11, issueState: 'open', appVersion: '1.0.0', createdAt: d('02'), issueUrl: 'u11' }];
+  assert.deepEqual(planPublication(withOpen, '0.9.90', idle), { action: 'create', previousIssueNumber: 9 });
+  assert.deepEqual(planPublication(withOpen.filter((r) => r.issueState === 'open'), '0.9.90', idle), { action: 'create', previousIssueNumber: null });
+  // קוד נייטיב של ה-runner (יותר מלולאת ההודעות) או חתימה מעורבת אינם גנריים
+  assert.equal(isGenericHangSignature({ exceptionType: 'AppHang', frames: ['otzaria.exe+0x1 otzaria.exe+0x2 otzaria.exe+0x3'] }), false);
+  assert.equal(isGenericHangSignature({ exceptionType: 'AppHang', frames: ['otzaria.exe+0x1', 'flutter_windows.dll+0x2'] }), false);
   // issue פתוח קודם לכל השוואת גרסאות
   assert.deepEqual(planPublication([...related, { issueNumber: 11, issueState: 'open', appVersion: '1.0.0', createdAt: d('02'), issueUrl: 'u11' }], '0.9.90'),
     { action: 'comment', issueNumber: 11, issueUrl: 'u11' });
