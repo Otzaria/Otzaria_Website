@@ -7,8 +7,9 @@
 import { finalTexts } from './rules.js'
 
 /** אותה צורת סימון כמו זה שבטקסט: עם רווח בין הסוגריים או בלי */
-export function markerLike(existing, original, proposed) {
-  const spaced = typeof existing === 'string' && existing.includes(') [')
+export function markerLike(existing, original, proposed, existingOriginal) {
+  // הצורה נקבעת לפי מבנה הסימון עצמו (המקור שבו), לא לפי ") [" שעשוי להופיע בתוך התיקון
+  const spaced = typeof existing === 'string' && existing.startsWith(`(${existingOriginal ?? ''}) [`)
   return spaced ? `(${original}) [${proposed}]` : `(${original})[${proposed}]`
 }
 
@@ -31,7 +32,7 @@ export function markerActionsFor(report, hit, markerText) {
         id: 'updateMarker',
         label: 'השאר בסוגריים בנוסח שהוחלט',
         done: 'הסימון עודכן לנוסח שהוחלט.',
-        replacement: markerLike(markerText, f.original, f.proposed),
+        replacement: markerLike(markerText, f.original, f.proposed, hit.original),
       })
     }
     return actions

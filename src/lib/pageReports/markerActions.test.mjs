@@ -8,8 +8,15 @@ const report = (extra = {}) => ({ status: 'approved', original: 'שלמם', prop
 const ids = (a) => a.map((x) => x.id)
 
 test('markerLike שומר על הצורה שבטקסט', () => {
-  assert.equal(markerLike('(א) [ב]', 'ג', 'ד'), '(ג) [ד]')
-  assert.equal(markerLike('(א)[ב]', 'ג', 'ד'), '(ג)[ד]')
+  assert.equal(markerLike('(א) [ב]', 'ג', 'ד', 'א'), '(ג) [ד]')
+  assert.equal(markerLike('(א)[ב]', 'ג', 'ד', 'א'), '(ג)[ד]')
+})
+
+test('markerLike: ") [" בתוך התיקון לא הופך סימון צמוד למרווח', () => {
+  assert.equal(markerLike('(a)[x) [y]', 'c', 'd', 'a'), '(c)[d]')
+  const hit = { original: 'a', proposed: 'x) [y' }
+  const [, update] = markerActionsFor({ status: 'approved', original: 'a', proposed: 'x) [y', finalOriginal: 'c', finalProposed: 'd' }, hit, '(a)[x) [y]')
+  assert.equal(update.replacement, '(c)[d]')
 })
 
 test('אושר בלי שינוי נוסח: רק "החלף בתיקון"', () => {

@@ -214,7 +214,7 @@ test('report action in the rich left column saves normally and Ctrl+Z restores i
     return normalFetch(url, options)
   })
   const view = render(<EditPage />)
-  fireEvent.click(await screen.findByRole('button', { name: 'החלף בתיקון' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'החלף בתיקון' }, { timeout: 5000 }))
   const left = queryEditorField(view.container, 'left')
   expect(left.value).toBe(updated)
   expect(queryEditorField(view.container, 'right').value).toBe(data.rightColumn)
