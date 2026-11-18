@@ -5,6 +5,12 @@ export default function OfflineEditorApp() {
   const [fileName, setFileName] = useState('קובץ_אופליין_חדש.txt');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const fileInputRef = useRef(null);
+  // התוכן העדכני של העורך. localContent מתעדכן רק בטעינה/שמירה, ולכן הורדה ממנו
+  // החזירה קובץ ריק (או את הגרסה שנפתחה) בלי העריכות של המשתמש.
+  const latestContentRef = useRef('');
+  const handleLatestContent = (content) => {
+    latestContentRef.current = content;
+  };
 
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
@@ -13,6 +19,7 @@ export default function OfflineEditorApp() {
     setFileName(file.name);
     const reader = new FileReader();
     reader.onload = (loadEvent) => {
+      latestContentRef.current = loadEvent.target.result;
       setLocalContent(loadEvent.target.result);
       setHasUnsavedChanges(false);
     };
@@ -51,7 +58,7 @@ export default function OfflineEditorApp() {
       <Button
         icon="download"
         variant="primary"
-        onClick={() => handleSaveToLocalFile(localContent)}
+        onClick={() => handleSaveToLocalFile(latestContentRef.current)}
         label="שמור קובץ"
       />
       <div className="w-px h-8 bg-surface-variant mx-2"></div>
@@ -68,6 +75,7 @@ export default function OfflineEditorApp() {
         canEdit={true}
         isCompleted={false}
         onSave={handleSaveToLocalFile}
+        onLatestContent={handleLatestContent}
         hasUnsavedChangesOuter={hasUnsavedChanges}
         setHasUnsavedChanges={setHasUnsavedChanges}
         headerStartElement={headerStart}
