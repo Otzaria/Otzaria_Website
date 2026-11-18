@@ -12,6 +12,8 @@ const RETRY_MS = 150
 // כשאין חלון פתוח, ואחרי השהיה קצרה שבה הוא מספיק להיפתח
 const SETTLE_MS = 500
 const MODAL_POLL_MS = 300
+// תקרת המתנה לחלון פתוח — אחריה מוותרים בשקט (עדיף לא לסמן מאשר לגנוב סמן ממי שכבר עובד)
+const MODAL_MAX_WAIT_MS = 30000
 const modalOpen = () => typeof document !== 'undefined' && Boolean(document.querySelector('[role="dialog"][aria-modal="true"]'))
 
 /**
@@ -26,6 +28,10 @@ export function useReportFocus({ containerRef, ready, bookPath, pageNumber, fetc
   const [state, setState] = useState(/** @type {null | FocusState} */ (null))
   const scrollTimer = useRef(0)
   const cancelFocus = useRef(() => {})
+  // מפתח (דיווח + עמוד) שהניסיון לאתר אותו כבר הסתיים (נמצא/כמה/חסר/עמוד אחר/סגירה) — ה-?report= נשאר ב-URL,
+  // ולכן בלעדיו כל ready false→true (טעינת עמוד מחדש, שינוי סטטוס) היה מסמן שוב וגונב את הסמן. "סמן שוב" ידני עדיין עובד.
+  const handledKey = useRef('')
+  const currentKey = useRef('')
 
   /** השדות שבמסך: [{ el, column, value }] */
   const fields = useCallback(() => {
@@ -62,32 +68,59 @@ export function useReportFocus({ containerRef, ready, bookPath, pageNumber, fetc
     if (!ready || typeof window === 'undefined') return undefined
     const id = reportIdFromSearch(window.location.search)
     if (!id) return undefined
+    const key = `${id}\u0001${pageKey}`
+    currentKey.current = key
+    if (handledKey.current === key) return undefined
     let cancelled = false
     let timer = 0
+    const markHandled = () => { handledKey.current = key }
+    // המשתמש כבר עובד בשדה (הקלדה/עכבר) — לא לגנוב לו את הסמן
+    let interacted = false
+    const onUserEvent = (e) => {
+      if (fields().some((f) => f.el === e.target || f.el.contains?.(e.target))) interacted = true
+    }
+    const userEvents = ['input', 'keydown', 'pointerdown']
+    userEvents.forEach((ev) => document.addEventListener(ev, onUserEvent, true))
+    const stopWatching = () => userEvents.forEach((ev) => document.removeEventListener(ev, onUserEvent, true))
     queueMicrotask(() => {
       if (!cancelled) setState({ phase: 'loading', report: null })
     })
     fetchReport(id).then((report) => {
       if (cancelled) return
       if (!reportMatchesPage(report, bookPath, pageNumber)) {
+        markHandled()
+        stopWatching()
         setState({ phase: 'otherPage', report })
         return
       }
       // השדות (בעיקר התצוגה המעוצבת) עולים אחרי הטעינה — כמה ניסיונות קצרים
       let tries = 0
+      const startedAt = Date.now()
+      const giveUp = () => {
+        markHandled()
+        stopWatching()
+        setState(null)
+      }
       const attempt = () => {
         if (cancelled) return
+        if (interacted || Date.now() - startedAt > MODAL_MAX_WAIT_MS) return giveUp()
         if (modalOpen()) {
           timer = window.setTimeout(attempt, MODAL_POLL_MS)
           return
         }
         const hit = highlight(report)
-        if (hit) return setState((s) => ({ phase: 'found', report, count: hit.count, placement: s?.placement }))
+        if (hit) {
+          markHandled()
+          stopWatching()
+          return setState((s) => ({ phase: 'found', report, count: hit.count, placement: s?.placement }))
+        }
         tries += 1
         if (tries < RETRIES && fields().every((f) => !f.value)) {
           timer = window.setTimeout(attempt, RETRY_MS)
           return
         }
+        markHandled()
+        stopWatching()
         setState({ phase: 'missing', report })
       }
       timer = window.setTimeout(attempt, SETTLE_MS)
@@ -98,6 +131,7 @@ export function useReportFocus({ containerRef, ready, bookPath, pageNumber, fetc
       cancelled = true
       window.clearTimeout(timer)
       window.clearTimeout(scrollTimer.current)
+      stopWatching()
     }
     cancelFocus.current = cancel
     return cancel
@@ -113,12 +147,14 @@ export function useReportFocus({ containerRef, ready, bookPath, pageNumber, fetc
   /** "סמן שוב" — איתור מחדש בטקסט הנוכחי */
   const rehighlight = useCallback(() => {
     if (!state?.report) return
+    cancelFocus.current()
     const hit = highlight(state.report)
     setState((s) => (s ? { ...s, phase: hit ? 'found' : 'missing', count: hit?.count } : s))
   }, [state, highlight])
 
   const dismiss = useCallback(() => {
     cancelFocus.current()
+    if (currentKey.current) handledKey.current = currentKey.current
     setState(null)
   }, [])
 
