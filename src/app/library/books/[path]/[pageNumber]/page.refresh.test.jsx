@@ -121,7 +121,7 @@ test.each([401, 403])('a completed HTTP %s denial remains an error even if the c
 test.each([401, 403])('an HTTP %s denial with a lost body cannot restore the local editor', async status => {
   let resolveRead
   const pendingRead = new Promise(resolve => { resolveRead = resolve })
-  const endpoint = stage === 'book' ? '/api/book/book?' : '/api/book/book/editor?'
+  const endpoint = '/api/book/book/editor?'
   const normalFetch = fetch.getMockImplementation()
   fetch.mockImplementation(url => String(url).startsWith(endpoint) ? pendingRead : normalFetch(url))
   render(<EditPage />)
