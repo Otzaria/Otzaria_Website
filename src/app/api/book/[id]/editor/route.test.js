@@ -67,3 +67,33 @@ it('מחזיר הודעת נעילה ללא תוכן, ומנהל ספרייה י
   mocks.session.mockResolvedValue({ user: { id: 'u', role: 'admin_books_only' } })
   expect((await read()).status).toBe(200)
 })
+
+it('מחזיר 404 כשהספר לא קיים', async () => {
+  mocks.book.mockReturnValue({ lean: async () => null })
+  const res = await read()
+  expect(res.status).toBe(404)
+  expect(await res.json()).toEqual({ error: 'הספר לא נמצא' })
+  expect(mocks.page).not.toHaveBeenCalled()
+})
+
+it('מחזיר 404 כשהעמוד לא קיים', async () => {
+  mocks.page.mockResolvedValue(null)
+  const res = await read()
+  expect(res.status).toBe(404)
+  expect(await res.json()).toEqual({ error: 'העמוד לא נמצא' })
+})
+
+it('מחזיר 500 על שגיאה בלתי צפויה', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  mocks.book.mockReturnValue({ lean: async () => { throw new Error('db down') } })
+  const res = await read()
+  expect(res.status).toBe(500)
+  expect(await res.json()).toEqual({ error: 'שגיאה בטעינת תוכן העמוד' })
+})
+
+it('בעל ספר מוסתר רשאי לקרוא את העמוד', async () => {
+  mocks.book.mockReturnValue({ lean: async () => ({ ...book, isHidden: true, ownerId: 'u' }) })
+  const res = await read()
+  expect(res.status).toBe(200)
+  expect(mocks.page).toHaveBeenCalled()
+})
