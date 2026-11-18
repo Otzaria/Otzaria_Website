@@ -8,7 +8,6 @@ import MyPageReports from './MyPageReports'
 import PageMessageDialog from './PageMessageDialog'
 import { postPageReport } from './pageReportsApi'
 import {
-  BROWSER_MENU_HINT,
   COPY_FALLBACK_MESSAGE,
   CUT_FALLBACK_MESSAGE,
   PASTE_FALLBACK_MESSAGE,
@@ -162,7 +161,6 @@ function PageReportsLayerInner({
           items={menuItems}
           onClose={closeMenu}
           label="פעולות על הטקסט"
-          footer={BROWSER_MENU_HINT}
         />
       )}
 

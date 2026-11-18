@@ -1,8 +1,9 @@
 import { beforeEach, afterEach, test, expect, vi } from 'vitest'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import EditPage from './page'
 import { pageKey, readRecord, writeRecord } from '@/lib/offlineBooks/store'
 import { EDITOR_PREFS_STORAGE_KEY, serializeEditorPrefs } from '@/hooks/editorPrefs'
+import { queryEditorField } from '@/lib/editor/editorField'
 
 const authState = vi.hoisted(() => ({ offline: false }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }), useParams: () => ({ path: 'book', pageNumber: '3' }) }))
@@ -18,6 +19,7 @@ const cacheKey = request => new URL(typeof request === 'string' ? request : requ
 const nextData = { id: 'p', claimedById: 'u', content: 'טקסט חדש', thumbnail: '/uploads/new-scan.png', status: 'in-progress', claimedBy: 'u', twoColumns: false, rightColumn: '', leftColumn: '', rightColumnName: 'פנים', leftColumnName: 'פירוש', contentVersion: 'b'.repeat(64), ocrReviewRevision: 'new-scan', ocrWordReview: null }
 beforeEach(() => {
   authState.offline = false
+  history.replaceState(null, '', '/')
   localStorage.clear()
   cacheStores.clear()
   cacheStores.set('prepared-cache', new Map([
@@ -45,7 +47,7 @@ beforeEach(() => {
     book: { name: 'ספר', totalPages: 10 }, data: { ...nextData, content: 'טקסט ישן', thumbnail: '/uploads/old-scan.png', ocrReviewRevision: 'old-scan', claimedById: 'u' }, draft: null })
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
-afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); localStorage.clear(); delete navigator.locks; delete navigator.onLine })
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); localStorage.clear(); history.replaceState(null, '', '/'); delete navigator.locks; delete navigator.onLine })
 
 test('online reload of a clean prepared page must update the cached scan before publishing its new thumbnail', async () => {
   render(<EditPage />)
@@ -67,6 +69,160 @@ test('a clean local fallback refreshes once real authentication finishes loading
   await screen.findByDisplayValue('טקסט חדש')
   expect(readRecord(key).baseVersion).toBe(nextData.contentVersion)
 })
+
+test.each(['clean', 'newer draft'])('disconnecting during a prepared page refresh retains the %s local copy', async version => {
+  let rejectRead
+  const pendingRead = new Promise((resolve, reject) => { rejectRead = reject })
+  const normalFetch = fetch.getMockImplementation()
+  fetch.mockImplementation(url => String(url).startsWith('/api/book/book/editor?') ? pendingRead : normalFetch(url))
+  render(<EditPage />)
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/book/book/editor?'))).toBe(true))
+  const expected = version === 'newer draft' ? 'טיוטה עדכנית במכשיר' : 'טקסט ישן'
+  if (version === 'newer draft') act(() => writeRecord({ ...readRecord(key), draft: { content: expected } }))
+  Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+  act(() => window.dispatchEvent(new Event('offline')))
+  await act(async () => rejectRead(new TypeError('Failed to fetch')))
+  await screen.findByDisplayValue(expected)
+  expect(screen.queryByText('Failed to fetch')).toBeNull()
+  expect(readRecord(key).data.thumbnail).toBe('/uploads/old-scan.png')
+  expect(readRecord(key).baseVersion).toBe('a'.repeat(64))
+})
+
+test('disconnecting while downloading a refreshed scan keeps the prepared scan editable', async () => {
+  let rejectScan
+  const pendingScan = new Promise((resolve, reject) => { rejectScan = reject })
+  const normalFetch = fetch.getMockImplementation()
+  fetch.mockImplementation(url => String(url).includes('/uploads/new-scan.png') ? pendingScan : normalFetch(url))
+  render(<EditPage />)
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).includes('/uploads/new-scan.png'))).toBe(true))
+  Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+  act(() => window.dispatchEvent(new Event('offline')))
+  await act(async () => rejectScan(new TypeError('Failed to fetch')))
+  await screen.findByDisplayValue('טקסט ישן')
+  expect(readRecord(key).data.thumbnail).toBe('/uploads/old-scan.png')
+  expect(readRecord(key).baseVersion).toBe('a'.repeat(64))
+  expect([...cacheStores.keys()]).toEqual(['prepared-cache'])
+})
+
+test.each([401, 403])('a completed HTTP %s denial remains an error even if the connection drops', async status => {
+  let resolveRead
+  const pendingRead = new Promise(resolve => { resolveRead = resolve })
+  const normalFetch = fetch.getMockImplementation()
+  fetch.mockImplementation(url => String(url).startsWith('/api/book/book/editor?') ? pendingRead : normalFetch(url))
+  render(<EditPage />)
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/book/book/editor?'))).toBe(true))
+  Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+  act(() => window.dispatchEvent(new Event('offline')))
+  await act(async () => resolveRead({ ok: false, status, json: async () => ({ success: false, error: 'ההרשאה לשרת נדחתה' }) }))
+  await screen.findByText('ההרשאה לשרת נדחתה')
+  expect(screen.queryByDisplayValue('טקסט ישן')).toBeNull()
+})
+
+test.each([401, 403])('an HTTP %s denial with a lost body cannot restore the local editor', async status => {
+  let resolveRead
+  const pendingRead = new Promise(resolve => { resolveRead = resolve })
+  const endpoint = stage === 'book' ? '/api/book/book?' : '/api/book/book/editor?'
+  const normalFetch = fetch.getMockImplementation()
+  fetch.mockImplementation(url => String(url).startsWith(endpoint) ? pendingRead : normalFetch(url))
+  render(<EditPage />)
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith(endpoint))).toBe(true))
+  Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+  act(() => window.dispatchEvent(new Event('offline')))
+  await act(async () => resolveRead({ ok: false, status, json: async () => { throw new TypeError('Failed to fetch') } }))
+  await screen.findByText('טעינת תוכן העמוד נכשלה')
+  expect(screen.queryByDisplayValue('טקסט ישן')).toBeNull()
+})
+
+test('an HTTP 200 response whose body is lost on disconnect still restores the prepared copy', async () => {
+  let resolveRead
+  const pendingRead = new Promise(resolve => { resolveRead = resolve })
+  const normalFetch = fetch.getMockImplementation()
+  fetch.mockImplementation(url => String(url).startsWith('/api/book/book/editor?') ? pendingRead : normalFetch(url))
+  render(<EditPage />)
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/book/book/editor?'))).toBe(true))
+  Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+  act(() => window.dispatchEvent(new Event('offline')))
+  await act(async () => resolveRead({ ok: true, status: 200, json: async () => { throw new TypeError('Failed to fetch') } }))
+  await screen.findByDisplayValue('טקסט ישן')
+  expect(screen.queryByText('Failed to fetch')).toBeNull()
+})
+
+test('a cancelled refresh cannot replace the local copy loaded by a newer session', async () => {
+  let rejectRead
+  const pendingRead = new Promise((resolve, reject) => { rejectRead = reject })
+  const normalFetch = fetch.getMockImplementation()
+  fetch.mockImplementation(url => String(url).startsWith('/api/book/book/editor?') ? pendingRead : normalFetch(url))
+  const view = render(<EditPage />)
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/book/book/editor?'))).toBe(true))
+  act(() => writeRecord({ ...readRecord(key), data: { ...nextData, content: 'עותק מקומי עדכני' } }))
+  authState.offline = true
+  Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+  view.rerender(<EditPage />)
+  await screen.findByDisplayValue('עותק מקומי עדכני')
+  await act(async () => rejectRead(new TypeError('Failed to fetch')))
+  expect(screen.getByDisplayValue('עותק מקומי עדכני')).toBeInTheDocument()
+  expect(screen.queryByText('Failed to fetch')).toBeNull()
+  expect(readRecord(key).data.content).toBe('עותק מקומי עדכני')
+})
+
+test('report focus survives authentication refreshing the same prepared page', async () => {
+  history.replaceState(null, '', '/library/books/book/3?report=0123456789abcdef01234567')
+  authState.offline = true
+  let resolveReport, resolveContent
+  const pendingReport = new Promise(resolve => { resolveReport = resolve })
+  const pendingContent = new Promise(resolve => { resolveContent = resolve })
+  const normalFetch = fetch.getMockImplementation()
+  fetch.mockImplementation(url => {
+    if (String(url).startsWith('/api/page-reports/')) return pendingReport
+    if (String(url).startsWith('/api/book/book/editor?')) return pendingContent
+    return normalFetch(url)
+  })
+  const marker = '(מקור)[תיקון]'
+  const content = `לפני ${marker} אחרי`
+  writeRecord({ ...readRecord(key), data: { ...readRecord(key).data, content } })
+  const view = render(<EditPage />)
+  await screen.findByDisplayValue(content)
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).startsWith('/api/page-reports/'))).toBe(true))
+  authState.offline = false
+  view.rerender(<EditPage />)
+  await screen.findByText('טוען...')
+  await act(async () => resolveReport({ ok: true, json: async () => ({ success: true, report: {
+    bookPath: 'book', pageNumber: 3, column: 'content', original: 'מקור', proposed: 'תיקון',
+  } }) }))
+  await act(async () => resolveContent({ ok: true, json: async () => ({ success: true, book: { name: 'ספר', totalPages: 10 }, data: { ...nextData, content } }) }))
+  const field = await screen.findByDisplayValue(content)
+  await screen.findByText('הסימון של הדיווח מסומן בטקסט.')
+  expect(field.value.slice(field.selectionStart, field.selectionEnd)).toBe(marker)
+})
+
+test('report action in the rich left column saves normally and Ctrl+Z restores it in one step', async () => {
+  localStorage.clear()
+  localStorage.setItem(EDITOR_PREFS_STORAGE_KEY, serializeEditorPrefs({ textView: 'rich' }))
+  history.replaceState(null, '', '/library/books/book/3?report=0123456789abcdef01234567')
+  const marker = '(מקור)[תיקון]'
+  const leftColumn = `לפני <b>${marker}</b> אחרי`
+  const updated = 'לפני <b>תיקון</b> אחרי'
+  const data = { ...nextData, twoColumns: true, leftColumn, rightColumn: 'טור שלא משתנה' }
+  const normalFetch = fetch.getMockImplementation()
+  fetch.mockImplementation((url, options) => {
+    if (String(url).startsWith('/api/page-reports/')) return Promise.resolve({ ok: true, json: async () => ({ success: true, report: {
+      bookPath: 'book', pageNumber: 3, column: 'left', status: 'approved', original: 'מקור', proposed: 'תיקון',
+    } }) })
+    if (String(url).startsWith('/api/book/book/editor?')) return Promise.resolve({ ok: true, json: async () => ({ success: true, book: { name: 'ספר', totalPages: 10 }, data }) })
+    if (url === '/api/page-content' && options?.method === 'POST') return Promise.resolve({ ok: true, json: async () => ({ success: true }) })
+    return normalFetch(url, options)
+  })
+  const view = render(<EditPage />)
+  fireEvent.click(await screen.findByRole('button', { name: 'החלף בתיקון' }, { timeout: 5000 }))
+  const left = queryEditorField(view.container, 'left')
+  expect(left.value).toBe(updated)
+  expect(queryEditorField(view.container, 'right').value).toBe(data.rightColumn)
+  const saved = () => fetch.mock.calls.filter(([url, options]) => url === '/api/page-content' && options?.method === 'POST').map(([, options]) => JSON.parse(options.body))
+  await waitFor(() => expect(saved().at(-1)).toMatchObject({ leftColumn: updated, rightColumn: data.rightColumn }), { timeout: 3000 })
+  fireEvent.keyDown(left, { key: 'z', code: 'KeyZ', ctrlKey: true })
+  expect(left.value).toBe(leftColumn)
+  await waitFor(() => expect(saved().at(-1)).toMatchObject({ leftColumn, rightColumn: data.rightColumn }), { timeout: 3000 })
+}, 10000)
 
 test('a blocked second tab never starts a refresh that could overwrite the owning editor', async () => {
   navigator.locks.request.mockImplementation(async (name, options, callback) => callback ? callback(null) : options({ name }))

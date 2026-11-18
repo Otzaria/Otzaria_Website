@@ -5,16 +5,31 @@ import UnifiedDiff from '@/components/corrections/UnifiedDiff'
 import TextDiff from '@/components/corrections/TextDiff'
 
 const MODES = [
-  { id: 'unified', label: 'תצוגת DIFF' },
   { id: 'split', label: 'זה מול זה' },
+  { id: 'unified', label: 'תצוגת DIFF' },
 ]
+// הבחירה האחרונה נזכרת בין דיווחים (localStorage); ברירת המחדל — זה מול זה.
+const MODE_KEY = 'corrections:diffMode'
+
+function savedMode() {
+  try {
+    const m = localStorage.getItem(MODE_KEY)
+    return MODES.some((x) => x.id === m) ? m : 'split'
+  } catch {
+    return 'split'
+  }
+}
 
 /**
- * השינוי בתצוגת diff (ברירת מחדל) או זה מול זה. split = תוכן חלופי לתצוגה זו מול זו (אם לא ניתן — TextDiff).
+ * השינוי זה מול זה (ברירת מחדל) או בתצוגת diff. split = תוכן חלופי לתצוגה זו מול זו (אם לא ניתן — TextDiff).
  * @param {{title:string, description?:string, split?:import('react').ReactNode} & Parameters<typeof UnifiedDiff>[0]} props
  */
 export default function ChangeDiff({ title, description = null, split = null, ...diff }) {
-  const [mode, setMode] = useState('unified')
+  const [mode, setModeState] = useState(savedMode)
+  const setMode = (m) => {
+    setModeState(m)
+    try { localStorage.setItem(MODE_KEY, m) } catch { /* אחסון חסום — רק לדיווח הנוכחי */ }
+  }
   const canSplit = Boolean(split) || typeof diff.after === 'string'
   const current = canSplit ? mode : 'unified'
   return (

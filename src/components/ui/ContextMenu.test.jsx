@@ -18,7 +18,7 @@ function setup(extra = {}) {
         footer="רמז תחתון"
         items={[
           { id: 'off', label: 'מושבת', icon: 'flag', disabled: true, hint: 'הסבר למה', onSelect: disabled },
-          { id: 'a', label: 'ראשון', icon: 'forum', onSelect: a },
+          { id: 'a', label: 'ראשון', icon: 'forum', hint: ['שורה אחת', 'שורה שתיים'], onSelect: a },
           { separator: true, id: 's' },
           { id: 'b', label: 'שני', shortcut: ['Ctrl', 'C'], onSelect: b },
         ]}
@@ -37,6 +37,9 @@ describe('ContextMenu', () => {
     const off = screen.getByRole('menuitem', { name: 'מושבת' })
     expect(off).toHaveAttribute('aria-disabled', 'true')
     expect(off).toHaveAccessibleDescription('הסבר למה')
+    // רמז של כמה שורות — כל שורה רכיב נפרד, וכולן בתיאור הנגיש
+    expect(screen.getByText('שורה אחת')).not.toHaveTextContent('שורה שתיים')
+    expect(screen.getByRole('menuitem', { name: 'ראשון' })).toHaveAccessibleDescription(/שורה אחת.*שורה שתיים/)
     await waitFor(() => expect(screen.getByRole('menuitem', { name: 'ראשון' })).toHaveFocus())
   })
 

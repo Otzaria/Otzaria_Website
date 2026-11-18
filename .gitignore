@@ -76,9 +76,6 @@ scripts/*
 !scripts/deploy-web.sh
 !scripts/check-production-trace.cjs
 !scripts/sync-app-reports.mjs
-!scripts/backfill-plugin-card-thumbnails.mjs
-!scripts/benchmark-web-performance.mjs
-!scripts/precompress-static.mjs
 empty-uploads-report-1767610989868.json
 .vscode/settings.json
 111.json

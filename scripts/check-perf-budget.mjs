@@ -82,8 +82,8 @@ const ASSET_BUDGETS = [
   { file: 'src/app/fonts/OpenSans-Variable.woff2', maxKB: 42, hint: HINT_FONT },
 ]
 
-// סך התמונות בביקור קר עם אנימציה (AVIF, DPR1): ספר סגור + פתוח ב-320w + הרצועה.
-// ב-Web performance QA נבדק שבחיבור חלש הרצועה אינה יורדת כלל.
+// הנכסים שדף הבית מוריד בביקור קר רגיל (AVIF, DPR1): ספר סגור + פתוח ב-320w + הרצועה. מעבר לסכום
+// הזה — נכס חדש או רגרסיה בקידוד. (סכום בנפרד מתקציבי הקבצים: כל קובץ יכול לעבור ב-15% והסכום יתנפח.)
 const HERO_IMAGES_TOTAL_KB = 130
 const HERO_IMAGES = [
   'public/home/golden-book-closed.v2-320.webp',

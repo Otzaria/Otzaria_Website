@@ -9,7 +9,7 @@ import {
   normalizeReportInput, normalizeDecision, statusAfter, REPORT_KINDS,
 } from './rules.js'
 import {
-  adminReportShape, myReportShape, parseAdminListQuery, countsFromRows, REPORTS_PER_HOUR, MY_REPORTS_LIMIT,
+  adminReportShape, editorReportShape, myReportShape, parseAdminListQuery, countsFromRows, REPORTS_PER_HOUR, MY_REPORTS_LIMIT,
 } from './shapes.js'
 
 const HOUR = 60 * 60 * 1000
@@ -102,6 +102,24 @@ export async function listMyPageReports(user, bookPath, pageNumberRaw) {
   if (!page) return fail(404, 'העמוד לא נמצא')
   const rows = await PageReport.find({ user: userId, page: page._id }).sort({ createdAt: -1 }).limit(MY_REPORTS_LIMIT).lean()
   return { ok: true, reports: rows.map(myReportShape) }
+}
+
+/**
+ * דיווח "טעות בספר" אחד לעורך העמוד (פתיחה מהניהול, ?report=<id>) — כדי למצוא את הסימון בטקסט. קריאה בלבד.
+ * מותר: מנהל ספרים, המדווח עצמו, או מי שתפס כרגע את העמוד.
+ * @returns {Promise<{ ok: true, report: object } | { ok: false, status: number, error: string }>}
+ */
+export async function getPageReportForEditor(user, id) {
+  const userId = userIdOf(user)
+  if (!userId) return fail(401, 'יש להתחבר')
+  if (!isObjectId(id)) return fail(404, 'הדיווח לא נמצא')
+  const report = await PageReport.findById(id).lean()
+  if (!report || report.kind !== 'book_error') return fail(404, 'הדיווח לא נמצא')
+  if (!hasBooksAccess(user) && String(report.user) !== String(userId)) {
+    const page = await Page.findById(report.page).select('claimedBy').lean()
+    if (!page?.claimedBy || String(page.claimedBy) !== String(userId)) return fail(403, 'אין הרשאה לצפות בדיווח הזה')
+  }
+  return { ok: true, report: editorReportShape(report) }
 }
 
 async function pagesById(ids) {

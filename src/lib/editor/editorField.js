@@ -52,7 +52,8 @@ export function queryAllEditorFields(root) {
  * @returns {null | {
  *   undo: () => boolean, redo: () => boolean, canUndo: () => boolean, canRedo: () => boolean, replaceRange: (from: number, to: number, text: string) => void,
  *   caretTop: (pos: number) => number|null, caretRowY: (pos: number) => number|null,
- *   offsetAtY: (y: number) => number|null, lineMidY: (line: number) => number|null
+ *   offsetAtY: (y: number) => number|null, lineMidY: (line: number) => number|null,
+ *   rangeRects: (from: number, to: number) => DOMRect[]
  * }}
  */
 export function richFieldApi(el) {

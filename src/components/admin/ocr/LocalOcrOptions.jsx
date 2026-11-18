@@ -1,6 +1,7 @@
 import { useId } from 'react'
 import { cx } from '@/components/ui/cx'
-import { LOCAL_LM_OPTIONS, LOCAL_SCRIPT_OPTIONS } from './ocrJobView'
+import { PROOFREADING_OPTION_KEYS } from '@/lib/ocr/proofreadingOptions'
+import { LOCAL_LM_OPTIONS, LOCAL_SCRIPT_OPTIONS, LOCAL_SENSITIVITY_OPTIONS } from './ocrJobView'
 
 /**
  * הגדרות העיבוד במחשב המקומי: מודל שפה (lm) וכתב ברירת מחדל (defaultScript).
@@ -11,11 +12,15 @@ import { LOCAL_LM_OPTIONS, LOCAL_SCRIPT_OPTIONS } from './ocrJobView'
 export default function LocalOcrOptions({ value, onChange, disabled = false, capabilities }) {
   const lmName = useId()
   const scriptName = useId()
+  const sensitivityName = useId()
   const advanced = capabilities?.state === 'available'
   const supportsLm = advanced && capabilities.lmCheck
   const supportsAlts = advanced && capabilities.alternatives
+  const supportsSensitivity = advanced && capabilities.sensitivity === true
   const lexicons = advanced && capabilities.lexiconAvailable ? capabilities.lexicons || [] : []
   const inheritLexicons = () => { const next = { ...value }; delete next.lexicons; onChange(next) }
+  // "normal" is the pipeline default: it is sent as an absent key, so the job keeps the legacy envelope.
+  const setSensitivity = (s) => { const next = { ...value }; if (s === 'normal') delete next.sensitivity; else next.sensitivity = s; onChange(next) }
 
   return (
     <div className="space-y-4">
@@ -53,6 +58,21 @@ export default function LocalOcrOptions({ value, onChange, disabled = false, cap
             ? 'ספריית ההקשר אינה זמינה כרגע במחשב המקומי.'
             : 'כבוי כברירת מחדל. חישוב ראשון עשוי להוסיף 7–25 דקות; הטקסט משתנה רק בבחירה שלכם.'}</p>
       </div>}
+      {supportsSensitivity && <fieldset disabled={disabled}>
+        <legend className="mb-2 text-title-sm text-on-surface">רגישות ההגהה</legend>
+        <div className="grid grid-cols-2 gap-2">
+          {LOCAL_SENSITIVITY_OPTIONS.map((opt) => (
+            <OptionCard
+              key={opt.value}
+              name={sensitivityName}
+              checked={(value.sensitivity || 'normal') === opt.value}
+              onSelect={() => setSensitivity(opt.value)}
+              label={opt.label}
+              desc={opt.desc}
+            />
+          ))}
+        </div>
+      </fieldset>}
       {advanced && capabilities.lexiconAvailable && <fieldset disabled={disabled}>
         <legend className="mb-2 text-title-sm text-on-surface">מילונים נוספים לספר</legend>
         <select aria-label="בחירת מילונים נוספים" value={!Object.hasOwn(value, 'lexicons') ? 'default' : value.lexicons.length ? 'custom' : 'none'}
@@ -72,7 +92,7 @@ export default function LocalOcrOptions({ value, onChange, disabled = false, cap
       {!advanced && <p className="text-label-sm text-on-surface-variant">{capabilities?.state === 'stale'
         ? 'דיווח יכולות ההגהה התיישן. ההגדרות הנוספות יהיו זמינות אחרי חיבור המחשב.'
         : 'הגדרות הגהה נוספות יופיעו אחרי שהמחשב המקומי ידווח על תמיכה בהן.'}</p>}
-      {!advanced && ['lmCheck', 'alts', 'lexicons'].some((key) => Object.hasOwn(value, key)) && <button type="button"
+      {!advanced && PROOFREADING_OPTION_KEYS.some((key) => Object.hasOwn(value, key)) && <button type="button"
         disabled={disabled} className="text-body-sm text-primary underline underline-offset-2"
         onClick={() => onChange({ lm: value.lmCheck === 'off' ? 'off' : value.lm, defaultScript: value.defaultScript })}>
         חזור להגדרות הזיהוי הבסיסיות

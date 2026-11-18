@@ -4,19 +4,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import FloatingPanel from '@/components/ui/FloatingPanel'
 import Button from '@/components/ui/Button'
 import { queryEditorField } from '@/lib/editor/editorField'
-import { applyFieldEdit } from '@/lib/editor/applyFieldEdit'
-import { replaceReviewedWord } from '@/lib/editor/ocrWordReview'
-import { formatPct } from '@/lib/pageProof/wordPopup'
+import { suspectId as idOf } from '@/lib/editor/suspectPopup'
 import { revealCaret } from '@/hooks/useWordTracking'
+import OcrSuspectDetails from './OcrSuspectDetails'
+import { applySuspectReplacement, liveSuspectField, planSuspectReplacement } from './ocrWordActions'
 
-const REASONS = {
-  proofreading_fix: 'הצעת תיקון מההגהה', proofreading_check: 'ההגהה סימנה לבדיקה',
-  low_conf: 'ביטחון זיהוי נמוך', alternatives: 'חלופות זיהוי', language_model: 'הצעת מודל השפה',
-  mixed_script: 'כתבים מעורבים', digit_in_word: 'ספרה בתוך מילה', final_mid: 'אות סופית באמצע מילה',
-  non_final_end: 'אות רגילה בסוף מילה', repeated_char: 'אות חוזרת', inner_punct: 'פיסוק בתוך מילה'
-}
-const SOURCES = { recognition: 'זיהוי', language: 'מודל השפה', context: 'מתאימה להקשר', proofreading: 'הגהת OCR' }
-const idOf = (s) => `${s.column}:${s.start}:${s.text}`
 const EMPTY_SUSPECTS = []
 const defaultPosition = (vp) => ({ x: Math.max(16, vp.width - 440 - 24), y: 96 })
 
@@ -29,7 +21,6 @@ export default function OcrWordReviewPanel({ review, textContainerRef, onApplyTe
   const suspects = review?.suspects || EMPTY_SUSPECTS
   const index = Math.max(0, suspects.findIndex((s) => idOf(s) === selected))
   const current = suspects[index]
-  const fieldFor = (s) => queryEditorField(textContainerRef.current, s?.column || 'content')
   const select = useCallback((s) => {
     setSelected(idOf(s))
     const field = queryEditorField(textContainerRef.current, s?.column || 'content')
@@ -53,11 +44,10 @@ export default function OcrWordReviewPanel({ review, textContainerRef, onApplyTe
 
   const replace = (suggestion) => {
     if (!current) return
-    const field = fieldFor(current)
     // A fetch/render or a manual keystroke may have changed the word while this
     // button was visible. Never apply an old suggestion to a new offset.
-    const next = field && field.value === review.fields[current.column].text
-      ? replaceReviewedWord(field.value, current, suggestion.text) : null
+    const field = liveSuspectField(textContainerRef.current, review, current)
+    const next = planSuspectReplacement(field, current, suggestion.text)
     if (!next) { setStale(true); return }
     setStale(false)
     const following = suspects.length > 1 ? suspects[(index + 1) % suspects.length] : null
@@ -65,11 +55,10 @@ export default function OcrWordReviewPanel({ review, textContainerRef, onApplyTe
       editedColumn: current.column, value: next.value, column: following.column, text: following.text,
       start: following.start + (following.column === current.column && following.start > current.start ? next.value.length - field.value.length : 0),
     }
-    if (!applyFieldEdit(field, () => next, (value) => onApplyText(current.column, value))) pendingNext.current = null
+    if (!applySuspectReplacement(field, current, next, onApplyText)) pendingNext.current = null
   }
   const setAccepted = (word, accept) => {
-    const field = fieldFor(word)
-    if (!field || field.value !== review.fields[word.column].text || onSetAccepted?.(word, accept) === false) {
+    if (!liveSuspectField(textContainerRef.current, review, word) || onSetAccepted?.(word, accept) === false) {
       setStale(true)
       return
     }
@@ -105,30 +94,7 @@ export default function OcrWordReviewPanel({ review, textContainerRef, onApplyTe
         <section aria-label={`הצעות למילה ${current.text}`} className="border-t border-outline-variant pt-3">
           <p className="text-title-md">{current.text}</p>
           {onSetAccepted && <Button variant="tonal" icon="check" onClick={() => setAccepted(current, true)}>המילה תקינה</Button>}
-          <p className="mb-2 text-body-sm text-on-surface-variant">{current.reasons.map((r) => REASONS[r] || r).join(' · ')}</p>
-          {current.p !== null && current.p !== undefined && <p className="text-body-sm">סבירות המילה המקורית לפי הזיהוי: {formatPct(current.p)}</p>}
-          {current.proofreading?.p != null && <p className="text-body-sm">סבירות לשגיאת זיהוי לפי ההגהה: {formatPct(current.proofreading.p)}</p>}
-          {current.proofreading?.why.length > 0 && <ul className="my-2 list-disc ps-5 text-body-sm text-on-surface-variant">
-            {current.proofreading.why.map((reason) => <li key={reason}>{reason}</li>)}
-          </ul>}
-          {current.suggestions.length ? <ul aria-label="הצעות להחלפה" className="mt-2 space-y-2">
-            {current.suggestions.map((s) => <li key={s.text} className="flex items-center justify-between gap-3">
-              <span>{s.text}<small className="ms-2 text-on-surface-variant">{s.sources.map((k) => SOURCES[k]).join(' · ')}{s.p !== null ? ` · ${formatPct(s.p)}` : ''}</small></span>
-              <Button variant="tonal" onClick={() => replace(s)} aria-label={`החלף ב${s.text}`}>החלף</Button>
-            </li>)}
-          </ul> : !current.contextAlternatives?.length && <p className="text-body-sm">אין הצעות חלופיות. אפשר לתקן ישירות בעורך לפי הצילום.</p>}
-          {!!current.contextAlternatives?.length && <div className="mt-3">
-            <p className="text-body-sm text-on-surface-variant">חלופות לפי ההקשר בספרייה. האחוזים הם משקל יחסי בין החלופות.</p>
-            <ul aria-label="חלופות לפי ההקשר" className="mt-2 space-y-2">
-              {current.contextAlternatives.map((s) => <li key={s.text}>
-                <div className="flex items-center justify-between gap-3">
-                  <span>{s.text}{s.p != null && <small className="ms-2 text-on-surface-variant">משקל יחסי: {formatPct(s.p)}</small>}</span>
-                  <Button variant="tonal" onClick={() => replace(s)} aria-label={`החלף ב${s.text}`}>החלף</Button>
-                </div>
-                {s.why && <p className="text-body-sm text-on-surface-variant">{s.why}</p>}
-              </li>)}
-            </ul>
-          </div>}
+          <OcrSuspectDetails word={current} onReplace={replace} />
         </section>
       </> : review?.status !== 'loading' && <p className="mt-3">אין כרגע מילים מסומנות לבדיקה.</p>}
       {onSetAccepted && review?.accepted?.length > 0 && <details className="mt-4 border-t border-outline-variant pt-3">

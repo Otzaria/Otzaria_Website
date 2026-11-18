@@ -87,8 +87,6 @@ jobs:
     needs: gate
     if: needs.gate.outputs.deploy == 'true'
     runs-on: ubuntu-latest
-    outputs:
-      precompressed: ${{ steps.upload-br.outcome == 'success' }}
     # Prerender exercises real data loaders against an isolated empty database.
     # Production still builds against its own database in the staging checkout.
     env:
@@ -142,55 +140,12 @@ jobs:
       - name: Try to Build
         run: npm run build
 
-      - name: Precompress static assets on the runner
-        id: prepare-br
-        if: vars.OTZARIA_STATIC_BROTLI == 'true'
-        continue-on-error: true
-        run: node scripts/precompress-static.mjs prepare .next/static/chunks web-static-brotli
-
-      - name: Save precompressed static assets
-        id: upload-br
-        if: steps.prepare-br.outcome == 'success'
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-static-brotli
-          path: web-static-brotli/
-          compression-level: 0
-          retention-days: 2
-
   # שלב 2: פריסה לשרת (אופטימיזציה בהעתקת קבצים)
   deploy:
     needs: [gate, build-check]
     if: needs.gate.outputs.deploy == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Download precompressed static assets
-        id: download-br
-        if: needs.build-check.outputs.precompressed == 'true'
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: web-static-brotli
-          path: web-static-brotli
-
-      - name: Stage precompressed files on the VPS
-        id: stage-br
-        if: steps.download-br.outcome == 'success' && vars.OTZARIA_SSH_FINGERPRINT != ''
-        continue-on-error: true
-        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
-        with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.SSH_KEY }}
-          port: ${{ secrets.PORT }}
-          fingerprint: ${{ vars.OTZARIA_SSH_FINGERPRINT }}
-          timeout: 30s
-          command_timeout: 2m
-          source: web-static-brotli
-          target: /var/www/.otzaria-static-brotli/${{ github.run_id }}-${{ github.run_attempt }}
-          strip_components: 1
-
       - name: Deploy using SSH
         uses: appleboy/ssh-action@v1.2.5
         with:
@@ -202,13 +157,6 @@ jobs:
           command_timeout: 30m
           script: |
             set -eu
-            stage="/var/www/.otzaria-static-brotli/${{ github.run_id }}-${{ github.run_attempt }}"
-            if [ -d "$stage" ]; then
-              trap 'rm -rf -- "$stage"' EXIT
-              if [ "${{ steps.stage-br.outcome }}" = success ]; then
-                export OTZARIA_BROTLI_INPUT="$stage"
-              fi
-            fi
             # TODO(one-time atomic-release migration): after production has
             # deployed this version successfully and /var/www/otzaria-web is
             # a symlink, remove the fallback and assign repo directly to

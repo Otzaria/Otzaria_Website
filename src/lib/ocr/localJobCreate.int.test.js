@@ -246,4 +246,16 @@ describe('proofreading capability gate and immutable retries', () => {
     expect((await create({ ...req(), options: { ...req().options, lexicons: ['missing'] } })).body.code).toBe('proofreading_unavailable')
     expect(builds).toHaveLength(0)
   })
+  it('stores the selected sensitivity only for a worker that reports support', async () => {
+    const more = { ...REQ, options: { lm: 'rabbinic', defaultScript: 'square', sensitivity: 'more' } }
+    await OcrWorkerState.create({ workerId: 'worker-1', proofreadingCapabilities: capabilities, capabilitiesReceivedAt: new Date() })
+    expect((await create(more)).body.code).toBe('proofreading_unavailable')
+    expect(builds).toHaveLength(0)
+    await OcrWorkerState.updateOne({ workerId: 'worker-1' }, { $set: { proofreadingCapabilities: { ...capabilities, sensitivity: true } } })
+    const attempt = create(more)
+    await vi.waitFor(() => expect(builds).toHaveLength(1))
+    await finishBuild(0, 'sensitivity-pdf')
+    expect((await attempt).status).toBe(202)
+    expect((await OcrJob.findOne({ requestId: REQ.requestId }).lean()).options).toEqual(more.options)
+  })
 })

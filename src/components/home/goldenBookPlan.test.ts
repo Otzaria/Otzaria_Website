@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from 'vitest'
-import { chooseSpriteSrc, OPEN_WAIT_MS, openingDeadline, planBookOpening, readBookConnection, resetSpriteSrcCache } from './goldenBookPlan'
+import { chooseSpriteSrc, OPEN_WAIT_MS, openingDeadline, planBookOpening, readSaveData, resetSpriteSrcCache, SPRITE_PRELOAD_MEDIA } from './goldenBookPlan'
 import { SPRITE_AVIF_SRC, SPRITE_WEBP_SRC } from './goldenBookAssets'
 
 describe('planBookOpening', () => {
@@ -32,19 +32,18 @@ describe('openingDeadline', () => {
   })
 })
 
-describe('readBookConnection', () => {
-  it.each([
-    { saveData: true, effectiveType: '4g' },
-    { effectiveType: '3g' },
-    { effectiveType: '4g', downlink: 0.4 },
-    { effectiveType: '4g', rtt: 600 },
-  ])('מונע הורדת אנימציה כאשר החיבור חלש או מוגבל (%o)', (connection) => {
-    expect(planBookOpening(readBookConnection({ connection }))).toBe('static')
+describe('SPRITE_PRELOAD_MEDIA', () => {
+  it('ההפך המדויק משאילתת reduced-motion — לא מוריד את הרצועה למי שביקש פחות תנועה', () => {
+    expect(SPRITE_PRELOAD_MEDIA).toBe('(prefers-reduced-motion: no-preference)')
   })
+})
 
-  it('מתיר ניסיון בחיבור מהיר ובדפדפן בלי מידע על החיבור', () => {
-    expect(planBookOpening(readBookConnection({ connection: { effectiveType: '4g', downlink: 10, rtt: 30 } }))).toBe('animate')
-    expect(planBookOpening(readBookConnection({}))).toBe('animate')
+describe('readSaveData', () => {
+  it('true רק כש-connection.saveData הוא true', () => {
+    expect(readSaveData({ connection: { saveData: true } })).toBe(true)
+    expect(readSaveData({ connection: { saveData: false } })).toBe(false)
+    expect(readSaveData({})).toBe(false)
+    expect(readSaveData(undefined)).toBe(false)
   })
 })
 

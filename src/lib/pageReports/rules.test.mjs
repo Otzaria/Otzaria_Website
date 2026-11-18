@@ -8,7 +8,7 @@ import {
 const base = { kind: 'book_error', bookPath: 'ספר', pageNumber: 3 }
 
 test('buildErrorMarker', () => {
-  assert.equal(buildErrorMarker('שלם', 'שלום'), '(שלם)[שלום]')
+  assert.equal(buildErrorMarker('שלם', 'שלום'), '(שלם) [שלום]')
 })
 
 test('normalizeReportInput — טעות בספר תקינה', () => {

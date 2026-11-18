@@ -57,7 +57,7 @@ export default function ErrorReportDialog({ initialText, columnLabel = null, onS
   return (
     <Dialog
       title="דיווח על טעות בספר"
-      subtitle={`הטקסט שבספר יסומן בעמוד כ־(טקסט)[תיקון], והדיווח יישלח למנהלים${columnLabel ? ` · ${columnLabel}` : ''}.`}
+      subtitle={`הטקסט שבספר יסומן בעמוד כ־(טקסט) [תיקון], והדיווח יישלח למנהלים${columnLabel ? ` · ${columnLabel}` : ''}.`}
       onClose={onClose}
       dismissible={!submitting}
       footer={
@@ -71,7 +71,7 @@ export default function ErrorReportDialog({ initialText, columnLabel = null, onS
       }
     >
       <form onSubmit={submit} onKeyDown={onKeyDown} className="space-y-4" noValidate>
-        <Notice tone="info">{BOOK_ERROR_SCOPE_TEXT}</Notice>
+        <Notice tone="info">{BOOK_ERROR_SCOPE_TEXT.map((line) => <p key={line}>{line}</p>)}</Notice>
 
         <div>
           <label htmlFor={ids.original} className={FIELD_LABEL}>הטקסט שבספר</label>

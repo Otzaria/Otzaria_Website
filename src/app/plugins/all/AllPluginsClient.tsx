@@ -11,7 +11,7 @@
 // ביצועים: הדף סטטי (ISR), ולכן המסננים מה-URL נקראים מ-window.location אחרי
 // hydration ולא דרך useSearchParams — useSearchParams בזמן prerender מבטל את
 // רינדור הגבול בשרת, וה-HTML הסטטי הכיל רק ספינר במקום רשימת התוספים. עכשיו
-// ה-HTML מכיל את מנת הכרטיסים הראשונה (מצב ברירת המחדל), וקישור עם ?q=/tag=/status=
+// ה-HTML מכיל את הרשימה המלאה (מצב ברירת המחדל), וקישור עם ?q=/tag=/status=
 // מסונן מיד אחרי ה-hydration.
 //
 // כדי שקישור מסונן לא יציג קודם את כל הרשימה ואז "יקפוץ" לרשימה המסוננת (CLS):
@@ -27,7 +27,8 @@
 //   → אזור התוצאות: h2 ובקצה השורה מונה התוצאות + "נקה סינון" כשיש סינון פעיל.
 //   → רשת הכרטיסים (h3). → אזור הסבר "תוספים לאוצריא".
 
-import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 import EmptyState from '@/components/ui/EmptyState'
@@ -60,7 +61,6 @@ const FILTER_PENDING_SCRIPT =
   `s.textContent='#all-plugins-content{display:none}#all-plugins-pending{display:flex}';` +
   `document.head.appendChild(s)}`
 
-const PAGE_SIZE = 24
 const TITLE_ID = 'all-plugins-title'
 const RESULTS_TITLE_ID = 'all-plugins-results-title'
 const INFO_TITLE_ID = 'all-plugins-info-title'
@@ -78,6 +78,7 @@ interface AllPluginsClientProps {
 }
 
 export default function AllPluginsClient({ plugins }: AllPluginsClientProps) {
+  const router = useRouter()
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [activeTag, setActiveTag] = useState('all')
@@ -105,57 +106,42 @@ export default function AllPluginsClient({ plugins }: AllPluginsClientProps) {
     [plugins, searchQuery, statusFilter, activeTag, sortMode]
   )
   const isFiltered = Boolean(searchQuery) || statusFilter !== 'all' || activeTag !== 'all'
-  const [visibleLimit, setVisibleLimit] = useState(PAGE_SIZE)
-  const visiblePlugins = filteredPlugins.slice(0, visibleLimit)
-  const resultsGrid = useRef<HTMLDivElement>(null)
-  const focusNewResult = useRef<number | null>(null)
-
-  useLayoutEffect(() => {
-    if (focusNewResult.current == null) return
-    resultsGrid.current?.querySelectorAll<HTMLAnchorElement>('article h3 a')[focusNewResult.current]?.focus()
-    focusNewResult.current = null
-  }, [visibleLimit])
 
   // אתחול מצב הסינון מה-URL — קישורים שיתופיים (?q=&tag=&status=&sort=).
   // useLayoutEffect: העדכון והרינדור המסונן קורים לפני הצביעה, כך שבניווט בתוך
   // האתר לא נצבעת קודם הרשימה המלאה.
   useLayoutEffect(() => {
-    function restoreFilters() {
-      const params = new URLSearchParams(window.location.search)
-      setSearchQuery(params.get('q') || '')
-      setStatusFilter(params.get('status') || 'all')
-      setActiveTag(params.get('tag') || 'all')
-      const sort = params.get('sort') || ''
-      setSortMode((SORT_MODES as readonly string[]).includes(sort) ? sort : 'recommended')
-      setVisibleLimit(PAGE_SIZE)
-      setResetCount((n) => n + 1)
-      setUrlStateReady(true)
-    }
-    restoreFilters()
+    const params = new URLSearchParams(window.location.search)
+    // קריאה חד-פעמית של ה-URL אחרי hydration (הדף סטטי). setState כאן מכוון: זה סנכרון ממערכת
+    // חיצונית (ה-URL), שאינה זמינה ברינדור השרת, והתזמון (layout effect — לפני הצביעה) הוא מה שמונע
+    // את הבהוב הרשימה המלאה. initializer של useState היה רץ גם בשרת ושובר את ה-hydration.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSearchQuery(params.get('q') || '')
+    setStatusFilter(params.get('status') || 'all')
+    setActiveTag(params.get('tag') || 'all')
+    const sort = params.get('sort') || ''
+    setSortMode((SORT_MODES as readonly string[]).includes(sort) ? sort : 'recommended')
+    setUrlStateReady(true)
     document.getElementById(FILTER_PENDING_STYLE_ID)?.remove()
-    window.addEventListener('popstate', restoreFilters)
-    return () => window.removeEventListener('popstate', restoreFilters)
   }, [])
 
   // שימור מצב הסינון ב-URL — קישורים שיתופיים (?q=&tag=&status=&sort=)
   useEffect(() => {
     if (!urlStateReady) return
-    const url = new URL(window.location.href)
-    const current = url.search
-    for (const [key, value] of [
-      ['q', searchQuery], ['tag', activeTag === 'all' ? '' : activeTag],
-      ['status', statusFilter === 'all' ? '' : statusFilter], ['sort', sortMode === 'recommended' ? '' : sortMode],
-    ]) {
-      if (value) url.searchParams.set(key, value)
-      else url.searchParams.delete(key)
+    const params = new URLSearchParams()
+    if (searchQuery) params.set('q', searchQuery)
+    if (activeTag !== 'all') params.set('tag', activeTag)
+    if (statusFilter !== 'all') params.set('status', statusFilter)
+    if (sortMode !== 'recommended') params.set('sort', sortMode)
+    const next = params.toString()
+    const current = new URLSearchParams(window.location.search).toString()
+    if (next !== current) {
+      router.replace(next ? `/plugins/all?${next}` : '/plugins/all', { scroll: false })
     }
-    if (url.search !== current) {
-      window.history.replaceState(null, '', url)
-    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlStateReady, searchQuery, activeTag, statusFilter, sortMode])
 
   const clearFilters = () => {
-    setVisibleLimit(PAGE_SIZE)
     setSearchQuery('')
     setStatusFilter('all')
     setActiveTag('all')
@@ -166,8 +152,6 @@ export default function AllPluginsClient({ plugins }: AllPluginsClientProps) {
   const resultsCount =
     plugins.length === 0
       ? ''
-      : visiblePlugins.length < filteredPlugins.length
-      ? `מוצגים ${visiblePlugins.length.toLocaleString('he-IL')} מתוך ${filteredPlugins.length.toLocaleString('he-IL')} תוספים תואמים`
       : filteredPlugins.length === plugins.length
       ? `כל התוספים מוצגים (${plugins.length.toLocaleString('he-IL')})`
       : `מוצגים ${filteredPlugins.length.toLocaleString('he-IL')} מתוך ${plugins.length.toLocaleString('he-IL')} תוספים`
@@ -216,14 +200,14 @@ export default function AllPluginsClient({ plugins }: AllPluginsClientProps) {
                   inputId={SEARCH_INPUT_ID}
                   placeholder="שם, תיאור או תגית..."
                   defaultValue={searchQuery}
-                  onSubmit={(q) => { setVisibleLimit(PAGE_SIZE); setSearchQuery(q) }}
+                  onSubmit={(q) => setSearchQuery(q)}
                 />
               </div>
-              <StatusSelect value={statusFilter} onChange={(status) => { setVisibleLimit(PAGE_SIZE); setStatusFilter(status) }} />
-              <SortSelect value={sortMode} onChange={(sort) => { setVisibleLimit(PAGE_SIZE); setSortMode(sort) }} />
+              <StatusSelect value={statusFilter} onChange={setStatusFilter} />
+              <SortSelect value={sortMode} onChange={setSortMode} />
             </div>
 
-            <TagFilterChips tags={tagOptions} activeTag={activeTag} onSelect={(tag) => { setVisibleLimit(PAGE_SIZE); setActiveTag(tag) }} />
+            <TagFilterChips tags={tagOptions} activeTag={activeTag} onSelect={setActiveTag} />
           </Card>
         </StorePageHeader>
 
@@ -260,32 +244,18 @@ export default function AllPluginsClient({ plugins }: AllPluginsClientProps) {
               />
             )
           ) : (
-            <>
-              <div ref={resultsGrid}>
-                <PluginGrid columns="full" labelledBy={RESULTS_TITLE_ID}>
-                  {visiblePlugins.map((plugin, pluginIndex) => (
-                    <PluginCard
-                      priority={pluginIndex === 0}
-                      key={plugin.id}
-                      plugin={plugin}
-                      installState={installState}
-                      onInstall={install}
-                      headingLevel="h3"
-                    />
-                  ))}
-                </PluginGrid>
-              </div>
-              {visiblePlugins.length < filteredPlugins.length && (
-                <div className="mt-6 flex justify-center">
-                  <Button variant="tonal" icon="expand_more" onClick={(event) => {
-                    if (event.detail === 0) focusNewResult.current = visiblePlugins.length
-                    setVisibleLimit((limit) => limit + PAGE_SIZE)
-                  }}>
-                    הצג תוספים נוספים
-                  </Button>
-                </div>
-              )}
-            </>
+            <PluginGrid columns="full" labelledBy={RESULTS_TITLE_ID}>
+              {filteredPlugins.map((plugin, pluginIndex) => (
+                <PluginCard
+                  priority={pluginIndex === 0}
+                  key={plugin.id}
+                  plugin={plugin}
+                  installState={installState}
+                  onInstall={install}
+                  headingLevel="h3"
+                />
+              ))}
+            </PluginGrid>
           )}
         </Section>
 

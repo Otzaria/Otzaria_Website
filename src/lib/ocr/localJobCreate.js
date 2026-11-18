@@ -19,6 +19,7 @@
 // imports יחסיים בלבד.
 import OcrWorkerState from '../../models/OcrWorkerState.js';
 import { proofreadingCapabilitiesView, unsupportedProofreadingOptions } from './proofreadingCapabilities.js';
+import { PROOFREADING_OPTION_KEYS } from './proofreadingOptions.js';
 import OcrJob from '../../models/OcrJob.js';
 import Page from '../../models/Page.js';
 import { buildJobInput } from './localPdf.js';
@@ -100,7 +101,7 @@ export async function createOrResumeLocalJob({ book, req, session, config, now =
       return prepare(taken, lease, req);
     }
 
-    if (['lmCheck', 'alts', 'lexicons'].some((key) => Object.hasOwn(req.options, key))) {
+    if (PROOFREADING_OPTION_KEYS.some((key) => Object.hasOwn(req.options, key))) {
       const worker = await OcrWorkerState.findOne({ workerId: config.workerId }).lean();
       const error = unsupportedProofreadingOptions(req.options, proofreadingCapabilitiesView(worker, now));
       if (error) return { status: 409, body: { error, code: 'proofreading_unavailable' } };

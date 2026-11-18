@@ -307,13 +307,6 @@ rm -rf "$NEW_RELEASE/.next/cache"
 cp -a node_modules "$NEW_RELEASE/node_modules"
 cp -a public/. "$NEW_RELEASE/public/"
 
-# Brotli files are prepared in GitHub CI. Only byte-identical production chunks
-# are eligible for their companion; a missing artifact does not block deploy.
-if [[ -n ${OTZARIA_BROTLI_INPUT:-} && -f "$OTZARIA_BROTLI_INPUT/manifest.json" ]]; then
-  node scripts/precompress-static.mjs install "$NEW_RELEASE/.next/static/chunks" "$OTZARIA_BROTLI_INPUT" ||
-    echo 'Warning: could not install all precompressed static assets' >&2
-fi
-
 # Runtime data is shared rather than copied into immutable releases. During
 # the one-time migration the targets are populated only after PM2 stops.
 mkdir -p "$SHARED_DIR/public"
