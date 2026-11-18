@@ -42,6 +42,7 @@ describe('reportFocusNotice', () => {
     expect(reportFocusNotice({ phase: 'otherPage' }).text).toContain('עמוד אחר')
     expect(reportFocusNotice({ phase: 'error', error: 'אין הרשאה' })).toEqual({ tone: 'error', text: 'אין הרשאה' })
     expect(reportFocusNotice({ phase: 'loading' }).tone).toBe('info')
+    expect(reportFocusNotice({ phase: 'applied', done: 'הסימון הוחלף בתיקון.' }).text).toBe('הסימון הוחלף בתיקון. אפשר לבטל עם Ctrl+Z.')
   })
   it('תווית הסימון', () => {
     expect(reportMarkerLabel(report)).toBe(buildErrorMarker('שלמם', 'שלום'))

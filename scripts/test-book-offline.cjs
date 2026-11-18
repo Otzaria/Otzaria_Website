@@ -8,6 +8,7 @@ const mongoose = req('mongoose');
 const { encode } = req('next-auth/jwt');
 const { chromium } = require(process.env.OTZARIA_PLAYWRIGHT_MODULE || 'playwright');
 const assert = require('node:assert/strict');
+const editorField = page => page.locator('.editor-container textarea, .editor-container [data-rich-textarea][contenteditable="true"]').first();
 const artifacts = process.env.OTZARIA_BOOK_OFFLINE_ARTIFACTS || fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'otzaria-book-offline-'));
 fs.mkdirSync(artifacts, {recursive:true});
 const log = fs.openSync(path.join(artifacts, 'build.log'), 'w');
@@ -77,7 +78,7 @@ let mongod, app, browser;
       resolveFailure();
     } else await route.continue();
   });
-  await page.locator('textarea[data-column="content"], [data-rich-textarea][contenteditable="true"]').first().fill('עריכה שהתאוששה מכשל זמני');
+  await editorField(page).fill('עריכה שהתאוששה מכשל זמני');
   await Promise.race([firstFailure,new Promise((_,reject)=>setTimeout(()=>reject(new Error('Expected transient save failure')),15000))]);
   await page.waitForFunction(k=>JSON.parse(localStorage.getItem(k)).draft===null,recordKey,{timeout:20000});
   assert.equal((await Page.findOne({book:book._id,pageNumber:1})).content,'עריכה שהתאוששה מכשל זמני');
@@ -103,11 +104,7 @@ let mongod, app, browser;
   await page.locator('[data-editor-shell]').waitFor({timeout:20000});
   assert.equal(await page.locator('img[alt]').evaluateAll(els=>els.some(e=>e.naturalWidth>0)),true);
   await page.waitForFunction(()=>Array.from(document.images).some(img=>img.naturalWidth===620));
-  // Switch to code view via the persisted preference; plain textarea is easier to assert.
-  const rich = page.locator('[data-rich-textarea][contenteditable="true"]');
-  const textarea=page.locator('textarea[data-column="content"]');
-  const field=await textarea.count()?textarea:rich;
-  await field.fill('טקסט שנערך ללא חיבור');
+  await editorField(page).fill('טקסט שנערך ללא חיבור');
   await page.getByText('נשמר במכשיר · ממתין לסנכרון עם השרת',{exact:false}).waitFor();
   assert.equal(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).draft.content,recordKey),'טקסט שנערך ללא חיבור');
   await page.reload();
@@ -122,8 +119,7 @@ let mongod, app, browser;
   console.log('Reconnection synced the draft to MongoDB.');
 
   await context.setOffline(true);
-  const currentField=page.locator('textarea[data-column="content"], [data-rich-textarea][contenteditable="true"]').first();
-  await currentField.fill('טיוטה מקומית מתנגשת');
+  await editorField(page).fill('טיוטה מקומית מתנגשת');
   await sharp({create:{width:650,height:950,channels:3,background:'#fefcf0'}}).png().toFile(path.join(imageDirectory,'replaced.png'));
   const newImagePath = imagePath.replace('scan.png','replaced.png');
   await Page.updateOne({book:book._id,pageNumber:1},{$set:{content:'תיקון אחר בשרת',imagePath:newImagePath}});
@@ -147,16 +143,21 @@ let mongod, app, browser;
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);
   await page.screenshot({path:path.join(artifacts,'conflict-mobile.png'),fullPage:true});
   await page.getByRole('button',{name:'השתמש בגרסה המקומית',exact:true}).click();
-  await page.getByRole('button',{name:'אישור',exact:true}).click();
+  // The journal is acknowledged before the handler reloads; wait for the new document.
+  await Promise.all([
+    page.waitForNavigation({waitUntil:'domcontentloaded'}),
+    page.getByRole('button',{name:'אישור',exact:true}).click(),
+  ]);
   await page.waitForFunction(k=>JSON.parse(localStorage.getItem(k)).draft===null,recordKey);
   await page.locator('[data-editor-shell]').waitFor();
+  assert.equal(await editorField(page).evaluate(el=>el.value),'טיוטה מקומית מתנגשת');
   assert.equal((await Page.findOne({book:book._id,pageNumber:1})).content,'טיוטה מקומית מתנגשת');
   assert.equal(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).data.thumbnail,recordKey),newImagePath);
   console.log('Conflict preserved both versions; comparison, backup download, replaced scan and explicit resolution passed at mobile width.');
 
   // Close the document and expire authentication while offline: only the local identity remains.
   await context.setOffline(true);
-  await page.locator('textarea[data-column="content"], [data-rich-textarea][contenteditable="true"]').first().fill('עבודה אחרי סגירה ופקיעת התחברות');
+  await editorField(page).fill('עבודה אחרי סגירה ופקיעת התחברות');
   await context.clearCookies();
   await page.close();
   const reopened=await context.newPage();

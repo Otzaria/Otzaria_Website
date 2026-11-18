@@ -2,6 +2,7 @@
 
 import Button from '@/components/ui/Button'
 import Notice from '@/components/ui/Notice'
+import { decisionText } from '@/lib/pageReports/markerActions'
 import { reportFocusNotice, reportMarkerLabel } from './reportFocusLogic'
 
 /**
@@ -16,6 +17,7 @@ export default function ReportFocusBar({ state, onRehighlight, onDismiss, extra 
   const notice = reportFocusNotice(state)
   const marker = state.report ? reportMarkerLabel(state.report) : ''
   const top = state.placement === 'top'
+  const decision = state.report ? decisionText(state.report) : ''
   return (
     <div data-report-focus-bar data-placement={top ? 'top' : 'bottom'}
       className={`pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4 ${top ? 'top-28' : 'bottom-16 md:bottom-12'}`}>
@@ -35,6 +37,7 @@ export default function ReportFocusBar({ state, onRehighlight, onDismiss, extra 
         >
           <p>{notice.text}</p>
           {marker && <p className="mt-1 [overflow-wrap:anywhere]" dir="rtl"><bdi>{marker}</bdi></p>}
+          {decision && <p className="mt-1 font-semibold [overflow-wrap:anywhere]">{decision}</p>}
         </Notice>
       </div>
     </div>

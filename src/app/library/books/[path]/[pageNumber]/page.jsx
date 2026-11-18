@@ -60,6 +60,8 @@ import { usePageReports } from '@/components/editor/reports/usePageReports'
 import { canReportBookError } from '@/components/editor/reports/reportLogic'
 import ReportFocusBar from '@/components/editor/reports/ReportFocusBar'
 import { useReportFocus } from '@/components/editor/reports/useReportFocus'
+import ReportMarkerActions from '@/components/editor/reports/ReportMarkerActions'
+import { useReportMarkerActions } from '@/components/editor/reports/useReportMarkerActions'
 import RestReminder from '@/components/editor/v2/RestReminder'
 import { buildEditorCommands } from '@/components/editor/v2/editorCommands'
 import {
@@ -1405,6 +1407,8 @@ ${claimRulesText()}`,
     if (column === 'right' || column === 'left') handleColumnChange(column, text)
     else { setContent(text); handleAutoSaveWrapper(text) }
   }, [handleColumnChange, handleAutoSaveWrapper])
+  // דיווח שהוכרע: עזרה בעריכת הסימון — בעורך, במסלול העריכה הרגיל (ההכרעה עצמה לא כותבת לטקסט)
+  const runReportMarkerAction = useReportMarkerActions({ focus: reportFocus, applyColumnText })
 
   const handleRelease = useCallback(() => {
     if (session?.offline || navigator.onLine === false) return showAlert('נדרש חיבור', 'שחרור עמוד דורש חיבור לרשת והתחברות לחשבון.');
@@ -1804,7 +1808,8 @@ ${claimRulesText()}`,
         scanCropFor={scanTracking.scanCropFor}
       />
 
-      <ReportFocusBar state={reportFocus.state} onRehighlight={reportFocus.rehighlight} onDismiss={reportFocus.dismiss} />
+      <ReportFocusBar state={reportFocus.state} onRehighlight={reportFocus.rehighlight} onDismiss={reportFocus.dismiss}
+        extra={canReportErrors ? <ReportMarkerActions state={reportFocus.state} onRun={runReportMarkerAction} /> : null} />
 
       <FindReplaceDialog
         isOpen={showFindReplace} onClose={() => setShowFindReplace(false)}

@@ -44,7 +44,7 @@ export function reportMarkerLabel(report) {
 
 /**
  * ההודעה בפס הדיווח.
- * @param {{ phase: 'loading'|'found'|'missing'|'otherPage'|'error', count?: number, error?: string }} state
+ * @param {{ phase: 'loading'|'found'|'missing'|'otherPage'|'error'|'applied', count?: number, error?: string, done?: string }} state
  * @returns {{ tone: 'info'|'warning'|'error', text: string }}
  */
 export function reportFocusNotice(state) {
@@ -60,6 +60,8 @@ export function reportFocusNotice(state) {
       }
     case 'missing':
       return { tone: 'warning', text: 'הסימון של הדיווח לא נמצא בטקסט העמוד. ייתכן שכבר טופל או נערך.' }
+    case 'applied':
+      return { tone: 'info', text: `${state.done || 'בוצע.'} אפשר לבטל עם Ctrl+Z.` }
     case 'otherPage':
       return { tone: 'warning', text: 'הדיווח שבכתובת שייך לעמוד אחר.' }
     default:
