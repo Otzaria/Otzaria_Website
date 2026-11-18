@@ -24,12 +24,17 @@
      Markdown רגיל וקוד בתוך שורה נשארים באותו פוסט. אחר כך הוא משייך אותו ל-`APP_REPORTS_TRIAGE_ASSIGNEE`.
    - `hold`: לא נפתח. ההחלטה והפענוח נשמרים בדיווח ומוצגים בדף הניהול. עם `linkIssue` הדיווח מקושר
      לכפילות (כמו צירוף שקט): הסנכרון מעדכן את מצבה, ומדווח עם מייל מקבל מייל כשהיא נסגרת.
+     עם `commentOnLink` הפענוח נכתב גם כתגובה בכפילות, פעם אחת בכל סבב בדיקה. כך מידע חדש על בעיה שכבר דווחה
+     מגיע ל-issue הקיים בלי לפתוח issue נוסף. אם GitHub נכשל, ה-cron משלים את התגובה.
    - `questions`: נשלחים למדווח במייל עם כתובת המענה של הדיווח, אם השאיר מייל ולא הסיר את עצמו. אם יש issue,
      נכתבת בו גם תגובה כמו בפנייה ידנית.
    - `awaitingReply` (רק עם `hold`): הדיווח מחכה לתשובה. כשאי אפשר לשאול בפועל, ההחלטה הופכת ל-`open`:
      אין מייל, המדווח הסיר את עצמו, `APP_REPORTS_REPLY_DOMAIN` לא מוגדר, או שהמייל נכשל.
 3. **תשובת המדווח** על דיווח שלא נפתח, או שעוד ממתין, נשמרת עם `issueComment: 'triage'` ולא מתפרסמת.
    - דיווח שלא נפתח חוזר ל-`pending` עם deadline חדש, וקישור הכפילות שלו מתבטל.
+   - תשובה מכתובת אחרת מזו שבדיווח (המדווח ענה מחשבון אחר) מפעילה בדיקה חוזרת רק כשהדיווח ממתין לתשובה
+     (`awaitingReply`), ומגיעה לשירות עם `fromReporter: false`. היא נשמרת כ-`held`, ולא מתפרסמת ב-issue גם אם הוא נפתח.
+     רק התשובה הזרה הראשונה מאז השאלה האחרונה מפעילה בדיקה; הבאות אחריה נשמרות בלי להפעיל. השירות רואה אותן רק אם הגיעו אחרי השאלה האחרונה, עד 3 אחרונות, כל אחת עד 2000 תווים.
    - תשובה שהגיעה בזמן שהבדיקה רצה מפעילה בדיקה חוזרת אחרי `hold`.
    - כשהדיווח נפתח בכל דרך, כולל `timeout`, התשובות האלה עוברות ל-`pending` ומתפרסמות ב-issue.
    - אחרי 5 בדיקות לאותו דיווח, תשובה נוספת כבר לא מפעילה בדיקה, והדיווח נפתח בסנכרון הבא.
@@ -62,7 +67,7 @@
 |---|---|
 | `GET /api/app-reports/triage` | `{items: [{reportId, requestedAt, deadline, runs}], late: [{reportId, issueNumber, merged}]}`. `items` הם עד 50 הדיווחים הממתינים, מהוותיק לחדש. `late` הם דיווחים שנפתחו בלי החלטה (`timeout` או `forced`) בשלושת הימים האחרונים ועוד לא קיבלו החלטה מאוחרת. |
 | `GET /api/app-reports/triage/{reportId}` | `{reportId, state, issuePending, issueNumber, issueUrl, merged}`. בדיווח `held` הערכים `issueNumber` ו-`issueUrl` הם `null`, גם כשהוא מקושר לכפילות. `404` אם הדיווח לא קיים. |
-| `GET /api/app-reports/triage/{reportId}/report` | חומר הבדיקה: `{reportId, type, trigger, title, description, stepsToReproduce, appVersion, platform, osVersion, arch, signature, createdAt, canContact, triage: {state, runs, lateDecidedAt}, issueNumber, contactLog: [{direction, sentAt, subject, message}], files: {errors, diagnostics, images}}`. בלי כתובת המייל: `canContact` אומר רק אם אפשר לשאול. ב-`contactLog` יש רק תשובות מכתובת המדווח. |
+| `GET /api/app-reports/triage/{reportId}/report` | חומר הבדיקה: `{reportId, type, trigger, title, description, stepsToReproduce, appVersion, platform, osVersion, arch, signature, createdAt, canContact, triage: {state, runs, lateDecidedAt}, issueNumber, contactLog: [{direction, sentAt, subject, message, fromReporter?}], files: {errors, diagnostics, images}}`. בלי כתובות המייל: `canContact` אומר רק אם אפשר לשאול. `fromReporter` קיים רק בפריטי `direction: 'in'`: `false` אומר שהיא נשלחה מכתובת אחרת, ואין לצטט אותה בפענוח. תשובות כאלה נחשפות רק אם הגיעו אחרי השאלה האחרונה ששלחנו (בלי שאלה: אף אחת), לכל היותר 3 האחרונות, וההודעה מקוצרת ל-2000 תווים. |
 | `GET /api/app-reports/triage/{reportId}/files/{kind}` | `errors`, `diagnostics` או `image-{n}` (מ-0), כגוף הקובץ. ה-dump של הקריסה לא מוגש, כי הוא מכיל את זיכרון התהליך. `404` אם אין קובץ כזה. |
 | `POST /api/app-reports/triage/{reportId}` | גוף ההחלטה (טבלה למטה). `200`: המצב אחרי ההחלטה, ועוד `questionsSent`. ב-`hold` מוחזר גם `retriage`. בהחלטה על דיווח שכבר נפתח מוחזר `late: true`. `409`: כבר הוחלט, והתשובה כוללת את המצב. `422`: גוף לא תקין (`field`). `404`: הדיווח לא קיים. |
 
@@ -75,6 +80,7 @@
 | `summary` | הפענוח ב-Markdown, עד 20,000 תווים. מוצג בדף הניהול, ונכתב ב-issue: בפוסט של הדיווח, או בתגובה נפרדת כשה-issue כבר נפתח, כשהפוסט יחרוג ממגבלת האורך של GitHub, או כשהטקסט של המדווח כולל HTML או גדרות קוד. |
 | `questions` | עד 5 שאלות, כל אחת עד 500 תווים (אופציונלי) |
 | `linkIssue` | מספר issue של הכפילות או התיקון, רק עם `hold` (אופציונלי) |
+| `commentOnLink` | `true`: הפענוח נכתב כתגובה ב-`linkIssue`. דורש `linkIssue`, ולא יחד עם `awaitingReply`. בהחלטה על דיווח שכבר נפתח אין לו השפעה (אופציונלי) |
 | `awaitingReply` | רק עם `hold` ועם שאלות (אופציונלי) |
 | `note` | הערה קצרה לשורת הסיכום שבתחתית התגובה, עד 500 תווים (אופציונלי) |
 

@@ -26,6 +26,31 @@ test('new options preserve domain, normalize names and distinguish omitted versu
   assert.deepEqual(toEnvelope({ _id: 'job', workerId: 'w', createdAt: new Date(0), inputSha256: 'a', options: req.value.options }).options, req.value.options);
 });
 
+test('sensitivity is optional, validated, fingerprinted and gated on the worker report', () => {
+  const f = (options) => requestFingerprint({ bookId: 'book', existingTextMode: 'overwrite', options });
+  const old = normalizeLocalRequest(base).value;
+  const more = normalizeLocalRequest({ ...base, options: { ...base.options, sensitivity: 'more' } });
+  assert.equal(more.ok, true);
+  assert.deepEqual(more.value.options, { ...base.options, sensitivity: 'more' });
+  assert.notEqual(f(more.value.options), f(old.options));
+  // An absent key keeps the exact legacy fingerprint and envelope.
+  assert.equal(f(old.options), f({ lm: 'modern', defaultScript: 'square' }));
+  assert.deepEqual(toEnvelope({ _id: 'job', workerId: 'w', createdAt: new Date(0), inputSha256: 'a', options: old.options }).options, base.options);
+  assert.deepEqual(toEnvelope({ _id: 'job', workerId: 'w', createdAt: new Date(0), inputSha256: 'a', options: more.value.options }).options,
+    { ...base.options, sensitivity: 'more' });
+  for (const bad of ['off', 'MORE', true, null, '']) {
+    assert.equal(normalizeLocalRequest({ ...base, options: { ...base.options, sensitivity: bad } }).ok, false);
+  }
+  const received = new Date('2026-11-16T10:00:00Z');
+  const view = (p) => proofreadingCapabilitiesView({ proofreadingCapabilities: normalizeCapabilities({ ...snapshot, proofreading: p }), capabilitiesReceivedAt: received }, received);
+  const legacy = view(snapshot.proofreading);
+  assert.equal(Object.hasOwn(legacy, 'sensitivity'), false);
+  assert.match(unsupportedProofreadingOptions({ ...base.options, sensitivity: 'more' }, legacy), /רגישות ההגהה/);
+  assert.equal(unsupportedProofreadingOptions({ ...base.options, sensitivity: 'more' }, view({ ...snapshot.proofreading, sensitivity: true })), null);
+  assert.ok(unsupportedProofreadingOptions({ ...base.options, sensitivity: 'more' }, view({ ...snapshot.proofreading, sensitivity: false })));
+  assert.equal(normalizeCapabilities({ ...snapshot, proofreading: { ...snapshot.proofreading, sensitivity: 'yes' } }), null);
+});
+
 test('context alternatives are bounded and distinct from old fix suggestions', () => {
   const list = cleanContextAlternatives([
     { text: 'word', p: .9 }, { text: 'old' }, { text: 'split word', p: .8, why: 'two words' },

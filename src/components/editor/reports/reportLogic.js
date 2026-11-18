@@ -153,11 +153,14 @@ export function canReportBookError({ claimState, role }) {
   return claimState === 'mine' || hasBooksAccess(role)
 }
 
-/** הדיווח רק על טעות שבספר עצמו; טעות זיהוי מתקנים ישירות בטקסט */
-export const BOOK_ERROR_SCOPE_HINT = 'טעות שמופיעה בצילום. טעות זיהוי — מתקנים בטקסט.'
+/**
+ * הדיווח רק על טעות שבספר עצמו; טעות זיהוי מתקנים ישירות בטקסט. שני רעיונות נפרדים — שתי שורות נפרדות
+ * בתפריט (קצרות, כדי שהתפריט לא יתרחב).
+ */
+export const BOOK_ERROR_SCOPE_HINT = Object.freeze(['רק לטעות שבספר עצמו, כפי שמופיעה בצילום', 'טעות זיהוי (OCR) מתקנים ישירות בטקסט'])
 
-/** שורת ההסבר בראש חלון הדיווח */
-export const BOOK_ERROR_SCOPE_TEXT = 'הדיווח הזה מיועד לטעות שנמצאת בספר המודפס עצמו, כפי שהיא מופיעה בצילום. טעות זיהוי (OCR) — מתקנים ישירות בטקסט, בלי דיווח.'
+/** ההסבר בראש חלון הדיווח — שתי שורות נפרדות, כמו בתפריט */
+export const BOOK_ERROR_SCOPE_TEXT = Object.freeze(['רק לטעות שנמצאת בספר המודפס עצמו, כפי שהיא מופיעה בצילום.', 'טעות זיהוי (OCR) מתקנים ישירות בטקסט, בלי דיווח.'])
 
 /**
  * פריטי תפריט הלחיצה הימנית (בלי הפעולות עצמן).
@@ -174,7 +177,7 @@ export function editorMenuModel({ hasSelection, canReport, online }) {
       disabled: !online || !canReport,
       hint: !online ? offlineHint
         : !canReport ? 'רק מי שתפס את העמוד יכול לדווח על טעות, כי הדיווח משנה את הטקסט'
-          : hasSelection ? BOOK_ERROR_SCOPE_HINT : `על המילה שתחת הסמן. ${BOOK_ERROR_SCOPE_HINT}`,
+          : hasSelection ? BOOK_ERROR_SCOPE_HINT : ['על המילה שתחת הסמן', ...BOOK_ERROR_SCOPE_HINT],
     },
     {
       id: 'pageMessage',
@@ -190,7 +193,6 @@ export function editorMenuModel({ hasSelection, canReport, online }) {
   ]
 }
 
-export const BROWSER_MENU_HINT = 'Shift + לחצן ימני — התפריט הרגיל של הדפדפן'
 export const PASTE_FALLBACK_MESSAGE = 'הדפדפן לא מאפשר להדביק מהתפריט. אפשר להדביק עם Ctrl+V.'
 export const COPY_FALLBACK_MESSAGE = 'הדפדפן לא מאפשר להעתיק מהתפריט. אפשר להעתיק עם Ctrl+C.'
 export const CUT_FALLBACK_MESSAGE = 'הדפדפן לא מאפשר לגזור מהתפריט. אפשר לגזור עם Ctrl+X.'

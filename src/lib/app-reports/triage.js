@@ -29,6 +29,7 @@ export function pendingTriage(now, config, runs = 1) {
   return {
     state: 'pending', requestedAt: now, deadline: new Date(now.getTime() + config.triageWaitMs),
     decidedAt: null, runs, awaitingReply: false, questionsPending: false, questionsLeaseUntil: null, questionsSentAt: null,
+    commentOnLink: false, followUp: null,
   };
 }
 
@@ -64,6 +65,8 @@ const fail = (field, error) => ({ ok: false, field, error });
 export const TRIAGE_MARKER = '<!-- app-report-triage -->';
 const BIDI_CONTROL_RE = /[\u202a-\u202e\u2066-\u2069]/g;
 const reportMarker = (reportId) => `<!-- app-report-triage-report: ${reportId} -->`;
+// תגובה בכפילות נכתבת בכל סבב: אחרי בדיקה חוזרת יש בה מידע חדש (למשל תשובת המדווח)
+const linkMarker = (reportId, runs) => `<!-- app-report-triage-link: ${reportId}:${runs || 1} -->`;
 const VERDICT_HE = {
   fixed: 'תוקן ב-dev', fix_pending: 'תיקון ב-PR פתוח', duplicate: 'כפול', external: 'סיבה חיצונית',
   no_info: 'אין מידע לפעול לפיו', ask_reporter: 'נדרש מידע מהמדווח', needs_human: 'דורש בדיקה',
@@ -77,9 +80,10 @@ export function triageComment(reportId, t) {
   // קישורים והפניות #123 נשארים בכוונה: הפענוח הוא Markdown שמפנה ל-PR-ים ול-issues.
   const summary = String(t.summary || '').replace(BIDI_CONTROL_RE, '').replace(/<!--/g, '&lt;!--')
     .replace(/@(?=[A-Za-z0-9])/g, '@\u200b').replace(/!\[/g, '!\u200b[');
-  const footer = [`בדיקה אוטומטית · ${VERDICT_HE[t.verdict] || t.verdict} · ודאות ${CONFIDENCE_HE[t.confidence] || t.confidence}`,
+  const footer = [`בדיקה אוטומטית · ${t.commentOnLink ? 'מידע חדש מדיווח נוסף · ' : ''}${VERDICT_HE[t.verdict] || t.verdict} · ודאות ${CONFIDENCE_HE[t.confidence] || t.confidence}`,
     t.note ? String(t.note).replace(BIDI_CONTROL_RE, '').replace(/<|>/g, '') : ''].filter(Boolean).join(' · ');
-  return `${TRIAGE_MARKER}\n${summary}\n\n---\n<sub>${footer}</sub>\n\n${reportMarker(reportId)}`;
+  const markers = t.commentOnLink ? `${reportMarker(reportId)}\n${linkMarker(reportId, t.runs)}` : reportMarker(reportId);
+  return `${TRIAGE_MARKER}\n${summary}\n\n---\n<sub>${footer}</sub>\n\n${markers}`;
 }
 
 /** הבעלים המקורי נשאר merged=false גם אחרי שדיווחים אחרים צורפו לכרטיס שלו. */
@@ -109,7 +113,8 @@ export async function runTriageFollowUp(reportId, github, deps) {
   const f = doc.triage.followUp;
   try {
     const comments = f.summaryPosted ? [] : await github.listComments(doc.issueNumber);
-    if (!f.summaryPosted && !comments.some((c) => c.body.includes(reportMarker(reportId)))) {
+    const marker = doc.triage.commentOnLink ? linkMarker(reportId, doc.triage.runs) : reportMarker(reportId);
+    if (!f.summaryPosted && !comments.some((c) => c.body.includes(marker))) {
       await github.createComment(doc.issueNumber, triageComment(reportId, doc.triage));
     }
     if (f.assign) await github.addAssignees(doc.issueNumber, [deps.config.triageAssignee]);
@@ -129,11 +134,11 @@ export async function runTriageFollowUp(reportId, github, deps) {
 
 /**
  * ההחלטה של השירות. open = לפתוח (או לצרף ל-issue פתוח עם אותה חתימה); hold = לא לפתוח.
- * @returns {{ok:true, value:{action:string, verdict:string, confidence:string, summary:string, questions:string[], linkIssue:number|null, awaitingReply:boolean}}|{ok:false, field:string, error:string}}
+ * @returns {{ok:true, value:{action:string, verdict:string, confidence:string, summary:string, questions:string[], linkIssue:number|null, commentOnLink:boolean, awaitingReply:boolean}}|{ok:false, field:string, error:string}}
  */
 export function validateTriageDecision(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return fail('body', 'object expected');
-  const { action, verdict, confidence, summary, questions = [], linkIssue = null, awaitingReply = false, note = '', runs = null } = raw;
+  const { action, verdict, confidence, summary, questions = [], linkIssue = null, commentOnLink = false, awaitingReply = false, note = '', runs = null } = raw;
   if (runs !== null && !(Number.isSafeInteger(runs) && runs > 0)) return fail('runs', 'positive integer');
   if (action !== 'open' && action !== 'hold') return fail('action', 'open|hold');
   if (!TRIAGE_VERDICTS.includes(verdict)) return fail('verdict', 'unknown');
@@ -144,13 +149,15 @@ export function validateTriageDecision(raw) {
     return fail('questions', `up to ${MAX_QUESTIONS} strings of 1..${MAX_QUESTION} chars`);
   }
   if (linkIssue !== null && !(Number.isSafeInteger(linkIssue) && linkIssue > 0)) return fail('linkIssue', 'positive integer');
+  if (typeof commentOnLink !== 'boolean') return fail('commentOnLink', 'boolean');
+  if (commentOnLink && (linkIssue === null || awaitingReply === true)) return fail('commentOnLink', 'requires linkIssue, without awaitingReply');
   if (typeof awaitingReply !== 'boolean') return fail('awaitingReply', 'boolean');
   if (typeof note !== 'string' || note.length > 500) return fail('note', 'up to 500 chars');
   if (action === 'open' && (linkIssue !== null || awaitingReply)) return fail('action', 'linkIssue/awaitingReply only with hold');
   if (awaitingReply && !questions.length) return fail('awaitingReply', 'requires questions');
   return {
     ok: true,
-    value: { action, verdict, confidence, summary: summary.trim(), questions: questions.map((q) => q.trim()), linkIssue, awaitingReply, note: note.trim(), runs },
+    value: { action, verdict, confidence, summary: summary.trim(), questions: questions.map((q) => q.trim()), linkIssue, commentOnLink, awaitingReply, note: note.trim(), runs },
   };
 }
 
@@ -177,16 +184,31 @@ export const UNLINKED = Object.freeze({
  * בדיקה חוזרת של דיווח שלא נפתח (המדווח השיב). ממתין שוב לפרסום, כך שגם אם השירות לא יענה — ייפתח.
  * @returns {Promise<boolean>} האם הבקשה נרשמה
  */
-export async function requestRetriage(reportId, deps) {
+/**
+ * תשובות מכתובת אחרת (`issueComment: 'held'`) שהגיעו אחרי השאלה האחרונה ששלחנו (`out`), לפי סדר ההתכתבות.
+ * `beforeDate`: רק שאלות שנשלחו עד המועד הזה נחשבות "השאלה האחרונה" (לבדיקה שכבר רצה, שהשאלה החדשה שלה לא נחשבת).
+ * בלי שאלה כלל: כל התשובות הזרות (`lastOut: -1`).
+ */
+export function heldRepliesAfterLastQuestion(contactLog, beforeDate = null) {
+  const log = contactLog || [];
+  let lastOut = -1;
+  log.forEach((c, i) => {
+    if ((c.direction || 'out') === 'out' && (!beforeDate || !c.sentAt || new Date(c.sentAt) <= new Date(beforeDate))) lastOut = i;
+  });
+  return { lastOut, held: log.slice(lastOut + 1).filter((c) => c.direction === 'in' && c.issueComment === 'held') };
+}
+
+export async function requestRetriage(reportId, deps, { requireAwaitingReply = false } = {}) {
   const now = deps.now || new Date();
-  const doc = await AppReport.findOne({ reportId, 'triage.state': 'held' }).select('triage').lean();
+  const filter = { reportId, 'triage.state': 'held', ...(requireAwaitingReply ? { 'triage.awaitingReply': true } : {}) };
+  const doc = await AppReport.findOne(filter).select('triage').lean();
   if (!doc) return false;
   const runs = (doc.triage.runs || 0) + 1;
   const next = pendingTriage(now, deps.config, runs);
   // המדווח השיב שוב ושוב: לא בודקים בלי סוף — נפתח ב-cron הבא
   if (runs > MAX_TRIAGE_RUNS) Object.assign(next, { state: 'opened', deadline: now, decidedAt: now, followUp: null });
   const upd = await AppReport.updateOne(
-    { reportId, 'triage.state': 'held', 'triage.decidedAt': doc.triage.decidedAt },
+    { ...filter, 'triage.decidedAt': doc.triage.decidedAt },
     { $set: { ...UNLINKED, issuePending: true, issueError: null, triage: { ...doc.triage, ...next } } },
   );
   if (!upd.modifiedCount) return false;

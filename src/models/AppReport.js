@@ -95,6 +95,8 @@ const TriageSchema = new mongoose.Schema({
   questionsLeaseUntil: { type: Date, default: null },
   awaitingReply: { type: Boolean, default: false },
   linkedIssue: { type: Number, default: null },
+  // הפענוח נכתב כתגובה ב-linkedIssue: מידע חדש על בעיה שכבר דווחה
+  commentOnLink: { type: Boolean, default: false },
   note: { type: String, default: '', maxlength: 500 },
   // החלטה שהגיעה אחרי שהדיווח כבר נפתח (timeout / ידני): פעם אחת
   lateDecidedAt: { type: Date, default: null },

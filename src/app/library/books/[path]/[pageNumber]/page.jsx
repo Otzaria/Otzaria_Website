@@ -52,6 +52,7 @@ import MobileActionBar from '@/components/editor/v2/MobileActionBar'
 import { pageClaimState, canFinishPage } from '@/components/editor/v2/pageClaim'
 import DisplaySettingsSheet from '@/components/editor/v2/DisplaySettingsSheet'
 import OcrWordReviewPanel from '@/components/editor/v2/OcrWordReviewPanel'
+import OcrWordPopup from '@/components/editor/v2/OcrWordPopup'
 import { setWordReviewAccepted } from '@/lib/editor/ocrWordReview'
 import FinishPageDialog from '@/components/editor/v2/FinishPageDialog'
 import PageReportsLayer from '@/components/editor/reports/PageReportsLayer'
@@ -1531,6 +1532,19 @@ ${claimRulesText()}`,
 
   // מצב המעקב לשורת המצב — מבלוק המעקב (usePageTracking) למעלה
   const tracking = scanTracking.tracking
+  // מילה חשודה: "המילה תקינה" / "החזר לבדיקה" והחלפה בהצעה — משותף לחלונית "מילים חשודות"
+  // ולחלונית שעל המילה (OcrWordPopup)
+  const setOcrWordAccepted = (word, accept) => {
+    const next = setWordReviewAccepted(reviewTextFields, ocrWordReview, word, ocrReviewRevision, accept)
+    if (!next) return false
+    setWordReviewState({ pageKey: wordReviewPageKey, revision: ocrReviewRevision, value: next })
+    handleAutoSaveWrapper(content, leftColumn, rightColumn, twoColumns, isContentSplit, next)
+    return true
+  }
+  const applyOcrReviewText = (column, value) => {
+    if (column === 'right' || column === 'left') handleColumnChange(column, value)
+    else { setContent(value); handleAutoSaveWrapper(value) }
+  }
 
   const statusShortcuts = [
     { keys: shortcutKeys(userShortcuts.commandPalette), label: 'פקודות' },
@@ -1876,18 +1890,14 @@ ${claimRulesText()}`,
 
       {showOcrReview && (
         <OcrWordReviewPanel key={`${bookPath}:${pageNumber}`} review={scanTracking.review} textContainerRef={textEditorContainerRef}
-          onSetAccepted={(word, accept) => {
-            const next = setWordReviewAccepted(reviewTextFields, ocrWordReview, word, ocrReviewRevision, accept)
-            if (!next) return false
-            setWordReviewState({ pageKey: wordReviewPageKey, revision: ocrReviewRevision, value: next })
-            handleAutoSaveWrapper(content, leftColumn, rightColumn, twoColumns, isContentSplit, next)
-            return true
-          }}
-          onApplyText={(column, value) => {
-            if (column === 'right' || column === 'left') handleColumnChange(column, value)
-            else { setContent(value); handleAutoSaveWrapper(value) }
-          }}
+          onSetAccepted={setOcrWordAccepted} onApplyText={applyOcrReviewText}
           onClose={() => setShowOcrReview(false)} />
+      )}
+
+      {/* אותן פעולות כמו בחלונית "מילים חשודות" — בחלונית קטנה על המילה עצמה (עמידה, לחיצה, F8) */}
+      {!loading && !error && (
+        <OcrWordPopup key={`popup:${bookPath}:${pageNumber}`} review={scanTracking.review} textContainerRef={textEditorContainerRef}
+          onSetAccepted={setOcrWordAccepted} onApplyText={applyOcrReviewText} />
       )}
 
       {showFinishDialog && (

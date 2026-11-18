@@ -132,7 +132,7 @@ test('decisionEdit / finalVersionLine', () => {
   assert.equal(decisionEdit(r, { original: 'בראשת', proposed: 'בראשית' }), null)
   assert.deepEqual(decisionEdit(r, { original: 'בראשת', proposed: 'ברשית' }), { original: 'בראשת', proposed: 'ברשית' })
   assert.equal(finalVersionLine(r), null)
-  assert.deepEqual(finalVersionLine({ ...r, finalOriginal: 'בראשת', finalProposed: 'ברשית' }), { reported: '(בראשת)[בראשית]', decided: '(בראשת)[ברשית]' })
+  assert.deepEqual(finalVersionLine({ ...r, finalOriginal: 'בראשת', finalProposed: 'ברשית' }), { reported: '(בראשת) [בראשית]', decided: '(בראשת) [ברשית]' })
 })
 
 

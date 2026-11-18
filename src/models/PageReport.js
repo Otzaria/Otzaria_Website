@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import { REPORT_KINDS, ALL_STATUSES, COLUMNS } from '../lib/pageReports/rules.js';
 import { CROP_SOURCES, CROP_LEVELS } from '../lib/pageReports/cropRect.js';
 
-// דיווח על עמוד בספר מצולם: טעות בספר עצמו (סימון "(מקור)[תיקון]" בטקסט) או הודעה חופשית למנהלים.
+// דיווח על עמוד בספר מצולם: טעות בספר עצמו (סימון "(מקור) [תיקון]" בטקסט) או הודעה חופשית למנהלים.
 // ראו src/lib/pageReports/rules.js לכללים המלאים.
 const resolutionSchema = new mongoose.Schema(
   {

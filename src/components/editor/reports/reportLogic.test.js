@@ -63,8 +63,8 @@ describe('buildErrorSubmission', () => {
     const res = buildErrorSubmission({ ...base, value, start: 8, end: 13, original: 'יהודה', proposed: 'יהודא', note: ' בדקתי ' })
     expect(res.ok).toBe(true)
     if (!res.ok) return
-    expect(res.newValue).toBe('אמר רבי (יהודה)[יהודא] בשם רב')
-    expect(res.caret).toBe(8 + '(יהודה)[יהודא]'.length)
+    expect(res.newValue).toBe('אמר רבי (יהודה) [יהודא] בשם רב')
+    expect(res.caret).toBe(8 + '(יהודה) [יהודא]'.length)
     expect(res.body).toMatchObject({
       kind: 'book_error', bookPath: 'ספר', pageNumber: 3, column: 'content',
       original: 'יהודה', proposed: 'יהודא', offset: 8,
@@ -106,13 +106,13 @@ describe('buildErrorSubmission', () => {
     const end = value.indexOf(' בָּרָא')
     const original = value.slice(0, end)
     const res = buildErrorSubmission({ ...base, value, start: 0, end, original, proposed: 'בְּרֵאשִׁית ב' })
-    expect(res.ok && res.newValue).toBe(`(${original})[בְּרֵאשִׁית ב] בָּרָא`)
+    expect(res.ok && res.newValue).toBe(`(${original}) [בְּרֵאשִׁית ב] בָּרָא`)
     expect(res.ok && res.body.original).toBe(original)
   })
 
   it('טווח ריק — הסימון נכנס במקום הסמן (תיקון בלבד)', () => {
     const res = buildErrorSubmission({ ...base, value: 'אב גד', start: 2, end: 2, original: '', proposed: 'ו' })
-    expect(res.ok && res.newValue).toBe('אב()[ו] גד')
+    expect(res.ok && res.newValue).toBe('אב() [ו] גד')
   })
 })
 
@@ -158,6 +158,8 @@ describe('הרשאות ותפריט', () => {
     const report = items.find((i) => i.id === 'reportError')
     expect(report.disabled).toBe(true)
     expect(report.hint).toMatch(/תפס/)
+    const allowed = editorMenuModel({ hasSelection: true, canReport: true, online: true }).find((i) => i.id === 'reportError')
+    expect(allowed.hint).toEqual(['רק לטעות שבספר עצמו, כפי שמופיעה בצילום', 'טעות זיהוי (OCR) מתקנים ישירות בטקסט'])
     expect(items.find((i) => i.id === 'pageMessage').disabled).toBe(false)
   })
 
@@ -166,8 +168,7 @@ describe('הרשאות ותפריט', () => {
     expect(items.find((i) => i.id === 'cut').disabled).toBe(true)
     expect(items.find((i) => i.id === 'copy').disabled).toBe(true)
     expect(items.find((i) => i.id === 'paste').disabled).toBeFalsy()
-    expect(items.find((i) => i.id === 'reportError').hint).toMatch(/המילה/)
-    expect(items.find((i) => i.id === 'reportError').hint).toMatch(/טעות זיהוי/)
+    expect(items.find((i) => i.id === 'reportError').hint).toEqual(['על המילה שתחת הסמן', 'רק לטעות שבספר עצמו, כפי שמופיעה בצילום', 'טעות זיהוי (OCR) מתקנים ישירות בטקסט'])
   })
 
   it('editorMenuModel — בלי רשת: שני הדיווחים מושבתים', () => {
