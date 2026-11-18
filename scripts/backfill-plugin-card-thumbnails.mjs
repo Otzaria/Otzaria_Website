@@ -1,3 +1,9 @@
+// יצירת תמונות ממוזערות (thumbnails) לכרטיסי תוספים שכבר קיימים באחסון.
+// הרצה ידנית בלבד: node scripts/backfill-plugin-card-thumbnails.mjs [מזהי תוספים]
+// חובה להריץ עם אותו PLUGIN_STORAGE_DIR של השרת, אחרת הסקריפט יעבוד על תיקייה אחרת.
+// שמות קובצי התמונה הממוזערת תלויים ב-inode וב-mtime של קובץ המקור, לכן חובה להריץ
+// מחדש אחרי העתקה/שחזור של האחסון (ההעתקה משנה inode/mtime והממוזערות הישנות לא יתאימו).
+// אין ניקוי יתומים ואין dry-run.
 import { opendir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'

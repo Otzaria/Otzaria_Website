@@ -29,6 +29,9 @@ export async function clearImageOptCache(pluginId) {
   } catch { /* ignore */ }
 }
 
+// תמונות ממוזערות לכרטיסים: scripts/backfill-plugin-card-thumbnails.mjs משלים אותן ידנית
+// לתוספים קיימים. חובה להריץ אותו עם אותו PLUGIN_STORAGE_DIR של השרת, ולהריץ מחדש אחרי
+// העתקה/שחזור של האחסון — שם הקובץ תלוי ב-inode וב-mtime של המקור, והעתקה משנה אותם.
 // הגרסה הממוזערת שייכת לקובץ מסוים. החלפה אטומית של המקור יוצרת שם חדש
 // גם אם סקריפט ההשלמה קרא את הגרסה הקודמת במקביל.
 function cardThumbnailPath(file, stat) {
