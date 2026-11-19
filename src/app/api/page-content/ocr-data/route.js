@@ -60,9 +60,9 @@ async function findPage(searchParams) {
   // ב-isValidObjectId ו-pageNumber ב-Number, ו-URLSearchParams עצמו אינו זורק על '%' פגום.
   const decodedPath = decodeBookPathParam(bookPath);
   if (decodedPath === null) return { error: badRequest(INVALID_BOOK_PATH_HE) };
-  const book = await Book.findOne({ $or: [{ slug: decodedPath }, { name: decodedPath }] }).select('_id').lean();
+  const book = await Book.findOne({ $or: [{ slug: decodedPath }, { name: decodedPath }] }).select('_id isHidden isPrivate ownerId').lean();
   if (!book) return { page: null };
-  return { page: await Page.findOne({ book: book._id, pageNumber }).select(select).lean() };
+  return { book, page: await Page.findOne({ book: book._id, pageNumber }).select(select).lean() };
 }
 
 export async function GET(request) {
@@ -88,6 +88,14 @@ export async function GET(request) {
     if (found.error) return noStore(found.error);
     const page = found.page;
     if (!page) return noStore(notFound('העמוד לא נמצא'));
+
+    const book = found.book ?? await Book.findById(page.book).select('isHidden isPrivate ownerId').lean();
+    if (!book) return noStore(notFound('הספר לא נמצא'));
+    const userId = session.user._id || session.user.id;
+    const ownsBook = userId && book.ownerId && String(book.ownerId) === String(userId);
+    if ((book.isHidden || book.isPrivate || book.ownerId) && !ownsBook && !hasBookLibraryAccess(session.user)) {
+      return noStore(forbidden('אין הרשאות לצפייה בספר זה'));
+    }
 
     const access = canViewPageContent(page, session.user);
     if (!access.ok) return noStore(forbidden(access.error));

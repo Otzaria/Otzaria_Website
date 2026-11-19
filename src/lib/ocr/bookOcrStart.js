@@ -1,0 +1,170 @@
+import { NextResponse } from 'next/server';
+import mongoose from 'mongoose';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import connectDB from '@/lib/db';
+import Book from '@/models/Book';
+import OcrJob from '@/models/OcrJob';
+import { bookAllowed } from '@/lib/ocr/bookOcrAccess';
+import { runOcrJob } from '@/lib/ocr/runOcrJob';
+import { reapStaleOcrJobs } from '@/lib/ocr/staleJobs';
+import { activeFilter } from '@/lib/ocr/localJobState';
+import { readWorkerConfig } from '@/lib/ocr/workerAuth';
+import { closeAbandonedPreparation, createOrResumeLocalJob } from '@/lib/ocr/localJobCreate';
+import { noPagesMessage, normalizeLocalRequest } from '@/lib/ocr/localJobCreate.pure';
+import { EXISTING_TEXT_MODES } from '@/lib/ocr/runOcrJob.pure';
+import { countBookOcrPages } from '@/lib/ocr/bookOcrCounts';
+import { normalizePageRange } from '@/lib/pageRange';
+import { badRequest, notFound, requireAccess, serverError } from '@/lib/apiResponse';
+
+const ALLOWED_METHODS = ['gemini', 'ocrwin', 'local'];
+const ALLOWED_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-3-pro-preview'];
+
+// השבתה זמנית של OCR לספר שלם דרך Gemini (צד שרת). OCRWin נשאר פעיל.
+const GEMINI_ENABLED = false;
+
+// הפעלת OCR לספר — משותף למסלול הניהול (POST /api/admin/books/ocr/start) ולמסלול הבעלים
+// (POST /api/user/books/ocr/start). access — מי נכנס ועל איזה ספר (ocr/bookOcrAccess.js).
+// ספק local בונה כאן את PDF הקלט (עד 2,000 עמודים, ראו localPdf.js) לפני תשובת 202 —
+// לכן maxDuration = 300 בשני קובצי הראוט.
+export async function startBookOcr(request, access) {
+  try {
+    const session = await getServerSession(authOptions);
+    const denied = requireAccess(session, access.hasAccess);
+    if (denied) return denied;
+
+    const body = await request.json();
+    // pageRange ({from,to} — "מעמוד / עד עמוד", לפי pageNumber): אופציונלי, חסר = כל הספר
+    const { bookId, method, model, existingTextMode, splitColumns } = body || {};
+
+    if (!bookId) {
+      return badRequest('חסר מזהה ספר');
+    }
+    if (!mongoose.isValidObjectId(bookId)) {
+      return badRequest('מזהה ספר לא תקין');
+    }
+    if (!ALLOWED_METHODS.includes(method)) {
+      return badRequest('שיטת OCR לא חוקית');
+    }
+    if (method === 'gemini' && !GEMINI_ENABLED) {
+      return NextResponse.json(
+        { error: 'OCR באמצעות Gemini מושבת זמנית. אנא השתמש ב-OCRWin.' },
+        { status: 503 }
+      );
+    }
+    if (method === 'gemini' && !ALLOWED_MODELS.includes(model)) {
+      return badRequest('מודל Gemini לא חוקי');
+    }
+    if (!EXISTING_TEXT_MODES.includes(existingTextMode)) {
+      return badRequest('בחירת טיפול בעמודים ערוכים לא חוקית');
+    }
+
+    // ספק local (מחשב מקומי): ולידציה משלו (requestId, options), ובלי runOcrJob
+    let localReq = null;
+    let workerConfig = null;
+    if (method === 'local') {
+      const normalized = normalizeLocalRequest(body);
+      if (!normalized.ok) {
+        return NextResponse.json({ error: normalized.error, code: normalized.code }, { status: 400 });
+      }
+      workerConfig = readWorkerConfig();
+      if (!workerConfig.ok) {
+        return NextResponse.json(
+          { error: 'ספק המחשב המקומי אינו מוגדר בשרת', code: 'local_not_configured' },
+          { status: 503 }
+        );
+      }
+      localReq = normalized.value;
+    }
+
+    // טווח העמודים (gemini/ocrwin; ב-local נבדק כבר ב-normalizeLocalRequest, עם code — אותה הודעה)
+    const range = normalizePageRange(body?.pageRange);
+    if (!range.ok) {
+      return badRequest(range.error);
+    }
+    const pageRange = range.range;
+
+    await connectDB();
+
+    const book = await Book.findById(bookId);
+    if (!bookAllowed(access, book, session.user)) {
+      return notFound('הספר לא נמצא');
+    }
+
+    const ownerScoped = Boolean(access.canUseBook);
+
+    // שחרור עבודה תקועה (שרת שהופעל מחדש באמצע) לפני הבדיקה, כדי לא לחסום לשווא
+    await reapStaleOcrJobs(book._id);
+
+    if (method === 'local') {
+      // 202 רק אחרי שה-PDF נשמר עמיד והעבודה ב-queued; ניסיון חוזר באותו requestId — אידמפוטנטי.
+      // בדיקת "עבודה פעילה לספר" נעשית שם (עבודת ה-requestId הזה עצמה אינה חסימה).
+      const { status, body: resBody } = await createOrResumeLocalJob({
+        book,
+        req: localReq,
+        session,
+        config: workerConfig,
+        ...(ownerScoped ? { ownerScoped } : {}),
+      });
+      return NextResponse.json(resBody, { status, headers: { 'Cache-Control': 'private, no-store' } });
+    }
+
+    // מניעת שתי עבודות פעילות במקביל על אותו ספר (בכל הספקים, כולל local)
+    let existing = await OcrJob.findOne({ book: book._id, ...activeFilter() });
+    // הכנת local נטושה (נקטעה לפני queued) אינה חוסמת לעד — נסגרת כמו בבקשת local חדשה
+    if (existing && (await closeAbandonedPreparation(existing))) {
+      existing = await OcrJob.findOne({ book: book._id, ...activeFilter() });
+    }
+    if (existing) {
+      return NextResponse.json(
+        { error: 'כבר רצה עבודת OCR על הספר הזה', jobId: existing._id.toString() },
+        { status: 409 }
+      );
+    }
+
+    // ספירת עמודים: כמה כבר ערוכים, וכמה יעובדו במצב שנבחר ובטווח (אותה בחירה כמו ב-runOcrJob)
+    const { editedPagesCount, toProcess } = await countBookOcrPages(book._id, { range: pageRange, ...(ownerScoped ? { ownerId: book.ownerId } : {}) });
+    const totalToProcess = toProcess[existingTextMode];
+
+    if (totalToProcess === 0) {
+      return badRequest(ownerScoped ? 'לא נמצאו עמודים מתאימים שעוד לא סומנו כהושלמו' : noPagesMessage(existingTextMode, pageRange));
+    }
+
+    let job;
+    try {
+      job = await OcrJob.create({
+        book: book._id,
+        bookName: book.name,
+        bookSlug: book.slug,
+        method,
+        model: method === 'gemini' ? model : '',
+        existingTextMode,
+        splitColumns: !!splitColumns,
+        ...(pageRange ? { pageRange } : {}),
+        status: 'running',
+        active: true,
+        totalPages: totalToProcess,
+        editedPagesCount,
+        ...(ownerScoped ? { ownerScoped: true } : {}),
+        startedBy: session.user?._id || session.user?.id,
+        startedByName: session.user?.name || '',
+      });
+    } catch (e) {
+      // האינדקס החלקי החוסם עבודה כפולה (race בין שתי בקשות במקביל)
+      if (e?.code === 11000) {
+        return NextResponse.json({ error: 'כבר רצה עבודת OCR על הספר הזה' }, { status: 409 });
+      }
+      throw e;
+    }
+
+    // הפעלה ברקע - לא ממתינים. ממשיך לרוץ כל עוד תהליך השרת חי.
+    runOcrJob(job._id.toString()).catch((e) =>
+      console.error('[ocr-job] runOcrJob threw:', e)
+    );
+
+    return NextResponse.json({ success: true, jobId: job._id.toString(), totalPages: totalToProcess });
+  } catch (error) {
+    console.error('OCR start error:', error);
+    return serverError('Internal Server Error');
+  }
+}

@@ -163,9 +163,11 @@ const ABORTED = Object.freeze({ kind: 'aborted' })
  * signal (AbortSignal): ביטול — למשל סגירת הדיאלוג. הבקשה שבדרך נקטעת, אין ניסיונות חוזרים נוספים,
  * והתוצאה {kind:'aborted'} (הקורא לא מעדכן state). ההכנה בשרת, אם התחילה, נמשכת — ופתיחה
  * מחדש של הדיאלוג תראה את העבודה (או תמשיך אותה באותו requestId השמור).
+ * url — נקודת הקצה (ברירת מחדל: מסלול הניהול; לבעלי ספר אישי — /api/user/books/ocr/start).
  */
 export async function postLocalStart({
   payload,
+  url = START_URL,
   fetchImpl = globalThis.fetch,
   attempts = START_RETRY_ATTEMPTS,
   delayMs = START_RETRY_DELAY_MS,
@@ -178,7 +180,7 @@ export async function postLocalStart({
     let status = 0
     let body = {}
     try {
-      const res = await fetchImpl(START_URL, {
+      const res = await fetchImpl(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

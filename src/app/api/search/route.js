@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Page from '@/models/Page';
+import Book from '@/models/Book';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/client-ip';
 import { apiError, serverError } from '@/lib/apiResponse';
@@ -23,14 +24,25 @@ export async function GET(request) {
 
         await connectDB();
 
-        // חיפוש טקסט מלא במונגו (דורש אינדקס טקסט ב-Schema)
-        const pages = await Page.find(
-            { $text: { $search: query } },
-            { score: { $meta: "textScore" } }
-        )
-        .sort({ score: { $meta: "textScore" } })
-        .limit(50)
-        .populate('book', 'name slug');
+        // מסננים ספרים מוסתרים ואישיים לפני ההגבלה, כדי שעמודים פרטיים לא יתפסו
+        // מקום בתוצאות הפומביות. השיוך לספר משתמש באינדקס _id.
+        const pages = await Page.aggregate([
+            { $match: { $text: { $search: query } } },
+            { $project: { book: 1, pageNumber: 1, content: 1, rightColumn: 1, leftColumn: 1, score: { $meta: 'textScore' } } },
+            { $lookup: {
+                from: Book.collection.name,
+                localField: 'book',
+                foreignField: '_id',
+                pipeline: [
+                    { $match: { isHidden: { $ne: true }, isPrivate: { $ne: true }, ownerId: null } },
+                    { $project: { _id: 0, name: 1, slug: 1 } },
+                ],
+                as: 'book',
+            } },
+            { $unwind: '$book' },
+            { $sort: { score: -1 } },
+            { $limit: 50 },
+        ]);
 
         const results = pages.map(page => {
             // איחוד התוכן לטקסט אחד לחיפוש הסניפט

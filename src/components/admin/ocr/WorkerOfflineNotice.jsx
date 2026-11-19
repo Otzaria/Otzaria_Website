@@ -17,7 +17,7 @@ export default function WorkerOfflineNotice({ worker, now }) {
           <>ספק המחשב המקומי אינו מוגדר בשרת כרגע. העבודה שמורה ותמשיך כשההגדרה תוחזר.</>
         ) : (
           <>
-            המחשב המעבד לא זמין (נראה לאחרונה: {formatLastSeen(worker?.lastSeenAt, now)}).
+            המחשב המעבד לא זמין{worker && Object.hasOwn(worker, 'lastSeenAt') && <> (נראה לאחרונה: {formatLastSeen(worker.lastSeenAt, now)})</>}.
             העבודה שמורה ותמשיך כשיחזור.
           </>
         )}

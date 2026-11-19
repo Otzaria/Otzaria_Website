@@ -21,6 +21,8 @@ import OcrWorkerState from '../../models/OcrWorkerState.js';
 import { proofreadingCapabilitiesView, unsupportedProofreadingOptions } from './proofreadingCapabilities.js';
 import { PROOFREADING_OPTION_KEYS } from './proofreadingOptions.js';
 import OcrJob from '../../models/OcrJob.js';
+import Book from '../../models/Book.js';
+import { ownsPersonalBook } from './bookOcrAccess.js';
 import Page from '../../models/Page.js';
 import { buildJobInput } from './localPdf.js';
 import { LocalInputError, selectPagesForLocal } from './localPdf.pure.js';
@@ -59,10 +61,11 @@ const isPermanentInputError = (err) => err instanceof LocalInputError || (err?.n
  *   הבקשה אחרי normalizeLocalRequest (pageRange — רק כשנבחר טווח; נשמר ב-OcrJob.pageRange, לא ב-options)
  * @param {object} args.session session של NextAuth (לשם ולמזהה המתחיל)
  * @param {{workerId:string}} args.config readWorkerConfig() תקין
+ * @param {boolean} [args.ownerScoped]
  * @param {Date} [args.now]
  * @returns {Promise<{status:number, body:object}>}
  */
-export async function createOrResumeLocalJob({ book, req, session, config, now = new Date() }) {
+export async function createOrResumeLocalJob({ book, req, session, config, ownerScoped = false, now = new Date() }) {
   const fingerprint = requestFingerprint({
     bookId: book._id,
     existingTextMode: req.existingTextMode,
@@ -140,6 +143,7 @@ export async function createOrResumeLocalJob({ book, req, session, config, now =
         workerId: config.workerId,
         prepLeaseUntil: lease,
         totalPages: 0,
+        ...(ownerScoped ? { ownerScoped: true } : {}),
         startedBy: session?.user?._id || session?.user?.id,
         startedByName: session?.user?.name || '',
       });
@@ -231,15 +235,16 @@ async function prepare(job, lease, req) {
   // סורקים בסמן ושומרים לכל עמוד רק את מה שצריך: ה-PDF משתמש ב-_id/pageNumber/imagePath/updatedAt,
   // והבחירה/הספירה רק ב-pageHasText/pageEditedByHuman. את הטקסט עצמו (עשוי להיות גדול) לא מחזיקים
   // בזיכרון — selectionView מחליף אותו בסמן שנותן לשתיהן בדיוק את אותה תשובה.
+  const ownerId = job.ownerScoped ? job.startedBy : undefined;
   const pages = [];
-  const cursor = Page.find({ book: job.book })
+  const cursor = Page.find({ book: job.book, ...(ownerId ? { status: { $ne: 'completed' } } : {}) })
     .sort({ pageNumber: 1 })
-    .select('_id pageNumber imagePath content rightColumn leftColumn status contentSaveRevision lastOcrTextSha256 lastOcrAt updatedAt')
+    .select('_id pageNumber imagePath content rightColumn leftColumn status claimedBy contentSaveRevision lastOcrTextSha256 lastOcrAt updatedAt')
     .lean()
     .cursor();
   for await (const p of cursor) {
     pages.push({
-      ...selectionView(p),
+      ...selectionView(p, ownerId),
       _id: p._id,
       pageNumber: p.pageNumber,
       imagePath: p.imagePath,
@@ -251,7 +256,14 @@ async function prepare(job, lease, req) {
 
   let input;
   try {
-    if (selected.length === 0) throw new LocalInputError('no_pages', { messageHe: noPagesMessage(mode, range) });
+    if (ownerId) {
+      const book = await Book.findById(job.book).select('isHidden isPrivate ownerId').lean();
+      if (!ownsPersonalBook(book, { id: ownerId })) throw new LocalInputError('book_no_longer_private', { messageHe: 'הספר לא נמצא' });
+    }
+    if (selected.length === 0) {
+      const messageHe = ownerId ? 'לא נמצאו עמודים מתאימים שעוד לא סומנו כהושלמו' : noPagesMessage(mode, range);
+      throw new LocalInputError('no_pages', { messageHe });
+    }
     input = await buildJobInput({ jobId, pages: selected });
   } catch (err) {
     if (isPermanentInputError(err)) {

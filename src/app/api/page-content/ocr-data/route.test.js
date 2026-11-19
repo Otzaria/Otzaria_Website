@@ -60,9 +60,9 @@ const jpeg = (w, h, r) =>
 
 let seq = 0
 // ספר עם עמוד אחד, תמונה אמיתית, ועבודה שהחילה את עמוד 1 של הפיקסצ'ר (layout עם ה-sha והמידות של התמונה)
-async function setup({ pageExtra = {} } = {}) {
+async function setup({ pageExtra = {}, bookExtra = {} } = {}) {
   const slug = `pd${++seq}`
-  const book = await Book.create({ name: `ספר ${slug}`, slug })
+  const book = await Book.create({ name: `ספר ${slug}`, slug, ...bookExtra })
   const dir = path.join(env.uploads, 'books', slug)
   await fs.mkdir(dir, { recursive: true })
   const image = await jpeg(60, 80, 10)
@@ -153,6 +153,22 @@ describe('GET /api/page-content/ocr-data', () => {
     expect([r.status, r.body.error, r.cache]).toEqual([403, 'הדף נמצא בטיפול על ידי משתמש אחר', 'private, no-store'])
     getServerSessionMock.mockResolvedValue(ADMIN)
     expect((await get({ pageId: String(page._id) })).status).toBe(200)
+  })
+
+  it('ספר פרטי: הבעלות נבדקת גם כשהעמוד פנוי, לפי מזהה או נתיב', async () => {
+    const { page, slug } = await setup({
+      bookExtra: { isPrivate: true, ownerId: USER.user.id },
+      pageExtra: { status: 'available' },
+    })
+    const pageId = String(page._id)
+    expect((await get({ pageId })).status).toBe(200)
+
+    getServerSessionMock.mockResolvedValue({ user: { id: '507f1f77bcf86cd799439013' } })
+    expect((await get({ pageId })).status).toBe(403)
+    expect((await get({ bookPath: slug, pageNumber: '1' })).status).toBe(403)
+
+    getServerSessionMock.mockResolvedValue(ADMIN)
+    expect((await get({ pageId })).status).toBe(200)
   })
 
   it('jobId: בלי hasBookLibraryAccess → 403; מנהל — רשומה ממתינה (pending_cancelled) / היסטוריה; 404 כשאין', async () => {

@@ -161,6 +161,21 @@ test('החלה ראשונה → accepted; שליחה חוזרת באותו hash 
   assert.deepEqual(j2, j1); // גם המונים וה-ack — כלום לא נכתב
 });
 
+test('עבודת בעלים אינה מחליפה עמוד שהושלם, גם כשמועד העדכון לא השתנה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const { job, pages } = await makeJob({ n: 2, mode: 'overwrite', texts: ['טקסט מוגה', ''], extra: { ownerScoped: true } });
+  await Page.updateOne({ _id: pages[0]._id }, { $set: { status: 'completed' } }, { timestamps: false });
+  const doc = resultDoc(job);
+  const sha = sha256(Buffer.from(JSON.stringify(doc)));
+
+  expectAck(await send(job._id, doc), 'accepted', job, sha, 'success');
+  const [completed, unfinished] = await pageSnap(pages);
+  assert.equal(completed.content, 'טקסט מוגה');
+  assert.equal(completed.status, 'completed');
+  assert.equal(unfinished.content, 'טקסט 2');
+  assert.equal((await load(job._id)).conflictPages, 1);
+});
+
 test('hash אחר → 409 result_conflict, נשמר לבירור; ה-ack המקורי נשמר — גם "ימים אחר כך" אחרי ניקוי', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const { job } = await makeJob({ n: 2 });

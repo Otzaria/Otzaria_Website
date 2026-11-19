@@ -3,7 +3,7 @@ import connectDB from '@/lib/db';
 import User from '@/models/User';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { hasAnyAdminAccess } from '@/lib/roles';
+import { hasAnyAdminAccess, ROLES } from '@/lib/roles';
 import { requireAccess, serverError } from '@/lib/apiResponse';
 
 // רשימת משתמשים בסיסית לצורך בחירת נמען בהודעות — נגיש לכל סוגי המנהלים
@@ -15,7 +15,7 @@ export async function GET() {
 
     await connectDB();
 
-    const users = await User.find({ role: 'user' })
+    const users = await User.find({ role: { $in: ['user', ROLES.PRIVATE_OCR] } })
       .select('_id name email')
       .sort({ name: 1 })
       .lean();
