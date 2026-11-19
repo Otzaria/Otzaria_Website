@@ -157,13 +157,16 @@
 בגרסה לא נתמכת או של תמונה אחרת מושמט **רק מאותו עמוד**, עם אזהרה שנשמרת. הטקסט נקלט כרגיל. אין קודי HTTP חדשים
 ואין שינוי בתשובות `/api/worker/v1`. תוצאה בלי `layout` (שירות ישן) מתקבלת בדיוק כמו קודם.
 
-**גבולות באתר:**
+**גבולות באתר** (כולם דטרמיניסטיים — עומק הקינון נבדק במפורש ולא נשען על חריגת `JSON.stringify`, שתלויה בגרסת Node;
+64 = `MaxDepth` ברירת המחדל של `System.Text.Json` בשירות, ולכן metadata שהשירות שולח בהגדרות ברירת המחדל לא אמור להיפסל בגלל עומק):
 
 | גבול | ערך | בחריגה |
 |---|---|---|
 | layout לעמוד (UTF-8 של `JSON.stringify`) | 1,179,648 (1.125MiB) | `layoutStatus:"too_large"`, אזהרה `layout_too_large`, נשמר בלי ה-layout |
 | `pages[].metadata` | 65,536 | `metadataJson:null` + `metadata_too_large` |
-| `metadata` הספר | 524,288 | נשמרת תת-קבוצה (`hardware, models, gpu, seconds, run_seconds, resumed, bridge_version, service_version, otzaria_issues, layout, salvage`) + `resultMetadataTruncated:true` |
+| `metadata` הספר | 524,288 | נשמרת תת-קבוצה (`hardware, models, gpu, seconds, run_seconds, resumed, bridge_version, service_version, otzaria_issues, layout, salvage, proofreading`) + `resultMetadataTruncated:true`; תת-קבוצה שגם היא חורגת (גודל או עומק) → `resultMetadataJson:null` |
+| עומק קינון של `pages[].metadata` / `metadata` הספר (`MAX_STORED_JSON_DEPTH`; האובייקט עצמו = רמה 1) | 64 רמות | כמו חריגת גודל: עמוד — `metadataJson:null` + `metadata_too_large`; ספר — תת-הקבוצה + `resultMetadataTruncated:true` |
+| עומק קינון של layout | 8 רמות (v1) | `layoutStatus:"invalid"` + `layout_invalid`; מעל 64 רמות גם ה-JSON שנדחה לא נשמר (`layoutRejectedJson:null`) |
 | מגבלות המבנה של v1 (≤5000 שורות, ≤2000 מילים לשורה, ≤1000 מסגרות וכו') | — | `layoutStatus:"invalid"` + `layout_invalid` לאותו עמוד בלבד |
 | התוצאה כולה | 100MiB (ללא שינוי) | 413 (ללא שינוי) |
 
