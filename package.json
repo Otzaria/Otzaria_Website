@@ -19,7 +19,7 @@
     "build": "node scripts/patch-plugin-validator.cjs && npm run generate-version && npm run check:icons && npm run check:admin-tokens && npm run copy:tesseract && next build && npm run build:offline-editor && npm run check:perf && node scripts/check-production-trace.cjs",
     "start": "next start",
     "pretest": "npm run check:plugin-validator",
-    "test":"node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/lib/*.test.mjs src/lib/*/*.test.mjs \"src/app/**/*.test.mjs\" && vitest run",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/lib/*.test.mjs src/lib/*/*.test.mjs \"src/app/**/*.test.mjs\" && vitest run",
     "pretest:node": "npm run check:plugin-validator",
     "test:node": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/lib/*.test.mjs src/lib/*/*.test.mjs \"src/app/**/*.test.mjs\"",
     "test:service-broker": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"workers/service-plugin-broker/test/*.test.mjs\"",

@@ -5,6 +5,8 @@
 // על החריגה הפסיקה לשמור — הערך המקונן עבר הלאה (ל-MongoDB, שמגביל קינון ל-100 רמות, ולכל קוד
 // רקורסיבי שקורא אותו). כאן הגבול מפורש, זהה בכל גרסה, והבדיקה עצמה אינה רקורסיבית.
 
+const childrenOf = (node) => (Array.isArray(node) ? node : Object.values(node)).values();
+
 /**
  * עומק = מספר המכלים (אובייקט/מערך) המקוננים: פרימיטיב → 0, {} → 1, {a:[1]} → 2.
  * עוצרת מיד כשנמצא מכל בעומק maxDepth+1, כך שגם קלט עוין (או מעגלי) נסרק רק עד הגבול. העבודה
@@ -16,18 +18,17 @@
 export function exceedsJsonDepth(value, maxDepth) {
   if (value === null || typeof value !== 'object') return false;
   if (maxDepth < 1) return true;
-  const stack = [value];
-  const depths = [1];
+  // מחזיקים סמן לכל רמה פעילה; מערך רחב נסרק בלי להעתיק את כל ילדיו למחסנית.
+  const stack = [childrenOf(value)];
   while (stack.length > 0) {
-    const node = stack.pop();
-    const depth = depths.pop();
-    const children = Array.isArray(node) ? node : Object.values(node);
-    for (const child of children) {
-      if (child === null || typeof child !== 'object') continue;
-      if (depth + 1 > maxDepth) return true;
-      stack.push(child);
-      depths.push(depth + 1);
+    const { value: child, done } = stack[stack.length - 1].next();
+    if (done) {
+      stack.pop();
+      continue;
     }
+    if (child === null || typeof child !== 'object') continue;
+    if (stack.length + 1 > maxDepth) return true;
+    stack.push(childrenOf(child));
   }
   return false;
 }
