@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useDialog } from '@/components/providers/DialogContext'
 import { useRound } from '../common/useRound'
@@ -207,7 +207,10 @@ function RouterRound({ round, take, jumpTopRef }) {
     [items, writeRow, goTo, showAlert]
   )
 
-  useEffect(() => {
+  // useLayoutEffect ולא useEffect: המאזין מתחלף יחד עם ה-commit, לפני שהמסך החדש נראה. ב-useEffect
+  // יש חלון (עד שה-passive effects רצים) שבו הקשה נבלעת — המאזין עוד לא נרשם בכניסה לסבב — או
+  // נשלחת עם cur/items/טיוטות של הרינדור הקודם.
+  useLayoutEffect(() => {
     const onKey = (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey || isTypingTarget(e.target) || ctxOf) return
       const it = items[cur]

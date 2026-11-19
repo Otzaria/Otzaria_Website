@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useDialog } from '@/components/providers/DialogContext'
 import { useRound } from '../common/useRound'
@@ -75,7 +75,9 @@ function OcrRound({ round }) {
     [items, round, cur, move, showAlert]
   )
 
-  useEffect(() => {
+  // useLayoutEffect ולא useEffect: המאזין מתחלף יחד עם ה-commit (ראו RouterScreen) — בלי חלון שבו
+  // הקשה נבלעת או נשלחת עם cur/items של הרינדור הקודם.
+  useLayoutEffect(() => {
     const onKey = (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey || isTypingTarget(e.target) || ctxOf) return
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
