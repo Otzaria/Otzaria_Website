@@ -22,7 +22,7 @@ beforeAll(async () => {
   state.root = await fs.mkdtemp(path.join(os.tmpdir(), 'otz-train-dl-'));
   vi.stubEnv('OCR_LOCAL_STORAGE_DIR', state.root);
   await sharp({ create: { width: 100, height: 200, channels: 3, background: '#ffffff' } }).png().toFile(path.join(state.root, 'page.png'));
-});
+}, 120000);
 afterAll(async () => { await db?.stop(); await fs.rm(state.root, { recursive: true, force: true }); vi.unstubAllEnvs(); });
 beforeEach(async () => { await db.reset(); book = await Book.create({ name: 'test', slug: 'train-dl' }); });
 const actor = { user: { id: 'b'.repeat(24), role: 'admin_ocr', name: 'Trainer' } };
