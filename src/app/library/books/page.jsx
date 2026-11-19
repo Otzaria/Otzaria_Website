@@ -77,10 +77,16 @@ export default function LibraryBooksPage() {
     return data
   }, [flatBooks, searchTerm, filterStatus, filterCategory]) // הוספנו את filterCategory לתלויות
 
-  // כל שינוי סינון מתחיל מחדש מהעמוד הראשון
-  useEffect(() => {
-    setVisibleCount(PAGE_SIZE)
-  }, [searchTerm, filterStatus, filterCategory])
+  // כל שינוי סינון מתחיל מחדש מהעמוד הראשון — באותו עדכון (ב-handler), ולא ב-effect
+  // שגורם ל-render נוסף עם הסינון החדש והכמות הישנה
+  const updateFilters = ({ search = searchTerm, status = filterStatus, category = filterCategory }) => {
+    if (search !== searchTerm || status !== filterStatus || category !== filterCategory) {
+      setVisibleCount(PAGE_SIZE)
+    }
+    setSearchTerm(search)
+    setFilterStatus(status)
+    setFilterCategory(category)
+  }
 
   const visibleBooks = useMemo(
     () => filteredBooks.slice(0, visibleCount),
@@ -132,7 +138,7 @@ export default function LibraryBooksPage() {
                                 type="text"
                                 placeholder="חפש ספר..."
                                 value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
+                                onChange={(e) => updateFilters({ search: e.target.value })}
                                 className="w-full px-4 py-3 pr-10 rounded-xl border-2 border-surface-variant bg-white focus:outline-none focus:border-primary shadow-sm transition-all"
                             />
                             <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">
@@ -144,7 +150,7 @@ export default function LibraryBooksPage() {
                         <div className="min-w-[180px]">
                             <select
                                 value={filterCategory}
-                                onChange={(e) => setFilterCategory(e.target.value)}
+                                onChange={(e) => updateFilters({ category: e.target.value })}
                                 className="w-full h-full px-4 py-3 rounded-xl border-2 border-surface-variant bg-white focus:outline-none focus:border-primary shadow-sm transition-all appearance-none cursor-pointer"
                                 style={{ backgroundImage: 'none' }} // מבטל את החץ הדיפולטיבי אם רוצים לעצב לבד, או להשאיר רגיל
                             >
@@ -164,7 +170,7 @@ export default function LibraryBooksPage() {
                                 return (
                                     <button
                                         key={key}
-                                        onClick={() => setFilterStatus(key)}
+                                        onClick={() => updateFilters({ status: key })}
                                         className={`px-4 py-2 rounded-xl font-medium flex items-center gap-2 whitespace-nowrap text-sm border-2 transition-all ${filterStatus === key 
                                             ? 'bg-primary text-on-primary border-primary' 
                                             : 'bg-white text-on-surface border-surface-variant hover:border-primary/50'}`}
@@ -175,7 +181,7 @@ export default function LibraryBooksPage() {
                                 )
                             })}
                             <button
-                                onClick={() => setFilterStatus('all')}
+                                onClick={() => updateFilters({ status: 'all' })}
                                 className={`px-4 py-2 rounded-xl font-medium whitespace-nowrap text-sm border-2 transition-all ${filterStatus === 'all' 
                                     ? 'bg-primary text-on-primary border-primary' 
                                     : 'bg-white text-on-surface border-surface-variant hover:border-primary/50'}`}
@@ -211,7 +217,7 @@ export default function LibraryBooksPage() {
                             <span className="material-symbols-outlined text-6xl text-on-surface/20 mb-4">search_off</span>
                             <p className="text-lg text-on-surface/60">לא נמצאו ספרים התואמים את הסינון</p>
                             <button 
-                                onClick={() => {setSearchTerm(''); setFilterStatus('all'); setFilterCategory('all');}}
+                                onClick={() => updateFilters({ search: '', status: 'all', category: 'all' })}
                                 className="mt-6 px-6 py-2 bg-white border border-surface-variant text-primary rounded-lg hover:bg-surface-variant transition-colors font-medium"
                             >
                                 נקה סינון
