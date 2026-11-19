@@ -107,6 +107,8 @@ export function requestFingerprint({ bookId, existingTextMode, options, pageRang
 // קוד שגיאת קלט קבועה (LocalInputError.code או קוד הכנה) → סטטוס HTTP
 export function httpStatusForPrepError(code) {
   switch (code) {
+    case 'book_no_longer_private':
+      return 404;
     case 'no_pages':
       return 400;
     case 'too_many_pages':

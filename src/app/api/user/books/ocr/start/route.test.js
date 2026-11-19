@@ -56,6 +56,7 @@ describe('POST /api/user/books/ocr/start', () => {
   it.each([
     ['ספר אישי של משתמש אחר', { _id: BOOK, isPrivate: true, ownerId: '507f1f77bcf86cd799439098' }],
     ['ספר ציבורי (בלי בעלים)', { _id: BOOK, name: 'ציבורי' }],
+    ['ספר גלוי שנשאר בו שדה בעלות', { _id: BOOK, ownerId: OWNER, isPrivate: false, isHidden: false }],
     ['ספר שלא קיים', null],
   ])('%s → 404, ושום עבודה לא נוצרת', async (_name, book) => {
     Book.findById.mockResolvedValue(book)

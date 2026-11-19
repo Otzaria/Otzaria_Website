@@ -2,13 +2,16 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { useSession } from 'next-auth/react'
 import Header from '@/components/layout/Header'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import Loader from '@/components/ui/Loader'
 import Button from '@/components/ui/Button'
-import PersonalBookOcrDrawer from '@/components/personalBooks/PersonalBookOcrDrawer'
 import { hasPrivateOcrAccess } from '@/lib/roles'
+import { isRestrictedBook } from '@/lib/ocr/bookOcrAccess'
+
+const PersonalBookOcrDrawer = dynamic(() => import('@/components/personalBooks/PersonalBookOcrDrawer'))
 
 export default function PersonalLibraryPage() {
   const [flatBooks, setFlatBooks] = useState([])
@@ -23,23 +26,18 @@ export default function PersonalLibraryPage() {
   const canOcr = hasPrivateOcrAccess(session?.user)
   const [ocrBook, setOcrBook] = useState(null)
 
-  const fetchUserBooks = async () => {
-    try {
-        setLoading(true);
-        const res = await fetch('/api/user/books');
-        const json = await res.json();
-        if (json.success) {
-            setFlatBooks(json.books);
-        }
-    } catch (err) {
-        console.error('Error fetching personal books:', err);
-    } finally {
-        setLoading(false);
-    }
-  };
+  const fetchUserBooks = () => {
+    fetch('/api/user/books')
+      .then(res => res.json())
+      .then(json => {
+        if (json.success) setFlatBooks(json.books)
+      })
+      .catch(err => console.error('Error fetching personal books:', err))
+      .finally(() => setLoading(false))
+  }
 
   useEffect(() => {
-    fetchUserBooks();
+    fetchUserBooks()
   }, [])
 
   const filteredBooks = useMemo(() => {
@@ -133,7 +131,7 @@ export default function PersonalLibraryPage() {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {filteredBooks.map(book => canOcr ? (
+                    {filteredBooks.map(book => canOcr && isRestrictedBook(book) ? (
                         <div key={book.id || book.path} className="flex flex-col gap-2">
                             <PersonalBookCard book={book} />
                             <Button variant="outlined" size="sm" icon="document_scanner" fullWidth onClick={() => setOcrBook(book)}>
@@ -148,7 +146,7 @@ export default function PersonalLibraryPage() {
         </div>
       </main>
 
-      {ocrBook && (
+      {canOcr && ocrBook && (
         <PersonalBookOcrDrawer
             book={ocrBook}
             onClose={() => setOcrBook(null)}
@@ -161,6 +159,7 @@ export default function PersonalLibraryPage() {
             onClose={() => setIsUploadModalOpen(false)} 
             onSuccess={() => {
                 setIsUploadModalOpen(false);
+                setLoading(true);
                 fetchUserBooks(); // ריענון הרשימה אחרי העלאה מוצלחת
             }} 
         />

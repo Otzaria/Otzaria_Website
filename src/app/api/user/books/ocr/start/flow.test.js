@@ -31,6 +31,9 @@ import { POST as start } from './route'
 import { GET as status } from '../status/route'
 import { POST as cancel } from '../cancel/route'
 import { GET as adminStatus } from '@/app/api/admin/books/ocr/status/route'
+import { POST as adminCancel } from '@/app/api/admin/books/ocr/cancel/route'
+import { GET as search } from '@/app/api/search/route'
+import { GET as example } from '@/app/api/book/[id]/example/route'
 
 vi.setConfig({ testTimeout: 30000 })
 
@@ -88,7 +91,7 @@ describe('OCR לספר אישי — מסלול הבעלים', () => {
 
     asUser(OWNER)
     expect((await cancel(json('/api/user/books/ocr/cancel', { jobId: String(job._id) }))).status).toBe(200)
-    expect((await OcrJob.findById(job._id).lean()).status).toBe('cancelled')
+    expect(await OcrJob.findById(job._id).lean()).toMatchObject({ status: 'cancelled', cancelReason: 'owner' })
 
     const after = await Book.findById(book._id).lean()
     expect(after).toMatchObject({ isHidden: true, isPrivate: true })
@@ -108,6 +111,76 @@ describe('OCR לספר אישי — מסלול הבעלים', () => {
     expect((await cancel(json('/api/user/books/ocr/cancel', { jobId: String(job._id) }))).status).toBe(404)
     expect((await OcrJob.findById(job._id).lean()).status).toBe('queued')
     expect(await OcrJob.countDocuments()).toBe(1)
+  })
+
+  it('דילוג על עריכה ידנית סופר ובוחר עמודים אישיים שכבר נתפסו אוטומטית', async () => {
+    asUser(OWNER)
+    await Page.updateOne({ book: book._id, pageNumber: 2 }, { $set: { content: 'עריכה ידנית', contentSaveRevision: 1 } })
+    const before = await status(get(`/api/user/books/ocr/status?bookId=${book._id}`))
+    expect((await before.json()).counts.toProcess.skip_edited).toBe(1)
+
+    const res = await start(json('/api/user/books/ocr/start', {
+      bookId: String(book._id), method: 'local', existingTextMode: 'skip_edited', requestId: 'req-owner-skip-edited',
+    }))
+    expect(res.status).toBe(202)
+    expect((await OcrJob.findOne({ book: book._id }).lean()).pageMap.map((page) => page.pageNumber)).toEqual([1])
+  })
+
+  it('אחרי פרסום הספר, הבעלים הקודם לא יכול להפעיל או לשלוט בעבודה', async () => {
+    asUser(OWNER)
+    const payload = { bookId: String(book._id), method: 'local', existingTextMode: 'skip', requestId: 'req-owner-before-publish' }
+    const accepted = await start(json('/api/user/books/ocr/start', payload))
+    expect(accepted.status).toBe(202)
+    const { jobId } = await accepted.json()
+
+    await Book.updateOne({ _id: book._id }, {
+      $set: { isPrivate: false, isHidden: false },
+      $unset: { ownerId: 1 },
+    })
+    expect((await start(json('/api/user/books/ocr/start', payload))).status).toBe(404)
+    expect((await status(get(`/api/user/books/ocr/status?bookId=${book._id}`))).status).toBe(404)
+    expect((await cancel(json('/api/user/books/ocr/cancel', { jobId }))).status).toBe(404)
+  })
+
+  it('עבודת אימון נשארת מחוץ ללוח ומוגנת מביטול בדפדפן', async () => {
+    const training = await OcrJob.create({ book: book._id, method: 'local', taskType: 'training', status: 'queued', active: true })
+    const request = json('/api/user/books/ocr/cancel', { jobId: String(training._id) })
+
+    asUser(OWNER)
+    expect((await (await status(get(`/api/user/books/ocr/status?bookId=${book._id}`))).json()).job).toBeNull()
+    expect((await cancel(request)).status).toBe(404)
+    asUser(OTHER, ['admin_books'])
+    expect((await (await adminStatus(get(`/api/admin/books/ocr/status?bookId=${book._id}`))).json()).job).toBeNull()
+    expect((await adminCancel(json('/api/admin/books/ocr/cancel', { jobId: String(training._id) }))).status).toBe(409)
+    expect((await OcrJob.findById(training._id).lean()).status).toBe('queued')
+  })
+
+  it('טקסט OCR מספר אישי נשאר מחוץ לחיפוש הפומבי ולעמודי הדוגמה של אורח', async () => {
+    const term = 'sharedsearchterm'
+    await Page.collection.createIndex({ content: 'text' }, { default_language: 'none' })
+    await Book.updateOne({ _id: book._id }, { $set: { examplePage: 1 } })
+    await Page.updateMany({ book: book._id }, { $set: { content: `${term} `.repeat(20) } })
+    await Page.insertMany(Array.from({ length: 55 }, (_, index) => ({
+      book: book._id,
+      pageNumber: index + 3,
+      imagePath: '/placeholder.jpg',
+      content: `${term} `.repeat(20),
+    })))
+    const publicBook = await Book.create({ name: 'ספר גלוי', slug: 'public-sefer' })
+    await Page.create({ book: publicBook._id, pageNumber: 1, imagePath: '/placeholder.jpg', content: `${term} public page` })
+
+    asUser(OTHER, [])
+    const results = await (await search(get(`/api/search?q=${term}`))).json()
+    expect(results).toMatchObject({ success: true, results: [{ bookSlug: publicBook.slug }] })
+    expect(results.results).toHaveLength(1)
+
+    const context = { params: Promise.resolve({ id: book.slug }) }
+    getServerSessionMock.mockResolvedValue(null)
+    expect((await example(get('/example'), context)).status).toBe(404)
+    asUser(OWNER)
+    const ownedExample = await example(get('/example'), context)
+    expect(ownedExample.headers.get('cache-control')).toBe('private, no-store')
+    expect((await ownedExample.json()).text.content).toContain(term)
   })
 
   it('הבעלים בלי התפקיד — 403, ושום עבודה לא נוצרת', async () => {

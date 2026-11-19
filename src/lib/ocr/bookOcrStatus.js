@@ -47,6 +47,20 @@ async function readWorkerInfo(now) {
   };
 }
 
+function ownerWorkerInfo({ configured, availability, proofreading }) {
+  const options = proofreading && {
+    state: proofreading.state,
+    lmCheck: proofreading.lmCheck,
+    sensitivity: proofreading.sensitivity,
+    alternatives: proofreading.alternatives,
+    contextAvailable: proofreading.contextAvailable,
+    lexiconAvailable: proofreading.lexiconAvailable,
+    lexicons: proofreading.lexicons?.map(({ name }) => ({ name })),
+    defaultLexicons: proofreading.defaultLexicons,
+  };
+  return { configured, availability, ...(options ? { proofreading: options } : {}) };
+}
+
 // עבודת local בהכנה: requestId (כדי שהממשק יוכל להמשיך את אותה בקשה גם אם המזהה השמור אצלו
 // אבד), ו-preparingStale — ה-lease של ההכנה פג (הכנה שנקטעה / תקלה זמנית שהחזירה
 // preparation_retry), כלומר אף בקשה לא בונה כרגע את הקובץ ואפשר ללחוץ "המשך הכנה".
@@ -61,7 +75,7 @@ function preparationInfo(job, now) {
   };
 }
 
-function serializeJob(job, now) {
+function serializeJob(job, now, includeDiagnostics) {
   return {
     id: job._id.toString(),
     status: job.status,
@@ -75,32 +89,23 @@ function serializeJob(job, now) {
     successPages: job.successPages,
     failedPages: job.failedPages,
     currentPageNumber: job.currentPageNumber,
-    error: job.error,
     errorCode: job.errorCode ?? null,
-    startedByName: job.startedByName,
     createdAt: job.createdAt,
     finishedAt: job.finishedAt,
     // ---- ספק local ----
     options: job.options ?? null,
     workerState: job.workerState ?? null,
     progress: {
-      phase: job.progressPhase ?? null,
+      phase: includeDiagnostics ? (job.progressPhase ?? null) : job.progressPhase === 'context' ? 'context' : null,
       pagesDone: job.processedPages ?? 0,
       pagesTotal: job.progressPagesTotal || job.totalPages || 0,
     },
-    workerMessage: job.workerMessage ?? null,
-    lastSeenAt: job.lastSeenAt ?? null,
     preparedAt: job.preparedAt ?? null,
     ...preparationInfo(job, now),
     cancelRequested: !!job.cancelRequested,
     decision: job.decision ?? null,
     resultOutcome: job.resultOutcome ?? null,
-    // נתוני התוצאה (ספק local): גרסת הצנרת, error העליון (לכל outcome — גם partial אחרי מיצוי
-    // ניסיונות), סיכום נתוני הפריסה ותת-קבוצה של metadata הספר לתצוגה (resultMetadataView)
-    pipelineVersion: job.pipelineVersion ?? null,
-    resultError: job.resultError?.code ? { code: job.resultError.code, message: job.resultError.message || '' } : null,
-    layoutSummary: job.layoutSummary ?? null,
-    resultMetadata: resultMetadataView(job.resultMetadataJson),
+    resultMetadata: serializeResultMetadata(job.resultMetadataJson, includeDiagnostics),
     summary: {
       applied: job.successPages ?? 0,
       failed: job.failedPages ?? 0,
@@ -114,12 +119,41 @@ function serializeJob(job, now) {
     resumeFailures: job.resumeFailures ?? 0,
     resumeRetryAt: job.resumeRetryAt ?? null,
     cancelReason: job.cancelReason ?? null,
-    cancelledByName: job.cancelledByName ?? null,
     pageErrors: (job.pageErrors || []).slice(0, MAX_PAGE_ERRORS).map((e) => ({
       pageNumber: e.pageNumber,
-      code: e.code ?? null,
-      message: e.message,
+      ...(includeDiagnostics
+        ? { code: e.code ?? null, message: e.message }
+        : { message: 'הזיהוי לא הושלם לעמוד זה' }),
     })),
+    ...(includeDiagnostics ? adminJobDiagnostics(job) : {
+      error: job.status === 'failed' && job.method !== 'local' ? 'לא הצלחנו להשלים את הזיהוי' : undefined,
+    }),
+  };
+}
+
+function serializeResultMetadata(json, includeDiagnostics) {
+  const metadata = resultMetadataView(json);
+  if (includeDiagnostics || !metadata) return metadata;
+  const salvage = metadata.salvage;
+  return {
+    ...(metadata.proofreading ? { proofreading: metadata.proofreading } : {}),
+    ...(Number.isSafeInteger(salvage?.pages) && salvage.pages >= 0
+      ? { salvage: { pages: salvage.pages, reason: salvage.reason === 'cancelled' ? 'cancelled' : 'failed' } }
+      : {}),
+  };
+}
+
+// הודעות שרת/עובד עשויות לכלול נתיבי קבצים וחיבור, ולכן מיועדות לניהול בלבד.
+function adminJobDiagnostics(job) {
+  return {
+    error: job.error,
+    startedByName: job.startedByName,
+    cancelledByName: job.cancelledByName ?? null,
+    workerMessage: job.workerMessage ?? null,
+    lastSeenAt: job.lastSeenAt ?? null,
+    pipelineVersion: job.pipelineVersion ?? null,
+    resultError: job.resultError?.code ? { code: job.resultError.code, message: job.resultError.message || '' } : null,
+    layoutSummary: job.layoutSummary ?? null,
     // תוצאות שלא הוחלו (בלי נתיבי קבצים): מתנגשות — hash שונה אחרי נעילה, ממתינות לסימון "נבדק";
     // נדחות — קובץ פגום/לא תקין/אחרי סגירה (לבירור בלבד)
     resultConflicts: (job.resultConflicts || []).map((c) => ({
@@ -156,7 +190,7 @@ export async function getBookOcrStatus(request, access) {
 
     await connectDB();
 
-    const book = await Book.findById(bookId).select('_id name ownerId').lean();
+    const book = await Book.findById(bookId).select(access.canUseBook ? '_id ownerId isHidden isPrivate' : '_id').lean();
     if (!bookAllowed(access, book, session.user)) {
       return notFound('הספר לא נמצא');
     }
@@ -164,6 +198,7 @@ export async function getBookOcrStatus(request, access) {
     // סימון עבודות תקועות (שרת שהופעל מחדש באמצע) ככשל לפני הקריאה
     await reapStaleOcrJobs(book._id);
 
+    const includeDiagnostics = !access.canUseBook;
     // בלי pageMap (עד 2,000 רשומות), בלי נתיבי קבצים פנימיים, ועד 50 שגיאות עמוד
     const job = await OcrJob.findOne({ book: book._id, taskType: { $ne: 'training' } })
       .sort({ createdAt: -1 })
@@ -181,8 +216,10 @@ export async function getBookOcrStatus(request, access) {
     // טקסט כל העמודים — רק ספירה זולה של עמודים עם תמונה; אחרי הסיום הממשק טוען שוב ומקבל הכול.
     const jobActive = job?.active ?? job?.status === 'running';
     const counts = jobActive
-      ? { pagesWithImage: await Page.countDocuments({ book: book._id, imagePath: { $gt: '' } }) }
-      : await countBookOcrPages(book._id, { withRuns: true });
+      ? { pagesWithImage: includeDiagnostics
+        ? await Page.countDocuments({ book: book._id, imagePath: { $gt: '' } })
+        : job.totalPages }
+      : await countBookOcrPages(book._id, { withRuns: true, ...(access.canUseBook ? { ownerId: book.ownerId } : {}) });
 
     const now = new Date();
     const olderJobsFilter = {
@@ -191,13 +228,13 @@ export async function getBookOcrStatus(request, access) {
       resultConflicts: { $elemMatch: { reviewedAt: null } },
       ...(job ? { _id: { $ne: job._id } } : {}),
     };
-    const [worker, conflictsOpen, bookConflictsOpen, olderJobs] = await Promise.all([
+    const [worker, conflictsOpen, bookConflictsOpen, olderResults] = await Promise.all([
       readWorkerInfo(now),
-      job?.method === 'local'
+      includeDiagnostics && job?.method === 'local'
         ? OcrConflict.countDocuments({ job: job._id, status: { $in: PENDING_CONFLICT_STATUSES } })
         : 0,
       OcrConflict.countDocuments({ book: book._id, status: { $in: PENDING_CONFLICT_STATUSES } }),
-      OcrJob.find(olderJobsFilter)
+      includeDiagnostics ? OcrJob.find(olderJobsFilter)
         .sort({ createdAt: -1 })
         .limit(OLDER_RESULT_CONFLICTS_MAX)
         .select({
@@ -207,17 +244,21 @@ export async function getBookOcrStatus(request, access) {
           'resultConflicts.bytes': 1,
           'resultConflicts.reviewedAt': 1,
         })
-        .lean(),
+        .lean() : OcrJob.exists(olderJobsFilter),
     ]);
 
     return NextResponse.json({
       success: true,
       counts,
-      job: job ? serializeJob(job, now) : null,
-      worker,
-      conflictsOpen,
+      job: job ? serializeJob(job, now, includeDiagnostics) : null,
+      worker: includeDiagnostics ? worker : ownerWorkerInfo(worker),
       bookConflictsOpen,
-      olderResultConflicts: pendingResultConflicts(olderJobs),
+      ...(includeDiagnostics
+        ? { conflictsOpen, olderResultConflicts: pendingResultConflicts(olderResults) }
+        : {
+          pendingReview: bookConflictsOpen > 0 || Boolean(olderResults)
+            || Boolean(job?.resultConflicts?.some((conflict) => !conflict.reviewedAt)),
+        }),
     }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error('OCR status error:', error);

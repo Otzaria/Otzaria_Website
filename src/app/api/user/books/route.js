@@ -29,6 +29,7 @@ export async function GET() {
       inProgressPages: book.totalPages - (book.completedPages || 0),
       status: book.completedPages === book.totalPages ? 'completed' : 'in-progress',
       isHidden: book.isHidden,
+      isPrivate: book.isPrivate,
       thumbnail: book.coverImage || null 
     }));
 

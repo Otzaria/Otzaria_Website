@@ -15,7 +15,7 @@ export default function PersonalBookOcrDrawer({ book, onClose }) {
     <Drawer title="זיהוי טקסט אוטומטי (OCR)" subtitle={book.name} onClose={onClose}>
       <div className="flex flex-col gap-4">
         <p className="text-body-sm text-on-surface-variant">
-          הטקסט שיזוהה ייכתב לעמודי הספר, ואפשר להמשיך לערוך אותו בעורך כרגיל. אפשר לסגור את החלון — הזיהוי ימשיך ברקע.
+          הזיהוי חל על עמודים שעוד לא סומנו כהושלמו. אפשר להמשיך לערוך אותם ולסגור את המגירה בזמן שהזיהוי רץ ברקע.
         </p>
         <BookOcrPanel book={book} apiBase="/api/user/books/ocr" reviewResults={false} />
       </div>
