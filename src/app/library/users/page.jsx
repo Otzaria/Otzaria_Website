@@ -13,10 +13,6 @@ export default function UsersPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const usersPerPage = 40
 
-  useEffect(() => {
-    loadUsers()
-  }, [])
-
   // איפוס עמוד בעת חיפוש
   useEffect(() => {
     setCurrentPage(1)
@@ -38,6 +34,10 @@ export default function UsersPage() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    loadUsers()
+  }, [])
 
   // סינון ומיון
   const processUsers = () => {
