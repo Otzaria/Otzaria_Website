@@ -22,7 +22,7 @@ import { getTextareaCaretTop } from '@/lib/editorUtils'
 import { isEditorField, queryEditorField } from '@/lib/editor/editorField'
 import { findNextWholeWordInTextarea as findNextWholeWordInTextareaUtil } from '@/lib/hebrewWordUtils'
 import { buildSearchRegex, findNextOutsideTags, processSearchPattern, rangeInText, replaceOutsideTags } from '@/lib/editor/textOnlyReplace'
-import { hasBookLibraryAccess, hasBooksAccess } from '@/lib/roles'
+import { hasBooksAccess } from '@/lib/roles'
 import { claimLimitMessage, claimRulesText, CLAIM_LIMIT_ERROR_CODE } from '@/lib/pageClaimPolicy'
 import { useRequireAuth } from '@/hooks/useRequireAuth'
 import { useUndoAvailability } from '@/hooks/useUndoAvailability'
@@ -52,11 +52,16 @@ import MobileActionBar from '@/components/editor/v2/MobileActionBar'
 import { pageClaimState, canFinishPage } from '@/components/editor/v2/pageClaim'
 import DisplaySettingsSheet from '@/components/editor/v2/DisplaySettingsSheet'
 import OcrWordReviewPanel from '@/components/editor/v2/OcrWordReviewPanel'
+import OcrWordPopup from '@/components/editor/v2/OcrWordPopup'
 import { setWordReviewAccepted } from '@/lib/editor/ocrWordReview'
 import FinishPageDialog from '@/components/editor/v2/FinishPageDialog'
 import PageReportsLayer from '@/components/editor/reports/PageReportsLayer'
 import { usePageReports } from '@/components/editor/reports/usePageReports'
 import { canReportBookError } from '@/components/editor/reports/reportLogic'
+import ReportFocusBar from '@/components/editor/reports/ReportFocusBar'
+import { useReportFocus } from '@/components/editor/reports/useReportFocus'
+import ReportMarkerActions from '@/components/editor/reports/ReportMarkerActions'
+import { useReportMarkerActions } from '@/components/editor/reports/useReportMarkerActions'
 import RestReminder from '@/components/editor/v2/RestReminder'
 import { buildEditorCommands } from '@/components/editor/v2/editorCommands'
 import {
@@ -87,6 +92,12 @@ const SHORTCUTS_STORAGE_KEY = 'user_shortcuts'
 const SHORTCUTS_VERSION_KEY = 'user_shortcuts_version'
 // פעולות שהקיצור שלהן הוסר בהעברת גרסה (התנגשות) — מוצג בחלון הקיצורים עד "הבנתי"
 const SHORTCUTS_UNBOUND_KEY = 'user_shortcuts_unbound'
+
+async function readPageResponse(response, fallback) {
+  if (response.ok) return response.json()
+  const result = await response.json().catch(() => null)
+  throw new Error(result?.error || fallback)
+}
 
 export default function EditPage() {
   const params = useParams()
@@ -351,91 +362,79 @@ if (savedImageZoom) setImageZoom(parseFloat(savedImageZoom))
     if (bookData?.name) document.title = `עריכה: ${bookData.name} - עמוד ${pageNumber}`
   }, [bookData, pageNumber])
 
-  const loadPageData = async () => {
+  const loadPageData = async signal => {
+    if (signal.aborted) return
+    const applyContent = data => {
+      setPageData(previous => ({ ...previous, ...data }))
+      setContent(data.content || '')
+      setLeftColumn(data.leftColumn || '')
+      setRightColumn(data.rightColumn || '')
+      setRightColumnName(data.rightColumnName || 'חלק 1')
+      setLeftColumnName(data.leftColumnName || 'חלק 2')
+      setTwoColumns(data.twoColumns || false)
+      setIsContentSplit(data.twoColumns || false)
+      setWordReviewState({ pageKey: `${bookPath}:${pageNumber}`, revision: data.ocrReviewRevision, value: data.ocrWordReview || null })
+    }
     try {
       setLoading(true)
       setError(null)
     
       const stored = offlineUserId && readRecord(pageKey(offlineUserId, bookPath, pageNumber))
-      const applyContent = data => {
-        setPageData(previous => ({ ...previous, ...data }))
-        setContent(data.content || '')
-        setLeftColumn(data.leftColumn || '')
-        setRightColumn(data.rightColumn || '')
-        setRightColumnName(data.rightColumnName || 'חלק 1')
-        setLeftColumnName(data.leftColumnName || 'חלק 2')
-        setTwoColumns(data.twoColumns || false)
-        setIsContentSplit(data.twoColumns || false)
-        setWordReviewState({ pageKey: `${bookPath}:${pageNumber}`, revision: data.ocrReviewRevision, value: data.ocrWordReview || null })
-      }
+
       if (stored && (!offline.holdsEditLock() || stored.draft || stored.inFlight || session.offline || navigator.onLine === false || window.__OTZARIA_OFFLINE_BOOK__)) {
         setBookData(stored.book)
         applyContent({ ...stored.data, ...stored.draft })
         return
       }
 
-      // מהספר רק העמוד הנוכחי (?page=) במקום כל עמודי הספר. תוכן העמוד נשלף רק
-      // אחרי שבדיקת ההרשאה שלמטה עברה (ולא במקביל): כך תוכן של ספר מוסתר או של
-      // עמוד נעול לא נשלח לדפדפן של מי שאינו מורשה, ואין בקשת 403 מיותרת.
-      const bookRes = await fetch(`/api/book/${encodeURIComponent(bookPath)}?page=${pageNumber}`)
-      const bookResult = await bookRes.json()
-      if (!bookRes.ok) throw new Error(bookResult.error || 'טעינת הספר נכשלה')
-
-      if (bookResult.success) {
-        setBookData(bookResult.book)
-      
-        if (bookResult.pages && bookResult.pages.length > 0) {
-           const foundPage = bookResult.pages.find(p => p.number === pageNumber);
-         
-           if (foundPage) {
-             
-               const currentUserId = session?.user?._id || session?.user?.id;
-               const isAdmin = hasBookLibraryAccess(session?.user);
-
-               const isClaimedByMe = foundPage.claimedById === currentUserId;
-             
-               const isAvailable = foundPage.status === 'available';
-
-               const canEnter = isAvailable || isClaimedByMe || isAdmin;
-
-               if (!canEnter) {
-                   const holderName = foundPage.claimedBy || 'משתמש אחר';
-                   setError(`אין לך הרשאה לערוך דף זה. הדף נמצא בטיפול על ידי ${holderName}.`);
-                   setLoading(false);
-                   return;
-               }
-
-               setPageData(foundPage);
-           }
-        }
-      } else {
-        throw new Error(bookResult.error)
+      const response = await fetch(`/api/book/${encodeURIComponent(bookPath)}/editor?page=${pageNumber}`, { signal })
+      const result = await readPageResponse(response, 'טעינת תוכן העמוד נכשלה')
+      if (signal.aborted) return
+      if (!result.success || !result.data) {
+        throw new Error(result.error || 'טעינת תוכן העמוד נכשלה')
       }
 
-      const contentRes = await fetch(`/api/page-content?bookPath=${encodeURIComponent(bookPath)}&pageNumber=${pageNumber}`)
-      const contentResult = await contentRes.json()
-
-      if (contentResult.success && contentResult.data) {
-        let data = contentResult.data
-        if (stored) {
-          let latest
-          try { latest = await refreshPreparedPage(stored, data, { ownsEditLock: offline.holdsEditLock }) }
-          catch { throw new Error('לא ניתן לעדכן את עותק האופליין. העותק הקודם נשמר; בדקו את החיבור והאחסון ורעננו.') }
-          if (!latest) throw new Error('עותק האופליין הוסר במהלך הטעינה. רעננו את העמוד.')
-          data = { ...latest.data, ...latest.draft }
+      let data = result.data
+      if (stored) {
+        let latest
+        try {
+          latest = await refreshPreparedPage(stored, data, {
+            ownsEditLock: () => !signal.aborted && offline.holdsEditLock(),
+          })
+        } catch (cause) {
+          throw new Error('לא ניתן לעדכן את עותק האופליין. העותק הקודם נשמר; בדקו את החיבור והאחסון ורעננו.', { cause })
         }
-        applyContent(data)
-      } else throw new Error(contentResult.error || 'טעינת תוכן העמוד נכשלה')
+        if (signal.aborted) return
+        if (!latest) throw new Error('עותק האופליין הוסר במהלך הטעינה. רעננו את העמוד.')
+        data = { ...latest.data, ...latest.draft }
+      }
+      setBookData(result.book)
+      applyContent(data)
     } catch (err) {
+      if (signal.aborted) return
+      // ניתוק בזמן רענון מחזיר לעותק המקומי; שגיאת הרשאה אינה כשל רשת.
+      try {
+        if (navigator.onLine === false && (err instanceof TypeError || err.cause instanceof TypeError)) {
+          const local = offlineUserId && readRecord(pageKey(offlineUserId, bookPath, pageNumber))
+          if (local) {
+            setBookData(local.book)
+            applyContent({ ...local.data, ...local.draft })
+            return
+          }
+        }
+      } catch (localError) { err = localError }
       console.error(err);
       setError(err.message || 'שגיאה בטעינה')
     } finally {
-      setLoading(false)
+      if (!signal.aborted) setLoading(false)
     }
   }
 
   useEffect(() => {
-    if (status === 'authenticated') queueMicrotask(loadPageData)
+    if (status !== 'authenticated') return
+    const controller = new AbortController()
+    queueMicrotask(() => { void loadPageData(controller.signal) })
+    return () => controller.abort()
   // טעינה מותנית-נתיב; loadPageData מוחרג למניעת לולאה
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, bookPath, pageNumber, offlineUserId, session?.offline, offline.lock])
@@ -1372,10 +1371,14 @@ ${claimRulesText()}`,
     containerRef: textEditorContainerRef,
     activeColumn: twoColumns ? (activeTextarea === 'left' ? 'left' : 'right') : null,
   })
+  // נפתח מתוך מסך הדיווחים (?report=<id>): סימון הסימון של הדיווח בטקסט — קריאה בלבד
+  const reportFocus = useReportFocus({ containerRef: textEditorContainerRef, ready: !loading && Boolean(pageData), bookPath, pageNumber })
   const applyColumnText = useCallback((column, text) => {
     if (column === 'right' || column === 'left') handleColumnChange(column, text)
     else { setContent(text); handleAutoSaveWrapper(text) }
   }, [handleColumnChange, handleAutoSaveWrapper])
+  // דיווח שהוכרע: עזרה בעריכת הסימון — בעורך, במסלול העריכה הרגיל (ההכרעה עצמה לא כותבת לטקסט)
+  const runReportMarkerAction = useReportMarkerActions({ focus: reportFocus, applyColumnText })
 
   const handleRelease = useCallback(() => {
     if (session?.offline || navigator.onLine === false) return showAlert('נדרש חיבור', 'שחרור עמוד דורש חיבור לרשת והתחברות לחשבון.');
@@ -1499,6 +1502,19 @@ ${claimRulesText()}`,
 
   // מצב המעקב לשורת המצב — מבלוק המעקב (usePageTracking) למעלה
   const tracking = scanTracking.tracking
+  // מילה חשודה: "המילה תקינה" / "החזר לבדיקה" והחלפה בהצעה — משותף לחלונית "מילים חשודות"
+  // ולחלונית שעל המילה (OcrWordPopup)
+  const setOcrWordAccepted = (word, accept) => {
+    const next = setWordReviewAccepted(reviewTextFields, ocrWordReview, word, ocrReviewRevision, accept)
+    if (!next) return false
+    setWordReviewState({ pageKey: wordReviewPageKey, revision: ocrReviewRevision, value: next })
+    handleAutoSaveWrapper(content, leftColumn, rightColumn, twoColumns, isContentSplit, next)
+    return true
+  }
+  const applyOcrReviewText = (column, value) => {
+    if (column === 'right' || column === 'left') handleColumnChange(column, value)
+    else { setContent(value); handleAutoSaveWrapper(value) }
+  }
 
   const statusShortcuts = [
     { keys: shortcutKeys(userShortcuts.commandPalette), label: 'פקודות' },
@@ -1762,6 +1778,9 @@ ${claimRulesText()}`,
         scanCropFor={scanTracking.scanCropFor}
       />
 
+      <ReportFocusBar state={reportFocus.state} onRehighlight={reportFocus.rehighlight} onDismiss={reportFocus.dismiss}
+        extra={canReportErrors ? <ReportMarkerActions state={reportFocus.state} onRun={runReportMarkerAction} /> : null} />
+
       <FindReplaceDialog
         isOpen={showFindReplace} onClose={() => setShowFindReplace(false)}
         findText={findText} setFindText={setFindText}
@@ -1841,18 +1860,14 @@ ${claimRulesText()}`,
 
       {showOcrReview && (
         <OcrWordReviewPanel key={`${bookPath}:${pageNumber}`} review={scanTracking.review} textContainerRef={textEditorContainerRef}
-          onSetAccepted={(word, accept) => {
-            const next = setWordReviewAccepted(reviewTextFields, ocrWordReview, word, ocrReviewRevision, accept)
-            if (!next) return false
-            setWordReviewState({ pageKey: wordReviewPageKey, revision: ocrReviewRevision, value: next })
-            handleAutoSaveWrapper(content, leftColumn, rightColumn, twoColumns, isContentSplit, next)
-            return true
-          }}
-          onApplyText={(column, value) => {
-            if (column === 'right' || column === 'left') handleColumnChange(column, value)
-            else { setContent(value); handleAutoSaveWrapper(value) }
-          }}
+          onSetAccepted={setOcrWordAccepted} onApplyText={applyOcrReviewText}
           onClose={() => setShowOcrReview(false)} />
+      )}
+
+      {/* אותן פעולות כמו בחלונית "מילים חשודות" — בחלונית קטנה על המילה עצמה (עמידה, לחיצה, F8) */}
+      {!loading && !error && (
+        <OcrWordPopup key={`popup:${bookPath}:${pageNumber}`} review={scanTracking.review} textContainerRef={textEditorContainerRef}
+          onSetAccepted={setOcrWordAccepted} onApplyText={applyOcrReviewText} />
       )}
 
       {showFinishDialog && (

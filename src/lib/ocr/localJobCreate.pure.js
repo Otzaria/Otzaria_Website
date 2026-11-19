@@ -3,7 +3,7 @@
 import { createHash } from 'node:crypto';
 import { EXISTING_TEXT_MODES } from './runOcrJob.pure.js';
 import { normalizePageRange, pageRangeText } from '../pageRange.js';
-import { normalizeProofreadingOptions, proofreadingFingerprint } from './proofreadingOptions.js';
+import { PROOFREADING_OPTION_KEYS, normalizeProofreadingOptions, proofreadingFingerprint } from './proofreadingOptions.js';
 
 // הלקוח שולח crypto.randomUUID() — אבל כל מזהה בטוח באורך סביר מתקבל
 export const REQUEST_ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
@@ -54,7 +54,7 @@ export function normalizeLocalRequest(body) {
     return { ok: false, code: 'invalid_options', error: 'הגדרות העיבוד אינן תקינות' };
   }
   const opts = options || {};
-  const unknown = Object.keys(opts).filter((k) => !Object.hasOwn(LOCAL_OPTION_VALUES, k) && !['lmCheck', 'alts', 'lexicons'].includes(k));
+  const unknown = Object.keys(opts).filter((k) => !Object.hasOwn(LOCAL_OPTION_VALUES, k) && !PROOFREADING_OPTION_KEYS.includes(k));
   if (unknown.length) {
     return { ok: false, code: 'invalid_options', error: 'הגדרת עיבוד לא מוכרת' };
   }

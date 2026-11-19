@@ -23,8 +23,8 @@ import { useOutsidePress } from '@/hooks/useOutsidePress'
  * בבחירה: קודם onClose('select') ואחר כך onSelect של הפריט — כך הפוקוס כבר חזר כשהפעולה רצה.
  *
  * @typedef {{ id: string, label: string, icon?: string, shortcut?: string[], disabled?: boolean,
- *   hint?: string, onSelect?: () => void } | { separator: true, id: string }} ContextMenuItem
- *   hint — שורה קטנה מתחת לתווית (למשל למה הפריט מושבת); מחוברת ב-aria-describedby
+ *   hint?: string | readonly string[], onSelect?: () => void } | { separator: true, id: string }} ContextMenuItem
+ *   hint — שורה קטנה מתחת לתווית (למשל למה הפריט מושבת), או כמה שורות נפרדות (מערך); מחוברת ב-aria-describedby
  *
  * @param {{ x: number, y: number, items: ContextMenuItem[], onClose: (reason: string) => void,
  *   label: string, footer?: import('react').ReactNode }} props
@@ -158,7 +158,11 @@ function ContextMenuRow({ item, baseId, onChoose }) {
       </span>
       <span className="min-w-0 flex-1">
         <span id={labelId} className={cx('block', item.disabled && 'opacity-40')}>{item.label}</span>
-        {item.hint && <span id={hintId} className="block text-label-sm text-on-surface-variant">{item.hint}</span>}
+        {item.hint && (
+          <span id={hintId} className="block text-label-sm text-on-surface-variant">
+            {Array.isArray(item.hint) ? item.hint.map((line) => <span key={line} className="block">{line}</span>) : item.hint}
+          </span>
+        )}
       </span>
       {item.shortcut && item.shortcut.length > 0 && (
         <Kbd keys={item.shortcut} decorative className={cx('text-label-sm text-on-surface-variant', item.disabled && 'opacity-40')} />

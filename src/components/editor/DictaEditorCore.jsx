@@ -73,7 +73,10 @@ export default function DictaEditorCore({
   headerEndElement = null,
   singleLineHeader = false,
   enableSpellcheck = true,
-  saveLabel = 'שמירה'
+  saveLabel = 'שמירה',
+  // callback שמקבל את התוכן העדכני בלי לגרום לרינדור של ההורה בכל הקלדה
+  // (העורך האופליין משתמש בו בכפתור ההורדה שבכותרת, שנמצא מחוץ לעורך).
+  onLatestContent = null
 }) {
   const { showAlert } = useDialog()
 
@@ -982,6 +985,7 @@ export default function DictaEditorCore({
   // סנכרון ה-ref מתבצע ב-effect (לא ישירות ברינדור) כדי לא לגעת ב-ref.current תוך כדי רינדור
   useEffect(() => {
     latestContentRef.current = content
+    if (onLatestContent) onLatestContent(content)
   })
   const handleSaveClick = useCallback(() => {
     if (onSave) onSave(latestContentRef.current)

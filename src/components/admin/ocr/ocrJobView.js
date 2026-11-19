@@ -349,6 +349,11 @@ export const LOCAL_SCRIPT_OPTIONS = Object.freeze([
   { value: 'square', label: 'מרובע' },
   { value: 'rashi', label: 'רש"י' },
 ])
+// רגישות ההגהה (options.sensitivity). "רגיל" נשלח כשדה חסר — ברירת המחדל של הפייפליין.
+export const LOCAL_SENSITIVITY_OPTIONS = Object.freeze([
+  { value: 'normal', label: 'רגיל', desc: 'פחות סימונים, כמעט כולם שגיאות אמיתיות' },
+  { value: 'more', label: 'יותר סימונים', desc: 'תופס יותר שגיאות, עם יותר סימונים מיותרים' },
+])
 
 // אפשרויות הטיפול בעמודים שכבר יש בהם טקסט (existingTextMode — ראו EXISTING_TEXT_MODES ב-runOcrJob.pure)
 export const EXISTING_TEXT_OPTIONS = Object.freeze([

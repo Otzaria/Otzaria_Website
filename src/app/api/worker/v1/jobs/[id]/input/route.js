@@ -13,7 +13,7 @@ export const GET = withWorker(async (_request, { workerId, params }) => {
   const { id } = params;
   if (!isJobIdParam(id)) return workerError(404, 'not_found');
   const job = await OcrJob.findOne({ _id: id, ...workerJobFilter(workerId) })
-    .select({ _id: 1, inputPath: 1, inputSha256: 1, inputBytes: 1, inputPurgedAt: 1 })
+    .select({ _id: 1, taskType: 1, inputPath: 1, inputSha256: 1, inputBytes: 1, inputPurgedAt: 1 })
     .lean();
   if (!job) return workerError(404, 'not_found');
 
@@ -27,7 +27,7 @@ export const GET = withWorker(async (_request, { workerId, params }) => {
   return new Response(input.stream, {
     status: 200,
     headers: {
-      'Content-Type': 'application/pdf',
+      'Content-Type': job.taskType === 'training' ? 'application/octet-stream' : 'application/pdf',
       'Content-Length': String(input.size),
       'X-Content-SHA256': input.sha256,
       'Cache-Control': 'no-store',

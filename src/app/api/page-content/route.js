@@ -8,6 +8,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { hasBookLibraryAccess } from '@/lib/roles';
 import { unauthorized, badRequest, notFound, forbidden, serverError } from '@/lib/apiResponse';
 import { pageVersion, pageVersionGuard, sameSavedText } from '@/lib/offlineBooks/version';
+import { formatEditorPageContent } from '@/lib/editor/pageContent';
 import { ocrReviewRevision, validOcrReviewState } from '@/lib/editor/ocrReviewState';
 
 // שמירת תוכן (Auto-save)
@@ -262,23 +263,7 @@ export async function GET(request) {
         // 3. החזרת הנתונים ללקוח
         return NextResponse.json({ 
             success: true, 
-            data: {
-                contentVersion: pageVersion(page),
-                saveRevision: page.contentSaveRevision || 0,
-                thumbnail: page.imagePath,
-                id: page._id, // חשוב להחזיר ID לשימוש ב-Update
-                content: page.content || '',
-                isTwoColumns: page.isTwoColumns || false,
-                twoColumns: page.isTwoColumns || false,
-                rightColumn: page.rightColumn || '',
-                leftColumn: page.leftColumn || '',
-                rightColumnName: page.rightColumnName || 'חלק 1',
-                leftColumnName: page.leftColumnName || 'חלק 2',
-                status: page.status,
-                claimedBy: page.claimedBy,
-                ocrReviewRevision: ocrReviewRevision(page),
-                ocrWordReview: page.ocrWordReview?.revision === ocrReviewRevision(page) ? page.ocrWordReview : null,
-            }
+            data: formatEditorPageContent(page)
         });
 
     } catch (error) {

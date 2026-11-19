@@ -438,6 +438,11 @@ export function createRichController(host, layer, { column, getProps }) {
       }
       return rawFromDomPoint(host, st.index, node, offset)
     },
+    // מלבני המסך של טווח בטקסט הגולמי (מילה חשודה — מיקום החלונית שעליה, ובדיקת עמידת העכבר)
+    rangeRects: (from, to) => {
+      const range = domRangeFromRaw(host, st.index, from, to)
+      return [...(range?.getClientRects?.() || [])].filter((x) => x.width > 0 && x.height > 0)
+    },
     lineMidY: (line) => {
       const el = lineElements(host)[line]
       if (!el) return null

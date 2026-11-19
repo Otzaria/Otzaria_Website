@@ -1,5 +1,7 @@
 'use client'
 
+import ModelTrainingPanel from './ModelTrainingPanel'
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import Button from '@/components/ui/Button'
@@ -56,7 +58,7 @@ const nameOf = (l) => (l.bookName ? `${l.bookName}, עמוד ${formatNumber(l.pa
  * בורר מקור (מההגהה / מעמודים לאימון), וכרטיס לכל שורה — תמונה וטקסט לעריכה, "אשר" · "שלח להקלדה מחדש" · ⋮.
  * אשר נבחרים; מקלדת: J K (בכל המסך, חוץ משדות טקסט) / ↑ ↓ (ברשימה), A, R. "הצג עוד" — 50 נוספות. אותן בקשות לשרת כמו המסך הקודם.
  */
-export default function OcrLinesScreen() {
+export default function OcrLinesScreen({ canRunBookOcr = false }) {
   const toast = useToast()
   const [confirm, confirmElement] = useConfirm()
   const [query, setQuery] = useUrlQuery(parseLinesQuery, serializeLinesQuery)
@@ -338,6 +340,7 @@ export default function OcrLinesScreen() {
   return (
     <div className="flex flex-col gap-5">
       <AdminScreenHeader id={TITLE_ID} title={SCREEN_TEXT.lines.title} description={SCREEN_TEXT.lines.description} menuItems={menuItems} />
+      <ModelTrainingPanel canRunBookOcr={canRunBookOcr} />
       {data.status === 'error' ? (
         <LoadError error={data.error} title="לא הצלחנו לטעון את השורות" sessionText="התחבר מחדש כדי לראות את השורות. אחרי ההתחברות תחזור לכאן." onRetry={data.retry} />
       ) : (

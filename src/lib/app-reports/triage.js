@@ -184,16 +184,31 @@ export const UNLINKED = Object.freeze({
  * בדיקה חוזרת של דיווח שלא נפתח (המדווח השיב). ממתין שוב לפרסום, כך שגם אם השירות לא יענה — ייפתח.
  * @returns {Promise<boolean>} האם הבקשה נרשמה
  */
-export async function requestRetriage(reportId, deps) {
+/**
+ * תשובות מכתובת אחרת (`issueComment: 'held'`) שהגיעו אחרי השאלה האחרונה ששלחנו (`out`), לפי סדר ההתכתבות.
+ * `beforeDate`: רק שאלות שנשלחו עד המועד הזה נחשבות "השאלה האחרונה" (לבדיקה שכבר רצה, שהשאלה החדשה שלה לא נחשבת).
+ * בלי שאלה כלל: כל התשובות הזרות (`lastOut: -1`).
+ */
+export function heldRepliesAfterLastQuestion(contactLog, beforeDate = null) {
+  const log = contactLog || [];
+  let lastOut = -1;
+  log.forEach((c, i) => {
+    if ((c.direction || 'out') === 'out' && (!beforeDate || !c.sentAt || new Date(c.sentAt) <= new Date(beforeDate))) lastOut = i;
+  });
+  return { lastOut, held: log.slice(lastOut + 1).filter((c) => c.direction === 'in' && c.issueComment === 'held') };
+}
+
+export async function requestRetriage(reportId, deps, { requireAwaitingReply = false } = {}) {
   const now = deps.now || new Date();
-  const doc = await AppReport.findOne({ reportId, 'triage.state': 'held' }).select('triage').lean();
+  const filter = { reportId, 'triage.state': 'held', ...(requireAwaitingReply ? { 'triage.awaitingReply': true } : {}) };
+  const doc = await AppReport.findOne(filter).select('triage').lean();
   if (!doc) return false;
   const runs = (doc.triage.runs || 0) + 1;
   const next = pendingTriage(now, deps.config, runs);
   // המדווח השיב שוב ושוב: לא בודקים בלי סוף — נפתח ב-cron הבא
   if (runs > MAX_TRIAGE_RUNS) Object.assign(next, { state: 'opened', deadline: now, decidedAt: now, followUp: null });
   const upd = await AppReport.updateOne(
-    { reportId, 'triage.state': 'held', 'triage.decidedAt': doc.triage.decidedAt },
+    { ...filter, 'triage.decidedAt': doc.triage.decidedAt },
     { $set: { ...UNLINKED, issuePending: true, issueError: null, triage: { ...doc.triage, ...next } } },
   );
   if (!upd.modifiedCount) return false;

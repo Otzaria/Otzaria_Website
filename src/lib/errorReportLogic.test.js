@@ -605,7 +605,70 @@ describe('buildHtml / buildText', () => {
     expect(html).not.toContain('קישור ישיר');
     const sefariaPayload = { ...payload, source_folder: 'sefariaToOtzaria' };
     const sefariaHtml = buildHtml(sefariaPayload, []);
-    expect(sefariaHtml).toContain('קישור ישיר');
+    expect(sefariaHtml).toContain('<strong>קישור:</strong> <a href="https://www.sefaria.org/');
+  });
+
+  it('sends Sefaria a plain mail: one-line source, the current text, then wrong and corrected', () => {
+    const report = {
+      ...payload,
+      book_title: 'מחיר יין',
+      current_ref: 'מחיר יין, פרק ח',
+      he_ref: 'מחיר יין, ח, טו, א',
+      source_folder: 'sefariaToOtzaria',
+      correction: { originalLine: 'וכבר <b>ביאר</b> המורה פרק כד', originalSelection: null, proposedText: 'וכבר <b>ביאר</b> המורה פרק נד' },
+    };
+    const { text, html } = buildEmailBodies(report, ['cc@x.com']);
+    expect(text.startsWith('מקור: מחיר יין, ח, טו, א\n\nקישור: https://www.sefaria.org/')).toBe(true);
+    expect(text).toContain([
+      'הנוסח הנוכחי:', 'וכבר ביאר המורה פרק כד', '',
+      'הטקסט השגוי:', 'וכבר ביאר המורה פרק כד', '',
+      'הטקסט המתוקן:', 'וכבר ביאר המורה פרק *נד*',
+    ].join('\n'));
+    for (const field of ['נתיב:', 'תיקיית מקור:', 'שורה:', 'ספר:']) expect(text).not.toContain(field);
+    expect(text).toContain('עותק נשלח גם ל: cc@x.com');
+    expect(html).not.toContain('border');
+    expect(html).toContain('<strong>מקור:</strong> מחיר יין, ח, טו, א');
+    expect(buildText({ ...report, he_ref: undefined }, [])).toContain('מקור: מחיר יין, פרק ח\n');
+    expect(buildText({ ...report, he_ref: undefined, current_ref: 'פרק ח' }, [])).toContain('מקור: מחיר יין, פרק ח\n');
+    expect(buildText({ ...report, he_ref: undefined, current_ref: '\nפרק\tח ' }, [])).toContain('מקור: מחיר יין, פרק ח\n');
+  });
+
+  it('quotes a very long current text around the change, and keeps a repeated excerpt whole', () => {
+    const words = Array.from({ length: 400 }, (_, index) => `מ${index}`);
+    const corrected = [...words];
+    corrected[300] = 'תיקון';
+    const report = {
+      ...payload,
+      source_folder: 'sefariaToOtzaria',
+      correction: { originalLine: words.join(' '), originalSelection: null, proposedText: corrected.join(' ') },
+    };
+    const current = buildText(report).split('הנוסח הנוכחי:\n')[1].split('\n')[0];
+    expect(current.startsWith('… ')).toBe(true);
+    expect(current.endsWith(' …')).toBe(true);
+    expect(current).toContain('מ300');
+    expect(current.split(' ').length).toBe(162);
+
+    const nearStart = [...words];
+    nearStart[2] = 'תיקון';
+    const atStart = buildText({ ...report, correction: { ...report.correction, proposedText: nearStart.join(' ') } })
+      .split('הנוסח הנוכחי:\n')[1].split('\n')[0];
+    expect(atStart.startsWith('מ0 ')).toBe(true);
+    expect(atStart.split(' ').length).toBe(161);
+
+    const repeated = 'פתיחה ' + 'א ב ג ד טעות ה ו ז ח '.repeat(30) + 'סוף';
+    const start = repeated.indexOf('טעות');
+    const ambiguous = buildText({
+      ...report,
+      correction: { originalLine: repeated, originalSelection: null, proposedText: repeated.slice(0, start) + 'תיקון' + repeated.slice(start + 4) },
+    });
+    expect(ambiguous).toContain(`הנוסח הנוכחי:\n${repeated}\n`);
+    expect(ambiguous).toContain('הקטע מופיע יותר מפעם אחת בשורה');
+    expect(ambiguous).toContain('הנוסח המתוקן המלא:');
+  });
+
+  it('labels the context as the current text in a free-text Sefaria report', () => {
+    const text = buildText({ ...payload, source_folder: 'sefariaToOtzaria' });
+    expect(text).toContain('הנוסח הנוכחי:\nctx\n\nהטקסט המסומן:\nsel\n\nפירוט הטעות:\nerr');
   });
 
   it('escapes the correction snippets in the HTML output', () => {

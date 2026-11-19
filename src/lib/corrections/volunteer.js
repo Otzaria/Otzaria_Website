@@ -23,6 +23,7 @@ import { newId, logEvent, userActor, currentRevisionOf, manualQueueSet } from '.
 import { cancelActiveJobs } from './worker.js';
 import { LIST_FILTERS, PUBLISHING_STATUSES } from './listFilters.js';
 import { parseListSort, sortSpec, libraryVersionKeyExpr, reportLibraryVersion, LIBRARY_VERSION_SORT_SCHEMA } from './listSort.js';
+import { afterReportCursor, parseReportCursor, reportCursor } from './listCursor.js';
 
 const MAX_LINE = 20_000;
 const ok = (body) => ({ status: 200, body });
@@ -71,7 +72,12 @@ export async function listReports({ user, query = {}, now = new Date() }) {
   const limit = Math.min(100, Math.max(1, Number.parseInt(query.limit, 10) || 50));
   const skip = Math.max(0, Number.parseInt(query.skip, 10) || 0);
   const sort = parseListSort(query.sort);
-  const fields = 'reportId bookTitle currentRef sourceFolder reportKind state status manual verification approval publish workflowGeneration createdAt resolvedSource.status inclusion libraryVersion location.libraryBuildId';
+  const cursor = query.cursor === undefined ? null : parseReportCursor(query.cursor, sort);
+  if (query.cursor !== undefined && !cursor) return err(400, 'invalid_cursor');
+  const boundary = cursor ? afterReportCursor(cursor, sort) : null;
+  const pageFilter = boundary ? { $and: [filter, boundary] } : filter;
+  const pageSkip = cursor ? 0 : skip;
+  const fields = 'reportId bookTitle currentRef sourceFolder reportKind state status manual verification approval publish workflowGeneration createdAt resolvedSource.status inclusion libraryVersion location.libraryBuildId libraryVersionSortKey';
   // Before the explicit migration, preserve correct ordering across mixed old/new reports.
   // The schema marker is the leading index key: once backfilled this check reads no reports.
   const needsBackfill = sort === 'version' && await ErrorReport.exists({ libraryVersionSortSchema: { $ne: LIBRARY_VERSION_SORT_SCHEMA } });
@@ -81,18 +87,22 @@ export async function listReports({ user, query = {}, now = new Date() }) {
       { $match: filter },
       { $project: Object.fromEntries(fields.split(' ').map((f) => [f, 1])) },
       { $addFields: { libraryVersionSortKey: libraryVersionKeyExpr() } },
+      ...(boundary ? [{ $match: boundary }] : []),
       { $sort: sortSpec(sort) },
-      { $skip: skip },
-      { $limit: limit },
+      { $skip: pageSkip },
+      { $limit: limit + 1 },
     ]).allowDiskUse(true)
-    : await ErrorReport.find(sort === 'version' ? { ...filter, libraryVersionSortSchema: LIBRARY_VERSION_SORT_SCHEMA } : filter)
-      .select(fields).sort(sortSpec(sort)).skip(skip).limit(limit).lean();
+    : await ErrorReport.find(sort === 'version' ? { ...pageFilter, libraryVersionSortSchema: LIBRARY_VERSION_SORT_SCHEMA } : pageFilter)
+      .select(fields).sort(sortSpec(sort)).skip(pageSkip).limit(limit + 1).lean();
+  const pageRows = rows.slice(0, limit);
   const total = await ErrorReport.countDocuments(filter);
   return ok({
     view,
     sort,
     total,
-    items: rows.map((r) => ({
+    hasMore: rows.length > limit,
+    nextCursor: pageRows.length ? reportCursor(pageRows.at(-1), sort) : null,
+    items: pageRows.map((r) => ({
       id: String(r._id),
       bookTitle: r.bookTitle,
       currentRef: r.currentRef,

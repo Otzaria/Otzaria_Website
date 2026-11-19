@@ -17,7 +17,7 @@ describe('כרטיס טעות בספר — תצוגה', () => {
     const card = screen.getByRole('listitem')
     expect(within(card).getByRole('heading')).toHaveTextContent('בראשית רבה')
     expect(within(card).getByRole('heading')).toHaveTextContent('עמוד 12')
-    expect(within(card).getByRole('link', { name: /פתח את עמוד 12 בבראשית רבה בעורך/ })).toHaveAttribute('href', '/library/books/bereshit-raba/12')
+    expect(within(card).getByRole('link', { name: /פתח את עמוד 12 בבראשית רבה בעורך/ })).toHaveAttribute('href', '/library/books/bereshit-raba/12?report=r1')
     expect(card).toHaveTextContent('משה כהן')
     expect(card).toHaveTextContent('מצב העמוד:')
     expect(card).toHaveTextContent('הושלם')

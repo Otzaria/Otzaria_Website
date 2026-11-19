@@ -11,6 +11,14 @@ describe('PluginImage', () => {
     expect(img).toHaveAttribute('loading', 'lazy')
   })
 
+  it('מבקש גרסת כרטיס באייקונים קטנים ושומר את המקור בכותרת פרטי התוסף', () => {
+    const source = '/api/plugins/0123456789abcdef01234567/image?pending=1'
+    const { container, rerender } = render(<PluginImage src={source} size="md" />)
+    expect(container.querySelector('img')).toHaveAttribute('src', source + '&size=card')
+    rerender(<PluginImage src={source} size="hero" />)
+    expect(container.querySelector('img')).toHaveAttribute('src', source)
+  })
+
   it('priority — eager ובעדיפות גבוהה', () => {
     const { container } = render(<PluginImage src="/x.webp" priority />)
     const img = container.querySelector('img') as HTMLImageElement

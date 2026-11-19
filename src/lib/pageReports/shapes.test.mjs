@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { buildErrorMarker } from './rules.js'
 import {
-  adminReportShape, myReportShape, parseAdminListQuery, countsFromRows, pageImageUrl,
+  adminReportShape, editorReportShape, myReportShape, parseAdminListQuery, countsFromRows, pageImageUrl,
   ADMIN_LIST_MAX_LIMIT,
 } from './shapes.js'
 
@@ -56,4 +56,14 @@ test('צורת הדיווח אינה טוענת שסימון נמצא או שה�
   assert.equal(s.appliedToText, null)
   assert.equal('markerPresent' in s, false)
   assert.equal('canApply' in s, false)
+})
+
+test('editorReportShape: מה שהעורך צריך כדי למצוא את הסימון, בלי פרטי משתמשים', () => {
+  const s = editorReportShape({ ...report, contextBefore: 'לפני ', contextAfter: ' אחרי', finalProposed: 'ג' })
+  assert.deepEqual(s, {
+    _id: 'r1', kind: 'book_error', bookPath: 'sefer', pageNumber: 2, column: 'content', original: 'א', proposed: 'ב',
+    offset: 0, contextBefore: 'לפני ', contextAfter: ' אחרי', status: 'pending', finalOriginal: 'א', finalProposed: 'ג',
+  })
+  assert.equal(editorReportShape({ ...report, offset: null }).offset, null)
+  assert.equal(editorReportShape(report).finalProposed, null)
 })

@@ -325,6 +325,10 @@ function toDisplayWords(line) {
  * כדי שהמקבל יאתר את המקום בחיפוש באתר שלו. null כשאין שינוי בטקסט הנראה.
  */
 export function buildCorrectionSnippets(correction) {
+  return analyzeCorrection(correction)?.snippets ?? null;
+}
+
+function analyzeCorrection(correction) {
   const newLine = computeNewLine(correction);
   if (newLine === null) return null;
   const oldWords = toDisplayWords(correction.originalLine);
@@ -349,7 +353,7 @@ export function buildCorrectionSnippets(correction) {
   const searchable = ` ${original} `;
   const first = searchable.indexOf(needle);
   const ambiguous = first >= 0 && searchable.indexOf(needle, first + 1) >= 0;
-  return {
+  const snippets = {
     wrong,
     fixed: [
       ...newWords.slice(from, prefix),
@@ -363,6 +367,19 @@ export function buildCorrectionSnippets(correction) {
       original, corrected: newWords.join(' '),
     } } : {}),
   };
+  return { snippets, currentText: currentTextExcerpt(oldWords, from, until, ambiguous) };
+}
+
+const MAX_CURRENT_WORDS = 160;
+
+// שורה ארוכה במיוחד מצוטטת כחלון סביב השינוי; בקטע שחוזר בשורה — כולה, כי מיקום המילים מתייחס אליה.
+function currentTextExcerpt(words, from, until, keepWhole) {
+  if (keepWhole || words.length <= MAX_CURRENT_WORDS) return words.join(' ');
+  // החלון ממורכז סביב השינוי, וליד קצה השורה מה שנשאר עובר לצד השני.
+  const span = Math.max(MAX_CURRENT_WORDS, until - from);
+  const start = Math.max(0, Math.min(from - Math.floor((span - (until - from)) / 2), words.length - span));
+  const end = start + span;
+  return `${start > 0 ? '… ' : ''}${words.slice(start, end).join(' ')}${end < words.length ? ' …' : ''}`;
 }
 
 /** הערת המדווח בלי בלוק ההצעה שהתוכנה מצרפת ל-error_details (מוצג כבר כטקסט שגוי/מתוקן). */
@@ -397,13 +414,84 @@ function correctionContextLabel(context) {
 
 function emailView(payload) {
   const isSefariaSource = getEmailRecipients(payload.source_folder).isSefariaOnly;
+  // הצעת תיקון נשלחת במייל רק למקור החיצוני (לאוצריא היא נכנסת למערכת התיקונים),
+  // וכל מקור צריך לאתר את המקום בחיפוש בטקסט שלו.
+  const analysis = analyzeCorrection(payload.correction);
   return {
     isSefariaSource,
     sefariaLink: isSefariaSource ? buildSefariaLink(payload.book_title, payload.current_ref, payload.he_ref) : '',
-    // הצעת תיקון נשלחת במייל רק למקור החיצוני (לאוצריא היא נכנסת למערכת התיקונים),
-    // וכל מקור צריך לאתר את המקום בחיפוש בטקסט שלו.
-    snippets: buildCorrectionSnippets(payload.correction),
+    snippets: analysis?.snippets ?? null,
+    currentText: analysis?.currentText ?? null,
   };
+}
+
+/** מראה מקום בשורה אחת להעתקה: של ספריא עצמה, ובלעדיו הספר והמיקום באוצריא. */
+function sefariaSourceLine(payload) {
+  const heRef = String(payload.he_ref ?? '').replace(/\s+/g, ' ').trim();
+  if (heRef) return heRef;
+  const title = String(payload.book_title ?? '').replace(/\s+/g, ' ').trim();
+  const ref = String(payload.current_ref ?? '').replace(/\s+/g, ' ').trim();
+  return !title || ref.startsWith(title) ? ref : `${title}, ${ref}`;
+}
+
+// ספריא מעתיקים מהמייל לחיפוש ולמערכת שלהם: טקסט רציף בלי מסגרות.
+function sefariaSections(payload, ccRecipients, { sefariaLink, snippets, currentText }) {
+  const ccList = (Array.isArray(ccRecipients) ? ccRecipients : [ccRecipients]).filter(Boolean);
+  const sections = [{ label: 'מקור', value: sefariaSourceLine(payload), inline: true }];
+  if (sefariaLink) sections.push({ label: 'קישור', value: sefariaLink, inline: true, link: true });
+  if (snippets) {
+    const note = reporterNote(payload.error_details);
+    sections.push(
+      { label: 'הנוסח הנוכחי', value: currentText },
+      { label: 'הטקסט השגוי', value: snippets.wrong },
+      { label: 'הטקסט המתוקן', value: snippets.fixed },
+    );
+    if (snippets.context) {
+      sections.push(
+        { value: correctionContextLabel(snippets.context) },
+        { label: 'הנוסח המתוקן המלא', value: snippets.context.corrected },
+      );
+    }
+    if (note) sections.push({ label: 'הערת המדווח', value: note });
+  } else {
+    sections.push(
+      { label: 'הנוסח הנוכחי', value: payload.context_text },
+      { label: 'הטקסט המסומן', value: payload.selected_text },
+      { label: 'פירוט הטעות', value: payload.error_details },
+    );
+  }
+  const footer = [
+    'דווח דרך אוצריא',
+    `שולח: ${payload.sender_email}`,
+    `גרסת ספרייה: ${extractLibraryVersion(payload)}`,
+    `מזהה דיווח: ${payload.report_id}`,
+  ];
+  if (ccList.length > 0) footer.push(`עותק נשלח גם ל: ${ccList.join(', ')}`);
+  return { sections, footer };
+}
+
+function renderSefariaText(payload, ccRecipients, view) {
+  const { sections, footer } = sefariaSections(payload, ccRecipients, view);
+  const blocks = sections.map(({ label, value, inline }) =>
+    !label ? value : inline ? `${label}: ${value}` : `${label}:\n${value}`);
+  return [...blocks, ['--', ...footer].join('\n')].join('\n\n');
+}
+
+function renderSefariaHtml(payload, ccRecipients, view) {
+  const { sections, footer } = sefariaSections(payload, ccRecipients, view);
+  const paragraph = ({ label, value, inline, link }) => {
+    const escapedValue = escapeHtml(value);
+    const shown = link
+      ? `<a href="${escapedValue}">${escapedValue}</a>`
+      : escapedValue.replace(/\r?\n/g, '<br>');
+    if (!label) return `<p>${shown}</p>`;
+    return inline
+      ? `<p><strong>${label}:</strong> ${shown}</p>`
+      : `<p><strong>${label}:</strong><br>${shown}</p>`;
+  };
+  return `<div dir="rtl" style="font-family: Arial, sans-serif; line-height: 1.6;">${
+    sections.map(paragraph).join('')
+  }<p style="color: #666;">--<br>${footer.map(escapeHtml).join('<br>')}</p></div>`;
 }
 
 /** Prepare correction snippets once for both formats; never cache across reports. */
@@ -419,7 +507,9 @@ export function buildHtml(payload, ccRecipients = []) {
   return renderHtml(payload, ccRecipients, emailView(payload));
 }
 
-function renderHtml(payload, ccRecipients, { isSefariaSource, sefariaLink, snippets }) {
+function renderHtml(payload, ccRecipients, view) {
+  if (view.isSefariaSource) return renderSefariaHtml(payload, ccRecipients, view);
+  const { snippets } = view;
   const escaped = Object.fromEntries(
     Object.entries(payload).map(([key, value]) => [key, escapeHtml(value)])
   );
@@ -442,7 +532,6 @@ function renderHtml(payload, ccRecipients, { isSefariaSource, sefariaLink, snipp
         <div style="padding: 24px; line-height: 1.7;">
           <p><strong>ספר:</strong> ${escaped.book_title}</p>
           <p><strong>מיקום:</strong> ${escaped.current_ref}</p>
-          ${isSefariaSource ? `<p><strong>קישור ישיר:</strong> <a href="${sefariaLink}" target="_blank" style="color: #d4a373;">${sefariaLink}</a></p>` : ''}
           <p><strong>שורה:</strong> ${escaped.line_number}</p>
           <p><strong>גרסת ספרייה:</strong> ${libraryVersion}</p>
           <p><strong>נתיב:</strong> ${escaped.file_path}</p>
@@ -469,15 +558,13 @@ export function buildText(payload, ccRecipients = []) {
   return renderText(payload, ccRecipients, emailView(payload));
 }
 
-function renderText(payload, ccRecipients, { isSefariaSource, sefariaLink, snippets }) {
+function renderText(payload, ccRecipients, view) {
+  if (view.isSefariaSource) return renderSefariaText(payload, ccRecipients, view);
+  const { snippets } = view;
   const lines = [
     `ספר: ${payload.book_title}`,
     `מיקום: ${payload.current_ref}`,
   ];
-
-  if (isSefariaSource && sefariaLink) {
-    lines.push(`קישור ישיר: ${sefariaLink}`);
-  }
 
   // הודעת העותק משקפת את נמעני ה-cc שבאמת קיבלו (לאחר סינון כפילויות)
   const ccList = (Array.isArray(ccRecipients) ? ccRecipients : [ccRecipients]).filter(Boolean);

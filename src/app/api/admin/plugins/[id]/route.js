@@ -16,6 +16,7 @@ import {
   getPendingPluginDir,
   removePluginAsset,
   clearImageOptCache,
+  promotePendingPluginImage,
   pluginFileSha256
 } from '@/lib/pluginStorage'
 import { archiveCurrentVersion } from '@/lib/pluginVersions'
@@ -152,10 +153,7 @@ export async function PATCH(request, { params }) {
             await removePluginAsset(pluginId, `image${plugin.image.ext}`).catch(() => {})
           }
           await clearImageOptCache(pluginId)
-          const source = path.join(getPendingPluginDir(pluginId), `image${pending.image.ext}`)
-          const target = path.join(pluginDir, `image${pending.image.ext}`)
-          await fs.rm(target, { force: true })
-          await fs.rename(source, target)
+          await promotePendingPluginImage(pluginId, pending.image.ext)
           plugin.image = pending.image
         }
 

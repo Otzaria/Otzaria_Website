@@ -28,6 +28,7 @@ import OcrJob from '../../models/OcrJob.js'
 import OcrWorkerState from '../../models/OcrWorkerState.js'
 import { startMongo } from '../corrections/testing/mongo.js'
 import { createOrResumeLocalJob } from './localJobCreate.js'
+import { toEnvelope } from './localEnvelope.js'
 import { countBookOcrPages } from './bookOcrCounts.js'
 import { ocrTextSha256 } from './runOcrJob.pure.js'
 import { LocalInputError } from './localPdf.pure.js'
@@ -216,9 +217,10 @@ describe('בעלות על הכנת local (W04)', () => {
 })
 
 
+const capabilities = { version: 1, lmCheck: true, alternatives: true, lexiconAvailable: true, contextAvailable: true,
+  lexicons: [{ name: 'modern', version: 1 }], defaultLexicons: [] }
+
 describe('proofreading capability gate and immutable retries', () => {
-  const capabilities = { version: 1, lmCheck: true, alternatives: true, lexiconAvailable: true, contextAvailable: true,
-    lexicons: [{ name: 'modern', version: 1 }], defaultLexicons: [] }
   const req = () => ({ ...REQ, options: { lm: 'modern', defaultScript: 'square', lmCheck: 'off', alts: 'off', lexicons: ['modern'] } })
   const create = (request = req(), now = new Date()) => createOrResumeLocalJob({ book, req: request, config: { workerId: 'worker-1' }, session: {}, now })
   it('rejects unsupported new work before PDF creation', async () => {
@@ -246,4 +248,36 @@ describe('proofreading capability gate and immutable retries', () => {
     expect((await create({ ...req(), options: { ...req().options, lexicons: ['missing'] } })).body.code).toBe('proofreading_unavailable')
     expect(builds).toHaveLength(0)
   })
+  it('stores the selected sensitivity only for a worker that reports support', async () => {
+    const more = { ...REQ, options: { lm: 'rabbinic', defaultScript: 'square', sensitivity: 'more' } }
+    await OcrWorkerState.create({ workerId: 'worker-1', proofreadingCapabilities: capabilities, capabilitiesReceivedAt: new Date() })
+    expect((await create(more)).body.code).toBe('proofreading_unavailable')
+    expect(builds).toHaveLength(0)
+    await OcrWorkerState.updateOne({ workerId: 'worker-1' }, { $set: { proofreadingCapabilities: { ...capabilities, sensitivity: true } } })
+    const attempt = create(more)
+    await vi.waitFor(() => expect(builds).toHaveLength(1))
+    await finishBuild(0, 'sensitivity-pdf')
+    expect((await attempt).status).toBe(202)
+    expect((await OcrJob.findOne({ requestId: REQ.requestId }).lean()).options).toEqual(more.options)
+  })
+})
+
+it.each([false, true])('book scope is server-derived only after rollout, and an existing envelope stays immutable (enabled=%s)', async enabled => {
+  vi.stubEnv('OCR_TRAINING_ENABLED', String(enabled))
+  try {
+    await OcrWorkerState.create({ workerId: 'worker-1', proofreadingCapabilities: capabilities, capabilitiesReceivedAt: new Date() })
+    const options = { lm: 'modern', defaultScript: 'square', lmCheck: 'off', alts: 'off', lexicons: ['modern'] }
+    const create = () => createOrResumeLocalJob({ book, req: { ...REQ, options }, session: {}, config: { workerId: 'worker-1' } })
+    const attempt = create()
+    await vi.waitFor(() => expect(builds).toHaveLength(1))
+    await finishBuild(0, 'book-scoped-input')
+    expect((await attempt).status).toBe(202)
+    const original = await OcrJob.findOne({ requestId: REQ.requestId }).lean()
+    expect(toEnvelope(original).options).toEqual({ ...options, ...(enabled ? { bookId: String(book._id) } : {}) })
+    vi.stubEnv('OCR_TRAINING_ENABLED', String(!enabled))
+    await create()
+    const replay = await OcrJob.findById(original._id).lean()
+    expect(toEnvelope(replay)).toEqual(toEnvelope(original))
+    expect(builds).toHaveLength(1)
+  } finally { vi.unstubAllEnvs() }
 })

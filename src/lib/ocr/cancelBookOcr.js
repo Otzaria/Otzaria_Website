@@ -38,12 +38,16 @@ export function createCancelHandler(privateOnly = false) {
       await connectDB();
 
       const query = jobId ? { _id: jobId } : { book: bookId };
-      const job = await OcrJob.findOne({ ...query, ...activeFilter() }).select(privateOnly ? '_id method book' : '_id method').lean();
+      const job = await OcrJob.findOne({ ...query, ...activeFilter() }).select(privateOnly ? '_id method taskType book' : '_id method taskType').lean();
       if (!job) return notFound(NOT_FOUND_HE);
 
       if (privateOnly) {
         const book = await Book.findById(job.book);
         if (!canRunPrivateOcr(book, session.user) || (bookId && String(job.book) !== bookId)) return notFound('הספר לא נמצא');
+      }
+
+      if (job.taskType === 'training') {
+        return NextResponse.json({ error: 'עצירת אימון מחייבת עצירה מבוקרת בתחנת האימון' }, { status: 409 });
       }
 
       const opts = { reason: 'admin', byName: session.user?.name || '' };

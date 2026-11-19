@@ -3,6 +3,8 @@
 //
 // ההכרעות משנות את הדיווח בלבד; עריכת העמוד מתבצעת ידנית.
 
+import { buildErrorMarker } from '../pageReports/rules.js'
+
 export const REPORT_TABS = Object.freeze(['book_error', 'message'])
 export const STATUS_FILTERS = Object.freeze({
   book_error: Object.freeze(['pending', 'approved', 'rejected', 'all']),
@@ -160,9 +162,12 @@ export function messageCardState(report) {
   return { handle: report?.status === 'pending', reopen: report?.status === 'handled' }
 }
 
-/** הקישור לעורך העמוד */
-export function editorHref(bookPath, pageNumber) {
-  return `/library/books/${encodeURIComponent(String(bookPath || ''))}/${encodeURIComponent(String(pageNumber ?? ''))}`
+/**
+ * הקישור לעורך העמוד. reportId — דיווח "טעות בספר": העורך מסמן את הסימון שלו בטקסט (?report=<id>).
+ */
+export function editorHref(bookPath, pageNumber, reportId = null) {
+  const base = `/library/books/${encodeURIComponent(String(bookPath || ''))}/${encodeURIComponent(String(pageNumber ?? ''))}`
+  return reportId ? `${base}?report=${encodeURIComponent(String(reportId))}` : base
 }
 
 /**
@@ -247,5 +252,5 @@ export function finalVersionLine(report) {
   const fo = report.finalOriginal ?? report.original ?? ''
   const fp = report.finalProposed ?? report.proposed ?? ''
   if (fo === report.original && fp === report.proposed) return null
-  return { reported: `(${report.original ?? ''})[${report.proposed ?? ''}]`, decided: `(${fo})[${fp}]` }
+  return { reported: buildErrorMarker(report.original ?? '', report.proposed ?? ''), decided: buildErrorMarker(fo, fp) }
 }

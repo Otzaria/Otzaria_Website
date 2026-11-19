@@ -48,9 +48,7 @@ test.each(cases)('ניקוי ספרות שומר את שני הטורים העד
   vi.stubGlobal('fetch', vi.fn(async (url) => ({
     ok: true,
     json: async () => url.startsWith('/api/book/')
-      ? { success: true, book: { name: 'ספר' }, pages: [{ number: 1, status: 'available' }] }
-      : url.startsWith('/api/page-content?')
-        ? { success: true, data: { id: 'p', twoColumns: true, rightColumn: right, leftColumn: left, status: 'available' } }
+      ? { success: true, book: { name: 'ספר' }, data: { id: 'p', twoColumns: true, rightColumn: right, leftColumn: left, status: 'available' } }
         : { success: true, data: {}, savedSearches: [], hiddenBooks: ['book'] }
   })))
   render(<EditPage />)
@@ -66,9 +64,7 @@ test('הרצת החלפות שמורות שומרת snapshot מלאה כששני
   vi.stubGlobal('fetch', vi.fn(async (url) => ({
     ok: true,
     json: async () => url.startsWith('/api/book/')
-      ? { success: true, book: { name: 'ספר' }, pages: [{ number: 1, status: 'available' }] }
-      : url.startsWith('/api/page-content?')
-        ? { success: true, data: { id: 'p', twoColumns: true, rightColumn: 'ימין1', leftColumn: 'שמאל1', status: 'available' } }
+      ? { success: true, book: { name: 'ספר' }, data: { id: 'p', twoColumns: true, rightColumn: 'ימין1', leftColumn: 'שמאל1', status: 'available' } }
         : url === '/api/user/saved-searches'
           ? { success: true, savedSearches: [{ id: '1', findText: '1', replaceText: '2', isRegex: false }] }
           : { success: true, data: {}, hiddenBooks: ['book'] }
