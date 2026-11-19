@@ -12,6 +12,7 @@
 import { createHash } from 'node:crypto';
 import { cleanProofreadingMetadata } from './proofreadingCapabilities.js';
 import { stripUnsafe } from './localStatusReport.js';
+import { exceedsJsonDepth } from '../jsonDepth.js';
 
 export const LAYOUT_VERSION = 1;
 export const SITE_LAYOUT_PAGE_MAX_BYTES = 1_179_648; // 1.125MiB (UTF-8 של JSON.stringify)
@@ -21,6 +22,12 @@ export const MAX_PAGE_WARNINGS = 20;
 export const WARNING_MESSAGE_MAX_CHARS = 500;
 export const MAX_LAYOUT_ERRORS = 5;
 export const MAX_LAYOUT_DEPTH = 8;
+// עומק הקינון המרבי של כל JSON שנשמר מהתוצאה: metadata (עמוד/ספר, ותת-הקבוצה) וה-layout שנדחה
+// (rejectedJson). 64 = MaxDepth ברירת המחדל של System.Text.Json, שבו השירות (C#) קורא וכותב את
+// התוצאה (בהנחה שלא שונה) — metadata אמיתי מהשירות לא אמור להיות עמוק יותר (בפועל 3 רמות), ולכן הגבול לא פוסל
+// אף תוצאה לגיטימית. הוא גם רחוק מתחת לגבול הקינון של MongoDB (100 רמות במסמך BSON) וממה שקוד
+// רקורסיבי (JSON.stringify/parse בגרסאות V8 ישנות, רינדור בממשק) מחזיק בבטחה.
+export const MAX_STORED_JSON_DEPTH = 64;
 
 export const LAYOUT_STATUSES = Object.freeze(['ok', 'absent', 'invalid', 'unsupported_version', 'too_large']);
 export const WARNING_CODE_RE = /^[a-z0-9_]{1,64}$/;
@@ -58,9 +65,13 @@ export function normalizeWarnings(raw) {
   return out;
 }
 
-// JSON.stringify שלא זורק: קינון עמוק מאוד (אלפי רמות — עובר את JSON.parse ואת validateResult)
-// זורק RangeError, וחריגה כאן הייתה מפילה את כל הקליטה (500 בכל ניסיון — הטקסט לא נקלט לעולם).
-const safeStringify = (v) => {
+// JSON.stringify עם גבול עומק מפורש: קינון עמוק מ-MAX_STORED_JSON_DEPTH → null, לפני הסריאליזציה.
+// קינון עמוק מאוד (אלפי רמות) עובר את JSON.parse ואת validateResult. בעבר הגבול היה RangeError של
+// JSON.stringify עצמו — אבל זו התנהגות של גרסת V8 (ב-Node 26 הוא כבר לא נזרק), ולכן הבדיקה כאן
+// מפורשת ודטרמיניסטית (jsonDepth.js). ה-catch נשאר רק כרשת ביטחון לקלט שאינו פלט של JSON.parse
+// (BigInt וכד'): חריגה כאן הייתה מפילה את כל הקליטה (500 בכל ניסיון — הטקסט לא נקלט לעולם).
+const boundedStringify = (v) => {
+  if (exceedsJsonDepth(v, MAX_STORED_JSON_DEPTH)) return null;
   try {
     return JSON.stringify(v);
   } catch {
@@ -68,14 +79,17 @@ const safeStringify = (v) => {
   }
 };
 
-/** pages[].metadata → {json, warning}: JSON כמות שהוא, או null + metadata_too_large מעל 64KiB */
+/**
+ * pages[].metadata → {json, warning}: JSON כמות שהוא, או null + metadata_too_large מעל 64KiB או
+ * בקינון עמוק מ-MAX_STORED_JSON_DEPTH
+ */
 export function pageMetadataJson(raw) {
   if (!isPlainObject(raw)) return { json: null, warning: null };
-  const json = safeStringify(raw);
+  const json = boundedStringify(raw);
   if (json === null) {
     return {
       json: null,
-      warning: siteWarning('metadata_too_large', 'page metadata could not be serialized (nesting too deep); not stored'),
+      warning: siteWarning('metadata_too_large', `page metadata is nested deeper than ${MAX_STORED_JSON_DEPTH} levels; not stored`),
     };
   }
   const bytes = utf8Bytes(json);
@@ -88,14 +102,17 @@ export function pageMetadataJson(raw) {
   return { json, warning: null };
 }
 
-/** metadata הספר → {json, truncated}: המלא, או תת-קבוצה קבועה כשהמלא גדול מ-512KiB */
+/**
+ * metadata הספר → {json, truncated}: המלא, או תת-קבוצה קבועה כשהמלא גדול מ-512KiB או מקונן עמוק
+ * מ-MAX_STORED_JSON_DEPTH. תת-קבוצה שגם היא חורגת (גודל או עומק) → json:null.
+ */
 export function bookMetadataJson(raw) {
   if (!isPlainObject(raw)) return { json: null, truncated: false };
-  const full = safeStringify(raw);
+  const full = boundedStringify(raw);
   if (full !== null && utf8Bytes(full) <= BOOK_METADATA_MAX_BYTES) return { json: full, truncated: false };
   const subset = {};
   for (const k of BOOK_METADATA_SUBSET_KEYS) if (Object.hasOwn(raw, k)) subset[k] = raw[k];
-  const json = safeStringify(subset);
+  const json = boundedStringify(subset);
   return { json: json !== null && utf8Bytes(json) <= BOOK_METADATA_MAX_BYTES ? json : null, truncated: true };
 }
 
@@ -282,12 +299,8 @@ export function normalizePageLayout(raw, pageMapEntry) {
   });
   if (raw === undefined || raw === null) return result('absent');
 
-  let json;
-  try {
-    json = JSON.stringify(raw);
-  } catch {
-    json = null;
-  }
+  // מקונן עמוק מ-MAX_STORED_JSON_DEPTH → json:null (בלי rejectedJson); keyProblem פוסל אותו ממילא
+  const json = boundedStringify(raw);
   const bytes = typeof json === 'string' ? utf8Bytes(json) : 0;
   const keep = typeof json === 'string' && bytes <= SITE_LAYOUT_PAGE_MAX_BYTES ? json : null;
   const version = isPlainObject(raw) && isInt(raw.layoutVersion) ? raw.layoutVersion : null;
@@ -297,7 +310,7 @@ export function normalizePageLayout(raw, pageMapEntry) {
     warnings: [siteWarning(code, errors.slice(0, MAX_LAYOUT_ERRORS).join('; '))],
   });
 
-  if (!isPlainObject(raw) || typeof json !== 'string') return invalid(['layout is not an object']);
+  if (!isPlainObject(raw)) return invalid(['layout is not an object']);
   if (raw.layoutVersion !== LAYOUT_VERSION) {
     return result('unsupported_version', {
       version, bytes, rejectedJson: keep,
@@ -307,6 +320,8 @@ export function normalizePageLayout(raw, pageMapEntry) {
   }
   const keyIssue = keyProblem(raw, 1);
   if (keyIssue) return invalid([keyIssue]);
+  // לא קורה (עומק > 8 נפסל למעלה); רק רשת ביטחון לקלט שאינו פלט של JSON.parse
+  if (typeof json !== 'string') return invalid(['layout could not be serialized']);
   if (bytes > SITE_LAYOUT_PAGE_MAX_BYTES) {
     return result('too_large', {
       version, bytes,
