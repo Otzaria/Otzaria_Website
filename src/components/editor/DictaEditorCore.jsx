@@ -119,6 +119,7 @@ export default function DictaEditorCore({
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('dicta_editor_toolbar_expanded')
       if (saved === 'true') {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- העדפות מ-localStorage, שאינו קיים ברינדור השרת — קריאה בעליה מונעת hydration mismatch (עורך אינטראקטיבי, ר' CLAUDE.md)
         setToolbarExpanded(true)
       }
       const savedCompact = localStorage.getItem('dicta_editor_header_compact')
@@ -143,6 +144,7 @@ export default function DictaEditorCore({
   const pendingScrollRestoreRef = useRef(null)
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- איפוס התוכן וההיסטוריה כשמגיע initialContent חדש מהאב (עורך אינטראקטיבי — לא משנים בלי בדיקה בדפדפן, ר' CLAUDE.md)
     setContent(initialContent)
     setHistory([{ content: initialContent, selection: { start: 0, end: 0 } }])
     setHistoryIndex(0)
@@ -162,6 +164,7 @@ export default function DictaEditorCore({
       return
     }
     pendingInitialSelectionRef.current = match
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- מעבר חד-פעמי למצב עריכה בקישור עמוק (?find=); האפקט התלוי ב-editMode מסמן וגולל (עורך אינטראקטיבי, ר' CLAUDE.md)
     setEditMode(true)
   }, [initialFind, initialContent, canEdit, showAlert])
 
@@ -222,6 +225,7 @@ export default function DictaEditorCore({
     const saved = localStorage.getItem('dicta_editor_shortcuts')
     if (saved) {
       try {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- קיצורים וחיפושים שמורים מ-localStorage, שאינו קיים ברינדור השרת — קריאה בעליה מונעת hydration mismatch
         setUserShortcuts(JSON.parse(saved))
       } catch (e) {
         console.error('Failed to parse shortcuts:', e)

@@ -42,6 +42,7 @@ export default function UsersPage() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- טעינה מהשרת; setLoading(true) הסינכרוני הוא no-op בעליה (ערך התחלתי true), השאר אחרי await
     loadUsers()
   }, [])
 

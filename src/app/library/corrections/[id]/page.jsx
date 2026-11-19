@@ -63,6 +63,7 @@ function CorrectionReport({ id }) {
     }
   }, [id, contextLines])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- טעינה מהשרת; ה-setState קורה אחרי await
   useEffect(() => { load() }, [load])
 
   // בדיקה תקופתית: מתנדב אחר או שינוי במקור → הודעה (בלי להחליף את התצוגה מתחת לידיים).

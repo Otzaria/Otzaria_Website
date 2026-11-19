@@ -135,6 +135,7 @@ export default function DashboardPage() {
       router.push(`/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`);
     } else if (status === 'authenticated') {
       const isFirstTime = stats.myPages === 0 && stats.recentActivity.length === 0;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- טעינה מהשרת אחרי אימות ה-session; ה-setState העיקרי אחרי await
       loadUserStats(isFirstTime);
       loadMyMessages();
       checkSubscriptionReminder();
