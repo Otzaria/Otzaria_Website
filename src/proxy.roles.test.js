@@ -35,7 +35,7 @@ const denied = (res) =>
   (res.status === 307 && /\/library\/unauthorized/.test(res.headers.get('location') || '')) || res.status === 403
 
 const OCR_PAGES = ['/library/admin/ocr-training', '/library/admin/ocr-lines', '/library/admin/ocr-layout', '/library/admin/page-proof']
-const OCR_APIS = ['/api/admin/ocr-training', '/api/admin/ocr-lines/abc', '/api/admin/ocr-layout', '/api/admin/page-proof', '/api/admin/training-proof/review', '/api/admin/stats']
+const OCR_APIS = ['/api/admin/ocr-training', '/api/admin/ocr-lines/abc', '/api/admin/ocr-layout', '/api/admin/page-proof', '/api/admin/training-proof/review', '/api/admin/model-training', '/api/admin/model-training/64b7f0c2a1b2c3d4e5f60001/download', '/api/admin/stats']
 const SEARCH_FEEDBACK_PAGE = '/library/admin/search-feedback'
 const OTHER_PAGES = ['/library/admin/users', '/library/admin/books', '/library/admin/plugins', '/library/admin/app-reports', '/library/admin/messages']
 const OTHER_APIS = ['/api/admin/users', '/api/admin/books', '/api/admin/plugins']
@@ -80,6 +80,13 @@ describe('proxy — תפקיד מאמן מודלים', () => {
     // הנתיבים הציבוריים של התוכנה פתוחים בלי session
     expect(passed(await call('/api/search-feedback/events'))).toBe(true)
   })
+})
+
+it('Book model training and downloads reject roles without OCR administration', async () => {
+  const paths = ['/api/admin/model-training', '/api/admin/model-training/64b7f0c2a1b2c3d4e5f60001/download']
+  for (const role of ['admin_books', 'admin_books_only', 'admin_plugins', 'developer', 'user']) {
+    for (const path of paths) expect(await call(path, role)).toHaveProperty('status', 403)
+  }
 })
 
 describe('proxy — צורת הדף', () => {

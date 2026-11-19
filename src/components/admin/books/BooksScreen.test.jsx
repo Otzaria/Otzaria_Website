@@ -8,6 +8,8 @@ import { useSyncExternalStore } from 'react'
 import { ToastProvider } from '@/components/ui/Toast'
 
 const push = vi.fn()
+const { useSession } = vi.hoisted(() => ({ useSession: vi.fn() }))
+vi.mock('next-auth/react', () => ({ useSession }))
 vi.mock('next/navigation', () => {
   const subscribe = (cb) => {
     window.addEventListener('test-url', cb)
@@ -67,6 +69,7 @@ let handler
 beforeEach(() => {
   calls = []
   push.mockClear()
+  useSession.mockReturnValue({ data: { user: { role: 'admin' } } })
   handler = null
   window.history.replaceState(null, '', '/library/admin/books')
   global.fetch = vi.fn(async (url, options = {}) => {
@@ -387,8 +390,8 @@ describe('BooksScreen — מגירת הספר', () => {
     const drawer = screen.getByRole('dialog', { name: 'חוות דעת' })
     expect(window.location.search).toBe('?book=1')
     // השם הנגיש — תמיד המלא (בטלפון מוצג שם קצר)
-    expect(within(drawer).getAllByRole('tab')).toHaveLength(4)
-    for (const name of ['פרטים', 'עמודים', 'הנחיות עריכה', 'זיהוי טקסט אוטומטי']) expect(within(drawer).getByRole('tab', { name })).toBeInTheDocument()
+    expect(within(drawer).getAllByRole('tab')).toHaveLength(5)
+    for (const name of ['פרטים', 'עמודים', 'הנחיות עריכה', 'זיהוי טקסט אוטומטי', 'אימון מודלים']) expect(within(drawer).getByRole('tab', { name })).toBeInTheDocument()
     expect(within(drawer).getByRole('progressbar', { name: 'התקדמות' })).toHaveAttribute('aria-valuetext', '4 מתוך 10 הושלמו')
     // הפעולות: ראשית אחת בולטת, ושאר הפעולות ברשימה שקטה — כולל "שנה קטגוריה"; "מחק לצמיתות" אחרון
     expect(within(drawer).getByRole('link', { name: /פתח בספרייה/ })).toBeInTheDocument()
@@ -400,6 +403,16 @@ describe('BooksScreen — מגירת הספר', () => {
     expect(within(drawer).getByText('לוח הזיהוי של חוות דעת')).toBeInTheDocument()
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  test('a book-only administrator can open the drawer but cannot open the training tab', () => {
+    useSession.mockReturnValue({ data: { user: { role: 'admin_books_only' } } })
+    window.history.replaceState(null, '', '/library/admin/books?book=2&view=training')
+    renderScreen()
+    const drawer = screen.getByRole('dialog', { name: 'אור החיים' })
+    expect(within(drawer).queryByRole('tab', { name: 'אימון מודלים' })).toBeNull()
+    expect(within(drawer).getByRole('tab', { name: 'פרטים' })).toHaveAttribute('aria-selected', 'true')
+    expect(calls.some(({ url }) => url.startsWith('/api/admin/model-training'))).toBe(false)
   })
 
   test('קישור ישיר למגירה (?book=…&view=pages) — נפתחת על הלשונית, וספר שלא קיים נזרק מהכתובת', async () => {

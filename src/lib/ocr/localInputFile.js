@@ -34,13 +34,21 @@ async function storageRootMissing(env) {
  * חריגת I/O אחרת (EACCES, EIO...) נזרקת — withWorker מחזיר 500 (זמני אצל השירות).
  */
 export async function openJobInput(job, env = process.env) {
+  const input = await openJobInputHandle(job, env);
+  if (!input.ok) return input;
+  const { handle, ...result } = input;
+  return { ...result, stream: fileHandleStream(handle, input.size) };
+}
+
+/** Validates the path and size; the caller owns and must close the handle. */
+export async function openJobInputHandle(job, env = process.env) {
   if (!job?.inputPath || job.inputPurgedAt) return fail(404, 'input_unavailable');
 
   // הנתיב חייב להיות בדיוק <jobId>/input-<inputSha256>.pdf (כך buildJobInput כותב): שם הקובץ
   // קשור ל-hash, כך שרשומה שמפנה לקובץ של תוכן אחר נתפסת לפני ההגשה.
   let abs;
   try {
-    const expected = `${String(job._id)}/${jobFileName('input', job.inputSha256)}`;
+    const expected = `${String(job._id)}/${jobFileName(job.taskType === 'training' ? 'training' : 'input', job.inputSha256)}`;
     if (job.inputPath !== expected) throw new Error('input_path_mismatch');
     abs = relToAbs(job.inputPath, env);
   } catch {
@@ -68,7 +76,7 @@ export async function openJobInput(job, env = process.env) {
       await fh.close();
       return fail(409, 'input_corrupt');
     }
-    return { ok: true, stream: fileHandleStream(fh, st.size), size: st.size, sha256: job.inputSha256 };
+    return { ok: true, handle: fh, size: st.size, sha256: job.inputSha256 };
   } catch (err) {
     await fh.close().catch(() => {});
     throw err;
