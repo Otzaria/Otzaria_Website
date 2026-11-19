@@ -50,7 +50,8 @@ export async function GET(request, { params }) {
   // העלאות אישיות ישנות משתמשות בקידומת הזו. ספרים ציבוריים רגילים אינם פונים למסד או לסשן.
   const [collection, slug, ...parts] = path.relative(UPLOAD_ROOT, resolved).replace(/\\/g, '/').split('/');
   let verifyAccess = false;
-  if (collection.toLowerCase() === 'books' && /^u-[a-f0-9]{4}(?:-.*)?$/i.test(slug ?? '') && parts.length) {
+  const legacySlug = Boolean(slug && /^u-[a-f0-9]{4}/i.test(slug) && (slug.length === 6 || slug[6] === '-'));
+  if (collection.toLowerCase() === 'books' && legacySlug && parts.length) {
     await connectDB();
     const book = await Book.findOne({ slug }).select('isHidden isPrivate ownerId').lean();
     if (!book) return new Response(null, { status: 404, headers: { 'Cache-Control': 'private, no-store' } });
