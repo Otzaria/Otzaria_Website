@@ -7,13 +7,48 @@ import { spawnSync } from 'node:child_process'
 
 const deployScript = path.resolve('scripts/deploy-web.sh')
 
+// deploy-web.sh runs only on the Linux VPS and deliberately relies on GNU
+// semantics: `realpath -m -s`, `readlink -f` and the atomic `mv -T` rename.
+// The script stays untouched; on other hosts (macOS) the fixture puts the
+// g-prefixed GNU coreutils on PATH under their plain names, and `flock`
+// (util-linux on Linux) must exist. Linux never skips, so CI stays a real gate.
+const GNU_COREUTILS = ['realpath', 'readlink', 'mv']
+const isGnuCoreutils = command =>
+  /GNU coreutils/.test(spawnSync(command, ['--version'], { encoding: 'utf8' }).stdout ?? '')
+const commandPath = command => {
+  const result = spawnSync('bash', ['-c', 'command -v "$1"', 'bash', command], { encoding: 'utf8' })
+  return result.status === 0 ? result.stdout.trim() : null
+}
+const gnuShims = {}
+const missingTools = []
+if (process.platform !== 'linux') {
+  for (const command of GNU_COREUTILS) {
+    if (isGnuCoreutils(command)) continue
+    const gnu = commandPath(`g${command}`)
+    if (gnu && isGnuCoreutils(gnu)) gnuShims[command] = gnu
+    else missingTools.push(`g${command}`)
+  }
+  if (!commandPath('flock')) missingTools.push('flock')
+}
+const skipDeployFixture = missingTools.length > 0 &&
+  `deploy-web.sh needs GNU tools that are missing here (${missingTools.join(', ')}); ` +
+  'on macOS run `brew install coreutils flock` (Linux/CI always runs these tests)'
+const deployTest = (name, fn) => test(name, { skip: skipDeployFixture }, fn)
+
 function fixture(mode = 'success', pm2App = 'otzaria') {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'atomic-deploy-test-'))
+  // Physical path: deploy-web.sh compares lexical `realpath -s` paths with the
+  // fully resolved `readlink -f` target, so a symlinked tmpdir (macOS /var ->
+  // /private/var) would look like a link outside the deployment root.
+  const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'atomic-deploy-test-'))
   const seed = path.join(root, 'seed')
   const remote = path.join(root, 'remote.git')
   const live = path.join(root, 'otzaria-web')
   const bin = path.join(root, 'bin')
   fs.mkdirSync(seed); fs.mkdirSync(bin)
+  for (const [command, gnu] of Object.entries(gnuShims)) {
+    fs.writeFileSync(path.join(bin, command), `#!/bin/sh\nexec '${gnu}' "$@"\n`)
+    fs.chmodSync(path.join(bin, command), 0o755)
+  }
 
   const run = (command, args, cwd = seed) => {
     const result = spawnSync(command, args, { cwd, encoding: 'utf8' })
@@ -124,7 +159,7 @@ test('deployment rejects mutable refs before touching the server', () => {
 })
 
 for (const mode of ['missing_process', 'install', 'build']) {
-  test(`${mode} failure leaves the legacy installation active`, () => {
+  deployTest(`${mode} failure leaves the legacy installation active`, () => {
     const f = fixture(mode)
     try {
       const result = f.deploy(f.first)
@@ -136,7 +171,7 @@ for (const mode of ['missing_process', 'install', 'build']) {
   })
 }
 
-test('first deployment migrates persistent data and installs the established next start runtime', () => {
+deployTest('first deployment migrates persistent data and installs the established next start runtime', () => {
   const f = fixture()
   try {
     const result = f.deploy(f.first)
@@ -157,7 +192,7 @@ test('first deployment migrates persistent data and installs the established nex
   } finally { f.remove() }
 })
 
-test('later deployment reuses build cache and retains exactly current and previous releases', () => {
+deployTest('later deployment reuses build cache and retains exactly current and previous releases', () => {
   const f = fixture()
   try {
     assert.equal(f.deploy(f.first).status, 0)
@@ -176,7 +211,7 @@ test('later deployment reuses build cache and retains exactly current and previo
   } finally { f.remove() }
 })
 
-test('failed health check atomically restores the previous release', () => {
+deployTest('failed health check atomically restores the previous release', () => {
   const f = fixture()
   try {
     assert.equal(f.deploy(f.first).status, 0)
@@ -189,7 +224,7 @@ test('failed health check atomically restores the previous release', () => {
   } finally { f.remove() }
 })
 
-test('failed health check during the one-time migration restores the legacy checkout', () => {
+deployTest('failed health check during the one-time migration restores the legacy checkout', () => {
   const f = fixture('health')
   try {
     const result = f.deploy(f.first)
@@ -202,7 +237,7 @@ test('failed health check during the one-time migration restores the legacy chec
   } finally { f.remove() }
 })
 
-test('moving validator tag creates a distinct release even for the same website commit', () => {
+deployTest('moving validator tag creates a distinct release even for the same website commit', () => {
   const f = fixture()
   try {
     assert.equal(f.deploy(f.first, 'a'.repeat(40)).status, 0)
@@ -212,7 +247,7 @@ test('moving validator tag creates a distinct release even for the same website 
   } finally { f.remove() }
 })
 
-test('redeploying identical website and validator commits is a safe no-op', () => {
+deployTest('redeploying identical website and validator commits is a safe no-op', () => {
   const f = fixture()
   try {
     const validator = 'a'.repeat(40)
@@ -228,7 +263,7 @@ test('redeploying identical website and validator commits is a safe no-op', () =
   } finally { f.remove() }
 })
 
-test('failed repeat deployment can never delete the active release', () => {
+deployTest('failed repeat deployment can never delete the active release', () => {
   const f = fixture()
   try {
     const validator = 'a'.repeat(40)
@@ -246,7 +281,7 @@ for (const [name, extraEnv] of [
   ['releases equal shared', root => ({ RELEASES_DIR: path.join(root, 'same'), SHARED_DIR: path.join(root, 'same') })],
   ['releases outside root', root => ({ RELEASES_DIR: path.join(root, 'nested', 'releases') })],
 ]) {
-  test(`unsafe path configuration is rejected: ${name}`, () => {
+  deployTest(`unsafe path configuration is rejected: ${name}`, () => {
     const f = fixture()
     try {
       const result = f.deploy(f.first, 'a'.repeat(40), 'success', extraEnv(f.root))
@@ -258,7 +293,7 @@ for (const [name, extraEnv] of [
   })
 }
 
-test('a pre-existing legacy recovery directory blocks migration before PM2 stops', () => {
+deployTest('a pre-existing legacy recovery directory blocks migration before PM2 stops', () => {
   const f = fixture()
   try {
     const legacy = path.join(f.root, `.otzaria-legacy.${f.first}-${'a'.repeat(40)}`)
@@ -272,7 +307,7 @@ test('a pre-existing legacy recovery directory blocks migration before PM2 stops
   } finally { f.remove() }
 })
 
-test('host-local deployment lock rejects a concurrent invocation', () => {
+deployTest('host-local deployment lock rejects a concurrent invocation', () => {
   const f = fixture()
   const lock = path.join(f.root, '.otzaria-deploy.lock')
   try {
@@ -286,7 +321,7 @@ test('host-local deployment lock rejects a concurrent invocation', () => {
   }
 })
 
-test('an interrupted migration with a missing live path is recovered safely', () => {
+deployTest('an interrupted migration with a missing live path is recovered safely', () => {
   const f = fixture()
   try {
     const legacy = path.join(f.root, `.otzaria-legacy.${f.first}-${'a'.repeat(40)}`)
@@ -299,7 +334,7 @@ test('an interrupted migration with a missing live path is recovered safely', ()
   } finally { f.remove() }
 })
 
-test('an interrupted migration after link swap removes legacy only after health passes', () => {
+deployTest('an interrupted migration after link swap removes legacy only after health passes', () => {
   const f = fixture()
   try {
     const validator = 'a'.repeat(40)
@@ -314,7 +349,7 @@ test('an interrupted migration after link swap removes legacy only after health 
   } finally { f.remove() }
 })
 
-test('an unhealthy release after interrupted link swap rolls back to legacy', () => {
+deployTest('an unhealthy release after interrupted link swap rolls back to legacy', () => {
   const f = fixture()
   try {
     const validator = 'a'.repeat(40)
@@ -333,7 +368,7 @@ test('an unhealthy release after interrupted link swap rolls back to legacy', ()
   } finally { f.remove() }
 })
 
-test('a successful deployment moves the broker checkout to the deployed commit', () => {
+deployTest('a successful deployment moves the broker checkout to the deployed commit', () => {
   const f = fixture()
   try {
     assert.equal(f.deploy(f.first).status, 0)
@@ -346,7 +381,7 @@ test('a successful deployment moves the broker checkout to the deployed commit',
   } finally { f.remove() }
 })
 
-test('a failed broker update warns, and retrying the same deployment repairs it', () => {
+deployTest('a failed broker update warns, and retrying the same deployment repairs it', () => {
   const f = fixture()
   try {
     assert.equal(f.deploy(f.first).status, 0)

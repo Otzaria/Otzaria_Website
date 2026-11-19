@@ -72,6 +72,8 @@ scripts/*
 !scripts/mock-verify-server.mjs
 !scripts/page-proof-link-import.mjs
 !scripts/patch-plugin-validator.cjs
+# בדיקת התקנה ישנה של הוולידטור מול package-lock.json (pretest; npm run check:plugin-validator)
+!scripts/check-plugin-validator.cjs
 !scripts/plugin-validation-worker.mjs
 !scripts/deploy-web.sh
 !scripts/check-production-trace.cjs

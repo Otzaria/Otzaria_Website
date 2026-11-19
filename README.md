@@ -44,6 +44,26 @@ npm install "github:Otzaria/otzaria-plugin-validator#v1" --legacy-peer-deps --no
 **המשמעות: כלל ולידציה חדש בוולידטור נכנס לחנות בבנייה הבאה, מיד ובלי שער
 סקירה.** לכן כלל חוסם חדש שם פוסל מכאן ואילך גם *עדכון* של תוסף שכבר מפורסם.
 
+### בפיתוח מקומי: רענון הוולידטור
+
+`node_modules` מקומי **לא** מתעדכן מעצמו כשהתגית `v1` זזה, ולא כשה‑lock מתעדכן
+ב‑`git pull`. התקנה ישנה מדי הייתה מפילה את טסטי הוולידציה ב‑TypeError סתום. היום
+`npm run check:plugin-validator` משווה את הגרסה המותקנת לזו שב‑`package-lock.json`
+ונכשל עם שתיהן ועם הפקודה לתיקון. הבדיקה רצה אוטומטית לפני `npm test`,
+`npm run test:node` ו‑`npm run test:vitest`. גרסה *חדשה* מה‑lock אינה שגיאה.
+
+```bash
+# חזרה לגרסה הנעולה ב-package-lock.json (התיקון הרגיל):
+npm ci
+
+# בדיקה מול ראש v1 העדכני, כמו בפריסה (ה-lock לא משתנה):
+npm install "github:Otzaria/otzaria-plugin-validator#v1" --legacy-peer-deps --no-save
+node scripts/patch-plugin-validator.cjs
+```
+
+עדכון הגרסה הנעולה עצמה (אותה פקודה בלי `--no-save`) הוא קומיט נפרד ומכוון של
+`package-lock.json`.
+
 ### הוספת כלל
 
 - כלל תאימות למפרט (מתודה, הרשאה, `when`, אריזה) → בוולידטור.

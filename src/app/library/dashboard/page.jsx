@@ -57,19 +57,6 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push(`/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`);
-    } else if (status === 'authenticated') {
-      const isFirstTime = stats.myPages === 0 && stats.recentActivity.length === 0;
-      loadUserStats(isFirstTime);
-      loadMyMessages();
-      checkSubscriptionReminder();
-    }
-  // טעינה מותנית-הרשאה; קריאת stats היא snapshot מכוון
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, router, session]);
-
   const loadUserStats = async (isInitialLoad = false) => {
     try {
       if (isInitialLoad) setLoading(true);
@@ -143,6 +130,20 @@ export default function DashboardPage() {
     }
   }
 
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push(`/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`);
+    } else if (status === 'authenticated') {
+      const isFirstTime = stats.myPages === 0 && stats.recentActivity.length === 0;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- טעינה מהשרת אחרי אימות ה-session; ה-setState העיקרי אחרי await
+      loadUserStats(isFirstTime);
+      loadMyMessages();
+      checkSubscriptionReminder();
+    }
+  // טעינה מותנית-הרשאה; קריאת stats היא snapshot מכוון
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, router, session]);
+
   const toggleSubscription = async () => {
     try {
       setLoadingSub(true)
@@ -170,12 +171,6 @@ export default function DashboardPage() {
       setLoadingSub(false)
     }
   }
-
-  useEffect(() => {
-    if (showNotifModal) {
-      checkSubscriptionStatus()
-    }
-  }, [showNotifModal])
 
   const handleSendMessage = async () => {
     if (!messageSubject.trim() || !messageText.trim()) {
@@ -388,7 +383,11 @@ export default function DashboardPage() {
               </button>
 
               <button 
-                onClick={() => setShowNotifModal(true)}
+                onClick={() => {
+                  // טעינת הסטטוס העדכני בעת פתיחת המודל — ב-handler במקום effect על showNotifModal
+                  setShowNotifModal(true)
+                  checkSubscriptionStatus()
+                }}
                 className="flex flex-col items-center gap-3 p-6 bg-primary-container rounded-xl hover:bg-primary/20 transition-all"
               >
                 <span className="material-symbols-outlined text-4xl text-primary">campaign</span>

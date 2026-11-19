@@ -47,6 +47,7 @@ export default function LibraryAcronymsPage() {
   const [submitting, setSubmitting] = useState(false)
   const [lastPr, setLastPr] = useState(null)
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- הסל נקרא מ-localStorage, שאינו קיים ברינדור השרת — קריאה בעליה מונעת hydration mismatch
   useEffect(() => setBasket(readStoredBasket()), [])
 
   const updateBasket = useCallback((next) => {
@@ -70,6 +71,7 @@ export default function LibraryAcronymsPage() {
   }, [showAlert])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- טעינה מהשרת; ה-setState העיקרי קורה אחרי await (setLoading(true) הסינכרוני הוא no-op בעליה)
     if (status === 'authenticated') loadData()
   }, [status, loadData])
 

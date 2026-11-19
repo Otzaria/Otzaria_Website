@@ -92,10 +92,16 @@ export default function BookPage() {
   const [ownershipFilter, setOwnershipFilter] = useState('all')
   const [visibleCount, setVisibleCount] = useState(PAGE_BATCH)
 
-  // כל שינוי סינון מתחיל מחדש מהמנה הראשונה
-  useEffect(() => {
-    setVisibleCount(PAGE_BATCH)
-  }, [activeFilter, ownershipFilter])
+  // כל שינוי סינון מתחיל מחדש מהמנה הראשונה — באותו עדכון (ב-handler), ולא ב-effect
+  // שגורם ל-render נוסף עם הסינון החדש והכמות הישנה
+  const changeActiveFilter = (value) => {
+    if (value !== activeFilter) setVisibleCount(PAGE_BATCH)
+    setActiveFilter(value)
+  }
+  const changeOwnershipFilter = (value) => {
+    if (value !== ownershipFilter) setVisibleCount(PAGE_BATCH)
+    setOwnershipFilter(value)
+  }
 
   // observer חדש אחרי כל מנה: אם ה-sentinel עדיין בטווח (מסך גבוה), הקריאה
   // הראשונית של ה-observer מוסיפה מיד מנה נוספת
@@ -149,6 +155,7 @@ export default function BookPage() {
   }, [bookPath])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- טעינה מהשרת; ה-setState העיקרי קורה אחרי await (setLoading(true) הסינכרוני הוא no-op בעליה)
     loadBookData()
   }, [loadBookData])
 
@@ -529,7 +536,7 @@ export default function BookPage() {
         {/* Filters */}
         <div className={`grid gap-4 mb-8 ${bookData.isOwner ? 'grid-cols-3' : 'grid-cols-4'}`}>
           <button 
-            onClick={() => setActiveFilter('all')}
+            onClick={() => changeActiveFilter('all')}
             className={`glass p-4 rounded-xl text-center border transition-all ${
               activeFilter === 'all' 
               ? 'border-primary ring-2 ring-primary/20 bg-primary/5' 
@@ -542,7 +549,7 @@ export default function BookPage() {
           
           {!bookData.isOwner && (
             <button 
-                onClick={() => setActiveFilter('available')}
+                onClick={() => changeActiveFilter('available')}
                 className={`glass p-4 rounded-xl text-center border-2 transition-all ${
                 activeFilter === 'available'
                     ? 'border-neutral-500 bg-neutral-50 ring-2 ring-neutral-200'
@@ -555,7 +562,7 @@ export default function BookPage() {
           )}
           
           <button 
-            onClick={() => setActiveFilter('in-progress')}
+            onClick={() => changeActiveFilter('in-progress')}
             className={`glass p-4 rounded-xl text-center border-2 transition-all ${
               activeFilter === 'in-progress'
                 ? 'border-info-500 bg-info-50 ring-2 ring-info-200'
@@ -567,7 +574,7 @@ export default function BookPage() {
           </button>
           
           <button 
-            onClick={() => setActiveFilter('completed')}
+            onClick={() => changeActiveFilter('completed')}
             className={`glass p-4 rounded-xl text-center border-2 transition-all ${
               activeFilter === 'completed'
                 ? 'border-success-500 bg-success-50 ring-2 ring-success-200'
@@ -588,7 +595,7 @@ export default function BookPage() {
                 {/* Ownership Filter Buttons */}
                 <div className="flex bg-surface-variant/30 rounded-lg p-1">
                     <button 
-                        onClick={() => setOwnershipFilter('all')} 
+                        onClick={() => changeOwnershipFilter('all')} 
                         className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
                             ownershipFilter === 'all' 
                             ? 'bg-white shadow-sm text-primary' 
@@ -598,7 +605,7 @@ export default function BookPage() {
                         כל העמודים
                     </button>
                     <button 
-                        onClick={() => setOwnershipFilter('mine')} 
+                        onClick={() => changeOwnershipFilter('mine')} 
                         className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
                             ownershipFilter === 'mine' 
                             ? 'bg-white shadow-sm text-primary' 

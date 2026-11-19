@@ -92,6 +92,7 @@ export default function OtherPagePicker({ gid, view, from = null, startPage = nu
   useEffect(() => {
     if (target == null) return undefined
     let alive = true
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- מצב טעינה לפני הבקשה לשרת; תלוי גם ב-gid/fetchLines ולא רק בבחירת עמוד, ולכן לא ב-handler
     setData({ status: 'loading' })
     setTabPick(null)
     setErr(null)

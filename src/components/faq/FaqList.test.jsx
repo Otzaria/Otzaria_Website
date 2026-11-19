@@ -109,7 +109,11 @@ describe('FaqList', () => {
     const { container } = render(<FaqList categories={categories} faqs={faqs} />)
     const answer = container.querySelector('#faq-11 summary + div')
     expect(within(answer).getByRole('link', { name: 'בדף ההורדה' })).toHaveAttribute('href', '/#download')
-    expect([...answer.querySelectorAll('bdi[dir="ltr"]')].map((b) => b.textContent)).toEqual(['macOS', 'macOS', 'Apple'])
+    const isolated = [...answer.querySelectorAll('bdi[dir="ltr"]')].map((b) => b.textContent)
+    // גרסה עם מספרה — יחידה אחת; הסוגריים והפיסוק נשארים בטקסט העברי (אחרת הם מתהפכים)
+    expect(isolated).toEqual(expect.arrayContaining(['macOS 12', 'Monterey', 'macOS 11', 'macOS', 'Apple']))
+    for (const term of isolated) expect(term).toMatch(/^[A-Za-z][A-Za-z0-9 ]*[A-Za-z0-9]$/)
+    expect(answer.textContent).toContain('macOS 12 (Monterey)')
   })
 
   it('שאלה בלי קישור — בלי a בתשובה', () => {

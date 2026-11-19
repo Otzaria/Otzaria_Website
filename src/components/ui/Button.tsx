@@ -81,7 +81,6 @@ const SAFE_ANCHOR_SCHEMES = new Set(['http:', 'https:', 'mailto:', 'tel:'])
  * ולכן הבדיקה נעשית על גרסה מנורמלת בלי תווי בקרה ורווחים. נתיבים יחסיים, # ו-// עוברים כמו שהם.
  */
 export function safeHref(href: string): string | undefined {
-  // eslint-disable-next-line no-control-regex
   const match = /^([a-z][a-z\d+.-]*:)/i.exec(href.replace(/[\u0000- ]/g, ''))
   if (match && !SAFE_ANCHOR_SCHEMES.has(match[1].toLowerCase())) return undefined
   return href

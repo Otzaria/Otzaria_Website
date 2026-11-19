@@ -13,14 +13,16 @@ export default function UsersPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const usersPerPage = 40
 
-  useEffect(() => {
-    loadUsers()
-  }, [])
-
-  // איפוס עמוד בעת חיפוש
-  useEffect(() => {
+  // איפוס עמוד בעת חיפוש/שינוי מיון — בתוך ה-handler (ולא ב-effect) כדי לחסוך render כפול
+  const changeSearchQuery = (value) => {
+    setSearchQuery(value)
     setCurrentPage(1)
-  }, [searchQuery, sortBy])
+  }
+
+  const changeSortBy = (value) => {
+    if (value !== sortBy) setCurrentPage(1)
+    setSortBy(value)
+  }
 
   const loadUsers = async () => {
     try {
@@ -38,6 +40,11 @@ export default function UsersPage() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- טעינה מהשרת; setLoading(true) הסינכרוני הוא no-op בעליה (ערך התחלתי true), השאר אחרי await
+    loadUsers()
+  }, [])
 
   // סינון ומיון
   const processUsers = () => {
@@ -118,7 +125,7 @@ export default function UsersPage() {
                     type="text"
                     placeholder="חפש לפי שם..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => changeSearchQuery(e.target.value)}
                     className="w-full px-4 py-3 pr-10 rounded-xl border border-surface-variant bg-white focus:outline-none focus:ring-2 focus:ring-primary shadow-sm transition-all"
                 />
                 <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400">
@@ -131,7 +138,7 @@ export default function UsersPage() {
             <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2">
                 <span className="text-sm font-bold text-on-surface/70 ml-2">מיין לפי:</span>
                 <button
-                  onClick={() => setSortBy('points')}
+                  onClick={() => changeSortBy('points')}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     sortBy === 'points'
                       ? 'bg-primary text-on-primary shadow-md'
@@ -142,7 +149,7 @@ export default function UsersPage() {
                   נקודות
                 </button>
                 <button
-                  onClick={() => setSortBy('name')}
+                  onClick={() => changeSortBy('name')}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     sortBy === 'name'
                       ? 'bg-primary text-on-primary shadow-md'
@@ -153,7 +160,7 @@ export default function UsersPage() {
                   שם
                 </button>
                 <button
-                  onClick={() => setSortBy('date')}
+                  onClick={() => changeSortBy('date')}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     sortBy === 'date'
                       ? 'bg-primary text-on-primary shadow-md'

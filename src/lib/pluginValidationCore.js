@@ -1,6 +1,26 @@
 import otzariaValidator from 'otzaria-plugin-validator'
 import { extractZipFiles, readPluginZipDirectory, parsePluginManifest } from './pluginArchive.js'
 
+// otzaria-plugin-validator מותקן מתגית נעה (#v1), ו-node_modules מקומי לא מתעדכן
+// מעצמו. התקנה ישנה (למשל 1.14, שבה main הוא ה-Action עצמו ואינו מייצא דבר)
+// נכשלה עד כה ב-TypeError סתום בשימוש הראשון. הבדיקה זולה ובלי I/O, ונכשלת רק
+// כשייצוא שהחנות צורכת באמת חסר — כשהחבילה תקינה אין לה שום השפעה.
+export function assertPluginValidatorExports(validator, names) {
+  const missing = names.filter(name => validator?.[name] === undefined)
+  if (missing.length === 0) return
+  throw new Error(
+    `otzaria-plugin-validator המותקן אינו תואם: חסרים הייצואים ${missing.join(', ')}. ` +
+    'כנראה התקנה ישנה מהגרסה הנעולה ב-package-lock.json (התגית #v1 נעה). ' +
+    'לתיקון: npm ci — ולהשוואת הגרסאות: npm run check:plugin-validator. ' +
+    '(Installed otzaria-plugin-validator is stale or incompatible; run `npm ci`.)'
+  )
+}
+
+assertPluginValidatorExports(otzariaValidator, [
+  'buildManifest', 'validateManifestFields', 'validateStartupWhenConditions',
+  'analyzeApiUsage', 'checkDesignCompliance', 'isCodeLikeFile', 'isStyleLikeFile',
+])
+
 const {
   buildManifest, validateManifestFields, validateStartupWhenConditions,
   analyzeApiUsage, checkDesignCompliance, isCodeLikeFile, isStyleLikeFile,

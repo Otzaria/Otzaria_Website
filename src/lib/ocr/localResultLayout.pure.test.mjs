@@ -8,6 +8,7 @@ import {
   bookMetadataJson,
   layoutV1Problems,
   MAX_PAGE_WARNINGS,
+  MAX_STORED_JSON_DEPTH,
   normalizePageLayout,
   normalizeWarnings,
   PAGE_METADATA_MAX_BYTES,
@@ -165,8 +166,9 @@ test('pageMetadataJson / bookMetadataJson: כמות שהוא, או השמטה/ת
   assert.deepEqual(kept.hardware, RESULT.metadata.hardware);
 });
 
-// קלט עוין: קינון עמוק מאוד עובר את JSON.parse ואת validateResult, אבל JSON.stringify זורק עליו
-// RangeError — חריגה כאן הייתה מפילה את כל הקליטה (500 בכל ניסיון, הטקסט לא נקלט לעולם)
+// קלט עוין: קינון עמוק מאוד עובר את JSON.parse ואת validateResult. אם JSON.stringify זורק עליו
+// RangeError (תלוי בגרסת V8 — ב-Node 26 כבר לא) חריגה הייתה מפילה את כל הקליטה, ואם לא — הערך
+// המקונן היה נשמר כמות שהוא. הגבול המפורש (MAX_STORED_JSON_DEPTH) נותן אותה תוצאה בכל גרסה.
 const deepJson = (n) => JSON.parse(`${'['.repeat(n)}0${']'.repeat(n)}`);
 
 test('קלט עוין: metadata מקונן מאוד לא זורק — העמוד בלי metadata (עם אזהרה), metadata הספר → null/תת-קבוצה', () => {
@@ -180,10 +182,69 @@ test('קלט עוין: metadata מקונן מאוד לא זורק — העמוד
   assert.deepEqual(JSON.parse(kept.json), { service_version: '1.0.143' });
 });
 
+test('גבול העומק של metadata: בדיוק 64 רמות נשמר, 65 → עמוד בלי metadata / ספר → תת-קבוצה (בכל גרסת Node)', () => {
+  assert.equal(MAX_STORED_JSON_DEPTH, 64);
+  // האובייקט החיצוני הוא רמה 1, ולכן deepJson(63) בתוכו = בדיוק 64 רמות
+  const atLimit = { lines: 3, deep: deepJson(MAX_STORED_JSON_DEPTH - 1) };
+  const overLimit = { lines: 3, deep: deepJson(MAX_STORED_JSON_DEPTH) };
+
+  assert.deepEqual(pageMetadataJson(atLimit), { json: JSON.stringify(atLimit), warning: null });
+  const page = pageMetadataJson(overLimit);
+  assert.equal(page.json, null);
+  assert.equal(page.warning.code, 'metadata_too_large');
+  assert.equal(page.warning.source, 'site');
+  assert.match(page.warning.message, /nested deeper than 64 levels/);
+
+  const book = { service_version: '1.0.143', deep: atLimit.deep };
+  assert.deepEqual(bookMetadataJson(book), { json: JSON.stringify(book), truncated: false });
+  const deeper = bookMetadataJson({ service_version: '1.0.143', deep: overLimit.deep });
+  assert.deepEqual(deeper, { json: JSON.stringify({ service_version: '1.0.143' }), truncated: true });
+  // מפתח של תת-הקבוצה: בגבול — נשמר מלא; מעליו — גם תת-הקבוצה חורגת → null
+  assert.deepEqual(bookMetadataJson({ layout: atLimit.deep }), { json: JSON.stringify({ layout: atLimit.deep }), truncated: false });
+  assert.deepEqual(bookMetadataJson({ layout: overLimit.deep }), { json: null, truncated: true });
+  // הכרעת העומק קודמת לגודל: קטן מאוד אבל עמוק → נפסל; גדול מאוד אבל רדוד → לפי הגודל בלבד
+  assert.ok(JSON.stringify(overLimit).length < 200);
+  assert.equal(pageMetadataJson({ x: Array.from({ length: 1000 }, () => [[[1]]]) }).warning, null);
+});
+
+test('layout מקונן: עומק 9–64 → invalid עם rejectedJson; מעל 64 → invalid בלי rejectedJson', () => {
+  const at = layoutOf(1);
+  at.extra = deepJson(MAX_STORED_JSON_DEPTH - 1); // השורש רמה 1 → בדיוק 64
+  const a = normalizePageLayout(at, entry(1));
+  assert.equal(a.status, 'invalid');
+  assert.deepEqual(a.errors, ['nesting deeper than 8']);
+  assert.equal(a.rejectedJson, JSON.stringify(at));
+  assert.equal(a.bytes, Buffer.byteLength(JSON.stringify(at)));
+
+  const over = layoutOf(1);
+  over.extra = deepJson(MAX_STORED_JSON_DEPTH);
+  const b = normalizePageLayout(over, entry(1));
+  assert.equal(b.status, 'invalid');
+  assert.deepEqual(b.errors, ['nesting deeper than 8']);
+  assert.equal(b.rejectedJson, null);
+  assert.equal(b.bytes, 0);
+  assert.deepEqual(b.warnings.map((w) => w.code), ['layout_invalid']);
+  // גרסה לא נתמכת ומקונן מעל 64: unsupported_version, בלי rejectedJson
+  const v2 = normalizePageLayout({ ...over, layoutVersion: 2 }, entry(1));
+  assert.equal(v2.status, 'unsupported_version');
+  assert.equal(v2.rejectedJson, null);
+});
+
+test('layoutVersion מקונן נפסל בלי לסריאל אותו בהודעות האבחון', () => {
+  const out = normalizePageLayout({ layoutVersion: deepJson(200_000) }, entry(1));
+  assert.equal(out.status, 'unsupported_version');
+  assert.equal(out.rejectedJson, null);
+  assert.equal(out.bytes, 0);
+  assert.deepEqual(out.errors, ['layoutVersion array is not supported']);
+  assert.deepEqual(out.warnings.map((w) => w.code), ['layout_version_unsupported']);
+});
+
 test('קלט עוין ב-layout: קינון עמוק, __proto__/constructor, מחרוזות NaN/Infinity, טיפוסים שגויים, מערכים ענקיים — לא זורק', () => {
   const e = entry(1);
   const deep = normalizePageLayout({ ...layoutOf(1), extra: deepJson(200_000) }, e);
   assert.equal(deep.status, 'invalid');
+  assert.deepEqual(deep.errors, ['nesting deeper than 8']);
+  assert.equal(deep.rejectedJson, null);
   assert.equal(normalizePageLayout(deepJson(200_000), e).status, 'invalid');
 
   // מפתח __proto__ מ-JSON.parse הוא מאפיין רגיל (לא שינוי prototype) — שדה לא מוכר, נשמר כמות שהוא

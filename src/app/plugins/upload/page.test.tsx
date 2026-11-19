@@ -82,7 +82,7 @@ describe('/plugins/upload (מחובר — ה-proxy מפנה אורח להתחב�
 
   it('קובץ תוסף שנגרר מאפשר שליחה גם כששדה הקובץ המקורי ריק', async () => {
     fetchSpy.mockResolvedValue({ ok: true, json: async () => ({}) })
-    const { container } = render(<UploadPluginPage tagPool={[]} />)
+    render(<UploadPluginPage tagPool={[]} />)
     const bytes = zipSync({ 'manifest.json': strToU8(JSON.stringify({
       id: 'com.example.plugin', name: 'בדיקה', author: 'מפתח', version: '1.0.0',
       description: 'תיאור קצר', stability: 'stable', minAppVersion: '99.0.0'
