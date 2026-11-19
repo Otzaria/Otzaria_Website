@@ -13,21 +13,17 @@ export default function ResetPasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   
   // ניהול סטטוס הטוקן והטעינה
-  const [isCheckingToken, setIsCheckingToken] = useState(true);
+  // בלי טוקן אין מה לבדוק — המצב הסופי נקבע כבר בערך ההתחלתי (ולא ב-effect)
+  const [isCheckingToken, setIsCheckingToken] = useState(Boolean(token));
   const [isValidToken, setIsValidToken] = useState(false);
-  const [tokenError, setTokenError] = useState('');
+  const [tokenError, setTokenError] = useState(token ? '' : 'לא נמצא קישור לאיפוס סיסמה');
 
   // סטטוס שליחת הטופס
   const [status, setStatus] = useState({ loading: false, error: '', success: '' });
 
   // בדיקת תקינות הטוקן בטעינת הדף
   useEffect(() => {
-      if (!token) {
-          setIsCheckingToken(false);
-          setIsValidToken(false);
-          setTokenError('לא נמצא קישור לאיפוס סיסמה');
-          return;
-      }
+      if (!token) return;
 
       const verifyToken = async () => {
           try {

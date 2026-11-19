@@ -171,12 +171,6 @@ export default function DashboardPage() {
     }
   }
 
-  useEffect(() => {
-    if (showNotifModal) {
-      checkSubscriptionStatus()
-    }
-  }, [showNotifModal])
-
   const handleSendMessage = async () => {
     if (!messageSubject.trim() || !messageText.trim()) {
       showAlert('שגיאה', 'נא למלא את כל השדות')
@@ -388,7 +382,11 @@ export default function DashboardPage() {
               </button>
 
               <button 
-                onClick={() => setShowNotifModal(true)}
+                onClick={() => {
+                  // טעינת הסטטוס העדכני בעת פתיחת המודל — ב-handler במקום effect על showNotifModal
+                  setShowNotifModal(true)
+                  checkSubscriptionStatus()
+                }}
                 className="flex flex-col items-center gap-3 p-6 bg-primary-container rounded-xl hover:bg-primary/20 transition-all"
               >
                 <span className="material-symbols-outlined text-4xl text-primary">campaign</span>

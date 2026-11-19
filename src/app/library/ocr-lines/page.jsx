@@ -37,11 +37,15 @@ const LineRow = memo(function LineRow({ line, onSave, onFlag, onOpenContext }) {
   const [flagging, setFlagging] = useState(false)
 
   // איפוס בעת החלפת השורה: אחרי רענון עלולה לחזור שורה עם אותו id (אותו key),
-  // ו-React משמר את המופע — בלי זה יוצגו עריכות ישנות שלא נשמרו
-  useEffect(() => {
+  // ו-React משמר את המופע — בלי זה יוצגו עריכות ישנות שלא נשמרו.
+  // דפוס "שמירת ה-prop הקודם ב-state" (במקום effect): האיפוס קורה עוד באותו render,
+  // בלי render ביניים שמציג את הטקסט הישן מול השורה החדשה.
+  const [prevLine, setPrevLine] = useState(line)
+  if (line !== prevLine) {
+    setPrevLine(line)
     setText(line.prefillText || '')
     setScript(line.scriptType || 'square')
-  }, [line])
+  }
 
   const forbidden = useMemo(() => findForbidden(text), [text])
   const canSave = !saving && forbidden.length === 0 && !!normalizeLineText(text)
