@@ -35,7 +35,7 @@ async function findBook(bookPath) {
 async function findBookAndPage(bookPath, pageNumber, user) {
   const book = await findBook(bookPath)
   if (!book) return fail(404, 'הספר לא נמצא')
-  if (!canUseBookEditor(book, user)) return book.isPrivate
+  if (!canUseBookEditor(book, user)) return book.privateOcr
     ? fail(404, 'הספר לא נמצא') : fail(403, 'אין הרשאות לצפייה בספר זה')
   const page = await Page.findOne({ book: book._id, pageNumber }).select(PAGE_TEXT_FIELDS).lean()
   if (!page) return fail(404, 'העמוד לא נמצא')

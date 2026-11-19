@@ -1,37 +1,325 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
+import Link from 'next/link'
 import { useSession } from 'next-auth/react'
-import Header from '@/components/layout/Header'
 import { hasPrivateOcrAccess } from '@/lib/roles'
 import PrivateBookCard from '@/components/privateBooks/PrivateBookCard'
 import PrivateBookUpload from '@/components/privateBooks/PrivateBookUpload'
+import Header from '@/components/layout/Header'
+import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import Loader from '@/components/ui/Loader'
 
 export default function PersonalLibraryPage() {
-  const { data: session, status } = useSession()
-  const allowed = hasPrivateOcrAccess(session?.user)
-  const [books, setBooks] = useState([])
-  const [error, setError] = useState('')
-  const refresh = useCallback(async () => {
-    const res = await fetch('/api/user/books', { cache: 'no-store' })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'טעינת הספרים נכשלה')
-    setBooks(data.books)
-    setError('')
-  }, [])
+  const { data: session } = useSession()
+  const userId = session?.user?._id || session?.user?.id
+  const showPrivateOcr = hasPrivateOcrAccess(session?.user)
+  const [privateLibrary, setPrivateLibrary] = useState(null)
+  const privateBooks = privateLibrary?.userId === userId ? privateLibrary?.books || [] : []
+  const [activeOcrId, setActiveOcrId] = useState(null)
+  const [flatBooks, setFlatBooks] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterStatus, setFilterStatus] = useState('all')
+
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
+
+  const fetchUserBooks = useCallback(async (signal) => {
+    try {
+        setLoading(true);
+        const res = await fetch('/api/user/books', { signal, cache: 'no-store' });
+        const json = await res.json();
+        if (json.success && !signal?.aborted) {
+            setFlatBooks(json.books.filter(book => !book.privateOcr));
+            setPrivateLibrary({ userId, books: json.books.filter(book => book.privateOcr) });
+        }
+    } catch (err) {
+        if (!signal?.aborted) console.error('Error fetching personal books:', err);
+    } finally {
+        if (!signal?.aborted) setLoading(false);
+    }
+  }, [userId]);
+
   useEffect(() => {
-    if (allowed) refresh().catch(e => setError(e.message))
-  }, [allowed, refresh])
-  return <div className="min-h-screen bg-background" dir="rtl">
-    <Header />
-    <main id="main-content" className="container mx-auto px-4 py-8 space-y-6">
-      <h1 className="text-3xl font-bold">הספרים הפרטיים שלי</h1>
-      {status === 'loading' ? <p>טוען…</p> : !allowed ? <p>נדרשת הרשאת OCR לספרים פרטיים ממנהל האתר.</p> : <>
-        <p>הספרים נשארים פרטיים גם בסיום העיבוד. אפשר להעלות PDF, להפעיל OCR ולהוריד את הטקסט.</p>
-        <PrivateBookUpload onSuccess={refresh} />
-        {error && <p role="alert">{error}</p>}
-        <div className="grid gap-4 md:grid-cols-2">{books.map(book => <PrivateBookCard key={book.id} book={book} />)}</div>
-      </>}
-    </main>
-  </div>
+    const controller = new AbortController();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- האפקט טוען את הספרים מהשרת.
+    fetchUserBooks(controller.signal);
+    return () => controller.abort();
+  }, [fetchUserBooks, showPrivateOcr])
+
+  const filteredBooks = useMemo(() => {
+    let data = flatBooks;
+    if (searchTerm) {
+      data = data.filter(book => book.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    }
+    if (filterStatus !== 'all') {
+      data = data.filter(book => {
+        if (filterStatus === 'available') return (book.totalPages - book.completedPages) > 0;
+        if (filterStatus === 'completed') return book.totalPages > 0 && book.completedPages === book.totalPages;
+        return true;
+      });
+    }
+    return data
+  }, [flatBooks, searchTerm, filterStatus])
+
+  return (
+    <div className="min-h-screen flex flex-col bg-background pb-12">
+      <Header />
+
+      <main id="main-content" className="flex-1 container mx-auto px-4 py-8">
+        <div className="max-w-7xl mx-auto flex flex-col gap-8">
+
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div>
+                  <h1 className="text-4xl font-bold text-foreground font-frank mb-2">
+                    הספרים שלי
+                  </h1>
+                  <p className="text-on-surface/60 text-lg">
+                    אזור אישי - ספרים לעבודה אישית ({flatBooks.length} ספרים)
+                  </p>
+                  <p className="text-on-surface/60 text-lg">
+                    כאן תוכלו להעלות ולנהל ספרים לעבודה אישית שאח"כ יוכנסו לאוצריא
+                  </p>
+                </div>
+
+                {/* כפתור שפותח את המודל */}
+                <button
+                    onClick={() => setIsUploadModalOpen(true)}
+                    className="flex items-center gap-2 bg-info-600 hover:bg-info-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-info-200 transition-all transform hover:-translate-y-1 active:scale-95"
+                >
+                    <span className="material-symbols-outlined">upload_file</span>
+                    העלאת ספר חדש
+                </button>
+            </div>
+
+            {showPrivateOcr && (
+                <section aria-labelledby="private-ocr-heading" className="space-y-4">
+                    <h2 id="private-ocr-heading" className="text-2xl font-bold">OCR לספרים פרטיים</h2>
+                    <p>ספרים שמועלים כאן נשארים פרטיים גם אחרי הזיהוי. אפשר להוריד מהם את הטקסט שהופק.</p>
+                    <PrivateBookUpload onSuccess={fetchUserBooks} />
+                    <div className="grid gap-4 md:grid-cols-2">
+                        {privateBooks.map(book => (
+                            <PrivateBookCard key={book.id} book={book} open={activeOcrId === book.id}
+                                onToggle={() => setActiveOcrId(activeOcrId === book.id ? null : book.id)} />
+                        ))}
+                    </div>
+                </section>
+            )}
+
+            {/* חיפוש וסינון */}
+            <div className="bg-white p-4 rounded-2xl shadow-sm border border-surface-variant flex flex-col sm:flex-row gap-4">
+                <div className="relative flex-1">
+                    <input
+                        type="text"
+                        placeholder="חפש בספרים שלך..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full px-4 py-2.5 pr-10 rounded-lg border border-neutral-200 bg-neutral-50 focus:bg-white focus:outline-none focus:border-info-500 transition-all"
+                    />
+                    <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400">search</span>
+                </div>
+                {/* כפתורי סינון */}
+                <div className="flex gap-2">
+                    {['all', 'available', 'completed'].map((status) => (
+                        <button
+                            key={status}
+                            onClick={() => setFilterStatus(status)}
+                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                filterStatus === status
+                                ? 'bg-neutral-800 text-white'
+                                : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                            }`}
+                        >
+                            {status === 'all' ? 'הכל' : status === 'available' ? 'בתהליך' : 'הושלם'}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* גריד ספרים */}
+            {loading ? (
+                <LoadingSpinner message="טוען..." />
+            ) : filteredBooks.length === 0 ? (
+                <div className="text-center py-20 bg-neutral-50 rounded-3xl border-2 border-dashed border-neutral-200">
+                    <span className="material-symbols-outlined text-6xl text-neutral-300 mb-4">library_books</span>
+                    <h3 className="text-xl font-medium text-neutral-600">אין כאן ספרים עדיין</h3>
+                    <button
+                        onClick={() => setIsUploadModalOpen(true)}
+                        className="mt-4 text-info-600 font-bold hover:underline"
+                    >
+                        לחץ כאן להעלאת הספר הראשון
+                    </button>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {filteredBooks.map(book => (
+                        <PersonalBookCard key={book.id || book.path} book={book} />
+                    ))}
+                </div>
+            )}
+        </div>
+      </main>
+
+      {/* קומפוננטת המודל להעלאה */}
+      {isUploadModalOpen && (
+        <UploadModal
+            onClose={() => setIsUploadModalOpen(false)}
+            onSuccess={() => {
+                setIsUploadModalOpen(false);
+                fetchUserBooks(); // ריענון הרשימה אחרי העלאה מוצלחת
+            }}
+        />
+      )}
+    </div>
+  )
+}
+
+// --- תת-קומפוננטה: חלון העלאה (Modal) ---
+function UploadModal({ onClose, onSuccess }) {
+    const [file, setFile] = useState(null);
+    const [bookName, setBookName] = useState('');
+    const [isUploading, setIsUploading] = useState(false);
+    const [status, setStatus] = useState(null);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!file || !bookName) return;
+
+        setIsUploading(true);
+        setStatus(null);
+
+        const formData = new FormData();
+        formData.append('pdf', file);
+        formData.append('bookName', bookName);
+
+        try {
+            const res = await fetch('/api/user/upload', {
+                method: 'POST',
+                body: formData,
+            });
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                setStatus({ type: 'success', msg: 'הועלה בהצלחה!' });
+                setTimeout(() => {
+                    onSuccess(); // סגירת המודל ורענון הדף
+                }, 1000);
+            } else {
+                setStatus({ type: 'error', msg: data.error || 'שגיאה' });
+                setIsUploading(false);
+            }
+        } catch (err) {
+            setStatus({ type: 'error', msg: 'שגיאת תקשורת' });
+            setIsUploading(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 relative">
+
+                {/* כפתור סגירה */}
+                <button onClick={onClose} className="absolute top-4 left-4 text-neutral-400 hover:text-neutral-600">
+                    <span className="material-symbols-outlined">close</span>
+                </button>
+
+                <div className="p-6 border-b border-neutral-100 bg-neutral-50">
+                    <h2 className="text-xl font-bold text-neutral-800 text-center">העלאת ספר חדש</h2>
+                </div>
+
+                <form onSubmit={handleSubmit} className="p-6 space-y-5">
+                    <div>
+                        <label className="block text-sm font-medium text-neutral-700 mb-1">שם הספר</label>
+                        <input
+                            type="text"
+                            value={bookName}
+                            onChange={(e) => setBookName(e.target.value)}
+                            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-info-500 outline-none"
+                            placeholder="שם הספר..."
+                            required
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-neutral-700 mb-1">קובץ PDF</label>
+                        <input
+                            type="file"
+                            accept="application/pdf"
+                            onChange={(e) => setFile(e.target.files[0])}
+                            className="block w-full text-sm text-neutral-500 file:ml-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-info-50 file:text-info-700 hover:file:bg-info-100"
+                            required
+                        />
+                    </div>
+
+                    {status && (
+                        <div className={`text-sm text-center p-2 rounded ${status.type === 'success' ? 'bg-success-100 text-success-700' : 'bg-danger-100 text-danger-700'}`}>
+                            {status.msg}
+                        </div>
+                    )}
+
+                    <button
+                        type="submit"
+                        disabled={isUploading}
+                        className="w-full bg-info-600 text-white py-2.5 rounded-xl font-bold hover:bg-info-700 transition disabled:opacity-50 flex justify-center gap-2"
+                    >
+                        {isUploading ? (
+                            <>
+                             <Loader size="inline" decorative className="text-sm" />
+                             מעלה...
+                            </>
+                        ) : 'העלה'}
+                    </button>
+                </form>
+            </div>
+        </div>
+    );
+}
+
+// --- תת-קומפוננטה: כרטיס ספר ---
+function PersonalBookCard({ book }) {
+  const total = book.totalPages || 0;
+  const completed = book.completedPages || 0;
+  const percent = total > 0 ? (completed / total) * 100 : 0;
+
+  return (
+    <Link
+        href={`/library/books/${encodeURIComponent(book.path)}`}
+        className="group bg-white p-5 rounded-2xl border border-surface-variant hover:border-info-300 hover:shadow-xl hover:shadow-info-50 transition-all duration-300 flex flex-col h-full transform hover:-translate-y-1 relative"
+    >
+        <span className="absolute top-4 left-4 bg-info-100 text-info-700 text-[10px] font-bold px-2 py-1 rounded-full z-10">
+            אישי
+        </span>
+
+        <div className="flex gap-4 mb-5">
+            <div className="w-16 h-20 bg-neutral-100 rounded-lg shadow-inner flex-shrink-0 flex items-center justify-center overflow-hidden">
+                {book.thumbnail ? (
+                    <img src={book.thumbnail} alt="" className="w-full h-full object-cover" />
+                ) : (
+                    <span className="material-symbols-outlined text-3xl text-neutral-300">folder_open</span>
+                )}
+            </div>
+            <div className="flex-1 min-w-0 py-1">
+                <h3 className="font-bold text-lg text-neutral-800 line-clamp-2 leading-tight mb-1 group-hover:text-info-600 transition-colors">
+                    {book.name}
+                </h3>
+                <span className="text-xs text-neutral-500">
+                   {total} עמודים
+                </span>
+            </div>
+        </div>
+
+        <div className="mt-auto">
+            <div className="flex justify-between text-[11px] text-neutral-400 mb-1.5">
+                <span>התקדמות</span>
+                <span>{Math.round(percent)}%</span>
+            </div>
+            <div className="flex h-2.5 w-full rounded-full overflow-hidden bg-neutral-100 mb-3">
+                <div
+                    className={`h-full transition-all duration-500 ${percent === 100 ? 'bg-success-500' : 'bg-info-500'}`}
+                    style={{ width: `${percent}%` }}
+                />
+            </div>
+        </div>
+    </Link>
+  )
 }

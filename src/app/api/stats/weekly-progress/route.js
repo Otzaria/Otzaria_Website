@@ -11,13 +11,13 @@ const CACHE_TTL_MS = 5 * 60_000;
 async function computeWeeklyProgress() {
     await connectDB();
 
-    // קביעת טווח תאריכים: 7 הימים האחרונים (כולל היום)
+    // הטווח והכותרות משתמשים ב-UTC, כמו הקיבוץ של Mongo ומפתח המטמון.
     const end = new Date();
-    end.setHours(23, 59, 59, 999);
+    end.setUTCHours(23, 59, 59, 999);
 
     const start = new Date();
-    start.setDate(start.getDate() - 6); // 7 ימים אחורה
-    start.setHours(0, 0, 0, 0);
+    start.setUTCDate(start.getUTCDate() - 6); // 7 ימים אחורה
+    start.setUTCHours(0, 0, 0, 0);
 
     // שליפת הנתונים מהמסד (רק דפים שהושלמו בטווח הזמן).
     // ה-$match נשען על האינדקס {status: 1, completedAt: 1} שב-models/Page.js.
@@ -49,7 +49,7 @@ async function computeWeeklyProgress() {
 
     for (let i = 0; i < 7; i++) {
         const d = new Date(start);
-        d.setDate(d.getDate() + i);
+        d.setUTCDate(d.getUTCDate() + i);
         const dateStr = d.toISOString().split('T')[0]; // YYYY-MM-DD
 
         const count = statsMap.get(dateStr) || 0;
@@ -57,7 +57,7 @@ async function computeWeeklyProgress() {
 
         filledData.push({
             _id: dateStr,
-            date: d.toLocaleDateString('he-IL', { weekday: 'short'}),
+            date: d.toLocaleDateString('he-IL', { weekday: 'short', timeZone: 'UTC' }),
             count: count
         });
     }

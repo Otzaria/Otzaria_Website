@@ -9,19 +9,19 @@ export function ownsBook(book, user) {
 }
 
 export function canRunPrivateOcr(book, user) {
-  return Boolean(book?.isPrivate && hasPrivateOcrAccess(user) && (isAdmin(user) || ownsBook(book, user)))
+  return Boolean(book?.privateOcr && book?.isPrivate && hasPrivateOcrAccess(user) && (isAdmin(user) || ownsBook(book, user)))
 }
 
 export function canReadBook(book, user) {
   if (!book) return false
   if (hasBookLibraryAccess(user)) return true
-  if (book.isPrivate) return canRunPrivateOcr(book, user)
-  return !book.isHidden || ownsBook(book, user)
+  if (book.privateOcr) return canRunPrivateOcr(book, user)
+  return (!book.isHidden && !book.isPrivate) || ownsBook(book, user)
 }
 
 // ספר פרטי אינו עובר דרך תור העריכה או מתפרסם בסיום.
 export function canUseBookEditor(book, user) {
-  return canReadBook(book, user) && (!book.isPrivate || hasBookLibraryAccess(user))
+  return canReadBook(book, user) && (!book.privateOcr || hasBookLibraryAccess(user))
 }
 
 // סינון עמודים לפני קיבוץ, ספירה או הגבלה: בלי טקסטים/שמות/ספירות של ספר פרטי.

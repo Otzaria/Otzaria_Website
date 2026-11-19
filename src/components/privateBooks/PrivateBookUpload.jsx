@@ -11,7 +11,7 @@ export default function PrivateBookUpload({ onSuccess }) {
     setBusy(true)
     setError('')
     try {
-      const res = await fetch('/api/user/upload', { method: 'POST', body: new FormData(form) })
+      const res = await fetch('/api/user/upload?privateOcr=1', { method: 'POST', body: new FormData(form) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'ההעלאה נכשלה')
       form.reset()

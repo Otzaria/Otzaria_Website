@@ -1,6 +1,7 @@
 // Uploads/storage are supplied by the live installation, not bundled build assets.
 import path from 'path';
 import fs from 'fs';
+import { Readable } from 'node:stream';
 import { promises as fsp } from 'fs';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
@@ -46,17 +47,21 @@ export async function GET(request, { params }) {
     return new Response(null, { status: 403 });
   }
 
-  // הגנה גם על סריקות של ספרים אישיים ישנים שנשמרו תחת uploads.
-  const bookPath = path.relative(UPLOAD_ROOT, resolved).replace(/\\/g, '/').split('/');
-  const isBookAsset = bookPath[0].toLowerCase() === 'books' && bookPath.length >= 3;
-  if (isBookAsset) {
+  // העלאות אישיות ישנות משתמשות בקידומת הזו. ספרים ציבוריים רגילים אינם פונים למסד או לסשן.
+  const [collection, slug, ...parts] = path.relative(UPLOAD_ROOT, resolved).replace(/\\/g, '/').split('/');
+  let verifyAccess = false;
+  if (collection.toLowerCase() === 'books' && /^u-[a-f0-9]{4}(?:-.*)?$/i.test(slug ?? '') && parts.length) {
     await connectDB();
-    const slug = bookPath[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const book = await Book.findOne({ slug: { $regex: `^${slug}$`, $options: 'i' } }).lean();
-    const session = await getServerSession(authOptions);
-    if (!canReadBook(book, session?.user)) return new Response(null, { status: 404, headers: { 'Cache-Control': 'private, no-store' } });
+    const book = await Book.findOne({ slug }).select('isHidden isPrivate ownerId').lean();
+    if (!book) return new Response(null, { status: 404, headers: { 'Cache-Control': 'private, no-store' } });
+    verifyAccess = Boolean(book.isHidden || book.isPrivate || book.ownerId);
+    if (verifyAccess) {
+      const session = await getServerSession(authOptions);
+      if (!canReadBook(book, session?.user)) return new Response(null, { status: 404, headers: { 'Cache-Control': 'private, no-store' } });
+    }
   }
 
+  const cacheControl = verifyAccess ? 'private, no-store' : 'public, max-age=86400, stale-while-revalidate=604800, must-revalidate';
   let stat;
   try {
     stat = await fsp.stat(resolved);
@@ -70,30 +75,21 @@ export async function GET(request, { params }) {
   const lastModified = stat.mtime.toUTCString();
   const etag = `"${stat.size}-${stat.mtimeMs}"`;
 
-  if (
-    request.headers.get('if-none-match') === etag ||
-    request.headers.get('if-modified-since') === lastModified
-  ) {
-    return new Response(null, { status: 304 });
+  const ifNoneMatch = request.headers.get('if-none-match');
+  if (!verifyAccess && (ifNoneMatch ? ifNoneMatch === etag : request.headers.get('if-modified-since') === lastModified)) {
+    return new Response(null, { status: 304, headers: { 'Cache-Control': cacheControl, 'Last-Modified': lastModified, 'ETag': etag } });
   }
 
   const ext = path.extname(resolved).toLowerCase();
   const contentType = MIME_MAP[ext] || 'application/octet-stream';
 
-  const stream = new ReadableStream({
-    start(controller) {
-      const fileStream = fs.createReadStream(resolved);
-      fileStream.on('data', chunk => controller.enqueue(chunk));
-      fileStream.on('end', () => controller.close());
-      fileStream.on('error', err => controller.error(err));
-    },
-  });
+  const stream = Readable.toWeb(fs.createReadStream(resolved));
 
   return new Response(stream, {
     headers: {
       'Content-Type': contentType,
       'Content-Length': stat.size.toString(),
-      'Cache-Control': isBookAsset ? 'private, no-store' : 'public, max-age=86400, stale-while-revalidate=604800, must-revalidate',
+      'Cache-Control': cacheControl,
       'Last-Modified': lastModified,
       'ETag': etag,
       'X-Content-Type-Options': 'nosniff',

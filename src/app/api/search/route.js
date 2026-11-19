@@ -1,7 +1,6 @@
 import { PUBLIC_BOOK_FILTER } from '@/lib/privateBooks';
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
-import Book from '@/models/Book';
 import Page from '@/models/Page';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/client-ip';
@@ -24,16 +23,24 @@ export async function GET(request) {
         }
 
         await connectDB();
-        const visibleIds = await Book.find({ ...PUBLIC_BOOK_FILTER, isHidden: { $ne: true } }).distinct('_id');
-
-        // חיפוש טקסט מלא במונגו (דורש אינדקס טקסט ב-Schema)
-        const pages = await Page.find(
-            { $text: { $search: query }, book: { $in: visibleIds } },
-            { score: { $meta: "textScore" } }
-        )
-        .sort({ score: { $meta: "textScore" } })
-        .limit(50)
-        .populate('book', 'name slug');
+        // מסננים את הספרים מתוך מועמדי אינדקס הטקסט לפני הגבלה, בלי להעביר רשימת מזהים של כל הקטלוג.
+        const pages = await Page.aggregate([
+            { $match: { $text: { $search: query } } },
+            { $project: { score: { $meta: 'textScore' }, book: 1, pageNumber: 1, content: 1, rightColumn: 1, leftColumn: 1 } },
+            { $lookup: {
+                from: 'books',
+                localField: 'book',
+                foreignField: '_id',
+                pipeline: [
+                    { $match: { ...PUBLIC_BOOK_FILTER, isHidden: { $ne: true } } },
+                    { $project: { name: 1, slug: 1 } },
+                ],
+                as: 'book',
+            } },
+            { $unwind: '$book' },
+            { $sort: { score: -1 } },
+            { $limit: 50 },
+        ]);
 
         const results = pages.map(page => {
             // איחוד התוכן לטקסט אחד לחיפוש הסניפט

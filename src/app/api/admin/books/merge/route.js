@@ -52,7 +52,7 @@ export async function POST(request) {
         }
 
         // המיזוג הקיים כותב לתיקייה ציבורית; ספר פרטי נשאר באחסון שלו.
-        if (sortedOldBooks.some(b => b.isPrivate || b.ownerId)) {
+        if (sortedOldBooks.some(b => b.privateOcr)) {
             return badRequest('אין למזג ספרים פרטיים');
         }
 

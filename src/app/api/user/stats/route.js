@@ -1,4 +1,3 @@
-import { publicPagesStages } from '@/lib/privateBooks';
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Page from '@/models/Page';
@@ -23,7 +22,6 @@ export async function GET() {
 
     const stats = await Page.aggregate([
       { $match: { claimedBy: user._id } },
-      ...publicPagesStages(),
       {
         $lookup: {
           from: 'books',
@@ -35,6 +33,7 @@ export async function GET() {
       { $unwind: '$bookData' },
       {
         $match: {
+          'bookData.privateOcr': { $ne: true },
           $or: [
             { 'bookData.isHidden': { $ne: true } }, 
             { status: 'completed' } 
@@ -55,7 +54,6 @@ export async function GET() {
 
     const recentActivityRaw = await Page.aggregate([
       { $match: { claimedBy: user._id } },
-      ...publicPagesStages(),
 
       { $sort: { status: -1, updatedAt: -1 } },
 
@@ -70,7 +68,7 @@ export async function GET() {
       
       { $unwind: '$bookData' },
 
-      { $match: { 'bookData.isHidden': { $ne: true } } },
+      { $match: { 'bookData.isHidden': { $ne: true }, 'bookData.privateOcr': { $ne: true } } },
 
       {
         $project: {

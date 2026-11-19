@@ -8,7 +8,7 @@ vi.mock('@/models/Book', () => ({ default: { findById: vi.fn() } }))
 vi.mock('@/models/OcrJob', () => ({ default: { findOne: vi.fn(), create: vi.fn() } }))
 vi.mock('@/lib/ocr/runOcrJob', () => ({ runOcrJob: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('@/lib/ocr/staleJobs', () => ({ reapStaleOcrJobs: vi.fn() }))
-vi.mock('@/lib/ocr/bookOcrCounts', () => ({ countBookOcrPages: vi.fn().mockResolvedValue({ editedPagesCount: 0, toProcess: { overwrite: 1 } }) }))
+vi.mock('@/lib/ocr/bookOcrCounts', () => ({ countBookOcrPages: vi.fn().mockResolvedValue({ editedPagesCount: 0, toProcess: { overwrite: 1, skip: 1 } }) }))
 import { getServerSession } from 'next-auth'
 import Book from '@/models/Book'
 import OcrJob from '@/models/OcrJob'
@@ -23,7 +23,7 @@ const request = () => ({ json: async () => ({ bookId: BOOK, method: 'ocrwin', ex
 beforeEach(() => {
   vi.clearAllMocks()
   getServerSession.mockResolvedValue({ user })
-  Book.findById.mockResolvedValue({ _id: BOOK, name: 'פרטי', isPrivate: true, ownerId: user.id })
+  Book.findById.mockResolvedValue({ _id: BOOK, name: 'פרטי', isPrivate: true, privateOcr: true, ownerId: user.id })
   OcrJob.findOne.mockResolvedValue(null)
   OcrJob.create.mockResolvedValue({ _id: 'job' })
 })
@@ -31,7 +31,7 @@ beforeEach(() => {
 describe('הפעלת OCR פרטי', () => {
   it('מפעיל את אותו מנוע על הספר הפרטי של הבעלים', async () => {
     expect((await POST(request())).status).toBe(200)
-    expect(OcrJob.create).toHaveBeenCalledWith(expect.objectContaining({ book: BOOK, startedBy: user.id }))
+    expect(OcrJob.create).toHaveBeenCalledWith(expect.objectContaining({ book: BOOK, startedBy: user.id, existingTextMode: 'skip' }))
     expect(runOcrJob).toHaveBeenCalledWith('job')
   })
   it.each([null, { user: { ...user, roles: [] } }])('מסרב ללא הרשאה לפני גישה למסד', async session => {
@@ -39,7 +39,7 @@ describe('הפעלת OCR פרטי', () => {
     expect((await POST(request())).status).toBe(session ? 403 : 401)
     expect(Book.findById).not.toHaveBeenCalled()
   })
-  it.each([{ isPrivate: true, ownerId: 'other' }, { isPrivate: false, ownerId: user.id }, null])('מחזיר 404 בלי הפעלה בספר שאינו שלו או שאינו פרטי', async book => {
+  it.each([{ isPrivate: true, privateOcr: true, ownerId: 'other' }, { isPrivate: false, ownerId: user.id }, { isPrivate: true, ownerId: user.id }, null])('מחזיר 404 בלי הפעלה בספר שאינו שלו או שאינו פרטי', async book => {
     Book.findById.mockResolvedValue(book)
     expect((await POST(request())).status).toBe(404)
     expect(OcrJob.create).not.toHaveBeenCalled()

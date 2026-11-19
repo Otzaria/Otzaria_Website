@@ -140,6 +140,27 @@ function serializeJob(job, now) {
   };
 }
 
+// הכרטיס הפרטי משתמש רק במצב, בהתקדמות ובפרטים הדרושים לחידוש הכנה של אותה בקשה.
+function ownerJobStatus(job) {
+  const prep = preparationInfo(job, new Date());
+  const canResume = prep.preparingStale && prep.requestId && job.existingTextMode === 'skip';
+  return {
+    status: job.status,
+    totalPages: job.totalPages ?? 0,
+    processedPages: job.processedPages ?? 0,
+    error: job.status === 'failed' || job.errorCode || job.failedPages
+      ? 'חלק מהעיבוד נכשל. ניתן לנסות שוב לעבד את העמודים שעדיין ריקים.'
+      : null,
+    ...(canResume ? {
+      preparingStale: true,
+      requestId: prep.requestId,
+      method: job.method,
+      options: job.options ?? null,
+      pageRange: jobPageRange(job),
+    } : {}),
+  };
+}
+
 export function createStatusHandler(privateOnly = false) {
   return async function GET(request) {
     try {
@@ -158,7 +179,7 @@ export function createStatusHandler(privateOnly = false) {
 
       await connectDB();
 
-      const book = await Book.findById(bookId).select(privateOnly ? '_id name isPrivate ownerId' : '_id name').lean();
+      const book = await Book.findById(bookId).select(privateOnly ? '_id privateOcr isPrivate ownerId' : '_id name').lean();
       if (!book || (privateOnly && !canRunPrivateOcr(book, session.user))) {
         return notFound('הספר לא נמצא');
       }
@@ -166,8 +187,16 @@ export function createStatusHandler(privateOnly = false) {
       // סימון עבודות תקועות (שרת שהופעל מחדש באמצע) ככשל לפני הקריאה
       await reapStaleOcrJobs(book._id);
 
+      const jobsForBook = { book: book._id, taskType: { $ne: 'training' } };
+      if (privateOnly) {
+        const job = await OcrJob.findOne(jobsForBook).sort({ createdAt: -1 })
+          .select('status method existingTextMode pageRange totalPages processedPages options requestId prepLeaseUntil errorCode failedPages')
+          .lean();
+        return NextResponse.json({ success: true, job: job ? ownerJobStatus(job) : null });
+      }
+
       // בלי pageMap (עד 2,000 רשומות), בלי נתיבי קבצים פנימיים, ועד 50 שגיאות עמוד
-      const job = await OcrJob.findOne({ book: book._id, taskType: { $ne: 'training' } })
+      const job = await OcrJob.findOne(jobsForBook)
         .sort({ createdAt: -1 })
         .select({
           pageMap: 0,

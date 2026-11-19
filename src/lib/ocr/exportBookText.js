@@ -48,7 +48,7 @@ export function createExportTextHandler(privateOnly = false) {
 
     } catch (error) {
       console.error('Error exporting book text:', error);
-      return serverError('שגיאת שרת פנימית: ' + error.message);
+      return serverError(privateOnly ? 'שגיאה בייצוא הטקסט' : 'שגיאת שרת פנימית: ' + error.message);
     }
   }
 

@@ -27,7 +27,7 @@ afterAll(() => {
   fs.rmSync(root, { recursive: true, force: true })
 })
 
-const call = (segments) => GET(new Request('http://localhost/uploads/x'), { params: Promise.resolve({ path: segments }) })
+const call = (segments, headers) => GET(new Request('http://localhost/uploads/x', { headers }), { params: Promise.resolve({ path: segments }) })
 
 describe('GET /uploads/[...path] — תיקיות חסומות', () => {
   it('קובץ רגיל מוגש', async () => {
@@ -35,15 +35,34 @@ describe('GET /uploads/[...path] — תיקיות חסומות', () => {
   })
 
   it('סריקה של ספר פרטי ישן אינה זמינה לאחר, גם עם כותרת מטמון', async () => {
-    fs.mkdirSync(path.join(root, 'books', 'private'), { recursive: true })
-    fs.writeFileSync(path.join(root, 'books', 'private', 'page.1.jpg'), 'image')
-    Book.findOne.mockReturnValue({ lean: async () => ({ isPrivate: true, ownerId: 'owner' }) })
+    fs.mkdirSync(path.join(root, 'books', 'u-4099-private'), { recursive: true })
+    fs.writeFileSync(path.join(root, 'books', 'u-4099-private', 'page.1.jpg'), 'image')
+    Book.findOne.mockReturnValue({ select: () => ({ lean: async () => ({ isPrivate: true, ownerId: 'owner' }) }) })
     getServerSession.mockResolvedValue({ user: { id: 'other', role: 'private_ocr' } })
-    expect((await call(['books', 'private', 'page.1.jpg'])).status).toBe(404)
-    getServerSession.mockResolvedValue({ user: { role: 'admin' } })
-    const res = await call(['books', 'private', 'page.1.jpg'])
+    expect((await call(['books', 'u-4099-private', 'page.1.jpg'])).status).toBe(404)
+    getServerSession.mockResolvedValue({ user: { id: 'owner', role: 'user' } })
+    const res = await call(['books', 'u-4099-private', 'page.1.jpg'])
     expect(res.status).toBe(200)
     expect(res.headers.get('cache-control')).toBe('private, no-store')
+    expect(await res.text()).toBe('image')
+    const cached = await call(['books', 'u-4099-private', 'page.1.jpg'], { 'If-None-Match': res.headers.get('etag') })
+    expect(cached.status).toBe(200)
+    await cached.body.cancel()
+    expect(Book.findOne).toHaveBeenCalledWith({ slug: 'u-4099-private' })
+  })
+
+  it('תמונות מספר ציבורי רגיל ניתנות למטמון ואינן מצריכות מסד או סשן', async () => {
+    Book.findOne.mockClear()
+    getServerSession.mockClear()
+    fs.mkdirSync(path.join(root, 'books', 'public-book'), { recursive: true })
+    fs.writeFileSync(path.join(root, 'books', 'public-book', 'page.1.jpg'), 'image')
+    const res = await call(['books', 'public-book', 'page.1.jpg'])
+    expect(res.status).toBe(200)
+    expect(res.headers.get('cache-control')).toMatch(/^public/)
+    expect(await res.text()).toBe('image')
+    expect((await call(['books', 'public-book', 'page.1.jpg'], { 'If-None-Match': res.headers.get('etag') })).status).toBe(304)
+    expect(Book.findOne).not.toHaveBeenCalled()
+    expect(getServerSession).not.toHaveBeenCalled()
   })
 
   it('חסום ישירות, ברישיות אחרת ובלוכסן-הפוך', async () => {

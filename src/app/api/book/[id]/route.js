@@ -32,7 +32,7 @@ export async function GET(request, { params }) {
         ] 
     }).lean();
     
-    if (!book || (book.isPrivate && !canUseBookEditor(book, session.user))) {
+    if (!book || (book.privateOcr && !canUseBookEditor(book, session.user))) {
       return notFound('הספר לא נמצא');
     }
 

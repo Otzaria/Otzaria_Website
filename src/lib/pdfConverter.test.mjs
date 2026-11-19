@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readdir, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { PDFDocument, rgb } from 'pdf-lib'
@@ -31,5 +31,16 @@ test('rendering failure releases PDF resources and later conversion still works'
     const source = await samplePdf()
     await assert.rejects(convertPdfToImages(source, path.join(dir, 'missing')), /unable to open|ENOENT|No such file/i)
     const pages = await convertPdfToImages(source, dir); assert.equal(pages.length, 2)
+  } finally { await rm(dir, { recursive: true, force: true }) }
+})
+
+test('PDF page limits are enforced before writing files by both renderers', async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'otzaria-pdf-limit-'))
+  try {
+    const source = await samplePdf()
+    for (const renderer of ['raw', 'legacy']) {
+      await assert.rejects(convertPdfToImages(source, dir, { maxPages: 1, renderer }), { code: 'PDF_PAGE_LIMIT' })
+      assert.deepEqual(await readdir(dir), [])
+    }
   } finally { await rm(dir, { recursive: true, force: true }) }
 })

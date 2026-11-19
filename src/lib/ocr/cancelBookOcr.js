@@ -5,7 +5,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
 import OcrJob from '@/models/OcrJob';
-import { hasBookLibraryAccess, hasPrivateOcrAccess } from '@/lib/roles';
+import { hasBookLibraryAccess, hasPrivateOcrAccess, isAdmin } from '@/lib/roles';
 import { canRunPrivateOcr } from '@/lib/privateBooks';
 import { activeFilter } from '@/lib/ocr/localJobState';
 import { APPLY_STARTED_MESSAGE_HE, cancelLocalJob, requestServerJobCancel } from '@/lib/ocr/localCancel';
@@ -50,7 +50,7 @@ export function createCancelHandler(privateOnly = false) {
         return NextResponse.json({ error: 'עצירת אימון מחייבת עצירה מבוקרת בתחנת האימון' }, { status: 409 });
       }
 
-      const opts = { reason: 'admin', byName: session.user?.name || '' };
+      const opts = { reason: privateOnly && !isAdmin(session.user) ? 'owner' : 'admin', byName: session.user?.name || '' };
       if (job.method === 'local') {
         const result = await cancelLocalJob(job._id, opts);
         if (!result.ok && result.code === 'apply_started') {

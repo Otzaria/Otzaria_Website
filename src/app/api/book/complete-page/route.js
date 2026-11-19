@@ -52,14 +52,12 @@ export async function POST(request) {
     await page.populate('claimedBy', 'name email');
 
     if (!wasAlreadyCompleted) {
-        await Book.findByIdAndUpdate(page.book, { $inc: { completedPages: 1 } });
+        const book = await Book.findByIdAndUpdate(page.book, { $inc: { completedPages: 1 } }, { returnDocument: 'after' });
         
         const userIdToReward = page.claimedBy._id || page.claimedBy; 
         await User.findByIdAndUpdate(userIdToReward, { $inc: { points: 10 } });
 
-        const book = await Book.findById(page.book);
-        
-        if (book && !book.isPrivate && book.ownerId) {
+        if (book && !book.privateOcr && (book.ownerId || book.isPrivate)) {
 
             if (book.totalPages > 0 && book.totalPages === book.completedPages) {
                 const update = {

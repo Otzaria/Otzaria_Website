@@ -1,22 +1,25 @@
 import { hasPrivateOcrAccess } from '@/lib/roles';
-import { requireAccess } from '@/lib/apiResponse';
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Book from '@/models/Book';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { serverError } from '@/lib/apiResponse';
+import { serverError, unauthorized } from '@/lib/apiResponse';
 
 async function listPrivateBooks() {
   try {
     const session = await getServerSession(authOptions);
 
-    const denied = requireAccess(session, hasPrivateOcrAccess);
-    if (denied) return denied;
+    const ownerId = session?.user?._id || session?.user?.id;
+    if (!ownerId) return unauthorized();
 
     await connectDB();
 
-    const books = await Book.find({ ownerId: session.user._id || session.user.id, isPrivate: true })
+    const books = await Book.find({
+      ownerId,
+      ...(hasPrivateOcrAccess(session.user) ? {} : { privateOcr: { $ne: true } }),
+    })
+      .select('name slug category totalPages completedPages isHidden privateOcr coverImage')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -31,7 +34,7 @@ async function listPrivateBooks() {
       status: book.completedPages === book.totalPages ? 'completed' : 'in-progress',
       isHidden: book.isHidden,
       privateOcr: book.privateOcr === true,
-      thumbnail: null
+      thumbnail: book.privateOcr ? null : book.coverImage || null
     }));
 
     return NextResponse.json({ success: true, books: formattedBooks }, { headers: { 'Cache-Control': 'private, no-store' } });

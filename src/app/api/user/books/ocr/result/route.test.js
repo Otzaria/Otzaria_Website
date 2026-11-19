@@ -13,7 +13,7 @@ const request = () => new Request('http://localhost/api/user/books/ocr/result?bo
 beforeEach(() => {
   vi.clearAllMocks()
   getServerSession.mockResolvedValue({ user: { id: 'owner', roles: ['private_ocr'] } })
-  Book.findById.mockResolvedValue({ isPrivate: true, ownerId: 'owner' })
+  Book.findById.mockResolvedValue({ isPrivate: true, privateOcr: true, ownerId: 'owner' })
   Page.find.mockReturnValue({ sort() { return this }, select() { return this }, lean: async () => [{ content: 'א' }, { content: 'ב' }] })
 })
 it('מייצא את הטקסט לפי מסלול הייצוא הקיים', async () => {
@@ -22,7 +22,7 @@ it('מייצא את הטקסט לפי מסלול הייצוא הקיים', async
   expect(res.headers.get('cache-control')).toBe('private, no-store')
   expect(await res.json()).toEqual({ success: true, combinedText: 'א\n\nב' })
 })
-it.each([{ isPrivate: true, ownerId: 'other' }, { isPrivate: false, ownerId: 'owner' }, null])('אין טקסט לספר זר או ציבורי', async book => {
+it.each([{ isPrivate: true, privateOcr: true, ownerId: 'other' }, { isPrivate: false, ownerId: 'owner' }, null])('אין טקסט לספר זר או ציבורי', async book => {
   Book.findById.mockResolvedValue(book)
   expect((await GET(request())).status).toBe(404)
   expect(Page.find).not.toHaveBeenCalled()

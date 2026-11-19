@@ -174,13 +174,14 @@ export function isWorkerUnavailable(job, worker) {
 
 const CANCEL_REASONS = Object.freeze({
   admin: 'בוטלה בידי מנהל',
+  owner: 'בוטלה בידי בעל הספר',
   book_deleted: 'בוטלה עקב מחיקת הספר',
   book_merged: 'בוטלה עקב מיזוג ספרים',
 })
 
 export function cancelReasonLabel(job) {
   const base = CANCEL_REASONS[job?.cancelReason] || 'בוטלה'
-  if (job?.cancelReason === 'admin' && job?.cancelledByName) return `בוטלה בידי ${job.cancelledByName}`
+  if (['admin', 'owner'].includes(job?.cancelReason) && job?.cancelledByName) return `בוטלה בידי ${job.cancelledByName}`
   return base
 }
 

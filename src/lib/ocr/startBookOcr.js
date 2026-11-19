@@ -34,7 +34,9 @@ export function createStartHandler(privateOnly = false) {
       const denied = requireAccess(session, privateOnly ? hasPrivateOcrAccess : hasBookLibraryAccess);
       if (denied) return denied;
 
-      const body = await request.json();
+      const input = await request.json();
+      // OCR פרטי מיועד למלא עמודים ריקים; ניסיונות חוזרים אינם דורסים טקסט שכבר הופק או נערך.
+      const body = privateOnly ? { ...input, existingTextMode: 'skip' } : input;
       // pageRange ({from,to} — "מעמוד / עד עמוד", לפי pageNumber): אופציונלי, חסר = כל הספר
       const { bookId, method, model, existingTextMode, splitColumns } = body || {};
 

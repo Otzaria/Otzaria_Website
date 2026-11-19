@@ -28,6 +28,7 @@ export async function GET() {
     // 2. חישוב כמות עמודים שהושלמו לכל משתמש (Aggregation)
     // סופר גם עמודים שהושלמו וגם שבטיפול
     const pagesStats = await Page.aggregate([
+      { $match: { status: { $in: ['completed', 'in-progress'] }, claimedBy: { $ne: null } } },
       ...publicPagesStages(),
       {
         $group: {

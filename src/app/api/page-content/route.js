@@ -77,7 +77,7 @@ export async function POST(request) {
     const currentPage = await Page.findOne(query);
     if (!currentPage) return notFound('Page not found');
     const sourceBook = await Book.findById(currentPage.book);
-    if (!canUseBookEditor(sourceBook, session.user)) return !sourceBook || sourceBook.isPrivate
+    if (!canUseBookEditor(sourceBook, session.user)) return !sourceBook || sourceBook.privateOcr
       ? notFound('הספר לא נמצא') : forbidden('אין הרשאות לצפייה בספר זה');
 
     // לוגיקת הרשאות ועדכון סטטוס:
@@ -236,7 +236,7 @@ export async function GET(request) {
             return notFound('Page not found');
         }
 
-        if (!canUseBookEditor(book, session.user)) return book.isPrivate
+        if (!canUseBookEditor(book, session.user)) return book.privateOcr
           ? notFound('הספר לא נמצא') : forbidden('אין הרשאות לצפייה בספר זה');
 
         // --- בדיקת הרשאות צפייה/עריכה ---
