@@ -26,15 +26,25 @@ export function compareAppVersions(a, b) {
   return a.build === null || b.build === null ? 0 : compareNumericStrings(a.build, b.build);
 }
 
+function hangFrameTokens(signature) {
+  if (signature?.exceptionType !== 'AppHang') return null;
+  return (signature.frames || []).flatMap((f) => String(f).trim().split(/\s+/)).filter(Boolean);
+}
+
 /**
- * חתימת תקיעה שמשותפת לתקיעות שאינן קשורות זו לזו: רק פריימי מנוע, או לולאת ההודעות של קובץ ההפעלה בלבד
- * (שני פריימים לכל היותר; יותר מזה הוא קוד נייטיב של ה-runner, שתקיעה בו היא ממצא אמיתי).
+ * לולאת ההודעות של קובץ ההפעלה בלבד: ה-thread הראשי היה פנוי כשנדגם, ואין בחתימה דבר על הגורם.
+ * יותר משני פריימים הם קוד נייטיב של ה-runner, שתקיעה בו היא ממצא אמיתי.
  */
+export function isMessageLoopOnlySignature(signature) {
+  const tokens = hangFrameTokens(signature);
+  return Boolean(tokens?.length) && tokens.length <= 2 && tokens.every((t) => /^[\w.-]+\.exe\+/i.test(t));
+}
+
+/** חתימת תקיעה שמשותפת לתקיעות שאינן קשורות זו לזו: רק פריימי מנוע, או לולאת ההודעות בלבד. */
 export function isGenericHangSignature(signature) {
-  if (signature?.exceptionType !== 'AppHang') return false;
-  const tokens = (signature.frames || []).flatMap((f) => String(f).trim().split(/\s+/)).filter(Boolean);
-  return tokens.every((t) => /^flutter_windows\.dll\+/i.test(t))
-    || (tokens.length <= 2 && tokens.every((t) => /^[\w.-]+\.exe\+/i.test(t)));
+  const tokens = hangFrameTokens(signature);
+  return tokens !== null
+    && (tokens.every((t) => /^flutter_windows\.dll\+/i.test(t)) || isMessageLoopOnlySignature(signature));
 }
 
 /**
@@ -42,14 +52,14 @@ export function isGenericHangSignature(signature) {
  * צירוף שקט; אחרת (גרסה חדשה יותר = התיקון לא עזר, או גרסה לא ידועה) issue חדש שמפנה לסגור האחרון.
  * @param {{issueNumber:number, issueState:string|null, issueStateReason?:string|null, appVersion?:string, createdAt:Date}[]} related דיווחים עם אותה חתימה ו-issue
  * @param {string} [appVersion] גרסת הדיווח החדש
- * @param {{exceptionType:string, frames:string[]}|null} [signature] חתימת הדיווח החדש; תקיעה גנרית לא מצורפת כלל
+ * @param {{exceptionType:string, frames:string[]}|null} [signature] חתימת הדיווח החדש; תקיעה גנרית לא מצורפת בשקט, ולולאת ההודעות בלבד לא מצורפת כלל
  * @returns {{action:'comment', issueNumber:number, issueUrl:string|null}
  *   |{action:'suppress', issueNumber:number, issueUrl:string|null, issueStateReason:string|null}
  *   |{action:'create', previousIssueNumber:number|null}}
  */
 export function planPublication(related, appVersion, signature) {
   const sorted = [...(related || [])].filter((r) => r.issueNumber).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  if (isGenericHangSignature(signature)) {
+  if (isMessageLoopOnlySignature(signature)) {
     return { action: 'create', previousIssueNumber: sorted.find((r) => r.issueState !== 'open')?.issueNumber ?? null };
   }
   const open = sorted.find((r) => r.issueState === 'open');
@@ -57,7 +67,7 @@ export function planPublication(related, appVersion, signature) {
   const last = sorted[0];
   const version = parseAppVersion(appVersion);
   // בלי סיבת סגירה ה-issue לא נסגר ב-GitHub אלא נמחק או ננעל — אין לאן לצרף
-  if (last?.issueStateReason && version) {
+  if (last?.issueStateReason && version && !isGenericHangSignature(signature)) {
     const linked = sorted.filter((r) => r.issueNumber === last.issueNumber);
     const highest = linked.map((r) => parseAppVersion(r.appVersion)).filter(Boolean)
       .reduce((max, v) => {
