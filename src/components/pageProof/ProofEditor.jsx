@@ -988,10 +988,10 @@ export default function ProofEditor({
   // ---- חלונית הקישור: הקישור שנפתח (לפי שתי השורות שלו — המספר עשוי להשתנות) ----
   const popItem = linkPop ? linksInDisplayOrder(view).find((x) => x.link.from_line === linkPop.from && x.link.to_line === linkPop.to) || null : null
   const closeLinkPop = useCallback(() => setLinkPop(null), [])
-  // הקישור בוטל או השתנה (גם מלוח הפרטים, או ב-Ctrl+Z) — החלונית נסגרת
-  useEffect(() => {
-    if (linkPop && !popItem) setLinkPop(null)
-  }, [linkPop, popItem])
+  // הקישור בוטל או השתנה (גם מלוח הפרטים, או ב-Ctrl+Z) — החלונית נסגרת.
+  // עדכון בזמן ה-render (ולא ב-effect): React מרנדר מחדש מיד, בלי commit ביניים; החלונית
+  // ממילא מוצגת רק כש-popItem קיים, והאיפוס מונע ממנה לחזור אם הקישור ישוחזר (Ctrl+Y)
+  if (linkPop && !popItem) setLinkPop(null)
 
   // ---- הסרגל ----
   const edit = !readOnly
