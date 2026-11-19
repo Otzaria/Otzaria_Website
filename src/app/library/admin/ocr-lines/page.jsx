@@ -8,7 +8,7 @@
 import { Suspense } from 'react'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
-import { hasOcrAccess } from '@/lib/roles'
+import { hasBookLibraryAccess, hasOcrAccess } from '@/lib/roles'
 import NoAccess from '@/components/admin/list/NoAccess'
 import OcrLinesScreen from '@/components/admin/training/OcrLinesScreen'
 import { TrainingScreenSkeleton } from '@/components/admin/training/TrainingSkeleton'
@@ -22,7 +22,7 @@ export default async function AdminOcrLinesPage() {
   }
   return (
     <Suspense fallback={<TrainingScreenSkeleton title={SCREEN_TEXT.lines.title} description={SCREEN_TEXT.lines.description} tabs={LINE_TABS.map((id) => STATUS_LABELS[id])} cards />}>
-      <OcrLinesScreen />
+      <OcrLinesScreen canRunBookOcr={hasBookLibraryAccess(session.user)} />
     </Suspense>
   )
 }

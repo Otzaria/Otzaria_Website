@@ -1,11 +1,13 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { useSession } from 'next-auth/react'
 import Badge from '@/components/ui/Badge'
 import Drawer from '@/components/ui/Drawer'
 import Tabs, { tabPanelProps } from '@/components/ui/Tabs'
 import ModelTrainingPanel from '@/components/admin/training/ModelTrainingPanel'
 import BookOcrPanel from '@/components/admin/ocr/BookOcrPanel'
+import { hasOcrAccess } from '@/lib/roles'
 import { unsavedConfirm, useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard'
 import { bookOwnership, bookProgress, displayCategory } from '@/lib/adminBooks/bookTerms'
 import BookDetailsTab from './BookDetailsTab'
@@ -40,7 +42,11 @@ export const DRAWER_TABS = [
  *   actions: Record<string, Function>, busy: boolean, toast: any, confirm: Function, returnFocus?: () => HTMLElement | null,
  *   onDirtyChange?: (dirty: boolean) => void }} props
  */
-export default function BookDrawer({ book, view, onView, onClose, colorOf, actions, busy, toast, confirm, returnFocus, onDirtyChange: reportDirty }) {
+export default function BookDrawer({ book, view: requestedView, onView, onClose, colorOf, actions, busy, toast, confirm, returnFocus, onDirtyChange: reportDirty }) {
+  const { data: session } = useSession()
+  const canTrain = hasOcrAccess(session?.user)
+  const tabs = canTrain ? DRAWER_TABS : DRAWER_TABS.filter((tab) => tab.id !== 'training')
+  const view = requestedView === 'training' && !canTrain ? 'details' : requestedView
   const [dirty, setDirty] = useState(false)
   const details = useBookDetails(book.path, view === 'pages' || view === 'instructions')
   const onDirtyChange = useCallback((next) => setDirty(next), [])
@@ -76,7 +82,7 @@ export default function BookDrawer({ book, view, onView, onClose, colorOf, actio
       leading={<BookThumb src={book.thumbnail} size="lg" className="mt-1" />}
       onClose={close}
       returnFocus={returnFocus}
-      header={<Tabs label={`הלשוניות של ${book.name}`} idPrefix={TAB_PREFIX} items={DRAWER_TABS} value={view} onChange={changeView} className="px-2 sm:px-4" />}
+      header={<Tabs label={`הלשוניות של ${book.name}`} idPrefix={TAB_PREFIX} items={tabs} value={view} onChange={changeView} className="px-2 sm:px-4" />}
     >
       <div {...tabPanelProps(TAB_PREFIX, view)} className="outline-none">
         {view === 'details' && <BookDetailsTab book={book} colorOf={colorOf} actions={actions} busy={busy} />}
@@ -89,7 +95,7 @@ export default function BookDrawer({ book, view, onView, onClose, colorOf, actio
             onDirtyChange={onDirtyChange}
           />
         )}
-        {view === 'training' && <ModelTrainingPanel book={book} />}
+        {view === 'training' && <ModelTrainingPanel book={book} canRunBookOcr />}
         {view === 'ocr' && <BookOcrPanel book={book} />}
       </div>
     </Drawer>

@@ -48,3 +48,13 @@ it('keeps the same id on a network retry and never treats completion of tagging 
   expect(bodies[0].requestId).toBe(bodies[1].requestId)
   expect(bodies[0].approved).toBe(true)
 })
+
+it.each([false, true])('shows the follow-up OCR link according to book access (%s)', async canRunBookOcr => {
+  const job = { id: 'c'.repeat(24), status: 'completed', active: false, script: 'square', bookId: book.id, activated: true }
+  m.request.mockResolvedValue({ enabled: true, jobs: [job] })
+  render(<ModelTrainingPanel book={book} canRunBookOcr={canRunBookOcr} />)
+  await screen.findByText(/מודל הספר מוכן לזיהוי יתר העמודים/)
+  const link = screen.queryByRole('link', { name: /לזיהוי יתר העמודים/ })
+  if (canRunBookOcr) expect(link).toHaveAttribute('href', `/library/admin/books?book=${book.id}&view=ocr`)
+  else expect(link).toBeNull()
+})

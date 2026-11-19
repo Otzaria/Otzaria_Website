@@ -8,6 +8,8 @@ import { useSyncExternalStore } from 'react'
 import { ToastProvider } from '@/components/ui/Toast'
 
 const push = vi.fn()
+const { useSession } = vi.hoisted(() => ({ useSession: vi.fn() }))
+vi.mock('next-auth/react', () => ({ useSession }))
 vi.mock('next/navigation', () => {
   const subscribe = (cb) => {
     window.addEventListener('test-url', cb)
@@ -67,6 +69,7 @@ let handler
 beforeEach(() => {
   calls = []
   push.mockClear()
+  useSession.mockReturnValue({ data: { user: { role: 'admin' } } })
   handler = null
   window.history.replaceState(null, '', '/library/admin/books')
   global.fetch = vi.fn(async (url, options = {}) => {
@@ -400,6 +403,16 @@ describe('BooksScreen — מגירת הספר', () => {
     expect(within(drawer).getByText('לוח הזיהוי של חוות דעת')).toBeInTheDocument()
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  test('a book-only administrator can open the drawer but cannot open the training tab', () => {
+    useSession.mockReturnValue({ data: { user: { role: 'admin_books_only' } } })
+    window.history.replaceState(null, '', '/library/admin/books?book=2&view=training')
+    renderScreen()
+    const drawer = screen.getByRole('dialog', { name: 'אור החיים' })
+    expect(within(drawer).queryByRole('tab', { name: 'אימון מודלים' })).toBeNull()
+    expect(within(drawer).getByRole('tab', { name: 'פרטים' })).toHaveAttribute('aria-selected', 'true')
+    expect(calls.some(({ url }) => url.startsWith('/api/admin/model-training'))).toBe(false)
   })
 
   test('קישור ישיר למגירה (?book=…&view=pages) — נפתחת על הלשונית, וספר שלא קיים נזרק מהכתובת', async () => {

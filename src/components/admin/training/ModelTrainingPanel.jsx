@@ -10,7 +10,7 @@ const labels = { preparing: 'מכין את חמשת העמודים', queued: 'מ
   completed: 'מודל הספר מוכן לזיהוי יתר העמודים', failed: 'המודל הקודם נשאר פעיל', needs_attention: 'נדרשת בדיקה במחשב המקומי', cancelled: 'בוטל' }
 const phases = { waiting_gpu: 'ממתין לכרטיס', snapshot_before: 'שומר את המודל הקודם', aligning_corrected_pages: 'מתאים את הטקסט המוגה לתמונות השורות', training: 'מאמן ובודק את מודל הספר', publish_after: 'שומר את המודל החדש', activate: 'מפעיל את מודל הספר' }
 
-export default function ModelTrainingPanel({ book = null }) {
+export default function ModelTrainingPanel({ book = null, canRunBookOcr = false }) {
   const [books, setBooks] = useState([]), [bookId, setBookId] = useState(book?.id || '')
   const [pageNumbers, setPageNumbers] = useState('1,2,3,4,5')
   const [script, setScript] = useState('square'), [epochs, setEpochs] = useState(4)
@@ -75,7 +75,7 @@ export default function ModelTrainingPanel({ book = null }) {
       {j.downloadable && <a className="underline me-3" href={`/api/admin/model-training/${j.id}/download`} download>הורד את חמשת העמודים והטקסט המתוקן (ZIP)</a>}
       {j.before && <a className="underline me-3" href={j.before.url} target="_blank" rel="noopener noreferrer">מודל לפני האימון</a>}
       {j.after && <a className="underline me-3" href={j.after.url} target="_blank" rel="noopener noreferrer">מודל אחרי האימון</a>}
-      {j.activated && <a className="underline" href={`/library/admin/books?book=${j.bookId}&view=ocr`}>לזיהוי יתר העמודים — בחרו דילוג על עמודים שכבר נערכו</a>}
+      {j.activated && canRunBookOcr && <a className="underline" href={`/library/admin/books?book=${j.bookId}&view=ocr`}>לזיהוי יתר העמודים — בחרו דילוג על עמודים שכבר נערכו</a>}
     </li>)}</ul>
   </section>
 }

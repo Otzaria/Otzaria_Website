@@ -60,6 +60,7 @@ const OCR_ADMIN_ALLOWED_API = [
   '/api/admin/ocr-layout',
   '/api/admin/page-proof',
   '/api/admin/training-proof',
+  '/api/admin/model-training',
   '/api/admin/stats',
 ];
 
@@ -96,6 +97,7 @@ const BOOKS_ADMIN_BLOCKED_API = [
   '/api/admin/ocr-layout',
   '/api/admin/page-proof',
   '/api/admin/training-proof',
+  '/api/admin/model-training',
 ];
 
 // ===== מפתח =====
