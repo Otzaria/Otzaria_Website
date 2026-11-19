@@ -105,7 +105,7 @@ it('מנהלי ספרייה ממשיכים לראות ספרים פרטיים ו
 it('השלמת ספר אישי ותיק מפרסמת אותו וספר OCR פרטי נשאר אישי', async () => {
   await User.create({ _id: OWNER, name: 'בעל ספר', email: 'owner@example.test' })
   const oldBook = await Book.create({ name: 'ספר אישי ותיק', slug: 'old-book', totalPages: 1, isPrivate: true, isHidden: true, ownerId: OWNER })
-  const oldPage = await Page.create({ book: oldBook._id, pageNumber: 1, status: 'in-progress', claimedBy: OWNER })
+  const oldPage = await Page.create({ book: oldBook._id, pageNumber: 1, imagePath: '/uploads/books/old-book/page.1.jpg', status: 'in-progress', claimedBy: OWNER })
   const finish = pageId => complete(new Request('http://localhost/api/book/complete-page', {
     method: 'POST', body: JSON.stringify({ pageId }),
   }))
