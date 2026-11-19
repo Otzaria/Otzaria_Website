@@ -97,3 +97,32 @@ test('ההתקנה בריפו הזה אינה ישנה מ-package-lock.json', ()
   const result = checkPluginValidatorInstall(path.resolve(import.meta.dirname, '../..'))
   assert.ok(result.ok, result.message)
 })
+
+// --- שער הייצואים בזמן import (pluginValidationCore.js / pluginValidation.js) ---
+// import דינמי: בהתקנה ישנה ה-import עצמו נכשל (בהודעה הברורה), ובדיקות ההתקנה
+// שלמעלה חייבות לרוץ בכל זאת ולהציג את הגרסאות.
+const loadGuard = async () => (await import('./pluginValidationCore.js')).assertPluginValidatorExports
+
+test('שער הייצואים: חבילה תקינה עוברת בלי לזרוק', async () => {
+  const assertPluginValidatorExports = await loadGuard()
+  const validator = (await import('otzaria-plugin-validator')).default
+  assert.doesNotThrow(() => assertPluginValidatorExports(validator, ['SPEC', 'getApiSpec', 'analyzeApiUsage']))
+})
+
+test('שער הייצואים: חבילה ישנה (main שאינו מייצא דבר) נכשלת בשמות החסרים ובפקודה לתיקון', async () => {
+  const assertPluginValidatorExports = await loadGuard()
+  for (const stale of [{}, undefined, null]) {
+    assert.throws(
+      () => assertPluginValidatorExports(stale, ['SPEC', 'getApiSpec']),
+      (err) => /SPEC, getApiSpec/.test(err.message) && /npm ci/.test(err.message) && /check:plugin-validator/.test(err.message)
+    )
+  }
+})
+
+test('שער הייצואים: מדווח רק על החסרים, וערך falsy שאינו undefined נחשב קיים', async () => {
+  const assertPluginValidatorExports = await loadGuard()
+  assert.throws(
+    () => assertPluginValidatorExports({ SPEC: {}, flag: false, count: 0 }, ['SPEC', 'flag', 'count', 'scanCodeForApiUsage']),
+    (err) => err.message.includes('הייצואים scanCodeForApiUsage.')
+  )
+})
