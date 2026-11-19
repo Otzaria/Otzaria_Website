@@ -57,19 +57,6 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push(`/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`);
-    } else if (status === 'authenticated') {
-      const isFirstTime = stats.myPages === 0 && stats.recentActivity.length === 0;
-      loadUserStats(isFirstTime);
-      loadMyMessages();
-      checkSubscriptionReminder();
-    }
-  // טעינה מותנית-הרשאה; קריאת stats היא snapshot מכוון
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, router, session]);
-
   const loadUserStats = async (isInitialLoad = false) => {
     try {
       if (isInitialLoad) setLoading(true);
@@ -142,6 +129,19 @@ export default function DashboardPage() {
       console.error('Error checking subscription status:', error);
     }
   }
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push(`/auth/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`);
+    } else if (status === 'authenticated') {
+      const isFirstTime = stats.myPages === 0 && stats.recentActivity.length === 0;
+      loadUserStats(isFirstTime);
+      loadMyMessages();
+      checkSubscriptionReminder();
+    }
+  // טעינה מותנית-הרשאה; קריאת stats היא snapshot מכוון
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, router, session]);
 
   const toggleSubscription = async () => {
     try {

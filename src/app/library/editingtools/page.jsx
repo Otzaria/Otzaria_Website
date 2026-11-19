@@ -11,12 +11,6 @@ export default function EditingToolsPage() {
   const [releases, setReleases] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    fetchReleases()
-  // fetch חד-פעמי בעליה; fetchReleases מוחרג
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
   const fetchReleases = async () => {
     try {
       const response = await fetch('https://api.github.com/repos/YOSEFTT/EditingDictaBooks/releases/latest', {
@@ -44,6 +38,12 @@ export default function EditingToolsPage() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    fetchReleases()
+  // fetch חד-פעמי בעליה; fetchReleases מוחרג
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleDownloadOfflineEditor = () => {
     const link = document.createElement('a')
