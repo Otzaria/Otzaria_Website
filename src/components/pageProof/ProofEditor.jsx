@@ -1073,6 +1073,8 @@ export default function ProofEditor({
         fontSize={layout.fontSize}
         fontFamily={fontFamily}
         className="h-full"
+        // goTo נוגע ב-refs, אבל לפי חוזה textView (ר' התיעוד בראש הקובץ) הוא נקרא רק מתוך handlers, לא בזמן render
+        // eslint-disable-next-line react-hooks/refs
         editorSlot={typeof textView === 'function' ? textView({ flow, view, tabKey, goTo }) : flow}
       />
     </div>

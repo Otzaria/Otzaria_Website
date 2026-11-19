@@ -40,6 +40,7 @@ export default function EditingToolsPage() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- טעינה מהשרת; ה-setState קורה אחרי await
     fetchReleases()
   // fetch חד-פעמי בעליה; fetchReleases מוחרג
   // eslint-disable-next-line react-hooks/exhaustive-deps

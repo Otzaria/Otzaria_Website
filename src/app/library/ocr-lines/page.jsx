@@ -225,6 +225,7 @@ export default function OcrLinesPage() {
 
   useEffect(() => {
     if (status === 'authenticated') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- טעינה מהשרת אחרי אימות ה-session; ה-setState העיקרי קורה אחרי await
       if (session?.user?.isVerified || hasBookLibraryAccess(session?.user)) load()
       else setLoading(false)
     }
