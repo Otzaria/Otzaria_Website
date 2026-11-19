@@ -10,7 +10,7 @@ import { validateAppReport, LEGACY_MAX_DIAGNOSTICS_BYTES as MAX_DIAGNOSTICS_BYTE
 import { computeContentHash, computeSignatureHash } from './hashes.js';
 import { redactEmails } from './redact.js';
 import { buildIssueTitle, buildIssueBody, buildMergeComment, issueLabels } from './issue-text.js';
-import { planPublication, parseAppVersion, compareAppVersions, isGenericHangSignature } from './merge.js';
+import { planPublication, parseAppVersion, compareAppVersions, isGenericHangSignature, isMessageLoopOnlySignature } from './merge.js';
 import { planClosureNotifications, closureKind, CLOSURE_TEXT_HE, pickClosingComment, CLOSING_COMMENT_MAX_CHARS } from './state-change.js';
 import { createUnsubscribeToken, verifyUnsubscribeToken, buildUnsubscribeUrl } from './unsubscribe.js';
 import { getAppReportsConfig } from './config.js';
@@ -270,12 +270,17 @@ test('החלטת איחוד: issue סגור — גרסה שאינה חדשה מ�
   // לולאת ההודעות של קובץ ההפעלה בלבד → גנרית; גם issue פתוח עם אותה חתימה לא מקבל אותה כתגובה
   const idle = { exceptionType: 'AppHang', frames: ['otzaria.exe+0x17cb6', 'otzaria.exe+0x26539'] };
   assert.equal(isGenericHangSignature(idle), true);
+  assert.equal(isMessageLoopOnlySignature(idle), true);
   const withOpen = [...related, { issueNumber: 11, issueState: 'open', appVersion: '1.0.0', createdAt: d('02'), issueUrl: 'u11' }];
   assert.deepEqual(planPublication(withOpen, '0.9.90', idle), { action: 'create', previousIssueNumber: 9 });
   assert.deepEqual(planPublication(withOpen.filter((r) => r.issueState === 'open'), '0.9.90', idle), { action: 'create', previousIssueNumber: null });
-  // קוד נייטיב של ה-runner (יותר מלולאת ההודעות) או חתימה מעורבת אינם גנריים
+  // פריימי מנוע בלבד עדיין מצטרפים ל-issue פתוח: המחסנית המלאה ספציפית מספיק לתגובה
+  assert.equal(isMessageLoopOnlySignature(engine), false);
+  assert.deepEqual(planPublication(withOpen, '0.9.90', engine), { action: 'comment', issueNumber: 11, issueUrl: 'u11' });
+  // קוד נייטיב של ה-runner (יותר מלולאת ההודעות), חתימה מעורבת או ריקה אינם לולאת ההודעות
   assert.equal(isGenericHangSignature({ exceptionType: 'AppHang', frames: ['otzaria.exe+0x1 otzaria.exe+0x2 otzaria.exe+0x3'] }), false);
   assert.equal(isGenericHangSignature({ exceptionType: 'AppHang', frames: ['otzaria.exe+0x1', 'flutter_windows.dll+0x2'] }), false);
+  assert.equal(isMessageLoopOnlySignature({ exceptionType: 'AppHang', frames: [] }), false);
   // issue פתוח קודם לכל השוואת גרסאות
   assert.deepEqual(planPublication([...related, { issueNumber: 11, issueState: 'open', appVersion: '1.0.0', createdAt: d('02'), issueUrl: 'u11' }], '0.9.90'),
     { action: 'comment', issueNumber: 11, issueUrl: 'u11' });
