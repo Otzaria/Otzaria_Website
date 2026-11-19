@@ -71,13 +71,20 @@ export function normalizeWarnings(raw) {
 // מפורשת ודטרמיניסטית (jsonDepth.js). ה-catch נשאר רק כרשת ביטחון לקלט שאינו פלט של JSON.parse
 // (BigInt וכד'): חריגה כאן הייתה מפילה את כל הקליטה (500 בכל ניסיון — הטקסט לא נקלט לעולם).
 const boundedStringify = (v) => {
-  if (exceedsJsonDepth(v, MAX_STORED_JSON_DEPTH)) return null;
   try {
+    if (exceedsJsonDepth(v, MAX_STORED_JSON_DEPTH)) return null;
     return JSON.stringify(v);
   } catch {
     return null;
   }
 };
+
+// השדה עשוי להיות פגום. תיאור קצר בלי לסריאל ערך מקונן או מחרוזת ארוכה.
+function describeLayoutVersion(value) {
+  if (typeof value === 'string') return JSON.stringify(value.slice(0, 40)).slice(0, 40);
+  if (value == null || typeof value === 'number' || typeof value === 'boolean') return JSON.stringify(value ?? null);
+  return Array.isArray(value) ? 'array' : typeof value;
+}
 
 /**
  * pages[].metadata → {json, warning}: JSON כמות שהוא, או null + metadata_too_large מעל 64KiB או
@@ -299,7 +306,7 @@ export function normalizePageLayout(raw, pageMapEntry) {
   });
   if (raw === undefined || raw === null) return result('absent');
 
-  // מקונן עמוק מ-MAX_STORED_JSON_DEPTH → json:null (בלי rejectedJson); keyProblem פוסל אותו ממילא
+  // מקונן עמוק מ-MAX_STORED_JSON_DEPTH → json:null (בלי rejectedJson); ב-v1 גם keyProblem פוסל אותו
   const json = boundedStringify(raw);
   const bytes = typeof json === 'string' ? utf8Bytes(json) : 0;
   const keep = typeof json === 'string' && bytes <= SITE_LAYOUT_PAGE_MAX_BYTES ? json : null;
@@ -312,10 +319,11 @@ export function normalizePageLayout(raw, pageMapEntry) {
 
   if (!isPlainObject(raw)) return invalid(['layout is not an object']);
   if (raw.layoutVersion !== LAYOUT_VERSION) {
+    const label = describeLayoutVersion(raw.layoutVersion);
     return result('unsupported_version', {
       version, bytes, rejectedJson: keep,
-      errors: [`layoutVersion ${JSON.stringify(raw.layoutVersion ?? null).slice(0, 40)} is not supported`],
-      warnings: [siteWarning('layout_version_unsupported', `layoutVersion ${JSON.stringify(raw.layoutVersion ?? null).slice(0, 40)} is not ${LAYOUT_VERSION}`)],
+      errors: [`layoutVersion ${label} is not supported`],
+      warnings: [siteWarning('layout_version_unsupported', `layoutVersion ${label} is not ${LAYOUT_VERSION}`)],
     });
   }
   const keyIssue = keyProblem(raw, 1);
