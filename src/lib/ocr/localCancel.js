@@ -21,7 +21,7 @@ import { ACTIVE_STATUSES, activeFilter } from './localJobState.js';
 
 const DURABLE = { writeConcern: { w: 1, j: true } };
 
-export const CANCEL_REASONS = Object.freeze(['admin', 'book_deleted', 'book_merged']);
+export const CANCEL_REASONS = Object.freeze(['admin', 'owner', 'book_deleted', 'book_merged']);
 
 export const OCR_APPLY_IN_PROGRESS = 'OCR_APPLY_IN_PROGRESS';
 
@@ -51,7 +51,7 @@ function cancelDocFields({ reason = 'admin', byName = '', now = new Date() } = {
 /**
  * ביטול עבודת local — סגירה מיידית בעדכון מותנה (j:true).
  * @param {any} jobId
- * @param {{reason?:'admin'|'book_deleted'|'book_merged', byName?:string, now?:Date}} [opts]
+ * @param {{reason?:'admin'|'owner'|'book_deleted'|'book_merged', byName?:string, now?:Date}} [opts]
  * @returns {Promise<{ok:true} | {ok:false, code:'apply_started'|'not_active'}>}
  */
 export async function cancelLocalJob(jobId, opts = {}) {

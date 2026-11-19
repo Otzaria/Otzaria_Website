@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import connectDB from '@/lib/db';
 import Book from '@/models/Book';
 import Page from '@/models/Page';
 import { notFound, serverError } from '@/lib/apiResponse';
+import { hasBookLibraryAccess } from '@/lib/roles';
 
 export async function GET(request, { params }) {
   try {
@@ -17,6 +20,15 @@ export async function GET(request, { params }) {
 
     if (!book) {
       return notFound('הספר לא נמצא');
+    }
+
+    const restricted = Boolean(book.isHidden || book.isPrivate || book.ownerId);
+    if (restricted) {
+      const session = await getServerSession(authOptions);
+      const user = session?.user;
+      const userId = user?._id || user?.id;
+      const ownsBook = userId && book.ownerId && String(book.ownerId) === String(userId);
+      if (!ownsBook && !hasBookLibraryAccess(user)) return notFound('הספר לא נמצא');
     }
 
     if (!book.examplePage) {
@@ -47,7 +59,7 @@ export async function GET(request, { params }) {
       pageNumber: book.examplePage,
       image: page.imagePath || page.thumbnail, 
       text: contentData
-    });
+    }, restricted ? { headers: { 'Cache-Control': 'private, no-store' } } : undefined);
 
   } catch (error) {
     console.error('Error fetching example page:', error);

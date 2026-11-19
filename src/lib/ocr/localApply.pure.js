@@ -62,6 +62,8 @@ export function pageApplyFilter(job, entry) {
     book: job.book,
     updatedAt: entry.expectedUpdatedAt ?? null,
     lastOcrJobId: { $ne: job._id },
+    // פרסום של ספר אישי דורש שכל עמודיו הושלמו. גם תוצאה שהגיעה אחרי הפרסום לא משנה אותם.
+    ...(job.ownerScoped ? { status: { $ne: 'completed' } } : {}),
   };
   if (job.existingTextMode !== 'overwrite' && job.existingTextMode !== 'skip_edited') {
     filter.content = SKIP_EMPTY;

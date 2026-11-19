@@ -35,17 +35,22 @@ export async function cancelBookOcr(request, access) {
 
     await connectDB();
 
-    const query = jobId ? { _id: jobId } : { book: bookId };
-    const job = await OcrJob.findOne({ ...query, ...activeFilter() }).select('_id method taskType book').lean();
+    const ownerScoped = Boolean(access.canUseBook);
+    const query = {
+      ...(jobId ? { _id: jobId } : { book: bookId }),
+      ...(ownerScoped ? { taskType: { $ne: 'training' } } : {}),
+      ...activeFilter(),
+    };
+    const job = await OcrJob.findOne(query).select(ownerScoped ? '_id method book' : '_id method taskType').lean();
     if (!job) return notFound(NOT_FOUND_HE);
     // מסלול הבעלים: העבודה חייבת להיות של ספר אישי שלו (גם בביטול לפי jobId)
-    if (access.canUseBook) {
-      const book = await Book.findById(job.book).select('_id ownerId').lean();
+    if (ownerScoped) {
+      const book = await Book.findById(job.book).select('_id ownerId isHidden isPrivate').lean();
       if (!bookAllowed(access, book, session.user)) return notFound(NOT_FOUND_HE);
     }
     if (job.taskType === 'training') return NextResponse.json({ error: 'עצירת אימון מחייבת עצירה מבוקרת בתחנת האימון' }, { status: 409 });
 
-    const opts = { reason: 'admin', byName: session.user?.name || '' };
+    const opts = { reason: ownerScoped ? 'owner' : 'admin', byName: session.user?.name || '' };
     if (job.method === 'local') {
       const result = await cancelLocalJob(job._id, opts);
       if (!result.ok && result.code === 'apply_started') {

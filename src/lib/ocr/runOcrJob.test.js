@@ -142,6 +142,48 @@ describe("runOcrJob — skip_edited (OCRWin)", () => {
   });
 });
 
+describe("runOcrJob — ספר אישי", () => {
+  const savedAt = new Date("2026-11-01T10:00:00Z");
+  const privateBook = { _id: "b1", ownerId: "owner", isPrivate: true };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    ocrJob.updateOne.mockResolvedValue({ matchedCount: 1 });
+    ocrJob.findById.mockImplementation(() => {
+      const response = Promise.resolve({
+        _id: JOB_ID, status: "running", method: "ocrwin", book: "b1",
+        existingTextMode: "overwrite", ownerScoped: true, startedBy: "owner",
+      });
+      response.select = () => ({ lean: async () => ({ cancelRequested: false }) });
+      return response;
+    });
+    book.findById.mockResolvedValue(privateBook);
+    page.find.mockReturnValue({ sort: async () => [{ _id: "p1", pageNumber: 1, imagePath: "/uploads/1.jpg", updatedAt: savedAt }] });
+    readPageImage.mockResolvedValue({ buffer: Buffer.from("x"), mimeType: "image/jpeg" });
+    ocrwinRecognize.mockResolvedValue("טקסט OCR");
+  });
+
+  it("החלפה אינה דורסת עמוד שהושלם או השתנה בזמן הזיהוי", async () => {
+    page.updateOne.mockResolvedValue({ matchedCount: 0 });
+    await runOcrJob(JOB_ID);
+    expect(page.find).toHaveBeenCalledWith({ book: "b1", status: { $ne: "completed" } });
+    expect(page.findByIdAndUpdate).not.toHaveBeenCalled();
+    expect(page.updateOne).toHaveBeenCalledWith(
+      { _id: "p1", book: "b1", updatedAt: savedAt, status: { $ne: "completed" } },
+      expect.any(Object),
+    );
+    expect(ocrJob.updateOne.mock.calls.some(([, update]) => update.$inc?.failedPages === 1)).toBe(true);
+  });
+
+  it("לא קורא למנוע אם הספר פורסם בעת טעינת העמודים", async () => {
+    book.findById.mockResolvedValueOnce(privateBook).mockResolvedValueOnce({ _id: "b1" });
+    await runOcrJob(JOB_ID);
+    expect(ocrwinRecognize).not.toHaveBeenCalled();
+    expect(page.updateOne).not.toHaveBeenCalled();
+    expect(finishCall()).toMatchObject({ status: "failed", active: false });
+  });
+});
+
 describe("runOcrJob — טווח עמודים של העבודה (OCRWin)", () => {
   const pages = [1, 2, 3, 4, 5].map((n) => ({ _id: `p${n}`, pageNumber: n, imagePath: `/uploads/${n}.jpg`, status: "available", content: "" }));
   const jobWith = (extra) => () => {

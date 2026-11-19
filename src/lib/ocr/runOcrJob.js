@@ -4,6 +4,7 @@ import Page from '@/models/Page';
 import OcrJob from '@/models/OcrJob';
 import { readPageImage, splitImageVertically } from '@/lib/ocr/images';
 import { ocrwinRecognize } from '@/lib/ocr/ocrwin';
+import { ownsPersonalBook } from '@/lib/ocr/bookOcrAccess';
 import {
   chunk,
   uploadFileToGemini,
@@ -54,13 +55,13 @@ async function recordPageResult(jobId, pageNumber, ok, message) {
 }
 
 // כתיבת טקסט ה-OCR לעמוד. במצבי הדילוג — רק אם העמוד לא השתנה מאז שנבחר לעבודה (updatedAt):
-// עמוד שמתנדב תפס או ערך בזמן שהעבודה רצה לא נדרס, ונרשם ככשל של העמוד.
+// במסלול הבעלים גם החלפת טקסט כפופה לתנאי הזה, כדי שלא תדרוס עריכה או השלמה במקביל.
 async function writePageText(job, page, text) {
-  if (job.existingTextMode === 'overwrite') {
+  if (job.existingTextMode === 'overwrite' && !job.ownerScoped) {
     await Page.findByIdAndUpdate(page._id, buildPageUpdate(text));
     return;
   }
-  const res = await Page.updateOne({ _id: page._id, updatedAt: page.updatedAt }, { $set: buildPageUpdate(text) });
+  const res = await Page.updateOne({ _id: page._id, updatedAt: page.updatedAt, ...(job.ownerScoped ? { book: job.book, status: { $ne: 'completed' } } : {}) }, { $set: buildPageUpdate(text) });
   if (res.matchedCount === 0) throw new Error('העמוד נערך או נתפס בזמן העבודה — הטקסט שבו לא נדרס');
 }
 
@@ -225,15 +226,25 @@ export async function runOcrJob(jobId) {
     if (!job || job.status !== 'running') return;
 
     const book = await Book.findById(job.book);
-    if (!book) {
+    if (!book || (job.ownerScoped && !ownsPersonalBook(book, { id: job.startedBy }))) {
       await finishJob(jobId, 'failed', 'הספר לא נמצא');
       return;
     }
 
     // בניית רשימת העמודים לעיבוד (מקור האמת), ממוינת לפי מספר עמוד: עם תמונה, לא מדולגים
     // במצב שנבחר, ובטווח העמודים של העבודה (אם נבחר).
-    const allPages = await Page.find({ book: book._id }).sort({ pageNumber: 1 });
-    const pages = selectServerJobPages(allPages, job.existingTextMode, jobPageRange(job));
+    const allPages = await Page.find({
+      book: book._id, ...(job.ownerScoped ? { status: { $ne: 'completed' } } : {}),
+    }).sort({ pageNumber: 1 });
+    if (job.ownerScoped) {
+      const currentBook = await Book.findById(job.book);
+      if (!ownsPersonalBook(currentBook, { id: job.startedBy })) {
+        await finishJob(jobId, 'failed', 'הספר לא נמצא');
+        return;
+      }
+    }
+
+    const pages = selectServerJobPages(allPages, job.existingTextMode, jobPageRange(job), job.ownerScoped ? job.startedBy : undefined);
 
     await OcrJob.updateOne({ _id: jobId }, { $set: { totalPages: pages.length } });
 

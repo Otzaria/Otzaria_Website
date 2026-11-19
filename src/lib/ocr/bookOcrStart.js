@@ -91,6 +91,8 @@ export async function startBookOcr(request, access) {
       return notFound('הספר לא נמצא');
     }
 
+    const ownerScoped = Boolean(access.canUseBook);
+
     // שחרור עבודה תקועה (שרת שהופעל מחדש באמצע) לפני הבדיקה, כדי לא לחסום לשווא
     await reapStaleOcrJobs(book._id);
 
@@ -102,6 +104,7 @@ export async function startBookOcr(request, access) {
         req: localReq,
         session,
         config: workerConfig,
+        ...(ownerScoped ? { ownerScoped } : {}),
       });
       return NextResponse.json(resBody, { status, headers: { 'Cache-Control': 'private, no-store' } });
     }
@@ -120,11 +123,11 @@ export async function startBookOcr(request, access) {
     }
 
     // ספירת עמודים: כמה כבר ערוכים, וכמה יעובדו במצב שנבחר ובטווח (אותה בחירה כמו ב-runOcrJob)
-    const { editedPagesCount, toProcess } = await countBookOcrPages(book._id, { range: pageRange });
+    const { editedPagesCount, toProcess } = await countBookOcrPages(book._id, { range: pageRange, ...(ownerScoped ? { ownerId: book.ownerId } : {}) });
     const totalToProcess = toProcess[existingTextMode];
 
     if (totalToProcess === 0) {
-      return badRequest(noPagesMessage(existingTextMode, pageRange));
+      return badRequest(ownerScoped ? 'לא נמצאו עמודים מתאימים שעוד לא סומנו כהושלמו' : noPagesMessage(existingTextMode, pageRange));
     }
 
     let job;
@@ -142,6 +145,7 @@ export async function startBookOcr(request, access) {
         active: true,
         totalPages: totalToProcess,
         editedPagesCount,
+        ...(ownerScoped ? { ownerScoped: true } : {}),
         startedBy: session.user?._id || session.user?.id,
         startedByName: session.user?.name || '',
       });

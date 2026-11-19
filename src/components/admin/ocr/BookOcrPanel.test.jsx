@@ -15,9 +15,9 @@ const ONLINE = { configured: true, lastSeenAt: new Date().toISOString(), availab
 
 function statusBody({
   job = null, worker = ONLINE, counts = { pagesWithImage: 10, editedPagesCount: 0 }, conflictsOpen = 0,
-  bookConflictsOpen = conflictsOpen, olderResultConflicts = [],
+  bookConflictsOpen = conflictsOpen, olderResultConflicts = [], pendingReview = false,
 } = {}) {
-  return { success: true, counts, job, worker, conflictsOpen, bookConflictsOpen, olderResultConflicts }
+  return { success: true, counts, job, worker, conflictsOpen, bookConflictsOpen, olderResultConflicts, pendingReview }
 }
 
 function localJob(overrides = {}) {
@@ -863,9 +863,8 @@ describe('BookOcrPanel — מסלול הבעלים (apiBase, reviewResults=false
       status: () => statusBody({
         job: localJob({
           status: 'completed', resultOutcome: 'success', summary: { applied: 7, failed: 0, conflicts: 1, missing: 0 },
-          resultConflicts: [{ sha256: 'a'.repeat(64), receivedAt: '2026-10-20T10:00:00.000Z', bytes: 1, reviewedAt: null }],
         }),
-        conflictsOpen: 1,
+        pendingReview: true,
       }),
     })
     renderOwner()

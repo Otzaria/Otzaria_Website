@@ -96,8 +96,10 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
   // מעבודות local קודמות (של העבודה האחרונה מוצגות ב-LocalResultIssues)
   const [bookConflictsOpen, setBookConflictsOpen] = useState(0)
   const [olderResultConflicts, setOlderResultConflicts] = useState([])
+  const [pendingReview, setPendingReview] = useState(false)
   const [error, setError] = useState('')
   const [sessionExpired, setSessionExpired] = useState(false)
+  const [bookUnavailable, setBookUnavailable] = useState(false)
   const [confirm, confirmElement] = useConfirm()
 
   // הגדרות הטופס
@@ -133,13 +135,15 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
       // שרת ישן בלי bookConflictsOpen — נופלים לספירה של העבודה האחרונה
       setBookConflictsOpen(Number(data.bookConflictsOpen ?? data.conflictsOpen) || 0)
       setOlderResultConflicts(Array.isArray(data.olderResultConflicts) ? data.olderResultConflicts : [])
+      setPendingReview(data.pendingReview === true)
     } catch (e) {
       if (e?.sessionExpired) setSessionExpired(true)
+      else if (!reviewResults && (e?.status === 403 || e?.status === 404)) setBookUnavailable(true)
       else setError(e?.message || 'לא הצלחנו לטעון את מצב הזיהוי.')
     } finally {
       setLoading(false)
     }
-  }, [book.id, apiBase])
+  }, [book.id, apiBase, reviewResults])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- טעינה מהשרת; ה-setState קורה אחרי await
@@ -147,7 +151,7 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
   }, [fetchStatus])
 
   // polling כל עוד יש עבודה פעילה: שרת כל 2.5 שניות, מחשב מקומי כל 10 שניות
-  const pollMs = sessionExpired ? null : pollIntervalMs(job)
+  const pollMs = sessionExpired || bookUnavailable ? null : pollIntervalMs(job)
   useEffect(() => {
     if (pollMs) {
       pollRef.current = setInterval(fetchStatus, pollMs)
@@ -160,7 +164,9 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
   const localUnavailableInServer = worker?.configured === false
 
   // טווח העמודים: null = כל הספר; טווח לא תקין חוסם את ההתחלה (וההודעה מוצגת מתחת לשדות)
-  const pageTotal = Number(counts.maxPageNumber) || Number(book.totalPages) || undefined
+  const countedPages = Number(counts.maxPageNumber) || 0
+  const bookPages = Number(book.totalPages) || 0
+  const pageTotal = (reviewResults ? countedPages || bookPages : Math.max(countedPages, bookPages)) || undefined
   const parsedRange = parsePageRangeInput(rangeInput, { total: pageTotal })
   const pageRange = parsedRange.ok ? parsedRange.range : null
   const rangeInvalid = !parsedRange.ok
@@ -329,11 +335,6 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
   // פאנל ברמת הספר: גם אחרי עבודה חדשה (OCRWin או local) ההתנגשויות הקודמות נשארות נגישות
   const showConflicts = !isRunning
     && (bookConflictsOpen > 0 || Number(lastLocalJob?.summary?.conflicts) > 0)
-  // בלי בדיקת תוצאות (בעל ספר אישי): האם יש משהו שממתין למנהל — במקום הפאנלים
-  const pendingReview = showConflicts || olderResultConflicts.length > 0
-    || (Array.isArray(lastLocalJob?.resultConflicts) && lastLocalJob.resultConflicts.length > 0)
-    || (Array.isArray(lastLocalJob?.resultRejections) && lastLocalJob.resultRejections.length > 0)
-
   // רק השיטות הזמינות עכשיו (החלטת המשתמש): שיטה מושבתת או לא מוגדרת בשרת — לא מוצגת
   const methodOptions = [
     { id: 'gemini', label: 'בינה מלאכותית', desc: 'איכות גבוהה', disabled: GEMINI_DISABLED },
@@ -350,6 +351,10 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
         action={<Button href={loginHref()} variant="filled" size="sm" icon="login">התחבר</Button>}
       />
     )
+  }
+
+  if (bookUnavailable) {
+    return <ErrorState title="זיהוי טקסט אינו זמין לספר הזה" description="הספר כבר אינו זמין לך לעיבוד או שההרשאה השתנתה." />
   }
 
   return (
@@ -523,7 +528,7 @@ export default function BookOcrPanel({ book, localRetryDelayMs = START_RETRY_DEL
                   <span>
                     יש {counts.editedPagesCount} עמודים שכבר יש בהם טקסט (מתוך {counts.pagesWithImage})
                     {Number.isFinite(counts.humanEditedPagesCount) && (
-                      <>; מתוכם {counts.humanEditedPagesCount} נערכו או נתפסו בידי מתנדבים</>
+                      <>; מתוכם {counts.humanEditedPagesCount} {reviewResults ? 'נערכו או נתפסו בידי מתנדבים' : 'נערכו ידנית'}</>
                     )}.
                   </span>
                 </div>

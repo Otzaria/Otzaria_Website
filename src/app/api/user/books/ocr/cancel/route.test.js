@@ -31,7 +31,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   getServerSessionMock.mockResolvedValue({ user: { id: OWNER, name: 'בעלים', roles: ['private_ocr'] } })
   OcrJob.findOne.mockReturnValue(lean({ _id: JOB, method: 'local', book: BOOK }))
-  Book.findById.mockReturnValue(lean({ _id: BOOK, ownerId: OWNER }))
+  Book.findById.mockReturnValue(lean({ _id: BOOK, ownerId: OWNER, isPrivate: true }))
   cancelLocalJobMock.mockResolvedValue({ ok: true })
   requestServerJobCancelMock.mockResolvedValue({ ok: true })
 })
@@ -47,6 +47,7 @@ it.each([['local', { jobId: JOB }], ['ocrwin', { bookId: BOOK }]])('הבעלים
 it.each([
   ['ספר של אחר', { _id: BOOK, ownerId: '507f1f77bcf86cd799439098' }],
   ['ספר ציבורי', { _id: BOOK }],
+  ['ספר גלוי שנשאר בו שדה בעלות', { _id: BOOK, ownerId: OWNER, isPrivate: false, isHidden: false }],
   ['ספר שנמחק', null],
 ])('עבודה ב%s — 404, ושום דבר לא נעצר (גם בביטול לפי jobId)', async (_name, book) => {
   Book.findById.mockReturnValue(lean(book))

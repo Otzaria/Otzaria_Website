@@ -4,13 +4,13 @@
 import Page from '../../models/Page.js';
 import { countOcrPages, selectionView } from './runOcrJob.pure.js';
 
-export async function countBookOcrPages(bookId, { range = null, withRuns = false } = {}) {
+export async function countBookOcrPages(bookId, { range = null, withRuns = false, ownerId = undefined } = {}) {
   const pages = [];
-  const cursor = Page.find({ book: bookId })
-    .select('pageNumber imagePath content rightColumn leftColumn status contentSaveRevision lastOcrTextSha256 lastOcrAt updatedAt')
+  const cursor = Page.find({ book: bookId, ...(ownerId ? { status: { $ne: 'completed' } } : {}) })
+    .select('pageNumber imagePath content rightColumn leftColumn status claimedBy contentSaveRevision lastOcrTextSha256 lastOcrAt updatedAt')
     .lean()
     .cursor();
   // הטקסט עצמו לא נשמר בזיכרון — selectionView נותן אותן תשובות
-  for await (const p of cursor) pages.push({ ...selectionView(p), imagePath: p.imagePath, pageNumber: p.pageNumber });
+  for await (const p of cursor) pages.push({ ...selectionView(p, ownerId), imagePath: p.imagePath, pageNumber: p.pageNumber });
   return countOcrPages(pages, { range, withRuns });
 }
