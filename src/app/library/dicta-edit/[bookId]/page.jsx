@@ -68,6 +68,7 @@ function LibraryEditorContent() {
       router.push(`/auth/login?callbackUrl=${encodeURIComponent(callbackUrl)}`)
       return
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- טעינה מהשרת אחרי אימות ה-session; ה-setState העיקרי קורה אחרי await
     if (bookId) loadBook()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookId, status])

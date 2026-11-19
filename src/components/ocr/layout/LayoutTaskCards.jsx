@@ -322,6 +322,7 @@ export function ZonesFullCard({ prefill, imageUrl, pagenumImgSrc, imageWidth, im
   // "הכול נכון" מהאב (confirmed ברמת העמוד) — משתקף בתתי-הרכיבים
   useEffect(() => {
     const nextParts = derivePartsFromValue(value, prefill)
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- שיקוף שינוי חיצוני מהאב (איפוס/אישור-הכול) לתתי-ההכרעות; רכיב canvas אינטראקטיבי — לא משנים בלי בדיקה בדפדפן (ר' CLAUDE.md)
     if (nextParts) setParts(nextParts)
     // רק שינוי חיצוני (איפוס/אישור-הכול/טעינת-תשובות) מעניין אותנו — לא כל עדכון פנימי
     // eslint-disable-next-line react-hooks/exhaustive-deps

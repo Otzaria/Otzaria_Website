@@ -68,6 +68,7 @@ export default function CorrectionsListPage() {
     try {
       const f = JSON.parse(sessionStorage.getItem(FILTERS_KEY) || 'null')
       if (f) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- שחזור הסינון מ-sessionStorage, שאינו קיים ברינדור השרת — קריאה בעליה מונעת hydration mismatch
         if (VIEWS.some((v) => v.id === f.view)) setView(f.view)
         setKind(f.kind || '')
         if (SORTS.some((s) => s.id === f.sort)) setSort(f.sort)

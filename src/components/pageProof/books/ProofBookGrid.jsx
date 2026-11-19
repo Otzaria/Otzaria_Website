@@ -94,6 +94,7 @@ export default function ProofBookGrid({ gid }) {
   }, [gid])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- טעינה מהשרת; ה-setState קורה אחרי await
     load()
   }, [load])
 
