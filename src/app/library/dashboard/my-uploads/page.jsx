@@ -2,9 +2,13 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
+import { useSession } from 'next-auth/react'
 import Header from '@/components/layout/Header'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import Loader from '@/components/ui/Loader'
+import Button from '@/components/ui/Button'
+import PersonalBookOcrDrawer from '@/components/personalBooks/PersonalBookOcrDrawer'
+import { hasPrivateOcrAccess } from '@/lib/roles'
 
 export default function PersonalLibraryPage() {
   const [flatBooks, setFlatBooks] = useState([])
@@ -13,6 +17,11 @@ export default function PersonalLibraryPage() {
   const [filterStatus, setFilterStatus] = useState('all')
   
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
+
+  // OCR לספרים אישיים — רק למי שקיבל את התפקיד private_ocr; לכל השאר הדף ללא שינוי
+  const { data: session } = useSession()
+  const canOcr = hasPrivateOcrAccess(session?.user)
+  const [ocrBook, setOcrBook] = useState(null)
 
   const fetchUserBooks = async () => {
     try {
@@ -124,13 +133,27 @@ export default function PersonalLibraryPage() {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {filteredBooks.map(book => (
+                    {filteredBooks.map(book => canOcr ? (
+                        <div key={book.id || book.path} className="flex flex-col gap-2">
+                            <PersonalBookCard book={book} />
+                            <Button variant="outlined" size="sm" icon="document_scanner" fullWidth onClick={() => setOcrBook(book)}>
+                                זיהוי טקסט (OCR)
+                            </Button>
+                        </div>
+                    ) : (
                         <PersonalBookCard key={book.id || book.path} book={book} />
                     ))}
                 </div>
             )}
         </div>
       </main>
+
+      {ocrBook && (
+        <PersonalBookOcrDrawer
+            book={ocrBook}
+            onClose={() => setOcrBook(null)}
+        />
+      )}
 
       {/* קומפוננטת המודל להעלאה */}
       {isUploadModalOpen && (

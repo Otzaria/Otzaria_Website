@@ -49,3 +49,13 @@ test('מנהל כללי — הכול', () => {
   assert.equal(allowed('admin', '/library/admin/users'), true)
   assert.equal(allowed(['admin_ocr', 'admin'], '/api/admin/private-sources'), true)
 })
+
+test('OCR לספרים אישיים (private_ocr) — אין גישה לשום נתיב ניהול, גם לא ל-OCR של הניהול', () => {
+  for (const path of ['/library/admin', '/library/admin/books', '/api/admin/books/ocr/start', '/api/admin/books/ocr/status', '/api/admin/stats']) {
+    assert.equal(allowed('private_ocr', path), false, path)
+    assert.equal(allowed({ role: 'user', roles: ['private_ocr'] }, path), false, path)
+  }
+  // יחד עם תפקיד ניהול — רק מה שתפקיד הניהול מתיר
+  assert.equal(allowed(['private_ocr', 'admin_ocr'], '/library/admin/ocr-lines'), true)
+  assert.equal(allowed(['private_ocr', 'admin_ocr'], '/library/admin/books'), false)
+})
