@@ -230,6 +230,15 @@ test('layout מקונן: עומק 9–64 → invalid עם rejectedJson; מעל 6
   assert.equal(v2.rejectedJson, null);
 });
 
+test('layoutVersion מקונן נפסל בלי לסריאל אותו בהודעות האבחון', () => {
+  const out = normalizePageLayout({ layoutVersion: deepJson(200_000) }, entry(1));
+  assert.equal(out.status, 'unsupported_version');
+  assert.equal(out.rejectedJson, null);
+  assert.equal(out.bytes, 0);
+  assert.deepEqual(out.errors, ['layoutVersion array is not supported']);
+  assert.deepEqual(out.warnings.map((w) => w.code), ['layout_version_unsupported']);
+});
+
 test('קלט עוין ב-layout: קינון עמוק, __proto__/constructor, מחרוזות NaN/Infinity, טיפוסים שגויים, מערכים ענקיים — לא זורק', () => {
   const e = entry(1);
   const deep = normalizePageLayout({ ...layoutOf(1), extra: deepJson(200_000) }, e);
