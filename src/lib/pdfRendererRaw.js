@@ -108,7 +108,7 @@ function timeoutSignal(userSignal, timeoutMs) {
 
 export async function convertPdfToImagesRaw(pdfSource, outputFolder, {
   width, height, scale, quality, filenamePrefix,
-  signal: userSignal, timeoutMs = DEFAULT_TIMEOUT_MS,
+  signal: userSignal, timeoutMs = DEFAULT_TIMEOUT_MS, maxPages = Infinity,
 }) {
   for (const [name, value] of [['width', width], ['height', height], ['scale', scale], ['quality', quality]]) {
     if (!Number.isFinite(value) || value <= 0) throw new RangeError('invalid PDF conversion ' + name);
@@ -148,6 +148,9 @@ export async function convertPdfToImagesRaw(pdfSource, outputFolder, {
       cMapPacked: true,
     });
     const doc = await loadingTask.promise;
+    if (doc.numPages > maxPages) {
+      throw Object.assign(new RangeError('PDF exceeds page limit'), { code: 'PDF_PAGE_LIMIT' });
+    }
     const result = [];
 
     // Always sequential: one render and one JPEG write in memory per conversion.

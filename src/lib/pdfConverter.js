@@ -16,7 +16,7 @@ const DEFAULT_OPTIONS = {
 };
 
 export async function convertPdfToImagesLegacy(pdfSource, outputFolder, options = {}) {
-  const { width, height, scale, quality, filenamePrefix } = { ...DEFAULT_OPTIONS, ...options };
+  const { width, height, scale, quality, filenamePrefix, maxPages = Infinity } = { ...DEFAULT_OPTIONS, ...options };
 
   const document = await pdf(pdfSource, {
     scale,
@@ -29,6 +29,9 @@ export async function convertPdfToImagesLegacy(pdfSource, outputFolder, options 
   let pageNumber = 0;
 
   try {
+    if (document.length > maxPages) {
+      throw Object.assign(new RangeError('PDF exceeds page limit'), { code: 'PDF_PAGE_LIMIT' });
+    }
     for await (const pngBuffer of document) {
       pageNumber++;
       const outputPath = path.join(/*turbopackIgnore: true*/ outputFolder, `${filenamePrefix}.${pageNumber}.jpg`);

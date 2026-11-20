@@ -37,6 +37,7 @@ export async function GET(request, { params }) {
     if (!book) return error(404, 'הספר לא נמצא')
     const isAdmin = hasBookLibraryAccess(session.user)
     const isOwner = Boolean(book.ownerId && String(book.ownerId) === String(userId))
+    if (book.privateOcr && !isAdmin) return error(404, 'הספר לא נמצא')
     if ((book.isHidden || book.isPrivate) && !isAdmin && !isOwner) {
       return error(403, 'אין הרשאות לצפייה בספר זה')
     }

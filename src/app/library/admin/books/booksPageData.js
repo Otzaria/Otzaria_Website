@@ -24,7 +24,7 @@ async function loadAdminBooksUncached() {
   await dbConnect()
 
   const books = await Book.find({})
-    .select('name slug totalPages category updatedAt isHidden ownerId originalOwnerId isPrivate')
+    .select('name slug totalPages category updatedAt isHidden ownerId originalOwnerId isPrivate privateOcr')
     .populate('ownerId', 'name')
     .populate('originalOwnerId', 'name')
     .sort({ updatedAt: -1 })
@@ -50,7 +50,7 @@ async function loadAdminBooksUncached() {
       id: book._id.toString(),
       name: book.name,
       path: book.slug,
-      thumbnail: `/uploads/books/${book.slug}/page.1.jpg`,
+      thumbnail: book.privateOcr ? `/private-books/${book.slug}/page.1.jpg` : `/uploads/books/${book.slug}/page.1.jpg`,
       totalPages: book.totalPages,
       completedPages: bookStats.completed,
       inProgressPages: bookStats.inProgress,

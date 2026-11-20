@@ -28,7 +28,7 @@ export async function PUT(request) {
 
     // בדיקה: האם הספר הוא אישי?
     // לפי המודל שלך, ספר אישי הוא כזה שיש לו ownerId (שויך למשתמש) או שדה isPrivate
-    const isPersonalBook = currentBook.ownerId || currentBook.isPrivate;
+    const isPersonalBook = currentBook.ownerId || currentBook.isPrivate || currentBook.privateOcr;
 
     // חסימה: אם הספר אישי ומנסים להפוך אותו לגלוי (isHidden = false)
     if (isPersonalBook && isHidden === false) {
@@ -53,7 +53,7 @@ export async function PUT(request) {
         return notFound('Book not found');
     }
 
-    if (sendNotification && isHidden === false) {
+    if (sendNotification && !isPersonalBook && isHidden === false) {
         await sendBookNotification(updatedBook.name, updatedBook.slug);
     }
 

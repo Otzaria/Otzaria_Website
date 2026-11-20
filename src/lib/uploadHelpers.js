@@ -1,3 +1,4 @@
+import { PUBLIC_BOOK_FILTER } from '@/lib/privateBooks';
 import Book from '@/models/Book';
 import Page from '@/models/Page';
 
@@ -20,6 +21,7 @@ export async function isLastPageUpload(bookName) {
         
         // חיפוש הספר לפי שם (slug או name)
         const book = await Book.findOne({
+            ...PUBLIC_BOOK_FILTER,
             $or: [
                 { slug: extractedBookName },
                 { name: { $regex: new RegExp(extractedBookName, 'i') } }

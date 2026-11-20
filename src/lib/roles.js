@@ -1,4 +1,5 @@
 export const ROLES = {
+  PRIVATE_OCR: 'private_ocr',
   ADMIN: 'admin',
   ADMIN_PLUGINS: 'admin_plugins',
   ADMIN_BOOKS: 'admin_books',
@@ -23,6 +24,7 @@ export const ROLE_LABELS = {
   admin_ocr: 'מנהל OCR',
   model_trainer: 'מאמן מודלים',
   developer: 'מפתח',
+  private_ocr: 'OCR לספרים פרטיים',
 }
 
 export const ALL_ADMIN_ROLES = [ROLES.ADMIN, ROLES.ADMIN_PLUGINS, ROLES.ADMIN_BOOKS, ROLES.ADMIN_BOOKS_ONLY, ROLES.ADMIN_OCR, ROLES.MODEL_TRAINER]
@@ -48,6 +50,7 @@ export const ASSIGNABLE_ROLES = [
   ROLES.ADMIN_OCR,
   ROLES.MODEL_TRAINER,
   ROLES.DEVELOPER,
+  ROLES.PRIVATE_OCR,
 ]
 
 /** הערכים המותרים בשדה role של המודל (כולל 'user') */
@@ -109,6 +112,11 @@ export function notRoleQuery(roles) {
 /** גישה לכל מה שבניהול */
 export function isAdmin(subject) {
   return hasRole(subject, ROLES.ADMIN)
+}
+
+/** העלאה ועיבוד ספר פרטי בלבד; אינו תפקיד ניהול. */
+export function hasPrivateOcrAccess(subject) {
+  return hasRole(subject, ROLES.ADMIN, ROLES.PRIVATE_OCR)
 }
 
 /** גישה לניהול תוספים */

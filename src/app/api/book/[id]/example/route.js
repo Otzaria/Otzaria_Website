@@ -1,3 +1,6 @@
+import { canUseBookEditor } from '@/lib/privateBooks';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Book from '@/models/Book';
@@ -17,6 +20,11 @@ export async function GET(request, { params }) {
 
     if (!book) {
       return notFound('הספר לא נמצא');
+    }
+
+    if (book.isHidden || book.isPrivate || book.privateOcr) {
+      const session = await getServerSession(authOptions);
+      if (!canUseBookEditor(book, session?.user)) return notFound('הספר לא נמצא');
     }
 
     if (!book.examplePage) {
@@ -47,7 +55,7 @@ export async function GET(request, { params }) {
       pageNumber: book.examplePage,
       image: page.imagePath || page.thumbnail, 
       text: contentData
-    });
+    }, { headers: { 'Cache-Control': 'private, no-store' } });
 
   } catch (error) {
     console.error('Error fetching example page:', error);

@@ -1,3 +1,4 @@
+import { resolvePrivateBookPath } from '@/lib/ocr/privateBookStorage';
 // Uploads/storage are supplied by the live installation, not bundled build assets.
 import { NextResponse } from 'next/server';
 import path from 'path';
@@ -24,6 +25,7 @@ const MAX_TOTAL_IMAGE_BYTES = Number(process.env.PDF_EXPORT_MAX_BYTES) || 200 * 
 // ממיר נתיב תמונה יחסי (למשל /uploads/books/slug/page.1.jpg) לנתיב פיזי במערכת הקבצים
 function resolveImagePath(imagePath) {
   if (!imagePath) return null;
+  if (imagePath.startsWith('/private-books/')) return resolvePrivateBookPath(imagePath);
   const relative = imagePath.replace(/^\/?uploads\//, '');
   const resolved = path.resolve(UPLOAD_ROOT, relative);
 

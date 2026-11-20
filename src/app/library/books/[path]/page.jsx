@@ -641,6 +641,7 @@ export default function BookPage() {
               >
                   <PageCard
                     page={page}
+                    privateImage={bookData.isPrivate || bookData.isOwner}
                     eagerImage={index < EAGER_THUMBNAILS}
                     viewMode={viewMode}
                     onClaim={handleClaimPage}
@@ -677,7 +678,7 @@ export default function BookPage() {
   )
 }
 
-function PageCard({ page, eagerImage, viewMode, onClaim, onComplete, onRelease, onUncomplete, onPreview, currentUser, bookPath, isAdmin, isBookOwner }) {
+function PageCard({ page, privateImage, eagerImage, viewMode, onClaim, onComplete, onRelease, onUncomplete, onPreview, currentUser, bookPath, isAdmin, isBookOwner }) {
   const status = pageStatusConfig[page.status]
 
   const editUrl = `/library/books/${encodeURIComponent(bookPath)}/${page.number}`;
@@ -704,6 +705,7 @@ function PageCard({ page, eagerImage, viewMode, onClaim, onComplete, onRelease, 
           <>
             <Image
               src={page.thumbnail}
+              unoptimized={privateImage}
               alt={`עמוד ${page.number}`}
               fill
               loading={eagerImage ? 'eager' : 'lazy'}

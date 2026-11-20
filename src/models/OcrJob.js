@@ -137,7 +137,7 @@ const OcrJobSchema = new mongoose.Schema({
   // נעילת החלטה: ביטול מול החלת תוצאה — הראשון שנועל גובר
   decision: { type: String, enum: ['cancel', 'apply', null], default: null },
   cancelledAt: { type: Date },
-  cancelReason: { type: String, enum: ['admin', 'book_deleted', 'book_merged'] },
+  cancelReason: { type: String, enum: ['admin', 'owner', 'book_deleted', 'book_merged'] },
   cancelledByName: { type: String },
 
   // תוצאה

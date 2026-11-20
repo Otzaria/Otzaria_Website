@@ -1,3 +1,4 @@
+import { PUBLIC_BOOK_FILTER } from '@/lib/privateBooks';
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Book from '@/models/Book';
@@ -8,7 +9,7 @@ export async function GET() {
     await connectDB();
 
     // שליפת כל הספרים עם הקטגוריה שלהם
-    const books = await Book.find({}).select('name slug category totalPages').lean();
+    const books = await Book.find(PUBLIC_BOOK_FILTER).select('name slug category totalPages').lean();
 
     // המרה למבנה עץ שה-UI מכיר
     const tree = buildTree(books);

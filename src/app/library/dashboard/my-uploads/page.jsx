@@ -1,37 +1,51 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import Link from 'next/link'
+import { useSession } from 'next-auth/react'
+import { hasPrivateOcrAccess } from '@/lib/roles'
+import PrivateBookCard from '@/components/privateBooks/PrivateBookCard'
+import PrivateBookUpload from '@/components/privateBooks/PrivateBookUpload'
 import Header from '@/components/layout/Header'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import Loader from '@/components/ui/Loader'
 
 export default function PersonalLibraryPage() {
+  const { data: session } = useSession()
+  const userId = session?.user?._id || session?.user?.id
+  const showPrivateOcr = hasPrivateOcrAccess(session?.user)
+  const [privateLibrary, setPrivateLibrary] = useState(null)
+  const privateBooks = privateLibrary?.userId === userId ? privateLibrary?.books || [] : []
+  const [activeOcrId, setActiveOcrId] = useState(null)
   const [flatBooks, setFlatBooks] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
-  
+
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
 
-  const fetchUserBooks = async () => {
+  const fetchUserBooks = useCallback(async (signal) => {
     try {
         setLoading(true);
-        const res = await fetch('/api/user/books');
+        const res = await fetch('/api/user/books', { signal, cache: 'no-store' });
         const json = await res.json();
-        if (json.success) {
-            setFlatBooks(json.books);
+        if (json.success && !signal?.aborted) {
+            setFlatBooks(json.books.filter(book => !book.privateOcr));
+            setPrivateLibrary({ userId, books: json.books.filter(book => book.privateOcr) });
         }
     } catch (err) {
-        console.error('Error fetching personal books:', err);
+        if (!signal?.aborted) console.error('Error fetching personal books:', err);
     } finally {
-        setLoading(false);
+        if (!signal?.aborted) setLoading(false);
     }
-  };
+  }, [userId]);
 
   useEffect(() => {
-    fetchUserBooks();
-  }, [])
+    const controller = new AbortController();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- האפקט טוען את הספרים מהשרת.
+    fetchUserBooks(controller.signal);
+    return () => controller.abort();
+  }, [fetchUserBooks, showPrivateOcr])
 
   const filteredBooks = useMemo(() => {
     let data = flatBooks;
@@ -51,10 +65,10 @@ export default function PersonalLibraryPage() {
   return (
     <div className="min-h-screen flex flex-col bg-background pb-12">
       <Header />
-      
+
       <main id="main-content" className="flex-1 container mx-auto px-4 py-8">
         <div className="max-w-7xl mx-auto flex flex-col gap-8">
-            
+
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                 <div>
                   <h1 className="text-4xl font-bold text-foreground font-frank mb-2">
@@ -69,7 +83,7 @@ export default function PersonalLibraryPage() {
                 </div>
 
                 {/* כפתור שפותח את המודל */}
-                <button 
+                <button
                     onClick={() => setIsUploadModalOpen(true)}
                     className="flex items-center gap-2 bg-info-600 hover:bg-info-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-info-200 transition-all transform hover:-translate-y-1 active:scale-95"
                 >
@@ -77,7 +91,21 @@ export default function PersonalLibraryPage() {
                     העלאת ספר חדש
                 </button>
             </div>
-            
+
+            {showPrivateOcr && (
+                <section aria-labelledby="private-ocr-heading" className="space-y-4">
+                    <h2 id="private-ocr-heading" className="text-2xl font-bold">OCR לספרים פרטיים</h2>
+                    <p>ספרים שמועלים כאן נשארים פרטיים גם אחרי הזיהוי. אפשר להוריד מהם את הטקסט שהופק.</p>
+                    <PrivateBookUpload onSuccess={fetchUserBooks} />
+                    <div className="grid gap-4 md:grid-cols-2">
+                        {privateBooks.map(book => (
+                            <PrivateBookCard key={book.id} book={book} open={activeOcrId === book.id}
+                                onToggle={() => setActiveOcrId(activeOcrId === book.id ? null : book.id)} />
+                        ))}
+                    </div>
+                </section>
+            )}
+
             {/* חיפוש וסינון */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-surface-variant flex flex-col sm:flex-row gap-4">
                 <div className="relative flex-1">
@@ -97,8 +125,8 @@ export default function PersonalLibraryPage() {
                             key={status}
                             onClick={() => setFilterStatus(status)}
                             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                filterStatus === status 
-                                ? 'bg-neutral-800 text-white' 
+                                filterStatus === status
+                                ? 'bg-neutral-800 text-white'
                                 : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
                             }`}
                         >
@@ -115,7 +143,7 @@ export default function PersonalLibraryPage() {
                 <div className="text-center py-20 bg-neutral-50 rounded-3xl border-2 border-dashed border-neutral-200">
                     <span className="material-symbols-outlined text-6xl text-neutral-300 mb-4">library_books</span>
                     <h3 className="text-xl font-medium text-neutral-600">אין כאן ספרים עדיין</h3>
-                    <button 
+                    <button
                         onClick={() => setIsUploadModalOpen(true)}
                         className="mt-4 text-info-600 font-bold hover:underline"
                     >
@@ -134,12 +162,12 @@ export default function PersonalLibraryPage() {
 
       {/* קומפוננטת המודל להעלאה */}
       {isUploadModalOpen && (
-        <UploadModal 
-            onClose={() => setIsUploadModalOpen(false)} 
+        <UploadModal
+            onClose={() => setIsUploadModalOpen(false)}
             onSuccess={() => {
                 setIsUploadModalOpen(false);
                 fetchUserBooks(); // ריענון הרשימה אחרי העלאה מוצלחת
-            }} 
+            }}
         />
       )}
     </div>
@@ -189,7 +217,7 @@ function UploadModal({ onClose, onSuccess }) {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 relative">
-                
+
                 {/* כפתור סגירה */}
                 <button onClick={onClose} className="absolute top-4 left-4 text-neutral-400 hover:text-neutral-600">
                     <span className="material-symbols-outlined">close</span>
@@ -252,9 +280,9 @@ function PersonalBookCard({ book }) {
   const total = book.totalPages || 0;
   const completed = book.completedPages || 0;
   const percent = total > 0 ? (completed / total) * 100 : 0;
-  
+
   return (
-    <Link 
+    <Link
         href={`/library/books/${encodeURIComponent(book.path)}`}
         className="group bg-white p-5 rounded-2xl border border-surface-variant hover:border-info-300 hover:shadow-xl hover:shadow-info-50 transition-all duration-300 flex flex-col h-full transform hover:-translate-y-1 relative"
     >
@@ -286,9 +314,9 @@ function PersonalBookCard({ book }) {
                 <span>{Math.round(percent)}%</span>
             </div>
             <div className="flex h-2.5 w-full rounded-full overflow-hidden bg-neutral-100 mb-3">
-                <div 
-                    className={`h-full transition-all duration-500 ${percent === 100 ? 'bg-success-500' : 'bg-info-500'}`} 
-                    style={{ width: `${percent}%` }} 
+                <div
+                    className={`h-full transition-all duration-500 ${percent === 100 ? 'bg-success-500' : 'bg-info-500'}`}
+                    style={{ width: `${percent}%` }}
                 />
             </div>
         </div>

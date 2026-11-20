@@ -63,15 +63,16 @@ const nextConfig = {
   },
   
   async rewrites() {
-    if (process.env.NODE_ENV === 'development') {
-      return [
-        {
-          source: '/uploads/:path*',
-          destination: 'https://otzaria.org/uploads/:path*',
-        },
-      ];
-    }
-    return [];
+    return {
+      // נתיבי העלאה אישית ישנים עוברים בדיקת נראות גם כשהקובץ נמצא ישירות ב-public.
+      beforeFiles: [{
+        source: '/uploads/books/:slug(u-[0-9a-fA-F]{4}(?:-.*)?)/:path*',
+        destination: '/api/book-assets/:slug/:path*',
+      }],
+      afterFiles: process.env.NODE_ENV === 'development'
+        ? [{ source: '/uploads/:path*', destination: 'https://otzaria.org/uploads/:path*' }]
+        : [],
+    };
   },
 
   async redirects() {

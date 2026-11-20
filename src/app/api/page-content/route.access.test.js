@@ -40,11 +40,12 @@ test.each(['user', 'admin_plugins', 'admin_ocr', 'developer'])('the same restric
   expect(updatePage).not.toHaveBeenCalled()
 })
 
-test('the private-book owner retains access without an administrative role', async () => {
-  book.isPrivate = true; book.ownerId = 'u'
-  getSession.mockResolvedValue({ user: { id: 'u', role: 'user' } })
-  expect((await read()).status).toBe(200)
-  expect((await save()).status).toBe(200)
+test.each(['user', 'private_ocr'])('בעל ספר OCR פרטי אינו מקבל גישה לעורך דרך תפקיד %s', async role => {
+  book.isPrivate = true; book.privateOcr = true; book.ownerId = 'u'
+  getSession.mockResolvedValue({ user: { id: 'u', role } })
+  expect((await read()).status).toBe(404)
+  expect((await save()).status).toBe(404)
+  expect(updatePage).not.toHaveBeenCalled()
 })
 
 test('a library administrator can edit another holder’s page, but a normal user cannot', async () => {
@@ -55,4 +56,12 @@ test('a library administrator can edit another holder’s page, but a normal use
   expect((await read()).status).toBe(403)
   expect((await save()).status).toBe(403)
   expect(updatePage).toHaveBeenCalledTimes(1)
+})
+
+
+test('בעל ספר אישי ותיק עדיין יכול לקרוא ולשמור בעורך', async () => {
+  Object.assign(book, { isPrivate: true, isHidden: true, ownerId: 'u' })
+  getSession.mockResolvedValue({ user: { id: 'u', role: 'user' } })
+  expect((await read()).status).toBe(200)
+  expect((await save()).status).toBe(200)
 })

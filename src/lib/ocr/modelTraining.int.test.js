@@ -57,3 +57,10 @@ it('refuses incomplete pages and never falls back to OCR output or old line-trai
   await expect(createTraining(req(), actor, 'worker-1')).rejects.toThrow('five_completed_pages_required');
   expect((await OcrJob.findOne()).status).toBe('failed');
 });
+
+it('does not use an OCR-only private book as training material', async () => {
+  await Book.updateOne({ _id: book._id }, { isHidden: true, isPrivate: true, privateOcr: true });
+  await pages();
+  expect((await createTraining(req(), actor, 'worker-1')).status).toBe(404);
+  expect(await OcrJob.countDocuments()).toBe(0);
+});

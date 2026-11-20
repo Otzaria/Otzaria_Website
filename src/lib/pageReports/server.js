@@ -1,9 +1,10 @@
+import { canUseBookEditor } from '../privateBooks.js'
 // שרת הדיווחים: יצירה, רשימות והכרעה בדיווח בלבד. עריכת העמוד נעשית ידנית.
 import mongoose from 'mongoose'
 import PageReport from '../../models/PageReport.js'
 import Page from '../../models/Page.js'
 import Book from '../../models/Book.js'
-import { hasBooksAccess, hasBookLibraryAccess } from '../roles.js'
+import { hasBooksAccess } from '../roles.js'
 import { canViewPageContent } from '../pageEditAccess.js'
 import {
   normalizeReportInput, normalizeDecision, statusAfter, REPORT_KINDS,
@@ -31,17 +32,11 @@ async function findBook(bookPath) {
   return Book.findOne({ $or: [{ slug: decoded }, { name: decoded }] }).lean()
 }
 
-/** ספר מוסתר/פרטי — רק מנהל ספרייה או הבעלים (כמו GET /api/page-content) */
-function canSeeBook(book, user) {
-  if (!book.isHidden && !book.isPrivate) return true
-  if (hasBookLibraryAccess(user)) return true
-  return book.ownerId != null && String(book.ownerId) === String(userIdOf(user))
-}
-
 async function findBookAndPage(bookPath, pageNumber, user) {
   const book = await findBook(bookPath)
   if (!book) return fail(404, 'הספר לא נמצא')
-  if (!canSeeBook(book, user)) return fail(403, 'אין הרשאות לצפייה בספר זה')
+  if (!canUseBookEditor(book, user)) return book.privateOcr
+    ? fail(404, 'הספר לא נמצא') : fail(403, 'אין הרשאות לצפייה בספר זה')
   const page = await Page.findOne({ book: book._id, pageNumber }).select(PAGE_TEXT_FIELDS).lean()
   if (!page) return fail(404, 'העמוד לא נמצא')
   return { ok: true, book, page }

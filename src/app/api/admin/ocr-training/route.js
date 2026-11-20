@@ -1,3 +1,4 @@
+import { PUBLIC_BOOK_FILTER } from '@/lib/privateBooks';
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import OcrTrainingPage from '@/models/OcrTrainingPage';
@@ -67,7 +68,7 @@ export async function POST(request) {
 
     await connectDB();
 
-    const book = await Book.findById(bookId);
+    const book = await Book.findOne({ _id: bookId, ...PUBLIC_BOOK_FILTER });
     if (!book) {
       return notFound('הספר לא נמצא');
     }

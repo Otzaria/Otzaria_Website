@@ -1,3 +1,4 @@
+import { PUBLIC_BOOK_FILTER } from '@/lib/privateBooks';
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Book from '@/models/Book';
@@ -14,7 +15,7 @@ export async function GET() {
 
   try {
     await connectDB();
-    const books = await Book.find({}, 'name slug totalPages isHidden category')
+    const books = await Book.find(PUBLIC_BOOK_FILTER, 'name slug totalPages isHidden category')
       .sort({ name: 1 })
       .lean();
 

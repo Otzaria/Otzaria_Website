@@ -70,7 +70,7 @@ export async function createTraining(req, session, workerId) {
   if (job && (job.taskType !== 'training' || job.requestFingerprint !== fingerprint)) return { status: 409, body: { error: 'מזהה הבקשה כבר בשימוש' } };
   if (!job) {
     const book = await Book.findById(req.bookId).lean();
-    if (!book) return { status: 404, body: { error: 'הספר לא נמצא' } };
+    if (!book || book.privateOcr) return { status: 404, body: { error: 'הספר לא נמצא' } };
     try {
       job = (await OcrJob.create([{ _id: new mongoose.Types.ObjectId(), book: book._id, bookName: book.name,
         bookSlug: book.slug, method: 'local', taskType: 'training', status: 'preparing', active: true,

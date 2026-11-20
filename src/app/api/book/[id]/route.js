@@ -1,3 +1,4 @@
+import { canUseBookEditor } from '@/lib/privateBooks';
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Book from '@/models/Book';
@@ -31,7 +32,7 @@ export async function GET(request, { params }) {
         ] 
     }).lean();
     
-    if (!book) {
+    if (!book || (book.privateOcr && !canUseBookEditor(book, session.user))) {
       return notFound('הספר לא נמצא');
     }
 

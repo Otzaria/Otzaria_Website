@@ -51,6 +51,11 @@ export async function POST(request) {
             return notFound('חלק מהספרים לא נמצאו');
         }
 
+        // המיזוג הקיים כותב לתיקייה ציבורית; ספר פרטי נשאר באחסון שלו.
+        if (sortedOldBooks.some(b => b.privateOcr)) {
+            return badRequest('אין למזג ספרים פרטיים');
+        }
+
         // הספרים הישנים נמחקים בסוף המיזוג — ביטול מתועד של עבודות OCR פעילות שלהם קודם,
         // לפני יצירת הספר החדש ולפני כל שינוי. אם קליטת תוצאה מקומית בעיצומה — 409 ולא נוגעים.
         const oldBookIds = sortedOldBooks.map(b => b._id);

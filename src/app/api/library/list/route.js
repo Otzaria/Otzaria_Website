@@ -1,3 +1,4 @@
+import { PUBLIC_BOOK_FILTER } from '@/lib/privateBooks';
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Book from '@/models/Book';
@@ -23,12 +24,12 @@ export async function GET(request) {
 
     await connectDB();
 
-    const query = isAdmin ? {} : { isHidden: { $ne: true } };
+    const query = isAdmin ? {} : { ...PUBLIC_BOOK_FILTER, isHidden: { $ne: true } };
 
     let booksQuery = Book.find(query)
       .select(catalogView
-        ? 'name slug totalPages category updatedAt isHidden ownerId isPrivate'
-        : 'name slug totalPages category updatedAt isHidden editingInfo ownerId originalOwnerId isPrivate')
+        ? 'name slug totalPages category updatedAt isHidden ownerId isPrivate privateOcr'
+        : 'name slug totalPages category updatedAt isHidden editingInfo ownerId originalOwnerId isPrivate privateOcr')
       .populate('ownerId', 'name');
     if (!catalogView) booksQuery = booksQuery.populate('originalOwnerId', 'name');
     const books = await booksQuery
@@ -36,6 +37,7 @@ export async function GET(request) {
       .lean();
 
     const stats = await Page.aggregate([
+      { $match: { book: { $in: books.map(book => book._id) } } },
       {
         $group: {
           _id: '$book',
@@ -61,7 +63,7 @@ export async function GET(request) {
         id: book._id,
         name: book.name,
         path: book.slug,
-        thumbnail: `/uploads/books/${book.slug}/page.1.jpg`,
+        thumbnail: book.privateOcr ? `/private-books/${book.slug}/page.1.jpg` : `/uploads/books/${book.slug}/page.1.jpg`,
         totalPages: book.totalPages,
         completedPages: bookStats.completed,
         inProgressPages: bookStats.inProgress,

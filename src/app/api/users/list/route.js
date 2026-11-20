@@ -1,3 +1,4 @@
+import { publicPagesStages } from '@/lib/privateBooks';
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
@@ -27,6 +28,8 @@ export async function GET() {
     // 2. חישוב כמות עמודים שהושלמו לכל משתמש (Aggregation)
     // סופר גם עמודים שהושלמו וגם שבטיפול
     const pagesStats = await Page.aggregate([
+      { $match: { status: { $in: ['completed', 'in-progress'] }, claimedBy: { $ne: null } } },
+      ...publicPagesStages(),
       {
         $group: {
           _id: '$claimedBy', // קיבוץ לפי ID של המשתמש

@@ -1,3 +1,4 @@
+import { PUBLIC_BOOK_FILTER, canUseBookEditor } from '@/lib/privateBooks';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
@@ -90,7 +91,7 @@ async function loadExamplePagesFromConfig(config, requestUrl, apiKey) {
   const results = [];
   for (const entry of config) {
     const slug = decodeURIComponent(entry.bookSlug);
-    const book = await Book.findOne({ $or: [{ slug }, { name: slug }] }).lean();
+    const book = await Book.findOne({ ...PUBLIC_BOOK_FILTER, $or: [{ slug }, { name: slug }] }).lean();
     if (!book) {
       console.warn(`[gemini-ocr-batch] example book not found: ${entry.bookSlug}`);
       continue;
@@ -199,7 +200,7 @@ export async function POST(request) {
 
     const decodedPath = decodeURIComponent(bookPath);
     const book = await Book.findOne({ $or: [{ slug: decodedPath }, { name: decodedPath }] });
-    if (!book) {
+    if (!canUseBookEditor(book, session.user)) {
       return NextResponse.json({ error: `Book not found: ${decodedPath}` }, { status: 404 });
     }
 

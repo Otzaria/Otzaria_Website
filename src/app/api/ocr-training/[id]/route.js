@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import OcrTrainingPage from '@/models/OcrTrainingPage';
 import Page from '@/models/Page';
+import Book from '@/models/Book';
+import { hasBookLibraryAccess } from '@/lib/roles';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { unauthorized, notFound, serverError } from '@/lib/apiResponse';
@@ -27,6 +29,8 @@ export async function GET(request, { params }) {
     await connectDB();
     const doc = await OcrTrainingPage.findById(id).lean();
     if (!doc) return notFound('העמוד לא נמצא');
+    const sourceBook = doc.book ? await Book.findById(doc.book).select('isPrivate').lean() : null;
+    if (sourceBook?.isPrivate && !hasBookLibraryAccess(session.user)) return notFound('העמוד לא נמצא');
 
     const userId = session.user.id || session.user._id;
     const mine = doc.claimedBy && String(doc.claimedBy) === String(userId);
