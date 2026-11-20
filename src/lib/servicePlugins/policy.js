@@ -7,7 +7,7 @@ export const POLICY_VERSION = 2
 const MiB = 1024 * 1024
 export const LIMITS = Object.freeze({
   pluginBytes: 50 * MiB,
-  installerBytes: 256 * MiB,
+  installerBytes: 350 * MiB,
   maxInstallers: 8,
   maxSources: 4,
   reportBytes: 64 * 1024,

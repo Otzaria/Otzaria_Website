@@ -13,7 +13,7 @@ import {
 } from '@/lib/servicePlugins/http'
 
 export const dynamic = 'force-dynamic'
-// מתקין עד 256MiB בחיבור איטי
+// מתקין עד 350MiB בחיבור איטי
 export const maxDuration = 900
 
 function storageFailure(err) {

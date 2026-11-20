@@ -49,7 +49,7 @@ export interface ServiceLimits {
 
 export const DEFAULT_LIMITS: ServiceLimits = {
   pluginBytes: 50 * 1024 * 1024,
-  installerBytes: 256 * 1024 * 1024,
+  installerBytes: 350 * 1024 * 1024,
   maxInstallers: 8,
   maxSources: 4,
   changeNotesChars: 2000,

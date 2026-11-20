@@ -12,7 +12,7 @@
 
 **MongoDB:** נדרש האינדקס הייחודי `service_port_owner` על `plugins.serviceState.reservedPortKeys`. יצירת טיוטה ממתינה לאתחול האינדקס; יש לוודא שהמשתמש של האתר רשאי ליצור אינדקסים. השריון מכסה הגשה פעילה ואת גרסאות השירות הנוכחית והקודמת. הניקוי השעתי משחרר שריונים שאינם נחוצים עוד.
 
-**nginx:** ‏`client_max_body_size` חייב להתיר מתקין של 256 MiB בנתיבי `/api/service-plugins/`, וזמן הקריאה (`proxy_read_timeout`, `client_body_timeout`) צריך להספיק להעלאה איטית. ההגדרה הקיימת של האתר אינה בריפו; יש לבדוק אותה בשרת.
+**nginx:** ‏`client_max_body_size` חייב להתיר מתקין של 350 MiB בנתיבי `/api/service-plugins/`, וזמן הקריאה (`proxy_read_timeout`, `client_body_timeout`) צריך להספיק להעלאה איטית. ההגדרה הקיימת של האתר אינה בריפו; יש לבדוק אותה בשרת.
 
 **ניקוי שעתי** (crontab של המשתמש שמריץ את האתר):
 
