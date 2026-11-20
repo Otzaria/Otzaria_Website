@@ -3,17 +3,19 @@
  * copy-tesseract-assets.mjs — אירוח עצמי של tesseract.js (זיהוי מילים בדפדפן בעורך העמוד).
  *
  * מעתיק מ-node_modules ל-public/vendor/tesseract/v<גרסה>/ את worker.min.js ואת קובצי ה-core
- * (*.wasm.js — ה-wasm מוטמע בהם), ומוריד פעם אחת את מודל העברית (heb.traineddata.gz, ~570KB)
- * לתיקייה lang/<מודל>/ עם בדיקת sha256 נעולה. התיקייה ב-.gitignore — לא נשמרת ב-Git.
+ * (*.wasm.js — ה-wasm מוטמע בהם), ומוריד את מודל העברית. אחרי בדיקת sha256 מול הגרסה
+ * הנעולה, דוחס אותו ל-lang/<מודל>/<שפה>.traineddata.gz בתיקייה שב-.gitignore.
  *
  * רץ בתחילת npm run build (וכך גם בפריסה: npm install + npm run build). כשל בהורדת המודל אינו
  * מכשיל את ה-build (אזהרה בלבד — הזיהוי המקומי יציג שגיאה בעברית), אלא אם --strict.
- * העתקה ידנית: להוריד את הקובץ מה-URL שב-src/lib/editor/tesseractAssets.js לנתיב שמודפס כאן.
+ * התקנה ידנית: להוריד את הקובץ מה-URL שב-src/lib/editor/tesseractAssets.js
+ * ולדחוס אותו ב-gzip לנתיב שמודפס כאן.
  */
 import { createHash } from 'node:crypto'
 import { copyFile, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { gunzipSync, gzipSync } from 'node:zlib'
 import { HEB_LANG, TESSERACT_PUBLIC_DIR } from '../src/lib/editor/tesseractAssets.js'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -53,8 +55,8 @@ async function copyRuntime() {
 
 async function ensureLang() {
   const dir = path.join(OUT, 'lang', HEB_LANG.model)
-  const file = path.join(dir, 'heb.traineddata.gz')
-  const existing = await readFile(file).catch(() => null)
+  const file = path.join(dir, `${HEB_LANG.language}.traineddata.gz`)
+  const existing = await readFile(file).then(gunzipSync).catch(() => null)
   if (existing && sha256(existing) === HEB_LANG.sha256) {
     console.log(`מודל העברית קיים: ${path.relative(ROOT, file)}`)
     return true
@@ -64,12 +66,13 @@ async function ensureLang() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const buf = Buffer.from(await res.arrayBuffer())
     if (sha256(buf) !== HEB_LANG.sha256) throw new Error('sha256 לא תואם')
+    const compressed = gzipSync(buf, { level: 9 })
     await mkdir(dir, { recursive: true })
-    await writeFile(file, buf)
-    console.log(`מודל העברית הורד: ${path.relative(ROOT, file)} (${Math.round(buf.length / 1024)}KB)`)
+    await writeFile(file, compressed)
+    console.log(`מודל העברית הורד: ${path.relative(ROOT, file)} (${Math.round(compressed.length / 1024)}KB)`)
     return true
   } catch (err) {
-    console.warn(`אזהרה: הורדת מודל העברית נכשלה (${err.message}). זיהוי המילים המקומי לא יעבוד עד שהקובץ יונח ידנית ב-${path.relative(ROOT, file)} (מקור: ${HEB_LANG.url}).`)
+    console.warn(`אזהרה: הורדת מודל העברית נכשלה (${err.message}). אפשר לדחוס ב-gzip את הקובץ מ-${HEB_LANG.url} ל-${path.relative(ROOT, file)}.`)
     return false
   }
 }

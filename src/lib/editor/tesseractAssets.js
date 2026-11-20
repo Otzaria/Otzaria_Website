@@ -6,12 +6,13 @@
 
 export const TESSERACT_PUBLIC_DIR = 'vendor/tesseract';
 
-// מודל העברית לזיהוי המילים (tessdata_best_int, ~570KB gz) — מ-@tesseract.js-data/heb בגרסה
-// נעולה; ה-sha256 נבדק בסקריפט לפני השמירה.
+// Rivok Lite 2.0 לשימוש בדפדפן. ה-sha256 של קובץ ה-traineddata נבדק לפני הדחיסה.
+// הרישיון והייחוס נכללים ב-public/licenses/tesseract-heb-rivok/.
 export const HEB_LANG = Object.freeze({
-  model: 'heb-4.0.0_best_int',
-  url: 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/heb@1.0.0/4.0.0_best_int/heb.traineddata.gz',
-  sha256: '9c70b524200dae77fb25e3567566eee600ccbcae9aeb89722990ccae0e84e805',
+  language: 'heb_rivok_lite',
+  model: 'heb-rivok-lite-v2.0',
+  url: 'https://github.com/RivoksLab/tesseract-heb-rivok/releases/download/v2.0/heb_rivok_lite.traineddata',
+  sha256: '59da073ad0bca9449fa5a965996e49d0e2bee3c17e8b0b4e2769d67a7ce34c40',
 });
 
 /**
@@ -25,7 +26,7 @@ export function tesseractAssetUrls(version, origin = '') {
     // תיקייה — tesseract בוחר בעצמו בין גרסאות SIMD/LSTM של ה-core
     corePath: `${root}/v${version}/core`,
     langPath: `${root}/lang/${HEB_LANG.model}`,
-    // מפתח המטמון ב-IndexedDB — נפרד מ-'heb' של /tessdata, שעשוי להיות מודל אחר
+    // מפתח המטמון ב-IndexedDB כולל את גרסת המודל, גם כשהשם של קובץ השפה זהה.
     cachePath: `otzaria-${HEB_LANG.model}`,
   };
 }

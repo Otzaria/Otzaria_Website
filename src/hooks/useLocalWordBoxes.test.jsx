@@ -85,11 +85,11 @@ describe('useLocalWordBoxes', () => {
     expect(loadImage).toHaveBeenCalledWith('/img.jpg', { signal: expect.any(AbortSignal) })
 
     const [lang, oem, opts] = createWorker.mock.calls[0]
-    expect([lang, oem]).toEqual(['heb', 1])
+    expect([lang, oem]).toEqual(['heb_rivok_lite', 1])
     expect(opts).toMatchObject({
       workerPath: `${window.location.origin}/vendor/tesseract/v7.0.0/worker.min.js`,
       corePath: `${window.location.origin}/vendor/tesseract/v7.0.0/core`,
-      langPath: `${window.location.origin}/vendor/tesseract/lang/heb-4.0.0_best_int`,
+      langPath: `${window.location.origin}/vendor/tesseract/lang/heb-rivok-lite-v2.0`,
       workerBlobURL: false,
     })
     expect(worker.recognize).toHaveBeenCalledWith('CANVAS', {}, { blocks: true, text: false })

@@ -16,7 +16,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import tesseractPkg from 'tesseract.js/package.json'
 import { fromTesseract, splitColumnStreams } from '@/lib/editor/trackingSource'
 import { storedToTrack, trackToStored } from '@/lib/editor/pageLayoutValidation'
-import { tesseractAssetUrls } from '@/lib/editor/tesseractAssets'
+import { HEB_LANG, tesseractAssetUrls } from '@/lib/editor/tesseractAssets'
 import { versionFor, nextVersionRecord } from './layoutVersion'
 
 const API = '/api/page-layout'
@@ -271,7 +271,7 @@ export function useLocalWordBoxes({ pageId, imageUrl, canSave = true, autoCheck 
       if (!live()) return null
       const T = mod?.createWorker ? mod : mod?.default
       const urls = tesseractAssetUrls(tesseractPkg.version, window.location.origin)
-      worker = await T.createWorker('heb', T.OEM?.LSTM_ONLY ?? 1, {
+      worker = await T.createWorker(HEB_LANG.language, T.OEM?.LSTM_ONLY ?? 1, {
         ...urls,
         workerBlobURL: false,
         logger: (m) => {
