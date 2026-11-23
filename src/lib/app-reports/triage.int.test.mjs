@@ -636,7 +636,7 @@ test('חומר הבדיקה: שדות, התכתבות וקבצים דרך הנת
   assert.equal(m.description, 'נתקע בגלילה');
   assert.equal(m.canContact, true);
   assert.deepEqual(m.triage, { state: 'pending', runs: 1, lateDecidedAt: null });
-  assert.deepEqual(m.files, { errors: true, diagnostics: true, images: 0 });
+  assert.deepEqual(m.files, { errors: true, diagnostics: true, images: 0, minidump: false });
   assert.equal(JSON.stringify(m).includes('reporter@example.com'), false);
 
   const errors = await handleTriageFileGet(auth('http://localhost/x'), body.reportId, 'errors', hdeps);
@@ -645,6 +645,13 @@ test('חומר הבדיקה: שדות, התכתבות וקבצים דרך הנת
   assert.equal((await handleTriageFileGet(auth('http://localhost/x'), body.reportId, 'minidump', hdeps)).status, 404);
   assert.equal((await handleTriageFileGet(new Request('http://localhost/x'), body.reportId, 'errors', hdeps)).status, 401);
   assert.equal((await handleTriageMaterialGet(auth('http://localhost/x'), 'missing', hdeps)).status, 404);
+
+  // dump קיים: החומר אומר זאת, אבל הקובץ עצמו לא מוגש
+  await AppReport.updateOne({ reportId: body.reportId }, { $set: { 'fileIds.minidump': { gridfsId: 'aaaaaaaaaaaaaaaaaaaaaaaa' } } });
+  files.set('aaaaaaaaaaaaaaaaaaaaaaaa', Buffer.from('MDMP'));
+  const withDump = await (await handleTriageMaterialGet(auth('http://localhost/x'), body.reportId, hdeps)).json();
+  assert.equal(withDump.files.minidump, true);
+  assert.equal((await handleTriageFileGet(auth('http://localhost/x'), body.reportId, 'minidump', hdeps)).status, 404);
 });
 
 test('החלטה מאוחרת על יוצר הכרטיס אינה סוגרת כרטיס שדיווח נוסף צורף אליו', async (t) => {
