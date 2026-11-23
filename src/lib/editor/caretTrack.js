@@ -10,7 +10,7 @@ import { streamLines, streamsOf } from './trackingSource.js';
 import { buildFlow, countsAgree, flowCaret, flowLineAgreement, flowOffsetFromScan, pickTarget, scanTargets, shouldUseFlow } from './flowTrack.js';
 
 /** זרמים שאינם חלק מהטקסט שמקלידים (כותרת עליונה / שורה תחתונה מזיהוי הצילום) */
-const EDGE_STREAMS = new Set(['header', 'footer']);
+const EDGE_STREAMS = new Set(['header', 'footer', 'sep']);
 
 const isBox = (b) => Array.isArray(b) && b.length === 4 && b.every(Number.isFinite);
 
@@ -33,14 +33,15 @@ const isBox = (b) => Array.isArray(b) && b.length === 4 && b.every(Number.isFini
  */
 export function linesForColumn(source, { twoColumns = false, column = null } = {}) {
   // כותרת עליונה / שורה תחתונה של הדף (מזיהוי הצילום) אינן חלק מהטקסט שמקלידים
-  const all = streamsOf(source);
+  const included = { ...source, lines: (source?.lines || []).filter((l) => l.inText !== false) };
+  const all = streamsOf(included);
   const streams = all.filter((s) => !EDGE_STREAMS.has(s));
-  const body = (source?.lines || []).filter((l) => streams.includes(l.stream));
+  const body = included.lines.filter((l) => streams.includes(l.stream));
   if (!streams.length) return { stream: null, lines: [], wordLevel: false };
   if (!twoColumns) return { stream: streams.length === 1 ? streams[0] : null, lines: body, wordLevel: true };
   if (streams.length === 2) {
     const s = column === 'left' ? streams[1] : streams[0];
-    return { stream: s, lines: streamLines(source, s), wordLevel: true };
+    return { stream: s, lines: streamLines(included, s), wordLevel: true };
   }
   // יותר משני זרמים (למשל ימין + שמאל + פסקה ברוחב העמוד, או טור שנחתך לשניים): מחלקים לפי
   // המיקום האופקי — הזרמים שבחצי הימני לטור הימני ושבחצי השמאלי לשמאלי; זרם ברוחב העמוד — לאף אחד
