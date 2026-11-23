@@ -49,7 +49,7 @@ ProtectControlGroups=yes
 ProtectClock=yes
 ProtectHostname=yes
 ProtectProc=invisible
-ProcSubset=pid
+# בלי ProcSubset=pid: הוא מסתיר את /proc/sys, ו-bwrap נכשל מיד ("Can't read /proc/sys/kernel/overflowuid").
 LockPersonality=yes
 RestrictRealtime=yes
 RestrictSUIDSGID=yes
@@ -61,7 +61,8 @@ AmbientCapabilities=
 # AF_NETLINK נדרש ל-bwrap כדי להעלות loopback בתוך מרחב רשת מבודד.
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 # מרחבי שמות נדרשים לעטיפת הבידוד (bwrap / unshare). בלי עטיפה אפשר להחמיר ל-RestrictNamespaces=yes.
-RestrictNamespaces=user net mnt pid ipc uts
+# cgroup חובה: bwrap --unshare-all פותח גם מרחב cgroup, ובלעדיו נכשל ב-"No permissions to create new namespace".
+RestrictNamespaces=user net mnt pid ipc uts cgroup
 TasksMax=512
 LimitNOFILE=8192
 MemoryMax=8G
