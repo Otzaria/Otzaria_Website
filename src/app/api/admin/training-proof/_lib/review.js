@@ -168,10 +168,14 @@ async function framesFixCheck(item) {
 // "תקן ואשר" (ה-11): המנהל מתקן לפני האישור. mark — באותה צורה שהמתנדב שולח
 // ({action,text} / {label,bad,words}). תיקון זהה למה שהמתנדב סימן = אישור רגיל.
 // check — בדיקה לחלק (frames: מהגלאי, כשתהיה); ברירת-מחדל MARK_CHECKS.
+// expectAt — רק לאישור בלי אינטרנט (docs/115 §6): זמן-ההגשה שההחלטה נעשתה עליו; הגשה אחרת ← 409.
 // מחזיר {ok, item, fixed} או {ok:false,status,error}
-export async function fixAndApprove(id, mark, by, now = new Date(), check = null) {
+export async function fixAndApprove(id, mark, by, now = new Date(), check = null, { expectAt = null } = {}) {
   const item = await TrainingProofItem.findOne({ _id: oid(id), status: 'submitted', streamChange: null }).lean();
   if (!item) return { ok: false, status: 409, error: 'הפריט כבר לא ממתין לאישור' };
+  if (expectAt && new Date(item.submittedAt || 0).getTime() !== new Date(expectAt).getTime()) {
+    return { ok: false, status: 409, error: 'הוגש מחדש מאז ההורדה' };
+  }
   const checker = check || MARK_CHECKS[item.section] || (item.section === 'frames' ? await framesFixCheck(item) : null);
   if (!checker) return { ok: false, status: 400, error: 'תיקון בחלק הזה נעשה בעורך המסגרות' };
   const { result, error } = checker(item.payload, mark);
