@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import { buildFlow, flowCaret, flowOffsetFromScan } from './flowTrack.js';
 import { buildFlowTextMap } from './flowTextMap.js';
 import { lineWords } from './caretWord.js';
+import { fromLayout } from './trackingSource.js';
+import { linesForColumn } from './caretTrack.js';
 
 const fixture = JSON.parse(readFileSync(new URL('./fixtures/rashba-flow.json', import.meta.url)));
 const scan = fixture.lines.map((l) => ({ ...l, words: l.words.map((w, i) => ({ text: l.text.split(/\s+/)[i], bbox: [w[0], l.bbox[1], w[1], l.bbox[3]] })) }));
@@ -59,4 +61,35 @@ test('OCR split/merged words use textual alignment and bound joined boxes to one
   assert.deepEqual(flowCaret(text, 0, S, m).wordBox, [60, 0, 95, 10]);
   assert.deepEqual(flowCaret(text, text.indexOf('שלום'), S, m).wordBox, S[1].words[0].bbox);
   assert.deepEqual(flowCaret(text, text.indexOf('עולם'), S, m).wordBox, S[1].words[0].bbox);
+});
+
+test('a Rashba line with mismatched word boxes keeps exact tracking on the rest of both columns', () => {
+  const broken = 20;
+  const lines = scan.map((l, i) => i === broken ? { ...l, words: l.words.map(({ bbox }) => ({ bbox })) } : l);
+  const m = buildFlow(fixture.text, lines);
+  const expected = scan.flatMap((l, si) => l.words.map((w) => ({ ...w, si })));
+  for (const [i, w] of lineWords(fixture.text).entries()) {
+    const t = flowCaret(fixture.text, w.start, lines, m);
+    assert.equal(t.scanIndex, expected[i].si, w.text);
+    if (expected[i].si === broken) {
+      assert.equal(t.wordBox, null);
+      assert.equal(t.kind, null);
+      assert.equal(t.confident, false);
+    } else {
+      assert.deepEqual(t.wordBox, expected[i].bbox, w.text);
+      assert.equal(t.kind, 'solid');
+      assert.equal(flowOffsetFromScan(fixture.text, lines, m, t.scanIndex, (t.wordBox[0] + t.wordBox[2]) / 2), w.start);
+    }
+  }
+});
+
+test('Tumim page 2: a non-exported empty line cannot disable full-page word tracking', () => {
+  const raw = scan.map((l, k) => ({ k, order: k + 1, stream: 'main', inText: true, text: l.text,
+    bbox: l.bbox, words: l.words.map((w) => [w.bbox[0], w.bbox[2], 1]) }));
+  raw.splice(20, 0, { k: 999, order: 20.5, stream: 'main', inText: false, text: '', bbox: [0, 200, 20, 210], words: [] });
+  const { lines } = linesForColumn(fromLayout({ layoutVersion: 1, image: { width: 1000, height: 1600 }, lines: raw }));
+  assert.equal(lines.length, scan.length);
+  assert.ok(buildFlowTextMap(fixture.text, lines));
+  const columns = fromLayout({ layoutVersion: 1, lines: raw.map((l) => ({ ...l, stream: l.k < 25 ? 'right' : 'left' })) });
+  for (const column of ['right', 'left']) assert.ok(linesForColumn(columns, { twoColumns: true, column }).lines.every((l) => l.inText !== false));
 });

@@ -32,15 +32,22 @@ function anchors(A, B) {
 
 export function buildFlowTextMap(text, lines) {
   const scan = [];
+  let labelled = 0;
   for (let si = 0; si < lines.length; si++) {
+    if (lines[si].inText === false) continue;
     const ws = (lines[si].words || []).filter((w) => isBox(w?.bbox));
-    // Incomplete word labels must retain the geometry-only fallback.
-    if (!ws.length || ws.some((w) => typeof w.text !== 'string' || !w.text.trim())) return null;
-    for (const w of [...ws].sort((a, b) => b.bbox[2] - a.bbox[2])) scan.push({ ...w, si });
+    if (ws.length && ws.every((w) => typeof w.text === 'string' && w.text.trim())) {
+      for (const w of [...ws].sort((a, b) => b.bbox[2] - a.bbox[2])) scan.push({ ...w, si });
+      labelled += ws.length;
+    } else {
+      // One malformed line must not discard the rest of the page's OCR labels.
+      // Its text can still locate the line, but cannot identify a physical word.
+      for (const w of lineWords(lines[si].text || '')) scan.push({ text: w.text, si, lineOnly: true });
+    }
   }
   const starts = lineStarts(text);
   const words = splitLines(text).flatMap((s, li) => lineWords(s).map((w) => ({ text: w.text.replace(/<[^>]*>/g, ''), off: starts[li] + w.start }))).filter((w) => w.text.trim());
-  if (!words.length || !scan.length) return null;
+  if (!words.length || !scan.length || !labelled) return null;
   const A = words.map((w) => normalizeWord(w.text));
   const B = scan.map((w) => normalizeWord(w.text));
   const matches = new Array(words.length).fill(null);
@@ -62,7 +69,8 @@ export function buildFlowTextMap(text, lines) {
     if (!hit?.length) return { off: w.off, si: null, box: null, confident: false };
     // A joined word spanning scan lines gets a box on its first line only.
     const si = hit[0].si;
-    return { off: w.off, si, box: unionBox(hit.filter((h) => h.si === si).map((h) => h.bbox)), confident: m.confident };
+    const hasWords = hit.every((h) => !h.lineOnly);
+    return { off: w.off, si, box: hasWords ? unionBox(hit.filter((h) => h.si === si).map((h) => h.bbox)) : null, confident: hasWords && m.confident };
   });
   return { targets, byOffset: new Map(targets.map((t) => [t.off, t])) };
 }
@@ -70,7 +78,7 @@ export function buildFlowTextMap(text, lines) {
 export function textMappedCaret(out, c, mapping, lines) {
   const off = c.word >= 0 ? c.lineStart + c.words[c.word].start : null;
   const hit = off == null ? null : mapping.byOffset.get(off);
-  if (hit?.si != null) return { ...out, scanIndex: hit.si, lineBox: lines[hit.si].bbox, wordBox: hit.box, kind: hit.confident ? 'solid' : 'dashed', confident: hit.confident };
+  if (hit?.si != null) return { ...out, scanIndex: hit.si, lineBox: lines[hit.si].bbox, wordBox: hit.box, kind: hit.box ? (hit.confident ? 'solid' : 'dashed') : null, confident: hit.confident };
   // An inserted word has no physical counterpart: reveal the nearest mapped line
   // without drawing a word box over an unrelated printed word.
   let nearest = null;
