@@ -1,16 +1,18 @@
 /** כשל שמדווח לשרת (`failure`): transient | quota | operator. */
 export class JobFailure extends Error {
-  constructor(failureClass, code, message, { resetAt = null } = {}) {
+  /** `data` — פרטים מובנים ליומן השלבים המקומי בלבד (לא נשלחים לאתר). */
+  constructor(failureClass, code, message, { resetAt = null, data = null } = {}) {
     super(message)
     this.name = 'JobFailure'
     this.failureClass = failureClass
     this.code = code
     this.resetAt = resetAt
+    this.data = data
   }
 }
 
 export const transient = (code, message) => new JobFailure('transient', code, message)
-export const operator = (code, message) => new JobFailure('operator', code, message)
+export const operator = (code, message, data = null) => new JobFailure('operator', code, message, { data })
 export const quota = (code, message, resetAt) => new JobFailure('quota', code, message, { resetAt })
 
 /** ממצא דטרמיניסטי שמסתיים בהחלטה 0 עם דוח בעברית (ללא Claude). */

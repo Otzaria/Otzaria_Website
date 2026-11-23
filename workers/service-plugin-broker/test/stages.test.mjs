@@ -5,7 +5,7 @@ import { test } from 'node:test'
 import { Rejection } from '../src/errors.js'
 import { JobContext, localAssetName } from '../src/job.js'
 import { SourceCollector, SourceFormatError, SourceLimitError, buildDiffText, decodeUtf16, looksLikeText } from '../src/source.js'
-import { clamavStage, parseClamOutput } from '../src/stages/scan.js'
+import { clamavStage, parseClamOutput, stderrHint } from '../src/stages/scan.js'
 import { extractStage, parseSevenZipList } from '../src/stages/extract.js'
 import { VtClient, judgeStats, scanFile } from '../src/stages/virustotal.js'
 import { ConfigError, checkClaudeUserSettings, loadConfig, parseWrapper } from '../src/config.js'
@@ -148,9 +148,54 @@ test('clamav: נקי, נגוע → דחייה, חריגת מגבלות → opera
   await assert.rejects(clamavStage(ctx), (e) => e instanceof Rejection && /EICAR/.test(e.report))
   await writeFile(scenarioFile, JSON.stringify({ exitCode: 1, found: ['Heuristics.Limits.Exceeded.MaxFileSize'] }))
   await assert.rejects(clamavStage(ctx), (e) => e.failureClass === 'operator' && e.code === 'clamav_incomplete')
+  await writeFile(scenarioFile, JSON.stringify({ exitCode: 1 }))
+  await assert.rejects(clamavStage(ctx), (e) => e.failureClass === 'operator' && e.code === 'clamav_output_unparsed')
   await writeFile(scenarioFile, JSON.stringify({ exitCode: 2 }))
   await assert.rejects(clamavStage(ctx), (e) => e.failureClass === 'operator' && e.code === 'clamav_error')
   assert.deepEqual(parseClamOutput('/a/b c.exe: Eicar FOUND\nok'), [{ file: '/a/b c.exe', signature: 'Eicar' }])
+})
+
+const LIMITS_SIG = 'Heuristics.Limits.Exceeded.MaxScanSize'
+const OVERRIDE = { clamavPartial: { reason: 'מתקין גדול, נבדק ידנית', grantedAt: '2026-11-20T10:00:00.000Z' } }
+
+test('clamav חלקי: ההודעה מפרטת קובץ וחתימה, והפרטים המובנים זמינים ליומן', async (t) => {
+  const { ctx, scenarioFile } = await extractCtx(t, { installerName: 'big-setup.exe', scenario: {} })
+  await writeFile(scenarioFile, JSON.stringify({ exitCode: 1, found: [{ file: 1, sig: LIMITS_SIG }] }))
+  const err = await clamavStage(ctx).catch((e) => e)
+  assert.equal(err.code, 'clamav_incomplete')
+  assert.match(err.message, /^סריקת ClamAV לא הושלמה עבור חלק מהקבצים/)
+  assert.match(err.message, /^- המתקין big-setup\.exe: Heuristics\.Limits\.Exceeded\.MaxScanSize$/m)
+  assert.match(err.message, /שאר הקבצים \(1\) נסרקו/)
+  assert.ok(err.message.length <= 500)
+  assert.deepEqual(err.data, { incomplete: [{ key: 'native0', signature: LIMITS_SIG }] })
+
+  await writeFile(scenarioFile, JSON.stringify({ exitCode: 1, found: [{ file: 0, sig: LIMITS_SIG }, { file: 1, sig: LIMITS_SIG }] }))
+  const both = await clamavStage(ctx).catch((e) => e)
+  assert.match(both.message, /^- קובץ התוסף: /m)
+  assert.match(both.message, /אף קובץ בהגשה לא נסרק במלואו/)
+})
+
+test('clamav חלקי עם חריגת מנהל: קבלת partial; ממצא אמיתי עדיין דוחה; פלט לא מזוהה/שגיאה אינם ניתנים לחריגה', async (t) => {
+  const { ctx, scenarioFile } = await extractCtx(t, { installerName: 'big-setup.exe', scenario: {} })
+  ctx.job.overrides = OVERRIDE
+  await writeFile(scenarioFile, JSON.stringify({ exitCode: 1, found: [{ file: 1, sig: LIMITS_SIG }] }))
+  assert.deepEqual(await clamavStage(ctx), {
+    status: 'partial', incomplete: [{ key: 'native0', signature: LIMITS_SIG }], override: OVERRIDE.clamavPartial,
+  })
+  // ממצא אמיתי לצד חריגת מגבלות → דחייה, גם עם חריגה
+  await writeFile(scenarioFile, JSON.stringify({ exitCode: 1, found: [{ file: 1, sig: LIMITS_SIG }, { file: 0, sig: 'Win.Test.EICAR_HDB-1' }] }))
+  await assert.rejects(clamavStage(ctx), (e) => e instanceof Rejection && /קובץ התוסף: Win\.Test\.EICAR/.test(e.report))
+  await writeFile(scenarioFile, JSON.stringify({ exitCode: 1 }))
+  await assert.rejects(clamavStage(ctx), (e) => e.code === 'clamav_output_unparsed')
+  await writeFile(scenarioFile, JSON.stringify({ exitCode: 2 }))
+  await assert.rejects(clamavStage(ctx), (e) => e.code === 'clamav_error')
+  // קובץ שאינו בהגשה → אין חריגה
+  await writeFile(scenarioFile, JSON.stringify({ exitCode: 1, found: [{ path: '/elsewhere/x', sig: LIMITS_SIG }] }))
+  await assert.rejects(clamavStage(ctx), (e) => e.code === 'clamav_incomplete' && /קובץ בהגשה/.test(e.message))
+  // חריגה פגומה → כאילו אין
+  ctx.job.overrides = { clamavPartial: { reason: '', grantedAt: OVERRIDE.clamavPartial.grantedAt } }
+  await writeFile(scenarioFile, JSON.stringify({ exitCode: 1, found: [{ file: 1, sig: LIMITS_SIG }] }))
+  await assert.rejects(clamavStage(ctx), (e) => e.code === 'clamav_incomplete')
 })
 
 // ---------------------------------------------------------------- VirusTotal
@@ -376,4 +421,12 @@ test('הגדרות Claude של משתמש המתווך: hooks / permissions.allo
   }
   await writeFile(path.join(home, '.claude', 'settings.json'), '{not json')
   assert.equal(checkClaudeUserSettings(config).length, 1)
+})
+
+test('stderrHint: ריק → כלום; שורה אחת מקוצרת מהסוף (כשל bwrap נראה בהודעה)', () => {
+  assert.equal(stderrHint(''), '')
+  assert.equal(stderrHint(undefined), '')
+  assert.equal(stderrHint('bwrap: Can\'t read /proc/sys/kernel/overflowuid\n'), ' (stderr: bwrap: Can\'t read /proc/sys/kernel/overflowuid)')
+  const long = stderrHint(`${'x'.repeat(500)}END`)
+  assert.ok(long.endsWith('END)') && long.includes('…') && long.length < 230)
 })

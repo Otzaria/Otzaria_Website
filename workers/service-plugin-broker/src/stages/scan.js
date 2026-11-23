@@ -3,6 +3,7 @@ import { Rejection, operator, transient } from '../errors.js'
 import path from 'node:path'
 import { DownloadError, RELEASE_HOSTS, fetchAllowlisted, hashBody } from '../httpDownload.js'
 import { ensureDir } from '../util.js'
+import { clamavAssetLabel, clamavIncompleteMessage, clamavPartialOverride, isLimitsSignature } from '../clamavPartial.js'
 
 const TOOL_TIMEOUT_MS = 60 * 60_000
 
@@ -21,6 +22,15 @@ export function parseClamOutput(stdout) {
   return found
 }
 
+const STDERR_HINT_CHARS = 200
+
+/** סוף ה-stderr בשורה אחת, לאבחון תקלות תפעול (למשל כשל של עטיפת הבידוד). */
+export function stderrHint(stderr) {
+  const text = String(stderr ?? '').replace(/\s+/g, ' ').trim()
+  if (!text) return ''
+  return ` (stderr: ${text.length > STDERR_HINT_CHARS ? `…${text.slice(-STDERR_HINT_CHARS)}` : text})`
+}
+
 export async function clamavStage(ctx) {
   await ctx.ensureAssets()
   const assets = ctx.assetList()
@@ -33,24 +43,35 @@ export async function clamavStage(ctx) {
   if (r.timedOut) throw transient('clamav_timeout', 'סריקת ClamAV חרגה מזמן ההמתנה')
   if (r.aborted) throw transient('clamav_aborted', 'סריקת ClamAV נעצרה')
   if (r.code === 0) return { status: 'clean', scanned: assets.map((a) => a.key) }
-  if (r.code !== 1) throw operator('clamav_error', `ClamAV החזיר שגיאה (קוד ${r.code}) — הסריקה לא הושלמה`)
+  if (r.code !== 1) {
+    throw operator('clamav_error', `ClamAV החזיר שגיאה (קוד ${r.code}) — הסריקה לא הושלמה${stderrHint(r.stderr)}`)
+  }
 
   const byFile = new Map(assets.map((a) => [ctx.localPath(a), a]))
   const found = parseClamOutput(r.stdout)
-  const incomplete = found.filter((f) => f.signature.startsWith('Heuristics.Limits.Exceeded'))
-  const real = found.filter((f) => !f.signature.startsWith('Heuristics.Limits.Exceeded'))
+  const describe = (f) => {
+    const a = byFile.get(f.file)
+    return { key: a?.key ?? null, label: clamavAssetLabel(a), signature: f.signature }
+  }
+  const real = found.filter((f) => !isLimitsSignature(f.signature)).map(describe)
   if (real.length) {
-    const lines = real.map((f) => {
-      const a = byFile.get(f.file)
-      return `- ${a ? (a.isPlugin ? 'קובץ התוסף' : `המתקין ${a.name}`) : 'קובץ בהגשה'}: ${f.signature}`
-    })
+    const lines = real.map((f) => `- ${f.label}: ${f.signature}`)
     throw new Rejection('clamav', `סורק הנוזקות ClamAV זיהה חתימה מוכרת:\n${lines.join('\n')}`,
-      { detections: real.map((f) => ({ key: byFile.get(f.file)?.key ?? null, signature: f.signature })) })
+      { detections: real.map(({ key, signature }) => ({ key, signature })) })
   }
-  if (incomplete.length || !found.length) {
-    throw operator('clamav_incomplete', 'סריקת ClamAV לא הושלמה (חריגה ממגבלות הסורק) — סריקה חלקית אינה "נקי"')
+  if (!found.length) {
+    // כך נראה גם כשל של עטיפת הבידוד (bwrap יוצא בקוד 1 בלי פלט) — ה-stderr מבדיל בין השניים.
+    throw operator('clamav_output_unparsed',
+      `ClamAV דיווח על ממצא (קוד 1) אך הפלט שלו לא זוהה — הסריקה אינה נחשבת "נקי"${stderrHint(r.stderr)}`)
   }
-  return { status: 'clean' }
+  const incomplete = found.map(describe)
+  const details = incomplete.map(({ key, signature }) => ({ key, signature }))
+  const override = clamavPartialOverride(ctx.job)
+  // חריגת מנהל חלה רק על קבצים מזוהים בהגשה שחרגו ממגבלות הסורק — לעולם לא על ממצא, שגיאה או פלט לא מזוהה.
+  if (override && incomplete.every((i) => i.key !== null)) {
+    return { status: 'partial', incomplete: details, override }
+  }
+  throw operator('clamav_incomplete', clamavIncompleteMessage(incomplete, assets.length), { incomplete: details })
 }
 
 /** כל מתקין חייב להיות זהה בדיוק לקובץ ה-Release הציבורי שהוצהר. */

@@ -41,6 +41,10 @@ export function buildContextText(job, receipts, { source } = {}) {
     `hashes: ${q(r('hashes') ? 'גדלים ו-SHA-256 תואמים' : null)}`,
     `clamav: ${q(r('clamav')?.status)}`,
   )
+  if (r('clamav')?.status === 'partial') {
+    lines.push(`  סריקה חלקית: הקבצים הבאים לא נסרקו במלואם (חריגה ממגבלות הסורק), והמשך הבדיקה אושר ידנית ע״י מנהל: ${
+      q([].concat(r('clamav').incomplete ?? []).map((i) => ({ key: i?.key, signature: i?.signature })))}. יש לציין זאת במגבלות הדוח.`)
+  }
   if (job.kind === 'service') {
     lines.push(
       `release: ${q(r('release')?.status)} — כל מתקין זהה לקובץ ב-GitHub Release שהוצהר`,

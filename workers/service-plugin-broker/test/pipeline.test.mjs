@@ -3,7 +3,7 @@ import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { test } from 'node:test'
 import { zipSync } from 'fflate'
-import { JobFailure, Rejection } from '../src/errors.js'
+import { JobFailure, Rejection, operator } from '../src/errors.js'
 import { JobContext } from '../src/job.js'
 import { DEFAULT_STAGES, claudeReceiptData, jobProblems, runPipeline, writeLocalClaude } from '../src/pipeline.js'
 import { prescanStage, sourceStage } from '../src/stages/source.js'
@@ -334,6 +334,56 @@ test('דוח Claude ארוך: הקבלה מחזיקה hash, הדוח המלא נ
   await assert.rejects(runPipeline(ctx, { stages }), (e) => e.failureClass === 'operator' && e.code === 'claude_report_unavailable')
   await writeLocalClaude(ctx, { decision: 1, report: long, session_id: 's' })
   assert.deepEqual(await runPipeline(ctx, { stages }), { decision: 1, report: long })
+})
+
+// ---------------------------------------------------------------- סריקת ClamAV חלקית שאושרה ע"י מנהל
+
+const PARTIAL = { status: 'partial', incomplete: [{ key: 'native0', signature: 'Heuristics.Limits.Exceeded.MaxScanSize' }],
+  override: { reason: 'מתקין גדול, נבדק ידנית', grantedAt: '2026-11-20T10:00:00.000Z' } }
+const NOTE_RE = /^שימו לב: סריקת ClamAV הייתה חלקית — .*המתקין setup\.zip \(Heuristics\.Limits\.Exceeded\.MaxScanSize\).*מתקין גדול, נבדק ידנית\.\n\n/
+
+test('clamav חלקי: הערה בראש הדוח הסופי בלבד — לא בקבלת claude ולא בתוצאה המקומית; גם בשימוש חוזר', async (t) => {
+  const { api, ctx } = await ctxFor(t, baseJob({ receipts: [receipt('hashes'), receipt('clamav', PARTIAL)] }))
+  const { stages } = spyStages()
+  const out = await runPipeline(ctx, { stages })
+  assert.match(out.report, NOTE_RE)
+  assert.ok(out.report.endsWith('\n\nדוח'))
+  assert.equal(api.calls.checkpoint.at(-1).data.report, 'דוח')
+  const local = JSON.parse(await readFile(ctx.paths.claudeResult, 'utf8'))
+  assert.equal(local.data.report, 'דוח')
+
+  // תפיסה חוזרת: קבלת claude שמורה → אותו דוח עם ההערה
+  const again = await ctxFor(t, baseJob({ receipts: [receipt('clamav', PARTIAL), receipt('claude', api.calls.checkpoint.at(-1).data)] }))
+  assert.deepEqual(await runPipeline(again.ctx, { stages }), out)
+  // תוצאה מקומית שה-checkpoint שלה לא הגיע לשרת
+  const pending = await ctxFor(t, baseJob({ receipts: ['hashes', 'release', 'extract', 'attestation', 'virustotal', 'source', 'prescan']
+    .map((s) => receipt(s)).concat(receipt('clamav', PARTIAL)) }))
+  await writeLocalClaude(pending.ctx, { decision: 1, report: 'דוח', session_id: 's' })
+  assert.deepEqual(await runPipeline(pending.ctx, { stages: spyStages().stages }), out)
+  assert.equal(pending.api.calls.checkpoint.at(-1).data.report, 'דוח')
+})
+
+test('clamav חלקי: דחייה דטרמיניסטית מאוחרת (וגם שמורה) כוללת את ההערה, וקבלת הדחייה לא', async (t) => {
+  const { api, ctx } = await ctxFor(t, baseJob({ receipts: [receipt('hashes'), receipt('clamav', PARTIAL)] }))
+  const { stages } = spyStages({ release: async () => { throw new Rejection('release', 'קובץ שונה') } })
+  const out = await runPipeline(ctx, { stages })
+  assert.equal(out.decision, 0)
+  assert.match(out.report, NOTE_RE)
+  assert.match(out.report, /ההגשה נדחתה בשלב: השוואה לקובץ GitHub Release/)
+  assert.deepEqual(api.calls.checkpoint.at(-1).data, { rejected: true, reason: 'קובץ שונה' })
+
+  const stored = await ctxFor(t, baseJob({ receipts: [receipt('clamav', PARTIAL), receipt('release', { rejected: true, reason: 'קובץ שונה' })] }))
+  assert.deepEqual(await runPipeline(stored.ctx, { stages: spyStages().stages }), out)
+})
+
+test('כשל תפעולי עם פרטים מובנים (clamav_incomplete) נרשם ביומן השלבים', async (t) => {
+  const { ctx } = await ctxFor(t, baseJob())
+  const incomplete = [{ key: 'native0', signature: 'Heuristics.Limits.Exceeded.MaxFileSize' }]
+  const { stages } = spyStages({ clamav: async () => { throw operator('clamav_incomplete', 'חלקי', { incomplete }) } })
+  await assert.rejects(runPipeline(ctx, { stages }), (e) => e.code === 'clamav_incomplete')
+  const failed = (await readFile(ctx.paths.stageLog, 'utf8')).trim().split('\n').map((l) => JSON.parse(l)).find((l) => l.event === 'failed')
+  assert.deepEqual(failed.data, { incomplete })
+  assert.equal(failed.code, 'clamav_incomplete')
 })
 
 // ---------------------------------------------------------------- מקור מול עץ ה-commit, workflow, ובודק
