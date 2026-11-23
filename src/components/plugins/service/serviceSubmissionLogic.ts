@@ -86,6 +86,8 @@ export interface ManageReview {
   lastErrorMessage?: string | null
   uploads: Record<string, boolean>
   assets: DeclaredAsset[]
+  /** לצופה מנהל בלבד (השרת לא שולח לבעלים): אישור המשך למרות סריקת ClamAV חלקית; scanned — הקבלה החלקית נשמרה */
+  clamavPartial?: { reason: string | null; grantedAt: string | null; scanned: boolean } | null
 }
 
 export interface ManageCurrent {

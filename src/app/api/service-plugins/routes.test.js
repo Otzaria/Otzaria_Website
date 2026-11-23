@@ -312,6 +312,56 @@ describe('זרימה מלאה דרך הראוטים', () => {
   })
 })
 
+describe('המשך למרות סריקת ClamAV חלקית — דרך הראוטים', () => {
+  it('קבלה חלקית 409 בלי אישור; accept_partial_scan עם סיבה; overrides בעבודה; הערה למנהל בלבד', async () => {
+    const { reviewId } = await createDraftViaRoute()
+    const putUrl = (k) => `${BASE}/${pid()}/drafts/${reviewId}/assets/${k}`
+    await assetPUT(putReq(putUrl('plugin'), PLUGIN_BYTES), p({ pluginId: pid(), reviewId, key: 'plugin' }))
+    await assetPUT(putReq(putUrl('native0'), NATIVE_BYTES), p({ pluginId: pid(), reviewId, key: 'native0' }))
+    const { digest } = await (await sealPOST(jsonReq(`${BASE}/x`, 'POST'), p({ pluginId: pid(), reviewId }))).json()
+    as(admin)
+    const admin_ = (body) => adminPOST(jsonReq(`${BASE}/admin/${pid()}`, 'POST', { jobId: reviewId, ...body }), p({ pluginId: pid() }))
+    expect((await admin_({ action: 'start' })).status).toBe(200)
+
+    let { job } = await (await claimPOST(worker(`${BASE}/worker/claim`, { workerId: 'b' }))).json()
+    expect(job.overrides).toEqual({ clamavPartial: null })
+    const partial = (leaseToken) => checkpointPOST(worker(`${BASE}/worker/${reviewId}/checkpoint`, { leaseToken, stage: 'clamav', digest, data: { status: 'partial' } }), p({ reviewId }))
+    const denied = await partial(job.leaseToken)
+    expect(denied.status).toBe(409)
+    expect(await denied.json()).toEqual({ error: 'clamav_partial_not_allowed' })
+    // לפני התקלה — הפעולה אינה זמינה
+    expect((await admin_({ action: 'accept_partial_scan', reason: 'x' })).status).toBe(409)
+    const message = 'סריקת ClamAV לא הושלמה:\nnative0/big.bin — Heuristics.Limits.Exceeded.MaxFileSize'
+    await failurePOST(worker(`${BASE}/worker/${reviewId}/failure`, { leaseToken: job.leaseToken, class: 'operator', code: 'clamav_incomplete', message }), p({ reviewId }))
+
+    const listed = (await (await adminGET(new Request(`${BASE}/admin`))).json()).reviews.find((r) => r.id === reviewId)
+    expect(listed).toMatchObject({ status: 'needs_operator', lastError: { class: 'operator', code: 'clamav_incomplete', message }, operatorOverrides: { clamavPartial: null } })
+    const noReason = await admin_({ action: 'accept_partial_scan' })
+    expect(noReason.status).toBe(400)
+    expect(await noReason.json()).toMatchObject({ code: 'reason_required', error: expect.stringMatching(/סיבה/) })
+    as(stranger)
+    expect((await admin_({ action: 'accept_partial_scan', reason: 'x' })).status).toBe(403)
+    as(admin)
+    const accepted = await admin_({ action: 'accept_partial_scan', reason: 'ארכיון נתונים גדול' })
+    expect(accepted.status).toBe(200)
+    expect(await accepted.json()).toEqual({ ok: true, status: 'queued' })
+
+    ;({ job } = await (await claimPOST(worker(`${BASE}/worker/claim`, { workerId: 'b' }))).json())
+    expect(job.overrides.clamavPartial).toEqual({ reason: 'ארכיון נתונים גדול', grantedAt: expect.any(String) })
+    expect(job.overrides.clamavPartial).not.toHaveProperty('grantedBy')
+    expect((await partial(job.leaseToken)).status).toBe(200)
+
+    const after = (await (await adminGET(new Request(`${BASE}/admin`))).json()).reviews.find((r) => r.id === reviewId)
+    expect(after).toMatchObject({ status: 'running', clamavPartialReceipt: true, operatorOverrides: { clamavPartial: { reason: 'ארכיון נתונים גדול' } } })
+    const adminManage = await (await manageGET(new Request(`${BASE}/${pid()}/manage`), p({ pluginId: pid() }))).json()
+    expect(adminManage.reviews[0].clamavPartial).toMatchObject({ reason: 'ארכיון נתונים גדול', scanned: true })
+    as(owner)
+    const ownerManage = await (await manageGET(new Request(`${BASE}/${pid()}/manage`), p({ pluginId: pid() }))).json()
+    expect(ownerManage.reviews[0]).not.toHaveProperty('clamavPartial')
+    expect(JSON.stringify(ownerManage)).not.toContain('ארכיון נתונים גדול')
+  })
+})
+
 describe('תיקוני QA בראוטים', () => {
   const assetUrl = (reviewId, key) => `${BASE}/${pid()}/drafts/${reviewId}/assets/${key}`
 

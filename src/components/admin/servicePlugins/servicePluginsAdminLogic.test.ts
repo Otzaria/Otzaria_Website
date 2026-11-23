@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { adminActionsFor, defaultServiceTab, groupAdminReviews, needsException, quotaPause, rollbackReviewIds, serviceAttentionCount, SERVICE_TABS, type AdminReview } from './servicePluginsAdminLogic'
+import { adminActionsFor, defaultServiceTab, groupAdminReviews, isClamavIncomplete, needsException, partialScanNote, quotaPause, rollbackReviewIds, serviceAttentionCount, SERVICE_TABS, type AdminReview } from './servicePluginsAdminLogic'
 
 function review(overrides: Partial<AdminReview>): AdminReview {
   return {
@@ -41,6 +41,24 @@ describe('servicePluginsAdminLogic', () => {
     expect(adminActionsFor(review({ status: 'needs_operator' }))).toEqual(['retry', 'cancel'])
     expect(adminActionsFor(review({ status: 'running' }))).toEqual(['cancel'])
     expect(adminActionsFor(review({ status: 'rejected' }))).toEqual([])
+  })
+
+  it('ClamAV לא הושלם: גם "המשך למרות סריקה חלקית" — רק במצב הזה', () => {
+    const clamav = review({ status: 'needs_operator', lastError: { class: 'operator', code: 'clamav_incomplete', message: 'קבצים' } })
+    expect(isClamavIncomplete(clamav)).toBe(true)
+    expect(adminActionsFor(clamav)).toEqual(['retry', 'accept_partial_scan', 'cancel'])
+    const other = review({ status: 'needs_operator', lastError: { class: 'operator', code: 'gh_auth', message: '' } })
+    expect(adminActionsFor(other)).toEqual(['retry', 'cancel'])
+    // אותו קוד, אבל ההגשה כבר חזרה לתור
+    expect(adminActionsFor({ ...clamav, status: 'queued' })).toEqual(['cancel'])
+  })
+
+  it('הערת סריקה חלקית: אישור בלבד, קבלה שנשמרה, או כלום', () => {
+    expect(partialScanNote(review({}))).toBeNull()
+    expect(partialScanNote(review({ operatorOverrides: { clamavPartial: null }, clamavPartialReceipt: false }))).toBeNull()
+    const override = { reason: 'קובץ ענק', grantedAt: '2026-11-01T10:00:00Z' }
+    expect(partialScanNote(review({ operatorOverrides: { clamavPartial: override } }))).toEqual({ scanned: false, ...override })
+    expect(partialScanNote(review({ operatorOverrides: { clamavPartial: override }, clamavPartialReceipt: true }))).toEqual({ scanned: true, ...override })
   })
 
   it('חזרה לאחור — פעם אחת לכל תוסף, על המאושרת האחרונה', () => {

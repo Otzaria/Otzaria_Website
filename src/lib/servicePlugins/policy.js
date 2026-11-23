@@ -19,7 +19,13 @@ export const LIMITS = Object.freeze({
   changeNotesChars: 2000,
   uninstallChars: 2000,
   reasonChars: 500,
+  // הודעת תקלה מהבודק (lastError.message) — ארוכה מסיבת מנהל: clamav_incomplete מפרט קבצים וחתימות
+  errorMessageChars: 4000,
 })
+
+/** קבלת ClamAV של סריקה שלא הושלמה; מתקבלת רק אחרי אישור מנהל (operatorOverrides.clamavPartial). */
+export const isPartialClamavReceipt = (stage, data) => stage === 'clamav' && data?.status === 'partial'
+export const hasClamavPartialOverride = (review) => !!review?.operatorOverrides?.clamavPartial
 
 export const SERVICE_COOLDOWN_DAYS = 21
 export const LEASE_SECONDS = 120
@@ -463,9 +469,10 @@ export function cooldownState(lastServiceCycleStartedAt, now = new Date()) {
 export function missingReceipts(review) {
   const required = REQUIRED_RECEIPTS[review?.kind] || REQUIRED_RECEIPTS.service
   const receipts = review?.receipts || []
-  // קבלת דחייה של שלב קבוע אינה מעבר שלו, גם אם הגיעה החלטה 1
+  // קבלת דחייה של שלב קבוע אינה מעבר שלו, גם אם הגיעה החלטה 1; סריקת ClamAV חלקית — רק באישור מנהל
+  const partialOk = hasClamavPartialOverride(review)
   return required.filter((stage) => !receipts.some((r) => r.stage === stage && !!review.manifestDigest && r.digest === review.manifestDigest
-    && r.data?.rejected !== true))
+    && r.data?.rejected !== true && (partialOk || !isPartialClamavReceipt(r.stage, r.data))))
 }
 
 /** תשובת הבודק: {decision:0|1, report} — report מחרוזת לא ריקה עד 64KiB. */

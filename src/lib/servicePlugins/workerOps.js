@@ -6,7 +6,7 @@ import ServiceScanControl from '../../models/ServiceScanControl.js'
 import { createSystemMessage } from '../systemMessages.js'
 import {
   LEASE_SECONDS, LIMITS, RECEIPT_STAGES, FAILURE_CLASSES, nextAfterTransientFailure, nextAfterQuota,
-  validateDecision, missingReceipts,
+  validateDecision, missingReceipts, isPartialClamavReceipt, hasClamavPartialOverride,
 } from './policy.js'
 import { newLeaseToken, hashLeaseToken, isLeaseTokenShape } from './workerAuth.js'
 import { publishReview, finalizeIfPublished, releaseScanLock, CLEARED_LEASE } from './publish.js'
@@ -146,7 +146,15 @@ async function buildJob(review, token) {
       ? { reviewId: String(service._id), serviceVersion: service.serviceVersion, serviceRange: { min: service.serviceRange?.min ?? null, max: service.serviceRange?.max ?? null }, sources: sourcesOf(service) }
       : null,
     receipts: (review.receipts || []).map((r) => ({ stage: r.stage, digest: r.digest, at: r.at, data: r.data ?? null })),
+    // אישורי מנהל (בלי מזהה המנהל). clamavPartial ≠ null → מותר לשלוח קבלת clamav עם status:'partial'
+    overrides: { clamavPartial: clamavPartialOverride(review) },
   }
+}
+
+function clamavPartialOverride(review) {
+  const o = review.operatorOverrides?.clamavPartial
+  if (!o) return null
+  return { reason: o.reason ?? '', grantedAt: o.grantedAt ? new Date(o.grantedAt).toISOString() : null }
 }
 
 async function loadLeased(reviewId, token, now) {
@@ -193,6 +201,8 @@ export async function checkpoint({ reviewId, token, stage, digest, data, now = n
   if (!loaded.ok) return loaded
   const { review } = loaded
   if (digest !== review.manifestDigest) return fail(409, 'digest_mismatch')
+  // סריקה חלקית אינה "נקי": מתקבלת רק אחרי שמנהל אישר להמשיך (adminAcceptPartialScan)
+  if (isPartialClamavReceipt(stage, data) && !hasClamavPartialOverride(review)) return fail(409, 'clamav_partial_not_allowed')
   // החלפה אטומית בצד המסד: שתי קבלות מקבילות לא ידרסו זו את זו
   const receipt = { stage, digest, at: now, data: data ?? null }
   const res = await ServicePluginReview.updateOne(leaseFilter(review, now), [{
@@ -234,7 +244,7 @@ export async function reportFailure({ reviewId, token, failureClass, code, messa
     status: next.status,
     nextAttemptAt: next.nextAttemptAt ?? null,
     lease: CLEARED_LEASE,
-    lastError: { class: failureClass, code, message: (message || '').slice(0, LIMITS.reasonChars), at: now },
+    lastError: { class: failureClass, code, message: (message || '').slice(0, LIMITS.errorMessageChars), at: now },
   })
   const res = await ServicePluginReview.updateOne(leaseFilter(review, now), { $set: set })
   if (res.matchedCount !== 1) return leaseLost()

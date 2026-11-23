@@ -4,6 +4,7 @@ import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 import Ltr from '@/components/ui/Ltr'
 import { formatDateWithTime } from '@/lib/formatDate'
+import ClamavPartialNote from './ClamavPartialNote'
 import ServiceStatusBadge from './ServiceStatusBadge'
 import ServiceReport from './ServiceReport'
 import { KIND_LABELS, OWNER_CANCELLABLE, type ManageReview } from './serviceSubmissionLogic'
@@ -54,6 +55,8 @@ export default function ServiceReviewItem({ review, onCancel, cancelling }: {
           קבצים שהתקבלו: <Ltr>{`${received}/${declared}`}</Ltr>
         </p>
       )}
+
+      {review.clamavPartial && <ClamavPartialNote {...review.clamavPartial} />}
 
       {review.report && <ServiceReport decision={review.decision} report={review.report} />}
 

@@ -4,7 +4,7 @@ import dbConnect from '@/lib/db'
 import Plugin from '@/models/Plugin'
 import ServicePluginReview from '@/models/ServicePluginReview'
 import { hasPluginsAccess } from '@/lib/roles'
-import { adminStart, adminRetry, adminEmergency, cancelReview, rollback } from '@/lib/servicePlugins/reviews'
+import { adminStart, adminRetry, adminEmergency, adminAcceptPartialScan, cancelReview, rollback } from '@/lib/servicePlugins/reviews'
 import {
   isEnabled, disabledResponse, notFoundResponse, isObjectIdString, sessionGate, rejectCrossSite, readJsonBody, json,
   failureResponse, errorResponse, toObjectId,
@@ -12,9 +12,10 @@ import {
 
 export const dynamic = 'force-dynamic'
 
-const ACTIONS = ['start', 'cancel', 'retry', 'emergency', 'rollback']
+const ACTIONS = ['start', 'cancel', 'retry', 'emergency', 'rollback', 'accept_partial_scan']
 
-// פעולות מנהל: start (= אישור פרסום מותנה), cancel, retry, emergency (חריגת 21 יום), rollback.
+// פעולות מנהל: start (= אישור פרסום מותנה), cancel, retry, emergency (חריגת 21 יום), rollback,
+// accept_partial_scan (המשך למרות סריקת ClamAV חלקית — רק אחרי clamav_incomplete, עם reason).
 export async function POST(request, { params }) {
   if (!isEnabled()) return disabledResponse()
   const csrf = rejectCrossSite(request)
@@ -45,6 +46,7 @@ export async function POST(request, { params }) {
       if (!review) return json({ error: 'ההגשה לא נמצאה', code: 'not_found' }, 404)
       if (action === 'start') result = await adminStart({ plugin, review, admin })
       else if (action === 'retry') result = await adminRetry({ review })
+      else if (action === 'accept_partial_scan') result = await adminAcceptPartialScan({ review, admin, reason })
       else result = await cancelReview({ review, by: admin._id, reason: typeof reason === 'string' ? reason : 'בוטל בידי מנהל', asAdmin: true })
     }
     if (!result.ok) return failureResponse(result)

@@ -253,6 +253,17 @@ test('missingReceipts: קבלת דחייה אינה נחשבת מעבר של ה�
   assert.deepEqual(missingReceipts({ kind: 'plugin', manifestDigest: 'd1', receipts }), ['clamav'])
 })
 
+test('missingReceipts: קבלת ClamAV חלקית נחשבת רק באישור מנהל (operatorOverrides.clamavPartial)', () => {
+  const receipts = REQUIRED_RECEIPTS.plugin.map((stage) => ({ stage, digest: 'd1', data: stage === 'clamav' ? { status: 'partial' } : {} }))
+  assert.deepEqual(missingReceipts({ kind: 'plugin', manifestDigest: 'd1', receipts }), ['clamav'])
+  assert.deepEqual(missingReceipts({ kind: 'plugin', manifestDigest: 'd1', receipts, operatorOverrides: { clamavPartial: null } }), ['clamav'])
+  const operatorOverrides = { clamavPartial: { reason: 'קובץ ענק', grantedAt: new Date() } }
+  assert.deepEqual(missingReceipts({ kind: 'plugin', manifestDigest: 'd1', receipts, operatorOverrides }), [])
+  // status:'partial' בשלב אחר אינו סריקה חלקית
+  const other = REQUIRED_RECEIPTS.plugin.map((stage) => ({ stage, digest: 'd1', data: stage === 'source' ? { status: 'partial' } : {} }))
+  assert.deepEqual(missingReceipts({ kind: 'plugin', manifestDigest: 'd1', receipts: other }), [])
+})
+
 
 test('הוראות הסרה מקבלות שורות, CRLF וטאבים, אך דוחות תווי בקרה אחרים', () => {
   for (const uninstall of ['1. עצירת השירות\n2. הסרת התוכנה', 'עצירה\r\n\tהסרה']) {

@@ -53,6 +53,14 @@ const ServicePluginReviewSchema = new mongoose.Schema({
     type: new mongoose.Schema({ reason: String, grantedBy: { type: ObjectId, ref: 'User' } }, { _id: false }),
     default: null,
   },
+  // אישורי מנהל להמשך הבדיקה למרות תקלה תפעולית מסוימת. נשמרים לתיעוד גם אחרי הפרסום.
+  operatorOverrides: {
+    // ClamAV חרג ממגבלות הסורק בחלק מהקבצים (clamav_incomplete): המתווך רשאי לשלוח קבלת clamav חלקית
+    clamavPartial: {
+      type: new mongoose.Schema({ reason: String, grantedBy: { type: ObjectId, ref: 'User' }, grantedAt: Date }, { _id: false }),
+      default: null,
+    },
+  },
   attempts: { type: Number, default: 0 },
   unknownQuotaWaits: { type: Number, default: 0 },
   // נפרד מ-attempts: lease אחד יכול לפוג כדין (שער שבת), אך פקיעות חוזרות הן לולאת קריסה

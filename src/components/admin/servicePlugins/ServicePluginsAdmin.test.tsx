@@ -95,6 +95,46 @@ describe('ServicePluginsAdmin', () => {
     expect(JSON.parse(String(call[1]!.body))).toEqual({ action: 'emergency', jobId: 'r1', reason: 'תיקון אבטחה דחוף' })
   })
 
+  it('ClamAV לא הושלם: ההודעה המלאה, "המשך למרות סריקה חלקית" עם סיבה ואזהרה', async () => {
+    const message = 'סריקת ClamAV לא הושלמה:\nnative0/big.bin — Heuristics.Limits.Exceeded.MaxFileSize\nnative0/data.pak — Heuristics.Limits.Exceeded.MaxScanSize'
+    adminBody = {
+      control: { quotaPausedUntil: null, lock: null },
+      reviews: [review({ status: 'needs_operator', lastError: { class: 'operator', code: 'clamav_incomplete', message }, operatorOverrides: { clamavPartial: null } })]
+    }
+    renderAdmin()
+    const shown = await screen.findByText((_, el) => el?.tagName === 'P' && el.textContent === message)
+    expect(shown).toHaveClass('whitespace-pre-line')
+    expect(screen.getByText(/סריקת ClamAV לא הושלמה: בחלק מהקבצים/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /נסה שוב/ })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /המשך למרות סריקה חלקית/ }))
+    const dialog = await screen.findByRole('dialog', { name: 'המשך למרות סריקה חלקית' })
+    expect(dialog).toHaveTextContent('לא נסרקו במלואם ב-ClamAV')
+    expect(dialog).toHaveTextContent(/VirusTotal וסקירת Claude/)
+    const submit = within(dialog).getByRole('button', { name: /המשך בבדיקה/ })
+    expect(submit).toBeDisabled()
+    fireEvent.change(within(dialog).getByLabelText(/^סיבה/), { target: { value: 'ארכיון נתונים גדול' } })
+    fireEvent.click(submit)
+    expect(await screen.findByText(/הסריקה החלקית אושרה/)).toBeInTheDocument()
+    const call = fetchSpy.mock.calls.find(([u]) => String(u) === '/api/service-plugins/admin/p1')!
+    expect(JSON.parse(String(call[1]!.body))).toEqual({ action: 'accept_partial_scan', jobId: 'r1', reason: 'ארכיון נתונים גדול' })
+  })
+
+  it('תקלה תפעולית אחרת — בלי "המשך למרות סריקה חלקית"; קבלה חלקית מאושרת — תג עם הסיבה', async () => {
+    adminBody = {
+      control: { quotaPausedUntil: null, lock: null },
+      reviews: [
+        review({ status: 'needs_operator', lastError: { class: 'operator', code: 'gh_auth', message: 'לא מחובר' } }),
+        review({ id: 'r2', pluginId: 'p2', status: 'running', operatorOverrides: { clamavPartial: { reason: 'ארכיון גדול', grantedAt: '2026-11-01T10:00:00Z' } }, clamavPartialReceipt: true })
+      ]
+    }
+    renderAdmin()
+    expect(await screen.findByRole('button', { name: /נסה שוב/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /המשך למרות סריקה חלקית/ })).toBeNull()
+    fireEvent.click(screen.getByRole('tab', { name: 'בבדיקה (1)' }))
+    expect(await screen.findByText('סריקת ClamAV חלקית — אושרה ידנית')).toBeInTheDocument()
+    expect(screen.getByText('ארכיון גדול')).toBeInTheDocument()
+  })
+
   it('בלי הגשות בכלל: מצב ריק אחד, בלי לשוניות', async () => {
     adminBody = { control: { quotaPausedUntil: null, lock: null }, reviews: [] }
     renderAdmin()

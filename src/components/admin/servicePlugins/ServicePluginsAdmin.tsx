@@ -12,6 +12,7 @@ import { useToast } from '@/components/ui/Toast'
 import { apiErrorMessages } from '@/components/plugins/service/serviceSubmissionLogic'
 import { formatDateWithTime } from '@/lib/formatDate'
 import EmergencyExceptionDialog from './EmergencyExceptionDialog'
+import PartialScanDialog from './PartialScanDialog'
 import ServiceReviewAdminCard from './ServiceReviewAdminCard'
 import {
   SERVICE_TABS,
@@ -22,6 +23,7 @@ import {
   rollbackReviewIds,
   type AdminAction,
   type AdminReview,
+  type ReasonAction,
   type ServiceTab
 } from './servicePluginsAdminLogic'
 import { useServiceAdminData, type ServiceAdminSource } from './useServiceAdminData'
@@ -98,7 +100,8 @@ export default function ServicePluginsAdmin({ source }: { source?: ServiceAdminS
   const toast = useToast() as { show: (t: { message: string; tone?: 'error' | 'success' | 'info'; action?: { label: string; href?: string } }) => void }
   const [confirm, confirmElement] = useConfirm() as unknown as [(o: object) => Promise<boolean>, React.ReactNode]
   const [busy, setBusy] = useState<{ id: string; action: AdminAction } | null>(null)
-  const [exceptionFor, setExceptionFor] = useState<AdminReview | null>(null)
+  // פעולה שמחכה לסיבה בחלון: חריגת חירום או המשך למרות סריקה חלקית
+  const [reasonFor, setReasonFor] = useState<{ review: AdminReview; action: ReasonAction } | null>(null)
   const [tab, setTab] = useState<ServiceTab | null>(null)
 
   const post = async (review: AdminReview, action: AdminAction, reason?: string): Promise<boolean> => {
@@ -130,8 +133,8 @@ export default function ServicePluginsAdmin({ source }: { source?: ServiceAdminS
   }
 
   const handleAction = async (review: AdminReview, action: AdminAction) => {
-    if (action === 'emergency') {
-      setExceptionFor(review)
+    if (action === 'emergency' || action === 'accept_partial_scan') {
+      setReasonFor({ review, action })
       return
     }
     const options = CONFIRMS[action]
@@ -223,16 +226,32 @@ export default function ServicePluginsAdmin({ source }: { source?: ServiceAdminS
 
       {confirmElement}
 
-      {exceptionFor && (
+      {reasonFor?.action === 'emergency' && (
         <EmergencyExceptionDialog
-          pluginName={exceptionFor.pluginName ?? ''}
-          busy={busy?.id === exceptionFor.id && busy.action === 'emergency'}
-          onClose={() => setExceptionFor(null)}
+          pluginName={reasonFor.review.pluginName ?? ''}
+          busy={busy?.id === reasonFor.review.id && busy.action === 'emergency'}
+          onClose={() => setReasonFor(null)}
           onSubmit={async (reason) => {
-            const ok = await post(exceptionFor, 'emergency', reason)
+            const ok = await post(reasonFor.review, 'emergency', reason)
             if (ok) {
-              setExceptionFor(null)
+              setReasonFor(null)
               toast.show({ tone: 'success', message: 'החריגה אושרה. עכשיו אפשר ללחוץ "אשר והתחל בדיקה" — החריגה תנוצל בתחילת הבדיקה.' })
+            }
+          }}
+        />
+      )}
+
+      {reasonFor?.action === 'accept_partial_scan' && (
+        <PartialScanDialog
+          pluginName={reasonFor.review.pluginName ?? ''}
+          details={reasonFor.review.lastError?.message ?? null}
+          busy={busy?.id === reasonFor.review.id && busy.action === 'accept_partial_scan'}
+          onClose={() => setReasonFor(null)}
+          onSubmit={async (reason) => {
+            const ok = await post(reasonFor.review, 'accept_partial_scan', reason)
+            if (ok) {
+              setReasonFor(null)
+              toast.show({ tone: 'success', message: `״${reasonFor.review.pluginName ?? ''}״: ההגשה חזרה לבדיקה — הסריקה החלקית אושרה, ושאר השלבים ירוצו כרגיל.` })
             }
           }}
         />

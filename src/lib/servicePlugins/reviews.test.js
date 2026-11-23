@@ -24,7 +24,7 @@ import ServicePluginReview from '@/models/ServicePluginReview'
 import ServiceScanControl from '@/models/ServiceScanControl'
 import { startMongo } from '@/lib/corrections/testing/mongo.js'
 import {
-  createDraft, recordAssetUpload, sealDraft, cancelReview, adminStart, adminRetry, adminEmergency, rollback,
+  createDraft, recordAssetUpload, sealDraft, cancelReview, adminStart, adminRetry, adminEmergency, adminAcceptPartialScan, rollback,
   claimNext, heartbeat, checkpoint, reportFailure, submitResult, maintenanceKeepList, openWorkerAsset, finalizeIfPublished,
 } from './reviews.js'
 import { getAdminView } from './views.js'
@@ -743,5 +743,65 @@ describe('תיקוני הסקירה: התאוששות ושריון פורטים'
     expect((await loadPlugin(a._id)).serviceState.reservedPortKeys).toEqual([])
     const b = await makePlugin()
     expect((await createDraft({ plugin: await loadPlugin(b._id), user: owner, body: serviceBody() })).ok).toBe(true)
+  })
+})
+
+describe('המשך למרות סריקת ClamAV חלקית', () => {
+  const partialMessage = 'סריקת ClamAV לא הושלמה:\nnative0/big.bin — Heuristics.Limits.Exceeded.MaxFileSize\n' + 'x'.repeat(900)
+
+  it('רק אחרי clamav_incomplete, עם סיבה; אישור עובר למתווך; קבלה חלקית מתקבלת רק עם האישור; פרסום', async () => {
+    const plugin = await makePlugin()
+    await queued(plugin, serviceBody())
+    let { job } = await claimNext({ workerId: 'a' })
+    expect(job.overrides).toEqual({ clamavPartial: null })
+    // בלי אישור — קבלה חלקית נדחית ולא נשמרת
+    expect(await checkpoint({ reviewId: job.reviewId, token: job.leaseToken, stage: 'clamav', digest: job.manifestDigest, data: { status: 'partial' } }))
+      .toMatchObject({ ok: false, status: 409, code: 'clamav_partial_not_allowed' })
+    expect((await loadReview(job.reviewId)).receipts).toHaveLength(0)
+    // רק בזמן ריצה — עוד אין clamav_incomplete
+    expect(await adminAcceptPartialScan({ review: await loadReview(job.reviewId), admin, reason: 'קובץ ענק' })).toMatchObject({ ok: false, status: 409 })
+
+    await reportFailure({ reviewId: job.reviewId, token: job.leaseToken, failureClass: 'operator', code: 'clamav_incomplete', message: partialMessage })
+    let review = await loadReview(job.reviewId)
+    expect(review.status).toBe('needs_operator')
+    // הודעה ארוכה (רשימת קבצים) נשמרת מעבר ל-500 תווים
+    expect(review.lastError.message).toBe(partialMessage)
+
+    expect(await adminAcceptPartialScan({ review, admin, reason: '   ' })).toMatchObject({ ok: false, status: 400, code: 'reason_required' })
+    expect(await adminAcceptPartialScan({ review, admin, reason: 'א'.repeat(501) })).toMatchObject({ status: 400, code: 'reason_required' })
+    const grantedAt = new Date()
+    expect(await adminAcceptPartialScan({ review, admin, reason: ' קובץ נתונים ענק ', now: grantedAt })).toEqual({ ok: true, status: 'queued' })
+    review = await loadReview(job.reviewId)
+    expect(review).toMatchObject({ status: 'queued', attempts: 0, leaseExpiries: 0, lastError: null })
+    expect(review.operatorOverrides.clamavPartial).toMatchObject({ reason: 'קובץ נתונים ענק', grantedAt })
+    expect(String(review.operatorOverrides.clamavPartial.grantedBy)).toBe(String(admin._id))
+    // פעם שנייה — כבר לא במצב המתאים
+    expect(await adminAcceptPartialScan({ review: { ...review, status: 'needs_operator', lastError: { code: 'clamav_incomplete' } }, admin, reason: 'שוב' }))
+      .toMatchObject({ ok: false, status: 409 })
+
+    const view = (await getAdminView()).reviews.find((r) => r.id === job.reviewId)
+    expect(view.operatorOverrides).toEqual({ clamavPartial: { reason: 'קובץ נתונים ענק', grantedAt } })
+    expect(view.clamavPartialReceipt).toBe(false)
+
+    ;({ job } = await claimNext({ workerId: 'a' }))
+    expect(job.overrides).toEqual({ clamavPartial: { reason: 'קובץ נתונים ענק', grantedAt: grantedAt.toISOString() } })
+    for (const stage of REQUIRED_RECEIPTS.service) {
+      const data = stage === 'clamav' ? { status: 'partial', files: ['native0/big.bin'] } : { ok: true }
+      expect((await checkpoint({ reviewId: job.reviewId, token: job.leaseToken, stage, digest: job.manifestDigest, data })).ok, stage).toBe(true)
+    }
+    expect((await getAdminView()).reviews.find((r) => r.id === job.reviewId).clamavPartialReceipt).toBe(true)
+    const res = await submitResult({ reviewId: job.reviewId, token: job.leaseToken, digest: job.manifestDigest, decision: 1, report: 'תקין' })
+    expect(res).toEqual({ ok: true, status: 'approved', published: true })
+  })
+
+  it('תקלה תפעולית אחרת — אין המשך למרות סריקה חלקית', async () => {
+    const plugin = await makePlugin()
+    await queued(plugin, serviceBody())
+    const { job } = await claimNext({ workerId: 'a' })
+    await reportFailure({ reviewId: job.reviewId, token: job.leaseToken, failureClass: 'operator', code: 'gh_auth', message: 'x' })
+    const res = await adminAcceptPartialScan({ review: await loadReview(job.reviewId), admin, reason: 'סיבה' })
+    expect(res).toMatchObject({ ok: false, status: 409, code: 'invalid_state' })
+    expect(res.message).toMatch(/ClamAV/)
+    expect((await loadReview(job.reviewId)).operatorOverrides?.clamavPartial ?? null).toBeNull()
   })
 })

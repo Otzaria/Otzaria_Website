@@ -350,11 +350,37 @@ export async function adminStart({ plugin, review, admin, now = new Date() }) {
   return { ok: true, status: 'queued', exceptionUsed: !!exceptionUsed }
 }
 
+// חזרה לתור מטיפול תפעולי — משותף לניסיון חוזר ולהמשך למרות סריקה חלקית
+const requeueFromOperator = (now) => ({
+  status: 'queued', attempts: 0, unknownQuotaWaits: 0, leaseExpiries: 0, nextAttemptAt: now, lastError: null, lease: CLEARED_LEASE,
+})
+
 export async function adminRetry({ review, now = new Date() }) {
   if (review.status !== 'needs_operator') return fail(409, 'invalid_state', 'ניסיון חוזר אפשרי רק להגשה שממתינה לטיפול תפעולי')
   const res = await ServicePluginReview.updateOne(
     { _id: review._id, status: 'needs_operator' },
-    { $set: { status: 'queued', attempts: 0, unknownQuotaWaits: 0, leaseExpiries: 0, nextAttemptAt: now, lastError: null, lease: CLEARED_LEASE } },
+    { $set: requeueFromOperator(now) },
+  )
+  if (res.modifiedCount !== 1) return fail(409, 'invalid_state', 'ההגשה השתנתה בזמן הפעולה')
+  return { ok: true, status: 'queued' }
+}
+
+/**
+ * המשך הבדיקה למרות סריקת ClamAV חלקית (clamav_incomplete), עם סיבה. האישור נשמר בהגשה ומועבר למתווך
+ * (job.overrides.clamavPartial), שרשאי אז לשלוח קבלת clamav חלקית; שאר השלבים רצים כרגיל.
+ */
+export async function adminAcceptPartialScan({ review, admin, reason, now = new Date() }) {
+  if (review.status !== 'needs_operator' || review.lastError?.code !== 'clamav_incomplete') {
+    return fail(409, 'invalid_state', 'אפשר להמשיך למרות סריקה חלקית רק להגשה שנעצרה כי סריקת ClamAV לא הושלמה')
+  }
+  const text = typeof reason === 'string' ? reason.trim() : ''
+  if (!text || text.length > LIMITS.reasonChars) return fail(400, 'reason_required', `יש לכתוב סיבה להמשך למרות הסריקה החלקית (עד ${LIMITS.reasonChars} תווים)`)
+  const res = await ServicePluginReview.updateOne(
+    { _id: review._id, status: 'needs_operator', 'lastError.code': 'clamav_incomplete' },
+    { $set: {
+      ...requeueFromOperator(now),
+      'operatorOverrides.clamavPartial': { reason: text, grantedBy: admin?._id ?? admin?.id ?? null, grantedAt: now },
+    } },
   )
   if (res.modifiedCount !== 1) return fail(409, 'invalid_state', 'ההגשה השתנתה בזמן הפעולה')
   return { ok: true, status: 'queued' }
