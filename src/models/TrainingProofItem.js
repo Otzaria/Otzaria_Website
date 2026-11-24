@@ -42,6 +42,8 @@ const TrainingProofItemSchema = new mongoose.Schema(
     // נעילה קצרת-חיים בזמן שינוי סוג זרם בספר. מונעת משמירה/אישור מקבילים
     // לדרוס את הסנכרון הרב-מסמכי (MongoDB בייצור הוא standalone, ללא transactions).
     streamChange: { type: mongoose.Schema.Types.Mixed, default: null },
+    // watermark קבוע: משלים ישן אינו רשאי לנעול שוב עמוד שכבר עבר את הדור שלו.
+    streamGeneration: { type: Number, default: 0, min: 0 },
     vol: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     submittedAt: { type: Date, default: null },
     reviewedAt: { type: Date, default: null },
@@ -67,5 +69,9 @@ TrainingProofItemSchema.index({ vol: 1, section: 1, status: 1 });
 TrainingProofItemSchema.index({ packageId: 1, part: 1 });
 // ספירת עמודי ספר בגלאי בלי לסרוק את כל עמודי החלק
 TrainingProofItemSchema.index({ section: 1, book: 1 });
+// התאוששות מסמן יתום נוגעת רק בעמודים נעולים, בלי לסרוק ספר שלם בכל שמירה.
+TrainingProofItemSchema.index({ section: 1, book: 1, 'streamChange.generation': 1 }, {
+  partialFilterExpression: { 'streamChange.id': { $type: 'string' } },
+});
 
 export default mongoose.models.TrainingProofItem || mongoose.model('TrainingProofItem', TrainingProofItemSchema);

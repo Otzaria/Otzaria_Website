@@ -14,6 +14,8 @@ const TrainingProofBookSchema = new mongoose.Schema(
     // פעולת שינוי סוג זרם שנמצאת בתהליך. הפעולה ניתנת לחזרה ומושלמת בבקשה
     // הבאה אם התהליך נעצר באמצע; ראו framesDb.settleStreamChange.
     streamChange: { type: mongoose.Schema.Types.Mixed, default: null },
+    // דור מונוטוני של שינויי סוג, גם כששינוי בוטל. אינו חוזר לאפס אחרי cleanup.
+    streamGeneration: { type: Number, default: 0, min: 0 },
     // מזהה פעולה שכבר בוצעה בספר אך נותר לנקות את סמניה מהעמודים.
     streamChangeCleanup: { type: String, default: null },
     pagesTotal: { type: Number, default: 0 },
