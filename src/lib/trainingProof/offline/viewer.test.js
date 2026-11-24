@@ -95,7 +95,10 @@ describe('viewerMain — זיהוי טקסט', () => {
     // מריצים את המקור כמחרוזת, כמו בקובץ — בלי גישה לשום import
     mount('ocr', [ocr(1)])
     document.querySelector('#app').innerHTML = ''
-    new Function(src.replace(/^<script>|<\/script>[\s\S]*$/g, ''))()
+    const generated = new DOMParser().parseFromString(src, 'text/html')
+    const script = generated.querySelector('script')
+    expect(script).not.toBeNull()
+    new Function(script.textContent)()
     expect(cards()).toHaveLength(1)
   })
 
