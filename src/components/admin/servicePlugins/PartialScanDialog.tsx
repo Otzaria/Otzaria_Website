@@ -3,17 +3,18 @@
 import AdminReasonDialog from './AdminReasonDialog'
 
 /** המשך הבדיקה למרות סריקת ClamAV חלקית (clamav_incomplete) — חובה סיבה; שאר שלבי הבדיקה רצים כרגיל */
-export default function PartialScanDialog({ pluginName, details, busy, onSubmit, onClose }: {
+export default function PartialScanDialog({ pluginName, details, busy, onSubmit, onClose, allResults = false }: {
   pluginName: string
   /** הודעת התקלה מהבודק — רשימת הקבצים שלא נסרקו במלואם */
   details: string | null
   busy: boolean
   onSubmit: (reason: string) => void
   onClose: () => void
+  allResults?: boolean
 }) {
   return (
     <AdminReasonDialog
-      title="המשך למרות סריקה חלקית"
+      title={allResults ? 'המשך למרות תוצאת ClamAV' : 'המשך למרות סריקה חלקית'}
       subtitle={pluginName}
       fieldId="service-partial-scan-reason"
       confirmLabel="המשך בבדיקה"
@@ -24,7 +25,10 @@ export default function PartialScanDialog({ pluginName, details, busy, onSubmit,
     >
       <div role="note" className="rounded-(--radius-control) bg-warning-container p-3 text-body-sm text-on-warning-container">
         <p>
-          הקבצים שברשימה לא נסרקו במלואם ב-ClamAV (חריגה ממגבלות הסורק). ההחלטה נרשמת עם הסיבה ומוצגת בהגשה.
+          {allResults
+            ? 'האישור מתיר להמשיך בכל תוצאת ClamAV בהגשה זו, גם בזיהוי חתימה חשודה, שגיאת סורק או היעדר סריקה. הוא אינו הופך את התוצאה לנקייה. יש לעיין בפרטים ולתעד את הנימוק.'
+            : 'הקבצים שברשימה לא נסרקו במלואם ב-ClamAV (חריגה ממגבלות הסורק).'}
+          {' '}הסיבה נשמרת למנהלים בלבד; בדוח למפתח יצוינו תוצאת הסריקה והאישור ללא הסיבה.
         </p>
         <p className="mt-1.5">
           שאר הבדיקה תרוץ כרגיל: השוואה לקובץ ה-Release, אישור הבנייה, VirusTotal וסקירת Claude — וכל ממצא בהם עדיין יחסום.

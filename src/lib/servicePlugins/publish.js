@@ -18,8 +18,12 @@ export const CLEARED_LEASE = Object.freeze({ owner: null, tokenHash: null, expir
 const fail = (status, code, message, more = {}) => ({ ok: false, status, code, message, ...more })
 const sameId = (a, b) => a != null && b != null && String(a) === String(b)
 
-export async function releaseScanLock(reviewId) {
-  await ServiceScanControl.updateOne({ key: 'global', 'lock.reviewId': reviewId }, { $set: { lock: null } })
+// נעילות שנוצרו לפני הוספת fence נתמכות עד תפיסה/heartbeat ראשונים של הקוד החדש.
+export const scanLockFilter = (reviewId, fence) => ({ key: 'global', 'lock.reviewId': reviewId,
+  $or: [{ 'lock.fence': fence }, { 'lock.fence': null }] })
+
+export async function releaseScanLock(reviewId, fence) {
+  await ServiceScanControl.updateOne(scanLockFilter(reviewId, fence), { $set: { lock: null } })
 }
 
 export function platformsOf(review) {
@@ -98,7 +102,7 @@ async function markApproved(review, publishedAt) {
     { _id: review._id, status: { $in: ACTIVE_STATUSES } },
     { $set: { status: 'approved', publishedAt, activeKey: null, nextAttemptAt: null, lease: CLEARED_LEASE } },
   )
-  await releaseScanLock(review._id)
+  await releaseScanLock(review._id, review.fence)
   await syncPortReservations(review.pluginId)
   return res.modifiedCount === 1
 }

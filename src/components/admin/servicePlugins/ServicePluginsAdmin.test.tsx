@@ -173,3 +173,22 @@ describe('ServicePluginsAdmin', () => {
     expect(await screen.findByText(/תוספי השירות כבויים באתר/)).toBeInTheDocument()
   })
 })
+
+it('דחיית ClamAV: ממצא מוצג והחריגה דורשת סיבה עם הסבר מפורש על כל תוצאות הסורק', async () => {
+  adminBody = { control: { quotaPausedUntil: null, lock: null }, reviews: [review({
+    status: 'rejected', decision: 0, clamavIssue: { code: 'clamav_detected', message: 'plugin: Test.EICAR FOUND' },
+  })] }
+  renderAdmin()
+  expect(await screen.findByText('plugin: Test.EICAR FOUND')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: /המשך למרות תוצאת ClamAV/ }))
+  const dialog = await screen.findByRole('dialog', { name: 'המשך למרות תוצאת ClamAV' })
+  expect(dialog).toHaveTextContent('גם בזיהוי חתימה חשודה')
+  expect(dialog).toHaveTextContent('הסיבה נשמרת למנהלים בלבד')
+  const submit = within(dialog).getByRole('button', { name: /המשך בבדיקה/ })
+  expect(submit).toBeDisabled()
+  fireEvent.change(within(dialog).getByRole('textbox', { name: /סיבה/ }), { target: { value: ' נבדק באופן עצמאי ' } })
+  fireEvent.click(submit)
+  await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith('/api/service-plugins/admin/p1', expect.objectContaining({ method: 'POST' })))
+  const call = fetchSpy.mock.calls.find(([url]) => String(url) === '/api/service-plugins/admin/p1')!
+  expect(JSON.parse(String(call[1]!.body))).toEqual({ action: 'accept_clamav_result', jobId: 'r1', reason: 'נבדק באופן עצמאי' })
+})

@@ -340,13 +340,14 @@ test('דוח Claude ארוך: הקבלה מחזיקה hash, הדוח המלא נ
 
 const PARTIAL = { status: 'partial', incomplete: [{ key: 'native0', signature: 'Heuristics.Limits.Exceeded.MaxScanSize' }],
   override: { reason: 'מתקין גדול, נבדק ידנית', grantedAt: '2026-11-20T10:00:00.000Z' } }
-const NOTE_RE = /^שימו לב: סריקת ClamAV הייתה חלקית — .*המתקין setup\.zip \(Heuristics\.Limits\.Exceeded\.MaxScanSize\).*מתקין גדול, נבדק ידנית\.\n\n/
+const NOTE_RE = /^שימו לב: סריקת ClamAV הייתה חלקית — .*המתקין setup\.zip \(Heuristics\.Limits\.Exceeded\.MaxScanSize\).*אושר ידנית ע״י מנהל\. התוצאה אינה נחשבת נקייה\.\n\n/
 
 test('clamav חלקי: הערה בראש הדוח הסופי בלבד — לא בקבלת claude ולא בתוצאה המקומית; גם בשימוש חוזר', async (t) => {
   const { api, ctx } = await ctxFor(t, baseJob({ receipts: [receipt('hashes'), receipt('clamav', PARTIAL)] }))
   const { stages } = spyStages()
   const out = await runPipeline(ctx, { stages })
   assert.match(out.report, NOTE_RE)
+  assert.ok(!out.report.includes(PARTIAL.override.reason))
   assert.ok(out.report.endsWith('\n\nדוח'))
   assert.equal(api.calls.checkpoint.at(-1).data.report, 'דוח')
   const local = JSON.parse(await readFile(ctx.paths.claudeResult, 'utf8'))
@@ -369,6 +370,7 @@ test('clamav חלקי: דחייה דטרמיניסטית מאוחרת (וגם ש
   const out = await runPipeline(ctx, { stages })
   assert.equal(out.decision, 0)
   assert.match(out.report, NOTE_RE)
+  assert.ok(!out.report.includes(PARTIAL.override.reason))
   assert.match(out.report, /ההגשה נדחתה בשלב: השוואה לקובץ GitHub Release/)
   assert.deepEqual(api.calls.checkpoint.at(-1).data, { rejected: true, reason: 'קובץ שונה' })
 

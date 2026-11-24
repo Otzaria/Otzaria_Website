@@ -3,7 +3,7 @@ import Plugin from '../../models/Plugin.js'
 import User from '../../models/User.js'
 import ServicePluginReview from '../../models/ServicePluginReview.js'
 import ServiceScanControl from '../../models/ServiceScanControl.js'
-import { ACTIVE_STATUSES, TERMINAL_STATUSES, LIMITS, cooldownState } from './policy.js'
+import { ACTIVE_STATUSES, TERMINAL_STATUSES, LIMITS, cooldownState, canOverrideClamavFailure } from './policy.js'
 import { canRollback } from './publish.js'
 
 const sameId = (a, b) => a != null && b != null && String(a) === String(b)
@@ -80,7 +80,7 @@ export async function getPublicServiceInfo(pluginId) {
 async function partialReceiptIds(reviews) {
   const ids = reviews.filter((r) => r.operatorOverrides?.clamavPartial).map((r) => r._id)
   if (!ids.length) return new Set()
-  const found = await ServicePluginReview.find({ _id: { $in: ids }, receipts: { $elemMatch: { stage: 'clamav', 'data.status': 'partial' } } })
+  const found = await ServicePluginReview.find({ _id: { $in: ids }, receipts: { $elemMatch: { stage: 'clamav', 'data.status': { $in: ['partial', 'overridden'] } } } })
     .select('_id').lean()
   return new Set(found.map((r) => String(r._id)))
 }
@@ -88,7 +88,7 @@ async function partialReceiptIds(reviews) {
 /** אישור המנהל לסריקה חלקית, לתצוגת מנהלים בלבד (בלי מזהה המאשר) */
 const clamavPartialOf = (r) => {
   const o = r.operatorOverrides?.clamavPartial
-  return o ? { reason: o.reason ?? '', grantedAt: o.grantedAt ?? null } : null
+  return o ? { reason: o.reason ?? '', grantedAt: o.grantedAt ?? null, ...(o.scope === 'all_results' ? { scope: o.scope } : {}) } : null
 }
 
 function reviewSummary(r) {
@@ -122,7 +122,7 @@ export async function getManageView(plugin, { enabled, adminNotes = false }) {
   const s = plugin.serviceState || {}
   const reviews = await ServicePluginReview.find({ pluginId: plugin._id })
     .sort({ createdAt: -1 }).limit(20)
-    .select('-receipts -manifest -lease').lean()
+    .select('-receipts -manifest -lease -clamavOverrideHistory -reopeningClamav').lean()
   const partialIds = adminNotes ? await partialReceiptIds(reviews) : null
   return {
     plugin: {
@@ -145,7 +145,8 @@ export async function getManageView(plugin, { enabled, adminNotes = false }) {
       if (!adminNotes) return summary
       const override = clamavPartialOf(r)
       const scanned = partialIds.has(String(r._id))
-      return { ...summary, clamavPartial: override || scanned ? { reason: override?.reason ?? null, grantedAt: override?.grantedAt ?? null, scanned } : null }
+      return { ...summary, clamavPartial: override || scanned ? { reason: override?.reason ?? null, grantedAt: override?.grantedAt ?? null, scanned,
+        ...(override?.scope === 'all_results' ? { full: true } : {}) } : null }
     }),
   }
 }
@@ -154,21 +155,25 @@ export async function getAdminView() {
   const [control, active, terminal] = await Promise.all([
     ServiceScanControl.findOne({ key: 'global' }).lean(),
     ServicePluginReview.find({ status: { $in: ACTIVE_STATUSES } }).sort({ selectedAt: 1, createdAt: 1 })
-      .select('-receipts -manifest -lease -report').lean(),
+      .select('-receipts -manifest -lease -report -clamavOverrideHistory -reopeningClamav').lean(),
     ServicePluginReview.find({ status: { $in: TERMINAL_STATUSES } }).sort({ updatedAt: -1 }).limit(30)
-      .select('-receipts -manifest -lease -report').lean(),
+      .select('-receipts -manifest -lease -report -clamavOverrideHistory -reopeningClamav').lean(),
   ])
   const reviews = [...active, ...terminal]
   const pluginIds = [...new Set(reviews.map((r) => String(r.pluginId)))]
   const ownerIds = [...new Set(reviews.map((r) => String(r.ownerId)))]
   // הקבלות לא נטענות ברשימה (גדולות); בנפרד — לאיזו הגשה שאושרה לה סריקה חלקית כבר נשמרה קבלה חלקית
-  const [plugins, owners, partialIds] = await Promise.all([
+  const [plugins, owners, partialIds, rejectedScans] = await Promise.all([
     Plugin.find({ _id: { $in: pluginIds } }).select('name slug serviceState').lean(),
     User.find({ _id: { $in: ownerIds } }).select('name').lean(),
     partialReceiptIds(reviews),
+    ServicePluginReview.find({ _id: { $in: terminal.filter((r) => r.status === 'rejected').map((r) => r._id) },
+      receipts: { $elemMatch: { stage: 'clamav', 'data.rejected': true } } })
+      .select({ _id: 1, receipts: { $elemMatch: { stage: 'clamav', 'data.rejected': true } } }).lean(),
   ])
   const pluginById = new Map(plugins.map((p) => [String(p._id), p]))
   const ownerById = new Map(owners.map((u) => [String(u._id), u]))
+  const rejectedById = new Map(rejectedScans.map((r) => [String(r._id), r.receipts[0]]))
   const lock = control?.lock
   return {
     control: {
@@ -178,6 +183,10 @@ export async function getAdminView() {
     reviews: reviews.map((r) => {
       const plugin = pluginById.get(String(r.pluginId))
       const s = plugin?.serviceState || {}
+      const rejected = rejectedById.get(String(r._id))
+      const clamavIssue = canOverrideClamavFailure(r) ? { code: r.lastError.code, message: r.lastError.message }
+        : rejected && rejected.digest === r.manifestDigest && r.decision === 0 && !r.filesDeletedAt && !r.filesDeletingAt
+          ? { code: 'clamav_detected', message: rejected.data.scan?.diagnosticMessage ?? rejected.data.reason } : null
       return {
         id: String(r._id),
         pluginId: String(r.pluginId),
@@ -196,6 +205,7 @@ export async function getAdminView() {
         decision: r.decision ?? null,
         operatorOverrides: { clamavPartial: clamavPartialOf(r) },
         clamavPartialReceipt: partialIds.has(String(r._id)),
+        clamavIssue,
         cooldown: r.status === 'pending_admin' && sameId(s.cycleStart?.reviewId, r._id)
           ? { blocked: false, nextAllowedAt: null }
           : cooldownState(s.lastServiceCycleStartedAt),

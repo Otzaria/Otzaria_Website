@@ -31,15 +31,15 @@ function fitList(head, items, tail, maxChars) {
 }
 
 /**
- * הודעת הכשל התפעולי `clamav_incomplete` (נחתכת בשרת ל-LIMITS.reasonChars — לכן נבנית בתוך המגבלה).
+ * הודעת הכשל התפעולי `clamav_incomplete`, בתוך תקרת הודעת שגיאה (4,000 תווים; fallback למדיניות ישנה).
  * @param {{key:string|null, label:string, signature:string}[]} items הקבצים שלא נסרקו במלואם
  * @param {number} totalFiles מספר הקבצים שנסרקו בהפעלה
  */
-export function clamavIncompleteMessage(items, totalFiles, maxChars = LIMITS.reasonChars) {
+export function clamavIncompleteMessage(items, totalFiles, maxChars = LIMITS.errorMessageChars ?? LIMITS.reasonChars) {
   const others = totalFiles - new Set(items.map((i) => i.key ?? `?${i.label}`)).size
   const tail = [
     others > 0
-      ? `שאר הקבצים (${others}) נסרקו ולא נמצאה בהם חתימה מוכרת.`
+      ? `לשאר הקבצים (${others}) לא דווחה חריגת מגבלה; אין בכך לבדו אישור לסריקה מלאה.`
       : 'אף קובץ בהגשה לא נסרק במלואו.',
     'סריקה חלקית אינה "נקי": מנהל יכול לאשר המשך בדיקה למרות הסריקה החלקית.',
   ].join(' ')
@@ -58,7 +58,7 @@ export function clamavPartialOverride(job) {
   if (typeof grantedAt !== 'string' || grantedAt.length > 64) return null
   const t = Date.parse(grantedAt)
   if (!Number.isFinite(t)) return null
-  return { reason, grantedAt: new Date(t).toISOString() }
+  return { reason, grantedAt: new Date(t).toISOString(), ...(o.scope === 'all_results' ? { scope: 'all_results' } : {}) }
 }
 
 const oneLine = (s, max) => escapeForList(String(s ?? '').replace(/\s+/g, ' ').trim()).slice(0, max)
@@ -72,13 +72,18 @@ function labelForKey(job, key) {
 
 /** הערת "סריקה חלקית" לראש הדוח הסופי, או null כשקבלת clamav אינה `partial`. */
 export function partialScanNote(job, clamavData) {
-  if (clamavData?.status !== 'partial') return null
+  if (!['partial', 'overridden'].includes(clamavData?.status)) return null
+  if (clamavData.status === 'overridden') {
+    const labels = { detected: 'נמצאו חתימות חשודות', error: 'הסריקה נכשלה או לא הושלמה', partial: 'הסריקה הייתה חלקית' }
+    const detections = (clamavData.detections ?? []).slice(0, MAX_NOTE_ITEMS)
+      .map((i) => `${labelForKey(job, i?.key)} (${oneLine(i?.signature, 120)})`).join('; ')
+    return `שימו לב: ${labels[clamavData.outcome] ?? 'לא התקבלה תוצאת סריקה תקינה'} ב-ClamAV. ההמשך אושר במפורש בידי מנהל; התוצאה אינה נחשבת נקייה.${detections ? ` ממצאים: ${detections}.` : ''}`
+  }
   const incomplete = Array.isArray(clamavData.incomplete) ? clamavData.incomplete : []
   const items = incomplete.slice(0, MAX_NOTE_ITEMS).map((i) => `${labelForKey(job, i?.key)} (${oneLine(i?.signature, 120)})`)
   if (incomplete.length > MAX_NOTE_ITEMS) items.push(`ועוד ${incomplete.length - MAX_NOTE_ITEMS}`)
-  const reason = oneLine(clamavData.override?.reason, LIMITS.reasonChars)
   return `שימו לב: סריקת ClamAV הייתה חלקית — הקבצים הבאים לא נסרקו במלואם (חריגה ממגבלות הסורק): ${items.join('; ') || 'לא ידוע'}. `
-    + `המשך הבדיקה אושר ידנית ע״י מנהל${reason ? `: ${reason}` : ''}.`
+    + 'המשך הבדיקה אושר ידנית ע״י מנהל. התוצאה אינה נחשבת נקייה.'
 }
 
 /**

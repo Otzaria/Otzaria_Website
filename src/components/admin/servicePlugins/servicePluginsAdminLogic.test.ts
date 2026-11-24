@@ -97,3 +97,12 @@ describe('לשוניות תוספי השירות', () => {
     expect(defaultServiceTab(groupAdminReviews([]))).toBe('pending')
   })
 })
+
+it('הרשאה מלאה נחשפת לפי תוצאת שרת, גם בדחייה ובניסיון חוזר; legacy נשאר מוגבל', () => {
+  const clamavIssue = { code: 'clamav_detected', message: 'Test.EICAR' }
+  expect(adminActionsFor(review({ status: 'rejected', clamavIssue }))).toEqual(['accept_clamav_result'])
+  expect(adminActionsFor(review({ status: 'retry_wait', clamavIssue: { code: 'clamav_timeout', message: 'timeout' } })))
+    .toEqual(['accept_clamav_result', 'cancel'])
+  expect(partialScanNote(review({ operatorOverrides: { clamavPartial: { reason: 'בדיקה', grantedAt: null, scope: 'all_results' } } })))
+    .toMatchObject({ full: true, reason: 'בדיקה' })
+})

@@ -17,7 +17,8 @@ const ACTION_LABELS: Record<AdminAction, string> = {
   retry: 'נסה שוב',
   cancel: 'בטל הגשה',
   rollback: 'חזור לגרסה הקודמת',
-  accept_partial_scan: 'המשך למרות סריקה חלקית'
+  accept_partial_scan: 'המשך למרות סריקה חלקית',
+  accept_clamav_result: 'המשך למרות תוצאת ClamAV'
 }
 
 const ACTION_ICONS: Record<AdminAction, string> = {
@@ -26,10 +27,11 @@ const ACTION_ICONS: Record<AdminAction, string> = {
   retry: 'restart_alt',
   cancel: 'cancel',
   rollback: 'undo',
-  accept_partial_scan: 'rule'
+  accept_partial_scan: 'rule',
+  accept_clamav_result: 'rule'
 }
 
-const ACTION_VARIANTS = { start: 'filled', emergency: 'tonal', retry: 'tonal', cancel: 'text', rollback: 'outlined', accept_partial_scan: 'outlined' } as const
+const ACTION_VARIANTS = { start: 'filled', emergency: 'tonal', retry: 'tonal', cancel: 'text', rollback: 'outlined', accept_partial_scan: 'outlined', accept_clamav_result: 'outlined' } as const
 
 const NOT_SUBMITTED = ['draft', 'sealing']
 
@@ -104,7 +106,12 @@ export default function ServiceReviewAdminCard({ review, actions, busyAction, on
         </p>
       )}
 
-      {operatorError && (isClamavIncomplete(review) ? (
+      {review.clamavIssue ? (
+        <div role="note" className="rounded-(--radius-control) bg-warning-container p-3 text-body-sm text-on-warning-container">
+          <p>תוצאת ClamAV דורשת החלטה. אפשר לאשר חריגה מנומקת גם כשהתגלה ממצא או כשהסריקה נכשלה; שאר שלבי הבדיקה ימשיכו כרגיל.</p>
+          <p className="mt-2 whitespace-pre-line [overflow-wrap:anywhere]" dir="auto">{review.clamavIssue.message}</p>
+        </div>
+      ) : operatorError && (isClamavIncomplete(review) ? (
         <div role="note" className="rounded-(--radius-control) bg-warning-container p-3 text-body-sm text-on-warning-container">
           <p>
             סריקת ClamAV לא הושלמה: בחלק מהקבצים הסורק חרג מהמגבלות שלו, וסריקה חלקית אינה &quot;נקי&quot;. &quot;נסה שוב&quot; ייכשל

@@ -163,7 +163,8 @@ export async function runPipeline(ctx, { stages = DEFAULT_STAGES } = {}) {
     } catch (err) {
       if (err instanceof Rejection) {
         await ctx.stageLog(stage, 'rejected', { data: err.data })
-        await checkpoint(stage, { rejected: true, reason: String(err.report).slice(0, REJECTION_REASON_CHARS) })
+        await checkpoint(stage, { rejected: true, reason: String(err.report).slice(0, REJECTION_REASON_CHARS),
+          ...(stage === 'clamav' && Object.keys(err.data ?? {}).length ? { scan: err.data } : {}) })
         return { decision: 0, report: finalReport(rejectionReport(job, err)) }
       }
       if (err instanceof JobFailure) {

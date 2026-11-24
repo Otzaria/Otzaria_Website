@@ -158,6 +158,11 @@ async function statFile(file) {
   }
 }
 
+/** @returns {Promise<number|null>} */
+export async function reviewAssetSize(reviewId, key, env = process.env) {
+  return (await statFile(reviewFilePath(reviewId, key, env)))?.size ?? null
+}
+
 /** @returns {Promise<{stream:ReadableStream, size:number}|null>} */
 export async function openReviewAssetStream(reviewId, key, env = process.env) {
   const file = reviewFilePath(reviewId, key, env)

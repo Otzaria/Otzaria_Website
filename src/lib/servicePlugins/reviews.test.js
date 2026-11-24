@@ -24,11 +24,13 @@ import ServicePluginReview from '@/models/ServicePluginReview'
 import ServiceScanControl from '@/models/ServiceScanControl'
 import { startMongo } from '@/lib/corrections/testing/mongo.js'
 import {
-  createDraft, recordAssetUpload, sealDraft, cancelReview, adminStart, adminRetry, adminEmergency, adminAcceptPartialScan, rollback,
+  createDraft, recordAssetUpload, sealDraft, cancelReview, adminStart, adminRetry, adminEmergency, adminAcceptPartialScan, adminAcceptClamavResult, rollback,
   claimNext, heartbeat, checkpoint, reportFailure, submitResult, maintenanceKeepList, openWorkerAsset, finalizeIfPublished,
 } from './reviews.js'
-import { getAdminView } from './views.js'
+import { getAdminView, getManageView } from './views.js'
+import { withPartialScanNote } from '../../../workers/service-plugin-broker/src/clamavPartial.js'
 import { runServicePluginCleanup } from './cleanup.js'
+import { releaseClamavReopen } from './clamavOverride.js'
 import { writeReviewAssetStream } from './storage.js'
 import { REQUIRED_RECEIPTS, submissionDigest, LEASE_SECONDS } from './policy.js'
 
@@ -803,5 +805,424 @@ describe('המשך למרות סריקת ClamAV חלקית', () => {
     expect(res).toMatchObject({ ok: false, status: 409, code: 'invalid_state' })
     expect(res.message).toMatch(/ClamAV/)
     expect((await loadReview(job.reviewId)).operatorOverrides?.clamavPartial ?? null).toBeNull()
+  })
+})
+
+describe('חריגת מנהל מפורשת לכל תוצאת ClamAV', () => {
+  const reason = 'הערת מנהל פרטית בלבד'
+  const accept = async (plugin, review) => adminAcceptClamavResult({ plugin: await loadPlugin(plugin._id), review: await loadReview(review._id), admin, reason })
+  async function rejected(plugin) {
+    const review = await queued(plugin, serviceBody())
+    const { job } = await claimNext({ workerId: 'scan' })
+    await checkpoint({ reviewId: job.reviewId, token: job.leaseToken, stage: 'clamav', digest: job.manifestDigest,
+      data: { rejected: true, reason: 'Win.Test.EICAR', scan: { detections: [{ key: 'plugin', signature: 'Win.Test.EICAR' }] } } })
+    expect((await submitResult({ reviewId: job.reviewId, token: job.leaseToken, digest: job.manifestDigest, decision: 0, report: 'דוח דחייה מקורי' })).status).toBe('rejected')
+    return loadReview(review._id)
+  }
+
+  it('כל כשל סורק ניתן לחריגה חדשה; ללא הרשאה או ב-legacy אין קבלת overridden; הסיבה נשארת פרטית אחרי result', async () => {
+    const plugin = await makePlugin()
+    const review = await queued(plugin, serviceBody())
+    let { job } = await claimNext({ workerId: 'scan' })
+    const receipt = { status: 'overridden', outcome: 'error', detections: [] }
+    const checkpointScan = () => checkpoint({ reviewId: job.reviewId, token: job.leaseToken, stage: 'clamav', digest: job.manifestDigest, data: receipt })
+    expect(await checkpointScan()).toMatchObject({ code: 'clamav_override_not_allowed' })
+    await ServicePluginReview.updateOne({ _id: review._id }, { $set: {
+      'operatorOverrides.clamavPartial': { reason: 'אישור limits ישן', grantedAt: new Date(), grantedBy: admin._id },
+    } })
+    expect(await checkpointScan()).toMatchObject({ code: 'clamav_override_not_allowed' })
+    for (const code of ['clamav_incomplete', 'clamav_error', 'clamav_output_unparsed', 'clamav_unavailable', 'clamav_timeout']) {
+      await reportFailure({ reviewId: job.reviewId, token: job.leaseToken, failureClass: code === 'clamav_timeout' ? 'transient' : 'operator', code, message: `פרטי ${code}` })
+      expect((await getAdminView()).reviews.find((r) => r.id === job.reviewId).clamavIssue).toMatchObject({ code })
+      expect((await accept(plugin, review)).ok).toBe(true)
+      ;({ job } = await claimNext({ workerId: 'scan' }))
+      expect(job.overrides.clamavPartial).toMatchObject({ reason, scope: 'all_results' })
+    }
+    expect((await loadReview(review._id)).clamavOverrideHistory).toHaveLength(5)
+    await allReceipts(job)
+    expect((await checkpointScan()).ok).toBe(true)
+    const report = withPartialScanNote(job, { ...receipt, override: { reason } }, 'דוח ציבורי')
+    expect((await submitResult({ reviewId: job.reviewId, token: job.leaseToken, digest: job.manifestDigest, decision: 1, report })).status).toBe('approved')
+    const ownerView = await getManageView(await loadPlugin(plugin._id), { enabled: true })
+    expect(JSON.stringify(ownerView)).not.toContain(reason)
+    expect(ownerView.reviews[0].report).toContain('אינה נחשבת נקייה')
+    expect(ownerView.reviews[0]).not.toHaveProperty('clamavOverrideHistory')
+    const adminView = await getManageView(await loadPlugin(plugin._id), { enabled: true, adminNotes: true })
+    expect(adminView.reviews[0].clamavPartial).toMatchObject({ reason, full: true, scanned: true })
+  })
+
+  it('פותח מחדש דחיית ClamAV, משמר ראיות, אוכף גרסאות ונותן lease חדש בלבד', async () => {
+    const plugin = await makePlugin()
+    const review = await rejected(plugin)
+    expect((await getAdminView()).reviews.find((r) => r.id === String(review._id)).clamavIssue.code).toBe('clamav_detected')
+    expect(await accept(plugin, review)).toMatchObject({ ok: true, status: 'queued' })
+    const reopened = await loadReview(review._id)
+    expect(reopened).toMatchObject({ decision: null, report: null, decidedAt: null, reopeningClamav: null, activeKey: String(plugin._id) })
+    expect(reopened.receipts).toEqual([])
+    expect(reopened.clamavOverrideHistory[0].previous).toMatchObject({ report: 'דוח דחייה מקורי', clamavReceipt: { data: { rejected: true, reason: 'Win.Test.EICAR' } } })
+    const { job } = await claimNext({ workerId: 'scan-again' })
+    expect(job.fence).toBeGreaterThan(review.fence)
+    await allReceipts(job)
+    await checkpoint({ reviewId: job.reviewId, token: job.leaseToken, stage: 'clamav', digest: job.manifestDigest,
+      data: { status: 'overridden', outcome: 'detected', detections: [{ key: 'plugin', signature: 'Win.Test.EICAR' }] } })
+    expect((await submitResult({ reviewId: job.reviewId, token: job.leaseToken, digest: job.manifestDigest, decision: 0,
+      report: withPartialScanNote(job, { status: 'overridden', outcome: 'detected', override: { reason } }, 'דחייה בשלב אחר') })).status).toBe('rejected')
+    expect(JSON.stringify(mocks.systemMessage.mock.calls)).not.toContain(reason)
+    // דחייה מאוחרת אינה הופכת שוב לדחיית ClamAV שניתן לפתוח.
+    expect(await accept(plugin, review)).toMatchObject({ code: 'invalid_state' })
+  })
+
+  it('דוחה פתיחה כשהגרסה כבר פורסמה, הקבצים חסרים, או יש הגשה פעילה אחרת', async () => {
+    const plugin = await makePlugin()
+    const review = await rejected(plugin)
+    await Plugin.updateOne({ _id: plugin._id }, { $addToSet: { 'serviceState.publishedPluginVersions': review.pluginVersion } })
+    expect(await accept(plugin, review)).toMatchObject({ code: 'version_conflict' })
+    await Plugin.updateOne({ _id: plugin._id }, { $set: { 'serviceState.publishedPluginVersions': [] } })
+    const created = await createDraft({ plugin: await loadPlugin(plugin._id), user: owner, body: serviceBody({ pluginVersion: '2.0.0', serviceVersion: '2.0.0' }) })
+    expect(created.ok).toBe(true)
+    expect(await accept(plugin, review)).toMatchObject({ code: 'active_review_exists' })
+    await cancelReview({ review: await loadReview(created.review._id), asAdmin: true })
+    await rm(path.join(storageDir, String(review._id), 'plugin'))
+    expect(await accept(plugin, review)).toMatchObject({ code: 'files_unavailable' })
+    expect((await loadPlugin(plugin._id)).serviceState.activeReviewId).toBeNull()
+    expect((await loadReview(review._id))).toMatchObject({ status: 'rejected', activeKey: null, reopeningClamav: null })
+  })
+
+  it('כשל כתיבת התור מפוצה בלי orphan lock; ניסיון נוסף מצליח', async () => {
+    const plugin = await makePlugin()
+    const review = await rejected(plugin)
+    const real = ServicePluginReview.updateOne.bind(ServicePluginReview)
+    const spy = vi.spyOn(ServicePluginReview, 'updateOne').mockImplementation((filter, update, ...args) => {
+      if (update.$set?.status === 'queued' && update.$push?.clamavOverrideHistory) throw new Error('queue write failed')
+      return real(filter, update, ...args)
+    })
+    try { await expect(accept(plugin, review)).rejects.toThrow('queue write failed') } finally { spy.mockRestore() }
+    expect((await loadPlugin(plugin._id)).serviceState.activeReviewId).toBeNull()
+    expect(await loadReview(review._id)).toMatchObject({ status: 'rejected', activeKey: null, reopeningClamav: null })
+    expect((await accept(plugin, review)).ok).toBe(true)
+  })
+
+  it('ניקוי שמבטל כוונה לפני תפיסת Plugin אינו משאיר נעילה מהבקשה הישנה', async () => {
+    const plugin = await makePlugin()
+    const review = await rejected(plugin)
+    const real = Plugin.updateOne.bind(Plugin)
+    let injected = false
+    const spy = vi.spyOn(Plugin, 'updateOne').mockImplementation(async (filter, update, ...args) => {
+      if (!injected && update.$set?.['serviceState.activeReviewId'] && update.$set?.['serviceState.activeFence']) {
+        injected = true
+        await runServicePluginCleanup(new Date(Date.now() + 20 * 60_000))
+      }
+      return real(filter, update, ...args)
+    })
+    try { expect(await accept(plugin, review)).toMatchObject({ ok: false, code: 'invalid_state' }) } finally { spy.mockRestore() }
+    expect(injected).toBe(true)
+    expect((await loadPlugin(plugin._id)).serviceState.activeReviewId).toBeNull()
+    expect(await loadReview(review._id)).toMatchObject({ status: 'rejected', activeKey: null, reopeningClamav: null })
+  })
+
+  it('ניקוי כוונה ישנה אינו משחרר נעילה בזמן ש-claimNext מקדם את fence ההגשה לפני Plugin', async () => {
+    const plugin = await makePlugin()
+    const review = await rejected(plugin)
+    const realReviewUpdate = ServicePluginReview.updateOne.bind(ServicePluginReview)
+    let intent
+    const reserveSpy = vi.spyOn(ServicePluginReview, 'updateOne').mockImplementation(async (filter, update, ...args) => {
+      if (update.$set?.status === 'queued' && update.$push?.clamavOverrideHistory) intent = await loadReview(review._id)
+      return realReviewUpdate(filter, update, ...args)
+    })
+    try { expect((await accept(plugin, review)).ok).toBe(true) } finally { reserveSpy.mockRestore() }
+    expect(intent.status).toBe('rejected')
+    const realPluginUpdate = Plugin.updateOne.bind(Plugin)
+    let injected = false
+    const claimSpy = vi.spyOn(Plugin, 'updateOne').mockImplementation(async (filter, update, ...args) => {
+      if (!injected && update.$set?.['serviceState.activeFence'] === intent.fence + 1) {
+        injected = true
+        expect(await loadReview(review._id)).toMatchObject({ status: 'running', fence: intent.fence + 1 })
+        await releaseClamavReopen(intent, intent.reopeningClamav.token)
+        expect(String((await loadPlugin(plugin._id)).serviceState.activeReviewId)).toBe(String(review._id))
+      }
+      return realPluginUpdate(filter, update, ...args)
+    })
+    let job
+    try { ({ job } = await claimNext({ workerId: 'again' })) } finally { claimSpy.mockRestore() }
+    expect(injected).toBe(true)
+    const state = (await loadPlugin(plugin._id)).serviceState
+    expect(String(state.activeReviewId)).toBe(String(review._id))
+    expect(state.activeFence).toBe(job.fence)
+    expect((await heartbeat({ reviewId: job.reviewId, token: job.leaseToken })).ok).toBe(true)
+  })
+
+  it('ניקוי orphan ישן אינו משחרר נעילה חדשה של אותה הגשה שנפתחה מחדש', async () => {
+    const plugin = await makePlugin()
+    const review = await rejected(plugin)
+    await ServicePluginReview.updateOne({ _id: review._id }, { $set: { updatedAt: new Date(Date.now() - 20 * 60_000) } }, { timestamps: false })
+    await Plugin.updateOne({ _id: plugin._id }, { $set: { 'serviceState.activeReviewId': review._id,
+      'serviceState.activeFence': review.fence, updatedAt: new Date(Date.now() - 20 * 60_000) } }, { timestamps: false })
+    const real = Plugin.updateOne.bind(Plugin)
+    let injected = false
+    const spy = vi.spyOn(Plugin, 'updateOne').mockImplementation(async (filter, update, ...args) => {
+      if (!injected && update.$set?.['serviceState.activeReviewId'] === null && String(filter['serviceState.activeReviewId']) === String(review._id)) {
+        injected = true
+        // ניקוי אחר מסיים, ואז המנהל פותח מחדש לפני שהניקוי הראשון משחרר את ה-snapshot שלו.
+        await real({ _id: plugin._id }, { $set: { 'serviceState.activeReviewId': null } })
+        expect((await accept(plugin, review)).ok).toBe(true)
+      }
+      return real(filter, update, ...args)
+    })
+    try { await runServicePluginCleanup() } finally { spy.mockRestore() }
+    expect(injected).toBe(true)
+    expect((await loadReview(review._id)).status).toBe('queued')
+    const state = (await loadPlugin(plugin._id)).serviceState
+    expect(String(state.activeReviewId)).toBe(String(review._id))
+    expect(state.activeFence).toBeGreaterThan(review.fence)
+  })
+
+  it('שתי פתיחות ויצירת טיוטה במקביל אינן יוצרות שתי הגשות פעילות; ביטול תור משחרר', async () => {
+    const plugin = await makePlugin()
+    const review = await rejected(plugin)
+    const snapshot = await loadPlugin(plugin._id)
+    const results = await Promise.all([
+      adminAcceptClamavResult({ plugin: snapshot, review, admin, reason }),
+      adminAcceptClamavResult({ plugin: snapshot, review, admin, reason }),
+      createDraft({ plugin: snapshot, user: owner, body: serviceBody({ pluginVersion: '2.0.0', serviceVersion: '2.0.0' }) }),
+    ])
+    expect(results.filter((r) => r.ok).length).toBeLessThanOrEqual(1)
+    const active = await ServicePluginReview.find({ pluginId: plugin._id, activeKey: String(plugin._id) }).lean()
+    expect(active.length).toBeLessThanOrEqual(1)
+    if (active.length) {
+      expect(String((await loadPlugin(plugin._id)).serviceState.activeReviewId)).toBe(String(active[0]._id))
+      await cancelReview({ review: active[0], asAdmin: true })
+    }
+    expect((await loadPlugin(plugin._id)).serviceState.activeReviewId).toBeNull()
+    expect(await ServicePluginReview.countDocuments({ pluginId: plugin._id, activeKey: String(plugin._id) })).toBe(0)
+  })
+
+  it('רשימת ניקוי ישנה אינה מוחקת קבצים שנפתחו מחדש ונדחו שוב זה עתה', async () => {
+    const plugin = await makePlugin()
+    const review = await rejected(plugin)
+    const now = new Date()
+    await ServicePluginReview.updateOne({ _id: review._id }, { $set: { decidedAt: new Date(now - 8 * DAY) } })
+    const real = ServicePluginReview.updateOne.bind(ServicePluginReview)
+    let injected = false
+    const spy = vi.spyOn(ServicePluginReview, 'updateOne').mockImplementation(async (filter, update, ...args) => {
+      if (!injected && update.$set?.filesDeletingAt) {
+        injected = true
+        expect((await accept(plugin, review)).ok).toBe(true)
+        const { job } = await claimNext({ workerId: 'again' })
+        await submitResult({ reviewId: job.reviewId, token: job.leaseToken, digest: job.manifestDigest, decision: 0, report: 'דחייה חדשה' })
+      }
+      return real(filter, update, ...args)
+    })
+    try { expect((await runServicePluginCleanup(now)).deletedReviewFiles).toBe(0) } finally { spy.mockRestore() }
+    expect(injected).toBe(true)
+    expect(await readdir(path.join(storageDir, String(review._id)))).toContain('plugin')
+    expect((await loadReview(review._id)).filesDeletedAt).toBeNull()
+  })
+})
+
+describe('חריגת ClamAV: גבולות הרשאה ותוצאה שמורה', () => {
+  it('החלטת מנהל אינה עוקפת ביטול/שגיאה בשלב אחר; סיבה חובה', async () => {
+    const plugin = await makePlugin()
+    const review = await queued(plugin, serviceBody())
+    const { job } = await claimNext({ workerId: 'scan' })
+    const accept = async (reason = 'בדיקה') => adminAcceptClamavResult({ plugin: await loadPlugin(plugin._id), review: await loadReview(review._id), admin, reason })
+    expect(await accept()).toMatchObject({ code: 'invalid_state' })
+    await reportFailure({ reviewId: job.reviewId, token: job.leaseToken, failureClass: 'operator', code: 'clamav_aborted' })
+    expect(await accept()).toMatchObject({ code: 'invalid_state' })
+    await ServicePluginReview.updateOne({ _id: review._id }, { $set: { 'lastError.code': 'claude_error' } })
+    expect(await accept()).toMatchObject({ code: 'invalid_state' })
+    await ServicePluginReview.updateOne({ _id: review._id }, { $set: { 'lastError.code': 'clamav_error' } })
+    expect(await accept('   ')).toMatchObject({ status: 400, code: 'reason_required' })
+    expect(await accept('x'.repeat(501))).toMatchObject({ status: 400, code: 'reason_required' })
+    await cancelReview({ review: await loadReview(review._id), asAdmin: true })
+    expect(await accept()).toMatchObject({ code: 'invalid_state' })
+  })
+})
+
+describe('חריגת ClamAV: הצלחת כתיבה ואובדן התשובה', () => {
+  async function rejectedJob() {
+    const plugin = await makePlugin()
+    const review = await queued(plugin, serviceBody())
+    const { job } = await claimNext({ workerId: 'scan' })
+    await checkpoint({ reviewId: job.reviewId, token: job.leaseToken, stage: 'clamav', digest: job.manifestDigest,
+      data: { rejected: true, reason: 'Test.EICAR' } })
+    await submitResult({ reviewId: job.reviewId, token: job.leaseToken, digest: job.manifestDigest, decision: 0, report: 'דחייה' })
+    return { plugin, review: await loadReview(review._id) }
+  }
+
+  it('תור שכבר נכתב נשאר תקף כשהתשובה אבדה; ביטול מקביל אחרי הכתיבה אינו מתבטל', async () => {
+    for (const cancel of [false, true]) {
+      const { plugin, review } = await rejectedJob()
+      const real = ServicePluginReview.updateOne.bind(ServicePluginReview)
+      const spy = vi.spyOn(ServicePluginReview, 'updateOne').mockImplementation(async (filter, update, ...args) => {
+        const result = await real(filter, update, ...args)
+        if (update.$set?.status === 'queued' && update.$push?.clamavOverrideHistory) {
+          if (cancel) await cancelReview({ review: await loadReview(review._id), asAdmin: true })
+          throw new Error('response lost after write')
+        }
+        return result
+      })
+      try {
+        expect(await adminAcceptClamavResult({ plugin: await loadPlugin(plugin._id), review, admin, reason: 'בדיקה' }))
+          .toMatchObject({ ok: true })
+      } finally { spy.mockRestore() }
+      const current = await loadReview(review._id)
+      expect(current.status).toBe(cancel ? 'cancelled' : 'queued')
+      expect(current.reopeningClamav).toBeNull()
+      const state = (await loadPlugin(plugin._id)).serviceState
+      expect(state.activeReviewId === null).toBe(cancel)
+      if (!cancel) await cancelReview({ review: current, asAdmin: true })
+    }
+  })
+})
+
+describe('פתיחה מחדש: פעולות מאוחרות אינן חוצות מחזור או fence', () => {
+  const reason = 'אישור לאחר בחינת ממצאי ClamAV'
+  async function runningClamav() {
+    const plugin = await makePlugin()
+    const review = await queued(plugin, serviceBody())
+    const { job } = await claimNext({ workerId: 'same-worker' })
+    await checkpoint({ reviewId: job.reviewId, token: job.leaseToken, stage: 'clamav', digest: job.manifestDigest,
+      data: { rejected: true, reason: 'Test.EICAR' } })
+    return { plugin, review: await loadReview(review._id), job }
+  }
+  const reject = (job) => submitResult({ reviewId: job.reviewId, token: job.leaseToken, digest: job.manifestDigest, decision: 0, report: 'ממצא ClamAV' })
+  const reopen = async (plugin, review) => adminAcceptClamavResult({ plugin: await loadPlugin(plugin._id), review: await loadReview(review._id), admin, reason })
+
+  it('סיום דחייה שנתקע אינו משחרר את נעילת Plugin או הנעילה הגלובלית של הריצה שנפתחה מחדש', async () => {
+    const { plugin, review, job } = await runningClamav()
+    const real = Plugin.updateOne.bind(Plugin)
+    let injected = false
+    let newJob
+    const spy = vi.spyOn(Plugin, 'updateOne').mockImplementation(async (filter, update, ...args) => {
+      if (!injected && update.$set?.['serviceState.activeReviewId'] === null) {
+        injected = true
+        const later = new Date(Date.now() + 20 * 60_000)
+        await runServicePluginCleanup(later)
+        expect((await reopen(plugin, review)).ok).toBe(true)
+        ;({ job: newJob } = await claimNext({ workerId: 'same-worker', now: later }))
+      }
+      return real(filter, update, ...args)
+    })
+    try { expect((await reject(job)).status).toBe('rejected') } finally { spy.mockRestore() }
+    expect(injected).toBe(true)
+    expect((await loadReview(review._id))).toMatchObject({ status: 'running', fence: newJob.fence, emailSentAt: null })
+    const state = (await loadPlugin(plugin._id)).serviceState
+    expect(String(state.activeReviewId)).toBe(job.reviewId)
+    expect(state.activeFence).toBe(newJob.fence)
+    const lock = (await ServiceScanControl.findOne({ key: 'global' }).lean()).lock
+    expect(String(lock.reviewId)).toBe(job.reviewId)
+    expect(lock.fence).toBe(newJob.fence)
+    expect(mocks.systemMessage).not.toHaveBeenCalled()
+  })
+
+  it('הודעת דחייה שכבר נשלחה אינה מסמנת emailSentAt על מחזור חדש', async () => {
+    const { plugin, review, job } = await runningClamav()
+    mocks.systemMessage.mockImplementationOnce(async () => {
+      expect((await reopen(plugin, review)).ok).toBe(true)
+      return {}
+    })
+    expect((await reject(job)).status).toBe('rejected')
+    expect(await loadReview(review._id)).toMatchObject({ status: 'queued', emailSentAt: null, report: null, reopenGeneration: 1 })
+  })
+
+  it('heartbeat ישן לא מחליף נעילה חדשה של אותו מזהה ואותו worker; נעילה ותיקה ללא fence נתמכת', async () => {
+    const { plugin, review, job } = await runningClamav()
+    await ServiceScanControl.updateOne({ key: 'global' }, { $unset: { 'lock.fence': 1 } })
+    expect((await heartbeat({ reviewId: job.reviewId, token: job.leaseToken })).ok).toBe(true)
+    expect((await ServiceScanControl.findOne({ key: 'global' }).lean()).lock.fence).toBe(job.fence)
+    const real = ServiceScanControl.updateOne.bind(ServiceScanControl)
+    let injected = false
+    let newJob
+    const spy = vi.spyOn(ServiceScanControl, 'updateOne').mockImplementation(async (filter, update, ...args) => {
+      if (!injected && update.$set?.lock?.fence === job.fence) {
+        injected = true
+        await reject(job)
+        expect((await reopen(plugin, review)).ok).toBe(true)
+        ;({ job: newJob } = await claimNext({ workerId: 'same-worker' }))
+      }
+      return real(filter, update, ...args)
+    })
+    try { expect(await heartbeat({ reviewId: job.reviewId, token: job.leaseToken })).toMatchObject({ code: 'lease_lost' }) } finally { spy.mockRestore() }
+    expect(injected).toBe(true)
+    expect((await ServiceScanControl.findOne({ key: 'global' }).lean()).lock.fence).toBe(newJob.fence)
+    expect((await heartbeat({ reviewId: newJob.reviewId, token: newJob.leaseToken })).ok).toBe(true)
+  })
+
+  it('ביטול מאותו מחזור חוצה claim בין review ל-Plugin בלי להשאיר הגשה פעילה ללא נעילה; legacy generation חסר נתמך', async () => {
+    const plugin = await makePlugin()
+    const review = await queued(plugin, serviceBody())
+    await ServicePluginReview.updateOne({ _id: review._id }, { $unset: { reopenGeneration: 1 } })
+    await Plugin.updateOne({ _id: plugin._id }, { $set: { 'serviceState.activeFence': 42 } })
+    const snapshot = await loadReview(review._id)
+    const real = Plugin.updateOne.bind(Plugin)
+    let cancelled
+    const spy = vi.spyOn(Plugin, 'updateOne').mockImplementation(async (filter, update, ...args) => {
+      if (update.$set?.['serviceState.activeFence'] === 1) cancelled = await cancelReview({ review: snapshot, asAdmin: true })
+      return real(filter, update, ...args)
+    })
+    try { await claimNext({ workerId: 'claiming' }) } finally { spy.mockRestore() }
+    expect(cancelled).toMatchObject({ ok: true, status: 'cancelled' })
+    expect(await loadReview(review._id)).toMatchObject({ status: 'cancelled', activeKey: null })
+    expect((await loadPlugin(plugin._id)).serviceState.activeReviewId).toBeNull()
+  })
+
+  it('ביטול ישן אינו פוגע בפתיחה מחדש לפני או אחרי תפיסת snapshot הנעילה', async () => {
+    for (const phase of ['before', 'after']) {
+      const { plugin, review, job } = await runningClamav()
+      const real = Plugin.updateOne.bind(Plugin)
+      let injected = false
+      let spy
+      if (phase === 'before') {
+        await reject(job)
+        expect((await reopen(plugin, review)).ok).toBe(true)
+      } else {
+        spy = vi.spyOn(Plugin, 'updateOne').mockImplementation(async (filter, update, ...args) => {
+          if (!injected && update.$inc?.['serviceState.activeFence'] === 1 && update.$set?.['serviceState.activeReviewId'] === null) {
+            injected = true
+            await reject(job)
+            expect((await reopen(plugin, review)).ok).toBe(true)
+          }
+          return real(filter, update, ...args)
+        })
+      }
+      try { expect(await cancelReview({ review, asAdmin: true })).toMatchObject({ ok: false, status: 409 }) } finally { spy?.mockRestore() }
+      expect(await loadReview(review._id)).toMatchObject({ status: 'queued', reopenGeneration: 1 })
+      expect(String((await loadPlugin(plugin._id)).serviceState.activeReviewId)).toBe(String(review._id))
+      expect((await cancelReview({ review: await loadReview(review._id), asAdmin: true })).ok).toBe(true)
+    }
+  })
+
+  it('ביטול שהתעכב אחרי שחרור Plugin אינו מבטל מחזור חדש שנפתח לפני כתיבת cancelled', async () => {
+    const { plugin, review, job } = await runningClamav()
+    const real = ServicePluginReview.findOneAndUpdate.bind(ServicePluginReview)
+    let injected = false
+    const spy = vi.spyOn(ServicePluginReview, 'findOneAndUpdate').mockImplementation((filter, update, ...args) => {
+      if (!injected && update.$set?.status === 'cancelled') return { lean: async () => {
+        injected = true
+        await reject(job)
+        expect((await reopen(plugin, review)).ok).toBe(true)
+        return real(filter, update, ...args).lean()
+      } }
+      return real(filter, update, ...args)
+    })
+    try { expect(await cancelReview({ review, asAdmin: true })).toMatchObject({ ok: false, status: 409 }) } finally { spy.mockRestore() }
+    expect(injected).toBe(true)
+    expect(await loadReview(review._id)).toMatchObject({ status: 'queued', reopenGeneration: 1 })
+    expect(String((await loadPlugin(plugin._id)).serviceState.activeReviewId)).toBe(job.reviewId)
+  })
+
+  it('retry ואישור limits ישנים אינם משנים needs_operator של ריצה חדשה', async () => {
+    const { plugin, review, job } = await runningClamav()
+    await reportFailure({ reviewId: job.reviewId, token: job.leaseToken, failureClass: 'operator', code: 'clamav_incomplete' })
+    const oldOperator = await loadReview(review._id)
+    expect((await adminRetry({ review: oldOperator })).ok).toBe(true)
+    const { job: retried } = await claimNext({ workerId: 'same-worker' })
+    await reject(retried)
+    expect((await reopen(plugin, review)).ok).toBe(true)
+    const { job: reopened } = await claimNext({ workerId: 'same-worker' })
+    await reportFailure({ reviewId: reopened.reviewId, token: reopened.leaseToken, failureClass: 'operator', code: 'clamav_incomplete' })
+    expect(await adminRetry({ review: oldOperator })).toMatchObject({ ok: false, status: 409 })
+    expect(await adminAcceptPartialScan({ review: oldOperator, admin, reason })).toMatchObject({ ok: false, status: 409 })
+    expect(await loadReview(review._id)).toMatchObject({ status: 'needs_operator', operatorOverrides: { clamavPartial: { scope: 'all_results' } } })
   })
 })

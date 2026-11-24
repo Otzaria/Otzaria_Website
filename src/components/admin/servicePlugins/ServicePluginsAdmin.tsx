@@ -133,7 +133,7 @@ export default function ServicePluginsAdmin({ source }: { source?: ServiceAdminS
   }
 
   const handleAction = async (review: AdminReview, action: AdminAction) => {
-    if (action === 'emergency' || action === 'accept_partial_scan') {
+    if (action === 'emergency' || action === 'accept_partial_scan' || action === 'accept_clamav_result') {
       setReasonFor({ review, action })
       return
     }
@@ -241,17 +241,20 @@ export default function ServicePluginsAdmin({ source }: { source?: ServiceAdminS
         />
       )}
 
-      {reasonFor?.action === 'accept_partial_scan' && (
+      {(reasonFor?.action === 'accept_partial_scan' || reasonFor?.action === 'accept_clamav_result') && (
         <PartialScanDialog
           pluginName={reasonFor.review.pluginName ?? ''}
-          details={reasonFor.review.lastError?.message ?? null}
-          busy={busy?.id === reasonFor.review.id && busy.action === 'accept_partial_scan'}
+          details={reasonFor.review.clamavIssue?.message ?? reasonFor.review.lastError?.message ?? null}
+          allResults={reasonFor.action === 'accept_clamav_result'}
+          busy={busy?.id === reasonFor.review.id && busy.action === reasonFor.action}
           onClose={() => setReasonFor(null)}
           onSubmit={async (reason) => {
-            const ok = await post(reasonFor.review, 'accept_partial_scan', reason)
+            const ok = await post(reasonFor.review, reasonFor.action, reason)
             if (ok) {
               setReasonFor(null)
-              toast.show({ tone: 'success', message: `״${reasonFor.review.pluginName ?? ''}״: ההגשה חזרה לבדיקה — הסריקה החלקית אושרה, ושאר השלבים ירוצו כרגיל.` })
+              toast.show({ tone: 'success', message: reasonFor.action === 'accept_partial_scan'
+                ? `״${reasonFor.review.pluginName ?? ''}״: ההגשה חזרה לבדיקה — הסריקה החלקית אושרה, ושאר השלבים ירוצו כרגיל.`
+                : `״${reasonFor.review.pluginName ?? ''}״: ההגשה חזרה לבדיקה באישור מנהל. שאר שלבי הבדיקה ירוצו כרגיל.` })
             }
           }}
         />
