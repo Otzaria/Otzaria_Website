@@ -20,6 +20,7 @@ export function downloadLinks(section, plan, { ctx = true } = {}) {
   return parts.map((p, i) => {
     const q = new URLSearchParams({ oid: plan.offlineId, part: String(i + 1), parts: String(parts.length), n: String(plan.per) })
     if (p.after) q.set('after', p.after)
+    if (p.through) q.set('through', p.through)
     if (!ctx) q.set('ctx', '0')
     return { key: String(i + 1), label: parts.length > 1 ? `חלק ${i + 1} מתוך ${parts.length}` : 'הקובץ', count: p.count, href: `${base}?${q}` }
   })

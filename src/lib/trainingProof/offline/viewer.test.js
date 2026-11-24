@@ -11,6 +11,7 @@ function ocr(i, extra = {}) {
   return {
     id: String(i).padStart(24, 'a'),
     v: `2026-11-2${i}T10:00:00.000Z`,
+    r: 0,
     img: `i${i}`,
     w: 100,
     h: 20,
@@ -120,10 +121,10 @@ describe('viewerMain — זיהוי טקסט', () => {
     const f = await savedFile()
     expect(f).toMatchObject({ contract: 'tpd/1', section: 'ocr', offline_id: 'tpo-20261123-abcdef', part: 1 })
     expect(f.decisions).toEqual([
-      { id: ocr(1).id, v: ocr(1).v, d: 'approve' },
-      { id: ocr(2).id, v: ocr(2).v, d: 'reject' },
-      { id: ocr(3).id, v: ocr(3).v, d: 'fix', mark: { action: 'fixed', text: 'שורה מתוקנת' } },
-      { id: ocr(4).id, v: ocr(4).v, d: 'fix', mark: { action: 'bad' } },
+      { id: ocr(1).id, v: ocr(1).v, r: 0, d: 'approve' },
+      { id: ocr(2).id, v: ocr(2).v, r: 0, d: 'reject' },
+      { id: ocr(3).id, v: ocr(3).v, r: 0, d: 'fix', mark: { action: 'fixed', text: 'שורה מתוקנת' } },
+      { id: ocr(4).id, v: ocr(4).v, r: 0, d: 'fix', mark: { action: 'bad' } },
     ])
     // הקובץ עובר את הבדיקה של השרת
     expect(checkDecisionsFile(f).error).toBeUndefined()
@@ -157,6 +158,46 @@ describe('viewerMain — זיהוי טקסט', () => {
     expect(cards()[0].textContent).toContain('תוקן')
   })
 
+  it.each([
+    { v: '2026-11-24T10:00:00.000Z' },
+    { r: 1 },
+  ])('הורדה מחדש אינה מחילה החלטה מקומית על הגשה/גרסה אחרת (%j)', async (changed) => {
+    mount('ocr', [ocr(1), ocr(2)])
+    key('1')
+    const mem = JSON.parse(window.localStorage.getItem('tp-offline:tpo-20261123-abcdef:1'))
+    expect(mem.dec[ocr(1).id]).toEqual({ v: ocr(1).v, r: 0, d: 'approve' })
+    mount('ocr', [ocr(1, changed), ocr(2)])
+    expect(cards()).toHaveLength(2)
+    expect(document.querySelector('.toast').textContent).toMatch(/אינן מתאימות לגרסה/)
+    key('ArrowDown')
+    key('1')
+    expect((await savedFile()).decisions).toEqual([{ id: ocr(2).id, v: ocr(2).v, r: 0, d: 'approve' }])
+  })
+
+  it('שמירה מקומית ישנה בלי חותם אינה מקבלת את חותם ההגשה החדשה', () => {
+    window.localStorage.setItem('tp-offline:tpo-20261123-abcdef:1', JSON.stringify({ dec: { [ocr(1).id]: { d: 'approve' } }, dirty: {} }))
+    mount('ocr', [ocr(1)])
+    expect(cards()).toHaveLength(1)
+    key('s', { ctrlKey: true })
+    expect(saved.filter((b) => b.type === 'application/json')).toHaveLength(0)
+  })
+
+  it('אישור וביטול גורפים שומרים את המצב פעם אחת גם עבור אלף שורות', () => {
+    const items = Array.from({ length: 1000 }, (_, i) => ocr(1, { id: i.toString(16).padStart(24, '0'), img: `i${i}` }))
+    mount('ocr', items)
+    const writes = vi.spyOn(Storage.prototype, 'setItem')
+    btn('אשר את כל המוצגות').click()
+    expect(writes).toHaveBeenCalledTimes(1)
+    expect(Object.keys(JSON.parse(writes.mock.calls[0][1]).dec)).toHaveLength(1000)
+    const select = document.querySelector('select')
+    select.value = 'all'
+    select.dispatchEvent(new Event('change'))
+    writes.mockClear()
+    btn('בטל החלטות במוצגות').click()
+    expect(writes).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(writes.mock.calls[0][1]).dec).toEqual({})
+  })
+
   it('טעינת קובץ-החלטות: מה שמתאים נטען, הגשה אחרת לא', async () => {
     mount('ocr', [ocr(1), ocr(2)])
     const file = new File(
@@ -169,6 +210,24 @@ describe('viewerMain — זיהוי טקסט', () => {
     await vi.waitFor(() => expect(document.querySelector('.toast')?.textContent).toMatch(/נטענו 1/))
     expect(document.querySelector('.toast').textContent).toMatch(/הגשה אחרת/)
     expect(cards()).toHaveLength(1)
+  })
+
+  it('טעינת קובץ-החלטות דורשת גם את גרסת התוכן ושומרת אותה בייצוא', async () => {
+    mount('ocr', [ocr(1, { r: 2 }), ocr(2, { r: 2 }), ocr(3)])
+    const file = new File([JSON.stringify({ contract: 'tpd/1', section: 'ocr', decisions: [
+      { id: ocr(1).id, v: ocr(1).v, r: 1, d: 'approve' },
+      { id: ocr(2).id, v: ocr(2).v, r: 2, d: 'reject' },
+      { id: ocr(3).id, v: ocr(3).v, d: 'approve' }, // קובץ ישן: r חסר = 0
+    ] })], 'd.json')
+    const input = document.querySelector('input[type=file]')
+    Object.defineProperty(input, 'files', { value: [file] })
+    input.dispatchEvent(new Event('change'))
+    await vi.waitFor(() => expect(document.querySelector('.toast')?.textContent).toMatch(/נטענו 2/))
+    expect(cards()).toHaveLength(1)
+    expect((await savedFile()).decisions).toEqual([
+      { id: ocr(2).id, v: ocr(2).v, r: 2, d: 'reject' },
+      { id: ocr(3).id, v: ocr(3).v, r: 0, d: 'approve' },
+    ])
   })
 
   it('תמונה שחסרה בקובץ — הודעה במקום התמונה', () => {
@@ -207,21 +266,49 @@ describe('viewerMain — נתב וגלאי', () => {
     key('Enter')
     const f = await savedFile()
     expect(f.decisions).toEqual([
-      { id: router(1).id, v: router(1).v, d: 'approve' },
-      { id: router(2).id, v: router(2).v, d: 'fix', mark: { label: 'rashi', bad: false } },
+      { id: router(1).id, v: router(1).v, r: 0, d: 'approve' },
+      { id: router(2).id, v: router(2).v, r: 0, d: 'fix', mark: { label: 'rashi', bad: false } },
       {
         id: router(3).id,
         v: router(3).v,
+        r: 0,
         d: 'fix',
         mark: { label: 'mixed', bad: false, words: [{ k: 0, box: [60, 0, 100, 20], label: 'square' }, { k: 1, box: [0, 0, 50, 20], label: 'latin' }] },
       },
     ])
   })
 
+  it('בחירת כתב בעכבר בכרטיס השני ואז Enter מתקנת רק את הכרטיס השני', async () => {
+    mount('router', [router(1), router(2)])
+    ;[...cards()[1].querySelectorAll('button')].find((b) => b.textContent.includes('רש"י')).click()
+    expect(document.querySelector('.card.cur').dataset.id).toBe(router(2).id)
+    key('Enter')
+    expect((await savedFile()).decisions).toEqual([
+      { id: router(2).id, v: router(2).v, r: 0, d: 'fix', mark: { label: 'rashi', bad: false } },
+    ])
+    expect(cards()[0].dataset.id).toBe(router(1).id)
+  })
+
+  it('שינוי כתב-מילה בכרטיס שאינו הנוכחי ואז Enter שומר אותו', async () => {
+    const mixed = router(2, { result: { label: 'mixed', bad: false, words: [
+      { k: 0, box: [60, 0, 100, 20], label: 'square' },
+      { k: 1, box: [0, 0, 50, 20], label: 'rashi' },
+    ] } })
+    mount('router', [router(1), mixed])
+    cards()[1].querySelectorAll('.word')[1].click()
+    expect(document.querySelector('.card.cur').dataset.id).toBe(mixed.id)
+    key('Enter')
+    const f = await savedFile()
+    expect(f.decisions).toHaveLength(1)
+    expect(f.decisions[0]).toMatchObject({ id: mixed.id, r: 0, d: 'fix', mark: { label: 'mixed', words: [{ label: 'square' }, { label: 'latin' }] } })
+    expect(cards()[0].dataset.id).toBe(router(1).id)
+  })
+
   it('גלאי: מסגרות על העמוד, "לתקן באתר" אינו החלטה שעולה', async () => {
     const page = (i) => ({
       id: String(i).padStart(24, 'b'),
       v: `2026-11-2${i}T10:00:00.000Z`,
+      r: 0,
       img: `p${i}`,
       w: 1000,
       h: 1400,
@@ -241,7 +328,7 @@ describe('viewerMain — נתב וגלאי', () => {
     key('2')
     key('1')
     const f = await savedFile()
-    expect(f.decisions).toEqual([{ id: page(2).id, v: page(2).v, d: 'approve' }])
+    expect(f.decisions).toEqual([{ id: page(2).id, v: page(2).v, r: 0, d: 'approve' }])
     expect(f.later).toEqual([page(1).id])
   })
 })

@@ -156,6 +156,7 @@ export function rejectUpdate(vol) {
       adminFixed: false,
       volResult: null,
     },
+    $inc: { reviewRevision: 1 },
     ...(vol ? { $addToSet: { notFor: vol, rejectedFor: vol } } : {}),
   };
 }
@@ -164,7 +165,7 @@ export function rejectUpdate(vol) {
 export function unapproveUpdate(item) {
   const set = { status: 'submitted', reviewedAt: null, reviewedBy: null, adminFixed: false, volResult: null, correctionLoggedAt: null };
   if (item.adminFixed && item.volResult) set.result = item.volResult;
-  return { $set: set };
+  return { $set: set, $inc: { reviewRevision: 1 } };
 }
 
 // שיעור-ההתאמה כאחוז שלם, או null

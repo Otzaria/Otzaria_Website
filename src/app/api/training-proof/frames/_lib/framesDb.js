@@ -5,6 +5,7 @@ import TrainingProofBook from '../../../../../models/TrainingProofBook.js';
 import TrainingProofPackage from '../../../../../models/TrainingProofPackage.js';
 import User from '../../../../../models/User.js';
 import { BOOK_CLAIM_MS } from '../../../../../lib/trainingProof/vocab.js';
+import { reviewRevisionFilter } from '../../../../../lib/trainingProof/reviewVersion.js';
 import {
   checkFramesPage,
   checkNewStream,
@@ -190,7 +191,14 @@ async function syncMarkedPages(bookKey, changeId, streams) {
   for (const it of items) {
     const result = resyncResult(it.result, streams);
     if (result !== it.result) {
-      ops.push({ updateOne: { filter: { _id: it._id, 'streamChange.id': changeId }, update: { $set: { result } } } });
+      // שינויי result אחרים דורשים streamChange:null. שתי השלמות של אותו journal
+      // רשאיות לכתוב אותו יעד; revision נוסף שמרני, אבל CAS עליו עלול לדלג על הסנכרון.
+      ops.push({
+        updateOne: {
+          filter: { _id: it._id, 'streamChange.id': changeId },
+          update: { $set: { result }, $inc: { reviewRevision: 1 } },
+        },
+      });
     }
   }
   if (ops.length) await TrainingProofItem.bulkWrite(ops, { ordered: false });
@@ -324,11 +332,11 @@ export async function savePage(userId, itemId, body, { now = new Date(), names =
       ? { status: 'held', heldBy: uid, heldUntil: null, heldAt: now, result, vol: null, submittedAt: null }
       : { status: 'submitted', heldBy: uid, heldUntil: null, heldAt: now, result, vol: uid, submittedAt: now };
   const doc = await TrainingProofItem.findOneAndUpdate(
-    { _id: item._id, status: { $in: ['available', 'held', 'submitted', 'rejected'] }, reviewedAt: null, streamChange: null },
-    { $set: set },
+    { _id: item._id, status: { $in: ['available', 'held', 'submitted', 'rejected'] }, reviewedAt: null, streamChange: null, ...reviewRevisionFilter(item) },
+    { $set: set, $inc: { reviewRevision: 1 } },
     { returnDocument: 'after', lean: true }
   );
-  if (!doc) return fail(409, 'המנהל כבר אישר את העמוד — אי-אפשר לשנות אותו');
+  if (!doc) return fail(409, 'העמוד השתנה או אושר בינתיים — רעננו לפני השמירה');
   let bookDone = false;
   if (isDoneState(pageState(doc))) {
     const c = (await pageCounts([item.book], { includeClosed: true }))[item.book];

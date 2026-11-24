@@ -18,9 +18,9 @@ const ID = (n) => String(n).padStart(24, '0')
 describe('חלוקה לקבצים', () => {
   it('גבול לפי מזהה, לא לפי מקום', () => {
     expect(lineParts([ID(1), ID(2), ID(3), ID(4), ID(5)], 2)).toEqual([
-      { after: null, count: 2 },
-      { after: ID(2), count: 2 },
-      { after: ID(4), count: 1 },
+      { after: null, through: ID(2), count: 2 },
+      { after: ID(2), through: ID(4), count: 2 },
+      { after: ID(4), through: ID(5), count: 1 },
     ])
     expect(lineParts([], 2)).toEqual([])
   })
@@ -49,11 +49,12 @@ describe('הפריט בקובץ', () => {
   }
   it('בלי מפתח-ספר; חותם-גרסה; תמונת-הקשר רק כשנכללת', () => {
     const it0 = offlineItem(doc, { volName: () => 'רחל', ctxKey: () => 'c1' })
-    expect(it0).toMatchObject({ id: ID(7), v: '2026-11-20T18:02:11.000Z', img: `i${ID(7)}`, alias: 'ספר 412', page: 17, line: 5, track: 'rashi', conf: 91.4, rejected: 1 })
+    expect(it0).toMatchObject({ id: ID(7), v: '2026-11-20T18:02:11.000Z', r: 0, img: `i${ID(7)}`, alias: 'ספר 412', page: 17, line: 5, track: 'rashi', conf: 91.4, rejected: 1 })
     expect(it0.vol).toEqual({ id: 'u1', name: 'רחל' })
     expect(it0.ctx).toEqual({ img: 'c1', bbox: [1, 2, 3, 4] })
     expect(JSON.stringify(it0)).not.toContain('b-5e0c2a91d4')
     expect(offlineItem(doc).ctx).toBeNull()
+    expect(offlineItem({ ...doc, reviewRevision: 4 }).r).toBe(4)
   })
   it('שמות מתנדבים: שם בלבד; בלי שם — "מתנדב N"', () => {
     const names = volunteerNames([{ _id: 'a', name: 'רחל', email: 'r@x.org' }, { _id: 'b', name: '' }], ['a', 'b', 'c', 'b'])
@@ -68,7 +69,7 @@ describe('קובץ-ההחלטות', () => {
     const r = checkDecisionsFile({ ...base, decisions: [one(), one({ d: 'reject' }), one({ id: ID(2), d: 'fix', mark: { action: 'bad' } })] })
     expect(r.error).toBeUndefined()
     expect(r.offlineId).toBe('tpo-20261123-a1b2c3')
-    expect(r.decisions).toEqual([{ id: ID(1), v: '2026-11-20T18:02:11.000Z', d: 'reject' }, { id: ID(2), v: '2026-11-20T18:02:11.000Z', d: 'fix', mark: { action: 'bad' } }])
+    expect(r.decisions).toEqual([{ id: ID(1), v: '2026-11-20T18:02:11.000Z', r: 0, d: 'reject' }, { id: ID(2), v: '2026-11-20T18:02:11.000Z', r: 0, d: 'fix', mark: { action: 'bad' } }])
   })
   it.each([
     [{ ...base, contract: 'tp/1', decisions: [one()] }, /tpd\/1/],
@@ -76,6 +77,10 @@ describe('קובץ-ההחלטות', () => {
     [{ ...base, decisions: [] }, /אף החלטה/],
     [{ ...base, decisions: [one({ id: 'nope' })] }, /מזהה/],
     [{ ...base, decisions: [one({ v: 'אתמול' })] }, /חותם/],
+    [{ ...base, decisions: [one({ r: -1 })] }, /גרסת-תוכן/],
+    [{ ...base, decisions: [one({ r: 1.5 })] }, /גרסת-תוכן/],
+    [{ ...base, decisions: [one({ r: '1' })] }, /גרסת-תוכן/],
+    [{ ...base, decisions: [one({ r: null })] }, /גרסת-תוכן/],
     [{ ...base, decisions: [one({ d: 'maybe' })] }, /לא מוכרת/],
     [{ ...base, decisions: [one({ d: 'fix' })] }, /חסר התיקון/],
     [{ ...base, section: 'frames', decisions: [one({ d: 'fix', mark: {} })] }, /רק באתר/],
@@ -93,6 +98,12 @@ describe('קובץ-ההחלטות', () => {
     expect(skipReason(dec, { section: 'ocr', status: 'submitted', submittedAt: new Date() }, 'ocr')).toBe('resubmitted')
     expect(skipReason(dec, { section: 'ocr', status: 'submitted', submittedAt: at, streamChange: { id: 'x' } }, 'ocr')).toBe('stream-change')
     expect(skipReason(dec, { section: 'ocr', status: 'submitted', submittedAt: at, streamChange: null }, 'ocr')).toBeNull()
+    expect(skipReason(dec, { section: 'ocr', status: 'submitted', submittedAt: at, reviewRevision: 1 }, 'ocr')).toBe('content-changed')
+    expect(skipReason({ ...dec, r: 1 }, { section: 'ocr', status: 'submitted', submittedAt: at, reviewRevision: 1 }, 'ocr')).toBeNull()
+  })
+  it('קובץ ישן בלי r חל רק על תוכן שלא השתנה; r מפורש נשמר', () => {
+    expect(checkDecisionsFile({ ...base, decisions: [one({ r: 7 })] }).decisions[0].r).toBe(7)
+    expect(checkDecisionsFile({ ...base, decisions: [one()] }).decisions[0].r).toBe(0)
   })
 })
 

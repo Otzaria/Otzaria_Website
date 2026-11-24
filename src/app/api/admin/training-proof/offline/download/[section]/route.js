@@ -8,8 +8,8 @@ export const maxDuration = 300;
 // "אישור בלי אינטרנט" (docs/115 §3) — ההורדה. GET ולא POST: היא **אינה משנה דבר** באתר
 // (הפריטים נשארים ממתינים, ואפשר להמשיך לאשר אותם גם כאן), ולכן קישור רגיל בדפדפן מוריד אותה.
 //
-// GET ?plan=1[&n=1000]                        ← {offlineId, count, parts:[{after,count}]} | {offlineId, count, books:[…]}
-// GET ?oid=…&part=&parts=&after=&n=&ctx=1     ← קובץ HTML (זיהוי/נתב): עד n פריטים אחרי המזהה after
+// GET ?plan=1[&n=1000]                        ← {offlineId, count, parts:[{after,through,count}]} | {offlineId, count, books:[…]}
+// GET ?oid=…&part=&parts=&after=&through=&n=&ctx=1 ← קובץ HTML (זיהוי/נתב): הטווח (after, through]
 // GET ?oid=…&part=&parts=&book=b-…            ← קובץ HTML (גלאי): כל העמודים הממתינים של ספר אחד
 export async function GET(request, { params }) {
   const { error } = await adminGate();
@@ -30,6 +30,10 @@ export async function GET(request, { params }) {
     const parts = Math.max(part, parseInt(q.get('parts'), 10) || 1);
     const after = q.get('after') || null;
     if (after && !validId(after)) return fail(400, 'נקודת-התחלה לא תקינה');
+    const through = q.get('through') || null;
+    if (through && !validId(through)) return fail(400, 'נקודת-סיום לא תקינה');
+    if (after && through && after.toLowerCase() >= through.toLowerCase()) return fail(400, 'טווח המזהים לא תקין');
+    if (section !== 'frames' && !through && (parts > 1 || after)) return fail(409, 'תכנית ההורדה ישנה — הכינו מחדש את רשימת הקבצים');
     const book = q.get('book') || null;
     if (section === 'frames' && !BOOK_RE.test(String(book || ''))) return fail(400, 'בגלאי מורידים ספר אחד בכל קובץ');
     const r = await buildOffline({
@@ -38,11 +42,13 @@ export async function GET(request, { params }) {
       part,
       parts,
       after,
+      through,
       n: per,
       book,
       ctx: q.get('ctx') !== '0',
       site: new URL(request.url).origin,
     });
+    if (r.overflow) return fail(409, 'נוספו הגשות בטווח הזה — הכינו מחדש את רשימת הקבצים');
     if (!r.count) return fail(409, 'אין כאן מה להוריד — אולי כבר אושר באתר');
     const it = r.chunks();
     const enc = new TextEncoder();

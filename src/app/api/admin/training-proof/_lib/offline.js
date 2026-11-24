@@ -13,6 +13,7 @@ import {
   SKIP_REASONS,
 } from '@/lib/trainingProof/offline/contract';
 import { htmlHead, htmlData, htmlImage, htmlTail } from '@/lib/trainingProof/offline/html';
+import { reviewRevision, reviewRevisionFilter } from '@/lib/trainingProof/reviewVersion';
 import { oid } from './http';
 import { approveSet, rejectUpdate, routerAgrees, framesChanges } from './rules';
 import { fixAndApprove } from './review';
@@ -23,7 +24,7 @@ import { fixAndApprove } from './review';
 // מה נכנס: ממתין לאישור, ולא באמצע שינוי-זרם (גם באתר אי אפשר לאשר אותו)
 const pendingFilter = (section) => ({ section, status: 'submitted', streamChange: null });
 
-// לזיהוי/נתב: {count, parts:[{after,count}]}. לגלאי: {count, books:[{book, alias, pages}]}
+// לזיהוי/נתב: {count, parts:[{after,through,count}]}. לגלאי: {count, books:[{book, alias, pages}]}
 export async function offlinePlan(section, per) {
   if (section === 'frames') {
     const groups = await TrainingProofItem.aggregate([
@@ -41,15 +42,16 @@ export async function offlinePlan(section, per) {
   return { count: ids.length, parts: lineParts(ids.map((d) => d._id), per) };
 }
 
-// הפריטים של קובץ אחד. after/n — לזיהוי/נתב; book — לגלאי
-async function partDocs(section, { after, n, book }) {
+// הפריטים של קובץ אחד. (after, through] — לזיהוי/נתב; book — לגלאי
+async function partDocs(section, { after, through, n, book }) {
   const f = pendingFilter(section);
   if (section === 'frames') {
     f.book = book;
     return TrainingProofItem.find(f).sort({ 'payload.page': 1, _id: 1 }).lean();
   }
-  if (after) f._id = { $gt: oid(after) };
-  const docs = await TrainingProofItem.find(f).sort({ _id: 1 }).limit(n).lean();
+  if (after || through) f._id = { ...(after ? { $gt: oid(after) } : {}), ...(through ? { $lte: oid(through) } : {}) };
+  // אם נוספו הגשות בתוך הטווח מאז התכנית, לא נחתוך בשקט פריטים שאין להם חלק אחר.
+  const docs = await TrainingProofItem.find(f).sort({ _id: 1 }).limit(through ? n + 1 : n).lean();
   // בתוך הקובץ — לפי סדר ההגשה, כמו במסך הסקירה
   return docs.sort((a, b) => new Date(a.submittedAt || 0) - new Date(b.submittedAt || 0) || String(a._id).localeCompare(String(b._id)));
 }
@@ -63,8 +65,9 @@ async function namesFor(docs) {
 
 // הקובץ: מחזיר {fileHead, count, chunks()} — chunks הוא async generator של מחרוזות, כך שהתמונות
 // נקראות מהדיסק אחת-אחת בזמן השליחה
-export async function buildOffline({ section, offlineId, part, parts, after, n, book, ctx, site, now = new Date() }) {
-  const docs = await partDocs(section, { after, n, book });
+export async function buildOffline({ section, offlineId, part, parts, after, through, n, book, ctx, site, now = new Date() }) {
+  const docs = await partDocs(section, { after, through, n, book });
+  if (section !== 'frames' && through && docs.length > n) return { count: docs.length, overflow: true };
   const names = await namesFor(docs);
   const ctxKeys = new Map();
   const ctxKey = (rel) => {
@@ -133,7 +136,7 @@ function where(doc) {
 export async function applyDecisions(section, decisions, by, now = new Date()) {
   const docs = await TrainingProofItem.find(
     { _id: { $in: decisions.map((d) => oid(d.id)) } },
-    { section: 1, status: 1, submittedAt: 1, streamChange: 1, vol: 1, 'payload.alias': 1, 'payload.page': 1, 'payload.line_no': 1 }
+    { section: 1, status: 1, submittedAt: 1, reviewRevision: 1, streamChange: 1, vol: 1, 'payload.alias': 1, 'payload.page': 1, 'payload.line_no': 1 }
   ).lean();
   const byId = new Map(docs.map((d) => [String(d._id), d]));
   const out = { approved: 0, fixed: 0, rejected: 0, skipped: {}, skippedList: [], total: decisions.length };
@@ -154,7 +157,7 @@ export async function applyDecisions(section, decisions, by, now = new Date()) {
 
   // כל החלטה — עדכון מותנה משלה: עדיין ממתין, אותו זמן-הגשה, (בדחייה) אותו מתנדב
   const one = async ({ dec, doc }) => {
-    const cond = { _id: doc._id, section, status: 'submitted', submittedAt: doc.submittedAt, streamChange: null };
+    const cond = { _id: doc._id, section, status: 'submitted', submittedAt: doc.submittedAt, streamChange: null, ...reviewRevisionFilter(doc) };
     if (dec.d === 'approve') {
       const r = await TrainingProofItem.findOneAndUpdate(cond, { $set: approveSet(oid(by), now) }, { projection: { _id: 1 }, lean: true });
       if (r) out.approved++;
@@ -167,7 +170,7 @@ export async function applyDecisions(section, decisions, by, now = new Date()) {
       else skip(dec, 'changed', doc);
       return;
     }
-    const r = await fixAndApprove(dec.id, dec.mark, by, now, null, { expectAt: doc.submittedAt });
+    const r = await fixAndApprove(dec.id, dec.mark, by, now, null, { expectAt: doc.submittedAt, expectRevision: reviewRevision(doc) });
     if (r.ok) {
       if (r.fixed) out.fixed++;
       else out.approved++;

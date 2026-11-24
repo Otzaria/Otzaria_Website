@@ -7,6 +7,7 @@ import { SECTIONS } from '@/lib/trainingProof/vocab';
 import { MARK_CHECKS, sameResult } from '@/lib/trainingProof/marks';
 import { volunteerStats } from '@/lib/trainingProof/stats';
 import { logCorrection, reconcileCorrections } from '@/lib/trainingProof/corrections';
+import { reviewRevision, reviewRevisionFilter } from '@/lib/trainingProof/reviewVersion';
 import { oid } from './http';
 import { PAGE_SIZE, adminItem, approveSet, rejectUpdate, unapproveUpdate, reviewFilter, routerAgrees, matchPct, framesChanges } from './rules';
 
@@ -105,10 +106,18 @@ export async function approveIds(section, ids, by, now = new Date()) {
 
 // דחייה לפי מזהים: כל פריט חוזר למאגר, והמתנדב שהגיש נרשם ב-notFor/rejectedFor
 export async function rejectIds(section, ids) {
-  const docs = await TrainingProofItem.find({ _id: { $in: ids.map(oid) }, section, status: 'submitted' }, { vol: 1 }).lean();
+  const docs = await TrainingProofItem.find(
+    { _id: { $in: ids.map(oid) }, section, status: 'submitted', streamChange: null },
+    { vol: 1, submittedAt: 1, reviewRevision: 1 }
+  ).lean();
   if (!docs.length) return 0;
   const res = await TrainingProofItem.bulkWrite(
-    docs.map((d) => ({ updateOne: { filter: { _id: d._id, status: 'submitted', vol: d.vol }, update: rejectUpdate(d.vol) } }))
+    docs.map((d) => ({
+      updateOne: {
+        filter: { _id: d._id, status: 'submitted', vol: d.vol, submittedAt: d.submittedAt, streamChange: null, ...reviewRevisionFilter(d) },
+        update: rejectUpdate(d.vol),
+      },
+    }))
   );
   return res.modifiedCount;
 }
@@ -116,8 +125,8 @@ export async function rejectIds(section, ids) {
 // "החזר לממתינות": אישור שבוטל (לפני ההורדה). תיקון של המנהל מתבטל
 export async function unapproveIds(section, ids) {
   const docs = await TrainingProofItem.find(
-    { _id: { $in: ids.map(oid) }, section, status: 'approved' },
-    { adminFixed: 1, volResult: 1 }
+    { _id: { $in: ids.map(oid) }, section, status: 'approved', streamChange: null },
+    { adminFixed: 1, volResult: 1, reviewRevision: 1 }
   ).lean();
   if (!docs.length) return 0;
   // findOneAndUpdate מחזיר בדיוק אילו עדכונים מותנים הצליחו. כך מרוץ עם מנהל אחר
@@ -125,7 +134,7 @@ export async function unapproveIds(section, ids) {
   const changed = [];
   for (const d of docs) {
     const updated = await TrainingProofItem.findOneAndUpdate(
-      { _id: d._id, section, status: 'approved' },
+      { _id: d._id, section, status: 'approved', streamChange: null, ...reviewRevisionFilter(d) },
       unapproveUpdate(d),
       { returnDocument: 'after', lean: true }
     );
@@ -168,13 +177,16 @@ async function framesFixCheck(item) {
 // "תקן ואשר" (ה-11): המנהל מתקן לפני האישור. mark — באותה צורה שהמתנדב שולח
 // ({action,text} / {label,bad,words}). תיקון זהה למה שהמתנדב סימן = אישור רגיל.
 // check — בדיקה לחלק (frames: מהגלאי, כשתהיה); ברירת-מחדל MARK_CHECKS.
-// expectAt — רק לאישור בלי אינטרנט (docs/115 §6): זמן-ההגשה שההחלטה נעשתה עליו; הגשה אחרת ← 409.
+// expectAt/expectRevision — לאישור בלי אינטרנט: ההגשה והתוכן שההחלטה נעשתה עליהם; שינוי ← 409.
 // מחזיר {ok, item, fixed} או {ok:false,status,error}
-export async function fixAndApprove(id, mark, by, now = new Date(), check = null, { expectAt = null } = {}) {
+export async function fixAndApprove(id, mark, by, now = new Date(), check = null, { expectAt = null, expectRevision = null } = {}) {
   const item = await TrainingProofItem.findOne({ _id: oid(id), status: 'submitted', streamChange: null }).lean();
   if (!item) return { ok: false, status: 409, error: 'הפריט כבר לא ממתין לאישור' };
   if (expectAt && new Date(item.submittedAt || 0).getTime() !== new Date(expectAt).getTime()) {
     return { ok: false, status: 409, error: 'הוגש מחדש מאז ההורדה' };
+  }
+  if (expectRevision !== null && reviewRevision(item) !== expectRevision) {
+    return { ok: false, status: 409, error: 'תוכן הפריט השתנה מאז ההורדה' };
   }
   const checker = check || MARK_CHECKS[item.section] || (item.section === 'frames' ? await framesFixCheck(item) : null);
   if (!checker) return { ok: false, status: 400, error: 'תיקון בחלק הזה נעשה בעורך המסגרות' };
@@ -186,8 +198,8 @@ export async function fixAndApprove(id, mark, by, now = new Date(), check = null
     ? approveSet(oid(by), now)
     : { ...approveSet(oid(by), now), result, adminFixed: true, volResult: item.result, correctionLoggedAt: null };
   const doc = await TrainingProofItem.findOneAndUpdate(
-    { _id: item._id, status: 'submitted', submittedAt: item.submittedAt, streamChange: null },
-    { $set: set },
+    { _id: item._id, status: 'submitted', submittedAt: item.submittedAt, streamChange: null, ...reviewRevisionFilter(item) },
+    { $set: set, ...(!same ? { $inc: { reviewRevision: 1 } } : {}) },
     { returnDocument: 'after', lean: true }
   );
   if (!doc) return { ok: false, status: 409, error: 'הפריט השתנה בינתיים — רעננו את הרשימה' };
