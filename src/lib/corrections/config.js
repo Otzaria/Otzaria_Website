@@ -25,6 +25,11 @@ export const PUBLISH_MAX_ATTEMPTS = 5;
 // מהיעד (שורות שנוספו/נמחקו לפניו) שורה מתוקנת שזזה עדיין נחשבת אותה שורה.
 export const PR_ABSORPTION_GRACE_SECONDS = 14 * 86_400;
 export const PR_ABSORPTION_RELOCATION_LINES = 50;
+// תוויות שמנהל הספרייה שם על PR שנסגר כדי לומר "לא נקלט" (בלי תלות ברישיות): ידני מיד, בלי המתנה.
+// תווית לעולם אינה סוגרת דיווח כפורסם — רק בדיקת התוכן ב-main.
+export const PR_REJECTED_LABELS = Object.freeze(['לא נקלט', 'rejected', 'wontfix', 'invalid']);
+// מטמון נפרד לקבצים שנבדקים לקליטה, כדי שקבצים ענקיים לא ידחקו את מטמון התצוגה והפרסום.
+export const PR_ABSORPTION_CACHE_BYTES = 32 * 1024 * 1024;
 export const WORKER_BATCH_SIZE = 10;
 export const WORKER_CONCURRENCY = 2;
 export const JOB_LEASE_SECONDS = 120;
@@ -141,6 +146,8 @@ export function getCorrectionsConfig(env = process.env, runtime = {}) {
       maxAttempts: PUBLISH_MAX_ATTEMPTS,
       absorptionGraceSeconds: PR_ABSORPTION_GRACE_SECONDS,
       absorptionRelocationLines: PR_ABSORPTION_RELOCATION_LINES,
+      rejectedLabels: PR_REJECTED_LABELS,
+      absorptionCacheBytes: PR_ABSORPTION_CACHE_BYTES,
     },
     source: { repo: SOURCE_REPO, ref: SOURCE_REF, token },
     worker: {

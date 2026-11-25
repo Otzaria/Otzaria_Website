@@ -130,6 +130,10 @@ const ErrorReportSchema = new mongoose.Schema({
     // ה-PR נסגר בלי מיזוג (זוהה ב-worker): ממתינים שהתיקון ייקלט ב-main. absorbed: נמצא שם ונסגר כפורסם.
     prClosedAt: Date,
     absorbed: Boolean,
+    // תום ההמתנה, הבדיקה האחרונה מול main (תוצאה, sha של main ושל הקובץ) והערת הסגירה של מנהל הספרייה.
+    absorptionDeadline: Date,
+    absorptionCheck: { type: mongoose.Schema.Types.Mixed, default: undefined },
+    prCloseComment: { type: mongoose.Schema.Types.Mixed, default: undefined },
     updatedAt: Date,
   },
   inclusion: {

@@ -33,7 +33,8 @@ export async function computeHealth({ config, now = new Date() }) {
   };
   const heartbeatAge = ageSec(beat?.lastBeatAt, now);
   const stale = heartbeatAge === null || heartbeatAge > config.worker.staleHeartbeatSeconds;
-  const hasWork = counts.verifyQueued + counts.outboxPending + counts.publishReady + counts.publishUnknown + counts.prOpened + counts.prClosedAwaiting > 0
+  // PR שנסגרו וממתינים לקליטה אינם "עבודה ממתינה": הם ממתינים ימים בכוונה, עם cron או בלעדיו.
+  const hasWork = counts.verifyQueued + counts.outboxPending + counts.publishReady + counts.publishUnknown + counts.prOpened > 0
     || Boolean(oldest.verify || oldest.publish);
   const problems = [];
   if (stale && hasWork) problems.push('worker_not_running');

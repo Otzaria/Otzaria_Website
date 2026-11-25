@@ -3,7 +3,10 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluateAbsorption, closedPrAction, handoffReasonOf, lineEdit, editState, ABSORPTION, CLOSED_PR_ACTION, PR_CLOSED_HANDOFF } from './absorption.js';
+import {
+  evaluateAbsorption, closedPrAction, handoffReasonOf, expiredAction, absorptionDeadline, hasRejectedLabel, lineEdit, editState,
+  anchorTarget, sameLine, ABSORPTION, CLOSED_PR_ACTION, PR_CLOSED_HANDOFF,
+} from './absorption.js';
 import { deriveLabels } from './labels.js';
 import { HANDOFF_REASON_LABELS } from './states.js';
 
@@ -14,33 +17,37 @@ const CHANGE = { lineIndex: 2, originalLine: OLD, newLine: NEW };
 const file = (lines, eol = '\r\n') => ({ content: lines.join(eol) + eol, lossy: false });
 const check = (lines, change = CHANGE, relocationLines = 50) => evaluateAbsorption(file(lines), change, { relocationLines });
 const filler = (n) => Array.from({ length: n }, (_, i) => `שורה ${i}`);
+/** הבסיס כפי שנשמר באישור (resolvedSource.context): עד 3 שורות לפני ואחרי שורת היעד. */
+const baseOf = (lines, i) => ({ before: lines.slice(Math.max(0, i - 3), i), after: lines.slice(i + 1, i + 4) });
+const pick = (v) => [v.outcome, v.detail, v.lineIndex, v.anchored];
 
 test('נקלט: השורה ביעד היא השורה החדשה', () => {
-  assert.deepEqual(check([L0, '', NEW, 'סוף']), { outcome: ABSORPTION.ABSORBED, detail: 'applied', lineIndex: 2, relocated: false });
+  assert.deepEqual(check([L0, '', NEW, 'סוף']), { outcome: ABSORPTION.ABSORBED, detail: 'applied', lineIndex: 2, relocated: false, anchored: false });
+  const base = baseOf([L0, '', OLD, 'סוף'], 2);
+  assert.deepEqual(pick(evaluateAbsorption(file([L0, '', NEW, 'סוף']), { ...CHANGE, base }, { relocationLines: 50 })), [ABSORPTION.ABSORBED, 'applied', 2, true]);
 });
 
-test('ממתין: השורה המקורית עדיין ביעד', () => {
-  assert.deepEqual(check([L0, '', OLD, 'סוף']), { outcome: ABSORPTION.PENDING, detail: 'original_in_place', lineIndex: 2, relocated: false });
+test('ממתין: השורה המקורית עדיין ביעד, או זזה בלי שינוי', () => {
+  assert.deepEqual(pick(check([L0, '', OLD, 'סוף'])), [ABSORPTION.PENDING, 'original_in_place', 2, false]);
+  assert.deepEqual(pick(check([L0, 'א', 'ב', '', OLD, 'סוף'])), [ABSORPTION.PENDING, 'original_relocated', 4, false]);
+  const base = baseOf([L0, '', OLD, 'סוף'], 2);
+  assert.deepEqual(pick(evaluateAbsorption(file(['הקדמה', 'עוד', L0, '', OLD, 'סוף']), { ...CHANGE, base }, { relocationLines: 50 })), [ABSORPTION.PENDING, 'original_relocated', 4, true]);
 });
 
-test('ממתין: השורה המקורית זזה (נוספו שורות לפניה) והחדשה אינה בקובץ', () => {
-  assert.deepEqual(check([L0, 'א', 'ב', '', OLD, 'סוף']), { outcome: ABSORPTION.PENDING, detail: 'original_relocated', lineIndex: 4, relocated: true });
-});
-
-test('נקלט אחרי הזזה: החדשה פעם אחת בטווח והמקורית אינה בקובץ; רחוק מהטווח → ידני', () => {
-  assert.deepEqual(check([L0, 'א', '', NEW, 'סוף']), { outcome: ABSORPTION.ABSORBED, detail: 'applied_relocated', lineIndex: 3, relocated: true });
-  const far = check([L0, ...filler(60), '', NEW, 'סוף']);
-  assert.equal(far.outcome, ABSORPTION.CHANGED);
-  assert.equal(far.detail, 'applied_too_far');
-  // בלי טווח הזזה — רק השורה עצמה נחשבת
-  assert.equal(check([L0, 'א', '', NEW, 'סוף'], CHANGE, 0).outcome, ABSORPTION.CHANGED);
+test('הזזה: נקלט רק כשהשורה מעוגנת לשכנים מהבסיס; בלי עיגון — ידני', () => {
+  const baseLines = [L0, 'פתיחה', OLD, 'סוף'];
+  const moved = ['הקדמה', 'עוד', L0, 'פתיחה', NEW, 'סוף'];
+  assert.deepEqual(pick(evaluateAbsorption(file(moved), { ...CHANGE, base: baseOf(baseLines, 2) }, { relocationLines: 50 })), [ABSORPTION.ABSORBED, 'applied_relocated', 4, true]);
+  assert.deepEqual(pick(check(moved)), [ABSORPTION.CHANGED, 'relocated_unanchored', null, false], 'בלי בסיס אין "נקלט" במקום אחר');
+  const far = [...filler(60), L0, 'פתיחה', NEW, 'סוף'];
+  assert.equal(evaluateAbsorption(file(far), { ...CHANGE, base: baseOf(baseLines, 2) }, { relocationLines: 50 }).outcome, ABSORPTION.CHANGED, 'מחוץ לטווח');
 });
 
 test('השורה שונתה אחרת → ידני; עמימות → ידני (אף פעם לא "נקלט")', () => {
-  assert.deepEqual(check([L0, '', 'נוסח אחר', 'סוף']), { outcome: ABSORPTION.CHANGED, detail: 'line_changed', lineIndex: null, relocated: false });
+  assert.deepEqual(pick(check([L0, '', 'נוסח אחר', 'סוף'])), [ABSORPTION.CHANGED, 'line_changed', null, false]);
   assert.equal(check([OLD, '', 'נוסח אחר', OLD]).detail, 'ambiguous', 'המקורית פעמיים בקובץ');
-  assert.equal(check([L0, NEW, 'נוסח אחר', OLD]).detail, 'ambiguous', 'המקורית זזה וגם החדשה ליד היעד');
-  assert.equal(check([L0, NEW, 'נוסח אחר', NEW]).detail, 'ambiguous', 'החדשה פעמיים בקובץ');
+  assert.equal(check([L0, NEW, 'נוסח אחר', OLD]).outcome, ABSORPTION.CHANGED, 'המקורית זזה וגם החדשה בסביבה');
+  assert.equal(check([L0, NEW, 'נוסח אחר', NEW]).outcome, ABSORPTION.CHANGED, 'החדשה פעמיים בקובץ');
 });
 
 test('קובץ חסר, קובץ שאינו UTF-8 ושינוי בלי שורת יעד → ידני', () => {
@@ -57,9 +64,9 @@ test('BOM בשורה הראשונה מה-DB, שורות LF, ומחיקת תוכ�
   const del = { ...CHANGE, newLine: '' };
   assert.equal(check([L0, '', '', 'סוף'], del).outcome, ABSORPTION.ABSORBED);
   assert.equal(check([L0, '', OLD, ''], del).outcome, ABSORPTION.PENDING);
-  assert.equal(check([L0, 'א', 'ב', '', OLD, ''], del).outcome, ABSORPTION.PENDING, 'שורות ריקות רבות אינן עמימות כשהמקורית זזה');
-  // שורה ריקה שזזה אל היעד אינה ראיה לקליטה כשהמקורית עדיין בקובץ
-  assert.deepEqual(check([L0, 'א', '', OLD, 'סוף'], del), { outcome: ABSORPTION.CHANGED, detail: 'ambiguous', lineIndex: null, relocated: false });
+  assert.equal(check([L0, 'א', 'ב', '', OLD, ''], del).outcome, ABSORPTION.PENDING, 'שורות ריקות אינן ראיה; המקורית זזה');
+  // שורה ריקה שזזה אל היעד אינה ראיה לקליטה כשהמקורית עדיין בסביבה
+  assert.deepEqual(pick(check([L0, 'א', '', OLD, 'סוף'], del)), [ABSORPTION.CHANGED, 'original_nearby', null, false]);
 });
 
 // שורה ארוכה עם שתי טעויות, ודיווח נפרד על כל אחת — מנהל הספרייה מחיל את שניהם יחד.
@@ -83,15 +90,15 @@ test('lineEdit: מה הוסר ומה נוסף, עם הקשר קצר; עיגון 
 
 test('כמה תיקונים באותה שורה: כל עריכה נבדקת בהקשרה, גם כשהשורה כולה אינה זהה לאף הצעה', () => {
   const both = file(['כותרת', fixB(fixA(LONG)), 'סוף']);
-  assert.deepEqual(evaluateAbsorption(both, A), { outcome: ABSORPTION.ABSORBED, detail: 'edit_applied', lineIndex: 1, relocated: false });
+  assert.deepEqual(pick(evaluateAbsorption(both, A)), [ABSORPTION.ABSORBED, 'edit_applied', 1, false]);
   assert.equal(evaluateAbsorption(both, B).outcome, ABSORPTION.ABSORBED);
-  const onlyB = file(['כותרת', fixB(LONG), 'סוף']);
-  assert.deepEqual(evaluateAbsorption(onlyB, A), { outcome: ABSORPTION.PENDING, detail: 'edit_pending', lineIndex: 1, relocated: false });
-  const otherWording = file(['כותרת', LONG.replace('הלכא', 'הילכתא'), 'סוף']);
-  assert.equal(evaluateAbsorption(otherWording, A).detail, 'line_changed', 'תוקן אחרת → ידני');
-  // השורה זזה: העריכה בהקשרה נמצאת בטווח
-  const moved = file(['כותרת', 'הקדמה', 'עוד', fixB(fixA(LONG)), 'סוף']);
-  assert.deepEqual(evaluateAbsorption(moved, A, { relocationLines: 50 }), { outcome: ABSORPTION.ABSORBED, detail: 'edit_applied_relocated', lineIndex: 3, relocated: true });
+  assert.deepEqual(pick(evaluateAbsorption(file(['כותרת', fixB(LONG), 'סוף']), A)), [ABSORPTION.PENDING, 'edit_pending', 1, false]);
+  assert.equal(evaluateAbsorption(file(['כותרת', LONG.replace('הלכא', 'הילכתא'), 'סוף']), A).detail, 'line_changed', 'תוקן אחרת → ידני');
+  // השורה זזה: מעוגנת לשכנים (שורה שכנה ארוכה שנערכה גם היא עדיין "אותה שורה")
+  const NEXT = 'ועוד אמר רבי יוחנן שם בגמרא דבר נוסף ארוך דיו כדי להיחשב שורה ארוכה לעיגון השכנים';
+  const base = { before: ['כותרת'], after: [NEXT, 'סוף'] };
+  const moved = file(['הקדמה', 'עוד', 'כותרת', fixB(fixA(LONG)), NEXT.replace('נוסף', 'אחר'), 'סוף']);
+  assert.deepEqual(pick(evaluateAbsorption(moved, { ...A, base }, { relocationLines: 50 })), [ABSORPTION.ABSORBED, 'edit_applied_relocated', 3, true]);
   assert.equal(evaluateAbsorption(file(['כותרת', 'הקדמה', fixB(LONG), 'סוף']), A, { relocationLines: 50 }).detail, 'edit_pending_relocated');
 });
 
@@ -103,17 +110,89 @@ test('אותו ביטוי פעמיים בשורה, אחד תוקן והשני ל
   assert.equal(evaluateAbsorption(target, change).detail, 'ambiguous');
 });
 
-test('המעבר: נקלט → סגירה; השתנה → ידני מיד; ממתין → המתנה עד תום הזמן ואז ידני', () => {
+// ---- QA (PR #312): "נקלט" שגוי כשהראיה אינה בשורת היעד עצמה ----
+
+test("S1′: כותרת כפולה, התיקון לא הוחל ונמחקו שורות למעלה — הכותרת הבאה שזזה אל היעד אינה ראיה", () => {
+  const base = ['<h2>חלק א</h2>', 'שורת קרדיט', 'שורת קרדיט 2', '<h3>יא</h3>', 'טקסט יא', '<h3>יא</h3>', 'טקסט נוסף', '<h3>יב</h3>', 'טקסט יב'];
+  const change = { lineIndex: 5, originalLine: '<h3>יא</h3>', newLine: '<h3>יב</h3>' };
+  const main = [base[0], ...base.slice(3)];
+  for (const c of [{ ...change, base: baseOf(base, 5) }, change]) {
+    const v = evaluateAbsorption(file(main), c, { relocationLines: 50 });
+    assert.notEqual(v.outcome, ABSORPTION.ABSORBED, JSON.stringify(v));
+  }
+});
+
+const X = 'ובגמרא שם אמר רבי יוחנן הלכה כרבי מאיר בגזירה ובנמצא, וכן כתב רש"י שם';
+const T = 'ובירושלמי אמר רבי יוחנן הלכא כרבי מאיר בגזירה ובנמצא, ושם מבואר';
+const TCHANGE = { lineIndex: 2, originalLine: T, newLine: T.replace('הלכא', 'הלכה') };
+const TBASE = ['<h1>ספר</h1>', X, T, 'סוף'];
+
+test('S2: לשכן כבר היה הביטוי המתוקן ונוספה שורה למעלה — השכן שזז אל היעד אינו ראיה', () => {
+  const main = ['<h1>ספר</h1>', 'שורה חדשה שנוספה', X, T, 'סוף'];
+  assert.deepEqual(pick(evaluateAbsorption(file(main), { ...TCHANGE, base: baseOf(TBASE, 2) }, { relocationLines: 50 })), [ABSORPTION.PENDING, 'original_relocated', 3, true]);
+  assert.notEqual(evaluateAbsorption(file(main), TCHANGE, { relocationLines: 50 }).outcome, ABSORPTION.ABSORBED, 'גם בלי בסיס');
+  assert.equal(evaluateAbsorption(file(TBASE), { ...TCHANGE, base: baseOf(TBASE, 2) }, { relocationLines: 50 }).outcome, ABSORPTION.PENDING, 'ביקורת: בלי הזזה');
+});
+
+test('S4′: מנהל הספרייה כתב את שורת היעד בנוסח שלישי, ולשכן כבר היה הביטוי המתוקן → לא "נקלט"', () => {
+  const main = ['<h1>ספר</h1>', X, T.replace('הלכא', 'הילכתא'), 'סוף'];
+  assert.deepEqual(pick(evaluateAbsorption(file(main), { ...TCHANGE, base: baseOf(TBASE, 2) }, { relocationLines: 50 })), [ABSORPTION.CHANGED, 'line_changed', null, true]);
+  assert.notEqual(evaluateAbsorption(file(main), TCHANGE, { relocationLines: 50 }).outcome, ABSORPTION.ABSORBED, 'גם בלי בסיס');
+});
+
+test('מספור מחדש לגיטימי של כותרת כפולה (כמו d6611a9a): הכותרת הזהה הסמוכה אינה מונעת "נקלט" כשיש עיגון', () => {
+  const t = (s) => `<b>${s}</b> ${'טקסט התשובה הארוך דיו כדי להיחשב שורה ארוכה בעיגון '.repeat(2)}`;
+  const base = [t('ואתה'), t('זה'), '<h2>יד</h2>', t('הנה'), '<h2>טז</h2>', t('שלמא'), '<h2>טז</h2>', t('והנה'), t('שלמא2')];
+  const change = { lineIndex: 4, originalLine: '<h2>טז</h2>', newLine: '<h2>טו</h2>', base: baseOf(base, 4) };
+  const main = base.map((l, i) => (i === 4 ? '<h2>טו</h2>' : l));
+  assert.deepEqual(pick(evaluateAbsorption(file(main), change, { relocationLines: 50 })), [ABSORPTION.ABSORBED, 'applied', 4, true]);
+  const { base: _omit, ...unanchored } = change;
+  assert.equal(evaluateAbsorption(file(main), unanchored, { relocationLines: 50 }).detail, 'original_nearby', 'בלי בסיס — הבדיקה הזולה מעבירה לידני');
+});
+
+test('בלי עיגון, עם הבסיס המלא: "נקלט" רק כשנוסף בדיוק מופע אחד של התיקון לעומת הבסיס', () => {
+  const P1 = 'ובירושלמי אמר';
+  const P2 = 'רבי יוחנן הלכא כרבי מאיר בגזירה ובנמצא, ושם מבואר';
+  assert.equal(`${P1} ${P2}`, T);
+  // מנהל הספרייה פיצל את הפסקה לשתיים והחיל את התיקון בחלק השני; השכנים השתנו גם הם — אין עיגון
+  const base = ['<h1>ספר</h1>', 'מבוא קצר', T, 'סוף'];
+  const main = ['<h1>ספר</h1>', 'מבוא קצר ומורחב', P1, P2.replace('הלכא', 'הלכה'), 'סוף הפרק'];
+  const split = { ...TCHANGE, base: null };
+  assert.deepEqual(pick(evaluateAbsorption(file(main), split, { relocationLines: 50 })), [ABSORPTION.CHANGED, 'relocated_unanchored', null, false], 'בלי הבסיס המלא — ידני');
+  assert.deepEqual(pick(evaluateAbsorption(file(main), { ...split, baseLines: base }, { relocationLines: 50 })), [ABSORPTION.ABSORBED, 'edit_applied_relocated', 3, false]);
+  // שכן שכבר היה בו הביטוי המתוקן זז אל היעד, והיעד עצמו נכתב בנוסח אחר — הבדיקה הזולה לבדה הייתה "נקלט"
+  const s4 = ['<h1>ספר</h1>', X, T.replace('הלכא', 'הילכתא'), 'סוף'].slice(1);
+  assert.equal(evaluateAbsorption(file(s4), { ...TCHANGE, base: null, lineIndex: 0 }, { relocationLines: 50 }).outcome, ABSORPTION.ABSORBED, 'מגבלת הבדיקה הזולה');
+  assert.deepEqual(pick(evaluateAbsorption(file(s4), { ...TCHANGE, base: null, lineIndex: 0, baseLines: [T, X, 'סוף'] }, { relocationLines: 50 })), [ABSORPTION.CHANGED, 'fix_not_new', null, false]);
+  // שני מופעים בסביבה: אחד היה בבסיס (השכן), השני חדש (התיקון) — נקלט
+  const two = ['<h1>ספר</h1>', X, P1, P2.replace('הלכא', 'הלכה'), 'סוף הפרק'];
+  assert.deepEqual(pick(evaluateAbsorption(file(two), { ...split, baseLines: TBASE }, { relocationLines: 50 })), [ABSORPTION.ABSORBED, 'edit_applied_relocated', 3, false]);
+});
+
+test('עיגון: שכנים זהים במקומות רבים או בסיס חלש → אין עיגון; שורה ארוכה שנערכה מעט היא "אותה שורה"', () => {
+  const rep = Array.from({ length: 10 }, (_, i) => (i % 2 ? 'טקסט' : '<br>'));
+  assert.deepEqual(anchorTarget(rep, 4, { before: ['<br>', 'טקסט'], after: ['טקסט', '<br>'] }, 50), { none: 'ambiguous' });
+  assert.deepEqual(anchorTarget(['a', 'b'], 1, { before: [''], after: [] }, 50), { none: 'weak_base' });
+  assert.deepEqual(anchorTarget(['a', 'b'], 1, null, 50), { none: 'no_base' });
+  assert.equal(sameLine(LONG, fixB(fixA(LONG))), true);
+  assert.equal(sameLine('<h3>יא</h3>', '<h3>יב</h3>'), false);
+});
+
+test('המעבר: נקלט → סגירה; כל השאר ממתין עד תום הזמן ואז לידני לפי התוצאה; תווית דחייה → ידני מיד', () => {
   const closedAt = new Date('2026-11-01T00:00:00Z');
-  const at = (sec) => ({ closedAt, now: new Date(closedAt.getTime() + sec * 1000), graceSeconds: 100 });
+  const at = (sec, extra = {}) => ({ closedAt, now: new Date(closedAt.getTime() + sec * 1000), graceSeconds: 100, ...extra });
   assert.equal(closedPrAction({ outcome: ABSORPTION.ABSORBED }, at(10_000)), CLOSED_PR_ACTION.CLOSE_ABSORBED);
-  assert.equal(closedPrAction({ outcome: ABSORPTION.CHANGED }, at(0)), CLOSED_PR_ACTION.HANDOFF_CHANGED);
-  assert.equal(closedPrAction({ outcome: ABSORPTION.PENDING }, at(0)), CLOSED_PR_ACTION.AWAIT);
+  assert.equal(closedPrAction({ outcome: ABSORPTION.CHANGED }, at(0)), CLOSED_PR_ACTION.AWAIT, 'גם "השתנה" ממתין: תיקון שכן שנדחף ראשון משנה את ההקשר');
+  assert.equal(closedPrAction({ outcome: ABSORPTION.CHANGED }, at(100)), CLOSED_PR_ACTION.HANDOFF_CHANGED);
   assert.equal(closedPrAction({ outcome: ABSORPTION.PENDING }, at(99)), CLOSED_PR_ACTION.AWAIT);
   assert.equal(closedPrAction({ outcome: ABSORPTION.PENDING }, at(100)), CLOSED_PR_ACTION.HANDOFF_NOT_ABSORBED);
-  assert.equal(handoffReasonOf(CLOSED_PR_ACTION.HANDOFF_CHANGED), PR_CLOSED_HANDOFF.CHANGED);
-  assert.equal(handoffReasonOf(CLOSED_PR_ACTION.HANDOFF_NOT_ABSORBED), PR_CLOSED_HANDOFF.NOT_ABSORBED);
-  assert.equal(handoffReasonOf(CLOSED_PR_ACTION.AWAIT), null);
+  assert.equal(closedPrAction({ outcome: ABSORPTION.ABSORBED }, at(0, { rejected: true })), CLOSED_PR_ACTION.HANDOFF_REJECTED, 'תווית לעולם אינה עוקפת לכיוון "נקלט"');
+  assert.equal(expiredAction(undefined), CLOSED_PR_ACTION.HANDOFF_UNVERIFIED);
+  assert.equal(absorptionDeadline(closedAt, 100).getTime(), closedAt.getTime() + 100_000);
+  const reasons = Object.values(CLOSED_PR_ACTION).map(handoffReasonOf);
+  assert.deepEqual(reasons, [null, null, PR_CLOSED_HANDOFF.NOT_ABSORBED, PR_CLOSED_HANDOFF.CHANGED, PR_CLOSED_HANDOFF.REJECTED, PR_CLOSED_HANDOFF.UNVERIFIED]);
+  assert.equal(hasRejectedLabel(['bug', ' Rejected '], ['לא נקלט', 'rejected']), true);
+  assert.equal(hasRejectedLabel(['נקלט'], ['לא נקלט', 'rejected']), false);
 });
 
 test('תוויות: PR שנסגר וממתין לקליטה, וסיבות ההעברה לידני החדשות', () => {

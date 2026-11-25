@@ -48,6 +48,8 @@ export const HANDOFF_REASON_LABELS = {
   publish_failed: 'הפרסום נכשל',
   pr_closed_not_absorbed: 'ה-PR נסגר בלי מיזוג והתיקון לא נקלט ב-main',
   source_changed_after_pr_close: 'המקור השתנה אחרי סגירת ה-PR',
+  pr_rejected_by_maintainer: 'מנהל הספרייה סימן את ה-PR כלא נקלט',
+  pr_closed_unverified: 'ה-PR נסגר ולא ניתן היה לבדוק את main עד תום ההמתנה',
   worker_error: 'תקלה פנימית חוזרת בעיבוד האוטומטי',
   volunteer_released: 'שוחרר ע"י מתנדב',
   claim_expired: 'תוקף השיוך פג',

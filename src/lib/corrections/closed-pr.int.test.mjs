@@ -13,9 +13,13 @@ import { getCorrectionsConfig } from './config.js';
 import { runWorkerBatch } from './worker.js';
 import { runReportAction } from './actions.js';
 import { listReports, getReportDetail } from './volunteer.js';
-import { migrateClosedPullReports } from './migrate.js';
+import { migrateClosedPullReports, revertClosedPullMigration } from './migrate.js';
+import { applyClosedPrAction } from './closed-pr.js';
+import { CLOSED_PR_ACTION } from './absorption.js';
 import { manualQueueSet } from './store.js';
 import { deriveLabels } from './labels.js';
+import { computeHealth } from './health.js';
+import WorkerHeartbeat from '../../models/WorkerHeartbeat.js';
 import { FakeGitHub, json } from './testing/fake-github.js';
 import { startMongo } from './testing/mongo.js';
 
@@ -35,6 +39,7 @@ const FILE = fileOf(LINES);
 const EXODUS = ['(א) וְאֵלֶּה שְׁמוֹת בְּנֵי יִשְׂרָאֵל', '(ב) רְאוּבֵן שִׁמְעוֹן לֵוִי'];
 const FILE2 = fileOf(EXODUS, '<h1>שמות</h1>');
 const CONFIG = getCorrectionsConfig({ DICTA_LIBRARY_GITHUB_TOKEN: 't' }, { publishMode: 'pr' });
+const DISABLED = getCorrectionsConfig({ DICTA_LIBRARY_GITHUB_TOKEN: 't' }, { publishMode: 'disabled' });
 const GRACE = CONFIG.publish.absorptionGraceSeconds;
 const T0 = new Date('2026-09-15T10:00:00Z');
 const at = (sec) => new Date(T0.getTime() + sec * 1000);
@@ -68,7 +73,7 @@ async function ingest(id, i, { lines = LINES, book = 'בראשית', path = 'ת�
 }
 
 const act = (user, id, body, now = T0) => runReportAction({ user, id, body, config: CONFIG, deps: { githubFetch: gh.fetch }, now });
-const work = (now) => runWorkerBatch({ config: CONFIG, workerId: 'w', deps: { githubFetch: gh.fetch, random: () => 0 }, now });
+const work = (now, { config = CONFIG, workerId = 'w', hooks } = {}) => runWorkerBatch({ config, workerId, deps: { githubFetch: gh.fetch, random: () => 0, hooks }, now });
 const load = (id) => ErrorReport.findById(id).lean();
 const events = async (id) => (await CorrectionEvent.find({ report: id }).sort({ createdAt: 1 }).lean()).map((e) => e.type);
 const labels = async (id) => deriveLabels(await load(id)).map((l) => l.text);
@@ -86,17 +91,21 @@ async function approved(id, user = users.a) {
   return r;
 }
 
-/** הקומיט המקומי של מנהל הספרייה מגיע ל-main: השורות שתוקנו (ואפשר גם שורות שנוספו לפני). */
-const pushFixes = (indexes, { prefix = [], path = PATH, lines = LINES } = {}) => {
+/** הקומיט המקומי של מנהל הספרייה מגיע ל-main: השורות שתוקנו (ואפשר גם שורות שנוספו לפני, או בסוף). */
+const pushFixes = (indexes, { prefix = [], suffix = [], path = PATH, lines = LINES } = {}) => {
   const next = lines.map((l, i) => (indexes.includes(i) ? fixed(l) : l));
-  gh.pushExternal('main', { [path]: path === PATH ? fileOf([...prefix, ...next]) : fileOf([...prefix, ...next], '<h1>שמות</h1>') }, 'batch');
+  const title = path === PATH ? H1 : '<h1>שמות</h1>';
+  gh.pushExternal('main', { [path]: fileOf([...prefix, ...next, ...suffix], title) }, 'batch');
 };
+// תוכן ייחודי לבדיקה: blob חדש שאינו במטמון מבדיקות קודמות.
+const unique = (t) => `הערת שוליים ${t.name.length}-${Date.now()}`;
+const gets = (from, re) => gh.calls.slice(from).filter((c) => c.method === 'GET' && re.test(c.path)).length;
 
 test('PR שנסגר בלי מיזוג והתיקון כבר ב-main → נסגר כפורסם (נקלט), לא לתור הידני', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const id = await ingest('abs', 0);
   const before1 = await approved(id);
-  gh.closePull(before1.publish.prNumber);
+  gh.closePull(before1.publish.prNumber, { comment: 'התיקון נבדק ונקלט בקומיט מקומי, ייכנס ל-main בקרוב' });
   pushFixes([0]);
   await work(at(2));
   const r = await load(id);
@@ -108,6 +117,7 @@ test('PR שנסגר בלי מיזוג והתיקון כבר ב-main → נסגר
   assert.equal(r.inclusion.status, 'merged_to_main');
   assert.equal(r.manual.status, 'none');
   assert.equal(r.workflowGeneration, before1.workflowGeneration + 1);
+  assert.equal(r.publish.absorptionCheck.anchored, true, 'מעוגן להקשר שנשמר באישור');
   assert.ok((await labels(id)).includes('פורסם במקור'));
   const ev = await CorrectionEvent.findOne({ report: id, type: 'pr_absorbed' }).lean();
   assert.equal(ev.data.prNumber, before1.publish.prNumber);
@@ -116,16 +126,20 @@ test('PR שנסגר בלי מיזוג והתיקון כבר ב-main → נסגר
   assert.ok(!(await events(id)).includes('handoff_manual'));
 });
 
-test('PR נסגר לפני שהתיקון הגיע ל-main → ממתין (נעול ללקיחה, לא בתור); נקלט אחר כך גם כששורות זזו', async (t) => {
+test('PR נסגר לפני שהתיקון הגיע ל-main → ממתין (נעול ללקיחה, לא בתור, עם הערת הסגירה); נקלט אחר כך גם כששורות זזו', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const id = await ingest('pend', 1);
   const r0 = await approved(id);
-  gh.closePull(r0.publish.prNumber);
+  gh.closePull(r0.publish.prNumber, { comment: 'נבדק ונקלט בקומיט מקומי, ייכנס ל-main בקרוב — ראו a@example.org' });
   await work(at(2));
   let r = await load(id);
   assert.equal(r.state, 'open');
   assert.equal(r.publish.status, 'pr_opened');
   assert.equal(r.publish.prClosedAt.getTime(), at(2).getTime());
+  assert.equal(r.publish.absorptionDeadline.getTime(), at(2 + GRACE).getTime());
+  assert.equal(r.publish.absorptionCheck.outcome, 'pending');
+  assert.match(r.publish.prCloseComment.body, /נקלט בקומיט מקומי/);
+  assert.ok(!r.publish.prCloseComment.body.includes('@example.org'), 'בלי כתובות מייל');
   assert.equal(r.manual.status, 'none');
   assert.equal(r.workflowGeneration, r0.workflowGeneration, 'זיהוי הסגירה אינו פוסל פעולה של מתנדב');
   assert.ok((await labels(id)).includes('ה-PR נסגר — ממתין לקליטה ב-main'));
@@ -133,6 +147,10 @@ test('PR נסגר לפני שהתיקון הגיע ל-main → ממתין (נע�
   assert.equal((await listReports({ user: users.b, query: { view: 'queued' }, now: at(2) })).body.total, 0);
   assert.equal((await listReports({ user: users.b, query: { view: 'publishing' }, now: at(2) })).body.total, 1);
   assert.equal((await act(users.b, id, { action: 'claim' }, at(2))).body.error, 'approved_locked', 'לקיחה הייתה יוצרת PR כפול');
+  const d = await getReportDetail({ user: users.b, id, config: CONFIG, deps: { githubFetch: gh.fetch } });
+  assert.match(d.body.report.publish.prCloseComment.body, /נקלט בקומיט מקומי/, 'ההערה מוצגת למתנדב');
+  const ev = await CorrectionEvent.findOne({ report: id, type: 'pr_closed_awaiting_absorption' }).lean();
+  assert.match(ev.data.comment, /נקלט בקומיט מקומי/);
 
   await work(at(3));
   assert.equal((await events(id)).filter((e) => e === 'pr_closed_awaiting_absorption').length, 1, 'בדיקה חוזרת אינה אירוע');
@@ -141,12 +159,11 @@ test('PR נסגר לפני שהתיקון הגיע ל-main → ממתין (נע�
   r = await load(id);
   assert.equal(r.state, 'closed_published');
   assert.equal(r.publish.absorbed, true);
-  const ev = await CorrectionEvent.findOne({ report: id, type: 'pr_absorbed' }).lean();
-  assert.equal(ev.data.relocated, true);
-  assert.equal(ev.data.lineIndex, 4);
+  const absorbed = await CorrectionEvent.findOne({ report: id, type: 'pr_absorbed' }).lean();
+  assert.deepEqual([absorbed.data.relocated, absorbed.data.lineIndex, absorbed.data.anchored], [true, 4, true]);
 });
 
-test('PR נסגר והתיקון לא נקלט ב-main עד תום ההמתנה → ידני עם סיבה נפרדת', async (t) => {
+test('PR נסגר והתיקון לא נקלט ב-main עד תום ההמתנה → ידני; אישור מחדש פותח PR במעקב רגיל', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const id = await ingest('grace', 2);
   const r0 = await approved(id);
@@ -168,30 +185,48 @@ test('PR נסגר והתיקון לא נקלט ב-main עד תום ההמתנה 
   assert.equal(ev.data.reason, 'pr_closed_not_absorbed');
   const claim = await act(users.b, id, { action: 'claim' }, at(3 + GRACE));
   assert.equal(claim.status, 200, 'מתנדב יכול לטפל בו');
-  // אישור מחדש פותח PR חדש — במעקב רגיל, בלי זמן ההמתנה של ה-PR הקודם
   const d = await getReportDetail({ user: users.b, id, config: CONFIG, deps: { githubFetch: gh.fetch } });
   const ap = await act(users.b, id, { action: 'approve', generation: claim.body.generation, revision: d.body.report.currentRevision, seenBlobSha: d.body.source?.blobSha }, at(4 + GRACE));
   assert.equal(ap.status, 200, JSON.stringify(ap.body));
-  await work(at(5 + GRACE));
+  // ה-PR החדש נסגר מיד אחרי פתיחתו, באותה אצווה: ההמתנה מתחילה מחדש (prClosedAt של ה-PR הקודם התאפס)
+  const closeAtOnce = { afterPublishWrite: async ({ outcome }) => { if (outcome.prNumber) gh.closePull(outcome.prNumber); } };
+  await work(at(5 + GRACE), { hooks: closeAtOnce });
   const again = await load(id);
-  assert.equal(again.publish.status, 'pr_opened');
   assert.notEqual(again.publish.prNumber, r0.publish.prNumber);
-  assert.equal(again.publish.prClosedAt, null);
-  assert.ok((await labels(id)).includes('נפתח PR (טרם מוזג)'));
+  assert.equal(again.publish.status, 'pr_opened', 'לא הועבר לידני מיד לפי זמן ההמתנה של ה-PR הקודם');
+  assert.equal(again.publish.prClosedAt.getTime(), at(5 + GRACE).getTime());
 });
 
-test('PR נסגר והשורה ב-main שונתה אחרת → ידני מיד (המקור השתנה אחרי סגירת ה-PR)', async (t) => {
+test('PR נסגר והשורה ב-main שונתה אחרת → ממתין עד תום הזמן (תיקון שכן אולי טרם נדחף), ואז ידני', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const id = await ingest('chg', 3);
   const r0 = await approved(id);
   gh.closePull(r0.publish.prNumber);
   gh.pushExternal('main', { [PATH]: FILE.replace(LINES[3], 'נוסח אחר לגמרי') });
   await work(at(2));
-  const r = await load(id);
+  let r = await load(id);
+  assert.equal(r.publish.status, 'pr_opened');
+  assert.equal(r.publish.absorptionCheck.outcome, 'changed');
+  await work(at(2 + GRACE));
+  r = await load(id);
   assert.equal(r.publish.status, 'failed');
   assert.equal(r.manual.handoffReason, 'source_changed_after_pr_close');
   assert.equal(r.publish.conflictReason, 'source_changed_after_pr_close');
   assert.ok((await labels(id)).includes('התנגשות'));
+});
+
+test('תווית דחייה של מנהל הספרייה → ידני מיד, גם כשהשורה ב-main זהה להצעה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const id = await ingest('label', 0);
+  const r0 = await approved(id);
+  gh.closePull(r0.publish.prNumber, { comment: 'לא נקלט — הנוסח המקורי נכון', labels: ['לא נקלט'] });
+  pushFixes([0]);
+  await work(at(2));
+  const r = await load(id);
+  assert.deepEqual([r.state, r.publish.status, r.manual.handoffReason], ['open', 'failed', 'pr_rejected_by_maintainer']);
+  assert.match(r.publish.prCloseComment.body, /הנוסח המקורי נכון/);
+  const ev = await CorrectionEvent.findOne({ report: id, type: 'pr_closed_unmerged' }).lean();
+  assert.deepEqual([ev.data.reason, ev.data.labels], ['pr_rejected_by_maintainer', ['לא נקלט']]);
 });
 
 test('PR שנפתח מחדש חוזר למעקב רגיל; דחייה באתר (שסוגרת את ה-PR) אינה עוברת בדיקת קליטה', async (t) => {
@@ -217,14 +252,154 @@ test('PR שנפתח מחדש חוזר למעקב רגיל; דחייה באתר (
   assert.ok(!(await events(id2)).includes('pr_absorbed'));
 });
 
+test('תום ההמתנה בלי תלות ב-GitHub: כשהפרסום כבוי, וכשהבדיקה נכשלת שוב ושוב (קובץ ענק, תקלה)', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  // פרסום כבוי: אין שום פנייה ל-GitHub, אבל דיווח שתמה המתנתו עובר לידני לפי התוצאה האחרונה
+  const id = await ingest('disabled', 2);
+  const r0 = await approved(id);
+  gh.closePull(r0.publish.prNumber);
+  await work(at(2));
+  const calls = gh.calls.length;
+  await work(at(2 + GRACE - 1), { config: DISABLED });
+  assert.equal((await load(id)).publish.status, 'pr_opened');
+  await work(at(2 + GRACE), { config: DISABLED });
+  assert.equal(gh.calls.length, calls, 'בלי GitHub');
+  let r = await load(id);
+  assert.deepEqual([r.publish.status, r.manual.handoffReason], ['failed', 'pr_closed_not_absorbed']);
+
+  // בדיקה שנכשלת תמיד (blob שחורג מה-timeout): השעון מתחיל בזיהוי הסגירה, ובתומו — ידני "לא נבדק"
+  const id2 = await ingest('failing', 4);
+  const r2 = await approved(id2);
+  gh.closePull(r2.publish.prNumber);
+  pushFixes([], { suffix: [unique(t)] });
+  gh.hooks.beforeRequest = ({ method, path }) => (method === 'GET' && path.includes('/git/blobs/') ? json(504, { message: 'timeout' }) : null);
+  await work(at(10));
+  r = await load(id2);
+  assert.equal(r.publish.status, 'pr_opened');
+  assert.equal(r.publish.prClosedAt.getTime(), at(10).getTime(), 'השעון התחיל למרות הכשל');
+  assert.match(r.publish.lastError, /pr_track_failed/);
+  await work(at(10 + GRACE));
+  r = await load(id2);
+  assert.deepEqual([r.publish.status, r.manual.handoffReason], ['failed', 'pr_closed_unverified']);
+  gh.hooks.beforeRequest = null;
+});
+
+test('PR שאינו קיים עוד (404) נבדק כמו PR שנסגר; כל PR נקרא פעם אחת לאצווה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const id = await ingest('gone', 0);
+  const id2 = await ingest('gone2', 1);
+  const r = await approved(id);
+  await approved(id2);
+  // שני דיווחים על אותו PR (כמו PR מרוכז), וה-PR נמחק
+  await ErrorReport.updateOne({ _id: id2 }, { $set: { 'publish.prNumber': r.publish.prNumber } });
+  gh.hooks.beforeRequest = ({ method, path }) => (method === 'GET' && path.endsWith(`/pulls/${r.publish.prNumber}`) ? json(404, { message: 'Not Found' }) : null);
+  pushFixes([0, 1]);
+  const from = gh.calls.length;
+  await work(at(2));
+  gh.hooks.beforeRequest = null;
+  assert.equal(gets(from, new RegExp(`/pulls/${r.publish.prNumber}$`)), 1, 'PR אחד — קריאה אחת');
+  assert.equal((await load(id)).state, 'closed_published');
+  assert.equal((await load(id2)).state, 'closed_published');
+});
+
+test('בדיקה חוזרת רק כש-main או הקובץ השתנו: אותו main — בלי בדיקה; קובץ אחר זז — בלי הורדה', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const id = await ingest('reuse', 1);
+  const r0 = await approved(id);
+  gh.closePull(r0.publish.prNumber);
+  pushFixes([], { suffix: [unique(t)] });
+  await work(at(2));
+  const first = (await load(id)).publish.absorptionCheck;
+  assert.equal(first.outcome, 'pending');
+  await work(at(3));
+  const same = (await load(id)).publish.absorptionCheck;
+  assert.equal(same.at.getTime(), first.at.getTime(), 'main לא זז — התוצאה ממוחזרת');
+  gh.pushExternal('main', { [PATH2]: fileOf([...EXODUS, 'שינוי בקובץ אחר'], '<h1>שמות</h1>') });
+  const from = gh.calls.length;
+  await work(at(4));
+  const moved = (await load(id)).publish.absorptionCheck;
+  assert.equal(moved.mainSha, gh.headSha('main'));
+  assert.equal(moved.at.getTime(), first.at.getTime(), 'הקובץ לא השתנה — בלי בדיקה מחדש');
+  assert.equal(gets(from, /\/git\/blobs\//), 0, 'בלי הורדת הקובץ');
+  pushFixes([1]);
+  await work(at(5));
+  assert.equal((await load(id)).state, 'closed_published');
+});
+
+test('גדרות: generation ומספר ה-PR בתנאי הכתיבה; לקיחה/דחייה בין הקריאה לכתיבה → raced', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const id = await ingest('fence', 0);
+  await approved(id);
+  const r = await load(id);
+  const verdict = { outcome: 'absorbed', detail: 'applied', mainSha: gh.headSha('main'), path: PATH, lineIndex: 2, anchored: true };
+  const opts = { now: at(2), closedAt: at(2), graceSeconds: GRACE, actor: { kind: 'worker' } };
+  await ErrorReport.updateOne({ _id: id }, { $inc: { workflowGeneration: 1 } });
+  assert.equal(await applyClosedPrAction(r, CLOSED_PR_ACTION.CLOSE_ABSORBED, verdict, opts), 'raced', 'generation ישן');
+  await ErrorReport.updateOne({ _id: id }, { $inc: { workflowGeneration: -1 }, $set: { 'publish.prNumber': 999 } });
+  assert.equal(await applyClosedPrAction(r, CLOSED_PR_ACTION.CLOSE_ABSORBED, verdict, opts), 'raced', 'PR אחר');
+  await ErrorReport.updateOne({ _id: id }, { $set: { 'publish.prNumber': r.publish.prNumber } });
+  assert.equal(await applyClosedPrAction(r, CLOSED_PR_ACTION.CLOSE_ABSORBED, verdict, opts), 'closed', 'ביקורת: בלי שינוי — נכתב');
+
+  // דחייה באתר בזמן שה-worker בודק: הכתיבה שלו נכשלת והדיווח נשאר דחוי
+  const id2 = await ingest('fence2', 1);
+  const r2 = await approved(id2);
+  gh.closePull(r2.publish.prNumber);
+  pushFixes([1]);
+  gh.hooks.beforeRequest = async ({ method, path }) => {
+    if (method !== 'GET' || !/\/issues\/\d+\/comments$/.test(path)) return null;
+    gh.hooks.beforeRequest = null;
+    const g = (await load(id2)).workflowGeneration;
+    assert.equal((await act(users.b, id2, { action: 'reject_approved', generation: g, reason: 'נוסח שגוי' })).status, 200);
+    return null;
+  };
+  await work(at(3));
+  const after2 = await load(id2);
+  assert.equal(after2.state, 'closed_rejected');
+  assert.ok(!(await events(id2)).includes('pr_absorbed'));
+});
+
+test('שתי אצוות במקביל: זיהוי הסגירה נרשם פעם אחת', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const id = await ingest('parallel', 2);
+  const r0 = await approved(id);
+  gh.closePull(r0.publish.prNumber);
+  // שתי האצוות קוראות את הדיווח לפני ששתיהן כותבות
+  let arrived = 0;
+  let release;
+  const both = new Promise((res) => { release = res; });
+  gh.hooks.beforeRequest = async ({ method, path }) => {
+    if (method !== 'GET' || !/\/issues\/\d+\/comments$/.test(path)) return null;
+    arrived += 1;
+    if (arrived === 2) release();
+    await both;
+    return null;
+  };
+  await Promise.all([work(at(2)), work(at(2), { workerId: 'w2' })]);
+  gh.hooks.beforeRequest = null;
+  assert.equal((await events(id)).filter((e) => e === 'pr_closed_awaiting_absorption').length, 1);
+});
+
+test('בריאות: דיווחים שממתינים לקליטה אינם "עבודה ממתינה" ל-worker', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const id = await ingest('health', 2);
+  const r0 = await approved(id);
+  gh.closePull(r0.publish.prNumber);
+  await work(at(2));
+  await WorkerHeartbeat.updateMany({}, { $set: { lastBeatAt: at(2) } });
+  const h = await computeHealth({ config: CONFIG, now: at(2 + 3 * DAY) });
+  assert.equal(h.counts.prClosedAwaiting, 1);
+  assert.equal(h.counts.prOpened, 0);
+  assert.ok(!h.problems.includes('worker_not_running'), JSON.stringify(h.problems));
+});
+
 /** המצב שהמעקב הישן השאיר: נכשל + בתור הידני עם publish_failed, מרגע הזיהוי observedAt. */
 async function legacyClosed(id, observedAt) {
   const r = await load(id);
-  gh.closePull(r.publish.prNumber);
+  gh.closePull(r.publish.prNumber, { comment: 'נבדק' });
   await ErrorReport.updateOne({ _id: id }, { $set: { 'publish.status': 'failed', 'publish.lastError': 'pr_closed_unmerged', 'publish.updatedAt': observedAt, ...manualQueueSet('publish_failed', observedAt) } });
 }
 
-test('migration: dry-run לא כותב; --apply מעביר לפי אותו כלל, אידמפוטנטי וקולט תיקונים מאוחרים', async (t) => {
+test('migration: dry-run לא כותב; --apply מעביר לפי אותו כלל, אידמפוטנטי, קולט תיקונים מאוחרים וניתן לביטול', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const NOW = at(40 * DAY);
   const ids = {};
@@ -232,7 +407,7 @@ test('migration: dry-run לא כותב; --apply מעביר לפי אותו כל�
     ids[k] = await ingest(`mig-${k}`, i);
     await approved(ids[k]);
   }
-  // אושר בכמות מחוץ ל-worker: בלי חבילת שינוי — היעד נגזר מההצעה
+  // אושר בכמות מחוץ ל-worker: בלי חבילת שינוי — היעד נגזר מההצעה, והבסיס מהורה הקומיט של ה-PR
   ids.bulk = await ingest('mig-bulk', 1, { lines: EXODUS, book: 'שמות', path: 'תנך/תורה/שמות.txt' });
   await approved(ids.bulk);
   await ChangePackage.deleteMany({ report: ids.bulk });
@@ -252,49 +427,93 @@ test('migration: dry-run לא כותב; --apply מעביר לפי אותו כל�
   // תקלה זמנית של GitHub (502) בקריאת קובץ — ניסיון חוזר, לא שגיאה
   let failed = 0;
   gh.hooks.beforeRequest = ({ method, path }) => (method === 'GET' && path.includes('/git/blobs/') && !failed++ ? json(502, { message: 'Bad Gateway' }) : null);
-  const dry = await migrateClosedPullReports({ config: CONFIG, deps: { githubFetch: gh.fetch, retryDelayMs: 0 }, now: NOW });
+  const rows = [];
+  const dry = await migrateClosedPullReports({ config: CONFIG, deps: { githubFetch: gh.fetch, retryDelayMs: 0 }, now: NOW, rows });
   gh.hooks.beforeRequest = null;
   assert.equal(failed > 1, true, 'הקריאה שנכשלה נוסתה שוב');
   assert.equal(await snapshot(), before1, 'dry-run אינו כותב');
   assert.equal(await CorrectionEvent.countDocuments(), eventsBefore);
   assert.equal(gh.calls.slice(callsBefore).filter((c) => c.method !== 'GET').length, 0, 'GitHub: קריאה בלבד');
-  const blobReads = gh.calls.slice(callsBefore).filter((c) => c.path.includes('/git/blobs/')).map((c) => c.path);
-  assert.equal(blobReads.length, new Set(blobReads).size + 1, 'כל קובץ נקרא פעם אחת (ועוד הניסיון החוזר)');
   assert.equal(dry.mainSha, gh.headSha('main'));
   assert.equal(dry.candidates, 6);
   assert.equal(dry.skippedClaimed, 1);
   assert.equal(dry.files, 2);
   assert.deepEqual(dry.outcomes, { absorbed: 2, pending: 2, changed: 1 });
-  assert.deepEqual(dry.actions, { close_absorbed: 2, await: 1, handoff_not_absorbed: 1, handoff_changed: 1 });
+  assert.deepEqual(dry.actions, { close_absorbed: 2, await: 2, handoff_not_absorbed: 1 }, '"השתנה" בתוך זמן ההמתנה ממתין');
+  // שורות קצרות סמוכות שכל אחת מהן תוקנה אינן מעגנות (השוואה מדויקת בשורות קצרות) — הבדיקה בלי עיגון, והתוצאה עדיין נכונה
+  assert.deepEqual(dry.anchored, { yes: 3, no: 2 });
+  assert.equal(rows.find((x) => x.id === ids.bulk).anchored, true, 'גם דיווח בלי חבילה מעוגן (בסיס מהורה הקומיט של ה-PR)');
   assert.equal(dry.errors, 0);
+  assert.equal(rows.length, 5);
+  assert.ok(rows.every((x) => x.id && x.pr && x.action && !('originalLine' in x)), 'שורת --out בלי תוכן ובלי פרטים אישיים');
+
+  // --apply כשהפרסום כבוי: לא מעבירים להמתנה (מעקב ה-PR לא ירוץ)
+  const off = await migrateClosedPullReports({ config: DISABLED, deps: { githubFetch: gh.fetch }, now: NOW });
+  assert.equal(off.skipped.awaitPublishDisabled, 2);
+  assert.equal(await snapshot(), before1);
 
   const applied = await migrateClosedPullReports({ config: CONFIG, deps: { githubFetch: gh.fetch }, apply: true, now: NOW });
-  assert.deepEqual(applied.written, { close_absorbed: 2, await: 1, handoff_not_absorbed: 1, handoff_changed: 1 });
+  assert.deepEqual(applied.written, { close_absorbed: 2, await: 2, handoff_not_absorbed: 1 });
   const s = Object.fromEntries(await Promise.all(Object.entries(ids).map(async ([k, id]) => [k, await load(id)])));
   for (const k of ['absorbed', 'bulk']) {
     assert.equal(s[k].state, 'closed_published', k);
     assert.equal(s[k].publish.absorbed, true, k);
-    assert.equal(s[k].manual.handoffReason, null, `${k}: לא "הפרסום נכשל" על דיווח שפורסם`);
+    assert.deepEqual([s[k].manual.handoffReason, s[k].manual.queuedAt, s[k].assignedTo], [null, null, null], `${k}: בלי שאריות של התור`);
   }
   assert.equal(s.waiting.publish.status, 'pr_opened');
   assert.equal(s.waiting.publish.prClosedAt.getTime(), at(39 * DAY).getTime(), 'ההמתנה נספרת מזיהוי הסגירה');
   assert.equal(s.waiting.manual.status, 'none');
+  assert.equal(s.waiting.publish.prCloseComment.body, 'נבדק', 'הערת הסגירה נשמרת לדיווח שנשאר פתוח');
+  assert.deepEqual([s.changed.publish.status, s.changed.manual.status], ['pr_opened', 'none']);
   assert.deepEqual([s.expired.publish.status, s.expired.manual.status, s.expired.manual.handoffReason], ['failed', 'queued', 'pr_closed_not_absorbed']);
-  assert.deepEqual([s.changed.publish.status, s.changed.manual.handoffReason], ['failed', 'source_changed_after_pr_close']);
   assert.deepEqual([s.claimed.manual.status, s.claimed.manual.handoffReason], ['claimed', 'publish_failed'], 'דיווח בטיפול לא נגעו בו');
   const migEvent = await CorrectionEvent.findOne({ report: ids.waiting, type: 'pr_closed_awaiting_absorption' }).lean();
-  assert.deepEqual([migEvent.actorKind, migEvent.data.migration], ['system', true]);
+  assert.deepEqual([migEvent.actorKind, migEvent.data.migration, migEvent.data.before.manual.handoffReason], ['system', true, 'publish_failed']);
 
   const again = await migrateClosedPullReports({ config: CONFIG, deps: { githubFetch: gh.fetch }, apply: true, now: NOW });
   assert.deepEqual(again.written, {});
-  assert.equal(again.unchanged, 2, 'הרצה חוזרת אינה כותבת');
+  assert.equal(again.unchanged, 1, 'הרצה חוזרת אינה כותבת');
 
   // התיקון של expired הגיע ל-main מאוחר: הרצה נוספת סוגרת אותו; waiting נסגר במעקב ה-PR של ה-worker
-  gh.pushExternal('main', { [PATH]: fileOf(LINES.map((l, i) => (i === 3 ? 'נוסח אחר לגמרי' : fixed(l)))) });
+  pushFixes([0, 1, 2, 4]);
   const late = await migrateClosedPullReports({ config: CONFIG, deps: { githubFetch: gh.fetch }, apply: true, now: at(41 * DAY) });
   assert.deepEqual(late.written, { close_absorbed: 1 });
-  assert.equal(late.unchanged, 1);
   assert.equal((await load(ids.expired)).state, 'closed_published');
   await work(at(41 * DAY));
+  assert.equal((await load(ids.waiting)).state, 'closed_published', 'נסגר במעקב ה-PR — לא יבוטל');
+
+  // ביטול: כל מה שה-migration העבירה ולא השתנה מאז חוזר למצב הקודם
+  const plan = await revertClosedPullMigration();
+  assert.deepEqual([plan.reports, plan.revertible, plan.skippedChanged], [5, 4, 1]);
+  const undo = await revertClosedPullMigration({ apply: true });
+  assert.equal(undo.reverted, 4);
+  for (const k of ['absorbed', 'bulk', 'changed', 'expired']) {
+    const x = await load(ids[k]);
+    assert.deepEqual([x.state, x.publish.status, x.manual.status, x.manual.handoffReason, x.publish.absorbed, x.publish.prClosedAt], ['open', 'failed', 'queued', 'publish_failed', undefined, undefined], k);
+  }
   assert.equal((await load(ids.waiting)).state, 'closed_published');
+  assert.equal((await revertClosedPullMigration({ apply: true })).reverted, 0, 'ביטול חוזר אינו כותב');
+});
+
+test('migration: לקיחה בין הקריאה לכתיבה — הכתיבה נכשלת (גם בלי שינוי generation)', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const id = await ingest('mig-race', 0);
+  const id2 = await ingest('mig-race2', 1);
+  for (const x of [id, id2]) {
+    await approved(x);
+    await legacyClosed(x, at(DAY));
+  }
+  pushFixes([0, 1]);
+  const lease = at(30 * DAY);
+  const hooks = {
+    beforeWrite: async (r) => {
+      // id: לקיחה אמיתית (generation עולה); id2: שיוך בלי generation — נתפס רק בתנאי השיוך בכתיבה
+      if (String(r._id) === id) assert.equal((await act(users.b, id, { action: 'claim' }, at(2 * DAY))).status, 200);
+      else await ErrorReport.updateOne({ _id: id2 }, { $set: { 'manual.status': 'claimed', 'manual.assignee': users.b._id, 'manual.leaseExpiresAt': lease } });
+    },
+  };
+  const res = await migrateClosedPullReports({ config: CONFIG, deps: { githubFetch: gh.fetch, hooks }, apply: true, now: at(2 * DAY) });
+  assert.equal(res.raced, 2);
+  assert.deepEqual(res.written, {});
+  for (const x of [id, id2]) assert.deepEqual([(await load(x)).state, (await load(x)).manual.status], ['open', 'claimed']);
 });

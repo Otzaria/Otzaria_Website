@@ -16,8 +16,7 @@ import { createGitSource, getSharedSourceCache } from './git-source.js';
 import { computeNewLine } from './payload.js';
 import { computeChangeDigest } from './ocj1.js';
 import { publishChange, reconcilePublish, PublishConflict } from './publisher.js';
-import { closedPrAction } from './absorption.js';
-import { createAbsorptionChecker, applyClosedPrAction } from './closed-pr.js';
+import { createAbsorptionChecker, processClosedPull, onClosedPullError, expireAwaitingReports } from './closed-pr.js';
 import { newId, logEvent, WORKER_ACTOR, currentRevisionOf, manualQueueSet } from './store.js';
 
 const RESOLVE_HANDOFF = {
@@ -413,7 +412,10 @@ async function markPublishOutcome({ report, job, attempt, outcome, config, now }
     if (toMain) Object.assign(set, { 'inclusion.status': 'merged_to_main', 'inclusion.at': now });
   } else if (outcome.status === 'pr_opened') {
     // PR חדש (גם אחרי אישור מחדש של דיווח שה-PR הקודם שלו נסגר): מעקב רגיל, לא "ממתין לקליטה".
-    Object.assign(set, { 'publish.status': 'pr_opened', 'publish.commitSha': outcome.commitSha, 'publish.prNumber': outcome.prNumber, 'publish.prUrl': outcome.prUrl, 'publish.branch': outcome.branch, 'publish.prClosedAt': null });
+    Object.assign(set, {
+      'publish.status': 'pr_opened', 'publish.commitSha': outcome.commitSha, 'publish.prNumber': outcome.prNumber, 'publish.prUrl': outcome.prUrl, 'publish.branch': outcome.branch,
+      'publish.prClosedAt': null, 'publish.absorptionDeadline': null, 'publish.absorptionCheck': null, 'publish.prCloseComment': null,
+    });
   } else if (outcome.status === 'already_fixed') {
     Object.assign(set, { 'publish.status': 'skipped_already_fixed', state: 'closed_already_fixed', status: 'resolved', closedAt: now, resolvedAt: now, closeReason: 'already_fixed_at_publish' });
   }
@@ -543,20 +545,12 @@ async function handlePublishConflict({ job, report, change, attemptId, err, now 
 }
 
 /**
- * PR שנסגר בלי מיזוג: מנהל הספרייה מחיל PRs בקומיט מקומי וסוגר אותם, ולכן הקובע הוא main.
- * נקלט → נסגר כפורסם; עדיין המקור → ממתין (עד absorptionGraceSeconds) ונבדק שוב; אחרת → ידני.
+ * מעקב PR: מוזג → committed; נסגר בלי מיזוג → בדיקת קליטה ב-main (closed-pr.js); בסיס השתנה → סימון.
+ * מנהל הספרייה מחיל PRs בקומיט מקומי וסוגר אותם, ולכן ב-PR שנסגר הקובע הוא main.
  */
-async function handleClosedPull(r, { checker, config, now }) {
-  const verdict = await checker.check(r);
-  const closedAt = r.publish.prClosedAt || now;
-  const action = closedPrAction(verdict, { closedAt, now, graceSeconds: config.publish.absorptionGraceSeconds });
-  const res = await applyClosedPrAction(r, action, verdict, { now, closedAt, actor: WORKER_ACTOR });
-  return res === 'closed' || res === 'handoff' || (res === 'awaiting' && !r.publish.prClosedAt);
-}
-
-/** מעקב PR: מוזג → committed; נסגר בלי מיזוג → בדיקת קליטה ב-main; בסיס השתנה → סימון. */
 export async function trackOpenPulls({ config, deps, now, limit = 10 }) {
-  if (config.publish.mode === 'disabled') return 0;
+  // הפרסום כבוי: בלי GitHub — אבל דיווח שה-PR שלו נסגר עדיין עובר לידני בתום ההמתנה.
+  if (config.publish.mode === 'disabled') return expireAwaitingReports({ config, now, actor: WORKER_ACTOR });
   const tracked = { 'publish.status': 'pr_opened', state: 'open' };
   // PR שנסגרו וממתינים לקליטה נבדקים בתור משלהם, כדי שלא ידחקו את ה-PR הפתוחים (ולהפך).
   const reports = [
@@ -565,11 +559,19 @@ export async function trackOpenPulls({ config, deps, now, limit = 10 }) {
   ];
   if (!reports.length) return 0;
   const client = publishClient(config, deps);
-  let checker = null;
+  // הקשר לאצווה: main נקרא רק כשיש PR שנסגר ופעם אחת; כל PR והערות הסגירה שלו — פעם אחת (ל-PR מרוכז יש עשרות דיווחים).
+  const ctx = { checker: null, client, config, now, actor: WORKER_ACTOR, comments: new Map() };
+  const pulls = new Map();
+  const getPull = (n) => {
+    // PR שאינו קיים עוד (404) נבדק כמו PR שנסגר: התוכן ב-main הוא הקובע.
+    if (!pulls.has(n)) pulls.set(n, client.getPull(n).catch((err) => (err.status === 404 ? { number: n, state: 'closed', merged: false, missing: true, labels: [] } : Promise.reject(err))));
+    return pulls.get(n);
+  };
   let changed = 0;
   for (const r of reports) {
+    let pr = null;
     try {
-      const pr = await client.getPull(r.publish.prNumber);
+      pr = await getPull(r.publish.prNumber);
       if (pr.merged) {
         const toMain = config.publish.repo === config.source.repo && config.publish.branch === config.source.ref;
         await ErrorReport.updateOne({ _id: r._id, 'publish.status': 'pr_opened' }, {
@@ -578,9 +580,8 @@ export async function trackOpenPulls({ config, deps, now, limit = 10 }) {
         await logEvent(r._id, 'pr_merged', WORKER_ACTOR, r.workflowGeneration, { prNumber: pr.number });
         changed += 1;
       } else if (pr.state === 'closed') {
-        // main נקרא רק כשיש PR שנסגר, ופעם אחת לאצווה: כל הדיווחים מושווים לאותו קומיט.
-        checker ??= createAbsorptionChecker({ config, deps });
-        if (await handleClosedPull(r, { checker, config, now })) changed += 1;
+        ctx.checker ??= createAbsorptionChecker({ config, deps });
+        if (await processClosedPull(r, pr, ctx)) changed += 1;
       } else {
         // PR שנפתח מחדש אחרי סגירה חוזר למעקב הרגיל (prClosedAt מתאפס).
         const change = await ChangePackage.findOne({ changeId: r.publish.changeId }).lean();
@@ -597,6 +598,11 @@ export async function trackOpenPulls({ config, deps, now, limit = 10 }) {
       }
     } catch (err) {
       await ErrorReport.updateOne({ _id: r._id }, { $set: { 'publish.lastError': `pr_track_failed:${err.status || 'net'}`, 'publish.updatedAt': now } });
+      // PR סגור (או ממתין) שבדיקתו נכשלת — גם שוב ושוב — יוצא מההמתנה בתום הזמן, בלי תלות ב-GitHub.
+      if ((pr?.state === 'closed' && !pr.merged) || r.publish.prClosedAt) {
+        const res = await onClosedPullError(r, { now, config, actor: WORKER_ACTOR }).catch(() => null);
+        if (res === 'handoff' || (res === 'awaiting' && !r.publish.prClosedAt)) changed += 1;
+      }
     }
   }
   return changed;

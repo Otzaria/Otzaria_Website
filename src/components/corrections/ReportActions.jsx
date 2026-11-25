@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import UnifiedDiff from '@/components/corrections/UnifiedDiff'
 import ManualSourcePicker from '@/components/corrections/ManualSourcePicker'
+import PrCloseNote from '@/components/corrections/PrCloseNote'
 import { rebaseLineChange } from '@/lib/corrections/rebase-change'
 
 const btn = 'px-3 py-2 rounded-lg font-medium text-sm disabled:opacity-50 flex items-center gap-1'
@@ -98,6 +99,7 @@ export default function ReportActions({ detail, meId, busy, run, probe, sourcePi
                 : writing ? ' והפרסום ל-GitHub מתבצע כעת.' : ' וממתין לפרסום.'}
           </span>
         </div>
+        {prClosed && <PrCloseNote publish={report.publish} awaiting />}
         <p className="text-xs text-on-surface/70">אי אפשר לקחת לטיפול דיווח שאושר — זה יוצר PR כפול. אם האישור שגוי, אפשר לדחות אותו.</p>
         {writing ? (
           <p className="text-xs text-warning-800">הפרסום מתבצע כרגע; הדחייה תתאפשר כשיסתיים.</p>
@@ -176,6 +178,7 @@ export default function ReportActions({ detail, meId, busy, run, probe, sourcePi
           ? <>בטיפולך עד {leaseText}</>
           : <>{claimed ? <>הטיפול של <b>{report.manual.assigneeName}</b> פג ב-{leaseText}. </> : 'הדיווח אינו משויך למטפל. '}<span className="text-on-surface/60">כל פעולה תשייך אותו אליך.</span></>}
       </div>
+      <PrCloseNote publish={report.publish} />
       <div className="flex flex-wrap gap-2">
         <button
           disabled={busy || Boolean(approveBlocked)}

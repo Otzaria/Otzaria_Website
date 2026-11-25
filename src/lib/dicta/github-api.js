@@ -410,7 +410,31 @@ export function createRepoClient({ repo, token = null, fetchImpl = fetch, timeou
     },
     async getPull(number) {
       const pr = await call(`/pulls/${Number(number)}`);
-      return { number: pr.number, url: pr.html_url, state: pr.state, merged: Boolean(pr.merged), mergeCommitSha: pr.merge_commit_sha || null, body: pr.body || '' };
+      return {
+        number: pr.number, url: pr.html_url, state: pr.state, merged: Boolean(pr.merged), mergeCommitSha: pr.merge_commit_sha || null, body: pr.body || '',
+        closedAt: pr.closed_at || null, labels: (pr.labels || []).map((l) => l?.name).filter(Boolean),
+      };
+    },
+    /** הערות ה-PR/issue לפי הסדר (עד 500). */
+    async listIssueComments(number) {
+      const out = [];
+      for (let page = 1; page <= 5; page++) {
+        const list = await call(`/issues/${Number(number)}/comments?per_page=100&page=${page}`);
+        out.push(...(list || []).map((c) => ({ body: c.body || '', createdAt: c.created_at || null })));
+        if (!list || list.length < 100) break;
+      }
+      return out;
+    },
+    /** מספרי ה-PR הסגורים שנושאים תווית (Issues API מחזיר גם PR). */
+    async listClosedPullNumbersWithLabel(label) {
+      const out = [];
+      for (let page = 1; page <= 10; page++) {
+        const q = new URLSearchParams({ state: 'closed', labels: label, per_page: '100', page: String(page) });
+        const list = await call(`/issues?${q.toString()}`);
+        out.push(...(list || []).filter((i) => i.pull_request).map((i) => i.number));
+        if (!list || list.length < 100) break;
+      }
+      return out;
     },
     /** fields: { state?: 'open'|'closed', title?, body? } */
     async updatePull(number, fields) {

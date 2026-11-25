@@ -197,7 +197,7 @@ export class FakeGitHub {
       return json(200, out);
     }
     if (method === 'POST' && rest === '/pulls') {
-      const pr = { number: this.pulls.length + 1, html_url: `https://github.com/${this.repo}/pull/${this.pulls.length + 1}`, state: 'open', head: body.head, base: body.base, title: body.title, body: body.body, merged_at: null, merged: false };
+      const pr = { number: this.pulls.length + 1, html_url: `https://github.com/${this.repo}/pull/${this.pulls.length + 1}`, state: 'open', head: body.head, base: body.base, title: body.title, body: body.body, merged_at: null, merged: false, closed_at: null, labels: [] };
       this.pulls.push(pr);
       return json(201, pr);
     }
@@ -217,17 +217,33 @@ export class FakeGitHub {
       return json(200, pr);
     }
     if (method === 'POST' && (m = rest.match(/^\/issues\/(\d+)\/comments$/))) {
-      this.issueComments.push({ number: Number(m[1]), body: body.body });
+      this.issueComments.push({ number: Number(m[1]), body: body.body, created_at: new Date().toISOString() });
       return json(201, { id: this.issueComments.length });
+    }
+    if (method === 'GET' && (m = rest.match(/^\/issues\/(\d+)\/comments$/))) {
+      const page = Number(q.get('page') || 1);
+      const all = this.issueComments.filter((c) => c.number === Number(m[1]));
+      return json(200, page === 1 ? all.map((c) => ({ body: c.body, created_at: c.created_at, user: { login: 'someone', type: 'User' } })) : []);
+    }
+    if (method === 'GET' && rest === '/issues') {
+      const label = q.get('labels');
+      const hit = this.pulls.filter((p) => (q.get('state') !== 'closed' || p.state === 'closed') && p.labels.some((l) => l.name === label));
+      return json(200, Number(q.get('page') || 1) === 1 ? hit.map((p) => ({ number: p.number, pull_request: { url: p.html_url } })) : []);
     }
     return json(404, { message: `fake: no route ${method} ${rest}` });
   }
 
-  /** סגירה בלי מיזוג — כמו מנהל הספרייה אחרי שהחיל את ה-PR בקומיט מקומי משלו. */
-  closePull(number) {
+  /**
+   * סגירה בלי מיזוג — כמו מנהל הספרייה אחרי שהחיל את ה-PR בקומיט מקומי משלו (אפשר עם הערה ותוויות).
+   * @param {number} number
+   * @param {{comment?:string, labels?:string[], at?:Date}} [opts]
+   */
+  closePull(number, { comment = null, labels = [], at = new Date() } = {}) {
     const pr = this.pulls[number - 1];
+    if (comment) this.issueComments.push({ number, body: comment, created_at: new Date(at.getTime() - 1000).toISOString() });
     pr.state = 'closed';
-    pr.closed_at = new Date().toISOString();
+    pr.closed_at = at.toISOString();
+    pr.labels = labels.map((name) => ({ name }));
   }
 
   mergePull(number) {
