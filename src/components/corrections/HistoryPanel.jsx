@@ -27,6 +27,8 @@ const EVENT_LABELS = {
   publish_reconciled: 'בדיקת תוצאת פרסום לא ידועה',
   pr_merged: 'ה-PR מוזג',
   pr_closed_unmerged: 'ה-PR נסגר בלי מיזוג',
+  pr_closed_awaiting_absorption: 'ה-PR נסגר בלי מיזוג — ממתינים שהתיקון ייקלט ב-main',
+  pr_absorbed: 'ה-PR נסגר בלי מיזוג והתיקון נמצא ב-main',
 }
 
 const AUTHOR = { user: 'המשתמש', service: 'שירות הבדיקה', volunteer: 'מתנדב' }

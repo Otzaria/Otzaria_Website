@@ -27,12 +27,13 @@ export async function computeHealth({ config, now = new Date() }) {
     publishReady: await count({ state: 'open', 'publish.status': 'ready' }),
     publishUnknown: await count({ 'publish.status': 'unknown_needs_reconcile' }),
     publishFailed: await count({ state: 'open', 'publish.status': 'failed' }),
-    prOpened: await count({ state: 'open', 'publish.status': 'pr_opened' }),
+    prOpened: await count({ state: 'open', 'publish.status': 'pr_opened', 'publish.prClosedAt': null }),
+    prClosedAwaiting: await count({ state: 'open', 'publish.status': 'pr_opened', 'publish.prClosedAt': { $ne: null } }),
     emailOnly: await count({ state: 'email_only' }),
   };
   const heartbeatAge = ageSec(beat?.lastBeatAt, now);
   const stale = heartbeatAge === null || heartbeatAge > config.worker.staleHeartbeatSeconds;
-  const hasWork = counts.verifyQueued + counts.outboxPending + counts.publishReady + counts.publishUnknown + counts.prOpened > 0
+  const hasWork = counts.verifyQueued + counts.outboxPending + counts.publishReady + counts.publishUnknown + counts.prOpened + counts.prClosedAwaiting > 0
     || Boolean(oldest.verify || oldest.publish);
   const problems = [];
   if (stale && hasWork) problems.push('worker_not_running');

@@ -30,8 +30,9 @@
 | שירות הבדיקה | `verify-client.js`, `verify-protocol.js`, `classify.js` |
 | איתור מקור | `resolver.js`, `git-source.js`, `source-text.js` |
 | פרסום | `publisher.js` מעל `src/lib/dicta/github-api.js` (`createRepoClient`) |
+| PR שנסגר בלי מיזוג | `absorption.js` (הכלל, טהור), `closed-pr.js` (קריאת main ומעבר מותנה) |
 | מתנדבים | `volunteer.js`, `actions.js`, `http.js`, `src/app/api/corrections/**`, `src/app/library/corrections/**` |
-| migration | `src/lib/corrections/migrate.js`, `scripts/migrate-corrections.mjs` |
+| migration | `src/lib/corrections/migrate.js`, `scripts/migrate-corrections.mjs`, `scripts/migrate-corrections-closed-prs.mjs` |
 
 **תקרות בקליטה.** נדחים (413/400, בלי חיתוך) רק השדות המדויקים של `correction` (20,000 כל אחד) וגוף
 מעל 256KB. שדות התצוגה הישנים (`error_details`, `selected_text`, `context_text` וכו') נבדקים לטיפוס בלבד:
@@ -54,6 +55,8 @@
 - "אושר" אינו "פורסם": אישור מציב `publish.status=ready`. "PR נפתח" (`pr_opened`) אינו "מוזג";
   רק מיזוג שזוהה ע"י ה-worker מציב `committed` + `closed_published`. `merged_to_main` אינו "נכלל
   בגרסת ספרייה" — `included_in_release` אינו מוצב אוטומטית כלל.
+- PR שנסגר בלי מיזוג (§4, "מעקב PR"): `pr_opened` עם `publish.prClosedAt` = ממתין שהתיקון ייקלט ב-main;
+  התיקון נמצא שם → `committed` + `publish.absorbed=true` + `closed_published` (`closeReason=pr_absorbed`).
 - כל מעבר הוא `findOneAndUpdate` יחיד עם תנאי `workflowGeneration` (ולפעולות worker — גם fence של
   המשימה). ה-generation עולה בכל מעבר שמפסיל עבודה ישנה: לקיחה, העברה לידני, עריכה, שליחה מחדש.
 - השדה הישן `status` (`pending`/`in_progress`/`resolved`/`rejected`) ממשיך להתעדכן לתאימות.
@@ -94,7 +97,8 @@
 יעד הפרסום והמקור הם `Otzaria/otzaria-library@main` — אותו ריפו וענף לקריאה ולכתיבה. גם כל
 הכוונון קבוע ומיוצא כקבועים: `VERIFY_MAX_ATTEMPTS` (6), `VERIFY_MAX_TOTAL_SECONDS` (86400),
 `VERIFY_TIMEOUT_MS` (20000), `VERIFY_BACKOFF_BASE_SECONDS` (30) ו-`_CAP_SECONDS` (3600),
-`PUBLISH_MAX_REF_RETRIES` (3), `PUBLISH_MAX_ATTEMPTS` (5), `WORKER_BATCH_SIZE` (10),
+`PUBLISH_MAX_REF_RETRIES` (3), `PUBLISH_MAX_ATTEMPTS` (5), `PR_ABSORPTION_GRACE_SECONDS` (14 יום),
+`PR_ABSORPTION_RELOCATION_LINES` (50), `WORKER_BATCH_SIZE` (10),
 `WORKER_CONCURRENCY` (2), `JOB_LEASE_SECONDS` (120), `HEARTBEAT_STALE_SECONDS` (300),
 `MANUAL_CLAIM_MINUTES` (24 שעות), `SOURCE_CACHE_BYTES` (64MB), `SOURCE_HEAD_TTL_SECONDS` (30),
 `DIFF_CONTEXT_LINES` (3 — "הרחב הקשר" בתצוגת המתנדב מוסיף עד 50). שינוי דורש שינוי קוד.
@@ -122,6 +126,10 @@
 ```
 */10 * * * * curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" http://127.0.0.1:3000/api/cron/corrections-worker >> /var/log/corrections-worker.log 2>&1
 ```
+
+**בייצור ה-cron הזה אינו מותקן** (נבדק ב-2026-11-25: ב-crontab של השרת אין קריאה ל-`corrections-worker`),
+ולכן אצוות רצות רק מתוך בקשות — כשנכנס דיווח או כשמתנדב מאשר. מומלץ להתקין אותו: בלעדיו ניסיונות
+חוזרים, זיהוי PR שמוזגו ובדיקה חוזרת של PR שנסגרו וממתינים לקליטה ב-main מתעכבים עד הבקשה הבאה.
 
 `scripts/corrections-worker.mjs` נשאר בריפו להרצה ידנית ולפיתוח (`--once` מריץ אצווה אחת
 ויוצא). אין צורך בשירות pm2/systemd קבוע. משתני הסקריפט: `CRON_SECRET`, `CORRECTIONS_WORKER_URL`
@@ -172,14 +180,34 @@
 `started`/`unknown`. לפני כל ניסיון נוסף ה-worker מבצע reconciliation — מחפש את `Publish-Attempt` בענף
 ה-PR או ב-50 הקומיטים האחרונים שנגעו בקובץ — ורק אם לא נמצא, כותב מחדש.
 
-**מעקב PR**: בכל אצווה נבדקים עד 10 PR פתוחים. מוזג → `committed`/`closed_published`; נסגר בלי מיזוג →
-`failed` + ידני; בסיס השתנה בזמן שה-PR פתוח → `publish.conflictReason=base_changed_while_pr_open` (תווית "התנגשות").
+**מעקב PR**: בכל אצווה נבדקים עד 10 PR פתוחים ועד 10 PR שנסגרו וממתינים לקליטה — כל קבוצה בתור משלה,
+הוותיקים בבדיקה קודם. מוזג → `committed`/`closed_published`; בסיס השתנה בזמן שה-PR פתוח →
+`publish.conflictReason=base_changed_while_pr_open` (תווית "התנגשות"); PR שנפתח מחדש חוזר למעקב הרגיל.
+
+**PR שנסגר בלי מיזוג אינו "נדחה"**: מנהל הספרייה בודק כל PR, מחיל אותו בקומיט מקומי מרוכז שנדחף ל-main
+מאוחר יותר, וסוגר את ה-PR בלי מיזוג (בהערה כמו "נקלט בקומיט מקומי" או "כבר קיים בעץ"). לכן ה-worker קורא
+את הקובץ ב-`Otzaria/otzaria-library@main` (קריאה בלבד; ראש הענף נקרא פעם אחת לאצווה) ומשווה אותו לחבילת
+השינוי (`absorption.js`):
+
+| מה נמצא ב-main | תוצאה |
+|---|---|
+| השורה ביעד היא `new_line`, או שהעריכה של הדיווח נמצאת בה בהקשרה (כמה תיקונים שהוחלו יחד באותה שורה ארוכה) | `committed` + `publish.absorbed=true`, `closed_published` (`closeReason=pr_absorbed`), `inclusion=merged_to_main` |
+| השורה, או המקור בהקשר העריכה, עדיין שם | `pr_opened` + `publish.prClosedAt` (תווית "ה-PR נסגר — ממתין לקליטה ב-main"): לא בתור הידני ולא ניתן ללקיחה (PR כפול), ונבדק שוב בכל אצווה. אחרי `PR_ABSORPTION_GRACE_SECONDS` (14 יום) מזיהוי הסגירה → ידני עם `pr_closed_not_absorbed` |
+| כל דבר אחר: נוסח אחר, עמימות, הקובץ חסר | ידני מיד עם `source_changed_after_pr_close` (תווית "התנגשות") |
+
+שורות שזזו (נוספו/נמחקו לפני היעד) נבדקות עד `PR_ABSORPTION_RELOCATION_LINES` (50) שורות מהיעד; שורה
+מקורית שזזה בלי שינוי נחשבת "ממתין". בכל ספק — ידני, ולעולם לא "נקלט": הסגירה כפורסם נעשית בלי עין אנושית.
+דיווח בלי חבילת שינוי (אושר בכמות מחוץ ל-worker) נבדק לפי ההצעה שאושרה, בנתיב שה-resolver מאתר. בהעברה
+לידני `publish.status=failed` ו-`publish.lastError=pr_closed_unmerged`, כמו קודם. דחייה באתר אחרי אישור
+סוגרת את הדיווח לפני שהיא סוגרת את ה-PR, ולכן אינה עוברת בדיקה זו; דחיית דיווח שממתין לקליטה רק מוסיפה
+את הסיבה כהערה ב-PR שכבר נסגר.
 
 ## 5. בריאות
 
 `GET /api/corrections/admin/health` (מנהל ספרים/כללי) ודף **ניהול ובריאות**:
 דופק אחרון, גיל המשימה הוותיקה (בדיקה/פרסום), ספירות, ותיאור ההגדרות בלי סודות. `runtimeSwitches`
 בתשובה מציין אילו מתגים מגיעים ממסך הניהול ולא מ-env.
+בספירות, `prOpened` הם PR פתוחים ו-`prClosedAwaiting` הם PR שנסגרו וממתינים לקליטה; שניהם עבודה ממתינה ל-worker.
 `healthy=false` כאשר: אין דופק טרי (`HEARTBEAT_STALE_SECONDS`, 300) ויש עבודה ממתינה; האצווה
 האחרונה נכשלה; יש פרסום בתוצאה לא ידועה; יש שגיאות הגדרה.
 
@@ -192,6 +220,8 @@
 | השירות מחזיר שגיאות רבות | להשהות מדף הניהול (הממתינים עוברים לידני). ביטול ההשהיה **לא** מחזיר לשירות דיווחים שבידי מתנדבים; שליחה מחודשת רק ידנית |
 | `publish_unknown_pending` | בדרך כלל נפתר לבד באצווה הבאה (reconciliation). אם GitHub לא זמין — ממתין; אין לפרסם ידנית בינתיים |
 | `publish.status=failed` | הדיווח חוזר לתור הידני עם `publish_failed`; האישור וההצעה נשמרים. לתקן את הסיבה (טוקן/הרשאות/branch protection) ולקחת את הדיווח מחדש |
+| `pr_closed_not_absorbed` | ה-PR נסגר והתיקון לא הגיע ל-main תוך 14 יום: לבדוק בהערות ה-PR אם מנהל הספרייה דחה אותו, ולטפל ידנית. הרצה חוזרת של `migrate-corrections-closed-prs.mjs` סוגרת דיווח שהתיקון שלו הגיע בינתיים |
+| `source_changed_after_pr_close` | השורה ב-main שונתה אחרת אחרי סגירת ה-PR: להשוות את הנוסח הנוכחי להצעה ולאשר מחדש או לסגור |
 | 401/403 מ-GitHub | ל-`DICTA_LIBRARY_GITHUB_TOKEN` חסרה הרשאת contents+pull_requests. הקוד לא עוקף branch protection — יש להשתמש ב-`pr` |
 | מתנדב חדש | דף **ניהול ובריאות** → מתנדבי תיקונים → סימון "מתנדב" (מנהל ספרים/כללי). ההרשאה אינה נותנת גישה לפאנל הניהול |
 | דיווח תקוע בבדיקה | מתנדב לוקח אותו (הבדיקה נפסלת), או השהיית השירות |
@@ -220,6 +250,26 @@
 
 שלבים 1–3 שימושיים בלי 4–5.
 
+### PR שנסגרו בלי מיזוג (migration חד-פעמית)
+
+לפני התיקון, מעקב ה-PR העביר כל PR שנסגר בלי מיזוג לתור הידני (`publish_failed`, `publish.lastError=pr_closed_unmerged`),
+גם כשהתיקון כבר נקלט ב-main. אחרי הפריסה, להריץ בתיקיית האתר בשרת:
+
+```sh
+node scripts/migrate-corrections-closed-prs.mjs           # dry-run: ספירות בלבד, בלי כתיבה
+node scripts/migrate-corrections-closed-prs.mjs --apply
+```
+
+הסקריפט מעריך מחדש, באותו כלל של ה-worker, כל דיווח פתוח שנכשל עם `pr_closed_unmerged` (גם כאלה שה-worker
+החדש העביר לידני מאותה סיבה). ההמתנה נספרת מזיהוי הסגירה (`publish.updatedAt` של הכשל), ולכן דיווח שה-PR
+שלו נסגר לפני יותר מ-14 יום והתיקון עדיין לא ב-main נשאר ידני (`pr_closed_not_absorbed`). בדיווח שמתנדב
+מטפל בו כעת (שיוך בתוקף) לא נוגעים (`skippedClaimed`). כל הדיווחים מושווים לאותו קומיט של main (`mainSha`), וכל
+קובץ נקרא מ-GitHub פעם אחת (`files`, `githubRequests`). בפלט: `outcomes` (absorbed / pending / changed),
+`details`, `actions` (`close_absorbed`, `await`, `handoff_not_absorbed`, `handoff_changed`) ו-`written`.
+הרצה חוזרת בטוחה: דיווח שכבר בתור הידני עם אותה סיבה אינו נכתב שוב (`unchanged`), ודיווח שהתיקון שלו הגיע
+ל-main בינתיים נסגר. ביומן הפעולות נרשם `actorKind=system` עם `data.migration=true`. דיווחים שעוברים להמתנה
+נבדקים במעקב ה-PR של ה-worker — שאינו רץ כשמצב הפרסום כבוי (הסקריפט מזהיר על כך).
+
 ### מיון לפי גרסת הספרייה
 
 לאחר **סיום פריסת כל תהליכי האתר** (ללא writers מהגרסה הקודמת), להריץ בסביבת השרת:
@@ -245,7 +295,8 @@ node scripts/migrate-corrections.mjs --apply
 
 ## 9. Rollback
 
-- **קוד**: פריסת הגרסה הקודמת. כל השדות החדשים אופציונליים ומתעלמים מהם בקוד הישן; `status` הישן
+- **קוד**: פריסת הגרסה הקודמת. כל השדות החדשים אופציונליים ומתעלמים מהם בקוד הישן (כולל `publish.prClosedAt`
+  ו-`publish.absorbed`: דיווח שממתין לקליטה הוא `pr_opened`, והקוד הישן מעביר אותו לידני כשה-PR סגור, כמו קודם); `status` הישן
   מסונכרן, ולכן הדיווחים נראים כרגיל. אין לבצע migration הפוכה — **אין למחוק** דיווחים, החלטות, חבילות
   שינוי, ניסיונות פרסום או יומן (`CorrectionEvent`).
 - **הקוד הישן מחזיר 500 כש-SMTP נכשל** — לקוח ישן יחזור וינסה; זו ההתנהגות שהייתה.

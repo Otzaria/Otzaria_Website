@@ -127,6 +127,9 @@ const ErrorReportSchema = new mongoose.Schema({
     prNumber: Number,
     prUrl: String,
     branch: String,
+    // ה-PR נסגר בלי מיזוג (זוהה ב-worker): ממתינים שהתיקון ייקלט ב-main. absorbed: נמצא שם ונסגר כפורסם.
+    prClosedAt: Date,
+    absorbed: Boolean,
     updatedAt: Date,
   },
   inclusion: {

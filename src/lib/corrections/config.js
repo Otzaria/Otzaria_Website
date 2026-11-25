@@ -20,6 +20,11 @@ export const VERIFY_BACKOFF_BASE_SECONDS = 30;
 export const VERIFY_BACKOFF_CAP_SECONDS = 3_600;
 export const PUBLISH_MAX_REF_RETRIES = 3;
 export const PUBLISH_MAX_ATTEMPTS = 5;
+// PR שנסגר בלי מיזוג (absorption.js): מנהל הספרייה מחיל PRs בקומיט מקומי ודוחף ל-main אחר כך.
+// כמה זמן ממתינים לתיקון ב-main מרגע שהסגירה זוהתה, לפני שהדיווח חוזר לידני; ועד כמה שורות
+// מהיעד (שורות שנוספו/נמחקו לפניו) שורה מתוקנת שזזה עדיין נחשבת אותה שורה.
+export const PR_ABSORPTION_GRACE_SECONDS = 14 * 86_400;
+export const PR_ABSORPTION_RELOCATION_LINES = 50;
 export const WORKER_BATCH_SIZE = 10;
 export const WORKER_CONCURRENCY = 2;
 export const JOB_LEASE_SECONDS = 120;
@@ -134,6 +139,8 @@ export function getCorrectionsConfig(env = process.env, runtime = {}) {
       token,
       maxRefRetries: PUBLISH_MAX_REF_RETRIES,
       maxAttempts: PUBLISH_MAX_ATTEMPTS,
+      absorptionGraceSeconds: PR_ABSORPTION_GRACE_SECONDS,
+      absorptionRelocationLines: PR_ABSORPTION_RELOCATION_LINES,
     },
     source: { repo: SOURCE_REPO, ref: SOURCE_REF, token },
     worker: {

@@ -16,7 +16,8 @@ const PROBLEMS = {
 const COUNTS = {
   open: 'פתוחים', legacyNotMigrated: 'ישנים שלא עברו migration', manualQueued: 'בתור הידני', claimed: 'בטיפול',
   verifyQueued: 'בבדיקה אוטומטית', outboxPending: 'ממתינים ל-worker', publishReady: 'מאושרים לפרסום',
-  publishUnknown: 'פרסום לא ידוע', publishFailed: 'פרסום נכשל', prOpened: 'PR פתוחים', emailOnly: 'מייל בלבד (לא לאוצריא)',
+  publishUnknown: 'פרסום לא ידוע', publishFailed: 'פרסום נכשל', prOpened: 'PR פתוחים',
+  prClosedAwaiting: 'PR שנסגרו וממתינים לקליטה ב-main', emailOnly: 'מייל בלבד (לא לאוצריא)',
 }
 const PUBLISH_MODE_OPTIONS = [
   { value: 'disabled', label: 'כבוי' },

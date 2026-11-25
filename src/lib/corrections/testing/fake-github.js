@@ -223,6 +223,13 @@ export class FakeGitHub {
     return json(404, { message: `fake: no route ${method} ${rest}` });
   }
 
+  /** סגירה בלי מיזוג — כמו מנהל הספרייה אחרי שהחיל את ה-PR בקומיט מקומי משלו. */
+  closePull(number) {
+    const pr = this.pulls[number - 1];
+    pr.state = 'closed';
+    pr.closed_at = new Date().toISOString();
+  }
+
   mergePull(number) {
     const pr = this.pulls[number - 1];
     const headSha = this.refs.get(pr.head);

@@ -46,6 +46,8 @@ export const HANDOFF_REASON_LABELS = {
   structural_change: 'שינוי מבני',
   source_changed_after_approval: 'המקור השתנה אחרי האישור',
   publish_failed: 'הפרסום נכשל',
+  pr_closed_not_absorbed: 'ה-PR נסגר בלי מיזוג והתיקון לא נקלט ב-main',
+  source_changed_after_pr_close: 'המקור השתנה אחרי סגירת ה-PR',
   worker_error: 'תקלה פנימית חוזרת בעיבוד האוטומטי',
   volunteer_released: 'שוחרר ע"י מתנדב',
   claim_expired: 'תוקף השיוך פג',

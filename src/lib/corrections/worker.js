@@ -16,6 +16,8 @@ import { createGitSource, getSharedSourceCache } from './git-source.js';
 import { computeNewLine } from './payload.js';
 import { computeChangeDigest } from './ocj1.js';
 import { publishChange, reconcilePublish, PublishConflict } from './publisher.js';
+import { closedPrAction } from './absorption.js';
+import { createAbsorptionChecker, applyClosedPrAction } from './closed-pr.js';
 import { newId, logEvent, WORKER_ACTOR, currentRevisionOf, manualQueueSet } from './store.js';
 
 const RESOLVE_HANDOFF = {
@@ -410,7 +412,8 @@ async function markPublishOutcome({ report, job, attempt, outcome, config, now }
     Object.assign(set, { 'publish.status': 'committed', 'publish.commitSha': outcome.commitSha, state: 'closed_published', status: 'resolved', closedAt: now, resolvedAt: now, closeReason: 'published' });
     if (toMain) Object.assign(set, { 'inclusion.status': 'merged_to_main', 'inclusion.at': now });
   } else if (outcome.status === 'pr_opened') {
-    Object.assign(set, { 'publish.status': 'pr_opened', 'publish.commitSha': outcome.commitSha, 'publish.prNumber': outcome.prNumber, 'publish.prUrl': outcome.prUrl, 'publish.branch': outcome.branch });
+    // PR חדש (גם אחרי אישור מחדש של דיווח שה-PR הקודם שלו נסגר): מעקב רגיל, לא "ממתין לקליטה".
+    Object.assign(set, { 'publish.status': 'pr_opened', 'publish.commitSha': outcome.commitSha, 'publish.prNumber': outcome.prNumber, 'publish.prUrl': outcome.prUrl, 'publish.branch': outcome.branch, 'publish.prClosedAt': null });
   } else if (outcome.status === 'already_fixed') {
     Object.assign(set, { 'publish.status': 'skipped_already_fixed', state: 'closed_already_fixed', status: 'resolved', closedAt: now, resolvedAt: now, closeReason: 'already_fixed_at_publish' });
   }
@@ -539,12 +542,30 @@ async function handlePublishConflict({ job, report, change, attemptId, err, now 
   return 'conflict';
 }
 
-/** מעקב אחרי PR פתוחים: מוזג → committed; נסגר בלי מיזוג → ידני; בסיס השתנה → סימון. */
+/**
+ * PR שנסגר בלי מיזוג: מנהל הספרייה מחיל PRs בקומיט מקומי וסוגר אותם, ולכן הקובע הוא main.
+ * נקלט → נסגר כפורסם; עדיין המקור → ממתין (עד absorptionGraceSeconds) ונבדק שוב; אחרת → ידני.
+ */
+async function handleClosedPull(r, { checker, config, now }) {
+  const verdict = await checker.check(r);
+  const closedAt = r.publish.prClosedAt || now;
+  const action = closedPrAction(verdict, { closedAt, now, graceSeconds: config.publish.absorptionGraceSeconds });
+  const res = await applyClosedPrAction(r, action, verdict, { now, closedAt, actor: WORKER_ACTOR });
+  return res === 'closed' || res === 'handoff' || (res === 'awaiting' && !r.publish.prClosedAt);
+}
+
+/** מעקב PR: מוזג → committed; נסגר בלי מיזוג → בדיקת קליטה ב-main; בסיס השתנה → סימון. */
 export async function trackOpenPulls({ config, deps, now, limit = 10 }) {
   if (config.publish.mode === 'disabled') return 0;
-  const reports = await ErrorReport.find({ 'publish.status': 'pr_opened', state: 'open' }).sort({ 'publish.updatedAt': 1 }).limit(limit).lean();
+  const tracked = { 'publish.status': 'pr_opened', state: 'open' };
+  // PR שנסגרו וממתינים לקליטה נבדקים בתור משלהם, כדי שלא ידחקו את ה-PR הפתוחים (ולהפך).
+  const reports = [
+    ...await ErrorReport.find({ ...tracked, 'publish.prClosedAt': null }).sort({ 'publish.updatedAt': 1 }).limit(limit).lean(),
+    ...await ErrorReport.find({ ...tracked, 'publish.prClosedAt': { $ne: null } }).sort({ 'publish.updatedAt': 1 }).limit(limit).lean(),
+  ];
   if (!reports.length) return 0;
   const client = publishClient(config, deps);
+  let checker = null;
   let changed = 0;
   for (const r of reports) {
     try {
@@ -557,10 +578,11 @@ export async function trackOpenPulls({ config, deps, now, limit = 10 }) {
         await logEvent(r._id, 'pr_merged', WORKER_ACTOR, r.workflowGeneration, { prNumber: pr.number });
         changed += 1;
       } else if (pr.state === 'closed') {
-        await ErrorReport.updateOne({ _id: r._id, 'publish.status': 'pr_opened' }, { $set: { 'publish.status': 'failed', 'publish.lastError': 'pr_closed_unmerged', 'publish.updatedAt': now, ...manualQueueSet('publish_failed', now) } });
-        await logEvent(r._id, 'pr_closed_unmerged', WORKER_ACTOR, r.workflowGeneration, { prNumber: pr.number });
-        changed += 1;
+        // main נקרא רק כשיש PR שנסגר, ופעם אחת לאצווה: כל הדיווחים מושווים לאותו קומיט.
+        checker ??= createAbsorptionChecker({ config, deps });
+        if (await handleClosedPull(r, { checker, config, now })) changed += 1;
       } else {
+        // PR שנפתח מחדש אחרי סגירה חוזר למעקב הרגיל (prClosedAt מתאפס).
         const change = await ChangePackage.findOne({ changeId: r.publish.changeId }).lean();
         if (change) {
           const git = createGitSource({ client, ref: config.publish.branch, cache: getSharedSourceCache(config.cacheBytes) });
@@ -568,9 +590,9 @@ export async function trackOpenPulls({ config, deps, now, limit = 10 }) {
           const f = await git.getFile(change.path, head.commitSha);
           const m = f ? matchLine(f.content, { originalLine: change.originalLine, lineIndex: change.lineIndex, newLine: change.newLine }) : null;
           const conflict = !m || (m.status !== 'exact' && m.status !== 'already_applied') || m.lineIndex !== change.lineIndex;
-          await ErrorReport.updateOne({ _id: r._id }, { $set: { 'publish.conflictReason': conflict ? 'base_changed_while_pr_open' : null, 'publish.updatedAt': now } });
+          await ErrorReport.updateOne({ _id: r._id }, { $set: { 'publish.conflictReason': conflict ? 'base_changed_while_pr_open' : null, 'publish.prClosedAt': null, 'publish.updatedAt': now } });
         } else {
-          await ErrorReport.updateOne({ _id: r._id }, { $set: { 'publish.updatedAt': now } });
+          await ErrorReport.updateOne({ _id: r._id }, { $set: { 'publish.prClosedAt': null, 'publish.updatedAt': now } });
         }
       }
     } catch (err) {
