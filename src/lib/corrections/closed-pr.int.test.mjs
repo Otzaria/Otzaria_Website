@@ -4,6 +4,9 @@
  */
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import mongoose from 'mongoose';
 import ErrorReport from '../../models/ErrorReport.js';
 import ChangePackage from '../../models/ChangePackage.js';
 import CorrectionEvent from '../../models/CorrectionEvent.js';
@@ -302,6 +305,67 @@ test('PR שאינו קיים עוד (404) נבדק כמו PR שנסגר; כל PR
   assert.equal((await load(id2)).state, 'closed_published');
 });
 
+test('PR שמחזיר 404 עד תום ההמתנה והתיקון לא הגיע ל-main → ממתין, ובתום ההמתנה עובר לידני (לא נסגר)', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const id = await ingest('gone-forever', 1);
+  const r = await approved(id);
+  gh.hooks.beforeRequest = ({ method, path }) => (method === 'GET' && path.endsWith(`/pulls/${r.publish.prNumber}`) ? json(404, { message: 'Not Found' }) : null);
+  await work(at(2));
+  let x = await load(id);
+  assert.equal(x.state, 'open', 'ה-404 מתחיל המתנה, לא סוגר');
+  assert.equal(x.publish.absorptionDeadline.getTime(), at(2 + GRACE).getTime());
+  await work(at(2 + GRACE - 1));
+  assert.equal((await load(id)).state, 'open');
+  await work(at(2 + GRACE));
+  gh.hooks.beforeRequest = null;
+  x = await load(id);
+  assert.notEqual(x.state, 'closed_published');
+  assert.deepEqual([x.publish.status, x.manual.status, x.manual.handoffReason], ['failed', 'queued', 'pr_closed_not_absorbed']);
+});
+
+/** דיווח מאושר על בסיס ייחודי (blob שאינו במטמון המשותף) שה-PR שלו נסגר; ב-main התיקון הוחל במקומו והשכנים שונו (אין עיגון). הבסיס אינו נקרא. */
+async function closedWithUnreadableBase(t, reportId) {
+  gh.pushExternal('main', { [PATH]: `${FILE}${unique(t)}\r\n` }, 'unique-base');
+  const id = await ingest(reportId, 1);
+  const r = await approved(id);
+  gh.closePull(r.publish.prNumber);
+  const baseSha = gh.fileSha('main', PATH);
+  const other = LINES.map((l, i) => (i === 1 ? fixed(l) : `שורה אחרת לגמרי ${i} ${l.split('').reverse().join('')}`));
+  gh.pushExternal('main', { [PATH]: fileOf(other) }, 'batch');
+  gh.hooks.beforeRequest = ({ method, path }) => (method === 'GET' && path.endsWith(`/git/blobs/${baseSha}`) ? json(500, { message: 'boom' }) : null);
+  return id;
+}
+
+test('הבסיס המלא אינו נקרא: "נקלט" לא מעוגן ממתין (לא נסגר מיד), ונבדק שוב במחזור הבא כשהבסיס חוזר', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const id = await closedWithUnreadableBase(t, 'nobase');
+  await work(at(2));
+  let x = await load(id);
+  assert.equal(x.state, 'open', 'בלי הבסיס — לא נסגר');
+  assert.equal(x.publish.absorptionCheck.outcome, 'changed');
+  assert.equal(x.publish.absorptionCheck.detail, 'base_required');
+  assert.equal(x.publish.absorptionCheck.baseError, true);
+  await work(at(3));
+  assert.equal((await load(id)).state, 'open', 'עדיין בלי בסיס');
+  // ביקורת: כשהבסיס נקרא באותו מצב — נקלט
+  gh.hooks.beforeRequest = null;
+  await work(at(4));
+  x = await load(id);
+  assert.equal(x.state, 'closed_published');
+  assert.equal(x.publish.absorptionCheck.baseError, false);
+});
+
+test('הבסיס המלא אינו נקרא עד תום ההמתנה → לידני, לעולם לא נסגר כנקלט', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const id = await closedWithUnreadableBase(t, 'nobase-expiry');
+  await work(at(2));
+  await work(at(2 + GRACE));
+  gh.hooks.beforeRequest = null;
+  const x = await load(id);
+  assert.notEqual(x.state, 'closed_published');
+  assert.deepEqual([x.publish.status, x.manual.status, x.manual.handoffReason], ['failed', 'queued', 'source_changed_after_pr_close']);
+});
+
 test('בדיקה חוזרת רק כש-main או הקובץ השתנו: אותו main — בלי בדיקה; קובץ אחר זז — בלי הורדה', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const id = await ingest('reuse', 1);
@@ -493,6 +557,37 @@ test('migration: dry-run לא כותב; --apply מעביר לפי אותו כל�
   }
   assert.equal((await load(ids.waiting)).state, 'closed_published');
   assert.equal((await revertClosedPullMigration({ apply: true })).reverted, 0, 'ביטול חוזר אינו כותב');
+});
+
+test('migration CLI: --revert (dry-run ואז --apply) מחזיר למצב שלפני ה-migration דרך הסקריפט עצמו', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const NOW = at(40 * DAY);
+  const id = await ingest('mig-cli', 0);
+  await approved(id);
+  await legacyClosed(id, at(39 * DAY));
+  pushFixes([0]);
+  const mig = await migrateClosedPullReports({ config: CONFIG, deps: { githubFetch: gh.fetch }, apply: true, now: NOW });
+  assert.deepEqual(mig.written, { close_absorbed: 1 });
+  assert.equal((await load(id)).state, 'closed_published');
+
+  const script = fileURLToPath(new URL('../../../scripts/migrate-corrections-closed-prs.mjs', import.meta.url));
+  const cli = (...args) => {
+    const res = spawnSync(process.execPath, ['--disable-warning=MODULE_TYPELESS_PACKAGE_JSON', script, ...args], {
+      encoding: 'utf8', cwd: fileURLToPath(new URL('../../../', import.meta.url)), timeout: 60_000,
+      env: { ...process.env, MONGODB_URI: `mongodb://${mongoose.connection.host}:${mongoose.connection.port}/${mongoose.connection.name}` },
+    });
+    assert.equal(res.status, 0, res.stderr);
+    return { out: JSON.parse(res.stdout.slice(0, res.stdout.lastIndexOf('}') + 1)), text: res.stdout };
+  };
+  const dry = cli('--revert');
+  assert.deepEqual([dry.out.apply, dry.out.revertible, dry.out.reverted], [false, 1, 0]);
+  assert.match(dry.text, /dry-run/);
+  assert.equal((await load(id)).state, 'closed_published', 'dry-run אינו כותב');
+  const applied = cli('--revert', '--apply');
+  assert.deepEqual([applied.out.apply, applied.out.reverted], [true, 1]);
+  const x = await load(id);
+  assert.deepEqual([x.state, x.publish.status, x.manual.status, x.manual.handoffReason], ['open', 'failed', 'queued', 'publish_failed']);
+  assert.equal(cli('--revert', '--apply').out.reverted, 0, 'ביטול חוזר אינו כותב');
 });
 
 test('migration: לקיחה בין הקריאה לכתיבה — הכתיבה נכשלת (גם בלי שינוי generation)', async (t) => {

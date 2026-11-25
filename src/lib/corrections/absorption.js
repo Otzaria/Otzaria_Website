@@ -164,10 +164,11 @@ export function anchorTarget(texts, lineIndex, base, range) {
  * @param {{content?:string, texts?:string[], lossy?:boolean}|null} file  הקובץ ב-main (null = אינו קיים)
  * @param {{lineIndex:number, originalLine:string, newLine:string, base?:{before:string[], after:string[]}|null, baseLines?:string[]|null}} change
  *   base — שכני שורת היעד בבסיס (לעיגון); baseLines — הקובץ המלא בבסיס, כשידוע (לבדיקה בלי עיגון)
- * @param {{relocationLines?:number, editContext?:number}} [opts]
+ * @param {{relocationLines?:number, editContext?:number, requireBase?:boolean}} [opts]
+ *   requireBase — "נקלט" לא מעוגן דורש את הבסיס המלא (baseLines); בלעדיו התוצאה changed/base_required (ייצור: תמיד true)
  * @returns {{outcome:'absorbed'|'pending'|'changed', detail:string, lineIndex:(number|null), relocated:boolean, anchored:boolean}}
  */
-export function evaluateAbsorption(file, change, { relocationLines = 0, editContext = EDIT_CONTEXT_CHARS } = {}) {
+export function evaluateAbsorption(file, change, { relocationLines = 0, editContext = EDIT_CONTEXT_CHARS, requireBase = false } = {}) {
   let anchored = false;
   const verdict = (outcome, detail, lineIndex = null) => ({ outcome, detail, lineIndex, relocated: lineIndex !== null && lineIndex !== change.lineIndex, anchored });
   if (!file) return verdict(ABSORPTION.CHANGED, 'target_missing');
@@ -187,6 +188,17 @@ export function evaluateAbsorption(file, change, { relocationLines = 0, editCont
     return editState(texts[i], edit);
   };
   const exact = (i, text) => texts[i] === text;
+  // מספר מופעי התיקון (לא מספר שורות): פיצול פסקה ליד העריכה מגדיל את מספר השורות הנושאות אותו בלי תיקון.
+  const appliedPattern = edit.left + edit.inserted + edit.right;
+  const fixIn = (line) => {
+    const n = occurrences(line, appliedPattern, edit);
+    return line === fresh ? Math.max(n, 1) : n;
+  };
+  const countFix = (lines, lo, hi) => {
+    let n = 0;
+    for (let i = Math.max(0, lo); i <= Math.min(lines.length - 1, hi); i++) n += fixIn(lines[i]);
+    return n;
+  };
 
   const anchor = anchorTarget(texts, li, change.base, relocationLines);
   if (anchor.at !== undefined) {
@@ -194,6 +206,11 @@ export function evaluateAbsorption(file, change, { relocationLines = 0, editCont
     const at = anchor.at;
     const moved = at === li ? '' : '_relocated';
     const st = stateOf(at);
+    // הבסיס המלא ידוע: גם בנתיב המעוגן הראיה חייבת להיות חדשה. עותק כפול שכבר נשא את התיקון בבסיס
+    // (והעיגון ננעל עליו) אינו ראיה — בקובץ כולו מספר מופעי התיקון חייב לעלות לעומת הבסיס.
+    if (st === 'applied' && Array.isArray(change.baseLines) && countFix(texts, 0, texts.length - 1) <= countFix(change.baseLines, 0, change.baseLines.length - 1)) {
+      return verdict(ABSORPTION.CHANGED, 'fix_not_new', at);
+    }
     if (st === 'applied') return verdict(ABSORPTION.ABSORBED, `${exact(at, fresh) ? 'applied' : 'edit_applied'}${moved}`, at);
     if (st === 'original') return verdict(ABSORPTION.PENDING, exact(at, orig) ? `original${moved || '_in_place'}` : `edit_pending${moved}`, at);
     return verdict(ABSORPTION.CHANGED, st === 'both' ? 'ambiguous' : 'line_changed');
@@ -215,11 +232,6 @@ export function evaluateAbsorption(file, change, { relocationLines = 0, editCont
   }
   const baseLines = Array.isArray(change.baseLines) ? change.baseLines : null;
   const carriesFix = (line) => line === fresh || ['applied', 'both'].includes(editState(line, edit));
-  const countFix = (lines, lo, hi) => {
-    let n = 0;
-    for (let i = Math.max(0, lo); i <= Math.min(lines.length - 1, hi); i++) if (carriesFix(lines[i])) n += 1;
-    return n;
-  };
   // חלון רחב יותר בבסיס: שורות שזזו עדיין נספרות כ"היו שם קודם" (כיוון זהיר).
   const addedFix = () => (baseLines ? countFix(texts, from, to) - countFix(baseLines, li - 2 * relocationLines, li + 2 * relocationLines) : null);
   const here = stateOf(li);
@@ -228,6 +240,8 @@ export function evaluateAbsorption(file, change, { relocationLines = 0, editCont
     // שורה ריקה ביעד (מחיקת תוכן השורה) אינה ראיה כשהמקורית עדיין בקובץ — שורות זזו.
     if (!fresh.trim() && texts.includes(orig)) return verdict(ABSORPTION.CHANGED, 'ambiguous');
     const added = addedFix();
+    // בלי עיגון ובלי הבסיס המלא אין דרך לדעת שהתיקון חדש: ממתינים (ובודקים שוב עם הבסיס), לעולם לא "נקלט".
+    if (added === null && requireBase) return verdict(ABSORPTION.CHANGED, 'base_required');
     if (added !== null && added !== 1) return verdict(ABSORPTION.CHANGED, 'fix_not_new');
     return verdict(ABSORPTION.ABSORBED, exact(li, fresh) ? 'applied' : 'edit_applied', li);
   }

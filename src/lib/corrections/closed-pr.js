@@ -18,7 +18,7 @@ import {
 import { currentRevisionOf, logEvent, manualQueueSet } from './store.js';
 
 // גרסת הכלל: תוצאה שמורה מגרסה אחרת אינה ממוחזרת (publish.absorptionCheck.v).
-export const ABSORPTION_RULE_VERSION = 2;
+export const ABSORPTION_RULE_VERSION = 3;
 // שורות מהבסיס לכל צד כשהבסיס נקרא מקובץ (ולא מההקשר שנשמר באישור).
 const BASE_SPAN = 12;
 const COMMENT_MAX = 500;
@@ -141,9 +141,9 @@ export function createAbsorptionChecker({ config, deps = {} }) {
   };
   const change = async (report, packages) => closedPrChange(report, { gitSource: git, head: await head(), source: config.source, packages });
   /**
-   * התוצאה לשינוי שכבר אותר. בלי עיגון, כשהתוצאה תלויה בראיה מחוץ לעיגון ("נקלט" או הזזה), נקרא גם
-   * הקובץ המלא בבסיס — כדי שמופע שהיה שם קודם לא ייחשב ראיה. כשל בקריאת הבסיס אינו מכשיל: הבדיקה
-   * בלי הבסיס המלא (הזהירה יותר), והתוצאה אינה נשמרת למחזור.
+   * התוצאה לשינוי שכבר אותר. כשהתוצאה תלויה בראיה חדשה ("נקלט" או הזזה) נקרא גם הקובץ המלא בבסיס —
+   * כדי שמופע שהיה שם קודם לא ייחשב ראיה. כשל בקריאת הבסיס אינו מכשיל: "נקלט" לא מעוגן בלי הבסיס
+   * הופך ל-changed (ממתין), ו"נקלט" מעוגן נשאר (העיגון עצמו ראיה); התוצאה אינה נשמרת למחזור.
    */
   const evaluate = async (found, f) => {
     let base = found.base ?? null;
@@ -153,11 +153,16 @@ export function createAbsorptionChecker({ config, deps = {} }) {
     } catch {
       baseError = true;
     }
-    let v = evaluateAbsorption(f, { ...found, base }, { relocationLines });
-    if (!v.anchored && (v.outcome === ABSORPTION.ABSORBED || v.detail === 'relocated_unanchored') && !baseError) {
+    let v = evaluateAbsorption(f, { ...found, base }, { relocationLines, requireBase: true });
+    // הקובץ המלא בבסיס נדרש לראיה חדשה: בנתיב המעוגן ("נקלט" בלבד), ובלי עיגון — לכל "נקלט" או הזזה.
+    // בלי הבסיס (לא נקרא, לא תואם או כשל) "נקלט" לא מעוגן הופך ל-changed (base_required) וממתין — לעולם לא נסגר.
+    const needsBase = v.anchored
+      ? v.outcome === ABSORPTION.ABSORBED
+      : v.outcome === ABSORPTION.ABSORBED || v.detail === 'relocated_unanchored' || v.detail === 'base_required';
+    if (needsBase && !baseError) {
       try {
         const baseLines = await baseLinesFor(found);
-        if (baseLines) v = evaluateAbsorption(f, { ...found, base: baseFromLines(baseLines, found.lineIndex, found.originalLine) ?? base, baseLines }, { relocationLines });
+        if (baseLines) v = evaluateAbsorption(f, { ...found, base: baseFromLines(baseLines, found.lineIndex, found.originalLine) ?? base, baseLines }, { relocationLines, requireBase: true });
       } catch {
         baseError = true;
       }

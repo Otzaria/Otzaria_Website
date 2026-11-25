@@ -202,3 +202,83 @@ test('תוויות: PR שנסגר וממתין לקליטה, וסיבות ההע
   assert.ok(t({ publish: { status: 'failed', conflictReason: PR_CLOSED_HANDOFF.CHANGED }, manual: { handoffReason: PR_CLOSED_HANDOFF.CHANGED } }).includes('התנגשות'));
   for (const reason of Object.values(PR_CLOSED_HANDOFF)) assert.ok(HANDOFF_REASON_LABELS[reason], reason);
 });
+
+// ---- חורי "נקלט" שגוי (QA של PR 312): C1, C2, C4, C5 — מקרים מבוססי ספרייה סינתטית של 260 שורות ----
+const QA_R = 50;
+const QA_LI = 130;
+const qaFill = (i) => Array.from({ length: 8 }, (_, k) => `w${i}x${k}q`).join(' ');
+const QA_OK = 'rule: when swearing they notelin money they require denial';
+const QA_ERR = QA_OK.replace('notelin', 'nouelin');
+const qaBase = () => Array.from({ length: 260 }, (_, i) => qaFill(i));
+const qaNeighbors = (b, li) => ({ before: b.slice(Math.max(0, li - 12), li), after: b.slice(li + 1, li + 13) });
+const qaDel = (a, from, n) => a.filter((_, i) => i < from || i >= from + n);
+/** מה שהייצור (evaluate ב-closed-pr.js) עושה: מעבר ראשון בלי baseLines, ואם צריך — מעבר שני איתם. requireBase תמיד. */
+function qaRun(main, base, li, original, fixed, { baseReadable = true } = {}) {
+  const ch = { lineIndex: li, originalLine: original, newLine: fixed, base: qaNeighbors(base, li) };
+  const opts = { relocationLines: QA_R, requireBase: true };
+  let v = evaluateAbsorption({ texts: main }, ch, opts);
+  const needs = v.anchored ? v.outcome === ABSORPTION.ABSORBED : v.outcome === ABSORPTION.ABSORBED || ['relocated_unanchored', 'base_required'].includes(v.detail);
+  if (needs && baseReadable) v = evaluateAbsorption({ texts: main }, { ...ch, baseLines: base }, opts);
+  return v;
+}
+
+test('C1: פיצול פסקה ליד העריכה אינו נחשב תיקון — סופרים מופעים, לא שורות', () => {
+  const b = qaBase();
+  b[QA_LI] = `p1 ${QA_OK} p2 ${QA_ERR} p3 ${QA_OK} p4`;
+  const fixed = b[QA_LI].replace(`p2 ${QA_ERR}`, `p2 ${QA_OK}`);
+  const cut = b[QA_LI].indexOf('nouelin') + 7;
+  const main = [...b];
+  main.splice(QA_LI, 1, b[QA_LI].slice(0, cut), b[QA_LI].slice(cut).trim());
+  const v = qaRun(main, b, QA_LI, b[QA_LI], fixed);
+  assert.equal(v.outcome, ABSORPTION.CHANGED, JSON.stringify(v));
+  // ביקורת: פיצול פסקה שבו התיקון אכן הוחל — מופע אחד חדש — נקלט
+  const cut2 = fixed.indexOf(' p3');
+  const applied = [...b];
+  applied.splice(QA_LI, 1, fixed.slice(0, cut2), fixed.slice(cut2).trim());
+  assert.equal(qaRun(applied, b, QA_LI, b[QA_LI], fixed).outcome, ABSORPTION.ABSORBED);
+});
+
+test('C2: עותק כפול שכבר נשא את התיקון בבסיס אינו ראיה גם כשהעיגון ננעל עליו', () => {
+  const b = qaBase();
+  const [A, B, C, D] = ['A', 'B', 'C', 'D'].map((x, i) => `${x} ${qaFill(1001 + i)}`);
+  const T = `${qaFill(130)} ${QA_ERR} tail`;
+  const F = T.replace(QA_ERR, QA_OK);
+  b.splice(QA_LI - 2, 5, A, B, T, C, D);
+  b.splice(QA_LI + 78, 5, A, B, F, C, D);
+  const main = qaDel(b, 20, 60);
+  const v = qaRun(main, b, QA_LI, T, F);
+  assert.equal(v.outcome, ABSORPTION.CHANGED, JSON.stringify(v));
+  assert.equal(v.detail, 'fix_not_new');
+  assert.equal(v.anchored, true);
+  // ביקורת: אותו מבנה כשמנהל הספרייה אכן תיקן את T (עותק התיקון הקיים נשאר) — נקלט
+  const fixedMain = main.map((l) => (l === T ? F : l));
+  assert.equal(qaRun(fixedMain, b, QA_LI, T, F).outcome, ABSORPTION.ABSORBED);
+});
+
+test('C4: בלי הבסיס המלא "נקלט" לא מעוגן הופך ל-changed (base_required); עם הבסיס — fix_not_new', () => {
+  const b = qaBase();
+  b[QA_LI] = `${qaFill(130)} ${QA_ERR} tail`;
+  b[QA_LI + 1] = `${qaFill(131)} ${QA_OK} more`;
+  const fixed = b[QA_LI].replace(QA_ERR, QA_OK);
+  const m = [...b];
+  m[QA_LI] = b[QA_LI].replace('nouelin', 'nokelin');
+  const main = qaDel(m, QA_LI - 1, 1);
+  const noBase = qaRun(main, b, QA_LI, b[QA_LI], fixed, { baseReadable: false });
+  assert.deepEqual([noBase.outcome, noBase.detail], [ABSORPTION.CHANGED, 'base_required']);
+  assert.deepEqual(pick(qaRun(main, b, QA_LI, b[QA_LI], fixed)).slice(0, 2), [ABSORPTION.CHANGED, 'fix_not_new']);
+  // בלי requireBase (פונקציה טהורה, בדיקות קיימות) ההתנהגות הקודמת נשמרת
+  const ch = { lineIndex: QA_LI, originalLine: b[QA_LI], newLine: fixed, base: qaNeighbors(b, QA_LI) };
+  assert.equal(evaluateAbsorption({ texts: main }, ch, { relocationLines: QA_R }).outcome, ABSORPTION.ABSORBED);
+});
+
+test("C5 (S1'): כותרת כפולה והזזה של יותר מ-50 שורות — בלי הבסיס המלא לא נסגר", () => {
+  const b = qaBase();
+  b[10] = '<h3>11</h3>';
+  b[QA_LI] = '<h3>11</h3>';
+  b[QA_LI + 60] = '<h3>12</h3>';
+  const main = qaDel(b, 20, 60);
+  const withBase = qaRun(main, b, QA_LI, '<h3>11</h3>', '<h3>12</h3>');
+  assert.deepEqual([withBase.outcome, withBase.detail], [ABSORPTION.CHANGED, 'fix_not_new']);
+  const noBase = qaRun(main, b, QA_LI, '<h3>11</h3>', '<h3>12</h3>', { baseReadable: false });
+  assert.notEqual(noBase.outcome, ABSORPTION.ABSORBED, JSON.stringify(noBase));
+});
