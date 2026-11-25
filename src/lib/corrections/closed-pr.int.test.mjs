@@ -324,13 +324,13 @@ test('PR שמחזיר 404 עד תום ההמתנה והתיקון לא הגיע 
 });
 
 /** דיווח מאושר על בסיס ייחודי (blob שאינו במטמון המשותף) שה-PR שלו נסגר; ב-main התיקון הוחל במקומו והשכנים שונו (אין עיגון). הבסיס אינו נקרא. */
-async function closedWithUnreadableBase(t, reportId) {
+async function closedWithUnreadableBase(t, reportId, { anchored = false } = {}) {
   gh.pushExternal('main', { [PATH]: `${FILE}${unique(t)}\r\n` }, 'unique-base');
   const id = await ingest(reportId, 1);
   const r = await approved(id);
   gh.closePull(r.publish.prNumber);
   const baseSha = gh.fileSha('main', PATH);
-  const other = LINES.map((l, i) => (i === 1 ? fixed(l) : `שורה אחרת לגמרי ${i} ${l.split('').reverse().join('')}`));
+  const other = LINES.map((l, i) => (i === 1 ? fixed(l) : anchored ? l : `שורה אחרת לגמרי ${i} ${l.split('').reverse().join('')}`));
   gh.pushExternal('main', { [PATH]: fileOf(other) }, 'batch');
   gh.hooks.beforeRequest = ({ method, path }) => (method === 'GET' && path.endsWith(`/git/blobs/${baseSha}`) ? json(500, { message: 'boom' }) : null);
   return id;
@@ -348,6 +348,24 @@ test('הבסיס המלא אינו נקרא: "נקלט" לא מעוגן ממתי
   await work(at(3));
   assert.equal((await load(id)).state, 'open', 'עדיין בלי בסיס');
   // ביקורת: כשהבסיס נקרא באותו מצב — נקלט
+  gh.hooks.beforeRequest = null;
+  await work(at(4));
+  x = await load(id);
+  assert.equal(x.state, 'closed_published');
+  assert.equal(x.publish.absorptionCheck.baseError, false);
+});
+
+test('הבסיס המלא אינו נקרא: גם "נקלט" מעוגן ממתין (base_required), ונסגר רק כשהבסיס חוזר', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const id = await closedWithUnreadableBase(t, 'nobase-anchored', { anchored: true });
+  await work(at(2));
+  let x = await load(id);
+  assert.equal(x.state, 'open', 'בלי הבסיס — גם מעוגן לא נסגר');
+  assert.equal(x.publish.absorptionCheck.outcome, 'changed');
+  assert.equal(x.publish.absorptionCheck.detail, 'base_required');
+  assert.equal(x.publish.absorptionCheck.baseError, true);
+  await work(at(3));
+  assert.equal((await load(id)).state, 'open', 'עדיין בלי בסיס');
   gh.hooks.beforeRequest = null;
   await work(at(4));
   x = await load(id);

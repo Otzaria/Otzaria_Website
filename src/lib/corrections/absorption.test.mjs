@@ -217,7 +217,7 @@ function qaRun(main, base, li, original, fixed, { baseReadable = true } = {}) {
   const ch = { lineIndex: li, originalLine: original, newLine: fixed, base: qaNeighbors(base, li) };
   const opts = { relocationLines: QA_R, requireBase: true };
   let v = evaluateAbsorption({ texts: main }, ch, opts);
-  const needs = v.anchored ? v.outcome === ABSORPTION.ABSORBED : v.outcome === ABSORPTION.ABSORBED || ['relocated_unanchored', 'base_required'].includes(v.detail);
+  const needs = v.outcome === ABSORPTION.ABSORBED || ['relocated_unanchored', 'base_required'].includes(v.detail);
   if (needs && baseReadable) v = evaluateAbsorption({ texts: main }, { ...ch, baseLines: base }, opts);
   return v;
 }
@@ -269,6 +269,17 @@ test('C4: בלי הבסיס המלא "נקלט" לא מעוגן הופך ל-chan
   // בלי requireBase (פונקציה טהורה, בדיקות קיימות) ההתנהגות הקודמת נשמרת
   const ch = { lineIndex: QA_LI, originalLine: b[QA_LI], newLine: fixed, base: qaNeighbors(b, QA_LI) };
   assert.equal(evaluateAbsorption({ texts: main }, ch, { relocationLines: QA_R }).outcome, ABSORPTION.ABSORBED);
+});
+
+test('C2b: "נקלט" מעוגן בלי הבסיס המלא (לא נקרא) → changed:base_required; עם הבסיס — נקלט', () => {
+  const b = qaBase();
+  b[QA_LI] = `${qaFill(130)} ${QA_ERR} tail`;
+  const fixed = b[QA_LI].replace(QA_ERR, QA_OK);
+  const main = [...b];
+  main[QA_LI] = fixed;
+  const noBase = qaRun(main, b, QA_LI, b[QA_LI], fixed, { baseReadable: false });
+  assert.deepEqual([noBase.outcome, noBase.detail, noBase.anchored], [ABSORPTION.CHANGED, 'base_required', true], JSON.stringify(noBase));
+  assert.equal(qaRun(main, b, QA_LI, b[QA_LI], fixed).outcome, ABSORPTION.ABSORBED);
 });
 
 test("C5 (S1'): כותרת כפולה והזזה של יותר מ-50 שורות — בלי הבסיס המלא לא נסגר", () => {

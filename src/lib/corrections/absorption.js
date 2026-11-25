@@ -165,7 +165,7 @@ export function anchorTarget(texts, lineIndex, base, range) {
  * @param {{lineIndex:number, originalLine:string, newLine:string, base?:{before:string[], after:string[]}|null, baseLines?:string[]|null}} change
  *   base — שכני שורת היעד בבסיס (לעיגון); baseLines — הקובץ המלא בבסיס, כשידוע (לבדיקה בלי עיגון)
  * @param {{relocationLines?:number, editContext?:number, requireBase?:boolean}} [opts]
- *   requireBase — "נקלט" לא מעוגן דורש את הבסיס המלא (baseLines); בלעדיו התוצאה changed/base_required (ייצור: תמיד true)
+ *   requireBase — כל "נקלט" (גם מעוגן) דורש את הבסיס המלא (baseLines); בלעדיו התוצאה changed/base_required (ייצור: תמיד true)
  * @returns {{outcome:'absorbed'|'pending'|'changed', detail:string, lineIndex:(number|null), relocated:boolean, anchored:boolean}}
  */
 export function evaluateAbsorption(file, change, { relocationLines = 0, editContext = EDIT_CONTEXT_CHARS, requireBase = false } = {}) {
@@ -211,6 +211,9 @@ export function evaluateAbsorption(file, change, { relocationLines = 0, editCont
     if (st === 'applied' && Array.isArray(change.baseLines) && countFix(texts, 0, texts.length - 1) <= countFix(change.baseLines, 0, change.baseLines.length - 1)) {
       return verdict(ABSORPTION.CHANGED, 'fix_not_new', at);
     }
+    // בלי הבסיס המלא גם העיגון אינו ראיה מספקת: הוא עלול להינעל על עותק כפול שכבר נשא את התיקון בבסיס, ורק
+    // השוואת הבסיס תופסת זאת. טעות כאן מאבדת תיקון בשקט, לכן ממתינים (ובודקים שוב עם הבסיס).
+    if (st === 'applied' && requireBase && !Array.isArray(change.baseLines)) return verdict(ABSORPTION.CHANGED, 'base_required', at);
     if (st === 'applied') return verdict(ABSORPTION.ABSORBED, `${exact(at, fresh) ? 'applied' : 'edit_applied'}${moved}`, at);
     if (st === 'original') return verdict(ABSORPTION.PENDING, exact(at, orig) ? `original${moved || '_in_place'}` : `edit_pending${moved}`, at);
     return verdict(ABSORPTION.CHANGED, st === 'both' ? 'ambiguous' : 'line_changed');
