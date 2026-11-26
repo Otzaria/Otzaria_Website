@@ -1,5 +1,5 @@
 // הבקשות של "דיווחים על עמודים" לשרת (לפי החוזה של הפיצ'ר):
-//   GET   /api/admin/page-reports?kind=&status=&book=&skip=&limit=   → { reports, counts, total, hasMore }
+//   GET   /api/admin/page-reports?kind=&status=&book=&skip=&limit=   → { reports, counts, books, total, hasMore }
 //   PATCH /api/admin/page-reports/[id]  { action, note?, original?, proposed? } → { report }
 // העטיפה (adminRequest) מוסיפה: התחברות שפגה מזוהה, תקרת זמן, והודעת השרת בעברית (למשל 409 — "העמוד בעריכה").
 import { requestJson } from '@/components/admin/list/adminRequest'
@@ -8,7 +8,7 @@ import { failText } from '@/lib/adminPageReportsScreen/pageReportsTerms'
 
 /**
  * @param {import('@/lib/adminPageReportsScreen/pageReportsQuery').PageReportsQuery} query
- * @returns {Promise<{ reports: any[], counts: ReturnType<typeof normalizeCounts>, total: number, hasMore: boolean }>}
+ * @returns {Promise<{ reports: any[], counts: ReturnType<typeof normalizeCounts>, books: { bookPath: string, bookName: string }[], total: number, hasMore: boolean }>}
  */
 export async function loadPageReports(query) {
   const data = await requestJson(listUrl(query), { fallback: 'לא הצלחנו לטעון את הדיווחים.', cache: 'no-store' })
@@ -16,6 +16,7 @@ export async function loadPageReports(query) {
   return {
     reports,
     counts: normalizeCounts(data.counts),
+    books: Array.isArray(data.books) ? data.books : [],
     total: Number.isFinite(Number(data.total)) ? Number(data.total) : reports.length,
     hasMore: data.hasMore === true,
   }

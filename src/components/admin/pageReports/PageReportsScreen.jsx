@@ -32,8 +32,13 @@ const TITLE_ID = 'page-reports-title'
 const LIST_ID = 'page-reports-list'
 const EMPTY = { reports: [], counts: normalizeCounts(null), total: 0, hasMore: false, books: new Map(), loaded: false }
 
-// תשובה חדשה מחליפה את הקודמת; הספרים שכבר נראו נשמרים (לבורר — השרת לא מחזיר רשימת ספרים)
-const merge = (previous, loaded) => ({ ...loaded, books: bookOptions(previous.books, loaded.reports).seen, loaded: true })
+// תשובה חדשה מחליפה את הקודמת. הבורר נבנה מכל הספרים שיש עליהם דיווחים (השרת מחזיר את כולם),
+// ולא רק מהדיווחים שבעמוד שנטען; ספרים שכבר נראו נשמרים, למקרה שתשובה ישנה לא כללה אותם.
+const merge = (previous, loaded) => ({
+  ...loaded,
+  books: bookOptions(bookOptions(previous.books, loaded.books).seen, loaded.reports).seen,
+  loaded: true,
+})
 
 /**
  * "דיווחים על עמודים" (/library/admin/page-reports): מה שמתנדבים שלחו מעורך העמוד —

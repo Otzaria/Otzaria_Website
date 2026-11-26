@@ -138,7 +138,7 @@ export async function listAdminPageReports(params) {
   if (book) {
     const bookDoc = await findBook(book)
     if (!bookDoc) {
-      return { ok: true, reports: [], counts: countsFromRows([]), total: 0, hasMore: false }
+      return { ok: true, reports: [], counts: countsFromRows([]), books: [], total: 0, hasMore: false }
     }
     scope.book = bookDoc._id
   }
@@ -147,12 +147,18 @@ export async function listAdminPageReports(params) {
   const filter = { ...scope, kind }
   if (status !== 'all') filter.status = status
 
-  const [rows, total, countRows] = await Promise.all([
+  const [rows, total, countRows, bookRows] = await Promise.all([
     PageReport.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit).lean(),
     PageReport.countDocuments(filter),
     PageReport.aggregate([
       { $match: { ...scope, kind: { $in: [...REPORT_KINDS] } } },
       { $group: { _id: { kind: '$kind', status: '$status' }, count: { $sum: 1 } } },
+    ]),
+    // כל הספרים שיש עליהם דיווחים (לבורר הספר) — לא רק אלה שבעמוד שנטען
+    PageReport.aggregate([
+      { $match: { kind: { $in: [...REPORT_KINDS] } } },
+      { $sort: { createdAt: -1 } },
+      { $group: { _id: '$bookPath', bookName: { $first: '$bookName' } } },
     ]),
   ])
   const pages = await pagesById([...new Set(rows.map((r) => String(r.page)))])
@@ -160,6 +166,7 @@ export async function listAdminPageReports(params) {
     ok: true,
     reports: rows.map((r) => adminReportShape(r, pages.get(String(r.page)) || null)),
     counts: countsFromRows(countRows),
+    books: bookRows.filter((b) => b._id).map((b) => ({ bookPath: b._id, bookName: b.bookName || '' })),
     total,
     hasMore: skip + rows.length < total,
   }
