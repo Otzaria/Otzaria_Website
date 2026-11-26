@@ -103,11 +103,26 @@ export function viewerMain() {
 
   // ---------- המצב: החלטות + "מה עוד לא נשמר לקובץ" ----------
   let st = { dec: {}, dirty: {} };
+  let staleMemory = 0;
+  const version = (it) => ({ v: it.v, r: it.r == null ? 0 : it.r });
+  const sameVersion = (x, it) => !!x && x.v === it.v && (x.r === undefined ? 0 : x.r) === (it.r == null ? 0 : it.r);
+  const validDecision = (x) => x && ['approve', 'reject', 'fix', 'site'].includes(x.d) && (x.d !== 'fix' || (S !== 'frames' && x.mark && typeof x.mark === 'object' && !Array.isArray(x.mark)));
   try {
     const raw = window.localStorage.getItem(SKEY);
     if (raw) {
       const x = JSON.parse(raw);
-      if (x && x.dec) st = { dec: x.dec, dirty: x.dirty || {} };
+      if (x && x.dec) {
+        for (const id of Object.keys(x.dec)) {
+          const it = byId.get(id);
+          const d = x.dec[id];
+          if (it && sameVersion(d, it) && validDecision(d)) st.dec[id] = d;
+          else staleMemory++;
+        }
+        for (const id of Object.keys(x.dirty || {})) {
+          const it = byId.get(id);
+          if (it && sameVersion(x.dirty[id], it)) st.dirty[id] = x.dirty[id];
+        }
+      }
     }
   } catch (e) {
     /* חלון פרטי / זיכרון חסום — עובדים בלי שמירה מעצמה */
@@ -121,15 +136,14 @@ export function viewerMain() {
   }
   const unsaved = () => Object.keys(st.dirty).length;
   function setDec(it, d, mark) {
-    st.dec[it.id] = mark ? { d: d, mark: mark } : { d: d };
-    st.dirty[it.id] = 1;
-    persist();
+    const v = version(it);
+    st.dec[it.id] = mark ? { v: v.v, r: v.r, d: d, mark: mark } : { v: v.v, r: v.r, d: d };
+    st.dirty[it.id] = v;
   }
   function clearDec(it) {
     if (!st.dec[it.id]) return;
     delete st.dec[it.id];
-    st.dirty[it.id] = 1;
-    persist();
+    st.dirty[it.id] = version(it);
   }
 
   // ---------- תצוגה ----------
@@ -239,6 +253,13 @@ export function viewerMain() {
 
   // ---------- פעולות ----------
   let list = [];
+  // פעולות בעכבר ובמקלדת חייבות להצביע על אותו כרטיס, גם כשעורכים כרטיס שאינו הראשון.
+  function selectItem(it) {
+    const index = list.findIndex((x) => x.id === it.id);
+    if (index < 0) return;
+    view.page = Math.floor(index / PER);
+    view.cur = index % PER;
+  }
   function move(delta) {
     const n = Math.max(1, Math.ceil(list.length / PER));
     let cur = view.page * PER + view.cur + delta;
@@ -253,11 +274,15 @@ export function viewerMain() {
     render(true);
   }
   function decide(it, d, mark) {
+    selectItem(it);
     setDec(it, d, mark);
+    persist();
     after(it);
   }
   function undo(it) {
+    selectItem(it);
     clearDec(it);
+    persist();
     view.edit = null;
     render(true);
   }
@@ -267,6 +292,7 @@ export function viewerMain() {
     if (!targets.length) return toast('אין מה לסמן');
     if (!window.confirm(label + ' — ' + fmt(targets.length) + ' ' + (S === 'frames' ? 'עמודים' : 'שורות') + '. להמשיך?')) return;
     targets.forEach((it) => setDec(it, d));
+    persist();
     toast(fmt(targets.length) + ' סומנו "' + DL[d] + '"');
     render();
   }
@@ -275,6 +301,7 @@ export function viewerMain() {
     if (!targets.length) return toast('אין החלטות במוצגות');
     if (!window.confirm('לבטל ' + fmt(targets.length) + ' החלטות במוצגות?')) return;
     targets.forEach(clearDec);
+    persist();
     render();
   }
 
@@ -285,7 +312,7 @@ export function viewerMain() {
       const x = st.dec[it.id];
       if (!x) continue;
       if (x.d === 'site') later.push(it.id);
-      else decisions.push(x.mark ? { id: it.id, v: it.v, d: x.d, mark: x.mark } : { id: it.id, v: it.v, d: x.d });
+      else decisions.push(x.mark ? { id: it.id, v: x.v, r: x.r, d: x.d, mark: x.mark } : { id: it.id, v: x.v, r: x.r, d: x.d });
     }
     if (!decisions.length) return toast('עוד אין החלטות לשמור');
     const body = {
@@ -330,17 +357,21 @@ export function viewerMain() {
           foreign++;
           continue;
         }
-        if (it.v !== one.v) {
+        if (!sameVersion(one, it) || !validDecision(one) || one.d === 'site') {
           stale++;
           continue;
         }
-        st.dec[it.id] = one.mark ? { d: one.d, mark: one.mark } : { d: one.d };
+        const revision = one.r == null ? 0 : one.r;
+        st.dec[it.id] = one.mark ? { v: one.v, r: revision, d: one.d, mark: one.mark } : { v: one.v, r: revision, d: one.d };
         delete st.dirty[it.id];
         ok++;
       }
-      for (const id of Array.isArray(x.later) ? x.later : []) if (byId.has(id) && !st.dec[id]) st.dec[id] = { d: 'site' };
+      for (const id of Array.isArray(x.later) ? x.later : []) if (byId.has(id) && !st.dec[id]) {
+        const v = version(byId.get(id));
+        st.dec[id] = { v: v.v, r: v.r, d: 'site' };
+      }
       persist();
-      toast('נטענו ' + fmt(ok) + ' החלטות' + (foreign ? ' · ' + fmt(foreign) + ' של פריטים שאינם בקובץ הזה' : '') + (stale ? ' · ' + fmt(stale) + ' של הגשה אחרת — לא נטענו' : ''));
+      toast('נטענו ' + fmt(ok) + ' החלטות' + (foreign ? ' · ' + fmt(foreign) + ' של פריטים שאינם בקובץ הזה' : '') + (stale ? ' · ' + fmt(stale) + ' של הגשה אחרת או גרסה אחרת — לא נטענו' : ''));
       render();
     };
     r.readAsText(file);
@@ -406,7 +437,7 @@ export function viewerMain() {
   }
   const ctxBtn = (it) =>
     it.ctx
-      ? h('button', { onclick: () => { view.ctx[it.id] = !view.ctx[it.id]; render(); }, class: view.ctx[it.id] ? 'on' : null }, view.ctx[it.id] ? 'הסתר עמוד מלא' : 'עמוד מלא')
+      ? h('button', { onclick: () => { selectItem(it); view.ctx[it.id] = !view.ctx[it.id]; render(); }, class: view.ctx[it.id] ? 'on' : null }, view.ctx[it.id] ? 'הסתר עמוד מלא' : 'עמוד מלא')
       : null;
 
   function metaRow(it, extra) {
@@ -485,6 +516,7 @@ export function viewerMain() {
     );
   }
   function startOcrEdit(it) {
+    selectItem(it);
     const r = it.result || {};
     const dec = st.dec[it.id];
     const text = dec && dec.mark && dec.mark.action === 'fixed' ? dec.mark.text : r.action === 'fixed' ? r.text : it.text;
@@ -518,6 +550,7 @@ export function viewerMain() {
   function setRouterLabel(it, label) {
     const s = routerState(it);
     if (label === 'mixed' && !s.words) return toast('אין בקובץ תיבות-מילים לשורה הזו — את "מעורבת" מסמנים באתר');
+    selectItem(it);
     view.edit = { id: it.id, label: label, words: s.words };
     render(true);
   }
@@ -554,6 +587,7 @@ export function viewerMain() {
             color: C.scripts[w.label],
             title: (L.scripts[w.label] || w.label) + ' — לחיצה מחליפה',
             onclick: () => {
+              selectItem(it);
               const words = s.words.map((x) => ({ k: x.k, box: x.box, label: x.label }));
               words[i].label = WORD_CYCLE[(WORD_CYCLE.indexOf(words[i].label) + 1) % WORD_CYCLE.length];
               view.edit = { id: it.id, label: 'mixed', words: words };
@@ -819,4 +853,8 @@ export function viewerMain() {
   }, on);
 
   render();
+  if (staleMemory) {
+    persist();
+    toast(fmt(staleMemory) + ' החלטות שמורות אינן מתאימות לגרסה הזאת ולא נטענו. אפשר לטעון קובץ-החלטות תואם או לסקור מחדש.');
+  }
 }

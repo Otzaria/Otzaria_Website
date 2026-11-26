@@ -5,6 +5,7 @@ import TrainingProofBook from '../../../../../models/TrainingProofBook.js';
 import TrainingProofPackage from '../../../../../models/TrainingProofPackage.js';
 import User from '../../../../../models/User.js';
 import { BOOK_CLAIM_MS } from '../../../../../lib/trainingProof/vocab.js';
+import { reviewRevisionFilter } from '../../../../../lib/trainingProof/reviewVersion.js';
 import {
   checkFramesPage,
   checkNewStream,
@@ -177,82 +178,156 @@ const publicStreams = (list) =>
 
 const mineNow = (book, userId, now) => claimActive(book, now) && String(book.claimedBy) === String(userId);
 
-// שינוי סוג זרם נוגע בספר ובכמה עמודים, ובייצור MongoDB רץ כ-standalone ללא transaction.
-// לכן הפעולה היא journaled וניתנת לחזרה: הספר נושא את רשימת-היעד, העמודים ננעלים
-// בסמן זהה, מסונכרנים ב-bulk, ורק אז הספר עובר לרשימת-היעד. שמירה ואישור דורשים
-// streamChange:null, כך שמי שניצח לפני הנעילה נכלל בסנכרון ומי שבא אחריה ממתין.
-async function syncMarkedPages(bookKey, changeId, streams) {
+const streamGeneration = (doc) => doc?.streamGeneration ?? 0;
+const generationFilter = (generation) => ({
+  streamGeneration: generation === 0 ? { $in: [null, 0] } : generation,
+});
+
+async function clearStreamLocks(bookKey, change) {
+  await TrainingProofItem.updateMany(
+    {
+      section: SECTION, book: bookKey, 'streamChange.id': change.id,
+      ...(change.generation == null ? {} : { 'streamChange.generation': change.generation }),
+    },
+    { $set: { streamChange: null } }
+  );
+}
+
+// גם משלים ישן שנעצר אחרי mark של עמוד שהועלה מאוחר יכול להשאיר סמן יתום.
+// הספר כבר סיים דורות אלה; כל ניקוי מותנה בזוג id/generation שנקרא מהעמוד,
+// ולכן לא יסיר נעילה חדשה שהחליפה אותו בינתיים. האינדקס החלקי מכסה רק נעילות.
+async function cleanupCompletedStreamChanges(book) {
+  if (!book) return;
+  const generation = streamGeneration(book);
+  if (generation > 0) {
+    const locks = await TrainingProofItem.aggregate([
+      { $match: {
+        section: SECTION, book: book.book,
+        'streamChange.id': { $type: 'string' }, 'streamChange.generation': { $lte: generation },
+      } },
+      { $group: { _id: { id: '$streamChange.id', generation: '$streamChange.generation' } } },
+    ]);
+    for (const lock of locks) await clearStreamLocks(book.book, lock._id);
+  }
+  if (book.streamChangeCleanup) {
+    await clearStreamLocks(book.book, { id: book.streamChangeCleanup });
+    await TrainingProofBook.updateOne(
+      { book: book.book, streamChange: null, streamChangeCleanup: book.streamChangeCleanup, ...generationFilter(generation) },
+      { $set: { streamChangeCleanup: null } }
+    );
+  }
+}
+
+// כל עמוד נחתם בדור, אבל תוכן נקרא ונכתב רק בעמודים שמשתמשים בזרם המשתנה.
+// direction נבחר פעם אחת בספר; כל המשלימים של journal זה מסנכרנים לאותו יעד.
+async function syncMarkedPages(bookKey, change, streams) {
   const items = await TrainingProofItem.find(
-    { section: SECTION, book: bookKey, 'streamChange.id': changeId },
-    { result: 1 }
+    {
+      section: SECTION, book: bookKey, 'streamChange.id': change.id,
+      'streamChange.generation': change.generation, 'result.frames.stream': change.streamId,
+    },
+    { result: 1, reviewRevision: 1 }
   ).lean();
   const ops = [];
   for (const it of items) {
     const result = resyncResult(it.result, streams);
     if (result !== it.result) {
-      ops.push({ updateOne: { filter: { _id: it._id, 'streamChange.id': changeId }, update: { $set: { result } } } });
+      ops.push({
+        updateOne: {
+          filter: {
+            _id: it._id, 'streamChange.id': change.id, 'streamChange.generation': change.generation,
+            ...reviewRevisionFilter(it),
+          },
+          update: { $set: { result }, $inc: { reviewRevision: 1 } },
+        },
+      });
     }
   }
-  if (ops.length) await TrainingProofItem.bulkWrite(ops, { ordered: false });
-  return ops.length;
+  if (!ops.length) return 0;
+  const written = await TrainingProofItem.bulkWrite(ops, { ordered: false });
+  return written.modifiedCount;
 }
 
+// standalone, ללא transactions או lease שפג: דור העמוד חוסם mark ישן; נעילה+revision
+// חוסמים sync ישן; direction חד-כיווני מונע rollback אחרי שמשלים אחר בחר apply.
 async function settleStreamChange(bookKey) {
-  const book = await TrainingProofBook.findOne({ book: bookKey }).lean();
-  if (!book?.streamChange?.id) {
-    // ייתכן שהתהליך נעצר אחרי commit הספר ולפני ניקוי סמני העמודים.
-    if (book?.streamChangeCleanup) {
-      await TrainingProofItem.updateMany(
-        { section: SECTION, book: bookKey, 'streamChange.id': book.streamChangeCleanup },
-        { $set: { streamChange: null } }
+  for (let attempt = 0; attempt < 4; attempt++) {
+    let book = await TrainingProofBook.findOne({ book: bookKey }).lean();
+    if (!book?.streamChange?.id) {
+      await cleanupCompletedStreamChanges(book);
+      return { ok: true, book };
+    }
+    // journal שנשאר מגרסה קודמת מקבל דור פעם אחת, לפני כל כתיבה לעמודים.
+    if (book.streamChange.generation == null) {
+      const generation = streamGeneration(book);
+      book = await TrainingProofBook.findOneAndUpdate(
+        { book: bookKey, 'streamChange.id': book.streamChange.id, 'streamChange.generation': null, ...generationFilter(generation) },
+        { $set: {
+          streamGeneration: generation + 1,
+          'streamChange.generation': generation + 1, 'streamChange.direction': null,
+          'streamChange.before': book.streams || [],
+        } },
+        { returnDocument: 'after', lean: true }
       );
-      await TrainingProofBook.updateOne(
-        { book: bookKey, streamChange: null, streamChangeCleanup: book.streamChangeCleanup },
-        { $set: { streamChangeCleanup: null } }
+      if (!book) continue;
+    }
+    let change = book.streamChange;
+    // גם עמוד שלא משתמש כרגע בזרם נחתם: שמירה שכבר אימתה את רשימת הזרמים
+    // הישנה לא תוכל להוסיף אליו את הזרם אחרי ה-commit. אין כאן קריאה של result.
+    await TrainingProofItem.updateMany(
+      {
+        section: SECTION, book: bookKey,
+        $or: [{ streamGeneration: null }, { streamGeneration: { $lt: change.generation } }],
+      },
+      { $set: { streamChange: { id: change.id, generation: change.generation }, streamGeneration: change.generation }, $inc: { reviewRevision: 1 } }
+    );
+    let current;
+    if (!change.direction) {
+      const approved = await TrainingProofItem.countDocuments({
+        section: SECTION, book: bookKey, status: 'approved', 'result.frames.stream': change.streamId,
+      });
+      current = await TrainingProofBook.findOneAndUpdate(
+        { book: bookKey, 'streamChange.id': change.id, 'streamChange.generation': change.generation, 'streamChange.direction': null },
+        { $set: { 'streamChange.direction': approved ? 'rollback' : 'apply' } },
+        { returnDocument: 'after', lean: true }
       );
     }
-    return { ok: true, book };
+    current ||= await TrainingProofBook.findOne({ book: bookKey }).lean();
+    if (current?.streamChange?.id !== change.id || current.streamChange.generation !== change.generation) {
+      // משלים אחר כבר סיים; אין לבחור עכשיו כיוון על סמך snapshot ישן.
+      await clearStreamLocks(bookKey, change);
+      continue;
+    }
+    change = current.streamChange;
+    if (!['apply', 'rollback'].includes(change.direction)) throw new Error('כיוון שינוי הזרם אינו תקין');
+    const streams = change.direction === 'apply' ? change.streams : change.before;
+    const pages = await syncMarkedPages(bookKey, change, streams || []);
+    const set = { streamChange: null, streamChangeCleanup: change.id };
+    if (change.direction === 'apply') {
+      const target = (change.streams || []).find((stream) => stream.id === change.streamId);
+      if (!target) throw new Error('הזרם חסר ברשימת היעד');
+      // העלאה מקבילה עשויה לצרף זרם חדש. אין להחליף את כל מערך הזרמים ולמחוק אותו.
+      set['streams.$[target]'] = target;
+    }
+    await TrainingProofBook.findOneAndUpdate(
+      {
+        book: bookKey, 'streamChange.id': change.id, 'streamChange.generation': change.generation,
+        'streamChange.direction': change.direction, ...generationFilter(change.generation),
+      },
+      { $set: set },
+      { ...(change.direction === 'apply' ? { arrayFilters: [{ 'target.id': change.streamId }] } : {}) }
+    );
+    await clearStreamLocks(bookKey, change);
+    await TrainingProofBook.updateOne(
+      { book: bookKey, streamChange: null, streamChangeCleanup: change.id, ...generationFilter(change.generation) },
+      { $set: { streamChangeCleanup: null } }
+    );
+    if (change.direction === 'rollback') return fail(409, 'עמוד עם הזרם הזה אושר בינתיים — הסוג לא השתנה');
+    const done = await TrainingProofBook.findOne({ book: bookKey }).lean();
+    if (done?.streamChange?.id) continue;
+    return { ok: true, book: done, pages };
   }
-  const change = book.streamChange;
-  await TrainingProofItem.updateMany(
-    {
-      section: SECTION,
-      book: bookKey,
-      status: { $in: ['held', 'submitted'] },
-      reviewedAt: null,
-      'result.frames.stream': change.streamId,
-    },
-    { $set: { streamChange: { id: change.id } } }
-  );
-  const approved = await TrainingProofItem.countDocuments({
-    section: SECTION,
-    book: bookKey,
-    status: 'approved',
-    'result.frames.stream': change.streamId,
-  });
-  if (approved) {
-    // אישור שניצח לפני נעילת העמודים מבטל את הפעולה כולה ומחזיר כל עמוד שכבר
-    // סונכרן לסוג המקורי. גם מסלול זה idempotent ולכן בטוח לאחר כשל ביניים.
-    await syncMarkedPages(bookKey, change.id, book.streams || []);
-    await TrainingProofItem.updateMany({ section: SECTION, book: bookKey, 'streamChange.id': change.id }, { $set: { streamChange: null } });
-    await TrainingProofBook.updateOne({ book: bookKey, 'streamChange.id': change.id }, { $set: { streamChange: null } });
-    return { ok: false, status: 409, error: 'עמוד עם הזרם הזה אושר בינתיים — הסוג לא השתנה' };
-  }
-  const pages = await syncMarkedPages(bookKey, change.id, change.streams || []);
-  const committed = await TrainingProofBook.findOneAndUpdate(
-    { book: bookKey, 'streamChange.id': change.id },
-    { $set: { streams: change.streams || [], streamChange: null, streamChangeCleanup: change.id } },
-    { returnDocument: 'after', lean: true }
-  );
-  // אם בקשה קודמת כבר ביצעה commit, הספר העדכני הוא מקור-האמת; בכל מקרה הסמן יתום.
-  await TrainingProofItem.updateMany({ section: SECTION, book: bookKey, 'streamChange.id': change.id }, { $set: { streamChange: null } });
-  await TrainingProofBook.updateOne(
-    { book: bookKey, streamChange: null, streamChangeCleanup: change.id },
-    { $set: { streamChangeCleanup: null } }
-  );
-  const done = committed || (await TrainingProofBook.findOne({ book: bookKey }).lean());
-  if (done) done.streamChangeCleanup = null;
-  return { ok: true, book: done, pages };
+  return fail(409, 'רשימת הזרמים השתנתה שוב בינתיים — נסו שוב');
 }
 
 // עמוד לדפדפן. בלי מפתח-הספר, בלי sig ובלי מזהי-תחנה — רק מה שהעורך צריך
@@ -309,13 +384,17 @@ export async function bookDetail(userId, bookKey, { isAdmin = false, now = new D
 // שמירת עמוד: body = {status:'draft'|'marked'|'skip', frames}. מחזיר {ok, page, bookDone}
 export async function savePage(userId, itemId, body, { now = new Date(), names = {} } = {}) {
   if (!mongoose.Types.ObjectId.isValid(String(itemId))) return fail(400, 'מזהה לא תקין');
-  const item = await TrainingProofItem.findOne({ _id: oid(itemId), section: SECTION }).lean();
+  let item = await TrainingProofItem.findOne({ _id: oid(itemId), section: SECTION }).lean();
   if (!item) return fail(404, 'העמוד לא נמצא');
   if (item.status === 'approved') return fail(409, 'המנהל כבר אישר את העמוד — אי-אפשר לשנות אותו');
   const settled = await settleStreamChange(item.book);
   if (!settled.ok) return settled;
   const book = settled.book;
   if (!book || !mineNow(book, userId, now)) return fail(409, 'הספר כבר לא אצלך — חזרו לרשימת הספרים וקחו אותו שוב');
+  if (item.streamChange || streamGeneration(item) !== streamGeneration(book)) {
+    item = await TrainingProofItem.findOne({ _id: oid(itemId), section: SECTION }).lean();
+  }
+  if (!item || item.streamChange || streamGeneration(item) > streamGeneration(book)) return fail(409, 'רשימת הזרמים השתנתה בינתיים — נסו שוב');
   const { result, error } = checkFramesPage(item.payload, body, { streams: book.streams });
   if (error) return fail(400, error);
   const uid = oid(userId);
@@ -324,11 +403,11 @@ export async function savePage(userId, itemId, body, { now = new Date(), names =
       ? { status: 'held', heldBy: uid, heldUntil: null, heldAt: now, result, vol: null, submittedAt: null }
       : { status: 'submitted', heldBy: uid, heldUntil: null, heldAt: now, result, vol: uid, submittedAt: now };
   const doc = await TrainingProofItem.findOneAndUpdate(
-    { _id: item._id, status: { $in: ['available', 'held', 'submitted', 'rejected'] }, reviewedAt: null, streamChange: null },
-    { $set: set },
+    { _id: item._id, status: { $in: ['available', 'held', 'submitted', 'rejected'] }, reviewedAt: null, streamChange: null, ...reviewRevisionFilter(item) },
+    { $set: set, $inc: { reviewRevision: 1 }, $max: { streamGeneration: streamGeneration(book) } },
     { returnDocument: 'after', lean: true }
   );
-  if (!doc) return fail(409, 'המנהל כבר אישר את העמוד — אי-אפשר לשנות אותו');
+  if (!doc) return fail(409, 'העמוד השתנה או אושר בינתיים — רעננו לפני השמירה');
   let bookDone = false;
   if (isDoneState(pageState(doc))) {
     const c = (await pageCounts([item.book], { includeClosed: true }))[item.book];
@@ -379,14 +458,22 @@ export async function setStreamKind(userId, bookKey, streamId, body, now = new D
     s.id === streamId && !s.added && !s.stationRole ? { ...s, stationRole: from } : s
   );
   const changeId = new mongoose.Types.ObjectId().toString();
+  const generation = streamGeneration(book) + 1;
   const doc = await TrainingProofBook.findOneAndUpdate(
-    { book: bookKey, claimedBy: oid(userId), claimedUntil: { $gt: now }, streamChange: null, streams: { $elemMatch: { id: streamId, role: from } } },
-    { $set: { streamChange: { id: changeId, streamId, from, role: stream.role, streams: targetStreams, startedAt: now } } },
+    {
+      book: bookKey, claimedBy: oid(userId), claimedUntil: { $gt: now }, streamChange: null,
+      streams: book.streams || [], ...generationFilter(generation - 1),
+    },
+    { $set: {
+      streamGeneration: generation,
+      streamChange: { id: changeId, generation, direction: null, streamId, from, role: stream.role, before: book.streams || [], streams: targetStreams, startedAt: now },
+    } },
     { returnDocument: 'after', lean: true }
   );
   if (!doc) return fail(409, 'הרשימה השתנתה בינתיים — נסו שוב');
   const done = await settleStreamChange(bookKey);
   if (!done.ok) return done;
+  if (!(done.book?.streams || []).some((s) => s.id === streamId && s.role === stream.role)) return fail(409, 'רשימת הזרמים השתנתה בינתיים — נסו שוב');
   return { ok: true, stream: publicStreams([{ ...stream }])[0], streams: publicStreams(done.book.streams), pages: done.pages || 0 };
 }
 

@@ -171,6 +171,7 @@ export async function markItem(userId, itemId, body, { now = new Date(), check =
   const mine = {
     _id: oid(itemId),
     heldBy: uid,
+    streamChange: null,
     $or: [{ status: 'held' }, { status: 'submitted', reviewedAt: null }],
   };
   const item = await TrainingProofItem.findOne(mine, { section: 1, payload: 1, status: 1 }).lean();
@@ -183,14 +184,14 @@ export async function markItem(userId, itemId, body, { now = new Date(), check =
   if (result.action === 'skip') {
     const doc = await TrainingProofItem.findOneAndUpdate(
       mine,
-      { $set: { ...RELEASE, result: null, vol: null, submittedAt: null }, $addToSet: { notFor: uid } },
+      { $set: { ...RELEASE, result: null, vol: null, submittedAt: null }, $inc: { reviewRevision: 1 }, $addToSet: { notFor: uid } },
       { returnDocument: 'after', lean: true }
     );
     return doc ? { ok: true, item: doc, skipped: true } : fail(409, 'השורה כבר לא אצלך');
   }
   const doc = await TrainingProofItem.findOneAndUpdate(
     mine,
-    { $set: { status: 'submitted', result, vol: uid, submittedAt: now, heldUntil: null } },
+    { $set: { status: 'submitted', result, vol: uid, submittedAt: now, heldUntil: null }, $inc: { reviewRevision: 1 } },
     { returnDocument: 'after', lean: true }
   );
   return doc ? { ok: true, item: doc } : fail(409, 'השורה כבר לא אצלך');

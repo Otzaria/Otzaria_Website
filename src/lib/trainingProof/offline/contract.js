@@ -2,10 +2,11 @@
 // צורת הפריט בקובץ שיורד, חלוקת ההורדה לחלקים, ובדיקת קובץ-ההחלטות (tpd/1) שחוזר.
 // טהור לגמרי (בלי מסד, בלי next) — רץ בשרת, בבדיקות, ובשום מקום אחר.
 //
-// הכלל המרכזי: לכל פריט יורד "חותם-גרסה" v = זמן ההגשה (submittedAt). החלטה מוחלת באתר רק
-// כשהפריט עדיין ממתין ו-v שלו זהה — כך החלטה ישנה לעולם אינה נוגעת בהגשה חדשה.
+// לכל פריט יורדים זמן ההגשה v וגרסת התוכן r. החלטה מוחלת רק כשהפריט עדיין ממתין
+// ושניהם זהים — גם שינוי סוג זרם באותה הגשה מבטל החלטה ישנה. r חסר = 0 לתאימות.
 
 import { SECTIONS, SECTION_LABELS, SCRIPT_LABELS, OCR_ACTION_LABELS, FRAME_ROLE_LABELS } from '../vocab.js';
+import { reviewRevision } from '../reviewVersion.js';
 
 export const OFFLINE_KIND = 'tpo/1'; // הנתונים שבתוך קובץ ה-HTML
 export const DECISIONS_CONTRACT = 'tpd/1'; // קובץ-ההחלטות שחוזר לאתר
@@ -29,13 +30,13 @@ const iso = (d) => (d ? new Date(d).toISOString() : null);
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 const int = (v) => (Number.isInteger(v) ? v : null);
 
-// חלוקת הזיהוי/הנתב לקבצים: ids ממוינים עולה. כל חלק = {after, count} — "אחרי המזהה הזה,
-// עד count פריטים". גבול לפי מזהה (לא לפי מקום ברשימה), כדי שאישור באתר בין ההורדות
-// לא יזיז פריטים מחלק לחלק
+// ids ממוינים עולה. כל חלק תחום בשני קצותיו: after בלעדי, through כולל.
+// אישור באתר מקטין את החלק; הוא אינו ממלא אותו מחדש בפריטים מהחלק הבא.
 export function lineParts(sortedIds, per = LINES_PER_FILE) {
   const out = [];
   for (let i = 0; i < sortedIds.length; i += per) {
-    out.push({ after: i === 0 ? null : String(sortedIds[i - 1]), count: Math.min(per, sortedIds.length - i) });
+    const count = Math.min(per, sortedIds.length - i);
+    out.push({ after: i === 0 ? null : String(sortedIds[i - 1]), through: String(sortedIds[i + count - 1]), count });
   }
   return out;
 }
@@ -57,6 +58,7 @@ export function offlineItem(doc, { volName = () => null, ctxKey = () => null } =
   const base = {
     id,
     v: iso(doc.submittedAt),
+    r: reviewRevision(doc),
     img: itemImageKey(id),
     w: num(p.w),
     h: num(p.h),
@@ -148,7 +150,7 @@ export function offlineFileName({ section, offlineId, part, parts }) {
 
 const isIso = (s) => typeof s === 'string' && s.length <= 40 && !Number.isNaN(Date.parse(s));
 
-// בדיקת קובץ-ההחלטות לפני כל נגיעה במסד. מחזיר {section, offlineId, decisions:[{id,v,d,mark?}]}
+// בדיקת קובץ-ההחלטות לפני כל נגיעה במסד. מחזיר {section, offlineId, decisions:[{id,v,r,d,mark?}]}
 // או {error} בעברית. החלטה כפולה לאותו פריט — האחרונה קובעת
 export function checkDecisionsFile(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return { error: 'הקובץ אינו קובץ-החלטות' };
@@ -164,8 +166,10 @@ export function checkDecisionsFile(body) {
     if (!x || typeof x !== 'object') return { error: `${at}: החלטה לא תקינה` };
     if (!OID_RE.test(String(x.id || ''))) return { error: `${at}: מזהה-פריט לא תקין` };
     if (!isIso(x.v)) return { error: `${at}: חסר חותם-הגרסה` };
+    const revision = x.r === undefined ? 0 : x.r;
+    if (!Number.isSafeInteger(revision) || revision < 0) return { error: `${at}: גרסת-תוכן לא תקינה` };
     if (!DECISIONS.includes(x.d)) return { error: `${at}: החלטה לא מוכרת` };
-    const one = { id: String(x.id).toLowerCase(), v: new Date(x.v).toISOString(), d: x.d };
+    const one = { id: String(x.id).toLowerCase(), v: new Date(x.v).toISOString(), r: revision, d: x.d };
     if (x.d === 'fix') {
       if (section === 'frames') return { error: `${at}: תיקון מסגרות נעשה רק באתר` };
       if (!x.mark || typeof x.mark !== 'object' || Array.isArray(x.mark)) return { error: `${at}: חסר התיקון` };
@@ -184,6 +188,7 @@ export const SKIP_REASONS = {
   'approved-online': 'כבר אושר באתר',
   'not-pending': 'כבר לא ממתין (נדחה באתר או חזר למאגר)',
   resubmitted: 'הוגש מחדש מאז ההורדה — ההחלטה ישנה',
+  'content-changed': 'תוכן הפריט השתנה מאז ההורדה — צריך לסקור מחדש',
   'stream-change': 'באמצע שינוי-זרם — לנסות שוב מאוחר יותר',
   changed: 'השתנה באתר בדיוק בזמן ההעלאה',
   'bad-mark': 'התיקון לא תקין',
@@ -197,5 +202,6 @@ export function skipReason(decision, doc, section) {
   if (doc.status !== 'submitted') return 'not-pending';
   if (iso(doc.submittedAt) !== decision.v) return 'resubmitted';
   if (doc.streamChange) return 'stream-change';
+  if (reviewRevision(doc) !== (decision.r ?? 0)) return 'content-changed';
   return null;
 }

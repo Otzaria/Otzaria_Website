@@ -51,6 +51,31 @@ beforeEach(async () => {
 const marked = (frames) => ({ status: 'marked', frames });
 const stateOf = async (u, now = T0) => (await listBooks(u, now)).books[0];
 
+// עוצרים כתיבה אחת לפני Mongo, ומשאירים לכל שאר הבקשות לעבוד מול בסיס הנתונים
+// האמיתי. כך נבדק interleaving מדויק, בלי זמני sleep ובלי לדמות את תנאי ה-CAS.
+function pauseWrite(t, model, method, matches, { crashAfterWrite = false } = {}) {
+  const original = model[method];
+  let paused = false;
+  let reached;
+  let release;
+  const entered = new Promise((resolve) => { reached = resolve; });
+  const resume = new Promise((resolve) => { release = resolve; });
+  const mock = t.mock.method(model, method, function (...args) {
+    if (paused || !matches(...args)) return original.apply(this, args);
+    paused = true;
+    reached(args);
+    return resume.then(async () => {
+      const written = await original.apply(this, args);
+      if (crashAfterWrite) throw new Error('simulated crash after journal mark');
+      return written;
+    });
+  });
+  t.after(() => { release(); mock.mock.restore(); });
+  return { entered, release };
+}
+
+const marksJournal = (_filter, update) => !!update?.$set?.streamChange?.id;
+
 test('רשימה: פנוי → אצלך / בעבודה אצל …', async (t) => {
   if (db.skip) return t.skip(db.skip);
   await seed();
@@ -360,6 +385,201 @@ test('אישור שניצח את נעילת שינוי הסוג מבטל ומח�
   assert.equal(afterBook.streamChange, null);
   assert.equal(afterPage.result.frames.find((f) => f.stream === 's1').role, 'body');
   assert.equal(afterPage.streamChange, null);
+});
+
+test('משלים שהשהה mark אינו מחזיר לאחור שינוי שכבר הושלם ואושר', { timeout: 10000 }, async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  await seed({ n: 2 });
+  await claimBook(A, KEY, T0);
+  const pages = (await bookDetail(A, KEY, { now: T0 })).pages;
+  for (const page of pages) await savePage(A, page.id, marked(page.frames), { now: T0 });
+  const gate = pauseWrite(t, TrainingProofItem, 'updateMany', marksJournal);
+  const delayed = setStreamKind(A, KEY, 's1', { role: 'commentary' }, T0);
+  await gate.entered;
+  try {
+    // בקשה שנייה משלימה את הפעולה, ומנהל מאשר עמוד לפני שהראשונה ממשיכה.
+    const completed = await bookDetail(A, KEY, { now: T0 });
+    assert.equal(completed.book.streams.find((s) => s.id === 's1').role, 'commentary');
+    const approved = await TrainingProofItem.updateOne(
+      { _id: pages[0].id, status: 'submitted', streamChange: null },
+      { $set: { status: 'approved', reviewedAt: T0 }, $inc: { reviewRevision: 1 } }
+    );
+    assert.equal(approved.modifiedCount, 1);
+    const before = await TrainingProofItem.find({ book: KEY }).sort({ _id: 1 }).lean();
+    gate.release();
+    assert.equal((await delayed).ok, true);
+    const after = await TrainingProofItem.find({ book: KEY }).sort({ _id: 1 }).lean();
+    assert.deepEqual(after.map((p) => p.reviewRevision), before.map((p) => p.reviewRevision));
+    for (const page of after) {
+      assert.equal(page.result.frames.find((f) => f.stream === 's1').role, 'commentary');
+      assert.equal(page.streamChange, null);
+      assert.equal(page.streamGeneration, 1);
+    }
+    assert.equal(after.find((p) => String(p._id) === pages[0].id).status, 'approved');
+  } finally {
+    gate.release();
+    await delayed;
+  }
+});
+
+test('sync ישן אינו דורס עריכת עמוד או שינוי זרם מדור חדש', { timeout: 10000 }, async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  await seed({ n: 2 });
+  await claimBook(A, KEY, T0);
+  const [page] = (await bookDetail(A, KEY, { now: T0 })).pages;
+  await savePage(A, page.id, marked(page.frames), { now: T0 });
+  const gate = pauseWrite(t, TrainingProofItem, 'bulkWrite', (ops) => ops.some((op) => op.updateOne?.update?.$set?.result));
+  const delayed = setStreamKind(A, KEY, 's1', { role: 'commentary' }, T0);
+  await gate.entered;
+  try {
+    await bookDetail(A, KEY, { now: T0 });
+    const changedFrames = page.frames.map((f) => f.fid === 'f2' ? { ...f, box: [900, 280, 1500, 2200], src: 'human' } : f);
+    assert.equal((await savePage(A, page.id, marked(changedFrames), { now: T0 })).ok, true);
+    assert.equal((await setStreamKind(A, KEY, 's1', { role: 'notes' }, T0)).ok, true);
+    const before = await TrainingProofItem.findById(page.id).lean();
+    gate.release();
+    assert.equal((await delayed).status, 409, 'הבקשה הישנה אינה מציגה הצלחה לסוג שכבר השתנה');
+    const after = await TrainingProofItem.findById(page.id).lean();
+    assert.deepEqual(after.result, before.result);
+    assert.equal(after.reviewRevision, before.reviewRevision);
+    assert.equal(after.result.frames.find((f) => f.stream === 's1').role, 'notes');
+    assert.deepEqual(after.result.frames.find((f) => f.fid === 'f2').box, [900, 280, 1500, 2200]);
+    assert.equal(after.streamGeneration, 2);
+    assert.equal(after.streamChange, null);
+    assert.equal((await TrainingProofBook.findOne({ book: KEY }).lean()).streams.find((s) => s.id === 's1').role, 'notes');
+  } finally {
+    gate.release();
+    await delayed;
+  }
+});
+
+test('גם עמוד ללא הזרם חוסם שמירה שאומתה מול רשימת זרמים ישנה', { timeout: 10000 }, async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  await seed({ n: 2 });
+  await claimBook(A, KEY, T0);
+  const pages = (await bookDetail(A, KEY, { now: T0 })).pages;
+  const otherStream = pages[0].frames.map((f) => f.stream === 's1' ? { ...f, stream: 's2', role: 'commentary' } : f);
+  await savePage(A, pages[0].id, marked(otherStream), { now: T0 });
+  await savePage(A, pages[1].id, marked(pages[1].frames), { now: T0 });
+  const before = await TrainingProofItem.findById(pages[0].id).lean();
+  const gate = pauseWrite(t, TrainingProofItem, 'findOneAndUpdate', (_filter, update) => !!update?.$set?.result);
+  const delayed = savePage(A, pages[0].id, marked(pages[0].frames), { now: T0 });
+  await gate.entered;
+  try {
+    const changed = await setStreamKind(A, KEY, 's1', { role: 'notes' }, T0);
+    assert.equal(changed.ok, true);
+    assert.equal(changed.pages, 1, 'רק העמוד שמשתמש בזרם נספר כתוכן שסונכרן');
+    gate.release();
+    assert.equal((await delayed).status, 409);
+    const after = await TrainingProofItem.findById(pages[0].id).lean();
+    assert.deepEqual(after.result, before.result, 'עמוד המשתמש בזרם אחר נשאר ללא שינוי בתוכן');
+    assert.equal(after.streamGeneration, 1);
+    const retried = await savePage(A, pages[0].id, marked(pages[0].frames), { now: T0 });
+    assert.equal(retried.ok, true);
+    assert.equal(retried.page.frames.find((f) => f.stream === 's1').role, 'notes');
+  } finally {
+    gate.release();
+    await delayed;
+  }
+});
+
+for (const recoverVia of ['savePage', 'bookDetail']) {
+  test(`עמוד שהועלה אחרי commit וננעל בידי משלים שקרס מתאושש דרך ${recoverVia}`, { timeout: 10000 }, async (t) => {
+    if (db.skip) return t.skip(db.skip);
+    await seed({ n: 2 });
+    await claimBook(A, KEY, T0);
+    const gate = pauseWrite(t, TrainingProofItem, 'updateMany', marksJournal, { crashAfterWrite: true });
+    const delayed = setStreamKind(A, KEY, 's1', { role: 'notes' }, T0);
+    const rejected = assert.rejects(delayed, /simulated crash after journal mark/);
+    await gate.entered;
+    try {
+      await bookDetail(A, KEY, { now: T0 });
+      const raw = framesItem(10);
+      const added = await TrainingProofItem.create(itemDoc(manifestOf('frames'), raw));
+      gate.release();
+      await rejected;
+      const orphan = await TrainingProofItem.findById(added._id).lean();
+      assert.ok(orphan.streamChange?.id);
+      assert.equal(orphan.streamGeneration, 1);
+      assert.equal((await TrainingProofBook.findOne({ book: KEY }).lean()).streamChange, null);
+      if (recoverVia === 'bookDetail') {
+        assert.equal((await bookDetail(A, KEY, { now: T0 })).ok, true);
+        assert.equal((await TrainingProofItem.findById(added._id).lean()).streamChange, null);
+      }
+      const saved = await savePage(A, String(added._id), marked(raw.frames), { now: T0 });
+      assert.equal(saved.ok, true, saved.error);
+      assert.equal(saved.page.frames.find((f) => f.stream === 's1').role, 'notes');
+      const after = await TrainingProofItem.findById(added._id).lean();
+      assert.equal(after.streamChange, null);
+      assert.equal(after.streamGeneration, 1);
+      assert.equal(await TrainingProofItem.countDocuments({ book: KEY, 'streamChange.id': { $type: 'string' } }), 0);
+    } finally {
+      gate.release();
+      await rejected;
+    }
+  });
+}
+
+test('rollback שנקטע שומר את הכיוון ואת דור העמודים, והשינוי הבא מתקדם לדור חדש', { timeout: 10000 }, async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  await seed({ n: 2 });
+  await claimBook(A, KEY, T0);
+  const pages = (await bookDetail(A, KEY, { now: T0 })).pages;
+  for (const page of pages) await savePage(A, page.id, marked(page.frames), { now: T0 });
+  const gate = pauseWrite(t, TrainingProofItem, 'updateMany', marksJournal);
+  const delayed = setStreamKind(A, KEY, 's1', { role: 'notes' }, T0);
+  await gate.entered;
+  try {
+    // האישור ניצח את הסימון הראשון, ולכן השלמה מקבילה חייבת לבחור rollback.
+    await TrainingProofItem.updateOne(
+      { _id: pages[0].id, streamChange: null },
+      { $set: { status: 'approved', reviewedAt: T0 }, $inc: { reviewRevision: 1 } }
+    );
+    await bookDetail(A, KEY, { now: T0 });
+    let book = await TrainingProofBook.findOne({ book: KEY }).lean();
+    assert.equal(book.streams.find((s) => s.id === 's1').role, 'body');
+    assert.equal(book.streamGeneration, 1);
+    assert.equal(book.streamChange, null);
+    gate.release();
+    assert.equal((await delayed).status, 409);
+    await TrainingProofItem.updateOne(
+      { _id: pages[0].id },
+      { $set: { status: 'submitted', reviewedAt: null }, $inc: { reviewRevision: 1 } }
+    );
+    assert.equal((await setStreamKind(A, KEY, 's1', { role: 'commentary' }, T0)).ok, true);
+    book = await TrainingProofBook.findOne({ book: KEY }).lean();
+    assert.equal(book.streamGeneration, 2);
+    for (const page of await TrainingProofItem.find({ book: KEY }).lean()) {
+      assert.equal(page.streamGeneration, 2);
+      assert.equal(page.streamChange, null);
+      assert.equal(page.result.frames.find((f) => f.stream === 's1').role, 'commentary');
+    }
+  } finally {
+    gate.release();
+    await delayed;
+  }
+});
+
+test('commit שינוי סוג משמר זרם שהעלאה מקבילה הוסיפה אחרי תחילת הפעולה', { timeout: 10000 }, async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  await seed({ n: 2 });
+  await claimBook(A, KEY, T0);
+  const gate = pauseWrite(t, TrainingProofBook, 'findOneAndUpdate', (_filter, update) => !!update?.$set?.streamChangeCleanup);
+  const delayed = setStreamKind(A, KEY, 's1', { role: 'notes' }, T0);
+  await gate.entered;
+  try {
+    await TrainingProofBook.updateOne(
+      { book: KEY }, { $push: { streams: { id: 's3', name: 'זרם מחלק נוסף', role: 'commentary' } } }
+    );
+    gate.release();
+    assert.equal((await delayed).ok, true);
+    const book = await TrainingProofBook.findOne({ book: KEY }).lean();
+    assert.equal(book.streams.find((s) => s.id === 's1').role, 'notes');
+    assert.equal(book.streams.find((s) => s.id === 's3').role, 'commentary');
+  } finally {
+    gate.release();
+    await delayed;
+  }
 });
 
 test('כל העמודים סומנו — הספר "הושלם" ו-doneBy', async (t) => {

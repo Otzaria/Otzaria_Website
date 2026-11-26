@@ -3,11 +3,12 @@ import { downloadLinks, reportSummary, placeOf } from './offlineLinks'
 
 describe('קישורי ההורדה', () => {
   it('זיהוי: קובץ לכל חלק, עם נקודת-ההתחלה ו"בלי עמוד מלא"', () => {
-    const plan = { offlineId: 'tpo-20261123-a1b2c3', per: 1000, count: 1500, parts: [{ after: null, count: 1000 }, { after: 'abc', count: 500 }] }
+    const plan = { offlineId: 'tpo-20261123-a1b2c3', per: 1000, count: 1500, parts: [{ after: null, through: 'abc', count: 1000 }, { after: 'abc', through: 'def', count: 500 }] }
     const l = downloadLinks('ocr', plan, { ctx: false })
     expect(l.map((x) => [x.label, x.count])).toEqual([['חלק 1 מתוך 2', 1000], ['חלק 2 מתוך 2', 500]])
     const q = new URL(l[1].href, 'http://x').searchParams
-    expect(Object.fromEntries(q)).toEqual({ oid: 'tpo-20261123-a1b2c3', part: '2', parts: '2', n: '1000', after: 'abc', ctx: '0' })
+    expect(Object.fromEntries(q)).toEqual({ oid: 'tpo-20261123-a1b2c3', part: '2', parts: '2', n: '1000', after: 'abc', through: 'def', ctx: '0' })
+    expect(new URL(l[0].href, 'http://x').searchParams.get('through')).toBe('abc')
     expect(l[0].href).toMatch(/^\/api\/admin\/training-proof\/offline\/download\/ocr\?/)
     expect(downloadLinks('ocr', { ...plan, parts: [plan.parts[0]] })[0].label).toBe('הקובץ')
   })
