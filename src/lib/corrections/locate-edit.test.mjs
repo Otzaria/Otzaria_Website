@@ -24,6 +24,16 @@ test('canon: BOM, צורות הצגה (U+FB33), NFC, תגיות ורווחים �
   assert.equal(applySpans(PARA, [{ start: PARA.indexOf('הלכא'), end: PARA.indexOf('הלכא') + 4, text: 'הלכה' }]), FIXED);
 });
 
+test('canon: הסרת תגיות במעבר אחד — רק תגית שלמה; "<" בודד, "<1>", "</>" ותגית לא סגורה נשארים', () => {
+  assert.equal(canon('<b>א</b> < ב'), 'א < ב');
+  assert.equal(canon('א <1> ב'), 'א <1> ב');
+  assert.equal(canon('א </> ב'), 'א </> ב');
+  assert.equal(canon('א <b ב'), 'א <b ב');
+  assert.equal(canon('<<b>א'), '<א');
+  assert.equal(canon('<a<b>>'), '<a>');
+  assert.equal(canon('<span class="x">א</span><BR/>ב'), 'א ב');
+});
+
 test('זיהוי ומיפוי: במקום, אחרי הזזה רחוקה, פיצול, איחוד ועריכה רחוקה → fixed; בלי תיקון → not_fixed', () => {
   const base = [...fill(6, 'לפני'), PARA, ...fill(6, 'אחרי')];
   const st = (lines) => locate(lines, base, 6);

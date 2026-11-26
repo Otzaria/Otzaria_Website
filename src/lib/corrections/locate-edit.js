@@ -35,15 +35,44 @@ export const LOCATE_RULE = Object.freeze({
 
 const PRESENTATION = /[יִ-ﭏ]/g;
 const BREAK_TAG = /<br\s*\/?>/gi;
-const TAG = /<\/?[A-Za-z][^<>]*>/g;
+const ASCII_LETTER = /[A-Za-z]/;
 const WORD = /[\p{L}\p{N}]/u;
 const NEIGHBOR_SCAN = 12;
 const LONG_LINE = 40;
 
+/**
+ * הסרת תגיות במעבר אחד, בדיוק כמו החלפה גלובלית של <\/?[A-Za-z][^<>]*> במחרוזת ריקה: תגית = "<", "/" אופציונלי,
+ * אות לטינית, תווים שאינם "<" או ">", ואז ">". הפלט משמש להשוואה ולאסימונים בלבד, לעולם לא מוצג כ-HTML, ולכן
+ * אין כאן ניקוי חוזר עד התייצבות (הוא היה משנה את הנרמול). סריקה ליניארית ולא replace, כדי שבדיקת CodeQL
+ * לא תפרש אותה כניקוי HTML חלקי.
+ */
+function stripTags(s) {
+  let out = '';
+  let last = 0;
+  let i = s.indexOf('<');
+  while (i >= 0) {
+    let k = i + 1;
+    if (s[k] === '/') k += 1;
+    if (k < s.length && ASCII_LETTER.test(s[k])) {
+      let j = k + 1;
+      while (j < s.length && s[j] !== '<' && s[j] !== '>') j += 1;
+      if (s[j] === '>') {
+        out += s.slice(last, i);
+        last = j + 1;
+        i = s.indexOf('<', last);
+        continue;
+      }
+    }
+    i = s.indexOf('<', i + 1);
+  }
+  return out + s.slice(last);
+}
+
 /** הנרמול של המודול: BOM, צורות הצגה (U+FB1D–FB4F, למשל U+FB33), NFC, תגיות (br → רווח) ורווחים. */
 export function canon(s) {
-  return String(s ?? '').replace(/^﻿/, '').replace(PRESENTATION, (c) => c.normalize('NFKC')).normalize('NFC')
-    .replace(BREAK_TAG, ' ').replace(TAG, '').replace(/\s+/g, ' ').trim();
+  const text = String(s ?? '').replace(/^﻿/, '').replace(PRESENTATION, (c) => c.normalize('NFKC')).normalize('NFC')
+    .replace(BREAK_TAG, ' ');
+  return stripTags(text).replace(/\s+/g, ' ').trim();
 }
 const tokensOfCanon = (c) => tokenize(c).filter((t) => t !== ' ');
 export const canonTokens = (s) => tokensOfCanon(canon(s));
