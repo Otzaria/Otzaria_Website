@@ -60,13 +60,13 @@ beforeEach(async () => {
 });
 
 /** דיווח על שורה שלמה (בלי בחירה) בשורה i של הקובץ. */
-async function ingest(id, i, { lines = LINES, book = 'בראשית', path = 'תנך/תורה/בראשית.txt' } = {}) {
+async function ingest(id, i, { lines = LINES, book = 'בראשית', path = 'תנך/תורה/בראשית.txt', proposed = fixed(lines[i]) } = {}) {
   const body = {
     schema_version: 2, report_id: id, report_kind: 'text_correction', book_title: book, current_ref: `${book} ${i}`, line_number: i + 3,
     selected_text: book, error_details: 'שם', context_text: '', file_path: `אוצריא/${path}`, source_folder: 'ToratEmetToOtzaria',
     library_version: '27', location: { line_index: i + 2, library_build_id: '27' },
     source_hint: { source_folder: 'ToratEmetToOtzaria', library_relative_path: `אוצריא/${path}` },
-    correction: { original_line: lines[i], original_selection: null, selection_offset: null, proposed_text: fixed(lines[i]), context_before: '', context_after: '' },
+    correction: { original_line: lines[i], original_selection: null, selection_offset: null, proposed_text: proposed, context_before: '', context_after: '' },
   };
   const res = await handleReportingErrorsPost(new Request('http://x/api/reportingerrors', { method: 'POST', body: JSON.stringify(body) }), {
     connectDB: async () => {}, config: CONFIG, rateLimit: () => true, notify: async () => ({ emailSent: false, duplicate: false }),
@@ -652,3 +652,27 @@ test('migration: לקיחה בין הקריאה לכתיבה — הכתיבה נ
   assert.deepEqual(res.written, {});
   for (const x of [id, id2]) assert.deepEqual([(await load(x)).state, (await load(x)).manual.status], ['open', 'claimed']);
 });
+
+// הביקורת החיצונית (#312): הכותרת המקורית זזה ושמרה את הטעות, ובמקומה הקודם כותרת זהה להצעה — מקליטת הדיווח ועד
+// MongoDB. הכותרת שזזה פוצלה לארבע שורות, או הורחבה בשורה אחת: הטעות עדיין בספר, ולכן הדיווח אינו נסגר.
+for (const [label, relocated] of Object.entries({
+  'פוצלה לארבע שורות': ['<h2>דיני', 'תפלה', 'הלכא', 'למעשה</h2>'],
+  'הורחבה בשורה אחת': ['<h2>דיני תפלה ומנהגיה הלכא למעשה לראש חודש בבית הכנסת</h2>'],
+})) {
+  test(`הביקורת: הכותרת המקורית זזה (${label}) ובמקומה כותרת זהה להצעה → הטעות עדיין בספר, הדיווח פתוח`, async (t) => {
+    if (db.skip) return t.skip(db.skip);
+    const original = '<h2>דיני תפלה הלכא למעשה</h2>';
+    const proposed = original.replace('הלכא', 'הלכה');
+    const base = ['פתח דבר', 'כללי הפרק', original, 'סיכום לתלמיד', 'מקורות', 'לסיום'];
+    gh.pushExternal('main', { [PATH]: fileOf(base) }, 'report base');
+    const id = await ingest(`review-${label}`, 2, { lines: base, proposed });
+    const opened = await approved(id);
+    gh.closePull(opened.publish.prNumber);
+    const latest = base.map((line, i) => (i === 2 ? proposed : line)).concat(relocated);
+    gh.pushExternal('main', { [PATH]: fileOf(latest) }, 'move the original and add a new heading at the report position');
+    await work(at(2));
+    const r = await load(id);
+    assert.equal(r.state, 'open');
+    assert.notEqual(r.publish.absorptionCheck?.outcome, 'absorbed');
+  });
+}

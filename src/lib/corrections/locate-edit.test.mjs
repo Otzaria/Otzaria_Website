@@ -4,7 +4,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { LOCATE, applySpans, canon, canonTokens, lineIndex, locateEdit } from './locate-edit.js';
+import { LOCATE, applySpans, canon, canonTokens, lineIndex, locateEdit, locateTarget } from './locate-edit.js';
 import { ABSORPTION, evaluateAbsorption } from './absorption.js';
 
 const PARA = 'ובגמרא שם אמר רבי יוחנן הלכא כרבי מאיר בגזירה ובנמצא, ושם מבואר בדברי הראשונים';
@@ -97,6 +97,65 @@ test('שורה קצרה (כותרת): רק התאמה מלאה, במקום שה�
   assert.equal(run(['<h3>יב</h3>', ...clean.filter((_, i) => i !== 4)]).status, LOCATE.UNCERTAIN, 'כותרת שזזה בלי שכניה');
 });
 
+// הביקורת החיצונית (#312): הכותרת המקורית זזה ושמרה את הטעות, ובמקומה הקודם הופיעה כותרת זהה להצעה.
+test('הביקורת: מקור שזז ועוצב מחדש (פוצל לשורות, הורחב, אוחד) ופיתיון זהה להצעה במקום הישן → לא fixed', () => {
+  const original = '<h2>דיני תפלה הלכא למעשה</h2>';
+  const proposed = original.replace('הלכא', 'הלכה');
+  const base = ['פתח דבר', 'כללי הפרק', original, 'סיכום לתלמיד', 'מקורות', 'לסיום'];
+  const run = (lines) => locateEdit({ original, proposed, current: lineIndex(lines), base: { index: lineIndex(base), lineIndex: 2 }, context: around(base, 2) });
+  const decoy = at(base, 2, proposed);
+  assert.equal(run(decoy).status, LOCATE.FIXED, 'בלי עותק שזז — התיקון במקום מזוהה');
+  for (const [label, moved] of Object.entries({
+    'פוצלה לארבע שורות': ['<h2>דיני', 'תפלה', 'הלכא', 'למעשה</h2>'],
+    'פוצלה לשש שורות עם שורות ריקות': ['<h2>דיני', '', 'תפלה', 'הלכא', '', 'למעשה</h2>'],
+    'הורחבה בשורה אחת': ['<h2>דיני תפלה ומנהגיה הלכא למעשה לראש חודש בבית הכנסת</h2>'],
+    'אוחדה עם שכנה': ['מקורות נוספים לעיון דיני תפלה הלכא למעשה'],
+  })) {
+    const r = run([...decoy, ...moved]);
+    assert.notEqual(r.status, LOCATE.FIXED, label);
+    assert.ok(['original_fragment', 'original_elsewhere'].includes(r.reason), `${label}: ${r.reason}`);
+  }
+  // פסקה ארוכה שזזה ופוצלה לשורה לכל מילה (אף חלון של עד 3 שורות אינו "דומה") — אותה הגנה
+  const long = [...fill(6, 'לפני'), PARA, ...fill(6, 'אחרי')];
+  const words = PARA.split(' ');
+  const r = locate([...at(long, 6, FIXED), ...fill(3, 'עוד'), ...words], long, 6);
+  assert.deepEqual([r.status, r.reason], [LOCATE.UNCERTAIN, 'original_fragment']);
+  assert.equal(locate([...at(long, 6, FIXED), ...fill(3, 'עוד'), ...FIXED.split(' ')], long, 6).status, LOCATE.FIXED, 'גם העותק המפוצל תוקן — הטעות אינה בשום מקום');
+  // החתימה ספציפית לבסיס: "הלכא" לבדה מופיעה בשורה אחרת בבסיס — לא חוסמת; עם ההקשר — חוסמת
+  const busy = [...base.slice(0, 5), 'גם כאן הלכא אחרת לגמרי', 'לסיום'];
+  const withBusy = (lines) => locateEdit({ original, proposed, current: lineIndex(lines), base: { index: lineIndex(busy), lineIndex: 2 }, context: around(busy, 2) });
+  assert.equal(withBusy(at(busy, 2, proposed)).status, LOCATE.FIXED);
+  assert.equal(withBusy([...at(busy, 2, proposed), 'תפלה', 'הלכא']).reason, 'original_fragment');
+});
+
+test('locateTarget (המפרסם): כתיבה רק במופע היחיד של המקור — לא בשורה זהה מפסקה אחרת ולא בפיתיון', () => {
+  const T = 'באמצע הפסקה הייחודית נשארה המילה השגיאה ויש עוד מה להגיה';
+  const NEWT = T.replace('השגיאה', 'השגחה');
+  const base = ['הקדמת המחבר', 'הכרעת חכמים בעניין זה', T, 'ועתה ראו חידוש נפלא', 'סיום הספר'];
+  const run = (lines, b = base, li = 2, original = T, proposed = NEWT) => locateTarget({
+    original, proposed, current: lineIndex(lines), base: { index: lineIndex(b), lineIndex: li }, context: around(b, li),
+  });
+  const shifted = ['שורה חדשה', ...base];
+  assert.deepEqual([run(shifted).status, run(shifted).target], [LOCATE.NOT_FIXED, 3]);
+  // הביקורת, פרסום ישיר: שורה זהה מפסקה אחרת במקום הישן והפסקה עצמה זזה → אין יעד
+  const impostor = ['הקדמת המחבר', 'אמרות מפרק אחר', T, 'תוספות', 'הכרעת חכמים בעניין זה', T, 'ועתה ראו חידוש נפלא', 'סיום הספר'];
+  assert.deepEqual([run(impostor).target, run(impostor).targetReason], [null, 'target_ambiguous']);
+  // הביקורת, PR: במקום הישן כבר ההצעה (מפסקה אחרת), והמקור זז → לא fixed ואין יעד
+  const decoy = at(impostor, 2, NEWT);
+  assert.deepEqual([run(decoy).status, run(decoy).target], [LOCATE.NOT_FIXED, null]);
+  assert.deepEqual([run(at(base, 2, NEWT)).status, run(at(base, 2, NEWT)).target], [LOCATE.FIXED, null]);
+  // תאום בבסיס, או המקור שזז ופוצל (חתימת הטעות גם מחוץ לשורה) → אין יעד
+  const twins = [...base, 'שורה', T];
+  assert.deepEqual([run(at(twins, 6, 'אחר'), twins).target, run(at(twins, 6, 'אחר'), twins).targetReason], [null, 'twin_in_base']);
+  assert.equal(run([...shifted, 'נשארה המילה', 'השגיאה ויש']).target, null);
+  assert.equal(run(at(shifted, 3, `${T} נוסף`)).target, null, 'השורה השתנתה');
+  // שורה קצרה: רק במקום שהשכנים מאשרים, ובלי עותק נוסף של ההצעה
+  const hb = ['פתח', 'כללי הפרק', '<h2>דיני תפלה הלכא למעשה</h2>', 'סיכום לתלמיד', 'מקורות'];
+  const h = (lines) => run(lines, hb, 2, hb[2], hb[2].replace('הלכא', 'הלכה'));
+  assert.equal(h(['חדש', ...hb]).target, 3);
+  assert.equal(h(['<h2>דיני תפלה הלכה למעשה</h2>', ...hb]).target, null, 'ההצעה נוספה במקום אחר');
+});
+
 // ---- בדיקת תכונה: מה שמנהל הספרייה והספרייה עושים לקובץ בין הדיווח לבדיקה ----
 
 function rng(seed) {
@@ -125,10 +184,14 @@ function render(L) {
  * תרחיש: קובץ בסיס עם פסקה מדווחת (החלפה/מחיקה/הוספה של מילה), תאומים ושורות-פיתיון אופציונליים, ואז 0–5 פעולות
  * (הזזה קרובה/רחוקה, עריכת מילים ליד/רחוק מהטעות, פיתיונות עם ההצעה, שכפול מתוקן/לא, פיצול, איחוד, שורות
  * שנוספו/נמחקו, תגיות, צורות הצגה) ותיקון: במקום הנכון בכל העותקים, רק בחלקם, במקום הלא נכון, או בכלל לא.
- * האמת ידועה: כל אסימון ממקום הטעות נושא סימון, ו"תוקן" = בכל עותקי הפסקה המדווחת הטעות תוקנה.
+ * reshape (הביקורת): גם הזזה עם עיצוב מחדש — פיצול ל-k שורות, איחוד עם שכנה, הרחבה בשורה (גם מילה צמודה לטעות) —
+ * ופיתיונות זהים להצעה במקום הישן או זהים למקור במקום אחר. בלי reshape — אותם תרחישים בדיוק כמו קודם.
+ * האמת ידועה: כל אסימון ממקום הטעות נושא סימון, ו"תוקן" = בכל עותקי הפסקה המדווחת הטעות תוקנה. "פתוח" (הפרה אם
+ * נסגר) = מקום טעות שלא תוקן ועדיין צמוד בזרם האסימונים לשכן מקורי שלו מהפסקה (מילה כפולה — לבת-זוגה); מקום טעות
+ * שנותק מכל שכניו (הפסקה נחתכה בדיוק סביבו והחלקים פוזרו) אינו ניתן לייחוס בשום טקסט — נספר בנפרד (dissolved).
  * עריכת מילים — רק בפסקה בת 6 מילים לפחות, ועד שתי עריכות (מעבר לזה זו כבר פסקה אחרת).
  */
-function scenario(seed) {
+function scenario(seed, { reshape = false } = {}) {
   const r = rng(seed);
   const int = (n) => Math.floor(r() * n);
   const pick = (a) => a[int(a.length)];
@@ -174,6 +237,7 @@ function scenario(seed) {
     else if (kind === 'delete') L.t = L.t.filter((x) => !x.err);
     else L.t = L.t.flatMap((x, i) => (x.mark && !L.t[i + 1]?.fix ? [x, { w: C, p: 1, fix: 1 }] : [x]));
   };
+  P.t.forEach((x, i) => { x.id = i; }); // זהות האסימונים בפסקה המקורית — לבדיקת "צמוד לשכן מקורי"
   const fixedP = copy(P);
   applyFix(fixedP);
   const site = siteOf(P);
@@ -272,6 +336,53 @@ function scenario(seed) {
       pick(main).sp = true;
     },
   };
+  const reshapeOps = {
+    // הביקורת: הפסקה זזה ועוצבה מחדש — פוצלה ל-k שורות, אוחדה עם שכנה או הורחבה בשורה — ולעתים פיתיון זהה להצעה
+    // נשאר במקומה הישן; reviewAttack — תמיד פיתיון, פיצול לשלוש שורות לפחות או מילה צמודה לטעות מצד אחד.
+    relocateSplit: () => relocate(splitLine),
+    relocateJoin: () => relocate(joinLine),
+    relocateExtend: () => relocate(extendLine),
+    reviewAttack: () => relocate(pick([(L) => splitLine(L, 3), (L) => extendLine(L, true), joinLine]), true),
+    decoyAtOld: () => main.splice(Math.min(li, main.length), 0, strip(fixedP)),
+    decoyOriginal: () => main.splice(place(main.length), 0, strip(P)),
+  };
+  function relocate(reshape, decoy = chance(0.5)) {
+    const i = pick(descIdx());
+    const [L] = main.splice(i, 1);
+    if (decoy) {
+      main.splice(i, 0, strip(fixedP));
+      benign = false;
+    }
+    main.splice(place(main.length), 0, ...reshape(L));
+  }
+  function splitLine(L, atLeast = 2) {
+    if (L.t.length < 2) return [L];
+    const lo = Math.min(atLeast, L.t.length);
+    const k = lo + int(Math.min(6, L.t.length) - lo + 1);
+    const cuts = new Set();
+    while (cuts.size < k - 1) cuts.add(1 + int(L.t.length - 1));
+    const at = [0, ...[...cuts].sort((x, y) => x - y), L.t.length];
+    return at.slice(1).flatMap((e, j) => [...(j && chance(0.2) ? [{ t: [] }] : []), { ...L, t: L.t.slice(at[j], e), b: undefined }]);
+  }
+  function joinLine(L) {
+    const idx = otherIdx().filter((j) => main[j].t.length);
+    if (!idx.length) return [L];
+    const [N] = main.splice(pick(idx), 1);
+    return [{ t: chance(0.5) ? [...N.t, ...L.t] : [...L.t, ...N.t] }];
+  }
+  function extendLine(L, adjacent = false) {
+    const t = [...L.t];
+    if (chance(0.6)) t.push(...para(1 + int(8)));
+    if (chance(0.5) || t.length === L.t.length) t.unshift(...para(1 + int(8)));
+    if (adjacent || chance(0.3)) {
+      // מילה באמצע (ב-adjacent — צמודה לטעות מצד אחד); לא מילת התיקון, ולא מיד אחרי נקודת ההוספה
+      const site = t.findIndex((x) => x.err || x.mark);
+      const p = adjacent && site >= 0 ? site + int(2) : place(t.length);
+      const w = word();
+      if (w !== C && w !== E && !t[p - 1]?.mark) t.splice(p, 0, { w });
+    }
+    return [{ ...L, t, b: undefined }];
+  }
   const mode = pick(['right', 'right', 'right', 'right', 'right', 'some', 'wrong', 'wrong', 'none', 'none', 'none']);
   if (mode !== 'right') benign = false;
   const fix = () => {
@@ -291,29 +402,57 @@ function scenario(seed) {
       pick(options)();
     }
   };
-  const names = Object.keys(ops);
+  const all = reshape ? { ...ops, ...reshapeOps } : ops;
+  const names = Object.keys(all);
   const n = int(6);
   const fixAt = int(n + 1);
   for (let k = 0; k <= n; k++) {
     if (k === fixAt) fix();
     if (k < n) {
       const op = pick(names);
-      if (['editNear', 'decoyFixed', 'decoyContext', 'duplicate'].includes(op)) benign = false;
-      ops[op]();
+      if (['editNear', 'decoyFixed', 'decoyContext', 'duplicate', 'decoyAtOld', 'decoyOriginal'].includes(op)) benign = false;
+      all[op]();
     }
   }
 
-  const all = main.flatMap((L) => L.t);
-  let truth;
-  if (kind === 'replace') {
-    const errs = all.filter((x) => x.err);
-    truth = errs.length > 0 && errs.every((x) => x.w === C);
-  } else if (kind === 'delete') truth = !all.some((x) => x.err);
-  else {
+  const truthOf = (lines) => {
+    const all = lines.flatMap((L) => L.t);
+    if (kind === 'replace') {
+      const errs = all.filter((x) => x.err);
+      return errs.length > 0 && errs.every((x) => x.w === C);
+    }
+    if (kind === 'delete') return !all.some((x) => x.err);
     const marks = all.flatMap((x, i) => (x.mark ? [i] : []));
-    truth = marks.length > 0 && marks.every((i) => all[i + 1]?.fix);
-  }
-  return { kind, mode, truth, benign, li, original: render(P), proposed: render(fixedP), baseTexts: base.map(render), mainTexts: main.map(render) };
+    return marks.length > 0 && marks.every((i) => all[i + 1]?.fix);
+  };
+  // מקום טעות פתוח וצמוד לשכן מקורי (בהוספה — הצומת עצמו: הסימון ואחריו השכן המקורי, או בסוף הפסקה — לפניו).
+  // פסקה של אסימון אחד — אין לו שכנים, והוא תמיד "צמוד".
+  const anchoredOpen = (lines) => {
+    const all = lines.flatMap((L) => L.t);
+    const nb = (j, id) => all[j] !== undefined && all[j].id === id;
+    return all.some((x, i) => {
+      if (kind === 'insert') {
+        if (!x.mark || all[i + 1]?.fix) return false;
+        if (P.t.length === 1) return true;
+        return x.id === P.t.length - 1 ? nb(i - 1, x.id - 1) : nb(i + 1, x.id + 1);
+      }
+      if (!x.err || (kind === 'replace' && x.w === C)) return false;
+      // מילה כפולה למחיקה: הטעות היא הכפילות עצמה — רק כשהיא צמודה לבת-זוגה
+      const twin = kind === 'delete' ? [-1, 1].find((d) => P.t[x.id + d]?.w === x.w) : undefined;
+      if (twin !== undefined) return nb(i + twin, x.id + twin);
+      return P.t.length === 1 || nb(i - 1, x.id - 1) || nb(i + 1, x.id + 1);
+    });
+  };
+  // המפרסם כותב את ההצעה בשורה k: האם אז הטעות בפסקה המדווחת תוקנה בכל עותקיה (שורה בלי סימון — פסקה אחרת)
+  const truthIfWritten = (k) => truthOf(main.map((L, i) => {
+    if (i !== k) return L;
+    const W = copy(L);
+    applyFix(W);
+    return W;
+  }));
+  return {
+    kind, mode, truth: truthOf(main), open: anchoredOpen(main), truthIfWritten, benign, li, original: render(P), proposed: render(fixedP), baseTexts: base.map(render), mainTexts: main.map(render),
+  };
 }
 
 /** כמו evaluate ב-closed-pr.js: מעבר ראשון בלי הבסיס המלא, ואם צריך — שני איתו; requireBase תמיד. */
@@ -366,4 +505,68 @@ test(`תכונה: נסגר ⇒ הטעות בפסקה המדווחת תוקנה (
   assert.deepEqual(bad.slice(0, 10), [], `הפרות: ${bad.length}`);
   // הזיהוי אינו "תמיד ספק": רוב התיקונים האמיתיים מזוהים (משני לאינווריאנט)
   assert.ok(stats.located / stats.trulyFixed > 0.5, JSON.stringify(stats));
+});
+
+test(`תכונה (הביקורת — הזזה ועיצוב מחדש, פיתיונות): נסגר ⇒ אין טעות פתוחה; יעד לכתיבה ⇒ הכתיבה בו מתקנת (${PROPERTY_SCENARIOS} תרחישים)`, (t) => {
+  const stats = {
+    scenarios: 0, trulyFixed: 0, located: 0, absorbed: 0, locateViolations: 0, absorbViolations: 0, benign: 0, benignLocated: 0,
+    dissolved: 0, dissolvedClosed: 0, writable: 0, targets: 0, targetViolations: 0,
+  };
+  const bad = [];
+  const misses = {};
+  // המפרסם (locateTarget) כותב רק כשהשורה ביעד זהה למקור בדיוק (applyLineChange); אז — אחרי הכתיבה הטעות בפסקה
+  // המדווחת תוקנה בכל עותקיה. נבדק גם על התרחישים הרגילים.
+  const checkTarget = (s, input, loc, seed) => {
+    const tg = locateTarget(input);
+    const exact = s.mainTexts.flatMap((x, i) => (x === s.original ? [i] : []));
+    const writable = !s.truth && exact.length === 1 && s.truthIfWritten(exact[0]);
+    if (writable) stats.writable += 1;
+    if (tg.status !== loc.status) bad.push({ seed, by: 'target_status', kind: s.kind, mode: s.mode });
+    if (tg.target === null || s.mainTexts[tg.target] !== s.original) return;
+    if (writable && tg.target === exact[0]) stats.targets += 1;
+    if (!s.truthIfWritten(tg.target)) {
+      stats.targetViolations += 1;
+      bad.push({ seed, by: 'target', kind: s.kind, mode: s.mode, target: tg.target });
+    }
+  };
+  for (let seed = 1; seed <= PROPERTY_SCENARIOS; seed++) {
+    const s = scenario(seed, { reshape: true });
+    const context = around(s.baseTexts, s.li);
+    const input = { original: s.original, proposed: s.proposed, current: lineIndex(s.mainTexts), base: { index: lineIndex(s.baseTexts), lineIndex: s.li }, context };
+    const loc = locateEdit(input);
+    const v = productionVerdict(s, context);
+    stats.scenarios += 1;
+    if (s.truth) stats.trulyFixed += 1;
+    if (!s.truth && !s.open) stats.dissolved += 1;
+    if (loc.status === LOCATE.FIXED) {
+      if (s.truth) stats.located += 1;
+      else if (!s.open) stats.dissolvedClosed += 1;
+      else {
+        stats.locateViolations += 1;
+        bad.push({ seed, by: 'locate', kind: s.kind, mode: s.mode, reason: loc.reason });
+      }
+    }
+    if (s.truth && s.benign) {
+      stats.benign += 1;
+      if (loc.status === LOCATE.FIXED) stats.benignLocated += 1;
+    }
+    if (s.truth && loc.status !== LOCATE.FIXED) misses[loc.reason] = (misses[loc.reason] || 0) + 1;
+    if (v.outcome === ABSORPTION.ABSORBED) {
+      if (s.truth) stats.absorbed += 1;
+      else if (s.open) {
+        stats.absorbViolations += 1;
+        bad.push({ seed, by: 'absorption', kind: s.kind, mode: s.mode, detail: v.detail });
+      }
+    }
+    checkTarget(s, input, loc, seed);
+    const c = scenario(seed);
+    const cInput = { original: c.original, proposed: c.proposed, current: lineIndex(c.mainTexts), base: { index: lineIndex(c.baseTexts), lineIndex: c.li }, context: around(c.baseTexts, c.li) };
+    checkTarget(c, cInput, locateEdit(cInput), -seed);
+  }
+  const pct = (x, n) => `${((100 * x) / n).toFixed(1)}%`;
+  t.diagnostic(`reshape: ${JSON.stringify(stats)} recall(locate)=${pct(stats.located, stats.trulyFixed)} recall(absorption)=${pct(stats.absorbed, stats.trulyFixed)} recall(locate, בלי פיתיונות/תאומים/שכפול/עריכה צמודה)=${pct(stats.benignLocated, stats.benign)} recall(target)=${pct(stats.targets, stats.writable)}`);
+  t.diagnostic(`reshape: תיקונים אמיתיים שלא זוהו, לפי סיבה: ${JSON.stringify(misses)}`);
+  assert.deepEqual(bad.slice(0, 10), [], `הפרות: ${bad.length}`);
+  // משני לאינווריאנט: גם עם התרחישים האדוורסריים רוב התיקונים האמיתיים בלי פיתיונות/תאומים/שכפול מזוהים
+  assert.ok(stats.benignLocated / stats.benign > 0.75 && stats.located / stats.trulyFixed > 0.4, JSON.stringify(stats));
 });

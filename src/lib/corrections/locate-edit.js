@@ -11,8 +11,13 @@
  * 3. fixed רק כש: כל הדומים בקובץ מתוקנים (דומה שלא תוקן או שאי אפשר למפות בו — הטעות אולי עדיין בספר);
  *    נשאר דומה מתוקן מעבר לתאומים המתוקנים שכבר היו בבסיס (עותק זהה שנשאר זהה אינו ראיה ואינו מתחרה);
  *    והדומה המזוהה ≥ 0.75 (או ≥ 0.5 כשהשכנים מהבסיס מאשרים את מקומו) ובפער ≥ 0.2 מהבא אחריו.
+ * 4. ובכל מקרה של fixed: חתימות הטעות (אסימוני המקור במקום העריכה עם הקשר שבבסיס מופיע רק בשורת הדיווח) אינן
+ *    מופיעות בשום מקום בזרם האסימונים של הקובץ — גם מעבר לגבולות שורות: מקור שזז ופוצל לכמה שורות, אוחד עם שכנה
+ *    או הורחב עדיין נושא את הטעות (original_fragment), גם כשבמקומו הישן עומד עותק זהה להצעה.
  * שורה קצרה (פחות מ-4 אסימונים מחוץ לעריכה, למשל כותרת): רק התאמה מלאה של השורה, במקום שהשכנים מהבסיס
  * מאשרים, ובלי שום שורה שמכילה את המקור.
+ * locateTarget (המפרסם, כשהקובץ השתנה מאז הבסיס): היעד לכתיבה רק כשהפסקה המדווחת לא תוקנה והיא המופע היחיד בקובץ
+ * של המקור ושל הטעות — לעולם לא שורה זהה מפסקה אחרת באינדקס הישן.
  */
 import { tokenize, matchPairs, diffHunks } from './rebase-change.js';
 
@@ -31,6 +36,7 @@ export const LOCATE_RULE = Object.freeze({
   maxWork: 8_000_000, // תאי יישור (LCS) לסריקה אחת; מעבר לזה הקובץ "צפוף" מדי לזיהוי בטוח → uncertain
   maxPostings: 200_000,
   maxCells: 4_000_000,
+  maxScan: 20_000_000, // אסימונים שנסרקים בחיפוש חתימות הטעות בקריאה אחת; מעבר לזה → uncertain
 });
 
 const PRESENTATION = /[יִ-ﭏ]/g;
@@ -176,15 +182,6 @@ function reportedEdit(original, proposed) {
     else hunks.push({ s: h.s, e: h.e, ns: h.ns, ne: h.ne });
   }
   for (const h of hunks) h.repl = N.slice(h.ns, h.ne);
-  // המקור עם צד אחד של ההקשר שלו (או, בהוספה, ההקשר משני הצדדים בלי ההוספה): קטע כזה מחוץ לכל פסקה דומה הוא
-  // עותק חלקי שעדיין נושא את הטעות.
-  const fragments = [];
-  for (const h of hunks) {
-    if (h.e > h.s) {
-      if (h.s >= K) fragments.push(B.slice(h.s - K, h.e));
-      if (h.e + K <= B.length) fragments.push(B.slice(h.s, h.e + K));
-    } else if (h.s >= K && h.e + K <= B.length) fragments.push(B.slice(h.s - K, h.e + K));
-  }
   for (const h of hunks) h.replWords = h.repl.filter(isWord).length;
   const inHunk = new Uint8Array(B.length);
   for (const h of hunks) inHunk.fill(1, h.s, h.e);
@@ -202,7 +199,7 @@ function reportedEdit(original, proposed) {
     words.add(t);
   });
   return {
-    B, hunks, fragments, inHunk, wordAt, outside, ownWords, own, words, allowance: hunks.reduce((n, h) => n + h.repl.length, 0),
+    B, N, hunks, inHunk, wordAt, outside, ownWords, own, words, allowance: hunks.reduce((n, h) => n + h.repl.length, 0),
     canonOriginal: canon(original), canonProposed: canon(proposed),
     weak: outside < LOCATE_RULE.minOwnTokens || words.size < LOCATE_RULE.minOwnWords,
   };
@@ -495,13 +492,188 @@ function decideStrong(rep, cur, base, ctx) {
   scores.second = next?.score ?? 0;
   if (!identified(top)) return outcome(LOCATE.UNCERTAIN, 'not_identified', top, scores);
   if (next && top.score - next.score < R.margin && !(fits(top) && !fits(next))) return outcome(LOCATE.UNCERTAIN, 'ambiguous', top, scores);
-  const inRegions = new Set();
-  for (const r of regions) for (let i = r.start; i <= r.end; i++) inRegions.add(i);
-  for (const run of rep.fragments) {
-    const at = findRun(cur, run, inRegions);
-    if (at >= 0) return outcome(LOCATE.UNCERTAIN, 'original_fragment', { start: at, end: at, span: null }, scores);
-  }
+  const held = errorHeld(rep, cur, base);
+  if (held !== -1) return heldOutcome(held, scores);
   return outcome(LOCATE.FIXED, 'fixed', top, scores);
+}
+
+// ---- הטעות בזרם האסימונים של הקובץ כולו: בלי גבולות שורות (פסקה שפוצלה לכמה שורות, אוחדה או הורחבה) ----
+
+/** מקום בזרם: [r, o] — אסימון o בשורה הלא-ריקה ה-r (ix.filled[r]). n אסימונים אחורה; null לפני תחילת הקובץ. */
+function stepBack(ix, r, o, n) {
+  let rr = r;
+  let oo = o - n;
+  while (oo < 0) {
+    rr -= 1;
+    if (rr < 0) return null;
+    oo += ix.toks[ix.filled[rr]].length;
+  }
+  return [rr, oo];
+}
+/** המקום הבא בזרם שיש בו אסימון (מדלג על סוף שורה); null בסוף הקובץ. */
+function settle(ix, r, o) {
+  let rr = r;
+  let oo = o;
+  while (rr < ix.filled.length && oo >= ix.toks[ix.filled[rr]].length) {
+    rr += 1;
+    oo = 0;
+  }
+  return rr < ix.filled.length ? [rr, oo] : null;
+}
+const tokenAt = (ix, p) => ix.toks[ix.filled[p[0]]][p[1]];
+
+/**
+ * מופעי החתימה בזרם — הרצף ברצף, ותנאי הקצה (notBefore/notAfter: האסימון שלפני/אחרי אינו ההוספה; בתחילת/סוף
+ * הקובץ התנאי מתקיים). מחזיר את השורה הראשונה של מופע ראשון שאינו כולו בתוך השורות [lo, hi], -1 אם אין, ו-null
+ * כשהסריקה חרגה מהתקציב (המסקנה אז שמרנית). הסריקה מתחילה מהמילה הנדירה בחתימה, דרך אינדקס המילים.
+ */
+function findOutside(ix, sig, lo, hi, budget) {
+  const { run } = sig;
+  let anchor = -1;
+  let fewest = Infinity;
+  run.forEach((t, k) => {
+    if (!isWord(t)) return;
+    const n = ix.byWord.get(t)?.length ?? 0;
+    if (n < fewest) {
+      fewest = n;
+      anchor = k;
+    }
+  });
+  const lines = anchor >= 0 ? ix.byWord.get(run[anchor]) || [] : ix.filled;
+  const a = Math.max(anchor, 0);
+  for (const i of lines) {
+    const toks = ix.toks[i];
+    budget.work += toks.length;
+    if (budget.work > LOCATE_RULE.maxScan) return null;
+    for (let o = 0; o < toks.length; o++) {
+      if (toks[o] !== run[a]) continue;
+      const s = stepBack(ix, ix.rank[i], o, a);
+      if (!s) continue;
+      let p = s;
+      let k = 0;
+      let last = s;
+      while (k < run.length) {
+        p = settle(ix, p[0], p[1]);
+        if (!p || tokenAt(ix, p) !== run[k]) break;
+        last = p;
+        p = [p[0], p[1] + 1];
+        k += 1;
+      }
+      budget.work += k;
+      if (k < run.length) continue;
+      if (sig.notBefore !== undefined) {
+        const b = stepBack(ix, s[0], s[1], 1);
+        if (b && tokenAt(ix, b) === sig.notBefore) continue;
+      }
+      if (sig.notAfter !== undefined) {
+        const f = settle(ix, p[0], p[1]);
+        if (f && tokenAt(ix, f) === sig.notAfter) continue;
+      }
+      const first = ix.filled[s[0]];
+      if (first < lo || ix.filled[last[0]] > hi) return first;
+    }
+  }
+  return -1;
+}
+
+/**
+ * החתימה של החלון [from, to) בשורת המקור: הרצף, ותנאי קצה שמבדיל אותו מכל מופע שלו בהצעה — רק כשהחלון מגיע
+ * לתחילת (סוף) השורה וכל מופעיו בהצעה באים אחרי (לפני) אותו אסימון, למשל הוספה בסוף השורה. null — אי אפשר.
+ */
+function windowSig(B, N, from, to) {
+  const run = B.slice(from, to);
+  if (!run.length) return null;
+  const qs = [];
+  for (let q = 0; q + run.length <= N.length; q++) if (run.every((t, k) => N[q + k] === t)) qs.push(q);
+  if (!qs.length) return { run };
+  const before = N[qs[0] - 1];
+  if (from === 0 && before !== undefined && qs.every((q) => N[q - 1] === before)) return { run, notBefore: before };
+  const after = N[qs[0] + run.length];
+  if (to === B.length && after !== undefined && qs.every((q) => N[q + run.length] === after)) return { run, notAfter: after };
+  return null;
+}
+
+/** הבסיס תקף לבדיקת ייחוד: שורת הדיווח בו היא המקור (בנרמול). */
+const baseOf = (rep, base) => (base?.index && base.index.canon[base.lineIndex] === rep.canonOriginal ? base : null);
+
+/**
+ * חתימות הטעות — "המקור עדיין בספר" גם כשהפסקה שזזה פוצלה לשורות, אוחדה עם שכנה או הורחבה. לכל צ'אנק: אסימוני
+ * המקור במקום העריכה עם הקשר מצד אחד (ואם שני הצדדים אינם מבדילים מההצעה, או בהוספה — שהטעות בה היא הצומת עצמו —
+ * הקשר משני הצדדים). אורך ההקשר: הקצר ביותר שבבסיס מופיע רק בשורת הדיווח ("ספציפי") ושאינו מופיע בהצעה; כשאין
+ * כזה — הקצר ביותר שאינו בהצעה (ואז כל מופע שלו חוסם, גם מופע שהיה כבר בבסיס). בלי בסיס תקף: עד anchorTokens
+ * אסימוני הקשר, ולפחות אחד.
+ */
+function signatures(rep, base, budget) {
+  if (rep.sigs) return rep.sigs;
+  const K = LOCATE_RULE.anchorTokens;
+  const { B, N } = rep;
+  const L = B.length;
+  const b = baseOf(rep, base);
+  // אין חלון ספציפי (למשל תאום זהה בבסיס) → הקצר ביותר שיש בו מילה: הרגיש ביותר — כל מופע שלו חוסם.
+  const choose = (windows) => {
+    let fallback = null;
+    for (const [from, to] of windows) {
+      const sig = windowSig(B, N, from, to);
+      if (!sig) continue;
+      if (!b) return { ...sig, specific: false };
+      // סימני פיסוק בלבד אינם מזהים מקום (כמו בציון הזיהוי) — רק כגיבוי, אם אין חלון עם מילה.
+      const word = sig.run.some(isWord);
+      if (word && findOutside(b.index, sig, b.lineIndex, b.lineIndex, budget) === -1) return { ...sig, specific: true };
+      if (!fallback || (word && !fallback.run.some(isWord))) fallback = sig;
+    }
+    return fallback && { ...fallback, specific: false };
+  };
+  // אורכי ההקשר לצד אחד: עם בסיס — עד קצה השורה; בלי — anchorTokens (או עד הקצה), ולפחות אסימון אחד. בשורה ארוכה
+  // לפחות אסימון הקשר אחד (מילה בודדת מופיעה גם בטקסט חדש, ופסקה ארוכה מוגנת גם ב"דומים"); בשורה קצרה גם הצ'אנק
+  // לבדו, כשהוא ספציפי (כותרת שפוצלה והחלק עם הטעות זז בלי הקשרו). צ'אנק שהוא השורה כולה — החלון הדו-צדדי.
+  const minK = rep.weak ? 0 : 1;
+  const lengths = (avail) => (b ? Array.from({ length: avail + 1 - minK }, (_, k) => k + minK) : Math.min(K, avail) ? [Math.min(K, avail)] : []);
+  const twoSided = (h) => {
+    if (!b) return Math.min(K, h.s) + Math.min(K, L - h.e) ? [[h.s - Math.min(K, h.s), h.e + Math.min(K, L - h.e)]] : [];
+    let kl = Math.min(1, h.s);
+    let kr = Math.min(1, L - h.e);
+    const out = [[h.s - kl, h.e + kr]];
+    while (kl < h.s || kr < L - h.e) {
+      if (kl < h.s) out.push([h.s - (kl += 1), h.e + kr]);
+      if (kr < L - h.e) out.push([h.s - kl, h.e + (kr += 1)]);
+    }
+    return out;
+  };
+  const sigs = [];
+  const add = (sig) => {
+    if (sig && !sigs.some((x) => sameTokens(x.run, sig.run) && x.notBefore === sig.notBefore && x.notAfter === sig.notAfter)) sigs.push(sig);
+    return Boolean(sig);
+  };
+  for (const h of rep.hunks) {
+    let found = false;
+    if (h.e > h.s) {
+      found = add(choose(lengths(h.s).map((k) => [h.s - k, h.e])));
+      found = add(choose(lengths(L - h.e).map((k) => [h.s, h.e + k]))) || found;
+    }
+    if (!found) add(choose(twoSided(h)));
+  }
+  rep.sigs = sigs;
+  return sigs;
+}
+
+/** השורה הראשונה בקובץ שבה (או ממנה והלאה, מעבר לשורות) הטעות עדיין נמצאת; -1 אם אין; null — סריקה גדולה מדי. */
+function errorHeld(rep, cur, base, lo = -1, hi = -1) {
+  const budget = { work: 0 };
+  const sigs = signatures(rep, base, budget);
+  for (const sig of sigs) {
+    const at = findOutside(cur, sig, lo, hi, budget);
+    if (at !== -1) return at;
+  }
+  return -1;
+}
+const heldOutcome = (held, scores = {}) => (held === null
+  ? outcome(LOCATE.UNCERTAIN, 'crowded_scan', null, scores)
+  : outcome(LOCATE.UNCERTAIN, 'original_fragment', { start: held, end: held, span: null }, scores));
+
+/** השורה הראשונה של מופע הרצף בזרם האסימונים (גם מעבר לגבולות השורות); -1 אם אין (או סריקה גדולה מדי — שמרני). */
+function findRun(ix, run) {
+  const at = findOutside(ix, { run }, -1, -1, { work: 0 });
+  return at === null ? 0 : at;
 }
 
 /** האם השורה מכילה את רצף האסימונים כולו, ברצף. */
@@ -514,25 +686,6 @@ function containsRun(toks, run) {
   }
   return false;
 }
-
-/** השורה הראשונה של מופע הרצף בשורה, או בחלון של עד windowLines שורות לא-ריקות סמוכות (פסקה שפוצלה); -1 אם אין. */
-function findRun(ix, run, skip = null) {
-  const word = run.filter(isWord).sort((x, y) => (ix.byWord.get(x)?.length ?? 0) - (ix.byWord.get(y)?.length ?? 0))[0];
-  const lines = word ? ix.byWord.get(word) || [] : ix.filled;
-  for (const i of lines) {
-    const r = ix.rank[i];
-    for (let w = 1; w <= LOCATE_RULE.windowLines; w++) {
-      for (let s = r - w + 1; s <= r; s++) {
-        const e = s + w - 1;
-        if (s < 0 || e >= ix.filled.length) continue;
-        if (skip && ix.filled.slice(s, e + 1).some((x) => skip.has(x))) continue;
-        if (containsRun(unitOf(ix, s, e).toks, run)) return ix.filled[s];
-      }
-    }
-  }
-  return -1;
-}
-
 const startsWith = (toks, run) => run.length <= toks.length && run.every((t, i) => toks[i] === t);
 const endsWith = (toks, run) => run.length <= toks.length && run.every((t, i) => toks[toks.length - run.length + i] === t);
 
@@ -575,6 +728,8 @@ function decideWeak(rep, cur, base, ctx) {
   const fit = exact.filter((i) => fits(i) && !neighbors.includes(cur.canon[i]));
   if (fit.length !== 1) return outcome(LOCATE.UNCERTAIN, fit.length ? 'ambiguous' : 'not_identified');
   if (base && exact.length <= (base.index.byCanon.get(rep.canonProposed)?.length ?? 0)) return outcome(LOCATE.UNCERTAIN, 'fix_not_new', region(fit[0]));
+  const kept = errorHeld(rep, cur, base);
+  if (kept !== -1) return heldOutcome(kept);
   return outcome(LOCATE.FIXED, 'fixed', region(fit[0]));
 }
 
@@ -586,9 +741,48 @@ function decideWeak(rep, cur, base, ctx) {
  * @returns {{status:'fixed'|'not_fixed'|'uncertain', reason:string, line:(number|null), lines:([number,number]|null),
  *   span:({line:number,text:string}|null), scores:object}}
  */
-export function locateEdit({ original, proposed = null, edits = null, current, base = null, context = null }) {
+export function locateEdit(input) {
+  return decide(input).result;
+}
+
+function decide({ original, proposed = null, edits = null, current, base = null, context = null }) {
   const rep = reportedEdit(original, proposed ?? applySpans(original, edits));
-  if (rep.error) return outcome(LOCATE.UNCERTAIN, rep.error);
+  if (rep.error) return { rep, result: outcome(LOCATE.UNCERTAIN, rep.error) };
   const ctx = baseContext(context);
-  return rep.weak ? decideWeak(rep, current, base, ctx) : decideStrong(rep, current, base, ctx);
+  return { rep, result: rep.weak ? decideWeak(rep, current, base, ctx) : decideStrong(rep, current, base, ctx) };
+}
+
+/**
+ * היעד לכתיבה, כשהקובץ השתנה מאז הבסיס (המפרסם): התוצאה של locateEdit, ועוד target — השורה שבה לכתוב, או null.
+ * target רק כש: הפסקה המדווחת לא תוקנה (not_fixed) ונמצאת בשורה אחת בדיוק הזהה למקור (בנרמול); היא המופע היחיד
+ * בקובץ — של המקור, של פסקה דומה (שורה ארוכה) ושל חתימות הטעות (גם מעבר לגבולות שורות); ההצעה לא נוספה בשום מקום
+ * (שורה קצרה); ובבסיס (חובה) לא היה לה תאום וכל חתימות הטעות ספציפיות לשורת הדיווח. אחרת target = null והסיבה
+ * ב-targetReason — ספק = ידני, לעולם לא כתיבה במקום אחר.
+ * @returns {ReturnType<typeof locateEdit> & {target:(number|null), targetReason:string}}
+ */
+export function locateTarget(input) {
+  const { rep, result } = decide(input);
+  const none = (targetReason) => ({ ...result, target: null, targetReason });
+  if (result.status !== LOCATE.NOT_FIXED) return none(result.status);
+  const cur = input.current;
+  const base = baseOf(rep, input.base);
+  if (!base) return none('base_required');
+  const [line, end] = result.lines ?? [null, null];
+  if (line === null || line !== end || cur.canon[line] !== rep.canonOriginal) return none('target_changed');
+  const copies = (ix) => ix.byCanon.get(rep.canonOriginal)?.length ?? 0;
+  if (copies(cur) !== 1) return none('target_ambiguous');
+  if (copies(base.index) !== 1) return none('twin_in_base');
+  if (rep.weak) {
+    const fixes = (ix) => ix.byCanon.get(rep.canonProposed)?.length ?? 0;
+    if (fixes(cur) > fixes(base.index)) return none('target_ambiguous');
+  } else {
+    if (result.scores.lookalikes !== 1) return none('target_ambiguous');
+    const twins = lookalikes(rep, base.index, base.lineIndex);
+    if (twins.crowded || twins.regions.length) return none('twin_in_base');
+  }
+  const budget = { work: 0 };
+  const sigs = signatures(rep, base, budget);
+  if (!sigs.length || sigs.some((s) => !s.specific)) return none('error_not_specific');
+  if (errorHeld(rep, cur, base, line, line) !== -1) return none('target_ambiguous');
+  return { ...result, target: line, targetReason: 'unique' };
 }

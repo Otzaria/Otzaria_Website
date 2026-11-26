@@ -19,7 +19,8 @@ import { currentRevisionOf, logEvent, manualQueueSet } from './store.js';
 
 // גרסת הכלל: תוצאה שמורה מגרסה אחרת אינה ממוחזרת (publish.absorptionCheck.v).
 // 6: כל "נקלט" מותנה באיתור הפסקה המדווחת ובמצב העריכה בה (locate-edit.js).
-export const ABSORPTION_RULE_VERSION = 6;
+// 7: וגם חתימות הטעות אינן בשום מקום בזרם האסימונים של הקובץ, מעבר לגבולות שורות (מקור שזז ופוצל/אוחד/הורחב).
+export const ABSORPTION_RULE_VERSION = 7;
 // שורות מהבסיס לכל צד כשהבסיס נקרא מקובץ (ולא מההקשר שנשמר באישור).
 const BASE_SPAN = 12;
 const COMMENT_MAX = 500;
