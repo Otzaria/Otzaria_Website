@@ -444,8 +444,42 @@ describe('BooksScreen — מגירת הספר', () => {
     await screen.findByText('ההנחיות נשמרו')
     expect(writes()).toEqual([{
       url: '/api/book/update-info', method: 'POST', redirect: 'manual',
-      body: { bookId: '1', editingInfo: { title: 'הנחיות עריכה', sections: [{ title: 'כללי', items: ['שורה ראשונה', 'שורה שנייה'] }] }, examplePage: null },
+      body: {
+        bookId: '1',
+        editingInfo: { title: 'הנחיות עריכה', sections: [{ title: 'כללי', items: ['שורה ראשונה', 'שורה שנייה'] }] },
+        examplePage: null,
+        finishQuestions: { mode: 'base', items: [] },
+      },
     }])
+  })
+
+  test('שאלות בסיום עמוד: בחירת "שאלות לספר בלבד" ושאלות — נשמרות עם ההנחיות; "בטל שינויים" מחזיר', async () => {
+    const user = userEvent.setup()
+    handler = (call) => (call.url.startsWith('/api/book/') && call.method === 'GET'
+      ? json({ success: true, book: { examplePage: null, finishQuestions: { mode: 'base+custom', items: ['קיימת'] } }, pages: [] })
+      : null)
+    window.history.replaceState(null, '', '/library/admin/books?book=1&view=instructions')
+    renderScreen()
+    const drawer = screen.getByRole('dialog', { name: 'חוות דעת' })
+    const area = await within(drawer).findByRole('textbox', { name: /^שאלות לספר/ })
+    expect(area).toHaveValue('קיימת')
+    expect(within(drawer).getByRole('radio', { name: 'שאלות בסיס + שאלות לספר' })).toBeChecked()
+
+    // מצב "בסיס בלבד": התיבה נעלמת, והשאלות השמורות לא נמחקות
+    await user.click(within(drawer).getByRole('radio', { name: 'שאלות בסיס בלבד' }))
+    expect(within(drawer).queryByRole('textbox', { name: /^שאלות לספר/ })).toBeNull()
+    expect(within(drawer).getByText(/שאלות הספר \(1\) נשמרות/)).toBeInTheDocument()
+    await user.click(within(drawer).getByRole('button', { name: 'בטל שינויים' }))
+    expect(within(drawer).getByRole('radio', { name: 'שאלות בסיס + שאלות לספר' })).toBeChecked()
+    expect(within(drawer).getByRole('button', { name: 'שמור' })).toBeDisabled()
+
+    await user.click(within(drawer).getByRole('radio', { name: 'שאלות לספר בלבד' }))
+    await user.type(within(drawer).getByRole('textbox', { name: /^שאלות לספר/ }), '{Enter}  חדשה  {Enter}')
+    await user.click(within(drawer).getByRole('button', { name: 'שמור' }))
+    await screen.findByText('ההנחיות נשמרו')
+    expect(writes()[0].body.finishQuestions).toEqual({ mode: 'custom', items: ['קיימת', 'חדשה'] })
+    expect(within(drawer).getByRole('textbox', { name: /^שאלות לספר/ })).toHaveValue('קיימת\nחדשה')
+    expect(within(drawer).getByRole('button', { name: 'שמור' })).toBeDisabled()
   })
 
   test('הנחיות לא שמורות: "אחורה" בדפדפן שואל, "הישאר" משאיר את המגירה והטקסט, ורענון מזהיר', async () => {

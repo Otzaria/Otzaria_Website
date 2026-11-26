@@ -8,6 +8,7 @@ import { releaseExpiredPageClaims } from '@/lib/bookPageClaims'
 import { isPersonalBook } from '@/lib/pageClaimPolicy'
 import { hasBookLibraryAccess } from '@/lib/roles'
 import { formatEditorPageContent } from '@/lib/editor/pageContent'
+import { normalizeBookFinishQuestions } from '@/lib/finishQuestions'
 
 const headers = { 'Cache-Control': 'private, no-store' }
 const error = (status, message) => NextResponse.json({ error: message }, { status, headers })
@@ -62,6 +63,7 @@ export async function GET(request, { params }) {
         totalPages: book.totalPages,
         editingInfo: book.editingInfo || null,
         examplePage: book.examplePage || null,
+        finishQuestions: normalizeBookFinishQuestions(book.finishQuestions),
       },
       data: {
         ...formatEditorPageContent(page),

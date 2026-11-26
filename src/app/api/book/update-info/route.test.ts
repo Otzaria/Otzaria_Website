@@ -60,4 +60,19 @@ describe("POST /api/book/update-info - auth", () => {
     expect(res.status).toBe(200);
     expect(body.success).toBe(true);
   });
+
+  it("saves normalized finishQuestions only when they are sent", async () => {
+    getServerSession.mockResolvedValue({ user: { id: "u1", role: "admin_books" } });
+    findByIdAndUpdateMock.mockResolvedValue({ _id: "b1" });
+
+    await POST(makeRequest({ bookId: "b1", editingInfo: "x" }));
+    expect(findByIdAndUpdateMock.mock.calls[0][1]).not.toHaveProperty("finishQuestions");
+
+    await POST(makeRequest({
+      bookId: "b1",
+      editingInfo: "x",
+      finishQuestions: { mode: "weird", items: ["  בדקתי  ", "", 7] },
+    }));
+    expect(findByIdAndUpdateMock.mock.calls[1][1].finishQuestions).toEqual({ mode: "base", items: ["בדקתי"] });
+  });
 });

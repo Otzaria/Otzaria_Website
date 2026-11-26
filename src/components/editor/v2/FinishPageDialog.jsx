@@ -38,6 +38,7 @@ export function isFreshSubmitChord(event, mountedAt) {
  *   onClose: () => void, showNote?: boolean, submitLabel?: string, children?: import('react').ReactNode
  * }} props
  * showNote — שדה ההערה לבודק (כבוי כל עוד אין לו יעד בשרת); submitLabel — נוסח הפעולה הראשית;
+ * questions — שאלות בסיום עמוד (lib/finishQuestions.js: בסיס ו/או של הספר), תיבות סימון רשות שאינן חוסמות;
  * children — תוכן נוסף מתחת לבדיקות (למשל "מה יקרה" בזרימת ההעלאה הקיימת).
  */
 export default function FinishPageDialog({
@@ -57,6 +58,7 @@ export default function FinishPageDialog({
   onClose,
   showNote = true,
   submitLabel = 'סיים ועבור לעמוד הבא',
+  questions = [],
   children
 }) {
   const noteId = useId()
@@ -109,6 +111,8 @@ export default function FinishPageDialog({
         ))}
       </ul>
 
+      {questions.length > 0 && <FinishQuestions questions={questions} />}
+
       {children}
 
       {showNote && (
@@ -124,6 +128,45 @@ export default function FinishPageDialog({
         </div>
       )}
     </Dialog>
+  )
+}
+
+/** שאלות בסיום עמוד — תזכורת לבדיקה עצמית. הסימון לא נשמר ולא חוסם את הסיום */
+function FinishQuestions({ questions }) {
+  const headingId = useId()
+  const [checked, setChecked] = useState(() => new Set())
+  const toggle = (id) => setChecked((prev) => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    return next
+  })
+  const done = questions.filter((q) => checked.has(q.id)).length
+
+  return (
+    <section aria-labelledby={headingId} className="mt-4">
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 id={headingId} className="text-title-sm text-on-surface">לפני שמסיימים</h3>
+        <span className="text-body-sm text-on-surface-variant" aria-live="polite">
+          {done} מתוך {questions.length}
+        </span>
+      </div>
+      <ul className="mt-2 space-y-1.5">
+        {questions.map((q) => (
+          <li key={q.id}>
+            <label className="flex cursor-pointer items-start gap-3 rounded-(--radius-card) bg-surface p-3 text-body-md text-on-surface hover:bg-surface-container">
+              <input
+                type="checkbox"
+                checked={checked.has(q.id)}
+                onChange={() => toggle(q.id)}
+                className="mt-0.5 size-4 shrink-0 accent-primary"
+              />
+              <span className={cx(checked.has(q.id) && 'text-on-surface-variant')}>{q.text}</span>
+            </label>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 

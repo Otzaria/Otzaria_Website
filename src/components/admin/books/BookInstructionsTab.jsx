@@ -9,6 +9,8 @@ import { loginHref } from '@/components/admin/list/adminRequest'
 import {
   bookInstructionsPayload, newSectionForm, parseExamplePage, sameSections, toBookInstructionsForm, untitledSectionKeys,
 } from '@/lib/adminBooks/instructions'
+import { normalizeBookFinishQuestions, questionsFromText } from '@/lib/finishQuestions'
+import FinishQuestionsFields from './FinishQuestionsFields'
 import InstructionSectionsEditor from './InstructionSectionsEditor'
 import { saveBookInstructions } from './booksApi'
 
@@ -16,6 +18,7 @@ import { saveBookInstructions } from './booksApi'
  * לשונית "הנחיות עריכה" במגירת הספר: כותרת, עמוד דוגמה, וסעיפים (כותרת + שורה לכל הנחיה). מה שהיה
  * "פרטים / עריכת מידע" בחלון נפרד. השמירה — בשורה דביקה בתחתית; "שמור" מושבת כשאין שינוי.
  * onDirtyChange — כדי שהמגירה תשאל "לצאת בלי לשמור?" לפני מעבר לשונית או סגירה.
+ * שאלות בסיום עמוד (מצב + שאלות הספר) נשמרות יחד עם ההנחיות.
  * מקור הנתון — הספר שנטען מהשרת (details), ולא הרשימה (שלא מחזיקה את ההנחיות). אחרי שמירה הנתון
  * שנטען מתעדכן (details.patch) — כך שחזרה ללשונית מציגה את מה שנשמר, ולא את הישן.
  *
@@ -45,6 +48,7 @@ export default function BookInstructionsTab({ book, details, toast, onDirtyChang
       book={book}
       info={details.data.book?.editingInfo ?? null}
       examplePage={details.data.book?.examplePage ?? null}
+      finishQuestions={details.data.book?.finishQuestions ?? null}
       toast={toast}
       onSaved={details.patch}
       onDirtyChange={onDirtyChange}
@@ -52,8 +56,11 @@ export default function BookInstructionsTab({ book, details, toast, onDirtyChang
   )
 }
 
-function InstructionsForm({ book, info, examplePage, toast, onSaved, onDirtyChange }) {
+function InstructionsForm({ book, info, examplePage, finishQuestions, toast, onSaved, onDirtyChange }) {
   const [saved, setSaved] = useState(() => toBookInstructionsForm(info, examplePage))
+  const [savedQuestions, setSavedQuestions] = useState(() => normalizeBookFinishQuestions(finishQuestions))
+  const [questionsMode, setQuestionsMode] = useState(savedQuestions.mode)
+  const [questionsText, setQuestionsText] = useState(savedQuestions.items.join('\n'))
   const [title, setTitle] = useState(saved.title)
   const [sections, setSections] = useState(saved.sections)
   const [pageText, setPageText] = useState(saved.examplePage ? String(saved.examplePage) : '')
@@ -62,7 +69,10 @@ function InstructionsForm({ book, info, examplePage, toast, onSaved, onDirtyChan
   const ids = { title: useId(), titleHint: useId(), page: useId(), pageHint: useId(), pageError: useId() }
   const page = parseExamplePage(pageText, book.totalPages)
   const untitled = untitledSectionKeys(sections)
+  const questionsDirty = questionsMode !== savedQuestions.mode
+    || questionsFromText(questionsText).join('\n') !== savedQuestions.items.join('\n')
   const dirty = title.trim() !== saved.title.trim() || !sameSections(sections, saved.sections) || (page.error ? true : page.value !== saved.examplePage)
+    || questionsDirty
 
   useEffect(() => {
     onDirtyChange(dirty)
@@ -75,11 +85,14 @@ function InstructionsForm({ book, info, examplePage, toast, onSaved, onDirtyChan
     setError('')
     const form = { title, sections, examplePage: page.value }
     const payload = bookInstructionsPayload(form)
+    const questions = normalizeBookFinishQuestions({ mode: questionsMode, items: questionsFromText(questionsText) })
     try {
-      await saveBookInstructions(book.id, payload)
+      await saveBookInstructions(book.id, { ...payload, finishQuestions: questions })
       setSaved({ title: payload.editingInfo.title, sections, examplePage: page.value })
       setTitle(payload.editingInfo.title)
-      onSaved({ editingInfo: payload.editingInfo, examplePage: page.value })
+      setSavedQuestions(questions)
+      setQuestionsText(questions.items.join('\n'))
+      onSaved({ editingInfo: payload.editingInfo, examplePage: page.value, finishQuestions: questions })
       toast.show({ message: 'ההנחיות נשמרו' })
     } catch (e) {
       setError(e?.message || 'לא הצלחנו לשמור את ההנחיות.')
@@ -92,6 +105,8 @@ function InstructionsForm({ book, info, examplePage, toast, onSaved, onDirtyChan
     setTitle(saved.title)
     setSections(saved.sections)
     setPageText(saved.examplePage ? String(saved.examplePage) : '')
+    setQuestionsMode(savedQuestions.mode)
+    setQuestionsText(savedQuestions.items.join('\n'))
     setError('')
   }
 
@@ -128,6 +143,14 @@ function InstructionsForm({ book, info, examplePage, toast, onSaved, onDirtyChan
         untitled={untitled}
         onAdd={() => setSections((s) => [...s, newSectionForm()])}
         requireTitle
+      />
+
+      <FinishQuestionsFields
+        mode={questionsMode}
+        onModeChange={setQuestionsMode}
+        text={questionsText}
+        onTextChange={setQuestionsText}
+        disabled={saving}
       />
 
       {error && <p role="alert" className={FIELD_ERROR}>{error}</p>}
