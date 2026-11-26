@@ -217,11 +217,24 @@ function CorrectionReport({ id }) {
             expanding={expanding}
             split={(
               // רק תצוגה מסומנת — התיבות הפשוטות היו כפילות של אותו טקסט. בלי הצעה אין מה לסמן, ולכן מוצגות שתי השורות כמו שהן.
+              // השורה השתנתה מאז הדיווח: השוואה אחת לא מספיקה (היא מערבבת את התיקון עם השינוי במקור), ולכן שתיים — שתיהן מול מה שראה המדווח.
               targetLine === null ? (
                 <section className="grid gap-4 md:grid-cols-2">
                   <LineBox title="המקור העדכני במאגר" tone="source" text={currentLine} empty="לא אותרה שורה מתאימה במקור" />
                   <LineBox title="התוצאה המיועדת" tone="target" subtitle={`גרסת הצעה ${rev.revision}`} text={null} empty="לא הוצע נוסח (ללא הצעה)" />
                 </section>
+              ) : currentLine !== null && source?.status === 'source_changed' ? (
+                <div className="space-y-4">
+                  <p className="text-xs text-on-surface/60">השורה במקור השתנתה מאז שהמדווח ראה אותה — ההצעה עדיין מבוססת על הנוסח הקודם.</p>
+                  <div>
+                    <h4 className="text-sm font-bold mb-2">התיקון שהוצע</h4>
+                    <TextDiff before={rev.originalLine} after={targetLine} beforeLabel="לפני (הנוסח שראה המדווח)" afterLabel={`אחרי (מיועד) · גרסת הצעה ${rev.revision}`} />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold mb-2">מה השתנה במקור מאז הדיווח</h4>
+                    <TextDiff before={rev.originalLine} after={currentLine} beforeLabel="הנוסח שראה המדווח" afterLabel="המקור העדכני במאגר" />
+                  </div>
+                </div>
               ) : currentLine !== null ? (
                 <TextDiff before={currentLine} after={targetLine} afterLabel={`אחרי (מיועד) · גרסת הצעה ${rev.revision}`} />
               ) : (
