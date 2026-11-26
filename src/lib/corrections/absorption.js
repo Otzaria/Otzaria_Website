@@ -159,7 +159,8 @@ export function anchorTarget(texts, lineIndex, base, range) {
  * בהקשרה. מופע של הנוסח המתוקן בשורה אחרת אינו ראיה (ייתכן שהיה שם כבר בבסיס).
  * בלי עיגון (אין בסיס, או שהשכנים לא נמצאו) נבדקת רק השורה במקומה המקורי, ו"נקלט" רק כשהמקור
  * (השורה או העריכה) אינו נמצא עד relocationLines שורות ממנה. הזזה בלי עיגון אינה ראיה לקליטה.
- * - absorbed: התיקון בשורת היעד והמקור לא. - pending: המקור עדיין שם.
+ * - absorbed: התיקון בשורת היעד והמקור לא — והמקור (השורה או העריכה) אינו מופיע בשום מקום בקובץ כולו
+ *   (מופע רחוק שנשאר שלם → pending/original_elsewhere). - pending: המקור עדיין שם.
  * - changed: כל השאר — נוסח אחר, עמימות, קובץ חסר או שאינו UTF-8 תקין. ספק = ידני, לעולם לא "נקלט".
  * @param {{content?:string, texts?:string[], lossy?:boolean}|null} file  הקובץ ב-main (null = אינו קיים)
  * @param {{lineIndex:number, originalLine:string, newLine:string, base?:{before:string[], after:string[]}|null, baseLines?:string[]|null}} change
@@ -200,6 +201,14 @@ export function evaluateAbsorption(file, change, { relocationLines = 0, editCont
     return n;
   };
 
+  // "נקלט" דורש שהמקור (השורה או העריכה, באותו נרמול של המודול) לא יופיע בשום מקום בקובץ כולו — לא רק בחלון
+  // ההזזה. פסקה מקורית שזזה רחוק ונשארה שלמה פירושה שהשגיאה עדיין בספר, גם אם נוסח מתוקן אחר קיים בקובץ.
+  const normOrig = norm(orig);
+  const normEdit = lineEdit(normOrig, norm(fresh), editContext);
+  const stillThere = (state) => state === 'original' || state === 'both';
+  const originalAnywhere = () => texts.some((t) => (normOrig !== '' && norm(t) === normOrig) || stillThere(editState(t, edit)) || stillThere(editState(norm(t), normEdit)));
+  const absorbed = (detail, at) => (originalAnywhere() ? verdict(ABSORPTION.PENDING, 'original_elsewhere', at) : verdict(ABSORPTION.ABSORBED, detail, at));
+
   const anchor = anchorTarget(texts, li, change.base, relocationLines);
   if (anchor.at !== undefined) {
     anchored = true;
@@ -214,7 +223,7 @@ export function evaluateAbsorption(file, change, { relocationLines = 0, editCont
     // בלי הבסיס המלא גם העיגון אינו ראיה מספקת: הוא עלול להינעל על עותק כפול שכבר נשא את התיקון בבסיס, ורק
     // השוואת הבסיס תופסת זאת. טעות כאן מאבדת תיקון בשקט, לכן ממתינים (ובודקים שוב עם הבסיס).
     if (st === 'applied' && requireBase && !Array.isArray(change.baseLines)) return verdict(ABSORPTION.CHANGED, 'base_required', at);
-    if (st === 'applied') return verdict(ABSORPTION.ABSORBED, `${exact(at, fresh) ? 'applied' : 'edit_applied'}${moved}`, at);
+    if (st === 'applied') return absorbed(`${exact(at, fresh) ? 'applied' : 'edit_applied'}${moved}`, at);
     if (st === 'original') return verdict(ABSORPTION.PENDING, exact(at, orig) ? `original${moved || '_in_place'}` : `edit_pending${moved}`, at);
     return verdict(ABSORPTION.CHANGED, st === 'both' ? 'ambiguous' : 'line_changed');
   }
@@ -246,7 +255,7 @@ export function evaluateAbsorption(file, change, { relocationLines = 0, editCont
     // בלי עיגון ובלי הבסיס המלא אין דרך לדעת שהתיקון חדש: ממתינים (ובודקים שוב עם הבסיס), לעולם לא "נקלט".
     if (added === null && requireBase) return verdict(ABSORPTION.CHANGED, 'base_required');
     if (added !== null && added !== 1) return verdict(ABSORPTION.CHANGED, 'fix_not_new');
-    return verdict(ABSORPTION.ABSORBED, exact(li, fresh) ? 'applied' : 'edit_applied', li);
+    return absorbed(exact(li, fresh) ? 'applied' : 'edit_applied', li);
   }
   if (here === 'original') return verdict(ABSORPTION.PENDING, exact(li, orig) ? 'original_in_place' : 'edit_pending', li);
   if (here === 'both') return verdict(ABSORPTION.CHANGED, 'ambiguous');
@@ -258,7 +267,7 @@ export function evaluateAbsorption(file, change, { relocationLines = 0, editCont
   if (near.applied.length && !near.original.length && addedFix() === 1) {
     const fresh1 = near.applied.filter((i) => !baseLines.some((b, j) => Math.abs(j - li) <= 2 * relocationLines && carriesFix(b) && sameLine(b, texts[i])));
     const at = fresh1.length === 1 ? fresh1[0] : near.applied.length === 1 ? near.applied[0] : null;
-    return verdict(ABSORPTION.ABSORBED, at !== null && exact(at, fresh) ? 'applied_relocated' : 'edit_applied_relocated', at);
+    return absorbed(at !== null && exact(at, fresh) ? 'applied_relocated' : 'edit_applied_relocated', at);
   }
   return verdict(ABSORPTION.CHANGED, near.applied.length ? 'relocated_unanchored' : near.original.length ? 'ambiguous' : 'line_changed');
 }

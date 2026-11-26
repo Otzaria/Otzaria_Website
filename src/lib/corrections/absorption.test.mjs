@@ -140,12 +140,15 @@ test('S4′: מנהל הספרייה כתב את שורת היעד בנוסח ש
   assert.notEqual(evaluateAbsorption(file(main), TCHANGE, { relocationLines: 50 }).outcome, ABSORPTION.ABSORBED, 'גם בלי בסיס');
 });
 
-test('מספור מחדש לגיטימי של כותרת כפולה (כמו d6611a9a): הכותרת הזהה הסמוכה אינה מונעת "נקלט" כשיש עיגון', () => {
+test('כותרת כפולה (כמו d6611a9a): הכותרת הזהה במקום אחר בקובץ עדיין מונעת "נקלט" — המקור קיים בקובץ (original_elsewhere)', () => {
   const t = (s) => `<b>${s}</b> ${'טקסט התשובה הארוך דיו כדי להיחשב שורה ארוכה בעיגון '.repeat(2)}`;
   const base = [t('ואתה'), t('זה'), '<h2>יד</h2>', t('הנה'), '<h2>טז</h2>', t('שלמא'), '<h2>טז</h2>', t('והנה'), t('שלמא2')];
   const change = { lineIndex: 4, originalLine: '<h2>טז</h2>', newLine: '<h2>טו</h2>', base: baseOf(base, 4) };
   const main = base.map((l, i) => (i === 4 ? '<h2>טו</h2>' : l));
-  assert.deepEqual(pick(evaluateAbsorption(file(main), change, { relocationLines: 50 })), [ABSORPTION.ABSORBED, 'applied', 4, true]);
+  // כלל "בשום מקום בקובץ": הכותרת המקורית עדיין בשורה 6, לכן אין ודאות שהשגיאה הוסרה — ממתין, ובתום ההמתנה ידני
+  assert.deepEqual(pick(evaluateAbsorption(file(main), change, { relocationLines: 50 })), [ABSORPTION.PENDING, 'original_elsewhere', 4, true]);
+  const gone = main.map((l, i) => (i === 6 ? '<h2>יז</h2>' : l));
+  assert.deepEqual(pick(evaluateAbsorption(file(gone), change, { relocationLines: 50 })), [ABSORPTION.ABSORBED, 'applied', 4, true]);
   const { base: _omit, ...unanchored } = change;
   assert.equal(evaluateAbsorption(file(main), unanchored, { relocationLines: 50 }).detail, 'original_nearby', 'בלי בסיס — הבדיקה הזולה מעבירה לידני');
 });
@@ -292,4 +295,27 @@ test("C5 (S1'): כותרת כפולה והזזה של יותר מ-50 שורות 
   assert.deepEqual([withBase.outcome, withBase.detail], [ABSORPTION.CHANGED, 'fix_not_new']);
   const noBase = qaRun(main, b, QA_LI, '<h3>11</h3>', '<h3>12</h3>', { baseReadable: false });
   assert.notEqual(noBase.outcome, ABSORPTION.ABSORBED, JSON.stringify(noBase));
+});
+
+test('A: הפסקה המקורית זזה מעבר לחלון ונשארה שלמה — מופע אחר של הנוסח המתוקן אינו הופך את הדיווח ל"נקלט"', () => {
+  const b = qaBase();
+  b[QA_LI] = `${qaFill(130)} ${QA_ERR} tail`;
+  const fixed = b[QA_LI].replace(QA_ERR, QA_OK);
+  // ביעד כעת פסקה אחרת שנושאת את הנוסח המתוקן; הפסקה המקורית (עם השגיאה) זזה 80 שורות והשגיאה עודנה בספר
+  const main = [...b];
+  main[QA_LI] = `intro ${QA_OK} outro`;
+  main[QA_LI + 80] = b[QA_LI];
+  for (const baseReadable of [true, false]) {
+    const v = qaRun(main, b, QA_LI, b[QA_LI], fixed, { baseReadable });
+    assert.notEqual(v.outcome, ABSORPTION.ABSORBED, JSON.stringify(v));
+  }
+  const v = qaRun(main, b, QA_LI, b[QA_LI], fixed);
+  assert.deepEqual([v.outcome, v.detail], [ABSORPTION.PENDING, 'original_elsewhere']);
+  // ללא המופע הרחוק של המקור — אותו קובץ נקלט (ההבדל היחיד)
+  const clean = [...main];
+  clean[QA_LI + 80] = qaFill(999);
+  assert.equal(qaRun(clean, b, QA_LI, b[QA_LI], fixed).outcome, ABSORPTION.ABSORBED);
+  // שורת היעד עצמה נקיה אך עריכה (לא שורה שלמה): המקור רחוק בהקשר אחר
+  assert.equal(closedPrAction(v, { closedAt: new Date(0), now: new Date(1000), graceSeconds: 10_000 }), CLOSED_PR_ACTION.AWAIT);
+  assert.equal(closedPrAction(v, { closedAt: new Date(0), now: new Date(20_000_000), graceSeconds: 10 }), CLOSED_PR_ACTION.HANDOFF_NOT_ABSORBED);
 });

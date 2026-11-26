@@ -18,7 +18,7 @@ import {
 import { currentRevisionOf, logEvent, manualQueueSet } from './store.js';
 
 // גרסת הכלל: תוצאה שמורה מגרסה אחרת אינה ממוחזרת (publish.absorptionCheck.v).
-export const ABSORPTION_RULE_VERSION = 4;
+export const ABSORPTION_RULE_VERSION = 5;
 // שורות מהבסיס לכל צד כשהבסיס נקרא מקובץ (ולא מההקשר שנשמר באישור).
 const BASE_SPAN = 12;
 const COMMENT_MAX = 500;
