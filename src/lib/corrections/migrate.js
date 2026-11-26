@@ -204,12 +204,23 @@ export async function migrateClosedPullReports({ config, deps = {}, apply = fals
 // השדות שה-migration מוסיפה; בביטול הם נמחקים.
 const MIGRATION_FIELDS = ['publish.absorbed', 'publish.prClosedAt', 'publish.absorptionDeadline', 'publish.absorptionCheck', 'publish.prCloseComment'];
 
-/** data.before (beforeSnapshot) → $set בנתיבים מנוקדים. */
+/**
+ * data.before (beforeSnapshot) → $set בנתיבים מנוקדים.
+ * ה-snapshot אינו שומר את הלוקח ואת תפוגת הלקיחה, ולכן דיווח שמצבו הקודם היה "נלקח" לא יכול לחזור נלקח
+ * (בלי לוקח ובלי תפוגה — הלוקח הבא מקבל 409 לנצח). הוא חוזר לתור הידני **לא נלקח**: שדות הלקיחה מנוקים,
+ * סיבת ההעברה והמועד הקודמים נשמרים, והסטטוס חוזר ל-pending.
+ */
 function restoreSet(before) {
   const set = {};
   for (const [k, v] of Object.entries(before || {})) {
     if (v && typeof v === 'object' && !(v instanceof Date) && !v._bsontype) for (const [kk, vv] of Object.entries(v)) set[`${k}.${kk}`] = vv ?? null;
     else set[k] = v ?? null;
+  }
+  if (set['manual.status'] === 'claimed') {
+    Object.assign(set, {
+      'manual.status': 'queued', 'manual.assignee': null, 'manual.assigneeName': null, 'manual.claimedAt': null, 'manual.leaseExpiresAt': null,
+      'dispatch.verify': false, status: 'pending', assignedTo: null,
+    });
   }
   return set;
 }

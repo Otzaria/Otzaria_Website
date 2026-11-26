@@ -608,6 +608,28 @@ test('migration CLI: --revert (dry-run ואז --apply) מחזיר למצב של�
   assert.equal(cli('--revert', '--apply').out.reverted, 0, 'ביטול חוזר אינו כותב');
 });
 
+test('migration --revert: דיווח שהיה "נלקח" (לקיחה שפגה) חוזר לתור הידני לא נלקח, ומתנדב יכול ללקוח אותו', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const NOW = at(40 * DAY);
+  const id = await ingest('mig-revert-claim', 0);
+  await approved(id);
+  await legacyClosed(id, at(39 * DAY));
+  assert.equal((await act(users.b, id, { action: 'claim' }, T0)).status, 200);
+  // הלקיחה פגה לפני ה-migration, והדיווח עבר להמתנה לקליטה (המקור עדיין ב-main)
+  const mig = await migrateClosedPullReports({ config: CONFIG, deps: { githubFetch: gh.fetch }, apply: true, now: NOW });
+  assert.deepEqual(mig.written, { await: 1 });
+  assert.equal((await load(id)).publish.status, 'pr_opened');
+
+  const undo = await revertClosedPullMigration({ apply: true });
+  assert.equal(undo.reverted, 1);
+  const x = await load(id);
+  assert.deepEqual([x.state, x.publish.status, x.manual.status, x.manual.handoffReason], ['open', 'failed', 'queued', 'publish_failed'], 'חוזר לתור הידני עם סיבת ההעברה הקודמת');
+  assert.deepEqual([x.manual.assignee, x.manual.assigneeName, x.manual.claimedAt, x.manual.leaseExpiresAt, x.assignedTo, x.status], [null, null, null, null, null, 'pending'], 'שדות הלקיחה מנוקים');
+  assert.equal((await act(users.a, id, { action: 'claim' }, NOW)).status, 200, 'המתנדב הבא יכול ללקוח');
+  const y = await load(id);
+  assert.deepEqual([y.manual.status, String(y.manual.assignee)], ['claimed', String(users.a._id)]);
+});
+
 test('migration: לקיחה בין הקריאה לכתיבה — הכתיבה נכשלת (גם בלי שינוי generation)', async (t) => {
   if (db.skip) return t.skip(db.skip);
   const id = await ingest('mig-race', 0);
