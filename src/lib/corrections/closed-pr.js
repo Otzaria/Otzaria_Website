@@ -259,8 +259,9 @@ const checkSnapshot = (v, now) => ({
 });
 
 /**
- * מחיל את המעבר בעדכון אטומי יחיד, מותנה ב-generation, במצב הפרסום ובמספר ה-PR שנקראו; בזיהוי הסגירה
- * הראשון גם בכך ש-prClosedAt עדיין ריק (שתי אצוות מקבילות — רק אחת רושמת).
+ * מחיל את המעבר בעדכון אטומי יחיד, מותנה ב-generation, במצב הפרסום, במספר ה-PR ובסימון ההמתנה (prClosedAt)
+ * שנקראו: בזיהוי הסגירה הראשון — שהוא עדיין ריק (שתי אצוות מקבילות — רק אחת רושמת); בהמתנה — שהוא אותו מועד
+ * (אצווה שראתה שה-PR נפתח מחדש מאפסת אותו, ולכן העברה לידני או המתנה מאצווה ישנה נכשלת — raced).
  * המקור: 'pr_opened' (מעקב ה-PR), או 'failed' — דיווח שמעקב ה-PR הישן כבר העביר לידני (migration).
  * @param {object} r הדיווח כפי שנקרא
  * @param {string} action CLOSED_PR_ACTION
@@ -273,7 +274,7 @@ export async function applyClosedPrAction(r, action, verdict, { now, closedAt, g
   const first = !queued && !r.publish?.prClosedAt;
   const where = {
     _id: r._id, state: 'open', workflowGeneration: r.workflowGeneration, 'publish.status': r.publish?.status, 'publish.prNumber': r.publish?.prNumber,
-    ...(first ? { 'publish.prClosedAt': null } : {}), ...filter,
+    'publish.prClosedAt': r.publish?.prClosedAt ?? null, ...filter,
   };
   const deadline = absorptionDeadline(closedAt, graceSeconds);
   const common = {

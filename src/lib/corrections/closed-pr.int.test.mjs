@@ -438,6 +438,16 @@ test('גדרות: generation ומספר ה-PR בתנאי הכתיבה; לקיח�
   const after2 = await load(id2);
   assert.equal(after2.state, 'closed_rejected');
   assert.ok(!(await events(id2)).includes('pr_absorbed'));
+
+  // הביקורת הרביעית: גם סימון ההמתנה בתנאי — PR שנפתח מחדש בין הקריאה לכתיבה (prClosedAt אופס) → raced, גם להמתנה
+  const id3 = await ingest('fence3', 2);
+  gh.closePull((await approved(id3)).publish.prNumber);
+  await work(at(4));
+  const r3 = await load(id3);
+  await ErrorReport.updateOne({ _id: id3 }, { $set: { 'publish.prClosedAt': null } });
+  const late = { ...opts, now: at(5 + GRACE), closedAt: r3.publish.prClosedAt };
+  for (const action of [CLOSED_PR_ACTION.HANDOFF_NOT_ABSORBED, CLOSED_PR_ACTION.AWAIT]) assert.equal(await applyClosedPrAction(r3, action, null, late), 'raced', action);
+  assert.deepEqual([(await load(id3)).publish.status, (await load(id3)).publish.prClosedAt], ['pr_opened', null]);
 });
 
 test('שתי אצוות במקביל: זיהוי הסגירה נרשם פעם אחת', async (t) => {
@@ -459,6 +469,43 @@ test('שתי אצוות במקביל: זיהוי הסגירה נרשם פעם א
   await Promise.all([work(at(2)), work(at(2), { workerId: 'w2' })]);
   gh.hooks.beforeRequest = null;
   assert.equal((await events(id)).filter((e) => e === 'pr_closed_awaiting_absorption').length, 1);
+});
+
+// הביקורת הרביעית (#312): אצווה קוראת דיווח שממתין אחרי סגירת ה-PR ומחליטה שההמתנה תמה; לפני שהיא כותבת, אצווה
+// אחרת רואה שה-PR נפתח מחדש ומחזירה את הדיווח למעקב. ההעברה לידני מותנית בסימון ההמתנה שנקרא (prClosedAt) → raced:
+// הדיווח נשאר במעקב ה-PR שנפתח מחדש, ומהתור הידני לא ייפתח PR שני לאותו תיקון.
+test('הביקורת: תום המתנה ישן אינו מעביר לידני דיווח שה-PR שלו נפתח מחדש בינתיים', async (t) => {
+  if (db.skip) return t.skip(db.skip);
+  const id = await ingest('reopen-cas', 0);
+  const n = (await approved(id)).publish.prNumber;
+  gh.closePull(n);
+  await work(at(2));
+  assert.ok((await load(id)).publish.prClosedAt);
+  const started = Promise.withResolvers();
+  const resume = Promise.withResolvers();
+  const orig = ErrorReport.collection.findOneAndUpdate;
+  // האצווה הישנה נעצרת רגע לפני כתיבת ההעברה לידני — אחרי שקראה את הדיווח והחליטה
+  ErrorReport.collection.findOneAndUpdate = async function (filter, update, ...args) {
+    if (update.$set?.['publish.status'] === 'failed') {
+      started.resolve();
+      await resume.promise;
+    }
+    return orig.call(this, filter, update, ...args);
+  };
+  const old = work(at(2 + GRACE), { workerId: 'old' });
+  try {
+    await started.promise;
+    gh.pulls[n - 1].state = 'open';
+    await work(at(3 + GRACE), { workerId: 'new' });
+    assert.equal((await load(id)).publish.prClosedAt, null);
+  } finally {
+    resume.resolve();
+    await old;
+    ErrorReport.collection.findOneAndUpdate = orig;
+  }
+  const r = await load(id);
+  assert.deepEqual([r.state, r.publish.status, r.publish.prClosedAt, r.manual.status], ['open', 'pr_opened', null, 'none']);
+  assert.ok(!(await events(id)).includes('pr_closed_unmerged'));
 });
 
 test('בריאות: דיווחים שממתינים לקליטה אינם "עבודה ממתינה" ל-worker', async (t) => {
