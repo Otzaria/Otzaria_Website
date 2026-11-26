@@ -344,3 +344,47 @@ test('R3 (סוקר, סבב 3): הפסקה זזה ומילים ליד הטעות 
   const movedFixed = main.map((l) => (l === moved ? fixed : l));
   assert.equal(qaRun(movedFixed, b, QA_LI, b[QA_LI], fixed).outcome, ABSORPTION.ABSORBED);
 });
+
+// הביקורת הרביעית (#312): האישור כלל תיקון מילה וגם שינוי HTML, ו-main קלט רק חלק ממנו. גם בקליטת PR שנסגר "נקלט"
+// דורש את כל השינוי הגולמי: הראיה היא השורה המוצעת או העריכה הגולמית בהקשרה (stateOf), והאיתור המנורמל רק מוסיף תנאי.
+test('הביקורת הרביעית: תיקון שנקלט בחלקו (המילה בלי ה-HTML, או להפך) אינו "נקלט" — במקום ואחרי הזזה; כל השינוי → נקלט', () => {
+  const original = 'באמצע הפסקה <b>הייחודית</b> נשארה המילה השגיאה ויש עוד מה להגיה';
+  const fixed = original.replace('<b>הייחודית</b>', 'הייחודית').replace('השגיאה', 'השגחה');
+  const base = ['הקדמת המחבר', 'פתיחה לענין', 'הכרעת חכמים בעניין זה', original, 'ועתה ראו חידוש נפלא', 'דברי סיום', 'סיום הספר'];
+  const li = 3;
+  const partial = {
+    'רק המילה': original.replace('השגיאה', 'השגחה'),
+    'המילה ותגית אחרת': original.replace('<b>הייחודית</b>', '<i>הייחודית</i>').replace('השגיאה', 'השגחה'),
+    'רק ה-HTML': original.replace('<b>הייחודית</b>', 'הייחודית'),
+  };
+  const mains = (line) => ({ 'במקום': base.map((l, i) => (i === li ? line : l)), 'אחרי הזזה': ['שורה חדשה', 'ועוד אחת', ...base.map((l, i) => (i === li ? line : l))] });
+  for (const [label, line] of Object.entries(partial)) {
+    for (const [where, main] of Object.entries(mains(line))) {
+      const v = qaRun(main, base, li, original, fixed);
+      assert.notEqual(v.outcome, ABSORPTION.ABSORBED, `${label} / ${where}: ${JSON.stringify(v)}`);
+    }
+  }
+  for (const [where, main] of Object.entries(mains(fixed))) assert.equal(qaRun(main, base, li, original, fixed).outcome, ABSORPTION.ABSORBED, where);
+});
+
+test('הביקורת הרביעית: שורה זהה להצעה במקום שאותר אינה מספיקה — עותק של הפסקה שבו המילה תוקנה והתגיות לא → לא "נקלט"', () => {
+  const original = 'באמצע הפסקה <b>הייחודית</b> נשארה המילה השגיאה ויש עוד מה להגיה';
+  const fixed = original.replace('<b>הייחודית</b>', 'הייחודית').replace('השגיאה', 'השגחה');
+  const wordOnly = original.replace('השגיאה', 'השגחה');
+  const base = ['הקדמת המחבר', 'פתיחה לענין', 'הכרעת חכמים בעניין זה', original, 'ועתה ראו חידוש נפלא', 'דברי סיום', 'סיום הספר'];
+  const li = 3;
+  const at = (lines, i, line) => lines.map((l, k) => (k === i ? line : l));
+  // פיתיון זהה להצעה במקום הישן, והפסקה המדווחת זזה לסוף הקובץ (עם תוספת בראשה); או תאום תקין שכבר היה בבסיס
+  const decoy = qaRun([...at(base, li, fixed), `תוספת: ${wordOnly}`], base, li, original, fixed);
+  assert.notEqual(decoy.outcome, ABSORPTION.ABSORBED, JSON.stringify(decoy));
+  const twinBase = [...base, fixed];
+  const twin = qaRun(['שורה חדשה', ...at(twinBase, li, wordOnly)], twinBase, li, original, fixed);
+  assert.notEqual(twin.outcome, ABSORPTION.ABSORBED, JSON.stringify(twin));
+  // הוספת תגית: התיקון נקלט בלי התגית — גם כשבמקום הישן עומדת שורה זהה להצעה
+  const bolded = original.replace('<b>הייחודית</b>', 'הייחודית');
+  const boldFixed = bolded.replace('השגיאה', '<b>השגחה</b>');
+  const addBase = at(base, li, bolded);
+  const add = qaRun([...at(addBase, li, boldFixed), `תוספת: ${bolded.replace('השגיאה', 'השגחה')}`], addBase, li, bolded, boldFixed);
+  assert.notEqual(add.outcome, ABSORPTION.ABSORBED, JSON.stringify(add));
+  assert.equal(qaRun(at(addBase, li, boldFixed), addBase, li, bolded, boldFixed).outcome, ABSORPTION.ABSORBED);
+});

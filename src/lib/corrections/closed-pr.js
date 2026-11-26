@@ -20,7 +20,8 @@ import { currentRevisionOf, logEvent, manualQueueSet } from './store.js';
 // גרסת הכלל: תוצאה שמורה מגרסה אחרת אינה ממוחזרת (publish.absorptionCheck.v).
 // 6: כל "נקלט" מותנה באיתור הפסקה המדווחת ובמצב העריכה בה (locate-edit.js).
 // 7: וגם חתימות הטעות אינן בשום מקום בזרם האסימונים של הקובץ, מעבר לגבולות שורות (מקור שזז ופוצל/אוחד/הורחב).
-export const ABSORPTION_RULE_VERSION = 7;
+// 8: וגם שינוי התגיות שאושר נקלט — אין עותק שבו המילה תוקנה והתגיות לא (rawPartHeld, הביקורת הרביעית).
+export const ABSORPTION_RULE_VERSION = 8;
 // שורות מהבסיס לכל צד כשהבסיס נקרא מקובץ (ולא מההקשר שנשמר באישור).
 const BASE_SPAN = 12;
 const COMMENT_MAX = 500;

@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { LOCATE, applySpans, canon, canonTokens, lineIndex, locateEdit, locateTarget } from './locate-edit.js';
 import { ABSORPTION, evaluateAbsorption } from './absorption.js';
+import { resolveRebased } from './publisher.js';
 
 const PARA = 'ובגמרא שם אמר רבי יוחנן הלכא כרבי מאיר בגזירה ובנמצא, ושם מבואר בדברי הראשונים';
 const FIXED = PARA.replace('הלכא', 'הלכה');
@@ -175,7 +176,7 @@ const COMMON = ['של', 'את', 'על', 'כי', 'לא', 'אם', 'הוא', 'זה'
 const PUNCT = [',', ':', '.'];
 
 function render(L) {
-  const s = L.t.map((x, i) => (L.b === i ? `<b>${x.w}</b>` : x.w)).join(L.sp ? '  ' : ' ');
+  const s = L.t.map((x, i) => (L.b === i || x.bold ? `<b>${x.w}</b>` : x.w)).join(L.sp ? '  ' : ' ');
   const h = L.h ? `<h3>${s}</h3>` : s;
   return L.pf ? h.replaceAll(DAGESH_D, 'דּ') : h;
 }
@@ -190,8 +191,11 @@ function render(L) {
  * נסגר) = מקום טעות שלא תוקן ועדיין צמוד בזרם האסימונים לשכן מקורי שלו מהפסקה (מילה כפולה — לבת-זוגה); מקום טעות
  * שנותק מכל שכניו (הפסקה נחתכה בדיוק סביבו והחלקים פוזרו) אינו ניתן לייחוס בשום טקסט — נספר בנפרד (dissolved).
  * עריכת מילים — רק בפסקה בת 6 מילים לפחות, ועד שתי עריכות (מעבר לזה זו כבר פסקה אחרת).
+ * raw (הביקורת הרביעית): ההצעה גם מוסיפה או מסירה תגית סביב מילה בפסקה — שינוי גולמי שהנרמול אינו רואה — ו-main
+ * קולט אותו בכל העותקים או לא קולט אותו כלל, בלי תלות בתיקון המילה. rawTruth: בכל עותקי הפסקה המדווחת התגית כמו בהצעה.
+ * בלי raw — אותם תרחישים בדיוק כמו קודם.
  */
-function scenario(seed, { reshape = false } = {}) {
+function scenario(seed, { reshape = false, raw = false } = {}) {
   const r = rng(seed);
   const int = (n) => Math.floor(r() * n);
   const pick = (a) => a[int(a.length)];
@@ -238,8 +242,13 @@ function scenario(seed, { reshape = false } = {}) {
     else L.t = L.t.flatMap((x, i) => (x.mark && !L.t[i + 1]?.fix ? [x, { w: C, p: 1, fix: 1 }] : [x]));
   };
   P.t.forEach((x, i) => { x.id = i; }); // זהות האסימונים בפסקה המקורית — לבדיקת "צמוד לשכן מקורי"
+  const rawIds = raw ? P.t.flatMap((x, i) => (isWordTok(x) && !(kind === 'delete' && x.err) ? [i] : [])) : [];
+  const rawPart = rawIds.length ? { id: pick(rawIds), bold: chance(0.5) } : null;
+  if (rawPart && !rawPart.bold) P.t[rawPart.id].bold = 1; // הסרת תגית: בבסיס המילה מודגשת
+  const applyRaw = (L) => L.t.forEach((x) => { if (x.p && x.id === rawPart.id) x.bold = rawPart.bold ? 1 : 0; });
   const fixedP = copy(P);
   applyFix(fixedP);
+  if (rawPart) applyRaw(fixedP);
   const site = siteOf(P);
   const decoy = () => ({ t: [...para(2 + int(4)), ...fixedP.t.slice(Math.max(0, site - 3), site + 4).map((x) => ({ w: x.w })), ...para(2 + int(4))] });
 
@@ -401,6 +410,7 @@ function scenario(seed, { reshape = false } = {}) {
       if (kind === 'insert' && carriers.length) options.push(() => carriers[0].t.splice(siteOf(carriers[0]), 0, { w: C }));
       pick(options)();
     }
+    if (rawPart && chance(0.5)) main.forEach(applyRaw);
   };
   const all = reshape ? { ...ops, ...reshapeOps } : ops;
   const names = Object.keys(all);
@@ -450,8 +460,11 @@ function scenario(seed, { reshape = false } = {}) {
     applyFix(W);
     return W;
   }));
+  // מה שמוצג בפועל: הדגשה של השורה (L.b) או של המילה
+  const rawTruth = !rawPart || main.every((L) => L.t.every((x, i) => !(x.p && x.id === rawPart.id) || (L.b === i || Boolean(x.bold)) === rawPart.bold));
   return {
     kind, mode, truth: truthOf(main), open: anchoredOpen(main), truthIfWritten, benign, li, original: render(P), proposed: render(fixedP), baseTexts: base.map(render), mainTexts: main.map(render),
+    raw: Boolean(rawPart), rawTruth,
   };
 }
 
@@ -569,4 +582,40 @@ test(`תכונה (הביקורת — הזזה ועיצוב מחדש, פיתיו�
   assert.deepEqual(bad.slice(0, 10), [], `הפרות: ${bad.length}`);
   // משני לאינווריאנט: גם עם התרחישים האדוורסריים רוב התיקונים האמיתיים בלי פיתיונות/תאומים/שכפול מזוהים
   assert.ok(stats.benignLocated / stats.benign > 0.75 && stats.located / stats.trulyFixed > 0.4, JSON.stringify(stats));
+});
+
+// הביקורת הרביעית (#312): ההצעה משנה גם תגיות (שינוי גולמי שהנרמול אינו רואה), ו-main קולט את המילה, את התגית, את
+// שתיהן או אף אחת. "כבר תוקן" במפרסם (resolveRebased — הקובץ השתנה מאז הבסיס) ו"נקלט" ב-PR שנסגר ⇒ גם השינוי הגולמי
+// שאושר נמצא בכל עותקי הפסקה המדווחת (ובנוסף — כמו קודם — הטעות תוקנה). זוגי: עם הזזה ועיצוב מחדש.
+test(`תכונה (הביקורת הרביעית — ההצעה משנה גם תגיות): "כבר תוקן" ו"נקלט" ⇒ כל השינוי הגולמי שאושר נקלט (${PROPERTY_SCENARIOS} תרחישים)`, (t) => {
+  const stats = { scenarios: 0, rawTaken: 0, wordOnly: 0, alreadyFixed: 0, absorbed: 0, publisherViolations: 0, absorbViolations: 0 };
+  const bad = [];
+  for (let seed = 1; seed <= PROPERTY_SCENARIOS; seed++) {
+    const reshape = seed % 2 === 0;
+    const s = scenario(seed, { reshape, raw: true });
+    const pub = resolveRebased(s.mainTexts.join('\n'), s.baseTexts, { lineIndex: s.li, originalLine: s.original, newLine: s.proposed });
+    const v = productionVerdict(s, around(s.baseTexts, s.li));
+    const closable = s.rawTruth && (s.truth || (reshape && !s.open));
+    stats.scenarios += 1;
+    if (s.raw && s.rawTruth) stats.rawTaken += 1;
+    if (s.raw && s.truth && !s.rawTruth) stats.wordOnly += 1;
+    if (pub.status === 'already_fixed') {
+      stats.alreadyFixed += 1;
+      if (!closable) {
+        stats.publisherViolations += 1;
+        bad.push({ seed, by: 'publisher', kind: s.kind, mode: s.mode, truth: s.truth, rawTruth: s.rawTruth });
+      }
+    }
+    if (v.outcome === ABSORPTION.ABSORBED) {
+      stats.absorbed += 1;
+      if (!closable) {
+        stats.absorbViolations += 1;
+        bad.push({ seed, by: 'absorption', kind: s.kind, mode: s.mode, detail: v.detail, truth: s.truth, rawTruth: s.rawTruth });
+      }
+    }
+  }
+  t.diagnostic(`raw: ${JSON.stringify(stats)}`);
+  assert.deepEqual(bad.slice(0, 10), [], `הפרות: ${bad.length}`);
+  // משני לאינווריאנט: הכלל אינו "תמיד ידני" — תיקונים שנקלטו במלואם עדיין נסגרים
+  assert.ok(stats.alreadyFixed > 0 && stats.absorbed > 0, JSON.stringify(stats));
 });

@@ -5,7 +5,8 @@
  * שנגזר מהתוצאה ומזמן ההמתנה. הקריאה מ-GitHub והעדכון ב-DB — ב-closed-pr.js.
  */
 import { splitSourceLines } from './source-text.js';
-import { LOCATE, lineIndex, locateEdit } from './locate-edit.js';
+import { LOCATE, lineIndex, locateEdit, rawCanon } from './locate-edit.js';
+import { diffHunks } from './rebase-change.js';
 
 export const ABSORPTION = Object.freeze({ ABSORBED: 'absorbed', PENDING: 'pending', CHANGED: 'changed' });
 
@@ -80,6 +81,91 @@ export function editState(line, edit) {
   const original = occurrences(line, edit.left + edit.removed + edit.right, edit);
   if (applied && original) return 'both';
   return applied ? 'applied' : original ? 'original' : null;
+}
+
+// ---- השינוי הגולמי (תגיות): האיתור מנורמל ואינו רואה תגיות, ולכן "כבר תוקן"/"נקלט" בודקים אותו בנפרד ----
+const TAG_TOKEN = /^<\/?[A-Za-z][^<>]*>$/;
+const RAW_TOKEN_RE = /<\/?[A-Za-z][^<>]*>|[\p{L}\p{N}\p{M}]+|\s+|[^\p{L}\p{N}\p{M}\s]/gu;
+const WORD_CHAR = /[\p{L}\p{N}]/u;
+const isTagToken = (t) => TAG_TOKEN.test(t);
+const isWordToken = (t) => !isTagToken(t) && WORD_CHAR.test(t);
+const tagsOf = (toks) => toks.filter(isTagToken).join('\n');
+
+/**
+ * קטעים גולמיים שמעידים ששינוי התגיות שאושר לא נקלט. לכל צ'אנק בין המקור להצעה (באסימונים גולמיים: תגית שלמה היא
+ * אסימון) שמשנה תגיות: צ'אנק של תגיות בלבד — המקור עצמו (שארית); צ'אנק שמשנה גם טקסט — הטקסט החדש בתוך התגיות
+ * הישנות (התיקון נקלט בלי שינוי התגיות). ההקשר: מהשורה, עד מילה שלמה מכל צד ולא לתוך צ'אנק שכן.
+ * null — אי אפשר לחשב (שורה ענקית עם שינוי תגיות, או תגיות באמצע טקסט שהשתנה).
+ */
+export function rawPartFragments(originalLine, newLine) {
+  const O = rawCanon(originalLine).match(RAW_TOKEN_RE) || [];
+  const N = rawCanon(newLine).match(RAW_TOKEN_RE) || [];
+  const hunks = diffHunks(O, N);
+  if (!hunks) return tagsOf(O) === tagsOf(N) ? [] : null; // שורה ענקית: בלי שינוי בתגיות — אין מה לבדוק כאן
+  const text = (toks) => toks.filter((t) => !isTagToken(t)).join('').replace(/\s+/g, ' ').trim();
+  const out = [];
+  for (let k = 0; k < hunks.length; k++) {
+    const h = hunks[k];
+    const o = O.slice(h.s, h.e);
+    const n = N.slice(h.ns, h.ne);
+    if (tagsOf(o) === tagsOf(n)) continue; // אין שינוי תגיות — האיתור בודק
+    let body = o;
+    if (text(o) !== text(n)) {
+      let a = 0;
+      while (a < o.length && isTagToken(o[a])) a += 1;
+      let b = o.length;
+      while (b > a && isTagToken(o[b - 1])) b -= 1;
+      if (o.slice(a, b).some(isTagToken)) return null;
+      body = [...o.slice(0, a), ...n.filter((t) => !isTagToken(t)), ...o.slice(b)];
+    }
+    const lo = k ? hunks[k - 1].e : 0;
+    const hi = k + 1 < hunks.length ? hunks[k + 1].s : O.length;
+    // צד שאין בו מילה עד הצ'אנק השכן או קצה השורה — בלי הקשר (תגית עוטפת בלבד אינה מזהה, ובעותק שעוצב מחדש היא נעלמת)
+    let l = h.s;
+    while (l > lo) if (isWordToken(O[--l])) break;
+    if (!isWordToken(O[l] ?? '')) l = h.s;
+    let r = h.e;
+    while (r < hi) if (isWordToken(O[r++])) break;
+    if (!isWordToken(O[r - 1] ?? '') || r === h.e) r = h.e;
+    const part = [...O.slice(l, h.s), ...body, ...O.slice(h.e, r)].join('');
+    if (!part) return null; // הוספת תגית בשורה בלי מילים — אין קטע מעיד
+    out.push(part);
+  }
+  return out;
+}
+
+const rawStreams = new WeakMap();
+function rawStream(lines) {
+  let s = rawStreams.get(lines);
+  if (s === undefined) {
+    s = ` ${lines.map(rawCanon).filter(Boolean).join(' ')} `; // בלי שורות ריקות, כמו זרם האסימונים באיתור
+    rawStreams.set(lines, s);
+  }
+  return s;
+}
+const countIn = (text, part) => {
+  let n = 0;
+  for (let i = text.indexOf(part); i !== -1; i = text.indexOf(part, i + 1)) n += 1;
+  return n;
+};
+
+/**
+ * האם שינוי התגיות שאושר לא נקלט במלואו — בשום מקום בקובץ (גם מעבר לגבולות שורות): לכל קטע מעיד יש בקובץ יותר
+ * מופעים ממה שהיה בו אחרי קליטה מלאה (בבסיס, פחות שורת המקור ועוד ההצעה; בלי הבסיס — רק מה שבהצעה). כך עותק של
+ * הפסקה שבו המילה תוקנה והתגיות לא חוסם "כבר תוקן"/"נקלט" גם כשבמקום שאותר עומדת שורה זהה להצעה. ספק → true.
+ * @param {{originalLine:string, newLine:string}} change
+ * @param {string[]} texts  הקובץ הנוכחי (שורות)
+ * @param {string[]|null} [baseLines]  הקובץ בבסיס
+ */
+export function rawPartHeld(change, texts, baseLines = null) {
+  const parts = rawPartFragments(change.originalLine, change.newLine);
+  if (parts === null) return true;
+  if (!parts.length) return false;
+  const cur = rawStream(texts);
+  const base = Array.isArray(baseLines) ? rawStream(baseLines) : null;
+  const o = rawCanon(change.originalLine);
+  const n = rawCanon(change.newLine);
+  return parts.some((p) => countIn(cur, p) > (base ? countIn(base, p) - countIn(o, p) : 0) + countIn(n, p));
 }
 
 // פירוק הקובץ לשורות — פעם אחת לכל אובייקט קובץ (כמה דיווחים על אותו קובץ באותה אצווה).
@@ -226,6 +312,8 @@ export function anchorTarget(texts, lineIndex, base, range) {
  * כלל 6: כל "נקלט" מותנה גם באיתור (locate-edit.js) — הפסקה המדווחת מזוהה בקובץ בביטחון, ובמקום שהעריכה ממופה
  * אליו המקור איננו וההצעה ישנה, וכל פסקה דומה בקובץ מתוקנת. not_fixed → pending (original_located); ספק →
  * changed (unlocated_<סיבה>). הבדיקות שכאן נשארות כתנאים שמרניים נוספים.
+ * כלל 8: האיתור אינו רואה תגיות — "נקלט" גם דורש שבשום מקום בקובץ אין עותק שבו המילה תוקנה ושינוי התגיות שאושר
+ * לא (rawPartHeld) → changed (raw_part_not_applied).
  * @param {{content?:string, texts?:string[], lossy?:boolean}|null} file  הקובץ ב-main (null = אינו קיים)
  * @param {{lineIndex:number, originalLine:string, newLine:string, base?:{before:string[], after:string[]}|null, baseLines?:string[]|null}} change
  *   base — שכני שורת היעד בבסיס (לעיגון); baseLines — הקובץ המלא בבסיס, כשידוע (לבדיקה בלי עיגון)
@@ -294,6 +382,8 @@ export function evaluateAbsorption(file, change, { relocationLines = 0, editCont
     const loc = locate();
     if (loc.status === LOCATE.NOT_FIXED) return verdict(ABSORPTION.PENDING, 'original_located', loc.line);
     if (loc.status !== LOCATE.FIXED) return verdict(ABSORPTION.CHANGED, `unlocated_${loc.reason}`, at);
+    // כלל 8: גם שינוי התגיות שאושר נקלט — בשום מקום בקובץ אין עותק שבו המילה תוקנה והתגיות לא (או שארית שלהן)
+    if (rawPartHeld({ originalLine: orig, newLine: fresh }, texts, baseLines)) return verdict(ABSORPTION.CHANGED, 'raw_part_not_applied', at);
     return verdict(ABSORPTION.ABSORBED, detail, at);
   };
 

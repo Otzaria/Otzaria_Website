@@ -80,6 +80,10 @@ export function canon(s) {
     .replace(BREAK_TAG, ' ');
   return stripTags(text).replace(/\s+/g, ' ').trim();
 }
+/** אותו נרמול בלי הסרת התגיות — להשוואת השינוי הגולמי (absorption.js, rawPartHeld). */
+export function rawCanon(s) {
+  return String(s ?? '').replace(/^﻿/, '').replace(PRESENTATION, (c) => c.normalize('NFKC')).normalize('NFC').replace(/\s+/g, ' ').trim();
+}
 const tokensOfCanon = (c) => tokenize(c).filter((t) => t !== ' ');
 export const canonTokens = (s) => tokensOfCanon(canon(s));
 const isWord = (t) => WORD.test(t);

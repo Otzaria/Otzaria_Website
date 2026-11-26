@@ -8,6 +8,7 @@ import { isAllowedRepoPath } from './resolver.js';
 import { createGitSource } from './git-source.js';
 import { ByteLru } from './lru.js';
 import { LOCATE, lineIndex, locateTarget } from './locate-edit.js';
+import { editState, lineEdit, rawPartHeld } from './absorption.js';
 
 // שורות מהבסיס לכל צד כהקשר לאיתור (כמו בבדיקת הקליטה, closed-pr.js).
 const BASE_SPAN = 12;
@@ -67,7 +68,11 @@ function buildPrBody({ report, change, attemptId, authority }) {
 /**
  * הקובץ השתנה מאז הבסיס: איפה לכתוב, לפי האיתור (locate-edit.js) מול הבסיס — לעולם לא לפי האינדקס לבדו (באינדקס
  * הישן עלולה לעמוד שורה זהה מפסקה אחרת, או ההצעה עצמה בפסקה אחרת, כשהפסקה המדווחת זזה ועדיין שגויה).
- * - already_fixed: רק כשהאיתור קובע fixed.
+ * - already_fixed: רק כשהאיתור קובע fixed, והפסקה שאותרה היא שורה אחת שבה גם השינוי הגולמי שאושר כולו: השורה
+ *   היא ההצעה עצמה, או שהעריכה הגולמית (מהשינוי הראשון עד האחרון, עם ההקשר) נמצאת בה והמקור לא — אותו כלל כמו
+ *   בקליטת PR שנסגר (editState); ובשום מקום בקובץ אין עותק שבו המילה תוקנה ושינוי התגיות לא (rawPartHeld). האיתור
+ *   מנורמל (בלי תגיות) ומזהה רק את הפסקה; תיקון שנקלט בחלקו (המילה בלי שינוי ה-HTML, או להפך), או פסקה שפוצלה
+ *   לכמה שורות — conflict (source_changed) → ידני.
  * - target: הפסקה המדווחת לא תוקנה, והיא המופע היחיד שלה ושל הטעות בקובץ — הכתיבה בשורה שאותרה.
  * - conflict: כל השאר → ידני. source_changed כשבאינדקס יש נוסח אחר (כמו קודם); source_not_resolved כשבאינדקס
  *   עדיין המקור או ההצעה אבל הפסקה לא אותרה בוודאות (זהה בשתי פסקאות, פיתיון, הזזה ועוד).
@@ -89,7 +94,13 @@ export function resolveRebased(content, baseLines, change) {
     base: { index: lineIndex(baseLines), lineIndex: li },
     context: { before: baseLines.slice(Math.max(0, li - BASE_SPAN), li), after: baseLines.slice(li + 1, li + 1 + BASE_SPAN) },
   });
-  if (t.status === LOCATE.FIXED) return { status: 'already_fixed' };
+  if (t.status === LOCATE.FIXED) {
+    const [from, to] = t.lines ?? [null, null];
+    const line = from !== null && from === to ? lines[from] : null;
+    const applied = line === change.newLine || (line !== null && editState(line, lineEdit(change.originalLine, change.newLine)) === 'applied');
+    if (applied && !rawPartHeld(change, lines, baseLines)) return { status: 'already_fixed' };
+    return { status: 'conflict', reason: 'source_changed', details: { locate: t.reason, target: applied ? 'raw_part_held' : 'raw_not_applied', line: from, currentLine: line } };
+  }
   if (t.target !== null) return { status: 'target', line: t.target };
   return { status: 'conflict', reason: reasonAtIndex(), details: { locate: t.reason, target: t.targetReason, currentLine: lines[li] ?? null } };
 }
